@@ -1,4 +1,4 @@
-"""IR-registered FP32 and BF16 arithmetic primitives: FP32 add/mul/fma/div rounded to nearest even (no ftz), the FTZ family
+"""Registered FP32 and BF16 arithmetic primitives: FP32 add/mul/fma/div rounded to nearest even (no ftz), the FTZ family
 of the fast-math FlashAttention-2 build, `max`, the `-inf` guard, and the BF16 element-wise operations the eager kernels
 compute in FP32 and round once to BF16.
 
@@ -11,7 +11,7 @@ on x86-64 (an operand's NaN quieted, `0xFFC00000` for an invalid operation) and 
 with every NaN result the GPU's `F32_NAN_PTX`, and equal to it on every other word.  A registered id denotes one function, so
 the GPU's NaN came as new ids (as `verity.ml.circuits.ops.prims.AmpereBF16TcDot16_v2` did); Programs move to `_v2` at a re-baseline.
 
-Provenance.  The `_v1` primitives are the definitions the vLLM integration registered in `verity_vllm.program.registry.prims`
+Provenance.  The `_v1` primitives are the definitions the vLLM integration registered in `verity.ml.definitions.registry.prims`
 (same ids, signatures, conformance statuses and evaluators), which re-exports them from here.  Its stored Programs cite these
 ids.
 """
@@ -243,7 +243,7 @@ def F32FmaSubFtz(a: int, b: int, c: int) -> int:
     return ftz_bits(f32_fma_bits(ftz_bits(a), ftz_bits(b), ftz_bits(c) ^ 0x80000000))
 
 
-# --- version 2: every NaN result the GPU's `F32_NAN_PTX` (the L40S / H100 probe art:e5dd6ce9..., every build, ftz on and off);
+# --- version 2: every NaN result the GPU's `F32_NAN_PTX` (measured on the L40S and H100, every build, ftz on and off);
 # equal to `_v1` on every other word ------------------------------------------------------------------------------------------
 
 

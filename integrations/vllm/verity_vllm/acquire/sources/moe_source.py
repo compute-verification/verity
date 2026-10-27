@@ -72,7 +72,7 @@ act at `SiluMulClamp_v1`'s, sum at `MoeSum_v1`'s, router_w and router_ids at `ds
 layer's ids are the module's `GatherI32x{V}` rows, committed as `ids`, and the token ids those gathers read as `in`
 (`hash_router_input`); router_ids and ids are committed as their 32-bit words, as those rows are (`f32`).  `layer_of` tells
 `identity_check` the source's names, a hash layer holding one more.  The call boundaries at those ports are this source's (`claims`,
-one of `call_boundary_source.CLAIMS`): every TP rank attaches it (`engine.rank_worker`), and the CPU gate counts them as the MoE
+one of `call_boundary_source.CLAIMS`): every TP rank attaches it (`pipeline.tp.rank_worker`), and the CPU gate counts them as the MoE
 source's on several ranks when the manifest names no `moe_block_stream` plane (`taps.attached`).
 
 `<k>` is the layer index of the MoE module whose forward is executing (forward pre-hooks on every `MoERunner`-family module set it, and
@@ -96,7 +96,7 @@ from typing import Any
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources.partial_source import _moe_reduces
 from verity_vllm.engine import hooks
-from verity_vllm.program.registry.moe import router_kernel
+from verity.ml.definitions.registry.moe import router_kernel
 from verity_vllm.query.manifest.bind import Port
 from verity_vllm.query.manifest.format import MOE_FP8_PLANES, MOE_PLANES
 

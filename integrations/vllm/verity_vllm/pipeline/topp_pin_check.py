@@ -21,7 +21,7 @@ from pathlib import Path
 
 import numpy as np
 
-from verity_vllm.config import option
+from verity_vllm.config import option, workload_arg
 
 
 def kernel(out: Path) -> dict:
@@ -29,7 +29,7 @@ def kernel(out: Path) -> dict:
 
     from verity_vllm.engine import topp_pin
     from verity_vllm.pipeline.topp_split_probe import NEG_INF_BITS, drain_batches, gen_ties
-    from verity_vllm.program.registry.topp_geometry import SPLIT_MAX_BATCH, registered_splits
+    from verity.ml.definitions.registry.topp_geometry import SPLIT_MAX_BATCH, registered_splits
 
     import vllm.v1.sample.ops.topk_topp_triton as TT
 
@@ -81,7 +81,7 @@ def served(workload: str, out: Path) -> dict:
     prof.apply_env()
     from verity_vllm.commit.committer.topp_splits import install_split_kernel_proxies
     from verity_vllm.engine import topp_pin, vllm_adapter as va
-    from verity_vllm.program.registry.topp_geometry import registered_splits
+    from verity.ml.definitions.registry.topp_geometry import registered_splits
 
     wl = va.load_workload(workload)
     reqs = wl["requests"]
@@ -124,7 +124,7 @@ class KernelOptions:
 
 @dataclass(frozen=True, kw_only=True)
 class ServedOptions:
-    workload: str = option("--workload")
+    workload: str = option("--workload", type=workload_arg)
     out: str = option("--out")
     cmd: str = field(default="served", init=False)
 

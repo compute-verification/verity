@@ -17,9 +17,9 @@ import pytest
 from test_circuit_check import PINS, REPO, TEMPLATES
 
 SNAPSHOT = json.loads((Path(__file__).parent / "fixtures" / "attention_split_facts.json").read_text())
-PKG = "verity_vllm.program.registry"
-REGISTRY = REPO / "integrations" / "vllm" / "verity_vllm" / "program" / "registry"
-#: the family's Definition modules (verity#1130's DSA and sparse-MLA ones included), and `hopper`, which the split left as it was
+PKG = "verity.ml.definitions.registry"
+REGISTRY = REPO / "verity" / "ml" / "definitions" / "registry"
+#: the family's Definition modules (the DSA and sparse-MLA ones included), and `hopper`, which the split left as it was
 MODULES = ("fa2_check_inf", "fa3_check_inf", "fa2_softcap", "boolean_attention", "boolean_softcap", "mla", "dsa", "boolean_dsa",
            "sparse_mla", "boolean_sparse_mla", "hopper")
 
@@ -65,7 +65,7 @@ def _digest(fn) -> str:
 def _served_bindings() -> dict[str, object]:
     """`targets.attention_spec` on the registered targets at served shapes: the bindings the vocabulary computes (`MASKED_FROM`)."""
     from verity_vllm.program.frontend import targets as TGT
-    from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity_vllm import TargetProfile
 
     profiles = {"ada": TargetProfile(), "h100-fa3": TargetProfile(compute_capability=(9, 0), num_sms=132, flash_attn_version=3),
                 "h100-guard": TargetProfile(compute_capability=(9, 0), num_sms=132, flash_attn_version=3,
@@ -96,11 +96,15 @@ def served() -> dict[str, object]:
     return _served_bindings()
 
 
+#: the snapshot's Definitions are held to it in this many tests, a slice each, so xdist spreads the digests, each of which builds
+#: its Definition's body (as one test, they would be the suite's critical path under xdist)
+PARTS = 8
+
+
 @pytest.fixture(scope="module")
 def now(suite, served):
-    """The family's Definitions with each one's id and digest at every circuit-check binding, pin and served binding."""
+    """The family's Definitions at every circuit-check binding, pin and served binding."""
     from circuit_check import targets as TG
-    from verity.ml.circuits.codec import descriptor_id
 
     TG.load_registries()
     fam = _family()
@@ -114,16 +118,21 @@ def now(suite, served):
     for fn in served.values():
         if not isinstance(fn, str):
             bound.setdefault(fn.id, fn)
-    definitions = {fid: {"descriptor_id": descriptor_id(fn), "digest": _digest(fn)} for fid, fn in bound.items()}
-    return {"family": fam, "definitions": definitions, "pins": pinned}
+    return {"family": fam, "bound": bound, "pins": pinned}
 
 
 @pytest.mark.slow
-def test_every_family_definition_keeps_its_id_and_digest(now):
-    """Every id and digest at every binding the snapshot holds, and every family Definition the snapshot names."""
+@pytest.mark.parametrize("part", range(PARTS))
+def test_every_family_definition_keeps_its_id_and_digest(now, part):
+    """Every id and digest at every binding the snapshot holds (this test's slice of them), and every family Definition and pin
+    the snapshot names."""
+    from verity.ml.circuits.codec import descriptor_id
+
     assert sorted(set(SNAPSHOT["family"]) - set(now["family"])) == []
-    changed = {k: (v, now["definitions"].get(k)) for k, v in SNAPSHOT["definitions"].items() if now["definitions"].get(k) != v}
-    assert changed == {}
+    keys = sorted(SNAPSHOT["definitions"])[part::PARTS]
+    got = {k: {"descriptor_id": descriptor_id(fn), "digest": _digest(fn)} if (fn := now["bound"].get(k)) is not None else None
+           for k in keys}
+    assert {k: (SNAPSHOT["definitions"][k], got[k]) for k in keys if got[k] != SNAPSHOT["definitions"][k]} == {}
     assert {k: now["pins"].get(k) for k in SNAPSHOT["pins"]} == SNAPSHOT["pins"]
 
 

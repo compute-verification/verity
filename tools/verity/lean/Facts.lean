@@ -26,6 +26,10 @@ judgement; `check.py` holds the policy.
   `meaning` where that walk
   stops, with their modules (`outside`). Signatures print with no notation, since no notation is loaded: nothing a
   package declares can change how its statements read.
+- `assumption_reads`: for each name under `assumptions`, and each premise head and named hypothesis a pin reports, that
+  constant and every definition, inductive type and constructor it reads, transitively, in the modules under `meaning`
+  and those a package of this repository builds (an `.olean` in its own `.lake/build`), wherever its module lies; its
+  canon text and theirs are `read:` lines. A name the walk doesn't hold (a theorem, a fetched dependency's) is left out.
 - `spec_definitions`: the definitions and inductive types the audited modules under `spec` declare in their source (with a
   declaration range: what Lean generates for them has none), projections and internal names aside, each with whether it
   is a statement (`def G : Prop`) and whether it is a predicate (its type, past its binders, is `Prop`).
@@ -40,7 +44,7 @@ judgement; `check.py` holds the policy.
 
 The hashes in the document are Lean's `Expr.hash`, which has 32 bits; `check.py` keeps them only to check records written
 before SHA-256. When `CONFIG` names a `canon` path, the pins' statements and the definitions they read are also written
-there, one JSON line each, as `canon` texts, and `check.py` hashes those with SHA-256. A pinned statement that is a
+there, one JSON line each, as `canon` texts (and those `assumption_reads` holds), and `check.py` hashes those with SHA-256. A pinned statement that is a
 definition under `meaning` applied under binders (`∀ xs, G as`) is also written with that definition unfolded once
 (`liftOf`), with the definition and its module, so that `check.py` can certify a statement lifted into a `Guarantees`
 definition as the statement its record holds.
@@ -284,10 +288,10 @@ unsafe def entriesOf (α : Type) (data : ModuleData) (ext : Name) : Array (Name 
   | some (_, es) => es.map fun e => unsafeCast e
   | none => #[]
 
-/-- The definitions under `meaning` that the constants `roots` read, transitively, and the constants other than theorems
-outside `meaning` that the walk reaches and does not follow (with their modules). Each definition's `meaningDeps` is read
-from `table` (`usesTable`): a read definition's value is walked once per run, not once per guarantee. -/
-def reads (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning : Array Name) (roots : Array Name) :
+/-- The definitions of the modules `inScope` admits that the constants `roots` read, transitively, and the constants other
+than theorems outside them that the walk reaches and does not follow (with their modules). Each definition's `meaningDeps`
+is read from `table` (`usesTable`): a read definition's value is walked once per run, not once per guarantee. -/
+def readsWhere (env : Environment) (table : Std.HashMap Name (Array Name)) (inScope : Name → Bool) (roots : Array Name) :
     Array (Name × Name × ConstantInfo) × Array (Name × Name) := Id.run do
   let mut seen : NameSet := {}
   let mut stack := roots
@@ -304,12 +308,17 @@ def reads (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning :
       let some i := env.getModuleIdxFor? c | continue
       let m := moduleName env i
       if ci matches .thmInfo _ then continue
-      if !under meaning m then
+      if !inScope m then
         outside := outside.push (c, m)
         continue
       out := out.push (c, m, ci)
       stack := stack ++ meaningDeps env table ci
   return (out, outside)
+
+/-- `readsWhere` over the modules under `meaning`: what a guarantee's statement reads. -/
+def reads (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning : Array Name) (roots : Array Name) :
+    Array (Name × Name × ConstantInfo) × Array (Name × Name) :=
+  readsWhere env table (under meaning) roots
 
 /-- `c` less the trailing components with a leading `_` that Lean's compilers add (`batch._f`, `go._unary`): the declaration
 under whose name `c`'s `own` constants are, so that a helper's `own` names its declaration's matchers. -/
@@ -490,20 +499,29 @@ def branching (c : Name) : MetaM Bool := do
   let some ci := (← getEnv).find? c | return false
   forallTelescope ci.type fun xs r => return xs.contains r.getAppFn
 
+/-- Whether `c` is a constant of an assumptions module. -/
+def assumption (moduleOf : Name → Option Name) (c : Name) : Bool :=
+  ((moduleOf c).map (·.components.contains `Assumptions)).getD false
+
 /-- The heads (`premiseHead`) of the parts a hypothesis packs in `∧` and `∃`, past its binders: `(∃ x, A x) ∧ B` has
-`A` and `B`; one that applies a `branching` constant (a `match`) has those of its branches. -/
-partial def packedHeads (moduleOf : Name → Option Name) (t : Expr) : MetaM (Array Name) :=
+`A` and `B`, and so does an abbrev outside an assumptions module that unfolds to it (`abbrev P x := A x ∧ B x`), at most
+`n` times; one that applies a `branching` constant (a `match`) has those of its branches. -/
+partial def packedHeads (moduleOf : Name → Option Name) (t : Expr) (n : Nat := 4) : MetaM (Array Name) :=
   forallTelescope t fun _ b => do
     if b.isAppOfArity ``And 2 then
-      return (← packedHeads moduleOf b.appFn!.appArg!) ++ (← packedHeads moduleOf b.appArg!)
+      return (← packedHeads moduleOf b.appFn!.appArg! n) ++ (← packedHeads moduleOf b.appArg! n)
     if b.isAppOfArity ``Exists 2 then
-      return ← withLocalDeclD `x b.appFn!.appArg! fun x => packedHeads moduleOf (b.appArg!.beta #[x])
+      return ← withLocalDeclD `x b.appFn!.appArg! fun x => packedHeads moduleOf (b.appArg!.beta #[x]) n
     if let .const c _ := b.getAppFn then
       if ← branching c then
         return ← b.getAppArgs.foldlM (init := #[]) fun out a => do
           unless a.isLambda do return out
           lambdaTelescope a fun _ body => do
-            return out ++ (← if ← isProp body then packedHeads moduleOf body else pure #[])
+            return out ++ (← if ← isProp body then packedHeads moduleOf body n else pure #[])
+      if !assumption moduleOf c && n > 0 then
+        let u ← whnfR b
+        if u != b && (u.isAppOfArity ``And 2 || u.isAppOfArity ``Exists 2 || u.isForall) then
+          return ← packedHeads moduleOf u (n - 1)
     return (← premiseHead moduleOf 4 b).toArray
 
 /-- `e` with its `let`s inlined, its metadata dropped and its β-redexes reduced: `forallTelescope` stops at each of them,
@@ -550,6 +568,69 @@ partial def fieldPremises (env : Environment) (meaning premises : Array Name) (m
       let ft ← inferType f
       let inner ← if ← isProp ft then pure #[] else fieldPremises env meaning premises moduleOf false ft
       return out ++ (← mentioned env premises moduleOf ft) ++ inner
+
+/-- What the proposition `e` asserts: its parts through `∧`, the bodies of `∀` and `→`, `let`, and reducible unfolding
+outside an assumptions module (as `premiseHead` sees through an abbrev, at most `n` times); `True` asserts nothing.
+Each part is its head constant, with whether it applies that constant to a proposition or a predicate, or no head for
+a part that applies a bound variable. What `e` takes rather than asserts (an antecedent, the type a `∀` ranges over)
+and a part's arguments add, as parts, the assumptions they mention (`mentioned`, `fieldPremises`). -/
+partial def parts (env : Environment) (meaning premises : Array Name) (moduleOf : Name → Option Name) (n : Nat)
+    (e : Expr) : MetaM (Array (Option Name × Bool)) := do
+  let e := e.consumeMData.headBeta
+  let named (cs : Array Name) := cs.map fun c => (some c, false)
+  match e with
+  | .forallE x t b bi =>
+    let taken ← if ← isProp t then mentioned env premises moduleOf t
+      else fieldPremises env meaning premises moduleOf true t
+    withLocalDecl x bi t fun y => return named taken ++ (← parts env meaning premises moduleOf n (b.instantiate1 y))
+  | .letE _ _ v b _ => parts env meaning premises moduleOf n (b.instantiate1 v)
+  | _ =>
+    if e.isAppOfArity ``And 2 then
+      return (← parts env meaning premises moduleOf n e.appFn!.appArg!) ++ (← parts env meaning premises moduleOf n e.appArg!)
+    if e.isConstOf ``True then return #[]
+    let .const c _ := e.getAppFn | return #[(none, false)]
+    if !assumption moduleOf c && n > 0 then
+      let u ← whnfR e
+      if u != e then return ← parts env meaning premises moduleOf (n - 1) u
+    let args := e.getAppArgs
+    let props ← args.anyM fun a => do forallTelescopeReducing (← inferType a) fun _ r => return r.isProp
+    let taken ← args.foldlM (init := #[]) fun out a => return out ++ (← mentioned env premises moduleOf a)
+    return #[(some c, props)] ++ named taken
+
+/-- The parts (`parts`) that the predicate `c`'s value asserts past its parameters, or none when `c` is a constant of
+an assumptions module, no definition, a `branching` one, or not a predicate. -/
+def assertedParts (env : Environment) (meaning premises : Array Name) (moduleOf : Name → Option Name) (c : Name) :
+    MetaM (Option (Array (Option Name × Bool))) := do
+  if assumption moduleOf c then return none
+  let some (.defnInfo v) := env.find? c | return none
+  if ← branching c then return none
+  unless ← forallTelescopeReducing v.type fun _ r => return r.isProp do return none
+  lambdaTelescope (← plain v.value) fun _ b => return some (← parts env meaning premises moduleOf 4 b)
+
+/-- For a premise headed by `h`, a definition of a module this repository builds (`built`), outside an assumptions module,
+that the lock doesn't list (`listed`): the parts it asserts (`assertedParts`), and those of each such definition among
+them, breadth first, at most 64 definitions; `{definition: [{head, module, props}]}`. Null for any other head. -/
+def unfoldsOf (env : Environment) (meaning premises : Array Name) (listed built : NameSet)
+    (moduleOf : Name → Option Name) (h : Name) : MetaM Json := do
+  let mine (c : Name) : Bool := !listed.contains c && ((moduleOf c).map built.contains).getD false
+  if !mine h then return Json.null
+  let some ps ← assertedParts env meaning premises moduleOf h | return Json.null
+  let part (p : Option Name × Bool) : Json := Json.mkObj [("head", toJson (p.1.map toString)),
+    ("module", toJson ((p.1.bind moduleOf).map toString)), ("props", toJson p.2)]
+  let mut out := #[(h.toString, toJson (ps.map part))]
+  let mut seen : NameSet := ({} : NameSet).insert h
+  let mut queue := ps.filterMap (·.1)
+  let mut i := 0
+  while h : i < queue.size do
+    let c := queue[i]
+    i := i + 1
+    if seen.contains c || !mine c then continue
+    seen := seen.insert c
+    if out.size ≥ 64 then break
+    if let some qs ← assertedParts env meaning premises moduleOf c then
+      out := out.push (c.toString, toJson (qs.map part))
+      queue := queue ++ qs.filterMap (·.1)
+  return Json.mkObj out.toList
 
 /-- For `e` applying a `Guarantees` definition or another definition under `meaning` outside an assumptions module,
 whether it is a `Guarantees` one and its value applied to `e`'s arguments. -/
@@ -709,7 +790,8 @@ partial def conclusionOf (env : Environment) (meaning : Array Name) (t : Expr) (
       ("defs", toJson ((defs.qsort Name.lt).map toString)), ("refl", toJson refl), ("assumed", toJson (hs.contains b))]],
       hs.any (·.isConstOf ``False))
 
-def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning premises : Array Name) (axioms : Std.HashMap Name NameSet)
+def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning premises : Array Name)
+    (listed built : NameSet) (axioms : Std.HashMap Name NameSet)
     (ranges : Std.HashMap Name DeclarationRanges) (rs : Array (Name × Name × ConstantInfo) × Array (Name × Name)) (n : Name) :
     MetaM Json := do
   let some ci := env.find? n | return Json.mkObj [("kind", "missing")]
@@ -737,7 +819,11 @@ def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning
     ("at", toJson (ranges[n]?.map fun (d : DeclarationRanges) => #[d.range.pos.line, d.range.pos.column])),
     ("signature", toJson signature), ("axioms", toJson ((axioms.getD n {}).toArray.qsort Name.lt |>.map toString)),
     ("hypotheses", toJson hypotheses), ("shape", ← shapeInfo env table meaning moduleOf ci.type),
-    ("premises", ← (do return toJson (← premisesOf env meaning premises moduleOf false (← plain ci.type))) <|> pure Json.null),
+    ("premises", ← (do
+      let ps ← premisesOf env meaning premises moduleOf false (← plain ci.type)
+      return toJson (← ps.mapM fun p => do
+        let some h := (p.getObjValAs? String "head").toOption | return p
+        return p.setObjVal! "unfolds" (← unfoldsOf env meaning premises listed built moduleOf h.toName))) <|> pure Json.null),
     ("body", ← (do
       let (h, neg) ← bodyHead ci.type
       let (cs, absurd) ← conclusionOf env meaning ci.type
@@ -835,6 +921,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   let roots := names cfg "roots"
   let meaning := names cfg "meaning"
   let premises := names cfg "premises"
+  let listed := (names cfg "assumptions").foldl NameSet.insert {}
   let allowed := names cfg "allowed"
   let pins := names cfg "pins"
   let spec := names cfg "spec"
@@ -922,13 +1009,39 @@ unsafe def main (args : List String) : IO UInt32 := do
         acc := acc.insert pins[i] rs
     return acc
   lap "reads" readsOf.size
+  let found ← (List.range ((mnames.size + 255) / 256)).toArray.mapM fun k => IO.asTask do
+    (mnames.extract (256 * k) (256 * k + 256)).mapM fun m => return toString (← findOLean m)
+  let mut oleans := #[]
+  for t in found do
+    oleans := oleans ++ (← IO.ofExcept t.get)
+  -- the modules a package of this repository builds (an `.olean` in its own `.lake/build`), as `check.py`'s `own_modules`
+  let built : NameSet := (List.range mnames.size).foldl (init := {}) fun s i =>
+    let o := oleans[i]!
+    if (o.splitOn "/.lake/build/").length > 1 && (o.splitOn "/.lake/packages/").length == 1 then s.insert mnames[i]! else s
   -- each pin's facts are a function of the environment and the maps above, so each pin is a task, joined in order
   let tasks ← pins.mapM fun p => IO.asTask do
     let (out, _) ← (MetaM.run' do
-      return (p.toString, ← pinInfo env table meaning premises axioms ranges (readsOf.getD p (#[], #[])) p)).toIO ctx { env }
+      return (p.toString, ← pinInfo env table meaning premises listed built axioms ranges (readsOf.getD p (#[], #[])) p)).toIO
+        ctx { env }
     return out
   let pinned ← tasks.mapM fun t => IO.ofExcept t.get
   lap "pins" pinned.size
+  let field (j : Json) (k : String) : Array Json := (j.getObjValD k).getArr?.toOption.getD #[]
+  let nameAt (j : Json) (k : String) : Option Name := (j.getObjValD k).getStr?.toOption.map String.toName
+  let candidates := names cfg "assumptions" ++ pinned.foldl (init := #[]) fun acc (_, j) =>
+    acc ++ (field j "premises").filterMap (nameAt · "head") ++ (field j "hypotheses").filterMap (nameAt · "named")
+  let assumed := (candidates.foldl (init := (({} : NameSet), #[])) fun (s, out) a =>
+    if s.contains a then (s, out) else (s.insert a, out.push a)).2
+  let inScope (m : Name) : Bool := under meaning m || built.contains m
+  let walks : Array (Name × Array (Name × Name × ConstantInfo)) := Id.run do
+    let tasks := assumed.map fun a => Task.spawn fun _ => (readsWhere env table inScope #[a]).1
+    let mut acc := #[]
+    for h : i in [0:assumed.size] do
+      let rs := tasks[i]!.get
+      if rs.any (·.1 == assumed[i]) then
+        acc := acc.push (assumed[i], rs)
+    return acc
+  lap "assumptions" walks.size
   let mut conflicts := #[]
   if let some path := (cfg.getObjValD "canon").getStr?.toOption then
     -- each line's text is computed in a task (`Task.spawn` takes the closure, so the text is not built here) and the
@@ -964,6 +1077,12 @@ unsafe def main (args : List String) : IO UInt32 := do
           lines := lines.push <| Task.spawn fun _ =>
             (Json.mkObj [("id", toJson s!"moved-read:{c}"), ("as", toJson (rn c).toString),
               ("canon", toJson (readCanon rci rn))]).compress
+    for (_, rs) in walks do
+      for (c, _, rci) in rs do
+        if done.contains c then continue
+        done := done.insert c
+        lines := lines.push <| Task.spawn fun _ =>
+          (Json.mkObj [("id", toJson s!"read:{c}"), ("canon", toJson (readCanon rci))]).compress
     let h ← IO.FS.Handle.mk path .write
     for l in lines do
       h.putStrLn l.get
@@ -976,11 +1095,6 @@ unsafe def main (args : List String) : IO UInt32 := do
       else
         took := took.insert (rn c) c
   lap "canon" conflicts.size
-  let found ← (List.range ((mnames.size + 255) / 256)).toArray.mapM fun k => IO.asTask do
-    (mnames.extract (256 * k) (256 * k + 256)).mapM fun m => return toString (← findOLean m)
-  let mut oleans := #[]
-  for t in found do
-    oleans := oleans ++ (← IO.ofExcept t.get)
   let mut graph := #[]
   for h : i in [0:mnames.size] do
     let olean := oleans[i]!
@@ -992,6 +1106,8 @@ unsafe def main (args : List String) : IO UInt32 := do
     ("axioms", toJson (used.toArray.qsort Name.lt |>.map toString)), ("offenders", toJson offenders),
     ("unreported_errors", toJson unreportedErrors), ("declared_axioms", toJson declared), ("escapes", toJson escapes), ("spec_definitions", toJson specDefs),
     ("instances", toJson instances), ("pins", Json.mkObj pinned.toList),
+    ("assumption_reads", Json.mkObj (walks.toList.map fun (a, rs) => (a.toString, toJson (rs.map fun (c, m, ci) =>
+      Json.mkObj [("name", toJson c.toString), ("module", toJson m.toString), ("kind", toJson (kind ci))])))),
     ("moved_conflicts", toJson conflicts)]
   let vcfg := cfg.getObjValD "verifier"
   let doc := if (names vcfg "entries").isEmpty then doc else

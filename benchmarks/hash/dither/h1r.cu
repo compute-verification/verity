@@ -4,7 +4,7 @@
 //
 //   h1r_seeds   one thread a (live unit, seed): seed_j and σ_R (`seeds.seed`, `seeds.receipt_seed`), SHA-512 of the 224-byte
 //               tagged message, two compressions
-//   h1r_units   one warp a unit.  Lane l derives row l's and column l's noise blocks itself (`seeds.noise_block`, one
+//   h1r_units   one warp a unit.  Lane l derives row l's and column l's noise chunks itself (`seeds.noise_block`, one
 //               compression each), 16 segments at a time, and lane l's fold keys from σ_R's block l.  Per 32-wide segment s
 //               lane l writes row l of X = A + b and column l of W' = B + c + U into shared memory; the warp then runs the
 //               tile's 2 x 4 mma.sync m16n8k32 s8 (lane 4 g + q's accumulators are exactly h1tile's lane entries, entry
@@ -16,20 +16,17 @@
 //               operands, one folds.  Version 4 (`h1s_unit`) splits it six ways: two warps hash a chunk ahead, two
 //               build the segments, and the fold is split in two by the fx1 + duo chains it feeds.
 //               `h1r_launch_j10r` runs version 1 under J10-R's call-scale noise (`h1r_seeds_jr`, `h1r_units_jr_k`;
-//               RT-ALGO-16's verifier form, #3574): the served J10-R units' receipts reference.
+//               the verifier's form): the served J10-R units' receipts reference.
 //
 // A step is a table of calls (`H1Call`): A [T, K] and B [N, K] s8 row-major (16-byte aligned rows), the unit positions
-// base (plus the step's, read from the device) + u, the call's roots and its row blocks' live bits (a unit is live iff its
-// row block holds an admitted row, `receipts.gated_receipts`); a dead unit's receipt is zero words and nothing of it is
+// base (plus the step's, read from the device) + u, the call's roots and its row tiles' live bits (a unit is live iff its
+// row tile holds an admitted row, `receipts.gated_receipts`); a dead unit's receipt is zero words and nothing of it is
 // hashed.  K % 512 == 0 (each stream's
 // tail, the digit coins or U, is then one block of its own); the host wrapper refuses any other K.
 #include <cstdint>
 #include <cuda_runtime.h>
 
-namespace sh {
-typedef unsigned long long u64;
-#include "../../codec_tensor/sha512.cuh"
-}  // namespace sh
+#include "../../torch_gpu/sha512_rows/sha512x.cuh"
 typedef unsigned long long u64;
 typedef unsigned int u32;
 
@@ -98,9 +95,8 @@ __device__ __forceinline__ void nblock(const u64* sd, u64 t, u64 nt0, u64 nt1, u
   w[13] = 0;
   w[14] = 0;
   w[15] = 96 * 8;
-#pragma unroll
-  for (int j = 0; j < 8; ++j) s[j] = sh::kSha512Iv[j];
-  sh::sha512_compress(s, w);
+  sx::iv(s);
+  sx::compress<0, 2>(s, w);
 #pragma unroll
   for (int j = 0; j < 8; ++j) {
     h[2 * j] = (u32)(s[j] >> 32);
@@ -140,9 +136,8 @@ __device__ __forceinline__ void unit_seed(const H1Call& C, u64 p, const u64* __r
   for (int j = 0; j < 8; ++j) w[4 + j] = salt[j] ^ p;
 #pragma unroll
   for (int j = 0; j < 4; ++j) w[12 + j] = C.roots[j] ^ p;
-#pragma unroll
-  for (int j = 0; j < 8; ++j) s[j] = sh::kSha512Iv[j];
-  sh::sha512_compress(s, w);
+  sx::iv(s);
+  sx::compress<0, 2>(s, w);
 #pragma unroll
   for (int j = 0; j < 4; ++j) w[j] = C.roots[4 + j] ^ p;
 #pragma unroll
@@ -151,7 +146,7 @@ __device__ __forceinline__ void unit_seed(const H1Call& C, u64 p, const u64* __r
   w[13] = 0;
   w[14] = 0;
   w[15] = 224 * 8;
-  sh::sha512_compress(s, w);
+  sx::compress<0, 2>(s, w);
 }
 
 // the seeds of every live unit: seeds[(seed0 + u) * 2 + kind] (8 words), kind 0 seed_j, 1 σ_R
@@ -197,8 +192,8 @@ constexpr int NZ = 17;  // shared noise stride in words: lane l's word s16 in ba
 
 __device__ __forceinline__ void sha_round(u64 v[8], u64 k, u64 w) {
   const u64 a = v[0], b = v[1], c = v[2], e = v[4], f = v[5], g = v[6];
-  const u64 t1 = v[7] + (sh::rotr64(e, 14) ^ sh::rotr64(e, 18) ^ sh::rotr64(e, 41)) + ((e & f) ^ (~e & g)) + k + w;
-  const u64 t2 = (sh::rotr64(a, 28) ^ sh::rotr64(a, 34) ^ sh::rotr64(a, 39)) + ((a & b) ^ (a & c) ^ (b & c));
+  const u64 t1 = v[7] + (sx::rotr<0, 14>(e) ^ sx::rotr<0, 18>(e) ^ sx::rotr<0, 41>(e)) + ((e & f) ^ (~e & g)) + k + w;
+  const u64 t2 = (sx::rotr<0, 28>(a) ^ sx::rotr<0, 34>(a) ^ sx::rotr<0, 39>(a)) + ((a & b) ^ (a & c) ^ (b & c));
   v[7] = g;
   v[6] = f;
   v[5] = e;
@@ -209,15 +204,17 @@ __device__ __forceinline__ void sha_round(u64 v[8], u64 k, u64 w) {
   v[0] = t1 + t2;
 }
 
-// a noise block's state after rounds 0 .. 10, which read only the tag and the seed (words 0 .. 10): one a unit
+// a noise chunk's state after rounds 0 .. 10, which read only the tag and the seed (words 0 .. 10): one a unit.  This
+// and nblock_mid read the IV from constant memory (sx::IV_DEV): with sx::iv's immediates version 2 runs 2-4% slower at
+// T = 64, where nblock (version 1's) runs 1% faster with them
 __device__ __forceinline__ void noise_mid(const u64* sd, u64 nt0, u64 nt1, u64 nt2, u64 mid[8]) {
 #pragma unroll
-  for (int j = 0; j < 8; ++j) mid[j] = sh::kSha512Iv[j];
-  sha_round(mid, sh::kSha512K[0], nt0);
-  sha_round(mid, sh::kSha512K[1], nt1);
-  sha_round(mid, sh::kSha512K[2], nt2);
+  for (int j = 0; j < 8; ++j) mid[j] = sx::IV_DEV[j];
+  sha_round(mid, sx::K_DEV[0], nt0);
+  sha_round(mid, sx::K_DEV[1], nt1);
+  sha_round(mid, sx::K_DEV[2], nt2);
 #pragma unroll
-  for (int j = 0; j < 8; ++j) sha_round(mid, sh::kSha512K[3 + j], sd[j]);
+  for (int j = 0; j < 8; ++j) sha_round(mid, sx::K_DEV[3 + j], sd[j]);
 }
 
 // `nblock` from the unit's midstate: rounds 11 .. 79 only
@@ -236,20 +233,20 @@ __device__ __forceinline__ void nblock_mid(const u64* mid, const u64* sd, u64 t,
 #pragma unroll
   for (int j = 0; j < 8; ++j) v[j] = mid[j];
 #pragma unroll
-  for (int j = 11; j < 16; ++j) sha_round(v, sh::kSha512K[j], w[j]);
+  for (int j = 11; j < 16; ++j) sha_round(v, sx::K_DEV[j], w[j]);
 #pragma unroll 1
   for (int r = 16; r < 80; r += 16) {
 #pragma unroll
     for (int j = 0; j < 16; ++j) {
       const u64 w15 = w[(j + 1) & 15], w2 = w[(j + 14) & 15];
-      w[j] += (sh::rotr64(w15, 1) ^ sh::rotr64(w15, 8) ^ (w15 >> 7)) + w[(j + 9) & 15] +
-              (sh::rotr64(w2, 19) ^ sh::rotr64(w2, 61) ^ (w2 >> 6));
-      sha_round(v, sh::kSha512K[r + j], w[j]);
+      w[j] += (sx::rotr<0, 1>(w15) ^ sx::rotr<0, 8>(w15) ^ (w15 >> 7)) + w[(j + 9) & 15] +
+              (sx::rotr<0, 19>(w2) ^ sx::rotr<0, 61>(w2) ^ (w2 >> 6));
+      sha_round(v, sx::K_DEV[r + j], w[j]);
     }
   }
 #pragma unroll
   for (int j = 0; j < 8; ++j) {
-    const u64 x = sh::kSha512Iv[j] + v[j];
+    const u64 x = sx::IV_DEV[j] + v[j];
     h[2 * j] = (u32)(x >> 32);
     h[2 * j + 1] = (u32)x;
   }
@@ -267,7 +264,7 @@ __device__ __forceinline__ void band_wait() {
 #endif
 }
 
-// a band workspace's noise block (16 words, 64-byte aligned) into registers, and from them to a lane's noise row
+// a band workspace's noise chunk (16 words, 64-byte aligned) into registers, and from them to a lane's noise row
 __device__ __forceinline__ void band_load(const u32* src, uint4 (&v)[4]) {
 #pragma unroll
   for (int i = 0; i < 4; ++i) v[i] = __ldg(reinterpret_cast<const uint4*>(src) + i);
@@ -287,7 +284,7 @@ __device__ __forceinline__ void band_store(const uint4 (&v)[4], u32* d) {
 // from the B, c and U bytes its W' is made of, as an s8 {-1, 0, 1} operand in E's shared buffer (E::wbs, 32 * XS bytes),
 // and one more MMA a fragment against the same X.  E writes z; it also says which A rows are the canonical empty row (read
 // as zero), what a dead unit writes, and may perturb a noised accumulator word or flip a wb⁺ bit (the conformance tests).
-// With E::PEEL (CA, 11:02Z and 12:16Z; H1V3's PouwPeelSeg) z is A Bᵀ taken from the same O: z = O + 256 X (wb⁺ - wb⁻)ᵀ
+// With E::PEEL (H1V3's PouwPeelSeg) z is A Bᵀ taken from the same O: z = O + 256 X (wb⁺ - wb⁻)ᵀ
 // - X cᵀ - (b - 256 xa) Bᵀ, xa = [A = 127 and b = 1] (X = -128, where A + b wrapped), from X's own fragment and b.  The
 // peel's MMAs are binary-by-int8 beside the wrap MMA (X against -c, -b and xa against B, B's bytes in the slot's fourth
 // row); no product of A itself is formed, so z moves with every noised word.  E may flip an xa bit (its conformance test).
@@ -328,7 +325,7 @@ __device__ __forceinline__ u32 wrap_s8(u32 P, u32 N) {
 // 256 terms in a four-word temporary, so cr stays one accumulator), from the fragments of X (af), wb (wf) and B (bf) and
 // the segment's noise words of rows g + 8 j (nb4) and of columns 8 j + g (nc4); the binary operands are made where they
 // are read (xa and -b a row half at a time, -c a column fragment at a time), to keep the builders under their registers.
-// xa B^T is skipped in a row half where no lane has an xa (A = 127 is rare in served rows; kernels-dither-hb's #2752)
+// xa B^T is skipped in a row half where no lane has an xa (A = 127 is rare in served rows)
 template <class E>
 __device__ __forceinline__ void peel_mmas(int (&Y)[2][4][4], int (&cr)[2][4][4], const u32 (&af)[2][4],
                                           const u32 (&wf)[4][2], const u32 (&bf)[4][2], const u32 (&IB)[4][2],
@@ -360,7 +357,7 @@ __device__ __forceinline__ void peel_mmas(int (&Y)[2][4][4], int (&cr)[2][4][4],
   }
 }
 
-// V 1: the first kernel.  V 2: a column block's row blocks on adjacent warps (B's tile from L2 when T > 32); noise blocks
+// V 1: the first kernel.  V 2: a column tile's row tiles on adjacent warps (B's tile from L2 when T > 32); noise chunks
 // from the unit's midstate; each chunk's noise words in shared memory; the next segment's A and B words loaded a segment
 // ahead and the next chunk's rows prefetched into L2; at most 170 registers (3 blocks of 4 warps an SM).
 // unit v of call C (v in the version's unit order) on one warp, with the warp's shared buffers: Xs and Ws (32 * XS bytes
@@ -369,7 +366,7 @@ __device__ __forceinline__ void peel_mmas(int (&Y)[2][4][4], int (&cr)[2][4][4],
 // unit ri ncb + (cj / band) band's, read from the seeds buffer
 // jrm > 0 (V 1 only; h1r_launch_j10r, J10-R's receipts reference): the seeds' first 8 words are the call's seed_c and the
 // unit reads its call's stream at call scale, Layout(jrm, N, K): row 32 ri + l's blocks at (32 ri + l) RB, column
-// 32 cj + l's at jrm RB + (32 cj + l) RB; a live unit whose row block lies past jrm gets all-ones words (no such unit)
+// 32 cj + l's at jrm RB + (32 cj + l) RB; a live unit whose row tile lies past jrm gets all-ones words (no such unit)
 template <int V, class E = NoEpi>
 __device__ __forceinline__ void h1r_unit(const H1Call& C, int v, int lane, uint8_t* Xs, uint8_t* Ws, u64* sdw, u32* nzw,
                                          const u64* __restrict__ seeds, u64 nt0, u64 nt1, u64 nt2, u32* __restrict__ out,
@@ -780,8 +777,8 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
   noise_mid(sj, nt0, nt1, nt2, mid);
   auto noise = [&](u64 t, u32 h[16]) { nblock_mid(mid, sj, t, nt0, nt1, nt2, h); };
   // E::BAND 1 (LDG): the rows read from the band workspace in the segment loop, so a group past group 0 is GW = 4 chunks,
-  // each operand warp hashing one column block of it, chunk c0 + i's column block in nz[buf][i >> 1][i & 1].  E::BAND 2:
-  // the per-unit schedule, each row block copied from the workspace where it would be hashed
+  // each operand warp hashing one column tile of it, chunk c0 + i's column tile in nz[buf][i >> 1][i & 1].  E::BAND 2:
+  // the per-unit schedule, each row tile copied from the workspace where it would be hashed
   constexpr bool LDG = E::BAND == 1;
   constexpr int GW = LDG ? 4 : 2;
   const u32* rwp = E::BAND ? ep.band_rows(C, ri, cj, RB) : nullptr;
@@ -1154,14 +1151,14 @@ __device__ __forceinline__ void h1b_unit(const H1Call& C, int v, H1BShared& sh, 
 }
 
 // The split form: one unit a block of six warps, the same values as `h1r_unit<2, E>`.  Warps 2 and 3 hash chunk c's row
-// and column noise blocks (one compression a thread) while chunk c - 1 is built, into nz[c & 1]; warps 0 and 1 build the
+// and column noise chunks (one compression a thread) while chunk c - 1 is built, into nz[c & 1]; warps 0 and 1 build the
 // segments s = b mod 2 of each chunk into slot s % 4 (X, W' and wb, from A, B and the noise; peeled, and B) and run their
 // residue and wrap MMAs (Y and X wbᵀ or the peel's correction, summed through shared memory after the last segment);
 // warps 4 and 5 are the fold's
 // halves.  Set t's chains (st[4 (t % 2) + e] and st[8 + 4 (t % 2) + e]) read only fragment (t / 4, t % 4), so half F owns the column
 // fragments ni = F and F + 2, their accumulators, chains and outputs, and XORs its share of each receipt word into
 // shared memory; the tail's digits are exchanged through shared memory, a digit at a time.  Live units come first, a
-// column block's live row blocks on adjacent blocks.  Named barriers: a slot's FULL and EMPTY (a builder and both
+// column tile's live row tiles on adjacent blocks.  Named barriers: a slot's FULL and EMPTY (a builder and both
 // halves), a noise buffer's FULL and EMPTY (hashers and builders), the builders' own, the reduction, the halves'.
 constexpr int SNW = 6;
 constexpr int STH = 32 * SNW;
@@ -1181,7 +1178,7 @@ struct __align__(16) H1SShared {
   u64 sd[16];              // seed_j, σ_R
 };
 
-// unit v's row and column block: the live row blocks' units first, then the dead ones', a column block's row blocks on
+// unit v's row and column tile: the live row tiles' units first, then the dead ones', a column tile's row tiles on
 // adjacent v
 __device__ __forceinline__ void live_first(const H1Call& C, int v, int& ri, int& cj) {
   const int nrb = C.units / C.ncb;
@@ -1399,13 +1396,13 @@ __device__ __forceinline__ void h1s_unit(const H1Call& C, int v, H1SShared& sh, 
   u64 mid[8];
   noise_mid(sj, nt0, nt1, nt2, mid);
   auto noise = [&](u64 t, u32 h[16]) { nblock_mid(mid, sj, t, nt0, nt1, nt2, h); };
-  // E::BAND: the two hashers take alternate chunks (chunk c's by hasher c & 1), each hashing its chunk's column block and
-  // copying its row block from the band workspace into nz[c & 1], so each noise buffer's barriers are one hasher's and
+  // E::BAND: the two hashers take alternate chunks (chunk c's by hasher c & 1), each hashing its chunk's column tile and
+  // copying its row tile from the band workspace into nz[c & 1], so each noise buffer's barriers are one hasher's and
   // the builders' (96 threads)
   const u32* rwp = E::BAND ? ep.band_rows(C, ri, cj, RB) : nullptr;
   constexpr int NZT = E::BAND ? 96 : 128;
 
-  // round 0, a compression a thread: U (warp 0), σ_R's blocks (warp 1), chunk 0's row and column blocks (warps 2, 3), the
+  // round 0, a compression a thread: U (warp 0), σ_R's blocks (warp 1), chunk 0's row and column tiles (warps 2, 3), the
   // digit coins (each half)
   u32 zc[3] = {0, 0, 0};
   {
@@ -1744,7 +1741,7 @@ extern "C" int h1r_launch_band(const H1Call* calls_dev, int ncalls, int max_unit
 // h1r_launch's version 1 under J10-R (J10R's PouwH1Tile_v5 receipt; the served J10-R units' receipts reference, measured
 // only): seed_c at each call's first position (h1r_seeds_jr), every unit's noise from its call's stream at call scale
 // Layout(m, N, K) (h1r_units_jr_k), its fold keys its own σ_R's; m a multiple of 32, the call's layout rows (its slot T,
-// or its live rows rounded up to 32), no call's live row block past it
+// or its live rows rounded up to 32), no call's live row tile past it
 extern "C" int h1r_launch_j10r(const H1Call* calls_dev, int ncalls, int max_units, const int* ks, const u64* salt_dev,
                                const u64* step_base, u64* seeds_dev, u32* out_dev, int nowrite, int m, cudaStream_t stream) {
   for (int i = 0; i < ncalls; ++i)

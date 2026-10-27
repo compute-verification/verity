@@ -13,7 +13,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluate import evaluate_region
 from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.program import Program
-from verity_vllm.program.registry import b1_tp2 as TP2, prims as P
+from verity.ml.definitions.registry import b1_tp2 as TP2, prims as P
 from verity_vllm.program.frontend import collective_kinds
 
 
@@ -187,7 +187,7 @@ def _derive_world4_all_reduce(monkeypatch, *, env: dict, gpu: tuple, M: int, N: 
     from verity_vllm.program.frontend.rules import vllm_bindings as VB
     from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity_vllm.program.registry.tp_allreduce import settings_of
+    from verity.ml.definitions.registry.tp_allreduce import settings_of
 
     ensure_ops()
     monkeypatch.setitem(VB._OBSERVED, "allreduce_settings", settings_of(True, env))
@@ -283,7 +283,7 @@ def test_link_three_synthetic_ranks():
     assert link["ranks"] == [0, 1, 2] and link["world_size"] == 3 and link["by_status"] == {"linked": 2}
     ar, ag = link["links"]
     assert ar["definition"]["id"] == "AllReduce_v2{WORLD=3,N=32}" and set(ar["required_writes"]) == {"0", "1", "2"}
-    assert ar["definition"]["module"] == "verity_vllm.program.registry.b1_tp2"
+    assert ar["definition"]["module"] == "verity.ml.definitions.registry.b1_tp2"
     assert ag["definition"]["id"] == "AllGather_v1{WORLD=3,N=8}"
     # world 2 of the same synthetic run keeps the recorded gather identity
     sh2 = {r: CL.extract_rank_shard(_rank_events(r, 2), rank=r) for r in range(2)}
@@ -382,7 +382,7 @@ def test_own_partial_rows_are_the_ranks_part_at_worlds_2_4_and_8(W):
     """A collective row's operand is `world` equal parts in rank order: rank r's own rows are its part's (N leaves for a per-row
     collective, M * N for a flat one), each named by the node producing it, not only the first (rank 0) or the last (rank W-1) run."""
     from verity_vllm.check.match import rank_match as RMx
-    N, spec = 7, lambda k: f"spec{k}"  # noqa: E731
+    N, spec = 7, lambda k: f"spec{k}"
     runs = [("n" if r % 2 else "p", r, 0, N) for r in range(W)]
     for rank in range(W):
         assert RMx._own_rows(runs, {"rank": rank, "world": W, "N": N}, spec) == ([f"spec{rank}"] if rank % 2 else ["<not-a-node>"])

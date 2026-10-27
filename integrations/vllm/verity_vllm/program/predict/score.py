@@ -15,7 +15,7 @@ compared with what the Build traced:
 A unit the vocabulary cannot express is scored `unexpressible` with the fact that stops it; a unit over `max_rows` (LP + T) is
 `over_budget`; a Build dir without a Program (the Build refused or failed) is `no_trace`.  Outputs go wherever `--out` says and
 `score` refuses an output path inside the rows root: a score is never written into a Build row (a switched row's AOT Build is
-`aot.emit`'s, run by its own Build stage).
+`aot.emit`'s, run by its own Build phase).
 """
 
 from __future__ import annotations
@@ -172,7 +172,7 @@ def request_component(r, canon: dict):
     `canon` (one dict a composition)."""
     from verity.ml.circuits.defs import REGISTRY
     from verity_vllm.program import workload as W
-    from verity_vllm.program.registry.catalog import load as load_registry
+    from verity.ml.definitions.registry.catalog import load as load_registry
     load_registry()
     params = [(name, repr(t)) for name, t in r.program.fn.signature()[0]]
     return W.request_component(r.desc, REGISTRY, params, canon=canon, digest=r.digest)
@@ -262,7 +262,7 @@ def equivalence(pred_program, traced_desc: dict) -> dict:
     from verity.ml.circuits.codec import decode_program
     from verity.ml.circuits.defs import REGISTRY
     from verity_vllm.program import descriptor_equivalence as DE
-    from verity_vllm.program.registry.catalog import load as load_registry
+    from verity.ml.definitions.registry.catalog import load as load_registry
     load_registry()
     t0 = time.time()
     try:

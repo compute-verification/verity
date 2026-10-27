@@ -18,12 +18,12 @@ from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.reference import evaluate
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.kernels import sparse_mla_split_twins as TW
-from verity_vllm.program.registry import boolean_sparse_mla_split as BX
-from verity_vllm.program.registry import mla_capture as MC
-from verity_vllm.program.registry import sparse_mla as M
-from verity_vllm.program.registry import sparse_mla_split as W
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.numerics import sparse_mla_split_twins as TW
+from verity.ml.definitions.registry import boolean_sparse_mla_split as BX
+from verity_vllm.program import mla_capture as MC
+from verity.ml.definitions.registry import sparse_mla as M
+from verity.ml.definitions.registry import sparse_mla_split as W
 from tests.program.test_boolean_fp8 import F32_SPECIALS, _flat, _inputs
 from tests.program.test_sparse_mla import FA3, _bf16, _case, _run_head, _val
 
@@ -45,7 +45,7 @@ def _lg2_word(x: int) -> int:
 
 @pytest.mark.parametrize("c0", ["C0", "C0_max"])
 def test_lg2_reproduces_the_sm120_measurement(c0: str) -> None:
-    """Every mantissa at [1, 2) and the 2^20-word sweep of run r20261004-060203-ba52, by the digests the table records, at
+    """Every mantissa at [1, 2) and the 2^20-word sweep, by the digests the table records, at
     either end of C0's measured range."""
     mant, sweep_in, sweep_out = _digests()
     h = hashlib.sha256()

@@ -6,20 +6,20 @@
 # committed value is changed (committed consistently, the prover's self-check skipped), which Lean must refuse. M0's
 # flock-circuit and Lean's flock-verify are built from this tree, in scratch.
 #   PP_TP=DIR: a deferred TP Commit's row dir (DIR/commit with its sealed bundles, DIR/build/rank<r>), as GLM-5.3 B1's Commit
-#     r20261021-141533-38b2 on vy-nebius-cpu-2 (/workspace/cp/circuits/glm-v2/rows/$ROW). Its advice is the declared run's,
+#     on vy-nebius-cpu-2 (/workspace/cp/circuits/glm-v2/rows/$ROW). Its advice is the declared run's,
 #     from integrations/vllm/workloads/$ROW.json. The honest partition is PP_PARTITION (default a5's step-16 SiluMul_v2,
 #     stratified:4); the forged one SiluMul_v2{I=1536} at step 16, all 3 units drawn, on ranks PP_FORGED_RANKS (default 0).
 #   PP_LLAMA=art:ID: a single-GPU (TP1) Commit's row dir in the store, fetched once per node into PP_CACHE (default
-#     ~/.cache/verity-prove-path): Llama-3.2-1B's Commit r20261024-055630-5377 (art:f7428299…, $LROW, the sealed bundle
+#     ~/.cache/verity-prove-path): Llama-3.2-1B's Commit ($LROW, the sealed bundle
 #     commit/replay_bundle_p0 and the Build's build_request_LP*). Its compiler is I2's compile_steps; its advice the declared
 #     run's. The bundle's context records the Commit's absolute node paths, and none is read: the prover's Programs are read from
-#     --row-dir, the verifier's from its own trace of each (PP_VLLM_PYTHON), and the Build manifest falls back to
+#     --row-dir, the verifier's from its own compile of each, and the Build manifest falls back to
 #     <row dir>/manifest.json (sha256-checked against the record). The honest partition is
 #     PP_PARTITION (default layer 0's SiluMul_v2{I=8192} at step 1, 4 units, subset:2); the forged one layer 0's at step 24, the
 #     one unit only r0 decodes there, drawn (subset:1), forged at PP_FORGE (default 0:0). With PP_SERVE_STANDIN=1, the same
 #     Commit laid out as a serve-openai run (prove_path.py serve-standin) and audited as a served window.
 #   PP_SERVE_RUN=DIR|art:ID PP_WINDOW=K PP_SERVE_ROWS=DIR|art:ID: a serve-openai run's closed Commit window K (default 0), its
-#     advice, requests and engine from the run dir, its Commit from the window's sealed row dir (#3532's form); PP_TARGET=F the
+#     advice, requests and engine from the run dir, its Commit from the window's sealed row dir; PP_TARGET=F the
 #     serving device's target profile where serve.json records none. The honest and forged partitions are PP_PARTITION and
 #     PP_FORGED_PARTITION (default the Llama ones above), forged at PP_FORGE (default 0:0). The window's compiler lists its
 #     model's transfer gates of record (prove_path.GATES_OF_RECORD, which PP_TRANSFER_GATES may only restate), and its advice is
@@ -27,21 +27,13 @@
 #     `prove_path.py compiler` prints). With PP_RECORDS=1 (a served window, PP_SERVE_RUN or PP_SERVE_STANDIN), each window is
 #     audited from its records alone (records_audit.py: circuit.json, the registration and the values, the advice's opening),
 #     its registered compiler run as a command (prove_path.py circuit), instead of by prove_path.py audit.
-#   PP_VLLM_PYTHON=PY: the interpreter holding the pinned vLLM (CPU, on meta, as tools/advice_compile.py runs it) that a TP1 or
-#     served window's verifier traces its own Build of each Program I2 compiles with (prove_path.py audit's and circuit's
-#     --vllm-python): the rows' names, the parameters' names and types, supplied, the correspondence and prefix_cache.json are
-#     no Program digest's, so the verifier never reads them from the row dir. Default the tree's venv, which holds no vLLM.
-#   PP_TORCH_LOOP=1: a window of an integration that is not vLLM (integrations/torch_loop: a W8A8 MLP in PyTorch, its one
-#     template ScaledMmS8Coordinate_v1{K=128}), honest and tampered (every output's bit 0 flipped), each audited from its records
-#     alone under PP_LAW (default subset:2), in members of PP_TORCH_LOOP_CAP units (default 8), each arm a run of its own
-#     (--run-id): once against the circuit's SHA-512 from the loop's shape and run, printed before it runs
-#     (records_audit.py --circuit), and once with its schedule committed
-#     as advice under its compiler (verity_torch_loop.compile, run by the audit as a command: --opening, --compilers); each
-#     tampered window must be refused by Lean. PP_TORCH_LOOP_SHAPE: more serve.py flags (--requests, --steps).
+#   PP_VLLM_PYTHON=PY: ignored (prove_path.py audit's and circuit's --vllm-python): a TP1 or served window's verifier writes its
+#     own Build of each Program I2 compiles from its compile, with no vLLM, since the rows' names, the parameters' names and
+#     types, supplied, the correspondence and prefix_cache.json are no Program digest's and never read from the row dir.
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256}:
 #     honest subset:4, forged subset:8 (every unit drawn); with PP_PLAIN=1, stratified:4 and stratified:8.
 #   PP_PLAIN=1: plain C-Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
-#     draw, until proofs' multi-table coverage lands, so each partition's law must be stratified:K over a window of one member.
+#     draw, until multi-table coverage lands, so each partition's law must be stratified:K over a window of one member.
 #   PP_JOBS=N ranks at once (a GLM-5.3 rank: its bundle window ~2.5 min and ~11 GB, its audit ~10 GB); PP_RANKS=0,3 those ranks
 #   only; PP_FORGE=MEMBER:UNIT the forged unit (default 0:1); PP_ONLY=honest|forged that run alone; PP_FLOCK_WORK=DIR keeps M0's
 #   build across runs. The Llama honest audit peaks at ~20 GB (one process), its forged one well under.
@@ -53,11 +45,11 @@
 #   llama32_1b_tg_l0_step24.json PP_FORGE=0:0 (a RoPE head, drawn because every one is).
 #   PP_CHALLENGER=local: each window drawn on a local challenger session's coins (--challenger local, a5_coins), not the
 #   verifier's own, pinned on main's first-parent history fetched from the clone's origin. PP_CHALLENGER=gate:USER@HOST:
-#   vy-challenger-1's, through infra's gate with the lane's gate key PP_GATE_KEY, its challenger on PP_PEER's 127.0.0.1 (this
+#   vy-challenger-1's, through its SSH gate with the lane's gate key PP_GATE_KEY, its challenger on PP_PEER's 127.0.0.1 (this
 #   node, as the gate's /etc/vy/peers names it), under the key record PP_CHALLENGER_KEY (challenger-key/v1). The gate opens a
 #   root once, and both arms register under the window's one run root: with the gate, run one arm (PP_ONLY).
 #   research run --on vy-nebius-cpu-2 --project verity --source . --cwd clone --mem-gb 64 --mem-wait 3600 \
-#     --env PP_LLAMA=art:f74282995892011346dbf7ec656b3651ca35b48e8c26cea4d4796b36afadce7f -- bash benchmarks/prove_path/run.sh
+#     --env PP_LLAMA=art:ID -- bash benchmarks/prove_path/run.sh
 # Kept in $OUT: the records and logs, the public files, the sessions (their proofs and records), the binaries' sha256; never the
 # advice or its opening (the prover's, private: the verifier is handed the opening, the named gap), a prover's file (inst-*,
 # *-private.bin: the rows and their salts) nor a circuit (its pin is).
@@ -130,7 +122,7 @@ PP="$PY benchmarks/prove_path/prove_path.py"
 keep() {  # NAME: $W/NAME's records into $O/NAME
   mkdir -p $O/$1
   (cd $W/$1 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' \
-    ! -path './builds/*' -print0 \
+    ! -path './builds/*' ! -path './proof-edits/*/sessions/*' ! -path './proof-edits/mutants/*/*' ! -path './proof-edits/*/member/*' -print0 \
     | xargs -0 -r -I{} cp --parents {} $O/$1/)
 }
 run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, then the verifier's audit; RUN is the committed
@@ -218,56 +210,16 @@ elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
     case $SR in art:*) SR=$W/serve-run; R data fetch $PP_SERVE_RUN --to $SR >> $O/fetch.log 2>&1 || { tail -20 $O/fetch.log; exit 8; };; esac
     served served $SR ${PP_WINDOW:-0} || rc=1
   else
-    LLAMA="--bundle $D/commit/replay_bundle_p0 --row-dir $D --workload integrations/vllm/workloads/$LROW.json"
+    LLAMA="--bundle $D/commit/replay_bundle_p0 --row-dir $D --workload examples/vllm/workloads/$LROW.json"
     if [ -n "${PP_SERVE_STANDIN:-}" ]; then
       $PP serve-standin $LLAMA --out $W/serve-run | tee $O/serve-standin.json || exit 8
       served llama-served $W/serve-run 0 || rc=1
     else
-      $PP advice --workload integrations/vllm/workloads/$LROW.json --out $W/advice.bin | tee $O/advice.log || exit 8
+      $PP advice --workload examples/vllm/workloads/$LROW.json --out $W/advice.bin | tee $O/advice.log || exit 8
       run llama "$LLAMA" $W/advice.bin ${PP_PARTITION:-$STEP1} "" || rc=1
       run llama-forged "$LLAMA" $W/advice.bin ${PP_FORGED_PARTITION:-$STEP24} "" --forge ${PP_FORGE:-0:0} || rc=1
     fi
   fi
-elif [ -n "${PP_TORCH_LOOP:-}" ]; then
-  TLAW=${PP_LAW:-subset:2} TCAP=${PP_TORCH_LOOP_CAP:-8}
-  TL="$PY -m verity_torch_loop.serve --law $TLAW --cap $TCAP ${PP_TORCH_LOOP_SHAPE:-}"
-  export PYTHONPATH=$REPO/integrations/torch_loop
-  # the verifier's table of the loop's compiler: its name, the digest over its code, the code and import paths the audit
-  # recomputes that digest over and runs it with in its checkout of the registered commit, and the command
-  $PY -m verity_torch_loop.compile --table $PY -m verity_torch_loop.compile --law $TLAW --cap $TCAP \
-    > $O/torch-loop-compilers.json || exit 8
-  loop() {  # NAME [--compiled] [--tamper]: the torch loop's window, audited from its records alone against the circuit
-            # registered before it ran, or (--compiled) against its compiler's output on its committed schedule. Each arm is
-            # a run of its own (--run-id), so a root of its own: infra's gate opens a root's coins once
-    local name=$1 forged= id=${RESEARCH_RUN_ID:-local}/$1 serve=() held=() c; shift
-    for x in "$@"; do
-      case $x in
-        --tamper) forged=--forged; serve+=(--tamper);;
-        --compiled) serve+=(--opening $W/$name-opening.json)
-                    held=(--opening $W/$name-opening.json --compilers $O/torch-loop-compilers.json);;
-      esac
-    done
-    mkdir -p $O/$name
-    if [ ${#held[@]} = 0 ]; then   # the circuit registered for the run before it runs, from its shape and id alone
-      c=$($TL --run-id $id --circuit-only | tee $O/$name/circuit-before.json | $PY -c 'import json, sys; print(json.load(sys.stdin)["circuit"])') \
-        || return 1
-      held=(--circuit $c)
-    fi
-    $TL --run-id $id --out $W/$name-window "${serve[@]}" | tee $O/$name/serve.json || return 1
-    local run; run=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["run"])' $O/$name/serve.json) || return 1
-    mkdir -p $O/$name/window && cp $W/$name-window/{registration,window,index,circuit}.json $W/$name-window/m*-public.bin $O/$name/window/
-    $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name-window --law $TLAW "${held[@]}" \
-      --run $run ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
-      --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
-    local rc=$?
-    grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
-    keep $name
-    return $rc
-  }
-  loop torch-loop || rc=1
-  [ "${PP_ONLY:-}" = honest ] || loop torch-loop-tampered --tamper || rc=1
-  loop torch-loop-compiled --compiled || rc=1
-  [ "${PP_ONLY:-}" = honest ] || loop torch-loop-compiled-tampered --compiled --tamper || rc=1
 else
   S=$W/served
   (cd integrations/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I 256 --law $LAW:4 --deferred) \

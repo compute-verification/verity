@@ -11,12 +11,13 @@ then takes, in order:
   - a pool where a slot that fits the job (not trains-only, at least its CPUs and its memory: the slot's mem= reserves the
     run, with no cgroup cap) is free and unblocked for every waiter ahead and this job;
   - else the pool with the shortest wait, as waiters ahead per fitting slot;
-  - node 2 only when no pool fits the job or none can be read. Node 2 is the only GPU node, and on 24 Oct 02:10Z its GPUs sat
-    at 0% under a load of 235 on 120 cores from CPU work while cpu-5 ran at 8 of 192 (top).
+  - node 2 only when no pool fits the job or none can be read, and node 2 itself can be. Node 2 is the only GPU node, and on
+    24 Oct 02:10Z its GPUs sat at 0% under a load of 235 on 120 cores from CPU work while cpu-5 ran at 8 of 192 (top).
 
 A GPU job, a run naming its own node, or one asking more than a pool slot gives stays on node 2's queue. A machine that can't
-be read is skipped, and with node 2 unread the job is queued there as before. A pool run waits up to an hour in its line
-(slot_only.POOL_WAIT_S) and then exits 75 without running; its --timeout counts from taking the slot.
+be read is skipped; with node 2 unread and no pool fitting, the job is refused (`Unplaceable`) with where to run it. A pool
+run waits up to an hour in its line (slot_only.POOL_WAIT_S) and then exits 75 without running; its --timeout counts from
+taking the slot.
 """
 from __future__ import annotations
 
@@ -28,12 +29,18 @@ from pathlib import Path
 from typing import Any, Callable
 
 AUTO_NODE, AUTO_PROJECT = "vy-nebius-2", "verity"
-#: (machine, pool) where `--on auto` may spill: cpu-1's and cpu-5's `research` pools are any lane's, on cores no check slot holds
-#: (8-53; slot_only.POOLS). cpu-2's cores are the train slot's and proofs', cpu-3's proofs', cpu-4's held for PRF-131's shares.
-SPILL = (("vy-nebius-cpu-1", "research"), ("vy-nebius-cpu-5", "research"))
+#: (machine, pool) where `--on auto` may spill: cpu-1's, cpu-3's and cpu-5's `research` pools are any lane's, on cores no check
+#: slot holds (slot_only.POOLS). cpu-3's joined 27 Oct, when the other two had 34 and 22 waiting while it sat idle (INF-281).
+#: cpu-2's cores are the train slot's and proofs', cpu-4's the train slot's, proofs' and soundness's.
+SPILL = (("vy-nebius-cpu-1", "research"), ("vy-nebius-cpu-5", "research"), ("vy-nebius-cpu-3", "research"))
 DESCRIPTION = Path("infra/cluster/descriptions/nebius.toml")
 SLOT_PY = Path("tools/verity/check/slot.py")
 READ_TIMEOUT_S = 30
+
+
+class Unplaceable(Exception):
+    """No pool fits the job and node 2 can't be read: its queue would place it on a node that isn't up (26 Oct: node 2 stopped,
+    and an `--on auto` job too big for a pool slot was refused there with a stale admission window)."""
 
 PROBE = '''
 import json, os, sys, types
@@ -160,7 +167,8 @@ def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
 
 
 def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float) -> tuple[tuple[str, str] | None, str]:
-    """The pool to spill to ((machine, pool)), or None for node 2's queue, and why (module doc)."""
+    """The pool to spill to ((machine, pool)), or None for node 2's queue, and why (module doc); `Unplaceable` when neither can
+    take it."""
     cpus = max(cpus, 1)
     n2 = docs.get(AUTO_NODE)
     share = n2.get("share") if isinstance(n2, dict) else None
@@ -186,7 +194,9 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float) -> tuple[tuple
         (_, _, target) = min(ranked)
         return target, "; ".join(notes) + f": the shortest line per run that fits is {target[0]}'s {target[1]} pool"
     if share is None:
-        return None, "; ".join(notes) + ": no pool fits, so the queue there as before"
+        raise Unplaceable("; ".join(notes) + f": no pool fits and {AUTO_NODE} can't be reached, so nothing would run it. "
+                          f"Give it a node yourself: `research run --on MACHINE --mem-gb N`, a CPU node whose free memory fits "
+                          f"it (`research pods list`), or shrink --cpus/--mem-gb to a pool slot's")
     if share.get("fits") and not share["waiters"]:
         return None, "; ".join(notes) + f": no pool fits, and it starts on {AUTO_NODE} now"
     return None, "; ".join(notes) + f": no pool fits, so {AUTO_NODE}'s line"

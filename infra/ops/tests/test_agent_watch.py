@@ -1,5 +1,6 @@
 """The agent watch (INF-69) frees a held run: RUNNING, its last event a finished tool call, then nothing but heartbeats for
 15 minutes. It cancels the run, starts a 'continue' run on the agent, and records it; it never cancels a long tool call."""
+import io
 import json
 import re
 import uuid
@@ -348,6 +349,80 @@ def test_the_stream_parses_server_sent_events_until_done(monkeypatch):
     assert events[1][1] == {"callId": "c1", "name": "Shell", "status": "completed"}
     assert seen[0].full_url.endswith("/v1/agents/bc-a/runs/run-1/stream")
     assert seen[0].get_header("Authorization").startswith("Basic ")
+
+
+def test_a_sweeps_reads_stop_at_its_budget_and_its_actions_still_go(monkeypatch):
+    """26 Oct: with the API answering near its 60 s timeout, one sweep's serial reads took 24 min and the cloud watch alerted.
+    A read past `reads_until` raises TimeoutError without asking, one before it waits at most what is left; a POST always goes."""
+    class Resp:
+        def __enter__(self):
+            return io.BytesIO(b"{}")
+
+        def __exit__(self, *a):
+            return False
+
+    asked = []
+    monkeypatch.setattr(W.urllib.request, "urlopen", lambda req, timeout=None: asked.append((req.get_method(), timeout)) or Resp())
+    clock = Clock(100.0)
+    api = W.Api("k", clock=clock)
+    api.get("/v1/agents")
+    api.reads_until = 130.0
+    api.get("/v1/agents")
+    clock.t = 130.0
+    with pytest.raises(TimeoutError):
+        api.get("/v1/agents")
+    api.post("/v1/agents/bc-a/runs/run-1/cancel")
+    assert asked == [("GET", 60), ("GET", 30.0), ("POST", 60)]
+
+
+def test_the_agents_listing_halves_its_page_on_each_503_down_to_its_floor(monkeypatch):
+    """27 Oct: GET /v1/agents 503'd at the fixed page of 25 from ~00:00Z while 10 answered, and every sweep failed for 3.5 h."""
+    class Resp:
+        def __init__(self, doc):
+            self.doc = doc
+
+        def __enter__(self):
+            return io.BytesIO(json.dumps(self.doc).encode())
+
+        def __exit__(self, *a):
+            return False
+
+    limits = []
+
+    def urlopen(req, timeout=None):
+        q = W.urllib.parse.parse_qs(W.urllib.parse.urlparse(req.full_url).query)
+        limits.append(n := int(q["limit"][0]))
+        if n > 3:
+            raise W.urllib.error.HTTPError(req.full_url, 503, "Service Unavailable", {}, io.BytesIO(b""))
+        return Resp({"items": [{"id": f"bc-{len(limits)}"}], "nextCursor": None if "cursor" in q else "c1"})
+
+    monkeypatch.setattr(W.urllib.request, "urlopen", urlopen)
+    api = W.Api("k")
+    assert [a["id"] for a in api.agents()] == ["bc-3", "bc-4"]
+    assert limits == [W.AGENTS_PAGE, W.AGENTS_PAGE // 2, 2, 2] and api.page == 2
+    monkeypatch.setattr(W.urllib.request, "urlopen", lambda req, timeout=None: (_ for _ in ()).throw(
+        W.urllib.error.HTTPError(req.full_url, 503, "Service Unavailable", {}, io.BytesIO(b""))))
+    with pytest.raises(W.urllib.error.HTTPError):
+        list(api.agents())
+
+
+def test_a_run_read_that_times_out_skips_its_agent_and_the_sweep_goes_on(tmp_path):
+    """An IDLE agent's run read (`Watch.read`) caught only HTTP errors, so a timeout there, or a spent read budget, failed the
+    whole sweep and left status.json stale."""
+    class SlowApi(FakeApi):
+        def get(self, path, **params):
+            if path.endswith("/runs/run-i"):
+                raise TimeoutError("The read operation timed out")
+            return super().get(path, **params)
+
+    clock = Clock()
+    api = SlowApi([{"id": "bc-i", "status": "IDLE", "latestRunId": "run-i", "updatedAt": W.iso(clock.t)},
+                   {"id": "bc-a", "status": "ACTIVE", "latestRunId": "run-1"}], {"run-1": {"status": "RUNNING"}})
+    w, started = W.Watch(api, tmp_path / "events.jsonl", clock), []
+    w.sweep(started.append)
+    assert [r.run for r in started] == ["run-1"]
+    assert status(tmp_path)["bc-a"]["watch_state"] == "followed"
+    assert records(tmp_path) == [], "a timeout is not an unreadable run"
 
 
 def test_a_tool_calls_interaction_update_twin_doesnt_hide_a_held_run(tmp_path):
@@ -1287,6 +1362,44 @@ def test_a_worker_that_goes_idle_is_recorded_once_per_transition(tmp_path):
         "the ACTIVE read before a restart of the watch counts (state.json)"
 
 
+def test_a_worker_whose_parent_got_its_task_result_is_not_recorded_idle_and_one_resumed_later_is(tmp_path):
+    """INF-277: a worker that ended its turn by reporting back (its parent's Task call completed as it stopped) needs no one,
+    whether the result streams in before the IDLE read or while the record is held; resumed (its Task call running again) and
+    stopped without a result, it is recorded as before."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_})")
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", "2026-10-18T19:31:00Z")}, notes=notes)
+    w.sweep(lambda r: None)
+    clock.t += 6 * 60
+    api.workers[W1_] = worker("IDLE", W.iso(clock.t - 30))
+    w.child(CO, {"name": "task", "status": "completed", "args": {"agentId": W1_}}, clock.t)
+    for _ in range(W.BURST_QUIET_S // 60 + 2):
+        clock.t += 60
+        w.sweep(lambda r: None)
+    assert records(tmp_path) == [], "reported back: nobody must act"
+    w.child(CO, {"name": "task", "status": "running", "args": {"agentId": W1_}}, clock.t)
+    api.workers[W1_] = worker("ACTIVE", W.iso(clock.t))
+    w.sweep(lambda r: None)
+    clock.t += 10 * 60
+    api.workers[W1_] = worker("IDLE", W.iso(clock.t - 30))
+    w.sweep(lambda r: None)
+    clock.t += 60
+    w.child(CO, {"name": "task", "status": "completed", "args": {"agentId": W1_}}, clock.t)
+    for _ in range(W.BURST_QUIET_S // 60 + 2):
+        clock.t += 60
+        w.sweep(lambda r: None)
+    assert records(tmp_path) == [], "a result that streams in while the record is held drops it"
+    w.child(CO, {"name": "task", "status": "running", "args": {"agentId": W1_}}, clock.t)
+    api.workers[W1_] = worker("ACTIVE", W.iso(clock.t))
+    w.sweep(lambda r: None)
+    clock.t += 10 * 60
+    api.workers[W1_] = worker("IDLE", stopped := W.iso(clock.t - 30))
+    for _ in range(W.BURST_QUIET_S // 60 + 2):
+        clock.t += 60
+        w.sweep(lambda r: None)
+    assert [(r["kind"], r["at"]) for r in records(tmp_path)] == [("worker_idle", stopped)], "no result: rung as before"
+
+
 def test_a_worker_first_seen_idle_is_not_recorded(tmp_path):
     """Idle before the watch knew it: it may have reported back hours ago."""
     notes = tmp_path / "notes"
@@ -1504,6 +1617,69 @@ def test_a_silent_worker_is_rung_once_then_once_more_a_window_later_then_not_unt
     assert [r["window"] for r in silent(tmp_path)] == [1, 2, 1] and silent(tmp_path)[-1]["since"] == W.iso(p.stat().st_mtime)
 
 
+def test_a_silent_worker_still_showing_nothing_six_hours_on_is_one_no_step_for_top(tmp_path):
+    """top, 26 Oct: nine workers sat ACTIVE with no step for 30-64 h, each rung twice as silent and then by no one."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_}); code cursor/w3-branch-c7a9", age_s=2 * 3600)
+    sh = FakeSh({"cursor/w3-branch-c7a9": "a" * 40})
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", W.iso(T0 - 3 * 3600))}, notes=notes,
+                                 git_remote=REMOTE, sh=sh)
+    w.sweep(lambda r: None)
+    sweeps(w, clock, 359)
+    assert [r["kind"] for r in records(tmp_path) if r["kind"] in ("silent", "no_step")] == ["silent", "silent"]
+    sweeps(w, clock, 1)
+    sweeps(w, clock, 600)
+    got = [r for r in records(tmp_path) if r["kind"] == "no_step"]
+    assert [{k: r[k] for k in ("agent", "since", "hours", "handle", "owner")} for r in got] == [
+        {"agent": W1_, "since": W.iso(T0), "hours": 6, "handle": "circuits", "owner": "top"}]
+
+
+def test_a_coordinator_working_with_no_note_or_push_is_silent_but_never_no_step(tmp_path):
+    """26 Oct 21:05Z: no_step told @top to stop and archive compute-accounting's and network-accounting's coordinators, each
+    working in Slack within two minutes, with no note or push for 6 h. Its agent's `updatedAt` moving is activity to no_step,
+    not to silent; once that stops too, no_step counts from it."""
+    run = {"status": "RUNNING", "createdAt": W.iso(T0), "updatedAt": W.iso(T0)}
+    sh = FakeSh({"main": "m" * 40})
+    api, clock, w = coordinators(tmp_path, [{"id": CO, "name": "verity: circuits", "status": "ACTIVE", "latestRunId": "run-r"}],
+                                 {"run-r": run}, notes=tmp_path / "notes", git_remote=REMOTE, sh=sh)
+    (tmp_path / "notes").mkdir()
+    sweep = w.sweep
+
+    def working(start):
+        api._agents[0]["updatedAt"] = W.iso(clock.t)
+        sweep(start)
+    w.sweep = working
+    w.sweep(lambda r: None)
+    sweeps(w, clock, 8 * 60)
+    kinds = [r["kind"] for r in records(tmp_path) if r["kind"] in ("silent", "no_step")]
+    assert kinds == ["silent", "silent"], kinds
+    w.sweep = sweep
+    stopped = clock.t
+    sweeps(w, clock, 6 * 60)
+    got = [r for r in records(tmp_path) if r["kind"] == "no_step"]
+    assert [(r["agent"], r["hours"], r["owner"]) for r in got] == [(CO, 6, "top")]
+    assert W.epoch(got[0]["since"]) >= stopped - 5 * 60
+
+
+def test_a_coordinators_lane_note_is_its_activity(tmp_path):
+    """top, 27 Oct: four silent rings on coordinators in 70 min were false; each was syncing notes signed with its lane, not its
+    id. A note under `lanes/<handle>/` counts for that handle's coordinator."""
+    run = {"status": "RUNNING", "createdAt": W.iso(T0), "updatedAt": W.iso(T0)}
+    notes = tmp_path / "notes"
+    sh = FakeSh({"main": "m" * 40})
+    api, clock, w = coordinators(tmp_path, [{"id": CO, "name": "verity: circuits", "status": "ACTIVE", "latestRunId": "run-r"}],
+                                 {"run-r": run}, notes=notes, git_remote=REMOTE, sh=sh)
+    (notes / "lanes").mkdir(parents=True)
+    w.sweep(lambda r: None)
+    for _ in range(12):
+        sweeps(w, clock, 20)
+        p = note(notes, "circuits", f"c{clock.t:.0f}.md", "circuits coordinator", age_s=0)
+        W.os.utime(p, (clock.t, clock.t))
+    assert [r for r in silent(tmp_path) if r["agent"] == CO] == [], "its lane's notes every 20 min are activity"
+    sweeps(w, clock, 65)
+    assert [r["agent"] for r in silent(tmp_path)] == [CO], "with no note for an hour it is silent again"
+
+
 def test_a_push_to_an_agents_branch_is_activity(tmp_path):
     """A coordinator's branches: its runs' `git.branches` and every head ending in its id's last four (`cursor/...-cccc`)."""
     run = {"status": "RUNNING", "createdAt": W.iso(T0), "updatedAt": W.iso(T0),
@@ -1520,17 +1696,18 @@ def test_a_push_to_an_agents_branch_is_activity(tmp_path):
         sweep(start)
     w.sweep = working
     w.sweep(lambda r: None)
-    sweeps(w, clock, 60)
+    sweeps(w, clock, 50)
     sh.heads[f"cursor/by-suffix-{CO[-4:]}"] = "4" * 40
-    sweeps(w, clock, 60)
+    sweeps(w, clock, 50)
     sh.heads["cursor/api-named"] = "5" * 40
-    sweeps(w, clock, 60)
+    sweeps(w, clock, 50)
     sh.heads["cursor/not-veritys"] = "6" * 40
     assert silent(tmp_path) == []
-    sweeps(w, clock, 90)
+    sweeps(w, clock, 60)
     (rec,) = silent(tmp_path)
-    assert (rec["agent"], rec["handle"], rec["run"], rec["minutes"], rec["since"]) == (
-        CO, "circuits", "run-r", 90, W.iso(T0 + 125 * 60)), "its last push was seen at the heads read after it"
+    assert (rec["agent"], rec["handle"], rec["run"], rec["minutes"], rec["since"], rec["owner"]) == (
+        CO, "circuits", "run-r", 60, W.iso(T0 + 105 * 60), "top"), \
+        "its last push was seen at the heads read after it; a coordinator is silent after an hour, and @top is rung"
     assert rec["branches"] == ["cursor/api-named", f"cursor/by-suffix-{CO[-4:]}"]
     assert status(tmp_path)[CO]["watch_state"] == "silent"
 
@@ -1552,10 +1729,10 @@ def test_stale_heads_or_no_notes_judge_nobody_and_an_agent_that_goes_idle_ends_i
     sweeps(w, clock, 5)
     assert w.silent == {} and w.active == {}
     agents[0]["status"], runs["run-r"]["status"] = "ACTIVE", "RUNNING"
-    sweeps(w, clock, 85)
+    sweeps(w, clock, 55)
     assert len(silent(tmp_path)) == 1, "a new ACTIVE spell counts from its start, the sweep that saw it ACTIVE again"
     sweeps(w, clock, 10)
-    assert [r["since"] for r in silent(tmp_path)][1:] == [W.iso(clock.t - W.SILENT_S)]
+    assert [r["since"] for r in silent(tmp_path)][1:] == [W.iso(clock.t - W.COORD_SILENT_S)]
     (tmp_path / "no-notes").mkdir()
     api2, clock2, w2 = coordinators(tmp_path / "no-notes", agents, runs, git_remote=REMOTE, sh=FakeSh())
     sweeps(w2, clock2, 200)
@@ -1573,20 +1750,21 @@ def test_a_restarted_watch_keeps_the_spells_rings(tmp_path):
     assert len(silent(tmp_path)) == 1
     again = W.Watch(api, tmp_path / "events.jsonl", clock, registry=tmp_path / "registry.json", routes=tmp_path / "routes.d",
                     notes=tmp_path / "notes", git_remote=REMOTE, sh=sh)
-    sweeps(again, clock, 85)
+    sweeps(again, clock, 25)
     assert len(silent(tmp_path)) == 1, "neither the ring nor the spell's start is forgotten"
     sweeps(again, clock, 5)
     assert [r["window"] for r in silent(tmp_path)] == [1, 2]
 
 
-def node_run(root, rid, ended, *, by="", state="done", rc=0, wall_s=750.0, command=None, job="", lane=""):
+def node_run(root, rid, ended, *, by="", state="done", rc=0, wall_s=750.0, command=None, job="", lane="", tree=""):
     """A run dir as `research run` leaves it on a node: runs/<rid>/{status,job}.json and requests/<rid>/request.json."""
     d, q = root / "runs" / rid, root / "requests" / rid
     d.mkdir(parents=True)
     q.mkdir(parents=True)
     (d / "status.json").write_text(json.dumps({"state": state, "rc": rc, "wall_s": wall_s, "transitions": [
         {"state": "running", "t_utc": W.iso(ended - wall_s)}, {"state": state, "t_utc": W.iso(ended)[:-1] + ".250Z"}]}))
-    (d / "job.json").write_text(json.dumps({"ownership": {"job": job, "lane": lane}, "computation": {"stage": ""}}))
+    (d / "job.json").write_text(json.dumps({"ownership": {"job": job, "lane": lane},
+                                             "computation": {"stage": "", **({"tree_sha": tree} if tree else {})}}))
     (q / "request.json").write_text(json.dumps({"command": command or ["python", "-m", "bench", "--seed", "1"],
                                                 **({"submitted_by": by} if by else {})}))
     W.os.utime(d / "status.json", (ended, ended))
@@ -1653,6 +1831,9 @@ def test_a_run_that_ends_rings_its_senders_handle_once(tmp_path):
                                   "lane": "zk-port"},
         "r20261018-195500-0004": {"agent": "", "name": "", "handle": "vllm", "role": "lane", "node": "vy-nebius-2",
                                   "what": "slot --by vllm --", "rc": 1, "state": "failed", "after": "30 s", "lane": "vllm"}}
+    assert {r["run"]: r.get("sender_status") for r in ended(tmp_path) if r["role"] != "unknown"} == {
+        "r20261018-195000-0002": "IDLE", "r20261018-195500-0003": "ACTIVE", "r20261018-195500-0004": "unknown"}, \
+        "the sender's status at its run's end, for the relay to ring only a sender not in a turn (INF-277)"
     assert status(tmp_path)[CO]["watch_state"] != "run_ended", "a research run's end is not the agent's state"
     for _ in range(3):
         clock.t += 5 * 60
@@ -1699,6 +1880,46 @@ def test_a_run_ends_sender_resolves_as_a_learned_worker_does_and_the_rest_are_on
     assert sorted((u["run"], u["node"], u["rc"]) for u in unsent["runs"]) == [
         ("r20261019-052718-24a9", "vy-nebius-2", 8), ("r20261019-192229-3606", "vy-nebius-1", 143)]
     assert censusand in w.awaiting, "the worker's end starts its clock, for its coordinator to resume it"
+
+
+def test_a_run_ends_unknown_sender_is_rung_to_the_handle_its_branch_names(tmp_path):
+    """25 Oct: infra traced seven unknown senders by hand, each from the run's tree to the branch that had it as its head to the
+    lane (TOP-90 row 21). The branch's suffix in the registry's `branch_suffixes`, or a handle its name starts with, routes it;
+    a sha no branch had stays @infra's."""
+    url = "https://cursor.com/agents/{}".format
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    reg = json.loads((tmp_path / "registry.json").read_text())
+    reg["handles"].append({"handle": "kernels", "holder": "the kernels coordinator"})
+    for h in reg["handles"]:
+        if h["handle"] == "circuits":
+            h["branch_suffixes"] = ["8c79"]
+    (tmp_path / "registry.json").write_text(json.dumps(reg))
+    a, b, c = "a" * 40, "b" * 40, "c" * 40
+    w.heads = {"t0": T0, "t": T0, "heads": {"cursor/kernels-kp2s8-8c40": [b, T0]},
+               "shas": {a: ["cursor/circuits-demowl-8c79", T0], b: ["cursor/kernels-kp2s8-8c40", T0]}}
+    w.sweep(lambda r: None)
+    clock.t += 60
+    node_run(roots["vy-nebius-1"], "r20261025-232710-0001", clock.t, by=url("bc-e7fea65b-bbd7-5c6c-a635-ebfb68240c07"), tree=a)
+    node_run(roots["vy-nebius-1"], "r20261025-232710-0002", clock.t, by=url("bc-5525ca1e-435c-5c8a-823a-eb79a408f170"), tree=b)
+    node_run(roots["vy-nebius-1"], "r20261025-232710-0003", clock.t, by=url("bc-9f0ed9de-4f13-5f31-9e6b-dab2b7a1ac12"), tree=c)
+    clock.t += 5 * 60
+    w.sweep(lambda r: None)
+    got = {r["run"]: (r["handle"], r["role"]) for r in ended(tmp_path) if r["role"] != "unknown"}
+    assert got == {"r20261025-232710-0001": ("circuits", "lane"), "r20261025-232710-0002": ("kernels", "lane")}
+    (unsent,) = [r for r in ended(tmp_path) if r["role"] == "unknown"]
+    assert [u["run"] for u in unsent["runs"]] == ["r20261025-232710-0003"]
+
+
+def test_read_heads_remembers_each_pushed_sha_s_branch_for_two_days(tmp_path):
+    api, clock, w, sh, _ = nodes_setup(tmp_path)
+    w.git_remote = "git@example:verity.git"
+    w.heads = {"t0": T0, "t": T0, "heads": {}, "shas": {"d" * 40: ["cursor/old-1111", T0 - W.HEADS_SHA_KEEP_S - 1]}}
+    sh.heads = {"cursor/lean-x-fc8d": "a" * 40}
+    w.read_heads(clock.t)
+    sh.heads = {"cursor/lean-x-fc8d": "b" * 40}
+    w.read_heads(clock.t + W.HEADS_EVERY_S)
+    assert (w.branch_of("a" * 40), w.branch_of("b" * 40), w.branch_of("d" * 40)) == (
+        "cursor/lean-x-fc8d", "cursor/lean-x-fc8d", ""), "an older head of a branch still names it; a stale one is forgotten"
 
 
 def test_a_quiet_handles_runs_are_not_rung(tmp_path):

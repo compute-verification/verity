@@ -30,15 +30,15 @@ from verity_vllm.acquire import inductor_templates as T
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.gemm_targets import UnregisteredGemmTarget, gemm_target_for
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.kernels import fa3_model as FA3
-from verity_vllm.program.registry import attention_vocab
-from verity_vllm.program.registry import fa2_check_inf as F2
-from verity_vllm.program.registry import fa2_split as W
-from verity_vllm.program.registry import fa3_check_inf as F3
-from verity_vllm.program.registry import inductor as IR
-from verity_vllm.program.registry.hopper import Fa3InvSum
-from verity_vllm.program.registry.prims import Fa2InvSum
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.numerics import fa3_model as FA3
+from verity.ml.definitions.registry import attention_vocab
+from verity.ml.definitions.registry import fa2_check_inf as F2
+from verity.ml.definitions.registry import fa2_split as W
+from verity.ml.definitions.registry import fa3_check_inf as F3
+from verity.ml.definitions.registry import inductor as IR
+from verity.ml.definitions.registry.hopper import Fa3InvSum
+from verity.ml.definitions.registry.prims import Fa2InvSum
 
 #: the FLASH_ATTN version each step family's served attention Definitions model
 ATTENTION = {"hopper": 3, "blackwell_consumer": 2, "blackwell": 2}

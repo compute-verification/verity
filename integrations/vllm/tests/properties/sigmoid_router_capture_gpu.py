@@ -50,7 +50,7 @@ from typing import Any
 
 import numpy as np
 from verity.ml.circuits.ops import mufu as MU
-from verity_vllm.program.kernels import derived_rows as DR
+from verity.ml.definitions.numerics import derived_rows as DR
 
 SCHEMA = "verity-vllm/sigmoid-router-capture/v2"
 RECORD = "sigmoid_router_capture.json"
@@ -393,7 +393,7 @@ _PROGRAMS: dict[str, Any] = {}
 
 def _program(launch: str):
     from verity.ml.circuits.defs import bind
-    from verity_vllm.program.registry import moe
+    from verity.ml.definitions.registry import moe
 
     if launch not in _PROGRAMS:
         _PROGRAMS[launch] = bind(moe.MoeRouterSigmoidBias, E=E, TOPK=TOPK, SCALE=SCALE, KERNEL=launch)

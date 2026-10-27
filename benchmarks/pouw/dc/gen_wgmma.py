@@ -15,6 +15,9 @@ FORMS = [
     *[(f"s8_n{n}", f"m64n{n}k32", "s32.s8.s8", "int", "r", "", False) for n in (8, 16, 32, 64, 128, 192, 256)],
     ("s8_n256_rs", "m64n256k32", "s32.s8.s8", "int", "r", "", True),
     ("u8s8_n256", "m64n256k32", "s32.u8.s8", "int", "r", "", False),
+    # the integer step's eight forms (s8 or u8 operands, .satfinite or not) at the N the s8 GEMMs issue (probes/s8_mma.cu)
+    *[(f"i8_{a}{b}_{m}_n{n}", f"m64n{n}k32", f"s32.{a}.{b}" + (".satfinite" if m == "sat" else ""), "int", "r", "", False)
+      for n in (64, 128, 256) for m in ("sat", "wrap") for a in ("s8", "u8") for b in ("s8", "u8")],
     ("e4m3_n128", "m64n128k32", "f32.e4m3.e4m3", "float", "f", ", 1, 1", False),
     ("e4m3_n256", "m64n256k32", "f32.e4m3.e4m3", "float", "f", ", 1, 1", False),
     ("e5m2_n256", "m64n256k32", "f32.e5m2.e5m2", "float", "f", ", 1, 1", False),

@@ -48,8 +48,7 @@ Stress / negative-test knobs (never in headline runs; recorded when used):
 
 from __future__ import annotations
 
-import os
-import sys
+import hashlib
 import threading
 import time
 from typing import Any
@@ -62,6 +61,7 @@ from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer.flush_points import GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES
 from verity_vllm.commit.committer.host_retention import (HIDDEN_M1_FAMILIES, RETAIN_EXCLUDE_ALIASES, _excluded_chunk_ranges,  # noqa: F401
                                                          _HostRanges, _HostWindows, outside, retain_exclude_families)
+from verity_vllm.commit.committer.native_ext import ext
 from verity_vllm.commit.committer.native_hidden import NativeHiddenM1Source, NativeHiddenM1SourceFA3
 from verity_vllm.commit.committer.native_host import (
     GPU_CHUNK_BYTES,
@@ -76,11 +76,8 @@ from verity_vllm.commit.committer.topp_splits import (SPLITS_IDENTITY, TOPP_SPLI
                                                       uninstall_split_kernel_proxies)
 from verity_vllm.commit.native_ranges import level_sizes
 
-_EXT = None
-HERE = os.path.dirname(os.path.abspath(__file__))
 
-
-def plan_key_of(sched: Any, ntok: int, nreq: int) -> tuple[int, str]:
+def plan_key_of(sched: Any, ntok: int, nreq: int, targets: bytes = b"") -> tuple[int, str]:
     """The collector's plan key for one engine step = the step's SHAPE CLASS, i.e. everything the staged byte layout depends on.
 
     [F-fp8-PLANKEY] The key used to be (ntok << 16) | nreq.  That is not the layout: the FA3 hidden M1 export
@@ -96,6 +93,13 @@ def plan_key_of(sched: Any, ntok: int, nreq: int) -> tuple[int, str]:
     tensor is not bound -- v1 leaf headers bind the step length M only, and the plan is a sequence of (name, bytes) in hook order.
     Between the warm-up (learn) run and the record run of the same declared, batch-invariant, greedy workload the schedule is identical,
     so every record step hits the plan its warm-up twin learned; the plan cache holds one entry per distinct step (<= steps x pairs).
+
+    Some planes follow the engine step, not the geometry: the int8 source's Int8RowQuant_v1 sites and the call-boundary bodies are
+    the manifest's, per engine step, and a served window restarts its steps at 0.  A bench manifest of 32 engine steps stages the
+    quantizers' (x_q, s_a) at window steps 0..31 and none after, so a lone request after its batch-mates finish meets the same
+    geometry at window step 25 in one window and 64 in the next, and stages different bytes.  `targets`, the digest of the names
+    those sources commit at the step (`NativeCollectCommitter.step_targets`), is hashed in with the geometry; with none (b"") the key
+    is the geometry's alone.
     Returns (key, mode): mode "geometry" when the scheduler output exposes the per-request fields (vLLM V1 `SchedulerOutput`:
     scheduled_new_reqs[].num_computed_tokens, scheduled_cached_reqs.{req_ids,num_computed_tokens}, num_scheduled_tokens{}), else
     "counts" = the old key -- recorded on the run (`bounded_staging.plan_key_mode`) so a record never hides which one it used."""
@@ -111,40 +115,11 @@ def plan_key_of(sched: Any, ntok: int, nreq: int) -> tuple[int, str]:
         if len(geo) != nreq or sum(g[1] for g in geo) != ntok:
             raise ValueError(f"scheduler output geometry {len(geo)} reqs / {sum(g[1] for g in geo)} tok != ({nreq}, {ntok})")
         geo.sort()
-        import hashlib
-        h = hashlib.blake2b(repr((int(ntok), int(nreq), geo)).encode(), digest_size=8).digest()
+        what = (int(ntok), int(nreq), geo, bytes(targets)) if targets else (int(ntok), int(nreq), geo)
+        h = hashlib.blake2b(repr(what).encode(), digest_size=8).digest()
         return int.from_bytes(h, "little") & 0x7FFF_FFFF_FFFF_FFFF, "geometry"
     except (AttributeError, IndexError, KeyError, TypeError, ValueError):
         return (int(ntok) << 16) | (int(nreq) & 0xFFFF), "counts"
-
-
-def build_source_digest() -> str:
-    """The source-set digest of THIS tree's collector (native_jit.source_set_digest with the toolchain versions) -- the key of its JIT dir."""
-    from verity_vllm.commit.committer import native_jit
-
-    return native_jit.source_set_digest(torch_version=str(torch.__version__), cuda_version=str(torch.version.cuda))
-
-
-def ext(build_dir: str | None = None, verbose: bool = False):
-    """JIT-build the C++ collector (pybind11 + cudart + .cu kernels) once per process.  `NATIVE_COLLECT_BUILD` (or `build_dir`) names the
-    PARENT of the build directory; the source-set digest picks the child (`<parent>/<digest12>`, native_jit) -- torch's
-    mtime test is never the arbiter of staleness (record_v5/ship.sh preserves source mtimes; a pod-wide dir warmed by another tree's build
-    was adopted by the r17-int-3 ship on cp-big).  Without a parent, torch's default cache dir is used, keyed the same way.  Concurrent jobs
-    on one host serialise on the dir's build lock (`native_jit.jit_load`)."""
-    global _EXT
-    if _EXT is None:
-        from verity_vllm.commit.committer import native_jit
-
-        _EXT, bd, digest = native_jit.jit_load("verity_native_collect", native_jit.source_paths(HERE),
-                                               parent=build_dir or settings.NATIVE_COLLECT_BUILD or None,
-                                               cflags=native_jit.CFLAGS, cuda_cflags=native_jit.CUDA_CFLAGS, verbose=verbose)
-        missing = native_jit.missing_bindings(_EXT, os.path.join(HERE, "native_collect.cpp"))
-        if missing:
-            _EXT = None
-            raise RuntimeError(f"native collector .so in {bd} does not expose {missing} bound by {HERE}/native_collect.cpp -- a stale build "
-                               f"(source digest {digest[:12]}); remove the directory and rebuild")
-        print(f"[jit] native collector source digest {digest[:12]} -> {bd}", file=sys.stderr, flush=True)
-    return _EXT
 
 
 # the first two zero-window overwriters and their flush leaves (GATHER_FLUSH_LEAVES, PRE_FLUSH_LEAVES): `flush_points`
@@ -306,7 +281,7 @@ class NativeCollectCommitter(NativeHostCommitter):
             self._nc.enable_gather(65536)
             # thread blocks per staged descriptor in the gather kernel (R10 default 4; 32 = R10's labelled-extra Llama geometry, the R11 default).
             # Size-adaptive, it is only a cap, 1024: a 256 MB prefill window holds a handful of descriptors, and at 32 blocks each the copy
-            # filled a fraction of the SMs (B32 compiled prefill gather 12.2 -> 8.3 ms/step, r20261017-205629-7b49 vs r20261017-205439-5d0c)
+            # filled a fraction of the SMs (B32 compiled prefill gather 12.2 -> 8.3 ms/step)
             blocks = settings.NATIVE_GATHER_BLOCKS
             self._nc.blocks_per_desc = blocks if blocks is not None else 1024 if self.auto_blocks else 32 if self.native_hooks else 4
             # R11 candidate B: size-adaptive blocks per window (cap = blocks_per_desc; ceil(max staged bytes / auto_bytes_per_block) otherwise)
@@ -396,7 +371,8 @@ class NativeCollectCommitter(NativeHostCommitter):
             # sized by every request's KV length, so two decode steps with the same (ntok, nreq) differ in bytes (B8 mixed 1024/128 steps
             # 35 and 80: 78,892,288 vs 87,297,280 -- the bounded record run failed closed by name, 01:28Z).  The key binds the per-request
             # geometry (num_computed_tokens, num_scheduled_tokens) as a multiset; on the unbounded windowed path a miss still self-heals.
-            me._plan_key, me._plan_key_mode = plan_key_of(scheduler_output, int(ntok), int(nreq))
+            # It binds too the names the step-keyed sources commit at the step about to begin (`step_targets`), which follow the window step.
+            me._plan_key, me._plan_key_mode = plan_key_of(scheduler_output, int(ntok), int(nreq), me.step_targets(me._step_index))
             me._plan_shape = (int(ntok), int(nreq))
             if me.bounded and me._plan_key_mode != "geometry":
                 # fail closed at the FIRST step, not mid-run: without the per-request geometry a hit-plan step can meet another layout
@@ -739,8 +715,20 @@ class NativeCollectCommitter(NativeHostCommitter):
             lo += k
         self.step_rows[step] = rows
 
+    def step_targets(self, step: int) -> bytes:
+        """The digest of the sorted (name, count)s the sources that commit by engine step (`targets_at`) commit at `step`, b"" for none:
+        part of its plan key.  Kept per step while the sources are the same: H1's int8 source names every linear at every step."""
+        srcs = tuple(src for src in self.sources if hasattr(src, "targets_at"))
+        if getattr(self, "_targets_of", None) != srcs:
+            self._targets_of, self._targets_memo = srcs, {}
+        sig = self._targets_memo.get(int(step))
+        if sig is None:
+            names = sorted(kv for src in srcs for kv in src.targets_at(step).items())
+            sig = self._targets_memo[int(step)] = hashlib.blake2b(repr(names).encode(), digest_size=16).digest() if names else b""
+        return sig
+
     def _begin_step(self) -> None:
-        job = _StepJob(self._step_index, [], None)
+        job = _StepJob(self._step_index, [], None, com=self._window_view(), seq=self._next_seq())
         self._cur = job
         self._step_index += 1
         for src in self.sources:
@@ -755,10 +743,10 @@ class NativeCollectCommitter(NativeHostCommitter):
             # [R17 fp8] the metas of the plan this hit step is predicted to follow (None on a learning step): the worker needs them
             # BEFORE step end to know which chunks of a window belong to an excluded family (retain=host + exclude)
             job.plan_hint = (self._plan_key, int(self._nc.plan_version(self._plan_key))) if job.plan_used >= 0 else None  # type: ignore[attr-defined]
-            job.hint_entries = self._nc.export_plan(self._plan_key) if self.retain_exclude and job.plan_hint and job.plan_hint not in self._metas_cache else None  # type: ignore[attr-defined]
+            job.hint_entries = self._nc.export_plan(self._plan_key) if self.retain_exclude and job.plan_hint and not self._plan_held(job.plan_hint) else None  # type: ignore[attr-defined]
             job.plan_shape = getattr(self, "_plan_shape", (0, 0))                # type: ignore[attr-defined]  (ntok, nreq) for messages/records
             self._prof_s = 0.0
-            self._nc.begin_step(self._plan_key, 0, 0, True, job.step)
+            self._nc.begin_step(self._plan_key, 0, 0, True, job.seq)            # its windows keyed by the job's seq: unique across windows
             self._q.put(job)                                                    # the worker absorbs windows WHILE the step runs
         else:
             job.arena = self.arena.take(int(getattr(self, "_step_min_bytes", 0) or 0))
@@ -813,9 +801,10 @@ class NativeCollectCommitter(NativeHostCommitter):
         job.cursor = int(used)
         key = self._plan_key
         # a learning step, or a hit on a plan the worker does not hold (not yet absorbed, or its step failed: plan_cache)
-        entries = self._nc.export_plan(key) if changed or (key, int(version)) not in self._metas_cache else None
+        entries = self._nc.export_plan(key) if changed or not self._plan_held((key, int(version))) else None
         job.plan = (key, int(version), entries)                         # type: ignore[attr-defined]
         job.acq_bytes = int(nbytes)
+        self.staged_bytes += job.acq_bytes
         if not (windowed and self.native_end):
             job.event = torch.cuda.Event()
             job.event.record(torch.cuda.current_stream())
@@ -847,6 +836,15 @@ class NativeCollectCommitter(NativeHostCommitter):
 
     # ------------------------------------------------------------------ worker side: metas from the plan (cached per plan version)
 
+    def _plan_held(self, kv: tuple) -> bool:
+        """Serving thread: whether the worker still holds plan ``kv``'s metas when it absorbs the step now ending. Each detached window
+        it has yet to end retires a generation of its cache there (`_window_ended`) before it reaches this step: with one to go, only
+        the current generation's plans survive; with more, none is counted on."""
+        behind = self._windows_detached - self._windows_ended
+        if behind <= 0:
+            return kv in self._metas_cache
+        return behind == 1 and kv in self._metas_cache.now
+
     def _metas_for(self, job: _StepJob, plan: tuple | None = None) -> PlanMetas:
         key, version, entries = plan or job.plan  # type: ignore[attr-defined]
         metas = self._metas_cache.get((key, version))
@@ -873,7 +871,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                     raise RuntimeError(f"windowed staging: the collector failed earlier in this run ({self._nc.failure[:200]}) -- step {job.step} not committed")
                 return self._commit_step_windowed(job)
             except Exception as e:  # noqa: BLE001
-                self._nc.abandon_step(job.step, f"worker failed on windowed step {job.step}: {e!r}"[:400], self._side.cuda_stream if self._side is not None else 0)
+                self._nc.abandon_step(job.seq, f"worker failed on windowed step {job.step}: {e!r}"[:400], self._side.cuda_stream if self._side is not None else 0)
                 raise           # the run failed by its first such name, and the step's slots went back after the side stream's reads of them
             finally:
                 if getattr(self._nc, "win_dead", False):
@@ -1188,7 +1186,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         idle = 0.0                                                              # waiting for the serving thread (a window, the step's end)
         while True:
             tw = time.perf_counter()
-            ok, used_k, slot = nc.wait_window(job.step, k, side.cuda_stream)
+            ok, used_k, slot = nc.wait_window(job.seq, k, side.cuda_stream)
             idle += time.perf_counter() - tw
             if not ok:
                 if int(used_k) < 0 or getattr(nc, "win_dead", False):
@@ -1351,7 +1349,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                 state.clear()
                 for a, b in parts:
                     self.pool.take(b - a)
-            nc.finish_step(job.step)
+            nc.finish_step(job.seq)
             self.learned_only_steps.append(job.step)
             self.learned_only_bytes += padded
             metas = job.metas
@@ -1433,7 +1431,7 @@ class NativeCollectCommitter(NativeHostCommitter):
                 for kk in range(n_data, max(1, state["width"] >> j)):
                     absorb(kk, row_leaves(self.win_scratch, 0, kk))
         levels, mr, tree_ms = self._window_root(job.step, state, padded, side)
-        nc.finish_step(job.step)
+        nc.finish_step(job.seq)
         if bounded and learning:
             excl_bytes += self._retain_from_transient(job, tblocks, keep_set, chunk_parts if chunk_picks is not None else None, ranges, side)
             tblocks = []
@@ -1577,10 +1575,38 @@ class NativeCollectCommitter(NativeHostCommitter):
 
     # ------------------------------------------------------------------ reporting
 
+    # ------------------------------------------------------------------ window views (`NativeHostCommitter.detach`)
+
+    SHARED_LAZY = NativeHostCommitter.SHARED_LAZY + ("_row_tn",)
+
+    def _detach_into(self, view: Any) -> None:
+        """The collector's run totals are the serving thread's (its step ends bump them) and the next window's reset clears them, so
+        the view keeps them as they stand at the detach, with the run's failure so far."""
+        super()._detach_into(view)
+        view._py_committed = self._py_committed
+        view._nc_at_detach = {"stats": dict(self._nc.stats()), "window_stats": dict(self._nc.window_stats()),
+                              "failure": str(getattr(self._nc, "failure", "") or "")}
+
+    def _window_ended(self, view: Any) -> None:
+        """Worker: a step of the window it abandons fails the run by name after the next window's reset; the window's own failure is
+        the one at its detach or this one. The worker's metas retire a generation here, where the old reset retired them."""
+        if not view._nc_at_detach["failure"]:
+            view._nc_at_detach["failure"] = str(getattr(self._nc, "failure", "") or "")
+        self._metas_cache.end_run()
+
+    def _nc_now(self) -> dict:
+        """The collector's run totals and failure for this committer's window: a detached view's from its detach, else live."""
+        snap = getattr(self, "_nc_at_detach", None)
+        if snap is not None:
+            return snap
+        return {"stats": dict(self._nc.stats()), "window_stats": dict(self._nc.window_stats()),
+                "failure": str(getattr(self._nc, "failure", "") or "")}
+
     def finalize(self):
-        for src in self.sources:
-            if hasattr(src, "sync_stats"):
-                src.sync_stats()
+        if getattr(self, "_nc_at_detach", None) is None:
+            for src in self.sources:
+                if hasattr(src, "sync_stats"):
+                    src.sync_stats()     # a view's sources were synced, and copied, at its detach
         dead = bool(getattr(self._nc, "win_dead", False)) and hasattr(self._nc, "ack_dead")
         if dead:
             # F-stoch-03: the run reached finalize -> X-03 fails it closed (the error below is in the record `super().finalize()` builds
@@ -1599,15 +1625,16 @@ class NativeCollectCommitter(NativeHostCommitter):
             self.replay_row_keys = None
         if dead:
             self._nc.ack_dead()
-        if failure := getattr(self._nc, "failure", ""):     # read after the worker drained: a step it abandoned failed the run by this name
+        nc = self._nc_now()
+        if failure := nc["failure"]:                        # read after the worker drained: a step it abandoned failed the run by this name
             self.errors.insert(0, f"collector failed: {failure}"[:300])
             rc.extra.update(errors=self.errors[:10], errors_n=len(self.errors), collector_failure=failure)
-        st = dict(self._nc.stats())
+        st = nc["stats"]
         # X-03 reference integrity: what the manifest attempted vs what was bound (the Python `_acquire` path puts through stage/collect
         # directly, so its successes are added here); commit_delta refuses PASS unless they are equal and no error was recorded
         rc.extra["expected_tensors"] = int(st.get("expected", 0))
         rc.extra["committed_tensors"] = int(st.get("committed", 0)) + int(self._py_committed)
-        rc.extra["windows"] = {**dict(self._nc.window_stats()), **getattr(self, "window_info", {}),
+        rc.extra["windows"] = {**nc["window_stats"], **getattr(self, "window_info", {}),
                                "reupload_bytes": getattr(self, "_win_reupload_bytes", 0),
                                "hfirst_steps": getattr(self, "_win_hfirst_steps", 0),
                                "rows_hold_bytes": self.rows_hold_bytes if self.rows else None,
@@ -1638,11 +1665,14 @@ class NativeCollectCommitter(NativeHostCommitter):
         return rc
 
     def reset(self) -> None:
+        detached = self._detached
         super().reset()
         self.row_keys = {}
+        self.step_rows = {}
         self._py_committed = 0
         self._nc.end_run()              # the collector's run totals, and the plans this run did not use (native_plans.h)
-        self._metas_cache.end_run()     # the worker's metas, by the same rule (plan_cache)
+        if not detached:
+            self._metas_cache.end_run()  # the worker's metas, by the same rule (plan_cache); a detached window's end retires them
         self.learned_only_steps = []    # [R17 fp8] per-run bounded-staging counters (the plans learned stay for the next run)
         self.learned_only_bytes = 0
         self.transient_peak_bytes = 0
@@ -1652,7 +1682,7 @@ class NativeCollectCommitter(NativeHostCommitter):
         self._win_hfirst_steps = 0
         self._win_leaf_folds = 0
         self._win_relayouts = 0
-        self._oar_deferred = []         # picks the in-run stages could not open from host (excluded families) -> openings_after_release
+        self._oar_deferred = []         # picks the in-run phases could not open from host (excluded families) -> openings_after_release
         for src in self.sources:
             fn = getattr(src, "begin_run", None)
             if fn is not None:

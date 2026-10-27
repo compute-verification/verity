@@ -2,7 +2,7 @@
 (`verity.core.protocols.sampled_proofs.remote`), as the serving process opens and closes it; `pouw_h1_challenger` is
 the verifier's check of what it served.
 
-The pouw setting ``challenger`` (``HOST:PORT``): a window connects once (`remote.RemoteChallenger.connect`) to a
+The pouw setting ``challenger`` (``HOST:PORT``): a window connects once (`remote.connect_when_listening`) to a
 challenger started over a live epoch's layout, scheme `pouw_h1_challenger.SCHEME` and `pouw_h1_challenger.families` (S)
 as ``FAMILIES`` (`benchmarks/live_challenger/run.sh`). An H1 window (`Window`) holds the gate's reserve answer
 (``session``: S) and, once round 0's request table is committed (`pouw_h1.H1Run.open_window`), has the gate (``gate``)
@@ -14,15 +14,22 @@ over W (`EPOCHS`), its salt coin opened after R (`salt_session`); its salt is `a
 the gate's open answer, and opens its salt after the weights' root. Round s's coin opens after round s's root
 (`pouw_h1.H1Run`); `finish` closes the session once the window has finished. The host opens a salt coin only after the
 root its session was opened on (serve.py's ``--root``, RT4-INT-24), H1's R. The challenger is auditor-trusted
-(`trusted-host`): it runs on a machine the prover doesn't control, and the serving process reaches it through ``ssh -R``
-on its own 127.0.0.1.
+(`trusted-host`): it runs on a machine the prover doesn't control, and the serving process reaches it on its own
+127.0.0.1, through its certifier coin link.
+
+A reserve joins its lane's open period, and a Pearl-C salt-only session is a window H1's checks refuse
+(`window.live_epoch_reason`), so one reserved in an H1 period (`H1_PERIOD`) is a wasted session whose period earns
+nothing. `reserve_salt` refuses before reserving, and Pearl-C's install before any patch or open (the pouw setting
+``period``), on the lane's open period as the auditor's ledger has it (`open_period`, `period_reason`).
 """
 from __future__ import annotations
 
 import contextlib
+import json
 import time
-from typing import Any, Callable, Iterator, Mapping
+from typing import Any, Callable, Iterable, Iterator, Mapping
 
+from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import salt_of
@@ -33,13 +40,13 @@ from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
 #: what else the gate's reserve answer carries beside its ``session`` (H1's and Pearl-C's ``session``, `reserved_of`)
 RESERVE_FIELDS = ("seq", "peer", "by", "for", "expires_utc", "period")
-#: how many times a session the gate has just opened is tried, a second apart, while it refuses connections (the
-#: auditor host's ``ssh -R`` to this machine not up yet)
-TRIES = 120
 #: Pearl-C's salt epochs: how many this process has asked the gate to open on each weights' root W (hex).  The next one
 #: over W is numbered that count, k (a manifest's ``pass_index``), and opens on `salt.epoch_open_root` of W and k, so a
 #: reinstall committing the same W (the same hm96 key over the same weights) opens a root of its own
 EPOCHS: dict[str, int] = {}
+#: what only an H1 period's open commits, for H1's window credit to read (core's `credit.committed_k`, `committed_rows`
+#: and `committed_length`): a period whose open commits any of them is H1's
+H1_PERIOD = (CR.K_FIELD, CR.ROWS_FIELD, CR.LENGTH_FIELD)
 
 
 def session_setting(raw: Any) -> dict[str, Any] | None:
@@ -75,15 +82,16 @@ def refusals(scheme: str, settings: Any, stage: str, opens: str | None = None) -
     return out
 
 
-def connect(at: str, given: Mapping[str, Any]) -> Any:
+def connect(at: str, given: Mapping[str, Any], wait_s: float = remote.TUNNEL_WAIT_S,
+            clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], Any] = time.sleep) -> Any:
     """The session the gate's answer `given` (`pouw_h1_challenger.session_of`) opened, on the challenger at `at`: its hello carries the
     answer's ``secret`` when it has one, and a challenger whose coin commitment isn't the answer's is closed and refused
-    (ValueError) before its first coin, since another process's challenger on that port would serve other coins."""
+    (ValueError) before its first coin, since another process's challenger on that port would serve other coins. While
+    the session's port on this machine isn't up yet (its certifier coin link) the connection is refused before any
+    hello, and it is tried again for up to `wait_s` (`remote.connect_when_listening`)."""
     secret = given.get("secret")
-    if secret is None:
-        client = remote.RemoteChallenger.connect(at)
-    else:
-        client = remote.RemoteChallenger.connect(at, bytes.fromhex(secret))
+    client = remote.connect_when_listening(at, None if secret is None else bytes.fromhex(secret), None, wait_s, clock,
+                                           sleep)
     got = client.commitment.root.hex()
     if got != given["commitment"]:
         _close(client)
@@ -105,13 +113,57 @@ def reserved_of(raw: Any) -> dict[str, Any] | None:
     return dict(raw)
 
 
+def open_period(lines: Iterable[str], lane: str) -> dict[str, Any] | None:
+    """The ``period-open`` body of lane `lane`'s open period in the auditor's ledger `lines` (the gate's ``ledger``, one
+    entry a line), None when the lane has none open."""
+    opened = None
+    for e in map(json.loads, lines):
+        if e["kind"] == "period-open" and e["body"].get("lane") == lane:
+            opened = e["body"]
+        elif e["kind"] == "period-close" and opened is not None and e["body"]["period"] == opened["period"]:
+            opened = None
+    return opened
+
+
+def period_setting(raw: Any) -> dict[str, Any] | None:
+    """The pouw setting ``period``: None (the lane has no period open) or its open period's ``period-open`` body
+    (`open_period`); ValueError otherwise."""
+    if raw is not None and not (isinstance(raw, Mapping) and isinstance(raw.get("period"), str)):
+        raise ValueError("pouw setting 'period' is the lane's open period, its period-open body in the auditor's ledger "
+                         f"({{'period', 'lane', ...}}, pouw_h1_window.open_period), or None when none is open, not {raw!r}")
+    return None if raw is None else dict(raw)
+
+
+def period_reason(period: Mapping[str, Any] | None, reserved: Mapping[str, Any] | None = None) -> str | None:
+    """Why a salt-only session (Pearl-C's, `window.SALT_FAMILIES`) is not reserved, or once reserved not opened, while
+    `period` is the lane's open period (its ``period-open`` body, `open_period`; None: none open), or None: `period` is
+    H1's (its open commits `H1_PERIOD`), or the gate's reserve answer `reserved` joined a period other than `period`."""
+    name = None if period is None else period["period"]
+    h1 = [f for f in H1_PERIOD if period is not None and f in period]
+    if h1:
+        return (f"the lane's open period {name} is H1's (its open commits {', '.join(h1)}): a salt-only session is a "
+                "window H1's checks refuse (window.live_epoch_reason), so in it the session is wasted and the period "
+                "earns nothing; reserve while the lane's open period is a Pearl-C one, or none")
+    if reserved is not None and reserved.get("period") != name:
+        joined = reserved.get("period")
+        return (f"the gate's reserve answer joined {f'period {joined}' if joined else 'no period'}, but the lane's open "
+                f"period read from the auditor's ledger (the pouw setting 'period', pouw_h1_window.open_period) is "
+                f"{name or 'none'}, so whether the period the session joined is H1's isn't known")
+    return None
+
+
 def _live(entry: str, at: str, steps: int, given: Mapping[str, Any],
-          layout: Callable[[LiveCommitment], str | None] = Wd.live_epoch_reason) -> tuple[Any, LiveCommitment]:
-    """The session the gate's answer `given` opened on the challenger at `at` (`connect`) and its coin commitment, of the
-    layout `layout` refuses none of (a live epoch's, or Pearl-C's salt coin alone, `window.salt_epoch_reason`) with at
-    least `steps` round coins; on a refusal the session is closed and ValueError raised."""
+          layout: Callable[[LiveCommitment], str | None] = Wd.live_epoch_reason,
+          wait: Callable[[float], Any] = time.sleep, clock: Callable[[], float] = time.monotonic
+          ) -> tuple[Any, LiveCommitment]:
+    """The session the gate's answer `given` opened on the challenger at `at` (`connect` on `clock`, `wait` between its
+    tries) and its coin commitment, of the layout `layout` refuses none of (a live epoch's, or Pearl-C's salt coin
+    alone, `window.salt_epoch_reason`) with at least `steps` round coins; on a refusal the session is closed and
+    ValueError raised (`CoinError` when the challenger refused or nothing listened)."""
     try:
-        client = connect(at, given)
+        client = connect(at, given, clock=clock, sleep=wait)
+    except CoinError as e:
+        raise CoinError(f"{entry}: {e}") from e
     except ValueError as e:
         raise ValueError(f"{entry}: {e}") from e
     c = client.commitment
@@ -151,12 +203,13 @@ def gate_of(call: Callable[..., Mapping[str, Any]]) -> Gate:
     return gate
 
 
-def opened(entry: str, at: str, steps: int, gate: Gate, sid: str, root: bytes, named: str, tries: int = 1,
+def opened(entry: str, at: str, steps: int, gate: Gate, sid: str, root: bytes, named: str,
            wait: Callable[[float], Any] = time.sleep,
-           layout: Callable[[LiveCommitment], str | None] = Wd.live_epoch_reason
-           ) -> tuple[Any, LiveCommitment, LiveOpening, dict[str, Any]]:
+           layout: Callable[[LiveCommitment], str | None] = Wd.live_epoch_reason,
+           clock: Callable[[], float] = time.monotonic) -> tuple[Any, LiveCommitment, LiveOpening, dict[str, Any]]:
     """Reserved session `sid` opened by `gate` on `root` (`named` names that root in a refusal), reached at `at`'s host on
-    the port the answer names (`at_port`; tried at most `tries` times while it refuses connections, `wait` between), of
+    the port the answer names (`at_port`; tried again while it refuses connections, `connect` on `clock`, `wait`
+    between), of
     `layout` with at least `steps` round coins (`_live`), and its salt coin opened after `root`. Returns the session,
     its coin commitment, the salt coin's opening and the gate's answer. Refused (ValueError, the session closed when it
     was reached): an answer that isn't the gate's open of `sid` on `root`, or a challenger off it; `CoinError` is the
@@ -167,14 +220,7 @@ def opened(entry: str, at: str, steps: int, gate: Gate, sid: str, root: bytes, n
         raise ValueError(f"{entry}: the gate's answer to opening session {sid}: {e}") from e
     if answer is None or (answer["session"], answer["root"]) != (sid, root.hex()):
         raise ValueError(f"{entry}: the gate's answer is not session {sid} opened on {named} {root.hex()[:16]}...")
-    for i in range(tries):
-        try:
-            client, c = _live(entry, at_port(at, answer.get("port")), steps, answer, layout)
-            break
-        except ConnectionRefusedError:
-            if i == tries - 1:
-                raise
-            wait(1.0)
+    client, c = _live(entry, at_port(at, answer.get("port")), steps, answer, layout, wait, clock)
     try:
         opening = LiveRecord(client, Wd.SALT).record(root)
     except BaseException:
@@ -199,13 +245,32 @@ def salt_session(entry: str, settings: Any, root: bytes, opens: bool
     k = EPOCHS.get(root.hex(), 0)
     EPOCHS[root.hex()] = k + 1
     client, c, opening, given = opened(entry, settings.challenger, 0, settings.gate, settings.session["session"],
-                                       PS.epoch_open_root(root, k), f"salt epoch {k}'s root", TRIES,
+                                       PS.epoch_open_root(root, k), f"salt epoch {k}'s root",
                                        layout=Wd.salt_epoch_reason)
     return client, c, opening, salt_of(c, opening.coin, root), PHC.carried(given), k
 
 
+def reserve_salt(call: Callable[..., Mapping[str, Any]], ledger: Callable[[], Iterable[str]], lane: str, peer: str,
+                 epoch: int) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """A salt-only session (`window.SALT_FAMILIES`, Pearl-C's) reserved at infra's gate, as words (`call`,
+    ``reserve --peer PEER``, under lane `lane`'s gate key), and the lane's open period it joined, read from the gate's
+    `ledger` before reserving (`open_period`). Refused (ValueError) before reserving while that period is H1's, and
+    before any open when the reserve joined another (`period_reason`). Returns the gate's reserve answer and the
+    period."""
+    period = open_period(ledger(), lane)
+    if (why := period_reason(period)) is not None:
+        raise ValueError(f"refused before reserving a salt-only session: {why}")
+    families = json.dumps([list(f) for f in Wd.SALT_FAMILIES], separators=(",", ":"))
+    reserved = dict(call("reserve", "--peer", peer, "--scheme", Wd.LIVE_SCHEME, "--families", families,
+                         "--epoch", str(epoch)))
+    if (why := period_reason(period, reserved)) is not None:
+        raise ValueError(f"session {reserved.get('session')} is reserved and refused before its open: {why}")
+    return reserved, period
+
+
 def open_session(entry: str, gate: Callable[..., Mapping[str, Any]], sid: str, root: bytes, k: int = 0,
-                 at: str = "127.0.0.1:0", tries: int = TRIES, wait: Callable[[float], Any] = time.sleep
+                 at: str = "127.0.0.1:0", wait: Callable[[float], Any] = time.sleep,
+                 clock: Callable[[], float] = time.monotonic
                  ) -> tuple[Any, LiveCommitment, LiveOpening, bytes, dict[str, Any]]:
     """Reserved session `sid` opened at infra's gate, as words (`gate_of`), on salt epoch `k`'s root over the
     weights' root `root` (`salt.epoch_open_root`), reached at `at`'s host on the port the answer names, its coins the salt
@@ -214,7 +279,7 @@ def open_session(entry: str, gate: Callable[..., Mapping[str, Any]], sid: str, r
     commitment, the salt coin's opening, the epoch's salt (`audit.salt_of` over `root`) and the gate's answer as a run
     carries it (`pouw_h1_challenger.carried`)."""
     client, c, opening, given = opened(entry, at, 0, gate_of(gate), sid, PS.epoch_open_root(root, k),
-                                       f"salt epoch {k}'s root", tries, wait, Wd.salt_epoch_reason)
+                                       f"salt epoch {k}'s root", wait, Wd.salt_epoch_reason, clock)
     return client, c, opening, salt_of(c, opening.coin, root), PHC.carried(given)
 
 
@@ -297,5 +362,6 @@ def finish(run: Any, client: Any) -> None:
             run.details["challenger"] = {"closed": why is None, **({"reason": why} if why else {})}
 
 
-__all__ = ["EPOCHS", "Gate", "RESERVE_FIELDS", "TRIES", "Window", "at_port", "closed_on_error", "connect", "finish", "gate_of",
-           "open_session", "opened", "refusals", "reserved_of", "salt_session", "session", "session_setting"]
+__all__ = ["EPOCHS", "Gate", "H1_PERIOD", "RESERVE_FIELDS", "Window", "at_port", "closed_on_error", "connect",
+           "finish", "gate_of", "open_period", "open_session", "opened", "period_reason", "period_setting", "refusals",
+           "reserve_salt", "reserved_of", "salt_session", "session", "session_setting"]

@@ -1,0 +1,76 @@
+# Scenarios over the algorithm families (rho/scenario.py): one target each, the families an adversary could train it
+# with. Same keys as scenarios.toml.
+
+[scenario.onsite-h200-kimi-rl]
+fleet = "reference-h200"
+regime = "onsite"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "kimi-k2-rl"
+families = ["full-rl", "full-rl-nvfp4", "lora-r16", "lora-r32-attn", "lora-r1", "tinylora", "es"]
+
+[scenario.remote-h200-kimi-rl]
+fleet = "reference-h200"
+regime = "remote"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "kimi-k2-rl"
+families = ["full-rl", "full-rl-nvfp4", "lora-r16", "lora-r32-attn", "lora-r1", "tinylora", "es"]
+
+[scenario.onsite-h200-kimi-rlvr]
+fleet = "reference-h200"
+regime = "onsite"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "kimi-k2-rlvr"
+families = ["full-rl", "lora-r16", "lora-r1", "lora-xs-r2", "tinylora", "tinylora-13", "es", "distill-traces"]
+
+[scenario.onsite-h200-frontier]
+fleet = "reference-h200"
+regime = "onsite"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "frontier-pretrain"
+families = ["full", "full-nvfp4", "diloco", "sparseloco", "demo", "streaming-diloco", "frozen-third", "es"]
+
+[scenario.remote-h200-frontier]
+fleet = "reference-h200"
+regime = "remote"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "frontier-pretrain"
+families = ["full", "full-nvfp4", "diloco", "sparseloco", "demo", "streaming-diloco", "frozen-third", "es"]
+
+[scenario.onsite-h200-llama405b]
+fleet = "reference-h200"
+regime = "onsite"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "llama3-405b-pretrain"
+families = ["full", "full-nvfp4", "diloco", "frozen-third", "distill"]
+
+# The small-model case: Qwen2.5-7B's whole state at 16 bits a parameter (1.2e11 bits) fits a server's window budget
+# (about 7e11 bits), so the state-fits attack trains it unthrottled.
+[scenario.onsite-h200-qwen7b]
+fleet = "reference-h200"
+regime = "onsite"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "qwen25-7b-pretrain"
+families = ["full", "full-nvfp4", "diloco", "frozen-third", "distill-online"]
+
+[scenario.onsite-h200-qwen1b5-grpo]
+fleet = "reference-h200"
+regime = "onsite"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "qwen25-1b5-grpo"
+families = ["full-rl", "lora-r16", "lora-xs-r2", "tinylora", "tinylora-13", "es"]
+
+[scenario.onsite-h200-kimi-sft]
+fleet = "reference-h200"
+regime = "onsite"
+policy = "kimi-k2-1m-raw"
+horizon = "year"
+run = "kimi-k2-sft"
+families = ["full-sft", "lora-r16", "expert-subset-sft", "frozen-third-sft", "mezo"]

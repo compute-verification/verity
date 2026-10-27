@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.check.match import rank_match as RM
-from verity_vllm.config import UsageError, option
+from verity_vllm.config import UsageError, option, workload_arg
 
 SCHEMA = "verity/tp2/fold-match/v1"
 
@@ -192,7 +192,7 @@ class Options:
     capture: str = option("--capture",
                           help="tp2_capture --record-collectives run dir: log.rank<r>.jsonl.gz, tokens.json, coll.rank<r>.jsonl")
     profile: str = option("--profile",
-                          help="rank profile module (verity_vllm.engine.profiles.<name>), e.g. derived_LLAMA32_1B_tp2 (profiles.generic, world = W)")
+                          help="rank profile module (verity_vllm.observe.fold.profiles.<name>), e.g. derived_LLAMA32_1B_tp2 (profiles.generic, world = W)")
     build_rank0: str | None = option("--build-rank0", default=None)
     build_rank1: str | None = option("--build-rank1", default=None)
     derived_rank0: list[str] = option("--derived-rank0", action="append", default=[],
@@ -206,7 +206,7 @@ class Options:
                                      help="R=DIR: a further request Program of rank R (B>1)")
     gprog_rank: list[str] = option("--gprog-rank", action="append", default=[],
                                    help="R=PATH: rank R's GP-01 workload_program.json")
-    workload: str | None = option("--workload", default=None)
+    workload: str | None = option("--workload", type=workload_arg, default=None)
     tp2_match: str | None = option("--tp2-match", default=None,
                                    help="tp2_match.json of the same run (its `provenance` = the stored-step value leg); REQUIRED for PASS")
     coll_dir: str | None = option("--coll-dir", default=None, help="dir of coll.rank<r>.jsonl (default: --capture)")

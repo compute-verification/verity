@@ -386,7 +386,7 @@ theorem coinTree_goal : CoinTree H rel := fun o => by
   · rw [h] at this; cases this
   · rfl
 
-/-- **A drawn session**: `checks` never reaches `drawLaw zk tags none`. -/
+/-- **A drawn session**: `checks` never reaches `drawLaw zk tags false none`. -/
 theorem CaseZk.drawn (c : CaseZk H rel) : c.s.read.draw.isNone = false := by
   have := c.ready_parts.2.1
   cases h : c.s.read.draw

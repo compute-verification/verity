@@ -19,10 +19,10 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity_vllm.config import UsageError, option
+from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.query.manifest.format import SCHEMA, manifest_digest as _manifest_digest
-from verity_vllm.program.kernels.compiled_relations import OUTPUT_ROLES, kernel_key, pointer_arity, roles_of
+from verity_vllm.program.compiled_relations import OUTPUT_ROLES, kernel_key, pointer_arity, roles_of
 
 # the consumer (binding.load_required_manifest, R15 manbind / rev-cb M-0108) admits ONE manifest schema and recomputes `manifest_digest`
 # over the rows with required_manifest.manifest_digest: the compiled manifest is that schema (its P_compiled-specific content lives under
@@ -604,7 +604,7 @@ class BuildOptions:
                                help="engine steps (default: the workload's expected_engine_steps)")
     prefill_tokens: int | None = option("--prefill-tokens", type=int, default=None,
                                         help="single-request form (no --workload): the prompt length")
-    workload: str | None = option("--workload", default=None,
+    workload: str | None = option("--workload", type=workload_arg, default=None,
                                   help="sweep workload json: the request schedule (B>=2: r<i> arrive_step / prompt / max_tokens)")
     request: str = option("--request", default="r0")
     kernel_set: str = option("--kernel-set",

@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity_vllm import settings
-from verity_vllm.config import TARGET_NUM_SMS, TARGETS, RowEngine, option
+from verity_vllm.config import TARGET_NUM_SMS, TARGETS, RowEngine, option, workload_arg
 
 FAIL_CLASS = "PRECHECK_FAIL_TARGET_FAMILY"
 SCHEMA = "verity-sweep/target-family/v1"
@@ -193,7 +193,7 @@ def summary_line(rec: dict) -> str:
 @dataclass(frozen=True, kw_only=True)
 class Options:
     row: str = option("--row", help="row id (device class in its third token)")
-    workload: str | None = option("--workload", default=None, help="workload manifest (declared target block)")
+    workload: str | None = option("--workload", type=workload_arg, default=None, help="workload manifest (declared target block)")
     stages: str = option("--stages", default="build,match,commit")
     build_summary: str | None = option("--build-summary", default=None,
                                        help="check the Build that came out (step.target) as well")

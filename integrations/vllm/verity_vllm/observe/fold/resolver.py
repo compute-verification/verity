@@ -317,7 +317,7 @@ class StepContext:
 
 
 def external_buffers(note: Note, device: Callable[[int], str]) -> dict[str, ViewDesc]:
-    """The views the capture's external-buffers Note (`engine.capture`) records with an offset and strides, the KV caches as
+    """The views the capture's external-buffers Note (`observe.capture`) records with an offset and strides, the KV caches as
     `kv_cache[<module>]`, on the device of their allocation."""
     return {name: ViewDesc(int(b["alloc"]), int(b["offset"]), tuple(b["shape"]), tuple(b["strides"]), b["dtype"], device(int(b["alloc"])))
             for name, b in ((note.data or {}).get("buffers") or {}).items() if "offset" in b and "strides" in b}
@@ -446,7 +446,7 @@ class ResolutionReport:
 
 def spec_module(spec: Any) -> str:
     """The module that defines a specialization's body (`defn.body` of a composite, `evaluate` of a primitive): the
-    registry a spec comes from — `verity_vllm.program.registry.quarantine.*` marks provisional numerical semantics (gate G4)."""
+    registry a spec comes from — `verity_vllm.program.quarantine.*` marks provisional numerical semantics (gate G4)."""
     defn = getattr(spec, "defn", spec)
     for attr in ("body", "evaluate"):
         fn = getattr(defn, attr, None)

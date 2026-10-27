@@ -54,7 +54,7 @@ head that landed (GitHub's "delete head branch" fires only on merges made on Git
 The remote's branch, fetched first, is the truth, never the checkout. With --push, a merge that lands is pushed to the remote
 (never forced), what the tool's declaration runs after a landing (`Tool.after_land`) is started, detached, on the landed commit,
 and then it is swept; without it the sweep runs before anyone pushes, finds nothing the merge landed, and
-`research merge --sweep` after the push does it. Whoever lands a train passes --push (Daniel, 1 Oct). Once origin has main, the
+`research merge --sweep` after the push does it. Whoever lands a train passes --push. Once origin has main, the
 same commit goes to vy-nebius-cpu-4's bare repository, whose main its builds check out (`vy-lean-sandbox checkout`): a plain
 push over the ssh `research run --on` uses, bounded by MIRROR_TIMEOUT_S. One that fails is a line with the command that reruns
 it, and the merge stands; $RESEARCH_MERGE_MIRROR names another machine, and empty skips it.
@@ -66,8 +66,8 @@ remote is the main they last ran for, and every `research merge` that can change
 
 A train's ref may be pinned: `N@SHA` (pull request N; quote `#N@SHA`, or the shell reads a comment) or `BRANCH@SHA` is fetched
 from the remote and refused unless its head there is still SHA, so what merges is the head that was reviewed (`pinned`); the gate
-reads each again when the tip lands (`unstacked`). It reads no ready mark and no grant, since the train's own check is the gate
-(Daniel, 6 and 8 Oct); the owner's ready mark is what admits a PR to a train (`research queue`), not part of this gate.
+reads each again when the tip lands (`unstacked`). It reads no ready mark and no grant, since the train's own check is the gate;
+the owner's ready mark is what admits a PR to a train (`research queue`), not part of this gate.
 A ref whose merge onto the train so far conflicts only on import lines (two PRs adding modules to one root import list) keeps
 both sides, ours first; a conflict on any other line refuses it, and so does a JSON file whose lines git merged into something
 that doesn't parse (`_merge`). Generated files never keep merged text: every merge runs the tree's own
@@ -75,8 +75,8 @@ that doesn't parse (`_merge`). Generated files never keep merged text: every mer
 Lake changes reach, re-points its dependency bundle's pin, regenerates every stale pin, and resolves a conflict in any of those
 files; the merge commit names what it rewrote in a `Regenerated:` trailer, which `reverted` reads as removals the train means.
 
-A push that lands a change to what a guarantee says (a `lean-audit.json`'s guarantees or the definitions they read) DMs Daniel
-what changed, and nothing waits on him (`spec_alert`; his ruling, 3 Oct). A DM that fails is printed and goes to #agent-alerts,
+A push that lands a change to what a guarantee says (a `lean-audit.json`'s guarantees or the definitions they read) sends the
+spec-change DM of what changed, and nothing waits on its reader (`spec_alert`). A DM that fails is printed and goes to #agent-alerts,
 and SPEC_ALERTED_REF stays where it was, so every later `research merge` sends it again and `--sweep` fails until it goes.
 """
 from __future__ import annotations
@@ -94,6 +94,7 @@ import time
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Iterable
 
 from .gates import FINDING, OK, REFUSED, git_env, refuse
 
@@ -121,8 +122,8 @@ SLOT_WRAP = ("python3", "tools/verity/check/slot.py")
 #: slot.py's options (its `parse`): which slot a check waits for, and how long, never what it runs
 SLOT_FLAGS, SLOT_OPTS = ("--priority",), ("--rank", "--by", "--twin", "--wait-max", "--run-max")
 #: check.py's own flags, as its `main` reads them in a recorded run: these anywhere, `--verdicts-in PACK` once, and then nothing
-#: or `--cores N`
-CHECK_FLAGS = ("--no-cache", "--keep-going")
+#: or `--cores N`; `--no-cache --circuit-cache` reuses less than a cached check does
+CHECK_FLAGS = ("--no-cache", "--circuit-cache", "--keep-going")
 
 
 def invocation(argv, command) -> tuple[str, object]:
@@ -488,7 +489,7 @@ def fetch_run(rid: str, names: list[str], cwd: Path | None = None, refresh: bool
 
 
 def live_records(rid: str, fetch=fetch_run) -> dict[str, tuple[str, Path | None]] | None:
-    """`regenerated_records` of a check whose files aren't in the store (one still running, which drive lands with `--defer`),
+    """`regenerated_records` of a check whose files aren't in the store (a Lean check still running, which drive's landing lands on),
     read from its run dir on its node with ``fetch`` (`fetch_run`), each record's sha256 taken of the bytes fetched; None when
     its run can't be read or holds no report of its Lean check.  `Unreadable` when the report can't be parsed, or names a
     record the run dir doesn't hold."""
@@ -524,19 +525,21 @@ def _ran_on(store, rid: str, commit: str, fetch) -> bool:
 
 
 def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: frozenset[str], command: tuple[str, ...],
-                       maps=None, deferred: str | None = None, fetch=None) -> str | None:
+                       maps=None, deferred: str | None = None, fetch=None, ran: str | None = None) -> str | None:
     """The passing ``tool`` attempt of ``commit``'s one parent that vouches for ``commit``, or None: ``commit`` changes only Lake
     packages' locks, names exactly those in its `Regenerated:` trailer, and they are byte for byte the locks that attempt
     regenerated, one for each package it regenerated, so the tree that lands is the one that check audited (CI-64).
 
-    ``deferred`` is the check drive lands the parent on with `--defer` while its deferred steps still run (`Driver.verdict`),
-    which has no passing attempt yet: it vouches when ``commit``'s `Checked:` trailer names it, it ran on the parent, and its
-    records match, read from the store, else from its run dir on its node (``fetch``: `live_records`), hashed here, never
-    digests a caller hands in.  Only drive passes it, having read that verdict itself; `gate` and the push guard never do."""
+    ``deferred`` is the Lean check drive lands the parent on (`Driver._unvouched`), which may have no passing attempt yet: it
+    vouches when ``commit``'s `Checked:` trailer names it, it ran on the parent, and its records match, read from the store, else from its run dir on its node (``fetch``: `live_records`), hashed here, never
+    digests a caller hands in.  Only drive passes it, having read that verdict itself; `gate` and the push guard never do.
+    With it, ``ran`` is the commit that check ran on when it isn't the parent (`Driver._carry` rebuilt the parent above a lock
+    commit drive landed): ``commit``'s files are then taken against ``ran``, so what lands is still the tree it checked with its
+    records, whatever the parent holds."""
     parents = _git(repo, "rev-list", "--parents", "-n", "1", commit).stdout.split()[1:]
     if len(parents) != 1:
         return None
-    parent = parents[0]
+    parent = ran if deferred is not None and ran else parents[0]
     files = _git(repo, "diff", "--name-only", "--no-renames", parent, commit).stdout.split()
     said = {f.strip() for f in _git(repo, "log", "-1", "--format=%(trailers:key=Regenerated,valueonly,separator=%x2C)",
                                      commit).stdout.replace("\n", ",").split(",") if f.strip()}
@@ -1374,6 +1377,11 @@ def landed_in(repo: Path, commit: str, tip: str) -> str:
     return landed
 
 
+#: the merged PRs most recently updated (a merge updates one), which GitHub reads consistently, as a search doesn't
+MERGED_QUERY = ("query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { pullRequests(states: MERGED, "
+                "first: 100, orderBy: {field: UPDATED_AT, direction: DESC}) { nodes { number headRefName headRefOid } } } }")
+
+
 def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool = False, gh=None, log=print) -> tuple[list[int], list[int]]:
     """Close every open pull request whose head is on ``remote``'s ``into``, or whose pinned head a train landed and whose head since
     adds nothing to it (`adds_nothing`; its branch is kept), with a comment naming the commit it landed in, and
@@ -1433,8 +1441,10 @@ def sweep(repo: Path, into: str = "main", remote: str = "origin", dry_run: bool 
             if r.returncode:
                 log(f"research merge: kept {head}: {(r.stderr or r.stdout).strip()[-200:]}")
     # a PR GitHub marked merged itself (its head reached `into` by drive's landing) leaves its branch too (17 Oct: 2,119 of the
-    # repository's 3,543 branches were already on main)
-    merged = json.loads(gh("pr", "list", "--state", "merged", "--limit", "200", "--json", "number,headRefName,headRefOid"))
+    # repository's 3,543 branches were already on main); the most recently merged, not created, first (26 Oct: `gh pr list`'s
+    # newest 200 by number left out 20 PRs that waited in the queue, whose branches stayed)
+    merged = json.loads(gh("api", "graphql", "-F", "owner={owner}", "-F", "name={repo}", "-f", f"query={MERGED_QUERY}",
+                           "--jq", ".data.repository.pullRequests.nodes"))
     # only a branch still at the merged head: a lease on a branch already gone fails as "stale info" (17 Oct: 58 a tick)
     heads = {ref.removeprefix("refs/heads/"): sha for sha, ref in (
         line.split() for line in _git(repo, "ls-remote", "--heads", remote).stdout.splitlines())}
@@ -1458,36 +1468,45 @@ KEEP_BRANCHES = frozenset({"main", "next", "queue-shadow"})
 #: a lead's run branch (`cursor/verity-<lead>-XXXX`), which its agent pushes to again
 RUN_BRANCH_RE = re.compile(r"cursor/verity-[a-z0-9-]+-[0-9a-f]{4}")
 MERGED_IDLE_S, UNMERGED_IDLE_S = 86400, 3 * 86400
+#: the most branches one sweep deletes, and the most it archives, the longest idle first: a caller sweeps again for the rest
+SWEEP_LIMIT = 200
 
 
 def sweep_branches(repo: Path, remote: str = "origin", into: str = "main", now: float | None = None, dry_run: bool = False,
-                   gh=None, log=print, chunk: int = 100) -> tuple[int, int]:
-    """The branch sweep (CI-48, 17 Oct, after Daniel asked why the repository had 4,000 branches): delete each branch whose tip
+                   gh=None, log=print, chunk: int = 100, keep: Iterable[str] = (), limit: int = SWEEP_LIMIT) -> tuple[int, int]:
+    """The branch sweep: delete each branch whose tip
     is on ``into`` and is a day idle (its content is there), and move each branch with unmerged work three days idle to
     `refs/archive/heads/NAME` (still fetchable: `git fetch origin refs/archive/heads/NAME`). It keeps `KEEP_BRANCHES`, leads'
-    run branches (`RUN_BRANCH_RE`) and every branch an open PR uses as its head or base.  Each push leases the tip it saw, so a
-    branch pushed to meanwhile is kept.  Returns (deleted, archived)."""
+    run branches (`RUN_BRANCH_RE`), every branch an open PR uses as its head or base, and ``keep`` (the heads of PRs drive
+    closed as stale, which stay to be reopened: `research.stale`).  At most ``limit`` of each, the longest idle first, each
+    logged by name.  Each push leases the tip it saw, so a branch pushed to meanwhile is kept.  Returns (deleted, archived)."""
     gh = gh or (lambda *a: _gh_cli(repo, *a))
     now = time.time() if now is None else now
     _git(repo, "fetch", "-q", "--prune", remote, f"+refs/heads/*:refs/sweep/{remote}/*")
     tip = _git(repo, "rev-parse", f"refs/sweep/{remote}/{into}").stdout.strip()
     prs = json.loads(gh("pr", "list", "--state", "open", "--limit", "1000", "--json", "headRefName,baseRefName"))
-    used = {p["headRefName"] for p in prs} | {p["baseRefName"] for p in prs}
+    used = {p["headRefName"] for p in prs} | {p["baseRefName"] for p in prs} | set(keep)
     rows = _git(repo, "for-each-ref", "--format=%(refname:lstrip=3) %(objectname) %(committerdate:unix)",
                 f"refs/sweep/{remote}/").stdout.splitlines()
     delete, archive = [], []
     for name, sha, when in (r.split() for r in rows):
-        if name in KEEP_BRANCHES or name in used or RUN_BRANCH_RE.fullmatch(name):
+        if name == into or name in KEEP_BRANCHES or name in used or RUN_BRANCH_RE.fullmatch(name):
             continue
         idle = now - int(when)
         if _git(repo, "merge-base", "--is-ancestor", sha, tip, check=False).returncode == 0:
             if idle > MERGED_IDLE_S:
-                delete.append((name, sha))
+                delete.append((idle, name, sha))
         elif idle > UNMERGED_IDLE_S:
-            archive.append((name, sha))
+            archive.append((idle, name, sha))
+    found = len(delete), len(archive)
+    delete, archive = ([(n, s) for _, n, s in sorted(x, key=lambda r: -r[0])[:limit]] for x in (delete, archive))
     verb = "would " if dry_run else ""
-    log(f"research merge: {verb}delete {len(delete)} branch(es) on {into} a day idle, {verb}archive {len(archive)} unmerged "
-        f"branch(es) three days idle to refs/archive/heads/")
+    log(f"research merge: {verb}delete {len(delete)} of {found[0]} branch(es) on {into} a day idle, {verb}archive {len(archive)} "
+        f"of {found[1]} unmerged branch(es) three days idle to refs/archive/heads/")
+    if delete:
+        log(f"research merge: {verb}delete: {' '.join(n for n, _ in delete)}")
+    if archive:
+        log(f"research merge: {verb}archive: {' '.join(n for n, _ in archive)}")
     if not dry_run:
         for i in range(0, len(delete), chunk):
             part = delete[i:i + chunk]
@@ -1621,7 +1640,7 @@ def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.P
     `required_steps` reads `merge_requires`) on ``commit``, in a session of its own, so it outlives this process and nothing it
     does changes the merge's result, and in a worktree of ``commit`` of its own (`_own_tree`) that goes when it ends.  With
     ``attempt``, the check the landing was admitted on, it gets `--attempt RID` after the commit: drive's landings carry no
-    `Check:` trailer, and one made with `--defer` has no passed attempt in the store yet (CI-81).  Returns the argv started,
+    `Check:` trailer, and the Lean check one lands on may have no passed attempt in the store yet (CI-81).  Returns the argv started,
     None when the declaration names none."""
     from .store import tools_registry
 
@@ -1649,7 +1668,7 @@ def after_land(repo: Path, tool: str, commit: str, log=print, spawn=subprocess.P
 
 #: the remote's ref holding the main commit the after-landing steps last ran for
 AFTER_LAND_REF = "refs/research/after-land"
-#: the remote's ref holding the main commit Daniel was last sent the spec change up to: it moves only when the DM went, so one
+#: the remote's ref holding the main commit the spec-change DM last went up to: it moves only when the DM went, so one
 #: that failed is sent again by the next `research merge`, and `--sweep` fails while it lags main
 SPEC_ALERTED_REF = "refs/research/spec-alerted"
 
@@ -1699,7 +1718,7 @@ def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log
             return None
     if spec_from and spec_from != tip:
         if _git(repo, "merge-base", "--is-ancestor", spec_from, tip, check=False).returncode:
-            log(f"research merge: Daniel was last sent the spec change up to {spec_from[:12]}, which isn't in {remote}'s main "
+            log(f"research merge: the spec-change DM last went up to {spec_from[:12]}, which isn't in {remote}'s main "
                 f"({tip[:12]}); no DM was sent: send it by hand, then `git push {remote} {tip}:{SPEC_ALERTED_REF}`")
         elif alert(repo, spec_from, tip, remote=remote, log=log):
             _move(repo, remote, SPEC_ALERTED_REF, alerted, tip, log)
@@ -1920,7 +1939,7 @@ def spec_alert_lag(repo: Path, remote: str) -> str:
 
 
 #: set by the control pod's drive.sh for all it runs with the verity-drive App's token: GitHub's rulesets "main is append-only"
-#: and "only drive moves main and next" (23 Oct, Daniel) let only that App move `main` and `next`
+#: and "only drive moves main and next" let only that App move `main` and `next`
 DRIVE_ENV = "RESEARCH_DRIVE"
 DRIVE_ONLY = ("main", "next")
 
@@ -1936,7 +1955,7 @@ def off_drive(ref: str, verb: str) -> str:
 
 
 def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = "check") -> int:
-    """After a merge landed on ``into`` here: with ``push``, push it to ``remote`` (never forced), DM Daniel the spec change it
+    """After a merge landed on ``into`` here: with ``push``, push it to ``remote`` (never forced), send the spec-change DM of what it
     landed on main (`spec_alert`), start what ``tool`` runs after a landing (`after_land`) and sweep, since the sweep closes only
     what is on the remote; a refused push sweeps nothing and fails. Without ``push`` the sweep finds nothing the merge landed,
     says so, and `research merge --sweep` after the push does it. On main the steps are `caught_up`'s, from the marker (or main

@@ -5,8 +5,8 @@ import Properties.NciDesc
 # `NciCheck.Desc.evaluate` agrees with `NciCheck.evaluate`
 
 `descAgrees_of` proves `Properties.DescAgrees` from two statements about the decoder and the description-sized analysis,
-each a named `Prop` here, the first proved (`Walk.gatesLocated_of`, from `Resolve.bodiesOk`) and the second open
-(`Novel.novelExact_of`, from `Novel.ReadsExact`):
+each a named `Prop` here, both proved: the first by `Walk.gatesLocated_of`, from `Resolve.bodiesOk`, and the second by
+`Novel.novelExact_of`, from `Novel.readsExact`:
 
 * `GatesLocated`: on a Program the decoder returns and `Desc.evaluate` reads (topological by `Prog.orderViolation`, its
   root laid out, its input nodes the root's, `Desc.walkable`, and `Desc.analyze` resolving its references), every gate of
@@ -528,9 +528,9 @@ open DescAgree
 open Lean (Json toJson)
 open Flock.Program (Prog)
 
-/-! ## The open statements -/
+/-! ## The statements `descAgrees_of` takes -/
 
-/-- **Open: the layout is located.** On a Program the decoder returns that `Desc.evaluate` reads (topological, its root
+/-- **The layout is located.** On a Program the decoder returns that `Desc.evaluate` reads (topological, its root
 laid out, its input nodes the root's, `Desc.walkable`, and its references resolved by `Desc.analyze`), every gate of the
 canonical layout is located and reads only earlier gates. Without `Desc.walkable` it is false: `Prog.gate` walks at most
 `Flock.Steps.FUEL` steps to an operand, and a nested scan of `2^32 × 2^32` identity steps needs `2^64`. -/
@@ -539,7 +539,7 @@ def GatesLocated : Prop :=
     Desc.rootLaidOut P = true → Desc.inputsAtRoot P = true → Desc.walkable P = true →
     (∃ reads, Desc.analyze P = .ok reads) → ∀ g < gates P, GateOk P g
 
-/-- **Open: the novel reads by node are the gates'.** On such a Program, and a division `dv` of its layout whose IUs are
+/-- **The novel reads by node are the gates'.** On such a Program, and a division `dv` of its layout whose IUs are
 unions of root nodes (root node `k`'s gates all in `own[k]`, θ every gate of the nodes `mask` marks, input nodes, in no
 IU), `Desc.novelWidth` of what `Desc.intoOf` collects per IU from `Desc.analyze`'s reads is `NciCheck.ius`'s novel
 reads. -/
@@ -578,7 +578,7 @@ theorem ius_fst (c : Circuit) (dv : Division) {u : ℕ} (hu : u < dv.n) : (ius c
   rw [getElem!_pos (ius c dv) u (by simp [ius, hs, hu]), getElem!_pos (tally c dv) u (by rw [hs]; exact hu)]
   simp [ius]
 
-/-- **`Desc.evaluate` agrees with `evaluate`, given the open statements.** -/
+/-- **`Desc.evaluate` agrees with `evaluate`, given `GatesLocated` and `NovelExact`.** -/
 theorem descAgrees_of (hG : GatesLocated) (hN : NovelExact) : Properties.DescAgrees := by
   intro j out hev
   obtain ⟨i, P, reads, mask, own, hpar, hdp, hov, hlo, hin, hwk, han, hθ, hos, hof, hn, hused, rfl⟩ :=

@@ -1,5 +1,5 @@
 """vLLM's grouped sigmoid router (`_moe_C.grouped_topk`, one group), beside the fused-MoE block's leaf kernels of `vllm_moe` (the
-`indexed-read` construction): `MoeRouterSigmoidBias{E,TOPK,SCALE,KERNEL}` per token row (numerics: `verity_vllm.program.registry.moe`).
+`indexed-read` construction): `MoeRouterSigmoidBias{E,TOPK,SCALE,KERNEL}` per token row (numerics: `verity.ml.definitions.registry.moe`).
 
     _moe_C.grouped_topk(scores [M, E] f32, 1, 1, TOPK, True, scale, bias [E] f32, 1)
         -> (weights f32 [M, TOPK], ids i32 [M, TOPK]): `MoeRouterSigmoidBias{E,TOPK,SCALE=scale,KERNEL}` on each token row, KERNEL the
@@ -9,7 +9,7 @@ DeepSeek-V3's and GLM's `noaux_tc` routing reaches it through `GroupedTopKRouter
 bias is the layer's `e_score_correction_bias` Parameter, and the scale the routed scaling factor, applied inside the kernel where the
 model leaves `apply_routed_scale_to_output` False.
 
-DeepSeek-V4's sqrtsoftplus routers (numerics: `verity_vllm.program.registry.dsv4_moe`), through `FusedTopKBiasRouter` ->
+DeepSeek-V4's sqrtsoftplus routers (numerics: `verity.ml.definitions.registry.dsv4_moe`), through `FusedTopKBiasRouter` ->
 `fused_topk_bias`:
 
     _moe_C.topk_softplus_sqrt(w!, ids!, tei!, logits [M, E] f32, True, scale, None, input_ids [M] i32, tid2eid [V, 6] i32, None)
@@ -31,9 +31,9 @@ from verity_vllm.program.frontend.rules.vllm_bindings.operands import _strides
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import DSV4_TOPK_PINS, _pins_ok
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 from verity_vllm.program.frontend.rules.vllm_moe import INDEXED_READ, DeadOutput, _moe_C_op, _not_owned
-from verity_vllm.program.registry.dsv4_moe import TOPK as DSV4_TOPK
-from verity_vllm.program.registry.moe import router_kernel
-from verity_vllm.program.registry.prims import I32
+from verity.ml.definitions.registry.dsv4_moe import TOPK as DSV4_TOPK
+from verity.ml.definitions.registry.moe import router_kernel
+from verity.ml.definitions.registry.prims import I32
 
 
 class GroupedTopkRule(OpRule):

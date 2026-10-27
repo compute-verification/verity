@@ -132,7 +132,7 @@ def make_bmap(vals: dict, *, steps=(0,)) -> tuple[dict, dict]:
 
 def _bnd(n_req: int) -> dict:
     """A binding record that passes binding_check on its own (context ok, coverage ok, population openings skipped): B = n_req."""
-    return {"context": {"ok": True}, "coverage": {"ok": True}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": n_req}}
+    return {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": n_req}}
 
 
 def reader(committed: dict):
@@ -593,6 +593,18 @@ def test_f_r16_24_the_oracle_provenance_carries_the_tie_facts_of_the_match_recor
     open(os.path.join(d2, "fold_summary.json"), "w").write('{"digest": "def"}')
     assert OC.oracle_tie_facts(d2)["fold_summary_sha256"] != tie2["fold_summary_sha256"]
     assert OC.oracle_tie_facts(str(tmp_path / "nowhere")) == {"fold_summary_sha256": None, "instances_sha256": None, "run_header_sha256": None}
+
+
+def test_an_unreadable_run_header_is_named_in_the_tie_facts_not_passed_off_as_an_absent_log(tmp_path):
+    """A capture/log.jsonl.gz that is there but isn't gzip has no RunHeader digest; the tie facts say it was unreadable and why, so the
+    record doesn't read as a Match stage that wrote no log."""
+    import os
+    d, _vals = make_match(str(tmp_path))
+    open(os.path.join(d, "capture", "log.jsonl.gz"), "wb").write(b'{"$e": "RunHeader"}\n')
+    tie = OC.oracle_tie_facts(d)
+    assert tie["run_header_sha256"] is None
+    assert tie["run_header_unreadable"].startswith("unreadable: capture/log.jsonl.gz (BadGzipFile: ")
+    assert "run_header_unreadable" not in OC.oracle_tie_facts(str(tmp_path / "nowhere"))
 
 
 # ---- [reqval F-moe-r17-06, the ORACLE side] a shared module's invocation k is compared at ITS Program op ---------------------------------

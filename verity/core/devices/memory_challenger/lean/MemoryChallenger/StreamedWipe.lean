@@ -34,7 +34,7 @@ and the count's 15. -/
 def EGRESS_MAX_UNITS : Int := 2 ^ 15 - 1
 
 /-- `WipeParams`: `labels` (`N`), the `k` challenges revealed `batch` at a time, each batch's deadline, and the memory
-tiers as `(name, bytes)`. -/
+tiers as `(name, bytes)`, which hold the fill and may declare memory past it. -/
 structure Params where
   labels : Nat
   k : Nat
@@ -50,8 +50,8 @@ def Params.check (p : Params) : E Unit := do
   if p.tiers.isEmpty || p.tiers.any (·.2 == 0) || (p.tiers.toList.map (·.1)).eraseDups.length != p.tiers.size then
     throw "a wipe declares its tiers, each named once with a positive size"
   let total := p.tiers.foldl (· + ·.2) 0
-  if total != p.labels * LABEL_BYTES then
-    throw s!"the tiers total {total} bytes, but the fill is {p.labels * LABEL_BYTES}: the fill covers every declared tier exactly"
+  if total < p.labels * LABEL_BYTES then
+    throw s!"the tiers total {total} bytes, less than the fill's {p.labels * LABEL_BYTES}: the declared tiers hold the fill"
 
 /-- `WipeParams.covered`: the sequential reveal, one index a batch, is what the guarantee covers. `verdict` refuses any
 other. -/

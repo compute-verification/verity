@@ -140,8 +140,8 @@ def sampler_geometry_check(gp: dict, B, engine_step_of: dict[int, int], steps: d
     does not schedule -- an undeclared request, a row past a stop, a missing lag row -- is named), a top-p select on a step the state
     schedules nobody at is named, a scheduled sampling step without a top-p select is named, and a step whose state is unestablished
     fails closed.  Without `scheduled` the SampleEnd batch is held to the observed logits rows."""
-    from verity_vllm.program.registry.sampling_vocab import SHARED_GREEDY
-    from verity_vllm.program.registry.topp_geometry import registered_splits
+    from verity.ml.definitions.registry.sampling_vocab import SHARED_GREEDY
+    from verity.ml.definitions.registry.topp_geometry import registered_splits
     from verity_vllm.program.sampling_event import family_of
     topp = (_TOPP_FAMILY, SHARED_GREEDY[_TOPP_FAMILY].id)   # either `sampler_construction`
     per_step: dict[int | None, set[int | None]] = collections.defaultdict(set)

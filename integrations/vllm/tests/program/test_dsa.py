@@ -27,8 +27,8 @@ import pytest
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.prims import HopperE4m3QgmmaDot32 as DOT
-from verity_vllm.program.registry import dsa as D
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions.registry import dsa as D
+from verity.ml.definitions.registry import prims as P
 from tests.program.test_fp8_moe import _ffma, _fmul, _q, _rn
 
 SIGN, INF, M32 = 1 << 31, 0x7F800000, 0xFFFFFFFF
@@ -277,12 +277,12 @@ KROW = bind(D.DsaIndexerKRow, D=128, ROPE=64, EPS=1e-6)
 QHEAD = bind(D.DsaIndexerQHead, D=128, ROPE=64, NH=32)
 LOGIT = bind(D.DsaMqaLogitV3, H=32, D=128)
 LOGIT_V1 = bind(D.DsaMqaLogit, H=32, D=128)
-#: eight (token, key) logits of an H200's DeepGEMM sm90 kernels (property glm53_dsa_capture, run r20261012-222325-ce92), four
+#: eight (token, key) logits of an H200's DeepGEMM sm90 kernels (property glm53_dsa_capture), four
 #: prefill and four paged (``paged``), each the first ones of its kind where `DsaMqaLogit_v1` differs: q (8, 32, 128) and k (8, 128)
 #: e4m3 bytes, w (8, 32) and ks (8,) f32 words, the kernel's logit (8,)
 H200_LOGITS = Path(__file__).parent / "data" / "dsa_h200_logits.npz"
-#: two tokens' index-K rows as an H200 served them (GLM-5.3 TP8 rank 0, layer 0's `_fused_norm_rope_kernel` at step 0, run A8's slice
-#: s01, art:2767c3a80137ce6c... and art:22e7456dcc5018b8...): k (2, 128) bf16, w and b (128,) f32 words, cs (2, 64) bf16, ``offsets``
+#: two tokens' index-K rows as an H200 served them (GLM-5.3 TP8 rank 0, layer 0's `_fused_norm_rope_kernel` at step 0):
+#: k (2, 128) bf16, w and b (128,) f32 words, cs (2, 64) bf16, ``offsets``
 #: their slots' offsets in index-K cache block 5 (slots 320 and 321), and ``block``, that block's 8448 bytes after the launch
 SERVED_KSLOTS = Path(__file__).parent / "data" / "dsa_glm53_kslots.npz"
 

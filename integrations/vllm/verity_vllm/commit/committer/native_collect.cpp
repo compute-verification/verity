@@ -1,4 +1,4 @@
-// R10 acq-native: native acquisition at the EXISTING hook boundaries (Daniel's brief §4, primary bet).
+// Native acquisition at the EXISTING hook boundaries.
 //
 // One `Collector` per committer.  Per step the serving thread calls `begin_step(plan_key, arena_ptr, arena_bytes)` once, then
 // `collect(name_id, tensor)` once per acquired tensor IN HOOK ORDER, then `end_step()`.  The collector keeps one PLAN per step-shape class
@@ -658,7 +658,7 @@ struct Collector {
       changed = true;
       ++step_misses;
     }
-    const int64_t off = (byte_cursor + 3) & ~static_cast<int64_t>(3);    // R9 `_acquire_fast`: 4-byte alignment, gap zeroed
+    const int64_t off = (byte_cursor + 3) & ~static_cast<int64_t>(3);    // R9 `_acquire_by_cudart`: 4-byte alignment, gap zeroed
     const int64_t gap = off - byte_cursor;
     if (off + nb > arena_bytes) throw std::runtime_error("native_collect: arena block too small for this step (no overflow chaining in the candidate): needed >= "
                                                         + std::to_string(off + nb) + " B (tensor " + std::to_string(nb) + " B at offset " + std::to_string(off)

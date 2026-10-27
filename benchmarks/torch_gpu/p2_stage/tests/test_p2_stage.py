@@ -1,4 +1,4 @@
-"""The staging decode's CPU parts: the store's layout as CMP-95 item 2's fixture gives it, the stream's bytes laid out as
+"""The staging decode's CPU parts: the store's layout as p2_v1's fixture gives it, the stream's bytes laid out as
 the store's W, the scatter of decoded rows into a staging buffer, P2's reference decode of one block (pinned to the
 spec's deployment vector), the fixture's toy store through the staging path under P2's reference, and the GEMM's twin
 against `ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}`."""
@@ -8,6 +8,7 @@ import argparse
 import hashlib
 import json
 import random
+import re
 import sys
 from pathlib import Path
 
@@ -85,8 +86,8 @@ def test_blocks_of():
         L.blocks_of(-1, 2)
 
 
-def test_store_layout_is_cmp95s_at_the_frozen_shape():
-    """CMP-95 item 2's numbers: 1,038 segments; layer l from block 1,307,915 l; QKV, O, up and down at blocks 0, 131,711,
+def test_store_layout_at_the_frozen_shape():
+    """The frozen layout's numbers: 1,038 segments; layer l from block 1,307,915 l; QKV, O, up and down at blocks 0, 131,711,
     262,401 and 785,158 of it and staging offsets 0, 270,532,608, 538,968,064 and 1,612,709,888; the head at block
     68,011,580 over 2,043 blocks."""
     lay = L.store_layout(layout_doc(model(16384, 52, 256, 65536)), PREFIX)
@@ -127,7 +128,7 @@ def test_store_layout_reads_the_toy_doc_and_refuses_other_layouts():
         L.store_layout(doc, PREFIX[:-1])
 
 
-@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="CMP-95 item 2's toy (benchmarks/pous/p2_v1/store-toy) isn't here")
+@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (benchmarks/pous/p2_v1/store-toy) isn't here")
 def test_layout_doc_is_the_toys():
     toy = json.loads((TOY / "toy.json").read_text())["layout"]
     assert layout_doc(model(64, 2, 1, 64), per_segment=11) == {k: toy[k] for k in layout_doc([]).keys()}
@@ -277,7 +278,7 @@ class RefKernels:
         return 0
 
 
-@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="CMP-95 item 2's toy (benchmarks/pous/p2_v1/store-toy) isn't here")
+@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (benchmarks/pous/p2_v1/store-toy) isn't here")
 def test_toy_store_stages_as_the_fixture_says(tmp_path, monkeypatch):
     """The toy's C* through `decode_layer` under P2's reference: each layer's staging buffer by its digest, each negative
     block refused with its flag bit, another salt refused, and the spot vectors at the real store's indices."""
@@ -408,7 +409,7 @@ def encoded_store(root: Path, rows: np.ndarray, per_segment: int, setup: dict) -
         L.segment_path(root, s, "json").write_text(json.dumps({"segment": s, "sha512": hashlib.sha512(data).hexdigest()}))
 
 
-@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="CMP-95 item 2's toy (benchmarks/pous/p2_v1/store-toy) isn't here")
+@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (benchmarks/pous/p2_v1/store-toy) isn't here")
 def test_the_toys_coin_and_segments_stage_as_an_encoded_store(tmp_path, monkeypatch):
     """The toy's coin and commitment give its salt; its C* as an encoded store's segment files stages each layer to
     toy.json's digest under P2's reference; a setup of another commitment, layout, parameters or salt is refused, and so
@@ -521,3 +522,147 @@ def test_layer_driver_reads_an_encoded_store_without_the_stream(tmp_path, monkey
     L.segment_path(root, lay.blocks(1).start // 11, "json").unlink()
     with pytest.raises(SystemExit, match="not done"):
         layer.main(args)
+
+
+def test_sample_blocks_takes_each_tensors_ends_and_a_seeded_draw():
+    import check
+
+    lay = L.store_layout(layout_doc(model(64, 2, 1, 256), per_segment=11), PREFIX)
+    got = check.sample_blocks(list(lay.tensors), 4, 3)
+    assert got == sorted(set(got)) == check.sample_blocks(list(lay.tensors), 4, 3)
+    for t in lay.tensors:
+        mine = [j for j in got if j in t.block_range]
+        assert t.first_block in mine and t.block_range.stop - 1 in mine and len(mine) == min(4, t.blocks)
+    assert check.sample_blocks(list(lay.tensors), 1000, 3) == list(range(lay.tensors[-1].block_range.stop))
+    assert check.sample_blocks(list(lay.tensors), 2, 3) == sorted({j for t in lay.tensors
+                                                                   for j in (t.first_block, t.block_range.stop - 1)})
+
+
+def test_layer_set():
+    import full
+
+    assert full.layer_set("0-2,5", 5) == {0, 1, 2, 5} and full.layer_set("3", 3) == {3}
+    for bad in ("0-6", "-1", "2-1"):
+        with pytest.raises(ValueError):
+            full.layer_set(bad, 5)
+
+
+TOY_W = b"verity-pous/p2-store/toy/w/v1\0"
+
+
+def toy_stream(doc: dict) -> tuple[dict, bytes]:
+    """The toy's W (each tensor `p2.stream(TOY_W, name, size)` at its offset, as `p2_v1/store.py`'s `toy_plain` packs
+    it, held to toy.json's digest) and then each stream tensor's f32 scales: a weights stream, and its manifest with
+    SHA-256s naming each store tensor's stream tensors (QKV as wq, wk and wv of 64 rows each but the query's) in W."""
+    lay = L.store_layout(doc["layout"], PREFIX)
+    w = bytearray(lay.params.blocks * L.PAYLOAD)
+    for t in lay.tensors:
+        w[t.offset:t.offset + t.size] = L.S.stream(TOY_W, t.name.encode(), t.size)
+    assert hashlib.sha512(w).hexdigest() == doc["w_sha512"]
+    rows, scales = [], bytearray()
+    for t in lay.tensors:
+        ns = [t.n - 128, 64, 64] if t.matrix == "qkv" else [t.n]
+        at = t.offset
+        for name, n in zip(t.stream_names, ns):
+            rows.append({"name": name, "offset": at, "nbytes": n * t.k, "shape": [n, t.k],
+                         "sha256": hashlib.sha256(w[at:at + n * t.k]).hexdigest()})
+            s = ((np.arange(n, dtype=np.float32) + 1) * 2.0 ** -14).tobytes()
+            rows.append({"name": f"{name}.scale", "offset": len(w) + len(scales), "nbytes": len(s), "shape": [n],
+                         "sha256": hashlib.sha256(s).hexdigest()})
+            scales += s
+            at += n * t.k
+    return {"tensors": rows, "stream_bytes": len(w) + len(scales)}, bytes(w + scales)
+
+
+@pytest.mark.skipif(not (TOY / "toy.json").exists(), reason="p2_v1's toy store (benchmarks/pous/p2_v1/store-toy) isn't here")
+def test_full_stages_the_whole_toy_store_and_check_samples_it(tmp_path, monkeypatch):
+    """The toy's C* as an encoded store through `full.py` under P2's reference: every tensor of every layer and the head
+    staged and held to the manifest's SHA-256, the step's decode summed over them, one layer's GEMM in chunks of output
+    channels against the twin and the Definition; `check.py --sample` on each tensor's blocks against P2's reference,
+    which finds one changed byte of W. Refused or failed: a tensor whose digest differs, a manifest with no digests or a
+    stream tensor of another shape, a segment not its SHA-512 or not done."""
+    import check
+    import full
+
+    doc = json.loads((TOY / "toy.json").read_text())
+    manifest, stream = toy_stream(doc)
+    (tmp_path / "layout.json").write_text(json.dumps(doc["layout"]))
+    (tmp_path / "m.json").write_text(json.dumps(manifest))
+    (tmp_path / "w.bin").write_bytes(stream)
+    setup = {"commitment": doc["commitment"], "manifest": doc["layout"]["params"],
+             "layout_sha512": hashlib.sha512((tmp_path / "layout.json").read_bytes()).hexdigest()}
+    bps = doc["layout"]["params"]["blocks_per_segment"]
+    root = tmp_path / "store"
+    encoded_store(root, np.frombuffer((TOY / "c-star.bin").read_bytes(), dtype=np.uint8).reshape(-1, L.ROW), bps, setup)
+    monkeypatch.setattr(S.gpu, "Kernels", RefKernels)
+    store = ["--layout", str(tmp_path / "layout.json"), "--weights", str(tmp_path / "m.json"), "--w", str(tmp_path / "w.bin"),
+             "--encoded", str(root), "--source", doc["source"], "--commitment", doc["commitment"]]
+    run = store + ["--lib", "unused", "--device", "cpu", "--reps", "1", "--readers", "2", "--hashers", "2"]
+    out = tmp_path / "out"
+    assert full.main(run + ["--out", str(out), "--gemm-layer", "1", "--m", "16", "--n-chunk", "64", "--samples", "4"]) == 0
+    recs = [json.loads(x) for x in (out / "full.json").read_text().splitlines()]
+    lay = L.store_layout(doc["layout"], PREFIX)
+    staged = [r for r in recs if r["step"] == "stage"]
+    assert [r["tensor"] for r in staged] == [t.name for t in lay.tensors]
+    assert all(all(r["sha256"].values()) and "refused" not in r for r in staged)
+    assert staged[0]["sha256"] == {"l0.wq": True, "l0.wk": True, "l0.wv": True} and staged[-1]["sha256"] == {"head": True}
+    summary = next(r for r in recs if r["step"] == "summary")
+    assert summary["ok"] and (summary["tensors"], summary["segments"]) == (9, 3)
+    assert summary["bytes"] == sum(t.size for t in lay.tensors)
+    assert summary["decode_step_s"] == pytest.approx(sum(min(r["decode_s"]) for r in staged), abs=1e-5)
+    assert summary["head_s"] > 0 and summary["layer_s"]["min"] > 0
+    gemms = [r for r in recs if r["step"] == "gemm"]
+    assert [(r["matrix"], r["n"], r["k"]) for r in gemms] == [("qkv", 192, 64), ("o", 64, 64), ("up", 64, 64),
+                                                              ("down", 64, 64)]
+    assert all(r["twin"] == {"words": 16 * r["n"], "mismatches": 0, "first": []} and all(r["sha256"].values())
+               for r in gemms)
+    res = check.check_gemm(out)
+    assert set(res) == {f"{m}-m16" for m in L.MATRICES} and all(v["mismatches"] == 0 for v in res.values())
+    assert res["qkv-m16"]["samples"] == 3 * 4
+    assert check.main(store + ["--out", str(out), "--sample", "3", "--workers", "2"]) == 0
+    dec = json.loads((out / "check.json").read_text())["decode"]
+    assert (dec["checked"], dec["mismatches"], dec["layers"]) == (len(check.sample_blocks(list(lay.tensors), 3, 12)), 0, 3)
+    wo = next(r for r in manifest["tensors"] if r["name"] == "l1.wo")
+    flipped = bytearray(stream)
+    flipped[wo["offset"] + 5] ^= 1
+    (tmp_path / "w2.bin").write_bytes(bytes(flipped))
+    bad = [a.replace(str(tmp_path / "w.bin"), str(tmp_path / "w2.bin")) for a in store]
+    assert check.main(bad + ["--out", str(tmp_path / "c2"), "--sample", "100", "--workers", "2"]) == 1
+    dec = json.loads((tmp_path / "c2" / "check.json").read_text())["decode"]
+    assert dec["checked"] == lay.tensors[-1].block_range.stop and dec["mismatches"] == 1
+    assert dec["first"][0][0] == lay.tensor(1, "o").first_block
+
+    def with_manifest(m: dict) -> list[str]:
+        (tmp_path / "m2.json").write_text(json.dumps(m))
+        return [a.replace(str(tmp_path / "m.json"), str(tmp_path / "m2.json")) for a in run]
+
+    wrong = json.loads(json.dumps(manifest))
+    next(r for r in wrong["tensors"] if r["name"] == "l1.wo")["sha256"] = "00" * 32
+    assert full.main(with_manifest(wrong) + ["--out", str(tmp_path / "o2"), "--layers", "1-2"]) == 1
+    recs = [json.loads(x) for x in (tmp_path / "o2" / "full.json").read_text().splitlines()]
+    assert [r["tensor"] for r in recs if r["step"] == "stage"] == [t.name for t in lay.tensors if t.layer >= 1]
+    assert [r["sha256"] for r in recs if r["step"] == "stage"][1] == {"l1.wo": False}
+    assert not next(r for r in recs if r["step"] == "summary")["ok"]
+    with pytest.raises(SystemExit, match="SHA-256"):
+        full.main(with_manifest({"tensors": [{k: v for k, v in r.items() if k != "sha256"} for r in manifest["tensors"]]})
+                  + ["--out", str(tmp_path / "o3")])
+    other = json.loads(json.dumps(manifest))
+    next(r for r in other["tensors"] if r["name"] == "head")["shape"] = [128, 64]
+    with pytest.raises(SystemExit, match="lm_head"):
+        full.main(with_manifest(other) + ["--out", str(tmp_path / "o3")])
+    L.segment_path(root, 1, "c").write_bytes(bytes(bps * L.ROW))
+    with pytest.raises(SystemExit, match="SHA-512"):
+        full.main(run + ["--out", str(tmp_path / "o4")])
+    L.segment_path(root, 1, "json").unlink()
+    with pytest.raises(SystemExit, match="not done"):
+        full.main(run + ["--out", str(tmp_path / "o4")])
+
+
+def test_every_kept_path_has_a_reason_in_keep_json():
+    """session.sh keeps each node path under keep.json's owner and expiry with that path's reason; a `keep PATH WHAT`
+    whose WHAT has no reason would keep nothing."""
+    keep = json.loads((HERE / "keep.json").read_text())
+    whats = re.findall(r'^\s*keep "\$\w+" (\w+)$', (HERE / "session.sh").read_text(), re.M)
+    assert sorted(whats) == sorted(keep["why"])
+    assert keep["owner"].startswith("@") and keep["expires"]
+    assert all("{layer}" in why for why in keep["why"].values())

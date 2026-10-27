@@ -1,10 +1,10 @@
 # PoUS's memory challenger's verdicts as executable Lean: its record formats and crypto, `verdict` on a record as its
 # caller holds it (`memory-challenger-verdict`) and as a core protocol (`memory-challenger`), and the streamed-label wipe's
-# `verdict` on a record (`streamed-wipe-verdict`). Code: Lean core and the packages below, no Mathlib and nothing of
-# Security.
+# `verdict` on a record (`streamed-wipe-verdict`) and as a core protocol (`wipe-protocol`). Code: Lean core and the
+# packages below, no Mathlib and nothing of Security.
 name = "core_memory_challenger"
 defaultTargets = ["MemoryChallenger", "memory-challenger", "memory-challenger-test", "memory-challenger-verdict",
-                  "streamed-wipe-verdict", "memory-challenger-difftest"]
+                  "streamed-wipe-verdict", "wipe-protocol", "wipe-protocol-test", "memory-challenger-difftest"]
 
 [leanOptions]
 autoImplicit = false
@@ -52,6 +52,17 @@ root = "MemoryChallenger.VerdictMain"
 [[lean_exe]]
 name = "streamed-wipe-verdict"
 root = "MemoryChallenger.WipeVerdictMain"
+
+# The streamed wipe's verdict as a core protocol, `verity/wipe/v0` under the accepted schemes: the interface's command
+# line, onsite's wipe component.
+[[lean_exe]]
+name = "wipe-protocol"
+root = "MemoryChallenger.WipeProtocolMain"
+
+# The same under the test signers' schemes alone, with a protocol id of its own, for the difftest.
+[[lean_exe]]
+name = "wipe-protocol-test"
+root = "MemoryChallenger.WipeProtocolTestMain"
 
 [[lean_exe]]
 name = "memory-challenger-difftest"

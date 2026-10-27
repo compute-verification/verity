@@ -30,6 +30,7 @@ CIRCUIT = "9f" * 64
 def host(tmp_path) -> A.Host:
     (tmp_path / "var" / "sessions").mkdir(parents=True)
     (tmp_path / "peers").write_text("vy-challenger-1 research@10.0.0.1\nvy-nebius-1 research@10.0.0.2\n")
+    (tmp_path / "coin-ports").write_text("vy-nebius-1 7811-7899\n")
     (tmp_path / "pins.jsonl").write_text(A.pin_line(PIN, "d" * 40, "2026-10-20T09:00:00Z") + "\n")
     return A.Host(root=tmp_path / "var", peers=tmp_path / "peers", pins=tmp_path / "pins.jsonl")
 
@@ -258,7 +259,7 @@ def test_an_end_after_its_periods_close_leaves_the_close_and_the_ledger_standing
 
 
 def test_a_period_open_commits_its_cap_and_circuit_and_the_gate_reserves_no_window_past_the_cap(host, signer):
-    """compute-accounting's CircuitWorkPeriod (#2722) reads both, committed before window 0's first coin; a reserve
+    """`CircuitWorkPeriod` reads both, committed before window 0's first coin; a reserve
     counts toward the cap from its entry on, opened or not."""
     opened = ok(admin(host, signer, f"period-open --name k1 --lane kernels --cap 2 --circuit {'ab' * 64}"))
     assert (opened["body"]["cap"], opened["body"]["circuit"]) == (2, "ab" * 64)
@@ -348,7 +349,7 @@ def test_a_period_open_commits_each_ks_circuit_file_when_given_and_none_otherwis
 
 @pytest.mark.parametrize("files", [
     "{}", "[]", "nope", '{"k64": "2b"}', '{"k0": "' + "2b" * 64 + '"}', '{"k064": "' + "2b" * 64 + '"}',
-    '{"64": "' + "2b" * 64 + '"}', '{"k64": "' + "2B" * 64 + '"}', '{"k64": 1}',
+    '{"64": "' + "2b" * 64 + '"}', '{"k64": "' + "2B" * 64 + '"}', '{"k64": 1}', '{"lives": "' + "2b" * 64 + '"}',
     '{"k64": "' + "2b" * 64 + '", "k64": "' + "1a" * 64 + '"}',
 ])
 def test_a_period_open_refuses_circuit_files_it_cant_check(host, signer, files):
@@ -357,13 +358,14 @@ def test_a_period_open_refuses_circuit_files_it_cant_check(host, signer, files):
     assert rc == 3 and "--circuit-files" in out["refused"]
     assert A.read_ledger(host.ledger) == []
     assert len(A.circuit_files_of(json.dumps({f"k{i}": "2b" * 64 for i in range(1, 65)}))) == 64
+    assert A.circuit_files_of(json.dumps({"k64": "2b" * 64, "live": "1a" * 64})) == {"k64": "2b" * 64, "live": "1a" * 64}
     with pytest.raises(A.Refused, match="1 to 64 distinct K"):
         A.circuit_files_of(json.dumps({f"k{i}": "2b" * 64 for i in range(1, 66)}))
 
 
 def test_a_period_open_commits_its_fixed_length_when_given_and_none_otherwise(host, signer):
     """PoUW's credit holds each window's served rows to the fixed length its period's open committed (`length`,
-    ``{max_tokens, stop}``, credit's `committed_length`; ASK-39), signed before window 0's first coin."""
+    ``{max_tokens, stop}``, credit's `committed_length`), signed before window 0's first coin."""
     length = {"max_tokens": [3, 1, 2], "stop": "fixed"}
     opened = ok(ssh(host, signer, f"period-open --name p1 --cap 2 --circuit {CIRCUIT} --draw-k 27 "
                                   f"--length {shlex.quote(json.dumps(length, indent=1))}", "hash"))
