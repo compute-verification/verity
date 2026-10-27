@@ -116,7 +116,7 @@ Two kinds of committed run:
   root, committed under the committer's secret key ``--key`` (`window_weights.weight_values`) as
   **weights-registration** committed them under it before the first window's coins (``--registration``, which the
   verifier pins: ``records_audit.py audit --registered``), so a weight served as registered has its registered root and
-  any other's reads are free; the slot values per-window values under the run root. ``--out`` is the window's records for ``records_audit.py audit --circuit``: the circuit is the
+  any other's reads are free; a stand-in scan state a per-window value under the run root. ``--out`` is the window's records for ``records_audit.py audit --circuit``: the circuit is the
   class's, a function of the class alone, so the verifier's own ``window-circuit`` record is the circuit it holds it to.
 
 `Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
@@ -1266,7 +1266,7 @@ def window_class_of(arg: str | None) -> Any:
 def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     """A served window's advice through I2 as its window class's one Circuit (V3: `window_circuit.window_circuit` at
     ``--class``, a class Program a slot flattened into units, every input row wired or registered, the weights' or the
-    window's slot values), written to
+    network certifier's scan state rows), written to
     ``--out`` as its circuit record from its description alone (`interface.descriptor_record`, members stated at ``--cap``
     units), or with ``--description`` as the description `interface.input_count` reads, no program built. -> the advice's
     length in bits and the record's input count at the verifier's pins (``--pin NAME=ROOT``, ``--pins FILE``: `pins_of`),
@@ -1323,8 +1323,9 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     (`window_circuit.lower`, refused where the class's slots don't take the window), each slot's values (`window_rows.Slot`,
     the k-th request's served values its sealed record's), every unit's rows (`window_rows.Rows`) recorded into a `Window`
     under the record's run root, the weights it serves committed under the committer's key ``--key`` as the registration
-    ``--registration`` (`weights-registration`, before the first window's coins) committed them, the slot values the window's
-    own. Refused for a registration of another model. -> the window's run root, its circuit record's SHA-512, its
+    ``--registration`` (`weights-registration`, before the first window's coins) committed them, and the scan state the
+    slots' rows and ``max_tokens`` give (`window_rows.standin_state`) the window's own value, a stand-in for the network
+    certifier's, whose reads are free. Refused for a registration of another model. -> the window's run root, its circuit record's SHA-512, its
     population and members, the registered weights whose root the window's is (``held``) and those it isn't, whose reads
     are free (``free``), and the seconds each part took."""
     import numpy as np
@@ -1333,6 +1334,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     from verity_vllm.check.replay.index import ProgramIndex
     from verity_vllm.check.replay.opening import CommittedStore
     from verity_vllm.pipeline import cpu_replay as CPU
+    from verity_vllm.program.predict import scan_state as SS
     from verity_vllm.program.predict import window_circuit as WC
     from verity_vllm.program.predict import window_rows as WRS
     from verity_vllm.program.predict import window_weights as WW
@@ -1383,14 +1385,15 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     for k in range(cls.slots):
         u = units[k] if k < len(units) else None
         if u is None:
-            row, served_ = [0] * (cls.prompt + 2), None
+            row, max_tokens, served_ = [0] * (cls.prompt + 2), 0, None
         else:
-            ids = [int(x) for x in compiler.inner.ingress[u.id]["prompt"]]
+            body = compiler.inner.ingress[u.id]
+            ids, max_tokens = [int(x) for x in body["prompt"]], int(body["max_tokens"])
             row = [1, len(ids), *ids, *[0] * (cls.prompt - len(ids))]
             pi = ProgramIndex(p.progs[u.id], program_dir=p.dirs[u.id])
             served_ = WRS.Served.of_record(pi, store, u.id, p.arrivals[u.id])
         slots.append(WRS.Slot(low.fn, cls, row, weights, served_))
-        rows.append(row)
+        rows.append((row, max_tokens))
     lap("slots")
     reg = WW.WeightsRegistration.of(json.loads(Path(a.registration).read_text()), a.registration)
     if (reg.repo, reg.revision) != (model["repo"], model["revision"]):
@@ -1398,7 +1401,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
                          f"{model['repo']}@{model['revision']}'s")
     served = {label: weights(label, 0, n) for label, n in sizes.items()}
     values = {**WW.weight_values(registered, served, key, keep_rows=True),
-              **WRS.slot_values(WC.NAME, rows, key, int(a.window), window=run)}
+              SS.SCAN_STATE: WRS.standin_state(WC.NAME, cls, rows, key, int(a.window), window=run)}
     held = sorted(p for p, e in reg.values.items() if p in values and values[p].entry() == dict(e))
     lap("weights")
     filled = WRS.Rows(low, slots, values)
@@ -1411,7 +1414,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     lap("close")
     prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window),
                                "requests": [u.id for u in units]},
-            "activations": {"program": WC.NAME, "values": {p: values[p].entry() for p in WC.SLOT_VALUES}}}
+            "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: values[SS.SCAN_STATE].entry()}}}
     win.write(c, a.out, prov, registrar=R)
     lap("write")
     sources = {s: int(sum((x == i).sum() for x in filled.source.values())) for i, s in enumerate(WRS.SOURCES)}
@@ -1467,10 +1470,16 @@ def serve_standin(a: argparse.Namespace) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    from verity_vllm.pipeline.workload_file import workload_file
+
+    def workload_arg(s: str) -> str:
+        workload_file(s)
+        return s
+
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("advice", help="a declared run's I1 advice from its workload file")
-    p.add_argument("--workload", required=True)
+    p.add_argument("--workload", required=True, type=workload_arg)
     p.add_argument("--out", required=True, help="the advice's file: I1's canonical encoding")
     for name in ("commit", "audit"):
         p = sub.add_parser(name)
@@ -1479,7 +1488,7 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--bundle", help="instead of --tp-commit: a single-GPU Commit's sealed replay bundle (<row dir>/commit/"
                        "replay_bundle_p0), its window's Programs I2's")
         p.add_argument("--row-dir", help="with --bundle or --serve-run: the row dir (the Build's Programs, manifest.json, commit/)")
-        p.add_argument("--workload", help="with --bundle: the workload file the Commit served (φ's declared inputs, I2's)")
+        p.add_argument("--workload", type=workload_arg, help="with --bundle: the workload file the Commit served (φ's declared inputs, I2's)")
         p.add_argument("--serve-run", help="instead: a serve-openai run dir (serve.json, windows.jsonl, requests.jsonl, advice/w<K>/), "
                        "its window --window from the sealed row dir --row-dir (bundle default <row dir>/commit/replay_bundle_p0)")
         p.add_argument("--window", type=int, help="with --serve-run: the closed Commit window K")
@@ -1541,7 +1550,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--target")
     p = sub.add_parser("serve-standin", help="a served run's dir laid out from a single-GPU Commit of record")
     for flag in ("--bundle", "--row-dir", "--workload", "--out"):
-        p.add_argument(flag, required=True)
+        p.add_argument(flag, required=True, **({"type": workload_arg} if flag == "--workload" else {}))
     p = sub.add_parser("circuit", help="a served window's registered compiler as a command: the circuit record it compiles the "
                        "advice to (records_audit.py's compile check)")
     for flag in ("--serve-run", "--partition", "--advice", "--out"):

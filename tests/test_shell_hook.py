@@ -344,9 +344,10 @@ def test_a_push_that_would_update_main_or_next_and_a_config_that_prints_tokens_a
                     "AGENT_GUARD_PUSH_NEXT_OK=x true; git push origin next", "export AGENT_GUARD_PUSH_NEXT_OK=x; git push origin next"):
         assert ask(command)["permission"] == "deny", command
     for command in ("git config --list", "git config -l", "git config --get-regexp http", "git config --show-origin --list",
-                    "git config --get http.https://github.com/.extraheader", "git config http.https://github.com/.extraheader"):
+                    "git config --get http.https://github.com/.extraheader", "git config http.https://github.com/.extraheader",
+                    "git config --name-only --list", "git config --name-only --show-origin --list",
+                    "git config --name-only --get-regexp url"):
         out = ask(command)
-        assert out["permission"] == "deny" and "--name-only --list" in out["agent_message"], command
-    for command in ("git config --name-only --list", "git config user.name", "git config user.name t",
-                    "git config --get remote.origin.fetch"):
+        assert out["permission"] == "deny" and "url.*.insteadof's name" in out["agent_message"], command
+    for command in ("git config user.name", "git config user.name t", "git config --get remote.origin.fetch"):
         assert ask(command)["permission"] == "allow", command

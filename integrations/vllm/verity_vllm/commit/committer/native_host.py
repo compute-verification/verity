@@ -1080,9 +1080,9 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
         """Registered input: every parameter + buffer hashed once (vllm-v1: chunked pos_leaf leaves, per-tensor subtree, fold of subtree
         roots, SHA-256; rows-sha512: `weights_rows`, SHA-512).  Timed and reported apart from steady state (BRIEF §3 denominator rule)."""
         t0 = time.perf_counter()
-        # [R16 sys SYS-05] host (default, the path below) | device | device-checked: the same leaves (pos_leaf over self.chunk-byte pieces of
-        # the tensor's bytes) and the same per-tensor fold on the GPU (verity_vllm.commit.committer.leafhash / native_leafhash.cu); the root
-        # construction below is untouched.  device-checked computes both and refuses a mismatch (validation runs record the equality).
+        # host (default) | device | device-checked: device hashes the same leaves into the same per-tensor tree on the GPU, rows-sha512's
+        # rows by native_rows.cu (`weights_rows`), vllm-v1's pos_leaf leaves over self.chunk-byte pieces by native_leafhash.cu (`leafhash`);
+        # the weights tree over the tensor roots is built the same either way.  device-checked computes both and refuses a mismatch.
         mode = settings.VERITY_WEIGHTS_HASH
         if mode not in ("host", "device", "device-checked"):
             raise ValueError(f"VERITY_WEIGHTS_HASH must be host | device | device-checked, got {mode!r}")

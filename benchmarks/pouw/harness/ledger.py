@@ -36,9 +36,11 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import price_twins as P
+from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
+settings = of(__file__)
 
 KIND = "kernel-attempt/v1"
 #: the gate code's version, so a record's validity is derived from it rather than voided by hand: 1 = the reference verifier
@@ -571,7 +573,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("publish", help="put a run's records (its ledger/ directory) into the store")
     p.add_argument("run", type=Path, help="the run's directory, or its result JSON")
-    p.add_argument("--by", default=os.environ.get("GPU_LEASE_WHO") or os.environ.get("RESEARCH_LANE"))
+    p.add_argument("--by", default=settings.GPU_LEASE_WHO or settings.RESEARCH_LANE)
     o = sub.add_parser("outcome", help="label an attempt: screened, frontier, kept, dropped, voided or superseded")
     o.add_argument("art")
     o.add_argument("outcome", choices=OUTCOMES)

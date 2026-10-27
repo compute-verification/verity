@@ -533,8 +533,9 @@ def stream(sizing: dict, cls: dict, target: str, served_ands: float, served_s: f
 def project(census: dict, slots: int, prompt: int, outputs: int, target: str = "h200") -> tuple[list[Unit], Heads, dict]:
     """A census of one Program at a probe class within one key block (`class_rows.py --probe`), projected to ``slots``
     Programs of ``prompt`` ids and ``outputs`` outputs as `class_size.project` projects one: outside attention a fixed count
-    of each template a position (`TokenFeed_v1` a prompt position, reading and writing its prompt's row of 4 bytes an id),
-    refused unless each divides evenly; the heads rebuilt at the class's positions (`Heads.units`)."""
+    of each template a position (`TokenFeed_v1` a prompt position and `SlotRow_v1` one a Program, each reading and writing
+    its prompt's row of 4 bytes an id), refused unless each divides evenly; the heads rebuilt at the class's positions
+    (`Heads.units`)."""
     c0 = census["class"]
     if c0["slots"] != 1:
         raise ValueError(f"a probe of {c0['slots']} Programs: project one")
@@ -544,7 +545,7 @@ def project(census: dict, slots: int, prompt: int, outputs: int, target: str = "
     for u in rest:
         fam, s = CS.statics(u.label)
         lab = u.label.replace(f"NP={NP0}", f"NP={prompt}")
-        if fam == CS.FEED:
+        if fam in (CS.FEED, CS.ROW):
             d = 4 * (prompt - NP0)
             grow = {k: getattr(u, k) + d for k in ("wired_bytes", "registered_bytes", "other_bytes") if getattr(u, k)}
             if len(grow) != 1:
@@ -552,6 +553,8 @@ def project(census: dict, slots: int, prompt: int, outputs: int, target: str = "
             u = replace(u, out_bytes=u.out_bytes + d, x=u.x - CR.blocks(128 + 4 * NP0) + CR.blocks(128 + 4 * prompt), **grow)
         if fam == CS.FEED:
             n = 1 if s["FIRST"] else prompt - 1
+        elif fam == CS.ROW:
+            n = 1
         elif u.n % P0:
             raise ValueError(f"the probe has {u.n} {u.label} units, not a fixed count at each of its {P0} positions")
         else:
@@ -565,16 +568,18 @@ def position_layout(rest: list[Unit], heads: Heads, levers: frozenset[str], T: i
     """One slot's output rows at position T under ``levers`` as a `commit_slots` step layout (`slots._layout_json`'s form,
     for ``step.py time`` at ``--slots S``): a group a template, one tensor of its units' bytes, each unit its rows, a unit's
     bytes split evenly over its rows (the census keeps a unit's total, not each row's). A template outside attention is at
-    every position as often (`TokenFeed_v1` at its prompt position). No lever but ``P``, whose
-    shared rows are another layout (``step.py export --shared``), changes a template's output rows outside attention."""
+    every position as often (`TokenFeed_v1` at its prompt position, `SlotRow_v1` at the first). No lever but ``P``, whose
+    shared rows are another layout (`e2e_h200.window.shared_layout`), changes a template's output rows outside attention."""
     if "P" in levers:
-        raise ValueError("P's shared rows are commit_slots' own layout (step.py export --shared --row-bytes), not this one")
+        raise ValueError("P's shared rows are FAMILIES' shared-row layout (e2e_h200.window.shared_layout), not this one")
     S, P, BN = heads.S, heads.P, EXACT_KEYS if "L1" in levers else heads.BN
     here = []
     for u in rest:
         fam, s = CS.statics(u.label)
         if fam == CS.FEED:
             k = int(T == 1) if s["FIRST"] else int(1 < T <= s["NP"])
+        elif fam == CS.ROW:
+            k = int(T == 1)
         else:
             k, r = divmod(u.n, S * P)
             if r:

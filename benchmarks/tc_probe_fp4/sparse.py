@@ -43,6 +43,7 @@ import numpy as np
 
 import probe as P
 from verity.ml.circuits.silicon import models as M
+from verity_config.settings import SHARED
 
 KIND = {"sp_nvf4": 0, "sp_mxf4": 1}
 PTX = {
@@ -224,7 +225,7 @@ class FakeSparse:
 
     def identity(self) -> dict:
         return {"device": f"FAKE SILICON ({self.model_name})", "compute_capability": "fake", "driver": None, "gpu_uuid": "GPU-fake",
-                "backend": "fake", "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES")}
+                "backend": "fake", "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES}
 
     def clocks(self, uuid):
         return None
@@ -378,7 +379,7 @@ def main(args) -> int:
     instr, arch = args.instruction, args.arch or "sm_120a"
     if args.chain != 1:
         raise SystemExit("--chain is not defined for the sparse rows")
-    if args.fake_silicon and os.environ.get("RESEARCH_RUN_ID"):
+    if args.fake_silicon and SHARED.RESEARCH_RUN_ID:
         raise SystemExit("--fake-silicon is a dry run and never publishes: not under a research run")
     models = candidates(instr)
     if args.expect_model and args.expect_model not in models:
@@ -520,7 +521,7 @@ def main(args) -> int:
 
     results["clocks_end"] = dev.clocks(identity.get("gpu_uuid"))
     rc = finish()
-    run_id = os.environ.get("RESEARCH_RUN_ID")
+    run_id = SHARED.RESEARCH_RUN_ID
     if run_id:
         sweep = results.get("sweep", {})
         agree = {m: c == 0 for m, c in sweep.get("total_mismatches_vs_model", {}).items()}

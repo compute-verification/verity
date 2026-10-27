@@ -48,6 +48,7 @@ import numpy as np
 import probe as P
 import sparse as S
 from verity.ml.circuits.silicon import models as M
+from verity_config.settings import SHARED
 
 HERE = Path(__file__).resolve().parent
 EMULATION = HERE / "fp4_emulation_1ad1aaa2.py"
@@ -328,7 +329,7 @@ class FakeSparseT1:
 
     def identity(self) -> dict:
         return {"device": f"FAKE SILICON ({self.model})", "compute_capability": "fake", "driver": None, "gpu_uuid": "GPU-fake",
-                "backend": "fake", "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES")}
+                "backend": "fake", "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES}
 
     def clocks(self, uuid):
         return None
@@ -358,7 +359,7 @@ def main(args) -> int:
     arch = args.arch or "sm_120a"
     if args.chain != 1:
         raise SystemExit("--chain is not defined for sp_nvf4_t1 (its chains are the whole k)")
-    if args.fake_silicon and os.environ.get("RESEARCH_RUN_ID"):
+    if args.fake_silicon and SHARED.RESEARCH_RUN_ID:
         raise SystemExit("--fake-silicon is a dry run and never publishes: not under a research run")
     if args.fake_silicon and args.fake_silicon not in FAKES:
         raise SystemExit(f"--fake-silicon for sp_nvf4_t1: one of {FAKES}")
@@ -514,7 +515,7 @@ def main(args) -> int:
         for name in settings}
     results["clocks_end"] = sparse_dev.clocks(identity.get("gpu_uuid"))
     rc = finish()
-    run_id = os.environ.get("RESEARCH_RUN_ID")
+    run_id = SHARED.RESEARCH_RUN_ID
     if run_id:
         result = {
             "schema": "research/result/v0.1", "kind": "tc-evidence/v1", "run_id": run_id, "instruction": INSTRUCTION_ID, "ptx": PTX,
