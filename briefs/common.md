@@ -56,3 +56,6 @@ Your VM's `research` may predate main's records gate (#5191, since 10:16Z: a pas
 
 ## Never merge next (27 Oct, 17:15Z)
 Never merge origin/next into a branch: drive then treats the PR as carrying everything next held. To clear a conflict with next, merge the specific PRs' heads you conflict with (only if you need their content) plus origin/main; a conflict that comes only from a next-only PR resolves when that PR reaches main.
+
+## main moved (27 Oct, 18:25Z)
+main is at 2b9074ce48b9: 34+ PRs landed (#5300, #5309 with the gate's wider reuse, and many that were only on next). Merge origin/main into your branch, never next, before your next records run; many conflicts with next go away.
