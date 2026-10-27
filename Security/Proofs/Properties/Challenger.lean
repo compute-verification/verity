@@ -5,9 +5,13 @@ import Properties.Challenger
 
 `liveAnswer`: `Live.factors` turns `answer`'s check into `checkAt` at the coins the evidence reads, and `answerAt` runs
 the same decoders. `coinsFromLog`: the coins' target from `liveAnswer` and the reader's property `DrawnByDevice`.
-`drawnByDevice_nontrivial`: a reader that accepts every record fails `DrawnByDevice`'s statement.
+`drawnByDevice_nontrivial`: a reader that accepts every record fails `DrawnByDevice`'s statement, and
+`roundsByDevice_nontrivial` likewise `RoundsByDevice`'s.
 `oneStage_check_of_accept`: one-stage's live check accepts only what its coin-free `check` accepts, so the properties
 proved about `check` (`acceptMeans_iff`) hold of what it accepts.
+`verifies_iff`: the reader's LMS check is `LmsVerifies`; `keyOfParams_eq_some`: the key v2's compiled check reads from
+the registered parameters; `verifies_registered`: under that key, the check accepts exactly what `LmsVerifies` accepts
+at `lmsKey (keyOfParams ps)`.
 -/
 
 namespace Properties.Challenger
@@ -74,6 +78,15 @@ theorem drawnByDevice_nontrivial : ¬ DrawnByDeviceAt (fun _ _ _ _ _ => .ok Byte
   · rw [hnone] at hw
     cases hw
 
+/-- `RoundsByDevice`'s statement is not trivially true: a reader that accepts every record fails it, since the empty
+device's ledger opens no session and an empty list of uses has no use whose record could carry a break. -/
+theorem roundsByDevice_nontrivial : ¬ RoundsByDeviceAt (fun _ _ _ _ _ _ => .ok []) := by
+  intro h
+  rcases h ⟨fun _ => [], fun _ => []⟩ ⟨Lms.deployed, ByteArray.empty⟩ "" [] [] [] Lean.Json.null [] rfl with
+    ⟨s, hs, -⟩ | ⟨i, u, hu, -⟩
+  · simp at hs
+  · simp at hu
+
 /-- What one-stage's protocol accepts, its coin-free `check` accepts: `checkAt` only adds the coins' refusals. -/
 theorem oneStage_check_of_accept {p : SampledProofs.OneStage.Params} {c : SampledProofs.OneStage.Commitment}
     {e : SampledProofs.OneStage.Evidence} {pub : SampledProofs.OneStage.Public} {prof : Core.Integrity}
@@ -89,5 +102,46 @@ theorem oneStage_check_of_accept {p : SampledProofs.OneStage.Params} {c : Sample
     cases hw : ξ.bind (SampledProofs.OneStage.coinsWhy p c e) with
     | some why => rw [hw] at h; simp at h
     | none => rw [hw] at h; exact h
+
+/-- **The reader's LMS check is the one definition's**: `Challenger.verifies`, the check of the record, the close and
+each ledger line, accepts exactly the signatures `LmsVerifies` accepts. -/
+theorem verifies_iff (key : SampledProofs.Challenger.ChallengerKey) (m sig : ByteArray) :
+    SampledProofs.Challenger.verifies key m sig = true ↔ LmsVerifies key m sig := by
+  unfold SampledProofs.Challenger.verifies LmsVerifies MemoryChallenger.Properties.LmsVerifies
+  cases hd : Lms.Signature.decode key.params sig with
+  | error e => simp
+  | ok σ =>
+    simp only [Except.ok.injEq, exists_eq_left']
+    cases hv : Lms.verify key.params key.pub m σ with
+    | error e => simp [Except.toOption]
+    | ok b => cases b <;> simp [Except.toOption]
+
+/-- **The key v2's compiled check reads**: `keyOfParams ps` is `k` exactly when the entry of `ps` named v2's id has
+parameters v2 reads (`OneStageZk.paramsOfJson` on their canonical JSON) whose challenger is `k`, the key `roundsWhy`
+hands `roundCoins` and `OneStage.coinsOf` hands `drawCoins`. -/
+theorem keyOfParams_eq_some {ps : List Core.Composition.Named} {k : SampledProofs.Challenger.ChallengerKey} :
+    keyOfParams ps = some k ↔ ∃ n p label, ps.find? (·.id == SampledProofs.OneStageZk.PROTOCOL) = some n ∧
+      paramsOfNamed n = .ok p ∧ p.base.challenger = some (k, label) := by
+  unfold keyOfParams
+  cases hn : ps.find? (·.id == SampledProofs.OneStageZk.PROTOCOL) with
+  | none => simp
+  | some n =>
+    cases hp : paramsOfNamed n with
+    | error e => simp [hp, Except.toOption]
+    | ok p =>
+      cases hc : p.base.challenger with
+      | none => simp [hp, hc, Except.toOption]
+      | some kl => obtain ⟨k', l⟩ := kl; simp [hp, hc, Except.toOption]
+
+/-- **The compiled check's LMS verify is `LmsVerifies` at the registered key**: where v2's compiled check reads the
+key `k` from the registered components' parameters `ps` (`keyOfParams`, `keyOfParams_eq_some`), every LMS check its
+challenger reader makes (`Challenger.verifies`) accepts exactly the signatures that
+`MemoryChallenger.Properties.LmsVerifies` accepts at `lmsKey (keyOfParams ps)`. -/
+theorem verifies_registered {ps : List Core.Composition.Named} {k : SampledProofs.Challenger.ChallengerKey}
+    (h : keyOfParams ps = some k) (m sig : ByteArray) :
+    SampledProofs.Challenger.verifies k m sig = true ↔
+      MemoryChallenger.Properties.LmsVerifies (lmsKey (keyOfParams ps)).1 (lmsKey (keyOfParams ps)).2 m sig := by
+  rw [h]
+  exact verifies_iff k m sig
 
 end Properties.Challenger

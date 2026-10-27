@@ -91,6 +91,13 @@ def ChallengerRecord.toJson (r : ChallengerRecord) : Json :=
   Json.mkObj [("commitment", r.commitment.toJson), ("host", Json.str r.host),
     ("signature", Json.str (Flock.hexOf r.signature))]
 
+/-- `verify`'s at LMS over the key's parameters, false for a signature that doesn't decode: the one LMS check the
+challenger's reader makes, of its record, its close and each ledger line. -/
+def verifies (key : ChallengerKey) (m sig : ByteArray) : Bool :=
+  match Lms.Signature.decode key.params sig with
+  | .ok s => (Lms.verify key.params key.pub m s).toOption == some true
+  | .error _ => false
+
 /-- `record_reason` (module docstring): why `record` (`null` when the verifier has none) is not a challenger record
 signed under `key`; `none` when it is. -/
 def recordReason (key : ChallengerKey) (record : Json) : V (Option String) := do
@@ -99,10 +106,8 @@ def recordReason (key : ChallengerKey) (record : Json) : V (Option String) := do
   | .error why => return some s!"the challenger record is malformed: {why}"
   | .ok r =>
     let m ← recordMessage (key.pub.extract 0 16) r.host r.commitment
-    let ok : Bool := match Lms.Signature.decode key.params r.signature with
-      | .ok sig => (Lms.verify key.params key.pub m sig).toOption == some true
-      | .error _ => false
-    unless ok do return some "the challenger record's signature does not verify under the verifier's challenger key"
+    unless verifies key m r.signature do
+      return some "the challenger record's signature does not verify under the verifier's challenger key"
     return none
 
 /-- `trusted_reason` (module docstring): why `c`, a coin commitment the prover presents, is not the one in the
