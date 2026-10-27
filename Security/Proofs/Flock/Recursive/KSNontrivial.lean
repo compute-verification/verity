@@ -333,26 +333,12 @@ theorem recBound_k_pos (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Read
   have := V_k_pos_flock false (xIOf x)
   omega
 
-/-- No bytes shorter than a length field decode as a recursive statement: every encoding starts with its format
-string's eight length bytes. -/
-theorem decodeRec_nil : decodeRec [] = none := by
-  cases h : decodeRec [] with
-  | none => rfl
-  | some w =>
-    have h8 : 8 ≤ (RecRaw.encode w).length := by
-      unfold RecRaw.encode
-      simp only [FlockDeploy.encStr, FlockDeploy.encBytes, FlockDeploy.encNat, List.length_append,
-        List.length_map, List.length_range]
-      omega
-    rw [decodeRec_encode h] at h8
-    simp at h8
-
-/-- **The outer Flock's parser refuses the empty statement.** -/
+/-- **The outer Flock's parser refuses the empty statement** (`insO_nil`). -/
 theorem zkRec_parse_nil (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
     (deployZkRec rel).parse [] = none := by
   have h : readOfO [] = none := by
-    unfold readOfO insO
-    rw [decodeRec_nil]
+    unfold readOfO
+    rw [insO_nil]
     rfl
   show (_root_.Flock.Readable.parseBytes readOfO []).map (_root_.Flock.Readable.toReadable rel) = none
   unfold _root_.Flock.Readable.parseBytes
