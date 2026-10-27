@@ -108,7 +108,7 @@ class StoreCompletion:
     @property
     def store(self) -> Any:
         if self._store is None:
-            from research.store.local import LocalStore  # noqa: PLC0415
+            from research.store.local import LocalStore
 
             self._store = LocalStore()
         return self._store
@@ -136,8 +136,8 @@ class StoreCompletion:
         """Fetch and index the remote's attempts started since `started` (Unix seconds, less `COMMIT_MARGIN_S`) that this
         store lacks; how many it indexed."""
 
-        from research.store import ids  # noqa: PLC0415
-        from research.store.local import StoreError  # noqa: PLC0415
+        from research.store import ids
+        from research.store.local import StoreError
 
         store = self.store
         remote = store.remote
