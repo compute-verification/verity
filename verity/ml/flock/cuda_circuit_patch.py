@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Install the circuit prover (verity/ml/flock/cuda/prove_circuit.cuh) into a Flock b684b12 checkout (lane flock-circuit).
+"""Install the circuit prover (verity/ml/flock/cuda/prove_circuit.cuh) into a Flock b684b12 checkout.
 
 Run from the flock checkout after verity/ml/flock/cuda_chunk_patch.py, which installs prove_chunk.cuh and the live hook.
 flock_cuda_prove_circuit is flock_cuda_prove_chunk's body with three parts replaced (each anchor must occur once): the shape
@@ -8,7 +8,7 @@ check (fc_bad_shape), the witness (fc_witness: device compressions and units, or
 live coins) is the chunk prover's, so no second copy of it is kept in the repository. Its buffer lifetimes change so that
 rep 1 can prove from rep 0's witness and level-0 commitment (rep_reuse, FcKept), off under M1.
 
-M1 (lane flock-zk) adds Ligerito level 0's hiding behind FlockCircuitParams::zk_on, as a handful of anchored insertions (each
+M1 adds Ligerito level 0's hiding behind FlockCircuitParams::zk_on, as a handful of anchored insertions (each
 anchor must occur once): level 0's commitment (fc_commit_l0_zk; M0's commit is the other branch), lincheck's folded comb, the
 lane phase's hiding step in the F256 ladder (verity/ml/flock/cuda/ligerito_zk.cuh, called from run_ligerito_f256) and the zk
 section of the proof stream (fc_write_zk).

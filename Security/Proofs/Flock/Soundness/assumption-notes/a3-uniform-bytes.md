@@ -6,8 +6,7 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
 - **Why per test.** The every-event form is refutable at the deployed source. Linux's CRNG (5.18 and later,
   `drivers/char/random.c`) answers one read past 32 bytes with a ChaCha20 stream under a 256-bit key derived for that
   call, so the event that the bytes are among the source's outputs has probability 1 there and at most `2^(256 - 8n)` at
-  `n` uniform bytes: any source with fewer outcomes than byte strings fails it
-  (note:proofs/20261018T1925Z-report-redteam-zk-server-os, P4). Its zero is an idealization, the CSPRNG taken as exactly
+  `n` uniform bytes: any source with fewer outcomes than byte strings fails it. Its zero is an idealization, the CSPRNG taken as exactly
   uniform; the true bound carries the CSPRNG's distinguishing advantage against the theorem's test, which is the per-test
   form's `η`. A salt is 192 bytes and a rep's draws are `drawBytes` bytes, so zero knowledge takes the per-test form.
   The unit draw still takes the every-event form, under the same idealization, since its reads are past 32 bytes too.
@@ -28,13 +27,10 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   `execOS_subset_full_escape`), so `RecursiveSound`, `RecursiveRanRegistered`, `PublicAudit` and `RecursiveAuditC3`
   are proved from their forms with no A3 premise (`…NoA3`). Those are fork forms and state no bits; the recursion's
   knowledge form, `Claims.Recursion.KS`, is at its level `Claims.Recursion.lam`, about 65 bits per SHA-512 call at the
-  deployed shape, below the 100-bit floor and the 2^-128 target under every weight. Route 2C's bound λ₂
-  (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), but
-  `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from a premise still
-  open. At the coin server's record (`recTr`) read by `recRead` (`RecDeploy.ksLin2_deployed_partAccepts`), `PartOpensB`
-  is proved, `PartChecksB` is no premise of its own (`VStarB.exists_chk_iff`), `recRead` reads the record back
-  (`readsBack_recTr`) and the readers' calls are true (`readersTrue_layoutBTops`), so what stays open there is
-  `DecompB` at what each part's circuit accepts (`PartAccepts`).
+  deployed shape, below the 100-bit floor and the 2^-128 target under every weight. The linear form's bound λ₂
+  (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), and
+  `RecursiveKS`, `KSLin2On` at the deployment's dense statements (`RecDeploy.DenseAt`) and the coin server's record, is
+  proved with no premise, A3 included (`RecDeploy.ResLower.recursiveKS_deployed`, `Recursive/KSProved.lean`).
   Holo statements are candidate 3's own model, and `BitsLin2` at the dense
   statements follows from it (`bitsLin2On_of_ksLin2On`).
 - **The salts.** C-Flock's prover reads every hm96 leaf salt, 192 bytes a leaf,
@@ -69,6 +65,6 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
     (the kernel logs `uninitialized urandom read`). The same nodes report `entropy_avail` 256 of 256: seeded.
   - A `seed-injection` build (the selftest's) expands the prover's values from an injected `ProverSeed` with ChaCha20:
     no record from such a build is evidence for a theorem that takes A3.
-- **Falsification.** No test runs: A3 is an assumption about the world, scoped by platform (8 Oct ruling), and the
+- **Falsification.** No test runs: A3 is an assumption about the world, scoped by platform, and the
   lock's `shape.conjectures`, the one place a falsification test is recorded, holds mathematical conjectures only. What
   checks it is the citation of `io.cpp` and `random.c`, re-read at every toolchain bump and on any platform but Linux.
