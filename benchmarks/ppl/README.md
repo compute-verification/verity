@@ -1,9 +1,8 @@
 # The perplexity bench (`verity bench ppl`)
 
 One standard bench for interventions on the matmuls of a served model: what perplexity a change to the linears or to
-attention costs, against bf16 and against plain int8, on fixed windows, seeds and references. It joins tonight's three
-harnesses (16 Oct: D4-PPL's linears, D4-ATTN's attention, D4-70B's layer-wise `linears_layerwise.py`) into one.
-`run.py` is the runner; its docstring lists the commands.
+attention costs, against bf16 and against plain int8, on fixed windows, seeds and references. `run.py` is the runner;
+its docstring lists the commands.
 
 ~~~text
 verity bench ppl submit --model llama-3.1-8b --set c4 --ctx 2048 adopted        # a `research run` on vy-nebius-2
@@ -28,7 +27,7 @@ Fixed in `methodology.py`; `run.py eval` refuses any other window list, context 
 - **Windows.** A set's documents joined by blank lines, tokenized without special tokens, cut into consecutive windows of
   T tokens, each led by the tokenizer's BOS if it has one (Llama's does, Qwen2.5's doesn't). Window i is tokens
   `[i * body, (i + 1) * body)` of the stream. `windows.lock.json` pins every list's sha256 per tokenizer, and a run
-  refuses another; Llama's C4 lists at 2K are tonight's `c4val2048x16.npy` and `c4cal2048x16.npy` byte for byte.
+  refuses another.
 
   `run.py tables windows` lists each context's windows and scored tokens.
 
@@ -111,81 +110,15 @@ their parameters and docs.
 
 `run.py tables arms` lists every arm in `specs/`: its scope, whether it runs every seed, whether it reads calibration,
 the plain int8 arm it is reported against, and its `description`. A new arm is its file, and its `description` says
-what it is and where it comes from; the account below, by family, runs to PPL-COMPILE and grows no further.
+what it is.
 
-`specs/` holds the arms in use: the three plain int8 arms, and the adopted design (`adopted`) with its halves
-(`adopted-linears`, tonight's `d63-sm50-smkv`; `adopted-attention`, tonight's `int8-rot-eqp=w64-poff64-psink-kc-kv=dith`)
-and `adopted-no-smooth` (tonight's WikiText end to end). The low-bit arms put the adopted design's linears (SmoothQuant
-0.5, rotated) on a grid, as integers: `fp4c` is E2M1's contiguous region (±2 in steps of 0.5, times 2: −4..4), `fp4`
-E2M1's every value (times 2: 0, ±1, ±2, ±3, ±4, ±6, ±8, ±12) and `int5` the integers −16..16 that E4M3 holds exactly.
-`GRID-MODE` (`fp4c-dither`, …, `int5-round`) keeps the adopted int8 attention, and `GRID-dither-act` dithers only the
-activations, rounding the weights as the adopted linears do; `GRID-MODE-all` puts attention on the
-grid too, with no key blocks; `fp4c-dither-all-kv` dithers only K and V there, as the adopted attention does, with
-`p_sink`. A dithered operand serves the level below x / s or the one above it by a fresh fair bit (on a uniform grid,
-floor(x / s) + b), the weights' bits drawn once per seed and layer; `GRID-sr` rounds the linears' operands up with
-probability the fraction instead (unbiased, a uniform coin). `nvfp4-MODE` puts the full E2M1 grid in blocks of 16
-with odd UE4M3 block scales (the integer operands q·σ reach 180, past int8, so their product takes the exact FP32-chunk
-route under the `grid_range` gate), `nvfp4-int-MODE` the same with every integer scale 1–15, `nvfp4c-MODE` the
-contiguous region in the same blocks, `nvfp4-qN`, `nvfp4c-qN` and `int5-qN` dither a coin-chosen 1/N of every k64
-word's positions on both operands, and `fp8-peel-wW[-gptq]` is the int8 design on E4M3's exact integers: activations
-dithered on −16..16, weights on ±W (rounded or GPTQ) served as W + U and peeled; `fp8-peel-w15-qN` dithers the
-activations on 1/N of the positions only (U still coins every position).
-SKIP's arms (note:20261017T0340Z-draft-skip): `adopted-qkd` (Q Kᵀ dithered on both operands, no Q peel),
-`adopted-bd` (the linears too), `adopted-bd-lm` (and lm_head), `co` (CO-Dither's served values at r = k/2: 7-bit
-sides plus fresh bits), `co32c` (CHECKED-STRIP's: 7-bit weights and 8-bit activations on the linears, `co`'s
-attention), `co32c-pv` (`co32c` with P·V as CO-Dither serves it: P dithered with a fresh bit under the w64 peel; `co32c-pvN`
-in blocks of N = 256, 512 or 1,024 keys; `adopted-bd-lm-pv` is `adopted-bd-lm` with that P·V, `adopted-bd-lm-pvN` in
-blocks), and `ncp` (NCP-INT's: the exact product of 7-bit operands) and `cb` (`ncp`'s linears with `co`'s attention),
-kept as records now that NCP-INT is no longer a design candidate. A design names its arm as `ppl` in the design registry
-(`benchmarks/pouw/machine_model/data/designs/`, decision 79's names): Dither-1S `adopted`, Dither-2S `adopted-bd-lm`,
-Dither-2S-pv `adopted-bd-lm-pv`, Dither-C `co32c-pv` and Dither-C-peel `co32c`.
-`adopted-bd-lm-dB` and `co32c-dB` (B = 2, 3, 4) are `adopted-bd-lm` and `co32c` with a B-bit dither on the linears,
-lm_head, Q and K (note:20261017T0518Z-draft-ppl-dither-size).
-One-sided dither against `adopted-bd-lm`'s both-sided: `side-lin-act` and `side-lin-w` round the linears' and
-lm_head's weights, or their activations, on ±127; `side-qk-q` and `side-qk-k` round K, or Q, in Q Kᵀ; each `-dB`
-(B = 2, 3, 4) is `adopted-bd-lm-dB` with the same operand rounded; `side-act-k[-d2]` rounds both the weights and Q
-(the record's sides without U). `dither_plot.py` draws perplexity against B per side choice.
-`co32c-uN` (N = 8, 16, 32, 64) is `adopted-bd-lm` with the linears' and lm_head's weights capped at ±(127 − N): co32c's
-linears with the peeled U on ±N (`benchmarks/pouw/theory/narrow_u.py`) and design A's attention.
-`co32c-u16-cohalf` is `co32c-u16` with Dither-C's cohalf Q Kᵀ at U on ±16 (Q and K dithered within ±111).
-PPL-LUT's arms (note:20261017T2111Z-draft-ppl-lut) measure the integer softmax of `benchmarks/pouw/edited_gemm/fattn.cu`
-(`fattn_ref.py`), `attention.int8`'s `softmax = "lut"`. Per query row it computes:
-
-- the fixed-point A = rint(s_q s_k log2(e) `lut_res` / √d 2³²), which needs one K scale per (layer, KV head);
-- the max m of S = Q Kᵀ over keys 0..pos;
-- t = min(⌊(m − S) A / 2³²⌋, `lut_size` − 1) and e = rint(127 · 2^(−t/`lut_res`)), whose last entry must be 0;
-- P = e at keys 1..pos, and key 0 as z_q V₀, with s_q = f32(1)/f32(L), z_q = f32(e₀)/f32(L) and L = Σ e.
-
-`lut_sink` takes key 0 out of the max. Its weight above the max over keys 1..pos, at u = −t, is H[u mod `lut_res`] ·
-2^(u div `lut_res`) with H[r] = rint(127 · 2^(r/`lut_res`)). `lut_round` takes t to nearest, ⌊((m − S) A + 2³¹) / 2³²⌋.
-`lut_norm` = b sums L over a table 2^b finer, rint(127 · 2^b · 2^(−t/`lut_res`)) (key 0 above the max: its weight
-times 2^b), with s_q = f32(2^b)/f32(L) and P = e as before, so keys whose e rounds to 0 still count in L.
-
-The arms:
-- `vllm-int8` is vLLM's plain step as VLLM-18 serves it: int8 everywhere, rounded, unrotated, lm_head bf16, float
-  softmax.
-- `vllm-int8-lm` and `vllm-int8-lut-cal-lm` are `vllm-int8` and `vllm-int8-lut-cal` with lm_head on the same int8 grid,
-  as recipe `verity-int8-channel127/v2` serves it (VLLM-49).
-- `vllm-int8-khead` changes only the K scale, to one per (layer, KV head).
-- `-khead-sink` is `-lut-sink`'s float twin: the same K scales, float softmax, and key 0 in a P block of its own
-  (`p_sink`).
-- `-lut` is the kernel's form; `-lut-sinkm` takes key 0 out of the max; `-lut-sink` also gives key 0's K its own scale;
-  `-lut-sink-rnd` also rounds t; `-lut-sink-norm` sums L over a table 2⁷ finer.
-- `-lut32` is 2^(−t/32) with 512 entries; `-lut-cal` calibrates the K scale; `-lut-sink-cal`, `-lut-sink-norm-cal`
-  and `-lut32-sink` combine them.
-- `co32c-u16-cohalf-*` are the same on H1's numerics.
-`frontier_plot.py` draws perplexity against core ε (`machine-model eps --checking full`) under each reading of the table
-route, and writes the table.
-PPL-COMPILE's arms (`pc-*`) cost running Dither-2S (`adopted-bd-lm`) on FP8 and FP4 hardware, every matmul including
-lm_head, after the same SmoothQuant, rotations and key centring: `pc-int8` and the format baselines `pc-fp8-tensor`,
-`pc-fp8-channel`, `pc-mxfp8`, `pc-nvfp4` and `pc-mxfp4` are plain quantization with no PoUW, and each one's `-lin`
-twin quantizes only the linears in the format and keeps `pc-int8`'s attention (C2's and C3's scope); `pc-c1-ROUTE` is
-`adopted-bd-lm` with every int8 product emulated from limbs (its perplexity is `adopted-bd-lm`'s bit for bit);
-`pc-c2-GRID-2s|1s` puts the linears on a format's integer grid (`int5`, `e4m3i`, `e4m3i-t` per tensor, `mx8`, `nvfp4`
-with odd scales, `mxfp4`, on E2M1's integers; `nvfp4x2`, `mxfp4x2` on twice E2M1's values), both operands dithered or
-the activations only (`int5-1s` is `fp8-peel-w15`'s design), and `pc-c3-fp8|fp4|fp4x2` keeps Dither's int8 activations
-against native dithered weights; C2 and C3 keep Dither-2S's attention.
-Any other file passes as a path.
+`specs/` holds the three plain int8 arms, the adopted design (`adopted`) with its halves (`adopted-linears`,
+`adopted-attention`) and `adopted-no-smooth`, and the variants measured against them. A design in the design registry
+(`benchmarks/pouw/machine_model/data/designs/`) names its arm as `ppl`. `attention.int8`'s `softmax = "lut"` is the
+integer softmax of `benchmarks/pouw/edited_gemm/fattn.cu`, which `steps.lut_softmax` states. `dither_plot.py` draws
+perplexity against the dither's size per side choice, and `frontier_plot.py` perplexity against core ε
+(`machine-model eps --checking full`) under each reading of the table route, each with its table. A SPEC is an arm's
+name in `specs/` or, with its suffix, any TOML file's path.
 
 ## Adding an intervention
 
