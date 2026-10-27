@@ -1,5 +1,5 @@
 """A served window's credited set, its drawn units and their outcome, its A rows, and the period it counts toward, as
-PoUW's verifier reads them (RT4-INT-32, -34 and -42; PRF-132). `_window_outcomes` and `_period_outcomes` are the Python
+PoUW's verifier reads them. `_window_outcomes` and `_period_outcomes` are the Python
 reference of the Lean `PouwCheck.Credit` (`lean/check`), held to it by the difftest (`lean/check/tests/test_difftest.py`);
 `window` and `period_credit` are they with each drawn unit's outcome from the verifier of record's own run, which the
 Lean `PouwCheck.Credit.window` takes as given. Those outcomes are the Lean's (`PouwCheck.Verified`, `_lean_verified`):
@@ -11,7 +11,8 @@ outcome is the Lean's too (`PouwCheck.LiveVerified`, `_lean_live_verified`), wit
 **`window` and `period_credit` are the only entries.** On one window's evidence and one round log, `window` runs every
 step and credits only when all of them accept: `_credited`, `core_check.rounds`, `_a_link`, `layout_of`, its period's
 `_weights`, `_arow`, the draw, `_verified`, `_outcome`'s rule, `_registration` and `_live`. `period_credit` runs `window` on each window
-of a closed, complete period. The steps are internal, so no caller credits a window with a step skipped: `_credited`
+of a closed, complete period. A live Pearl-C pass is credited only through `pearl_c_period_credit`, its period holding
+Pearl-C salt sessions alone. The steps are internal, so no caller credits a window with a step skipped: `_credited`
 returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the round log's roots, which only
 `core_check.rounds` holds to the ones the challenger received before each coin.
 
@@ -23,7 +24,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   call's ``--registered`` file credit builds from the descriptor and the window's entries (`registered_file`,
   `h1window.table_reads_file`'s, main's per-call tables). A rejected session refuses the window, and so does a
   verifier that can't run. The circuit file's tie to the descriptor's Definitions rests on the auditor's lowering,
-  which built the committed file, until the verifier derives the circuit from the descriptor (PRF-133). The verdict
+  which built the committed file, until the verifier derives the circuit from the descriptor. The verdict
   over the statements is the Lean's (`PouwCheck.Verified.verified`, through `verifier.lean`): it names each statement
   to verify and the inputs (`_asks`: up to the first statement a check before the verifier refuses), this module only
   runs the verifier on them, and the Lean judges the answers (`_lean_verified`).
@@ -133,7 +134,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   which contains it (`domain_of`). The window's request table ``<prefix>requests@0`` (`is_requests`, the live unit's
   ``req``), when it registers one, is round 0's: its root is ``request_table`` and its domain binds the session alike.
   That the Commit's values are the model's computation is the Commit's draw's, not credit's.
-* **The window serves its period's fixed length** (`committed_length`, `_length`; Daniel, 19 Oct, ASK-39): correct
+* **The window serves its period's fixed length** (`committed_length`, `_length`): correct
   tokens served past the honest run's end of sequence are not useful work, so a row of record serves each request's
   public max_tokens whatever it samples (ignore_eos, circuits' ``public-cap`` done source). The period's open commits
   them before any window (`LENGTH_FIELD`, ``{max_tokens, stop}``, stop `window.STOP_FIXED`), so they are the verifier's
@@ -149,8 +150,8 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   and the root its reads were opened against). The entries are the registration's: each A value's domain, and each
   other value's a proof opened, is `domain_of` the committed descriptor's SHA-512 and, for every value but the weights'
   ``…/b/<K>`` (held across windows, `is_held`) and round 0's input-ids and request tables, the window's open root
-  (``window.root``, the root the auditor's ledger opens its session for, which a per-window value's domain binds since
-  PRF-127); round 0's input-ids and request tables, whose roots that open root contains, bind the window's session
+  (``window.root``, the root the auditor's ledger opens its session for, which a per-window value's domain binds);
+  round 0's input-ids and request tables, whose roots that open root contains, bind the window's session
   instead. Each proof was
   verified against that
   descriptor, opened only values the window registers once, each at its registered root, and opened its unit's K's A
@@ -185,6 +186,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Callable
 
+from verity.core.protocols.pouw import coins as Co
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import verifier as V
@@ -269,7 +271,7 @@ PERIOD_PIN_FIELD = "pinned"
 #: pin, never from main's head, so main moving on never refuses a window fresh at its open, CMP74-FOLLOW). Optional,
 #: default 0 when the open pins but records no floor; infra sets it generously, about a day of first-parent commits
 STALE_FIELD = "pin_floor"
-#: the period-open's field holding the rows of record's fixed length (Daniel, 19 Oct, ASK-39): ``{max_tokens, stop}``,
+#: the period-open's field holding the rows of record's fixed length: ``{max_tokens, stop}``,
 #: each request's public max_tokens in admission order and the stop mode `window.STOP_FIXED` (ignore_eos, circuits'
 #: ``public-cap`` done source), signed before any window, so it is the verifier's own and never the prover's
 LENGTH_FIELD = "length"
@@ -1163,6 +1165,18 @@ def _drawn(coin: bytes, stream: Any, registration: Any, receipt: Any, ss: list[d
     return (None, ("sampler", "the draw's stream ran out")) if got is None else (got, None)
 
 
+def _window_drawn(window: dict, draw: dict, ss: list[dict], k: Any
+                  ) -> tuple[list[int] | None, tuple[str, str] | None]:
+    """The units the window's draw coin (`draw`'s ``coin``, a live opening) draws over the strata `ss` at the period's
+    committed K `k`, its stream the window's root, its registration the draw's root and its receipt ``{"receipts": …}``
+    (`_drawn`), and None; or None and the refusal."""
+    try:
+        coin = Ch.LiveOpening.from_json(draw.get("coin")).coin
+    except Ch.CoinError as e:
+        return None, ("coin", f"the draw coin: {e}")
+    return _drawn(coin, window.get("root"), draw.get("root"), {"receipts": draw.get("receipts")}, ss, k)
+
+
 def _finding(x: Any) -> list[tuple[str, str, str]] | None:
     """A session's registered finding (flock-verify's ``registered``, ``{port: {value, root}}``: each registered port's
     value and the root its reads were opened against) as ``(port, value, root)`` in port order, or None."""
@@ -1249,7 +1263,7 @@ def domain_of(program: str, window: str, e: dict, session: str | None = None) ->
     `ids_step` 0) and request table (``…/requests@0``, `is_requests`), whose roots the window's open root contains
     (`requests_root`, `_arow`), bind the window's session `session` in that root's place; every other value's rows are
     the window's own, its A rows and its calls' A and z tables (`h1window.table`) among them, and its domain binds the
-    window's open root (PRF-127)."""
+    window's open root."""
     v, first = e["value"], ids_step(e["value"]) == 0 or is_requests(e["value"])
     return G.domain(program, v, e["words"], e["leaves"], e.get(G.WIDTH_KEY, G.WORD_BITS),
                     None if is_held(v) or first else window, session=session if first else None).domain_id.hex()
@@ -1920,8 +1934,7 @@ def _window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: A
         why = _length(max_tokens, rows, layout, len(rounds))
     if why is not None:
         return None, why
-    units, why = _drawn(Ch.LiveOpening.from_json(draw["coin"]).coin, window["root"], draw["root"],
-                        {"receipts": draw["receipts"]}, ss, k)
+    units, why = _window_drawn(window, draw, ss, k)
     proofs = None
     if why is None:
         proofs, why = proved(layout, bytes.fromhex(descriptor), units, len(rounds))
@@ -2287,14 +2300,15 @@ def _main_index(main: Any, commit: Any) -> int | None:
     return main.index(commit) if isinstance(main, list) and commit in main else None
 
 
-def _pin_hygiene(name: str, i: int, main: Any, pinned: str, period_pin: str | None, floor: int | None
-                 ) -> tuple[str, str] | None:
+def _pin_hygiene(name: str, i: int, main: Any, pinned: str, period_pin: str | None, floor: int | None,
+                 unit: str = "window") -> tuple[str, str] | None:
     """Why window `i` of period `name`, whose session ran commit `pinned` on main's first-parent line `main`, is too old
     for the period: its pin more than the period's freshness floor of first-parent commits behind the commit the period's
     open recorded (`period_pin`, `committed_pin`; `floor`, `committed_floor`, default 0 when the open pins but records no
     floor), measured from that pin and never from main's head, so main moving on never refuses a window fresh at its open;
     None when it is recent enough or the open records no pin.  The per-window pin and circuit are
-    `challenger.credited_session`'s; this is the period-level hygiene on top (CMP74-FOLLOW)."""
+    `challenger.credited_session`'s; this is the period-level hygiene on top (CMP74-FOLLOW).  `unit` names what `i`
+    counts (``pass`` in a Pearl-C period, `pearl_c_period_credit`)."""
     if period_pin is None:
         return None
     pos = _main_index(main, pinned)
@@ -2307,7 +2321,7 @@ def _pin_hygiene(name: str, i: int, main: Any, pinned: str, period_pin: str | No
                        "git rev-list --first-parent origin/main holds")
     f = floor if floor is not None else 0
     if pos > base + f:
-        return ("pin", f"window {i} of period {name} is pinned {pos - base} first-parent commit(s) before the commit "
+        return ("pin", f"{unit} {i} of period {name} is pinned {pos - base} first-parent commit(s) before the commit "
                        f"its period opened under, past its freshness floor of {f} ({STALE_FIELD}): {pinned[:16]}... is "
                        f"that far behind {period_pin[:16]}... on main's first-parent line, so the period earns nothing; "
                        "open every window within the floor of its period's open pin")
@@ -2322,7 +2336,7 @@ def passes_distinct(passes: Any) -> tuple[str, str] | None:
     `protocol.CALL_RANGE` (``call-range``), and no index held by two passes of one epoch, nor twice by one pass
     (``repeated-call``). The epoch is the manifest's salt, since -h3's row seed binds the salt and the index but no pass,
     so a repeated index under one salt and root_B repeats its seeds, noise and tickets and would be credited twice
-    (CMP-84; `Properties.Pouw.LiveSalt.PassesDistinct`). A pass's calls are its manifest's ``matmuls``, each an
+    (`Properties.Pouw.LiveSalt.PassesDistinct`). A pass's calls are its manifest's ``matmuls``, each an
     ``index``."""
     seen: dict[str, dict[int, int]] = {}
     for p, m in enumerate(passes):
@@ -2345,6 +2359,120 @@ def passes_distinct(passes: Any) -> tuple[str, str] | None:
                                        "is credited twice")
             held[i] = p
     return None
+
+
+#: a Pearl-C pass's evidence in its period (`pearl_c_period_credit`)
+PEARL_C_KEYS = ("context", "descriptor", "manifest", "session")
+PEARL_C_FORM = ("the period's passes are not a nonempty list of each pass's evidence {context, descriptor, manifest, "
+                "session}: the window context naming its manifest by SHA-512, the descriptor in lowercase hex of the "
+                "circuit it proves, its manifest's bytes in lowercase hex and its salt epoch's session's files")
+EARLIER_FORM = ("the lane's earlier credited Pearl-C epochs are not a list of [weights' root, k] pairs: a SHA-512 digest "
+                "(128 lowercase hex) and an integer in [0, 2^64)")
+SALT_ONLY, PASS_REFUSED, INDEX = "salt-only", "pass", "index"
+
+
+def pearl_c_period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, passes: Any, earlier: Any,
+                          verify: Ch.Verify) -> tuple[dict | None, tuple[str, str] | None]:
+    """Pearl-C period `name`'s credit and None, or None and the refusal (the Pearl-C period rule). A
+    live Pearl-C pass earns only inside a Pearl-C period, and the period earns only when every clause holds, each
+    refused with its own code:
+
+    1. **Exact match** (`period`: ``coin``, ``period``, ``missing``, ``order``). The presented passes' salt epochs'
+       roots R = `salt.epoch_open_root` (W, k), of each manifest's weights' root and ``pass_index``
+       (`core_check.live_epoch`) and in the order they first appear, are exactly the windows the close of period `name`
+       lists, in its order, and the close is complete. So every session the period holds has a pass presented with it,
+       and a complete salt-only session no presented pass names (an abandoned one) refuses the period.
+    2. **Salt-only sessions** (``salt-only``). Each pass's session is a Pearl-C salt session: `core_check.live_salt`
+       refuses none with ``salt`` (its commitment and reserve the salt coin alone, ended complete having released it,
+       its log showing R). H1's window checks refuse such a session (`window.live_epoch_reason`), so the two never
+       share a period.
+    3. **Credited sessions** (``circuit``). Each pass's session passes `challenger.credited_session`: run from a commit
+       the host's pins log `pins` records on main's first-parent line `main`, and the pass's ``descriptor`` hashing to
+       the circuit the period's open committed.
+    3a. **Fresh pins** (``pin``). Each pass's session is pinned within the period's freshness floor of the commit its
+       open recorded, H1's period-level pin hygiene (`committed_pin`, `committed_floor`, `_pin_hygiene`): a session
+       pinned more than the floor of first-parent commits behind the period's open pin refuses it.
+    4. **Accepted passes** (``pass``). Each pass's ``context`` is a string, and the pass passes `core_check.pass_epoch`
+       under the verifier's live inputs (``{key, ledger, main, pins, session}``), salted by its live coin, its
+       ``context`` naming its manifest.
+    5. **Consecutive epochs** (``index``). For each W, the period's epochs on W, in the close's order, are numbered
+       n_W, n_W + 1, … with no gap or repeat, where n_W is one more than the largest k on W in `earlier` (the lane's
+       epochs credited in earlier Pearl-C periods, ``[W, k]`` pairs) or 0 when it has none. A W whose numbering broke,
+       since one of its roots was opened outside a credited period, is spent: the prover re-keys hm96 for a new W.
+    6. **Distinct calls** (`passes_distinct`: ``call-range``, ``repeated-call``). No two passes of one epoch hold one
+       call index, and none is 2^32 or more.
+
+    The credit is ``{epochs, passes}``: the period's epochs as ``[W, k]`` (W hex) in the close's order, which the
+    lane's next Pearl-C period takes in its `earlier`, and the credited passes' manifests in the order presented. The
+    challenger's signatures are checked with `verify`."""
+    if not (type(passes) is list and passes
+            and all(isinstance(p, dict) and sorted(p) == list(PEARL_C_KEYS) for p in passes)):
+        return None, ("period", PEARL_C_FORM)
+    if not (type(earlier) is list and all(type(e) is list and len(e) == 2 and _digest(e[0]) is not None
+                                          and _nat(e[1]) and e[1] < 1 << 64 for e in earlier)):
+        return None, (INDEX, EARLIER_FORM)
+    if not all(type(p["manifest"]) is str and _HEX.fullmatch(p["manifest"]) for p in passes):
+        return None, ("period", PEARL_C_FORM)
+    manifests, epochs = [], []
+    for i, p in enumerate(passes):
+        try:
+            m, w, k = CC.live_epoch(bytes.fromhex(p["manifest"]))
+        except (CC.Refused, Co.DomainError) as e:
+            return None, (PASS_REFUSED, f"pass {i} of period {name} names no salt epoch, so the period earns nothing: {e}")
+        manifests.append(m)
+        epochs.append((w, k, PS.epoch_open_root(w, k).hex()))
+    roots = list(dict.fromkeys(r for _, _, r in epochs))
+    why = period(key, ledger, name, roots, verify)
+    if why is not None:
+        return None, why
+    ck, audited = Ch.ChallengerKey.from_json(key), []
+    for i, (p, m) in enumerate(zip(passes, manifests)):
+        _, why = CC.live_salt(key, ledger, pins, main, p["session"], m, verify)
+        if why is not None and why[0] == "salt":
+            return None, (SALT_ONLY, f"pass {i} of period {name} is not of a Pearl-C salt session, so the period earns "
+                                     f"nothing: {why[1]}")
+    for i, (p, (_, _, r)) in enumerate(zip(passes, epochs)):
+        d = bytes.fromhex(p["descriptor"]) if type(p["descriptor"]) is str and _HEX.fullmatch(p["descriptor"]) else None
+        if d is None:
+            return None, ("circuit", f"pass {i} of period {name}: the descriptor is not the bytes in lowercase hex of "
+                                     "the circuit it proves")
+        try:
+            audited.append(Ch.credited_session(ledger, {"root": r}, ck, pins, main, d, verify))
+        except Ch.CoinError as e:
+            return None, ("circuit", f"pass {i} of period {name} doesn't count toward it, so the period earns "
+                                     f"nothing: {e}")
+    period_pin, floor = committed_pin(ledger, name), committed_floor(ledger, name)
+    for i, a in enumerate(audited):
+        why = _pin_hygiene(name, i, main, a.pinned, period_pin, floor, "pass")
+        if why is not None:
+            return None, why
+    for i, p in enumerate(passes):
+        if type(p["context"]) is not str:
+            return None, (PASS_REFUSED, f"pass {i} of period {name} is refused, so the period earns nothing: its "
+                                        "context is not a string, the window context naming its manifest by SHA-512")
+        live = {"key": key, "ledger": ledger, "main": main, "pins": pins, "session": p["session"]}
+        _, why = CC.pass_epoch(None, bytes.fromhex(p["manifest"]), p["context"], live=live, verify=verify)
+        if why is not None:
+            return None, (PASS_REFUSED, f"pass {i} of period {name} is refused, so the period earns nothing: {why[0]}: "
+                                        f"{why[1]}")
+    nxt: dict[str, int] = {}
+    for w, k in earlier:
+        nxt[w] = max(nxt.get(w, 0), k + 1)
+    out = []
+    for r in roots:
+        w, k = next((w.hex(), k) for w, k, x in epochs if x == r)
+        want = nxt.get(w, 0)
+        if k != want:
+            return None, (INDEX, f"period {name}'s epoch {k} over weights' root {w[:16]}... is not epoch {want}: a "
+                                 "weights' root's salt epochs are numbered on from its lane's earlier credited periods "
+                                 "with no gap or repeat, so a root whose numbering broke is spent: re-key hm96 for a new "
+                                 "weights' root, its epochs numbered from 0")
+        nxt[w] = k + 1
+        out.append([w, k])
+    why = passes_distinct(manifests)
+    if why is not None:
+        return None, why
+    return {"epochs": out, "passes": manifests}, None
 
 
 def period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify,
@@ -2760,12 +2888,12 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
     return w, None
 
 
-__all__ = ["CALL_RANGE_CODE", "CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "COMMIT_TAG", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "K_FIELD", "LAYOUT_KEYS", "LENGTH_FIELD",
+__all__ = ["CALL_RANGE_CODE", "CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "COMMIT_TAG", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "EARLIER_FORM", "INDEX", "K_FIELD", "LAYOUT_KEYS", "LENGTH_FIELD",
            "LENGTH_KEYS", "ROWS_FIELD", "LEVELS",
-           "LIVE", "LIVE_FN", "LIVE_KEYS", "LIVE_RECORD", "LIVE_STATEMENT_KEYS", "LIVE_STATEMENTS", "LIVE_UNIT", "MAX_K", "MODEL_FIELD", "MODEL_KEYS", "MODELS", "PARTITION_FORMAT", "PERIOD_KEYS", "PINNED_MODELS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "REPEATED_CALL", "REQUESTS_IDS_TAG", "REQUESTS_OUTSIDE", "REQUESTS_TABLE", "ROUND_TAG",
-           "SCHEMA", "SERVED_ROWS", "STATEMENT_KEYS", "TILE_FN", "VERDICTS", "WEIGHTS_FIELD", "WINDOW_FN", "WINDOW_KEYS",
+           "LIVE", "LIVE_FN", "LIVE_KEYS", "LIVE_RECORD", "LIVE_STATEMENT_KEYS", "LIVE_STATEMENTS", "LIVE_UNIT", "MAX_K", "MODEL_FIELD", "MODEL_KEYS", "MODELS", "PARTITION_FORMAT", "PASS_REFUSED", "PEARL_C_FORM", "PEARL_C_KEYS", "PERIOD_KEYS", "PINNED_MODELS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "REPEATED_CALL", "REQUESTS_IDS_TAG", "REQUESTS_OUTSIDE", "REQUESTS_TABLE", "ROUND_TAG",
+           "SALT_ONLY", "SCHEMA", "SERVED_ROWS", "STATEMENT_KEYS", "TILE_FN", "VERDICTS", "WEIGHTS_FIELD", "WINDOW_FN", "WINDOW_KEYS",
            "call_work", "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_length", "committed_rows", "committed_weights", "cover",
            "credited_work", "domain_of", "draw_root", "drawn", "established", "a_value", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "law", "layout_of", "live_of",
-           "merkle_depth", "partition_of", "passes_distinct", "period", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
+           "merkle_depth", "partition_of", "passes_distinct", "pearl_c_period_credit", "period", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
            "served_rows", "served_work", "slots_step", "step_row", "step_tables", "strata", "table_rows", "tree_root",
            "window"]

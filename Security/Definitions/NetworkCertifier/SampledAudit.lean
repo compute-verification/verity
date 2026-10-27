@@ -6,7 +6,7 @@ import Mathlib.Order.Interval.Finset.Nat
 /-!
 # The sampled audit and acceptance: what an accepted audit says about the egress, at `δ`
 
-Definitions only (PRF-144). Network accounting writes the whole computation as one program `C` of the Boolean profile,
+Definitions only. Network accounting writes the whole computation as one program `C` of the Boolean profile,
 each machine a subcircuit, and audits its committed trace with sampled proofs (`Claims.Sampling`). The transfer-gate
 units and N2's head checks are classes drawn `all`, and the internal step units are sampled. This module says what an
 accepted audit then establishes about the egress, in the network certifier's terms (`Program`, `Accepted`), on
@@ -14,9 +14,9 @@ sampling's own vocabulary: its statement, partition, design, faulty set and `M_�
 
 **The layout** (`Layout`, public, part of the statement) says which of `C`'s gates hold each step's egress rows (per
 slot, a presence gate and the frame's bit gates) and its ingress (input gates, in bit order). It fits the program
-(`Layout.Fits`) when, before the horizon, the egress gates are gates `C` returns, so their values are committed, the
-ingress gates are inputs, and `C` is causal. The verifier refuses a statement whose layout doesn't fit, as it refuses
-one outside the sampling scope.
+(`Layout.Fits`) when, before the horizon, the egress gates are gates `C` returns and not inputs, so their values are
+committed and computed by `C`, the ingress gates are inputs, and `C` is causal. The verifier refuses a statement whose
+layout doesn't fit, as it refuses one outside the sampling scope.
 
 **The circuit's Program** (`circuitProgram`) is `C` run on the ingress up to step `t` and the declared advice, read off
 at step `t`'s egress gates. The advice is the inputs other than the ingress, plus values held at a set of gates
@@ -32,7 +32,7 @@ at step `t`'s egress gates. The advice is the inputs other than the ingress, plu
   (`Covered`).
 
 **What this module does not model.** The certifier's signed rows and the operator's moves are tied to the transfer gates
-by the transfer-gate units and, beyond them, by the certifier's trust (`trusted-nebius-host`). That tie is the condition
+by the transfer-gate units and, beyond them, by the certifier's trust (`trusted-host`). That tie is the condition
 `Carries` picks out, inside the conclusion. The statuses are the certifier's published record, which the network check
 reads (`Covered`).
 -/
@@ -87,10 +87,11 @@ def Depends (C : Prog) (i g : ℕ) : Prop :=
   Relation.ReflTransGen (fun a b => a ∈ (C.gates[b]?.map BGate.reads).getD []) i g
 
 /-- **The layout fits the program** over the horizon `k`, which the verifier checks before it draws. Before `k`: every
-egress gate is one `C` returns, so its value is committed; every ingress gate is an input of `C`; and no egress gate of a
-step depends on an ingress gate of a later step (`C` is causal). -/
+egress gate is one `C` returns, so its value is committed, and is not an input, so `C` computes it (the circuit's Program
+would read an input egress gate from the advice, and so accept any rows the trace carries); every ingress gate is an
+input of `C`; and no egress gate of a step depends on an ingress gate of a later step (`C` is causal). -/
 def Layout.Fits {L S : ℕ} (lay : Layout L S) (C : Prog) (k : ℕ) : Prop :=
-  (∀ t < k, ∀ ℓ σ, ∀ g ∈ slotGates (lay.egress t ℓ σ), g ∈ C.outs) ∧
+  (∀ t < k, ∀ ℓ σ, ∀ g ∈ slotGates (lay.egress t ℓ σ), g ∈ C.outs ∧ C.gates[g]? ≠ some .input) ∧
     (∀ t < k, ∀ g ∈ lay.ingress t, C.gates[g]? = some .input) ∧
     ∀ t < k, ∀ t' < k, t < t' → ∀ ℓ σ, ∀ g ∈ slotGates (lay.egress t ℓ σ), ∀ i ∈ lay.ingress t', ¬ Depends C i g
 
@@ -128,18 +129,20 @@ def allSlotsFrom : List Rule → List (List (List RU)) → ℕ → Finset ℕ
 def allSlots (d : Design) (P : Partition) : Finset ℕ := allSlotsFrom d.rules P.classes 0
 
 /-- **The sampled audit's relation** at `δ`, on the statement's bytes. The statement parses, its query evaluates, and:
-the sampling relation holds (`RelS`: the faulty set is in `M_δ`); the faulty set holds no slot drawn `all`; and some
-advice `(a, free)` holds values only at the faulty units' committed gates (`FaultyGate`) and makes `Accepted` by the
-circuit's Program, over the horizon, every observation sequence and operator the trace's transfer gates carry
-(`Carries`) with every status complete (`Covered`). -/
+the sampling relation holds (`RelS`: the faulty set is in `M_δ`); the faulty set holds no slot drawn `all`; and the
+advice `(traceVal C ref, free)`, its inputs the trace's committed values and `free` holding values exactly at the
+faulty units' committed gates (`FaultyGate`), makes `Accepted` by the circuit's Program, over the horizon, every observation
+sequence and operator the trace's transfer gates carry (`Carries`) with every status complete (`Covered`). The inputs
+are pinned to the trace, so the registered ones are what the registration commits. -/
 def RAcc (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt) (partition : Stmt → Option Partition)
     (L K S : ℕ) (lay : Stmt → Layout L S) (k : Stmt → ℕ) (δ : ℝ) : Rel Wit :=
   fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧ RelS H Cm δ s P w ∧
     Disjoint (faulty H Cm s P w) (allSlots s.design P) ∧
-    ∃ adv : (ℕ → Bool) × (ℕ → Option Bool), (∀ g b, adv.2 g = some b → FaultyGate s.prog P (faulty H Cm s P w) g) ∧
+    ∃ free : ℕ → Option Bool, (∀ g b, free g = some b → FaultyGate s.prog P (faulty H Cm s P w) g) ∧
+      (∀ g, FaultyGate s.prog P (faulty H Cm s P w) g → free g ≠ none) ∧
       ∀ (op : ℕ → List (Obs L K S) → List Bool) (o : List (Obs L K S)),
         Carries (lay s) s.prog (w.val H Cm s) op (k s) o → Covered (k s) o →
-          Accepted (circuitProgram s.prog (lay s) (k s)) op (k s) o adv
+          Accepted (circuitProgram s.prog (lay s) (k s)) op (k s) o (traceVal s.prog (w.val H Cm s), free)
 
 section Claim
 

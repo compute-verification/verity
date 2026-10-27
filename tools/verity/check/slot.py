@@ -24,7 +24,9 @@ circuit-check's budget, so two checks' circuit-checks never each budget all the 
 20:06Z: two cold ones, each at its six 125-151 GiB targets, filled the 1600 GiB slice); while the check runs, the slot holds a
 research.mem reservation of GB (`reserve`), so `research run --mem-gb` admits nothing that needs what the check may still take.
 With every slot busy it retries every POLL_S, reading
-SLOTS again each time, so a slot added while checks wait is taken by them; with no slots file, CMD runs as it is. A slot
+SLOTS again each time, so a slot added while checks wait is taken by them; with no slots file, CMD runs as it is, unless
+CHECK_SLOTS named that file: then it exits NOT_STARTED, naming the pools the machine has (vy-nebius-1, 27 Oct: a run sent to a
+pool the node lacked ran unpinned beside its GPU jobs; INF-278). A slot
 with a core outside this process's own (os.sched_getaffinity) is skipped, since pinning onto it fails. Stdlib only: it runs before uv.
 
 Waiters take slots in the order they came: each holds a locked ticket in LINE beside SLOTS while it waits, and only the oldest
@@ -79,8 +81,8 @@ from pathlib import Path
 
 SLOTS = Path(os.environ.get("CHECK_SLOTS", "/workspace/research/locks/slots"))
 #: a lane's own test run, which no landing needs (a PR lands on an eyeball review; Daniel, 24 Oct 06:05Z)
-LANE_RUN = ("`research run --on vy-nebius-cpu-K --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && "
-            "uv run tools/verity/check/suites.py --changed origin/main --quick'`")
+LANE_RUN = ('`research run --on vy-nebius-cpu-K --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
+            'uv run tools/verity/check/suites.py --changed $(git rev-parse origin/main) --quick"`')
 LINE = "check-line"
 POLL_S = 20
 #: the exit of a waiter that gave up (`--wait-max`): CMD never ran
@@ -145,13 +147,42 @@ def lane_pools(slots_file: Path) -> list[Path]:
     return out
 
 
+#: where a Nebius node caps each login session's memory (deploy.toml's 50-vy-job-memory.conf; research.telemetry.cgroup reads the
+#: same files)
+SESSION_DROPINS = Path("/etc/systemd/system/session-.scope.d")
+
+
+def session_cap(dropins: Path | None = None) -> str | None:
+    """The MemoryMax= every login session scope gets here (the last one set, as systemd reads the drop-ins), or None."""
+    cap = None
+    try:
+        files = sorted((dropins or SESSION_DROPINS).glob("*.conf"))
+    except OSError:
+        return None
+    for f in files:
+        try:
+            lines = f.read_text().splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            k, _, v = line.strip().partition("=")
+            if k.strip() == "MemoryMax":
+                cap = v.strip() or None
+    return None if cap in (None, "infinity") else cap
+
+
 def scoped(cmd: list[str], slot: str, run_id: str) -> tuple[list[str], str]:
     """CMD in a transient systemd user scope of its own (`scope=1` on its slot), and the scope's unit name. `--scope` registers
     this process in it and execs CMD, so the pid and the inherited slot lock stay; the check's whole tree is then one cgroup,
     whose memory.peak spans.py records at each step's end and the check's (a session scope it shares with other runs has no
-    per-check peak: 23 Oct, train-slot sizing rested on summed RSS, which counts shared pages over and over)."""
+    per-check peak: 23 Oct, train-slot sizing rested on summed RSS, which counts shared pages over and over). On a node that
+    caps each login session's memory the scope gets the same MemoryMax, as the session it leaves had: `research run` refuses
+    to start a workload from an uncapped cgroup, which failed every test of the research suite that runs one locally inside
+    a scoped check (exit 75, 26 Oct)."""
     unit = f"check-{slot}-{run_id}"
-    return ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={unit}", "--", *cmd], unit
+    cap = session_cap()
+    props = [f"--property=MemoryMax={cap}"] if cap else []
+    return ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={unit}", *props, "--", *cmd], unit
 
 
 def scope_refusal(run=subprocess.run) -> str | None:
@@ -389,14 +420,17 @@ def started(pid: int, proc: Path = Path("/proc")) -> datetime | None:
 
 
 def asker(by: str | None = None, twin: str | None = None) -> dict:
-    """Who asked for a slot: this process, the run it belongs to, the tree it checks and who (--by, else RESEARCH_AGENT_URL),
+    """Who asked for a slot: this process, the run it belongs to, the tree it checks and its commit (RESEARCH_SOURCE_SHA, the
+    shipped tree's: a run's clone of it is <root>/scratch/<run id>/tree, which names none), who (--by, else RESEARCH_AGENT_URL),
     and its pair when it is a twin."""
     return {"pid": os.getpid(), "run": os.environ.get("RESEARCH_RUN_ID"), "tree": os.getcwd(),
+            **({"commit": c} if (c := os.environ.get("RESEARCH_SOURCE_SHA")) else {}),
             "by": by or os.environ.get("RESEARCH_AGENT_URL"), **({"twin": twin} if twin else {})}
 
 
 def describe(who: dict) -> str:
-    parts = [f"run {who['run']}" if who.get("run") else "", f"tree {Path(who['tree']).name}" if who.get("tree") else "",
+    tree = who.get("commit") or (Path(who["tree"]).name if who.get("tree") else "")
+    parts = [f"run {who['run']}" if who.get("run") else "", f"tree {tree}" if tree else "",
              f"by {who['by']}" if who.get("by") else "", f"twin {who['twin']}" if who.get("twin") else "",
              f"slot taken {who['took']}" if who.get("took") else ""]
     return ", ".join(p for p in parts if p)
@@ -513,7 +547,7 @@ def holding(lock: Path, who_file: Path, now: datetime, proc: Path = Path("/proc"
            "minutes": round((now - t).total_seconds() / 60) if t else None, "cmd": cmd[:200]}
     who = _read(who_file)
     if who.get("pid") == pid:
-        out.update({k: who[k] for k in ("run", "tree", "by", "twin", "took") if who.get(k)})
+        out.update({k: who[k] for k in ("run", "tree", "commit", "by", "twin", "took") if who.get(k)})
     return out
 
 
@@ -559,7 +593,7 @@ def waiting(line: Path, now: datetime, before: str | None = None) -> list[dict]:
         who = _read(p)
         out.append({"since": f"{t:%Y-%m-%dT%H:%MZ}", "minutes": round((now - t).total_seconds() / 60),
                     "priority": p.name.startswith(PRIORITY), "pid": who.get("pid", int(p.name.split("-")[-1])),
-                    **{k: who[k] for k in ("run", "tree", "by", "twin") if who.get(k)}})
+                    **{k: who[k] for k in ("run", "tree", "commit", "by", "twin") if who.get(k)}})
     return out
 
 
@@ -721,6 +755,12 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     priority, by, wait_max, run_max, pair, rank = options(opts)
     if not cmd:
         sys.exit(USAGE)
+    if not SLOTS.exists() and os.environ.get("CHECK_SLOTS"):
+        pools = ", ".join(p.parent.name for p in lane_pools(SLOTS.parent.parent / "slots")) or "none"
+        print(f"slot: not started: CHECK_SLOTS names {SLOTS}, which this machine doesn't have, and CMD would run on any core "
+              f". Name one of its pools instead (CHECK_SLOTS={SLOTS.parent.parent}/NAME/slots, or `research run --pool "
+              f"NAME`): {pools}; exit {NOT_STARTED}", file=sys.stderr, flush=True)
+        return NOT_STARTED
     if not SLOTS.exists():
         print(f"slot: no check slots on this machine ({SLOTS}); running unpinned", file=sys.stderr, flush=True)
         os.execvp(cmd[0], cmd)
@@ -742,7 +782,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
         pools = lane_pools(SLOTS)
         where = ("a lane check takes a lane pool here: " + ", or ".join(
             f"`CHECK_SLOTS={p} python3 tools/verity/check/slot.py --by LANE -- CMD...`" for p in pools)
-            + " (`research run --pool NAME` sends one by its directory's name, for the pools `research run --help` names)"
+            + " (`research run --pool NAME` sends one by its directory's name, and `check.py --record --on MACHINE --pool NAME` a "
+              "recorded check, for the pools `research run --help` names)"
             if pools else "a lane check runs on another machine")
         sys.exit(f"slot: every slot in {SLOTS} is for train checks (only=trains); {where}. A PR lands "
                  f"on an eyeball review, and no lane check or quick tier is required; to run its tests anyway: {LANE_RUN}")

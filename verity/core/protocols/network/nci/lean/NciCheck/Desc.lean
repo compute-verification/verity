@@ -57,7 +57,8 @@ same IU (expanded copy by copy, `novelWidth`). Serve_v1 meets none of the walks,
 
 ## Refusals
 
-In the order checked: `instance` and `params` (`NciCheck.parse`), `program` (the decoder refuses it), `not-topological`
+In the order checked: `instance` and `params` (`NciCheck.parse`), `program` (the decoder refuses it, or a reference
+reads a leaf at another width than it was committed with, `E_REINTERPRET`: `NciCheck.decodeProgram`), `not-topological`
 (a body names a later node, `Prog.orderViolation`), `program` (the root's offsets are not its layout, a body calls the
 root or holds an input node outside the root's: `rootLaidOut`, `inputsAtRoot`, which the decoder never gives), `program`
 (a `walkBound` past half of `Flock.Steps.FUEL`, past which `Prog.gate`'s walk can run out of steps; a scan of no
@@ -214,7 +215,9 @@ def Seg.alike (s : Seg) : Seg := if s.reps > 1 && s.shift == 0 then { s with rep
 
 /-- `s` as reads, each of one node's gates: copies all alike as one (`alike`), and one copy piece by piece. A copy's
 pieces can name different nodes' outputs (a batch member returning leaves of several arguments its members share), and a
-read is kept, and its IU found, by its first piece. -/
+read is kept, and its IU found, by its first piece. Copies that shift stay one read, since they lie in one node: they
+name only gates of one batch's members (`down` makes them from whole members returning their own gates, and `fromCallee`
+offsets a callee's into one member), and copies naming leaves never shift. -/
 def Seg.split (s : Seg) : Array Seg :=
   let s := s.alike
   if s.reps == 1 then s.ps.map .one else #[s]
@@ -1049,9 +1052,7 @@ def analyzeCode (e : String) : String := if e.startsWith UNWALKED then e else "p
 
 def evaluate (j : Json) : Except String Json := do
   let i ← parse j
-  let P ← match decode i.program.toUTF8 with
-    | .ok P => pure P
-    | .error _ => throw "program"
+  let P ← decodeProgram i.program
   if P.orderViolation.isSome then throw "not-topological"
   if !(rootLaidOut P && inputsAtRoot P) then throw "program"
   if !walkable P then throw "program"
@@ -1076,16 +1077,16 @@ def evaluate (j : Json) : Except String Json := do
   let r := (Array.range n).map fun u => (size[u]!, novelWidth into[u]!)
   return verdict (P.defs[P.root]!).gates r (failure i.gamma i.num i.den r)
 
-/-- A refusal as JSON: `unwalked` with its reason as the `message`, else as `NciCheck.refusal` writes it. -/
-def refusal (code : String) : Json :=
+/-- A refusal of `j` as JSON: `unwalked` with its reason as the `message`, else as `NciCheck.refusalOf` writes it. -/
+def refusal (j : Json) (code : String) : Json :=
   if code.startsWith UNWALKED then
     Json.mkObj [("error", Json.str "unwalked"), ("message", Json.str ((code.drop UNWALKED.length).toString))]
-  else NciCheck.refusal code
+  else NciCheck.refusalOf j code
 
 /-- `evaluate`, with a refusal as `refusal` writes it. -/
 def check (j : Json) : Json :=
   match evaluate j with
   | .ok r => r
-  | .error code => refusal code
+  | .error code => refusal j code
 
 end NciCheck.Desc

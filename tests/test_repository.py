@@ -24,6 +24,8 @@ ROOT = Path(__file__).resolve().parents[1]
 #: notes store (cite it from here by ``note:<id>``).
 ALLOWED_MD_BASENAMES = frozenset({"README.md", "AGENTS.md", "ARCHITECTURE.md", "PROTOCOL.md", "DESIGN.md", "SKILL.md",
                                   "DISCREPANCIES.md", "CHANGELOG.md"})
+#: The Glossary's second file, at the root only: no directory holds a glossary (Daniel, 26 Oct).
+ROOT_ONLY_MD = frozenset({"GLOSSARY.md"})
 #: Layout/spec documents left in place by the 2026-09-22 migration; a human folds them into PROTOCOL.md / README.md.
 ALLOWED_EXTRA = (
     "archive/direct/V2_AIR.md",
@@ -62,13 +64,11 @@ BLOB_LIMIT = 256 * 1024  # a tracked file holds at most this, except source code
 #: Suffixes of source, exempt from BLOB_LIMIT (a generated module or a pinned Lean file can be larger); markdown has its own caps.
 CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
 #: Data over BLOB_LIMIT that is not a test fixture: runtime tables a module loads, the generated census, the vLLM checkpoint
-#: manifest (append-only; most of its readers don't read the sibling manifests yet), three vLLM workload specs and two vLLM
-#: logs. Each is capped at its size rounded up to 64 KiB, so none can grow past that and nothing joins them silently. A test
-#: fixture over BLOB_LIMIT is registered in fixtures/artifacts.json instead and fetched (`research data fetch-fixtures`).
+#: manifest (append-only; most of its readers don't read the sibling manifests yet) and three vLLM workload specs. Each is
+#: capped at its size rounded up to 64 KiB, so none can grow past that and nothing joins them silently. A test fixture over
+#: BLOB_LIMIT is registered in fixtures/artifacts.json instead and fetched (`research data fetch-fixtures`).
 ALLOWLIST = {
     "benchmarks/census/workloads.json": 384 * 1024,
-    "integrations/vllm/data/logs/m1.jsonl.gz": 576 * 1024,
-    "integrations/vllm/data/logs/m6/log.jsonl.gz": 576 * 1024,
     "integrations/vllm/manifests/checkpoints.json": 320 * 1024,
     "integrations/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
     "integrations/vllm/workloads/llama32-1b__bf16__l40s__tp1__b128__i1024__o128__mixed__greedy__bi-eager.json": 512 * 1024,
@@ -83,8 +83,9 @@ AUDIT_RECORD = "lean-audit.json"
 AUDIT_RECORD_LIMIT = 6 * 1024 * 1024
 #: Tracked data (everything but CODE_SUFFIXES and audit records) in the whole tree, so that many small files cannot
 #: add up to what one large one may not be. Audit records are left out: they must stay in Git and each has its own
-#: AUDIT_RECORD_LIMIT, so counting them here would make every new guarantee spend the fixtures' budget.
-DATA_BUDGET = 40 * 1024 * 1024
+#: AUDIT_RECORD_LIMIT, so counting them here would make every new guarantee spend the fixtures' budget. 48 MiB since 26 Oct:
+#: the E2E demo's fixtures (#4454, #4455) took the tree to 40.1 MiB; register the next large one rather than raising it again.
+DATA_BUDGET = 48 * 1024 * 1024
 REGISTRY = "fixtures/artifacts.json"
 
 
@@ -95,6 +96,7 @@ def _tracked() -> list[str]:
 
 def test_tracked_markdown_is_maintained_documentation() -> None:
     offenders = [p for p in _tracked() if p.endswith(".md") and os.path.basename(p) not in ALLOWED_MD_BASENAMES
+                 and p not in ROOT_ONLY_MD
                  and not p.endswith(".template.md") and p not in ALLOWED_EXTRA
                  and not p.startswith(tuple(SPLIT_DOCUMENT_DIRS))]
     assert not offenders, (
@@ -146,18 +148,22 @@ def split_dir(path: str) -> str | None:
     return next((d for d, index in SPLIT_DOCUMENT_DIRS.items() if path.startswith(d) or path == index), None)
 
 
+def markdown_cap(path: str) -> int:
+    """The markdown file ``path``'s cap in bytes.  The merge queue's landing gate (`tools/verity/check/gates/markdown_caps.py`)
+    reads it and `markdown_over_cap` from this file at `main`, so keep both importable with the standard library alone."""
+    if os.path.basename(path) == "SKILL.md":
+        return OVERSIZE_SKILLS.get(path, SKILL_SIZE_CAP)
+    return PROTOCOL_SIZE_CAP if os.path.basename(path) == "PROTOCOL.md" else MD_SIZE_CAP
+
+
 def markdown_over_cap(path: str, size: int) -> str | None:
     """Why the markdown file ``path`` of ``size`` bytes is over its cap, and where its detail goes; None within it."""
+    if size <= (cap := markdown_cap(path)):
+        return None
     if os.path.basename(path) == "SKILL.md":
-        cap = OVERSIZE_SKILLS.get(path, SKILL_SIZE_CAP)
-        if size <= cap:
-            return None
         return (f"{path}: {size / 1024:.0f} KB > {cap // 1024} KB, {size - cap} bytes over; compact it: keep the current "
                 "procedure and rules, drop what AGENTS.md or another skill states, and move dates and history to Daniel's "
                 "decisions log or a note (.agents/skills/authoring-skills/SKILL.md)")
-    cap = PROTOCOL_SIZE_CAP if os.path.basename(path) == "PROTOCOL.md" else MD_SIZE_CAP
-    if size <= cap:
-        return None
     where = f"one file per entry under {d}" if (d := split_dir(path)) else "the notes store (cite it by note:<id>)"
     return f"{path}: {size / 1024:.0f} KB > {cap // 1024} KB, {size - cap} bytes over; move detail to {where}"
 

@@ -293,8 +293,8 @@ class _Store:
         import sqlite3
 
         db = sqlite3.connect(":memory:")
-        db.execute("CREATE TABLE attempts (id TEXT, tool TEXT, state TEXT, start_utc TEXT, wall_s REAL)")
-        db.executemany("INSERT INTO attempts VALUES (?, 'check', ?, ?, ?)",
+        db.execute("CREATE TABLE attempts (id TEXT, tool TEXT, state TEXT, start_utc TEXT, wall_s REAL, manifest_json TEXT)")
+        db.executemany("INSERT INTO attempts VALUES (?, 'check', ?, ?, ?, '{}')",
                        [(rid, self.states.get(rid, "done"), f"2026-10-12T{23 - i:02d}:00:00Z", self.walls.get(rid, 1.0))
                         for i, rid in enumerate(self.runs)])
         return db.execute(query, params).fetchall()

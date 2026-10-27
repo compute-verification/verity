@@ -1,10 +1,9 @@
-import Models.Accounting.Guarantees.TS
+import Definitions.Accounting.Guarantees.TS
 
 /-!
 # The tensor–scalar model's facet guarantees
 
-Lemma 1 and Corollaries D1 and D2 (EPS1-SPEC §1.1, §2.5), gap list M1, M7–M9
-(note:20261017T0801Z-draft-lean-stmt).
+Lemma 1 and Corollaries D1 and D2 (EPS1-SPEC §1.1, §2.5).
 -/
 
 namespace Accounting.SecurityProofs.TS

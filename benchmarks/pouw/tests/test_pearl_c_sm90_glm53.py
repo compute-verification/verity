@@ -398,7 +398,7 @@ def retained(tmp_path_factory):
     sys.path.insert(0, str(HERE.parent / "clear"))
     import clear_work as CW
     from clear_audit import Prover
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
 
     from verity.core.protocols.pouw.audit import (
         HM96_TRANSCRIPT,

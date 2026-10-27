@@ -10,6 +10,7 @@
 # env: K=4096 N=2 (85's inner statement: N instances of GemmCoordinate_v2{K})
 #      STEPS=build,inner,icheck,vstage,vcap,oprove,oreplay,lean,forge-after,negative  REPEAT=3 (each CPU step; REPEAT_<STEP>=n one step's)
 #      WARM=1 RUNS=3 (the inner's sessions)  OPROVE_WARM=0 OPROVE_RUNS=1 (each V* statement's sessions)
+#      OPROVE_JOBS=1 (V* statements proved at once; 85's own default is 4)
 #      MODES=firewall (oprove's prover sides; the last one's sessions are what oreplay and lean read)
 #      GPU_MAX_MIN=75 (each prove's lease, minutes)  LEAN_JOBS=4 (Lean verifies this many V* sessions at once)
 #      OPROVE_GPU=0 under MODES=firewall, else GPU (V*'s prover: 85's CPU prover, or the GPU one under a lease)
@@ -20,22 +21,25 @@
 #      TAG=rb-<run id> (85's data/$TAG, removed at the end unless KEEP_DATA=1; a later job's STEPS=oprove,... takes it with
 #      TAG=... KEEP_DATA=1)  FLOCK_WORK=/workspace/jobs/rec-bench
 #      and any of 85's own (LEVELS, GPU, PCPUS, GPU_PREEMPTIBLE, ...), passed through
-#      CUDA_TK, WARM_FROM: as 85 takes them (default: proofs' rec-reprice unpack and cargo tree where present, read only)
+#      CUDA_TK, WARM_FROM: as 85 takes them (default: the rec-reprice unpack and cargo tree where present, read only)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
+REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/rec-bench-$$}/out}; mkdir -p "$O"
+# settings.py: an unknown REPEAT_* or OPROVE_*, or a value that doesn't parse, is refused; the value settings given are recorded
+SETTINGS=$(python3 benchmarks/recursion_e2e/settings.py record "$O/settings.json") || exit 2
 # 85's leases are preemptible unless GPU_PREEMPTIBLE is empty: on node 1 a waiter stops one after about 2 min, a lost
 # measurement (85 retries the statement afresh, at most GPU_TRIES times), so the bench's are not. A firewalled V* session
 # at K = 4096 takes minutes (L3: 519 s), past 85's default lease of 10 min for the larger statements (run.py's LEASE_MIN)
 export GPU_PREEMPTIBLE=${GPU_PREEMPTIBLE-} GPU_MAX_MIN=${GPU_MAX_MIN:-75}
-REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/rec-bench-$$}/out}; mkdir -p "$O"
 export K=${K:-4096} N=${N:-2}; export TAG=${TAG:-rb-${RESEARCH_RUN_ID:-$$}} WARM=${WARM:-1} RUNS=${RUNS:-3}
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/rec-bench}; mkdir -p "$FLOCK_WORK" || { echo "cannot make $FLOCK_WORK" >&2; exit 1; }
 STEPS=${STEPS:-build,inner,icheck,vstage,vcap,oprove,oreplay,lean,negative}; REPEAT=${REPEAT:-3}; FORGE=${FORGE:-}
 MODES=${MODES:-firewall}; NEG=${NEG-challenge,query}; NEG=${NEG//,/ }
-# OPROVE_GPU=0 (the default under the firewall): V*'s statements proved by 85's CPU prover, no lease. Node 1's lease pool
-# stops a lease at about 10 min while its GPU computes nothing (three firewalled L0 tries, 74 min non-preemptible leases,
-# exit 143 at 10m18s each: r20261024-075309-69be), and a firewalled session's GPU waits on the Lean session loop for minutes
+# OPROVE_GPU=0 (the default under the firewall): V*'s statements proved by 85's CPU prover, no lease. A lease pool stops a
+# lease whose GPU computes nothing for about 10 min, and a firewalled session's GPU waits on the Lean session loop for minutes
 [[ ,$MODES, == *,firewall,* ]] && OPROVE_GPU=${OPROVE_GPU:-0} || OPROVE_GPU=${OPROVE_GPU:-${GPU:-1}}
+# V*'s statements one at a time, as the firewall proves outer proofs: 85 proves 4 at once by default
+export OPROVE_JOBS=${OPROVE_JOBS:-1}
 PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$FLOCK_WORK" --owner @benchmarks --expires 7d --priority low \
   --regenerate "bash benchmarks/recursion_e2e/job.sh K=$K N=$N" \
   --why "the recursion bench's builds (and a KEEP_DATA=1 run's data/TAG): a cache, rebuilt by the next run" > "$O/keep.json" 2>&1 \
@@ -49,8 +53,8 @@ log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
 REC=verity/ml/flock/pod/85-rec-reprice.sh
 L=$FLOCK_WORK/cache
 LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
-{ echo "commit=${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)} K=$K N=$N TAG=$TAG WARM=$WARM RUNS=$RUNS REPEAT=$REPEAT"
-  echo "OPROVE_WARM=${OPROVE_WARM:-0} OPROVE_RUNS=${OPROVE_RUNS:-1} GPU_MAX_MIN=$GPU_MAX_MIN GPU=${GPU:-1} OPROVE_GPU=$OPROVE_GPU" \
+{ echo "commit=${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)} K=$K N=$N TAG=$TAG WARM=$WARM RUNS=$RUNS REPEAT=$REPEAT settings=$SETTINGS"
+  echo "OPROVE_WARM=${OPROVE_WARM:-0} OPROVE_RUNS=${OPROVE_RUNS:-1} GPU_MAX_MIN=$GPU_MAX_MIN GPU=${GPU:-1} OPROVE_GPU=$OPROVE_GPU OPROVE_JOBS=$OPROVE_JOBS" \
     $(for v in $(compgen -v REPEAT_); do echo "$v=${!v}"; done)
   echo "steps=$STEPS modes=$MODES lean_jobs=${LEAN_JOBS:-4} lean_sources=$LSHA neg=${NEG// /+} forge=${FORGE//,/+}"
   echo "cuda_tk=${CUDA_TK:-} warm_from=${WARM_FROM:-}"; nproc; nvidia-smi -L 2>/dev/null; } > "$O/params.txt"

@@ -4,7 +4,7 @@ scheme names, the schedules a pass may run under, and what one pass publishes.
 * `HashFormat` (`HASH_FORMATS`): a format's tree hash, whether forming waits for A's tree, and what a row's seed is keyed
   on.  An executor reads the tree hash from here, never from a literal.  The formats are h0 (TurboSHAKE128 digests, SHA-256
   trees) and h3 (SHA-512 throughout, each row seeding its own E_A line); the BLAKE3 formats h1, h2 and BLAKE3 -h3 are in
-  ``archive/pouw-blake3/`` (one hash, SHA-512: Daniel, 2026-10-06).
+  ``archive/pouw-blake3/`` (one hash, SHA-512).
 * `SchemeId`: the one grammar of Pearl-C names, ``pearl-c-{device}-{forming}[-{hashing}][@{prices}]`` for FP8 and
   ``pearl-c-{nvfp4|mxfp4}-{version}[-{hashing}]`` for Pearl-C4.  Every name in use parses and prints back unchanged.
 * `Schedule` (`SCHEDULES`): which step groups of a call leave the critical path, and at what priority; `schedule_refusals`
@@ -147,7 +147,7 @@ DEFERRED = Schedule("deferred", frozenset({"tile_hash"}), ring=2, main_priority=
 #: the same placement with the caller's stream left at its own priority (#564's first cut), kept to time against DEFERRED
 DEFERRED_CALLER = Schedule("deferred-caller", frozenset({"tile_hash"}), ring=2)
 #: DEFERRED with A's tree beside the tile hashing: the main lane keeps only the per-row keying (`row_seeds`), about a fifth
-#: of a call's hashing (note:20261014T0219Z-report-pearlc-split-b).  Runs only where the format seeds forming per row (h3)
+#: of a call's hashing.  Runs only where the format seeds forming per row (h3)
 DEFERRED_A = Schedule("deferred-a", frozenset({"a_tree", "tile_hash"}), ring=2, main_priority="greatest")
 SCHEDULES = {s.name: s for s in (SERIAL, DEFERRED, DEFERRED_CALLER, DEFERRED_A)}
 
@@ -177,7 +177,7 @@ def schedule_refusals(fmt: HashFormat, s: Schedule) -> list[str]:
 
 
 MANIFEST_SCHEMA = "verity/pouw/pass-manifest/v1"
-#: the manifests a verifier reads: this one, and the MVP's (`verity_vllm.protocol_options.pouw_pearl_c_device`), v1 (salted
+#: the manifests a verifier reads: this one, and the MVP's (`verity_vllm.protocols.pouw.pearl_c`), v1 (salted
 #: from a beacon, before epoch coins) only as a replay of a recorded pass
 MANIFEST_SCHEMAS_READ = (MANIFEST_SCHEMA, "verity-vllm/pouw-pearl-c-run/v2", "verity-vllm/pouw-pearl-c-run/v1")
 

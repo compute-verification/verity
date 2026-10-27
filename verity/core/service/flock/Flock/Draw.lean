@@ -437,4 +437,25 @@ def drawOn (law : Law) (population : Nat) (src : ByteArray) : Option UnitDraw :=
       stratified strata segs
   return { law, population, units }
 
+/-- The units every draw under a law has, when that count is fixed: `k` for a subset law and `Σ_s k_s` for a stratified
+one (`UnitDraw.ofJson` holds every decoded draw to them); none for a Bernoulli law, whose count is random, and a work law,
+whose closure varies from draw to draw. -/
+def Law.fixedCount : Law → Option Nat
+  | .subset k => some k
+  | .stratified _ strata => some (strata.foldl (fun acc s => acc + s.k) 0)
+  | _ => none
+
+/-- The refusal of a draw that several tables cannot split (`Stmt.setupTables`, `tablesWhy`). -/
+def TABLES_LAW : String :=
+  "tables: several tables need a subset or stratified draw, whose unit count is fixed (a Bernoulli draw's count is random, so the tables could not split it evenly, and a work draw's closure is not split)"
+
+/-- Why one draw under `law` cannot be split into `count` equal tables, as `Stmt.setupTables` splits a session's draw, else
+none: one table takes any law; several take a law of fixed count (`Law.fixedCount`) that is positive and a multiple of
+`count`. A law's count is fixed before any coin, so `flock-verify draw --tables J` refuses here before reading one. -/
+def tablesWhy (law : Law) (count : Nat) : Option String :=
+  if count ≤ 1 then none
+  else match law.fixedCount with
+    | none => some TABLES_LAW
+    | some n => if n == 0 || n % count != 0 then some s!"tables: {n} units do not split into {count} equal tables" else none
+
 end Flock.Draw

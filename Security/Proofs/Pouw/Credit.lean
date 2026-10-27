@@ -1,6 +1,6 @@
 import Properties.Pouw.Credit
-import Properties.Proofs.Pouw
-import Properties.Proofs.Pouw.Strata
+import Proofs.Properties.Pouw
+import Proofs.Properties.Pouw.Strata
 import Proofs.Flock.Soundness.ExecStratified
 import Proofs.Flock.Soundness.Audit.Work
 import Proofs.Flock.VBridge.Full

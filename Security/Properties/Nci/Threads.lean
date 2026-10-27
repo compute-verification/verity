@@ -1,6 +1,6 @@
 import Properties.Nci
-import Models.Nci.Assumptions.Baseline
-import Models.Nci.Assumptions.Threads
+import Definitions.Nci.Assumptions.Baseline
+import Definitions.Nci.Assumptions.Threads
 
 /-!
 # A verdict of compliance carries the thread bound
@@ -8,7 +8,7 @@ import Models.Nci.Assumptions.Threads
 `Witnesses` (`Properties.Nci`) says that a verdict of `NciCheck.evaluate` whose `complies` is `true` means every
 declaration the Program lays out, with the baseline `theta` names, complies with `Nci.Complies Γ (num / den)`. The thread
 bounds, `Nci.Guarantees.ThreadedThrottled`, `ThreadedThrottledDark` and their `Slots` forms
-(`Models/Nci/Guarantees/Threads.lean`), bound a complying declaration that contains a reference circuit. The statements
+(`Definitions/Nci/Guarantees/Threads.lean`), bound a complying declaration that contains a reference circuit. The statements
 here join the two, so that the check's verdict carries the bound: on every instance with a verdict whose `complies` is
 `true`, every such declaration `d` meets the bound's conclusion at `Γ = gamma` and `α = num / den`, for every reference
 circuit `c` it contains, under the bound's premises.

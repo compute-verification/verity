@@ -27,7 +27,7 @@ what it cannot give: the order the deployment releases coins in, the challenger 
 terms `Committed.hide`). `ReleaseOrder` names it, a premise of the deployment's,
 which no property here takes. `LiveUnder` is `Live` as the code states it, on the events a session sees on its
 coins: two sessions on coins that agree below `W + t`, wherever each has drawn window `t`, see the same record and
-the same openable receipts. `Properties.Proofs.RemoteAudit.Order` derives it from the three properties and
+the same openable receipts. `Proofs.Properties.RemoteAudit.Order` derives it from the three properties and
 `ReleaseOrder` (`liveUnder`), a lemma rather than a property since its premise is the deployment's. And `Counted`
 reads the trace's held blocks, which the code never sees: that a credited pass's wrong registered blocks are receipts
 no opening passes is the hash binding of the receipts and the store's commitments, not a property of the verifier's

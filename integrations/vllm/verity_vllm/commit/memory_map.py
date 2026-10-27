@@ -26,7 +26,7 @@ page      `block_size` slots in each layer as the engine lays them out (`page_of
 block     4,096 bytes of a plane (`store.registry._page_blocks`), at slot `firsts[layer] + ids[page, c]` (the `Store`'s
           numbering: a KV pool of one region per layer)
 appended  a block whose rows are all born, at the step of the last (its completion), if a later step reads it: a step's
-          record, its frees then its writes, takes effect after the step's reads (remote_bandwidth's convention, #2378),
+          record, its frees then its writes, takes effect after the step's reads (remote_bandwidth's convention),
           so a block whose last structural reader is the step that completes it is never read while resident and is in
           no record; nor
           is a block with a row no step writes (it stays dirty).  A step's blocks are one append, by slot
@@ -68,8 +68,8 @@ from verity.ml.circuits.refs import runs
 from verity.ml.circuits.requirement import from_census
 from verity.ml.circuits.types import Array
 from verity_vllm.query.required import SAMPLING_EVENTS
-from verity_vllm.store.interface import PageLayout
-from verity_vllm.store.registry import _page_blocks
+from verity_vllm.protocols.remote_bandwidth.interface import PageLayout
+from verity_vllm.protocols.remote_bandwidth.registry import _page_blocks
 
 #: an attention Call's cached K and V parameters
 KV = ("kc", "vc")

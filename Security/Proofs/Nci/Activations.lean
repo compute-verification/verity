@@ -1,4 +1,4 @@
-import Models.Nci.Guarantees.Activations
+import Definitions.Nci.Guarantees.Activations
 import Proofs.Nci.Threads
 
 /-!

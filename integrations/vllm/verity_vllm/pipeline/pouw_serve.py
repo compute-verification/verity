@@ -71,7 +71,7 @@ def protocols_config(a: Options) -> dict[str, Any]:
 def verdicts(records: Sequence[Any], commitment: dict[str, Any], draws: int) -> dict[str, Any]:
     """Both replays and the verdict."""
     from verity_vllm.check.replay import pouw_circuit as RC
-    from verity_vllm.protocol_options import pouw_circuit as PC
+    from verity_vllm.protocols.pouw import circuit as PC
 
     honest = RC.replay(records, commitment, draws)
     bad, where = RC.tamper_tiles(records)
@@ -104,8 +104,8 @@ def progress(run: Any, stop: threading.Event, every: float = 30.0) -> None:
 def main(a: Options) -> int:
     from vllm import SamplingParams
 
-    from verity_vllm.pipeline.llm import LLM
-    from verity_vllm.protocol_options import pouw
+    from verity_vllm.llm import LLM
+    from verity_vllm.protocols import pouw
 
     wl = json.loads(Path(a.workload).read_text())
     rev = RowEngine.of(wl).revision

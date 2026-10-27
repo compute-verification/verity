@@ -3,14 +3,14 @@ import Proofs.Flock.SoundAtBridge
 /-!
 # The named premises a window of C-Flock sessions takes
 
-The premises `Accounting.Guarantees.TS.SessionSoundAt` takes on #2855's served layer `pf`, besides #2909's own, as
-decided for the lane (option A for both, 20 Oct): the proof service's acceptance rule (`AcceptedLive`, #2909's premise
-of that name, as a named `Prop`), the window's law (`WindowLaw`), and in place of #2909's
+The premises `Accounting.Guarantees.TS.SessionSoundAt` takes on the served proof layer `pf`
+(`Accounting.TS.ProofLayer`), besides `Flock.SoundAtBridge`'s own: the proof service's acceptance rule (`AcceptedLive`,
+the bridge's premise of that name, as a named `Prop`), the window's law (`WindowLaw`), and in place of the bridge's
 `Flock.SoundAtBridge.RelOfRows` and `Flock.SoundAtBridge.OpenedPlurAt`, the same two facts on the accepted sessions
 whose drawn units are right: there `pf`'s relation, the served Definition's check, holds at the session's value layer
 (`ServedChecksHold`), and the value layer is `pf`'s served opening, outside `δs` (`ServedRootsLinked`).
 
-They belong in `Security/Models/Accounting/Assumptions/TS`, but they read `RowsSession`, which is in the proofs package
+They belong in `Security/Definitions/Accounting/Assumptions/TS`, but they read `RowsSession`, which is in the proofs package
 (the `security` package can't import it), so they are here until C-Flock's spec is extracted, as C-Flock's own
 assumptions are (`Proofs/Flock/Soundness/Assumptions`).
 -/
@@ -22,7 +22,7 @@ open Pouw.RelativeSecurity (Paths)
 
 variable {Ω : Type} {S nπ : ℕ} {V : Type}
 
-/-- `accounting-ts-accepted-live` (the proof service's acceptance rule; owner @proofs). **A proof is credited only after
+/-- `accounting-ts-accepted-live` (the proof service's acceptance rule). **A proof is credited only after
 flock-verify `--zk --registered` accepts its session**: on every path, `pf` accepts proof `i` of round `w` only where
 flock-verify accepts its session's outcome (`LiveAcceptsZKR`). `Flock.SoundAtBridge.AcceptedLive` is the same `Prop`.
 
@@ -55,7 +55,7 @@ and of how `sess` is built:
    `EndToEndRegisteredRows`' `bound` is small only because they are fresh and uniform given the prover. Under `--zk`
    they are the verifier's keyed coin tree, committed at `Hello` after the prover's nonce and opened round by round.
    So the session's audit coins come from the auditor's verifier, on a machine the prover doesn't control, fresh for
-   each session, under the named assumption `trusted-nebius-host`. Neither `CoinTree.checkFresh`, which refuses only a
+   each session, under the named assumption `trusted-host`. Neither `CoinTree.checkFresh`, which refuses only a
    key reused within a run, nor the coin tree's commitment, which protects the prover, gives this.
 
 If 1 fails, `δ` weakens; if 2, 3 or 5 fails, it breaks. 1–3 are the challenger's and the firewall's code, which a check
@@ -74,24 +74,24 @@ def WindowLaw [Fintype Ω] (sess : Paths Ω S → Fin S → Fin nπ → RowsSess
 Definition's check holds at its session's value layer wherever the drawn units are right**: on every path, when
 flock-verify accepts proof `i` of round `w`'s session and every drawn unit is right (`WrongAt` fails) with its rows
 right at its own owned reads (`RowsAt`), `pf`'s relation (`rel x w i`, the proof's Definition) holds at `rows` of the
-session's value layer (`XplurZC`). It is #2909's `RelOfRows` on the accepted sessions. Under a sampled draw it holds
-only for a relation that reads the drawn units alone: an undrawn unit can be wrong while every drawn one is right. -/
+session's value layer (`XplurZC`). It is `Flock.SoundAtBridge.RelOfRows` on the accepted sessions. Under a sampled
+draw it holds only for a relation that reads the drawn units alone: an undrawn unit can be wrong while every drawn one
+is right. -/
 def ServedChecksHold (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) : Prop :=
   ∀ x w i, LiveAcceptsZKR (sess x w i).I (sess x w i).own (out x w i) →
     (∀ u ∈ (out x w i).2.1, ¬ (sess x w i).WrongAt u ∧ (sess x w i).RowsAt (out x w i) u) →
     pf.rel x w i (rows (sess x w i) (sess x w i).Xv)
 
-/-- `accounting-ts-served-roots-linked` (C-Flock's rows link at the served roots; owner @proofs). **Where the drawn
+/-- `accounting-ts-served-roots-linked` (C-Flock's rows link at the served roots). **Where the drawn
 units are right, the session's value layer is the served layer's opening**: at each round and proof, the probability
 over the window's paths that flock-verify accepts the session, every drawn unit is right at its own owned reads, and
 yet `rows` of the session's value layer is not `pf`'s opening (`pf.opened x w i`: the round's served leaves, committed
-before σ_w) is at most `δs`. It is #2909's `OpenedPlurAt` on those sessions. `EndToEndRegisteredRows` links only
-registered reads, and the served trees are hiding commitments that bind nothing on their own;
-`Flock.SecurityProofs.ServedRowsLinked` links them pointwise, but only at drawn units, at a circuit that names each port
-once, and where the service registers each served tree as a port of `own` (`RowsSession.ServedRegistered`). With a
-`rows` that reads the served reads it gives this at `δs = 0` only under full checking (`kd = n`), port uniqueness and
-`ServedRegistered` at every unit: under a sampled draw nothing proved ties an undrawn unit's value layer to the served
+before σ_w) is at most `δs`. It is `Flock.SoundAtBridge.OpenedPlurAt` on those sessions. `EndToEndRegisteredRows`
+links only registered reads, and the served trees are hiding commitments that bind nothing on their own;
+`Flock.SecurityProofs.ServedRowsLinked` links them pointwise, but only at drawn units, and where the service registers
+each served tree as a port of `own` (`RowsSession.ServedRegistered`). With a `rows` that reads the served reads it gives
+this at `δs = 0` only under full checking (`kd = n`) and `ServedRegistered` at every unit: under a sampled draw nothing proved ties an undrawn unit's value layer to the served
 leaves, and `rows` can't see the draw. -/
 def ServedRootsLinked [Fintype Ω] (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) (δs : ℝ) : Prop :=

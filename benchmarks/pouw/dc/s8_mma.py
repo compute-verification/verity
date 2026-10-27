@@ -1,13 +1,15 @@
 """The integer tensor-core step on Hopper (sm_90a) and datacenter Blackwell (sm_100a) against
 ``verity.ml.circuits.silicon.integer``, one instruction per tile (`probes/s8_mma.cu`).
 
-    s8_mma.py gen --family F --out CASES --meta META     the case file s8_mma.cu reads for family F (mma, wg or tc)
+    s8_mma.py gen --family F --out CASES --meta META     the case file s8_mma.cu reads for family F (mma, wg, wg64, wg128,
+                                                         wg256 or tc)
     s8_mma.py check --family F --cases CASES --meta META --words DIR --sass SASS --json OUT [--structured OUT2]
     s8_mma.py evidence --family F --out-dir RUN_OUT --instruction ID --run RUN --json OUT
                                                          one instruction's tc-evidence/v1 meta (benchmarks/tc_probe/trust.py)
 
 Families and their tiles (M x N, K = 32): ``mma`` mma.sync m16n8k32 (16 x 8, both cards), ``wg`` wgmma m64n8k32 (64 x 8,
-sm_90a), ``tc`` tcgen05.mma kind::i8 (128 x 32, sm_100a). Eight forms each (s8/u8 x s8/u8, saturating or not) run over the
+sm_90a), ``wg64``, ``wg128`` and ``wg256`` wgmma m64nNk32 at the N an s8 GEMM's warpgroup tile issues (64 x N, sm_90a), ``tc``
+tcgen05.mma kind::i8 (128 x 32, sm_100a). Eight forms each (s8/u8 x s8/u8, saturating or not) run over the
 same tiles, each reading the operand bytes in its own formats. The cases are sm_120's IMMA probe's (run
 r20261015-084000-06d8, which pinned `integer.BLACKWELL_SM120_S8_M16N8K32`) at the family's tile shape:
 
@@ -39,7 +41,7 @@ import numpy as np
 
 S32_MAX, S32_MIN = (1 << 31) - 1, -(1 << 31)
 FORMS = [f"{a}{b}_{m}" for m in ("sat", "wrap") for a in ("s8", "u8") for b in ("s8", "u8")]
-SHAPES = {"mma": (16, 8), "wg": (64, 8), "tc": (128, 32)}
+SHAPES = {"mma": (16, 8), "wg": (64, 8), "wg64": (64, 64), "wg128": (64, 128), "wg256": (64, 256), "tc": (128, 32)}
 POS, NEG = 0x7F, 0x81            # +127 and -127 as s8 codes (127 and 129 as u8)
 EDGES = [S32_MAX - 1000, S32_MAX - 20000, S32_MAX - 300000, S32_MAX, S32_MIN + 1000, S32_MIN + 20000, S32_MIN + 300000, S32_MIN]
 SWEEP_WORDS = 22_000 * 128       # words per sweep family: three of them give >= 8.4M words a form, the whole set >= 10M

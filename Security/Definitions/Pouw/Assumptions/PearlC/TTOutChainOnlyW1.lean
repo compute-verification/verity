@@ -4,7 +4,7 @@ import Definitions.Pouw.PearlC.DeviceChainOnly
 /-!
 # TT_OUT under the chain-only reading at W1 (trusted; named assumptions, `Prop`s taken as hypotheses, never `axiom`s)
 
-The chain-only forms of `TTOutChainOnly` (`Models.Pouw.Assumptions.PearlC.TTOutChainOnly`) with their cost model the term
+The chain-only forms of `TTOutChainOnly` (`Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly`) with their cost model the term
 `W1.w1Priced dv salt`, as `TTOutW1` states the device forms: `TTOutW1`'s game at the chain-only protocols
 (`DeviceChainOnly`, whose credit leaves out the forming). What W1 charges, the device `dv` paired with the record `d`,
 `sha`, `fetch` and the noise are `TTOutW1`'s. `ttOutPearlCDev{,Rev1}ChainOnly_of_w1`

@@ -1,19 +1,29 @@
+import Proofs.Flock.Claims.KS.PlainDraw
+import Proofs.Flock.Claims.KS.DecodeHidden
 import Proofs.Flock.Claims.KS.PlainDrawK
-import Proofs.Flock.Claims.KS.PlainDrawAcc
 
 /-!
 # flock-verify's acceptance at a draw value, through `keep`
 
-`PlainDrawAcc`'s lemmas at `AcceptsAtDK keep`, by their proofs on the walkers of `verifyWithMK keep` at SHA-512
-(`verifyK_ok_tables`, `verifyK_one_ok`) and of `Record.decodeWithK keep` (`decodeWithK_points`, `decodeWithK_roundsWF`,
-`decodeWithK_allRetained`), each lemma's session the one the record decodes to through `keep`:
+The acceptance lemmas the deployed plain decoders read take `Exec.Accepts`, and read it only as a setup that succeeds
+and `verify`'s acceptance against it, with the record's draw only an argument of `Stmt.setupTables`. So each holds at
+`AcceptsAtDK keep I dr`, the setup at a draw value `dr`, with `dr` for the record's draw, by its proof on the walkers of
+`verifyWithMK keep` at SHA-512 (`verifyK_ok_tables`, `verifyK_one_ok`) and of `Record.decodeWithK keep`
+(`decodeWithK_points`, `decodeWithK_roundsWF`, `decodeWithK_allRetained`), each lemma's session the one the record
+decodes to through `keep`. At `keep := id` they are `PlainDrawAcc`'s:
 
-* `accepts_oneAnyDK`, `accepts_rep_roundsAnyDK`, `accepts_verdict_hm96AnyDK`: `accepts_oneAnyD` (with its table's
-  registry scheme), `accepts_rep_roundsAnyD`, `accepts_verdict_hm96AnyD`.
-* `accepts_req0DK`, `accepts_opens₀LDK`: `accepts_req0D`, `accepts_opens₀LD`.
-* `accepts_repsOneDK`: `accepts_repsOneD`.
+* `accepts_oneAnyDK`, `accepts_rep_roundsAnyDK`, `accepts_verdict_hm96AnyDK`: `accepts_oneAny` (with its table's
+  registry scheme), `accepts_rep_roundsAny`, `accepts_verdict_hm96Any`, for either tag. `TableVerdictsDK keep lf`:
+  each table's verdict accepting at a model leaf `lf`, which `accepts_verdict_hm96AnyDK` gives at `leaf512`. `LeafForm`,
+  `LeafForm.TagsOk`, `LeafForm.hm96`: a leaf form at hidden outputs (tag, model leaf, verdicts, digest length), its
+  tags, and `hm96-sha512/v1`'s.
+* `accepts_req0DK`, `accepts_opens₀LDLfK`, `accepts_opens₀LDK`: `accepts_req0`, and `accepts_opens₀L` at a model leaf
+  `lf` and at `leaf512`.
+* `accepts_repsOneDLfK`, `accepts_repsOneDK`: `accepts_reps` and `accepts_repsH` at once, the one table's statement
+  `setupOne`'s at `dr`, where each table's verdict accepts at `lf`, and at `leaf512` under `hm96-sha512/v1`.
 * `drawSetup_of_acceptsDK`, `tableAt_of_acceptsDK`, `drawSetupH_of_acceptsDK`, `tableAtH_of_acceptsDK`:
-  `drawSetup_of_acceptsD`, `tableAt_of_acceptsD`, `drawSetupH_of_acceptsD`, `tableAtH_of_acceptsD`.
+  `drawSetup_of_accepts`, `tableAt_of_accepts`, `drawSetupH_of_accepts`, `tableAtH_of_acceptsI` at the draw `some d`,
+  with no premise on a record's draw.
 -/
 
 namespace FlockSoundness.Discharge.AtDraw
@@ -110,6 +120,67 @@ theorem accepts_verdict_hm96AnyDK (keep : Bool → Bool) {I : Exec.Inputs} {dr :
     (decodeWithK_roundsWF keep With.std hsess) schs[j] hf j _ _
     c h0 h1
 
+/-- **Each table's verdict at the model leaf `lf` accepts, at flock-verify's acceptance at `dr` through `keep`**: what
+`accepts_verdict_hm96AnyDK` gives at `leaf512` and `accepts_verdict_plainAnyDK` at `leafPlain`. -/
+def TableVerdictsDK (keep : Bool → Bool) (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512) (I : Exec.Inputs)
+    (dr : Option Json) (t : Exec.Transcript) : Prop :=
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
+      Record.decodeWithK keep With.std spec t.record = .ok sess ∧ sts.size = spec.tables.size ∧
+      ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
+        ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m),
+        ∃ (p₀ p₁ : Proof) (s₀ s₁ : StreamRec) (pend₀ pend₁ : PendL 𝔽 Dig),
+          decodeProof (shapeOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
+            PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) t.proofs[2 * j]! = .ok p₀ ∧
+          decodeProof (shapeOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
+            PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) t.proofs[2 * j + 1]! = .ok p₁ ∧
+          sess.streams.find? (fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString 0) = some s₀ ∧
+          sess.streams.find? (fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString 1) = some s₁ ∧
+          Plays fOf (Model.repC execArith 0 (stmtOf sts[j] hwf (regionsOf sts[j])) (schedOf sch) hm
+              (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
+                (ptsOf sts[j].mPts sess.points)))
+            (repMsgs (Setup.ofCircuit sts[j]) sch (2 + (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
+              PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) p₀ capDig)
+            (s₀.rounds.toList.map (·.coins)) pend₀ ∧
+          Plays fOf (Model.repC execArith 1 (stmtOf sts[j] hwf (regionsOf sts[j])) (schedOf sch) hm
+              (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
+                (ptsOf sts[j].mPts sess.points)))
+            (repMsgs (Setup.ofCircuit sts[j]) sch (2 + (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
+              PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) p₁ capDig)
+            (s₁.rounds.toList.map (·.coins)) pend₁ ∧
+          (tableOutL H512 enc512 lf (capOfRoot sess.rootB[j]!) (pend₀, pend₁)
+            (opnOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL
+              sts[j].mPts (ptsOf sts[j].mPts sess.points)).length #[t.proofs[2 * j]!, t.proofs[2 * j + 1]!])).accepted =
+            true
+
+/-- **A leaf form at hidden outputs**: the tag `merkleLeaf` names, the model leaf `lf`, each table's verdict accepting
+at `lf` under that tag (`TableVerdictsDK`), and the 64-byte digests of the scheme a hidden setup under the tag commits
+with. -/
+structure LeafForm where
+  tag : String
+  lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512
+  verdicts : ∀ (keep : Bool → Bool) {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript},
+    I.tags.hiddenOutputs = true → I.tags.merkleLeaf = tag → AcceptsAtDK keep I dr t → TableVerdictsDK keep lf I dr t
+  digestLen : ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+    {draw partition : Option Json} {program : Option ByteArray} {st : Flock.Stmt},
+    Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st → tags.merkleLeaf = tag →
+      st.merkle.digestLen = 64
+
+/-- **The verify command's tags under hidden outputs at a leaf form**: `TagsOkH` at `F`'s tag. -/
+def LeafForm.TagsOk (F : LeafForm) (I : Exec.Inputs) : Prop :=
+  I.tags.hiddenOutputs = true ∧ I.tags.retainRounds = true ∧ I.tags.merkleLeaf = F.tag ∧ I.count ≤ 1
+
+/-- **`hm96-sha512/v1` leaves as a leaf form**: `leaf512`, with `accepts_verdict_hm96AnyDK`. -/
+noncomputable abbrev LeafForm.hm96 : LeafForm where
+  tag := "hm96-sha512/v1"
+  lf := leaf512
+  verdicts := by
+    intro keep _ _ _ _ hl h
+    exact accepts_verdict_hm96AnyDK keep hl h
+  digestLen := by
+    intro _ _ _ _ _ _ _ _ _ hst hl
+    rw [HiddenExec.setupHidden_hm96 hl hst]
+    rfl
+
 end Any
 
 section Req0
@@ -181,8 +252,96 @@ theorem accepts_req0DK (keep : Bool → Bool)
   rw [lvOf_schedOf hlt]
   exact ⟨hl, hd⟩
 
-/-- **At flock-verify's acceptance at `dr`, each table's level-0 openings are its reps' deployed entries**
-(`accepts_opens₀L`). -/
+/-- **At flock-verify's acceptance at `dr` through `keep`, each table's level-0 openings at the model leaf `lf` are its
+reps' deployed entries** (`accepts_opens₀L`). -/
+theorem accepts_opens₀LDLfK (keep : Bool → Bool) (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512)
+    {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtDK keep I dr t) :
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
+      Record.decodeWithK keep With.std spec t.record = .ok sess ∧
+      ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
+        ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec)
+          (pend₀ pend₁ : PendL 𝔽 Dig) (cap : Cap Dig) (out : OutCL 𝔽 Dig (List UInt8)),
+          sess.streams.find? (fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString 0) =
+            some s₀ →
+          sess.streams.find? (fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString 1) =
+            some s₁ →
+          decodeProof (shapeOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
+            PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) t.proofs[2 * j]! = .ok p₀ →
+          decodeProof (shapeOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
+            PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) t.proofs[2 * j + 1]! = .ok p₁ →
+          Plays fOf (Model.repC execArith 0 (stmtOf sts[j] hwf (regionsOf sts[j])) (schedOf sch) hm
+              (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
+                (ptsOf sts[j].mPts sess.points)))
+            (repMsgs (Setup.ofCircuit sts[j]) sch (2 + (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
+              PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) p₀ capDig)
+            (s₀.rounds.toList.map (·.coins)) pend₀ →
+          Plays fOf (Model.repC execArith 1 (stmtOf sts[j] hwf (regionsOf sts[j])) (schedOf sch) hm
+              (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
+                (ptsOf sts[j].mPts sess.points)))
+            (repMsgs (Setup.ofCircuit sts[j]) sch (2 + (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
+              PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) p₁ capDig)
+            (s₁.rounds.toList.map (·.coins)) pend₁ →
+          out = tableOutL H512 enc512 lf cap (pend₀, pend₁)
+            (opnOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL
+              sts[j].mPts (ptsOf sts[j].mPts sess.points)).length #[t.proofs[2 * j]!, t.proofs[2 * j + 1]!]) →
+          out.accepted = true →
+          (∀ x ∈ opens₀L (schedOf sch) out, VerifiedL H512 enc512 lf cap
+            (lvOf (schedOf sch) 0).lanes (Model.pathLen (lvOf (schedOf sch) 0)) x ∧
+              x.1 < 2 ^ (sch.levels.getD 0 default).d) ∧
+          (opens₀L (schedOf sch) out).map (fun x => (x.1, x.2.1)) =
+            Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit sts[j]) sch
+                (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
+                  (ptsOf sts[j].mPts sess.points)).length) s₀.rounds t.proofs[2 * j]! ++
+              Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit sts[j]) sch
+                (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
+                  (ptsOf sts[j].mPts sess.points)).length) s₁.rounds t.proofs[2 * j + 1]! := by
+  obtain ⟨spec, sts, sess, hs, hsess, hall⟩ := accepts_req0DK keep h
+  refine ⟨spec, sts, sess, hs, hsess, fun j hj => ?_⟩
+  obtain ⟨sch, hf, hk⟩ := hall j hj
+  refine ⟨sch, hf, fun hwf hr hm p₀ p₁ s₀ s₁ pend₀ pend₁ cap out hs₀ hs₁ hp₀ hp₁ hpl₀ hpl₁ hout hacc => ?_⟩
+  subst hout
+  obtain ⟨⟨R₀, rest₀, hR₀, hl₀, hpos₀, hrw₀⟩, hsh₀⟩ := hk hwf hr hm 0 (by norm_num) s₀ p₀ pend₀ hs₀ hp₀ hpl₀
+  obtain ⟨⟨R₁, rest₁, hR₁, hl₁, hpos₁, hrw₁⟩, hsh₁⟩ := hk hwf hr hm 1 (by norm_num) s₁ p₁ pend₁ hs₁ hp₁ hpl₁
+  have h2 := (fast100_dims _ sch hf).1.2.1
+  have hseam : LevelSeam (sch.levels.getD 0 default) :=
+    fast100_level _ sch hf _ (by unfold Array.getD; rw [dite_eq_left (by omega)]; exact Array.getElem_mem _)
+  have hlv0 := lvOf_schedOf (s := sch) (i := 0) (by omega)
+  have hQ : (lvOf (schedOf sch) 0).queries = (sch.levels.getD 0 default).q := by rw [hlv0]; rfl
+  have hq : ∀ (R : Req) (coins : Array F128),
+      R.positions = (Flock.positions (sch.levels.getD 0 default) coins).toList →
+      R.positions.length = (sch.levels.getD 0 default).q := fun R coins h => by
+    rw [h, Array.length_toList, positions_size _ hseam]
+  have hent : (opens₀L (schedOf sch) (tableOutL H512 enc512 lf cap (pend₀, pend₁)
+      (opnOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL
+        sts[j].mPts (ptsOf sts[j].mPts sess.points)).length #[t.proofs[2 * j]!, t.proofs[2 * j + 1]!]))).map
+        (fun x => (x.1, x.2.1)) =
+      Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit sts[j]) sch
+          (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
+            (ptsOf sts[j].mPts sess.points)).length) s₀.rounds t.proofs[2 * j]! ++
+        Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit sts[j]) sch
+          (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
+            (ptsOf sts[j].mPts sess.points)).length) s₁.rounds t.proofs[2 * j + 1]! := by
+    unfold opens₀L
+    rw [List.map_append, hQ, Claims.Flock.plainRepColsOf_ok hp₀, Claims.Flock.plainRepColsOf_ok hp₁,
+      opnOf_pair hp₀ hp₁]
+    congr 1
+    · exact Claims.Flock.slotOpensL_entries _ 0 _ _ _ R₀ rest₀ hR₀ hl₀ hpos₀ (hq _ _ hpos₀) hrw₀ fun _ => rfl
+    · exact Claims.Flock.slotOpensL_entries _ 1 _ _ _ R₁ rest₁ hR₁ hl₁ hpos₁ (hq _ _ hpos₁) hrw₁ fun _ => rfl
+  refine ⟨fun x hx => ⟨?_, ?_⟩, hent⟩
+  · refine Claims.Flock.verified_opens₀L H512 enc512 lf (schedOf sch) _ (pend₀, pend₁) _ hacc
+      (fun r hr R hR hlR => ?_) x hx
+    rcases r with _ | _ | r
+    · exact hlR ▸ hsh₀ R hR
+    · exact hlR ▸ hsh₁ R hR
+    · omega
+  · have hm := List.mem_map_of_mem (f := fun x => (x.1, x.2.1)) hx
+    rw [hent, Claims.Flock.plainRepColsOf_ok hp₀, Claims.Flock.plainRepColsOf_ok hp₁] at hm
+    rcases List.mem_append.1 hm with hm | hm
+    · exact Claims.Flock.lt_of_mem_positions hseam (Claims.Flock.fst_mem_positions_of_mem_zkRepCols hm)
+    · exact Claims.Flock.lt_of_mem_positions hseam (Claims.Flock.fst_mem_positions_of_mem_zkRepCols hm)
+
+/-- **At flock-verify's acceptance at `dr`, each table's level-0 openings are its reps' deployed entries**:
+`accepts_opens₀LDLfK` at `leaf512`. -/
 theorem accepts_opens₀LDK (keep : Bool → Bool)
     {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtDK keep I dr t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
@@ -223,51 +382,8 @@ theorem accepts_opens₀LDK (keep : Bool → Bool)
                   (ptsOf sts[j].mPts sess.points)).length) s₀.rounds t.proofs[2 * j]! ++
               Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit sts[j]) sch
                 (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
-                  (ptsOf sts[j].mPts sess.points)).length) s₁.rounds t.proofs[2 * j + 1]! := by
-  obtain ⟨spec, sts, sess, hs, hsess, hall⟩ := accepts_req0DK keep h
-  refine ⟨spec, sts, sess, hs, hsess, fun j hj => ?_⟩
-  obtain ⟨sch, hf, hk⟩ := hall j hj
-  refine ⟨sch, hf, fun hwf hr hm p₀ p₁ s₀ s₁ pend₀ pend₁ cap out hs₀ hs₁ hp₀ hp₁ hpl₀ hpl₁ hout hacc => ?_⟩
-  subst hout
-  obtain ⟨⟨R₀, rest₀, hR₀, hl₀, hpos₀, hrw₀⟩, hsh₀⟩ := hk hwf hr hm 0 (by norm_num) s₀ p₀ pend₀ hs₀ hp₀ hpl₀
-  obtain ⟨⟨R₁, rest₁, hR₁, hl₁, hpos₁, hrw₁⟩, hsh₁⟩ := hk hwf hr hm 1 (by norm_num) s₁ p₁ pend₁ hs₁ hp₁ hpl₁
-  have h2 := (fast100_dims _ sch hf).1.2.1
-  have hseam : LevelSeam (sch.levels.getD 0 default) :=
-    fast100_level _ sch hf _ (by unfold Array.getD; rw [dite_eq_left (by omega)]; exact Array.getElem_mem _)
-  have hlv0 := lvOf_schedOf (s := sch) (i := 0) (by omega)
-  have hQ : (lvOf (schedOf sch) 0).queries = (sch.levels.getD 0 default).q := by rw [hlv0]; rfl
-  have hq : ∀ (R : Req) (coins : Array F128),
-      R.positions = (Flock.positions (sch.levels.getD 0 default) coins).toList →
-      R.positions.length = (sch.levels.getD 0 default).q := fun R coins h => by
-    rw [h, Array.length_toList, positions_size _ hseam]
-  have hent : (opens₀L (schedOf sch) (tableOutL H512 enc512 leaf512 cap (pend₀, pend₁)
-      (opnOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL
-        sts[j].mPts (ptsOf sts[j].mPts sess.points)).length #[t.proofs[2 * j]!, t.proofs[2 * j + 1]!]))).map
-        (fun x => (x.1, x.2.1)) =
-      Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit sts[j]) sch
-          (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
-            (ptsOf sts[j].mPts sess.points)).length) s₀.rounds t.proofs[2 * j]! ++
-        Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit sts[j]) sch
-          (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
-            (ptsOf sts[j].mPts sess.points)).length) s₁.rounds t.proofs[2 * j + 1]! := by
-    unfold opens₀L
-    rw [List.map_append, hQ, Claims.Flock.plainRepColsOf_ok hp₀, Claims.Flock.plainRepColsOf_ok hp₁,
-      opnOf_pair hp₀ hp₁]
-    congr 1
-    · exact Claims.Flock.slotOpensL_entries _ 0 _ _ _ R₀ rest₀ hR₀ hl₀ hpos₀ (hq _ _ hpos₀) hrw₀ fun _ => rfl
-    · exact Claims.Flock.slotOpensL_entries _ 1 _ _ _ R₁ rest₁ hR₁ hl₁ hpos₁ (hq _ _ hpos₁) hrw₁ fun _ => rfl
-  refine ⟨fun x hx => ⟨?_, ?_⟩, hent⟩
-  · refine Claims.Flock.verified_opens₀L H512 enc512 leaf512 (schedOf sch) _ (pend₀, pend₁) _ hacc
-      (fun r hr R hR hlR => ?_) x hx
-    rcases r with _ | _ | r
-    · exact hlR ▸ hsh₀ R hR
-    · exact hlR ▸ hsh₁ R hR
-    · omega
-  · have hm := List.mem_map_of_mem (f := fun x => (x.1, x.2.1)) hx
-    rw [hent, Claims.Flock.plainRepColsOf_ok hp₀, Claims.Flock.plainRepColsOf_ok hp₁] at hm
-    rcases List.mem_append.1 hm with hm | hm
-    · exact Claims.Flock.lt_of_mem_positions hseam (Claims.Flock.fst_mem_positions_of_mem_zkRepCols hm)
-    · exact Claims.Flock.lt_of_mem_positions hseam (Claims.Flock.fst_mem_positions_of_mem_zkRepCols hm)
+                  (ptsOf sts[j].mPts sess.points)).length) s₁.rounds t.proofs[2 * j + 1]! :=
+  accepts_opens₀LDLfK keep leaf512 h
 
 end Req0
 
@@ -277,11 +393,11 @@ open Flock Refine Exec Game Model Accounting Audit
 open FlockSoundness.Discharge.DecodeZL FlockSoundness.Discharge.HiddenExec
 open Lean (Json)
 
-/-- **flock-verify's acceptance at `dr` of a one-table session, rep by rep**: `accepts_reps` and `accepts_repsH`, with
-the one table's statement `st` `setupOne`'s at `dr` under either tag. -/
-theorem accepts_repsOneDK (keep : Bool → Bool)
-    {I : Inputs} {dr : Option Json} {t : Exec.Transcript} (hrr : I.tags.retainRounds = true)
-    (hl : I.tags.merkleLeaf = "hm96-sha512/v1") (hc1 : I.count ≤ 1) (h : AcceptsAtDK keep I dr t) :
+/-- **flock-verify's acceptance at `dr` through `keep` of a one-table session, rep by rep, where each table's verdict
+accepts at the model leaf `lf`**, the one table's statement `st` `setupOne`'s at `dr`. -/
+theorem accepts_repsOneDLfK (keep : Bool → Bool) (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512)
+    {I : Inputs} {dr : Option Json} {t : Exec.Transcript} (hrr : I.tags.retainRounds = true) (hc1 : I.count ≤ 1)
+    (hv : TableVerdictsDK keep lf I dr t) (h : AcceptsAtDK keep I dr t) :
     ∃ (st : Flock.Stmt) (spec : SessionSpec) (sess : Session) (sch : Flock.Schedule),
       setupOne I.tags I.circuitFile I.publicFile I.coins I.tables dr I.partition I.program = .ok st ∧
       setupAtD I dr = .ok (spec, #[st]) ∧ Record.decodeWithK keep With.std spec t.record = .ok sess ∧
@@ -303,10 +419,10 @@ theorem accepts_repsOneDK (keep : Bool → Bool)
           ∀ k < s.rounds.size, Retains (s.rounds[k]!) (encs ((chunks (repFrames (Setup.ofCircuit st) sch
             (spec.domain spec.tables[0]! r.val).toUTF8 (2 + (Model.extraClaims (stmtOf st hwf (regionsOf st)) PT_LOCAL
               st.mPts (ptsOf st.mPts sess.points)).length) p Tv)).1.getD k []))) ∧
-        (tableOutL H512 enc512 leaf512 (capOfRoot sess.rootB[0]!) (pend 0, pend 1)
+        (tableOutL H512 enc512 lf (capOfRoot sess.rootB[0]!) (pend 0, pend 1)
           (opnOf (Setup.ofCircuit st) sch (Model.extraClaims (stmtOf st hwf (regionsOf st)) PT_LOCAL st.mPts
             (ptsOf st.mPts sess.points)).length #[t.proofs[0]!, t.proofs[1]!])).accepted = true := by
-  obtain ⟨spec, sts, sess, hsu, hdec, -, hall⟩ := accepts_verdict_hm96AnyDK keep hl h
+  obtain ⟨spec, sts, sess, hsu, hdec, -, hall⟩ := hv
   obtain ⟨spec', sts', sess', hsu', hdec', -, hallR⟩ := accepts_rep_roundsAnyDK keep hrr h
   rw [hsu, Except.ok.injEq, Prod.mk.injEq] at hsu'
   obtain ⟨rfl, rfl⟩ := hsu'
@@ -338,6 +454,37 @@ theorem accepts_repsOneDK (keep : Bool → Bool)
   · exact ⟨e₀, f₀, T₀, hf₀, hq₀, hpl₀, hl₀, hr₀⟩
   · exact ⟨e₁, f₁, T₁, hf₁, hq₁, hpl₁, hl₁, hr₁⟩
   · omega
+
+/-- **flock-verify's acceptance at `dr` of a one-table session, rep by rep**: `accepts_reps` and `accepts_repsH`, with
+the one table's statement `st` `setupOne`'s at `dr` under either tag: `accepts_repsOneDLfK` at `leaf512`. -/
+theorem accepts_repsOneDK (keep : Bool → Bool)
+    {I : Inputs} {dr : Option Json} {t : Exec.Transcript} (hrr : I.tags.retainRounds = true)
+    (hl : I.tags.merkleLeaf = "hm96-sha512/v1") (hc1 : I.count ≤ 1) (h : AcceptsAtDK keep I dr t) :
+    ∃ (st : Flock.Stmt) (spec : SessionSpec) (sess : Session) (sch : Flock.Schedule),
+      setupOne I.tags I.circuitFile I.publicFile I.coins I.tables dr I.partition I.program = .ok st ∧
+      setupAtD I dr = .ok (spec, #[st]) ∧ Record.decodeWithK keep With.std spec t.record = .ok sess ∧
+      Flock.fast100 st.m = some sch ∧
+      ∀ (hwf : StmtWF st) (_hr : RegionsWF st) (hm : 13 ≤ st.m), ∃ pend : Fin 2 → PendL 𝔽 Dig,
+        (∀ r : Fin 2, ∃ (s : StreamRec) (p : Proof) (Tv : F128),
+          sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString r.val) =
+            some s ∧
+          decodeProof (shapeOf (Setup.ofCircuit st) sch (Model.extraClaims (stmtOf st hwf (regionsOf st)) PT_LOCAL
+            st.mPts (ptsOf st.mPts sess.points)).length) t.proofs[r.val]! = .ok p ∧
+          Plays fOf (Model.repC execArith r.val (stmtOf st hwf (regionsOf st)) (schedOf sch) hm
+              (Model.extraClaims (stmtOf st hwf (regionsOf st)) PT_LOCAL st.mPts (ptsOf st.mPts sess.points)))
+            (repMsgs (Setup.ofCircuit st) sch (2 + (Model.extraClaims (stmtOf st hwf (regionsOf st)) PT_LOCAL
+              st.mPts (ptsOf st.mPts sess.points)).length) p capDig)
+            (s.rounds.toList.map (·.coins)) (pend r) ∧
+          (chunks (repFrames (Setup.ofCircuit st) sch (spec.domain spec.tables[0]! r.val).toUTF8
+            (2 + (Model.extraClaims (stmtOf st hwf (regionsOf st)) PT_LOCAL st.mPts
+              (ptsOf st.mPts sess.points)).length) p Tv)).1.length = s.rounds.size ∧
+          ∀ k < s.rounds.size, Retains (s.rounds[k]!) (encs ((chunks (repFrames (Setup.ofCircuit st) sch
+            (spec.domain spec.tables[0]! r.val).toUTF8 (2 + (Model.extraClaims (stmtOf st hwf (regionsOf st)) PT_LOCAL
+              st.mPts (ptsOf st.mPts sess.points)).length) p Tv)).1.getD k []))) ∧
+        (tableOutL H512 enc512 leaf512 (capOfRoot sess.rootB[0]!) (pend 0, pend 1)
+          (opnOf (Setup.ofCircuit st) sch (Model.extraClaims (stmtOf st hwf (regionsOf st)) PT_LOCAL st.mPts
+            (ptsOf st.mPts sess.points)).length #[t.proofs[0]!, t.proofs[1]!])).accepted = true :=
+  accepts_repsOneDLfK keep leaf512 hrr hc1 (accepts_verdict_hm96AnyDK keep hl h) h
 
 end Reps
 

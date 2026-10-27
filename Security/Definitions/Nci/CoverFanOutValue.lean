@@ -5,7 +5,7 @@ import Mathlib.Data.Finset.Union
 # The cover theorem's fan-out tightening: values read whole, from wiring
 
 `FanOutReadIntensity` prices each value a block spends at `f` bits through the named premise `ValueReadHardness`. These
-are the wiring properties that let the circuit set the price instead (`Models.Nci.Guarantees.CoverFanOutValue`):
+are the wiring properties that let the circuit set the price instead (`Definitions.Nci.Guarantees.CoverFanOutValue`):
 
 * `Keyed.pathGates`: the gates of a value's key path, its first stop included.
 * `Keyed.KeyDisjoint`: distinct activations of one token have disjoint key paths. `Keyed`'s (I) and (F) imply it
@@ -34,7 +34,7 @@ any set of the key path's gates that cuts every path from `g` of the root's legs
 the key path's gates and the product's, has at least `f` gates. A block handed fewer than `f` gates of the key path
 therefore holds an exit of all but `g − 1` of the root's legs, and pays for them as a block that holds the root does.
 
-It is the set-cut form of the red team's per-value width, a max-flow problem per root on the named circuit. It costs the
+It is the set-cut form of the per-value width, a max-flow problem per root on the named circuit. It costs the
 bound `g − 1` of a root's `d` legs. At `g = 1` it is the single-leg form: `f` paths from each leg to the product's
 output gate, disjoint on the key path's gates. That form holds at `f = 4` for legs that are 4-bit codes. It fails only
 if the product's own gates may be cut, since one gate of the product carries every path, and the cut here lies in the

@@ -1,0 +1,12 @@
+{
+ "definitions": {
+  "CompileSlice_v3{R=2,W=1,A=2,M=2,T=16,L=16,B=4,H=0,CH=1,WM=0,FULL=1,PC=1,NB=6,IW=3,AS=0,EW=0,Q=3,D=5,P=5,K=3,CN=5,CTW=4,CU=4,CD=2,SW=6,DA=5}": {
+   "and": 76554,
+   "type": "863188e84942638645d0ec2660e950d87d6ae3c9935bec2a599652de1f7d7e19364f2d046df8a40d517426d7ee28e9aaad0bd299d74404701b007e1454b9f89c"
+  },
+  "CompileSlice_v3{R=2,W=1,A=2,M=2,T=16,L=16,B=4,H=0,CH=1,WM=0,FULL=1,PC=1,NB=6,IW=3,AS=1,EW=0,Q=3,D=5,P=5,K=3,CN=5,CTW=4,CU=4,CD=2,SW=6,DA=5}": {
+   "and": 83287,
+   "type": "62964e0c62cbf7ab0bdca40b2151a38143149ff0d8da86d9dd9090f404830b5bb7b622a872f00ee015b07bae87aa12c98675fc1d1992ad085f1f510516fb613c"
+  }
+ }
+}

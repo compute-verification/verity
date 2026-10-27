@@ -14,8 +14,7 @@ as leaf w·(P / G) + j of one hm96-sha512/row/v2 registration in a frame-v3-sha5
 is public and in the record (`Served.record`'s ``G``). At G = P a window is one row, the slice's ``srv``. At G < P the
 slice is `compile_slice.CompileSliceBlocks_v1{…, G}`, whose ``srv0`` … ``srv{P/G − 1}`` are the window's blocks: unit w's
 row ``srv{j}`` is held by its b‖c to leaf w·(P / G) + j, and step u is checked against row u // G. Its ANDs are the
-G = P unit's: at 8eb1's engine class, G = 2 gives 27 rows and 1,021,302 ANDs, as at G = 54 = P (run
-r20261025-004442-ebac, each built in about 21 s at 3.0 GB).
+G = P unit's: at 8eb1's engine class, G = 2 gives 27 rows and 1,021,302 ANDs, as at G = 54 = P.
 
 **The unit** reads two rows:
 - ``pub``, opened: the block's G steps' statics. For each step, R slots of (valid, start, n), in the Programs' batch
@@ -33,7 +32,7 @@ sample.
 **Positions.** The tie reads the Programs' positions, which are public, and binds no position leaf of the Commit. On vllm's
 eager path a Program's RoPE positions are static structure (`RotaryEmbeddingRule` refuses computed ones), so no eager
 Program reads a committed position. The compiled path's RoPE reads ``c00.input/positions``, a committed value
-(`verity_vllm.predict.compiled`). For a compiled-path window the committed positions are what the compute read, and the
+(`verity_vllm.program.predict.compiled`). For a compiled-path window the committed positions are what the compute read, and the
 routed tie holds the served rows to them.
 
 **Idle blocks are proved.** Every block of every window is a unit, under `Selection` All, the idle blocks too. A step

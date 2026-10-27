@@ -2,7 +2,7 @@ import Mathlib.Data.Fintype.BigOperators
 import Mathlib.Data.Fintype.Fin
 import Mathlib.Logic.Equiv.Fin.Basic
 import Mathlib.Tactic.NormNum
-import Models.Pous.Guarantees
+import Definitions.Pous.Guarantees
 
 /-!
 # Sanity theorems: the definitions are not vacuous

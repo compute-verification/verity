@@ -1,6 +1,6 @@
 import Proofs.Flock.Soundness.Refine.Rep
 import Proofs.Flock.Soundness.Refine.Frames
-import Proofs.Flock.Soundness.Model.HoloCompiled
+import Definitions.Flock.HoloCompiled
 import Proofs.Flock.VBridge.Algebra.Holo
 
 /-!

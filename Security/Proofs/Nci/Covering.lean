@@ -1,4 +1,4 @@
-import Models.Nci.Guarantees.Covering
+import Definitions.Nci.Guarantees.Covering
 import Mathlib.Algebra.Order.BigOperators.Ring.Finset
 import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.Positivity
@@ -7,7 +7,7 @@ import Mathlib.Tactic.Ring
 /-!
 # The covering bound at one width and one rate
 
-Daniel's proof (22 Oct 2026): charge each chained multiplication block to a block `S` of the covering that computes its
+The proof: charge each chained multiplication block to a block `S` of the covering that computes its
 output gate. Tracing back from that gate inside the multiplication block (`completes_or_meets`), `S` either completes it
 or has one of its gates as an input, and the multiplication blocks are disjoint and miss `θ`, so at most `k` are not
 completed. The completed ones lie in `θ'_S × J_S`: `|θ'_S| ≤ k / c` by parameter-hardness, and for each token `j ∈ J_S`

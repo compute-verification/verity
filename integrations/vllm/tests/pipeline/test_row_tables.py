@@ -1,4 +1,4 @@
-"""The row-table layout of the serving rows (`pipeline.serving_rows.with_row_tables`, `commit.serving_rows.RowTable`) and PoUW's
+"""The row-table layout of the serving rows (`pipeline.serving_rows.with_row_tables`, `ml.windows.rows.RowTable`) and PoUW's
 interface to it (`commit.row_tables`): one hm96-sha512/row-seg/v1 table per (engine step, linear) in the canonical order, whose
 root is `verity.ml.commitments.row_table`'s under its serve-time domain, chunks whose x rows are its rows (the same strings) read by
 offset, a ScaledMmS8Coordinate replay from the table that reproduces every output, the step roots serving computes at its step
@@ -21,7 +21,8 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import gemm as OG
 from verity.ml.commitments import row_table as RT
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R
-from verity_vllm.commit import index as IX, row_tables as RTB, serving_rows as CS, tables as TB
+from verity_vllm.commit import index as IX, row_tables as RTB
+from verity.ml.windows import rows as CS, tables as TB
 from verity_vllm.pipeline import serving_rows as SRW
 
 DOT = '{"fn":"BlackwellS8ImmaDot32_v1"}'

@@ -1,4 +1,4 @@
-import Models.Nci.Guarantees
+import Definitions.Nci.Guarantees
 import Proofs.Nci.Inequalities
 import Proofs.Nci.LoomisWhitney
 import Proofs.Core
@@ -25,6 +25,7 @@ import Proofs.Nci.Training
 import Proofs.Nci.Packed
 import Proofs.Nci.PackedTraining
 import Proofs.Nci.Remote
+import Proofs.Nci.RemotePeriod
 import Proofs.Nci.Verdict
 import Proofs.Nci.DescVerdict
 import Proofs.Nci.Activations
@@ -35,6 +36,7 @@ import Proofs.Nci.CoveringTwoCostsWitness
 import Proofs.Nci.CoveringPriced
 import Proofs.Nci.CoveringPricedWitness
 import Proofs.Nci.Cover
+import Proofs.Nci.Ldl
 
 /-!
 # Proofs of NCI's guarantees

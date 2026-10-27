@@ -56,7 +56,7 @@ from verity_vllm.commit import store_dump as SD
 from verity_vllm.config import option
 from verity_vllm.pipeline import c2_replay as C2
 from verity_vllm.pipeline import replay_bundle as RB
-from verity_vllm.program.kernels.compiled_relations import warm_vml
+from verity_vllm.program.compiled_relations import warm_vml
 
 ATTESTS = ("every weight field the replay consumed, composed from the checkpoint (or carried in the bundle), has the committed tensor root, "
            "and the tensor roots fold to the committed weights root")
@@ -367,10 +367,12 @@ def manifest_of(o: Options, ctx: dict[str, Any], args: SimpleNamespace) -> tuple
 
 
 def replay_args(o: Options, ctx: dict[str, Any]) -> SimpleNamespace:
-    """The Commit's replay arguments, with its Programs read from this row dir (their digests are checked against the record)."""
+    """The Commit's replay arguments, with its Programs read from this row dir (their digests are checked against the record).  No
+    serving rows: a Commit's window is committed at its C2 site (`c2_replay.serving_rows`), before any draw, never by its replay."""
     a = dict(ctx["args"])
     a["programs_root"] = o.row_dir if a.get("programs_root") else None
     a["program_dir"] = os.path.join(o.row_dir, "build_request") if a.get("program_dir") else None
+    a["serving_rows"] = None
     if o.replay_workers is not None:
         a["replay_workers"] = o.replay_workers
     return SimpleNamespace(**a, replay_cache=False, vu_export_dir=None)

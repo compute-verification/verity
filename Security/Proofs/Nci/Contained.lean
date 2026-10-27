@@ -1,4 +1,4 @@
-import Models.Nci.Guarantees.Contained
+import Definitions.Nci.Guarantees.Contained
 import Proofs.Nci.Reads
 import Proofs.Nci.Pull
 import Proofs.Nci.Support

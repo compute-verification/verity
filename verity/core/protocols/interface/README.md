@@ -51,20 +51,34 @@ profile's types derive `DecidableEq`.
   JSON, and writes one flushed outcome line per case. This is the mode the difftest harness drives.
 - A usage error exits 64, and an outcome that can't be written canonically exits 70.
 
+## Blobs (`CoreProtocol/Blobs.lean`)
+
+A check that reads bytes too large for canonical JSON (a statement's circuit file, its public file, its sessions'
+records and proofs) is a `Core.BlobProtocol`: a `Protocol` with `checkBlobs`, which also takes `Core.Blobs`. The caller
+passes the bytes, and the verifier holds each under the SHA-512 it computes itself, so `Blobs.get digest` finds a blob
+only by the digest of its own bytes. The check names each file by a digest its parameters or evidence carry, and the
+lookup is the check that the file is the committed one. `BlobProtocol.answer` is `Protocol.answer` with `checkBlobs` on
+the caller's blobs. `toProtocol` is the protocol on no blobs, so a composition of `Protocol`s takes it unchanged.
+`Protocol` and `Protocol.answer` don't change, and a protocol that reads no blobs needs none of this.
+
+`BlobProtocol.main`'s command line is `Protocol.main`'s, with `check PARAMS COMMITMENT EVIDENCE [BLOB ...]` (each blob a
+file) and a `serve` case that may carry `"blobs": ["<hex>", ...]` (absent: none). `CoreProtocol/BlobsExample.lean` is
+the toy protocol whose guards cover both.
+
 ## The profile (`CoreProtocol/Profile.lean`)
 
 `Core.Integrity` is `verity.core.protocols.profile.IntegrityProfile.to_json`: `programs`, `prescribed`,
 `linked`, `covered`, the `levels` coarse to fine (name, query, size, and draw: `{"bernoulli":"p"}`, `{"subset":k}` or
 `{"law":"stratified","strata":[...]}`), `delta` and `drawn`. The one change is that δ is an exact ratio, not a float. A
-protocol whose acceptance isn't a sampling design over units (a timed storage audit, a certificate check) declares its
+protocol whose acceptance isn't a sampling design over proof blocks (a timed storage audit, a certificate check) declares its
 own profile type and JSON.
 
 ## Properties
 
 A protocol's properties go in `Security/Properties/<Protocol>.lean`, stated against `P.check` (or `P.Accepts`) with its
 actual parameters, every input covered and assumptions as named `Prop`s. They, not the
-port, are what makes a verifier proven. All protocols share one Lake package for them, `security_properties` (#1494), with the statements in
-`Properties.<Protocol>` and the proofs in `Properties.Proofs.<Protocol>` (top, 1791398523.782759):
+port, are what makes a verifier proven. All protocols share one Lake package for them, `security_properties`, with the statements in
+`Properties.<Protocol>` and the proofs in `Proofs.Properties.<Protocol>`:
 - It requires `security` (Definitions and Models) and, by path, the code it states properties of. It never requires
   `security_proofs`, so code requires nothing, `security` requires no code, and nothing pulls in ArkLib.
 - A result whose proof needs `security_proofs` keeps its statement in `Properties.<Protocol>`, and its proof goes in

@@ -162,12 +162,11 @@ theorem rowsReg_eq_portRead (hS : ∀ u, s.ServedRegistered u)
 
 /-- **Under the complete check every port row of a drawn unit is registered and opens at its registered root**: at
 an outcome flock-verify `--zk --registered` accepts, a drawn unit `u` whose registrant reads its served roots' rows
-(`ServedRegistered`), in a circuit that names each port once and whose every port is a port of `own`
-(`Flock.Registered.checkComplete`), reads `u`'s row of every port `q` (each input port and output row, so whatever an
+(`ServedRegistered`), in a circuit whose every port is a port of `own` (`Flock.Registered.checkComplete`; acceptance
+has the circuit name each port once), reads `u`'s row of every port `q` (each input port and output row, so whatever an
 output's cone reads, the lane index included) as a registered read through `own`'s port of `q`'s name (`ownPort`), and
 every registered read of `u` opens the root `own` holds there (`ReadsX.Checked`, through `regPathsHJ`). -/
-theorem portRow_opens (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s.c.ports[q'].name → q = q')
-    (hcomp : _root_.Flock.Registered.checkComplete s.c s.own = .ok ()) {S : Finset (Fin s.n)} {R : s.Reg}
+theorem portRow_opens (hcomp : _root_.Flock.Registered.checkComplete s.c s.own = .ok ()) {S : Finset (Fin s.n)} {R : s.Reg}
     {o : LiveOutJ (planZHJ (Reg := s.Reg) s.dj s.y₀ S R).length (mPtsOf s.c.g (s.kd / nTab s.I))}
     (hacc : LiveAcceptsZKR s.I s.own (R, S, s.wr S R o)) {u : Fin s.n} (hu : u ∈ S) (hS : s.ServedRegistered u)
     (q : Fin s.c.ports.size) :
@@ -179,7 +178,7 @@ theorem portRow_opens (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s
   obtain ⟨hmem, hname⟩ := FlockC3.Compose.portOf_spec hn
   exact ⟨(hS.1 _).2 ⟨q, rfl, hn⟩, hmem, hname, (hS.2 q hn).1,
     checked_of_acceptsHJ s.I s.ht s.own s.dj s.y₀ s.hc s.hU s.hpub s.hscope s.hTags _ hacc (s.rdU u)
-      (s.ownReadsHJ_of_served hN hacc hu hS)⟩
+      (s.ownReadsHJ_of_served hacc hu hS)⟩
 
 end Flock.SoundAtBridge.RowsSession
 
@@ -379,9 +378,9 @@ theorem Accounting.TS.Lanes.leafLanes_soundAt {Ω : Type} [Fintype Ω] {S nπ K 
         obtain ⟨ks, hm⟩ := hO x w i k
         have hm' : (ok, ks) ∈ known x w i k ++ Flock.KnownRead.fullRows (sess x w i k).own (full x w i k) :=
           Array.mem_append.2 (Or.inl hm)
-        obtain ⟨hN, hex⟩ := names_of_check (hacc k).2.2.2.1 hm'
+        obtain ⟨-, hex⟩ := names_of_check (hacc k).2.2.2.1 hm'
         obtain ⟨reg, hf, -⟩ := FlockC3.RegLevels.checkKnownAll_ok (hacc k).2.1 hm
-        exact ⟨hN, hex _ _ hm', reg, Array.mem_toList_iff.1 (List.mem_of_find?_eq_some hf),
+        exact ⟨hex _ _ hm', reg, Array.mem_toList_iff.1 (List.mem_of_find?_eq_some hf),
           by simpa using List.find?_some hf⟩
       have hR : CheckedRel (sess x w i k) (out x w i k) ok (openedReg (sess x w i k)) := by
         by_contra hR

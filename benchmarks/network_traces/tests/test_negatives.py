@@ -729,6 +729,19 @@ def test_the_tie_reads_each_requests_sampled_ids_by_its_advice_id(tmp_path):
     assert NG.read_ids(tmp_path / "served.jsonl") == {"cmpl-0": [7]} | IDS
 
 
+def test_the_tie_reads_the_requests_whose_clients_aborted_them(tmp_path):
+    """serve-openai writes a request its client aborted with ``finish`` null (or of reason ``abort``), ADVICE-SRC with
+    ``finish_reason`` ``abort``; a row with another finish, or with no finish field, isn't one."""
+    rows = [{"http_id": "cmpl-0", "user": "a", "streamed_ids": [1], "finish": None},
+            {"http_id": "cmpl-1", "user": None, "streamed_ids": [1], "finish": {"reason": "abort"}},
+            {"http_id": "cmpl-2", "user": "c", "streamed_ids": [1], "finish": {"reason": "length", "stop_reason": None}},
+            {"http_id": "cmpl-3", "user": "d", "streamed_ids": [1]},
+            {"request": "q0", "user": "e", "output_ids": [1], "finish_reason": "abort"},
+            {"request": "q1", "user": "f", "output_ids": [1], "finish_reason": "stop"}]
+    (tmp_path / "requests.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    assert NG.read_aborted(tmp_path / "requests.jsonl") == {"a", "cmpl-1", "e"}
+
+
 def test_the_ties_view_of_the_advice_is_each_kept_outputs_step_row_request_index_bucket_and_id():
     """Each kept output as advice v0 has it (step, batch row, request, index), its release bucket and its sampled id, in
     the advice's order; an output past its request's ids (a request the run never served) has the id 0."""

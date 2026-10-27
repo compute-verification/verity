@@ -17,7 +17,7 @@ from verity.ml.circuits.program import Program
 from verity.ml.commitments import row_table as RT
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
-from verity_vllm.commit import serving_rows as CS, tables as TB
+from verity.ml.windows import rows as CS, tables as TB
 
 from .test_row_tables import DEFN, UNITS, committed
 
@@ -47,7 +47,7 @@ def _spec(mine: CS.Window, table: bool = True) -> S.Spec:
 
 
 @pytest.mark.slow
-def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp_path, signer, monkeypatch):  # noqa: F811
+def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp_path, signer, monkeypatch):
     """The window's record, at row 101 + i for case i, registers on a stream whose Spec declares the `row-table` root
     as a tree over roots of row-seg leaves; drawn from the served challenger's coins after its digest, the honest draw's
     outcome is accepted by the Lean run and each of `coin_outcomes`' negatives is refused at its select (`coins`). Every

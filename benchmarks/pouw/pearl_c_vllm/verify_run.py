@@ -1,4 +1,4 @@
-"""The reference replay on a vLLM pass's transcript (``pouw_pearl_c_device``'s retained pass): #449's work law
+"""The reference replay on a vLLM pass's transcript (``pouw_pearl_c_device``'s retained pass): the work law
 (`clear_work`), over the pass's whole workload, with the prover's openings read from the pass's files.
 
   python benchmarks/pouw/pearl_c_vllm/verify_run.py RUN_DIR/manifest.json --coins COINS.json [--draws T] [--jobs J] [--commit SHA] [--fast]
@@ -55,7 +55,7 @@ from verity.core.protocols.pouw.coins import CoinCommitment
 from verity.core.protocols.pouw.credit import passes_distinct
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
-from verity_vllm.protocol_options import pouw_pearl_c_device as PD
+from verity_vllm.protocols.pouw import pearl_c as PD
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))

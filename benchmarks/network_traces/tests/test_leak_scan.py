@@ -321,6 +321,7 @@ def test_a_rows_tail_is_cut_and_a_leak_written_only_there_is_found(tmp_path):
     kept, held, public = LS.public_pieces(A8, {"wit 0": wit}, {"wit 0"}, b"g 1 2\n" + bytes(16).hex().encode())
     assert (kept, held, public) == ({"wit 0 @4": wit[4:], "wit 0 @16": wit[16:] + bytes(12)}, {"wit 0 @4", "wit 0 @16"},
                                     [bytes(16).hex()])
+    assert LS.public_pieces(A8, {"wit 0": wit}, {"wit 0"}, bytes(16).hex().encode(), fields=True)[1] == {"wit 0 @4"}
     vdir = _streams(tmp_path, {112: (wit[4:], b"")})
     assert LS.classify(_found(vdir, kept), kept, vdir, reads=_reads) == (["wit 0 @4"], {})
     (tmp_path / "file").mkdir()

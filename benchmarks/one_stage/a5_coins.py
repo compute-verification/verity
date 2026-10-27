@@ -137,6 +137,10 @@ def lines(path: Path) -> list[str]:
     return [x for x in path.read_text().split("\n") if x]
 
 
+#: the proof service's rule for a client of a session the gate has just opened (`remote.connect_when_listening`)
+TUNNEL_WAIT_S, connect_when_listening = R.TUNNEL_WAIT_S, R.connect_when_listening
+
+
 class Draws:
     """The step's coins over the window root `window_root` for every rank of `ranks`. Each rank plans its draw (`plan`).
     Once every rank has planned or ended (`wait_planned`), the session either opens (`connect`: its client, one
@@ -184,7 +188,7 @@ class Draws:
         refusing every rank's draw, when either fails."""
         client = None
         try:
-            client = R.RemoteChallenger.connect(address, None if secret is None else bytes.fromhex(secret))
+            client = connect_when_listening(address, None if secret is None else bytes.fromhex(secret))
             if commitment is not None and client.commitment.root.hex() != commitment:
                 raise Ch.CoinError(f"the challenger's hello answered commitment {client.commitment.root.hex()[:16]}…, not "
                                    f"the gate's {commitment[:16]}…")
@@ -375,11 +379,12 @@ def lean_side(audit: dict | None) -> dict | None:
 def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
                        register: Callable[[S.Stream], S.Registration], honest: S.Stream, coins: VerifierCoins,
                        draw: S.Draw, outcome: Callable[[S.Stream, S.Draw, dict | None], tuple[S.Outcome, dict | None]],
-                       window: str) -> dict[str, dict]:
+                       window: str, closure: dict[int, list[int]] | None = None) -> dict[str, dict]:
     """The refusals that apply to a draw `draw` from the verifier's own `coins` on stream `honest`, once its outcome is
     final. `stream_of(coins)` is a fresh stream of the same Spec on `coins`, `register(stream)` receives the honest
     registration on it, and `outcome(stream, draw, coins)` delivers the honest sessions and decides (the outcome, its
-    audit record); `window` is the registration's window root.
+    audit record); `window` is the registration's window root, and `closure` the closure map the honest draw was selected
+    under (`Stream.select`), which every select here passes too.
 
     * ``verifier-coins-claimed-as-challenger``: the honest draw's bytes passed off as the auditor's challenger's coins
       (`Replay`) with no evidence: `coins.coins_reason` refuses, and the Lean's run refuses at its select (`coins`).
@@ -399,7 +404,7 @@ def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
                                    ("verifier-coins-with-evidence", OwnReplay(read), FOREIGN_EVIDENCE)):
         s = stream_of(replay)
         try:
-            d = s.select(register(s))
+            d = s.select(register(s), closure=closure)
             if d.draw != draw.draw:
                 raise ValueError(f"the replayed draw {d.units} is not the honest draw {draw.units}")
             got, audit = outcome(s, d, evidence)
@@ -411,11 +416,11 @@ def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
         if isinstance(replay, Replay):
             row["python"] = CC.coins_reason(evidence, window, after, read, lms_verify)
         neg[name] = {"refused": accepted is False and at == SELECT_COINS and row.get("python", "") is not None, **row}
-    neg["verifier-coins-redraw"] = stream_refusal(lambda: honest.select(draw.registration), "drawn",
+    neg["verifier-coins-redraw"] = stream_refusal(lambda: honest.select(draw.registration, closure=closure), "drawn",
                                                   lambda: len(coins.read))
     fresh = OwnReplay(read)
-    neg["verifier-coins-before-the-registration"] = stream_refusal(lambda: stream_of(fresh).select(draw.registration),
-                                                                   "unknown", lambda: fresh.at)
+    neg["verifier-coins-before-the-registration"] = stream_refusal(
+        lambda: stream_of(fresh).select(draw.registration, closure=closure), "unknown", lambda: fresh.at)
     return neg
 
 
@@ -446,6 +451,7 @@ class Local:
         self.host = A.Host(root=root / "var", peers=root / "peers", name=LOCAL_HOST, pins=root / "pins.jsonl")
         (root / "var" / "sessions").mkdir(parents=True)
         (root / "peers").write_text(f"{LOCAL_HOST} research@127.0.0.1\n{LOCAL_PEER} research@127.0.0.1\n")
+        (root / "coin-ports").write_text(f"{LOCAL_PEER} {A.PORTS.start}-{A.PORTS.stop - 1}\n")
         self.pin = on_main(main)
         self.host.pins.write_text(A.pin_line(self.pin, main[0] if main else self.pin, A.utc(datetime.now(timezone.utc))) + "\n")
         self.params = lms.Params(64, *LOCAL_PARAMS)
@@ -457,18 +463,17 @@ class Local:
         A, host = self.A, self.host
         body = A.sessions_of(A.read_ledger(host.ledger))[session]["open"]["body"]
         argv = A.serve_argv(host, session, body)
-        i = argv.index("--peer")
-        del argv[i:i + 2]
         argv[argv.index("--port") + 1] = "0"
         argv += ["--params", ",".join(map(str, LOCAL_PARAMS)), "--keygen-workers", "1"]
         A.run(host, session, signer=self.signer, pinned=self.pin, now=lambda: datetime.now(timezone.utc), argv=argv)
 
-    def open(self, root: str, layout: list, minutes: int = MINUTES) -> tuple[str, str, str]:
-        """Reserve and open the session on `root` with the coins `layout`, as the gate does: (address, secret, commitment)."""
+    def open(self, root: str, layout: list, minutes: int = MINUTES, scheme: str = SCHEME) -> tuple[str, str, str]:
+        """Reserve and open the session on `root` with the coins `layout` of `scheme`, as the gate does: (address, secret,
+        commitment)."""
         A, host, now = self.A, self.host, datetime.now(timezone.utc)
         hooks = dict(by=self.by, now=now, own=lambda p: None, token=secrets.token_hex(2),
                      reserve=lambda s: A.reserve(host, s, signer=self.signer, pinned=self.pin, now=now))
-        rc, out = A.gate(["reserve", "--peer", LOCAL_PEER, "--scheme", SCHEME, "--families", json.dumps(layout),
+        rc, out = A.gate(["reserve", "--peer", LOCAL_PEER, "--scheme", scheme, "--families", json.dumps(layout),
                           "--minutes", str(minutes)], host, **hooks)
         if rc:
             raise Ch.CoinError(f"the local gate refused the reserve: {out.decode().strip()}")
@@ -487,7 +492,8 @@ class Local:
         if rc or got.get("commitment") is None:
             raise Ch.CoinError(f"the local gate refused the open, or its challenger signed no commitment: {out.decode().strip()}")
         address = host.sessions / self.session / "out" / "address.json"
-        while not address.exists() and alive(self.session):
+        # serve.py writes the file in place, its newline last: read it only once it is whole
+        while not (address.exists() and address.read_text().endswith("\n")) and alive(self.session):
             time.sleep(0.1)
         return json.loads(address.read_text())["address"], got["secret"], got["commitment"]
 
@@ -522,9 +528,9 @@ class Gate:
             raise Ch.CoinError(f"infra's gate refused {words.split()[0]}: {p.stderr.decode().strip() or p.stdout.decode().strip()}")
         return p.stdout
 
-    def open(self, root: str, layout: list, minutes: int = MINUTES) -> tuple[str, str, str]:
-        """Reserve and open the root's one session, once the host's pins log pins, in its last line, a commit on `main`: a
-        session from any other tree gives coins `pinned_session` refuses, and the gate opens a root once, ever."""
+    def open(self, root: str, layout: list, minutes: int = MINUTES, scheme: str = SCHEME) -> tuple[str, str, str]:
+        """Reserve and open the root's one session, of `scheme`, once the host's pins log pins, in its last line, a commit on
+        `main`: a session from any other tree gives coins `pinned_session` refuses, and the gate opens a root once, ever."""
         pins = [x for x in self._raw("pins").decode().split("\n") if x]
         pin = json.loads(pins[-1]).get("commit") if pins else None
         if pin not in self.main:
@@ -532,7 +538,7 @@ class Gate:
                                f"verifier's copy ({len(self.main)} commits from {self.main[0][:10] if self.main else None}): "
                                "repin the host to a commit on it (vy-challenger-pin), or refresh --main, before spending the "
                                "root's one session")
-        got = self.H1.gate_call(self.gate, ["reserve", "--peer", self.peer, "--scheme", SCHEME, "--families",
+        got = self.H1.gate_call(self.gate, ["reserve", "--peer", self.peer, "--scheme", scheme, "--families",
                                             json.dumps(layout, separators=(",", ":")), "--minutes", str(minutes)], self.ssh)
         self.session = got["session"]
         session, _ = self.H1.open_window(self.gate, self.session, bytes.fromhex(root), self.ssh)

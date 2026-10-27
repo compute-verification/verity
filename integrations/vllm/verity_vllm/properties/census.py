@@ -29,7 +29,7 @@ Two halves, one CLI:
 Launch counts: per step, every declared kernel must launch on the device exactly as many times as the step has root events
 whose resolution declares it.  Claiming by name alone lets an untraced launch of a declared kernel (a JIT or cuteDSL kernel
 that leaves no dispatcher event) overwrite a Call's output in place: the fold sees no read-before-write and the residue stays
-zero (note:20261019T0602Z-report-a9-glm-moe-final).  A mismatch is refused by name: the kernel, its device count against its
+zero.  A mismatch is refused by name: the kernel, its device count against its
 declaring events, and the buffers (allocations) those events write.  `kernel_allowlist.LAUNCH_COUNT_ALLOWLIST` exempts a
 declared name with its reason, which the report records.  Two cases are not counted: launches the frozen `KERNEL_ALLOWLIST`
 claims (copies, fills, the runner's metadata kernels), which the residue accepts at any count with or without a declaration,
@@ -47,7 +47,6 @@ from __future__ import annotations
 import gzip
 import hashlib
 import json
-import os
 import re
 import time
 from collections import Counter, OrderedDict
@@ -55,7 +54,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.config import UsageError, option
+from verity_vllm.observe.kernel_trace import kernels_of_trace_events, load_trace, summarize_kernels
 from verity_vllm.properties.record import seal
 
 # ---------------------------------------------------------------------------------------------------------
@@ -159,40 +160,6 @@ def claims_for(kernel_name: str, declared: set[str] | frozenset[str]) -> list[st
 # GPU half: profile the bare run step by step
 # ---------------------------------------------------------------------------------------------------------
 
-_KERNEL_CATS = {"kernel", "Kernel", "gpu_memcpy", "gpu_memset", "cuda_runtime_kernel", "gpu_op"}
-
-
-def kernels_of_trace_events(evs: list[dict]) -> list[dict]:
-    """Device-side events (`ph == "X"`) of a Kineto Chrome trace: kernels, memcpys, memsets; in launch order."""
-    ks = [e for e in evs if e.get("ph") == "X" and e.get("cat") in _KERNEL_CATS]
-    ks.sort(key=lambda e: (e.get("ts", 0), e.get("name", "")))
-    return ks
-
-
-def summarize_kernels(ks: list[dict]) -> "OrderedDict[str, dict]":
-    """name -> {count, us, grid, block, first_index} (first launch's grid/block), by first appearance."""
-    out: "OrderedDict[str, dict]" = OrderedDict()
-    for i, e in enumerate(ks):
-        n = e.get("name", "")
-        d = out.get(n)
-        if d is None:
-            a = e.get("args", {}) or {}
-            d = out[n] = {"count": 0, "us": 0.0, "grid": a.get("grid"), "block": a.get("block"), "first_index": i,
-                          "cat": e.get("cat")}
-        d["count"] += 1
-        d["us"] += float(e.get("dur", 0.0) or 0.0)
-    for d in out.values():
-        d["us"] = round(d["us"], 1)
-    return out
-
-
-def _load_trace(path: Path) -> list[dict]:
-    op = gzip.open if path.suffix == ".gz" else open
-    with op(path, "rt") as f:
-        doc = json.load(f)
-    return doc["traceEvents"] if isinstance(doc, dict) else doc
-
-
 def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens: int | None, warmup: bool,
                max_num_seqs: int, keep_traces: bool, case: str | None = None, engine_args: dict | None = None) -> dict:
     import shutil
@@ -209,10 +176,10 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
     (out / "traces").mkdir(parents=True, exist_ok=True)
     wl = va.load_workload(workload_path, max_tokens)
     case = va.case_of(wl, case)
-    if os.environ.get("VERITY_CENSUS_GPU_UTIL"):
+    if (gpu_util := settings.VERITY_CENSUS_GPU_UTIL) is not None:
         # [coverage] a census re-run that shares the GPU with another engine: the KV-cache size does not enter the kernel counts
         # (no preemption at these workload sizes); the resolved value is on record in this document's engine_kwargs
-        engine_args = {**(engine_args or {}), "gpu_memory_utilization": float(os.environ["VERITY_CENSUS_GPU_UTIL"])}
+        engine_args = {**(engine_args or {}), "gpu_memory_utilization": gpu_util}
     eng = va.build_engine(checkpoints, max_num_seqs=max_num_seqs, case=case, engine_args=engine_args, target=va.target_of_workload(wl))
     print(f"[census] engine built in {eng.build_s:.1f}s (case {case}, {eng.cp['repo']})", flush=True)
     versions = va.versions_doc(eng)
@@ -258,7 +225,7 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
             it += 1
             tr = out / "traces" / f"{tag}-engine_step{k}.json"
             pr.export_chrome_trace(str(tr))
-            evs = _load_trace(tr)
+            evs = load_trace(tr)
             ks = kernels_of_trace_events(evs)
             for o in outs:
                 tokens[o.request_id] = [int(t) for t in o.outputs[0].token_ids]
@@ -287,7 +254,7 @@ def run_census(workload_path: str, out_dir: str, checkpoints: str, *, max_tokens
         return steps, tokens
 
     if warmup:
-        warm = va.throwaway_requests(eng, wl["requests"])
+        warm = va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED)
         profiled_run(warm, "warmup")      # profiler + CUPTI warm-up too; discarded
         torch.cuda.synchronize()
     steps, tokens = profiled_run(wl["requests"], "census")

@@ -7,6 +7,7 @@
     uv run tools/verity/check/suites.py --fresh             run even where a pass is cached
     uv run tools/verity/check/suites.py --list              each suite, its inputs, and whether a pass is cached
     uv run tools/verity/check/suites.py flock -- -k tanh    arguments after `--` go to pytest
+    uv run tools/verity/check/suites.py --known-red origin/main   what is red on main: its newest check's failed tests, as JSON
 
 A suite is a directory whose `pyproject.toml` configures pytest (`[tool.pytest.ini_options]`). Its inputs are its own directory,
 the directories of the workspace packages it depends on (its dependencies, extras and dependency groups, and theirs
@@ -109,6 +110,13 @@ does (`serial_slots`, from each suite's last duration); each lane goes longest f
 suite runs in one process. Each test process's thread pools (OpenMP, so torch's, MKL, OpenBLAS, numexpr) get the CPUs divided by
 `--jobs` (`threads_per_process`) unless the environment already sets them: sized to the whole node, every xdist worker of ten
 lane runs at once ran 159-191 threads each (24 Oct, load 522 on cpu-5's 192 cores).
+
+Known red on main. With `--changed REV` (a PR's quick tier, a lane's pre-mark run; never check's own run), a failure is judged
+against what is already red on `main` (CI-173): the failed tests in the suite reports of the newest ended post-landing run or
+recorded check of REV's newest first-parent commit that has one in the evidence store (`known_red`, read in a process of its own
+that alone gets a recorded run's store key: `known_red_on_main`). A failed suite whose every failed test is on that list, and that
+failed for nothing else, is `known-red` and fails nothing; one with other failures still fails, and says which of them are red on
+`main` too. Where the list can't be read, every failure counts. `--known-red REV` prints the list.
 
 `--timeouts` (`check` passes it) bounds each suite's run by its `[tool.verity.tests] timeout_s`, else `SUITE_TIMEOUT_S`: a suite
 still running then has its process group killed and fails as timed out (`timed_out` in --json), so a hung test costs the check
@@ -674,6 +682,38 @@ def covered(path: str, paths: list[str], cut: list[str] = ()) -> bool:
     return _under(path, [p for p in paths if not inner or _under(p, inner)])
 
 
+class Unresolved(Exception):
+    """`--changed REV` names no commit here, even after fetching it; the message names the fix."""
+
+
+def _commit(rev: str) -> str:
+    return subprocess.run(["git", "rev-parse", "--verify", "-q", f"{rev}^{{commit}}"], cwd=ROOT, capture_output=True,
+                          text=True).stdout.strip()
+
+
+def changed_base(rev: str) -> str:
+    """The commit `--changed REV` names: a SHA, a branch, or REMOTE/BRANCH, which a tree `research run` ships may lack (proofs, 25
+    Oct: `git diff origin/main` exited 128 and no suite ran). A shipped tree's `origin` is the machine's repository
+    (<root>/git/verity.git, whose `main` launchers push), and a `--cwd clone` of it has the shipped tree as its `origin`, where
+    `origin/main` is itself a remote-tracking ref; so REMOTE/BRANCH is fetched as either into this tree's REMOTE/BRANCH. The
+    run's RESEARCH_SOURCE_SHA is no base: it is HEAD's own commit, from which the change is empty."""
+    if sha := _commit(rev):
+        return sha
+    remote, _, branch = rev.partition("/")
+    remotes = subprocess.run(["git", "remote"], cwd=ROOT, capture_output=True, text=True).stdout.split()
+    if branch and remote in remotes:
+        env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+        for src in (f"refs/heads/{branch}", f"refs/remotes/{remote}/{branch}"):
+            subprocess.run(["git", "fetch", "-q", "--no-tags", remote, f"+{src}:refs/remotes/{remote}/{branch}"], cwd=ROOT,
+                           capture_output=True, env=env)
+            if sha := _commit(rev):                 # a concurrent run of this tree may have written the ref, whatever this fetch did
+                return sha
+    tried = f", nor could it be fetched from {remote}" if branch and remote in remotes else ""
+    raise Unresolved(f"--changed {rev}: {ROOT} has no commit {rev}{tried} (a tree `research run` ships may hold no {rev}). "
+                     f"Pass main's SHA: `--changed $(git rev-parse origin/main)`, expanded in your own checkout, outside the job's "
+                     f"quotes")
+
+
 def merge_base(rev: str) -> str:
     """Where HEAD left ``rev``'s history, so `--changed origin/main` on a branch behind main is the branch's own change, not
     everything main gained since; ``rev`` itself when HEAD descends from it or the two share no history."""
@@ -717,18 +757,19 @@ def fetched_fixtures(tree: str, paths: set[str]) -> dict[str, str]:
     return {v: k for v, k in reg.items() if held[v] == "absent"}
 
 
-def fetch_fixtures(fixtures: dict[str, str], logs: Path) -> set[str]:
-    """Fetch the entries (`research data fetch-fixtures`); returns the paths that are still missing or different afterwards."""
+def fetch_fixtures(fixtures: dict[str, str], log: Path) -> set[str]:
+    """Fetch the entries (`research data fetch-fixtures`), its output in `log`; returns the paths that are still missing or
+    different afterwards."""
     if not fixtures:
         return set()
-    log = logs / "fetch-fixtures.log"
     p = subprocess.run([sys.executable, "-m", "research", "data", "fetch-fixtures", "--repo", str(ROOT), "--json", *sorted(fixtures)],
                        cwd=ROOT, capture_output=True, text=True)
     log.write_text(p.stdout + p.stderr)
     try:
         rep = json.loads(p.stdout)
     except ValueError:
-        print(f"fetch-fixtures failed (rc {p.returncode}); log: {log}")
+        err = "\n".join("    " + line for line in p.stderr.strip().splitlines()[:5])
+        print(f"fetch-fixtures failed (rc {p.returncode}); log: {log}" + (f"\n{err}" if err else ""))
         return set(fixtures)
     bad = {e["path"] for e in rep["entries"] if e["status"] in ("missing", "stale")}
     blobs = rep["fetch"]["blobs"]
@@ -1383,9 +1424,16 @@ def _durations() -> dict[str, float]:
     return json.loads(f.read_text()) if f.exists() else {}
 
 
+#: how many of a suite's longest tests the guard gets, of which it starts the longest it collected at the heads of the workers'
+#: shares: a run of some of a suite's files, or one that reuses passes, collects few of the suite's longest
+#: (r20261025-202541-cb5f collected none of verity-vllm's 4 longest, and ran its own longest two back to back on one worker)
+HEAVY_CANDIDATES = 1000
+
+
 def longest(suite: Suite, n: int) -> list[str]:
-    """The ``n`` tests of ``suite`` whose setup and call took longest when their passes were last kept (`PerTest`), longest first: what
-    the guard starts at the heads of the workers' shares (`heavy_first`). An order only, which no key or verdict reads."""
+    """The ``n`` tests of ``suite`` whose setup and call took longest when their passes were last kept (`PerTest`), longest first: of
+    which the guard starts the longest it collected at the heads of the workers' shares (`heavy_first`). An order only, which no
+    key or verdict reads."""
     d = per_test_dir(suite)
     last: dict[str, tuple[str, float]] = {}
     for p in d.glob("*.json") if d.is_dir() else ():
@@ -1583,7 +1631,7 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
         env["VERITY_SUITE_REUSE"] = str(logs / f"{slug}.reuse.json")
     env.pop("VERITY_SUITE_HEAVY", None)
     (logs / f"{slug}.heavy.json").unlink(missing_ok=True)
-    if workers > 1 and (first := longest(suite, workers)):
+    if workers > 1 and (first := longest(suite, HEAVY_CANDIDATES)):
         (logs / f"{slug}.heavy.json").write_text(json.dumps(first))
         env["VERITY_SUITE_HEAVY"] = str(logs / f"{slug}.heavy.json")
     spread = ["-n", str(workers), *DIST] if workers > 1 else []
@@ -1849,6 +1897,95 @@ def failing(out: Path, results: list[Result]) -> None:
     tmp.replace(failing_path(out))
 
 
+#: how many of `main`'s first-parent commits `known_red` looks down for one a check reported its suites at: drive's after-landing
+#: run checks `main`'s tip about every 4 h, and dozens of landings can come between two (25-26 Oct: 467 in a day and a half)
+KNOWN_RED_WALK = 200
+#: a check's suite reports among its run files (`check.py`'s `write_result` lists them), which drive reads a red suite from too
+KNOWN_RED_REPORTS = ("suites.json", "suites-lean.json")
+#: what `known_red_on_main` may take: a refresh of the store's attempts and one run's reports
+KNOWN_RED_S = 300
+
+
+def _reported_red(store, rid: str) -> dict[str, list[str]] | None:
+    """{suite path: the node ids of its failed tests} in the suite reports of attempt ``rid``'s run files, or None when it
+    published none."""
+    outs = (store.get_attempt(rid) or {}).get("outputs") or {}
+    for art in dict.fromkeys(a for a in (outs.get("run_files"), outs.get("run_record")) if a):
+        if have := [n for n in KNOWN_RED_REPORTS if any(f["path"] == n for f in store.listing(art))]:
+            red: dict[str, list[str]] = {}
+            with tempfile.TemporaryDirectory(prefix="known-red-") as d:
+                got = store.fetch(art, Path(d), paths=have)
+                for name in have:
+                    for row in json.loads((got / name).read_text()):
+                        if row.get("status") == "failed" and row.get("failed_tests"):
+                            red.setdefault(row["suite"], []).extend(row["failed_tests"])
+            return red
+    return None
+
+
+def known_red(rev: str, store=None) -> dict:
+    """What is red on `main`: the failed tests in the suite reports of the newest ended check (a post-landing run, or a recorded
+    check: `plan.own_checks`) of the newest of ``rev``'s first `KNOWN_RED_WALK` first-parent commits that has one,
+    ``{"run", "commit", "red": {suite path: [node id]}}``; ``{"why"}`` when no such run is in the evidence store."""
+    if store is None:
+        from research.store.local import LocalStore
+
+        store = LocalStore()
+    if store.remote is not None:
+        store.refresh(attempts_only=True)
+    spec = importlib.util.spec_from_file_location("suites_plan", HERE / "plan.py")
+    plan = sys.modules[spec.name] = importlib.util.module_from_spec(spec)      # dataclasses resolve their module by name
+    spec.loader.exec_module(plan)
+    for commit in _git("rev-list", "--first-parent", "-n", str(KNOWN_RED_WALK), rev).split():
+        for rid in plan.own_checks(store, commit):
+            if (red := _reported_red(store, rid)) is not None:
+                return {"run": rid, "commit": commit, "red": red}
+    return {"why": f"no check of {rev[:12]} or its last {KNOWN_RED_WALK - 1} first-parent commits reported its suites in the store"}
+
+
+def known_red_on_main(rev: str) -> dict:
+    """`known_red` in a process of its own (`--known-red`), which alone gets the store key a recorded run's custody holds when this
+    machine has no store config of its own (as `verity/ml/flock/verifier/ci.py`'s `store_env`): the tests' environment never
+    does. ``{"why"}`` when it can't be read."""
+    env = dict(os.environ)
+    custody = Path(env[CUSTODY_ENV]) if env.get(CUSTODY_ENV) else None
+    if (custody is not None and not env.get("RESEARCH_STORE_CONFIG") and not (Path.home() / ".research" / "store.toml").is_file()
+            and (custody / "store.toml").is_file() and (custody / "cred.json").is_file()):
+        cred = json.loads((custody / "cred.json").read_text())
+        env["RESEARCH_STORE_CONFIG"] = str(custody / "store.toml")
+        env.update({k: cred[k] for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN") if cred.get(k)})
+    try:
+        p = subprocess.run([sys.executable, str(Path(__file__).resolve()), "--known-red", rev], cwd=ROOT, env=env,
+                           capture_output=True, text=True, timeout=KNOWN_RED_S)
+    except subprocess.TimeoutExpired:
+        return {"why": f"`suites.py --known-red` took over {KNOWN_RED_S} s"}
+    try:
+        return json.loads(p.stdout)
+    except ValueError:
+        return {"why": f"`suites.py --known-red` exited {p.returncode}: {(p.stderr or p.stdout).strip()[-300:] or 'no output'}"}
+
+
+def mask_known_red(failed: list[Result], doc: dict) -> list[str]:
+    """Each of ``failed`` whose every failed test is red on `main` too (``doc``, `known_red`'s) and that failed for nothing else
+    becomes `known-red`, which fails no run; the lines that say what `main`'s red list explains of ``failed``."""
+    if "red" not in doc:
+        return [f"known red on `main`: not read ({doc.get('why')}), so every failure here counts"]
+    red = {s: set(ts) for s, ts in doc["red"].items()}
+    lines = [f"known red on `main` (run {doc['run']}, at {doc['commit'][:12]}): a test that failed there too fails nothing here"]
+    for r in failed:
+        tests, there = set(r.failed_tests or ()), red.get(r.suite.path, set())
+        if not tests & there:
+            continue
+        alone = not (r.outside or r.child_reads or r.unguarded or r.timed_out or r.signal or r.nondeterministic or not r.reported)
+        if tests <= there and alone:
+            r.status = "known-red"
+            lines.append(f"  known-red {r.suite.name}: {', '.join(sorted(tests)[:5])}" + (" ..." if len(tests) > 5 else ""))
+        else:
+            lines.append(f"  failed    {r.suite.name}: {len(tests & there)} of its {len(tests)} failed tests are red there too, "
+                         f"{', '.join(sorted(tests - there)[:3]) or 'and it failed for more than its tests'} not")
+    return lines
+
+
 _stopping = False
 
 
@@ -1895,12 +2032,18 @@ def main(argv: list[str] | None = None) -> int:
                     "per-test reuse; runs nothing")
     ap.add_argument("--lean-built", action="store_true", help=f"the Lean verifier is built and `lake` is on the PATH (check's "
                     f"lean-suites step): don't run `lake build` before {', '.join(AFTER_LEAN)}")
+    ap.add_argument("--known-red", metavar="REV", help="print, as JSON, what is red on main at REV (`known_red`: the newest check of "
+                    "its first-parent commits in the evidence store) and run nothing; with --changed, a suite whose every failed "
+                    "test is on that list fails nothing")
     a = ap.parse_args(argv)
     sys.stdout.reconfigure(line_buffering=True)
     if not in_git():
         print(f"suites: {ROOT} is not a git checkout, and suites are keyed from git's view of the tree: run them in a checkout "
               f"(`research run --on` ships one; a tree the archive stream or an older launcher shipped isn't)", file=sys.stderr)
         return 2
+    if a.known_red:
+        print(json.dumps(known_red(a.known_red)))
+        return 0
     store_custody()
 
     pkgs, suites = members(), discover()
@@ -1913,9 +2056,14 @@ def main(argv: list[str] | None = None) -> int:
     args = (QUICK if a.quick else []) + extra
     tree = worktree()
     if a.changed:
-        base = merge_base(a.changed)
+        try:
+            rev = changed_base(a.changed)
+        except Unresolved as e:
+            print(f"suites: {e}", file=sys.stderr)
+            return 2
+        base = merge_base(rev)
         chosen = touched(chosen, pkgs, base, tree, locked())
-        since = f"{a.changed[:12]}" + (f" (its merge-base with HEAD, {base[:12]})" if base != a.changed else "")
+        since = f"{a.changed[:12]}" + (f" (its merge-base with HEAD, {base[:12]})" if base != rev else "")
         print(f"suites: the change from {since} touches {len(chosen)}: {', '.join(s.name for s in chosen) or 'none'}")
     build_lean = (not (a.list or a.explain or a.lean_built) and any(s.name in AFTER_LEAN for s in chosen)
                   and (flock_lean() / "lakefile.toml").exists())
@@ -1931,7 +2079,8 @@ def main(argv: list[str] | None = None) -> int:
         sweep_basetemps()
     # the repository's own suite keys on the whole tree but reads tracked files only, so it alone never makes a fetch
     needed = {p: art for p, art in fixtures.items() if any(covered(p, [x for x in ps if x != "."], cuts[s]) for s, ps in inputs.items())}
-    unfetched = set() if a.list or a.explain else fetch_fixtures(needed, logs)
+    fetch_log = logs / f"fetch-fixtures-{os.getpid()}.log"            # check's pytest and lean-suites steps share `logs`
+    unfetched = set() if a.list or a.explain else fetch_fixtures(needed, fetch_log)
     plan, ids_of = [], {}
     meta, lock, provided = metadata() + list(STORE_READS), locked(), set(importlib.metadata.packages_distributions())
     for s in chosen:
@@ -1966,8 +2115,8 @@ def main(argv: list[str] | None = None) -> int:
                if (a.fresh or not hit) and any(covered(p, [x for x in paths if x != "."], cuts[s]) for p in unfetched)]
     for s in blocked:
         print(f"failed  {s.name:28} its fixtures could not be fetched: "
-              f"{', '.join(sorted(p for p in unfetched if covered(p, inputs[s], cuts[s])))[:300]} (log: {logs / 'fetch-fixtures.log'})")
-        results.append(Result(s, "failed", log=logs / "fetch-fixtures.log"))
+              f"{', '.join(sorted(p for p in unfetched if covered(p, inputs[s], cuts[s])))[:300]} (log: {fetch_log})")
+        results.append(Result(s, "failed", log=fetch_log))
     todo = [(s, paths, keys, deps) for s, paths, keys, hit, deps in plan if (a.fresh or not hit) and s not in blocked]
     per = {s: PerTest(s, ids_of[s], env, [args] + ([extra] if a.quick else []), deps, tree)
            for s, _paths, _keys, deps in todo if not a.no_per_test}
@@ -2128,9 +2277,17 @@ def main(argv: list[str] | None = None) -> int:
         for name, test, secs in sorted(slow, key=lambda x: -x[2])[:10]:
             print(f"  {secs:6.1f} s  {name}: {test}")
     failed = [r for r in results if r.status == "failed"]
+    if failed and a.changed:
+        print("\n" + "\n".join(mask_known_red(failed, known_red_on_main(rev))))
+        failed = [r for r in failed if r.status == "failed"]
+        if a.json and failed:
+            failing(a.json, results)
+        elif a.json:
+            failing_path(a.json).unlink(missing_ok=True)
     ran = sum(r.seconds for r in results)
-    print(f"\n{len(results)} suites: {len(results) - len(failed)} passed ({sum(r.status == 'cached' for r in results)} cached),"
-          f" {len(failed)} failed; {ran / 60:.1f} min of test time; logs in {logs}")
+    red = sum(r.status == "known-red" for r in results)
+    print(f"\n{len(results)} suites: {len(results) - len(failed) - red} passed ({sum(r.status == 'cached' for r in results)} cached),"
+          f" {len(failed)} failed" + (f", {red} known red on main" if red else "") + f"; {ran / 60:.1f} min of test time; logs in {logs}")
     if a.json:
         a.json.write_text(json.dumps([{"suite": r.suite.path, "name": r.suite.name, "status": r.status, "key": r.key,
                                        "seconds": round(r.seconds, 1), "workers": r.workers, "counts": r.counts,

@@ -8,8 +8,8 @@
 # extra/ and late/ as `certifier_serve.py rehearse` writes them) or else made here by `n2_zk.py virtual` (stub
 # endpoint, injected clock).
 # env: N2_MEM_GB (what job.sh's stages may take, within the slot's)  N2_RUNS (the tarball's name under the run's inputs/)
-#      N2_REQUESTS (virtual's --requests)  N2_JOBS (members proved at once, 4 by default)  N2_ROUNDS (n2_zk.py's
-#      --rounds)  N2_DEBUG_CLEAR=1 (each verdict also carries the in-the-clear comparison)  N2_CACHE (the build cache,
+#      N2_REQUESTS (virtual's --requests)  N2_ROUNDS (n2_zk.py's --rounds, proved one after another: one firewalled
+#      session at a time)  N2_DEBUG_CLEAR=1 (each verdict also carries the in-the-clear comparison)  N2_CACHE (the build cache,
 #      kept across runs where writable)  N2_DRY=1 (the link-windows and their references only)
 # Kept in $OUT/n2zk: n2_zk's records and logs, the public files and everything the verifier received; never a prover's
 # file (inst-*, prover-instances.bin) nor a circuit (its pin is kept). $OUT/runs: the runs' public files.
@@ -43,9 +43,9 @@ mkdir -p "$OUT/runs"
 (cd "$RUNS" && find . -type f \( -name '*.json' -o -name 'certified.jsonl' \) -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/runs/")
 EXTRA=; [ -d "$RUNS/extra" ] && EXTRA=$RUNS/extra
 LATE=; [ -d "$RUNS/late" ] && LATE=$RUNS/late
-log "n2zk: proving, jobs ${N2_JOBS:-4}${N2_DEBUG_CLEAR:+, debug clear}${N2_DRY:+, dry}"
+log "n2zk: proving${N2_DEBUG_CLEAR:+, debug clear}${N2_DRY:+, dry}"
 "$PY" benchmarks/network_traces/n2_zk.py prove --run "$RUNS/honest" ${EXTRA:+--extra "$EXTRA"} ${LATE:+--late "$LATE"} \
-  --bin "$BIN" --lean "$LEAN" --out "$W/n2zk" --jobs "${N2_JOBS:-4}" ${N2_ROUNDS:+--rounds "$N2_ROUNDS"} \
+  --bin "$BIN" --lean "$LEAN" --out "$W/n2zk" ${N2_ROUNDS:+--rounds "$N2_ROUNDS"} \
   ${N2_DEBUG_CLEAR:+--debug-clear} ${N2_DRY:+--dry} 2>&1 | tee -a "$OUT/n2zk.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/n2zk"

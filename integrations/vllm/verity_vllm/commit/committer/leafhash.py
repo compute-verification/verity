@@ -1,4 +1,4 @@
-"""[R16 sys SYS-05] Device-side weight registration -- the SAME weights root as the host path, computed where the parameters live.
+"""Device-side weight registration -- the SAME weights root as the host path, computed where the parameters live.
 
 `native_host.register_weights` hashes every parameter/buffer as CHUNK-byte position-identified leaves (`scheme.pos_leaf`) folded per
 tensor (`scheme.fold`), and folds the per-tensor roots into the weights root.  With the GPU tree the chunk is 256 bytes: a 2.5 GB model
@@ -17,13 +17,15 @@ import os
 import time
 from typing import Any
 
+from verity_vllm import settings
+
 _EXT: Any = None
 HERE = os.path.dirname(os.path.abspath(__file__))
 MODES = ("host", "device", "device-checked")
 
 
 def mode_from_env(default: str = "host") -> str:
-    m = os.environ.get("VERITY_WEIGHTS_HASH", default)
+    m = settings.VERITY_WEIGHTS_HASH if settings.is_set("VERITY_WEIGHTS_HASH") else default
     if m not in MODES:
         raise ValueError(f"VERITY_WEIGHTS_HASH must be one of {MODES}, got {m!r}")
     return m
@@ -38,7 +40,7 @@ def ext(build_dir: str | None = None, verbose: bool = False):
 
         t0 = time.perf_counter()
         _EXT, _bd, _digest = native_jit.jit_load("verity_leafhash", [os.path.join(HERE, "native_leafhash.cu")],
-                                                 parent=build_dir or os.environ.get("VERITY_LEAFHASH_BUILD") or None, cuda_cflags=("-O3",),
+                                                 parent=build_dir or settings.VERITY_LEAFHASH_BUILD or None, cuda_cflags=("-O3",),
                                                  verbose=verbose)
         _EXT._verity_load_s = time.perf_counter() - t0
     return _EXT

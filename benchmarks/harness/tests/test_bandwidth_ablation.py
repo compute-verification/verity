@@ -1,5 +1,5 @@
 """The bandwidth audit's breakdown arms (`verity_bench.vllm.bandwidth_ablation`) and its spec: the top-up-off spans arms are
-memory accounting's `BandwidthArm` built through its supported settings, uncredited and token-controlled by
+the bandwidth audit's `BandwidthArm` built through its supported settings, uncredited and token-controlled by
 bandwidth-plain, and the spec runs them beside the credited and spans arms, plain first. No engine."""
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ def test_the_ablations_are_bandwidth_arms_with_the_top_up_off_and_spans_on(modul
         arm = getattr(ablation, name)
         assert isinstance(arm, bench_arm.BandwidthArm)
         assert (arm.id, arm.encoded, arm.control, arm.resident) == (arm_id, encoded, bench_arm.PLAIN.id, False)
-        assert arm.settings() == {"topup": False, "spans": True, "kv_receipts": True, "codec_rounds": 3}
+        assert arm.settings() == {**bench_arm.PLAIN.settings(), "topup": False, "spans": True}
         assert arm_id not in bench_arm.CREDITED
         judged = bench_arm.credit(arm_id, topup=False, spans=True, empty_runs=0)
         assert judged["passes"] and not judged["credited"]

@@ -7,7 +7,7 @@ The properties of the executable window (`verity/core/protocols/pouw/lean/window
 `verity/core/protocols/pouw/window.py`), stated against its functions as they run. Each covers every input the
 function takes: a function on Python's integers (`floorPoint?`, `kPrime`) either answers or refuses, and a property says
 what an answer is, so its domain comes from the answer. That the function answers every input on its domain is
-completeness, proved beside it. Each is a `Prop`, and `Properties.Proofs.Pouw` proves every one, on Lean core.
+completeness, proved beside it. Each is a `Prop`, and `Proofs.Properties.Pouw` proves every one, on Lean core.
 
 The numbers are the served ones: the 3-bit grid (`gridBits`), tiles of 4096 multiply-adds (an FP8 tile), ε = 1/2, and δ
 from 1/10 to 2⁻⁴⁰, over tile counts up to 2⁴⁰.
@@ -154,7 +154,7 @@ def KPrimeExactAtEquality : Prop := (kPrime 1 (1 / 512) 7 8 1).toOption = some 3
 
 /-! ## What is public -/
 
-/-- `PUBLIC` is the draft's six items and the rows' fixed length (Daniel, 19 Oct, ASK-39), each of one of the four kinds
+/-- `PUBLIC` is the draft's six items and the rows' fixed length, each of one of the four kinds
 a protocol may make public, and a registration carries the ones that do not come from the outcome. -/
 def PublicItems : Prop :=
   publicItems.map (·.item) = ["verdict", "work", "check", "sampling", "length", "drawn", "root_W"] ∧

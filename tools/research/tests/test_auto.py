@@ -39,6 +39,15 @@ def test_a_pool_slot_free_now_wins_even_when_node_2_could_start_the_job():
     assert target == (CPU5, "research"), "cpu-5's pool when cpu-1's is busy"
 
 
+def test_cpu_3s_research_pool_takes_a_job_while_cpu_1s_and_cpu_5s_are_full():
+    """INF-281, 27 Oct 03:06Z: cpu-1 had 22 waiting and cpu-5 34 while cpu-3's research pool sat idle, outside SPILL."""
+    cpu3 = "vy-nebius-cpu-3"
+    assert (cpu3, "research") in auto.SPILL
+    full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=22)
+    target, why = auto.choose({N2: share(waiters=5), CPU1: full, CPU5: full, cpu3: pool(slot("b4", cpus="0-15", mem=48))}, 4, 16)
+    assert target == (cpu3, "research") and why.endswith("a slot is free there now")
+
+
 def test_with_nothing_free_the_pool_with_the_shortest_line_per_fitting_slot_wins():
     full = pool(*(slot(f"r{i}", held=True) for i in range(4)), waiters=3)                      # (3 + 1) / 4 = 1
     assert auto.choose({N2: share(waiters=56), CPU1: full}, 4, 16)[0] == (CPU1, "research")
@@ -58,11 +67,15 @@ def test_a_slot_too_small_trains_only_or_blocked_never_takes_the_job():
     assert target == (CPU1, "research") and "r0 blocked" in why and "shortest line" in why, "a blocked slot is no free one"
 
 
-def test_a_machine_that_cant_be_read_is_skipped_and_with_no_pool_fitting_the_job_queues_on_node_2():
+def test_a_machine_that_cant_be_read_is_skipped_and_with_neither_a_pool_nor_node_2_the_job_is_refused():
+    """26 Oct: node 2 stopped, and a job too big for a pool slot went to its queue, which refused it on a stale admission
+    window."""
     target, why = auto.choose({N2: "exit 255: ssh: connect refused", CPU1: pool(slot("r0"))}, 4, 16)
     assert target == (CPU1, "research") and why.startswith(f"{N2}'s share wasn't read (exit 255: ssh: connect refused); ")
-    target, why = auto.choose({N2: "exit 255: ssh: connect refused", CPU1: "no answer in 30 s"}, 4, 16)
-    assert target is None and why.endswith("no pool fits, so the queue there as before")
+    with pytest.raises(auto.Unplaceable, match=f"no pool fits and {N2} can't be reached.*research run --on MACHINE --mem-gb N"):
+        auto.choose({N2: "exit 255: ssh: connect refused", CPU1: "no answer in 30 s"}, 4, 16)
+    with pytest.raises(auto.Unplaceable, match="no slot of .* gives 64 CPUs and 300 GB"):
+        auto.choose({N2: "exit 255: ssh: connect timed out", CPU1: pool(slot("r0"))}, 64, 300)
     target, why = auto.choose({N2: share(waiters=5), CPU1: {"research": {"error": "OSError: no slots"}}}, 4, 16)
     assert target is None and f"{CPU1}'s research pool skipped: OSError: no slots" in why
 
@@ -91,7 +104,7 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     assert (claims / "gone.cpus").exists(), "the probe only reads: a leftover is the next taker's to remove"
     assert auto.read(src, 8, reach=lambda name: [sys.executable, "-"])[N2]["share"]["fits"] is True, "nothing holds them now"
     failing = auto.read(src, 4, reach=lambda name: [sys.executable, "-c", "import sys; sys.exit('no python here')"])
-    assert failing == {N2: "exit 1: no python here", CPU1: "exit 1: no python here", CPU5: "exit 1: no python here"}
+    assert failing == {m: "exit 1: no python here" for m in (N2, *(machine for machine, _ in auto.SPILL))}
 
 
 def _auto_repo(tmp_path: Path) -> Path:
@@ -124,7 +137,21 @@ def test_on_auto_spills_to_the_pool_as_a_pool_run_with_the_kinds_time(tmp_path, 
     assert remote.flag_value(kw["harness_args"], "--cwd") == "source"
     err = capsys.readouterr().err
     assert f"research run --on auto: spilled to {CPU1}'s research pool, from " in err and "a slot is free there now" in err
-    assert "--mem-gb" not in err, "the slot's mem= is the run's, without a word about a dropped --mem-gb"
+    assert kw["env"]["CHECK_RUN_MEM_GB"] == "16", "the slot reserves the larger of its mem= and the sized run's"
+
+
+def test_on_auto_spilled_to_a_pool_keeps_its_mem_gb_for_the_slot(tmp_path, monkeypatch, capsys):
+    """INF-228: a spill dropped --mem-gb, so a 40-GB research slot held the vllm suite to 2 workers; the slot gets the run's 150."""
+    launched = []
+    monkeypatch.setattr(auto, "read", lambda source, cpus: {N2: share(waiters=56), CPU1: pool(slot("r8", mem=160))})
+    monkeypatch.setattr(remote, "launch", _refusing(launched))
+    monkeypatch.setattr(remote, "queue_placement", _refusing([]))
+    monkeypatch.chdir(_auto_repo(tmp_path))
+    runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
+    assert main([*runs, "--mem-gb", "150", "--", "pytest", "-q"]) == 3
+    (kw,) = launched
+    assert kw["mem_gb"] is None and kw["env"]["CHECK_RUN_MEM_GB"] == "150"
+    assert "--mem-gb 150 goes to the slot" in capsys.readouterr().err
 
 
 def test_on_auto_keeps_a_gpu_job_or_one_too_big_for_any_slot_on_node_2(tmp_path, monkeypatch, capsys):
@@ -138,6 +165,18 @@ def test_on_auto_keeps_a_gpu_job_or_one_too_big_for_any_slot_on_node_2(tmp_path,
     assert main([*runs, "--cpus", "16", "--mem-gb", "160", "--", "pytest"]) == 3
     assert "no slot of /workspace/research/locks/research/slots gives 16 CPUs and 160 GB" in capsys.readouterr().err
     assert [(s["node"], s["gpus"], s["cpus"]) for s in placed] == [(N2, 1, None), (N2, None, 16)]
+
+
+def test_on_auto_refuses_a_job_too_big_for_any_slot_while_node_2_is_down(tmp_path, monkeypatch, capsys):
+    launched, placed = [], []
+    monkeypatch.setattr(auto, "read", lambda source, cpus: {N2: "exit 255: ssh: connect timed out", CPU1: pool(slot("r0"))})
+    monkeypatch.setattr(remote, "launch", _refusing(launched))
+    monkeypatch.setattr(remote, "queue_placement", _refusing(placed))
+    monkeypatch.chdir(_auto_repo(tmp_path))
+    runs = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto"]
+    assert main([*runs, "--cpus", "64", "--mem-gb", "300", "--", "pytest"]) == 2
+    assert launched == placed == []
+    assert f"research run --on auto: refused: {N2}'s share wasn't read" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("text, n", [("8-19", 12), ("0", 1), ("48-51,56-63", 12)])

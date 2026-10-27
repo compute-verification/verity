@@ -9,7 +9,7 @@
   which the caller gives (128 lowercase hex digits, no other open's, ever), and gives the port its challenger listens on
   at the peer's 127.0.0.1, the session's secret, which only that answer carries and nothing here prints, and the root of
   the coin commitment its challenger signed; the challenger opens the salt coin only after R. The gated served window
-  of record is vllm's H1 path, `integrations/vllm/verity_vllm/protocol_options/pouw_h1.py` (#3053), which holds its
+  of record is vllm's H1 path, `integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py` (#3053), which holds its
   salt, round-0 request table, R, session S and requests_root rules (#2950, PRF-132); serve.py refuses ``--gate``.
   ``coins.py open`` reserves and opens a session by hand, for development and timing rows only, on `stand_in_root` of
   its session, a stand-in and never a window's root, passed as ``--challenger HOST:PORT``, ``--session ID``,
@@ -371,16 +371,19 @@ class RoundPipe:
 
 
 def open_coins(at: Session | None, epoch: int, rounds: int, entropy: Callable[[int], bytes] | None = None,
-               connect: Callable[..., Any] = R.RemoteChallenger.connect) -> Coins:
+               connect: Callable[..., Any] | None = None, wait_s: float = R.TUNNEL_WAIT_S,
+               clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep) -> Coins:
     """The window's coins: the challenger of session `at`, its hello carrying the session's secret when it has one, its
     commitment held to `layout` and to the root the gate's open answered when `at` holds one, or with no session the
-    in-process challenger over `entropy` (the Lean verifier of record's coins by default)."""
+    in-process challenger over `entropy` (the Lean verifier of record's coins by default).  The client connects once
+    the session's tunnel listens (`remote.connect_when_listening` over `connect`, for up to `wait_s`: a caller that knows
+    the window's coin deadline passes the time left to it)."""
     if at is None:
         if entropy is None:
             from verity.core.protocols.pouw import verifier
             entropy = verifier.coins
         return Coins(Wd.live_challenger(epoch, rounds, entropy), "in-process")
-    client = connect(at.address, at.secret)
+    client = R.connect_when_listening(at.address, at.secret, connect, wait_s, clock, sleep)
     why = layout_reason(client.commitment, epoch, rounds)
     if why is None and at.commitment is not None and client.commitment.root.hex() != at.commitment:
         why = (f"session {at.id}'s challenger answered the hello with commitment {client.commitment.root.hex()[:16]}…, "

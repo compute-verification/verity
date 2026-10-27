@@ -1,4 +1,4 @@
-# /etc/vy/auditor: this machine is an auditor host (AGENTS.md's auditor-trusted devices, under trusted-nebius-host): it runs the
+# /etc/vy/auditor: this machine is an auditor host (AGENTS.md's auditor-trusted devices, under trusted-host): it runs the
 # auditor's own service and nothing else, no pool, lane or prover job. Each line below would be one command a `research run` here
 # may be, exactly, as shlex splits it, and there is none: on vy-challenger-1 the challenger runs only as `auditor`, from infra's
 # pinned tree, through vy-challenger-gate (benchmarks/live_challenger/auditor.py, RT4-INT-18), and on vy-auditor-1 the verifier

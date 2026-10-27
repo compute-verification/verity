@@ -30,6 +30,7 @@ CIRCUIT = "9f" * 64
 def host(tmp_path) -> A.Host:
     (tmp_path / "var" / "sessions").mkdir(parents=True)
     (tmp_path / "peers").write_text("vy-challenger-1 research@10.0.0.1\nvy-nebius-1 research@10.0.0.2\n")
+    (tmp_path / "coin-ports").write_text("vy-nebius-1 7811-7899\n")
     (tmp_path / "pins.jsonl").write_text(A.pin_line(PIN, "d" * 40, "2026-10-20T09:00:00Z") + "\n")
     return A.Host(root=tmp_path / "var", peers=tmp_path / "peers", pins=tmp_path / "pins.jsonl")
 
@@ -348,7 +349,7 @@ def test_a_period_open_commits_each_ks_circuit_file_when_given_and_none_otherwis
 
 @pytest.mark.parametrize("files", [
     "{}", "[]", "nope", '{"k64": "2b"}', '{"k0": "' + "2b" * 64 + '"}', '{"k064": "' + "2b" * 64 + '"}',
-    '{"64": "' + "2b" * 64 + '"}', '{"k64": "' + "2B" * 64 + '"}', '{"k64": 1}',
+    '{"64": "' + "2b" * 64 + '"}', '{"k64": "' + "2B" * 64 + '"}', '{"k64": 1}', '{"lives": "' + "2b" * 64 + '"}',
     '{"k64": "' + "2b" * 64 + '", "k64": "' + "1a" * 64 + '"}',
 ])
 def test_a_period_open_refuses_circuit_files_it_cant_check(host, signer, files):
@@ -357,6 +358,7 @@ def test_a_period_open_refuses_circuit_files_it_cant_check(host, signer, files):
     assert rc == 3 and "--circuit-files" in out["refused"]
     assert A.read_ledger(host.ledger) == []
     assert len(A.circuit_files_of(json.dumps({f"k{i}": "2b" * 64 for i in range(1, 65)}))) == 64
+    assert A.circuit_files_of(json.dumps({"k64": "2b" * 64, "live": "1a" * 64})) == {"k64": "2b" * 64, "live": "1a" * 64}
     with pytest.raises(A.Refused, match="1 to 64 distinct K"):
         A.circuit_files_of(json.dumps({f"k{i}": "2b" * 64 for i in range(1, 66)}))
 

@@ -445,7 +445,7 @@ theorem accepted_of {L K S : ℕ} {C : Prog} {P : Partition} {lay : Layout L S} 
     inputOf_eq hcar ht fun t' h1 h2 hgi => hg t' h1 h2 g hgi Relation.ReflTransGen.refl
   have heq : ∀ σ, ∀ g ∈ slotGates (lay.egress t ℓ σ),
       valOver C (lay.inputOf k (ingressUpTo op o t) (traceVal C ref)) (heldAdv C P F ref) g = traceVal C ref g :=
-    fun σ g hg => valOver_out hT hP ι hι Good hgood hinp (hfit.1 t ht ℓ σ g hg)
+    fun σ g hg => valOver_out hT hP ι hι Good hgood hinp (hfit.1 t ht ℓ σ g hg).1
       fun t' h1 h2 i hi => hfit.2.2 t ht t' h2 h1 ℓ σ g hg i hi
   funext σ
   show rowOf (traceVal C ref) (lay.egress t ℓ) σ =
@@ -470,8 +470,9 @@ theorem rAcc_of_r (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (lay :
   obtain rfl := Option.some.inj hP₁
   obtain ⟨ι, hι⟩ := correct_of_not_faulty H D.commit s P w
   refine ⟨s, P, hs, hP, hM, disjoint_allSlots hδ hM,
-    (traceVal s.prog (w.val H D.commit s), heldAdv s.prog P (faulty H D.commit s P w) (w.val H D.commit s)),
-    fun g b h => faultyGate_of_heldAdv h, fun op o hcar hcov => ?_⟩
+    heldAdv s.prog P (faulty H D.commit s P w) (w.val H D.commit s),
+    fun g b h => faultyGate_of_heldAdv h, fun g h => by
+      rw [heldAdv_of (ref := w.val H D.commit s) h]; exact Option.some_ne_none _, fun op o hcar hcov => ?_⟩
   exact accepted_of hin.1 hin.2.1 hfit ι hι hcar hcov
 
 end NetTiming.SampledAuditProof

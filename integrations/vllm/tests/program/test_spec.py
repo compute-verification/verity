@@ -13,11 +13,11 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.ml.circuits import Program, bind  # noqa: E402
-from verity.ml.circuits.evaluate import evaluate_call  # noqa: E402
-from verity_vllm.program.registry import spec  # noqa: E402
-from verity_vllm.program.registry.b1 import Serve  # noqa: E402
-from tests.program.crosscheck import _standalone  # noqa: E402
+from verity.ml.circuits import Program, bind
+from verity.ml.circuits.evaluate import evaluate_call
+from verity.ml.definitions.registry import spec
+from verity.ml.definitions.registry.b1 import Serve
+from tests.program.crosscheck import _standalone
 
 U32 = 0xFFFFFFFF
 TINY = {"model": "tiny", "revision": None, "H": 32, "NL": 2, "NH": 2, "KVH": 1, "D": 16, "I": 32, "V": 64,
@@ -68,7 +68,7 @@ def test_advance_matches_reference(K):
 
 
 def _random_weights(C: dict, rng) -> list[int]:
-    from verity_vllm.program.registry.b1 import weights_type
+    from verity.ml.definitions.registry.b1 import weights_type
     n = weights_type(C).leaves
     w = (rng.standard_normal(n) * 0.05).astype(np.float32).view(np.uint32) >> 16
     return [int(x) for x in w]

@@ -18,7 +18,7 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.commit import serving_rows as CS
+from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.serving_templates import Template, template
 
@@ -60,8 +60,8 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
          slices: Callable) -> tuple[dict[str, Any], list[list[Any]]]:
     """Member ``m``'s units (the module's order and ports), every port its elements' bytes in u16 words, the row's argument groups
     read by ``slices`` (`serving_rows._slices`); one index entry per row."""
-    from verity_vllm.program.kernels.derived_rows import f2fp_bf16
-    from verity_vllm.program.kernels.fp8_moe_rows import (
+    from verity.ml.definitions.numerics.derived_rows import f2fp_bf16
+    from verity.ml.definitions.numerics.fp8_moe_rows import (
         TWIN_DOT_OF,
         moe_expert_fp8_block_accs,
     )

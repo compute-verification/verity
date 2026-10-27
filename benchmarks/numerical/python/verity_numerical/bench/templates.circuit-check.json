@@ -1,5 +1,17 @@
 {
  "units": {
+  "attention-head-v18/d128-bn64/sm120-fa2-bf16-decode": {
+   "and": 8250,
+   "not": 1791,
+   "type": "3b77f5a97e231fe0e72ee4a99558feb5cece3c1109d8ec901207e56f514b2883dd3d6ae86c6877ac93a3fafd8445b5167d977d3c9bd21fe0221e797931b4deb1",
+   "xor": 55973
+  },
+  "attention-head-v18/d64-bn128/sm120-fa2-bf16-decode": {
+   "and": 8250,
+   "not": 1791,
+   "type": "3b77f5a97e231fe0e72ee4a99558feb5cece3c1109d8ec901207e56f514b2883dd3d6ae86c6877ac93a3fafd8445b5167d977d3c9bd21fe0221e797931b4deb1",
+   "xor": 55973
+  },
   "attention-head/d64-bn128/sm80-fa2-bf16": {
    "and": 8660,
    "not": 2041,
@@ -63,6 +75,18 @@
    "not": 62814,
    "type": "84ffa578e0b2eb33565d843783f043567e7776fb68ef37a19e1821010ebda2bba7d5127e987ab8fd0beaf8dac77830a6b2aa88c27505443a6d0ff01fa0d8de5e",
    "xor": 2165677
+  },
+  "rmsnorm-triton-v5/n2048-eps1e-05/bf16": {
+   "and": 1176709,
+   "not": 181662,
+   "type": "8f4782f8e410cf8f88ccf161801021339503a8edc9a90b92b5a18687a9ca92e7994b9cb5d808da875d1499e9ccb4c8cd2b4395097daf0f00bf43db4b6351fd96",
+   "xor": 8174317
+  },
+  "rmsnorm-triton-v5/n4096-eps1e-05/bf16": {
+   "and": 1176709,
+   "not": 181662,
+   "type": "8f4782f8e410cf8f88ccf161801021339503a8edc9a90b92b5a18687a9ca92e7994b9cb5d808da875d1499e9ccb4c8cd2b4395097daf0f00bf43db4b6351fd96",
+   "xor": 8174317
   },
   "rmsnorm-triton/n128-eps1e-06/bf16": {
    "and": 148173,

@@ -57,10 +57,10 @@ from typing import Any, Callable
 
 import numpy as np
 from verity.ml.circuits.ops import mufu as MU
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.kernels.dsv4_moe_twin import clamp_twin, hash_twin, lg2_words, router_twin, score_words
-from verity_vllm.program.registry import dsv4_moe as D
-from verity_vllm.program.registry import mla_check as MC
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.numerics.dsv4_moe_twin import clamp_twin, hash_twin, lg2_words, router_twin, score_words
+from verity.ml.definitions.registry import dsv4_moe as D
+from verity.ml.definitions.registry import mla_check as MC
 
 SCHEMA = "verity-vllm/dsv4-moe-capture/v1"
 RECORD = "dsv4_moe_capture.json"
@@ -677,7 +677,7 @@ def run(out: str, seed: int, n: int, clamp_n: int, min_driver: int, want_cc: str
     os.environ["VLLM_BATCH_INVARIANT"] = "1"
     import torch
     import vllm
-    import vllm._custom_ops  # noqa: F401
+    import vllm._custom_ops
 
     outdir = Path(out)
     outdir.mkdir(parents=True, exist_ok=True)

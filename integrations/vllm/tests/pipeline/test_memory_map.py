@@ -20,7 +20,7 @@ import pytest
 import torch
 
 from tests.commit.test_memory_map import PREFIX, PRODUCERS, WARM_ARRIVE, WARM_TABLES, _slots, dsa_request, warm_program
-from tests.predict.test_predict import TINY, _phi
+from tests.program.predict.test_predict import TINY, _phi
 from tests.program import test_dsa_derive as DSA
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
 from verity.core.protocols.remote_bandwidth.memory_map import Replay, dumps, parse
@@ -30,7 +30,7 @@ from verity_vllm.commit import memory_map as MM
 from verity_vllm.pipeline import memory_map as PMM
 from verity_vllm.pipeline.build import _instance_rows
 from verity_vllm.pipeline.tp import rank_replay as RR
-from verity_vllm.predict.build import build_program
+from verity_vllm.program.predict.build import build_program
 
 WIDE = TINY | {"hidden_size": 512, "num_key_value_heads": 4}
 LAYERS = [f"model.layers.{i}.self_attn.attn" for i in range(2)]
@@ -316,7 +316,7 @@ def _latent_caches(rows: MM.Rows, words) -> dict[str, torch.Tensor]:
 
 
 @pytest.mark.slow
-def test_each_tp_rank_writes_the_map_of_its_mla_latent_rows(tmp_path, served, monkeypatch):  # noqa: F811
+def test_each_tp_rank_writes_the_map_of_its_mla_latent_rows(tmp_path, served, monkeypatch):
     # GLM-5.3 at TP2 in small: each rank's Build dir holds its request Program (the DSA stand-in: an indexer layer and an IndexShare
     # layer, a prefill of 64 rows, then two decode steps); MLA's latent cache is whole on each rank, the scheduler's pages the same
     # on both, and each rank's committed words its own.  Rank 0's Build has KV rows cached under kv-rows/v1, which refused them

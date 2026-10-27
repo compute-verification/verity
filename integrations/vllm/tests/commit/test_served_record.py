@@ -197,7 +197,10 @@ def test_a_stream_cut_short_fails_on_its_finish_not_as_an_overrun():
     ({"reason": "length", "max_tokens": 5}, OUT, False),
     ({"reason": "stop", "stop_reason": 2}, OUT, True),
     ({"reason": "stop", "stop_reason": 23}, OUT, False),
-    ({"reason": "abort"}, OUT, False),
+    ({"reason": "abort", "k": 4, "max_tokens": 9}, OUT, True),
+    ({"reason": "abort", "k": 3, "max_tokens": 9}, OUT, False),            # aborted after 3, and 4 were streamed
+    ({"reason": "abort", "k": 4, "max_tokens": 4}, OUT, False),            # at its cap it finished on length
+    ({"reason": "cancelled"}, OUT, False),
     ({"reason": "stop", "stop_reason": "c"}, [1, 3], True),
     ({"reason": "stop", "stop_reason": "c"}, [3, 1], False),              # the string was already there a token earlier
     ({"reason": "stop", "stop_reason": "c"}, [1, 1], False),

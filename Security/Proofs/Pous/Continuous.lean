@@ -1,4 +1,6 @@
 import Proofs.Pous.Continuous.MissCount
+import Proofs.Pous.Continuous.Verdict
+import Proofs.Pous.Continuous.VerdictCode
 import Proofs.Pous.Continuous.Verifier
 import Proofs.Pous.Continuous.PerAnswer
 import Proofs.Pous.Continuous.Band
@@ -16,7 +18,7 @@ responder that runs on its clock. The statements are `Pous.Guarantees.PerAnswer`
 
 * `Continuous/MissCount.lean`: the counting step, pure probability (`PousContinuous.pr_misses_le`,
   `PousContinuous.pr_misses_gt_le`).
-* `Continuous/Verifier.lean`: the memory challenger enforces the three rules PR #896's draft assumed: no pipelining
+* `Continuous/Verifier.lean`: the memory challenger enforces the three rules an earlier draft assumed: no pipelining
   (`no_pipelining`, `close_le_send`), a hard deadline (`closed_le`, `not_reject`), and every answer past `Δ` counted
   (`hit_on_time`, `late_not_hit`).
 * `Continuous/PerAnswer.lean`: both guarantees from `TimedINC` (`PousContinuous.per_answer`,
@@ -34,4 +36,10 @@ responder that runs on its clock. The statements are `Pous.Guarantees.PerAnswer`
   (`PousContinuous.band_cont_time_average_row`), and the rows `D = 0, 1, 2, 5`
   (`PousContinuous.band_family_continuous_time_average`; pinned as
   `Pous.SecurityProofs.BandFamilyContinuousTimeAverage`).
+* `Continuous/Verdict.lean`: the verdict as one proof unit, `PousVerdict_v1{K, M, LIMIT}`: its output is `1` iff
+  `contAccepts M` holds on the records its openings determine (`PousVerdict.verdictProg_accepts`,
+  `PousVerdict.verdict_accepts`), not pinned.
+* `Continuous/VerdictCode.lean`: the unit's executable code (`PousCheck.Verdict`, which the difftest runs against the
+  Definition's circuit) is `verdictProg` gate for gate, so `VerdictIs` holds of it (`PousVerdict.Code.prog_eq`,
+  `PousVerdict.Code.verdictIs_prog`), and its run, verdicts and acceptance are the analysis's, not pinned.
 -/

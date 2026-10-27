@@ -39,7 +39,7 @@ from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveOpening, ledger_head, pinned_session
-from verity_vllm.protocol_options import pouw_h1_challenger as PHC
+from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
 
 def locate(calls: list[dict], tile: tuple[int, int], u: int) -> dict:

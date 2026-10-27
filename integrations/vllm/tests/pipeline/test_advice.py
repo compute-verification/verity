@@ -6,6 +6,7 @@ from __future__ import annotations
 import itertools
 import json
 import random
+import re
 from types import SimpleNamespace
 
 import pytest
@@ -138,6 +139,66 @@ def test_an_aborted_request_is_a_commit_windows_finish_and_a_whole_sessions_refu
         ADV.from_trace(recs, io, carry=())
 
 
+def _behind_a_long_prompt(tmp_path, abort_at: dict[int, str]) -> tuple[list[dict], dict]:
+    """e0's 40-token prompt takes the 16-token budget for three steps: aborted after the first, it is mid-prefill; e1, waiting
+    behind it, has never run."""
+    _run(tmp_path, {0: [FakeRequest("e0", [5] * 40, [6] * 3, 3), FakeRequest("e1", [5] * 4, [6] * 3, 3)]}, abort_at=abort_at)
+    return ST.load(tmp_path / "step_trace.jsonl"), ADV.io_record(tmp_path / "requests.jsonl")
+
+
+def test_an_abort_mid_prefill_before_the_first_output_is_refused_by_name(tmp_path):
+    recs, io = _behind_a_long_prompt(tmp_path, {1: "e0"})
+    assert len(io["e0"]["output_ids"]) == 0 and any(row[0] == "e0" for r in recs if r["kind"] == "step" for row in r["rows"])
+    with pytest.raises(ValueError) as e:
+        ADV.from_trace(recs, io, carry=())
+    assert str(e.value) == ("request e0 was aborted before its first output, which the advice refuses: an aborted request's "
+                            "Program ends at its last kept output, and it kept none")
+
+
+def test_a_request_aborted_before_it_is_ever_scheduled_is_dropped_from_the_advice_and_kept_in_the_commit_record(tmp_path):
+    """e1 has no row and no output, so the advice is e0's alone, a Commit window's and a whole session's alike, and the Commit
+    record keeps e1; a Commit record or a trace that gives e1 an output is refused."""
+    recs, io = _behind_a_long_prompt(tmp_path, {1: "e1"})
+    assert [r["reason"] for r in recs if r["kind"] == "finish" and r["request"] == "e1"] == ["abort"] and io["e1"]["output_ids"] == []
+    assert not any(row[0] == "e1" for r in recs if r["kind"] == "step" for row in r["rows"])
+    for carry in ((), None):
+        b = ADV.from_trace(recs, io, carry=carry)
+        assert [(q.id, q.output_len, q.finish) for q in b.advice.requests] == [("user-e0", 3, "length")] and b.dropped == ("e1",)
+        assert len(b.advice.release) == 3 and b.advice.version == 0
+    rep = ADV.write(tmp_path, compiler=C)
+    assert rep["roundtrip"] and rep["counts"]["requests"] == 1 and rep["counts"]["aborted_unscheduled"] == 1
+    assert [(q.id, q.output_len) for q in _advice(tmp_path).requests] == [("user-e0", 3)]
+    gone = "request e1 was aborted before it was ever scheduled, which the advice drops, and the trace emitted"
+    for e1, why in [({"output_ids": [6]}, "0 tokens for it, the Commit record 1, finished by abort"),
+                    ({"finish": {"reason": "abort", "stop_reason": None, "k": 2}}, "0 tokens for it, the Commit record 0, finished by abort after 2 ids"),
+                    ({"finish": {"reason": "length", "stop_reason": None}}, "0 tokens for it, the Commit record 0, finished by length")]:
+        with pytest.raises(ValueError) as e:
+            ADV.from_trace(recs, {**io, "e1": {**io["e1"], **e1}}, carry=())
+        assert str(e.value) == f"{gone} {why}"
+    next(r for r in recs if r["kind"] == "step" and r["step"] == 0)["emitted"]["e1"] = 1
+    with pytest.raises(ValueError) as e:
+        ADV.from_trace(recs, io, carry=())
+    assert str(e.value) == f"{gone} 1 tokens for it, the Commit record 0, finished by abort"
+
+
+def test_a_request_that_arrived_and_never_ran_unaborted_is_refused(tmp_path):
+    recs, io = _behind_a_long_prompt(tmp_path, {1: "e1"})
+    recs = [r for r in recs if not (r["kind"] == "finish" and r["request"] == "e1")]
+    with pytest.raises(ValueError, match=r"^1 requests arrived and never ran: \['e1'\]$"):
+        ADV.from_trace(recs, io, carry=())
+
+
+def test_an_abort_of_a_request_waiting_after_a_preemption_is_refused_by_name(tmp_path):
+    _run(tmp_path, {0: [FakeRequest("e0", [5] * 4, [6] * 6, 6), FakeRequest("e1", [5] * 4, [6] * 6, 6)]}, preempt_at={2: "e0"},
+         abort_at={3: "e0"})
+    recs, io = ST.load(tmp_path / "step_trace.jsonl"), ADV.io_record(tmp_path / "requests.jsonl")
+    assert len(io["e0"]["output_ids"]) == 2 and "e0" in next(r for r in recs if r["kind"] == "step" and r["step"] == 2)["preempted"]
+    with pytest.raises(ValueError) as e:
+        ADV.from_trace(recs, io, carry=())
+    assert str(e.value) == ("request e0 was aborted after step 2 while it waited after a preemption, which the advice refuses: it "
+                            "has no row in the step it is freed at")
+
+
 def test_a_commit_record_whose_output_disagrees_with_the_trace_is_refused(tmp_path):
     _served(tmp_path, n=4)
     lines = (tmp_path / "requests.jsonl").read_text().splitlines()
@@ -183,6 +244,45 @@ def test_the_command_writes_the_advice_and_exits_zero(tmp_path, capsys):
     assert rep["registration"]["compiler"]["inner"] == {"name": ADV.COMPILER, "digest": "ab" * 64}
     private = out / "private"
     assert I1.from_json(json.loads((private / "advice.json").read_text())) == I1.decode((private / "advice.bin").read_bytes())
+
+
+def test_the_registration_records_the_committers_weights_roots_and_refuses_anything_else(tmp_path):
+    """``--weights-of-record``: the registration records the committer's registered root for each weight parameter of the
+    window circuit (its weights registration's, ``registered_roots``, what `interface.input_count` holds the verifier's pins
+    to); without it, none. A weights record (the verifier's shapes, no root), a registration of no value, one whose values
+    aren't weight parameters' entries with a root of 64 bytes, or one of another model than the run's ``serve.json`` names,
+    is a usage error."""
+    from verity.ml.windows import interface as IF
+    from verity_vllm.check import weights_of_record as WR
+    from verity_vllm.records import weights_registration as WRG
+
+    _served(tmp_path, n=4)
+    roots = {"weights/model.norm.weight@64": "cd" * 64, "weights/model.embed_tokens.weight@64": "ef" * 64}
+    values = {p: {"value": p, "root": r, "leaves": 1, "words": 64, "domain": "01" * 64} for p, r in roots.items()}
+    registration = {"schema": WRG.SCHEMA, "program": "ab" * 64, "model": {"repo": "org/m", "revision": "r"},
+                    "grain": {"gemm_words": 32768, "rows": 256, "select": 768}, "values": values, "unrooted": {}}
+    (tmp_path / "wr.json").write_text(json.dumps(registration))
+    assert ADV.main(ADV.Options(run=str(tmp_path), out=str(tmp_path / "a"), compiler_digest="ab" * 64,
+                                weights_of_record=str(tmp_path / "wr.json"))) == 0
+    reg = json.loads((tmp_path / "a" / "registration.json").read_text())
+    assert reg["registered_roots"] == IF.registered_roots(reg) == roots
+    assert ADV.main(ADV.Options(run=str(tmp_path), out=str(tmp_path / "b"), compiler_digest="ab" * 64)) == 0
+    assert "registered_roots" not in json.loads((tmp_path / "b" / "registration.json").read_text())
+    p = "weights/model.norm.weight@64"
+    record = {"schema": WR.SCHEMA, "of_record": True, "root_of_record": "cd" * 32,
+              "registered_entries": {q: {k: v for k, v in e.items() if k != "root"} for q, e in values.items()}}
+    for bad, serve, why in [(record, None, "never a weights record"),
+                            ({**registration, "values": {}}, None, "'values' is empty"),
+                            ({**registration, "values": {"x": {**values[p], "value": "x"}}}, None, "registers ['x'], not weight"),
+                            ({**registration, "values": {**values, p: {**values[p], "root": "cd" * 32}}}, None,
+                             f"'values.{p}' doesn't name its parameter with a root of 64 bytes"),
+                            (registration, {"model": "org/other", "revision": "r"}, "the run served org/other@r")]:
+        (tmp_path / "wr.json").write_text(json.dumps(bad))
+        if serve:
+            (tmp_path / "serve.json").write_text(json.dumps(serve))
+        with pytest.raises(UsageError, match=re.escape(why)):
+            ADV.main(ADV.Options(run=str(tmp_path), out=str(tmp_path / "c"), compiler_digest="ab" * 64,
+                                 weights_of_record=str(tmp_path / "wr.json")))
 
 
 def test_the_command_reports_a_disagreeing_run_as_a_usage_error(tmp_path):

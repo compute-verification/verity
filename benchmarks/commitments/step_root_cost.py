@@ -34,7 +34,8 @@ import numpy as np
 
 from verity.ml.commitments import row_table as RT
 from verity.ml.commitments.rowleaf import sha512_row_seg_digest
-from verity_vllm.commit import row_tables as RTB, serving_rows as SR
+from verity_vllm.commit import row_tables as RTB
+from verity.ml.windows import rows as SR
 
 RESULT_SCHEMA = "research/result/v0.1"
 #: Llama-3.1-8B's int8 linears and their K

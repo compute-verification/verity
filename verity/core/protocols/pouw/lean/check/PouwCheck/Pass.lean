@@ -86,6 +86,22 @@ def hex? : Json → Option ByteArray
 
 def at? (j : Json) (k : String) : Json := (PouwWindow.field? j k).getD .null
 
+/-- `j == .str s`, by a match the kernel reduces: `BEq Json` is a `partial def`, opaque to the kernel, so a property of a
+check that compares with it can't be proved. -/
+def jsonStrIs (j : Json) (s : String) : Bool := match j with | .str t => t == s | _ => false
+
+/-- `j == .bool true`, by a match the kernel reduces (`jsonStrIs`). -/
+def jsonTrue (j : Json) : Bool := match j with | .bool true => true | _ => false
+
+example : jsonStrIs (.str "verity-vllm/pouw-pearl-c-run/v2") MANIFEST_SCHEMA = true := by decide
+example : jsonStrIs (.str "verity-vllm/pouw-pearl-c-run/v1") MANIFEST_SCHEMA = false := by decide
+example : jsonStrIs .null "" = false := by decide
+example : jsonTrue (.bool true) = true := by decide
+example : jsonTrue (.bool false) = false := by decide
+example : jsonTrue .null = false := by decide
+example : jsonStrIs (at? (Json.mkObj [("salt", .str "ab"), ("schema", .null)]) "salt") "ab" = true := by decide
+example : jsonTrue (at? (Json.mkObj [("closed", .bool true), ("complete", .bool true)]) "complete") = true := by decide
+
 /-- `coins_of`. -/
 def coinsOf (j : Json) (recorded : Bool) : Except String Coins := do
   let bad := s!"a coin commitment's scheme is {pyRepr PouwCommit.SCHEME}"
@@ -309,10 +325,29 @@ opened at ledger entry `seq` on `root` under the commitment whose root is `commi
 `secret`. -/
 def carries (s : Json) (sid : String) (seq : Nat) (root : ByteArray) (commitment : String) : Bool :=
   match s with
-  | .obj _ => (PouwWindow.field? s "secret").isNone && at? s "session" == .str sid &&
-      PouwWindow.intOf? (at? s "seq") == some (seq : Int) && at? s "root" == .str (Flock.hexOf root) &&
-      at? s "commitment" == .str commitment
+  | .obj _ => (PouwWindow.field? s "secret").isNone && jsonStrIs (at? s "session") sid &&
+      PouwWindow.intOf? (at? s "seq") == some (seq : Int) && jsonStrIs (at? s "root") (Flock.hexOf root) &&
+      jsonStrIs (at? s "commitment") commitment
   | _ => false
+
+example : carries (Json.mkObj [("session", .str "s1"), ("seq", (4 : Nat)), ("root", .str "0102"),
+    ("commitment", .str "ab")]) "s1" 4 ⟨#[1, 2]⟩ "ab" = true := by decide
+example : carries (Json.mkObj [("session", .str "s1"), ("seq", (4 : Nat)), ("root", .str "0102"),
+    ("commitment", .str "ab"), ("secret", .str "00")]) "s1" 4 ⟨#[1, 2]⟩ "ab" = false := by decide
+example : carries (Json.mkObj [("session", .str "s1"), ("seq", (4 : Nat)), ("root", .str "0103"),
+    ("commitment", .str "ab")]) "s1" 4 ⟨#[1, 2]⟩ "ab" = false := by decide
+
+/-- `claimed == c` for two live coin commitments, field by field: what comparing their `toJson`'s `compress` decided,
+since `toJson` is injective, by functions the kernel reduces (`Json.compress` is a `partial def`). -/
+def sameCommitment (a b : LiveCommitment) : Bool :=
+  a.scheme == b.scheme && a.epoch == b.epoch && a.families == b.families && a.root == b.root
+
+example : sameCommitment ⟨"verity/live", 3, [("pouw/salt", 1)], ⟨#[1, 2]⟩⟩ ⟨"verity/live", 3, [("pouw/salt", 1)], ⟨#[1, 2]⟩⟩
+    = true := by decide
+example : sameCommitment ⟨"verity/live", 3, [("pouw/salt", 1)], ⟨#[1, 2]⟩⟩ ⟨"verity/live", 3, [("pouw/salt", 1)], ⟨#[1, 3]⟩⟩
+    = false := by decide
+example : sameCommitment ⟨"verity/live", 3, [("pouw/salt", 1)], ⟨#[1, 2]⟩⟩ ⟨"verity/live", 4, [("pouw/salt", 1)], ⟨#[1, 2]⟩⟩
+    = false := by decide
 
 /-- `core_check.live_salt` (LIVESALT2, `Properties.Pouw.LiveSalt`): a live Pearl-C pass's salt, `saltCheck`'s rule with
 the pass's epoch's root R in place of a window's open root, its session and commitment read from the auditor's ledger
@@ -328,7 +363,7 @@ over W, and its session the gate's answer for the session without its secret (`c
 def liveSaltCheck (key ledger pins main session m : Json) : R ByteArray := do
   let .obj _ := m | manifest "the pass's manifest is not a JSON object"
   let schema := at? m "schema"
-  if schema != .str MANIFEST_SCHEMA then
+  unless jsonStrIs schema MANIFEST_SCHEMA do
     let .str s := schema | manifest "the pass's manifest names no schema"
     coin s!"schema {pyRepr s}, not {MANIFEST_SCHEMA}"
   let (us, roots) ← workloadOf m
@@ -347,18 +382,18 @@ def liveSaltCheck (key ledger pins main session m : Json) : R ByteArray := do
       (SampledProofs.Challenger.familiesJson PouwWindow.SALT_FAMILIES) do throw ("salt", RESERVE_LAYOUT)
   unless SampledProofs.int? (SampledProofs.getD opened.body "reserve") == some (reserve.seq : Int) do
     throw ("salt", NO_RESERVE)
-  unless SampledProofs.getD ended.body "complete" == .bool true &&
+  unless jsonTrue (SampledProofs.getD ended.body "complete") &&
       SampledProofs.jeq (SampledProofs.getD ended.body "released")
         (Json.mkObj [(PouwWindow.SALT, Lean.toJson (1 : Nat))]) do throw ("salt", INCOMPLETE)
   unless received == [(PouwWindow.SALT, [r])] do throw ("salt", LIVE_NOT_RECEIVED)
   let claimed ← (LiveCommitment.ofJson (at? m "coins")).mapError fun e => ("coin", s!"the pass's coins are malformed: {e}")
-  unless claimed.toJson.compress == c.toJson.compress do coin LIVE_NOT_SIGNED
+  unless sameCommitment claimed c do coin LIVE_NOT_SIGNED
   let o ← (LiveOpening.ofJson (at? m "salt_opening")).mapError fun e => ("coin", s!"the salt's {e}")
   if let some why ← port (SampledProofs.Challenger.liveReason c o PouwWindow.SALT 0 r) then coin s!"the salt's {why}"
   let seed ← port (PouwCommit.key? o.coin PouwCommit.EPOCH_SALT_DOMAIN
     [("epoch", .int c.epoch), ("coins", .bytes c.root), ("weights", .bytes w)])
   let salt := FlockSoundness.Randomness.stream seed [.str "salt"] 32
-  if at? m "salt" != .str (Flock.hexOf salt) then coin LIVE_SALT
+  unless jsonStrIs (at? m "salt") (Flock.hexOf salt) do coin LIVE_SALT
   unless carries (at? m "session") a.session opened.seq r a.commitment do coin LIVE_SESSION
   pure salt
 

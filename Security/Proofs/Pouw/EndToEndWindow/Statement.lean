@@ -1,6 +1,6 @@
 import Definitions.Pouw.Game.Params
-import Models.Pouw.Assumptions.Game
-import Models.Pouw.Assumptions.NCP.Assumptions
+import Definitions.Pouw.Assumptions.Game
+import Definitions.Pouw.Assumptions.NCP.Assumptions
 import Proofs.Flock.Soundness.Audit.Extraction
 import Proofs.Flock.Soundness.Audit.RegDraw
 import Proofs.Flock.Soundness.Audit.Window
@@ -164,7 +164,7 @@ theorem coordDomain_inhabited : ∃ U : Workload, U.InDomain coordDomain ∧ U.l
 salt (`play`: the registration, then the sessions on every draw), with what the model charges for it. `cost` is the
 work of its online phase, from the salt's release to the registration's receipt, in PoUW's cost units; `received` and
 `cutoff` are places in the challenger's record of the epoch's coins, which logs each root's receipt and then its coin's
-release (`LiveRecord.log`, #2584; that the challenger keeps that order is `trusted-nebius-host`'s): the registration's
+release (`LiveRecord.log`, #2584; that the challenger keeps that order is `trusted-host`'s): the registration's
 receipt, and the release of the epoch's draw coin (`pouw/draw`); `calls` is the registration's oracle calls, the
 commitments', which `RegQueries` ties to the queries of the program that computes it; `sessCalls` is the sessions'
 oracle calls, the most over every draw and every coin of the sessions. The extraction reads none of the sessions'
@@ -280,7 +280,7 @@ It is stated for models whose registration is an oracle program's output with it
 shrink the provers it quantifies over. It is the shape of relative security's
 premises, an adversary that commits first with random-oracle commitments (`Assumptions.ServiceSoundStaged`,
 `Extraction`), and it is carded on the random-oracle card with the seeded windows' premise
-(`Accounting.Assumptions.Compose.SeedExtractedAt`), so that Daniel rules on the random oracle once. -/
+(`Accounting.Assumptions.Compose.SeedExtractedAt`), so that the random oracle is ruled on once. -/
 def StraightLineExtraction [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {n : ℕ} {Reg : Type}
     {Lr : Reg → Law n} {session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool}
     (PM : ProverModel Q R S Reg Lr session) (CM : CostModel Q R S) (D : Layout → Prop)
@@ -379,7 +379,7 @@ $$\beta(H, s) = \mathrm{miss}_{K'}(b) + \varepsilon_{ks}(H, s, R, \tau) + \delta
 the first term is the subset law's own escape of `b` units (`Law.miss`), `C(N − b, K′)/C(N, K′)` for `b ≤ N` by
 `FlockSoundness.Audit.Law.subset_miss` and `0` past it, the exact hypergeometric miss, so it needs no work table (over
 main's served levels it is at most `2^-40.6` at `(ε, δ) = (0.1%, 2^-40)` and `2^-128.5` at `(1%, 2^-128)`,
-note:compute-accounting/20261018T2336Z-finding-pw8-rered, probe 2):
+the recheck's probe 2):
 * where `K′ = N` (`k_prime`'s answer when no `K < N` reaches `δ`), every unit is drawn and the first term is `0`
   (`b ≥ 1`);
 * where `K′ < N`, it is at most the binomial `(1 − ε·W/(N·w_max))^{K′}`, which `k_prime` makes at most its `δ`, since

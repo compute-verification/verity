@@ -60,12 +60,13 @@ from typing import Any
 
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.commitments import advice as AC
+from verity.ml.windows import interface as IF
 from verity_vllm.config import option
 
 TRACED = "verity-vllm/advice-windows/traced-of-record/v0"
 I1 = "verity.core.protocols.certifier.advice"
-SCHEME = "verity-vllm/advice-windows/advice/v1"
-ROW_BITS = 256
+SCHEME = IF.ADVICE_SCHEME
+ROW_BITS = IF.ADVICE_ROW_BITS
 _DIGEST = re.compile(r"^[0-9a-f]{128}$")
 
 
@@ -119,21 +120,24 @@ def requests_of(advice: Any) -> list[dict[str, Any]]:
             for i, q in enumerate(advice.requests)]
 
 
+def named(compiler: Any) -> dict[str, str]:
+    """A compiler as the registration names it: its name and digest."""
+    return {"name": str(compiler.name), "digest": compiler.digest}
+
+
 def commitment_binding(compiler: Any) -> bytes:
-    """The advice tree's domain binding: the scheme and the registered compiler, so a root opens only under the compiler it names."""
-    return hashlib.sha512(canonical_json({"scheme": SCHEME, "compiler": {"name": str(compiler.name), "digest": compiler.digest}})).digest()
+    """The advice tree's domain binding (`interface.advice_tree_binding`): the scheme and the registered compiler, so a root
+    opens only under the compiler it names."""
+    return IF.advice_tree_binding(named(compiler))
 
 
-def advice_rows(data: bytes) -> list[bytes]:
-    """The advice's encoding as ``ROW_BITS``-bit rows, the last zero-padded: ``ceil(bits / ROW_BITS)`` rows, which its public
-    length fixes."""
-    w = ROW_BITS // 8
-    return [bytes(data[i:i + w]).ljust(w, b"\0") for i in range(0, max(len(data), 1), w)]
+advice_rows = IF.advice_rows
 
 
 def commit_advice(compiler: Any, data: bytes, salts: Sequence[bytes] | None = None) -> AC.Registration:
-    """The advice's hiding commitment (`advice_rows` under `commitment_binding`), fresh salts unless ``salts`` is given."""
-    return AC.register(advice_rows(data), ROW_BITS, commitment_binding(compiler), salts)
+    """The advice's hiding commitment (`interface.commit_advice`: `advice_rows` under `commitment_binding`), fresh salts unless
+    ``salts`` is given."""
+    return IF.commit_advice(named(compiler), data, salts)
 
 
 def of_advice(compiler: Any, data: bytes, codec: Any = None,
@@ -168,7 +172,7 @@ def report(compiler: Any, data: bytes, T: int, codec: Any = None) -> dict[str, A
 def opening(data: bytes, reg: AC.Registration) -> dict[str, Any]:
     """The advice's opening: its encoding and every row's salt, the prover's private file.  Handing it to the verifier stands in
     for the proof that the compiler's units are wired as the committed advice says (the named gap)."""
-    return {"scheme": SCHEME, "advice": bytes(data).hex(), "salts": [s.hex() for s in reg.salts]}
+    return IF.advice_opening(data, reg)
 
 
 def of_opening(compiler: Any, doc: Mapping[str, Any], codec: Any = None) -> tuple[list[dict[str, Any]], dict[str, Any]]:

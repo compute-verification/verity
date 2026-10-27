@@ -3,7 +3,7 @@ import Definitions.Pouw.RelativeSecurity
 /-!
 # Per-stage coins with sampled proofs (trusted)
 
-STEER-PROOF's route A (note:20261018T0303Z-draft-steer-proof) over PoUW's rounds (`Pouw.RelativeSecurity.RoundGame`,
+STEER-PROOF's route A over PoUW's rounds (`Pouw.RelativeSecurity.RoundGame`,
 `Paths`, `prob`): a round runs its stages in order, and stage `c`'s coin is released after stage `c`'s operands are
 committed (decision 36's order, with whole dot products for units), so what the cheater does at a stage is a function
 of the coins of that stage and the earlier ones, never a later one. After the round's last stage, `s` independent

@@ -1,9 +1,9 @@
 import Mathlib
-import Models.Accounting.Guarantees.RateAuditHorizon
+import Definitions.Accounting.Guarantees.RateAuditHorizon
 import Proofs.Accounting.RateAudit.Chain
 
 /-!
-# The causal horizon bound: the proof
+# The causal bound over the monitoring period: the proof
 
 Rounds `0, …, n − 1` each draw a sample of `s_i` items, uniform over `M`, after a set of good items `G_i` is fixed.
 `G_i` may be any function of the earlier rounds' coins, their samples among them, and of round `i`'s own other coins,
@@ -291,7 +291,7 @@ open Accounting.Rate
 open Pous (pr)
 open scoped ENNReal
 
-/-- **The causal horizon bound** (`Accounting.Guarantees.HorizonSampling`). -/
+/-- **The causal bound over the monitoring period** (`Accounting.Guarantees.HorizonSampling`). -/
 theorem HorizonSampling : Accounting.Guarantees.HorizonSampling := by
   intro n M K X _ s G hG
   exact Horizon.pr_causal_le' n M K X s G hG

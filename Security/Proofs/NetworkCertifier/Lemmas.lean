@@ -1,5 +1,5 @@
 import Definitions.NetworkCertifier
-import Models.NetworkCertifier.Assumptions
+import Definitions.NetworkCertifier.Assumptions
 import Mathlib.Data.Sym.Card
 import Mathlib.Data.Set.Card
 import Mathlib.Data.Fintype.Pi
@@ -10,7 +10,7 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 /-!
 # The network certifier's lemmas
 
-The statements that are steps of the guarantees' proofs (`Models.NetworkCertifier.Guarantees`) rather than bounds or rules
+The statements that are steps of the guarantees' proofs (`Definitions.NetworkCertifier.Guarantees`) rather than bounds or rules
 a document cites: the occupancy facts, Theorem 1(b)'s counting bound, the advice cap the clock-sync and block forms
 specialise, and the composed block statement. Each is a `def G : Prop` under the guarantees' namespace, proved by
 `NetTiming.SecurityProofs.G`, so they are audited with them and pinned by no record.

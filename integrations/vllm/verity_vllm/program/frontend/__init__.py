@@ -14,8 +14,8 @@ from verity_vllm.program.frontend.correspond import CorrespondenceReport, corres
 from verity_vllm.program.frontend.provenance import DerivationRule, RuleApplication, registry_version  # noqa: F401
 
 try:
-    import torch as _torch  # noqa: F401
-except ImportError:  # pure-IR use (no torch): the analyses above are still available
+    import torch as _torch
+except ImportError:  # pure-circuit use (no torch): the analyses above are still available
     _torch = None
 else:
     from verity_vllm.program.frontend.errors import CODES, DeadGateWarning, FrontendError  # noqa: F401

@@ -1,4 +1,4 @@
-"""cb_a.global_match/v1 -- the GLOBAL Match of a batched execution against one rooted workload Program (R14 lane gmatch, GM-01): the
+"""cb_a.global_match/v1 -- the GLOBAL Match of a batched execution against one rooted workload Program (GM-01): the
 runtime match check of record.  Glossary (Draft 3 §12): a fold 'instance' is a Call, 'attribution' is occurrence resolution, and the
 capture log (RunHeader / StepStart / SampleEnd / StepLink rows) is execution evidence.
 
@@ -42,11 +42,11 @@ and establishes (each a named check with PASS / FAIL and evidence; the verdict i
 Time unit of the chronology: the ENGINE STEP (one model forward), counted from 0 = the first forward of the run.  Ordering
 convention: programmed dependencies and step indices only -- no statement about elapsed time is made or implied.
 
-Request identity [R15 COORD ruling 2]: the Program, the workload manifest and every check name requests `r<k>` (k = manifest position).
+Request identity: the Program, the workload manifest and every check name requests `r<k>` (k = manifest position).
 The record (RunHeader / StepStart rows / tokens.json / fold meta) names them by the manifest's UUID -- the id vLLM served them
 under; the checker maps those through the global Program's `workload_request_id` table (G1 verifies the UUID set == manifest).
 
-Within-step order [R15 DECISION M-0021 -> COORD ruling M-0177]: `within_step="dag"` (DEFAULT of record from r15-int-2) compares
+Within-step order: `within_step="dag"` (the DEFAULT of record) compares
 a request's step as an order-insensitive Merkle DAG multiset with structural canonical addresses; `within_step="sequence"` (the r14-v1
 verdicts) compares it as X-09's instance SEQUENCE (spec + wiring by position). The other criterion's verdict is recorded beside the
 verdict of record (`alternate_verdict`) and never merged into it. The dag criterion uses X-09's chunked-prefill Merkle multiset
@@ -84,7 +84,9 @@ import sys
 import time
 from dataclasses import dataclass
 
+from verity_vllm import settings
 from verity_vllm.check.match import batch_decomp as BD
+from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.config import UsageError, option
 from verity_vllm.check.match import global_match_fast as GMF  # [R17 mprof] MATCH_IMPL=fast: compute-once memo of the pure per-request work; inert without the flag
 from verity_vllm.check.match import instance_sequence as SEQ
@@ -96,6 +98,7 @@ from verity_vllm.check.match.engine_steps import vu_population, within_step_orde
 from verity_vllm.check.match.match_run import MatchRun
 from verity_vllm.check.match.per_request import check_requests
 from verity_vllm.check.match.record import canonicalize_record, read_record, request_aliases
+from verity_vllm.records.global_match import SCHEMA as GM_SCHEMA
 
 COMPARATOR = "cb_a.global_match/v1"
 RULES_VERSION = "r14-v1"
@@ -124,11 +127,11 @@ def check(gp: dict, oracle_dir: str, log_path: str | None = None, tokens_path: s
           within_step: str = DEFAULT_WITHIN_STEP, record_alternate: bool = True,
           _loaded: dict | None = None, tokens_optional: bool = False) -> dict:
     """`_loaded` = {"oracle": SEQ.Prog, "components": {dir: SEQ.Prog}} decoded once by this process and shared with the X-09 run and
-    the alternate-criterion run ([R15 global, GM-01 memory]: the fold Prog is read-only after load; decoding it three times per
+    the alternate-criterion run (the fold Prog is read-only after load; decoding it three times per
     invocation -- check, X-09, alternate -- put GM-01's peak RSS at 87 GB on the B16 1024/128 record). The criteria are unchanged.
 
-    [R17 mprof] MATCH_IMPL=fast (BRIEF s5): the same body over global_match_fast's compute-once operations (`match_ops`); the outermost
-    call releases their caches when it returns or raises (rev F-r17-06), the nested alternate-criterion call keeps them."""
+    MATCH_IMPL=fast: the same body over global_match_fast's compute-once operations (`match_ops`); the outermost
+    call releases their caches when it returns or raises, the nested alternate-criterion call keeps them."""
     fast = GMF.enabled()
     ops = match_ops(fast)
     if not fast:
@@ -173,7 +176,7 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
     tokens = json.load(open(tokens_path)) if os.path.exists(tokens_path) else None
     rec = read_record(log_path)
     mark("read_record")
-    res = {"schema": "cb-a/global-match/v1", "comparator": COMPARATOR, "rules_version": RULES_VERSION,
+    res = {"schema": GM_SCHEMA, "comparator": COMPARATOR, "rules_version": RULES_VERSION,
            "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "oracle_dir": oracle_dir, "log": log_path,
            "global_program": {"schema": gp.get("schema"), "builder": gp.get("builder"), "workload": gp.get("workload"),
                               "workload_digest": gp.get("workload_digest"), "n_requests": len(gp.get("requests") or []),
@@ -196,16 +199,18 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
     G = {r["request_id"]: r for r in gp["requests"]}
 
     # ---------------------------------------------------------------- the fold (meta channel of the record) + canonical request ids
+    comp_dirs = [g["component"]["dir"] for g in gp["requests"] if (g.get("component") or {}).get("dir")]
+    comp_dirs += [d for d in _loaded.get(X09_EXTRA_DERIVED) or () if d not in comp_dirs]   # [R17-28 P1] shapes derived at Match time (--derived)
     B = _loaded.get("oracle")
     if B is None:
         B = _loaded["oracle"] = ops.load_oracle(oracle_dir, "oracle")
+        CF.fold_in_form(B, comp_dirs)
+    res["fold_form"] = getattr(B, "fold_form", None)
     mark("load_fold")
     alias = request_aliases(gp)
     # ---------------------------------------------------------------- X-09 evidence (whole run, as row_pod runs it)
     # Runs on the RAW fold, before canonicalize_record renames the fold rows' request ids to r<k> IN PLACE below: X-09 attributes
     # instances by the record's own ids (RunHeader.workload UUIDs) and now shares this process's decoded fold instead of decoding its own.
-    comp_dirs = [g["component"]["dir"] for g in gp["requests"] if (g.get("component") or {}).get("dir")]
-    comp_dirs += [d for d in _loaded.get(X09_EXTRA_DERIVED) or () if d not in comp_dirs]   # [R17-28 P1] shapes derived at Match time (--derived)
     if run_x09:
         try:
             x = BD.decompose(oracle_dir, comp_dirs, log_path, within_step=within_step, oracle=B,   # X-09 evidence under the same criterion
@@ -278,8 +283,8 @@ IMPL_DEFAULT = "fast"
 
 
 def impl_module(name: str | None = None):
-    """[R17 mfast, COORD R17-7.2] The checker implementation `MATCH_IMPL` selects: `fast` (`cb_a.global_match_fast`: the same criteria
-    with compute-once memoisation, compact operand progressions and forked per-request legs -- the Match of record since R17
+    """The checker implementation `MATCH_IMPL` selects: `fast` (`cb_a.global_match_fast`: the same criteria
+    with compute-once memoisation, compact operand progressions and forked per-request legs -- the Match of record
     (`sweep/row_pod.sh` exports it for every row) and the CLI's default) or `record` (this module's un-memoised single-process body:
     the audit checker the differential harness compares against).  Both expose `check(gp, oracle_dir, log_path, tokens_path, run_x09,
     within_step, record_alternate)` with the same result schema; the differential harness (`verity_vllm.pipeline.match_diff`) runs
@@ -289,7 +294,7 @@ def impl_module(name: str | None = None):
     [lane/vllm-v2-gm-scale] The default moved from `record` to `fast`: a `global_match.py` invoked outside `row_pod.sh` (a by-hand rerun,
     another launcher) used to get the audit checker silently -- on the B64 llama32-1b row that is 8+ h single-core at 40-50 GB against
     ~4 min on 8 cores at 13.5 GB for the same verdict.  `MATCH_IMPL=record` still selects the audit checker explicitly."""
-    name = (name if name is not None else os.environ.get(IMPL_ENV, IMPL_DEFAULT)).strip().lower() or IMPL_DEFAULT
+    name = (name if name is not None else settings.get(IMPL_ENV) or IMPL_DEFAULT).strip().lower() or IMPL_DEFAULT
     if name == "record":
         import sys
         return sys.modules[__name__]
@@ -304,11 +309,11 @@ def impl_banner(mod, gp: dict | None = None) -> str:
     component dirs were relocated -- the two facts whose absence cost the v2 acquisition lane an 8 h run (record checker by default,
     a Build's dangling component paths noticed only at load)."""
     name = getattr(mod, "IMPL_NAME", "record")
-    env = os.environ.get(IMPL_ENV)
+    env = settings.raw(IMPL_ENV)
     parts = [f"# global_match impl={name}", f"({IMPL_ENV}={env!r})" if env is not None else f"({IMPL_ENV} unset -> default {IMPL_DEFAULT})"]
     if name == "fast":
-        parts.append(f"workers={GMF.workers(1 << 30)} ({GMF.WORKERS_ENV}={os.environ.get(GMF.WORKERS_ENV) or 'default'})")
-        parts.append(f"compact_args={os.environ.get(GMF.COMPACT_ENV, '1').strip() != '0'}")
+        parts.append(f"workers={GMF.workers(1 << 30)} ({GMF.WORKERS_ENV}={settings.raw(GMF.WORKERS_ENV) or 'default'})")
+        parts.append(f"compact_args={settings.get(GMF.COMPACT_ENV)}")
     else:
         parts.append("single process, no memo (the audit checker; hours and tens of GB on a batched row -- MATCH_IMPL=fast is the Match of record)")
     reloc = ((gp or {}).get("gprog_artifact") or {}).get("relocated_components") or {}

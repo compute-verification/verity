@@ -629,6 +629,12 @@ def _build_advance(C, S, ok, cur, win, stepped, arr, bits, taken, used, nxt):
 
 
 def _build_load(C, S, prev, last, arrivals, decisions, count, steps, nxt, window):
+    checks, loaded, opened = _load_rows(C, S, prev, last, arrivals, decisions, count, steps)
+    return [and_reduce(C, checks + [_eq(C, loaded, nxt), _eq(C, opened, window)])]
+
+
+def _load_rows(C, S, prev, last, arrivals, decisions, count, steps):
+    """`load` as wires: its checks (each 1 where it holds), the state row 1 and the window row it computes."""
     Z, Wd, Ww = widths(S), width(S), window_width(S)
     p, lw, a = _split(prev, row_fields(S)), _split(last, window_fields(S)), _split(arrivals, arrival_fields(S))
     av = [e[0] for e in a["a_valid"]]
@@ -651,7 +657,7 @@ def _build_load(C, S, prev, last, arrivals, decisions, count, steps, nxt, window
               _lt(C, const_bits(S.P, Z.PW + 1), steps).inv(), _zero(C, p["steps"][0]), _lt(C, left, dh).inv()]
     loaded = _pad(_flat(p, state_fields(S)) + [ZERO] * (Z.QW + Z.DW) + list(steps), Wd)
     opened = _pad(_flat(queue, queue_fields(S)) + dec + total[:Z.DW], Ww)
-    return [and_reduce(C, checks + [_eq(C, loaded, nxt), _eq(C, opened, window)])]
+    return checks, loaded, opened
 
 
 def _build_close(C, S, row, window):

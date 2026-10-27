@@ -6,6 +6,10 @@
   "NetworkAdvisedCounts_v1{T=60,RIN=1,OWN=1}": {
    "and": 6139
   },
+  "NetworkAdvisedCounts_v1{T=60,RIN=2,OWN=1}": {
+   "and": 6259,
+   "type": "bcc16364da47ac7e8b345b7beb9b7f76b598b7ac94d1aaebb4a55a8882a0e6537132f50edc12c62a314a25666f084317d66685358abb32917eccbb38dd575c37"
+  },
   "NetworkAdvisedCounts_v1{T=8,RIN=2,OWN=0}": {
    "and": 832
   },
@@ -19,6 +23,9 @@
   },
   "NetworkAdvisedCounts_v1{T=60,RIN=1,OWN=1}": {
    "sha512": "dc2d3f127668636de87c42f05b16e830970b50c48b73128425df4b2c0d03b7e4e2b7422f4128da66ed2c7c0fc960eac419a3d7d7754b34cb5ec57691fe70ff46"
+  },
+  "NetworkAdvisedCounts_v1{T=60,RIN=2,OWN=1}": {
+   "sha512": "3d55ec35e5ec14639d2da9b91da17da0f530506447ff062c0ca550bede6ae02952720e62572441f3f812690812f1111010e0516b0d6b59270cdc7955addcdaf1"
   },
   "NetworkAdvisedCounts_v1{T=600,RIN=1,OWN=0}": {
    "sha512": "962deebbe7b54bb2737c10d704338f3f7a54d79d0ce5658c2fa60efdfa008652aedd505b6493acc374b831ebb216cdfb176d3cc55ca0f3a5ebc319c8310035c7"

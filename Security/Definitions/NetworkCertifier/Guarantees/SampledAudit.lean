@@ -10,10 +10,6 @@ at the faulty units' committed gates only, and the faulty set is in `M_δ` and m
 hypothesis is `KS` at the same deployment, the sampling claim it rests on; every condition on the run is either a
 verifier refusal (the scope, `ScopeAcc`) or a condition, inside the conclusion, that picks out which observations the
 conclusion is about (`Carries`, `Covered`).
-
-`SampledAuditAcceptedStated` reads it, so the lock records its text (and every definition it reads) under `reads`: a
-changed statement is a changed record. It leaves when a theorem proves `SampledAuditAccepted`, whose own record then holds
-the text.
 -/
 
 namespace NetTiming.Guarantees
@@ -27,16 +23,14 @@ verifier at which `Claims.Sampling.KS` holds, and every public layout `lay` and 
 
 * the faulty set is in `M_δ`;
 * the faulty set holds no unit of a class drawn `all` (the transfer-gate units and N2's head checks: error `0`);
-* some advice, holding values only at the faulty units' committed gates, makes `Accepted` by the circuit's Program
-  every observation sequence and operator that the trace's transfer gates carry with every status complete.
+* the advice whose inputs are the trace's committed values, holding values exactly at the faulty units' committed
+  gates, makes `Accepted` by the circuit's Program every observation sequence and operator that the trace's transfer gates
+  carry with every status complete.
 
 With no unit faulty, the advice holds no gate, and `Accepted` is exact. -/
 def SampledAuditAccepted : Prop :=
   ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : Stmt → Layout L S) (k : Stmt → ℕ),
     KS H D → KSAccepted H D L K S lay k
-
-/-- **The sampled audit's statement is recorded**: `SampledAuditAccepted`, equal to itself. -/
-def SampledAuditAcceptedStated : Prop := SampledAuditAccepted = SampledAuditAccepted
 
 end NetTiming.Guarantees

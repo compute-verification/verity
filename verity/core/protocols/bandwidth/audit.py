@@ -62,7 +62,7 @@ REGEN_FLOOR_NS = 2 * ROOT_CALL_NS
 """The fastest 16,448-bit root on the allowed hardware, 8 cores of one chiplet cooperating, 1,708,058 ns
 (`pous.schemes.p2.ROOT_CALL_NS` is half of it).  Rebuilding a block of `C*` from `W` takes two roots in sequence, so a
 window shorter than one cannot rebuild any block.  The fastest root measured on the RTX PRO 6000 is slower, 18.53 ms
-(floor 2.26 ms, art:f26f917e0605e2974f44a9b0f8ae7f4fe4a78b95181deaf8d8c457ce98c64ad3)."""
+(floor 2.26 ms)."""
 
 FAILURES = ("late", "malformed", "store-path", "tag-path", "tag-mismatch")
 
@@ -298,7 +298,7 @@ class ChallengerState:
     file holds is refused, so no two windows over the store share a key.  Before each record the file must be as this
     object left it.  Nothing here rewrites or truncates the file.  A state restored from a snapshot, or copied to another
     directory or host, is past what the directory can see; that the verifier keeps one state directory and never rolls
-    back or forks a state rests on its host (`trusted-nebius-host`), and neither repeats a key while the nonces are
+    back or forks a state rests on its host (`trusted-host`), and neither repeats a key while the nonces are
     fresh (PROTOCOL.md §3)."""
 
     def __init__(self, directory: str | os.PathLike, vk: VerifierKey, *,

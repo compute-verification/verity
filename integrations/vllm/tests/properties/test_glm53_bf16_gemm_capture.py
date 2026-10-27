@@ -18,8 +18,8 @@ import torch
 
 from tests.properties import glm53_bf16_gemm_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
-from verity_vllm.program.registry import bf16_gemm_check as BC
-from verity_vllm.program.registry import mla_check as MK
+from verity.ml.definitions.registry import bf16_gemm_check as BC
+from verity.ml.definitions.registry import mla_check as MK
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 DOTPROD = {"kind": "dotprod", "BS": 32, "VEC": 8}
@@ -150,7 +150,7 @@ def test_the_profiler_record_pins_grid_split_count_and_reduction() -> None:
 
 
 def test_a_trace_with_no_kernels_fails_the_launch() -> None:
-    """r20261014-082004-e35b: the scan's in-process profiler sessions left Kineto returning empty traces to all 77 later
+    """The scan's in-process profiler sessions left Kineto returning empty traces to all 77 later
     per-launch sessions, and the empty profile passed `ok` while silently dropping the served split-K override, so the
     comparisons modeled serial chains against split-K kernels.  Every GEMM launches at least one kernel: an empty trace is a
     broken profiler and fails the launch, never a quiet model downgrade."""
@@ -274,7 +274,7 @@ def test_scan_regimes_end_where_the_signature_or_the_words_change() -> None:
 
 
 def test_the_sweep_takes_one_case_per_model_class_plus_the_envelope() -> None:
-    """r20261014-082004-e35b: the box cycles through tens of kernel regimes across 256..1024 (114 on the glm53 gate), but
+    """The box cycles through tens of kernel regimes across 256..1024 (114 on the glm53 gate), but
     their words follow four models (splits 2, 3 and 4, and the serial chain).  The sweep takes each class's first M past the
     covered 256, not both sides of all 113 boundaries, plus the endpoint."""
     regimes = [{"m0": 256, "m1": 256, "split": 3}, {"m0": 257, "m1": 400, "split": 4}, {"m0": 401, "m1": 500, "split": 3},
@@ -377,7 +377,7 @@ def test_each_model_runs_its_own_gemms() -> None:
 
 def test_the_base_cases_and_their_word_counts_are_conserved() -> None:
     """The scan only adds cases: the unswept expected set and each case's compared words stay the base capture's, pinned to
-    the GO run r20261013-222550-f31c (0 of 18,734,624 words different, 7,040 dotprod words), so a collection refactor that
+    a GO run (0 of 18,734,624 words different, 7,040 dotprod words), so a collection refactor that
     drops, shrinks or re-models a previously-GO case fails here without a GPU."""
     words, dotprod = {}, {}
     for model, phase, case, M in X.cases(False, set(X.PHASES), list(X.MODELS)):
@@ -754,7 +754,7 @@ def test_the_scan_extends_the_sweep_through_main(tmp_path, monkeypatch) -> None:
 
 
 def test_the_scan_runs_in_its_own_process(tmp_path, monkeypatch) -> None:
-    """r20261014-082004-e35b: the scan's profiler sessions in the capture process left every later per-launch session an empty
+    """The scan's profiler sessions in the capture process left every later per-launch session an empty
     trace.  The scan process gets `--scan-run`, the variant flag and the same models and phases, and its scan.json comes back
     with the subprocess's exit code; a process that left no scan.json is a failed scan, never a quiet pass."""
     seen = {}

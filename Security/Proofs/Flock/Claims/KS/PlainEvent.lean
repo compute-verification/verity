@@ -10,9 +10,9 @@ is the transport of the run's coins to the live session's:
 
 * `cols_plain`: an accepted plain run's reader looks up table 0's columns at the shape and level 0 `TxNoOff` reads, in
   its live session's rep streams and its proof files.
-* `plainVerdict_of_run`: an accepting run of `V false` at SHA-512 decides, and where the record's draw is the
-  statement's `d`, with no `--public-inputs`, a run whose reader looks up no column off `C` has `plainVerdict` at its
-  live outcome and its link's root.
+* `plainVerdict_of_run`: an accepting run of `V false` at SHA-512 decides, and on a statement of draw `d` (which the
+  record's draw then is, as a value: `recordDraw_of_decide`), a run whose reader looks up no column off `C` has
+  `plainVerdict` at its live outcome and its link's root.
 -/
 
 namespace FlockDeploy.KS
@@ -65,10 +65,10 @@ theorem cols_plain (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {ins :
     List.append_nil]
 
 /-- **The deployed event gives `wrP`'s verdict**: an accepting run of `V false` at SHA-512 decides on its messages and
-coins, and where the record's draw is the statement's `d`, if the run's reader looks up no column off `C` at table 0,
-`plainVerdict` holds at the run's live outcome (`viewOf`, at any `mPts`) and its link's root: the checks refuse
-`--public-inputs` (`publicInputs_none_of_checks`), flock-verify accepts what `wrP` writes for the run (`accepts_wrP`),
-and that transcript records the run's streams and proof files (`RecordsLiveAtP`), whose columns are the reader's
+coins, and on a statement of draw `d`, if the run's reader looks up no column off `C` at table 0, `plainVerdict` holds
+at the run's live outcome (`viewOf`, at any `mPts`) and its link's root: the checks refuse `--public-inputs`
+(`publicInputs_none_of_checks`), flock-verify accepts what `wrP` writes for the run (`accepts_wrP`), and that
+transcript records the run's streams and proof files (`RecordsLiveAtP`), whose columns are the reader's
 (`cols_plain`). -/
 theorem plainVerdict_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V false).k x) → Coin} {N : ℕ} (C : Fin N → List 𝔽)
@@ -77,16 +77,17 @@ theorem plainVerdict_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x :
       act false x ((Claims.run sha512 P (V false) x ω r).msgs.map Prod.fst)
           ((List.range ((Claims.run sha512 P (V false) x ω r).msgs.map Prod.fst).length).map (Claims.coinSeq r)) =
         .decide s spec sts link c₁ mids f ∧
-      ∀ d, Exec.recordDraw f.record = s.read.draw → s.read.draw = some d →
+      ∀ d, s.read.draw = some d →
         (¬ ∃ (p : Fin N) (u : List 𝔽),
           Claims.Flock.lookCol (cols false (Claims.run sha512 P (V false) x ω r).seen 0) p.val = some u ∧ u ≠ C p) →
         plainVerdict s.read.I d C link.1.toArray (viewOf 1 mPts spec link c₁ f) := by
   obtain ⟨s, spec, sts, link, c₁, mids, f, hact, hrun⟩ := acc_decide h
-  refine ⟨s, spec, sts, link, c₁, mids, f, hact, fun d hdraw hd hno => ?_⟩
+  refine ⟨s, spec, sts, link, c₁, mids, f, hact, fun d hd hno => ?_⟩
   have hacc := run_acc_next sha512 P (V false) x ω r h
   replace hacc : ((next false x ((Claims.run sha512 P (V false) x ω r).msgs.map Prod.fst)
       ((List.range ((Claims.run sha512 P (V false) x ω r).msgs.map Prod.fst).length).map
         (Claims.coinSeq r))).eval sha512).1 = .acc := hacc
+  have hdraw := recordDraw_of_decide hact hacc
   obtain ⟨hv, hc⟩ := (next_decide_sha512 hact).1 hacc
   have hpi := publicInputs_none_of_checks hc
   simp only [Bool.false_eq_true, ite_false] at hv
@@ -97,7 +98,7 @@ theorem plainVerdict_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x :
   obtain ⟨-, -, -, htsz, hpos, -⟩ := verify_ok_tables hv
   have hJ : 1 ≤ spec.tables.size := by rw [← htsz]; exact hpos
   have hA := accepts_wrP (mPts := mPts) (fun _ : Finset (Fin 0) => d) (fun _ _ => 1) (S := ∅) (R := ()) hact hacc
-    hpi hdraw hd hJ
+    hpi hd hJ
   refine ⟨hA, rfl, ?_⟩
   intro spec' st sess sch s₀ s₁ hset' hdec' hsch hs₀ hs₁
   obtain ⟨hdr, hpr, hall⟩ := (recordsLiveJ_iff _ _ _ _).1

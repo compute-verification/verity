@@ -506,7 +506,7 @@ class ServedCompiledSource:
     def expected_modules(self) -> list[str]:
         return list(self.modules)
 
-    def extra_step_bytes(self, envelope: dict[str, Any], model: Any) -> dict[str, int]:  # noqa: ARG002
+    def extra_step_bytes(self, envelope: dict[str, Any], model: Any) -> dict[str, int]:
         """What a step adds to the committer's staging bound (`size_arena`), read from the slots the captures allocated: bytes per token
         row, the largest plan's fixed-shape tensors, and the tensor count."""
         per_token = sum(s.numel() * s.element_size() // self.max_rows for k, s in self.slots.items() if len(k) == 2) if self.max_rows else 0
@@ -529,7 +529,7 @@ class ServedCompiledSource:
         self.drained = False
         self.stats["steps"] += 1
 
-    def on_step_end(self, job: Any) -> None:  # noqa: ARG002
+    def on_step_end(self, job: Any) -> None:
         if self.step_mode is None:
             self.stats["steps_without_dispatch"] += 1
         elif self.step_mode not in GRAPH_MODES:

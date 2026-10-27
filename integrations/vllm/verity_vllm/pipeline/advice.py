@@ -12,8 +12,12 @@ declared before the run predicts.  This command writes it from what the run reco
 and refuses a run whose two records disagree (a prompt or output length, a request the trace never saw), a row whose first
 position isn't where the request's last row ended (`continuity`: no position is computed twice and none is skipped, except
 from a prefix-cache hit at first scheduling or at a resume from preemption), a finish the advice can't say (a stop string; an
-abort outside a Commit window), and a row after an abort's step.  A cache hit's KV `sources` are the runs of earlier-computed
-positions whose requests share the hit's tokens, read
+abort outside a Commit window; an abort mid-prefill, before the request's first output, since an aborted request's Program
+ends at its last kept output; an abort while it waits after a preemption, since it has no row in the step it is freed at), a
+request that arrived and never ran, and a row after an abort's step.  A request its client aborted before it was ever
+scheduled has no row and no output, so the advice drops it, exactly; the Commit record keeps it, aborted after 0 ids, and must
+hold no output for it.  A cache hit's KV `sources` are the runs of earlier-computed positions whose requests share the hit's
+tokens, read
 from the Commit record's token ids.  Each kept output's `release` bucket is the bucket of width `--tau` seconds, counted from
 the first step, in which the engine emitted it (the step's clock reading): with no certifier on the path, the earliest bucket
 its frame could be released in.  A trace without a clock takes the step index as the bucket.
@@ -25,8 +29,10 @@ the advice's length go public, as the binding a window's registration carries (`
 
     registration.json     public: the binding (the compiler's name and digest, the advice's root and ``total_bits``), the
                           registered compiler, `advice_windows.Capped` with ℓ (the cap on the advice's length its digest covers)
-                          and the compiler it wraps (``compiler``), and the bits
-                          I1 charges each egress window of `--T` buckets (``bits_by_window``)
+                          and the compiler it wraps (``compiler``), the bits
+                          I1 charges each egress window of `--T` buckets (``bits_by_window``), and with `--weights-of-record`
+                          the committer's hiding root of each weight parameter the window circuit registers, as its weights
+                          registration records it (``registered_roots``: `registered_weights`)
     private/advice.bin    the prover's: the advice, I1's canonical encoding
     private/advice.json   the same advice, I1's `to_json`
     private/opening.json  the advice's opening (`advice_windows.opening`: its encoding and every row's salt)
@@ -36,7 +42,11 @@ the advice's length go public, as the binding a window's registration carries (`
 A `verity-vllm serve-openai` run (its ``advice_trace.jsonl``, the server's scheduler step trace with each Commit window's open and
 close, and its ``requests.jsonl``, whose ``user`` names each request) gets one advice a closed Commit window (`windows_of`), each
 under ``w<k>/`` with its registration naming the window's Commit (run id and run root), listed in ``windows.json``; a window still
-open is left for a later call, and a window the advice refuses is named there.  A window's advice is `window_advice`'s: I1 v0
+open is left for a later call, and a window the advice refuses is named there.  While the server runs, a window holding a request
+with no Commit record yet is pending, not refused: the server writes a request's record at the close of the window it finishes in,
+after the closes before it, so one running on past its window's close has none until then.  A pending window and the ones after
+it are left for a later call, with no ``windows.json`` written and exit code 3; once the server has stopped with every record
+written (its ``summary.json``'s ``final``), a request with none is refused.  A window's advice is `window_advice`'s: I1 v0
 with the requests it carries across its open and close, since a window closes after ``window_steps`` steps whatever is running,
 and the requests its clients abort (the trace's outside finish, ``abort``, after the step in flight).
 The windows are read in order, each opening with the state the last one left (`Left`: where each unfinished request's next
@@ -44,6 +54,7 @@ row continues, its kept outputs and the KV it computed), so a request that runs 
 position it reached, and its record (lengths and finish) is the Commit record's.
 
     verity-vllm advice RUN [--trace FILE] [--io FILE] [--out DIR] [--window K] [--T 600] [--tau 0.1] [--compiler-name N --compiler-digest D] [--cap BITS]
+        [--weights-of-record FILE]
 """
 from __future__ import annotations
 
@@ -65,7 +76,9 @@ from . import window_advice as WA
 SCHEMA = "verity-vllm/advice-report/v3"
 REGISTRATION = "verity-vllm/advice-registration/v1"
 SERVED = "verity-vllm/advice-windows-index/v1"
-COMPILER = "verity_vllm.predict.steps.compile_steps"
+COMPILER = "verity_vllm.program.predict.steps.compile_steps"
+#: a served run's exit code while a window it reads waits on a Commit record the running server hasn't written yet
+PENDING = 3
 
 
 #: ℓ when the registration names none (`advice_windows.CAP_BITS`, `predict.steps.CAP_BITS`: 1 MiB of advice)
@@ -107,6 +120,16 @@ def finish_of(rid: str, rec: dict[str, Any] | None) -> str:
         return reason
     raise ValueError(f"request {rid} finished by {reason}{f' ({why!r})' if why is not None else ''}, which the advice can't say "
                      f"(its finishes are {', '.join(WA.FINISHES)})")
+
+
+def _aborted_before_output(rid: str) -> str:
+    return (f"request {rid} was aborted before its first output, which the advice refuses: an aborted request's Program ends at "
+            "its last kept output, and it kept none")
+
+
+def _aborted_preempted(rid: str, step: int) -> str:
+    return (f"request {rid} was aborted after step {step} while it waited after a preemption, which the advice refuses: it has no "
+            "row in the step it is freed at")
 
 
 def io_record(path: str | Path) -> dict[str, dict[str, Any]]:
@@ -200,6 +223,25 @@ class Built:
     advice: WA.Advice
     release_rule: dict[str, Any]
     left: tuple[Left, ...] = ()
+    dropped: tuple[str, ...] = ()               # the requests aborted before they were ever scheduled (`_dropped`)
+
+
+def _dropped(reqs: dict[str, _Req], outside: dict[str, dict[str, Any]], io: dict[str, dict[str, Any]] | None) -> tuple[str, ...]:
+    """The requests that arrived and were never scheduled, each one its client aborted, which the advice drops: with no row, the
+    advice of the others is the same without them.  The Commit record keeps each, aborted after 0 ids; one it says kept an
+    output, or the trace says emitted one, is refused, and so is a request that never ran and wasn't aborted."""
+    unscheduled = [rid for rid, q in reqs.items() if q.index is None]
+    gone = tuple(rid for rid in unscheduled if (outside.get(rid) or {}).get("reason") == "abort")
+    if never := [rid for rid in unscheduled if rid not in gone]:
+        raise ValueError(f"{len(never)} requests arrived and never ran: {never[:3]}")
+    for rid in gone:
+        rec = (io or {}).get(rid) or {"output_ids": [], "finish": None}
+        fin = rec.get("finish") or {"reason": "abort"}
+        if reqs[rid].emitted or rec["output_ids"] or fin.get("reason") != "abort" or fin.get("k"):
+            raise ValueError(f"request {rid} was aborted before it was ever scheduled, which the advice drops, and the trace emitted "
+                             f"{reqs[rid].emitted} tokens for it, the Commit record {len(rec['output_ids'])}, finished by "
+                             f"{fin.get('reason')}" + (f" after {fin['k']} ids" if fin.get("k") is not None else ""))
+    return gone
 
 
 def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None = None, *, tau: float = 0.1,
@@ -208,7 +250,8 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
     is held to, and the tokens a cache hit's sources are read from).  ``carry`` makes it a served Commit window's
     (`window_advice`): what the last window left (`Built.left`; ``()`` for a window that opens on an idle engine), each
     request it must carry and each it may that has a row here coming first, held to its state; and a request may end the window
-    unfinished, its record then the Commit record's.  Without it the trace is a whole session's, every request finished."""
+    unfinished, its record then the Commit record's.  Without it the trace is a whole session's, every request finished.  Either
+    way a request its client aborted before it was ever scheduled is dropped (`Built.dropped`)."""
     window = carry is not None
     ids = {row[0] for r in recs if r["kind"] == "step" for row in r["rows"]}
     carried = [x for x in carry or () if x.must or x.q.rid in ids]
@@ -273,9 +316,10 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
             reqs[rid].finish = {**f, "at": s}
         for rid, f in outside.items():
             if f["after_step"] == s and reqs[rid].finish is None:
+                if f["reason"] == "abort" and reqs[rid].preempted:
+                    raise ValueError(_aborted_preempted(rid, s))
                 reqs[rid].finish = {**f, "at": s}
-    if unscheduled := [rid for rid, q in reqs.items() if q.index is None]:
-        raise ValueError(f"{len(unscheduled)} requests arrived and never ran: {unscheduled[:3]}")
+    dropped = _dropped(reqs, outside, io)
     advice_reqs = []
     for q in order:
         was = carried[q.index].record if q.index < len(carried) else None
@@ -299,6 +343,8 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
             finish = finish_of(q.rid, (rec and rec.get("finish")) or outside.get(q.rid))
         else:
             finish = was.finish
+        if finish == "abort" and total == 0:
+            raise ValueError(_aborted_before_output(q.rid))
         if was is not None and (user, total, finish) != (was.id, was.output_len, was.finish):
             raise ValueError(f"request {q.rid} is carried in as {was}, and its Commit record says {user!r}, {total} outputs, {finish}")
         advice_reqs.append(WA.RequestAdvice(user, q.prompt_len, total, finish))
@@ -336,22 +382,44 @@ def from_trace(recs: list[dict[str, Any]], io: dict[str, dict[str, Any]] | None 
                              f"{a.requests[c.request].output_len} outputs")
         f = None if q.finish is None else {**q.finish, "at": q.finish["at"] - len(steps)}
         left.append(Left(replace(q, index=None, finish=f, made=[list(m) for m in q.made]), a.requests[c.request], c.state, c.must))
-    return Built(a, rule, tuple(left))
+    return Built(a, rule, tuple(left), dropped)
 
 
 def _sha(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
 
-def registration(compiler: Any, a: I1.Advice, root: bytes, rows: int, T: int) -> dict[str, Any]:
+def registered_weights(registration: dict[str, Any], serve: dict[str, Any] | None = None) -> dict[str, str]:
+    """What a window's registration records of the weights it served (``registered_roots``): the committer's weights
+    registration's hiding root for each weight parameter its window circuit registers (`records.weights_registration`,
+    ``weights/<label>@<words>`` -> its entry, `window_weights.weights_registration`), written once per model and key
+    before the first window's coins, the roots the verifier pins, which `interface.input_count` holds each weight's reads
+    to. Refused (ValueError) unless it is such a registration, every value a weight parameter's, and, given the run's
+    ``serve.json``, of its model at its revision."""
+    from verity_vllm.check import weights_of_record as WR
+    from verity_vllm.records.weights_registration import WeightsRegistration
+
+    r = WeightsRegistration.of(registration, "the weights registration")
+    if other := sorted(p for p in r.values if not p.startswith(f"{WR.PARAM}/")):
+        raise ValueError(f"the weights registration registers {other}, not weight parameters {WR.PARAM}/<label>@<words>")
+    if serve is not None and (r.repo, r.revision) != (serve.get("model"), serve.get("revision")):
+        raise ValueError(f"the weights registration is of {r.repo}@{r.revision}, and the run served "
+                         f"{serve.get('model')}@{serve.get('revision')}")
+    return r.roots
+
+
+def registration(compiler: Any, a: I1.Advice, root: bytes, rows: int, T: int,
+                 registered_roots: dict[str, str] | None = None) -> dict[str, Any]:
     """What goes public of the advice: the binding (the compiler, the root of the advice's hiding commitment and its length in
-    bits) and the bits I1 charges each egress window of ``T`` buckets.  Nothing of the advice itself."""
+    bits), the bits I1 charges each egress window of ``T`` buckets and, given, the root of each registered parameter
+    (``registered_roots``, `registered_weights`).  Nothing of the advice itself."""
     c = codec(a)
     return {"schema": REGISTRATION, "scheme": AW.SCHEME, "binding": AW.binding(compiler, root.hex(), int(c.total_bits(a))),
             "compiler": {"name": str(compiler.name), "digest": compiler.digest, "cap_bits": int(compiler.cap_bits),
                          "inner": {"name": str(compiler.inner.name), "digest": compiler.inner.digest}},
             "rows": rows, "row_bits": AW.ROW_BITS, "T": int(T),
-            "bits_by_window": {str(w): int(n) for w, n in sorted(c.bits_by_window(a, int(T)).items())}}
+            "bits_by_window": {str(w): int(n) for w, n in sorted(c.bits_by_window(a, int(T)).items())},
+            **({"registered_roots": dict(registered_roots)} if registered_roots else {})}
 
 
 def codec(a: Any) -> Any:
@@ -359,16 +427,17 @@ def codec(a: Any) -> Any:
     return WA if isinstance(a, WA.Advice) else I1
 
 
-def commit(compiler: Any, a: Any, T: int = 600, salts: list[bytes] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
-    """The advice (I1's, or a Commit window's) committed: its public registration (`registration`) and its private opening
-    (`advice_windows.opening`).  Advice over the compiler's ℓ (``compiler``: an `advice_windows.Capped`) is refused: the
-    compiler is total only up to it."""
+def commit(compiler: Any, a: Any, T: int = 600, salts: list[bytes] | None = None,
+           registered_roots: dict[str, str] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The advice (I1's, or a Commit window's) committed: its public registration (`registration`, with ``registered_roots``) and
+    its private opening (`advice_windows.opening`).  Advice over the compiler's ℓ (``compiler``: an `advice_windows.Capped`)
+    is refused: the compiler is total only up to it."""
     data = codec(a).encode(a)
     cap = int(compiler.cap_bits)
     if 8 * len(data) > cap:
         raise ValueError(f"the advice is {8 * len(data)} bits, over the registered cap ℓ = {cap} bits")
     reg = AW.commit_advice(compiler, data, salts)
-    return registration(compiler, a, reg.root, len(reg.rows), T), AW.opening(data, reg)
+    return registration(compiler, a, reg.root, len(reg.rows), T, registered_roots), AW.opening(data, reg)
 
 
 def windows_of(recs: list[dict[str, Any]]) -> tuple[dict[int, list[dict[str, Any]]], list[int]]:
@@ -400,9 +469,10 @@ def served(recs: list[dict[str, Any]]) -> bool:
 
 
 def write(run: str | Path, out: str | Path | None = None, *, trace: str | Path | None = None, io: str | Path | None = None,
-          T: int = 600, tau: float = 0.1, compiler: Any = None, window: int | None = None) -> dict[str, Any]:
+          T: int = 600, tau: float = 0.1, compiler: Any = None, window: int | None = None,
+          registered_roots: dict[str, str] | None = None) -> dict[str, Any]:
     """The run's advice, committed (`write_one`); a `verity-vllm serve-openai` run's, one advice a closed Commit window
-    (`write_served`)."""
+    (`write_served`); each registration with ``registered_roots``, the root of each parameter its window circuit registers."""
     run = Path(run)
     if trace is None:
         trace = next((p for p in (run / ST.SERVED, run / "step_trace.jsonl") if p.exists()), run / "step_trace.jsonl")
@@ -413,21 +483,25 @@ def write(run: str | Path, out: str | Path | None = None, *, trace: str | Path |
     compiler = compiler if compiler is not None else registered_compiler()
     out = Path(out) if out else run / "advice"
     if served(recs):
-        return write_served(run, out, recs, trace, io, T=T, tau=tau, compiler=compiler, window=window)
-    return write_one(run, out, recs, trace, io, io_record(io) if io else None, T=T, tau=tau, compiler=compiler)
+        return write_served(run, out, recs, trace, io, T=T, tau=tau, compiler=compiler, window=window,
+                            registered_roots=registered_roots)
+    return write_one(run, out, recs, trace, io, io_record(io) if io else None, T=T, tau=tau, compiler=compiler,
+                     registered_roots=registered_roots)
 
 
 def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, io: str | Path | None, *, T: int, tau: float,
-                 compiler: Any, window: int | None = None) -> dict[str, Any]:
+                 compiler: Any, window: int | None = None, registered_roots: dict[str, str] | None = None) -> dict[str, Any]:
     """A server's advice, one a closed Commit window (`windows_of`; only ``window`` when given): each under ``out/w<k>/`` as
     `write_one` writes it, its registration naming the window's Commit (its run id and run root, from windows.jsonl).  The
     windows are read in order, each opening with what the last one left (`from_trace`'s ``carry``), so ``window`` reads the
     ones before it too.  A window whose advice is refused (a finish the advice can't say, a trace the Commit record contradicts)
-    is named in ``refused``, and the others are written; the window after a refused one opens on nothing carried.
-    ``out/windows.json`` (public) lists each window's registration."""
+    is named in ``refused``, and the others are written; the window after a refused one opens on nothing carried.  Until the
+    server has `stopped`, a window holding a request with no Commit record yet is named in ``pending``, and neither it nor any
+    window after it is read.  ``out/windows.json`` (public) lists each window's registration, written only when none is pending."""
     if io is None:
         raise ValueError("a served run's advice needs its Commit record, requests.jsonl")
     io_all = io_record(io)
+    final = stopped(run)
     lines = (run / "windows.jsonl").read_text().splitlines() if (run / "windows.jsonl").exists() else []
     commits = {int(d["window"]): {"run_id": d.get("run_id"), "run_root": d.get("run_root")}
                for d in (json.loads(line) for line in lines if line.strip())}
@@ -436,12 +510,18 @@ def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, 
         raise ValueError(f"window {window} is not a closed window with steps (closed: {sorted(per)}; open: {still_open})")
     reports: dict[str, Any] = {}
     refused: dict[str, str] = {}
+    pending: dict[str, str] = {}
     carry: tuple[Left, ...] = ()
     gone: int | None = None
     for w, sub in per.items():
         if window is not None and w > window:
             break
         ids = {r["request"] for r in sub if r["kind"] == "arrive"}
+        if not final and (unrecorded := sorted(ids - set(io_all))):
+            pending[str(w if window is None else window)] = (
+                f"request {unrecorded[0]} of window {w} has no Commit record yet, and the server is still running"
+                + (f" (window {window} opens on what window {w} leaves)" if window is not None and w != window else ""))
+            break
         try:
             b = from_trace(sub, {i: q for i, q in io_all.items() if i in ids}, tau=tau, carry=carry)
         except ValueError as e:
@@ -452,30 +532,42 @@ def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, 
         carry, gone = b.left, None
         if window is None or w == window:
             reports[str(w)] = _written(run, out / f"w{w}", b, sub, trace, io, T=T, compiler=compiler,
-                                       extra={"window": w, "commit": commits.get(w)})
+                                       extra={"window": w, "commit": commits.get(w)}, registered_roots=registered_roots)
     index = {"schema": SERVED, "run": str(run), "trace": str(trace), "T": int(T),
              "windows": {w: {"registration": f"w{w}/registration.json", "root": r["registration"]["binding"]["advice"]["root"],
                              "bits": r["registration"]["binding"]["advice"]["bits"], "commit": r["registration"]["commit"]}
                          for w, r in reports.items()},
              "refused": refused, "open": still_open}
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "windows.json").write_text(json.dumps(index, indent=1) + "\n")
-    return {**index, "reports": reports}
+    if not pending:
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "windows.json").write_text(json.dumps(index, indent=1) + "\n")
+    return {**index, "pending": pending, "reports": reports}
+
+
+def stopped(run: Path) -> bool:
+    """Whether ``run``'s server has stopped with every Commit record written: its ``summary.json`` says ``final`` (one without
+    the key is from a server that wrote each window's records on its engine loop, before any summary)."""
+    try:
+        return json.loads((run / "summary.json").read_text()).get("final", True) is True
+    except (OSError, ValueError):
+        return False
 
 
 def write_one(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, io: str | Path | None, io_map: dict[str, Any] | None, *,
-              T: int, tau: float, compiler: Any, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+              T: int, tau: float, compiler: Any, extra: dict[str, Any] | None = None,
+              registered_roots: dict[str, str] | None = None) -> dict[str, Any]:
     """One advice from ``recs`` and the Commit record's requests ``io_map``, committed: ``out/registration.json`` (public, with
-    ``extra``) and ``out/private/``."""
-    return _written(run, out, from_trace(recs, io_map, tau=tau), recs, trace, io, T=T, compiler=compiler, extra=extra)
+    ``extra`` and ``registered_roots``) and ``out/private/``."""
+    return _written(run, out, from_trace(recs, io_map, tau=tau), recs, trace, io, T=T, compiler=compiler, extra=extra,
+                    registered_roots=registered_roots)
 
 
 def _written(run: Path, out: Path, b: Built, recs: list[dict[str, Any]], trace: Path, io: str | Path | None, *, T: int, compiler: Any,
-             extra: dict[str, Any] | None = None) -> dict[str, Any]:
+             extra: dict[str, Any] | None = None, registered_roots: dict[str, str] | None = None) -> dict[str, Any]:
     a = b.advice
     data = WA.encode(a)
     back = WA.decode(data)
-    public, opened = commit(compiler, a, T)
+    public, opened = commit(compiler, a, T, registered_roots=registered_roots)
     public.update(extra or {})
     private = out / "private"
     private.mkdir(parents=True, exist_ok=True)
@@ -503,7 +595,9 @@ def _written(run: Path, out: Path, b: Built, recs: list[dict[str, Any]], trace: 
                          "prefill_rows": sum(1 for r in rows if r.kind == "prefill"), "decode_rows": sum(1 for r in rows if r.kind == "decode"),
                          "preempted_rows": sum(1 for r in rows if r.preempted), "cache_hit_rows": sum(1 for r in rows if r.cache_hit),
                          "mixed_steps": sum(1 for s in a.steps if len({r.kind for r in s.rows}) > 1),
-                         "arrivals_during_decode": sum(1 for r in recs if r["kind"] == "arrive" and 0 < r["before_step"] < len(steps)),
+                         "arrivals_during_decode": sum(1 for r in recs if r["kind"] == "arrive" and 0 < r["before_step"] < len(steps)
+                                                       and r["request"] not in b.dropped),
+                         "aborted_unscheduled": len(b.dropped),
                          "finishes": {f: sum(1 for q in a.requests if q.finish == f) for f in sorted({q.finish for q in a.requests})},
                          "row_order": sorted({s["order"] for s in steps})}}
     (private / "report.json").write_text(json.dumps(report, indent=1) + "\n")
@@ -513,7 +607,8 @@ def _written(run: Path, out: Path, b: Built, recs: list[dict[str, Any]], trace: 
 @dataclass(frozen=True, kw_only=True)
 class Options:
     """Write a served run's advice (I1) from its step trace and Commit record, committed: registration.json public, the advice and
-    its opening under private/; a serve-openai run's, one a closed Commit window under w<k>/; exit 0 iff each round-trips."""
+    its opening under private/; a serve-openai run's, one a closed Commit window under w<k>/; exit 0 iff each round-trips, 3
+    (`PENDING`) while a window waits on a Commit record its running server hasn't written yet."""
     run: str = option("run", help="the run directory (step_trace.jsonl or a server's advice_trace.jsonl, and requests.jsonl or windows.jsonl)")
     trace: str | None = option("--trace", default=None, help="the step trace (default RUN/advice_trace.jsonl, else RUN/step_trace.jsonl)")
     io: str | None = option("--io", default=None, help="the Commit record's requests (default RUN/requests.jsonl or RUN/windows.jsonl)")
@@ -527,6 +622,10 @@ class Options:
                            "advice_windows.Capped over the one named, whose digest covers ℓ (default 2^23, 1 MiB)")
     T: int = option("--T", type=int, default=600, help="egress buckets per window, for the bits I1 charges each window")
     tau: float = option("--tau", type=float, default=0.1, help="the egress bucket's width in seconds, for each output's release bucket")
+    weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON",
+                                           help="the committer's weights registration (window_weights.weights_registration), "
+                                                "whose hiding root for each weight parameter each window's registration "
+                                                "records (default: none recorded)")
 
 
 def _say(rep: dict[str, Any], where: str = "") -> bool:
@@ -541,8 +640,13 @@ def _say(rep: dict[str, Any], where: str = "") -> bool:
 
 def main(a: Options) -> int:
     try:
+        roots = None
+        if a.weights_of_record:
+            serve = Path(a.run) / "serve.json"
+            roots = registered_weights(json.loads(Path(a.weights_of_record).read_text()),
+                                       json.loads(serve.read_text()) if serve.exists() else None)
         rep = write(a.run, a.out, trace=a.trace, io=a.io, T=a.T, tau=a.tau, window=a.window,
-                    compiler=registered_compiler(a.compiler_name, a.compiler_digest, a.cap))
+                    compiler=registered_compiler(a.compiler_name, a.compiler_digest, a.cap), registered_roots=roots)
     except ValueError as e:
         raise UsageError(f"{a.run}: {e}") from e
     if rep.get("schema") != SERVED:
@@ -550,6 +654,11 @@ def main(a: Options) -> int:
     ok = [_say(r, f" commit window {w}:") for w, r in rep["reports"].items()]
     for w, why in rep["refused"].items():
         print(f"[advice] commit window {w}: refused: {why}", flush=True)
-    print(f"[advice] {len(ok)} commit windows committed, {len(rep['refused'])} refused, open {rep['open']}; index "
-          f"{Path(a.out) if a.out else Path(a.run) / 'advice'}/windows.json", flush=True)
+    for w, why in rep["pending"].items():
+        print(f"[advice] commit window {w}: pending: {why}; a later call takes it", flush=True)
+    index = f"{Path(a.out) if a.out else Path(a.run) / 'advice'}/windows.json"
+    print(f"[advice] {len(ok)} commit windows committed, {len(rep['refused'])} refused, {len(rep['pending'])} pending, open "
+          f"{rep['open']}; " + ("no index until none is pending" if rep["pending"] else f"index {index}"), flush=True)
+    if rep["pending"]:
+        return PENDING if all(ok) else 1
     return 0 if ok and all(ok) else 1

@@ -26,6 +26,14 @@ def test_a_run_may_name_a_pool_of_its_own_under_the_locks_directory_and_nothing_
     assert not S.through_slot([*pool, "python3", "tools/verity/check/slot.py", "--status"])
 
 
+def test_the_refusal_names_the_pools_this_machine_has(tmp_path):
+    """27 Oct: `verity lean try --on vy-nebius-1` without `--pool` was refused, and the refusal named only slot.py by hand."""
+    (tmp_path / "proofs").write_text("p0 0-15\n")
+    why = S.refusal(tmp_path / "marker", {"proofs": str(tmp_path / "proofs"), "soundness": str(tmp_path / "soundness")})
+    assert "add `--pool proofs` to `research run` or `verity lean try`" in why
+    assert "slot.py [--by NAME] -- CMD" in S.refusal(tmp_path / "marker", {"soundness": str(tmp_path / "soundness")})
+
+
 def test_research_run_pool_wraps_the_command_in_a_named_pool_that_the_launcher_accepts(capsys):
     """INF-27/28: a lane's run on cpu-1 takes the `research` pool with one flag, not a five-layer command line."""
     c = S.in_pool("research", "compute-accounting", ["python3", "search.py", "--n", "4"])
@@ -187,12 +195,12 @@ def test_an_auditor_host_stops_every_live_run_but_the_commands_its_marker_lists(
 
 def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_no_research_run():
     """The deployed marker lists no command (the challenger runs only through vy-challenger-gate, the verifier through
-    vy-verifier-gate) and goes, with the timer that enforces it, to the two auditor hosts only, each host's gate and units to it
-    alone; the nodes' shared peers file and the cluster's description name neither host."""
+    vy-verifier-gate) and goes, with the timer that enforces it, to the auditor hosts only, each host's gate and units to it
+    alone; the nodes' shared peers file and the cluster's description name no auditor host."""
     import tomllib
     from pathlib import Path
 
-    hosts = ["vy-challenger-1", "vy-auditor-1"]
+    hosts = ["vy-challenger-1", "vy-auditor-1", "vy-auditor-2"]
     nebius = Path(S.__file__).resolve().parent
     assert (nebius / "auditor").read_text().startswith("#") and S.auditor_commands(nebius / "auditor") == []
     rows = tomllib.loads((nebius / "deploy.toml").read_text())["file"]
@@ -209,7 +217,7 @@ def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_
                                                      "/usr/local/sbin/vy-challenger-pin", "/etc/systemd/system/vy-challenger@.service",
                                                      "/etc/systemd/system/vy-certifier@.service")}
     verifier = {e["path"]: e["nodes"] for e in rows if "/pods/nebius/verifier/" in e.get("src", "")}
-    assert verifier == {p: ["vy-auditor-1"] for p in (
+    assert verifier == {p: ["vy-auditor-1", "vy-auditor-2"] for p in (
         "/usr/local/sbin/vy-verifier-gate", "/usr/local/sbin/vy-verifier-setup", "/usr/local/sbin/vy-verifier-pin",
         "/usr/local/sbin/vy-verifier-tunnel", "/etc/systemd/system/vy-verifier@.service",
         "/etc/systemd/system/vy-verifier-replay@.service", "/etc/systemd/system/vy-verifier-publish@.service",

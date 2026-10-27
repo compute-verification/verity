@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from verity_bench import breakdown, jobs, served_table
+from verity_bench import breakdown, jobs, served_table, settings
 from verity_bench.vllm import cli as vllm_cli
 from verity_bench.vllm import result
 from verity_bench.vllm.arms import resolve_arms
@@ -57,11 +57,11 @@ def _point(args: Any) -> int:
         raise ValueError(f"point {args.point!r} is not in spec {args.spec!r}")
     if item.identity != args.identity:
         raise ValueError(f"point identity changed: expected {item.identity}, invocation named {args.identity}")
-    run_dir = Path(os.environ.get("RESEARCH_RUN_DIR", ".")).resolve()
+    run_dir = Path(settings.RESEARCH_RUN_DIR).resolve()
     # A requeued (preempted) point reruns in its run directory: an earlier attempt's verdict must not outlive it.
     (run_dir / "result.json").unlink(missing_ok=True)
     spec = plan.spec
-    jobs.check_point_environment(spec, os.environ)
+    jobs.check_point_environment(spec, settings.environ())
     if spec.preset.model_digest is not None:
         found = local_checkpoint(spec.preset, spec.preset.model).model_digest
         if found != spec.preset.model_digest:
@@ -85,16 +85,17 @@ def _point(args: Any) -> int:
             "uv_lock_sha256": plan.toolchain.uv_lock_sha256,
         },
     )
-    out = Path(os.environ.get("OUT", run_dir / "out")).resolve()
+    out = Path(settings.OUT or run_dir / "out").resolve()
     out.mkdir(parents=True, exist_ok=True)
     write(doc, out / "benchmark.json")
     (out / "table.md").write_text(render(doc), encoding="utf-8")
     jobs.write_resolved(plan, out / "resolved-spec.json")
+    (out / "settings.json").write_text(json.dumps(settings.record(), indent=1, sort_keys=True) + "\n", encoding="utf-8")
     passed = all(g["passed"] for g in doc["gates"])
     envelope = {
         "schema": "research/result/v0.1",
         "kind": "verity-vllm-benchmark/v1",
-        "run_id": os.environ.get("RESEARCH_RUN_ID", "local"),
+        "run_id": settings.RESEARCH_RUN_ID,
         "workload_fingerprint": {
             "identity": item.identity,
             "resolved_spec_sha256": plan.spec_sha256,
@@ -108,7 +109,7 @@ def _point(args: Any) -> int:
         },
         "measurements": [],
         "measurement_files": ["out/benchmark.json"],
-        "artifacts": ["out/table.md", "out/resolved-spec.json"],
+        "artifacts": ["out/table.md", "out/resolved-spec.json", "out/settings.json"],
     }
     target = run_dir / "result.json"
     temporary = run_dir / f"result.json.tmp.{os.getpid()}"
@@ -200,6 +201,7 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
+        settings.validate(of_record=args.command == "_vllm-point")
         return int(args.run(args))
     except ValueError as error:
         args.command_parser.error(str(error))

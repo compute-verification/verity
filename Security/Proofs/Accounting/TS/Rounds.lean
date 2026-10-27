@@ -1,11 +1,11 @@
-import Models.Accounting.Guarantees.TS
+import Definitions.Accounting.Guarantees.TS
 import Proofs.Pouw.RelativeSecurity
 
 /-!
 # The tensor–scalar model's round lemmas
 
 The plays' tail bounds: one bet a round under (L), the deficiency against the deficient rounds, and SAMPLING's budget
-(EPS1-SPEC §2.4, §2.7; gap list G7–G9: note:20261017T0801Z-draft-lean-stmt). They are PoUW's round bounds
+(EPS1-SPEC §2.4, §2.7). They are PoUW's round bounds
 (`Pouw.RelativeSecurity`): `luck_rounds` conditions on the first round's coins (`prob_eq_expect`, `expect_prod`) as
 `expect_weight_le` does, and `budget_tail` is `prob_accepts_le` at `c = 1/Λ`.
 -/

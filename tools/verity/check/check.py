@@ -16,7 +16,8 @@
                                                             inputs when the commit changes verity/ml/flock/ against --base REF
                                                             (default origin/main), and presigned URLs for the pinned Lean
                                                             dependency bundles; with --on, in a free check slot of M
-                                                            (`tools/verity/check/slot.py`), the lock and cores the train checks take;
+                                                            (`tools/verity/check/slot.py`), the lock and cores the train checks take,
+                                                            and in the run's own clone of the shipped tree (`--cwd clone`);
                                                             --priority takes the next free slot ahead of waiting lane checks;
                                                             --agreement sends the upstream build whatever the commit changes
                                                             (a train that changes a guarantee elsewhere: `train.sh`);
@@ -28,6 +29,12 @@
                                                             refuses when no machine's slots can be read; with no slot free on
                                                             any, twins: the check on each machine it can run on (`twins`),
                                                             the first to take a slot runs; exit 75 when none ran: rerun
+    uv run python tools/verity/check/check.py --record --on M --pool NAME [--deferred STEP,...]
+                                                            the same in a slot of M's NAME pool (`research run --pool`'s pools,
+                                                            e.g. `--on vy-nebius-cpu-1 --pool research`, any lane's), not its
+                                                            merge-check slots, which on the CPU nodes take train checks alone:
+                                                            a lane's own recorded check.  Launch it from a checkout, never inside
+                                                            a `research run`, where --record is refused with the command to run
     uv run python tools/verity/check/check.py --slots [M ...]      each machine's check slots (holders, blocking and upcoming
                                                             windows), check line, and Lean audit slots and their waiters, read
                                                             over ssh by this tree's slot.py and lean_slot.py (`--status --json`);
@@ -71,12 +78,16 @@ step's status is `stopped`. `--keep-going` lets every group run to its end inste
 except after a failed preflight, which starts no group, or a step in `HALTS`: a Lean module that doesn't compile, or a guarantee whose
 record is stale, fails the audit too, so nothing still running is worth the slot; likewise a Rust crate that doesn't compile
 (`HALTS_ON`: flock-circuit-build's log says `could not compile`) fails flock-rust-tests.
+A step whose outputs (its log, the run dir's files named after it, `WATCH`'s) haven't changed for `IDLE_S`, or that is still
+running after `STEP_BUDGET_S`, is stopped the same way (SIGTERM, then SIGKILL) and fails, `hung: no output for N min` or `over
+budget`, so a hung test can't hold a check slot for a day; each suite is bounded first by its own `--timeouts`.
 The steps stay in this process's group, which a runner's timeout and a manual stop signal as a whole. Each step's record is
 appended to `steps.jsonl` in the output directory as the step ends, so a failure shows while the rest still run, and mirrored
 as a trace/v1 span line in `spans.jsonl` (`spans.py`: the run opens a root span, each step is a completed child, the run's end
 completes the root), the frozen shape the observability watcher reads.  A SIGTERM
-(`research cancel`, a runner's timeout) stops the steps the same way, and a recorded run still writes its result, validation
-`not_run`, and the pack of the passes its steps stored before it, then exits 143: a cancelled check's passes are reused.
+(`research cancel`, a runner's timeout) stops the steps the same way (a step it reaches first and kills is `stopped` too, not
+failed), and a recorded run still writes its result, validation `not_run`, and the pack of the passes its steps stored before
+it, then exits 143: a cancelled check's passes are reused.
 
 Then the independent groups run at once, the cores split between the first two (`--cores N`, default the CPUs this process may
 use). Which group a step is in, its order there, a step in another group it waits on, and whether its failure halts the run
@@ -304,13 +315,16 @@ def twins(names: list[str], docs: dict[str, dict | str], home: str, priority: bo
 #: the machines `--on auto` and `--slots` consider, in this order: the shared nodes' merge-check slots (the CPU nodes' are
 #: only=trains, and vy-nebius-1's went with its draining, 23 Oct; CI-152)
 AUTO = ("vy-nebius-2",)
+#: where a lane's own recorded check goes when it names no machine (`nested_record`): a pool any lane takes, one of
+#: research.auto's SPILL
+LANE_POOL = ("vy-nebius-cpu-1", "research")
 #: how long reading one machine's slots may take, ssh included
 SLOTS_TIMEOUT_S = 60
 #: a full check's length: `--on auto` places none on a machine whose deadline (/etc/research/deadline) is nearer than this
 FULL_CHECK_S = 9000
 #: a lane's own test run, which no landing needs (a PR lands on an eyeball review; Daniel, 24 Oct 06:05Z)
-LANE_RUN = ("`research run --on vy-nebius-cpu-K --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && "
-            "uv run tools/verity/check/suites.py --changed origin/main --quick'`")
+LANE_RUN = ('`research run --on vy-nebius-cpu-K --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
+            'uv run tools/verity/check/suites.py --changed $(git rev-parse origin/main) --quick"`')
 #: what `--slots` runs on a machine as `python3 -`, after SLOT_SRC and LEAN_SRC: both `--status --json` documents as one object,
 #: each `{"error": ...}` when it can't be read there, and the seconds left until the machine's DEADLINE (null without one)
 SLOTS_PROGRAM = '''
@@ -429,26 +443,6 @@ def placement(doc: dict, priority: bool = False) -> tuple[bool, int, str]:
     return room and free_lean > len(p["waiters"]), ahead, why
 
 
-def spare(doc: dict, priority: bool = False) -> int:
-    """How many more checks could take a slot now on a machine whose `read_slots` documents are ``doc``: its free check slots no
-    window or memory gate blocks, less the live waiters ahead (`placement`), and no more than its free Lean `check` slots less
-    their waiters; 0 where none can run.  A machine without check slots counts one.  Drive moves a train still waiting in
-    another machine's line onto it (`research.drive.free_slots`)."""
-    try:
-        room, ahead, _ = placement(doc, priority)
-    except (ValueError, KeyError, TypeError, AttributeError):
-        return 0
-    if not room:
-        return 0
-    check, lean = doc["check"], doc["lean"]
-    n = 1 if check["slots"] is None else len([s for s in check["slots"] if (priority or not s.get("trains"))
-                                                and s["holder"] is None and not s["blocked"]]) - ahead
-    if lean["pools"] is not None:
-        p = lean["pools"][next(k for k in ("check", "any") if k in lean["pools"])]
-        n = min(n, len([s for s in p["slots"] if s["holder"] is None and not s["past_n"]]) - len(p["waiters"]))
-    return max(n, 0)
-
-
 def choose(names: list[str], docs: dict[str, dict | str], priority: bool = False) -> tuple[str | None, str, list[str]]:
     """`--on auto`'s machine among ``names``, its reason, and each machine skipped with why. The first machine where a check slot
     with no window blocking it and a Lean `check` slot are free for this request (`placement`); else the one with the fewest
@@ -485,10 +479,11 @@ PLACED_S = 1800
 
 
 def _trees(doc: dict) -> set[str]:
-    """The shortened commits a machine's check slots hold or wait for."""
+    """The shortened commits a machine's check slots hold or wait for: each one's commit, else its tree's name (<root>/src/<sha>,
+    from a slot.py that records no commit)."""
     check = doc.get("check") or {}
     who = [s["holder"] for s in check.get("slots") or [] if s.get("holder")] + list(check.get("waiters") or [])
-    return {Path(h["tree"]).name[:12] for h in who if h.get("tree")}
+    return {(h.get("commit") or Path(h["tree"]).name)[:12] for h in who if h.get("commit") or h.get("tree")}
 
 
 def place(names: list[str], commit: str, priority: bool = False, read=None, path: Path | None = None,
@@ -523,7 +518,7 @@ def _who(h: dict) -> str:
     """A holder or waiter in a few words: since when, its run, its tree (a commit's, shortened) and who asked (a URL's last part)."""
     parts = [f"since {h['since']} ({h['minutes']} min)" if h.get("since") else f"pid {h['pid']}"]
     parts += [f"run {h['run']}"] if h.get("run") else []
-    tree = Path(h["tree"]).name if h.get("tree") else ""
+    tree = h.get("commit") or (Path(h["tree"]).name if h.get("tree") else "")
     parts += [f"tree {tree[:12] if re.fullmatch(r'[0-9a-f]{40}', tree) else tree}"] if tree and tree != h.get("run") else []
     parts += [f"by {h['by'].rstrip('/').rsplit('/', 1)[-1]}"] if h.get("by") else []
     return ", ".join(parts if len(parts) > 1 or not h.get("cmd") else [*parts, h["cmd"][:60]])
@@ -683,7 +678,8 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
     conformance with `verity.ml.circuits.partition` (`unit_cut_agree.py`), the audit of every Lean package, and the agreement job
     against upstream's Rust verifier on the pinned upstream build (`upstream.json`) when the run has it; without it that step
     is skipped by name.  The audit regenerates lock records (`lean_regenerates`) unless ``regenerate`` is off (`--no-regenerate`,
-    drive's after-landing run, where a record difference fails).  `research merge` requires it for a change under `verity/ml/flock/` (`tools/verity/check/tool.py`), and
+    drive's after-landing run, where a record difference fails), and inside a recorded run it bundles the module versions it
+    built for other nodes (`lean_audit.py --bundle`).  `research merge` requires it for a change under `verity/ml/flock/` (`tools/verity/check/tool.py`), and
     `--record` sends it then.  The agreement fails, sent or not, while the verifier's package requires one from outside its
     directory (`requires_outside`)."""
     lean = FLOCK_LEAN
@@ -710,13 +706,17 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
                             sys.executable, str(LEAN_JOBS / "lean_audit.py"), "--out", str(out / "lean-audit"),
                             "--cache", str(cache_dir() / "lean-audit"), "--deps", str(cache_dir() / "lean-deps"),
                             *([] if cache else ["--fresh"]), *(["--urls", str(urls)] if urls else []),
+                            *(["--bundle"] if os.environ.get("RESEARCH_RUN_ID") else []),
                             *(["--regenerate"] if regenerate and lean_regenerates() else [])], ROOT),
             ("lean-agreement", agreement, ROOT)]
 
 
 def memory_gb(root: Path = Path("/")) -> int:
     """The memory this process may use: the least of MemAvailable and what each cgroup limit over it leaves, v2 or v1 (a pod's
-    /proc/meminfo is the host's; on a VM the limits are on its own cgroup's ancestors, such as a run's session scope)."""
+/proc/meminfo is the host's; on a VM the limits are on its own cgroup's ancestors, such as a run's session scope). A v2
+cgroup's page cache (active_file and inactive_file in its memory.stat) is in its memory.current, but the kernel reclaims it at
+the limit, so it counts as left, as in slot.py's `memory_gb`: 27 Oct 00:48Z, vy-nebius-cpu-1's user slice held 336 GB of
+cache in its 691 of 700 GB, and main's after-landing lean-agreement refused to run with "0 GB"."""
     def read(p: Path) -> str | None:
         try:
             return p.read_text().strip()
@@ -731,7 +731,9 @@ def memory_gb(root: Path = Path("/")) -> int:
             for c in (d, *[p for p in d.parents if p.is_relative_to(top)]):
                 m, used = read(c / "memory.max"), read(c / "memory.current")
                 if m and m.isdigit():
-                    left.append(int(m) - int(used if used and used.isdigit() else 0))
+                    stat = dict(ln.split()[:2] for ln in (read(c / "memory.stat") or "").splitlines() if len(ln.split()) >= 2)
+                    cache = sum(int(stat[k]) for k in ("active_file", "inactive_file") if stat.get(k, "").isdigit())
+                    left.append(int(m) - int(used if used and used.isdigit() else 0) + cache)
     v1 = root / "sys/fs/cgroup/memory"
     m, used = read(v1 / "memory.limit_in_bytes"), read(v1 / "memory.usage_in_bytes")
     if m and m.isdigit() and int(m) < 1 << 60:         # v1 writes "no limit" as a number near 2^63
@@ -845,7 +847,7 @@ def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
     w = out / "flock-agreement"
     for name, src in (("upstream", upstream), ("inputs", inputs)):
         if _sha256(src) != pin[name]["sha256"]:
-            print(f"check: {src} is not the pinned {name} ({pin[name]['art']})", file=sys.stderr)
+            print(f"check: lean-agreement: error: {src} is not the pinned {name} ({pin[name]['art']})", file=sys.stderr)
             return 1
         with tarfile.open(src) as t:
             t.extractall(w / name, filter="data")
@@ -853,12 +855,14 @@ def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
     for c, h in sorted(pin["upstream"]["binaries"].items()):
         b = w / "upstream" / f"upstream-{c}"
         if not b.is_file() or _sha256(b) != h:
-            print(f"check: upstream-{c} does not match the pin", file=sys.stderr)
+            print(f"check: lean-agreement: error: upstream-{c} does not match the pin", file=sys.stderr)
             return 1
         b.chmod(0o755)
         ups += ["--upstream", f"{c}={b}"]
+    print(f"check: lean-agreement: unpacked the pinned upstream build ({len(ups) // 2} binaries) and inputs; preflight: one "
+          f"stored honest session replayed per binary", flush=True)
     if why := agreement_preflight(pin, [w / "upstream" / f"upstream-{c}" for c in sorted(pin["upstream"]["binaries"])], w):
-        print(f"check: lean-agreement cannot run here: {why}", file=sys.stderr)
+        print(f"check: lean-agreement: error: cannot run here: {why}", file=sys.stderr)
         return 1
     ci = pin.get("ci", {})
     sets = json.loads((FLOCK_VERIFIER / "vectors.json").read_text())["replayable"]["sets"]    # ci.py --jobs: sets at once
@@ -866,7 +870,11 @@ def lean_agreement(out: Path, upstream: Path, inputs: Path) -> int:
             *ups, "--work", str(w / "work"), "--inputs", str(w / "inputs"), "--jobs", str(max(1, min(cores(), len(sets)))),
             "--session-jobs", str(session_jobs()),
             "--seed", str(ci.get("seed", 20260926)), "--fuzz", str(ci.get("fuzz", 20)), "--out", str(w)]
-    return subprocess.run(argv, cwd=ROOT).returncode
+    print(f"check: lean-agreement: preflight passed; ci.py on {len(sets)} sets (it prints its results when every set ends)",
+          flush=True)
+    if rc := subprocess.run(argv, cwd=ROOT).returncode:
+        print(f"check: lean-agreement: error: ci.py exited {rc}; its verdicts are in {w}", file=sys.stderr, flush=True)
+    return rc
 
 
 def landable(base: str) -> bool:
@@ -879,6 +887,34 @@ def landable(base: str) -> bool:
     return r.returncode == 0 and r.stdout.split("\n", 1)[0].strip() == head
 
 
+def pool_env(pool: str | None, on: str | None, priority: bool) -> list[str]:
+    """The `research run` options that put a `--record --on MACHINE --pool NAME` check in a slot of MACHINE's NAME pool, the
+    pool `research run --pool NAME` takes (`slot_only.POOLS`), rather than its merge-check slots, which on the CPU nodes are
+    only=trains: slot.py reads the pool's slots file from CHECK_SLOTS.  The command stays `slot_wrap`'s around the declared one,
+    not `slot_only.in_pool`'s (`env ... nice -n 19`), so `research merge` and `gather_verdicts` read the attempt as a check of its
+    commit.  ValueError when the pool can't be taken so."""
+    if pool is None:
+        return []
+    from research.pods.nebius import slot_only
+
+    if pool not in slot_only.POOLS:
+        raise ValueError(f"{pool}: no such pool; the pools are {', '.join(sorted(slot_only.POOLS))}")
+    if not on or on == "auto" or "," in on:
+        raise ValueError(f"{pool} needs --on MACHINE, the one machine whose pool it waits in (`--on {LANE_POOL[0]} --pool "
+                         f"{LANE_POOL[1]}`); --on auto and lists choose among merge-check slots")
+    if priority:
+        raise ValueError(f"{pool} takes no --priority: that is the lander's train checks' place in the merge-check slots' line")
+    return ["--env", f"CHECK_SLOTS={slot_only.POOLS[pool]}"]
+
+
+def nested_record(argv: list[str]) -> str:
+    """The command that records ``argv``'s check from outside a `research run`: `record` launches a `research run` of its own,
+    so inside one it is refused with this.  With no --on, on `LANE_POOL`, any lane's pool."""
+    where = [] if "--on" in argv else ["--on", LANE_POOL[0], *([] if "--pool" in argv else ["--pool", LANE_POOL[1]])]
+    return shlex.join(["uv", "run", "python", "tools/verity/check/check.py", "--record", *where,
+                       *(a for a in argv if a != "--record")])
+
+
 def record(argv: list[str]) -> int:
     """`--record [--on MACHINE|auto|M1,M2] [--base REF] [--agreement]`: `research run --tool check` on this clean commit, with the
     pinned upstream build and inputs (fetched from the store) when the commit changes a path `tools/verity/check/tool.py` names against
@@ -888,14 +924,17 @@ def record(argv: list[str]) -> int:
     launches `twins` there and on the others (one `research run` each, waited on together: 0 when one passed, the exit of the
     one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it).  With
     `--deferred STEP,...` it is a `research run` without `--tool check` of those steps alone (no gate reads it), with the
-    gathered verdicts and no upstream build or Lean dependencies."""
-    on = base = None
+    gathered verdicts and no upstream build or Lean dependencies.  `--pool NAME` (with `--on MACHINE`) waits for a slot of that
+    machine's NAME pool instead of its merge-check slots (`pool_env`)."""
+    on = base = pool = None
     agreement = priority = False
     rest = []
     it = iter(argv)
     for x in it:
         if x == "--on":
             on = next(it)
+        elif x == "--pool":
+            pool = next(it)
         elif x == "--base":
             base = next(it)
         elif x == "--agreement":
@@ -904,6 +943,11 @@ def record(argv: list[str]) -> int:
             priority = True
         else:
             rest.append(x)
+    try:
+        pooled = pool_env(pool, on, priority)
+    except ValueError as e:
+        print(f"check: --pool {e}", file=sys.stderr)
+        return 2
     pair, both = None, []
     if on == "auto" or (on and "," in on):
         names = list(AUTO) if on == "auto" else on.split(",")
@@ -947,9 +991,11 @@ def record(argv: list[str]) -> int:
     need = [s for s, rule in tool.CHECK.merge_requires.items() if rule_touches(rule, changed)] + ["lean-agreement"] * agreement
     if combining or parts is not None:                 # a shard gets what its own steps read; a combine runs none
         need = [s for s in need if parts is not None and s in parts]
-    # a post-landing run is no check of the commit: recorded without the tool, so `research merge` never reads it
+    # a post-landing run is no check of the commit: recorded without the tool, so `research merge` never reads it.  On a machine
+    # every run of a commit shares the shipped tree <root>/src/<sha>, and two checks' Lake builds there broke each other's .lake
+    # (CI-170, 25 Oct: Flock/RecSparse.olean missing), so each runs in its own clone of it
     cmd = [sys.executable, "-m", "research", "run", *(["--tool", "check"] if deferred is None else []), "--project", "verity",
-           "--cwd", "source", *(x for p in PACK_FILES for x in ("--declared-output", p))]
+           "--cwd", "clone" if on else "source", *(x for p in PACK_FILES for x in ("--declared-output", p)), *pooled]
     env = dict(os.environ)
     if "lean-agreement" in need:
         from research.store.local import LocalStore
@@ -1063,8 +1109,8 @@ def gathered_packs(d: Path, store, limit: int = GATHER) -> list[tuple[str, Path]
     (`gather_verdicts`); one it refuses is passed over by name.  The store's attempts are refreshed first when it has a remote."""
     if store.remote is not None:
         store.refresh(attempts_only=True)
-    rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND state IN ('done', 'failed', 'cancelled') ORDER BY julianday(start_utc) + COALESCE(wall_s, 0) / 86400.0 DESC LIMIT ?",
-                           (4 * limit,))
+    rows = store.index.sql(f"SELECT id FROM attempts WHERE {COMMON.RECORDED_CHECKS} AND state IN ('done', 'failed', 'cancelled') "
+                           "ORDER BY julianday(start_utc) + COALESCE(wall_s, 0) / 86400.0 DESC LIMIT ?", (4 * limit,))
     packs = []
     for (rid,) in rows:
         if (pack := attempt_pack(store, rid, d)) is None:
@@ -1146,7 +1192,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     with_cc = only is None or "circuit-check" in names
     # pytest and lean-suites run at once, each with this share: what circuit-check beside them both leaves, halved
     tests_gb = None if slot_gb is None else (slot_gb - cc_mem_gb(slot_gb, beside) if with_cc else slot_gb) // 2
-    tail = ["--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
+    tail = ["--timeouts", "--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
             *(["--run", os.environ["RESEARCH_RUN_ID"]] if os.environ.get("RESEARCH_RUN_ID") else [])]
     lean = lean_steps(out, cache, urls, regenerate)
     after_lean: list[str] = []
@@ -1526,6 +1572,67 @@ def _kill_after_grace(p: subprocess.Popen) -> None:
         _signal_tree(p.pid, signal.SIGKILL)
 
 
+#: a running step none of whose outputs (`outputs`) has changed for this long is hung. pytest sat 23-24 h on one hung test after
+#: lean-suites failed, holding its train slot, and circuit-check beside it its share of memory (r20261025-021824-ba9f,
+#: r20261025-023312-fa65); a passing step's longest quiet stretch is about an hour (circuit-check's plan before its first target,
+#: one 35-minute target, a cold Lean package's build)
+IDLE_S = 3 * 3600
+#: and one still running after this long is over its budget, whatever it writes (the longest steps passed in 3-4 h)
+STEP_BUDGET_S = 12 * 3600
+#: how often a running step's outputs are looked at
+WATCH_EVERY_S = 60
+#: where a step writes as it runs besides the run dir's files named after it: the suites' own logs
+WATCH = {"pytest": ("suites",), "lean-suites": ("suites",)}
+#: the clock `watch` reads (a test injects one)
+CLOCK = time.monotonic
+
+
+def _exit_within(p: subprocess.Popen, seconds: float) -> int | None:
+    try:
+        return p.wait(timeout=seconds)
+    except subprocess.TimeoutExpired:
+        return None
+
+
+#: `watch`'s wait for a step's exit code, None while it runs on (a test injects one)
+WAIT = _exit_within
+
+
+def outputs(out: Path, name: str) -> tuple[int, int, int]:
+    """What step ``name`` has written so far, as (files, bytes, newest mtime): the run dir's files and directories named after it
+    (its log, circuit-check's progress, lean-audit's build logs), and those `WATCH` names for it."""
+    roots = [*out.glob(f"{name}*"), *(out / d for d in WATCH.get(name, ()))]
+    sizes, newest = [], 0
+    for root in roots:
+        for f in [root, *(root.rglob("*") if root.is_dir() else ())]:
+            try:
+                st = f.stat()
+            except OSError:
+                continue
+            sizes.append(st.st_size)
+            newest = max(newest, st.st_mtime_ns)
+    return len(sizes), sum(sizes), newest
+
+
+def watch(name: str, p: subprocess.Popen, out: Path) -> tuple[int, str | None]:
+    """``p``'s exit code, and why it was stopped: a step quiet for `IDLE_S` or running past `STEP_BUDGET_S` gets SIGTERM (suites.py
+    then kills its suites' groups and writes what it has), what is left of it SIGKILL after `STOP_GRACE_S`."""
+    start = last = CLOCK()
+    seen = outputs(out, name)
+    while (rc := WAIT(p, WATCH_EVERY_S)) is None:
+        now = CLOCK()
+        if (o := outputs(out, name)) != seen:
+            seen, last = o, now
+        why = (f"hung: no output for {(now - last) / 60:.0f} min" if now - last >= IDLE_S
+               else f"over budget: still running after {(now - start) / 3600:.1f} h" if now - start >= STEP_BUDGET_S else None)
+        if why:
+            print(f"check: {name}: {why}; stopping its processes", flush=True)
+            _signal_tree(p.pid, signal.SIGTERM)
+            _kill_after_grace(p)
+            return p.wait(), why
+    return rc, None
+
+
 #: the steps whose failure stops the run even under --keep-going (`halts` in ci.toml)
 HALTS = frozenset(j.name for j in JOBS if j.halts)
 #: ... and those whose failure does when their log has this text (`halts_on`); without it (a failed clone or toolchain download)
@@ -1757,9 +1864,16 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
     else:
         with open(log, "wb") as f:
             p = steps.start(name, argv, cwd, e, f)
-            rc = p.wait() if p is not None else None
+            rc, hung = watch(name, p, out) if p is not None else (None, None)
         if rc is None:
             rec = {"step": name, "status": "stopped", "detail": f"not started: {steps.why}"}
+        elif hung:
+            rec = {"step": name, "status": "failed", "rc": rc, "log": log.name, "detail": hung}
+        elif rc == -signal.SIGTERM:
+            # a cancel (`research cancel`) signals the run's whole process group, so a step can die of it before this check's
+            # handler marks it stopped: it found nothing (lean-agreement "failed" with an empty log, r20261026-062546-11fc)
+            rec = {"step": name, "status": "stopped", "rc": rc, "log": log.name,
+                   "detail": "stopped: killed by a SIGTERM this check did not send (a cancel of the run)"}
         elif rc == 0 and name == "lean-audit" and (why := lean_fast(out)):
             print(f"check: {name}: {why}", flush=True)
             rec = {"step": name, "status": "failed", "rc": rc, "log": log.name, "detail": why}
@@ -1786,7 +1900,7 @@ def _step(name: str, argv: list[str] | str, cwd: Path, out: Path, cache: bool, s
 
 #: vLLM's C++ twin models, compiled on first use: built once before the groups start, so that no step compiles them while
 #: another loads them (a check that compiles mid-run is untraceable, and circuit-check stores none of its results)
-PREBUILD = ("try:\n    from verity_vllm.program.kernels import twins\nexcept ImportError:\n    twins = None\n"
+PREBUILD = ("try:\n    from verity.ml.definitions.numerics import twins\nexcept ImportError:\n    twins = None\n"
             "if twins:\n    twins.preload()\n")
 
 
@@ -1974,8 +2088,10 @@ def main(argv: list[str]) -> int:
     if argv[:1] == ["--plan"]:
         return _load("plan").main(argv[1:], sys.modules[__name__])
     if "--record" in argv:
-        if os.environ.get("RESEARCH_RUN_ID"):
-            print("check: --record inside a recorded run", file=sys.stderr)
+        if rid := os.environ.get("RESEARCH_RUN_ID"):
+            print(f"check: --record inside a recorded run ({rid}): it launches its own `research run`, which places the check "
+                  f"and records it as an Attempt of the clean commit, so launch it from your checkout instead, outside `research "
+                  f"run` (the launch is light; an agent VM runs it): `{nested_record(argv)}`", file=sys.stderr)
             return 2
         return record([a for a in argv if a != "--record"])
     if os.environ.get("RESEARCH_RUN_ID") and os.environ.get("VERITY_SKIP_STORE") == "1":

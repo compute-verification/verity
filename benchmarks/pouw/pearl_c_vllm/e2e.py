@@ -4,10 +4,10 @@ on the device, timed against stock vLLM on the same card at the panel's two shap
   python benchmarks/pouw/pearl_c_vllm/e2e.py --model DIR --kernel benchmarks/pouw/pearl_c_sm120 --cubin SHIP/pearl_c_sm120.cubin \\
       --out RUN_DIR/e2e.json [--retain DIR] [--reps 3]
 
-The run (research store ``docs/pouw/mvp-e2e.md``, "RTX PRO 6000"):
+The run:
 - **Model:** Llama-3.1-8B-Instruct, TP 1, eager, prefix caching off.  Every linear is in the kernels' domain: k is 4,096 or
   14,336, and n is 6,144, 4,096 or 28,672.
-- **Two engines stay resident, each in its own process on the one GPU** (the root's ruling, 12:11Z):
+- **Two engines stay resident, each in its own process on the one GPU:**
   - ``base``: stock vLLM ``quantization="fp8"``, the baseline the panel carries;
   - ``arm``: the BF16 model with every LinearBase apply wrapped.  Per rep the wrapper is off (``bf16``, stock vLLM) or runs
     the `PearlCDeviceRun` without hashing (``pearlc-nohash``) or with it (``pearlc``).
@@ -30,8 +30,8 @@ The run (research store ``docs/pouw/mvp-e2e.md``, "RTX PRO 6000"):
   in the arm, each a retained pass on poisoned buffers, whose commitment must equal its timed pass's.  Then the negative
   control: one decode prompt as a retained pass writing none of the commitment (`CONTROL_OMITS`).  The three manifests go to
   `verify_run.py` after the window: the first two must be replay-verified (development shortcut; the protocol's check is
-  a ZK proof, PROTOCOL.md) and the control rejected (the panel's rule of 11:50Z).
-- **The panel's shapes** (the coordinator, 11:50Z): `SHAPES`, under ``pearl-c-sm120`` v1-h3; `panel_rows.py` writes the rows.
+  a ZK proof, PROTOCOL.md) and the control rejected (the panel's rule).
+- **The panel's shapes:** `SHAPES`, under ``pearl-c-sm120`` v1-h3; `panel_rows.py` writes the rows.
 
 ``--whole-step`` (with ``--graphs``) builds the arm engine with vLLM's FULL decode graphs (no compile, the decode batch's
 size only, or ``--capture``'s sizes), and each Pearl-C arm's decode forward is captured whole with its calls' graph steps inside
@@ -82,8 +82,8 @@ GROUP = {"fp8": "base", "fp8-graphs": "base-graphs", "bf16": "arm", "pearlc-noha
 #: ``--statement``: ``pearlc`` with each decode forward's rows committed in the ZK statement's format too, once after the
 #: forward (served_zk/statement.py), timed after each ``pearlc`` rep
 ZK = ("pearlc-zk",)
-#: ``--fp8-graphs``: stock vLLM FP8 as vLLM serves it, compiled with its CUDA graphs (the decode headline's baseline, the
-#: 19:58Z ruling), in an engine of its own beside the eager one, timed after each eager ``fp8`` rep
+#: ``--fp8-graphs``: stock vLLM FP8 as vLLM serves it, compiled with its CUDA graphs (the decode headline's baseline),
+#: in an engine of its own beside the eager one, timed after each eager ``fp8`` rep
 GRAPHED = ("fp8-graphs",)
 #: the graphed engine's CUDA-graph batch sizes at the default decode batch; `configure` keeps those under ``--batch`` and adds it
 CAPTURE_32 = [1, 2, 4, 8, 16, 24, 32]
@@ -104,7 +104,7 @@ CONTROL_OMITS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "hash_l
 CONTROLS = {"control": CONTROL_OMITS, "control-leaves": frozenset({"hash_leaf"})}
 #: ``--smoke --retain``'s served requests, each one chat prompt (vllm_bench's PROMPTS, by index) as a retained pass: the
 #: request whose calls a ZK proof opens (served_zk), and another request, whose commitment is that proof's foreign control.
-#: Each is served at the fixed length SERVED_TOKENS under ignore_eos (Daniel, 19 Oct, ASK-39), and how it was served goes
+#: Each is served at the fixed length SERVED_TOKENS under ignore_eos, and how it was served goes
 #: beside its pass as SERVED_RECORD (``{"ignore_eos", "max_tokens", "served"}``), which served_zk's committer registers
 SERVED, SERVED_TOKENS = {"request": 0, "other": 1}, 4
 SERVED_RECORD = "served.json"
@@ -155,7 +155,7 @@ def pass_capacity(tile: int, ns: list[int]) -> tuple[int, int]:
     and at least the device run's defaults: the prompts' prefill in chunks of `PREFILL` tokens, then 1 + `STEPS` forwards of the
     batch, each forward's rows padded to `ROW_ALIGN` and its tiles to whole tile rows, with as many forwards again for
     vLLM's mixed prefill-and-decode steps.  Every linear (`ns`, their n) runs once per forward."""
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
     cdiv = lambda a, b: -(-a // b)  # noqa: E731
     prompt_rows, forwards = BATCH * PROMPT, 2 * (cdiv(BATCH * PROMPT, PREFILL) + 1 + STEPS)
     tile_rows = cdiv(prompt_rows, tile) + forwards * cdiv(BATCH, tile)
@@ -189,15 +189,15 @@ def engine(args, group: str):
 
 
 def install(model, args, coins):
-    """Every LinearBase layer's apply, found by type (`verity_vllm.linear.vllm_site`), through one `Stack` whose executor is a
+    """Every LinearBase layer's apply, found by type (`verity_vllm.protocols.linear.vllm_site`), through one `Stack` whose executor is a
     `PearlCDeviceRun` over the layers' own weights, attached through `engine.hooks`.  The epoch's salt is `coins`' salt coin,
     asked for once the weights are committed (`Coins`).  Returns the run, the weights by id and the stack; the stack starts
     inactive (vLLM's own apply), and `arm_of` gives each mode's arm."""
     from verity.core.protocols.pouw.audit import weights_root
     from verity_vllm.engine.hooks import Hooks
-    from verity_vllm.linear import vllm_site
-    from verity_vllm.linear.api import Stack
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.linear import vllm_site
+    from verity_vllm.protocols.linear.api import Stack
+    from verity_vllm.protocols.pouw import pearl_c as PPD
 
     sites = vllm_site.discover(model)
     weights = {site.weight_id: layer.weight.data for site, layer in sites}
@@ -233,17 +233,17 @@ def install(model, args, coins):
 def whole_step(llm, run, stack):
     """``--whole-step``: Pearl-C's decode forwards replayed as vLLM's own graphs (`pouw_pearl_c_whole.WholeStep`), on the
     engine's in-process model runner."""
-    from verity_vllm.engine.engine_profile import get_model_runner
+    from verity_vllm.engine import handle
     from verity_vllm.engine.hooks import Hooks
-    from verity_vllm.protocol_options.pouw_pearl_c_whole import WholeStep
-    return WholeStep(run, stack, get_model_runner(llm), Hooks(tag=f"{run.entry}:whole-step"))
+    from verity_vllm.protocols.pouw.pearl_c.whole import WholeStep
+    return WholeStep(run, stack, handle.model_runner(llm), Hooks(tag=f"{run.entry}:whole-step"))
 
 
 def arm_of(mode: str, run, args):
     """The arm engine's arm for `mode`: ``bf16`` is vLLM's own apply with the stack attached (so the wrapper's cost is inside
     the baseline), ``pearlc-nohash`` and ``pearlc`` the run without and with hashing, under the run's schedule, and
     ``pearlc-zk`` ``pearlc`` with its statement enabled (``--statement``)."""
-    from verity_vllm.linear.api import Arm, PassSpec
+    from verity_vllm.protocols.linear.api import Arm, PassSpec
     if getattr(run, "statement", None) is not None:
         run.statement.enabled = mode in ZK
     if mode not in PEARLC:
@@ -421,7 +421,7 @@ def graphs_check(run, weights: dict) -> list[dict]:
     fresh pass on poisoned outputs, must give the same A roots, tile root, screen flags and y, bit for bit.  And the screen
     of an m = 8,192 call read from its BF16 x must give the flags it gives from A's FP32 words."""
     import torch
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
     out, seen = [], set()
     gen = torch.Generator(device=next(iter(weights.values())).device).manual_seed(20261001)
     for w, W in weights.items():
@@ -465,7 +465,7 @@ def screen_check(run, weights: dict) -> dict:
     entries, one over the noise floor's bound, the rest ordinary) whose flags, from the run's screen, must be the torch
     screen's on the same rows and the kernel's own α and ρ."""
     import torch
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
     w, W = next(iter(weights.items()))
     k = W.shape[1]
     gen = torch.Generator(device=W.device).manual_seed(20260931)
@@ -583,7 +583,7 @@ def serve(conn, args, group: str, coins: dict) -> None:
             elif op == "ppl":
                 conn.send(prompt_logprobs(llm, SamplingParams, timed, cmd["windows"]))
             elif op == "verify":
-                from verity_vllm.linear.api import Control
+                from verity_vllm.protocols.linear.api import Control
                 stack.activate(arm_of("pearlc", run, args))
                 out = {}
                 if whole is not None:
@@ -1015,7 +1015,7 @@ def agree(a, b) -> float:
 
 def main() -> None:
     from verity.core.protocols.pouw.serving import SCHEDULES
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--model", required=True)
     ap.add_argument("--revision")

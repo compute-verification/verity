@@ -1,5 +1,5 @@
 import Mathlib
-import Models.Accounting.Guarantees.RateAuditDeployed
+import Definitions.Accounting.Guarantees.RateAuditDeployed
 import Proofs.Accounting.RateAudit.Session
 
 /-!
@@ -16,7 +16,7 @@ returns the same receipts with the same tier reads, sends what the device sends,
 
 **A window and a session.** A deployed window maps to a `GrindChain` of the simulated devices, whose union over the
 `G` candidates (`GrindChain.pr_unpaid_le`) and `RatePaidNamedRO` bound each window's unpaid words; the session's pooled
-draws are the causal horizon (`Horizon.pr_causal_le'`, `Horizon.pr_floor_le`), as in `Session.lean`.
+draws are causal over the monitoring period (`Horizon.pr_causal_le'`, `Horizon.pr_floor_le`), as in `Session.lean`.
 
 **The readings.** `K = ⌊(1 − d̄)·n·P·N⌋` and `K_w = ⌊(1 − d_w)·P·N⌋` turn the counts into the fractions of `γ`.
 -/
@@ -452,9 +452,9 @@ theorem pr_window_le (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n
     rw [hη]
   simpa [e, hω, hc] using hy
 
-/-- A session's draws over one store as a causal family of the horizon (`Horizon.Causal`): any event of the openings
-and correct receipts that the family's own bound covers has at most that bound, on any store `store ω` drawn before
-the session's coins. -/
+/-- A session's draws over one store as a causal family over the monitoring period (`Horizon.Causal`): any event of the
+openings and correct receipts that the family's own bound covers has at most that bound, on any store `store ω` drawn
+before the session's coins. -/
 theorem pr_draws_map_of_causal {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
     (A : DeployedSession n P N b h ρ S L q r s d G) (Ev : Store N b →
       (Fin n → WindowCoins P N b h ρ r s d) → Prop) (B : ℝ≥0∞)
@@ -506,8 +506,8 @@ theorem pr_draws_of_causal (A : DeployedSession n P N b h ρ S L q r s d G) (Ev 
     pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) => Ev x.1 x.2) ≤ B :=
   pr_draws_map_of_causal id A Ev B hB
 
-/-- **A session's pooled draws over the horizon**: every window's openings land on correct receipts while the session
-holds at most `K`. -/
+/-- **A session's pooled draws over the monitoring period**: every window's openings land on correct receipts while the
+session holds at most `K`. -/
 theorem pr_draws_horizon_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
     (A : DeployedSession n P N b h ρ S L q r s d G) (K : ℕ) :
     pr (fun x : Ω × (Fin n → WindowCoins P N b h ρ r s d) =>
@@ -696,7 +696,7 @@ theorem div_le_ofReal {a c : ℕ} (hc : 0 < c) {t : ℝ} (h : (a : ℝ) ≤ t * 
   rw [← ENNReal.ofReal_natCast a, ← ENNReal.ofReal_natCast c, ← ENNReal.ofReal_div_of_pos hc']
   exact ENNReal.ofReal_le_ofReal ((div_le_iff₀ hc').2 h)
 
-/-- The horizon's draw term at `K = ⌊(1 − d̄)·M⌋`: at most `(1 − d̄)^e`. -/
+/-- The monitoring period's draw term at `K = ⌊(1 − d̄)·M⌋`: at most `(1 − d̄)^e`. -/
 theorem horizon_le (dbar : ℝ) (M e : ℕ) (hM : 0 < M) :
     ((⌊(1 - dbar) * M⌋₊ : ℝ≥0∞) / M) ^ e ≤ ENNReal.ofReal (1 - dbar) ^ e := by
   refine pow_le_pow_left₀ zero_le ?_ e
@@ -751,7 +751,7 @@ theorem ofReal_pow_le {x : ℝ} {m : ℕ} (hx : 0 ≤ x) (h : x ^ m ≤ 1 / 2 ^ 
   rw [e]
   exact ENNReal.ofReal_le_ofReal h
 
-/-- The horizon's term at the deployed draw: `(1 − 0.0015)^(2773·n) ≤ 2^-40` from `n = 7`. -/
+/-- The monitoring period's term at the deployed draw: `(1 − 0.0015)^(2773·n) ≤ 2^-40` from `n = 7`. -/
 theorem horizon_deployed (n : ℕ) (hn : 7 ≤ n) : ENNReal.ofReal (1 - 0.0015) ^ (2773 * n) ≤ 1 / 2 ^ 40 := by
   refine ofReal_pow_le (by norm_num) ((one_sub_pow_le 0.0015 _ (by norm_num)).trans (exp_neg_le _ ?_))
   have : (7 : ℝ) ≤ n := by exact_mod_cast hn

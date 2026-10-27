@@ -4,7 +4,7 @@ import Mathlib.Data.Finset.Union
 /-!
 # The cover theorem's partial-sum tightening: the vocabulary
 
-The fan-out bounds (`Models.Nci.Guarantees.CoverFanOut`) charge a block per value it reads, but they count its products
+The fan-out bounds (`Definitions.Nci.Guarantees.CoverFanOut`) charge a block per value it reads, but they count its products
 as a rectangle of tokens and parameters. A matrix multiplication's products are a cube: each is a triple of an output
 row `o`, an input column `i` and a token `t`, and its three pair-shadows are its weight `(o, i)`, its activation (the
 source `(i, t)`) and its output entry `(o, t)`. By Loomis–Whitney a block's products number at most

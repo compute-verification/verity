@@ -29,7 +29,7 @@ from types import ModuleType, SimpleNamespace
 import numpy as np
 import pytest
 
-from verity_vllm.commit import serving_rows as CS
+from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.tp import serving_rows as SRT
 from verity_vllm.pipeline.tp import run_root as RT
@@ -73,7 +73,7 @@ class _LLM:
 def _tp_commit(tmp_path: Path, monkeypatch, write) -> tuple[list[str], Path]:
     """`tp.commit.main` with ``--serving-rows`` over `_LLM`, each rank's window `write`'s; -> the events and the request's dir."""
     pytest.importorskip("torch")
-    from verity_vllm import protocol_options as PO
+    from verity_vllm import protocols as PO
     from verity_vllm.commit import challenge, partition
     from verity_vllm.engine import engine_profile as prof
     from verity_vllm.engine import vllm_adapter as va

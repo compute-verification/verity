@@ -1,4 +1,4 @@
-import Models.Pouw.Assumptions.PearlC.HiddenTile
+import Definitions.Pouw.Assumptions.PearlC.HiddenTile
 import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
 import Proofs.Pouw.PearlC.TTOutW1
 import Proofs.Core.Game.Prob

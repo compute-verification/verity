@@ -5,8 +5,8 @@
 # --store-read).
 # PERIOD and PIN are the audit's period and challenger key, COMMIT the verifier run's recorded commit. Through the
 # lane's gate key it reads the ledger (`ledger`), a head beside each session's, and the challenger host's pins log
-# (`pins`, RT4-INT-40). A gate that refuses `pins` serves no log: then no session is pinned, and the line credits
-# zero. It fetches origin/main itself and writes its first-parent history ($OUT/main.txt, `--main`, CMP-74): a pin off
+# (`pins`). A gate that refuses `pins` serves no log: then no session is pinned, and the line credits
+# zero. It fetches origin/main itself and writes its first-parent history ($OUT/main.txt, `--main`): a pin off
 # that line, or no list when the fetch fails, likewise credits zero. Writes $OUT/auditor_line.json and $OUT/credit.md,
 # each session's checks and the line, which the Lean verifier computes (`line_by` lean: auditor_line.py builds
 # remote-audit-verifier, so lake must be on the PATH, and refuses the line where line.py's differs). RUN may instead be
@@ -26,12 +26,19 @@ trap 'rm -rf "$S"' EXIT
 cp -a "${RUN:?}/out" "$S/" && chmod -R u+w "$S"
 [ ! -f "$RUN/request.json" ] || cp "$RUN/request.json" "$S/"
 : > "$OUT/fetch.log"
-if [ -f "$RUN/run-files.evicted.json" ]; then
+# the eviction record is RUN's own, or its run's when RUN is a host dir inside one (a fire's out/host/V), with paths
+# under that run's dir
+R=$(cd "$RUN" && pwd)
+EV=$R
+until [ -f "$EV/run-files.evicted.json" ] || [ -f "$EV/job.json" ] || [ "$EV" = / ]; do EV=$(dirname "$EV"); done
+if [ -f "$EV/run-files.evicted.json" ]; then
+  P=${R#"$EV"}; P=${P#/}; P=${P:+$P/}
   art=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['artifact'])" \
-    "$RUN/run-files.evicted.json")
-  uv run research data fetch "$art" --to "$S" --path 'out/verifier.json' --path 'out/challenger/*' \
+    "$EV/run-files.evicted.json")
+  uv run research data fetch "$art" --to "$S/restore" --path "${P}out/verifier.json" --path "${P}out/challenger/*" \
     > "$OUT/restore.log" 2>&1
-  echo "restore $art rc $?" >> "$OUT/fetch.log"
+  echo "restore $art ${P:-./} rc $?" >> "$OUT/fetch.log"
+  [ ! -d "$S/restore/${P}out" ] || cp -a "$S/restore/${P}out/." "$S/out/"
 fi
 gate() { ssh -o BatchMode=yes -o IdentitiesOnly=yes -i "$KEY" "$GATE" "$@"; }
 gate ledger > "$OUT/ledger.jsonl"

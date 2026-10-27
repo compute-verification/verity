@@ -12,6 +12,7 @@ import Proofs.Flock.SessionLoop.FinRepView
 import Proofs.Flock.SessionLoop.FinRepXs
 import Proofs.Flock.SessionLoop.FinRounds
 import Proofs.Flock.SessionLoop.FinHmkLive
+import Proofs.Flock.SessionLoop.FinRepL0
 import Proofs.Flock.SessionLoop.FinRepRows
 import Proofs.Flock.SessionLoop.FinRepTau
 import Proofs.Flock.SessionLoop.FinL0Vals
@@ -35,10 +36,11 @@ import Proofs.Flock.SessionLoop.FinPrevFw
 import Proofs.Flock.SessionLoop.FinRepMsgsFw
 import Proofs.Flock.SessionLoop.FinRepLanesFw
 import Proofs.Flock.SessionLoop.FinishIsRet
+import Proofs.Flock.SessionLoop.FinishIsLoop
 import Proofs.Flock.SessionLoop.FinRepFinal
 import Proofs.Flock.SessionLoop.FinRepOpen
 import Proofs.Flock.SessionLoop.FinRepTarget
-import Proofs.Flock.SessionLoop.FinRepL0
+import Proofs.Flock.SessionLoop.FinRepRestart
 
 /-!
 # Proof of C-Flock's zero knowledge at the session loop's own frames

@@ -1,4 +1,4 @@
-import Models.Pous.Guarantees
+import Definitions.Pous.Guarantees
 
 /-!
 # PoUS's lemmas, stated
@@ -8,7 +8,7 @@ pebbling and number theory, numeric certificates, the continuous audit's complet
 refuted N10 (`InvExPostFactoTwoLayer`) beside its refutation, and Track A's `M1Meets`, a `Meets` in model M1 that
 is no claim about PoUS's scheme. Each is proved as `Pous.SecurityProofs.X` (`Security/Proofs/Pous.lean`) except
 `A2LemmaAM1`, `A5RabinGcd`, `A7Params` and `M1Meets`, which are open, and `InvExPostFactoTwoLayer`, which is false.
-They keep their names in `Pous.Guarantees`, beside the frozen statements of `Security/Models/Pous/Guarantees.lean`.
+They keep their names in `Pous.Guarantees`, beside the frozen statements of `Security/Definitions/Pous/Guarantees.lean`.
 "Pinned as drafted" means the binders and conclusion are the draft's, verbatim.
 
 This module states and proves nothing else, and imports no proof: `grade.sh` grades `KFloor` and `Theorem1ii` (its
@@ -489,7 +489,7 @@ rules: it reveals the next index only after the last round closed, rejects an an
 every answer past `Δ` as a miss, with every rejected or wrong one. `PerAnswer` takes no hypothesis about them, and
 holds at every hard deadline `(D_late, Q_late)` and every arrival schedule `arr`
 (`Security/Definitions/Pous/Model/Continuous.lean`); `ContinuousAudit`, the frozen statement it gives, is in
-`Security/Models/Pous/Guarantees.lean`.
+`Security/Definitions/Pous/Guarantees.lean`.
 -/
 
 /-- **The per-answer bound in the continuous audit.** From `TimedINC sch D Q β π`, for every machine, every arrival
@@ -590,8 +590,8 @@ and `0 < b` makes the draw space nonempty. The
 scope is the model's: the arrival coins are the memory challenger's own randomness, independent of the setup and the
 answers; memory is read once per slot, so a dip shorter than one slot is not seen; time is in units of one round, which
 the step floor converts to seconds in the ideal-permutation model only (at the reference Feistel-SHAKE256 `Π₂` a prover
-answers from 1.53% of `C` in 481 Keccak-f, under one call: red team, 4 Oct 2026, art:7617c8017e80). Proof:
-`PousContinuous.continuous_time_average`; here `Pous.SecurityProofs.ContinuousTimeAverage`. -/
+answers from 1.53% of `C` in 481 Keccak-f, under one call: the red team's state attack, `primitives.pi2_keccak_f`).
+Proof: `PousContinuous.continuous_time_average`; here `Pous.SecurityProofs.ContinuousTimeAverage`. -/
 def ContinuousTimeAverage : Prop :=
   ∀ {M : IdealModel} (sch : Scheme M) (D Q D_late Q_late β T a b : ℕ) (π : ℝ≥0∞), 0 < b → a ≤ b →
     TimedINC sch D Q β π →
@@ -611,7 +611,7 @@ def ContinuousTimeAverage : Prop :=
 /-! ## Proved results cited outside the package
 
 The types of seven theorems that the protocol's documents and code cite, written out so that each citation names a
-statement (three more, about schemes, are frozen in `Security/Models/Pous/Guarantees.lean`). Each is proved in
+statement (three more, about schemes, are frozen in `Security/Definitions/Pous/Guarantees.lean`). Each is proved in
 `Pous.SecurityProofs` under its own name, from the theorem its docstring names. -/
 
 open DRG Labelling in
@@ -686,7 +686,7 @@ open ColumnGame in
 def BandTwoWay220_16 : Prop :=
   ColumnHard (PousP3Column.bandGraph 220 16) 12 220 3
 
-/-! ## Secure erasure (`Security/Models/Pous/Guarantees/SecureErasure.lean`'s game) -/
+/-! ## Secure erasure (`Security/Definitions/Pous/Guarantees/SecureErasure.lean`'s game) -/
 
 open Pous.Digest in
 /-- **The digest is almost universal.** Two different lists of `R` blocks of `W` words over a finite field `F` have the
@@ -694,8 +694,7 @@ same digest at a uniform key `(g, z)` with probability at most `((W − 1) + (R 
 differs, and the digests agree at at most `R − 1` points `z`, or every block hash agrees, which a block that differs
 allows at at most `W − 1` points `g`. A word enters as an element of `F`: two `uint32` words that agree mod `p` count as
 equal. Unconditional. This is what makes the fill check's digest catch a region that differs from the fill; the
-secure-erasure bounds below hold for every digest and do not use it. Ported from PR #1010, unchanged but for the
-namespace. Proof: `PousDigest.digestAU`. -/
+secure-erasure bounds below hold for every digest and do not use it. Proof: `PousDigest.digestAU`. -/
 def DigestAU : Prop :=
   ∀ (R W : ℕ) (F : Type) [Field F] [Fintype F] (xs ys : Fin R → Blk W F), xs ≠ ys →
     pr (fun k : Key F => digest k.1 k.2 xs = digest k.1 k.2 ys) ≤

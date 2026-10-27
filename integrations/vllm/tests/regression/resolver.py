@@ -1,9 +1,10 @@
-"""Where a reference record's bytes are: `artifact://r19/<row>/<rel>` -> a local file, sha256-checked against `fixtures.toml`.
+"""Where a reference record's bytes are: `artifact://r19/<row>/<rel>` -> a local file, sha256-checked against `files.toml`.
 
-`fixtures.toml` (this directory; small, committed) lists every reference file this harness may read: `[rows.<row>.files."<rel>"]`
-with `sha256`, `bytes`, `role` (record | program | manifest | ...) and, per row, the places the bytes are known to live (`local.<machine>`
-= a row dir on that pod, `artifacts.records` / `artifacts.programs` = `art:` ids in the data store once put, `oracle` = the vault
-extraction dir).  Nothing large is in Git: the file is an index, the bytes come from one of these, in this order:
+`files.toml` (this directory; a registered fixture, `fixtures/artifacts.json`, that `research data fetch-fixtures` fetches) lists every
+reference file this harness may read: `[rows.<row>.files."<rel>"]` with `sha256`, `bytes`, `role` (record | program | manifest | ...).
+`fixtures.toml` (committed) holds, per row, the places the bytes are known to live (`local.<machine>` = a row dir on that pod,
+`artifacts.records` / `artifacts.programs` = `art:` ids in the data store once put, `oracle` = the vault extraction dir), with the
+labelled decisions and retirements.  Nothing large is in Git: the bytes come from one of these, in this order:
 
     1. $VERITY_REGRESSION_ROWS_ROOT/<row>/<rel>          a directory of row dirs (tp2: /workspace/regress/rows -> symlinks to the live
                                                           row dirs under /workspace/cp/sweep/...; vault: /vault/tmp/oracle)
@@ -42,6 +43,7 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 VLLM_ROOT = HERE.parents[1]  # integrations/vllm
 FIXTURES = HERE / "fixtures.toml"
+FILES = HERE / "files.toml"
 EXPECTED_DIR = HERE / "expected"
 VERIFY_LIMIT = 64 * 1024 * 1024
 
@@ -69,9 +71,9 @@ def registered(p: Path) -> str | None:
     """The `art:` id `fixtures/artifacts.json` registers for `p` (a fixture git does not track), else None."""
     try:
         reg = json.loads(REGISTRY.read_text())
+        rel = str(p.resolve().relative_to(REGISTRY.parents[1]))
     except (OSError, ValueError):
         return None
-    rel = str(p.resolve().relative_to(REGISTRY.parents[1]))
     return next((art for art, path in reg.items() if path == rel), None)
 
 
@@ -105,7 +107,7 @@ def record_result(row_key: str, check: str, exp: Any, act: Any, problems: list[s
 
 
 class InputMismatch(AssertionError):
-    """A resolved reference file does not have the sha256 / size `fixtures.toml` froze for it."""
+    """A resolved reference file does not have the sha256 / size `files.toml` froze for it."""
 
 
 class NotResolvable(LookupError):
@@ -117,6 +119,15 @@ def load_fixtures() -> dict[str, Any]:
         return tomllib.load(f)
 
 
+def load_files() -> dict[str, dict[str, Any]]:
+    """`[rows.<row>.files]` of files.toml, by row key; NotResolvable until `research data fetch-fixtures` has fetched it."""
+    if not FILES.is_file():
+        raise NotResolvable(f"{FILES.name}, the frozen sha256 / bytes of every reference file, is not here: it is the registered fixture "
+                            f"{registered(FILES)}; `research data fetch-fixtures` fetches it (suites.py does before the suite runs)")
+    with open(FILES, "rb") as f:
+        return {k: v.get("files") or {} for k, v in (tomllib.load(f).get("rows") or {}).items()}
+
+
 def sha256_file(p: Path) -> str:
     h = hashlib.sha256()
     with open(p, "rb") as f:
@@ -126,16 +137,23 @@ def sha256_file(p: Path) -> str:
 
 
 class Row:
-    def __init__(self, key: str, spec: dict[str, Any], *, fixtures: dict[str, Any]):
+    def __init__(self, key: str, spec: dict[str, Any], *, fixtures: dict[str, Any], indexed: bool = False):
         self.key = key
         self.spec = spec
         self.number = int(spec["row"])
         self.cls = spec.get("class")
-        self.files: dict[str, dict[str, Any]] = spec.get("files") or {}
+        self._files: dict[str, dict[str, Any]] | None = None if indexed else (spec.get("files") or {})
         self._fixtures = fixtures
         self._fetched: dict[str, Path] = {}
         #: `<rel>` -> "<finding> (<status>)" for every input this row resolved by a DECISION's pin instead of the frozen v1 pin
         self.pinned_by: dict[str, str] = {}
+
+    @property
+    def files(self) -> dict[str, dict[str, Any]]:
+        """The row's frozen reference files (`<rel>` -> sha256 / bytes / role): files.toml's for an indexed row, read on first use."""
+        if self._files is None:
+            self._files = load_files().get(self.key) or {}
+        return self._files
 
     # ---- locating -------------------------------------------------------------------------------------------------------------
     def _roots(self) -> list[Path]:
@@ -162,7 +180,7 @@ class Row:
             from . import store_io
             try:
                 self._fetched[art] = store_io.fetch(art)
-            except Exception as e:  # noqa: BLE001 -- the store not being reachable is a skip, not an error
+            except Exception as e:  # the store not being reachable is a skip, not an error
                 raise NotResolvable(f"{self.key}: store fetch of {label} {art} failed: {e}") from e
         return self._fetched[art]
 
@@ -268,7 +286,7 @@ class Row:
         """A directory holding the row's request Programs (`build_request*/instances.json.gz` beside the derive's `result.json`) -- the
         live row dir, or, when the Programs and the records live in different trees (the store's `programs` / `records` artifacts,
         the pod's staged programs dir: `instances.json.gz` + `manifest.json` only), a merged view assembled under the scratch dir: one
-        hard link (a symlink across filesystems) per frozen `build_request*/…` file of fixtures.toml, each resolved through `path()`
+        hard link (a symlink across filesystems) per frozen `build_request*/…` file of files.toml, each resolved through `path()`
         (sha / size checked).  None when no
         Programs are reachable.  Both engines read `result.json` (attention impls observed) beside the instances, so a split layout
         must be re-joined here, from the frozen index, never by guessing."""
@@ -350,7 +368,7 @@ class Row:
         from . import store_io
         try:
             return store_io.fetch_attempt(mine, dest)
-        except Exception as e:  # noqa: BLE001 -- the store not being reachable is a skip, not an error
+        except Exception as e:  # the store not being reachable is a skip, not an error
             raise NotResolvable(f"{self.key}: candidate attempts {mine} not fetchable here: {e}") from e
 
     def candidate_attempts(self) -> list[dict[str, Any]]:
@@ -419,7 +437,7 @@ def candidate_attempt_docs() -> list[dict[str, Any]]:
         if rid not in _ATTEMPT_DOCS:
             try:
                 _ATTEMPT_DOCS[rid] = store_io.attempt(rid)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 raise NotResolvable(f"candidate attempt {rid} not readable here: {e}") from e
         doc = _ATTEMPT_DOCS[rid]
         out.append(doc)
@@ -437,7 +455,7 @@ def candidate_attempt_docs() -> list[dict[str, Any]]:
 def rows(selection: str | None = None) -> list[Row]:
     """The reference rows of fixtures.toml, by row number; `selection` = 'green' | 'by-name' | None (all)."""
     fx = load_fixtures()
-    out = [Row(k, v, fixtures=fx) for k, v in (fx.get("rows") or {}).items()]
+    out = [Row(k, v, fixtures=fx, indexed=True) for k, v in (fx.get("rows") or {}).items()]
     if selection:
         out = [r for r in out if r.spec.get("selection") == selection]
     return sorted(out, key=lambda r: r.number)

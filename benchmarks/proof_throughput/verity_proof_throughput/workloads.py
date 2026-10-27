@@ -7,7 +7,7 @@ session proves the B units the verifier draws from it by the stratified law, the
 (``instances``). Its unit is the coordinate class the ``Q_word`` partition of a ``Gemm_v2`` Call gives, gate for gate.
 
 ``bf16-k6144`` is the VU family behind GLM-5.3's bf16 GEMMs at hidden 6144 over ``HopperBF16WgmmaDot16_v1``
-(``integrations/vllm/verity_vllm/program/registry/bf16_gemm_check.py``): lm_head and the DSA indexer's ``wk_weights_proj``
+(``verity/ml/definitions/registry/bf16_gemm_check.py``): lm_head and the DSA indexer's ``wk_weights_proj``
 (N = 160) are ``Gemm_v2``, whose coordinate is the VU; the MoE router (N = 256) past 16 tokens is cuBLAS's ``GemmF32Out_v1``
 over the same dot chain, its output the f32 word rather than its bf16 rounding. The sites differ in N, the number of
 coordinates a token row makes, not in the coordinate, so one VU family stands for them. ``fp8-coord-k*`` are served_units' block-scaled FP8

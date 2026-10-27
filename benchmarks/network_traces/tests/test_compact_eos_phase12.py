@@ -56,6 +56,11 @@ def _sampled(io: dict) -> dict[int, list[int]]:
     return {r["stream"]: _answer(r["prompt"], r["max_tokens"])[0] for r in io["records"]}
 
 
+def _caps(io: dict) -> dict[int, int]:
+    """Each request's `max_tokens` by its ingress ordinal."""
+    return {r["stream"]: r["max_tokens"] for r in io["records"]}
+
+
 def _cells(outs) -> list[bytes]:
     """The link's frames in canonical order, padding left out."""
     return [s for rec in sorted(outs, key=lambda r: r.window) for row in rec.grid for s in row[:row_count(row)]]
@@ -91,7 +96,7 @@ def test_the_honest_compact_run_is_accepted_and_its_cells_are_the_commits_sample
     sampled = _sampled(run.honest)
     assert {r["stream"]: r["output"] for r in run.honest["records"]} == sampled
     assert any(r["finish"] == "eos" for r in run.honest["records"]) and not run.eos & set(run.target["output"])
-    assert active.compact_finish_violations(sampled, run.eos, _cells(run.outs)) == []
+    assert active.compact_finish_violations(sampled, run.eos, _cells(run.outs), max_tokens=_caps(run.honest)) == []
 
 
 def test_the_hidden_stop_is_refused_at_every_length(run):
@@ -123,5 +128,5 @@ def test_a_stop_the_model_never_sampled_is_refused_by_the_tie_at_every_length(ru
         assert got["accepted"] and mine["finish"] == "eos" and len(mine["output"]) == k + 1, k
         assert got["tokens"] == run.honest["tokens"] - (full - 1 - k)
         assert cs.certified_io(ids, run.setup, run.ins, _as_id_events(forged))["accepted"], k
-        assert active.compact_finish_violations(sampled, run.eos, _cells(forged)) == \
+        assert active.compact_finish_violations(sampled, run.eos, _cells(forged), max_tokens=_caps(run.honest)) == \
             [(stream, f"output {k} is id {eos_id} where the Commit sampled {run.target['output'][k]}")], k

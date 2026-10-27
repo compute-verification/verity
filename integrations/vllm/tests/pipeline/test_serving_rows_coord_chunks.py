@@ -14,11 +14,11 @@ from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.prims import HopperE4m3MmaV2Dot32
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_flock.class_statement import UnitStager
-from verity_vllm.commit import serving_rows as CS
+from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
-from verity_vllm.program.registry import boolean_fp8_moe as BFM
-from verity_vllm.program.registry import fp8_moe_experts as X
+from verity.ml.definitions.registry import boolean_fp8_moe as BFM
+from verity.ml.definitions.registry import fp8_moe_experts as X
 
 E, K, N, G, KB = 3, 64, 40, 32, 32
 NB, KG = -(-N // G), K // G

@@ -9,9 +9,11 @@ import Proofs.Flock.Claims.Sampling.Select.Design
 import Proofs.Flock.Claims.Sampling.Select.Scope
 import Proofs.Flock.Claims.Sampling.Select.Refusals
 import Proofs.Flock.Claims.Sampling.Select.Code
+import Proofs.Flock.Claims.Sampling.Select.OS
 
 /-! The deployed sampled verifier's draw (`SampledProofs.Slots.select`) against the claims' `P_a`: a sequential draw's
-stopping-time bound (`Select.Seq`); the draw's coins read in order and its law's stages (`Select.Take`); the
+stopping-time bound (`Select.Seq`); the draw's coins read in order and its law's stages (`Select.Take`); a subset draw
+as the live draw `Law.runOS` on the same bytes, and its bound under A3 (`Select.OS`); the
 verifier's partition as the claims' slots (`Select.Layout`); `Select.select`'s steps and the design it draws
 (`Select.Steps`); each law's miss bound on its coins (`Select.Bounds`); `drawMisses`, which proves
 `Properties.SampledProofs.DrawMisses` (`Select.Misses`); `DrawLaw` at a deployment whose draw is `Slots.select`'s

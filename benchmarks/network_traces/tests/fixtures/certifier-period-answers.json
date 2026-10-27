@@ -1,0 +1,164 @@
+{
+ "r20261025-213746-7692": {
+  "answers": {
+   "1/100": {
+    "commitment": "862587df6d6f1111705c499bc962bc0e61d3cc2b1734aa090b9cace92bb2c224145ea2764f9a25786e54ba95c99e66fb848898828adc09b2b0c91206b1861def",
+    "profile": {
+     "link": "served",
+     "windows": 1
+    },
+    "protocol": "verity/certifier/v0",
+    "public": {
+     "K": 2178452,
+     "audits": [
+      {
+       "delta": "1/100",
+       "drawn": 2,
+       "faulty_bits": 14736,
+       "faulty_sets": 1024,
+       "free": 2162688,
+       "jitter": 0,
+       "units": 1024,
+       "wrong_units": 921
+      }
+     ],
+     "cells": 0,
+     "eps": "1/100",
+     "schedules": 4,
+     "windows": 1
+    },
+    "reason": null,
+    "verdict": "accept"
+   },
+   "1/1000000": {
+    "commitment": "862587df6d6f1111705c499bc962bc0e61d3cc2b1734aa090b9cace92bb2c224145ea2764f9a25786e54ba95c99e66fb848898828adc09b2b0c91206b1861def",
+    "profile": {
+     "link": "served",
+     "windows": 1
+    },
+    "protocol": "verity/certifier/v0",
+    "public": {
+     "K": 2180068,
+     "audits": [
+      {
+       "delta": "1/1000000",
+       "drawn": 2,
+       "faulty_bits": 16352,
+       "faulty_sets": 1024,
+       "free": 2162688,
+       "jitter": 0,
+       "units": 1024,
+       "wrong_units": 1022
+      }
+     ],
+     "cells": 0,
+     "eps": "1/1000000",
+     "schedules": 4,
+     "windows": 1
+    },
+    "reason": null,
+    "verdict": "accept"
+   }
+  },
+  "form": "clock",
+  "node": "computeinstance-e05ckx5wj15xzjhcma",
+  "period": 0,
+  "tampered": {
+   "commitment": "59fd3f7a13409b505fc25d1c02ba837d979a8d73d3fad9abe3607ce94722aadad32f2d908294d14cfd0eed17e367901646c3cdb4797f8fab3382079343688104",
+   "profile": null,
+   "protocol": "verity/certifier/v0",
+   "public": null,
+   "reason": "window 0: service: N2's verifier of record: {'deadline': 1, 'verdict': 0}",
+   "verdict": "reject"
+  }
+ },
+ "r20261025-235229-305e": {
+  "answers": {
+   "1/100": {
+    "commitment": "80c31f4e0f18d69e182037e033842eded9408e9ed39d7aee4cd2031c47a203fd10595e9ef167bdbdf78d29c76ba57f670020070c919b8b2f7cb0d1008caaff2b",
+    "profile": {
+     "link": "warden",
+     "windows": 1
+    },
+    "protocol": "verity/certifier/v0",
+    "public": {
+     "K": 12200606,
+     "audits": [
+      {
+       "delta": "1/100",
+       "drawn": 2,
+       "faulty_bits": 14736,
+       "faulty_sets": 1024,
+       "free": 2162688,
+       "jitter": 0,
+       "units": 1024,
+       "wrong_units": 921
+      }
+     ],
+     "cells": 0,
+     "eps": "1/50",
+     "scans": [
+      {
+       "delta": "1/100",
+       "drawn": 16,
+       "faulty_bits": 224,
+       "faulty_sets": 46,
+       "free": 10021888,
+       "jitter": 0,
+       "units": 64,
+       "wrong_units": 14
+      }
+     ],
+     "schedules": 0,
+     "windows": 1
+    },
+    "reason": null,
+    "verdict": "accept"
+   },
+   "1/1000000": {
+    "commitment": "80c31f4e0f18d69e182037e033842eded9408e9ed39d7aee4cd2031c47a203fd10595e9ef167bdbdf78d29c76ba57f670020070c919b8b2f7cb0d1008caaff2b",
+    "profile": {
+     "link": "warden",
+     "windows": 1
+    },
+    "protocol": "verity/certifier/v0",
+    "public": {
+     "K": 12202528,
+     "audits": [
+      {
+       "delta": "1/1000000",
+       "drawn": 2,
+       "faulty_bits": 16352,
+       "faulty_sets": 1024,
+       "free": 2162688,
+       "jitter": 0,
+       "units": 1024,
+       "wrong_units": 1022
+      }
+     ],
+     "cells": 0,
+     "eps": "1/500000",
+     "scans": [
+      {
+       "delta": "1/1000000",
+       "drawn": 16,
+       "faulty_bits": 512,
+       "faulty_sets": 64,
+       "free": 10021888,
+       "jitter": 0,
+       "units": 64,
+       "wrong_units": 32
+      }
+     ],
+     "schedules": 0,
+     "windows": 1
+    },
+    "reason": null,
+    "verdict": "accept"
+   }
+  },
+  "form": "rows",
+  "node": "computeinstance-e05ckx5wj15xzjhcma",
+  "period": 0
+ }
+}

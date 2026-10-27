@@ -1,4 +1,4 @@
-import Proofs.Flock.Soundness.Model.HoloCompiled
+import Definitions.Flock.HoloCompiled
 import Proofs.Flock.VBridge.InnerAccepts
 
 /-!

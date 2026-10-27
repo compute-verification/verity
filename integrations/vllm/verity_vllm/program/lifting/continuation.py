@@ -1,4 +1,4 @@
-"""`Continuation_v1` -- the continuation logic of the fixed padded Program (CONTINUATION-SPEC v0.1, COORD R17-32; Daniel 20:17Z).
+"""`Continuation_v1` -- the continuation logic of the fixed padded Program (CONTINUATION-SPEC v0.1).
 
 Two computed Boolean circuit values per TOKEN-GENERATION SLOT `t = 1..C` (`C = max_tokens`; slot 1 = the token produced from the prompt;
 slots are NOT engine iterations: chunked prefill advances the state once, an unscheduled request is pending, not inactive):
@@ -17,13 +17,13 @@ slots are NOT engine iterations: chunked prefill advances the state once, an uns
     u_{t+1} = Select(r_{t+1}, y_t, bot) the next decode input, from the RAW token
     S_{t+1} = Select(r_t, S_cand, S_t)  persistent state over the existing structured machinery (no K/V copy)
 
-`A` is fixed at BUILD from the RESOLVED profile (the same field R17-1's declared LAG reads, through the ONE lag rule -- `A = LAG`), never
+`A` is fixed at BUILD from the RESOLVED profile (the same field the declared LAG reads, through the ONE lag rule -- `A = LAG`), never
 from where the rows stop; `n_executed = n (A = 0) / min(n + 1, C) (A = 1)` with `n` served slots is a DERIVED TEST INVARIANT, never an input
-that shortens the Program (R17-27).  This module is the SEMANTIC core: the spec's reference evaluator (`next_flags`, verbatim), an
+that shortens the Program.  This module is the SEMANTIC core: the spec's reference evaluator (`next_flags`, verbatim), an
 independently written three-state reference machine (SERVING / LAG / INACTIVE), the checker's recurrence over a RAW transcript
-(`recurrence`), the named invariants (`invariants`), rev's Match-side checks (M-0445: `check_transcript`), the slot <-> engine-iteration map
+(`recurrence`), the named invariants (`invariants`), rev's Match-side checks (`check_transcript`), the slot <-> engine-iteration map
 (revb R1: `slot_map` -- a STATED fact, contiguity + unchunked prefill or FAIL by name), and the derived invariant.  The registered gates
-(`LIsEOS<E>_v1`, `LEmitNext_v1`, `LRunNext<A>_v1`) and the construction live in `verity_vllm/program/registry/lifted.py` (`continuation_chain`); the
+(`LIsEOS<E>_v1`, `LEmitNext_v1`, `LRunNext<A>_v1`) and the construction live in `verity/ml/definitions/registry/lifted.py` (`continuation_chain`); the
 R17-1 lag unit (`LStepLive`/`LSelect` guard chain) is proven to compute exactly `r` / `u` of this rule (`chain_bits`, tested exhaustively).
 
 Indexing: slot `t` <-> the Build's sampling EVENT / step `s = t - 1` (`out[s]`; the lifted tool's `a_r` is the first event with `r = 0`).
@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Iterable, Sequence
 
-from verity_vllm.program.registry import lifted as L
+from verity.ml.definitions.registry import lifted as L
 from verity_vllm.program.lifting import lifted_records
 
 CONTINUATION_VERSION = "continuation-v1"  # every Continuation_v1 result carries it (spec s1: recorder, builder, Match share one version)
@@ -67,18 +67,18 @@ def rng_accounting(slots: Sequence["Slot"], *, prompt_len: int | None = None) ->
 
 
 def check_profile(A: int) -> int:
-    """`A in {0, 1}` and nothing else: the same refusal as R17-1's `check_lag` (one rule).  `A` is the resolved profile, never a fit."""
+    """`A in {0, 1}` and nothing else: the same refusal as the lag rule's `check_lag` (one rule).  `A` is the resolved profile, never a fit."""
     return L.check_lag(A)
 
 
 def resolve_profile(header: dict) -> tuple[int, str]:
-    """`A` from the record's RESOLVED profile (`RunHeader.profile.engine_kwargs.async_scheduling`, True -> 1, False -> 0), through R17-1's
+    """`A` from the record's RESOLVED profile (`RunHeader.profile.engine_kwargs.async_scheduling`, True -> 1, False -> 0), through the lag rule's
     `lag_from_header` -- the one rule; an absent / non-boolean attestation is refused by name, never defaulted (spec s1; revb R6)."""
     return lifted_records.lag_from_header(header)
 
 
 def declared_profile(workload_program: dict | None) -> tuple[int | None, str | None]:
-    """`A` as the Build DECLARED it (the Program's digest-bound `lag=<n>` static and moe's sidecar fields; R17-1's `declared_lag_of_row`)."""
+    """`A` as the Build DECLARED it (the Program's digest-bound `lag=<n>` static and moe's sidecar fields; the lag rule's `declared_lag_of_row`)."""
     return lifted_records.declared_lag_of_row(workload_program)
 
 
@@ -134,7 +134,7 @@ def three_state_run(is_eos: Sequence[bool], *, cap: int, A: int) -> list[tuple[b
 
 def is_eos_total(w: int, x: int, eos_set: Iterable[int]) -> bool:
     """`IsEOS` as a TOTAL Definition over the lifted `w+1`-bit word: `[tag(x) = 0] AND [payload(x) in EOS_pinned]` -- the tag test is a gate,
-    so `IsEOS(bot) = 0` is not a convention; a noncanonical `1||nonzero` word is not EOS either (R17-6: never normalized, never matched)."""
+    so `IsEOS(bot) = 0` is not a convention; a noncanonical `1||nonzero` word is not EOS either (never normalized, never matched)."""
     return L.is_active(w, x) and L.payload(w, x) in {int(e) for e in eos_set}
 
 
@@ -210,7 +210,7 @@ def lag_slots(slots: Sequence[Slot]) -> list[int]:
 
 def n_executed_derived(n_served: int, *, cap: int, A: int) -> int:
     """The DERIVED test invariant (spec s4): `n_executed = n` (A = 0) / `min(n + 1, C)` (A = 1) for `n` served slots including the EOS.
-    Equal to moe's executed-prefix rule of record (R17-27) and to R17-1's `expected_served(a_r, cap, lag)` with `a_r = n`; never an input."""
+    Equal to moe's executed-prefix rule of record and to the lag rule's `expected_served(a_r, cap, lag)` with `a_r = n`; never an input."""
     check_profile(A)
     if not (1 <= n_served <= cap):
         raise ValueError(f"n_served = {n_served} outside [1, C = {cap}]")
@@ -247,10 +247,10 @@ def invariants(slots: Sequence[Slot], *, cap: int, A: int) -> dict[str, bool]:
 
 
 def executed_prefix_by_rule(served: Sequence[int], *, cap: int, A: int, eos: Iterable[int]) -> dict[str, Any]:
-    """The per-request block of moe's `executed_prefix_of_record` (`verity_vllm/check/executed_prefix.py`) computed FROM the rule: the
+    """The per-request block of moe's `executed_prefix_of_record` (`verity_vllm/commit/executed_prefix.py`) computed FROM the rule: the
     recurrence over the SERVED list as the raw prefix.  `executed_prefix_len = |{t : r_t = 1}|`, `eos_step` = the FIRST EOS's request-relative
     row, `lag_steps` = the (0, 1) slot(s) as request-relative rows (`t - 1`).  A served token AFTER the first EOS is `served_past_first_eos`
-    (rev F-r17-14: the rule stops at the first EOS; a last-token test would accept `[EOS, x, EOS]`), a last served token outside the pinned
+    (the rule stops at the first EOS; a last-token test would accept `[EOS, x, EOS]`), a last served token outside the pinned
     set on an early stop is F-pm-24, a served list over the cap is named -- each a problem, `ok` their absence.  No LAG default: `A` is the
     declared / attested profile (`check_profile`).  Offered to moe as the one code path (revb S-r17b-20 R3); nothing here reads a trace."""
     check_profile(A)
@@ -317,9 +317,9 @@ def slot_map(executed_engine_steps: Sequence[int], *, arrive_step: int, prefill_
 
 
 def expected_draw_positions(served: Sequence[int], *, cap: int, A: int, eos: Iterable[int], prompt_len: int) -> dict[str, Any]:
-    """revb M-0615 (R5, F-r17b-35): the draw positions the RULE prescribes, `{L - 1 + (t - 1) : r_t = 1}` with `L = prompt_len` (the record's
-    `pos` fact = the query position whose logits are sampled: stoch's ledger M-0749 'draw k at pos = prompt_len - 1 + k', slot t = k + 1;
-    the counter RNG is keyed by `(seed, pos)`, M-0469), read from the recurrence over the SERVED list (the one mechanism, R3).
+    """The draw positions the RULE prescribes, `{L - 1 + (t - 1) : r_t = 1}` with `L = prompt_len` (the record's
+    `pos` fact = the query position whose logits are sampled: stoch's ledger: 'draw k at pos = prompt_len - 1 + k', slot t = k + 1;
+    the counter RNG is keyed by `(seed, pos)`), read from the recurrence over the SERVED list (the one mechanism, R3).
     An ORDERED list: the served slots' draws, then the one lag draw (A = 1, EOS before the cap), nothing after -- so an over-cap draw without
     an EOS, a second post-EOS draw, or a draw at an inactive slot is an EXTRA position by name, a missing served draw a MISSING one
     (`compare_draw_positions`).  `A in {0, 1}` (check_profile) -- revb's lag >= 2 case has no admitted profile."""
@@ -345,7 +345,7 @@ def expected_draw_positions(served: Sequence[int], *, cap: int, A: int, eos: Ite
 
 def compare_draw_positions(expected: Sequence[int], drawn: Sequence[int]) -> dict[str, Any]:
     """`drawn` = the positions the record's ledger shows a draw at (stoch's draw_accounting), in ledger order.  Every extra / missing / repeated /
-    out-of-order position is a problem BY NAME; `ok` is their absence -- 'RNG advances iff r_t' measured literally (revb M-0615)."""
+    out-of-order position is a problem BY NAME; `ok` is their absence -- 'RNG advances iff r_t' measured literally."""
     exp = [int(p) for p in expected]
     got = [int(p) for p in drawn]
     problems: list[str] = []
@@ -370,9 +370,9 @@ def compare_draw_positions(expected: Sequence[int], drawn: Sequence[int]) -> dic
 
 def check_transcript(*, executed_slots_of_record: Sequence[int], raw_by_slot: dict[int, int], served_of_record: Sequence[int], cap: int,
                      A: int, eos: Iterable[int], w: int = 32) -> dict[str, Any]:
-    """rev M-0445 (3): (a) executed slots of record == `{t : r_t = 1}` exactly -- a row at `r_t = 0` is "execution past the stop", a missing
+    """(a) executed slots of record == `{t : r_t = 1}` exactly -- a row at `r_t = 0` is "execution past the stop", a missing
     row at `r_t = 1` "a deleted step"; (b) served output == `(y_t : e_t = 1)` as a list, EOS included, position by position; (c) the lag
-    slot's token is NOT in the served output; (d) the inactive suffix has no rows (its identities stay in the population -- R17-27); (e)
+    slot's token is NOT in the served output; (d) the inactive suffix has no rows (its identities stay in the population); (e)
     `stop_t = e_t AND IsEOS(y_t)` under the PINNED set: a served early stop on a token outside the set is FAIL (F-pm-24), never extend the
     set; (5) the derived invariant `n_exec` checked AFTER (a).  Bits are computed from the rule + the raw transcript; nothing is supplied by
     the prover, nothing inferred from where the rows stop.  Every failure is named; `ok` is the conjunction."""
@@ -453,7 +453,7 @@ def wrong_profile_negative(*, executed_slots_of_record: Sequence[int], raw_by_sl
 
 
 def chain_bits(raw_words: Sequence[int], *, cap: int, lag: int, eos: Sequence[int], w: int = 32) -> dict[str, list]:
-    """The R17-1 guard chain of `LServe_v1` / `lift_request_component` SIMULATED with the registered evaluators (`LStepLive<E>_v1`,
+    """The lag guard chain of `LServe_v1` / `lift_request_component` SIMULATED with the registered evaluators (`LStepLive<E>_v1`,
     `LSelect<w>_v1`, `LBot<w>_v1`): steps `1..LAG` unguarded; `live_s = LStepLive(g_s, eos_set)` with `g_s = out[s-1]` (LAG = 0) or
     `tok_in_{s-1}` (LAG = 1); `tok_in_s = LSelect(live_s, out[s-1], bot)`; `out[s]` bot by strictness when `tok_in_s` is bot.  `raw_words[s]`
     is the word the sampler WOULD produce at event `s` if it runs (the transcript the record would commit).  Returns `run[t]` for slots

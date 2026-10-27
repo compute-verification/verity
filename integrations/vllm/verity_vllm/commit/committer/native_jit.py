@@ -1,4 +1,4 @@
-"""The native collector's JIT build is keyed by WHAT IT COMPILES, never by mtimes (COORD R17-41 (1), stoch M-0756 / rel M-0803).
+"""The native collector's JIT build is keyed by WHAT IT COMPILES, never by mtimes.
 
 torch.utils.cpp_extension.load() decides "up to date" by comparing the .so's mtime with the sources'.  record_v5/ship.sh PRESERVES source
 mtimes, and /workspace/cp/nc_build is one pod-wide directory: on cp-big an .so built 22:15:25Z from the previous tree's sources was adopted
@@ -115,7 +115,7 @@ def default_parent(name: str) -> str:
 def staged_sources(build_dir: str, sources: Sequence[str]) -> list[str]:
     """The sources copied into `<build_dir>/src/` (rewritten only when their bytes differ), the paths torch compiles.  torch writes the
     source paths into build.ninja and ninja rebuilds when that file changes, so compiling each tree's own copy rebuilt the shared,
-    digest-keyed dir for every job of another tree (~2 min of nvcc under the build lock per GPU job on Nebius, Sep 30).  A digest-keyed
+    digest-keyed dir for every job of another tree (~2 min of nvcc under the build lock per GPU job).  A digest-keyed
     dir holds one source set, so its staged copy is the same file for every tree.  The local headers they include (`local_headers`) are
     staged at their relative paths beside them, so the copies compile as the originals do."""
     sd = os.path.join(build_dir, "src")

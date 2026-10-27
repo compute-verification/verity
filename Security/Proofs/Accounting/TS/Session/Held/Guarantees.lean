@@ -44,8 +44,6 @@ def HeldSessionSound : Prop :=
     (∀ x w i, (sess x w i).CR) →
     Accounting.Assumptions.TS.WindowLaw sess out →
     (∀ x w i, (sess x w i).kd = (sess x w i).n) →
-    (∀ x w i (q q' : Fin (sess x w i).c.ports.size),
-      (sess x w i).c.ports[q].name = (sess x w i).c.ports[q'].name → q = q') →
     (∀ x w i u, (sess x w i).ServedRegistered u) →
     (∀ x w i, (∃ q : Fin (sess x w i).c.ports.size, (sess x w i).c.ports[q].name = ok) ∧
       ∃ pt ∈ (sess x w i).own, pt.name = ok) →

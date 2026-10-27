@@ -66,10 +66,8 @@ import Proofs.Flock.Claims.KS.PlainDrawAcc
 import Proofs.Flock.Claims.KS.PlainDrawDec
 import Proofs.Flock.Claims.KS.PlainDrawSim
 import Proofs.Flock.Claims.KS.PlainDrawKDefs
-import Proofs.Flock.Claims.KS.PlainDrawJ
-import Proofs.Flock.Claims.KS.PlainDrawJMove
-import Proofs.Flock.Claims.KS.PlainDrawJRun
-import Proofs.Flock.Claims.KS.PlainDrawJCols
+import Proofs.Flock.Claims.KS.PlainDrawRCols
+import Proofs.Flock.Claims.KS.PlainDrawRColsE
 import Proofs.Flock.Claims.KS.PlainDrawK
 import Proofs.Flock.Claims.KS.PlainDrawAccK
 import Proofs.Flock.Claims.KS.PlainDrawDecK
@@ -77,6 +75,10 @@ import Proofs.Flock.Claims.KS.PlainLeafDecK
 import Proofs.Flock.Claims.KS.PlainClashLaterK
 import Proofs.Flock.Claims.KS.PlainClash0K
 import Proofs.Flock.Claims.KS.PlainLeafClashK
+import Proofs.Flock.Claims.KS.PlainDrawJ
+import Proofs.Flock.Claims.KS.PlainDrawJMove
+import Proofs.Flock.Claims.KS.PlainDrawJRun
+import Proofs.Flock.Claims.KS.PlainDrawJCols
 import Proofs.Flock.Claims.KS.PlainSlackFit
 import Proofs.Flock.Claims.KS.PlainSim
 import Proofs.Flock.Claims.KS.PlainLock
@@ -168,6 +170,7 @@ import Proofs.Flock.Claims.KS.Extend
 import Proofs.Flock.Claims.KS.ZkExtend
 import Proofs.Flock.Claims.KS.PlainUntrim
 import Proofs.Flock.Claims.KS.ZkOuter
+import Proofs.Flock.Claims.KS.PlainAccPrR
 
 /-! Flock's knowledge soundness at `E^rep`, in parts: one wait truncated to `E^rep`'s `K` draws, by a coupling with `k`
 independent accepted runs and a Chernoff bound (`Wait`, `ERep_trunc`); the soundness proof's escape events, each a
@@ -361,7 +364,8 @@ SHA-512 leaves and the later entries (`PlainLeafDecK`: `FlockDeploy.KS.plain_hde
 `FlockDeploy.KS.plain_laterClashAtK`, `FlockDeploy.KS.plain_laterClashHAtK`) and the level-0 clashes
 (`PlainClash0K`, `PlainLeafClashK`: `FlockDeploy.KS.plain_clash₀AtK`, `FlockDeploy.KS.plain_clash₀HUAtK`,
 `FlockDeploy.KS.plain_laterClashHUAtK`). The acceptance lemmas the plain
-decoders read hold at a draw value by their proofs (`PlainDrawAcc`: `FlockSoundness.Discharge.AtDraw.accepts_oneAnyD`,
+decoders read hold at a draw value by their proofs, through `keep` and at `keep := id`
+(`PlainDrawAccK`: `FlockSoundness.Discharge.AtDraw.accepts_oneAnyDK`; `PlainDrawAcc`:
 `FlockSoundness.Discharge.AtDraw.tableAt_of_acceptsD`), so the plain decoders decode the verdict at the draw
 (`PlainDrawDec`: `Claims.Bridge.PlainDraw.decodesTable_wrPD_sc`, `FlockDeploy.KS.plain_hdecAt`,
 `FlockDeploy.KS.plain_hdecHAt`), and the plain table bound at a statement holds from a simulator at that verdict, with

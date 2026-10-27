@@ -1,5 +1,5 @@
 import Mathlib
-import Models.Accounting.Guarantees.Actual.WipeBridge
+import Definitions.Accounting.Guarantees.Actual.WipeBridge
 import Proofs.Accounting.Actual.Confidence
 import Proofs.Accounting.Actual.WipeReadPool
 

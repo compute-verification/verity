@@ -13,7 +13,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
 
-from verity_vllm.pipeline.tp.c2 import sampled_replay_components  # noqa: E402
+from verity_vllm.pipeline.tp.c2 import sampled_replay_components
 
 
 def _sr(result, grade, vus=10, evaluated=4, why=None, unrep=None):
@@ -99,7 +99,7 @@ def test_not_run_shape_when_replay_disabled():
 # ------------------------------------------------------------------------------------------------------------ worker fail-closed paths
 
 def _worker(cfg, bmap, rc=None, model=None):
-    from verity_vllm.engine import rank_worker as W
+    from verity_vllm.pipeline.tp import rank_worker as W
 
     class Stub:
         _tp2_sampled_replay = W.TP2CaptureWorkerExtension._tp2_sampled_replay

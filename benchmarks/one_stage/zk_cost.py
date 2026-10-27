@@ -4,7 +4,7 @@ session proving k of them drawn by the verifier's Lean, with `flock-circuit prov
 sessions.
 
     python benchmarks/one_stage/zk_cost.py stage  --lean flock-verify --out DIR [--ks 4096,14336] [--sizes 1,8,64,512]
-    python benchmarks/one_stage/zk_cost.py prove  --bin flock-circuit --out DIR [--arms fw,nofw] [--cold 2] [--runs 3]
+    python benchmarks/one_stage/zk_cost.py prove  --bin flock-circuit --out DIR [--arms fw,nofw] [--cold 2] [--runs 3] [--cpu]
     python benchmarks/one_stage/zk_cost.py verify --lean flock-verify --out DIR
     python benchmarks/one_stage/zk_cost.py fit    --out DIR [--run RUN_ID]
 
@@ -27,6 +27,9 @@ sessions.
   staging `s + s_c c` and verification `v + v_c c + v_k k` (CPU-s); and across K, `costfit`'s features (one, ands,
   ands*staged, ands*drawn). `observations.json` holds `costfit.Observation`s: prove is a cold process's wall, verify the
   single-threaded verifier's CPU time (its wall stretches on a loaded node).
+* **CPU** (`--cpu`, `zk_cost_cpu.sh`): the same sessions by `flock-circuit prove --zk` on the node's CPUs, as the CPU nodes
+  prove a block's draw. Each session record carries `peak_rss_kb`, the sampled peak of the prover's, its live verifier's
+  and the firewall's Lean's resident memory summed, which is what a node holds for one session.
 """
 from __future__ import annotations
 
@@ -50,7 +53,7 @@ import a6  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
 
-#: ANDs of the pieces of a unit with its rows' openings (benchmarks/sampling_plan's inputs: #2391's pins, hm96 PROTOCOL §5)
+#: ANDs of the pieces of a unit with its rows' openings (benchmarks/sampling_plan's inputs: its pins, hm96 PROTOCOL §5)
 S8_STEP, EPILOGUE, SHA512, HM96 = 4_190, 5_000, 58_120, 116_240
 
 
@@ -71,10 +74,60 @@ def free_port() -> int:
         return s.getsockname()[1]
 
 
-def timed(cmd: list[str], stdout, stderr, env: dict | None = None) -> tuple[int, dict, list[tuple[float, str]]]:
-    """Run ``cmd``; its exit code, wall and CPU seconds and peak RSS, and each stdout line with the seconds since start."""
+class Peak:
+    """The peak of the summed RSS of some processes and all their descendants, sampled every `every` seconds in a thread:
+    a firewalled session's prover, its live verifier (`serve`) and the firewall's Lean child peak together, and their sum is
+    what a node must hold for the session (ru_maxrss gives only the largest one process)."""
+
+    def __init__(self, every: float = 0.5) -> None:
+        import threading
+        self.roots: list[int] = []
+        self.peak_kb = 0
+        self._stop = threading.Event()
+        self._every = every
+        self._page_kb = os.sysconf("SC_PAGE_SIZE") // 1024
+        self._t = threading.Thread(target=self._run, daemon=True)
+        self._t.start()
+
+    def _tree(self) -> set[int]:
+        seen, todo = set(), list(self.roots)
+        while todo:
+            pid = todo.pop()
+            if pid in seen:
+                continue
+            seen.add(pid)
+            try:
+                for tid in os.listdir(f"/proc/{pid}/task"):
+                    todo += [int(c) for c in Path(f"/proc/{pid}/task/{tid}/children").read_text().split()]
+            except OSError:
+                pass
+        return seen
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            kb = 0
+            for pid in self._tree():
+                try:
+                    kb += int(Path(f"/proc/{pid}/statm").read_text().split()[1]) * self._page_kb
+                except (OSError, IndexError, ValueError):
+                    pass
+            self.peak_kb = max(self.peak_kb, kb)
+            self._stop.wait(self._every)
+
+    def stop(self) -> int:
+        self._stop.set()
+        self._t.join()
+        return self.peak_kb
+
+
+def timed(cmd: list[str], stdout, stderr, env: dict | None = None,
+          peak: Peak | None = None) -> tuple[int, dict, list[tuple[float, str]]]:
+    """Run ``cmd``; its exit code, wall and CPU seconds and peak RSS, and each stdout line with the seconds since start;
+    ``peak`` also samples its process tree."""
     t0 = time.monotonic()
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=stderr, text=True, env={**os.environ, **(env or {})})
+    if peak is not None:
+        peak.roots.append(p.pid)
     lines = []
     for line in p.stdout:
         lines.append((time.monotonic() - t0, line.rstrip("\n")))
@@ -150,19 +203,30 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
                               "--pin", pt["pin"], "--operator", "zk-cost", "--draw-file", str(sd / f"draw-k{k}.json"),
                               "--sessions", str(warm + runs)], stdout=serve_log, stderr=subprocess.STDOUT, text=True,
                              env={**os.environ, **env})
+    peak = Peak()
+    peak.roots.append(serve.pid)
+    serve_usage = None
     try:
         while "SERVING" not in (o / "serve.log").read_text() and serve.poll() is None:
             time.sleep(0.2)
         with open(o / "prove.out", "w") as fo, open(o / "prove.err", "w") as fe:
-            rc, usage, lines = timed([a.bin, "prove", "--zk", "--gpu", "--verifier", f"127.0.0.1:{port}", "--instances",
-                                      str(d / f"inst-{c}.bin"), "--circuit", str(d / "circuit.txt"), "--tables", str(d / "tables"),
-                                      "--runs", str(runs), "--warm", str(warm)], fo, fe, env)
-        serve.wait(timeout=900)
+            rc, usage, lines = timed([a.bin, "prove", "--zk", *([] if a.cpu else ["--gpu"]), "--verifier", f"127.0.0.1:{port}",
+                                      "--instances", str(d / f"inst-{c}.bin"), "--circuit", str(d / "circuit.txt"),
+                                      "--tables", str(d / "tables"), "--runs", str(runs), "--warm", str(warm)], fo, fe, env, peak)
+        deadline = time.monotonic() + 900
+        while serve.returncode is None and time.monotonic() < deadline:
+            pid, status, ru = os.wait4(serve.pid, os.WNOHANG)
+            if pid:
+                serve.returncode = os.waitstatus_to_exitcode(status)
+                serve_usage = {"serve_user_s": ru.ru_utime, "serve_sys_s": ru.ru_stime, "serve_maxrss_kb": ru.ru_maxrss}
+            else:
+                time.sleep(0.5)
     finally:
         if serve.poll() is None:
             serve.terminate()
             serve.wait(timeout=60)
         serve_log.close()
+        peak_kb = peak.stop()
     lives = []
     for t, line in lines:
         if line.startswith("LIVE\t"):
@@ -181,13 +245,16 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
     sessions = sorted((o / "sessions").glob("*/session.json"), key=lambda f: f.stat().st_mtime)
     served = [json.loads(f.read_text()) for f in sessions]
     rec = {"K": pt["K"], "c": c, "k": k, "arm": arm, "mode": mode, "rep": rep, "warm": warm, "runs": runs, "rc": rc,
-           "gpu_uuid": os.environ.get("GPU_LEASE_UUID"),
-           **{x: round(y, 3) for x, y in usage.items()}, "built_s": built, "lives": lives, "dir": str(o),
+           "gpu_uuid": os.environ.get("GPU_LEASE_UUID"), "cpu": bool(a.cpu), "threads": os.environ.get("RAYON_NUM_THREADS"),
+           **{x: round(y, 3) for x, y in {**usage, **(serve_usage or {})}.items()}, "peak_rss_kb": peak_kb,
+           "built_s": built, "lives": lives, "dir": str(o),
            "sessions": [str(f.parent) for f in sessions],
            "serve_verify_s": [((r or {}).get("verdict") or {}).get("verify_s") for r in served],
            "accepted": rc == 0 and len(lives) == warm + runs and all(x["accepted"] is True for x in lives)}
     print(f"ZKCOST prove K={pt['K']} c={c} k={k} {arm} {mode}{rep}: rc {rc}, wall {usage['wall_s']:.2f} s, built {built} s, "
-          f"e2e {[x['e2e_s'] and round(x['e2e_s'], 2) for x in lives]}, accepted {rec['accepted']}"
+          f"e2e {[x['e2e_s'] and round(x['e2e_s'], 2) for x in lives]}, k_log {[x['k_log'] for x in lives]}, "
+          f"dense_m {[x['dense_m'] for x in lives]}, peak {peak_kb / 2**20:.1f} GiB (prover, serve and firewall summed), "
+          f"accepted {rec['accepted']}"
           + ("" if rec["accepted"] else f" ({[x['why'] for x in lives]}; {(o / 'prove.err').read_text()[-300:]!r})"), flush=True)
     return rec
 
@@ -197,9 +264,10 @@ def prove(a) -> int:
     plan = json.loads((out / "plan.json").read_text())
     if a.points is not None:
         plan = [plan[int(i)] for i in a.points.split(",")]
-    q = "name,uuid,driver_version,memory.total,compute_cap,clocks.max.sm,power.limit"
-    (out / "records" / "gpu.csv").write_text(subprocess.run(["nvidia-smi", f"--query-gpu={q}", "--format=csv"],
-                                                             capture_output=True, text=True).stdout)
+    if not a.cpu:
+        q = "name,uuid,driver_version,memory.total,compute_cap,clocks.max.sm,power.limit"
+        (out / "records" / "gpu.csv").write_text(subprocess.run(["nvidia-smi", f"--query-gpu={q}", "--format=csv"],
+                                                                 capture_output=True, text=True).stdout)
     ok, arms, tried = True, a.arms.split(","), set()
     # an arm whose first point failed every session stays dropped across --points calls
     earlier = read_jsonl(out / "records" / "prove.jsonl")
@@ -213,7 +281,8 @@ def prove(a) -> int:
     for pt in plan:
         for arm in list(arms):
             recs = [session(a, pt, arm, "cold", rep, out / "points") for rep in range(a.cold)]
-            recs.append(session(a, pt, arm, "warm", 0, out / "points"))
+            if a.runs:
+                recs.append(session(a, pt, arm, "warm", 0, out / "points"))
             for rec in recs:
                 jsonl(out / "records" / "prove.jsonl", rec)
                 ok &= rec["accepted"]
@@ -373,7 +442,8 @@ def main() -> int:
     ap.add_argument("--arms", default="fw,nofw", help="fw: the firewall's send check on (the design's path); nofw: off")
     ap.add_argument("--cold", type=int, default=2, help="one-session prover processes a point and arm")
     ap.add_argument("--warm", type=int, default=1)
-    ap.add_argument("--runs", type=int, default=3)
+    ap.add_argument("--runs", type=int, default=3, help="the warm process's timed sessions; 0: no warm process")
+    ap.add_argument("--cpu", action="store_true", help="prove: on the node's CPUs (no --gpu), as the CPU nodes prove a draw")
     ap.add_argument("--run", default=os.environ.get("RESEARCH_RUN_ID"), help="fit: the run id the observations name")
     a = ap.parse_args()
     if a.command in ("stage", "verify") and not a.lean or a.command == "prove" and not a.bin:

@@ -12,7 +12,7 @@ on bits.
     I32Add_v2                         (a, b: Array<32, Value<1>>) -> Array<32, Value<1>>        word view: I32Add_v1
 
 Each is traced from the builder C-Flock's lowering runs for its word primitive (`trace.definition`), so its And gates are that
-builder's live ANDs: `fp.f32_add` / `f32_mul` / `f32_div` with the IR's NaN words (numpy float32 on x86-64), `fp.f32_fma`, the
+builder's live ANDs: `fp.f32_add` / `f32_mul` / `f32_div` with the word primitives' NaN words (numpy float32 on x86-64), `fp.f32_fma`, the
 same four with every NaN the GPU's 0x7FFFFFFF for the `_v4`s (the `_v2` words, as C-Flock's `tail_pieces` lowers them), the
 f32 add or multiply of the widened operands rounded by `fp.f32_to_bf16` to the word's NaN (0x7FC0 for `Bf16Add_v1`, F2FP's
 0x7FFF for the others), and `forms.add` at 32 bits. None is flushed: a
@@ -162,7 +162,7 @@ def shared_operand(names: tuple[str, str], version: int, build: Callable, params
 
     def split() -> list[Traced]:
         if not parts:
-            parts.extend(_split(trace(build, types, ret), types, shared))
+            parts.extend(_split(trace(build, types, ret, key=("/".join(names), version, {})), types, shared))
         return parts
 
     name, t = params[shared]
@@ -180,11 +180,12 @@ def shared_operand(names: tuple[str, str], version: int, build: Callable, params
 
 def specialized(name: str, version: int, statics: Sequence[str], build: Callable,
                 signature: Callable[[Any], tuple[Sequence[tuple[str, Type]], Type]], doc: str = "", word: Any = None,
-                register: bool = True) -> CompositeDefinition:
+                register: bool = True, refuse: Callable[[dict], str | None] | None = None, ports: Any = None,
+                conformance: str = "exact-model-tested") -> CompositeDefinition:
     """The Boolean Definition ``name_v{version}{statics}`` whose circuit for bindings S is the builder ``build(S)`` traced over
     ``signature(S)`` (`trace.trace`), so that a constant or a length the statics name is folded into its gates, never an operand.
     Traced once per binding, on first use; ``traced(S)``. ``word``, a function of the bindings, names the word Definition it
-    computes (`trace.word_of`)."""
+    computes (`trace.word_of`). ``refuse``, ``ports`` and ``conformance`` are `CompositeDefinition`'s."""
     made: dict[tuple, Traced] = {}
 
     def types(S) -> tuple[list[Type], Type]:
@@ -194,12 +195,12 @@ def specialized(name: str, version: int, statics: Sequence[str], build: Callable
     def traced(S) -> Traced:
         key = tuple(getattr(S, k) for k in statics)
         if key not in made:
-            made[key] = trace(build(S), *types(S))
+            made[key] = trace(build(S), *types(S), key=(name, version, dict(zip(statics, key))))
         return made[key]
 
     d = CompositeDefinition(name, version, tuple(statics), signature,
-                            lambda B, S, *c: emit(traced(S), *types(S), B, *c), doc=doc, conformance="exact-model-tested",
-                            register=register)
+                            lambda B, S, *c: emit(traced(S), *types(S), B, *c), doc=doc, conformance=conformance,
+                            register=register, refuse=refuse, ports=ports)
     d.traced = traced  # type: ignore[attr-defined]
     d.word = word  # type: ignore[attr-defined]
     return d
@@ -222,7 +223,8 @@ def shared_specialized(names: tuple[str, str], version: int, statics: Sequence[s
         if key not in made:
             params, ret = signature(S)
             types = [t for _, t in params]
-            made[key] = _split(trace(build(S), types, ret), types, shared, by_element)
+            made[key] = _split(trace(build(S), types, ret, key=("/".join(names), version, dict(zip(statics, key)))), types,
+                               shared, by_element)
         return made[key]
 
     def own_sig(S):
@@ -254,7 +256,7 @@ def on_bits(name: str, version: int, statics: Sequence[str], signature: Callable
     """The Boolean composite ``name_v{version}{statics}`` with body ``body`` (whose Calls are Boolean Definitions), documented by
     ``body``'s docstring, whose word view is the word Definition ``word`` bound at the same statics (`trace.word_of`), each static
     in ``lifted`` (a Boolean Definition) read as its own word view. A static-free one names ``word`` itself: the switch
-    (`verity_vllm.program.boolean`) finds a word Definition without bindings by its id alone."""
+    (`verity.ml.definitions.boolean`) finds a word Definition without bindings by its id alone."""
     d = CompositeDefinition(name, version, tuple(statics), signature, body, doc=body.__doc__ or "",
                             conformance="exact-model-tested", register=register)
     if statics:

@@ -119,10 +119,10 @@ def extract(a) -> None:
     import pickle
 
     from verity.core.protocols.pouw import credit as CR
-    from verity_vllm.protocol_options import pouw_h1_challenger as PHC
-    from verity_vllm.protocol_options import pouw_h1_handoff as HO
-    from verity_vllm.protocol_options import pouw_h1_prover as PV
-    from verity_vllm.protocol_options import pouw_h1_kept as KP
+    from verity_vllm.protocols.pouw.h1 import challenger as PHC
+    from verity_vllm.protocols.pouw.h1 import handoff as HO
+    from verity_vllm.protocols.pouw.h1 import prover as PV
+    from verity_vllm.protocols.pouw.h1 import kept as KP
 
     t0 = time.time()
     doc = json.loads(Path(a.calls).read_text())

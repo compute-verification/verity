@@ -1,12 +1,12 @@
 """What a point's arms certify, and each resource's covert residual.  Pure (stdlib and `verity`), so it runs on a CPU.
 
-* **W_cert, compute.**  `Pouw.Guarantees.EndToEnd` (``Security/Models/Pouw/Guarantees/Game.lean``) bounds the chance that an
+* **W_cert, compute.**  `Pouw.Guarantees.EndToEnd` (``Security/Definitions/Pouw/Guarantees/Game.lean``) bounds the chance that an
   audit of t draws accepts a transcript whose prover spent T < (1 − γ)(1 − ε_s)·ΣW_ref by (1 − ε_s)^t + ε_TT(q, N).  So
   W_cert = (1 − γ)(1 − ε_s)·ΣW_ref, in W1 units (one dense FP8 MAC on the device), with ΣW_ref the drawn statement's
   reference work over the credited cells (`clear_work.ticket_cell`; about 1.09 to 1.11 per MAC at the sweep's shapes).
   γ is looked up from the Lean-pinned price twins (`price_twins.lookup`) of the statement on the priced path the scheme's
   draw cites (`clear_work.draw_wref`), at both FP32 prices, the larger published; it is never typed.  Twins are stated
-  at the cubes 8,192³ and 16,384³ and at each of Llama-3.1-8B's linears (n, k) and its layout (#1809, `GAMMA_PIN`), so
+  at the cubes 8,192³ and 16,384³ and at each of Llama-3.1-8B's linears (n, k) and its layout (`GAMMA_PIN`), so
   every shape the sweep names is priced; a shape no twin states has W_cert unproved.  ε_s = 0.1% at t = K = 27,713 draws
   (`plan.RECORD_K`, (1 − ε_s)^K ≤ 2⁻⁴⁰).  A chain's credited rows are its screened rows less those the screen failed or
   left unsure, a lower bound on the rows the records credit.
@@ -53,7 +53,7 @@ DELTA = Fraction(1, 2 ** 40)
 GAMMA_PIN = "#1809"
 #: the served layout whose twin is γ's max over its linears
 LAYOUT = "llama31_8b"
-#: the bandwidth protocol's red-team grant (#1805, with conditions), whose point `granted_params` is
+#: the bandwidth protocol's red-team grant (with conditions), whose point `granted_params` is
 Q_GRANT = "red-team grant at 5761861fd"
 Q_THEOREM = "Bandwidth.SecurityProofs.AuditRO"
 GRANTED_T_NS = 1_200_000

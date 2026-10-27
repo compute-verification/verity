@@ -1,0 +1,16 @@
+{
+ "definitions": {
+  "EgressBucket_v1{B=148,R=6,r=3,NR=3,K=5,IB=7,D=0}": {
+   "and": 2552,
+   "type": "63946e1a571ce4eba1a9397a70420d4dc6489d6e5dd2d4510c0f5952785475067f1ab5d265cd767776286bacb381ae1205c1b25a3535d4919bb2330b7edb4b4f"
+  },
+  "EgressBucket_v1{B=256,R=16,r=4,NR=4,K=64,IB=17,D=22}": {
+   "and": 11555,
+   "type": "59d5fa8a03288b8686fe28c6ea0a3414d2b9314e38d85a8e98e22068f1b18fe9445e368fee92101bb25430057cbc0380546ac557f4114c48a7269db2fe7ad6c3"
+  },
+  "EgressBucket_v1{B=256,R=8,r=2,NR=4,K=16,IB=18,D=2}": {
+   "and": 5795,
+   "type": "9f4e6dbc2dd2e5a73d40c5b4fb086292efc3e3e7a0feb1c0083b35d11a2c6a7592ac30eaaff5f49b2bd6c7b2d755362693fc104b3b774c3139d6e329f1abb0f7"
+  }
+ }
+}

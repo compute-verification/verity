@@ -1,5 +1,5 @@
-"""[R15 compiled] Merge the control-only and treatment-only commit_delta outputs of an Execution=compiled row into ONE paired summary
-(summary.json / summary.md / runs.jsonl / verdict.json in --out), in the shape row_pod.sh's Commit stage reads.
+"""Merge the control-only and treatment-only commit_delta outputs of an Execution=compiled row into ONE paired summary
+(summary.json / summary.md / runs.jsonl / verdict.json in --out), in the shape row_pod.sh's Commit phase reads.
 
 The two arms are separate processes because the treatment's record ops live inside the compiled graphs for the whole process; pairing is
 by run index (control run i <-> treatment run i).  Refuses when the two processes' compilation settings differ (CompilationMode,
@@ -26,12 +26,12 @@ def _json(p: Path, name: str) -> dict:
     return json.loads(f.read_text()) if f.exists() else {}
 
 
-def _bootstrap_ci(xs: list[float], n: int = 4000, seed: int = 0) -> tuple[float, float]:
-    import random
+def _bootstrap_ci(xs: list[float], n: int = 4000, *, seed: int) -> tuple[float, float]:
+    from verity_vllm.commit import challenge as CH
 
     if len(xs) < 2:
         return (float("nan"), float("nan"))
-    rng = random.Random(seed)
+    rng = CH.stream(seed)
     means = sorted(statistics.fmean(rng.choices(xs, k=len(xs))) for _ in range(n))
     return means[int(0.025 * n)], means[int(0.975 * n) - 1]
 
@@ -87,7 +87,7 @@ def main(a: Options) -> None:
     # [coord M-0178 (2a)] the generated-kernel identity of both processes: the Triton kernel SOURCES Inductor emitted (kernel_set_sha256 over
     # {(name, source sha256)}) and the per-piece launch programs.  The treatment's pieces carry the record op as an extern call, so its
     # launch programs (call_set) legitimately differ; its KERNEL SET should equal the control's -- a difference means the record op changed
-    # what Inductor fused, and is listed kernel by kernel (reported, labelled; not a refusal: the row's implementation is then the treatment's).
+    # what Inductor fused, and is listed kernel by kernel (reported, labelled; not a refusal: the workload's implementation is then the treatment's).
     gkc, gkt = cc.get("generated_kernels") or {}, ct.get("generated_kernels") or {}
     kernels_identified = bool(gkc.get("kernel_set_sha256")) and bool(gkt.get("kernel_set_sha256"))
     kernel_set_equal = kernels_identified and gkc.get("kernel_set_sha256") == gkt.get("kernel_set_sha256")
@@ -123,7 +123,7 @@ def main(a: Options) -> None:
             problems.append("P_compiled path: P_compiled not derived from BOTH arms' Inductor output code (--manifest-control/--manifest-treatment)")
         elif not program_digests["equal"]:
             problems.append(f"P_compiled path: the Program derived from the treatment's output code differs from the control's: {program_digests}")
-        # [Daniel M-0776 (3)] runtime <-> pinned artifact identity: the code objects LOADED in each running process (PyCodeCache registry:
+        # runtime <-> pinned artifact identity: the code objects LOADED in each running process (PyCodeCache registry:
         # Triton sources + cubins) must be one set across arms, and every kernel P_compiled names must be among the loaded objects
         lc, lt = gkc.get("loaded") or {}, gkt.get("loaded") or {}
         # refusal = the LOADED KERNEL SOURCES (the code objects) differ; the binaries (cubin sha256 where Inductor retains the bytes, else
@@ -248,7 +248,7 @@ def main(a: Options) -> None:
                 config_differ.append(k)
             if code_equal and cc_bytes and ct_bytes and cc_bytes != ct_bytes:
                 code_equal_denied_differ.append(k)
-        # [R16 compiled, Daniel DECISIONS-3 autotune rule] a kernel whose arms executed DIFFERENT autotune configs of the SAME source is two
+        # [the compiled-kernel autotune rule] a kernel whose arms executed DIFFERENT autotune configs of the SAME source is two
         # specializations -- lifted only when the treatment process SHOWED, on committed inputs of sampled launches, that the kernel's own
         # compiled source under EVERY candidate config of its heuristic reproduces the committed outputs bit for bit (compiled_autotune),
         # every treatment run agreeing, the control's executed config(s) among the candidates, and the sources equal; else it stays DIFFERS.
@@ -373,7 +373,7 @@ def main(a: Options) -> None:
                       "commit_pass": (t.get("commit") or {}).get("commit_pass"), "run_root": (t.get("commit") or {}).get("run_root")})
     deltas = [p["delta_wall_s"] for p in pairs]
     ratio = [p["treatment_wall_s"] / p["control_wall_s"] for p in pairs if p["control_wall_s"]]
-    lo, hi = _bootstrap_ci(deltas)
+    lo, hi = _bootstrap_ci(deltas, seed=0)
     commit_pass = bool(trt) and all(bool((r.get("commit") or {}).get("commit_pass")) for r in trt) and not problems
     fail_reasons = [(r.get("commit") or {}).get("commit_fail_reason") for r in trt if not (r.get("commit") or {}).get("commit_pass")]
     tv = _json(T, "verdict.json")

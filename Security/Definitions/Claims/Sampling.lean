@@ -51,7 +51,7 @@ Generic pieces this block adds, which move to `Definitions.Claims` in a later ch
 is the spec's `ZKmalRx` and the decoder spec Flock's radius form, `Flock.ListWithin` at `Flock.Deploy`'s `len` and `θ`;
 nothing here reads Flock's former decoding threshold or count (`agree`, `nMin`).
 
-Frozen by `Flock.Guarantees.SamplingClaimsStated` (`Models/Flock/Guarantees/SamplingClaims.lean`), whose statement
+Frozen by `Flock.Guarantees.SamplingClaimsStated` (`Definitions/Flock/Guarantees/SamplingClaims.lean`), whose statement
 reads every claim here: the lock records each one's text under `reads`, so a changed claim is a changed record.
 -/
 

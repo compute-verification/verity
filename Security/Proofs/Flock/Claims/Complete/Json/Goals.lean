@@ -222,7 +222,7 @@ theorem drawMatches_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.
   | some d =>
     rintro ⟨d', hd', hs⟩
     rw [hd']
-    exact (drawEq_iff _ _).2 (.some hs.symm.jsonEquiv)
+    exact (drawEq_iff _ _).2 (.some hs)
 
 theorem list_bytes_beq_self (l : List ByteArray) : (l == l) = true := by
   induction l with

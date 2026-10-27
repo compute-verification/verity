@@ -1,4 +1,4 @@
-"""The scale-products source (`acquire.sources.scale_products_source`) on CPU tensors with a recording committer: its words are the IR's
+"""The scale-products source (`acquire.sources.scale_products_source`) on CPU tensors with a recording committer: its words are the circuit's
 (`ScaledMmFp8BlockSharedScale_v1` evaluated as a standalone Call, its committed interior gates `query.scale_products.slots` read in
 order, NaN payloads, infinities and subnormals included); it commits `<linear module>/scale_products` only inside the manifest site during
 a committed step and refuses a launch of another block geometry; `attach` refuses a manifest without the family, and `taps.attach`
@@ -15,7 +15,7 @@ from tests.acquire.test_vocab_range_source import Recorder
 from tests.check.test_sampled_replay_v2_addresses import _v2_manifest
 from tests.query.test_scale_products import fp8_program
 from verity_vllm.acquire.sources import call_boundary_plan as CBP
-from verity_vllm.program.registry import fp8
+from verity.ml.definitions.registry import fp8
 from verity_vllm.query import scale_products as SP
 
 torch = pytest.importorskip("torch")

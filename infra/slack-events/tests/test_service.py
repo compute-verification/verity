@@ -66,6 +66,7 @@ def test_vercel_json_wires_the_function_and_the_crons_with_the_drain_every_minut
                                                              "/api/cron/watchdog": "*/5 * * * *",
                                                              "/api/cron/reconcile": "*/10 * * * *"}
     assert v["framework"] is None and v["buildCommand"] == "python3 build.py && mkdir -p public && echo slack-events > public/index.txt"   # a custom build with no framework needs a non-empty output dir
+    assert v["ignoreCommand"] == "python3 ignore.py"
     assert (SERVICE / ".python-version").read_text().strip() == "3.13"
     assert not (SERVICE / "api" / "consume.py").exists()
 
@@ -142,3 +143,49 @@ def test_a_retry_is_rescheduled_not_acknowledged_and_the_drain_stops_at_its_budg
 
     assert anyio.run(lambda: subscriber.drain(world.deps, receive, lambda: next(ticks))) == {"handled": 1, "failed": 0}
     assert log == [("retry", "m1", consumer.backoff(1))]
+
+
+def test_a_git_deployment_builds_only_main_and_only_when_the_service_changed():
+    """Git deployments, off since 19 Oct, come back for main alone, filtered by the service's inputs (ignore.py), so a
+    landing deploys itself.  Console's CLI deploy (no branch) and an unanswerable diff both build."""
+    ignore = load_module("ignore")
+    asked = []
+
+    def diff(answer):
+        return lambda base: asked.append(base) or answer
+    assert ignore.decide({}, diff(False))[0] == 1 and asked == []
+    assert ignore.decide({"VERCEL_GIT_COMMIT_REF": "cursor/x-1234"}, diff(True))[0] == 0 and asked == []
+    assert ignore.decide({"VERCEL_GIT_COMMIT_REF": "main", "VERCEL_GIT_PREVIOUS_SHA": "abc"}, diff(False))[0] == 0
+    assert ignore.decide({"VERCEL_GIT_COMMIT_REF": "main", "VERCEL_GIT_PREVIOUS_SHA": "abc"}, diff(True))[0] == 1
+    assert ignore.decide({"VERCEL_GIT_COMMIT_REF": "main", "VERCEL_GIT_PREVIOUS_SHA": "abc"}, diff(None))[0] == 1
+    assert ignore.decide({"VERCEL_GIT_COMMIT_REF": "main"}, diff(False))[0] == 1 and asked == ["abc", "abc", "abc"]  # main's first
+    assert set(ignore.INPUTS) >= {f"{p}" for p in build_sources()}
+
+
+def test_ignore_reads_the_diff_from_git(tmp_path):
+    import subprocess
+    ignore = load_module("ignore")
+    git = lambda *a: subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", *a], cwd=tmp_path,
+                                    check=True, capture_output=True, text=True).stdout.strip()
+    git("init", "-q")
+    (tmp_path / "README").write_text("x")
+    git("add", "-A"); git("commit", "-qm", "base")
+    base = git("rev-parse", "HEAD")
+    (tmp_path / "README").write_text("y")
+    git("commit", "-qam", "docs only")
+    assert ignore.changed(base, tmp_path) is False
+    (tmp_path / "infra" / "slack-events").mkdir(parents=True)
+    (tmp_path / "infra" / "slack-events" / "a.py").write_text("x")
+    git("add", "-A"); git("commit", "-qm", "the service")
+    assert ignore.changed(base, tmp_path) is True and ignore.changed("0" * 40, tmp_path) is None
+
+
+def load_module(name: str):
+    spec = importlib.util.spec_from_file_location(f"slack_events_service_{name}", SERVICE / f"{name}.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def build_sources():
+    return load_module("build").SOURCES.values()
