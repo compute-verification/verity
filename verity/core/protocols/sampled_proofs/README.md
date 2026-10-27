@@ -19,7 +19,7 @@ points to the code, and lists what the Lean does not state yet.
 3. The verifier draws proof blocks from its operating system's randomness under the agreed sampling design and sends the draw
    in the clear, before the session's coin commitment. Nothing is derived from a commitment, and there is no beacon.
 4. The drawn proof blocks are proved in one session, whose statement is the drawn proof blocks'.
-5. Each verifier that runs checks the proofs. The Lean verifier is the verifier of record.
+5. Each verifier that runs checks the proofs. The Lean verifier's verdict is the one that counts.
 6. The audit record keeps the registration, the receipt, the draw, the proved proof blocks, the statement's digests and every
    verdict, and, when everything accepted, the integrity profile.
 
@@ -46,10 +46,11 @@ query, never from the prover.
 **What an accepted audit establishes.** Under a stratified draw, a set of faulty proof blocks has acceptance probability
 `Π_s C(n_s − m_s, k_s) / C(n_s, k_s)` (the probability that the draw misses all of them), `m_s` being its proof blocks in
 stratum `s`, so a subcircuit that is faulty in every proof block is never missed. Under the work sampling design, faulty proof blocks
-doing a fraction `ε` of the credited work have acceptance probability at most `(1 − ε)^K`; at `K = 27,713`, a 0.1% share
-has at most `2^-40`. The proof system adds, per proof block, its knowledge-soundness and binding errors (ε_ks and ε_bind).
+doing a fraction `ε` of the work the table credits have acceptance probability at most `(1 − ε)^K`; at `K = 27,713`, a
+0.1% share has at most `2^-40`. The proof system adds, per proof block, its knowledge-soundness and binding errors (ε_ks and ε_bind).
 Applications weight the profile's faulty proof blocks by what each one costs them: exfiltration security by their output bits,
-plus a term for which proof blocks are faulty, and compute security by their work.
+plus a term for which proof blocks are faulty, and compute security by their work. For the overhead lower bound, the
+audited circuit is verified compute up to the share its faulty proof blocks may hold, ε_skip (`GLOSSARY.md`).
 
 Everything is committed at serve time: the proof service has no two-stage rule, and the Lean verifier refuses a
 registration that names one.

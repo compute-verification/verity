@@ -8,7 +8,8 @@ their ported components' packages, with no Mathlib:
   stub components (`Stubs.lean`); and the `#guard`s that pin the rule (`Guards.lean`).
 - `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): sampled proofs, PoUW, PoUS, the remote bandwidth
   audit and the network certifier.
-- `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): sampled proofs and PoUW.
+- `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): sampled proofs and PoUW, for an auditor with
+  no device at the datacenter, so where PoUW's coins are kept confidential there is open ([PoUW](../pouw/README.md)).
 
 The rule and the formats are written once, over any list of components, and the two products are values
 of it that differ in their id and components. Each product's executable is the core CLI (`onsite id | check | serve`,
@@ -56,8 +57,8 @@ replaces its stub in `Core.Onsite.components` and `Core.Remote.components` with 
 a `[[require]]` of each product, keeping each list in the order of its ids (`ordered`, which each product's `#guard`
 checks), and deletes the stub. The difftest's reference (`tests/reference.py`) replaces the stub's mirror with the port's
 own Python (`Ported`), or its Python's answers on cases made once (`Recorded`), and its cases come from the port's
-own difftest or its period hook. Every component of both products is ported; NCI and the trial's reconciling are not
-components yet.
+own difftest or its period hook. Every component of both products is ported. The inference-only policy is not yet a
+component of the composites, and neither is the trial's reconciling.
 
 ## The difftest
 
@@ -82,9 +83,10 @@ trial's differs, and the reference is changed to match (`verdict`; the trial's, 
   rejects. `test_the_rule_changes_the_trial_only_where_a_rejection_meets_an_undecided_component` pins the difference,
   and `test_a_reference_without_reject_dominance_is_caught` shows the difftest tells the two apart: a reference with the
   trial's rule disagrees with the Lean, on a case where one component rejects and another is undecided.
-- **Every component counts.** Of the components' statements, the trial's NCI fails the epoch on PoUW's reasons alone
-  (sampled proofs' reach it through them), and PoUS's or the network certifier's reasons only zero their explained usage in the
-  balance. Here each component's rejection rejects; `trial_verdict` already counts every component's.
+- **Every component counts.** Of the components' statements, the trial's inference-only check (`Nci.verifier`) fails
+  the epoch on PoUW's reasons alone (sampled proofs' reach it through them), and PoUS's or the network certifier's
+  reasons only zero their explained usage in the balance. Here each component's rejection rejects; `trial_verdict`
+  already counts every component's.
 
 A bare `uv run` inside this directory stops its workspace search at `verity/core/protocols/pyproject.toml`; run the suite
 through `suites.py`, or `pytest` with the workspace's `.venv`.
