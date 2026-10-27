@@ -18,7 +18,7 @@ call a zone a block (`datacenter.physical.Block`, `--blocks`).
 - `workload/`: what runs on the zones, with its own suite (its modules are listed in `workload/__init__.py`).
   `python -m workload.lab_run run --out DIR`, from this directory in a Python with torch, serves verity_vllm's serving
   Program on the lab, each zone in its namespace behind its certifier's proxy and the client on the outside host, then
-  checks the certifiers' audit, N3, N2's served verdict and the answers.
+  checks the certifiers' audit, N2's served verdict and the answers.
 - `run.py`: the whole night on the lab host, `verity bench network_sim --out DIR` (below), checked against its expected
   verdicts.
 - `tests/`: the exports' tests, the declarations' values pinned against memory accounting's constants
@@ -67,10 +67,8 @@ namespace the proxy (`verity.core.protocols.certifier.active.Proxy`, unmodified)
 whose connection crosses the fabric. Each zone's server plays one strategy: `honest`; `bits`, whose write times carry a
 random bit per request; `late`, which holds a request in sampling period 0 past every sync; `extra`, which writes one
 event at a position the Program doesn't have; or `maintenance`, honest with its certifier down for sampling period 1
-(below). Each zone is audited three times. The certifier's audit is `audit.Audit`'s `check_link` and
-`check_ingress_link` on its raw and committed records. N3Window_v5's reference checks every raw sampling block against
-the canonical framing's templates (`workload.n3_canonical`). The datacenter record check is `datacenter.check_records`
-on its records as `datacenter.observe.Record`s against the ones an honest run of the Program publishes: each port
+(below). Each zone is audited twice. The certifier's audit is `audit.Audit`'s `check_link` and `check_ingress_link`
+on its raw and committed records. The datacenter record check is `datacenter.check_records` on its records as `datacenter.observe.Record`s against the ones an honest run of the Program publishes: each port
 (`b0.cert:out` for what leaves the zone, `b0.cert:in` for what enters it) needs a record for each sampling period, with
 the declared counts and digest, and each carried sampling period leaves log2 of the sync set's size bits of timing
 advice. The declaration's cadence is the certifiers' calibrated parameters: frames of 4,096 bytes, buckets of 100 ticks
@@ -166,17 +164,15 @@ bucket late, and an honest zone's ingress records are refused unless the Program
 across the zones in pipeline order) on the lab's declaration. Each zone's server runs in the zone's namespace, mockdc's
 proxy in its certifier's, and the client on `na-ext0`. A zone reaches only its certifier, so the client relays every
 message between zones: it leaves its source as server-sent events of a response and enters its destination in a request
-(`workload/lab.py`), both on the canonical framing (`active.event`, `active.request_frames`). Each zone is checked five
-ways: the certifier's audit (`audit.Audit` in `active_replay`'s live mode, on the zone's event log), N3 over the
-certifier's records (`workload.lab.check`), N3Window_v5's reference on each sampling block (`n3_unit.lab_windows`), N2's
-served verdict on each sampling block (`lab_run.n2_verdicts`), and the answers against the Program evaluated in one
-process. Every sampling block declares the calibration's envelope, δ = 12 buckets of 100 ms. The run needs a Python with
-torch (below). Its tampers are `--tamper b1:flip-bit`, `b2:late` and `b1:extra`, and their expected verdicts are
-`run.WORKLOAD`'s.
+(`workload/lab.py`), both on the canonical framing (`active.event`, `active.request_frames`). Each zone is checked three
+ways: the certifier's audit (`audit.Audit` in `active_replay`'s live mode, on the zone's event log), N2's served verdict
+on each sampling block (`lab_run.n2_verdicts`), and the answers against the Program evaluated in one process. Every
+sampling block declares the calibration's envelope, δ = 12 buckets of 100 ms. The run needs a Python with torch
+(below). Its tampers are `--tamper b2:late` and `b1:extra`, and their expected verdicts are `run.WORKLOAD`'s.
 
 Every zone's link is served (the certifier's `PROTOCOL.md`, "A served link"): responses padded with empty events to F,
 requests to F_in frames, and a proxy that admits a request only while its sampling period still ends idle. The proxy
-signs nothing: a stand-in (`n3_unit.Certifier`) signs N2's heads after the run.
+signs nothing: a stand-in LMS key (`lab_run.n2_verdicts`) signs N2's heads after the run.
 
 ## The whole night
 
@@ -186,7 +182,7 @@ vy-nebius-cpu-2's path, so there it is `python3 benchmarks/network_sim/run.py --
 - the mock datacenter in five zones, which take the five strategies, once plain and once with the salt;
 - the fleet (`up --fleet --blocks 2`), twice, with the first four strategies swapped between the sites
   (`run.MOCKDC_RUNS`);
-- with the lab back in its default shape, lab_run's honest, `b1:flip-bit`, `b2:late` and `b1:extra` runs;
+- with the lab back in its default shape, lab_run's honest, `b2:late` and `b1:extra` runs;
 - the summary.
 
 lab_run runs in a Python with torch: the one `--python` names, else `run.py`'s own if it has torch, else one built
@@ -195,8 +191,7 @@ it leaves the lab up in its default shape.
 
 `DIR/summary.txt` has a row per zone of each run with:
 - the certifier's verdicts, and the salt check's;
-- the record check's verdicts, or N3's;
-- N3Window_v5's, as the sampling blocks it accepts of those the zone recorded;
+- the record check's verdicts, on mockdc's runs;
 - N2's, on lab_run's served links;
 - the account's covert budget;
 - the median lag from a bucket's tick to its bytes reaching the peer;
@@ -215,10 +210,10 @@ research run --on vy-nebius-cpu-2 --project verity --source . --cwd source --tim
 `research run` publishes the night's `summary.txt` and `summary.json` with its outputs in the evidence store, where
 results are read.
 
-## N3 in zero knowledge
+## N3, retired
 
-N3, the content check (every frame a certified link carried is a committed crossing), is prototyped in `workload/` as
-Boolean circuits over a sampling block, evaluated in the clear, in no proof-service Spec and not proved: `N3Window_v3`
-(`workload/n3_unit.py`), `N3Window_v4` (`workload/n3_v4.py`) and `N3Window_v5` (`workload/n3_v5.py`), with their sizes
-at a served link's shape in `workload/n3_cost.py`. Each module's docstring states its checks, what is public and what
-is committed.
+N3, the content check (every frame a certified link carried is a committed crossing), was prototyped here: in the clear
+over the certifiers' records and as Boolean circuits over a sampling block, `N3Window_v3` to `N3Window_v5`, that no Spec
+ran. It is retired, superseded by the network certifier's step-indexed scan
+(`verity/core/protocols/certifier/ingress_scan.py` and `egress.py`), which `benchmarks/network_traces/scan_zk.py` proves
+in zero knowledge.
