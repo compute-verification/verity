@@ -126,6 +126,7 @@ def evaluate(snapshot: Path, ids: np.ndarray, window_ids: list[int], arms: list,
                 d = (h.float() - new_ref.float()).norm()
                 diverge[k].append(float(d / new_ref.float().norm().clamp(min=1e-30)))
             ref = new_ref
+            run = None  # the last Run holds the layer and its int8 cache (V4: 40 GB) into the next layer's reference
             del layer, cache, calib
             if str(device).startswith("cuda"):
                 torch.cuda.empty_cache()

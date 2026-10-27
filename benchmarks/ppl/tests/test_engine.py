@@ -1,5 +1,7 @@
+import gc
 import math
 import types
+import weakref
 
 import numpy as np
 import pytest
@@ -231,6 +233,24 @@ def test_row_chunks_change_no_bit(llama, ids, calib, monkeypatch):
     assert passed(chunked), chunked["gates"]
     for k in whole["nll"]:
         assert np.array_equal(whole["nll"][k], chunked["nll"][k]), k
+
+
+def test_a_layer_is_freed_before_the_next_is_built(llama, ids, calib, monkeypatch):
+    """When layer li + 1 is built nothing holds layer li, nor (through the last arm's Run) its int8 weight cache: a
+    run's peak memory is one layer's."""
+    refs, alive = [], []
+    real = engine.make_layer
+
+    def make(cfg, li, tensors, device):
+        gc.collect()
+        alive.append([r() is not None for r in refs])
+        layer = real(cfg, li, tensors, device)
+        refs.append(weakref.ref(layer))
+        return layer
+
+    monkeypatch.setattr(engine, "make_layer", make)
+    evaluate(llama, ids[:1], ["int8-all"], calib=calib)
+    assert len(alive) == M.Config.read(llama).layers and not any(any(a) for a in alive), alive
 
 
 def test_the_readme_plugin_example_runs(llama, ids, monkeypatch, tmp_path):
