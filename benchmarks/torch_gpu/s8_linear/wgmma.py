@@ -15,11 +15,12 @@ import ctypes as C
 import functools
 import hashlib
 import json
-import os
 from pathlib import Path
 
 import torch
+from verity_config.settings import of
 
+settings = of(__file__)
 HERE = Path(__file__).resolve().parent
 TILES = ((128, 256), (128, 128), (128, 64), (64, 256), (64, 128), (64, 64))
 BK, SMEM_BUDGET, MAX_STAGES = 128, 220 * 1024, 12
@@ -124,7 +125,7 @@ class Lib:
         self.path = Path(path)
         self.cubin = self.path.read_bytes()
         self.sha256 = hashlib.sha256(self.cubin).hexdigest()
-        self.cu = C.CDLL(os.environ.get("S8_LIBCUDA", "libcuda.so.1"))
+        self.cu = C.CDLL(settings.S8_LIBCUDA)
         for f, a in CUDA.items():
             getattr(self.cu, f).argtypes, getattr(self.cu, f).restype = a, i32
         torch.cuda.init()
@@ -253,7 +254,7 @@ class Lib:
 
 @functools.cache
 def lib() -> Lib:
-    return Lib(Path(os.environ.get("S8_WGMMA_CUBIN", HERE / "build" / "s8_wgmma.cubin")))
+    return Lib(Path(settings.S8_WGMMA_CUBIN or HERE / "build" / "s8_wgmma.cubin"))
 
 
 def scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
