@@ -18,6 +18,8 @@
 //   paths B PICKS OUT                    PICKS: u32 (step in block, layer, leaf) triples; OUT: each one's siblings,
 //                                        leaves first (64 bytes a level). Answers `paths B COUNT`.
 //   quit
+// v31.cu's CUTLASS baseline names phc_prepared even when it isn't linked in; its header declares it
+#include "../harness/native/cutlass_api.h"
 #define main v31_main
 #include "v31.cu"
 #undef main
