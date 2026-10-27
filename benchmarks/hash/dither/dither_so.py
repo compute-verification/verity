@@ -12,7 +12,7 @@ after it, beside a later step's forward; their receipts go under a later round. 
                      graphs), exactlin's GEMM with the z/y records (dither-a's -zy) and the served y's records
                      (`dithera_ycommit`).  No seeds and no units: nothing in the forward reads a coin.
     between steps    under -ab, every call's rows >= m cleared and the step's A tables in one h1c_build (h1agate.py's
-                     `batch`: a per-step A commitment, a scheme change CA has not ruled in, so a separate arm); the step's
+                     `batch`: a per-step A commitment, a scheme change not ruled in, so a separate arm); the step's
                      A slots, scales, A roots, live rows and step into ring slot s mod D; the admit tables (under -pt on
                      their own stream), the z/y leaf tables and the served y's tables (their run-time compare);
                      round s over a-step, admit-step, z-step, y-step and receipt-step, whose leaf is the receipt-table
@@ -260,7 +260,7 @@ def smq_of(v: str) -> tuple[int, int, int]:
 # the A tables: "m" per call in the forward on NA_MULTI streams; "b" once a step between steps (not ruled in); "n" after
 # either: each call's noise on NA_MULTI streams beside the units
 AO = {"m": "per call, in the forward", "mn": "per call, in the forward; noise on its own streams",
-      "b": "once a step (h1agate's batch; not ruled in by CA)", "bn": "once a step (not ruled in by CA); noise on its own streams"}
+      "b": "once a step (h1agate's batch; not ruled in)", "bn": "once a step (not ruled in); noise on its own streams"}
 NA = DA.NA_MULTI
 
 
@@ -443,7 +443,7 @@ class SoWindow(DO.Window):
 
     def prepare(self) -> None:
         """In process, the next window's challenger made now, outside a timed generate (its commitment over 16384 rounds
-        takes 1.7 s), as infra's gate makes an off-node session's before its window."""
+        takes 1.7 s), as the challenger's gate makes an off-node session's before its window."""
         if not self.open and self.prepared is None and CO.session() is None:
             self.prepared = CO.open_coins(None, 1, rounds_of())
 
@@ -1117,8 +1117,8 @@ class SoWindow(DO.Window):
         doc["salt"] = "round (the step's own coin)"
         doc["so"] = {"order": ORDER, "depth": self.depth, "units_lag_steps": self.depth - 2,
                      "receipts_round_lag": self.depth - 1, "a_tables": "once a step (not ruled in)" if self.a_once
-                     else ("a/<K>@<s> once a step after the forward (DITHER_A_STEP: CA's 23 Oct ruling, core's form "
-                           "pending)" if self.a_step else "per call, in the forward"),
+                     else ("a/<K>@<s> once a step after the forward (DITHER_A_STEP: ruled in, core's form pending)"
+                           if self.a_step else "per call, in the forward"),
                      "coins": self.coins.label, "coins_record": self.coins.record(),
                      "coin_rtt_ms": {"n": len(rtt), "p50": _q(rtt, 0.5), "p90": _q(rtt, 0.9), "max": _q(rtt, 1.0)},
                      "coin_wait_ms": {"n": len(waits), "p50": _q(waits, 0.5), "p90": _q(waits, 0.9), "max": _q(waits, 1.0)},

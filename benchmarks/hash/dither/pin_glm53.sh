@@ -9,7 +9,7 @@
 # Both outputs stay on the node (about 705 GB of base and 757 GB of pin), recorded with `research keep` until pin_glm53.toml's
 # expiries. cwd = the source tree.
 #
-#   research run --on vy-nebius-cpu-1 --pool research --as vllm-dither-requant --project verity --source . --cwd source \
+#   research run --on vy-nebius-cpu-1 --pool research --as WHO --project verity --source . --cwd source \
 #     --timeout 8h -- bash benchmarks/hash/dither/pin_glm53.sh pin|make
 set -euo pipefail
 MODE=${1:?usage: pin_glm53.sh pin|make}

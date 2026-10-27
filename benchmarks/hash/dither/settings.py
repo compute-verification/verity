@@ -8,7 +8,7 @@ are h1u.cu's nvcc macros (``-DH1U_JRC=1``), not variables; ``HB_KC_FLAGS`` and i
 A build's path (``DITHER_H1C``, ``HB_H1U``, ...) is ``where``: sbench.sh and hb_served.sh build each from this tree's sources
 at the run's commit (RESEARCH_SOURCE_SHA), or check a sent build's sources against it, so the commit is the value.
 
-The standalone files read their variables themselves: CA's reference runs under another tree's PYTHONPATH (h1v3_ref.py),
+The standalone files read their variables themselves: H1V3's reference runs under another tree's PYTHONPATH (h1v3_ref.py),
 live_audit.py reruns itself under main's, and hb_served.sh runs the hb_*.py from the run's inputs when the source has none.
 `REGISTRY.standalone_problems` holds each of their reads to its declaration here.
 """
@@ -20,7 +20,7 @@ from verity_config.settings import DEBUG, VALUE, WHERE, Registry, Setting as S, 
 
 STANDALONE = ("h1v3_ref.py", "live_audit.py", "hb_sbench.py", "hb_peel.py")
 BUILD = "a build's path in the run's scratch (sbench.sh's or hb_served.sh's, from this tree's sources at the run's commit)"
-TREE = "the source tree CA's reference runs from, under its own PYTHONPATH; the result records its commit"
+TREE = "reference's source tree, run under its own PYTHONPATH; the result records its commit"
 SHELL = "sbench.sh's, read only by the shell"
 
 REGISTRY = Registry(
@@ -31,7 +31,7 @@ REGISTRY = Registry(
     S("DITHER_H1F", str, None, WHERE, f"libh1f.so, the fused window's units: {BUILD}"),
     S("DITHER_H1O", str, None, WHERE, f"libh1o.so, the one-stream window's units: {BUILD}"),
     S("DITHER_UNITS", str, "block", VALUE, "dither_one's units form (block, mix, ...): which kernel computes a call's units"),
-    S("DITHER_PEEL", one, False, VALUE, "1: z = A B^T from O (CA's peel of b and c), so y is today's served y"),
+    S("DITHER_PEEL", one, False, VALUE, "1: z = A B^T from O (the peel of b and c), so y is today's served y"),
     S("DITHER_PERCALL", str, None, VALUE, "the per-call challenger round's waits, measured only: a file of ns "
                                           "waits h1o_percall replays, 0 no wait"),
     S("DITHER_PERCALL_WAITS", str, None, VALUE, "the per-call waits' file sbench.sh found in the run's inputs, which a "
@@ -62,7 +62,7 @@ REGISTRY = Registry(
                                                      "address, secret_file, commitment, rounds}}): where its coins come "
                                                      "from, which its stats say"),
     S("DITHER_CREDIT_GATE", str, None, WHERE, "the credit gate's credit_gate.py sbench.sh fetched, which dither-1s-credit runs"),
-    S("DITHER_H1V3_TREE", str, None, WHERE, TREE),
+    S("DITHER_H1V3_TREE", str, None, WHERE, f"H1V3's {TREE}"),
     S("DITHER_H1V3_SHA", str, None, WHERE, "DITHER_H1V3_TREE's commit, which the result records"),
     S("DITHER_J10R_TREE", str, None, WHERE, f"J10-R's {TREE}"),
     S("DITHER_J10R_SHA", str, None, WHERE, "DITHER_J10R_TREE's commit, which the result records"),

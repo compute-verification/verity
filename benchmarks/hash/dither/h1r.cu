@@ -284,7 +284,7 @@ __device__ __forceinline__ void band_store(const uint4 (&v)[4], u32* d) {
 // from the B, c and U bytes its W' is made of, as an s8 {-1, 0, 1} operand in E's shared buffer (E::wbs, 32 * XS bytes),
 // and one more MMA a fragment against the same X.  E writes z; it also says which A rows are the canonical empty row (read
 // as zero), what a dead unit writes, and may perturb a noised accumulator word or flip a wb⁺ bit (the conformance tests).
-// With E::PEEL (CA, 11:02Z and 12:16Z; H1V3's PouwPeelSeg) z is A Bᵀ taken from the same O: z = O + 256 X (wb⁺ - wb⁻)ᵀ
+// With E::PEEL (H1V3's PouwPeelSeg) z is A Bᵀ taken from the same O: z = O + 256 X (wb⁺ - wb⁻)ᵀ
 // - X cᵀ - (b - 256 xa) Bᵀ, xa = [A = 127 and b = 1] (X = -128, where A + b wrapped), from X's own fragment and b.  The
 // peel's MMAs are binary-by-int8 beside the wrap MMA (X against -c, -b and xa against B, B's bytes in the slot's fourth
 // row); no product of A itself is formed, so z moves with every noised word.  E may flip an xa bit (its conformance test).

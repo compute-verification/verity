@@ -26,11 +26,11 @@ stream at the forward's last call, and under piecewise graphs at every qkv call 
 forks, and a piece ends at an attention).  Between steps dither_one's Window builds the admit and z tables, the step
 trees, the round and the receipt trees, as dither-1s's: the A table before the call's units, z before the draw, the
 step and receipt trees between steps, and nothing waits on the side stream but those.  With z="zy" (the arms' -zy) z
-is committed as CA's leaves instead of the window's row z tables: the epilogue writes one record a 32 x 32 unit (its z,
+is committed as the per-unit z/y leaves instead of the window's row z tables: the epilogue writes one record a 32 x 32 unit (its z,
 then its y = dequant(z); a slot past m is zero codes under s_a = +0, so its z is 0 and its y h1zy's dq(0, +0, s_w), as
 `scaled_mm_zy`'s) and the window builds every call's leaf table between steps in the row z tables'
 place, beside the receipt trees, each root the call's leaf of the z-step tree, so the round over them still comes before
-the draw (CA, 00:33Z: every leaf in its registered root before the draw coin, nothing written after it).  With ao="a" (the arms' -ao) the
+the draw (every leaf in its registered root before the draw coin, nothing written after it).  With ao="a" (the arms' -ao) the
 A tables run on a third stream above the units' priority: A_w waits on its quantizer and the units of call w on
 A_w, so each call's A table still precedes its seeds and units, and A_(w+1) runs beside call w's units (the same
 launches; only the streams they wait on change); with ao="as" (-aos; kh and hbk, whose seeds are a launch of their own)
@@ -59,7 +59,7 @@ step's noise read (the statement's order needs the units after their round's coi
 A, admit and z roots and the round against commit.py; z = A B^T (int_mm, the A the A table committed) on every call and
 zero past m; the served y (dumped) = dequant(z); every record's y (-zy) = dequant(z) at s_a, and dq(0, +0, s_w) past m,
 as the served y's records; every receipt = h1r v1's on the saved slots under the window's salt and
-the CPU's roots (another unit implementation); three units' receipts by CA's definition on the CPU (`h1v3_unit`), and
+the CPU's roots (another unit implementation); three units' receipts by H1V3's Definition on the CPU (`h1v3_unit`), and
 their receipts and z by H1V3's own code with the peel (`h1v3_itself`: this source's h1tile unless DITHER_H1V3_TREE names a
 tree; one without the peel is refused).  The control (nothing written: the A slot, z, receipts) must be refused on z and on the receipts; the
 fault must be refused on the receipts at exactly the flipped words, z and y untouched; "fault_y" (bit 0 of every call's
@@ -106,8 +106,8 @@ CAPTURES = ("gate", "control", "fault", "fault_rr")
 LIB_ENV = DO.LIB_ENV
 LIB = "dithera"
 UNITS = ("h1r", "kh", "hbk", "hbr"); KONE = ("hbk", "hbr")
-# z's commitment: "row" each slot's N int32 a hiding leaf (dither_one's z table, built between steps); "zy" CA's leaf
-# (the coordinator's 22:40Z shape): one hiding leaf a credited UR x UC unit holding its z (int32) then its y = dequant(z)
+# z's commitment: "row" each slot's N int32 a hiding leaf (dither_one's z table, built between steps); "zy" the per-unit
+# leaf: one hiding leaf a credited UR x UC unit holding its z (int32) then its y = dequant(z)
 # (bf16), past m z 0 and y dq(0, +0, s_w) (h1zy's empty slot), which the epilogue writes as one record a unit and the
 # window commits between steps (ZY_KIND, provisional until INT-TIE names the fields); "none" no z stored
 # and no z table, y only: the leaves'
@@ -1101,7 +1101,7 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
         doc["conforming"] = not fault_bad and not z_bad and not y_bad and not yleaf_bad and commits_ok
         doc["ok"] = not rc_bad and doc["conforming"]
         return doc
-    # three units' receipts by CA's definition on the CPU and by H1V3's own code; its z (peeled: A B^T) against ours
+    # three units' receipts by H1V3's Definition on the CPU and by H1V3's own code; its z (peeled: A B^T) against ours
     units_doc, h1v3_in = [], []
     if which == "gate":
         rng = np.random.default_rng(s)
