@@ -13,14 +13,12 @@ open scoped NNRat
 namespace Verity.Assumptions
 
 /-- **`accel-product-form(card)`** (P2): at the semantics `x`, every MMA opcode's dot, dense and 2:4 sparse, is a
-function of its accumulator and its pairs' products (`Accel.ProductForm`): each multiplier forms one product from one
-operand pair (an element of a row of `A` and the same element of a column of `B`) and its output feeds that row's and
-column's output only, as `Accel.mulOut` and nothing else of the pair. Checked per card by a pair-swap capture (swap
-operand pairs whose `mulOut` agree and compare every output bit for bit). The exact `s8` dot has it
+function of its accumulator and its pairs' products (`Accel.Open.ProductForm`): each multiplier forms one product from
+one operand pair (an element of a row of `A` and the same element of a column of `B`) and its output feeds that row's
+and column's output only, as `Accel.mulOut` and nothing else of the pair. Checked per card by a pair-swap capture
+(swap operand pairs whose `mulOut` agree and compare every output bit for bit). The exact `s8` dot has it
 (`Proofs/Core/Accel/Model.lean`). -/
-def AccelProductForm (x : Accel.Open) : Prop :=
-  ∀ (o : x.Mma) (k : ℕ), Accel.ProductForm (x.fa o) (x.fb o) k (x.dot o k) ∧
-    Accel.ProductForm (x.fa o) (x.fb o) (k / 2) (x.dotSp o k)
+def AccelProductForm (x : Accel.Open) : Prop := x.ProductForm
 
 /-- **`card-within-accel(card)`, the coverage premise**: the card does no more than the machine at its numbers.
 `can f T D` says the card, running one code on its SMs (not the exclusions below) at a clock within the table's

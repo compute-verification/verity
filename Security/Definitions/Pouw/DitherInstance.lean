@@ -1,5 +1,5 @@
 import Definitions.Pouw.Dither
-import Definitions.Core.Assumptions.Accel
+import Definitions.Core.Accel.Machine
 import Definitions.Core.Accel.H200
 import Definitions.Core.Accel.Sm120
 
@@ -34,7 +34,7 @@ import Definitions.Core.Accel.Sm120
   period's capacity, at any number of blocks.
 
 The card's semantics `x` are not fixed here: the headline holds at every `x` meeting P1 (`Card.Exact`) and P2
-(`Assumptions.AccelProductForm`).
+(`Open.ProductForm`, as `Assumptions.AccelProductForm`).
 -/
 
 open scoped NNRat
@@ -106,7 +106,7 @@ def cardUnits (m : Verity.Accel.Machine) (iss : List m.Instr) (r : Verity.Accel.
 
 * each card resource runs at `n ρ_r` units a second, and each other device's at its θ rate;
 * `G`'s memory is the pooled cards' bits and the other devices';
-* `G`'s (P1) and (P2) are the machine's at `x` (`Card.Exact`, `Assumptions.AccelProductForm`);
+* `G`'s (P1) and (P2) are the machine's at `x` (`Card.Exact`, `Open.ProductForm`);
 * every words program the cards run is one of `G`'s: for every memory `M₀` the round starts from (whatever the prover
   carried into it) and every program and schedule of the pooled machine, fixed before the coin, meeting (G1) and (G2)
   from `M₀` with the coin written in, some words program of `G` computes the words the run leaves, uses exactly the
@@ -126,7 +126,7 @@ def OnCard (G : Accel) (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devi
     (∀ r, G.rate (e.symm (.inl r)) = ((poolCard c D.n D.n_pos).ρ r : ℝ)) ∧
     (∀ h, G.rate (e.symm (.inr h)) = D.oth.rate h) ∧
     G.mem = ((D.machine x).bits : ℝ) + D.oth.mem ∧
-    (G.P1 ↔ c.Exact x) ∧ (G.P2 ↔ Verity.Assumptions.AccelProductForm x) ∧
+    (G.P1 ↔ c.Exact x) ∧ (G.P2 ↔ x.ProductForm) ∧
     ∀ (M₀ : (D.machine x).Mem) (Prg : (D.machine x).Prog ℕ) (sched : List ℕ) (T : P.Draw → ℚ≥0),
       (∀ d, Verity.Accel.Machine.Fits Prg ⟨L.putDraw d M₀, fun _ => 0⟩ sched (T d)) →
       ∃ Mw : G.Mc.Alg ((D.machine x).Mem × P.Draw) P.Tr, ∀ d,

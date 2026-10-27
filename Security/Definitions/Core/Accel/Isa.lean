@@ -243,8 +243,8 @@ def mmaSpEval (dot : Dot) (fa fb : Fmt) (wide : Bool) (s : Shape) (v : ℕ → W
 /-! ## The card's semantics and the envelope's opcodes -/
 
 /-- **The card's semantics**: the functions its instructions compute. No table states them; a statement over the model
-holds at every `Open` meeting P1 (`Card.Exact`) and P2 (`Assumptions.AccelProductForm`), and the card's own is one
-(`Assumptions.CardWithinAccel`). -/
+holds at every `Open` meeting P1 (`Card.Exact`) and P2 (`Open.ProductForm`, as `Assumptions.AccelProductForm`), and
+the card's own is one (`Assumptions.CardWithinAccel`). -/
 structure Open where
   /-- the card's lane opcodes, each on its pipe, with what it computes from its input words (`pipe.nIn` of them) -/
   Lane : Type
@@ -262,6 +262,11 @@ structure Open where
   wide : Mma → Bool
   dot : Mma → ℕ → Dot
   dotSp : Mma → ℕ → Dot
+
+/-- **(P2) at the semantics `x`**: every MMA opcode's dot, dense and 2:4 sparse, has the product form (`ProductForm`). -/
+def Open.ProductForm (x : Open) : Prop :=
+  ∀ (o : x.Mma) (k : ℕ), Accel.ProductForm (x.fa o) (x.fb o) k (x.dot o k) ∧
+    Accel.ProductForm (x.fa o) (x.fb o) (k / 2) (x.dotSp o k)
 
 /-- **The envelope's opcodes** at the card's semantics `x`. -/
 inductive Op (x : Open) where
