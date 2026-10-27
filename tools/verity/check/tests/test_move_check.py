@@ -666,6 +666,13 @@ def test_an_entry_the_range_does_not_bear_out_adds_nothing(tmp_path):
     assert {MC.MOVES, "suite/pyproject.toml"} <= {f["path"] for f in r["refusals"]}
 
 
+def test_a_moves_file_that_is_not_json_declares_nothing_and_is_refused(tmp_path):
+    repo, base = _repo(tmp_path, SPLIT_DIR)
+    _write(repo, {MC.MOVES: '{"about": "x", "moves": [\n'})
+    r = _check(repo, base)
+    assert [(f["path"], f["reason"]) for f in r["refusals"]] == [(MC.MOVES, "not JSON")]
+
+
 def test_a_lock_field_the_writer_wraps_anew_is_still_a_move(tmp_path):
     """`check.py --update` wraps a list a renamed module lengthened past its line: the same value, laid out anew."""
     lock = _lock(roots=["Models"], layers={"Definitions.Core": {"imports": ["Definitions.Core"]}},
