@@ -4,8 +4,8 @@
 
 For every row below, one ``.entry`` holding that single instruction is assembled with ``ptxas -arch=<arch>``; the return code and
 diagnostic are recorded and, when it assembles, the SASS opcodes (``cuobjdump -sass``) and their count.  Record-only: nothing
-executes, nothing is gated except that the dense rows ``probe.py`` issues must assemble.  The sparse rows (2:4 ``mma.sp``) are
-for the FP4 attacker (GPU 7): whether a 2:4 sparse FP4 instruction exists on this part, and at what shape.
+executes, nothing is gated except that the dense rows ``probe.py`` issues must assemble.  The sparse rows (2:4 ``mma.sp``) say
+whether a 2:4 sparse FP4 instruction exists on this part, and at what shape.
 """
 from __future__ import annotations
 

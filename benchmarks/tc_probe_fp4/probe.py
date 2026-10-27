@@ -1,7 +1,7 @@
-"""Blackwell FP4 tensor-core probe (lanes fp4-5090, fp4-re): one ``mma.sync`` per tile on an RTX 5090, raw bits captured and
+"""Blackwell FP4 tensor-core probe: one ``mma.sync`` per tile on sm_120 (RTX 5090, RTX PRO 6000), raw bits captured and
 compared bit for bit against ``verity.ml.circuits.silicon.models`` (``BLACKWELL_SM120_NVF4`` / ``BLACKWELL_SM120_MXF4``, the primary model and
 the validation gate) and against ``model5.py`` (autoproof's five-way align-add, kept as the control whose D16/D17/D18 mismatches
-the verity rule must remove).  Families under ``families_fp4_re`` are lane fp4-re's accumulator families; ``specials`` is
+the verity rule must remove).  Families under ``families_fp4_re`` are the accumulator families of discrepancy-log entries D16-D18; ``specials`` is
 record-only (NaN / inf accumulators, sums leaving binary32: the hardware words are summarised, no model is asserted), and so
 are mxf4's ``families_mxf4_edges`` (the UE8M0 NaN scale, overflowing blocks that cancel, the RZ edge at 2^128, infinite
 accumulators against overflows): what a total mxf4 step must decide.
@@ -38,7 +38,7 @@ Outputs under ``--out``: ``probe_results.json`` (identity, sass counts, replay a
 ``result.json`` (``kind: tc-evidence/v1``; meta per store README §11: instruction, arch, sku, driver, nvcc, families, counts,
 model, model_agrees, first_mismatches (<= 20), seed, n; validation passes iff every replay and model mismatch count is zero).
 
-PoUW RTX PRO 6000 (GPU 4, 2026-09-30) -- the K=32 E2M1 rows and the gates:
+The K=32 E2M1 rows, the gates, and the other instructions and modes:
   * ``f8f6f4_e2m1_e4m3`` / ``f8f6f4_e4m3_e2m1`` (unscaled mixed), ``mxf8f6f4_e2m1`` / ``_e2m1_e4m3`` / ``_e4m3_e2m1`` (UE8M0
     ``.scale_vec::1X``) run through ``mma_fp4.cu``'s ``row_tiles_kernel<kind>``; they and ``f8f6f4`` (swept with the K=32
     families of ``k32.py``) are captures whose finding is
@@ -66,7 +66,7 @@ PoUW RTX PRO 6000 (GPU 4, 2026-09-30) -- the K=32 E2M1 rows and the gates:
     nibbles; ``twins`` counts the words the pair's members differ in, and any difference on the device means no model that
     reads only the exact products and the accumulator (no ``GroupSum``) computes the instruction.
 
-Lane tcgen05 -- the datacenter Blackwell backend (``tcgen05_fp4.cu``, ``-arch=sm_100a`` on a B200 / ``sm_103a`` on a B300):
+The datacenter Blackwell backend (``tcgen05_fp4.cu``, ``-arch=sm_100a`` on a B200 / ``sm_103a`` on a B300):
 ``--instruction tcgen05_nvf4`` = ``tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::4X`` (UE4M3, registry id
 ``sm100.tcgen05.mma.e2m1.nvf4``), ``tcgen05_mxf4`` = the same mnemonic with ``.scale_vec::2X`` and the UE8M0 instruction
 descriptor (``sm100.tcgen05.mma.e2m1.mxf4``), ``tcgen05_mxf4kind`` = ``kind::mxf4.block_scale.scale_vec::2X`` (CUTLASS's mnemonic
@@ -119,7 +119,7 @@ PTX = {
     "mxf4": "mma.sync.aligned.kind::mxf4nvf4.block_scale.scale_vec::2X.m16n8k64.row.col.f32.e2m1.e2m1.f32.ue8m0",
     "f8f6f4": "mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e2m1.e2m1.f32",
     "bf16": "mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32",
-    # sm_100 (lane tcgen05): the mnemonic plus the instruction descriptor it is issued with (types, scale format, M, N, K-major)
+    # sm_100: the mnemonic plus the instruction descriptor it is issued with (types, scale format, M, N, K-major)
     "tcgen05_nvf4": "tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::4X [idesc: e2m1 x e2m1 -> f32, scale ue4m3, M128 N8 K64, K-major]",
     "tcgen05_mxf4": "tcgen05.mma.cta_group::1.kind::mxf4nvf4.block_scale.scale_vec::2X [idesc: e2m1 x e2m1 -> f32, scale ue8m0, M128 N8 K64, K-major]",
     "tcgen05_mxf4kind": "tcgen05.mma.cta_group::1.kind::mxf4.block_scale.scale_vec::2X [idesc: e2m1 x e2m1 -> f32, scale ue8m0, M128 N8 K64, K-major]",
@@ -699,7 +699,7 @@ def families_nvf4(rng, n_random: int, scale_kind: str, fixed_mult: int = 1):
     yield from families_fp4_re(rng, n_random, scale_kind, fixed_mult)
 
 
-# --- lane fp4-re: the accumulator families (D16 sign of zero, D17 alignment anchor, D18 ue8m0 scales, domain edges) ---------------
+# --- the accumulator families (D16 sign of zero, D17 alignment anchor, D18 ue8m0 scales, domain edges) ---------------
 
 
 def _scale_value(codes: np.ndarray, scale_kind: str) -> np.ndarray:

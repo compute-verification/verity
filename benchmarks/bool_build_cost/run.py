@@ -32,7 +32,7 @@ def _attention(T: int, mf: int) -> str:
 
 
 def qwen3_06b() -> list[str]:
-    """Qwen3-0.6B, B1, a 256-token prompt and 32 tokens out on FA2 (r20261018-183840-0fc5's row): prefill row r sees r + 1 keys,
+    """Qwen3-0.6B, B1, a 256-token prompt and 32 tokens out on FA2: prefill row r sees r + 1 keys,
     decode step s sees 256 + s; MASKED_FROM is FA2's tile rule (`attention_vocab.fa2_masked_from`, BN 64)."""
     from verity.ml.definitions.registry.attention_vocab import fa2_masked_from
     att = [_attention(r + 1, fa2_masked_from(256, 256, r, 64, True)) for r in range(256)]

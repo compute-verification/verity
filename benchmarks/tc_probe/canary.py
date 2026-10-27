@@ -5,7 +5,7 @@ driver / ptxas / toolkit change, on a second physical device of the SKU (TRUSTED
 
 A canary is < 1 minute on the device, exits non-zero on any mismatch against a declared model, and under ``research run`` writes a
 ``tc-evidence/v1`` ``result.json`` whose ``tc_evidence.canary`` holds the counts and whose ``workload_fingerprint.family`` is
-``canary``; the lane then labels the artifact ``family=canary instruction=<id> hardware=<sku family> model=<name>
+``canary``; whoever ran it then labels the artifact ``family=canary instruction=<id> hardware=<sku family> model=<name>
 model_agrees=<true|false>`` (the ``research data label`` lines are printed at the end; ``trust.py`` reads them).
 
 The tile set is a pure function of the instruction id, the repository fixtures and :data:`CANARY_SEED` (:func:`canary_plan`,

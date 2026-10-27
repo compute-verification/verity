@@ -18,7 +18,7 @@ median with [min, max] over the pairs:
   eager-served  eager Commit / compiled stock: the overhead as served for a Commit that runs only eager
   eager         eager Commit / batch-invariant eager stock: the mode of GLM-5.3's points on G2's curve
   compiled-bi   compiled Commit / batch-invariant eager stock
-  f             compiled stock / batch-invariant eager stock, which turns an eager ratio into a served one (#3377's f)
+  f             compiled stock / batch-invariant eager stock, which turns an eager ratio into a served one
 The metrics are curve.py's: prefill ttft (time to first token, the mean over the batch's requests), decode itl_p50 (per-token
 latency p50) and run tpot (the run's wall over its generated tokens, prefill included). A ratio's gates pass when every gate on
 either arm passed (the harness's: an arm's tokens equal its control's, its KV pool equals its control's, it closed clean).

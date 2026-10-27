@@ -1,7 +1,7 @@
 """The Call boundaries a coarser proof block would keep, from a served Build's request Programs: per Call (what the Commit's Call
 boundaries are), per block (a decoder layer's attention block and its MLP block) and per layer, each at one token; per kept boundary
 its bytes, and per granularity the bytes and the hashing time they leave at the rows-sha512 floor.  Reads the Build only; measurement
-only, for PRF-62 (what per-layer units cost the proof); nothing here is a scheme.
+only, for what per-layer units would cost the proof; nothing here is a scheme.
 
     python granularity.py BUILD/build_request [BUILD/build_request_LP*_T* ...] [--json OUT.json]
                           (--rate-256, --rate-4k: the floor in GB/s at 256-byte and 4 KiB rows)

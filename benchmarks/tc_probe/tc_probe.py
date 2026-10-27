@@ -1,9 +1,9 @@
 """Hardware probe for one tensor-core instruction: one ``mma.sync`` (or ``wgmma``) per tile, arbitrary accumulators, captures in
 the golden-record format, compared bit for bit against the pinned ``verity.ml.circuits.silicon.silicon`` model of that instruction.
 
-Provenance: ported for lane WP1 from veritor ``gpu/tensor-core-semantics/`` (``mma_tiles.cu``, ``tcs_gpu.py``,
+Provenance: ported from veritor ``gpu/tensor-core-semantics/`` (``mma_tiles.cu``, ``tcs_gpu.py``,
 ``validate_tiles.py``: the BF16 kernel, encodings, finite-sweep families, per-element records, multiprocess model comparison,
-golden sampling) and extended for lane tc-probe-fp8 with the E4M3 kernel half and encodings of the same files, the FP8-specific
+golden sampling) and extended with the E4M3 kernel half and encodings of the same files, the FP8-specific
 families (the Ada zero-product accumulator truncation: discrepancy-log entry D10 and ``verity.ml.circuits.silicon.models.ADA_E4M3_M16N8K32``;
 Hawkeye's adder-width probe of ``characterize.py``; the special-value classes of ``gpu/tc-fp8/campaign.py``) and the Hopper
 ``wgmma`` path with the SASS confirmation of ``gpu/tc-fp8/wgmma_fp8_probe.py`` (exactly one MMA-class instruction per tile
@@ -37,7 +37,7 @@ second descriptor, the SS form GEMM mainloops issue) and ``tcgen05_tiles.cu`` (`
 and B through descriptors, the accumulator in tensor memory, M = 128; ``--no-input-d`` runs its first MMA with enable_input_d = 0,
 the accumulator not read, over zero accumulators, as a GEMM mainloop's first k step).
 
-SASS (nvcc 12.4, compile check r20260922-180506-a006 on vy-sp1): every tile kernel holds exactly one MMA-class instruction --
+SASS (nvcc 12.4): every tile kernel holds exactly one MMA-class instruction --
 ``HMMA.16816.F32.BF16`` (sm_80/sm_89/sm_90a bf16), ``QMMA.16832.F32.E4M3.E4M3`` / ``QMMA.16832.F32.E5M2.E5M2`` (sm_89 FP8),
 ``QGMMA.64x8x32.F32.E4M3.E4M3`` / ``QGMMA.64x8x32.F32.E5M2.E5M2`` (sm_90a wgmma) -- EXCEPT ``mma.sync.m16n8k32.{e4m3,e5m2}`` on
 sm_90a, which ptxas lowers to ``F2FP.F16.<fmt>.UNPACK_B`` conversions, two ``HMMA.16816.F32`` (the FP16 tensor-core instruction,
@@ -61,7 +61,7 @@ finite-sweep families and compares every output element with the model(s); ``--f
 
     randn_zero_acc (n), randn_random_acc (n/4), uniform_bits (n/4), subnormal (n/8), cancellation (n/8), mixed_magnitude (n/8),
     near_overflow (n/16), signed_zero (256), tiny_acc_zero_products (512)               -- every format, as in the Ada validation
-    zero_acc_tiny_cancellation (max(256, n/16))                                          -- BF16 only (WP1: the zero's exponent)
+    zero_acc_tiny_cancellation (max(256, n/16))                                          -- BF16 only (the zero's exponent)
     zero_products_nonzero_acc (512): all products zero, random finite accumulators        -- FP8: the accumulator truncation quirk
     acc_only_lsb_walk (64 bases x 1024 low-10-bit patterns): zero products               -- FP8: which accumulator bits survive
     specials (48): NaN (E4M3) / inf and NaN (E5M2) operand and accumulator classes       -- FP8: hardware words only, never asserted
@@ -229,7 +229,7 @@ class Format:
 
     def random_finite_bits(self, rng, shape, exp_lo=None, exp_hi=None) -> np.ndarray:
         """Uniformly random sign, exponent field in [exp_lo, exp_hi] (default 1 .. finite max) and mantissa; NaN codes repaired
-        to the largest finite mantissa (E4M3) -- the draws are the ones of the WP1 BF16 probe, unchanged."""
+        to the largest finite mantissa (E4M3) -- the BF16 probe's draws."""
 
         n = int(np.prod(shape))
         lo, hi = (1 if exp_lo is None else exp_lo), (self.finite_exp_max if exp_hi is None else exp_hi)
@@ -310,7 +310,7 @@ def fp32_add_bits(x: int, y: int) -> int:
 SM90_FP8_MMA_LOWERING = "2xHMMA.16816.F32+FADD"
 # ptxas (12.4, sm_90a) lowers mma.sync.m16n8k32.{e4m3,e5m2} to: F2FP.F16.<fmt>.UNPACK_B of every operand word (low half and high
 # half separately), HMMA.16816.F32 over the low halves with a zero accumulator, HMMA.16816.F32 over the high halves with a zero
-# accumulator, FADD of the two partial words, FADD with the accumulator (compile check r20260922-181825-a926, sass_*.txt).  The
+# accumulator, FADD of the two partial words, FADD with the accumulator (sass_*.txt).  The
 # low half of an operand word holds k = 4t, 4t+1 (and 16+4t, 16+4t+1), the high half k = 4t+2, 4t+3 (and 16+..): the partition
 # below.  The one open assumption is that HMMA.16816.F32 with FP16 inputs has Hopper's BF16 K=16 pipeline (groups (16,), width
 # 26); the FP8 values and products are exact in FP16, so the terms are the same numbers.
@@ -436,11 +436,11 @@ INSTRUCTIONS: dict[str, Instruction] = {
         _mma("sm120.mma.m16n8k32.e5m2", "sm_120a", E5M2, (Model(TCM.BLACKWELL_SM120_E5M2_M16N8K32), _ADA_E5M2, _HOPPER_HMMA_X2_E5M2)),
         _wgmma("sm90.wgmma.m64n8k32.e4m3", E4M3, (Model(S.HOPPER_E4M3_K32),)),
         _wgmma("sm90.wgmma.m64n8k32.e5m2", E5M2, (_HOPPER_E5M2,)),
-        # lane wgmma-bf16: the BF16 wgmma vLLM's H100 GEMMs issue, against its total semantics (specials asserted); the Ampere
+        # The BF16 wgmma vLLM's H100 GEMMs issue, against its total semantics (specials asserted); the Ampere
         # pipeline is the control that the tiles distinguish one group of 16 / 26 bits from two groups of 8 / 25 bits.
         _wgmma("sm90.wgmma.m64n8k16.bf16", BF16, (Model(TCM.HOPPER_BF16_WGMMA_K16, total=True), Model(S.AMPERE_BF16_M16N8K16, declared=False, total=True))),
         # Blackwell datacenter (B200): the mma.sync FA2 runs (JIT from its sm_80 PTX) and the tcgen05 k16 step cuBLAS's GEMMs issue, each
-        # against Hopper's k16 pipeline (r20261018-234914-864e: 0 mismatches) with Ampere's as the control that the families tell them apart.
+        # against Hopper's k16 pipeline (which they match on every word) with Ampere's as the control that the families tell them apart.
         _mma("sm100.mma.m16n8k16.bf16", "sm_100a", BF16, (Model(S.HOPPER_BF16_M16N8K16), Model(S.AMPERE_BF16_M16N8K16, declared=False))),
         _tcgen05("sm100.tcgen05.mma.bf16", (Model(TCM.HOPPER_BF16_WGMMA_K16, total=True),
                                             Model(S.AMPERE_BF16_M16N8K16, declared=False, total=True))),
@@ -625,7 +625,7 @@ def host_identity() -> dict:
 
 def families(rng, n_random, fmt: Format, M: int, K: int):
     """Yield (name, A (n,M,K), Bt (n,8,K), C (n,M,8), meta) -- the nine families of the Ada validation (unchanged for BF16: the
-    same draws in the same order), the WP1 zero-exponent family (BF16) and the FP8-specific families."""
+    same draws in the same order), the zero-exponent family (BF16) and the FP8-specific families."""
 
     cast = lambda x: fmt.from_f32(x.astype(np.float32))
     zeros_acc = lambda n: np.zeros((n, M, N), np.uint32)
@@ -712,7 +712,7 @@ def families(rng, n_random, fmt: Format, M: int, K: int):
     yield "tiny_acc_zero_products", np.zeros((n, M, K), fmt.dtype), np.zeros((n, N, K), fmt.dtype), acc, None
 
     if fmt is BF16:
-        # 10. (WP1 addition) +-0 accumulators with cancelling products below 2^-145: BF16 subnormal a (30% of lanes), b in
+        # 10. +-0 accumulators with cancelling products below 2^-145: BF16 subnormal a (30% of lanes), b in
         # [2^-27, 2^-5].  Decides whether a zero accumulator's exponent enters the alignment maximum (silicon and the simulator's
         # E_ZERO zero: no; a zero carried at -126/-127 would truncate these sums differently -- see the log).
         n = max(256, n_random // 16)
@@ -1177,7 +1177,7 @@ def _init_floors(desc, floors):
 def floor_alternatives(pool, model: Model, A, Bt, C, D, declared_words, procs: int, floors: list[int]) -> dict:
     """D15(b): the declared pipeline evaluated with ``zero_exponent`` set to every floor in ``floors`` on the floor-probe tiles;
     per floor, how many words differ from the pinned floor's and from the hardware's.  All zeros = no floor in the range is
-    observable on these tiles (the structural reason is in the lane's D15 entry: with any nonzero term the group's maximum
+    observable on these tiles (the structural reason is in discrepancy-log entry D15: with any nonzero term the group's maximum
     exponent is at least -126, the FP32 subnormal grid, above every floor here; with no nonzero term the sum is zero regardless)."""
 
     desc = (model.pipeline.name, model.product, model.declared, model.lowering)

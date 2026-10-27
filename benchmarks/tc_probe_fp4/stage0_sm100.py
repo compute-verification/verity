@@ -1,4 +1,4 @@
-"""Lane tcgen05, stage 0: instruction reality on a datacenter Blackwell part (sm_100 / sm_103), before any semantics.
+"""Stage 0: instruction reality on a datacenter Blackwell part (sm_100 / sm_103), before any semantics.
 
     python benchmarks/tc_probe_fp4/stage0_sm100.py --out $RESEARCH_RUN_DIR [--arch sm_100a] [--cutlass /workspace/cutlass]
 
