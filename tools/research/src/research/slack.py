@@ -1841,8 +1841,9 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                          "--worker NAME for a lane's worker, which holds no handle")
     if ns.worker and not WORKER_RE.fullmatch(ns.worker):
         raise SlackError(f"--worker {ns.worker!r}: a name of letters, digits, `.`, `_` and `-`, at most 40 (e.g. LINTOOLS)")
-    if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit"):
-        raise SlackError(f"linear {ns.verb} has no --dry-run (it would write): leave it off, or try `edit`, which has one")
+    if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit", "state", "place", "comment"):
+        raise SlackError(f"linear {ns.verb} has no --dry-run (it would write): leave it off, or try `edit`, `state`, "
+                         "`place` or `comment`, which have one")
     try:
         brief = Path(ns.file).read_text() if ns.file else None
     except OSError as e:
