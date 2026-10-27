@@ -263,7 +263,10 @@ def test_the_row_split_s8_coordinate_is_the_coordinate_on_its_parts_concatenated
         assert [p for p, _ in rows.signature()[0]] == [*(f"x{r}" for r in range(R)), "sx", *(f"wrow{r}" for r in range(R)), "sw"]
         got = E.evaluate_batch(rows, *np.split(x, R, axis=1), sx, *np.split(w, R, axis=1), sw, kernel="reference")
         assert np.array_equal(got, want), R
-    bits = lambda fn: [sum(t.leaf_widths()) for _, t in fn.signature()[0]]
+
+    def bits(fn):
+        return [sum(t.leaf_widths()) for _, t in fn.signature()[0]]
+
     assert bits(bind(G.ScaledMmS8CoordinateRows, K=65536, R=2, **G.GEMM_SM90_S8)) == [UNIT_CLASS_MAX] * 2 + [32] + [UNIT_CLASS_MAX] * 2 + [32]
     assert bits(bind(G.ScaledMmS8Coordinate, K=65536, **G.GEMM_SM90_S8)) == [2 * UNIT_CLASS_MAX, 32, 2 * UNIT_CLASS_MAX, 32]
 
@@ -281,7 +284,9 @@ def test_the_padded_coordinate_is_the_coordinate_on_zero_padded_operands_at_ever
     coord = bind(G.GemmCoordinate, K=32, **G.GEMM_HOPPER)
     xs, ws = KT.sample_tc(np.random.default_rng(34), 3000, E.batch.signature_of(coord)[0])
     for T in (1, 5, 16, 17, 31, 32):
-        pad = lambda a: np.concatenate([a[:, :T], np.zeros((len(a), 32 - T), a.dtype)], axis=1)
+        def pad(a):
+            return np.concatenate([a[:, :T], np.zeros((len(a), 32 - T), a.dtype)], axis=1)
+
         want = E.evaluate_batch(coord, pad(xs), pad(ws))
         for k in (32, 48, 64):
             pad_k = bind(G.GemmCoordinatePad, T=T, K=k, **G.GEMM_HOPPER)
