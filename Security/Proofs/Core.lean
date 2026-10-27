@@ -1,4 +1,5 @@
 import Proofs.Core.Circuit
+import Proofs.Core.Annotation
 import Proofs.Core.Advice
 import Proofs.Core.PrivatePartition
 import Proofs.Core.Boolean
