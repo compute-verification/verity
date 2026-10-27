@@ -317,7 +317,7 @@ def epsilon(card: str, en: dict, honest_mac_s: float, honest_mhz: float) -> dict
     rnd_run = floors(en, (1,))
     per_f = {}
     for k, r in en["lgc"].items():
-        if k.endswith(f"-{mma}-1") and "e" in r:
+        if k.endswith(f"-{mma}-1") and "e" in r and "tensor" in rnd_run:
             f = r["mhz"] * 1e6
             e_f = {kk: v * r["e"] / rnd_run["tensor"] for kk, v in rnd_run.items()}
             cap_f = capacity(card, e_f, r["p_sleep_here"], fmax=f)
@@ -333,7 +333,7 @@ def epsilon(card: str, en: dict, honest_mac_s: float, honest_mhz: float) -> dict
     # its top point's energies, which understates them there.
     rnd_zero = floors(en, ALL_MODES)
     two = {}
-    pts = [(k, r) for k, r in en["lgc"].items() if k.endswith(f"-{mma}-1") and "e" in r]
+    pts = [(k, r) for k, r in en["lgc"].items() if k.endswith(f"-{mma}-1") and "e" in r and "tensor" in rnd_run]
     if pts:
         k, r = max(pts, key=lambda kr: kr[1]["mhz"])
         if r["mhz"] * 1e6 < 0.99 * c["fmax"]:
