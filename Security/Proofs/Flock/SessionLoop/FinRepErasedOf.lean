@@ -5,8 +5,8 @@ import Proofs.Flock.SessionLoop.FinL0Vals
 # `FinRepErased` from its parts
 
 **`Loop.finRepErased_of`**: at SessionLoopZKDeployed's premises, where every table's rows hold at its base (`hRows`,
-`Loop.FinRows`'s body) and the views' masked values below `zp 64` are the request's values plus its pads (`hMk`, FINH's
-equation), the run from the views is the firewall's up to `eraseZ` at every rep stream. By strong induction on the
+`Loop.FinRows`'s body) and the views' masked values below `zp 64` are the request's values plus its pads (`hMk`),
+ the run from the views is the firewall's up to `eraseZ` at every rep stream. By strong induction on the
 stream: where the streams before `k` return from the views with the auditor's rounds (`viewRep_rounds`,
 `viewRep_size`), rep `0`'s claim points are the opened coins' (`priorOf_view`, `repCut_points`) and they return from the
 switched cut too (`repCut_eraseZ`), so level 0's masked values are `l0Clear` plus the pads (`swSrcE_l0_live`), and

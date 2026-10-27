@@ -444,7 +444,7 @@ theorem stepsWX_of_G (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ →
     StepsWX rd key wE final w b elem shape untr cmt :=
   fun x st hx hf c ws hJ xs hxs hcol hms => h x st hx hf c ws hJ ⟨xs, hxs, hcol, hms⟩
 
-/-- **P3 from `StepsWG` at `XsW`** (STEPSW's form), wherever the brings list the registered reads. -/
+/-- **P3 from `StepsWG` at `XsW`**, wherever the brings list the registered reads. -/
 theorem accPorts_of_G (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))

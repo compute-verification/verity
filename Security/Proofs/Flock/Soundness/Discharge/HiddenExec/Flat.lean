@@ -115,7 +115,7 @@ theorem outPairs_ne_unit (L : Layout st) (F : Aliased.UnitFacts tags st) (hrows 
     (show AtSlot st.c st.c.unitNet s₀ b _ from ⟨hs₀, hb', he⟩)
 
 /-- **An untyped hidden statement reads its flat twin's rows at every unit slot's row**, at unsegmented output rows, its Δ being
-`HmRow.delta`'s, then `outPairs` ([wave2-hidden]'s `Hidden.hidden_delta'`). -/
+`HmRow.delta`'s, then `outPairs` (`Discharge/Hidden`'s `Hidden.hidden_delta'`). -/
 theorem unitRowsFlat (ht : tags.typed = false)
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st)
     (hrows : Hidden.Any.OutRowsS st.c) : UnitRowsFlat st := by

@@ -19,9 +19,9 @@ that of the coin drawn fresh after a worst-case message by at most `δ₁`, hm96
 averaged over the key. `coinLeaf_fresh`: the coin tree's own leaf (`ZK.coinLeaf`), for a block of `n` coins.
 
 So each round of a session whose verifier commits its coins costs its fresh-coin bound plus `δ₁`. `Hm96Hiding` is the
-assumption as main states it; worker zk-lean-cr-only proves it for every salt map (`hm96Hiding_gap`, at the distance
-`hidingGap`) and bounds `hidingGap`'s mean over hm96-sha512's keys by `2^-257` (`hm96_sha512_sum`), on branch
-`cursor/zk-lean-cr-only-95d4`; until that lands, it is a hypothesis here.
+assumption as main states it; Security proves it for every salt map (`hm96Hiding_gap`, at the distance
+`hidingGap`) and bounds `hidingGap`'s mean over hm96-sha512's keys by `2^-257` (`hm96_sha512_sum`); here it is
+a hypothesis.
 -/
 
 namespace FlockSoundness.Discharge.ZkSession

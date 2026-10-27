@@ -16,14 +16,14 @@ deployed builder `verity_flock.rec_vstage.stage` followed by `flock-circuit --zk
 * **The stager's inputs** (`srcOf`): `rest`, its message rounds and tops the rows the inner prover committed
   (`roundRows`): each absorbing round's last row at the rounds the rep streams commit them (`msgsOf`, `msgRound`), level
   0's tops at round 0 and each later level's at the round committing it (`topsOf`), each under its salt.
-* **Each part's port inputs** (`VStar.In.partIn`, VREFUSE's, difftested against the stager's `inst.bin`), at the part's
+* **Each part's port inputs** (`VStar.In.partIn`, difftested against the stager's `inst.bin`), at the part's
   V\* statement and its circuit's program (`partAt`, `progOf`).
 * **The trace** (`vstarWit`): an assigner `A` on the part's circuit at those inputs. What the obligations read of the
   trace is where it places each port's rows and salts (`Places`: `rowHidden`, `hmSalt`).
 
 `refPartsAt x` fixes the compiled statement: `RefParts.wit` reads no statement, and the builder reads part `s`'s
 statement and the rep streams' schedule off it. A deployed record over `refPartsAt x` is the deployed one at runs on
-`x`. The deployed `Brings` is `withReg` of it (RECVCALLS' `RegSetup`); `withReg` changes only `setup`, so `ref` is this.
+`x`. The deployed `Brings` is `withReg` of it (`RegSetup`); `withReg` changes only `setup`, so `ref` is this.
 -/
 
 namespace RecDeploy.VStarBuild

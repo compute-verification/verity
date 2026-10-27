@@ -7,7 +7,7 @@ import Proofs.Flock.Recursive.HoloRepCoins
 `repIdxB_of_size`: a rep's consumed rounds (`repIdxB`) are the coin rounds of the reps' hidden-unit schedule
 (`holoRepRounds`, `coinRounds_holoRep_split`) where its transcript consumed as many rounds as the schedule has
 (`t₄.k = rs.size`). The verifier holds each rep stream's coins to the schedule's count by H's check in
-`checkCommitRounds` (`cursor/flock-c3-refusals-95d4`); until that check is on this branch its result is the hypothesis
+`checkCommitRounds`; here its result is the hypothesis
 `RepRoundsCounted`, from which `heldRounds_size_of_counted` reads a rep stream's held rounds' count. The check's
 round-for-round form gives it (`repRoundsCounted_of_rounds`).
 
@@ -20,8 +20,8 @@ namespace FlockC3.Reps
 
 open Flock Flock.RecVStar Flock.Guarantees FlockSoundness
 
-/-- **Hypothesis: the verifier's count check of the reps' held rounds** (H's, in `checkCommitRounds`, on
-`cursor/flock-c3-refusals-95d4`): every stream the verifier holds but the sparse phases and R's holds as many rounds of
+/-- **Hypothesis: the verifier's count check of the reps' held rounds** (H's, in
+`checkCommitRounds`): every stream the verifier holds but the sparse phases and R's holds as many rounds of
 coins as the reps' schedule `rep` has rounds. -/
 def RepRoundsCounted (cs : InnerCommits) (rep : Array SchedRound) : Prop :=
   ∀ st ∈ cs.streams, (st.name.startsWith s!"{SPARSE}/" || st.name.startsWith s!"{STACKED}/") = false →
@@ -101,8 +101,8 @@ theorem t₄k_of_coins {cs : InnerCommits} {rep : Array SchedRound} {s : String}
     (hk : v.t₄.k = v.t.rounds.size) : v.t₄.k = rep.size := by
   rw [hk, ← heldRounds_size_of_counted hc hs hn, ← hd, hpc, Array.size_map]
 
-/-- **RepsDrawn (ii)'s count at the verifier's round-for-round check** (H's, in `checkCommitRounds` on
-`cursor/c3-n19-bridge-95d4`: every held stream but the sparse phases' and R's holds the reps' schedule's rounds, round
+/-- **RepsDrawn (ii)'s count at the verifier's round-for-round check** (H's, in
+`checkCommitRounds`: every held stream but the sparse phases' and R's holds the reps' schedule's rounds, round
 for round). -/
 theorem repIdxB_of_rounds {S₀ : Model.Statement} {b : ValsSrc} {sh : Flock.Shape}
     {d : FlockVBridge.Compiled.RepData} {m kLog claims : ℕ} {rs : Array SchedRound} {cs : InnerCommits} {s : String}

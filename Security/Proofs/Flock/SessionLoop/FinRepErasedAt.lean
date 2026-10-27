@@ -16,7 +16,7 @@ level 0's commitment (`cms_cm0`), the pads commitment (`padsView_ic`) and what o
 (`eraseS_cutSrc`), so `repCut_eraseZ` and `go_of_eraseZ` give it. What the rep stream's place in the session fixes is
 taken as premises:
 
-* `hmk`: below `zp 64`, the views' masked values are the request's values plus its pads (FINH's equation);
+* `hmk`: below `zp 64`, the views' masked values are the request's values plus its pads;
 * `hl0`: where the views' PIOP returns, level 0's masked values are `l0Clear` plus the pads (`swSrcE_l0_live`);
 * `hpri`: the prior points the view run reads from the auditor's streams are the opened coins' (`Masked.priorE`);
 * `hxs`: the extra claims from the views have the request's coordinates (`finRepXs`);

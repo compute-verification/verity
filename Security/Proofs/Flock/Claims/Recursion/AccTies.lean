@@ -22,7 +22,7 @@ V\* gives its unit count, at most the table's (`instances_le`); and a level or a
 is in `xs` (`getD_mem_of_setup`), and the collision clause is `hcol`, which `PortsAtV` carries beside `JointP`. At the
 dense form a part holds rows only as a level (`acc`) or an algebra part (`acc0`, `acc1`) (`slotAt_of_holding`; R's
 levels are absent, `stacked_none`), at the positions `accRead` names, so any two slots of one row tie
-(`slotCommit_eq`): STEPSW's `AccCommitW` and RESP3's `InnerAccTie` with `xs`, `hxs` and `hcol` after `JointP`
+(`slotCommit_eq`): `AccCommitW` and `InnerAccTie` with `xs`, `hxs` and `hcol` after `JointP`
 (`accCommitV`, `innerAccTieV`), wherever the brings list the registered reads (`RegSetup`, which `deployedB` gives).
 -/
 
@@ -402,7 +402,7 @@ theorem slotCommit_eq {rd : Msg → Option FinalP} {wE : Msg → ℝ}
     exact innerInnerCommit_eq hS hS' hxO hxO' hck hck' hr hpc hpc' hsv hsv' hsch hsu hsu' h0 h0' hidx hidx' hown hown' hnm hd
       hnm' hd' hq hq' (by omega) (by omega) (hP.symm.trans hP') hD hl hcol hxs1 hxs1'
 
-/-! ## STEPSW's and RESP3's ties, with every part's acceptance in `xs` and `hcol` -/
+/-! ## The accumulator ties `AccCommitW` and `InnerAccTie`, with every part's acceptance in `xs` and `hcol` -/
 
 /-- **`AccCommitW` with the parts' staged statements**: at `JointP`, and wherever every part accepts at its statement
 in `xs` with its decision (`hxs`, `PortsAtV`'s) and the true calls and the setups' evaluations at `xs` have no
