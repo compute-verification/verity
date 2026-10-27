@@ -16,10 +16,9 @@ from verity_vllm.records.fields import RecordError
 
 BINDING = "the run's Commit block"
 
-# The interim required-value manifest for the native committer + FA2 hidden tap on an FA2 dense model (the R12 canary rows' `required_classes`
-# minus the two derived-from-bound norm classes, which are protocol clauses with no leaves and are checked for presence only when declared).
-# Lanes override with `commit_delta --required-classes a,b,c` (recorded in verdict.json) when the model's producers genuinely differ
-# (e.g. a native FA3 tap class on Hopper) -- never to make a missing producer pass.
+# The interim required-value manifest for the native committer + FA2 hidden tap on an FA2 dense model: the canary rows' `required_classes`
+# minus the two derived-from-bound norm classes (protocol clauses with no leaves, checked for presence only when declared).  When a model's
+# producers differ (FA3's tap on Hopper), `commit_delta --required-classes` overrides it (kept in verdict.json), never to hide a missing one.
 REQUIRED_CLASSES_DEFAULT = ("input_token_ids", "instance_outputs_native", "sampled_token_ids", "weights", "fa2_hidden_m1_stream")
 LEAF_HOWS = ("bound-as-leaf", "registered-input")
 HIDDEN_CLASS_BY_FA = {2: "fa2_hidden_m1_stream", 3: "fa3_hidden_m1_stream"}
