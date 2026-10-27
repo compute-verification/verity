@@ -16,7 +16,8 @@ It accepts when every link-window's registration names the link's Program and th
 clock certificate is egress and signs a salted digest (`clock_commitment`: neither a sync's `clock_digest` itself nor
 an earlier link-window's clock digest), and one-stage accepted the window's one unit (`subset:1`),
 whose verifier of record is `LinkWindows.verify` (C-Flock's Lean verifier on the `--zk` proof, then `certified()` and
-the sync); and when every compute audit's answer accepted a subset draw. On acceptance its public output is `K` with its
+the sync); and when every compute audit's answer accepted a subset or stratified draw (a work law's draw is
+stratified). On acceptance its public output is `K` with its
 terms, each `⌈log2⌉` of a factor of `NetTiming.Guarantees.PeriodLeakAccepted`: the schedules (`#Σ_sync^m`), the cells
 (`Σ_c (cap_c + 1)`), and per audit its free inputs, its faulty sets (`Σ_{j ≤ b} C(N, j)`, with `b` one-stage's bound on
 faulty proof blocks at its δ), `16 · b` and `Dj^k`. Beside `K` it publishes `eps`, the probability that `K` fails to bound the

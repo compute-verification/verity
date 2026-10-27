@@ -2,8 +2,9 @@
 form the units read it. The certifier reads the load from a source (a file, a pipe, another host's stream), writes every
 byte on to the sink (the H200's) as it reads it, and commits every tensor of CMP-95 interface 1's manifest as a
 registered value, as the reading program's units read it (interface 1's registration for a program named by its
-digest): an f32 scale one 32-bit leaf a row, every other tensor 16-bit leaves, a linear's row ``row_codes`` codes,
-``tok`` (H, V) one coordinate over the tokens a row (proofs' pick, CMP-95 option (a)), in ``hm96-sha512/row/v2`` rows
+digest): every tensor 16-bit leaves (a Boolean program's one-bit leaves rounded up, as the served step's Program reads
+them: an f32 scale two, its low half first), a linear's row ``row_codes`` codes (at H200 the 8,192 a FAMILIES ``wrow``
+part reads), ``tok`` (H, V) one coordinate over the tokens a row (proofs' pick, CMP-95 option (a)), in ``hm96-sha512/row/v2`` rows
 (a value of ``hm96-sha512/row-seg/v1`` rows, as interface 1's ``tok_rows="token"`` registers ``tok``, commits too);
 each row under its own salt, in a frame-v3-sha512 tree under the value's domain, the root `Registered.commit`'s
 (`transfer_rows.Transfer`). It then signs
@@ -54,7 +55,7 @@ The commit itself (`relay`, which ``relay`` runs end to end with a key of its ow
   every hm96 salt is the operating system's (Daniel, 9 Oct, decisions 4(a) and 4(c); A3 in
   ``Security/Proofs/Flock/Soundness/Assumptions.lean``), so nothing rests on a stream generator. ``--witness`` is
   where they go, every value's in manifest order, its rows in order (each value's `Transfer.witness`): the prover's
-  alone, 106.4 GB at H200 (553,917,440 rows). `keyed_salts` is interface 1's prover-side derivation (C-Flock's
+  alone, 4.85 GB at H200 (25,284,864 rows). `keyed_salts` is interface 1's prover-side derivation (C-Flock's
   ``hm96_salt``), here only to hold this commit to interface 1's fixture roots.
 * **The domain** is a parameter, by default the one the verifier derives (`transfer_rows.domain`: the reading program's
   digest ``--program``, the value's leaf width, a value held across windows dropping only the window), interface 1's.
@@ -132,7 +133,8 @@ class Shape:
     row_codes: int
 
 
-H200 = Shape("cmp92-h200-mqa-w16384-l52", 16384, 52, 256, 64, 1, 65536, 256, 32, 256)
+#: a linear's row the 8,192 codes a FAMILIES ``wrow`` part reads (interface 1's, #4681)
+H200 = Shape("cmp92-h200-mqa-w16384-l52", 16384, 52, 256, 64, 1, 65536, 256, 32, 8192)
 TINY = Shape("tiny-h32-l1", 32, 1, 2, 16, 1, 64, 256, 8, 16)
 SHAPES = {"h200": H200, "tiny": TINY}
 
@@ -163,9 +165,9 @@ class Value:
 
     @property
     def word_bits(self) -> int:
-        """Its leaves' width read by a program named by its digest: its elements' rounded up to 16 or 32 bits
-        (interface 1's `Tensor.word_bits`)."""
-        return 32 if self.kind == "scale" else 16
+        """Its leaves' width read by a program named by its digest: 16, a Boolean program's one-bit leaves rounded up,
+        an f32 scale two 16-bit leaves, its low half first (interface 1's `Tensor.word_bits`)."""
+        return 16
 
     @property
     def reg_words(self) -> int:
@@ -176,8 +178,8 @@ class Value:
 def manifest(shape: Shape) -> tuple[Value, ...]:
     """Interface 1's tensors in stream order, each a value: ``tok`` (H, V), a coordinate over the tokens a row of V
     words, ``pos`` (1 word), then per layer ``attn_norm``, ``wq``, ``wk``, ``wv``, ``wo``, ``mlp_norm``, ``wup``, ``wdown``,
-    each linear its s8 rows of ``row_codes`` codes then its f32 ``.scale`` (one 32-bit leaf a row), a gain 1 word a
-    row; then ``final_norm``, ``head`` and ``head.scale``."""
+    each linear its s8 rows of ``row_codes`` codes then its f32 ``.scale`` (2 words a row), a gain 1 word a row; then
+    ``final_norm``, ``head`` and ``head.scale``."""
     s, out, off = shape, [], 0
 
     def add(name: str, nbytes: int, words: int, kind: str, rows: int = 1, exponent: int = 0,

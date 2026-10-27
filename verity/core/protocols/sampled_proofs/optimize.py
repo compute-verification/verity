@@ -34,9 +34,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from math import ceil, exp, expm1, fsum, inf, lgamma, log, log1p
+from fractions import Fraction
+from math import ceil, exp, expm1, floor, fsum, inf, lgamma, log, log1p, nextafter
 
-from verity.core.protocols.profile import IntegrityProfile, Stratified, Stratum
+from verity.core.protocols.profile import HARM_MARGIN, IntegrityProfile, Stratified, Stratum
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound
 from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX, unit_class
 
@@ -335,27 +336,207 @@ def replay_cost(sizes: Mapping[str, int], chosen: Sequence[Candidate], costs: Co
     return total
 
 
-def density_bound(rows: Iterable[tuple[int, int, float]], delta: float) -> float:
-    """The most harm a wrong set escaping with probability at least `delta` holds, when a stratum of n units with k drawn
-    and harm h per unit, holding x of the set, escapes with at most (1 - x/n)^k <= exp(-k x / n), and never once
-    x > n - k.  So sum_s k_s x_s / n_s <= ln(1/delta), and the bound is that fractional knapsack's value: strata in the
-    order of harm per unit of risk, the last one fractionally."""
-    budget = log(1 / delta)
-    out, items = 0.0, []
+#: `ln_upper`'s atanh terms and the dyadic it rounds up to (`SampledProofs.Bound.lnTerms`, `lnBits`)
+LN_TERMS, LN_BITS = 32, 64
+
+
+def _two_atanh_upper(t: Fraction) -> Fraction:
+    """At least 2 atanh(t) = ln((1 + t) / (1 - t)) for 0 <= t <= 1/3: the series to `LN_TERMS` terms, plus
+    2 t^(2N+1) / ((2N + 1)(1 - t^2)), which bounds the rest."""
+    s, p, t2 = Fraction(0), t, t * t
+    for i in range(LN_TERMS):
+        s += p / (2 * i + 1)
+        p *= t2
+    return 2 * (s + p / ((2 * LN_TERMS + 1) * (1 - t2)))
+
+
+def ln_upper(delta: Fraction | float) -> Fraction:
+    """A rational at least ln(1/delta), for 0 < delta < 1, within about 2^-LN_BITS of it: with 1/delta = 2^j z,
+    1 <= z < 2, it is j ln 2 + ln z, each 2 atanh((z - 1)/(z + 1)) (ln 2 at z = 2), rounded up.  Lean's
+    `SampledProofs.Bound.lnUpper` is its definition."""
+    delta = Fraction(delta)
+    if not 0 < delta < 1:
+        raise ValueError("0 < delta < 1")
+    y = 1 / delta
+    j = y.numerator.bit_length() - y.denominator.bit_length()
+    if y < 2 ** j:
+        j -= 1
+    z = y / 2 ** j
+    v = j * _two_atanh_upper(Fraction(1, 3)) + _two_atanh_upper((z - 1) / (z + 1))
+    return Fraction(ceil(v * 2 ** LN_BITS), 2 ** LN_BITS)
+
+
+def fill(rows: Iterable[tuple[int, int, float | Fraction]], budget: float | Fraction) -> float | Fraction:
+    """The fractional knapsack's value at a risk budget: a stratum of n units with k drawn and harm h per unit counts
+    whole when k = 0 and not at all when k = n; the rest go in decreasing harm per unit of risk h n / k, each whole
+    (n - k units at risk k / n each) until the budget runs out, the last one fractionally.  Exact on Fractions, where
+    Lean's `SampledProofs.Bound.fill` is its definition."""
+    out, items = 0, []
     for n, k, h in rows:
         if h <= 0 or k >= n:
             continue
         if k == 0:
             out += n * h
             continue
-        items.append((h * n / k, n - k, k / n, h))
-    for _, top, rate, h in sorted(items, reverse=True):
-        x = min(top, budget / rate)
+        items.append((h * n / k, n - k, n, k, h))
+    for _, top, n, k, h in sorted(items, reverse=True):
+        x = min(top, budget * n / k)
         out += x * h
-        budget -= x * rate
+        budget = (budget * n - x * k) / n
         if budget <= 0:
             break
     return out
+
+
+def density_bound(rows: Iterable[tuple[int, int, float]], delta: float) -> float:
+    """The most harm a wrong set escaping with probability at least `delta` holds, when a stratum of n units with k drawn
+    and harm h per unit, holding x of the set, escapes with at most (1 - x/n)^k <= exp(-k x / n), and never once
+    x > n - k.  So sum_s k_s x_s / n_s <= ln(1/delta), and the bound is that fractional knapsack's value (`fill`).  In
+    floats, the budget and the value raised by `HARM_MARGIN` (the budget also by 2^-60, for delta near 1), so it is at
+    least `density_exact`, its definition."""
+    v = fill(rows, -log(delta) * (1 + HARM_MARGIN) + 2.0 ** -60)
+    return nextafter(v * (1 + HARM_MARGIN), inf) if v > 0 else 0.0
+
+
+def density_exact(rows: Iterable[tuple[int, int, float | Fraction]], delta: float | Fraction) -> Fraction:
+    """`density_bound` exactly, harms and delta read as rationals: `fill` at `ln_upper(delta)`.  Lean's
+    `SampledProofs.Bound.densityBound` is its definition."""
+    return fill(((n, k, Fraction(h)) for n, k, h in rows), ln_upper(delta))
+
+
+#: `ln_bound` works to multiples of `2^-LN_PREC` (`SampledProofs.Bound.lnPrec`)
+LN_PREC = 128
+
+
+def _two_atanh_lower(t: Fraction) -> Fraction:
+    """At most 2 atanh(t) for 0 <= t < 1: the series' first `LN_TERMS` terms."""
+    s, p, t2 = Fraction(0), t, t * t
+    for i in range(LN_TERMS):
+        s += p / (2 * i + 1)
+        p *= t2
+    return 2 * s
+
+
+_LN2 = (_two_atanh_lower(Fraction(1, 3)), _two_atanh_upper(Fraction(1, 3)))
+
+
+def ln_bound(a: int, b: int, up: bool) -> Fraction:
+    """ln(a / b) for a >= b > 0, a multiple of 2^-LN_PREC below it, or above it when `up`: with a / b = 2^j z,
+    1 <= z < 2, j ln 2 + ln z, z first rounded to a multiple of 2^-LN_PREC.  Lean's `SampledProofs.Bound.lnBound` is
+    its definition."""
+    j = a.bit_length() - b.bit_length()
+    if a < b << j:
+        j -= 1
+    q, d = 1 << LN_PREC, b << j
+    m = (a * q + d - 1) // d if up else a * q // d
+    t = Fraction(m - q, m + q)
+    v = j * _LN2[1] + _two_atanh_upper(t) if up else j * _LN2[0] + _two_atanh_lower(t)
+    return Fraction(ceil(v * q) if up else floor(v * q), q)
+
+
+def escape_parts(n: int, k: int, x: int) -> tuple[int, int]:
+    """prod_{i < t} (n - s - i) and prod_{i < t} (n - i), t = min(x, k), s = max(x, k), whose ratio is
+    C(n - x, k) / C(n, k) = C(n - k, x) / C(n, x), for x <= n - k."""
+    a = b = 1
+    for i in range(min(x, k)):
+        a *= n - max(x, k) - i
+        b *= n - i
+    return a, b
+
+
+def max_harm_check(rows: Iterable[tuple[int, int, float | Fraction, int, int, int]], delta: float | Fraction,
+                   lam: float | Fraction) -> tuple[Fraction, Fraction]:
+    """(lower, upper) around the most harm a wrong set escaping with probability at least `delta` holds,
+    `Flock.Guarantees.JointStratified`'s `StratifiedBlock.maxHarm`, from a certificate: rows (n, k, h, take, lo, hi) and
+    a multiplier `lam > 0`.  `lower` is the harm of the counts `take`, whose exact escape is at least `delta`; `upper`
+    the dual bound `lam ln(1/delta) + sum_s max_x (h_s x - lam c_s(x))`, `c(x) = -ln(C(n - x, k)/C(n, k))`, whose
+    maximizer the row's lo <= hi place: the increments `d(j) = ln((n - j)/(n - j - k))` before `lo` cost at most `h`,
+    those from `hi` on at least `h`.  Raises ValueError where the certificate fails.  Lean's
+    `SampledProofs.Bound.maxHarmCheck` is its definition."""
+    delta, lam = Fraction(delta), Fraction(lam)
+    if lam <= 0:
+        raise ValueError("the multiplier is not positive")
+    num = den = 1
+    lower, upper = Fraction(0), lam * ln_upper(delta)
+    for n, k, h, take, lo, hi in rows:
+        h, top = Fraction(h), n - k
+        if h < 0:
+            raise ValueError("a row's harm is negative")
+        if top < take:
+            raise ValueError("a row takes more than size - k")
+        if not lo <= hi <= top:
+            raise ValueError("a row needs lo <= hi <= size - k")
+        a, b = escape_parts(n, k, take)
+        num, den = num * a, den * b
+        lower += take * h
+        if lo > 0 and h < lam * ln_bound(n - lo + 1, top - lo + 1, True):
+            raise ValueError("an increment before a row's lo may cost more than its harm")
+        if hi < top and lam * ln_bound(n - hi, top - hi, False) < h:
+            raise ValueError("an increment from a row's hi on may cost less than its harm")
+        a, b = escape_parts(n, k, lo)
+        gain = max(Fraction(0), h - lam * ln_bound(n - lo, top - lo, False)) if lo < hi else Fraction(0)
+        upper += lo * h - lam * ln_bound(b, a, False) + (hi - lo) * gain
+    if num * delta.denominator < delta.numerator * den:
+        raise ValueError("take escapes with probability below delta")
+    return lower, upper
+
+
+def _taken(n: int, k: int, h: float, lam: float) -> int:
+    """How many of a stratum's increments d(j) = -ln(1 - k/(n - j)), j < n - k, cost less than h / lam, in floats."""
+    if h <= 0:
+        return 0
+    if k == 0:
+        return n
+    q = -expm1(-h / lam)
+    v = n - k / q if q > 0 else -inf
+    return 0 if v <= 0 else min(n - k, ceil(v))
+
+
+def max_harm(rows: Iterable[tuple[int, int, float | Fraction]], delta: float | Fraction
+             ) -> tuple[Fraction, Fraction, Fraction, list[tuple[int, int, int]]]:
+    """`max_harm_check`'s bracket around `StratifiedBlock.maxHarm` for rows (n, k, h) at delta, with the certificate
+    found: (lower, upper, lam, [(take, lo, hi)]).  The multiplier is searched in floats, where each stratum's maximizer is
+    in closed form, so `upper` is the linear relaxation over the exact risk to the search's precision; `take` is the
+    maximizers at the least multiplier found whose counts escape exactly; `lo` and `hi` are widened until they hold."""
+    rows = [(n, k, Fraction(h)) for n, k, h in rows]
+    floats = [(n, k, float(h)) for n, k, h in rows]
+    budget, d = -log(float(delta)), Fraction(delta)
+
+    def counts(lam: float) -> list[int]:
+        return [_taken(n, k, h, lam) for n, k, h in floats]
+
+    def used(lam: float) -> float:
+        return fsum(-_log_miss(n, x, k) for (n, k, _), x in zip(floats, counts(lam)))
+
+    def escapes(xs: list[int]) -> bool:
+        num = den = 1
+        for (n, k, _), x in zip(rows, xs):
+            a, b = escape_parts(n, k, x)
+            num, den = num * a, den * b
+        return num * d.denominator >= d.numerator * den
+
+    lo, hi = -1000.0, 1000.0
+    if used(2.0 ** lo) <= budget:
+        hi = lo
+    for _ in range(200 if hi > lo else 0):
+        mid = (lo + hi) / 2
+        lo, hi = (lo, mid) if used(2.0 ** mid) <= budget else (mid, hi)
+    lam, scale, step = 2.0 ** hi, 1.0, 2.0 ** -40
+    while not escapes(takes := counts(lam * scale)):
+        scale, step = scale * (1 + step), step * 4
+    cert, exact = [], Fraction(lam)
+    for (n, k, h), x, take in zip(rows, counts(lam), takes):
+        top = n - k
+        a = b = n if k == 0 else 0 if h == 0 else x
+        step = 1
+        while a > 0 and h < exact * ln_bound(n - a + 1, top - a + 1, True):
+            a, step = max(0, a - step), step * 2
+        step = 1
+        while b < top and exact * ln_bound(n - b, top - b, False) < h:
+            b, step = min(top, b + step), step * 2
+        cert.append((take, a, b))
+    lower, upper = max_harm_check(((n, k, h, *c) for (n, k, h), c in zip(rows, cert)), d, exact)
+    return lower, upper, exact, cert
 
 
 def certify(sizes: Mapping[str, int], candidates: Sequence[Candidate], objective: Objective, *,
@@ -705,7 +886,8 @@ def work_law(plan: Plan, candidates: Sequence[Candidate]) -> dict:
     return {"law": "work:1", "table": {c.template: {"work": c.work, "floor": plan.sizes[c.template]} for c in chosen}}
 
 
-__all__ = ["Candidate", "Certificate", "Commitment", "CostModel", "HM96_ANDS", "Objective", "Plan", "ReplayDomain",
-           "SHA512_ANDS", "TemplateCost", "certify", "density_bound", "for_budget", "for_target", "frontier",
-           "needs_benchmark", "overlaps", "perturb", "replay_cost", "row_ands", "sensitivity", "structure",
+__all__ = ["Candidate", "Certificate", "Commitment", "CostModel", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
+           "Objective", "Plan", "ReplayDomain", "SHA512_ANDS", "TemplateCost", "certify", "density_bound", "density_exact",
+           "escape_parts", "fill", "for_budget", "for_target", "frontier", "ln_bound", "ln_upper", "max_harm",
+           "max_harm_check", "needs_benchmark", "overlaps", "perturb", "replay_cost", "row_ands", "sensitivity", "structure",
            "template_cost", "touched", "weigh", "work_law"]

@@ -1095,7 +1095,7 @@ def check_row(path: str | Path, opts: Options = Options(), *, memo: dict | None 
     from verity_vllm.correspondence.reader_for_query import Correspondence
     from verity.ml.definitions import word as W
     from verity_vllm.query.module_body import literal_calls
-    from verity_vllm.query.program_view import from_instances
+    from verity_vllm.query.program_view import from_instances, iter_instance_rows
     from verity_vllm.query.required import population
 
     memo = {} if memo is None else memo
@@ -1118,7 +1118,7 @@ def check_row(path: str | Path, opts: Options = Options(), *, memo: dict | None 
     except ImportError:
         out["cross_call"] = {"checked": False, "reason": "verity.ml.definitions.cross_call is not on this tree (PR #98)"}
     else:
-        x = cross_call.check_program(str(inst), strict=False)
+        x = cross_call.check_program(lambda: iter_instance_rows(str(inst)), strict=False)
         out["cross_call"] = {"checked": True, **{k: x[k] for k in ("check", "ok", "calls", "recomputed_gates", "unrefined")}}
         for a in x["recomputes"]:
             F.fail("partition", "cross-call-recompute", a["definition"], f"({a['level']}: {a['calls']} Call(s) compute {a['gates']} "
