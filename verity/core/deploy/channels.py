@@ -293,23 +293,27 @@ class Tee:
 
 
 class Adversary:
-    """`pipe` with what it sends tampered with, each frame by `seed`'s draws in turn: dropped (`drop`), one byte flipped
-    (`corrupt`), held back until the next frame has gone (`reorder`, or until the run has nothing else to do), or delayed
-    by `delay_ns` (`delay`, on a `MemoryPipe`). `events` lists what it did to which frame."""
+    """`pipe` with what it sends tampered with, from its frame numbered `after` on (0 counts the handshake's), each frame
+    by `seed`'s draws in turn: dropped (`drop`), one byte flipped (`corrupt`), held back until the next frame has gone
+    (`reorder`, or until the run has nothing else to do), or delayed by `delay_ns` (`delay`, on a `MemoryPipe`). `events`
+    lists what it did to which frame."""
 
     def __init__(self, pipe: Pipe, seed: int, *, drop: float = 0.0, corrupt: float = 0.0, reorder: float = 0.0,
-                 delay: float = 0.0, delay_ns: int = 0) -> None:
+                 delay: float = 0.0, delay_ns: int = 0, after: int = 0) -> None:
         self.pipe, self.rng = pipe, random.Random(seed)
         self.p = {"drop": drop, "corrupt": corrupt, "reorder": reorder, "delay": delay}
-        self.delay_ns = delay_ns
+        self.delay_ns, self.after = delay_ns, after
         self.held: deque[bytes] = deque()
         self.events: list[tuple[int, str]] = []
         self._n = 0
 
     def send(self, frame: bytes) -> None:
         n, self._n = self._n, self._n + 1
-        draw = {k: self.rng.random() for k in ("drop", "corrupt", "reorder", "delay")}
         frame = bytes(frame)
+        if n < self.after:
+            self.pipe.send(frame)
+            return
+        draw = {k: self.rng.random() for k in ("drop", "corrupt", "reorder", "delay")}
         if draw["drop"] < self.p["drop"]:
             self.events.append((n, "drop"))
             return

@@ -18,9 +18,10 @@ loads from a static table: core imports no protocol. The modes:
 
 A `Host` holds one party: its endpoints (one per peer and source), its transcript, and the rules no party passes. Before
 any protocol message each channel to a live peer runs the handshake (`verity.core.wire.handshake`), signed with the party's
-key; the party never sees it. A frame the wire refuses, a handshake refused, a message the party sends that its manifest
-doesn't declare on that channel (`undeclared`), an exception out of the party (`party-died`) and a run in which nothing
-more can happen (`stalled`) each finish the party refused by name. Nothing is retried: a party that dies fails its run.
+key; the party never sees it, and starts once every handshake is done. A frame the wire refuses, a handshake refused, a
+channel that closes before its party starts (`closed`), a message the party sends that its manifest doesn't declare on
+that channel (`undeclared`), an exception out of the party (`party-died`) and a run in which nothing more can happen
+(`stalled`) each finish the party refused by name. Nothing is retried: a party that dies fails its run.
 
 With `state_dir`, each run is numbered in `runs.jsonl` and its transcripts and record are kept under `runs/N/`. A restart
 keeps the state; a run the log shows started and never ended is refused by name (`incomplete`) when the next starts.
@@ -76,7 +77,6 @@ class Endpoint:
     accepts: Registry
     sends: Registry
     handshake: Handshake | None = None
-    held: list[bytes] = field(default_factory=list)
     closed: bool = False
 
 
@@ -94,8 +94,11 @@ class Host:
         self.transcript, self.endpoints = transcript, dict(endpoints)
         self.transmit, self.on_finish = transmit, on_finish
         self.finished: Finish | None = None
+        self.started = False
+        self.early: list[tuple[str, bytes]] = []
 
     def start(self) -> None:
+        """The start entry and each channel's hello; the party itself starts once every handshake is done."""
         self.transcript.append("start", "", "structure", canonical({"party": self.name, "instance": self.identity.instance,
                                                                      "params": self.params}))
         for ch in sorted(self.endpoints):
@@ -103,7 +106,17 @@ class Host:
             if ep.handshake is not None:
                 for f in ep.handshake.start():
                     self._handshake_out(ep, f)
+        self._start()
+
+    def _start(self) -> None:
+        if self.started or self.finished is not None or any(ep.handshake is not None and not ep.handshake.done
+                                                             for ep in self.endpoints.values()):
+            return
+        self.started = True
         self._act(lambda: self.party.start(self.params, self.identity))
+        early, self.early = self.early, []
+        for channel, raw in early:
+            self.receive(channel, raw)
 
     def _handshake_out(self, ep: Endpoint, f: bytes) -> None:
         self.transcript.append("handshake-out", ep.channel, "structure", f)
@@ -124,9 +137,10 @@ class Host:
             for f in out:
                 self._handshake_out(ep, f)
             if hs.done:
-                for f in ep.held:
-                    self.transmit(ep, f)
-                ep.held.clear()
+                self._start()
+            return
+        if not self.started:
+            self.early.append((channel, raw))
             return
         t = ep.accepts.type_of(raw)
         self.transcript.append("in", channel, "private" if t is None else ep.accepts.kind(*t), raw)
@@ -148,6 +162,9 @@ class Host:
             return
         ep.closed = True
         self.transcript.append("event", channel, "structure", RUNTIME.encode(msg))
+        if not self.started:
+            self._end(Finish({"channel": channel, "detail": f"{channel} closed before {self.name} started"}, "closed"))
+            return
         self._act(lambda: self.party.on(Received(channel, msg)))
 
     def _act(self, step: Callable[[], list[Action]], refused: Finish | None = None) -> None:
@@ -181,10 +198,7 @@ class Host:
                 self._end(Finish({"channel": a.channel, "detail": e.detail}, e.name))
                 return
             self.transcript.append("out", a.channel, ep.sends.kind(m.type, m.version), f)
-            if ep.handshake is not None and not ep.handshake.done:
-                ep.held.append(f)
-            else:
-                self.transmit(ep, f)
+            self.transmit(ep, f)
         elif isinstance(a, Record):
             self.transcript.append("record", "", a.kind, canonical(a.entry))
         elif isinstance(a, Finish):
@@ -365,10 +379,11 @@ class Runtime:
                     h = self.hosts[name]
                     if h.finished is None:
                         h._end(Finish({"detail": f"{name} waits on a message nothing can send"}, "stalled"))
-        except Diverged:
-            for h in self.hosts.values():
+        except Diverged as e:
+            for name in sorted(self.hosts):
+                h = self.hosts[name]
                 if h.finished is None:
-                    self.finished(h)
+                    h._end(Finish({"detail": str(e)}, "divergence"))
 
 
 def _describe(e: Entry) -> str:
@@ -592,7 +607,8 @@ def run(config: Mapping[str, Any], parties_here: Sequence[str], mode: str, state
         raise
     outcomes = {n: _plain(h.finished) for n, h in sorted(rt.hosts.items())}
     for b, child in children.items():
-        out, _ = child.communicate()
+        out = child.stdout.read()
+        child.wait()
         try:
             got = json.loads(out.decode().strip().splitlines()[-1])
             outcomes.update(got["outcomes"])
