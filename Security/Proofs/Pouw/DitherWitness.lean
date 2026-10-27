@@ -264,7 +264,7 @@ theorem twCallCap : twPd.callCap = 8 := by
   refine le_antisymm ((Pouw.SecurityProofs.Dither.callCap_le twPd h1).trans (le_of_eq ?_)) ?_
   · show (1 : ℝ) * 8 / (if (1 : Fin 3) = 1 then 1 else 0) = 8
     norm_num
-  · haveI : Nonempty {r : Fin 3 // 0 < tw.callUse r} := ⟨⟨1, h1⟩⟩
+  · have : Nonempty {r : Fin 3 // 0 < tw.callUse r} := ⟨⟨1, h1⟩⟩
     unfold Period.callCap
     refine le_ciInf fun ⟨r, hr⟩ => ?_
     have hr1 : r = 1 := by

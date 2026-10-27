@@ -375,7 +375,7 @@ theorem callCap_le {G : Accel} (Pd : Period G) {r : G.Res} (hr : 0 < G.callUse r
 theorem exists_cap_eq_callCap {G : Accel} (Pd : Period G) (h : ∃ r, 0 < G.callUse r) :
     ∃ r, 0 < G.callUse r ∧ Pd.cap r = Pd.callCap * G.callUse r := by
   obtain ⟨r, hr⟩ := h
-  haveI : Nonempty {r : G.Res // 0 < G.callUse r} := ⟨⟨r, hr⟩⟩
+  have : Nonempty {r : G.Res // 0 < G.callUse r} := ⟨⟨r, hr⟩⟩
   obtain ⟨⟨r', hr'⟩, he⟩ :=
     exists_eq_ciInf_of_finite (f := fun r : {r : G.Res // 0 < G.callUse r} => Pd.cap r / G.callUse r)
   have he' : Pd.cap r' / G.callUse r' = Pd.callCap := he
@@ -582,7 +582,7 @@ theorem WorkMoment : Pouw.Guarantees.Dither.WorkMoment := by
     show 0 ≤ Hmm w + Hsha w + Ho w - pubmm w - pubsha w
     linarith [hpos w]
   -- The floor, at the blocks' shortfall.
-  have hfloor : ∀ o x, A.Passes verdict dev o x → A.WithinCap sel Q o x →
+  have hfloor : ∀ o x, A.Passes verdict dev o x → A.WithinCap sel Pd.callCap o x →
       (1 - (epsWorkSound (fun w => Hmm w + Hsha w + Ho w) pubmm pubsha η 1 β K +
         (∑ r, μ r * ξ A r) / ∑ w, (Hmm w + Hsha w + Ho w) + (∑ w, Dval o x w) / ∑ r, μ r * (1 * Pd.hon r))) *
         ∑ r, μ r * (1 * Pd.hon r) ≤ ∑ r, μ r * A.timedUse o x r := by
@@ -665,7 +665,7 @@ theorem WorkMoment : Pouw.Guarantees.Dither.WorkMoment := by
     exact ⟨w, hr, fun hD => hw ((hGood _ _ _).mpr ⟨hr, hD⟩)⟩
   -- The extraction.
   have E2 : prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) =>
-      A.Accepted Reg ox.1 ox.2 ∧ A.WithinCap sel Q ox.1 ox.2 ∧ ∃ w, ¬ okw ox.1 ox.2 w) ≤ κx A := by
+      A.Accepted Reg ox.1 ox.2 ∧ A.WithinCap sel Pd.callCap ox.1 ox.2 ∧ ∃ w, ¬ okw ox.1 ox.2 w) ≤ κx A := by
     refine le_trans (prob_mono fun ox h => ?_) hx
     obtain ⟨hacc, hq, w, hw⟩ := h
     exact ⟨hacc, hq, w, fun hk => hw ((hokw _ _ _).mpr hk)⟩
@@ -673,7 +673,7 @@ theorem WorkMoment : Pouw.Guarantees.Dither.WorkMoment := by
   refine ⟨fun ox => ∑ w, Dval ox.1 ox.2 w,
     fun ox => ∏ w, roundF μ pubmm pubsha η Mw' Mh' Good Dm Ds ox.1 w (adv ox.1 ox.2 w, A.inst ox.1 ox.2 w) (ox.2 w),
     fun ox => (((A.Passes verdict dev ox.1 ox.2 ∧ ¬ A.Accepted Reg ox.1 ox.2) ∨
-        (A.Accepted Reg ox.1 ox.2 ∧ A.WithinCap sel Q ox.1 ox.2 ∧ ∃ w, ¬ okw ox.1 ox.2 w)) ∨
+        (A.Accepted Reg ox.1 ox.2 ∧ A.WithinCap sel Pd.callCap ox.1 ox.2 ∧ ∃ w, ¬ okw ox.1 ox.2 w)) ∨
         (∃ w, A.inst ox.1 ox.2 w ∈ Reg w ∧ ¬ Good ox.1 w (adv ox.1 ox.2 w, A.inst ox.1 ox.2 w))) ∨
         (∃ w, Good ox.1 w (adv ox.1 ox.2 w, A.inst ox.1 ox.2 w) ∧ deg ox.1 ox.2 w),
     fun ox => Finset.sum_nonneg fun w _ => hDval0 _ _ w, fun ox => Finset.prod_nonneg fun w _ => hF0 _ _ _ _,
