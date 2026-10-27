@@ -297,10 +297,9 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
     schema = json.loads(BLOCK_SCHEMA.read_text())
     jsonschema.Draft202012Validator({"$schema": schema["$schema"], "$defs": schema["$defs"],
                                      "$ref": "#/$defs/leg"}).validate(entry)
-    K = answer["public"]["K"]
-    assert answer["public"]["eps"] == "1/100" and (
-        f"K = {K} bits over 1 link-windows, error 1/100 (quantity.eps); at δ = 1/100: K = {K}; at δ = 1/1000000: "
-        "not established") in cr.markdown(got)
+    K, eps = answer["public"]["K"], answer["public"]["eps"]
+    at = f"K = {K}" if Fraction(eps) <= Fraction(1, 100) else "not established"
+    assert f"K = {K} bits over 1 link-windows, error {eps} (quantity.eps); at δ = 1/100: {at}" in cr.markdown(got)
     out = tmp_path / "out"
     assert cr.main(["report", "--custody", steps.custody, "--certs", steps.certs, "--endpoint", steps.endpoint,
                     "--n2", steps.n2, "--scan", steps.scan, "--job", steps.job, "--warden-run", steps.warden_run,

@@ -1,3 +1,4 @@
+import Definitions.Flock.Audit.Harm
 import Proofs.Flock.Soundness.Audit.Law
 
 /-!
@@ -15,13 +16,7 @@ namespace FlockSoundness.Audit
 
 open Finset
 open scoped ENNReal
-
 variable {n : ℕ}
-
-/-- **`harm_bound`'s specification**: every wrong-unit set that escapes with probability at least `δ` has harm at most
-`H`. -/
-def IsHarmBound (L : Law n) (h : Fin n → ℝ) (δ : ℝ≥0∞) (H : ℝ) : Prop :=
-  ∀ B : Finset (Fin n), δ ≤ L.escape B → ∑ u ∈ B, h u ≤ H
 
 /-- A set whose harm exceeds a harm bound escapes with probability below `δ`. -/
 theorem escape_lt_of_harm_gt {L : Law n} {h : Fin n → ℝ} {δ : ℝ≥0∞} {H : ℝ} (hH : IsHarmBound L h δ H)

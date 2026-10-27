@@ -28,7 +28,7 @@ and when every compute audit's answer accepted a subset or stratified draw (a wo
 stratified). On acceptance its public output is `K` with its
 terms, each `⌈log2⌉` of a factor of `NetTiming.Guarantees.PeriodLeakAccepted`: the schedules (`#Σ_sync^m`), the cells
 (`Σ_c (cap_c + 1)`), and per audit its free inputs, its faulty sets (`Σ_{j ≤ b} C(N, j)`, with `b` one-stage's bound on
-wrong units at its δ), `16 · b` and `Dj^k`. Beside `K` it publishes `eps`, the probability that `K` fails to bound the
+faulty proof blocks at its δ), `16 · b` and `Dj^k`. Beside `K` it publishes `eps`, the probability that `K` fails to bound the
 period's leak: the union of the audits' δ, an exact `"num/den"` string as PoUS's and remote bandwidth's publics carry
 theirs. The parameters name the layout terms (free inputs, monitoring period `k`, cell caps,
 `Dj`), the link's two ends (grid and occupancy profile), N2's run and the auditor's one-stage v2 parameters for the
@@ -50,7 +50,7 @@ has no scan, so any read of its state there is refused.
 The form above is the certifier-only path's. In the network certifier's own run (`warden_serve`, where it functions as
 an active warden) there is no clock certificate: one fixed schedule (`WardenParams`) lays out every link-window's cells,
 and every row registration binds its digest. The rows form's parameters name that schedule (`schedule`) in place of
-Σ_sync, and the scan's layout terms (`scan`). Per link-window its commitment is the scan's one-stage registration, and
+Σ_sync, and the scan's Program (`scan`, its descriptor). Per link-window its commitment is the scan's one-stage registration, and
 its evidence is the scan's answer, the three records' certificates (requests, ingress; responses, egress; fails, egress
 on the link `<link>-fails`) and the two row registrations (`verity-network-warden/registration/v2`, ingress then
 egress). A link-window passes when:
@@ -63,8 +63,7 @@ egress). A link-window passes when:
  window's rows is refused.
 
 Then the scan's answer is refused by name: the check takes no answer for a link-window, and one-stage v2 can't run the
-scan's proof itself (the scan's Program is a population of several templates drawn stratified, a statement each, which
-v2's one circuit, one public file and one instance a session don't cover). So no rows-form period accepts until
-one-stage runs the scan. Once it does, with one schedule the schedules term is 0, each link-window's scan adds its free
-inputs, faulty sets, `16 · b` and `Dj^k`, as an audit does, the public lists those terms under `scans`, and `eps` is
-the union of the audits' and the scans' δ.
+scan's proof itself (the scan's Program is a population of three templates, `scan_zk`'s one group statement over the
+link-windows, which v2's one circuit, one public file and one instance a session don't cover). So no rows-form period
+accepts until one-stage v2 runs the scan. Its terms once it does are `NetworkCheck.Period.rowsTerms`'s: each
+link-window's scan's under `scans`, the compute audits in no term, and `eps` the scans' δ summed.

@@ -9,11 +9,14 @@ pieces already have: one-stage v2 on each link-window's proof (`one_stage_zk_cas
 `registration.window_domain`), one-stage's answers and integrity profiles for the compute audits as PoUW reads them
 (`pouw.core_check.answer_of` and `integrity`), the network certifier's certificates and clock certificates under its
 LMS key (`certifier.certificate`), Σ_sync (`certifier.schedule`), `registration.digest`, and in the rows form the
-schedule (`warden.WardenParams`) and the verifier's read of each row registration (`warden_rows.check_registration`).
-Its verdict, public, profile and digest are Lean's exactly; its reason is its own. No case here carries a proof v2
-accepts, so the clock form is undecided at best (`check` raises outside the mirror on an accepted link-window: its
-profile and opening are `network-period opening`'s, which the certifier's tests hold), and the rows form, whose scan's
-answer the check refuses, always rejects.
+schedule (`warden.WardenParams`) and the verifier's read of each row registration (`warden_rows.check_registration`),
+and the scan's terms read off its Program's descriptor (`_scan`), as each compute audit's units and their committed
+bits are read off its own (`_audit`). Its verdict, public, profile and digest are Lean's exactly; its reason is its
+own. Public is `K` and its terms over `PeriodLeakAccepted`'s windows (the clock form's audits), each with its `delta`,
+and `eps`, the union of those deltas as an exact ratio string. No case here carries a proof v2 accepts, so the clock
+form is undecided at best (`check` raises outside the mirror on an accepted link-window: its profile and opening are
+`network-period opening`'s, which the certifier's tests hold), and the rows form, whose scan's answer the check
+refuses, always rejects.
 
 `build(m, seed, small)` makes a period with one change `m` (`EXPECT`, each aimed at one path of the check, or malformed
 parameters, commitments, evidence and cases). In the clock form: the link-windows of one link from the session's window
@@ -24,10 +27,13 @@ sync and the salt in no case), and shown with one-stage v2's evidence (no sessio
 delivered salts; the case's blobs are the circuit and the public file. In the rows form (a change named `rows-…`):
 each link-window's ingress and egress rows committed and registered under a small drawn schedule
 (`warden_rows.Cells.commit` and `registration`, signed by the same key), its three records certified, and the scan's
-registration holding both rows' roots and domains, beside the scan's answer. Beside them, the compute audits, each
-answered with a subset or stratified draw (a work law's) and its bound on wrong units. `case(kind, seed, form)` is a
-small period of the form aimed at a verdict, or at a decoding failure (`AIMS`), and `cases(seed, form)` one of each with
-its answer, as a composition's difftest takes a real component's cases.
+registration holding both rows' roots and domains, beside the scan's answer; the scan's Program is its generator form,
+stand-ins of its three templates at small widths in the Boolean profile's types, as the scan's Definitions have them
+(`scan_descriptor`), and a Program in the checker form is a bad scan (`bad_scans`). Beside them, the compute audits,
+each registered over its Program, a population of one or two stand-in templates whose units commit from 8 to 320 bits
+(`audit_descriptor`), and answered with a subset or stratified draw (a work law's) and its bound on wrong units.
+`case(kind, seed, form)` is a small period of the form aimed at a verdict, or at a decoding failure (`AIMS`), and
+`cases(seed, form)` one of each with its answer, as a composition's difftest takes a real component's cases.
 
 This is test-side Python (it imports `verity_difftest` and PoUW's `core_check`, which the certifier's package may not),
 so it lives beside the period's difftest (`test_network_period_protocol.py`), and other suites load it by path."""
@@ -56,6 +62,11 @@ from verity.core.protocols.certifier.service import LEAVES, SCHEMA, VALUE
 from verity.core.protocols.certifier.warden import WardenParams
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k
+from verity.ml.circuits import boolean as BL, codec, population
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.ml.circuits.program import Program
+from verity.ml.circuits.refs import tuple_of
+from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.commitments import hm96
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.commitments.window import window_domain
@@ -82,7 +93,7 @@ ID = "verity/certifier/v0"
 COMMITMENT_TAG = "verity-network-certifier/period/v0"
 ONE_STAGE = "verity/sampled-proofs/one-stage/v1"
 FORMATS = ("verity/registration/v1", "verity/registration/v2")
-#: a proof unit's outputs are at most 16 bits
+#: a proof unit's public outputs are at most 16 bits (the values it commits can be wider)
 OUT_BITS = 16
 UNIT = "unit"
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
@@ -107,6 +118,17 @@ DIGEST = re.compile("[0-9a-f]{128}")
 SCAN_STATE, STATE_PORT = "verity/certifier/scan-state/v1", "scan/state"
 U32 = 1 << 32
 FORMS = ("clock", "rows")
+DESCRIPTOR_SCHEMA = "verity-ir/descriptor/v1"
+INPUT_ID = re.compile(r"^(?:Registered)?Input([1-9][0-9]*)_v1$")
+#: the scan's templates' parameters in the generator form: bucket 0's (`ingress_scan.IngressScanFirst`), each later
+#: ingress bucket's (`ingress_scan.IngressScanBucket`) and the egress bucket's (`egress.EgressBucket`)
+FIRST_PARAMS = ("row", "prog")
+INGRESS_PARAMS = ("row", "sin", "prog")
+EGRESS_PARAMS = ("state",)
+#: a byte and a u16 in the Boolean profile, as the scan's Definitions type a row's bytes and the egress bucket's word
+BOOL_BYTE, BOOL_U16 = ["Array", 8, ["Value", 1]], ["Array", OUT_BITS, ["Value", 1]]
+#: the checker form's, which took the rows its units compared as inputs
+CHECKER_PARAMS = (("row", "sin", "prog", "sout", "view"), ("state", "row"))
 
 # --- the mirror --------------------------------------------------------------------------------------------------------
 
@@ -124,8 +146,19 @@ class Link:
 
 
 @dataclasses.dataclass(frozen=True)
+class Audit:
+    """`Audit`: a compute audit's layout terms (its free inputs and monitoring period) and what its Program gives: its
+    SHA-512, its units (its root's template instances) and the most bits one of them commits."""
+    free: int
+    steps: int
+    program: str
+    units: int
+    bits: int
+
+
+@dataclasses.dataclass(frozen=True)
 class Params:
-    audits: tuple[tuple[int, int], ...]
+    audits: tuple[Audit, ...]
     cells: tuple[int, ...]
     first: int
     jitter: int
@@ -137,11 +170,21 @@ class Params:
     #: the clock form's Σ_sync; None in the rows form
     sync_set: SyncSet | None
     windows: int
-    #: the rows form's schedule and the scan's layout terms (free, steps); None in the clock form
+    #: the rows form's schedule and the scan's terms, read off its Program; None in the clock form
     schedule: WardenParams | None = None
-    scan: tuple[int, int] | None = None
+    scan: Scan | None = None
     #: the clock form's link; None in the rows form
     clock: Link | None = None
+
+
+@dataclasses.dataclass(frozen=True)
+class Scan:
+    """`Scan`: the scan's monitoring period (T), its free inputs (T ingress instances' `prog`), and the bits one ingress
+    and one egress instance commit."""
+    steps: int
+    free: int
+    ingress: int
+    egress: int
 
 
 @dataclasses.dataclass(frozen=True)
@@ -213,11 +256,6 @@ def _sync_set(j) -> SyncSet:
     return SyncSet(tuple(deltas), tuple(rhos))
 
 
-def _audit(a, ctx: str) -> tuple[int, int]:
-    _exactly(a, ["free", "steps"], ctx)
-    return _nat(a["free"], ctx), _nat(a["steps"], ctx)
-
-
 def _schedule(j) -> WardenParams:
     """`scheduleOf`: `WardenParams`' fields, each a positive integer, B past a cell's header, and B, S and T u32s."""
     _exactly(j, SCHEDULE_KEYS, "schedule")
@@ -262,6 +300,82 @@ def _one_stage(j) -> tuple[str, str]:
         raise D.Reject("one_stage: the partition object has no digest") from None
 
 
+def bits_of(t) -> int:
+    """`bitsOf`: a descriptor type's leaves' widths summed."""
+    kind = t[0]
+    if kind == "Value":
+        return t[1]
+    if kind == "Array":
+        return t[1] * bits_of(t[2])
+    return sum(bits_of(f if kind == "Tuple" else f[1]) for f in t[1])
+
+
+def program_sha512(desc: dict) -> str:
+    """`partition_object.program_sha512`: SHA-512 of the canonical descriptor without `annotations`."""
+    return hashlib.sha512(D.canonical({k: v for k, v in desc.items() if k != "annotations"}).encode()).hexdigest()
+
+
+def _members(x: dict) -> int:
+    """`Node.members`: a batch's members or a scan's iterations, else one."""
+    return x["n"] if x["form"] in ("batch", "scan") else 1
+
+
+def _audit(a, ctx: str) -> Audit:
+    """`auditOf`: the layout terms and the Program's descriptor, whose root's template instances are the audit's units,
+    each committing its template's return; a root with no template refused. It reads the descriptor's root nodes and
+    signatures; C-Flock's decoder, which Lean runs on it, refuses no descriptor this module writes."""
+    _exactly(a, ["free", "program", "steps"], ctx)
+    free, steps, j = _nat(a["free"], ctx), _nat(a["steps"], ctx), a["program"]
+    if not isinstance(j, dict) or j.get("schema") != DESCRIPTOR_SCHEMA:
+        raise D.Reject(f"{ctx}: program: not a Program's descriptor")
+    defs, callees = j["definitions"], j["callees"]
+    units = [(_members(x), bits_of(d["body"]["ret_type"])) for x in defs[j["root"]]["body"]["nodes"]
+             if (d := defs[callees[x["fn"]]])["form"] != "primitive"]
+    if not units:
+        raise D.Reject(f"{ctx}: program: no template")
+    return Audit(free, steps, program_sha512(j), sum(n for n, _ in units), max(b for _, b in units))
+
+
+def _scan(j, program: str, s: WardenParams) -> Scan:
+    """`scanOf`: the scan's terms from its Program's descriptor, which must be the registered Program and the generator
+    form of the schedule's link-window in the Boolean profile's types (`BOOL_BYTE`, `BOOL_U16`), an egress template
+    with a row among its parameters (the checker form) refused first. It reads the descriptor's template nodes and
+    signatures; C-Flock's decoder, which Lean runs on it, refuses no descriptor this module writes."""
+    if not isinstance(j, dict) or j.get("schema") != DESCRIPTOR_SCHEMA:
+        raise D.Reject("scan: not a Program's descriptor")
+    if program_sha512(j) != program:
+        raise D.Reject("scan: its SHA-512 is not the registered Program's")
+    defs, callees = j["definitions"], j["callees"]
+    nodes = defs[j["root"]]["body"]["nodes"]
+    templates = [(x, defs[callees[x["fn"]]]["body"]) for x in nodes if defs[callees[x["fn"]]]["form"] != "primitive"]
+    T, row = s.window, ["Array", s.lanes * s.slots * s.cell_bytes, BOOL_BYTE]
+    if not templates:
+        raise D.Reject("scan: no template")
+    (xf, bf), later, (xe, be) = templates[0], templates[1:-1], templates[-1]
+    if any(k == "row" or t == row for k, t in be["params"]):
+        raise D.Reject("scan: the egress template takes its row as an input (the checker form)")
+    if len(templates) not in (2, 3):
+        raise D.Reject("scan: not the generator form's templates")
+    names = lambda b: tuple(k for k, _ in b["params"])  # noqa: E731
+    if (names(bf) != FIRST_PARAMS or any(names(b) != INGRESS_PARAMS for _, b in later)
+            or names(be) != EGRESS_PARAMS):
+        raise D.Reject("scan: the templates' parameters are not the generator form's")
+    counts = [(xf, 1), *((x, T - 1) for x, _ in later), (xe, T)]
+    if len(later) != (T > 1) or not all(x["form"] == "batch" and x["n"] == n for x, n in counts):
+        raise D.Reject(f"scan: not bucket 0, {T - 1} later ingress buckets and {T} egress buckets")
+    if bf["params"][0][1] != row or any(b["params"][0][1] != row for _, b in later):
+        raise D.Reject("scan: an ingress template's row is not the schedule's")
+    if any(b["params"][2][1] != bf["params"][1][1] or b["ret_type"] != bf["ret_type"] for _, b in later):
+        raise D.Reject("scan: the ingress templates' prog or return differ")
+    if be["ret_type"] != ["Tuple", [BOOL_U16, row]]:
+        raise D.Reject("scan: the egress template doesn't return a u16 and the schedule's row")
+    inputs = sum(int(w[1]) * _members(x) for x in nodes if (w := INPUT_ID.match(callees[x["fn"]])))
+    bits = lambda b: sum(bits_of(t) for _, t in b["params"])  # noqa: E731
+    if inputs != bits(bf) + (T - 1) * sum(bits(b) for _, b in later) + T * bits(be):
+        raise D.Reject("scan: an input gate that is no template's parameter")
+    return Scan(T, T * bits_of(bf["params"][1][1]), bits_of(bf["ret_type"]), bits_of(be["ret_type"]))
+
+
 def params(j) -> Params:
     if not isinstance(j, dict):
         raise D.Reject("the object: not an object")
@@ -292,12 +406,15 @@ def params(j) -> Params:
         sync_set, schedule, scan = _sync_set(j["sync_set"]), None, None
         egress, ingress = _end(j["egress"], "egress"), _end(j["ingress"], "ingress")
         program, partition = _one_stage(j["one_stage"])
+        if not isinstance(program, str) or not DIGEST.fullmatch(program):
+            raise D.Reject("program: not a SHA-512 digest")
         clock = Link(_of(j["run"], str, "run"), egress, ingress, j["one_stage"], partition)
     else:
-        sync_set, schedule, scan, clock = None, _schedule(j["schedule"]), _audit(j["scan"], "scan"), None
         program = _of(j["program"], str, "program")
-    if not isinstance(program, str) or not DIGEST.fullmatch(program):
-        raise D.Reject("program: not a SHA-512 digest")
+        if not DIGEST.fullmatch(program):
+            raise D.Reject("program: not a SHA-512 digest")
+        schedule = _schedule(j["schedule"])
+        sync_set, scan, clock = None, _scan(j["scan"], program, schedule), None
     windows = _nat(j["windows"], "windows")
     if windows < 1:
         raise D.Reject("windows: a period has at least one link-window")
@@ -546,7 +663,7 @@ def records(link: str) -> tuple[tuple[str, Direction], ...]:
 
 def _rows_window_check(p: Params, w: int, reg: Registration, x: Window) -> None:
     """`rowsWindowCheck`: its checks in order, then the refusal of the scan's answer, which one-stage v2 can't take the
-    place of (the scan's Program is several templates drawn stratified, a statement each)."""
+    place of (the scan's Program is a population of three templates, one group statement over the link-windows)."""
     what = f"window {w}"
     if x.registrations is None:
         raise Finding(REJECT, f"{what}: a clock certificate, not registrations")
@@ -582,10 +699,16 @@ def _facts(what: str, prof: dict, pub) -> Facts:
     return Facts(lv["size"], drawn, prof["delta"], bound)
 
 
-def _audit_check(i: int, reg: Registration, a: dict) -> Facts:
+def _audit_check(i: int, audit: Audit, reg: Registration, a: dict) -> Facts:
+    """`auditCheck`: the registration names the audit's Program, and the answer's units are the Program's."""
     what = f"audit {i}"
+    if reg.record.get("program") != audit.program:
+        raise Finding(REJECT, f"{what}: registration: not its Program")
     prof, pub = _answered(what, reg, a)
-    return _facts(what, prof, pub)
+    f = _facts(what, prof, pub)
+    if f.units != audit.units:
+        raise Finding(REJECT, f"{what}: profile: {f.units} units, not its Program's {audit.units}")
+    return f
 
 
 def clog2(x: int) -> int:
@@ -598,24 +721,33 @@ def at_most(n: int, b: int) -> int:
     return sum(math.comb(n, j) for j in range(min(b, n) + 1))
 
 
-def _terms(free: int, steps: int, f: Facts, jitter: int) -> dict:
-    return {"delta": str(f.delta), "drawn": f.drawn, "faulty_bits": OUT_BITS * f.wrong,
-            "faulty_sets": clog2(at_most(f.units, f.wrong)), "free": free, "jitter": clog2(jitter ** steps),
-            "units": f.units, "wrong_units": f.wrong}
+def _facts_json(f: Facts) -> dict:
+    return {"delta": str(f.delta), "drawn": f.drawn, "units": f.units, "wrong_units": f.wrong}
+
+
+def _terms(free: int, steps: int, per_unit: int, f: Facts, jitter: int) -> dict:
+    """`AuditTerms.of` (a compute audit's, `per_unit` its Program's widest unit's committed bits) and `Scan.terms` (a
+    scan's, `per_unit` the wider instance's committed bits)."""
+    return _facts_json(f) | {"faulty_bits": f.wrong * per_unit, "faulty_sets": clog2(at_most(f.units, f.wrong)),
+                             "free": free, "jitter": clog2(jitter ** steps)}
 
 
 def public(p: Params, facts: list[Facts], scans: list[Facts] | None = None) -> dict:
-    """K and its terms; `scans`, the rows form's link-windows' scans' facts (None in the clock form)."""
-    audits = [_terms(free, steps, f, p.jitter) for (free, steps), f in zip(p.audits, facts)]
-    scan_terms = None if scans is None else [_terms(*p.scan, f, p.jitter) for f in scans]
+    """K and its terms over `PeriodLeakAccepted`'s windows: the clock form's compute audits, or the rows form's
+    link-windows' scans (`scans`, None in the clock form), where the compute audits are in no term."""
     cells = sum(clog2(cap + 1) for cap in p.cells)
-    syncs = 1 if p.sync_set is None else len(p.sync_set.deltas) * len(p.sync_set.rhos)
-    schedules = clog2(syncs ** p.windows)
-    units = audits + (scan_terms or [])
+    if scans is None:
+        units = [_terms(a.free, a.steps, a.bits, f, p.jitter) for a, f in zip(p.audits, facts)]
+        schedules = clog2((len(p.sync_set.deltas) * len(p.sync_set.rhos)) ** p.windows)
+        out = {"audits": units}
+    else:
+        s = p.scan
+        units = [_terms(s.free, s.steps, max(s.ingress, s.egress), f, p.jitter) for f in scans]
+        schedules = cells
+        out = {"audits": [_facts_json(f) for f in facts], "scans": units}
     K = schedules + cells + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"] for t in units)
-    eps = sum((f.delta for f in [f for _, f in zip(p.audits, facts)] + (scans or [])), Fraction(0))
-    out = {"K": K, "audits": audits, "cells": cells, "eps": str(eps), "schedules": schedules, "windows": p.windows}
-    return out if scan_terms is None else out | {"scans": scan_terms}
+    eps = sum((Fraction(t["delta"]) for t in units), Fraction(0))
+    return out | {"K": K, "cells": cells, "eps": str(eps), "schedules": schedules, "windows": p.windows}
 
 
 def check(p: Params, c: Commitment, e, blobs: list[bytes] = ()) -> tuple:
@@ -644,9 +776,9 @@ def check(p: Params, c: Commitment, e, blobs: list[bytes] = ()) -> tuple:
                 _rows_window_check(p, p.first + i, reg, x)
         except Finding as f:
             findings.append(f)
-    for i, (reg, a) in enumerate(zip(c.audits, audits)):
+    for i, (audit, reg, a) in enumerate(zip(p.audits, c.audits, audits)):
         try:
-            facts.append(_audit_check(i, reg, a))
+            facts.append(_audit_check(i, audit, reg, a))
         except Finding as f:
             findings.append(f)
     if rejected := next((f for f in findings if f.verdict == REJECT), None):
@@ -677,6 +809,8 @@ def reference(case) -> dict:
 
 #: Small LMS parameter sets (N, W, H, toy): the toy N = 8, and the deployed N = 64 at height 1.
 KEYS = [(8, 8, 1, True), (8, 2, 2, True), (64, 4, 1, False)]
+#: The rows form's δ, one a period.
+DELTAS = ("1/100", "1/1000000", "1/7")
 
 
 @lru_cache(maxsize=None)
@@ -698,7 +832,7 @@ EXPECT = {
     "answer-made-up": REJECT, "v2-verdicts": REJECT, "v2-refused": REJECT, "v2-blobs": REJECT, "v2-session": REJECT,
     "v2-other-window": REJECT, "v2-domain": REJECT, "v2-previous": REJECT,
     "audit-other": REJECT, "audit-reject": REJECT, "audit-undecided": UNDECIDED, "audit-profile": REJECT,
-    "audit-bound": REJECT, "state-read": REJECT,
+    "audit-bound": REJECT, "audit-program": REJECT, "audit-units": REJECT, "state-read": REJECT,
     "form": REJECT, "first": REJECT, "count-windows": REJECT, "count-audits": REJECT, "evidence-count": REJECT,
     "params": REJECT, "commitment": REJECT, "evidence": REJECT, "case": REJECT,
     "rows-honest": REJECT,
@@ -786,6 +920,127 @@ def _end_json(r: random.Random, windows: int) -> dict:
     return {"grid": grid, "profile": profile}
 
 
+BIT, BYTE, U16 = Value(1), Value(8), Value(16)
+#: the compute audits' stand-in unit's gate: a byte from a u16
+LOW = PrimitiveDefinition("NetworkPeriodScanLow", 1, (("s", U16),), BYTE, lambda s: s & 0xFF, register=False)
+#: a byte and a u16 in the Boolean profile, as the scan's stand-ins type them (`BOOL_BYTE`, `BOOL_U16`)
+BYTE_BITS, U16_BITS = Array(8, BIT), Array(OUT_BITS, BIT)
+
+#: the scan's stand-ins' gate, a bit from two, and `N` bits from two (a byte's or a u16's)
+MIX = PrimitiveDefinition("NetworkPeriodScanMix", 2, (("a", BIT), ("b", BIT)), BIT, lambda a, b: a ^ b,
+                          register=False)
+SPREAD = CompositeDefinition("NetworkPeriodScanSpread", 0, ("N",),
+                             lambda S: ((("a", BIT), ("b", BIT)), Array(S.N, BIT)),
+                             lambda B, S, a, b: B.batch(MIX, a, b, axes=(None, None), n=S.N), register=False)
+
+
+def _ingress_ret(S):
+    return Tuple(U16_BITS, Array(S.STATE, BIT), Array(S.VIEW, BIT))
+
+
+def _first_sig(S):
+    return tuple(zip(S.NAMES, (Array(S.ROW, BYTE_BITS), Array(S.PROG, BIT)))), _ingress_ret(S)
+
+
+def _ingress_sig(S):
+    return tuple(zip(S.NAMES, (Array(S.ROW, BYTE_BITS), Array(S.STATE, BIT), Array(S.PROG, BIT)))), _ingress_ret(S)
+
+
+def _egress_sig(S):
+    return tuple(zip(S.NAMES, (Array(S.WORDS, U16_BITS),))), Tuple(U16_BITS, Array(S.ROW, BYTE_BITS))
+
+
+def _first(B, S, row, prog):
+    b, p = row[0][0], prog[0]
+    return tuple_of(B.call(bind(SPREAD, N=OUT_BITS), b, p), B.batch(MIX, p, b, axes=(None, None), n=S.STATE),
+                    B.batch(MIX, p, b, axes=(None, None), n=S.VIEW))
+
+
+def _ingress(B, S, row, sin, prog):
+    b, p = row[0][0], prog[0]
+    return tuple_of(B.call(bind(SPREAD, N=OUT_BITS), b, p), B.batch(MIX, sin, b, axes=(0, None)),
+                    B.batch(MIX, p, b, axes=(None, None), n=S.VIEW))
+
+
+def _egress(B, S, state):
+    s = state[0][0]
+    return tuple_of(B.call(bind(SPREAD, N=OUT_BITS), s, s),
+                    B.batch(bind(SPREAD, N=8), s, s, axes=(None, None), n=S.ROW))
+
+
+#: Stand-ins of the scan's templates in the generator form, with their parameters and returns as `IngressScanFirst`,
+#: `IngressScanBucket` and `EgressBucket` have them at small widths, in the Boolean profile's types: each unit computes
+#: and returns its rows.
+_STATICS = ("NAMES", "ROW", "STATE", "PROG", "VIEW")
+FIRST_BUCKET = CompositeDefinition("NetworkPeriodScanFirst", 0, _STATICS, _first_sig, _first, register=False)
+INGRESS_BUCKET = CompositeDefinition("NetworkPeriodScanIngress", 1, _STATICS, _ingress_sig, _ingress, register=False)
+EGRESS_BUCKET = CompositeDefinition("NetworkPeriodScanEgress", 1, ("NAMES", "WORDS", "ROW"), _egress_sig, _egress,
+                                    register=False)
+
+
+def _checker_ingress_sig(S):
+    return tuple(zip(S.NAMES, (Array(S.ROW, BYTE_BITS), Array(S.STATE, BIT), Array(S.PROG, BIT), Array(S.STATE, BIT),
+                               Array(S.VIEW, BIT)))), BIT
+
+
+def _checker_egress_sig(S):
+    return tuple(zip(S.NAMES, (Array(S.WORDS, U16_BITS), Array(S.ROW, BYTE_BITS)))), U16_BITS
+
+
+#: Stand-ins of the checker form's templates, which take the rows they compare as inputs (its egress row an input gate,
+#: which `NetTiming.Layout.Fits` refuses).
+CHECKER_INGRESS = CompositeDefinition(
+    "NetworkPeriodScanIngress", 0, _STATICS, _checker_ingress_sig,
+    lambda B, S, row, sin, prog, sout, view: B.call(BL.XOR, BL.operands(sin[0], sout[0])), register=False)
+CHECKER_EGRESS = CompositeDefinition(
+    "NetworkPeriodScanEgress", 0, ("NAMES", "WORDS", "ROW"), _checker_egress_sig,
+    lambda B, S, state, row: B.call(bind(SPREAD, N=OUT_BITS), state[0][0], row[0][0]), register=False)
+
+
+@lru_cache(maxsize=None)
+def scan_descriptor(T: int, row: int, widths: tuple[int, int, int, int], counts: tuple[int, ...] | None = None,
+                    names: tuple[tuple[str, ...], ...] = (FIRST_PARAMS, INGRESS_PARAMS, EGRESS_PARAMS),
+                    checker: bool = False) -> str:
+    """The canonical descriptor of a scan's Program in the generator form: bucket 0's stand-in instance, `T − 1` later
+    ingress instances (no template when there are none) and `T` egress instances (or `counts`), each ingress template's
+    row `row` bytes, the ingress buckets' state, prog and view bits and the egress bucket's state words `widths`;
+    `checker`: in the checker form instead, `T` ingress and `T` egress instances (or `counts`) that take their rows."""
+    state, prog, view, words = widths
+    ingress = {"ROW": row, "STATE": state, "PROG": prog, "VIEW": view}
+    if checker:
+        templates = (bind(CHECKER_INGRESS, NAMES=CHECKER_PARAMS[0], **ingress),
+                     bind(CHECKER_EGRESS, NAMES=CHECKER_PARAMS[1], WORDS=words, ROW=row))
+    else:
+        templates = (bind(FIRST_BUCKET, NAMES=names[0], **ingress), bind(INGRESS_BUCKET, NAMES=names[1], **ingress),
+                     bind(EGRESS_BUCKET, NAMES=names[2], WORDS=words, ROW=row))
+    counts = counts or ((T, T) if checker else (1, T - 1, T))
+    program = population.mixed_population_program([(t, n) for t, n in zip(templates, counts) if n])
+    return D.canonical(codec.encode_program(program))
+
+
+def _unit_sig(S):
+    return (("x", Array(1, U16)),), Array(S.OUT, BYTE)
+
+
+#: A compute audit's stand-in unit: it commits `OUT` bytes, a proof unit's 16-bit public output (`OUT` = 2) or more or
+#: fewer, each one gate.
+AUDIT_UNIT = CompositeDefinition("NetworkPeriodAuditUnit", 0, ("OUT",), _unit_sig,
+                                 lambda B, S, x: B.batch(LOW, x[0], axes=(None,), n=S.OUT), register=False)
+#: The stand-in unit's widths in bytes: one under, at and over the public output's 16 bits.
+UNIT_BYTES = (1, 2, 5, 40)
+
+
+@lru_cache(maxsize=None)
+def audit_descriptor(units: tuple[tuple[int, int], ...]) -> str:
+    """The canonical descriptor of a compute audit's Program over the stand-in unit: `n` instances committing `out`
+    bytes each, for each `(n, out)` of `units` (each `out` its own template), one template as the window's population
+    program (`population_program`, `TemplateInstances_v1`), several as a mixed one."""
+    templates = [(bind(AUDIT_UNIT, OUT=out), n) for n, out in units]
+    program = population.population_program(*templates[0]) if len(templates) == 1 else \
+        population.mixed_population_program(templates)
+    return D.canonical(codec.encode_program(program))
+
+
 def build(m: str, seed: int, small: bool = False) -> dict:
     """A period's case with the change `m`, in the form `m` names (`form_of`), every choice drawn from `seed`; `small`:
     the toy key, as few link-windows and audits as `m` needs."""
@@ -804,7 +1059,10 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     first = r.choice([0, 0, r.randrange(1, 6)])
     if rows:
         sched = bound = _small_schedule(r, small)
-        program = hashlib.sha512(b"scan program %d" % r.randrange(3)).hexdigest()
+        widths = (r.randint(1, 3), r.randint(1, 4), r.randint(1, 3), r.randint(1, 2))
+        scan = json.loads(scan_descriptor(sched.window, WR.row_bytes(sched), widths))
+        program = program_sha512(scan)
+        delta = r.choice(DELTAS)
     else:
         deltas = r.sample(range(4), r.randint(1, 3))
         rhos = r.sample([Fraction(1), Fraction(2), Fraction(1, 2), Fraction(3, 2)], r.randint(1, 3))
@@ -922,11 +1180,14 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         entries.insert(r.randrange(len(entries) + 1),
                        {"domain": r.randbytes(64).hex(), "root": r.randbytes(64).hex(), "value": "decoy"})
         T = sched.window
+        units = 2 * T
         strata = [{"k": r.randint(1, T), "name": d.value, "size": T} for d in (INGRESS, EGRESS)] \
             if r.random() < 0.5 else None
-        k = sum(s["k"] for s in strata) if strata else r.randint(1, 2 * T)
-        rec = {"format": r.choice(FORMATS), "law": {"k": k, "law": "subset" if strata is None else "stratified"},
-               "partition": f"{link}/scan/{w}", "population": 2 * T, "program": program, "protocol": ONE_STAGE,
+        k = sum(s["k"] for s in strata) if strata else r.randint(1, units)
+        law = {"k": k, "law": "subset"} if strata is None else {"k": k, "law": "stratified", "strata": [
+            {"k": s["k"], "template": s["name"], "units": [[j * T, (j + 1) * T]]} for j, s in enumerate(strata)]}
+        rec = {"format": r.choice(FORMATS), "law": law,
+               "partition": f"{link}/scan/{w}", "population": units, "program": program, "protocol": ONE_STAGE,
                r.choice(["roots", "registered"]): entries, "window": {"kind": "stand-in", "window": w}}
         state = {"domain": r.randbytes(64).hex(), "leaves": T + 1, "port": STATE_PORT, "root": r.randbytes(64).hex()}
         roots = rec.setdefault("roots", [])
@@ -934,8 +1195,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         states.append(state)
         if aimed and m == "program":
             rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), program.upper(), None])
-        answer = _accepted(registration_digest(rec), program, rec["partition"], 2 * T, k,
-                           r.choice(["1/100", "1/1000000", "1/7"]), r.randint(0, 2 * T), strata)
+        answer = _accepted(registration_digest(rec), program, rec["partition"], units, k, delta, r.randint(0, units),
+                           strata)
         window_regs.append(rec)
         shown = {"answer": answer, "registrations": regs}
         if aimed and m == "form":
@@ -1032,6 +1293,12 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     audit_params, audit_regs, audits = [], [], []
     for i in range(n_audits):
         units = r.randint(1, 40)
+        n_prog = units + (r.choice([1, -1]) if units > 1 else 1) if i == a and m == "audit-units" else units
+        split = r.randint(1, n_prog - 1) if n_prog > 1 and r.random() < 0.3 else None
+        outs = r.sample(UNIT_BYTES, 1 if split is None else 2)
+        desc = json.loads(audit_descriptor(((n_prog, outs[0]),) if split is None else
+                                           ((split, outs[0]), (n_prog - split, outs[1]))))
+        prog = program_sha512(desc)
         k, strata = r.randint(1, units), None
         law_i = {"k": k, "law": "subset"}
         if r.random() < 0.5:
@@ -1043,8 +1310,12 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                       for s in law_i["strata"]]
             k = sum(s["k"] for s in strata)
         rec = {"format": r.choice(FORMATS), "law": law_i, "partition": f"loop/{i}", "population": units,
-               "program": hashlib.sha512(b"loop %d" % i).hexdigest(), "protocol": ONE_STAGE,
-               "window": {"kind": "served", "window": i}}
+               "program": prog, "protocol": ONE_STAGE, "window": {"kind": "served", "window": i}}
+        if i == a and m == "audit-program":
+            if r.random() < 0.5:
+                rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), prog.upper(), None])
+            else:
+                desc = json.loads(audit_descriptor(((n_prog, r.choice([o for o in UNIT_BYTES if o != outs[0]])),)))
         if (i == a and m.startswith("state")) or (states and (i == a or r.random() < 0.5)):
             j = r.randrange(len(states)) if states else 0
             st = states[j] if states else {"domain": r.randbytes(64).hex(), "root": r.randbytes(64).hex()}
@@ -1060,7 +1331,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                        "words": 1}
             rec |= {"format": "verity/registration/v2", "registered": r.sample([read, weights], 2)}
         digest = registration_digest(rec)
-        answer = _accepted(digest, rec["program"], rec["partition"], units, k, r.choice(["1/100", "1/1000000", "1/10"]),
+        answer = _accepted(digest, prog, rec["partition"], units, k, r.choice(["1/100", "1/1000000", "1/10"]),
                            r.randint(0, units), strata)
         if i == a:
             if m == "audit-other":
@@ -1077,7 +1348,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             elif m == "audit-bound":
                 answer["public"] = r.choice([{"drawn": []}, answer["public"] | {"bound": -1},
                                              answer["public"] | {"bound": "3"}, []])
-        audit_params.append({"free": r.randint(0, 5), "steps": r.randint(0, 4)})
+        audit_params.append({"free": r.randint(0, 5), "program": desc, "steps": r.randint(0, 4)})
         audit_regs.append(rec)
         audits.append(answer)
 
@@ -1085,8 +1356,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                    "jitter": r.randint(1, 5), "key": lms.public_key(key).hex(), "link": link,
                    "lms": {"H": H, "N": N, "W": W, "toy": toy}, "session": session.hex(), "windows": n_windows}
     if rows:
-        case_params |= {"program": program, "scan": {"free": r.randint(0, 5), "steps": r.randint(0, 4)},
-                        "schedule": schedule_json(bound)}
+        case_params |= {"program": program, "scan": scan, "schedule": schedule_json(bound)}
     else:
         one_stage = OS._json({
             "anchors": [], "delta": r.choice(["1/1000", "1/10", "1/2"]), "law": law, "leaf_layer": None, "log": log,
@@ -1104,7 +1374,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     elif m == "count-windows":
         case_params["windows"] = n_windows + r.choice([1, -1] if n_windows > 1 else [1])
     elif m == "count-audits":
-        case_params["audits"] = r.choice([audit_params[1:], [*audit_params, {"free": 0, "steps": 0}]])
+        case_params["audits"] = r.choice([audit_params[1:], [*audit_params, {
+            "free": 0, "program": json.loads(audit_descriptor(((1, 2),))), "steps": 0}]])
     elif m == "evidence-count":
         e_json = r.choice([{"audits": audits, "windows": windows[1:]}, {"audits": audits, "windows": windows + windows[:1]},
                            {"audits": [*audits, audits[0] if audits else _accepted(bytes(64), program, "q", 1, 1,
@@ -1139,8 +1410,8 @@ def _bad_params(p: dict, n: int) -> list:
            p | {"session": p["session"][:-2]}, p | {"session": ""},
            p | {"lms": p["lms"] | {"W": 3}}, p | {"lms": p["lms"] | {"H": 0}}, p | {"lms": p["lms"] | {"toy": 0}},
            p | {"lms": p["lms"] | {"x": 0}}, p | {"lms": {k: v for k, v in p["lms"].items() if k != "toy"}},
-           p | {"audits": [{"free": 0}]}, p | {"audits": [{"free": -1, "steps": 0}]}, p | {"audits": "x"},
-           p | {"cells": [-1]}, p | {"cells": [True]}, p | {"first": -1}, p | {"first": True}, p | {"first": "0"}]
+           p | {"cells": [-1]}, p | {"cells": [True]}, p | {"first": -1}, p | {"first": True}, p | {"first": "0"},
+           *bad_audits(p)]
     if "sync_set" in p:
         ss, os_, end = p["sync_set"], p["one_stage"], p["egress"]
         grid = end["grid"]
@@ -1167,9 +1438,59 @@ def _bad_params(p: dict, n: int) -> list:
                   p | {"schedule": s | {"lanes": True}}, p | {"schedule": s | {"window": -1}},
                   p | {"schedule": s | {"queue": "1"}}, p | {"schedule": s | {"cell_bytes": 10}},
                   p | {"schedule": s | {"cell_bytes": U32}}, p | {"schedule": s | {"lanes": U32}},
-                  p | {"schedule": s | {"window": U32}}, p | {"scan": {"free": 0}},
-                  p | {"scan": {"free": 0, "steps": -1}}, p | {"scan": "x"},
-                  p | {"sync_set": {"deltas": [0], "rhos": [[1, 1]]}}]
+                  p | {"schedule": s | {"window": U32}}, p | {"sync_set": {"deltas": [0], "rhos": [[1, 1]]}},
+                  *bad_scans(p)]
+
+
+def bad_audits(p: dict) -> list[dict]:
+    """Parameters whose audits `auditOf` refuses, each one change to `p`: an audit without its monitoring period, with a
+    negative free count, not a list, and an audit whose Program isn't a descriptor, is of another schema, or has no
+    template in its root (the stand-in unit alone)."""
+    good = json.loads(audit_descriptor(((1, 2),)))
+    bare = json.loads(D.canonical(codec.encode_program(Program(bind(AUDIT_UNIT, OUT=2)))))
+    one = lambda **kw: p | {"audits": [{"free": 0, "program": good, "steps": 0} | kw]}  # noqa: E731
+    return [p | {"audits": [{"free": 0, "program": good}]}, one(free=-1), p | {"audits": "x"}, one(program="x"),
+            one(program=good | {"schema": "verity-ir/v0"}), one(program=bare)]
+
+
+def _scan_widths(desc: dict) -> tuple[int, int, int, int]:
+    """`scan_descriptor`'s widths of a generator-form descriptor it wrote: the ingress templates' state, prog and view
+    bits, and the egress template's state words."""
+    sig = {tuple(k for k, _ in d["body"]["params"]): d["body"] for d in desc["definitions"].values()
+           if d["form"] == "composite"}
+    first, egress = sig[FIRST_PARAMS], sig[EGRESS_PARAMS]
+    _, state, view = first["ret_type"][1]
+    return state[1], first["params"][1][1][1], view[1], egress["params"][0][1][1]
+
+
+def bad_scans(p: dict) -> list[dict]:
+    """Rows-form parameters whose scan `scanOf` refuses, each one change to `p`: not a descriptor, another Program's
+    (its SHA-512 not `program`), and, each under its own SHA-512, the checker form (its egress row an input), templates
+    with other parameters, another number of instances, rows not the schedule's, and an input gate no template's."""
+    s, desc = p["schedule"], p["scan"]
+    T, row, widths = s["window"], s["lanes"] * s["slots"] * s["cell_bytes"], _scan_widths(desc)
+
+    def own(text: str) -> dict:
+        d = json.loads(text)
+        return p | {"scan": d, "program": program_sha512(d)}
+
+    extra = json.loads(D.canonical(desc))
+    extra["types"].append(["Array", 1, ["Value", 1]])
+    extra["definitions"][extra["root"]]["body"]["nodes"].append(
+        {"args": [], "axes": [], "fn": extra["callees"].index("Input1_v1"), "form": "batch", "n": 1,
+         "out": len(extra["types"]) - 1})
+    return [p | {"scan": "x"}, p | {"scan": {"free": 0, "steps": 0}}, p | {"scan": desc | {"schema": "verity-ir/v0"}},
+            p | {"scan": json.loads(scan_descriptor(T, row, (widths[0] + 1, *widths[1:])))},
+            own(scan_descriptor(T, row, widths, checker=True)),
+            own(scan_descriptor(T, row, widths, names=(("row", "seed"), INGRESS_PARAMS, EGRESS_PARAMS))),
+            *([own(scan_descriptor(T, row, widths, names=(FIRST_PARAMS, ("row", "sin", "seed"), EGRESS_PARAMS)))]
+              if T > 1 else []),
+            own(scan_descriptor(T, row, widths, names=(FIRST_PARAMS, INGRESS_PARAMS, ("words",)))),
+            own(scan_descriptor(T, row, widths, counts=(1, T - 1, T + 1))),
+            own(scan_descriptor(T, row, widths, counts=(2, T - 1, T))),
+            own(scan_descriptor(T, row, widths, counts=(1, T, T))),
+            own(scan_descriptor(T, row + 1, widths)),
+            p | {"scan": extra, "program": program_sha512(extra)}]
 
 
 def _bad_commitments(c: dict, b: bytes) -> list[bytes]:

@@ -13,15 +13,21 @@
   and the leg asserts an honest relay's accepted audit proved the class and a tampered relay's was refused there;
 * `case_of`'s case of signed link-windows and the period's audit is the period check's (its Python mirror, which
   `network-period` is held to): the mirror runs one-stage v2 on each link-window's proof (undecided with no session's
-  proof), refuses a link-window v2 refuses and a case naming another first window, and once v2 accepts the proofs
-  accepts with K and eps at each δ;
+  proof), refuses a link-window v2 refuses, a case naming another first window and an audit registered over another
+  Program, and once v2 accepts the proofs accepts with K and eps at each δ, the audit charged its Program's units'
+  committed bits (16 a unit, or 40);
 * a loop period's value files give its requests' prompt tokens, steps and width, and its registered outputs are the
-  stub's for those tokens (`torch_loop_stub.step_outputs`), so an honest certifier session's egress carries them (slow);
+  stub's for those tokens (`torch_loop_stub.step_outputs`), so an honest certifier session's egress carries them; its
+  audit's Program, rebuilt from its records (`audit_program`), is its registration's, of its population's units, each
+  committing a 16-bit output (slow);
 * the free inputs are every unit's input rows less the wired, the external and an uncut registered read's; a member's
   units read the same rows off a shared-row member's tables through its refs as off a plain member's bodies (each
   written by `rows.Committed`), and a body of another size or a ref past its table is refused; where #4426's
   registered weights are in the tree, a ``--registered`` period's shared-row members read unit for unit as the plain
-  period's, and its free inputs are `interface.input_count`'s (slow);
+  period's, and its free inputs are `interface.input_count`'s (slow); a wired window gives the leg the per-coordinate
+  window's requests and outputs at a cap that splits its records across members, and a record that spans other than
+  one unit a request is refused; a ``--registered --wired`` period gives it its requests, the stub's outputs (each
+  wired down_proj unit's whole ``o0`` row) and its free inputs, the requests' step-0 inputs alone (slow);
 * ``CERTIFIER_PATH`` picks the path, the certifier-only one by default, and the warden path's stubbed lines are the
   other's less its records' gap; ``WARDEN_TAMPER`` names the stub's tampers;
 * of the windows the runner audits at once, one makes the run's session and the others read it (`once`), and the
@@ -30,10 +36,13 @@
   its group's in ``groups.json``, and the certified ids match the registered outputs' by connection, else by content,
   and a stub's changed byte, extra id or lost id is no match;
 * only the warden session's public files are published, its certificates without the heads and salts they sign;
-* the scan's answer of link-window 0 is its audit record re-decided at the leg's δ, a refusal a reject, and
-  `rows_case_of`'s case is the rows form's: a signed rows period of the mirror's (`period_case.build`), taken apart into
-  a warden run's windows and scans and rebuilt, is the same commitment and evidence, and the mirror refuses it by
-  name at the scan's answer (one-stage v2 can't run the scan's proof);
+* a session step that fails (the leg's relay or the runner's, N2's prove, a warden rehearse) raises an error carrying
+  its log's last `LOG_TAIL` lines and naming the log's copy where custody keeps it (the leg's ``out``, the runner's
+  ``--out/certifier-session``), since the scratch's is gone by the time anyone reads the error;
+* the scan's answer of link-window 0 is its audit record re-decided at the leg's δ, a refusal a reject, beside its
+  Program's descriptor, and `rows_case_of`'s case is the rows form's: a signed rows period of the mirror's
+  (`period_case.build`), taken apart into a warden run's windows and scans and rebuilt, is the same commitment and
+  evidence, and the mirror refuses it by name at the scan's answer (one-stage v2 can't run the scan's proof);
 * each term of a case is decided at its share of the δ (`term_delta`): a signed clock case of two audits, its
   link-windows' proofs accepted, is accepted with eps that δ, an unsplit one with eps their sum, which `holds_at`
   refuses;
@@ -93,6 +102,16 @@ LOOP = {"format": R.FORMAT, "protocol": R.PROTOCOL, "program": "aa" * 64, "parti
         "law": {"law": "subset", "k": 2}}
 DRAW = {"law": "subset", "k": 2, "population": 1024, "units": [700, 5]}
 ACCEPTED = {"accepted": True, "registration": LOOP, "draw": DRAW, "proved_units": [5, 700]}
+#: the audit's Program, the period mirror's stand-in population of LOOP's 1024 units, each committing 16 bits, and
+#: LOOP registered over it
+PROGRAM = json.loads(PERIOD.audit_descriptor(((1024, 2),)))
+AUDITED = LOOP | {"program": PERIOD.program_sha512(PROGRAM)}
+
+
+def audited(delta: Fraction, program: dict = PROGRAM) -> tuple[dict, dict]:
+    """LOOP registered over ``program`` and its accepted audit re-decided at ``delta``."""
+    reg = LOOP | {"program": PERIOD.program_sha512(program)}
+    return reg, L.audit_answer(reg, {"verdict": "accept"}, ACCEPTED | {"registration": reg}, delta)
 
 
 def plan(periods: int) -> tuple[dict, dict]:
@@ -290,37 +309,45 @@ def proofs_accepted(monkeypatch) -> None:
 @pytest.mark.parametrize("delta", L.DELTAS)
 def test_the_case_is_the_period_checks(delta, tmp_path, monkeypatch):
     """`case_of`'s case is the clock form's: the link's ends and run, N2's one-stage v2 parameters with the stream's
-    registrations before the period as their log, each link-window's v2 evidence and salts, and the files its proof
-    names as blobs; the mirror passes every check of each link-window up to one-stage v2 and runs v2 on it (undecided:
-    no session's proof), refuses a link-window v2 refuses and a case naming another first window, and once v2 accepts
-    the proofs accepts with K and eps at each δ."""
+    registrations before the period as their log, each audit's Program, each link-window's v2 evidence and salts, and
+    the files its proof names as blobs; the mirror passes every check of each link-window up to one-stage v2 and runs
+    v2 on it (undecided: no session's proof), refuses a link-window v2 refuses, a case naming another first window and
+    an audit registered over another Program, and once v2 accepts the proofs accepts with K and eps at each δ, the
+    audit charged its Program's units' committed bits (16 a unit, or 40)."""
     rw = session_run([0, 1, 2], tmp_path)
-    audits = [(LOOP, L.audit_answer(LOOP, {"verdict": "accept"}, ACCEPTED, delta))]
-    case = L.case_of(rw, [1, 2], audits, 1, [FREE])
+    audits = [audited(delta)]
+    case = L.case_of(rw, [1, 2], audits, 1, [FREE], [PROGRAM])
     p = case["params"]
     assert sorted(p) == PERIOD.PARAMS_KEYS and p["run"] == "r-leg" and p["link"] == "n2"
     assert p["one_stage"] == {**rw["one_stage"], "log": [rw["windows"][0]["registration"]]}
-    assert p["audits"] == [{"free": FREE, "steps": 2 * cs.WINDOW_BUCKETS}]
+    assert p["audits"] == [{"free": FREE, "program": PROGRAM, "steps": 2 * cs.WINDOW_BUCKETS}]
     assert case["blobs"] == [rw["circuit"], *rw["windows"][1]["blobs"], *rw["windows"][2]["blobs"]]
     e = json.loads(bytes.fromhex(case["evidence"]))
     assert all(sorted(x) == PERIOD.CLOCK_WINDOW_KEYS for x in e["windows"])
     a = decided(case)
     assert (a["verdict"], a["reason"]) == ("undecided", "window 1: one-stage v2: verifier of record"), a
-    assert decided(L.case_of(rw, [1, 2], audits, 0, [FREE]))["verdict"] == "reject"
+    assert decided(L.case_of(rw, [1, 2], audits, 0, [FREE], [PROGRAM]))["verdict"] == "reject"
     refused = session_run([0, 1, 2], tmp_path, frozenset({2}))
-    a = decided(L.case_of(refused, [1, 2], audits, 1, [FREE]))
+    a = decided(L.case_of(refused, [1, 2], audits, 1, [FREE], [PROGRAM]))
     assert a["verdict"] == "reject" and a["reason"].startswith("window 2: one-stage v2: "), a
+    wide = json.loads(PERIOD.audit_descriptor(((1024, 5),)))
+    other = decided(L.case_of(rw, [1, 2], audits, 1, [FREE], [wide]))
+    assert other["verdict"] == "reject" and "not its Program" in other["reason"], other
     with pytest.raises(ValueError, match="free-input counts"):
-        L.case_of(rw, [1, 2], audits, 1, [])
+        L.case_of(rw, [1, 2], audits, 1, [], [PROGRAM])
+    with pytest.raises(ValueError, match="Programs"):
+        L.case_of(rw, [1, 2], audits, 1, [FREE], [])
     proofs_accepted(monkeypatch)
     a = decided(case)
     assert a["verdict"] == "accept", a["reason"]
     pub = a["public"]
     bound = audits[0][1]["public"]["bound"]
-    assert pub["eps"] == str(delta) and pub["windows"] == 2 and pub["cells"] == 0
+    assert pub["eps"] == str(delta) and pub["windows"] == 2 and pub["cells"] == 0 and bound > 0
     assert pub["audits"][0]["wrong_units"] == bound and pub["audits"][0]["jitter"] == 0
     assert pub["audits"][0]["free"] == FREE and pub["audits"][0]["faulty_bits"] == 16 * bound
     assert pub["K"] == pub["schedules"] + pub["audits"][0]["faulty_sets"] + 16 * bound + FREE
+    a40 = decided(L.case_of(rw, [1, 2], [audited(delta, wide)], 1, [FREE], [wide]))
+    assert a40["public"]["audits"][0]["faulty_bits"] == 40 * bound and a40["public"]["K"] == pub["K"] + 24 * bound
 
 
 def test_run_windows_reads_what_n2_writes(tmp_path):
@@ -537,7 +564,7 @@ def test_the_session_proves_n2s_members_one_firewalled_session_at_a_time(tmp_pat
                                                  "m0-pythonpath": ""})
     monkeypatch.setattr(L, "lean_exes", lambda: {"network-records": "nr"})
     monkeypatch.setattr(L, "requests_of", lambda d: ([1, 2], 3, 4))
-    monkeypatch.setattr(L, "_stub", lambda *a: (Stub(), "http://stub"))
+    monkeypatch.setattr(L, "_stub", lambda *a, **k: (Stub(), "http://stub"))
     monkeypatch.setattr(L, "_run", run)
     monkeypatch.setenv("CERTIFIER_TAMPER", "extra")
     L._session(period, s)
@@ -555,6 +582,75 @@ def test_the_warden_sessions_tampers_are_the_stubs(monkeypatch):
     monkeypatch.setenv("WARDEN_TAMPER", "drop")
     with pytest.raises(RuntimeError, match="WARDEN_TAMPER"):
         L.warden_tampers()
+
+
+TOOLS = {"flock-circuit": "fc", "flock-verify": "fv", "flock-firewall": "ff", "m0-pythonpath": ""}
+
+
+def failing(monkeypatch, fails: set[str]) -> None:
+    """The session's stub, Lean executables and requests stubbed; each step it runs writes 100 lines to its log, and
+    the steps in ``fails`` (``rehearse``, ``prove``) exit 3 with nothing else, the others as if they succeeded."""
+    class Stub:
+        def terminate(self) -> None:
+            pass
+
+        def wait(self) -> None:
+            pass
+
+    def run(argv, log, env=None) -> int:
+        log.write_text("".join(f"{log.stem} line {i}\n" for i in range(100)))
+        step = argv[2]
+        if step not in fails:
+            done = Path(argv[argv.index("--out") + 1]) / "summary.json"
+            done.parent.mkdir(parents=True, exist_ok=True)
+            done.write_text("{}")
+        return 3 if step in fails else 0
+
+    monkeypatch.setattr(L, "lean_exes", lambda: {"network-records": "nr"})
+    monkeypatch.setattr(L, "requests_of", lambda d: ([3, 7], STEPS, H))
+    monkeypatch.setattr(L, "_stub", lambda *a, **k: (Stub(), "http://127.0.0.1:1"))
+    monkeypatch.setattr(L, "scan_schedule", lambda env=None: [])
+    monkeypatch.setattr(L, "_run", run)
+
+
+def carries_tail(error: Exception, why: str, kept: Path) -> bool:
+    head, *tail = str(error).splitlines()
+    return (head == f"{why} ({kept}); its last {L.LOG_TAIL} lines:"
+            and tail == [f"{kept.stem} line {i}" for i in range(100 - L.LOG_TAIL, 100)]
+            and kept.read_text() == "".join(f"{kept.stem} line {i}\n" for i in range(100)))
+
+
+def test_a_failed_relay_or_prove_carries_its_logs_tail_and_keeps_the_log_where_custody_does(tmp_path, monkeypatch):
+    from verity_all_protocols import tie as TIE
+
+    period, out = tmp_path / "scratch" / "w0", tmp_path / "out"
+    period.mkdir(parents=True)
+    (period / "period.json").write_text(json.dumps({"periods": 1, "tools": TOOLS}))
+    failing(monkeypatch, {"rehearse"})
+    with pytest.raises(RuntimeError) as got:
+        L.session(period, out / "w0" / "certifier")
+    assert carries_tail(got.value, "certifier_serve.py rehearse exited 3 with no summary",
+                        out / "w0" / "certifier" / "rehearse.log")
+    monkeypatch.setattr(TIE, "load", lambda name: L)
+    monkeypatch.setattr(TIE, "_loop", lambda: Namespace(H=H))
+    with pytest.raises(RuntimeError) as got:
+        TIE.relay(tmp_path / "runner-scratch", [3, 7], STEPS, 1, TOOLS, False, TIE.OC.OutShape("aa" * 64, "out", 1, H),
+                  out)
+    assert carries_tail(got.value, "certifier_serve.py rehearse exited 3 with no summary",
+                        out / L.SESSION / "rehearse.log")
+    failing(monkeypatch, {"prove"})
+    with pytest.raises(RuntimeError) as got:
+        L.session(period, out / "w1" / "certifier")
+    assert carries_tail(got.value, "n2_zk.py prove exited 3 with no summary", out / "w1" / "certifier" / "n2zk.log")
+
+
+def test_a_failed_warden_rehearse_carries_its_logs_tail_and_keeps_the_log_in_the_legs_out(tmp_path, monkeypatch):
+    failing(monkeypatch, {"rehearse"})
+    (tmp_path / "s").mkdir()
+    with pytest.raises(RuntimeError) as got:
+        L.warden_rehearse(tmp_path / "s", [3, 7], STEPS, H, 1, 7, ["honest"], {}, tmp_path / "out")
+    assert carries_tail(got.value, "warden_serve.py rehearse (honest) exited 3 with no check.json",
+                        tmp_path / "out" / "rehearse-honest.log")
 
 
 def test_a_warden_run_is_the_gates_scan_rehearsal_at_the_scans_schedule(tmp_path):
@@ -627,22 +723,20 @@ SCAN_SUMMARY = {"T": 32, "bits": {"ingress/row": 16384, "ingress/sin": 3, "ingre
                                   "egress/state": 7, "egress/row": 65536}}
 
 
-def test_the_scans_free_inputs_are_every_scan_row_but_the_cells():
-    assert L.scan_free(SCAN_SUMMARY) == 32 * (3 + 5 + 11 + 7)
-
-
 def test_a_scan_window_is_its_audit_records_answer_and_a_refused_one_a_reject(tmp_path):
     d = tmp_path / "scan" / "honest"
     (d / "honest").mkdir(parents=True)
+    (d / "joint").mkdir()
     (d / "summary.json").write_text(json.dumps(SCAN_SUMMARY))
+    (d / "joint" / "program.json").write_text(json.dumps(PROGRAM))
     (d / "honest" / "registration.json").write_text(json.dumps(LOOP))
     sess = {"scan_prove": {"honest": {"dir": str(d), "exit": 0}}}
     for record, verdict in ((ACCEPTED, "accept"), (ACCEPTED | {"accepted": False}, "reject"), (None, "reject")):
         (d / "honest" / "audit.json").unlink(missing_ok=True)
         if record is not None:
             (d / "honest" / "audit.json").write_text(json.dumps(record))
-        reg, a, free = L.scan_window(sess, "honest", Fraction(1, 100))
-        assert reg == LOOP and free == L.scan_free(SCAN_SUMMARY)
+        reg, a, desc = L.scan_window(sess, "honest", Fraction(1, 100))
+        assert reg == LOOP and desc == PROGRAM
         assert check_answer(a) == a and a["verdict"] == verdict and a["commitment"] == R.digest(LOOP)
         assert verdict == "reject" or a["public"]["bound"] == 921
     assert L.scan_window(sess, "late", Fraction(1, 100)) is None
@@ -667,15 +761,15 @@ def test_a_rows_case_is_the_rows_forms():
     rw = {"deployment": dep, "windows": {w: {
         "registrations": {d: rows(d, w) for d in ("egress", "ingress")},
         "certificates": {n: cert(link, d.value, w) for n, (link, d) in WS.CERTIFIED.items()}} for w in (3, 4)}}
-    scan = {**LOOP, "program": "dd" * 64}
-    scans = {w: (scan | {"partition": f"scan/{w}"}, {"verdict": "accept", "w": w}, 26 * 32) for w in (3, 4)}
+    scan, desc = {**LOOP, "program": "dd" * 64}, {"schema": "verity-ir/descriptor/v1", "root": "scan"}
+    scans = {w: (scan | {"partition": f"scan/{w}"}, {"verdict": "accept", "w": w}, desc) for w in (3, 4)}
     audits = [(LOOP, {"verdict": "accept"})]
-    case = L.rows_case_of(rw, [3, 4], scans, audits, 3, [FREE])
+    case = L.rows_case_of(rw, [3, 4], scans, audits, 3, [FREE], [PROGRAM])
     p = case["params"]
     assert sorted(p) == ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule",
                          "session", "windows"]
     assert (p["first"], p["windows"], p["link"], p["program"], p["key"]) == (3, 2, WS.LINK, "dd" * 64, "ab" * 24)
-    assert p["audits"] == [{"free": FREE, "steps": 64}] and p["scan"] == {"free": 26 * 32, "steps": 32}
+    assert p["audits"] == [{"free": FREE, "program": PROGRAM, "steps": 64}] and p["scan"] == desc
     assert p["schedule"] == schedule and p["lms"] == {"H": 6, "N": 64, "W": 1, "toy": False}
     c, e = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
     assert c == {"audits": [LOOP], "windows": [scans[3][0], scans[4][0]]}
@@ -686,9 +780,12 @@ def test_a_rows_case_is_the_rows_forms():
         assert [(c["link"], c["direction"]) for c in x["certificates"]] == [
             (WS.LINK, "ingress"), (WS.LINK, "egress"), (f"{WS.LINK}-fails", "egress")]
     with pytest.raises(ValueError, match="free-input counts"):
-        L.rows_case_of(rw, [3, 4], scans, audits, 3, [])
+        L.rows_case_of(rw, [3, 4], scans, audits, 3, [], [PROGRAM])
     with pytest.raises(RuntimeError, match="2 Programs"):
-        L.rows_case_of(rw, [3, 4], scans | {4: (LOOP, {}, 26 * 32)}, audits, 3, [FREE])
+        L.rows_case_of(rw, [3, 4], scans | {4: (LOOP, {}, desc)}, audits, 3, [FREE], [PROGRAM])
+    with pytest.raises(RuntimeError, match="2 descriptors"):
+        L.rows_case_of(rw, [3, 4], scans | {4: (scans[4][0], {}, desc | {"root": "other"})}, audits, 3, [FREE],
+                       [PROGRAM])
 
 
 def mirror_rows_run(monkeypatch, seed: int) -> tuple[dict, dict, dict, dict, list[int]]:
@@ -715,14 +812,14 @@ def test_a_signed_rows_period_rebuilt_by_rows_case_of_is_the_mirrors_and_refused
     case, c, e, rw, ws = mirror_rows_run(monkeypatch, 19)
     p = case["params"]
     assert not p["lms"]["toy"] and len(c["audits"]) == 2 and p["first"] == 3
-    scans = {w: (reg, x["answer"], p["scan"]["free"]) for w, reg, x in zip(ws, c["windows"], e["windows"])}
-    free = [a["free"] for a in p["audits"]]
-    got = L.rows_case_of(rw, list(ws), scans, list(zip(c["audits"], e["audits"])), p["first"], free)
+    scans = {w: (reg, x["answer"], p["scan"]) for w, reg, x in zip(ws, c["windows"], e["windows"])}
+    free, programs = [a["free"] for a in p["audits"]], [a["program"] for a in p["audits"]]
+    got = L.rows_case_of(rw, list(ws), scans, list(zip(c["audits"], e["audits"])), p["first"], free, programs)
     assert (got["commitment"], got["evidence"]) == (case["commitment"], case["evidence"])
     assert sorted(got["params"]) == PERIOD.ROWS_PARAMS_KEYS
     T = p["schedule"]["window"]
-    assert got["params"]["scan"] == {"free": p["scan"]["free"], "steps": T}
-    assert got["params"]["audits"] == [{"free": f, "steps": len(ws) * T} for f in free]
+    assert got["params"]["scan"] == p["scan"]
+    assert got["params"]["audits"] == [{"free": f, "program": q, "steps": len(ws) * T} for f, q in zip(free, programs)]
     a = PERIOD.reference(got)
     assert a["verdict"] == "reject" and a["reason"].startswith(
         f"window {ws[0]}: the scan's answer: the check takes no answer for a link-window"), a
@@ -734,13 +831,13 @@ def test_each_term_is_decided_at_its_share_of_the_periods_delta(monkeypatch, del
     with pytest.raises(ValueError, match="at least one term"):
         L.term_delta(delta, 0)
     accept = {"verdict": "accept"}
-    rw, second = session_run([1, 2], tmp_path), LOOP | {"partition": "cc" * 64}
-    records = [(LOOP, ACCEPTED), (second, ACCEPTED | {"registration": second})]
+    rw, second = session_run([1, 2], tmp_path), AUDITED | {"partition": "cc" * 64}
+    records = [(AUDITED, ACCEPTED | {"registration": AUDITED}), (second, ACCEPTED | {"registration": second})]
     with monkeypatch.context() as m:
         proofs_accepted(m)
         for d, eps in ((L.term_delta(delta, len(records)), delta), (delta, 2 * delta)):
             audits = [(r, L.audit_answer(r, accept, rec, d)) for r, rec in records]
-            a = decided(L.case_of(rw, [1, 2], audits, 1, [FREE, FREE]))
+            a = decided(L.case_of(rw, [1, 2], audits, 1, [FREE, FREE], [PROGRAM, PROGRAM]))
             assert a["verdict"] == "accept" and Fraction(a["public"]["eps"]) == eps
     L.holds_at(0, a, 2 * delta)
     with pytest.raises(RuntimeError, match="term_delta"):
@@ -827,6 +924,9 @@ def test_a_loop_window_registers_what_the_stub_serves(tmp_path):
     a = Namespace(law="subset:2", cap=8, requests="3,7", steps=STEPS, tamper=set(), node="test-node", tools={},
                   pouw=None, delta="1/100", start=0, windows=1, weights=None, session_jobs=1)
     d, _ = RN.loop_window(0, "test", a, tmp_path / "scratch", tmp_path / "out")
+    reg = json.loads((d / "registration.json").read_text())
+    audit = PERIOD._audit({"free": 0, "program": L.audit_program(d), "steps": 0}, "the audit")
+    assert (audit.program, audit.units, audit.bits) == (reg["program"], reg["population"], 16)
     units = L.loop_units(d)
     assert L.requests_of(d, units) == ([3, 7], STEPS, H)
     outputs = L.registered_outputs(units)
@@ -859,14 +959,49 @@ def test_a_registered_weights_window_reads_unit_for_unit_as_the_plain_one(tmp_pa
 
 def test_a_wired_windows_requests_and_registered_outputs_are_the_per_coordinate_windows(tmp_path):
     """The wired circuit records each linear once for all requests (a record's ``requests``, one a unit) and its quantize
-    units carry no layer: the leg reads the same prompts, steps and outputs off it as off the per-coordinate circuit."""
+    units carry no layer: the leg reads the same prompts, steps and outputs off it as off the per-coordinate circuit, at
+    a cap that splits each record across members as at one that doesn't; a record whose units aren't one a request is
+    refused."""
     from verity_torch_loop import serve
 
     shape = ["--requests", "3,7", "--steps", "2", "--law", "stratified:3", "--run-id", "allp-cert-wired"]
     assert serve.main([*shape, "--out", str(tmp_path / "coord")]) == 0
-    assert serve.main([*shape, "--out", str(tmp_path / "wired"), "--cap", "2", "--wired"]) == 0
-    coord, wired = (L.loop_units(tmp_path / d) for d in ("coord", "wired"))
-    assert L.requests_of(tmp_path / "wired", wired) == L.requests_of(tmp_path / "coord", coord) == ([3, 7], 2, 128)
-    outputs = L.registered_outputs(wired)
-    assert outputs == L.registered_outputs(coord) and sorted(outputs) == [(r, s) for r in ("r0", "r1") for s in (0, 1)]
-    assert all(len(v) == 2 * 128 for v in outputs.values())
+    for cap in (1, 2):
+        assert serve.main([*shape, "--out", str(tmp_path / f"wired{cap}"), "--cap", str(cap), "--wired"]) == 0
+    coord, *wired = (L.loop_units(tmp_path / d) for d in ("coord", "wired1", "wired2"))
+    for cap, units in zip((1, 2), wired):
+        assert L.requests_of(tmp_path / f"wired{cap}", units) == L.requests_of(tmp_path / "coord", coord) == ([3, 7], 2, 128)
+        outputs = L.registered_outputs(units)
+        assert outputs == L.registered_outputs(coord) and sorted(outputs) == [(r, s) for r in ("r0", "r1") for s in (0, 1)]
+        assert all(len(v) == 2 * 128 for v in outputs.values())
+    d = tmp_path / "wired1"
+    index = json.loads((d / "index.json").read_text())
+    index["members"][1]["labels"][0][2]["requests"] = ["r1", "r0"]
+    (d / "index.json").write_text(json.dumps(index))
+    with pytest.raises(ValueError, match=r"spans units \[0\], not one a request of 2"):
+        L.loop_units(d)
+
+
+@pytest.mark.slow
+def test_a_wired_registered_window_gives_the_leg_its_requests_outputs_and_free_inputs(tmp_path):
+    from verity.ml.windows import interface as IF
+
+    weights = {"opening": tmp_path / "opening.json", "pin": tmp_path / "pin.json"}
+    RN.serve(["--commit-weights", str(weights["opening"]), "--pin", str(weights["pin"]), "--wired"])
+    a = Namespace(law="work:14", cap=2, requests="3,7", steps=STEPS, tamper=set(), node="test-node", tools={},
+                  pouw=None, delta="1/100", start=0, windows=1, weights=weights, session_jobs=1, wired=True)
+    d, _ = RN.loop_window(0, "test", a, tmp_path / "scratch", tmp_path / "out")
+    circuit = json.loads((d / "circuit.json").read_text())
+    assert circuit["name"] == f"torch-loop/mlp-w8a8-h{H}/wired" and len(circuit["templates"]) == 3
+    units = L.loop_units(d)
+    assert L.requests_of(d, units) == ([3, 7], STEPS, H)
+    outputs = L.registered_outputs(units)
+    model = S.L.Model(h=H)
+    for i, token in enumerate([3, 7]):
+        assert [outputs[f"r{i}", k] for k in range(STEPS)] == S.step_outputs(model, token, STEPS)
+    text = [b"".join(outputs[f"r{i}", k] for k in range(STEPS)).hex().encode() for i in range(2)]
+    events = [t[j:j + L.TOKEN_BYTES] for t in text for j in range(0, len(t), L.TOKEN_BYTES)]
+    assert L.match_outputs([{"stream": 1, "session": "s.0"}, {"stream": 2, "session": "s.1"}], events, FRAMES, outputs,
+                           STEPS)["equal"]
+    # every activation is a tie and every weight registered: only the requests' step-0 up_proj inputs are free
+    assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit)["free"] == 2 * (1024 + 32)
