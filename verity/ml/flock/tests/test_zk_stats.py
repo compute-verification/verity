@@ -73,7 +73,7 @@ def test_a_witness_dependent_real_transcript_fails():
 
 
 def test_a_relation_across_fields_and_reps_fails_though_every_field_passes():
-    """red-team-m1-zk F1's shape: every field uniform, a cross-rep functional of them the same in every session."""
+    """A shared pair's shape: every field uniform, a cross-rep functional of them the same in every session."""
     res = zk_stats.analyse(zk_stats.load(_dump(24, relation_leak=True)))
     assert not res["pass"]
     assert all(res["classes"][c]["real_indistinguishable_from_sim"] for c in zk_stats.CLASSES)

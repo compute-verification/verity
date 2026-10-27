@@ -157,7 +157,7 @@ def _probe(addr: str, timeout: float = 1800) -> None:
     raise RuntimeError(f"no verifier at {addr}")
 
 
-PER_PROOF_LOG2 = -195.44   # flock-128-r2 whole-proof bound per proof (red-team-flock grant of flock-pure-block/v2)
+PER_PROOF_LOG2 = -195.44   # flock-128-r2 whole-proof bound per proof (flock-pure-block/v2's)
 
 
 def tcp_rtt(target: str, n: int = 30) -> dict | None:

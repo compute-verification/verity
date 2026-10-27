@@ -2,9 +2,9 @@
 # The proof leg (prove_leg.py) on a CPU machine, on hidden_zk's builds (its job.sh, sourced: C-Flock's flock-circuit and the
 # Lean flock-verify, cached under $LEG_CACHE) with the firewall's Lean frame and the sampled-proofs verifier built in the
 # tree. From a clone:
-#   research run --on auto --source . --as proofs --project verity --cwd clone --cpus 8 --mem-gb 32 \
-#     --env LEG_CACHE=/workspace/research/cache/pouw-hidden-zk -- bash benchmarks/one_stage/prove_leg.sh
-# env: LEG_MEM_GB (the job's --mem-gb, 32 by default)  LEG_CACHE (the build cache)  LEG_N (units a member, 4)
+#   LEG_CACHE=/workspace/research/cache/pouw-hidden-zk bash benchmarks/one_stage/prove_leg.sh
+#   (a job run from a clone of the tree, 8 CPUs, 32 GB)
+# env: LEG_MEM_GB (the job's memory, GB, 32 by default)  LEG_CACHE (the build cache)  LEG_N (units a member, 4)
 #      LEG_KS (the stand-in's K values, "128,256")  LEG_NEGATIVES=0 (honest only)  LEG_FIREWALL=0 (prove without it)
 #      LEG_REGISTERED=1 (the registered-weights stand-in at the first K, verified with --registered)
 #      LEG_DEFS="gemm:1b:2048 rope:1b ..." (vLLM's served Definitions, prove_leg.py defs, in place of the stand-in)
