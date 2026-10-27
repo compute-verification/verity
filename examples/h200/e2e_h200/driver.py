@@ -21,7 +21,9 @@ op's outputs, one row a slot: ``embed``; per layer ``l<i>.`` ``attn_sums`` (RMSN
 word), ``wq``, ``wk``, ``wv``, ``softmax`` (heads x 32, the slot's first position + 1 of each head's its probabilities and the
 rest +0), ``pv``, ``o_amax``, ``o_quant``, ``wo``, ``attn_residual``, ``mlp_sums``, ``mlp_norm``, ``up_amax``, ``up_quant``,
 ``wup``, ``down_amax``, ``down_quant`` (RELU), ``wdown``, ``mlp_residual``; then ``final_sums``, ``final_norm``,
-``head_amax``, ``head_quant``, ``head`` and ``argmax``. The map's units (`plan.Units`) are slices of these rows. RMSNorm
+``head_amax``, ``head_quant``, ``head`` and ``argmax``; under the committer's ``residual`` fusion (`plan.Map`) there is no
+``wo`` or ``wdown``, their coordinates' words being added straight into the residual. The map's units (`plan.Units`) are
+slices of these rows. RMSNorm
 sums in chunks and groups (`shape.Forms`), which changes its words from one sequential sum wherever a row is more than one
 chunk. With ``keep=False`` a group's tables are dropped once committed (a run of record keeps no step's tables: a drawn slot
 is opened by replaying its request, `opening`).
@@ -136,7 +138,7 @@ class Driver:
         self.subcircuits = list(subcircuits)
         self.calls = [s for s in self.subcircuits if hasattr(s, "call")]
         self.attn = A.Attention(self.device, attention)
-        self.groups = tables(shape)
+        self.groups = tables(shape, committer.fused)
         self.forms = forms(shape)
         self.k: torch.Tensor | None = None      # the driver's own KV pool, (layers, batch, context, head_dim) int16
         self.v: torch.Tensor | None = None
@@ -275,7 +277,8 @@ class Driver:
                 self._bf(T["pv"])[lo:hi] = att
                 q = self._quantize(T, "o", lo, hi, att)
                 o = self._linear(st, p + "wo", lo, q, w["wo"])
-                self._bf(T["wo"])[lo:hi] = o
+                if "wo" in T:
+                    self._bf(T["wo"])[lo:hi] = o
                 xs = O.add(xs, o)
                 self._bf(T["attn_residual"])[lo:hi] = xs
                 h = self._norm(T, "mlp", p + "mlp_norm", lo, hi, xs)
@@ -285,7 +288,8 @@ class Driver:
                 q = self._quantize(T, "down", lo, hi, u, relu=True)
                 del u
                 dn = self._linear(st, p + "wdown", lo, q, w["wdown"])
-                self._bf(T["wdown"])[lo:hi] = dn
+                if "wdown" in T:
+                    self._bf(T["wdown"])[lo:hi] = dn
                 xs = O.add(xs, dn)
                 self._bf(T["mlp_residual"])[lo:hi] = xs
                 x[lo:hi] = xs

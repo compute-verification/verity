@@ -8,7 +8,6 @@ import pytest
 from e2e_h200 import program as PR
 from e2e_h200.commit import Committer, fixture_secrets
 from e2e_h200.driver import Driver
-from e2e_h200.plan import Map
 from e2e_h200.shape import MINI, PV_K, TINY
 from e2e_h200.store import GeneratorStore
 from e2e_h200.units import Replayer
@@ -61,11 +60,12 @@ def interpret(prog, args: list[np.ndarray]) -> tuple[dict[str, np.ndarray], np.n
     return named, _resolve(body.ret, vals)
 
 
-def drive(shape):
+def drive(shape, fused=frozenset()):
     w = Weights(shape)
-    d = Driver(shape, GeneratorStore(w), BATCH, Committer("reference", *fixture_secrets("test")), "cpu", clock=lambda: 0.0)
+    d = Driver(shape, GeneratorStore(w), BATCH, Committer("reference", *fixture_secrets("test"), fused=fused), "cpu",
+               clock=lambda: 0.0)
     results = d.run(PROMPTS, STEPS)
-    return w, d, Replayer(shape, w, d.steps, [r.tokens_in for r in results])
+    return w, d, Replayer(shape, w, d.steps, [r.tokens_in for r in results], fused=fused)
 
 
 def inputs(shape, w: Weights, rp: Replayer, step: int, b: int) -> list[np.ndarray]:
@@ -83,18 +83,20 @@ def inputs(shape, w: Weights, rp: Replayer, step: int, b: int) -> list[np.ndarra
     return out
 
 
-@pytest.fixture(scope="module", params=[TINY, MINI], ids=lambda s: s.name)
+@pytest.fixture(scope="module", params=[(TINY, frozenset()), (MINI, frozenset()), (MINI, frozenset({"residual"}))],
+                ids=lambda p: p[0].name + "-fused-residual" * bool(p[1]))
 def served(request):
-    shape = request.param
-    w, d, rp = drive(shape)
-    return shape, w, rp, PR.program(shape)
+    shape, fused = request.param
+    w, d, rp = drive(shape, fused)
+    return shape, w, rp, PR.program(shape, fused)
 
 
 def test_every_family_is_the_drivers_table_and_the_return_is_the_steps_token_and_kv(served):
     shape, w, rp, prog = served
     step = STEPS - 1
     tables = rp.steps[step].tables
-    names = {u.table for g in Map(shape).groups() for _, us in g for u in us}
+    table_of = {u.name: u.table for g in rp.map.groups() for _, us in g for u in us}
+    names = set(table_of) | set(table_of.values())
     for b in range(BATCH):
         named, ret = interpret(prog, inputs(shape, w, rp, step, b))
         checked = 0
@@ -121,7 +123,7 @@ def test_every_family_is_the_drivers_table_and_the_return_is_the_steps_token_and
                 checked += 1
             elif name in names:
                 assert np.array_equal(np.packbits(out, bitorder="little"),
-                                      np.ascontiguousarray(tables[name][0][b]).view(np.uint8)), name
+                                      np.ascontiguousarray(tables[table_of.get(name, name)][0][b]).view(np.uint8)), name
                 checked += 1
         assert checked == len(named)
         L, d = shape.layers, shape.head_dim

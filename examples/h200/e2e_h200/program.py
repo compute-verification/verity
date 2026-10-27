@@ -24,6 +24,7 @@ view; the Program calls the Boolean Definition whose `word` that is):
 | ``RowAbsMax_v1{N, RELU}`` | ``RowAbsMax_v2`` |
 | ``QuantChunkS8_v1{N, RELU}`` | ``QuantChunkS8_v2`` (chunk 0's scale is the linear's ``sx``) |
 | ``ScaledMmS8CoordinateRows_v1{K, R, BlackwellS8ImmaDot32_v1}`` | ``ScaledMmS8CoordinateRows_v2{K, R, BlackwellS8ImmaDot32_v2}`` |
+| ``ScaledMmS8ResidualCoordinateRows_v1{K, R, BlackwellS8ImmaDot32_v1}`` (``fused`` ``residual``) | ``ScaledMmS8ResidualCoordinateRows_v2{K, R, BlackwellS8ImmaDot32_v2}``, r the stream's word |
 | ``QkSoftmaxRowPad_v1{T, D}`` | ``QkSoftmaxRowPad_v1{T, D, HopperBF16WgmmaDot16_v2}`` |
 | ``PvRow_v1{T, K, D, HopperBF16WgmmaDot16_v1}`` | ``PvRowPad_v2{T, K, D, HopperBF16WgmmaDot16_v2}``: keys at n and past read as 0 |
 | ``Bf16AddRow_v2{N}``, ``Argmax_v2{V}`` | the same |
@@ -49,7 +50,7 @@ from verity.ml.circuits.types import Array, Tuple, Value
 
 from e2e_h200 import served_weights as SW
 
-from .plan import EPS_KEY
+from .plan import EPS_KEY, FUSIONS
 from .shape import PV_K, Shape, check, forms
 
 BIT = Value(1)
@@ -68,9 +69,11 @@ def _weight_type(t: SW.Tensor) -> Array:
     return Array(t.cols, elem) if t.rows == 1 else Array(t.rows, Array(t.cols, elem))
 
 
-def program(shape: Shape) -> Program:
-    """The served step's Program at ``shape`` (module docstring)."""
+def program(shape: Shape, fused: frozenset[str] = frozenset()) -> Program:
+    """The served step's Program at ``shape`` on the map with the fusions ``fused`` (`plan.FUSIONS`; module docstring)."""
     sh, f = check(shape), forms(shape)
+    if not fused <= FUSIONS:
+        raise ValueError(f"the map's fusions are {sorted(FUSIONS)}, not {sorted(fused - FUSIONS)}")
     w, d, h, c, L = sh.width, sh.head_dim, sh.heads, f.chunk, sh.layers
     ts = SW.tensors(sh)
     kv = Array(L, Array(PV_K, Array(d, BF16)))
@@ -106,20 +109,28 @@ def program(shape: Shape) -> Program:
             return B.batch(bind(BQ.QuantChunkS8, N=q, RELU=relu), x.reshape(Array(N // q, Array(q, BF16))), amax,
                            axes=(0, None), name=op + "_quant")
 
-        def linear(op: str, qx: Coll) -> Coll:
+        def linear(op: str, qx: Coll, stream: Coll | None = None) -> Coll:
+            """Linear ``op``'s coordinates; given the residual ``stream``, each adds its word to the stream's."""
             W, sw = a[op], a[op + ".scale"]
             N, K = W.type.n, W.type.elem.n
             q = f.qchunk(K)
             R = K // q
             xs = [qx[r][0] for r in range(R)]
             wrows = [Coll(Array(N, Array(q, CODE)), strided_view(W, r * q * 8, q * 8, K * 8, 1, N * q * 8)) for r in range(R)]
-            return B.batch(bind(BG.ScaledMmS8CoordinateRows, K=K, R=R, DOT=S8_DOT), *xs, qx[0][1], *wrows, sw,
-                           axes=(None,) * (R + 1) + (0,) * (R + 1), name=op)
+            ports, axes = [*xs, qx[0][1], *wrows, sw], (None,) * (R + 1) + (0,) * (R + 1)
+            if stream is None:
+                return B.batch(bind(BG.ScaledMmS8CoordinateRows, K=K, R=R, DOT=S8_DOT), *ports, axes=axes, name=op)
+            return B.batch(bind(BG.ScaledMmS8ResidualCoordinateRows, K=K, R=R, DOT=S8_DOT), *ports, stream,
+                           axes=axes + (0,), name=op)
 
         def residual(op: str, x: Coll, y: Coll) -> Coll:
             rows = Array(w // c, Array(c, BF16))
             return B.batch(bind(BR.Bf16AddRow, N=c), x.reshape(rows), y.reshape(rows), axes=(0, 0),
                            name=op).reshape(Array(w, BF16))
+
+        def projection(op: str, qx: Coll, x: Coll, res: str) -> Coll:
+            """Linear ``op`` back to the width, then the residual add ``res`` to ``x``: one block a coordinate when fused."""
+            return linear(op, qx, x) if "residual" in fused else residual(res, x, linear(op, qx))
 
         pos = B.batch(BM.select_bf16(sh.context), a["p"], a["pos"], axes=(None, 0), name="pos")
         x = B.batch(bind(RW.EmbeddingCoordinate, V=sh.vocab), tok, a["tok"], pos, axes=(None, 0, 0), name="embed")
@@ -136,10 +147,9 @@ def program(shape: Shape) -> Program:
             vrows = [values[t] for t in range(PV_K)] + [n]
             att = B.batch(bind(BG.PvRowPad, T=PV_K, K=PV_K, D=d, DOT=BF16_DOT), probs, *vrows, axes=(0,) + (None,) * len(vrows),
                           name=p + "pv")
-            o = linear(p + "wo", quant(p + "o", att.reshape(Array(h * d, BF16)), False))
-            x = residual(p + "attn_residual", x, o)
+            x = projection(p + "wo", quant(p + "o", att.reshape(Array(h * d, BF16)), False), x, p + "attn_residual")
             up = linear(p + "wup", quant(p + "up", norm(p + "mlp", x, a[p + "mlp_norm"]), False))
-            x = residual(p + "mlp_residual", x, linear(p + "wdown", quant(p + "down", up, True)))
+            x = projection(p + "wdown", quant(p + "down", up, True), x, p + "mlp_residual")
         logits = linear("head", quant("head", norm("final", x, a["final_norm"]), False))
         nxt = B.call(bind(BR.Argmax, V=sh.vocab), logits, name="argmax")
         return tuple_of(nxt, array_of(ks), array_of(vs))

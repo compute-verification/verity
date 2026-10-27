@@ -8,6 +8,7 @@
   are assembled from its committed rows (under 1 KiB rows, 64 B rows whose ports span rows, and today's ``families/v1``,
   whose slot roots are the run's own). They must be the inputs replay reads and the outputs it checks, and each row opens
   against its step's root.
+- All of it again on the map with the ``residual`` fusion (`plan.FUSIONS`), whose frozen layout drops the projections' rows.
 """
 from __future__ import annotations
 
@@ -33,6 +34,13 @@ from verity.ml.commitments import layout as L
 #: circuits' writers artifact for the frozen shape, `window.writers_digest`
 FROZEN_WRITERS = ("5f20869283c3b4c078193c42259d1f2aada1a82138e203a438216d4449c1fc6f"
                   "7a2f69952a2dddabbaab83e1d928551769c0b7b0bc26408b2f69686ef4cf63d4")
+RESIDUAL = frozenset({"residual"})
+#: the frozen shared layout under the ``residual`` fusion: rows, bytes a slot, `layout_digest` and its writers' digest
+FUSED_ROWS, FUSED_BYTES = 18_529, 24_008_260
+FUSED_DIGEST = ("6d4651773566e0caf2aad9c47748bf109da83a5dff3889ee2ee11721f51f41af"
+                "4894fc249aa52f98dd974c1bc9d3eccd5ecadbfff1e70767b4bc4b9095211de8")
+FUSED_WRITERS = ("59b05a362a01f35542a56228db5f37dc1172e956168562e4990ced295e0342b8"
+                 "fbda60c5e1f52cfb19ca927699cf472697e5ac0c71ab9cbd09ed5ff6eeb317f9")
 SLOTS, N, P, G, ADMIT = 4, 7, 2, 3, 1
 
 
@@ -43,6 +51,11 @@ def lockstep(steps: int, batch: int) -> list[SimpleNamespace]:
 @pytest.fixture(scope="module")
 def frozen() -> W.Window:
     return W.Window(FROZEN, lockstep(FROZEN.context, 2))
+
+
+@pytest.fixture(scope="module")
+def frozen_fused() -> W.Window:
+    return W.Window(FROZEN, lockstep(FROZEN.context, 2), fused=RESIDUAL)
 
 
 def test_the_shared_layout_and_its_writers_are_circuits_at_the_frozen_shape(frozen) -> None:
@@ -58,6 +71,26 @@ def test_a_layout_that_isnt_shared_rows_is_refused() -> None:
         W.shared_layout(MINI, 255)
     with pytest.raises(InvalidArtifact, match="group 0 tensor 0: bytes 0..2 are committed twice"):
         W.Window(MINI, lockstep(1, 1), families_layout(MINI)).writers()
+
+
+def test_the_residual_fusion_drops_the_projections_tables_and_the_residual_adds_at_the_frozen_shape(frozen, frozen_fused) -> None:
+    """Each layer's ``wo`` and ``wdown`` tables go (32 KiB, 32 rows each) and with them the two ``Bf16AddRow_v2`` families;
+    the projections' coordinates write the residuals' rows instead."""
+    lay, n = frozen_fused.layout, FROZEN.layers
+    assert (lay.row_count, lay.slot_bytes, lay.digest.hex()) == (FUSED_ROWS, FUSED_BYTES, FUSED_DIGEST)
+    assert frozen.layout.row_count - lay.row_count == 64 * n and frozen.layout.slot_bytes - lay.slot_bytes == 65_536 * n
+    ws = frozen_fused.writers()
+    assert len(ws) == 1203 - 2 * n and W.writers_digest(ws) == FUSED_WRITERS
+    assert {u.template for u in frozen.units.values()} - {u.template for u in frozen_fused.units.values()} == {"Bf16AddRow_v2"}
+    for f, table, k in (("l50.wo", "l50.attn_residual", 16384), ("l50.wdown", "l50.mlp_residual", 65536)):
+        u = frozen_fused.family(f)
+        assert (u.table, u.count, u.key) == (table, FROZEN.width, f"ScaledMmS8ResidualCoordinateRows_v1{{K={k},R={k // 8192},"
+                                                                 f"DOT=BlackwellS8ImmaDot32_v1}}")
+        assert f in frozen.tables and f not in frozen_fused.tables
+    out = lambda f, i: frozen_fused.outputs(7, 1, f, i)[0]  # noqa: E731
+    assert frozen_fused.locate(7, 1, "l50.wo", 11, "r") == out("l49.wdown", 11)
+    assert frozen_fused.locate(7, 1, "l50.wdown", 11, "r") == out("l50.wo", 11)
+    assert frozen_fused.locate(7, 1, "l50.wdown", 11, "wrow3") == (W.Registered("l50.wdown", 11 * 8 + 3, 0, 8192),)
 
 
 def _written(writers: list[dict]) -> dict[int, list[tuple[int, int]]]:
@@ -81,7 +114,9 @@ def _inside(lo: int, hi: int, ranges: list[tuple[int, int]]) -> bool:
     return lo >= hi
 
 
-def test_every_read_at_the_frozen_shape_is_in_rows_its_producers_wrote(frozen) -> None:
+@pytest.mark.parametrize("which", ["frozen", "frozen_fused"])
+def test_every_read_at_the_frozen_shape_is_in_rows_its_producers_wrote(which, request) -> None:
+    frozen = request.getfixturevalue(which)
     ws = frozen.writers()
     written, by = _written(ws), {w["family"]: w for w in ws}
     step, slot = 7, 1
@@ -162,39 +197,42 @@ def test_under_shared_rows_an_output_is_a_window_of_its_row(frozen) -> None:
 
 # -- the round trip at MINI
 
-@pytest.fixture(scope="module")
-def served():
-    """A run served by continuous batching (slots reused, steps mixing positions) under the per-slot commit at MINI."""
+@pytest.fixture(scope="module", params=[frozenset(), RESIDUAL], ids=["unfused", "fused-residual"])
+def served(request):
+    """A run served by continuous batching (slots reused, steps mixing positions) under the per-slot commit at MINI, on the
+    unfused map and on the ``residual`` fusion's."""
     if not any(shutil.which(c) for c in ("g++", "c++", "clang++")):
         pytest.skip("the slots commit's host twin needs a C++ compiler")
+    fused = request.param
     w = Weights(MINI)
-    c = Committer("slots", *fixture_secrets("test"), MINI, "cpu", fixture_salt("test"))
+    c = Committer("slots", *fixture_secrets("test"), MINI, "cpu", fixture_salt("test"), fused=fused)
     d = Driver(MINI, GeneratorStore(w), SLOTS, c, clock=lambda: 0.0)
     ps = RUN.prompts_for("serve", N, P)
     d.serve(SlotKV(SlotShape(SLOTS, MINI.layers, MINI.context, MINI.head_dim, prompt=P, generate=G), "cpu", admit=ADMIT),
             [Request(i, bytes(ps[i].astype(np.uint8))) for i in range(N)])
-    win = W.Window(MINI, d.steps)
+    win = W.Window(MINI, d.steps, fused=fused)
     assert any(r != b for s, st in enumerate(d.steps) for b in range(st.batch) for _, r in win.history(s, b)), \
         "a sequence's earlier keys are in other rows of their steps"
+    assert ("l0.wo" in d.steps[0].tables) == (not fused)
     return w, c, d
 
 
-LAYOUTS = {"shared-1024": lambda: W.shared_layout(MINI), "shared-64": lambda: W.shared_layout(MINI, 64),
-           "families-v1": lambda: families_layout(MINI)}
+LAYOUTS = {"shared-1024": lambda f: W.shared_layout(MINI, fused=f), "shared-64": lambda f: W.shared_layout(MINI, 64, f),
+           "families-v1": lambda f: families_layout(MINI, f)}
 
 
 @pytest.mark.parametrize("layout", LAYOUTS)
 def test_drawn_blocks_of_every_family_assemble_from_committed_rows_to_what_replay_reads(served, layout) -> None:
     w, c, d = served
     S, _ = _slots()
-    win = W.Window(MINI, d.steps, LAYOUTS[layout]())
+    win = W.Window(MINI, d.steps, LAYOUTS[layout](c.fused), c.fused)
     rows = {(s, b): win.slot_rows(st, b) for s, st in enumerate(d.steps) for b in range(st.batch)}
     if layout == "families-v1":
         assert all(S.commit_slot(c.context, win.layout, r.salt_key, b, rows[s, b]).root == r.slot_roots[b]
                    for s, r in enumerate(d.results) for b in range(d.steps[s].batch))
         assert len(win.locate(0, 0, "l0.softmax", 1, "q")) == 1, "a read opens the gather's row, not its parts'"
     tokens = [r.tokens_in for r in d.results]
-    rp = Replayer(MINI, w, d.steps, tokens)
+    rp = Replayer(MINI, w, d.steps, tokens, fused=c.fused)
     run, weights = win.run_inputs(tokens), W.weights_of(w)
     spans = 0
     for s, st in enumerate(d.steps):
@@ -211,6 +249,7 @@ def test_drawn_blocks_of_every_family_assemble_from_committed_rows_to_what_repla
                 (layout, s, u.family, u.index)
             outs = win.outputs(s, b, u.family, u.index)
             assert b"".join(win.assemble(o, lambda *k: rows[k], weights, run, s, b) for o in outs) == u.got.tobytes()
+            assert u.ok, (layout, s, u.family, u.index)
             spans += sum(len(win.locate(s, b, u.family, u.index, p)) > 1 for p in ports)
     assert layout != "shared-64" or spans
 
@@ -218,7 +257,7 @@ def test_drawn_blocks_of_every_family_assemble_from_committed_rows_to_what_repla
 def test_a_drawn_attention_blocks_rows_open_against_their_steps_roots(served) -> None:
     w, c, d = served
     S, _ = _slots()
-    win = W.Window(MINI, d.steps)
+    win = W.Window(MINI, d.steps, fused=c.fused)
     s = len(d.steps) - 1
     st = d.steps[s]
     b = int(np.argmax(st.positions))
