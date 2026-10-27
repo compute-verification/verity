@@ -156,11 +156,9 @@ NOT_READ = {
     "lean_changed.py": "check's lean-changed step and the Lean fast path, which run beside the audit",
     "merge.py": "git's merge driver for lean-audit.json",
     "run_daily.py": "the build cache's daily publish",
-    "survey.py": "the Lean read as text (its map, its form, its trusted size), run by hand",
+    "survey.py": "the Lean read as text (its map, its form, its trusted size, the modules no guarantee uses), run by hand",
     "tool.py": "the store's declarations of the scheduled runs",
-    "unused.py": "a lane's list of the modules no guarantee uses, and their deletion (LEAN-73)",
     "Upstream.lean": "`upstream.py --lean`, the exact pass; the audit runs the no-build one",
-    "Used.lean": "`unused.py`, which compiles and runs it",
     "pyproject.toml": "the tools/verity/lean suite's settings",
 }
 
