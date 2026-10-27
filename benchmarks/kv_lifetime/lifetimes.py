@@ -15,7 +15,7 @@ unhashed); its held segments are the spans some request holds it (ALLOC or HIT t
 count to zero). Under memory-map/v1 a pass is credited the bits its step reads, so only held blocks are ever
 credited: a cached block no request holds may be resident and planned, but carries none of the step's reads.
 
-`analyze` turns the events into the distributions the memory-accounting frontier needs, for a block of `block_bytes`:
+`analyze` turns the events into the distributions the memory accounting frontier needs, for a block of `block_bytes`:
 
 - lifetimes: held life (ALLOC to the last release) and resident life (ALLOC to eviction), weighted by bytes (every
   block is `block_bytes`; a request's partly filled last block counts whole);

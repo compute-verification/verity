@@ -1,10 +1,10 @@
 """γ for p512 at k = 2 under the decode-free, HBM-capacity and node-level accounting rules, from measured inputs.
 
-γ = μ_chip + μ_sample + μ_rebuild + μ_host, with μ_rebuild = d/(k·x₁,adv) (memory-accounting's mainline model) and
+γ = μ_chip + μ_sample + μ_rebuild + μ_host, with μ_rebuild = d/(k·x₁,adv) (the mainline model) and
 μ_host = d·B_spare/ΣB_HBM: the words a host process can sketch (or DMA into a GPU) from host DRAM in one step, as a
 share of the node's HBM, when host DRAM is inside the device but outside the audit.
 
-x₁,adv = x₁/(s·(1 + h)): x₁ = 175 is ra-codec-tensor's p512 encode at the max clock (r20261012-095329-3aac, ÷ 1.16),
+x₁,adv = x₁/(s·(1 + h)): x₁ = 175 is the tensor-core codec's p512 encode at the max clock (÷ 1.16),
 s the adversary's squaring speed-up over the best measured form (sqfloor at 512 bits: 1.0 measured, 1.2 the multiply
 pipe at 100%, 1.45 the issue bound) and h the host CPUs' share of the GPUs' squaring rate (host_sq: GMP measured; an
 AVX-512 IFMA kernel at its port bound: ten 52-bit limbs, about 130 IFMA and 60 other vector operations per 8 words, on
