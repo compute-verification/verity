@@ -1,4 +1,4 @@
-/* Two radix-M packings that put more incidences into one sm_120 instruction than QSTAR's ISA-CAP (<= 32/7), checked
+/* Two radix-M packings that put more incidences into one sm_120 instruction than ISA-CAP (<= 32/7), checked
    over every R bit and U entry (U in -64..-1, 1..64), with each instruction evaluated from its packed registers and its
    destination decoded as a mixed-radix tuple of fields:
 

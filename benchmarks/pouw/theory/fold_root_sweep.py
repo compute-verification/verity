@@ -51,12 +51,12 @@ def kj_scaled(a: int, n: int, r2: int) -> bool:
 
 def kj_last(a: int, r1: int) -> bool:
     """Only KJ19's last clause (j = r2 − 1), a ≢ ±1 mod 2^r1: `egemm_depthr_check.key_ok_r11_32`'s KJ19, and
-    REFEREE's rescaling."""
+    the rescaled rule's."""
     return a % (1 << r1) not in (1, (1 << r1) - 1)
 
 
 def near_inverse(a0: int, a1: int, n: int) -> bool:
-    """FOLD's reduced pair clause (egemm_depthr_check.near_inverse): v2(a0 a1 ∓ 1) >= n − 5."""
+    """egemm_depthr_check's reduced pair clause (near_inverse): v2(a0 a1 ∓ 1) >= n − 5."""
     m = (1 << n) - 1
     p = (a0 * a1) & m
 
