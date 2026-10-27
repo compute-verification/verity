@@ -6,6 +6,7 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py period open SERVE_DIR --name P --circuits DIR --slots N --max-tokens N [--gate CMD] [--draw-k K]
                                  [--model M]
     served_verdicts.py period close SERVE_DIR [--gate CMD]
+    served_verdicts.py program OUT [--model M] [--rows T] [--steps S] [--like SERVE_DIR]
     served_verdicts.py pieces --serve-run DIR --window K --out DIR
     served_verdicts.py pouw SERVE_DIR WINDOW DIR [--gate CMD] [--key-sha512 HEX] [--main FILE] [--python PY]
                                 [--statements FILE] [--live-evidence FILE]
@@ -39,6 +40,11 @@ Its fixed length is ``--slots`` requests of ``--max-tokens`` (`credit.LENGTH_FIE
 digest, else none (the gate refuses a root its registry lacks, and serve-openai's own is a local key's, so core's credit
 then refuses the window at its weights). The open's answer goes
 to ``SERVE_DIR/period.json``. ``period close`` closes that period and adds its answer there.
+
+``program``: serve-openai's declared window Program for ``--model`` at T, S, built on a CPU without serving (`program`,
+`DECLARED`) and written as serve-openai writes ``h1/``, so the circuit files can be built before the serve that needs
+them (the Program is a function of the linears, T and S). ``--like`` takes model, T and S from a serve-openai run and
+refuses unless the digest is that run's.
 
 ``pouw``: PoUW's development piece (``POUW_CMD``): window K's H1 outcome (``windows.jsonl``'s ``pouw_h1``) and record
 (``h1/w<K>/pouw-h1-calls.json``); with the auditor host's challenger's coins, the window's session as the gate's ``fetch``
@@ -115,6 +121,12 @@ H1_META = "h1/window-program.meta.json"
 CIRCUITS_MANIFEST = "circuit-files.json"
 #: the period this serve dir's windows joined, its open's and close's answers (``period``)
 PERIOD = "period.json"
+#: the int8 linears serve-openai declares its window Program over, by served model: its layers and each layer's
+#: ``(module, n, K)`` in vLLM's module order (`serve_h1.H1Windows`: each ``weight.shape``, named by `pouw._named`)
+DECLARED: dict[str, tuple[int, tuple[tuple[str, int, int], ...]]] = {
+    "verity-int8/Llama-3.2-1B-INT8": (16, (("self_attn.qkv_proj", 3072, 2048), ("self_attn.o_proj", 2048, 2048),
+                                           ("mlp.gate_up_proj", 16384, 2048), ("mlp.down_proj", 2048, 8192))),
+}
 
 
 def _lines(path: Path) -> list[dict[str, Any]]:
@@ -235,6 +247,33 @@ def gate_ready(gate: str, lane: str, main: Path | None = None) -> tuple[bool, st
             f"{len(ledger)} entries; pinned {str(pin.get('commit'))[:12]} (main {str(pin.get('main'))[:12]}, "
             f"{pin.get('pinned_utc')}){where}")
     return period is None, line
+
+
+def program(out: Path, model: str, rows: int, steps: int, like: Path | None = None) -> dict[str, Any]:
+    """``program``: the window Program serve-openai declares for `model` at T `rows` and S `steps`, built without serving
+    (`DECLARED`'s linears) and written as serve-openai writes it (`serve_h1.write_program`) into `out`; its meta. With
+    `like`, a serve-openai run's dir, its model, T and S are that run's and its digest must be the run's
+    (serve.json's ``protocols.program``), else ValueError."""
+    from verity_vllm.pipeline import serve_h1 as SH
+    from verity_vllm.protocols.pouw.h1 import served as SV
+
+    want = None
+    if like is not None:
+        serve = json.loads((like / "serve.json").read_text())
+        proto = serve.get("protocols") or {}
+        model, rows, steps, want = serve.get("served_model_name") or model, proto["rows"], proto["steps"], proto["program"]
+    if model not in DECLARED:
+        raise ValueError(f"no declared linears for {model!r}: add them to DECLARED ({sorted(DECLARED)})")
+    layers, linears = DECLARED[model]
+    named = [(f"model.layers.{i}.{m}", n, k) for i in range(layers) for m, n, k in linears]
+    shapes = [(n, k) for _m, n, k in named]
+    modules = {w: m for w, (m, _n, _k) in enumerate(named)}
+    digest = SH.write_program(SV.declared(shapes, modules, rows, steps),
+                              SV.declared_layout(shapes, modules, rows, steps), out, rows=rows, steps=steps)
+    if want is not None and digest != want:
+        raise ValueError(f"{model}'s Program at T {rows}, S {steps} is {digest[:16]}..., not {like}'s {str(want)[:16]}...: "
+                         "DECLARED's linears aren't the ones that run served")
+    return json.loads((out / SH.PROGRAM_META).read_text())
 
 
 def period_open_argv(serve_dir: Path, name: str, circuits: Path, *, slots: int, max_tokens: int,
@@ -500,6 +539,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     pe.add_argument("--max-tokens", type=int)
     pe.add_argument("--draw-k", type=int)
     pe.add_argument("--model")
+    pr = sub.add_parser("program")
+    pr.add_argument("out", type=Path)
+    pr.add_argument("--model", default="verity-int8/Llama-3.2-1B-INT8")
+    pr.add_argument("--rows", type=int, default=512)
+    pr.add_argument("--steps", type=int, default=16)
+    pr.add_argument("--like", type=Path)
     o = sub.add_parser("pouw")
     o.add_argument("serve_dir", type=Path)
     o.add_argument("window", type=int)
@@ -557,6 +602,15 @@ def main(argv: Sequence[str] | None = None) -> int:
               f"{doc['draw_k']}, weights {' '.join(doc['weights']) or 'none'}, files {sorted(doc['circuit_files'])}"
               + (f" (no k<K> file yet for K = {doc['missing']}: a drawn statement there is refused)" if doc["missing"]
                  else ""), flush=True)
+        return 0
+    if a.cmd == "program":
+        try:
+            meta = program(a.out, a.model, a.rows, a.steps, a.like)
+        except (OSError, ValueError, KeyError) as e:
+            print(f"PROGRAM refused: {type(e).__name__}: {e}"[:1200], flush=True)
+            return 1
+        print(f"PROGRAM {meta['program_digest'][:16]}... T {meta['rows']}, S {meta['steps']}, {meta['bytes']} bytes"
+              + (f", serve-openai's at {a.like}" if a.like else ""), flush=True)
         return 0
     if a.cmd == "pouw":
         doc = pouw(a.serve_dir, a.window, a.out, gate=a.gate, key=a.key_sha512, main=a.main,

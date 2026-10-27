@@ -17,9 +17,10 @@ what core's credit verifies each round's ``live@<s>`` on (``circuit_files["live"
 window's rounds. It takes seconds.
 
 The lowering runs once per K, each in its own process (`lower`). At K = 4096 and 14336 on the 32 × 32 tile it is the
-long step, so it runs once as its own CPU job and later runs reuse its directory (`build`, `MANIFEST`):
+long step, so it runs once as its own CPU job and later runs reuse its directory (`build`, `MANIFEST`). ``--strata``
+lowers only the K it lists (``none``: only the live file), and the manifest then holds no ``k<K>`` for the rest:
 
-    python -m tests.protocols.pouw_h1_circuits --program PROGRAM_DIR --out DIR [--live T,S]
+    python -m tests.protocols.pouw_h1_circuits --program PROGRAM_DIR --out DIR [--live T,S] [--strata K,...|none]
 """
 from __future__ import annotations
 
@@ -31,7 +32,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 
 HERE = Path(__file__).resolve().parent
 H1_PROVE = HERE.parents[3] / "benchmarks" / "pouw" / "h1_prove"
@@ -113,7 +114,7 @@ def lower_live(T: int, part: dict, path: Path) -> None:
 
 
 def build(program_dir: Path, out: Path, lower: Lower = lower, live: tuple[int, int] | None = None,
-          lower_live: LowerLive = lower_live) -> dict[str, Any]:
+          lower_live: LowerLive = lower_live, only: Sequence[int] | None = None) -> dict[str, Any]:
     """Each stratum's circuit file of the declared window Program in `program_dir` (the rehearsal's ``PROGRAM`` and
     ``PROGRAM_META``), lowered by `lower` into `out` (`file_name`) unless `out`'s `MANIFEST` already records it under
     the same bind, and the manifest: ``{program, bind, templates, files}``, ``files`` the period-open's
@@ -140,6 +141,8 @@ def build(program_dir: Path, out: Path, lower: Lower = lower, live: tuple[int, i
             lower_live(T, part, path)
         files[CR.LIVE] = hashlib.sha512(path.read_bytes()).hexdigest()
     for k in strata(meta["layout"]):
+        if only is not None and k not in only:
+            continue
         path = out / file_name(k)
         if not (kept.get("bind") == bind and path.is_file()):
             lower(k, tuple(meta["layout"]["tile"]), bind, path)
@@ -156,6 +159,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", metavar="DIR", help="where each stratum's circuit file and the manifest go")
     ap.add_argument("--live", metavar="T,S", type=lambda v: tuple(int(x) for x in v.split(",")),
                     help="also the live template's circuit file, for windows of S rounds at T rows")
+    ap.add_argument("--strata", metavar="K,...|none", type=lambda v: () if v == "none" else tuple(int(x) for x in v.split(",")),
+                    help="lower only these strata's files (none: only --live's)")
     ap.add_argument("--lower", nargs=5, metavar=("K", "R", "C", "BIND", "PATH"), help=argparse.SUPPRESS)
     a = ap.parse_args(argv)
     if a.lower:
@@ -164,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if not (a.program and a.out):
         ap.error("--program and --out")
-    doc = build(Path(a.program), Path(a.out), live=a.live)
+    doc = build(Path(a.program), Path(a.out), live=a.live, only=a.strata)
     print(f"POUW-H1-CIRCUITS program={doc['program'][:16]} files={json.dumps(doc['files'])}", flush=True)
     return 0
 

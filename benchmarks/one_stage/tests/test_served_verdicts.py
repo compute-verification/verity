@@ -393,3 +393,41 @@ def test_a_period_open_is_refused_on_files_that_are_not_the_served_programs(tmp_
            "no meta": "has no declared window Program", "no manifest": "no circuit files at"}[case]
     with pytest.raises(ValueError, match=why):
         S.period_open_argv(d, "p", c, slots=4, max_tokens=8)
+
+
+def test_the_program_is_built_off_the_server_as_serve_openai_declares_and_writes_it(tmp_path, monkeypatch):
+    """``program`` declares the served model's linears (`DECLARED`) in vLLM's order and naming, ``(n, K)`` each, at T and
+    S, and writes them with serve-openai's own `serve_h1.write_program`; ``--like`` takes model, T and S from a serve
+    dir and refuses a digest other than the one that run declared. The declaration and its digest are stand-ins here
+    (a real one takes minutes); the node job checks the real one against a recorded run's digest."""
+    from verity_vllm.pipeline import serve_h1 as SH
+    from verity_vllm.protocols.pouw.h1 import served as SV
+
+    seen = []
+    monkeypatch.setattr(SV, "declared", lambda shapes, modules, rows, steps: ("program", shapes, modules, rows, steps))
+    monkeypatch.setattr(SV, "declared_layout", lambda shapes, modules, rows, steps: {"tile": [32, 32]})
+
+    def write(prog, layout, out, *, rows, steps):
+        seen.append((prog, layout, out, rows, steps))
+        out.mkdir(parents=True, exist_ok=True)
+        (out / SH.PROGRAM_META).write_text(json.dumps({"program_digest": DIGEST, "rows": rows, "steps": steps,
+                                                       "bytes": 9, "layout": layout}))
+        return DIGEST
+    monkeypatch.setattr(SH, "write_program", write)
+    meta = S.program(tmp_path / "h1", "verity-int8/Llama-3.2-1B-INT8", 512, 16)
+    (_tag, shapes, modules, rows, steps), _layout, out, *_ = seen[0]
+    assert meta["program_digest"] == DIGEST and out == tmp_path / "h1" and (rows, steps) == (512, 16)
+    assert len(shapes) == 64 and shapes[:4] == [(3072, 2048), (2048, 2048), (16384, 2048), (2048, 8192)]
+    assert modules[0] == "model.layers.0.self_attn.qkv_proj" and modules[63] == "model.layers.15.mlp.down_proj"
+
+    run = tmp_path / "serve"
+    run.mkdir()
+    (run / "serve.json").write_text(json.dumps({"served_model_name": "verity-int8/Llama-3.2-1B-INT8",
+                                                "protocols": {"program": DIGEST, "rows": 32, "steps": 2}}))
+    assert S.main(["program", str(tmp_path / "like"), "--like", str(run)]) == 0 and seen[-1][3:] == (32, 2)
+    (run / "serve.json").write_text(json.dumps({"served_model_name": "verity-int8/Llama-3.2-1B-INT8",
+                                                "protocols": {"program": "6f" * 64, "rows": 32, "steps": 2}}))
+    with pytest.raises(ValueError, match="DECLARED's linears aren't the ones that run served"):
+        S.program(tmp_path / "like", "x", 0, 0, like=run)
+    with pytest.raises(ValueError, match="no declared linears for 'other'"):
+        S.program(tmp_path / "other", "other", 512, 16)
