@@ -95,6 +95,10 @@ FUSED = (("qkv", ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj")), 
          ("up", ("mlp.gate_proj", "mlp.up_proj")), ("down", ("mlp.down_proj",)))
 ETA = 1 - 2.8e-5
 DELTA = 0.01
+#: the ANDs of a MAC under main's Boolean lowering of an s8 x s8 linear into int32: GemmAccumulatorS8_v2{K, DOT} on the
+#: card's IMMA step (BlackwellS8ImmaDot32_v2; sm_90's step costs the same) is 8,316 ANDs at K = 64 and linear in K. It is
+#: not creditSize's lowering pinned at registration: Dither's Fill has no Definition yet.
+ANDS_PER_MAC = (2079, 16)
 
 
 def load_card(spec: str) -> dict:
@@ -943,6 +947,9 @@ def summarize(results: list[dict], plan: Plan, source: dict | None = None, card:
         "plan": plan.__dict__, "periods": len(honest),
         "accepted": sum(r["accepted"] for r in honest),
         "credited_macs": credited, "wall_s": wall,
+        "credited_ands": {"value": credited * ANDS_PER_MAC[0] // ANDS_PER_MAC[1],
+                          "lowering": "GemmAccumulatorS8_v2{K, DOT=BlackwellS8ImmaDot32_v2} (verity.ml.circuits.ops.boolean.gemm)",
+                          "per_mac": ANDS_PER_MAC[0] / ANDS_PER_MAC[1]},
         "card": None, "peak_macs_s": {}, "certified_share": {}, "plain_share_of_peak": {},
         "proto_s_per_step": med([per_step(r) for r in honest]), "plain_s_per_step": med([per_step(r) for r in plain]),
         "gamma_wall": None, "gamma_gpu": None,
