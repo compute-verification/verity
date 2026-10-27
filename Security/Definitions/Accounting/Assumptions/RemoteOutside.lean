@@ -22,6 +22,10 @@ each a named `Prop` on a trace, the session's record of computation off the node
   certifiers sign nothing but the verifier's messages entering the node over the credited passes, nothing else
   entered.
 
+In the per-party names, `Covered` is `Covered` (every uplink from the prover's server passes through an active
+certifier) and `IngressCounted` is `Faithful` of the certifiers (what they sign is what crossed their links); neither
+names the prover, whose strategy is arbitrary.
+
 Statement C in full, no device outside the node computing on a registered block or a receipt during a credited pass,
 was a premise of the memory line (`NoOutsideCompute`), on the prover's own conduct. It is now the event the certifiers
 observe (`Quiet T I.counted`), inside the line's event, and their count's error δ_net in its bound. The three give the
