@@ -62,11 +62,12 @@ A spec-level reference for network accounting's timing channel:
   Commit's `c00.input/ids` rows to the same scan and holds every prompt id to them;
 - the capacity counts;
 - the egress side of the step-indexed scan (`egress`, N2) on a fake upstream, in no Spec: one unit a link and bucket
-  t (`EgressBucket`) that reads the scan's slot state S_t and the warden's egress row t, both registered reads of
-  input ports (`warden_rows.bucket_port` for the row), computes the bucket's cells from the state with every switch
-  computed and none witness, and outputs one u16 verdict, `ACCEPT` exactly when the row is the one the state renders.
-  It has the reference (`bucket_map`, `rendered`, `verdict`) and the state's egress-view layout (`Shape`'s offsets),
-  which the scan's ingress step writes;
+  t (`EgressBucket`) that reads the scan's slot state S_t, a registered read, and computes the bucket's row of cells
+  from it with every switch computed and none witness (the generator form): its outputs are a u16, `ACCEPT` exactly
+  when the state renders a row, the one public output, and the row, committed as a registered read of the warden's
+  egress row t (`warden_rows.bucket_port`), which opens only if the computed row is the warden's. It has the reference
+  (`bucket_map`, `computed`, `rendered`, `outputs`) and the state's egress-view layout (`Shape`'s offsets), which the
+  scan's ingress step writes;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
@@ -158,24 +159,27 @@ A spec-level reference for network accounting's timing channel:
   certified changes;
 - the warden's cells as rows (`warden_rows`): each link-window's cells committed one `hm96-sha512/row/v2` row a
   bucket, padding and empty slots included, under a frame-v3-sha512 root the warden signs with the certifier's signer,
-  beside a salted digest of the window's wiring. The registration is what a proof unit's `--registered` port reads, so
+  beside a salted digest of the window's wiring. The registration is what a proof block's `--registered` port reads, so
   the sender's unit opens a cell's row as its output and the receiver's as its input, and the verifier places each
   read, the (connection, cell) the Program's units' wiring pins (`Units`, whose digest the port's value names), with
   the warden's wiring (`PROTOCOL.md`, "The warden's cells as rows"; `benchmarks/network_traces/warden_zk.py`);
-- the output value the certifier relayed as a registered value (`out_commit`): `commit_out` commits its rows under the
-  domain the verifier derives for the reading program's pinned value (``out`` by default), with the certifier's fresh
-  salts, and signs the head for the egress link-window; `check_out` reads the public record for the link-window it
-  expects and returns the root to pin, or refuses by name (`REFUSALS`), so the output units' rows are registered reads
-  of the certifier's root rather than a comparison in the clear;
+- the output value the certifier relayed as a registered value (`out_commit`): `commit_out` commits its rows at the
+  reading program's registered shape (`OutShape`: its program, the value, ``words`` a row and ``rows``, both sides
+  taking them from the circuit's registered read) under the domain the verifier derives for that pinned value, with the
+  certifier's fresh salts, and signs the head for the egress link-window; `check_out` reads the public record for the
+  link-window it expects at the verifier's own shape and returns the root to pin, or refuses by name (`REFUSALS`:
+  another width is ``out-width``, another row count ``out-rows``), so the output units' rows are registered reads of
+  the certifier's root rather than a comparison in the clear;
 - the run's boundary in a window's circuit (`boundary`): the circuit record's ``boundary``, which names the template
-  whose unit ℓ·T + t holds bucket t of egress link ℓ (`EgressBucket`'s checked row: its frame parameter row, the
-  warden's registered row, and its u16 verdict, whose bit 0 is the slots' presence) and of ingress link ℓ (its frame
-  parameter row, the warden's registered row), the same gates whatever the load, so arrival steps and prompt lengths stay
-  private (`NetTiming.Layout`). `checked_refusal` checks that the layout fits the circuit (`NetTiming.Layout.Fits`, its
-  first conjunct taking a frame gate that is an input) at the record's grain, which contains the gate grain's, held to
-  `prog_fits`, `Layout.Fits` itself on a flattened program. `refusal`, the verifier's check before it draws, refuses
-  what passes it by name until Lean's `Layout.Fits` takes the checked row. `Fits` stays structural: a served window fits
-  in the step-indexed scan's form, and a window in any other form is refused;
+  whose unit ℓ·T + t holds bucket t of egress link ℓ (`EgressBucket`'s frame, the row it computes and returns,
+  committed as a registered read of the warden's row, and its u16 verdict, whose bit 0 is the slots' presence) and of
+  ingress link ℓ (its frame parameter row, the warden's registered row; with ``first``, `IngressScanFirst` holds bucket
+  0), the same gates whatever the load, so arrival steps and prompt lengths stay private (`NetTiming.Layout`); its
+  format is `verity/boundary/v3`. `refusal`, the verifier's check before it draws, checks that the layout fits the
+  circuit (`NetTiming.Layout.Fits`: no egress gate is an input, and each is one the circuit returns) at the record's
+  grain, which contains the gate grain's, held to `prog_fits`, `Layout.Fits` itself on a flattened program; the scan's
+  state and view chains are wires of the record. A frame that is a parameter row, an input, is refused by name. `Fits`
+  stays structural: a served window fits in the step-indexed scan's form, and a window in any other form is refused;
 - the transfer rows (`transfer_rows`): every value that crosses a server block's boundary, the weights' load, a
   window's request bytes in and generated bytes out, and a wire between two servers, committed as a registered value
   under the network certifier's own salts at the reading port's leaf width and row format, its root in a head the
@@ -185,21 +189,42 @@ A spec-level reference for network accounting's timing channel:
   `benchmarks/network_traces/load_relay.py`);
 - the blocks (`blocks`): the server blocks, the server-time block and the transfer gates of a circuit, schema
   `verity/blocks/v1`, kept in this module until the window interface carries it in ``circuit.json``. `check` refuses
-  blocks whose servers don't partition the units, a boundary row that is no transfer's (an ``ingress``, a registered
-  read no transfer brings in, a wire between servers, an external port's row no transfer covers), a transfer's read
-  or write that isn't whole rows of its value, an out value a row of which no unit writes or two do, and a wire
-  transfer not paired (one value, its out on one server and its in on another, of one shape and one step a row).
-  `pins` gives the verifier's pinned roots from the certificates alone, so the interface's ``input_count`` under them
-  has no free input, and `certified` refuses a wire whose two certifiers' roots differ (the receiver's commits under
-  the sender's salts, so the rows that arrived are the rows that left);
+  blocks whose servers don't partition the units, an inference block on two servers (below), a boundary row that is no
+  transfer's (an ``ingress``, a registered read no transfer brings in, a wire between servers, an external port's row
+  no transfer covers), a transfer's read or write that isn't whole rows of its value, an out value a row of which no
+  unit writes or two do, and a wire transfer not paired (one value, its out on one server and its in on another, of one
+  shape and one step a row). `pins` gives the verifier's pinned roots from the certificates alone, so the interface's
+  ``input_count`` under them has no free input, and `certified` refuses a wire whose two certifiers' roots differ (the
+  receiver's commits under the sender's salts, so the rows that arrived are the rows that left). An inference block
+  runs on a single server (NET-92, Daniel's ruling of 26 Oct): a server's ingress and egress carry only its inference
+  blocks' declared inputs and outputs, so which server may read an inference block's input bits is unambiguous. `check`
+  reads each unit's (slot, step) from the record's inference entries (``blocks.inference``) and refuses, by name, a
+  block whose units are on two servers, and two servers or more over a record that states no inference block;
+  `server_blocks` is that part alone. Which server runs which units is protocol structure, public like NCI's
+  declaration and not a private partition, so it is checked in the clear with no proof unit;
 - the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
-  warden ingress row, the slot state the bucket before carries and the Programs' row (registered reads), computes the
-  next state (each block to the slot holding its connection, a new connection to the lowest free slot, its prompt ids
-  appended, a due slot's output count and ids taken from the Programs' row at its anchor, a slot held through its last
-  egress bucket, `admitted + D + ⌊n/r⌋`) and its egress view, the state as `egress.EgressBucket` reads it (bucket, then
-  per slot live, q, admitted, n and the output ids), as a row of its own, and outputs one ok bit; `Class.serves` names
-  the warden parameters it takes every run of. `benchmarks/network_traces/scan_zk.py` proves both sides at w63's class
-  in one registration: ingress unit t writes the state and view egress unit t reads, chained by registered reads;
+  warden ingress row, the slot state the bucket before carries and the Programs' row (registered reads), and computes
+  the next state (each block to the slot holding its connection, a new connection to the lowest free slot, its prompt
+  ids appended, a due slot's output count and ids taken from the Programs' row at its anchor, a slot held through its
+  last egress bucket, `admitted + D + ⌊n/r⌋`) and its egress view, the state as `egress.EgressBucket` reads it (bucket,
+  then per slot live, q, admitted, n and the output ids), its outputs beside a public ok bit; `IngressScanFirst`, the
+  first bucket's, starts from the empty state, constants of its circuit. Programs start at fixed slots a network
+  timestep (ASK-122): a timestep is `EVERY` buckets, the warden's `every`, which divides its window, with
+  `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a slot's
+  Program reads is the scan's state row b − 1 (`verity/certifier/scan-state/v1`, `token_row`): its occupancy word
+  `occ` (1 for a slot whose Program starts at b, 0 for an empty slot), its prompt's length `fields` and its prompt ids,
+  which the scan reads off the warden's signed ingress cells, so no other tie holds them to the certified bytes;
+  `slot_row` gives each one's bits in the state row, for a reader that takes them as i32s (vllm's `SlotRow_v1`), and
+  `window_state` the rows a window circuit of the link-window from bucket t0 reads, the scan's rows t0 − 1 on (the
+  empty state's for row −1). A Program gives all its outputs to the Programs' row at its anchor (n, u32, and 64 ids
+  of 17 bits at w63's class); an empty slot's entry is all zero (its outputs masked by `occ`, never on the egress). A
+  request the class can't hold is refused at the scan's unit, never truncated: a prompt of more than `KI` ids (1,024
+  at w63's class) at its cell, a Program's n over `KO` at its anchor. A window whose warden refused a connection,
+  traffic past its slots, has no certified record, and the period check refuses it. `Class.serves` names the warden
+  parameters it takes every run of. `benchmarks/network_traces/scan_zk.py` proves both sides of a group of
+  link-windows in one registration: ingress unit t's state and view outputs are committed as registered reads of the
+  scan's state and view rows t, which ingress unit t + 1 and egress unit t read, and egress unit t's row as a
+  registered read of the warden's egress row t, so the chains are wires through the registered roots;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
   With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
   windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a

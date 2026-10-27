@@ -4,7 +4,8 @@
 # it. `sampled-proofs-verifier` is the verifier of record the Python calls (`one_stage.verifier`). Code, not analysis: Lean
 # core, C-Flock and the interface.
 name = "core_sampled_proofs"
-defaultTargets = ["SampledProofs", "sampled-proofs-one-stage", "sampled-proofs-difftest", "sampled-proofs-verifier"]
+defaultTargets = ["SampledProofs", "sampled-proofs-one-stage", "sampled-proofs-one-stage-zk", "sampled-proofs-difftest",
+  "sampled-proofs-verifier"]
 
 [leanOptions]
 autoImplicit = false
@@ -33,6 +34,10 @@ name = "SampledProofs"
 [[lean_exe]]
 name = "sampled-proofs-one-stage"
 root = "SampledProofs.Main"
+
+[[lean_exe]]
+name = "sampled-proofs-one-stage-zk"
+root = "SampledProofs.ZkMain"
 
 [[lean_exe]]
 name = "sampled-proofs-difftest"

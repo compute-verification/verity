@@ -1,7 +1,7 @@
 """Served trees as registered ports: the one form in which a served path registers what it served and has the Lean verifier
 open it (`register_served`).
 
-A *served tree* is a frame-v3-sha512 tree of `hm96-sha512/row/v1` rows that serving committed and that a proof unit reads:
+A *served tree* is a frame-v3-sha512 tree of `hm96-sha512/row/v1` rows that serving committed and that a proof block reads:
 a template's operands, Dither's z/y leaves or receipt roots, H1's per-call A, y and z tables. Its root is a hiding
 commitment, which binds nothing on its own: `EndToEndRegisteredRows` links a proof's value layer to a committed row only at
 a registered read. So the service registers each served tree as a port of the verifier's own `--registered` file before

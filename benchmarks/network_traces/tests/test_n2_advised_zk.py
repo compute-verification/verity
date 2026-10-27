@@ -4,7 +4,7 @@ moved release bucket, an output length one short, extra egress) fails in some wi
 head checks passing and every window's unit taking an instance; the verifier's own ``pub`` row, from public fields,
 the certificates and its own view of the public advice, is the prover's, in whole u16 words. The --e2e link's advice
 (`joined`) numbers each Commit window's requests after the windows' before it. At the tests' T = 8 the
-proof unit (`LinkWindows.proof_unit`), evaluated on the rows the prover stages, gives the output words the gates'
+proof block (`LinkWindows.proof_unit`), evaluated on the rows the prover stages, gives the output words the gates'
 references do (`LinkWindows.outputs`) in every window of every member and on a head the prover changed. Each builder
 `n2_advised_zk.builders` attaches, called as C-Flock's lowering calls it, traces to its part's own gates. ``--jobs`` is 1
 unless given and 2 is refused, naming the rule (`n2_zk.ONE_SESSION`). Nothing here lowers or proves

@@ -75,7 +75,8 @@ checks reduce to what `complete_zk` takes at one table, per rep the ring switch,
 tables, so completeness holds at every number of tables from the four per-table premises at every good case
 (`completeAll`: `StmtAt`, `ProverRunsAt`, `RepShapedAt`, `RepChecksAt`), with no premise of `complete_zk`'s. The
 statement's premise holds at every case of several tables (`Stmt`: `Case.stmtAt`, `stmtOkJ`, from the setup of several
-tables, `setupTables_spec`, a printable subset draw, `good_subset`, and the masked `Hello`'s read-back, `hello_ok`), so
+tables, `setupTables_spec`, a printable subset or stratified draw with no closure, `good_subset`,
+`closure_stratified`, and the masked `Hello`'s read-back, `hello_ok`), so
 `completeJS` and `completeAllS` drop it, keeping `StmtOkZk` at one table. The ring switch replays at every table given
 the extra claims' algebra (`RingSwitch`: `ringSwitchJ`, `RsExtrasAt`), which holds at the deployed relation from
 `RelS`, each table satisfied by its share (`Case.model`, `Run.rsExtras`), so there completeness asks per rep only the

@@ -493,7 +493,7 @@ class Served:
         of its step), and the Commit's value of it (`pouw_h1_commit.CommitTap.input_ids`)."""
         if self.tap is None or self.refused or self.program is None:
             return
-        ids = self.tap.ids_at(r, next((c.pad for c in run.calls if c.step == r and c.layer == 0), 0))
+        ids = self.tap.ids_at(r)
         if r:
             try:
                 self._register_ids(run, r, ids)

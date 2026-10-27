@@ -36,12 +36,12 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     - `circuits` (format in `circuits/PROTOCOL.md`): circuits and their evaluator (`evaluation`), the Boolean profile
       (`boolean`), what models compute (`ops`, the primitive circuits' Definitions), what the GPUs actually compute
       (`silicon`, the exact hardware semantics) and `targets`.
-    - `kernels` (with `hash_gpu/`): fast code, each kernel checked against its Definition.
+    - `kernels`: fast code, each kernel checked against its Definition.
     - `commitments` (with Merkle multiproofs, `multiproof`), shared hash code (`crypto`), and the one challenge derivation
       (`randomness`).
     - `private_circuits`: the universal unit, one public Definition that runs any private circuit of a size class.
     - `definitions`: the served workloads' kernel Definitions (`registry`, twins in `numerics`), their Boolean versions,
-      the proof-unit cut (`word`), and their encoding and digest (`encoding`).
+      the proof-block cut (`word`), and their encoding and digest (`encoding`).
     - `flock/` (`verity_flock`, a distribution of its own, `flock/pyproject.toml` with its package in `flock/python/`):
       C-Flock, the proof system. Its patches on upstream Flock, the CUDA prover, the zero-knowledge prover (`live/`,
       `flock-circuit --zk`), and `verifier/`: the verifier's specification and the scripts that run it, with upstream's
@@ -50,8 +50,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
   (Lean below). `Properties/` is `security_properties` (Lean below).
 - `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
   (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
-- `examples/`: one directory per example: its workload, its placement and the commands that serve and audit it
-  (`examples/README.md`).
+- `examples/`: one directory per example: its workload, placement, commands and doneness; a milestone is (example,
+  run, proof) triples, which top keeps (`examples/README.md`).
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, and the benchmark tools.
   - `benchmarks/census/`: data only. `verity` never reads it; it takes such numbers as parameters.
@@ -105,7 +105,7 @@ check, `verity check tests|lean|circuits` runs only those parts, and `verity ben
 ~~~text
 uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
 research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py'  # suites whose inputs changed; --quick: no slow tests
-research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'  # the whole check; --record: an Attempt
+research run --on auto --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --extra torch-cpu verity check'  # the whole check
 research status RUN  # check back on a run (`research run` returns once it starts); --wait: only a run under 20 min
 ~~~
 
@@ -123,7 +123,7 @@ the standing rulings stated nowhere else.
   - the verifier's coins and draws;
   - hiding commitments.
 
-  Partitions are private, and their properties are public. A proof unit's outputs fit its size class, a public power of
+  Partitions are private, and their properties are public. A proof block's outputs fit its size class, a public power of
   two from 16 to 262,144 bits and a property of its Definition, and its output bits count in leakage (Daniel, 19 Oct,
   provisional; `UNIT_CLASS_MAX` set to 16 restores the 16-bit limit).
 
@@ -145,8 +145,8 @@ the standing rulings stated nowhere else.
   - BLAKE3 leaves the served path for `archive/`. There are two named exceptions:
     - Pearl's FP8 scheme, as Pearl defines it.
     - Duo receipts, PoUW's per-step receipts: keyed u32 mul/xor/rotl folds over committed accumulator words. They
-      bind under the named premise H-μ⁺, which is the premise ledger's row R1
-      (`note:20261016T0219Z-report-premise-ledger`) and not yet in a lock.
+      bind under the named premise H-μ⁺, the premise ledger's row R1
+      (`note:20261016T0219Z-report-premise-ledger`), not yet in a lock.
 - **Live coins only.** Fiat–Shamir is out, with two exceptions, each at a rate where live coins are impractical:
   - the remote bandwidth audit's pass seeds inside a window, derived from the window's live challenge and the previous
     pass's root (Daniel, 12 Oct);
@@ -172,7 +172,7 @@ the standing rulings stated nowhere else.
   doesn't control, never as a process on the prover's node, and trust in the device and its host provider is a named
   assumption (`trusted-host`). Nothing the prover runs or hosts is trusted. A network certifier functions as an
   active warden, in network steganography's sense, but "network certifier" is its one name: never "warden" or "tap"
-  (Daniel, 25 Oct; old names in `ARCHITECTURE.md`'s Glossary).
+  (Daniel, 25 Oct; old names in `glossary/`).
 - **The audited hardware is untrusted, and so is its vendor** (Daniel, 17 Oct: an international scheme may treat the chip
   designer as adversarial). No guarantee rests on a GPU attesting its own SKU, firmware or clocks. Hardware constants
   (f_max, peak rates) come from the data sheet for now, quoted under two or three readings rather than one main line,
@@ -196,7 +196,7 @@ the standing rulings stated nowhere else.
 - **Integrations are frontends, and Verity is agnostic to them** (Daniel, 24 Oct). Verity's vocabulary is circuits,
   values, commitments, coins, proofs and verdicts. It has no notion of models, checkpoints, requests, batches or
   schedulers, and none enters `verity/`. An integration hands Verity only:
-  - a circuit, partitioned into proof units, with its public layout (which gates are the system's external I/O, such as
+  - a circuit, partitioned into proof blocks, with its public layout (which gates are the system's external I/O, such as
     the network frames the certifiers see), registered by digest;
   - when the circuit depends on choices made at run time, a registered compiler (itself a circuit, with a public length
     cap) and the advice it compiles: a bit string Verity never interprets, whose length is charged;
@@ -210,12 +210,11 @@ the standing rulings stated nowhere else.
 - **Results are per monitoring period, over all compute** (Daniel, 25 Oct). The time length of interest is the
   *monitoring period* (`ARCHITECTURE.md`, Glossary), not the window, the run or the demo. Every result, in a report, a
   table, a PR or a message to Daniel, is presented for monitoring periods of one week, one month and one year, and over
-  all compute: the world's (*adversary resource model*), a datacenter's beside it, though a demo checks one. The
-  datacenter's size (from
-  `benchmarks/census/`) and the window's length are stated parameters, and a figure scaled from one machine says which
-  parts are proved and which are scaled. Give each bound as its pooled total over the period and as a share of the
-  compute it covers, beside the per-window figure, never the per-window figure alone: a per-window δ that looks weak is
-  not the result.
+  all compute, in AND gates: the world's (*adversary resource model*), a datacenter's beside it, though a demo checks
+  one. The datacenter's size (from `benchmarks/census/`) and the window's length are stated parameters, and a figure
+  scaled from one machine says which parts are proved and which are scaled. Give each bound as its pooled total over the
+  period and as a share of the compute it covers, beside the per-window figure, never instead of it: a per-window δ that
+  looks weak is not the result.
 
 ## Tests
 
@@ -267,7 +266,8 @@ multi-core CPU pod. It covers:
   run sends the upstream build then.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
-unchanged. `--record` runs `check` through `research run` as an Attempt of the checked-out clean commit.
+unchanged. `check.py --record --on M --pool NAME`, from a checkout, records `check` as an Attempt of the clean commit
+in M's NAME pool.
 
 Landing (Daniel, 24 Oct 06:05Z): PRs land on an eyeball review, and the full check runs after landing. A part's verdict is
 reused only while a hash of its declared inputs (the read guard enforces them), the base image and the code that decides it (a
@@ -380,7 +380,8 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
     lock with its own record;
   - every file is built, and every declaration is replayed through the kernel.
 - **The lock.** A guarantee (ARCHITECTURE.md "Glossary") is listed in `lean-audit.json`, and `check.py --update` records its
-  statement and every definition the statement reads; those records are the lock.
+  statement, every definition the statement reads, and each named assumption it takes with a digest of it and what it
+  reads, wherever its module lies; those records are the lock.
   - When a changed record lands on `main`, Daniel gets a DM showing it. That DM is the check: nobody signs off and nothing
     waits on it.
   - A guarantee that only moved sends nothing (`--update --moved MOVES.json`).
@@ -490,8 +491,6 @@ over and archived as `infra/cursor/README.md` says.
   `environment: "cloud"`; Daniel's ruling, 18 Oct 10:20 AM PDT) or as a detached `research run`. A local subagent is only
   for a short read-only lookup. A coordinator's foreground local Task is refused (#2510), and heavy work never runs on an
   agent VM (the shell hook refuses it).
-- **No step waits long.** No tool call blocks for more than about 20 minutes: launch detached, end the step, and check
-  back on the run.
 - **Workers restart from notes.** Each brief asks for a checkpoint note before long work and every 3 to 4 hours, and
   words red-team work neutrally. A worker resumed twice, or whose base branch was deleted, is relaunched fresh from its
   last note.
@@ -515,8 +514,8 @@ over and archived as `infra/cursor/README.md` says.
     at each hourly checkpoint (`git fetch -q origin B && git show origin/B:inbox/<agent-id>.md`), which gets changes to
     it within the hour. Larger changes go in when you resume it (Task's `resume`, with the `bc-…` id the launch
     returned) after its turn ends.
-  - It stays reachable as below: when it would wait on a run, it ends its turn naming the run id and ETA, and its
-    launcher resumes it. A running turn holds one of the team's concurrent cloud-agent slots.
+  - It stays reachable (below), and its launcher resumes it. A running turn holds one of the team's concurrent
+    cloud-agent slots.
   - It opens its own PR from its VM (`research queue open`), and syncs its notes like any worker. Where that fails, it
     reports its branch and SHA and the launcher opens the PR for it. Its final message goes to whoever launched it.
 - **Check what's being tried.** Before starting work another agent could plausibly be doing, read the notes'
@@ -536,8 +535,7 @@ over and archived as `infra/cursor/README.md` says.
   and never resumes a local worker a third time.
 - **Landing is drive's.** The worker that made a branch opens its PR (`research queue open --head BRANCH --sha SHA
   --title T --body-file F --by LANE`, from any VM, with `Lane LANE` in the body), marks it ready and goes back to
-  research. A reviewer ci staffs writes its verdict, a lock or code Lean change waits for its Lean check, and the full check
-  runs after landing and reverts a PR that breaks `main`; you hear back only if yours is held, ejected or reverted. Before
+  research. The rest is Checking and merging's, and you hear back only if yours is held, ejected or reverted. Before
   marking, run the Lean check of the packages you touched and the suites your change touches, `research run --on auto --cwd
   source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py
   --changed $(git rev-parse origin/main) --quick"` (main's SHA, expanded in your checkout: a shipped tree may hold no
