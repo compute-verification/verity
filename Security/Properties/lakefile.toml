@@ -77,13 +77,17 @@ path = "../../verity/core/protocols/onsite"
 name = "flock_verifier"
 path = "../../verity/core/service/flock"
 
+[[require]]
+name = "core_remote"
+path = "../../verity/core/protocols/remote"
+
 [[lean_lib]]
 name = "Properties"
 roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Pouw.LiveSalt",
   "Properties.Pouw.Period", "Properties.Pouw.PeriodJ10R", "Properties.Pouw.Strata", "Properties.Pouw.Credit",
   "Properties.Nci", "Properties.Nci.Threads", "Properties.CertifierDevice", "Properties.Pous",
   "Properties.Pous.TimedAudit", "Properties.Pous.MemoryChallenger", "Properties.Pous.EndToEnd",
-  "Properties.Pous.Period", "Properties.Pous.EndToEndAt", "Properties.Pous.PeriodAt",
+  "Properties.Pous.Period", "Properties.Pous.EndToEndAt", "Properties.Pous.PeriodAt", "Properties.Pous.PeriodDeployed",
   "Properties.Accounting.JointBridge.SpaceOfPeriodHeld", "Properties.NetworkCertifier",
   "Properties.NetworkCertifier.LinkWindow", "Properties.CertifierNetwork",
   "Properties.CertifierNetwork.Runs", "Properties.Identity", "Properties.NciDesc", "Properties.NciDesc.Verdict",
@@ -92,7 +96,9 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Accounting.Requirement", "Properties.Accounting.Compose", "Properties.RemoteAudit",
   "Properties.RemoteAudit.Coins", "Properties.RemoteAudit.Pooled", "Properties.Accounting.Served",
   "Properties.Accounting.DeclaredCircuit", "Properties.RemoteAudit.Line", "Properties.RemoteAudit.Schedule",
-  "Properties.RemoteAudit.Shared", "Properties.RemoteAudit.Live", "Properties.Composition",
+  "Properties.RemoteAudit.Shared", "Properties.RemoteAudit.Live", "Properties.RemoteAudit.Component",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
-  "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Flock.Circuit", "Properties.Nci.Protocol",
-  "Properties.Verity.Soundness", "Properties.Verity.Game"]
+  "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Challenger",
+  "Properties.SampledProofs.OneStageZk", "Properties.Composed", "Properties.Onsite", "Properties.Remote",
+  "Properties.Flock.Circuit", "Properties.Nci.Protocol", "Properties.Composition", "Properties.Verity.Soundness",
+  "Properties.Verity.Game"]
