@@ -208,7 +208,7 @@ on an eyeball review, and the full check runs after landing (24 Oct). ci's `rese
   audit's verifier, each in its protocol's `lean/` with a difftest. Under `FC_FIREWALL=1` every byte that leaves is
   computed by `Flock.Firewall`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released bytes through
   hypotheses not yet proved about the live path. The analysis is `Security/`, three trees (24 Oct): definitions
-  (`Definitions/` and `Models/`, the package `security`, Mathlib only: the vocabulary, named assumptions and guarantee
+  (`Definitions/`, the package `security`, Mathlib only: the vocabulary, named assumptions and guarantee
   statements Daniel reads), properties (`Properties/`, `security_properties`: statements about the code's Lean
   functions) and proofs (`Proofs/`, `security_proofs`, ArkLib allowed: every proof, lemma and proof-only definition, with
   `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for each proved guarantee). No statement or module of the definitions
