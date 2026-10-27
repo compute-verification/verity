@@ -325,6 +325,17 @@ def test_a_spec_warmups_count_loads_strictly_and_binds_the_identity(tmp_path):
         load_spec(_spec_with(tmp_path, "warmups = 3\nmax_warmups = 2"))
 
 
+def test_an_engine_setting_the_runner_doesnt_read_refuses_by_name(tmp_path):
+    from verity_bench.vllm.presets import ENGINE_SETTINGS
+
+    path = tmp_path / "spec.toml"
+    path.write_text((SPEC_ROOT / "llama31-8b-fp8-1gpu.toml").read_text().replace(
+        "[preset.engine_settings]\n", '[preset.engine_settings]\nattention_backend = "FLASH_ATTN"\n'))
+    refusal = f"unknown engine_settings ['attention_backend']; known: {list(ENGINE_SETTINGS)}"
+    with pytest.raises(ValueError, match=re.escape(refusal)):
+        load_spec(path)
+
+
 def test_dispatch_forwards_the_spec_env_and_setup_and_the_point_refuses_any_other(tmp_path, monkeypatch):
     root = Path(__file__).resolve().parents[3]
     spec = resolve_spec(_spec_with(tmp_path, 'setup = "benchmarks/harness/setup/vllm_encoded.sh"\n[env]\nARM_KNOB = "on"'))
@@ -458,7 +469,7 @@ def test_every_spec_dispatches_as_a_registered_queue_kind_that_fits_it():
 
     kinds_toml = Path(__file__).resolve().parents[3] / "infra" / "cluster" / "kinds" / "benchmarks.toml"
     kinds = tomllib.loads(kinds_toml.read_text())["kinds"]
-    phase_gpus = {"gpu1": 1, "gpu8-timed": 8}
+    phase_gpus = {"gpu1": 1}
     specs = [load_spec(p) for p in sorted(SPEC_ROOT.glob("*.toml")) if "vllm-spec/v0" in p.read_text().splitlines()[0]]
     assert specs
     for spec in specs:
@@ -466,7 +477,7 @@ def test_every_spec_dispatches_as_a_registered_queue_kind_that_fits_it():
         assert phase_gpus[kind["phase"]] == spec.preset.gpu_count, spec.id
         assert spec.admission.max_minutes is None or spec.admission.max_minutes <= kind["max_wall_min"], spec.id
     with pytest.raises(ValueError, match="register one in infra/cluster/kinds/benchmarks.toml"):
-        jobs.queue_kind(4)
+        jobs.queue_kind(8)
 
 
 def test_plan_run_check_and_compare_are_top_level_commands(tmp_path):
@@ -784,13 +795,18 @@ def test_block_mode_pins_one_kv_pool_for_every_arm_of_the_llama_preset():
     assert settings["block_kv_cache_memory_bytes"] == 56 * 2**30
 
 
+def _serving_defaults_preset():
+    preset = load_spec("llama32-1b-bf16-rtx-served-arm").preset
+    return replace(preset, engine_settings={**preset.engine_settings, "serving_defaults": True})
+
+
 def test_engine_args_pin_the_pool_in_either_mode_and_serving_defaults_leave_compilation_to_vllm():
     from verity_bench.vllm.runner import engine_args
 
-    served_preset = load_spec("qwen3-8b-bf16-h200-served").preset
+    served_preset = _serving_defaults_preset()
     for resident in (True, False):
         args = engine_args(served_preset, "bfloat16", resident=resident, eager=False)
-        assert args["kv_cache_memory_bytes"] == 10 * 2**30
+        assert args["kv_cache_memory_bytes"] == 4 * 2**30
         assert "compilation_config" not in args and args["enforce_eager"] is False and args["execution"] == "compiled"
     assert engine_args(served_preset, "bfloat16", resident=True, eager=True)["execution"] == "eager"
     pinned = load_spec("llama31-8b-fp8-1gpu").preset
@@ -800,9 +816,6 @@ def test_engine_args_pin_the_pool_in_either_mode_and_serving_defaults_leave_comp
                                               "cudagraph_capture_sizes": [1, 8, 32, 128]}
     assert engine_args(pinned, "fp8", resident=False, eager=False)["kv_cache_memory_bytes"] == 56 * 2**30
     assert "compilation_config" not in engine_args(pinned, "fp8", resident=False, eager=True)
-    assert not {"attention_backend", "attention_config", "moe_backend"} & set(args)
-    moe = engine_args(load_spec("qwen3-30b-a3b-bf16-b200-served").preset, "bfloat16", resident=False, eager=False)
-    assert (moe["attention_backend"], moe["attention_config"], moe["moe_backend"]) == ("FLASH_ATTN", {"flash_attn_version": 2}, "triton")
 
 
 def test_serving_defaults_give_every_arm_process_one_inductor_cache(monkeypatch):
@@ -829,7 +842,7 @@ def test_serving_defaults_give_every_arm_process_one_inductor_cache(monkeypatch)
     monkeypatch.setattr(runner.tempfile, "mkdtemp", lambda prefix: f"/tmp/{prefix}x")
     factory = runner.ProcessEngineFactory()
     factory.context = Context()
-    preset = load_spec("qwen3-8b-bf16-h200-served").preset
+    preset = _serving_defaults_preset()
     for arm in resolve_arms("stock"):
         factory.create(arm, preset, resident=True)
         factory.create(arm, preset, resident=True)
