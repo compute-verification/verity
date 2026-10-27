@@ -1,5 +1,6 @@
-"""The class circuit's row census (V3c): per template, its units' input rows by what fills them (``wired``, ``registered``,
-``table_root``, ``opening``, ``ingress``, else ``free``) and their bytes, its output rows and their bytes, and the SHA-512
+"""The class circuit's row census (V3c): per template, its units' input rows by what fills them (``wired``, ``registered``
+(the weights'), ``value`` (a per-window registered value's, such as the slot rows), ``table_root``, ``opening``, else
+``free``) and their bytes, its output rows and their bytes, and the SHA-512
 compressions a by-reference commit spends on them: every output row hashed fresh, every input row only re-leafed in its
 port's tree, since a wired row's b||c is its writer's and a registered row's the registration's.
 
@@ -26,14 +27,12 @@ def kinds_of(circuit, IF):
     reg = circuit.registered
     if reg is not None:
         for r in reg.reads:
-            k[(r.reader, r.port)].add("registered")
+            k[(r.reader, r.port)].add("registered" if r.param.split("/", 1)[0] == "weights" else "value")
         for r in reg.roots:
             k[(r.reader, r.port)].add("table_root")
         for o in reg.openings:
             for p in o.ports:
                 k[(o.reader, p)].add("opening")
-    for i in circuit.ingress:
-        k[(i.reader, i.port)].add("ingress")
     return k
 
 

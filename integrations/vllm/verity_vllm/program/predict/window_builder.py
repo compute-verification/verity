@@ -105,7 +105,6 @@ class _Builder:
     tables: dict[tuple[int, int, int], IF.Table] = field(default_factory=dict)
     roots: list[IF.TableRead] = field(default_factory=list)
     openings: list[IF.Opening] = field(default_factory=list)
-    ingress: list[IF.Ingress] = field(default_factory=list)
     gathered: dict[tuple[tuple[str, str, int, int, int], ...], Row] = field(default_factory=dict)
     #: the (slot, step) the next units are of, and each template's runs of units by theirs, ``(at, count, slot, step)``
     label: tuple[int, int] | None = None
@@ -198,6 +197,15 @@ class _Builder:
         words = dict(lay.rows + lay.outs)[port]
         param, lo = self.weight(base, base + words + sum((r - 1) * s for r, s in zip(radix, step)), words)
         self.reads.append(IF.Read(tid, port, param, at=at, radix=tuple(radix), base=lo, step=tuple(step)))
+
+    def value(self, tid: str, port: str, at: int, param: str, row: int, rows: int) -> None:
+        """Unit ``at`` of ``tid`` reads ``port`` as row ``row`` of the registered parameter ``param``, ``rows`` rows of the
+        port's width (a per-window value, not the weights record)."""
+        lay = IF.layout(self.fns[tid])
+        words = dict(lay.rows)[port]
+        if self.params.setdefault(param, rows * words) != rows * words:
+            raise Unexpressible(f"{param}: read as {rows} rows of {words} words and as {self.params[param]} leaves")
+        self.reads.append(IF.Read(tid, port, param, at=at, radix=(1,), base=row * words, step=(0,)))
 
     def table(self, lo: int, words: int, rows: int) -> IF.Table:
         """The registered table of ``rows`` rows of ``words`` from word ``lo`` of the weights record (an embedding's), one a

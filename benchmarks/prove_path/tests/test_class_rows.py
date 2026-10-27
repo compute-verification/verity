@@ -1,6 +1,7 @@
 """class_rows (V3c): the class circuit's rows by what fills them, on TINY's class circuit.
 
-* with the weights pinned, no input row of any unit is free: each is wired, registered, a table root, an opening or ingress;
+* no input row of any unit is free: each is wired, a registered read of the weights or of the window's slot rows, a table
+  root or an opening;
 * a GEMM slice reads one wired row and one registered row and writes one row;
 * the census counts every unit once and its compressions are the templates' sum;
 * SHA-512 pads a message by 17 bytes, so 111 bytes are one compression and 112 two.
@@ -40,7 +41,8 @@ def test_every_input_row_of_tinys_class_circuit_is_filled_and_a_gemm_slice_is_wi
     assert total["compressions"] == sum(t["units"] * t["compressions_a_unit"] for t in templates.values())
     gemms = [t for lab, t in templates.items() if lab.startswith("Gemm_v2")]
     assert gemms and all(t["rows"] == {"out": 1, "registered": 1, "wired": 1} for t in gemms)
-    assert {"rows.ingress", "rows.opening", "rows.table_root"} <= set(total)
+    assert {"rows.value", "rows.opening", "rows.table_root"} <= set(total)
+    assert [t["rows"] for lab, t in templates.items() if lab.startswith("SlotRow_v1")] == [{"out": 2, "value": 1}]
 
 
 def test_a_compression_is_128_bytes_after_sha512s_17_bytes_of_padding():

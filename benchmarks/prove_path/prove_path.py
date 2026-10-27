@@ -1204,7 +1204,8 @@ def window_class_of(arg: str | None) -> Any:
 
 def window_circuit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     """A served window's advice through I2 as its window class's one Circuit (V3: `window_circuit.window_circuit` at
-    ``--class``, a class Program a slot flattened into units, every input row wired, registered or ingress), written to
+    ``--class``, a class Program a slot flattened into units, every input row wired or registered, the weights' or the
+    window's slot rows), written to
     ``--out`` as its circuit record from its description alone (`interface.descriptor_record`, members stated at ``--cap``
     units), or with ``--description`` as the description `interface.input_count` reads, no program built. -> the advice's
     length in bits and the record's input count at the verifier's pins (``--pin``)."""
