@@ -14,6 +14,6 @@ verifier = "gpu-node"        # vy-nebius-1, the Lean verifier
 challenger = "auditor-host"  # vy-challenger-1, through infra's gate (PP_CHALLENGER)
 
 [evidence]
-# the row's Commit of record (commit.sh); the serve run the demo of record audited (serve.sh, port 18091); that demo's gate
+# the workload's Commit of record (commit.sh); the serve run the demo of record audited (serve.sh, port 18091); that demo's gate
 # run, on vy-challenger-1's coins (benchmarks/prove_path/README.md)
 runs = ["r20261024-055630-5377", "r20261025-092311-15a1", "r20261025-100403-334e"]
