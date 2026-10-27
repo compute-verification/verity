@@ -142,9 +142,17 @@ theorem served_meets (n : ℕ) :
     ⟨fun _ => 0, fun _ _ _ => rfl⟩, fun _ _ _ => rfl, fun _ _ => trivial, zero_le_one,
     fun _ _ _ => rfl, fun x _ => ?_⟩
   · simp [sum_tileWords]
-  · show (n : ℝ) * (tileCount σ sT : ℝ) ≤ _
-    refine le_of_eq ?_
-    simp [work, rightWords_hon, sum_tileWords]
+  · have h : ∀ w, Pouw.Assumptions.rightWords hon
+        (fun t => (tileWords Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT) t : ℝ)) ()
+        (saltCoin (hr1 _) x w)
+        ((fa (tileCount σ sT)).Mc.eval (work (tileCount σ sT) (Np := tileCount σ sT) x w)
+          ((), saltCoin (hr1 _) x w)) = tileCount σ sT := fun w => by
+      have e : (fa (tileCount σ sT)).Mc.eval (work (tileCount σ sT) (Np := tileCount σ sT) x w)
+          ((), saltCoin (hr1 _) x w) = fun _ => saltCoin (hr1 _) x w := rfl
+      rw [e, rightWords_hon]
+      exact sum_tileWords _
+    refine le_of_eq (Eq.symm ((Finset.sum_congr rfl fun w _ => h w).trans ?_))
+    simp
 
 /-- **`ServedWork`'s conclusion at the honest J10-R period with the honest inventory**: `j10r_meets` and
 `served_meets` give it every premise, so except with probability `δ_s` its `N_p` a window of priced work is at least
@@ -231,10 +239,10 @@ theorem served_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (re
             (windows σ sT regOf evOf n) x) 1 1 (j10rRate (k sT) 1) (Real.exp (-1)) - ∑ _w : Fin n, (0 : ℝ)) ≤
       Real.exp (-1) + n * (0 + 0) + n * 0 := by
   have hne : Nonempty (Ω1 σ sT) := ⟨((true, ()), (Equiv.refl _, ()))⟩
-  haveI := @paths_nonempty (Ω1 σ sT) hne n
+  have := @paths_nonempty (Ω1 σ sT) hne n
   intro hle
   rw [prob_true] at hle
-  · have := Real.exp_lt_one.mpr (show (-1 : ℝ) < 0 by norm_num)
+  · have := Real.exp_lt_one_iff.mpr (show (-1 : ℝ) < 0 by norm_num)
     simp only [mul_zero, add_zero] at hle
     linarith
   · intro x
