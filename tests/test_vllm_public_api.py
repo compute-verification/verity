@@ -42,8 +42,11 @@ PUBLIC = {
     "verity_vllm": "I1: the pinned engine (LLM), its pin, its spec and its target",
     "verity_vllm.engine.spec": "I1: engine spec documents",
     "verity_vllm.engine.handle": "I2: a built engine's vLLM objects",
+    "verity_vllm.engine.served_seed": "I1: the served engine's public default seed, which a served registration fixes",
     "verity_vllm.program.predict.window_weights": "I7: the window circuit's weights, the committer's registration and the "
                                                   "verifier's pins of it (VLLM-113)",
+    "verity_vllm.program.predict.window_rows": "I7: a window's rows, the window circuit's units filled from a served window's "
+                                               "values (VLLM-125)",
 }
 
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.
@@ -82,7 +85,6 @@ KNOWN = frozenset({
     "verity_vllm.engine.env",
     "verity_vllm.engine.hooks",
     "verity_vllm.engine.int8_attention",
-    "verity_vllm.engine.int8_attention_vllm",
     "verity_vllm.engine.int8_exact",
     "verity_vllm.engine.int8_fused",
     "verity_vllm.engine.int8_ops",
@@ -173,9 +175,6 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.check.fold_compare', '_component_ranges'),
     ('verity_vllm.check.fold_compare', '_in_place'),
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
-    ('verity_vllm.protocols.pouw.pearl_c.host', '_bytes'),
-    ('verity_vllm.protocols.pouw.pearl_c.host', '_put'),
-    ('verity_vllm.protocols.pouw.pearl_c.host', '_zeros'),
     ('verity_vllm.protocols.remote_bandwidth.registry', '_page_blocks'),
     ('verity_vllm.query.program_view', '_registry'),
     ('verity_vllm.query.program_view', '_spec_id'),

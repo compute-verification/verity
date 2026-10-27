@@ -193,7 +193,7 @@ def products(registered: tuple[str, ...] = ("w",)) -> tuple[Program, list[int]]:
 
 
 def test_data_products_are_work_and_a_weights_macs_are_not():
-    """Nonlinear units (#4622): the dot of two run inputs is 32 data products, each a unit of its node's work; the dot by a
+    """Nonlinear units: the dot of two run inputs is 32 data products, each a unit of its node's work; the dot by a
     registered w is a linear map and free. A root input `registered` takes (as a Build that binds its weights as run inputs
     needs) carries no bits and makes its products by it free; one that isn't a root input is refused."""
     program, ends = products()

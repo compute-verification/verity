@@ -24,12 +24,13 @@ names each gap. `EXPERIMENTAL` says what the bound rests on.
 
 `leg(period_dir, node, out)` is the wipe's leg of `benchmarks/all_protocols`: one wipe as `period.json`'s `wipe` says
 (`CONFIG`: `SEGMENTS` 32 MiB segments in host memory by default, or a GPU's memory through `wipe_store`, the whole
-device declared so that its memory outside the fill counts in `R`), the memory challenger on `period.json`'s
-`challenger_host` (`wipe_party.Party.of`; this node by default, a process whose key and session log are beside the
-periods). No network certifier counts the session's egress yet, so the challenger signs `UNCOUNTED` and an accepted
-leg's bound is vacuous: its verdict is real and its quantity isn't. The leg's record names what the bound doesn't cover
-(`uncertified`): the key off its own host, an uncounted egress, the node's memory outside the declared tiers
-(`undeclared`) and each link leaving the node that no network certifier counts (`wipe_party.link`).
+device declared, the driver's reserve included (`wipe_store.Cuda.info`'s `total_bytes`), so that its memory outside the
+fill counts in `R`), the memory challenger on `period.json`'s `challenger_host` (`wipe_party.Party.of`; this node by
+default, a process whose key and session log are beside the periods). No network certifier counts the session's egress
+yet, so the challenger signs `UNCOUNTED` and an accepted leg's bound is vacuous: its verdict is real and its quantity
+isn't. The leg's record names what the bound doesn't cover (`uncertified`): the key off its own host, an uncounted
+egress, the node's memory outside the declared tiers (`undeclared`), a GPU's driver reserve when NVML gave no total,
+and each link leaving the node that no network certifier counts (`wipe_party.link`).
 `main` runs the leg on this node and prints its `summary` (`benchmarks/pous/streamed_wipe/demo.sh` runs it on one GPU).
 """
 
@@ -279,7 +280,8 @@ CONFIG = {"store": "python", "device": 0, "segments": None, "reserve_bytes": 1 <
           "limit_ns": LIMIT_NS, "streamer": "python", "threads": None, "foreign_bytes": 0, "placement": None,
           "egress_bits": None, "reads": None, "links": []}
 """`period.json`'s `wipe` and its defaults: the prover's `store` (`python`, `streamed_wipe.Prover`; `host`, host memory
-through `wipe_store`; `cuda`, GPU `device`'s memory, declared whole, so that what the fill doesn't reach counts in `R`),
+through `wipe_store`; `cuda`, GPU `device`'s memory, declared whole, the driver's reserve included
+(`wipe_store.Cuda.info`'s `total_bytes`), so that what the fill doesn't reach counts in `R`),
 the fill in 32 MiB `segments` (`SEGMENTS`; for `cuda`, `None` fills the device's free memory less `reserve_bytes`), the
 declared `tier` (the store's own by default), the deadline a read, and the fill's streamer (`native`, `wipe_stream` on
 `threads` CPUs, or `python`) when the challenger runs on this node. A challenger on its own host streams as its
@@ -381,12 +383,18 @@ def undeclared(tier: str, declared_bytes: int, store: Mapping[str, Any] | None =
 def uncertified(where: Mapping[str, Any], signed: sw.SignedWipe | None) -> list[str]:
     """What an accepted wipe's bound doesn't cover, from its placement (`wipe_party.placement`) and signed session: the
     memory challenger off its own host (its key on the prover's node), an egress signed `UNCOUNTED`, each undeclared
-    tier and each link leaving the node that no network certifier counts."""
+    tier, a GPU's driver reserve when NVML gave no total (`wipe_store.Cuda.info`) and each link leaving the node that
+    no network certifier counts."""
     out = [] if where["kind"] == "own-host" else [f"key custody: {where[wipe_party.PREMISE]}"]
     if signed is not None and signed.egress_bits >= UNCOUNTED:
         out.append("egress: signed UNCOUNTED, no network certifier's count over the session, so the bound is vacuous")
     out += [f"tier {u['tier']}: {u['what']} ({u['bytes']} bytes) is undeclared: the fill doesn't cover it and M doesn't "
             "count it" for u in where["undeclared_tiers"]]
+    s = where.get("prover_store") or {}
+    if s.get("backend") == "cuda" and s.get("nvml_total_bytes") is None:
+        out.append(f"tier {s['tier']}: the memory {s['device']}'s driver reserves is undeclared: the tier is CUDA's total "
+                   f"({s['cuda_total_bytes']} bytes), which leaves it out, since NVML gave none ({s.get('nvml_error')}); "
+                   "the fill doesn't cover it and M doesn't count it")
     out += [f"link {e['name']}: {e['ends'][0]} to {e['ends'][1]} ({e['via']}) is counted by no network certifier, so what "
             "leaves on it is outside E" for e in where["links"] if e["counted_by"] is None]
     return out
@@ -399,7 +407,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     whose key and session log are in `wipe-challenger` beside the periods) and the prover here. A `wipe_store` prover
     gates its store before the session. With `wipe-protocol` among the period's tools, the Lean answers (the verifier of
     record) and must agree with the Python; it writes `out/wipe.case.json` (onsite's wipe case) and `out/wipe.json`.
-    Which host ran each party, whether `trusted-nebius-host`'s premise holds, the memory the prover kept the fill in,
+    Which host ran each party, whether `trusted-host`'s premise holds, the memory the prover kept the fill in,
     the links leaving the node (`wipe.links`, and the challenger's on its own host as the prover connected to it) and
     the node's memory outside the declared tier (`undeclared`) go in `wipe.json` and in an accepted answer's profile
     (`placement`, `wipe_party.placement`); `wipe.json` adds the prover's own timings (`prover`: its store, gate, fill

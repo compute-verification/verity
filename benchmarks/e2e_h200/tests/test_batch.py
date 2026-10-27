@@ -16,7 +16,7 @@ from e2e_h200 import attention as A
 from e2e_h200.commit import Committer, _layout, _slots, fixture_salt, fixture_secrets
 from e2e_h200.driver import Driver, Params
 from e2e_h200.engine import Engine
-from e2e_h200.opening import Openings, replay_slot
+from e2e_h200.opening import Openings, commit_slot_parallel, replay_slot
 from e2e_h200.plan import Map
 from e2e_h200.shape import FROZEN, MINI, TINY
 from e2e_h200.store import GeneratorStore
@@ -160,6 +160,21 @@ def test_a_drawn_slot_opens_by_replaying_its_request(params, shape):
     assert not Openings(c, bad).open(op, 0, units[0])["verified"]
 
 
+def test_the_parallel_slot_commit_is_the_references(params, kept):
+    """`commit_slot_parallel` gives `commit_slot`'s strings, root and paths, and openings through it verify."""
+    c, d, results = kept
+    S, st, r = c.S, d.steps[STEPS - 1], results[STEPS - 1]
+    rows = c.slot_rows(st, 2)
+    ref = S.commit_slot(c.context, c.layout, r.salt_key, 2, rows)
+    par = commit_slot_parallel(S, c.context, c.layout, r.salt_key, 2, rows, 3)
+    assert par.strings == ref.strings and par.root == ref.root == r.slot_roots[2]
+    assert all(par.tree.open([u]) == ref.tree.open([u]) for u in (0, c.layout.unit_count // 2, c.layout.unit_count - 1))
+    op = replay_slot(TINY, params, c, results, PROMPTS, 1, STEPS - 1, "cpu")
+    units = Replayer(TINY, params.store.weights, op.driver.steps, op.tokens).draw(STEPS - 1, 1, b"t")
+    opn = Openings(c, results, workers=3)
+    assert opn.reference_equal(op, STEPS - 1) and all(opn.open(op, STEPS - 1, u)["verified"] for u in units)
+
+
 def test_the_engine_serves_what_lockstep_serves(kept):
     """Two requests through the endpoint's engine, the second arriving three calls late: each one's ids are the lockstep's."""
     _, _, results = kept
@@ -190,7 +205,7 @@ def test_softmax_t_is_the_definitions():
         assert np.array_equal(p[b, :, :n], A.softmax(sw[b:b + 1, :, :n]).probs[0]) and not p[b, :, n:].any()
 
 
-#: circuits' FAMILIES table at the frozen shape (PRF-166 db928eb0): a slot's units by key, the embedding's and head's included
+#: circuits' FAMILIES table at the frozen shape: a slot's units by key, the embedding's and head's included
 FAMILIES = {
     "EmbeddingCoordinate_v1{V=256}": 16_384,
     "AllGather_v1{WORLD=128,N=1}": 40_066,
