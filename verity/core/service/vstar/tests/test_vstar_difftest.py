@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -21,6 +20,7 @@ from types import SimpleNamespace
 
 import pytest
 from hypothesis import strategies as st
+from verity_difftest import settings
 
 import verity_difftest as D
 from verity.ml.circuits.boolean.forms import Circuit
@@ -35,7 +35,7 @@ from verity_flock import rec_residuals as RR
 
 LEAN = Path(__file__).resolve().parents[1]
 #: inner sessions' shapes, ``M,K_LOG,CLAIMS`` separated by ``;``, whose whole stage `test_stage_is_byte_equal` compares
-STAGE = os.environ.get("VERITY_VSTAR_STAGE", "")
+STAGE = settings.get("VERITY_VSTAR_STAGE")
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 HEX = "0123456789abcdef"
@@ -803,7 +803,7 @@ def test_stage_is_byte_equal(tmp_path, shape):
         record.append({**s, "python_sha512": hashlib.sha512(python).hexdigest(), "python_bytes": len(python),
                        "equal": data == python, "partition": b["partition"], "program": b["program"]})
         del data, python
-    if out := os.environ.get("VERITY_VSTAR_STAGE_OUT"):
+    if out := settings.get("VERITY_VSTAR_STAGE_OUT"):
         Path(out).mkdir(parents=True, exist_ok=True)
         (Path(out) / f"stage-{'-'.join(map(str, shape))}.json").write_text(json.dumps(record, indent=1))
     assert all(r["equal"] for r in record), [r["dir"] for r in record if not r["equal"]]

@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import random
 import shutil
 import tempfile
@@ -28,6 +27,7 @@ import numpy as np
 import pytest
 import verity_difftest as D
 from hypothesis import strategies as st
+from verity_difftest import settings
 from verity_flock import rec_algebra as A
 from verity_flock import rec_cap as RC
 from verity_flock import rec_live as RL
@@ -382,7 +382,7 @@ def _agrees(server, inner: Path, fold: dict, out: Path, salts: Path, levels: lis
     return checked
 
 
-DEPLOYED = pytest.mark.skipif(not os.environ.get("VERITY_VSTAR_IN_DEPLOYED"), reason="stages a recorded session's every "
+DEPLOYED = pytest.mark.skipif(not settings.get("VERITY_VSTAR_IN_DEPLOYED"), reason="stages a recorded session's every "
                               "statement (the pod's): set VERITY_VSTAR_IN_DEPLOYED=1")
 COINS = FLOCK_TESTS / "fixtures" / "rec-coins" / "16-16-8-n64"
 
