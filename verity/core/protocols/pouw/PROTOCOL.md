@@ -285,6 +285,20 @@ is a string and the pass passes `core_check.pass_epoch` (``pass``); each W's epo
 so a W whose numbering broke is spent; and no two passes of one epoch hold one call index (`credit.passes_distinct`).
 Its Lean port is open.
 
+**Filler periods** (`fill`, CMP-172; Daniel's card 5d4997de, option (a); Lean `PouwCheck.Fill`). Filler windows run H1's
+window Program on tensor pipes the served windows leave idle, and count toward the served period's companion
+``<name>:fill``, whose open commits its circuit, K, and the registry's weights' root and model as a served period's does.
+A period's credit carries their ``fill`` beside ``work``, whose rule is unchanged (`period_check`, given ``fills``). Each
+filler window's session holds one salt coin and one draw coin (`fill.FILL_FAMILIES`): its salt coin opens after
+`fill.open_root` (the weights' root, `fill.FILL_REQUESTS` and the session), its Program salt is that coin's
+(`h1tile.live_salt`), each K's A rows are the verifier's public pad (`fill.pad_entry`), and its draw coin opens after
+`fill.draw_root` over the salt and every registered entry, so every value is fixed before the draw. Every drawn unit
+must be accepted, and one refused filler window refuses the whole fill. The fill is each window's M·n·K a call at the
+fill period's K, with its ε at `credit.DELTA`. `H1J10RCheckedCreditPeriod` reads ``work`` alone, so ``fill`` is not
+under it yet. The ledger holds one open period a lane, so a fill period opens after its served period closes, and
+filler windows can't yet run while that period's served windows do. `benchmarks/pouw/fill_period` runs one filler period
+on a development gate.
+
 ## Registered weights (`registration`)
 
 One rule for every construction that serves a checkpoint: Pearl-C4 (`PearlC4.check_registration`) and served FP8's Pearl-C
