@@ -44,7 +44,7 @@ template <int BN> struct Tile {
   static constexpr int NWG = 2, NA = BN / 2;
   static constexpr uint32_t A_BYTES = TM * BK, STAGE = (TM + BN) * BK;
   static constexpr int STAGES = SMEM_BUDGET / STAGE < MAX_STAGES ? SMEM_BUDGET / STAGE : MAX_STAGES;
-  static constexpr int SMEM = 1024 + STAGES * STAGE + 16 * STAGES + 4 * MAX_TT;
+  static constexpr int SMEM = 1024 + STAGES * STAGE + 16 * STAGES + 4 * MAX_TT + 4 * STAGES;
 };
 struct alignas(128) Args {
   CUtensorMap a, b, pa, pb;   // X or A (boxes of 128 rows), W' or B (BN rows), P_A (128 rows), P_B (BN rows)
@@ -57,6 +57,10 @@ struct alignas(128) Args {
   int* O;                     // mode 0, 1: s32 cells; mode 2: bf16 words
   uint32_t* cbuf;             // CM 1: a slot of TM x BN / 2 words a CTA
   const float *sa, *sw;       // mode 2's scales
+  // a CTA's first tile is blockIdx.x, its next ones gridDim.x + a claim on tctr less tbase (null: every gridDim.x-th);
+  // launches that share tctr run in one stream's order, and each advances it by its tiles (v31.cu's Ring, gctr)
+  unsigned* tctr;
+  unsigned tbase;
   int M, N, K, L, S, lp, dz, dy, TT, group, mode, diag, KQ;
 };
 
@@ -156,6 +160,7 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
   extern __shared__ __align__(1024) uint8_t smem[];
   const uint32_t base = (smem_at(smem) + 1023) & ~1023u, bars = base + STAGES * T::STAGE;
   int* tab = reinterpret_cast<int*>(smem + (base - smem_at(smem)) + STAGES * T::STAGE + 16 * STAGES);
+  int* const stile = tab + MAX_TT;   // the tile a stage starts (written with its first k-tile), or -1: no more tiles
   const int M = p.M, N = p.N, KT = p.K / BK, tiles_m = M / TM, tiles_n = N / BN, tiles = tiles_m * tiles_n;
   const bool proto = p.mode == 1;
   const int TT = proto ? p.TT + p.KQ : 0, steps = TT + KT;
@@ -189,12 +194,17 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
       if (TT && p.KQ) wgp::tma_prefetch(&p.q);
       int s = 0;
       uint32_t ph = 0;
-      for (int t = blockIdx.x; t < tiles; t += gridDim.x) {
+      auto next = [&](int t) {
+        const unsigned q = p.tctr ? gridDim.x + (atomicAdd(p.tctr, 1u) - p.tbase) : (unsigned)t + gridDim.x;
+        return q < (unsigned)tiles ? (int)q : tiles;
+      };
+      for (int t = blockIdx.x; t < tiles; t = next(t)) {
         int tm, tn;
         raster(t, tiles_m, tiles_n, p.group, tm, tn);
         for (int i = 0; i < steps; i++) {
           const uint32_t st = base + s * T::STAGE, full = bars + 8 * s;
           mbar_wait(bars + 8 * (STAGES + s), ph ^ 1);
+          if (i == 0) stile[s] = t;
           mbar_expect_tx(full, T::STAGE);
           if (i < TT) {
             const int e = tab[i], kt = e & 0xFFFF;
@@ -212,6 +222,9 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
           if (++s == STAGES) { s = 0; ph ^= 1; }
         }
       }
+      mbar_wait(bars + 8 * (STAGES + s), ph ^ 1);
+      stile[s] = -1;
+      mbar_arrive(bars + 8 * s);
     }
     asm volatile("exit;");
   }
@@ -226,7 +239,10 @@ template <int BN, int CM, int RP> __device__ void body(const Args& p) {
   uint32_t* const cs = CM == 1 ? p.cbuf + (size_t)blockIdx.x * (TM * BN / 2) + tid : nullptr;   // the thread's tau words
   const bool segs = proto && !(p.diag & 1);
   const int kpl = p.L / BK;
-  for (int t = blockIdx.x; t < tiles; t += gridDim.x) {
+  for (;;) {
+    mbar_wait_warp(bars + 8 * s, ph);
+    const int t = stile[s];
+    if (t < 0) break;
     int tm, tn;
     raster(t, tiles_m, tiles_n, p.group, tm, tn);
     int pend = -1;            // the stage whose release waits on its MMAs

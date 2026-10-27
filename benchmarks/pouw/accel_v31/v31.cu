@@ -1320,8 +1320,8 @@ static std::string env_str(const char* name, const char* dflt) {
   return v && *v ? v : dflt;
 }
 // The knobs a bench line records. V31_CARVE: every kernel's preferred shared-memory carveout (percent; < 0 leaves the
-// driver's choice), so commit_gpu's small-path CTAs (no shared memory) can sit beside a GEMM CTA; V31_DYN: the GEMM takes
-// its tiles from a counter; V31_CPRIO: the commit stream's priority against the compute stream's (hi, lo or eq); V31_WRAP:
+// driver's choice), so commit_gpu's small-path CTAs (no shared memory) can sit beside a GEMM CTA; V31_DYN: the GEMMs (V31_GEMM
+// 1's too, wgl included) take their tiles from a counter; V31_CPRIO: the commit stream's priority against the compute stream's (hi, lo or eq); V31_WRAP:
 // the wrap correction's kernel (1: wrap_kernel, 2: wrap2_kernel, 3: wrap3_kernel, 4: wrap4_kernel; 5: X w_W^T on the
 // tensor cores, gemm_kernel<false> on X and w_W (form_b writes w_W), then wrap_a_kernel; 6, V31_GEMM 1 only: X w_W^T in
 // the protocol GEMM's own accumulator, as X (-2 w_W)^T k-tiles before its tail's x(-128), and wrap_a_kernel stores the
@@ -1560,9 +1560,13 @@ struct Ctx {
 #endif
   }
 #ifdef V31_WG
-  void wg_launch(cudaStream_t st, const wgp::Args& g, int cm, int rp) {
+  // V31_DYN 1: an SM the commit's CTAs share takes fewer tiles (gctr, as gemm_kernel's)
+  void wg_launch(cudaStream_t st, wgp::Args g, int cm, int rp) {
     constexpr int T0 = wgp::threads<0>(), T2 = wgp::threads<2>();
     constexpr int S256 = wgp::Tile<256>::SMEM, S128 = wgp::Tile<128>::SMEM;
+    g.tctr = kn.dyn ? gctr : nullptr;
+    g.tbase = gbase;
+    gbase += (u32)((m / wgp::TM) * (n / wbn));
     if (wbn == 256 && rp == 2) wgp::gemm_rw<256><<<wgrid, T2, S256, st>>>(g);
     else if (rp == 2) wgp::gemm_rw<128><<<wgrid, T2, S128, st>>>(g);
     else if (wbn == 256 && cm) wgp::gemm<256, 1><<<wgrid, T0, S256, st>>>(g);
