@@ -296,15 +296,17 @@ the wipe's component of onsite Verity, `verity/wipe/v0` (`MemoryChallenger.WipeP
 (every declared tier), the reads `k` the memory challenger chose (`wipe_party --reads`, 2152 by default, up to
 `MAX_READS = 2^17`; the prover never names them), `r = ratio(k)` and the foreign content it may leave,
 `StreamedWipeMeetsReads`' threshold with the egress counted, and `M` (vacuous) otherwise; an unsigned session is
-undecided. `wipe_period.leg(period_dir, node, out)` is the wipe's run in the all-protocols period runner. On a GPU,
-`period.json`'s `wipe` puts the fill in device memory (`wipe_store`, with host memory as its CPU stand-in) and has the
-challenger stream it natively (`wipe_stream.c`, built and gated on the challenger's host by `wipe_stream`);
-`benchmarks/pous/streamed_wipe/demo.sh` runs it on one H200. Its `foreign_bytes` makes the prover the cheat that keeps
-prior content in place of the fill's first labels (one label past the published figure, which must reject), and its
-`placement` `simulated` stands a challenger on the prover's node in for one on its own host. The run's record names
-what the bound doesn't cover (`uncertified`: the links leaving the node that no network certifier counts, the node's
-memory outside the declared tiers, an egress signed `UNCOUNTED`) and carries the session's window, `t0` and `t1` on the
-challenger's clock, which a network certifier counts the egress over.
+undecided. `wipe_period.leg(period_dir, node, out)` is the wipe's run in the all-protocols period runner.
+`wipe_parties` is the same memory challenger and prover as parties of the deployment layer (`verity.core.deploy`), the
+reads the challenger's machine gives it: on the same coins, clock readings, key and reads it signs the bytes
+`wipe_party.serve` signs. On a GPU, `period.json`'s `wipe` puts the fill in device memory (`wipe_store`, with host
+memory as its CPU stand-in) and has the challenger stream it natively (`wipe_stream.c`, built and gated on the
+challenger's host by `wipe_stream`); `benchmarks/pous/streamed_wipe/demo.sh` runs it on one H200. Its `foreign_bytes`
+makes the prover the cheat that keeps prior content in place of the fill's first labels (one label past the published
+figure, which must reject), and its `placement` `simulated` stands a challenger on the prover's node in for one on its
+own host. The run's record names what the bound doesn't cover (`uncertified`: the links leaving the node that no
+network certifier counts, the node's memory outside the declared tiers, an egress signed `UNCOUNTED`) and carries the
+session's window, `t0` and `t1` on the challenger's clock, which a network certifier counts the egress over.
 
 | Module | What it holds |
 |---|---|

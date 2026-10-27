@@ -6,7 +6,7 @@ proof block.
 Scanned: every tracked text file but `archive/` (frozen with what it describes) and the Lean (`.lean` files and their
 locks' reasons, `lean-audit.json`). A term matches case-insensitively as two words, hyphenated, or wrapped onto the next
 line (behind a comment marker or not). Identifiers (`proof_unit`) are code; the retired-terms table
-(`glossary/README.md`) names them. What may stay: the table's own rows (``RETIRED_ROWS``), a spelling baked into a
+(`GLOSSARY.md`) names them. What may stay: the table's own rows (``RETIRED_ROWS``), a spelling baked into a
 record or a digest (``ALLOWED``, one reason each; an entry that matches nothing fails too), and a file whose lines a PR
 already queued on `next` rewrites (``PENDING``), until that PR lands and the rename follows it.
 
@@ -26,7 +26,7 @@ TERMS = {"proof unit": "proof block", "faulty unit": "faulty proof block"}
 _TERM = re.compile(r"\b(proof|faulty)(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)units?\b", re.I)
 
 #: The retired-terms table, the Glossary's older names (`ARCHITECTURE.md` links it).
-GLOSSARY = "glossary/README.md"
+GLOSSARY = "GLOSSARY.md"
 #: The table's rows that name the terms, in GLOSSARY.
 RETIRED_ROWS = ('| "proof unit"', '| "wrong unit"')
 
@@ -166,8 +166,8 @@ def test_the_scan_reads_each_form():
         GLOSSARY: '| "proof unit", and "unit" alone meaning one | proof block |\n| other | a proof unit |\n',
     }
     found, used = offenders(list(docs), read=docs.__getitem__)
-    assert found == [("a.py", 1, "proof unit"), ("a.py", 1, "Proof-Units"), ("a.py", 1, "proof units"),
-                     ("a.py", 3, "faulty unit"), ("b.rs", 1, "proof /// unit"), (GLOSSARY, 2, "proof unit")]
+    assert found == [(GLOSSARY, 2, "proof unit"), ("a.py", 1, "proof unit"), ("a.py", 1, "Proof-Units"),
+                     ("a.py", 1, "proof units"), ("a.py", 3, "faulty unit"), ("b.rs", 1, "proof /// unit")]
     assert used == {"N, the round's proof units"}
 
 
@@ -184,7 +184,7 @@ def test_the_doc_scan_reads_each_form():
         "verity/README.md": "a leg",
         GLOSSARY: '| "leg"; a physical block | subprotocol |\nA leg outside the table.\n',
     }
-    assert doc_offenders(list(docs), read=docs.__getitem__) == [
+    assert doc_offenders(list(docs), read=docs.__getitem__) == [(GLOSSARY, 2, "leg"),
         ("a.md", 1, "wrong unit"), ("a.md", 1, "Isolation-Units"), ("a.md", 1, "replay unit"), ("a.md", 2, "IU"),
         ("a.md", 2, "IUs"), ("a.md", 2, "KV block"), ("a.md", 3, "legs"), ("a.md", 3, "leg"), ("a.md", 3, "leg"),
-        ("b.md", 8, "thread block"), (GLOSSARY, 2, "leg")]
+        ("b.md", 8, "thread block")]

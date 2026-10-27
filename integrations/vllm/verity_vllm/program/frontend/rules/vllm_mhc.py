@@ -37,7 +37,7 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 BF16, F32 = torch.bfloat16, torch.float32
 
-#: the kernels' threads at DeepSeek-V4-Pro's hidden size (registry.mhc's statics; the H200's GO, run r20261013-205619-36e8):
+#: the kernels' threads at DeepSeek-V4-Pro's hidden size (registry.mhc's statics; an H200's GO run):
 #: `mhc_fused_tilelang`'s TH, the fused norm's TN, `hc_head_fuse_tilelang`'s TH
 MHC_GEOMETRY = {7168: {"TH": 256, "TN": 64, "TH_HEAD": 128}}
 #: the most tokens `mhc_fused_post_pre_tilelang` runs on its FMA path (`use_small_fma`, mhc/tilelang.py:518)
