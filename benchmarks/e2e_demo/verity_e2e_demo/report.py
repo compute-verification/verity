@@ -15,7 +15,7 @@ a number. A value may carry a ``label`` (``PyTorch dry run``, ``HASH-20 bench``)
 for a number that is not the demo block's own; ``--record-label`` labels every number read from the block records,
 once at the top and in the sources table.
 
-**Demo A** composes sampled proofs, PoUW and network accounting (`DEMO_A`): accept when all three accepted on the
+**Demo A** composes sampled proofs, PoUW and the network certifier (`DEMO_A`): accept when all three accepted on the
 block's server, reject when one rejected, pending otherwise, with their errors summed as
 ``Accounting.Guarantees.JointHorizon`` states it. PoUS, the bandwidth audit and the wipe compose at M4 (Demo B).
 
@@ -27,9 +27,10 @@ the live coins (PRF-171), never sized to a proving budget; a block that drew ano
 
 **Part 3's H and B** are the planner's (`planned`): `sampled_proofs.optimize.for_budget` at 1% of a one-week sampling
 block, each subcircuit's units scaled from the demo block's, priced at part 2's measured costs, in the planner's
-AND-weighted form (a unit's work is its ANDs). They stay ``⟨H_POOLED⟩`` and ``⟨B_POOLED⟩`` until every cost is measured.
-Each share is stated against the world's compute (``WORLD_FLOP_YEAR``, the adversary's resources) with the deployment's
-beside it.
+AND-weighted form (a unit's cost is its ANDs). They stay ``⟨H_POOLED⟩`` and ``⟨B_POOLED⟩`` until every cost is measured.
+Part 3 is circuit size, counted in AND gates, with no FLOP figure or price (Daniel, 26 Oct, TOP-95): each share is
+stated against the world's compute in AND gates (``WORLD_GATES_YEAR``, the adversary's resources) with the
+deployment's beside it.
 
 **Stubs.** Each of `STUBS` is a caveat until the measurements file's ``fixed`` names it, with the run that shows it
 fixed.
@@ -42,8 +43,20 @@ every drawn unit was proved.
 
 **Gathers** are wire references, not proof units: a measured subcircuit named for one is refused.
 
-**Words.** Each protocol by its name, "sampling block" and "subcircuit": `render` refuses a report that says "leg",
-"window" or "template" (`BANNED`), measurement text included.
+**Words.** Each of the six subprotocols by its name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network
+certifier, the wipe), "proof block", "sampling block", "server-time block" and "subcircuit": `render` refuses a report
+that says "leg", "window", "template", "integrity", "work", "space" or "communication" (`BANNED`) outside a code span,
+measurement text included.
+
+**M3's report** (``m3.template``): when the measurements file has ``sections`` or ``proved``, the report is M3's,
+and no block record is needed. Each section row is one number with its run, its own verdict line quoted and its target
+(``{"op": "<=", "value": 0.95}``, or ``{"none": "why"}``); `render` computes its ratio and whether it met the target,
+and lists every miss under visible failures (top's row 68). ``proved`` is DRAWPROVE's run of record (PRF-172):
+``{"run", "drawn": [the coin's indices], "lines": [its output's VERDICT and PROVEBUNDLE lines, verbatim], "text"}``,
+rendered as the first section, one row per drawn proof block. The first line is `M3_STATUS` only when all `HANDFUL`
+drawn proof blocks have a VERDICT line that says accepted (C-Flock ``--zk``, M0 and Lean) and the final PROVEBUNDLE
+line is ok with every negative refused; until then it is `FALLBACK_STATUS` (the file's ``status``, which may say
+nothing else), and each block not accepted is a visible failure.
 
 The measurements file::
 
@@ -85,11 +98,15 @@ HANDFUL = 8
 #: part 3's sampling block, in H200-seconds
 SAMPLING_BLOCK_S = 7 * 86400
 WORLD_LABEL = "world-inference-2027"
+#: the first line of M3's report while its drawn H200 proof blocks aren't all proved and accepted
+FALLBACK_STATUS = "M3 fallback: live-drawn, opened, replayed (Python); not proved in C-Flock"
+#: the first line once every drawn H200 proof block is proved in C-Flock and accepted by the Lean verifier
+M3_STATUS = f"M3: {HANDFUL} live-drawn H200 proof blocks, each proved in C-Flock --zk and accepted by the Lean verifier"
 #: what keeps the CPU demo's ACCEPT from being "no stubs", until the measurements file's ``fixed`` names it
 STUBS = {
     "pouw-live-salt": "PoUW's salt isn't yet the live coin read in its answer, nor its rows the committed activations "
                       "(#4405, #4426), so the demo's ACCEPT isn't yet \"no stubs\".",
-    "certifier-output-tie": "Network accounting's output tie isn't proved yet: the certified egress isn't yet shown "
+    "certifier-output-tie": "The network certifier's output tie isn't proved yet: the certified egress isn't yet shown "
                             "equal to #4426's committed output rows inside the period's --zk proof (NET-80), so the "
                             "demo's ACCEPT isn't yet \"no stubs\".",
     "torch-loop-wiring": "The torch loop's ReLU and per-row quantize are not proved units: each linear's input is a "
@@ -103,13 +120,21 @@ STUBS = {
                        "demo's ACCEPT isn't yet \"no stubs\".",
 }
 DEMO_A = ("integrity", "pouw", "certifier")
-PROTOCOL_NAMES = {"integrity": "sampled proofs", "pouw": "PoUW", "certifier": "network accounting", "pous": "PoUS",
+PROTOCOL_NAMES = {"integrity": "sampled proofs", "pouw": "PoUW", "certifier": "network certifier", "pous": "PoUS",
                   "bandwidth": "the bandwidth audit", "wipe": "the wipe"}
 PERIODS = block_record.PERIODS
-BANNED = re.compile(r"\b(legs?|windows?|templates?)\b", re.IGNORECASE)
+#: retired words, and the old names of the six subprotocols; a code span (a field or a quoted verdict line) is exempt
+BANNED = re.compile(r"\b(legs?|windows?|templates?|integrity|work|space|communication)\b", re.IGNORECASE)
+CODE_SPAN = re.compile(r"(`+)(?:(?!\1).)+?\1")
 PLACEHOLDER = re.compile(r"⟨([A-Z][A-Z0-9_]*)⟩")
 #: placeholders that stand for a rendered block rather than one number
-BLOCKS = ("LABEL", "RECORDS", "VISIBLE_FAILURES", "SUBCIRCUITS", "PERIODS", "CAVEATS", "SOURCES")
+BLOCKS = ("LABEL", "RECORDS", "VISIBLE_FAILURES", "SUBCIRCUITS", "PERIODS", "CAVEATS", "SOURCES", "SECTIONS", "MISSES")
+#: M3's report: the measurements file's ``sections`` and ``proved``
+M3_TEMPLATE = Path(__file__).parent / "m3.template"
+#: what a section row names: the number, its run, its own verdict line quoted and its target
+ROW_FIELDS = ("what", "value", "run", "verdict", "target")
+RUN_ID = re.compile(r"\b(r\d{8}-\d{6}-[0-9a-f]{4}|art:[0-9a-f]{8,})")
+TARGET_OPS = {"<=": "≤", ">=": "≥", "==": "="}
 #: what names a visible failure: the drawn unit, why it wasn't proved, and the run that shows it
 FAILURE_FIELDS = ("subcircuit", "unit", "step", "slot", "why", "source")
 
@@ -118,12 +143,12 @@ RECORD: dict[str, str] = {
     "RECORD_RUN": "run",
     "BLOCK_SERVER": "server",
     "BLOCK_STEPS": "server_time's steps [lo, hi)",
-    "DEMO_A_VERDICT": "sampled proofs', PoUW's and network accounting's answer.verdict on the block's server",
-    "DRAWN_UNITS": "integrity › quantity.drawn",
-    "UNITS_TOTAL": "integrity › quantity.of",
-    "LEAN_VERDICT": "integrity › answer.verdict (the Lean verifier's audit)",
-    "H_UNITS": "integrity › at 1/100 › value",
-    "INTEGRITY_ERROR": "integrity › error",
+    "DEMO_A_VERDICT": "sampled proofs', PoUW's and the network certifier's answer.verdict on the block's server",
+    "DRAWN_UNITS": "`integrity` › quantity.drawn",
+    "UNITS_TOTAL": "`integrity` › quantity.of",
+    "LEAN_VERDICT": "`integrity` › answer.verdict (the Lean verifier's audit)",
+    "H_UNITS": "`integrity` › at 1/100 › value",
+    "INTEGRITY_ERROR": "`integrity` › error",
     "POUW_TILES": "pouw › answer.public.check's tile Definition",
     "POUW_TILES_DRAWN": "pouw › answer.public.drawn (its count)",
     "POUW_W_CERT": "pouw › quantity.value (W_cert, at 1/100)",
@@ -157,9 +182,9 @@ MEASURED: dict[str, str] = {
     "H_A": "the bound (BOUND_CITATION) at δ = 1/100 on the block's draw, harm in ANDs: "
            "`sampled_proofs.optimize.certify` on the block's sizes and k",
     "H_B": "the same bound, harm in output bits",
-    "BLOCK_ANDS": "the block's circuit: ANDs over all its proof units (circuit-check's ANDs a unit × units, per "
+    "BLOCK_ANDS": "the block's circuit: ANDs over all its proof blocks (circuit-check's ANDs a unit × units, per "
                   "subcircuit)",
-    "BLOCK_OUTPUT_BITS": "the block's circuit: output bits over all its proof units",
+    "BLOCK_OUTPUT_BITS": "the block's circuit: output bits over all its proof blocks",
     "POUW_EPS": "CMP-126 (H200-POUW): PoUW's ε at δ = 1/100 from the block's one draw, its tiles a subcircuit at the "
                 "planner's k",
     "POUW_COVERAGE": "CMP-126: the share of the block's static INT8 MACs its tiles cover (`range`)",
@@ -181,19 +206,18 @@ MEASURED: dict[str, str] = {
     "STEP_S_B1024": "M3's block run on the H200 at batch 1,024: seconds a step",
     "ROW_SLOT_NS_B1024": "the same run: nanoseconds a step per row-slot",
     "STEP_S_KERNELS": "kernels' faster step at batch 512: seconds a step",
-    "BLOCK_FLOP": "the block's circuit: 2 × its MACs, its INT8 ops counted as FP8 FLOP",
-    "WORLD_FLOP_YEAR": f"the world's compute, FP8 FLOP a year, labelled {WORLD_LABEL} (census entry pending, CMP-133)",
+    "WORLD_GATES_YEAR": f"the world's compute, AND gates a year, labelled {WORLD_LABEL} (census entry pending, CMP-133)",
 }
 
 _PERIOD_DERIVED: dict[str, str] = {}
 for _p, _ in PERIODS:
     _P = _p.upper()
-    _world = f"WORLD_FLOP_YEAR × a {_p} / a year / BLOCK_FLOP"
+    _world = f"WORLD_GATES_YEAR × a {_p} / a year"
     _PERIOD_DERIVED |= {
         f"BLOCKS_{_P}": f"D_GPUS × a {_p} / a week: the {_p}'s one-week sampling blocks",
-        f"H_WORLD_SHARE_{_P}": f"H_POOLED / ({_world} × BLOCK_ANDS)",
+        f"H_WORLD_SHARE_{_P}": f"H_POOLED / ({_world})",
         f"H_SHARE_{_P}": f"H_POOLED / (D_GPUS × a {_p} × BLOCK_ANDS / BLOCK_GPU_S)",
-        f"B_WORLD_SHARE_{_P}": f"B_POOLED / ({_world} × BLOCK_OUTPUT_BITS)",
+        f"B_WORLD_SHARE_{_P}": f"B_POOLED / ({_world} × BLOCK_OUTPUT_BITS / BLOCK_ANDS)",
         f"B_SHARE_{_P}": f"B_POOLED / (D_GPUS × a {_p} × BLOCK_OUTPUT_BITS / BLOCK_GPU_S)",
     }
 
@@ -349,8 +373,8 @@ def load_measurements(doc: Mapping[str, Any]) -> tuple[dict[str, V], list[dict[s
         if not str(x.get("source") or "").strip():
             raise ValueError(f"measurements: ⟨{name}⟩ names no source; say which run or field it came from")
         values[name] = V(x["value"], x["source"], x.get("label"))
-    if "WORLD_FLOP_YEAR" in values and values["WORLD_FLOP_YEAR"].label != WORLD_LABEL:
-        raise ValueError(f"measurements: ⟨WORLD_FLOP_YEAR⟩ is labelled {WORLD_LABEL!r}, the census entry's")
+    if "WORLD_GATES_YEAR" in values and values["WORLD_GATES_YEAR"].label != WORLD_LABEL:
+        raise ValueError(f"measurements: ⟨WORLD_GATES_YEAR⟩ is labelled {WORLD_LABEL!r}, the census entry's")
     subcircuits = [dict(s) for s in doc.get("subcircuits") or []]
     for s in subcircuits:
         if not s.get("name") or not str(s.get("source") or "").strip():
@@ -393,7 +417,7 @@ def planned(values: Mapping[str, V], subcircuits: Sequence[Mapping[str, Any]]) -
                     | {s["label"] for s in subcircuits if s.get("label")})
     label = "; ".join(labels) or None
     version = hashlib.sha256(Path(optimize.__file__).read_bytes()).hexdigest()[:12]
-    inputs = (f"`for_budget` over `frontier` (exact=False) at δ = 1/100, `Objective` work = ANDs, budget "
+    inputs = (f"`for_budget` over `frontier` (exact=False) at δ = 1/100, `Objective` weighted by ANDs, budget "
               f"{_fmt(budget)} GPU-s = 1% of a one-week sampling block ({SAMPLING_BLOCK_S:,} H200-s, each "
               f"subcircuit's units × {scale:.4g} = a week / BLOCK_GPU_S); per_and {_fmt(float(per_and))} GPU-s "
               f"(PROVE_S_PER_AND); " + "; ".join(
@@ -450,16 +474,16 @@ def derive(values: Mapping[str, V], subcircuits: Sequence[Mapping[str, Any]]) ->
     out |= planned(values, subcircuits)
     values = {**values, **out}
     year = dict(PERIODS)["year"]
-    gs, world, flop = (_num(values.get(k)) for k in ("BLOCK_GPU_S", "WORLD_FLOP_YEAR", "BLOCK_FLOP"))
+    gs, world, ands = (_num(values.get(k)) for k in ("BLOCK_GPU_S", "WORLD_GATES_YEAR", "BLOCK_ANDS"))
     for p, seconds in PERIODS:
         P = p.upper()
         if d:
             put(f"BLOCKS_{P}", float(d * seconds / SAMPLING_BLOCK_S), "D_GPUS")
         for harm, total, share in (("H_POOLED", "BLOCK_ANDS", "H"), ("B_POOLED", "BLOCK_OUTPUT_BITS", "B")):
             h, t = _num(values.get(harm)), _num(values.get(total))
-            if h is not None and t and world and flop:
-                put(f"{share}_WORLD_SHARE_{P}", _pct(h / (world * seconds / year / flop * t)), harm, total,
-                    "WORLD_FLOP_YEAR", "BLOCK_FLOP")
+            if h is not None and t and world and ands:
+                put(f"{share}_WORLD_SHARE_{P}", _pct(h / (world * seconds / year * t / ands)), harm, total,
+                    "WORLD_GATES_YEAR", "BLOCK_ANDS")
             if h is not None and t and gs and d:
                 put(f"{share}_SHARE_{P}", _pct(h / (d * seconds * t / gs)), harm, total, "BLOCK_GPU_S", "D_GPUS")
     return out
@@ -523,9 +547,9 @@ def _period_names(p: str) -> tuple[str, ...]:
 
 
 def _periods(values: Mapping[str, V], quiet: str | None) -> str:
-    rows = [("| period | one-week sampling blocks | H faulty ANDs | share of the world's ANDs | share of the "
-             "deployment's ANDs | B leaked bits | share of the world's output bits | share of the deployment's output "
-             "bits |"), "|" + " --- |" * 8]
+    rows = [("| period | one-week sampling blocks | H faulty AND gates | share of the world's AND gates | share of "
+             "the deployment's AND gates | B leaked bits | share of the world's output bits | share of the "
+             "deployment's output bits |"), "|" + " --- |" * 8]
     for p, _ in PERIODS:
         rows.append(f"| {p} | " + " | ".join(_cell(n, values, quiet) for n in _period_names(p)) + " |")
     return "\n".join(rows)
@@ -533,8 +557,12 @@ def _periods(values: Mapping[str, V], quiet: str | None) -> str:
 
 def _caveats(records: Sequence[Mapping[str, Any]], values: Mapping[str, V], extra: Sequence[str],
              quiet: str | None, fixed: Mapping[str, str]) -> str:
-    r = records[0]
     lines = [STUBS[k] for k in STUBS if k not in fixed]
+    if not records:
+        lines += [f"Numbers marked *({lab})* are not the demo block's own." for lab in
+                  sorted({v.label for v in values.values() if v.label})]
+        return "\n".join(f"- {x}" for x in [*lines, *extra])
+    r = records[0]
     if (k := values.get("DRAWN_UNITS")) is not None and k.value != HANDFUL:
         lines.append(f"This block drew k = {_fmt(k.value)}, not M3's handful of {HANDFUL} (PRF-171).")
     lines.append("The challenger and the network certifier run on the prover's node for the demo, not on a machine the "
@@ -550,7 +578,7 @@ def _caveats(records: Sequence[Mapping[str, Any]], values: Mapping[str, V], extr
         lines.append("JointHorizon is stated, not yet proved: the error sum in part 1 is the sum it states.")
     lines.append("PRF-167: the state carried across a wipe has no cross-session binding term yet, so the bound holds "
                  "per server-time block.")
-    lines.append("`pous-ring-instantiation` is M4's: PoUS's S_cert, the bandwidth audit's Q_cert and the wipe's f·M "
+    lines.append("`pous-ring-instantiation` is M4's: PoUS's S_cert, the bandwidth audit's Q_cert and the wipe's foreign_bits "
                  "compose at M4 (Demo B), not in Demo A.")
     labels = sorted({v.label for v in values.values() if v.label})
     if quiet:
@@ -597,18 +625,32 @@ def _sources(order: Sequence[str], values: Mapping[str, V], subcircuits: Sequenc
 def render(records: Sequence[Mapping[str, Any]], measurements: Mapping[str, Any] | None = None, *,
            record_label: str | None = None, template: str | None = None) -> str:
     """The report's Markdown (module docstring)."""
-    if not records:
+    doc = measurements or {"format": MEASUREMENTS}
+    sections = list(doc.get("sections") or [])
+    status = str(doc.get("status") or "").strip()
+    if doc.get("proved") is not None:
+        if status and status != FALLBACK_STATUS:
+            raise ValueError(f"measurements: with `proved`, the status is {FALLBACK_STATUS!r} or left out; `render` "
+                             f"says {M3_STATUS!r} once every drawn proof block is proved and accepted")
+        section, complete = proved_section(doc["proved"])
+        sections.insert(0, section)
+        status = M3_STATUS if complete else FALLBACK_STATUS
+    m3 = bool(sections)
+    if m3 and not status:
+        raise ValueError("measurements: sections need a status, the report's first line (what was and wasn't shown)")
+    if not records and not m3:
         raise ValueError("render needs at least one block record: the first is the block the report is about")
-    text = TEMPLATE.read_text() if template is None else template
-    measured, subcircuits, caveats, fixed, failures = load_measurements(measurements or {"format": MEASUREMENTS})
-    values = {**from_record(records[0], record_label), **measured}
-    if failures:
+    text = (M3_TEMPLATE if m3 else TEMPLATE).read_text() if template is None else template
+    measured, subcircuits, caveats, fixed, failures = load_measurements(doc)
+    rows = section_rows(sections)
+    values = {**(from_record(records[0], record_label) if records else {}), **measured}
+    if failures and records:
         v = values["DEMO_A_VERDICT"]
         values["DEMO_A_VERDICT"] = V(demo_a_verdict(records[0], len(failures)),
                                      v.source + ", with the measurements file's visible failures", v.label)
     for r in records[1:]:
         from_record(r)
-    if "SUBCIRCUIT_COUNT" not in values and not subcircuits:
+    if records and "SUBCIRCUIT_COUNT" not in values and not subcircuits:
         per = (records[0]["legs"].get("integrity") or {}).get("answer", {}).get("public", {}).get("per_template")
         if per:
             values["SUBCIRCUIT_COUNT"] = V(len(per), DERIVED["SUBCIRCUIT_COUNT"], record_label)
@@ -627,29 +669,157 @@ def render(records: Sequence[Mapping[str, Any]], measurements: Mapping[str, Any]
     banner = (f"> The {record_label}'s numbers are not marked in place: every number read from the block records "
               f"(block record {records[0]['run']}), and every measurement labelled *({record_label})*, is the "
               f"{record_label}'s, not the demo block's. Any other number that isn't the demo block's own is marked "
-              f"in place.") if record_label else "> A number that isn't the demo block's own is marked in place."
-    blocks = {"LABEL": banner, "RECORDS": _records(records, len(failures or ())),
+              f"in place.") if record_label and records else "> A number that isn't the demo block's own is marked in place."
+    blocks = {"LABEL": banner, "RECORDS": _records(records, len(failures or ())) if records else "No block record.",
               "VISIBLE_FAILURES": _failures(failures), "SUBCIRCUITS": _subcircuits(subcircuits, record_label),
               "PERIODS": _periods(values, record_label),
               "CAVEATS": _caveats(records, values, caveats, record_label, fixed),
-              "SOURCES": _sources(order, values, subcircuits, failures)}
+              "SOURCES": _sources(order, values, subcircuits, failures),
+              "SECTIONS": _sections(sections, rows), "MISSES": _misses(rows, failures)}
     out = PLACEHOLDER.sub(lambda m: blocks[m[1]] if m[1] in blocks else _cell(m[1], values, record_label), text)
+    if status:
+        out = f"{status}\n\n{out}"
     vocabulary(out)
     return out
 
 
 def vocabulary(text: str) -> None:
-    """Refuses a report that says "leg", "window" or "template" (CMP-98's words)."""
+    """Refuses a report that says "leg", "window" or "template" (CMP-98's words), or a subprotocol's old name
+    ("integrity", "work", "space", "communication"), outside a code span."""
     for n, line in enumerate(text.splitlines(), 1):
-        if m := BANNED.search(line):
-            raise ValueError(f"the report says {m[0]!r} (line {n}: {line.strip()!r}): name each protocol (sampled "
-                             f"proofs, PoUW, network accounting), and say 'sampling block' and 'subcircuit'")
+        if m := BANNED.search(CODE_SPAN.sub("", line)):
+            raise ValueError(f"the report says {m[0]!r} (line {n}: {line.strip()!r}): name each of the six "
+                             f"subprotocols (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, "
+                             f"the wipe), and say 'proof block', 'sampling block', 'server-time block' and 'subcircuit'")
+
+
+def _code(s: str) -> str:
+    fence = "``" if "`" in s else "`"
+    return f"{fence}{' ' if fence == '``' else ''}{s}{' ' if fence == '``' else ''}{fence}"
+
+
+def section_rows(sections: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Every section row with its ``ratio`` (value over a numeric target) and ``met``; refuses a row that names no run,
+    no verdict line or no target (top's rules: each number with its run id, its own verdict line, its target and
+    ratio)."""
+    out = []
+    for sec in sections:
+        if not str(sec.get("title") or "").strip():
+            raise ValueError(f"measurements: section {sec!r} needs a title")
+        for row in sec.get("rows") or []:
+            if missing := [k for k in ROW_FIELDS if row.get(k) is None or str(row[k]).strip() == ""]:
+                raise ValueError(f"measurements: row {row.get('what')!r} names no {', '.join(missing)}; every number "
+                                 f"carries its run, its own verdict line quoted, and its target")
+            if not RUN_ID.search(str(row["run"])):
+                raise ValueError(f"measurements: row {row['what']!r}: run {row['run']!r} has no run id (rYYYYMMDD-"
+                                 f"HHMMSS-xxxx) or art: id")
+            t = row["target"]
+            r = dict(row, section=sec["title"], ratio=None, met=None)
+            if isinstance(t, Mapping) and "none" in t:
+                if not str(t["none"]).strip():
+                    raise ValueError(f"measurements: row {row['what']!r}: say why it has no target")
+            elif isinstance(t, Mapping) and t.get("op") in TARGET_OPS and "value" in t:
+                v, x = row["value"], t["value"]
+                num = all(isinstance(y, (int, float)) and not isinstance(y, bool) for y in (v, x))
+                if num and t["op"] != "==" and x:
+                    r["ratio"] = v / x
+                r["met"] = (v <= x if t["op"] == "<=" else v >= x) if num and t["op"] != "==" else v == x
+            else:
+                raise ValueError(f"measurements: row {row['what']!r}: target is {{op: <=|>=|==, value}} or "
+                                 f"{{none: why}}, not {t!r}")
+            out.append(r)
+    return out
+
+
+def _line(lines: Sequence[str], head: str) -> list[tuple[str, dict[str, Any]]]:
+    out = []
+    for line in lines:
+        if line.startswith(head + " {"):
+            try:
+                out.append((line, json.loads(line[len(head) + 1:])))
+            except json.JSONDecodeError as e:
+                raise ValueError(f"measurements: proved: {line[:80]!r} isn't {head} and one JSON object ({e})") from e
+    return out
+
+
+def proved_section(proved: Mapping[str, Any]) -> tuple[dict[str, Any], bool]:
+    """DRAWPROVE's run as a section, one row per drawn proof block and one for the bundle's verdict, and whether every
+    drawn proof block was proved and accepted (module docstring); refuses a VERDICT for a block the coin didn't draw."""
+    run, drawn, lines = proved.get("run"), proved.get("drawn"), proved.get("lines")
+    if not RUN_ID.search(str(run or "")) or not isinstance(lines, list) or not isinstance(drawn, list) or not drawn:
+        raise ValueError("measurements: proved needs its run id, the coin's drawn indices and the run's output lines")
+    if len(set(drawn)) != len(drawn) or not all(isinstance(g, int) and not isinstance(g, bool) for g in drawn):
+        raise ValueError(f"measurements: proved: drawn {drawn!r} isn't distinct indices")
+    verdicts: dict[int, tuple[str, dict[str, Any]]] = {}
+    for line, v in _line(lines, "VERDICT"):
+        if v.get("block") not in drawn:
+            raise ValueError(f"measurements: proved: a VERDICT for block {v.get('block')!r}, which the coin didn't draw")
+        verdicts[v["block"]] = (line, v)
+    final = (_line(lines, "PROVEBUNDLE") or [(None, None)])[-1]
+    rows = [{"what": "proof blocks the live coin drew", "value": len(drawn), "target": {"op": "==", "value": HANDFUL},
+             "run": run, "verdict": "drawn: " + json.dumps(drawn)}]
+    for g in drawn:
+        line, v = verdicts.get(g, (None, None))
+        value = "no VERDICT line" if v is None else "accepted" if v.get("accepted") is True else "not accepted"
+        rows.append({"what": f"drawn proof block {g}: proved in C-Flock --zk behind the firewall, verified by M0 and Lean",
+                     "value": value, "target": {"op": "==", "value": "accepted"}, "run": run,
+                     "verdict": line or f"the run's output has no VERDICT line for block {g}"})
+    line, v = final
+    n = (v or {}).get("negatives") or 0
+    refused = (v or {}).get("negatives_refused")
+    rows.append({"what": "negatives refused by Lean (flipped bits, the tampered proof block)",
+                 "value": "no PROVEBUNDLE line" if v is None else f"{refused} of {n}",
+                 "target": {"op": "==", "value": f"{n} of {n}" if n else "every negative"}, "run": run,
+                 "verdict": line or "the run's output has no final PROVEBUNDLE line"})
+    rows.append({"what": "the bundle's verdict (PROVEBUNDLE)", "value": "no PROVEBUNDLE line" if v is None else
+                 "ok" if v.get("ok") is True else "not ok", "target": {"op": "==", "value": "ok"}, "run": run,
+                 "verdict": line or "the run's output has no final PROVEBUNDLE line"})
+    complete = (len(drawn) == HANDFUL and all(r["value"] == "accepted" for r in rows[1:1 + len(drawn)])
+                and rows[-1]["value"] == "ok" and n > 0 and refused == n)
+    title = "M3 proper: the drawn H200 proof blocks proved in C-Flock"
+    return {"title": title, "text": str(proved.get("text") or ""), "rows": rows}, complete
+
+
+def _target(r: Mapping[str, Any]) -> str:
+    t, unit = r["target"], f" {r['unit']}" if r.get("unit") else ""
+    if "none" in t:
+        return f"no target ({t['none']})"
+    return f"target {TARGET_OPS[t['op']]} {_fmt(t['value'])}{unit if not isinstance(t['value'], str) else ''}"
+
+
+def _row(r: Mapping[str, Any]) -> str:
+    unit = f" {r['unit']}" if r.get("unit") and not isinstance(r["value"], str) else ""
+    ratio = f", ratio {r['ratio']:.3g}×" if r["ratio"] is not None else ""
+    met = "" if r["met"] is None else ", **met**" if r["met"] else ", **missed**"
+    return (f"- **{r['what']}:** {_fmt(r['value'])}{unit} ({_target(r)}{ratio}{met}). Run {r['run']}. "
+            f"Verdict: {_code(str(r['verdict']))}" + (f" {r['note']}" if r.get("note") else ""))
+
+
+def _sections(sections: Sequence[Mapping[str, Any]], rows: Sequence[Mapping[str, Any]]) -> str:
+    parts = []
+    for n, sec in enumerate(sections, 1):
+        mine = [r for r in rows if r["section"] == sec["title"]]
+        parts.append(f"## {n}. {sec['title']}\n\n" + (f"{sec['text']}\n\n" if sec.get("text") else "")
+                     + "\n".join(_row(r) for r in mine))
+    return "\n\n".join(parts)
+
+
+def _misses(rows: Sequence[Mapping[str, Any]], failures: Sequence[Mapping[str, Any]] | None) -> str:
+    missed = [r for r in rows if r["met"] is False]
+    lines = [f"- {r['section']}: **{r['what']}**: {_fmt(r['value'])}"
+             + (f" {r['unit']}" if r.get("unit") and not isinstance(r["value"], str) else "") + f" against {_target(r)}"
+             + (f" (ratio {r['ratio']:.3g}×)" if r["ratio"] is not None else "") + f". Run {r['run']}." for r in missed]
+    if failures:
+        lines += [f"- Drawn proof block {_fmt(f['unit'])} ({f['subcircuit']}, step {_fmt(f['step'])}, slot "
+                  f"{_fmt(f['slot'])}) not proved: {f['why']}. Run {f['source']}." for f in failures]
+    return "\n".join(lines) or "None: every number above met its target."
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Demo A's report from block records and a measurements file.")
-    ap.add_argument("records", nargs="+", type=Path,
-                    help="block records (verity/block-record/v1); the first is the block")
+    ap.add_argument("records", nargs="*", type=Path,
+                    help="block records (verity/block-record/v1); the first is the block. None for a report whose "
+                         "measurements carry sections or proved (M3's report)")
     ap.add_argument("--measurements", type=Path)
     ap.add_argument("--record-label", help="the label every number read from the block records carries")
     ap.add_argument("--out", type=Path)

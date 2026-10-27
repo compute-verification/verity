@@ -38,7 +38,7 @@ RTX PRO 6000, H200 and B200. `--check` reproduces these values.
 Not in the model:
 
 - The extra cost of a unit's larger cone (int8 scales, a sampler over the logits row) shows up at proving, not at serve.
-- Two-stage rows leave out the interiors committed after the draw for drawn replay units, which is a fraction of the bytes
+- Two-stage rows leave out the interiors committed after the draw for drawn replay blocks, which is a fraction of the bytes
   that the profile sets.
 
 The rule each row touches and its owner are in the table.

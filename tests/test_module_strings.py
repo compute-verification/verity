@@ -62,7 +62,7 @@ EXEMPT = {
 #: packages whose modules a `sys.meta_path` finder in the package makes on import, by the names it accepts; importing one to
 #: ask would load torch, so its grammar is restated here (`generic._MODULE_RE`, `dense_generic.role_of_module`) and
 #: `test_the_generated_modules_finder_is_still_there` checks the finder is
-GENERATED = {"verity_vllm.engine.profiles": re.compile(r"(derived_[A-Z0-9_]+?(_tp\d+)?(_ovs)?|dense_[A-Z0-9_]+)")}
+GENERATED = {"verity_vllm.observe.fold.profiles": re.compile(r"(derived_[A-Z0-9_]+?(_tp\d+)?(_ovs)?|dense_[A-Z0-9_]+)")}
 
 _NAME = r"[A-Za-z_][\w]*(?:\.[A-Za-z_]\w*)*"
 #: (kind, pattern with groups `mod` and optionally `attr`)
@@ -245,6 +245,6 @@ def test_the_scan_sees_each_kind_and_catches_a_dangling_one():
     registry = "tools/research/src/research/store/tools_registry.py"
     assert {(registry, "attr", "tools.verity.check.tool:CHECK"), ("tools/research/pyproject.toml", "attr", "research.cli:main"),
             ("integrations/vllm/tests/ops/test_epoch_row.py", "main", "verity_vllm.pipeline.cli"),
-            ("integrations/vllm/tests/engine/test_cov_difr_b0.py", "import", "verity_vllm.engine.profiles.derived_B0_ovs"),
+            ("integrations/vllm/tests/engine/test_cov_difr_b0.py", "import", "verity_vllm.observe.fold.profiles.derived_B0_ovs"),
             ("benchmarks/numerical/python/verity_numerical/bench/drivers/c_interactive.py", "main", "verity_flock.register"),
             ("archive/direct/ligero/cell.sh", "main", "archive.direct.ligero.live")} <= seen

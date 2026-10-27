@@ -14,7 +14,7 @@ layer's block is one extern call (vLLM's fused-MoE custom op, `extern` or `moe_*
 place, and its router and experts are inside it.  Where the norm after o_proj comes as a pair of [T, hidden] buffers (a fused
 add + RMSNorm), the first is the post-attention residual, `residual_attn`.
 
-Units (what a proof unit would take as its inputs and outputs, so what is left to commit):
+Units (what a proof block would take as its inputs and outputs, so what is left to commit):
   norm-folded      RMSNorm inside the next GEMM's unit, which recomputes it from the committed residual stream: no norm output.
   residual-folded  the residual add inside o_proj's and down's units, whose outputs are the sums: down's (or the MoE block's)
                    output is not committed beside the post-MLP residual, nor o_proj's beside a post-attention residual (where
