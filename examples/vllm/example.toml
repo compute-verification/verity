@@ -1,5 +1,5 @@
 # The vLLM example's doneness (examples/README.md), placed where its runs of record ran. Placed needs the Lean verifier off
-# the nodes the prover runs: those runs ran it on the GPU node with the endpoint and the prover. Its proof is none: no theorem
+# the nodes the prover runs: those runs ran it on vy-nebius-1 with the endpoint and the prover. Its proof is none: no theorem
 # yet ties the session verdicts the verifier of record runs to NetTiming.Guarantees.SampledAuditAccepted
 # (benchmarks/prove_path/README.md).
 protocol = "sampled_proofs"
@@ -8,10 +8,10 @@ run = "runs"
 proof = "none"
 
 [placement]
-endpoint = "gpu-node"        # one leased RTX PRO 6000
-prover = "gpu-node"
-verifier = "gpu-node"        # the Lean verifier
-challenger = "auditor-host"  # the live challenger, through infra's gate (PP_CHALLENGER)
+endpoint = "gpu-node"        # vy-nebius-1, one leased RTX PRO 6000
+prover = "gpu-node"          # vy-nebius-1
+verifier = "gpu-node"        # vy-nebius-1, the Lean verifier
+challenger = "auditor-host"  # vy-challenger-1, through infra's gate (PP_CHALLENGER)
 
 [evidence]
 # the row's Commit of record (commit.sh); the serve run the demo of record audited (serve.sh, port 18091); that demo's gate

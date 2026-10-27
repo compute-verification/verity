@@ -21,7 +21,7 @@ NORM_TAP_SO = "/workspace/cp/norm_tap/build/verity_norm_tap.so"
 
 [run.window]
 # one served window through every subprotocol; the prover and the Lean verifier run on the serving node, after the lease ends.
-# The sampled proofs' coins are the verifier's own unless PP_CHALLENGER names the live challenger (the auditor host's, through
+# The sampled proofs' coins are the verifier's own unless PP_CHALLENGER names the live challenger (vy-challenger-1 through
 # infra's gate: `--env PP_CHALLENGER=gate:USER@HOST` with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). CLASSES is V2's class,
 # whose window circuit the run needs; the class of record's is measured after it and gates nothing
 node = "vy-nebius-1"
