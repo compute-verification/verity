@@ -59,9 +59,9 @@ from verity_vllm.protocols.pouw import pearl_c as PD
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
-import fast_tile as FT  # noqa: E402
-import clear_work as CW  # noqa: E402
-from clear_audit import TileOpening, Transcript, Verifier  # noqa: E402
+import fast_tile as FT
+import clear_work as CW
+from clear_audit import TileOpening, Transcript, Verifier
 
 DRAWS = 3
 

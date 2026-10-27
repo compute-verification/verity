@@ -60,7 +60,8 @@ KV; `refused` names why. It records `check_compiled`'s refusal (`batch_rule`) ra
 
 The compiler digest is `score.code_version()`, with ℓ beside it. `Compiled.transfer_gates` lists the templates whose units hold
 transfer gates (the ingress parse and the token selects), each of which a window proves whole. `trace_commands` lists the Build traces (`verity-vllm build
---wrapper request`) of a compilation's Programs, and `compare` holds the compiled digests to them.
+--wrapper request`) of a compilation's Programs, and `compare` holds the compiled digests to them. With `named=True` each Program
+carries what its trace's Build says beside it (`Compiled.named`, `naming`), so an auditor writes that Build with no vLLM.
 """
 from __future__ import annotations
 
@@ -171,6 +172,7 @@ class Compiled:
     cap_bits: int = CAP_BITS
     batch_rule: str | None = None         # partial=True only: `predict.batch`'s refusal of this compilation, which it doesn't raise
     idle: tuple[int, ...] = ()            # carried requests with no row in the window: no unit here
+    named: dict[str, Any] = field(default_factory=dict)  # named=True only: request Program digest -> its names (`naming.Named`)
 
     @property
     def transfer_gates(self) -> tuple[str, ...]:
@@ -388,17 +390,23 @@ class Plan:
         return out
 
 
-def request_program(registered: Registered, unit: RequestUnit) -> Any:
+def request_program(registered: Registered, unit: RequestUnit, named: bool = False) -> Any:
     """`unit`'s Program (a `build.BuildResult`): the Build's request wrapper at its (LP, T), under its policy, with its C cached rows,
-    at φ's rank, in the registered compiler's form (`dead_free`) at any world."""
-    return build_program(Phi.from_json({**registered.phi.to_json(), "sampling": unit.policy}), "request", LP=unit.LP, T=unit.T, C=unit.C,
-                         dead_free=True)
+    at φ's rank, in the registered compiler's form (`dead_free`) at any world; `named`: with its trace's names
+    (`naming.named_program`)."""
+    phi = Phi.from_json({**registered.phi.to_json(), "sampling": unit.policy})
+    if named:
+        from .naming import named_program
+        return named_program(phi, unit.LP, unit.T, unit.C)
+    return build_program(phi, "request", LP=unit.LP, T=unit.T, C=unit.C, dead_free=True)
 
 
-def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False) -> Compiled:
+def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False, named: bool = False) -> Compiled:
     """The Programs of `advice`'s session (module docstring): each request's at its (LP, T, policy), GP-01 over them, and each step's
     live rows as `RowRef`s. Total and deterministic: it reads `registered`, `advice` and `ingress` only, and compiles them or raises
-    `Unexpressible`. `partial` refuses request by request (`Compiled.refused`) where a refusal would otherwise refuse the session."""
+    `Unexpressible`. `partial` refuses request by request (`Compiled.refused`) where a refusal would otherwise refuse the session.
+    `named`: each Program with what its Build says beside it, as its trace would (`Compiled.named`, `naming.write_build`), or
+    `Unexpressible` where the naming doesn't reach it."""
     from verity_vllm.pipeline.global_program import request_id_of
     from verity_vllm.program import workload as W
 
@@ -408,8 +416,11 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial:
     comps: dict[str, Any] = {}
     digests: dict[str, str] = {}
     canon: dict = {}
+    names: dict[str, Any] = {}
     for u in plan.distinct():
-        r = request_program(registered, u)
+        r = request_program(registered, u, named)
+        if named:
+            names[r.digest] = r.named
         if dead := dead_units(body := r.program.fn.body):
             raise Unexpressible(f"request {u.request}'s Program {r.digest[:16]} holds {len(dead)} dead units, node {dead[0]} "
                                 f"({body.nodes[dead[0]].fn.id}) first, which no output reads: drop them in the lowering, on the "
@@ -422,7 +433,7 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial:
                             for u in units if u is not None], manifest_digest=None, lag=int(registered.phi.target_profile().lag()))
     steps = [[RowRef(r, units[r].digest, start, n, k) for r, start, n, k in rows] for rows in plan.steps]
     compiled = Compiled(programs=programs, requests=units, workload=wl, steps=steps, discarded=plan.discarded, refused=plan.refused,
-                        cap_bits=registered.cap_bits, idle=plan.idle)
+                        cap_bits=registered.cap_bits, idle=plan.idle, named=names)
     from .batch import BatchDependent, check_compiled
     try:
         check_compiled(registered, advice_of(registered, advice), ingress, compiled, plan_steps)

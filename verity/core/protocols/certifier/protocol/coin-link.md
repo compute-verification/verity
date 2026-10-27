@@ -26,7 +26,8 @@ runs the server's network certifier (`trusted-host`). A window's session takes t
 
 A link that refuses to start ends the session at once, and the `end` entry says why. The link refuses when the record
 is missing or unreadable, when its parameters are invalid, or when the peer's line routes through another host. A link
-that ends while `serve.py` still serves, because its tunnel ended, ends the session too.
+that doesn't listen within the time `serve.py` has to start (`START_SECONDS`, 60 s) is killed and ends the session too,
+and so does a link that ends while `serve.py` still serves, because its tunnel ended.
 
 ### What it guarantees
 
