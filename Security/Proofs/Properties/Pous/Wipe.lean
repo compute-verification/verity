@@ -298,7 +298,9 @@ theorem honestRead_honestFill {ι : Type} {d : Accounting.Device ι} {n : ℕ} (
   · omega
 
 theorem wipeSurvivorBoundHonest : WipeSurvivorBoundHonest := by
-  refine ⟨fun q hk hn => certify_zero hk hn, fun d s b n k h carry => ⟨rfl, ?_, fun σ L c => ⟨fun i => ?_, le_rfl⟩⟩⟩
+  refine ⟨fun q hk hn => certify_zero hk hn, ?_⟩
+  intro ι d C B s b n k h carry
+  refine ⟨rfl, ?_, fun σ L c => ⟨fun i => ?_, le_rfl⟩⟩
   · show (Finset.univ : Finset (Fin 0 → Bool)).card ≤ 2 ^ 0
     simp
   · exact honestRead_honestFill h σ L (c i)
@@ -334,7 +336,8 @@ theorem not_survivorBound_cheat {ι : Type} (d : Accounting.Device ι) {C : Circ
   have hadv : Pous.StreamedWipe.prfAdvantage prf
       ((cheat d s b n k carry).distinguisher (fun _ _ _ => True) Finset.univ (storeHold d) (storeKeep hF)) = 0 :=
     prfAdvantage_of_forall prf fun x => ⟨trivial, storeKeep_hold hF _ _ _, Finset.mem_univ _⟩
-  have hdelta : (cheat d s b n k carry).deltaNet (fun _ _ _ => True) prf Finset.univ (storeHold d) = 0 :=
+  have hdelta :
+      (cheat d s b n k carry).deltaNet (fun _ _ _ => True) prf Finset.univ (storeHold d (S := F + d.chip)) = 0 :=
     pr_eq_zero fun x hx => hx.2 (Finset.mem_univ _)
   beta_reduce at h
   rw [value_draw_pr, Pous.pr_eq_one, hadv, hdelta, add_zero, add_zero] at h
