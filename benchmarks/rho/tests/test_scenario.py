@@ -164,11 +164,14 @@ def test_s_times_defaults_to_the_reference_average_under_the_straddling_premise(
 
 def test_the_comparator_is_the_unmonitored_adversary_at_its_mfu():
     """`Result.unmonitored` is `μ / MFU`, the best construction's ρ with no protocol at all; a lower bound below it is
-    vacuous, as remote's is and onsite H200's isn't."""
+    vacuous, as remote's is under PoUW as deployed on the H200 and isn't with the floor credit at the card table's clock
+    (2.75 against 2.5), or onsite."""
     u = evaluate_named(REG, "unmonitored-h200-kimi")
     assert u.unmonitored == pytest.approx(u.attack, rel=1e-12)
     remote, onsite = evaluate_named(REG, "reference-remote-h200"), evaluate_named(REG, "reference-onsite-h200")
-    assert remote.unmonitored == pytest.approx(1 / 0.4) and remote.vacuous(remote.lo)
+    deployed = evaluate_named(REG, "reference-remote-h200-pouw")
+    assert remote.unmonitored == deployed.unmonitored == pytest.approx(1 / 0.4) and deployed.vacuous(deployed.lo)
+    assert not remote.vacuous(remote.lo) and remote.vacuous(2.0)
     assert not onsite.vacuous(onsite.lo) and onsite.vacuous(2.0)
 
 

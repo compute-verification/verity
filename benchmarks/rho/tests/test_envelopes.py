@@ -1,3 +1,4 @@
+import dataclasses
 import importlib.util
 import math
 from pathlib import Path
@@ -35,7 +36,7 @@ def tiers_context(registry: Registry = REG) -> Context:
 
 
 def tiers_params(ctx: Context) -> dict:
-    """tiers' DEFAULTS with the host share its server's CPUs give (0.11796, which tiers rounds to 0.118)."""
+    """tiers' DEFAULTS with the host share its server's CPUs give (0.12608, which tiers computes the same way)."""
     return T.DEFAULTS | {"host_share": ctx.location.host_phi / ctx.location.phi}
 
 
@@ -190,6 +191,25 @@ def test_without_pouw_only_the_serving_cut_bounds():
     inference, serving = block.cuts
     assert inference.blocks[0].count == 0 and math.fsum(inference.uncertified.values()) >= block.gates
     assert serving.name == "serving"
+
+
+def test_pouw_as_deployed_on_the_h200_certifies_so_little_that_rho_stays_near_one():
+    """`regime.remote-h200-pouw`: per-call J10-R credits a step's 5.72e14 served INT8 MACs against the H200's 1.0705e15
+    MACs/s (the ACCEL card table: 4,096 a SM-clock, 132 SMs, at the clock's 1,980 MHz ceiling) over its 12.60 s (served
+    3.78, its commit 0.42, PoUW's units 5.59 and their commit 2.81). J10-R credits words, and C counts the card at its
+    ceiling, so the clock term is 0. With the hosts (2.9% of the location), `r̂` is 0.987. onsite-today's twin carries
+    the same PoUW envelope, and both differ from remote's in three keys."""
+    remote, today = envelopes.regime(REG, "remote-h200-pouw"), envelopes.regime(REG, "onsite-today-h200-pouw")
+    assert today.pouw == remote.pouw and today.wipe == envelopes.regime(REG, "onsite-today").wipe
+    macs = 4096 * (52 * (2 * 16384**2 + 2 * 16384 * 64 + 2 * 16384 * 65536) + 16384 * 256)
+    assert remote.pouw.residual == pytest.approx(1 - macs / (4096 * 132 * 1.98e9 * (3.78 + 0.42 + 5.59 + 2.81)), abs=5e-4)
+    assert remote.pouw.clock_share == 0
+    p = remote.pouw
+    assert dataclasses.replace(envelopes.regime(REG, "remote").pouw, residual=p.residual, clock_share=p.clock_share,
+                               host=p.host) == p
+    loc = context("reference-h200").location
+    assert p.audited(loc) == pytest.approx(p.residual + loc.host_phi / loc.phi, rel=1e-12) == pytest.approx(0.987, abs=5e-4)
+    assert evaluate_named(REG, "reference-remote-h200-pouw").lo < 1.02
 
 
 def test_at_5_gb_a_server_no_location_takes_kimi_k2s_state_in_a_day_and_per_device_an_nvl72_rack_does():

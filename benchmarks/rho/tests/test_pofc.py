@@ -222,7 +222,7 @@ def test_every_pofc_argument_is_a_draft_citing_the_page():
 
 
 def test_pofc_never_lowers_the_guarantee_and_its_class_caps_nothing_at_a_toll_of_one():
-    """With no audited residual (at today's, 0.505 of peak over MFU₀ 0.4, the free capacity alone is a whole
+    """With no audited residual (at today's, 0.449 of peak over MFU₀ 0.4, the free capacity alone is a whole
     unencumbered rate). Monitored capacity counts at peak and unencumbered training at MFU₀, as Lean's dampener does,
     so below a toll of one the class binds only once `1/(1 − t)` passes `1/MFU₀`."""
     credited = REG.override({"regime.remote.residual": 0.0, "regime.remote.clock_share": 0.0, "regime.remote.host": 0.0})

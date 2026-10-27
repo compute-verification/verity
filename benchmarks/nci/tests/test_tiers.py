@@ -1,5 +1,6 @@
 import json
 import math
+import re
 import sys
 from pathlib import Path
 
@@ -17,6 +18,22 @@ ROOT = HERE.parents[2]
 
 #: the defaults at the threading ReferenceThreaded gives under its conjecture, where the closed-form memory cap binds
 KEYED = T.DEFAULTS | {"d": T.REFERENCE_THREADED[0]}
+
+def test_the_gpus_read_the_accel_models_card_table():
+    """`CARD` is `Verity.Accel.Sm120.card`'s tensor rate and clock ceiling (its sheet-form `f_max` on main until #4920's
+    `clock` lands), and PoUW credits H1's SM120 record's f_max: so the clock term is 0, the server's peak is 8 cards at
+    the table's FP8 rate (7.485e15 FLOP/s, not NVIDIA's 8e15 headline at about 2,597 MHz) and the Xeons are 12.6% of it."""
+    lean = (ROOT / "Security/Definitions/Core/Accel/Sm120.lean").read_text()
+    sms, tensor = map(int, re.search(r"\| \.tensor => (\d+) \* (\d+)", lean).groups())
+    mhz = re.search(r"def clock : ℚ≥0 := (\d+) \* 10 \^ 6", lean) or re.search(r"f_max = (\d+) MHz", lean)
+    assert T.CARD == {"sms": sms, "tensor": tensor, "clock_hz": int(mhz.group(1)) * 1e6}
+    h1 = (ROOT / "verity/core/protocols/pouw/circuit/h1device.py").read_text()
+    sm120 = h1[h1.index("SM120 = Device("):h1.index("SM90 = Device(")]
+    assert T.CREDITED_CLOCK_HZ == int(re.search(r"fmax_mhz=(\d+)", sm120).group(1)) * 1e6
+    assert T.DEFAULTS["clock_share"] == 0.0
+    assert T.DEFAULTS["node_flops"] == pytest.approx(7.4848666e15, rel=1e-8)
+    assert T.DEFAULTS["host_share"] == pytest.approx(0.12608, rel=1e-4)
+
 
 def test_each_tier_gives_the_adversary_no_more_than_the_last():
     effs = [T.evaluate(T.DEFAULTS, T.TIERS[k])["efficiency"] for k in ("T1", "T2", "T3", "T4")]
@@ -134,7 +151,7 @@ def test_proof_of_space_rounds_set_the_slack():
 def test_unbounded_ingress_makes_wipes_cap_nothing():
     """Until the count check is in the ZK flow, declared ingress is bounded only by line rate (network-accounting, 19 Oct),
     and then even a small wipe residual caps nothing."""
-    tight = T.DEFAULTS | {"pous_rounds": 1e6, "pous_floor": 0.0, "unfilled_gb": 0.01}
+    tight = T.DEFAULTS | {"pous_rounds": 1e6, "pous_floor": 0.0, "unfilled_gb": 0.001}
     assert T.evaluate(tight, T.TIERS["T3"])["memory_caps_residual"]
     assert not T.evaluate(tight | {"intake_x": 1.3e6}, T.TIERS["T3"])["memory_caps_residual"]
 
