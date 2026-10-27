@@ -1240,6 +1240,8 @@ struct Ctx {
     CK(cudaFuncSetAttribute(wrap_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, TILE * 129 * 4));
     CK(cudaFuncSetAttribute(wrap2_kernel<128>, cudaFuncAttributeMaxDynamicSharedMemorySize, lp * 128));
     CK(cudaFuncSetAttribute(wrap2_kernel<256>, cudaFuncAttributeMaxDynamicSharedMemorySize, lp * 128));
+    CK(cudaFuncSetAttribute(wrap3_kernel<128>, cudaFuncAttributeMaxDynamicSharedMemorySize, (lp + 1) * 128));
+    CK(cudaFuncSetAttribute(wrap3_kernel<256>, cudaFuncAttributeMaxDynamicSharedMemorySize, (lp + 1) * 128));
     for (int b = 0; b < 2; b++) {
       CK(cudaEventCreateWithFlags(&ev_comp[b], cudaEventDisableTiming));
       CK(cudaEventCreateWithFlags(&ev_done[b], cudaEventDisableTiming));
