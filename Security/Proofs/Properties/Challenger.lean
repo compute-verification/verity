@@ -126,14 +126,12 @@ theorem keyOfParams_eq_some {ps : List Core.Composition.Named} {k : SampledProof
   cases hn : ps.find? (·.id == SampledProofs.OneStageZk.PROTOCOL) with
   | none => simp
   | some n =>
-    simp only [Option.bind, Option.some.injEq, exists_eq_left']
     cases hp : paramsOfNamed n with
-    | error e => simp [Except.toOption]
+    | error e => simp [hp, Except.toOption]
     | ok p =>
-      simp only [Except.toOption, Except.ok.injEq, exists_eq_left']
       cases hc : p.base.challenger with
-      | none => simp
-      | some kl => obtain ⟨k', l⟩ := kl; simp
+      | none => simp [hp, hc, Except.toOption]
+      | some kl => obtain ⟨k', l⟩ := kl; simp [hp, hc, Except.toOption]
 
 /-- **The compiled check's LMS verify is `LmsVerifies` at the registered key**: where v2's compiled check reads the
 key `k` from the registered components' parameters `ps` (`keyOfParams`, `keyOfParams_eq_some`), every LMS check its
