@@ -60,7 +60,6 @@ KNOWN = {
     ("tools/research/src/research/queue.py", "--by"): 1,
     ("tools/research/src/research/retention.py", "--by"): 2,
     ("tools/research/src/research/store/cli.py", "--by"): 2,
-    ("tools/verity/cli/verity_cli/run.py", "--machine"): 2,
 }
 
 

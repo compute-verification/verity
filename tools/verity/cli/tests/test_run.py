@@ -309,13 +309,13 @@ def test_workers_that_cant_serve_leave_no_verdict(tmp_path, capsys):
 
 
 def test_a_party_placed_elsewhere_is_refused(tmp_path, capsys):
-    rc, _ = run(tmp_path, registry(), "--party", "challenger", "--machine", "auditor-1")
+    rc, _ = run(tmp_path, registry(), "--party", "challenger", "--on", "auditor-1")
     assert rc == 2 and "refused machine" in capsys.readouterr().err
 
 
 def test_parties_apart_meet_only_at_a_configured_listen_port(tmp_path, capsys):
     auditor = config(challenger="auditor-1", network_certifier="auditor-1", verifier="auditor-1")
-    rc, _ = run(tmp_path, registry(), "--machine", "auditor-1", cfg=auditor)
+    rc, _ = run(tmp_path, registry(), "--on", "auditor-1", cfg=auditor)
     captured = capsys.readouterr()
     assert rc == 2 and said(captured.out) == [{"party": "network-certifier", "exit": 0}]
     assert "refused listen: the verifier dials firewall, workers" in captured.err

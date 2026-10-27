@@ -1,12 +1,12 @@
 """`verity run` and `verity config`: a deployment configuration's parties, run on this machine, and the file itself
 (`verity.core.deploy.config`; `note:memory-accounting/20261026T2305Z-draft-deployment-api-v3`, addenda 23:46Z to 00:30Z).
 
-    verity run CONFIG [--party ROLE ...] [--machine NAME] [--periods N] [--state DIR]
-    verity config new --workload W --protocols P,... [--machine NAME] [--out FILE]
+    verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR]
+    verity config new --workload W --protocols P,... [--on MACHINE] [--out FILE]
     verity config check CONFIG
     verity config hash CONFIG
 
-`verity run` checks the configuration, then runs the parties it places on this machine (``--machine``, default
+`verity run` checks the configuration, then runs the parties it places on this machine (``--on``, default
 ``local``), or only the ``--party`` ones, for ``--periods`` periods (default 1), in the shared state ``--state`` (default
 a new directory under the system's temporary one). Step 0's parties are those of the static table `REGISTRY` names.
 It names none since the toy it ran was removed, so `verity run` and `verity config` are refused by name (``no-table``)
@@ -149,7 +149,7 @@ def plan(cfg: Mapping[str, Any], reg: Registry, machine: str, wanted: Sequence[s
     if unknown := [p for p in wanted if p not in at]:
         raise K.Refused("unknown-party", f"{', '.join(unknown)} (the configuration's: {', '.join(at)})")
     if elsewhere := [p for p in wanted if at[p] != machine]:
-        raise K.Refused("machine", ", ".join(f"{p} runs on {at[p]}, not {machine} (--machine)" for p in elsewhere))
+        raise K.Refused("machine", ", ".join(f"{p} runs on {at[p]}, not {machine} (--on)" for p in elsewhere))
     chosen = list(dict.fromkeys(wanted)) or [p for p, m in at.items() if m == machine]
     if not chosen:
         raise K.Refused("machine", f"the configuration places no party on {machine} (its machines: "
@@ -348,7 +348,7 @@ def run_main(argv: Sequence[str], reg: Registry | None = None, in_process: bool 
                                  "machine (module docstring of verity_cli.run).")
     ap.add_argument("config", metavar="CONFIG")
     ap.add_argument("--party", action="append", default=[], metavar="ROLE", help="only this party (repeatable)")
-    ap.add_argument("--machine", default=K.LOCAL, metavar="NAME", help="this machine's name in the configuration "
+    ap.add_argument("--on", dest="machine", default=K.LOCAL, metavar="MACHINE", help="this machine's name in the configuration "
                     f"(default {K.LOCAL})")
     ap.add_argument("--periods", type=int, default=1, metavar="N", help="the run's periods (default 1)")
     ap.add_argument("--state", metavar="DIR", help="the parties' shared state (default a new temporary directory)")
@@ -390,7 +390,7 @@ def config_main(argv: Sequence[str], reg: Registry | None = None) -> int:
     p = sub.add_parser("new", help="a configuration that states only its choices")
     p.add_argument("--workload", required=True)
     p.add_argument("--protocols", required=True, help="the components, comma-separated")
-    p.add_argument("--machine", default=K.LOCAL, help=f"every party's machine (default {K.LOCAL})")
+    p.add_argument("--on", dest="machine", default=K.LOCAL, metavar="MACHINE", help=f"every party's machine (default {K.LOCAL})")
     p.add_argument("--commit", help="the program's commit (default the running tree's HEAD)")
     p.add_argument("--out", help="write it here (default stdout)")
     for name in ("check", "hash"):
