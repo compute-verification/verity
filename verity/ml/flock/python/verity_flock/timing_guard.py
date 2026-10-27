@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import itertools
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -39,34 +40,32 @@ CGROUP = Path("/sys/fs/cgroup")
 
 def cpu_quota(root: Path = CGROUP) -> float | None:
     """The cgroup's CPU quota in cores: v2 ``cpu.max``, else v1 ``cpu/cpu.cfs_quota_us`` / ``cpu.cfs_period_us``.  ``None`` when
-    unlimited or unreadable."""
-    try:
+    unlimited or when the host has neither."""
+    v1 = [root / "cpu" / f for f in ("cpu.cfs_quota_us", "cpu.cfs_period_us")]
+    if (root / "cpu.max").is_file():
         q, p = (root / "cpu.max").read_text().split()[:2]
-    except (OSError, ValueError):
-        try:
-            q, p = ((root / "cpu" / f).read_text().strip() for f in ("cpu.cfs_quota_us", "cpu.cfs_period_us"))
-        except OSError:
-            return None
-    try:
-        return int(q) / int(p) if q not in ("max", "-1") and int(p) > 0 else None
-    except ValueError:
+    elif all(f.is_file() for f in v1):
+        q, p = (f.read_text().strip() for f in v1)
+    else:
         return None
+    return int(q) / int(p) if q not in ("max", "-1") and int(p) > 0 else None
 
 
 def cpu_stat(root: Path = CGROUP) -> dict[str, int]:
-    """The cgroup's ``cpu.stat`` counters (v2 ``cpu.stat``, else v1 ``cpu/cpu.stat``); ``{}`` when unreadable."""
+    """The cgroup's ``cpu.stat`` counters (v2 ``cpu.stat``, else v1 ``cpu/cpu.stat``); ``{}`` when the host has neither."""
     for f in (root / "cpu.stat", root / "cpu" / "cpu.stat"):
-        try:
+        if f.is_file():
             return {k: int(v) for k, v in (line.split() for line in f.read_text().splitlines() if line.strip())}
-        except (OSError, ValueError):
-            continue
     return {}
 
 
 def _smi(query: str) -> list[str] | None:
+    if shutil.which("nvidia-smi") is None:
+        return None
     try:
         r = subprocess.run(["nvidia-smi", query, "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=10, check=False)
-    except (OSError, subprocess.TimeoutExpired):
+    except subprocess.TimeoutExpired as e:
+        print(f"timing guard: {e}; this sample has no GPU reading", file=sys.stderr)
         return None
     return [line.split(",")[0].strip() for line in r.stdout.splitlines() if line.strip()] if r.returncode == 0 else None
 
@@ -93,7 +92,8 @@ def sample() -> dict[str, Any]:
         n_other = max(len(pids) - _own_context(), 0)
     try:
         load1: float | None = os.getloadavg()[0]
-    except OSError:
+    except OSError as e:
+        print(f"timing guard: no load average ({e})", file=sys.stderr)
         load1 = None
     busy = [float(u) for u in util or [] if u.replace(".", "", 1).isdigit()]
     stat = cpu_stat()

@@ -1,8 +1,8 @@
-"""Ruff's findings on every tracked Python file outside ``archive/`` that the vLLM integration's ruff lint doesn't hold, held to
+"""Ruff's findings on every tracked Python file that the vLLM integration's ruff lint doesn't hold, held to
 ``allowlists/repo_ruff.json``: ``ruff check`` under the root ``ruff.toml``, with the ruff the root ``dev`` group pins.
 
 The integration's lint (``integrations/vllm/tests/lint/test_ruff.py``) holds ``integrations/vllm`` and ``verity/ml/definitions``
-to its own list, and ``archive/`` is kept but not developed (``archive/AGENTS.md``), so neither is held here (``LEFT_OUT``); this
+to its own list, so neither is held here (``LEFT_OUT``); this
 lint holds the rest of ``git ls-files``' ``*.py`` and ``*.pyi``.  Findings are counted per ``(file, rule)``: the file relative
 to the repository and the rule's code, the key the ratchet gate counts by too, so a refactor that moves a finding within its
 file changes nothing here.  An entry ``{"file", "rule", "count"}`` allows ``count`` findings of its pair.  A pair found more
@@ -34,8 +34,8 @@ NAME = "repo_ruff"
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG = ROOT / "ruff.toml"
 LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
-#: what the integration's ruff lint holds to its own list (its `ROOT` and `DEFINITIONS`), and the archive
-LEFT_OUT = ("integrations/vllm/", "verity/ml/definitions/", "archive/")
+#: what the integration's ruff lint holds to its own list (its `ROOT` and `DEFINITIONS`)
+LEFT_OUT = ("integrations/vllm/", "verity/ml/definitions/")
 FIELDS = ("file", "rule", "count")
 FIX = ("Fix the code (`ruff check --fix PATH` fixes some), or, where the rule is wrong for that line, say why in a "
        "`# noqa: CODE` on it. If the file moved, move its entries in the same change: "
