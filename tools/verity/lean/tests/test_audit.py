@@ -1754,7 +1754,7 @@ def witness_codes(pol, f):
 
 
 def test_a_guarantee_of_what_an_acceptance_means_has_an_honest_and_a_nontrivial_witness():
-    """LEAN-66: a guarantee whose statement reads a claim names, under `witnesses`, `honest` theorems concluding its premises
+    """A guarantee whose statement reads a claim names, under `witnesses`, `honest` theorems concluding its premises
     at the deployed instance and a `nontrivial` theorem that its conclusion fails at the verifier that accepts everything,
     each a guarantee; without them it fails, naming both and their statements' shapes. The witnesses are no guarantees the
     rule holds to witnesses of their own, and a guarantee that reads no claim needs none."""
@@ -1791,7 +1791,7 @@ def test_a_guarantee_of_what_an_acceptance_means_has_an_honest_and_a_nontrivial_
 
 
 def test_the_three_vacuous_guarantees_of_26_october_fail_the_witnesses_rule():
-    """LEAN-66's three cases: a conclusion `∃ X, C X` whose X the prover picks (`∃ X, ¬ C acceptAll X` holds of any such
+    """The three cases: a conclusion `∃ X, C X` whose X the prover picks (`∃ X, ¬ C acceptAll X` holds of any such
     conclusion, so the `nontrivial` lemma is `∀ X, ¬ C acceptAll X`); a premise that can never hold (no `honest` lemma
     concludes it, except by assuming it, assuming `False`, or concluding something else); and a bound whose break always
     holds (a `nontrivial` lemma negating `C` alone says nothing of `C ∨ Break`)."""
@@ -1934,8 +1934,8 @@ def test_a_lifted_guarantee_is_witnessed_as_the_statement_it_lifts():
 
 
 def test_a_witness_constructs_its_instance_and_takes_only_listed_assumptions():
-    """LEAN-66 (soundness 23:30Z): a witness that ranges over its instance (`∀ n Reg I (ht : …) D (hD : parse … = .ok D) …,
-    ¬ …`, ONE19's `sampledKSLivePub_nontrivial` in #4867) or takes a hypothesis that is no named assumption the lock
+    """A witness that ranges over its instance (`∀ n Reg I (ht : …) D (hD : parse … = .ok D) …,
+    ¬ …`, as `sampledKSLivePub_nontrivial` once did) or takes a hypothesis that is no named assumption the lock
     lists fails; one whose only hypothesis is a listed named assumption (`FalseInScope → ¬ …`) passes."""
     one19 = {"body": wbody("P.Holds", negated=True, binders=["∀", "∀", "∀", "→", "∀", "→"]),
              "hypotheses": [{"binder": "ht", "type": "I.tags.typed = false", "closed": False},
@@ -1960,7 +1960,7 @@ def test_a_witness_constructs_its_instance_and_takes_only_listed_assumptions():
 
 
 def test_an_honest_witness_at_a_verifier_that_accepts_everything_fails():
-    """LEAN-68: `HonestH200` builds its 'honest' period with `accepts := fun _ _ => True`: that is the accept-all verifier,
+    """`HonestH200` builds its 'honest' period with `accepts := fun _ _ => True`: that is the accept-all verifier,
     the nontrivial lemma's object, so an honest witness whose statement applies one (`Facts.lean`'s `accept_all`) fails."""
     h200 = {"body": wbody("P.Compiled"), "accept_all": ["P.HonestH200.jointRun.accepts"]}
     assert A.witness_failures(*witnessed(honest=h200), WOWN) == [
@@ -1971,10 +1971,10 @@ def test_an_honest_witness_at_a_verifier_that_accepts_everything_fails():
 
 
 def test_an_exclusion_theorem_has_an_honest_witness_and_an_explicit_circuit_beating_its_bound():
-    """LEAN-66 (top 21:52Z): a guarantee concluding a bound over a partition or a covering and reading no acceptance (NCI's
+    """A guarantee concluding a bound over a partition or a covering and reading no acceptance (NCI's
     exclusion, training's serving-block bound) is of the `exclusion` kind: its honest witnesses conclude its premises at
     the deployed partition and parameters, and its nontrivial one states, at an explicit circuit, (each other premise
-    holds) ∧ ¬ (a named premise) ∧ ¬ (the bound), its conjuncts in any order (lean 27 Oct, #5100 and #5132); a bare
+    holds) ∧ ¬ (a named premise) ∧ ¬ (the bound), its conjuncts in any order; a bare
     `¬ bound` reads no premise and fails. A statement that only reads a partition, or reads a verifier's acceptance as
     well, is no exclusion."""
     cover = {"name": "P.Covering.load", "module": "P.Covering", "kind": "def", "hash": "6" * 32}
@@ -2036,7 +2036,7 @@ def test_an_exclusion_theorem_has_an_honest_witness_and_an_explicit_circuit_beat
 
 
 def test_a_nontrivial_witness_may_negate_what_the_guarantee_unfolds_to():
-    """proofs/KSNONTRIV (LEAN-66 22:20Z): `RecursiveKS` fixes its verifier inside `RecursiveKSAt`, so its nontrivial
+    """`RecursiveKS` fixes its verifier inside `RecursiveKSAt`, so its nontrivial
     witness negates `RecursiveKSAll`, which unfolds to the same `KSLin2On` at accept-all: `Facts.lean`'s `chain` reads both
     through the definitions their heads unfold through."""
     g = {"body": wbody("P.Guarantees.KS", conclusion=[wk("P.Guarantees.KS")]) | {"chain": ["P.Guarantees.KS", "P.KSAt",
