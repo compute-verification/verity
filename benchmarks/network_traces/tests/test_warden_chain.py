@@ -139,11 +139,11 @@ def test_n2_on_a_sampled_warden_period_tampers_every_window_and_proves_another_s
     run = gate_run(tmp_path)
     assert n2.main(["prove", "--warden-run", str(run), "--draw", "1", "--dry", "--out", str(tmp_path / "n2")]) == 0
     s = json.loads((tmp_path / "n2" / "summary.json").read_text())
-    assert (s["draw"]["law"], s["draw"]["k"], s["draw"]["population"]) == ("subset:1", 1, sz.WINDOWS)
+    assert (s["draw"]["law"], s["draw"]["k"], s["draw"]["population"]) == ("subset:1", 1, sz.W63.windows)
     tampered, other = (s["members"][k]["reference"] for k in ("tampered", n2.OTHER))
-    assert [x["expect"] for x in tampered] == [0] * sz.WINDOWS
+    assert [x["expect"] for x in tampered] == [0] * sz.W63.windows
     assert all(x["failed"] == {"egress": ["signed"], "ingress": []} for x in tampered)
-    assert [x["expect"] for x in other] == [1] * sz.WINDOWS
+    assert [x["expect"] for x in other] == [1] * sz.W63.windows
     with pytest.raises(SystemExit, match="a period draw takes 1 to 2"):
         n2.main(["prove", "--warden-run", str(run), "--draw", "3", "--dry", "--out", str(tmp_path / "n2x")])
 

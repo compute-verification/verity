@@ -14,8 +14,8 @@ over W (`EPOCHS`), its salt coin opened after R (`salt_session`); its salt is `a
 the gate's open answer, and opens its salt after the weights' root. Round s's coin opens after round s's root
 (`pouw_h1.H1Run`); `finish` closes the session once the window has finished. The host opens a salt coin only after the
 root its session was opened on (serve.py's ``--root``, RT4-INT-24), H1's R. The challenger is auditor-trusted
-(`trusted-host`): it runs on a machine the prover doesn't control, and the serving process reaches it through ``ssh -R``
-on its own 127.0.0.1.
+(`trusted-host`): it runs on a machine the prover doesn't control, and the serving process reaches it on its own
+127.0.0.1, through its certifier coin link.
 
 A reserve joins its lane's open period, and a Pearl-C salt-only session is a window H1's checks refuse
 (`window.live_epoch_reason`), so one reserved in an H1 period (`H1_PERIOD`) is a wasted session whose period earns
@@ -87,7 +87,7 @@ def connect(at: str, given: Mapping[str, Any], wait_s: float = remote.TUNNEL_WAI
     """The session the gate's answer `given` (`pouw_h1_challenger.session_of`) opened, on the challenger at `at`: its hello carries the
     answer's ``secret`` when it has one, and a challenger whose coin commitment isn't the answer's is closed and refused
     (ValueError) before its first coin, since another process's challenger on that port would serve other coins. While
-    the session's tunnel isn't up yet (the auditor host's ``ssh -R`` to this machine) the connection is refused before any
+    the session's port on this machine isn't up yet (its certifier coin link) the connection is refused before any
     hello, and it is tried again for up to `wait_s` (`remote.connect_when_listening`)."""
     secret = given.get("secret")
     client = remote.connect_when_listening(at, None if secret is None else bytes.fromhex(secret), None, wait_s, clock,

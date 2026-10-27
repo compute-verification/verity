@@ -6,7 +6,8 @@ The rest of the [Glossary](../ARCHITECTURE.md#glossary), and it changes with it:
 
 The datacenter model's symbols, one meaning each (Daniel, 26 Oct). The canonical text is the Notion working draft
 "Distinguishing inference from frontier training", §3, §8 and its notation table, with
-`note:training/20261026T1840Z-draft-formal-properties`.
+`note:training/20261026T1840Z-draft-formal-properties`. A gate count that credits or reports is in AND gates, and the
+(c, k)-partitions count every gate ("Size, credit and exclusion", below).
 
 - D, A: the declared circuit, registered once as R = (θ, D, 𝓘), θ its registered input gates and values and 𝓘 its
   (c,k)-partition into inference blocks; the actual circuit, placed: gate g at device x(g) and tick tick(g).
@@ -38,6 +39,41 @@ The datacenter model's symbols, one meaning each (Daniel, 26 Oct). The canonical
   binding, knowledge soundness and pseudorandomness, against a stated adversary.
 - ρ, T_target: the circuit-size slowdown |C|/T_0 against the reference circuit C_0 of T_0 gates; the time to the target,
   a separate conclusion, T_target ≥ L·T_0/Φ_total when every target-reaching circuit has at least L·T_0 gates.
+
+## Size, credit and exclusion
+
+Daniel (26 Oct, 6:40 PM PDT, tentative): credit and all reporting are in circuit size, counted in AND gates.
+
+- **Size** is a circuit's or a region's AND-gate count. AND gates are what C-Flock pays for, so size is the lingua franca
+  every protocol credits in and every result reports computation in, in place of work, FLOPs, MAC-times and pricing. U uncertified
+  gates complete at most U/s_× counted operations, s_× the fewest gates of a counted operation in the same count; this
+  replaces κ/2.
+- **Credit** is a statement about values. An accepted run credits a size S, and its guarantee is
+  Pr[accept ∧ the AND gates whose committed values are right number fewer than (1 − ε_skip)·S] ≤ δ_coin + δ_crypto. It
+  needs no algorithmic premise: SAK (`SAKResidual`) is a premise of exclusion only. For the served PoUW, the
+  one computational premise left is `SharedNoiseLucks` (the fold receipts' detection) until the no-fold receipt. The
+  remote audit (`Accounting.Remote`) makes no exclusion claim, so its PoUW guarantee is the size credit alone.
+- **Exclusion** bounds how much hidden work could run beside the credited work (layer 3). It is the one place the
+  accelerator model 𝓜's resources appear (tensor-pipe time, issue slots, memory bandwidth), because gates can't measure
+  a device's capacity, and its result converts back to AND gates for reporting.
+- **What counts every gate.** The (c, k)-partitions (inference blocks, a serving block's c_S) and the Lean's counting
+  results (`Circuit.size`) count every gate, so a report that reads one converts it explicitly (lean's proposal:
+  `Circuit.andSize` beside `Circuit.size`).
+- **Not yet restated.** The Lean's device-model audits still price work per op (`Accounting.Run.ComputeSound` at a
+  `Price`, and the covert residual F·T − W_cert, which is exclusion on one device), and ACCEL's `PROTOCOL.md` credits at
+  pub(μ°) against W_reg until CMP-158 restates it in AND gates.
+
+Daniel's standing instruction goes with it: anyone who finds a reason this is wrong floats it the moment they find it,
+on its #agent-coordination thread or to @compute-research.
+
+## Workload
+
+Daniel (26 Oct, 5:49 and 5:56 PM PDT): a **workload** is what a datacenter runs over a monitoring period: its Programs,
+their inputs (weights, and requests or data) and their placement. It is one thing at every scale, from one server to a
+whole datacenter, inference and training alike, and workloads compose: workloads run side by side are one workload.
+"Row" no longer names one; it stays only for a commitment's matrix rows. vLLM's workload files
+(`integrations/vllm/workloads/*.json`, `verity-vllm/workload/v2`) each state one workload with the runtime that serves it
+(engine, target, execution).
 
 ## Older names
 
@@ -96,11 +132,15 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "leg"; "integrity", "work", "space" and "communication" naming subprotocols; `benchmarks/all_protocols/legs/` (`subprotocols/` after Demo B), the verdict keys `integrity` and `communication`, the Lean's `Core.Protocol` | subprotocol |
 | "stage", outside "one-stage"; names and record keys that keep it, such as `research run --stage` | phase, or run |
 | "row" for a server's window (s, w), "per-row bound" | serving block, serving-block bound |
-| "work", "FLOPs", "pricing" for how much a circuit computes; PoUW's and ACCEL's docs until CMP-158, W_cert, the Lean's `WorkSound` and `CircuitWork*` names; "κ/2" | size (gate count); U/s_× |
+| "work", "FLOPs", "MAC-times", "pricing" for how much a circuit computes or a protocol credits; pub(μ°), μ°, W_reg and W_b in ACCEL's docs until CMP-158; W_cert, the Lean's `WorkSound`, `CircuitWork*` names and the device model's `Price`; "κ/2" | size, in AND gates; U/s_× |
+| "row" for a workload; vLLM's `verity-vllm row`, `row.py`, `config.RowConfig`, `row_file`, row ids and row dirs, and "row of record" (`manifests/records.json`), in `integrations/vllm/` and `examples/vllm/` until vLLM's workloads move | workload; a workload of record |
 | "link-window", "link window"; code and records' `window` (`WardenParams.window`), the Lean's `LinkWindow` and `LinkWindowAcceptMeans`, until a format version | a sampling block of transfer blocks, over a sampling period |
 | "window" for a span of time; `Accounting.Window`, `verity.ml.windows`, `window.kind`, until a format version | period: a sampling period, a certification period (`NetworkCheck.Period`), or a period of T ticks |
 | "session"; code and records' `session` (`session_id`, `core-firewall session`, the challenger's gate session), until a format version | by sense: a run (one execution of a subprotocol); a release (the firewall's one outer proof per statement); a certifier's attachment to a link (its 32-byte id); a run's challenge phase (the live challenger's gate session) |
 | "deploy", `verity deploy`, "deployment file", "deployment configuration" for running Verity's roles | `verity run CONFIG --party ROLE`; the configuration |
+| "ACCEL" naming the protocol, and PoUW's `accel/` directory; the coin domain `verity/pouw-accel/<kind>/v1` in a Lean docstring (`Security/Definitions/Pouw/Assumptions/Dither.lean`), until DITHER-E2E renames it | Dither |
+| "the accelerator model", "the machine model" for 𝓜 (`benchmarks/pouw/machine_model/` and its `machine-model` command keep the name) | the ACCEL model |
+| `ShaSpeed` and `ServiceSound`, the Lean's names until DITHER-E2E's PR | `SAKSha` (SAK for SHA) and `ProofSystemSound` |
 
 The `veritor.*` gate families are grandfathered and the prefix is frozen (circuits, 14 Oct 2026, CIR-12): each existing id
 declared in `verity/ml/circuits/targets/target.py` (`veritor.tc-ampere-bf16@1`, the `veritor.tc-bf16.*@1` and
@@ -108,6 +148,20 @@ declared in `verity/ml/circuits/targets/target.py` (`veritor.tc-ampere-bf16@1`, 
 bake it in, and renaming would invalidate every one of them for no semantic gain. No new family is created under
 `veritor.*`: a new family takes a fresh id, and `verity/ml/circuits/tests/test_targets_frozen_families.py` fails on any
 `veritor.*` id outside the grandfathered set.
+
+## The ACCEL model and Dither
+
+Daniel named them on 26 Oct (7:51 PM PDT):
+
+- **The ACCEL model** 𝓜 is the physical model: a period's devices as the Lean's `Accel` reads them
+  (`Security/Definitions/Core/Accel/`), their resources (tensor cores, issue slots, shared-memory and register ports,
+  device memory, links) each at its data-sheet rate, read at its floors on the H200 and the RTX PRO 6000. Its
+  parameters, θ, are `benchmarks/pouw/machine_model/`'s data.
+- **Dither** is the protocol, PoUW's no-fold design, at v3.2 (`verity/core/protocols/pouw/dither/PROTOCOL.md` while it is
+  experimental; the Lean's `Pouw.Dither`), proved over the ACCEL model. Its receipt is no-fold (CMP-172): each
+  segment's 16-bit noised prefix sums are committed as SHA-512 hiding leaves, hm96 rows of 16 KiB, before the check coin,
+  and the sampled cells are opened after it. The served PoUW moves to it, and `SharedNoiseLucks`, which the served H1
+  and J10-R folds rest on, has no place in it.
 
 ## Narrower senses
 
@@ -121,3 +175,42 @@ Some words keep a different, narrower sense:
 - A **transition unit** is one tensor-core accumulator step; a GEMM-coordinate subcircuit chains `K/16` of them, and a "unit circuit" arithmetises one.
 - "Candidate C" and "Candidate V" in older notes are the QuickSilver VOLE research backend in `archive/vole`, not C-Flock.
 - In `integrations/vllm`, "family" and "kind" name circuit Definitions and query families, many of them serialized fields (see its README's vocabulary).
+
+## Terms of one area
+
+Vocabulary that one area uses, moved here from `ARCHITECTURE.md`'s Glossary so that it holds the shared terms:
+
+- **Wire**: an edge from a gate to a gate that reads it; it carries its source gate's value and has none of its own.
+- **Port** and **element**: a port is a named array of fixed-width elements on a circuit definition's boundary, one of its
+  parameters or results, bound by each call to gates of the caller; under `Q_call`, a Call whose result ports fit in X bits
+  is one proof block. An element is one member, such as 16 bits. A leaf serializes whole elements, but a partition counts
+  bits, so a proof block may commit some of an element's bits and not others.
+- **Format**: a label on a port's elements (BF16, FP32, E4M3, int32, token id) saying how their bits encode a number or a
+  symbol; metadata, outside the content digest (`verity.ml.circuits.annotations`).
+- **Boolean Definition** and **word view**: a Boolean Definition's gates are only gates (`verity.ml.circuits.boolean.is_boolean`),
+  so its meaning is its gates; a *word Definition*'s gates output w-bit words whose meaning is registry code, and the word
+  library migrates to Boolean Definitions under new versions of the same names. The word view reads each element's bits as
+  one integer (`boolean.word_type`): under it, `GemmCoordinate_v3` takes and returns what `GemmCoordinate_v2` does.
+- **Subcircuit template** and **subcircuit**: a template is named, with typed parameters for shape and numeric (silicon)
+  semantics, such as `gemm_coordinate(K, semantics)`, a semantics value being an instruction id of
+  `verity.ml.circuits.silicon.instructions.INSTRUCTIONS`; a subcircuit binds every parameter, such as
+  `gemm_coordinate(K=1536, semantics=sm90.wgmma.m64n8k32.e4m3)`. The proof system proves subcircuits.
+- **Input** and **input set**: one assignment of values to a subcircuit's input gates, with the output the chip produced
+  beside it; an input set is a batch of them for one subcircuit, with their provenance (captured or synthetic).
+- **Cell**: one benchmark result: a proof system (an archived one's backend id included) × statement × input set × prover
+  hardware.
+- **Transfer block**: the transfer gates a network certifier releases on one link, in one direction, at one tick of its
+  clock (one bucket, `bucket_ms`): one bucket's row of that direction's record (`WardenParams.grid`), proved as its own proof
+  block (`IngressScanBucket`, `EgressBucket`, `scan_zk.py`) (Daniel, 26 Oct). The code's link-window is a sampling block of
+  2T transfer blocks, T buckets each way under one registration (`WardenParams.window`), its Program the T ingress then the
+  T egress proof blocks chained through the scan state; all are proved today (`scan_zk --draw K` samples), each certified
+  one with one liveness bit. The signed `fails` record is the certifier's own. A certifier's *attachment* to a link, its
+  32-byte id, is one key and schedule on that link across many periods.
+- **Lemma**: any proved statement that isn't a guarantee. A package keeps its lemmas in `SecurityProofs`, outside its spec,
+  and they change freely while every guarantee proves the same statement.
+- **Spec**: a Lean package's trusted text, all a reader must trust to read its guarantees: its definitions, assumptions and
+  guarantees, importing only one another, the `Core` spec and Mathlib (`layers` in `lean-audit.json`). Every line is
+  trusted, so it is kept short and the machinery goes in `SecurityProofs`.
+- **Lock**: a package's guarantee records in its `lean-audit.json` (`AGENTS.md`, "Lean"): each guarantee's statement and
+  every definition it reads. A changed record means a guarantee now says something else. It protects only the guarantees
+  and what their statements read, though today it lists many lemmas too.
