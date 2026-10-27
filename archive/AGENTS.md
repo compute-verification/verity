@@ -49,105 +49,24 @@ shards and fixed costs directly.
 
 ## Canonical tables (frozen 2026-09-22)
 
-Rendered from the evidence store by `python -m verity_numerical.bench.tables
---root <store> [--format md|json] [--snapshot]` (`verity_numerical/bench/tables.py`).
-These are the only canonical tables; everything else (memory, committed
-elements, hash bytes, verifier seconds, transcript bytes, the RTT sweep,
-coupling diagnostics) is drill-down behind a Table 2 or Table 3 cell, never
-another top-level table. Caption constants: K = 1536; B = 4096; soundness
-2^-128, target and achieved (union-bounded over sub-batches); dense execution;
-FP32 accumulation; FMA = 2 FLOP; the frozen input set of the row's subcircuit;
-native denominator = datasheet dense peak of the exact target device
-(`Target.native_peak`); authentication = excluded (until `included` runs exist).
+The three canonical tables, their drill-downs D1-D3 and the approved spec's
+views are evidence now, not code (CMP-13, 27 Oct). Their final render is
+`art:607c4bd1c7d80a861e70545bbc78aecde068576f0e20d570ffab2d35181ac358`:
+`tables.md`/`.json`, `drilldown.md`/`.json`, `views.md`/`.json`, the docs
+site's last entities JSON and the last parity report, rendered from the
+steward's store. The cell artifacts are the `dataset-snapshot/v1`
+`tables-2026-09-26`. The renderers (`verity_numerical.bench.tables`,
+`drilldown`, `views` and the rest of that stack) were deleted after
+`2bb751070f`; their definitions (validity predicate, cell rule, Table 3
+identity) are in that commit's `archive/AGENTS.md` and module docstrings.
 
-~~~text
-Table 1  Candidate proof systems (definitional: no performance, no status)
-         Candidate | Description | ZK | Verifier model | Soundness | Setup | Interaction | Security assumptions
-         rows = tables.CANDIDATES: A-GKR (NON_ZK_PROOF), B-Ligero (COMPLETE_ZK_BACKEND; COMPLETE_HVZK_BACKEND
-         as drill-down), SP1 (any sound class); ZK is No | HVZK | Malicious-verifier ZK (two variants allowed)
-Table 2  Headline proving overhead by target (one row per verity.ml.circuits.targets.target.TARGETS)
-         Device | Datatype / target | Native dense peak, spec | Native dense peak, measured | A-GKR | B-Ligero | SP1
-Table 3  Prover phase decomposition (one row per populated Table 2 cell, the same artifact)
-         Device / target | Candidate | Total prover time | Witness | Encoding + commitment | Arithmetic | Lookup | ZK additional | Serialization | Other
-~~~
-
-Cell = the best valid implementation of the backend family in its declared proof
-class: min `t.total` over valid results, printed as R_native_spec / R_proved
-(`2.6e7×`), R_proved = 2KB / `t.total`; R_proved and the artifact id stay in
-the JSON and in a numbered markdown footnote; `—` = no valid result. The
-measured column is `292 T (0.94)` from a `native-peak/v1` artifact (meta:
-device, dtype, accumulate fp32, method "cublas dense gemm 8192^3, median of 5",
-flop_per_second, spec_flop_per_second, fraction_of_spec, sass, driver, cuda)
-matched by normalised device + dtype; `…` when absent. `--snapshot` freezes the
-cell artifacts as a `dataset-snapshot/v1` named `tables-<UTC date>`.
-
-Same-SKU invariant: the prover ran on the row's native device, `hardware.gpu.name`
-≡ `native_peak.device` under `tables.normalise_sku` ("NVIDIA A100-SXM4-80GB" ≡
-"NVIDIA A100 SXM4 80GB", "NVIDIA H100 80GB HBM3" ≡ "NVIDIA H100 SXM5 80GB"); a
-run on any other device never populates a cell.
-Validity (`tables.reject_reasons`; empty = valid): `contract.validate()`
-empty; `profile` is the row's subcircuit; K = 1536 and B = 4096 (B_real = B when
-present); `security.target` ≤ −128 and, when present, `security.achieved_log2`
-≤ −128; `instances` equals the subcircuit's frozen ref (BF16: `bench-instances/v1`
-`vu-k1536` [0, 4096) manifest 059103cf…; FP8 Ada: `bench-instances-fp8-ada/v1`
-`vu-k1536-fp8-ada`, digest `contract.FP8_ADA_INSTANCES_DIGEST`; Hopper has no
-frozen set yet), or is a re-packing of it that an `instance-equiv/v1` artifact
-(campaign morning-tables BRIEF §5) shows byte-identical, labelled
-`verified=accepted` by a non-producer of it and of the result (user decision
-2026-09-24; the cell's footnote names it); `proof_class` is the backend family's
-declared class; authentication excluded (column B-Ligero + in-proof hash:
-`included-hash`, Poseidon2-BabyBear per row, no sharing; Ajtai, BLAKE3 and
-shared tiles are drill-down); same SKU; **independently verified** -- a label
-`independently_verified=true` (the store's back-fill key; `verified=accepted`
-is also accepted) whose `by` is no producer: not the producing attempt's
-campaign, an asserter of the result's own `candidate`/`label` labels, the lane
-a `lane` label or its meta (`lane`, `by`, `registered_by`, `constructed_by`)
-names; an attempt-less result naming none is never verified; **not
-downgraded** -- the latest `red-team-*` `proof_class` verdict on the artifact
-is not below the fingerprint's class; **not pulled** -- the latest `finding`
-label on the artifact does not start `PULLED` (one starting `UNDER
-RE-VERIFICATION` keeps the cell, marked `(under re-verification)` with the
-finding in its footnote, until a later `CLEARED` label). A result's backend family is recognised from
-`software.backend.name` (`verity-gkr`, `b-ligero chain…`, `sp1`); component
-benchmarks (`verity-direct`, `archive/gkr/...`, `b-encode`) are none. The
-renderer lists every rejected result with its first reason.
-Table 3 identity: T_total = witness + encoding_commitment + arithmetic +
-lookup + zk_additional + serialization + other, each cell `0.41 s (37%)`,
-Other = t.total − Σ buckets − Σ joints (≥ −1 %·t.total); a fused stage
-`t.joint.a+b` prints once as `a+b: 0.41 s (37%)` in the first bucket column it
-covers and `↞` in the others.
-
-Drill-downs D1-D3 (`python -m verity_numerical.bench.drilldown --root <store>
-[--format md|json]`, `verity_numerical/bench/drilldown.py`): D1 backends and
-statements with their security properties, one row per `drilldown.VARIANTS` entry (its recogniser and
-its ZK / operands hidden / binding / soundness / Table 2 column, with sources);
-D2 fastest measured `t.total` per `VARIANTS` entry × subcircuit, marked ✓ or with the first
-reason letter of `tables.reject_codes`; D3 communication and verifier cost per
-Table 2 cell, read only from the cell's result envelope (`…` where absent).
-Non-canonical; layout fixed 2026-09-24 (campaign morning-tables BRIEF §1).
-
-The approved spec's tables (`kb/TABLES.md`: Table 1 backends and their
-security, Table 2 end-to-end N ÷ P per subcircuit, hardware class and
-commitment scheme over the full committed relation on a core-defined scheme,
-results on an algebraic hash flagged and marked `(alg.)`, Table 3 with
-serving and proving overhead) render as a labelled preview with
-`python -m verity_numerical.bench.views --root <store> [--rules spec|unfiltered|legacy]`
-(`--format entities`: the docs site's JSON, with ids from `verity.census` and `verity.core.claims`);
-`--parity` checks that the legacy-rules views select exactly today's cells
-(the switch's gate; `--take-snapshot --record` stores the check as a
-`tables-parity/v1` artifact). The steward renders it as a preview for a
-`[[render]]` entry with `preview = true`. It replaces the canonical tables only
-at the labelled switch: an entry with `published = "views"` publishes
-`views --published` as `<stamp>-tables.md` and the frozen tables as the
-drill-down `<stamp>-tables-frozen.md`; `python -m verity_numerical.bench.switch`
-renders the switch digest (`benchmarks/numerical/CHANGELOG.md`). Since
-2026-09-26 the docs site replaces the markdown tables for reading (Daniel):
-the steward's entry is `published = "entities"`, which renders only the
-entities JSON `<stamp>-tables.json` (the site's input, mirrored to the
-Project store's `internal/tables-render/latest.json`) and runs `--parity` as an
-internal correctness gate that publishes nothing. Renders land outside the
-notes (the entry's `out`, absolute or under `$RESEARCH_RENDERS`): they are
-regenerated from the store on demand, never committed.
+Table 1 lists the candidate proof systems; Table 2 is the headline proving
+overhead by target (R_native_spec / R_proved, the best valid result on the
+row's native device); Table 3 is the prover phase decomposition of each
+Table 2 cell. Everything else (memory, committed elements, hash bytes,
+verifier seconds, transcript bytes, the RTT sweep) is drill-down behind a
+cell, never another top-level table. A new number for an archived backend
+goes into the store as a `bench-result/v1`; nothing re-renders the tables.
 
 ## Proof model: interactive is fine, transferability is not required
 
