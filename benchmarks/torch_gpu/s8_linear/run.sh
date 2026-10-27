@@ -7,7 +7,8 @@
 # A STEP is a script and its arguments in one word, e.g. "run.py --ms 1,7,257 --no-swap" (the canary) then "run.py" (the
 # gate); each writes into $OUT/<i>-<script>. @OUT@ in a step is $OUT ("bench.py --configs @OUT@/1-tune/best.json"), @S@
 # the run's scratch directory (deleted at exit, never uploaded), and a step "cpu:SCRIPT ..." runs with no lease ("cpu:realw.py
-# --gen --weights @S@/realw" then "realw.py --weights @S@/realw"). A step that fails ends the run (S8_KEEP_GOING=1: the rest
+# --gen --weights @S@/realw" then "realw.py --weights @S@/realw"), and a step "max=N:SCRIPT ..." holds its lease at most N
+# minutes (a canary's, so a hung kernel frees the card soon). A step that fails ends the run (S8_KEEP_GOING=1: the rest
 # still run).
 # Outside any lease: the ship unpacked and held to its MANIFEST.sha256 (s8_wgmma.cubin, its sass.json; row_table/ seeds
 # ~/.cache/verity/row_table), the card and Python recorded. VERITY_BENCH_VENV names the Python with torch and vLLM.
@@ -35,6 +36,7 @@ MAX_MIN=${S8_MAX_MIN:-30}
 rc_all=0; i=0
 for step in "$@"; do
   s=${step//@OUT@/$OUT}; s=${s//@S@/$S}; lease=1; [[ $s == cpu:* ]] && { lease=0; s=${s#cpu:}; }
+  step_min=$MAX_MIN; [[ $s =~ ^max=([0-9]+): ]] && { step_min=${BASH_REMATCH[1]}; s=${s#*:}; }
   i=$((i + 1)); read -r -a argv <<< "$s"; script=${argv[0]}; dir=$OUT/$i-${script%.py}; mkdir -p "$dir"
   if [ "$lease" = 0 ]; then
     echo "s8_linear: step $i ($step) with no GPU at $(date -u +%H:%M:%SZ)"
@@ -49,9 +51,9 @@ for step in "$@"; do
     > "$dir/smi.csv" 2>/dev/null &
   smi=$!
   # shellcheck disable=SC2016
-  gpu-lease 1 --wait --max-min "$MAX_MIN" -- bash -c '
+  gpu-lease 1 --wait --max-min "$step_min" -- bash -c '
     [ -n "${GPU_LEASE_UUID:-}" ] && nvidia-smi -i "$GPU_LEASE_UUID" -q -d CLOCK,PERFORMANCE,POWER > "$0/clocks.txt" 2>&1
-    exec timeout $((60 * $1 - 30)) "$2" "$3" --out "$0" "${@:4}"' "$dir" "$MAX_MIN" "$PY" "$ROOT/benchmarks/torch_gpu/s8_linear/$script" \
+    exec timeout $((60 * $1 - 30)) "$2" "$3" --out "$0" "${@:4}"' "$dir" "$step_min" "$PY" "$ROOT/benchmarks/torch_gpu/s8_linear/$script" \
     "${argv[@]:1}" 2>&1 | tee "$dir/log.txt"
   rc=${PIPESTATUS[0]}
   kill "$smi" 2>/dev/null
