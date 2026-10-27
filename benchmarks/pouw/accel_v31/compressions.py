@@ -5,7 +5,9 @@ midstates), from `dither.Shape`'s layout: per call and per T MAC of h200_step's 
 A call's components (compressions on the device; a leaf's row is R bytes):
   t_S    a filler's T_S rows (a served call's O implies its T_S): R / 128 + 1 a leaf, from P's midstate
   t_s    the T_s rows for s < S
-  O      O's rows (a served call's)
+  O      O's rows (a served call's), at 32 bits or, in layout (d), 16
+  act    layout (d)'s A′ rows in a gate-up call's value root: each of its m rows' n / 2 bytes in rows of R bytes, the last
+         short, from the same midstate (a row/v2 prefix is one block at every length)
   salt   a leaf's salt: prf_salt's y (3) and hm96's c = H(salt_prefix ‖ y) from its midstate (2)
   hide   a leaf's hm96 tree leaf from leaf_prefix's midstate (2) and its frame-v3 leaf (2)
   node   the tree's nodes over the leaves padded to a power of two, 2 each from the level's midstate
@@ -16,12 +18,16 @@ A call's components (compressions on the device; a leaf's row is R bytes):
   apad   a filler's pad A: m ceil(K / 64) blocks (fill-bench's `ovl_pad`), none when A is given
   seeds  the call's seeds, two blocks a stream (on the host)
   A      A's operand root (`dither.operand_tree`): its m rows of K bytes as leaves, each salted and hidden, and the tree;
-         v31 doesn't hash it on the device
+         v31 doesn't hash it on the device. A call whose A is read from a producer's value root (down's, under `--d`
+         or `--share`) has none.
 
 A row is a multiple of 16 bytes dividing a tile-segment's 32 KiB in dither.py (`Shape`) and in v31's Fill (`bad_shape`).
 A longer row is priced here as the same bytes cut into fewer rows, which crosses tile-segments: a format change.
 
-    python3 compressions.py [--rows 8192,16384,32768,65536,262144] [--L 4096] [--lp 512] [--check]
+Layout (d) (`--d`): every served call commits O at 16 bits (`dither.Shape.ow`), the gate-up call A′ (`dither.Shape.act`),
+and down reads A′ from it. `--L 0` is the one-segment shape, each call at L = K and L′ = K / 8.
+
+    python3 compressions.py [--rows 8192,16384,32768,65536,262144] [--L 4096] [--lp 512] [--check] [--d] [--share]
 """
 from __future__ import annotations
 
@@ -44,7 +50,9 @@ NAMES = {"8b": {(6144, 4096): "qkv", (4096, 4096): "o", (28672, 4096): "up", (40
                       (256, 16384): "head"}}
 #: a call's kinds: (O committed, A's source): a filler with its pad, a filler on a given A (no A hashed), a served call
 KINDS = {"filler": (False, "pad"), "filler-a": (False, "given"), "served": (True, "root")}
-ROWS, DATA = ("t_S", "t_s", "O"), ("t_S", "t_s", "O")
+#: the call whose A is a producer's output read from that producer's value root, and the producer whose A′ it reads
+SHARED, PRODUCER = "down", "up"
+ROWS, DATA = ("t_S", "t_s", "O", "act"), ("t_S", "t_s", "O", "act")
 LEAF = ("salt", "hide", "node", "pad")
 COINS = ("bits", "noise", "perm", "apad", "seeds")
 PARTS = (*ROWS, *LEAF, *COINS, "A")
@@ -79,28 +87,44 @@ def operand(m: int, k: int) -> int:
     return m * (row_blocks(k) + SALT_Y + SALT_C + LEAF_H + FRAME) + NODE * nodes + PAD * pads
 
 
-def components(m: int, n: int, k: int, lp: int = 512, L: int = 4096, row: int = 16384, kind: str = "filler") -> dict:
-    """A call's compressions by component (`PARTS`) and its leaves, at any row (`legal` or priced as a format change)."""
+def components(m: int, n: int, k: int, lp: int = 512, L: int = 4096, row: int = 16384, kind: str = "filler", ow: int = 32,
+               act: bool = False, shared: bool = False) -> dict:
+    """A call's compressions by component (`PARTS`) and its leaves, at any row (`legal` or priced as a format change): O
+    at `ow` bits, A′ committed (`act`), A read from a producer's value root (`shared`: no operand root). L = 0 is the
+    one-segment shape, L = K and L′ = K / 8."""
     o, a = KINDS[kind]
-    sh = dither.Shape(m, n, k, lp, L, o=o)
+    if not L:
+        L, lp = k, k // 8
+    sh = dither.Shape(m, n, k, lp, L, o=o, ow=ow if o else 32, act=act)
     seg = sh.tiles * dither.TILE_WORD_BYTES
-    by = {"t_S": 0 if o else seg, "t_s": (sh.S - 1) * seg, "O": sh.tiles * dither.TILE_O_BYTES if o else 0}
-    nl = {x: -(-b // row) for x, b in by.items()}
+    by = {"t_S": 0 if o else seg, "t_s": (sh.S - 1) * seg, "O": sh.tiles * sh.ow // 8 * dither.CELLS if o else 0,
+          "act": m * sh.I if act else 0}
+    full, rest = divmod(sh.I, row)
+    nl = {x: -(-b // row) for x, b in by.items()} | {"act": m * (full + bool(rest)) if act else 0}
     leaves = sum(nl.values())
     nodes, pads = tree(leaves)
     noised = sh.W > 0
     c = {x: v * row_blocks(row) for x, v in nl.items()}
+    c["act"] = m * (full * row_blocks(row) + (row_blocks(rest) if rest else 0)) if act else 0
     c |= {"salt": (SALT_Y + SALT_C) * leaves, "hide": (LEAF_H + FRAME) * leaves, "node": NODE * nodes, "pad": PAD * pads,
           "bits": PRG * (m + n) * -(-k // 512), "noise": PRG * (m + n) * lp // 16 if noised else 0,
           "perm": PRG * k // 16 if noised else 0, "apad": PRG * m * -(-k // 64) if a == "pad" else 0,
-          "seeds": 2 * (len(dither.STREAMS) + (not o)), "A": operand(m, k) if a == "root" else 0}
+          "seeds": 2 * (len(dither.STREAMS) + (not o)), "A": operand(m, k) if a == "root" and not shared else 0}
     return {"parts": c, "leaves": leaves, "nodes": nodes, "pads": pads, "bytes": sum(by.values()), "S": sh.S, "W": sh.W,
             "macs": m * n * k}
 
 
-def step(model: str, **kw) -> dict:
-    """`components` of a model's step at M = 16,384 (h200_step's calls), per call shape and summed."""
-    calls = {NAMES[model][nk]: (cnt, components(M, *nk, **kw)) for nk, cnt in MODELS[model].items()}
+def step(model: str, d: bool = False, share: bool = False, **kw) -> dict:
+    """`components` of a model's step at M = 16,384 (h200_step's calls), per call shape and summed. `d`: layout (d), O at
+    16 bits in every served call, A′ in the gate-up's value root, and down's A read from it; `share`: down's A read from
+    the gate-up's value root (today's spec, O under the map) without (d)."""
+    served = kw.get("kind", "filler") == "served"
+
+    def call(name: str, nk: tuple[int, int]) -> dict:
+        x = dict(ow=16, act=name == PRODUCER) if d and served else {}
+        return components(M, *nk, **kw, **x, shared=served and (d or share) and name == SHARED)
+
+    calls = {NAMES[model][nk]: (cnt, call(NAMES[model][nk], nk)) for nk, cnt in MODELS[model].items()}
     tot = Counter()
     for cnt, c in calls.values():
         tot.update({x: cnt * v for x, v in c["parts"].items()})
@@ -202,14 +226,18 @@ def midstates(row: int) -> dict[str, int]:
             "leaf_h": blocks(len(key)) + len(dither.INST.leaf_prefix(key)) // 128, "node": 1}
 
 
-def reference(m: int, n: int, k: int, lp: int, L: int, row: int, kind: str) -> tuple[Counter, Counter]:
+def reference(m: int, n: int, k: int, lp: int, L: int, row: int, kind: str, ow: int = 32,
+              act: bool = False) -> tuple[Counter, Counter]:
     """(the reference's compressions by category, the model's of the same hashes) for one call through dither.py: its seeds,
     the coins the device draws, its values (any bytes: the layout fixes the hashing) under the value root, and A's
     operand root for a served call. A domain's id, a constant of its shape, isn't counted."""
     o, a = KINDS[kind]
-    sh = dither.Shape(m, n, k, lp, L, row, o=o)
-    c = components(m, n, k, lp, L, row, kind)
+    sh = dither.Shape(m, n, k, lp, L, row, o=o, ow=ow, act=act)
+    c = components(m, n, k, lp, L, row, kind, ow, act)
     p, mid = c["parts"], midstates(row)
+    lens = [sh.leaf_span(pos)[1] for pos in range(sh.leaves)]
+    mid_row = sum(midstates(x)["row"] for x in lens)
+    assert c["leaves"] == sh.leaves and sum(lens) == sh.nbytes
     saved = counted()
     _Count.counts = Counter()
     try:
@@ -221,7 +249,7 @@ def reference(m: int, n: int, k: int, lp: int, L: int, row: int, kind: str) -> t
             dither.noise_b(sh, sd, range(n))
         if a == "pad":
             dither.pad_rows(sd, k, range(m))
-        dither.commit(sh, bytes(range(256)) * (sh.leaves * row // 256), dither.salts(bytes(64), 0))
+        dither.commit(sh, (bytes(range(256)) * -(-sh.nbytes // 256))[:sh.nbytes], dither.salts(bytes(64), 0))
         got = Counter(_Count.counts)
         _Count.counts = Counter()
         if a == "root":
@@ -232,7 +260,7 @@ def reference(m: int, n: int, k: int, lp: int, L: int, row: int, kind: str) -> t
         restore(saved)
     leaves, nodes, pads = c["leaves"], c["nodes"], c["pads"]
     want = Counter({"seeds": p["seeds"], "coin:dA": m * -(-k // 512), "coin:dB": n * -(-k // 512),
-                    "row": sum(p[x] for x in ROWS) + mid["row"] * leaves, "salt_y": SALT_Y * leaves,
+                    "row": sum(p[x] for x in ROWS) + mid_row, "salt_y": SALT_Y * leaves,
                     "salt_c": (SALT_C + mid["salt_c"]) * leaves, "leaf_h": (LEAF_H + mid["leaf_h"]) * leaves,
                     "frame": FRAME * leaves, "node": (NODE + mid["node"]) * nodes, "pad": PAD * pads})
     if sh.W:
@@ -247,7 +275,10 @@ def reference(m: int, n: int, k: int, lp: int, L: int, row: int, kind: str) -> t
 
 CHECKS = ((128, 256, 768, 128, 256, 2048, "filler"), (256, 128, 1024, 128, 512, 4096, "served"),
           (128, 128, 512, 128, 512, 1024, "served"), (256, 256, 1024, 128, 512, 32768, "filler-a"),
-          (384, 256, 1024, 128, 512, 32768, "served"), (128, 384, 640, 128, 256, 8192, "filler"))
+          (384, 256, 1024, 128, 512, 32768, "served"), (128, 384, 640, 128, 256, 8192, "filler"),
+          (256, 256, 1024, 128, 512, 4096, "served", 16, True), (128, 768, 512, 128, 512, 256, "served", 16, True),
+          (256, 512, 1024, 128, 1024, 32768, "served", 16, True), (128, 256, 512, 64, 512, 1024, "served", 16, False),
+          (256, 384, 768, 128, 256, 2048, "served", 16, True))
 
 
 def check() -> bool:
@@ -256,9 +287,10 @@ def check() -> bool:
         got, want = reference(*case)
         same = got == want
         ok &= same
-        m, n, k, lp, L, row, kind = case
+        m, n, k, lp, L, row, kind, *d = case
         diff = {x: (got[x], want[x]) for x in sorted(set(got) | set(want)) if got[x] != want[x]}
-        print(f"{kind} {m}x{n}x{k} L' {lp} L {L} row {row}: {'equal' if same else 'DIFFER ' + repr(diff)}; "
+        lay = f", O {d[0]} bits{' with A′' if d[1] else ''}" if d else ""
+        print(f"{kind} {m}x{n}x{k} L' {lp} L {L} row {row}{lay}: {'equal' if same else 'DIFFER ' + repr(diff)}; "
               f"{sum(got.values())} reference compressions")
     print(f"compressions check: {'ACCEPT' if ok else 'REFUSE'}: {sum(1 for _ in CHECKS)} calls' reference hashing "
           f"{'equals' if ok else 'differs from'} the model plus the device's midstates")
@@ -271,10 +303,18 @@ def _row_name(row: int) -> str:
     return f"{row // 1024} KiB" + ("" if legal(row) else " (format change)")
 
 
-def breakdown(model: str, kind: str, row: int, L: int, lp: int) -> str:
-    st = step(model, lp=lp, L=L, row=row, kind=kind)
+def _seg_name(L: int, lp: int) -> str:
+    return f"L {L}, L' {lp}" if L else "one segment (L = K, L' = K / 8)"
+
+
+def _lay_name(d: bool, share: bool) -> str:
+    return " (d)" if d else " down's A shared" if share else ""
+
+
+def breakdown(model: str, kind: str, row: int, L: int, lp: int, d: bool = False, share: bool = False) -> str:
+    st = step(model, d, share, lp=lp, L=L, row=row, kind=kind)
     cols = [x for x in PARTS if st["parts"].get(x)]
-    out = [f"\n{model} {kind}, row {_row_name(row)}, L {L}, L' {lp}: M compressions per T MAC\n",
+    out = [f"\n{model} {kind}{_lay_name(d, share)}, row {_row_name(row)}, {_seg_name(L, lp)}: M compressions per T MAC\n",
            "| call | count | S | W | leaves | " + " | ".join(cols) + " | total | total with A |",
            "|---|---|---|---|---|" + "---|" * (len(cols) + 2)]
     for name, (cnt, c) in st["calls"].items():
@@ -285,7 +325,7 @@ def breakdown(model: str, kind: str, row: int, L: int, lp: int) -> str:
     out.append(f"| step (MAC-weighted) | | | | {st['leaves']} | " + " | ".join(f"{t[x]:.3f}" for x in cols)
                + f" | {total(t):.3f} | {total(t, True):.3f} |")
     data = st["bytes"] / 128 / st["macs"] * 1e6
-    out.append(f"\nsummary: {model} {kind} row {row} L {L} L' {lp}: {total(t):.3f} M compressions per T MAC "
+    out.append(f"\nsummary: {model} {kind}{_lay_name(d, share)} row {row} {_seg_name(L, lp)}: {total(t):.3f} M compressions per T MAC "
                f"({total(st['parts'])} a step of {st['macs']} MACs; {total(t, True):.3f} with A's operand root); the "
                f"committed words' bytes alone {data:.3f}; {st['leaves']} leaves, {st['nodes']} nodes, {st['pads']} pads")
     return "\n".join(out)
@@ -306,16 +346,39 @@ def rows_table(model: str, rows: list[int], L: int, lp: int) -> str:
     return "\n".join(out)
 
 
+def compare(rows: list[int], L: int, lp: int) -> str:
+    """Served steps under layout (d) against today's, on the value roots and with the operand roots, down's A shared in
+    both (today it is the gate-up's O under the map, in (d) its A′)."""
+    out = [f"\nlayout (d) against today, served, {_seg_name(L, lp)}: M compressions per T MAC\n",
+           "| model | row | today | today with operand roots | (d) | (d) with operand roots | (d) / today | of which A′ |",
+           "|---|---|---|---|---|---|---|---|"]
+    for model in MODELS:
+        for row in rows:
+            t, d = (step(model, x, not x, kind="served", row=row, L=L, lp=lp) for x in (False, True))
+            pt, pd = per_tmac(t["parts"], t["macs"]), per_tmac(d["parts"], d["macs"])
+            out.append(f"| {model} | {_row_name(row)} | {total(pt):.3f} | {total(pt, True):.3f} | {total(pd):.3f} | "
+                       f"{total(pd, True):.3f} | {total(pd, True) / total(pt, True):.3f} | {pd['act']:.3f} |")
+    return "\n".join(out)
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--rows", default="8192,16384,32768,65536,262144")
-    ap.add_argument("--L", type=int, default=4096)
+    ap.add_argument("--L", type=int, default=4096, help="0: one segment a call, L = K and L' = K / 8")
     ap.add_argument("--lp", type=int, default=512)
     ap.add_argument("--check", action="store_true", help="count dither.py's reference hashing on small calls")
+    ap.add_argument("--d", action="store_true", help="layout (d): O at 16 bits, A′ in the gate-up's value root, down reading it")
+    ap.add_argument("--share", action="store_true", help="down's A read from the gate-up's value root, without (d)")
     a = ap.parse_args(argv[1:])
     if a.check:
         return 0 if check() else 1
     rows = [int(x) for x in a.rows.split(",")]
+    if a.d or a.share:
+        for model in MODELS:
+            for row in rows:
+                print(breakdown(model, "served", row, a.L, a.lp, a.d, a.share))
+        print(compare(rows, a.L, a.lp))
+        return 0
     for model in MODELS:
         for kind in KINDS:
             print(breakdown(model, kind, 8192 if kind != "served" else 16384, a.L, a.lp))
