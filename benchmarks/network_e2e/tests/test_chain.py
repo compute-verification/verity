@@ -623,7 +623,7 @@ def test_given_the_sampled_ids_each_negative_the_tie_reads_carries_its_verdict(v
     md = (tmp_path / "out" / "report.md").read_text()
     assert "| I/O tie |" in md
     if NG.io_tie_module() is None:
-        assert all(not t["ran"] and "IO-TIE" in t["why"] for t in tied.values())
+        assert all(not t["ran"] and "io_tie" in t["why"] for t in tied.values())
         assert any(x.startswith("I/O tie: no I/O tie yet") for x in r["stubbed"])
     else:
         ran = {k: t for k, t in tied.items() if t["ran"]}

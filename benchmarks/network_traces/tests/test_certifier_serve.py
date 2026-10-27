@@ -1723,8 +1723,8 @@ def test_tie_run_on_the_gates_compact_runs_reads_their_records_as_data_cells_and
     record is the data cell of its id, so neither run lacks id events, and the tie holds the link's records to the
     ids (`finish`, `active.compact_finish_violations`). Honest's finish holds; token's fails on exactly window 0's
     responses, which refuses it. Honest's fails too, at that request's ordinal alone, where the Commit says a user's
-    client aborted it (`aborted`) and its records end on `COMPACT_LAST`. With IO-TIE in the tree honest is accepted
-    and token refused by content too, at window 0; without it neither has a verdict, only IO-TIE missing."""
+    client aborted it (`aborted`) and its records end on `COMPACT_LAST`. With `io_tie` in the tree honest is accepted
+    and token refused by content too, at window 0; without it neither has a verdict, only `io_tie` missing."""
     got, endpoint = gate_compact
     path = tmp_path / "requests.jsonl"
     path.write_text("".join(json.dumps(r) + "\n" for r in endpoint.served))
