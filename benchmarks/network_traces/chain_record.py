@@ -126,7 +126,7 @@ OUT_BITS = 16
 HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted (#4367) is conditional: its per-window inputs hesc "
                      "(proofs' SampledKSLive) and hleak (the live SampledLeakAccepted) are not discharged")
 #: the all-protocols runner's network accounting, whose `block_leg` is the block record's one certifier entry
-ALLP_CERTIFIER = HERE.parent / "all_protocols" / "legs" / "certifier.py"
+ALLP_CERTIFIER = HERE.parents[1] / "examples" / "toy_onsite" / "legs" / "certifier.py"
 #: why a report without ``--period-answer`` writes no block entry
 NO_PERIOD_ANSWER = ("no --period-answer: certifier/v0's case needs the period's compute audit (its registration and "
                     "answer) beside each link-window's N2 registration, and this report has neither")

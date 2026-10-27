@@ -41,7 +41,7 @@ from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest
 
 HERE = Path(__file__).resolve().parent
-SEG_PATH = HERE.parent / "hashed_gemm" / "segment_e2e.py"
+SEG_PATH = HERE.parents[1] / "benchmarks" / "pouw" / "hashed_gemm" / "segment_e2e.py"
 SEG_SHA256 = "4aff8b61dcacf1cf32f11c8ec4e4bd19573fc84e68267a34ac69e8f6f10f28f7"
 
 

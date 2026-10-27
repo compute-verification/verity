@@ -56,7 +56,7 @@ import numpy as np
 import torch
 
 HERE = Path(__file__).resolve().parent
-E2E = HERE.parents[1] / "e2e_h200"
+E2E = HERE.parents[2] / "examples" / "h200"
 sys.path[:0] = [str(HERE), str(E2E)]
 import slots as S
 import slots_gpu as G
