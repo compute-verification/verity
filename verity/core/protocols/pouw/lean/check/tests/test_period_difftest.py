@@ -2,7 +2,7 @@
 (`PouwCheck.Period`, ``verity/pouw/period/v1``, onsite's work component), on the shared harness (`verity_difftest`,
 `of_record="lean"`): one `ProtocolPort` over the cases `pouw_period_cases` generates (a period of the auditor's ledger
 and its windows, honest or with one mutation aimed at every refusal of `credit.period_credit`, and the protocol's own
-framing broken), compared outcome for outcome, its reason included: the reason is the refusal `credit.period_credit`
+framing broken, and a period in each form the period's guarantee doesn't cover), compared outcome for outcome, its reason included: the reason is the refusal `credit.period_credit`
 names, so agreeing on it holds which rule refused the period."""
 from __future__ import annotations
 
@@ -58,8 +58,9 @@ def test_pouw_period(server):
     print(f"pouw-period difftest: {stats}, and {sum(swept.values())} swept ({dict(swept)}); by rule: "
           f"{dict(sorted(RULES.items()))}")
     assert set(swept) == {"accept", "reject"}, dict(swept)
-    assert {"accept", "reject params", "reject commitment", "reject evidence", "reject period", "reject window",
-            "reject circuit", "reject missing", "reject order", "reject coin", "reject budget"} <= set(RULES), RULES
+    assert {"accept", "reject params", "reject commitment", "reject evidence", "reject form", "reject period",
+            "reject window", "reject circuit", "reject missing", "reject order", "reject coin",
+            "reject budget"} <= set(RULES), RULES
 
 
 def test_an_honest_period_is_its_credit():
@@ -73,3 +74,17 @@ def test_an_honest_period_is_its_credit():
     for name, what in (("params-missing", "params"), ("ledger-object", "commitment"), ("evidence-list", "evidence")):
         got = PC.case(cases.instance(random.Random(f"{name}/credit"), name))
         assert got["verdict"] == "reject" and got["reason"].startswith(f"{what}: "), (name, got)
+
+
+@pytest.mark.parametrize("name,why", [("form-pass", "is a Pearl-C pass"),
+                                      ("form-not-h1", "proves PouwH1Tile_v1, not an H1 window"),
+                                      ("form-per-unit", "takes per-unit noise"),
+                                      ("form-v6", "is not over PouwH1Tile_v5"), ("form-strata", "units at 2 K's")])
+def test_an_uncovered_form_is_refused_by_name(name, why):
+    """Every form `H1J10RCheckedCreditPeriod` doesn't cover is refused before the credit, naming the form and the
+    guarantee, and the same period in the covered form (J10-R's per-call unit over PouwH1Tile_v5, at one K) is credited."""
+    for seed in range(3):
+        got = PC.case(cases.instance(random.Random(f"{name}/{seed}"), name))
+        assert got["verdict"] == "reject" and got["reason"].startswith("form: window "), (name, got["reason"])
+        assert why in got["reason"] and PC.GUARANTEE in got["reason"], (name, got["reason"])
+        assert PC.case(cases.instance(random.Random(f"{name}/{seed}"), "honest"))["verdict"] == "accept"
