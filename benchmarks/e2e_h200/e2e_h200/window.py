@@ -51,8 +51,8 @@ from .commit import _slots
 from .plan import Entry, Map, Table, Units
 from .shape import PV_K, Shape, forms
 from .units import sources
+from e2e_h200 import served_weights as SW
 from verity.ml.commitments import layout as L
-from verity_torch_loop import weights as SW
 
 ROW = 1024
 KEPT = ("wk", "wv")
