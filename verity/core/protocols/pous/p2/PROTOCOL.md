@@ -711,7 +711,7 @@ grounds (its §4).
   `RTT_ALLOWANCE_CAP_NS = 354_000`, and `benchmarks/pous/p2_v1/reference.py`'s `MAX_RTT_ALLOWANCE_NS = 354_000`.
 
 **What the cap rests on.**
-- **The floor is a model, not a measurement.** No kernel reaches it: the campaign's best measured kernel is 3.38× slower
+- **The floor is a model, not a measurement.** No kernel reaches it: the best measured kernel is 3.38× slower
   at 5,504 bits. A core with twice the IFMA throughput halves the root, and so the cap.
 - **The cap has no slack above 3.490×.** Rounding the speedup up to 3.5× leaves 1.994× at the cap; at 3.5× the cap would
   be 351 µs.

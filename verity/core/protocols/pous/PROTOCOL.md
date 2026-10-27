@@ -1021,4 +1021,4 @@ the dense chain scheme and P3 with the concrete `H` ("Guarantees"), in
 - Native and GPU kernels for encode and decode, and a responder in native code on a high-priority stream.
 - The bulk bandwidth audit that would pin storage to HBM rather than the whole server.
 - In `lean/`: N10′ (`ColumnAwareDraft`, `ForwardCoreDraft`, `n10prime`; its core `n10prime_core` is open) and
-  `p3-meets` (P3 with a random-oracle `H`) come in later PRs.
+  `p3-meets` (P3 with a random-oracle `H`).

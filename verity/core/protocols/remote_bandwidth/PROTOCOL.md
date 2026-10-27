@@ -123,7 +123,7 @@ the node's, the sum over its devices, whatever share of the node the store is on
 
 One device's own values are `timing`'s `GPU_` and `HOST_` constants. A device the store isn't on can still hold store
 bytes on chip and re-encode blocks, which is why \(S_{\text{chip}}\) and \(C_{\text{sq}}\) are the node's in every
-session (the red team's R6, F1). A session over part of the node, as on one GPU, establishes its certified bytes,
+session (as the red team found). A session over part of the node, as on one GPU, establishes its certified bytes,
 \((1 - \gamma) R \Sigma\), in which \(R\) cancels, so they are the same at either \(R\). Its γ is the node's only once
 the store spans the node. A store on one GPU leaves the other GPUs and host DRAM idle, about 88% of \(R\), in
 \(\mu_{\text{timing}}\). A store in all 8 GPUs' HBM and none of host DRAM leaves host DRAM's 4.7% of \(R\) idle: 752 GB
@@ -568,7 +568,7 @@ What each kind rests on:
     check while reading 1/64 of each block at 16 rows (`RateSketchTable`), though it needs about \(2^{65536}\) times
     the store in memory. What Lean proves today is the narrower form, where each device obtains a sector only whole
     and as it is.
-  - **Signs fresh per pass.** \(S_{(t,i)}\) comes from each pass's chained seed, never once per window (F29, §8).
+  - **Signs fresh per pass.** \(S_{(t,i)}\) comes from each pass's chained seed, never once per window (§8).
     The statement's window is this protocol's pass.
   - **Grinding.** The statement takes the signs uniform. Here they are derived from a seed the prover can choose
     (above), so the bound counts every key the prover sees, ground or not (below).
