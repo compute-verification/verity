@@ -1654,16 +1654,13 @@ _CODE: dict[bytes, bytes] = {}
 
 def _code(p: Path) -> bytes:
     """A file of the checker as its version holds it: a module by the digest of its AST with every string-alone statement cut
-    (`_Prose`; the AST holds no comment, formatting or line number), so an edit to its prose keeps the version; a file that is
-    no module, or does not parse, by its bytes.  Memoized by the bytes, since `key` reads every file again for each entry."""
+    (`_Prose`; the AST holds no comment, formatting or line number), so an edit to its prose keeps the version; any other file
+    by its bytes.  Memoized by the bytes, since `key` reads every file again for each entry."""
     data = p.read_bytes()
     if p.suffix != ".py":
         return data
     if data not in _CODE:
-        try:
-            _CODE[data] = b"ast:" + hashlib.sha512(ast.dump(_Prose().visit(ast.parse(data))).encode()).digest()
-        except (SyntaxError, ValueError):
-            _CODE[data] = data
+        _CODE[data] = b"ast:" + hashlib.sha512(ast.dump(_Prose().visit(ast.parse(data))).encode()).digest()
     return _CODE[data]
 
 
