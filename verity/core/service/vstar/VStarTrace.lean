@@ -197,7 +197,7 @@ def satUsage : String :=
   "usage: vstar-trace --sat --circuit F --public F --instances F [--partition F] [--program F] [--draw F] [--mask zero|SEED] [--flip Q,Q,...]"
 
 def sat (args : List String) : IO UInt32 := do
-  let arg := fun k => match args.dropWhile (· != k) with | _ :: v :: _ => some v | _ => none
+  let arg : String → Option String := fun k => match args.dropWhile (· != k) with | _ :: v :: _ => some v | _ => none
   let (some cf, some pf, some inf) := (arg "--circuit", arg "--public", arg "--instances") | IO.eprintln satUsage; return 1
   let cb ← IO.FS.readBinFile cf
   let pb ← IO.FS.readBinFile pf
@@ -209,7 +209,7 @@ def sat (args : List String) : IO UInt32 := do
     | some s => match s.toNat? with
       | some n => pure (mixMask n.toUInt64)
       | none => IO.eprintln satUsage; return 1
-  let some flips := ((((arg "--flip").getD "").splitOn ",").filter (· ≠ "")).mapM String.toNat?
+  let some (flips : List Nat) := ((((arg "--flip").getD "").splitOn ",").filter (· ≠ "")).mapM String.toNat?
     | IO.eprintln satUsage; return 1
   let coins := Coins.tree (Zk.coinSpec (Tags.circuit.tableNames 1))
   let tags := Zk.tags (Tags.circuit.withCoins coins) (Zk.maskLogOf cb) 1
@@ -235,7 +235,7 @@ def sat (args : List String) : IO UInt32 := do
   let tm := Trace.m c pin
   let head := [("m", (st.m : Json)), ("k_log", (kl : Json)), ("pin", (st.pin : Json)), ("trace_m", (tm : Json)), ("trace_k_log", (c.kLog : Json)),
     ("fits", Json.bool fits), ("shape_ok", Json.bool shapeOk), ("ranges", (st.c.ranges.size : Json)),
-    ("regions", (st.regions.size : Json)), ("region_bits", ((p.regs.foldl (· + ·.2.size) 0 : Nat) : Json)),
+    ("regions", (st.regions.size : Json)), ("region_bits", ((p.regs.foldl (fun (n : Nat) r => n + r.2.size) 0 : Nat) : Json)),
     ("delta", ((st.da.size + st.db.size : Nat) : Json)), ("flips", (flips.length : Json))]
   if !fits || tm != st.m || c.kLog != kl then
     IO.println (Json.compress (Json.mkObj (("ok", Json.bool false) :: head))); return 0
