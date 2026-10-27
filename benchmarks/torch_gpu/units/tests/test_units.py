@@ -247,7 +247,7 @@ def test_add_twin_is_Bf16AddF2fp():
 
 
 class Rows:
-    """CIR-104's references as `ops.rows` states them: Argmax_v1's scan and Bf16AddRow_v1's Bf16AddF2fp per element."""
+    """The references as `ops.rows` states them: Argmax_v1's scan and Bf16AddRow_v1's Bf16AddF2fp per element."""
     argmax = staticmethod(lambda x: scan(x))
     add_row = staticmethod(lambda a, b: [fp32.Bf16AddF2fp.evaluate(p, q) for p, q in zip(a, b)])
 
@@ -374,7 +374,7 @@ def test_build_check_holds_each_arch_to_its_kernels():
 
 def test_build_check_takes_sm_120a_constants_and_integer_division():
     """sm_120a's ptxas loads constants with HFMA2 (no .MMA) and computes units_relu's unrolled trip count by the
-    compiler's integer division (the SASS of r20261027-020639-df6d); neither touches an integer kernel's values."""
+    compiler's integer division; neither touches an integer kernel's values."""
     bodies = dict(BODIES, units_argmax=["HFMA2 R16, -RZ, RZ, 0, 0", "HFMA2 R5, -RZ, RZ, 1.875, 1.1920928955078125e-07",
                                         "SEL R3, R1, R2, P0"],
                   units_relu=["I2F.U32.RP R0, R2", "MUFU.RCP R0, R0", "F2I.FTZ.U32.TRUNC.NTZ R9, R8", "I2F.U64.RP R4, R2",

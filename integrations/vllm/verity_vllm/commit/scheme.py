@@ -110,7 +110,7 @@ def thread_header(src_mask: int, slab: int, m_block: int, n_block: int, tidx: in
 
 def program_field(program_digest: str) -> bytes:
     """The 32-byte ``program`` field the roots bind for a Program digest (hex): its first 32 bytes, so SHA-512 truncated to
-    256 bits for an IR Program digest (``codec.program_digest``), and the whole digest for a 32-byte one."""
+    256 bits for a Program digest (``codec.program_digest``), and the whole digest for a 32-byte one."""
     d = bytes.fromhex(program_digest)
     if len(d) < 32:
         raise ValueError(f"a Program digest has at least 32 bytes, not {len(d)}")

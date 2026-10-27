@@ -1,11 +1,11 @@
-"""The Commit in H1's serving engine (ROOTS1, VLLM-73), installed: the committer (`committer`, the windowed collector under
+"""The Commit in H1's serving engine, installed: the committer (`committer`, the windowed collector under
 rows-sha512: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte roots), the int8 source at each linear H1 records, the
 step-input port that gives each step's input ids, and the tap that keeps what the Commit acquired for H1
 (`protocol_options.pouw_h1_commit.CommitTap`). Here in ``acquire`` because it builds the int8 source; `pouw_h1_commit`
 holds the tap and the values and imports nothing from ``acquire``. On a server that commits already (serve-openai's
 rows-sha512 collector), `tap` puts H1's tap on that Commit instead.
 
-A MoE layer's routed experts (`engine.int8_experts.ExpertSite`, VLLM-80) are no modules: each expert projection's site is
+A MoE layer's routed experts (`engine.int8_experts.ExpertSite`) are no modules: each expert projection's site is
 named as H1 names it (`pouw_h1_hooks.expert_names`, ``prefix.expert.projection``), and its Int8RowQuant_v1 output is
 acquired under that name inside the call (`ExpertGemm.apply`), as `Int8ExpertsMethod` runs every expert on every forward:
 an expert no token routed to is a call of zero rows, acquired as its zero rows [0, K] and scales [0]."""
