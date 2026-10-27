@@ -5,7 +5,7 @@ commitment construction in `schemes.SCHEMES`:
   (2) binds identity/position, not a multiset — reordered positions rejected; a commitment to the same multiset in another order has a
                                             different root; equal values at two positions are distinguishable by position
   (3) opens against the exact prechallenge root — the verifier holds R fixed BEFORE the challenge (the challenge is derived from R
-                                            and the coin drawn after it); a root recomputed after the fact (altered value → R') is not
+                                            and the coin opened after it); a root recomputed after the fact (altered value → R') is not
                                             accepted as R and yields another challenge
   (4) negative tests                     — altered / reordered / substituted / truncated stream all rejected
 
@@ -119,7 +119,7 @@ def test_truncated_stream_rejected(scheme):
 
 
 def test_root_recomputed_after_the_fact_is_not_the_prechallenge_root(scheme):
-    """Protocol order: the verifier fixes R, draws the coin after it, derives the challenge from both, then receives openings.  A
+    """Protocol order: the verifier fixes R, opens the coin after it, derives the challenge from both, then receives openings.  A
     prover that alters a value after seeing the challenge and recomputes R' (i) produces openings that fail against R, and (ii) R'
     would have produced a different challenge — so R' can never be passed off as the prechallenge root."""
     vals = values_of(64)

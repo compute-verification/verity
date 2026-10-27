@@ -100,7 +100,7 @@ def test_positions_draw_over_a_sha512_root_and_refuse_other_sizes():
             CH.challenge_positions(bytes(n), lps, 4, source=AUDITOR_KEY)
 
 
-def test_identities_draw_through_the_picker():
+def test_identities_sample_through_the_picker():
     c, run, bmap = T.commit(T.produce())
     pop = list(B.expected_population(T.structure(), T.workload()))
     fresh = B.challenge_identities(pop, bmap, run.run_root, 16, salt=b"t", source=AUDITOR_KEY)
