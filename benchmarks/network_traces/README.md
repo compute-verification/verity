@@ -20,12 +20,12 @@ driver's docstring says what it runs, what it publishes and what its verifier re
 - **Calibration and the honest path.** `record.py` records per-token timing of real vLLM serving; `replay.py` runs
   honest traces through the reference protocol at calibrated parameters; `active_replay.py` runs the active certifier
   on recorded traces in real time, and in front of a live vLLM (`active_live.sh`, `active_live_cells.sh`);
-  `lean_replay.py` replays every recorded run's audit through the Lean verifier beside the Python. `consistency.py`
-  checks a circuit against its network certificates, `covert.py` measures a colluding sender's channel through the
-  declared clock sync, and `stall_probe.py` and `tick_load.py` find what makes a tick late.
+  `lean_replay.py` replays every recorded run's audit through the Lean verifier beside the Python. `covert.py`
+  measures a colluding sender's channel through the declared clock sync, and `stall_probe.py` and `tick_load.py` find
+  what makes a tick late.
 - **The certifier in front of an endpoint.** `certifier_serve.py` runs the network certifier (`active.Proxy`) in front
   of a served OpenAI endpoint (`rehearse`) and checks what it published offline. The endpoints it rehearses against
-  besides vLLM: `demo_endpoint.py`, `demo_stub.py` and `torch_loop_stub.py` (`torch_loop_smoke.py` times it).
+  besides vLLM: `demo_endpoint.py`, `demo_stub.py` and `torch_loop_stub.py`.
   `compact_render.py` is the client's shim for compact egress framing.
 - **The certifier as a relay.** `warden_serve.py` runs `verity.core.protocols.certifier.warden`, the network certifier
   as a relay that knows bytes only, in front of any TCP server and checks what it published offline; `warden_chain.py`
@@ -39,7 +39,9 @@ driver's docstring says what it runs, what it publishes and what its verifier re
   them runs, and `n2_lean_replay.py` replays recorded N2 runs' verdicts through the Lean beside the Python.
 - **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with `window_chain.py` (a served
   endpoint's Commit windows as one I1 v0 advice) and `negatives.py` (what network accounting must refuse, each by the
-  check and code that refuse it). `demo_chain.sh` runs the one-H200 demo by the certifier-only path.
+  check and code that refuse it). `block_certifier.py` decides a period by `network-period check` and writes its
+  accepted answer as the block record's certifier entry, for `chain_record.py` and all_protocols' runner alike.
+  `demo_chain.sh` runs the one-H200 demo by the certifier-only path.
 - **The weights' load:** `load_relay.py` and `load_commit.py` (below).
 - **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).
 - `tool.py`: the harness's store declarations.
@@ -47,7 +49,7 @@ driver's docstring says what it runs, what it publishes and what its verifier re
 ## The demo's load
 
 The H200 demo serves plain INT8 weights generated from the public seed `verity/cmp92/h200/weights/v1`
-(`verity_torch_loop.weights`). They are relayed to the H200 once per serving run and committed as they cross, through
+(`e2e_h200.served_weights`). They are relayed to the H200 once per serving run and committed as they cross, through
 two gate verbs on the auditor's machine (vy-challenger-1):
 
 - `vy-challenger-gate weights-write [--shape h200|tiny]` writes the shape's weights stream onto the auditor's store disk
@@ -64,14 +66,14 @@ two gate verbs on the auditor's machine (vy-challenger-1):
 
 ## The wipe's egress
 
-Memory accounting's streamed wipe signs its egress `UNCOUNTED` when its challenger is on another host. The count over its
-period [t0, t1) comes after, from a relay run that spans it: `wipe_gate.sh` runs that relay through the gate
+Memory accounting's streamed wipe signs its egress `UNCOUNTED` when its challenger is on another host. The count over
+its period [t0, t1) comes after, from a relay run that spans it: `wipe_gate.sh` runs that relay through the gate
 (`warden-rehearse --scan --prompts` against the toy, `demo_stub.py serve`, on the card's loopback), at a given UTC time
-when asked, and fetches the run's bundle. `wipe_egress.py BUNDLE --t0-ns T0 --t1-ns T1` then writes the
-`wipe-egress/v1` record from what the gate published. Each sampling block whose sampling period meets
-[t0 − 1 s, t1 + 1 s) counts at the schedule's capacity, 2,621,440 bits a sampling block, with K that count and δ 0. The
-record is covered only when every one of those sampling blocks is certified. The wipe's reader takes
-`wipe_period.certify(p, egress_mib)` from a covered record and keeps the wipe uncounted otherwise.
+when asked, and fetches the run's bundle. `wipe_egress.py BUNDLE --t0-ns T0 --t1-ns T1` then writes the `wipe-egress/v1`
+record from what the gate published. Each sampling block whose sampling period meets [t0 − 1 s, t1 + 1 s) counts at the
+schedule's capacity, 2,621,440 bits a sampling block, with K that count and δ 0. The record is covered only when every
+one of those sampling blocks is certified. The wipe's reader takes `wipe_period.certify(p, egress_mib)` from a covered
+record and keeps the wipe uncounted otherwise.
 
 ## The chain's run of record
 

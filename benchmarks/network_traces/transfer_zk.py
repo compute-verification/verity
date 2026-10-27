@@ -80,7 +80,7 @@ UPLINK, WINDOW = "s0/uplink", 1
 #: the deployed scheme (N = 64, W = 1) on a tree of 2^6 leaves
 PARAMS = lms.Params(64, 1, 6)
 INS, PORTS = ("x", "sx", "wrow", "sw"), ("x", "sx", "wrow", "sw", "o0")
-#: the seeded weights' seeds (`verity_torch_loop.weights`): the demo's public one and its fixture's
+#: the seeded weights' seeds (`e2e_h200.served_weights`): the demo's public one and its fixture's
 DEMO_SEED, TEST_SEED = b"verity/cmp92/h200/weights/v1", b"verity/seeded-weights/test-seed"
 H200_WIDTH, H200_HEAD, H200_CODES = 16384, 64, 256
 

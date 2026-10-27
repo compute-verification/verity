@@ -124,8 +124,9 @@ CLAIM = {
         "the Lean firewall and held by Lean verify --zk, the verifier opening only each unit's public row and its "
         "verdict row. Late's head checks are not proved: N2 alone refuses it."),
     "not_covered": [
-        "N3 (content): the frames inside the counts, their bytes and their order, are not checked. N3 is a design and "
-        "the simulator's behaviour, not a proof-service unit, so nothing here holds the egress grid to the Program's.",
+        "N3 (content): the frames inside the counts, their bytes and their order, are not checked. N3 is retired, and "
+        "the network certifier's step-indexed scan that supersedes it doesn't run here, so nothing here holds the "
+        "egress grid to the Program's.",
         "The proofs cover each end's head check only: not the certificates' LMS check (NetworkCertificatesCheck, on the "
         "host by design, over public fields and the signed digest), not the audit of each record's status, signature "
         "and declared syncs (on the host, over the opening), and on a served link not NetworkServedCounts_v1, which "
