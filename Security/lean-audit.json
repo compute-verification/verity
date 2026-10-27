@@ -864,7 +864,7 @@
   },
   "Claims.ZKMal.RefSession.Tables": {
    "owner": "@proofs",
-   "digest": "9f404c1d4bfdff5ff638c665f1b6318ebca5fbd6c7eee6eda72c6b469b2944a8"
+   "digest": "8be2c61edb9413dc95a4c49d35522c217f735a7090d50541d66177e0132bfcfc"
   },
   "Claims.ZKMal.RefSession.TapeOK": {
    "owner": "@proofs",
@@ -892,7 +892,7 @@
   },
   "Claims.ZKServer.Loop.Src": {
    "owner": "@proofs",
-   "digest": "ad0868c852716cbaf78d581da89d9c3aebdab62df639ae69bfe7e88cb8f1e0f0"
+   "digest": "0ff5a2167284afd2f918295e789037c2134267e1b879cadd56ce906b9b170edd"
   },
   "Flock.Assumptions.RegistrantCovers": {
    "owner": "@proofs",
@@ -940,35 +940,35 @@
   },
   "Flock.Guarantees.TablesAdmitUnrefused": {
    "owner": "@proofs",
-   "digest": "aa10b80f8d91f9e4056caa3ddd34516add98ed7863e18793a7509160e00955e6"
+   "digest": "b20fb294918eca587e895fb2341db15acadc01c122d59465b65988670f7dc890"
   },
   "Flock.SoundAtBridge.AcceptedLive": {
    "owner": "@proofs",
-   "digest": "ccd2c38fbb504a59be3218d2d315d23e6ec80758a85b8f406f5ace03976dedf2"
+   "digest": "fb642ab1a3b88d03c93ade88adb52fb634323a7d65f51889c5de648b00a9b63c"
   },
   "Flock.SoundAtBridge.OpenedPlurAt": {
    "owner": "@proofs",
-   "digest": "c202c94fc3af3c578676053e5b86f737220edffcf23a2bf76b3965941f9e7fc5"
+   "digest": "67294015223093a04de709d1ab8064608edc30945ff80f834237a73c79c43e5b"
   },
   "Flock.SoundAtBridge.RelOfRows": {
    "owner": "@proofs",
-   "digest": "278d8543b5d31960c82b1ed4065fecc821a603825d5a4782a7022c72dd0df90f"
+   "digest": "09167aba38fa258b9de65bcb721da3a18b6c858f6de7a2c8e5bf359292872afc"
   },
   "Flock.SoundAtBridge.RowsSession.CR": {
    "owner": "@proofs",
-   "digest": "65e58dffd4ecc4d5f8b69f5cff34f7712a2b830283b29bdda37474b1485da293"
+   "digest": "fda67528b3f4a0f8530bb0204f6a0f242944a01e544492f4a530763bbf73ff5a"
   },
   "Flock.SoundAtBridge.RowsSession.RowsAt": {
    "owner": "@proofs",
-   "digest": "57ca2bb8818ca26ce1589f31642ff02424b89ff831129ce79f68323685546d75"
+   "digest": "b4312d158fc8544deb2a22403565ef6da318b25dd6e0018b2ee251dd88fccaa8"
   },
   "Flock.SoundAtBridge.RowsSession.ServedRegistered": {
    "owner": "@proofs",
-   "digest": "14be04f535b5cfc3b52c890447cbe6c195e48ebf41cce4c2cf211312723d98e5"
+   "digest": "4568ff320467196cc6bbb0944fa5d6d4a0dea8241b09f2c82c7143ffd7a199f3"
   },
   "Flock.SoundAtBridge.WindowLaw": {
    "owner": "@proofs",
-   "digest": "150c727f9af2e1acf5bc7b451cf7d493866e38c0cfe11348c07a976dabc46a26"
+   "digest": "c141d3d9a484c06cf79146dab68c24fc352786d9b4d7a4cdaafe4219bfd57630"
   },
   "FlockDeploy.PlainIn": {
    "owner": "@proofs",
