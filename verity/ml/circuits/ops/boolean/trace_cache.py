@@ -1,5 +1,5 @@
-"""Traced circuits a build reuses across processes. A prover's or developer's build turns the cache on (`use`, or `use_env` from
-``$VERITY_TRACE_CACHE``); a verifier never does, and nothing in `verity.core` names this module (``PROVER_ONLY`` in
+"""Traced circuits a build reuses across processes. A prover's or developer's build turns the cache on (`use`, with a directory
+its own settings name); a verifier never does, and nothing in `verity.core` names this module (``PROVER_ONLY`` in
 ``tests/test_boundaries.py``).
 
 `trace.trace` with a key, as `trace.definition` and `elementwise`'s `specialized`, `shared_specialized` and `shared_operand` give
@@ -35,7 +35,6 @@ from verity.ml.circuits.codec import _static_json, canonical_json
 from verity.ml.circuits.types import Type
 
 MAGIC = b"verity-trace-cache v1\n"
-ENV = "VERITY_TRACE_CACHE"
 _KIND = {k: i for i, k in enumerate(TR._KINDS)}
 _CIRCUITS = Path(_circuits.__file__).resolve().parent
 _VERITY = _CIRCUITS.parents[1]
@@ -168,9 +167,3 @@ def use(directory: str | os.PathLike | None) -> TraceCache | None:
     """Reuse traced circuits through ``directory`` in this process; None: trace every time."""
     TR.CACHE = TraceCache(directory) if directory else None
     return TR.CACHE
-
-
-def use_env() -> TraceCache | None:
-    """`use` the directory ``$VERITY_TRACE_CACHE`` names, if it names one: for a prover's or developer's entry point."""
-    return use(os.environ.get(ENV) or None)
-
