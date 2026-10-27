@@ -1,19 +1,25 @@
 """transfer-zk: a server block's proof units read against the network certifier's transfer rows (`certifier.transfer_rows`):
-a TINY server block, n units of ``ScaledMmS8Coordinate_v1{K=128}`` on one uplink, every input row a registered read of a
-value the network certifier committed and signed as it crossed the server's boundary and every output row a row of the
-response it signed. The verifier pins each root from its certificate alone (`certifier.blocks`), C-Flock `prove --zk`
-proves the statement behind the Lean firewall, and the Lean verifier's registered reads hold it
-(`flock-verify verify --zk --registered`), through the one-stage audit as warden_zk.py's.
+n units of ``ScaledMmS8Coordinate_v1{K}`` on one uplink, every input row a registered read of a value the network
+certifier committed and signed as it crossed the server's boundary and every output row a row of the response it signed.
+The verifier pins each root from its certificate alone (`certifier.blocks`), C-Flock `prove --zk` proves the statement
+behind the Lean firewall, and the Lean verifier's registered reads hold it (`flock-verify verify --zk --registered`),
+through the one-stage audit as warden_zk.py's.
 
     python benchmarks/network_traces/transfer_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--units 8]
-      [--dry]
+      [--shape tiny|h200] [--dry]
 
-* **The circuit** (`circuit`): one template, n units, unit i a W8A8 linear's output coordinate i on one token: ``x`` the
-  token's s8 row and ``sx`` its scale (the request's rows, external ports), ``wrow`` channel i's s8 weights and ``sw``
+* **The blocks** (`Block`, ``--shape``):
+  - ``tiny``: K = 128 on sm_120's s8 step, the load ``w`` and ``sw`` n seeded channels, unit i reading channel i;
+  - ``h200``: K = 256 on sm_90's (the H200's), the load CMP-95 interface 1's ``l0.wk`` and ``l0.wk.scale`` at the frozen
+    H200 shape under its demo seed, whole, in its registered rows (128 words of 256 codes, the row
+    ``S8AccumulatorPart{K=256}`` reads, and 2 words of an f32 scale; `h200_load`), unit i reading channel i's first part
+    (row 64·i) and its scale (row i). The test holds `seeded` to interface 1's fixture.
+* **The circuit** (`circuit`): one template, n units, unit i a W8A8 linear's output coordinate on one token: ``x`` the
+  token's s8 row and ``sx`` its scale (the request's rows, external ports), ``wrow`` its channel's s8 weights and ``sw``
   its scale (the weights' load), ``o0`` the coordinate (the response's rows, an external port). Every input row is a
-  registered read (`VALUES`), unit i reading row i of its value.
-* **The blocks** (`blocks`, `verity/blocks/v1`): one server on uplink `UPLINK`, its server-time block window `WINDOW`
-  of n steps, unit i's rows at step i; the loads ``w`` and ``sw`` (ingress, the server session's window 0), the
+  registered read of its value (`Block.values`), at the rows `attestation`'s ``reads`` name.
+* **The server block** (`blocks`, `verity/blocks/v1`): one server on uplink `UPLINK`, its server-time block window
+  `WINDOW` of n steps, unit i's rows at step i; the two load values (ingress, the server session's window 0), the
   request's ``request`` and ``request_scale`` (ingress) and the ``response`` (egress, every unit's ``o0``).
 * **The network certifier**, in process here: its own LMS key (the deployed N = 64, W = 1, on 2^6 leaves) in its own
   session. It commits each value as it crosses (`transfer_rows.attest`) under its own salts, which it hands the prover
@@ -29,7 +35,10 @@ proves the statement behind the Lean firewall, and the Lean verifier's registere
     that read (`WHY`);
   - ``unsigned``: o0 under the prover's own commitment of the units' outputs (its own salts and tree), against the
     certifier's root, to be refused at that read. The prover's registration of its own root under the certifier's
-    certificate is refused by `transfer_rows.check_registration` and by `blocks.certified`.
+    certificate is refused by `transfer_rows.check_registration` and by `blocks.certified`;
+  - ``request`` and ``weight``: unit 0's x (a request byte) or wrow (a loaded weight) one s8 code off the row the
+    certifier signed, under its salts and paths (`changed`: the first code whose change leaves the unit's output, and so
+    the signed response, as it was), to be refused at that read alone.
   Each is drawn by the verifier's Lean (every unit, `flock-verify draw --stratified n`), proved ``--zk`` behind the
   firewall (``FC_FIREWALL=1``, ``FC_FIREWALL_LEAN``) and held by Lean ``verify --zk --partition --program --registered``.
 * **What the verifier receives**, scanned for every 16-byte piece of every x and wrow row and every salt of the
@@ -43,8 +52,12 @@ import argparse
 import hashlib
 import json
 import os
+import socket
 import sys
 import time
+from collections.abc import Callable
+from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -63,24 +76,88 @@ from verity.ml.windows import interface as IF  # noqa: E402
 from verity.core.protocols.certifier import blocks as BK, transfer_rows as TR, warden_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.certificate import Certificate, Direction, Issuer, LmsSigner  # noqa: E402
 
-K = 128
-COORD = bind(GM.ScaledMmS8Coordinate, K=K, **GM.GEMM_SM120_S8)
-TID = descriptor_id(COORD)
 UPLINK, WINDOW = "s0/uplink", 1
 #: the deployed scheme (N = 64, W = 1) on a tree of 2^6 leaves
 PARAMS = lms.Params(64, 1, 6)
-#: each port's value, its kind and the link-window it crosses in (a load's the server session's, 0)
-VALUES = {"x": ("request", "request", WINDOW), "sx": ("request_scale", "request", WINDOW), "wrow": ("w", "load", 0),
-          "sw": ("sw", "load", 0), "o0": ("response", "response", WINDOW)}
 INS, PORTS = ("x", "sx", "wrow", "sw"), ("x", "sx", "wrow", "sw", "o0")
-MEMBERS = {"honest": True, "forged": False, "unsigned": False}
-#: what Lean's registered reads, and the host's read of them, refuse each refused member by, at port o0
-WHY = {"forged": "does not open", "unsigned": "does not open"}
+#: CMP-95 interface 1's seeds (`verity_torch_loop.weights`): the demo's public one and its fixture's
+DEMO_SEED, TEST_SEED = b"verity/cmp92/h200/weights/v1", b"verity/seeded-weights/test-seed"
+H200_WIDTH, H200_HEAD, H200_CODES = 16384, 64, 256
 
 
-def head(heads: dict, p: str) -> TR.TransferHead:
+@dataclass(frozen=True)
+class Block:
+    """A server block's one template, ``ScaledMmS8Coordinate_v1{K}`` on the s8 step ``gemm``; each port's value, its
+    kind and the link-window it crosses in (a load's the server session's, 0); and `load`, each load port's whole value
+    as the certifier commits it, ``{port: (rows of u16 words, stride)}``, unit i reading row ``i * stride``."""
+
+    name: str
+    k: int
+    gemm: dict
+    values: dict
+    load: Callable[[int, bytes], dict[str, tuple[np.ndarray, int]]]
+    of: str
+
+    @cached_property
+    def coord(self):
+        return bind(GM.ScaledMmS8Coordinate, K=self.k, **self.gemm)
+
+    @cached_property
+    def tid(self) -> str:
+        return descriptor_id(self.coord)
+
+
+def seeded(seed: bytes, name: str, row: int, n: int) -> bytes:
+    """Interface 1's generation row `row` of tensor `name`, its first `n` bytes: the SHA-512 counter stream
+    ``SHA-512(K_t ‖ u64le row ‖ u64le i)``, ``K_t = SHA-512("verity/seeded-weights/v1" 0x00 seed 0x00 name)``."""
+    key = hashlib.sha512(b"verity/seeded-weights/v1\0" + seed + b"\0" + name.encode()).digest()
+    g = row.to_bytes(8, "little")
+    return b"".join(hashlib.sha512(key + g + i.to_bytes(8, "little")).digest() for i in range(-(-n // 64)))[:n]
+
+
+def tiny_load(n: int, seed: bytes) -> dict[str, tuple[np.ndarray, int]]:
+    """n channels' seeded s8 rows and positive f32 scales, unit i reading channel i."""
+    rng = np.random.default_rng(int.from_bytes(hashlib.sha512(seed).digest()[:8], "little"))
+    w = rng.integers(-128, 128, (n, 128)).astype(np.int8)
+    sw = (np.abs(rng.standard_normal(n)) / 127 + 1e-3).astype(np.float32)
+    return {"wrow": (IF.words(w.view(np.uint8), 8, n, 64), 1), "sw": (IF.words(sw.view(np.uint32), 32, n, 2), 1)}
+
+
+def h200_load(n: int, seed: bytes) -> dict[str, tuple[np.ndarray, int]]:
+    """Interface 1's ``l0.wk`` and ``l0.wk.scale`` at the frozen H200 shape, whole: the MQA key projection's 64 channels
+    over the width 16,384, in its registered rows of 256 codes (128 words, the row ``S8AccumulatorPart{K=256}`` reads;
+    channel c's part j is row 64·c + j), and its 64 f32 scales ``(127 + E) << 23 | u32 >> 9``, E = −(7 + ⌊log2 16384 / 2⌋),
+    one a row of 2 words. Unit i reads channel i's first part and its scale."""
+    if n > H200_HEAD:
+        raise ValueError(f"l0.wk has {H200_HEAD} channels, not {n}")
+    wk = b"".join(seeded(seed, "l0.wk", c, H200_WIDTH) for c in range(H200_HEAD))
+    u = np.frombuffer(seeded(seed, "l0.wk.scale", 0, 4 * H200_HEAD), "<u4")
+    scale = (np.uint32((127 - 14) << 23) | (u >> np.uint32(9))).astype("<u4")
+    return {"wrow": (np.frombuffer(wk, "<u2").reshape(-1, H200_CODES // 2).astype(np.uint16), H200_WIDTH // H200_CODES),
+            "sw": (scale.view("<u2").reshape(H200_HEAD, 2).astype(np.uint16), 1)}
+
+
+TINY = Block("tiny", 128, GM.GEMM_SM120_S8,
+             {"x": ("request", "request", WINDOW), "sx": ("request_scale", "request", WINDOW), "wrow": ("w", "load", 0),
+              "sw": ("sw", "load", 0), "o0": ("response", "response", WINDOW)},
+             tiny_load, "a TINY server block of {n} W8A8 coordinates on {uplink}")
+H200 = Block("h200", H200_CODES, GM.GEMM_SM90_S8,
+             {"x": ("request", "request", WINDOW), "sx": ("request_scale", "request", WINDOW),
+              "wrow": ("l0.wk", "load", 0), "sw": ("l0.wk.scale", "load", 0), "o0": ("response", "response", WINDOW)},
+             h200_load, "{n} K = 256 parts of the frozen H200 shape's l0.wk on sm_90's s8 step, on {uplink}")
+BLOCKS = {b.name: b for b in (TINY, H200)}
+MEMBERS = {"honest": True, "forged": False, "unsigned": False, "request": False, "weight": False}
+#: the port each refused member is refused at, alone
+REFUSED_AT = {"forged": "o0", "unsigned": "o0", "request": "x", "weight": "wrow"}
+#: what Lean's registered reads, and the host's read of them, refuse each refused member by, at its `REFUSED_AT`
+WHY = {name: "does not open" for name in REFUSED_AT}
+#: the members whose units read a row one code off the one the network certifier signed, and that port
+CHANGED = {"request": "x", "weight": "wrow"}
+
+
+def head(heads: dict, block: Block, p: str) -> TR.TransferHead:
     """Port ``p``'s value's head among `blocks.certified`'s, which are by value and direction."""
-    value, kind, _window = VALUES[p]
+    value, kind, _window = block.values[p]
     return heads[value, TR.KINDS[kind][0]]
 
 
@@ -90,38 +167,59 @@ def log(msg: str) -> None:
 
 # --- the circuit and its blocks ---------------------------------------------------------------------------------------
 
-def circuit(n: int) -> IF.Circuit:
-    lay = dict(IF.layout(COORD).rows)
-    reads = tuple(IF.Read(TID, p, VALUES[p][0], 0, (n,), 0, (lay[p],)) for p in INS)
-    return IF.Circuit("transfer-zk", ((COORD, n),), external=(f"{TID}/x", f"{TID}/sx", f"{TID}/o0"),
-                      registered=IF.Registered({VALUES[p][0]: n * lay[p] for p in INS}, reads=reads))
+def circuit(block: Block, n: int, load: dict) -> IF.Circuit:
+    lay, tid = dict(IF.layout(block.coord).rows), block.tid
+    stride = {p: load[p][1] if p in load else 1 for p in INS}
+    rows = {p: len(load[p][0]) if p in load else n for p in INS}
+    reads = tuple(IF.Read(tid, p, block.values[p][0], 0, (n,), 0, (stride[p] * lay[p],)) for p in INS)
+    return IF.Circuit(f"transfer-zk-{block.name}", ((block.coord, n),), external=(f"{tid}/x", f"{tid}/sx", f"{tid}/o0"),
+                      registered=IF.Registered({block.values[p][0]: rows[p] * lay[p] for p in INS}, reads=reads))
 
 
-def blocks(n: int) -> dict:
+def blocks(block: Block, n: int) -> dict:
     steps = {"base": 0, "radix": [n], "step": [1]}
 
     def transfer(p: str, d: str) -> dict:
-        value, kind, window = VALUES[p]
+        value, kind, window = block.values[p]
         return {"server": "s0", "dir": d, "kind": kind, "value": value, "window": window,
                 "t": None if kind == "load" else steps}
 
     out = {**transfer("o0", "out"), "leaves": n,
-           "writes": [{"writer": TID, "out": "o0", "at": 0, "radix": [n], "base": 0, "step": [1]}]}
+           "writes": [{"writer": block.tid, "out": "o0", "at": 0, "radix": [n], "base": 0, "step": [1]}]}
     return {"format": BK.FORMAT, "server": [{"name": "s0", "uplink": UPLINK, "units": "all"}],
             "server_time": {"window": WINDOW, "steps": n}, "transfers": [*(transfer(p, "in") for p in INS), out]}
 
 
-def values(n: int, seed: int = 0) -> dict[str, np.ndarray]:
-    """n coordinates' rows, each port's ``(n, words)`` u16 words: seeded s8 rows and positive f32 scales, and the
-    Definition's outputs on them."""
-    rng = np.random.default_rng(seed)
-    x, w = (rng.integers(-128, 128, (n, K)).astype(np.int8) for _ in range(2))
-    sx, sw = ((np.abs(rng.standard_normal(n)) / 127 + 1e-3).astype(np.float32) for _ in range(2))
-    ins = [x.view(np.uint8), sx.view(np.uint32), w.view(np.uint8), sw.view(np.uint32)]
-    o0 = np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16).reshape(n, 1)
-    lay = dict(IF.layout(COORD).rows)
-    words = {p: IF.words(a, 8 if p in ("x", "wrow") else 32, n, lay[p]) for p, a in zip(INS, ins)}
-    return {**words, "o0": o0}
+def values(block: Block, n: int, seed: bytes, load: dict) -> dict[str, np.ndarray]:
+    """n coordinates' rows, each port's ``(n, words)`` u16 words: a seeded s8 token row and positive f32 scale a unit
+    (the request), the rows of the load each unit reads, and the Definition's outputs on them."""
+    rng = np.random.default_rng(int.from_bytes(hashlib.sha512(b"request\0" + seed).digest()[:8], "little"))
+    x = rng.integers(-128, 128, (n, block.k)).astype(np.int8)
+    sx = (np.abs(rng.standard_normal(n)) / 127 + 1e-3).astype(np.float32)
+    lay = dict(IF.layout(block.coord).rows)
+    words = {"x": IF.words(x.view(np.uint8), 8, n, lay["x"]), "sx": IF.words(sx.view(np.uint32), 32, n, lay["sx"]),
+             **{p: rows[::stride][:n] for p, (rows, stride) in load.items()}}
+    return {**words, "o0": outputs(block, words)}
+
+
+def outputs(block: Block, words: dict[str, np.ndarray]) -> np.ndarray:
+    """The Definition's ``o0`` on the units' input rows, ``(n, 1)``."""
+    n = len(words["x"])
+    ins = [np.ascontiguousarray(words["x"]).view(np.uint8), np.ascontiguousarray(words["sx"]).view(np.uint32).reshape(n),
+           np.ascontiguousarray(words["wrow"]).view(np.uint8), np.ascontiguousarray(words["sw"]).view(np.uint32).reshape(n)]
+    return np.asarray(evaluate_batch(block.coord, *ins, kernel="reference"), dtype=np.uint16).reshape(n, 1)
+
+
+def changed(block: Block, words: dict[str, np.ndarray], p: str) -> tuple[dict[str, np.ndarray], int]:
+    """`words` with unit 0's row of port `p` one s8 code off (its low bit flipped), at the first code whose change leaves
+    unit 0's output the one on the signed rows: a server that computed on a byte the network certifier didn't relay, and
+    whose response is still the signed one, so that only the read of `p` can refuse it. Also the code's index."""
+    for k in range(block.k):
+        w = dict(words, **{p: words[p].copy()})
+        w[p][0].view(np.uint8)[k] ^= 1
+        if np.array_equal(outputs(block, {q: a[:1] for q, a in w.items()}), words["o0"][:1]):
+            return w, k
+    raise ValueError(f"every code of unit 0's {p} changes its output")
 
 
 # --- the network certifier and the verifier ---------------------------------------------------------------------------
@@ -134,11 +232,11 @@ def certifier(directory: Path) -> SimpleNamespace:
     return SimpleNamespace(issuer=Issuer(signer, session), key=signer.public_key(), session=session)
 
 
-def attest(cert: SimpleNamespace, program: str, value: str, rows) -> tuple[TR.Transfer, dict]:
+def attest(cert: SimpleNamespace, block: Block, program: str, value: str, rows) -> tuple[TR.Transfer, dict]:
     """`value`'s rows as they crossed `UPLINK`, committed and signed: the certifier's opening (witness) and its
     registration (public)."""
-    p = next(p for p, v in VALUES.items() if v[0] == value)
-    _v, kind, window = VALUES[p]
+    p = next(p for p, v in block.values.items() if v[0] == value)
+    _v, kind, window = block.values[p]
     direction = Direction.EGRESS if p == "o0" else Direction.INGRESS
     t, c = TR.attest(cert.issuer, UPLINK, direction, window, kind, program, value, [list(map(int, r)) for r in rows])
     if c is None:
@@ -146,24 +244,37 @@ def attest(cert: SimpleNamespace, program: str, value: str, rows) -> tuple[TR.Tr
     return t, TR.registration(t.head, c)
 
 
-def attestation(n: int, out: Path) -> SimpleNamespace:
-    """The circuit record and its blocks; the units' rows; the network certifier's transfers and registrations, the
-    honest response's and the forged one's; and the prover's own commitment of its outputs."""
-    c = circuit(n)
+def attestation(n: int, out: Path, block: Block = TINY, seed: bytes = TEST_SEED) -> SimpleNamespace:
+    """The circuit record and its blocks; the load and the units' rows; the network certifier's transfers and
+    registrations (each load value whole), the honest response's and the forged one's; and the prover's own commitment of
+    its outputs."""
+    load = block.load(n, seed)
+    c = circuit(block, n, load)
     doc = IF.descriptor_record(c, cap=n)
-    words = values(n)
+    words = values(block, n, seed, load)
     cert = certifier(out / "certifier")
     tr, regs = {}, {}
     for p in PORTS:
-        v = VALUES[p][0]
-        tr[v], regs[v] = attest(cert, doc["program"], v, words[p])
+        v = block.values[p][0]
+        tr[v], regs[v] = attest(cert, block, doc["program"], v, load[p][0] if p in load else words[p])
     forged_rows = words["o0"].copy()
     forged_rows[0, 0] ^= 1
-    forged, forged_reg = attest(cert, doc["program"], "response", forged_rows)
+    forged, forged_reg = attest(cert, block, doc["program"], "response", forged_rows)
     own = TR.Transfer.commit(UPLINK, Direction.EGRESS, WINDOW, "response", doc["program"], "response",
                              [list(map(int, r)) for r in words["o0"]])
-    return SimpleNamespace(n=n, circuit=c, doc=doc, blocks=blocks(n), words=words, cert=cert, transfers=tr,
-                           registrations=regs, forged=forged, forged_registration=forged_reg, own=own)
+    changes = {name: changed(block, words, p) for name, p in CHANGED.items()}
+    reads = {p: [i * (load[p][1] if p in load else 1) for i in range(n)] for p in PORTS}
+    return SimpleNamespace(n=n, block=block, circuit=c, doc=doc, blocks=blocks(block, n), load=load, words=words,
+                           reads=reads, cert=cert, transfers=tr, registrations=regs, forged=forged,
+                           forged_registration=forged_reg, own=own,
+                           changed={name: w for name, (w, _k) in changes.items()},
+                           changed_code={name: k for name, (_w, k) in changes.items()})
+
+
+def member_rows(name: str, at: SimpleNamespace) -> dict[str, np.ndarray]:
+    """The rows member `name`'s units read and write: the signed ones, but ``request``'s and ``weight``'s unit 0 one code
+    off at its `CHANGED` port."""
+    return at.changed.get(name, at.words)
 
 
 def layouts(doc: dict) -> dict:
@@ -178,7 +289,7 @@ def verifier(at: SimpleNamespace, regs: list[dict]) -> SimpleNamespace:
     certifiers = {UPLINK: (at.cert.key, at.cert.session)}
     heads = BK.certified(at.doc, at.blocks, layouts(at.doc), regs, certifiers)
     pins = BK.pins(at.doc, at.blocks, layouts(at.doc), regs, certifiers)
-    ports = {p: TR.port(head(heads, p), list(range(at.n))) for p in PORTS}
+    ports = {p: TR.port(head(heads, at.block, p), at.reads[p]) for p in PORTS}
     return SimpleNamespace(heads=heads, pins=pins, ports=ports, free=IF.input_count(at.doc, pins=pins)["free"],
                            free_unpinned=IF.input_count(at.doc)["free"])
 
@@ -218,25 +329,25 @@ def member_ports(name: str, at: SimpleNamespace) -> dict[str, tuple[list[bytes],
     ``forged``'s o0 under the forged response's and ``unsigned``'s under the prover's own commitment."""
     out = {}
     for p in PORTS:
-        t = at.transfers[VALUES[p][0]]
+        t = at.transfers[at.block.values[p][0]]
         if p == "o0" and name == "forged":
             t = at.forged
         elif p == "o0" and name == "unsigned":
             t = at.own
-        _rows, salts, entry = t.statement(range(at.n))
+        _rows, salts, entry = t.statement(at.reads[p])
         out[p] = (salts, entry)
     return out
 
 
-def refused(at: SimpleNamespace, v: SimpleNamespace, mp: dict, base: int) -> dict[str, str]:
-    """The host's read of each registered port against the verifier's, as Lean's registered reads make it
-    (`warden_rows.refusal`): the ports it refuses, with why."""
-    out = {}
+def refused(at: SimpleNamespace, v: SimpleNamespace, mp: dict, base: int, name: str = "honest") -> dict[str, str]:
+    """The host's read of each registered port of member `name`'s statement against the verifier's, as Lean's registered
+    reads make it (`warden_rows.refusal`): the ports it refuses, with why."""
+    out, rows = {}, member_rows(name, at)
     for p in PORTS:
-        h = head(v.heads, p)
+        h = head(v.heads, at.block, p)
         salts, entry = mp[p]
-        why = WR.refusal(TR.port(h, list(range(at.n)), base), TR.domain(at.doc["program"], h.value, h.words, h.rows),
-                         entry, [TR.bc(list(map(int, r)), s) for r, s in zip(at.words[p], salts)])
+        why = WR.refusal(TR.port(h, at.reads[p], base), TR.domain(at.doc["program"], h.value, h.words, h.rows),
+                         entry, [TR.bc(list(map(int, r)), s) for r, s in zip(rows[p], salts)])
         if why is not None:
             out[p] = why
     return out
@@ -268,12 +379,13 @@ def stager(M, at: SimpleNamespace, out: Path) -> SimpleNamespace:
     (out / "program.json").write_bytes(M.canonical_json(M.encode_program(program)))
     bound = {"partition": M.P.digest(part), "program": part["program"]}
     t = time.time()
-    in_rows, out_rows = IF.unit_rows(COORD)
-    st = M.CS.UnitStager(COORD, "unit/transfer", in_rows, out_rows, circuit=out / "circuit.txt", bind=bound)
+    coord = at.block.coord
+    in_rows, out_rows = IF.unit_rows(coord)
+    st = M.CS.UnitStager(coord, "unit/transfer", in_rows, out_rows, circuit=out / "circuit.txt", bind=bound)
     st.pin
     (tid, base, cnt), = M.P.ranges(program, query)
-    assert tid == M.P.template_id(COORD) and cnt == at.n
-    return SimpleNamespace(defn=COORD, program=program, query=query, n=at.n, base=base, st=st, out=out,
+    assert tid == M.P.template_id(coord) and cnt == at.n
+    return SimpleNamespace(block=at.block, defn=coord, program=program, query=query, n=at.n, base=base, st=st, out=out,
                            lower_s=round(time.time() - t, 1), partition_file=out / "partition.json",
                            program_file=out / "program.json")
 
@@ -290,7 +402,7 @@ def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
         raise SystemExit(f"{name}: m = {k_log} + {nbl} is outside 25 .. {M.a7.M_MAX} (--zk and flock-circuit's shape)")
     v = verifier(at, presented(name, at))
     mp = member_ports(name, at)
-    rows = {p: at.words[p] for p in INS}
+    rows = {p: member_rows(name, at)[p] for p in INS}
     got = st.stage(rows, out, os.urandom(32), salts={p: mp[p][0] for p in PORTS},
                    indices=range(sg.base, sg.base + n), set_name=f"{st.iset.name}-{name}", tables=rows,
                    refs={p: list(range(n)) for p in INS}, registered={p: mp[p][1] for p in PORTS})
@@ -300,14 +412,14 @@ def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
     (out / "pub.bin").rename(out / f"pub-{n}.bin")
     (out / "tables").mkdir(exist_ok=True)
     os.link(sg.out / "circuit.txt", out / "circuit.txt")
-    reads = WR.reads_file({p: TR.port(head(v.heads, p), list(range(n)), sg.base) for p in PORTS})
+    reads = WR.reads_file({p: TR.port(head(v.heads, at.block, p), at.reads[p], sg.base) for p in PORTS})
     (out / "registered.json").write_text(json.dumps(reads, sort_keys=True))
     (out / "transfer-registrations.json").write_text(json.dumps(presented(name, at), indent=1, sort_keys=True))
     m = {"tag": name, "name": name, "dir": out, "meta": st.meta, "pin": st.pin, "class": st.class_sha512,
          "set": f"{st.iset.name}-{name}", "n": n, "base": sg.base, "defn": sg.defn, "ands": got["ands"],
          "unit_nnz": got["unit_nnz"], "salts": got["salts"], "ports": st.ports, "partition_file": sg.partition_file,
          "program_file": sg.program_file, "registered_file": out / "registered.json",
-         "registrations_file": out / "transfer-registrations.json", "predicted": refused(at, v, mp, sg.base),
+         "registrations_file": out / "transfer-registrations.json", "predicted": refused(at, v, mp, sg.base, name),
          "pins": v.pins, "free": v.free, "free_unpinned": v.free_unpinned, "stage_s": round(time.time() - t0, 1)}
     m["header"] = M.a0.public_header(out, n)
     return m
@@ -337,10 +449,11 @@ def audit_member(M, a, sg, m: dict, out: Path, port: int) -> dict:
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
     law = M.D.parse_law(f"stratified:{n}")
-    win = {"kind": "stand-in", "of": f"a TINY server block of {n} W8A8 coordinates on {UPLINK}, every row a transfer "
-                                      "row the network certifier signed (transfer_zk.py)",
+    values = sg.block.values
+    win = {"kind": "stand-in", "of": sg.block.of.format(n=n, uplink=UPLINK) + ", every row a transfer row the network "
+                                                                               "certifier signed (transfer_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
-           "link": {p: f"registered: port {p} reads {VALUES[p][0]} at the network certifier's signed root" for p in PORTS}}
+           "link": {p: f"registered: port {p} reads {values[p][0]} at the network certifier's signed root" for p in PORTS}}
     rec = R.record(sg.program, sg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, sg.program, sg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json(),
@@ -391,29 +504,45 @@ def audit_member(M, a, sg, m: dict, out: Path, port: int) -> dict:
 def blobs_of(at: SimpleNamespace, m: dict) -> tuple[dict[str, bytes], set[str]]:
     """The witness pieces the verifier must not receive: every x and wrow row and every salt of the statement, all of
     which the prover's instance file holds."""
-    blobs = {f"{p} {i}": r.astype("<u2").tobytes() for p in ("x", "wrow") for i, r in enumerate(at.words[p])}
+    rows = member_rows(m.get("name", "honest"), at)
+    blobs = {f"{p} {i}": r.astype("<u2").tobytes() for p in ("x", "wrow") for i, r in enumerate(rows[p])}
     blobs.update({f"salt {p} {i}": s for p, ss in m["salts"].items() for i, s in enumerate(ss)})
     return blobs, set(blobs)
 
 
 def expected(name: str, res: dict) -> bool:
-    """The member to be accepted is; the others are refused by Lean's registered reads at port o0, each by its `WHY`."""
+    """The member to be accepted is; the others are refused by Lean's registered reads at their `REFUSED_AT` port, each
+    by its `WHY`."""
     lean = res["verdicts"].get(f"lean-verify/{name}")
     if MEMBERS[name]:
         return res["accepted"] and lean is True
     why = res["why"].get(f"lean-verify/{name}") or ""
-    return not res["accepted"] and lean is False and "registered reads" in why and "o0" in why and WHY[name] in why
+    return not res["accepted"] and lean is False and "registered reads" in why and f"port {REFUSED_AT[name]}:" in why \
+        and WHY[name] in why
+
+
+def session_port(base: int, j: int) -> int:
+    """Member ``j``'s session port: ``base + j``, else (``base`` 0) a port free now, so that two runs sharing a node never
+    cross one run's prover with another's verifier."""
+    if base:
+        return base + j
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
 
 
 def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    at = attestation(a.units, out)
+    block = BLOCKS[a.shape]
+    at = attestation(a.units, out, block, DEMO_SEED if block is H200 else TEST_SEED)
     v = verifier(at, presented("honest", at))
-    summary: dict = {"template": TID, "units": at.n, "uplink": UPLINK, "window": WINDOW, "blocks": at.blocks,
-                     "circuit": at.doc, "registrations": at.registrations, "forged_registration": at.forged_registration,
-                     "pins": v.pins, "free": v.free, "free_unpinned": v.free_unpinned, "refusals": refusals(at)}
-    log(f"{TID} × {at.n} on {UPLINK}: the certifier signed {sorted(at.registrations)}; the verifier pins "
+    summary: dict = {"block": block.name, "template": block.tid, "units": at.n, "uplink": UPLINK, "window": WINDOW,
+                     "blocks": at.blocks, "circuit": at.doc, "registrations": at.registrations,
+                     "forged_registration": at.forged_registration, "pins": v.pins, "free": v.free,
+                     "free_unpinned": v.free_unpinned, "refusals": refusals(at), "reads": at.reads,
+                     "changed": {name: {"port": CHANGED[name], "unit": 0, "code": k} for name, k in at.changed_code.items()}}
+    log(f"{block.tid} × {at.n} on {UPLINK}: the certifier signed {sorted(at.registrations)}; the verifier pins "
         f"{sorted(v.pins)}, free {v.free} bits (with no pins {v.free_unpinned}); refusals {summary['refusals']}")
     if v.free != 0 or v.free_unpinned == 0 or not all(r.startswith("refused") for r in summary["refusals"].values()):
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
@@ -429,9 +558,8 @@ def prove(a) -> int:
         summary.setdefault("members", {})[name] = {"ands": m["ands"], "stage_s": m["stage_s"], "free": m["free"],
                                                    "predicted": m["predicted"] or "accepted"}
         log(f"staged {name}: {m['ands']} ANDs, every port registered; the host's read: {m['predicted'] or 'accepted'}")
-        bad = set(m["predicted"]) - {"o0"} or (not m["predicted"]) != MEMBERS[name] or \
-            WHY.get(name, "") not in m["predicted"].get("o0", "")
-        if bad:
+        at_ = REFUSED_AT.get(name)
+        if set(m["predicted"]) != ({at_} if at_ else set()) or (at_ and WHY[name] not in m["predicted"][at_]):
             raise SystemExit(f"{name}: the host's read of its statement ({m['predicted'] or 'accepted'}) is not the member's")
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     if a.dry:
@@ -440,7 +568,7 @@ def prove(a) -> int:
     av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta)
     ok = True
     for j, (name, m) in enumerate(staged.items()):
-        res = audit_member(M, av, sg, m, out / name, a.port + j)
+        res = audit_member(M, av, sg, m, out / name, session_port(a.port, j))
         if "verdicts" in res and res["verdicts"]:
             blobs, held, public = LS.public_pieces(M.a8, *blobs_of(at, m), (m["dir"] / "circuit.txt").read_bytes())
             res["received"] = {**M.a8.received(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held),
@@ -468,7 +596,9 @@ def main(argv=None) -> int:
     p.add_argument("--lean")
     p.add_argument("--out", required=True)
     p.add_argument("--units", type=int, default=8)
-    p.add_argument("--port", type=int, default=7791)
+    p.add_argument("--shape", choices=sorted(BLOCKS), default=TINY.name,
+                   help="tiny, or h200: interface 1's l0.wk at the frozen H200 shape, under its demo seed")
+    p.add_argument("--port", type=int, default=0, help="the members' first session port (default: a free port each)")
     p.add_argument("--delta", type=float, default=2.0 ** -20)
     p.add_argument("--dry", action="store_true", help="the statements and the host's read of them: nothing proved")
     a = ap.parse_args(argv)

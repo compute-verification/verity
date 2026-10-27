@@ -1,9 +1,10 @@
 /-
 Onsite Verity (`verity/onsite/v0`): remote Verity's accounting with the verifier's hardware at the site, so it also
 accounts for space, bandwidth and communication. Its components are sampled proofs on the proofs themselves
-(`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`: the form the params name, one-stage v2's
-audit, flock-verify `--zk` run on each session's files, or the recursive audit, V*'s compiled check run on the recursive
-session's parts, each on the files the caller hands in as blobs), work by proof of useful work (`PouwCheck.protocol`), space by
+(`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`: the form the params name, one-stage v2's audit,
+flock-verify `--zk` run on each session's files, or the recursive audit, V*'s compiled check run on the recursive
+session's parts, each on the files the caller hands in as blobs), work by proof of useful work over the period
+(`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the period's windows credited all or nothing), space by
 PoUS's check of a run (`PousCheck.RunProtocol.protocol`), bandwidth by the remote bandwidth audit's session
 (`RemoteAudit.Protocol.protocol`), communication by the network certifier over the period
 (`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the period's link-windows certified and proved, and the bound `K`
@@ -20,7 +21,7 @@ import MemoryChallenger.WipeProtocol
 import NciCheck.Protocol
 import NetworkCheck.Period
 import PousCheck.RunProtocol
-import PouwCheck.Protocol
+import PouwCheck.Period
 import RemoteAudit.Protocol
 import SampledProofs.OneStageZk
 import VStarRecursive.Sampled
@@ -31,7 +32,7 @@ open Composition
 
 /-- Onsite's components, in the order of their ids. -/
 def components : List BlobProtocol :=
-  [NetworkCheck.Period.protocol, PousCheck.RunProtocol.protocol, PouwCheck.protocol, RemoteAudit.Protocol.protocol,
+  [NetworkCheck.Period.protocol, PousCheck.RunProtocol.protocol, PouwCheck.Period.protocol, RemoteAudit.Protocol.protocol,
     VStar.Recursive.Sampled.protocol, MemoryChallenger.WipeProtocol.protocol]
 
 def protocol : BlobProtocol :=
@@ -48,7 +49,7 @@ private def answer (xs : List Case) (blobs : Array ByteArray := #[]) : Answer :=
 private def contains (s pat : String) : Bool := (s.splitOn pat).length > 1
 
 #guard orderedB components
-#guard components.map (·.id) == ["verity/certifier/v0", "verity/pous/p2/v4/run", "verity/pouw/v1",
+#guard components.map (·.id) == ["verity/certifier/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
   "verity/remote-bandwidth/v0", "verity/sampled-proofs/v1", "verity/wipe/v0"]
 
 -- every component refuses its case: onsite rejects on each, with or without blobs, and makes nothing public
@@ -60,9 +61,9 @@ private def allRefused : Answer := answer (components.map refused)
 #guard (answer (components.map refused) #["not a circuit file".toUTF8]).reason == allRefused.reason
 -- a refused wipe refuses onsite
 #guard (allRefused.reason.map (contains · "verity/wipe/v0 reject: params: ")).getD false
--- remote's components alone are not onsite's, onsite has no wipe-less form, and neither v1's nor v2's audit alone is
+-- a part of onsite's components is not onsite's, onsite has no wipe-less form, and neither v1's nor v2's audit alone is
 -- onsite's sampled proofs component
-#guard (answer [refused PouwCheck.protocol, refused VStar.Recursive.Sampled.protocol]).reason ==
+#guard (answer [refused PouwCheck.Period.protocol, refused VStar.Recursive.Sampled.protocol]).reason ==
   some "params: verity/certifier/v0 is missing"
 #guard (answer ((components.take 5).map refused)).reason == some "params: verity/wipe/v0 is missing"
 #guard (answer ((components.take 4).map refused ++

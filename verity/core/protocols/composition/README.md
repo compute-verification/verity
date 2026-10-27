@@ -48,7 +48,8 @@ component accepts its own case, and the commitment is `bind` of the components' 
 | component | onsite | remote | `Core.Protocol` | id |
 | --- | --- | --- | --- | --- |
 | communication (the network certifier over the period: its link-windows certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
-| work (PoUW's window check) | yes | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
+| work (PoUW's period credit: the period's windows credited all or nothing) | yes | | `PouwCheck.Period.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/period/v1` |
+| work (PoUW's window check) | | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
 | sampled proofs (the audit on the proofs themselves, which it reads as blobs: one-stage v2 or the recursive audit, as the params' `form` names it) | yes | yes | `VStar.Recursive.Sampled.protocol` (`core_vstar_recursive`, `../../service/vstar/recursive`) | `verity/sampled-proofs/v1` |
 | space (PoUS's check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
 | bandwidth (the remote bandwidth session) | yes | | `RemoteAudit.Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/v0` |
@@ -96,7 +97,7 @@ adds nothing to what is public or kept.
 through the harness's `ProtocolPort` (`../../difftest`), holding every field of each outcome but its reason to
 `tests/reference.py`: the trial's composition rule from #1036 (`cursor/protocol-interfaces-c3b2` at 46820ebcb, vendored,
 with its source files named), over the harness's framing of the core interface (`verity_difftest.protocol.answer`), and
-each component's own Python (PoUW's `core_check.case`; for sampled proofs, its form's split (`sampled_proofs`) over v2's framing
+each component's own Python (PoUW's `core_check.case`, and for its period `period_check.case`; for sampled proofs, its form's split (`sampled_proofs`) over v2's framing
 over sampled proofs' one-stage difftest's `one_stage` and decoders, `one_stage_zk`, on the cases v2 decides without a
 session's proof, the recursive form refused where the case names none of its files; the network certifier's period difftest's `reference`, its Python mirror over the certifier's
 certificates and one-stage's answers, on small signed periods from its `build`; the wipe's mirror,
