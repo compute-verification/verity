@@ -105,7 +105,6 @@ KNOWN: dict[str, str] = {
     f"{D}Accounting/RateAudit.lean::Accounting.Rate.Device": "the rate audit's device; wave 5",
     f"{D}Accounting/RateAuditSketch.lean::Accounting.RateSketch.Device": "the rate sketch's device; wave 5",
     f"{D}Accounting/Bandwidth/Game.lean::Bandwidth.Device": "the bandwidth game's device; wave 5",
-    "Security/Properties/Attest.lean::MemoryChallenger.Attest.Properties.Device": "what the auditor devices sign, by key; wave 5",
     "Security/Properties/Pous/MemoryChallenger.lean::MemoryChallenger.Properties.Device": "the memory challengers; wave 5",
     # InteractiveDevice
     f"{D}Accounting/RateAuditInteractive.lean::Accounting.Rate.InteractiveDevice": "the rate audit's; wave 5",
