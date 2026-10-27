@@ -1,5 +1,5 @@
 """The served rows' tie to the compute: a window's committed served rows (`served_rows`) held to the positions its steps'
-Commit holds, so a prover can't register cheaper rows at serve time than the batch it ran. REDTEAM phase 10's six passes
+Commit holds, so a prover can't register cheaper rows at serve time than the batch it ran. The six-pass run's rows
 (user-1 never admitted) leave step 6's 29 prefill tokens of the honest batch uncovered, and the tie refuses them.
 
     ServedRowsTie_v2{R, P, G, IW, L, T, IB, PB} (pub, srv, pos_<g>_<k> …, sw_<g> …) -> verdict[16]

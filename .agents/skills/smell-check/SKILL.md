@@ -51,7 +51,7 @@ Each question heads a catalogue section, whose entries are its examples.
 1. **Is what's credited tied to what was served?** PoUW credits noised work on a served product's operands, committed
    and checked by value; not work beside it, stand-ins, a reference pass, uncommitted bytes, or a claim narrowed to fit.
 2. **Does "served", "end to end" or "measured" mean the real path?** The pinned compiled build at the record's settings,
-   the real workload and values, interference included, the verifier of record, the critical path; not a harness, model,
+   the real workload and values, interference included, the verifier, the critical path; not a harness, model,
    label, Python standing in for Lean, argument, or number nobody measured for this case.
 3. **Is the path that follows the design rules (AGENTS.md) the record, or opt-in?**
 4. **Is anything public that should be a value?** A partition, count, salt or field that follows the workload.
