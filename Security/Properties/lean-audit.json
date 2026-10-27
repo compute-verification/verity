@@ -2399,6 +2399,21 @@
    "signature": ["Properties.SampledProofs.noAcceptAfterHalt : Properties.SampledProofs.NoAcceptAfterHalt"],
    "assumptions": [],
    "type_hash": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
+  },
+  "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned": {
+   "owner": "@memory-accounting"
+  },
+  "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound": {
+   "owner": "@memory-accounting"
+  },
+  "MemoryChallenger.Attest.Properties.SecurityProofs.livenessContentFree": {
+   "owner": "@memory-accounting"
+  },
+  "MemoryChallenger.Attest.Properties.SecurityProofs.auditorSeesSkeleton": {
+   "owner": "@memory-accounting"
+  },
+  "MemoryChallenger.Attest.Properties.SecurityProofs.proverSeesMessages": {
+   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -3507,6 +3522,26 @@
    "Properties.Composition.answerAccepts": {
     "function": "Core.Protocol.answer",
     "outcome": "accept"
+   },
+   "MemoryChallenger.Attest.Properties.SecurityProofs.periodSigned": {
+    "function": "MemoryChallenger.Attest.check",
+    "outcome": "accept"
+   },
+   "MemoryChallenger.Attest.Properties.SecurityProofs.periodSound": {
+    "function": "MemoryChallenger.Attest.check",
+    "outcome": "accept"
+   },
+   "MemoryChallenger.Attest.Properties.SecurityProofs.livenessContentFree": {
+    "function": "MemoryChallenger.Attest.Properties.code",
+    "outcome": "none"
+   },
+   "MemoryChallenger.Attest.Properties.SecurityProofs.auditorSeesSkeleton": {
+    "function": "MemoryChallenger.Attest.Properties.code",
+    "outcome": "none"
+   },
+   "MemoryChallenger.Attest.Properties.SecurityProofs.proverSeesMessages": {
+    "function": "MemoryChallenger.Attest.Properties.code",
+    "outcome": "none"
    }
   },
   "frozen": {
