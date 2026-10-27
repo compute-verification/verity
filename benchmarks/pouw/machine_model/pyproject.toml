@@ -4,6 +4,9 @@ version = "0.0.0"
 description = "PoUW's machine model: the price-vector LP, the census and attack families as data, and `machine-model`."
 requires-python = ">=3.12"
 # scipy pinned: a vector's margin is read at the vertex HiGHS returns, and the published margins are that version's vertex.
+# `verity` (verity.hardware, the card files) comes from the workspace environment undeclared: uv takes a project nested in
+# benchmarks/pouw's for one outside the workspace when it builds it, so a `{ workspace = true }` source fails to resolve
+# (benchmarks/pouw/exact_kit's pyproject.toml); the suite lists what it reads of it in `inputs`.
 dependencies = ["scipy==1.18.1", "numpy"]
 
 [project.scripts]
@@ -23,5 +26,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # The tests read this directory (the package and data/), the perplexity arms the designs name, the README, which
-# holds no table (`machine-model render` prints them), and the Lean sheets `machine-model sheet --lean` prints.
-inputs = ["benchmarks/ppl/specs", "benchmarks/pouw/machine_model/README.md", "Security/Definitions/Accounting/Sheets"]
+# holds no table (`machine-model render` prints them), the Lean sheets `machine-model sheet --lean` prints, and the card
+# files θ and the data sheet read their ceilings from, with their loader.
+inputs = ["benchmarks/ppl/specs", "benchmarks/pouw/machine_model/README.md", "Security/Definitions/Accounting/Sheets",
+          "verity/hardware/__init__.py", "verity/hardware/cards", "verity/__init__.py", "verity/errors.py"]

@@ -1,6 +1,7 @@
 """A device's data sheet (`sheet.toml` in its directory): each constant the data-sheet machine (`Accounting.TS.Sheet`)
 reads, its value, the document that states it and its grade, and each class of its DS vector's epoch with its tensor
-form or its pipe.
+form or its pipe. A constant the device's card file states as a ceiling (`card = "SKU"`, `verity.hardware`) gives
+`card = "EXPR"` (`card.py`) in place of its number, and keeps the grade and source the Lean module prints.
 
 `lines` derives the DS lines from it, exactly: issue 1 for every class (A2, and A2u for the uniform datapath's), a tensor
 form's MACs a warp instruction over a quarter of its type's peak (A3), 128 over its pipe's width (A4; the uniform pipe's
@@ -21,6 +22,7 @@ from dataclasses import dataclass, replace
 from fractions import Fraction
 from pathlib import Path
 
+from verity_machine_model import card as K
 from verity_machine_model import headline as H
 from verity_machine_model.eps import UNI, design, eps, machine
 from verity_machine_model.model import model, vector
@@ -93,29 +95,41 @@ class Sheet:
     omega: tuple[str, str]  # A6's ω, a tensor class's accumulator words: its grade and source
 
 
-def _const(t: dict, key: str) -> Const:
-    return Const(Fraction(t[key]), t["grade"], t["source"])
-
-
 def sheet(data: Path) -> Sheet:
     p = data / SHEET
     if not p.is_file():
         raise SystemExit(f"{data}: no {SHEET}; a device with a data sheet has one (README \"Devices\")")
     t = tomllib.loads(p.read_text())
+    c = K.card(t["card"]) if "card" in t else None
+
+    def num(v: dict, key: str, where: str) -> Fraction:
+        """The card's number where `card` names an expression, else the entry's own `key`."""
+        if "card" not in v:
+            return Fraction(v[key])
+        if c is None:
+            raise SystemExit(f"{p}: {where} reads the card, and {SHEET} names none; add card = \"SKU\" at its top")
+        if key in v:
+            raise SystemExit(f"{p}: {where} reads {v['card']!r} from the card, which holds its number; drop {key}")
+        return K.value(c, v["card"])
+
+    def _const(v: dict, key: str, where: str = "") -> Const:
+        return Const(num(v, key, where or key), v["grade"], v["source"])
+
     kinds = {}
     for k, v in t["kinds"].items():
         form = Form(v["type"], v["m"], v["n"], v["k"], v["warps"], v.get("sparse", False)) if "type" in v else None
         kinds[k] = Kind(form, v.get("pipe"))
         if form and kinds[k].pipe:
             raise SystemExit(f"{p}: {k} has a tensor form and a pipe; a class has one or neither")
-    s = Sheet(name=t["name"], gpu=t["gpu"], vector=t["vector"], lean=t["lean"], fmax=_const(t["fmax"], "mhz"),
-              sms=_const(t["sms"], "value"), issue=_const(t["issue"], "slots"),
+    s = Sheet(name=t["name"], gpu=t["gpu"], vector=t["vector"], lean=t["lean"], fmax=_const(t["fmax"], "mhz", "[fmax]"),
+              sms=_const(t["sms"], "value", "[sms]"), issue=_const(t["issue"], "slots"),
               uniform_issue=_const(t["uniform_issue"], "slots"),
-              clocks={c: _const(v, "mhz") for c, v in t["clocks"].items()},
-              labels={c: v.get("label", f"`{c}` clock") for c, v in t["clocks"].items()},
-              peaks={ty: Peak(Fraction(v["macs"]), Fraction(v["sheet"]), v["sparse"], Fraction(v["tol"]), v["clock"],
-                              v["grade"], v["source"], v.get("element_words", 1)) for ty, v in t["peaks"].items()},
-              pipes={q: _const(v, "width") for q, v in t["pipes"].items()}, kinds=kinds,
+              clocks={k: _const(v, "mhz", f"[clocks.{k}]") for k, v in t["clocks"].items()},
+              labels={k: v.get("label", f"`{k}` clock") for k, v in t["clocks"].items()},
+              peaks={ty: Peak(num(v, "macs", f"[peaks.{ty}]"), Fraction(v["sheet"]), v["sparse"], Fraction(v["tol"]),
+                              v["clock"], v["grade"], v["source"], v.get("element_words", 1))
+                     for ty, v in t["peaks"].items()},
+              pipes={q: _const(v, "width", f"[pipes.{q}]") for q, v in t["pipes"].items()}, kinds=kinds,
               omega=(t["omega"]["grade"], t["omega"]["source"]))
     if s.issue.value != 1 or s.uniform_issue.value != 1:
         raise SystemExit(f"{p}: [issue] and [uniform_issue] take 1 slot, as Sheet.machine's issue row does; price A2u "

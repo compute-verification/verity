@@ -3,6 +3,11 @@ the model reads, each with the vendor document that states it (`sheet`, `grade`,
 measured run (`measured`, `runs`), or the run that would measure it (`gap`); the card's exact paths; its FP8 atoms'
 semantics; and the units that write registers (`[[writer]]`, with the census's joint issue rows, `[[joint]]`).
 
+A number the device's card file (`card = "SKU"`, `verity.hardware`) states as a ceiling is read from it: the entry gives
+`card = "EXPR"` (`card.py`) in place of its number, grade and source, and the SM count is the card's. θ keeps what the
+card doesn't hold: the forms and rates it has no entry for, the clocks a document quotes its figures at, the figures
+themselves (each still checked at 2 · sheet · SMs · clock), and every measured value, a sanity check on the ceiling.
+
 Each derivation is read twice: on the data sheet (every rate its `sheet` value) and measured (every rate its measured
 value, and the sheet's where no run has one, which the result lists as filled).
 
@@ -46,9 +51,11 @@ from pathlib import Path
 
 from scipy.optimize import linprog
 
+from verity_machine_model import card as K
 from verity_machine_model import eps as E
 
 THETA = "theta.toml"
+CARD = "card (ceiling)"     # the grade of a number θ reads from its card file
 LANES = 32
 WORD = 32                   # bits a register word
 SMSPS = 4                   # a joint issue row's SMSP-cycles a SM-clock
@@ -196,16 +203,36 @@ def theta(data: Path) -> Theta:
     if not p.is_file():
         raise SystemExit(f"{data}: no {THETA}; the devices with one are sm_120 (data/) and sm_90")
     t = tomllib.loads(p.read_text())
-    clocks = {c: Clock(c, v["mhz"], v["grade"], v["source"], v.get("measured", ""), v.get("measured_mhz"))
-              for c, v in t["clocks"].items()}
+    c = K.card(t["card"]) if "card" in t else None
+
+    def sourced(v: dict, field: str, where: str) -> tuple:
+        """(number, grade, source): the card's where `card` names an expression, else the entry's own."""
+        if "card" not in v:
+            return v.get(field), v["grade"], v["source"]
+        if c is None:
+            raise SystemExit(f"{p}: {where} reads the card, and {THETA} names none; add card = \"SKU\" at its top")
+        if dup := [f for f in (field, "grade", "source") if f in v]:
+            raise SystemExit(f"{p}: {where} reads {v['card']!r} from the card, which holds its number and source; "
+                             f"drop {', '.join(dup)}")
+        return K.number(c, v["card"]), CARD, K.pointer(c, v["card"])
+
+    clocks = {k: Clock(k, *sourced(v, "mhz", f"[clocks.{k}]"), v.get("measured", ""), v.get("measured_mhz"))
+              for k, v in t["clocks"].items()}
     rates: dict[str, Rate] = {}
     for v in t["rate"]:
         if v["key"] in rates:
             raise SystemExit(f"{p}: two rates {v['key']}")
-        rates[v["key"]] = Rate(v["key"], v["what"], v["unit"], v.get("sheet"), v.get("clock"), v.get("figure"),
-                               v["grade"], v["source"], v.get("measured"), v.get("runs", ""), v.get("gap", ""))
-    caps = {v["key"]: Capacity(v["key"], v["what"], v["value"], v["unit"], v["grade"], v["source"],
-                               v.get("measured", ""), v.get("gap", "")) for v in t["capacity"]}
+        sheet, grade, source = sourced(v, "sheet", f"rate {v['key']}")
+        rates[v["key"]] = Rate(v["key"], v["what"], v["unit"], sheet, v.get("clock"), v.get("figure"),
+                               grade, source, v.get("measured"), v.get("runs", ""), v.get("gap", ""))
+    caps = {}
+    for v in t["capacity"]:
+        value, grade, source = sourced(v, "value", f"capacity {v['key']}")
+        caps[v["key"]] = Capacity(v["key"], v["what"], value, v["unit"], grade, source, v.get("measured", ""),
+                                  v.get("gap", ""))
+    if c is not None and "sms" in t:
+        raise SystemExit(f"{p}: the card holds the SM count; drop sms and sms_source")
+    sms, sms_source = (K.number(c, "sm.count"), K.pointer(c, "sm.count")) if c else (t["sms"], t["sms_source"])
     writers = tuple(Writer(v["name"], v["rate"], v["per"], v["words"], v["pipe"], dict(v.get("joint", {})))
                     for v in t.get("writer", ()))
     joints = {v["name"]: Joint(v["name"], v["other"], v["source"]) for v in t.get("joint", ())}
@@ -217,7 +244,7 @@ def theta(data: Path) -> Theta:
                                v.get("against"), v["why"], v.get("gap", ""))
     public = tuple(Public(v["impl"], v["form"], v["gps"], v["card"], v["sms"], v["mhz"], v["source"])
                    for v in t.get("public", ()))
-    th = Theta(gpu=t["gpu"], sms=t["sms"], sms_source=t["sms_source"], honest=tuple(t["honest"]),
+    th = Theta(gpu=t["gpu"], sms=sms, sms_source=sms_source, honest=tuple(t["honest"]),
                documents=tuple(t["documents"]), clocks=clocks, rates=rates, capacities=caps,
                paths=tuple(t.get("path", ())), fp8=tuple(t.get("fp8", ())), writers=writers, joints=joints,
                units=units, public=public, sha_mix=t.get("sha512_mix"))

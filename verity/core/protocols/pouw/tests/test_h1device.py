@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from verity.hardware import load
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
@@ -93,19 +94,26 @@ def test_each_record_binds_its_pinned_step() -> None:
     assert D.SM90.gemm == BG.GEMM_SM90_S8
 
 
-def test_the_sm90_record_is_its_data_sheet() -> None:
-    """SMs, the tensor clock, f_max and the dense s8 MACs are DS-90's, and 2 x MACs x SMs x clock is half the H200 data sheet's
-    sparse INT8 3,958 TOPS to within its tolerance."""
+def test_the_sm90_record_is_its_card_and_data_sheet() -> None:
+    """SMs, f_max and the dense s8 MACs are the H200's card file's, which DS-90 reads too; the tensor clock is DS-90's, and
+    2 x MACs x SMs x clock is half the H200 data sheet's sparse INT8 3,958 TOPS to within its tolerance."""
+    card = load("h200-sxm-141gb")
+    assert (D.SM90.sms, D.SM90.fmax_mhz, D.SM90.s8_macs) == (132, 1980, 4096) == (
+        card["sm"]["count"]["value"], card["clock"]["sm"]["value"], card["rate"]["tensor"]["value"])
     sheet = tomllib.loads(SHEET_90.read_text())
     s8 = sheet["peaks"]["s8"]
-    assert (D.SM90.gpu, D.SM90.sms, D.SM90.fmax_mhz) == (sheet["gpu"], sheet["sms"]["value"], sheet["fmax"]["mhz"])
-    assert (D.SM90.tensor_mhz, D.SM90.s8_macs) == (sheet["clocks"][s8["clock"]]["mhz"], s8["macs"])
+    assert (D.SM90.gpu, sheet["card"]) == (sheet["gpu"], card["sku"])
+    assert (sheet["sms"]["card"], sheet["fmax"]["card"], s8["card"]) == ("sm.count", "clock.sm", "rate.tensor / weight.s8")
+    assert D.SM90.tensor_mhz == sheet["clocks"][s8["clock"]]["mhz"]
     assert s8["sparse"] and D.SM90.sheet_s8_tops == s8["sheet"] / 2
     assert abs(D.SM90.s8_dense_tops - s8["sheet"] / 2) <= s8["tol"]
 
 
-def test_the_sm120_record_is_ds120() -> None:
-    """f_max and the IMMA16832 MACs are `Accounting.TS.Headline.Sm120.ds120`'s."""
+def test_the_sm120_record_is_its_card_and_ds120() -> None:
+    """SMs, f_max and the IMMA16832 MACs are the card file's, and f_max is `Accounting.TS.Headline.Sm120.ds120`'s."""
+    card = load("rtx-pro-6000-server")
     lean = SM120_LEAN.read_text()
     assert re.search(r"def ds120 : SheetData Pipe where\n  fmax := 2430\n", lean)
-    assert (D.SM120.fmax_mhz, D.SM120.tensor_mhz, D.SM120.s8_macs, D.SM120.sheet_s8_tops) == (2430, 2430, 1024, None)
+    assert (D.SM120.sms, D.SM120.fmax_mhz, D.SM120.s8_macs) == (188, 2430, 1024) == (
+        card["sm"]["count"]["value"], card["clock"]["sm"]["value"], card["rate"]["tensor"]["value"])
+    assert (D.SM120.tensor_mhz, D.SM120.sheet_s8_tops) == (2430, None)

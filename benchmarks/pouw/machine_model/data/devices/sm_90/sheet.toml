@@ -1,21 +1,24 @@
 # DS-90 as a data sheet (note:20261019T0511Z-draft-mm-sheets, G1): each constant the data-sheet machine
 # (`Accounting.TS.Sheet.machine`) reads on the H200, its value, the vendor document that states it and its grade, and
-# each DS-90 class's tensor form or pipe. `machine-model sheet --device sm_90` derives every DS-90 line from it and
-# checks them against census/DS-90.csv; `--lean` prints the Lean module `lean` names, which the tests hold to it.
+# each DS-90 class's tensor form or pipe. A constant the card file states (verity/hardware/cards/h200-sxm-141gb.toml) is
+# read from it: `card = "EXPR"`, beside the grade and source the Lean module prints. `machine-model sheet --device sm_90`
+# derives every DS-90 line from it and checks them against census/DS-90.csv; `--lean` prints the Lean module `lean`
+# names, which the tests hold to it.
 # Scope: one GPU's own SMs. A peer GPU's work over NVLink or NVSwitch is outside the sheet, and Device.lean's side
 # channels don't list it (RT-SCOPE-1, note:20261019T0455Z-draft-rt-scope).
 name = "H200"
 gpu = "H200 SXM (sm_90a)"
+card = "h200-sxm-141gb"
 vector = "DS-90"
 lean = "Security/Definitions/Accounting/Sheets/H200.lean"
 
 [fmax]
-mhz = 1980
+card = "clock.sm"
 grade = "whitepaper (H100 SXM5), and measured"
 source = "H100 Tensor Core GPU Architecture whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non Tensor Core Ops: 1980 MHz', footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous'; the H200 data sheet states no clock; the driver's maximum on vy-dc-h200 is 1980 MHz (EPS1 DC, note:20261017T0452Z-draft-eps1-dc)"
 
 [sms]
-value = 132
+card = "sm.count"
 grade = "whitepaper (H100 SXM5), and measured"
 source = "H100 whitepaper V1.04, Table 3, H100 SXM5: 'SMs 132'; the H200 data sheet states none (its peaks equal H100 SXM5's); the device reports 132"
 
@@ -40,7 +43,7 @@ source = "H100 whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP8, F
 
 [clocks.fp64]
 label = "FP64 tensor boost clock"
-mhz = 1980
+card = "clock.sm"
 grade = "whitepaper (H100 SXM5)"
 source = "H100 whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non Tensor Core Ops: 1980 MHz'; f_max itself"
 
@@ -48,7 +51,7 @@ source = "H100 whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP64 T
 # `sparse` whether it is with sparsity (the dense figure half of it), `tol` half its last printed digit, and `clock`
 # the clock at which the per-clock peak reproduces it: 2 · macs · SMs · clock is the figure to within tol.
 [peaks.s8]
-macs = 4096
+card = "rate.tensor / weight.s8"
 sheet = 3958
 sparse = true
 tol = 0.5
@@ -57,7 +60,7 @@ grade = "data sheet and whitepaper; per clock derived (figure over SMs and the t
 source = "H200 data sheet (nvidia.com/en-us/data-center/h200, Technical Specifications, H200 SXM): 'INT8 Tensor Core 3,958', footnote 2 'With sparsity', footnote 1 'Preliminary specifications'; H100 whitepaper V1.04 Table 3 'Peak INT8 Tensor TOPS 1978.9/3957.8'; 'H100 SM Architecture': twice A100's MMA rate a SM on equivalent data types"
 
 [peaks.e4m3]
-macs = 4096
+card = "rate.tensor / weight.e4m3"
 sheet = 3958
 sparse = true
 tol = 0.5
@@ -66,7 +69,7 @@ grade = "data sheet and whitepaper; per clock derived"
 source = "H200 data sheet, H200 SXM: 'FP8 Tensor Core 3,958' with sparsity; H100 whitepaper V1.04 Table 3 'Peak FP8 Tensor TFLOPS with FP32 Accumulate 1978.9/3957.8'"
 
 [peaks.e5m2]
-macs = 4096
+card = "rate.tensor / weight.e5m2"
 sheet = 3958
 sparse = true
 tol = 0.5
@@ -75,7 +78,7 @@ grade = "data sheet and whitepaper; per clock derived"
 source = "H200 data sheet, H200 SXM: 'FP8 Tensor Core 3,958' with sparsity, for both FP8 formats (CUDA C++ Programming Guide 12.9 §18.8.1: FP8 'in either E4M3 or E5M2')"
 
 [peaks.f16]
-macs = 2048
+card = "rate.tensor / weight.f16"
 sheet = 1979
 sparse = true
 tol = 0.5
@@ -84,7 +87,7 @@ grade = "data sheet and whitepaper; per clock derived"
 source = "H200 data sheet, H200 SXM: 'FP16 Tensor Core 1,979' with sparsity; H100 whitepaper V1.04 Table 3 'Peak FP16 Tensor TFLOPS with FP32 Accumulate 989.4/1978.9'"
 
 [peaks.bf16]
-macs = 2048
+card = "rate.tensor / weight.bf16"
 sheet = 1979
 sparse = true
 tol = 0.5
@@ -93,7 +96,7 @@ grade = "data sheet and whitepaper; per clock derived"
 source = "H200 data sheet, H200 SXM: 'BFLOAT16 Tensor Core 1,979' with sparsity; H100 whitepaper V1.04 Table 3 'Peak BF16 Tensor TFLOPS with FP32 Accumulate 989.4/1978.9'"
 
 [peaks.tf32]
-macs = 1024
+card = "rate.tensor / weight.tf32"
 sheet = 989
 sparse = true
 tol = 0.5
@@ -104,7 +107,7 @@ source = "H200 data sheet, H200 SXM: 'TF32 Tensor Core 989' with sparsity; H100 
 # DMMA (`mma.sync .f64`): an int8 × int8 product is exact in f64, so it heads exact int8 words, and it has its row
 # here, not 0 (RT-ISA-1). `element_words`: an f64 accumulator element takes two registers (A6-WIDE).
 [peaks.f64]
-macs = 128
+card = "rate.tensor / weight.f64"
 sheet = 67
 sparse = false
 tol = 0.5
@@ -120,17 +123,17 @@ source = "PTX ISA 9.4, the accumulator (D) fragments: mma.sync m16n8k32 .s32 fou
 
 # Each Nsight Compute pipe's results an SM clock (A4).
 [pipes.alu]
-width = 64
+card = "rate.alu"
 grade = "Programming Guide and Nsight Compute"
 source = "CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 9.0: 32-bit integer add 64, compare/minimum/maximum 64, bitwise AND/OR/XOR 64, shift 64 (results a clock a multiprocessor); Nsight Compute Kernel Profiling Guide §2.3.6: alu executes 'most bit manipulation and logic instructions ... integer instructions, excluding IMAD and IMUL'"
 
 [pipes.imad]
-width = 64
+card = "rate.imad"
 grade = "Programming Guide"
 source = "CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 9.0: '32-bit integer multiply, multiply-add, extended-precision multiply-add' 64; Nsight Compute §2.3.6: IMUL and IMAD on FMA Heavy"
 
 [pipes.shfl]
-width = 32
+card = "rate.shfl"
 grade = "Programming Guide"
 source = "CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 9.0: 'warp shuffle' 32; Nsight Compute §2.3.6: lsu issues shuffles"
 
