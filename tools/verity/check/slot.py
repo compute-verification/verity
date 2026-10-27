@@ -24,7 +24,9 @@ circuit-check's budget, so two checks' circuit-checks never each budget all the 
 20:06Z: two cold ones, each at its six 125-151 GiB targets, filled the 1600 GiB slice); while the check runs, the slot holds a
 research.mem reservation of GB (`reserve`), so `research run --mem-gb` admits nothing that needs what the check may still take.
 With every slot busy it retries every POLL_S, reading
-SLOTS again each time, so a slot added while checks wait is taken by them; with no slots file, CMD runs as it is. A slot
+SLOTS again each time, so a slot added while checks wait is taken by them; with no slots file, CMD runs as it is, unless
+CHECK_SLOTS named that file: then it exits NOT_STARTED, naming the pools the machine has (vy-nebius-1, 27 Oct: a run sent to a
+pool the node lacked ran unpinned beside its GPU jobs; INF-278). A slot
 with a core outside this process's own (os.sched_getaffinity) is skipped, since pinning onto it fails. Stdlib only: it runs before uv.
 
 Waiters take slots in the order they came: each holds a locked ticket in LINE beside SLOTS while it waits, and only the oldest
@@ -753,6 +755,12 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
     priority, by, wait_max, run_max, pair, rank = options(opts)
     if not cmd:
         sys.exit(USAGE)
+    if not SLOTS.exists() and os.environ.get("CHECK_SLOTS"):
+        pools = ", ".join(p.parent.name for p in lane_pools(SLOTS.parent.parent / "slots")) or "none"
+        print(f"slot: not started: CHECK_SLOTS names {SLOTS}, which this machine doesn't have, and CMD would run on any core "
+              f". Name one of its pools instead (CHECK_SLOTS={SLOTS.parent.parent}/NAME/slots, or `research run --pool "
+              f"NAME`): {pools}; exit {NOT_STARTED}", file=sys.stderr, flush=True)
+        return NOT_STARTED
     if not SLOTS.exists():
         print(f"slot: no check slots on this machine ({SLOTS}); running unpinned", file=sys.stderr, flush=True)
         os.execvp(cmd[0], cmd)
