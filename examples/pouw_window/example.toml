@@ -1,0 +1,9 @@
+# The PoUW window example's rung on the ladder (examples/README.md): moved, its evidence not yet cited. Its check runs on
+# stand-in values with the statement's ideal proof; C-Flock --zk and the Lean verifier of record prove it only on a pod.
+protocol = "pouw"
+workload = "none"   # stand-in int8 W and X (window.Window.stand_in) until vLLM's int8 window exists
+level = 0
+
+[placement]
+prover = "local"    # attacks.honest and each attack
+verifier = "local"  # window.Round's check, in the same process
