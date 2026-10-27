@@ -24,10 +24,11 @@ the sampled statement at `RowsOk` circuit files (row/v1, row/v2 and row-seg/v1 p
 verifiers' acceptance (`Refused`). `Lowers`: the claims program `progOf C κ` lowers every unit of every circuit
 (`Flock.Bridge.lowers`).
 `FaultyRightC`: a unit right on its shaped openings is not faulty (`Flock.Bridge.faultyRightC`). `Public`:
-`Flock.SecurityProofs.SampledKSLivePub : Flock.Guarantees.SampledKSLivePub`, `SampledKSLiveV2` with its error
-`Flock.Bridge.deltaPub`, a function of the public parameters. `PublicDeployed`:
-`Flock.SecurityProofs.DeltaPubDeployed : Flock.Guarantees.DeltaPubDeployed`, `deltaPub < 1` at the deployment's
-parameters. `PublicWitnesses`: its honest lemma (the parameter hypotheses hold as deployed) and its nontrivial lemma
+`Flock.SecurityProofs.SampledKSLivePub : Flock.Guarantees.SampledKSLivePub`, `SampledKSLiveV2` in the additive form
+`δ + f(K·Pr[B^τ])`: `Flock.Bridge.deltaPub`, a function of the public parameters, plus `Flock.Bridge.lossPub` at the
+collision probability of `B^τ`, the uniform mixture of C-Flock's `K` finders (`PubFinder`). `PublicDeployed`:
+`Flock.SecurityProofs.DeltaPubDeployed : Flock.Guarantees.DeltaPubDeployed`, `δ + f(p) < 1` at the deployment's
+parameters for `p ≤ 2^-200`. `PublicWitnesses`: its honest lemma (the parameter hypotheses hold as deployed) and its nontrivial lemma
 (false at the verifier that accepts everything). `PublicToyDesc`: a hand-built circuit file meeting the nontrivial
 lemma's structural premises (no port, a computed returned gate, `ioSum ≤ 2^40`). -/
 

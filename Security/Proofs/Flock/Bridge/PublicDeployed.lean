@@ -1,19 +1,20 @@
 import Proofs.Flock.Bridge.Public
 
 /-!
-# `deltaPub` is below 1 at the deployment's parameters
+# `SampledKSLivePub`'s error is below 1 at the deployment's parameters
 
-`SampledKSLivePub` bounds a cheating prover's success by `Bridge.deltaPub`, which says something only below 1. At the
-parameters ONE-19 deploys, `ρ = 1/2`, `k = ⌈2^24/e⌉` (`kDep`) and `M = R_w = 2^192`, it is:
+`SampledKSLivePub` bounds a cheating prover's success by `δ + f(K·Pr[B^τ])` (`Bridge.deltaPub`, `Bridge.lossPub`),
+which says something only below 1. At the parameters ONE-19 deploys, `ρ = 1/2`, `k = ⌈2^24/e⌉` (`kDep`) and
+`M = R_w = 2^192`, it is:
 
 * `rateM1_kDep`: `SampledKSLivePub`'s rate hypothesis holds, `2^23/(e·kDep) ≤ 1/2`;
 * `ksClosedM1_le`: the knowledge term is at most `2^-155` at budgets `q_F, q_S ≤ 2^82`;
 * `link_le`: the link factor is at most `2^-150` at `t' ≤ 2^80`;
-* `deltaPub_le_deployed`: so `deltaPub` is the draw's miss plus at most `2^-100`, for `W ≤ 2^40` committed wires;
+* `deltaPub_le_deployed`: so `δ` is the draw's miss plus at most `2^-100`, for `W ≤ 2^40` committed wires;
+* `lossPub_le_deployed`: `f(p) ≤ 2^-60` at `p ≤ 2^-200`;
 * `miss_le_pow`, `miss_le_exp`: the miss `C(n−K₀, k_d)/C(n, k_d)` is at most `(1 − K₀/n)^{k_d} ≤ e^{−K₀k_d/n}`;
 * `Flock.Guarantees.DeltaPubDeployed`: at `K₀ ≤ n ≤ K₀·k_d` (a draw of `k_d` units expects at least one of `K₀` bad
-  ones), the miss is at most `1/e`, so `deltaPub < 1` at `SampledKSLivePub`'s budgets `q_F = 2(t' + v)`, `q_S = t' + v`
-  for `t', v ≤ 2^80`.
+  ones), the miss is at most `1/e`, so `δ + f(p) < 1` for `p ≤ 2^-200`.
 -/
 
 namespace Flock.Bridge
@@ -105,32 +106,51 @@ theorem link_le {k : ℕ} (hk : (k : ℝ) ≤ 2 ^ 23) {t' : ℝ} (ht : t' ≤ 2 
   · linarith
   · norm_num
 
-/-- **`deltaPub` at the deployment's parameters is the draw's miss plus at most `2^-100`**: `ρ = 1/2`, `k = kDep`,
-`M = R_w = 2^192`, budgets `q_F, q_S ≤ 2^82`, `t' ≤ 2^80` and at most `2^40` committed wires. -/
-theorem deltaPub_le_deployed (n kd K₀ W : ℕ) (hW : W ≤ 2 ^ 40) {qF qS t' : ℝ} (hF0 : 0 ≤ qF) (hF : qF ≤ 2 ^ 82)
-    (hS0 : 0 ≤ qS) (hS : qS ≤ 2 ^ 82) (ht0 : 0 ≤ t') (ht : t' ≤ 2 ^ 80) :
-    deltaPub n kd K₀ kDep qF qS t' (2 ^ 192) (2 ^ 192) W (1 / 2) ≤
+/-- **`δ` at the deployment's parameters is the draw's miss plus at most `2^-100`**: `ρ = 1/2`, `k = kDep`,
+`M = R_w = 2^192` and at most `2^40` committed wires. -/
+theorem deltaPub_le_deployed (n kd K₀ W : ℕ) (hW : W ≤ 2 ^ 40) :
+    deltaPub n kd K₀ kDep (2 ^ 192) (2 ^ 192) W (1 / 2) ≤
       ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) + 2 ^ (-(100 : ℝ)) := by
   unfold deltaPub
-  have hks := ksClosedM1_le kDep_le hF0 hF hS0 hS
-  have hl := link_le kDep_le ht
+  have hl := link_le kDep_le (t' := 0) (by norm_num)
+  rw [zero_mul, mul_zero, zero_div, zero_add] at hl
   have hW' : (W : ℝ) ≤ 2 ^ 40 := by exact_mod_cast hW
-  set B := 2 * (t' * (1 + (kDep : ℝ))) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * ((2 ^ 192 : ℕ) : ℝ)) +
-      (kDep : ℝ) / (Real.exp 1 * ((2 ^ 192 : ℕ) : ℝ)) with hB
+  set B := 1 / (Real.exp 1 * ((2 ^ 192 : ℕ) : ℝ)) + (kDep : ℝ) / (Real.exp 1 * ((2 ^ 192 : ℕ) : ℝ)) with hB
   have hl0 : 0 ≤ B := by rw [hB]; positivity
   have hWl := mul_le_mul hW' hl hl0 (by positivity)
-  have e : ∀ r : ℝ, (2 : ℝ) ^ (-r) = 1 / (2 : ℝ) ^ r := fun r => by rw [Real.rpow_neg (by norm_num)]; ring
-  have e155 : (2 : ℝ) ^ (155 : ℝ) = 2 ^ (155 : ℕ) := by norm_num
-  have e150 : (2 : ℝ) ^ (150 : ℝ) = 2 ^ (150 : ℕ) := by norm_num
-  have e100 : (2 : ℝ) ^ (100 : ℝ) = 2 ^ (100 : ℕ) := by norm_num
-  rw [e, e155] at hks
-  rw [e, e150] at hWl
-  rw [e, e100]
-  have hρ : (1 : ℝ) - 1 / 2 = 1 / 2 := by norm_num
-  rw [hρ, div_div_eq_mul_div, div_div_eq_mul_div]
-  have h1 : ksClosedM1 kDep qF qS * 2 / 1 ≤ 1 / 2 ^ 155 * 2 := by linarith
-  have h2 : (W : ℝ) * B * 2 / 1 ≤ 2 ^ 40 * (1 / 2 ^ 150) * 2 := by linarith
-  have h3 : (1 : ℝ) / 2 ^ 155 * 2 + 2 ^ 40 * (1 / 2 ^ 150) * 2 ≤ 1 / 2 ^ 100 := by norm_num
+  have h203 : (2 : ℝ) ^ (-(203 : ℝ)) = 1 / 2 ^ 203 := by
+    rw [Real.rpow_neg (by norm_num)]; norm_num
+  have h150 : (2 : ℝ) ^ (-(150 : ℝ)) = 1 / 2 ^ 150 := by
+    rw [Real.rpow_neg (by norm_num)]; norm_num
+  have h100 : (2 : ℝ) ^ (-(100 : ℝ)) = 1 / 2 ^ 100 := by
+    rw [Real.rpow_neg (by norm_num)]; norm_num
+  have e2 : ∀ x : ℝ, x / (1 - 1 / 2) = 2 * x := fun x => by ring
+  rw [h150] at hWl
+  rw [h203, h100, e2, e2]
+  have h2 : (2 : ℝ) * (1 / 2 ^ 203) + 2 * (2 ^ 40 * (1 / 2 ^ 150)) ≤ 1 / 2 ^ 100 := by norm_num
+  linarith
+
+/-- **`f(p)` at the deployment's parameters is at most `2^-60`** at `p ≤ 2^-200`: `ρ = 1/2`, `k ≤ 2^23` and at most
+`2^40` committed wires. -/
+theorem lossPub_le_deployed {k W : ℕ} (hk : (k : ℝ) ≤ 2 ^ 23) (hW : W ≤ 2 ^ 40) {p : ℝ} (hp0 : 0 ≤ p)
+    (hp : p ≤ 1 / 2 ^ 200) : lossPub k W (1 / 2) p ≤ 1 / 2 ^ 60 := by
+  unfold lossPub
+  have hW' : (W : ℝ) ≤ 2 ^ 40 := by exact_mod_cast hW
+  have hs : Real.sqrt p ≤ 1 / 2 ^ 100 := by
+    rw [Real.sqrt_le_left (by positivity)]
+    exact hp.trans (le_of_eq (by norm_num))
+  have hsk : Real.sqrt (k * p) ≤ 2 ^ 12 * (1 / 2 ^ 100) := by
+    rw [Real.sqrt_mul (Nat.cast_nonneg k)]
+    have hk' : Real.sqrt k ≤ 2 ^ 12 := by
+      rw [Real.sqrt_le_left (by positivity)]
+      linarith
+    exact mul_le_mul hk' hs (Real.sqrt_nonneg _) (by positivity)
+  have hWp : (W : ℝ) * p ≤ 2 ^ 40 * (1 / 2 ^ 200) := mul_le_mul hW' hp hp0 (by positivity)
+  have hC := mul_le_mul_of_nonneg_left hs (show (0 : ℝ) ≤ 2 * 25638 + 2 ^ 14 + 2 by norm_num)
+  have e2 : ∀ x : ℝ, x / (1 - 1 / 2) = 2 * x := fun x => by ring
+  rw [e2, e2]
+  have h3 : (2 : ℝ) * ((2 * 25638 + 2 ^ 14 + 2) * (1 / 2 ^ 100) + 1 / 2 ^ 200 + 2 ^ 12 * (1 / 2 ^ 100)) +
+      2 * (2 ^ 40 * (1 / 2 ^ 200)) ≤ 1 / 2 ^ 60 := by norm_num
   linarith
 
 theorem descFactorial_mul_pow_le {a n : ℕ} (h : a ≤ n) (k : ℕ) :
@@ -206,26 +226,25 @@ end Flock.Bridge
 namespace Flock.Guarantees
 
 /-- **`SampledKSLivePub`'s error is below 1 at the deployment's parameters.** At `k = kDep = ⌈2^24/e⌉`, `ρ = 1/2` and
-`M = R_w = 2^192`, its rate hypothesis holds (`1 ≤ k`, `rateM1 k ≤ ρ`), and `deltaPub < 1` at its budgets
-`q_F = 2(t' + v)` and `q_S = t' + v` for a prover's per-run time `t' ≤ 2^80` and one opening's verification `v ≤ 2^80`, at
-most `2^40` committed wires (`W`, `Bridge.ioSum`) and a draw of `k_d` of `n` units with `K₀ ≤ n ≤ K₀·k_d`. -/
+`M = R_w = 2^192`, its rate hypothesis holds (`1 ≤ k`, `rateM1 k ≤ ρ`), and `δ + f(p) < 1` at most `2^40` committed wires
+(`W`, `Bridge.ioSum`), a draw of `k_d` of `n` units with `K₀ ≤ n ≤ K₀·k_d`, and `p ≤ 2^-200`: wherever
+`K·Pr[B^τ] ≤ 2^-200`. -/
 def DeltaPubDeployed : Prop :=
   1 ≤ Bridge.kDep ∧ FlockSoundness.Discharge.ZkLink.rateM1 Bridge.kDep ≤ 1 / 2 ∧
-    ∀ (n kd K₀ W : ℕ) (t' v : ℝ), 0 < n → K₀ ≤ n → n ≤ K₀ * kd → W ≤ 2 ^ 40 → 0 ≤ t' → t' ≤ 2 ^ 80 →
-      0 ≤ v → v ≤ 2 ^ 80 →
-      Bridge.deltaPub n kd K₀ Bridge.kDep (2 * (t' + v)) (t' + v) t' (2 ^ 192) (2 ^ 192) W (1 / 2) < 1
+    ∀ (n kd K₀ W : ℕ) (p : ℝ), 0 < n → K₀ ≤ n → n ≤ K₀ * kd → W ≤ 2 ^ 40 → 0 ≤ p → p ≤ 1 / 2 ^ 200 →
+      Bridge.deltaPub n kd K₀ Bridge.kDep (2 ^ 192) (2 ^ 192) W (1 / 2) + Bridge.lossPub Bridge.kDep W (1 / 2) p < 1
 
 end Flock.Guarantees
 
 /-- **`SampledKSLivePub`'s error is below 1 at the deployment's parameters** (`Flock.Guarantees.DeltaPubDeployed`). -/
 theorem Flock.SecurityProofs.DeltaPubDeployed : Flock.Guarantees.DeltaPubDeployed := by
   refine ⟨Flock.Bridge.one_le_kDep, Flock.Bridge.rateM1_kDep, ?_⟩
-  intro n kd K₀ W t' v hn0 hK hn hW ht0 ht hv0 hv
-  have hF : 2 * (t' + v) ≤ 2 ^ 82 := by linarith
-  have hS : t' + v ≤ 2 ^ 82 := by linarith
-  refine (Flock.Bridge.deltaPub_le_deployed n kd K₀ W hW (by linarith) hF (by linarith) hS ht0 ht).trans_lt ?_
+  intro n kd K₀ W p hn0 hK hn hW hp0 hp
+  have hd := Flock.Bridge.deltaPub_le_deployed n kd K₀ W hW
+  have hl := Flock.Bridge.lossPub_le_deployed Flock.Bridge.kDep_le hW hp0 hp
   have h := Flock.Bridge.miss_le_half hn0 hK hn
-  have : (2 : ℝ) ^ (-(100 : ℝ)) < 1 / 2 := by
+  have h100 : (2 : ℝ) ^ (-(100 : ℝ)) < 1 / 4 := by
     rw [Real.rpow_neg (by norm_num), show (100 : ℝ) = ((100 : ℕ) : ℝ) by norm_num, Real.rpow_natCast]
     norm_num
+  have h60 : (1 : ℝ) / 2 ^ 60 < 1 / 4 := by norm_num
   linarith
