@@ -63,9 +63,10 @@ def declare(monkeypatch):
 
 @pytest.fixture
 def sidecar(monkeypatch):
-    """Stand-in targets of ``Leaf``'s sidecar (`by_calls._family_targets`)."""
-    def go(*fns):
+    """Stand-in targets of ``Leaf``'s sidecar (`by_calls._family_targets`), and what it binds that select drops."""
+    def go(*fns, dropped=()):
         monkeypatch.setattr(BC, "_family_targets", lambda c: (SIDECAR, {f.id: f for f in fns}))
+        monkeypatch.setattr(BC, "_family_dropped", lambda c: {f.id: f for f in dropped})
     return go
 
 
@@ -115,7 +116,18 @@ def test_a_callee_with_no_target_agreeing_in_its_switches_is_unbound(declare, si
     e = BC.check(root)
     (f,) = e["failures"]
     assert f["code"] == "unbound" and f["callee"] == bind(Leaf, N=LARGE, MODE="b").id
-    assert "agrees with it in MODE" in f["name"] and a2.id in f["name"]
+    assert "agrees with it in MODE" in f["name"] and a2.id in f["name"] and "select" not in f["name"]
+
+
+def test_an_unbound_callee_names_the_agreeing_binding_select_drops(declare, sidecar):
+    """A sidecar that binds an agreeing target over MAX_GATES, beside a smaller one of the family that doesn't agree, has it
+    dropped (`targets.select`): the failure says so, not only that none is bound."""
+    root = bind(Root, N=LARGE)
+    declare(root)
+    sidecar(bind(Leaf, N=2, MODE="a"), dropped=[bind(Leaf, N=3, MODE="b"), bind(Leaf, N=3, MODE="a")])
+    (f,) = BC.check(root)["failures"]
+    assert f["code"] == "unbound" and bind(Leaf, N=3, MODE="b").id in f["name"] and "`targets.select` drops" in f["name"]
+    assert bind(Leaf, N=3, MODE="a").id not in f["name"]
 
 
 def test_statics_differ_by_switch_or_by_size():
