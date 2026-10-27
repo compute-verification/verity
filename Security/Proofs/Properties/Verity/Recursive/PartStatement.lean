@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Complete.Encode
 import Proofs.Flock.Claims.Recursion.Deploy
+import Proofs.Properties.Verity.Recursive.Names
 import VStarRecursive
 
 /-!
@@ -192,13 +193,6 @@ theorem readXPre_spec {x : Claims.Msg} {r : XR} (h : readXPre x = some r) :
   · cases h
   · cases h
     exact ⟨hw, hri, toOption_ok hshape, toOption_ok hpart⟩
-
-/-- **The form compiled part `s` sets up**: the statement `verity/flock-circuit` (`VStar.Recursive.STATEMENT`) under
-`--zk`, its coins the keyed coin tree, one table and no lookup tables, and no `--work`, `--work-table`, `--stratified`,
-`--closure` or `--public-inputs`. `Names`' `Verity.Recursive.PartForm` is the same body. -/
-def PartForm (b : Raw) : Prop :=
-  b.statement = VStar.Recursive.STATEMENT ∧ b.zk = true ∧ b.osCoins = false ∧ b.count = 1 ∧ b.tables = [] ∧
-    b.work = none ∧ b.workTable = none ∧ b.stratified = none ∧ b.closure = none ∧ b.publicInputs = none
 
 theorem len_encBytes (b : ByteArray) : (encBytes b).length = 8 + b.size := by
   show (encNat b.size ++ b.data.toList).length = _
