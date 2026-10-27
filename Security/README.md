@@ -42,26 +42,25 @@ and after and each changed definition with its source; nothing waits on it, and 
 
 ## The guarantees to read first
 
-**Protocol soundness, `Verity.Soundness`: not yet in Lean.** The spec has its building block, `Verity.Sound`
-(`Definitions/Core/Game.lean`): a game is sound for a claim with error δ when accepting while the claim fails has
-probability at most δ. It is being built as `Verity.Soundness` in `Properties.Verity.Soundness`, at onsite's
-compiled verifier: it takes each subprotocol's target (`Verity.Vocab.SampledProofsSound`, `PouwSound`, `PousSound`,
-`BandwidthAuditSound`, `NetworkCertifierSound`) as a hypothesis and bounds accepting while a claim of the period fails by
-their summed errors (proof: `Verity.Vocab.soundness`); the wipe joins in `Properties.Verity.Wipe`.
+**Protocol soundness, `Verity.Soundness`: not yet in Lean on `main`.** It will be one theorem over all the subprotocols:
+the verifier accepts while a claim of the period fails with probability at most their errors summed, each subprotocol's
+guarantee entering as a target until that subprotocol's own proof discharges it. The memory wipe joins as the sixth
+subprotocol. Its building block on `main` is `Verity.Sound` (`Definitions/Core/Game.lean`).
 
-Each subprotocol's top guarantee, each proved under `Proofs/`. A status names the statement's named assumptions; the
+The table lists what it rests on, then one guarantee outside it; each is proved under `Proofs/`. A status names the statement's named assumptions; the
 conditions it places on its inputs and setup, which the lock also lists, are left out.
 
 | Subprotocol | Guarantee | Status |
 |---|---|---|
 | Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, `Proofs/Flock/Bridge/Refused.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance for its finders, `TableCRZ` and `LinkCRZC` |
-| PoUW, period check | `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, `Properties/Pouw/PeriodJ10R.lean` | Proved under named assumptions: `TileServiceSound`, `TileDrawIsCoin`, `RegisteredBeforeDraw`, `SaltIsLiveCoin`, `SharedNoiseLucks`, `UnitFixed` |
-| PoUW, Dither | `Pouw.Guarantees.Dither.WorkSound`, `Definitions/Pouw/Guarantees/Dither.lean` | Proved under named assumptions: the device's `G1`–`G3`, `P1`, `P2`; `SAKMatmul`, `ShaSpeed`, `OutsourceWithinEgress`, `ServiceSound`, `ImportWithinCertifier`, `ExtractAdv` |
+| PoUW | `Properties.Pouw.Period.H1CheckedCreditPeriod`, `Properties/Pouw/Period.lean` | Proved under named assumptions: `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt` |
 | PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean` | Proved under named assumptions: `CoinCommitHides`, `RingDevice`, and `P2RingAuditSecure`, an open conjecture |
 | Bandwidth audit | `Bandwidth.Guarantees.AuditRO`, `Definitions/Accounting/Guarantees/Bandwidth.lean` | Proved, in the random-oracle model |
-| Remote bandwidth audit | `Properties.RemoteAudit.Line.LineHeld`, `Properties/RemoteAudit/Line.lean` | Proved under named assumptions: the memory model's, `Accounting.Remote.Held.Assumptions` and `Accounting.Remote.Draw.Assumptions` |
 | Network certifier | `NetTiming.Guarantees.PeriodLeakAccepted`, `Definitions/NetworkCertifier/Guarantees/Period.lean` | Proved under named assumptions: `TrustedHost`, `Claims.Flock.ListWithin`, and sampled proofs' `Claims.Sampling.KS` and `Claims.Sampling.Commitment.Binds`; each window is bounded alone, with no union over the period yet |
 | Memory wipe | `Pous.Guarantees.StreamedWipe`, `Definitions/Pous/Guarantees/StreamedWipe.lean` | Proved; the PRF enters as its advantage term |
+| Remote bandwidth audit | `Properties.RemoteAudit.Line.LineHeld`, `Properties/RemoteAudit/Line.lean` | Outside protocol soundness for now, that audit's own guarantee. Proved under named assumptions: `Accounting.Remote.Held.Assumptions`, `Accounting.Remote.Draw.Assumptions` |
+
+PoUW has other guarantees, outside protocol soundness.
 
 ## Building and checking
 
