@@ -377,7 +377,6 @@
     {"file": "verity/core/protocols/network/nci/lean/scripts/desc_difftest_vectors.py", "count": 1},
     {"file": "verity/core/protocols/network/tests/period_case.py", "count": 1},
     {"file": "verity/core/protocols/network/tests/test_lean_audit.py", "count": 1},
-    {"file": "verity/core/protocols/pous/check/scripts/difftest_vectors.py", "count": 2},
     {"file": "verity/core/protocols/pous/check/tests/test_setup_difftest.py", "count": 1},
     {"file": "verity/core/protocols/pous/memory_challenger.py", "count": 1},
     {"file": "verity/core/protocols/pous/streamed_wipe.py", "count": 1},
