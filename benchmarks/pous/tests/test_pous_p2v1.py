@@ -739,7 +739,7 @@ def test_the_signed_sessions_are_on_disk_before_any_verdict_runs(tmp_path, monke
 
 def test_a_test_signed_audit_leaves_nothing_in_tmpdir(tmp_path_factory, monkeypatch):
     """`--signer test`'s leaf state and session log are in a temporary directory the audit removes, whether it ends or
-    fails: nothing removes one left in `$TMPDIR` (`pous-session-log-*` and `pous-test-signer-*` held 82% of vy-nebius-2's
+    fails: nothing removes one left in `$TMPDIR` (`pous-session-log-*` and `pous-test-signer-*` held 82% of a GPU node's
     /workspace inodes once)."""
     import tempfile
 

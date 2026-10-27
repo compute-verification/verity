@@ -11,7 +11,7 @@ on every pass, at the scheme's certified parameters.
   - Llama-3.1-8B: layer 0 and the untied head, 22,688 blocks (band-gpu and the reference; not in `vllm-gpu`'s frozen
     harness).
 - `bench.py` is the harness: one command per (scheme, implementation, weight set, hardware). It writes `bench-result.json`
-  (`verity-pous/bench-result/v1`), and `result.json` under `research run`.
+  (`verity-pous/bench-result/v1`), and `result.json` in `$RESEARCH_RUN_DIR` when that is set.
   - Every implementation passes the same gates:
     - the scheme's pinned conformance vectors;
     - the implementation's own gates: known answers, and decoded blocks equal to the reference's;
@@ -106,17 +106,13 @@ A new one is a class in `bench.py`'s `IMPLS`.
 PYTHONPATH=. python benchmarks/pous/bench.py --impl reference \
   --weight-set qwen2.5-0.5b/linears+head --hardware local --out /tmp/pous-bench --max-segments 1   # about 50 s
 
-git -C <the implementation's checkout> archive -o impl.tar 4e49163193c3750dad580f3a28f5428fbb722a8a
-research run --on <L40S pod> --project verity --source . --cwd source --send impl.tar --campaign pous \
-  -- bash benchmarks/pous/pod.sh IMPL=vllm-gpu IMPL_COMMIT=4e49163193c3750dad580f3a28f5428fbb722a8a
-research run --on <RTX 4090 pod> --project verity --source . --cwd source --campaign pous \
-  -- bash benchmarks/pous/pod.sh IMPL=band-gpu [WS=qwen2.5-7b/layer0+head] [NVME_DIR=/workspace/nvme]
-research run --on <RTX 4090 pod> --project verity --source . --cwd source --campaign pous \
-  -- bash benchmarks/pous/pod.sh IMPL=side-by-side [WS=...] [NVME_DIR=/workspace/nvme]      # band and P2 v1, then the table
-research run --on <RTX PRO 6000 pod> --project verity --source . --cwd source --campaign pous \
-  -- bash benchmarks/pous/pod.sh IMPL=side-by-side GATES_ONLY=1 MAX_SEGMENTS=2              # build check: both arms' kernel gates
-research run --on <RTX PRO 6000 pod> --project verity --source . --cwd source --campaign pous \
-  -- bash benchmarks/pous/pod.sh IMPL=band-gpu BAND_D=6                                      # the band at in-degree 6
+# on the GPU machine, from the source tree's root; pod.sh writes to $RESEARCH_RUN_DIR and reads impl.tar from its inputs/
+git -C <the implementation's checkout> archive -o "$RESEARCH_RUN_DIR/inputs/impl.tar" 4e49163193c3750dad580f3a28f5428fbb722a8a
+bash benchmarks/pous/pod.sh IMPL=vllm-gpu IMPL_COMMIT=4e49163193c3750dad580f3a28f5428fbb722a8a   # an L40S
+bash benchmarks/pous/pod.sh IMPL=band-gpu [WS=qwen2.5-7b/layer0+head] [NVME_DIR=/workspace/nvme]  # an RTX 4090
+bash benchmarks/pous/pod.sh IMPL=side-by-side [WS=...] [NVME_DIR=/workspace/nvme]     # an RTX 4090: band and P2 v1, then the table
+bash benchmarks/pous/pod.sh IMPL=side-by-side GATES_ONLY=1 MAX_SEGMENTS=2             # an RTX PRO 6000: both arms' kernel gates
+bash benchmarks/pous/pod.sh IMPL=band-gpu BAND_D=6                                     # an RTX PRO 6000: the band at in-degree 6
 ~~~
 
 `BAND_D=N` (`bench.py --band-d N`, band-gpu and side-by-side's band arm) runs the band at in-degree `d = N`, as
@@ -148,8 +144,7 @@ default). `bench.py`'s docstring lists the steps; `run.sh` builds for sm_120, ta
 `gpu-lease` and writes `timing.json`:
 
 ~~~bash
-research run --on <RTX PRO 6000 node> --project verity --source . --cwd source --campaign streamed-wipe \
-  -- bash benchmarks/pous/streamed_wipe/run.sh
+bash benchmarks/pous/streamed_wipe/run.sh   # on an RTX PRO 6000 node, from the source tree's root
 ~~~
 
 `streamed_wipe/served_wipe.sh` is the wipe's piece of a served window: `demo.sh`'s wipe of the H200 a
@@ -167,5 +162,5 @@ it next to honest, naive-cheat and broken-premise provers (`K` on the prover's n
 Lean verdict and `streamed_wipe.verdict`. It writes `resume.json` and fails if any prover ends other than expected:
 
 ~~~bash
-research run --on <CPU node> --project verity --source . --cwd clone -- bash benchmarks/pous/wipe_resume/run.sh
+bash benchmarks/pous/wipe_resume/run.sh   # on a CPU node, from a clone (the Lean verdict builds into it)
 ~~~

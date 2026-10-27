@@ -1,5 +1,4 @@
-"""The POUS benchmark harness: one command per (scheme, implementation, weight set, hardware), recorded through
-`research run` as an Attempt.
+"""The POUS benchmark harness: one command per (scheme, implementation, weight set, hardware).
 
     python benchmarks/pous/bench.py --scheme band-chain/d12/v1 --impl reference --weight-set qwen2.5-0.5b/linears+head \\
       --hardware l40s-48gb/bf16 --out DIR [--workers N] [--max-segments N] [--audits 20]
@@ -9,7 +8,7 @@
       --weight-set qwen2.5-0.5b/linears+head --hardware rtx-4090/e4m3 --out DIR [--nvme-dir DIR]
 
 Every implementation passes the same gates and reports the same metrics, written to `bench-result.json`
-(`verity-pous/bench-result/v1`) and, under `research run`, to `$RESEARCH_RUN_DIR/result.json`:
+(`verity-pous/bench-result/v1`) and, when `RESEARCH_RUN_DIR` is set, to `$RESEARCH_RUN_DIR/result.json`:
 
 * **Gates.**
   - The scheme's pinned conformance vectors (`verity/core/protocols/pous/tests/fixtures/schemes/<name>.json`), through

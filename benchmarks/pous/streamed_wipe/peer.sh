@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
 # demo.sh with the memory challenger on a cluster peer: a rehearsal of the challenger on its own host before the auditor's
-# gate serves it. This tree goes to a mktemp -d on PEER over ssh (PEER's line in /etc/vy/peers, the vy-cluster
-# key), and demo.sh starts the challenger's side there over ssh as the gate's verb will (the request on stdin;
+# gate serves it. This tree goes to a mktemp -d on PEER over ssh (PEER's line in the node's peers file, the cluster's
+# ssh key), and demo.sh starts the challenger's side there over ssh as the gate's verb will (the request on stdin;
 # `{"listening"}` and the report on stdout), the fill and the reads over direct TCP to PEER's address at PORT (47611).
 # The cluster's nodes pass only ssh to each other (TCP 47611 times out), so there
 # --tunnel carries the fill and the reads in an ssh forward instead (this node's 127.0.0.1 to PEER's), and the record
 # names that link. DEMO_OPTIONS' --reads K starts the peer's challenger at K reads too. PEER is the lane's machine, not
 # the auditor's, so the run certifies nothing. cwd = a clone, as demo.sh's:
 #
-#   research run --on NODE --project verity --source . --cwd clone --timeout 60m -- \
-#     bash benchmarks/pous/streamed_wipe/peer.sh PEER [--port P] [--tunnel] -- DEMO_OPTIONS
+#   bash benchmarks/pous/streamed_wipe/peer.sh PEER [--port P] [--tunnel] -- DEMO_OPTIONS
 #
 # The peer's scratch (the tree, its venv, the challenger's key and session log) is removed on exit.
 set -euo pipefail
