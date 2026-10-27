@@ -170,7 +170,8 @@ def test_conflict_through_a_static_bundle_is_rejected_by_the_binding_cache():
 
 def test_bind_refuses_a_record_its_composite_refuses_and_caches_none():
     """`refuse` sees the statics bound so far: a partial record it has nothing against binds, the record it names a reason
-    for raises before it is cached, and an admitted record binds to the same digest as the composite without `refuse`."""
+    for raises before it is cached, and an admitted record binds to the same digest as the composite without `refuse`. A
+    record refused for its type (M=True) is refused after the equal-keyed M=1 binds."""
     def even(b):
         return f"M={b['M']} is odd" if b.get("M", 0) % 2 else None
 
@@ -184,6 +185,11 @@ def test_bind_refuses_a_record_its_composite_refuses_and_caches_none():
             partial.bind(M=3)
     assert all(dict(k).get("M") != 3 for k in Even._cache)
     assert program_digest(Program(partial.bind(M=4))) == program_digest(Program(bind(Plain, M=4, ops=ops)))
+    Typed = CompositeDefinition("TypedOps", 1, ("M", "ops"), sig, body, register=False,
+                                refuse=lambda b: "M is a bool" if isinstance(b.get("M"), bool) else None)
+    bind(Typed, M=1, ops=ops)
+    with pytest.raises(ValueError, match=r"^TypedOps_v1 refuses this binding: M is a bool$"):
+        bind(Typed, M=True, ops=ops)
 
 
 def test_unbound_composite_as_a_static_value_is_not_encodable():
