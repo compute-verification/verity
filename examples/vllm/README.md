@@ -19,9 +19,10 @@ proved: when the verifier accepts a `--zk` session, the committed transcript is 
 probability at most δ plus the proof system's errors. The example's proof level is still none, because the remote
 protocol it is half of has no guarantee in Lean for it to instantiate: `Verity.Soundness` is not in Lean yet, and remote's
 verifier reads one-stage v1, which takes the sessions' verdicts as evidence (`verity/core/protocols/remote/README.md`,
-"The open gap"). Onsite's chain has a gap of its own: no theorem yet carries `SampledKSLiveV3` to `Claims.Sampling.KS`,
-which network certification's `NetTiming.Guarantees.SampledAuditAccepted` takes as a hypothesis
-(`benchmarks/prove_path/README.md`).
+"The open gap"). Onsite's chain has a gap of its own: network certification's `NetTiming.Guarantees.SampledAuditAccepted`
+takes `Claims.Sampling.KS` as a hypothesis, and the theorem that gives it at the deployed record,
+`Claims.Sampling.sampling_assembled`, is not a lock guarantee and takes the verifier's own facts as hypotheses
+(`benchmarks/prove_path/e2e_chains/README.md`).
 
 ## What runs
 

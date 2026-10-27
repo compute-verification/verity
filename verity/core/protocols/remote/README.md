@@ -108,9 +108,9 @@ completeness, never a security claim.
 **The pieces.** "Proved" means its proof is in a lock on `main`. For a guarantee, that's `<Area>.SecurityProofs.G :
 <Area>.Guarantees.G` in `Security/lean-audit.json`. For a property of the code, it's its proof in
 `Security/Properties/lean-audit.json` (`Properties.Composition.acceptMeans : Properties.Composition.AcceptMeans`). The
-last column is the end-to-end chain's status in `benchmarks/prove_path/e2e_chains/README.md`. That page has no row for
-the remote composite, so the column gives its subprotocols' rows (Sampled proofs / C-Flock `--zk`, PoUW `--zk`), and a
-chain can be "none" while each piece is proved.
+last column is the end-to-end chain's status in `benchmarks/prove_path/e2e_chains/README.md`. That page's row for the
+remote composite is "none" (the open gap), so the column gives its subprotocols' rows (Sampled proofs / C-Flock `--zk`,
+PoUW `--zk`), and a chain can be "none" while each piece is proved.
 
 | Piece | Lean declaration | Lock | End to end |
 |---|---|---|---|
