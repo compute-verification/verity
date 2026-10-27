@@ -453,7 +453,8 @@ def PerServerIngressNontrivial : Prop :=
       (xw : (i : Fin p.windows) → WindowTape Coin kw Ω i → Claims.Msg)
       (P : (i : Fin p.windows) → Claims.Prover (WindowTape Coin kw Ω i))
       (c : PeriodCoins Coin kw Ω → NetworkCheck.Period.Commitment) (ev : PeriodCoins Coin kw Ω → Evidence),
-      (∀ ω, ∃ i, ¬ IngressDeclared H D s ops δ (xw i (tapeOf ω i))) → periodErr H D δ decode ops xw P < 1 →
+      (∀ ω : PeriodCoins Coin kw Ω, ∃ i, ¬ IngressDeclared H D s ops δ (xw i (tapeOf ω i))) →
+        periodErr H D δ decode ops xw P < 1 →
         ¬ PeriodSound chk H D s δ decode ops p xw P c ev
 
 end Properties.NetworkCertifier

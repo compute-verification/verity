@@ -308,8 +308,9 @@ theorem tape_term_le (H : Msg → Msg) (D : Deploy Coin Col T) (hks : KS H D) (h
       windowErr H D δ decode ops m (P.comap fun _ => t) := by
   subst hk
   refine le_trans (le_of_eq ?_) (ingress_sound H D hks hb s δ decode hδ hdec ops m hm Unit (P.comap fun _ => t))
-  calc Pr (fun r : Fin (D.V.k m) → Coin => (run H P D.V m t r).out = .acc ∧ ¬ IngressDeclared H D s ops δ m)
-      = Pr (fun a : Unit × (Fin (D.V.k m) → Coin) =>
+  calc _ = Pr (fun r : Fin (D.V.k m) → Coin => (run H P D.V m t r).out = .acc ∧ ¬ IngressDeclared H D s ops δ m) :=
+        Claims.Pr_congr fun _ => Iff.rfl
+    _ = Pr (fun a : Unit × (Fin (D.V.k m) → Coin) =>
           (run H P D.V m t a.2).out = .acc ∧ ¬ IngressDeclared H D s ops δ m) :=
         (NetTiming.Pr_equiv (Equiv.punitProd _) fun r =>
           (run H P D.V m t r).out = .acc ∧ ¬ IngressDeclared H D s ops δ m).symm
@@ -354,8 +355,9 @@ theorem periodErr_le (H : Msg → Msg) (D : Deploy Coin Col T) (δ : ℝ) (decod
     (ops : Stmt → List (Opening Bool)) {n : ℕ} {kw : Fin n → ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (xw : (i : Fin n) → WindowTape Coin kw Ω i → Msg) (P : (i : Fin n) → Prover (WindowTape Coin kw Ω i))
     (ε : Fin n → ℝ) (h : ∀ i t, windowErr H D δ decode ops (xw i t) ((P i).comap fun _ => t) ≤ ε i) :
-    periodErr H D δ decode ops xw P ≤ ∑ i, ε i :=
-  Finset.sum_le_sum fun i _ => (Claims.Ex_mono (h i)).trans (Claims.Ex_const (ε i)).le
+    periodErr H D δ decode ops xw P ≤ ∑ i, ε i := by
+  unfold periodErr
+  exact Finset.sum_le_sum fun i _ => (Claims.Ex_mono (h i)).trans (Claims.Ex_const (ε i)).le
 
 end Deploy
 
