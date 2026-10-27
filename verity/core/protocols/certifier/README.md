@@ -225,9 +225,9 @@ A spec-level reference for network accounting's timing channel:
   empty state's for row −1). A Program gives all its outputs to its entry at its anchor (its read bit, n, u32, and 64
   ids of 17 bits at w63's class, 71 words, the row `SlotEntry_v1` writes once it carries the read bit); a
   link-window's bucket t reads slot j's entry at row j·nb + ⌊t / EVERY⌋ of one slot-entries input, and an empty
-  slot's entry is ignored (its outputs masked by `occ`, never on the egress). A request the class can't hold is refused at the scan's unit, never truncated: a prompt of more than `KI`
-  ids (1,024 at w63's class) at its cell, a Program's n over `KO` at its anchor. A window whose warden refused a
-  connection, traffic past its slots, has no certified record, and the period check refuses it. `Class.serves` names
+  slot's entry is ignored (its outputs masked by `occ`, never on the egress). A request the class can't hold is
+  refused at the scan's unit, never truncated: a prompt of more than `KI` ids (1,024 at w63's class) at its cell, a
+  Program's n over `KO` at its anchor. A window whose warden refused a connection, traffic past its slots, has no certified record, and the period check refuses it. `Class.serves` names
   the warden parameters it takes every run of. `benchmarks/network_traces/scan_zk.py` proves both sides of a group of
   link-windows in one registration: ingress unit t's state and view outputs are committed as registered reads of the
   scan's state and view rows t, which ingress unit t + 1 and egress unit t read, and egress unit t's row as a
