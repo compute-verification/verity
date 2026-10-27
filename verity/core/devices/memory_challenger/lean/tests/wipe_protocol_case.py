@@ -10,8 +10,9 @@ is `verity/wipe/v0`'s, under S1's LMS; `test_answer` the test signers' protocol'
 
 `build(m, seed)` makes one wipe with the change `m` (`EXPECT`), signed by the memory challenger's tests' key at S1's
 deployed parameters (`mc_cases.deployed_signer`) so that `verity/wipe/v0` itself takes it: an honest wipe at a small fill
-(accepted, its bound vacuous) and at one 32 MiB segment with its egress counted (accepted and certified at f·M), a prover
-keeping more than f·M of foreign content, a read past its deadline, a session the prover left before it ended
+and `READS` reads, one 32 MiB segment at `READS` reads and one at `REMOTE_READS` with a MiB declared past the fill (each
+accepted and certified at `StreamedWipeMeetsReads`' threshold for its `k`, its egress counted), a prover keeping one
+label past that threshold of foreign content, a read past its deadline, a session the prover left before it ended
 (unsigned), a commitment of another server or session, an untrusted key, a record edited after it was signed, and
 malformed params, commitment and evidence. `case(kind, seed)` is a wipe aimed at a verdict or at a decoding failure
 (`KINDS`), and `cases(seed)` one of each with its answer, as a composition's difftest takes a real component's cases.
@@ -43,6 +44,8 @@ ID = WP.PROTOCOL
 TEST_ID = mc.TEST_PREFIX + ID
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 SERVER = b"vy-nebius-cpu-4"
+REMOTE_READS = 5231
+"""The reads of `StreamedWipeMeets141GB5`, the H200's wipe at 5 GB (`r = 59`)."""
 
 # --- the mirror --------------------------------------------------------------------------------------------------------
 
@@ -133,7 +136,7 @@ def wipe_case(commitment: sw.WipeCommitment, signed: sw.SignedWipe | None, trust
 
 
 EXPECT = {
-    "honest": ACCEPT, "segment": ACCEPT,
+    "honest": ACCEPT, "segment": ACCEPT, "reads": ACCEPT,
     "foreign": REJECT, "late": REJECT, "other-server": REJECT, "other-session": REJECT, "untrusted": REJECT,
     "tampered": REJECT,
     "unsigned": UNDECIDED,
@@ -152,15 +155,16 @@ def _build(m: str, seed: int) -> dict:
     r = random.Random(f"wipe-protocol {m} {seed}")
     signer = M.deployed_signer()
     trusted = (signer.public_key,)
-    params = WP.params_for() if m == "segment" else _small(r)
+    params = {"segment": WP.params_for(),
+              "reads": WP.params_for(k=REMOTE_READS, tier_bytes=WP.SEGMENT_BYTES + (1 << 20))}.get(m) or _small(r)
     kw: dict[str, Any] = {"coins": r.randbytes(16), "session_id": r.randbytes(32), "egress_bits": r.randrange(1, 4 << 23)}
     if m == "foreign":
-        kw["prover"] = WP.keeping(params.labels // 19 + 1)
+        kw["prover"] = WP.keeping(WP.foreign_labels("fM", params))
     elif m == "late":
-        at = r.randrange(WP.READS)
+        at = r.randrange(params.k)
         kw["spends"] = lambda b: params.limit_ns + 1 if b == at else 1
     elif m == "unsigned":
-        kw["stop_after"] = r.randrange(WP.READS)
+        kw["stop_after"] = r.randrange(params.k)
     commitment, signed = wipe(params, signer, **kw)
     if m == "other-server":
         return wipe_case(commitment, signed, trusted, server=b"another node")
@@ -194,7 +198,7 @@ def build(m: str, seed: int = 0) -> dict:
 KINDS = (ACCEPT, REJECT, UNDECIDED, "broken-params", "broken-commitment", "broken-evidence")
 #: Each kind's changes (`build`'s `m`): a rejection by the check itself, not by decoding, for `reject`.
 AIMS: dict[str, tuple[str, ...]] = {
-    ACCEPT: ("honest", "segment"),
+    ACCEPT: ("honest", "segment", "reads"),
     REJECT: tuple(m for m, v in EXPECT.items() if v == REJECT and m not in ("params", "commitment", "evidence")),
     UNDECIDED: ("unsigned",),
     "broken-params": ("params",), "broken-commitment": ("commitment",), "broken-evidence": ("evidence",),
