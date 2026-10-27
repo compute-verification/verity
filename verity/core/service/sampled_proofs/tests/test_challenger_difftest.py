@@ -1674,12 +1674,12 @@ def read_case(rng: random.Random, name: str) -> Any:
 
 
 DRAW_COINS_NAMES = ["honest"] + DRAW_MUTATIONS + ["log-tampered", "other-window", "window-form", "key-form",
-                                                   "off-main", "no-pins", "coins-form", "request"]
+                                                   "off-main", "no-pins", "coins-form", "unwithheld", "request"]
 
 
 def draw_coins_case(rng: random.Random, name: str) -> Any:
     rng = _seeded(rng)
-    d = Drawn(rng, before=name == "before")
+    d = Drawn(rng, before=name == "before", withheld=name != "unwithheld")
     seg, read_, after = _mutated(rng, d, name)
     coins = d.evidence(seg)
     j = {"after": after.hex(), "coins": coins, "read": read_.hex(), "window": d.ledger.window["root"]}

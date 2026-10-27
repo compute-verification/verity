@@ -151,19 +151,19 @@ class Host:
     (a new ledger in `tmp_path` unless `ledger`), whose record `open_session` signed with `sign` and wrote to
     `directory` naming the host the ledger opens it on (or `record_host`), serving one session on a loopback port;
     `reason` is how `serve` ended it, and the ledger's end says the session closed when its client closed it (or as
-    `closed` says)."""
+    `closed` says). With `withhold`, the session is a withheld one, and the ledger's open says so."""
 
     def __init__(self, tmp_path, sign, session: str = "s-1", seed: str = "host", ledger: Ledger | None = None,
                  window: dict = WINDOW, closed: bool | None = None, record_host: str | None = None,
-                 secret: bytes | None = None) -> None:
+                 secret: bytes | None = None, withhold: bool = False) -> None:
         self.secret = secret
         self.directory = tmp_path / session
         self.directory.mkdir(parents=True)
         self.ledger, self.closed = ledger or Ledger(tmp_path / "windows.jsonl", sign), closed
-        self.ledger.open(session, window)
+        self.ledger.open(session, window, **({"withheld": True} if withhold else {}))
         self.challenger = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy(seed))
         self.session = R.open_session(self.challenger, pinned_key(), record_host or f"{HOST}.{session}", sign,
-                                      self.directory, session)
+                                      self.directory, session, withhold=withhold)
         (self.directory / R.HELLOS).write_text("")
         self.listener = socket.create_server(("127.0.0.1", 0))
         self.address = "127.0.0.1:%d" % self.listener.getsockname()[1]

@@ -22,20 +22,6 @@ def DRAW_FORM : String :=
   "a draw's coin evidence is {ledger, main, pins, segment, session}: the auditor's ledger, the verifier's copy of " ++
   "main's first-parent history, the host's pins log, the draw's coins (Segment.to_json) and the challenger session's files"
 
-def WITHHELD : String :=
-  "the session the auditor's ledger opens on the window does not withhold its coin commitment until it closes " ++
-  "(its open's body has no `withheld: true`: `remote.open_session(..., withhold=True)`)"
-
-/-- `withheld_on`: the ledger opens `window` (its open root), and every open of it marks its session withheld
-(`withheld: true` in its body), a session whose challenger released only its coins' raw bytes while it ran, and its
-commitment, salts and paths once it closed. -/
-def withheldOn (ledger : Json) (window : String) : Bool :=
-  let opens : List LedgerEntry := match ledger with
-    | .arr ls => ls.toList.filterMap fun l => (ledgerEntry? l).filter fun e =>
-        e.kind == "open" && getD (getD e.body "window") "root" == Json.str window
-    | _ => []
-  !opens.isEmpty && opens.all fun e => getD e.body "withheld" == Json.bool true
-
 /-- The coins of family `label` that the session the auditor's ledger opens on `window` (its open root, lowercase hex)
 under `key` released after `after`, read from `coins`, in order: the bytes a draw reads. The session must be a withheld
 one (`withheldOn`). -/

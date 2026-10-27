@@ -305,7 +305,7 @@ def coins_reason(coins: Any, window: str, after: bytes, read: bytes, verify: Ver
     verifier reads from the challenger's signed open of the registration's window (`registration.check`'s
     `window_root`), never the record's or the evidence's. So a prover picks no window: coins another window's session
     released after the same commitment are refused, and a prover with sessions in several windows gets one draw, not
-    the best of them. `service.Stream.outcome` hands the evidence to the Lean verifier of record, whose run refuses a
+    the best of them. The session must be a withheld one (`withheld_on`), as `draw_coins`'s. `service.Stream.outcome` hands the evidence to the Lean verifier of record, whose run refuses a
     draw from the challenger without evidence that holds (`Run.run`'s `select`, code `coins`)."""
     if not isinstance(coins, Mapping) or sorted(coins) != ["key", "ledger", "main", "pins", "segment", "session"]:
         return COINS_FORM
@@ -314,6 +314,8 @@ def coins_reason(coins: Any, window: str, after: bytes, read: bytes, verify: Ver
                                                coins["pins"], coins["main"], coins["session"], verify)
     except CoinError as e:
         return str(e)
+    if not withheld_on(coins["ledger"], window):
+        return WITHHELD
     segment = coins["segment"]
     label = segment.get("label") if isinstance(segment, Mapping) else None
     return read_reason(commitment, segment, after, read, roots.get(label, ()) if type(label) is str else ())

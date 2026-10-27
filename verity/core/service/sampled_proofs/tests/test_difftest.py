@@ -3473,8 +3473,8 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
     honest run is accepted, each stratum drawn at least its floor. It is refused at its registration for a window of
     other counts (`R2-program`) or the templates in the other order (`query`), and for a record whose law draws a
     stratum short of its floor (`R1-law`); at its select (`coins`) for each mutation of the coins that changes the
-    segment or the bytes, coins opened after another digest, evidence for another window, none or empty, and evidence
-    on a draw from the verifier's own coins."""
+    segment or the bytes, coins opened after another digest, coins of a session the ledger doesn't open withheld,
+    evidence for another window, none or empty, and evidence on a draw from the verifier's own coins."""
     rule, s = service.Law("stratified:3"), SETUPS[3]
     a = _v1_audit("stratified", s)
     rec = a["record"]
@@ -3526,7 +3526,9 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
                    if name not in ("unread", "read-tampered", "other-after")]
         selects.append(case_of(d, d.segment.to_json(), bytes(tampered)))
         elsewhere = Drawn(rng, reads=reads)
+        bare = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads, withheld=False)
         selects += [case_of(elsewhere, elsewhere.segment.to_json(), elsewhere.read),
+                    case_of(bare, bare.segment.to_json(), bare.read),
                     {**honest, "params": {**honest["params"], "window_root": d.other_window(rng)}},
                     {**honest, "coins": None}, {**honest, "coins": {}}, {**honest, "coin_source": "verifier"}]
         for c in selects:
