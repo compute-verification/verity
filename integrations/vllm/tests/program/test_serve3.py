@@ -1,4 +1,4 @@
-"""Lane PAD-IMPL: `Serve@3` at TINY-PAD against PAD-SPEC v1's frozen semantics — the prefix property
+"""`Serve@3` at TINY-PAD against PAD-SPEC v1's frozen semantics — the prefix property
 (§13, `n ∈ {0, 3, D_MAX}`), the absorbing property and the inactive step-boundary
 relation (§6), output interpretation (§8), digest distinctness (§10), the measured gate budget (§14.1), and
 the vectorized reference evaluator (§11/§12, `verity/ml/definitions/numerics/serve3_reference.py`) bit-for-bit against

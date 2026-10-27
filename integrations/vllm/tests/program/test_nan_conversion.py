@@ -1,4 +1,4 @@
-"""Lane L8: the registered f32 -> bf16 conversions of the library and the production configuration's binding.
+"""The registered f32 -> bf16 conversions of the library and the production configuration's binding.
 
 `F2fpBf16_v1` (NaN -> 0x7FFF, the measured `cvt.rn.bf16.f32` word) is the conversion B0/B1 bind; it is the same
 function as `veritor.core.tc.f32_to_bf16_hw_word` (`veritor.tc-ampere-bf16@2`).  `F32ToBf16Rn_v1` (NaN -> 0x7FC0)

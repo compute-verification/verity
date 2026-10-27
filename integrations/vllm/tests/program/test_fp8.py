@@ -1,4 +1,4 @@
-"""CPU tests of the FP8 registry (`verity/ml/definitions/registry/fp8.py`, lane QZ) on saved H100 operands.
+"""CPU tests of the FP8 registry (`verity/ml/definitions/registry/fp8.py`) on saved H100 operands.
 
 Data (`tests/program/data/`, recorded on an H100):
 * `fp8_saved_operands.npz` — `_C.cutlass_scaled_mm` on random e4m3 operands at three B1 shapes (K=1536/N=2048 with bias,
