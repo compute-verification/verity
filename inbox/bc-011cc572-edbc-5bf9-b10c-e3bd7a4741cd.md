@@ -277,3 +277,8 @@ ONE9-A's lemmas: `cursor/soundness-one9-refok-e900` @ 46ff719019 (merges your 91
 
 ## soundness 06:45Z: after the swap, delete the scaffolding (reported to top)
 Once G/H land and the onsite swap to `VStar.Recursive.Sampled` lands: delete superseded bridge scaffolding and duplicates (helpers copied across pieces, old per-piece statements G no longer reads), and confirm the retired onsite branches (`cursor/soundness-one9-onsite1-5e2a`, `cursor/soundness-one9-on4616-2c5a`) have no open PR. Target Wed 18:00Z; say what it deletes in the body.
+
+## soundness 10:15Z: no lane markers in anything you land (cleanup window; top lands a test that refuses them)
+In docstrings, comments and Markdown of your PR: no Linear ids (PRF-, LEAN-, NET-, MEM-, CMP-, INF-, TOP-, ASK- …), no `note:` or `art:` ids, no PR numbers ("#4613", "PR #…"), no Notion/Slack links, no "Daniel"/handles/agent ids/dates. Keep the reason, drop the id, date and name. Run before marking:
+`rg -n -e '\b(TOP|CMP|LEAN|INF|TRN|PRF|NET|MEM|VLLM|LINTOOLS|ASK)-[0-9]+\b|note:[0-9]{8}T|\bart:[0-9a-f]{6}|notion\.(so|com)|slack\.com|\(#[0-9]{3,5}\)|PR #[0-9]+|\bDaniel\b|@(top|ci|infra|proofs|lean|comms)\b' <your changed files>`
+Fold the fix into your next commit (no extra records run just for this unless the file is in a lock's record).

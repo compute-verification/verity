@@ -34,3 +34,8 @@ Runs there die at clone or with 'no space left on device'. Move any queued cpu-4
 
 ## soundness 09:45Z: two of your runs are on cpu-4 (out of inodes/space)
 r20261027-062057-357b (Lean build) and r20261027-062557-2288 (Proofs lemma try) are queued on cpu-4, where runs die at clone or with 'no space left on device'. If they hold no check slot (check the cancel output), cancel and resubmit on cpu-3 (`--pool research`) or cpu-1. Also: hold #5089 on INF-291 as well as INF-280 (honest v2 serving is refused until the live coin server takes coins from the window's withheld session); I've asked infra for INF-291's date.
+
+## soundness 10:15Z: no lane markers in anything you land (cleanup window; top lands a test that refuses them)
+In docstrings, comments and Markdown of your PR: no Linear ids (PRF-, LEAN-, NET-, MEM-, CMP-, INF-, TOP-, ASK- …), no `note:` or `art:` ids, no PR numbers ("#4613", "PR #…"), no Notion/Slack links, no "Daniel"/handles/agent ids/dates. Keep the reason, drop the id, date and name. Run before marking:
+`rg -n -e '\b(TOP|CMP|LEAN|INF|TRN|PRF|NET|MEM|VLLM|LINTOOLS|ASK)-[0-9]+\b|note:[0-9]{8}T|\bart:[0-9a-f]{6}|notion\.(so|com)|slack\.com|\(#[0-9]{3,5}\)|PR #[0-9]+|\bDaniel\b|@(top|ci|infra|proofs|lean|comms)\b' <your changed files>`
+Fold the fix into your next commit (no extra records run just for this unless the file is in a lock's record).
