@@ -1584,7 +1584,8 @@ def vacuous_meets(body: dict, claim: str) -> str | None:
 #: what puts a guarantee under the witnesses rule (`witness_scope`) beside a property of a function's acceptance: a read of
 #: a definition of a module with a `SCOPE_COMPONENT` component (a claim: what an acceptance means), under `SCOPE_MODULES`
 #: (the one theorem's vocabulary, `Verity.Soundness` and its subprotocols' targets), or whose name's last component
-#: starts with one of `VERIFIER_PREFIXES` (a verifier's acceptance: `PeriodRun.accepts`, `Flock.Zk.verify`), the
+#: starts with one of `VERIFIER_PREFIXES`, in any case (a verifier's acceptance: `PeriodRun.accepts`, `Audits.Accepts`,
+#: `Flock.Zk.verify`), the
 #: `acceptance` kind; with none, a read of a module whose last component is one of `EXCLUSION_MODULES` and a conclusion
 #: headed by one of `BOUND_HEADS` (a partition's or a covering's bound, which no verifier accepts), the `exclusion` kind
 #: (top, LEAN-66 21:52Z)
@@ -1624,7 +1625,7 @@ def witness_scope(name: str, policy: dict, pin: dict) -> tuple[str, str] | None:
         if under(SCOPE_MODULES, m):
             return "acceptance", f"it reads {parent(r['name'])}, the one theorem's vocabulary"
     for r in reads:
-        if r.get("name", "").split(".")[-1].startswith(VERIFIER_PREFIXES):
+        if r.get("name", "").split(".")[-1].lower().startswith(VERIFIER_PREFIXES):
             return "acceptance", f"it reads {r['name']}, a verifier's acceptance"
     if set(concluded(pin)[0]) & set(BOUND_HEADS):
         for r in reads:
