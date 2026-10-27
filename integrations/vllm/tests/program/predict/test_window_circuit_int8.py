@@ -48,9 +48,9 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     """Each int8 linear is its quantizer and its `ScaledMmS8_v1{K, N}` in slices of 512 // (K / 2) columns (an s8 weight row
     is K / 2 words: 16 columns at K = 64, 8 at K = 128), each slice's ``w`` and ``sw`` registered reads of the linear's s8
     rows and f32 row scales (layer 0's q/k/v, o and gate/up, each its own weight and scales from row 0, a slice a row on:
-    512 words of codes, 32 of scales); the LM head stays bf16 `Gemm_v2`. q/k/v's and gate/up's quantizer is one
-    `Int8RowQuant_v1{K}` unit reading the norm's row; o_proj's reads the attention's heads, at another row count, so it is
-    that template's body, `Int8RowScale_v1{K}` and `Int8StaticQuant_v1{K}`.
+    512 words of codes, 32 of scales); the LM head stays bf16 `Gemm_v2`. Each quantizer is one `Int8RowQuant_v3{K, R}`
+    unit reading ``x`` as its writers' R rows: q/k/v's and gate/up's the norm's row (R = 1), down_proj's the SiLU's (R = 1)
+    and o_proj's the attention's 4 heads (R = 4).
     The window holds the norm both o_proj and down_proj write, cut at its residual add after down_proj (module docstring);
     its unwired lowering registers the weights and the scan state."""
     reg = _registered()
@@ -63,10 +63,10 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     n = {_label(fn): k for fn, k in circuit.templates}
     ids = {_label(fn): IF.descriptor_id(fn) for fn, _ in circuit.templates}
     assert {t: k for t, k in n.items() if t.startswith(("Int8", "ScaledMmS8", "Gemm"))} == {
-        "Int8RowQuant_v1{K=64}": 40, "Int8RowScale_v1{K=64}": 20, "Int8StaticQuant_v1{K=64}": 20,
-        "Int8RowQuant_v1{K=128}": 20, "ScaledMmS8_v1{K=64,N=16}": 560, "ScaledMmS8_v1{K=128,N=8}": 160,
+        "Int8RowQuant_v3{K=64,R=1}": 40, "Int8RowQuant_v3{K=64,R=4}": 20, "Int8RowQuant_v3{K=128,R=1}": 20,
+        "ScaledMmS8_v1{K=64,N=16}": 560, "ScaledMmS8_v1{K=128,N=8}": 160,
         "Gemm_v2{K=64,N=8}": 320, "Gemm_v2{K=64,N=1}": 10}
-    assert (sum(circuit.units.values()), circuit.wires, circuit.cuts) == (1600, (), {})
+    assert (sum(circuit.units.values()), circuit.wires, circuit.cuts) == (1580, (), {})
     mm = ids["ScaledMmS8_v1{K=64,N=16}"]
     reads = {(r.param, r.port, r.base, r.step[-1]) for r in circuit.registered.reads if r.reader == mm}
     layer = "model.layers.0.self_attn.qkv_proj", "model.layers.0.self_attn.o_proj", "model.layers.0.mlp.gate_up_proj"
@@ -76,7 +76,7 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
     assert params.pop(SCAN_STATE) == 16 * 4548 and len(params) == 25
     assert {p.split("/", 1)[0] for p in params} == {WC.WEIGHTS}
     assert IF.input_count(json.loads(json.dumps(circuit.description())), **held(circuit)) == {
-        "units": 1600, "inputs": 10568800, "wired": 0, "registered": 9161856, "ingress": 0, "free": 1406944}
+        "units": 1580, "inputs": 10547680, "wired": 0, "registered": 9161856, "ingress": 0, "free": 1385824}
 
 
 @pytest.mark.parametrize("flip, param", [("model.layers.1.mlp.down_proj.weight", "model.layers.1.mlp.down_proj.weight@512"),
@@ -99,8 +99,8 @@ def test_the_committers_registered_roots_hold_every_int8_weight_read_but_the_rot
     assert set(pins) == set(_unwired(reg).registered.params) - {ROPE, SCAN_STATE}
     rope, both = _alone(doc, ROPE), {**pins, **SCAN_PIN}
     held_ = IF.input_count(doc, pins=both, roots=both)
-    assert held_ == {"units": 1600, "inputs": 10568800, "wired": 0, "registered": 9161856 - rope, "ingress": 0,
-                     "free": 1406944 + rope}
+    assert held_ == {"units": 1580, "inputs": 10547680, "wired": 0, "registered": 9161856 - rope, "ingress": 0,
+                     "free": 1385824 + rope}
     served = WW.record_words(reg, *_checkpoint(tmp_path / "served", flip=flip, quant=INT8_EXACT_QUANT))
     refused = {param.rpartition("@")[0]: "served words that aren't the checkpoint's"}
     with pytest.raises(ValueError, match=re.escape(f"no weight registered: {refused} ")):

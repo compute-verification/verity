@@ -34,8 +34,8 @@ the units, their feeds and weight reads, and wires them). Every unit reads its w
 - `Gemm_v2{K, N}` is ⌈N / n⌉ slices `Gemm_v2{K, n}`, each reading its weight rows from the weights record (`Read`) and
   its ``x`` as its writers' rows, n = ``grain.gemm_words`` // K columns, halved while an earlier node reads that slice
   template's ``x`` at another row count (a port is cut one way, and o_proj's ``x`` is a row a head).
-- An int8 linear (`registry.int8_exact`) is its quantizer `Int8RowQuant_v1{K}`, one unit (its body's two, scale and codes,
-  where an earlier node reads its template's ``x`` at another row count: o_proj's), and its product `ScaledMmS8_v1{K, N}`,
+- An int8 linear (`registry.int8_exact`) is its quantizer `Int8RowQuant_v1{K}`, one unit `Int8RowQuant_v3{K, R}` (v1 with
+  ``x`` as R rows of K / R, R its writers' rows: one after a norm, a head's at o_proj), and its product `ScaledMmS8_v1{K, N}`,
   ⌈N / n⌉ slices `ScaledMmS8_v1{K, n}` at the same weight words a slice (n = ``grain.gemm_words`` // (K / 2): an s8 weight row
   is K / 2 words), each reading its s8 weight rows and their f32 row scales from the weights record and the quantizer's codes
   ``x`` and scale ``sx`` whole. Words are laid out by each field's leaf width (`_spans`): a weight or node output whose leaves
@@ -376,10 +376,12 @@ class _Program:
         self.slot = Row(tid, u, "o1", 2 * (NP + 1))
         return (Row(tid, u, "o0", 2),)
 
-    def _one(self, j: int, node: Any) -> None:
-        """A node that is one unit of its own Definition: each parameter a weight read or its writers' rows."""
-        tid, u = self.b.unit(node.fn)
-        lay = IF.layout(node.fn)
+    def _one(self, j: int, node: Any, fn: Any = None) -> None:
+        """A node that is one unit of its own Definition, or of ``fn`` where given (one over the same leaves, its ports
+        other shapes of them): each parameter a weight read or its writers' rows."""
+        fn = node.fn if fn is None else fn
+        tid, u = self.b.unit(fn)
+        lay = IF.layout(fn)
         for (p, words), arg in zip(lay.rows, node.args):
             segs = self.segments(arg.refs)
             if segs[0][:2] == ("p", WEIGHTS):
@@ -416,17 +418,12 @@ class _Program:
         self.norms[j] = tuple(parts)
 
     def _Int8RowQuant(self, j: int, node: Any) -> None:
-        """`Int8RowQuant_v1{K}`, one unit, or where an earlier node reads its template's ``x`` at another row count, its body's
-        two: `Int8RowScale_v1{K}` (its scale) and `Int8StaticQuant_v1{K}` (its codes under it), each reading ``x``."""
-        xs, K, (codes, scale) = self.rows(node.args[0].refs), node.fn.bindings["K"], IF.layout(node.fn).outs
-        if self.b.read_rows.get((descriptor_id(node.fn), "x"), len(xs)) == len(xs):
-            return self._one(j, node)
-        (st, su), (qt, qu) = self.b.unit(bind(IX.Int8RowScale, K=K)), self.b.unit(bind(IX.Int8StaticQuant, K=K))
-        s = Row(st, su, "o0", scale[1])
-        self.b.feed(st, "x", su, 1, xs)
-        self.b.feed(qt, "x", qu, 1, xs)
-        self.b.feed(qt, "s", qu, 1, (s,))
-        self.outs[j] = [(0, codes[1], Row(qt, qu, "o0", codes[1])), (codes[1], codes[1] + scale[1], s)]
+        """`Int8RowQuant_v1{K}` as one unit `Int8RowQuant_v3{K, R}`, its ``x`` the R rows its writers hold it in (one after a
+        norm, a head's at o_proj), so each template's ``x`` is read at one row count; refused where R doesn't divide K."""
+        R, K = len(self.rows(node.args[0].refs)), node.fn.bindings["K"]
+        if K % R:
+            raise Unexpressible(f"{node.fn.id}: its x is {R} writer rows, which don't divide its {K} values")
+        self._one(j, node, bind(IX.Int8RowQuantV3, K=K, R=R))
 
     def _SiluMul(self, j: int, node: Any) -> None:
         """`SiluMul_v2{I}` as P units `SiluMul_v2{I / P}`, unit k reading gate and up elements [k·I/P, (k+1)·I/P) as the
