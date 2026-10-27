@@ -1,4 +1,4 @@
-// Independent CPU model of vLLM's batch-invariant Triton ``_rms_norm_kernel`` (W11), as compiled for sm_89:
+// Independent CPU model of vLLM's batch-invariant Triton ``_rms_norm_kernel``, as compiled for sm_89:
 // BLOCK_SIZE = 1024, HAS_WEIGHT = True, num_warps = 4, one CTA (128 threads, 8 columns per thread) per row.
 // Every rounding point below was read off the kernel's PTX and SASS:
 //
