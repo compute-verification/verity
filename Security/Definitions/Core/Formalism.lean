@@ -2,6 +2,7 @@ import Mathlib.Data.ENat.Lattice
 import Mathlib.Data.Finset.Sort
 import Mathlib.Data.Nat.Log
 import Mathlib.Basic.Real.Basic
+import Mathlib.Data.ZMod.Defs
 import Definitions.Core.Partition
 import Definitions.Core.Declaration
 
@@ -18,6 +19,9 @@ accounting envelopes is to be stated on these objects.
   circuits takes and none of Lemma 1, Theorem 3 and Lemma A.1 needs. The circuit's **size**
   `|C|` is its number of operation gates, `C.size C.computed`. A multi-bit value is a bundle of gates, read in order as
   the string `bits X l`.
+* The **AND count** `C.andSize S` (`andSize`) is the number of AND gates (`IsAnd`: an operation gate whose function is
+  not affine over GF(2)) among `S`, and `C.andSize C.computed` is the circuit's multiplicative complexity, the gates
+  C-Flock pays for. Credit and reporting count `andSize`; Theorem 3 and the `(c, k)`-partition count `size`.
 * The **registration** `R = (θ, C, 𝓘)` (`Registration`) is a declaration `(C, θ)`, the fixed values of `θ`'s gates and
   a partition `𝓘` of the operation gates into `B` proof blocks. A proof block is a unit of a `Partition`; NCI's instance
   calls them inference blocks, and training's serving blocks. No ordering of the proof blocks is required: Lemma 1 and
@@ -57,6 +61,27 @@ def FanIn (C : Circuit) (a : ℕ) : Prop := ∀ g, (C.reads g).card ≤ a
 first. On a Boolean circuit, one bit per gate. -/
 def bits (C : Circuit) (X : C.Transcript) (l : List (Fin C.N)) : List Bool :=
   l.flatMap fun g => List.ofFn fun i : Fin (C.w g) => (X g).getLsbD i
+
+/-- A value's least significant bit, in `ZMod 2`. -/
+def bitZ {n : ℕ} (x : BitVec n) : ZMod 2 := if x.getLsbD 0 then 1 else 0
+
+/-- Gate `g` computes an **affine** function over GF(2) of the gates it reads: its bit is a constant plus the XOR of the
+bits of some of them. On a Boolean circuit these are the gates of an XOR/NOT basis, which C-Flock proves for free. -/
+def Affine (C : Circuit) (g : Fin C.N) : Prop :=
+  ∃ (S : Finset (Fin C.N)) (c : ZMod 2), S ⊆ C.reads g ∧ ∀ v, bitZ (C.op g v) = c + ∑ a ∈ S, bitZ (v a)
+
+/-- **An AND gate** of a Boolean circuit: an operation gate whose function of the gates it reads is not affine over
+GF(2). `Verity.Circuit`'s gate functions carry no tag, so AND is this predicate on the function. C-Flock's `and a b`
+(`a ≠ b`) and its rows `(⊕ a) ∧ (⊕ b)` whose two XORs differ are AND gates, and its XOR, NOT and input gates are not
+(`Verity.Guarantees.ToCircuitAnd`). -/
+def IsAnd (C : Circuit) (g : Fin C.N) : Prop := C.isInput g = false ∧ ¬ C.Affine g
+
+open Classical in
+/-- **The AND count** of the gates `S`, the number of AND gates among them: on `C.computed`, the circuit's
+multiplicative complexity, the gates C-Flock pays for. Credit and every reported count are stated in `andSize`. An
+exclusion result, stated in `size` (Theorem 3, `CountingSum`, the `(c, k)`-partition), converts to ANDs only through the
+counted circuit's own ratio `andSize / size`, never through a free constant. -/
+noncomputable def andSize (C : Circuit) (S : Finset (Fin C.N)) : ℕ := (S.filter fun g => C.IsAnd g).card
 
 end Circuit
 
