@@ -3,6 +3,7 @@ import Proofs.Properties.Pous.RunAt
 import Proofs.Properties.Pous.MemoryChallenger
 import Proofs.Properties.CertifierDevice.Lms
 import Mathlib.Tactic.SplitIfs
+import Batteries.Tactic.OpenPrivate
 
 /-!
 # Proofs of PoUS's and the wipe's component statements (`Properties.Pous.Component`)
@@ -23,10 +24,14 @@ Each acceptance statement's two lemmas:
 * nontrivial: `runAccepts_fails`, `runBinds_fails`, `wipeAccepts_fails`, each `¬ …By check` for every check that
   accepts everything, and `runBinds_break_fails`, that `RunBinds`' collision is not always there; `runAccepts_by`,
   `runBinds_by` and `wipeAccepts_by` read each guarantee as its `…By` at the compiled check;
-* honest: `runAccepts_complete` (of `RunAccepts` and `RunBinds`) and `wipeAccepts_complete`, the converses, and
-  `wipeAccepts_meets`, an honest wipe signed by any key `Lms.key` derives at S1's deployed parameters, which the
-  wipe's check accepts. A run's instance is open, as setup's completeness is (`runAccepts_complete`).
+* honest: `runAccepts_complete` (of `RunAccepts` and `RunBinds`) and `wipeAccepts_complete`, the converses, and their
+  instances, each signed by any key `Lms.key` derives at S1's deployed parameters and accepted by its compiled check:
+  `runAccepts_meets`, an honest run of setup's own accepted store (two 8-byte blocks) and one round, which the kernel
+  evaluates (`decide +kernel`) once `Flock.canon`'s sort is shown to leave the manifest's sorted keys as they are
+  (`qsort_sorted`); `runBinds_meets`, that run twice; and `wipeAccepts_meets`, an honest wipe.
 -/
+
+open private Array.qsort.sort Array.qpartition.loop from Init.Data.Array.QSort.Basic
 
 namespace Pous.Component.SecurityProofs
 
@@ -34,6 +39,7 @@ open Flock MemoryChallenger MemoryChallenger.Properties PousCheck PousCheck.Prop
 open Pous.EndToEnd.SecurityProofs
 open PousCheck.Properties.SecurityProofs (append_cancel mth_binds leaves_entry root_mth)
 open MemoryChallenger.Properties.SecurityProofs (forIn'_measure_eq)
+open Lean (Json)
 
 local instance instLawfulBEqByteArray_component : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
@@ -41,6 +47,7 @@ local instance instLawfulBEqByteArray_component : LawfulBEq ByteArray where
 
 deriving instance ReflBEq, LawfulBEq for StreamedWipe.Params
 deriving instance ReflBEq, LawfulBEq for StreamedWipe.Commitment
+deriving instance ReflBEq, LawfulBEq for SessionCommitment
 
 /-! ## PoUS's acceptance -/
 
@@ -499,10 +506,9 @@ theorem wipeAccepts_fails : ∀ check, AcceptsAll check → ¬ WipeAcceptsBy che
 
 /-- **The compiled check accepts every run `AcceptedAt` accepts** (the honest lemma of `RunAccepts` and of `RunBinds`),
 publishing `certify` of the point: `RunAccepts`' hypothesis holds exactly where the decision of record does, and two
-runs it accepts are two accepted runs. That an honest run is `AcceptedAt` is setup's completeness
-(`PousCheck.Properties.AcceptsComplete`, open) and the composed check's on an honest session: its instance waits on
-the kernel evaluating `Commit.commit`, which reads the manifest through `Flock.canon` (well-founded recursion), and on
-SHA-512 Merkle roots and coin openings; the difftest's honest scenario runs it on the compiled code. -/
+runs it accepts are two accepted runs. That every honest run is `AcceptedAt` is setup's completeness
+(`PousCheck.Properties.AcceptsComplete`, open) and the composed check's on an honest session; `runAccepts_meets` is
+one that is. -/
 theorem runAccepts_complete : ∀ (p : RunProtocol.Params) (pub : SetupProtocol.Public) (e : RunProtocol.Evidence),
     AcceptedAt p.point p.trusted.toList e.setup.commitment e.setup.store pub e.digests e.session p.sessionId →
       RunProtocol.protocol.check p pub e = .accept (RunProtocol.certify p.point) p.point := by
@@ -636,5 +642,420 @@ theorem wipeAccepts_meets : ∀ (I seed : ByteArray) (k : Lms.PrivateKey), Lms.k
   intro b hb
   obtain rfl : b = 0 := by simp [honestSession] at hb; omega
   simp [honestSession, honestBatch, honestCommitment, StreamedWipe.Batch.elapsedNs]
+
+/-! ## An honest run
+
+The run of `runAccepts_meets`: setup's own accepted store (`SetupProtocol.HONEST`: `w = 64`, `c0 = 189`, one segment of
+two 8-byte blocks, its `COMMITMENT` and `ROOT`) read once, under a one-coin tree with an all-zero key and salt, the round
+answered at once with block 0. The kernel evaluates every check on it (`decide +kernel`), SHA-512 trees and the coin's
+HM96 opening included, but `Flock.canon`'s `Array.qsort`, which it does not unfold (core's sort is well-founded and
+private): the manifest is a flat object whose keys `Json.mkObj` already keeps in order, which `qsort_sorted` leaves as
+they are. The session's signature is `Lms.signAt`'s, verified by `lmsCorrect`, as `wipeAccepts_meets`' is. -/
+
+section QSort
+
+variable {α : Type} {n : Nat}
+
+private theorem swap_self (xs : Vector α n) (i : Nat) (h : i < n) : xs.swap i i h h = xs := by
+  ext k hk
+  rw [Vector.getElem_swap]
+  split
+  · subst_vars; rfl
+  · rfl
+
+section Loop
+
+variable (lt : α → α → Bool) {lo hi : Nat} (hhi : hi < n) (pivot : α) (as : Vector α n)
+
+private theorem loop_skip (i : Nat) (ilo : lo ≤ i) :
+    ∀ (d k : Nat) (ik : i ≤ k) (w : k ≤ hi), hi - k = d →
+      (∀ j (hj : j < n), k ≤ j → j < hi → lt as[j] pivot = false) →
+      Array.qpartition.loop lt lo hi hhi pivot as i k ilo ik w =
+        (⟨i, ilo, by omega⟩, as.swap i hi (by omega) hhi) := by
+  intro d
+  induction d with
+  | zero =>
+    intro k ik w hd _
+    rw [Array.qpartition.loop.eq_def]
+    have : ¬ k < hi := by omega
+    simp only [this, dite_false]
+  | succ d ih =>
+    intro k ik w hd hb
+    rw [Array.qpartition.loop.eq_def]
+    have hk : k < hi := by omega
+    simp only [hk, dite_true, hb k (by omega) (Nat.le_refl _) hk, Bool.false_eq_true, ite_false]
+    exact ih (k + 1) (by omega) (by omega) (by omega) (fun j hj h1 h2 => hb j hj (by omega) h2)
+
+private theorem loop_take (m : Nat) (hm : m ≤ hi) :
+    ∀ (d k : Nat) (ilo : lo ≤ k) (w : k ≤ m), m - k = d →
+      (∀ j (hj : j < n), k ≤ j → j < m → lt as[j] pivot = true) →
+      (∀ j (hj : j < n), m ≤ j → j < hi → lt as[j] pivot = false) →
+      Array.qpartition.loop lt lo hi hhi pivot as k k ilo (Nat.le_refl _) (by omega) =
+        (⟨m, by omega, hm⟩, as.swap m hi (by omega) hhi) := by
+  intro d
+  induction d with
+  | zero =>
+    intro k ilo w hd _ hb
+    obtain rfl : k = m := by omega
+    exact loop_skip lt hhi pivot as k ilo (hi - k) k (Nat.le_refl _) _ rfl hb
+  | succ d ih =>
+    intro k ilo w hd ht hb
+    rw [Array.qpartition.loop.eq_def]
+    have hk : k < hi := by omega
+    simp only [hk, dite_true, ht k (by omega) (Nat.le_refl _) (by omega), ite_true, swap_self]
+    exact ih (k + 1) (by omega) (by omega) (by omega) (fun j hj h1 h2 => ht j hj (by omega) h2) hb
+
+end Loop
+
+/-- `as` is strictly sorted by `lt` on `[lo, hi]`: `lt` holds of two of its elements there exactly in their order. -/
+private def SortedOn (lt : α → α → Bool) (lo hi : Nat) (as : Vector α n) : Prop :=
+  ∀ i j (hi' : i < n) (hj : j < n), lo ≤ i → i ≤ hi → lo ≤ j → j ≤ hi → lt as[i] as[j] = decide (i < j)
+
+private theorem qpartition_sorted (lt : α → α → Bool) (as : Vector α n) {lo hi : Nat} (w : lo ≤ hi)
+    (hlo : lo < n) (hhi : hi < n) (hlt : lo < hi) (hs : SortedOn lt lo hi as) :
+    Array.qpartition as lt lo hi w hlo hhi = (⟨(lo + hi) / 2, by omega, by omega⟩, as) := by
+  have hm1 : lo ≤ (lo + hi) / 2 := by omega
+  have hm2 : (lo + hi) / 2 < hi := by omega
+  unfold Array.qpartition
+  have h1 : lt (as[(lo + hi) / 2]'(by omega)) as[lo] = false := by
+    rw [hs ((lo + hi) / 2) lo _ _ hm1 (by omega) (Nat.le_refl _) w]; simp; omega
+  have h2 : lt as[hi] as[lo] = false := by
+    rw [hs hi lo _ _ w (Nat.le_refl _) (Nat.le_refl _) w]; simp; omega
+  have h3 : lt (as[(lo + hi) / 2]'(by omega)) as[hi] = true := by
+    rw [hs ((lo + hi) / 2) hi _ _ hm1 (by omega) w (Nat.le_refl _)]; simp; omega
+  simp only [h1, h2, h3, Bool.false_eq_true, ite_false, ite_true, Vector.getElem_swap_right]
+  rw [loop_take lt hhi _ _ ((lo + hi) / 2) (Nat.le_of_lt hm2) _ lo (Nat.le_refl _) hm1 rfl]
+  · simp only [Vector.swap_swap]
+  · intro j hj h4 h5
+    rw [Vector.getElem_swap_of_ne (by omega) (by omega), hs j ((lo + hi) / 2) _ _ h4 (by omega) hm1 (by omega)]
+    simp; omega
+  · intro j hj h4 h5
+    rw [Vector.getElem_swap]
+    split
+    · rename_i e; subst e
+      rw [hs hi ((lo + hi) / 2) _ _ w (Nat.le_refl _) hm1 (by omega)]; simp; omega
+    · split
+      · omega
+      · rw [hs j ((lo + hi) / 2) _ _ (by omega) (by omega) hm1 (by omega)]; simp; omega
+
+private theorem sort_sorted (lt : α → α → Bool) :
+    ∀ (d : Nat) (as : Vector α n) (lo hi : Nat) (w : lo ≤ hi) (hlo : lo < n) (hhi : hi < n), hi - lo < d →
+      SortedOn lt lo hi as → Array.qsort.sort lt as lo hi w hlo hhi = as := by
+  intro d
+  induction d with
+  | zero => intro _ _ _ _ _ _ hd; omega
+  | succ d ih =>
+    intro as lo hi w hlo hhi hd hs
+    rw [Array.qsort.sort.eq_def]
+    split
+    · rename_i hlt
+      rw [qpartition_sorted lt as w hlo hhi hlt hs]
+      simp only
+      split
+      · omega
+      · rw [ih as lo ((lo + hi) / 2) _ hlo _ (by omega)
+          (fun i j _ _ h1 h2 h3 h4 => hs i j _ _ h1 (by omega) h3 (by omega))]
+        exact ih as ((lo + hi) / 2 + 1) hi _ _ hhi (by omega)
+          (fun i j _ _ h1 h2 h3 h4 => hs i j _ _ (by omega) h2 (by omega) h4)
+    · rfl
+
+/-- `Array.qsort` leaves a strictly sorted array as it is: its pivot, the middle element, splits it in place. -/
+private theorem qsort_sorted (as : Array α) (lt : α → α → Bool)
+    (hs : ∀ i (hi : i < as.size) j (hj : j < as.size), lt as[i] as[j] = decide (i < j)) : as.qsort lt = as := by
+  unfold Array.qsort
+  split
+  · rfl
+  · simp only
+    rw [sort_sorted lt _ as.toVector _ _ _ _ _ (Nat.lt_succ_self _)
+      (fun i j hi hj _ _ _ _ => by simpa using hs i hi j hj)]
+
+end QSort
+
+private def jsonLeaf : Json → Bool
+  | .null | .bool _ | .num _ | .str _ => true
+  | .arr _ | .obj _ => false
+
+/-- `Flock.canon` of a leaf. -/
+private def canonLeaf : Json → V String
+  | .null => pure "null"
+  | .bool b => pure (if b then "true" else "false")
+  | .num n => if n.exponent == 0 then pure (toString n.mantissa) else throw "canonical JSON: a non-integer number"
+  | .str s => pure (canonStr s)
+  | .arr _ | .obj _ => throw "canonical JSON: not a leaf"
+
+/-- `Flock.canon` of an object of leaves. -/
+private def canonObj (kvs : Std.TreeMap.Raw String Json) : V String := do
+  let vals ← kvs.toArray.attach.mapM fun p => do pure (p.1.1, ← canonLeaf p.1.2)
+  let items := vals.qsort (fun a b => a.1 < b.1)
+  pure ("{" ++ ",".intercalate (items.toList.map fun kv => canonStr kv.1 ++ ":" ++ kv.2) ++ "}")
+
+private def KeysSorted (as : Array (String × String)) : Prop :=
+  ∀ i (hi : i < as.size) j (hj : j < as.size), decide (as[i].1 < as[j].1) = decide (i < j)
+
+private instance (as : Array (String × String)) : Decidable (KeysSorted as) := by unfold KeysSorted; infer_instance
+
+/-- `canonObj`, sorting only items whose keys are out of order, so that the kernel evaluates it on sorted keys. -/
+private def canonObjInOrder (kvs : Std.TreeMap.Raw String Json) : V String := do
+  let vals ← kvs.toArray.attach.mapM fun p => do pure (p.1.1, ← canonLeaf p.1.2)
+  let items := if KeysSorted vals then vals else vals.qsort (fun a b => a.1 < b.1)
+  pure ("{" ++ ",".intercalate (items.toList.map fun kv => canonStr kv.1 ++ ":" ++ kv.2) ++ "}")
+
+private theorem canonObj_inOrder (kvs : Std.TreeMap.Raw String Json) : canonObj kvs = canonObjInOrder kvs := by
+  unfold canonObj canonObjInOrder
+  congr 1
+  funext vals
+  split
+  · rename_i h; rw [qsort_sorted vals (fun a b => decide (a.1 < b.1)) h]
+  · rfl
+
+private def jsonFlat (j : Json) : Bool := match j with
+  | .obj kvs => kvs.toArray.all fun p => jsonLeaf p.2
+  | _ => false
+
+private def canonFlat (j : Json) : V String := match j with
+  | .obj kvs => canonObjInOrder kvs
+  | _ => throw "not an object"
+
+private theorem canon_leaf (j : Json) (h : jsonLeaf j = true) : Flock.canon j = canonLeaf j := by
+  cases j <;> first
+    | (simp [jsonLeaf] at h; done)
+    | simp only [Flock.canon, canonLeaf]
+
+private theorem canon_obj (kvs : Std.TreeMap.Raw String Json) (h : (kvs.toArray.all fun p => jsonLeaf p.2) = true) :
+    Flock.canon (.obj kvs) = canonObj kvs := by
+  have hc : ∀ p : {x // x ∈ kvs.toArray}, Flock.canon p.1.2 = canonLeaf p.1.2 :=
+    fun p => canon_leaf _ (Array.all_eq_true_iff_forall_mem.1 h p.1 p.2)
+  rw [Flock.canon, canonObj]
+  simp only [hc]
+
+private theorem canon_flat (j : Json) (h : jsonFlat j = true) : Flock.canon j = canonFlat j := by
+  cases j
+  case obj kvs => exact (canon_obj kvs h).trans (canonObj_inOrder kvs)
+  all_goals simp [jsonFlat] at h
+
+private theorem eq_ok_of {α : Type} [DecidableEq α] {x : Except String α} {a : α}
+    (h : (match x with | .ok b => decide (b = a) | .error _ => false) = true) : x = .ok a := by
+  cases x with
+  | error e => simp at h
+  | ok b =>
+    simp only [decide_eq_true_eq] at h
+    rw [h]
+
+private theorem ok_of_matches {x : Except String Unit} (h : (x matches .ok ()) = true) : x = .ok () := by
+  cases x with
+  | ok u => rfl
+  | error e => simp at h
+
+private def toyParams : P2.Params := ⟨64, 189, 2, 1⟩
+private def toyPoint : Run.Point := ⟨toyParams, 1, 1000⟩
+private def toyBytes : ByteArray := (unhex SetupProtocol.COMMITMENT).toOption.getD .empty
+private def toyCommitment : SetupProtocol.Commitment := ⟨toyBytes.extract 0 64, toyBytes.extract 64 88⟩
+private def toyBlocks : Array ByteArray := (SetupProtocol.HONEST.mapM unhex).toOption.getD #[]
+private def toyStore : Array (Array ByteArray) := #[toyBlocks]
+private def toyPublic : SetupProtocol.Public :=
+  ⟨2, toyCommitment.w, (unhex SetupProtocol.ROOT).toOption.getD .empty, toyCommitment.salt⟩
+private def toyManifest : String :=
+  "{\"blocks_per_segment\":2,\"c0\":189,\"expander\":\"sha512-ctr-v4\",\"profile\":\"p2-6B\",\"scheme\":\"p2\"," ++
+  "\"segments\":1,\"w\":64}"
+
+private theorem canon_toy : Flock.canon (Commit.manifestJson toyParams) = .ok toyManifest := by
+  rw [canon_flat (Commit.manifestJson toyParams) (by decide +kernel)]
+  exact eq_ok_of (by decide +kernel)
+
+private theorem manifest_toy : Commit.manifest toyParams = .ok toyManifest.toUTF8 := by
+  unfold Commit.manifest
+  rw [canon_toy]
+  rfl
+
+private theorem tie_matches : (RunProtocol.tie toyPoint toyCommitment toyStore toyPublic matches .ok ()) = true := by
+  unfold RunProtocol.tie SetupProtocol.check Setup.verifierKeyFromEncoding Commit.commitState
+  simp only [show toyPoint.params = toyParams from rfl, manifest_toy]
+  decide +kernel
+
+private theorem tie_toy : RunProtocol.tie toyPoint toyCommitment toyStore toyPublic = .ok () :=
+  ok_of_matches tie_matches
+
+private def toyDigests : ByteArray := blockDigest toyBlocks[0]! ++ blockDigest toyBlocks[1]!
+private def toySid : ByteArray := ByteArray.mk (Array.replicate 32 7)
+private def toyCoinKey : ByteArray := ByteArray.mk (Array.replicate HM96.keyBytes 0)
+private def toyCoinSalt : ByteArray := ByteArray.mk (Array.replicate HM96.saltBytes 0)
+private def toyCoins : CoinTree :=
+  match CoinTree.make toySid 2 #[0] toyCoinKey #[toyCoinSalt] with
+  | .ok t => t
+  | .error _ => ⟨toySid, 2, #[0], toyCoinKey, #[toyCoinSalt], #[], .empty⟩
+private def toySessionCommitment : SessionCommitment :=
+  ⟨toySid, toyCoins.root, toyCoinKey, 2, 1, 1000, 8, toyPublic.root⟩
+private def toyRound : MemoryChallenger.Round := ⟨0, 0, 0, 0, blockDigest toyBlocks[0]!⟩
+private def toyOpenings : Array CoinOpening := #[toyCoins.opening 0]
+private def toySigned (pk sig : ByteArray) : SignedSession :=
+  ⟨toySessionCommitment, COMPLETE, #[toyRound], LMS, pk, sig⟩
+private def toySession (pk sig : ByteArray) : Run.Session := ⟨toySigned pk sig, toySessionCommitment, toyOpenings⟩
+
+/-- `verdict`'s reasons before the rounds. -/
+private def rpre (schemes : Schemes) (trusted : List ByteArray) (s : SignedSession) (c : SessionCommitment) :
+    Array String := Id.run do
+  let mut reasons : Array String := #[]
+  match schemes.lookup s.scheme with
+  | none => reasons := reasons.push s!"signature scheme {pyRepr s.scheme} is not accepted"
+  | some p =>
+    if !trusted.contains s.publicKey then
+      reasons := reasons.push "the session is signed by a key that is not a trusted memory challenger's"
+    else
+      let ok := match s.message >>= fun m => lmsVerify p s.publicKey s.commitment.session m s.signature with
+        | .ok b => b
+        | .error _ => false
+      if !ok then reasons := reasons.push "the signature does not verify"
+  if !(s.commitment == c) then reasons := reasons.push "the signed header is not the session's commitment"
+  if s.ended != COMPLETE || s.rounds.size != c.k then
+    reasons := reasons.push s!"the session ended {s.ended} after {s.rounds.size} of {c.k} rounds"
+  return reasons
+
+/-- `verdict` from the rounds `rounds` on, after the reasons `r0`. -/
+private def rtail (expected : Nat → Option ByteArray) (rounds : Array MemoryChallenger.Round) (c : SessionCommitment)
+    (openings : Array CoinOpening) (r0 : Array String) : Verdict := Id.run do
+  let mut reasons := r0
+  let byJ := fun (j : Nat) => openings.findRev? (·.j == j)
+  let mut late := 0
+  let mut wrong := 0
+  for h : j in [0:rounds.size] do
+    let r := rounds[j]
+    let committed := match byJ j with
+      | some o => r.j == j && o.index == r.index && verifyCoin c o
+      | none => false
+    if !committed then reasons := reasons.push s!"round {j}'s index is not its committed coin"
+    if !(r.index < c.blocks && expected r.index == some r.digest) then wrong := wrong + 1
+    if !(0 ≤ r.elapsedNs && r.elapsedNs ≤ c.limitNs) then late := late + 1
+  if wrong > 0 then reasons := reasons.push s!"{wrong} answers are not their blocks of C"
+  if late > 0 then reasons := reasons.push s!"{late} answers are past Δ + RTT = {c.limitNs} ns"
+  return ⟨reasons.isEmpty, reasons, late, wrong⟩
+
+private theorem rverdict_eq (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → Option ByteArray)
+    (s : SignedSession) (c : SessionCommitment) (openings : Array CoinOpening) :
+    MemoryChallenger.verdict schemes trusted expected s c openings =
+      rtail expected s.rounds c openings (rpre schemes trusted s c) := by
+  unfold MemoryChallenger.verdict rtail rpre
+  cases schemes.lookup s.scheme with
+  | none =>
+    by_cases h1 : (!s.commitment == c) = true <;> by_cases h2 : (s.ended != COMPLETE || s.rounds.size != c.k) = true <;>
+      simp only [h1, h2, ite_true, ite_false, Bool.false_eq_true] <;> rfl
+  | some p =>
+    cases hm : (s.message >>= fun m => lmsVerify p s.publicKey s.commitment.session m s.signature) with
+    | error e =>
+      by_cases h0 : (!trusted.contains s.publicKey) = true <;>
+      by_cases h1 : (!s.commitment == c) = true <;>
+      by_cases h2 : (s.ended != COMPLETE || s.rounds.size != c.k) = true <;>
+        simp only [hm, h0, h1, h2, ite_true, ite_false, Bool.false_eq_true, Bool.not_false] <;> rfl
+    | ok b =>
+      by_cases h0 : (!trusted.contains s.publicKey) = true <;> cases b <;>
+      by_cases h1 : (!s.commitment == c) = true <;>
+      by_cases h2 : (s.ended != COMPLETE || s.rounds.size != c.k) = true <;>
+        simp only [hm, h0, h1, h2, ite_true, ite_false, Bool.false_eq_true, Bool.not_false, Bool.not_true] <;> rfl
+
+private theorem rpre_nil (schemes : Schemes) (trusted : List ByteArray) (s : SignedSession) (c : SessionCommitment)
+    (hk : ∃ p, schemes.lookup s.scheme = some p ∧ s.publicKey ∈ trusted ∧
+      ∃ m, s.message = .ok m ∧ lmsVerify p s.publicKey s.commitment.session m s.signature = .ok true)
+    (hcm : (s.commitment == c) = true) (hend : s.ended = COMPLETE) (hsize : s.rounds.size = c.k) :
+    rpre schemes trusted s c = #[] := by
+  obtain ⟨p, hp, ht, m, hm, hv⟩ := hk
+  have hok : (s.message >>= fun m => lmsVerify p s.publicKey s.commitment.session m s.signature) = .ok true := by
+    rw [hm]
+    exact hv
+  unfold rpre
+  simp [Id.run, hp, hok, hcm, hend, hsize]
+  exact ite_eq_left ht
+
+private theorem rtail_toy :
+    (rtail (Run.expected toyParams toyDigests) #[toyRound] toySessionCommitment toyOpenings #[]).accepted = true := by
+  decide +kernel
+
+private theorem verdict_toy (pk sig m : ByteArray)
+    (hm : MemoryChallenger.message toySessionCommitment COMPLETE #[toyRound] = .ok m)
+    (hlms : lmsVerify Lms.deployed pk toySessionCommitment.session m sig = .ok true) :
+    (MemoryChallenger.verdict SCHEMES [pk] (Run.expected toyParams toyDigests) (toySigned pk sig) toySessionCommitment
+      toyOpenings).accepted = true := by
+  rw [rverdict_eq, rpre_nil SCHEMES [pk] (toySigned pk sig) toySessionCommitment
+    ⟨Lms.deployed, rfl, List.mem_singleton.2 rfl, m, hm, hlms⟩ (beq_self_eq_true _) rfl rfl]
+  exact rtail_toy
+
+private theorem checkAt_of (schemes : Schemes) (pt : Run.Point) (trusted : List ByteArray)
+    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray)
+    (h1 : (pub.blocks == pt.params.blocks) = true) (h2 : (pub.salt.size == Run.SALT) = true)
+    (h3 : (digests.size == pt.params.blocks * Merkle.DIGEST) = true)
+    (h4 : (Merkle.root (Run.rowLeaves pt.params pub.salt digests) == some pub.root) = true)
+    (h5 : (r.commitment.blocks == pt.params.blocks) = true) (h6 : (r.commitment.k == pt.k) = true)
+    (h7 : decide (r.commitment.limitNs ≤ pt.limitNs) = true)
+    (h8 : (r.commitment.blockBytes == pt.params.blockBytes) = true) (h9 : (r.commitment.binding == pub.root) = true)
+    (h10 : (r.commitment.session == sid) = true)
+    (hv : (MemoryChallenger.verdict schemes trusted (Run.expected pt.params digests) r.signed r.commitment
+      r.openings).accepted = true) :
+    Run.checkAt schemes pt trusted pub digests r sid = .ok () := by
+  unfold Run.checkAt
+  simp only [h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, hv]
+  rfl
+
+private theorem salt_toy : (toyPublic.salt.size == Run.SALT) = true := by decide +kernel
+private theorem digests_toy : (toyDigests.size == toyPoint.params.blocks * Merkle.DIGEST) = true := by decide +kernel
+private theorem table_toy :
+    (Merkle.root (Run.rowLeaves toyPoint.params toyPublic.salt toyDigests) == some toyPublic.root) = true := by
+  decide +kernel
+
+private theorem checkAt_toy (pk sig : ByteArray)
+    (hv : (MemoryChallenger.verdict SCHEMES [pk] (Run.expected toyParams toyDigests) (toySigned pk sig)
+      toySessionCommitment toyOpenings).accepted = true) :
+    Run.checkAt SCHEMES toyPoint [pk] toyPublic toyDigests (toySession pk sig) toySid = .ok () :=
+  checkAt_of SCHEMES toyPoint [pk] toyPublic toyDigests (toySession pk sig) toySid rfl salt_toy digests_toy
+    table_toy rfl rfl rfl rfl (beq_self_eq_true _) (beq_self_eq_true _) hv
+
+private theorem message_toy : ∃ m, MemoryChallenger.message toySessionCommitment COMPLETE #[toyRound] = .ok m := by
+  unfold MemoryChallenger.message MemoryChallenger.recordsRoot
+  rw [Array.mapM_eq_mapM_toList]
+  exact ⟨_, rfl⟩
+
+/-- **An honest run is accepted** (the instance of `RunAccepts`' honest lemma): for every key `Lms.key` derives at
+S1's deployed LMS parameters, the run of setup's own accepted store (two 8-byte blocks, `w = 64`), one round at
+`k = 1` answered with block 0 within its 1000 ns limit, ended complete and signed at leaf 0 with `Lms.signAt`, is
+accepted by PoUS's compiled run check of a verifier that trusts that key, publishing `certify` of its point. -/
+theorem runAccepts_meets : ∀ (I seed : ByteArray) (k : Lms.PrivateKey), Lms.key Lms.deployed I seed = .ok k →
+    ∃ (pt : Run.Point) (sid : ByteArray) (pub : SetupProtocol.Public) (e : RunProtocol.Evidence),
+      RunProtocol.protocol.check ⟨pt, sid, #[k.publicKey]⟩ pub e = .accept (RunProtocol.certify pt) pt := by
+  intro I seed k hk
+  obtain ⟨-, hIk, -, hIs, -, -, -⟩ := Properties.CertifierDevice.Proofs.Lms.key_spec hk
+  subst hIk
+  have hroot : (k.tree[1]!).size = Lms.deployed.N :=
+    Properties.CertifierDevice.Proofs.Lms.node_size hk (by decide) 1 le_rfl (by decide)
+  have hpub : k.publicKey.size = 16 + Lms.deployed.N := by
+    simp only [Lms.PrivateKey.publicKey, ByteArray.size_append, hIs, hroot]
+  have hI : k.publicKey.extract 0 16 = k.I := ByteArray.extract_append_eq_left hIs.symm
+  obtain ⟨m, hm⟩ := message_toy
+  obtain ⟨M, hM⟩ : ∃ M, memoryChallengerMessage k.I toySessionCommitment.session m = .ok M := by
+    unfold memoryChallengerMessage
+    simp [hIs]
+    exact ⟨_, rfl⟩
+  obtain ⟨sig, hsig⟩ :=
+    Properties.CertifierDevice.Proofs.Lms.lmsSigns 64 1 20 false Lms.deployed k.I seed k 0 M rfl hk (by decide)
+  obtain ⟨hver, hdec⟩ :=
+    Properties.CertifierDevice.Proofs.Lms.lmsCorrect 64 1 20 false Lms.deployed k.I seed k 0 M sig rfl hk hsig
+  have hlms : lmsVerify Lms.deployed k.publicKey toySessionCommitment.session m sig.encode = .ok true := by
+    unfold lmsVerify
+    simp only [hpub, ne_eq, not_true_eq_false, ↓reduceIte, hdec, hI, hM, hver, bind, Except.bind]
+  have ha : RunProtocol.accepts SCHEMES toyPoint [k.publicKey] toyCommitment toyStore toyPublic toyDigests
+      (toySession k.publicKey sig.encode) toySid = .ok () := by
+    unfold RunProtocol.accepts
+    rw [tie_toy, checkAt_toy k.publicKey sig.encode (verdict_toy k.publicKey sig.encode m hm hlms)]
+    rfl
+  exact ⟨toyPoint, toySid, toyPublic, ⟨toyDigests, toySession k.publicKey sig.encode, ⟨toyCommitment, toyStore⟩⟩,
+    runAccepts_complete ⟨toyPoint, toySid, #[k.publicKey]⟩ toyPublic
+      ⟨toyDigests, toySession k.publicKey sig.encode, ⟨toyCommitment, toyStore⟩⟩
+      ((RunProtocol.accepts_iff _ _ _ _ _ _ _ _ _).mp ha)⟩
+
+/-- **Two honest runs of one setup are accepted** (the instance of `RunBinds`' honest lemma): `runAccepts_meets`' run,
+twice. -/
+theorem runBinds_meets : ∀ (I seed : ByteArray) (k : Lms.PrivateKey), Lms.key Lms.deployed I seed = .ok k →
+    ∃ (pt : Run.Point) (sid : ByteArray) (pub : SetupProtocol.Public) (e e' : RunProtocol.Evidence),
+      RunProtocol.protocol.Accepts ⟨pt, sid, #[k.publicKey]⟩ pub e ∧
+        RunProtocol.protocol.Accepts ⟨pt, sid, #[k.publicKey]⟩ pub e' := by
+  intro I seed k hk
+  obtain ⟨pt, sid, pub, e, h⟩ := runAccepts_meets I seed k hk
+  exact ⟨pt, sid, pub, e, e, ⟨_, _, h⟩, ⟨_, _, h⟩⟩
 
 end Pous.Component.SecurityProofs
