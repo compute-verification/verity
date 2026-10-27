@@ -1,7 +1,7 @@
 """The proof service, the challenger's side: a protocol's `Spec`, the public-items rule (`check_public`), and a `Stream` of
 registrations, draws and outcomes over the one-stage audit (`one_stage`).
 
-A protocol states what it commits (`Spec.values`), which proof units need proofs (`Spec.selection`, its selection rule),
+A protocol states what it commits (`Spec.values`), which proof blocks need proofs (`Spec.selection`, its selection rule),
 the check each drawn unit passes, as a public Program (`Spec.check`), and what it makes public, each item with its reason
 (`Spec.public`). What it does with each `Outcome` is its own code; the service does the rest. The parties: the workers
 compute and prove with zero knowledge off, trusted by neither party; the firewall, trusted by the developer, is their only
@@ -226,7 +226,7 @@ class Value:
 
 @dataclass(frozen=True)
 class All:
-    """Every proof unit is proved."""
+    """Every proof block is proved."""
 
     def to_json(self) -> dict[str, Any]:
         return {"rule": "all"}
@@ -282,7 +282,7 @@ RETIRED_TWO_STAGE = ("two-stage sampling is retired (ASK-25: everything is commi
 @dataclass(frozen=True)
 class Check:
     """The check each drawn unit passes. `program`: the per-unit check Program's digest (`partition.program_digest`), or,
-    for a window of templates (`Stream`'s), the tuple of each template's in the window's order. `query`: its proof units,
+    for a window of templates (`Stream`'s), the tuple of each template's in the window's order. `query`: its proof blocks,
     one-stage's template query over that Program's Definition (`Q_template_instance`), or over the window's templates in
     its order (`Q_template_instances`). `window`: the window statement's
     Program's SHA-512, proved once per window over the committed layout. `public_outputs`: what the verifier reports that
@@ -382,7 +382,7 @@ class Spec:
 
 @dataclass(frozen=True)
 class Exhaustive:
-    """Every one of `units` proof units was proved, and the verifier accepted them."""
+    """Every one of `units` proof blocks was proved, and the verifier accepted them."""
 
     units: int
 
@@ -593,7 +593,7 @@ def _reads_positions(supplied: Mapping[str, Any] | None) -> bool:
 
 
 def selection_law(rule: Selection, n: int) -> dict[str, Any]:
-    """The law a selection rule names over `n` proof units, before `draw.derive` expands it over the check's program and
+    """The law a selection rule names over `n` proof blocks, before `draw.derive` expands it over the check's program and
     query: `subset:n` for `All` and a `Law`'s own. A rate law is `subset:K` at K = `draw.rate_count` over `n`, and raises
     `Refused` (`rate`) unless 1 <= K <= n. The Lean verifier's `Select.Rule.over`, then `Select.Rule.lawOver`, is this."""
     if isinstance(rule, All):
@@ -1372,7 +1372,8 @@ class Stream:
         aren't at least one instance for each of its templates and N in all, or a single unit's stream is given any
         (`population`), when the rule's rate law
         draws none or more than N units (`rate`, `selection_law`, before R1-R7), when either check fails, or, after both,
-        when the law draws a count that varies (`shapes`, `count_varies`) or its fleet refuses it (`halted`)."""
+        when the law draws a count that varies (`shapes`, `count_varies`), when the program's units read stratum by stratum
+        are not its N units in order (`population-order`, `partition.in_order`), or its fleet refuses it (`halted`)."""
         deadline = self.spec.check.registration_deadline
         op: dict[str, Any] = {"op": "register"}
         got: dict[str, Any] = {}
@@ -1402,6 +1403,8 @@ class Stream:
                             work_table, registered, supplied, pinned, self.binding, schemas, window_root, held)
                 if v.ok and count_varies(law):
                     v = _refuse("shapes", {"law": law}).verdict
+                if v.ok and not P.in_order(program, self.spec.check.query, n):
+                    v = _refuse("population-order", {"population": n}).verdict
                 got.update(program=program, law=law, earlier=earlier)
             if v.ok and self._fleet is not None:
                 try:

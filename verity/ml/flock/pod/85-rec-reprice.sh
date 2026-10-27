@@ -836,9 +836,10 @@ lean)
   done
   # V*'s own inputs (RecVStar.checkStmt; without them every V* statement is refused at setup): the inner shape (rec-inner
   # of the inner statement), each statement's index in rec-statements' list and its bindings (rec_bindings of its
-  # partition object and program), and the shared rows (rec_vstage.shared_rows: the honest algebra's row ports but v and
-  # out, R's levels' tops, and each level's tops rec-top-L<l> as L<l> and its cap read them; without the algebra, the
-  # level's acc as acc0)
+  # partition object and program), and the one shared rows file every part is verified against (rows.json,
+  # rec_vstage.staged_shared_rows: the honest algebra's row ports but v and out, R's levels' tops, and each level's tops
+  # rec-top-L<l> as L<l> and its cap read them; without the algebra, the first level's acc as acc0), whose digest
+  # lean_verdicts.py's rec-compose holds every part's verdict to
   if [ -d $DD/v-sess ]; then
     $LEAN_BIN rec-inner --circuit $DD/stage/circuit.txt --public $DD/stage/pub-$N.bin --partition $DD/stage/partition.json \
       --program $DD/stage/program.json > $O/lean/rec-inner.json 2> $O/lean/rec-inner.err || { tail -5 $O/lean/rec-inner.err; exit 1; }
@@ -852,20 +853,14 @@ o, v, vs = map(Path, sys.argv[1:])
 (line,) = [json.loads(ln[9:]) for ln in (o / "rec-statements.txt").read_text().splitlines() if ln.startswith("RECVSTAR ")]
 names = [s[0] for s in line["statements"]]
 try:
-    shared = VS.shared_rows(sorted(v.glob("alg/*")), sorted(v.glob("stacked/L*")),
-                            [d for d in [*sorted(v.glob("L[0-9]*")), v / "cap", *sorted(v.glob("cap/L*"))]
-                             if (d / "registered.json").is_file()])["ports"]
+    (o / "rows.json").write_text(json.dumps(VS.staged_shared_rows(v)))
 except ValueError as e:
     sys.exit(str(e))
 for s in sorted(p for p in vs.iterdir() if p.is_dir()):
     c = Path((vs / f"{s.name}.stmt").read_text().strip())
     with (c / "circuit.txt").open() as f:
         unit = f.readline().split()[1]
-    ports = json.loads((c / "registered.json").read_text())["ports"]
-    rows = o / f"rows-{s.name}.json"
-    rows.write_text(json.dumps({"format": "verity/registered-reads/v0",
-                                "ports": shared | ({"acc0": ports["acc"]} if "acc0" not in shared and "acc" in ports else {})}))
-    flags = ["--rec-inner", str(o / "rec-inner.json"), "--rec-rows", str(rows)]
+    flags = ["--rec-inner", str(o / "rec-inner.json"), "--rec-rows", str(o / "rows.json")]
     if unit in names:
         flags += ["--rec-part", str(names.index(unit))]
     try:
@@ -919,7 +914,8 @@ EOF
   [ "${INNER_LEAN:-0}" = 1 ] && PARTS="$PARTS inner"
   [ -f $DD/stage/circuit.txt ] && PARTS="$PARTS inner-statement"
   if [ "${LEVELS:-}" = none ] && [ -z "$PARTS" ]; then echo "lean: LEVELS=none and no ZK_LEAN: no part to check"
-  else cp $DD/v-sess/*.live $O/lean/ 2>/dev/null; python3 verity/ml/flock/pod/lean_verdicts.py $O/lean $PARTS; LEAN_RC=$?; fi
+  else cp $DD/v-sess/*.live $O/lean/ 2>/dev/null
+    python3 verity/ml/flock/pod/lean_verdicts.py $([ -s $O/lean/rows.json ] && echo "--compose $LEAN_BIN") $O/lean $PARTS; LEAN_RC=$?; fi
   ;;
 esac
 summary

@@ -1,7 +1,8 @@
 """`remote-audit-protocol serve` (`RemoteAudit.Protocol`, onsite Verity's bandwidth component) against the Python verifier
 of the same case (`protocol`: the case decoded as the Lean decodes it, its events through `audit.Session` as
 `ra_cases.session` replays them, and `remote_bandwidth.period.answer` of the session after them): every field of the
-answer but its reason, the certified `q_bytes`, `eps` and the profile among them.
+answer but its reason, the certified `q_bytes`, `eps` and the profile among them. Both refuse a session paced at one
+window in flight, which no property of the Lean covers.
 
 The cases are a small period on one node (`period.run` on a clock the test sets): honest, its prover reading a store
 that dropped every other block, and stopped before its last window is verified; every recorded scenario
@@ -155,11 +156,20 @@ def test_a_small_periods_answers_agree(server) -> None:
     assert Fraction(honest["public"]["eps"]) == Fraction(2 ** 24 + draws, 2 ** 64), honest
 
 
+def _covered(kw: dict) -> bool:
+    """A scenario's session is one the check replays (`RemoteAudit.Protocol.sessionOf`): not paced at one window in
+    flight."""
+    pace = kw.get("pace")
+    return pace is None or pace.in_flight == 2
+
+
 @pytest.mark.parametrize("name", list(M.SCENARIOS))
 def test_a_recorded_scenario_agrees(server, name) -> None:
+    """Each scenario's verdict is its recorded outcome's, and a reject for a session the check refuses to replay."""
     case, outcome = M.recorded(name)
     kind, text = D.replay(PORT, case_of(case), server)
-    want = {"accepted": "accept", None: "undecided"}.get(M.SCENARIOS[name][3], "reject")
+    _, kw, _, recorded = M.SCENARIOS[name]
+    want = {"accepted": "accept", None: "undecided"}.get(recorded, "reject") if _covered(kw) else "reject"
     assert json.loads(text)["verdict"] == want, (name, text)
 
 

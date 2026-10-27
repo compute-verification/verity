@@ -119,7 +119,8 @@ def test_a_committer_takes_its_configuration_as_before(committers, env: pytest.M
 def engine():
     pytest.importorskip("torch")
     from verity_vllm.acquire.sources import compiled_source
-    from verity_vllm.check import fold_compare, kernel_identity
+    from verity_vllm.check import fold_compare
+    from verity_vllm.engine import kernel_identity
     from verity_vllm.check.replay import driver
     from verity_vllm.engine import build, code_identity, engine_profile
     from verity_vllm.engine.profiles import dense_generic

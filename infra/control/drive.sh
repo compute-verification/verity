@@ -15,7 +15,9 @@
 # Drive posts as @ci, which `research msg` allows only ci's holder: RESEARCH_AGENT_URL is the caller's, else /data/drive/agent-url
 # (ci's coordinator URL, one line; ci rewrites it at a handover). The nodes are reached as `research run --on` reaches them: the notes clone's
 # machines.d (RESEARCH_NOTES, the steward's clone) and ~/.runpod/ssh/runpodctl-ssh-key. The store is a cache of the bucket on the
-# container disk (/root/drive-store, as the store index keeps its own): its SQLite catalog on the volume took minutes a pull.
+# container disk (/root/drive-store, as the store index keeps its own): its SQLite catalog on the volume took minutes a pull. Its
+# objects/ and attempts/ are links into $DIR/store on the volume (`store_links`): they filled the pod's 20 GiB root to 94% (26 Oct),
+# and the store writes each file beside its destination, so a link never makes a write cross filesystems.
 # While /data/drive/stopped exists no tick starts (a running one finishes): `drive.sh stop` writes it and waits for the tick in
 # progress to end, `drive.sh start` removes it once a dry-run push of next shows the token can push, `drive.sh status` says
 # which and shows the log's tail, and `drive.sh once [FLAGS]` runs one tick here in the foreground, after the one in progress,
@@ -47,9 +49,23 @@ fast_clones() {
   fi
   [ -d "$FAST/queue-verity/.git" ] || [ ! -d "$QUEUE.volume/.git" ] || cp -a "$QUEUE.volume" "$FAST/queue-verity" || return 1
 }
+# Under the tick lock: a new container's store links its objects/ and attempts/ to their copies on the volume; one already a real
+# directory is merged into the volume's copy first (both are write-once, named by content or run id)
+store_links() {
+  for d in objects attempts; do
+    [ -L "$RESEARCH_STORE/$d" ] && continue
+    mkdir -p "$RESEARCH_STORE" "$DIR/store/$d" || return 1
+    if [ -d "$RESEARCH_STORE/$d" ]; then
+      cp -an "$RESEARCH_STORE/$d/." "$DIR/store/$d/" && mv "$RESEARCH_STORE/$d" "$RESEARCH_STORE/$d.old" || return 1
+    fi
+    ln -s "$DIR/store/$d" "$RESEARCH_STORE/$d" || return 1
+    rm -rf "$RESEARCH_STORE/$d.old"
+  done
+}
 # origin's main in $REPO: `research merge` refuses any checkout but branch main (CI-169), the tick and `queue` take a detached one
 checkout() {
   fast_clones || return 1
+  store_links || return 1
   git -C "$REPO" fetch -q origin main || return 1
   if [ "$1" = merge ]; then git -C "$REPO" checkout -q -f -B main FETCH_HEAD
   else git -C "$REPO" checkout -q -f --detach FETCH_HEAD; fi

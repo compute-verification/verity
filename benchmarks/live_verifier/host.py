@@ -61,6 +61,18 @@ pinned, one run at a time, each run's parameters a lane's request held to a fixe
   against the sha256 and bytes `verifier.json` recorded for it, and replays them through both verifiers
   (`verity/core/protocols/remote_bandwidth/lean/tests/replay.py transcript --record verifier.json`), or the record
   alone when the run left no transcript, into `runs/<run>/replay/`; a transcript that isn't the recorded one fails it.
+- **The memory challenger's parties** (INF-258): `wipe_party [--reads K] [--native [--threads T]]` and `challenger_party`
+  run PoUS's streamed-wipe challenger (`verity/core/protocols/pous/wipe_party.py`, port 47611) and its block challenger
+  (`challenger_party.py`, port 47610) as `auditor` from the pinned tree, one session per ssh connection: the request line
+  on the gate's stdin, `{"listening"}` and the signed report on its stdout, as a lane's `--challenger-command` expects
+  (`benchmarks/pous/block/block.py`). The prover connects to the host's address at the port over direct TCP, which the
+  security groups admit from the card only. Each party's LMS key and session log are `<root>/parties/<wipe|pous>/`, made
+  on the host, never leaving it; `party_key wipe|pous` prints the public half, which the lane pins as `--trusted`, and
+  `party_log wipe|pous [LOG]` lets any key read the sessions and each one's stdout as the host kept it (its signed t0 and
+  t1). A lane
+  never names a path, an address or an egress count: a session signs `UNCOUNTED` egress until the network certifier's
+  count reaches the host. A session waits for no verifier unit to run, each party serves one session at a time, and the
+  gate kills a party after its session's `--minutes M` (60 by default, at most 180), so a session no prover joined ends.
 - **The store.** When a run's or a replay's unit stops, `vy-verifier-publish@<run>.service` puts `runs/<run>/` (`research
   data put --kind verifier-run/v1 --tree ... --preserve`, from the pinned tree) with the credential infra keeps in
   `/etc/vy/verifier-store.env`, which only that unit reads.
@@ -82,6 +94,7 @@ import signal
 import subprocess
 import sys
 import tarfile
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -122,6 +135,12 @@ PRO 6000 has 96 GB of HBM)."""
 STORE_INT = re.compile(r"[1-9][0-9]{0,7}")
 MODEL_PINS = Path("verity/core/protocols/pouw/lean/check/models.json")
 """Core's pin of each model role, in the pinned tree: a bound run's `verifier.py --pin`."""
+PARTIES = {"wipe_party": ("wipe", "verity.core.protocols.pous.wipe_party", 47611),
+           "challenger_party": ("pous", "verity.core.protocols.pous.challenger_party", 47610)}
+PARTY_INTS = {"--reads": (1, 1 << 20), "--threads": (1, 256)}
+PARTY_MINUTES = (1, 180)
+"""A party session's limit (`--minutes M`, 60 by default): the gate kills the party then, so one no prover joined, or whose ssh
+connection dropped, never holds its port and lock."""
 UNIT = "vy-verifier@{}.service"
 REPLAY_UNIT = "vy-verifier-replay@{}.service"
 LOG_LINES = 20
@@ -151,6 +170,10 @@ class Host:
     @property
     def registry(self) -> Path:
         return self.root / "registry.json"
+
+    @property
+    def parties(self) -> Path:
+        return self.root / "parties"
 
     def settings(self) -> dict:
         return json.loads(self.config.read_text())
@@ -523,10 +546,173 @@ def gate_close(rest: list[str], host: Host, *, by: str, busy: Callable[[], list[
     return {"node": rest[0], "by": by, "closed": doc}
 
 
+def _as_auditor_python(*args: str) -> list[str]:
+    return ["runuser", "-u", "auditor", "--", "/usr/bin/env", "-i", "PYTHONDONTWRITEBYTECODE=1", "HOME=/var/lib/vy-verifier",
+            "PATH=/usr/bin:/bin", "/usr/bin/python3", "-s", "-E", *args]
+
+
+def party_args(verb: str, rest: list[str]) -> tuple[list[str], int]:
+    """`rest` without `--minutes M`, and M (`PARTY_MINUTES`, 60 by default)."""
+    if "--minutes" not in rest:
+        return list(rest), 60
+    i = rest.index("--minutes")
+    v = rest[i + 1] if i + 1 < len(rest) else ""
+    lo, hi = PARTY_MINUTES
+    if not COUNT.fullmatch(v) or not lo <= int(v) <= hi or rest.count("--minutes") > 1:
+        raise Refused(f"{verb} --minutes takes one integer in [{lo}, {hi}], got {v!r}")
+    return rest[:i] + rest[i + 2:], int(v)
+
+
+def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
+    """The party's command line for `verb` (`PARTIES`): its module from the pinned tree as `auditor`, its key and session log in
+    `<root>/parties/<name>` (made there, never leaving the host), listening on every address at its port. A lane names
+    `wipe_party`'s `--reads K`, `--native` (the streamer, built on this host) and `--threads T`, and nothing of
+    `challenger_party`'s; never a path, an address or an egress count (the session signs UNCOUNTED, which bounds nothing,
+    until the network certifier's count reaches the host)."""
+    name, module, port = PARTIES[verb]
+    extra: list[str] = []
+    args = list(rest)
+    while args:
+        flag = args.pop(0)
+        if verb == "wipe_party" and flag == "--native" and "--streamer" not in extra:
+            extra += ["--streamer", "build"]
+        elif verb == "wipe_party" and flag in PARTY_INTS and args and flag not in extra:
+            lo, hi = PARTY_INTS[flag]
+            v = args.pop(0)
+            if not COUNT.fullmatch(v) or not lo <= int(v) <= hi:
+                raise Refused(f"{verb} {flag} takes an integer in [{lo}, {hi}], got {v!r}")
+            extra += [flag, v]
+        else:
+            raise Refused(f"{verb} takes {'[--reads K] [--native] [--threads T]' if verb == 'wipe_party' else 'no flags'}"
+                          f"; got {flag!r}")
+    if "--threads" in extra and "--streamer" not in extra:
+        raise Refused("wipe_party --threads sets the native streamer's threads: give --native too")
+    return _as_auditor_python("-m", module, "--device", str(host.parties / name), "--listen", f"0.0.0.0:{port}", *extra)
+
+
+def exec_party(argv: list[str], sink: BinaryIO, log: Path, minutes: int) -> int:
+    """Run the party with the gate's stdin (the request line), its stdout forwarded line by line to `sink` and to `log`; killed
+    after `minutes`, which `log` records."""
+    with open(log, "ab") as out, subprocess.Popen(argv, cwd=TREE, stdout=subprocess.PIPE, start_new_session=True) as p:
+        ran_out = threading.Event()
+
+        def kill() -> None:
+            ran_out.set()
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(p.pid, signal.SIGKILL)    # runuser's child too: killing runuser alone leaves the party listening
+        timer = threading.Timer(minutes * 60, kill)
+        timer.start()
+        try:
+            for line in p.stdout:
+                out.write(line)
+                out.flush()
+                with contextlib.suppress(OSError):
+                    sink.write(line)
+                    sink.flush()
+        finally:
+            timer.cancel()
+        p.wait()
+        if ran_out.is_set():
+            out.write(json.dumps({"killed": f"the session's {minutes} min ran out"}).encode() + b"\n")
+    return p.returncode
+
+
+def gate_party(verb: str, rest: list[str], host: Host, *, by: str, now: datetime, busy: Callable[[], list[str]],
+               own: Callable[[Path], None], run: Callable[[list[str], BinaryIO, Path, int], int], sink: BinaryIO) -> int:
+    """`wipe_party` / `challenger_party`: one session of the party, served while the ssh connection lasts; refused while a
+    verifier unit runs (its cores would time the reads) or the same party serves another session. Each session's request
+    and end go to `<root>/parties/<name>/requests.jsonl`, its stdout to `log/<utc>.jsonl` beside it."""
+    rest, minutes = party_args(verb, rest)
+    argv = party_argv(verb, rest, host)
+    d = host.parties / PARTIES[verb][0]
+    for p in (host.parties, d, d / "log"):
+        if not p.is_dir():
+            p.mkdir(mode=0o700)
+            own(p)
+    with open(host.parties / f"{PARTIES[verb][0]}.lock", "a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise Refused(f"{verb} is serving another session; one at a time") from None
+        if units := busy():
+            raise Refused(f"{', '.join(units)} runs: a party session waits for no unit to run")
+        stamp = f"{now.astimezone(timezone.utc):%Y%m%dT%H%M%SZ}"
+        log = d / "log" / f"{stamp}.jsonl"
+        reqs = d / "requests.jsonl"
+        with open(reqs, "a") as f:
+            f.write(json.dumps({"verb": verb, "by": by, "utc": utc(now), "argv": argv, "log": log.name, "minutes": minutes},
+                               sort_keys=True) + "\n")
+        rc = run(argv, sink, log, minutes)
+        with open(reqs, "a") as f:
+            f.write(json.dumps({"verb": verb, "by": by, "log": log.name, "rc": rc}, sort_keys=True) + "\n")
+        for p in (reqs, log):
+            if p.exists():
+                own(p)
+    return rc
+
+
+LOG_NAME = re.compile(r"\d{8}T\d{6}Z\.jsonl")
+
+
+def gate_party_log(rest: list[str], host: Host) -> dict:
+    """`party_log wipe|pous [LOG]`: a party's sessions (each request and end, `requests.jsonl`), or one session's stdout as the
+    host kept it (`log/LOG`: `{"listening"}` and the signed report, whose `window` is t0 and t1 on this host's clock), so a
+    reader takes them from the challenger's host and never through the card. Any key reads it."""
+    names = {n for n, _, _ in PARTIES.values()}
+    if not rest or rest[0] not in names or len(rest) > 2 or (len(rest) == 2 and not LOG_NAME.fullmatch(rest[1])):
+        raise Refused(f"party_log {'|'.join(sorted(names))} [LOG]")
+    d = host.parties / rest[0]
+    if len(rest) == 1:
+        reqs = d / "requests.jsonl"
+        return {"party": rest[0], "sessions": [json.loads(ln) for ln in reqs.read_text().splitlines() if ln.strip()]
+                if reqs.is_file() else []}
+    f = d / "log" / rest[1]
+    if not f.is_file():
+        raise Refused(f"no session log {rest[1]} for {rest[0]}")
+    lines = []
+    for ln in f.read_text(errors="replace").splitlines():
+        try:
+            lines.append(json.loads(ln))
+        except ValueError:
+            lines.append(ln)
+    return {"party": rest[0], "log": rest[1], "lines": lines}
+
+
+KEYGEN = "import sys; from verity.core.protocols.pous import period; print(period.challenger(sys.argv[1]).public_key.hex())"
+
+
+def gate_party_key(rest: list[str], host: Host, *, own: Callable[[Path], None],
+                   keygen: Callable[[list[str]], str]) -> dict:
+    """`party_key wipe|pous`: the party's public key, its key made on this host the first time it's asked (only the public
+    half leaves it)."""
+    names = {n: v for v, (n, _, _) in PARTIES.items()}
+    if len(rest) != 1 or rest[0] not in names:
+        raise Refused(f"party_key {'|'.join(sorted(names))}")
+    d = host.parties / rest[0]
+    for p in (host.parties, d):
+        if not p.is_dir():
+            p.mkdir(mode=0o700)
+            own(p)
+    key = keygen(_as_auditor_python("-c", KEYGEN, str(d)))
+    if not re.fullmatch(r"[0-9a-f]{16,}", key):
+        raise Refused(f"the key generation printed {key[-200:]!r}, not a public key")
+    return {"party": rest[0], "verb": names[rest[0]], "public_key": key}
+
+
+def run_keygen(argv: list[str]) -> str:
+    p = subprocess.run(argv, cwd=TREE, capture_output=True, text=True)
+    if p.returncode:
+        raise Refused((p.stderr.strip() or f"key generation exited {p.returncode}").splitlines()[-1])
+    return (p.stdout.strip().splitlines() or [""])[-1]
+
+
 USAGE = ("verbs: run --peer NAME --port P --period P --pin SHA512 (--paced SPEC ... [--pace-pass-ms MS] | --sessions N "
          "[--windows W] [--window-ms MS] [--samples S]) [--minutes M] [--jitter-ms MS] [--quantile Q] [--lifetime L] "
          "[--verdict lean|both] [--model ROLE [--engines E] --arena-blocks A] | replay RUN | stop RUN | close NODE_HEX "
-         "(a lane's own gate key, or vy-admin) | status [RUN] | fetch RUN [--transcripts]")
+         "| wipe_party [--reads K] [--native [--threads T]] [--minutes M] | challenger_party [--minutes M] (the request line "
+         "on stdin) "
+         "(a lane's own gate key, or vy-admin) | status [RUN] | fetch RUN [--transcripts] | party_key wipe|pous "
+         "| party_log wipe|pous [LOG]")
 
 
 def gate(argv: list[str], host: Host = Host(), sink: BinaryIO | None = None, **hooks: Any) -> int:
@@ -563,7 +749,7 @@ def gate(argv: list[str], host: Host = Host(), sink: BinaryIO | None = None, **h
     own = hooks.get("own") or own_by_auditor
     pinned = hooks.get("pinned")
     try:
-        if verb in ("run", "replay", "stop", "close") and by is None:
+        if verb in ("run", "replay", "stop", "close", *PARTIES) and by is None:
             raise Refused("this key reads only: a run is started, replayed, stopped or a registration closed with a "
                           "lane's own gate key, which infra registers for it (send infra the public half)")
         if verb == "run":
@@ -587,6 +773,13 @@ def gate(argv: list[str], host: Host = Host(), sink: BinaryIO | None = None, **h
         elif verb == "close":
             doc = gate_close(rest, host, by=by, busy=busy, close=hooks.get("close") or as_auditor_close, now=now,
                              own=own)
+        elif verb in PARTIES:
+            return gate_party(verb, rest, host, by=by, now=now, busy=busy, own=own, run=hooks.get("party") or exec_party,
+                              sink=sink)
+        elif verb == "party_log":
+            doc = gate_party_log(rest, host)
+        elif verb == "party_key":
+            doc = gate_party_key(rest, host, own=own, keygen=hooks.get("keygen") or run_keygen)
         else:
             raise Refused(USAGE)
     except Refused as e:

@@ -31,7 +31,7 @@ try:
     import sys as _sys
     from pathlib import Path as _Path
 
-    _shared = str(_Path(__file__).resolve().parents[3] / "verity" / "ml" / "kernels")
+    _shared = str(_Path(__file__).resolve().parents[2] / "shared")
     if _shared not in _sys.path:
         _sys.path.insert(0, _shared)
     import cupy as _cp  # noqa: F401

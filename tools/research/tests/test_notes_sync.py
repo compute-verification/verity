@@ -634,6 +634,21 @@ def test_a_missing_notes_clone_is_cloned_once_the_token_is_set(cloud_vm, tmp_pat
     assert [p.name for p in root.parent.iterdir()] == ["notes"]
 
 
+def test_parallel_callers_in_one_process_clone_the_notes_once(cloud_vm, tmp_path, monkeypatch):
+    """26 Oct: `research run` on a fresh VM probes machines in parallel threads, each asking for the notes clone; the clone
+    directory was named by pid alone, so one thread's cleanup deleted another's clone mid-way and the run couldn't start."""
+    import concurrent.futures
+
+    origin = cloud_vm[0]
+    root = tmp_path / "home" / ".research" / "notes"
+    monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+        lines = list(pool.map(lambda _: NS.ensure_clone(root), range(6)))
+    assert lines.count(f"notes: cloned {NS.NOTES_URL} into {root}") == 1 and lines.count(None) == 5
+    assert _git(root, "rev-parse", "HEAD") == _git(origin, "rev-parse", "main")
+    assert [p.name for p in root.parent.iterdir()] == ["notes"]
+
+
 def test_a_failed_clone_leaves_nothing_and_says_why_without_the_token(cloud_vm, tmp_path, monkeypatch):
     monkeypatch.setenv(NS.TOKEN_ENV, TOKEN)
     _git(tmp_path, "config", "--file", str(tmp_path / "gitconfig"), "--unset-all", f"url.{cloud_vm[0]}.insteadOf")

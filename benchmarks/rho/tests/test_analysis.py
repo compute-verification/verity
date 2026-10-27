@@ -146,7 +146,7 @@ def test_attribution_splits_the_adversary_s_rate_and_each_ceiling_caps_rho(name)
     fam = min(r.families, key=lambda f: f.lo)
     assert sum(t.part for t in terms) == pytest.approx(fam.profile.efficiency / r.lo)
     assert all(t.ceiling >= r.lo * (1 - 1e-9) for t in terms)
-    assert any(t.name == "dark" for t in terms) == (r.scenario.context.fleet.dark > 0)
+    assert any(t.name == "dark" for t in terms) == (r.scenario.context.fleet.eps_dark > 0)
 
 
 def test_results_are_cached_per_registry_and_override():
@@ -167,9 +167,24 @@ def test_run_writes_markdown_json_and_figures_into_out(tmp_path, monkeypatch, ca
     monkeypatch.setattr(sys, "argv", ["run.py", "--target", "10", "--scenario", NAMES[0]])
     run.main()
     text = capsys.readouterr().out
-    assert text.startswith("# ρ") and "## Regions where ρ falls below target" in text and "**Corner:**" in text
+    assert text.startswith("# ρ") and "## Where ρ falls below target" in text and "**Corner:**" in text
     assert (tmp_path / "rho.md").read_text() == text
     record = json.loads((tmp_path / "rho.json").read_text(), parse_constant=lambda c: pytest.fail(f"JSON has {c}"))
     assert set(record["scenarios"]) == {NAMES[0]}
     assert {"corner", "lo_by_status", "attribution", "dangers", "rescues"} <= set(record["scenarios"][NAMES[0]])
     assert drawn == [(tmp_path / "figures", [10.0])]
+
+
+def test_run_prints_the_comparator_beside_rho_and_flags_a_vacuous_lower_end(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    import run
+
+    monkeypatch.setattr(figures, "render", lambda reg, out, names, targets: {})
+    monkeypatch.setenv("OUT", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", ["run.py", "--target", "10", "--scenario", "reference-remote-h200"])
+    run.main()
+    text = capsys.readouterr().out
+    assert "| reference-remote-h200 | [2.35 (vacuous), 5.87] | 2.5 |" in text
+    assert "With no protocol the adversary sits at **ρ = 2.5**" in text and "**vacuous**" in text
+    record = json.loads((tmp_path / "rho.json").read_text())["scenarios"]["reference-remote-h200"]
+    assert record["vacuous"] and record["unmonitored"] == pytest.approx(2.5)

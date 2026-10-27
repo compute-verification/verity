@@ -275,7 +275,9 @@ class PearlCWholeArm(PearlCArm):
     ``PEARLC_CAPTURE_SIZES`` overrides the preset's capture sizes (each at most 256 rows); ``PEARLC_WHOLE_DEFER_A=0``
     keeps each call's A tree on the capturing stream (a kernel whose pipeline doesn't split A's commitment needs it),
     ``PEARLC_WHOLE_FORK_STATS=0`` each call's A scales (`whole_fork_stats`: by default they run beside its A commitment),
-    ``PEARLC_WHOLE_TREE_SM=0`` gives the GEMM beside A's tree every SM, ``PEARLC_LAG_ENDS=0`` reads each pass's
+    ``PEARLC_WHOLE_TREE_SM=0`` gives the GEMM beside A's tree every SM, ``PEARLC_WHOLE_SHAPE_JOINS=1`` joins each call's
+    side steps only before the next call of its shape (`whole_shape_joins`; off by default: on the H200 it lost 0.12 ms a
+    step, its side steps slowing the next calls' GEMMs, r20261025-104353-9adc), ``PEARLC_LAG_ENDS=0`` reads each pass's
     commitment back at its own end, and ``PEARLC_ASIDE_ENDS=0`` runs a lagged end's tile tree on the step's stream (by
     default, `aside_ends`, on a stream of its own, so the next step doesn't wait for it).  On pearl_c_sm120 (`RTX_ONLY`)
     the stats stream also prefetches each call's B̃ into L2 (`whole_prefetch_b`, run.py's ``prefetch_b`` in its
@@ -302,6 +304,8 @@ class PearlCWholeArm(PearlCArm):
                             ("aside_ends", "PEARLC_ASIDE_ENDS"), ("whole_prefetch_b", "PEARLC_WHOLE_PREFETCH_B")):
             if os.environ.get(env) == "0":
                 self.run_options = {k: v for k, v in self.run_options.items() if k != option}
+        if os.environ.get("PEARLC_WHOLE_SHAPE_JOINS") == "1":
+            self.run_options = {**self.run_options, "whole_shape_joins": True}
         if "whole_defer_a" not in self.run_options:
             self.run_options = {k: v for k, v in self.run_options.items() if k != "whole_tree_sm"}
         if "lag_ends" not in self.run_options:
@@ -326,11 +330,11 @@ class PearlCWholeArm(PearlCArm):
                                        "cudagraph_capture_sizes": self.capture}}
 
     def ready(self, target: Any) -> None:
-        from verity_vllm.engine.engine_profile import get_model_runner
+        from verity_vllm.engine import handle
         from verity_vllm.protocols.pouw.pearl_c.whole import WholeStep
 
         super().ready(target)
-        self.whole = WholeStep(self.run, self.stack, get_model_runner(target.engine.vllm), target.hooks)
+        self.whole = WholeStep(self.run, self.stack, handle.model_runner(target.engine.vllm), target.hooks)
         self.whole.prepare()
         self.totals = dict(self.whole.take())
 

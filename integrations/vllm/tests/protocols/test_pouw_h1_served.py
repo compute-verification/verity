@@ -469,6 +469,44 @@ def test_a_periods_program_and_digest_given_are_not_declared_again(monkeypatch):
     assert taken == digest == served.declare(SHAPES, MODULES, T, STEPS) and served.calls == list(decl.fn.bindings["CALLS"])
 
 
+def test_a_window_without_a_unit_takes_each_ks_tile_unit_on_its_cards_arch(monkeypatch):
+    """Without ``unit``, `declared` takes `h1window.tile_unit` on ``arch``, the serving card's H1 record, whose domain
+    refuses a K that card's kernels don't serve: K 16 and 32 on sm_90 (K >= 384 and 512 | K), before any tile is built.
+    It hands each K and the tile to `tile_unit` with that arch, as does a `Served` of that arch, and one with no arch keeps
+    `tile_unit`'s own (sm_120's, which states no domain). The real units' Program is the same on sm_90 and sm_120 (the
+    record's step is one function); a stand-in of their parameter shape keeps it small here."""
+    with pytest.raises(ValueError, match="outside H1's domain on sm_90"):
+        SV.declared(SHAPES, MODULES, T, STEPS, TILE, BLOCKS, arch="sm_90")
+    asked, stand_in = [], _unit()
+
+    def tile_unit(k, tile, definition=None, arch="sm_120"):
+        asked.append((k, tuple(tile), definition, arch))
+        return stand_in(k)
+
+    monkeypatch.setattr(SV.HW, "tile_unit", tile_unit)
+    decl = SV.declared(SHAPES, MODULES, T, STEPS, TILE, BLOCKS, arch="sm_90")
+    assert sorted(asked) == [(16, TILE, None, "sm_90"), (32, TILE, None, "sm_90")]
+    assert P.program_digest(decl) == P.program_digest(SV.declared(SHAPES, MODULES, T, STEPS, TILE, BLOCKS, unit=stand_in))
+    asked.clear()
+    SV.Served(TILE, None, BLOCKS, arch="sm_90").declare(SHAPES, MODULES, T, STEPS)
+    assert sorted(asked) == [(16, TILE, None, "sm_90"), (32, TILE, None, "sm_90")]
+    asked.clear()
+    SV.Served(TILE, None, BLOCKS).declare(SHAPES, MODULES, T, STEPS)
+    assert sorted(asked) == [(16, TILE, None, "sm_120"), (32, TILE, None, "sm_120")]
+
+
+@pytest.mark.parametrize("capability, arch", [((9, 0), "sm_90"), ((12, 0), "sm_120"), ((8, 9), None)])
+def test_card_arch_is_the_cards_h1_record(monkeypatch, capability, arch):
+    """`card_arch` names the current card by its H1 record (`h1device.DEVICES`): an H200's compute capability 9.0 is
+    sm_90's, the RTX PRO 6000's 12.0 sm_120's, and a card with no record (8.9) is refused."""
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda device=None: capability)
+    if arch is None:
+        with pytest.raises(ValueError, match="no device record for 'sm_89'"):
+            SV.card_arch()
+    else:
+        assert SV.card_arch() == arch
+
+
 def test_a_replayed_windows_values_are_refused_through_their_window_bound_domains():
     """Two windows of a period share every name, so a window's call tables are its own only through their domains, which
     bind its open root: window 1's, presented as window 2's, are not under the domains window 2's root gives them
