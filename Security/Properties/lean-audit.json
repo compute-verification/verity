@@ -1558,6 +1558,9 @@
   "Properties.NetworkCertifier.perServerIngress": {
    "owner": "@network-accounting"
   },
+  "Properties.NetworkCertifier.perServerIngress_drawn": {
+   "owner": "@network-accounting"
+  },
   "Properties.NetworkCertifier.perServerIngress_honest": {
    "owner": "@network-accounting"
   },
@@ -3605,6 +3608,7 @@
    "Pous.Period.SecurityProofs.periodHeldHonest": "completeness: the honest lemma of periodHeld and periodHeldDeployed: at an honest period on one H200 holding all of C* (honestRun, 2^30 bits on chip, one PCIe Gen 5 x16 side channel of 437,248,000 bits a round), RingDevice holds at the deployed budget for every audit, the certificate HONEST_S = 63,000,000 bits is positive and fits the state bound, and the budget is the deadline's at the measured floor (DEADLINE_ROUNDS <= RING_D, the 1.995x margin)",
    "Pous.Period.SecurityProofs.periodHeldNontrivial": "completeness: the nontrivial lemma of periodHeld and periodHeldDeployed: at a period whose capacity account holds nothing, an accept-all verdict fails their conclusion wherever the period's data holds no break (a concrete audit with no break needs SHA-512 on each of the table's 2^20 strings, so that is a hypothesis), and their event is false at the honest period",
    "Properties.NetworkCertifier.perServerIngress": "frozen (premise,no-function): its soundness conjunct's event's acceptance is the deployed check's whole decision (NetworkCheck.Period.check), but it takes the sampled verifier's named assumptions (Claims.Sampling.KS, the commitment's Binds, Claims.Flock.ListWithin, Properties.NetworkScan.StmtFlattens), the network certifier's (Regenerates, Packed, Allocated and JitterBounded of Definitions.NetworkCertifier.Assumptions, StatusComplete) and its own module's (AnswersOfRecord, ScanScope, RecordsCells, OpensPass, WardenRowsOpen, OkOpens, ChainOpens), none under shape.premises; and its count conjunct bounds the secrets an outside sender passes through the warden, which reads the warden's record and the scan's Program and not the check. Its honest and nontrivial lemmas are perServerIngress_honest and perServerIngress_nontrivial.",
+   "Properties.NetworkCertifier.perServerIngress_drawn": "lemma: PerServerIngress' count conjunct where every window's draw takes every ingress unit (IngressDrawn), so that no faulty set holds one and a window is log2 #faultySets + windowBits bits; a corollary of the count (perServerIngress_count with scanBound_drawn), under its premises and IngressDrawn, about the warden's record and the scan's Program and not the check, as the count conjunct is.",
    "Properties.NetworkCertifier.perServerIngress_honest": "completeness: the honest lemma of perServerIngress: a rows-form period whose every window's and audit's answer is accepted, the windows' at one delta (HonestWindowsAccepted), is accepted by NetworkCheck.Period.check with every window answered, so AnswersOfRecord reads an accepted window's answer",
    "Properties.NetworkCertifier.perServerIngress_nontrivial": "completeness: the nontrivial lemma of perServerIngress: a check that accepts every period fails PeriodSound at any period one of whose windows' registered ingress the scan doesn't accept, wherever the period's error is below 1"
   },

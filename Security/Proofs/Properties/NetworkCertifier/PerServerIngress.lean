@@ -483,29 +483,11 @@ theorem scanBound_drawn {s : Schedule} (cls : ScanClass) {st : Stmt} {P : Partit
     _ = _ := by rw [Finset.sum_const, smul_eq_mul]
 
 /-- **The count where the draw takes every ingress unit** (`IngressDrawn` at every window): `perServerIngress_count`
-with no faulty ingress unit, at most `∏_i #faultySets · 2^windowBits · (∏_ℓ (r ℓ + 1))^n · Dj^n`. -/
-theorem perServerIngress_drawn {Coin Col T : Type} (H : Msg → Msg) (D : Deploy Coin Col T) (δ : ℝ) (p : Params)
-    (s : Schedule)
-    (cls : ScanClass) (ops : Stmt → List (Opening Bool)) {K : ℕ} {Z In Act Wire : Type}
-    (I : Interaction 1 K s.allocation Z In Act Wire) (Dj : ℕ) (r : Fin 1 → ℕ)
-    (view : ℕ → Obs 1 K s.allocation → Wire) (hW2 : Regenerates I.certifier view) (hW4 : Packed I.certifier)
-    (hr : Allocated I.certifier r) (hJ : JitterBounded I.certifier Dj)
-    (sw : Fin p.windows → Stmt) (Pw : Fin p.windows → Partition)
-    (hcount : ∀ i, ScanCountsRequests s cls (sw i) (Pw i) δ) (hdrawn : ∀ i, IngressDrawn s (sw i) (Pw i))
-    (Ms : Set Z) (xm : Z → Fin p.windows → Msg)
-    (hsw : ∀ m ∈ Ms, ∀ i st, D.parse (xm m i) = some st →
-      st.prog = (sw i).prog ∧ st.desc = (sw i).desc ∧ st.design = (sw i).design ∧ D.partition st = some (Pw i))
-    (hacc : ∀ m ∈ Ms, StatusComplete (p.windows * s.window) (I.obsRun m (p.windows * s.window)))
-    (hcells : ∀ m ∈ Ms, RecordsCells s (I.obsRun m (p.windows * s.window)))
-    (hpass : ∀ m ∈ Ms, ∀ i st, D.parse (xm m i) = some st → OpensPass H D.commit st (ops st))
-    (hrows : ∀ m ∈ Ms, ∀ i st, D.parse (xm m i) = some st →
-      WardenRowsOpen s st (ops st) (windowIns s (I.obsRun m (p.windows * s.window)) i.val))
-    (hok : ∀ m ∈ Ms, ∀ i st, D.parse (xm m i) = some st → OkOpens s st (ops st))
-    (hchain : ∀ m ∈ Ms, ∀ i st, D.parse (xm m i) = some st → ChainOpens s st (ops st))
-    (dec : List Wire → Z) (hdec : ∀ m ∈ Ms, dec (I.wireRun m (p.windows * s.window)) = m) :
-    {m | m ∈ Ms ∧ ∀ i, IngressDeclared H D s ops δ (xm m i)}.encard ≤
-      (((∏ i, (faultySets (sw i).design (Pw i) δ).card * 2 ^ windowBits s cls) *
-        ((∏ ℓ, (r ℓ + 1)) ^ (p.windows * s.window) * Dj ^ (p.windows * s.window)) : ℕ) : ℕ∞) := by
+with no faulty ingress unit. -/
+theorem perServerIngress_drawn : PerServerIngressDrawn := by
+  unfold PerServerIngressDrawn
+  intro Coin Col T H D δ p s cls ops K Z In Act Wire I Dj r view hW2 hW4 hr hJ sw Pw hcount hdrawn Ms xm hsw hacc
+    hcells hpass hrows hok hchain dec hdec
   have h := perServerIngress_count H D δ p s cls ops I Dj r view hW2 hW4 hr hJ sw Pw hcount Ms xm hsw hacc hcells
     hpass hrows hok hchain dec hdec
   rwa [Finset.prod_congr rfl fun i _ => scanBound_drawn cls δ (hdrawn i)] at h

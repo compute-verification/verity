@@ -24,7 +24,7 @@ every prover:
   the scan accepts, number at most
   `∏_i Σ_(F faulty at δ) 2^(#ingress(F) · faultyIngressBits + windowBits) · (∏_ℓ (r ℓ + 1))^n · D^n`. Where the
   draw takes every ingress unit, no faulty set holds one, and the content is `log2 #faultySets + windowBits` bits a
-  window.
+  window (`PerServerIngressDrawn`).
 
 `windowBits` is `N · requestBits + T · bucketBits`, at the window's most requests `N = lanes · ⌈T / (D + 1)⌉`.
 `requestBits` is a request's ordinal (32: the scan checks only that it is above the last), its head (content-length,
@@ -357,6 +357,33 @@ def PerServerIngressBy (chk : Params → NetworkCheck.Period.Commitment → Evid
 /-- **The server's ingress over a rows-form period**: `PerServerIngressBy` at the check of record,
 `NetworkCheck.Period.check`. -/
 def PerServerIngress : Prop := PerServerIngressBy check
+
+/-- **The count where the draw takes every ingress unit**: `PerServerIngress`' count where every window's draw takes
+every ingress unit (`IngressDrawn`), so that no faulty set holds one: the secrets an outside sender passes into the
+server through the warden, whose every window's ingress the scan accepts, number at most
+`∏_i #faultySets · 2^windowBits · (∏_ℓ (r ℓ + 1))^n · Dj^n`, `log2 #faultySets + windowBits` bits a window. -/
+def PerServerIngressDrawn : Prop :=
+  ∀ {Coin Col T : Type} (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (δ : ℝ) (p : Params) (s : Schedule)
+    (cls : ScanClass) (ops : Stmt → List (Opening Bool)) {K : ℕ} {Z In Act Wire : Type}
+    (I : Interaction 1 K s.allocation Z In Act Wire) (Dj : ℕ) (r : Fin 1 → ℕ)
+    (view : ℕ → Obs 1 K s.allocation → Wire) (hW2 : Regenerates I.certifier view) (hW4 : Packed I.certifier)
+    (hr : Allocated I.certifier r) (hJ : JitterBounded I.certifier Dj)
+    (sw : Fin p.windows → Stmt) (Pw : Fin p.windows → Partition)
+    (hcount : ∀ i, ScanCountsRequests s cls (sw i) (Pw i) δ) (hdrawn : ∀ i, IngressDrawn s (sw i) (Pw i))
+    (Ms : Set Z) (xm : Z → Fin p.windows → Claims.Msg)
+    (hsw : ∀ m ∈ Ms, ∀ i st, D.parse (xm m i) = some st →
+      st.prog = (sw i).prog ∧ st.desc = (sw i).desc ∧ st.design = (sw i).design ∧ D.partition st = some (Pw i))
+    (hacc : ∀ m ∈ Ms, StatusComplete (p.windows * s.window) (I.obsRun m (p.windows * s.window)))
+    (hcells : ∀ m ∈ Ms, RecordsCells s (I.obsRun m (p.windows * s.window)))
+    (hpass : ∀ m ∈ Ms, ∀ i st, D.parse (xm m i) = some st → OpensPass H D.commit st (ops st))
+    (hrows : ∀ m ∈ Ms, ∀ i st, D.parse (xm m i) = some st →
+      WardenRowsOpen s st (ops st) (windowIns s (I.obsRun m (p.windows * s.window)) i.val))
+    (hok : ∀ m ∈ Ms, ∀ i st, D.parse (xm m i) = some st → OkOpens s st (ops st))
+    (hchain : ∀ m ∈ Ms, ∀ i st, D.parse (xm m i) = some st → ChainOpens s st (ops st))
+    (dec : List Wire → Z) (hdec : ∀ m ∈ Ms, dec (I.wireRun m (p.windows * s.window)) = m),
+    {m | m ∈ Ms ∧ ∀ i, IngressDeclared H D s ops δ (xm m i)}.encard ≤
+      (((∏ i, (faultySets (sw i).design (Pw i) δ).card * 2 ^ windowBits s cls) *
+        ((∏ ℓ, (r ℓ + 1)) ^ (p.windows * s.window) * Dj ^ (p.windows * s.window)) : ℕ) : ℕ∞)
 
 /-! ## Its honest and nontrivial statements -/
 
