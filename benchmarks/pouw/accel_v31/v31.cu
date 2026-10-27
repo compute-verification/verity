@@ -1742,38 +1742,74 @@ DEV int log2_cnt(u32 cnt) {
 struct KsArg {
   u64 ks[8], ks_m8[8];
 };
-// commit_gpu's salt_prf on k rather than C
-DEV void salt_prf_k(const KsArg& k, u64 pos, u64* Y) {
+// salt_prf's block r (salt words 8 r .. 8 r + 7) into Y, Ks from k when given, else from C
+DEV void salt_prf_block(const KsArg* k, u64 pos, int r, u64* Y) {
+  u64 w[16];
 #pragma unroll
-  for (int r = 0; r < 3; ++r) {
-    u64 w[16];
+  for (int i = 0; i < 8; ++i) w[i] = k ? k->ks[i] : C.ks[i];
+  w[8] = pos; w[9] = r; w[10] = 0x8000000000000000ull;
+  w[11] = w[12] = w[13] = w[14] = 0;
+  w[15] = 80 * 8;
+  sha::iv(Y);
+  sha::compress_from<8>(Y, k ? k->ks_m8 : C.ks_m8, w);
+}
+// hm96_mask<false, true>'s terms from salt bytes 64 B .. 64 B + 63 (Yb, salt_prf's block B: q = 4 B .. 4 B + 3) xored into m
+template <int B>
+DEV void hm96_mask_block(const uint8_t* T, const u64* Yb, u32* m) {
 #pragma unroll
-    for (int i = 0; i < 8; ++i) w[i] = k.ks[i];
-    w[8] = pos; w[9] = r; w[10] = 0x8000000000000000ull;
-    w[11] = w[12] = w[13] = w[14] = 0;
-    w[15] = 80 * 8;
-    sha::iv(Y + 8 * r);
-    sha::compress_from<8>(Y + 8 * r, k.ks_m8, w);
+  for (int r = 0; r < 16; ++r) {
+    u32 A[20];
+#pragma unroll
+    for (int i = 0; i < 20; ++i) A[i] = 0;
+#pragma unroll
+    for (int j = 0; j < 4; ++j) {
+      const int p = 16 * j + r;
+      const u32 v = (u32)(Yb[p >> 3] >> (56 - 8 * (p & 7))) & 0xFFu;
+      const uint8_t* lo = T + 256 * (4 * B + j) + 16 * (v & 15u);
+      const uint8_t* hi = T + 4096 + 256 * (4 * B + j) + 16 * (v >> 4);
+#pragma unroll
+      for (int i = 0; i < 5; ++i) {
+        const uint4 u = ldg16(lo + 256 * i), w = ldg16(hi + 256 * i);
+        A[4 * i] ^= u.x ^ w.x; A[4 * i + 1] ^= u.y ^ w.y; A[4 * i + 2] ^= u.z ^ w.z; A[4 * i + 3] ^= u.w ^ w.w;
+      }
+    }
+    const int sw = r >> 2, s = 8 * (r & 3);
+#pragma unroll
+    for (int w = 0; w < 16; ++w) m[w] ^= s ? __funnelshift_r(A[w + sw], A[w + sw + 1], s) : A[w + sw];
   }
 }
 // salt_one<true, false, true> at the call's salt offset: S[pos] from prf_salt(Ks, off + pos) (dither.salts(Ks, off)); Ks
-// from k when given, else from C
+// from k when given, else from C. Each of the PRF's three blocks goes into the mask and the digest as it is made, so the
+// salt's 24 words are never live at once (hm96_mask over all of them spilled).
 DEV void salt_one_at(u64 pos, u64 off, const uint8_t* T, u64* __restrict__ S, const KsArg* k = nullptr) {
-  u64 Y[24], c[8], my[8];
+  u64 Y[16], c[8];
   u32 m[16];
-  if (k) salt_prf_k(*k, off + pos, Y);
-  else salt_prf(off + pos, Y);
-  hm96_mask<false, true>(T, Y, m);
-  salt_digest(Y, c);
+#pragma unroll
+  for (int w = 0; w < 16; ++w) m[w] = 0;
+  salt_prf_block(k, off + pos, 0, Y);
+  hm96_mask_block<0>(T, Y, m);
+  salt_prf_block(k, off + pos, 1, Y + 8);
+  hm96_mask_block<1>(T, Y + 8, m);
+  cpy8(c, C.mid_salt);
+  sha::compress(c, Y);
+  salt_prf_block(k, off + pos, 2, Y);
+  hm96_mask_block<2>(T, Y, m);
+  Y[8] = 0x8000000000000000ull;
+#pragma unroll
+  for (int i = 9; i < 15; ++i) Y[i] = 0;
+  Y[15] = (128 + 192) * 8;
+  sha::compress(c, Y);
+  u64 my[8];
 #pragma unroll
   for (int i = 0; i < 8; ++i) my[i] = (u64)bswap32(m[2 * i]) << 32 | bswap32(m[2 * i + 1]);
   st8(S + 16 * pos, my);
   st8(S + 16 * pos + 8, c);
 }
 // salt_small<true> (slot 0) a group at a time: S and F for positions below n (salted at off + pos), the pads up to width,
-// and the subtrees of groups that hold only pads (nvb = ceil(width / 128)); KP: Ks from ka, else from C
-template <bool KP = false>
-__global__ void __launch_bounds__(SMALL_THREADS, SMALL_MINB)
+// and the subtrees of groups that hold only pads (nvb = ceil(width / 128)); KP: Ks from ka, else from C; MINB its CTAs an
+// SM by registers (4: 128 a thread, as many CTAs as a cap of 4 lets in anyway)
+template <bool KP = false, int MINB = SMALL_MINB>
+__global__ void __launch_bounds__(SMALL_THREADS, MINB)
     salt_persist(Persist p, int dom, const uint4* __restrict__ Tg, u64 n, u64 width, u64* __restrict__ S, u64* __restrict__ F,
                  u64* levels, u64 off, const __grid_constant__ KsArg ka) {
   const u32 cnt = (u32)(width < SMALL_THREADS ? width : SMALL_THREADS);
@@ -2097,14 +2133,15 @@ static std::string env_str(const char* name, const char* dflt) {
 // 96, 80 or 64 a thread); V31_SAHEAD 1, a call's salt phase on a stream of its own (Ks a launch argument), issued with the
 // call, so it runs beside the previous call's GEMM or leaves rather than between its own GEMM and leaves; V31_FULL 0, rows of
 // a multiple of 128 bytes hashed as any row (hash_after_block's padding checks) rather than as full blocks; V31_LPIECES, the
-// pieces a row's chunks are cut into (Pieces; 0, the default: 8 when the groups outnumber the CTAs the caps allow, else 1).
+// pieces a row's chunks are cut into (Pieces; 0, the default: 8 when the groups outnumber the CTAs the caps allow, else 1);
+// V31_SMINB 4 or 5 (the default), salt_persist's MINB.
 struct Knobs {
   int carve = env_int("V31_CARVE", 100), dyn = env_int("V31_DYN", 1), wrap = env_int("V31_WRAP", 2), wcw = env_int("V31_WCW", 256),
       ccta = env_int("V31_CCTA", 1), pf = env_int("V31_PF", 0), diag = env_int("V31_DIAG", 0), sched = env_int("V31_SCHED", 0),
       gemm = env_int("V31_GEMM", 0), wgbn = env_int("V31_WGBN", 256), cm = env_int("V31_CM", 0), wgg = env_int("V31_WGG", 16),
       rp = env_int("V31_RP", 0), lminb = env_int("V31_LMINB", SMALL_MINB), sahead = env_int("V31_SAHEAD", 0),
       ltw = env_int("V31_LTW", 0),   // Fill at S = 1: cuBLASLt's int32 X W'^T in place of the protocol GEMM, rows its low halves
-      full = env_int("V31_FULL", 1), lpieces = env_int("V31_LPIECES", 0);
+      full = env_int("V31_FULL", 1), lpieces = env_int("V31_LPIECES", 0), sminb = env_int("V31_SMINB", SMALL_MINB);
   std::string cprio = env_str("V31_CPRIO", "hi");
 };
 static void set_carveout(int pct) {
@@ -2127,7 +2164,7 @@ static void set_carveout(int pct) {
                       (const void*)leaf_persist<LtRow, 4>, (const void*)leaf_persist<LtRow, 6>, (const void*)leaf_persist<LtRow, 8>,
                       (const void*)leaf_persist<ServedRow, 6>, (const void*)leaf_persist<ServedRow, 8>,
                       (const void*)leaf_persist<NoMemRow, 4>, (const void*)leaf_persist<NoMemRow, 6>,
-                      (const void*)leaf_persist<NoMemRow, 8>};
+                      (const void*)leaf_persist<NoMemRow, 8>, (const void*)salt_persist<false, 4>, (const void*)salt_persist<true, 4>};
   for (const void* k : ks) CK(cudaFuncSetAttribute(k, cudaFuncAttributePreferredSharedMemoryCarveout, pct));
 }
 
@@ -2137,7 +2174,7 @@ template <class R> static u32 host_chunks(const R& r) { return r.full ? r.row / 
 static u32 host_chunks(const FusedRow&) { return 1; }
 struct Lanes {
   u32 *ctl = nullptr, *claim = nullptr, epoch = 0;
-  int nsm = 1, lminb = SMALL_MINB, lpieces = 0;
+  int nsm = 1, lminb = SMALL_MINB, lpieces = 0, sminb = SMALL_MINB;
   u64* xs = nullptr;     // Pieces: a chaining value for each of up to cap_n leaves, a flag a group
   u32* flag = nullptr;
   u64 cap_n = 0;
@@ -2175,12 +2212,13 @@ struct Lanes {
     if (!ccta && !off && !ka) { cm.salts<true>(nullptr, st); return; }
     if (!ccta) ccta = 8;
     const u64 nvb = (cm.width + SMALL_THREADS - 1) / SMALL_THREADS;
-    if (ka)
-      salt_persist<true><<<grid(nvb, ccta), SMALL_THREADS, 0, st>>>(persist(nvb, ccta), cm.dom, cm.Tn, cm.n, cm.width, cm.S,
-                                                                     cm.F, cm.levels, off, *ka);
-    else
-      salt_persist<false><<<grid(nvb, ccta), SMALL_THREADS, 0, st>>>(persist(nvb, ccta), cm.dom, cm.Tn, cm.n, cm.width, cm.S,
-                                                                      cm.F, cm.levels, off, KsArg{});
+    const unsigned g = grid(nvb, ccta);
+    const Persist p = persist(nvb, ccta);
+    const KsArg k = ka ? *ka : KsArg{};
+    if (ka && sminb == 4) salt_persist<true, 4><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, k);
+    else if (ka) salt_persist<true><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, k);
+    else if (sminb == 4) salt_persist<false, 4><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, k);
+    else salt_persist<false><<<g, SMALL_THREADS, 0, st>>>(p, cm.dom, cm.Tn, cm.n, cm.width, cm.S, cm.F, cm.levels, off, k);
   }
   template <class Row>
   void leaves_nodes(Committer& cm, const Row& rows, int ccta, cudaStream_t st) {
@@ -2626,6 +2664,7 @@ struct Fill {
       exit(2);
     }
     if (kn.lpieces < 0 || kn.lpieces > 255) { fprintf(stderr, "V31_LPIECES: 0 to 255\n"); exit(2); }
+    if (kn.sminb != 4 && kn.sminb != SMALL_MINB) { fprintf(stderr, "V31_SMINB: 4 or %d\n", SMALL_MINB); exit(2); }
     own = !c0;
     if (own) {
       int lo, hi;
@@ -2641,6 +2680,7 @@ struct Fill {
     pl.init(nsm);
     pl.lminb = kn.lminb;
     pl.lpieces = kn.lpieces;
+    pl.sminb = kn.sminb;
     if (full_rows()) pl.pieces_init(leaves);
     if (kn.sahead) {
       int pr;
@@ -3698,10 +3738,10 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
     };
     const double rs = per_cycle("sha", cc.sha), rl = per_cycle("leaf", cc.leaf), rn = per_cycle("leaf_nomem", cc.leaf),
                  rt = per_cycle("salt", cc.salt), rc = per_cycle("commit", cc.leaf + cc.salt);
-    printf("\"full\": %u, \"lpieces\": %u, \"comp\": {\"sha\": %.0f, \"leaf\": %.0f, \"salt\": %.0f}, \"per_sm_cycle\": {\"sha\": %s, "
+    printf("\"sminb\": %d, \"full\": %u, \"lpieces\": %u, \"comp\": {\"sha\": %.0f, \"leaf\": %.0f, \"salt\": %.0f}, \"per_sm_cycle\": {\"sha\": %s, "
            "\"leaf\": %s, \"leaf_nomem\": %s, \"salt\": %s, \"commit\": %s}, \"of_sha\": {\"leaf\": %s, \"leaf_nomem\": %s, "
            "\"salt\": %s, \"commit\": %s}, ",
-           f.full_rows(), f.leaf_pieces(0), cc.sha, cc.leaf, cc.salt, jn(rs).c_str(), jn(rl).c_str(), jn(rn).c_str(),
+           f.kn.sminb, f.full_rows(), f.leaf_pieces(0), cc.sha, cc.leaf, cc.salt, jn(rs).c_str(), jn(rl).c_str(), jn(rn).c_str(),
            jn(rt).c_str(), jn(rc).c_str(), jn(rl / rs).c_str(), jn(rn / rs).c_str(), jn(rt / rs).c_str(), jn(rc / rs).c_str());
     printf("\"kernels\": ");
     kernel_attrs(stdout);
