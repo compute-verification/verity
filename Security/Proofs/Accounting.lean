@@ -1,3 +1,4 @@
+import Proofs.Accounting.Defs
 import Proofs.Accounting.Memory
 import Proofs.Accounting.Device
 import Proofs.Accounting.Gates
@@ -6,7 +7,6 @@ import Proofs.Accounting.Headline
 import Proofs.Accounting.HeadlineDc
 import Proofs.Accounting.HeadlineDc.Meets
 import Proofs.Accounting.Gates.Rows
-import Proofs.Accounting.Gates.Macs
 import Proofs.Accounting.Gates.Bitwise
 import Proofs.Accounting.Bandwidth
 import Proofs.Accounting.ChainWork
@@ -45,7 +45,6 @@ import Proofs.Accounting.PerRunJoint
 import Proofs.Accounting.PerRunNecessity
 import Proofs.Accounting.PerRunPriced
 import Proofs.Accounting.PerRunStop
-import Proofs.Accounting.Remote
 import Proofs.Accounting.RemoteHeld
 import Proofs.Accounting.RemoteHeld.Meets
 import Proofs.Accounting.RemoteHeld.OverTime
@@ -56,6 +55,7 @@ import Proofs.Accounting.RemoteHeld.Sketch
 import Proofs.Accounting.RemoteHeld.SketchLine
 import Proofs.Accounting.RemoteHeld.SketchP2
 import Proofs.Accounting.RemoteHeld.Line
+import Proofs.Accounting.RemoteHeld.Component
 import Proofs.Accounting.Requirement
 import Proofs.Accounting.RequirementPouw
 import Proofs.Accounting.Sanity
@@ -72,7 +72,6 @@ import Proofs.Accounting.TS.FixedMeets
 import Proofs.Accounting.TS.SharedNoise
 import Proofs.Accounting.TS.J10RChecks
 import Proofs.Accounting.TS.SessionSound
-import Proofs.Accounting.TS.SessionProofSound
 import Proofs.Accounting.TS.CheckedSound
 import Proofs.Accounting.TS.LanesSound
 import Proofs.Accounting.TS.Session.Lanes.Layout
@@ -86,7 +85,7 @@ import Proofs.Accounting.TS.Session.Lanes.KnownFields
 import Proofs.Accounting.TS.Session.Lanes.KnownRead
 import Proofs.Accounting.TS.Session.Lanes.Combine
 import Proofs.Accounting.TS.Session.Lanes.Lane
-import Proofs.Accounting.TS.Session.Lanes.Stream
+import Proofs.Pouw.H1Zy.Stream
 import Proofs.Accounting.TS.HeldSound
 import Proofs.Accounting.TS.Session.Tile.Computes
 import Proofs.Accounting.TS.TileSound
@@ -95,7 +94,6 @@ import Proofs.Accounting.Responder
 import Proofs.Accounting.Responder.Latency
 import Proofs.Accounting.HMu
 import Proofs.Accounting.CoinFlow
-import Proofs.Accounting.Layers
 import Proofs.Accounting.Compose
 import Proofs.Accounting.ComposePeriod
 import Proofs.Accounting.ComposePeriod.Honest

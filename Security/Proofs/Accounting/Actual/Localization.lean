@@ -1,5 +1,5 @@
 import Definitions.Accounting.Guarantees.Localization
-import Definitions.Accounting.Localization
+import Proofs.Accounting.Defs.Localization
 import Definitions.Accounting.Physical
 import Proofs.Accounting.Actual.Split
 import Proofs.Accounting.Actual.Confidence
@@ -11,13 +11,13 @@ import Mathlib.Tactic.FinCases
 `Localization`, over strategies, is function composition. What the rest reads from outside before `u ≤ t₁`
 (`crossing_split`) is what it read before `t₀` (part of what it can tell at `t₀`), what `X` sent it during `[t₀, u)`,
 and what it heard from the leaves in neither during `W`, cut at `u`. With its inputs fixed, causality's global form
-(`global_of_causal`) makes what the rest does before `u` a function of what `X` sent. The table picks a run for
-each key, and the count is the image's. `memory_of_mem`: memory per run on the state bounds the circuit's `state`.
-`markov_mem`: memory accounting's `not_markov` circuit (a gate of `X` reading nothing, with the coin's value) has
-`mem X 2 ≥ 1` at some coin in every strategy causal from every tick, whatever it holds (`markov_holding`: it can).
-`zero_link_alphabet`: memory accounting's `zero_link` (a width-0 wire sent at the coin's tick) meets `Links` at
-capacity 0 (`zero_links`) and fails `Alphabet` there. `Recall` is `CausalFrom` read through a table, as `Localization`
-is, with the content's length bound (`content_length_le`).
+(`global_of_causal`) makes what the rest does before `u` a function of what `X` sent. The table picks a run for each
+key, and the count is the image's. `memory_of_mem`: memory per run on the state bounds the circuit's `state`.
+`markov_mem`: the `not_markov` circuit (a gate of `X` reading nothing, with the coin's value) has `mem X 2 ≥ 1` at some
+coin in every strategy causal from every tick, whatever it holds (`markov_holding`: it can). `zero_link_alphabet`: the
+`zero_link` circuit (a width-0 wire sent at the coin's tick) meets `Links` at capacity 0 (`zero_links`) and fails
+`Alphabet` there. `Recall` is `CausalFrom` read through a table, as `Localization` is, with the content's length bound
+(`content_length_le`).
 
 `localization_wires` is the per-run lemma (not the model's `e = 0`, which reads the strategy): under causality a gate
 downstream of `C` runs at or after `C`'s ticks (`le_t_of_downstream`), so one that `A[Y, W]` reads runs during `W`; and
@@ -133,9 +133,9 @@ theorem memory_of_mem {L : Type*} {R : Actual.Run L} {𝒳 : Set (Finset L)} {M 
   simp only [Actual.Run.state, Finset.mem_filter, Finset.mem_univ, true_and]
   exact Or.inr ⟨hai, hx⟩
 
-/-- The actual circuit of memory accounting's `not_markov` at coin `b`, over leaves `true` (the verifier) and `false`
-(`X`): the verifier's input `g0` and its copy `g1` at tick 0, `g2` at `X` at tick 1 reading `g1`, and `g3` at `X` at
-tick 3, reading nothing, with value `b`; gate `gi` in cell `i`. -/
+/-- The actual circuit of `not_markov` at coin `b`, over leaves `true` (the verifier) and `false` (`X`): the verifier's
+input `g0` and its copy `g1` at tick 0, `g2` at `X` at tick 1 reading `g1`, and `g3` at `X` at tick 3, reading nothing,
+with value `b`; gate `gi` in cell `i`. -/
 abbrev markovPlaced (b : Bool) : Placed Bool where
   N := 4
   w _ := 1
@@ -160,10 +160,10 @@ abbrev markovRun (b : Bool) (held : Bool → ℕ → Finset (Fin 4)) (h : (marko
   held := held
   holding := h
 
-/-- **`not_markov` is closed** (memory accounting's counterexample to v2.1's per-run memory): a strategy running that
-circuit at each coin, holding anything `Holding` allows, and causal from every tick has `mem X 2 ≥ 1` at some coin, so
-`M_X = 0` fails there. `g3`'s value is what `X` does during `[2, 4)` and nothing reaches `X` then, so `X`'s state at
-tick 2 tells the coins apart: `b` is held at `X` across tick 2. -/
+/-- **`not_markov` is closed** (the counterexample to per-run memory): a strategy running that circuit at each coin,
+holding anything `Holding` allows, and causal from every tick has `mem X 2 ≥ 1` at some coin, so `M_X = 0` fails there.
+`g3`'s value is what `X` does during `[2, 4)` and nothing reaches `X` then, so `X`'s state at tick 2 tells the coins
+apart: `b` is held at `X` across tick 2. -/
 theorem markov_mem (held : Bool → Bool → ℕ → Finset (Fin 4)) (h : ∀ b, (markovPlaced b).Holding (held b))
     (hc : CausalFrom fun b => markovRun b (held b) (h b)) : ∃ b, 1 ≤ (markovRun b (held b) (h b)).mem {false} 2 := by
   by_contra hne
@@ -197,8 +197,8 @@ theorem markov_holding (b : Bool) :
   · fin_cases a <;> simp_all
   · fin_cases g <;> fin_cases a <;> simp_all
 
-/-- The honest location of the 09:35Z `MODEL:` line, at one leaf: the inputs `g0` and `g1` at tick 0, in cells 0 and
-1, and `g2` at tick 1, in cell 2, computing `g0 ∧ ¬g1`. -/
+/-- An honest location, at one leaf: the inputs `g0` and `g1` at tick 0, in cells 0 and 1, and `g2` at tick 1, in cell
+2, computing `g0 ∧ ¬g1`. -/
 abbrev andPlaced : Placed Unit where
   N := 3
   w _ := 1
@@ -242,9 +242,9 @@ theorem and_content (c : Bool × Bool) {t : ℕ} (ht : t ≤ 1) : (andRun c).con
       (h₂ := by simp [Actual.position, Actual.Run.seen]), sort_singleton]
   cases a <;> cases b <;> rfl
 
-/-- **The honest location is causal** (v2.5): `g0` and `g1` are in different cells, so the coins `(0, 1)` and
-`(1, 0)` have contents `[false, true]` and `[true, false]`, and the strategy running it at each coin is causal from
-every tick. Without cells, the content order put them by value, alike at those coins, while `g2` tells them apart. -/
+/-- **The honest location is causal**: `g0` and `g1` are in different cells, so the coins `(0, 1)` and `(1, 0)` have
+contents `[false, true]` and `[true, false]`, and the strategy running it at each coin is causal from every tick.
+Without cells, the content order put them by value, alike at those coins, while `g2` tells them apart. -/
 theorem and_causal : CausalFrom andRun := by
   intro X t u r r' hc _
   rcases X.eq_empty_or_nonempty with rfl | ⟨⟨⟩, hx⟩
@@ -271,9 +271,9 @@ theorem and_causal : CausalFrom andRun := by
           omega
       rw [h0 r, h0 r']
 
-/-- The actual circuit of memory accounting's `zero_link` at coin `b`, over leaves `true` (the verifier) and `false`
-(`X`): the verifier's input `g0` at tick 0, `g1` at the verifier of width 0 at tick `b`, reading `g0`, and `g2` at `X`
-at tick 3, reading `g1`. Every gate is `b` at its width; gate `gi` in cell `i`. -/
+/-- The actual circuit of `zero_link` at coin `b`, over leaves `true` (the verifier) and `false` (`X`): the verifier's
+input `g0` at tick 0, `g1` at the verifier of width 0 at tick `b`, reading `g0`, and `g2` at `X` at tick 3, reading
+`g1`. Every gate is `b` at its width; gate `gi` in cell `i`. -/
 abbrev zeroPlaced (b : Bool) : Placed Bool where
   N := 3
   w g := if g.val = 1 then 0 else 1
@@ -309,7 +309,7 @@ theorem zero_links (b : Bool) : (zeroPlaced b).Links (fun _ : Unit => (true, fal
     obtain ⟨g, hzg, hne, -⟩ := hz
     fin_cases g <;> fin_cases z <;> simp_all
 
-/-- **`zero_link` fails `Alphabet` at `β = 0`** (memory accounting's counterexample to v2.1's links, "a link of
+/-- **`zero_link` fails `Alphabet` at `β = 0`** (the counterexample to a bound by `Links` alone, "a link of
 capacity 0 carries a bit"): whatever its runs hold, the signal its link delivers to `X` at tick 3 is `g1` as seen, whose
 sender's tick is the coin, so the link takes two signals across the strategy where an alphabet of capacity 0 allows
 one. It meets `Links` at capacity 0 (`zero_links`); a bound that counts what crosses goes through `Alphabet`. -/
