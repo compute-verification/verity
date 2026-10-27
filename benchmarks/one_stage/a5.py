@@ -917,7 +917,7 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
         if isinstance(v2, str):
             raise ValueError(v2)
         (out / "case-v2.json").write_text(json.dumps(case_v2(c.case(), sessions, **v2), sort_keys=True))
-    except Exception as x:  # noqa: BLE001: as the v1 case's
+    except Exception as x:  # noqa: BLE001 - as the v1 case's
         (out / "case-v2-error.txt").write_text(f"{type(x).__name__}: {x}\n")
 
 
