@@ -185,6 +185,22 @@ def test_token_select_reduce_v1_of_chunks_is_the_wider_chunk(N, C):
         assert evaluate(reduce, [p[0] for p in parts], [p[1] for p in parts]) == evaluate(wide, row), row
 
 
+def test_token_select_reduce_v1_of_reduces_is_the_wider_chunk():
+    """Runs of 2 runs of 3 chunks of 4: a run of reduced runs is the chunk of all their logits, so the reduce nests to any
+    depth."""
+    C, N1, N2 = 4, 3, 2
+    chunk, inner, outer = (bind(DF.TokenSelectChunkV2, C=C), bind(DF.TokenSelectReduceV1, N=N1, C=C),
+                           bind(DF.TokenSelectReduceV1, N=N2, C=N1 * C))
+    wide, V = bind(DF.TokenSelectChunkV2, C=N2 * N1 * C), N2 * N1 * C
+    rows = _logit_rows(V) + [[ONE if j in (lo - 1, lo) else NEG_ONE for j in range(V)] for lo in (C, N1 * C)]
+    for row in rows:
+        runs = []
+        for g in range(N2):
+            parts = [evaluate(chunk, row[(g * N1 + i) * C:(g * N1 + i + 1) * C]) for i in range(N1)]
+            runs.append(evaluate(inner, [p[0] for p in parts], [p[1] for p in parts]))
+        assert evaluate(outer, [r[0] for r in runs], [r[1] for r in runs]) == evaluate(wide, row), row
+
+
 def test_token_select_combine_v3_refuses_an_empty_run():
     with pytest.raises(ValueError, match="N = 0 partials a run"):
         bind(DF.TokenSelectCombineV3, V=200, C=64, N=0).body
