@@ -126,8 +126,11 @@ check runs doesn't change (`hold`): then every sync, drive's or a hand one, leav
 syncs (`Queue._drive_only`): `eject` only withdraws the mark, for drive's next tick, and a hand `sync` on the control pod
 (`Queue.hand_sync`) waits as drive's tick does for a running Lean check whose prefix holds an ejected member (`lean_waits`) and
 keeps `next` up to drive's running and passed Lean checks (`lean_hold`).  A
-PR whose head contains another open PR's head goes in after it and waits while that one waits, unless it carries that one's
-change: the same owner, or that one's owner withdrew its mark (`Queue._carried`).  What a sync merges on top goes non-Lean first
+PR whose head contains another open PR's head, or by ancestry an older one (a head the queue saw it at, or its branch merged in:
+`Queue.entries`; never by PR number, and never for commits the two merely share), goes
+in after it and waits while that one waits, unless it carries that one's change: the same owner, or that one's owner withdrew its
+mark (`Queue._carried`); drive tells the owner of an unmarked one that a marked PR waits for, once per pair of heads
+(`Driver.tell_unmarked`).  What a sync merges on top goes non-Lean first
 (drive.toml's `nonlean_first`, on by default: `Queue._nonlean_order`): each PR whose own change is no Lean change (`lean_change`
 on its diff against `main`, or against the PR it's stacked on) and contains none of those merged with it goes below every Lean
 change, `--first`'s order and then admission's within each part, so it doesn't wait above a Lean change for its Lean check.
@@ -764,15 +767,21 @@ class Entry:
     pr: PR
     state: str = "ready"                  # ready | queued | waiting | refused
     why: str = ""
-    after: tuple[int, ...] = ()           # open PRs whose heads its head contains
+    after: tuple[int, ...] = ()           # open PRs whose current or an older head its head contains (`Queue.entries`)
+    older: tuple[int, ...] = ()           # those of `after` whose current head it doesn't contain
     position: int | None = None           # 1-based, on `next`
     commit: str | None = None
     idle_since: float | None = None       # stale (`research.stale`): idle since then
 
+    def contains(self, n: int) -> str:
+        """How a reason names ``n``, one of `after`."""
+        return f"#{n}'s commits (at an older head)" if n in self.older else f"#{n}"
+
 
 def contained(repo: Path, base: str, head: str, heads: dict[str, int]) -> list[int]:
     """The PRs of ``heads`` ({head: PR number}) whose head ``head`` contains: one of its commits not on ``base``, ``head``
-    itself included (the caller leaves its own PR out).  A PR goes on `next` after those it contains (`Entry.after`)."""
+    itself included (the caller leaves its own PR out).  A PR goes on `next` after those it contains, and after those whose
+    commits it holds at an older head (`Entry.after`, `Queue.entries`)."""
     return sorted({heads[h] for h in _out(repo, "rev-list", f"{base}..{head}").split() if h in heads})
 
 
@@ -915,9 +924,24 @@ class Queue:
         return when is not None and when > at
 
     def entries(self, prs: list[PR], state: dict, base: str = "origin/main") -> dict[int, Entry]:
+        """Each open PR's standing.  A PR P goes after, and waits while it isn't admitted, each other open PR Q whose current
+        head P's head contains, or an older head of Q's, by ancestry alone (never by PR number).  P holds an older head of Q
+        when one of P's own commits (those in ``base``.. its head less those below the heads of open PRs it contains) is
+
+        - a head the queue saw Q at, and the first open PR it saw there (`seen`), that Q's head still contains, as when P
+          branched from Q and Q moved on unmarked (25 Oct, CI-178: #4412 from #4382's eadb6663, which would have landed
+          #4382's unmarked commits under #4412's mark); or
+        - one of Q's own commits on Q's first-parent line that P has only through a merge, as when P merged Q's branch and Q
+          moved on (27 Oct: #4772 merged #4855's branch; it waits for #4855, and #4855 for nothing).
+
+        Commits two PRs merely share wait for nothing: a third branch both merged (on neither first-parent line), or a fork
+        point the queue never saw either PR at (on both).  One `rev-list` and one `rev-list --first-parent` a PR, not a merge
+        base for each pair."""
         rules = self.rules()
         heads = {p.head: p.number for p in prs}
         out: dict[int, Entry] = {}
+        below: dict[int, set[str]] = {}
+        line: dict[int, set[str]] = {}
         if self.prefetch is not None:
             self.prefetch([(p.number, p.head) for p in prs if rules.hold_label not in p.labels and p.owner is not None])
         for p in prs:
@@ -936,19 +960,46 @@ class Queue:
                                              f"before `marked_after`): re-mark it or close it")
             else:
                 e.state, e.why = "waiting", f"not marked ready at {p.head[:8]}: `research queue ready {p.number} --on MACHINE` (or --local; --mark without the tier)"
-            e.after = tuple(n for n in contained(self.workdir, base, p.head, heads) if n != p.number)
+            below[p.number] = set(_out(self.workdir, "rev-list", f"{base}..{p.head}").split())
+            line[p.number] = set(_out(self.workdir, "rev-list", "--first-parent", f"{base}..{p.head}").split())
+            e.after = tuple(sorted(heads[h] for h in below[p.number] if h in heads and heads[h] != p.number))
+        own = {n: below[n].difference(*(below[a] for a in e.after)) for n, e in out.items()}
+        branch: dict[str, list[int]] = {}                   # commit: the PRs it is an own commit on the first-parent line of
+        for n, cs in own.items():
+            for c in cs & line[n]:
+                branch.setdefault(c, []).append(n)
+        seen = state.get("seen") or {}
+        for n, e in out.items():
+            held = {q for c in own[n] for q in seen.get(c, ()) if q in out and c in below[q]}
+            held |= {q for c in own[n] - line[n] for q in branch.get(c, ())}
+            e.older = tuple(sorted(held - {n}))
+            e.after = tuple(sorted(e.after + e.older))
         for e in out.values():
             e.after = tuple(a for a in e.after if not self._carried(e.pr, out[a], state))
+            e.older = tuple(a for a in e.older if a in e.after)
         changed = True
         while changed:                                      # a PR waits while a PR whose commits it contains isn't admitted
             changed = False
             for e in out.values():
                 if e.state == "ready" and (blocking := [a for a in e.after if out[a].state != "ready"]):
-                    e.state, e.why, changed = "waiting", f"contains #{blocking[0]}, which isn't admitted", True
+                    e.state, e.why, changed = "waiting", f"contains {e.contains(blocking[0])}, which isn't admitted", True
         return out
 
+    @staticmethod
+    def _seen(state: dict, prs: list[PR], open_numbers: set[int]) -> None:
+        """Record in ``state``'s `seen` ({head: PRs}) each head of ``prs`` no open PR was seen at before, for the PRs at it now,
+        so a PR holding it later holds an older head of theirs (`entries`); a closed PR's records go."""
+        seen = state["seen"] = {h: kept for h, ns in (state.get("seen") or {}).items()
+                                if (kept := [n for n in ns if n in open_numbers])}
+        new: dict[str, list[int]] = {}
+        for p in prs:
+            if p.head not in seen:
+                new.setdefault(p.head, []).append(p.number)
+        seen.update(new)
+
     def _carried(self, p: PR, a: Entry, state: dict) -> bool:
-        """Whether ``p`` carries the change of ``a``, a PR whose head it contains and that isn't marked ready: the same owner
+        """Whether ``p`` carries the change of ``a``, a PR whose head or own commits it contains (`entries`) and that isn't
+        marked ready: the same owner
         rebuilt it as ``p``, or ``a``'s owner withdrew its mark (`eject`, or a `ready = false` label).  Then ``p`` doesn't wait
         for ``a`` and goes on without it below (24 Oct: lanes rebuilt #3401, #3570 and #3554 by hand to drop a superseded PR
         that no one's tooling may close)."""
@@ -976,10 +1027,12 @@ class Queue:
                 break
             held.append(m.pr)
         out: list[int] = []
+        placing: set[int] = set()
 
         def place(n: int) -> None:
-            if n in out:
+            if n in out or n in placing:
                 return
+            placing.add(n)
             for a in entries[n].after:
                 place(a)
             out.append(n)
@@ -1130,8 +1183,9 @@ class Queue:
         self._drive_only(self.branch, "queue sync", dry_run)
         self._clone()
         state = self.load_state()
-        prs = [p for p in self.github.open_prs() if p.base == "main"]
-        prs, waiting = self.fetch_prs(prs)
+        open_prs = self.github.open_prs()
+        prs, waiting = self.fetch_prs([p for p in open_prs if p.base == "main"])
+        self._seen(state, prs, {p.number for p in open_prs})
         chain = self.chain()
         entries = self.entries(prs, state)
         entries.update(waiting)
@@ -1170,7 +1224,7 @@ class Queue:
         for n in order[k:]:
             e = entries[n]
             if blocked := [a for a in e.after if a in dropped]:
-                e.state, e.why = "waiting", f"contains #{blocked[0]}, which didn't merge"
+                e.state, e.why = "waiting", f"contains {e.contains(blocked[0])}, which didn't merge"
                 dropped.add(n)
                 waits[str(n)] = {"head": e.pr.head, "why": e.why, "handle": self.handle(e.pr)}
                 if state.get("waiting", {}).get(str(n), {}).get("head") != e.pr.head:
@@ -1308,7 +1362,7 @@ class Queue:
         for n in contained_first(entries):
             e = entries[n]
             if e.state == "ready" and (out := [a for a in e.after if a in entries and entries[a].state in ("refused", "waiting")]):
-                e.state, e.why = "waiting", f"contains #{out[0]}, which is {entries[out[0]].state}: {entries[out[0]].why}"
+                e.state, e.why = "waiting", f"contains {e.contains(out[0])}, which is {entries[out[0]].state}: {entries[out[0]].why}"
             elif e.state == "ready" and (c := conflicts.get(str(n))) and c["head"] == e.pr.head:
                 e.state, e.why = "refused", f"{c['why']} (at the last sync)"
             elif e.state == "ready" and (w := waits.get(str(n))) and w["head"] == e.pr.head:

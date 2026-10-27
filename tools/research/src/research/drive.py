@@ -1454,6 +1454,28 @@ class Driver:
         else:
             self.q.log(f"research queue drive: could not post to the merge thread (the next tick retries): {' '.join(to)}: {text}")
 
+    def tell_unmarked(self, drive: dict, entries: dict) -> None:
+        """Tell the owner of each open PR that a PR marked ready waits for because it isn't marked at its head (the marked one
+        contains its head, or its commits at an older head: `Queue.entries`), once per pair of heads (TOP-90: #4412 waited on
+        #4382's unmarked commits and no one told #4382's owner).  A PR that isn't marked, or waits for a reason of its own (a
+        hold, a warming check), tells no one; one it waits for that is marked but waits itself tells its own blockers' owners."""
+        q = self.q
+        hold = q.rules().hold_label
+        for n, e in entries.items():
+            if e.state != "waiting" or not e.why.startswith("contains ") or not q.ready(n, e.pr.head):
+                continue
+            for b in (entries[a] for a in e.after):
+                if b.state != "waiting" or b.pr.owner is None or hold in b.pr.labels or q.ready(b.pr.number, b.pr.head):
+                    continue
+                if (key := f"unmarked:{n}@{e.pr.head}:{b.pr.number}@{b.pr.head}") in drive["told"]:
+                    continue
+                by = self.ready_by(n, e.pr.head) or q.handle(e.pr) or e.pr.owner
+                at = _out(q.workdir, "merge-base", e.pr.head, b.pr.head)
+                self.refuse(drive, key,
+                            f"#{n} (marked by {by}) waits for your mark of #{b.pr.number}, which it contains (at {at[:12]}): "
+                            f"mark #{b.pr.number} ready at {b.pr.head[:8]}, or withdraw it (`research queue eject "
+                            f"{b.pr.number} --reason ...`) and #{n} carries it", q.handle(b.pr))
+
     def _tell_out(self, drive: dict, state: dict) -> None:
         """Tell each PR the last sync left off `next` once per head: one that didn't merge (`conflicts`), and one that contains
         such a PR (`waiting`)."""
@@ -1560,9 +1582,10 @@ class Driver:
             chain = q.chain()
             q.hold = max(max((i + 1 for i, m in enumerate(chain) if m.commit in running), default=0), self._landable(drive, chain))
             q.frozen = {m.pr for m in chain[:q.hold]}
-            q.sync(dry_run)
+            entries = q.sync(dry_run)[1]
             state = {**q.load_state(), "drive": drive}
             self._tell_out(drive, state)
+            self.tell_unmarked(drive, entries)
         landed, why = None, self._unbaselined(drive)
         if why is None:
             landed, why = self.land_reviewed(drive, dry_run)
