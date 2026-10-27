@@ -24,7 +24,8 @@ each a named `Prop` on a trace, the session's record of computation off the node
 
 In the per-party names, `Covered` is `Covered` (every uplink from the prover's server passes through an active
 certifier) and `IngressCounted` is `Faithful` of the certifiers (what they sign is what crossed their links); neither
-names the prover, whose strategy is arbitrary.
+names the prover, whose strategy is arbitrary. The line reads no `Secret`, `Confined` or `WitnessPathPrivate`: those
+keep what the certifiers sign from the auditor, and the bits-read bound needs only that it was counted.
 
 Statement C in full, no device outside the node computing on a registered block or a receipt during a credited pass,
 was a premise of the memory line (`NoOutsideCompute`), on the prover's own conduct. It is now the event the certifiers
