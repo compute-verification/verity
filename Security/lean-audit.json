@@ -12377,6 +12377,30 @@
   "events": ["FlockSoundness.Game.prob"]
  },
  "reads": {
+  "Attest.FrameV3Sha512": {
+   "digest": "64cd898fd4b23076f22a644547e6ffea2d1a3550aa4013e8f551494604e0538a",
+   "definitions": {
+    "FrameV3Sha512.Domain": "35ee9e6cb36d45a8a20ccbdb300f3e2ecba8aad38f771197b637664c1d4b9bdc",
+    "FrameV3Sha512.Domain.count": "7fdf189973ba7e2e5d27b327a7b20c7a2fd429c6655c087fd508043e41e5569d",
+    "FrameV3Sha512.Domain.emptyRoot": "a75bdc18cd0c9075f9195fce9735365a8ee0209cc1e898876a97562a0a07baf0",
+    "FrameV3Sha512.Domain.id": "1e925de0e4e1b38bd6ff7c5552a9c2a941343c5cf36e7e534722a7a551e17d76",
+    "FrameV3Sha512.Domain.leaf": "c0e1d9291b016a0e3fd4cfc1d64e4cde92d3191a760d6ed214e748110abd306f",
+    "FrameV3Sha512.Domain.make": "3541fe15f6cf18fc8bedd3d33cbb44b795f4191931f08a9197d9a0baf5f08056",
+    "FrameV3Sha512.Domain.node": "4ab9f0d849abe4eb3dc3cc6e95f2a11800dde1598294f8262f3544f016a38327",
+    "FrameV3Sha512.Domain.pad": "5095ec18c6fee365f97aa04dda3d028992d58cc53c2b85f920fe616a3a57d3a3",
+    "FrameV3Sha512.TAGGED": "b3adbefa6c68d121a2f4f39f6295f7f0125990efc2fb4e820246926ba4f2c54d",
+    "FrameV3Sha512.climb": "6608574a33bc44cbf71c53fe050d1248ce8ca5c46f39c495a85abc0493d57773",
+    "FrameV3Sha512.depth": "8036a8a143445f63c6878ccfdfb1bc3203ecb4b5a50262d214575f0277b63758",
+    "FrameV3Sha512.hash": "683ba7b389b311ade8bf06fde78da2afd0fae57100127f55b99f0e2580e1424b",
+    "FrameV3Sha512.levels": "eb6fd599d6ecb132ba5778441d207c44a85e366d60f68b9ac5292bd8472e923e",
+    "FrameV3Sha512.rangeIdentity": "fd6b553d82cab94a58c72014b7dc38435d1a55f08532f84962f29aa3851f292c",
+    "FrameV3Sha512.root": "5b4cb495d8bfc8d09f2dd568c9aedb811adaacc49e9abdff5354697338fd9fbd",
+    "FrameV3Sha512.taggedSha512": "ed0aabbda079e728301c5b30534795b08291f2c5d0ef75aa99e76f2ba947aeea",
+    "FrameV3Sha512.uint": "4e050a0ea5c7cfb946572765a743ecf21dfe57e81282275756659a731912a818",
+    "FrameV3Sha512.verifyOpening": "68443bea98b29f3788ed3c094dc42608ed23c0167463aaee4cdf6f8aa2d5d847"
+   },
+   "guarantees": ["Accounting.SecurityProofs.JointHorizonBlocksDeployed"]
+  },
   "CoreProtocol.Profile": {
    "digest": "57a2650e841fd38e788a338824bddbe0981991aa914cd04d1e70e4adfa3aa64f",
    "definitions": {
@@ -39217,30 +39241,6 @@
     "Accounting.SecurityProofs.JointHorizonBlocksDeployed",
     "Accounting.SecurityProofs.JointHorizonBlocksDeployedA"
    ]
-  },
-  "MemoryChallenger.FrameV3": {
-   "digest": "64cd898fd4b23076f22a644547e6ffea2d1a3550aa4013e8f551494604e0538a",
-   "definitions": {
-    "FrameV3Sha512.Domain": "35ee9e6cb36d45a8a20ccbdb300f3e2ecba8aad38f771197b637664c1d4b9bdc",
-    "FrameV3Sha512.Domain.count": "7fdf189973ba7e2e5d27b327a7b20c7a2fd429c6655c087fd508043e41e5569d",
-    "FrameV3Sha512.Domain.emptyRoot": "a75bdc18cd0c9075f9195fce9735365a8ee0209cc1e898876a97562a0a07baf0",
-    "FrameV3Sha512.Domain.id": "1e925de0e4e1b38bd6ff7c5552a9c2a941343c5cf36e7e534722a7a551e17d76",
-    "FrameV3Sha512.Domain.leaf": "c0e1d9291b016a0e3fd4cfc1d64e4cde92d3191a760d6ed214e748110abd306f",
-    "FrameV3Sha512.Domain.make": "3541fe15f6cf18fc8bedd3d33cbb44b795f4191931f08a9197d9a0baf5f08056",
-    "FrameV3Sha512.Domain.node": "4ab9f0d849abe4eb3dc3cc6e95f2a11800dde1598294f8262f3544f016a38327",
-    "FrameV3Sha512.Domain.pad": "5095ec18c6fee365f97aa04dda3d028992d58cc53c2b85f920fe616a3a57d3a3",
-    "FrameV3Sha512.TAGGED": "b3adbefa6c68d121a2f4f39f6295f7f0125990efc2fb4e820246926ba4f2c54d",
-    "FrameV3Sha512.climb": "6608574a33bc44cbf71c53fe050d1248ce8ca5c46f39c495a85abc0493d57773",
-    "FrameV3Sha512.depth": "8036a8a143445f63c6878ccfdfb1bc3203ecb4b5a50262d214575f0277b63758",
-    "FrameV3Sha512.hash": "683ba7b389b311ade8bf06fde78da2afd0fae57100127f55b99f0e2580e1424b",
-    "FrameV3Sha512.levels": "eb6fd599d6ecb132ba5778441d207c44a85e366d60f68b9ac5292bd8472e923e",
-    "FrameV3Sha512.rangeIdentity": "fd6b553d82cab94a58c72014b7dc38435d1a55f08532f84962f29aa3851f292c",
-    "FrameV3Sha512.root": "5b4cb495d8bfc8d09f2dd568c9aedb811adaacc49e9abdff5354697338fd9fbd",
-    "FrameV3Sha512.taggedSha512": "ed0aabbda079e728301c5b30534795b08291f2c5d0ef75aa99e76f2ba947aeea",
-    "FrameV3Sha512.uint": "4e050a0ea5c7cfb946572765a743ecf21dfe57e81282275756659a731912a818",
-    "FrameV3Sha512.verifyOpening": "68443bea98b29f3788ed3c094dc42608ed23c0167463aaee4cdf6f8aa2d5d847"
-   },
-   "guarantees": ["Accounting.SecurityProofs.JointHorizonBlocksDeployed"]
   },
   "MemoryChallenger.Records": {
    "digest": "72a75ac1714623dffce7618c44b43f14b9f133f5ddb48a6e1cc75affac9d1f02",
