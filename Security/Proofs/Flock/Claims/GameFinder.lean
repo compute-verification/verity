@@ -33,7 +33,8 @@ theorem Ex_pi_eval {C : Type} [Fintype C] [DecidableEq C] {T : C → Type} [∀ 
   calc Ex (fun t : (c : C) → T c => h (t c₀))
       = Ex (fun t : (c : C) → T c => (fun p : T c₀ × ((j : { j // j ≠ c₀ }) → T j) => h p.1)
           (Equiv.piSplitAt c₀ T t)) := rfl
-    _ = Ex (fun p : T c₀ × ((j : { j // j ≠ c₀ }) → T j) => h p.1) := Ex_equiv _ _
+    _ = Ex (fun p : T c₀ × ((j : { j // j ≠ c₀ }) → T j) => h p.1) :=
+        Ex_equiv (Equiv.piSplitAt c₀ T) (fun p : T c₀ × ((j : { j // j ≠ c₀ }) → T j) => h p.1)
     _ = Ex (fun a : T c₀ => Ex fun _ : (j : { j // j ≠ c₀ }) → T j => h a) := Ex_prod _
     _ = Ex h := by simp only [Ex_const]
 
@@ -167,6 +168,8 @@ theorem Ex_run (f : α → ℝ) (g : Game α) :
   | @coin C iF iN k ih =>
     intro s
     classical
+    haveI : ∀ c, Fintype (Tape (k c) (s c)) := fun c => instFintypeTape (k c) (s c)
+    haveI : ∀ c, Nonempty (Tape (k c) (s c)) := fun c => instNonemptyTape (k c) (s c)
     calc Claims.Ex (fun t : Tape (Game.coin C k) s => f (run (Game.coin C k) s t))
         = @Claims.Ex (C × ((c : C) → Tape (k c) (s c))) inferInstance
             (fun t : C × ((c : C) → Tape (k c) (s c)) => f (run (k t.1) (s t.1) (t.2 t.1))) :=
@@ -197,10 +200,8 @@ theorem tapeFinder_Pr {β : Type} (H : Claims.Msg → Claims.Msg) (g : Game β) 
   rw [prob_toReal, ← Ex_run]
   show Claims.Pr (fun t : Tape g s => ∃ u v, out (run g s t) = some (u, v) ∧ Claims.Collision H u v) = _
   rw [← Claims.Ex_ind]
-  congr 1
-  funext t
-  unfold ind
-  exact if_congr Iff.rfl rfl rfl
+  all_goals congr 1
+  all_goals (funext t; unfold ind; exact if_congr Iff.rfl rfl rfl)
 
 theorem tapeFinder_cost_le {β : Type} (g : Game β) (s : Strategy g) (out : β → Option (Claims.Msg × Claims.Msg))
     (cost : β → ℕ) (b : ℕ) (h : ∀ x, cost x ≤ b) (x : (tapeFinder g s out cost).S) :
