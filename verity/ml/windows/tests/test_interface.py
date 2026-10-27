@@ -91,7 +91,7 @@ def test_a_units_rows_are_its_definitions_bit_rows():
 
 
 def test_a_boolean_definitions_rows_are_its_ports_words():
-    """A Boolean-profile Definition (every leaf one bit, as network-accounting's egress units) has the bit rows of its
+    """A Boolean-profile Definition (every leaf one bit, as the network certifier's egress units) has the bit rows of its
     `boolean.word_type` view; a port whose words aren't whole u16 words of one width is still refused."""
     bit = Value(1)
 
