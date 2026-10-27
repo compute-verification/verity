@@ -1,7 +1,7 @@
 """A chunked serving-rows template's units (`serving_rows.chunked`) on the bit rows C-Flock's `UnitStager` stages: their rows
 (`unit_rows`) and table reads (`reads`), the most of them one flock-circuit statement holds (`chunk_cap`, a partition file's
 ``chunk_cap``), and a template's units read once cut into its chunks (`split`).  The window's chunks (`serving_rows.members`)
-and the verifier's circuit (``benchmarks/one_stage/compose_circuit.py --template``) are both laid out by `unit_rows` and
+and the verifier's circuit (``examples/one_stage/compose_circuit.py --template``) are both laid out by `unit_rows` and
 `reads`.  Each function takes the template as `serving_rows.template` reads it."""
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from typing import Any
 
 from verity.ml.windows import rows as CS
 
-#: flock-circuit's spec shape (`verity/ml/flock/live/src/circuit.rs`'s `shape_in_range`, `benchmarks/one_stage/a6.py`'s `M_MAX`):
+#: flock-circuit's spec shape (`verity/ml/flock/live/src/circuit.rs`'s `shape_in_range`, `examples/one_stage/a6.py`'s `M_MAX`):
 #: a statement's dense size m = k_log + nbl, nbl = max(3, ceil(log2 blocks)), is at most 35
 M_MAX = 35
 
@@ -76,7 +76,7 @@ def unit_rows(tp: Any) -> tuple[list[tuple[str, str, int, list[str]]], list[tupl
 
 
 def chunk_cap(tp: Any) -> int:
-    """The most instances of chunked template ``tp`` one flock-circuit statement holds, as ``benchmarks/one_stage/a6.py``'s
+    """The most instances of chunked template ``tp`` one flock-circuit statement holds, as ``examples/one_stage/a6.py``'s
     ``chunk_cap`` computes it: the template staged by `UnitStager` on its rows (`unit_rows`) with its `reads`, then
     ``vus_per_block`` blocks of ``2^(M_MAX - k_log)``.  Builds the circuit (seconds to minutes; a 64-key ``SparseMlaSplitPart``
     about 36 min at 71 GB): a partition file pins it as ``chunk_cap``."""
