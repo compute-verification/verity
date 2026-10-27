@@ -2,7 +2,7 @@ import Mathlib
 import Proofs.Pouw.RelativeSecurity
 
 /-!
-# Attention's noise at every operand value (ATTN-NOISE)
+# Attention's noise at every operand value
 
 On the design `dP`/`dX` (`Definitions.Pouw.RelativeSecurity`): the peeled side `P̃ = P + U`, `U` of period `L` per
 row from the planes `β_p(i, j)` at weights `w`, and the served side `X = V + b` with a fresh coin per entry. Adopted

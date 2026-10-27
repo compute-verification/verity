@@ -2,7 +2,7 @@ import Proofs.Pouw.PearlC.DeviceSm120LoopGamma
 import Proofs.Pouw.PearlC.ChainOnlyGamma
 
 /-!
-# v2's TT_OUT is the same statement at both FP32 prices (the price-twins lane's file; staged)
+# v2's TT_OUT is the same statement at both FP32 prices (staged)
 
 At `devSm120v2` (G = 0) the FP32 add enters neither the credit (`creditDev` has no promotion term, and rev1's first
 add is none) nor the debit (`debitDev`'s `add/G` is 0, and rev1's later promotions into +0 are none without promotion).

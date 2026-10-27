@@ -2,7 +2,7 @@ import Proofs.Pouw.PearlC.TileGamma
 import Definitions.Pouw.PearlC.DeviceFp4Hot
 
 /-!
-# Pearl-C4 v2's price twins, at any FP32 price and scale path (the price-twins lane's file; staged)
+# Pearl-C4 v2's price twins, at any FP32 price and scale path (staged)
 
 * **γ from TT_OUT at any protocol meeting v2's accounting** (`pearlCGammaFp4HotAt`, `pearlCSampledFp4HotAt`): with the
   credited bound `K` and `W_ref = wrefFp4Hot`, TT_OUT gives `G_γ` (per tile, `GγSampled`) at

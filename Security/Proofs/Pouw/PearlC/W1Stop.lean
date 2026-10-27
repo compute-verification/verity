@@ -6,7 +6,7 @@ import Proofs.Pouw.Prob
 /-!
 # The stopping machine truncates
 
-`Accounting.BudgetAbort` fails for W1 under any refund rule (the static-refund red team's three-load example),
+`Accounting.BudgetAbort` fails for W1 under any refund rule (the static-refund three-load example),
 and for the outcome refund by `W1BudgetAbort.w1_not_budgetAbort`. On a
 machine that stops a run at its budget (`CostModel.withStop`, by ruling) it holds:
 

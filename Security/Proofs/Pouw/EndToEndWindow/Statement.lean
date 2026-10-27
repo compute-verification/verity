@@ -60,9 +60,8 @@ lands.
 **The window's law** is the service's (decision 102, `window.py`): one uniform `K′`-subset of the `n` padded units
 (`subset:K′`, `Law.subset`), the `N_real` real tiles padded with fillers to `pad(N_real + 1)`, drawn after the receipt,
 each drawn unit proved alone (no closures). `WindowWork.WindowBoundOfService` discharges `WindowBound` there, its first
-term the subset law's own escape, which is 0 where `K′ = N`. On main, PoUW's PROTOCOL.md (Lifecycle, step 5) still
-describes `Sampled(t)`, `t` independent work-weighted draws with replacement; compute accounting's #2601 describes the
-code's draw.
+term the subset law's own escape, which is 0 where `K′ = N`. PoUW's PROTOCOL.md (Lifecycle, step 5) describes
+`Sampled(t)`, `t` independent work-weighted draws with replacement, not the code's draw.
 
 Gap (6)'s `Pouw.Guarantees.Window.WindowEps` (branch `cursor/pouw-window-eps-stmt2-c7a9`) bounds the same event in
 gap (6)'s copy of the game (`Pouw.Window`), with the window's knowledge and link terms composed from its calls'. The
@@ -127,7 +126,7 @@ noncomputable def meteredModel (P : Protocol Q R S) (γ : ℝ) : CostModel Q R S
     (P.Wref U.layout u : ℝ)
   calls p H U act st s := (p U act st s).calls H
 
-/-- The metered model's programs reach the oracle only through counted queries (red-team B6's form). -/
+/-- The metered model's programs reach the oracle only through counted queries (the form of `CostModel.Queries`). -/
 theorem meteredModel_queries (P : Protocol Q R S) (γ : ℝ) : (meteredModel P γ).Queries :=
   fun p U act st s => ⟨p U act st s, fun _ => ⟨rfl, rfl⟩⟩
 
@@ -164,7 +163,7 @@ theorem coordDomain_inhabited : ∃ U : Workload, U.InDomain coordDomain ∧ U.l
 salt (`play`: the registration, then the sessions on every draw), with what the model charges for it. `cost` is the
 work of its online phase, from the salt's release to the registration's receipt, in PoUW's cost units; `received` and
 `cutoff` are places in the challenger's record of the epoch's coins, which logs each root's receipt and then its coin's
-release (`LiveRecord.log`, #2584; that the challenger keeps that order is `trusted-host`'s): the registration's
+release (`LiveRecord.log`; that the challenger keeps that order is `trusted-host`'s): the registration's
 receipt, and the release of the epoch's draw coin (`pouw/draw`); `calls` is the registration's oracle calls, the
 commitments', which `RegQueries` ties to the queries of the program that computes it; `sessCalls` is the sessions'
 oracle calls, the most over every draw and every coin of the sessions. The extraction reads none of the sessions'
@@ -174,7 +173,7 @@ fixes the cost; a prover only picks a program.
 A session's strategy is a strategy of the session at `H`, whose type depends on `H`, so no oracle program's output is
 one. `sessCalls` is free: the model picks a separate session play at each oracle and its count, and nothing ties the
 count to the play's queries. So a bound on the sessions' state terms at counted queries (the random-oracle card's,
-through #2593's `Pouw.Window.CollCounted`) holds only for a model whose sessions are one oracle program's run at `H`,
+through `Pouw.Window.CollCounted`) holds only for a model whose sessions are one oracle program's run at `H`,
 counted by that program's calls:
 * at a true count it is false: a model whose session play at each `H` holds a hardcoded collision of `H` counts 0
   session calls, and its `β` is about 1 at every `H`;
@@ -201,7 +200,7 @@ section Prover
 variable {n : ℕ} {Reg : Type} {Lr : Reg → Law n}
   {session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool}
 
-/-- **The registration is an oracle program's output, and `calls` counts its queries** (red-team B6's form,
+/-- **The registration is an oracle program's output, and `calls` counts its queries** (the form of
 `CostModel.Queries`, for the registration): on fixed inputs, a play's registration is the result of an adaptive oracle
 program, and the model's `calls` is exactly that program's queries. The sessions' strategies, whose type depends on `H`,
 are counted by the model's `sessCalls` (`Prover.Bounded`), not tied to an oracle program here. -/

@@ -7,8 +7,7 @@ import Proofs.Pouw.PearlC.AtomErr
 /-!
 # Pearl-C4's replayed debit: exactness, and the soundness of terms 2 and 3
 
-Proofs about `Pouw.PearlC.Fp4Skip` on any `Fp4Atom` (`sm120Nvf4`, `sm120Mxf4`), for TT_OUT-FP4's debit
-(`internal/pouw/rtx-pro/theory-pearl-c4-domain.md` §2).
+Proofs about `Pouw.PearlC.Fp4Skip` on any `Fp4Atom` (`sm120Nvf4`, `sm120Mxf4`), for TT_OUT-FP4's debit.
 
 * **The exactness lemma** (`step_exact`, `chainMask_exact`, `cTilde_exact`, `cTilde_dot`). A step is exact when
   - `NoLoss`: no addend loses a bit to the step's grid `2^lsb` (`gridLsb`), i.e. every group's scaled dot and the

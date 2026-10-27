@@ -3,7 +3,7 @@ import Definitions.Pouw.Assumptions.Dither
 /-!
 # SAK(matmul) from a pointwise work premise: what is proved, and the residual
 
-SAK-LB's lower bound.
+The lower bound.
 
 `Definitions.Pouw.Assumptions.Dither.SAKMatmul` bounds a words program's moment
 `E_σ[1_{d ∉ Deg ∧ pass} · e^{η (pub − cost)₊}] ≤ 1`. It mixes two things: what a program must spend to get a fraction of

@@ -7,7 +7,7 @@ import Mathlib.Data.Int.Interval
 /-!
 # Lifting MinRank: grid density (L3) and slices (L2)
 
-Two self-contained lemmas of `Lift_MinRank` (`internal/pouw/new-crypto/lifting/README.md`).
+Two self-contained lemmas of `Lift_MinRank`.
 
 * **L3 (grid density).** Points with every coordinate in a finite set `G` whose pairwise differences lie in a
   subspace `V` number at most `|G| ^ finrank V`. On the noise grid `{−31, …, 32}^ι` a set inside an affine subspace

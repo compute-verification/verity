@@ -546,7 +546,7 @@ theorem a1CostQuadNear : A1CostQuadNear := by
   obtain ⟨h2, hli⟩ := gridNear k m n N R A B U w hind hmr hU hw
   exact theorem1Family N m n k w U h2 hli
 
-/-- **Theorem 1 on the grid** (`a1-cost.md` §3.2 with P8-2): `A1_cost_quad 2 0` holds for every `k` and `R`, the
+/-- **Theorem 1 on the grid**: `A1_cost_quad 2 0` holds for every `k` and `R`, the
 instance `w = word` of `a1CostQuadNear`. -/
 theorem a1CostQuadHolds : A1CostQuadHolds := by
   intro k R hind hmr m n N A B U hU Rs hRs S hS hSw

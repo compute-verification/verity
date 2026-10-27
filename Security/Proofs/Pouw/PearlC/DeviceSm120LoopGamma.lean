@@ -4,7 +4,7 @@ import Proofs.Pouw.PearlC.ChainCapLoopGamma
 import Proofs.Pouw.PearlC.UOnlyLoopGamma
 
 /-!
-# γ at the RTX PRO 6000 (sm_120) records at the in-loop prices (the price-twins lane's file; staged)
+# γ at the RTX PRO 6000 (sm_120) records at the in-loop prices (staged)
 
 The twins of `DeviceSm120Gamma`'s γ corollaries at `devSm120v1 Prices.sm120Loop` and `devSm120v2 Prices.sm120Loop` in
 place of `Prices.sm120`: each is `<instance at Prices.sm120Loop> CM (devSm120vX Prices.sm120Loop) sem rfl rfl hTT`, with

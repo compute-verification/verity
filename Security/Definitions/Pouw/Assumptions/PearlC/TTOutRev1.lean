@@ -8,8 +8,7 @@ TT_OUT(1/400) for Pearl-C with every promotion into a +0 total out of the credit
 word out of the credit and `W_ref`, any later one debited by replay. It holds at any device record, per unit and per audit
 tile. It asserts less than the granted rows: a unit correct under rev1 is correct under them, and earns at most their
 credit (`ttOutPearlCDevRev1_of_granted`). That is an implication only: the granted rows are falsified by the
-first-promotion skip (rating D), so it carries no evidence for rev1, whose rating B rests on the assessor's alone
-(07:40Z, `repair-rows-rev1-and-v2-cap.md`).
+first-promotion skip (rating D), so it carries no evidence for rev1, whose rating B rests on its own review alone.
 -/
 
 namespace Pouw.PearlC.Assumptions
@@ -23,7 +22,7 @@ per word, not `k/(32·G)`), and any later one debited (`laterZeroPromos`). The g
 `TTOutPearlCDev`'s. Without promotion (`G = 0`) it is `TTOutPearlCDev`.
 
 - **Why they go.** Every program outputs the same ticket words with them skipped (the first: 3,360 of 3,360 words across
-  30 in-domain cells, `r20260930-061318-99f0`), and neither the flags nor the cap remove them. Crediting the first
+  30 in-domain cells), and neither the flags nor the cap remove them. Crediting the first
   falsifies the granted row wherever `add·m·n − qa·m·k > γ₀·creditDev`: at `m = n = 8,192`, for every in-domain
   `k ≤ 8,192` at H100 prices and `k ≤ 2,048` at sm_120's measured FADD. A later +0 total is rare (≤ 3.9·10⁻⁶ of later
   promotions on the H100 atom, none measured on sm_120) and moves no γ.
@@ -37,14 +36,14 @@ per word, not `k/(32·G)`), and any later one debited (`laterZeroPromos`). The g
   record's price, however few of its output words or lanes a program uses: on sm_120 an E4M3 `m16n8k32` is
   16·8·32 = 4,096 units, and a BF16 `m16n8k16` is 2,048 MACs at 2. `CM` never prices a tensor-core instruction per output
   word. Under per-word pricing, per-word joint skip sets would count: 10–16% of a word just inside v2's cap, 2.8–9.4%
-  inside v1's (`repair-rows-rev1-and-v2-cap.md`). This assumption would then be a different one, which those sets
+  inside v1's. This assumption would then be a different one, which those sets
   falsify. Every other instruction is charged its class price per instruction. `CostModel` is abstract, so this rule is
   part of which `CM` the assumption is stated at, not a property Lean checks. At W1 (`TTOutPearlCDevRev1W1`,
   `Definitions.Pouw.Assumptions.PearlC.TTOutW1`) `CM` is the term `W1.w1Priced dv salt`, which charges each fragment
   whole by its definition.
 - **The prices are the cheapest bit-exact implementation's** (C3's charging rule). On sm_120 an FP32 add is 8.00 per word
-  issue-bound, 8.376 per FADD in the measured loop (`r20260930-063213-c94a`). sm_120a has no packed FP32 add (no FADD2):
-  `add.rn.f32x2` compiles to two scalar FADDs (`r20260930-081301-747b`), so it does not halve the add. -/
+  issue-bound, 8.376 per FADD in the measured loop. sm_120a has no packed FP32 add (no FADD2):
+  `add.rn.f32x2` compiles to two scalar FADDs, so it does not halve the add. -/
 def TTOutPearlCDevRev1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (d : PearlCDevice)
     (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
   TTOut CM (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDev d) (1 / 400) εPearlC

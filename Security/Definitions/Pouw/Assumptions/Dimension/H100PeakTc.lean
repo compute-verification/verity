@@ -3,14 +3,13 @@ import Definitions.Pouw.Assumptions.Dimension.H100Floor
 /-!
 # A citation with no measurement at `tc` (trusted statements; draft semantics)
 
-**Draft semantics, pending review** (`internal/pouw-fp8/genuine-fp8-interface.md` §1.1; red team Phase 18c, F18c-1, in
-`internal/pouw/new-crypto/red-team.md`).
+**Draft semantics, pending review**.
 
 `h100Floor`'s `tc = 32` is this board's measurement of legacy `mma.sync`, half the `wgmma` rate per MAC, and m8n8k4 and
 sparse `mma.sp` were never run. So `DistinctWritesFloor` covers legacy tensor-core forms only as measured.
 
 `h100PeakTc` is `h100Floor` with `tc = 8`: m8n8k4's price per register at the `wgmma` per-MAC rate, the least of the
-legacy shapes at those rates (red team 18c.2). It is also the dispatch bound for a legacy MMA that writes 4 accumulator
+legacy shapes at those rates. It is also the dispatch bound for a legacy MMA that writes 4 accumulator
 registers per thread (128 per warp, at one warp instruction per SMSP per clock). The other entries are `h100Floor`'s.
 
 `floorTcPeakTc` (`Pouw.Dimension.H100PeakTcProofs`) proves `FloorTc 32 8 h100PeakTc` by `decide`, and
@@ -22,13 +21,13 @@ multiplicands that meet `FragLanes`. The bound is additive-W1 work, not time (`H
 
 namespace Pouw.Dimension.H100
 
-/-- **The H100 table with legacy tensor-core forms at the peak rate** (red team F18c-1; draft semantics):
+/-- **The H100 table with legacy tensor-core forms at the peak rate** (draft semantics):
 `h100Floor` with `tc = 8`, m8n8k4's price per register at the `wgmma` per-MAC rate. -/
 def h100PeakTc : Prices100 := { h100Floor with tc := 8 }
 
 /-! ## Pinned statements (draft semantics, pending review) -/
 
-/-- **The distinct-writes bound with no measurement at `tc`** (draft semantics, pending review; F18c-1): at
+/-- **The distinct-writes bound with no measurement at `tc`** (draft semantics, pending review): at
 `h100PeakTc`, if every tensor-core instruction below 32 per register writes only functions in `K`, then for targets
 `T₁` and `T₂`, pairwise distinct on `S` within and across, none equal on `S` to a free value, and no target of `T₁`
 equal on `S` to a function of `K`, a well-formed `MH100w` program on free inputs matching them all on `S` costs at

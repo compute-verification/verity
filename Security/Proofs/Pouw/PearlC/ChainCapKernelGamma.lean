@@ -4,8 +4,7 @@ import Proofs.Pouw.PearlC.KernelWrefGamma
 import Definitions.Pouw.PearlC.DevicePricesLoop
 
 /-!
-# v2 at the chain cap 1/1,000 against the honest kernel's `W_ref`: the exact in-loop values (the price-twins lane's
-file; staged)
+# v2 at the chain cap 1/1,000 against the honest kernel's `W_ref`: the exact in-loop values (staged)
 
 * **γ at any record against the kernel's `W_ref`, with the chain cap** (`pearlCGammaDevChainCapKAt`,
   `pearlCSampledDevChainCapKAt`), from the record's own chain-cap TT_OUT, which doesn't read `W_ref` (`ttOut_wref`). Per

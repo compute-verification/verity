@@ -25,7 +25,7 @@ that reads the target words only modulo `V₀` transfers:
 * A1 is stated on the unbiased span and is unchanged: it gives the same inequality on the route-U span (`A1U`), so
   `AlgBound4090U`, `TTNCPOfA1A2U` and `TTNCPOfA1A2W1U` hold with the same A1.
 
-No reduction between programs is used, so no free instruction is added (red-team P8-1 does not arise).
+No reduction between programs is used, so no free instruction is added.
 
 The final checkpoint is excluded, as in Theorem D: `C^U_T = A·B` (`RouteU.CheckedUFinal`).
 -/
@@ -160,7 +160,7 @@ def MixingLemmaU : Prop :=
     Lmul (targetSpanU β k m n N R A B U ⊓ (Submodule.span ℚ {f | f ∈ prodOuts P} ⊔ V0 N m n k)) ≤
       (prodOuts P).length
 
-/-- **Theorem D for route U's protocol words** (mod `2^32`, which are `Params.YU`'s by `RouteU.YUChecked`; TD-2), as
+/-- **Theorem D for route U's protocol words** (mod `2^32`, which are `Params.YU`'s by `RouteU.YUChecked`), as
 `AlgBoundWrapped`: for `β ∈ {127, 128, 129}`, a signed-permutation `R`, `k ≤ 2^15`, `A = g(F₁)` int7 at every `F₁`
 and `B` int7 on the units in `U`, under checkpoint independence and H_16, a program on inputs in `V₀` that outputs
 the wrapped non-final route-U words costs at least `16·|U|·m·n·(3k/16 − 1)`. There the wrap is the identity

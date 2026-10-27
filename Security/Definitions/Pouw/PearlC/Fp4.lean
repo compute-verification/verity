@@ -17,7 +17,7 @@ import Definitions.Pouw.Fp8Atom.Atom
   `mant·2^exp`.
   - UE4M3 (NVFP4, blocks of 16) is the low 7 bits read as an E4M3 code with the sign bit clear, as `Fp8Atom.Code`'s
     `(sig, lsbExp)`: subnormals (field 0) are `(m, −9)`, and `0x00` is the zero scale. sm_120 ignores bit 7 (all 256
-    bytes, `r20260930-093120-b2f2`), so `0x80` is also a zero scale and `0x7F` and `0xFF` are NaN (invalid).
+    bytes), so `0x80` is also a zero scale and `0x7F` and `0xFF` are NaN (invalid).
   - UE8M0 (MXFP4, blocks of 32) is `2^(code − 127)`, written `(8, code − 130)` like UE4M3's 4-bit mantissa. `0xFF`
     (NaN) is invalid.
 * **The block-scaled product** (`blockProduct`): an E2M1 product times its two blocks' scales, as a `Term`.

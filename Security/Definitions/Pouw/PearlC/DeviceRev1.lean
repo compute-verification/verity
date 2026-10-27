@@ -5,13 +5,12 @@ import Definitions.Pouw.PearlC.Device
 
 The granted credit counts `k/(32·G)` FP32 promotion adds per word, `T_g = RNE(T_{g−1} + S_g)` from `T_0 = +0`. A
 promotion into a +0 total returns `S_g` itself (`Defs.promote` on `0`; the scheme's `chain` reads `−0` as `+0`), so a
-program can skip it: the assessor's `first-promotion-overcredit.md` (run `r20260930-061318-99f0`) for the first, and
-`repair-rows-rev1-and-v2-cap.md` for the rest. rev1 takes every promotion into a +0 total out of the credit:
+program can skip it. rev1 takes every promotion into a +0 total out of the credit:
 * **the first of every word** (`T_0 = +0` always): out of the credit and out of `W_ref` (`firstAddDev`), since the
   honest kernel needn't execute it either;
 * **any later one** (`T_{g−1} = 0` for `g ≥ 2`): debited by replay (`laterZeroPromos`), since only the chain's values
-  show it. It is rare: at most 3.9·10⁻⁶ of later promotions on the H100 atom and none measured on sm_120
-  (`r20260930-072335-f9d9`, `-071537-652b`), so it moves no γ. `W_ref` keeps it: the honest kernel can't skip it
+  show it. It is rare: at most 3.9·10⁻⁶ of later promotions on the H100 atom and none measured on sm_120,
+  so it moves no γ. `W_ref` keeps it: the honest kernel can't skip it
   without a per-word test that costs as much as the add.
 
 The maps, the domain and the cap's form are the device record's. The debit gains the later +0 promotions and is

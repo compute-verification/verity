@@ -1,7 +1,7 @@
 import Definitions.Pouw.PearlC.DeviceFp4Issue
 
 /-!
-# Pearl-C4's chain-only reading at an FP4 record (the price-twins lane's file; definitions only, staged)
+# Pearl-C4's chain-only reading at an FP4 record (definitions only, staged)
 
 The forming-credit reading credits the salt-dependent forming (`fs` per activation element). The chain-only reading
 credits the unit without it, as `creditChainOnly` does at the H100 and `DeviceChainOnly` does for FP8: `creditFp4` less

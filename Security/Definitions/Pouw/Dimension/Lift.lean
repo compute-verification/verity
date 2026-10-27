@@ -1,9 +1,9 @@
 import Definitions.Pouw.Dimension.Defs
 
 /-!
-# `Lift_MinRank` (red-team P7-3): a named placeholder, and MinRank ≥ ρ (trusted statements)
+# `Lift_MinRank`: a named placeholder, and MinRank ≥ ρ (trusted statements)
 
-The chain's probabilistic node (TD-4), as the lifting worker states it (`internal/pouw/new-crypto/lifting/README.md`):
+The chain's probabilistic node:
 a program on inputs in `V₀` with `p` priced slots that outputs every non-final checked word correctly on a set `Z` of
 noise values (whether by lottery, grinding or noise-dependent branching) has `Pr_grid[Z] ≤ ε(d)`, with `d = D − p`
 the saving, under checkpoint independence and MinRank ≥ ρ. Here `ε` and `ρ` are parameters. The lifting worker proves
@@ -21,7 +21,7 @@ namespace Pouw.Dimension
 
 open Finset Pouw.NCP Pouw.NCP.Relation
 
-/-- **MinRank ≥ ρ** (`minrank.md` §3): every combination `X = Σ_t q_t·M_t` of the non-final checkpoint matrices that
+/-- **MinRank ≥ ρ**: every combination `X = Σ_t q_t·M_t` of the non-final checkpoint matrices that
 is nonzero on `{0, …, k − 1}²` has distinct rows `r i` and distinct columns `s i` (`i < ρ`) with `X[r i, s i] ≠ 0`
 and `X[r i, s l] = 0` for `i < l`, a triangular minor with nonzero diagonal, hence rank ≥ ρ. -/
 def MinRankGe (k : ℕ) (R : Mat) (ρ : ℕ) : Prop :=
@@ -31,7 +31,7 @@ def MinRankGe (k : ℕ) (R : Mat) (ρ : ℕ) : Prop :=
       (∀ i, ∑ t ∈ range (3 * k / 16 - 1), q t * (ckMat k R (16 * (t + 1)) (r i) (s i) : ℚ) ≠ 0) ∧
       (∀ i l, i < l → ∑ t ∈ range (3 * k / 16 - 1), q t * (ckMat k R (16 * (t + 1)) (r i) (s l) : ℚ) = 0)
 
-/-- **L5e's ε** (`lifting/README.md`): `((1 + 64^(Λ − ρ + G − 1)) / 64)^X` with
+/-- **L5e's ε**: `((1 + 64^(Λ − ρ + G − 1)) / 64)^X` with
 `X = ⌈d / ((n·T + k)/G + T + M·T/Λ)⌉`, where `T` is the number of non-final checkpoints per entry and `M` the number of
 rows (`N·m` for `N` units sharing `F₁`, L6). -/
 noncomputable def epsL5e (ρ G Λ k M n T : ℕ) (d : ℤ) : ℝ :=

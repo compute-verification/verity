@@ -21,7 +21,7 @@ and `CM.Queries` holds (`Proofs.Pouw.PearlC.TTOutW1.w1Priced_queries`); `TTOutW1
 **What is credited** is the protocol's credit, unchanged: `creditDev` (rev1: without the first promotion of each word)
 minus the replayed debit. The weight side (B̃'s forming, B̃·F_A, P_B) depends on the salt, so a program runs it after
 the salt; W1 charges it and the credit counts none of it, nor `qa·m·k` (in `W_ref` only), the SHA-512 work or any fetch.
-The bound on guessing whole output words (lean's red team of the TT_OUT forms) rests on exactly that.
+The bound on guessing whole output words rests on exactly that.
 
 **Why `w1Priced`.** It charges at least what `w1` (with the operand refund) charges, so TT_OUT at `w1` implies it here:
 it is the weaker assumption. It is the cost model the compute audit reads (`GγPerCoin (w1Priced dv salt)`), and it does
@@ -42,9 +42,9 @@ separately. It speaks at the deployment when `sem := NoiseSha512.sha512Sem base 
 model reads: one salt, which the program reads as its salt bytes (`W1.init`'s region 1) and the protocol reads as the
 noise's. At any other pair it is still proved, but about a game the deployment doesn't play.
 
-**The program's text is bounded** (`W1.Prog.bounded`: at every layout `2^64` code nodes and `2^64` constants, W1RT-1's
-fix F2). W1 charges only the path a run takes, so a strategy with unbounded text could hold the reference at
-`sha512Sem` as a table of one leaf per salt in its code (W1RT-1). A W1 program can't
+**The program's text is bounded** (`W1.Prog.bounded`: at every layout `2^64` code nodes and `2^64` constants).
+W1 charges only the path a run takes, so a strategy with unbounded text could hold the reference at
+`sha512Sem` as a table of one leaf per salt in its code. A W1 program can't
 (`Proofs.Pouw.PearlC.W1Tabulate.tree_not_code`).
 
 **The honest program** pays the weight side and the weight read, neither in `W_ref`, so `AdmitsRef (W1.w1Priced …)`
