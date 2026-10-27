@@ -54,7 +54,7 @@ tree's git hash (`verity/remote-bandwidth/v0 verifier tree
 <tree>`, `sampled_proofs.challenger.credited_session`), so the circuit a period signs commits to the code that decided
 `bound`. A change to it, like any change here, gives later periods a new circuit.
 
-A session over PoUS's P2 store (`p2_party.py`) is decided by the Lean too (Daniel, 26 Oct: the trusted base is the
+A session over PoUS's P2 store (`p2_party.py`) is decided by the Lean too (the trusted base is the
 compiled Lean verifier, which parses bytes of untrusted provenance, so Python is never trusted): the verifier's
 process holds the registration file's bytes, recomputes the registration's digest from its fields, reads the
 prover's request and every root and openings line as sent, and checks each opened unit's four blocks on the

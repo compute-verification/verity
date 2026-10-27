@@ -24,8 +24,8 @@ padding past the last tensor, which is PoUS's and which the decode never reads; 
   reads `q_bytes`, the receipts less the wrong ones the pooled bound leaves (`pooled.bound` at δ = 2^-40), a unit's
   8,224 bytes each, over the session's span.
 
-The verifier of record is the Lean (Daniel, 26 Oct: the trusted base is the compiled Lean verifier, which parses bytes
-of untrusted provenance, so Python is never trusted): the process `remote-audit-verifier` (`p2_lean.py`,
+The verifier of record is the Lean (the trusted base is the compiled Lean verifier, which parses bytes of untrusted
+provenance, so Python is never trusted): the process `remote-audit-verifier` (`p2_lean.py`,
 `RemoteAudit.P2Session`) holds the registration file's bytes, recomputes the registration's digest from its fields, and
 reads the prover's request and every root and openings line as the prover sent it, each opening's four blocks checked
 on the registered vk root, and its answer is the session's. The Python's books (`Books`, `p2.Session`) take every
