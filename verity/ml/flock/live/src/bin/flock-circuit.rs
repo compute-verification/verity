@@ -120,7 +120,54 @@ fn seed_coins() -> bool {
     match std::env::var("FC_COINS").as_deref() {
         Err(_) | Ok("" | "seed") => true,
         Ok("os") => cfg!(feature = "seed-injection"),
-        Ok(v) => refuse(format!("FC_COINS={v}: \"seed\" (the default) or \"os\"")),
+        Ok("challenger") => false,
+        Ok(v) => refuse(format!("FC_COINS={v}: \"seed\" (the default), \"os\" or \"challenger\"")),
+    }
+}
+
+/// `FC_COINS=challenger`: the session's coins are the window's withheld challenger's (`SessionConfig::challenger`,
+/// [`flock_live::CHALLENGER_SCHEME`]), as session `FC_COIN_SLOT` of the window, served through the auditor's relay at
+/// `FC_COIN_RELAY` ([`relay_hook`]). Nothing is committed at `Hello`, under `--zk` too: the challenger releases its
+/// commitment only at its close, and the audit holds the record's coins to it.
+fn challenger_slot() -> Option<u32> {
+    challenger_mode().then(|| {
+        std::env::var("FC_COIN_SLOT").ok().and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| refuse("FC_COINS=challenger: FC_COIN_SLOT is the session's index in the window".into()))
+    })
+}
+
+/// `FC_COINS=challenger` ([`challenger_slot`]), as the identity pins it: the mode, not the slot.
+fn challenger_mode() -> bool {
+    std::env::var("FC_COINS").as_deref() == Ok("challenger")
+}
+
+/// The auditor's relay to the window's challenger at `addr` (`HOST:PORT`): one connection a use, one JSON line
+/// `{"label", "after", "coins"}` asked, and one line answered, `{"coins": HEX}` (64 bytes a coin) or `{"refused": WHY}`.
+fn relay_hook(addr: String) -> flock_live::ChallengerHook {
+    use std::io::{BufRead, BufReader, Write};
+    Box::new(move |label: &str, after: &[u8; 64], n: usize| {
+        let mut s = std::net::TcpStream::connect(&addr).map_err(|e| format!("the coin relay at {addr}: {e}"))?;
+        let ask = json!({"label": label, "after": flock_live::hex(after), "coins": n});
+        s.write_all(format!("{ask}\n").as_bytes()).map_err(|e| format!("the coin relay: {e}"))?;
+        let mut line = String::new();
+        BufReader::new(s).read_line(&mut line).map_err(|e| format!("the coin relay: {e}"))?;
+        let got: Value = serde_json::from_str(&line).map_err(|e| format!("the coin relay answered no JSON line: {e}"))?;
+        match (got["coins"].as_str(), got["refused"].as_str()) {
+            (Some(h), None) => flock_live::circuit::hexb(h),
+            (None, Some(why)) => Err(why.to_string()),
+            _ => Err(format!("the coin relay answered {got}")),
+        }
+    })
+}
+
+/// `s` on the window's challenger under `FC_COINS=challenger`, asked through the relay `FC_COIN_RELAY`.
+fn on_challenger(s: Server) -> Server {
+    if s.cfg.challenger.is_none() {
+        return s;
+    }
+    match std::env::var("FC_COIN_RELAY") {
+        Ok(a) if !a.is_empty() => s.with_challenger(relay_hook(a)),
+        _ => refuse("FC_COINS=challenger: FC_COIN_RELAY is the auditor's relay to the window's challenger (HOST:PORT)".into()),
     }
 }
 
@@ -259,10 +306,15 @@ fn lean_level0(_: &Plan, _: &Stmt, _: LigeritoProfile, _: &[F128], _: usize, _: 
 /// - a zerocheck outer coin `r_j = 1`, as it opens ([`zkv::Masking`]). Completeness: under uniform coins the honest prover
 ///   refuses with probability at most `(#outer coins) · 2^-128` per rep, `m − 13` outer coins.
 fn zk_identity(c: &Composite) -> Value {
+    let verifier_coins = if challenger_mode() {
+        CHALLENGER_COINS.to_string()
+    } else {
+        format!("committed before the prover's first message ({}): the prover's fresh nonce in hello; the root and the \
+                 verifier's session key in its answer; every coin opened against them, or the prover stops",
+                flock_live::coin_tree::SCHEME)
+    };
     json!({"zk": true, "stage": "m2-prototype (committed verifier coins, CPU)", "compiler": "veil (ePrint 2026/683 §4.1, Remark 4.4) over gf(2^128)",
-           "verifier_coins": format!("committed before the prover's first message ({}): the prover's fresh nonce in hello; the root and the \
-                                      verifier's session key in its answer; every coin opened against them, or the prover stops",
-                                     flock_live::coin_tree::SCHEME),
+           "verifier_coins": verifier_coins,
            "pads": "zerocheck and lincheck: every sent value + a pad (os bytes, getrandom); pads committed before the zerocheck's first coin",
            "pads_commitment": format!("rs over gf(2^128), {} padding symbols, rate 1/{}, {} queries, hm96-sha512/v1 leaves, sha512 nodes",
                                       zkv::K_PAD, 1 << zkv::INNER_LOG_INV_RATE, zkv::Q),
@@ -281,6 +333,12 @@ fn zk_identity(c: &Composite) -> Value {
 }
 
 
+/// The verifier's coins under `FC_COINS=challenger`, as the identity pins them (Lean's `Flock.Zk.CHALLENGER_COINS`).
+const CHALLENGER_COINS: &str = "the window's withheld challenger's (challenger-withheld/v1): the link points its release for \
+                                slot/<i>/session after the sha512 of the tables' root_b digests, each round's coins its release \
+                                for slot/<i>/<stream> after the round's sha512, each asked once; nothing committed at hello, and \
+                                the audit holds the record's coins to the challenger's log";
+
 /// The backend identity the statement digest pins (so a NON_ZK and a ZK cell never share one).
 fn identity(c: &Composite) -> Value {
     let hooks = if zk_mode() { zk_identity(c) } else { NoMask::new(ProverSeed::from_os()).identity() };
@@ -297,7 +355,11 @@ fn identity(c: &Composite) -> Value {
                       "transcript": "none (live verifier coins)", "row_leaf_in_circuit": "hm96-sha512/row/v1 over sha512/row/v1"},
            "hooks": hooks});
     // only under FC_COINS=os: the statement digest pins the identity, and the default's must not move
-    if !zk_mode() && !seed_coins() {
+    if !zk_mode() && challenger_mode() {
+        id["coins"] = json!(CHALLENGER_COINS);
+        id["hashes"]["coin_commitment"] = json!("none (FC_COINS=challenger: the challenger's own, released at its close)");
+        id["hashes"]["coin_derivation"] = json!("none (FC_COINS=challenger)");
+    } else if !zk_mode() && !seed_coins() {
         id["coins"] = json!("live-os (every round's coins the verifier's OS draws: no seed, no PRF)");
         id["hashes"]["coin_commitment"] = json!("none (FC_COINS=os)");
         id["hashes"]["coin_derivation"] = json!("none (FC_COINS=os)");
@@ -625,7 +687,10 @@ fn config_with(tabs: &[(&str, &Stmt, &Instances)], unit_draw: Option<Value>) -> 
     let mut cfg = SessionConfig::flock_128_r2(specs);
     cfg.link = Some(LinkSpec { sigma: session_sigma(tabs).to_vec(), m: st.m_pts, points: 2 });
     // M2 (--zk): every coin committed at Hello and opened round by round; M0: the step-0 seed, or OS coins (seed_coins)
-    if is_zk(st) {
+    // FC_COINS=challenger: the window's withheld challenger's, under either
+    if let Some(slot) = challenger_slot() {
+        cfg.challenger = Some(slot);
+    } else if is_zk(st) {
         cfg.coin_tree = Some(coin_spec_of(&tabs.iter().map(|t| t.0.to_string()).collect::<Vec<_>>()));
     } else {
         cfg.coin_seed = seed_coins();
@@ -777,7 +842,7 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
 
 /// One session's server.
 fn server_of(sv: &Serving, st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Server {
-    let s = Server::new(config_of(&sv.tabs), Box::new(CircuitVerifier::new(sv.tabs.clone())));
+    let s = on_challenger(Server::new(config_of(&sv.tabs), Box::new(CircuitVerifier::new(sv.tabs.clone()))));
     if let Some(draw) = &sv.given {
         let mut s = with_draw(s, st, inst, flock_live::unit_draw::Law::Subset { k: 0 }, count);
         s.cfg.draw_law = None;
@@ -3410,7 +3475,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     }
     // M2: every coin the verifier sends is checked against its step-0 commitment before the prover uses it; under the
     // firewall the Lean session loop checks them (`flock-firewall session`), and only the coins come back
-    let t: SharedTransport = if is_zk(st) && !plan.lean_session {
+    let t: SharedTransport = if is_zk(st) && !plan.lean_session && !challenger_mode() {
         shared(flock_live::coin_tree::Checked::new(SharedCall(t), coin_spec_of(&names)))
     } else {
         t
@@ -3452,7 +3517,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     // under the firewall the Lean session loop sends its own Hello, at a nonce it draws, in place of whatever the prover sends
     let hello = if plan.lean_session {
         String::new()
-    } else if is_zk(st) {
+    } else if is_zk(st) && !challenger_mode() {
         config_of(&tabs).hello_with_nonce(&plan.coin_nonce.unwrap_or_else(|| flock_live::zk_hooks::coin_nonce(&seed)))
     } else {
         config_of(&tabs).hello()
@@ -3535,11 +3600,13 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let res: Result<(), String> = (|| {
         match call(&t, Req::Hello(hello.clone()))? {
             // M0's seed commitment (4 words), or the keyed coin tree's root and session key (20; `coin_tree::Checked` checked them)
-            Resp::Coins(c) if c.len() == if is_zk(st) { 20 } else { 4 } && (is_zk(st) || seed_coins()) => commit = c,
-            // FC_COINS=os: nothing committed, every round's coins the verifier's OS draws
-            Resp::Ok if !is_zk(st) && !seed_coins() => {}
+            Resp::Coins(c) if !challenger_mode() && c.len() == if is_zk(st) { 20 } else { 4 } && (is_zk(st) || seed_coins()) => commit = c,
+            // FC_COINS=os: nothing committed, every round's coins the verifier's OS draws; FC_COINS=challenger: the window's
+            // challenger's, released at its close
+            Resp::Ok if challenger_mode() || (!is_zk(st) && !seed_coins()) => {}
             r => return Err(format!("hello: step 0 expects the verifier's {}, got {r:?}",
-                                    if is_zk(st) || seed_coins() { "seed commitment" } else { "Ok (FC_COINS=os)" })),
+                                    if challenger_mode() { "Ok (FC_COINS=challenger)" }
+                                    else if is_zk(st) || seed_coins() { "seed commitment" } else { "Ok (FC_COINS=os)" })),
         }
         // several tables: every table after the first commits its level-0 root (and draws its level-0 hiding) before any stream
         // opens, so the session's one Commit, in table 0's first rep, carries every table's root

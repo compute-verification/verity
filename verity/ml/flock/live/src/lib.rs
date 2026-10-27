@@ -1205,12 +1205,45 @@ pub struct SessionConfig {
     pub coin_tree: Option<coin_tree::Spec>,
     /// Or serve this draw, the verifier's own (made outside the server, as `docs/audit-protocols.md` recommends), at `Register`.
     pub draw_given: Option<Value>,
+    /// The window's withheld challenger ([`CHALLENGER_SCHEME`]), as session `slot` of the window: the link points are the
+    /// challenger's release for `slot/<slot>/session` after the SHA-512 of the tables' root_B digests, and each round's coins
+    /// its release for `slot/<slot>/<stream>` after the SHA-512 of the round's bytes, each asked once ([`ChallengerHook`]).
+    /// Nothing is committed at `Hello`: the challenger releases its commitment only at its close, and the audit holds the
+    /// record's coins to it (sampled proofs' `roundCoins`).
+    pub challenger: Option<u32>,
+}
+
+/// The coin source of a session on the window's withheld challenger ([`SessionConfig::challenger`]).
+pub const CHALLENGER_SCHEME: &str = "challenger-withheld/v1";
+
+/// The challenger's coins of a family: `(label, after, coins)` asks it once for the next `coins` coins of the family `label`
+/// released after `after`, and answers their bytes, 64 a coin. A second ask after the same `after` is the challenger's to
+/// refuse, and the session stops on any refusal.
+pub type ChallengerHook = Box<dyn FnMut(&str, &[u8; 64], usize) -> Result<Vec<u8>, String> + Send>;
+
+/// A challenger coin's bytes per F128.
+const COIN_F128S: usize = 4;
+
+/// `n` F128s from the challenger's coin bytes `b`: F128 `j` is bytes `16j … 16j + 15`, big-endian as `hi ‖ lo`, so the
+/// record's hex of it is those bytes' own hex.
+pub fn challenger_f128s(b: &[u8], n: usize) -> Result<Vec<F128>, String> {
+    if b.len() < 16 * n {
+        return Err(format!("the challenger answered {} bytes for {n} words", b.len()));
+    }
+    Ok(b[..16 * n].chunks(16).map(|c| F128 { hi: u64::from_be_bytes(c[..8].try_into().unwrap()),
+                                              lo: u64::from_be_bytes(c[8..].try_into().unwrap()) }).collect())
+}
+
+/// The family of session `slot`'s stream `stream` on the window's challenger.
+pub fn slot_family(slot: u32, stream: &str) -> String {
+    format!("slot/{slot}/{stream}")
 }
 
 impl SessionConfig {
     pub fn flock_128_r2(tables: Vec<TableSpec>) -> Self {
         Self { profile: "fast100".into(), reps: 2, flavor: "rs".into(), tables, require_link: true, link: None, prime_live: false, coin_seed: false,
-               retain_rounds: false, sha512_digests: false, unit_draw: None, draw_law: None, draw_given: None, coin_tree: None }
+               retain_rounds: false, sha512_digests: false, unit_draw: None, draw_law: None, draw_given: None, coin_tree: None,
+               challenger: None }
     }
 
     /// The record's digest of `b`.
@@ -1237,6 +1270,12 @@ impl SessionConfig {
                 || self.tables.iter().flat_map(|tb| (0..self.reps).map(move |r| rep_stream(&tb.name, r))).any(|x| !t.streams.contains(&x)))
         {
             return Err("the committed coin schedule must hold the session's stream first, then every table's every rep".into());
+        }
+        if self.challenger.is_some() && (self.coin_tree.is_some() || self.coin_seed || self.prime_live) {
+            return Err("the window's challenger is the session's one coin source: no coin tree, step-0 seed or live prime coins".into());
+        }
+        if self.challenger.is_some() && (self.link.is_none() || !self.sha512_digests) {
+            return Err("challenger coins follow SHA-512 digests of the link roots and of each round: a link exchange and SHA-512 digests".into());
         }
         if self.coin_seed && self.prime_live {
             return Err("step-0 coins derive the GF(2^128) coins only; live prime coins with a committed seed are not built".into());
@@ -1273,6 +1312,9 @@ impl SessionConfig {
         }
         if let Some(t) = &self.coin_tree {
             h["coins"] = t.to_json();
+        }
+        if let Some(slot) = self.challenger {
+            h["coins"] = json!({"scheme": CHALLENGER_SCHEME, "slot": slot});
         }
         if self.retain_rounds {
             h["rounds"] = json!("bytes retained");
@@ -1392,6 +1434,8 @@ pub struct Server {
     coin_tape: Option<[u8; 32]>,
     /// a test harness's malicious verifier: its edit of the committed blocks (`coin_tree::CoinTree::draw_with`)
     coin_edit: Option<CoinEdit>,
+    /// the window's withheld challenger ([`SessionConfig::challenger`]): asked once per use, never retried
+    challenger: Option<ChallengerHook>,
     t0: std::time::Instant,
     /// Seconds spent handling everything but `Finish` (the verifier's compute inside the prover's coin waits).
     handle_s: f64,
@@ -1418,6 +1462,29 @@ impl Server {
     pub fn with_draw(mut self, hook: DrawHook) -> Self {
         self.on_draw = Some(hook);
         self
+    }
+
+    /// A server whose coins are the window's withheld challenger's ([`SessionConfig::challenger`]), asked through `hook`.
+    pub fn with_challenger(mut self, hook: ChallengerHook) -> Self {
+        self.challenger = Some(hook);
+        self
+    }
+
+    /// `n` coins of session stream `stream` from the window's challenger, released after `after`: one ask, and a refusal
+    /// stops the session. A server rebuilt from a record asks nothing: its zeros are replaced by the recorded coins.
+    fn challenger_coins(&mut self, stream: &str, after: &[u8], n: usize) -> Result<Vec<F128>, String> {
+        let slot = self.cfg.challenger.ok_or("no window challenger")?;
+        if self.replaying {
+            return Ok(vec![F128 { hi: 0, lo: 0 }; n]);
+        }
+        let after: [u8; 64] = after.try_into().map_err(|_| "challenger: a use follows a 64-byte SHA-512 digest".to_string())?;
+        let label = slot_family(slot, stream);
+        let hook = self.challenger.as_mut().ok_or("challenger: no connection to the window's challenger")?;
+        let b = hook(&label, &after, n.div_ceil(COIN_F128S)).map_err(|e| format!("challenger: {label}: {e}"))?;
+        if b.len() != 64 * n.div_ceil(COIN_F128S) {
+            return Err(format!("challenger: {label}: {} bytes for {} coins", b.len(), n.div_ceil(COIN_F128S)));
+        }
+        challenger_f128s(&b, n)
     }
 
     pub fn try_new(cfg: SessionConfig, verifier: Box<dyn StatementVerifier>) -> Result<Self, String> {
@@ -1449,6 +1516,7 @@ impl Server {
             coin_nonce: None,
             coin_tape: None,
             coin_edit: None,
+            challenger: None,
             t0: std::time::Instant::now(),
             handle_s: 0.0,
         })
@@ -1656,6 +1724,9 @@ impl Server {
                 if self.cfg.coin_tree.is_some() && self.urandom.is_none() && !self.replaying {
                     return self.refuse("coin tree: no OS random source to draw the session's key and coins".into());
                 }
+                if self.cfg.challenger.is_some() && self.challenger.is_none() && !self.replaying {
+                    return self.refuse("challenger: no connection to the window's challenger to serve the session's coins".into());
+                }
                 if let (Some(spec), Some(nonce)) = (self.cfg.coin_tree.clone(), nonce)
                     && self.urandom.is_some()
                 {
@@ -1754,6 +1825,16 @@ impl Server {
                 }
                 self.commit = Some(CommitRec { root_f, roots, publics, publics_digest: pd });
                 self.prime_before_commit = Some(self.prime.len());
+                if self.cfg.challenger.is_some() {
+                    let ds: Vec<u8> = self.commit.as_ref().unwrap().roots.values().flat_map(|r| self.cfg.dg(r)).collect();
+                    let after = self.cfg.dg(&ds);
+                    let c = match self.challenger_coins("session", &after, spec.points * spec.m) {
+                        Ok(c) => c,
+                        Err(e) => return self.refuse(e),
+                    };
+                    self.points = c.chunks(spec.m.max(1)).map(|p| p.to_vec()).collect();
+                    return Resp::Coins(c);
+                }
                 if self.coin_tree.is_some() {
                     let (c, w) = match self.committed_coins(coin_tree::SESSION, 0, spec.points * spec.m) {
                         Ok(x) => x,
@@ -1846,7 +1927,13 @@ impl Server {
                     self.streams.get_mut(&stream).unwrap().cap = Some(cap);
                 }
                 let at = self.streams[&stream].rounds.len();
-                let (coins, answer) = if self.coin_tree.is_some() {
+                let (coins, answer) = if self.cfg.challenger.is_some() {
+                    let after = self.cfg.dg(&content);
+                    match self.challenger_coins(&stream, &after, n as usize) {
+                        Ok(c) => (c.clone(), c),
+                        Err(e) => return self.refuse(e),
+                    }
+                } else if self.coin_tree.is_some() {
                     match self.committed_coins(&stream, at, n as usize) {
                         Ok(x) => x,
                         Err(e) => return self.refuse(e),
@@ -2564,6 +2651,101 @@ mod coin_server_tests {
         let mut s = Server::try_new(cfg(), Box::new(NoProofs)).unwrap();
         s.urandom = None;
         assert!(matches!(s.handle(Req::Hello(hello)), Resp::Refused(ref e) if e.contains("no OS random source")));
+    }
+
+    fn challenger_cfg() -> SessionConfig {
+        let mut c = SessionConfig::flock_128_r2(vec![TableSpec { name: "t".into(), binding: Binding::R1cs { statement_digest: [0; 32] } }]);
+        c.link = Some(LinkSpec { sigma: vec![1; 64], m: 3, points: 2 });
+        c.sha512_digests = true;
+        c.challenger = Some(5);
+        c
+    }
+
+    fn frame(op: u8, p: &[u8]) -> Vec<u8> {
+        let mut b = vec![op, 0, 0, 0, 0, 0, 0, 0];
+        b.extend_from_slice(&(p.len() as u64).to_le_bytes());
+        b.extend_from_slice(p);
+        b.resize(16 + 16 * p.len().div_ceil(16), 0);
+        b
+    }
+
+    /// The asks a challenger saw, `(label, after, coins)`, and a server on it: each coin's bytes its family, `after`'s
+    /// first byte and its index, and a second ask after the same `after` in a family refused, as the window's
+    /// `ChallengerCoins.commit` refuses it.
+    fn on_challenger() -> (Server, Arc<std::sync::Mutex<Vec<(String, [u8; 64], usize)>>>) {
+        let asks = Arc::new(std::sync::Mutex::new(Vec::<(String, [u8; 64], usize)>::new()));
+        let seen = asks.clone();
+        let hook: ChallengerHook = Box::new(move |label, after, n| {
+            let mut a = seen.lock().unwrap();
+            if a.iter().any(|(l, x, _)| l == label && x == after) {
+                return Err(format!("the {label} coins after {} are open already", hex(&after[..8])));
+            }
+            a.push((label.to_string(), *after, n));
+            Ok((0..64 * n).map(|i| (label.len() as u8) ^ after[0] ^ (i as u8)).collect())
+        });
+        (Server::try_new(challenger_cfg(), Box::new(NoProofs)).unwrap().with_challenger(hook), asks)
+    }
+
+    /// On the window's challenger, `Hello` commits nothing; the link points are the challenger's release for
+    /// `slot/<i>/session` after the SHA-512 of the root_B digests, and each round's coins its release for
+    /// `slot/<i>/<stream>` after the round's SHA-512, the bytes' own hex in the record; a round asked again after the same
+    /// bytes is the challenger's to refuse, and the session stops there.
+    #[test]
+    fn challenger_coins_are_asked_once_after_each_commitment_and_a_replayed_round_stops_the_session() {
+        let (mut s, asks) = on_challenger();
+        let c = challenger_cfg();
+        assert!(matches!(s.handle(Req::Hello(c.hello())), Resp::Ok));
+        let rb = vec![9u8; 32];
+        let pts = match s.handle(Req::Commit { root_f: vec![2; 32], roots: vec![("t".into(), rb.clone())], publics: vec![] }) {
+            Resp::Coins(w) => w,
+            r => panic!("commit: {r:?}"),
+        };
+        assert_eq!(pts.len(), 6);
+        let want_after = c.dg(&c.dg(&rb));
+        {
+            let a = asks.lock().unwrap();
+            assert_eq!((a[0].0.as_str(), &a[0].1[..], a[0].2), ("slot/5/session", &want_after[..], 2));
+        }
+        assert!(matches!(s.handle(Req::Link(vec![0; 16 * 2])), Resp::Ok));
+        let stream = rep_stream("t", 0);
+        assert!(matches!(s.handle(Req::Open { stream: stream.clone(), parent: String::new(), label: Vec::new(), at: 0 }), Resp::Ok));
+        let content = [frame(OP_DOMAIN, b""), frame(OP_LABEL, LABEL_R1CS), frame(OP_BYTES, &[0; 32]), frame(OP_BYTES, &rb)].concat();
+        let coins = match s.handle(Req::Round { stream: stream.clone(), content: content.clone(), n: 5 }) {
+            Resp::Coins(w) => w,
+            r => panic!("round: {r:?}"),
+        };
+        assert_eq!(coins.len(), 5);
+        {
+            let a = asks.lock().unwrap();
+            assert_eq!((a[1].0.as_str(), &a[1].1[..], a[1].2), ("slot/5/t/rep0", &c.dg(&content)[..], 2));
+        }
+        let rec = s.record_json();
+        let first = rec["streams"][0]["rounds"][0]["coins"][0].as_str().unwrap().to_string();
+        let b0: Vec<u8> = (0..16).map(|i| (slot_family(5, &stream).len() as u8) ^ c.dg(&content)[0] ^ i as u8).collect();
+        assert_eq!(first, hex(&b0), "the record's F128 is the coin bytes' own hex");
+        assert_eq!(rec["streams"][0]["rounds"][0][format!("msg_{}", c.dk())], json!(hex(&c.dg(&content))));
+        // the same round's bytes again: a second ask after the same digest, refused, and the session stops
+        let again = s.handle(Req::Round { stream: stream.clone(), content, n: 5 });
+        assert!(matches!(again, Resp::Refused(ref e) if e.contains("open already")), "{again:?}");
+        assert!(matches!(s.handle(Req::Round { stream, content: vec![0; 16], n: 1 }), Resp::Refused(ref e) if e.contains("aborted")));
+        assert_eq!(asks.lock().unwrap().len(), 2);
+    }
+
+    /// A server on the window's challenger with no connection to it refuses `Hello`; a configuration that also commits a
+    /// coin tree or a step-0 seed is refused.
+    #[test]
+    fn a_challenger_session_needs_its_connection_and_no_other_coin_source() {
+        let mut s = Server::try_new(challenger_cfg(), Box::new(NoProofs)).unwrap();
+        assert!(matches!(s.handle(Req::Hello(challenger_cfg().hello())), Resp::Refused(ref e) if e.contains("no connection")));
+        let mut c = challenger_cfg();
+        c.coin_seed = true;
+        assert!(Server::try_new(c, Box::new(NoProofs)).is_err());
+        let mut c = challenger_cfg();
+        c.coin_tree = cfg().coin_tree;
+        assert!(Server::try_new(c, Box::new(NoProofs)).is_err());
+        let mut c = challenger_cfg();
+        c.sha512_digests = false;
+        assert!(Server::try_new(c, Box::new(NoProofs)).is_err());
     }
 }
 
