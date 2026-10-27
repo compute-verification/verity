@@ -13,8 +13,8 @@ import Mathlib.Algebra.BigOperators.Ring.Finset
   of each link, at the readers' ticks.
 * `computeRate_one`: compute rate at a pricing of at least one per computed gate bounds the number of gates, compute
   rate at one per gate.
-* `state_eq_stateIn_add_compl`: the state is its part in `G` plus its part outside `G`, so memory at a tick bounds
-  the part in any `G` there (`stateIn_le_of_memoryAt`).
+* `state_eq_stateIn_add_compl`: the state is its part in `G` plus its part outside `G`, so the state bounds its part
+  in any `G` (`stateIn_le_state`).
 -/
 
 namespace Accounting.SecurityProofs.Actual
@@ -115,15 +115,6 @@ theorem state_eq_stateIn_add_compl (X : Finset L) (t : ℕ) (G : Finset (Fin A.N
 theorem stateIn_le_state (X : Finset L) (t : ℕ) (G : Finset (Fin A.N)) : A.stateIn X t G ≤ A.state X t := by
   rw [state_eq_stateIn_add_compl A X t G]
   exact Nat.le_add_right _ _
-
-theorem memoryAt_of_memory {𝒳 : Set (Finset L)} {M : Finset L → ℕ} (h : A.Memory 𝒳 M) (T : Set ℕ) :
-    A.MemoryAt 𝒳 M T :=
-  fun X hX t _ => h X hX t
-
-/-- Memory at a tick bounds the state's part in any set of gates there. -/
-theorem stateIn_le_of_memoryAt {𝒳 : Set (Finset L)} {M : Finset L → ℕ} {T : Set ℕ} (h : A.MemoryAt 𝒳 M T)
-    {X : Finset L} (hX : X ∈ 𝒳) {t : ℕ} (ht : t ∈ T) (G : Finset (Fin A.N)) : A.stateIn X t G ≤ M X :=
-  (stateIn_le_state A X t G).trans (h X hX t ht)
 
 /-- **Pricing at least one per gate bounds the gates**: compute rate at a pricing `π ≥ 1` on computed gates is compute
 rate at one per gate. -/
