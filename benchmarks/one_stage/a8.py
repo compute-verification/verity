@@ -24,10 +24,12 @@ deploys them), so that the verifier receives no block bytes; and the prover's co
   first draw replaced by other bytes before the passes (a prover that lost the block and receipts what it holds in its
   place). Its unit's verdict is codec, its proof is accepted, and the window is rejected. Both rounds are staged on one
   stager, so the circuit is lowered once.
-* **What the verifier received** (`received`): every file the verifier side holds (the registration, partition, program,
+* **What the verifier received** (`scan`): every file the verifier side holds (the registration, partition, program,
   circuit, public file, the session's record and proofs, the draw, the openings it was sent and v0's messages), scanned
-  for every 16-byte piece of every drawn block and payload at every offset, raw and as hex, but the pieces the staged
-  public circuit holds (a run of zero bytes), which it lists. The prover's instance file is the positive control.
+  at every offset, raw and as hex, for each drawn block and payload cut whole into 16-byte pieces (`leak_scan.cut`, its
+  tail included), but the pieces the staged public circuit holds (a run of zero bytes), which it lists. A round fails on
+  a piece the zero-knowledge drivers' one rule reads ``leaked`` (`leak_scan.scan`). The prover's instance file is the
+  positive control.
 * **Cost** (``--points``): sessions on the honest statement whose verifier draws its first k units, cold (one prover
   process each, ``--cold`` of them), in each of ``--arms`` (``fw``: the firewall's send check, `FC_FIREWALL=1`, the design's
   path, which rechecks a host witness; ``nofw``), on the device with ``--gpu``: the process's wall and CPU seconds, and the
@@ -56,9 +58,11 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(HERE.parent / "network_traces"))
 
 import a0  # noqa: E402
 import a7  # noqa: E402
+import leak_scan as LS  # noqa: E402
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, opening as C3, receipts  # noqa: E402
 from verity.core.protocols.remote_bandwidth.receipts import Plan  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
@@ -320,14 +324,14 @@ def audit_round(a, sg, m: dict, rs, c3, draws, out: Path, port: int) -> dict:
 
 # --- what the verifier received -----------------------------------------------------------------------------------------------
 
-def needles(blobs: dict[str, bytes]) -> dict[bytes, str]:
-    """Every aligned 16-byte piece of each named blob, raw and as hex (both cases), to the blob's name."""
+def needles(pieces: dict[str, bytes]) -> dict[bytes, str]:
+    """Each named piece (`leak_scan.cut`'s), raw and as hex (both cases), to its name."""
+    if bad := {k: len(x) for k, x in pieces.items() if len(x) != PIECE}:
+        raise ValueError(f"pieces {bad} (their bytes) aren't {PIECE} bytes: cut each row whole (`leak_scan.public_pieces`)")
     out: dict[bytes, str] = {}
-    for name, b in blobs.items():
-        for o in range(0, len(b) - PIECE + 1, PIECE):
-            x = b[o:o + PIECE]
-            for nd in (x, x.hex().encode(), x.hex().upper().encode()):
-                out.setdefault(nd, name)
+    for name, x in pieces.items():
+        for nd in (x, x.hex().encode(), x.hex().upper().encode()):
+            out.setdefault(nd, name)
     return out
 
 
@@ -353,32 +357,30 @@ def find(data: bytes, table: dict[bytes, str]) -> dict[str, int]:
     return {x: len(v) for x, v in hits.items()}
 
 
-def public_pieces(blobs: dict[str, bytes], public: bytes) -> tuple[dict[str, bytes], list[str]]:
-    """``blobs``, each less the aligned pieces ``public`` holds raw or as hex (its other pieces joined, so `needles` cuts
-    them again), and the left-out pieces' hex. ``public`` is the staged circuit, which the stager writes from the Definition
-    before any instance, so what it holds the verifier has whatever the witness: a run of zero bytes in a block is a piece
-    the circuit holds too."""
-    cut = {name: [b[o:o + PIECE] for o in range(0, len(b) - PIECE + 1, PIECE)] for name, b in blobs.items()}
-    out = {bytes.fromhex(h) for h in find(public, needles({x.hex(): x for xs in cut.values() for x in xs}))}
-    return {name: b"".join(x for x in xs if x not in out) for name, xs in cut.items()}, sorted(x.hex() for x in out)
-
-
-def received(vdir: Path, control: Path, blobs: dict[str, bytes], held: set[str], public: bytes = b"") -> dict:
-    """Every file under ``vdir`` (what the verifier received) and the prover's ``control`` file, scanned for ``blobs``'
-    pieces but those the public circuit ``public`` holds (`public_pieces`, listed as ``public_pieces``): each file's size
-    and the blobs found in it; the control is to hold every blob in ``held`` with a piece left to scan for."""
-    blobs, left_out = public_pieces(blobs, public)
-    held = {h for h in held if blobs[h]}
-    table = needles(blobs)
+def received(vdir: Path, control: Path, pieces: dict[str, bytes], held: set[str]) -> dict:
+    """Every file under ``vdir`` (what the verifier received) and the prover's ``control`` file, scanned for ``pieces``
+    (`needles`): each file's size and the pieces found in it; the control is to hold every piece in ``held``."""
+    table = needles(pieces)
     files = {}
     for f in sorted(vdir.iterdir()):
         files[f.name] = {"bytes": f.stat().st_size, "found": find(f.read_bytes(), table)}
     ctl = find(control.read_bytes(), table)
-    return {"needles": len(table), "blobs": len(blobs), "public_pieces": left_out, "files": files,
+    return {"needles": len(table), "blobs": len(pieces), "files": files,
             "verifier_bytes": sum(x["bytes"] for x in files.values()),
             "verifier_found": sorted({b for x in files.values() for b in x["found"]}),
-            "control": {"file": control.name, "bytes": control.stat().st_size, "blobs_found": len(ctl), "of": len(blobs),
+            "control": {"file": control.name, "bytes": control.stat().st_size, "blobs_found": len(ctl), "of": len(pieces),
                         "holds_all": held <= set(ctl), "missing": sorted(held - set(ctl))}}
+
+
+def scan(vdir: Path, control: Path, blobs: dict[str, bytes], held: set[str], public: bytes) -> dict:
+    """What the verifier received (`received`) scanned for ``blobs``, each cut whole by the zero-knowledge drivers' one
+    cutter less the pieces the public circuit ``public`` holds (`leak_scan.public_pieces`, listed as ``public_pieces``),
+    and the found pieces judged by their one rule (`leak_scan.scan`: ``leaked``, ``structured``, ``placed``). A blob
+    shorter than a piece is refused (`leak_scan.cut`). ``public`` is the staged circuit, which the stager writes from the
+    Definition before any instance, so what it holds the verifier has whatever the witness."""
+    pieces, held, left_out = LS.public_pieces(sys.modules[__name__], blobs, held, public)
+    got = {**received(vdir, control, pieces, held), "public_pieces": left_out}
+    return {**got, **LS.scan(got, pieces, vdir)}
 
 
 # --- cost points --------------------------------------------------------------------------------------------------------------
@@ -504,19 +506,19 @@ def main() -> int:
             held = set(blobs)
             if name == "tampered":
                 blobs[f"registered block {summary['tampered_block']}"] = store.blocks[summary["tampered_block"]]
-            res["received"] = received(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held,
-                                       (m["dir"] / "circuit.txt").read_bytes())
+            res["received"] = scan(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held,
+                                   (m["dir"] / "circuit.txt").read_bytes())
             summary[name].update(res)
             want = name == "honest"
+            got = res["received"]
             good = (res["accepted"] is want and res["audit"]["accepted"] is True and all(res["verdicts"].values())
-                    and not res["received"]["verifier_found"] and res["received"]["control"]["holds_all"]
-                    and (want or res["failure"] == "codec"))
+                    and not got["leaked"] and got["control"]["holds_all"] and (want or res["failure"] == "codec"))
             ok &= good
             log(f"round {name}: window {'accepted' if res['accepted'] else 'rejected (' + str(res['failure']) + ')'}, proofs "
-                f"{res['verdicts']}, failures {res['failures']}, verifier received {res['received']['verifier_bytes']} bytes in "
-                f"{len(res['received']['files'])} files, block pieces found there: {res['received']['verifier_found'] or 'none'}, "
-                f"control found {res['received']['control']['blobs_found']}/{len(blobs)} (holds all it should: "
-                f"{res['received']['control']['holds_all']}); {'as expected' if good else 'UNEXPECTED'}")
+                f"{res['verdicts']}, failures {res['failures']}, verifier received {got['verifier_bytes']} bytes in "
+                f"{len(got['files'])} files, block pieces leaked there: {got['leaked'] or 'none'} (structured: "
+                f"{got['structured'] or 'none'}), control found {got['control']['blobs_found']}/{got['blobs']} pieces (holds "
+                f"all it should: {got['control']['holds_all']}); {'as expected' if good else 'UNEXPECTED'}")
             (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
 
     if a.points:
