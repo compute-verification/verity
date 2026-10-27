@@ -387,6 +387,27 @@ def test_a_revert_and_a_pure_move_are_exempt(linted):
     assert _verdicts(G.gate("main", "next")) == [("#4", "exempt")]
 
 
+def test_once_main_moves_a_passed_change_is_not_judged_again_and_a_failed_one_is(repo, monkeypatch):
+    """Drive's sync after a landing gates `next` on a new `main`: keyed by BASE, every verdict missed and the first sync's gate run
+    went past drive's 600 s (27 Oct, #4927). Only a failed change's exemptions read BASE, so only it is judged again."""
+    base = repo.git("rev-parse", "main")
+    repo.git("checkout", "-q", "-b", "ok", base)
+    ok = repo.commit("retires A", {"integrations/vllm/verity_vllm/a.py": "A = 2\n", P01: _allowlist(_entry("verity_vllm/b.py", "B"))})
+    repo.git("checkout", "-q", "-b", "bad", base)
+    bad = repo.commit("grows P01", {"integrations/vllm/verity_vllm/c.py": "C = 1\n",
+                                    P01: _allowlist(_entry("verity_vllm/a.py", "A"), _entry("verity_vllm/b.py", "B"),
+                                                    _entry("verity_vllm/c.py", "C"))})
+    judged, judge = [], G.judge
+    monkeypatch.setattr(G, "judge", lambda c, b: (judged.append(c.hi), judge(c, b))[1])
+    first = [G.gate("main", t) for t in ("ok", "bad")]
+    repo.git("checkout", "-q", "main")
+    repo.commit("main moves on", {"integrations/vllm/verity_vllm/d.py": "D = 1\n"})
+    again = [G.gate("main", t) for t in ("ok", "bad")]
+    assert judged == [ok, bad, bad]
+    assert [[(c["commit"], c["verdict"], c["why"]) for c in d["changes"]] for d in again] == \
+           [[(c["commit"], c["verdict"], c["why"]) for c in d["changes"]] for d in first]
+
+
 def test_a_worktree_git_wont_remove_decides_no_verdict_and_goes_by_hand(linted, monkeypatch):
     """26 Oct on drive's pod: `git worktree remove --force` failed ("Directory not empty"), the gate exited 2, and the sync left
     the PR out of `next`."""

@@ -39,8 +39,9 @@ at the sync, its merge onto `next`, each member below judged again) as it admits
 sync onto `next` leaves the PR out).  The lints run on the Python that runs it, the ruff lint too when that Python's ruff is
 the base's pin, else on one ``uv run --with`` gives the pin.  A sync gates each PR on its merge onto `next`, which holds every
 PR below it, so each change's verdict is kept under ``$RATCHET_GATE_CACHE`` (default ``~/.cache/verity/ratchet-gate``; empty:
-none), keyed by this file's bytes, BASE and the change's commits, which are all it reads: a sync of N PRs judges each once,
-not N times.  An entry that can't be read is judged again, and an error is never kept.  Before marking a branch, run
+none), keyed by this file's bytes and the change's commits, which are all it reads, and BASE too for a verdict that reads it (a
+failed change's exemptions run BASE's move_check): a sync of N PRs judges each change once, not N times, and once `main` moves
+an untouched or passed change is still not judged again.  An entry that can't be read is judged again, and an error is never kept.  Before marking a branch, run
 ``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes, 1 when one fails
 (with the fix), 2 on a usage or git error, or when the base's lints can't run (the ruff lint, with no ``uv``).  ``--json``
 prints `KIND`, whose ``failures`` name each failing change's top ``commit``.
@@ -510,7 +511,11 @@ def judge(c: Change, base: str) -> None:
 JUDGED = ("verdict", "why", "before", "after", "touched", "lints", "fix", "noqa_added", "noqa_removed", "pooled")
 
 
-def cache_path(c: Change, base: str) -> Path | None:
+#: the verdicts `judge` reaches without reading BASE, kept under a key without it; a failed change's exemptions read BASE's move_check
+BASE_FREE = ("untouched", "passed")
+
+
+def cache_path(c: Change, base: str | None) -> Path | None:
     root = os.environ.get("RATCHET_GATE_CACHE")
     if root == "":
         return None
@@ -518,12 +523,12 @@ def cache_path(c: Change, base: str) -> Path | None:
     return root / (hashlib.sha256(json.dumps([SELF, base, c.lo, c.hi, c.commits]).encode()).hexdigest() + ".json")
 
 
-def recall(c: Change, p: Path | None) -> bool:
+def recall(c: Change, p: Path | None, verdicts: tuple[str, ...] = ("untouched", "passed", "exempt", "failed")) -> bool:
     try:
         doc = json.loads(p.read_text()) if p is not None else None
     except (OSError, ValueError):
         return False
-    if not (isinstance(doc, dict) and set(JUDGED) <= doc.keys() and doc["verdict"] in ("untouched", "passed", "exempt", "failed")):
+    if not (isinstance(doc, dict) and set(JUDGED) <= doc.keys() and doc["verdict"] in verdicts):
         return False
     for k in JUDGED:
         setattr(c, k, doc[k])
@@ -546,10 +551,10 @@ def gate(base: str, top: str) -> dict:
     base, top = (git("rev-parse", "--verify", f"{r}^{{commit}}").strip() for r in (base, top))
     cs = changes(base, top)
     for c in cs:
-        p = cache_path(c, base)
-        if not recall(c, p):
+        free, based = cache_path(c, None), cache_path(c, base)
+        if not (recall(c, free, BASE_FREE) or recall(c, based)):
             judge(c, base)
-            keep(c, p)
+            keep(c, free if c.verdict in BASE_FREE else based)
     failed = [c for c in cs if c.verdict == "failed"]
     return {"kind": KIND, "base": base, "top": top, "changes": [c.doc() for c in cs],
             "failures": [{"commit": c.hi, "pr": c.pr, "why": c.why, "fix": c.fix} for c in failed]}
