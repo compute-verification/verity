@@ -1,4 +1,5 @@
 import Proofs.Flock.Bridge.Deployed
+import Proofs.Flock.Bridge.PortRoots
 import Proofs.Flock.Soundness.Discharge.Hm.Mask
 import Properties.Verity.Game
 
@@ -534,6 +535,58 @@ theorem commitDep_accepts {C : FlockSoundness.Audit.Circuit} {rows : Fin C.N →
     (fun _ => rfl) rfl (hleaves ▸ hlt) (digOf reg.root) (digOf_bytes (root_size hopen)).symm _
     (by simpa [SamplingDeploy.rowBits] using hw) (saltOf o) (saltOf_length (log2ceil_pos hnl) hpath) r.leaf _ hopen
   rwa [hleaves] at ha
+
+theorem find?_map_range {α : Type} {m q : ℕ} {f : ℕ → α} {P : α → Bool} {a : α}
+    (h : ((Array.range m).map f).find? P = some a) (hq : q < m) (hP : P (f q) = true)
+    (hd : ∀ i < q, P (f i) = true → False) : a = f q := by
+  obtain ⟨hPa, i, hi, rfl, hj⟩ := Array.find?_eq_some_iff_getElem.mp h
+  simp only [Array.size_map, Array.size_range] at hi
+  simp only [Array.getElem_map, Array.getElem_range] at hPa hj ⊢
+  rcases Nat.lt_trichotomy i q with hlt | rfl | hgt
+  · exact (hd i hlt hPa).elim
+  · rfl
+  · have := hj q hgt
+    simp [hP] at this
+
+/-- **The port a position's root finds is its row's own**, at a circuit that names each port once and whose roots
+expose no collision (`PortRoots.rootsColl`): the registered port `find?` returns has the row's port's domain and root. -/
+theorem find_port {c : Flock.Circuit} {pub : Flock.Public} {nl q : ℕ} {rt : Claims.Msg} {reg : Registered.Port}
+    (hn : Registered.dupName c = none) (hc : PortRoots.rootsColl c pub nl = none)
+    (hq : (rootsOf c pub nl)[q]? = some rt)
+    (hf : (portsOf c nl (rootsOf c pub nl)).find? (fun p => decide (bs p.root = rt)) = some reg) :
+    q < c.ports.size ∧ reg.leaves = nl ∧ reg.domain = domOf c q ∧ reg.root = bytes rt := by
+  have hqs : q < c.ports.size := by
+    have := (List.getElem?_eq_some_iff.mp hq).1
+    simpa [rootsOf] using this
+  have hrt : (rootsOf c pub nl).getD q [] = rt := by
+    rw [List.getD_eq_getElem?_getD, hq, Option.getD_some]
+  have hd := PortRoots.rootsDistinct_of_fixes hn (PortRoots.fixes_of_none hc)
+  unfold portsOf at hf
+  have he := find?_map_range hf hqs (by simp only [bs_bytes, hrt, decide_eq_true_eq])
+    (fun i hi hP => hd q i hi hqs (by simp only [bs_bytes, decide_eq_true_eq] at hP; rw [hP, hrt]))
+  subst he
+  exact ⟨hqs, rfl, rfl, show bytes ((rootsOf c pub nl).getD q []) = bytes rt by rw [hrt]⟩
+
+/-- **An opening `commitDep` accepts at a deployed registration is a spec row-leaf opening at its row's port**: at a
+row/v2 file that names each port once, whose roots expose no collision and with `2 ≤ nl < 2^64` leaves a port, the
+position's row `r` is opened at rank `r.leaf` under port `r.port`'s root `rt`, by the spec's verifier of that port at
+any domain id whose bytes are its name, with the opened bit at the row's place. Every component is a function of the
+position. -/
+theorem opens_at {C : FlockSoundness.Audit.Circuit} {rows : Fin C.N → Option RowAt} {c : Flock.Circuit}
+    {pub : Flock.Public} {nl : ℕ} (hv2 : RowsV2 c) (hnl : 2 ≤ nl) (hlt : nl < 2 ^ 64)
+    (hn : Registered.dupName c = none) (hc : PortRoots.rootsColl c pub nl = none) {o : Opening Bool}
+    (h : (commitDep C rows c nl (rootsOf c pub nl)).Opens sha512Msg (rootsOf c pub nl) o = true) :
+    ∃ r rt, rowOfPos C rows o.pos = some r ∧ (rootsOf c pub nl)[r.port]? = some rt ∧
+      ∀ id : Hash.Digest, id.bytes = bs (domOf c r.port) → (placeOf C rows o.pos).1 < 2 ^ 64 →
+        ∃ ro : Hash.RowLeaf.Opening,
+          Hash.RowLeaf.accepts Verity.sha512 Verity.sha512 ⟨⟨id, nl, fun r => r⟩, key512, .v2⟩ (digOf (bytes rt))
+            r.leaf ro ∧ ro.row[((placeOf C rows o.pos).2 : ℕ)]? = some o.val := by
+  obtain ⟨r, rt, reg, hr, hrt, hf, ha⟩ := commitDep_accepts hv2 hnl hlt h
+  obtain ⟨-, hleaves, hdom, hroot⟩ := find_port hn hc hrt hf
+  refine ⟨r, rt, hr, hrt, fun id hid hw => ⟨⟨SamplingDeploy.rowBits (placeOf C rows) (bitsOf (log2ceil nl)) o,
+    saltOf o, (Registered.sibs (bytes (pathOf (log2ceil nl) o)) (log2ceil nl)).map digOf⟩, ?_, rowBits_place _ _ _⟩⟩
+  have := ha id (by rw [hdom]; exact hid) hw
+  rwa [verifierOf, hleaves, hroot] at this
 
 /-- **A value the witness opens has an opening that passes**: at its position, of its value. -/
 theorem val_opens {H : Claims.Msg → Claims.Msg} {Cm : Commitment Bool} {s : Claims.Sampling.Stmt}
