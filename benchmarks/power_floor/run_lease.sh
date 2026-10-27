@@ -130,6 +130,19 @@ case ${PF_PLAN:-full} in
     cap
     PF_CLOCKS=${PF_CAP_CLOCKS:-2430 2250 2100} sweep
     ;;
+  entropy)  # energy a MAC against the operands' statistics (energy.cu's modes 0-8), at the default clocks, then locked
+    arm && sudo -n nvidia-smi -i "$UUID" -rgc >>"$OUT/lgc.txt" 2>&1 || echo "sudo -n nvidia-smi -rgc refused" >>"$OUT/lgc.txt"
+    one "cap-sleep" sleep sleep 0 "$S" "$W"
+    for m in 0 3 7 8 5 4 6 1 2; do one "cap-$MMA-$m" "$MMA" "$MMA" $m "$S" "$W"; done
+    for m in 0 5 6 1; do one "cap-dp4a-$m" dp4a dp4a $m "$S" "$W"; done
+    for m in 0 3 5 6 1; do one "cap-gemm-$m" gemm $m "$S" "$W"; done
+    for f in ${PF_CLOCKS:-}; do
+      arm && sudo -n nvidia-smi -i "$UUID" -lgc "$f,$f" >>"$OUT/lgc.txt" 2>&1 || continue
+      one "lgc$f-sleep" sleep sleep 0 10 4
+      for m in 0 3 7 8 5 4 6 1; do one "lgc$f-$MMA-$m" "$MMA" "$MMA" $m 10 4; done
+      for m in 0 6 1; do one "lgc$f-gemm-$m" gemm $m 10 4; done
+    done
+    ;;
   gemm)  # the honest GEMMs alone, at the default clocks and then locked at PF_CLOCKS
     arm && sudo -n nvidia-smi -i "$UUID" -rgc >>"$OUT/lgc.txt" 2>&1 || echo "sudo -n nvidia-smi -rgc refused" >>"$OUT/lgc.txt"
     one "cap-sleep" sleep sleep 0 "$S" "$W"

@@ -11,8 +11,11 @@
 // chains of IADD3, LOP3 and SHF), sha (one SHA-512 compression a thread an iteration), lds (8 LDS.128 a warp an
 // iteration, conflict free), ldg (a 4 GiB buffer streamed with LDG.128 through L2), sleep (nanosleep: the SMs resident
 // and idle), none. MODE: 0 zero operands, 1 random operands held fixed, 2 random operands alternating with their
-// complement from one instruction to the next (the most toggling a fixed program gets). SM_FRACTION < 1 launches that
-// share of one block an SM (the rate at a partial load, for linearity).
+// complement from one instruction to the next (the most toggling a fixed program gets). Modes 3-8 shape the s8 operands
+// (imma, wgmma, dp4a, the shared-memory tiles and the GEMMs; the other roles take them as mode 1), each byte: 3 sparse
+// (random in 1 byte of 8, else 0), 4 four-bit (uniform in [-8, 7]), 5 two-bit ([-2, 1]), 6 weight-like (the sum of four
+// random s8 over 4: about N(0, 37), absmax-quantized weights' shape), 7 the constant 1, 8 ternary ({-1, 0, 1}).
+// SM_FRACTION < 1 launches that share of one block an SM (the rate at a partial load, for linearity).
 //
 // Prints one JSON line: the window's energy (NVML total-energy counter, mJ), its wall time, the operations each role
 // did, NVML's SM clock, power, temperature and clock-event reasons sampled every 50 ms, and the SM clock the blocks ran
@@ -68,6 +71,7 @@ struct Args {
   int iters;
   uint32_t zmask;  // 0 in mode 0, else ~0: operands are (random & zmask), so the compiler never sees a constant
   uint32_t tmask;  // ~0 in mode 2, else 0: the second operand set is the first ^ tmask
+  int shape;       // the mode in modes 3-8 (shape_s8), else 0
   u64* counts;     // [2]: warp-iterations done by role A's warps and role B's
   long long* times;  // a block: clock64 and %globaltimer at the start and the end
   uint32_t* smid;
@@ -75,12 +79,33 @@ struct Args {
   uint32_t* sink;
 };
 
-__device__ __forceinline__ uint32_t mix32(uint32_t x) {
+__host__ __device__ __forceinline__ uint32_t mix32(uint32_t x) {
   x ^= x >> 16;
   x *= 0x7FEB352Du;
   x ^= x >> 15;
   x *= 0x846CA68Bu;
   return x ^ (x >> 16);
+}
+// Four random bytes w, reshaped byte by byte to mode m's distribution (modes 3-8; any other m returns w).
+__host__ __device__ inline uint32_t shape_s8(uint32_t w, int m) {
+  if (m < 3 || m > 8) return w;
+  const uint32_t h = mix32(w ^ 0xA5A5A5A5u), g1 = mix32(w + 1), g2 = mix32(w + 2), g3 = mix32(w + 3);
+  uint32_t out = 0;
+  for (int i = 0; i < 4; i++) {
+    const int sh = 8 * i;
+    const uint32_t b = (w >> sh) & 0xFF;
+    int v;
+    switch (m) {
+      case 3: v = ((h >> sh) & 7) == 0 ? (int)(int8_t)b : 0; break;
+      case 4: v = (int)((b & 0xF) ^ 8) - 8; break;
+      case 5: v = (int)((b & 3) ^ 2) - 2; break;
+      case 6: v = ((int)(int8_t)b + (int8_t)(g1 >> sh) + (int8_t)(g2 >> sh) + (int8_t)(g3 >> sh)) >> 2; break;
+      case 7: v = 1; break;
+      default: v = (int)(b % 3) - 1; break;
+    }
+    out |= (uint32_t)(v & 0xFF) << sh;
+  }
+  return out;
 }
 __device__ __forceinline__ unsigned long long gtime() {
   unsigned long long t;
@@ -104,12 +129,12 @@ __device__ Ret run_imma(const Args& a, int iters, const volatile int* done, uint
   uint32_t a0[4], a1[4], b0[2], b1[2];
 #pragma unroll
   for (int i = 0; i < 4; i++) {
-    a0[i] = mix32(seed + i) & a.zmask;
+    a0[i] = shape_s8(mix32(seed + i), a.shape) & a.zmask;
     a1[i] = a0[i] ^ a.tmask;
   }
 #pragma unroll
   for (int i = 0; i < 2; i++) {
-    b0[i] = mix32(seed + 7 + i) & a.zmask;
+    b0[i] = shape_s8(mix32(seed + 7 + i), a.shape) & a.zmask;
     b1[i] = b0[i] ^ a.tmask;
   }
   int d[8][4] = {};
@@ -133,10 +158,10 @@ __device__ Ret run_dp4a(const Args& a, int iters, const volatile int* done, uint
   uint32_t x[2][4], y[2];
 #pragma unroll
   for (int i = 0; i < 4; i++) {
-    x[0][i] = mix32(seed + i) & a.zmask;
+    x[0][i] = shape_s8(mix32(seed + i), a.shape) & a.zmask;
     x[1][i] = x[0][i] ^ a.tmask;
   }
-  y[0] = mix32(seed + 9) & a.zmask;
+  y[0] = shape_s8(mix32(seed + 9), a.shape) & a.zmask;
   y[1] = y[0] ^ a.tmask;
   int c[16] = {};
   int it = 0;
@@ -364,10 +389,12 @@ __global__ void __launch_bounds__(TPB, 1) kern(Args a) {
 #endif
   __shared__ int done, finished;
   uint32_t* w = reinterpret_cast<uint32_t*>(smem);
-  for (int i = threadIdx.x; i < SMEM_WORDS; i += TPB) w[i] = mix32(i * 0x9E3779B9u + 0x1234567u) & a.zmask;
+  for (int i = threadIdx.x; i < SMEM_WORDS; i += TPB)
+    w[i] = shape_s8(mix32(i * 0x9E3779B9u + 0x1234567u), a.shape) & a.zmask;
 #ifdef PF_SM90
   for (int i = threadIdx.x; i < WG_TILE / 4; i += TPB)
-    w[(LDS_BYTES + WG_TILE) / 4 + i] = (mix32((LDS_BYTES / 4 + i) * 0x9E3779B9u + 0x1234567u) & a.zmask) ^ a.tmask;
+    w[(LDS_BYTES + WG_TILE) / 4 + i] =
+        (shape_s8(mix32((LDS_BYTES / 4 + i) * 0x9E3779B9u + 0x1234567u), a.shape) & a.zmask) ^ a.tmask;
   fence_async_smem();
 #endif
   if (threadIdx.x == 0) {
@@ -562,11 +589,10 @@ struct Gemm {
     CK(cudaMalloc(&x, xs));
     CK(cudaMalloc(&w, wsb));
     CK(cudaMalloc(&c, cs * 4));
-    std::vector<int8_t> h(std::max(xs, wsb));
-    uint32_t r = 0x12345u;
-    for (auto& v : h) {
-      r = r * 1664525u + 1013904223u;
-      v = mode == 0 ? 0 : (int8_t)(r >> 24);
+    std::vector<int8_t> h(std::max(xs, wsb) + 3);
+    for (size_t i = 0; i < h.size(); i += 4) {
+      const uint32_t v = mode == 0 ? 0u : shape_s8(mix32((uint32_t)(i >> 2) * 0x9E3779B9u ^ (uint32_t)(i >> 34)), mode);
+      memcpy(&h[i], &v, std::min<size_t>(4, h.size() - i));
     }
     CK(cudaMemcpy(x, h.data(), xs, cudaMemcpyHostToDevice));
     CK(cudaMemcpy(w, h.data(), wsb, cudaMemcpyHostToDevice));
@@ -659,6 +685,10 @@ int main(int argc, char** argv) {
     warm = argc > 5 ? atof(argv[5]) : 5.0;
     frac = argc > 6 ? atof(argv[6]) : 1.0;
   }
+  if (mode < 0 || mode > 8) {
+    fprintf(stderr, "MODE is 0-8\n");
+    return 2;
+  }
   CK(cudaSetDevice(0));
   cudaDeviceProp prop;
   CK(cudaGetDeviceProperties(&prop, 0));
@@ -741,6 +771,7 @@ int main(int argc, char** argv) {
   Args a{};
   a.zmask = mode == 0 ? 0u : ~0u;
   a.tmask = mode == 2 ? ~0u : 0u;
+  a.shape = mode >= 3 ? mode : 0;
   CK(cudaMalloc(&a.counts, 2 * sizeof(u64)));
   CK(cudaMalloc(&a.times, 4 * sizeof(long long) * blocks));
   CK(cudaMalloc(&a.smid, sizeof(uint32_t) * blocks));
