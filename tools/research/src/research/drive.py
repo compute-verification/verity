@@ -1946,7 +1946,8 @@ class Driver:
                 shutil.copyfile(src, self.repo / dst)
                 files.append(dst)
             _git(self.repo, "add", "--", *files)
-            ran = (((drive.get("lean") or {}).get(m.commit) or {}).get("carried") or {}).get("from")
+            rec = (drive.get("lean") or {}).get(m.commit) or {}
+            ran = (rec.get("carried") or {}).get("from") if rec.get("run") == rid else None
             _git(self.repo, "commit", "-q", "--allow-empty", "-m",
                  f"Lock records regenerated for {prs}\n\nChecked: {rid} (the Lean check of {(ran or m.commit)[:12]}, passed by "
                  f"regenerating them)\nRegenerated: {', '.join(files)}\n", env=IDENTITY)
@@ -2931,10 +2932,11 @@ class Driver:
     # -- the review landing (`land = "review"`, the module's "Review landing").  `drive["lean"]`: {the commit of `next` a Lean
     #    check ran on: {"ids" ([] with "launch", `detach`'s record, while its train.sh runs detached: `_resolve`), "at",
     #    "members": [[PR, head], ...] up to it, "tree", "stacked" or "hand" and "by" (`hand_lean`) when it is either,
-    #    "state": None while it runs, else "passed" (with
-    #    "run", the id that passed) or "failed" (with "why")}}, each dropped once its commit leaves `next`.  `drive["postland"]`
-    #    also keeps "verified_as" ({"steps", "no_cache"} of the run that verified `verified`, or ci's `research queue baseline`)
-    #    and "bisect" (a failed after-landing run's implicated landings, being bisected: `_bisect_step`)
+    #    "rekeyed_from" (`_rekey_lean`) or "carried" (`_carry`: {"from": the commit it ran on, "files" that commit's tree and
+    #    this one's differ in, "ok" once `_carried_ok` judged it}) when it moved there, "state": None while it runs, else
+    #    "passed" (with "run", the id that passed) or "failed" (with "why")}}, each dropped once its commit leaves `next`.
+    #    `drive["postland"]` also keeps "verified_as" ({"steps", "no_cache"} of the run that verified `verified`, or ci's
+    #    `research queue baseline`) and "bisect" (a failed after-landing run's implicated landings, being bisected: `_bisect_step`)
 
     def _review(self, state: dict, drive: dict, dry_run: bool) -> str:
         """One tick of the review landing: sync `next` (held on its base while a Lean check of it runs, drive's or a hand one:
@@ -3379,12 +3381,13 @@ class Driver:
             q.log(f"research queue drive: pushing `{q.branch}` rebuilt on the lock commit {lock[:12]} was refused "
                   f"({p.stderr.strip()[-200:]}); the next sync rebuilds it")
             return
-        moved = []
-        for c, new in images.items():
+        moved, above = [], [[x.pr, x.head] for x in chain[t + 1:]]
+        for n, (c, new) in enumerate(images.items(), 1):
             if (rec := lean.pop(c, None)) is None or rec.get("state") == "failed":
                 continue
             ran = (rec.get("carried") or {}).get("from", c)
-            lean[new] = {**rec, "tree": self._tree(new), "carried": {"from": ran, "files": sorted(changed(self.repo, ran, new))}}
+            lean[new] = {**rec, "members": above[:n], "tree": self._tree(new),
+                         "carried": {"from": ran, "files": sorted(changed(self.repo, ran, new))}}
             moved.append(f"{c[:12]} to {new[:12]}")
         q.log(f"research queue drive: `{q.branch}` rebuilt on the lock commit {lock[:12]}: {len(images)} member(s) above it "
               "kept, each with its merge's tree and the records no merge above changed"
