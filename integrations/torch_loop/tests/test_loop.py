@@ -216,13 +216,13 @@ def test_registered_weights_leave_half_the_inputs_free_and_open_the_pinned_root(
     files = IF.registered_reads(doc, mine, pin, registered=REG)
     assert len(files) == len(mine.members) == 128
     for k, m in enumerate(mine.members):
-        assert opened_reads(c, k, CS.registered_header(written, k), files[m.key]) is None
+        assert opened_reads(c, k, written["members"][k]["registered"], files[m.key]) is None
     m = mine.members[-1]
     layer_of, n0 = divmod(m.base % 256, 128)
     assert files[m.key]["ports"]["wrow"]["reads"] == [128 * layer_of + n0 + i for i in range(8)]
     other = {**files[m.key], "ports": {**files[m.key]["ports"], "wrow": {**files[m.key]["ports"]["wrow"],
                                                                          "reads": [0] * 8}}}
-    assert "another position" in opened_reads(c, len(mine.members) - 1, CS.registered_header(written, len(mine.members) - 1), other)
+    assert "another position" in opened_reads(c, len(mine.members) - 1, written["members"][-1]["registered"], other)
 
 
 def test_other_weights_under_the_registered_salts_open_no_pinned_root(tmp_path):
@@ -232,7 +232,7 @@ def test_other_weights_under_the_registered_salts_open_no_pinned_root(tmp_path):
     assert win.mismatches() == {}
     mine, doc = IF.of_records(tmp_path, D.parse_law("subset:2"), IF.resolve)
     files = IF.registered_reads(doc, mine, L.held_pin(L.pin(L.Model(), WEIGHTS)), registered=REG)
-    why = [opened_reads(c, k, CS.registered_header(written, k), files[m.key]) for k, m in enumerate(mine.members)]
+    why = [opened_reads(c, k, written["members"][k]["registered"], files[m.key]) for k, m in enumerate(mine.members)]
     assert all(w is not None and "does not open" in w for w in why)
 
 
@@ -241,7 +241,7 @@ def test_a_tampering_loop_with_registered_weights_is_still_its_definitions_refus
     assert len(win.mismatches()[descriptor_id(L.template(L.H))]) == 1024
     mine, doc = IF.of_records(tmp_path, D.parse_law("subset:2"), IF.resolve)
     files = IF.registered_reads(doc, mine, L.held_pin(L.pin(L.Model(), WEIGHTS)), registered=REG)
-    assert opened_reads(c, 0, CS.registered_header(written, 0), files[mine.members[0].key]) is None
+    assert opened_reads(c, 0, written["members"][0]["registered"], files[mine.members[0].key]) is None
 
 
 def test_its_activations_are_the_units_rows_committed_under_the_run_and_take_nothing_from_the_free_inputs():
@@ -325,7 +325,7 @@ def tie_reads(loop: L.TorchLoop, win: IF.Window, c: CS.Committed, tmp_path: Path
     written = json.loads((tmp_path / "window.json").read_text())
     files = IF.registered_reads(doc, mine, {v: r.entry() for v, r in values.items()}, registered=REG)
     assert set(files) == {m.key for m in win.window.members}
-    got = {k: opened_reads(c, k, CS.registered_header(written, k), files[m.key], values) for k, m in enumerate(mine.members)}
+    got = {k: opened_reads(c, k, written["members"][k]["registered"], files[m.key], values) for k, m in enumerate(mine.members)}
     return {k: why for k, why in got.items() if why is not None}
 
 
