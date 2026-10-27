@@ -878,7 +878,7 @@ def decode_program(desc: dict, registry: Registry) -> DecodedProgram:
         if fid in admitted:
             return admitted[fid]
         d = ddefs[fid]
-        reg = registry.defs.get(d["id"]) if d["form"] == "composite" else None
+        reg = registry[d["id"]] if d["form"] == "composite" and d["id"] in registry else None
         if not isinstance(reg, CompositeDefinition):
             admitted[fid] = get(fid)
             return admitted[fid]

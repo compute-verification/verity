@@ -229,9 +229,20 @@ def test_decode_refuses_a_record_its_registered_composite_refuses():
     assert "TokenFeed_v1{NP=2,FIRST=true}" in text
     assert program_digest(decode_program(json.loads(text), REGISTRY)) == program_digest(json.loads(text))
     lookalike = json.loads(text.replace("FIRST=true", "FIRST=1").replace('"FIRST":true', '"FIRST":1'))
-    with pytest.raises(ValueError, match=r"^definition 'TokenFeed_v1\{NP=2,FIRST=1\}': TokenFeed_v1 refuses this binding: NP "
-                                         r"must be at least 1 and FIRST a bool \(got NP=2, FIRST=1\)$"):
-        decode_program(lookalike, REGISTRY)
+
+    class Lookup:
+        """A registry as the decoder reads one, through `in` and `[]` alone (benchmarks/one_stage/replay.py's stand-ins)."""
+
+        def __contains__(self, fid: str) -> bool:
+            return fid in REGISTRY
+
+        def __getitem__(self, fid: str):
+            return REGISTRY[fid]
+
+    for registry in (REGISTRY, Lookup()):
+        with pytest.raises(ValueError, match=r"^definition 'TokenFeed_v1\{NP=2,FIRST=1\}': TokenFeed_v1 refuses this binding: "
+                                             r"NP must be at least 1 and FIRST a bool \(got NP=2, FIRST=1\)$"):
+            decode_program(lookalike, registry)
 
 
 def test_unbound_composite_as_a_static_value_is_not_encodable():
