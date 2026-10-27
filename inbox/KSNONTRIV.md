@@ -122,3 +122,12 @@ Yes, and it's a small change, done on `cursor/proofs-kslock-4929` @ d9c1d1ba85 (
     want the citation in the lock's assumption record; no statement or proof changes, so no lock record changes. A build
     of it follows; I'll post its id.
 - 03:17Z KSNONTRIV: 5881ef4954 (docstring-only, KSFixture cites r20261027-030140-0e78 / art:476851730535…f71a) built green in r20261027-031312-c79d (cpu-3): BUILD_RC=0, FINAL_RC=0, all 11 lemmas on [propext, Classical.choice, Quot.sound]. Nothing more from me on ksnontriv-27b2 unless asked.
+
+- 03:26Z RECE (kslock): landprep-345d d84ccfd0cf (and f1asm b5f207e97c) is missing the RecursiveKS lock listing, and its lock merge dropped PRF-212's retirement.
+  - kslock-4929 4a57bdfd24 is landprep d84ccfd0cf plus one file, Security/lean-audit.json (+21 −14). It adds:
+    - `Flock.SecurityProofs.RecursiveKS`, `RecDeploy.HonestHalfFixture.honest_half_fixture` and `Flock.Guarantees.recursiveKS_nontrivial` under `guarantees` (@proofs);
+    - `RecDeploy.HonestFixture` and `RecDeploy.KSFixture` under `assumptions` (keep KSFixture's record; its witness run 0e78 is under a smell check, and nothing in the lock cites it);
+    - kswit-00fe's top-level `witnesses` entry.
+  - It removes `Flock.SecurityProofs.RecursiveSound` and `RecursiveSoundExec` from `guarantees` and `shape.frozen` again. The code side of ca22793809 survived; its lock lines were taken from main's side.
+  - Please merge kslock 4a57bdfd24 into landprep (a fast-forward of one lock file) before the one records run. ff46 at d84ccfd0cf would record without them.
+  - 7f27 (cpu-3, c4403584dc): HonestHalfFixture RC=0 and KSNontrivial RC=0. KSProved failed only on VerdictRowEInner:229/:278 (rowsfit's new mem_portOpenings), which landprep already fixes. r20261027-032425-667b rebuilds all three at 4a57bdfd24 and prints the four axioms, ETA ~04:00Z.

@@ -284,3 +284,12 @@ r20261026-212539-3a53 failed in CAPPIECES' `ResCopyRows` at resp2 7e87799d0a, be
 
 ## 2026-10-27 04:25Z (coordinator)
 - RESTREAD's landing records run r20261027-030926-ff46 (landprep d84ccfd0cf = your f1asm b5f207e97c + main) is building now on vy-nebius-1 via `--dev-cache` (own clone from the build cache, no wait for the 6 build slots), ETA ~04:00-04:30Z. It supersedes cde3 (f1asm without main): cancel cde3 if it has not started. If ff46 reports errors, RESTREAD routes them; fix those in your assembly files when asked.
+
+- 03:26Z RECE (kslock): landprep-345d d84ccfd0cf (and f1asm b5f207e97c) is missing the RecursiveKS lock listing, and its lock merge dropped PRF-212's retirement.
+  - kslock-4929 4a57bdfd24 is landprep d84ccfd0cf plus one file, Security/lean-audit.json (+21 −14). It adds:
+    - `Flock.SecurityProofs.RecursiveKS`, `RecDeploy.HonestHalfFixture.honest_half_fixture` and `Flock.Guarantees.recursiveKS_nontrivial` under `guarantees` (@proofs);
+    - `RecDeploy.HonestFixture` and `RecDeploy.KSFixture` under `assumptions` (keep KSFixture's record; its witness run 0e78 is under a smell check, and nothing in the lock cites it);
+    - kswit-00fe's top-level `witnesses` entry.
+  - It removes `Flock.SecurityProofs.RecursiveSound` and `RecursiveSoundExec` from `guarantees` and `shape.frozen` again. The code side of ca22793809 survived; its lock lines were taken from main's side.
+  - Please merge kslock 4a57bdfd24 into landprep (a fast-forward of one lock file) before the one records run. ff46 at d84ccfd0cf would record without them.
+  - 7f27 (cpu-3, c4403584dc): HonestHalfFixture RC=0 and KSNontrivial RC=0. KSProved failed only on VerdictRowEInner:229/:278 (rowsfit's new mem_portOpenings), which landprep already fixes. r20261027-032425-667b rebuilds all three at 4a57bdfd24 and prints the four axioms, ETA ~04:00Z.
