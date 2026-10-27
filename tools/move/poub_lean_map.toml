@@ -1,0 +1,24 @@
+# The PoUB rename's Lean names: what `tools/move/rename.py --map tools/move/poub_lean_map.toml` renames. The remote
+# bandwidth audit is PoUB (proof of useful bandwidth), and its Lean takes the name: the Lake package (`remote_audit`), its
+# library, modules and namespace (`RemoteAudit`), its executables, and the namespace and modules of its properties and their
+# proofs (`Properties.RemoteAudit`, `Proofs.Properties.RemoteAudit`). Declarations keep their short names, so the locks'
+# records need only the namespace renames `rename.py --moves` prints, for `check.py --update --moved`. The protocol's
+# directory and its Python modules are the layout move's, not this map's.
+
+[words]
+"remote-audit-difftest" = "poub-difftest"
+"remote-audit-verifier" = "poub-verifier"
+"remote-audit-protocol" = "poub-protocol"
+"remote_audit" = "poub"
+"RemoteAudit" = "Poub"
+
+[rewrite]
+# Never rewritten: this map, records of what was (changelogs, the rulings, a test's recorded PR title), the frozen
+# backends, and files whose bytes a digest pins.
+exclude = ["tools/move/poub_lean_map.toml", "archive/**", "tools/research/tests/**", ".agents/skills/friction/SKILL.md",
+           "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "*.patch",
+           "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+']
+strings = []
