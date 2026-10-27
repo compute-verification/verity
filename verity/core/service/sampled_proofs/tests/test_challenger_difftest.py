@@ -996,13 +996,15 @@ def ledger_case(rng: random.Random, name: str) -> Any:
             lines = lg.lines()
             j["ledger"] = lines[:i] + [json.dumps(json.loads(lines[i]))] + lines[i + 1:]
         case "unicode":
-            if rng.random() < 0.5:
-                lines = lg.lines(edit=_body_edit(o, note=rng.choice(["\U0001f600", "\\ud800", "\\udfff"])))
-                j["ledger"] = lines
+            note = rng.choice(["\U0001f600", "\\ud800", "\\udfff", "\u00e9", "\u00e9"])
+            if note.isascii():
+                j["ledger"] = lg.lines(edit=_body_edit(o, note=note))
             else:
-                lines = lg.lines(edit=_body_edit(o, note="\u00e9"))
-                j["ledger"] = lines[:o] + [json.dumps(json.loads(lines[o]), sort_keys=True, separators=(",", ":"),
-                                                      ensure_ascii=False)] + lines[o + 1:]
+                # no entry's signed digest (canonical JSON) holds a string past ASCII, so the note goes into the signed
+                # line's text: the emoji as `ledger_text` escapes it (a surrogate pair), é as itself (not canonical)
+                lines = lg.lines(edit=_body_edit(o, note="?"))
+                text = json.dumps(note, ensure_ascii=note != "\u00e9")
+                j["ledger"] = lines[:o] + [lines[o].replace('"note":"?"', '"note":' + text, 1)] + lines[o + 1:]
         case "torn":
             lines = lg.lines()
             j["ledger"] = lines[:i] + [lines[i][:rng.randrange(1, len(lines[i]))]] + lines[i + 1:]
