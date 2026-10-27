@@ -37,7 +37,7 @@
     {"file": "verity_vllm/observe/capture_v1.py", "kind": "module-name", "symbol": "<module>", "detail": "capture_v1"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "doc-date", "symbol": "dump_normalizer", "detail": "date"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "module-name", "symbol": "<module>", "detail": "m1_capture"},
-    {"file": "verity_vllm/engine/profiles/gen_dense_softcap_patterns.py", "kind": "doc-date", "symbol": "<module>", "detail": "date", "count": 2},
+    {"file": "verity_vllm/observe/fold/profiles/gen_dense_softcap_patterns.py", "kind": "doc-date", "symbol": "<module>", "detail": "date", "count": 2},
     {"file": "verity_vllm/program/frontend/rules/family.py", "kind": "def-name", "symbol": "<module>", "detail": "_serve_v3_binder"},
     {"file": "verity_vllm/program/frontend/rules/vllm_sampling.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
     {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "doc-round", "symbol": "TargetProfile.from_run_profile", "detail": "R1N"},
