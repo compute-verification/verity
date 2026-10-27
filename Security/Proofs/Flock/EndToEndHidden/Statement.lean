@@ -170,8 +170,8 @@ open Classical in
 with `EndToEndDrawn`'s event: for every live prover `τ`,
 $$\Pr[\text{flock-verify accepts} \wedge \text{some drawn unit is wrong}] \le \varepsilon_{ks} + \delta_{link},$$
 with "wrong" `EndToEndHidden`'s (`wrongRegZ`, against the public file's `b ‖ c` at every row, in the committed transcript
-fixed at registration), and `ε_ks`, `δ_link` `EndToEndHidden`'s terms, averaged over the verifier's draw. The bound has no miss
-term, so it holds whatever the verifier's bytes: it needs no A3, and the draw need not be uniform.
+fixed at registration), and `ε_ks`, `δ_link` `EndToEndHidden`'s terms, averaged over the verifier's draw. The bound has
+no miss term, so it holds whatever the verifier's bytes: it needs no A3, and the draw need not be uniform.
 
 Its one named assumption, a hypothesis, is `live-verifier` (`Assumptions.Zk.RecordCustodyZKJ`, with A6
 `uniform/flock-coin-server` for its coins); `ε_ks` and `δ_link` are `EndToEndHidden`'s additive terms, the finders'

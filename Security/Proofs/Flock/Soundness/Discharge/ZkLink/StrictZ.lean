@@ -12,10 +12,13 @@ count is a collision of `H` (`opRZ_conflict_collision`, `opPadsAtZ_conflict_coll
 `op₀Z_conflict_collision`, `SelfClashZ.collision`). A cap's finder counts every pair, accepting or not, so it bounds
 `advRSZ`, which counts only runs accepting every table up to the table's (`forkE_capAcc_le`). So:
 
+* `ksBoundAccZ_le_pr`, `ksPrZ`: a `--zk` table's knowledge bound in a session is at most `ksStrictZ`'s shape with each
+  finder's collision probability in place of its `q²/2^513`, with no hash premise; `ksAvgZC_le_pr`, `ksAvgPrZ`: the
+  compiled audit's knowledge term at those, averaged over the draw (the additive form);
 * `ksBoundAccZ_le_strict`: a `--zk` table's knowledge bound in a session is at most `ksStrictZ`, at finders that
-  satisfy `SHA512CRStrict` at budgets `qF` (rewinding) and `qS` (self-clash);
+  satisfy `SHA512CRStrict` at budgets `qF` (rewinding) and `qS` (self-clash) (`ksPrZ_le_strict`);
 * `ksAvgZC_le_strict`: the compiled audit's knowledge term is at most `ksAvgStrictZ`, which reads only the plan, the
-  law and the budgets;
+  law and the budgets (`ksAvgPrZ_le_strict`);
 * `zk_flock_countC_execOS_ks` and `zk_flock_countC_execOS_strict`: the compiled count curve at the live draw with
   `JointZC` discharged (`jointZC_ksBound`), and with `ε_ks` in closed form under A1;
 * `zk_flock_countC_execOS_cr`: the same with each unit read at its place, so `ε_ks`, `δ_link` and `δ_tree` rest on A1,

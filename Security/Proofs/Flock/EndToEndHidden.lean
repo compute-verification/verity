@@ -5,9 +5,9 @@ import Proofs.Flock.EndToEndHidden.Statement
 
 `Flock.SecurityProofs.EndToEndHidden : Flock.Guarantees.EndToEndHidden` is `zk_session_soundHJ_custody_reg` with its
 miss term in closed form (`Audit.Law.subset_miss`), and its knowledge and link terms the finders' collision
-probabilities (`ksAvgPrZ`, `linkPrZC`). `Flock.SecurityProofs.EndToEndHiddenDrawn : Flock.Guarantees.EndToEndHiddenDrawn`
-is `zk_session_soundHJ_custody_drawn_reg`. Each reads the circuit the descriptor
-unrolls to, which `HmOut.parse` reads from the file (`Flock.Desc.parse_flat`). `EndToEndHiddenFlat` and
+probabilities (`ksAvgPrZ`, `linkPrZC`).
+`Flock.SecurityProofs.EndToEndHiddenDrawn : Flock.Guarantees.EndToEndHiddenDrawn` is
+`zk_session_soundHJ_custody_drawn_reg`. Each reads the circuit the descriptor unrolls to, which `HmOut.parse` reads from the file (`Flock.Desc.parse_flat`). `EndToEndHiddenFlat` and
 `EndToEndHiddenDrawnFlat` are the two at the flat descriptor `Desc.single c` (`Flock.Desc.parse_single`).
 
 `EndToEndHidden_refSetup` shows the hidden-output statements' reference setup `y₀` (theirs and `EndToEndRegistered`'s)
