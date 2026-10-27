@@ -28,6 +28,9 @@ COUNT += 7  # `torch_attention`'s training kernels (CIR-117): the softmax, its b
 COUNT += 13  # `torch_loss`'s training kernels (CIR-117): log_softmax's warp trees, lanes, warps, epilogue and row end, nll_loss
 #              and its backward, and log_softmax's backward with its slots and element
 
+COUNT += 6  # `torch_embedding`'s training kernels (CIR-117): the sort path's step, run, end and whole, the feature kernel's
+#             chunk and whole
+
 
 def test_the_catalog_loads_every_definition_and_no_other():
     registry, errors = catalog.load()

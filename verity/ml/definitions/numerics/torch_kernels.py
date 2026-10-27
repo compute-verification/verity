@@ -1,5 +1,5 @@
 """numpy models of the torch 2.13/2.14 CUDA kernels behind the training Definitions (`registry.torch_attention`,
-`registry.torch_loss`), in each kernel's own order, on rows of f32 (u32) and bf16 (u16) words. Every f32 result's NaN is the
+`registry.torch_loss`, `registry.torch_embedding`), in each kernel's own order, on rows of f32 (u32) and bf16 (u16) words. Every f32 result's NaN is the
 GPU's 0x7FFFFFFF and every rounding to bf16 is F2FP's (`derived_rows.f2fp_bf16`, NaN 0x7FFF); nothing is flushed.
 
 These are written from the kernels' source independently of the gates, so a test that compares them checks the gates. The two
@@ -338,3 +338,51 @@ def chunk(x, w: int) -> np.ndarray:
     x = np.atleast_2d(np.asarray(x))
     R, V = x.shape
     return x.reshape(R, V // SPAN, LANES, 128)[:, :, w, :].reshape(R, -1)
+
+
+NROWS_PER_THREAD = 10
+EMBEDDING_FEATURE_MAX = 3072
+
+
+def embedding_backward_sort(t, g, entries) -> np.ndarray:
+    """``embedding_dense_backward_cuda``'s sort path, deterministic, for the given entries: rows of (M,) ids t and (M, H) bf16
+    gradients g. ``radix_sort_pairs`` of (id, position) is stable, so an entry's segment is its positions in order;
+    ``compute_grad_weight`` sums each NROWS_PER_THREAD of them from +0 and ``sum_and_scatter`` the partials from +0, stored as
+    bf16. Returns (len(entries), H) bf16."""
+    t, g = np.asarray(t, U32).reshape(-1), np.asarray(g, np.uint16)
+    order = np.argsort(t, kind="stable")
+    out = np.zeros((len(entries), g.shape[1]), np.uint16)
+    for k, e in enumerate(entries):
+        seg = order[t[order] == e]
+        tot = np.zeros(g.shape[1], U32)
+        for a in range(0, len(seg), NROWS_PER_THREAD):
+            p = np.zeros(g.shape[1], U32)
+            for i in seg[a:a + NROWS_PER_THREAD]:
+                p = add(p, f32(g[i]))
+            tot = add(tot, p)
+        out[k] = bf16(tot)
+    return out
+
+
+def embedding_backward_feature(t, g, entries) -> np.ndarray:
+    """``embedding_backward_feature_kernel`` for the given entries: per chunk of 32 consecutive positions, the first position
+    holding the entry is the leader, whose f32 gradient adds the chunk's later ones in order; ``grad_weight += bf16(sum)`` is
+    bf16(f32(grad_weight) + f32(bf16(sum))), from +0."""
+    t, g = np.asarray(t, U32).reshape(-1), np.asarray(g, np.uint16)
+    out = np.zeros((len(entries), g.shape[1]), np.uint16)
+    for k, e in enumerate(entries):
+        for a in range(0, len(t), 32):
+            peers = a + np.flatnonzero(t[a:a + 32] == e)
+            if len(peers):
+                s = f32(g[peers[0]])
+                for i in peers[1:]:
+                    s = add(s, f32(g[i]))
+                out[k] = bf16(add(f32(out[k]), f32(bf16(s))))
+    return out
+
+
+def embedding_dense_backward(t, g, entries) -> np.ndarray:
+    """``embedding_dense_backward_cuda`` (``padding_idx`` -1, no ``scale_grad_by_freq``): the feature kernel up to 3072 ids,
+    else the sort path."""
+    f = embedding_backward_feature if np.size(t) <= EMBEDDING_FEATURE_MAX else embedding_backward_sort
+    return f(t, g, entries)
