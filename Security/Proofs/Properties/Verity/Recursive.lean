@@ -7,6 +7,7 @@ import VStarRecursive
 import Properties.Verity.Game
 import Proofs.Properties.Verity.Soundness
 import Proofs.Properties.Verity.Recursive.Compiled
+import Proofs.Properties.Verity.Recursive.Numbers
 
 /-!
 # Sampled proofs' recursive configuration: the component's property and its target (ONE-9p)
