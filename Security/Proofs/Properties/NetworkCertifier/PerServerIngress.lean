@@ -13,14 +13,18 @@ The proof of `Properties.NetworkCertifier.PerServerIngress`.
 **Soundness** (`periodSound_check`). An accepted period answers every window (`windowAnswered_of_accept`: `check`
 accepts only when `firstFinding` finds nothing, so every window's `rowsWindowCheck` is `.ok`), so by `AnswersOfRecord`
 each window's sampled verifier accepted on its coins. On the sampling relation at `δ`, the trace filled in with the
-openings the verifier holds (`NetTiming.TapProof.fill`) keeps every unit outside the faulty set correct, and at the
-faulty set's committed gates held at the filled values the scan's Program returns the trace's value at every gate it
-returns (`NetTiming.SampledAuditProof.valOver_out`): the opened `ok` gates are 1 and each link's ends open to one value,
-and the registered rows are the inputs (`inputOf_rows`), so the window's ingress is in `ScanDeclared`
-(`scanDeclared_of`, `ingressDeclared_of_r`). Where the trace disagrees with an opening it is a collision `B_tap` finds,
-as in `NetTiming.TapProof.sampledLeak_tap` (`ingress_sound`). Each window's prover reads the period's coins through its
-tape (`tapeOf`), which with the window's own coins is the period's coins rearranged (`windowSplit`), so each window's
-term is its sampled verifier's (`window_term_le`), and the union bound over the windows gives `periodErr`.
+openings the verifier holds (`NetTiming.TapProof.fill`) keeps every unit outside the faulty set correct. Hold the faulty
+set's committed gates at the filled values, a checked one at its opening: a checked gate of the faulty set is read only
+inside its unit (`ChecksOwned`), so the rest of the scan's Program runs as with the trace's values (`valOver_agree`)
+and returns the trace's value at every gate it returns (`NetTiming.SampledAuditProof.valOver_out`). A checked gate
+outside the faulty set is its correct unit's, so its trace value is its opening, a constant one included
+(`Prog.Correct`). The opened `ok` gates are 1 and each link's ends open to one value, and the registered rows are the
+inputs (`inputOf_rows`), so the window's ingress is in `ScanDeclared` (`scanDeclared_of`, `ingressDeclared_of_r`).
+Where the trace disagrees with an opening it is a collision `B_tap` finds, as in `NetTiming.TapProof.sampledLeak_tap`
+(`ingress_sound`). Each window's prover and statement read the period's coins through its tape (`tapeOf`), which with
+the window's own coins is the period's coins rearranged (`windowSplit`); at each tape they are fixed and the window's
+coins uniform, so each window's term is its sampled verifier's averaged over the tape (`tape_term_le`,
+`window_term_le`), and the union bound over the windows gives `periodErr`.
 
 **The count** (`perServerIngress_count`). The frames the warden releases on the requests' link are its windows' frame
 streams in order (`linkFrames_eq`: each record row's cells are its frames, `RecordsCells`), each a stream the scan
@@ -65,43 +69,151 @@ theorem inputOf_rows {L S : ℕ} {lay : Layout L S} {k : ℕ} {ins : List (List 
     rw [Option.map_eq_none_iff, List.findIdx?_eq_none_iff] at this
     simpa using this g hg
 
+theorem valOver_absent {C : Prog} {inp : ℕ → Bool} {free : ℕ → Option Bool} {g : ℕ} (h : free g = none)
+    (hx : C.gates[g]? = none) : valOver C inp free g = false := by
+  rw [valOver]
+  simp only [h, hx]
+
+/-- **Holdings that agree off a set closed under reading agree off it**: where `f₁` and `f₂` agree at every gate off
+`N`, and a gate off `N` that `f₁` doesn't hold reads only gates off `N`, `C` run with either has one value at every
+gate off `N`. -/
+theorem valOver_agree {C : Prog} {inp : ℕ → Bool} {f₁ f₂ : ℕ → Option Bool} (N : ℕ → Prop)
+    (hf : ∀ g, ¬ N g → f₁ g = f₂ g)
+    (hN : ∀ g x, C.gates[g]? = some x → ¬ N g → f₁ g = none → ∀ i ∈ x.reads, ¬ N i) :
+    ∀ g, ¬ N g → valOver C inp f₁ g = valOver C inp f₂ g := by
+  intro g
+  induction g using Nat.strong_induction_on with
+  | _ g ih =>
+  intro hg
+  rcases h1 : f₁ g with _ | b
+  · have h2 : f₂ g = none := (hf g hg).symm.trans h1
+    rcases hx : C.gates[g]? with _ | x
+    · rw [valOver_absent h1 hx, valOver_absent h2 hx]
+    rw [valOver_gate h1 hx, valOver_gate h2 hx]
+    by_cases hxi : x = .input
+    · subst hxi
+      rfl
+    congr 1
+    refine val_congr hxi fun i hi => ?_
+    by_cases hlt : i < g
+    · rw [dif_pos hlt, dif_pos hlt, ih i hlt (hN g x hx hg h1 i hi)]
+    · rw [dif_neg hlt, dif_neg hlt]
+  · rw [valOver_held h1, valOver_held ((hf g hg).symm.trans h1)]
+
+theorem runIn_const {C : Prog} {ref : ℕ → Option Bool} {u : List ℕ} {g : ℕ} {b : Bool}
+    (h : C.gates[g]? = some (.const b)) : C.runIn ref u g = some b := by
+  rw [Prog.runIn]
+  simp only [h, Option.bind_some, BGate.val]
+
+theorem slot_of_mem {P : Partition} {r : RU} (h : r ∈ P.rus) : ∃ v, P.rus[v]? = some r := by
+  obtain ⟨v, hv, rfl⟩ := List.getElem_of_mem h
+  exact ⟨v, List.getElem?_eq_getElem hv⟩
+
+theorem fill_of_agree {ref : ℕ → Option Bool} {tv : ℕ → Bool} {g : ℕ} (hag : ∀ b, ref g = some b → b = tv g) :
+    fill ref tv g = some (tv g) := by
+  rcases h : ref g with _ | b
+  · simp [fill, h]
+  · simp [fill, h, hag b h]
+
 /-- **A window whose committed values the openings hold is one the scan accepts**: at a topological program the
-partition partitions, every unit outside `F` correct at the committed values `ref`, `F` faulty at `δ`, and `ref`
-holding the openings `ops` wherever they open a gate (a constant where the opening says so), rows `ins` the openings
-hold at the ingress gates, every `ok` gate opened to 1 and every link's two ends opened to one value are in
-`ScanDeclared`: the advice is the trace's values, and `F`'s committed gates are held at them. -/
+partition partitions, every unit outside `F` correct at the committed values `ref`, `F` faulty at `δ`, the checked
+gates committed and their units' own, and `ref` holding the openings `ops` wherever they open a gate, rows `ins` the
+openings hold at the ingress gates, every `ok` gate opened to 1 and every link's two ends opened to one value are in
+`ScanDeclared`. The advice is the trace's values; `F`'s committed gates are held at them, except a checked one, held at
+its opening. A checked gate of `F` is read only inside its faulty unit, whose gates `C` doesn't compute past its held
+ones (`valOver_agree`), so the rest of `C` runs as with the trace's values (`valOver_out`); and a checked gate outside
+`F` has the trace's value, its opening, a constant one included, since its unit commits it and is correct. -/
 theorem scanDeclared_of {S : ℕ} {C : Prog} {P : Partition} {d : Design} {lay : Layout 1 S} {k : ℕ} {ok : List ℕ}
     {links : List (ℕ × ℕ)} {δ : ℝ} (hT : C.Topological) (hP : P.Partitions C)
     (hin : ∀ t < k, ∀ g ∈ lay.ingress t, C.gates[g]? = some .input) {ref : ℕ → Option Bool} {F : Finset ℕ}
     (ι : ℕ → ℕ → Bool) (hι : ∀ v r, P.rus[v]? = some r → v ∉ F → ∀ u ∈ r, C.Correct (RU.ref C r ref (ι v)) u)
-    (hF : F ∈ faultySets d P δ) (hcomm : ChecksCommitted C ok links) {ops : List (Opening Bool)}
-    (hval : ∀ g, (∃ q ∈ ops, q.pos = g) → (∀ b, C.gates[g]? = some (.const b) → tapVal ops g = b) →
-      traceVal C ref g = tapVal ops g)
+    (hF : F ∈ faultySets d P δ) (hcomm : ChecksCommitted C ok links)
+    (hown : ChecksOwned C P (ok ++ links.map Prod.snd)) {ops : List (Opening Bool)}
+    (hval : ∀ g, (∃ q ∈ ops, q.pos = g) → ref g = some (tapVal ops g))
     {ins : List (List Bool)} (hlen : ins.length = k)
     (hrows : ∀ t < k, ∀ j g, (lay.ingress t)[j]? = some g →
       (∃ q ∈ ops, q.pos = g) ∧ tapVal ops g = (ins.getD t []).getD j false)
-    (hok : ∀ g ∈ ok, (∀ b, C.gates[g]? = some (.const b) → b = true) ∧ (∃ q ∈ ops, q.pos = g) ∧
-      tapVal ops g = true)
-    (hchain : ∀ e ∈ links, (∃ q ∈ ops, q.pos = e.1) ∧ (∃ q ∈ ops, q.pos = e.2) ∧ tapVal ops e.1 = tapVal ops e.2 ∧
-      ∀ b, C.gates[e.2]? = some (.const b) → tapVal ops e.2 = b) :
+    (hok : ∀ g ∈ ok, (∃ q ∈ ops, q.pos = g) ∧ tapVal ops g = true)
+    (hchain : ∀ e ∈ links, (∃ q ∈ ops, q.pos = e.1) ∧ (∃ q ∈ ops, q.pos = e.2) ∧ tapVal ops e.1 = tapVal ops e.2) :
     ins ∈ ScanDeclared C P d lay k ok links δ := by
+  classical
+  have hN := hP.1
+  have hread : ∀ g, (∃ q ∈ ops, q.pos = g) → (∀ b, C.gates[g]? ≠ some (.const b)) →
+      traceVal C ref g = tapVal ops g := fun g hq hnc => by
+    rw [traceVal, read_of_not_const hnc, hval g hq, Option.getD_some]
   have hinp : lay.inputOf k ins (traceVal C ref) = traceVal C ref := funext (inputOf_rows hlen fun t ht j g hg => by
     have hgi : C.gates[g]? = some .input := hin t ht g (List.mem_of_getElem? hg)
-    rw [hval g (hrows t ht j g hg).1 fun b hb => by rw [hgi] at hb; cases hb]
+    rw [hread g (hrows t ht j g hg).1 fun b hb => by rw [hgi] at hb; cases hb]
     exact (hrows t ht j g hg).2)
-  have hout : ∀ g ∈ C.outs,
-      valOver C (lay.inputOf k ins (traceVal C ref)) (heldAdv C P F ref) g = traceVal C ref g := by
+  have hchk : ∀ g ∈ ok ++ links.map Prod.snd, (∃ q ∈ ops, q.pos = g) ∧ g ∈ C.outs := by
     intro g hg
-    rw [hinp]
-    exact valOver_out hT hP ι hι (fun _ => True) (fun _ _ _ _ _ _ => trivial) (fun _ _ _ => rfl) hg trivial
+    rcases List.mem_append.1 hg with hg | hg
+    · exact ⟨(hok g hg).1, hcomm.1 g hg⟩
+    · obtain ⟨e, he, rfl⟩ := List.mem_map.1 hg
+      exact ⟨(hchain e he).2.1, (hcomm.2 e he).1⟩
+  let M : ℕ → Prop := fun g => g ∈ ok ++ links.map Prod.snd ∧ FaultyGate C P F g
+  let free : ℕ → Option Bool := fun g => if M g then some (tapVal ops g) else heldAdv C P F ref g
+  let N : ℕ → Prop := fun g =>
+    M g ∨ ∃ v ∈ F, ∃ r, P.rus[v]? = some r ∧ g ∈ RU.gates r ∧ C.Boundary (RU.gates r) g = false
+  have hint : ∀ g, ¬ FaultyGate C P F g → ∀ v ∈ F, ∀ r, P.rus[v]? = some r → g ∈ RU.gates r → N g := by
+    intro g hfg v hv r hr hg
+    refine Or.inr ⟨v, hv, r, hr, hg, ?_⟩
+    cases hb : C.Boundary (RU.gates r) g
+    · rfl
+    · exact (hfg ⟨v, hv, r, hr, hg, hb⟩).elim
+  have hfree : ∀ g, ¬ N g → free g = heldAdv C P F ref g := fun g hg => if_neg fun hM => hg (Or.inl hM)
+  have hagree : ∀ g, ¬ N g →
+      valOver C (traceVal C ref) free g = valOver C (traceVal C ref) (heldAdv C P F ref) g := by
+    refine valOver_agree N hfree fun g x hx hg hnone i hi hNi => ?_
+    have hfg : ¬ FaultyGate C P F g := fun hfg => by
+      rw [hfree g hg, heldAdv_of hfg] at hnone
+      cases hnone
+    rcases hNi with ⟨hic, v, hv, r, hr, hir, -⟩ | ⟨v, hv, r, hr, hir, hbi⟩
+    · obtain ⟨r', hr', hir', hrd⟩ := hown i hic
+      obtain ⟨v', hv'⟩ := slot_of_mem hr'
+      have hvv : v' = v := slot_unique hN hv' hr hir' hir
+      rw [hvv, hr, Option.some.injEq] at hv'
+      rw [← hv'] at hrd
+      exact hg (hint g hfg v hv r hr (hrd g x hx hi))
+    · by_cases hgr : g ∈ RU.gates r
+      · exact hg (hint g hfg v hv r hr hgr)
+      · rw [boundary_of_read hx hi hgr] at hbi
+        cases hbi
+  have hval_chk : ∀ g ∈ ok ++ links.map Prod.snd, valOver C (traceVal C ref) free g = tapVal ops g := by
+    intro g hg
+    obtain ⟨hq, hout⟩ := hchk g hg
+    by_cases hfg : FaultyGate C P F g
+    · exact valOver_held (show free g = some (tapVal ops g) from if_pos ⟨hg, hfg⟩)
+    have hNg : ¬ N g := by
+      rintro (⟨-, hf⟩ | ⟨v, -, r, -, -, hb⟩)
+      · exact hfg hf
+      · rw [boundary_of_out hout] at hb
+        cases hb
+    rw [hagree g hNg,
+      valOver_out hT hP ι hι (fun _ => True) (fun _ _ _ _ _ _ => trivial) (fun _ _ _ => rfl) hout trivial]
+    by_cases hk : ∃ b, C.gates[g]? = some (.const b)
+    · obtain ⟨b, hb⟩ := hk
+      obtain ⟨r, hr, hgr, -⟩ := hown g hg
+      obtain ⟨v, hv⟩ := slot_of_mem hr
+      have hvF : v ∉ F := fun hvF => hfg ⟨v, hvF, r, hv, hgr, boundary_of_out hout⟩
+      obtain ⟨u, hu, hgu⟩ := List.mem_flatten.1 hgr
+      obtain ⟨b', hb', hrun⟩ := (hι v r hv hvF u hu g hgu).2 (boundary_of_out hout)
+      rw [ref_of_boundary (boundary_of_out hout), hval g hq] at hb'
+      rw [runIn_const hb] at hrun
+      rw [traceVal, read_const hb, Option.getD_some]
+      exact (Option.some.inj hrun).trans (Option.some.inj hb').symm
+    · push Not at hk
+      exact hread g hq hk
   simp only [ScanDeclared, Set.mem_ofPred_eq]
-  refine ⟨hlen, F, hF, traceVal C ref, heldAdv C P F ref, fun g b h => faultyGate_of_heldAdv h, fun e he => ?_,
-    fun g hg => ?_⟩
-  · obtain ⟨h1, h2, heq, hc⟩ := hchain e he
+  refine ⟨hlen, F, hF, traceVal C ref, free, fun g b h => ?_, fun e he => ?_, fun g hg => ?_⟩
+  · by_cases hM : M g
+    · exact hM.2
+    · exact faultyGate_of_heldAdv ((if_neg hM).symm.trans h)
+  · obtain ⟨h1, -, heq⟩ := hchain e he
     have he1 : C.gates[e.1]? = some .input := (hcomm.2 e he).2
-    rw [hout e.2 (hcomm.2 e he).1, hval e.1 h1 (fun b hb => by rw [he1] at hb; cases hb), hval e.2 h2 hc, heq]
-  · obtain ⟨hc, hq, hv⟩ := hok g hg
-    rw [hout g (hcomm.1 g hg), hval g hq (fun b hb => hv.trans (hc b hb).symm), hv]
+    rw [hinp, hval_chk e.2 (List.mem_append_right _ (List.mem_map_of_mem he)),
+      hread e.1 h1 (fun b hb => by rw [he1] at hb; cases hb), heq]
+  · rw [hinp, hval_chk g (List.mem_append_left _ hg), (hok g hg).2]
 
 section Deploy
 
@@ -128,9 +240,10 @@ theorem ingressDeclared_of_r (H : Msg → Msg) (D : Deploy Coin Col T) (s : Sche
       fill (w.val H D.commit st) (tapVal (ops st)) g = some b := fill_ext
   refine ⟨st, P, hs, hP, fun ins hio => ?_⟩
   obtain ⟨hpass, ⟨hlen, hrows⟩, hok, hchain⟩ := hio
+  obtain ⟨hcc, hown⟩ := hcomm st hs
   exact scanDeclared_of hsc.1 hsc.2.1 hfit.2.1 ι
-    (fun v r hr hv u hu => correct_mono (ruRef_mono hext) (hι v r hr hv u hu)) hF (hcomm st hs)
-    (fun g hq hc => traceVal_fill_of hc (hagree st hs hpass g hq)) hlen (fun t ht => (hrows t ht).2) hok hchain
+    (fun v r hr hv u hu => correct_mono (ruRef_mono hext) (hι v r hr hv u hu)) hF hcc (hown P hP)
+    (fun g hq => fill_of_agree (hagree st hs hpass g hq)) hlen (fun t ht => (hrows t ht).2) hok hchain
 
 /-- **The scan's soundness at one window**: at a deployment where `KS` holds and the commitment binds, on a scan
 statement `x`, `Pr[acc ∧ ¬IngressDeclared x] ≤ δ + ε_ks + ε_bind + Pr[B_tap]` over the tape, the run's coins and the
@@ -165,30 +278,84 @@ theorem ingress_sound (H : Msg → Msg) (D : Deploy Coin Col T) (hks : KS H D) (
     _ ≤ _ := Claims.Sampling.Pr_union_le _ _
     _ ≤ _ := add_le_add hks' (Pr_tapColl_le_Btap H D decode ops P x)
 
+theorem stepWith_comap_tape {Ω Ω' : Type} (H : Msg → Msg) (P : Prover Ω) (f : Ω' → Ω) (x : Msg) (ω : Ω')
+    (vnext : List Msg → Claims.OC Claims.Out) :
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Claims.Trace),
+      stepWith H (P.comap f) x ω vnext n hist as t = stepWith H P x (f ω) vnext n hist as t
+  | 0, _, _, _ => rfl
+  | n + 1, hist, as, t => by
+      have e : (P.comap f).next x hist ω = P.next x hist (f ω) := rfl
+      simp only [stepWith, e]
+      split
+      · exact stepWith_comap_tape H P f x ω vnext n _ _ _
+      · rfl
+      · rfl
+
+/-- The run reads a prover on other tapes at the tape it reads. -/
+theorem run_comap_tape {Ω Ω' : Type} (H : Msg → Msg) (P : Prover Ω) (f : Ω' → Ω) (V : Claims.Verifier Coin) (x : Msg)
+    (ω : Ω') (r : Fin (V.k x) → Coin) : run H (P.comap f) V x ω r = run H P V x (f ω) r :=
+  stepWith_comap_tape H P f x ω _ _ _ _ _
+
+/-- **The scan's soundness at one tape**: at a scan statement `m` of `kw` rounds and a prover `P` at its tape `t`,
+`Pr[acc ∧ ¬IngressDeclared m] ≤ windowErr` over the run's `kw` coins: `ingress_sound` on the empty tape, at `P` read at
+`t`. -/
+theorem tape_term_le (H : Msg → Msg) (D : Deploy Coin Col T) (hks : KS H D) (hb : D.commit.Binds H) (s : Schedule)
+    (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
+    (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (ops : Stmt → List (Opening Bool))
+    (m : Msg) (hm : ScanScope D s m) {Ω' : Type} (P : Prover Ω') (t : Ω') {kw : ℕ} (hk : D.V.k m = kw) :
+    Pr (fun r : Fin kw → Coin => (run H P D.V m t fun j => r (Fin.cast hk j)).out = .acc ∧
+        ¬ IngressDeclared H D s ops δ m) ≤
+      windowErr H D δ decode ops m (P.comap fun _ => t) := by
+  subst hk
+  refine le_trans (le_of_eq ?_) (ingress_sound H D hks hb s δ decode hδ hdec ops m hm Unit (P.comap fun _ => t))
+  calc Pr (fun r : Fin (D.V.k m) → Coin => (run H P D.V m t r).out = .acc ∧ ¬ IngressDeclared H D s ops δ m)
+      = Pr (fun a : Unit × (Fin (D.V.k m) → Coin) =>
+          (run H P D.V m t a.2).out = .acc ∧ ¬ IngressDeclared H D s ops δ m) :=
+        (NetTiming.Pr_equiv (Equiv.punitProd _) fun r =>
+          (run H P D.V m t r).out = .acc ∧ ¬ IngressDeclared H D s ops δ m).symm
+    _ = Pr (fun a : Unit × (Fin (D.V.k m) → Coin) =>
+          (run H (P.comap fun _ => t) D.V m a.1 a.2).out = .acc ∧ ¬ IngressDeclared H D s ops δ m) :=
+        Claims.Pr_congr fun a => by rw [run_comap_tape]
+    _ = Pr (fun u : Unit × (Fin (D.V.k m) → Coin) × (E D decode).C m =>
+          (run H (P.comap fun _ => t) D.V m u.1 u.2.1).out = .acc ∧ ¬ IngressDeclared H D s ops δ m) :=
+        (Claims.Pr_drop fun (u : Unit) (r : Fin (D.V.k m) → Coin) =>
+          (run H (P.comap fun _ => t) D.V m u r).out = .acc ∧ ¬ IngressDeclared H D s ops δ m).symm
+
 /-- Window `i`'s coins split off the period's: its prover's tape (`tapeOf`) and its own coins. -/
-def windowSplit (D : Deploy Coin Col T) {n : ℕ} (x : Fin n → Msg) (Ω : Type) (i : Fin n) :
-    PeriodCoins D x Ω ≃ WindowTape D x Ω i × (Fin (D.V.k (x i)) → Coin) :=
-  (Equiv.prodCongr (Equiv.refl Ω) (Equiv.piSplitAt i fun j => Fin (D.V.k (x j)) → Coin)).trans
+def windowSplit (Coin : Type) {n : ℕ} (kw : Fin n → ℕ) (Ω : Type) (i : Fin n) :
+    PeriodCoins Coin kw Ω ≃ WindowTape Coin kw Ω i × (Fin (kw i) → Coin) :=
+  (Equiv.prodCongr (Equiv.refl Ω) (Equiv.piSplitAt i fun j => Fin (kw j) → Coin)).trans
     ((Equiv.prodCongr (Equiv.refl Ω) (Equiv.prodComm _ _)).trans (Equiv.prodAssoc _ _ _).symm)
 
-/-- **Window `i`'s term**: over the period's coins, window `i`'s sampled verifier accepts with its prover at its tape
-while its ingress isn't one the scan accepts with probability at most its `δ + ε_ks + ε_bind + Pr[B_tap]`. -/
+/-- **Window `i`'s term**: over the period's coins, window `i`'s sampled verifier accepts on its statement with its
+prover at its tape while its ingress isn't one the scan accepts with probability at most its error averaged over the
+tape. The period's coins are the window's tape and its own coins (`windowSplit`); at each tape the statement and the
+prover are fixed, and the window's coins are uniform (`tape_term_le`). -/
 theorem window_term_le (H : Msg → Msg) (D : Deploy Coin Col T) (hks : KS H D) (hb : D.commit.Binds H) (s : Schedule)
     (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
     (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (ops : Stmt → List (Opening Bool))
-    {n : ℕ} (x : Fin n → Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : (i : Fin n) → Prover (WindowTape D x Ω i))
-    (i : Fin n) (hx : ScanScope D s (x i)) :
-    Pr (fun ω : PeriodCoins D x Ω => (run H (P i) D.V (x i) (tapeOf ω i) (ω.2 i)).out = .acc ∧
-        ¬ IngressDeclared H D s ops δ (x i)) ≤
-      κ D δ (x i) + Real.sqrt (γ D (x i) * PrB H D.V (P i) (x i)) +
-        (Bext H D.V (E D decode) (WindowTape D x Ω i) (P i) (x i)).Pr H +
-        (Btap H D.V (E D decode) D.commit D.parse ops (WindowTape D x Ω i) (P i) (x i)).Pr H := by
-  have key : ∀ q : WindowTape D x Ω i → (Fin (D.V.k (x i)) → Coin) → Prop,
-      Pr (fun ω : PeriodCoins D x Ω => q (tapeOf ω i) (ω.2 i)) =
-        Pr (fun u : WindowTape D x Ω i × (Fin (D.V.k (x i)) → Coin) × (E D decode).C (x i) => q u.1 u.2.1) :=
-    fun q => (NetTiming.Pr_equiv (windowSplit D x Ω i) fun u => q u.1 u.2).trans (Claims.Pr_drop q).symm
-  exact (key fun t r => (run H (P i) D.V (x i) t r).out = .acc ∧ ¬ IngressDeclared H D s ops δ (x i)).trans_le
-    (ingress_sound H D hks hb s δ decode hδ hdec ops (x i) hx (WindowTape D x Ω i) (P i))
+    {n : ℕ} {kw : Fin n → ℕ} {Ω : Type} [Fintype Ω] (xw : (i : Fin n) → WindowTape Coin kw Ω i → Msg)
+    (hk : ∀ i t, D.V.k (xw i t) = kw i) (hx : ∀ i t, ScanScope D s (xw i t))
+    (P : (i : Fin n) → Prover (WindowTape Coin kw Ω i)) (i : Fin n) :
+    Pr (fun ω : PeriodCoins Coin kw Ω =>
+        (run H (P i) D.V (xw i (tapeOf ω i)) (tapeOf ω i) fun j => ω.2 i (Fin.cast (hk i (tapeOf ω i)) j)).out =
+          .acc ∧ ¬ IngressDeclared H D s ops δ (xw i (tapeOf ω i))) ≤
+      Ex fun t : WindowTape Coin kw Ω i => windowErr H D δ decode ops (xw i t) ((P i).comap fun _ => t) := by
+  have key : ∀ q : WindowTape Coin kw Ω i → (Fin (kw i) → Coin) → Prop,
+      Pr (fun ω : PeriodCoins Coin kw Ω => q (tapeOf ω i) (ω.2 i)) = Ex fun t => Pr fun r => q t r :=
+    fun q => (NetTiming.Pr_equiv (windowSplit Coin kw Ω i) fun u => q u.1 u.2).trans (NetTiming.Pr_prod_eq_Ex _)
+  exact (key fun t r => (run H (P i) D.V (xw i t) t fun j => r (Fin.cast (hk i t) j)).out = .acc ∧
+      ¬ IngressDeclared H D s ops δ (xw i t)).trans_le
+    (Claims.Ex_mono fun t => tape_term_le H D hks hb s δ decode hδ hdec ops (xw i t) (hx i t) (P i) t (hk i t))
+
+/-- **The period's error under a bound at every tape**: where window `i`'s error is at most `ε i` at every tape, the
+period's is at most `Σ_i ε i`. -/
+theorem periodErr_le (H : Msg → Msg) (D : Deploy Coin Col T) (δ : ℝ) (decode : List (ℕ × Col) → List T)
+    (ops : Stmt → List (Opening Bool)) {n : ℕ} {kw : Fin n → ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (xw : (i : Fin n) → WindowTape Coin kw Ω i → Msg) (P : (i : Fin n) → Prover (WindowTape Coin kw Ω i))
+    (ε : Fin n → ℝ) (h : ∀ i t, windowErr H D δ decode ops (xw i t) ((P i).comap fun _ => t) ≤ ε i) :
+    periodErr H D δ decode ops xw P ≤ ∑ i, ε i :=
+  Finset.sum_le_sum fun i _ => (Claims.Ex_mono (h i)).trans (Claims.Ex_const (ε i)).le
 
 end Deploy
 
@@ -250,23 +417,24 @@ window's answer its sampled verifier's acceptance (`AnswersOfRecord`). -/
 theorem periodSound_check (H : Msg → Msg) (D : Deploy Coin Col T) (hks : KS H D) (hb : D.commit.Binds H)
     (s : Schedule) (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
     (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (p : Params) (sd : ByteArray)
-    (sc : Scan) (hform : p.form = .rows s sd sc) (ops : Stmt → List (Opening Bool))
-    (c : NetworkCheck.Period.Commitment) (x : Fin p.windows → Msg) (hx : ∀ i, ScanScope D s (x i)) (Ω : Type)
-    [Fintype Ω] [Nonempty Ω] (P : (i : Fin p.windows) → Prover (WindowTape D x Ω i))
-    (ev : PeriodCoins D x Ω → Evidence) (hrec : AnswersOfRecord H D p s sd c x P ev) :
-    PeriodSound check H D s δ decode ops p c x Ω P ev := by
+    (sc : Scan) (hform : p.form = .rows s sd sc) (ops : Stmt → List (Opening Bool)) {kw : Fin p.windows → ℕ}
+    {Ω : Type} [Fintype Ω] (xw : (i : Fin p.windows) → WindowTape Coin kw Ω i → Msg)
+    (hk : ∀ i t, D.V.k (xw i t) = kw i) (hx : ∀ i t, ScanScope D s (xw i t))
+    (P : (i : Fin p.windows) → Prover (WindowTape Coin kw Ω i))
+    (c : PeriodCoins Coin kw Ω → NetworkCheck.Period.Commitment) (ev : PeriodCoins Coin kw Ω → Evidence)
+    (hrec : AnswersOfRecord H D p s sd xw hk P c ev) :
+    PeriodSound check H D s δ decode ops p xw P c ev := by
   unfold PeriodSound periodErr
-  calc Pr (fun ω : PeriodCoins D x Ω =>
-        PeriodAccepts (check p c (ev ω)) ∧ ∃ i, ¬ IngressDeclared H D s ops δ (x i))
-      ≤ Pr (fun ω : PeriodCoins D x Ω => ∃ i ∈ (Finset.univ : Finset (Fin p.windows)),
-          (run H (P i) D.V (x i) (tapeOf ω i) (ω.2 i)).out = .acc ∧ ¬ IngressDeclared H D s ops δ (x i)) :=
+  let W : Fin p.windows → PeriodCoins Coin kw Ω → Prop := fun i ω =>
+    (run H (P i) D.V (xw i (tapeOf ω i)) (tapeOf ω i) fun j => ω.2 i (Fin.cast (hk i (tapeOf ω i)) j)).out = .acc ∧
+      ¬ IngressDeclared H D s ops δ (xw i (tapeOf ω i))
+  calc Pr (fun ω : PeriodCoins Coin kw Ω =>
+        PeriodAccepts (check p (c ω) (ev ω)) ∧ ∃ i, ¬ IngressDeclared H D s ops δ (xw i (tapeOf ω i)))
+      ≤ Pr (fun ω => ∃ i ∈ (Finset.univ : Finset (Fin p.windows)), W i ω) :=
         Claims.Pr_mono fun ω ⟨hacc, i, hi⟩ =>
           ⟨i, Finset.mem_univ _, hrec ω i (windowAnswered_of_accept hform hacc i.val i.isLt), hi⟩
-    _ ≤ ∑ i, Pr (fun ω : PeriodCoins D x Ω =>
-          (run H (P i) D.V (x i) (tapeOf ω i) (ω.2 i)).out = .acc ∧ ¬ IngressDeclared H D s ops δ (x i)) :=
-        Claims.Sampling.Pr_exists_le Finset.univ fun i (ω : PeriodCoins D x Ω) =>
-          (run H (P i) D.V (x i) (tapeOf ω i) (ω.2 i)).out = .acc ∧ ¬ IngressDeclared H D s ops δ (x i)
-    _ ≤ _ := Finset.sum_le_sum fun i _ => window_term_le H D hks hb s δ decode hδ hdec ops x Ω P i (hx i)
+    _ ≤ ∑ i, Pr (W i) := Claims.Sampling.Pr_exists_le Finset.univ W
+    _ ≤ _ := Finset.sum_le_sum fun i _ => window_term_le H D hks hb s δ decode hδ hdec ops xw hk hx P i
 
 end Deploy
 
@@ -452,8 +620,8 @@ theorem perServerIngress : PerServerIngress := by
   unfold PerServerIngress PerServerIngressBy
   intro Coin Col T _ _ _ _ _ H D hks hb hflat δ decode hδ hdec p s sd sc hform cls ops
   refine ⟨?_, ?_⟩
-  · intro c x hx Ω _ _ P ev hrec
-    exact periodSound_check H D hks hb s δ decode hδ hdec p sd sc hform ops c x hx Ω P ev hrec
+  · intro kw Ω _ _ xw hk hx P c ev hrec
+    exact periodSound_check H D hks hb s δ decode hδ hdec p sd sc hform ops xw hk hx P c ev hrec
   · intro K Z In Act Wire I Dj r view hW2 hW4 hr hJ sw Pw hcount Ms xm hsw hacc hcells hpass hrows hok hchain dec
       hdecm
     exact perServerIngress_count H D δ p s cls ops I Dj r view hW2 hW4 hr hJ sw Pw hcount Ms xm hsw hacc hcells hpass
@@ -555,10 +723,11 @@ theorem perServerIngress_honest : PerServerIngressHonest := by
 
 theorem perServerIngress_nontrivial : PerServerIngressNontrivial := by
   unfold PerServerIngressNontrivial
-  intro chk hall Coin Col T _ _ _ _ _ H D s δ decode ops p c x Ω _ _ P ev hbad herr hsound
-  have hsure : Pr (fun ω : PeriodCoins D x Ω =>
-      PeriodAccepts (chk p c (ev ω)) ∧ ∃ i, ¬ IngressDeclared H D s ops δ (x i)) = 1 :=
-    (Claims.Pr_congr fun ω => ⟨fun _ => trivial, fun _ => ⟨hall p c (ev ω), hbad⟩⟩).trans Claims.Sampling.Pr_true
+  intro chk hall Coin Col T _ _ _ _ _ H D s δ decode ops p kw Ω _ _ xw P c ev hbad herr hsound
+  have hsure : Pr (fun ω : PeriodCoins Coin kw Ω => PeriodAccepts (chk p (c ω) (ev ω)) ∧
+      ∃ i, ¬ IngressDeclared H D s ops δ (xw i (tapeOf ω i))) = 1 :=
+    (Claims.Pr_congr fun ω => ⟨fun _ => trivial, fun _ => ⟨hall p (c ω) (ev ω), hbad ω⟩⟩).trans
+      Claims.Sampling.Pr_true
   unfold PeriodSound at hsound
   linarith
 

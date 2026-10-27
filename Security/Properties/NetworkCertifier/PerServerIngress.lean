@@ -19,7 +19,8 @@ every prover:
 
 * **soundness**: over the period's live coins, the check of record accepts while some window's ingress, as the network
   certifier registers it at the scan's ingress gates, is not one the scan's Program accepts (`IngressDeclared`) with
-  probability at most `Σ_i (δ + ε_ks + ε_bind + Pr[B_tap])`, each window's errors at its statement;
+  probability at most `Σ_i E_t (δ + ε_ks + ε_bind + Pr[B_tap])`, each window's errors at its statement and its prover
+  at the window's tape `t`, averaged over the tape;
 * **the count**: the secrets an outside sender passes into the server through the warden, whose every window's ingress
   the scan accepts, number at most
   `∏_i Σ_(F faulty at δ) 2^(#ingress(F) · faultyIngressBits + windowBits) · (∏_ℓ (r ℓ + 1))^n · D^n`. Where the
@@ -36,16 +37,21 @@ requests more (`faultyIngressBits`). At `W63` of `benchmarks/network_traces/scan
 
 **What it reads.** The soundness reads the check of record through `AnswersOfRecord` (an accepted window's answer is
 the sampled verifier's acceptance of that window's statement on that window's coins), and each window's statement
-through `ScanScope` (the sampled audit's scope at the scan's layout, with the gates the scan checks committed). The
-count reads the warden's record (`RecordsCells`), the openings the verifier holds at the scan's gates (`OpensPass`,
-`WardenRowsOpen`, `OkOpens`, and `ChainOpens`, which holds the registered-read chain of parse states as equal
-openings), and `ScanCountsRequests`, the count of one window's frame streams the scan accepts, a conjecture on the scan
-class's Program checked by enumeration at toy classes. Each window's prover may read every other window's coins
-(`WindowTape`), so the period's provers may be adaptive.
+through `ScanScope` (the sampled audit's scope at the scan's layout, with the gates the scan checks committed and each
+its unit's own). The count reads the warden's record (`RecordsCells`), the openings the verifier holds at the scan's
+gates (`OpensPass`, `WardenRowsOpen`, `OkOpens`, and `ChainOpens`, which holds the registered-read chain of parse
+states as equal openings), and `ScanCountsRequests`, the count of one window's frame streams the scan accepts, a
+conjecture on the scan class's Program checked by enumeration at toy classes.
+
+**Adaptive windows.** Each window's prover may read every other window's coins (`WindowTape`), and so may its
+statement: window `i`'s registered statement is a function of its prover's tape, never of its own coins, with a fixed
+round count `kw i` (the window class fixes the scan's Program, and so the verifier's round count), and its error is
+averaged over that tape. The period's commitment and evidence are functions of all the coins.
 
 **The answers.** `rowsWindowCheck` reads each link-window's answer from the evidence (`answered`) and does not run the
 sampled verifier itself, so `AnswersOfRecord` is what ties an accepted answer to that window's coins.
-`PerServerIngressHonest` reads acceptance through `HonestWindowsAccepted`.
+`PerServerIngressHonest` reads acceptance through `HonestWindowsAccepted`: it is a statement about `check`, and does
+not say that any deployed period meets `HonestWindowsAccepted`.
 -/
 
 namespace Properties.NetworkCertifier
@@ -142,6 +148,15 @@ link's read end is an input. -/
 def ChecksCommitted (C : Prog) (ok : List ℕ) (links : List (ℕ × ℕ)) : Prop :=
   (∀ g ∈ ok, g ∈ C.outs) ∧ ∀ e ∈ links, e.2 ∈ C.outs ∧ C.gates[e.1]? = some .input
 
+/-- **The checked gates are their units' own**: each of the gates `gs` is a gate of a replay unit of the partition `P`
+that also holds every gate of `C` reading it. The generator form gives it: every template's argument is one input
+node's leaves (`NetworkCheck.Period.inputArg`), so the next bucket reads the state through its `sin` parameter, an
+input, and a bucket's `ok` and state leaves are read only inside its template instance, which the template query makes
+one unit. A constant checked gate is then one its unit commits, so a correct unit's committed value is the constant
+(`Prog.Correct`), and a faulty unit's checked gate reaches no other unit. -/
+def ChecksOwned (C : Prog) (P : Partition) (gs : List ℕ) : Prop :=
+  ∀ g ∈ gs, ∃ r ∈ P.rus, g ∈ RU.gates r ∧ ∀ g' x, C.gates[g']? = some x → g ∈ x.reads → g' ∈ RU.gates r
+
 /-! ## What the scan accepts -/
 
 /-- **The ingress the scan's Program accepts** over the horizon `k` with a faulty set `RAcc δ` allows: the window's rows
@@ -168,18 +183,14 @@ def WardenRowsOpen (s : Schedule) (st : Stmt) (ops : List (Opening Bool)) (ins :
         (∃ q ∈ ops, q.pos = g) ∧ tapVal ops g = (ins.getD t []).getD j false
 
 /-- **Every bucket's `ok` opens to 1** (named assumption: the sampled verifier opens each unit's `o0` and requires
-1): every `ok` gate has an opening in `ops`, of value 1, and is no constant 0 (as `TapOpens` reads a constant gate's
-opening). -/
+1): every `ok` gate has an opening in `ops`, of value 1. -/
 def OkOpens (s : Schedule) (st : Stmt) (ops : List (Opening Bool)) : Prop :=
-  ∀ g ∈ (checksOf s st).1, (∀ b, st.prog.gates[g]? = some (.const b) → b = true) ∧ (∃ q ∈ ops, q.pos = g) ∧
-    tapVal ops g = true
+  ∀ g ∈ (checksOf s st).1, (∃ q ∈ ops, q.pos = g) ∧ tapVal ops g = true
 
 /-- **The state chain opens as one value** (named assumption: the registered read of the previous bucket's state,
-which the Claims model has no form for): both ends of every state link have an opening in `ops`, of one value, and a
-written end that is a constant opens to it (as `TapOpens` reads a constant gate's opening). -/
+which the Claims model has no form for): both ends of every state link have an opening in `ops`, of one value. -/
 def ChainOpens (s : Schedule) (st : Stmt) (ops : List (Opening Bool)) : Prop :=
-  ∀ e ∈ (checksOf s st).2, (∃ q ∈ ops, q.pos = e.1) ∧ (∃ q ∈ ops, q.pos = e.2) ∧ tapVal ops e.1 = tapVal ops e.2 ∧
-    ∀ b, st.prog.gates[e.2]? = some (.const b) → tapVal ops e.2 = b
+  ∀ e ∈ (checksOf s st).2, (∃ q ∈ ops, q.pos = e.1) ∧ (∃ q ∈ ops, q.pos = e.2) ∧ tapVal ops e.1 = tapVal ops e.2
 
 /-- **The openings `ops` register the window's rows `ins` at the scan's gates**: all four of the above. -/
 def IngressOpens (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (s : Schedule) (st : Stmt)
@@ -194,12 +205,16 @@ def IngressDeclared {Coin Col T : Type} (H : Claims.Msg → Claims.Msg) (D : Dep
     ∀ ins, IngressOpens H D.commit s st (ops st) ins →
       ins ∈ ScanDeclared st.prog P st.design (layOf s st) s.window (checksOf s st).1 (checksOf s st).2 δ
 
-/-- **A link-window's scan statement**: in the sampled audit's scope at the scan's layout and horizon (`ScopeAcc`), and
-its checked gates committed. `ScanScopeAcc` and the scan's shape (`scanOf`) give it. -/
+/-- **A link-window's scan statement**: in the sampled audit's scope at the scan's layout and horizon (`ScopeAcc`), its
+checked gates committed, and at its partition each checked gate (every `ok` gate and every link's written end) its
+unit's own (`ChecksOwned`). `ScanScopeAcc` and the scan's shape (`scanOf`) give the first two, and the generator form
+under the template query the third. -/
 def ScanScope {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (D : Deploy Coin Col T) (s : Schedule) (x : Claims.Msg) : Prop :=
   ScopeAcc D (layOf s) (fun _ => s.window) x ∧
-    ∀ st, D.parse x = some st → ChecksCommitted st.prog (checksOf s st).1 (checksOf s st).2
+    ∀ st, D.parse x = some st → ChecksCommitted st.prog (checksOf s st).1 (checksOf s st).2 ∧
+      ∀ P, D.partition st = some P →
+        ChecksOwned st.prog P ((checksOf s st).1 ++ (checksOf s st).2.map Prod.snd)
 
 /-! ## The warden's record -/
 
@@ -256,50 +271,63 @@ def WindowAnswered (p : Params) (s : Schedule) (sd : ByteArray) (c : NetworkChec
     (i : ℕ) : Prop :=
   ∃ reg x f, c.windows[i]? = some reg ∧ e.windows[i]? = some x ∧ rowsWindowCheck p s sd (p.first + i) reg x = .ok f
 
-/-- The period's coins: the prover's tape and each window's live coins. -/
-abbrev PeriodCoins {Coin Col T : Type} (D : Deploy Coin Col T) {n : ℕ} (x : Fin n → Claims.Msg) (Ω : Type) : Type :=
-  Ω × ((i : Fin n) → Fin (D.V.k (x i)) → Coin)
+/-- The period's coins: the prover's tape and each window's live coins, `kw i` of them at window `i`. -/
+abbrev PeriodCoins (Coin : Type) {n : ℕ} (kw : Fin n → ℕ) (Ω : Type) : Type :=
+  Ω × ((i : Fin n) → Fin (kw i) → Coin)
 
 /-- Window `i`'s prover's tape: the prover's own and the live coins of every other window. A window's prover has seen
 the earlier windows' coins; the tape grants it the later windows' too. -/
-abbrev WindowTape {Coin Col T : Type} (D : Deploy Coin Col T) {n : ℕ} (x : Fin n → Claims.Msg) (Ω : Type) (i : Fin n) :
-    Type :=
-  Ω × ((j : {j : Fin n // j ≠ i}) → Fin (D.V.k (x j.1)) → Coin)
+abbrev WindowTape (Coin : Type) {n : ℕ} (kw : Fin n → ℕ) (Ω : Type) (i : Fin n) : Type :=
+  Ω × ((j : {j : Fin n // j ≠ i}) → Fin (kw j.1) → Coin)
 
 /-- Window `i`'s prover's tape on the period's coins `ω`. -/
-def tapeOf {Coin Col T : Type} {D : Deploy Coin Col T} {n : ℕ} {x : Fin n → Claims.Msg} {Ω : Type}
-    (ω : PeriodCoins D x Ω) (i : Fin n) : WindowTape D x Ω i :=
+def tapeOf {Coin : Type} {n : ℕ} {kw : Fin n → ℕ} {Ω : Type} (ω : PeriodCoins Coin kw Ω) (i : Fin n) :
+    WindowTape Coin kw Ω i :=
   (ω.1, fun j => ω.2 j.1)
 
-/-- **The answers are of record** (named assumption): the evidence `ev ω` is the provers' on the
-period's coins `ω`, and where its window `i` is answered (`WindowAnswered`), the sampled verifier's run on that window's
-statement `x i`, with window `i`'s prover `P i` at its tape (`tapeOf`) and on that window's coins, accepted: the
-answer is the verifier's own. -/
+/-- **The answers are of record** (named assumption): the commitment `c ω` and the evidence `ev ω` are the provers' on
+the period's coins `ω`, and where its window `i` is answered (`WindowAnswered`), the sampled verifier's run on that
+window's statement `xw i (tapeOf ω i)`, with window `i`'s prover `P i` at its tape and on that window's coins (its
+`kw i` coins, the statement's round count `hk`), accepted: the answer is the verifier's own. -/
 def AnswersOfRecord {Coin Col T : Type} [Inhabited Coin] (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T)
-    (p : Params) (s : Schedule) (sd : ByteArray) (c : NetworkCheck.Period.Commitment) (x : Fin p.windows → Claims.Msg)
-    {Ω : Type} (P : (i : Fin p.windows) → Claims.Prover (WindowTape D x Ω i)) (ev : PeriodCoins D x Ω → Evidence) :
-    Prop :=
-  ∀ ω i, WindowAnswered p s sd c (ev ω) i.val → (Claims.run H (P i) D.V (x i) (tapeOf ω i) (ω.2 i)).out = .acc
+    (p : Params) (s : Schedule) (sd : ByteArray) {kw : Fin p.windows → ℕ} {Ω : Type}
+    (xw : (i : Fin p.windows) → WindowTape Coin kw Ω i → Claims.Msg) (hk : ∀ i t, D.V.k (xw i t) = kw i)
+    (P : (i : Fin p.windows) → Claims.Prover (WindowTape Coin kw Ω i))
+    (c : PeriodCoins Coin kw Ω → NetworkCheck.Period.Commitment) (ev : PeriodCoins Coin kw Ω → Evidence) : Prop :=
+  ∀ ω i, WindowAnswered p s sd (c ω) (ev ω) i.val →
+    (Claims.run H (P i) D.V (xw i (tapeOf ω i)) (tapeOf ω i) fun j => ω.2 i (Fin.cast (hk i (tapeOf ω i)) j)).out =
+      .acc
 
-/-- The period's error: each window's `δ + ε_ks + ε_bind + Pr[B_tap]` at its statement and its prover. -/
+/-- One window's error at its statement `m` and its prover `Pt` at one tape (`Pt` on the empty tape):
+`δ + ε_ks + ε_bind + Pr[B_tap]`. -/
+noncomputable def windowErr {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
+    [Zero Col] (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (δ : ℝ) (decode : List (ℕ × Col) → List T)
+    (ops : Stmt → List (Opening Bool)) (m : Claims.Msg) (Pt : Claims.Prover Unit) : ℝ :=
+  κ D δ m + Real.sqrt (γ D m * Claims.PrB H D.V Pt m) + (Bext H D.V (E D decode) Unit Pt m).Pr H +
+    (Btap H D.V (E D decode) D.commit D.parse ops Unit Pt m).Pr H
+
+/-- The period's error: each window's error (`windowErr`) at its statement and its prover at the window's tape,
+averaged over the tape. At most `Σ_i ε_i` where every tape's error at window `i` is at most `ε_i`. -/
 noncomputable def periodErr {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
     [Zero Col] (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (δ : ℝ) (decode : List (ℕ × Col) → List T)
-    (ops : Stmt → List (Opening Bool)) {n : ℕ} (x : Fin n → Claims.Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω]
-    (P : (i : Fin n) → Claims.Prover (WindowTape D x Ω i)) : ℝ :=
-  ∑ i, (κ D δ (x i) + Real.sqrt (γ D (x i) * Claims.PrB H D.V (P i) (x i)) +
-    (Bext H D.V (E D decode) (WindowTape D x Ω i) (P i) (x i)).Pr H +
-    (Btap H D.V (E D decode) D.commit D.parse ops (WindowTape D x Ω i) (P i) (x i)).Pr H)
+    (ops : Stmt → List (Opening Bool)) {n : ℕ} {kw : Fin n → ℕ} {Ω : Type} [Fintype Ω]
+    (xw : (i : Fin n) → WindowTape Coin kw Ω i → Claims.Msg) (P : (i : Fin n) → Claims.Prover (WindowTape Coin kw Ω i)) :
+    ℝ :=
+  ∑ i, Claims.Ex fun t : WindowTape Coin kw Ω i => windowErr H D δ decode ops (xw i t) ((P i).comap fun _ => t)
 
-/-- **`chk`'s acceptance is sound for the period's ingress**: over the period's coins, `chk` accepts the evidence while
-some window's registered ingress is not one the scan accepts with probability at most `periodErr`. -/
+/-- **`chk`'s acceptance is sound for the period's ingress**: over the period's coins, `chk` accepts the commitment
+and evidence while some window's registered ingress is not one the scan accepts with probability at most
+`periodErr`. -/
 def PeriodSound (chk : Params → NetworkCheck.Period.Commitment → Evidence → Core.Outcome Public Profile)
     {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
     (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (s : Schedule) (δ : ℝ) (decode : List (ℕ × Col) → List T)
-    (ops : Stmt → List (Opening Bool)) (p : Params) (c : NetworkCheck.Period.Commitment) (x : Fin p.windows → Claims.Msg)
-    (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : (i : Fin p.windows) → Claims.Prover (WindowTape D x Ω i))
-    (ev : PeriodCoins D x Ω → Evidence) : Prop :=
-  Claims.Pr (fun ω : PeriodCoins D x Ω => PeriodAccepts (chk p c (ev ω)) ∧ ∃ i, ¬ IngressDeclared H D s ops δ (x i)) ≤
-    periodErr H D δ decode ops x Ω P
+    (ops : Stmt → List (Opening Bool)) (p : Params) {kw : Fin p.windows → ℕ} {Ω : Type} [Fintype Ω]
+    (xw : (i : Fin p.windows) → WindowTape Coin kw Ω i → Claims.Msg)
+    (P : (i : Fin p.windows) → Claims.Prover (WindowTape Coin kw Ω i))
+    (c : PeriodCoins Coin kw Ω → NetworkCheck.Period.Commitment) (ev : PeriodCoins Coin kw Ω → Evidence) : Prop :=
+  Claims.Pr (fun ω : PeriodCoins Coin kw Ω => PeriodAccepts (chk p (c ω) (ev ω)) ∧
+      ∃ i, ¬ IngressDeclared H D s ops δ (xw i (tapeOf ω i))) ≤
+    periodErr H D δ decode ops xw P
 
 /-! ## The guarantee -/
 
@@ -308,11 +336,13 @@ set_option linter.unusedVariables false
 
 /-- **The server's ingress over a period, at the check `chk`.** At every deployment `D` of the sampled verifier where
 `Claims.Sampling.KS` holds, the trace's commitment binds and statements are their descriptors flattened, with a decoder
-that lists every trace within Flock's radius, at `δ ≥ 0`, over a rows-form period `p` (schedule `s`) whose `W` windows'
-statements `x i` are the scan's (`ScanScope`), with the openings `ops st` at each statement and the scan class `cls`:
+that lists every trace within Flock's radius, at `δ ≥ 0`, over a rows-form period `p` (schedule `s`), with the openings
+`ops st` at each statement and the scan class `cls`:
 
-* every period's provers (window `i`'s reading every other window's coins) whose answers are of record have
-  `Pr[chk accepts ∧ some window's ingress isn't one the scan accepts] ≤ Σ_i (δ + ε_ks + ε_bind + Pr[B_tap])`;
+* every period's provers, window `i`'s reading every other window's coins (`WindowTape`), whose window `i` registers
+  a statement `xw i` of `kw i` rounds that is the scan's (`ScanScope`) at each value of those coins, and whose answers
+  are of record, have `Pr[chk accepts ∧ some window's ingress isn't one the scan accepts] ≤ periodErr`, each window's
+  `δ + ε_ks + ε_bind + Pr[B_tap]` averaged over its tape;
 * an outside sender passing secrets `Ms` into the server through the warden (the interaction `I` on the requests' link,
   `n = W · T` steps, under W2, W4 with allocation `r`, and J at `Dj`), whose every run keeps its statuses complete,
   whose record holds cells, whose windows' statements are `sw i` (partition `Pw i`) with the record's rows registered
@@ -328,10 +358,12 @@ def PerServerIngressBy (chk : Params → NetworkCheck.Period.Commitment → Evid
     (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode)
     (p : Params) (s : Schedule) (sd : ByteArray) (sc : Scan) (hform : p.form = .rows s sd sc) (cls : ScanClass)
     (ops : Stmt → List (Opening Bool)),
-    (∀ (c : NetworkCheck.Period.Commitment) (x : Fin p.windows → Claims.Msg) (hx : ∀ i, ScanScope D s (x i))
-        (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : (i : Fin p.windows) → Claims.Prover (WindowTape D x Ω i))
-        (ev : PeriodCoins D x Ω → Evidence) (hrec : AnswersOfRecord H D p s sd c x P ev),
-        PeriodSound chk H D s δ decode ops p c x Ω P ev) ∧
+    (∀ (kw : Fin p.windows → ℕ) (Ω : Type) [Fintype Ω] [Nonempty Ω]
+        (xw : (i : Fin p.windows) → WindowTape Coin kw Ω i → Claims.Msg) (hk : ∀ i t, D.V.k (xw i t) = kw i)
+        (hx : ∀ i t, ScanScope D s (xw i t)) (P : (i : Fin p.windows) → Claims.Prover (WindowTape Coin kw Ω i))
+        (c : PeriodCoins Coin kw Ω → NetworkCheck.Period.Commitment) (ev : PeriodCoins Coin kw Ω → Evidence)
+        (hrec : AnswersOfRecord H D p s sd xw hk P c ev),
+        PeriodSound chk H D s δ decode ops p xw P c ev) ∧
       ∀ {K : ℕ} {Z In Act Wire : Type} (I : Interaction 1 K s.allocation Z In Act Wire) (Dj : ℕ) (r : Fin 1 → ℕ)
         (view : ℕ → Obs 1 K s.allocation → Wire) (hW2 : Regenerates I.certifier view) (hW4 : Packed I.certifier)
         (hr : Allocated I.certifier r) (hJ : JitterBounded I.certifier Dj)
@@ -411,16 +443,17 @@ def PeriodAcceptsAll (chk : Params → NetworkCheck.Period.Commitment → Eviden
   ∀ p c e, PeriodAccepts (chk p c e)
 
 /-- **`PerServerIngress`' nontrivial statement**: a check accepting every period is not sound for the period's ingress
-at any period one of whose windows' registered ingress the scan doesn't accept, wherever the period's error is below
-1. -/
+at any period where, at every value of the coins, some window's registered ingress is not one the scan accepts,
+wherever the period's error is below 1. -/
 def PerServerIngressNontrivial : Prop :=
   ∀ (chk : Params → NetworkCheck.Period.Commitment → Evidence → Core.Outcome Public Profile), PeriodAcceptsAll chk →
     ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
       (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (s : Schedule) (δ : ℝ) (decode : List (ℕ × Col) → List T)
-      (ops : Stmt → List (Opening Bool)) (p : Params) (c : NetworkCheck.Period.Commitment)
-      (x : Fin p.windows → Claims.Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω]
-      (P : (i : Fin p.windows) → Claims.Prover (WindowTape D x Ω i)) (ev : PeriodCoins D x Ω → Evidence),
-      (∃ i, ¬ IngressDeclared H D s ops δ (x i)) → periodErr H D δ decode ops x Ω P < 1 →
-        ¬ PeriodSound chk H D s δ decode ops p c x Ω P ev
+      (ops : Stmt → List (Opening Bool)) (p : Params) (kw : Fin p.windows → ℕ) (Ω : Type) [Fintype Ω] [Nonempty Ω]
+      (xw : (i : Fin p.windows) → WindowTape Coin kw Ω i → Claims.Msg)
+      (P : (i : Fin p.windows) → Claims.Prover (WindowTape Coin kw Ω i))
+      (c : PeriodCoins Coin kw Ω → NetworkCheck.Period.Commitment) (ev : PeriodCoins Coin kw Ω → Evidence),
+      (∀ ω, ∃ i, ¬ IngressDeclared H D s ops δ (xw i (tapeOf ω i))) → periodErr H D δ decode ops xw P < 1 →
+        ¬ PeriodSound chk H D s δ decode ops p xw P c ev
 
 end Properties.NetworkCertifier
