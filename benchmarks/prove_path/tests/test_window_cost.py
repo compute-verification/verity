@@ -125,15 +125,14 @@ def test_at_the_class_of_record_every_lever_lowers_the_commit_and_the_plan_leave
 
 
 def test_serving_streams_commit_is_its_4_kib_rows_and_F_leaves_out_its_fa3_interiors():
-    from verity_vllm.acquire.sources.hidden_source import CHUNK_WORDS, mat_total_words
-
     sizing = json.loads(SIZING.read_text())["sizing"]
     one, anchors = W.stream(sizing, {"slots": 4, "prompt": 40, "outputs": 3}, "h200", 1e12, 1.0, lanes=2, every=2).values()
 
     def fa3(seqs: int, rows: int, BN: int) -> int:
-        """one launch's FA3 M1 bytes over the layers: a slab a (sequence, KV head) of rows · 4 query heads, one key block"""
-        words = mat_total_words(8 * seqs, 4 * rows, 1, BN, 64)
-        return sizing["model"]["layers"] * 4 * -(-words // CHUNK_WORDS) * CHUNK_WORDS
+        """One launch's FA3 M1 bytes over the layers, in whole 64-word chunks: a slab a (sequence, KV head) of rows · 4 query
+        heads, one key block of BN keys, each row 2.5 BN words of scores and probabilities, 8 + D of the block's state and 4."""
+        words = 8 * seqs * 4 * rows * (2 * BN + BN // 2 + 8 + 64 + 4)
+        return sizing["model"]["layers"] * 4 * -(-words // 64) * 64
 
     # 40 ids · 4 heads a KV head > 64 rows: blocks of 128; a decode launch's 4 rows: blocks of 192
     assert one["hidden_bytes"] == fa3(4, 40, 128) + 2 * fa3(4, 1, 192)
