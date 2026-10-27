@@ -87,7 +87,7 @@ def binding_check(bnd: CommitBinding | Mapping[str, Any], *, min_openings: int =
     cov = b.coverage
     if cov is None:
         return False, "identity coverage: not recorded"
-    if cov.error:                                                                # [MAN-02] incomplete manifest (unmodelled families) -> fail closed, named
+    if cov.error:                                                                # incomplete manifest (unmodelled families) -> fail closed, named
         return False, f"identity coverage: {cov.error}"
     if not cov.ok:
         if cov.missing_n == 0 and (cov.ambiguous_n or 0) > 0:
@@ -479,7 +479,7 @@ def rule_binding_context(commit: dict, ctx: dict) -> CheckResult:
 
 
 def rule_identity_coverage(commit: dict, ctx: dict) -> CheckResult:
-    """binding_check (2): identity coverage of the expected population (error -> MAN-02 refusal; missing; ambiguous)."""
+    """binding_check (2): identity coverage of the expected population (error -> refusal; missing; ambiguous)."""
     b = _binding_of(commit)
     claim = "Every identity of the required-value population has exactly one committed binding (a duplicate never covers a missing one; BIND-01 (2) / MAN-02)."
     compat = ["binding.coverage.ok", "binding.coverage.error", "binding.coverage.missing_n", "binding.coverage.ambiguous_n", "binding.coverage.expected_n", "binding.coverage.bound_n"]
@@ -554,7 +554,7 @@ def rule_openings_population(commit: dict, ctx: dict, min_openings: int) -> Chec
 
 
 def rule_manifest_coverage(commit: dict, ctx: dict) -> CheckResult:
-    """v1: `cov = ex.coverage or commit.coverage; if cov is not None and not cov.ok: FAIL` (MAN-01)."""
+    """v1: `cov = ex.coverage or commit.coverage; if cov is not None and not cov.ok: FAIL`."""
     ex = _d(commit.get("extra"))
     cov = ex.get("coverage") or commit.get("coverage")
     claim = "Every identity the required-value manifest names (Program x query, per request / step / member / element range) was committed with its full extent (MAN-01)."
@@ -646,7 +646,7 @@ def rule_required_classes(commit: dict, ctx: dict, declaration: dict | None, req
 
 
 def rule_manifest_verified(commit: dict, ctx: dict) -> CheckResult:
-    """row_pod.sh EXEC-05 / MAN-05: `required_manifest verify` rebuilt the manifest from this attempt's Program x workload == the one used."""
+    """row_pod.sh: `required_manifest verify` rebuilt the manifest from this attempt's Program x workload == the one used."""
     mv = ctx.get("manifest_verify")
     claim = "The required-value manifest the Commit used is byte-identical (rows digest) to the one rebuilt from this attempt's Program x workload (EXEC-05 / MAN-05)."
     compat = ["manifest_verify.ok", "manifest_verify.used_digest", "manifest_verify.rebuilt_digest", "stages.txt manifest_verify="]

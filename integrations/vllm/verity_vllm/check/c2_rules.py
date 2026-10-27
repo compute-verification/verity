@@ -21,7 +21,7 @@ QUERY_CHECKS = "the sampled replay's population.query_checks"
 _POPULATION_GAP_CLASSES = ("plane-fed", "interior-composed-v2")     # the MAN-06f / MAN-06g population moves
 # which by-name classes form (B) CAN cover: form (B) compares the Match record's dispatcher-level
 # module outputs (`instance_outputs`), so an interior-composed VU (MAN-06g: its module's returned tensor IS an instance output) is covered by a
-# complete (B); a PLANE-FED VU (MAN-06f) is not -- its committed members are the moe/ block-stream planes, and oracle_compare has NO oracle
+# complete (B); a PLANE-FED VU is not -- its committed members are the moe/ block-stream planes, and oracle_compare has NO oracle
 # family for `moe/` (NO_ORACLE_FAMILY_PREFIXES: counted 'no oracle family', excluded from compared).  Neither form value-checks those planes
 # (form (A) has no row->plane mapping in this replay), so a plane-fed gap FAILs by name whatever form (B) says; C1 + C3 still hold on them.
 _PLANE_FED_NEITHER_FORM = ("have committed moe/ plane members value-checked by NEITHER form (form (B) has no oracle family for moe/ planes "
@@ -204,7 +204,7 @@ def _scope_fail_account_missing(sr: dict) -> bool:
 
 def _complete_replay_population_gap(sr: dict | None, oc: dict | None) -> tuple[str | None, str | None]:
     """The C2 rule when the sampled replay is COMPLETE but its POPULATION excluded VUs BY NAME
-    under a MAN-06f / MAN-06g class (`population.not_evaluable`: VUs fed by MoE block-stream planes; VUs fed by an interior producer without an
+    under a plane-fed or interior-composed class (`population.not_evaluable`: VUs fed by MoE block-stream planes; VUs fed by an interior producer without an
     evaluator, e.g. Qwen2.5's BiasAdd over Gemm_v2).  Those VUs HAVE committed members the replay did not check -- the same gap the PARTIAL
     rule (`_partial_replay_named_gap`) carries on a PASS only when form (B) is complete over the values; moving the gap into the population
     must not lift that condition.  Returns (gap note for the PASS text, None) when form (B) is complete; (None, FAIL text) when it is not;

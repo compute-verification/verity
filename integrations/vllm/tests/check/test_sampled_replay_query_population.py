@@ -196,7 +196,7 @@ def test_a_replay_record_predating_the_fields_is_graded_as_before_without_a_scop
 
 
 def test_moe_plane_identities_reconcile_at_their_planes(moe_world):
-    """[MAN-06f v3] the fused-MoE block rows are addressed at their PLANES (`moe/L<k>` / plane) -- the manifest's moe_block_stream
+    """The fused-MoE block rows are addressed at their PLANES (`moe/L<k>` / plane) -- the manifest's moe_block_stream
     identities.  Every plane identity is either reached (an evaluator exists) or uncovered by name (plane-fed producer without one)."""
     man = _manifest_for(moe_world)
     assert man["populations"]["by_family"]["moe_block_stream"] > 0
