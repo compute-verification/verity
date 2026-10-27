@@ -3,10 +3,10 @@
 # size (bw_check.py), from build.sh's lib for the toy's decode path; cwd = the source tree's root:
 #
 #   research run --on vy-dc-h200-3 --project verity --campaign e2e-demo --source . --cwd source --timeout 30m \
-#     --env GPU_LEASE_WHO=kernels-kstage --send /tmp/p2lib.tar -- bash benchmarks/torch_gpu/p2_stage/bw.sh
+#     --env GPU_LEASE_WHO=LANE --send /tmp/p2lib.tar -- bash benchmarks/torch_gpu/p2_stage/bw.sh
 #
-# Under one untimed lease of at most LEASE_MIN minutes (default 10), refused near INF-242's window (Tue 27 Oct
-# 08:00-10:00Z). RANDOM units of random C* (default 262144) against the reference, SAMPLE of them (default 4000) from
+# Under one untimed lease of at most LEASE_MIN minutes (default 10), refused near the quiet window
+# it names. RANDOM units of random C* (default 262144) against the reference, SAMPLE of them (default 4000) from
 # their blocks. Each step's exit code is in $OUT/rc.txt; exits non-zero if any failed.
 set -uo pipefail
 O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs

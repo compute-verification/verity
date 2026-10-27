@@ -1,4 +1,4 @@
-"""One streamed step of the commit call at a layout on a CUDA device, timed by phase, its roots checked (HASH-25).
+"""One streamed step of the commit call at a layout on a CUDA device, timed by phase, its roots checked.
 
     uv run python benchmarks/torch_gpu/commit_slots/step.py export --shared [--row-bytes B] OUT.json  # the workspace's
     python benchmarks/torch_gpu/commit_slots/step.py count LAYOUT.json --out OUT.count.json          # host twin, any CPU
@@ -7,7 +7,7 @@
 ``export --shared`` writes FAMILIES' layout at the frozen shape (``benchmarks/e2e_h200``'s map, ``commit.layout``) with
 CIR-113's shared rows, by circuits' row model: in each table a gather reads, only the gather's units stay, so the producers'
 rows go and each gather's commit unit keeps its place. A slot then commits 102,448 rows in 101,718 units; its digest is that
-of circuits' own export (art:f6eb8ebd). With ``--row-bytes B``, a synthetic variant for the row-size curve: each gather's
+of circuits' own export. With ``--row-bytes B``, a synthetic variant for the row-size curve: each gather's
 shared rows, each the next bytes of one tensor, are cut again into one-row units of B bytes (the last of a run what is
 left), and every other unit stays as circuits has it, so a slot commits the same bytes in fewer rows. The file is in
 ``slots._layout_json``'s form, the form circuits' export from its row model takes. ``export`` needs the workspace
@@ -35,7 +35,7 @@ of ``--slots`` slots on the plan's side stream (``slots_gpu.StepCommitter``):
 
 JSON goes to DIR/step.json (with several layouts, DIR/<stem>/step.json), with a line on stdout as each part ends, and the
 host twin's counts from a ``<stem>.count.json`` beside the layout. Each layout ends with a verdict line: its best step
-against CMP-149's <=0.95 s at 4,096 slots, with the ratio, and whether its roots equal the reference's; the run ends with one
+against the <=0.95 s target at 4,096 slots, with the ratio, and whether its roots equal the reference's; the run ends with one
 over them all, which is also ``$RESEARCH_RUN_DIR/result.json``'s validation when research runs it. Exits 1 if a root differs.
 """
 from __future__ import annotations
@@ -64,15 +64,15 @@ KEY = bytes(range(96, 128))
 STEP = 7
 #: commit_gpu's SHA-512 compressions/s on an H200, in G (sha512_rows/README.md), against which each phase's rate is read
 PEAK_G = 4.79
-#: CMP-149's target for a step: at most 25% of the 3.78 s served step, at 4,096 slots
+#: the target for a step: at most 25% of the 3.78 s served step, at 4,096 slots
 TARGET_S, TARGET_SLOTS = 0.95, 4096
 
 
 # --- layouts -----------------------------------------------------------------------------------------------------------
 
 def shared_layout(row_bytes: int = 0) -> S.Layout:
-    """FAMILIES' layout at the frozen shape with CIR-113's shared rows: in every table a gather (``AllGather_v1``) reads, the
-    gather's units alone (circuits' row model, ``shrow_rows.py`` in art:d4fce7df). With ``row_bytes``, a synthetic variant:
+    """The families layout at the frozen shape with circuits' shared rows: in every table a gather (``AllGather_v1``) reads, the
+    gather's units alone (circuits' row model). With ``row_bytes``, a synthetic variant:
     each gather's run of shared rows (one-row units, each the next bytes of its table) cut into rows of ``row_bytes``, the
     run's last row what is left; every other unit as circuits has it. The same bytes in fewer rows."""
     sys.path.insert(0, str(ROOT / "benchmarks" / "e2e_h200"))
@@ -468,7 +468,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     ex = sub.add_parser("export", help="write a layout in slots._layout_json's form")
-    ex.add_argument("--shared", action="store_true", required=True, help="FAMILIES' layout with CIR-113's shared rows")
+    ex.add_argument("--shared", action="store_true", required=True, help="the families layout with circuits' shared rows")
     ex.add_argument("--row-bytes", type=int, default=0,
                     help="cut each gather's shared rows into rows of this many bytes (0: circuits' rows)")
     ex.add_argument("path", type=Path)

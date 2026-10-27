@@ -1,4 +1,4 @@
-"""J10-R's units under a profiler (HASH-22): what bounds an h1u build's call on the H200.
+"""J10-R's units under a profiler: what bounds an h1u build's call on the H200.
 
     python prof.py run --fixtures DIR --scratch S --h1u NAME=PATH [--sm] [--ms 16384] [--linears q,kv,o,up,down]
                        --out OUT

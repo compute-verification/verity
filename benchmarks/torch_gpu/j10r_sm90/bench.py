@@ -1,4 +1,4 @@
-"""J10-R's units against plain exact INT8 at the frozen shape's linears, interleaved, on one GPU (HASH-22):
+"""J10-R's units against plain exact INT8 at the frozen shape's linears, interleaved, on one GPU:
 
     python bench.py --fixtures DIR --out OUT --scratch S [--h1u NAME=PATH ...] [--ref PATH] [--sm] [--s8-simple FILE]
                     [--wgmma DIR] [--check check.json] [--ms 4096,16384] [--linears q,kv,o,up,down,head] [--reps 7]
@@ -11,7 +11,7 @@ rotates each rep:
 * `plain`: s8_simple's `linear(x, sx, w, sw)` (#4472; --s8-simple names its file: `torch._int_mm` and the fused
   epilogue), else `torch._int_mm` and s8_simple's eager `scale`, restated;
 * `int_mm`: `torch._int_mm` alone, the s32 GEMM;
-* `wgmma` (--wgmma DIR, s8_linear's wgmma.py and configs.py, #4520): KP2-S8's exact linear, wgmma.scaled_mm at its tuned
+* `wgmma` (--wgmma DIR, s8_linear's wgmma.py and configs.py): s8_linear's exact linear, wgmma.scaled_mm at its tuned
   config for the linear and M, into an output allocated once, held to plain's output on every cell;
 * each h1u build NAME: the call's J10-R receipts, kh_seeds_j10r then kh_units_multi_j10r (with --sm
   kh_units_multi_j10r_sm on every SM, the served launch);
@@ -69,7 +69,7 @@ def plain_of(path: str | None):
 
 
 def wgmma_of(path: str | None) -> dict | None:
-    """KP2-S8's exact linear (s8_linear's wgmma.py and configs.py in the directory `path`, the cubin $S8_WGMMA_CUBIN):
+    """s8_linear's exact linear (its wgmma.py and configs.py in the directory `path`, the cubin $S8_WGMMA_CUBIN):
     its identity, `cfg(m, n, k)` (configs.CONFIGS' tuned pick for (N, K) at M, as its run.py's table_cfg, else wgmma's
     default) and `fn(x, sx, w, sw, y, cfg)`, wgmma.scaled_mm into y."""
     if not path:

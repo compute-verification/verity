@@ -1,5 +1,4 @@
-"""J10-R's units at the frozen shape against the Definition's expected values (`fixtures.py`), bit for bit, on one GPU
-(HASH-22):
+"""J10-R's units at the frozen shape against the Definition's expected values (`fixtures.py`), bit for bit, on one GPU:
 
     python check.py --fixtures DIR --out OUT --scratch S [--h1u NAME=PATH ...] [--ref PATH] [--sm] [--jobs 32]
                     [--calls q-4096,...] [--operands-only]

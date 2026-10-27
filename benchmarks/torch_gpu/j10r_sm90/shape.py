@@ -1,10 +1,10 @@
-"""The frozen shape's J10-R calls (HASH-22): the operands, salt, roots and positions of each (linear, M), and the units
+"""The frozen shape's J10-R calls: the operands, salt, roots and positions of each (linear, M), and the units
 the fixtures sample. Shared by `fixtures.py` (the expected values, CPU), `check.py` and `bench.py` (the GPU).
 
 * **Linears** (`LINEARS`, s8_simple's SHAPES, #4472): the H200 demo's MQA decoder, width 16384, 256 query heads of 64,
   one KV head, MLP 65536: q, kv (wk's rows then wv's), o, up, down, and the head once a step. A call is A [M, K] (token
   rows) times B [N, K] (the linear's weight), its units the 32 x 32 tiles, unit u = ri (N / 32) + cj.
-* **B** is layer 0's weight of the demo's served weights: ALLP-IFACE's generator (`verity_torch_loop.weights` on
+* **B** is layer 0's weight of the demo's served weights: the seeded generator (`verity_torch_loop.weights` on
   cursor/allp-iface-1de3, shape H200, seed `WEIGHTS_SEED`), restated here for its s8 codes and f32 scales
   (`weight_rows`, `weight_scales`): row g of tensor t is the SHA-512 counter stream SHA-512(K_t || u64le(g) || u64le(i)),
   K_t = SHA-512("verity/seeded-weights/v1" 0x00 seed 0x00 t), truncated to the row; tests/ pins its first bytes.
@@ -61,7 +61,7 @@ def tensor_key(seed: bytes, name: str) -> bytes:
 
 
 def stream_row(seed: bytes, name: str, row: int, n: int) -> bytes:
-    """The first n bytes of generation row `row`'s counter stream of tensor `name` (ALLP-IFACE's `row_bytes`)."""
+    """The first n bytes of generation row `row`'s counter stream of tensor `name` (the generator's `row_bytes`)."""
     key, g, sha = tensor_key(seed, name), row.to_bytes(8, "little"), hashlib.sha512
     return b"".join(sha(key + g + i.to_bytes(8, "little")).digest() for i in range(-(-n // 64)))[:n]
 

@@ -1,11 +1,11 @@
 """The whole encoded store through the staging decode on one GPU, one tensor at a time, each held to the plain weights'
-digests; then the exact W8A8 GEMM (KS8-SIMPLE) on one layer's staged matrices.
+digests; then the exact W8A8 GEMM on one layer's staged matrices.
 
     python full.py --layout LAYOUT --weights M (--w W | --generator G --shape S --weights-seed SEED)
                    --encoded ENC --source HEX --commitment HEX --lib LIB --out OUT [--layers 0-52] [--gemm-layer 51]
                    [--m 16384] [--reps 2] [--readers 6] [--hashers 4] [--n-chunk 16384]
 
-`LAYOUT`, `M`, `ENC`, the coin and the commitment are `layer.py`'s: CMP-95 item 2's layout, the weights manifest with
+`LAYOUT`, `M`, `ENC`, the coin and the commitment are `layer.py`'s: the store's layout, the weights manifest with
 each stream tensor's SHA-256 (`manifest --digests`, the digests memory-accounting held W to), and memory-accounting's
 encoded store, read only, under the salt `setup.draw_salt` of the coin and commitment its `setup.json` is held to.
 
@@ -440,7 +440,7 @@ def layer_set(spec: str, last: int) -> set[int]:
 def main(argv=None) -> int:
     global DEVICE
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("--layout", type=Path, required=True, help="the store's layout JSON (CMP-95 item 2)")
+    ap.add_argument("--layout", type=Path, required=True, help="the store's layout JSON (p2_v1/store.py layout)")
     ap.add_argument("--weights", type=Path, required=True, help="the weights stream's manifest, with digests")
     ap.add_argument("--w", type=Path, help="the weights stream's bytes at their stream offsets (else the generator's)")
     ap.add_argument("--generator", default="verity_torch_loop.weights", help="the seeded generator, without --w")

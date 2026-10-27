@@ -1,4 +1,4 @@
-"""The serve-time commit call on the GPU (README.md is its specification, ``slots.py`` its CPU reference), on HASH-20's
+"""The serve-time commit call on the GPU (README.md is its specification, ``slots.py`` its CPU reference), on the
 SHA-512 engine (``../sha512_rows/engine.py``): the engine hashes each group's rows into hm96 leaves and builds frame-v3
 levels; this module lays them out as one subtree per slot.
 
@@ -275,9 +275,8 @@ class Plan:
     """What a run's ``context`` and ``layout`` fix, on ``device`` (a CUDA device, or ``"host"`` for the engine's host twin).
     Its work is linear in the layout's units: each unit's domain id is hashed once (``slots.unit_domain_ids``), each group
     the layout repeats is laid out once, and the pads that close a slot's tree are hashed once. A step's passes keep their
-    temporaries within ``temp_bytes``, and run the leaf kernel at ``leaf_minb`` blocks an SM (the engine's ``minb``: 0, the
-    build's default, 1; on an H200, 1 is 4% faster at FAMILIES' passes of 35 slots of 117k rows and 2 is 8% faster at
-    CIR-113's shared rows, 2,134 slots of 1,965 rows, with the same bytes).
+    temporaries within ``temp_bytes``, and run the leaf kernel at ``leaf_minb`` blocks an SM (the engine's ``minb``, 0 for the
+    build's default; every setting commits the same bytes).
 
     With ``sms``, the side stream is on an ``SmPartition`` of that many SMs (``partition``; ``sms`` becomes the count it
     gave), and the leaf kernel's persistent grid fills those alone: the commit then shares the device with work on the

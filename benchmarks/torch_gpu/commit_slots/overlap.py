@@ -69,7 +69,7 @@ from e2e_h200.weights import Weights
 MODES = ("serve", "commit", "serial", "low", "high", "equal", "low-thread", "high-thread")
 OVERLAPPED = ("low", "high", "equal", "low-thread", "high-thread")
 RUNS = ("serve", "commit:shared", "serial:shared", "low:shared", "high:shared", "equal:shared", "low:families:2")
-#: CMP-149: the commit's share of the 3.78 s served step at 4,096 slots, at most 25%
+#: the target: the commit's share of the 3.78 s served step at 4,096 slots, at most 25%
 TARGET_S = 0.95
 #: an out-of-range priority: CUDA clamps it to the device's highest
 HIGH = -(1 << 20)
@@ -593,7 +593,7 @@ def roots_equal(runs: list[dict]) -> dict[str, bool]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--shared", type=Path, help="circuits' shared-row Layout JSON (CIR-113)")
+    ap.add_argument("--shared", type=Path, help="circuits' shared-row Layout JSON")
     ap.add_argument("--runs", nargs="+", default=list(RUNS), help="MODE:LAYOUT[:STEPS], MODE one of " + ", ".join(MODES))
     ap.add_argument("--shape", default="h200")
     ap.add_argument("--batch", type=int, default=4096)

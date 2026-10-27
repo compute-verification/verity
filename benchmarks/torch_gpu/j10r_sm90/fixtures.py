@@ -1,4 +1,4 @@
-"""The expected values of J10-R's units at the frozen shape (HASH-22), from the Definition itself: for each (linear, M)
+"""The expected values of J10-R's units at the frozen shape, from the Definition itself: for each (linear, M)
 of `shape` and each sampled unit (`shape.picks`), `h1tile.j10r_reference` (`PouwH1Tile_v5`) on the unit's 32 rows of A
 and of B gives its z (32 x 32, mod 2^32) and its receipt (2 (K / 32 + m) u32), under seed_c = `seeds.call_seed`(salt,
 base, roots) at the unit's `j10r_blocks` and sigma_R = `seeds.receipt_seed`(salt, base + u, roots). `--v6` units a call

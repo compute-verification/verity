@@ -17,8 +17,8 @@ sequences (random values; the hash's work doesn't depend on them) and committed 
   beside   the step's hashing beside a stream of int8 GEMMs of shape H's attention projection (M = batch, K = N = d,
            ``torch._int_mm``) on another stream: each GEMM's time alone and while the hashing runs, and the hashing's wall
 
-``share``: the step arm's wall over compute-accounting's shape-H step at M = 20,480 (ALLP-GPU, 25 Oct 22:50Z, H2: 7.5 s with
-P2 decode staged serially at 40 GB/s, 3.7 s with the decode hidden under the GEMMs).  Writes ``bench.json`` into ``--out``
+``share``: the step arm's wall over the shape-H step at M = 20,480 (``STEP_S``: with the P2
+decode staged serially at 40 GB/s, and with it hidden under the GEMMs).  Writes ``bench.json`` into ``--out``
 (default ``$OUT``) and ``result.json`` into the run dir, whose validation is ``check_roots.py``'s when its ``roots.json`` is
 in ``--out``.
 """

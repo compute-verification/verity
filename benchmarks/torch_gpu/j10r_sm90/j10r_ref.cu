@@ -1,4 +1,4 @@
-// J10-R's unit, `PouwH1Tile_v5` (h1tile.j10r_reference), slow but exact on sm_90a (HASH-22's fallback): every value in
+// J10-R's unit, `PouwH1Tile_v5` (h1tile.j10r_reference), slow but exact on sm_90a (the fallback): every value in
 // the Definition's own order, integers only, no tensor cores, the noise and the fold keys hashed by each unit itself.
 //
 //   jr_seeds   one thread a listed unit: sigma_R = seeds.receipt_seed(salt, base + u, roots); one more thread seed_c =

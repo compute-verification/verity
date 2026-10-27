@@ -8,7 +8,7 @@
    its 1,300 one-row units' roots (frame leaves, pads, 11 levels), and the step's tree over the slots' roots. Seconds a step,
    GB/s of committed bytes, SHA-512 compressions a second (a leaf's 5; its 3 ChaCha20 blocks aren't counted) and the split.
 
-The layout is commit_slots' ``h200_layout`` (HASH-13, benchmarks/torch_gpu/commit_slots/slots.py), derived again here from
+The layout is commit_slots' ``h200_layout`` (benchmarks/torch_gpu/commit_slots/slots.py), derived again here from
 the frozen shape: every op's per-token output, one-row units of at most 32 KiB. Times are CUDA events; clocks are read, never
 set.
 """
