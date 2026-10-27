@@ -63,7 +63,6 @@ theorem pr_le_add {α : Type} [Fintype α] {P Q R : α → Prop} (h : ∀ x, P x
       _ ≤ _ := Finset.card_union_le _ _
   rw [Pous.pr_def, Pous.pr_def, Pous.pr_def, ← ENNReal.add_div, ← Nat.cast_add]
   gcongr
-  all_goals exact_mod_cast hcard
 
 /-- Probability is invariant under a bijection of the coins. -/
 theorem pr_congr_equiv {α β : Type} [Fintype α] [Fintype β] (e : α ≃ β) {P : α → Prop} {Q : β → Prop}
@@ -134,7 +133,7 @@ theorem pr_distinguisher_le {ι : Type} {d : Accounting.Device ι} {C : Circuit}
   classical
   rcases A.eq_empty_or_nonempty with rfl | ⟨a₀, ha₀⟩
   · rw [pr_eq_zero fun x hx => by simp [Accounting.Wipe.Strategy.distinguisher] at hx]
-    exact zero_le _
+    exact zero_le
   have hcard : Fintype.card (Device.State d × A) ≤
       Fintype.card (Pous.Bits (n * 512) × Pous.Bits (K + d.chip + (d.mem - n * 512))) := by
     rw [Fintype.card_prod, Fintype.card_prod, card_state, Fintype.card_coe]
@@ -177,9 +176,9 @@ theorem pr_distinguisher_le {ι : Type} {d : Accounting.Device ι} {C : Circuit}
 label, meets the survivor bound at `⌈n · 512/19⌉ + E` bits and `ε₀ ≥ 2^-128` plus the PRF's advantage against the
 adversary's distinguisher plus `δ_net`, at every set `A` of at most `2^E` egress strings. -/
 theorem survivorBound_of_observed {ι : Type} {d : Accounting.Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B}
-    {b : Fin B} {n : ℕ} [NeZero n] (hn : 2 ^ 19 ≤ n) (τ : Accounting.Wipe.Strategy d s b n 2152)
+    {b : Fin B} {n k : ℕ} [NeZero n] (hk : k = 2152) (hn : 2 ^ 19 ≤ n) (τ : Accounting.Wipe.Strategy d s b n k)
     (hfill : τ.fill ≤ n * 512)
-    (acc : Device.State d → Accounting.Wipe.Labels n → Accounting.Wipe.Reads n 2152 → Prop)
+    (acc : Device.State d → Accounting.Wipe.Labels n → Accounting.Wipe.Reads n k → Prop)
     (hacc : ∀ σ L c, acc σ L c → ∀ i, τ.answer (τ.filled σ L).1 (τ.filled σ L).2
       (Pous.StreamedWipe.revealed c i) (c i) = L (c i))
     {κ : ℕ} (prf : Pous.Bits κ → Accounting.Wipe.Labels n) {K : ℕ} (A : Finset (Fin τ.egress → Bool))
@@ -188,6 +187,7 @@ theorem survivorBound_of_observed {ι : Type} {d : Accounting.Device ι} {C : Ci
     (τ.wipe acc prf).SurvivorBound foreignBits fun _ hold keep =>
       ε₀ + Pous.StreamedWipe.prfAdvantage prf (τ.distinguisher acc A hold keep) + τ.deltaNet acc prf A hold := by
   classical
+  subst hk
   intro S hS hold keep
   have hS' : (n * 512 + 18) / 19 + (K + d.chip + (d.mem - n * 512)) ≤ S := by
     have : (τ.wipe acc prf).unfilled = d.chip + (d.mem - τ.fill) := rfl
@@ -283,11 +283,7 @@ theorem wipeSurvivorBound : WipeSurvivorBound := by
   have heps : ((1 : ℕ) : ℝ≥0∞) / ((2 ^ 128 : ℕ) : ℝ≥0∞) = (2⁻¹ : ℝ≥0∞) ^ 128 := by
     rw [Nat.cast_one, Nat.cast_pow, Nat.cast_ofNat, one_div, ENNReal.inv_pow]
   subst hm
-  revert τ
-  generalize c.params.k = k at hk ⊢
-  subst hk
-  intro τ count A hfill hA
-  exact survivorBound_of_observed hn τ hfill _ (fun _ _ _ h => h.1) prf A hA (le_of_eq rfl) heps.ge
+  exact survivorBound_of_observed hk hn τ hfill _ (fun _ _ _ h => h.1) prf A hA (le_of_eq rfl) heps.ge
 
 /-! ## The honest and nontrivial lemmas -/
 
@@ -297,8 +293,9 @@ theorem honestRead_honestFill {ι : Type} {d : Accounting.Device ι} {n : ℕ} (
   have hi := i.isLt
   have ht := t.isLt
   simp only [honestRead, honestFill]
-  rw [dif_pos (by omega)]
-  congr 2 <;> apply Fin.ext <;> simp only <;> omega
+  split_ifs with ha
+  · congr 2 <;> omega
+  · omega
 
 theorem wipeSurvivorBoundHonest : WipeSurvivorBoundHonest := by
   refine ⟨fun q hk hn => certify_zero hk hn, fun d s b n k h carry => ⟨rfl, ?_, fun σ L c => ⟨fun i => ?_, le_rfl⟩⟩⟩
