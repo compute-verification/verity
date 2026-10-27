@@ -163,7 +163,7 @@ first coin.
   rehearse`, with the warden and its client here and the server the peer's endpoint, reached through the same tunnel:
   client ──cells──▶ warden (here) ──tunnel──▶ the peer's 127.0.0.1:PORT. The gate validates `--peer`, `--port` and
   `--minutes` as a certifier rehearsal's (it takes no `--tamper`: the warden is the device, with no shim to tamper),
-  `--requests` 4 to 400 (100 by default) and `--tokens` 16 to 256, the most tokens a request asks for, recorded and
+  `--requests` 4 to 1700 (100 by default) and `--tokens` 16 to 256, the most tokens a request asks for, recorded and
   passed on only when given (`warden_serve.py`'s 256 otherwise), and the sampling and the key's height below. The traffic
   is the gate's (`WARDEN_RATE`, `WARDEN_SEED`, `WARDEN_TAIL_S`), so a request whose `--minutes` is under
   `warden_minutes` of its requests and height is refused, with the least that fits. With `--scan` (recorded only then)
@@ -314,7 +314,10 @@ DECIMAL = r"[0-9](\.[0-9]{1,4})?"
 REHEARSAL_HEIGHT = (10, lms.DEPLOYED.H)
 #: the one-time keys a second `certifier_serve.load_key` makes in its eight processes (16384 in 4.1 s on four cores)
 KEYGEN_LEAVES_S = 4096
-WARDEN_REQUESTS = (4, 400)
+#: a warden rehearsal's `--requests` (and a scan rehearsal's on its own `--prompts`, `WARDEN_PROMPT_REQUESTS`): 1700 at
+#: `WARDEN_RATE` is one session of about 57 minutes, about 1080 of the scan's 3.2 s link-windows, past the 745 that
+#: memory-accounting's whole-node wipe needs (H200-GATE, 27 Oct)
+WARDEN_REQUESTS = (4, 1700)
 WARDEN_TOKENS = (16, 256)
 #: the warden rehearsal's traffic, which the gate fixes so that `warden_minutes` bounds it: Poisson arrivals at
 #: `WARDEN_RATE` a second drawn from `WARDEN_SEED`, the run lasting `WARDEN_TAIL_S` past the last
@@ -335,7 +338,7 @@ WARDEN_PROMPTS_BYTES = 1 << 20
 WARDEN_PROMPTS = (1, 400)
 WARDEN_PROMPT_IDS = (1, 1024)
 WARDEN_PROMPT_ID_BITS = 17
-WARDEN_PROMPT_REQUESTS = (1, 400)
+WARDEN_PROMPT_REQUESTS = (1, WARDEN_REQUESTS[1])
 WARDEN_PROMPT_TOKENS = (1, SCAN["--egress-cells"] - 1)
 #: the prompts' file in `witness/`, the prover's: `warden_serve.py rehearse --prompts` reads it
 PROMPTS = "prompts.json"

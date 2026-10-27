@@ -79,9 +79,10 @@ def test_the_gates_warden_rehearsal_is_a_rehearse_and_its_least_minutes_cover_ev
     assert (args.rate, args.seed, args.tail) == (A.WARDEN_RATE, A.WARDEN_SEED, A.WARDEN_TAIL_S)
     assert ws.parser().parse_args(A.warden_command({"requests": 7}, tmp_path, "http://h:1")[2:]).max_tokens == 256
     window_s = args.window * args.bucket_ms / 1000
+    most = ws.varied_traffic(A.WARDEN_REQUESTS[1], model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED)
+    assert ws.varied_traffic(400, model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED) == most[:400]
     for n in range(A.WARDEN_REQUESTS[0], A.WARDEN_REQUESTS[1] + 1):
-        last = ws.varied_traffic(n, model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED)[-1]["at"]
-        took = math.ceil((last + A.WARDEN_TAIL_S) / window_s) * window_s + args.start_in + 30
+        took = math.ceil((most[n - 1]["at"] + A.WARDEN_TAIL_S) / window_s) * window_s + args.start_in + 30
         assert took <= A.warden_minutes(n, A.REHEARSAL_HEIGHT[0]) * 60, n
 
 
