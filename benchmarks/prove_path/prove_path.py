@@ -90,8 +90,9 @@ Two kinds of committed run:
   and 16, 1,024 prompt ids and 64 outputs, the certifier run of record's envelope at ASK-122's fixed slots; every slot's
   Program whatever the window's requests, each placed at the window's first boundary): its record (or ``--description``,
   its description) and its input count at the verifier's pins (``--pin NAME=ROOT``, the roots it fixed before the run,
-  each of its parameter alone, a weight's ``weights/<label>@<words>``; ``--pins RECORD``, each weight's root of record,
-  `window_circuit.weights_record`'s ``registered_roots``; a registered read counts registered only where the window's
+  each of its parameter alone, a weight's ``weights/<label>@<words>``; ``--pins REGISTRATION``, each weight's hiding root
+  as the committer registered it before the first window's coins, `window_weights.weights_registration`'s ``{program,
+  values}``, never a root computed from a checkpoint; a registered read counts registered only where the window's
   registration, `verity-vllm advice`'s, records the pinned root for its parameter, and any other is free), which
   ``records_audit.py count`` recounts from the record alone. A5 audits it once the committer writes each
   unit's rows as the record's members (V3c).
@@ -1411,9 +1412,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pin", action="append", default=[], type=pin_arg, metavar="NAME=ROOT", help="a registered parameter and "
                    "the root the verifier fixed for it before the run, as `records_audit.py count --pin` takes it (repeatable; "
                    "none: every registered read is free)")
-    p.add_argument("--pins", action="append", default=[], metavar="FILE", help="pins as a JSON {param: root}, or a weights "
-                   "record of record's registered_roots (window_circuit.weights_record), as `records_audit.py count --pins` "
-                   "takes them (repeatable)")
+    p.add_argument("--pins", action="append", default=[], metavar="FILE", help="pins as a JSON {param: root}, or a "
+                   "registration of values {program, values}, the committer's weights registration "
+                   "(window_weights.weights_registration), as `records_audit.py count --pins` takes them (repeatable)")
     p = sub.add_parser("class-size", help="a served window's padded size at its class, projected from a small probe class")
     for flag in ("--serve-run", "--row-dir", "--advice"):
         p.add_argument(flag, required=True)
