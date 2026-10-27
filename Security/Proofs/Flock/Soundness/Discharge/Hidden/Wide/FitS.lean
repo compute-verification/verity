@@ -34,6 +34,21 @@ def SegRow (p : Port) : Prop :=
 input rows (`OutRowsS`), and every row an unsegmented row (`PadRow`) or a `sha512/row-seg/v1` row (`SegRow`). -/
 def RowsFitS (c : Circuit) : Prop := OutRowsS c ∧ ∀ p ∈ c.ports.toList, PadRow p ∨ SegRow p
 
+/-- **`RowsFitS` with output ports past the output rows** (`OutRowsP`: META `pinned_outputs`' have no row). -/
+def RowsFitP (c : Circuit) : Prop := OutRowsP c ∧ ∀ p ∈ c.ports.toList, PadRow p ∨ SegRow p
+
+theorem RowsFitS.toP {c : Circuit} (h : RowsFitS c) : RowsFitP c := ⟨h.1.toP, h.2⟩
+
+namespace RowsFitP
+
+variable {c : Circuit} (h : RowsFitP c)
+include h
+
+theorem kind {p : ℕ} (hp : p < c.ports.size) : PadRow c.ports[p]! ∨ SegRow c.ports[p]! :=
+  h.2 _ (by rw [getElem!_pos c.ports p hp]; exact Array.getElem_mem_toList hp)
+
+end RowsFitP
+
 /-- **The bytes a row's `hm96` slot hashes**, `bytes` its message bytes: `RowSeg.enc` of them at a segmented row, else
 its own prefix (`rowPre`) and them. -/
 def rowMsg (p : Port) (bytes : List UInt8) : List UInt8 :=
@@ -45,7 +60,7 @@ variable {c : Circuit} (h : RowsFitS c)
 include h
 
 theorem kind {p : ℕ} (hp : p < c.ports.size) : PadRow c.ports[p]! ∨ SegRow c.ports[p]! :=
-  h.2 _ (by rw [getElem!_pos c.ports p hp]; exact Array.getElem_mem_toList hp)
+  h.toP.kind hp
 
 theorem bits16 : ∀ p ∈ c.ports.toList, p.bits = 16 * p.words := fun p hp => by
   rcases h.2 p hp with h1 | h1

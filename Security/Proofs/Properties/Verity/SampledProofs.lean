@@ -163,7 +163,7 @@ theorem sampledProofsSound_nontrivial (V : Vocab d α) (θ F c : ByteArray) (σ 
     (hio : ∀ u, ∃ g ∈ (V.partsOf F).io u, ∀ v, ¬ V.Opens θ F c g v) (hε : (V.certOf θ).ε < 1) (hn : 0 < V.units F)
     (hlt : ∑ b, V.error b θ F c σ < 1) :
     ∑ b, V.error b θ F c σ < Game.prob (fun o => ¬ V.Holds θ F c σ .sampled o) (V.game θ F c) σ := by
-  exact hlt.trans_eq (prob_play_eq_one (V.rounds θ) (V.sign θ) θ F c (fun o => ¬ V.Holds θ F c σ .sampled o)
+  exact hlt.trans_eq (prob_play_eq_one (V.rounds θ) θ F c (fun o => ¬ V.Holds θ F c σ .sampled o)
     (fun _ _ _ => not_holds_sampled_of_unopened V θ F c σ _ hio hε hn) σ).symm
 
 /-- **Sampled proofs' honest lemma** (`Vocab.HonestHolds commit .sampled`): where, at registered files and the honest
@@ -174,7 +174,7 @@ theorem honestHolds_sampled (V : Vocab d α) (commit : ByteArray → ByteArray �
       (∀ u, (V.partsOf F).Correct (V.extract θ F (commit θ F) (V.honest θ F (commit θ F))) u) ∧
         ∀ g, V.Opens θ F (commit θ F) g (V.extract θ F (commit θ F) (V.honest θ F (commit θ F)) g)) :
     V.HonestHolds commit .sampled := fun θ F hreg =>
-  prob_play_eq_zero (V.rounds θ) (V.sign θ) θ F (commit θ F) _
+  prob_play_eq_zero (V.rounds θ) θ F (commit θ F) _
     (fun _ _ _ hn => hn (V.holds_sampled_of_opens θ F (commit θ F) _ _ (h θ F hreg).1 (h θ F hreg).2 (hε θ))) _
 
 end Verity

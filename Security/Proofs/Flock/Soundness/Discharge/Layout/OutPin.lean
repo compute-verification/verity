@@ -14,7 +14,7 @@ that bit is `outBitOf`: the gate's column in its unit's instance is a template i
 is bit `t` of the population's output word `lo[j]` of the unit, for the copy's leaf's outputs `lo`. `keyProg_hout`
 proves `hout` for it, in an untyped circuit whose unit returns the outputs (`c.outNet = c.unitNet`), from:
 
-* the stacked column's place in the block (`stackPlace_val_comp`, `col_val_comp`): the template instance's slot
+* the stacked column's place in the block (`Layout.col_val_comp`, `col_val_comp`): the template instance's slot
   `vu · upv + u'` at column `outCol j t`, which is region "out"'s `outAddr` (`out_site`, at each drawn unit's site,
   `BcSite`);
 * `OutsOut`: every committed gate a unit computes is on such a column (a condition on the circuit's outputs `outs`: the
@@ -31,31 +31,17 @@ open Flock FlockLevel3 Model Audit Binding Placed
 
 /-! ## A stacked computed column's place -/
 
-/-- **Copy `u'`'s computed column `c0`, stacked and placed**, is `base u' + c0`. -/
-theorem stackPlace_val_comp (S : Model.Statement) (R : FlockSoundness.Rows) (k : ℕ) (base : ℕ → ℕ)
-    (hb : ∀ u < k, base u + (R.nIn + R.nComp) < 2 ^ S.kLog) {u' c0 : ℕ} (hu' : u' < k) (h1 : R.nIn ≤ c0)
-    (h2 : c0 < R.nIn + R.nComp) (x : Fin (R.stackW k))
-    (hx : x.val = k * R.nIn + (u' * (R.nComp + 1) + (1 + (c0 - R.nIn)))) :
-    (stackPlace S R k base hb x).val = base u' + c0 := by
-  have hc0 : c0 < R.w := by simp only [FlockSoundness.Rows.w]; omega
-  have e : x = R.stackCol k hu' ⟨c0, hc0⟩ := by
-    apply Fin.ext
-    simp only [FlockSoundness.Rows.stackCol, show ¬ c0 < R.nIn by omega, h2, ↓reduceDIte]
-    exact hx
-  rw [e, stackPlace_stackCol]
-  rfl
-
 /-- **An accepted statement's template instance column of copy `u'`'s computed column `c0`** is column `c0` of the unit
-slot `vu · upv + u'`. -/
+slot `vu · upv + u'`, through `upos`. -/
 theorem col_val_comp {T : Model.Statement} (a : Placed.Accepted T) {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w)
     {u' c0 : ℕ} (hu' : u' < a.st.c.upv) (h1 : (unitRows a.st a.layout.unit_built).nIn ≤ c0)
     (h2 : c0 < (unitRows a.st a.layout.unit_built).nIn + (unitRows a.st a.layout.unit_built).nComp)
     (hx : x.val = a.st.c.upv * (unitRows a.st a.layout.unit_built).nIn +
       (u' * ((unitRows a.st a.layout.unit_built).nComp + 1) + (1 + (c0 - (unitRows a.st a.layout.unit_built).nIn)))) :
-    (a.col hg x).val = a.st.c.unitRange.slot (g * a.st.c.upv + u') + c0 := by
+    (a.col hg x).val = a.st.c.unitRange.slot (g * a.st.c.upv + u') + upos a.st.c c0 := by
   unfold Placed.Accepted.col
   rw [Fin.val_cast]
-  exact stackPlace_val_comp _ _ _ _ _ hu' h1 h2 x hx
+  exact a.layout.col_val_comp a.regs hg hu' h1 h2 x hx
 
 /-! ## The returned outputs' columns -/
 
@@ -156,11 +142,12 @@ theorem keyProg_hout (ho : c.outNet = c.unitNet)
     rw [e]
   have hcc := (si.acc S R u hu).c_eq (hparse S R u hu)
   have hR : unitRows (si.acc S R u hu).st (si.acc S R u hu).layout.unit_built = Rows.ofNet hU :=
-    Placed.ofNet_eq hcc _ hU
+    Placed.ofNet_eq (Placed.lunit_of_parse (hparse S R u hu) hcc) _ hU
   have hcol := col_val_comp (si.acc S R u hu) (si.hvu S R u hu)
     (Fin.cast (congrArg FlockSoundness.Rows.w (Sites.rowsOf_keyProg hU hparse S R u hu)) (Classical.choose hc'))
     (u' := u') (c0 := outCol c j t) (by rw [hcc]; exact hu') (by rw [hR]; exact h1) (by rw [hR]; exact h2)
     (by rw [hR, Fin.val_cast, hcc]; exact hxv)
+  rw [upos_flat (by rw [hcc]; exact (parse_facts (hparse S R u hu)).tmpl)] at hcol
   have hA : (si.acc S R u hu).st.c.unitRange.slot (si.vu S R u hu * (si.acc S R u hu).st.c.upv + u') + outCol c j t =
       outAddr (si.acc S R u hu).st.c (si.vu S R u hu * (si.acc S R u hu).st.c.upv + u') j t := by
     rw [hcc]

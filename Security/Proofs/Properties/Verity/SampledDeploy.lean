@@ -280,16 +280,15 @@ theorem card_wrong_congr {C C' : Verity.Circuit} (hC : C = C') {n n' : ℕ} (hn 
 where the wire values `vals` opens at `σ`, read at the parse's constants (`Flock.Bridge.openedOf`), are the key
 circuit's evaluation on some inputs `xv` (`hval`), every unit of `extractOf`'s transcript is correct. -/
 theorem correct_extractOf (read : ByteArray → FileRead) (rounds : ByteArray → List ℕ)
-    (sign : ByteArray → ByteArray → List Bool → ByteArray × ByteArray)
-    (vals : ∀ (θ F c : ByteArray) (_σ : Game.Strategy (play (rounds θ) (sign θ) θ F c)) (r : Flock.Bridge.Parsed),
+    (vals : ∀ (θ F c : ByteArray) (_σ : Game.Strategy (play (rounds θ) θ F c)) (r : Flock.Bridge.Parsed),
       Flock.Bridge.parsedOf (read F).tags (read F).circuitFile (read F).tables (read F).publicFile = some r →
       ℕ → Option Bool)
-    (θ F c : ByteArray) (σ : Game.Strategy (play (rounds θ) (sign θ) θ F c)) {r : Flock.Bridge.Parsed}
+    (θ F c : ByteArray) (σ : Game.Strategy (play (rounds θ) θ F c)) {r : Flock.Bridge.Parsed}
     (hr : Flock.Bridge.parsedOf (read F).tags (read F).circuitFile (read F).tables (read F).publicFile = some r)
     (xv : Fin (Flock.Bridge.keyCircuit r.D r.hU r.n).N → Bool)
     (hval : ∀ g, Flock.Bridge.openedOf (Flock.Bridge.keyCircuit r.D r.hU r.n) (fun g => parsedConsts (some r) g)
       (vals θ F c σ r hr) g = (Flock.Bridge.keyCircuit r.D r.hU r.n).eval xv g) :
-    ∀ u, (read F).parts.Correct (extractOf read rounds sign vals θ F c σ) u := by
+    ∀ u, (read F).parts.Correct (extractOf read rounds vals θ F c σ) u := by
   have hC : (read F).circuit = Flock.Bridge.circuitOf r.D r.hU r.n := by
     show Flock.Bridge.Parsed.circuit
       (Flock.Bridge.parsedOf (read F).tags (read F).circuitFile (read F).tables (read F).publicFile) = _
@@ -305,15 +304,15 @@ theorem correct_extractOf (read : ByteArray → FileRead) (rounds : ByteArray �
       (Flock.Bridge.parsedOf (read F).tags (read F).circuitFile (read F).tables (read F).publicFile)) _
     rw [hr]
     rfl
-  have hT : HEq (extractOf read rounds sign vals θ F c σ)
+  have hT : HEq (extractOf read rounds vals θ F c σ)
       (Flock.Bridge.transcriptOf r.D r.hU r.n (fun g => parsedConsts (some r) g) (vals θ F c σ r hr)) :=
     transcriptAt_heq _ hr
-  have hw : ((read F).parts.wrong (extractOf read rounds sign vals θ F c σ)).card = 0 := by
+  have hw : ((read F).parts.wrong (extractOf read rounds vals θ F c σ)).card = 0 := by
     rw [card_wrong_congr hC hn hP hT, Flock.Bridge.transcriptOf, Flock.Bridge.partsOf_wrong, funext hval,
       wrong_evalAudit] <;> exact Finset.card_empty
   intro u
   by_contra hu
-  have hmem : u ∈ (read F).parts.wrong (extractOf read rounds sign vals θ F c σ) := (read F).parts.mem_wrong.2 hu
+  have hmem : u ∈ (read F).parts.wrong (extractOf read rounds vals θ F c σ) := (read F).parts.mem_wrong.2 hu
   rw [Finset.card_eq_zero.1 hw] at hmem
   exact Finset.notMem_empty u hmem
 
@@ -392,7 +391,7 @@ theorem honestHolds_sampled_of_bits (V : Vocab d α) (commit : ByteArray → Byt
     (hε : ∀ θ, 0 ≤ (V.certOf θ).ε)
     (w : ∀ (θ F c : ByteArray) (_σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed), V.parsed F = some r →
       Fin (Flock.Bridge.keyCircuit r.D r.hU r.n).N → Bool)
-    (hext : V.extract = extractOf V.read V.rounds V.sign
+    (hext : V.extract = extractOf V.read V.rounds
       fun θ F c σ r hr => valsOfBits (Flock.Bridge.keyCircuit r.D r.hU r.n) (w θ F c σ r hr))
     (h : ∀ θ F, V.Registered θ F → ∀ (r : Flock.Bridge.Parsed) (hr : V.parsed F = some r),
       ∃ xv : Fin (Flock.Bridge.keyCircuit r.D r.hU r.n).N → Bool,
@@ -431,7 +430,7 @@ theorem honestHolds_sampled_of_bits (V : Vocab d α) (commit : ByteArray → Byt
       exact transcriptAt_heq _ hr
     refine ⟨?_, fun g => ?_⟩
     · rw [hext]
-      exact correct_extractOf V.read V.rounds V.sign vals θ F (commit θ F) (V.honest θ F (commit θ F)) hr xv hev
+      exact correct_extractOf V.read V.rounds vals θ F (commit θ F) (V.honest θ F (commit θ F)) hr xv hev
     · cases hc : (V.read F).consts g with
       | none => exact hopen θ F hreg g hc
       | some b =>
@@ -551,7 +550,7 @@ transcript and no draw enters. -/
 theorem honestHolds_sampled_of_rows (Dp : SampledDeploy V) (commit : ByteArray → ByteArray → ByteArray)
     (wo : ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
       (hr : V.parsed F = some r), (Dp.A θ F c σ r hr).vb.Pos → (Dp.A θ F c σ r hr).vb.Opening)
-    (hext : V.extract = extractOf V.read V.rounds V.sign fun θ F c σ r hr =>
+    (hext : V.extract = extractOf V.read V.rounds fun θ F c σ r hr =>
       valsOfBits (Flock.Bridge.keyCircuit r.D r.hU r.n) ((Dp.A θ F c σ r hr).rowBits (wo θ F c σ r hr)))
     (h : ∀ θ F, V.Registered θ F → ∀ (r : Flock.Bridge.Parsed) (hr : V.parsed F = some r),
       ∃ xv : Fin (Flock.Bridge.keyCircuit r.D r.hU r.n).N → Bool,
@@ -595,6 +594,6 @@ theorem sampledProofsSound' (V : Vocab d α) (Dp : SampledDeploy V) : V.SampledP
       refine (Game.prob_mono (q := fun _ => False) (fun o ho => ho.2 hH) _ σ).trans ?_
       rw [Game.prob_false]
       exact zero_le
-  · exact (prob_play_eq_zero (V.rounds θ) (V.sign θ) θ F c _ (fun _ _ _ h => hreg h.1.1) σ).trans_le zero_le
+  · exact (prob_play_eq_zero (V.rounds θ) θ F c _ (fun _ _ _ h => hreg h.1.1) σ).trans_le zero_le
 
 end Verity

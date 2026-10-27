@@ -77,6 +77,10 @@ path = "../../verity/core/protocols/onsite"
 name = "flock_verifier"
 path = "../../verity/core/service/flock"
 
+[[require]]
+name = "core_remote"
+path = "../../verity/core/protocols/remote"
+
 [[lean_lib]]
 name = "Properties"
 roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Pouw.LiveSalt",
@@ -95,5 +99,6 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.RemoteAudit.Shared", "Properties.RemoteAudit.Live", "Properties.RemoteAudit.Component",
   "Properties.Composition", "Properties.Verity.Soundness", "Properties.Verity.Game",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
-  "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Flock.Circuit", "Properties.Nci.Protocol",
-  "Properties.Verity.Extract"]
+  "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Challenger",
+  "Properties.SampledProofs.OneStageZk", "Properties.Composed", "Properties.Onsite", "Properties.Remote",
+  "Properties.Flock.Circuit", "Properties.Nci.Protocol", "Properties.Verity.Extract"]

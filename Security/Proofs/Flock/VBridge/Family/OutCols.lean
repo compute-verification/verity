@@ -17,7 +17,7 @@ verifier's `unitLaid` (`check_part`), and the leaves are `HmRow.check`'s leaf ma
 
 The parts' `v` and row columns (`PartVCols`, `PartRowCols`, `PartRowBits`) are another matter: their keys
 (`Aliased.srcKey`) read copy 0's leaf map and the ports' names and words, which only META's `leaves_in` and `ports`
-give, and META is read by `Lean.Json.parse`, a `partial def` no proof unfolds.
+give, and META is read by `Flock.JsonParse.parse`, which no proof here evaluates.
 -/
 
 namespace FlockVBridge.OfVStar
