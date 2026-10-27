@@ -3,7 +3,7 @@ import Properties.Verity.Game
 /-!
 # Where the committed files open each gate (`Verity.FileRead.place`)
 
-The vocabulary's positions (`Vocab.place`, ONE-7) at the committed files as v2 reads them. Gate `g` of the circuit the
+The vocabulary's positions (`Vocab.place`) at the committed files as v2 reads them. Gate `g` of the circuit the
 files describe (`FileRead.circuit`) is bit `k` of unit `u`'s row of port `q` (`HiddenExec.rowOfH`, the game's own row
 map, read off the circuit file), and its place (`placeAt`) is that row's leaf as the spec's row-leaf verifier opens it:
 
