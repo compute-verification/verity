@@ -15,7 +15,6 @@ CPU reference of the same chunk tree (`commit_block_offline`) so they need no CU
 from __future__ import annotations
 
 import copy
-import os
 
 import pytest
 
@@ -50,11 +49,9 @@ def _metas(step: int, seed: int) -> tuple[list[TensorMeta], bytes]:
 
 
 def _committer(retain: str, run_id: str = "p0-test") -> NativeHostCommitter:
-    os.environ["VERITY_RETAIN"] = retain
-    try:
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("VERITY_RETAIN", retain)
         return NativeHostCommitter(None, run_id=run_id, gpu_tree=True)
-    finally:
-        del os.environ["VERITY_RETAIN"]
 
 
 def _run(com: NativeHostCommitter, seed: int = 1, steps: int = 3):
