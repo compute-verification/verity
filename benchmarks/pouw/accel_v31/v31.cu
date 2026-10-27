@@ -26,7 +26,9 @@
 //                                         to OUT/samples/NAME (`v31.py gpu-sample`), then gpu_kit's interleaved timing of
 //                                         the arms (lt: cuBLASLt's int8 GEMM, the baseline; plain: this file's mainloop
 //                                         alone; coins, form, wrap, gemm, commit; call: one call serial; ovl: calls with
-//                                         each commit beside the next call's compute), one JSON line a shape
+//                                         each commit beside the next call's compute; salt, leaf, leaf_nomem: the
+//                                         commit's parts), one JSON line a shape
+//   v31 once PDIR LP T ROW name:M:N:K     one shape's call twice, nothing timed or checked (under a profiler)
 // Build: nvcc -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1
 //        v31.cu -lcuda -lcublasLt
 #include <cublasLt.h>
@@ -1484,7 +1486,32 @@ static int cmd_bench(int reps, const std::string& out, const std::string& pdir, 
   return 0;
 }
 
+// One shape's call (compute, then commit) twice on synthetic operands, nothing timed: what a profiler watches.
+static int cmd_once(const std::string& pdir, int lp, int t, int row, const std::string& sh) {
+  char name[64];
+  int m, n, k;
+  if (sscanf(sh.c_str(), "%63[^:]:%d:%d:%d", name, &m, &n, &k) != 4) { fprintf(stderr, "bad shape %s\n", sh.c_str()); return 2; }
+  Ctx c;
+  c.setup(m, n, k, lp, t, row, pdir + "/" + std::to_string(m) + "x" + std::to_string(n) + "x" + std::to_string(k) + "-lp" +
+          std::to_string(lp) + "-t" + std::to_string(t) + "-r" + std::to_string(row) + ".bin", std::max(64, k / 8), 1);
+  gen_kernel<<<m, 256, 0, c.s0>>>(c.A, k, 1u, true);
+  gen_kernel<<<n, 256, 0, c.s0>>>(c.B, k, 2u, false);
+  std::vector<uint8_t> sd(320);
+  for (size_t i = 0; i < sd.size(); i++) sd[i] = (uint8_t)mix32((u32)i);
+  c.set_seeds(sd.data());
+  for (int i = 0; i < 2; i++) {
+    c.compute(c.s0, 0);
+    c.commit(c.s0, 0);
+  }
+  CK(cudaStreamSynchronize(c.s0));
+  CK(cudaGetLastError());
+  const std::vector<u64> r = c.root();
+  printf("%s: flags %d root %016llx\n", name, c.flags(), (unsigned long long)r[0]);
+  return c.flags() ? 4 : 0;
+}
+
 int main(int argc, char** argv) {
+  if (argc == 7 && !strcmp(argv[1], "once")) return cmd_once(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), argv[6]);
   if (argc >= 10 && !strcmp(argv[1], "gate"))
     return cmd_gate(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), atoi(argv[6]), atoi(argv[7]), atoi(argv[8]), argv[9]);
   if (argc >= 9 && !strcmp(argv[1], "bench"))
@@ -1495,6 +1522,7 @@ int main(int argc, char** argv) {
     printf("\n");
     return 0;
   }
-  fprintf(stderr, "usage: v31 gate DIR M N K LP T ROW CHEAT | bench REPS OUT PDIR LP T ROW name:M:N:K... | attrs\n");
+  fprintf(stderr, "usage: v31 gate DIR M N K LP T ROW CHEAT | bench REPS OUT PDIR LP T ROW name:M:N:K... | once PDIR LP T ROW "
+                  "name:M:N:K | attrs\n");
   return 2;
 }

@@ -13,7 +13,11 @@
 #     --by V31-GPU -- bash benchmarks/pouw/accel_v31/run.sh
 # (a node's lane runs go through a slot of its gpu pool; the GPUs come from gpu-lease inside, for the GPU work alone)
 #
-# HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench (default bench); SHAPES: bench's NAME:M:N:K list
+# MODE=prof: after the gates, in place of the bench, Nsight Compute (--set full) on PROF_KERNELS (an ncu -k regex, default
+# the form, wrap and commit kernels; PROF_COUNT launches, default 10) of `v31 once` on each of SHAPES for each of VARIANTS:
+# out/ncu-TAG-SHAPE.ncu-rep and its details page as CSV.
+#
+# HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
 # cprio (lo), carve (100), dyn (1), wrap (2), wcw (256), ccta (1), pf (0) (v31.cu's Knobs) and nreg (the GEMM's register cap, a
 # build of its own; default v31.cu's), default row=8192; REPS (default 7); Q, the proof blocks a verdict opens (default
@@ -39,7 +43,12 @@ git rev-parse HEAD > "$O/commit.txt" 2>&1
 : > "$O/rc.txt"
 # knob VARIANT KEY DEFAULT: the variant's KEY, else DEFAULT
 knob() { local v; v=$(tr ',' '\n' <<< "$1" | sed -n "s/^$2=//p" | tail -1); echo "${v:-$3}"; }
-export -f knob
+# knob_env VARIANT: its knobs as v31.cu's environment
+knob_env() {
+  echo "V31_CPRIO=$(knob "$1" cprio lo) V31_CARVE=$(knob "$1" carve 100) V31_DYN=$(knob "$1" dyn 1) V31_WRAP=$(knob "$1" wrap 2)" \
+    "V31_WCW=$(knob "$1" wcw 256) V31_CCTA=$(knob "$1" ccta 1) V31_PF=$(knob "$1" pf 0)"
+}
+export -f knob knob_env
 
 build() {   # BIN LOG [nvcc flags]
   nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1 "${@:3}" -o "$1" $D/v31.cu -lcuda \
@@ -90,7 +99,7 @@ V4-n43008-k7168:8192:43008:7168 V4-n50176-k3072:8192:50176:3072 V4-n1536-k7168:8
 V4-n512-k7168:8192:512:7168 V4-n16384-k4096:8192:16384:4096 V4-n7168-k16384:8192:7168:16384 V4-n129280-k7168:8192:129280:7168
 V4-n2048-k7168:8192:2048:7168 V4-n1024-k7168:8192:1024:7168 V4-n8192-k1536:8192:8192:1536 V4-n384-k7168:8192:384:7168"}
 export SHAPES
-if [ "$MODE" = bench ]; then
+if [ "$MODE" != gates ]; then
   for r in $(for v in $VARIANTS; do knob "$v" row 8192; done | sort -u); do
     # shellcheck disable=SC2086
     $PY $D/v31.py params "$W/params" $SHAPES --lp "$LP" --t "$T" --row "$r" 2>> "$O/prep.err"
@@ -135,16 +144,33 @@ if [ "$MODE" = bench ] && ! grep -qv ' rc 0$' "$O/rc.txt"; then
       tag=$(tr ',' '-' <<< "$v" | tr -d '=')
       n=$(knob "$v" nreg "")
       mkdir -p "$W/bench/$tag"
-      V31_CPRIO=$(knob "$v" cprio lo) V31_CARVE=$(knob "$v" carve 100) V31_DYN=$(knob "$v" dyn 1) V31_WRAP=$(knob "$v" wrap 2) \
-        V31_WCW=$(knob "$v" wcw 256) V31_CCTA=$(knob "$v" ccta 1) V31_PF=$(knob "$v" pf 0) \
-        "$W/v31${n:+-n$n}" bench "$REPS" "$W/bench/$tag" "$W/params" "$LP" "$T" "$(knob "$v" row 8192)" $SHAPES \
-        > "$O/bench-$tag.jsonl" 2> "$O/bench-$tag.err"
+      env $(knob_env "$v") "$W/v31${n:+-n$n}" bench "$REPS" "$W/bench/$tag" "$W/params" "$LP" "$T" "$(knob "$v" row 8192)" \
+        $SHAPES > "$O/bench-$tag.jsonl" 2> "$O/bench-$tag.err"
       echo "bench $tag rc $?" >> "$O/rc.txt"
     done
     kill $smi'
   echo "lease bench rc $?" >> "$O/rc.txt"
-elif [ "$MODE" = bench ]; then
-  echo "bench skipped: a gate or its check failed" >> "$O/rc.txt"
+elif [ "$MODE" = prof ] && ! grep -qv ' rc 0$' "$O/rc.txt"; then
+  export PROF_KERNELS=${PROF_KERNELS:-form_|wrap|salt_|leaf_} PROF_COUNT=${PROF_COUNT:-10}
+  NCU=$(command -v ncu || ls /usr/local/cuda/bin/ncu /usr/local/cuda-*/bin/ncu /opt/nvidia/nsight-compute/*/ncu 2>/dev/null | head -1)
+  export NCU
+  [ -n "$NCU" ] || echo "prof rc no-ncu" >> "$O/rc.txt"
+  # shellcheck disable=SC2016,SC2086
+  $LEASE bash -c '
+    for v in $VARIANTS; do
+      tag=$(tr ',' '-' <<< "$v" | tr -d '=')
+      n=$(knob "$v" nreg "")
+      for s in $SHAPES; do
+        f="$O/ncu-$tag-${s%%:*}"
+        env $(knob_env "$v") "$NCU" --clock-control none -k "regex:$PROF_KERNELS" -c "$PROF_COUNT" --set full -f -o "$f" \
+          "$W/v31${n:+-n$n}" once "$W/params" "$LP" "$T" "$(knob "$v" row 8192)" "$s" > "$f.log" 2>&1
+        echo "prof $tag ${s%%:*} rc $?" >> "$O/rc.txt"
+        "$NCU" -i "$f.ncu-rep" --csv --page details > "$f.csv" 2>> "$f.log"
+      done
+    done'
+  echo "lease prof rc $?" >> "$O/rc.txt"
+elif [ "$MODE" != gates ]; then
+  echo "$MODE skipped: a gate or its check failed" >> "$O/rc.txt"
 fi
 
 for b in "$W"/bench/*/; do
