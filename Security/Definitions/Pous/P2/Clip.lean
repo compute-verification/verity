@@ -41,12 +41,12 @@ theorem clip_costs (g : α → β) (d : β) (f : (ringRO B w p).Qry → (ringRO 
     intro D Q L
     by_cases h : (if qs.any RingQry.isMul then 1 else 0) ≤ D ∧ qs.countP RingQry.isKey ≤ Q ∧
         qs.countP (fun q => !q.isKey) ≤ L
-    · rw [clip, if_pos h]
+    · rw [clip, ite_eq_left h]
       obtain ⟨h1, h2, h3⟩ := ih (qs.map f) (D - if qs.any RingQry.isMul then 1 else 0)
         (Q - qs.countP RingQry.isKey) (L - qs.countP (fun q => !q.isKey))
       simp only [mulDepth, keyWork, ringWork]
       omega
-    · rw [clip, if_neg h]
+    · rw [clip, ite_eq_right h]
       simp [mulDepth, keyWork, ringWork]
 
 /-- **A clipped program is `(D, Q, L)`-bounded**, whatever it clips. -/

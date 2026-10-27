@@ -66,7 +66,7 @@ theorem unpack_pack {n : ℕ} (l : List Bool) (hl : l.length < n) : StateBits.un
   have hg : Nat.findGreatest (fun k => ∃ h : k < n, StateBits.pack (n := n) l ⟨k, h⟩ = true) n = l.length := by
     rw [Nat.findGreatest_eq_iff]
     refine ⟨hl.le, fun _ => ⟨hl, by simp [StateBits.pack]⟩, fun k hk hkn ⟨h, hb⟩ => ?_⟩
-    simp only [StateBits.pack, show ¬ k < l.length from by omega, dif_neg, not_false_eq_true] at hb
+    simp only [StateBits.pack, show ¬ k < l.length from by omega, dite_eq_right, not_false_eq_true] at hb
     simp at hb
     omega
   unfold StateBits.unpack
@@ -75,7 +75,7 @@ theorem unpack_pack {n : ℕ} (l : List Bool) (hl : l.length < n) : StateBits.un
   · simp; omega
   · intro k h1 h2
     simp only [List.getElem_take, List.getElem_ofFn, StateBits.pack]
-    rw [dif_pos h2]
+    rw [dite_eq_left h2]
 
 theorem clip_run {B w p : ℕ} [NeZero p] {α β : Type} (g : α → β) (d : β)
     (f : (ringRO B w p).Qry → (ringRO B w p).Ans) (P : Prog (ringRO B w p) α) :
@@ -87,7 +87,7 @@ theorem clip_run {B w p : ℕ} [NeZero p] {α β : Type} (g : α → β) (d : β
     simp only [Prog.mulDepth, Prog.keyWork, Prog.ringWork] at h1 h2 h3
     have h : (if qs.any RingQry.isMul then 1 else 0) ≤ D ∧ qs.countP RingQry.isKey ≤ Q ∧
         qs.countP (fun q => !q.isKey) ≤ L := ⟨by omega, by omega, by omega⟩
-    rw [Prog.clip, if_pos h]
+    rw [Prog.clip, ite_eq_left h]
     exact ih (qs.map f) _ _ _ (by omega) (by omega) (by omega)
 
 /-- **The packed, clipped strategy answers as the strategy does**, on rounds whose states have fewer than `S` bits and
