@@ -13,6 +13,7 @@ import Definitions.Pous
 import Definitions.Pous.Guarantees.StreamedWipeFamily
 import Definitions.Pous.Guarantees.StreamedWipeReads
 import Definitions.Pous.Guarantees.StreamedWipeServer
+import Definitions.Pous.Guarantees.StreamedWipeDisk
 import Definitions.Pous.Guarantees.StreamedWipeInfo
 import Definitions.Pouw
 import Definitions.NetworkCertifier

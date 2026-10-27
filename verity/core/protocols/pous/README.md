@@ -147,6 +147,15 @@ declares whole, the host's DRAM, its disks), a GPU's driver reserve when NVML ga
 of CUDA's and NVML's totals, and NVML's counts the reserve: `wipe_store.Cuda.info`) and an egress signed `UNCOUNTED`. It
 also carries the session's window, `t0` (the prover connected) and `t1` (the session signed) on the challenger's clock,
 which a network certifier counts the egress over.
+`wipe.disk` puts the node's disks in the same session (`wipe_store.Disk`, laid ahead of the card or host memory by
+`wipe_store.Joint`; `demo.sh --disk PATH`): a fill file of the session's own in each target directory, or a raw block
+device, written with `O_DIRECT` and synced before the prover acknowledges the fill. The whole disks under the targets
+are declared, with `spare_bytes` for each drive's spare area and cache, so what the fill doesn't overwrite (the used
+filesystem, its metadata, the reserve, the spare area) counts in `R`. That is `Pous.Guarantees.StreamedWipeMeetsDisk`.
+A virtual disk's backing store, an undeclared spare area, buffered I/O and the disks outside the targets go in
+`uncertified`: every block device in `/sys/block` but loop and RAM devices, mounted or not, each whole. `wipe.dram` puts the host's DRAM in that session too, after the card (`demo.sh --dram`): the fill takes
+what `MemAvailable` says less a reserve, and the whole DRAM is declared (`wipe_store.HostMemory(whole=True)`), so the
+rest counts in `R`.
 
 Tests: `uv run pytest verity/core/protocols/pous` (about 8 s). P3's 64 KB-label segment vector runs with `VERITY_POUS_SLOW=1`.
 Regenerate the vectors with `python verity/core/protocols/pous/tests/pous_vectors.py`, and the Lean vectors with
