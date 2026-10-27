@@ -70,3 +70,9 @@ ONE8's results carry over. ONE9P states that lemma in G.
   after PRF-202's bridge passes. The registration-sending gap in `compose.py` is ONE3B's.
 - ONE9-A: `--stratified` is `some n`, with n the inner statement's population (`85-rec-reprice.sh:892`). Your `innerOk` refusal
   computes n from the params' partition and program, never reads it from a param.
+
+## 02:25Z from soundness: one more size bound, the staged rows
+
+ONE9-C's `insO_staged_partIns` now takes `hrows : (st.rows x ms).size < 2^56` (the staged rows from #4744's staging message),
+next to the public file, record and transcript bounds. Add it to your `fits` refusal (the same 2^56 bound and the same reason
+form) so G can discharge it from the compiled accept.
