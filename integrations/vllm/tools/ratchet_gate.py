@@ -69,10 +69,11 @@ sync onto `next` leaves the PR out).  The lints run on the Python that runs it, 
 on the first Python whose ``-m ruff`` is the base's pin: this one, else one ``uv run --offline --with`` makes from uv's cache,
 else one ``uv run --with`` fetches the pin for (the network, once per uv cache).  A sync gates each PR on its merge onto
 `next`, which holds every PR below it, so each change's verdict is kept under ``$RATCHET_GATE_CACHE`` (default
-``~/.cache/verity/ratchet-gate``; empty: none), keyed by this file's bytes, BASE and the change's commits, which are all it
-reads: a sync of N PRs judges each once, not N times.  The source checks' findings are kept beside the verdict, under the
-same key, and apply to the top change only, so a member below the top is never failed by them.  An entry that can't be read
-is judged again, and an error is never kept.  Before marking
+``~/.cache/verity/ratchet-gate``; empty: none), keyed by this file's bytes and the change's commits, which are all it reads, and
+BASE too for a verdict that reads it (a failed change's exemptions run BASE's move_check): a sync of N PRs judges each change
+once, not N times, and once `main` moves an untouched or passed change is still not judged again.  The source checks' findings
+are kept beside the verdict under BASE's key (they run BASE's lints and config), and apply to the top change only, so a member
+below the top is never failed by them.  An entry that can't be read is judged again, and an error is never kept.  Before marking
 a branch, run
 ``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes, 1 when one fails
 (with the fix), 2 on a usage or git error, or when the base's lints or ruff can't run (with the fix for the host), which the
@@ -891,7 +892,11 @@ FOUND = ("linted", "env_read", "ruff_new", "ruff_grown", "ruff_unmoved", "env_ne
 VERDICTS = ("untouched", "passed", "exempt", "failed")
 
 
-def cache_path(c: Change, base: str, part: str = "verdict") -> Path | None:
+#: the verdicts `judge` reaches without reading BASE, kept under a key without it; a failed change's exemptions read BASE's move_check
+BASE_FREE = ("untouched", "passed")
+
+
+def cache_path(c: Change, base: str | None, part: str = "verdict") -> Path | None:
     root = os.environ.get("RATCHET_GATE_CACHE")
     if root == "":
         return None
@@ -899,12 +904,12 @@ def cache_path(c: Change, base: str, part: str = "verdict") -> Path | None:
     return root / (hashlib.sha256(json.dumps([SELF, part, base, c.lo, c.hi, c.commits]).encode()).hexdigest() + ".json")
 
 
-def recall(c: Change, p: Path | None, fields: tuple[str, ...] = JUDGED) -> bool:
+def recall(c: Change, p: Path | None, fields: tuple[str, ...] = JUDGED, verdicts: tuple[str, ...] = VERDICTS) -> bool:
     try:
         doc = json.loads(p.read_text()) if p is not None else None
     except (OSError, ValueError):
         return False
-    if not (isinstance(doc, dict) and set(fields) <= doc.keys() and doc.get("verdict", VERDICTS[0]) in VERDICTS):
+    if not (isinstance(doc, dict) and set(fields) <= doc.keys() and doc.get("verdict", VERDICTS[0]) in verdicts):
         return False
     for k in fields:
         setattr(c, k, doc[k])
@@ -927,10 +932,10 @@ def gate(base: str, top: str) -> dict:
     base, top = (git("rev-parse", "--verify", f"{r}^{{commit}}").strip() for r in (base, top))
     cs = changes(base, top)
     for c in cs:
-        p = cache_path(c, base)
-        if not recall(c, p):
+        free, based = cache_path(c, None), cache_path(c, base)
+        if not (recall(c, free, verdicts=BASE_FREE) or recall(c, based)):
             judge(c, base)
-            keep(c, p)
+            keep(c, free if c.verdict in BASE_FREE else based)
         if c.hi == top:
             lint_top(c, base)
     failed = [c for c in cs if c.verdict == "failed"]
