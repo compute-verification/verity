@@ -610,8 +610,8 @@ template <int RP, class H> __device__ void body_pp(const Args& p, const H& h) {
     if constexpr (RP == 6) regs_dec<104>();
     else regs_dec<40>();
     if (tid == 256) {
-      tma_prefetch(&p.a);
-      tma_prefetch(&p.b);
+      wgp::tma_prefetch(&p.a);
+      wgp::tma_prefetch(&p.b);
       int s = 0;
       uint32_t ph = 0;
       for (int i = 0; i < ntile; i++) {
@@ -621,8 +621,8 @@ template <int RP, class H> __device__ void body_pp(const Args& p, const H& h) {
           const uint32_t st = base + s * T::STAGE, full = bars + 8 * s;
           mbar_wait(bars + 8 * (STAGES + s), ph ^ 1);
           mbar_expect_tx(full, T::STAGE);
-          tma_load(st, &p.a, full, k * BK, tm * TM);
-          tma_load(st + T::A_BYTES, &p.b, full, k * BK, tn * BN);
+          wgp::tma_load(st, &p.a, full, k * BK, tm * TM);
+          wgp::tma_load(st + T::A_BYTES, &p.b, full, k * BK, tn * BN);
           if (++s == STAGES) { s = 0; ph ^= 1; }
         }
       }
