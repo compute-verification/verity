@@ -72,6 +72,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "commit_gpu"))
 import reference as cref
 
+from verity.core.protocols.pouw.circuit import dither
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.limits import VerificationLimits
@@ -584,8 +585,6 @@ def verdict(sh: Shape, ch: StubChallenger, call: int, prover: Prover, q: int) ->
 # leaf rows under dither.Shape.domain; leaf pos of a call at salt offset off is salted prf_salt(Ks, off + pos).
 SERVED_TAG = "verity/pouw/dither/call/v1"
 FILL_TAG = "verity/pouw/dither/fill/v1"
-SERVED_SEEDS_TAG = b"verity/pouw/dither/seeds/v1\0"
-FILL_SEEDS_TAG = b"verity/pouw/dither/fill-seeds/v1\0"
 FILL_STREAMS = ("pad", "dA", "dB", "U", "V", "P")
 K_LIMIT = 1 << 17
 
@@ -681,29 +680,8 @@ class Fill:
         return sorted(set(pos + ([self.o_leaf(i, j)[0]] if s == self.S and self.o else [])))
 
 
-def _x(x: str) -> bytes:
-    return x.encode().ljust(8, b"\0")
-
-
-def served_seeds(coin: bytes, receipt: bytes, call: int) -> dict[str, bytes]:
-    """dither.seeds: a served call's seeds, SHA-512(SERVED_SEEDS_TAG || coin || receipt || be64(call) || x) for each stream
-    x, from the challenger's raw coin opened after the operand roots, the digest of the certifier's receipt of them, and
-    the call's index in its sampling block."""
-    if len(coin) != 64 or len(receipt) != 64:
-        raise ValueError("the coin and the operand-root receipt are 64-byte digests")
-    head = SERVED_SEEDS_TAG + coin + receipt + call.to_bytes(8, "big")
-    return {x: hashlib.sha512(head + _x(x)).digest() for x in STREAMS}
-
-
-def fill_seeds(salt: bytes, coin: bytes) -> dict[str, bytes]:
-    """dither.fill_seeds: a filler call's seeds from its live coin `coin`, in the period whose salt is `salt`."""
-    if len(salt) != 64 or len(coin) != 64:
-        raise ValueError("the period's salt and the call's coin are 64-byte digests")
-    head = FILL_SEEDS_TAG + salt + coin
-    return {x: hashlib.sha512(head + _x(x)).digest() for x in FILL_STREAMS}
-
-
-call_seeds = fill_seeds
+served_seeds = dither.seeds
+fill_seeds = call_seeds = dither.fill_seeds
 
 
 def fill_seeds_bytes(seeds: dict[str, bytes]) -> bytes:
