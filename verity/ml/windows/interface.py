@@ -1,9 +1,9 @@
 """What an integration hands Verity (Daniel, 24 Oct: integrations are frontends, and Verity is agnostic to them), one window
 at a time, in four records:
 
-1. **A circuit in proof units** (:class:`Circuit`): templates, each a complete binding of a Definition in Verity's catalog
+1. **A circuit in proof blocks** (:class:`Circuit`): templates, each a complete binding of a Definition in Verity's catalog
    (`catalog`), with its unit count, in order. Their population program and template query (`rows.population_program`)
-   partition it into proof units, and each unit's public layout is its Definition's bit rows (`layout`); ``external``
+   partition it into proof blocks, and each unit's public layout is its Definition's bit rows (`layout`); ``external``
    names the ports that are the system's external I/O, ``wires`` the units that read another unit's output row whole
    (:class:`Wire`, one pattern for many units), and ``boundary`` its I/O layout as network-accounting's N1 states it. The
    window's ``circuit.json`` (`circuit_record`) holds the whole layout the verifier reads, stated per template and wire
@@ -865,7 +865,7 @@ def server_ends(network: Mapping[str, Any] | None, units: Mapping[str, int]) -> 
 
 @dataclass(frozen=True)
 class Circuit:
-    """An integration's circuit in proof units: ``templates``, each ``(template, units)`` in order, every template `catalog`'s
+    """An integration's circuit in proof blocks: ``templates``, each ``(template, units)`` in order, every template `catalog`'s
     and of its own descriptor id; ``external``, the ports (``<descriptor id>/<port>``) that are the system's external I/O;
     ``wires``, the units whose input rows are other units' output rows (`Wire`, `check_wires`); ``boundary``, its I/O
     layout (network-accounting's N1, ``verity/boundary/v1``), a JSON object carried as given; ``cuts``, by template, the
@@ -962,6 +962,24 @@ class Circuit:
             if descriptor_id(fn) == tid:
                 return fn
         raise KeyError(f"{tid}: no template of {self.name}")
+
+
+def read_shape(circuit: Circuit, value: str) -> dict[str, Any]:
+    """Registered parameter ``value``'s rows as the circuit's reads fix them, the shape an outside committer (a network
+    certifier's output value, `out_commit.OutShape`) commits it at: ``words``, the row width of the port every read of it
+    names; ``rows``, its leaves over that; 16-bit leaves in ``hm96-sha512/row/v2`` rows (`unit_rows`). Refused
+    (ValueError) when no read names it, two read it at two widths, or its leaves aren't whole rows."""
+    lays = circuit.layouts
+    widths = {dict(lays[r.reader][0].rows + lays[r.reader][0].outs)[r.port] for r in circuit.reads if r.param == value}
+    leaves = (circuit.registered.params if circuit.registered is not None else {}).get(value)
+    if not widths or leaves is None:
+        raise ValueError(f"{circuit.name}: no registered read of {value!r}")
+    if len(widths) != 1:
+        raise ValueError(f"{circuit.name}: {value!r} is read at {sorted(widths)} words a row, not one width")
+    (w,) = widths
+    if leaves % w:
+        raise ValueError(f"{circuit.name}: {value!r}'s {leaves} leaves aren't whole rows of {w} words")
+    return {"value": value, "words": w, "rows": leaves // w, "word_bits": 16, "row_schema": V2}
 
 
 def members(circuit: Circuit, cap: int) -> tuple[CS.Member, ...]:
