@@ -51,7 +51,7 @@ def _record(n_layers: int = 4, requests: int = 2, *, block: bool = False):
 
 def test_the_real_reader_returns_the_first_meta_of_a_name_so_the_store_must_ask_for_the_exact_invocation():
     rd, bmap, manifest = _record()
-    # [revb S-r17b-19 n3] the reader by BARE name of a shared member (4 metas under it at the step): None by name -- the first-meta answer
+    # the reader by BARE name of a shared member (4 metas under it at the step): None by name -- the first-meta answer
     # (invocation 0 = layer 0's words for every layer) was the alias class; a third caller cannot regress into it silently
     assert rd(0, f"{ROT}/0", 0, W * 2) is None
     # the exact meta by ordinal: invocation 2's meta (layer 2, ordinal 5) -- layer 2's words
