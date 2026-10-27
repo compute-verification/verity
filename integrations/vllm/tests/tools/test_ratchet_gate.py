@@ -1214,3 +1214,76 @@ def test_the_command_line(repo):
     assert run("main", "main").returncode == 0
     r = run("main", "no-such-ref")
     assert r.returncode == 2 and "ratchet gate: git rev-parse" in r.stderr
+
+
+REPO_LANE_LINT = "tests/lint/test_repo_lane_text.py"
+REPO_LANE_JSON = "tests/lint/allowlists/repo_lane_text.json"
+DOCS_A = {"file": "docs/a.md", "count": 1}
+
+
+@pytest.fixture
+def lane_linted(repo) -> Repo:
+    """``repo`` with the repository's real lane-text lint: docs/a.md's ``#1234`` is its one site, which the list allows."""
+    repo.commit("lane text", {REPO_LANE_LINT: (SCRIPT.parents[3] / REPO_LANE_LINT).read_text(),
+                              REPO_LANE_JSON: _allowlist(DOCS_A), "docs/a.md": "# A\n\nSee #1234.\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    return repo
+
+
+def _lane_lint(repo: Repo) -> str | None:
+    """the repository's lane-text lint, as the root suite runs it after landing, on ``repo``'s checkout"""
+    r = subprocess.run([sys.executable, "-c", "import sys; sys.path.insert(0, 'tests/lint'); "
+                        "import test_repo_lane_text as T; T.test_no_new_lane_text()"],
+                       cwd=repo.root, capture_output=True, text=True)
+    return None if r.returncode == 0 else r.stderr
+
+
+def test_lane_text_is_counted_in_every_kind_of_file_its_lint_reads_naming_where_the_text_goes(lane_linted):
+    """Markdown, a Lean comment and a Python docstring count, each by its path; a Python string literal is code, not prose."""
+    lane_linted.commit("an attribution, a Linear id, a PR and a literal", {
+        "docs/a.md": "# A\n\nSee #1234 (Daniel, 8 Oct).\n", "Security/B.lean": "-- VLLM-136\ndef b := 1\n",
+        "tools/c.py": '"""Built for #4321."""\nX = "#1234"\n', "tools/d.json": '{"pr": "#1234"}\n'})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["counted"].get("repo_lane_text")) == (
+        "failed", ["Security/B.lean", "docs/a.md", "tools/c.py"]), c["why"]
+    assert c["why"].startswith(
+        f"adds 3 lane-text site(s) to the files it changes, as the base's {REPO_LANE_LINT} counts them (Security/B.lean 0 -> 1; "
+        "docs/a.md 1 -> 2; tools/c.py 0 -> 1): Say what is true now, and put the rest where it lives: history in git "
+        "(the commit message), work in Linear (the issue), rulings in Notion (the decisions log), results in the store"), c["why"]
+    assert c["fix"] == ["Security/B.lean:1 linear: VLLM-136", "docs/a.md:3 attribution: (Daniel, 8 Oct)",
+                        "tools/c.py:1 pr: #4321"]
+    assert "docs/a.md: 2 found, 1 allowed" in (_lane_lint(lane_linted) or "")
+
+
+def test_a_lane_text_count_that_falls_refuses_nobody_and_its_list_may_run_ahead_or_be_pruned(lane_linted):
+    """Every area cleans its own while the list stands at its landing counts: a list ahead of its tree is fine, and only
+    growth is refused."""
+    lane_linted.commit("says what is true now", {"docs/a.md": "# A\n\nSee the queue's README.\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["counted"].get("repo_lane_text"), c["why"]) == (
+        "passed", ["docs/a.md"], "no lane-text site is new in the 1 file(s) it changes"), c["why"]
+    assert _lane_lint(lane_linted) is None
+    subprocess.run([sys.executable, REPO_LANE_LINT, "--prune"], cwd=lane_linted.root, check=True, capture_output=True)
+    assert json.loads((lane_linted.root / REPO_LANE_JSON).read_text())["entries"] == []
+    lane_linted.commit("prunes its entry", {REPO_LANE_JSON: (lane_linted.root / REPO_LANE_JSON).read_text()})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"]) == ("passed", ["repo_lane_text"]), c["why"]
+    assert c["why"].startswith("3 -> 2 ratchet exceptions"), c["why"]
+
+
+def test_a_lane_text_list_catches_up_to_what_its_base_holds_and_a_pinned_file_has_no_entry(lane_linted):
+    e = {"file": "tools/e.py", "count": 1}
+    lane_linted.git("checkout", "-q", "main")
+    lane_linted.commit("lane text with no entry", {"tools/e.py": "X = 1  # VLLM-136\n"})
+    lane_linted.git("checkout", "-q", "-B", "pr")
+    lane_linted.commit("the list takes it", {REPO_LANE_JSON: _allowlist(DOCS_A, e)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"], c["pooled"]) == (
+        "passed", ["repo_lane_text"], [_caught_up(REPO_LANE_JSON, "1 -> 2", 1)]), c["why"]
+    assert _lane_lint(lane_linted) is None
+    lane_linted.git("checkout", "-q", "-B", "pr", "main")
+    lane_linted.commit("lane text in AGENTS.md, listed", {"AGENTS.md": "Owned by @vllm (Daniel, 8 Oct).\n",
+                                                         REPO_LANE_JSON: _allowlist(DOCS_A, {"file": "AGENTS.md", "count": 1})})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", [f"{REPO_LANE_JSON}: {G.key({'file': 'AGENTS.md'})} 0 -> 1"]), c["why"]
+    assert "repo_lane_text.json: AGENTS.md is pinned at zero (PINNED), so it has no entry" in (_lane_lint(lane_linted) or "")

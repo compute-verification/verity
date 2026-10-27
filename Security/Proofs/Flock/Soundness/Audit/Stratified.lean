@@ -76,7 +76,7 @@ theorem stratified_escape (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s
       ∏ s, (((stratum σ s).card - (B.filter (σ · = s)).card).choose (k s) : ℝ≥0∞) /
         ((stratum σ s).card.choose (k s) : ℝ≥0∞) := by
   classical
-  unfold escape
+  unfold Verity.Law.escape
   have hd : (fun ω : (stratified σ k hk).Ω => Disjoint ((stratified σ k hk).draw ω) B) =
       fun ω => ∀ s ∈ (univ : Finset (Fin m)), Disjoint (ω s).1 B := by
     funext ω

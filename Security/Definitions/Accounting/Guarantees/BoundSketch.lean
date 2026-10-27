@@ -48,22 +48,21 @@ multiplier matrix `B` (independent), with every value at most `κ_E` and `κ_R` 
 protocol `π` between the side holding `E` and the side holding `B`: the probability that `π`'s output is the sketch
 `v_i[c] = Σ_q E(i, q)·B(c, q)` is at most `1/p + 2^bits(π)·√(κ_E·κ_R·p^{r·m})`.
 
-**The reading** (`ro-bound-sketch-blake3/v0`, lane ra-bound-receipt, at `p = 257`). The block side holds the
-tile's bytes `E` (`|E| = r·m` bytes, int8, embedded in `𝔽₂₅₇`), the tile side the bytes `R` of the matmul's values.
-Both know the pass's mask `M` (public, fresh each pass), so `B = R ⊕ M` is a bijection of `R` and `κ_R` is `R`'s
-guessing probability: the entropy that counts is `R`'s, after slice mode's XOR fold, not `z`'s. For any random
-oracle `H` (BLAKE3 in the receipt, SHA-512 in the PoUW leaf), a receipt `H(σ_p, j, v)` is right, but for a guess,
-only if one side queried `H` at `v`, so a relay that produces it is such a protocol. With `E` uniform
-(`κ_E = 2^{−8|E|}`) and `κ_R = 2^{−h_R}`, `h_R ≤ 8|E|`, success `1/257 + ε` takes
-`bits ≥ ½(h_R − (log₂ 257 − 8)·|E|) − log₂(1/ε) ≥ ½(h_R − 0.006·|E|) − log₂(1/ε)`: about half of
-`min(H(R), 8|E|)` a relayed tile, where `BoundReceiptLink`'s generic mix gives `min(|z|, |E|)`. One buffer `M` for
-every tile of a pass costs nothing, since `M` is public either way; two receipts whose `R` is one `z` count it once,
-since `κ_R` is the joint guessing probability of the inputs the protocol relays.
+**The reading** (`ro-bound-sketch-blake3/v0`, at `p = 257`). The block side holds the tile's bytes `E` (`|E| = r·m`
+bytes, int8, embedded in `𝔽₂₅₇`), the tile side the bytes `R` of the matmul's values. Both know the pass's mask `M`
+(public, fresh each pass), so `B = R ⊕ M` is a bijection of `R` and `κ_R` is `R`'s guessing probability: the entropy
+that counts is `R`'s, after slice mode's XOR fold, not `z`'s. For any random oracle `H` (BLAKE3 in the receipt, SHA-512
+in the PoUW leaf), a receipt `H(σ_p, j, v)` is right, but for a guess, only if one side queried `H` at `v`, so a relay
+that produces it is such a protocol. With `E` uniform (`κ_E = 2^{−8|E|}`) and `κ_R = 2^{−h_R}`, `h_R ≤ 8|E|`, success
+`1/257 + ε` takes `bits ≥ ½(h_R − (log₂ 257 − 8)·|E|) − log₂(1/ε) ≥ ½(h_R − 0.006·|E|) − log₂(1/ε)`: about half of
+`min(H(R), 8|E|)` a relayed tile, where `BoundReceiptLink`'s generic mix gives `min(|z|, |E|)`. One buffer `M` for every
+tile of a pass costs nothing, since `M` is public either way; two receipts whose `R` is one `z` count it once, since
+`κ_R` is the joint guessing probability of the inputs the protocol relays.
 
 **What the game takes.** `E` and `R` independent, `R`'s min-entropy against the block side being the ideal tile's
 (`TileUnpredictable` below its work: against a side that can compute `R` from the activations, `R` has none), and `E`'s
 against the tile side the store's (the codec's work, charged as rebuilds). `M` is fixed before the protocol: a mask
-fixed for the window is a public matrix, and leaves residency to the generic-mix game's fresh mix (red team F29).
+fixed for the window is a public matrix, and leaves residency to the generic-mix game's fresh mix.
 
 Proof: `Accounting.SecurityProofs.BoundSketchRelay`, from `InnerProductRelay` on the sketch's trace
 `Σ_i v_i[i] = ⟨E, B⟩`, at `n = r·m`.

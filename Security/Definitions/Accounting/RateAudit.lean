@@ -24,7 +24,7 @@ stream (`stream i` returns bit `i` of `R`), and rebuilding words (`rebuild j` re
 at an address the chip picks, so it answers any function of the store and of what the chip sent, and sending is free;
 it reaches the oracle only through what the chip sends it, so it relays no tag the chip did not query. Side-source and
 stream bits both come in over the side link, which carries at most `L` bits per window: in the actual-circuit model
-(`note:console/20261012T0645Z-draft-actual-circuit-model`, v2.4's B3 at `e = 0`), `L` is `c = β_side·(T + RTT)`, the
+(B3 at `e = 0`), `L` is `c = β_side·(T + RTT)`, the
 side links' signals over the deadline and a round trip, timing included, with no `2^e` factor for what the chip sent.
 The certified stream's `ρ` bits (certified ingress) must come in too, because a tag absorbs all of `R`, so at most
 `L − ρ` bits of the link are free for anything else. The audited location is the chip: device memory is what HBM held
