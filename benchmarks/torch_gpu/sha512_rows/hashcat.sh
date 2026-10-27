@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# hashcat's SHA-512 kernels against sha512x.cuh's default compression on one leased GPU, in one lease at one locked SM clock
-# (HASH-24). hashcat (HC_TAG, default v7.1.2) is built from its source in scratch. Its benchmark (`hashcat -b`: the mask
+# hashcat's SHA-512 kernels against sha512x.cuh's default compression on one leased GPU, in one lease at one locked SM
+# clock. hashcat (HC_TAG, default v7.1.2) is built from its source in scratch. Its benchmark (`hashcat -b`: the mask
 # ?a?a?a?a?a?a?a, a 7-byte candidate, and for -m 1710 the self-test salt's 12 bytes, so one SHA-512 block a candidate) runs
 # -m 1700 and -m 1710 each with its optimized kernel (-O, what `hashcat -b` runs by default) and its pure one, at -w 3
 # (the benchmark's default), and -m 1700 -O at -w 4. Ours: commit_gpu's raw rate (`commit_gpu sha`, sha_rate: each thread
@@ -8,7 +8,7 @@
 # force-included (ruler.sh's builds), each checked bit for bit against reference.py in the lease before it is timed; and
 # hashcat_forms.cu, our compression in hashcat's shapes (its header), its first digests checked against hashlib, and the
 # honest chain and -O's shape at each CTA size in SHAPES, in whole waves of the CTAs an SM holds (commit_gpu's sha launches
-# 8 CTAs of 256 an SM, 3 resident, a partial last wave; r20261027-044217-d499: whole waves gain the honest chain 1%).
+# 8 CTAs of 256 an SM, 3 resident, a partial last wave).
 # cwd = the source tree's root. Outside the lease: the builds and reference.py's cases. The lease: the SM clock locked at
 # LOCK_MHZ (default 1980) and reset on exit, nvidia-smi every 200 ms, the checks, one warm-up a hashcat setting (its kernel
 # build, Accel/Loops/Thr/Vec and the mask), then ROUNDS rounds with every arm interleaved. After it: the SASS pipe mix of
@@ -16,7 +16,7 @@
 # verdict.txt's VERDICT lines.
 #
 #   research run --on vy-dc-h200 --project verity --campaign hash --source . --cwd source --timeout 90m \
-#     --env GPU_LEASE_WHO=kernels-kcommit -- bash benchmarks/torch_gpu/sha512_rows/hashcat.sh
+#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/torch_gpu/sha512_rows/hashcat.sh
 # ROUNDS (3), LOCK_MHZ (1980), LEASE_MIN (25), HC_TAG (v7.1.2), JOBS (16), SHAPES ("128 256 384 512 640 768 1024").
 set -uo pipefail
 export O=${OUT:?}
@@ -90,7 +90,7 @@ gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash -c '
   probe() { "$W/hashcat_forms" time 5 2>/dev/null | python3 -c "import sys, json; print(int(min(json.loads(l)[\"mhz\"] for l in sys.stdin)))"; }
   sudo -n nvidia-smi -i "$U" -lgc "$LOCK,$LOCK" > "$O/lock.txt" 2>&1; echo "lock rc $?" >> "$O/rc.txt"
   trap "sudo -n nvidia-smi -i $U -rgc >> $O/lock.txt 2>&1; nvidia-smi -i $U -q -d CLOCK > $O/clock-after.txt 2>&1" EXIT
-  # a lock this card resolves below LOCK (vy-dc-h200 put -lgc 1980,1980 at 1830, r20261027-040452-3d4d): unlocked, if the
+  # a lock this card resolves below LOCK (vy-dc-h200 puts -lgc 1980,1980 at 1830 under load): unlocked, if the
   # boost holds LOCK under load, else the lock as it resolves
   locked=$(probe) free=n/a mode=locked
   if [ "${locked:-0}" -lt "$LOCK" ]; then
