@@ -121,7 +121,7 @@ linked by its rows:
 **For the 25 async windows.** Their sync replay isn't the served schedule, so `slice_inputs` refuses them at AS = 0.
 At AS = 1 the step also reads `run_fin R×1 | run_cap R×1 | wait_cap W×1` after `free` and `arr_cap A×1` after
 `arr_O`. `replay_chain`'s rows carry them at its AS (PROTOCOL.md, "The rows'"), with an arrival's cap as `q_cap` in the
-window row and `a_cap` in the warden's slots. The slice takes its chain's shape from its statics
+window row and `a_cap` in the network certifier's slots. The slice takes its chain's shape from its statics
 (`compile_slice.chain`), so at an async engine its rows widen and its circuit hands the step these fields.
 **w1** is the smallest of them with more than one request: window 1, requests 4–7 of the session, decisions
 `[1, 1, 1]`, 38 steps; its sync replay diverges from the trace at step 2.

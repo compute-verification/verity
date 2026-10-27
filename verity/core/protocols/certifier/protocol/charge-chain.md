@@ -194,7 +194,7 @@ coder's first state (`sum_owt_codeAll_le`), a weight being an interval's width o
 difftest holds them to it: the certifier program's `NetworkCertifier.WindowCharge`, proved equal to them
 (`CodeChargesWhole`), gives what `reference_window` gives on 4,000 random instances (`lean/scripts/window_vectors.py`).
 
-**The slice.** The compile slice's class runs inside the pool bound with the warden's ingress, so its windows send no
+**The slice.** The compile slice's class runs inside the pool bound with the network certifier's ingress, so its windows send no
 hits and no order entries. It keeps `ChargeLink_v1{D}` over `replay-charge` as above, and nothing in its wiring changes.
 A class whose windows send hits or order entries does the following:
 - It calls `window_charge.build_link(C, N, H, O, book, row_in, row_out, en, bits, hen, short, oen, p, r)` over
