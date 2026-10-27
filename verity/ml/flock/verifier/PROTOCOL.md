@@ -163,7 +163,7 @@ reads the coins from the record; with a seed, soundness also assumes the commitm
 
 `Flock.Draw`, `flock-verify draw`. After serving registers its roots and before the session, the verifier draws the
 sampled units from its own OS randomness with `verity.ml.randomness`'s exact samplers, in the clear and under no hash.
-The draw is the public header's `unit_draw` (so under the public digest and Σ), instance `i` being unit `u_i`.
+The draw is the public header's `unit_draw` (so under the public digest and Σ), input `i` being unit `u_i`.
 
 - **Sampling designs.** `subset(k, n)` (partial Fisher–Yates), `bernoulli(p)`, `stratified` (the default: strata by the
   template descriptor id of each unit's root node, derived from the verifier's own program and partition object, stratum
@@ -171,7 +171,7 @@ The draw is the public header's `unit_draw` (so under the public digest and Σ),
   verifier's own `--work-table`, with floors, optionally with a `closure` from the verifier's own closure map). The
   verifier never takes a draw's `K`, strata, works, floors or closure as stated: it derives them and compares.
 - **Checks.** U1: the record keeps the statement's draw. U2: the draw is well formed and the verifier's own derivation.
-  U3: the statement's instances are the drawn units and their closure. U4: every unit that reads a round's commitment
+  U3: the statement's inputs are the drawn units and their closure. U4: every unit that reads a round's commitment
   (`rec-c<i>`, `rec-top-L<l>`, `rec-opening-c<i>`, `rec-top-stacked-L<l>`, `rec-sparse-<p>`) is drawn in full.
 - Which designs a soundness claim covers is §16.15's rule; the guarantees are in `Security/Proofs/Flock/`.
   `stratified_agree.py` holds the Lean draws to core's (`verity.core.protocols.sampled_proofs.one_stage.draw`).
@@ -382,13 +382,13 @@ default key. Every identity and binding digest is SHA-512, and the unit draw is 
   (`Flock.RecOpen`, `Flock.RecResiduals`, `Flock.RecOpening`, `Flock.RecVStar`).
 - **Layout.** At least one unit per VU and a power of two of VUs per block; header sizes bounded before any power is
   computed; row wires, the pin and Δ derived by the verifier and compared; the region-word and region-size checks.
-- **Public file.** `flock-circuit-inputs`: header, each instance's `b ‖ c` per port, then the outputs; the public digest
+- **Public file.** `flock-circuit-inputs`: header, each input's `b ‖ c` per port, then the outputs; the public digest
   is SHA-512 over the canonical header and the body. Shared-row files commit each port's rows once as a table, with
-  per-instance refs.
+  per-input refs.
 - **Digests.** Circuit pin, statement digest and `Σ = SHA-512("verity/flock-circuit/sigma" ‖ circuit ‖ statement ‖
   public)`, which is `Hello`'s `link.sigma` and root_F.
 - **End-to-end bindings.** META binds `program_sha512` and the partition (`verity/partition/v1` with the verifier's own
-  `--partition` object, or the provisional unit cover), and each instance's class.
+  `--partition` object, or the provisional unit cover), and each input's class.
 - **Template queries and the partition finding.** `Flock.TemplateQuery`: with the verifier's own `--program`, the
   verifier derives the statement's units itself; every verdict carries `partition = {rule, query, digest, units, note}`,
   `units` being `derived` or `as stated`.
@@ -432,7 +432,7 @@ with `refused: <why>: a statement form the soundness proof does not cover`. The 
 5. no public input ports;
 6. no shared-row public file, except at hidden outputs and `hm96-sha512/v1` leaves with the verifier's own `--registered F`;
 7. where wires feed the unit or the outputs, an order of the wires that computes every slot from the leaves;
-8. `Layout.scopeOk` (with hidden outputs `scopeOkI`, the general instance form);
+8. `Layout.scopeOk` (with hidden outputs `scopeOkI`, the general input form);
 9. every table's `m` at least 22, or 25 under `--zk`.
 
 Also refused: a draw by a design no claim covers (bernoulli, work, a work draw with a closure, and a subset draw without
@@ -471,7 +471,7 @@ copying upstream. The deliberate divergences, each refused by Lean and accepted 
 | D13 | a `rec-open` unit whose name, bits, rows or net are not the verifier's |
 | D14 | a draw that does not draw in full each unit reading a round's commitment (U4) |
 | D15 | an inner statement's registered description that is not the registration |
-| D16 | a V* session whose instance labels are not its drawn units |
+| D16 | a V* session whose input labels are not its drawn units |
 | D17 | a plain file in the form its statement doesn't pin, or a byte after a proof's end |
 | D18 | a non-empty `matrix_evals` |
 | D19 | a V* cap session that does not read its level's tops at the verifier's shared rows |

@@ -51,7 +51,7 @@ leaf_prefix(key) = leaf tag ‖ H(key)         zero-padded to one block of H
   prefers a block-aligned prefix such as `sha256/row/v1`'s, `sha512/row/v1`'s or a bit row's (`sha512/row/v2`), since its midstate
   is a constant. Under frame-v3 the tree leaf's schema names the inner one: `hm96-sha512/row/v1`, or `hm96-sha512/row/v2` over a bit
   row (`frame_v3/PROTOCOL.md` §6).
-- **`b ‖ c` is the commit string.** A backend proves it and publishes it, and the verifier computes the tree leaf natively.
+- **`b ‖ c` is the commit string.** A proof system proves it and publishes it, and the verifier computes the tree leaf natively.
 - **An opening** is `(value, y)`. The verifier recomputes `x`, `c`, `b` and the leaf, and checks the path with the base scheme's tree
   (`vllm-v1`'s or `vllm-v1-sha512`'s node and lift rule and root bindings).
 - **Bits.** Bit t of a byte string is bit `t mod 8` of byte `⌊t/8⌋`. `y_j`, `x_i` and `b_i` are read this way, and `M·y` is written
@@ -139,7 +139,7 @@ This holds for every key, including one the committer chose. A key substituted a
 (a collision again). The only assumption is collision resistance of H: `cr/sha-256` for `hm96-sha256/v1`, `cr/sha-512` for
 `hm96-sha512/v1`. There is no random oracle anywhere.
 
-## 5. What a backend proves
+## 5. What a proof system proves
 
 Per leaf, the gadget takes the private value and salt:
 - it computes x exactly as for the unsalted leaf;
@@ -202,7 +202,7 @@ These are analytic, one row of R bytes per leaf, against the archived keyed-BLAK
 ## 7. Proof-internal leaves
 
 A proof's own Merkle trees, such as Flock's Ligerito column trees, hide their unopened leaves with the same function:
-- the inner digest is the backend's column digest under H;
+- the inner digest is the proof system's column digest under H;
 - each leaf gets its own salt;
 - the key is the instance's pinned key, fixed before the root;
 - the leaf is `tree_leaf`.

@@ -2,11 +2,11 @@
 
 This is the commitment framing vLLM's serving Commit path emits by name, as a named scheme; its default is `rows-sha512`
 (`integrations/vllm/verity_vllm/commit/step_rows.py`). It is permanent and sits
-beside frame-v3 (`verity.ml.commitments.frame_v3`). Backends select one or the other, and both are
+beside frame-v3 (`verity.ml.commitments.frame_v3`). Proof systems select one or the other, and both are
 benchmarked (`benchmarks/commitments/commit_cost.py`). This spec describes existing bytes: it changes none
 of the roots serving emits.
 
-- Reference: `verity.ml.commitments.vllm_v1` (plain `hashlib`); backends lower it by §8 and bind §9 in their statements. `VllmV1(ports)` is the configured
+- Reference: `verity.ml.commitments.vllm_v1` (plain `hashlib`); proof systems lower it by §8 and bind §9 in their statements. `VllmV1(ports)` is the configured
   `verity.ml.commitments.scheme.CommitmentScheme`, with one verifier-held domain per port (§5). `TREE` is the bare
   tree rule.
 - Vectors: `vectors.json`, written by `python -m verity.ml.commitments.vllm_v1.vectors`. `--check` exits
@@ -62,9 +62,9 @@ Each `fa2h` header is sixteen `u32le` words:
   followed by `verity-vllm/leaf`, a position leaf `verity/`, and an `fa2h` leaf `fa2h`. So no leaf preimage is a
   node preimage, and no two leaf rules share a preimage.
 
-### Leaf layouts: what a backend proves
+### Leaf layouts: what a proof system proves
 
-Every `vllm-v1` leaf is `digest = SHA-256(prefix ‖ value)` with no suffix. The digest *is* the tree leaf, so a backend
+Every `vllm-v1` leaf is `digest = SHA-256(prefix ‖ value)` with no suffix. The digest *is* the tree leaf, so a proof system
 proves it, publishes it, and the verifier checks the tree natively. `VllmV1.leaf_layout(port, position)` and the
 domains' `leaf_layout` methods return the layout below; the vectors' `layouts` section pins one of each.
 
@@ -122,7 +122,7 @@ A published root is a raw SHA-256 over a tag and fixed-width fields, and wraps t
   (`profile/request/prompt_len/step`) and native-host `_ctx_digest` (`run_id/step=s`). Both are injective only
   because their trailing fields are decimal integers and the profile id is fixed-width hex, so the integration
   must keep those fields that way. `program` is the first 32 bytes of the Program digest (`commit.scheme.program_field`): for an
-  IR Program, its SHA-512 `codec.program_digest` truncated to 256 bits.
+  Program, its SHA-512 `codec.program_digest` truncated to 256 bits.
 - **The hm96 context suffix.** Under the opt-in `hm96-sha256/v1` leaves (`verity.ml.commitments.hm96`, §5), native-host
   `ctx` is `SHA-256(run_id/step=s ‖ "/leaf=" ‖ scheme_digest(key))`, with the scheme digest as 32 raw bytes.
   - The committer computes it only for a step whose leaves it salted, so no hm96-bound root sits over unsalted leaves.
@@ -214,7 +214,7 @@ fixed in the bytes. Fixing any of them in the bytes would change roots:
    most 63.
 4. **Injectivity of the `/`-joined context digests depends on field formats** that the integration owns (§4).
 
-## 8. Lowering into a proof backend
+## 8. Lowering into a proof system
 
 Every hash in `vllm-v1` is SHA-256 (FIPS 180-4). Each message is padded with `0x80`, then zeros, then its
 bit length as a u64be, to a multiple of 64 bytes. There are no other hashes, keys or algebraic steps, and no tree
@@ -256,7 +256,7 @@ padding.
 - **Private index.** The circuit must derive the pattern from i's bits and N: at each level, `is_lift = (i_level ==
   width_level − 1) ∧ (width_level odd)`, and the direction bit is the low bit of `i_level`.
 - **No multiproof format.** vLLM opens single paths (§3) and contiguous ranges (the capture-v2 weights, not in this
-  scheme). A backend opening many leaves proves one path per leaf, or shares siblings under its own
+  scheme). A proof system opening many leaves proves one path per leaf, or shares siblings under its own
   statement-defined rule. There is no core `vllm-v1` multiproof encoding.
 
 ### 8.3 What the vectors give a circuit author
@@ -273,10 +273,10 @@ Everything is lowercase hex:
 - **`layouts`**: one leaf layout per leaf kind.
 - **`rejections`**: openings the circuit or verifier must reject.
 
-## 9. What a backend statement must bind externally
+## 9. What a proof system's statement must bind externally
 
 frame-v3 binds its domain inside every leaf and node, so a frame-v3 root already names its session, phase, owner
-and positions. `vllm-v1` does not. A backend statement over `vllm-v1` openings must supply, outside the hashes:
+and positions. `vllm-v1` does not. A proof system's statement over `vllm-v1` openings must supply, outside the hashes:
 
 1. **The domain.** The statement names the verifier-held domain of each port (§5), with every context field and N,
    and absorbs `domain_digest(domain)` into its statement digest and Fiat–Shamir transcript.
@@ -301,7 +301,7 @@ and positions. `vllm-v1` does not. A backend statement over `vllm-v1` openings m
 4. **Each position's value length and interpretation.** A position leaf carries no id, dtype or shape. The
    statement fixes `value_len` per position from the template or layout, and the gadget constrains the value to
    exactly that many bytes, so the length prefix is public, not prover-chosen.
-5. **Positions derived by the verifier.** The statement's positions come from its own subcircuit, instance range
+5. **Positions derived by the verifier.** The statement's positions come from its own subcircuit, input range
    and port. For `fa2h` leaves, the header fields are derived from the claimed position. The prover's path must
    match `shape(N, i)`.
 6. **Thread trees.** The geometry fields (HB, num_m_block, NB, sequence lengths, causal) are in the statement,
@@ -311,7 +311,7 @@ and positions. `vllm-v1` does not. A backend statement over `vllm-v1` openings m
    different trees, or reuse a subtree root as a leaf. Every leaf comes from a `leaf_layout` digest of its own
    port.
 
-With 1–7 in place, a `vllm-v1` opening in a backend statement means what a frame-v3 opening does: this value, at
+With 1–7 in place, a `vllm-v1` opening in a proof system's statement means what a frame-v3 opening does: this value, at
 this verifier-derived position, of this verifier-derived commitment. §5's injectivity argument carries over unchanged.
 
 ## 10. `vllm-v1-sha512`
@@ -329,7 +329,7 @@ Recorded roots don't move. The vLLM integration keeps SHA-256 until the re-basel
 | width | what |
 |---|---|
 | 64 bytes: computed by the scheme | position, chunk and thread leaves; nodes, lifts and the empty root; `stream_ctx` and `thread_ctx`; every §4 root binding (semantic, step, run, weights, stream, thread), so the step roots a run root folds and the tensor roots a weights root folds; `domain_digest` (§9) |
-| 32 bytes: identity digests from the integration | `program` (an IR Program's SHA-512 digest truncated to 256 bits); `ctx` (context), `geo` (geometry), `layout`, and the integration's `template` and `names` digests, SHA-256 until the re-baseline |
+| 32 bytes: identity digests from the integration | `program` (a Program's SHA-512 digest truncated to 256 bits); `ctx` (context), `geo` (geometry), `layout`, and the integration's `template` and `names` digests, SHA-256 until the re-baseline |
 | variable, unchanged | `query_id` |
 
 **What carries over unchanged:**
@@ -382,7 +382,7 @@ Recorded roots don't move. The vLLM integration keeps SHA-256 until the re-basel
 - **What rests on `cr/sha-512`.** Table 1 lists SHA-512 under collision resistance for everything the scheme computes: leaves, nodes,
   lifts, the empty root, the stream and thread contexts, every root binding, and `domain_digest`. Binding a value inside a
   verifier-held domain rests on `cr/sha-512` alone.
-- **What still rests on SHA-256.** The root bindings absorb the integration's identity digests. `program` is an IR Program's SHA-512
+- **What still rests on SHA-256.** The root bindings absorb the integration's identity digests. `program` is a Program's SHA-512
   digest truncated to 256 bits, so which Program a root belongs to rests on `cr/sha-512`. The others are 32-byte SHA-256 digests:
   `ctx` (context), `geo` (geometry) and `layout`, and in the semantic and weights roots `template` and `names`. So which context and
   step a root belongs to rests on SHA-256.

@@ -3,7 +3,7 @@
 frame-v3 is SHA-256 indexed trees over verifier-derived domains. The framing itself (frame
 `veritor/protocol/merkle/frame/v3\0`, the `leaf`, `pad`, `node` and `empty` tags, and domain ids) is in
 `verity.ml.commitments.merkle`, and SP1's guest, `ligero-verify` and B-Ligero's authentication already pin it. This
-document specifies the leaves a backend proves and how a verifier turns a proven digest into a tree leaf. It
+document specifies the leaves a proof system proves and how a verifier turns a proven digest into a tree leaf. It
 changes no root.
 
 - **Reference.** `verity.ml.commitments.frame_v3.FrameV3(ports)` is a configured `CommitmentScheme`. The row digests
@@ -23,9 +23,9 @@ leaf(domain, rank, position, schema, value) =
 `uint(x)` is x big-endian in the fewest bytes, with one byte for 0. `CommitmentDomain.leaf_prefix(rank, position,
 schema, len value)` gives every byte before `value`, so `leaf = SHA-256(prefix ‖ value)`.
 
-Both leaf kinds end in this leaf. What the backend proves differs:
+Both leaf kinds end in this leaf. What the proof system proves differs:
 
-| leaf kind | value | the digest a backend proves | tree leaf (computed natively by the verifier) |
+| leaf kind | value | the digest a proof system proves | tree leaf (computed natively by the verifier) |
 |---|---|---|---|
 | word leaf (`WordLeaf(schema, nbytes)`) | the word's bytes (e.g. `u16`, 2 bytes big-endian) | the frame-v3 leaf itself: layout `sha256`, prefix = `leaf_prefix(…)` | the digest |
 | row leaf (`RowLeaf(hash, role, word_bits, n_words)`) | one row's bytes (§2) | the row digest (§3, §4) | `leaf(domain, rank, position, schema, row digest)` |
@@ -67,7 +67,7 @@ schema string and keys are pinned in `ligero-verify` (`src/leaf.rs`), and the fu
 chunk-CV fold. The key separates roles. The word width is not bound, as in B-Ligero: a row's length is the domain's
 business, since frame-v3 domain bindings name K and the schema.
 
-For rows over 1024 bytes, a backend may prove the chunk chaining values and let the verifier do the parent fold
+For rows over 1024 bytes, a proof system may prove the chunk chaining values and let the verifier do the parent fold
 natively, as B-Ligero does. The layout still describes the whole-row digest, which is what the tree leaf binds.
 
 ## 4a. NVFP4 rows: `sha256/row-nvfp4/v1` and `blake3-keyed/row-nvfp4/v1`
@@ -87,7 +87,7 @@ blake3-keyed/row-nvfp4/v1: digest = BLAKE3( nvfp4_row_bytes, key = the §4 key f
 The SHA-256 prefix binds the role, the 4-bit code width, `k` and the scale count. The BLAKE3 schema (archived, as §4) uses §4's role keys;
 its schema string, which the tree leaf binds, separates it from `blake3-keyed/row/v2`. Reference and conformance
 vectors: `verity.ml.commitments.rowleaf` (`nvfp4_row_bytes`, `sha256_row_nvfp4_digest`, `blake3_row_nvfp4_digest`) and
-`nvfp4_row_v1_vectors.json` beside this file (flock-backend's reference, checked by `test_rowleaf_nvfp4.py`).
+`nvfp4_row_v1_vectors.json` beside this file (C-Flock's reference, checked by `test_rowleaf_nvfp4.py`).
 
 ## 5. Hashes
 
@@ -116,7 +116,7 @@ frame-v3 with SHA-512 in place of SHA-256 for every hash the framing computes, f
 - `leaf_prefix` is the same prefix over the 64-byte domain id, so `leaf = SHA-512(prefix ‖ value)`.
 
 **The binding.** `binding` is the caller's identity digest of what the commitment may not outlive: a header, a replay phase or a
-weights tag. It is an identity from the protocol and the IR, not something the frame computes. Under every frame it is 64 bytes, an
+weights tag. It is an identity from the protocol and the Program, not something the frame computes. Under every frame it is 64 bytes, an
 `identity_digest_sha512` or another SHA-512 digest (one hash, SHA-512), or 32 bytes, a SHA-256 identity
 digest as recorded statements carry it. The domain message frames every part with its u64be length, so a 64-byte binding and a
 32-byte one never give the same message, and the frame version does not change. `binding64_trees` in
@@ -143,7 +143,7 @@ P(ℓ)      = ( "verity/sha512-row/v2\0" ‖ u64be ℓ )  zero-padded to 128 byt
 digest    = SHA-512( P(ℓ) ‖ row bytes )
 ~~~
 
-- **Elements.** A row of elements lists each element's bits least significant first, elements in order: the Boolean IR's element
+- **Elements.** A row of elements lists each element's bits least significant first, elements in order: the Boolean profile's element
   convention. For every format in use the row bytes are then the tensor's memory: two E2M1 codes a byte, the first in the low nibble;
   one byte per E4M3 element or scale; two little-endian bytes per BF16 element. An NVFP4 or MXFP4 row is its k codes followed by its
   scales, as one row (4k + 8·k/16 or 4k + 8·k/32 bits), so an NVFP4 row's bytes are §4a's `nvfp4_row_bytes`. Which values form a
@@ -253,7 +253,7 @@ and `test_rowleaf_bits.py` check them.
   domain id, the positions' identity, leaves, pads, nodes and roots. Binding a value to a position inside a verifier-held domain
   rests on `cr/sha-512` alone.
 - **What may still rest on SHA-256.** Which statement and which session a root belongs to also rests on `binding`. A 64-byte binding
-  rests on `cr/sha-512`; a 32-byte SHA-256 identity digest from the protocol or the IR does not, and a Table 1 row that cites this
+  rests on `cr/sha-512`; a 32-byte SHA-256 identity digest from the protocol or the Program does not, and a Table 1 row that cites this
   frame over one cites `cr/sha-256` beside `cr/sha-512`.
 
 ## 7. `frame-b3`

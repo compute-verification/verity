@@ -1,33 +1,33 @@
 # C-Flock (`verity-flock`)
 
-The active backend family. C-Flock proves a committed relation, the commitment's hash leaves included, in one
+The proof system. C-Flock proves a committed relation, the commitment's hash leaves included, in one
 binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patched here). Where the frozen families are
 and what the merge gate runs per family: `../../../archive/README.md`.
 
 ## Layout
 
 - `python/verity_flock/`: the Python package.
-  - `backend.py`: the pure-block backends over the GEMM-coordinate subcircuits (`BACKENDS`: `FLOCK_FRAME_V3_BLAKE3`,
+  - `backend.py`: the pure-block statements over the GEMM-coordinate subcircuits (`BACKENDS`: `FLOCK_FRAME_V3_BLAKE3`,
     `FLOCK_BLOCK`, `FLOCK_VLLM_V1`, proved by `flock-pure`). Archived: they commit rows as keyed-BLAKE3 leaves, the
     Lean verifier does not implement their statements, and they stay for the benchmark tables. `lowering.py` and
     `unit.py`: the pinned lowering of one tensor-core transition unit.
-  - `ir_lower.py`: the generic IR lowering, an IR Definition composed from the per-op circuit pieces of `fp.py` (over
+  - `ir_lower.py`: the generic lowering, a Definition composed from the per-op circuit pieces of `fp.py` (over
     `gf2.py`); `tail_pieces.py`: circuits for the primitives a template's units leave outside.
   - `templates/`: one lowering per subcircuit template; `ir_frame.py` (`verity/flock-ir-frame/v3`) and `ir_sampling.py`
-    (`verity/flock-ir-sampling/v1`): their frame-v3 statements, archived like the pure-block backends (BLAKE3 row
+    (`verity/flock-ir-sampling/v1`): their frame-v3 statements, archived like the pure-block statements (BLAKE3 row
     digests, not in the Lean verifier).
   - `partition_units.py`: every unit class of an arbitrary partition (`verity.ml.circuits.units`) lowered and checked against the
     reference evaluator; `boolean_export.py`: a served workload's leaf templates, or one census subcircuit (`subcircuit`, the catalog's blob), as Boolean
     circuits (a derived format, not a statement); `circuit_types.py` (`verity/circuit-type/v1`): each distinct sub-circuit once, the object the Boolean
     export, the docs site and the prover's layouts share.
-  - M0: `circuit.py` (`verity/flock-circuit`), a lowered template proved with its serving rows committed in the circuit,
+  - The circuit prover: `circuit.py` (`verity/flock-circuit`), a lowered template proved with its serving rows committed in the circuit,
     the rows' SHA-512 and the template's tail in the circuit too (`sha512_circuit.py`, `tail.py`), or with `layout=MODE`
     the templated statement (`verity/flock-circuit/tmpl`: the unit as `tmpl.py`'s template, its slot from `tmpl.layout`,
     Lean's `Tmpl.layoutM`), which the verifier refuses until its proof lands; `tables.py`
     (`verity/flock-tables`), several tables in one commitment with private glue; `class_statement.py`, a unit class of
-    any partition as an M0 statement (`UnitStager(..., layout=MODE, structural=True)`: the unit as `struct_lower.py`'s
+    any partition as a circuit-prover statement (`UnitStager(..., layout=MODE, structural=True)`: the unit as `struct_lower.py`'s
     template, the flat unit never built, its outputs from the template, `tmpl.evaluate`), and `class_sweep.py`, the
-    backend sweep's work lists; `circuit_bench.py`,
+    proof system's sweep work lists; `circuit_bench.py`,
     `flock-circuit`'s sweep.
   - `bench.py`, `ir_bench.py`, `negatives.py`, `register.py`: the benchmark sweeps, statement negatives and cell
     registration.
@@ -43,7 +43,7 @@ and what the merge gate runs per family: `../../../archive/README.md`.
   (`../../core/service/flock/`, `flock-verify`), and the scripts that hold it to upstream's Rust verifier; its Lean
   proofs are under `Security/Proofs/Flock/`. See its README.
 
-C-Flock's circuit prover is M0 in the Layout above (module `verity_flock.circuit`, CLI `flock-circuit`, statements
+C-Flock's circuit prover is `circuit.py` in the Layout above (module `verity_flock.circuit`, CLI `flock-circuit`, statements
 `verity/flock-circuit` and `verity/flock-tables`). The Lean verifier reads its format, serving writes rows in it
 (`verity.ml.windows.rows`), and `benchmarks/one_stage` runs it from a pinned tree sent with the run
 (`--m0-pythonpath`), not from the checkout. C-Flock ZK is `flock-circuit prove --zk` (`live/PROTOCOL.md`).
