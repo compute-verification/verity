@@ -221,7 +221,7 @@ private def h200 : StreamedWipe.Params := ⟨2203125000, 5231, 1, 1000, #[("gpu-
 private def unread : StreamedWipe.Commitment := ⟨"n0".toUTF8, ⟨#[0]⟩, { segment with k := 0 }⟩
 
 #guard gaps unread.params 0 == ["k = 0: a session of no timed reads bounds nothing"]
-#guard certify unread.params 0 |>.certified == false
+#guard (certify unread.params 0).certified == false
 #guard match canon unread.toJson with
   | .ok s => (decodeCommitment s.toUTF8).toOption.isNone
   | .error _ => false
