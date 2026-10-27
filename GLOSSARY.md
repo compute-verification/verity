@@ -1,6 +1,6 @@
 # Glossary: notation, older names and narrower senses
 
-The rest of the [Glossary](../ARCHITECTURE.md#glossary), and it changes with it: a term that replaces an older one gets its row here in the same change.
+The rest of the [Glossary](ARCHITECTURE.md#glossary), and it changes with it: a term that replaces an older one gets its row here in the same change.
 
 ## Notation
 
