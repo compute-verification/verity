@@ -242,7 +242,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
   difference, so a statement, or a definition it depends on, cannot change without a visible diff of this file. A record
   holds the statement, not the proof: list a `sorry` stub, and the guarantee passes once a proof with allowed axioms
   replaces it.
-- `owner`, in each guarantee's entry: the handle of the lane that answers for it (`@proofs`, `@compute-accounting`), whom
+- `owner`, in each guarantee's entry: the handle of the lane that answers for it (`@lane`), whom
   a broken or restated guarantee goes to. The audit fails an entry without one. Write it by hand, or pass
   `--update --owner @lane`, which gives it to the new entries only: `--update` keeps an entry's owner, and writes no
   entry without one. A changed owner is one line in the review and no change of the statement.

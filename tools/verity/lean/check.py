@@ -224,7 +224,7 @@ GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|ca
 ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions", "meaning", "escapes", "verifier", "claims", "witnesses",
          "unwitnessed", "unread", "compile_time",
          "dependency_unchecked", "layers", "reads_exempt", "trees", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
-#: a guarantee's `owner`: the handle of the lane that answers for it (`@proofs`)
+#: a guarantee's `owner`: the handle of the lane that answers for it (`@lane`)
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
 
 
@@ -1334,7 +1334,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
                 continue
         elif not OWNER.fullmatch(who):
             fails.append(Failure("guarantees.bad-owner", name, f"guarantees: {name}'s owner {who!r} is not a handle such as "
-                                 f"@proofs"))
+                                 f"@lane"))
         f = facts["pins"].get(name, {"kind": "missing"})
         if f["kind"] != "theorem":
             fails.append(Failure("guarantees.missing" if f["kind"] == "missing" else "guarantees.not-a-theorem", name,
@@ -2131,7 +2131,7 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
                                  f"entry, or run `check.py --update --owner @lane`"))
         elif not OWNER.fullmatch(who):
             fails.append(Failure("assumptions.bad-owner", a, f"assumptions: {a}'s owner {who!r} is not a handle such as "
-                                 f"@proofs"))
+                                 f"@lane"))
         out[a] = ({"owner": who} if who else {}) | {"digest": h}
         if update:
             continue
@@ -3833,7 +3833,7 @@ def main(argv: list[str]) -> int:
         if not isinstance(lifts, dict) or not all(isinstance(v, dict) and {"as", "into"} <= set(v) for v in lifts.values()):
             ap.error(f"{a.lift}: a JSON object {{guarantee: {{\"as\": X.Guarantees.G, \"into\": module[, \"beside\": module]}}}}")
     if a.owner is not None and not (a.update and OWNER.fullmatch(a.owner)):
-        ap.error("--owner goes with --update, and names a handle such as @proofs")
+        ap.error("--owner goes with --update, and names a handle such as @lane")
     if a.update and (shipped := next((t for p in pkgs for t in (p, *p.parents) if (t / "READY.json").is_file()), None)):
         ap.error(f"{shipped} is a tree `research run --on` shipped, which every run of its commit shares: rerun with "
                  "`research run ... --cwd clone`, or take the records `--update` writes under --out (audit-<pkg>/lean-audit.json)")
