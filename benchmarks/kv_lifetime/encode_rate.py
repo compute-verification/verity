@@ -1,5 +1,5 @@
 """kv.cu's encode rate in 4 KiB chunks (one Llama-3.1-8B token-layer of bf16 K and V) a second on one GPU, for the
-honest cost of appending and re-keying KV: run by `benchmarks/word_codec/run.sh` (KV=1, KV_SCRIPT=
+honest cost of appending and re-keying KV: run by `benchmarks/word_codec/run.sh` (KV_SCRIPT=
 ../kv_lifetime/encode_rate.py), which builds kv.cu at each of KV_FIELDS and passes `--lib NAME=PATH` for each.
 
 For each library and each k of `--ks`:
