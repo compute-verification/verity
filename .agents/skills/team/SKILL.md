@@ -9,7 +9,11 @@ description: >
 
 # The team
 
-AGENTS.md states the code's layout and rules. This skill states how the team that writes the code works.
+AGENTS.md is the public guide: the code's layout and rules. This skill states how the team that writes the code works,
+and routes to the team's other skills: `writing-runs` (a job for `research run`), `friction` (when something is in your
+way, and the standing rulings), `process-design` (before adding, changing or retiring a process), `coordinating`
+(planning, tracking and reporting work in Linear), `using-slack` (`research msg`) and `asking-daniel`. A rule about the
+code goes in AGENTS.md, stated with no name, date or id; a rule about how the team works goes here or in one of those.
 
 ## Machines
 
@@ -35,11 +39,13 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   `research retention gc` or `research retention rm --approved-by @OWNER`.
 - **A guard never fails open**, and an agent VM can be suspended at any moment, so nothing that bounds spend or preserves
   results depends on one: pods bound themselves (`research pods create --max-hours`, under a line of the notes repo's
-  `budgets.toml`) and runs preserve their results from the pod. The lane whose budget line pays for a machine stops it
-  when its work there ends.
-- **Secrets.** The shell hook (`.cursor/hooks.json`, `tools/agent-guard/shell_hook.py`) refuses a command that would
-  print the environment or every process's command line; on a VM booted without it, run origin/main's
-  `tools/agent-guard/boot.sh`. A secret is stored as one line (a key as base64, `NAME_B64`).
+  `budgets.toml`; a budget line a standing ruling names stands) and runs preserve their results from the pod. The lane
+  whose budget line pays for a machine stops it when its work there ends.
+- **Secrets.** Never print a secret's value. List environment variable names with `compgen -e`, never `env`, `printenv`
+  or tmux's `show-environment` (a multi-line value's later lines print as if they were names). The shell hook
+  (`.cursor/hooks.json`, `tools/agent-guard/shell_hook.py`) refuses a command that would print the environment or every
+  process's command line; on a VM booted without it, run origin/main's `tools/agent-guard/boot.sh`. A secret is stored as
+  one line (a key as base64, `NAME_B64`).
 
 ## Landing
 

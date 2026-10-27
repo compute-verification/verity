@@ -51,5 +51,5 @@ the checkout.
 PRs land through the merge queue (`research queue drive`): its flags are `drive.toml` and its admission rules are
 `queue.toml`. Before a PR lands, the landing gates `drive.toml` names (`gates/markdown_caps.py` among them) judge its
 merge. After each landing, one run checks `main`'s tip (`train.sh --deferred`), and `post_train.py` runs the vLLM
-regression's rebuilds. AGENTS.md "Checking and merging" is the procedure. A pure move that `move_check.py` certifies
+regression's rebuilds. The team skill's "Landing" is the procedure. A pure move that `move_check.py` certifies
 (`verity check move BASE HEAD`) lands ahead of the queue.

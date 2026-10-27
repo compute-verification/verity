@@ -19,7 +19,7 @@ a card: a decision waiting in a note or a thread waits forever.
 
 ## Before asking
 
-Only keys and claims need him (AGENTS.md "Working principles"), and a recorded ruling that covers the case (AGENTS.md, the
+Only keys and claims need him (the team skill's "Working principles"), and a recorded ruling that covers the case (AGENTS.md, the
 skills, the friction skill's "Standing rulings") stands until he reverses it. A question the system already answers isn't
 an ask (which circuit a templated unit's theorem names: the one its template unrolls to).
 

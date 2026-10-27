@@ -18,7 +18,7 @@ runs/
 # Rust build artifacts anywhere (e958a0b accidentally committed backends/ligero-verify/target, 20.8 MB)
 **/target/
 
-# notes and reports live in ~/.research/notes (AGENTS.md "Where writing goes"); tests/test_repository.py is the backstop
+# notes and reports live in ~/.research/notes (the team skill's "Outside the tree"); tests/test_repository.py is the backstop
 /notes/
 **/HANDOFF*.md
 **/*HANDOFF*.md

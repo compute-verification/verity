@@ -1,4 +1,4 @@
-"""Repository invariants (AGENTS.md "Where writing goes"): the tree holds executable code, tests, small fixtures and a
+"""Repository invariants (AGENTS.md "What the tree holds"): the tree holds executable code, tests, small fixtures and a
 few maintained current-truth documents.  Lane reports, handoffs, findings and drafts live in the notes (``~/.research/notes``),
 never in Git.  Generated output (rendered tables, reports, plots, evidence copies, run results) is never tracked: it is
 regenerated from code plus the evidence store, or fetched from the store by ``art:`` id.  Model weights live in artifact
@@ -129,7 +129,7 @@ def test_no_generated_output() -> None:
     fetched from it by ``art:`` id (``research data put --preserve``); none is tracked."""
     offenders = [f"{p} ({why})" for p in _tracked() if (why := generated_output(p))]
     assert not offenders, (
-        "generated output belongs in the evidence store, not Git (AGENTS.md \"Where writing goes\"):\n" + "\n".join(offenders)
+        "generated output belongs in the evidence store, not Git (AGENTS.md \"What the tree holds\"):\n" + "\n".join(offenders)
     )
 
 
