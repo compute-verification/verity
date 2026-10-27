@@ -23,10 +23,10 @@ challenger, the certifier or the firewall, with the premise it makes true.
 
 The Glossary's terms (`ARCHITECTURE.md`), the shared notation (CMP-158), and these:
 
-- **Subprotocol, phase and run.** ACCEL is part of PoUW, one of the subprotocols. A run is one pass of a subprotocol
-  through three phases: a commit phase, a challenge phase in which the challenger draws live coins, and a response phase.
-  Every commitment is bound before any challenge (Daniel, 26 Oct, 11:09 AM PDT). Each of ACCEL's sampling blocks takes
-  two runs: a dither run, whose response is the block's value roots, and a check run, whose commitment they are.
+- **Runs.** ACCEL is part of PoUW, one of the Glossary's subprotocols, and each of its runs goes through the Glossary's
+  three phases: commit, challenge (the challenger draws live coins) and response. Every commitment is bound before any
+  challenge (Daniel, 26 Oct, 11:09 AM PDT). Each of ACCEL's sampling blocks takes two runs: a dither run, whose response
+  is the block's value roots, and a check run, whose commitment they are.
 - **The machine model 𝓜**: a period's devices as the Lean's `Accel` reads them: their resources (tensor cores, issue
   slots, shared-memory and register ports, device memory, links), each at its data-sheet rate, and each run's use of
   each. On the H200 and the RTX PRO 6000 it is read at 𝓜's floors (`Card.floors`, #4662). A price μ ≥ 0 is per unit of
@@ -34,10 +34,11 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation (CMP-158), and the
 - **pub_μ(b)**: sampling block b's least cost at μ over D5 v2.1's menu of public methods, which holds the named matmul
   programs (with route (iii) on the RTX PRO 6000) and the pinned SHA-512 schedules (the Lean's `PubBest`).
 - **μ°**: the honest served period's dual prices, which follow from the period's public shapes.
-- **Sampling block**: a set of independent calls (none reads another's output) that go through their runs together.
-  Unlike the Glossary's default, its draw is not stratified by subcircuit (see "The sampling design").
-- **Proof block**: what one check proves with C-Flock `--zk`: one segment of one output cell of a call. It is one part of
-  ACCEL's partition, proved on its own; #4780 makes "proof block" the Glossary's name for such a part.
+- **Sampling block**: the proof blocks of a set of independent calls (none reads another's output), which go through
+  their runs together. Unlike the Glossary's default, its draw is not stratified by subcircuit (see "The sampling
+  design").
+- **Proof block**: what one check proves with C-Flock `--zk`: one segment of one output cell of a call, the Glossary's
+  proof block in ACCEL's partition.
 - **W_b and W_p**: sampling block b's and proof block p's public cost, the honest cost at μ° from the public shape. W_b
   is the sum of its proof blocks' W_p. W is work at the period's prices, as in the Glossary's W_cert.
 - **W_reg**: a replica's budget for a monitoring period, registered before its first coin.
@@ -422,8 +423,8 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
     the period, each fixed before its own session but after earlier answers' sessions, so the rule is to be read per
     statement for a stream (RS6).
 - **τ_ans**, from a passing measured run (see "Timing").
-- **Credit becomes size** (CMP-158). Then ε_skip is a share of the registered size, and the channel term stays in bits,
-  k_infil and k_exfil, without ε_net's β.
+- **Credit becomes size** (the Glossary's Size, CMP-158): a sampling block's credit becomes its size. Then ε_skip is a
+  share of the registered size, and the channel term stays in bits, k_infil and k_exfil, without ε_net's β.
 - **μ° or a fixed published price** (Daniel's open Ask).
   - At μ°, plain int8 tensor work beside the credited blocks is valued at little or nothing. Let x be its plain MACs
     for each credited MAC. At x = 0.25 it is 5.1–7.3% of the claim on the H200 and 10.8–13.0% on the RTX PRO 6000, and
