@@ -144,8 +144,8 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     assert "MISSING the network certifier" not in capsys.readouterr().out
     assert json.loads((piece / "answer.json").read_text()) == accept
     assert json.loads((piece / "chain" / "report" / "report.json").read_text())["verdict"] == "accepted"
-    assert sorted(json.loads((piece / "case.json").read_text())) == ["commitment", "evidence", "params"]
     assert sorted(p.name for p in (piece / "period").iterdir()) == ["commitment.bin", "evidence.json", "params.json"]
+    assert {p.name for p in piece.iterdir()} - {"piece.json"} == {"answer.json", "chain", "period", "piece.log"}
     assert "leak guard (exit 0)" in (piece / "piece.log").read_text()
     keep = d / CP.PRIVATE / RUN
     assert sorted(p.name for p in keep.iterdir()) == ["chain", "endpoint", "fetch.tar.gz"]

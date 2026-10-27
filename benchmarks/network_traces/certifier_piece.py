@@ -35,7 +35,8 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
      streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
      (``--lean``, else built in verity/core/protocols/network/lean); its answer is the piece's.
-  DIR also gets the chain's public report, job and leak-guard files and the case; the record's leak guard
+  DIR also gets the chain's public report, job and leak-guard files and the check's three input files in DIR/period,
+  the case's one copy (it runs to hundreds of megabytes on a served window); the record's leak guard
   (`leak_guard.py`) then reads DIR against the warden run's witness. ``--draw K`` is the scan's K drawn units (every
   unit by default); a CR_K=V goes to the chain; ``--chain-cmd`` replaces the chain (a test's, which writes the report
   and the scan's answers under RESEARCH_RUN_DIR/out).
@@ -309,9 +310,7 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
         except (OSError, ValueError, KeyError) as e:
             raise Undecided(f"the scan's answers.json names no one link-window: {type(e).__name__}: {e}") from None
         in_link_window(certified, T, w)
-        c = case(warden, out / "scan")
-        (d / "case.json").write_text(json.dumps(c, indent=1, sort_keys=True) + "\n")
-        got = check(c, d / "period")
+        got = check(case(warden, out / "scan"), d / "period")
         if got.get("protocol") != PROTOCOL or got.get("verdict") not in ("accept", "reject", "undecided"):
             raise Undecided(f"network-period answered no {PROTOCOL} verdict: {json.dumps(got)[:400]}")
         return got, unpacked
