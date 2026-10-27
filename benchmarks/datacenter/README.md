@@ -12,8 +12,8 @@ values, a row per element, so that inputs and rows are words in the word view wh
 `claims` (`audit`: what the trusted devices' records and the commitments establish about the prover system, with no
 device premise). The **physical layer** interprets those claims with registered hardware, named assumptions and trusted
 devices: `physical` (devices, blocks, links, certifier ports, the certifiers' cadence and trusted clock, datacenters and
-fleets, every number an `Assumption`), `memory` (registered stores, challenges, read audits, wipes and the times to
-serve them) and `account` (credit in ANDs, with the MACs beside it, attribution, where each store was, what could be
+fleets, every number an `Assumption`), `memory` (registered stores, challenges, read audits, memory wipes and the times
+to serve them) and `account` (credit in ANDs, with the MACs beside it, attribution, where each store was, what could be
 carried in, the covert budget, the export, the `Ledger` across epochs with its custody check, and `double_credit`, the
 joint rule for credit from several audits). `binding` places a Program's root nodes on a datacenter (where an input
 enters says where its bits come from), derives its crossings and publishes its `Profile`, the only part of the placement

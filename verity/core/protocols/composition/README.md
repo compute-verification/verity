@@ -85,7 +85,7 @@ trial's differs, and the reference is changed to match (`verdict`; the trial's, 
   and `test_a_reference_without_reject_dominance_is_caught` shows the difftest tells the two apart: a reference with the
   trial's rule disagrees with the Lean, on a case where one subprotocol rejects and another is undecided.
 - **Every subprotocol counts.** Of the subprotocols' statements, the trial's inference-only check (`Nci.verifier`) fails
-  the epoch on PoUW's reasons alone (sampled proofs' reach it through them), and PoUS's or the network certifier's
+  the epoch on PoUW's reasons alone (sampled proofs' reach it through them), and PoUS's or network certification's
   reasons only zero their explained usage in the balance. Here each subprotocol's rejection rejects; `trial_verdict`
   already counts every subprotocol's.
 
