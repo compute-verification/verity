@@ -15,7 +15,8 @@ import Properties.Pous.Period
 a period that realizes the protocol's audit, from the source's own premises:
 
 * sampled proofs: `Accounting.Guarantees.Bridge.IntegrityOfIntegrityBlock`, C-Flock's integrity audit of the
-  server-time block (`Flock.Guarantees.IntegrityBlock`), at `δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t)`;
+  server-time block with carried state (`Flock.Guarantees.IntegrityBlockCarried`), at
+  `δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t) + Σ_ℓ δ_carry,ℓ,b`;
 * PoUW: `Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod`, H1's checked credit over the torch loop
   (`Properties.Pouw.Period.H1CheckedCreditPeriod`), at `δ_s + n·(δ_bind + δ_ks)`;
 * PoUS: `Accounting.Bridge.SpaceOfPeriodHeld`, the ring audit's period (`Pous.Period.PeriodHeld`), at `δ + ε_max`;
@@ -45,16 +46,17 @@ open scoped ENNReal
 set_option linter.unusedVariables false
 
 open FlockSoundness.Audit FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
-  FlockSoundness.Discharge.ZkHidden Claims Claims.Sampling NetTiming in
+  FlockSoundness.Discharge.ZkHidden FlockSoundness.LinkFinder Claims Claims.Sampling NetTiming in
 /-- **The joint guarantee over a horizon of `B` server-time blocks, every leg from its protocol's own guarantee.** On
 any device and any horizon of `B` blocks of a node's run over a circuit on one coin space (as
 `Accounting.Guarantees.JointHorizonBlocks`), suppose each block's five audits realize their protocols' audits under
 their sources' premises, block by block:
 
 * sampled proofs: block `b`'s sampled audit is C-Flock's integrity audit of block `b` of the server's sessions `S`
-  (`Accounting.RealizesIntegrityOfIntegrityBlock`), each draw covering at least a fraction `q > 0` of its sampling
-  block's units, under A3 for each draw's bytes and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512` (`LinkCRZC`) at every
-  strategy the node plays a sampling block with, at an integrity certificate of at least `ln(1/δ_I)/q` units;
+  with carried leaves (`Accounting.RealizesIntegrityOfIntegrityBlock`), each draw covering at least a fraction `q > 0`
+  of its sampling block's units, under A3 for each draw's bytes, `cr/sha-512` (`TableCRZ`) and `ecr/sha-512`
+  (`LinkCRZC`) at every strategy the node plays a sampling block with, and `ecr/sha-512` (`SHA512CRExpected`) at each
+  carried leaf's finder, at an integrity certificate of at least `ln(1/δ_I)/q` units;
 * PoUW: block `b`'s PoUW audit credits H1's checked words over the torch loop (`Accounting.RealizesCreditedWords` at
   `m = minWordMacs Sc Cd macs` multiply-adds a word, `u` a unit and `b_unit` bits a unit), each right word of a unit
   the device didn't outsource costing `m` multiply-adds of priced work (`Accounting.Assumptions.WordCostsMacs`) and at
@@ -73,8 +75,8 @@ their sources' premises, block by block:
 and, as in `JointHorizonBlocks`, each wipe's survivor bound holds at its error `ε_wipe b` and each block's memory term
 at `δ_PoUS b`. Then the probability that some block's accepted audit's claim fails, some accepted wipe's survivor bound
 fails, or some block's memory term fails while its PoUS accepted is at most
-$$\sum_b \Big(\delta_I + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}) + \delta_s + n(\delta_{bind} + \delta_{ks})
-  + (\delta + \varepsilon_{max}) + \big(\tfrac{k-1}{N}\big)^s + \tfrac{s}{2^h} + \tfrac{C(q_b, k)}{2^\lambda}
+$$\sum_b \Big(\delta_I + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}) + \sum_\ell \delta_{carry,\ell,b}
+  + \delta_s + n(\delta_{bind} + \delta_{ks}) + (\delta + \varepsilon_{max}) + \big(\tfrac{k-1}{N}\big)^s + \tfrac{s}{2^h} + \tfrac{C(q_b, k)}{2^\lambda}
   + n_c(\delta_c + \varepsilon_{ks} + \varepsilon_{bind} + \varepsilon_{tap})\Big) + \sum_b \varepsilon_{\mathrm{wipe},b}
   + \sum_b \delta_{\mathrm{PoUS},b},$$
 `q_b = rate_oracle · T_b` the device's oracle queries over block `b`'s window.
@@ -87,14 +89,14 @@ stays as its realization's field or its source's premise: the program-from-circu
 words fixed right as device-model work (RT4-LOGIC-6, now the premises `WordCostsMacs` and `HelpWithinCertifier`), PoUS
 at its challenge times only, and the
 trace's values at the registered inputs and the records' coverage on the network certifier's acceptance
-(`window_le`). As in `JointHorizonBlocks`, the state a block
-carries across a wipe is outside the integrity bound (PRF-167). -/
+(`window_le`). The state a block carries across a wipe is read at its carried leaves, each at one value in every
+session that shares it, whose terms `δ_carry,ℓ,b` the bound states. -/
 def JointHorizonBlocksDeployed : Prop :=
   ∀ (ι α I : Type) [Fintype ι] [Fintype α] [Fintype I] [DecidableEq I] (Ω : I → Type) [∀ i, Fintype (Ω i)]
     [∀ i, Nonempty (Ω i)] (d : Device ι) (C : Verity.Circuit) (B : ℕ) (s : BlocksRun d α C Ω B)
     (c : Fin B → Certificates) (p : Price) (f : ℝ) (εWipe δPous : Fin B → ℝ)
     -- sampled proofs: C-Flock's integrity audit of each server-time block
-    (S : Flock.Guarantees.ServerBlocks) (q δI : ℝ), 0 < q → 0 < δI →
+    (S : Flock.Guarantees.CarriedBlocks) (q δI : ℝ), 0 < q → 0 < δI →
     (∀ b : Fin B, ∀ t ∈ S.sessions b, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
     (∀ b : Fin B, ∀ t ∈ S.sessions b, FlockSoundness.Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src) →
     ∀ RI : (b : Fin B) → RealizesIntegrityOfIntegrityBlock (s.block b) S b,
@@ -106,6 +108,11 @@ def JointHorizonBlocksDeployed : Prop :=
       Flock.Guarantees.Period.Plays S.W S.T ((RI b).strat ξ) t τ →
       LinkCRZC FlockSoundness.execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
         (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') →
+    (∀ b ξ x, FlockSoundness.Assumptions.SHA512CRExpected FlockSoundness.Refine.H512
+      (finderG (S.mix ((RI b).strat ξ) x) (S.leaf x).M)
+      (finderStrat (S.mix ((RI b).strat ξ) x) (S.mixS ((RI b).strat ξ) x) (S.leaf x).M)
+      (outOf (rdSig fun _ => (S.leaf x).rd) (S.leaf x).op (S.leaf x).col)
+      (finderCost (rdSig fun _ => (S.leaf x).rd) (S.leaf x).costMix)) →
     (∀ b, Real.log (1 / δI) / q ≤ (c b).ε * (s.block b).units) →
     (∀ b, ENNReal.ofReal δI + S.err b ≠ ⊤) →
     -- PoUW: H1's checked credit over the torch loop
@@ -211,7 +218,7 @@ def JointHorizonBlocksDeployed : Prop :=
     Pouw.pr (fun ξ => (∃ b a, (s.block b).accepts a ξ ∧ ¬ (s.block b).Holds (c b) p a ξ) ∨
         (∃ b, (s.wipe b).accepts ξ ∧ ¬ (s.wipe b).Survives f ξ) ∨
         (∃ b, (s.block b).accepts .pous ξ ∧ ¬ s.MemoryTerm b ξ)) ≤
-      ∑ b : Fin B, ((ENNReal.ofReal δI + S.err b).toReal + (δs + n * (δbind + δks)) +
+      ∑ b : Fin B, ((ENNReal.ofReal δI + S.err b + S.carry b).toReal + (δs + n * (δbind + δks)) +
           ((Pous.Params.δ : ℝ) + Pous.Params.εMax.toReal) +
           ((((k - 1 : ℕ) : ℝ) / N) ^ sB + (sB : ℝ) / 2 ^ h +
             (((d.rate .oracle * (s.block b).win.len).choose k : ℕ) : ℝ) / 2 ^ lam) +
@@ -219,17 +226,17 @@ def JointHorizonBlocksDeployed : Prop :=
         ∑ b, εWipe b + ∑ b, δPous b
 
 open FlockSoundness.Audit FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
-  FlockSoundness.Discharge.ZkHidden Claims Claims.Sampling NetTiming in
+  FlockSoundness.Discharge.ZkHidden FlockSoundness.LinkFinder Claims Claims.Sampling NetTiming in
 /-- **Demo A's composed theorem, every leg from its protocol's own guarantee: sampled proofs, PoUW and the network
 certifier over a horizon of `B` server-time blocks.** As `Accounting.Guarantees.JointHorizonBlocksA`, with each block's
 three legs given by their realizations and their sources' premises, block by block, as in
 `JointHorizonBlocksDeployed`: block `b`'s sampled audit is C-Flock's integrity audit of block `b` of the server's
-sessions `S` (`Accounting.RealizesIntegrityOfIntegrityBlock`), its PoUW audit H1's checked words credited over the
+sessions `S` with carried leaves (`Accounting.RealizesIntegrityOfIntegrityBlock`), its PoUW audit H1's checked words credited over the
 torch loop (`Accounting.RealizesCreditedWords`, with `WordCostsMacs` and `HelpWithinCertifier`), and its network audit the network certifier's period of `n_c`
 sampled audits (`Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted`). Then the probability that one of those three
 audits in some block accepts while its claim fails is at most
-$$\sum_b \Big(\delta_I + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}) + \delta_s + n(\delta_{bind} + \delta_{ks})
-  + n_c(\delta_c + \varepsilon_{ks} + \varepsilon_{bind} + \varepsilon_{tap})\Big).$$
+$$\sum_b \Big(\delta_I + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}) + \sum_\ell \delta_{carry,\ell,b}
+  + \delta_s + n(\delta_{bind} + \delta_{ks}) + n_c(\delta_c + \varepsilon_{ks} + \varepsilon_{bind} + \varepsilon_{tap})\Big).$$
 Demo A has no wipe or memory term (memory accounting joins at M4 through `JointHorizonBlocksDeployed`); each bridge's own
 gap stays as its realization's field or its source's premise, as there. -/
 def JointHorizonBlocksDeployedA : Prop :=
@@ -237,7 +244,7 @@ def JointHorizonBlocksDeployedA : Prop :=
     [∀ i, Nonempty (Ω i)] (d : Device ι) (C : Verity.Circuit) (B : ℕ) (r : Fin B → PeriodRun d α C Ω)
     (c : Fin B → Certificates) (p : Price)
     -- sampled proofs: C-Flock's integrity audit of each server-time block
-    (S : Flock.Guarantees.ServerBlocks) (q δI : ℝ), 0 < q → 0 < δI →
+    (S : Flock.Guarantees.CarriedBlocks) (q δI : ℝ), 0 < q → 0 < δI →
     (∀ b : Fin B, ∀ t ∈ S.sessions b, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
     (∀ b : Fin B, ∀ t ∈ S.sessions b, FlockSoundness.Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src) →
     ∀ RI : (b : Fin B) → RealizesIntegrityOfIntegrityBlock (r b) S b,
@@ -249,6 +256,11 @@ def JointHorizonBlocksDeployedA : Prop :=
       Flock.Guarantees.Period.Plays S.W S.T ((RI b).strat ξ) t τ →
       LinkCRZC FlockSoundness.execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
         (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') →
+    (∀ b ξ x, FlockSoundness.Assumptions.SHA512CRExpected FlockSoundness.Refine.H512
+      (finderG (S.mix ((RI b).strat ξ) x) (S.leaf x).M)
+      (finderStrat (S.mix ((RI b).strat ξ) x) (S.mixS ((RI b).strat ξ) x) (S.leaf x).M)
+      (outOf (rdSig fun _ => (S.leaf x).rd) (S.leaf x).op (S.leaf x).col)
+      (finderCost (rdSig fun _ => (S.leaf x).rd) (S.leaf x).costMix)) →
     (∀ b, Real.log (1 / δI) / q ≤ (c b).ε * (r b).units) →
     (∀ b, ENNReal.ofReal δI + S.err b ≠ ⊤) →
     -- PoUW: H1's checked credit over the torch loop
@@ -333,6 +345,6 @@ def JointHorizonBlocksDeployedA : Prop :=
       ((RN b).stmt ξ i)).Pr H ≤ εtap) →
     Pouw.pr (fun ξ => ∃ b, ∃ a ∈ ({.sampled, .pouw, .network} : Finset Audit),
         (r b).accepts a ξ ∧ ¬ (r b).Holds (c b) p a ξ) ≤
-      ∑ b : Fin B, ((ENNReal.ofReal δI + S.err b).toReal + (δs + n * (δbind + δks)) + nc * (δc + εks + εbind + εtap))
+      ∑ b : Fin B, ((ENNReal.ofReal δI + S.err b + S.carry b).toReal + (δs + n * (δbind + δks)) + nc * (δc + εks + εbind + εtap))
 
 end Accounting.Guarantees

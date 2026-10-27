@@ -20,10 +20,11 @@ every value of the others, as the audits' are, gives it (`Pouw.pr_le_of_update`)
 Each hypothesis is to come from its protocol's own statement:
 
 * the five audits: as in `Accounting.Guarantees.JointPeriod`. For integrity, proofs' per-block bound is
-  `Flock.Guarantees.IntegrityBlock` (and `IntegrityBlocks` over the horizon): block `b` accepted with at least
-  `ln(1/δ)/q` wrong units with probability at most `δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t)`. It is stated in C-Flock's
-  analysis (the proofs tree) over its game of sessions played by one prover, not over this coin space, so the integrity
-  leg here is `PeriodRun.Sound` for `.sampled` in each block until a bridge carries it over;
+  `Flock.Guarantees.IntegrityBlockCarried`: block `b` accepted with at least `ln(1/δ)/q` wrong units, the state a block
+  carries across a wipe read at its carried leaves, with probability at most
+  `δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t) + Σ_ℓ δ_carry,ℓ,b`. It is stated in C-Flock's analysis (the proofs tree) over its
+  game of sessions played by one prover, not over this coin space, so the integrity leg here is `PeriodRun.Sound` for
+  `.sampled` in each block, which `Accounting.Guarantees.Bridge.IntegrityOfIntegrityBlock` carries over;
 * the wipe: `Pous.Guarantees.SecureErasureMeetsFamily`, at `f = 1/19` and `ε_wipe = 2^-128` for the band of the
   fill's size, through DEVICE-WIPE's `Verity.Wipe.SurvivorBound` (neither bridge is stated yet);
 * the memory term: weights-only PoUS at a share of `0.07` (ASK-132), at `δ_PoUS`.
@@ -54,9 +55,9 @@ $$\sum_b \sum_a \delta_{b,a} + \sum_b \varepsilon_{\mathrm{wipe},b} + \sum_b \de
 
 The integrity leg is `PeriodRun.Sound` for `.sampled` in each block, not proofs' `Flock.Guarantees.IntegrityBlock`,
 which is stated over C-Flock's game rather than this coin space. The memory term holds at PoUS's challenge times only,
-until the continuous audit is tied in. **Gap (PRF-167):** the state a block carries across a wipe (the KV cache,
-committed before the wipe and re-read after it) is outside the integrity bound: nothing here says the value a block
-re-reads is the one the block before committed. -/
+until the continuous audit is tied in. The state a block carries across a wipe (the KV cache, committed before the
+wipe and re-read after it) is in the integrity leg the bridge gives (`Bridge.JointHorizonBlocksOfIntegrityBlock`):
+each carried leaf is read at one value in every session that shares it. -/
 def JointHorizonBlocks : Prop :=
   ∀ (ι α I : Type) [Fintype ι] [Fintype α] [Fintype I] [DecidableEq I] (Ω : I → Type) [∀ i, Fintype (Ω i)]
     [∀ i, Nonempty (Ω i)] (d : Device ι) (C : Verity.Circuit) (B : ℕ) (s : BlocksRun d α C Ω B)
@@ -92,8 +93,9 @@ certifiers) is at most `∑_b (δ b sampled + δ b pouw + δ b network)`.
 
 The weights are pinned at their transfer in, like any ingress (ASK-130 A), not by PoUS. The memory and wipe terms
 join at M4 through `JointHorizonBlocks`. As there, the integrity leg is `PeriodRun.Sound` for `.sampled` in each
-block, not proofs' `Flock.Guarantees.IntegrityBlock`, which is stated over C-Flock's game rather than this coin space;
-and the state a block carries across a wipe is outside the integrity bound (PRF-167). -/
+block, not proofs' `Flock.Guarantees.IntegrityBlockCarried`, which is stated over C-Flock's game rather than this coin
+space; the bridge (`Bridge.JointHorizonBlocksAOfIntegrityBlock`) reads the state a block carries across a wipe at its
+carried leaves. -/
 def JointHorizonBlocksA : Prop :=
   ∀ (ι α I : Type) [Fintype α] [Fintype I] [DecidableEq I] (Ω : I → Type) [∀ i, Fintype (Ω i)]
     [∀ i, Nonempty (Ω i)] (d : Device ι) (C : Verity.Circuit) (B : ℕ) (r : Fin B → PeriodRun d α C Ω)

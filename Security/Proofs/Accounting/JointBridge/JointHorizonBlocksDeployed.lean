@@ -29,7 +29,7 @@ theorem sum_univ_audit (g : Audit → ℝ) : ∑ a, g a = g .sampled + g .pouw +
 (`Accounting.Guarantees.JointHorizonBlocksDeployed`). -/
 theorem JointHorizonBlocksDeployed : Accounting.Guarantees.JointHorizonBlocksDeployed := by
   intro ι α I _ _ _ _ Ω _ _ d C B s c p f εWipe δPous
-    S q δI hq hδI hqt hA3 RI hT hL hcert hfin
+    S q δI hq hδI hqt hA3 RI hT hL hA2 hcert hfin
     ι' K T L U Cn Ξ V _ _ _ _ _ _ _ Sc Cd n hn hN hr hM hK prm enc staged flat δs δbind δks ws opened salt Wp Pl folded
     macs u bUnit help RW hcost hhelp hScope hρ hw hluck hgame hdead hpre hbind hreg hdraw hsvc hsalt hpins hmu hrb hguess hfix
     hd hp hH Dr Qr Lr hP ΩW ΩQ run P round RS hdev hS
@@ -37,7 +37,7 @@ theorem JointHorizonBlocksDeployed : Accounting.Guarantees.JointHorizonBlocksDep
     Coin Col Tn _ _ _ _ _ H D Ln Kₒ Sn lay kh δc decode regN Dj nc RN hks hbc hδc hdec εks εbind εtap herr hbindN htap
     hW hMem
   let δ : Fin B → Audit → ℝ := fun b a => match a with
-    | .sampled => (ENNReal.ofReal δI + S.err b).toReal
+    | .sampled => (ENNReal.ofReal δI + S.err b + S.carry b).toReal
     | .pouw => δs + n * (δbind + δks)
     | .pous => (Pous.Params.δ : ℝ) + Pous.Params.εMax.toReal
     | .poub => (((k - 1 : ℕ) : ℝ) / N) ^ sB + (sB : ℝ) / 2 ^ h +
@@ -47,7 +47,7 @@ theorem JointHorizonBlocksDeployed : Accounting.Guarantees.JointHorizonBlocksDep
     intro b a
     cases a
     · exact Bridge.IntegrityOfIntegrityBlock ι d α C I Ω (s.block b) S b q δI hq hδI (hqt b) (hA3 b) (RI b)
-        (hT b) (hL b) (c b) p (hcert b) (hfin b)
+        (hT b) (hL b) (hA2 b) (c b) p (hcert b) (hfin b)
     · exact Bridge.WorkOfH1CheckedCreditPeriod p macs u bUnit ι α I Ω d C (s.block b) (c b) Sc Cd hn hN hr hM hK prm enc
         staged flat δs δbind δks (ws b) (opened b) (salt b) (Wp b) (Pl b) (folded b) (help b) (RW b) (hcost b)
         (hhelp b) hScope hρ hw hluck (hgame b)
@@ -64,12 +64,12 @@ theorem JointHorizonBlocksDeployed : Accounting.Guarantees.JointHorizonBlocksDep
 (`Accounting.Guarantees.JointHorizonBlocksDeployedA`). -/
 theorem JointHorizonBlocksDeployedA : Accounting.Guarantees.JointHorizonBlocksDeployedA := by
   intro ι α I _ _ _ Ω _ _ d C B r c p
-    S q δI hq hδI hqt hA3 RI hT hL hcert hfin
+    S q δI hq hδI hqt hA3 RI hT hL hA2 hcert hfin
     ι' K T L U Cn Ξ V _ _ _ _ _ _ _ Sc Cd n hn hN hr hM hK prm enc staged flat δs δbind δks ws opened salt Wp Pl folded
     macs u bUnit help RW hcost hhelp hScope hρ hw hluck hgame hdead hpre hbind hreg hdraw hsvc hsalt hpins hmu hrb hguess hfix
     Coin Col Tn _ _ _ _ _ H D Ln Kₒ Sn lay kh δc decode regN Dj nc RN hks hbc hδc hdec εks εbind εtap herr hbindN htap
   let δ : Fin B → Audit → ℝ := fun b a => match a with
-    | .sampled => (ENNReal.ofReal δI + S.err b).toReal
+    | .sampled => (ENNReal.ofReal δI + S.err b + S.carry b).toReal
     | .pouw => δs + n * (δbind + δks)
     | .network => nc * (δc + εks + εbind + εtap)
     | _ => 0
@@ -78,7 +78,7 @@ theorem JointHorizonBlocksDeployedA : Accounting.Guarantees.JointHorizonBlocksDe
     simp only [Finset.mem_insert, Finset.mem_singleton] at ha
     rcases ha with rfl | rfl | rfl
     · exact Bridge.IntegrityOfIntegrityBlock ι d α C I Ω (r b) S b q δI hq hδI (hqt b) (hA3 b) (RI b)
-        (hT b) (hL b) (c b) p (hcert b) (hfin b)
+        (hT b) (hL b) (hA2 b) (c b) p (hcert b) (hfin b)
     · exact Bridge.WorkOfH1CheckedCreditPeriod p macs u bUnit ι α I Ω d C (r b) (c b) Sc Cd hn hN hr hM hK prm enc
         staged flat δs δbind δks (ws b) (opened b) (salt b) (Wp b) (Pl b) (folded b) (help b) (RW b) (hcost b)
         (hhelp b) hScope hρ hw hluck (hgame b)
