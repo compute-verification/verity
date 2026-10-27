@@ -77,7 +77,7 @@ theorem m1_le_35 : ∀ m, 25 ≤ m → m ≤ 35 →
 
 theorem m1_35_length : (m1Schedule 35).levels.length = 7 := by decide +kernel
 
-theorem hashArg_cast (s : Schedule) (ℓ : ℕ) :
+theorem hashArg_cast (s : FlockSoundness.Accounting.Schedule) (ℓ : ℕ) :
     (2 : ℝ) ^ (lvOf s ℓ).logLen * ((lvOf s ℓ).queries : ℝ) = (hashArg s ℓ : ℝ) := by
   unfold hashArg
   push_cast
@@ -92,49 +92,49 @@ theorem hashUp35_le : ∑ ℓ ∈ Finset.Icc 1 7, (rootUp (hashArg (m1Schedule 3
 /-! ## A table's bound by its finder slots -/
 
 /-- Level `ℓ`'s rewinding slot of rep `r` (`ℓ ≥ 1`), where `TabIx 7` has it. -/
-noncomputable def rsPr (X : TabIx 7 → ℝ) (r : ℕ) : ℕ → ℝ
+noncomputable def rsPr (Xs : TabIx 7 → ℝ) (r : ℕ) : ℕ → ℝ
   | 0 => 0
-  | ℓ + 1 => if h : r < 2 ∧ ℓ < 7 then X (.inl (⟨r, h.1⟩, ⟨ℓ, h.2⟩)) else 0
+  | ℓ + 1 => if h : r < 2 ∧ ℓ < 7 then Xs (.inl (⟨r, h.1⟩, ⟨ℓ, h.2⟩)) else 0
 
 /-- Rep `r`'s pads slot. -/
-noncomputable def padsPr (X : TabIx 7 → ℝ) (r : ℕ) : ℝ := if h : r < 2 then X (.inr (.inl ⟨r, h⟩)) else 0
+noncomputable def padsPr (Xs : TabIx 7 → ℝ) (r : ℕ) : ℝ := if h : r < 2 then Xs (.inr (.inl ⟨r, h⟩)) else 0
 
 /-- Rep `r`'s `τ` slot. -/
-noncomputable def tauPr (X : TabIx 7 → ℝ) (r : ℕ) : ℝ := if h : r < 2 then X (.inr (.inr (.inl ⟨r, h⟩))) else 0
+noncomputable def tauPr (Xs : TabIx 7 → ℝ) (r : ℕ) : ℝ := if h : r < 2 then Xs (.inr (.inr (.inl ⟨r, h⟩))) else 0
 
-/-- **A table's knowledge bound past `2^-203`, by slot**, at each slot's collision probability `X s`, with
+/-- **A table's knowledge bound past `2^-203`, by slot**, at each slot's collision probability `Xs s`, with
 coefficients that read no table: `m1Schedule 35`'s per level, `2^13` for the pads. -/
-noncomputable def ksSlots (X : TabIx 7 → ℝ) (k : ℕ) : ℝ :=
-  ∑ r ∈ Finset.range 2, ∑ ℓ ∈ Finset.Icc 1 7, (rootUp (hashArg (m1Schedule 35) ℓ) : ℝ) * Real.sqrt (rsPr X r ℓ) +
-    ∑ r ∈ Finset.range 2, 2 ^ 13 * Real.sqrt (padsPr X r) +
-    ∑ r ∈ Finset.range 2, Real.sqrt (tauPr X r) +
-    X (.inr (.inr (.inr (.inr ())))) + Real.sqrt k * Real.sqrt (X (.inr (.inr (.inr (.inl ())))))
+noncomputable def ksSlots (Xs : TabIx 7 → ℝ) (k : ℕ) : ℝ :=
+  ∑ r ∈ Finset.range 2, ∑ ℓ ∈ Finset.Icc 1 7, (rootUp (hashArg (m1Schedule 35) ℓ) : ℝ) * Real.sqrt (rsPr Xs r ℓ) +
+    ∑ r ∈ Finset.range 2, 2 ^ 13 * Real.sqrt (padsPr Xs r) +
+    ∑ r ∈ Finset.range 2, Real.sqrt (tauPr Xs r) +
+    Xs (.inr (.inr (.inr (.inr ())))) + Real.sqrt k * Real.sqrt (Xs (.inr (.inr (.inr (.inl ())))))
 
 section Slots
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
-  {D Sl : Type} [Inhabited D] [Inhabited Sl] (A : Arith F K) (Hs : Hashes F D Sl)
+  {D Sl : Type} [Inhabited D] [Inhabited Sl] (A : Arith F K) (Hs : FlockSoundness.Discharge.ZkLink.Hashes F D Sl)
 
 /-- **`ε_c⁻` at a `M1W` table, by slot**: `epsPrZ` at most `2^-203` plus `ksSlots`' session terms, where each finder's
 collision probability is its slot's. -/
 theorem epsPrZ_le_slots (hF : Fintype.card F = 2 ^ 128) (T : TabZK F mPts)
     (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutZC F D Sl))) (cap₀ : Cap D) (hT : T.M1W)
-    (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) (X : TabIx 7 → ℝ)
+    (σ : Strategy (sessAtZ pre post (tabAfterZC A Hs T cap₀))) (Xs : TabIx 7 → ℝ)
     (hRS : ∀ r ∈ Finset.range 2, ∀ ℓ ∈ Finset.Icc 1 T.sch.levels.length,
-      (advRSFinderZ A Hs T pre post cap₀ r ℓ σ).ev (Game.ind (StrictCR.IsColl Hs.H)) = rsPr X r ℓ)
+      (advRSFinderZ A Hs T pre post cap₀ r ℓ σ).ev (Game.ind (StrictCR.IsColl Hs.H)) = rsPr Xs r ℓ)
     (hP : ∀ r ∈ Finset.range 2,
-      (advPadsSFinderZ A Hs T pre post cap₀ r σ).ev (Game.ind (StrictCR.IsColl Hs.H)) = padsPr X r)
+      (advPadsSFinderZ A Hs T pre post cap₀ r σ).ev (Game.ind (StrictCR.IsColl Hs.H)) = padsPr Xs r)
     (hTau : ∀ r ∈ Finset.range 2,
-      (advTauSFinderZ A Hs T pre post cap₀ r σ).ev (Game.ind (StrictCR.IsColl Hs.H)) = tauPr X r)
+      (advTauSFinderZ A Hs T pre post cap₀ r σ).ev (Game.ind (StrictCR.IsColl Hs.H)) = tauPr Xs r)
     (hS : (selfSFinderZ A Hs T pre post cap₀ σ).ev (Game.ind (StrictCR.IsColl Hs.H)) =
-      X (.inr (.inr (.inr (.inr ()))))) :
+      Xs (.inr (.inr (.inr (.inr ()))))) :
     epsPrZ A Hs T pre post cap₀ σ ≤
       2 ^ (-(203 : ℝ)) +
         ∑ r ∈ Finset.range 2, ∑ ℓ ∈ Finset.Icc 1 7,
-          (rootUp (hashArg (m1Schedule 35) ℓ) : ℝ) * Real.sqrt (rsPr X r ℓ) +
-        ∑ r ∈ Finset.range 2, 2 ^ 13 * Real.sqrt (padsPr X r) +
-        ∑ r ∈ Finset.range 2, Real.sqrt (tauPr X r) +
-        X (.inr (.inr (.inr (.inr ())))) := by
+          (rootUp (hashArg (m1Schedule 35) ℓ) : ℝ) * Real.sqrt (rsPr Xs r ℓ) +
+        ∑ r ∈ Finset.range 2, 2 ^ 13 * Real.sqrt (padsPr Xs r) +
+        ∑ r ∈ Finset.range 2, Real.sqrt (tauPr Xs r) +
+        Xs (.inr (.inr (.inr (.inr ())))) := by
   have hb : T.bound.toReal ≤ 2 ^ (-(203 : ℝ)) :=
     ENNReal.toReal_le_of_le_ofReal (by positivity) (T.bound_le_m1w hF hT)
   obtain ⟨m, h1, h2, hsch, -, -, -, hN, -, -⟩ := hT
@@ -161,26 +161,26 @@ theorem epsPrZ_le_slots (hF : Fintype.card F = 2 ^ 128) (T : TabZK F mPts)
     exact mul_le_mul_of_nonneg_right hN' (Real.sqrt_nonneg _)
   · exact Finset.sum_le_sum fun r hr => le_of_eq (by rw [hTau r hr])
 
-/-- **A `M1W` table's knowledge bound, by slot**: `ksPrZ ≤ 2^-203 + ksSlots X k`, where each finder's collision
-probability is its slot's `X s`. -/
+/-- **A `M1W` table's knowledge bound, by slot**: `ksPrZ ≤ 2^-203 + ksSlots Xs k`, where each finder's collision
+probability is its slot's `Xs s`. -/
 theorem ksPrZ_le_slots (hF : Fintype.card F = 2 ^ 128) (ts : List (TabZK F mPts)) (j : Fin ts.length) (k : ℕ)
-    (τ : Strategy (sessionZC A Hs ts)) (hT : (ts.get j).M1W) (X : TabIx 7 → ℝ)
+    (τ : Strategy (sessionZC A Hs ts)) (hT : (ts.get j).M1W) (Xs : TabIx 7 → ℝ)
     (hRS : ∀ r ∈ Finset.range 2, ∀ ℓ ∈ Finset.Icc 1 (ts.get j).sch.levels.length,
       (advRSFinderZ A Hs (ts.get j) ((gamesZC A Hs ts τ.1).take j) ((gamesZC A Hs ts τ.1).drop (j + 1)) (τ.1 j) r ℓ
-        (stratZ A Hs ts j τ)).ev (Game.ind (StrictCR.IsColl Hs.H)) = rsPr X r ℓ)
+        (stratZ A Hs ts j τ)).ev (Game.ind (StrictCR.IsColl Hs.H)) = rsPr Xs r ℓ)
     (hP : ∀ r ∈ Finset.range 2,
       (advPadsSFinderZ A Hs (ts.get j) ((gamesZC A Hs ts τ.1).take j) ((gamesZC A Hs ts τ.1).drop (j + 1)) (τ.1 j) r
-        (stratZ A Hs ts j τ)).ev (Game.ind (StrictCR.IsColl Hs.H)) = padsPr X r)
+        (stratZ A Hs ts j τ)).ev (Game.ind (StrictCR.IsColl Hs.H)) = padsPr Xs r)
     (hTau : ∀ r ∈ Finset.range 2,
       (advTauSFinderZ A Hs (ts.get j) ((gamesZC A Hs ts τ.1).take j) ((gamesZC A Hs ts τ.1).drop (j + 1)) (τ.1 j) r
-        (stratZ A Hs ts j τ)).ev (Game.ind (StrictCR.IsColl Hs.H)) = tauPr X r)
+        (stratZ A Hs ts j τ)).ev (Game.ind (StrictCR.IsColl Hs.H)) = tauPr Xs r)
     (hS : (selfSFinderZ A Hs (ts.get j) ((gamesZC A Hs ts τ.1).take j) ((gamesZC A Hs ts τ.1).drop (j + 1)) (τ.1 j)
-        (stratZ A Hs ts j τ)).ev (Game.ind (StrictCR.IsColl Hs.H)) = X (.inr (.inr (.inr (.inr ())))))
+        (stratZ A Hs ts j τ)).ev (Game.ind (StrictCR.IsColl Hs.H)) = Xs (.inr (.inr (.inr (.inr ())))))
     (h0 : (adv₀SFinderZ A Hs (ts.get j) ((gamesZC A Hs ts τ.1).take j) ((gamesZC A Hs ts τ.1).drop (j + 1)) (τ.1 j)
-        (stratZ A Hs ts j τ)).ev (Game.ind (StrictCR.IsColl Hs.H)) = X (.inr (.inr (.inr (.inl ()))))) :
-    ksPrZ A Hs ts j k τ ≤ 2 ^ (-(203 : ℝ)) + ksSlots X k := by
+        (stratZ A Hs ts j τ)).ev (Game.ind (StrictCR.IsColl Hs.H)) = Xs (.inr (.inr (.inr (.inl ()))))) :
+    ksPrZ A Hs ts j k τ ≤ 2 ^ (-(203 : ℝ)) + ksSlots Xs k := by
   have he := epsPrZ_le_slots A Hs hF (ts.get j) ((gamesZC A Hs ts τ.1).take j) ((gamesZC A Hs ts τ.1).drop (j + 1))
-    (τ.1 j) hT (stratZ A Hs ts j τ) X hRS hP hTau hS
+    (τ.1 j) hT (stratZ A Hs ts j τ) Xs hRS hP hTau hS
   unfold ksPrZ ksSlots
   rw [h0, Real.sqrt_mul (Nat.cast_nonneg k)]
   linarith
@@ -189,14 +189,14 @@ end Slots
 
 /-- **`ksSlots`' average over the draw from the averaged premise**: where every slot's average is at most `p`, the
 average of `ksSlots` is at most `(2·25638 + 2^14 + 2)·√p + p + √(kp)` (`ex_sqrt_le` on each square root). -/
-theorem ex_ksSlots_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (X : Ω → TabIx 7 → ℝ) (k : ℕ) {p : ℝ} (hp : 0 ≤ p)
-    (h0 : ∀ ω s, 0 ≤ X ω s) (havg : ∀ s, Claims.Ex (fun ω => X ω s) ≤ p) :
-    Claims.Ex (fun ω => ksSlots (X ω) k) ≤
+theorem ex_ksSlots_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (Xs : Ω → TabIx 7 → ℝ) (k : ℕ) {p : ℝ} (hp : 0 ≤ p)
+    (h0 : ∀ ω s, 0 ≤ Xs ω s) (havg : ∀ s, Claims.Ex (fun ω => Xs ω s) ≤ p) :
+    Claims.Ex (fun ω => ksSlots (Xs ω) k) ≤
       (2 * 25638 + 2 ^ 14 + 2) * Real.sqrt p + p + Real.sqrt (k * p) := by
   have hsq : ∀ f : Ω → ℝ, (∀ ω, 0 ≤ f ω) → Claims.Ex f ≤ p →
       Claims.Ex (fun ω => Real.sqrt (f ω)) ≤ Real.sqrt p :=
     fun f hf h => (ex_sqrt_le f hf).trans (Real.sqrt_le_sqrt h)
-  have hrs0 : ∀ ω r ℓ, 0 ≤ rsPr (X ω) r ℓ := by
+  have hrs0 : ∀ ω r ℓ, 0 ≤ rsPr (Xs ω) r ℓ := by
     intro ω r ℓ
     cases ℓ with
     | zero => exact le_rfl
@@ -205,7 +205,7 @@ theorem ex_ksSlots_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (X : Ω → TabIx 7
       split_ifs
       · exact h0 _ _
       · exact le_rfl
-  have hrsA : ∀ r ℓ, Claims.Ex (fun ω => rsPr (X ω) r ℓ) ≤ p := by
+  have hrsA : ∀ r ℓ, Claims.Ex (fun ω => rsPr (Xs ω) r ℓ) ≤ p := by
     intro r ℓ
     cases ℓ with
     | zero => simp only [rsPr, Claims.Ex_const]; exact hp
@@ -213,27 +213,27 @@ theorem ex_ksSlots_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (X : Ω → TabIx 7
       by_cases h : r < 2 ∧ ℓ < 7
       · simp only [rsPr, dif_pos h]; exact havg _
       · simp only [rsPr, dif_neg h, Claims.Ex_const]; exact hp
-  have hpd0 : ∀ ω r, 0 ≤ padsPr (X ω) r := fun ω r => by
+  have hpd0 : ∀ ω r, 0 ≤ padsPr (Xs ω) r := fun ω r => by
     unfold padsPr; split_ifs
     · exact h0 _ _
     · exact le_rfl
-  have hpdA : ∀ r, Claims.Ex (fun ω => padsPr (X ω) r) ≤ p := by
+  have hpdA : ∀ r, Claims.Ex (fun ω => padsPr (Xs ω) r) ≤ p := by
     intro r
     by_cases h : r < 2
     · simp only [padsPr, dif_pos h]; exact havg _
     · simp only [padsPr, dif_neg h, Claims.Ex_const]; exact hp
-  have htu0 : ∀ ω r, 0 ≤ tauPr (X ω) r := fun ω r => by
+  have htu0 : ∀ ω r, 0 ≤ tauPr (Xs ω) r := fun ω r => by
     unfold tauPr; split_ifs
     · exact h0 _ _
     · exact le_rfl
-  have htuA : ∀ r, Claims.Ex (fun ω => tauPr (X ω) r) ≤ p := by
+  have htuA : ∀ r, Claims.Ex (fun ω => tauPr (Xs ω) r) ≤ p := by
     intro r
     by_cases h : r < 2
     · simp only [tauPr, dif_pos h]; exact havg _
     · simp only [tauPr, dif_neg h, Claims.Ex_const]; exact hp
   simp only [ksSlots, Claims.Ex_add, ex_sum, ex_mul_left]
   have hA : ∑ r ∈ Finset.range 2, ∑ ℓ ∈ Finset.Icc 1 7, (rootUp (hashArg (m1Schedule 35) ℓ) : ℝ) *
-      Claims.Ex (fun ω => Real.sqrt (rsPr (X ω) r ℓ)) ≤ 2 * 25638 * Real.sqrt p := by
+      Claims.Ex (fun ω => Real.sqrt (rsPr (Xs ω) r ℓ)) ≤ 2 * 25638 * Real.sqrt p := by
     calc _ ≤ ∑ _r ∈ Finset.range 2, ∑ ℓ ∈ Finset.Icc 1 7,
             (rootUp (hashArg (m1Schedule 35) ℓ) : ℝ) * Real.sqrt p := by
           gcongr with r hr ℓ hℓ
@@ -245,7 +245,7 @@ theorem ex_ksSlots_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (X : Ω → TabIx 7
       _ ≤ 2 * 25638 * Real.sqrt p := by
           have := mul_le_mul_of_nonneg_right hashUp35_le (Real.sqrt_nonneg p)
           linarith
-  have hB : ∑ r ∈ Finset.range 2, 2 ^ 13 * Claims.Ex (fun ω => Real.sqrt (padsPr (X ω) r)) ≤
+  have hB : ∑ r ∈ Finset.range 2, 2 ^ 13 * Claims.Ex (fun ω => Real.sqrt (padsPr (Xs ω) r)) ≤
       2 ^ 14 * Real.sqrt p := by
     calc _ ≤ ∑ _r ∈ Finset.range 2, (2 : ℝ) ^ 13 * Real.sqrt p := by
           gcongr with r hr
@@ -254,7 +254,7 @@ theorem ex_ksSlots_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (X : Ω → TabIx 7
           rw [Finset.sum_const, Finset.card_range, nsmul_eq_mul]
           push_cast
           ring
-  have hC : ∑ r ∈ Finset.range 2, Claims.Ex (fun ω => Real.sqrt (tauPr (X ω) r)) ≤ 2 * Real.sqrt p := by
+  have hC : ∑ r ∈ Finset.range 2, Claims.Ex (fun ω => Real.sqrt (tauPr (Xs ω) r)) ≤ 2 * Real.sqrt p := by
     calc _ ≤ ∑ _r ∈ Finset.range 2, Real.sqrt p :=
           Finset.sum_le_sum fun r _ => hsq _ (fun ω => htu0 ω r) (htuA r)
       _ = 2 * Real.sqrt p := by
@@ -262,13 +262,13 @@ theorem ex_ksSlots_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (X : Ω → TabIx 7
           push_cast
           ring
   have hS := havg (.inr (.inr (.inr (.inr ()))))
-  have hZ : Real.sqrt k * Claims.Ex (fun ω => Real.sqrt (X ω (.inr (.inr (.inr (.inl ())))))) ≤
+  have hZ : Real.sqrt k * Claims.Ex (fun ω => Real.sqrt (Xs ω (.inr (.inr (.inr (.inl ())))))) ≤
       Real.sqrt (k * p) := by
     rw [Real.sqrt_mul (Nat.cast_nonneg k)]
     exact mul_le_mul_of_nonneg_left (hsq _ (fun ω => h0 _ _) (havg _)) (Real.sqrt_nonneg _)
   linarith
 
-theorem ksSlots_nonneg (X : TabIx 7 → ℝ) (k : ℕ) (h0 : ∀ s, 0 ≤ X s) : 0 ≤ ksSlots X k := by
+theorem ksSlots_nonneg (Xs : TabIx 7 → ℝ) (k : ℕ) (h0 : ∀ s, 0 ≤ Xs s) : 0 ≤ ksSlots Xs k := by
   unfold ksSlots
   exact add_nonneg (add_nonneg (by positivity) (h0 _)) (by positivity)
 
