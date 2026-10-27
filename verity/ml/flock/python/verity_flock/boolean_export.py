@@ -456,7 +456,7 @@ COUNTER = object()
 
 class Walker:
     """Definitions as trees: children are sub-definitions (``call`` x1, ``batch`` / ``scan`` x n) and primitive leaves; a
-    tensor-core step is the proof unit; another primitive is its ir_lower piece (lowered once per operand signature, constant
+    tensor-core step is the proof block; another primitive is its ir_lower piece (lowered once per operand signature, constant
     operands a Const node gives propagated) or not yet lowered."""
 
     def __init__(self, reg: Registry, store: DefStore, cache: dict):
@@ -1188,7 +1188,7 @@ def _attention_ids(store: DefStore, tname: str, tp: dict, statics: dict) -> dict
 
 def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | None = None, walker: "Walker | None" = None,
              spec: str | None = None, member: str | None = None) -> dict:
-    """A leaf template's record: its proof units under the committed cut and its tail (C-Flock's unit lowerings), or its
+    """A leaf template's record: its proof blocks under the committed cut and its tail (C-Flock's unit lowerings), or its
     Definition tree (the walker: attention per T, GEMM coordinates, every other template). ``member``: the Definition one
     instance of the group is (a GEMM's output coordinate) when the Call is a batch of them; the record then counts one."""
     cache = {} if cache is None else cache
@@ -1240,7 +1240,7 @@ def _spine(reg: Registry, sub, base: dict, walker: "Walker", spec: str | None, w
         rec = _walked(base, walker, spec, walked_name)
         rec["note"] = (f"at N = {sub.params['N']} the kernel's warps differ, so there is no single C-Flock unit "
                        f"(verity_flock.templates.{Path(mod.__file__).stem}.width); its Definition is walked instead, every "
-                       f"primitive with its piece, none in a proof unit")
+                       f"primitive with its piece, none in a proof block")
         return rec
     low = mod.lowering(sub)
     uid = _unit(reg, low.units, f"{mod.UNIT} unit", cache)
