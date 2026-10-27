@@ -769,7 +769,7 @@ def test_top_p_below_one_is_refused_naming_the_gap(tmp_path, top_p):
         status, raw = s.post("/v1/completions", dict(CERTIFIER_BODY, top_p=top_p))
         ok, _ = s.post("/v1/completions", dict(CERTIFIER_BODY, top_p=1))
     err = json.loads(raw)["error"]
-    assert status == 400 and err["param"] == "top_p" and "CIR-87" in err["message"] and f"top_p={top_p}" in err["message"]
+    assert status == 400 and err["param"] == "top_p" and "split count" in err["message"] and f"top_p={top_p}" in err["message"]
     assert "split count" in err["message"] and ok == 200
     assert len(records(tmp_path, "requests.jsonl")) == 1          # the refused request never reached the engine
 

@@ -1,4 +1,4 @@
-"""Hot Commit worker (BRIEF §5 / §8 #4): one commit_delta process serves consecutive Commit jobs of the SAME engine key
+"""Hot Commit worker: one commit_delta process serves consecutive Commit jobs of the SAME engine key
 instead of building a fresh vLLM engine per invocation.  Not a distributed service: one worker per pod, files under one directory,
 the client is a drop-in for `verity-vllm commit ARGS` (row_pod.sh `HOT_ENGINE=1`).
 
@@ -136,7 +136,7 @@ def so_identity(argv: list[str]) -> dict[str, str | None]:
         paths.append(hs)
     ncb = settings.NATIVE_COLLECT_BUILD
     if ncb:
-        # [R17 rel M-0803] NATIVE_COLLECT_BUILD is the PARENT; the .so this tree loads is in <parent>/<source digest12>/ (native_jit) --
+        # NATIVE_COLLECT_BUILD is the PARENT; the .so this tree loads is in <parent>/<source digest12>/ (native_jit) --
         # name that one when the digest is computable here, else every .so one level down (plus the flat legacy location)
         keyed: list[str] = []
         try:
@@ -403,7 +403,7 @@ def cold_run(argv: list[str], reason: str, log=print) -> int:
 # ---------------------------------------------------------------------------------------------------------------------------- server
 # committer attributes that own device / pinned memory (native_collect window ring + scratch, the FA2/FA3 tap buffers of the hidden
 # sources, the staging arena, the pinned pool, the retained device store).  A cold process frees them at exit; the hot worker must drop them
-# explicitly after `close()` so the caching allocator can hand the memory to the next job (R16 sys: +2.3 GiB allocated per hot job otherwise).
+# explicitly after `close()` so the caching allocator can hand the memory to the next job (else +2.3 GiB stays allocated per hot job).
 DEVICE_ATTRS = ("win_tensors", "win_scratch", "arena", "pool", "_gpu_blocks", "_gpu_levels", "_levels", "_done", "_layouts", "_streams",
                 "_metas_cache", "_wrapped", "_handles", "_cur", "sources", "_nc", "_hi")
 

@@ -138,7 +138,7 @@ DTYPE_VARIANTS = {"float16": "f16", "half": "f16"}
 
 
 # =========================================================================================================
-# [chunked owner, window 2026-09-17] feature variant `--variant chunked=<max_num_batched_tokens>`
+# feature variant `--variant chunked=<max_num_batched_tokens>`
 #
 # vLLM V1 always has chunked prefill enabled, but the campaign's `engine.args.max_num_batched_tokens` (2048+64 /
 # 8192+64) keeps every prefill in ONE engine step, so no coverage cell so far has exercised partial-prefill attention.  The
