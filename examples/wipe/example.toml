@@ -1,9 +1,11 @@
-# The streamed wipe's rung on the ladder (examples/README.md): level 0, moved. Level 2 needs a run of record with the
-# memory challenger on an auditor host (demo.sh --challenger) and the verdict judged off the GPU node (wipe.case.json
-# replayed with wipe-protocol on a CPU node the prover doesn't run).
+# The streamed wipe's doneness (examples/README.md): run moved, proof none. Placed needs a run of record with every
+# auditor role on an auditor host: the memory challenger through its gate (demo.sh --challenger) and the verdict judged
+# there too (wipe.case.json replayed with wipe-protocol), not on the GPU node. Stated needs Pous.Guarantees.StreamedWipe
+# with its honest and nontrivial lemmas in [evidence].
 protocol = "pous"
 workload = "none"
-level = 0
+run = "moved"
+proof = "none"
 
 [placement]
 prover = "gpu-node"          # the GPU whose memory is wiped (wipe_store.Cuda)
