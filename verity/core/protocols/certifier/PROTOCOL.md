@@ -59,8 +59,6 @@ On each link:
   - A fault is an overflow beyond Q, a frame of the wrong size, or a reported one (monitor unavailable, drop, delivery
     refused, coverage never established).
   - After a fault, the rest of the window is padding, the queue is dropped, and the first reason is recorded.
-  - The certifier signs no certificate of a window whose status isn't complete (`certificate.Issuer`), so the window
-    fails closed as a `no-verdict`.
 - **The record is exactly (grid, status) (W5).** The status is one untimed symbol per link-window: complete, or not
   established with a reason. It carries no bucket index, time or count.
 
@@ -89,11 +87,9 @@ v1 stays as it is, and readable: `CommittedRecord` and `record_digest` are uncha
 
 **The trust change.** The **network certifier**, the device on a node's uplink that shapes each link into the grid
 (`grid.Certifier`), is auditor-trusted: the auditor trusts it to run the grid and to sign what it ran. A raw or
-committed record reaches the auditor as published. Instead, once per link-window whose record is complete, the
+committed record reaches the auditor as published. Instead, once per link-window whose status is complete, the
 certifier signs a **network certificate**: a signature over a hiding digest of the window's record, salted by the
-certifier (`certificate.Issuer`). A link-window whose status isn't complete gets none (`Issuer.refused` lists it), so
-it fails closed as a `no-verdict`, and a certificate that verifies under the certifier's key is of a complete record
-unless it is a forgery (`euf-cma/lms-sha512-n64`).
+certifier (`certificate.Issuer`). Any other link-window gets none (`Issuer.refused`) and fails closed (W6).
 The record head and the salt are witness. They enter proofs, which open frames of the record in-circuit, and never
 reach the auditor in the clear, so the record's own hashes are unsalted. The audit checks the certificate against the
 certifier's public key. With an honest certifier every certificate verifies, and the audit's verdicts are those of the
