@@ -181,7 +181,7 @@ def test_accounting_at_8192():
 
 
 def test_domain_and_registry():
-    """Pearl-C4 claims NVFP4 only (Daniel, 15:34Z): MXFP4 stays constructible as the contrast line, unregistered and with a
+    """Pearl-C4 claims NVFP4 only: MXFP4 stays constructible as the contrast line, unregistered and with a
     certificate that claims nothing."""
     s = get("pearl-c-nvfp4-v0")
     assert isinstance(s, F.PearlC4) and s.fmt is F.NVFP4 and not s.contrast and "tt-out/fp4-sm120" in s.certificate.claims
@@ -201,7 +201,7 @@ def test_domain_and_registry():
 
 
 def test_vo_rotation_and_head_interleave_register_inside_the_8_block_rotation_only():
-    """Daniel's 5:52 PM PDT ruling: the keyed V/O rotation plus the head interleave register inside the keyed 8-block
+    """The keyed V/O rotation plus the head interleave register inside the keyed 8-block
     rotation, and the same transforms on an unrotated checkpoint are refused, curated or not."""
     s = get("pearl-c-nvfp4-v0")
     vo = (F.VO_ROTATION, F.HEAD_INTERLEAVE)
@@ -214,7 +214,7 @@ def test_vo_rotation_and_head_interleave_register_inside_the_8_block_rotation_on
 
 def test_registered_weights_take_the_8_block_rotation_or_the_curated_list():
     """The keyed 8-block rotation is the registered-weights rule, and an unrotated checkpoint registers only from the curated
-    list (Daniel, 1:36 PM PDT).  Only the adopted stacks pass: V/O and the interleave together and after the rotation."""
+    list.  Only the adopted stacks pass: V/O and the interleave together and after the rotation."""
     s = get("pearl-c-nvfp4-v0")
     s.check_registration((F.ROTATION_8,))
     s.check_registration((), curated=True)
@@ -257,7 +257,7 @@ def spiked(row: bytes, k: int = K, at: tuple[int, ...] = (1,), value: float = 25
 
 
 def test_dnf_rejects_a_negative_beta_whose_byte_would_be_zero_noise():
-    """D-NF with bc-824e54a2's two fixes: 0 ≤ β, and a_E's E4M3 byte v < 128.  At β = −1/4096 the cast gives 0x80, which
+    """D-NF's two conditions: 0 ≤ β, and a_E's E4M3 byte v < 128.  At β = −1/4096 the cast gives 0x80, which
     a check of 8 ≤ v alone admits and sm_120 reads from its low 7 bits as a zero scale, so the row's noise would be zero.
     A larger negative β (−1.0, byte 0xB8) would read as +1.0; D-NF rejects both.  The pinned stats never make β negative,
     and every honest row's verdict is unchanged."""
@@ -463,7 +463,7 @@ def dead_tile(a_dead: bool, b_dead: bool):
 
 
 def test_item_3_charges_per_element_where_both_codes_are_salt_dead():
-    """Item 3 per element (the assessor's B, 17:25Z): one MAC per word and position whose A and B codes are both
+    """Item 3 per element: one MAC per word and position whose A and B codes are both
     salt-dead.  Where both sides are dead everywhere every word is charged k, each atom its full 64; a dead side against
     a live one (dead zeros included) charges nothing; and it never exceeds the block form."""
     s, record, ops = dead_tile(True, True)
@@ -572,7 +572,7 @@ def formed(f: F.Fmt, rows, role_e: int, role_f: int, k: int):
 
 @pytest.mark.parametrize("family", [spike_row, narrow_cell_row], ids=["spike", "narrow-cell"])
 def test_f1_prime_charges_the_base_split_rows_past_the_cap(family):
-    """F1′: the assessor's spike rows, which the support witness reads as salt-live (every other item 0),
+    """F1′: the spike rows, which the support witness reads as salt-live (every other item 0),
     and the narrow-cell rows, which escape a count of near-deterministic codes, are both charged far past the cap, while
     the Gaussian side carries nothing."""
     f, k, n = F.NVFP4, 1024, 4096
@@ -632,7 +632,7 @@ def test_f1_prime_takes_the_cheaters_layout_inside_a_block():
 
 
 def test_f1_prime_puts_the_correction_inside_the_expectation():
-    """κ inside (the assessor's FP4 condition 1, 15:18Z): a cheater routes each row after the salt, so F1′ charges
+    """κ inside: a cheater routes each row after the salt, so F1′ charges
     E[max(0, R − κ)] per route, never less than max(0, E[R] − κ), and κ = 0 leaves S_w as it was."""
     f = F.NVFP4
     p = [0.0] * 16 + [0.45] * 112
@@ -645,7 +645,7 @@ def test_f1_prime_puts_the_correction_inside_the_expectation():
 
 
 def test_f1_prime_reads_the_exact_noise_law():
-    """p_t under the exact law given E (the assessor's FP4 condition 2, 15:18Z): the pmf of Σ (2E_r)(2F_r) has the
+    """p_t under the exact law given E: the pmf of Σ (2E_r)(2F_r) has the
     Gaussian's variance exactly, sums to 1, and is symmetric; a lone E code of 6 gives F's own 16-point law scaled
     by 12."""
     e = tuple(F.line(b"\x05" * 32, F.ROLE_EA, 0))
@@ -712,7 +712,7 @@ def test_the_modal_byte_is_the_realised_bytes_mode():
 
 
 def r1_tile():
-    """A 4 x 4 credited tile of a 4 x 1024 x 4096 NVFP4 unit: A row 0 the assessor's spike row, rows 1–3 and B Gaussian."""
+    """A 4 x 4 credited tile of a 4 x 1024 x 4096 NVFP4 unit: A row 0 the spike row, rows 1–3 and B Gaussian."""
     s, k = V.scheme("nvfp4", False), 1024
     ctx = V.ctx_of("r1", (4, k, 4096), 0, 0)
     a_rows = [F.bf16_row([x >> 16 for x in spike_row(0, k)])] + V.rows("r1", "A", 3, k)
@@ -723,7 +723,7 @@ def r1_tile():
 
 
 def test_r1_uncredits_a_row_whose_own_debit_passes_its_cell_cap():
-    """R1 (the assessor's FP4 condition 4, 15:18Z): the spike row's own F1′ passes ρ·(its cell credit), so it must be
+    """R1: the spike row's own F1′ passes ρ·(its cell credit), so it must be
     declared excluded; declared so, the tile passes, since the Gaussian rows' debit is far under the cap.  Credited, it
     fails the tile; an excluded Gaussian row passes the per-row rules and R1, so its exclusion fails.  The honest
     prover's declaration finds exactly row 0."""
@@ -741,7 +741,7 @@ def test_r1_uncredits_a_row_whose_own_debit_passes_its_cell_cap():
 
 
 def test_r1_allows_either_declaration_inside_its_tolerance_band():
-    """R1's tolerance band (the assessor's condition 3, 16:10Z): a row within `R1_TOLERANCE` of its bound may be declared
+    """R1's tolerance band: a row within `R1_TOLERANCE` of its bound may be declared
     credited or excluded, so implementations that differ in the last bits agree on the audit."""
     s, ctx, tile, a_rows, b_rows, ops = r1_tile()
     k = ctx.matmul.shape.k
@@ -758,7 +758,7 @@ def test_r1_allows_either_declaration_inside_its_tolerance_band():
 
 
 def test_b_ovf_discounts_credit_by_its_pinned_table():
-    """B-OVF (the assessor's B, 18:45Z; condition 7): creditOf less ⌈β(n_b)·mnk⌉, β the table
+    """B-OVF: creditOf less ⌈β(n_b)·mnk⌉, β the table
     measured on each bucket's R1 boundary (`beta_final.py`), n_b the largest tabled n ≤ the unit's, non-increasing, 0 from
     4,096 up."""
     assert F.B_OVF == ((128, Fraction(414, 10_000)), (256, Fraction(223, 10_000)), (512, Fraction(119, 10_000)),
@@ -817,15 +817,15 @@ def test_a_drawn_tile_evaluates_each_rows_f1_once():
 
 
 def strassen_c_L(m: int, k: int, n: int) -> float:
-    """The c_L F2 pinned before the catalogue (bc-d9842080, 13:35Z; the assessor's FP4 conditions, 15:18Z):
+    """The c_L F2 pinned before the catalogue:
     Strassen–Winograd at W1's int8 leaf of 2 slots, depth capped by log2(k/16) alone."""
     return min((2 * (7 / 8) ** L + 4.25 * (1 / m + 1 / n) * ((7 / 4) ** L - 1) / 0.75
                 for L in range(1, (k // 16).bit_length())), default=2.0)
 
 
 def test_f2_depth_cost_is_the_pinned_catalogue_minimum():
-    """c_L is the fast-matmul catalogue's minimum at its lower-bound add count, one add per new form (the assessor's
-    20:00Z ruling): 0.661 / 0.579 / 0.507 / 0.408 at 8k–64k³, where Strassen's
+    """c_L is the fast-matmul catalogue's minimum at its lower-bound add count, one add per new form:
+    0.661 / 0.579 / 0.507 / 0.408 at 8k–64k³, where Strassen's
     formula gave 0.808 / 0.707 / 0.619 / 0.542.  At the domain's corner (m = 2^24, k = 2^16, n = 2^18, the claimed n
     cap) 0.270 against Strassen's 0.421; rectangular shapes read their own entries; F2 fires only past f_A + f_B = 1.915
     at 8k³, far from honest tiles' 0.13–0.30."""
@@ -883,7 +883,7 @@ def test_f2_reads_flatness_per_row_and_per_block_column_class(fmt):
 
 
 def test_f2_charges_a_formed_tile_whose_scales_sit_at_one_byte():
-    """The flattest rows (fp4-int8-route.md 12:00Z): spike rows with α tuned so every block max centres byte 384, on both
+    """The flattest rows: spike rows with α tuned so every block max centres byte 384, on both
     sides.  Their realised scales sit at one byte, so F2 charges the masked int8 route's saving on every chain MAC."""
     f, k, m, n = F.NVFP4, 4096, 1 << 24, 1 << 18
     rows = [spike_row(i, k, top=9.88) for i in range(4)]
@@ -895,7 +895,7 @@ def test_f2_charges_a_formed_tile_whose_scales_sit_at_one_byte():
 
 
 def test_scale_bytes_have_one_encoding_and_no_zero():
-    """sm_120 reads a UE4M3 scale from its low 7 bits (the assessor's run of all 256 bytes), so every replayed step does too;
+    """sm_120 reads a UE4M3 scale from its low 7 bits (all 256 bytes run), so every replayed step does too;
     D-SB rejects bit 7 (a second encoding of the same C̃), a zero scale (a noise block's products zeroed) and 0x7F (NaN), and
     honest forming writes none: its bytes over an amax sweep from 0 to FP32's largest stay in [0x01, 0x7E]."""
     f = F.NVFP4
@@ -915,7 +915,7 @@ def test_scale_bytes_have_one_encoding_and_no_zero():
     assert counts == {"bytes": 6, "outside_range": 4, "min": 0, "max": 0xB8, "bit7": 2, "zero": 1, "nan": 1}
 
 
-#: The four rows the decode's 28-row `nvf4Specials` table adds (bc-5a715b19's review): (accumulator, a, b, sa, sb),
+#: The four rows the decode's 28-row `nvf4Specials` table adds: (accumulator, a, b, sa, sb),
 #: codes and bytes packed little-endian, as the Lean `Vec`.  Each is a NaN accumulator with one scale byte that sets
 #: bit 7.
 NAN_BIT7_SPECIALS = (
@@ -1099,7 +1099,7 @@ def test_the_work_law_audits_pearl_c4_under_h3():
 
 
 def test_v_ex_a_voluntary_row_that_passes_the_rules_is_accepted():
-    """V-EX (the assessor's B at 17:32Z): a row given up before the draws may pass the per-row rules and R1,
+    """V-EX: a row given up before the draws may pass the per-row rules and R1,
     earns nothing, opens no exclusion tile, and is committed in `records_root`; declared excluded instead, it fails.  A row
     the rules exclude stays excluded."""
     s = V.scheme("nvfp4", True)
@@ -1243,7 +1243,7 @@ def test_replay_rejects(tmp_path):
 
 def test_replay_declares_r1_rows_and_its_workers_give_the_serial_transcript(tmp_path):
     """The replay's prove declares R1's rows as the honest prover does (`clear_work.declare` on the transcript): A row 5,
-    the assessor's spike row, passes the per-row rules but its own F1′ passes R1's bound, so prove excludes it and the
+    the spike row, passes the per-row rules but its own F1′ passes R1's bound, so prove excludes it and the
     verifier accepts.  Credited, as prove declared before R1 (r20261001-134930-22d2's m64-n512-k2048 unit, B row 386), it
     rejects.  prove maps R1 row by row over its workers, and two workers give the one worker's transcript."""
     s = V.scheme("nvfp4", True)

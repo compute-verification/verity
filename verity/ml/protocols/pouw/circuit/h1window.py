@@ -61,7 +61,7 @@ derives the window's units from its own copy of the Program under the `Q_templat
   after their readers' coins. Each call's receipts (`RECEIPTS`, ``receipt@<c>``, one a unit in its tile order), which
   hang on nothing past the salt, its rows and the roots, are committed whole under its round's root too, and a
   statement then reads its units' receipts there as its output row o0 (`RECEIPT_PORT`).
-* **A drawn leaf's statements** (option A, PRF-134; `pouw.leaf_lanes`): a drawn unit is proved as its lanes and their
+* **A drawn leaf's statements** (`pouw.leaf_lanes`): a drawn unit is proved as its lanes and their
   combine, derived from the window's own template at its K (`leaf_unit`: `h1zy.lane` and `h1zy.combine` over the tile
   of its zy unit), so the window binds nothing more. Each runs under a one-call Program of its wrapper
   (`PouwH1WindowLane`, `PouwH1WindowCombine`; `leaf_program`), one unit, the same all period. Its reads are its leaf-local
@@ -541,7 +541,7 @@ def table_reads_file(program: Program, tp: Any, call: int, roots: dict[str, str]
     (`window_ports`); ``prog`` the Program's digest when the caller holds it. Every table is a ``row/v2`` value of 16-bit
     leaves under `registered.domain` of its own name, rows and width: an A table is M rows of the parameter's width for
     each of its step's calls of K, a z table one record a unit of the call. ``window``, a served window's open root,
-    binds the two tables' domains, the window's own rows (PRF-127; `credit.domain_of`), and never the weights', which are
+    binds the two tables' domains, the window's own rows (`credit.domain_of`), and never the weights', which are
     held across windows. When ``roots`` holds the call's receipt table, its units' receipts are the statement's output
     row o0 (`RECEIPT_PORT`) at its rows, one a unit, under the z table's domain rule. A unit of another call reads none
     of them: each port's reads start at the call's first unit (``reads_from``, `core_check.call_reads`) and end at its
@@ -641,7 +641,7 @@ def ok_table(prog: str, value: str, window: str, population: int) -> tuple[list[
     return rows, salts, G.Registered.commit(prog, value, rows, salts, G.WORD_BITS, G.SCHEMA_V2, window=window)
 
 
-# -- a drawn leaf's lanes and combine (option A, PRF-134) ---------------------------------------------------------------------
+# -- a drawn leaf's lanes and combine -----------------------------------------------------------------------------------------
 
 #: a ``--registered`` port's key that its statement reads every bit of its row (Flock's `KnownRead.READ_KEY`)
 READ_IN_FULL = "read_in_full"

@@ -1,7 +1,7 @@
 """``pearl-fp8-v4``: Pearl's FP8 proof of useful work, certificate v4, as published.
 
 Sources: the whitepaper "Pearl Floating Point Scheme Specification" (Pearl Research, Sep 2026) and
-pearl-research-labs/pearl PR #311 ("feat(fp8): certificate-v4 + mining") at ``284b147b``, whose verifier code
+pearl-research-labs/pearl's certificate-v4 code ("feat(fp8): certificate-v4 + mining") at ``284b147b``, whose verifier code
 (``zk-pow/src/api/fp8``, ``zk-pow/src/circuit/fp8/unpredictability.rs``) rules where the two differ.  Conformance vectors
 come from that code (``tests/vectors/pearl_kw.json``).  Pearl extends Komargodski–Weinstein's low-rank noise with
 post-noise quantization, so the ticket hashes the output tile itself.
@@ -677,7 +677,7 @@ class PearlKW:
         return ops.tile
 
     def admissible(self, ctx: Context, ops: Ops) -> bool:
-        """Pearl's jackpot policy (PR #311): entry liveness, the noise floor, and the unpredictable-summands census."""
+        """Pearl's jackpot policy (certificate-v4): entry liveness, the noise floor, and the unpredictable-summands census."""
         dev, k = self.device, ctx.matmul.shape.k
         for side in (ops.a, ops.b):
             dead = sum(1 for row, l2 in zip(side.clean, side.l2) for x in row

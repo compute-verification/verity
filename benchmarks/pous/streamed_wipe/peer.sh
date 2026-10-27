@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # demo.sh with the memory challenger on a cluster peer: a rehearsal of the challenger on its own host before the auditor's
-# gate serves it (INF-258). This tree goes to a mktemp -d on PEER over ssh (PEER's line in /etc/vy/peers, the vy-cluster
+# gate serves it. This tree goes to a mktemp -d on PEER over ssh (PEER's line in /etc/vy/peers, the vy-cluster
 # key), and demo.sh starts the challenger's side there over ssh as the gate's verb will (the request on stdin;
 # `{"listening"}` and the report on stdout), the fill and the reads over direct TCP to PEER's address at PORT (47611).
 # The cluster's nodes pass only ssh to each other (r20261026-092032-a53b, -ba1e: TCP 47611 times out), so there

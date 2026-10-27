@@ -894,6 +894,42 @@ def test_a_challenger_of_another_layout_is_refused_before_any_coin_and_its_sessi
         assert [json.loads(x)["event"] for x in (host.directory / "releases.jsonl").read_text().splitlines()] == ["commitment"]
 
 
+def test_open_coins_waits_out_a_refused_connect_until_its_deadline_and_raises_any_other_error_at_once():
+    """An onsite window's client retries a refused connect (no hello, no coin) until the session's tunnel listens, every
+    half second up to `wait_s` on the injected clock; past it `CoinError` refuses it, and any other error raises at once."""
+    at = CO.Session(SID, "127.0.0.1:7811", b"\x01" * 32)
+    challenger = CO.Wd.live_challenger(EPOCH, ROUNDS, random.Random("challenger").randbytes)
+
+    def run(outcomes, wait_s=CO.R.TUNNEL_WAIT_S):
+        now, calls, slept = [0.0], [], []
+
+        def connect(address, secret):
+            calls.append((address, secret))
+            got = outcomes[min(len(calls), len(outcomes)) - 1]
+            if isinstance(got, BaseException):
+                raise got
+            return got
+
+        def sleep(s):
+            slept.append(s)
+            now[0] += s
+
+        try:
+            return CO.open_coins(at, EPOCH, ROUNDS, connect=connect, wait_s=wait_s, clock=lambda: now[0], sleep=sleep)
+        finally:
+            assert calls == [(at.address, at.secret)] * len(calls)
+            run.calls, run.slept = len(calls), slept
+
+    cs = run([ConnectionRefusedError(), ConnectionRefusedError(), challenger])
+    assert cs.challenger is challenger and cs.source == "off-node" and (run.calls, run.slept) == (3, [0.5, 0.5])
+    with pytest.raises(CO.Ch.CoinError, match="nothing listened"):
+        run([ConnectionRefusedError()], wait_s=2)
+    assert (run.calls, run.slept) == (5, [0.5] * 4)
+    with pytest.raises(ConnectionResetError):
+        run([ConnectionResetError()])
+    assert (run.calls, run.slept) == (1, [])
+
+
 def test_without_a_session_the_coins_are_in_process_and_labelled_not_certified_and_half_a_session_is_refused(monkeypatch):
     for name in (CO.CHALLENGER_ENV, CO.SESSION_ENV, CO.SECRET_ENV, CO.COMMITMENT_ENV):
         monkeypatch.delenv(name, raising=False)
