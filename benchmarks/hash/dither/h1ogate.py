@@ -38,7 +38,9 @@ sys.path.insert(0, str(HERE))
 
 import dither_fused as DF  # noqa: E402
 import dither_one as DO  # noqa: E402
+from verity_config.settings import of  # noqa: E402
 
+settings = of(__file__)
 SHAPES = {"self_attn.qkv_proj": (6144, 4096), "self_attn.o_proj": (4096, 4096), "mlp.gate_up_proj": (28672, 4096),
           "mlp.down_proj": (4096, 14336)}
 T, M = 64, 32
@@ -87,14 +89,14 @@ def step(win: DO.Window, xs: list, outs: list) -> None:
 def gate(form: str, dev) -> tuple:
     os.environ[DO.UNITS_ENV] = form.split("-")[0]
     os.environ[DO.PEEL_ENV] = "1" if form.endswith("-cpeel") else "0"
-    win = DO.Window(T, os.urandom(64), os.environ["DITHER_H1C"], os.environ[DO.LIB_ENV], True, dev)
+    win = DO.Window(T, os.urandom(64), settings.need("DITHER_H1C"), settings.need(DO.LIB_ENV), True, dev)
     outs = [(torch.empty(M, n, dtype=torch.bfloat16, device=dev), torch.empty(M, n, dtype=torch.int32, device=dev))
             for n, _ in win.nk]
     step(win, operands(win, 7), outs)
     win.arm(M)
     for i in range(len(win.captures)):
         step(win, operands(win, 100 + i), outs)
-    caps = {n: DO.check(win, os.environ[DO.LIB_ENV], n) for n in win.captures}
+    caps = {n: DO.check(win, settings.need(DO.LIB_ENV), n) for n in win.captures}
     return win, outs, caps, DO.gate_verdict(caps["gate"], *(caps[n] for n in win.captures[1:]))
 
 
