@@ -13,8 +13,8 @@ parts of circuits, the subprotocols go by their names, and "leg" is retired). Th
 owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a record key stays, and a term
 written as a quoted mention ("leg"); the table's rows name them too.
 
-``DOC_TERMS`` also holds the overhead lower bound's and the inference-only policy's retired words, each with what
-replaced it (`GLOSSARY.md`, Older names). "Slack", "residual" and "faithful" stay out of it, since those words keep
+``DOC_TERMS`` also holds the overhead lower bound's, the inference-only policy's and PoUB's retired words, each with
+what replaced it (`GLOSSARY.md`, Older names). "Slack", "residual" and "faithful" stay out of it, since those words keep
 other senses (a tick's slack, the Slack app; the residual stream, the covert residual; a byte-faithful replica); "dark"
 alone is in it, since no maintained doc uses the word in another sense. "IU" and "NCI" match in capitals only, so a
 path (`benchmarks/nci`) or a Lean name (`Nci`, `NciCheck`) is no match even outside backticks.
@@ -45,7 +45,8 @@ DOC_TERMS = {
     "certified block": "inference block",
     "thread block": "CTA",
     "KV block": "KV page",
-    "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, the wipe), or run",
+    "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, the bandwidth audit, PoUB, network certification, the "
+           "memory wipe), or run",
     "exclusion bound": "overhead lower bound (the result) or server-block yield (the per-block step)",
     "dampener, compute dampener, training efficiency, pretraining efficiency, hardware multiple": "the overhead lower "
         "bound (the result) or overhead (η is only a success probability)",
@@ -63,6 +64,7 @@ DOC_TERMS = {
     "faithfulness": "the admissible set, or verified compute",
     "unregistered input bits": "fresh input bits",
     "registered computation": "the declared circuit (registered programs on committed inputs)",
+    "remote bandwidth audit": "proof of useful bandwidth (PoUB)",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?"
@@ -78,7 +80,7 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|monitored{_SPACE}residuals?"
                        rf"|(?:skippable|certified|credited){_SPACE}work|uncertified{_SPACE}(?:capacit(?:y|ies)|shares?)"
                        rf"|unregistered{_SPACE}input{_SPACE}bits?|registered{_SPACE}computations?"
-                       rf"|faithfulness|legs?)\b)|\b(?:IUs?|NCI)\b")
+                       rf"|remote{_SPACE}bandwidth{_SPACE}audits?|faithfulness|legs?)\b)|\b(?:IUs?|NCI)\b")
 _CODE = re.compile(r"^[ \t]*(`{3,}|~{3,}).*?^[ \t]*\1[^\n]*$|(`+)[\s\S]*?(?<!`)\2(?!`)", re.M | re.S)
 
 ALLOWED: dict[str, str] = {
@@ -93,8 +95,10 @@ ALLOWED: dict[str, str] = {
 }
 
 PENDING: dict[str, str] = {
+    ".agents/skills/friction/SKILL.md": "the coordination skills move to the ops repository and stay as they are here",
     "Security/Proofs/NetworkCertifier/README.md": "#4690 adds lines",
     "benchmarks/census/README.md": "#4731 rewrites its lines",
+    "benchmarks/prove_path/e2e_chains/README.md": "#5339 rewrites its lines",
     "examples/h200/interfaces/verity_e2e_demo/report.py": "#4691 adds a line",
     "examples/h200/README.md": "#4680 rewrites its lines",
     "benchmarks/network_traces/chain_record.py": "#4575 rewrites its lines",
@@ -231,6 +235,8 @@ def test_the_doc_scan_reads_each_form():
                 "Not `NciCheck`, `benchmarks/nci`, nci, Nci.Complies, the novel basis, faithful, faithfully, the\n"
                 "residual stream, the covert residual, the monitoring period, the work the table credits, fresh input\n"
                 'or registered information; "NCI" quoted.\n',
+        "h.md": "The remote bandwidth audit, two remote\nbandwidth audits and a Remote-Bandwidth audit.\n"
+                "Not the bandwidth audit, `remote_bandwidth`, a remote bandwidth measurement, the remote audit or PoUB.\n",
         "benchmarks/numerical/CHANGELOG.md": "a leg",
         "verity/README.md": "a leg",
         GLOSSARY: '| "leg"; a physical block | subprotocol |\nA leg outside the table.\n',
@@ -253,4 +259,5 @@ def test_the_doc_scan_reads_each_form():
         ("g.md", 2, "novel reads"), ("g.md", 2, "novel bits"), ("g.md", 2, "compute dampener"), ("g.md", 2, "dampener"),
         ("g.md", 2, "training efficiency"), ("g.md", 3, "pretraining efficiency"), ("g.md", 3, "hardware multiple"),
         ("g.md", 3, "monitored residual"), ("g.md", 3, "unmonitored compute"), ("g.md", 4, "credited work"),
-        ("g.md", 4, "faithfulness")]
+        ("g.md", 4, "faithfulness"), ("h.md", 1, "remote bandwidth audit"), ("h.md", 1, "remote bandwidth audits"),
+        ("h.md", 2, "Remote-Bandwidth audit")]
