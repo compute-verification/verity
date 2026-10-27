@@ -45,7 +45,7 @@ FAMILIES = {"dither-1s": ("dither_one: the served product is H1V3's noised mainl
 
 def j10r_part(rows_mode: str, skip_dead: bool, t: int) -> str:
     """A J10-R arm's part: "j10r" (ADOPTED_PARTS) when its units' layout rows are the window's T ("slot"), T is a slot
-    (a power of two, at least 32) and every row block is computed, else "j10r-off" (UNADOPTED_PARTS)."""
+    (a power of two, at least 32) and every row tile is computed, else "j10r-off" (UNADOPTED_PARTS)."""
     return "j10r" if rows_mode == "slot" and not skip_dead and t >= 32 and t & (t - 1) == 0 else "j10r-off"
 
 

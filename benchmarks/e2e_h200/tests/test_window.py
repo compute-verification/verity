@@ -1,8 +1,9 @@
-"""The H200 window writer (`window`, CIR-115).
+"""The H200 window writer (`window`).
 
-- At the frozen shape, FAMILIES' shared-row layout and its writers are circuits' artifacts.
+- At the frozen shape, FAMILIES' shared-row layout and its writers are the pinned ones, and `commitments.layout`'s
+  shared-row check refuses a layout that isn't one.
 - Every read a proof block's ports make lies in rows its producers wrote, and K and V are read at the steps that wrote them.
-- A linear's weight reads are whole rows of the weights' registration (CMP-160).
+- A linear's weight reads are whole rows of the weights' registration.
 - A run served by continuous batching on the CPU at MINI: for proof blocks of every family drawn at every step, the ports
   are assembled from its committed rows (under 1 KiB rows, 64 B rows whose ports span rows, and today's ``families/v1``,
   whose slot roots are the run's own). They must be the inputs replay reads and the outputs it checks, and each row opens
@@ -26,8 +27,10 @@ from e2e_h200.store import GeneratorStore
 from e2e_h200.units import Replayer
 from e2e_h200.weights import Weights
 from e2e_h200 import served_weights as SW
+from verity.errors import InvalidArtifact
+from verity.ml.commitments import layout as L
 
-#: art:8ce57586b2176a6364260a10963c9703b5b8919b26bd965a4f907667846323e9's writers, `window.writers_digest`
+#: circuits' writers artifact for the frozen shape, `window.writers_digest`
 FROZEN_WRITERS = ("5f20869283c3b4c078193c42259d1f2aada1a82138e203a438216d4449c1fc6f"
                   "7a2f69952a2dddabbaab83e1d928551769c0b7b0bc26408b2f69686ef4cf63d4")
 SLOTS, N, P, G, ADMIT = 4, 7, 2, 3, 1
@@ -44,8 +47,17 @@ def frozen() -> W.Window:
 
 def test_the_shared_layout_and_its_writers_are_circuits_at_the_frozen_shape(frozen) -> None:
     assert frozen.layout.row_count == W.FROZEN_ROWS and frozen.layout.digest.hex() == W.FROZEN_DIGEST
+    assert L.Layout(frozen.layout.name, frozen.layout.groups).json_digest.hex() == W.FROZEN_JSON_DIGEST
     ws = frozen.writers()
     assert len(ws) == 1203 and W.writers_digest(ws) == FROZEN_WRITERS
+
+
+def test_a_layout_that_isnt_shared_rows_is_refused() -> None:
+    """Rows of 255 B split the embedding's coordinate 127; ``families/v1``'s gathers re-commit their parts' bytes."""
+    with pytest.raises(InvalidArtifact, match="group 0 tensor 0: bytes 254..256 aren't a window of one row"):
+        W.shared_layout(MINI, 255)
+    with pytest.raises(InvalidArtifact, match="group 0 tensor 0: bytes 0..2 are committed twice"):
+        W.Window(MINI, lockstep(1, 1), families_layout(MINI)).writers()
 
 
 def _written(writers: list[dict]) -> dict[int, list[tuple[int, int]]]:
@@ -104,7 +116,7 @@ def test_a_linears_x_is_its_quantizers_r_rows_and_attention_reads_k_and_v_at_the
 
 
 def test_a_linears_registered_reads_at_the_frozen_shape_are_whole_rows_of_cmp_160s_registration(frozen) -> None:
-    """CMP-160 registered the frozen weights as 733 values of 25,284,864 rows (r20261026-204952-3496), a linear's ``wrow{r}``
+    """The frozen weights' registration is 733 values of 25,284,864 rows, a linear's ``wrow{r}``
     of coordinate n its row n R + r and ``sw`` its scale's row n."""
     ts = SW.tensors(FROZEN)
     assert (len(ts), sum(t.leaves for t in ts)) == (733, 25_284_864)
@@ -123,7 +135,7 @@ def test_a_linears_registered_reads_at_the_frozen_shape_are_whole_rows_of_cmp_16
 
 
 def test_the_bundles_pieces_on_families_v1_at_the_frozen_shape_are_cmp_161s() -> None:
-    """KVREADS's stub (CMP-161, 20:58Z) on the layout r20261026-195842-f3ca committed under: K and V are their gathers' rows,
+    """The drawn-block bundle's stub on the layout `families/v1` commits under: K and V are their gathers' rows,
     a linear's x its quantizer's chunk units, an output its own unit's row."""
     lay, bases = _layout(FROZEN)
     assert lay.digest.hex().startswith("1791efa8")

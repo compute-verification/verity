@@ -1,26 +1,29 @@
-"""Layer 2, the envelopes: each subprotocol's property of the actual circuit, its slack and its δ (the working draft's §8).
+"""Protocol soundness, the envelopes: each subprotocol's property of the actual circuit, its slack and its δ (the
+working draft's §8).
 
-An envelope `E_i` narrows the prior if its verifier accepts, except with probability `δ_i(S)` per serving block. Each
-one here carries its parameters, the slack it leaves (shares of capacity by route, the uncertified gates `U` no
-inference block constrains) and its `delta`, split into the coins' draws and the cryptography's advantage:
+An envelope `𝒜_a` narrows the physical model's class `𝒜_phys` if its verifier accepts, except with probability `δ_a`
+summed over serving blocks. Each one here carries its parameters, the slack it leaves (shares of capacity by route, the
+uncertified gates `U` no inference block constrains) and its `delta`, split into the coins' draws and the
+cryptography's advantage:
 
 * `Pouw`: the certified declared gates were evaluated, `|A[X,J] ∩ W_cert| ≥ (1 − ε_W)|W_cert|`. Its slack is `undecl`
-  (the host CPUs, known compute running no declared work), `gap` (its floor credit `residual` and the clock above the
-  credited one; with `undecl`, the audited residual `r̂`) and `skip` (its deficit `ε_W` and the certificate slack `ε'`).
+  (monitored capacity running no certified declared work: the host CPUs, the GPUs outside the floor credit `residual`
+  and the clock above the credited one, together the audited residual `r̂`) and `skip` (its deficit `ε_W` and the
+  certificate slack `ε'`).
   Its δ is `p / ε'` with `p = δ_s + δ_bind + δ_ks` per window, by Markov over every window at once: `ε'` is the share
   whose certificates may be wrong, and `δ` the chance more are.
 * `Detection`, sampled proofs with terminal detection: their slack is `break` (the verdict lag `JΔ/H` and, sampled,
   the faulty blocks accepted before detection `θ`) and `exfil.faulty`, Lean's `χ` (the compute that bits injected by
   accepted faulty blocks buy, at `chord` products a bit; not double counting, §8 "Channels"). Its δ is the escape
   bound's.
-* `Wipe`: at each wipe a server keeps at most `k_wipe` bits of the prior content of its whole memory `M_s` (`per =
-  "server"`, Daniel's operating point, 26 Oct 12:16 PM PDT), or, the per-device sensitivity, each device
+* `Wipe`: at each wipe a server keeps at most `k_wipe` bits of the earlier content of its whole memory `M_s` (`per =
+  "server"`, the ruled operating point), or, the per-device sensitivity, each device
   `residual_bits` and each host `host_residual_bits` (`per = "device"`); a boot disk the wipe doesn't reach keeps
   `boot_disk_bits` more a server (today's wipe, `regime.onsite-today`). Its δ is `2⁻¹²⁸ + Adv_PRF` per game,
   one game per server (or device) per wipe, summed over the horizon.
 * `Certifier`: a serving block behind certifiers reads at most `(r_in + r_side) Δ_wipe` unregistered bits from outside,
   `r_in` the certified prompt ingress and `r_side` the timing and side channels no certifier reads. `r_in` is
-  `intake · α Φ`, at most `α Φ` since a server's ingress carries only its inference blocks' declared inputs (NET-92);
+  `intake · α Φ`, at most `α Φ` since a server's ingress carries only its inference blocks' declared inputs;
   with `declared` (`regime.onsite-w63`), each server's declared inputs at a cadence the warden form's public parameters
   set. Its δ is 0: the certifier is the auditor's device (`trusted-nebius-host`), and the side channels an assumed cap.
 * The NCI check is a registration check, not an envelope: the declared circuit's `(c, k)`-partition into inference
@@ -48,9 +51,9 @@ from rho.hardware import Fleet, Horizon, Location, Units
 from rho.params import Registry
 from rho.theorem import Blocks, Budget, Cut, Partition, ServingBlock
 
-#: the routes of the uncertified gates, the prefix of each slack term's key (the working draft's §8: `ε_undecl`,
-#: `ε_gap`, `ε_skip`, `ε_break`, and Lean's `χ` as `exfil`)
-ROUTES = ("undecl", "gap", "skip", "break", "exfil")
+#: the routes of the uncertified gates, the prefix of each slack term's key (`ε_undecl`, `ε_skip`, `ε_break`, and
+#: Lean's `χ` as `exfil`)
+ROUTES = ("undecl", "skip", "break", "exfil")
 
 
 @dataclass(frozen=True)
@@ -61,6 +64,9 @@ class Policy:
     name: str
     gamma: float
     k: float
+    #: the inference overhead: the honest inference workload's circuit under this partition over its unpartitioned
+    #: size, a factor beside the training overhead. NaN where it isn't modeled (its source says so).
+    inference_overhead: float = math.nan
 
 
 @dataclass(frozen=True)
@@ -84,8 +90,8 @@ class Context:
 
 @dataclass(frozen=True)
 class Delta:
-    """`Σ_i Σ_S δ_i(S)`, by envelope as `(coin, crypto)`. `Pr[Break]`, a forgery of the devices' logged coins (LMS), is
-    named beside it and not bounded here."""
+    """`Σ_a δ_a`, over envelopes and serving blocks, by envelope as `(coin, crypto)`. `Pr[Break]`, a forgery of the
+    devices' logged coins (LMS), is named beside it and not bounded here."""
 
     by: Mapping[str, tuple[float, float]]
 
@@ -129,8 +135,8 @@ class Pouw:
 
     def slack(self, loc: Location) -> dict[str, float]:
         r = self.audited(loc)
-        return {"undecl.host": self.host * loc.host_phi / loc.phi, "gap.floor": self.residual,
-                "gap.clock": self.clock_share, "skip.pouw": self.eps_w * (1 - r), "skip.certs": self.eps_agg}
+        return {"undecl.host": self.host * loc.host_phi / loc.phi, "undecl.gpu": self.residual,
+                "undecl.clock": self.clock_share, "skip.pouw": self.eps_w * (1 - r), "skip.certs": self.eps_agg}
 
     def delta(self, ctx: Context) -> tuple[float, float]:
         return self.window_delta_coin / self.eps_agg, self.window_delta_crypto / self.eps_agg
@@ -216,7 +222,7 @@ class Wipe:
     host_residual_bits: float = 0.0
     #: bits each server's boot disk keeps through a wipe that doesn't reach it (today's), on top of either form
     boot_disk_bits: float = 0.0
-    #: one game's failure: the coins' `2⁻¹²⁸` and the pseudorandom function's advantage (#4707's retention game)
+    #: one game's failure: the coins' `2⁻¹²⁸` and the pseudorandom function's advantage (the streamed wipe's retention game)
     game_delta_coin: float = 2.0**-128
     prf_advantage: float = 0.0
 
@@ -265,7 +271,7 @@ class Certifier:
     """A network certifier on each host's links, and the channels it doesn't read.
 
     With `declared`, a server's ingress and egress carry only its inference blocks' declared inputs and outputs, and an
-    inference block runs on a single server (NET-92; Daniel, 26 Oct). At the warden form's public parameters a request
+    inference block runs on a single server (ruled). At the warden form's public parameters a request
     is at most `cells` cells of `K = (cell_bytes − 9) // 11` ids of `id_bits` bits, its fields and `request_slack` in,
     and `outputs` ids and their count out; each bucket adds which of each lane's `r` slots it carries; and a lane holds
     a request at least `hold + 1` buckets of `bucket_s`. So a server anchors at most `lanes ⌈T / (D + 1)⌉` requests in a
@@ -275,18 +281,18 @@ class Certifier:
              = (lanes ⌈T / (D + 1)⌉ (C K IDB + 112 + requestSlack) + lanes T ⌈log₂(r + 1)⌉) / (T τ_b)
         r_out ≤ lanes ⌈T / (D + 1)⌉ (KO IDB + ⌈log₂(KO + 1)⌉) / (T τ_b)
 
-    (`requestBits`, `windowRequests` and `windowBits` of PR 5's `Properties.NetworkCertifier.PerServerIngress`,
-    `note:network-accounting/20261027T0530Z-draft-net92-perserver-guarantee`). The bound is stated per window, so the
-    rate is too: the ceiling's extra request a lane a window is in it, and rho never cites less than the bound states.
-    This is the bound's honest-δ form, at a δ where only the empty faulty set is possible: a faulty ingress unit frees
-    its bucket, `faulty_unit_bits` more a unit, which the count charges and this bound excludes until every ingress unit
-    is drawn. It is a draft until NET-92's PR 5 proves it. Until then `declared_x` keeps the line rate as the ingress's
+    (`requestBits`, `windowRequests` and `windowBits` of the draft per-server ingress bound,
+    `draft:per-server-ingress`). The bound is stated per window, so the
+    rate is too: the ceiling's extra request a lane a window is in it, and this package never cites less than the bound
+    states. This is the bound's honest-δ form, at a δ where only the empty faulty set is possible: a faulty ingress unit
+    frees its bucket, `faulty_unit_bits` more a unit, which the count charges and this bound excludes until every ingress
+    unit is drawn. It is a draft until Lean proves it. Until then `declared_x` keeps the line rate as the ingress's
     upper end: the ingress is `declared_x · hosts · r_in`, at most the location's `links`. A cadence whose `r_in` is
     below the prompt rate of the serving credited at the location can't feed that serving, so `declared` is off by
     default until a deployment picks one that does."""
 
-    #: the certified prompt ingress as a multiple of `α Φ` (`α = k/c`), the declared intake at full use: 1 under
-    #: NET-92, which admits only declared inputs (without `declared`)
+    #: the certified prompt ingress as a multiple of `α Φ` (`α = k/c`), the declared intake at full use: 1 when a
+    #: server's ingress admits only declared inputs (without `declared`)
     intake: float = 1.0
     #: the certified prompt ingress in bit/s per location, given directly (None: `hosts · r_in` with `declared`, else
     #: `intake · α Φ`)
@@ -294,7 +300,7 @@ class Certifier:
     #: per host, bit/s: the certifier's timing channel, and side channels no certifier sees
     timing: float = 0.0
     side: float = 0.0
-    #: each server's ingress at most its inference blocks' declared inputs (NET-92), at the parameters below
+    #: each server's ingress at most its inference blocks' declared inputs, at the parameters below
     declared: bool = False
     #: `B`, bytes a cell; `r`, cells a lane a bucket (its `slots`, the warden's line rate); lanes a server; `C`, cells a
     #: request
@@ -308,16 +314,15 @@ class Certifier:
     hold: float = math.nan
     outputs: float = math.nan
     bucket_s: float = math.nan
-    #: `T`, buckets a link-window (the warden's `window`), the length PR 5's bound is stated per
+    #: `T`, buckets a link-window (the warden's `window`), the length the per-server bound is stated per
     window_buckets: float = math.nan
     #: the certified prompt ingress as a multiple of the declared bound, at most line rate (`Location.links`): 1 under
-    #: NET-92, and line rate the upper end until its PR 5
+    #: the declared-ingress rule, and line rate the upper end until Lean proves the per-server bound
     declared_x: float = 1.0
 
     CITES = ("NetTiming.Guarantees.EncardIngressDecodableLeContents", "Accounting.Covered", "Accounting.TrustedUnits")
-    INTAKE = ("draft:NET-92",)
-    DECLARED = ("draft:NET-92", "note:network-accounting/20261027T0220Z-finding-net92-plan",
-                "note:network-accounting/20261027T0530Z-draft-net92-perserver-guarantee")
+    INTAKE = ("draft:declared-ingress",)
+    DECLARED = ("draft:declared-ingress", "draft:per-server-ingress")
 
     def __post_init__(self) -> None:
         unset = [k for k in DECLARED_IO if self.declared and not math.isfinite(getattr(self, k))]
@@ -417,7 +422,7 @@ def _dark(ctx: Context) -> dict[str, float]:
 
 @dataclass(frozen=True)
 class Unmonitored:
-    """No protocol: every serving block is unconstrained (`g = 1`, `ρ = μ`)."""
+    """No protocol: every serving block is unconstrained (`g = 1`, overhead `μ`)."""
 
     name: str
 
@@ -442,7 +447,7 @@ class Remote:
     #: premises, and the registration
     CITES = ("Nci.Guarantees.DampenerRemote",) + Pouw.CITES + Detection.CITES + ("Nci.Assumptions.BaselineRegistered",)
     #: the routes a strategy that never cheats gets: no wrong certificate, faulty block or detection
-    ABIDING = ("undecl.host", "gap.floor", "gap.clock", "skip.pouw")
+    ABIDING = ("undecl.host", "undecl.gpu", "undecl.clock", "skip.pouw")
 
     def envelopes(self) -> dict[str, Any]:
         return {"pouw": self.pouw, "detection": self.detection}
