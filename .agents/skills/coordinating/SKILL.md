@@ -75,7 +75,7 @@ skill).
   the issue; the owner does.
 - **Sub-issues** split a deliverable into pieces that move separately: one per worker. A parent is In Progress while any
   child is, and Done once every child is and its own done-condition holds.
-- **Dependencies** between lanes are Linear's blocking relations, not prose.
+- **Dependencies** between lanes are Linear's blocking relations (`research msg linear relate`), not prose.
 - **Asks.** `research msg ask --as ME --to @OWNER --title 'DELIVERABLE' [--parent ISSUE] --file BRIEF.md` files the
   issue in the owner's team, under the deliverable it serves (so in that project and milestone), and rings the owner.
   The owner dates it and moves it out of Backlog within the hour, or declines it (`research msg close --declined`). A
@@ -85,7 +85,10 @@ skill).
   - `research msg linear comment ISSUE 'TEXT' --as ME`, which rings the team's handle and any names the text starts with;
   - `research msg linear state ISSUE STATE`;
   - `research msg linear place ISSUE PROJECT --milestone M`;
-  - `research msg linear edit ISSUE --title T --due D`.
+  - `research msg linear edit ISSUE --title T --due D`;
+  - `research msg linear relate ISSUE blocks|blocked-by|related|duplicate OTHER`, and `unrelate ISSUE OTHER`;
+  - `research msg linear update PROJECT --health onTrack|atRisk|offTrack --body-file F`, a project update;
+  - `research msg linear project create NAME --team KEY` and `milestone create|edit PROJECT NAME [--date D]`.
 
 ## Workers
 
