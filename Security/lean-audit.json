@@ -1995,6 +1995,18 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
+  },
+  "Accounting.Assumptions.PaidBy": {
+   "owner": "@compute-research",
+   "digest": "147819080f7c1e4296ee212f9d45acd9b221835f5d1ac685dd5a44fd64f6a631"
+  },
+  "Accounting.Assumptions.ShareNoGate": {
+   "owner": "@compute-research",
+   "digest": "8e7b60a19ca3ad7f1f21c1f37e464d7c0c90fdc24e754337ec3581f9a11dc644"
+  },
+  "Accounting.PeriodRate": {
+   "owner": "@compute-research",
+   "digest": "a1b1f65f6605b9f4a6e960d7bcae7c0249d716fea0bcaf0be6103027558df6ac"
   }
  },
  "meaning": [
@@ -2657,6 +2669,18 @@
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
  "guarantees": {
+  "Accounting.SecurityProofs.AccelAdditive": {
+   "owner": "@compute-research",
+   "signature": ["Accounting.SecurityProofs.AccelAdditive : Accounting.Guarantees.AccelAdditive"],
+   "assumptions": [],
+   "type_hash": "d40d7bc6a40c0afeb4793787bda1f439b2855b67e79a509cad8645dc792f7a5d"
+  },
+  "Accounting.SecurityProofs.AccelRate": {
+   "owner": "@compute-research",
+   "signature": ["Accounting.SecurityProofs.AccelRate : Accounting.Guarantees.AccelRate"],
+   "assumptions": [],
+   "type_hash": "ceb44afb1f12b9cd4607f52406ddb1ef61e0e2441adec746f17aa50a268d8cbb"
+  },
   "Accounting.SecurityProofs.Actual.AnsweredOfQuiet": {
    "owner": "@memory-accounting",
    "signature": [
@@ -2780,6 +2804,12 @@
    "signature": ["Accounting.SecurityProofs.Actual.WipeReadPool.{u_3, u_4} : Accounting.Guarantees.Actual.WipeReadPool"],
    "assumptions": [],
    "type_hash": "53ded1fd00f3bc75c312a97dfdc886aa7b9a42f6dc170b487509cc63dd73d350"
+  },
+  "Accounting.SecurityProofs.AdditiveOfShareNoGate": {
+   "owner": "@compute-research",
+   "signature": ["Accounting.SecurityProofs.AdditiveOfShareNoGate.{u_1} : Accounting.Guarantees.AdditiveOfShareNoGate"],
+   "assumptions": [],
+   "type_hash": "7ea3b7f2f3f1f9a751552eecdd67271167438c8e3eea4f1ca37b0649354d96db"
   },
   "Accounting.SecurityProofs.B2": {
    "owner": "@memory-accounting",
@@ -3388,6 +3418,12 @@
    "assumptions": [],
    "type_hash": "5b40f0c5460acaf648aa680d40b856fc259b43c20551db825483644902c6b28a"
   },
+  "Accounting.SecurityProofs.GatesAdditive": {
+   "owner": "@compute-research",
+   "signature": ["Accounting.SecurityProofs.GatesAdditive.{u_1} : Accounting.Guarantees.GatesAdditive"],
+   "assumptions": [],
+   "type_hash": "abb3219ad107679029e2c7c0594bf95a26dee2d97e01dfd398a5f9aed1177250"
+  },
   "Accounting.SecurityProofs.HMu.CoinPointMass": {
    "owner": "@compute-accounting",
    "signature": ["Accounting.SecurityProofs.HMu.CoinPointMass : Accounting.Guarantees.HMu.CoinPointMass"],
@@ -3704,6 +3740,14 @@
    "assumptions": [],
    "type_hash": "1910cfb31b79cb8d721cb0edad48b0c09ee74b51a2fe974750f10c5f81b6df1f"
   },
+  "Accounting.SecurityProofs.RateComputeAdditiveOfGates": {
+   "owner": "@compute-research",
+   "signature": [
+    "Accounting.SecurityProofs.RateComputeAdditiveOfGates.{u_1} : Accounting.Guarantees.RateComputeAdditiveOfGates"
+   ],
+   "assumptions": [],
+   "type_hash": "9254a6e57798187346ffdcf11f5d3dcfeb71e184c7a0f35b3a09ceeddeb4fc56"
+  },
   "Accounting.SecurityProofs.RateConservation": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.RateConservation : Accounting.Guarantees.RateConservation"],
@@ -3957,6 +4001,14 @@
    "signature": ["Accounting.SecurityProofs.Remote.SketchBoundSession : Accounting.Guarantees.Remote.SketchBoundSession"],
    "assumptions": [],
    "type_hash": "11a0c4236ece5ac3bbde1769c48a9d63ec39eb9d7978c349013877f11b233e8d"
+  },
+  "Accounting.SecurityProofs.RemoteComputeAdditiveOfGates": {
+   "owner": "@compute-research",
+   "signature": [
+    "Accounting.SecurityProofs.RemoteComputeAdditiveOfGates.{u_1} : Accounting.Guarantees.RemoteComputeAdditiveOfGates"
+   ],
+   "assumptions": [],
+   "type_hash": "0ddd7f3d29cf512ddab17615167ec8421f3e4c7b3fa382cdac9727279ffef15a"
   },
   "Accounting.SecurityProofs.RemoteSessionConservation": {
    "owner": "@memory-accounting",
@@ -10831,24 +10883,6 @@
    "signature": ["Verity.SecurityProofs.SoundMono : Verity.Guarantees.SoundMono"],
    "assumptions": [],
    "type_hash": "093cd4e683f144b86a3751c7eb7ad611c970d0e583757f8db4091beb488e3217"
-  },
-  "Accounting.SecurityProofs.AccelRate": {
-   "owner": "@compute-research"
-  },
-  "Accounting.SecurityProofs.AccelAdditive": {
-   "owner": "@compute-research"
-  },
-  "Accounting.SecurityProofs.GatesAdditive": {
-   "owner": "@compute-research"
-  },
-  "Accounting.SecurityProofs.RemoteComputeAdditiveOfGates": {
-   "owner": "@compute-research"
-  },
-  "Accounting.SecurityProofs.RateComputeAdditiveOfGates": {
-   "owner": "@compute-research"
-  },
-  "Accounting.SecurityProofs.AdditiveOfShareNoGate": {
-   "owner": "@compute-research"
   }
  },
  "shape": {
@@ -12074,6 +12108,7 @@
     "Accounting.SecurityProofs.Actual.WipeReadHeld",
     "Accounting.SecurityProofs.Actual.WipeReadHeldPrf",
     "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
+    "Accounting.SecurityProofs.AdditiveOfShareNoGate",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -12084,9 +12119,12 @@
     "Accounting.SecurityProofs.B4Covered",
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
+    "Accounting.SecurityProofs.GatesAdditive",
     "Accounting.SecurityProofs.Localization",
     "Accounting.SecurityProofs.PouwLocalOff",
+    "Accounting.SecurityProofs.RateComputeAdditiveOfGates",
     "Accounting.SecurityProofs.Recall",
+    "Accounting.SecurityProofs.RemoteComputeAdditiveOfGates",
     "Accounting.SecurityProofs.RequirementCredits",
     "Accounting.SecurityProofs.RequirementCreditsSteps",
     "Accounting.SecurityProofs.RequirementHelp",
@@ -12144,6 +12182,41 @@
     "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw"
    ]
   },
+  "Definitions.Accounting.Additive": {
+   "digest": "4542c4a6c7eafa3d55252a5625b97c6525f17d410ecb043f6ff8e03947d7a6f4",
+   "definitions": {
+    "Accounting.AccelRun": "cce34274971a2e22d7ff7f52ab1962eb3996fc4ed4c7a554115db282a8b68892",
+    "Accounting.AccelRun.P": "b5def4e0e360a94af48d926b065f0d78c96c108bbaa7e0af1b6e4153f3570b66",
+    "Accounting.AccelRun.instrs": "ca8692aaba48efab03453432890c0d448ff15b0d8a5cfcf2845b8fc57ec98814",
+    "Accounting.AccelRun.sched": "9e19ba0b44f0fd3b04047b77733d26bd6555605811f905b58e1034ecd2f4c752",
+    "Accounting.AccelRun.σ": "78bd2fde4cf1f3512692fa0de1b0fafcd94247dc782f8b7f0699895202be94d8",
+    "Accounting.PeriodRate": "a1b1f65f6605b9f4a6e960d7bcae7c0249d716fea0bcaf0be6103027558df6ac",
+    "Accounting.issued": "543f347025a8081eb01f4d831c122eacd3103f9aa56191d78d184f8b7e934be4",
+    "Accounting.occUse": "6426cc8b9bd903b81d076e1a81ab09d136c19516b0177725030dc5ed555d2b8a",
+    "Accounting.stream": "564a1676de827e64028f0f7aba27a9ad953cd046a41a2e8bd92de99c9cbb860b",
+    "Accounting.supply": "4b760437e983564fbd994ae629e8e1775676d032a787ee79f51ff8a862761e35"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.AccelAdditive",
+    "Accounting.SecurityProofs.AccelRate",
+    "Accounting.SecurityProofs.GatesAdditive",
+    "Accounting.SecurityProofs.RateComputeAdditiveOfGates",
+    "Accounting.SecurityProofs.RemoteComputeAdditiveOfGates"
+   ]
+  },
+  "Definitions.Accounting.Assumptions.Additive": {
+   "digest": "a8ace9b4b9e3259d1bd2f4d9bc8218b91a639e8dc411b2f8fbaacf1410521645",
+   "definitions": {
+    "Accounting.Assumptions.PaidBy": "147819080f7c1e4296ee212f9d45acd9b221835f5d1ac685dd5a44fd64f6a631",
+    "Accounting.Assumptions.ShareNoGate": "8e7b60a19ca3ad7f1f21c1f37e464d7c0c90fdc24e754337ec3581f9a11dc644"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.AdditiveOfShareNoGate",
+    "Accounting.SecurityProofs.GatesAdditive",
+    "Accounting.SecurityProofs.RateComputeAdditiveOfGates",
+    "Accounting.SecurityProofs.RemoteComputeAdditiveOfGates"
+   ]
+  },
   "Definitions.Accounting.Assumptions.Compose": {
    "digest": "f877cd444d2c9b5ff22043805110e73fcd44382af61a45bfb2376b2ce24449b3",
    "definitions": {
@@ -12193,6 +12266,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.RateAuditPartial",
+    "Accounting.SecurityProofs.RateComputeAdditiveOfGates",
     "Accounting.SecurityProofs.RateOfAuditPartial",
     "Accounting.SecurityProofs.RateOfAuditPartialPasses",
     "Accounting.SecurityProofs.RatePartialRebuild",
@@ -12235,6 +12309,13 @@
     "Accounting.SecurityProofs.StackedSessionConservationRelay",
     "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
    ]
+  },
+  "Definitions.Accounting.Assumptions.Remote": {
+   "digest": "69da43292eae1364f7e5056146ad26038d7a45879871e65463fdccbd01857939",
+   "definitions": {
+    "Accounting.Remote.Assumptions.ComputeAdditive": "1f7651a6d2168a240d6282ba6472e98cb5bda746df585b95cfd0ca5dc2a1038d"
+   },
+   "guarantees": ["Accounting.SecurityProofs.RemoteComputeAdditiveOfGates"]
   },
   "Definitions.Accounting.Assumptions.RemoteDraw": {
    "digest": "13fddd7383210a4e3caf86cbfdd4ef304c8bd8b48c199c4b426df97929d3051e",
@@ -13047,6 +13128,7 @@
     "Accounting.SecurityProofs.Actual.WipeReadHeld",
     "Accounting.SecurityProofs.Actual.WipeReadHeldPrf",
     "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
+    "Accounting.SecurityProofs.AdditiveOfShareNoGate",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -13123,6 +13205,8 @@
     "Accounting.instFintypeOp": "215511804eac7984ffc432e02f18ff1db6a3ae8f96101691aa6f1d5338bddd4d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.AccelAdditive",
+    "Accounting.SecurityProofs.AccelRate",
     "Accounting.SecurityProofs.BandwidthOfAudit",
     "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
     "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
@@ -13138,6 +13222,7 @@
     "Accounting.SecurityProofs.CovertResidualPerRun",
     "Accounting.SecurityProofs.CovertResidualPerRunPriced",
     "Accounting.SecurityProofs.DerivedStateResidual",
+    "Accounting.SecurityProofs.GatesAdditive",
     "Accounting.SecurityProofs.Joint",
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
@@ -13147,11 +13232,13 @@
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
     "Accounting.SecurityProofs.JointPeriod",
+    "Accounting.SecurityProofs.RateComputeAdditiveOfGates",
     "Accounting.SecurityProofs.RateOfAudit",
     "Accounting.SecurityProofs.RateOfAuditInteractive",
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
     "Accounting.SecurityProofs.RateOfAuditPartial",
     "Accounting.SecurityProofs.RateOfAuditPartialPasses",
+    "Accounting.SecurityProofs.RemoteComputeAdditiveOfGates",
     "Accounting.SecurityProofs.RequirementCreditsSteps",
     "Accounting.SecurityProofs.RequirementStepsInner",
     "Accounting.SecurityProofs.RequirementStepsOuter",
@@ -13627,6 +13714,14 @@
    },
    "guarantees": ["Accounting.SecurityProofs.Actual.WipeReadHeldPrf"]
   },
+  "Definitions.Accounting.Guarantees.Additive": {
+   "digest": "1d77f9a5311174238b982a6c727c5f85e1629a4e0ae279462fae461c360a0e71",
+   "definitions": {
+    "Accounting.Guarantees.AccelAdditive": "6f858ede87b9a4d223e3800b04808bd6c6f371b1d9dba7f87c1ea807ec2bcd26",
+    "Accounting.Guarantees.AccelRate": "e3de3716619a14ea7c11b4684197b5e4e35f2276c8dd1c52270b2ce414bc0826"
+   },
+   "guarantees": ["Accounting.SecurityProofs.AccelAdditive", "Accounting.SecurityProofs.AccelRate"]
+  },
   "Definitions.Accounting.Guarantees.Bandwidth": {
    "digest": "71fb78cd62c87a3e6762f035dfab04f030ac6c761371e26bb809172c897d7fb0",
    "definitions": {
@@ -13901,6 +13996,21 @@
     "Accounting.SecurityProofs.Gates.SquaringCarryNibbles",
     "Accounting.SecurityProofs.Gates.SquaringUnits",
     "Accounting.SecurityProofs.Gates.UnitsFooling"
+   ]
+  },
+  "Definitions.Accounting.Guarantees.GatesAdditive": {
+   "digest": "598b363fa16d6c007a60772137253224f0a0f5e42ca7e5e273e9ff90ca58688d",
+   "definitions": {
+    "Accounting.Guarantees.AdditiveOfShareNoGate": "6d5370ae6acad779eed9c3e2537e12309d07fa99cdb149cfdc0846e5a5d89296",
+    "Accounting.Guarantees.GatesAdditive": "5d7df3145a36caf7f07ec4e2fe5fc937ce05262584853d9532c7c558e64a3c14",
+    "Accounting.Guarantees.RateComputeAdditiveOfGates": "6373fd3482765b6beb67dde75eabd04dd2495b4626016e52f79b3efc8fea8221",
+    "Accounting.Guarantees.RemoteComputeAdditiveOfGates": "32c1a86fb34f53407289115eb36699ad8b0ecef7d6842d8e93cdfcd95988615d"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.AdditiveOfShareNoGate",
+    "Accounting.SecurityProofs.GatesAdditive",
+    "Accounting.SecurityProofs.RateComputeAdditiveOfGates",
+    "Accounting.SecurityProofs.RemoteComputeAdditiveOfGates"
    ]
   },
   "Definitions.Accounting.Guarantees.GatesBitwise": {
@@ -14944,6 +15054,7 @@
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
     "Accounting.SecurityProofs.JointPeriod",
+    "Accounting.SecurityProofs.RateComputeAdditiveOfGates",
     "Accounting.SecurityProofs.RateOfAudit",
     "Accounting.SecurityProofs.RateOfAuditInteractive",
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
@@ -15123,6 +15234,9 @@
     "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
     "Accounting.SecurityProofs.B4",
     "Accounting.SecurityProofs.B4Covered",
+    "Accounting.SecurityProofs.GatesAdditive",
+    "Accounting.SecurityProofs.RateComputeAdditiveOfGates",
+    "Accounting.SecurityProofs.RemoteComputeAdditiveOfGates",
     "Nci.SecurityProofs.FitRate"
    ]
   },
@@ -15225,6 +15339,7 @@
     "Accounting.SecurityProofs.RateChainSampled",
     "Accounting.SecurityProofs.RateChainSampledNamedRO",
     "Accounting.SecurityProofs.RateChainSampledRO",
+    "Accounting.SecurityProofs.RateComputeAdditiveOfGates",
     "Accounting.SecurityProofs.RateConservation",
     "Accounting.SecurityProofs.RateConservationCap",
     "Accounting.SecurityProofs.RateConservationCapRO",
@@ -15441,6 +15556,7 @@
     "Accounting.RealizesRate": "fe8285f741347e84ea831205623007f6df35cfb411ac57e1f2c8048462641567"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.RateComputeAdditiveOfGates",
     "Accounting.SecurityProofs.RateOfAudit",
     "Accounting.SecurityProofs.RateOfAuditInteractive",
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
@@ -15488,6 +15604,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.RateAuditPartial",
+    "Accounting.SecurityProofs.RateComputeAdditiveOfGates",
     "Accounting.SecurityProofs.RateOfAuditPartial",
     "Accounting.SecurityProofs.RateOfAuditPartialPasses",
     "Accounting.SecurityProofs.RatePartialHonest",
@@ -15853,7 +15970,7 @@
    ]
   },
   "Definitions.Accounting.Remote.Node": {
-   "digest": "3ced36c3ec6c09e23dd55b57b41035d8deb9eeabd9805652c774d7a51937a2b8",
+   "digest": "d55189054637d977a3992838f2bdba4aea192a83ecd567ea899623d26bbebc55",
    "definitions": {
     "Accounting.Remote.Audit": "076f0b4fde91f8235dc297a41f164b886aeff62281b35f5212d45896c7abb3fc",
     "Accounting.Remote.Audit.P": "0916c76e605a6912875b349077cb0c4735ffe54daa7dad9b34cbe5c23daa05e3",
@@ -15862,9 +15979,11 @@
     "Accounting.Remote.Audit.lam": "342accb4ab8658132d5f65c5b847c2475ab9a62165fa3377a48a8ddf6d432ce1",
     "Accounting.Remote.Node": "12870ff9532ae5b6e3cc61c7ff739a7b72ffbb2b03c58d7831ea684014850752",
     "Accounting.Remote.Node.declared": "1e8f015633d4c925781801d28dc9d66a73cbdb955056e84cb6aa0b10e1763df3",
-    "Accounting.Remote.Node.rate": "d3ba8e1eb4abea3fd097b26a60af97f89db14bd428410773e0c3b46ee1fbb58d"
+    "Accounting.Remote.Node.rate": "d3ba8e1eb4abea3fd097b26a60af97f89db14bd428410773e0c3b46ee1fbb58d",
+    "Accounting.Remote.Node.rebuild": "3230ec1f5c949ee36f469edd03b443b86d5d2c1a34883a0f348c79ed4bec9235"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.RemoteComputeAdditiveOfGates",
     "Accounting.SecurityProofs.RemoteSessionRoutes",
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
@@ -15881,7 +16000,7 @@
    "guarantees": ["Accounting.SecurityProofs.Remote.SketchBoundLine"]
   },
   "Definitions.Accounting.Remote.Run": {
-   "digest": "57f6439b5cfb8419eea613c599b00b1f72393b8f0d099ddc7dd1a671f95ebd06",
+   "digest": "04be697117e2859edea73ef3b3c81f6eff5b17e19add05ab586292aa5a777198",
    "definitions": {
     "Accounting.Remote.Run": "b419a6bbc8247d432ad329ee43f75bb86128e27d0c8b5486b513b7901999aa0a",
     "Accounting.Remote.Run.Holds": "caefba17b77542a48a63c39786752dc9b2b05ff01a4b95b94dea26990c0c063d",
@@ -15890,15 +16009,18 @@
     "Accounting.Remote.Run.accepts": "cec27f6dae1bd5f2b89e07a41ea9caef81bd50d8893befe2546fffb11f83776a",
     "Accounting.Remote.Run.correct": "5dcb80e1387b0d61b347f99f5461087e15558cd378948d4bacd102441df95fbd",
     "Accounting.Remote.Run.paid": "edeff472a5b7c4a8b4b3a064bf90dc53f973932a658cc205838ead9fbcbdd371",
+    "Accounting.Remote.Run.pouwWork": "2f797e9394787f5446686a27e4978e1232b9138256a3070733607e6bfc25bb82",
     "Accounting.Remote.Run.read": "2cb31b62530c75e04ea124031ae9517592d263ad2bf93bbc4b2d66e56b819ec7",
     "Accounting.Remote.Run.readOut": "cc18dccf842738ac38b4df052586eebc30977a9dbd1fb9858d75b488fd2d131f",
     "Accounting.Remote.Run.reads": "372c484a8f4e6597ad318693c4577d942dfce35a4eb0eb64ac86164ba0156c4c",
+    "Accounting.Remote.Run.rebuildWork": "e5fd63582eb1daddbc8f4df9bedb402307de2181f7a70d114d9d941168bbdcce",
     "Accounting.Remote.Run.rebuilt": "9b8ac2ddac1ca45f01d084ef2ef8e9fdb3593090abce9f266ae5db405bac6008",
     "Accounting.Remote.Run.rebuiltOut": "8d85f20ac924ce9dfc622ac29f2cc544362abd5f989a96256d103770bb25b388",
     "Accounting.Remote.Run.state": "a251a1eface9c3ffbedbc8d55dcb4c8edc83854f3bd91b745c810abea5c8a7fb",
     "Accounting.Remote.Run.stateOut": "f4c2a6c67bf54b19cff28699b366cd3efdb05e36176076f9ab4053e1e2b7c569"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.RemoteComputeAdditiveOfGates",
     "Accounting.SecurityProofs.RemoteSessionRoutes",
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
     "Accounting.SecurityProofs.RemoteSessionRunConservationRelay",
@@ -18174,6 +18296,11 @@
     "Verity.Accel.Word": "a743e9b37b547ce9b60bc650ce9ea8e342ac8deeff0b63e589e665628cb9e7b0"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.AccelAdditive",
+    "Accounting.SecurityProofs.AccelRate",
+    "Accounting.SecurityProofs.GatesAdditive",
+    "Accounting.SecurityProofs.RateComputeAdditiveOfGates",
+    "Accounting.SecurityProofs.RemoteComputeAdditiveOfGates",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundH200",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardH200",
     "Pouw.SecurityProofs.DitherInstance.WorkSoundOnCardSm120",
@@ -18331,6 +18458,7 @@
     "Accounting.SecurityProofs.Actual.WipeReadHeld",
     "Accounting.SecurityProofs.Actual.WipeReadHeldPrf",
     "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
+    "Accounting.SecurityProofs.AdditiveOfShareNoGate",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -18343,6 +18471,7 @@
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
+    "Accounting.SecurityProofs.GatesAdditive",
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
     "Accounting.SecurityProofs.JointHorizonBlocksA",
@@ -18351,7 +18480,9 @@
     "Accounting.SecurityProofs.JointPeriod",
     "Accounting.SecurityProofs.Localization",
     "Accounting.SecurityProofs.PouwLocalOff",
+    "Accounting.SecurityProofs.RateComputeAdditiveOfGates",
     "Accounting.SecurityProofs.Recall",
+    "Accounting.SecurityProofs.RemoteComputeAdditiveOfGates",
     "Accounting.SecurityProofs.RequirementCredits",
     "Accounting.SecurityProofs.RequirementCreditsSteps",
     "Accounting.SecurityProofs.RequirementHelp",
@@ -23004,6 +23135,7 @@
     "Accounting.SecurityProofs.RateChainSampled",
     "Accounting.SecurityProofs.RateChainSampledNamedRO",
     "Accounting.SecurityProofs.RateChainSampledRO",
+    "Accounting.SecurityProofs.RateComputeAdditiveOfGates",
     "Accounting.SecurityProofs.RateConservation",
     "Accounting.SecurityProofs.RateConservationCap",
     "Accounting.SecurityProofs.RateConservationCapRO",
