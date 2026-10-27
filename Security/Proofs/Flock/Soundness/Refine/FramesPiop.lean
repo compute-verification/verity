@@ -4,14 +4,14 @@ import Proofs.Flock.Soundness.Refine.Frames
 # The PIOP's rounds, as frames (R11b)
 
 Which frames each round of the PIOP's phases retained, on the unsalted path: `zerocheck_frames` for the statement
-binding and the zerocheck (`Flock.Piop`).
+binding and the zerocheck (PROTOCOL.md §9.1–§9.2).
 -/
 
 namespace FlockSoundness.Refine
 
 open Flock Transcript
 
-/-- **The zerocheck's rounds' bytes** (`Flock.Piop`). When the statement binding and the zerocheck succeed from
+/-- **The zerocheck's rounds' bytes** (PROTOCOL.md §9.1–§9.2). When the statement binding and the zerocheck succeed from
 `t` to `t'` on retained rounds, the rounds they consume retained, in order:
 * the pending frames, the binding's labels, digest and cap, and the first squeeze;
 * the second squeeze's header;
