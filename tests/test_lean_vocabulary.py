@@ -34,9 +34,8 @@ PROPOSITIONS = ("Collision",)
 D, P = "Security/Definitions/", "Security/Proofs/"
 KNOWN: dict[str, str] = {
     # Circuit: Core/Circuit's `Verity.Circuit`.
-    f"{D}Core/Boolean.lean::Verity.Boolean.Circuit": "the Boolean profile's circuit beside Core/Circuit's, in Core; wave 2",
+    f"{D}Core/Boolean.lean::FlockSoundness.Audit.Circuit": "the Boolean profile's circuit beside Core/Circuit's, in Core; wave 2",
     f"{D}Claims.lean::Claims.Circuit": "the claims layer's AND/XOR wire circuit; wave 2",
-    f"{D}Flock/Circuit.lean::FlockSoundness.Audit.Circuit": "C-Flock's audit circuit, a copy of Core/Boolean's; wave 2",
     f"{D}Nci/Cover.lean::Nci.Cover.Circuit": "NCI's circuit with registered parameters; wave 2",
     # Gate
     f"{D}Claims.lean::Claims.Gate": "the claims layer's AND/XOR gate; wave 2",
@@ -46,10 +45,9 @@ KNOWN: dict[str, str] = {
     f"{P}Flock/Soundness/GateRows.lean::FlockSoundness.GateRows.Gate": "C-Flock's gate rows' AND/XOR/NOT gate; wave 2",
     f"{P}Flock/Soundness/Types/Flatten.lean::FlockSoundness.Types.Flatten.Gate": "C-Flock's flattened gate; wave 2",
     f"{P}Pouw/RelativeSecurity.lean::Pouw.RelativeSecurity.ModelB.Gate": "relative security's proof-local gate; wave 2",
-    # Op: Core/Boolean's `Verity.Boolean.Op`.
+    # Op: Core/Boolean's `FlockSoundness.Audit.Op`.
     f"{D}Accounting/Gates/Model.lean::Accounting.Gates.Op": "the gate accounting's operation over input slots; wave 2",
     f"{D}Core/Accel/Isa.lean::Verity.Accel.Op": "an opcode over stores, a name clash with Core/Boolean's: rename; wave 2",
-    f"{D}Flock/Circuit.lean::FlockSoundness.Audit.Op": "C-Flock's audit gate op, a copy of Core/Boolean's; wave 2",
     f"{D}Pouw/Assumptions/Dimension/Embed.lean::Pouw.Dimension.Embed.Op": "an M4090 instruction, a name clash: rename; wave 2",
     # Partition: Core/Partition's `Verity.Partition`.
     f"{D}Claims/Sampling.lean::Claims.Sampling.Partition": "the sampling claim's classes, strata and units; wave 2",
