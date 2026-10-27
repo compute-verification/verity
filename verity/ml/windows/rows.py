@@ -570,16 +570,17 @@ def _wire(m: Member, port: str) -> tuple[str, str, tuple[int, ...]]:
     return next(w for w in m.wired if w[0] == port)
 
 
-def _by_reference(members: Sequence[Member], src: Any, ys: Mapping[str, bytes], bc: Mapping[str, bytes]) -> tuple[bytes, bytes]:
+def _by_reference(members: Sequence[Member], bases: np.ndarray, src: Any, ys: Mapping[str, bytes],
+                  bc: Mapping[str, bytes]) -> tuple[bytes, bytes]:
     """A port given by reference (`commit`): its rows' salts and ``b || c``, its source's (a `ValueRows`' value's, or a wired
-    port's writers' output rows', from their committed ``ys`` and ``bc``)."""
+    port's writers' output rows', from their committed ``ys`` and ``bc``); ``bases``, the members' (`wiring.bases`)."""
     if isinstance(src, ValueRows):
         v = src.value
         return b"".join(bytes(v.salts[i]) for i in src.positions), b"".join(bytes(v.bcs[i]) for i in src.positions)
     m, port = src
     _p, o, ws = _wire(m, port)
     y, s = np.empty((m.n, SALT_BYTES), dtype=np.uint8), np.empty((m.n, BC_BYTES), dtype=np.uint8)
-    for wm, mine, theirs in WI._writers(members, ws):
+    for wm, mine, theirs in WI._writers(members, ws, bases):
         y[mine] = np.frombuffer(ys[wm.port(o)], dtype=np.uint8).reshape(wm.n, SALT_BYTES)[theirs]
         s[mine] = np.frombuffer(bc[wm.port(o)], dtype=np.uint8).reshape(wm.n, BC_BYTES)[theirs]
     return y.tobytes(), s.tobytes()
@@ -591,6 +592,7 @@ class _Rows(Mapping):
 
     def __init__(self, members: Sequence[Member], rows: Mapping[str, np.ndarray], refd: Mapping[str, Any], order: tuple[str, ...]):
         self._members, self._rows, self._refd, self._order = members, rows, refd, order
+        self._bases = WI.bases(members)
 
     def __getitem__(self, port: str) -> np.ndarray:
         if port in self._rows:
@@ -603,7 +605,7 @@ class _Rows(Mapping):
         m, p = src
         _p, o, ws = _wire(m, p)
         out = np.empty((m.n, dict(m.rows)[p]), dtype=np.uint16)
-        for wm, mine, theirs in WI._writers(self._members, ws):
+        for wm, mine, theirs in WI._writers(self._members, ws, self._bases):
             out[mine] = self[wm.port(o)][theirs]
         return out
 
@@ -718,9 +720,9 @@ def commit(window: Window, data: Sequence[dict[str, dict[str, np.ndarray]]], *, 
     t_salt = time.perf_counter()
     roots, bc = commit_ports(domains, rows, {}, ys, workers=workers, chunk=chunk, schemas=schemas)
     if refd:
-        strings = {}
+        strings, at = {}, WI.bases(ms)
         for p, src in refd.items():
-            ys[p], strings[p] = _by_reference(ms, src, ys, bc)
+            ys[p], strings[p] = _by_reference(ms, at, src, ys, bc)
         more, _ = commit_ports(domains, {}, {}, {}, workers=workers, chunk=chunk, schemas=schemas, strings=strings)
         roots |= more
         roots = {p: roots[p] for p in counts}
