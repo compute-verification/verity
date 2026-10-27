@@ -30,8 +30,8 @@ byte for byte.  `kv.cu` takes it as each token-layer's offset b (`kv_encode_boun
 `benchmarks/vllm_encoded/paged.cu`'s paths), gated against these vectors (`kv_bench.py`'s `gate_bound`); `kv_twin.py`
 takes the seed's key only.
 
-The derivation is `benchmarks/codec_tensor/wide.py`'s (ra-codec-tensor) under a domain of its own, at the fields
-ra-codec-theory chose (2^1536 − 3453 its operating point), whose words have no slack. A payload is any word below p. For p = 2^n − c
+The derivation is `benchmarks/codec_tensor/wide.py`'s under a domain of its own, at the fields
+the codec's cost model chose (2^1536 − 3453 its operating point), whose words have no slack. A payload is any word below p. For p = 2^n − c
 with c < 2^16 a payload at or above p has its top 16 bits all ones, a NaN in bf16 (and its top byte 0xFF, a NaN in
 E4M3), so every word of finite values is one; `encode_word` refuses the rest.
 
