@@ -340,7 +340,10 @@ theorem portRow_capl {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fi
     have hcr : capRow I w ρ hist ((rs.getD (j % rs.size) default).2.1.toList.take e).sum j t =
         capRow I w ρ hist ((rs.getD (j % rs.size) default).2.1.toList.take e).sum (1 * rs.size + j % rs.size) t := by
       rw [hj']
-    rw [h, Nat.one_mul, hcr]
+    have hi : j / rs.size * ((rs.getD (j % rs.size) default).2.1).getD e 0 + t =
+        ((rs.getD (j % rs.size) default).2.1).getD e 0 + t := by
+      rw [h, Nat.one_mul]
+    rw [hi, hcr]
     rw [portRow_fitPin, pair_append, portRow_ownRows (by simp at ht ⊢; omega) (by simp at ht ⊢; omega), Option.map_some, hpw]
     simp only [List.getElem_toArray]
     rw [List.getElem_append_right (by simp), List.getElem_append_right (by simp)]
