@@ -132,7 +132,7 @@ def test_the_generator_covers_what_it_says():
 def test_the_proxys_shutdown_runs_on_the_harness_thread(monkeypatch):
     """A run with a prover ends in the proxy's executor shutdown (`asyncio.to_thread`). On a real thread it finishes
     when the host gets to it, possibly after `settle` has taken the loop as quiet, and the generator then raises "the
-    trace leaves ticks unrun" under load (r20261010-073331-ef9b). The harness runs it inline, on the loop's thread."""
+    trace leaves ticks unrun" under load. The harness runs it inline, on the loop's thread."""
     threads = []
     monkeypatch.setattr(active.InlineExecutor, "shutdown", lambda self, *a, **k: threads.append(threading.get_ident()),
                         raising=False)

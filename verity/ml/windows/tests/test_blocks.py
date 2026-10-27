@@ -264,7 +264,7 @@ def test_cmp92s_split_across_two_servers_is_refused(circuits):
     assert [s.name for s in BK.server_blocks(docs[1], docs[1]["blocks"]["server"], lays)] == ["s0"]
     with pytest.raises(ValueError, match=re.escape(f"inference block (slot 0, step 0): units of {KID} on server s0 and of {KID} "
                                                    "on server s1; an inference block runs on one server, the one that may "
-                                                   "read its inputs (NET-92)")):
+                                                   "read its inputs")):
         BK.server_blocks(docs[2], docs[2]["blocks"]["server"], lays)
     r1, r2 = docs[1]["blocks"], docs[2]["blocks"]
     assert {k: v for k, v in r1.items() if k not in I.NETWORK} == {k: v for k, v in r2.items() if k not in I.NETWORK}

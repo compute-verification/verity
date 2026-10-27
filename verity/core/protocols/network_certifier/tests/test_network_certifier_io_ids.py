@@ -1,8 +1,8 @@
 """The ingress-ids tie on a fake upstream Commit and the warden's own ingress (`io_ids`): each prompt id the warden
 certified on ingress held to every computation of its position in the Commit's `c00.input/ids` rows, and every
 prefix-cache read in place of one, a bucket row at a time, by the reference and by the Boolean Definitions. The first
-negative is REDTEAM phase 9 #1 (`cursor/redteam-phase9-iotiereq-061a`): IoTieRequest left the prompt ids' values
-bound to nothing, so the model could compute on another prompt of the same length."""
+negative is a prompt substitution: IoTieRequest alone leaves the prompt ids' values bound to nothing, so the model
+could compute on another prompt of the same length."""
 from __future__ import annotations
 
 import hashlib
@@ -112,7 +112,7 @@ def test_an_honest_link_is_tied_in_every_bucket():
 
 
 def test_redteam_phase9_prompt_substitution_is_refused():
-    """REDTEAM phase 9 #1: the model computes on a prompt of the same length with one id changed, here request 2's
+    """A prompt substitution: the model computes on a prompt of the same length with one id changed, here request 2's
     position 5. IoTieRequest accepts every bucket, since the fields' count and form are the user's; the ids tie
     refuses the bucket whose cells hold that field, since its class holds the user's id and the Commit's."""
     tokens = _tokens(_prompts(ACROSS))
@@ -180,7 +180,7 @@ def test_the_read_rows_are_the_commits_at_the_maps_steps():
 
 
 def test_a_second_tree_of_the_users_ids_is_refused_under_the_commits_registration():
-    """REDTEAM phase 19 #1: the forward computes request 2's position 5 on another id, and the Commit registers that
+    """The forward computes request 2's position 5 on another id, and the Commit registers that
     tree. The prover hands the verifier instances opened from a second tree of the user's ids under the same public
     domain, so every unit is 1. The verifier's own ports name the registration's root and its own maps' steps, never
     an instance's, so the second tree's rows open none of them."""
@@ -420,7 +420,7 @@ def test_the_batched_chain_is_the_flat_one_at_the_served_sort():
 
 @pytest.mark.slow
 def test_the_unit_is_its_reference():
-    """`IoTieRequestIds{512, 2, 2, 16, 8}` against `unit_reference` on the link's buckets, honest, under the phase-9
+    """`IoTieRequestIds{512, 2, 2, 16, 8}` against `unit_reference` on the link's buckets, honest, under the prompt
     substitution, the Commit differing at a cache source, and a cache hit on another prefix in the same bucket; a
     field's class the sink, an entry's class another class, two fields' classes swapped, and a lane's carry-out one
     field short; and random switches for each routing. What the parts' tests can't reach is the wiring: each lane's

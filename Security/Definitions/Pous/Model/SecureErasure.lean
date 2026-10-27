@@ -33,14 +33,14 @@ before it and the prover's foreign content beside it:
    primitive), which may change from round to round.
 
 **Memory.** `σ_j` is the prover's whole volatile memory at round `j`'s arrival, and nothing else survives from one round
-to the next: no disk, no network (perfect isolation, the 4 Oct model). So the state bound is a bound on memory at the
+to the next: no disk, no network (perfect isolation). So the state bound is a bound on memory at the
 arrivals, which is what the guarantee is about; unlike the storage audit
 (`Security/Definitions/Pous/Model/Graded.lean`, "Why late rounds are bounded"), it needs no link to storage at
 rest, and a prover may recompute anything during the audit within its memory.
 
 **What the game does not model.** The bandwidth between memory tiers: device memory and host DRAM count alike, and no statement
-over this game rests on a bandwidth-separation premise (the host-link assumption `TwoTierBandwidth` was dropped on
-3 Oct 2026). Memory the prover has beyond the `S` bits it declares: `S` must be all of its volatile memory.
+over this game rests on a bandwidth-separation premise (the host-link assumption `TwoTierBandwidth` is dropped). Memory
+the prover has beyond the `S` bits it declares: `S` must be all of its volatile memory.
 
 **What to check.** That `z` is independent of the primitive, the coins, `κ` and the indices; that the fill
 sees `κ` (it may, as when the digest key is derived from `K`); that keeping is required at every round's arrival
