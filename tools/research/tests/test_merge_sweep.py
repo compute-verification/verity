@@ -817,9 +817,14 @@ def test_the_branch_sweep_deletes_what_is_on_main_and_archives_idle_unmerged_wor
     del gh.open[1], gh.open[2]                                            # A and B landed; C, D and E stay open
     for name in ("A", "B"):                                               # landed with the train, and fresh at ``now``
         _git(repo, "push", "-q", "origin", f":refs/heads/{name}")
-    # old-landed deleted; old-work, the head of a PR drive closed as stale, kept
-    assert M.sweep_branches(repo, now=now, gh=gh, log=[].append, keep=["old-work"]) == (1, 0)
-    assert "old-work" in _heads(repo)
+    log = []
+    assert M.sweep_branches(repo, now=now, gh=gh, log=log.append, limit=0) == (0, 0), "at its limit, it pushes nothing more"
+    assert "delete 0 of 1 branch(es)" in log[0] and "archive 0 of 1 unmerged" in log[0] and len(log) == 1, log
+    # old-landed deleted, by name; old-work, the head of a PR drive closed as stale, kept
+    log = []
+    assert M.sweep_branches(repo, now=now, gh=gh, log=log.append, keep=["old-work"]) == (1, 0)
+    assert "old-work" in _heads(repo) and "old-landed" not in _heads(repo)
+    assert "research merge: delete: old-landed" in log, log
     assert M.sweep_branches(repo, now=now, gh=gh, log=[].append) == (0, 1)  # without it, old-work archived
     assert _heads(repo) == {"main", "C", "D", "E", "new-landed", "new-work", "cursor/verity-ci-3d4e"}
     assert "refs/archive/heads/old-work" in _git(repo, "ls-remote", "origin", "refs/archive/*")

@@ -17,9 +17,9 @@ from pathlib import Path
 import pytest
 
 pytest.importorskip("verity_vllm.acquire.sources.partial_source")
-from verity_vllm.acquire.sources import partial_source as tps  # noqa: E402
-from tests.acquire.test_tp_partial_source_moe import _Committer, _Mod, _T, _make, _model  # noqa: E402
-from verity_vllm.engine.collectives import collective_sites as CS  # noqa: E402
+from verity_vllm.acquire.sources import partial_source as tps
+from tests.acquire.test_tp_partial_source_moe import _Committer, _Mod, _T, _make, _model
+from verity_vllm.engine.collectives import collective_sites as CS
 
 THIS = __name__
 MLP = "model.layers.0.mlp"
@@ -183,5 +183,5 @@ def test_match_recorder_and_commit_source_read_the_one_census():
     """Both observers take their expected mid-module sites from `mid_module_site_census`, so the Match and the Commit cannot disagree on
     which calls are expected."""
     pkg = Path(tps.__file__).resolve().parents[2]
-    for calls in (_calls_in(pkg / "engine" / "rank_worker.py", "tp2_coll_install"), _calls_in(Path(tps.__file__), "__init__", "TPPartialSource")):
+    for calls in (_calls_in(pkg / "pipeline" / "tp" / "rank_worker.py", "tp2_coll_install"), _calls_in(Path(tps.__file__), "__init__", "TPPartialSource")):
         assert "mid_module_site_census" in calls and "mid_module_sites" not in calls and "class_collective_calls" not in calls

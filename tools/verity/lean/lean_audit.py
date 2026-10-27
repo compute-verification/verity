@@ -5,10 +5,11 @@ packages whose passes can't be reused, with dependencies kept warm.
                                                       (only those packages: a shard's share, `check.py --shard`)
                                                       [--regenerate] (a train's check: record differences pass, and
                                                       audit.json's `regenerated` names the records the train commits)
+                                                      [--bundle] (a recorded check: the module versions it built, for other nodes)
     python tools/verity/lean/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
     python tools/verity/lean/lean_audit.py --restore PKG    PKG's pinned bundle as its `.lake/packages`, when it has none (`setup.sh`)
     python tools/verity/lean/lean_audit.py --explain PKG    why PKG's audit would run: its inputs against the nearest pass kept here
-    python tools/verity/lean/lean_audit.py --prune          evict now what the caps keep (`DEPS_KEPT`, `BUILDS_KEPT`, `REPLAYS_KEPT`, `RECORDS_KEPT`, artifacts)
+    python tools/verity/lean/lean_audit.py --prune          evict now what the caps keep (`DEPS_KEPT`, `BUILDS_KEPT`, `REPLAYS_KEPT`, `RECORDS_KEPT` or one per `build` slot, artifacts)
 
 A package's verdict is reused while everything its audit reads is unchanged, wherever the package is. Its key hashes content,
 each file under its path relative to its package (a module's is its name), never the package's own path:
@@ -53,9 +54,10 @@ lakefile less the paths to what it requires (`build_key`), not under its path: L
 hashes, not paths or mtimes, so a moved package rebuilds nothing. The audit's `dependencies` check still compares their
 `.olean` files with the package's record, and the kernel replay still covers the package's own modules and their whole import
 closure, the toolchain's, Mathlib's and ArkLib's modules included (`check.py --closure`): each module whose `.olean` files, and
-those of every module it imports, transitively, passed an earlier replay here is reused (`check.py --replay-cache`,
-`lean-replay/` beside the passes), so a change to a few modules replays those and what imports them, and a dependency's
-modules go through the kernel once per change of their `.olean` files on this machine. With `--fresh` the replay cache is
+those of every module it imports, transitively, passed an earlier replay here or in a recorded check whose verdict pack this
+one imported (`check.gather_verdicts`) is reused (`check.py --replay-cache`, `lean-replay/` beside the passes, its
+`REPLAYS_KEPT` last used kept), so a change to a few modules replays those and what imports them, and a dependency's
+modules go through the kernel once per change of their `.olean` files. With `--fresh` the replay cache is
 the scratch tree's, so the packages of one run share it and nothing outlives the run. Lean gets this
 machine's CPUs (`LEAN_NUM_THREADS`): inside a pod, its default counts the host's.
 
@@ -528,14 +530,16 @@ def prune(pkg: Path) -> int:
 
 
 #: the kept builds a node holds before its least recently used go: every tree whose manifest or lakefile differs adds one
-#: (infra, 12 Oct: 71 of them, 19 GB, on a 200 GB disk)
-BUILDS_KEPT = 24
+#: (infra, 12 Oct: 71 of them, 19 GB, on a 200 GB disk). Each package's newest stays past it (`WarmBuilds.evict`): at 24, fewer
+#: than the ~30 packages, every check evicted some and rebuilt them cold (r20261026-040757-de32: Flock's build alone 1,094 s)
+BUILDS_KEPT = 48
 #: the kept dependency trees (one per manifest and toolchain, `deps_key`) a node holds before its least recently used go:
 #: Security/Proofs' is about 35k files, and vy-nebius-2 held 24 (806k inodes) on 18 Oct (infra, LEAN-29)
 DEPS_KEPT = 8
-#: the replay cache's entries a node keeps, newest first: one per module and key, about 3k a version of the tree, and
+#: the replay cache's entries a node keeps, last used first (a replay touches each entry it reuses): one per module and key,
+#: about 3k a version of the tree plus some 8k of Mathlib's and ArkLib's that every replay reuses, each a few hundred bytes;
 #: vy-nebius-2 held 180k on 18 Oct
-REPLAYS_KEPT = 20_000
+REPLAYS_KEPT = 60_000
 
 
 class WarmBuilds:
@@ -574,23 +578,39 @@ class WarmBuilds:
             src = pkg / ".lake" / "build"
             if not src.is_dir():
                 continue
-            home = self.store / build_key(os.path.relpath(pkg, work), work)
+            rel = os.path.relpath(pkg, work)
+            home = self.store / build_key(rel, work)
             with self._lock(home.name):
                 if home.exists():
                     shutil.rmtree(home, ignore_errors=True)
                 _move(src, home)
                 os.utime(home)
+                (self.store / f"{home.name}.pkg").write_text(rel)
         self.evict()
 
+    def newest_per_package(self) -> set[str]:
+        """The newest kept build of each package a `NAME.pkg` beside it names."""
+        newest: dict[str, tuple[float, str]] = {}
+        for tag in self.store.glob("*.pkg") if self.store.is_dir() else ():
+            home = self.store / tag.stem
+            try:
+                pkg, t = tag.read_text().strip(), home.stat().st_mtime
+            except OSError:                            # taken while listed, or its build is gone
+                continue
+            if pkg not in newest or t > newest[pkg][0]:
+                newest[pkg] = (t, home.name)
+        return {name for _, name in newest.values()}
+
     def evict(self) -> int:
-        """Remove all but the `kept` builds last given back or copied from (`evict_lru`); the number removed."""
-        return evict_lru(self.store, self.kept)
+        """Remove all but the `kept` builds last given back or copied from, never a package's newest (`evict_lru`); the number
+        removed."""
+        return evict_lru(self.store, self.kept, keep=self.newest_per_package())
 
 
-def evict_lru(store: Path, kept: int) -> int:
+def evict_lru(store: Path, kept: int, keep: set[str] = frozenset()) -> int:
     """Remove all but the ``kept`` directories of ``store`` last used (a rename keeps a directory's mtime, so each use sets
-    it), each only when its lock (`NAME.lock` beside it) is free: a run holding it is taking it or giving it back. The number
-    removed."""
+    it), and never one named in ``keep``, each only when its lock (`NAME.lock` beside it) is free: a run holding it is taking
+    it or giving it back. The number removed."""
     held = []
     for home in store.iterdir() if store.is_dir() else ():
         try:
@@ -600,6 +620,8 @@ def evict_lru(store: Path, kept: int) -> int:
             pass
     n = 0
     for _, home in sorted(held, reverse=True)[kept:]:
+        if home.name in keep:
+            continue
         with open(store / f"{home.name}.lock", "w") as f:
             try:
                 fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -607,30 +629,54 @@ def evict_lru(store: Path, kept: int) -> int:
                 continue
             if home.is_dir():
                 shutil.rmtree(home, ignore_errors=True)
+                (store / f"{home.name}.pkg").unlink(missing_ok=True)
                 n += 1
     return n
 
 
 #: the fast path's (`lean_changed.py --records`) trees a node keeps, its most recently used: each is a checkout with its own
-#: builds, about 40 GB and 490k inodes (vy-nebius-cpu-2 reached 95% of its inodes on 21 Oct with nine)
+#: builds, about 40 GB and 490k inodes (vy-nebius-cpu-2 reached 95% of its inodes on 21 Oct with nine). A node with more
+#: `build` Lean slots keeps one per slot (`build_slots`)
 RECORDS_KEPT = 3
+#: `lean_slot.py`'s SLOTS: the node's Lean slot caps, `build N` among them
+LEAN_SLOTS = Path(os.environ.get("LEAN_SLOTS", "/workspace/research/locks/lean-slots"))
+#: `lean_changed.py`'s kept passes under `lean-records/`, not a tree: they have their own cap (`PASSES_KEPT`)
+RECORDS_PASSES = "passes"
 
 
-def prune_records(store: Path, kept: int | None = None) -> int:
-    """Remove all but the ``kept`` (`RECORDS_KEPT`) trees of ``store`` (`lean-records/`) last used, by the newest of their
-    `.who`, `links.json` and `.lock`, each only when its `.lock` is free: a run holding or waiting on it keeps it. A link
-    to a tree elsewhere goes with its target. The number removed."""
-    kept = RECORDS_KEPT if kept is None else kept
+def build_slots(slots: Path | None = None) -> int:
+    """The node's `build` Lean slots (``slots``' `build N`), 0 when it lists none or can't be read."""
+    try:
+        text = (slots or LEAN_SLOTS).read_text()
+    except OSError:
+        return 0
+    for line in text.splitlines():
+        f = line.split("#")[0].split()
+        if len(f) == 2 and f[0] == "build" and f[1].isdigit():
+            return int(f[1])
+    return 0
+
+
+def prune_records(store: Path, kept: int | None = None, slots: int | None = None) -> int:
+    """Remove all but ``kept`` trees of ``store`` (`lean-records/`), each only when its `.lock` is free: a run holding or
+    waiting on it keeps it. ``kept`` is `RECORDS_KEPT`, or the node's ``slots`` (`build_slots`) when it has more, since each
+    slot's tree is the one a run there takes, and removing it hands that run a cold one (vy-nebius-cpu-1, 26 Oct: four
+    trees seeded for `build 8` and the hourly prune took two of them). The slots' own trees (`build-I`, I below ``slots``)
+    are kept first, then the rest by last use, the newest of their `.who`, `links.json` and `.lock`. A link to a tree
+    elsewhere goes with its target, and `passes/` is never touched. The number removed."""
+    slots = build_slots() if slots is None else slots
+    kept = max(RECORDS_KEPT, slots) if kept is None else kept
+    own = {f"build-{i}" for i in range(slots)}
     used = []
     for tree in store.iterdir() if store.is_dir() else ():
         try:
-            if tree.is_dir():
+            if tree.is_dir() and tree.name != RECORDS_PASSES:
                 stamps = [p.stat().st_mtime for p in (tree / ".who", tree / "links.json", tree / ".lock") if p.exists()]
-                used.append((max(stamps, default=tree.stat().st_mtime), tree))
+                used.append((tree.name in own, max(stamps, default=tree.stat().st_mtime), tree))
         except OSError:
             pass
     n = 0
-    for _, tree in sorted(used, reverse=True)[kept:]:
+    for _, _, tree in sorted(used, reverse=True)[kept:]:
         try:
             with open(tree / ".lock", "a") as f:
                 fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -645,8 +691,9 @@ def prune_records(store: Path, kept: int | None = None) -> int:
 
 
 def prune_replays(cache: Path, kept: int | None = None) -> int:
-    """Remove all but the ``kept`` (`REPLAYS_KEPT`) newest replay entries of ``cache`` (`check.py --replay-cache`): each is
-    one module's pass under its key, so one dropped costs that module one replay. The number removed."""
+    """Remove all but the ``kept`` (`REPLAYS_KEPT`) replay entries of ``cache`` (`check.py --replay-cache`) last stored or
+    reused (`check.touch_replays`): each is one module's pass under its key, so one dropped costs that module one replay. The
+    number removed."""
     kept = REPLAYS_KEPT if kept is None else kept
     try:
         entries = [(e.stat().st_mtime, e) for e in os.scandir(cache) if e.name.endswith(".json")]
@@ -979,11 +1026,12 @@ def transient(rep: dict) -> bool:
 
 def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: Path, cache: Path, deps: Path, fresh: bool,
            log, urls: dict[str, str] | None = None, comps: dict | None = None,
-           regenerate: bool = False) -> tuple[list[str], list[str]]:
+           regenerate: bool = False, bundle: bool = False) -> tuple[list[str], list[str]]:
     """Audit ``missed`` on a scratch tree of their inputs (the packages they require by path included), and store each pass.
     ``regenerate`` (`check.py --regenerate`, a train's check) passes a package whose every failure is a record difference;
-    such a pass is never stored, since its lock changes when the train commits the record.  Returns (the failed, the
-    audited)."""
+    such a pass is never stored, since its lock changes when the train commits the record.  ``bundle`` (a recorded check)
+    writes the module versions new in the artifact cache to ``out`` for other nodes (`LakeArtifacts.bundle`).  Returns (the
+    failed, the audited)."""
     deps.mkdir(parents=True, exist_ok=True)
     # beside the dependencies: moves, not copies. Resolved, because check.py names each package by its resolved path, and a
     # cache reached through a symlink would otherwise match no report to its package
@@ -1039,7 +1087,7 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
             kept = {work / p for p in audited if p in reports and not reports[p].get("failures")}
             try:
                 log(f"lean-audit: {artifacts.put(kept)} module version(s) new in the artifact cache")
-                if os.environ.get("RESEARCH_RUN_DIR") and artifacts.added:
+                if bundle and artifacts.added:
                     dest = next(out / f"lean-artifacts{'' if i == 1 else f'-{i}'}.tar.gz" for i in range(1, 99)
                                 if not (out / f"lean-artifacts{'' if i == 1 else f'-{i}'}.tar.gz").exists())
                     log(f"lean-audit: {artifacts.bundle(dest)} of them bundled for other nodes ({dest.name})")
@@ -1063,7 +1111,7 @@ def select(pkgs: list[str], only: list[str] | None) -> list[str]:
 
 
 def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls: dict[str, str] | None = None,
-        export: Path | None = None, only: list[str] | None = None, regenerate: bool = False) -> int:
+        export: Path | None = None, only: list[str] | None = None, regenerate: bool = False, bundle: bool = False) -> int:
     files = COMMON.tracked_files(ROOT)
     if files is None:
         log("lean-audit: the tree's files cannot be listed; nothing is cached")
@@ -1088,7 +1136,7 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
     for attempt in range(len(RETRIES) + 1):
         if not todo:
             break
-        now, audited = _audit(todo, files, keys, reports, out, cache, deps, fresh, log, urls, comps, regenerate)
+        now, audited = _audit(todo, files, keys, reports, out, cache, deps, fresh, log, urls, comps, regenerate, bundle)
         failed = [f for f in failed if f not in audited] + now
         retry = [p for p in audited if p in now and transient(reports.get(p, {}))]
         if not retry or attempt == len(RETRIES):
@@ -1132,8 +1180,9 @@ def presigned(ttl_s: int = URL_TTL_S) -> dict[str, str]:
 
 def shared_bundles(store=None, limit: int = SHARED_LIMIT) -> list[str]:
     """The sha256 of each artifact bundle (`LakeArtifacts.bundle`) among the newest recorded checks' run files, newest first, at
-    most ``limit``: only a recorded run's, as `gather_verdicts` takes only theirs. Empty when the store can't be read: each
-    node then reuses only what it built."""
+    most ``limit``: only a recorded run's (`common.RECORDED_CHECKS`), as `gather_verdicts` takes only theirs, a failed or
+    cancelled run's too, since its bundle holds only modules of packages whose audit passed. Empty when the store can't be
+    read: each node then reuses only what it built."""
     from research.store.local import LocalStore
 
     out: list[str] = []
@@ -1141,8 +1190,8 @@ def shared_bundles(store=None, limit: int = SHARED_LIMIT) -> list[str]:
         store = store or LocalStore()
         if store.remote is not None:
             store.refresh(attempts_only=True)
-        rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND state = 'done' ORDER BY start_utc DESC LIMIT ?",
-                               (4 * limit,))
+        rows = store.index.sql(f"SELECT id FROM attempts WHERE {COMMON.RECORDED_CHECKS} AND state IN ('done', 'failed', 'cancelled') "
+                               "ORDER BY start_utc DESC LIMIT ?", (4 * limit,))
         for (rid,) in rows:
             art = ((store.get_attempt(rid) or {}).get("outputs") or {}).get("run_files")
             for f in store.listing(art) if art else []:
@@ -1267,10 +1316,12 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--regenerate", action="store_true", help="a train's check: `check.py --regenerate`, so a package whose "
                     "every failure is a record difference passes and audit.json's `regenerated` names its record; not in the "
                     "cache key, and such a pass is never stored")
+    ap.add_argument("--bundle", action="store_true", help="a recorded check's audit: write the module versions it added to the "
+                    "artifact cache as lean-artifacts.tar.gz in --out, for other nodes to take (`shared_bundles`)")
     a = ap.parse_args(argv)
     urls = json.loads(a.urls.read_text()) if a.urls and a.urls.is_file() else None
     return run(a.out, a.cache, a.deps, a.fresh, log=lambda s: print(s, flush=True), urls=urls, export=a.export, only=a.package,
-               regenerate=a.regenerate)
+               regenerate=a.regenerate, bundle=a.bundle)
 
 
 if __name__ == "__main__":

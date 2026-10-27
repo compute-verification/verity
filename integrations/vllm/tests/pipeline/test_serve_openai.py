@@ -24,6 +24,7 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as proto
+from verity_vllm.pipeline import serve_seal as ss
 from verity_vllm.pipeline.serve_admit import Admission
 
 CERTIFIER_BODY = {"model": "m", "prompt": [128000, 791, 4062], "max_tokens": 4, "min_tokens": 4, "stream": True,
@@ -126,6 +127,7 @@ def test_ids_frames_are_the_scans_id_events():
 def test_command_is_registered_and_defaults_to_the_setting_that_fits_the_certifiers_plan():
     opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--out", "/tmp/x", "--no-commit", "--port", "0"], environ={})
     assert (opts.port, opts.commit, opts.precision, opts.gpu_tree, opts.window_steps) == (0, False, "verity_int8", True, 64)
+    assert (opts.scheme, opts.of_record) == ("rows-sha512", None)
     assert (opts.protocol, opts.run_id, opts.hf_home) == ("vllm", "local", None)
     assert so.engine_options(opts)["quantization"] == "verity_int8" and "attention_backend" not in so.engine_options(opts)
     exact = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--precision", "int8_exact", "--no-gpu-tree"], environ={})
@@ -148,15 +150,59 @@ def test_every_precision_registers_the_verity_int8_method_before_the_engine(prec
     assert set(so.INT8_PARTS) == set(so.PRECISIONS)
 
 
-def test_preflight_refuses_a_gpu_tree_without_ninja_before_the_model_loads():
-    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r"], environ={})
-    with pytest.raises(cli.UsageError, match="ninja.*--no-gpu-tree"):
+def test_preflight_refuses_a_gpu_tree_without_ninja_before_the_model_loads(tmp_path):
+    (man := tmp_path / "manifest.json").write_text("{}")
+    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man)], environ={})
+    with pytest.raises(cli.UsageError, match=r"ninja is\) on PATH$"):
         so.preflight(opts, which=lambda _: None)
     so.preflight(opts, which=lambda _: "/v/bin/ninja")
-    so.preflight(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--no-gpu-tree"], environ={}), which=lambda _: None)
+    so.preflight(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--no-commit"], environ={}), which=lambda _: None)
     with pytest.raises(cli.UsageError, match="window-steps"):
         so.preflight(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--window-steps", "0"], environ={}),
                      which=lambda _: "/v/bin/ninja")
+
+
+def test_the_served_commit_is_rows_sha512_unless_a_recorded_sha256_run_is_served_again(tmp_path):
+    """rows-sha512 is the default (VLLM-17): a committing run that names no scheme is refused before the model loads until it
+    names its bench row's manifest, and is never served under SHA-256. vllm-v1 is served only by name, to serve again a recorded
+    vllm-v1 run of the same model (``--of-record``: its serve.json says vllm-v1, or predates the field); the committer refuses
+    it too, before it builds anything."""
+    def parse(*more: str) -> so.Options:
+        return cli.parse("serve-openai", ["--model", "m", "--revision", "r", *more], environ={})
+
+    def refusal(opts: so.Options, which: Any = lambda _: "/v/bin/ninja") -> str | None:
+        try:
+            so.preflight(opts, which=which)
+        except cli.UsageError as e:
+            return str(e)
+        return None
+
+    def record(name: str, **rec: Any) -> str:
+        (d := tmp_path / name).mkdir()
+        (d / "serve.json").write_text(json.dumps({"model": "m", "revision": "r", "commit": True, **rec}))
+        return str(d)
+
+    (man := tmp_path / "manifest.json").write_text("{}")
+    assert parse().scheme == ss.ROWS == ss.SCHEMES[0] == "rows-sha512" and ss.V1 in ss.SCHEMES
+    assert "(the default)" in refusal(parse()) and "--required-manifest ROW_DIR/manifest.json" in refusal(parse())
+    assert "drop --no-gpu-tree" in refusal(parse("--no-gpu-tree", "--required-manifest", str(man)))
+    assert refusal(parse("--required-manifest", str(man))) is None and refusal(parse("--no-commit")) is None
+    with pytest.raises(cli.UsageError, match="--required-manifest ROW_DIR/manifest.json"):
+        ss.committer(parse(), llm=None)
+
+    v1, old = ("--scheme", "vllm-v1"), record("v1", scheme="vllm-v1")
+    assert "commits SHA-256" in refusal(parse(*v1)) and "--of-record RUN_DIR" in refusal(parse(*v1))
+    with pytest.raises(cli.UsageError, match="commits SHA-256"):
+        ss.committer(parse(*v1), llm=None)
+    assert refusal(parse(*v1, "--of-record", old)) is None
+    assert refusal(parse(*v1, "--of-record", record("before-serve-json-named-it"))) is None
+    assert refusal(parse(*v1, "--of-record", old, "--no-gpu-tree"), which=lambda _: None) is None
+    assert refusal(parse(*v1, "--of-record", old), which=lambda _: None).endswith("or pass --no-gpu-tree")
+    assert "committed under rows-sha512, not under vllm-v1" in refusal(parse(*v1, "--of-record", record("rows", scheme="rows-sha512")))
+    assert "committed nothing" in refusal(parse(*v1, "--of-record", record("uncommitted", commit=False, scheme=None)))
+    assert "served m2@r, not m@r" in refusal(parse(*v1, "--of-record", record("other", model="m2", scheme="vllm-v1")))
+    assert "not a recorded serve-openai run" in refusal(parse(*v1, "--of-record", str(tmp_path / "none")))
+    assert "not under --scheme rows-sha512" in refusal(parse("--required-manifest", str(man), "--of-record", old))
 
 
 # ---------------------------------------------------------------------------------------------------------------- stand-ins
@@ -305,11 +351,13 @@ class Serving:
 
     def __init__(self, out: Path, *, commit: bool = True, flip: tuple[int, int] | None = None, window_steps: int = 64,
                  idle_close_steps: int = 1, force_include_usage: bool = True, seed_override: int | None = None,
-                 served: dict | None = None, marks: Any = None, block: int | None = None, protocol: Any = None) -> None:
+                 served: dict | None = None, marks: Any = None, block: int | None = None, protocol: Any = None,
+                 arm: Any = None) -> None:
         self.runner = Runner()
         self.windows = sc.CommitWindows(Committer(self.runner, flip), out, run_id="t", window_steps=window_steps,
                                        idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
-                                       clock=lambda: 0.0, wall=lambda: 0.0, served=served, marks=marks) if commit else None
+                                       clock=lambda: 0.0, wall=lambda: 0.0, served=served, marks=marks,
+                                       arm=arm(self.runner) if arm is not None else None) if commit else None
         self.loop = so.EngineLoop(Engine(self.runner, seed_override), self.windows)
         self.server = so.Server(proto=protocol or proto.PlainProtocol(force_include_usage), served_name="m", max_model_len=512,
                                 tokenizer=Tokenizer(),
@@ -463,7 +511,7 @@ def test_under_ids_the_network_certifiers_clients_get_vllms_http_and_json(tmp_pa
     (urllib) the same."""
     ids = proto.IdsProtocol(True, payload=proto.ID_PAYLOAD, base=proto.PlainProtocol(True))
     with Serving(tmp_path, commit=False, protocol=ids) as s:
-        assert [m["id"] for m in json.loads(urllib.request.urlopen(s.url + "/v1/models").read())["data"]] == ["m"]
+        assert [m["id"] for m in json.loads(urllib.request.urlopen(s.url + "/v1/models").read())["data"]] == ["m"]  # noqa: S310 (the test's own 127.0.0.1 endpoint)
         assert json.loads(s.post("/tokenize", {"model": "m", "prompt": "a bb ccc"})[1])["tokens"] == [1, 101, 102, 103]
         head, body = dechunked(s.send(shims_request(s.http.address[1])))
         status, probed = s.post("/v1/completions", dict(CERTIFIER_BODY, max_tokens=2, return_token_ids=True))
@@ -554,6 +602,26 @@ def test_the_gpu_arms_client_serves_shared_prefix_turns_that_the_server_checks(t
     bad = records(tmp_path, "client.jsonl")
     bad[0]["streamed_ids"] = bad[0]["streamed_ids"][:-1]
     assert not client.compare(bad, records(tmp_path, "requests.jsonl"))["passed"]
+
+
+def test_each_request_records_when_it_was_received_submitted_admitted_and_first_streamed(tmp_path):
+    """The wall-clock stamps that tell late bytes (``received``) from a hold before the engine (``submitted``,
+    ``admitted``), on one clock the server, the engine loop and the windows share."""
+    ticks, lock = iter(range(1, 1_000_000)), threading.Lock()
+
+    def clock() -> float:
+        with lock:
+            return float(next(ticks))
+
+    s = Serving(tmp_path)
+    s.server.clock = s.loop.clock = s.windows.wall = clock
+    with s:
+        assert s.post("/v1/completions", dict(CERTIFIER_BODY, prompt=[1, 2, 3]))[0] == 200
+    (rec,) = records(tmp_path, "requests.jsonl")
+    order = ["head", "received", "submitted", "admitted", "first_token"]
+    assert set(rec["times"]) == set(order), rec["times"]
+    stamps = [rec["times"][k] for k in order]
+    assert stamps == sorted(stamps) and len(set(stamps)) == len(stamps), rec["times"]
 
 
 @pytest.mark.parametrize("idle_close_steps, windows", [(1, 3), (100, 1)])

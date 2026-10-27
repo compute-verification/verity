@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.program.registry.prims import I32
+from verity.ml.definitions.registry.prims import I32
 from verity.ml.circuits.types import Array
 
 REPO = Path(__file__).resolve().parents[2]
@@ -25,7 +25,7 @@ def _available() -> str | None:
         return "full-size build: set CAPTURE_BIG=1 (DESIGN §11)"
     if not LOG.exists():
         return f"{LOG} missing (L1)"
-    if importlib.util.find_spec(f"verity_vllm.engine.profiles.{PROFILE}") is None:
+    if importlib.util.find_spec(f"verity_vllm.observe.fold.profiles.{PROFILE}") is None:
         return f"profile {PROFILE} missing (L3)"
     try:
         from verity_vllm.observe.fold.memory import MemoryModel

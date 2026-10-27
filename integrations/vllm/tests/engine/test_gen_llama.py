@@ -19,16 +19,16 @@ import pytest
 from verity_vllm.program import model as analytic
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepEnd, StepStart, TritonLaunch
 from verity_vllm.observe.fold.patterns import GemmLaunch, members
-from verity_vllm.engine.profiles import gen_llama_patterns as GP
-from verity_vllm.engine.profiles import profile_for_case, profile_module_for_case
-from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as BASE
+from verity_vllm.observe.fold.profiles import gen_llama_patterns as GP
+from verity_vllm.observe.fold.profiles import profile_for_case, profile_module_for_case
+from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as BASE
 
-L = importlib.import_module("verity_vllm.engine.profiles.derived_LLAMA32_1B")
-Q = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN05")
+L = importlib.import_module("verity_vllm.observe.fold.profiles.derived_LLAMA32_1B")
+Q = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN05")
 from verity_vllm.observe.fold.resolver import Compute, PerRow, Shared, StepContext, Unsupported, resolve_step
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.observe.events import ViewDesc
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 REPO = Path(__file__).resolve().parents[2]
 MANIFEST = REPO / "manifests" / "checkpoints.json"

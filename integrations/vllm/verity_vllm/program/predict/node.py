@@ -34,8 +34,8 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, Record, Type, Value
 
-from .build import I32, I64, WRAPPERS, BUILDER_ID, BuildResult, decoder, drive, launch_batch
-from .common import Unexpressible, _arr_shape, _Launch, _Peers, _Stochastic
+from .build import I32, I64, WRAPPERS, BUILDER_ID, BuildResult, _Model, decoder, drive, launch_batch
+from .common import Unexpressible, _arr_shape, _Launch, _Peers, _Stochastic, launch_rows
 from .phi import Phi
 
 
@@ -242,6 +242,8 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
                 raise Unexpressible(f"vocabulary cannot express: a request run in a launch batch (no batch invariance, {len(phi.requests)} "
                                     f"requests), whose kernel choices the {nets[r].model_class} decoder reads at its own rows")
             model.launch = _Launch(batch)
+        if wrapper == "request" and isinstance(model, _Model):
+            model.ctx = launch_rows(phis[r], LP, T)
         models.append(model)
     rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]
     toks: list[list[Coll] | None] = [None] * world
@@ -273,7 +275,7 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
     name = f"{derive_name}Node[{nets[0].model_class}]"
     src_static = {"class": f"verity-vllm/node/v1[{src_class}]", "mode": "profile", "profile": phi.profile, "world": world,
                   "inputs": inputs, "config_sha256": hashlib.sha256(canonical_json({})).hexdigest()[:16]}
-    from verity_vllm.program.replay import replayer
+    from verity.ml.definitions.replay import replayer
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
                                doc=f"a tensor-parallel node's ranks joined at their collectives, predicted ahead of time by "
                                    f"verity_vllm.program.predict.node ({BUILDER_ID})",

@@ -9,17 +9,21 @@ them (a branch's own commits against its merge base, or against the merge of its
 ratchet is a shrink-only allowlist under ``integrations/vllm/tests`` (``**/allowlists/*.json`` or ``**/*allowlist*.json``
 holding an ``entries`` list), known by its slug, its file's name less a rule number (``p10_size.json`` and ``size.json`` are
 both ``size``), so a moved or renamed allowlist is still compared; one the change adds starts at its own count and is not
-compared.  A change is judged when it touches a ratchet or a ``*.py`` file under ``integrations/vllm/tests/lint/`` (the lints'
-code), and passes when:
+compared.  A change is judged when it touches a ratchet, a ``*.py`` file under ``integrations/vllm/tests/lint/`` (the lints'
+code) or the ruff lint's: ``integrations/vllm/ruff.toml`` and the ruff the root ``dev`` group pins.  It passes when:
 
-* no ratchet its base has holds more entries after it than before;
-* no entry's recorded ``count`` grows (an entry is its fields less ``count``; P10's count is a size in lines); and
+* in each ratchet, no kind whose entries record counts (an entry's ``count``: typed_records' or-empty per package, P07's)
+  holds more in total after it than before.  A key may rise, or a new one appear, when the same kind's other keys fall by
+  at least as much, so a move from one package to another passes (the vLLM coordinator, 26 Oct);
+* among the other entries, the per-site ones and P10's, whose count is a size in lines, no ratchet its base has holds
+  more after it than before, and no entry's recorded ``count`` grows (an entry is its fields less ``count``); and
 * if it changes a lint's code or allowlist, its base's lint code finds nothing on its tree that its allowlists don't cover.
-  In a temporary worktree of the change's top, ``tests/lint/`` is replaced by the base's, each allowlist there holding the
-  top's entries for its slug (none for a deleted one), and the ``test_no_new*`` tests of each lint whose code or allowlist
-  changed (every lint's, if the shared code did) run without pytest.  So loosening a lint to drop its entries (raising P10's
-  cap, skipping a kind, deleting the lint) fails, naming each violation the base's lint still finds, while tightening one
-  passes once the change fixes what it finds.
+  In a temporary worktree of the change's top, ``tests/lint/`` and ``ruff.toml`` are replaced by the base's, each allowlist
+  there holding the top's entries for its slug (none for a deleted one), and the ``test_no_new*`` tests of each lint whose
+  code or allowlist changed (every lint's, if the shared code did) run without pytest, the ruff lint with the base's pin.
+  So loosening a lint to drop its entries (raising P10's cap, skipping a kind, ignoring a ruff rule, deleting the lint)
+  fails, naming each violation the base's lint still finds, while tightening one passes once the change fixes what it
+  finds.
 
 A ``# noqa`` is an exception too (the vLLM coordinator, 25 Oct 11:20Z, under that delegation), held by count with no
 allowlist, and every change is judged by it: in the ``*.py`` files it touches under ``integrations/vllm``, a change may add
@@ -29,32 +33,46 @@ that moves with its code counts as kept, and deleting a stale ``noqa`` pays for 
 Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR title starts ``Revert``) and a pure move that
 BASE's ``tools/verity/check/move_check.py`` certifies.
 
-It runs on git, in the repository of the current directory, and runs no code but the base's (its lints, and BASE's
-move_check), so the merge queue runs `main`'s copy of it, which a PR can't weaken, on `main` and a PR's head as it admits the
-PR (a landing gate in drive.toml's ``landing_gates``: `research queue ready`'s preflight refuses the mark, and the sync onto
-`next` leaves the PR out).  Before marking a branch, run ``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.
-Exit 0 when every change passes, 1 when one fails (with the fix), 2 on a usage or git error, or when the base's lints can't
-run.  ``--json`` prints `KIND`, whose ``failures`` name each failing change's top ``commit``.
+It runs on git, in the repository of the current directory, and runs no code but the base's (its lints and the ruff it pins,
+and BASE's move_check), so the merge queue runs `main`'s copy of it, which a PR can't weaken, on `main` and a PR's head (or,
+at the sync, its merge onto `next`, each member below judged again) as it admits the PR (a landing gate in drive.toml's ``landing_gates``: `research queue ready`'s preflight refuses the mark, and the
+sync onto `next` leaves the PR out).  The lints run on the Python that runs it, the ruff lint too when that Python's ruff is
+the base's pin, else on one ``uv run --with`` gives the pin.  A sync gates each PR on its merge onto `next`, which holds every
+PR below it, so each change's verdict is kept under ``$RATCHET_GATE_CACHE`` (default ``~/.cache/verity/ratchet-gate``; empty:
+none), keyed by this file's bytes, BASE and the change's commits, which are all it reads: a sync of N PRs judges each once,
+not N times.  An entry that can't be read is judged again, and an error is never kept.  Before marking a branch, run
+``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes, 1 when one fails
+(with the fix), 2 on a usage or git error, or when the base's lints can't run (the ruff lint, with no ``uv``).  ``--json``
+prints `KIND`, whose ``failures`` name each failing change's top ``commit``.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import io
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
 import tokenize
+import tomllib
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
 KIND = "vllm-ratchet-gate/v2"
+#: this file's bytes, part of every cached verdict's key, so a changed gate judges every change again
+SELF = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 INTEGRATION = "integrations/vllm"
 TESTS = f"{INTEGRATION}/tests/"
 LINT = f"{TESTS}lint"
+#: the ruff lint (``test_ruff.py``, by its slug), its config, and the pyproject whose ``dev`` group pins its ruff
+RUFF_LINT = "ruff"
+RUFF_CONFIG = f"{INTEGRATION}/ruff.toml"
+PYPROJECT = "pyproject.toml"
 MOVE_CHECK = "tools/verity/check/move_check.py"
 QUEUE_SUBJECT = re.compile(r"^Queue: #(\d+) ?(.*)$")
 RULE_NUMBER = re.compile(r"^p\d+_")
@@ -64,6 +82,8 @@ NOQA = re.compile(r"#\s*(?:(?:ruff|flake8)\s*:\s*)?noqa\b", re.IGNORECASE)
 HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
 #: entries or violations named in a failure's fix, at most
 CHEAPEST = 12
+#: the ratchets whose ``count`` measures one site (P10's is a size in lines) rather than counting findings, so never pooled
+MEASURES = {"size"}
 
 #: Run as ``python -I -c RUNNER LINT_DIR SLUGS`` (SLUGS a JSON list, or null for every lint): imports the lint directory as a
 #: package of its own, so no other file of the tree runs, with a stand-in for pytest (its marks), and calls each selected
@@ -197,6 +217,7 @@ class Change:
     fix: list[str] = field(default_factory=list)
     noqa_added: int = 0
     noqa_removed: int = 0
+    pooled: list[str] = field(default_factory=list)
 
     @property
     def name(self) -> str:
@@ -205,7 +226,7 @@ class Change:
     def doc(self) -> dict:
         return {"name": self.name, "commit": self.hi, "base": self.lo, "pr": self.pr, "verdict": self.verdict, "why": self.why,
                 "before": self.before, "after": self.after, "touched": self.touched, "lints": self.lints, "fix": self.fix,
-                "noqa_added": self.noqa_added, "noqa_removed": self.noqa_removed}
+                "noqa_added": self.noqa_added, "noqa_removed": self.noqa_removed, "pooled": self.pooled}
 
 
 def merge_base(base: str, top: str) -> str:
@@ -256,25 +277,76 @@ def is_pure_move(c: Change, base: str) -> bool:
         script = git("show", f"{base}:{MOVE_CHECK}")
     except GitError:
         return False
-    with tempfile.TemporaryDirectory(prefix="ratchet-gate-") as d:
+    with tempfile.TemporaryDirectory(prefix="ratchet-gate-", ignore_cleanup_errors=True) as d:
         p = Path(d) / "move_check.py"
         p.write_text(script)
         return subprocess.run([sys.executable, str(p), c.lo, c.hi], capture_output=True).returncode == 0
 
 
-def growth(before: dict[str, list], after: dict[str, list], paths: dict[str, str]) -> tuple[list[str], list[str]]:
-    """(each grown ratchet and each grown count, the entries that grew it): what the change adds, against its base."""
-    grown, fix = [], []
+def counted_kinds(s: str, entries: list) -> set:
+    """The kinds of ratchet ``s`` whose counts pool: each kind one of ``entries`` (before and after) records a count in."""
+    return set() if s in MEASURES else {e.get("kind") for e in entries if isinstance(e, dict) and "count" in e}
+
+
+def growth(before: dict[str, list], after: dict[str, list],
+           paths: dict[str, str]) -> tuple[list[str], list[str], list[str]]:
+    """(each grown ratchet, count and pooled kind; the entries that grew it, or the keys that moved in a grown kind; each
+    kind a key rose in whose total didn't grow): what the change adds, against its base."""
+    grown, fix, pooled = [], [], []
     for s in sorted(before):
-        was = {key(e): count(e) for e in before[s]}
         now = after.get(s, [])
-        if len(now) > len(before[s]):
-            grown.append(f"{paths[s]} {len(before[s])} -> {len(now)} entries")
-            fix += [f"{paths[s]}: new {key(e)}" for e in now if key(e) not in was]
-        for e in now:
+        kinds = counted_kinds(s, before[s] + now)
+
+        def in_pool(e: object) -> bool:
+            return isinstance(e, dict) and e.get("kind") in kinds
+
+        sites, now_sites = [e for e in before[s] if not in_pool(e)], [e for e in now if not in_pool(e)]
+        was = {key(e): count(e) for e in sites}
+        if len(now_sites) > len(sites):
+            outside = f" outside its counted kinds ({', '.join(sorted(map(str, kinds)))})" if kinds else ""
+            grown.append(f"{paths[s]} {len(sites)} -> {len(now_sites)} entries{outside}")
+            fix += [f"{paths[s]}: new {key(e)}" for e in now_sites if key(e) not in was]
+        for e in now_sites:
             if count(e) > was.get(key(e), count(e)):
                 grown.append(f"{paths[s]} count {was[key(e)]} -> {count(e)} for {key(e)}")
-    return grown, fix
+        for kind in sorted(kinds, key=str):
+            lo, hi = Counter(), Counter()
+            for side, entries in ((lo, before[s]), (hi, now)):
+                for e in entries:
+                    if in_pool(e) and e.get("kind") == kind:
+                        side[key(e)] += count(e)
+            moved = sorted((k for k in lo.keys() | hi.keys() if lo[k] != hi[k]), key=lambda k: (lo[k] - hi[k], k))
+            total = f"{paths[s]} {kind} {sum(lo.values())} -> {sum(hi.values())} in total"
+            if sum(hi.values()) > sum(lo.values()):
+                grown.append(total)
+                fix += [f"{paths[s]}: {k} {lo[k]} -> {hi[k]}" for k in moved]
+            elif any(hi[k] > lo[k] for k in moved):
+                pooled.append(f"{total} over {len(moved)} moved key(s)")
+    return grown, fix, pooled
+
+
+def ruff_pin(rev: str) -> str | None:
+    """The ruff requirement the root ``dev`` group pins at ``rev`` (``ruff==0.17.2``), or None."""
+    try:
+        doc = tomllib.loads(git("show", f"{rev}:{PYPROJECT}"))
+    except (GitError, tomllib.TOMLDecodeError):
+        return None
+    dev = doc.get("dependency-groups", {}).get("dev", [])
+    return next((d for d in dev if isinstance(d, str) and re.split(r"[\s=<>!~;\[]", d, maxsplit=1)[0] == "ruff"), None)
+
+
+def python_for(pin: str | None, slugs: list[str] | None) -> list[str]:
+    """The isolated Python the base's lints run on: this one, unless the ruff lint is to run and this Python's ruff isn't
+    the base's ``pin``, when ``uv run --with`` makes one that has it."""
+    if pin is None or (slugs is not None and RUFF_LINT not in slugs):
+        return [sys.executable, "-I"]
+    r = subprocess.run([sys.executable, "-m", "ruff", "--version"], capture_output=True, text=True)
+    if r.returncode == 0 and pin.startswith("ruff==") and r.stdout.split() == ["ruff", pin.removeprefix("ruff==").strip()]:
+        return [sys.executable, "-I"]
+    uv = shutil.which("uv")
+    if uv is None:
+        raise GitError(f"the base's ruff lint runs {pin}, which {sys.executable} lacks, and there is no `uv` to provide it")
+    return [uv, "run", "--no-project", "--quiet", "--python", sys.executable, "--with", pin, "--", "python", "-I"]
 
 
 def noqa_lines(rev: str, path: str) -> list[tuple[int, str]]:
@@ -326,25 +398,37 @@ def lint_selection(touched: list[str]) -> list[str] | None:
     code = [f for f in touched if is_lint_code(f)]
     if any(not PurePosixPath(f).name.startswith("test_") for f in code):
         return None
-    return sorted({slug(f) for f in code} | {slug(f) for f in touched if f.startswith(f"{LINT}/") and is_ratchet(f)})
+    return sorted({slug(f) for f in code} | {slug(f) for f in touched if f.startswith(f"{LINT}/") and is_ratchet(f)}
+                  | ({RUFF_LINT} if {RUFF_CONFIG, PYPROJECT} & set(touched) else set()))
+
+
+def drop_worktree(tree: Path) -> None:
+    """Remove the lints' worktree. Cleanup decides no verdict: when git won't remove it (26 Oct on drive's pod: "Directory not
+    empty"), the directory goes by hand and git forgets it."""
+    if subprocess.run(["git", "worktree", "remove", "--force", str(tree)], capture_output=True).returncode:
+        shutil.rmtree(tree, ignore_errors=True)
+        subprocess.run(["git", "worktree", "prune"], capture_output=True)
 
 
 def base_lints(c: Change, slugs: list[str] | None, after: dict[str, list]) -> tuple[list[str], list[dict]]:
     """(the lints run, their failures): the base's lint code run on the change's tree against its allowlists."""
     if not git("ls-tree", "--name-only", c.lo, "--", LINT).strip():
         return [], []
-    with tempfile.TemporaryDirectory(prefix="ratchet-gate-") as d:
+    python = python_for(ruff_pin(c.lo), slugs)
+    with tempfile.TemporaryDirectory(prefix="ratchet-gate-", ignore_cleanup_errors=True) as d:
         tree = Path(d) / "tree"
         git("worktree", "add", "-q", "--detach", str(tree), c.hi)
         try:
             shutil.rmtree(tree / LINT, ignore_errors=True)
             git("-C", str(tree), "checkout", "-q", c.lo, "--", LINT)
+            if git("ls-tree", "--name-only", c.lo, "--", RUFF_CONFIG).strip():
+                git("-C", str(tree), "checkout", "-q", c.lo, "--", RUFF_CONFIG)
             for p in (tree / LINT / "allowlists").glob("*.json"):
                 p.write_text(json.dumps({"entries": after.get(slug(p.name), [])}))
-            r = subprocess.run([sys.executable, "-I", "-c", RUNNER, str(tree / LINT), json.dumps(slugs)], cwd=d,
-                               capture_output=True, text=True)
+            r = subprocess.run([*python, "-c", RUNNER, str(tree / LINT), json.dumps(slugs)], cwd=d, capture_output=True,
+                               text=True, env={**os.environ, "RUFF_CACHE_DIR": str(Path(d) / "ruff-cache")})
         finally:
-            git("worktree", "remove", "--force", str(tree))
+            drop_worktree(tree)
     try:
         doc = json.loads(r.stdout)
         return doc["ran"], doc["failures"]
@@ -368,11 +452,13 @@ def violations(failures: list[dict]) -> list[str]:
 
 def judge(c: Change, base: str) -> None:
     diff = git("diff", "--no-renames", "--name-only", "-z", c.lo, c.hi).split("\0")
-    c.touched = sorted(f for f in diff if f and (is_ratchet(f) or is_lint_code(f)))
+    c.touched = sorted(f for f in diff if f and (is_ratchet(f) or is_lint_code(f) or f == RUFF_CONFIG
+                                                 or f == PYPROJECT and ruff_pin(c.lo) != ruff_pin(c.hi)))
     new_noqa, c.noqa_added, c.noqa_removed = noqa_change(c.lo, c.hi, diff)
     noqa = [f"{c.noqa_added} `# noqa` line(s) added, {c.noqa_removed} removed"] if c.noqa_added or c.noqa_removed else []
     if not c.touched and not noqa:
-        c.verdict, c.why = "untouched", f"changes no ratchet, no lint code under {LINT}/ and no `# noqa`"
+        c.verdict, c.why = "untouched", (f"changes no ratchet, no lint code under {LINT}/, no {RUFF_CONFIG}, no ruff pin and "
+                                         f"no `# noqa`")
         return
     grown, added, bad, found = [], [], [], []
     if c.touched:
@@ -380,7 +466,7 @@ def judge(c: Change, base: str) -> None:
         after, now_at, bad = ratchets(c.hi)
         c.before = sum(len(v) for v in before.values())
         c.after = sum(len(after.get(s, [])) for s in before)
-        grown, added = growth(before, after, {**was_at, **now_at})
+        grown, added, c.pooled = growth(before, after, {**was_at, **now_at})
     noqa_grows = c.noqa_added > c.noqa_removed
     if c.touched and not (grown or bad or noqa_grows):
         slugs = lint_selection(c.touched)
@@ -389,7 +475,7 @@ def judge(c: Change, base: str) -> None:
             found = violations(failures)
     if not (grown or bad or noqa_grows or found):
         c.verdict, c.why = "passed", "; ".join(
-            ([f"{c.before} -> {c.after} ratchet exceptions"] if c.touched else []) + noqa
+            ([f"{c.before} -> {c.after} ratchet exceptions"] if c.touched else []) + [f"pooled: {p}" for p in c.pooled] + noqa
             + ([f"the base's lint code finds nothing uncovered ({', '.join(c.lints)})"] if c.lints else []))
         return
     if is_revert(c):
@@ -402,8 +488,9 @@ def judge(c: Change, base: str) -> None:
     if bad:
         c.why = f"leaves {', '.join(bad)} unreadable as an allowlist (a JSON object with an `entries` list)"
     elif grown:
-        c.why = (f"grows {'; '.join(grown)}: no change adds a ratchet exception or raises a recorded count (fix the new code; "
-                 f"an entry may move with the violation it allows, within its ratchet)")
+        c.why = (f"grows {'; '.join(grown)}: no change adds a ratchet exception or raises a recorded count, past what the same "
+                 f"kind's other counts lose (fix the new code; an entry may move with the violation it allows, within its "
+                 f"ratchet, and a count with its findings, within its kind)")
         c.fix = added[:CHEAPEST] + ([f"... and {len(added) - CHEAPEST} more"] if len(added) > CHEAPEST else [])
     elif noqa_grows:
         c.why = (f"adds {c.noqa_added} `# noqa` line(s) under {INTEGRATION}/ and removes {c.noqa_removed}: a noqa is an "
@@ -419,11 +506,50 @@ def judge(c: Change, base: str) -> None:
         c.fix = found[:CHEAPEST] + ([f"... and {len(found) - CHEAPEST} more"] if len(found) > CHEAPEST else [])
 
 
+#: what `judge` decides, the fields a cached verdict restores
+JUDGED = ("verdict", "why", "before", "after", "touched", "lints", "fix", "noqa_added", "noqa_removed", "pooled")
+
+
+def cache_path(c: Change, base: str) -> Path | None:
+    root = os.environ.get("RATCHET_GATE_CACHE")
+    if root == "":
+        return None
+    root = Path(root) if root else Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "verity" / "ratchet-gate"
+    return root / (hashlib.sha256(json.dumps([SELF, base, c.lo, c.hi, c.commits]).encode()).hexdigest() + ".json")
+
+
+def recall(c: Change, p: Path | None) -> bool:
+    try:
+        doc = json.loads(p.read_text()) if p is not None else None
+    except (OSError, ValueError):
+        return False
+    if not (isinstance(doc, dict) and set(JUDGED) <= doc.keys() and doc["verdict"] in ("untouched", "passed", "exempt", "failed")):
+        return False
+    for k in JUDGED:
+        setattr(c, k, doc[k])
+    return True
+
+
+def keep(c: Change, p: Path | None) -> None:
+    if p is None:
+        return
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_name(f".{p.name}.{os.getpid()}")
+        tmp.write_text(json.dumps({k: getattr(c, k) for k in JUDGED}))
+        tmp.replace(p)
+    except OSError:
+        pass
+
+
 def gate(base: str, top: str) -> dict:
     base, top = (git("rev-parse", "--verify", f"{r}^{{commit}}").strip() for r in (base, top))
     cs = changes(base, top)
     for c in cs:
-        judge(c, base)
+        p = cache_path(c, base)
+        if not recall(c, p):
+            judge(c, base)
+            keep(c, p)
     failed = [c for c in cs if c.verdict == "failed"]
     return {"kind": KIND, "base": base, "top": top, "changes": [c.doc() for c in cs],
             "failures": [{"commit": c.hi, "pr": c.pr, "why": c.why, "fix": c.fix} for c in failed]}

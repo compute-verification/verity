@@ -3,7 +3,8 @@
 Status: superseded. The bandwidth audit on the served path is the remote bandwidth audit
 (`verity/core/protocols/remote_bandwidth/PROTOCOL.md`), which applies this audit's guarantee, `AuditRO`, per pass. v0's
 tag `ro-blake3/v1` is BLAKE3, which the one-hash rule (6 Oct) takes off the served path, so no deployment runs this
-audit. The code stays while `verity_vllm.protocols.remote_bandwidth`'s tag receipt reads `tags`. What follows is v0 as it was granted.
+audit, and no served code reads it: `verity_vllm.protocols.remote_bandwidth`'s receipts are the remote audit's own
+(its `receipts.py`). The code stays for the benchmarks that measure its tags. What follows is v0 as it was granted.
 
 v0 with the certified tag `ro-blake3/v1` at `s = 1,849` and `T = 1.2 ms`. The red team granted head
 `f18c1854a` with conditions (art:847a28cdb35482186f67e1aec1bcab52c9bf1ad73cac87c2a7141b366be12fa6), fixing `T` and
@@ -25,7 +26,7 @@ No guarantee assumes trusted prover hardware (Daniel, 12 Oct 2026). The audit ha
 - **The verifier** holds the secret `source`, draws each window's nonce, derives its key, sends `σ`, runs the clock,
   draws the samples, checks the openings and keeps the store's state (§3). It is PoUS's memory challenger (§3), the
   auditor's hardware on a machine the prover doesn't control (the auditor's own VM or box, under the auditor's
-  account), never a process on the GPU's node. `trusted-nebius-host` (§5) is about that machine only.
+  account), never a process on the GPU's node. `trusted-host` (§5) is about that machine only.
 - **The on-node challenger** is the code that runs on the GPU's own node: `audit.read_device`, and
   `benchmarks/bandwidth`'s `gpu.challenger_device` and `gpu.Prover`. It is prover hardware. Its only role is to run the
   protocol: to drive the tagger and carry `σ`, the root, the samples and the openings between the GPU and the verifier.
@@ -182,9 +183,9 @@ store's state at a time. A nonce in the file is never drawn again, and one windo
 whichever verifier opens it. A window the file shows open when the state is reopened belonged to a verifier that
 stopped; reopening records it closed, and no verifier can accept it. A file cannot detect being restored from a
 snapshot, nor a directory a copy of a state kept in another directory or on another host. Both rest on
-`trusted-nebius-host` for the verifier's machine, which network-accounting widens under the same id to say that the
-device runs its stated code on its Nebius host, "…, and its host never restores an earlier copy of the state the device
-keeps there", pending network-accounting's widening (Daniel, decision 2). The verifier's stated code keeps one state
+`trusted-host` for the verifier's machine: "the auditor's device runs its stated code, timing included, on a host the
+prover doesn't control, with its CPU isolated from other tenants and a monotonic clock; the host never restores its
+earlier state" (Daniel, decision 2). The verifier's stated code keeps one state
 directory and never copies a state, and its host never brings an earlier copy back. A state kept on the GPU's node
 would rest on prover hardware, which no guarantee does (§0). PoUS's memory challenger cites the same assumption for
 its session-id log. The audit needs it for the two properties below.
@@ -309,9 +310,9 @@ The claims registry (`verity.core.claims`) names what a deployment rests on:
   so a co-resident slice's path in is on chip, not over PCIe. The RTX PRO 6000 Server's only link is its PCIe Gen 5
   x16 (no NVLink, no chip-to-chip link). A deployment records the SKU the node reports beside its id (§2); it is the
   node's word until the device's confidential-computing attestation is checked (§0, item 1).
-- **`trusted-nebius-host`** (assumption, core's): the verifier's machine, the auditor's, runs its stated code on its
-  Nebius host, which offers no attesting hardware, "…, and its host never restores an earlier copy of the state the
-  device keeps there", the wording network-accounting adds under the same id, pending network-accounting's widening
+- **`trusted-host`** (assumption, core's): the verifier's machine is the auditor's, on a host that offers no
+  attesting hardware: "the auditor's device runs its stated code, timing included, on a host the prover doesn't
+  control, with its CPU isolated from other tenants and a monotonic clock; the host never restores its earlier state"
   (Daniel, decision 2). The audit cites it for one property: the verifier keeps one state directory, never copies a
   state and never gets an earlier copy back (§3), which one open window per store and additivity across windows need
   and a single window's bound does not. It covers no machine the prover controls: not the GPU's node, and not the
@@ -362,7 +363,7 @@ with a 0.3 ms `RTT` allowance. The error is `2^-40.42`. The last table of this s
 parameters. Under Daniel's reading of `bandwidth-device` (§5), the rate is certified now for an isolated device, and
 for a co-audited set it is each device's share of the set's total once AuditRO for `m` stores lands.
 
-The GPU tagger (`benchmarks/bandwidth/run.sh`) on one RTX PRO 6000 Blackwell Server Edition of vy-nebius-2, under a
+The GPU tagger (`benchmarks/bandwidth/run.sh`) on one RTX PRO 6000 Blackwell Server Edition, under a
 timed lease, SM clock 2,085 to 2,092 MHz throughout. Every run's gates passed before anything was timed: SHA-512's and
 keyed BLAKE3's known answers on host and device; every tag's root over the full store (`N = 2^19`) and over the pinned
 vectors' 37 blocks equal to the reference's, with the output buffers poisoned; and a pass without the tag kernel that

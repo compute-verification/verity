@@ -133,7 +133,8 @@
         "benchmarks/sampling_plan/",
         "integrations/vllm/verity_vllm/protocols/sampled_proofs.py",
         "Security/Definitions/Hash/",
-        "Security/Proofs/Hash/"
+        "Security/Proofs/Hash/",
+        "verity/core/protocols/interface/"
       ],
       "branch_suffixes": [
         "95d4",
@@ -224,13 +225,15 @@
         "Security/Definitions/Nci.lean",
         "Security/Definitions/Nci/",
         "Security/Proofs/Nci/",
+        "benchmarks/all_protocols/",
         "benchmarks/pouw/",
         "benchmarks/pouw/machine_model/",
         "benchmarks/pouw/receipts/",
-        "benchmarks/all_protocols/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",
         "benchmarks/nci/",
+        "benchmarks/e2e_h200/",
+        "benchmarks/e2e_demo/",
         ".agents/skills/kernel-engineering/",
         "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
         "integrations/vllm/verity_vllm/protocols/pouw/circuit.py",
@@ -246,6 +249,7 @@
         "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
         "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
         "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
+        "integrations/torch_loop/",
         "fixtures/bench-instances/",
         "fixtures/redteam/",
         "fixtures/redteam-3/",
@@ -555,9 +559,11 @@
         "AGENTS.md",
         "README.md",
         "ARCHITECTURE.md",
+        "glossary/",
         ".agents/skills/",
         "tests/",
         "fixtures/",
+        "examples/README.md",
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
@@ -571,7 +577,8 @@
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C954BELSW",
       "owns": [
-        "integrations/vllm/"
+        "integrations/vllm/",
+        "examples/vllm/"
       ],
       "linear": "VLLM",
       "branch_suffixes": [
@@ -621,7 +628,8 @@
       "charter": "Daniel, 2026-10-17 10:46 PM PDT (a new slice, via top); renamed from @hash by Daniel, 2026-10-18 9:40 AM PDT",
       "usergroup": "S0CAYGG5BDW",
       "owns": [
-        "benchmarks/hash/"
+        "benchmarks/hash/",
+        "benchmarks/torch_gpu/"
       ],
       "branch_suffixes": [
         "15ad"
@@ -640,7 +648,10 @@
       "remit": "Training compute and scaling laws: Daniel's training agent, for scaling-law questions.",
       "charter": "Daniel, 2026-10-18 (via top, COMM-44)",
       "usergroup": "S0CA9EAFKED",
-      "owns": [],
+      "owns": [
+        "benchmarks/rho/",
+        "benchmarks/circuit_properties/"
+      ],
       "branch_suffixes": [
         "4207"
       ],
@@ -651,6 +662,27 @@
         "If a lab hides some of its GPUs from monitoring, how much protection is left?",
         "What would have to improve for the slowdown to go from about 30x to over 1,000x?"
       ]
+    },
+    {
+      "handle": "soundness",
+      "holder": "the soundness coordinator (bc-d2745108-9b89-5c53-8137-de8e75809c4d), a new slice launched from top's charter, split from proofs to own the Full proofs project",
+      "remit": "The one soundness theorem: Verity.Soundness over the compiled verifier, every subprotocol it rests on, and their composition.",
+      "charter": "Daniel, 2026-10-26 10:04 AM PDT (pull the full proofs in; a new slice, via top, split from proofs at its worker cap)",
+      "owns": [
+        "verity/core/protocols/onsite/",
+        "verity/core/protocols/remote/"
+      ],
+      "branch_suffixes": [
+        "9c4d"
+      ],
+      "examples": [
+        "Is there one theorem that says the whole verifier is sound, and what does it still assume?",
+        "Which subprotocols of the soundness theorem are proved, and which are still premises?",
+        "If the verifier accepts a period, what exactly does that guarantee about the work, memory and network claims?",
+        "When will Verity.Soundness be on main with no subprotocol left as a hypothesis?",
+        "Does the theorem cover the code that actually runs, or a model of it?"
+      ],
+      "usergroup": "S0CBTDSL95M"
     }
   ]
 }

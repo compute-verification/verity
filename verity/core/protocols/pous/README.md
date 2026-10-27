@@ -65,7 +65,7 @@ answer after reading its receipt time (`block_digest`, its `sha512/row/v2` diges
 A session's id is the auditor's for one audit, and its `SessionLog` refuses an id it has used. `verdict` checks a
 signed session in the clear and publishes only the verdict. It accepts S1's LMS over SHA-512 at `lms.DEPLOYED`
 (`memory_challenger.LMS`) and nothing else: a test-signed or unsigned record is refused. `verdict_circuit`'s
-`PousVerdict_v1{K, M, LIMIT}` is the verdict over the rounds as one proof unit, its one output bit the public verdict: 1
+`PousVerdict_v1{K, M, LIMIT}` is the verdict over the rounds as one proof block, its one output bit the public verdict: 1
 iff at most `M` of the `K` rounds miss, a round hitting when its record names it, is on time within `LIMIT` and holds
 the expected digest of its block (`PousVerdict.verdictProg_accepts`, `Security/Proofs/Pous/Continuous/Verdict.lean`).
 Its gates as Lean code, `PousCheck.Verdict.prog` (`check/PousCheck/Verdict.lean`), are `verdictProg` gate for gate
@@ -76,7 +76,7 @@ compiled circuit to that code.
 from verity.ml.crypto import lms
 from verity.core.protocols.pous import memory_challenger as mc
 
-signer = mc.LmsSigner(key, lms.LeafState(state_path, lms.public_key(key), lms.DEPLOYED.H))  # key = lms.keygen(lms.DEPLOYED, seed)
+signer = mc.LmsSigner(key, state_path)  # key = lms.keygen(lms.DEPLOYED, seed); lms.LeafState.create(state_path, ...) once
 log = mc.SessionLog(log_path)                     # its own file (mc.SessionLog.create once), never in the key's directory
 coins = mc.CoinTree.draw(challenger_secret, session_id, params.blocks, k)          # session_id: the auditor's, for this audit
 c = mc.MemoryChallenger(coins, signer, log=log, limit_ns=500_000 + rtt, block_bytes=params.block_bytes,
@@ -97,7 +97,11 @@ challenger fills every memory tier of one server with labels it derives itself (
 and the wipe), then reveals `k` indices drawn on live coins once the fill is complete and checks each answer against its
 own label, under a deadline per batch. `Pous.SecurityProofs.StreamedWipe` bounds what an accepted wipe leaves of the
 prior content, with no named assumption, for the sequential reveal, the only one the verdict accepts (batch size 1); at
-2.6 TB and `k = 74,000`, the egress plus 1.075 GB at `2^-40` (`StreamedWipeMeets2600GB`). `PROTOCOL.md` ("The
+2.6 TB and `k = 74,000`, the egress plus 1.075 GB at `2^-40` (`StreamedWipeMeets2600GB`); at `k = 2152`, for every
+fill of a 32 MiB segment or more, the egress plus `⌈M/19⌉` bits at `2^-128` (`StreamedWipeMeetsFamily`, with
+`StreamedWipeMeets96GiB` and `StreamedWipeMeets141GB`); at any `k` with `(1 − 1/r)^k ≤ 2^-129`, the egress plus
+`512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130` bits and the memory outside the fill (`StreamedWipeMeetsReads`), an H200 at
+`k = 5231` within 5 GB with its driver reserve (`StreamedWipeMeets141GB5`). `PROTOCOL.md` ("The
 streamed-label wipe") has the messages, the bound, the measured fill and round trips, and the holes. The verdict is decided by its Lean port, `MemoryChallenger.StreamedWipe`
 (`streamed-wipe-verdict` in `verity/core/devices/memory_challenger/lean/`), through `wipe_verdict.judge` there;
 `streamed_wipe.verdict` is the reference it is difftested against, and runs beside it under `both`.
@@ -114,6 +118,25 @@ signed = c.close(egress_bits=certified)                                        #
 v, sides = wipe_verdict.judge(signed, c.commitment, trusted={signer.public_key})  # wipe_verdict.py, loaded by its path
 print(v.public())                                                              # {"accepted": ..., "egress_mib": ...}
 ~~~
+
+A period's wipe is `wipe_period`: one streamed wipe of the node, the memory challenger a party of its own on
+`period.json`'s `challenger_host` (`wipe_party`, which streams the fill and times the reads over a socket), judged as the
+wipe's component of onsite Verity, `verity/wipe/v0` (`MemoryChallenger.WipeProtocol`, `wipe-protocol` in
+`verity/core/devices/memory_challenger/lean/`). An accepted wipe publishes `M` (every declared tier), the reads `k` the
+memory challenger chose (`wipe_party --reads`, 2152 by default; the prover never names them), `r = ratio(k)` and the
+foreign content it may leave, `StreamedWipeMeetsReads`' `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `2^-128` with
+the egress counted (`R` the declared memory past the fill), and `M` (vacuous) otherwise; an unsigned session is
+undecided. `wipe_period.leg(period_dir, node, out)` is the wipe's leg of the all-protocols period runner.
+On a GPU, `period.json`'s `wipe` puts the fill in device memory (`wipe_store`: the CUDA driver through ctypes, gated
+before the fill, with host memory as its CPU stand-in) and has the challenger stream it natively (`wipe_stream.c`, built
+and gated on the challenger's host by `wipe_stream`); `benchmarks/pous/streamed_wipe/demo.sh` runs it on one H200. Its
+`foreign_bytes` makes the prover the cheat that keeps prior content in place of the fill's first labels (`fM`: one label
+past the published figure, which must reject), its `reads` the reads the leg expects, and its `placement` `simulated` names a challenger on the prover's node the stand-in for
+one on its own host. The leg's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
+no network certifier counts (the placement's `links`: `wipe.links`, and the challenger's as the prover connected to it),
+the node's memory outside the declared tier (`undeclared_tiers`: the device's past the declared tier, which a GPU's leg
+declares whole, the host's DRAM, its disks) and an egress signed `UNCOUNTED`. It also carries the session's window, `t0` (the prover connected) and `t1` (the
+session signed) on the challenger's clock, which a network certifier counts the egress over.
 
 Tests: `uv run pytest verity/core/protocols/pous` (about 8 s). P3's 64 KB-label segment vector runs with `VERITY_POUS_SLOW=1`.
 Regenerate the vectors with `python verity/core/protocols/pous/tests/pous_vectors.py`, and the Lean vectors with

@@ -1,9 +1,11 @@
 """`tools/ratchet_gate.py` on toy repositories: a branch's own commits judged together against its merge base (the merge of its
-merge bases, when it has several), each queue merge on its own, no ratchet growing (by entries, per ratchet, or by an entry's
-count), a new, moved or renamed ratchet, the changes it doesn't judge, the base's lint code run on the change's tree (a
+merge bases, when it has several), each queue merge on its own, no ratchet growing (a counted kind by its total, which a move
+between its keys keeps; the other entries by number, per ratchet, or by an entry's count, P10's sizes among them), a new,
+moved or renamed ratchet, the changes it doesn't judge, the base's lint code run on the change's tree (a
 loosened, deleted or bypassed lint fails, naming what it still finds; a tightened one passes once its findings are fixed), the
-`noqa` count (no change adds more than it removes; a moved one is kept; only comments count; a new copy of a line is named
-where it was added), the exemptions (a revert, a pure move the base's move_check certifies), and its command line."""
+ruff lint rerun with the base's config and pin (a loosened config, lint or pin fails), the `noqa` count (no change adds more
+than it removes; a moved one is kept; only comments count; a new copy of a line is named where it was added), the exemptions
+(a revert, a pure move the base's move_check certifies), and its command line."""
 from __future__ import annotations
 
 import importlib.util
@@ -97,6 +99,13 @@ class Repo:
         return self.git("rev-parse", "HEAD")
 
 
+@pytest.fixture(autouse=True)
+def verdict_cache(tmp_path, monkeypatch) -> Path:
+    """each test its own cache of verdicts, so none reads another's"""
+    monkeypatch.setenv("RATCHET_GATE_CACHE", str(tmp_path / "gate-cache"))
+    return tmp_path / "gate-cache"
+
+
 @pytest.fixture
 def repo(tmp_path, monkeypatch) -> Repo:
     r = Repo(tmp_path / "repo")
@@ -141,14 +150,18 @@ def test_a_branch_is_judged_against_its_merge_base_and_may_not_grow_a_ratchet(re
     assert (c["verdict"], c["before"], c["after"]) == ("passed", 2, 2)
 
 
-def test_no_recorded_count_grows_and_one_ratchet_does_not_pay_for_another(repo):
+def test_no_counted_kind_grows_and_one_ratchet_does_not_pay_for_another(repo):
     repo.commit("p02, and a count", {P02: _allowlist(_entry("verity_vllm/a.py", "X")),
                                      P01: _allowlist(_entry("verity_vllm/a.py", "A", 2), _entry("verity_vllm/b.py", "B"))})
     repo.git("checkout", "-q", "-b", "pr")
-    repo.commit("raises a count, retires another", {P01: _allowlist(_entry("verity_vllm/a.py", "A", 3))})
+    repo.commit("raises a count", {P01: _allowlist(_entry("verity_vllm/a.py", "A", 3), _entry("verity_vllm/b.py", "B"))})
     [c] = G.gate("main", "pr")["changes"]
-    assert (c["verdict"], c["before"], c["after"]) == ("failed", 3, 2)
-    assert c["why"].startswith(f'grows {P01} count 2 -> 3 for {G.key(_entry("verity_vllm/a.py", "A"))}')
+    assert (c["verdict"], c["before"], c["after"]) == ("failed", 3, 3)
+    assert c["why"].startswith(f"grows {P01} k 3 -> 4 in total: no change adds a ratchet exception")
+    assert c["fix"] == [f'{P01}: {G.key(_entry("verity_vllm/a.py", "A"))} 2 -> 3']
+    repo.commit("raises a count, retires another of its kind", {P01: _allowlist(_entry("verity_vllm/a.py", "A", 3))})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["before"], c["after"], c["pooled"]) == ("passed", 3, 2, [f"{P01} k 3 -> 3 in total over 2 moved key(s)"])
     repo.git("checkout", "-q", "-b", "trade", "main")
     repo.commit("retires from p01, adds to p02", {P01: _allowlist(_entry("verity_vllm/b.py", "B")),
                                                  P02: _allowlist(_entry("verity_vllm/a.py", "X"), _entry("verity_vllm/b.py", "Y"))})
@@ -157,6 +170,75 @@ def test_no_recorded_count_grows_and_one_ratchet_does_not_pay_for_another(repo):
     repo.git("checkout", "-q", "-b", "lower", "main")
     repo.commit("lowers a count", {P01: _allowlist(_entry("verity_vllm/a.py", "A"), _entry("verity_vllm/b.py", "B"))})
     assert _verdicts(G.gate("main", "lower"))[0][1] == "passed"
+
+
+TYPED = "integrations/vllm/tests/lint/allowlists/typed_records.json"
+CHECK, COMMIT, RECORDS = "verity_vllm/check", "verity_vllm/commit", "verity_vllm/records"
+
+
+def _or_empty(package: str, n: int) -> dict:
+    """typed_records' count of `.get(k) or []` reads in one package (#4525)"""
+    return {"file": package, "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": n}
+
+
+def _schema(file: str) -> dict:
+    """typed_records' per-site entry: a schema id literal outside records/"""
+    return {"file": file, "kind": "schema-literal", "symbol": "<module>", "detail": "verity/x/v1"}
+
+
+def test_a_move_between_packages_keeps_its_kinds_total_as_4545_moves_reads_from_check_to_commit(repo):
+    """clean-engine's #4545 moves `.get(k) or []` reads from check/ to commit/ to break their cycle: commit's count rises
+    53 -> 87 as check's falls 252 -> 218.  A new package is paid for the same way; a new per-site entry isn't, by any kind."""
+    gates = _schema("verity_vllm/check/gates.py")
+    repo.commit("typed_records", {TYPED: _allowlist(_or_empty(CHECK, 252), _or_empty(COMMIT, 53), gates)})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("#4545", {TYPED: _allowlist(_or_empty(CHECK, 218), _or_empty(COMMIT, 87), gates)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["before"], c["after"], c["fix"]) == ("passed", 5, 5, [])
+    assert c["pooled"] == [f"{TYPED} or-empty 305 -> 305 in total over 2 moved key(s)"]
+    assert c["why"] == f"5 -> 5 ratchet exceptions; pooled: {c['pooled'][0]}"
+    repo.commit("a new package, which check pays for", {
+        TYPED: _allowlist(_or_empty(CHECK, 210), _or_empty(COMMIT, 87), _or_empty(RECORDS, 8), gates)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["before"], c["after"]) == ("passed", 5, 6)
+    new = _schema("verity_vllm/commit/x.py")
+    repo.commit("a new schema literal", {
+        TYPED: _allowlist(_or_empty(CHECK, 200), _or_empty(COMMIT, 87), _or_empty(RECORDS, 8), gates, new)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(f"grows {TYPED} 1 -> 2 entries outside its counted kinds (or-empty)")
+    assert c["fix"] == [f"{TYPED}: new {G.key(new)}"]
+
+
+def test_a_kinds_total_may_not_grow_and_the_failure_names_the_totals_and_the_keys_that_moved(repo):
+    repo.commit("typed_records", {TYPED: _allowlist(_or_empty(CHECK, 252), _or_empty(COMMIT, 53))})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("moves 34 reads and adds one", {TYPED: _allowlist(_or_empty(CHECK, 218), _or_empty(COMMIT, 88))})
+    doc = G.gate("main", "pr")
+    [c] = doc["changes"]
+    assert (c["verdict"], c["pooled"]) == ("failed", [])
+    assert c["why"].startswith(f"grows {TYPED} or-empty 305 -> 306 in total: no change adds a ratchet exception or raises a "
+                               "recorded count, past what the same kind's other counts lose")
+    assert c["fix"] == [f"{TYPED}: {G.key(_or_empty(COMMIT, 0))} 53 -> 88", f"{TYPED}: {G.key(_or_empty(CHECK, 0))} 252 -> 218"]
+    assert doc["failures"][0]["fix"] == c["fix"]
+    repo.git("checkout", "-q", "-b", "fresh", "main")
+    one = {k: v for k, v in _or_empty(RECORDS, 1).items() if k != "count"}
+    repo.commit("a new package of one read, nothing paid", {TYPED: _allowlist(_or_empty(CHECK, 252), _or_empty(COMMIT, 53), one)})
+    [c] = G.gate("main", "fresh")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(f"grows {TYPED} or-empty 305 -> 306 in total")
+    assert c["fix"] == [f"{TYPED}: {G.key(one)} 0 -> 1"]
+
+
+def _size(symbol: str, lines: int) -> dict:
+    return {"file": "verity_vllm/a.py", "kind": "function", "symbol": symbol, "detail": "over the cap", "count": lines}
+
+
+def test_a_size_is_not_a_count_so_p10_does_not_pool(repo):
+    size = "integrations/vllm/tests/lint/allowlists/p10_size.json"
+    repo.commit("sizes", {size: _allowlist(_size("f", 120), _size("g", 140))})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("g shrinks, f grows", {size: _allowlist(_size("f", 130), _size("g", 100))})
+    [c] = G.gate("main", "pr")["changes"]
+    assert c["verdict"] == "failed" and c["why"].startswith(f"grows {size} count 120 -> 130 for {G.key(_size('f', 0))}")
 
 
 def test_main_moving_on_keeps_the_branch_judged_against_its_merge_base(repo):
@@ -231,6 +313,32 @@ def test_each_queue_merge_is_one_pr_against_the_one_below(repo):
     assert doc["changes"][2]["commit"] == m3
 
 
+def test_a_sync_judges_each_change_once_and_a_cached_verdict_is_the_one_judged(repo, verdict_cache, monkeypatch):
+    """A sync gates each PR on its merge onto `next`, every PR below it included (#4183's gate held drive's tick ~20 min a PR on
+    26 Oct): with the cache, N merges cost N judgments, not N(N+1)/2."""
+    base = repo.commit("p02", {P02: _allowlist(_entry("verity_vllm/a.py", "X"))})
+    heads = []
+    for i, files in enumerate([{P01: _allowlist(_entry("verity_vllm/b.py", "B"))},
+                               {P02: _allowlist(_entry("verity_vllm/a.py", "X"), _entry("verity_vllm/c.py", "C"))},
+                               {"integrations/vllm/verity_vllm/d.py": "D = 1\n"}]):
+        repo.git("checkout", "-q", "-b", f"b{i}", base)
+        heads.append(repo.commit(f"pr {i}", files))
+    repo.git("checkout", "-q", "-b", "next", base)
+    tops = [repo.queue(i + 1, f"pr {i}", h) for i, h in enumerate(heads)]
+    monkeypatch.setenv("RATCHET_GATE_CACHE", "")
+    fresh = [G.gate("main", t) for t in tops]
+    monkeypatch.setenv("RATCHET_GATE_CACHE", str(verdict_cache))
+    judged, judge = [], G.judge
+    monkeypatch.setattr(G, "judge", lambda c, b: (judged.append(c.hi), judge(c, b))[1])
+    assert [G.gate("main", t) for t in tops] == fresh
+    assert judged == tops
+    assert [G.gate("main", t) for t in tops] == fresh and judged == tops
+    sorted(verdict_cache.glob("*.json"))[0].write_text("{")
+    assert G.gate("main", tops[-1]) == fresh[-1] and len(judged) == len(tops) + 1
+    monkeypatch.setattr(G, "SELF", "another gate")
+    assert G.gate("main", tops[-1]) == fresh[-1] and len(judged) == 2 * len(tops) + 1
+
+
 def test_a_new_ratchet_is_its_own_baseline_and_a_moved_or_renamed_one_is_still_compared(repo):
     repo.git("checkout", "-q", "-b", "pr")
     moved = "integrations/vllm/tests/lint/moved/allowlists/p01_core.json"
@@ -277,6 +385,45 @@ def test_a_revert_and_a_pure_move_are_exempt(linted):
     linted.git("checkout", "-q", "-b", "next", "main")
     linted.queue(4, 'Revert "x"', "pr")
     assert _verdicts(G.gate("main", "next")) == [("#4", "exempt")]
+
+
+def test_a_worktree_git_wont_remove_decides_no_verdict_and_goes_by_hand(linted, monkeypatch):
+    """26 Oct on drive's pod: `git worktree remove --force` failed ("Directory not empty"), the gate exited 2, and the sync left
+    the PR out of `next`."""
+    linted.commit("fixes a.py and retires its entry", {"integrations/vllm/verity_vllm/a.py": "A = 'ok'\n",
+                                                       P01: _allowlist(_entry("verity_vllm/b.py", "B"))})
+    run = subprocess.run
+    monkeypatch.setattr(G.subprocess, "run", lambda args, *a, **k: subprocess.CompletedProcess(args, 1)
+                        if list(args[:3]) == ["git", "worktree", "remove"] else run(args, *a, **k))
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"]) == ("passed", ["p01_core"])
+    assert len(linted.git("worktree", "list").splitlines()) == 1
+
+
+def test_a_worktree_that_leaves_files_behind_decides_no_verdict(linted, monkeypatch, tmp_path):
+    """ci's review of #4852: when git won't remove the worktree and the removal by hand leaves a file, the scratch directory's own
+    cleanup raised on 3.12, past `main`'s `GitError`, and the gate exited 1 naming no failure."""
+    linted.commit("fixes a.py and retires its entry", {"integrations/vllm/verity_vllm/a.py": "A = 'ok'\n",
+                                                       P01: _allowlist(_entry("verity_vllm/b.py", "B"))})
+    run = subprocess.run
+    monkeypatch.setattr(G.subprocess, "run", lambda args, *a, **k: subprocess.CompletedProcess(args, 1)
+                        if list(args[:3]) == ["git", "worktree", "remove"] else run(args, *a, **k))
+
+    def stubborn(path, ignore_errors=False, onerror=None, *, onexc=None, dir_fd=None):
+        """`shutil.rmtree` on a directory a file it can't delete keeps: its error goes to `onexc`, as shutil's does"""
+        try:
+            raise OSError(39, "Directory not empty", str(path))
+        except OSError as e:
+            if onexc is not None:
+                onexc(os.rmdir, str(path), e)
+            elif not ignore_errors:
+                raise
+
+    monkeypatch.setattr(G.tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setattr(G.shutil, "rmtree", stubborn)
+    monkeypatch.setattr(G.tempfile, "_rmtree", stubborn)
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"]) == ("passed", ["p01_core"])
 
 
 def test_a_retired_entry_passes_once_the_base_lint_agrees_it_is_gone(linted):
@@ -346,6 +493,77 @@ def test_shared_lint_code_runs_every_lint_and_an_error_is_named(linted):
     assert G.violations([{"lint": "p10_size", "test": "test_no_new_x", "error": True,
                           "message": "Traceback:\n  File x\nFileNotFoundError: gone.py\n"}]) == [
         "p10_size: test_no_new_x raised FileNotFoundError: gone.py"]
+
+
+REAL_LINT = SCRIPT.parents[1] / "tests" / "lint"
+RUFF_LINT = "integrations/vllm/tests/lint/test_ruff.py"
+RUFF_JSON = "integrations/vllm/tests/lint/allowlists/ruff.json"
+RUFF_TOML = '[lint]\nselect = ["F"]\n'
+F401 = {"file": "verity_vllm/a.py", "kind": "F401", "symbol": "<module>", "detail": "`os` imported but unused"}
+
+
+def _pyproject(pin: str, *more: str) -> str:
+    return "[dependency-groups]\ndev = [" + ", ".join(f'"{d}"' for d in (*more, pin)) + "]\n"
+
+
+@pytest.fixture
+def ruffed(repo) -> Repo:
+    """``repo`` with the real ruff lint, its config selecting pyflakes, and this Python's ruff pinned: a.py's unused import
+    is its one finding, which ruff.json allows."""
+    version = subprocess.run([sys.executable, "-m", "ruff", "--version"], capture_output=True, text=True, check=True).stdout
+    repo.pin = f"ruff=={version.split()[1]}"
+    repo.commit("ruff", {RUFF_LINT: (REAL_LINT / "test_ruff.py").read_text(),
+                         "integrations/vllm/tests/lint/_ratchet.py": (REAL_LINT / "_ratchet.py").read_text(),
+                         G.RUFF_CONFIG: RUFF_TOML, G.PYPROJECT: _pyproject(repo.pin), RUFF_JSON: _allowlist(F401),
+                         "integrations/vllm/verity_vllm/a.py": "import os\nA = 1\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    return repo
+
+
+@pytest.mark.parametrize("loosen", [
+    {G.RUFF_CONFIG: RUFF_TOML + 'ignore = ["F401"]\n'},
+    {G.RUFF_CONFIG: RUFF_TOML + '[lint.per-file-ignores]\n"verity_vllm/*" = ["F401"]\n'},
+    {G.RUFF_CONFIG: 'extend-exclude = ["verity_vllm"]\n' + RUFF_TOML},
+    {RUFF_LINT: (REAL_LINT / "test_ruff.py").read_text().replace(
+        "for f in json.loads(r.stdout))", "for f in json.loads(r.stdout) if f['code'] != 'F401')")},
+    {G.PYPROJECT: _pyproject("ruff==0.0.1")},
+    {G.RUFF_CONFIG: None, RUFF_LINT: None, RUFF_JSON: None},
+], ids=["ignore", "per-file-ignore", "exclude", "lint-code", "pin", "deleted"])
+def test_loosening_ruff_to_drop_its_findings_fails_naming_what_the_base_ruff_finds(ruffed, loosen):
+    ruffed.commit("loosens ruff and drops its entry", {RUFF_JSON: _allowlist(), **loosen})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["before"], c["after"], c["lints"]) == ("failed", 3, 2, ["ruff"]), c["why"]
+    assert c["fix"] == ["ruff: verity_vllm/a.py:1 [F401] <module>: `os` imported but unused"]
+
+
+def test_tightening_ruff_passes_once_its_findings_are_fixed_and_a_kept_pin_is_not_ruffs_change(ruffed):
+    ruffed.git("checkout", "-q", "main")
+    ruffed.commit("c.py", {"integrations/vllm/verity_vllm/c.py": "f = lambda: 0\n"})
+    ruffed.git("checkout", "-q", "-B", "pr")
+    ruffed.commit("selects E731, fixes c.py, and leaves the formatter off", {
+        G.RUFF_CONFIG: RUFF_TOML.replace('["F"]', '["E731", "F"]') + '[format]\nexclude = ["*"]\n',
+        "integrations/vllm/verity_vllm/c.py": "def f():\n    return 0\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["touched"], c["lints"]) == ("passed", [G.RUFF_CONFIG], ["ruff"]), c["why"]
+    ruffed.git("checkout", "-q", "-b", "deps", "main")
+    ruffed.commit("another dev dependency, the same ruff", {G.PYPROJECT: _pyproject(ruffed.pin, "pytest==9")})
+    assert _verdicts(G.gate("main", "deps"))[0][1] == "untouched"
+    ruffed.commit("a new pin", {G.PYPROJECT: _pyproject("ruff==0.0.1", "pytest==9")})
+    [c] = G.gate("main", "deps")["changes"]
+    assert (c["verdict"], c["touched"], c["lints"]) == ("passed", [G.PYPROJECT], ["ruff"]), c["why"]
+
+
+def test_the_ruff_lint_runs_on_this_python_when_its_ruff_is_the_pin_else_on_one_uv_makes(ruffed, monkeypatch):
+    here = [sys.executable, "-I"]
+    assert G.ruff_pin("main") == ruffed.pin and G.ruff_pin(ruffed.git("rev-parse", "main~1")) is None
+    assert G.python_for(None, None) == here and G.python_for("ruff==0.0.1", ["core"]) == here
+    assert G.python_for(ruffed.pin, ["ruff"]) == here
+    monkeypatch.setattr(G.shutil, "which", lambda name: f"/opt/{name}")
+    assert G.python_for("ruff==0.0.1", None) == ["/opt/uv", "run", "--no-project", "--quiet", "--python", sys.executable,
+                                                 "--with", "ruff==0.0.1", "--", "python", "-I"]
+    monkeypatch.setattr(G.shutil, "which", lambda name: None)
+    with pytest.raises(G.GitError, match="no `uv` to provide it"):
+        G.python_for("ruff==0.0.1", ["ruff"])
 
 
 A_PY = "integrations/vllm/verity_vllm/a.py"

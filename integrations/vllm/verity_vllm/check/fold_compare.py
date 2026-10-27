@@ -48,7 +48,7 @@ from verity_vllm.config import option
 from verity_vllm.program.frontend.rules.family import _field_intervals, expand_leaves, match_program, node_leaf_id
 from verity.ml.circuits.layout import FunctionCall
 from verity.ml.circuits.refs import Refs, runs
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 from verity.ml.circuits.types import Array, Tuple as TupleT, Type
 
 from verity_vllm.observe.events import ViewDesc
@@ -76,9 +76,9 @@ _NP = {"bfloat16": np.uint16, "float16": np.uint16, "float32": np.uint32, "int32
 # --- loaders ----------------------------------------------------------------------------------------------
 
 def load_profile(name: str) -> Profile:
-    """`verity_vllm.engine.profiles.<name>`: its `PROFILE` / `profile` object or `build_profile()` / `make_profile()`."""
+    """`verity_vllm.observe.fold.profiles.<name>`: its `PROFILE` / `profile` object or `build_profile()` / `make_profile()`."""
     import importlib
-    mod = importlib.import_module(f"verity_vllm.engine.profiles.{name}")
+    mod = importlib.import_module(f"verity_vllm.observe.fold.profiles.{name}")
     for attr in ("PROFILE", "profile"):
         p = getattr(mod, attr, None)
         if isinstance(p, Profile):
@@ -87,7 +87,7 @@ def load_profile(name: str) -> Profile:
         f = getattr(mod, attr, None)
         if callable(f):
             return f()
-    raise ImportError(f"verity_vllm.engine.profiles.{name} exposes no Profile (PROFILE / profile / build_profile())")
+    raise ImportError(f"verity_vllm.observe.fold.profiles.{name} exposes no Profile (PROFILE / profile / build_profile())")
 
 
 def fold_log(log_path: str | Path, profile: Profile, *, strict: bool | None = None, with_program: bool = True) -> FoldResult:

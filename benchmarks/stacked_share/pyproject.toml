@@ -1,10 +1,12 @@
-# The stacked-share tool and its tests. Not a package: units.py runs on a Build's Program where vLLM's registry is importable
-# (job.sh, on a GPU node), share.py anywhere; their toys run here as a suite
-# (`uv run tools/verity/check/suites.py benchmarks/stacked_share`).
+# The stacked-share tool and its tests. Not a package: units.py runs on a Build's Program where vLLM is importable
+# (job.sh, on a GPU node), atoms.py where `verity.ml.definitions.registry` imports (frontier_job.sh, on a CPU node), share.py and frontier.py
+# anywhere; their toys run here as a suite (`uv run tools/verity/check/suites.py benchmarks/stacked_share`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
 [tool.verity.tests]
-# units.py reads property/v1 and census/v1 (verity.ml.circuits); share.py imports nothing of verity
+# units.py reads property/v1 and census/v1 (verity.ml.circuits); share.py and frontier.py import nothing of verity
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/kernels/__init__.py",
-          "verity/ml/kernels/tc.py"]
+          "verity/ml/kernels/tc.py",
+          # beta.py reads the Program as units.py does, and its data products by the pass beside property/v1's
+          "benchmarks/property_redteam/products_pass.py"]

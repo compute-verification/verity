@@ -38,7 +38,7 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/bin/vy-*", "/usr/local/lib/vy-monitoring/*", "/etc/systemd/system/vy-*", "/etc/systemd/system/*.d/*vy*",
            "/etc/systemd/system.control/*/*"]
 
-# the auditor host for proofs' challenger service (INF-154, INF-162; us-north1, trusted-nebius-host): it runs the challenger as
+# the auditor host for proofs' challenger service (INF-154, INF-162; us-north1, trusted-host): it runs the challenger as
 # `auditor` from infra's pinned tree through vy-challenger-gate and takes no `research run` (/etc/vy/auditor), and no cluster pool
 # or check slot lists it. Its deploy user is vy-admin: research's keys there reach only the gate, so the relays' drift skips it
 # (`admin`) and infra's lead reads it with `research deploy drift --on vy-challenger-1` from a machine holding vy-admin's key.
@@ -48,7 +48,7 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/sbin/vy-*", "/usr/local/lib/vy-monitoring/*", "/usr/local/lib/vy-lockout/*", "/etc/systemd/system/vy-*",
            "/etc/systemd/system/*.d/*vy*", "/etc/ssh/sshd_config.d/*vy*"]
 
-# the auditor host for the remote bandwidth audit's verifier (INF-179; uk-south2, trusted-nebius-host, as vy-challenger-1): it runs
+# the auditor host for the remote bandwidth audit's verifier (INF-179; uk-south2, trusted-host, as vy-challenger-1): it runs
 # the verifier as `auditor` from infra's pinned tree through vy-verifier-gate and takes no `research run` (/etc/vy/auditor), and no
 # cluster pool or check slot lists it. Its deploy user is vy-admin: research's keys there reach only the gate, so the relays' drift
 # skips it (`admin`), as on vy-challenger-1.
@@ -382,31 +382,31 @@ run = ["systemd:vy-oom-order.timer"]
 owner = "infra"
 
 # The Lean check cache's caps (#3033): lean_audit.py --prune hourly as research, so a node's records trees stay at the 3 last
-# used (cpu-2's / filled with them, INF-151). lean_audit.py loads common.py by its repository path, so both keep that layout.
+# used, or one per `build` Lean slot where lean-slots has more (cpu-2's / filled with them, INF-151). lean_audit.py loads common.py by its repository path, so both keep that layout.
 # After installing, `sudo systemctl enable --now vy-lean-prune.timer`.
 [[file]]
 path = "/usr/local/lib/vy-monitoring/lean-audit/tools/verity/lean/lean_audit.py"
 src = "tools/verity/lean/lean_audit.py"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 owner = "infra"
 
 [[file]]
 path = "/usr/local/lib/vy-monitoring/lean-audit/tools/verity/check/common.py"
 src = "tools/verity/check/common.py"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-lean-prune.service"
 src = "tools/research/src/research/pods/nebius/vy-lean-prune.service"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 run = ["systemd:vy-lean-prune.timer"]
 owner = "infra"
 
 [[file]]
 path = "/etc/systemd/system/vy-lean-prune.timer"
 src = "tools/research/src/research/pods/nebius/vy-lean-prune.timer"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3"]
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
 run = ["systemd:vy-lean-prune.timer"]
 owner = "infra"
 

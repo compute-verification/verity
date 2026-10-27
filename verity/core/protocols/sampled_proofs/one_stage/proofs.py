@@ -19,6 +19,11 @@ indices of the instances its session drew (`unit_draw`), read only off a session
 The verifier reads the whole circuit file once a call, in time and memory linear in it (about six times the file at
 peak), then O(proof) a session: so a protocol verifies one statement a stratum, every drawn unit of it an instance.
 
+The one-stage audit's v2 (`V2`, `SampledProofs.OneStageZk`) runs this verifier inside the audit's own Lean, on the files
+as content-addressed blobs: `check_v2` hands it v1's inputs with the verdicts replaced by the files' digests
+(`evidence_v2`) and the files themselves, and `verdicts_v2` is that run's verdicts alone, which the difftest holds to
+`verify`'s.
+
 Building takes the lock `verifier.BUILD_LOCK` takes: Lake builds the flock package in place for `sampled-proofs-verifier`
 too, and two builds at once would rewrite one module's C under each other.
 """
@@ -33,9 +38,10 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 from .verifier import BUILD_LOCK, CORE
+from .verifier import PACKAGE as V2_PACKAGE
 
 PACKAGE = CORE / "service" / "flock"
 EXE = "flock-verify"
@@ -178,5 +184,93 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
     return out, None
 
 
-__all__ = ["EXE", "PACKAGE", "STATEMENT", "Finding", "LeanError", "Proof", "executable", "file_sha512", "proved_units",
-           "reads_registered", "verify"]
+#: the one-stage audit on the proofs themselves (`SampledProofs.OneStageZk`), which runs `verify`'s verifier on blobs
+V2 = "verity/sampled-proofs/one-stage/v2"
+V2_EXE = "sampled-proofs-one-stage-zk"
+
+
+@functools.cache
+def v2_executable() -> Path:
+    """`lake build sampled-proofs-one-stage-zk`, once per process, under `BUILD_LOCK`; the executable's path."""
+    BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
+    with open(BUILD_LOCK, "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            p = subprocess.run(["lake", "build", V2_EXE], cwd=V2_PACKAGE, capture_output=True, text=True)
+        except FileNotFoundError:
+            raise LeanError(f"lake is not on the PATH, so {V2_EXE} in {V2_PACKAGE} cannot be built") from None
+    if p.returncode != 0:
+        raise LeanError(f"lake build {V2_EXE} in {V2_PACKAGE} failed ({p.returncode}):\n{p.stdout[-2000:]}{p.stderr[-2000:]}")
+    return V2_PACKAGE / ".lake" / "build" / "bin" / V2_EXE
+
+
+def _canonical(x: Any) -> bytes:
+    """`x` in the canonical JSON `Core.canonicalJson` reads, for the integers, strings, lists and objects of ASCII keys
+    these inputs hold."""
+    return json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode()
+
+
+def evidence_v2(proof: Proof, names: Sequence[str] | None = None) -> tuple[dict, list[Path]]:
+    """The v2 evidence's ``proofs`` for `proof`'s files, and the blobs that hold them: the public file's SHA-512 and, per
+    session (named `names`, the v1 evidence's ``sessions``; by default its directory's name), its ``session.json``'s and
+    each rep file's (``*.bin``). The blobs are the circuit file, which the parameters name by the auditor's digest, the
+    public file and each session's files."""
+    names = [s.name for s in proof.sessions] if names is None else list(names)
+    if len(names) != len(proof.sessions):
+        raise ValueError(f"{len(names)} names for {len(proof.sessions)} sessions")
+    sessions, blobs = [], [proof.circuit, proof.public]
+    for name, s in zip(names, proof.sessions):
+        reps = sorted(s.glob("*.bin"))
+        sessions.append({"name": name, "record": file_sha512(s / "session.json"),
+                         "reps": {r.name: file_sha512(r) for r in reps}})
+        blobs += [s / "session.json", *reps]
+    return {"public": file_sha512(proof.public), "sessions": sessions}, blobs
+
+
+def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any], partition: Mapping[str, Any],
+                registered: Mapping[str, Any] | None = None) -> tuple[list[Finding] | None, str | None]:
+    """`verify`, by the v2 audit's own run of the verifier on `proof`'s files as blobs
+    (`sampled-proofs-one-stage-zk verdicts`): the findings in session order (``session`` the directory's name) and None,
+    or None and Lean's refusal. `program` is the descriptor as JSON."""
+    pr, blobs = evidence_v2(proof)
+    own = {"circuit": circuit_sha512, "partition": dict(partition), "program": dict(program),
+           "registered": None if registered is None else dict(registered)}
+    with tempfile.TemporaryDirectory(prefix="verity-proofs-v2-") as d:
+        paths = (Path(d, "own.json"), Path(d, "proofs.json"))
+        paths[0].write_bytes(_canonical(own))
+        paths[1].write_bytes(_canonical(pr))
+        p = subprocess.run([str(v2_executable()), "verdicts", *map(str, paths), *map(str, blobs)], capture_output=True,
+                           text=True)
+    try:
+        got = json.loads(p.stdout.strip().splitlines()[-1])
+    except (IndexError, ValueError):
+        raise LeanError(f"{V2_EXE} verdicts answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
+    if "refused" in got:
+        return None, got["refused"]
+    return [Finding(v["session"], v["accepted"] is True, v["why"], v.get("program_sha512"), v.get("registered") or {},
+                    tuple(v["units"])) for v in got["verdicts"]], None
+
+
+def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any], proof: Proof, *,
+             circuit_sha512: str, registered: Mapping[str, Any] | None) -> dict:
+    """The one-stage audit on `proof` itself (`sampled-proofs-one-stage-zk check`): v1's `params` with ``proofs``, the
+    auditor's circuit digest and the verifier's registered file, the registration `record`, and v1's `evidence` with
+    its ``verdicts`` replaced by `proof`'s ``proofs`` (`evidence_v2`, under the evidence's ``sessions``); the outcome
+    line."""
+    pr, blobs = evidence_v2(proof, evidence["sessions"])
+    p2 = {**params, "proofs": {"circuit": circuit_sha512, "registered": registered}}
+    e2 = {k: v for k, v in evidence.items() if k != "verdicts"} | {"proofs": pr}
+    with tempfile.TemporaryDirectory(prefix="verity-proofs-v2-") as d:
+        paths = [Path(d, n) for n in ("params.json", "record.json", "evidence.json")]
+        for path, x in zip(paths, (p2, record, e2)):
+            path.write_bytes(_canonical(x))
+        p = subprocess.run([str(v2_executable()), "check", *map(str, paths), *map(str, blobs)], capture_output=True,
+                           text=True)
+    try:
+        return json.loads(p.stdout.strip().splitlines()[-1])
+    except (IndexError, ValueError):
+        raise LeanError(f"{V2_EXE} check answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
+
+
+__all__ = ["EXE", "PACKAGE", "STATEMENT", "V2", "V2_EXE", "Finding", "LeanError", "Proof", "check_v2", "evidence_v2",
+           "executable", "file_sha512", "proved_units", "reads_registered", "v2_executable", "verdicts_v2", "verify"]

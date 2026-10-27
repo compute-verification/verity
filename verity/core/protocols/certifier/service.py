@@ -12,13 +12,30 @@ a head leaf in the head's two or three SHA-512 compressions instead of the certi
 and heads are witness: the challenger sees the root, never a certificate, a salt or a head.
 
 **Selection** is `All`: every link-window is checked, so an accepted outcome is the exhaustive fact. A registration is
-one link-window, one proof unit. Its `window` provenance is `{"kind": "served", "window": w}`, and the challenger holds w
+one link-window, one proof block. Its `window` provenance is `{"kind": "served", "window": w}`, and the challenger holds w
 to the registration's order in the stream (`LinkWindows.register`), so the receipt's order is the link-window. The
 network verdict of record is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share
 credit: it accepts only when every window of the egress profile (a served or advised link's profile) is registered in
 order and its outcome of record accepted, so a rejected or late window, one with no outcome, and a gap in the
 registrations each reject the link. A
-run's is the AND over its links'. The datacenter model (`benchmarks/datacenter`, a Python model) builds no
+run's is the AND over its links'.
+
+**The period draw** (`LinkWindows.period_draw`) samples the link-windows instead. The prover first commits the
+period: every window's salted root (`root`) and, on an advised link, the advice's digest (`advised.digest`), which the
+challenger records before it reads a coin (a coin source with a `commit` is first committed to the period's digest, as
+a remote challenger's is). It then draws `subset:K` of the n windows, and only the drawn windows are registered, in
+window order, each held to its committed root (`register(drawn=…)`), selected and proved. `network_verdict(drawn=…)`
+accepts when exactly the drawn windows are registered, in order, each under its committed root, with an accepted
+outcome of record (on an advised link naming the committed advice), and it states what the draw established: except
+with probability δ, at most `wrong_units["bound"]` of the n committed windows are wrong (the uniform K-subset's exact
+bound, one-stage's `wrong_units` over windows), so ε = bound / n at δ. The challenger's draw is Python's
+(`service.select_draw`), which records the coin bytes it read (`read`); the draw of record is the Lean verifier of
+record's on those bytes (`lean_draw`: C-Flock's `flock-verify draw --population n --k K --stream-file`, the Lean
+`draw` the one-stage drivers run, `Flock.Draw.drawOn`), which the network verdict runs itself, as a registration's own
+draw is the Lean's `Select.select` on the bytes it read. The verdict accepts only when the windows registered and
+proved are exactly that draw's, and otherwise refuses by name (`PERIOD_DRAWN`), whatever units the draw object it is
+handed lists. Selection `All` (K None) draws every window and reads no coin, and K = n leaves nothing to draw.
+The datacenter model (`benchmarks/datacenter`, a Python model) builds no
 `LinkWindows` outcomes, so its account doesn't read it, though `Account.sound` is the same AND over its own port
 records.
 
@@ -145,8 +162,20 @@ without a clock source, every advised link is refused too. It refuses a window w
 network verdict refuses a window that names another advice than the first accepted window's, so every window's counts
 are one advice's. The in-the-clear check runs `advised_check` too.
 
-A link whose egress end has no occupancy profile and is neither served nor advised has no verdict (`ValueError`,
-failing closed): nothing would hold its egress timing.
+**A warden link** (`LinkWindows(warden=WardenProfile(…))`) is the active warden's (`warden.Warden`) own two records
+of each link-window: its responses on egress and its requests on ingress, on its one grid, certified under its
+schedule's parameters digest (`warden.WardenParams.digest`, which its deployment publishes) rather than a certifier's
+(`certificate.parameters_digest`). The warden is the auditor's device, and its code puts every bucket's cells, r for
+each live connection and the rest padding (`warden.audit` reads them in the clear, the scan's units in zero
+knowledge), so its counts are its schedule's: no occupancy profile holds them, the period's schedule terms charge them
+(log2 #S_s and Σ_c log2(cap_c + 1)), and the warden runs no shaper clock, so a window declares no sync and the
+charge is 0. Its unit is the plain one, `NetworkLinkWindow` v5{EGRESS, INGRESS}, each head check holding its end's
+head to the warden's grid and digest and to the warden's signed digest. Its public items are `PUBLIC_WARDEN`. The
+in-the-clear check is the opening's root and the head checks: the records' cells are the scan's, and the certifier's
+host audit doesn't read a warden's records.
+
+A link whose egress end has no occupancy profile and is neither served, advised nor a warden's has no verdict
+(`ValueError`, failing closed): nothing would hold its egress timing.
 
 `LinkWindows.stand_in` is the in-the-clear verdict, the Program's egress grid compared as it was before the head check,
 and each head's counts the profile's (`declares`). It reads the frames, so it is the tests' oracle, never a verdict:
@@ -157,6 +186,26 @@ move the Program's counts off the profile, which N2 holds the counts to instead.
 When the in-the-clear check's audit is the Lean check's (`lean_audit.Audit`), `audit.Audit` runs beside it as the
 reference: a link-window where the two differ rejects, and the verdict says `"by": "lean"` and carries the reference's
 accept bit (`reference`), never a violation's kind.
+
+**The verdict of record is the Lean's** on plain, served and warden links: `NetworkCheck.LinkWindow.verdict`
+(`verity/core/protocols/network/lean`, `network-records verdicts`' ``link-window``, `lean_verdict`), switched by the one
+line `OF_RECORD` under the 8 Oct ruling. `verify` runs it and this module's `python_verdict` on every proof, records
+whose verdict it is (`by`) and the other's accept bit (`reference`), and rejects a link-window where they differ or the
+Lean refuses the case. On a warden link the Lean reads the warden's parameters digest (`lean_case`'s ``warden``) for
+both ends' grids and no sync, as `grid` and `python_verdict` do. The gap list, what `python_verdict` reads that the
+Lean takes as an input rather than checks:
+- an advised link's window view (`advised.view`, under the tie source's IoTieRequest verdict and the clock source's
+  syncs), which is why an advised link's verdict of record stays this module's;
+- on a warden link, the warden's parameters digest (`WardenProfile.digest`, which the warden's deployment publishes
+  as its schedule's, `warden.WardenParams.digest`), which neither derives;
+- what both take from the proof service and the lowering: the findings of the verifier's own run of C-Flock's Lean
+  verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the draw, and the registered
+  Program's and partition's digests and the gate ids (`P.partition`, `head_check.gate`), which the Lean holds the
+  findings and pins to but doesn't derive.
+The Lean reads an `LmsKey` only, and refuses (so `verify` rejects) any other key. `tie_service.IngressTie.verify`, the
+ingress tie's verifier, is not ported and stays Python. Every recorded proving run of N2 replays through both to the
+verdict it recorded (`benchmarks/network_traces/n2_lean_replay.py`), and the properties of the Lean's verdict are
+`Security/Properties/NetworkCertifier/LinkWindow.lean`.
 
 What that establishes, and what it doesn't: the outcome is accept exactly when the Lean verifier accepts a proof of the
 registered unit whose public row is the verifier's own and whose output word is 0b11, the certificates verify and the
@@ -175,6 +224,8 @@ from __future__ import annotations
 import hashlib
 import json
 import struct
+import subprocess
+import tempfile
 from dataclasses import dataclass, field
 from functools import cached_property, lru_cache
 from pathlib import Path
@@ -191,22 +242,33 @@ from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
-from verity.core.protocols.certifier import advised as AD, audit as host_audit, head_check as HC, served as SV
+from verity.core.protocols.certifier import advised as AD, audit as host_audit, head_check as HC, lean_audit as LA, \
+    served as SV
 from verity.core.protocols.certifier.lean_audit import Audit
-from verity.core.protocols.certifier.certificate import Certificate, CertifiedClock, CertifiedRecord, PublicKey, \
-    parameters_digest
+from verity.core.protocols.certifier.certificate import Certificate, CertifiedClock, CertifiedRecord, Direction, LmsKey, \
+    PublicKey, parameters_digest
 from verity.core.protocols.certifier.grid import GridParams
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet
 from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, proofs as PF, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import audit as OA, partition as P, proofs as PF, registration as R
 from verity.core.protocols.sampled_proofs.one_stage.proofs import Finding
 from verity.core.protocols.sampled_proofs.one_stage.verdict import Verdict
+
+#: Whose verdict on a link-window's proof is the record's, by kind of link (`LinkWindows.kind`): the Lean's
+#: (``"lean"``, `NetworkCheck.LinkWindow`) or this module's (``"python"``). Both run on every proof either way. Setting a
+#: kind to ``"python"`` is the one line that switches it back. An advised link stays Python's: the Lean takes its
+#: window view (`advised.view`) as an input.
+OF_RECORD = {"plain": "lean", "served": "lean", "advised": "python", "warden": "lean"}
 
 SPEC = "verity-network-certifier/service-spec/v0"
 SESSION = "verity-network-certifier/session/v0"
 STATEMENT = "verity-network-certifier/statement/v0"
 VERDICT = "verity-network-certifier/verdict/v0"
 NETWORK_VERDICT = "verity-network-certifier/network-verdict/v0"
+PERIOD_DRAW = "verity-network-certifier/period-draw/v0"
+#: the sampled network verdict's refusal by name: the windows registered and proved are not the period's draw of record
+#: (`lean_draw` on the coins the period draw read), or that draw can't be made
+PERIOD_DRAWN = "period-draw"
 VALUE = "certificates"
 SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
 VERIFIER = "network-audit"
@@ -316,19 +378,19 @@ def _units(check, served, advised=AD.gate) -> tuple[CompositeDefinition, Composi
 
     return (CompositeDefinition(
         "NetworkLinkWindow", 5, ("EGRESS", "INGRESS"), lambda S_: (_SIGNED + _heads(S_), _OUT), body,
-        doc="the proof unit of network accounting: one link-window, both directions, over the two certificates' signed "
+        doc="the proof block of network accounting: one link-window, both directions, over the two certificates' signed "
             "digests; EGRESS and INGRESS are each end's head check's (L, T, COUNTS). Its two output bits are the "
             "verdict, both head checks, and the deadline, both heads' deadline bits", register=False),
         CompositeDefinition(
         "NetworkServedLinkWindow", 4, ("EGRESS", "INGRESS", "SERVED"),
         lambda S_: (_SIGNED + _heads(S_) + (_SYNC,), _OUT), body_served,
-        doc="the proof unit of network accounting on a served link: `NetworkLinkWindow`'s checks, and the egress "
+        doc="the proof block of network accounting on a served link: `NetworkLinkWindow`'s checks, and the egress "
             "head's counts derived from the ingress head's under the declared sync (`served.NetworkServedCounts`, "
             "SERVED its (T, FOUT, FIN, R, RIN)), in its verdict bit", register=False),
         CompositeDefinition(
         "NetworkAdvisedLinkWindow", 2, ("EGRESS", "INGRESS", "ADVISED"),
         lambda S_: (_SIGNED + _heads(S_) + _advice(S_), _OUT), body_advised,
-        doc="the proof unit of network accounting on an advised link: `NetworkLinkWindow`'s checks, and the egress "
+        doc="the proof block of network accounting on an advised link: `NetworkLinkWindow`'s checks, and the egress "
             "head's counts held to the advice's releases, and the advice to the ingress head's counts "
             "(`advised.NetworkAdvisedCounts`, ADVISED its (T, RIN, OWN)), in its verdict bit", register=False))
 
@@ -340,7 +402,7 @@ _PROOF_UNIT, _PROOF_SERVED_UNIT, _PROOF_ADVISED_UNIT = _units(_head_expanded, _s
 
 def unit(egress: tuple[int, int, int], ingress: tuple[int, int, int], served: tuple[int, ...] | None = None,
          advised: tuple[int, int, int] | None = None, *, proof: bool = False):
-    """N2's proof unit for heads of the size classes `egress` and `ingress`, each (L, T, COUNTS) (`head_check.unit`),
+    """N2's proof block for heads of the size classes `egress` and `ingress`, each (L, T, COUNTS) (`head_check.unit`),
     and on a served link the served counts' size class `served`, (T, FOUT, FIN, R, RIN, OWN) (`served.unit`), or on an
     advised link the advised counts' `advised`, (T, RIN, OWN) (`advised.unit`). With `proof`, the unit a proof's
     circuit lowers: the same id and signature, so the template the registered query names, with each gate the
@@ -394,6 +456,12 @@ PUBLIC_ADVISED = tuple(p for p in PUBLIC_SERVED if p.item not in ("served", "syn
              "row; each window reports the SHA-512 of the advice's encoding and those frames (`advised.digest`), "
              "which the network verdict holds to one advice"),
 )
+#: a warden link's: no occupancy profile and no sync, the warden's schedule instead, which puts its counts
+PUBLIC_WARDEN = tuple(p for p in PUBLIC if p.item not in ("charge", "occupancy")) + (
+    S.Public("warden", "structure", "the active warden's schedule (`warden.WardenParams`, the digest both ends' heads "
+             "bind) and the link's windows, fixed before the run: the device's code puts every bucket's cells (r for "
+             "each live connection), so its counts are the schedule's, which the period's schedule terms charge"),
+)
 #: an advised link's: and the advice its window read (`advised.digest`), which the verifier reports beside the unit's
 #: two output bits
 OUTPUTS_ADVISED = OUTPUTS + ("advice",)
@@ -419,13 +487,47 @@ def _sha512(obj: Any) -> str:
     return hashlib.sha512(canonical_json(obj)).hexdigest()
 
 
+def _root_of(record: Any) -> Any:
+    """A link-window record's one salted root, None when it holds no such root."""
+    roots = record.get("roots") if isinstance(record, Mapping) else None
+    if isinstance(roots, list) and len(roots) == 1 and isinstance(roots[0], Mapping):
+        return roots[0].get("root")
+    return None
+
+
+def lean_draw(k: int, n: int, read: bytes) -> dict[str, Any]:
+    """The period's draw of record: C-Flock's Lean verifier of record (`proofs.executable`, which verifies the
+    windows' proofs) drawing `subset:k` of n on `read`, the coin bytes the period draw read, in order
+    (``flock-verify draw --population n --k k --stream-file``, `Flock.Draw.drawOn`, which `select_draw`'s sampler is
+    byte for byte: `test_lean_verifier.test_unit_draw_samplers_are_the_exact_reduction` and `test_coins`); its ``DRAW``
+    object, or ``{"refused": why}`` where the bytes run out or the Lean refuses or can't run."""
+    try:
+        with tempfile.TemporaryDirectory(prefix="verity-period-draw-") as d:
+            (Path(d) / "coins.bin").write_bytes(read)
+            p = subprocess.run([str(PF.executable()), "draw", "--population", str(n), "--k", str(k), "--stream-file",
+                                str(Path(d) / "coins.bin")], capture_output=True, text=True)
+    except (OSError, PF.LeanError) as e:
+        return {"refused": f"flock-verify draw can't run: {e}"}
+    lines = [x[len("DRAW "):] for x in p.stdout.splitlines() if x.startswith("DRAW ")]
+    if p.returncode != 0 or len(lines) != 1:
+        return {"refused": f"flock-verify draw: exit {p.returncode}: {(p.stderr or p.stdout)[-300:]}"}
+    try:
+        return json.loads(lines[0])
+    except ValueError:
+        return {"refused": f"flock-verify draw answered a DRAW line that is not JSON: {lines[0][:300]}"}
+
+
 _NO_PROFILE = ("N2 compares no egress grid, so a link whose egress end has no occupancy profile has no verdict: "
                "nothing would hold its egress counts (declare LinkWindows.occupancy, LinkWindows.served on a served "
-               "link, or LinkWindows.advised on an advised one)")
+               "link, LinkWindows.advised on an advised one, or LinkWindows.warden on a warden's)")
 
 
 def _accepts(egress: Sequence[Any], ingress: Sequence[Any], window: int) -> bool:
     return len(egress) > window and egress[window].accepted and ingress[window].accepted
+
+
+def _profile(rows: Sequence[Sequence[int]] | None) -> list[list[int]] | None:
+    return None if rows is None else [list(r) for r in rows]
 
 
 @dataclass(frozen=True)
@@ -520,12 +622,29 @@ class Opening:
 
 
 @dataclass(frozen=True)
+class WardenProfile:
+    """A warden link's profile (`LinkWindows.warden`, the module docstring's "A warden link"): the link's windows and the
+    warden's parameters digest (`warden.WardenParams.digest`), which both ends' heads bind, both fixed before the run."""
+
+    windows: int
+    digest: bytes
+
+    def __post_init__(self) -> None:
+        if type(self.windows) is not int or self.windows < 1:
+            raise ValueError(f"a warden link has one or more windows, not {self.windows!r}")
+        if type(self.digest) is not bytes or len(self.digest) != HC.DIGEST_BYTES:
+            raise ValueError(f"a warden's parameters digest is {HC.DIGEST_BYTES} bytes")
+
+
+@dataclass(frozen=True)
 class LinkWindows:
     """Network accounting's protocol on one link, every field public: the link, its egress and ingress grids, Σ_sync, the
     network certifier's public key, the run that names the served domains, the certifier session's id (the 32 bytes the
     challenger drew for the certifier's session, which every certificate signs), the proof deadline in seconds, and the
     occupancy profile: for each end (egress, ingress), each window's counts, or None for an end without one. A served
-    link (`served`, FIXLEN) or an advised one (`advised`, arbitrary traffic under the advice) has no egress profile.
+    link (`served`, FIXLEN) or an advised one (`advised`, arbitrary traffic under the advice) has no egress profile, nor
+    has a warden's (`warden`: the active warden's records, its key and session the certifier's here, its counts its
+    schedule's, and no sync, so `sync_set` is unread).
     `ties` is no public field but the verifier's own source of an advised link's tie (`advised.TieSource`), the only
     place `_view` takes IoTieRequest's verdict from (`tie_service.Ties`, on the ingress tie's stream of record): None
     refuses every advised link. `certified_clocks` is no public field either: the certifier's salted clock
@@ -547,6 +666,7 @@ class LinkWindows:
     occupancy: tuple[Sequence[Sequence[int]] | None, Sequence[Sequence[int]] | None] = (None, None)
     served: SV.ServedProfile | None = None
     advised: AD.AdvisedProfile | None = None
+    warden: WardenProfile | None = None
     ties: AD.TieSource | None = field(default=None, compare=False, repr=False)
     clocks: AD.ClockSource | None = field(default=None, compare=False, repr=False)
     certified_clocks: Sequence[CertifiedClock] | None = field(default=None, compare=False, repr=False)
@@ -559,6 +679,12 @@ class LinkWindows:
                              "(clocks), not both")
         if self.served is not None and self.advised is not None:
             raise ValueError("a link is served (FIXLEN) or advised, not both")
+        if self.warden is not None:
+            if self.served is not None or self.advised is not None or tuple(self.occupancy) != (None, None):
+                raise ValueError("a warden link's counts are its schedule's: it has no occupancy, served or advised "
+                                 "profile")
+            if self.ingress_params != self.params:
+                raise ValueError("a warden link's two ends are on the warden's one grid")
         if self.advised is not None:
             g, i = self.params, self.ingress_params
             if self.occupancy[0] is not None:
@@ -582,6 +708,13 @@ class LinkWindows:
     def ingress_params(self) -> GridParams:
         return self.ingress or self.params
 
+    @property
+    def kind(self) -> str:
+        """``"served"``, ``"advised"``, ``"warden"``, or ``"plain"`` (none of them: its egress counts are its occupancy
+        profile's)."""
+        return ("served" if self.served is not None else "advised" if self.advised is not None
+                else "warden" if self.warden is not None else "plain")
+
     @cached_property
     def clock_source(self) -> AD.ClockSource | None:
         """The syncs `_view` holds an advised window's declared sync to: the certifier's salted clock certificates,
@@ -599,8 +732,8 @@ class LinkWindows:
 
     @property
     def charge(self) -> float:
-        """log2 #Σ_sync: 7 bits per window at 16 × 8."""
-        return self.sync_set.bits
+        """log2 #Σ_sync: 7 bits per window at 16 × 8; 0 on a warden link, which declares no sync."""
+        return 0.0 if self.warden is not None else self.sync_set.bits
 
     def head_key(self, direction: int) -> tuple[int, int, int]:
         """The end's head check's size class (L, T, COUNTS): the link name's UTF-8 length, the end's buckets, and 1 when
@@ -610,7 +743,9 @@ class LinkWindows:
 
     def grid(self, direction: int) -> bytes:
         """The end's declared grid as its head encodes it (`head_check.grid_bytes`): the egress grid's parameters digest
-        binds Σ_sync, the ingress grid's none."""
+        binds Σ_sync, the ingress grid's none; on a warden link both are the warden's (`WardenProfile.digest`)."""
+        if self.warden is not None:
+            return HC.grid_bytes((self.params, self.ingress_params)[direction], self.warden.digest)
         if direction == 0:
             return HC.grid_bytes(self.params, parameters_digest(self.params, self.sync_set))
         return HC.grid_bytes(self.ingress_params, parameters_digest(self.ingress_params))
@@ -630,16 +765,15 @@ class LinkWindows:
 
     @property
     def windows(self) -> int:
-        """The link's windows, which `network_verdict` takes by default: the served or advised profile's, else the
-        egress occupancy profile's."""
-        if self.occupancy[0] is None and self.served is None and self.advised is None:
-            raise ValueError(_NO_PROFILE)
-        derived = self.served or self.advised
+        """The link's windows, which `network_verdict` takes by default: the served, advised or warden profile's, else
+        the egress occupancy profile's."""
+        self._profiled()
+        derived = self.served or self.advised or self.warden
         return derived.windows if derived is not None else len(self.occupancy[0])
 
     @cached_property
     def unit(self):
-        """N2's proof unit for this link (`unit`): its heads' size classes are the link's, and on a served link its
+        """N2's proof block for this link (`unit`): its heads' size classes are the link's, and on a served link its
         served counts' (`served_key`), on an advised link its advised counts' (`advised_key`)."""
         return unit(self.head_key(0), self.head_key(1), self.served_key(), self.advised_key())
 
@@ -672,17 +806,19 @@ class LinkWindows:
         context = canonical_json({
             "format": SPEC, "link": self.link, "run": self.run, "key": self.key.key_id.hex(),
             "certifier_session": self.certifier_session.hex(), "charge": self.charge,
-            "parameters": {"egress": parameters_digest(self.params, self.sync_set).hex(),
-                           "ingress": parameters_digest(self.ingress_params).hex()},
+            "parameters": {"egress": self.grid(0)[-HC.DIGEST_BYTES:].hex(),
+                           "ingress": self.grid(1)[-HC.DIGEST_BYTES:].hex()},
             "occupancy": [None if p is None else _sha512([list(row) for row in p]) for p in self.occupancy],
             **({} if self.served is None else {"served": [self.served.response_frames, self.served.request_frames,
                                                           self.served.windows, self.served.own]}),
             **({} if self.advised is None else {"advised": [self.advised.windows, self.advised.own,
-                                                            _sha512(list(self.advised.request_frames))]})})
+                                                            _sha512(list(self.advised.request_frames))]}),
+            **({} if self.warden is None else {"warden": [self.warden.windows, self.warden.digest.hex()]})})
         check = S.Check(P.program_sha512(Program(self.unit)), self.query,
                         public_outputs=OUTPUTS if self.advised is None else OUTPUTS_ADVISED,
                         proof_deadline=self.proof_deadline)
-        public = PUBLIC_SERVED if self.served is not None else PUBLIC_ADVISED if self.advised is not None else PUBLIC
+        public = (PUBLIC_SERVED if self.served is not None else PUBLIC_ADVISED if self.advised is not None
+                  else PUBLIC_WARDEN if self.warden is not None else PUBLIC)
         return S.Spec((S.Value(VALUE, SCHEMA, "serve"),), S.All(), check, public, context)
 
     def stream(self, **kwargs: Any) -> S.Stream:
@@ -742,13 +878,25 @@ class LinkWindows:
 
     # the challenger
 
-    def register(self, stream: S.Stream, record: Mapping[str, Any]) -> S.Registration:
+    def register(self, stream: S.Stream, record: Mapping[str, Any],
+                 drawn: Mapping[str, Any] | None = None) -> S.Registration:
         """`stream.register` with the link-window's own ports, after holding the record's `window` provenance to exactly
-        `{"kind": "served", "window": order}`: the service declares the provenance one public item and doesn't read it,
-        and anything else there would reach the auditor."""
-        window = len(stream.records)
+        `{"kind": "served", "window": w}`: the service declares the provenance one public item and doesn't read it,
+        and anything else there would reach the auditor. w is the registration's order in the stream, or with `drawn`,
+        a period draw (`period_draw`) over this stream, the order-th drawn window, whose record's root must be the one
+        the period committed. Raises `Refused` (`window`, `period`) otherwise."""
+        order = len(stream.log)
+        if drawn is None:
+            window = order
+        else:
+            units = self._drawn(stream, len(drawn.get("roots") or ()) if isinstance(drawn, Mapping) else 0, drawn)
+            if order >= len(units):
+                raise S.Refused(Verdict(False, ("period",), {"period": {"drawn": units, "registered": order}}))
+            window = units[order]
         if not isinstance(record, Mapping) or record.get("window") != self.provenance(window):
             raise S.Refused(Verdict(False, ("window",), {"window": {"expected": self.provenance(window)}}))
+        if drawn is not None and _root_of(record) != drawn["roots"][window]:
+            raise S.Refused(Verdict(False, ("period",), {"period": {"window": window, "root": "not the committed one"}}))
         return stream.register(record, self.ports(window))
 
     # the prover's side: the unit's arguments and outputs on the opening
@@ -937,7 +1085,7 @@ class LinkWindows:
             and c.verify(self.key, self.certifier_session) for d, c in enumerate(certificates))
 
     def _profiled(self) -> None:
-        if self.occupancy[0] is None and self.served is None and self.advised is None:
+        if self.occupancy[0] is None and self.served is None and self.advised is None and self.warden is None:
             raise ValueError(_NO_PROFILE)
 
     def _advice_output(self, advice: Any) -> dict[str, str | None]:
@@ -945,6 +1093,107 @@ class LinkWindows:
         if self.advised is None:
             return {}
         return {"advice": AD.digest(advice) if type(advice) is AD.LinkAdvice else None}
+
+    @staticmethod
+    def _decided(draw: S.Draw, sessions: Sequence[str], accepted: bool, public: dict[str, Any]) -> dict[str, Any]:
+        """A verdict's accept bit and public outputs, with the digest binding them to the registration and sessions."""
+        digest = _sha512({"format": VERDICT, "registration": draw.registration.digest, "sessions": list(sessions),
+                          "accepted": accepted, "public": public})
+        return {"accepted": accepted, "digest": digest, "public": public}
+
+    def python_verdict(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
+                       delivered: Delivered, findings: Sequence[Finding] | None, sessions: Sequence[str],
+                       advice: Any = None) -> dict[str, Any]:
+        """This module's verdict on the link-window (`verify`'s conditions), on the findings of the verifier's own run
+        of C-Flock's Lean verifier (None where `proofs.verify` refused): its accept bit, digest and public outputs."""
+        reg = draw.registration.record
+        w, root = reg["window"]["window"], bytes.fromhex(reg["roots"][0]["root"])
+        proved = findings is not None and self.proved(findings) \
+            and all(list(f.units) == list(draw.units) for f in findings)
+        args = self.public_arguments(w, root, certificates, syncs, advice)
+        opened = _opened(delivered, draw.units[0], self.row(args, "pub") if args is not None else None,
+                         self.bits("pub")) if proved else None
+        word = opened if opened is not None else 0
+        accepted = (proved and opened is not None and word == 0b11 and self.certified(w, certificates)
+                    and (self.warden is not None or (w < len(syncs) and syncs[w] in self.sync_set)))
+        return self._decided(draw, sessions, accepted,
+                             {"verdict": int(accepted), "deadline": word >> 1 & 1} | self._advice_output(advice))
+
+    def lean_case(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
+                  delivered: Delivered, findings: Sequence[Finding] | None, sessions: Sequence[str],
+                  advice: Any = None) -> dict[str, Any] | None:
+        """`verify`'s inputs as `NetworkCheck.LinkWindow.caseOf` reads them: the verifier's own structure (the Program's
+        and partition's digests, the gate ids), the registration, the draw, the findings of its own run of C-Flock's
+        Lean verifier (None where `proofs.verify` refused), the delivered public file, salts, output word and session
+        SHA-512s, the certificates (each null unless a `Certificate` of well-typed fields) and each one's signed digest
+        as `public_arguments` reads it, the declared syncs, Σ_sync,
+        the key and session, each end's grid and profile, on an advised link the window's view (`advised.view`) and
+        the advice output, and on a warden link the warden's parameters digest. None for a key the Lean doesn't read
+        (not an `LmsKey`)."""
+        if not isinstance(self.key, LmsKey):
+            return None
+        reg, p = draw.registration.record, self.key.params
+        w = reg["window"]["window"]
+
+        def cert(c: Any) -> dict[str, Any] | None:
+            if not (isinstance(c, Certificate) and all(type(x) is bytes for x in (c.key_id, c.digest, c.signature))
+                    and type(c.link) is str and isinstance(c.direction, Direction) and type(c.window) is int
+                    and c.window >= 0):
+                return None
+            return {"key_id": c.key_id.hex(), "link": c.link, "direction": c.direction.code, "window": c.window,
+                    "digest": c.digest.hex(), "signature": c.signature.hex()}
+
+        def hexed(b: Any) -> str | None:
+            return b.hex() if type(b) is bytes else None
+
+        def digest(c: Any) -> str:
+            d = getattr(c, "digest", b"")
+            return bytes(d).hex() if isinstance(d, (bytes, bytearray)) else ""
+
+        try:
+            public = Path(delivered.proof.public).read_bytes().hex()
+        except OSError:
+            public = None
+        word = delivered.output
+        case: dict[str, Any] = {
+            "kind": self.kind, "link": self.link, "run": self.run, "window": w, "root": reg["roots"][0]["root"],
+            "registration": draw.registration.digest, "units": list(draw.units), "program": self._partition["program"],
+            "partition": P.digest(self._partition), "gates": [g.id for g in self.gates()],
+            "findings": None if findings is None else [
+                {"accepted": f.accepted, "program": f.program, "units": list(f.units)} for f in findings],
+            "public": public, "salts": {k: hexed(delivered.salts.get(k)) for k in ("pub", "o0")},
+            "output": word if type(word) is int and word >= 0 else None, "sessions": list(sessions),
+            "certificates": [cert(c) for c in certificates], "digests": [digest(c) for c in certificates],
+            "syncs": [[s.delta, s.rho.numerator, s.rho.denominator] for s in syncs],
+            "sync_set": {"deltas": list(self.sync_set.deltas),
+                         "rhos": [[r.numerator, r.denominator] for r in self.sync_set.rhos]},
+            "lms": {"N": p.N, "W": p.W, "H": p.H, "toy": p.toy}, "key": self.key.public.hex(),
+            "session": bytes(self.certifier_session).hex(),
+            "egress": {"grid": LA._grid_json(self.params), "profile": _profile(self.occupancy[0])},
+            "ingress": {"grid": LA._grid_json(self.ingress_params), "profile": _profile(self.occupancy[1])}}
+        if self.advised is not None:
+            v = self._view(w, syncs, advice)
+            case["view"] = None if v is None else {"released": list(v.released), "floor": list(v.floor),
+                                                   "received": v.received}
+            case["advice"] = self._advice_output(advice)["advice"]
+        if self.warden is not None:
+            case["warden"] = self.warden.digest.hex()
+        return case
+
+    def lean_verdict(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
+                     delivered: Delivered, findings: Sequence[Finding] | None, sessions: Sequence[str],
+                     advice: Any = None, server: LA.Server | None = None) -> dict[str, Any] | None:
+        """The Lean's verdict on the link-window (`NetworkCheck.LinkWindow.verdict`, `network-records verdicts`'
+        ``link-window``): its accept bit, digest and public outputs; None where `lean_case` has no case or the Lean
+        refuses it. The Lean not built or not running raises."""
+        case = self.lean_case(draw, certificates, syncs, delivered, findings, sessions, advice)
+        if case is None:
+            return None
+        try:
+            out = (server or LA.SERVER).call("link-window", case)
+        except ValueError:
+            return None
+        return {"accepted": out["accepted"], "digest": out["digest"], "public": out["public"]}
 
     def verify(self, draw: S.Draw, certificates: Sequence[Certificate], syncs: Sequence[ClockSync],
                delivered: Delivered, *, circuit_sha512: str, opening: Opening | None = None,
@@ -958,29 +1207,30 @@ class LinkWindows:
           registered root, the public fields and both certificates' signed digests, and on an advised link the window's
           view of `advice`, the link's advice, which `advised.view` takes under the tie from `ties` alone), and its
           output row to the word delivered (`_opened`), whose verdict bit and deadline bit are both 1;
-        - the certificates' check accepts (`certified`), and the window's declared sync is one of Σ_sync.
+        - the certificates' check accepts (`certified`), and the window's declared sync is one of Σ_sync (on a warden
+          link, which declares none, nothing is read of `syncs`).
         The verdict reports the public outputs, the proved deadline bit among them, on an advised link the advice it
         read (`advised.digest`), and never a violation's kind. `opening` (the witness) is for a debug comparison only,
         off by default: given, the verdict also carries the in-the-clear check's accept bit (`clear`), which decides
-        nothing. Raises `ValueError` on a link with no egress occupancy, served or advised profile."""
+        nothing. Raises `ValueError` on a link with no egress occupancy, served, advised or warden profile.
+
+        The Lean (`NetworkCheck.LinkWindow`, `lean_verdict`) decides the same on every call beside this Python, and
+        `OF_RECORD` names whose verdict is the record's (`by`); the other's accept bit is `reference`'s. Where the two
+        differ in the accept bit, the public outputs or the digest, or the Lean refuses the case, the link-window is
+        rejected, with deadline 0."""
         self._profiled()
-        reg = draw.registration.record
-        w, root = reg["window"]["window"], bytes.fromhex(reg["roots"][0]["root"])
         findings, refused = PF.verify(delivered.proof, circuit_sha512=circuit_sha512, program=self.program,
                                       partition=self._partition)
-        proved = refused is None and self.proved(findings) and all(list(f.units) == list(draw.units) for f in findings)
-        args = self.public_arguments(w, root, certificates, syncs, advice)
-        opened = _opened(delivered, draw.units[0], self.row(args, "pub") if args is not None else None,
-                         self.bits("pub")) if proved else None
-        word = opened if opened is not None else 0
-        accepted = (proved and opened is not None and word == 0b11 and self.certified(w, certificates)
-                    and w < len(syncs) and syncs[w] in self.sync_set)
-        public = {"verdict": int(accepted), "deadline": word >> 1 & 1} | self._advice_output(advice)
+        findings = None if refused is not None else findings
         sessions = delivered.sessions()
-        digest = _sha512({"format": VERDICT, "registration": draw.registration.digest, "sessions": sessions,
-                          "accepted": accepted, "public": public})
-        verdict = {"of_record": True, "decided_by": "proof", "accepted": accepted, "digest": digest, "sessions": sessions,
-                   "public": public}
+        python = self.python_verdict(draw, certificates, syncs, delivered, findings, sessions, advice)
+        lean = self.lean_verdict(draw, certificates, syncs, delivered, findings, sessions, advice)
+        by = OF_RECORD[self.kind]
+        mine, other = (lean, python) if by == "lean" else (python, lean)
+        if lean is None or any(lean[k] != python[k] for k in python):
+            mine = self._decided(draw, sessions, False, {"verdict": 0, "deadline": 0} | self._advice_output(advice))
+        verdict = {"of_record": True, "decided_by": "proof", "by": by, **mine, "sessions": sessions,
+                   "reference": {"accepted": None if other is None else other["accepted"]}}
         if opening is not None:
             verdict["clear"] = {"accepted": self.clear(opening, draw, syncs, advice)["accepted"]}
         return verdict
@@ -991,7 +1241,8 @@ class LinkWindows:
         link-window's domain, both head checks accept, and the audit accepts both records, comparing no grid (the module
         docstring). `syncs` are the declared clock syncs of windows 0 … w (on an advised link, of every window the
         advice releases a frame in). On a served link it also runs the served counts' check (`served_check`), and on an
-        advised link the advised counts' on `advice` (`advised_check`), reporting the advice it read as `advice`."""
+        advised link the advised counts' on `advice` (`advised_check`), reporting the advice it read as `advice`. On a
+        warden link it is the root and the head checks alone (the module docstring's "A warden link")."""
         self._profiled()
         root = self._registered(opening, draw)
         w, (egress, ingress) = opening.window, opening.records
@@ -999,6 +1250,9 @@ class LinkWindows:
         headed = all(i is not None and HC.reference(i) for i in self.head_checks(opening, bytes.fromhex(root)))
         headed = headed and (self.served is None or self.served_check(opening, syncs))
         headed = headed and (self.advised is None or self.advised_check(opening, syncs, advice))
+        if self.warden is not None:
+            public = {"verdict": int(sealed and headed), "deadline": int(egress.head.deadline and ingress.head.deadline)}
+            return {"of_record": False, "accepted": sealed and headed, "public": public}
         audit = Audit()
         out, inn = self._audit(audit, opening, syncs)
         accepted = sealed and headed and _accepts(out, inn, w)
@@ -1082,7 +1336,92 @@ class LinkWindows:
         return stream.outcome(draw, {VERIFIER: verdict}, self.statement(draw),
                               session_roots={VALUE: self.root(opening)})
 
-    def network_verdict(self, stream: S.Stream, windows: int | None = None) -> dict[str, Any]:
+    def _period(self, stream: S.Stream, windows: int | None) -> int:
+        default = self.windows
+        if stream.spec.digest() != self.spec.digest():
+            raise ValueError("the stream is not this link's: its spec isn't LinkWindows.spec")
+        n = default if windows is None else windows
+        if not (type(n) is int and n >= 1):
+            raise ValueError(f"a link has one or more link-windows, not {n!r}")
+        return n
+
+    def _committed(self, stream: S.Stream, roots: Sequence[str], advice: str | None) -> str:
+        """The period's digest, what the coins come after: this stream, and the committed roots and advice."""
+        return _sha512({"format": PERIOD_DRAW, "stream": stream.digest, "roots": list(roots), "advice": advice})
+
+    def period_draw(self, stream: S.Stream, roots: Sequence[str], k: int | None, coins: Any, *,
+                    advice: str | None = None) -> dict[str, Any]:
+        """The period's draw over its link-windows 0 … n − 1, after the prover committed them: `roots`, window w's
+        salted root (`root`, hex) at w, n of them (by default the link's windows, which `network_verdict` takes), and on
+        an advised link `advice`, the advice's digest (`advised.digest`), which every accepted window must name. Every
+        window for `k` None (`All`, reading no coins), else `subset:k`, 1 <= k <= n, on `coins` (a callable of a byte
+        count, as a stream's); a coin source with a `commit` method is first committed to the period's digest
+        (`commitment`), so the coins come after every commitment of the period. Call it before the stream's first
+        registration. The object is `{format, stream, law, k, population, units, roots, advice, commitment, read}`,
+        `read` the coin bytes the draw read, in order (hex), from which the network verdict's Lean draws its own
+        (`lean_draw`); `register` and `network_verdict` take it as `drawn`. Raises `ValueError` for a stream that isn't
+        this link's or holds a registration, roots that aren't n SHA-512 hex digests, an advice on a link that isn't
+        advised or none on one that is, and k outside [1, n]."""
+        n = self._period(stream, len(roots) if isinstance(roots, Sequence) and not isinstance(roots, str) else None)
+        if stream.log:
+            raise ValueError("the period is committed and drawn before the stream's first registration")
+        roots = list(roots)
+        if not all(isinstance(r, str) and len(r) == 128 and all(c in "0123456789abcdef" for c in r) for r in roots):
+            raise ValueError("a period commits each window's salted root, a SHA-512 in lowercase hex")
+        if (self.advised is not None) != (advice is not None) or not (advice is None or (
+                isinstance(advice, str) and len(advice) == 128)):
+            raise ValueError("an advised link's period commits its advice's digest (advised.digest), and only an advised "
+                             "link's does")
+        if k is not None and not (type(k) is int and 1 <= k <= n):
+            raise ValueError(f"a period draw takes 1 <= K <= {n} of the link-windows, not {k!r}")
+        commitment = self._committed(stream, roots, advice)
+        rule = S.All() if k is None else S.Law(f"subset:{k}")
+        if k is not None and callable(getattr(coins, "commit", None)):
+            coins.commit(bytes.fromhex(commitment))
+        read = bytearray()
+
+        def reading(m: int) -> bytes:
+            b = coins(m)
+            read.extend(b)
+            return b
+        draw = S.select_draw(rule, S.selection_law(rule, n), n, reading)
+        return {"format": PERIOD_DRAW, "stream": stream.digest, "law": "subset", "k": draw["k"], "population": n,
+                "units": list(draw["units"]), "roots": roots, "advice": advice, "commitment": commitment,
+                "read": read.hex()}
+
+    def _drawn(self, stream: S.Stream, n: int, drawn: Mapping[str, Any]) -> list[int]:
+        """The drawn windows, once `drawn` is a period draw over this stream's n windows; else `ValueError`."""
+        get = drawn.get if isinstance(drawn, Mapping) else (lambda _: None)
+        units, k, roots, read = get("units"), get("k"), get("roots"), get("read")
+        if not (isinstance(drawn, Mapping) and get("format") == PERIOD_DRAW and get("law") == "subset"
+                and get("population") == n and type(k) is int and 1 <= k <= n and isinstance(units, list)
+                and all(type(u) is int and 0 <= u < n for u in units) and units == sorted(set(units))
+                and len(units) == k and isinstance(roots, list) and len(roots) == n and isinstance(read, str)
+                and len(read) % 2 == 0 and all(c in "0123456789abcdef" for c in read)):
+            raise ValueError(f"not a period draw of subset:K over this link's {n} windows")
+        if get("stream") != stream.digest or get("commitment") != self._committed(stream, roots, get("advice")):
+            raise ValueError("the period draw is not this stream's, or not over the period it committed")
+        return list(units)
+
+    @staticmethod
+    def _of_record(n: int, drawn: Mapping[str, Any]) -> tuple[list[int] | None, str | None]:
+        """The period's draw of record over its n windows, ascending, and None; or None and why there is none: every
+        window at K = n, else `lean_draw` on the coins `drawn` read, which must be `subset:K` over n."""
+        k = drawn["k"]
+        if k == n:
+            return list(range(n)), None
+        got = lean_draw(k, n, bytes.fromhex(drawn["read"]))
+        if not isinstance(got, Mapping) or "refused" in got:
+            return None, str(got.get("refused") if isinstance(got, Mapping) else got)
+        units = got.get("units")
+        if not (got.get("law") == "subset" and got.get("k") == k and got.get("population") == n
+                and isinstance(units, list) and all(type(u) is int and 0 <= u < n for u in units)
+                and len(set(units)) == len(units) == k):
+            return None, f"the Lean's draw is not subset:{k} over the {n} windows: {json.dumps(got)[:300]}"
+        return sorted(units), None
+
+    def network_verdict(self, stream: S.Stream, windows: int | None = None,
+                        drawn: Mapping[str, Any] | None = None) -> dict[str, Any]:
         """The link's network verdict of record: the AND over its link-windows 0 … `windows` − 1 (by default the egress
         profile's windows, fixed before the run), with no ε and no share credit. It accepts only when, for every w,
         the stream's w-th registration is window w and its outcome of record accepted. A window registered out of
@@ -1091,34 +1430,75 @@ class LinkWindows:
         `records` is each window's outcome record SHA-512 (`S.Outcome.record`, None without one), and `digest` binds
         the verdict to the stream and those records. On a served or advised link the windows are by default its
         profile's (`windows`), and on an advised link every accepted window must name the first accepted window's advice
-        (its `advice` output, `advised.digest`), which the verdict reports as `advice`, or it is refused. Raises
-        `ValueError` on a link with no egress occupancy, served or advised profile, as `verify` does, and on a stream
-        that isn't this link's."""
-        default = self.windows
-        if stream.spec.digest() != self.spec.digest():
-            raise ValueError("the stream is not this link's: its spec isn't LinkWindows.spec")
-        n = default if windows is None else windows
-        if not (type(n) is int and n >= 1):
-            raise ValueError(f"a link has one or more link-windows, not {n!r}")
+        (its `advice` output, `advised.digest`), which the verdict reports as `advice`, or it is refused.
+
+        With `drawn`, the period draw (`period_draw`) over this stream's n windows, the stream's registrations must be
+        exactly the drawn windows, in order, each under the root the period committed for it, and each needs an
+        accepted outcome; on an advised link each names the committed advice. An undrawn window has no registration and
+        its record is None; a registration past the drawn windows is listed in `refused` as n, n + 1, … The verdict
+        then carries `selection` (the draw) and `wrong_units`, what it established at the stream's δ: except with
+        probability δ, an accepted link has at most `bound` wrong windows of the `of` committed, and `epsilon` is
+        bound / of (the uniform K-subset's exact bound, one-stage's `wrong_units` over windows); `digest` binds the
+        draw too.
+
+        The drawn windows are the draw of record's, never the units `drawn` lists: the verdict runs `lean_draw` on
+        `drawn`'s coins (`read`), and every window at K = n, which leaves nothing to draw. It refuses the link by name,
+        `why[PERIOD_DRAWN]` with the Lean's draw (or why there is none), `drawn`'s units and the windows registered,
+        when the Lean can't draw, when `drawn`'s units aren't the Lean's, and when a registered window isn't one the
+        Lean drew; a drawn window not registered is in `refused`. `selection` is the draw of record, ``by`` ``lean``
+        (or ``all`` at K = n), and its units are the Lean's. Raises `ValueError` on a link with no egress occupancy,
+        served or advised profile, as `verify` does, on a stream that isn't this link's, and on a draw that isn't this
+        stream's period draw."""
+        n = self._period(stream, windows)
+        why: dict[str, Any] = {}
+        if drawn is None:
+            expected = list(range(n))
+        else:
+            claimed = self._drawn(stream, n, drawn)
+            lean, no = self._of_record(n, drawn)
+            expected = claimed if lean is None else lean
+            by = None if lean is None else "all" if drawn["k"] == n else "lean"
+            registered = [p.get("window") if isinstance(p := r.get("window"), Mapping) else None for r in stream.log]
+            if lean is None or lean != claimed or any(w not in lean for w in registered):
+                why[PERIOD_DRAWN] = {"lean": lean if lean is not None else {"refused": no}, "drawn": claimed,
+                                     "registered": registered,
+                                     "why": no or "the windows registered and proved are not the Lean verifier of "
+                                                  "record's draw on the period's coins"}
         outcomes = {r["registration"]: r for r in stream.records}
-        records: list[str | None] = []
+        records: list[str | None] = [None] * n
         refused: list[int] = []
-        advice = None
-        for w in range(max(n, len(stream.log))):
-            reg = stream.log[w] if w < len(stream.log) else None
-            body = outcomes.get(R.digest(reg)) if reg is not None and reg.get("window") == self.provenance(w) else None
-            records.append(None if body is None else _sha512(body))
-            ok = w < n and body is not None and body["symbol"] == S.ACCEPT
+        advice = None if drawn is None else drawn.get("advice")
+        for i in range(max(len(expected), len(stream.log))):
+            reg = stream.log[i] if i < len(stream.log) else None
+            w = expected[i] if i < len(expected) else n + i - len(expected)
+            in_order = reg is not None and reg.get("window") == self.provenance(w)
+            body = outcomes.get(R.digest(reg)) if in_order else None
+            record = None if body is None else _sha512(body)
+            if w < n:
+                records[w] = record
+            else:
+                records.append(record)
+            ok = (w < n and in_order and body is not None and body["symbol"] == S.ACCEPT
+                  and (drawn is None or _root_of(reg) == drawn["roots"][w]))
             if ok and self.advised is not None:
                 named = body["public"].get("advice")
                 advice = named if advice is None else advice
                 ok = named is not None and named == advice
             if not ok:
                 refused.append(w)
-        accepted = not refused
+        accepted = not refused and not why
+        sampled = {} if drawn is None else {"drawn": dict(drawn), "of_record": expected, "why": why}
         digest = _sha512({"format": NETWORK_VERDICT, "stream": stream.digest, "windows": n, "records": records,
-                          "accepted": accepted})
+                          "accepted": accepted, **sampled})
         out = {"accepted": accepted, "windows": n, "refused": refused, "records": records, "digest": digest}
+        if drawn is not None:
+            bound = OA.core_law({"law": "subset", "k": drawn["k"]}, n).count_bound(stream.delta)
+            out |= {"why": why,
+                    "selection": {**{k: drawn[k] for k in ("law", "k", "population", "commitment")}, "units": expected,
+                                  "by": by},
+                    "wrong_units": {"delta": stream.delta, "of": n, "bound": bound, "epsilon": bound / n,
+                                    "rule": "except with probability delta, an accepted link has at most `bound` wrong "
+                                            "link-windows of the `of` its period committed"}}
         return out if self.advised is None else out | {"advice": advice}
 
 

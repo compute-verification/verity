@@ -8,7 +8,7 @@ Same κ as `bench/m1_capture.py` (`profile.apply_env()`, `engine_kwargs(cp, enfo
 uninstrumented throwaway warm-up, our request ids) with two differences forced by the process topology:
 
   * `tensor_parallel_size` (and any `--engine-arg`) is passed to `LLM(...)` directly — `vllm_adapter.build_engine` exposes no
-    engine-argument passthrough and ends in `get_model_runner(llm)`, which has no in-process runner to find under the
+    engine-argument passthrough and ends in `handle.model_runner(llm)`, which has no in-process runner to find under the
     multiprocess executor (PROPOSED: `build_engine(engine_args=...)`, `m1_capture/run_config --engine-arg`);
   * the observer is installed in every rank's process through `worker_extension_cls` = `tp2_worker.EXTENSION` and driven with
     `llm.collective_rpc("tp2_install" | "tp2_close")`; the run directory holds one raw log per rank (`log.rank<r>.jsonl.gz`)
@@ -40,12 +40,12 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import option
-from verity_vllm.engine import engine_profile as prof, env as engine_env
+from verity_vllm.engine import engine_profile as prof, env as engine_env, handle
 
 prof.apply_env()
 
 from verity_vllm.engine import vllm_adapter as va
-from verity_vllm.engine.rank_worker import EXTENSION
+from verity_vllm.pipeline.tp.rank_worker import EXTENSION
 from verity_vllm.pipeline.tp import target as TT
 
 
@@ -162,7 +162,7 @@ def main(args: Options) -> None:
                             "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")}, "env_flags": env_flags,
                             "effective_execution": va.effective_execution_doc(llm), "in_process_runner": None, "ranks": None}
     try:
-        prof.get_model_runner(llm)
+        handle.model_runner(llm)
         topo["in_process_runner"] = True
     except Exception as e:  # noqa: BLE001
         topo["in_process_runner"] = f"none: {e}"

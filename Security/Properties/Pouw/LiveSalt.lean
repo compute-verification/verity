@@ -50,7 +50,7 @@ The facts PoUW's argument reads from an acceptance:
 * **The salt is fixed only after the epoch's root.** The open naming `R` is signed before the session's record, which
   holds the challenger's commitment to the coins (`leafOf o.sig < recordLeaf`). The coin is opened after `R`
   (`liveReason`), and `R` is the root the log shows the coin's release followed. That the gate and the challenger run as
-  written, in that order, is S5 (live coins on `trusted-nebius-host`); that the coin stays hidden from the hello to its
+  written, in that order, is S5 (live coins on `trusted-host`); that the coin stays hidden from the hello to its
   release is N1 (X-RO commitments, hm96's hiding leaves). Both are named assumptions of PoUW's model, not this check's
   properties.
 * **One epoch, one session, one salt.** The ledger opens `R` once and the session once (`LedgerShows`' last clause), so
@@ -85,8 +85,8 @@ namespace Properties.Pouw.LiveSalt
 
 open Lean (Json)
 open PouwCheck (R at? checkWorkload workloadOf weightsRootAt MANIFEST_SCHEMA)
-open SampledProofs.Challenger (Audited ChallengerKey LedgerEntry LiveCommitment LiveOpening Roots ledgerEntry? leafOf
-  liveReason pinnedSession sessionNamed)
+open SampledProofs.Challenger (Audited ChallengerKey Families LedgerEntry LiveCommitment LiveOpening Roots ledgerEntry?
+  leafOf liveReason pinnedSession sessionNamed)
 
 /-! ## The layout, the epoch's root and the salt -/
 
@@ -312,13 +312,19 @@ abbrev PeriodCredit := (key ledger pins main period : Json) → R (List Json)
 
 /-! ## The properties -/
 
-/-- A live root binds its commitment and its coins. Take two commitments with one root, and an opening of each that
-`liveReason` accepts for one coin (`label`, `index`). Either the commitments are one (scheme, epoch and layout) and the
-openings carry the same coin, or two different messages, one hashed in checking each opening, have one SHA-512 digest. -/
+/-- A live root binds its commitment and its coins. Take two commitments with one root `r`, `⟨s, e, fs, r⟩` and
+`⟨s', e', fs', r⟩`, and an opening of each that `liveReason` accepts for one coin (`label`, `index`). Either the
+commitments are one (scheme, epoch and layout) and the openings carry the same coin, or two different messages, one hashed
+in checking each opening, have one SHA-512 digest. It doesn't bound the salt's choice among a weights' root's epochs: the
+prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes, and that choice rests
+on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a
+complete salt-only session that no accepted pass presents (ci's review of #3968). -/
 def LiveCoinBinding : Prop :=
-  ∀ (c c' : LiveCommitment) (o o' : LiveOpening) label index after after', c.root = c'.root →
-    liveReason c o label index after = .ok none → liveReason c' o' label index after' = .ok none →
-    (c = c' ∧ o.coin = o'.coin) ∨ Collides (hashedBy c o label index) (hashedBy c' o' label index)
+  ∀ (s s' : String) (e e' : Nat) (fs fs' : Families) (r : ByteArray) (o o' : LiveOpening) label index after after',
+    liveReason ⟨s, e, fs, r⟩ o label index after = .ok none →
+    liveReason ⟨s', e', fs', r⟩ o' label index after' = .ok none →
+    ((⟨s, e, fs, r⟩ : LiveCommitment) = ⟨s', e', fs', r⟩ ∧ o.coin = o'.coin) ∨
+      Collides (hashedBy ⟨s, e, fs, r⟩ o label index) (hashedBy ⟨s', e', fs', r⟩ o' label index)
 
 /-- An epoch's root names one weights' root and one epoch: two 64-byte weights' roots and two epoch numbers below 2^64
 with one epoch root are one pair, or their two messages, different, have one SHA-512 digest. -/
@@ -328,11 +334,15 @@ def EpochRootBinding : Prop :=
 
 /-- One epoch, one session, one salt: two passes that the check accepts against one ledger, under one key, pins log and
 history, both passes of epoch `k` over the weights' root `w`, were salted by one session `a` of the ledger, and their
-salts agree unless two different messages hashed in checking their salt coins have one SHA-512 digest. -/
+salts agree unless two different messages hashed in checking their salt coins have one SHA-512 digest. It doesn't bound
+the salt's choice among a weights' root's epochs: the prover picks `pass_index`, so it can open several epochs over one
+`W` and present the salt it likes, and that choice rests on the grinding term over every epoch the prover can open, at
+most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's
+review of #3968). -/
 def OnePair (check : Check) : Prop :=
-  ∀ key ledger pins main session session' m m' salt salt' w k,
+  ∀ key ledger pins main session session' m m' salt salt',
     check key ledger pins main session m = .ok salt → check key ledger pins main session' m' = .ok salt' →
-    EpochRoot m w k → EpochRoot m' w k →
+    ∀ w k, EpochRoot m w k → EpochRoot m' w k →
     ∃ a c c' o o', Accepted key ledger pins main session m w k a c o salt ∧
       Accepted key ledger pins main session' m' w k a c' o' salt' ∧
       (salt = salt' ∨ Collides (hashedBy c o PouwWindow.SALT 0) (hashedBy c' o' PouwWindow.SALT 0))

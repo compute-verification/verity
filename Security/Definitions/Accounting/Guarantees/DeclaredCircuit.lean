@@ -11,7 +11,8 @@ pass's step reads, `W`'s credited bits there less an explicit share `ε` of the 
 held what (the node's boundary, HBM against host DRAM) is attribution, stated apart. It composes the stacked remote
 audit in its deployed sketch form (`StackedSessionConservationSketchDeployed`), on a layout the prover may steer after
 the coins, with the carriers' cost read from the property's caps (`Gates.Property`, under
-`Accounting.Assumptions.EncodeChainHardness`) and the audit linked to `W`'s placed requirement (A1's
+`Accounting.Assumptions.SquaringFloor` and `Accounting.Assumptions.ChainSum`) and the audit linked to `W`'s placed
+requirement (A1's
 `Definitions/Accounting/Requirement.lean`) pass by pass, each pass and window on the devices' clocks. It credits `W`'s
 appended blocks only: a registered block's key is fixed for the registration, so nothing bounds its carriers, and the
 weights and the filler are the registration audit's to count. Its theorem is
@@ -44,10 +45,13 @@ check (#3828) at a cap fixed before the coins. `SteeredLayout` fixes one `a` at 
 `Properties.RemoteAudit.steered_of_checked` gives it at `a = a₀ + 1` when, at every prefix and every append coin, the
 check accepts a schedule of at most `a₀` bits holding the plan the pass sent, under the named gap
 `Properties.RemoteAudit.ScheduleLayoutGap` (the model's layout of a pass is the verifier's positions of the session's
-appends and the plan the pass sent). So `a₀` is the steering cap the prover commits before the first coin, over which
-the check refuses a schedule (memory-accounting's steer-cap, in progress), not the bits of the one schedule a session
-published: a prover whose schedule is 200 bits on most coins and 300 where it steers meets `SteeredLayout` only at 301
-(RD-18, note:memory-accounting/20261024T2155Z-report-redteam-5, open until the cap lands). A layout that follows a
+appends and the plan the pass sent). So `a₀` is the steering cap the prover commits before the first coin
+(`audit.Params.schedule_cap`, credited as `audit.Ledger.steering`, #4021), over which the check refuses a schedule, not
+the bits of the one schedule a session published: a prover whose schedule is 200 bits on most coins and 300 where it
+steers would meet `SteeredLayout` only at 301 (RD-18, note:memory-accounting/20261024T2155Z-report-redteam-5, which the
+committed cap fixes). `Properties.DeclaredCircuit.ScheduledRequirement` is `G` with `SteeredLayout` so discharged, on
+the sessions the check accepts at every pass, with `2^(a + (cap + 1))` in the query term
+(`Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement`). A layout that follows a
 coin at a counted schedule is refused (`Properties.RemoteAudit.coinLayout_not_scheduled`, `ScheduleFixesLayout`), so
 `a` does not collapse to `|Y|`. Each append has its own coin, uniform and independent of the others', so a re-key,
 which appends a block again, draws a fresh one. Each append's blocks are read within `L` windows of the window
@@ -68,9 +72,12 @@ tiles are not bounded. `G` holds at every value of them; what they are on a node
 named assumptions).
 
 *The circuit.* `Wc` is in the restricted class (`Gates.Restricted B`) and passes the stacking property at the caps
-`caps` on `Aud` (`Gates.Property`): in each window its budgeted units are within `c = caps.total` a byte `Aud`
-certifies, and its run inputs within that window's `R_in,v = caps.runBytes v` bytes. A window certifies at most its
-passes' stores, `P·N·4096` bytes.
+`caps` on `Aud` (`Gates.Property`): in each window its nonlinear units (its budgeted units and its data products,
+`Gates.nonlinear`) are within `c = caps.total` a byte `Aud` certifies, its data products within `caps.products` a
+byte, and its run inputs within that window's `R_in,v = caps.runBytes v` bytes. A window certifies at most its
+passes' stores, `P·N·4096` bytes. An encode of a word costs `E` nonlinear units, with `E ≤ 3·S·e_s` (`S = 1,021`
+squarings a root) under `Accounting.Assumptions.SquaringFloor` at `e_s` nonlinear units a squaring and
+`Accounting.Assumptions.ChainSum` at the deployed codec (p1024, 3 rounds, `ε ≥ 2^−64`).
 
 *The requirement.* The prover chooses everything on `W`'s side after every coin: the placed execution `p x` (each
 value's device `leaf` and the tick `ticks d s` at which device `d` begins engine step `s`), the layout of values in
@@ -135,7 +142,7 @@ digests, by `remote_bandwidth`'s Replay), that each pass's plan is its step's (#
 ticks (a certifier stamping step records and pass roots on one clock). A credit across circuits needs their credited blocks
 disjoint, and a device tick credited to a pass here and to another window elsewhere is joint accounting's. Which of the
 node's devices held the tiles, and that the bits taken from outside the store are every bit crossing the node's
-boundary, are attribution's (`certifier-coverage`, `trusted-nebius-host` and the tiers' bandwidths at the deadline). A
+boundary, are attribution's (`certifier-coverage`, `trusted-host` and the tiers' bandwidths at the deadline). A
 node that registers `R` times pays `δ_G` once a registration.
 
 `G` credits nothing once `γ ≥ 1 − 0.0015`, because a pass's credit is at most its `N` tiles' bits and the event's
@@ -156,7 +163,8 @@ group a page, so a chunk may complete several pages while their coins are out; i
 and both of `G`'s thresholds are positive at the 30 s life for 8B and for 70B (`life30_8b`, `life30_70b`).
 
 Proof (`Accounting.SecurityProofs.DeclaredCircuitRequirement`): under the lifetime cap each carrier's inputs are at
-most `8·R_L` and its encodes at most `L·c·P·N·4096` units (`OfCircuit` with the property), so every pass rebuilds at
+most `8·R_L` and its encodes at most `L·c·P·N·4096` nonlinear units (`OfCircuit` with the property), so every pass
+rebuilds at
 most `X_r·τ + C` bits of its appended tiles, and its tiles of `W` are appended tiles; the conservation runs on a pass's
 tiles of `W` alone (their sectors held, read, linked or rebuilt), so the rebuilds of registered tiles, which nothing
 bounds, never enter it; an unpaid window at slack `k` tiles a pass has a rank-poor sign matrix, a guessed tag (at every
@@ -172,9 +180,10 @@ within `L` windows of the one it joined, with the rebuilds of appended tiles cha
 passing the stacking property within its caps over `L` windows, its shortfall read pass by pass against the circuit's
 credited reads in appended blocks at the step each pass is bound to, with the memory map and plans holding its
 credited blocks (one-sided), each pass and window on the devices' clocks, in the random-oracle and ideal encoding
-models, under the per-pass hash budget, `EncodeChainHardness`, `KeyBinding`, `CircuitCarriers` and `SteeredLayout`. -/
+models, under the per-pass hash budget, `SquaringFloor`, `ChainSum`, `KeyBinding`, `CircuitCarriers` and
+`SteeredLayout`. -/
 def DeclaredCircuitRequirement : Prop :=
-  ∀ (n P N ρ S q G Xr Lr qr τ k a L E B εnum εden T M : ℕ) (ε δ : ℝ≥0∞) {ιW : Type} (Wc : Gates.Dag ιW)
+  ∀ (n P N ρ S q G Xr Lr qr τ k a L E es B εnum εden T M : ℕ) (ε δ : ℝ≥0∞) {ιW : Type} (Wc : Gates.Dag ιW)
     (caps : Gates.Caps) (Aud : Gates.Audit) {Ω Ca Ch : Type} [Fintype Ω] [Fintype Ca]
     (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin 128 → RateSketch.Sector))
     (choose : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω → (a : Fin T) → ({b : Fin T // b < a} → Ca) → Ch)
@@ -193,7 +202,8 @@ def DeclaredCircuitRequirement : Prop :=
     7 ≤ n → 0 < P → 0 < N → 0 < E →
     Assumptions.SketchRank 16 128 12 ε →
     Assumptions.KeyBinding T M δ enc →
-    Assumptions.EncodeChainHardness Gates.p1024 3 B E εnum εden → εden ≤ 2 ^ 64 * εnum →
+    Assumptions.SquaringFloor Gates.p1024 es εnum εden → Assumptions.ChainSum Gates.p1024 3 B es εnum εden →
+    E ≤ 3 * Gates.p1024.squarings * es → εden ≤ 2 ^ 64 * εnum →
     (∀ s w η j pre, Assumptions.SketchHashBudget (((A.session s).window w η).device j pre) (qr * τ)) →
     Assumptions.CircuitCarriers (fun c y => A.session (steer c y)) (RateSketch.steeredStore enc choose layout) layout
       joined (Xr * τ) L B εnum εden Wc Aud →

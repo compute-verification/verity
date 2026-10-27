@@ -525,7 +525,7 @@ def _ran_on(store, rid: str, commit: str, fetch) -> bool:
 
 
 def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: frozenset[str], command: tuple[str, ...],
-                       maps=None, deferred: str | None = None, fetch=None) -> str | None:
+                       maps=None, deferred: str | None = None, fetch=None, ran: str | None = None) -> str | None:
     """The passing ``tool`` attempt of ``commit``'s one parent that vouches for ``commit``, or None: ``commit`` changes only Lake
     packages' locks, names exactly those in its `Regenerated:` trailer, and they are byte for byte the locks that attempt
     regenerated, one for each package it regenerated, so the tree that lands is the one that check audited (CI-64).
@@ -533,11 +533,14 @@ def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: froz
     ``deferred`` is the check drive lands the parent on with `--defer` while its deferred steps still run (`Driver.verdict`),
     which has no passing attempt yet: it vouches when ``commit``'s `Checked:` trailer names it, it ran on the parent, and its
     records match, read from the store, else from its run dir on its node (``fetch``: `live_records`), hashed here, never
-    digests a caller hands in.  Only drive passes it, having read that verdict itself; `gate` and the push guard never do."""
+    digests a caller hands in.  Only drive passes it, having read that verdict itself; `gate` and the push guard never do.
+    With it, ``ran`` is the commit that check ran on when it isn't the parent (`Driver._carry` rebuilt the parent above a lock
+    commit drive landed): ``commit``'s files are then taken against ``ran``, so what lands is still the tree it checked with its
+    records, whatever the parent holds."""
     parents = _git(repo, "rev-list", "--parents", "-n", "1", commit).stdout.split()[1:]
     if len(parents) != 1:
         return None
-    parent = parents[0]
+    parent = ran if deferred is not None and ran else parents[0]
     files = _git(repo, "diff", "--name-only", "--no-renames", parent, commit).stdout.split()
     said = {f.strip() for f in _git(repo, "log", "-1", "--format=%(trailers:key=Regenerated,valueonly,separator=%x2C)",
                                      commit).stdout.replace("\n", ",").split(",") if f.strip()}
@@ -1466,16 +1469,18 @@ KEEP_BRANCHES = frozenset({"main", "next", "queue-shadow"})
 #: a lead's run branch (`cursor/verity-<lead>-XXXX`), which its agent pushes to again
 RUN_BRANCH_RE = re.compile(r"cursor/verity-[a-z0-9-]+-[0-9a-f]{4}")
 MERGED_IDLE_S, UNMERGED_IDLE_S = 86400, 3 * 86400
+#: the most branches one sweep deletes, and the most it archives, the longest idle first: a caller sweeps again for the rest
+SWEEP_LIMIT = 200
 
 
 def sweep_branches(repo: Path, remote: str = "origin", into: str = "main", now: float | None = None, dry_run: bool = False,
-                   gh=None, log=print, chunk: int = 100, keep: Iterable[str] = ()) -> tuple[int, int]:
+                   gh=None, log=print, chunk: int = 100, keep: Iterable[str] = (), limit: int = SWEEP_LIMIT) -> tuple[int, int]:
     """The branch sweep (CI-48, 17 Oct, after Daniel asked why the repository had 4,000 branches): delete each branch whose tip
     is on ``into`` and is a day idle (its content is there), and move each branch with unmerged work three days idle to
     `refs/archive/heads/NAME` (still fetchable: `git fetch origin refs/archive/heads/NAME`). It keeps `KEEP_BRANCHES`, leads'
     run branches (`RUN_BRANCH_RE`), every branch an open PR uses as its head or base, and ``keep`` (the heads of PRs drive
-    closed as stale, which stay to be reopened: `research.stale`).  Each push leases the tip it saw, so a branch pushed to
-    meanwhile is kept.  Returns (deleted, archived)."""
+    closed as stale, which stay to be reopened: `research.stale`).  At most ``limit`` of each, the longest idle first, each
+    logged by name.  Each push leases the tip it saw, so a branch pushed to meanwhile is kept.  Returns (deleted, archived)."""
     gh = gh or (lambda *a: _gh_cli(repo, *a))
     now = time.time() if now is None else now
     _git(repo, "fetch", "-q", "--prune", remote, f"+refs/heads/*:refs/sweep/{remote}/*")
@@ -1486,17 +1491,23 @@ def sweep_branches(repo: Path, remote: str = "origin", into: str = "main", now: 
                 f"refs/sweep/{remote}/").stdout.splitlines()
     delete, archive = [], []
     for name, sha, when in (r.split() for r in rows):
-        if name in KEEP_BRANCHES or name in used or RUN_BRANCH_RE.fullmatch(name):
+        if name == into or name in KEEP_BRANCHES or name in used or RUN_BRANCH_RE.fullmatch(name):
             continue
         idle = now - int(when)
         if _git(repo, "merge-base", "--is-ancestor", sha, tip, check=False).returncode == 0:
             if idle > MERGED_IDLE_S:
-                delete.append((name, sha))
+                delete.append((idle, name, sha))
         elif idle > UNMERGED_IDLE_S:
-            archive.append((name, sha))
+            archive.append((idle, name, sha))
+    found = len(delete), len(archive)
+    delete, archive = ([(n, s) for _, n, s in sorted(x, key=lambda r: -r[0])[:limit]] for x in (delete, archive))
     verb = "would " if dry_run else ""
-    log(f"research merge: {verb}delete {len(delete)} branch(es) on {into} a day idle, {verb}archive {len(archive)} unmerged "
-        f"branch(es) three days idle to refs/archive/heads/")
+    log(f"research merge: {verb}delete {len(delete)} of {found[0]} branch(es) on {into} a day idle, {verb}archive {len(archive)} "
+        f"of {found[1]} unmerged branch(es) three days idle to refs/archive/heads/")
+    if delete:
+        log(f"research merge: {verb}delete: {' '.join(n for n, _ in delete)}")
+    if archive:
+        log(f"research merge: {verb}archive: {' '.join(n for n, _ in archive)}")
     if not dry_run:
         for i in range(0, len(delete), chunk):
             part = delete[i:i + chunk]

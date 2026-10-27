@@ -16,7 +16,7 @@ import dataclasses
 
 import pytest
 
-from verity_vllm.engine.profiles import profile_for_case
+from verity_vllm.observe.fold.profiles import profile_for_case
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, ViewDesc
 from verity_vllm.observe.fold.patterns.collectives import TpFusedAllReduceRmsNorm
 from verity_vllm.observe.fold.patterns.cublas import CublasLinear, MlaAbsorbBmm
@@ -254,7 +254,7 @@ def _build_kind(settings, M, N=H, rows=None):
     from types import SimpleNamespace
     from verity_vllm.program.frontend.rules.vllm_bindings import collectives as BC
     from verity_vllm.program.frontend.rules.vocab import vocabulary_for
-    from verity_vllm.program.registry import tp_allreduce as T
+    from verity.ml.definitions.registry import tp_allreduce as T
 
     setting, route = T.served_route(settings, M, N)
     plan = {"captured": T.covered(setting, N, route, M), "M": M, "rows_n": rows or M, "N": N}

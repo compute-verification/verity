@@ -8,7 +8,8 @@ import Proofs.Flock.Recursive.PadsAt
 import Proofs.Flock.Recursive.Flock
 import Proofs.Flock.Recursive.Schedule
 import Proofs.Flock.Recursive.Target
-import Proofs.Flock.Recursive.Holo
+import Definitions.Flock.Recursive.Holo
+import Proofs.Flock.Soundness.Defs
 import Proofs.Flock.Recursive.Transfer
 import Proofs.Flock.Recursive.Stage
 import Proofs.Flock.Recursive.StageRead
@@ -63,6 +64,8 @@ import Proofs.Flock.Recursive.ValueChecked
 import Proofs.Flock.Recursive.ValueInner
 import Proofs.Flock.Recursive.PartTie
 import Proofs.Flock.Recursive.HPortTie
+import Proofs.Flock.Recursive.KSStatement
+import Proofs.Flock.Recursive.KS
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), hidden unit circuits' class,
 registered table and registered schedule, with the holographic table at them (`Holo`), the proofs of its guarantees
 (`Guarantees`; circuit privacy and the registered private circuit's in `Private`), its zero knowledge at the operating

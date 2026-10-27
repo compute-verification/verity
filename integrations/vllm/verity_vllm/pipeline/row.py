@@ -35,13 +35,13 @@ from verity_vllm.config import (ROOT, WORKLOADS, BuildConfig, CommitConfig, Matc
                                 done_source_refusal, group, option, row_world)
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import research
+from verity_vllm import settings
 
 STAGES = "build,match,commit"
 EFFECTIVE_SCHEMA = "verity-vllm/effective-config/v1"
 EFFECTIVE_NAME = "effective_config.json"
 #: The environment a row's engines inherit that can change their kernels, recorded beside the config (never a credential).
 ENGINE_ENV = ("VLLM_", "NCCL_", "CUBLAS", "TORCH_", "TORCHINDUCTOR_", "TRITON_", "FLASHINFER_", "CUDA_VISIBLE_DEVICES")
-_SECRET_WORDS = ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -56,7 +56,7 @@ class _Row:
     world: int | None = option("--world", env="WORLD", type=int, default=None, help="TP: ranks (default: the manifest's sweep.tp)")
     query: str = option("--query", env="VERITY_QUERY_ID", default="Q_word_v1{X=16,W=32,R=no-recompute}", help="verification query id (recorded)")
     protocols: str | None = option("--protocols", env="PROTOCOLS", default=None,
-                                   help="the row's protocol set, sampled proofs included: 'pouw:<scheme>,pous:<scheme>,sampled-proofs:vllm-v1' "
+                                   help="the row's protocol set, sampled proofs included: 'pouw:<scheme>,pous:<scheme>,sampled-proofs:rows-sha512' "
                                         "(verity_vllm.protocols); default: the workload target's, else sampled proofs alone")
     build: BuildConfig = group(BuildConfig)
     match: MatchConfig = group(MatchConfig)
@@ -162,7 +162,7 @@ def effective_config(o: Run | Stage, stages: str, protocols: tuple[str, ...] | N
                           **{k: run[k] for k in ("world", "gpu_util", "protocols") if run[k] is not None}},
             "vllm_installed": vllm,
             "engine_env": {k: environ[k] for k in sorted(environ) if k.startswith(ENGINE_ENV)
-                           and not any(w in k.upper() for w in _SECRET_WORDS)}}
+                           and not settings.is_secret(k)}}
 
 
 def run_row(o: Run | Stage, stages: str) -> int:

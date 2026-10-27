@@ -32,10 +32,10 @@ import verity_vllm
 from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition
 from verity_vllm.program.frontend.rules.vocab import PROFILES
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import prims as P
 from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.registry.hopper import Fa3InvSum
+from verity.ml.definitions.registry.hopper import Fa3InvSum
 
 PACKAGE = Path(verity_vllm.__file__).parent
 DEFAULT = TargetProfile().numerics_profile
@@ -203,7 +203,7 @@ def test_every_allowed_definition_is_reported_without_its_entry():
 def test_the_scan_reads_the_fold_pattern_modules():
     refs = fold_references()
     where = {w.rsplit(":", 1)[0] for _, w in refs.values()}
-    assert {"verity_vllm.engine.profiles.gen_ov_moe_patterns", "verity_vllm.observe.fold.patterns.norms"} <= where, sorted(where)
+    assert {"verity_vllm.observe.fold.profiles.gen_ov_moe_patterns", "verity_vllm.observe.fold.patterns.norms"} <= where, sorted(where)
     assert {"SiluMul_v2", "MoeSum_v1", "RMSNormTriton_v1", "RMSNormTriton_v3"} <= set(refs), sorted(refs)
     assert "b1-eager-v3" in CURRENT and "dense2-eager-v1" in CURRENT
 

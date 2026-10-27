@@ -128,7 +128,7 @@ frame k for k < N and E_0 after, so padding slots never enter the tree, and open
 frame-v3's SHA-512 tree (`frame-v3-sha512`) doesn't fit, for three reasons:
 - its `CommitmentDomain` takes a 32-byte SHA-256 `binding`, and its positions compute a SHA-256 identity eagerly, so the
   record would rest on `cr/sha-256` as well;
-- its `owner` is a weights, boundary or replay unit, not a link-window;
+- its `owner` is a weights, boundary or replay block, not a link-window;
 - it pads its leaves to the next power of two of N, so its depth and opening shape change with the occupancy.
 
 **The signed digest** hides the record digest R under `salt_c`, 64 bytes the certifier draws from its own
@@ -183,7 +183,7 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   head (N3's, which is designed to hold the window's frames to the head's root) opens its head leaf in two or three
   SHA-512 compressions, where the record leaf would cost the certificate's 272 more. The firewall keeps the records and
   salts (`Opening`). The challenger receives one salted root and never a certificate, a certifier's salt or a head.
-- **Selection:** `All`. A registration is one link-window, one proof unit, so an accepted outcome is the exhaustive fact.
+- **Selection:** `All`. A registration is one link-window, one proof block, so an accepted outcome is the exhaustive fact.
   The record's `window` provenance is exactly `{"kind": "served", "window": w}`, and the challenger holds w to the
   registration's order (`LinkWindows.register`): the receipt keeps the order, and the order is the link-window.
 - **The network verdict of record** is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε
@@ -257,7 +257,8 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   service: the service has no public kind for them), the declared syncs, and from the prover the statement's public
   file, its sessions, the circuit file and the salts of ``pub`` and ``o0`` with the output word; never the opening nor
   ``wit``'s salt. The outcome passes the registered root as the session's. A proof after `proof_deadline` is the
-  service's `late`. The verdict reads no frames, so its claim is counts only: the egress head's counts are the
+  service's `late`. On a plain, served or warden link the verdict of record is the Lean's (`NetworkCheck.LinkWindow`,
+  `service.OF_RECORD`), with the Python beside it as the reference; the README has the gap list and the replay. The verdict reads no frames, so its claim is counts only: the egress head's counts are the
   profile's (and the ingress head's, where that end declares one), which puts the link's timing at the profile. The
   egress grid is the head's counts filled with its frames in order, and the head's digest binds both, so the frames
   are the rest of the grid, and nothing in this protocol holds them: until N3 is a proof-service unit with Selection
@@ -290,6 +291,16 @@ only: the record leaves (0, 1), each certified record whole, are committed but n
 the certificates' signatures are checked on the host from their public fields, not in the proof. One clock per
 spatial unit across links is not checked (each registration is one link-window, alone), and the frames' consistency
 with the served computation is left to N3.
+
+## A warden link (`service.WardenProfile`)
+
+[protocol/warden-link.md](protocol/warden-link.md).
+
+## A period, as onsite's communication component (`verity/certifier/v0`)
+
+Onsite composes the network certifier as one `Core.Protocol`, `NetworkCheck.Period` (`network/lean`, the
+`network-period` executable), which publishes the bound `K` on what left the site with its terms:
+[protocol/period.md](protocol/period.md).
 
 ## A served link (`served`)
 
@@ -1156,7 +1167,7 @@ requests, whose frames are a function of the prompt's length alone), for every p
   verifier of record verified itself (`advised.IoTieVerdict`, naming the link, the registrations and the advice),
   given by the verifier's own tie source (`LinkWindows.ties`). The tie service (`tie_service.IngressTie`) builds it,
   and `tie_service.Ties` is that source. A registration is one ingress link-window, the warden's salted root of its
-  T bucket rows, held to the window's order, and T proof units, unit t bucket row t. The unit is
+  T bucket rows, held to the window's order, and T proof blocks, unit t bucket row t. The unit is
   `NetworkIngressTieBucket`: one gate naming IoTieRequest and its pinned circuit digest
   (`io_request.circuit-check.json`), its witness row the bucket row itself, read off the warden's root by the
   verifier's own registered read (`warden_rows.bucket_port`). The statement is a shared-row file whose `wit` table is
@@ -1290,7 +1301,7 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network cert
 | The shipped schedule, per window | `A_c` once, then `log2 #Σ_sync + T·log2 D` bits per window over the run's first m whole windows (n = m·T ≤ W·T): 7 bits per window at 16 × 8 sync values under J. Cumulative: a later window may carry more, since content advice and an earlier window's sync can first show in it | `SecurityProofs.EncardAccSeqsLeConstantRatePerWindow`; for a decoder of the wire, under W2 and J, `SecurityProofs.EncardDecodableLeConstantRatePerWindow` |
 | The advice string, with a precommitted, deterministic compiler | `Σ_w b_w + min(W, m)·log2 #Σ_sync + n·log2 D` bits, where `b_w` is the public cap on the advice charged to window w (I1's `bits(advice, w)`), fixed before the run. Over all W windows (n = W·T), `b_w + log2 #Σ_sync + T·log2 D` bits per window, cumulative as above | `SecurityProofs.EncardAccSeqsWithinLeConstantRate`; for a decoder of the wire, under W2, J and the compiler's two assumptions, `SecurityProofs.EncardDecodableWithinLeCompiled` and `SecurityProofs.EncardDecodableWithinLeCompiledPerWindow`; with advice v1's charge, no assumption on the charge: `SecurityProofs.EncardAccSeqsWithinLeConstantRateV1`, `SecurityProofs.EncardDecodableWithinLeCompiledV1`, `SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1` |
 | The circuit's Program under a sampled audit of its step units, at δ | `c + log2 #(faulty sets) + Σ_{v faulty} committed bits + n·log2 D` bits, where the inputs other than the ingress take at most `2^c` values and a faulty set is one `RAcc δ` allows (in `M_δ`, no unit drawn `All`). It holds on the runs an accepted audit gives, except with probability δ + ε_ks + ε_bind over the selection (`SampledAuditAccepted`), with c the unregistered ones, since `RAcc` pins the inputs to the trace. At δ ≥ miss(1) no unit may be faulty, and it is `c + n·log2 D` | `SecurityProofs.EncardAccSeqsSampledLe`, for a layout that fits the circuit (`Layout.Fits`); given `SampledAuditAccepted`, `SecurityProofs.SampledLeakAccepted` |
-| The warden (design v3): every byte re-framed into cells on a public schedule, a late cell fails its connection | `log2 #schedules + Σ_c log2(cells_c + 1)` bits besides the data, one fail choice per cell of each connection's lane or none. With the data from an advice string within the caps and `k` bits of content no proved unit fixes, `log2 #schedules + Σ_c log2(cells_c + 1) + Σ_w b_w + k` bits for the run | `SecurityProofs.WardenViewEqClientView`, `SecurityProofs.EncardWardenViewsLe`; for a decoder of the client's view, under `trusted-nebius-host` and `BitsCount`, `SecurityProofs.EncardWardenDecodableLe` |
+| The warden (design v3): every byte re-framed into cells on a public schedule, a late cell fails its connection | `log2 #schedules + Σ_c log2(cells_c + 1)` bits besides the data, one fail choice per cell of each connection's lane or none. With the data from an advice string within the caps and `k` bits of content no proved unit fixes, `log2 #schedules + Σ_c log2(cells_c + 1) + Σ_w b_w + k` bits for the run | `SecurityProofs.WardenViewEqClientView`, `SecurityProofs.EncardWardenViewsLe`; for a decoder of the client's view, under `trusted-host` and `BitsCount`, `SecurityProofs.EncardWardenDecodableLe` |
 | A fixed clock, under J (D = 1) | 0 bits of timing | `SecurityProofs.EncardAccSeqsLeFixedClock`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRateFixedClock` |
 | Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link, under J (D = 1), statuses complete | `SecurityProofs.EncardIngressDecodableLe`, `SecurityProofs.EncardIngressObsDecodableLe` |
 | Ingress, content plus timing | `log2 #Cs` bits plus the ingress timing | `SecurityProofs.EncardIngressDecodableLeContents`, `SecurityProofs.EncardIngressObsDecodableLeContents` |
@@ -1339,8 +1350,8 @@ The bound charges the caps `b_w`, not the realized lengths, since a run counts i
 it. The compiler must be registered before the run (`CompilerPrecommitted`), and its frames must read only the advice
 and the certified ingress (`CompilerDeterministic`). Each run's egress must equal the compiled Program's, which needs
 every egress frame tied, and which the tie gives only when no step unit can be faulty: every step unit drawn `All`, or a
-sampled audit at δ ≥ miss(1). At a smaller δ an accepted sampled audit gives `Accepted` only with the faulty units'
-committed gates held as advice (`SampledAuditAccepted`), and the charge adds the faulty units' committed bits and
+sampled audit at δ ≥ miss(1). At a smaller δ an accepted sampled audit gives `Accepted` only with the faulty proof blocks'
+committed gates held as advice (`SampledAuditAccepted`), and the charge adds the faulty proof blocks' committed bits and
 log2 of the number of possible faulty sets, except with probability δ + ε_ks + ε_bind over the selection
 (`SecurityProofs.SampledLeakAccepted`). Charging a window only for the windows up to it would need a causality
 assumption about the compiler, which the statement doesn't take.
@@ -1354,10 +1365,10 @@ data in the cells (`WardenViewEqClientView`): the server's accept time, send tim
 through the fail cells. NCI's transfer gates are these cells' bits, whose number per window the schedule fixes. The
 schedules are charged `log2 #schedules`, so a schedule that came to depend on the server is still counted. The content
 term (`k`: the egress data bits no proved unit fixes, `ε` times the data bits at the draw's `δ`) is a premise of the run,
-not an assumption. For the circuit's Program, `SecurityProofs.SampledLeakAccepted` counts it: the faulty units'
+not an assumption. For the circuit's Program, `SecurityProofs.SampledLeakAccepted` counts it: the faulty proof blocks'
 committed bits plus log2 of the number of possible faulty sets, except with probability δ + ε_ks + ε_bind.
 
-The inference-only policy charges an isolation unit the ingress covert capacity from the last wipe before it starts,
+The inference-only policy charges an isolation block the ingress covert capacity from the last wipe before it starts,
 plus what survived that wipe. `capacity.k_share` expresses bits as a share of K, which the caller passes in bits
 (`calibrate(k_bits=…)`, `--k-bits`): 9.12e7 under NCI's inference-only policy (α·Γ = 9.6e−11 × 9.5e17). The
 calibration report records the K it used.
@@ -1456,31 +1467,32 @@ The notation is for one audit of W windows:
     #𝒜_c · #Φ · #Σ_sync^W · D^n   elements,   that is   c + 1 + I_ε + W·log2 #Σ_sync + n·log2 D bits,
 
 and the audit accepts a run whose sequence lies outside it with probability at most δ_audit. Here Φ is the influence
-of the wrong units (step 3 below), I_ε = log2 #Φ, and δ_audit = δ + ε_ks + δ_link + δ_in is the error of
+of the faulty proof blocks (step 3 below), I_ε = log2 #Φ, and δ_audit = δ + ε_ks + δ_link + δ_in is the error of
 `audit_influence` (`Security/Proofs/Flock/Soundness/Audit/Influence.lean`).
 
 **Why it holds.**
 1. **Fix a.** Then every unit's circuit is fixed, because `compile` is a function of the registered items and of a. So
    for each a the audit is the one-stage audit of a fixed circuit, and `audit_influence` applies: the audit accepts
    while the values it delivers lie outside Φ_a with probability at most δ_audit. Φ_a is the set of values reachable
-   when the wrong units form a set whose escape is at least δ, and it is fixed before the draw.
-2. **With no wrong unit, the egress is a function of I and a.** Every committed value is the forward evaluation of the
+   when the faulty proof blocks form a set whose acceptance probability is at least δ, and it is fixed before the draw.
+2. **With no faulty proof block, the egress is a function of I and a.** Every committed value is the forward evaluation of the
    compiled circuits from I, w and a, because every value a circuit reads has exactly one writer (A2). Each tie unit
    then holds its frame to the canonical frame of the committed token at the (request, position) the advice maps it to.
    N2 holds each window's counts to the counts that the ingress counts and the advice derive. So the egress rows are
    the Program `constantRate T W ss frames` with content advice a: `frames ins a ℓ` gives each frame's payload, anchor
    and logical index.
-3. **A wrong unit adds its influence.** Take the content advice of step 2 to be (a, φ), where φ is the wrong units and
+3. **A faulty proof block adds its influence.** Take the content advice of step 2 to be (a, φ), where φ is the faulty
+   proof blocks and
    what they let through, so that Ac = 𝒜_c × Φ.
-   - A wrong step unit lets through its outputs, at most 16 bits (a unit's outputs are at most 16 bits), plus the
-     choice of which unit is wrong. That is `card_influenceSet_le_harm`'s `H + log2 Σ_{j ≤ K} C(n, j)`.
+   - A wrong step unit lets through its outputs: its public output, at most 16 bits, and its committed ones, their
+     bits, plus the choice of which unit is wrong. That is `card_influenceSet_le_harm`'s `H + log2 Σ_{j ≤ K} C(n, j)`.
    - A wrong tie unit lets through the frame it was to hold, not its one-bit verdict. That is 8·B bits, or about
      log2 V for the token alone if an exhaustive check holds every frame to the canonical form (attack 8).
 4. **Count.** `SecurityProofs.EncardAccSeqsLeConstantRate` with this Ac gives `#Ac · #Σ_sync^W · D^n`, so no new
    counting guarantee is needed. What is new is the bridge from steps 1 to 3: that an audit accepted by sampled proofs
    is, except with probability δ_audit, `Accepted` for some (a, φ). `Accepted` is the exact binding, in which every
    recorded row is the Program's. Today's audit gets it by recomputing the grid, and a sampled audit does not.
-   For the circuit's Program, `SampledAuditAccepted` (PRF-144, proved) is that bridge with φ the faulty units' committed
+   For the circuit's Program, `SampledAuditAccepted` (PRF-144, proved) is that bridge with φ the faulty proof blocks' committed
    gates, and `SecurityProofs.EncardAccSeqsSampledLe` is its count: φ costs those gates' bits plus log2 of the number
    of possible faulty sets. `SecurityProofs.SampledLeakAccepted` composes the two, with a pinned at the registered inputs.
 5. **The advice set.** `#𝒜_c ≤ 2^(c+1) − 1`. `encode` is injective (A5), so distinct advice values are distinct bit
@@ -1528,7 +1540,7 @@ Each assumption, and what breaks without it:
   in its context. Every consumer (the compiler, N2 and the tie) reads that one advice. If the advice can follow the
   draw, the prover picks, after the draw, an a under which the drawn units pass. The error then grows to as much as
   #𝒜_c · δ, which is vacuous. Each window's advice must precede its own units' draw. It may follow an earlier window's
-  draw, since an earlier window's wrong units are counted in Φ by their exits, whatever later circuits read them.
+  draw, since an earlier window's faulty proof blocks are counted in Φ by their exits, whatever later circuits read them.
 - **A5, the charge is the encoding every consumer decodes.**
   - `bits` counts the canonical, self-delimiting encoding of every field any consumer reads, and no consumer reads
     anything else. A field read from elsewhere (the Commit's row metadata, a default, a field an encoding stopped
@@ -1543,7 +1555,7 @@ Each assumption, and what breaks without it:
   - Each field is charged to a window no later than the first window whose rows it can change. Then the first m
     windows' charges bound the first m windows, which the per-window form needs, as `ExpectedRowCausal` gives it for
     the syncs. A prefill step that releases nothing is still charged.
-- **A6, the certifier's clock.** The buckets are the certifier's, under `trusted-nebius-host`, W1 to W6 and J (D = 1
+- **A6, the certifier's clock.** The buckets are the certifier's, under `trusted-host`, W1 to W6 and J (D = 1
   is no jitter), and the advice's release buckets are certifier buckets. Nothing else in the accounting reads a time.
   The challenger's readings of when a registration or a proof arrived (`received_at`) are the prover's choice within
   their deadlines, so they stay out of anything published, or they are charged.
@@ -1557,19 +1569,8 @@ and the ingress terms, which stay the K charge's.
 
 ### Attacks
 
-Moved to [protocol/arbitrary-serving-attacks.md](protocol/arbitrary-serving-attacks.md).
-
-### Adversarial cases
-
-Moved to [protocol/arbitrary-serving-attacks.md](protocol/arbitrary-serving-attacks.md).
-
-### The parts as drafted (24 Oct)
-
-Moved to [protocol/arbitrary-serving-attacks.md](protocol/arbitrary-serving-attacks.md).
-
-### For Daniel: what the guarantees would have to say
-
-Moved to [protocol/arbitrary-serving-attacks.md](protocol/arbitrary-serving-attacks.md).
+Moved to [protocol/arbitrary-serving-attacks.md](protocol/arbitrary-serving-attacks.md), with the adversarial cases, the
+parts as drafted (24 Oct) and what the guarantees would have to say.
 
 ## Calibration (`calibration`)
 
@@ -2323,7 +2324,7 @@ sealed under an AEAD built from SHA-512 alone.
   - S and its keys live only in the two certifier processes and on their hosts, never in a record, a log or the
     prover's configuration.
   - They are protocol keys, which seal frames, not access keys.
-  - Their custody joins `trusted-nebius-host`, which now also covers each pair's secret on its two hosts and the
+  - Their custody joins `trusted-host`, which now also covers each pair's secret on its two hosts and the
     deployment channel that installs it.
   - A leaked S opens that pair's link for that session. It changes no record and no verdict: the account only loses
     the premise below, and the link is charged as an unsealed one.
@@ -2352,7 +2353,7 @@ sealed under an AEAD built from SHA-512 alone.
     value certified equal to the committed output at a certifier on the facility boundary, or one of s side-channel
     bits per window.
   - **The premise:** every link between two spatial units is a sealed pair link between two of the auditor's
-    certifiers. The AEAD's security rests on `prf/sha-512`, and its keys' custody on `trusted-nebius-host`.
+    certifiers. The AEAD's security rests on `prf/sha-512`, and its keys' custody on `trusted-host`.
   - **What it changes:** A1's units are then the facility, not each block.
 - **What it costs** (run `r20261024-014147-3886`, `benchmarks/network_sim/mockdc.py seal`, on a CPU node: an AMD
   EPYC Genoa, 256 cores at a load of about 30, with `sha_ni` but no SHA-512 instructions, and OpenSSL 3.0.13).
@@ -2693,13 +2694,13 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
   release-order` adds requests to the engine in the order they were released: `x-verity-release: N`, N its `END`'s
   index among the ingress records' `END` cells, and `x-verity-release-run:` the warden's `run_id` (in
   `deployment.json`). The server gets a request whole at its `END`'s release, and nothing of a connection that fails
-  before it. The headers are on the server's leg only. No cell or record holds them, so the cell counts, the prompt
+  before it. The headers are on the server's side only. No cell or record holds them, so the cell counts, the prompt
   lengths and the I/O tie's request frames are unchanged. They reach the server, never the client, so the leak bound
   is unchanged. The active certifier's served proxy adds the same headers (`active_replay.ReleaseProxy`), with
   N = s − 1 for request stream s.
 
 **Named gaps:**
-- TLS isn't terminated: both legs are plain TCP.
+- TLS isn't terminated: both sides are plain TCP.
 - Every recorded run had the warden on the server's host, and the server gets the ingress bytes over loopback, with no
   shim on its side. `warden-rehearse` puts the warden and its client on the auditor's host and reaches the server
   through the gate's ssh tunnel to the peer's loopback. No run of it is recorded yet, and the tunnel's far end is still
@@ -2736,7 +2737,7 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
 
 ## The warden's cells as rows (`warden_rows`)
 
-Design v3 makes the transfer gates the cells' bits: the sender's proof unit opens a cell's row as an output and the
+Design v3 makes the transfer gates the cells' bits: the sender's proof block opens a cell's row as an output and the
 receiver's opens the same row as an input, under a root the warden signs, through the Lean verifier's registered
 reads (`Flock.Registered.checkPort`, `--registered`), with no new verifier form. `warden_rows.py`'s docstring has the
 encodings; this section says what is committed, signed and read.

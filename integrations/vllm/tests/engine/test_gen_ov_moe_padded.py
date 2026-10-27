@@ -15,14 +15,14 @@ import types
 
 import pytest
 
-from verity_vllm.engine.profiles.gen_ov_moe_patterns import MOE_CONSTRUCTION_PATTERNS, MoEFusedExperts, MoEFusedExpertsPadded, ov_moe_patterns
+from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import MOE_CONSTRUCTION_PATTERNS, MoEFusedExperts, MoEFusedExpertsPadded, ov_moe_patterns
 
-OV = importlib.import_module("verity_vllm.engine.profiles.derived_OLMOE")
+OV = importlib.import_module("verity_vllm.observe.fold.profiles.derived_OLMOE")
 from verity_vllm.observe.fold.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
 from tests.engine.test_gen_ov_moe import C, E, H, I, TOPK, _ctx, _start, moe_scope_events
 from verity_vllm.observe.fold.tree import step_events
 from verity.ml.circuits.defs import bind
-from verity_vllm.program.registry import moe_pad as MP
+from verity.ml.definitions.registry import moe_pad as MP
 
 PADDED = OV.with_moe_construction(OV.PROFILE, "padded")
 KERNEL_ORDER = OV.with_moe_construction(OV.PROFILE, "indexed-read")
@@ -70,7 +70,7 @@ def test_padded_compute_is_the_frontend_definition_and_its_operand_leaf_counts_a
     """The fold's spec IS the Definition the padded frontend rule binds (vocab kind `moe_ffn_fixed`): one id, one digest, one lift of
     record (`LMoeFfnL_v1`, hand-registered) -- GM-01 compares Build and record in that vocabulary."""
     from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as V
-    from verity_vllm.program.registry import lifted as L
+    from verity.ml.definitions.registry import lifted as L
     fold_spec = bind(MP.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=8, H=H, I=I)
     front_spec = V.kinds["moe_ffn_fixed"](E, TOPK, 8, H, I)
     assert fold_spec.id == front_spec.id == FIXED_ID and fold_spec.defn is front_spec.defn and fold_spec.bindings == front_spec.bindings
@@ -122,11 +122,11 @@ def test_the_construction_is_declared_and_selected_by_name_never_inferred(tmp_pa
 def test_fold_refuses_a_declared_construction_the_profile_cannot_fold():
     """A `padded` declaration on a profile without the hook FAILS by name before the log is read: the MOE-01 fold is never a silent stand-in."""
     from verity_vllm.pipeline.match import fold_summary_result
-    fake = types.ModuleType("verity_vllm.engine.profiles._moe_test_nohook")
+    fake = types.ModuleType("verity_vllm.observe.fold.profiles._moe_test_nohook")
     fake.PROFILE = OV.PROFILE
-    sys.modules["verity_vllm.engine.profiles._moe_test_nohook"] = fake
+    sys.modules["verity_vllm.observe.fold.profiles._moe_test_nohook"] = fake
     try:
         with pytest.raises(SystemExit, match="with_moe_construction"):
             fold_summary_result("/nonexistent/log.jsonl.gz", "_moe_test_nohook", moe_construction="padded")
     finally:
-        del sys.modules["verity_vllm.engine.profiles._moe_test_nohook"]
+        del sys.modules["verity_vllm.observe.fold.profiles._moe_test_nohook"]

@@ -25,6 +25,11 @@ page 16, num_splits 1, softmax scale D^-0.5, causal as vLLM passes it):
       first and causal-masked ones (`masked_from`) -- and every output row against `Attention_v4` evaluated on the launch's inputs
       (`out_vs_ir`: the twin, and the reference evaluator on rows the twin does not cover).
 
+Beside the property, an FA3 run can check every row of its prefill launches against the decode-shaped Definitions (`--against-decode`,
+`prefill_cases`, `out_vs_decode`, `decode_shaped`): `Attention_v4` at the one-row decode's tile (`decode_tile`) and its `MASKED_FROM`,
+which the window circuit's class Program binds at every position, prompt positions included, while the engine prefills a prompt at the
+prefill's tile (VLLM-127).  It is a finding, not part of `ok`.
+
 Every stream word is `FILL` before the launch.  The `edge_rows` cases give some query rows the scores -inf (so the max and the guard see
 -inf everywhere), +inf or NaN throughout (`SPECIAL`).
 
@@ -103,6 +108,33 @@ def cases(fa_version: int, quick: bool = False) -> list[dict[str, Any]]:
         cs += [_case("smallq_onewg", 4, 2, [3, 5, 8, 1], [3, 700, 8, 129]),
                _case("chunked_tail", 4, 2, [64, 40], [164, 290])]
     return [c for c in cs if c["name"] in QUICK] if quick else cs
+
+
+#: the H200 window class of record's attention heads (32 query heads over 8 KV heads) prefilling its 1,024-id prompt, beside a 200-id
+#: and a 17-id prompt (VLLM-127)
+GQA4_PREFILL = _case("prefill_1024_gqa4", 32, 8, [1024, 200, 17], [1024, 200, 17])
+
+
+def prefill_cases(quick: bool = False) -> list[dict[str, Any]]:
+    """The FA3 launches with a prefill row (some sequence's seqlen_q above 1) that the decode-shaped check reads, and `GQA4_PREFILL`."""
+    return [c for c in cases(3, quick) if max(c["seqlens_q"]) > 1] + [GQA4_PREFILL]
+
+
+def decode_tile(D: int, g: int) -> tuple[int, int]:
+    """(kBlockM, kBlockN) of FA3's one-row decode at head dim D and g query heads a KV head: the tile the class Program's Definitions are
+    bound at (`window_circuit`: every position a one-row decode, `targets.attention_spec` at seqlen_q 1)."""
+    return fa3_tile(D, 1, g, 1)
+
+
+def decode_shaped(doc: dict[str, Any]) -> dict[str, Any]:
+    """A record's prefill rows against the decode-shaped Definitions (its cases' `out_vs_decode`): `exact` when every row is evaluated and
+    equals `Attention_v4` at the one-row decode's tile; the mismatched rows (those whose every score is special apart) and the fewest keys
+    a mismatched row sees."""
+    es = [e["out_vs_decode"] for e in doc["cases"] if e.get("out_vs_decode")]
+    total = {k: sum(e.get(k, 0) for e in es) for k in ("rows", "heads", "mismatch", "mismatch_rows", "special_mismatch_rows", "unevaluated")}
+    least = [e["min_T_mismatch"] for e in es if e.get("min_T_mismatch") is not None]
+    return {**total, "cases": len(es), "min_T_mismatch": min(least) if least else None,
+            "exact": bool(es) and total["rows"] > 0 and total["mismatch"] == 0 and total["unevaluated"] == 0}
 
 
 def geometry(fa_version: int, c: dict[str, Any], D: int, swapped: bool | None = None) -> dict[str, Any]:
@@ -201,7 +233,7 @@ def masked_digest(words: np.ndarray, layout: StreamLayout) -> str:
 def ir_guard(m: int) -> int:
     """The IR model's `GuardNegInfZero_v1(m)` by the reference evaluator."""
     from verity.ml.circuits.evaluation.reference import evaluate
-    from verity_vllm.program.registry import prims
+    from verity.ml.definitions.registry import prims
 
     return int(evaluate(prims.GuardNegInfZero, int(m))[0])
 
@@ -210,7 +242,7 @@ def check_row3(words: np.ndarray, layout: StreamLayout, rows: Iterator[tuple[int
     """ROW word 3 of a guarded-max build at every visited (slab, row, block): the IR's `GuardNegInfZero_v1` of the entry's row_max (word 0)
     at every block after the row's first (the kernel visits blocks n_block_max - 1 .. 0), 0 at the first.  All words by the twin, and
     `ir_sample` of them (every distinct special row_max among them) by the reference evaluator."""
-    from verity_vllm.program.kernels.derived_rows import guard_neg_inf_zero
+    from verity.ml.definitions.numerics.derived_rows import guard_neg_inf_zero
 
     R = _row_plane(np.asarray(words, dtype=np.uint32), layout)
     later: list[tuple[int, int, int]] = []
@@ -242,16 +274,16 @@ def check_row3(words: np.ndarray, layout: StreamLayout, rows: Iterator[tuple[int
 def scale_log2_bits(c: dict[str, Any], D: int) -> int:
     """The f32 bits of the kernel's `scale_softmax_log2` for case `c` at head dim `D`, the IR's constant: softmax_scale * log2(e), or
     softcap * log2(e) with a softcap."""
-    from verity_vllm.program.registry import b1, dense
+    from verity.ml.definitions.registry import b1, dense
 
-    return dense.softcap_scale_log2_bits(c["softcap"]) if c["softcap"] else b1._scale_log2_bits(D)
+    return dense.softcap_scale_log2_bits(c["softcap"]) if c["softcap"] else b1.scale_log2_bits(D)
 
 
 def ir_max_scaled(m: int, scale_log2: int, check: bool = True) -> int:
     """The IR model's `F32MulFtz_v1(GuardNegInfZero_v1(m), scale_log2)` by the reference evaluator (`check` False: `AttnBlock_v4`'s
     unguarded iteration, `F32MulFtz_v1(m, scale_log2)`)."""
     from verity.ml.circuits.evaluation.reference import evaluate
-    from verity_vllm.program.registry import prims
+    from verity.ml.definitions.registry import prims
 
     return int(evaluate(prims.F32MulFtz, ir_guard(m) if check else int(m), int(scale_log2))[0])
 
@@ -262,7 +294,7 @@ def check_ms(words: np.ndarray, layout: StreamLayout, rows: Iterator[tuple[int, 
     row_max (word 0, the running max after the block).  With `masked_from` (FA3 under `check-inf-per-iteration`) the guard applies only at
     blocks >= the row's value, as `AttnBlock_v4{CHECK}`.  All words by the twin, `ir_sample` of them (every distinct special row_max among
     them) by the reference evaluator; mismatches whose row_max is -inf are counted apart."""
-    from verity_vllm.program.kernels.derived_rows import guard_neg_inf_zero, mul_ftz
+    from verity.ml.definitions.numerics.derived_rows import guard_neg_inf_zero, mul_ftz
 
     w = np.asarray(words, dtype=np.uint32)
     R, o = _row_plane(w, layout), layout.offsets
