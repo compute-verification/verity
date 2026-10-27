@@ -3744,6 +3744,180 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
   return 0;
 }
 
+// A step's calls in served order: a Fill for each shape V31_STEP names, each in a domain slot of its own (the shapes share
+// ROW, so C), every call's compute on one stream and every commit on another (a split's, on a split), so each call's
+// commit runs beside the later calls' compute, as far behind as its own shape's two copies allow. V31_STEP
+// "q,kv,q,up,down*52+head": a layer's calls by shape name, the layers (default 1), then the calls once a step. Each call
+// forms its weight side (ovl_w's calls) on its own A. For each N of V31_GSMS (default 0, every SM), step_gN: a step an
+// item; then on each split, one step into poisoned buffers with each shape's last call's two sampled tiles to
+// NAME-step-gN. V31_ITEM_MS as fill-bench's. One JSON line.
+static int cmd_fill_step(int reps, const std::string& out, const std::string& pdir, int lp, int Lspec, int row,
+                         const std::vector<std::string>& shapes) {
+  struct Shape {
+    std::string name;
+    int m, n, k;
+  };
+  std::vector<Shape> all, used;
+  for (const auto& sh : shapes) {
+    char name[64];
+    int m, n, k;
+    if (sscanf(sh.c_str(), "%63[^:]:%d:%d:%d", name, &m, &n, &k) != 4) { fprintf(stderr, "bad shape %s\n", sh.c_str()); return 2; }
+    all.push_back({name, m, n, k});
+  }
+  const std::string spec = env_str("V31_STEP", "");
+  std::string layer = spec, tail;
+  int layers = 1;
+  if (const size_t p = layer.find('+'); p != std::string::npos) { tail = layer.substr(p + 1); layer = layer.substr(0, p); }
+  if (const size_t p = layer.find('*'); p != std::string::npos) { layers = atoi(layer.c_str() + p + 1); layer = layer.substr(0, p); }
+  auto seq_of = [&](const std::string& s, std::vector<int>& seq) {
+    std::istringstream is(s);
+    for (std::string nm; std::getline(is, nm, ',');) {
+      if (nm.empty()) continue;
+      int i = -1;
+      for (size_t j = 0; j < used.size() && i < 0; j++)
+        if (used[j].name == nm) i = (int)j;
+      for (size_t j = 0; j < all.size() && i < 0; j++)
+        if (all[j].name == nm) { used.push_back(all[j]); i = (int)used.size() - 1; }
+      if (i < 0) { fprintf(stderr, "V31_STEP: no shape named %s among the arguments\n", nm.c_str()); return false; }
+      seq.push_back(i);
+    }
+    return true;
+  };
+  std::vector<int> lseq, tseq;
+  if (!seq_of(layer, lseq) || !seq_of(tail, tseq)) return 2;
+  if (lseq.empty() || layers < 1) { fprintf(stderr, "V31_STEP: NAME,NAME...[*LAYERS][+NAME,...], not \"%s\"\n", spec.c_str()); return 2; }
+  const size_t ns = used.size();
+  if ((int)ns > COMMIT_GPU_DOMS) {
+    fprintf(stderr, "V31_STEP: %zu shapes, %d domain slots (build with -DCOMMIT_GPU_DOMS=%zu)\n", ns, COMMIT_GPU_DOMS, ns);
+    return 2;
+  }
+  std::vector<int> gsms;
+  {
+    std::string g = env_str("V31_GSMS", "0");
+    for (char& c : g)
+      if (c == ',' || c == '_') c = ' ';
+    std::istringstream is(g);
+    for (int x; is >> x;)
+      if (x >= 0 && std::find(gsms.begin(), gsms.end(), x) == gsms.end()) gsms.push_back(x);
+  }
+  gk::Nvml nv(0);
+  cudaDeviceProp prop;
+  CK(cudaGetDeviceProperties(&prop, 0));
+  std::mt19937_64 rng(std::random_device{}());
+  const bool served = env_int("V31_SERVED", 0) != 0;
+  const double item_ms = env_int("V31_ITEM_MS", 0) > 0 ? env_int("V31_ITEM_MS", 0) : gk::ITEM_MS;
+  const Knobs kn;
+  int lo, hi;
+  CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
+  cudaStream_t c0, c1;
+  CK(cudaStreamCreateWithPriority(&c0, cudaStreamNonBlocking, kn.cprio == "lo" ? hi : lo));
+  CK(cudaStreamCreateWithPriority(&c1, cudaStreamNonBlocking, kn.cprio == "hi" ? hi : lo));
+  std::vector<Fill> fs(ns);
+  std::vector<int8_t*> As(ns);
+  std::vector<std::vector<uint8_t>> sds(ns, std::vector<uint8_t>(384));
+  std::vector<std::string> pfiles(ns);
+  std::vector<int> per_step(ns, 0);
+  for (const int x : lseq) per_step[x] += layers;
+  for (const int x : tseq) per_step[x]++;
+  for (size_t i = 0; i < ns; i++) {
+    const Shape& s = used[i];
+    const int L = Lspec > 0 ? Lspec : s.k;
+    pfiles[i] = pdir + "/" + fill_params_name(s.m, s.n, s.k, lp, L, row, served);
+    Fill& f = fs[i];
+    f.o = served;
+    f.setup(s.m, s.n, s.k, lp, L, row, read_params(pfiles[i]), (int)i, c0, c1);
+    As[i] = dalloc<int8_t>((size_t)s.m * s.k);
+    gen_kernel<<<s.m, 256, 0, c0>>>(As[i], s.k, (u32)rng(), true);
+    gen_kernel<<<s.n, 256, 0, c0>>>(f.B, s.k, (u32)rng(), false);
+    for (auto& x : sds[i]) x = (uint8_t)rng();
+    if (served) std::fill(sds[i].begin(), sds[i].begin() + 64, 0);
+    f.set_seeds(sds[i].data());
+  }
+  // C is one a process: every shape's params must give the same one, Ks aside (each call sets its own)
+  auto c_of = [](Consts c) {
+    memset(c.ks, 0, sizeof c.ks);
+    memset(c.ks_m8, 0, sizeof c.ks_m8);
+    return c;
+  };
+  for (size_t i = 1; i < ns; i++) {
+    const Consts a = c_of(fs[0].cm[0].hc), b = c_of(fs[i].cm[0].hc);
+    if (memcmp(&a, &b, sizeof a)) {
+      fprintf(stderr, "V31_STEP: %s's params give another C than %s's\n", used[i].name.c_str(), used[0].name.c_str());
+      return 2;
+    }
+  }
+  CK(cudaStreamSynchronize(c0));
+  auto step = [&](cudaStream_t s, int r, const Split* p) {
+    for (Fill& f : fs) f.use(p);
+    if (p) split_fork(p, s);
+    for (int i = 0; i < r; i++)
+      for (int l = 0; l <= layers; l++)
+        for (const int x : l < layers ? lseq : tseq) fs[x].issue(fs[x].calls * fs[x].leaves, As[x], Cheat{}, true);
+    for (Fill& f : fs) {
+      f.flush();
+      for (int b = 0; b < 2; b++) CK(cudaStreamWaitEvent(s, f.ev_done[b]));
+    }
+  };
+  std::vector<gk::Arm> arms;
+  for (const int gn : gsms) {
+    const Split* p = split_of(gn);
+    for (Fill& f : fs) f.prep(p);
+    arms.push_back({"step_g" + std::to_string(gn), [&step, p](cudaStream_t s, int r) { step(s, r, p); }});
+  }
+  const gk::Timing tm = gk::timed_items(arms, reps, c0, nv, item_ms);
+  CK(cudaGetLastError());
+  gk::summary(tm, arms, stderr);
+  for (const int gn : gsms) {
+    const Split* p = split_of(gn);
+    for (Fill& f : fs) {
+      f.use(p);
+      for (int b = 0; b < 2; b++) {
+        f.poison(b, c0);
+        gk::poison(f.cm[b].levels, f.levels_count() * 64, c0);
+      }
+    }
+    CK(cudaStreamSynchronize(c0));
+    step(c0, 1, p);
+    for (size_t i = 0; i < ns; i++) {
+      const int b = fs[i].ready(fs[i].calls - 1);
+      CK(cudaGetLastError());
+      fill_samples(fs[i], b, out + "/samples/" + used[i].name + "-step-g" + std::to_string(gn), pfiles[i], sds[i], As[i],
+                   (u32)rng());
+    }
+  }
+  printf("{\"fill_step\": true, \"step\": \"%s\", \"layers\": %d, \"lp\": %d, \"L\": %d, \"row\": %d, \"o\": %s, \"gpu\": \"%s\", "
+         "\"sms\": %d, \"cprio\": \"%s\", \"ccta\": %d, \"pf\": %d, \"sched\": %d, \"wg\": %d, \"wgw\": %d, \"rp\": %d, "
+         "\"lminb\": %d, \"sahead\": %d, \"gcoins\": %d, \"item_ms\": %.1f, \"steady\": %s, \"shapes\": [",
+         spec.c_str(), layers, lp, Lspec, row, served ? "true" : "false", prop.name, fs[0].nsm, kn.cprio.c_str(), kn.ccta, kn.pf,
+         kn.sched, fs[0].wg ? 1 : 0, fs[0].wgw ? 1 : 0, kn.rp, kn.lminb, kn.sahead ? 1 : 0, kn.gcoins, item_ms,
+         tm.steady ? "true" : "false");
+  for (size_t i = 0; i < ns; i++)
+    printf("%s{\"shape\": \"%s\", \"m\": %d, \"n\": %d, \"k\": %d, \"calls\": %d}", i ? ", " : "", used[i].name.c_str(), used[i].m,
+           used[i].n, used[i].k, per_step[i]);
+  printf("], \"gsms\": [");
+  for (size_t i = 0; i < gsms.size(); i++) {
+    const Split* p = split_of(gsms[i]);
+    printf("%s{\"n\": %d, \"sms\": [%d, %d]}", i ? ", " : "", gsms[i], p ? p->sms[0] : fs[0].nsm, p ? p->sms[1] : fs[0].nsm);
+  }
+  printf("], \"arms\": {");
+  for (size_t a = 0; a < arms.size(); a++) {
+    std::vector<double> v, fq;
+    for (const auto& it : tm.items)
+      if (it.arm == (int)a) { v.push_back(it.ms / it.calls); if (it.sm_mhz()) fq.push_back(it.sm_mhz()); }
+    printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f, \"calls\": %d}", a ? ", " : "", arms[a].name.c_str(), gk::median(v),
+           gk::median(fq), arms[a].calls);
+  }
+  printf("}}\n");
+  fflush(stdout);
+  FILE* items = fopen((out + "/items-step.jsonl").c_str(), "w");
+  if (items) { gk::items_jsonl(tm, arms, items); fclose(items); }
+  CK(cudaDeviceSynchronize());
+  for (Fill& f : fs) f.drop_splits();
+  splits_free();
+  CK(cudaDeviceReset());
+  return 0;
+}
+
 #ifdef V31_LIB
 // ---------------------------------------------------------------- the per-call binding (v31lib.py over ctypes)
 // One process, one device: every context shares its compute and commit streams (V31_GSM, V31_GSM_BY: its split's, shared
@@ -3945,6 +4119,9 @@ int main(int argc, char** argv) {
   if (argc >= 9 && !strcmp(argv[1], "fill-bench"))
     return cmd_fill_bench(atoi(argv[2]), argv[3], argv[4], atoi(argv[5]), atoi(argv[6]), atoi(argv[7]),
                           std::vector<std::string>(argv + 8, argv + argc));
+  if (argc >= 9 && !strcmp(argv[1], "fill-step"))
+    return cmd_fill_step(atoi(argv[2]), argv[3], argv[4], atoi(argv[5]), atoi(argv[6]), atoi(argv[7]),
+                         std::vector<std::string>(argv + 8, argv + argc));
   if (argc == 7 && !strcmp(argv[1], "once")) return cmd_once(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), argv[6]);
   if (argc == 7 && !strcmp(argv[1], "fill-once"))
     return cmd_fill_once(argv[2], atoi(argv[3]), atoi(argv[4]), atoi(argv[5]), argv[6]);
@@ -3959,8 +4136,8 @@ int main(int argc, char** argv) {
     return 0;
   }
   fprintf(stderr, "usage: v31 gate DIR M N K LP T ROW CHEAT | bench REPS OUT PDIR LP T ROW name:M:N:K... | once PDIR LP T ROW "
-                  "name:M:N:K | fill-bench REPS OUT PDIR LP L ROW name:M:N:K... (L 0: K) | fill-once PDIR LP L ROW name:M:N:K "
-                  "| attrs\n");
+                  "name:M:N:K | fill-bench REPS OUT PDIR LP L ROW name:M:N:K... (L 0: K) | fill-step REPS OUT PDIR LP L ROW "
+                  "name:M:N:K... (V31_STEP) | fill-once PDIR LP L ROW name:M:N:K | attrs\n");
   return 2;
 }
 #endif

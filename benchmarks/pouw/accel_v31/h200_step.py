@@ -24,7 +24,13 @@ step from its arm of record (`ovl_w_gN`, a filler's `ovl_pad_gN`; N 0 the same c
 against the whole GPU's (`gemm_gN` over `gemm`), the commit alone on the rest (`commit_gN`), the hashing hidden (the serial
 split's sum less the step, over its hashing), and the step with each call's best N (that call's shape on its own split).
 
-    python3 h200_step.py BENCH.jsonl ... [--wgmma 3.06]
+`v31 fill-step`'s lines (`"fill_step": true`, run.sh's FILL_STEPS) time a step's calls in served order: each shape's calls
+on its own two copies, every commit beside the later calls' compute, as far behind as its shape's two copies allow, for
+each N of its splits (`step_gN`). The model is the one whose calls its shapes' are; gamma_u is against wgmma.linear's step
+from the same variant's fill-bench lines (at its L', L and ROW), the hashing hidden is their serial split less the step,
+over its hashing, and beside it is their step at that N (each shape's calls back to back).
+
+    python3 h200_step.py BENCH.jsonl ... [STEP.jsonl ...] [--wgmma 3.06]
 """
 from __future__ import annotations
 
@@ -50,6 +56,46 @@ def rows(paths: list[str]) -> list[dict]:
         for line in Path(p).read_text().splitlines():
             if line.startswith("{") and '"gamma_ovl"' in line:
                 out.append(json.loads(line) | {"variant": Path(p).stem.removeprefix("fill-").removeprefix("bench-")})
+    return out
+
+
+def step_rows(paths: list[str]) -> list[dict]:
+    """Each fill-step line, with its variant: the file's name past `fill-step-` (run.sh writes a variant's lines to one
+    file, as fill-bench's)."""
+    out = []
+    for p in paths:
+        for line in Path(p).read_text().splitlines():
+            if line.startswith("{") and '"fill_step"' in line:
+                out.append(json.loads(line) | {"variant": Path(p).stem.removeprefix("fill-step-")})
+    return out
+
+
+def served_order(steps_: list[dict], lines: list[dict], m: int = 16384, wg: dict[str, float] = WGMMA) -> list[dict]:
+    """Each fill-step line's model (None: its shapes' calls are no model's at M m) and for each N it timed: the step, the
+    SMs, gamma_u (against the same variant's fill-bench wgl, else wg's), the hashing hidden (their serial split less the
+    step, over its hashing) and their step at that N (`apart`, each shape's calls back to back)."""
+    out = []
+    for r in steps_:
+        calls = {(s["n"], s["k"]): s["calls"] for s in r["shapes"]}
+        model = next((x for x, c in MODELS.items() if c == calls and all(s["m"] == m for s in r["shapes"])), None)
+        key = (r["lp"], r["L"], r["row"], bool(r.get("o")), r.get("variant", ""))
+        fb = fill_steps(lines, m, MODELS[model]).get(key) if model else None
+        sp = split_steps(lines, m, MODELS[model]).get(key) if model else None
+        wgl = fb["s"]["wgl"] if fb else None
+        ref = wgl or wg.get(model)
+        serial = fb["tensor"] + fb["hashing"] + fb["other"] if fb else None
+        per = {}
+        for g in r["gsms"]:
+            a = r["arms"].get(f"step_g{g['n']}")
+            if not a:
+                continue
+            step = a["ms"] / 1e3
+            apart = sp["n"][g["n"]]["step"] if sp and g["n"] in sp["n"] else fb["step"] if fb and not g["n"] else None
+            per[g["n"]] = {"step": step, "sms": tuple(g["sms"]), "mhz": a.get("mhz") or None,
+                           "gamma_u": step / ref if ref else None, "apart": apart,
+                           "hidden": (serial - step) / fb["hashing"] if fb and fb["hashing"] else None}
+        out.append({"model": model, "key": key, "spec": r["step"], "ref": ref, "wgl": wgl, "serial": serial,
+                    "hashing": fb["hashing"] if fb else None, "steady": r.get("steady"), "n": per})
     return out
 
 
@@ -209,6 +255,31 @@ def main() -> int:
                   f"{n1} step {one['step']:.3f} s{gu(one['step'])}, hashing hidden {f(one['hidden'], '.1%')}; each call's "
                   f"N ({', '.join(f'{s} {n}' for s, n in v['pick'].items())}) step {v['best']:.3f} s{gu(v['best'])}, hashing "
                   f"hidden {f(v['best_hidden'], '.1%')}; serial {v['serial']:.3f} s (hashing {v['hashing']:.3f} s){against}")
+    so = served_order(step_rows(a.files), lines, wg=wg)
+    if so:
+        found = True
+        f = lambda x, p=".3f": "-" if x is None else format(x, p)  # noqa: E731
+        print("\nDither's no-fold calls in served order (each shape's calls on its own two copies, every commit beside the "
+              "later calls' compute)\n\n| model | L' | L | ROW | kind | variant | N | SMs | step s | gamma_u | fill-bench's "
+              "step s | serial s | hashing hidden | SM MHz |")
+        print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+        for v in so:
+            lp, L, row, o, var = v["key"]
+            for n, x in v["n"].items():
+                sms = f"{x['sms'][0]} + {x['sms'][1]}" if n else "every SM"
+                print(f"| {v['model'] or v['spec']} | {lp} | {L} | {row} | {'served' if o else 'filler'} | {var} | {n} | "
+                      f"{sms} | {x['step']:.3f} | {f(x['gamma_u'])} | {f(x['apart'])} | {f(v['serial'])} | "
+                      f"{f(x['hidden'], '.1%')} | {f(x['mhz'], '.0f')} |")
+        for v in so:
+            lp, L, row, o, var = v["key"]
+            rn = "these lines' wgl" if v["wgl"] else "wgmma's"
+            against = f", gamma_u against {rn} {v['ref']:.3f} s" if v["ref"] else ""
+            for n, x in v["n"].items():
+                gu = f", gamma_u {x['gamma_u']:.3f}" if x["gamma_u"] else ""
+                print(f"summary: {v['model'] or v['spec']} served order {'served' if o else 'filler'} L {L} L' {lp} row "
+                      f"{row} {var} N {n}: step {x['step']:.3f} s{gu}, hashing hidden {f(x['hidden'], '.1%')}; "
+                      f"fill-bench's step at N {n} {f(x['apart'])} s; serial {f(v['serial'])} s (hashing "
+                      f"{f(v['hashing'])} s){against}{'' if v['steady'] else '; clock not steady'}")
     if not found:
         print("summary: no complete step (a bench shape is missing)")
     return 0 if found else 1

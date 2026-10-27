@@ -143,6 +143,51 @@ def test_a_split_gives_each_ns_step_its_gemms_slowdown_the_hashing_hidden_and_ea
             "against these lines' wgl 0.160 s") in out
 
 
+def test_a_served_order_step_is_against_its_variants_fill_bench_lines(tmp_path, capsys, monkeypatch):
+    """fill-step's lines: the model is the one whose calls the line's shapes' are; each N's step is its step_gN, gamma_u
+    against the same variant's fill-bench wgl, the hashing hidden their serial split less the step, over its hashing, and
+    beside it their step at that N; a line whose calls are no model's prints under its spec, with no reference."""
+    calls = h200_step.MODELS["8b"]
+    lines = [json.loads(_fill_line(n, k, True)) for n, k in calls]
+    for x in lines:
+        x["lp"] = 512
+        x["gsms"] = [{"n": 0, "sms": [132, 132]}, {"n": 64, "sms": [64, 68]}]
+        x["arms"] |= {"wgl": {"ms": 1.25, "mhz": 1980}, "ovl_w_g0": {"ms": 2.0, "mhz": 1980},
+                      "ovl_w_g64": {"ms": 1.8, "mhz": 1980}}
+    f = tmp_path / "fill-bench-served1-gemm1-L4096.jsonl"
+    f.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+    names = {(6144, 4096): "qkv", (4096, 4096): "o", (28672, 4096): "gu", (4096, 14336): "down"}
+
+    def step(spec: str, per: dict[tuple[int, int], int]) -> str:
+        return json.dumps({"fill_step": True, "step": spec, "layers": 32, "lp": 512, "L": 4096, "row": 16384, "o": True,
+                           "steady": True, "shapes": [{"shape": names[nk], "m": 16384, "n": nk[0], "k": nk[1], "calls": c}
+                                                      for nk, c in per.items()],
+                           "gsms": [{"n": 0, "sms": [132, 132]}, {"n": 64, "sms": [64, 68]}],
+                           "arms": {"step_g0": {"ms": 250.0, "mhz": 1700, "calls": 1},
+                                    "step_g64": {"ms": 224.0, "mhz": 1900, "calls": 1}}})
+
+    g = tmp_path / "fill-step-served1-gemm1-L4096.jsonl"
+    g.write_text(step("qkv,o,gu,down*32", calls) + "\n" + step("qkv*32", {(6144, 4096): 32}) + "\n")
+    so = h200_step.served_order(h200_step.step_rows([str(f), str(g)]), h200_step.rows([str(f), str(g)]))
+    assert [v["model"] for v in so] == ["8b", None]
+    n0, n64 = so[0]["n"][0], so[0]["n"][64]
+    assert so[0]["ref"] == pytest.approx(128 * 1.25e-3) and so[0]["serial"] == pytest.approx(128 * 2.2e-3)
+    assert n64["step"] == pytest.approx(0.224) and n64["sms"] == (64, 68) and n64["mhz"] == 1900
+    assert n64["gamma_u"] == pytest.approx(1.4) and n64["apart"] == pytest.approx(128 * 1.8e-3)
+    assert n64["hidden"] == pytest.approx((0.2816 - 0.224) / 0.0832)
+    assert n0["apart"] == pytest.approx(128 * 2e-3) and n0["hidden"] == pytest.approx((0.2816 - 0.25) / 0.0832)
+    assert so[1]["ref"] is None and so[1]["n"][64]["gamma_u"] is None and so[1]["n"][64]["hidden"] is None
+    monkeypatch.setattr(sys, "argv", ["h200_step.py", str(f), str(g)])
+    assert h200_step.main() == 0
+    out = capsys.readouterr().out
+    assert ("| 8b | 512 | 4096 | 16384 | served | served1-gemm1-L4096 | 64 | 64 + 68 | 0.224 | 1.400 | 0.230 | 0.282 | "
+            "69.2% | 1900 |") in out
+    assert "| qkv*32 | 512 | 4096 | 16384 | served | served1-gemm1-L4096 | 0 | every SM | 0.250 | - | - | - | - | 1700 |" in out
+    assert ("summary: 8b served order served L 4096 L' 512 row 16384 served1-gemm1-L4096 N 64: step 0.224 s, gamma_u "
+            "1.400, hashing hidden 69.2%; fill-bench's step at N 64 0.230 s; serial 0.282 s (hashing 0.083 s), gamma_u "
+            "against these lines' wgl 0.160 s") in out
+
+
 def test_pipe_duty_is_each_kernels_busy_time_over_the_overlapped_call(tmp_path, capsys):
     """h200_pipes.py: a pipe's busy time is its share of peak over the kernel's elapsed cycles (active / elapsed scales
     it) times the kernel's duration (in ncu's unit, refused when it's none it knows), the larger of its issue and

@@ -40,7 +40,10 @@
 # timeline`'s .timeline.md. FILL_PROF=1, after the bench, runs Nsight Compute's pipe utilization on `v31 fill-once`
 # (OVL_CALLS overlapped calls, default 4) for the first variant on each shape and L, and h200_pipes.py's duty of each pipe
 # over the overlapped call (pipes.md). FILL_ONE_LEASE=1 runs the gates, nsys, bench and prof under one LEASE after the
-# builds, in place of a lease each (the GPU's queue between them can be hours long).
+# builds, in place of a lease each (the GPU's queue between them can be hours long). FILL_STEPS, V31_STEP specs
+# ("q,kv,q,up,down*52+head": a layer's FILL_SHAPES names, the layers, the calls once a step), runs `v31 fill-step` (a
+# build with 8 domain slots) on each, for each variant and L, after the bench: out/fill-step-TAG-L.jsonl, its calls'
+# sampled tiles checked as the bench's, and h200_step.py's served-order table (step.md). FILL_BENCH=0 skips the bench.
 #
 # HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof|nsys|fill (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
@@ -133,11 +136,16 @@ if [ "$MODE" = fill ]; then
   [ "$VARIANTS" = row=8192 ] && VARIANTS="row=1024,cprio=hi,sched=1 row=8192,cprio=hi,sched=1"
   FILL_LS=${FILL_LS:-"768 2048"}
   FILL_SHAPES=${FILL_SHAPES:-"8B-qkv:16384:6144:4096 8B-o:16384:4096:4096 8B-up:16384:28672:4096 8B-down:16384:4096:14336"}
-  export VARIANTS FILL_SHAPES FILL_LS LP REPS Q D PY
+  FILL_STEPS=${FILL_STEPS:-}
+  export VARIANTS FILL_SHAPES FILL_LS FILL_STEPS LP REPS Q D PY
   # shellcheck disable=SC2086
   nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v ${SHA_FLAGS:--DSHA_ADD=0 -DSHA_ROT=0 -DSHA_ROLL=1} -DV31_LIB -DCOMMIT_GPU_DOMS=8 ${NVFLAGS:-} \
     -Xcompiler -fPIC -shared -o "$W/libv31.so" $D/v31.cu -lcuda -lcublasLt > "$O/build-lib.log" 2>&1
   echo "build lib rc $?" >> "$O/rc.txt"
+  if [ -n "$FILL_STEPS" ]; then
+    build "$W/v31-step" "$O/build-step.log" -DCOMMIT_GPU_DOMS=8
+    echo "build step rc $?" >> "$O/rc.txt"
+  fi
   for v in $VARIANTS; do
     for L in $FILL_LS; do
       sv=(); [ "$(knob "$v" served 0)" = 1 ] && sv=(--served)
@@ -198,6 +206,7 @@ if [ "$MODE" = fill ]; then
   fi
   # the bench runs whatever the gate's verdicts (its own checked call is sampled below); cite it only beside a passed gate
   for v in $VARIANTS; do
+    [ "${FILL_BENCH:-1}" = 0 ] && break
     for L in $FILL_LS; do
       export v L
       # shellcheck disable=SC2016
@@ -214,6 +223,23 @@ if [ "$MODE" = fill ]; then
         echo "fill-bench $tag rc $?" >> "$O/rc.txt"
         kill $smi'
       echo "lease fill-bench $v L$L rc $?" >> "$O/rc.txt"
+    done
+  done
+  for v in $VARIANTS; do
+    [ -n "$FILL_STEPS" ] || break
+    for L in $FILL_LS; do
+      export v L
+      # shellcheck disable=SC2016
+      $LEASE bash -c '
+        tag=$(tr "," "-" <<< "$v" | tr -d "=")-L$L
+        mkdir -p "$W/fbench/step-$tag"
+        for st in $FILL_STEPS; do
+          # shellcheck disable=SC2046,SC2086
+          env $(knob_env "$v") V31_STEP="$st" "$W/v31-step" fill-step "$REPS" "$W/fbench/step-$tag" "$W/fparams" "$LP" "$L" \
+            "$(knob "$v" row 1024)" $FILL_SHAPES >> "$O/fill-step-$tag.jsonl" 2>> "$O/fill-step-$tag.err"
+          echo "fill-step $tag $st rc $?" >> "$O/rc.txt"
+        done'
+      echo "lease fill-step $v L$L rc $?" >> "$O/rc.txt"
     done
   done
   if [ "${FILL_PROF:-0}" = 1 ]; then
@@ -263,9 +289,14 @@ if [ "$MODE" = fill ]; then
     echo "fill-sample $name rc $?" >> "$O/rc.txt"
   done
   ls "$O"/fill-bench-*.jsonl > /dev/null 2>&1 && $PY $D/v31.py fill-table "$O"/fill-bench-*.jsonl > "$O/table.md" 2>> "$O/table.err"
+  if ls "$O"/fill-step-*.jsonl > /dev/null 2>&1; then
+    fb=(); ls "$O"/fill-bench-*.jsonl > /dev/null 2>&1 && fb=("$O"/fill-bench-*.jsonl)
+    python3 $D/h200_step.py "${fb[@]}" "$O"/fill-step-*.jsonl > "$O/step.md" 2>> "$O/table.err"
+    echo "step table rc $?" >> "$O/rc.txt"
+  fi
   cat "$O/rc.txt"
   cat "$O/verdicts.txt" 2>/dev/null
-  cat "$O/table.md" 2>/dev/null
+  cat "$O/table.md" "$O/step.md" 2>/dev/null
   ! grep -qv ' rc 0$' "$O/rc.txt"
   exit
 fi
