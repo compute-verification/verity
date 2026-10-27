@@ -83,7 +83,9 @@ a string or `False`, a name other than the caught exception's, an empty containe
 `tests/lint/allowlists/repo_silent_excepts.json`, built like the env-read list. The gate refuses a PR that adds one to a file it
 changes, naming each, with the fix: re-raise; or record the outcome in the area's typed record or log; or test for the
 expected case and let the rest raise (a narrower handler that still swallows still counts). A rename moves its entry
-(`python3 tests/lint/test_repo_silent_excepts.py --move OLD NEW`).
+(`python3 tests/lint/test_repo_silent_excepts.py --move OLD NEW`). A PR that retunes one of these counted lints (its
+`tests/lint/test_<slug>.py`) may raise its list's counts for files the PR doesn't touch, since that is code already there:
+the list takes it at landing and only shrinks after (27 Oct 05:10Z). A rise in a file the PR touches is refused as before.
 Before marking, run `python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD`.
 
 **A `# noqa` is an exception too** (the vLLM coordinator, 25 Oct 11:20Z). In `integrations/vllm`, a change may add no more

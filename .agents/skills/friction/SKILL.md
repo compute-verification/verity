@@ -144,10 +144,10 @@ Landing:
   retirement. The ratchet gate counts them, with no allowlist.
 - (26-27 Oct, the vLLM coordinator, rolling out Daniel's 25 Oct ask repo-wide) Outside `integrations/vllm/` and
   `archive/`, the same gate holds `tests/lint/`'s no-growth lists and checks each PR's changed Python, as drive lands
-  before the suites run (22:45Z): fix the code, never the list; a rename moves its entries (`--move OLD NEW`). Ruff: the
-  root `ruff.toml`, per (file, rule), `noqa` uncounted (23:47Z). No new direct environment read: use the area's settings
-  registry, a `settings.py` or a file the list marks `"registry": true` at the PR's base (01:30Z). No new swallowing
-  except handler, typed or broad: re-raise, record, or test first (02:05Z).
+  before the suites run (22:45Z): fix the code, never the list; a rename moves its entries (`--move OLD NEW`); a retuned
+  lint's list takes its new count of untouched files at landing (05:10Z). Ruff: the root `ruff.toml`, per (file, rule),
+  `noqa` uncounted (23:47Z). No new direct environment read: use the area's settings registry (a `settings.py`, or a
+  list mark at the PR's base) (01:30Z). No new swallowing handler: re-raise, record, or test first (02:05Z).
 
 Protocols and claims:
 
