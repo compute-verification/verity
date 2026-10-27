@@ -95,9 +95,10 @@ lowering.
 Its weight reads, the embedding's table reads and its openings count registered (`interface.input_count`) only where the
 verifier pinned that weight's own parameter, ``weights/<label>@<words>``, before the run, at the root the window's
 registration records for it; anywhere else they are free. The pins are the hiding roots the committer registered once per
-model and key, never roots the verifier computes (`window_weights`). Its scan state reads count registered likewise only
-where the verifier pinned `scan_state.SCAN_STATE` at the root of the scan's rows the window reads
-(`ingress_scan.window_state`), which no weights registration gives.
+model and key, never roots the verifier computes (`window_weights`). Its scan state reads are held otherwise: the window
+commits the scan's state rows it reads as `scan_state.SCAN_STATE` (`ingress_scan.window_state`, `window_rows.state_value`)
+and the scan's own state ports read that root under its domain, so the scan's chain and the window's reads are one tree.
+No pin holds them, so `interface.input_count` counts them free.
 """
 from __future__ import annotations
 

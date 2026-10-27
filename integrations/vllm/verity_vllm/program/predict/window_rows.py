@@ -561,15 +561,27 @@ def scan_slots(lowered: Lowered, state: Sequence[Any]) -> list[tuple[list[int], 
     return [_lanes(P, state)[P.lane] for P in lowered.programs]
 
 
-def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence[int], int]], key: bytes, index: int, *,
-                  window: str) -> G.Registered:
-    """`scan_state.SCAN_STATE` where no scan ran: the rows (``row/v2``, a row a bucket of the window) that give slot k its
-    row (occupancy, prompt length, ids) and ``max_tokens``, ``slots[k]``, at its anchor and lane (`scan_slots`), every
-    other field zero, committed under the committer's secret ``key`` at salt nonce `STATE_NONCE` plus the window's
-    ``index``, a per-window value under the window's root ``window``. No verifier pins its root at a scan's, so the audit
-    counts its reads free."""
+def state_value(program: str, cls: WindowClass, rows: Sequence[Sequence[int]], key: bytes, index: int, *,
+                window: str) -> G.Registered:
+    """`scan_state.SCAN_STATE`'s value: ``rows``, the scan's state rows a window of ``cls`` reads (row a the state before
+    bucket a, `ingress_scan.window_state`'s bits), as ``row/v2`` rows committed under the committer's secret ``key`` at salt
+    nonce `STATE_NONCE` plus the window's ``index``, a per-window value under the window's root ``window``. It is the
+    prover's side of the tree (its rows, salts and levels) for the window's prover and the scan's alike: the scan's state
+    ports open their rows in it, by its root and domain."""
     if not 0 <= index < 1 << 32:
         raise ValueError(f"window {index}: a window's index is a u32")
+    bits = np.asarray(rows, dtype=np.uint16)
+    if bits.shape != (cls.buckets, IS.state_bits(cls.scan)) or bits.max(initial=0) > 1:
+        raise ValueError(f"a window of {cls.buckets} buckets reads {cls.buckets} state rows of {IS.state_bits(cls.scan)} "
+                         f"bits, not {bits.shape}")
+    words = (bits.reshape(cls.buckets, -1, 16) << np.arange(16, dtype=np.uint16)).sum(axis=2, dtype=np.uint16)
+    return H1R.commit(program, SS.SCAN_STATE, words, key, STATE_NONCE + index, keep_rows=True, window=window)
+
+
+def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence[int], int]], key: bytes, index: int, *,
+                  window: str) -> G.Registered:
+    """`state_value` where no scan ran: the rows that give slot k its row (occupancy, prompt length, ids) and
+    ``max_tokens``, ``slots[k]``, at its anchor and lane (`scan_slots`), every other field zero."""
     scan = cls.scan
     states = [IS.empty(scan) for _ in range(cls.buckets)]
     for k, (row, max_tokens) in enumerate(slots):
@@ -577,10 +589,8 @@ def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence
         s.occ, s.fields, s.max_tokens = int(row[0]), int(row[1]), int(max_tokens)
         for p, v in enumerate(row[2:]):
             s.ids[IS.position(scan, p)] = int(v)
-    bits = np.array([IS.encode(scan, st) for st in states], dtype=np.uint16).reshape(len(states), -1, 16)
-    words = (bits << np.arange(16, dtype=np.uint16)).sum(axis=2, dtype=np.uint16)
-    return H1R.commit(program, SS.SCAN_STATE, words, key, STATE_NONCE + index, keep_rows=True, window=window)
+    return state_value(program, cls, [IS.encode(scan, st) for st in states], key, index, window=window)
 
 
 __all__ = ["COMPUTED", "EVALUATED", "FORMS", "Rows", "SERVED", "SOURCES", "STATE_NONCE", "Served", "Slot", "positions",
-           "scan_slots", "standin_state"]
+           "scan_slots", "standin_state", "state_value"]
