@@ -330,11 +330,14 @@ class Draws:
         """The session the uses are for now (`use` takes only slot `slot`'s families); None takes none."""
         self._slot = slot
 
-    def use(self, label: str, after: str, coins: int) -> dict:
+    def use(self, label: str, request: str, coins: int) -> dict:
         """One use of a held session's coins (a v2 session's link points or one of its rounds, `proofs.session_uses`):
-        family `label`'s next `coins` coins after `after` (hex, 64 bytes), asked once: `{"coins": hex}`, or
-        `{"refused": why}` when the family isn't the current slot's, the session isn't open, or its coins after `after`
-        are open already (a replayed round: a retry never redraws)."""
+        family `label`'s next `coins` coins after the SHA-512 of the public `request` (hex), asked once: the link
+        points' after their tables' root_B digests, a round's after its request (`proofs.round_request`), whose stream
+        must be the family's and whose F128 count must take `coins` coins. Answers `{"coins": hex}`, or
+        `{"refused": why}` when the family isn't the current slot's, the session isn't open, a round's request isn't one
+        for its family and coins, or its coins after that request are open already (a replayed round: a retry never
+        redraws)."""
         with self._uses_lock:
             try:
                 if self._refused is not None or self._client is None or self._closed.is_set():
@@ -343,10 +346,18 @@ class Draws:
                     raise Ch.CoinError(f"{label} is not a family of the session being proved (slot {self._slot})")
                 if type(coins) is not int or coins < 0:
                     raise Ch.CoinError("a use asks a number of coins")
+                x = bytes.fromhex(request)
+                stream = label.removeprefix(f"slot/{self._slot}/")
+                if stream != "session":
+                    q = PF.parse_round_request(x)
+                    if q is None or q[0] != stream or -(-q[2] // 4) != coins:
+                        raise Ch.CoinError(f"a round of {stream} asks {coins} coins after a request that isn't "
+                                           "u16be(len stream) || stream || a_k || u64le(n) for its stream and an n "
+                                           "of that many coins")
                 fam = self._families.get(label)
                 if fam is None:
                     fam = self._families[label] = CC.ChallengerCoins(Ch.LiveRecord(self._client, label))
-                segment = fam.commit(bytes.fromhex(after))
+                segment = fam.commit(hashlib.sha512(x).digest())
                 self._uses.append(segment)
                 return {"coins": fam(coins * Ch.COIN_BYTES).hex() if coins else ""}
             except (Ch.CoinError, ValueError) as e:
@@ -439,10 +450,10 @@ class _Ask(socketserver.StreamRequestHandler):
     def handle(self) -> None:
         try:
             ask = json.loads(self.rfile.readline())
-            if not (isinstance(ask, dict) and sorted(ask) == ["after", "coins", "label"]
-                    and isinstance(ask["label"], str) and isinstance(ask["after"], str)):
-                raise ValueError("an ask is one JSON line {label, after, coins}")
-            got = self.server.draws.use(ask["label"], ask["after"], ask["coins"])
+            if not (isinstance(ask, dict) and sorted(ask) == ["coins", "label", "request"]
+                    and isinstance(ask["label"], str) and isinstance(ask["request"], str)):
+                raise ValueError("an ask is one JSON line {label, request, coins}")
+            got = self.server.draws.use(ask["label"], ask["request"], ask["coins"])
         except ValueError as e:
             got = {"refused": str(e)}
         self.wfile.write((json.dumps(got) + "\n").encode())
@@ -464,11 +475,12 @@ class Relay:
         self.server.server_close()
 
 
-def relay_ask(address: str, label: str, after: str, coins: int) -> dict:
-    """One ask of the relay at `address` (HOST:PORT), as `flock-circuit`'s coin server makes it: its answer line."""
+def relay_ask(address: str, label: str, request: str, coins: int) -> dict:
+    """One ask of the relay at `address` (HOST:PORT), as `flock-circuit`'s coin server makes it (`request` hex): its
+    answer line."""
     host, port = address.rsplit(":", 1)
     with socket.create_connection((host, int(port))) as s:
-        s.sendall((json.dumps({"label": label, "after": after, "coins": coins}) + "\n").encode())
+        s.sendall((json.dumps({"label": label, "request": request, "coins": coins}) + "\n").encode())
         return json.loads(s.makefile("rb").readline())
 
 

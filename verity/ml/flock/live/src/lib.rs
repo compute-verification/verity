@@ -1207,8 +1207,9 @@ pub struct SessionConfig {
     pub draw_given: Option<Value>,
     /// The window's withheld challenger ([`CHALLENGER_SCHEME`]), as session `slot` of the window: the link points are the
     /// challenger's release for `slot/<slot>/session` after the SHA-512 of the tables' root_B digests, and each round's coins
-    /// its release for `slot/<slot>/<stream>` after the stream's chain at that round (`after_k = SHA-512(after_{k-1} ‖
-    /// SHA-512(round k))`, `after_{-1}` empty: `Server::round_chain`), each asked once ([`ChallengerHook`]).
+    /// its release for `slot/<slot>/<stream>` after the SHA-512 of the round's request ([`round_request`]: the stream, its
+    /// chain `a_k = SHA-512(a_{k-1} ‖ SHA-512(round k))` from `a_{-1}` empty, and the round's coin count), each asked once
+    /// ([`ChallengerHook`]).
     /// Nothing is committed at `Hello`: the challenger releases its commitment only at its close, and the audit holds the
     /// record's coins to it (sampled proofs' `roundCoins`).
     pub challenger: Option<u32>,
@@ -1217,10 +1218,18 @@ pub struct SessionConfig {
 /// The coin source of a session on the window's withheld challenger ([`SessionConfig::challenger`]).
 pub const CHALLENGER_SCHEME: &str = "challenger-withheld/v1";
 
-/// The challenger's coins of a family: `(label, after, coins)` asks it once for the next `coins` coins of the family `label`
-/// released after `after`, and answers their bytes, 64 a coin. A second ask after the same `after` is the challenger's to
-/// refuse, and the session stops on any refusal.
-pub type ChallengerHook = Box<dyn FnMut(&str, &[u8; 64], usize) -> Result<Vec<u8>, String> + Send>;
+/// The challenger's coins of a family: `(label, request, coins)` asks it once for the next `coins` coins of the family
+/// `label` released after the SHA-512 of the request's bytes, and answers their bytes, 64 a coin. A second ask after the
+/// same digest is the challenger's to refuse, and the session stops on any refusal.
+pub type ChallengerHook = Box<dyn FnMut(&str, &[u8], usize) -> Result<Vec<u8>, String> + Send>;
+
+/// Round k's request to the window's challenger (live PROTOCOL.md §9), all of it public: its stream's name (two bytes
+/// big-endian of its UTF-8 length, then the name), the stream's chain at the round `a_k` (64 bytes), then the round's coin
+/// count `n` (eight bytes little-endian), its F128s. The challenger releases its `⌈n/4⌉` coins after its SHA-512.
+pub fn round_request(stream: &str, chain: &[u8], n: u64) -> Result<Vec<u8>, String> {
+    let len = u16::try_from(stream.len()).map_err(|_| format!("challenger: stream {stream}'s name is past 65535 bytes"))?;
+    Ok([&len.to_be_bytes()[..], stream.as_bytes(), chain, &n.to_le_bytes()].concat())
+}
 
 /// A challenger coin's bytes per F128.
 const COIN_F128S: usize = 4;
@@ -1471,26 +1480,27 @@ impl Server {
         self
     }
 
-    /// `n` coins of session stream `stream` from the window's challenger, released after `after`: one ask, and a refusal
-    /// stops the session. A server rebuilt from a record asks nothing: its zeros are replaced by the recorded coins.
-    fn challenger_coins(&mut self, stream: &str, after: &[u8], n: usize) -> Result<Vec<F128>, String> {
+    /// `n` coins of session stream `stream` from the window's challenger, released after the SHA-512 of `request`: one
+    /// ask, and a refusal stops the session. A server rebuilt from a record asks nothing: its zeros are replaced by the
+    /// recorded coins.
+    fn challenger_coins(&mut self, stream: &str, request: &[u8], n: usize) -> Result<Vec<F128>, String> {
         let slot = self.cfg.challenger.ok_or("no window challenger")?;
         if self.replaying {
             return Ok(vec![F128 { hi: 0, lo: 0 }; n]);
         }
-        let after: [u8; 64] = after.try_into().map_err(|_| "challenger: a use follows a 64-byte SHA-512 digest".to_string())?;
         let label = slot_family(slot, stream);
         let hook = self.challenger.as_mut().ok_or("challenger: no connection to the window's challenger")?;
-        let b = hook(&label, &after, n.div_ceil(COIN_F128S)).map_err(|e| format!("challenger: {label}: {e}"))?;
+        let b = hook(&label, request, n.div_ceil(COIN_F128S)).map_err(|e| format!("challenger: {label}: {e}"))?;
         if b.len() != 64 * n.div_ceil(COIN_F128S) {
             return Err(format!("challenger: {label}: {} bytes for {} coins", b.len(), n.div_ceil(COIN_F128S)));
         }
         challenger_f128s(&b, n)
     }
 
-    /// What `stream`'s next round on the window's challenger is released after, before its own bytes: nothing at its first
-    /// round, else its last round's `after`, so round k's is `dg(after_{k-1} ‖ dg(round k))`. Two rounds of equal bytes
-    /// (two squeezes of one count) are two uses, and round k's coins can only be asked once round k-1's bytes are fixed.
+    /// `stream`'s chain before its next round on the window's challenger: nothing at its first round, else `a_{k-1}`, so
+    /// round k's is `a_k = dg(a_{k-1} ‖ dg(round k))`, which its request carries ([`round_request`]). Two rounds of equal
+    /// bytes (two squeezes of one count) are two uses, and round k's coins can only be asked once round k-1's bytes are
+    /// fixed.
     fn round_chain(&self, stream: &str) -> Vec<u8> {
         self.streams[stream].rounds.iter().fold(Vec::new(), |a, r| self.cfg.dg(&[a, r.sha.clone()].concat()))
     }
@@ -1835,8 +1845,7 @@ impl Server {
                 self.prime_before_commit = Some(self.prime.len());
                 if self.cfg.challenger.is_some() {
                     let ds: Vec<u8> = self.commit.as_ref().unwrap().roots.values().flat_map(|r| self.cfg.dg(r)).collect();
-                    let after = self.cfg.dg(&ds);
-                    let c = match self.challenger_coins("session", &after, spec.points * spec.m) {
+                    let c = match self.challenger_coins("session", &ds, spec.points * spec.m) {
                         Ok(c) => c,
                         Err(e) => return self.refuse(e),
                     };
@@ -1936,8 +1945,8 @@ impl Server {
                 }
                 let at = self.streams[&stream].rounds.len();
                 let (coins, answer) = if self.cfg.challenger.is_some() {
-                    let after = self.cfg.dg(&[self.round_chain(&stream), self.cfg.dg(&content)].concat());
-                    match self.challenger_coins(&stream, &after, n as usize) {
+                    let chain = self.cfg.dg(&[self.round_chain(&stream), self.cfg.dg(&content)].concat());
+                    match round_request(&stream, &chain, u64::from(n)).and_then(|q| self.challenger_coins(&stream, &q, n as usize)) {
                         Ok(c) => (c.clone(), c),
                         Err(e) => return self.refuse(e),
                     }
@@ -2677,18 +2686,20 @@ mod coin_server_tests {
         b
     }
 
-    /// The asks a challenger saw, `(label, after, coins)`, and a server on it: each coin's bytes its family, `after`'s
-    /// first byte and its index, and a second ask after the same `after` in a family refused, as the window's
-    /// `ChallengerCoins.commit` refuses it.
-    fn on_challenger() -> (Server, Arc<std::sync::Mutex<Vec<(String, [u8; 64], usize)>>>) {
-        let asks = Arc::new(std::sync::Mutex::new(Vec::<(String, [u8; 64], usize)>::new()));
+    /// The asks a challenger saw, `(label, after, coins, request)` with `after` the request's SHA-512, and a server on it:
+    /// each coin's bytes its family, `after`'s first byte and its index, and a second ask after the same `after` in a family
+    /// refused, as the window's `ChallengerCoins.commit` refuses it.
+    #[allow(clippy::type_complexity)]
+    fn on_challenger() -> (Server, Arc<std::sync::Mutex<Vec<(String, [u8; 64], usize, Vec<u8>)>>>) {
+        let asks = Arc::new(std::sync::Mutex::new(Vec::<(String, [u8; 64], usize, Vec<u8>)>::new()));
         let seen = asks.clone();
-        let hook: ChallengerHook = Box::new(move |label, after, n| {
+        let hook: ChallengerHook = Box::new(move |label, request, n| {
+            let after: [u8; 64] = Sha512::digest(request).as_slice().try_into().unwrap();
             let mut a = seen.lock().unwrap();
-            if a.iter().any(|(l, x, _)| l == label && x == after) {
+            if a.iter().any(|(l, x, _, _)| l == label && *x == after) {
                 return Err(format!("the {label} coins after {} are open already", hex(&after[..8])));
             }
-            a.push((label.to_string(), *after, n));
+            a.push((label.to_string(), after, n, request.to_vec()));
             Ok((0..64 * n).map(|i| (label.len() as u8) ^ after[0] ^ (i as u8)).collect())
         });
         (Server::try_new(challenger_cfg(), Box::new(NoProofs)).unwrap().with_challenger(hook), asks)
@@ -2696,9 +2707,9 @@ mod coin_server_tests {
 
     /// On the window's challenger, `Hello` commits nothing; the link points are the challenger's release for
     /// `slot/<i>/session` after the SHA-512 of the root_B digests, and each round's coins its release for
-    /// `slot/<i>/<stream>` after the stream's chain (`round_chain`), the bytes' own hex in the record; a later round of the
-    /// same bytes is another use, and a use whose coins the challenger already released is its to refuse, and the session
-    /// stops there.
+    /// `slot/<i>/<stream>` after the SHA-512 of its request (`round_request`: the stream, its chain, the round's coin
+    /// count), the bytes' own hex in the record; a later round of the same bytes is another use, and a use whose coins the
+    /// challenger already released is its to refuse, and the session stops there.
     #[test]
     fn challenger_coins_are_asked_once_after_each_commitment_and_a_replayed_round_stops_the_session() {
         let (mut s, asks) = on_challenger();
@@ -2725,23 +2736,27 @@ mod coin_server_tests {
         };
         assert_eq!(coins.len(), 5);
         let a1 = c.dg(&c.dg(&content));
+        let q1 = [&[0u8, 6][..], b"t/rep0", &a1, &5u64.to_le_bytes()].concat();
+        assert_eq!(round_request(&stream, &a1, 5).unwrap(), q1);
+        let r1 = c.dg(&q1);
         {
             let a = asks.lock().unwrap();
-            assert_eq!((a[1].0.as_str(), &a[1].1[..], a[1].2), ("slot/5/t/rep0", &a1[..], 2));
+            assert_eq!((a[1].0.as_str(), &a[1].1[..], a[1].2, &a[1].3[..]), ("slot/5/t/rep0", &r1[..], 2, &q1[..]));
         }
         let rec = s.record_json();
         let first = rec["streams"][0]["rounds"][0]["coins"][0].as_str().unwrap().to_string();
-        let b0: Vec<u8> = (0..16).map(|i| (slot_family(5, &stream).len() as u8) ^ a1[0] ^ i as u8).collect();
+        let b0: Vec<u8> = (0..16).map(|i| (slot_family(5, &stream).len() as u8) ^ r1[0] ^ i as u8).collect();
         assert_eq!(first, hex(&b0), "the record's F128 is the coin bytes' own hex");
         assert_eq!(rec["streams"][0]["rounds"][0][format!("msg_{}", c.dk())], json!(hex(&c.dg(&content))));
         // the same bytes in the next round (two squeezes of one count): another use, after the chain
         assert!(matches!(s.handle(Req::Round { stream: stream.clone(), content: content.clone(), n: 5 }), Resp::Coins(_)));
         let a2 = c.dg(&[a1, c.dg(&content)].concat());
-        assert_eq!(asks.lock().unwrap()[2].1[..], a2[..]);
+        assert_eq!(asks.lock().unwrap()[2].3, round_request(&stream, &a2, 5).unwrap());
         // the next use's coins already released (asked on another connection): refused, and the session stops
         let next = frame(OP_BYTES, b"x");
-        let a3: [u8; 64] = c.dg(&[a2, c.dg(&next)].concat()).try_into().unwrap();
-        asks.lock().unwrap().push(("slot/5/t/rep0".into(), a3, 1));
+        let q3 = round_request(&stream, &c.dg(&[a2, c.dg(&next)].concat()), 1).unwrap();
+        let r3: [u8; 64] = c.dg(&q3).try_into().unwrap();
+        asks.lock().unwrap().push(("slot/5/t/rep0".into(), r3, 1, q3));
         let again = s.handle(Req::Round { stream: stream.clone(), content: next, n: 1 });
         assert!(matches!(again, Resp::Refused(ref e) if e.contains("open already")), "{again:?}");
         assert!(matches!(s.handle(Req::Round { stream, content: vec![0; 16], n: 1 }), Resp::Refused(ref e) if e.contains("aborted")));

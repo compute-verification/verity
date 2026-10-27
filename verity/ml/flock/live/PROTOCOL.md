@@ -577,12 +577,22 @@ takes every coin from the auditor's challenger device, which releases its window
 nothing is committed at `Hello`:
 - `Hello`'s `coins` is `{scheme: "challenger-withheld/v1", slot: i}`, the window's session `i`, answered `Ok`. Under the
   firewall the prover receives the loop's own 64-byte handle, which names the session.
-- At `Commit` the server asks the challenger for family `slot/<i>/session` after the SHA-512 of the tables' root_B
-  digests in key order, `⌈points·m/4⌉` coins, and the link points are their bytes.
-- Round k of stream `s` asks family `slot/<i>/<s>` after the stream's chain `a_k = SHA-512(a_{k-1} ‖ SHA-512(round k))`,
-  `a_{-1}` empty, for `⌈n/4⌉` coins. A coin is 64 bytes and an F128 is 16 of them (hi, then lo, big-endian), so the
-  record's hex is the bytes'. Under the chain, two rounds of equal bytes (two squeezes of one count) are two uses, and
-  round k's coins can't be asked before round k-1's bytes are fixed.
+- Every ask carries a public request `x`, and the device releases its coins after `SHA-512(x)`. The relay's ask
+  (`FC_COIN_RELAY`, one JSON line) is `{label, request, coins}`, `request` the hex of `x`, and the device's log
+  records each request's after.
+- At `Commit` the server asks the challenger for family `slot/<i>/session`, `⌈points·m/4⌉` coins, on the request `x`
+  the tables' root_B digests (64 bytes each) concatenated in key order, and the link points are their bytes.
+- Round k of stream `s` asks family `slot/<i>/<s>` for `⌈n/4⌉` coins, `n` the round's coin count (its F128s), on the
+  request
+
+  `x_k = u16be(len s) ‖ s ‖ a_k ‖ u64le(n)`, with `a_k = SHA-512(a_{k-1} ‖ SHA-512(round k))` and `a_{-1}` empty:
+
+  the stream's name (`len s` its UTF-8 bytes, at most 65535), the stream's chain (64 bytes) and the count, all
+  public. A coin is 64 bytes and an F128 is 16 of them (hi, then lo, big-endian), so the record's hex is the bytes'.
+  Under the chain, two rounds of equal bytes (two squeezes of one count) are two uses, and round k's coins can't be
+  asked before round k-1's bytes are fixed. The auditor's relay refuses an ask whose request names another stream than
+  its family's or a count whose `⌈n/4⌉` isn't the coins asked. v2 builds each round's request from the record's own
+  count (`SampledProofs.OneStageZk.roundRequest`), so a release after a request of another count matches no use.
 - Each use is asked once. A refusal (the challenger released those coins already) stops the session, and nothing is
   retried.
 - The audit holds the record to the challenger's log. v2's `roundsWhy` recomputes every use from the record

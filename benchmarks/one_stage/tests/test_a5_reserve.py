@@ -21,7 +21,7 @@ import pytest
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.types import Array, Value as Bits
 from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC, service as S
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, proofs as PF
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -251,8 +251,9 @@ def test_a_rank_that_ends_before_planning_opens_nothing(tmp_path, monkeypatch):
 
 def test_a_held_v2_session_serves_each_use_once_and_settles_them_in_the_sessions_order(tmp_path, monkeypatch):
     """A v2 window's held session (`v2_families`, `Draws(held=True)`): no coin before the registration, the draw, then a
-    session's uses through the relay (`Relay`, as `flock-circuit` asks it): its link points, then two rounds. A round asked
-    again and a family of another slot are refused, releasing nothing. The session closes only at `end_uses`, and its
+    session's uses through the relay (`Relay`, as `flock-circuit` asks it, each after the SHA-512 of its public request):
+    its link points, then two rounds. A round asked again, a round whose request's count or stream disagrees with its ask,
+    and a family of another slot are refused, releasing nothing. The session closes only at `end_uses`, and its
     evidence settles every use, which `session_segments` puts in the record's order (the link points, then each stream's
     rounds as the record lists them), whatever order they were asked in."""
     rule, law, n = "stratified:4", law_of("stratified:4", SILU_MUL), sum(SILU_MUL)
@@ -262,7 +263,9 @@ def test_a_held_v2_session_serves_each_use_once_and_settles_them_in_the_sessions
     record = {"link": {"points": [["11" * 16] * 5], "root_b_sha512": {"circuit": rb}},
               "streams": [{"stream": "circuit/rep0", "rounds": [{"msg_sha512": m0, "coins": ["22" * 16] * 4}]},
                           {"stream": "circuit/rep1", "rounds": [{"msg_sha512": m1, "coins": ["33" * 16] * 6}]}]}
-    r0, r1 = (hashlib.sha512(bytes.fromhex(m)).hexdigest() for m in (m0, m1))
+    q0, q1 = (PF.round_request(f"circuit/rep{k}", hashlib.sha512(bytes.fromhex(m)).digest(), n).hex()
+              for k, m, n in ((0, m0, 4), (1, m1, 6)))
+    r0, r1 = (hashlib.sha512(bytes.fromhex(q)).hexdigest() for q in (q0, q1))
     manager, draws, opener = local(tmp_path, monkeypatch, [0], reserve=lambda needs: AC.v2_families(needs, 1), held=True)
     relay = None
     try:
@@ -273,14 +276,17 @@ def test_a_held_v2_session_serves_each_use_once_and_settles_them_in_the_sessions
         segment = coins.drawn()
         draws.skip(0)
         relay = AC.Relay(draws)
-        assert "refused" in AC.relay_ask(relay.address, "slot/0/session", points_after, 2), "no slot is being proved"
+        assert "refused" in AC.relay_ask(relay.address, "slot/0/session", rb, 2), "no slot is being proved"
         draws.slot(0)
-        asked = [("slot/0/session", points_after, 2), ("slot/0/circuit/rep1", r1, 2), ("slot/0/circuit/rep0", r0, 1)]
+        for label, q, coins in (("slot/0/circuit/rep0", q0, 2), ("slot/0/circuit/rep1", q0, 1), ("slot/0/circuit/rep0", r0, 1),
+                                ("slot/0/circuit/rep0", q0[:-2], 1)):
+            assert "a_k || u64le(n)" in AC.relay_ask(relay.address, label, q, coins).get("refused", ""), (label, coins)
+        asked = [("slot/0/session", rb, 2), ("slot/0/circuit/rep1", q1, 2), ("slot/0/circuit/rep0", q0, 1)]
         answers = [AC.relay_ask(relay.address, *ask) for ask in asked]
         assert [len(x.get("coins", "")) for x in answers] == [2 * 128, 2 * 128, 128], answers
-        replayed = AC.relay_ask(relay.address, "slot/0/circuit/rep0", r0, 1)
+        replayed = AC.relay_ask(relay.address, "slot/0/circuit/rep0", q0, 1)
         assert "open already" in replayed.get("refused", ""), replayed
-        assert "slot 0" in AC.relay_ask(relay.address, "slot/1/session", points_after, 2).get("refused", "")
+        assert "slot 0" in AC.relay_ask(relay.address, "slot/1/session", rb, 2).get("refused", "")
         draws.slot(None)
         draws.end_uses()
         opener.join()

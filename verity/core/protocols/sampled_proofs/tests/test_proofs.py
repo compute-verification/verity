@@ -23,9 +23,11 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from verity.core.protocols.sampled_proofs import coins as C
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
 #: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it (its records
@@ -256,6 +258,7 @@ REFUSED = {"points not a list": _record(**{"link.points": {}}), "a point not hex
            "streams not a list": _record(streams={}), "a stream unnamed": _record(**{"streams.1.stream": 1}),
            "rounds not a list": _record(**{"streams.1.rounds": None}),
            "a stream named as the points' family": _record(**{"streams.1.stream": "session"}),
+           "a stream's name past 65535 bytes": _record(**{"streams.1.stream": "é" * 32768}),
            "a round without its digest": _record(**{"streams.0.rounds.0": {"coins": []}}),
            "a short round digest": _record(**{"streams.0.rounds.1.msg_sha512": "02" * 63}),
            "an uppercase round digest": _record(**{"streams.0.rounds.1.msg_sha512": "AB" * 64}),
@@ -273,19 +276,44 @@ def _uses(slot: int, text: str) -> dict:
 
 def test_a_sessions_uses_of_the_challenger_are_its_points_after_its_root_bs_then_each_round_after_its_streams_chain():
     """`session_uses` (the prover's side of v2's round-coins check, `OneStageZk.roundsWhy`): the link points after the
-    SHA-512 of the tables' root_B digests in key order, then each round after its stream's chain (the SHA-512 of the
-    previous round's `after` and its own digest), a 64-byte coin for each four F128s, under the session's slot. Two
-    rounds of equal bytes are two uses."""
+    SHA-512 of the tables' root_B digests in key order, then each round after the SHA-512 of its request, its stream's
+    name, its stream's chain (the SHA-512 of the previous round's chain and its own digest) and its F128 count, a
+    64-byte coin for each four F128s, under the session's slot. Two rounds of equal bytes are two uses."""
     pts = ["0" * 32, "1" * 32, "2" * 32, "3" * 32, "4" * 32]
     a0 = hashlib.sha512(b"\x01" * 64).digest()
     a1 = hashlib.sha512(a0 + b"\x02" * 64).digest()
+    q0 = b"\x00\x06t/rep0" + a0 + (5).to_bytes(8, "little")
+    assert PF.round_request("t/rep0", a0, 5) == q0 and PF.parse_round_request(q0) == ("t/rep0", a0, 5)
     assert PF.session_uses(3, json.dumps(_record())) == [
         ("slot/3/session", hashlib.sha512(b"\xaa" * 64 + b"\xbb" * 64).digest(), 2, pts),
-        ("slot/3/t/rep0", a0, 2, ["5" * 32] * 5), ("slot/3/t/rep0", a1, 1, ["6" * 32] * 4)]
+        ("slot/3/t/rep0", hashlib.sha512(q0).digest(), 2, ["5" * 32] * 5),
+        ("slot/3/t/rep0", hashlib.sha512(PF.round_request("t/rep0", a1, 4)).digest(), 1, ["6" * 32] * 4)]
     same = PF.session_uses(3, json.dumps(_record(**{"streams.0.rounds.1.msg_sha512": "01" * 64})))
-    assert same[1][1] != same[2][1] and same[2][1] == hashlib.sha512(a0 + b"\x01" * 64).digest()
+    a1 = hashlib.sha512(a0 + b"\x01" * 64).digest()
+    assert same[1][1] != same[2][1] and same[2][1] == hashlib.sha512(PF.round_request("t/rep0", a1, 4)).digest()
+    for bad in (b"", b"\x00", b"\x00\x06t/rep0" + a0, q0 + b"\x00", b"\x00\x02\xff\xfe" + a0 + bytes(8)):
+        assert PF.parse_round_request(bad) is None, bad
     for name, r in REFUSED.items():
         assert "refused" in _uses(0, r if isinstance(r, str) else json.dumps(r)), name
+
+
+def test_a_round_released_after_a_request_whose_count_disagrees_with_the_record_is_refused():
+    """The device answers a round's request after its SHA-512, and v2 builds each round's request from the record's own
+    F128 count (`session_uses`): a log whose round was released after a request of the same stream and chain but
+    another count matches no use, and `exactly_reason` refuses it. The honest log passes."""
+    uses = [C.Use(lab, after, n) for lab, after, n, _ in PF.session_uses(3, json.dumps(_record()))]
+    layout = SimpleNamespace(families=(("slot/3/session", 2), ("slot/3/t/rep0", 3)))
+
+    def roots(round0: bytes) -> dict[str, list[bytes]]:
+        return {"slot/3/session": [uses[0].after] * 2, "slot/3/t/rep0": [round0] * 2 + [uses[2].after]}
+
+    assert C.exactly_reason(layout, roots(uses[1].after), uses) is None
+    a0 = hashlib.sha512(b"\x01" * 64).digest()
+    for n in (4, 6, 8):
+        other = hashlib.sha512(PF.round_request("t/rep0", a0, n)).digest()
+        assert "not exactly" in C.exactly_reason(layout, roots(other), uses), n
+    other = hashlib.sha512(PF.round_request("t/rep1", a0, 5)).digest()
+    assert "not exactly" in C.exactly_reason(layout, roots(other), uses)
 
 
 @lean

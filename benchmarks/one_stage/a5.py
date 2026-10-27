@@ -425,20 +425,27 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
 
 
 def v2_replayed_round(a: argparse.Namespace, sdir: Path, slot: int) -> dict[str, dict]:
-    """The honest session's first round asked again through the relay, as a prover replaying it would ask (`--v2`): refused,
-    with nothing released, so the window's log keeps one release a use (which v2's accept then shows)."""
+    """The honest session's first round asked again through the relay, as a prover replaying it would ask (`--v2`), and
+    asked for one coin more than its request's count takes: each refused, with nothing released, so the window's log
+    keeps one release a use (which v2's accept then shows)."""
     recs = sorted((sdir / "sessions").glob("*/session.json"))
-    rounds = PF.session_uses(slot, recs[-1].read_text())[1:] if recs else []
+    text = recs[-1].read_text() if recs else "{}"
+    rounds = PF.session_uses(slot, text)[1:] if recs else []
     if not rounds:
-        return {"v2-replayed-round": {"refused": False, "why": "the session recorded no round to replay"}}
-    label, after, n, _want = rounds[0]
+        why = "the session recorded no round to replay"
+        return {k: {"refused": False, "why": why} for k in ("v2-replayed-round", "v2-miscounted-round")}
+    label, after, n, want = rounds[0]
+    s = next(s for s in json.loads(text)["streams"] if s["rounds"])
+    request = PF.round_request(s["stream"], hashlib.sha512(bytes.fromhex(s["rounds"][0]["msg_sha512"])).digest(), len(want))
+    assert hashlib.sha512(request).digest() == after, "the first round's request is not session_uses' first round's"
     a.coins.slot(slot)
     try:
-        got = AC.relay_ask(a.relay.address, label, after.hex(), n)
+        got = {"v2-replayed-round": AC.relay_ask(a.relay.address, label, request.hex(), n),
+               "v2-miscounted-round": AC.relay_ask(a.relay.address, label, request.hex(), n + 1)}
     finally:
         a.coins.slot(None)
-    return {"v2-replayed-round": {"refused": "refused" in got and "coins" not in got, "label": label,
-                                  "why": got.get("refused")}}
+    return {k: {"refused": "refused" in g and "coins" not in g, "label": label, "why": g.get("refused")}
+            for k, g in got.items()}
 
 
 def v2_audit(a: argparse.Namespace, rec: dict, mine: CS.Window, want: dict, leaf_layer: str | None, part: dict, mm: dict,

@@ -314,11 +314,20 @@ def pointsAfter (link : Json) : V ByteArray := do
     | _ => throw s!"record: link.root_b_sha512.{t} is not 64 bytes of hex"
   return Flock.Sha512.hash (ds.foldl (· ++ ·) .empty)
 
+/-- Round k's request to the window's challenger (live PROTOCOL.md §9), all of it public: its stream's name (two bytes
+big-endian of its UTF-8 length, then the name), the stream's chain at the round `a` (64 bytes), then the round's coin
+count `n`, its F128s as the record's `coins` lists them (eight bytes little-endian). Its coins are released after its
+SHA-512. -/
+def roundRequest (stream : String) (a : ByteArray) (n : Nat) : ByteArray :=
+  let s := stream.toUTF8
+  ⟨#[(s.size / 256 % 256).toUInt8, (s.size % 256).toUInt8]⟩ ++ s ++ a ++ Flock.le64 n.toUInt64
+
 /-- Session `slot`'s uses of the challenger's coins, each with the coins (as the record's F128 hex) its bytes must
 begin with: its link points, of family `slot/<slot>/session` after `pointsAfter`, then each stream's rounds in the
-record's order, of family `slot/<slot>/<stream>` after the stream's chain at that round, `a_k = SHA-512(a_{k-1} ‖
-msg_sha512_k)` from `a_{-1}` empty (live PROTOCOL.md §9), so two rounds of equal bytes are two uses; `⌈n/4⌉` coins of
-64 bytes for `n` F128s. -/
+record's order, of family `slot/<slot>/<stream>` after the SHA-512 of the round's request (`roundRequest`) at the
+stream's chain `a_k = SHA-512(a_{k-1} ‖ msg_sha512_k)` from `a_{-1}` empty and the round's own coin count, the record's
+F128s `n` (live PROTOCOL.md §9), so two rounds of equal bytes are two uses and a release after a request of another count
+is no use; `⌈n/4⌉` coins of 64 bytes for `n` F128s. -/
 def sessionUses (slot : Nat) (record : String) : V (List (Challenger.Use × Array String)) := do
   let j ← (Json.parse record).mapError (s!"record: not JSON: {·}")
   let link := getD j "link"
@@ -330,6 +339,7 @@ def sessionUses (slot : Nat) (record : String) : V (List (Challenger.Use × Arra
   for s in ss do
     let .str name := getD s "stream" | throw "record: a stream's name is not a string"
     if name == POINTS then throw s!"record: a stream is named {POINTS}, the link points' family"
+    if name.toUTF8.size ≥ 65536 then throw s!"record: a stream's name is past 65535 bytes"
     let .arr rs := getD s "rounds" | throw s!"record: {name}'s rounds are not a list"
     let mut chain := ByteArray.empty
     for r in rs do
@@ -337,7 +347,8 @@ def sessionUses (slot : Nat) (record : String) : V (List (Challenger.Use × Arra
       if sha.length != 128 then throw s!"record: a round of {name}'s msg_sha512 is not 64 bytes of hex"
       let cs ← hexes (getD r "coins") s!"the coins of a round of {name}"
       chain := Flock.Sha512.hash (chain ++ (← Flock.unhex sha))
-      out := out ++ [({ label := Hello.slotStream slot name, after := chain, coins := (cs.size + 3) / 4 }, cs)]
+      out := out ++ [({ label := Hello.slotStream slot name, after := Flock.Sha512.hash (roundRequest name chain cs.size),
+        coins := (cs.size + 3) / 4 }, cs)]
   return out
 
 /-- Why the coins `ξ` don't begin with the F128s `want` (record hex, `{hi:016x}{lo:016x}`, 16 bytes each); none when
@@ -473,6 +484,8 @@ def main (args : List String) : IO UInt32 := do
     "".pushn '0' 128 ++ "\"}},\"streams\":[{\"stream\":\"t/rep0\",\"rounds\":[{\"msg_sha512\":\"" ++ "".pushn '1' 128 ++
     "\",\"coins\":[\"a\",\"b\",\"c\",\"d\",\"e\"]}]}]}")).toOption.map
     (·.map fun (u, hs) => (u.label, u.coins, hs.size))) == some [("slot/1/session", 1, 1), ("slot/1/t/rep0", 2, 5)]
+#guard (roundRequest "t/é" (ByteArray.mk (Array.replicate 64 7)) 261).data ==
+  #[0, 4, 116, 47, 195, 169] ++ Array.replicate 64 7 ++ #[5, 1, 0, 0, 0, 0, 0, 0]
 #guard coinsMismatch #["00".pushn '0' 30] (ByteArray.mk (Array.replicate 64 0)) == none
 #guard (coinsMismatch #["01".pushn '0' 30] (ByteArray.mk (Array.replicate 64 0))).isSome
 

@@ -142,12 +142,13 @@ fn challenger_mode() -> bool {
 }
 
 /// The auditor's relay to the window's challenger at `addr` (`HOST:PORT`): one connection a use, one JSON line
-/// `{"label", "after", "coins"}` asked, and one line answered, `{"coins": HEX}` (64 bytes a coin) or `{"refused": WHY}`.
+/// `{"label", "request", "coins"}` asked (the request's bytes in hex, whose SHA-512 the challenger releases the coins
+/// after), and one line answered, `{"coins": HEX}` (64 bytes a coin) or `{"refused": WHY}`.
 fn relay_hook(addr: String) -> flock_live::ChallengerHook {
     use std::io::{BufRead, BufReader, Write};
-    Box::new(move |label: &str, after: &[u8; 64], n: usize| {
+    Box::new(move |label: &str, request: &[u8], n: usize| {
         let mut s = std::net::TcpStream::connect(&addr).map_err(|e| format!("the coin relay at {addr}: {e}"))?;
-        let ask = json!({"label": label, "after": flock_live::hex(after), "coins": n});
+        let ask = json!({"label": label, "request": flock_live::hex(request), "coins": n});
         s.write_all(format!("{ask}\n").as_bytes()).map_err(|e| format!("the coin relay: {e}"))?;
         let mut line = String::new();
         BufReader::new(s).read_line(&mut line).map_err(|e| format!("the coin relay: {e}"))?;
@@ -336,9 +337,9 @@ fn zk_identity(c: &Composite) -> Value {
 /// The verifier's coins under `FC_COINS=challenger`, as the identity pins them (Lean's `Flock.Zk.CHALLENGER_COINS`).
 const CHALLENGER_COINS: &str = "the window's withheld challenger's (challenger-withheld/v1): the link points its release for \
                                 slot/<i>/session after the sha512 of the tables' root_b digests, each round's coins its release \
-                                for slot/<i>/<stream> after the stream's chain sha512(previous round's after || sha512(round)), each \
-                                asked once; nothing committed at hello, and \
-                                the audit holds the record's coins to the challenger's log";
+                                for slot/<i>/<stream> after the sha512 of the round's request u16be(len(stream)) || stream || \
+                                a_k || u64le(n), a_k = sha512(a_(k-1) || sha512(round)), n its coin count, each asked once; \
+                                nothing committed at hello, and the audit holds the record's coins to the challenger's log";
 
 /// The backend identity the statement digest pins (so a NON_ZK and a ZK cell never share one).
 fn identity(c: &Composite) -> Value {
