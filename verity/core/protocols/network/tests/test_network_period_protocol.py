@@ -124,6 +124,9 @@ REFUSALS = {
     "rows-schedule": ("another schedule's digest than the bound one", "the registration's parameters is"),
     "rows-honest": ("the scan's answer: the check takes no answer for a link-window, and one-stage v2 can't run",
                     "the scan's answer: the check takes no answer for a link-window"),
+    "state-read": (f"its read of {PC.SCAN_STATE}: the clock form has no scan",) * 2,
+    "rows-state-root": (f"its read of {PC.SCAN_STATE}: another root than link-window ",) * 2,
+    "rows-state-domain": (f"its read of {PC.SCAN_STATE}: its domain is no link-window's scan state's",) * 2,
 }
 
 
@@ -135,6 +138,25 @@ def test_the_period_refuses_what_it_must_by_name(server):
             assert mirror in reference(case)["reason"], (m, n, reference(case))
             verdict, out = D.replay(PORT, case, server)
             assert verdict == REJECT and lean in json.loads(out)["reason"], (m, n, out)
+
+
+def test_an_audits_read_of_the_scan_state_under_a_link_windows_root_and_domain_passes():
+    """The rows form's honest periods' audits read the scan's state rows under the root and domain a link-window's scan
+    registration names them under, and reach the scan's answer (`REFUSALS`' rows-honest holds Lean to it); the clock
+    form's honest audits read none."""
+    reads = 0
+    for n in range(8):
+        for form in FORMS:
+            case = build("honest" if form == "clock" else "rows-honest", n, small=n % 2 == 0)
+            c = PC.commitment(bytes.fromhex(case["commitment"]))
+            states = [PC.state_of(reg) for reg in c.windows]
+            got = [(e["root"], e["domain"]) for reg in c.audits for e in reg.record.get("registered", [])
+                   if e["value"] == PC.SCAN_STATE]
+            assert all(x in states for x in got) and (form == "rows" or not got), (form, n)
+            reads += len(got)
+            if form == "rows":
+                assert "the scan's answer" in reference(case)["reason"], n
+    assert reads
 
 
 def test_the_mirror_reads_a_registration_as_the_network_certifier_writes_it():

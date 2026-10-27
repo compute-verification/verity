@@ -99,6 +99,12 @@ against that salted digest is a later change to its circuit (the certifier PROTO
 **The check**, in order; any rejection rejects, then any undecided answer leaves the period undecided:
 
 * the commitment registers the parameters' audits and `m` link-windows, and the evidence answers each;
+* each audit's reads of the scan's state rows (`verity/certifier/scan-state/v1`, which a compute window reads row
+  b − 1 of: its registration's `registered` entries of that value), on the commitment alone, as onsite refuses a
+  registration other than the one its committing component committed to (`Core.Composition.mismatch`): each read names
+  the root and domain under which a link-window's scan registration names its state rows (its `roots` entry
+  `scan/state`), which the scan's proofs tie to the certified cells. A read under another root, or under a domain no
+  link-window's scan names, is refused, and so is any read in the clock form, which has no scan;
 * link-window `w` (the `i`-th, `w = w₀ + i`): its registration names the link's Program and the provenance
   `{"kind": "served", "window": w}`;
   both certificates are the key's, name the link, their end and `w`, and verify under LMS over `certificate_message` in
@@ -687,6 +693,44 @@ def holds (reg : Registration) (r : Rows) : Bool :=
   (entries "roots" ++ entries "registered").any fun e =>
     e.getObjValD "root" == .str (Flock.hexOf r.root) && e.getObjValD "domain" == .str r.domain
 
+/-- The scan's state rows, the value a compute window reads row b − 1 of (`scan_zk.VALUES["state"]`). -/
+def scanState : String := "verity/certifier/scan-state/v1"
+/-- The port the scan's registration names its state rows' root and domain under (`scan_zk.audit`'s `roots`). -/
+def statePort : String := "scan/state"
+
+/-- An entry's root and domain, when both are strings. -/
+def rootDomain (e : Json) : Option (String × String) :=
+  match e.getObjValD "root", e.getObjValD "domain" with
+  | .str r, .str d => some (r, d)
+  | _, _ => none
+
+/-- Each read of the scan's state rows a registration registers (its `registered` entries of the value `scanState`):
+its root and domain, none for an entry without both. -/
+def stateReads (reg : Registration) : Array (Option (String × String)) :=
+  let entries : Array Json := match reg.record.getObjValD "registered" with | .arr xs => xs | _ => #[]
+  (entries.filter fun e => e.getObjValD "value" == .str scanState).map rootDomain
+
+/-- The root and domain a scan's registration names its state rows under: its `roots` entry of the port `statePort`. -/
+def stateOf (reg : Registration) : Option (String × String) :=
+  let roots : Array Json := match reg.record.getObjValD "roots" with | .arr xs => xs | _ => #[]
+  (roots.find? fun e => e.getObjValD "port" == .str statePort).bind rootDomain
+
+/-- Audit `i`'s reads of the scan's state rows, on the commitment alone, as onsite's registration check refuses a
+registration other than the one its committing component committed to (`Core.Composition.mismatch`): each read names
+the root and domain the scan's registration of a link-window (`scans`, the period's first at `first`) names its state
+rows under, which the scan's proofs tie to the certified cells. The clock form (`scans` none) has no scan, so any read
+of its state there is refused. -/
+def stateCheck (scans : Option (Array Registration)) (first i : Nat) (reg : Registration) : Found Unit := do
+  let what := s!"audit {i}: its read of {scanState}"
+  for read in stateReads reg do
+    let some (root, dom) := read | refuse s!"{what}: names no root and domain"
+    let some scans := scans | refuse s!"{what}: the clock form has no scan"
+    match scans.zipIdx.find? fun (s, _) => (stateOf s).map (·.2) == some dom with
+    | none => refuse s!"{what}: its domain is no link-window's scan state's"
+    | some (s, j) =>
+      unless (stateOf s).map (·.1) == some root do
+        refuse s!"{what}: another root than link-window {first + j}'s scan registration names"
+
 /-- The certified records of the rows form's link-window: the requests' (ingress), responses' (egress) and fails'. -/
 def records (link : String) : Array (String × Direction) :=
   #[(link, .ingress), (link, .egress), (link ++ "-fails", .egress)]
@@ -819,7 +863,9 @@ def check (p : Params) (c : Commitment) (e : Evidence) (bs : Core.Blobs) : Core.
             ((c.windows.extract 0 i).map (·.record)) (p.first + i) reg x bs
       | .rows s sd _ => pairs.map fun ((reg, x), i) => some <$> rowsWindowCheck p s sd (p.first + i) reg x
     let as := (c.audits.zip e.audits).zipIdx.map fun ((reg, a), i) => auditCheck i reg a
-    match firstFinding (ws.toList.map findingOf ++ as.toList.map findingOf) with
+    let scans := match p.form with | .clock _ => none | .rows .. => some c.windows
+    let ss := c.audits.zipIdx.map fun (reg, i) => stateCheck scans p.first i reg
+    match firstFinding (ss.toList.map findingOf ++ ws.toList.map findingOf ++ as.toList.map findingOf) with
     | some (.reject, r) => .reject r
     | some (_, r) => .undecided r
     | none =>
@@ -917,6 +963,30 @@ def openings (params commitment evidence : ByteArray) (bs : Core.Blobs) : V (Arr
 #guard match saltsOf (Json.mkObj [("o0", Json.str "00"), ("pub", Json.str "00")]) "salts" with
   | .error r => r == "salts: a salt is 192 bytes"
   | .ok _ => false
+-- an audit's read of the scan's state rows passes in the rows form when it names the root and domain of a link-window's
+-- scan registration's `scan/state`; under another root, under a domain no scan names, without a root and domain, or
+-- in the clock form, which has no scan, it is refused by name; a registration that reads no state passes in either
+private def stateRead (root dom : String) : Registration :=
+  { record := Json.mkObj [("registered", Json.arr #[Json.mkObj [("domain", .str dom), ("leaves", toJson 4),
+      ("root", .str root), ("value", .str scanState), ("words", toJson 1)]])], digest := .empty }
+private def scanReg (root dom : String) : Registration :=
+  { record := Json.mkObj [("roots", Json.arr #[Json.mkObj [("domain", .str dom), ("leaves", toJson 4),
+      ("port", .str statePort), ("root", .str root)]])], digest := .empty }
+private def refusedAs (f : Found Unit) (r : String) : Bool :=
+  match f with
+  | .error (.reject, r') => r' == r
+  | _ => false
+#guard (stateCheck (some #[scanReg "aa" "d0", scanReg "bb" "d1"]) 5 0 (stateRead "bb" "d1")).isOk
+#guard refusedAs (stateCheck (some #[scanReg "aa" "d0", scanReg "bb" "d1"]) 5 2 (stateRead "aa" "d1"))
+  "audit 2: its read of verity/certifier/scan-state/v1: another root than link-window 6's scan registration names"
+#guard refusedAs (stateCheck (some #[scanReg "aa" "d0"]) 0 0 (stateRead "aa" "d1"))
+  "audit 0: its read of verity/certifier/scan-state/v1: its domain is no link-window's scan state's"
+#guard refusedAs (stateCheck (some #[scanReg "aa" "d0"]) 0 0
+    { record := Json.mkObj [("registered", Json.arr #[Json.mkObj [("value", .str scanState)]])], digest := .empty })
+  "audit 0: its read of verity/certifier/scan-state/v1: names no root and domain"
+#guard refusedAs (stateCheck none 0 1 (stateRead "aa" "d0"))
+  "audit 1: its read of verity/certifier/scan-state/v1: the clock form has no scan"
+#guard (stateCheck none 0 0 (scanReg "aa" "d0")).isOk && (stateCheck (some #[]) 0 0 (scanReg "aa" "d0")).isOk
 #guard (withKey (Json.mkObj [("a", toJson 1), ("b", toJson 2)]) "a" (toJson 3)).getObjValD "a" == toJson 3 &&
   (withKey (Json.mkObj [("a", toJson 1), ("b", toJson 2)]) "a" (toJson 3)).getObjValD "b" == toJson 2 &&
   withKey (toJson 1) "a" (toJson 3) == toJson 1

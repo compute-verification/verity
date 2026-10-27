@@ -36,6 +36,15 @@ link-windows; the composition's theorem is to tie the audits' answers to the sam
 `verity/core/protocols/network/tests/test_network_period_protocol.py` holds it to its Python mirror
 (`verity/core/protocols/network/tests/period_case.py`) on signed periods of both forms.
 
+Before any link-window, on the commitment alone, each compute audit's reads of the scan's state rows
+(`verity/certifier/scan-state/v1`, which a compute window reads row b − 1 of: its registration's `registered` entries
+of that value) must each name the root and domain under which a link-window's scan registration names those rows (its
+`roots` entry `scan/state`). The scan's state rows are the prover's, committed in the scan's registration before the
+draw, and the scan's proofs tie them to the certifier's signed cells, so the read is pinned by that root and by no
+certificate. A read under another root, or under a domain no link-window's scan names, is refused, as onsite refuses a
+registration other than the one its committing component committed to (`Core.Composition.mismatch`). The clock form
+has no scan, so any read of its state there is refused.
+
 ### The rows form: the network certifier's own run
 
 The form above is the certifier-only path's. In the network certifier's own run (`warden_serve`, where it functions as

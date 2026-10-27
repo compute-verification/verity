@@ -102,6 +102,9 @@ LAYOUT_KEYS = ["buckets", "connection_slots", "first_bucket", "slots"]
 #: the salts N2's prover delivers for the drawn unit's ``pub`` and ``o0`` rows (`Delivered.salts`)
 DELIVERED_SALT_BYTES = hm96.SHA512.salt_bytes
 DIGEST = re.compile("[0-9a-f]{128}")
+#: the scan's state rows, which a compute window reads row b − 1 of (`scan_zk.VALUES["state"]`), and the port the
+#: scan's registration names their root and domain under
+SCAN_STATE, STATE_PORT = "verity/certifier/scan-state/v1", "scan/state"
 U32 = 1 << 32
 FORMS = ("clock", "rows")
 
@@ -501,6 +504,41 @@ def _holds(reg: Registration, doc: dict) -> bool:
                for e in entries)
 
 
+def _root_domain(e) -> tuple[str, str] | None:
+    """`rootDomain`: an entry's root and domain, when both are strings."""
+    if isinstance(e, dict) and isinstance(e.get("root"), str) and isinstance(e.get("domain"), str):
+        return e["root"], e["domain"]
+    return None
+
+
+def state_of(reg: Registration) -> tuple[str, str] | None:
+    """`stateOf`: the root and domain a scan's registration names its state rows under, its `roots` entry
+    `scan/state`."""
+    roots = reg.record.get("roots")
+    e = next((e for e in roots if isinstance(e, dict) and e.get("port") == STATE_PORT), None) \
+        if isinstance(roots, list) else None
+    return None if e is None else _root_domain(e)
+
+
+def _state_check(scans: list[Registration] | None, first: int, i: int, reg: Registration) -> None:
+    """`stateCheck`: each of audit `i`'s reads of the scan's state rows names the root and domain a link-window's scan
+    registration names them under; in the clock form (`scans` None), which has no scan, any read is refused."""
+    what = f"audit {i}: its read of {SCAN_STATE}"
+    entries = reg.record.get("registered")
+    for e in entries if isinstance(entries, list) else []:
+        if not (isinstance(e, dict) and e.get("value") == SCAN_STATE):
+            continue
+        if (read := _root_domain(e)) is None:
+            raise Finding(REJECT, f"{what}: names no root and domain")
+        if scans is None:
+            raise Finding(REJECT, f"{what}: the clock form has no scan")
+        j = next((j for j, s in enumerate(scans) if (st := state_of(s)) is not None and st[1] == read[1]), None)
+        if j is None:
+            raise Finding(REJECT, f"{what}: its domain is no link-window's scan state's")
+        if state_of(scans[j])[0] != read[0]:
+            raise Finding(REJECT, f"{what}: another root than link-window {first + j}'s scan registration names")
+
+
 def records(link: str) -> tuple[tuple[str, Direction], ...]:
     """The rows form's certified records of a link-window (`warden_serve.CERTIFIED`): requests, responses, fails."""
     return (link, INGRESS), (link, EGRESS), (f"{link}-fails", EGRESS)
@@ -591,6 +629,11 @@ def check(p: Params, c: Commitment, e, blobs: list[bytes] = ()) -> tuple:
     if len(audits) != len(c.audits):
         return REJECT, "evidence: another number of audits' answers"
     findings, facts = [], []
+    for i, reg in enumerate(c.audits):
+        try:
+            _state_check(None if p.schedule is None else c.windows, p.first, i, reg)
+        except Finding as f:
+            findings.append(f)
     clear = clear_clocks(p.sync_set) if p.schedule is None else set()
     for i, (reg, x) in enumerate(zip(c.windows, windows)):
         try:
@@ -655,7 +698,7 @@ EXPECT = {
     "answer-made-up": REJECT, "v2-verdicts": REJECT, "v2-refused": REJECT, "v2-blobs": REJECT, "v2-session": REJECT,
     "v2-other-window": REJECT, "v2-domain": REJECT, "v2-previous": REJECT,
     "audit-other": REJECT, "audit-reject": REJECT, "audit-undecided": UNDECIDED, "audit-profile": REJECT,
-    "audit-bound": REJECT,
+    "audit-bound": REJECT, "state-read": REJECT,
     "form": REJECT, "first": REJECT, "count-windows": REJECT, "count-audits": REJECT, "evidence-count": REJECT,
     "params": REJECT, "commitment": REJECT, "evidence": REJECT, "case": REJECT,
     "rows-honest": REJECT,
@@ -665,7 +708,8 @@ EXPECT = {
     "rows-cert-key": REJECT,
     "rows-reg-count": REJECT, "rows-reg-swap": REJECT, "rows-reg-forged": REJECT, "rows-reg-window": REJECT,
     "rows-reg-link": REJECT, "rows-reg-session": REJECT, "rows-reg-key": REJECT, "rows-reg-field": REJECT,
-    "rows-schedule": REJECT, "rows-answer-window": REJECT, "rows-form": REJECT,
+    "rows-schedule": REJECT, "rows-answer-window": REJECT, "rows-state-root": REJECT, "rows-state-domain": REJECT,
+    "rows-form": REJECT,
     "rows-first": REJECT, "rows-count-windows": REJECT, "rows-count-audits": REJECT, "rows-evidence-count": REJECT,
     "rows-params": REJECT, "rows-commitment": REJECT, "rows-evidence": REJECT,
 }
@@ -754,7 +798,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     session = r.randbytes(lms.SESSION_BYTES)
     link = r.choice(["eth0", "a", "dé"])
     least_windows = 2 if m == "clock-reused" else 1
-    least_audits = 1 if m.startswith("audit") or m == "count-audits" else 0
+    least_audits = 1 if m.startswith(("audit", "state")) or m == "count-audits" else 0
     n_windows = r.randint(least_windows, least_windows if small else 3)
     n_audits = r.randint(least_audits, max(least_audits, 1) if small else 2)
     first = r.choice([0, 0, r.randrange(1, 6)])
@@ -806,7 +850,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     def salts() -> dict:
         return {k: r.randbytes(DELIVERED_SALT_BYTES).hex() for k in ("o0", "pub")}
 
-    window_regs, windows, clocks = [], [], []
+    window_regs, windows, clocks, states = [], [], [], []
     for w in range(first, first + n_windows) if rows else ():
         aimed = w == first + t
         i, j = r.randrange(2), r.randrange(3)
@@ -884,6 +928,10 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         rec = {"format": r.choice(FORMATS), "law": {"k": k, "law": "subset" if strata is None else "stratified"},
                "partition": f"{link}/scan/{w}", "population": 2 * T, "program": program, "protocol": ONE_STAGE,
                r.choice(["roots", "registered"]): entries, "window": {"kind": "stand-in", "window": w}}
+        state = {"domain": r.randbytes(64).hex(), "leaves": T + 1, "port": STATE_PORT, "root": r.randbytes(64).hex()}
+        roots = rec.setdefault("roots", [])
+        roots.insert(r.randrange(len(roots) + 1), state)
+        states.append(state)
         if aimed and m == "program":
             rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), program.upper(), None])
         answer = _accepted(registration_digest(rec), program, rec["partition"], 2 * T, k,
@@ -997,6 +1045,20 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         rec = {"format": r.choice(FORMATS), "law": law_i, "partition": f"loop/{i}", "population": units,
                "program": hashlib.sha512(b"loop %d" % i).hexdigest(), "protocol": ONE_STAGE,
                "window": {"kind": "served", "window": i}}
+        if (i == a and m.startswith("state")) or (states and (i == a or r.random() < 0.5)):
+            j = r.randrange(len(states)) if states else 0
+            st = states[j] if states else {"domain": r.randbytes(64).hex(), "root": r.randbytes(64).hex()}
+            read = {"domain": st["domain"], "leaves": r.randint(1, 4), "root": st["root"], "value": SCAN_STATE,
+                    "words": r.randint(1, 4)}
+            if i == a and m == "state-root":
+                others = [s["root"] for s in states if s["root"] != st["root"]]
+                read["root"] = r.choice([r.randbytes(64).hex(), *others])
+            elif i == a and m == "state-domain":
+                read["domain"] = r.choice([r.randbytes(64).hex(), *(e["domain"] for e in window_regs[j].get(
+                    "registered", []) + window_regs[j]["roots"] if e is not st)])
+            weights = {"domain": r.randbytes(64).hex(), "leaves": 2, "root": r.randbytes(64).hex(), "value": "weights",
+                       "words": 1}
+            rec |= {"format": "verity/registration/v2", "registered": r.sample([read, weights], 2)}
         digest = registration_digest(rec)
         answer = _accepted(digest, rec["program"], rec["partition"], units, k, r.choice(["1/100", "1/1000000", "1/10"]),
                            r.randint(0, units), strata)
