@@ -60,7 +60,8 @@ def warden(tmp_path_factory):
     fetch = d / "fetch.tar.gz"
     with tarfile.open(fetch, "w:gz") as tar:
         tar.add(run, arcname=RUN)
-    return {"fetch": fetch, "w": w, "records": by[w][:4], "others": [r for x, rs in by.items() if x != w for r in rs]}
+    return {"fetch": fetch, "w": w, "records": by[w][:4], "others": [r for x, rs in by.items() if x != w for r in rs],
+            "windows": WC.deployment(run)[0]["windows"]}
 
 
 def _write(path: Path, rows: list[dict]) -> None:
@@ -167,8 +168,8 @@ def test_a_window_request_the_warden_didnt_certify_is_rejected_before_any_chain(
 def _decide(tmp_path, warden, verdict="accepted", w=None, records=None, check=None):
     d = _serve_dir(tmp_path / "serve", warden, records)
 
-    def chain(keep, run, ep):
-        assert sorted(p.name for p in ep.iterdir()) == sorted(CP.ENDPOINT)
+    def chain(keep, run, ep, windows):
+        assert sorted(p.name for p in ep.iterdir()) == sorted(CP.ENDPOINT) and windows == warden["windows"]
         _chain_out(keep / run / "chain", verdict, warden["w"] if w is None else w)
         return 0
     (tmp_path / "dir").mkdir()
@@ -204,6 +205,12 @@ def test_no_kept_run_or_no_report_is_undecided_and_composes_pending(tmp_path, wa
     d = _serve_dir(tmp_path / "silent", warden)
     a, _ = CP.decide(d, K, tmp_path / "dir2", chain=lambda *x: 7, check=lambda *x: {})
     assert a["verdict"] == "undecided" and a["reason"].startswith("the chain wrote no report (exit 7)")
+
+
+def test_n2_and_the_tie_take_every_link_window_of_a_short_run_unless_named():
+    assert CP.sized(1, []) == ["CR_N2_DRAW=", "CR_TIE_WINDOWS=1"]
+    assert CP.sized(8, ["CR_N2_DRAW=4"]) == ["CR_TIE_WINDOWS=8", "CR_N2_DRAW=4"]
+    assert CP.sized(9, ["CR_SCAN_ONLY=1"]) == ["CR_SCAN_ONLY=1"]
 
 
 def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve_dirs_private(tmp_path, monkeypatch):

@@ -25,8 +25,9 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
      requests (`warden_chain.io`), with the same prompt and streamed ids; else reject.
   3. The chain (`served_session.py chain`: chain_record.sh's warden path, certs, endpoint, N2, tie and scan) on the
      kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
-     dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. Its report's verdict
-     ``accepted`` goes on; any other is a reject with its why, and no report an undecided.
+     dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
+     take every link-window of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on; any other is a
+     reject with its why, and no report an undecided.
   4. The period's link-window is the scan's (``answers.json``'s one window): every window request's release and
      streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
@@ -210,6 +211,16 @@ def endpoint_copy(serve_dir: Path, dest: Path) -> Path:
     return dest
 
 
+def sized(windows: int, sets: list[str]) -> list[str]:
+    """N2's draw and the tie's link-windows for a run of ``windows`` link-windows: every one when they are at most
+    `served_session.chain`'s 8 (whose draw of 8 a shorter run refuses), unless a CR_K=V of ``sets`` names them."""
+    given = {kv.partition("=")[0] for kv in sets}
+    if windows > 8:
+        return sets
+    return [*(["CR_N2_DRAW="] if "CR_N2_DRAW" not in given else []),
+            *([f"CR_TIE_WINDOWS={windows}"] if "CR_TIE_WINDOWS" not in given else []), *sets]
+
+
 def run_chain(keep: Path, run: str, endpoint: Path, eos: str, draw: int | None, sets: list[str],
               cmd: str | None = None) -> int:
     """`served_session.py chain` on the kept run (or ``cmd``, run as ``bash -c CMD _ KEEP RUN ENDPOINT``), its run dir
@@ -258,9 +269,10 @@ def publish(chain_out: Path, d: Path) -> None:
             shutil.copyfile(chain_out / rel, d / "chain" / rel)
 
 
-def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str, Path], int],
+def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str, Path, int], int],
            check: Callable[[dict, Path], dict], case: Callable[[Path, Path], dict] = case_of) -> tuple[dict, Path | None]:
-    """Window ``window``'s answer (module docstring) and the unpacked fetch (for the leak guard), its files in ``d``."""
+    """Window ``window``'s answer (module docstring) and the unpacked fetch (for the leak guard), its files in ``d``;
+    ``chain`` is given KEEP, the run, the endpoint's records and the run's link-windows."""
     import warden_chain as WC
     keep = serve_dir / PRIVATE
     try:
@@ -273,11 +285,12 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
         unpacked, warden = unpack(keep / run / "fetch.tar.gz")
         try:
             io = WC.io(warden)
-            T = WC.deployment(warden)[1].window
+            dep, params = WC.deployment(warden)
         except SystemExit as e:
             raise Rejected(f"the kept warden run: {e}") from None
+        T = params.window
         certified = bind(reqs, io)
-        rc = chain(keep, run, endpoint_copy(serve_dir, keep / run / "endpoint"))
+        rc = chain(keep, run, endpoint_copy(serve_dir, keep / run / "endpoint"), int(dep["windows"]))
         out = keep / run / "chain" / "out"
         publish(out, d)
         report = out / "report" / "report.json"
@@ -324,7 +337,8 @@ def piece(a: argparse.Namespace) -> int:
             return 2
     try:
         exe = period_exe(a.lean)
-        chain = lambda keep, run, ep: run_chain(keep, run, ep, a.eos_ids, a.draw, a.set, a.chain_cmd)  # noqa: E731
+        chain = lambda keep, run, ep, n: run_chain(keep, run, ep, a.eos_ids, a.draw, sized(n, a.set),  # noqa: E731
+                                                   a.chain_cmd)
         got, unpacked = decide(serve_dir, a.window, d, chain=chain, check=lambda c, p: period_check(exe, c, p))
     except Undecided as e:
         got, unpacked = answer("undecided", str(e)), None
