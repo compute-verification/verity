@@ -21,12 +21,14 @@
 # `v31.py timeline`'s summary of it (.timeline.md: each kernel serial and overlapped, the steady period, the streams' overlap).
 #
 # MODE=fill: Dither's no-fold call (CMP-172) in place of all the above. libv31.so (v31.cu -DV31_LIB) and, under a lease,
-# v31lib.py's gate (the binding's calls: the GPU's pad, words and tree against v31.py's Fill, then the verifier's verdicts
-# on the GPU's own openings, honest and cheating, two shapes interleaved; verdicts.txt), once with the protocol GEMM and
-# once with V31_LTW=1 (cuBLASLt's GEMM at S = 1; variants take it as ltw=1); then, a lease each variant and L
-# of FILL_LS (default "768 4096 8192 0", 0: L = K), `v31 fill-bench` over FILL_SHAPES (default Llama 3 8B's QKV, O,
-# gate-up and down at m 16384) beside cuBLASLt and CUTLASS; fill-sample on each shape's sampled tiles; fill-table.
-# VARIANTS here default to "row=1024,cprio=hi,sched=1 row=8192,cprio=hi,sched=1" (row: the leaf row, dither.Shape.row).
+# v31lib.py's gate (the binding's calls: the GPU's pad, values and tree against v31.py's Fill, then the verifier's verdicts
+# on the GPU's own openings, honest and cheating, filler and served, a filler's and a served Prover interleaved;
+# verdicts.txt), once with the protocol GEMM and once (the filler's gates) with V31_LTW=1 (cuBLASLt's GEMM at S = 1;
+# variants take it as ltw=1); then, a lease each variant and L of FILL_LS (default "768 4096 8192 0", 0: L = K),
+# `v31 fill-bench` over FILL_SHAPES (default Llama 3 8B's QKV, O, gate-up and down at m 16384) beside cuBLASLt and
+# CUTLASS; fill-sample on each shape's sampled tiles; fill-table. VARIANTS here default to "row=1024,cprio=hi,sched=1
+# row=8192,cprio=hi,sched=1" (row: the leaf row, dither.Shape.row); served=1 benches the served call (O committed, T_S
+# implied: dither.Shape(o=True); its params named served-*).
 # FILL_NSYS=1 adds, before the bench, Nsight Systems on `v31 fill-once` (OVL_CALLS overlapped calls after two serial ones)
 # for each variant, L and shape: out/nsys-TAG-L-SHAPE.nsys-rep, its kernel trace and `v31.py timeline`'s .timeline.md.
 #
@@ -61,7 +63,7 @@ knob() { local v; v=$(tr ',' '\n' <<< "$1" | sed -n "s/^$2=//p" | tail -1); echo
 knob_env() {
   echo "V31_CPRIO=$(knob "$1" cprio lo) V31_CARVE=$(knob "$1" carve 100) V31_DYN=$(knob "$1" dyn 1) V31_WRAP=$(knob "$1" wrap 2)" \
     "V31_WCW=$(knob "$1" wcw 256) V31_CCTA=$(knob "$1" ccta 1) V31_PF=$(knob "$1" pf 0) V31_DIAG=$(knob "$1" diag 0)" \
-    "V31_SCHED=$(knob "$1" sched 0) V31_LTW=$(knob "$1" ltw 0)"
+    "V31_SCHED=$(knob "$1" sched 0) V31_LTW=$(knob "$1" ltw 0) V31_SERVED=$(knob "$1" served 0)"
 }
 export -f knob knob_env
 
@@ -115,9 +117,11 @@ if [ "$MODE" = fill ]; then
   echo "build lib rc $?" >> "$O/rc.txt"
   for v in $VARIANTS; do
     for L in $FILL_LS; do
+      sv=(); [ "$(knob "$v" served 0)" = 1 ] && sv=(--served)
       # shellcheck disable=SC2086
-      $PY $D/v31.py fill-params "$W/fparams" $FILL_SHAPES --lp "$LP" --L "$L" --row "$(knob "$v" row 1024)" 2>> "$O/prep.err"
-      echo "fill-params $(knob "$v" row 1024) L$L rc $?" >> "$O/rc.txt"
+      $PY $D/v31.py fill-params "$W/fparams" $FILL_SHAPES --lp "$LP" --L "$L" --row "$(knob "$v" row 1024)" "${sv[@]}" \
+        2>> "$O/prep.err"
+      echo "fill-params $(knob "$v" row 1024)${sv[*]} L$L rc $?" >> "$O/rc.txt"
     done
   done
   # shellcheck disable=SC2016
@@ -125,8 +129,9 @@ if [ "$MODE" = fill ]; then
     nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,power.limit,memory.used --format=csv \
       ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/gpu.txt" 2>&1
     for x in 0 1; do
-      V31_LTW=$x $PY $D/v31lib.py gate --lib "$W/libv31.so" --out "$O/fill-gates-ltw$x" --q "$Q" > "$O/fill-gates-ltw$x.log" \
-        2> "$O/fill-gates-ltw$x.err"
+      only=(); [ $x = 1 ] && only=(--only fill)
+      V31_LTW=$x $PY $D/v31lib.py gate --lib "$W/libv31.so" --out "$O/fill-gates-ltw$x" --q "$Q" "${only[@]}" \
+        > "$O/fill-gates-ltw$x.log" 2> "$O/fill-gates-ltw$x.err"
       echo "fill gate ltw$x rc $?" >> "$O/rc.txt"
     done'
   echo "lease fill gate rc $?" >> "$O/rc.txt"
