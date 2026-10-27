@@ -196,7 +196,8 @@
    "digest": "2a18edf5d0551da318e3b6d712c6373df33fd32b2f8053ad6f145e2e32337091"
   },
   "Pous.Period.FixedBefore": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "digest": "b4e82606a80cb0c46bc33a3e9b3ed881173a07dd1e60fee5fc3bb2137bb9d50c"
   },
   "Pous.Period.Instantiates": {
    "owner": "@memory-accounting",
