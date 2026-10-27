@@ -47,7 +47,8 @@ constexpr int BK = 128, TM = 128, SMEM_BUDGET = 220 * 1024, MAX_STAGES = 8, TW =
 //   RP 5  RP 4 with a hash warpgroup of its own: 512 threads at 128, warps 9 to 15 hashing (two a sub-partition, one on
 //         sub-partition 0 beside the load warp), the producer and hash warpgroups at HR and the consumers at 256 - HR
 //         (2 HR + 2 (256 - HR) = 512 a sub-partition). A 128 x 256 tile's MMAs are two m64n128k32 a k32 atom, into
-//         accumulators 0 to 63 and 64 to 127 (m64n256's launch budget is 154). The plain product alone (mode 0).
+//         accumulators 0 to 63 and 64 to 127 (m64n256's launch budget is 154). Mode 0, and mode 1 without a tail (a
+//         served call's prefix sums alone, whose hash warps hash its tiles' rows, the prefix-sum rows as they're posted).
 // (384 threads at 136 can't be built: wgmma n256 needs a launch budget of 154, ptxas C7602, whatever setmaxnreg raises it
 // to. 288 threads at 168, one producer warp, puts 3 warps and 16,128 registers on sub-partition 0, and the commit's CTAs
 // never land beside it.)
@@ -55,9 +56,9 @@ template <int RP> __host__ __device__ constexpr int threads() { return RP == 3 ?
 // RP 5's register splits (HR, the producer and hash warpgroups'), each a build of gemm_r5. At 104 the consumers' 152
 // can't keep a 128 x 256 tile's MMAs in flight (ptxas C7512 serializes them) and spill 1 KB; at 88 the hash spills.
 constexpr int R5_SPLITS[] = {96, 88};
-// RP 4's hasher, H: lpt() O rows a 128 x 128 tile; h(ct, j, stop, budget) hashes on O row j of commit tile ct (tm N / 128
-// + tn) by at most budget SHA-512 chunks, until stop() holds, and says whether the row is hashed whole; chunk, a visit's
-// budget (0: a row whole at once)
+// RP 4's and 5's hasher, H: lpt() rows a 128 x 128 tile; h(ct, j, stop, budget) hashes on row j of commit tile ct (tm N /
+// 128 + tn) by at most budget SHA-512 chunks, until stop() holds, and says whether the row is hashed whole; chunk, a
+// visit's budget (0: a row whole at once)
 struct NoHash {
   static constexpr unsigned chunk = 0;
   WGD unsigned lpt() const { return 1; }
@@ -207,9 +208,9 @@ WGD void raster(int t, int tiles_m, int tiles_n, int group, int& tm, int& tn) {
 // with dO = w_X B~^T alone; T_s = lo16(acc - tau) are untouched.
 enum { TAIL_NONE = 0, TAIL_X128 = 1, TAIL_XM128 = 2, TAIL_CAPTURE = 3, TAIL_Q = 1 << 20 };
 
-// RP 4's and 5's hash warps (warps 9 to NHW + 8): warp w takes batches w, w + NHW, ..: batch b is the CTA's O rows 32 b ..
-// 32 b + 31 in its tiles' order, Lg = (BN / 128) h.lpt() a tile, a row a lane, once the consumers have posted (8 warps a
-// tile) every tile the batch reads. h.chunk 0: each batch whole in turn; else passes over the batches posted so far, at most
+// RP 4's and 5's hash warps (warps 9 to NHW + 8): warp w takes batches w, w + NHW, ..: batch b is the CTA's rows (H's)
+// 32 b .. 32 b + 31 in its tiles' order, Lg = (BN / 128) h.lpt() a tile, a row a lane, once the consumers have posted (8
+// warps a tile) every tile the batch reads. h.chunk 0: each batch whole in turn; else passes over the batches posted so far, at most
 // chunk SHA-512 chunks of each a visit, so the rows the leaf phase takes on are left with chains of about one length.
 // Without hall, nothing starts once the consumers are done, and stop() ends the row's hash where it is.
 template <int BN, int NHW, class H>
@@ -402,7 +403,7 @@ template <int BN, int CM, int RP, class H = NoHash, int HR = 0> __device__ void 
   int32_t d[NA];
   uint32_t cp[CM == 0 ? NA / 2 : 1];
   uint32_t* const cs = CM == 1 ? p.cbuf + (size_t)blockIdx.x * (TM * BN / 2) + tid : nullptr;   // the thread's packed tau halves
-  const bool segs = proto && !(p.diag & 1);
+  const bool segs = (proto || (RP == 5 && p.mode == 1)) && !(p.diag & 1);
   const int kpl = p.L / BK;
   int cg = 0;   // the steps consumed (RP 3's producer's reference)
   for (;;) {
@@ -574,8 +575,8 @@ __global__ void __launch_bounds__(threads<4>(), 1) gemm_r4(const __grid_constant
   body<BN, 1, 4, H>(p, h);
 #endif
 }
-// RP 5: the plain product with the commit's row hashes in a hash warpgroup and the producer's (HR registers, one of
-// R5_SPLITS)
+// RP 5: the plain product or the prefix sums alone, with the commit's row hashes in a hash warpgroup and the producer's (HR
+// registers, one of R5_SPLITS)
 template <int BN, class H, int HR>
 __global__ void __launch_bounds__(threads<5>(), 1) gemm_r5(const __grid_constant__ Args p, const __grid_constant__ H h) {
 #if defined(__CUDA_ARCH_FEAT_SM90_ALL)
