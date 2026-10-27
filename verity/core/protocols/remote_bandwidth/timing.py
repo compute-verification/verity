@@ -49,11 +49,10 @@ SECTOR_BYTES = 32
 SECTORS = BLOCK_BYTES // SECTOR_BYTES
 GPUS = 8
 """A node's RTX PRO 6000s (vy-nebius: 8 of them and a host of two Xeon 6776P sockets).  The prover is the whole node,
-one undifferentiated resource (Daniel, 12 Oct, #1884), so each unprefixed rate and capacity below is the node's, the
+one undifferentiated resource, so each unprefixed rate and capacity below is the node's, the
 sum over its devices; the `GPU_` and `HOST_` constants are one device's."""
 GPU_SHA512_PER_S = 7.0e9
-"""One RTX PRO 6000's SHA-512 compressions a second: block-sha512's 33 a block over 2,097,152 blocks in 9.87 ms
-(#1916, art:dea3a309)."""
+"""One RTX PRO 6000's SHA-512 compressions a second: block-sha512's 33 a block over 2,097,152 blocks in 9.87 ms."""
 SHA512_PER_S = GPUS * GPU_SHA512_PER_S
 """The node's SHA-512 compressions a second, its GPUs'.  The host's cores' rate is not measured and not in it."""
 SKETCH_OUTSIDE = 2 ** 20
@@ -62,33 +61,31 @@ own over its span, Q = F·C (`sketch_failure`'s `outside`).  Grinding a sketch-s
 on any hardware the prover reaches, not only the node's GPUs: 2^20 nodes' SHA-512, about 8.4M RTX PRO 6000s, past any
 one operator's fleet.  At 16 rows it costs a session's line 0.4 bits of error (2^-29.95 to 2^-29.55 at 2118 passes),
 since AuditRO's 2^-41 a pass dominates it; 64 rows would bring δs under 2^-50 at τ 1.226 a pass on the reader, the
-option if that slack is ever cut.  Provisional, under the sketch's random-oracle ask (memory-accounting, 24 Oct; RD-5,
-note:20261024T1350Z-report-sketch-named)."""
+option if that slack is ever cut.  Provisional, under the sketch's random-oracle ask."""
 GPU_READ_BYTES_PER_S = 1.539e12
 """One RTX PRO 6000's measured HBM read rate: the fastest bare read of an encoded store measured on it, 1,539.26 GB/s
-in the honest session of 14 Oct (prover r20261014-193057-8fec), rounded down.  ra-word-codec's 1.488e12 (#1840,
-r20261012-051505-ed9d, art:51a27942) is a slower kernel's."""
+in the honest session of 14 Oct (prover r20261014-193057-8fec), rounded down.  ra-word-codec's 1.488e12
+(r20261012-051505-ed9d) is a slower kernel's."""
 GPU_SPEC_BYTES_PER_S = 1.597e12
 """The RTX PRO 6000 Server Edition's datasheet memory bandwidth, 1,597 GB/s (NVIDIA's product page and datasheet, as
 the census's `rtx-pro-6000-server` entries cite them), which no measured kernel reaches."""
 HOST_READ_BYTES_PER_S = 606.8e9
 """The host DRAM's measured read rate: 8 GPUs' pinned H2D and 56 CPU readers at once, 319.2 + 287.6 GB/s, the most any
-reader mix measured; DRAM caps the sum, not the root complex (r20261015-081037-5ecf, art:3250e5915dd8,
-note:20261015T0731Z-draft-model-constants)."""
+reader mix measured; DRAM caps the sum, not the root complex (r20261015-081037-5ecf)."""
 HOST_SPEC_BYTES_PER_S = 819.2e9
 """The host DRAM's specified read bandwidth: 16 channels of DDR5-6400."""
 READ_BYTES_PER_S = GPUS * GPU_READ_BYTES_PER_S + HOST_READ_BYTES_PER_S
 """R measured: the node's read capacity over every registered tier, its GPUs' HBM and its host DRAM, each at its
 measured rate.  A store in HBM alone reads at `GPUS · GPU_READ_BYTES_PER_S` and leaves host DRAM's share idle."""
 SPEC_BYTES_PER_S = GPUS * GPU_SPEC_BYTES_PER_S + HOST_SPEC_BYTES_PER_S
-"""R specified, the headline (Daniel, 13 Oct): every tier at its datasheet rate."""
+"""R specified, the headline: every tier at its datasheet rate."""
 GPU_WRITE_BYTES_PER_S = GPU_SPEC_BYTES_PER_S
 """One RTX PRO 6000's write ceiling, the fastest a fill can write labels into its memory: the datasheet's 1,597 GB/s,
 the bus's own rate (512 bits at the 12,481 MHz memory clock it ran at), 4.4% above every write measured on it.  Labels
 derived on the device were written at 1,528.98 GB/s by TMA bulk stores and 1,526.48 by 16-byte evict-first stores, a
 constant at 1,521.88 by the driver's memset, and labels streamed in over its PCIe 5.0 x16 at 56.39 GB/s by the copy
 engines and 51.40 by zero copy (r20261020-211937-b9c0, `benchmarks/bandwidth/write.cu`).  A ceiling must bound every
-prover, and a measured rate bounds only the kernels tried, so the sheet's rate stands (MEM-45).  A fill of codec labels
+prover, and a measured rate bounds only the kernels tried, so the sheet's rate stands.  A fill of codec labels
 derived from a seed is bounded lower, by the labeller: the node's `SQUARINGS_PER_S[width]` over the codec's
 `encode_squarings` a block (`audit.Rebuild`), about 1.05 GB/s a GPU under `codec.DEFAULT`."""
 HOST_WRITE_BYTES_PER_S = HOST_SPEC_BYTES_PER_S
@@ -102,8 +99,7 @@ gives its coverage, not a rate), and the datacenter model reads an unset rate as
 links."""
 GPU_CHIP_BYTES = 263_163_904
 """One RTX PRO 6000's on-chip storage at most: 188 SMs' registers, L1 and shared memory, L1.5, instruction caches,
-uniform registers and warp state, its L2, TLB and 1 MiB of buffers (ra-pcie-exhaust #1852, `chip.cu`, runs
-art:2b6cac05 to art:90de6479)."""
+uniform registers and warp state, its L2, TLB and 1 MiB of buffers (ra-pcie-exhaust's `chip.cu`)."""
 HOST_CHIP_BYTES = 1_000_341_504
 """The host's on-chip storage at most, bounded for the whole host, two Xeon 6776P sockets of 64 cores each, whatever
 share of them its VM gets (vy-nebius-2's guest sees 2 × 48): each socket's 336 MiB of L3 and 2 MiB of uncore queues, and
@@ -111,11 +107,9 @@ each core's 2 MiB of L2, 48 KiB of L1d, 64 KiB of L1i and 64 KiB of registers an
 guest's CPUID topology on that host type (r20261020-212232-6ba5's lscpu), and the 128 cores the host's
 (`benchmarks/rate_squaring/gamma.py`). The 64 KiB a core and 2 MiB a socket are allowances, not an enumeration: two
 threads' architectural state with AMX tiles (about 11 KiB each), the physical register files and the load, store and
-fill buffers; and the memory controllers', UPI's and PCIe's queues (red team, note:20261024T0330Z-report-redteam-night
-(f)4)."""
+fill buffers; and the memory controllers', UPI's and PCIe's queues (red team)."""
 CHIP_BYTES = GPUS * GPU_CHIP_BYTES + HOST_CHIP_BYTES
-"""S_chip, the node's: every GPU's on-chip storage and the host's caches (the red team's R6 F1,
-note:20261015T0705Z-draft-bandwidth-core-redteam)."""
+"""S_chip, the node's: every GPU's on-chip storage and the host's caches (the red team's R6 F1)."""
 LINK_WINDOW_BYTES = 6_291_456
 """One link window, what the node's boundary link can land in its memory at once beyond the link's rate: its TCP
 receive buffer at most, `net.ipv4.tcp_rmem`'s max on vy-nebius-2 (eth0's ring, 1,024 descriptors at a 1,500-byte MTU,
@@ -125,8 +119,8 @@ GPU_SQUARINGS_PER_S = {"p1024": 1.67 * 1.499e10, "p512": 1.567 * 5.13e10}
 on the GPU less its MOV and SEL and h the host's 128 cores at their IFMA bound over 8 reference GPUs
 (ra-squaring-ceiling #1887).  The reference is codec-mix's 5.13e10 at 512 bits and `kv.cu`'s 1.499e10 at 1,024.  At
 1,024 bits the best form is `kv.cu`'s FOLD 6 at ILP 1, 2.044e10 a second (1.364× the reference, #2489), so s =
-1.364 × 2463/2262 ≈ 1.485 and s·(1 + h) = 1.67 at h = 12.5%, up from `sq.cu`'s FOLD 6 and 1.597 (s = 1.42), as Daniel's
-card e2a13d4a set it (ASK-8, default applied 18 Oct, MEM-43).  A higher ceiling only raises μ_rebuild, from 0.062% to
+1.364 × 2463/2262 ≈ 1.485 and s·(1 + h) = 1.67 at h = 12.5%, up from `sq.cu`'s FOLD 6 and 1.597 (s = 1.42), as a
+decision card set it.  A higher ceiling only raises μ_rebuild, from 0.062% to
 0.065% of the node's measured R (γ +0.003 points), so the raise is the conservative direction.  The MOV/SEL-free form
 is modeled, not built, and stays below the conservative reading, Karatsuba's own model (s = 1.68, 1.885× with the
 host)."""

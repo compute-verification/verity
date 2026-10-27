@@ -406,7 +406,7 @@ def synthetic(lengths: tuple[int, ...], drawn: int, delta: float) -> audit.Recor
 
 
 def test_the_ledger_reads_the_openings_per_window_and_over_the_horizon() -> None:
-    """Daniel's hybrid claim at 2^-40 (#1884), as `Accounting.Guarantees.RateSessionDraw` reads it: 7 windows of 2,773
+    """The hybrid claim at 2^-40, as `Accounting.Guarantees.RateSessionDraw` reads it: 7 windows of 2,773
     openings each (d·n ≥ 18,470) are short by under 0.15% over the horizon, and by under 1% in every window, together.
     Read per window, each window's own bound at δ is about 1% of its receipts, with 7·δ in all."""
     n, d, u, delta = 7, 2773, 100_000, 2.0 ** -40
@@ -1056,7 +1056,7 @@ def test_the_stated_claim_holds_in_every_window_and_for_the_horizons_sampling_te
 
 
 def test_the_node_constants_are_the_sums_over_its_devices() -> None:
-    """R, S_chip, the squaring ceiling and the SHA-512 rate are the node's (MEM-26): its 8 GPUs' and its host's, every
+    """R, S_chip, the squaring ceiling and the SHA-512 rate are the node's: its 8 GPUs' and its host's, every
     tier, each GPU's value kept apart for the benches that read one GPU."""
     assert timing.GPUS == 8
     assert timing.READ_BYTES_PER_S == 8 * 1.539e12 + 606.8e9 and timing.SPEC_BYTES_PER_S == 8 * 1.597e12 + 819.2e9
@@ -1070,7 +1070,7 @@ def test_the_node_constants_are_the_sums_over_its_devices() -> None:
 
 
 def test_the_write_ceilings_are_the_sheets_above_every_write_measured() -> None:
-    """One GPU's and the host DRAM's write ceilings (MEM-45) are their data sheets' rates, which bound every prover
+    """One GPU's and the host DRAM's write ceilings are their data sheets' rates, which bound every prover
     where a measurement bounds only the kernels tried, each above every write its run measured: the card's 1,528.98
     GB/s on the device and 56.39 streamed in (r20261020-211937-b9c0), the host's 207.69 (r20261020-212232-6ba5).  Each
     docstring names its runs; a fill of derived codec labels is bounded by the labeller, about 1.05 GB/s a GPU under

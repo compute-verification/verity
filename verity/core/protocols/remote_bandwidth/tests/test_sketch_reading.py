@@ -71,7 +71,7 @@ def test_the_bound_is_exact_at_two_rows(cols: int) -> None:
 
 def test_seeded_sampling_does_not_falsify_the_rank_tail() -> None:
     """Seeded sampling at small parameters against the formulas behind `Accounting.Assumptions.SketchRank`
-    (art:d3c891e4 evaluates the deployed 16 × 4096 number, out of any sampler's reach): 10,000 draws a check at seed
+    (the deployed 16 × 4096 number is out of any sampler's reach): 10,000 draws a check at seed
     20261014.  The F2 law is exact, so the empirical CDF matches it two-sided; the ±1 bound and the union bound over
     sectors (the assumption's `∃ u` event) are upper bounds that sampling sits below, up to noise, and they are tight
     here (at 4 × 5 the bound on rank ≤ 2 is exactly 0.02588 by enumeration), so a wrong formula shows as systematic
