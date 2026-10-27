@@ -16,7 +16,8 @@
 #     closed window's advice under PROVE-PATH's registered compiler and the weights registration (`--weights-of-record`),
 #     then this window's request Programs (`tools/advice_compile.py`); V3b's window circuit at each class of CLASSES
 #     (`prove_path.py window-circuit --pins` the registration, and PIN's NAME=ROOT if set; #4317 with #4757; `record` is the
-#     class of record), its registered and free input bits at those pins; then the window audited from its records alone
+#     class of record), its registered and free input bits at those pins, each within WC_TIMEOUT (default 30m; Llama-3.2-1B
+#     int8's class of record needs longer); then the window audited from its records alone
 #     (`prove_path/run.sh` with PP_RECORDS=1, `records_audit.py`): C-Flock `--zk` on the drawn proof blocks behind the Lean
 #     firewall, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
 #     layer 0's SiluMul_v2 at step 1), not the window circuit's: proving the window circuit's own units is V3c (VLLM-103),
@@ -262,8 +263,11 @@ for c in $CLASSES; do
     wc_ok=1
     say "WINDOW-CIRCUIT class $c: $("$PY" -c 'import json, sys; c = json.load(open(sys.argv[1]))["count"]; print("registered", c["registered"], "bits, free", c["free"], "bits of", c["inputs"], "input bits")' \
       "$OUT/window-circuit-$tag.json" 2>&1 | cut -c1-200) $WP; $(cat "$OUT/window-circuit-$tag.json"); record $(sha256sum "$f" | cut -c1-16)… $(stat -c %s "$f") bytes"
+  elif [ "$rc" = 124 ]; then
+    say "WINDOW-CIRCUIT class $c timed out after WC_TIMEOUT=${WC_TIMEOUT:-30m} (exit 124): no count"
   else
-    say "WINDOW-CIRCUIT class $c refused (exit $rc): $(grep -m1 'window-circuit' "$OUT/window-circuit-$tag.err" | cut -c1-600)"
+    say "WINDOW-CIRCUIT class $c refused (exit $rc): $({ grep -m1 'window-circuit' "$OUT/window-circuit-$tag.err" \
+      || tail -1 "$OUT/window-circuit-$tag.err"; } | cut -c1-600)"
   fi
 done
 say "MISSING V3c (VLLM-103, vllm-stack-neutral): the committer writing the window circuit's units as the record's members," \
