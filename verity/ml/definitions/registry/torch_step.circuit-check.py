@@ -6,19 +6,21 @@ from typing import Any
 
 
 def _boolean_roots() -> list[Any]:
-    """F.linear's three GEMMs on two rows of a row GEMM at K 64, N 3: each unsplit (the route of every forward and dW of the
-    step at one layer, B 1 x S 256, and of three of its five dX shapes), and on a split route its role takes in the capture: dX
-    split-K with bf16 partials, dW grid.z's aligned residue-first split."""
+    """F.linear's three GEMMs on one row of a row GEMM over 64 terms, one output each: unsplit (the route of every forward and
+    dW of the step at one layer, B 1 x S 256, and of three of its five dX shapes), and on a split route its role takes in the
+    capture: dX split-K with bf16 partials, dW grid.z's aligned residue-first split. Each is under `targets.MAX_GATES`, which
+    `targets.select` drops a binding over whenever its family has one under it, so every route `TrainStep_v1`'s calls take
+    has a target its by-calls check relies on."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import torch_step as TS
 
     nosplit = {"kernel": "nosplit"}
     return [
-        bind(TS.LinearTorch, M=2, K=64, N=3, ROUTE=nosplit),
-        bind(TS.LinearTorchDx, M=2, K=3, N=64, ROUTE=nosplit),
-        bind(TS.LinearTorchDx, M=2, K=3, N=64, ROUTE={"kernel": "splitk", "SPLIT_K": 4, "partial": "bf16"}),
-        bind(TS.LinearTorchDw, M=64, K=3, N=2, ROUTE=nosplit),
-        bind(TS.LinearTorchDw, M=64, K=3, N=2,
+        bind(TS.LinearTorch, M=1, K=64, N=1, ROUTE=nosplit),
+        bind(TS.LinearTorchDx, M=1, K=1, N=64, ROUTE=nosplit),
+        bind(TS.LinearTorchDx, M=1, K=1, N=64, ROUTE={"kernel": "splitk", "SPLIT_K": 4, "partial": "bf16"}),
+        bind(TS.LinearTorchDw, M=64, K=1, N=1, ROUTE=nosplit),
+        bind(TS.LinearTorchDw, M=64, K=1, N=1,
              ROUTE={"kernel": "splitk", "SPLIT_K": 3, "partial": "bf16", "align": 8, "tile_k": 16}),
     ]
 
