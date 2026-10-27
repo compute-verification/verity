@@ -32,7 +32,8 @@ preconditions refused by `verify --zk` (`ScopeGate`). `Lowers`: the claims progr
 `Flock.SecurityProofs.DeltaPubDeployed : Flock.Guarantees.DeltaPubDeployed`, `deltaPub < 1` at the deployment's
 parameters. `PublicWitnesses`: its honest lemma (the parameter hypotheses hold as deployed) and its nontrivial lemma
 (false at the verifier that accepts everything). `RefusedWitnesses`: `SampledKSLiveV2`'s and `SampledKSLiveV3`'s
-nontrivial lemmas, at `SampledKSLivePub`'s failing instance through `SampledKSLiveV2`'s error at most `deltaPub`. -/
+nontrivial lemmas, at `SampledKSLivePub`'s failing instance through `SampledKSLiveV2`'s error at most `deltaPub`.
+`ScopeGateSanity`: `SampledKSLiveV4`'s nontrivial lemma, at the same instance through `SampledKSLiveV3`'s. -/
 
 /-- **`SampledKSLive` is stated** (`Flock.Guarantees.SampledKSLiveStated`). -/
 theorem Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated := rfl
