@@ -100,6 +100,9 @@ ENGINE = Costs("engine", CR.FRESH_EXTRA + 1, CR.REUSED + 1)
 #: `Int8RowQuant_v2{K}` by K, `GemmCoordinate_v3{K}` by K, `AttnBlock_v9{D=64, NVIS=BN, FIRST=False, BN, CHECK}` by (BN, CHECK)
 S8_COORD = {2048: 271_342, 8192: 1_069_678}
 ROW_QUANT = {2048: 7_727_887, 8192: 30_903_055}
+#: the row quantizers priced by `ROW_QUANT`: `Int8RowQuant_v3{K, R}` is v1's body over x by reference, its Boolean twin
+#: `Int8RowQuant_v4{K, R}` v2's gates
+ROW_QUANTS = ("Int8RowQuant_v1", "Int8RowQuant_v3")
 BF16_COORD = {2048: 1_007_682}
 FA3_FULL = {(128, False): 8_131_559, (128, True): 8_131_622, (192, False): 12_107_687, (192, True): 12_107_750}
 #: `AttnBlock_v9{D=64, NVIS, FIRST=True, BN, CHECK=True}`'s ANDs at NVIS = 1 ... 192, the same at every BN >= NVIS (FA3's first
@@ -132,7 +135,7 @@ def unit_ands(lab: str, target: str = "h200") -> int:
     if target == "h200":
         if fam == "ScaledMmS8_v1":
             return s["N"] * S8_COORD[s["K"]]
-        if fam == "Int8RowQuant_v1":
+        if fam in ROW_QUANTS:
             return ROW_QUANT[s["K"]]
         if fam == "Gemm_v2":
             return s["N"] * BF16_COORD[s["K"]]

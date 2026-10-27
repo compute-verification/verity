@@ -9,9 +9,9 @@
   with a block's state in one row (`L3b`) too;
 * at the class of record, every lever leaves the commit's compressions no larger and every step of the plan lowers them,
   and the plan from ``L1 + L2`` on leaves no pad pass at any traffic, once every template of Llama-3.2-1B's probe has a
-  measured price: its probe lowers, first blocks `AttnBlockFirst_v2` priced as v1, but the scan off the class of record's
-  lanes, o_proj's `Int8RowScale_v1` and `Int8StaticQuant_v1`, `SiluMul_v2` at I 2,048 and the norm's add parts and tail
-  have none yet;
+  measured price: its probe lowers, first blocks `AttnBlockFirst_v2` priced as v1 and quantizers `Int8RowQuant_v3` as
+  v1, but the scan off the class of record's lanes, `SiluMul_v2` at I 2,048 and the norm's add parts and tail have none
+  yet;
 * serving's stream commit is its stream's 4 KiB rows under both schedules, its FA3 interiors the hand count of each launch,
   and ``F`` leaves out exactly those;
 * the H200's AND tables are `BS.compile`'s counts.
