@@ -6,8 +6,9 @@ record, a network certificate, its digest hidden under a 64-byte salt the certif
 over a hiding commitment and the record stays witness. Network accounting reads those certificates. Its check, N2,
 holds each sampling block's per-bucket counts to the link's public occupancy profile (on a served or advised link, to
 the counts its ingress and the declared sync or the advice derive), which puts the link's timing at the profile. The
-claim is counts only: N3, which would hold the frames inside the counts to the Program's, is a design and the
-simulator's behaviour (`benchmarks/network_sim`), not a protocol.
+claim is counts only. N3, the content check that would have held the frames inside the counts to the Program's, is
+retired, superseded by the network certifier's step-indexed scan (`ingress_scan`, `egress`, proved by
+`benchmarks/network_traces/scan_zk.py`).
 
 **Trust.** The certifier is the auditor's hardware. It runs on a host the prover doesn't control, never as a process on
 the prover's node, and trust in the device and its host is the named assumption `trusted-host`
@@ -157,7 +158,8 @@ Tests: `uv run tools/verity/check/suites.py verity/core/protocols/certifier`.
 
 Every protocol is to be zero-knowledge. The network audit's claim is counts only: N2 holds each sampling block's
 per-bucket counts to the occupancy profile (on a served link, to the ones its ingress counts derive under the declared
-sync), beside the proved timing bound, while N3, the content check, is a design.
+sync), beside the proved timing bound. N3, the content check, is retired, superseded by the step-indexed scan
+(`benchmarks/network_traces/scan_zk.py`).
 
 N2's verifier of record, `LinkWindows.verify`, decides each sampling block on a `--zk` proof of N2's registered proof
 block (`NetworkLinkWindow` v5, served `NetworkServedLinkWindow` v4) and public inputs alone: its own run of C-Flock's

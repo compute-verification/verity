@@ -7,8 +7,8 @@ records (`CertifiedRecord`), egress leaf 0 and ingress leaf 1, and their heads, 
 Each leaf is `hm96-sha512/row/v2` over its bytes, salted with its own fresh 192-byte salt, in a `frame-v3-sha512` tree
 under one-stage's served domain, whose run is the link and the window. A record leaf's bytes are `encode`'s (the record
 head, the certifier's salt for it, then the certificate), and a head leaf's are the head's alone (`RecordHead.encode`).
-A proof that reads only the head, such as N3's, which is designed to hold the window's frames to the head's root, opens
-a head leaf in the head's two or three SHA-512 compressions instead of the certificate's 272. The certificates, salts
+A proof that reads only the head, such as the head check's, opens a head leaf in the head's two or three SHA-512
+compressions instead of the certificate's 272. The certificates, salts
 and heads are witness: the challenger sees the root, never a certificate, a salt or a head.
 
 **Selection** is `All`: every link-window is checked, so an accepted outcome is the exhaustive fact. A registration is
@@ -47,15 +47,14 @@ rejected link-window shows only the service's `reject`: the violation's kind sta
 **The occupancy profile** (`LinkWindows.occupancy`) is the placement's public occupancy for each end of the link: each
 window's T counts, the frames that end's record holds in each bucket, as the Program and the placement fix them. An end
 whose rows the Program reads rather than predicts, such as requests from outside, has none. The profile is fixed before
-the run and bound by the spec's context, and nothing declared at run time sets it. So a port-window it leaves empty can
-pass N3's design from public occupancy, with no N3 unit: a head with frames where the profile says 0 fails N2's count
-check. An end without a profile has no such backing, since its occupancy is its record's own.
+the run and bound by the spec's context, and nothing declared at run time sets it. So a port-window it leaves empty
+needs no content check: a head with frames where the profile says 0 fails N2's count check. An end without a profile has no such backing, since its occupancy is its record's own.
 
 **The check** is `LinkWindows.unit`, `NetworkLinkWindow` v5{EGRESS, INGRESS}: each end's head check,
 `head_check.NetworkHeadCheck_v2{L, T, COUNTS}` (EGRESS and INGRESS are those statics), a Boolean Definition over its
 end's signed digest (`certificate_digest`: the end's record digest hidden under the certifier's salt), its direction a
-constant of the unit (egress 0, ingress 1). The head opens at leaf 2 + direction under the registered root, the hiding
-read N3 makes of the same leaf; its link, direction and window are the link-window's; its status is complete; its T, r,
+constant of the unit (egress 0, ingress 1). The head opens at leaf 2 + direction under the registered root, a hiding
+read; its link, direction and window are the link-window's; its status is complete; its T, r,
 B, τ_b and parameters digest are the end's declared grid's; on an end with an occupancy profile its T counts are the
 profile's row for the window; and its record digest under the certifier's salt is the signed digest, so the certificate
 signs the head the check opened. A window past the profile has no row to give, so it is rejected. The unit's parameters
@@ -79,10 +78,9 @@ The count check is the part of the egress grid check that needs no frame's bytes
 It runs on every link-window, as a structural check must. In a proof it is an equality of each head's 32·T count bits
 with the profile's row, 32·T − 1 ANDs a head (19,199 at T = 600), beside the head's opening (`head_check.size`).
 
-N3, the content check, is a design and the simulator's behaviour, not part of this protocol: a prototype unit evaluated
-in the clear (`benchmarks/network_sim`, "N3 in zero knowledge"), in no proof-service Spec and not proved. Its design
-runs it on every port-window that recorded frames, recomputing the head's frames root over its N frames, which would
-hold N to the head's Σ n_t up to a SHA-512 collision (`certificate`: leaf k is frame k for k < Σ n_t and E_0 after).
+N3, the content check, a prototype in `benchmarks/network_sim` evaluated in the clear and in no proof-service Spec, is
+retired, superseded by the step-indexed scan (`ingress_scan`, `egress`), which `benchmarks/network_traces/scan_zk.py`
+proves in zero knowledge, outside this protocol.
 
 **The proof.** The prover proves the drawn unit as one C-Flock statement of one instance: rows ``pub`` (the unit's
 public parameters) and ``wit`` (each end's head, its leaf's salt, its two siblings and the certifier's salt), each the
@@ -121,8 +119,8 @@ zero-knowledge.
 N2 compares no grid in the clear and takes no frames, so its claim is counts only: on every link-window the egress
 head's counts are the profile's (and the ingress head's, where that end declares one), which puts the link's timing at
 the profile. The egress grid is the head's counts filled with the head's frames in order (`grid.fill`), and the head's
-digest binds both, so the frames are the rest of the grid, and N2 says nothing of them. Until N3 is a proof-service
-unit with Selection `All`, nothing here holds the egress grid to the Program's.
+digest binds both, so the frames are the rest of the grid, and N2 says nothing of them. Nothing here holds the egress
+grid to the Program's.
 
 **A served link** (`LinkWindows(served=served.ServedProfile(…))`) has egress counts that follow its requests' arrivals
 and the run-time syncs, so no profile fixes them before the run. Its unit is `NetworkServedLinkWindow` v4{EGRESS,
@@ -179,7 +177,7 @@ A link whose egress end has no occupancy profile and is neither served, advised 
 `LinkWindows.stand_in` is the in-the-clear verdict, the Program's egress grid compared as it was before the head check,
 and each head's counts the profile's (`declares`). It reads the frames, so it is the tests' oracle, never a verdict:
 `clear` accepts every link-window it accepts, and differs from it only where the record's grid, at the profile's
-counts, isn't the Program's: in its frames, which N2 doesn't hold (N3's design would), or because the declared syncs
+counts, isn't the Program's: in its frames, which N2 doesn't hold, or because the declared syncs
 move the Program's counts off the profile, which N2 holds the counts to instead.
 
 When the in-the-clear check's audit is the Lean check's (`lean_audit.Audit`), `audit.Audit` runs beside it as the
@@ -215,8 +213,8 @@ record leaves (0, 1), which hold each certified record whole, are committed but 
 the certificates' signatures are checked
 on the host from their public fields, not in the proof. One clock per spatial unit across links (`Audit.syncs`) is
 not checked here: each registration is one link-window, checked alone. The frames, their content and their order
-within the counts, are left to N3: an accepted outcome says nothing of them, so the claim is counts only (timing at
-the profile) until N3 is a proof-service unit with Selection `All`.
+within the counts, are not held: an accepted outcome says nothing of them, so the claim is counts only (timing at the
+profile).
 """
 from __future__ import annotations
 
