@@ -126,6 +126,7 @@ def main(out: str) -> None:
     rc = read(f"{out}/rc.txt")
     timed = next((ln.split(":", 1)[1].split() for ln in rc.splitlines() if ln.startswith("timed:")), [])
     lock = re.search(r"lock rc (\d+)", rc)
+    mode = re.search(r"clock mode (.*)", rc)
     ph, samples = phases(out), smi_samples(out)
     fc = jsonl(f"{out}/forms-check.jsonl")
     sms = next((r["sms"] for r in fc if "sms" in r), None)
@@ -191,7 +192,8 @@ def main(out: str) -> None:
     skip = max((forms[k] for k in ("skip-roll0", "skip-roll1")), key=lambda v: v["gcomp_per_s"] or 0)
     skip_name = "straight-line" if skip is forms["skip-roll0"] else "rolled"
 
-    summary = {"sms": sms, "lock_mhz_rc": int(lock.group(1)) if lock else None, "timed": timed, "forms_check": forms_ok,
+    summary = {"sms": sms, "lock_mhz_rc": int(lock.group(1)) if lock else None,
+               "clock_mode": mode.group(1) if mode else None, "timed": timed, "forms_check": forms_ok,
                "base": base_name, "ours": ours, "forms": forms, "forms_clock": forms_clock, "hashcat": hc,
                "hashcat_commit": read(f"{out}/hashcat-commit.txt").strip()}
     with open(f"{out}/summary.json", "w") as f:
@@ -199,7 +201,7 @@ def main(out: str) -> None:
 
     timed_mhz = [m for name, s, e, _ in ph if re.fullmatch(r"(sha|forms|hc)-.*-\d+", name)
                  for t, m, _ in samples if s <= t <= e]
-    print(f"VERDICT clock: SM clock lock rc {summary['lock_mhz_rc']}; NVML in the timed arms "
+    print(f"VERDICT clock: lock rc {summary['lock_mhz_rc']}, {summary['clock_mode']}; NVML in the timed arms "
           f"{fmt(min(timed_mhz) if timed_mhz else None, '.0f')}..{fmt(max(timed_mhz) if timed_mhz else None, '.0f')} MHz "
           f"({len(timed_mhz)} samples at 200 ms); {sms} SMs")
     checks = []

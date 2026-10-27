@@ -45,9 +45,16 @@ build() {
 hashcat_build() {
   git clone -q --depth 1 --branch "$HC_TAG" https://github.com/hashcat/hashcat.git "$W/hashcat" > "$O/hashcat-build.log" 2>&1 &&
     git -C "$W/hashcat" rev-parse HEAD > "$O/hashcat-commit.txt" &&
-    make -C "$W/hashcat" -j "${JOBS:-16}" hashcat modules/module_01700.so modules/module_01710.so >> "$O/hashcat-build.log" 2>&1
+    make -C "$W/hashcat" -j "${JOBS:-16}" hashcat modules/module_00000.so modules/module_01700.so modules/module_01710.so \
+      >> "$O/hashcat-build.log" 2>&1
   echo "build hashcat rc $?" >> "$O/rc.txt"
 }
+# hashcat dlopens libnvrtc.so or libnvrtc.so.1 alone: a link to the toolkit's own, whatever its version suffix
+mkdir -p "$W/lib"
+nvrtc=$(find /usr/local/cuda/lib64/ /usr/local/cuda/targets/*/lib/ -maxdepth 1 -name 'libnvrtc.so*' 2>/dev/null | sort | head -1)
+[ -n "$nvrtc" ] && ln -sf "$nvrtc" "$W/lib/libnvrtc.so"
+echo "nvrtc ${nvrtc:-none}" >> "$O/rc.txt"
+export LD_LIBRARY_PATH=$W/lib:$LD_LIBRARY_PATH
 build a0r0l &
 build sx0000 &
 nvcc -O3 -std=c++17 -gencode arch=compute_$SM,code=sm_$SM -Xptxas -v -o "$W/hashcat_forms" $X/hashcat_forms.cu -lnvidia-ml \
@@ -64,8 +71,7 @@ mkdir -p "$HOME"
 hcargs() {   # the hashcat flags of setting $1: MODE-KERNEL[-wN]
   local m=${1%%-*} rest=${1#*-} w=3
   case $rest in *-w4) w=4; rest=${rest%-w4} ;; esac
-  printf -- '-b -m %s -w %s %s --backend-ignore-opencl --backend-ignore-hip --backend-ignore-metal' "$m" "$w" \
-    "$([ "$rest" = O ] && echo -O)"
+  printf -- '-b -m %s -w %s %s --backend-ignore-opencl --backend-ignore-hip' "$m" "$w" "$([ "$rest" = O ] && echo -O)"
 }
 export -f hcargs
 # shellcheck disable=SC2016
@@ -76,8 +82,22 @@ gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash -c '
   nvidia-smi --query-gpu=index,uuid,name,driver_version,compute_cap,clocks.sm,clocks.max.sm,power.limit --format=csv -i "$U" \
     > "$O/gpu.txt" 2>&1
   nvidia-smi -i "$U" -q -d CLOCK,PERFORMANCE > "$O/clock-before.txt" 2>&1
+  nvidia-smi -i "$U" -q -d SUPPORTED_CLOCKS 2>&1 | head -40 > "$O/supported-clocks.txt"
+  # the clock under load, from hashcat_forms (NVML after each launch): the least of its forms medians
+  probe() { "$W/hashcat_forms" time 5 2>/dev/null | python3 -c "import sys, json; print(int(min(json.loads(l)[\"mhz\"] for l in sys.stdin)))"; }
   sudo -n nvidia-smi -i "$U" -lgc "$LOCK,$LOCK" > "$O/lock.txt" 2>&1; echo "lock rc $?" >> "$O/rc.txt"
   trap "sudo -n nvidia-smi -i $U -rgc >> $O/lock.txt 2>&1; nvidia-smi -i $U -q -d CLOCK > $O/clock-after.txt 2>&1" EXIT
+  # a lock this card resolves below LOCK (vy-dc-h200 put -lgc 1980,1980 at 1830, r20261027-040452-3d4d): unlocked, if the
+  # boost holds LOCK under load, else the lock as it resolves
+  locked=$(probe) free=n/a mode=locked
+  if [ "${locked:-0}" -lt "$LOCK" ]; then
+    sudo -n nvidia-smi -i "$U" -rgc >> "$O/lock.txt" 2>&1
+    free=$(probe)
+    if [ "${free:-0}" -ge "$LOCK" ]; then mode=boost; else
+      sudo -n nvidia-smi -i "$U" -lgc "$LOCK,$LOCK" >> "$O/lock.txt" 2>&1
+    fi
+  fi
+  echo "clock mode $mode: under load $locked MHz locked at $LOCK,$LOCK, $free MHz unlocked" >> "$O/rc.txt"
   nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.mem,power.draw,temperature.gpu,clocks_event_reasons.active \
     --format=csv,noheader -lms 200 -i "$U" > "$O/smi.csv" 2>&1 &
   smi=$!
