@@ -382,12 +382,11 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
   (`Certificate.lean`): when the unit's rows are the rows `GateRows.rows G L` derives from a gate circuit
   `G` (`RowsCert`) and `G` computes a definition `D` (`∀ x, G.eval x = D x`, `G` being `D`'s lowering, which is in
   Python, not Lean), a unit that is not faulty, with its constant 1, carries on each committed output wire `D`'s output
-  on its input wires. `RowsCert` is a fact about finite data, which a kernel computation checks (RoPE's facts, by
-  `decide +kernel`); `∀ x, G.eval x = D x` is not, since it ranges over every input, and nothing in Lean ties `D` to a
-  Definition until the Definition's Boolean semantics is stated there. `Rope.rope_sound` proves, for RoPE's pinned rows,
-  that rows satisfied with the constant 1 carry the gate circuit's outputs, checked in the kernel. Once every Definition
-  lowers to a Boolean circuit over AND, XOR and NOT (lane proofs-ir), a generic Boolean-semantics lemma replaces the
-  per-template `RowsCert`.
+  on its input wires. `RowsCert` is a fact about finite data, which a kernel computation can check; `∀ x, G.eval x = D x`
+  is not, since it ranges over every input, and nothing in Lean ties `D` to a Definition until the Definition's Boolean
+  semantics is stated there. For a checked typed layout, `Types.Dag.layout_sound` proves that rows satisfied with the
+  constant 1 carry the layout type's outputs, for every layout `deriveChecked` accepts. Once every Definition lowers to a
+  Boolean circuit over AND, XOR and NOT, a generic Boolean-semantics lemma replaces the per-template `RowsCert`.
 - **The statement's form** is no hypothesis: `verify` refuses forms the proof omits (PROTOCOL.md §16.15).
 - **The link points' layout** is a hypothesis (`Statement.LinkLayout`). Each region's free bits must be distinct and
   read link coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …` must fit inside the point. The
