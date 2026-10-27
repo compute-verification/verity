@@ -57,8 +57,8 @@ Topics: `weights`, `updates`, `seed-based`, `gradients`, `activations`, `tokens`
 Agents writing from memory produce plausible but wrong citations. Every source here was found and checked by a
 web-search agent.
 
-- An auditor re-fetched a seeded random sample of 40 of the first 611 findings (2026-10-17). All 40 quotes were
-  verbatim; three findings were corrected, and those carry an `audit` field saying what changed.
+- An auditor re-fetched a seeded random sample of the findings. A finding the audit corrected carries an `audit` field
+  saying what changed.
 - The scaling corpus (findings marked `from_review: scaling-corpus`) was checked by its agent's script against the
   fetched pages but not yet audited.
 
@@ -306,28 +306,6 @@ Three caps keep the library's lower bounds valid. Each was added because a query
 - an activation's charge is at most the bits a compressed boundary carries per value;
 - a block that holds the whole state is charged no more per token than the novel data it reads.
 
-## The board today
-
-Under `kimi-k2-1m-raw` (K = 2e7 bits, a 1M-token session at 32B active parameters):
-
-| Row | Lower (proven) | Upper (construction) |
-| --- | --- | --- |
-| `pretrain-full` | 9.6e4 | 1.4e7 (shard) |
-| `rl-full-weights` | 6.2e4 | 3.7e6 (shard) |
-| `rl-rank1-lora-all-experts` | 4 | 6.3e4 (shard) |
-| `mezo-seed-finetune` | 1 | 2.4e3 (decode-shard) |
-| `zo-seed-pool` | 1 | about 3 (fit) |
-| `rl-tinylora`, `context-playbook` | 1 | about 1 (fit) |
-
-Each row's numbers move with the calibration. Under the 11 MB calibration every seed-based row fits in a block, at
-1.2–3.5. Coded prompts raise full-weight training's lower bound about 5x.
-
-The widest brackets are the research targets:
-
-- **`rl-rank1-lora-all-experts`** (4 to 6.3e4) decides whether frontier RL escapes.
-- **The seed-based rows.** Their lower bound is 1, so their cost is whatever the best construction pays.
-- **`pretrain-full`**. The proven bound (9.6e4) and the construction (1.4e7) are 150x apart.
-
 ## What the committed parameters may hold
 
 Today the policy puts no limit on θ, the values committed before monitoring. That matters most for seed-based training.
@@ -363,22 +341,6 @@ training on smuggled data stays bounded, not closed.
 **The proof gap.** The thread guarantees say nothing about a developer whose data is in θ, since their premise
 `BaselineRegistered` fails. The fix to pursue states the guarantee with a term for the committed data, degrading by
 at most the bits of data the budgets allow.
-
-## What changed from the prior draft's appendix
-
-The prior review's citations all resolve, but these uses don't hold up. Each item cites its finding:
-
-- **TT-LoRA MoE.** Its "rank 5" is a tensor-train rank (33,920 parameters), and it trails rank-16 LoRA rather than
-  matching it (`kunwar-2025-ttloramoe/2`, `/3`).
-- **Wang et al. (OREO)** covers math and ALFWorld, not coding (`wang-2024-oreo/1`).
-- **Song et al.'s coverage result** is for offline contrastive methods only (`song-2024-onlinedata/1`).
-- **Rinberg et al.**
-  - The 33x is a lossy rewrite; the lossless result is about 11x (`rinberg-2026-haikutoopus/2`, `/3`).
-  - The 250–1667x buys part of a capability gap, not compressed responses (`rinberg-2026-haikutoopus/4`).
-- **Zhang et al.** is an empirical study whose gains are at about 2x (`zhang-2025-promptcompression/1`).
-- **Brown et al.'s 16–100x** is measured only at 1.5B. At 7B, about 10x costs 22 MMLU points
-  (`brown-2026-weight-theft/7`, `/8`).
-- **Unsourced claims.** "Updates compressible 50–100x" and the DeepSeek-V4-Pro LoRA sizes have no source here.
 
 ## Not yet here
 
