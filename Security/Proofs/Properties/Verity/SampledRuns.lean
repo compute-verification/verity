@@ -930,7 +930,7 @@ uses' runs; each release of a served request is tagged by it, a round's request 
 rebuilds from the record. -/
 theorem runs_at (V : Vocab d α) (hR : Properties.Challenger.RoundsByDevice)
     (hf : ∀ θ o, V.forger .sampled θ o = V.forgerAt recsAt θ o) {θ F c : ByteArray}
-    (h512 : ∀ k ∈ V.rounds θ, k = 512) (R₀ : A.Reg)
+    (rounds_eq : ∀ k ∈ V.rounds θ, k = 512) (R₀ : A.Reg)
     (hSz : SizesAt V (fun o => ColEvent (V.colAt recsAt pairsAt θ) o ∨ V.Forges .sampled θ o) A) :
     RunsAt V θ F c (fun o => ColEvent (V.colAt recsAt pairsAt θ) o ∨ V.Forges .sampled θ o)
       (readersAt V θ A R₀ (drawLabel θ)) := by
@@ -1015,7 +1015,7 @@ theorem runs_at (V : Vocab d α) (hR : Properties.Challenger.RoundsByDevice)
     intro z hz
     obtain ⟨w', hw', h1, -⟩ := annot_mem [] hs z (List.mem_filter.1 hz).1
     rw [h1]
-    exact h512 _ (by rw [← hsz]; exact List.mem_map_of_mem hw')
+    exact rounds_eq _ (by rw [← hsz]; exact List.mem_map_of_mem hw')
   have hNoCol : ∀ z ∈ servedReqs (V.device θ) hs, ∀ req ∈ _root_.SampledProofs.OneStageZk.reqsOf record,
       Flock.Sha512.hash (bytesOfRequest z.2.1.2) = Flock.Sha512.hash req → bytesOfRequest z.2.1.2 = req := by
     intro z hz req hreq hh
@@ -1348,7 +1348,7 @@ theorem accept_le_of_runs {V : Vocab d α} (kd : ByteArray → ℕ) (desc : Byte
     (A : ∀ (θ F c : ByteArray) (_σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed), V.parsed F = some r →
       Flock.Guarantees.LiveAt r.n r.D r.hU (kd θ) (⌊(V.certOf θ).ε * r.n⌋₊ + 1) (desc θ))
     (hR : Properties.Challenger.RoundsByDevice) (hf : ∀ θ o, V.forger .sampled θ o = V.forgerAt recsAt θ o)
-    (h512 : ∀ θ, ∀ k ∈ V.rounds θ, k = 512) (R₀ : ∀ θ F c σ r hr, (A θ F c σ r hr).Reg)
+    (rounds_eq : ∀ θ, ∀ k ∈ V.rounds θ, k = 512) (R₀ : ∀ θ F c σ r hr, (A θ F c σ r hr).Reg)
     (hSz : ∀ θ F c σ r hr,
       SizesAt V (fun o => ColEvent (V.colAt recsAt pairsAt θ) o ∨ V.Forges .sampled θ o) (A θ F c σ r hr))
     (hSt : ∀ θ F c σ r hr, ∀ o, V.Verdict .sampled o →
@@ -1368,11 +1368,11 @@ theorem accept_le_of_runs {V : Vocab d α} (kd : ByteArray → ℕ) (desc : Byte
         FlockSoundness.Game.prob (fun o => ZkExec.LiveAcceptsZK (A θ F c σ r hr).I o) (A θ F c σ r hr).GH
           (drive V θ F c σ _ (readersAt V θ (A θ F c σ r hr) (R₀ θ F c σ r hr) (drawLabel θ))
             (inputsAt_of_statement (hSt θ F c σ r hr))
-            (runs_at (θ := θ) (F := F) (c := c) V hR hf (h512 θ) (R₀ θ F c σ r hr) (hSz θ F c σ r hr))
+            (runs_at (θ := θ) (F := F) (c := c) V hR hf (rounds_eq θ) (R₀ θ F c σ r hr) (hSz θ F c σ r hr))
             (hDraw θ F c σ r hr) (hLink θ F c σ r hr)).τ :=
   accept_le_of_canon kd desc A pairsAt (fun θ F c σ r hr => readersAt V θ (A θ F c σ r hr) (R₀ θ F c σ r hr) (drawLabel θ))
     (fun θ F c σ r hr => inputsAt_of_statement (hSt θ F c σ r hr))
-    (fun θ F c σ r hr => runs_at (θ := θ) (F := F) (c := c) V hR hf (h512 θ) (R₀ θ F c σ r hr) (hSz θ F c σ r hr))
+    (fun θ F c σ r hr => runs_at (θ := θ) (F := F) (c := c) V hR hf (rounds_eq θ) (R₀ θ F c σ r hr) (hSz θ F c σ r hr))
     hDraw hLink
 
 end Verity.Canon
