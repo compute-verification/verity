@@ -21,7 +21,7 @@ EOS = 9
 
 
 def _match_link(epr: dict) -> dict:
-    """The Match-account link with both legs beside the Commit, as `link_to_match_account` writes them."""
+    """The Match-account link with both Match records beside the Commit, as `link_to_match_account` writes them."""
     link = EPL.link_to_match_account(epr, EPL.load_match_account(None), order={"w0": "r0", "w1": "r1"}, declared_lag=1)
     return link | {"ok": True, "problems": [], "lag_attested": True, "match_dir": "/x/match",
                    "tokens_json": {"path": "/x/match/capture/tokens.json", "sha256": "ef" * 32, "lag": 1, "tokens_equal": {"r0": True, "r1": True},
@@ -34,7 +34,7 @@ def _match_link(epr: dict) -> dict:
 
 def _binding() -> dict:
     """A single-GPU binding as `binding_record` assembles it: r0 stopped at EOS with LAG 1, r1 ran its cap; the token-record link was
-    not applied (the row committed no sampled id)."""
+    not applied (the workload committed no sampled id)."""
     epr = EP.executed_prefix_of_record(["r0", "r1"], {"r0": [5, EOS], "r1": [1, 2, 3]}, caps={"r0": 3, "r1": 3}, eos_of_record=[EOS], lag=1)
     cov = B.coverage_check([], {"digest": "d" * 64, "entries_n": 0, "entries": []})
     cov |= {"ok": True, "expected_n": 12, "bound_n": 12, "missing_n": 0,
