@@ -38,6 +38,7 @@ registered value (`Earlier.value`): its entry has the domain and root of that va
 log's record with that digest, whose leaves, words and word bits must be the value's own (`R7-output` otherwise), so
 nothing is registered afresh.
 -/
+import Flock.WindowRecord
 import SampledProofs.Draw
 import SampledProofs.Registered
 import SampledProofs.Supplied
@@ -49,7 +50,7 @@ open Lean (Json)
 open Flock (V)
 open Flock.TemplateQuery (Desc)
 
-/-- The record's formats and its digest, `SHA-512(format || 0 || canon(record))` with the record's own format as the tag:
+/- The record's formats and its digest, `SHA-512(format || 0 || canon(record))` with the record's own format as the tag:
 the window record's, which every reader of the record shares. -/
 export Flock.WindowRecord (FORMAT FORMAT_V2 digest digestHex)
 

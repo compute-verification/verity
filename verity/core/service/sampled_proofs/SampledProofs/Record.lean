@@ -153,7 +153,7 @@ def pySha512 (j : Json) : V String := do return sha512Hex (← PyJson.canonical 
 0x7f, where the two write every string alike. -/
 def pyCanonical (rec : Json) : Bool :=
   match Flock.canon rec with
-  | .ok s => s.all (·.toNat < 0x7f)
+  | .ok s => s.toList.all fun c => c.toNat < 0x7f
   | .error _ => false
 
 structure Input where

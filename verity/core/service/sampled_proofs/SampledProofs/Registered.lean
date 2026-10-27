@@ -23,6 +23,7 @@ gates are then its own nodes' gates.
 -/
 import Flock.Program
 import Flock.Public
+import Flock.Registered
 import SampledProofs.Partition
 
 namespace SampledProofs.Registered
@@ -32,7 +33,7 @@ open Flock (V)
 open Flock.Program (Ty)
 open Flock.TemplateQuery (Desc)
 
-/-- A registered value's domain, its leaf widths, its row formats (`registered.SCHEMAS`) and the default width, which the
+/- A registered value's domain, its leaf widths, its row formats (`registered.SCHEMAS`) and the default width, which the
 domain and the entry name only by leaving `word_bits` out: C-Flock's, which reads the same registered values. -/
 export Flock.Registered (REGISTERED_DOMAIN SCHEMAS WORD_BITS WIDTHS WIDTH_KEY domain)
 
