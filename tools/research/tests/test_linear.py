@@ -6,6 +6,7 @@ import re
 import stat
 import urllib.error
 import urllib.parse
+from datetime import datetime, timezone
 
 import pytest
 
@@ -544,7 +545,8 @@ def test_the_audit_names_the_teams_it_cant_read_skips_them_and_never_fails_on_th
     assert linear.Linear(KEY, FakeLinear()).unread(["inf", "Infra", "COMMS", "HASH"]) == ["HASH"]   # a key or a name, any case
 
 
-def test_place_and_an_ask_under_a_parent_from_the_cli(fake, registry, capsys, lin):
+def test_place_and_an_ask_under_a_parent_from_the_cli(fake, registry, capsys, lin, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime(2026, 10, 27, 7, 10, tzinfo=timezone.utc))
     rc, out, _ = run(capsys, "linear", "place", "TOP-1", "E2E", "toy", "--milestone", "M3")
     assert rc == 0 and out.strip() == "TOP-1 placed in E2E toy deployment on one H200 / M3 · composed"
     assert lin.updated == [("I1", {"projectId": "PJ1", "projectMilestoneId": "MS3"})]
@@ -554,7 +556,7 @@ def test_place_and_an_ask_under_a_parent_from_the_cli(fake, registry, capsys, li
     (_, v, _), = lin.sent("issueCreate")
     assert rc == 0 and v["i"]["parentId"] == "P1" and v["i"]["projectMilestoneId"] == "MS3" and v["i"]["title"] == "One host"
     assert out.startswith("linear: INF-1 https://linear.app/x/issue/INF-1 under CMP-92")
-    assert re.fullmatch(r"<!subteam\^SINFRA\|@infra> top 06:55Z \(sent \d\d:\d\dZ\): one host", fake.messages[COORD][-1]["text"].removesuffix(LINKED))  # Slack: the first line, as it was
+    assert re.fullmatch(r"<!subteam\^SINFRA\|@infra> top 06:55Z \(sent 07:10Z\): one host", fake.messages[COORD][-1]["text"].removesuffix(LINKED))  # Slack: the first line, as it was
     rc, _, _ = run(capsys, "send", "--as", "top", "--to", "@infra", "--title", "The host", "--text", "one host")
     assert rc == 0 and lin.sent("issueCreate")[-1][1]["i"]["title"] == "The host" and "parentId" not in lin.sent("issueCreate")[-1][1]["i"]
     root = fake.messages[COORD][-1]["ts"]
