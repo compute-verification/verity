@@ -24,11 +24,13 @@
 #      CUDA_TK, WARM_FROM: as 85 takes them (default: proofs' rec-reprice unpack and cargo tree where present, read only)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
+REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/rec-bench-$$}/out}; mkdir -p "$O"
+# settings.py: an unknown REPEAT_* or OPROVE_*, or a value that doesn't parse, is refused; the value settings given are recorded
+SETTINGS=$(python3 benchmarks/recursion_e2e/settings.py record "$O/settings.json") || exit 2
 # 85's leases are preemptible unless GPU_PREEMPTIBLE is empty: on node 1 a waiter stops one after about 2 min, a lost
 # measurement (85 retries the statement afresh, at most GPU_TRIES times), so the bench's are not. A firewalled V* session
 # at K = 4096 takes minutes (L3: 519 s), past 85's default lease of 10 min for the larger statements (run.py's LEASE_MIN)
 export GPU_PREEMPTIBLE=${GPU_PREEMPTIBLE-} GPU_MAX_MIN=${GPU_MAX_MIN:-75}
-REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:-/tmp/rec-bench-$$}/out}; mkdir -p "$O"
 export K=${K:-4096} N=${N:-2}; export TAG=${TAG:-rb-${RESEARCH_RUN_ID:-$$}} WARM=${WARM:-1} RUNS=${RUNS:-3}
 export FLOCK_WORK=${FLOCK_WORK:-/workspace/jobs/rec-bench}; mkdir -p "$FLOCK_WORK" || { echo "cannot make $FLOCK_WORK" >&2; exit 1; }
 STEPS=${STEPS:-build,inner,icheck,vstage,vcap,oprove,oreplay,lean,negative}; REPEAT=${REPEAT:-3}; FORGE=${FORGE:-}
@@ -53,7 +55,7 @@ log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
 REC=verity/ml/flock/pod/85-rec-reprice.sh
 L=$FLOCK_WORK/cache
 LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
-{ echo "commit=${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)} K=$K N=$N TAG=$TAG WARM=$WARM RUNS=$RUNS REPEAT=$REPEAT"
+{ echo "commit=${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)} K=$K N=$N TAG=$TAG WARM=$WARM RUNS=$RUNS REPEAT=$REPEAT settings=$SETTINGS"
   echo "OPROVE_WARM=${OPROVE_WARM:-0} OPROVE_RUNS=${OPROVE_RUNS:-1} GPU_MAX_MIN=$GPU_MAX_MIN GPU=${GPU:-1} OPROVE_GPU=$OPROVE_GPU OPROVE_JOBS=$OPROVE_JOBS" \
     $(for v in $(compgen -v REPEAT_); do echo "$v=${!v}"; done)
   echo "steps=$STEPS modes=$MODES lean_jobs=${LEAN_JOBS:-4} lean_sources=$LSHA neg=${NEG// /+} forge=${FORGE//,/+}"

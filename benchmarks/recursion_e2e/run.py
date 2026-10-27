@@ -21,7 +21,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import os
 import re
 import subprocess
 import sys
@@ -32,6 +31,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import rec_profile as RP  # noqa: E402
+import settings as RS
 
 NODE = "vy-nebius-1"
 STEPS = RP.ORDER
@@ -179,10 +179,16 @@ def job_env(a: argparse.Namespace) -> list[str]:
     lease = a.lease_min or lease_min(a.oprove_warm + a.oprove_runs, "firewall" in a.modes.split(","), levels(a))
     # a CPU node has no GPU, and /workspace/jobs isn't the research user's there
     node = ["GPU=0", f"FLOCK_WORK={CPU_WORK}"] if direct(a) else ["GPU=0"] if a.cpu else []
-    return [f"K={a.K}", f"N={a.N}", f"STEPS={','.join(steps(a.steps))}", f"REPEAT={a.repeat}", f"MODES={a.modes}",
-            f"OPROVE_WARM={a.oprove_warm}", f"OPROVE_RUNS={a.oprove_runs}", f"GPU_MAX_MIN={lease}", f"NEG={','.join(a.neg.split())}",
-            f"FORGE={','.join(forge(a))}", *([f"FORGE_AFTER={','.join(forge_after(a))}"] if "forge-after" in steps(a.steps) else []),
-            *node, *([f"OPROVE_GPU={a.oprove_gpu}"] if a.oprove_gpu != "auto" else []), *a.env]
+    env = [f"K={a.K}", f"N={a.N}", f"STEPS={','.join(steps(a.steps))}", f"REPEAT={a.repeat}", f"MODES={a.modes}",
+           f"OPROVE_WARM={a.oprove_warm}", f"OPROVE_RUNS={a.oprove_runs}", f"GPU_MAX_MIN={lease}", f"NEG={','.join(a.neg.split())}",
+           f"FORGE={','.join(forge(a))}", *([f"FORGE_AFTER={','.join(forge_after(a))}"] if "forge-after" in steps(a.steps) else []),
+           *node, *([f"OPROVE_GPU={a.oprove_gpu}"] if a.oprove_gpu != "auto" else []), *a.env]
+    # job.sh refuses the same on the pod (settings.py record); here it fails before anything is launched
+    try:
+        RS.validate(dict(e.split("=", 1) for e in env), of_record=False)
+    except ValueError as e:
+        raise SystemExit(f"--env: {e}") from None
+    return env
 
 
 def job_command(a: argparse.Namespace, root: Path) -> list[str]:
@@ -249,7 +255,7 @@ def load(ref: str) -> dict:
         return json.loads(p.read_text())
     if RUN_ID.fullmatch(ref):
         subprocess.run(["research", "fetch", "--all", ref], check=False, capture_output=True)
-        out = Path(os.environ.get("RESEARCH_RUNS_DIR", Path.home() / ".research" / "runs")) / ref / "out"
+        out = Path(RS.RESEARCH_RUNS_DIR or Path.home() / ".research" / "runs") / ref / "out"
         # the records themselves, read by this reader (a job's own result is its commit's reader's, and a job stopped
         # before its end wrote none); the job's result only where the records weren't fetched
         res = next((out / f for f in ("recursion_e2e.json", "profile.json") if (out / f).is_file()), None)
