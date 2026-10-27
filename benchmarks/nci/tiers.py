@@ -95,7 +95,7 @@ HOST_OPS = 128 * 2048 * 3.6e9
 #: the deployed proof-of-space audit (k = 111 rounds at delta = 1/100; the slack counts the floor once, memory-accounting
 #: MEM-51) and the memory
 #: the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap, about 7 GB of DPU, BMC and flash); disks
-#: unplugged; today's uncharged export; the declared computation's novel intake at alpha F (once NET-35's count check is in
+#: unplugged; today's uncharged export; the declared computation's novel intake at alpha F (once the network's count check is in
 #: the ZK flow; line rate until then); sampled proofs at 1% on top of serve-time commitments, at today's sparse-draw cost
 #: (about 35 GPU-s a draw), delta = 2^-40 and luck A = 8; the structural d = 1, what Lean certifies for a run that trains
 #: its embedding, with ReferenceThreaded's e for a reference circuit written in Dot16 steps, as the declarations are, in
@@ -313,7 +313,7 @@ def audited_residual(p: dict) -> float:
 
 
 def residual_share(p: dict) -> float:
-    """r = r-hat + eps_W W_cert/C + eps', the residual inside ``Nci.Guarantees.DampenerRemote``'s bounds (#3646),
+    """r = r-hat + eps_W W_cert/C + eps', the residual inside ``Nci.Guarantees.DampenerRemote``'s bounds,
     ``residualShare W C + εW * W / C + ε``: the audited residual r-hat = 1 - W_cert/C, PoUW's deficit on the certified
     work (a certificate that isn't wrong may credit up to eps_W of its work without its running, so what was certified
     and run is (1 - eps_W) W_cert), and the share whose certificates may be wrong."""
