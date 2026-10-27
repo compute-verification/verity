@@ -42,7 +42,6 @@ def parse : Difftest.Fn := fun j => return answer (Flock.JsonParse.parse (← te
 
 def parseCore : Difftest.Fn := fun j => return answer (Lean.Json.parse (← text j))
 
-end FlockJsonDifftest
+def table : String → Option Difftest.Fn := Difftest.table [("parse", parse), ("parse-core", parseCore)]
 
-def main : IO Unit :=
-  Difftest.serve (Difftest.table [("parse", FlockJsonDifftest.parse), ("parse-core", FlockJsonDifftest.parseCore)])
+end FlockJsonDifftest

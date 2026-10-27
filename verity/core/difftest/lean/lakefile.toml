@@ -21,4 +21,4 @@ root = "DifftestExample"
 
 [[lean_exe]]
 name = "flock-json-difftest"
-root = "FlockJsonDifftest"
+root = "FlockJsonDifftestMain"

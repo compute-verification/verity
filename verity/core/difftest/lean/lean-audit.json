@@ -4,6 +4,9 @@
   "DifftestExample",
   "FlockJsonDifftest"
  ],
+ "exempt": {
+  "FlockJsonDifftestMain": "the flock-json-difftest server's entry point, one line: Difftest.serve of FlockJsonDifftest.table, which tests/test_flock_json_port.py drives against the Python mirror; audited under FlockJsonDifftest (a root beside DifftestExample, which declares `main` too)"
+ },
  "layers": {
   "Difftest": {
    "imports": [
