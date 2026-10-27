@@ -6,7 +6,7 @@ scales (the special ones included): the kernel's picked config and its others, e
 loads them.
 
     python realw.py --out OUT --weights DIR --gen [--layer 0] [--seed text:verity/cmp92/h200/weights/v1] [--workers N]
-    python realw.py --out OUT --weights DIR [--layer 0] [--ms 1,7,64,...] [--kernel wgmma|triton] [--configs BEST_JSON]
+    python realw.py --out OUT --weights DIR [--layer 0] [--ms 1,7,64,...] [--kernel wgmma|triton|int_mm] [--configs BEST_JSON]
 
 The generator's module is on the path from benchmarks/e2e_h200, after this directory (whose `run` it imports).
 """

@@ -75,7 +75,8 @@ def _split(path: Path) -> tuple[dict, bytes]:
 
 
 def _put(path: Path, head: dict, body: bytes) -> None:
-    path.write_bytes(json.dumps(head, sort_keys=True).encode() + b"\n" + body)
+    """The prover's file or, ``rows`` false, the verifier's (`circuit.public_file`)."""
+    path.write_bytes(json.dumps(head, sort_keys=True).encode() + b"\n" + body if head["rows"] else FC.public_file(head, body))
 
 
 def tables(stage: Path) -> tuple[dict, dict[str, dict]]:

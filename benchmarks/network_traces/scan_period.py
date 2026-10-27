@@ -7,11 +7,12 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
 * **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
   and one schedule), the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
   ``answers.json`` carries (the block round's, whose o1 is the scan's `prog`: its descriptor, free inputs and steps),
-  and the scan that Program's descriptor (``joint/program.json``), off which the period check reads the scan's terms;
-  the commitment the audits' registrations and the scan's; the evidence the audits' answers, then the scan's answer,
-  the certificates of W's three records (``certified.jsonl``: requests, responses, fails) and W's two row
-  registrations (``cells.jsonl``, as ``answers.json`` carries them). The rows form reads a registration of one
-  link-window's 2T units, so a group of more is refused, and the scan's `prog` must be an audit's output.
+  jitter bound 1 (K's jitter term 0, assumed (J), which the certifier doesn't meet at 1), and the scan that Program's
+  descriptor (``joint/program.json``), off which the period check reads the scan's terms; the commitment the audits'
+  registrations and the scan's; the evidence the audits' answers, then the scan's answer, the certificates of W's
+  three records (``certified.jsonl``: requests, responses, fails) and W's two row registrations (``cells.jsonl``, as
+  ``answers.json`` carries them). The rows form reads a registration of one link-window's 2T units, so a group of
+  more is refused, and the scan's `prog` must be an audit's output.
 * **tampered** and **chain**: the same rows and certificates with that round's registration
   (``<round>/registration.json``) and its refusal as the answer: tampered's an egress-only Program's, a prover's answer
   for another statement than the link's Program; chain's the link's Program's, refused.
