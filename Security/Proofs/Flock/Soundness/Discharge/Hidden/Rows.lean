@@ -381,7 +381,9 @@ theorem out_rows_v1Pre {tags : Tags} {cf : ByteArray} {tables : List (String × 
       ∀ j < c.outPorts.size, HmOut.nIn c + j < c.ports.size ∧
         2 * (c.ports.getD (HmOut.nIn c + j) default).words = 128 * (c.ports.getD (HmOut.nIn c + j) default).chunks := by
   have hu : ∀ p ∈ c.ports.toList, p.segs = none := fun p hm => P.v1Segs p hm (hv1 p hm)
-  have hr := outRows_single (parse_rowPorts hp).2 fun j hj => by
+  have hsum : c.outRowPorts.foldl (· + ·) 0 = c.outPorts.size := by
+    rw [(parse_rowPorts hp).2, unpinned_of_v1 hc hv1, Nat.sub_zero]
+  have hr := outRows_single hsum fun j hj => by
     obtain ⟨hlt, h1 | ⟨hs, -⟩⟩ := checkRows_out hc hj
     · exact h1.1
     · rw [hu _ (getD_mem_toList (d := default) hlt), hv1 _ (getD_mem_toList (d := default) hlt)] at hs
