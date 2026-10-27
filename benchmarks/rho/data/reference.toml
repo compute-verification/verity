@@ -1,5 +1,6 @@
 # The reference datacenter Daniel named (25 Oct 10:05 PM PDT, relayed by top in thread 1792987543.379119): the world's
-# committed inference, about 2e16 requests a year of DeepSeek-V4-Pro in FP8 at about 4,500 input tokens each, on two
+# committed inference, about 2e16 requests a year of DeepSeek-V4-Pro in FP8 at about 4,500 input tokens each (the
+# census's world-inference-2027, benchmarks/census/adversary.json, 2.12e16 of them, is the figure of record), on two
 # fleets (8-GPU H200 servers; NVL72 racks, a rack one location), dark share 0.1% and 1%, side channels 1 kb/s per
 # server, horizons a week, a month and a year; and the work and exfiltration references that make rho interpretable.
 # Its regimes are data/envelopes.toml's onsite (a wipe every 24 h leaving 5 GB of each server's whole memory, Daniel
@@ -34,18 +35,20 @@ gamma = { value = 9.8e16, unit = "FLOP", source = "a 1M-token session: 1e6 x 2 x
 k = { value = 2e7, unit = "bit", low = 2.2e6, high = 8.8e7, source = "ruling: Daniel 25 Oct, a session returns at most 2.5 MB (1M tokens at 20 bits)", status = "ruled" }
 inference_overhead = { value = nan, unit = "x", source = "not modeled: a placeholder for the honest inference workload's overhead under this partition; rho models no honest inference circuit to partition" }
 
-# Each fleet is the whole world's compute: sized to serve the committed computation, 2e16 requests x 4,500 tokens x
-# 2 x 49e9 = 8.82e30 FLOP a year (prefill only), at the fleet's serving MFU: count = 8.82e30 / (phi x year x mfu_serve).
+# Each fleet is the whole world's compute: sized to serve the census's world-inference-2027
+# (benchmarks/census/adversary.json total_flop, 2.12e16 requests x 4,500 tokens x 2 x 49e9 = 9.36e30 FLOP over its
+# one-year monitoring period, prefill only), at the fleet's serving MFU: count = total_flop / (phi x
+# monitoring_period_s x mfu_serve) (tests/test_hardware.py holds it there).
 [fleet.world-h200]
 location = "h200-hgx"
-count = { value = 4.42e7, unit = "location", source = "8.82e30 / (1.583e16 x 3.1536e7 x 0.4); top's 1.8e7 is at 100% use", status = "derived" }
+count = { value = 4.687e7, unit = "location", source = "benchmarks/census/adversary.json world-inference-2027: 9.36e30 / (1.58312e16 x 3.1536e7 x 0.4); 4.42e7 at Daniel's 25 Oct 8.82e30, before the census's reconciliation (26 Oct)", status = "derived" }
 eps_dark = { value = 0.001, low = 0.0001, high = 0.01, source = "ruling: Daniel 26 Oct 6:55 PM PDT, mainline 0.1%; one connected unencumbered pool (Daniel 25 Oct, operating points 0.1% and 1%); high: the 25 Oct 1% point", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.3, high = 0.55, source = "frontier pretraining MFU", status = "assumed" }
 mfu_serve = { value = 0.4, low = 0.2, high = 0.6, source = "the served work's MFU, prefill-heavy", status = "assumed" }
 
 [fleet.world-nvl72]
 location = "gb200-nvl72"
-count = { value = 1.94e6, unit = "location", source = "8.82e30 / (3.6e17 x 3.1536e7 x 0.4); top's 7.8e5 is at 100% use", status = "derived" }
+count = { value = 2.061e6, unit = "location", source = "benchmarks/census/adversary.json world-inference-2027: 9.36e30 / (3.6e17 x 3.1536e7 x 0.4); 1.94e6 at Daniel's 25 Oct 8.82e30, before the census's reconciliation (26 Oct)", status = "derived" }
 eps_dark = { value = 0.001, low = 0.0001, high = 0.01, source = "ruling: Daniel 26 Oct 6:55 PM PDT, mainline 0.1%; one connected unencumbered pool (Daniel 25 Oct, operating points 0.1% and 1%); high: the 25 Oct 1% point", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.3, high = 0.55, source = "frontier pretraining MFU", status = "assumed" }
 mfu_serve = { value = 0.4, low = 0.2, high = 0.6, source = "the served work's MFU, prefill-heavy", status = "assumed" }

@@ -15,7 +15,7 @@ output_bits = { value = 20, unit = "bit/token", source = "Daniel's Notion page P
 # Where an in-episode update goes (Daniel 26 Oct; pofc.PERSIST): registration happens once (25 Oct), so through Y and
 # back in through X.
 persist = "outputs"
-episodes_per_day = { value = 1.24e6, unit = "episode/location/day", source = "Daniel's Notion page Proof of forward computation: one inference request an episode; 2e16 requests a year (data/reference.toml) / 4.42e7 servers / 365 days", status = "derived" }
+episodes_per_day = { value = 1.24e6, unit = "episode/location/day", source = "Daniel's Notion page Proof of forward computation: one inference request an episode; 2.12e16 requests a year (benchmarks/census/adversary.json world-inference-2027) / 4.687e7 servers (fleet.world-h200) / 365 days", status = "derived" }
 
 # The physical instantiation: each GPU reads only its own static memory and sends forward only, so the bandwidth to the
 # next GPU is the write allowance of the location's narrowest forward cut.
