@@ -204,9 +204,9 @@ __global__ void form_a_kernel(FormArgs f) {
   }
 }
 // B side: thread c holds Y_W[j, c] for its 16 rows in registers; U's row gathered through pi from shared memory
-// (WRAP5: w_W to ww, N x K of -1, 0 or 1, wrap5's B operand; a parameter of its own, since a FormArgs field more costs
-// form_a_kernel 72 registers)
-template <bool WRAP5>
+// (WW 1: w_W to ww, N x K of -1, 0 or 1, wrap5's B operand; WW 2: -2 w_W, wrap 6's (wg_proto.cuh's KQ k-tiles); a
+// parameter of its own, since a FormArgs field more costs form_a_kernel 72 registers)
+template <int WW>
 __global__ void form_b_kernel(FormArgs f, int8_t* __restrict__ ww) {
   extern __shared__ int8_t us[];   // [16][L']
   __shared__ int scnt[16];
@@ -231,7 +231,7 @@ __global__ void form_b_kernel(FormArgs f, int8_t* __restrict__ ww) {
       const int bd = (int)f.Q[j * f.K + k] + ((f.bits[j * f.kb64 + (k >> 3)] >> (k & 7)) & 1), bt = bd + us[r * lp + pc];
       const int x = ((bt + 128) & 255) - 128, w = (bt - x) >> 8;
       f.X[j * f.K + k] = (int8_t)x;
-      if (WRAP5) ww[j * f.K + k] = (int8_t)w;
+      if (WW) ww[j * f.K + k] = (int8_t)(WW == 2 ? -2 * w : w);
       y[r] += bd;
       bp[r >> 1] |= (u32)(bt & 0xFFFF) << (16 * (r & 1));
       if (w) {
@@ -327,12 +327,13 @@ DEV void cp_async16(uint32_t dst, const void* src) {
 DEV void cp_async_wait_all() { asm volatile("cp.async.wait_all;" ::: "memory"); }
 
 // w_X B~^T added into the 128 x CW tile of dO at (i0, j0), after its X w_W^T is stored (rare: A's wraps): thread (row r,
-// group g) over the tile's 32-column blocks g, g + G, ... (G = blockDim / 128), from B~^T's row k of each wrap (k, s)
-template <int CW>
+// group g) over the tile's 32-column blocks g, g + G, ... (G = blockDim / 128), from B~^T's row k of each wrap (k, s);
+// ST: stored rather than added (V31_WRAP 6, whose GEMM takes X w_W^T itself), zeros where a row has no wrap
+template <int CW, bool ST = false>
 DEV void wrap_a_side(const WrapArgs& a, size_t i0, size_t j0) {
   const int t = threadIdx.x, r = t & 127, g = t >> 7, G = blockDim.x >> 7;
   const int na = a.cntA[i0 + r];
-  if (na == 0) return;
+  if (na == 0 && !ST) return;
   const int* LA = a.listA + (i0 + r) * a.capA;
 #pragma unroll 1
   for (int cb = 32 * g; cb < CW; cb += 32 * G) {
@@ -350,7 +351,7 @@ DEV void wrap_a_side(const WrapArgs& a, size_t i0, size_t j0) {
     int4* d = reinterpret_cast<int4*>(a.dO + (i0 + r) * a.n + c0);
 #pragma unroll
     for (int u = 0; u < 8; ++u) {
-      int4 x = d[u];
+      int4 x = ST ? make_int4(0, 0, 0, 0) : d[u];
       x.x += v[4 * u]; x.y += v[4 * u + 1]; x.z += v[4 * u + 2]; x.w += v[4 * u + 3];
       d[u] = x;
     }
@@ -624,9 +625,11 @@ __global__ void __launch_bounds__(256, CW == 128 ? 3 : 2) wrap4_kernel(WrapArgs 
   wrap_a_side<CW>(a, i0, jb);
 }
 
-// wrap5's A side: w_X B~^T added into dO's 128 x 128 tile a CTA, after the plain GEMM (X, w_W) has stored X w_W^T there
+// wrap5's A side: w_X B~^T added into dO's 128 x 128 tile a CTA, after the plain GEMM (X, w_W) has stored X w_W^T there;
+// ST (wrap 6): stored as all of dO
+template <bool ST>
 __global__ void __launch_bounds__(256) wrap_a_kernel(WrapArgs a) {
-  wrap_a_side<TILE>(a, (size_t)blockIdx.y * TILE, (size_t)blockIdx.x * TILE);
+  wrap_a_side<TILE, ST>(a, (size_t)blockIdx.y * TILE, (size_t)blockIdx.x * TILE);
 }
 
 // ---------------------------------------------------------------- TMA, mbarrier, ldmatrix, mma.sync (floored_gemm's)
@@ -1320,8 +1323,9 @@ static std::string env_str(const char* name, const char* dflt) {
 // driver's choice), so commit_gpu's small-path CTAs (no shared memory) can sit beside a GEMM CTA; V31_DYN: the GEMM takes
 // its tiles from a counter; V31_CPRIO: the commit stream's priority against the compute stream's (hi, lo or eq); V31_WRAP:
 // the wrap correction's kernel (1: wrap_kernel, 2: wrap2_kernel, 3: wrap3_kernel, 4: wrap4_kernel; 5: X w_W^T on the
-// tensor cores, gemm_kernel<false> on X and w_W (form_b writes w_W), then wrap_a_kernel), V31_WCW its
-// columns a CTA (256 where N allows, or 128; 1 to 4);
+// tensor cores, gemm_kernel<false> on X and w_W (form_b writes w_W), then wrap_a_kernel; 6, V31_GEMM 1 only: X w_W^T in
+// the protocol GEMM's own accumulator, as X (-2 w_W)^T k-tiles before its tail's x(-128), and wrap_a_kernel stores the
+// rest, w_X B~^T, as dO), V31_WCW its columns a CTA (256 where N allows, or 128; 1 to 4);
 // V31_CCTA: the salt and leaf phases' CTAs an SM (salt_persist, leaf_persist; 0: commit_gpu's salt_small and leaf_small);
 // V31_PF: each row's next 128-byte block prefetched as its compression starts (0 none, 1 into L1, 2 into L2); V31_DIAG 1:
 // the bench's timing-only gemm_no* arms; V31_SCHED: the overlapped calls' order (Ctx::call_ovl). Under -DV31_WG (sm_90a):
@@ -1341,8 +1345,9 @@ static void set_carveout(int pct) {
   const void* ks[] = {(const void*)gemm_kernel<true>,  (const void*)gemm_kernel<false>,  (const void*)wrap_kernel,
                       (const void*)wrap2_kernel<128>,  (const void*)wrap2_kernel<256>,   (const void*)wrap3_kernel<128>,
                       (const void*)wrap3_kernel<256>,  (const void*)wrap4_kernel<128>,  (const void*)wrap4_kernel<256>,
-                      (const void*)wrap_a_kernel,      (const void*)form_a_kernel,       (const void*)form_b_kernel<false>,
-                      (const void*)form_b_kernel<true>, (const void*)bits_kernel,         (const void*)noise_kernel,
+                      (const void*)wrap_a_kernel<false>, (const void*)wrap_a_kernel<true>, (const void*)form_a_kernel,
+                      (const void*)form_b_kernel<0>,   (const void*)form_b_kernel<1>,    (const void*)form_b_kernel<2>,
+                      (const void*)bits_kernel,        (const void*)noise_kernel,
                       (const void*)perm_kernel,        (const void*)salt_small<true>,    (const void*)leaf_small<V31Row, 0>,
                       (const void*)level_kernel,       (const void*)top_small,           (const void*)salt_persist,
                       (const void*)leaf_persist<V31Row>, (const void*)leaf_small<NoMemRow, 0>, (const void*)leaf_persist<NoMemRow>};
@@ -1435,6 +1440,8 @@ struct Ctx {
     maps_proto = dalloc<Maps>(1); maps_plain = dalloc<Maps>(1);
     CK(cudaMemcpy(maps_proto, &mp, sizeof mp, cudaMemcpyHostToDevice));
     CK(cudaMemcpy(maps_plain, &mq, sizeof mq, cudaMemcpyHostToDevice));
+    if (kn.wrap == 6 && !kn.gemm) { fprintf(stderr, "V31_WRAP 6 needs V31_GEMM 1\n"); exit(2); }
+    if (kn.wrap == 6) WW = dalloc<int8_t>(nk);
     if (kn.wrap == 5) {
       WW = dalloc<int8_t>(nk);
       const Maps mw{tmap(X, k, m, TILE), tmap(WW, k, n, TILE), tmap(PA, TL, m, TILE), tmap(PB, TL, n, TILE)};
@@ -1487,16 +1494,19 @@ struct Ctx {
   }
   void form(cudaStream_t st) {
     form_a_kernel<<<m / 16, lp, 16 * lp * 4, st>>>(fa());
-    if (WW) form_b_kernel<true><<<n / 16, lp, 16 * lp, st>>>(fb(), WW);
-    else form_b_kernel<false><<<n / 16, lp, 16 * lp, st>>>(fb(), nullptr);
+    if (kn.wrap == 6) form_b_kernel<2><<<n / 16, lp, 16 * lp, st>>>(fb(), WW);
+    else if (WW) form_b_kernel<1><<<n / 16, lp, 16 * lp, st>>>(fb(), WW);
+    else form_b_kernel<0><<<n / 16, lp, 16 * lp, st>>>(fb(), nullptr);
   }
   void wrap(cudaStream_t st) {
     const WrapArgs w{XT, BtT, listA, cntA, listB, cntB, dO, m, n, capA, capB, offB, lp, NT};
-    if (kn.wrap == 5) {
+    if (kn.wrap == 6) {
+      wrap_a_kernel<true><<<dim3(n / TILE, m / TILE), 256, 0, st>>>(w);
+    } else if (kn.wrap == 5) {
       gemm_kernel<false><<<grid, Ring::NCT, Ring::SMEM, st>>>(
           GArgs{maps_dw, nullptr, nullptr, dO, m, n, k, L, S, 0, 8, lp, dz, kn.dyn ? gctr : nullptr, gbase, 0});
       gbase += (u32)tiles;
-      wrap_a_kernel<<<dim3(n / TILE, m / TILE), 256, 0, st>>>(w);
+      wrap_a_kernel<false><<<dim3(n / TILE, m / TILE), 256, 0, st>>>(w);
     } else if (kn.wrap == 1) wrap_kernel<<<dim3(n / TILE, m / TILE), 256, TILE * 129 * 4, st>>>(w);
     else if (kn.wrap == 3 && wcw == 256) wrap3_kernel<256><<<dim3(n / 256, m / TILE), 256, (lp + 1) * 128, st>>>(w);
     else if (kn.wrap == 3) wrap3_kernel<128><<<dim3(n / 128, m / TILE), 256, (lp + 1) * 128, st>>>(w);
@@ -1511,7 +1521,11 @@ struct Ctx {
     wbn = kn.wgbn == 256 && n % 256 == 0 ? 256 : 128;
     wgrid = std::min((m / wgp::TM) * (n / wbn), nsm);
     if (kn.rp && !kn.cm) { fprintf(stderr, "V31_RP 1 needs V31_CM 1\n"); exit(2); }
-    if (TT > wgp::MAX_TT) { fprintf(stderr, "the tail's %d k-tiles exceed wg_proto.cuh's MAX_TT %d\n", TT, wgp::MAX_TT); exit(2); }
+    const int KQ = kn.wrap == 6 ? k / wgp::BK : 0;
+    if (TT + KQ > wgp::MAX_TT) {
+      fprintf(stderr, "the tail's %d k-tiles exceed wg_proto.cuh's MAX_TT %d\n", TT + KQ, wgp::MAX_TT);
+      exit(2);
+    }
     float* sa = dalloc<float>(m);
     float* sw = dalloc<float>(n);
     const std::vector<float> ha(m, 1.f / 127), hw(n, 1.f / 127);
@@ -1521,8 +1535,10 @@ struct Ctx {
     auto mk = [&](const int8_t* a, const int8_t* b, int mode) {
       wgp::Args g{};
       g.a = tmap(a, k, m, wgp::TM); g.b = tmap(b, k, n, wbn); g.pa = tmap(PA, TL, m, wgp::TM); g.pb = tmap(PB, TL, n, wbn);
+      if (KQ) g.q = tmap(WW, k, n, wbn);
       g.dO = dO; g.cbuf = cbuf; g.sa = sa; g.sw = sw;
       g.M = m; g.N = n; g.K = k; g.L = L; g.S = S; g.lp = lp; g.dz = dz; g.dy = dy; g.TT = TT; g.group = kn.wgg; g.mode = mode;
+      g.KQ = mode == 1 ? KQ : 0;
       return g;
     };
     wa_proto = mk(X, W, 1); wa_plain = mk(X, W, 0); wa_wgl = mk(A, B, 2);
@@ -1567,7 +1583,7 @@ struct Ctx {
     if (kn.gemm) {
       wgp::Args g = proto ? wa_proto : wa_plain;
       g.words = words[b]; g.O = O[b]; g.diag = diag;
-      if (diag & 2) g.TT = 0;
+      if (diag & 2) { g.TT = 0; g.KQ = 0; }
       wg_launch(st, g, kn.cm, kn.rp);
       return;
     }
@@ -1671,12 +1687,12 @@ static std::vector<uint8_t> readfile(const std::string& p, size_t want) {
 struct KAttr { const char* name; const void* fn; };
 static void kernel_attrs(FILE* f) {
   const KAttr ks[] = {{"gemm_proto", (const void*)gemm_kernel<true>}, {"gemm_plain", (const void*)gemm_kernel<false>},
-                      {"form_a", (const void*)form_a_kernel}, {"form_b", (const void*)form_b_kernel<false>},
-                      {"form_b5", (const void*)form_b_kernel<true>},
+                      {"form_a", (const void*)form_a_kernel}, {"form_b", (const void*)form_b_kernel<0>},
+                      {"form_b5", (const void*)form_b_kernel<1>}, {"form_b6", (const void*)form_b_kernel<2>},
                       {"wrap", (const void*)wrap_kernel}, {"wrap2_128", (const void*)wrap2_kernel<128>},
                       {"wrap2_256", (const void*)wrap2_kernel<256>}, {"wrap3_128", (const void*)wrap3_kernel<128>},
                       {"wrap3_256", (const void*)wrap3_kernel<256>}, {"wrap4_128", (const void*)wrap4_kernel<128>},
-                      {"wrap4_256", (const void*)wrap4_kernel<256>}, {"wrap_a", (const void*)wrap_a_kernel},
+                      {"wrap4_256", (const void*)wrap4_kernel<256>}, {"wrap_a", (const void*)wrap_a_kernel<false>},
                       {"bits", (const void*)bits_kernel},
                       {"leaf_small", (const void*)leaf_small<V31Row, 0>}, {"salt_small", (const void*)salt_small<true>},
                       {"leaf_persist", (const void*)leaf_persist<V31Row>}, {"salt_persist", (const void*)salt_persist},
