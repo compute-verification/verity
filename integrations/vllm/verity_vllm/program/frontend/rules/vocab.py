@@ -82,7 +82,7 @@ def _int8():
 def _attention_dot_value(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM):
     """Off the accepted target the scale is an input only under FA2's per-iteration Check_inf (Attention_v11): without
     `FA2_MASKED_FROM` the kind does not bind (`Vocabulary.kind`)."""
-    from verity.ml.definitions.registry import fa2_check_inf as _f2v  # noqa: PLC0415
+    from verity.ml.definitions.registry import fa2_check_inf as _f2v
     return ir_bind(_f2v.AttentionV11, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
 
 
@@ -324,12 +324,12 @@ _DNK, _DNN = _dense_kinds()
 def _moe_ffn_fixed(E: int, TOPK: int, VPT: int, H: int, I: int):
     """[route A (3)] `MoeFfnFixedL_v1{E,TOPK,VPT,H,I}` (registry.moe_pad), imported on first use: the padded registry (pad's lifted
     registry + the hand-lift hook) is not loaded by a dense derivation that never asks for the kind."""
-    from verity.ml.definitions.registry import moe_pad as _mp  # noqa: PLC0415
+    from verity.ml.definitions.registry import moe_pad as _mp
     return ir_bind(_mp.MoeFfnFixedL, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
 
 
 def _silu_mul_fp8_block_quant(I: int, G: int):
-    from verity.ml.definitions.registry import fp8_moe as _fm  # noqa: PLC0415
+    from verity.ml.definitions.registry import fp8_moe as _fm
     return ir_bind(_fm.SiluMulFp8BlockQuant, I=I, G=G)
 
 
@@ -338,21 +338,21 @@ def _moe_expert_dot(routed, E, K, N, DOT, G, KB, SWAP):
         return ir_bind(_moe.MoeExpertGemmWV2 if routed else _moe.MoeExpertGemmV2, E=E, K=K, N=N, DOT=DOT)
     if G is None or KB is None or SWAP is None:
         raise TypeError("the block-FP8 pair forms take G, KB and SWAP together")
-    from verity.ml.definitions.registry import fp8_moe_experts as _x  # noqa: PLC0415
+    from verity.ml.definitions.registry import fp8_moe_experts as _x
     return ir_bind(_x.MoeExpertFp8GemmW if routed else _x.MoeExpertFp8Gemm, E=E, K=K, N=N, G=G, KB=KB, SWAP=SWAP, DOT=DOT)
 
 
 def _attention_softcap_dot(T, NH, KVH, D, BN, DOT, INV, FA2_MASKED_FROM, CAP):
     if FA2_MASKED_FROM is None:
         raise TypeError("a softcap off the accepted target is registered only under FA2's per-iteration Check_inf")
-    from verity.ml.definitions.registry import fa2_softcap as _f2s  # noqa: PLC0415
+    from verity.ml.definitions.registry import fa2_softcap as _f2s
     return ir_bind(_f2s.AttentionSoftcapV2, T=T, NH=NH, KVH=KVH, D=D, BN=BN, CAP=CAP, DOT=DOT, INV=INV, MASKED_FROM=FA2_MASKED_FROM)
 
 
 def _attention_split_dot(T, NH, KVH, D, BN, DOT, INV, MASKED_FROM, PER):
     if MASKED_FROM is None:
         raise TypeError("FA3's split prefill is registered only under FA3's per-iteration Check_inf")
-    from verity.ml.definitions.registry import fa3_split as _f3s  # noqa: PLC0415
+    from verity.ml.definitions.registry import fa3_split as _f3s
     return ir_bind(_f3s.AttentionSplit, T=T, NH=NH, KVH=KVH, D=D, BN=BN, DOT=DOT, INV=INV, MASKED_FROM=MASKED_FROM, PER=PER)
 
 # -- profile "b1-eager-v3": the admitted `vllm_d9105ea80_sm89_eager` profile as the accepted records bind it —

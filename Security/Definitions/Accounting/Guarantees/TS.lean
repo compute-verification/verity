@@ -3,8 +3,8 @@ import Definitions.Accounting.Assumptions.TS
 /-!
 # The tensor–scalar model's guarantee statements (trusted)
 
-EPS1's statements over `Accounting.TS` (note:20261017T0324Z-draft-eps1-spec, EPS1-TENSOR
-note:20261017T0321Z-draft-eps1-tensor), each `def G : Prop`, proved (or a `sorry` stub) as
+EPS1's statements over `Accounting.TS`,
+each `def G : Prop`, proved (or a `sorry` stub) as
 `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.TS`:
 
 * `TimeBound`: Lemma 1, `T(P) ≥ B(P)/f_max`.

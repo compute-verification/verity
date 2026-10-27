@@ -420,7 +420,7 @@ def run(so: str, out: str, quick: bool = False, live: bool = True) -> dict[str, 
     os.environ["VLLM_ENABLE_V1_MULTIPROCESSING"] = "0"
     import torch
     import vllm
-    import vllm._custom_ops  # noqa: F401  -- loads the installed _moe_C ops
+    import vllm._custom_ops  # loads the installed _moe_C ops
 
     from verity_vllm.acquire.router_tap_src.build_ext import NAME, TAP_VERSION
 
