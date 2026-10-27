@@ -823,7 +823,7 @@ def cmd_timeline(a: argparse.Namespace) -> int:
                 continue
             ks.append((int(r["Start (ns)"]), int(r["Start (ns)"]) + int(r["Duration (ns)"]), kernel_name(r["Name"])))
     ks.sort()
-    ncalls = sum(n == "gemm_kernel<true>" for _, _, n in ks)
+    ncalls = sum(n.startswith("gemm_kernel<true") for _, _, n in ks)
     if ncalls < a.serial + 3:
         print(f"{ncalls} calls: want {a.serial} serial and at least 3 overlapped", file=sys.stderr)
         return 2
@@ -858,7 +858,7 @@ def cmd_timeline(a: argparse.Namespace) -> int:
         side = sum(beside) / max(1, sum(per_call))
         print(f"| {n} | {len([m for _, _, m in calls[a.serial - 1] if m == n])} | {ser / 1e6:.3f} | {med / 1e6:.3f} | "
               f"{med / max(ser, 1):.2f} | {100 * side:.0f}% |")
-    gend = [max(e for s, e, n in c if n == "gemm_kernel<true>") for c in calls]
+    gend = [max(e for s, e, n in c if n.startswith("gemm_kernel<true")) for c in calls]
     periods = [gend[i] - gend[i - 1] for i in steady]
     ser_call = calls[a.serial - 1]
     ser_span = max(e for s, e, _ in ser_call) - min(s for s, _, _ in ser_call)

@@ -878,9 +878,10 @@ DEV void store_words(const int (&acc)[4][4][4], uint16_t* words, size_t tile, in
 #define V31_MAXNREG 208
 #endif
 #if !V31_WG
-constexpr int G_NCT = Ring::NCT, G_SMEM = Ring::SMEM, G_WG_NREG = 0, G_WG_STAGES = 0;
-template <bool PROTO>
+constexpr int G_NCT = Ring::NCT, G_SMEM = Ring::SMEM, G_WG_NREG = 0, G_WG_STAGES = 0, G_BN = TILE, G_NBW = 1;
+template <bool PROTO, int NB>
 __global__ void __maxnreg__(V31_MAXNREG) gemm_kernel(const GArgs a) {
+  static_assert(NB == 1, "one tile a CTA");
   extern __shared__ __align__(1024) uint8_t gsm[];
   Ring R(gsm, a.maps, a.M, a.N, a.K, PROTO ? a.TT : 0, a.group, a.ctr, a.base);
   R.init(threadIdx.x);
@@ -946,25 +947,33 @@ __global__ void __maxnreg__(V31_MAXNREG) gemm_kernel(const GArgs a) {
 // V31_WG (sm_90a): the same GEMM on warpgroup MMAs, s8_wgmma.cu's mainloop (benchmarks/torch_gpu/s8_linear). The producer
 // warpgroup's first thread issues every TMA in Ring::issue's order (a tile's main stages, then its tail stages; the tile's
 // index beside its first stage, -1 when none is left; the counter for the next); consumer warpgroup w takes rows 64 w ..
-// 64 w + 63 of the 128 x 128 tile as m64n128k32 atoms on the stage's SWIZZLE_128B boxes, its accumulator i of thread x at
-// row 16 (x / 32) + (x % 32) / 4 + 8 ((i / 2) % 2), column 8 (i / 4) + 2 (x % 4) + i % 2. A segment's store waits for all
-// of the warpgroup's atoms; a tail stage's product is two m64n64 halves in registers of their own, subtracted at its
-// weight. V31_WG_NREG: a thread's registers at launch (the producer keeps 40 and the consumers take the rest), below 168
-// so that a commit CTA fits beside the GEMM's 384 threads; V31_WG_STAGES: the ring's 32 KB stages.
+// 64 w + 63 of the 128 x 128 NB tile as m64n(128 NB)k32 atoms on the stage's SWIZZLE_128B boxes, its accumulator i of
+// thread x at row 16 (x / 32) + (x % 32) / 4 + 8 ((i / 2) % 2), column 8 (i / 4) + 2 (x % 4) + i % 2. A segment's store
+// waits for all of the warpgroup's atoms; a tail stage's product is 2 NB m64n64 pieces in registers of their own,
+// subtracted at its weight. V31_WG_NREG: a thread's registers at launch (the producer keeps 40 and the consumers take the rest), below 168
+// so that a commit CTA fits beside the GEMM's 384 threads; V31_WG_STAGES: the ring's stages; V31_WG_BN 256: a CTA takes
+// NB = 2 column-adjacent tiles as one 128 x 256 tile (m64n256 atoms, B's two boxes one after the other in the stage)
+// wherever N / 128 is even, a third less traffic from L2 a product than 128 x 128.
 #ifndef V31_WG_NREG
 #define V31_WG_NREG 168
 #endif
 #ifndef V31_WG_STAGES
 #define V31_WG_STAGES 4
 #endif
+#ifndef V31_WG_BN
+#define V31_WG_BN 128
+#endif
 #include "../../torch_gpu/s8_linear/s8_acc.h"
 struct WRing {
   static constexpr int STAGES = V31_WG_STAGES, NCT = 384, CONS = V31_WG_NREG + (V31_WG_NREG - 40) / 2;
-  static constexpr uint32_t A_BYTES = TILE * BK, STAGE = 2 * TILE * BK;
-  static constexpr int SMEM = STAGES * STAGE + 32 * STAGES + 1024;
+  static constexpr uint32_t A_BYTES = TILE * BK;
+  static constexpr uint32_t stage_bytes(int nb) { return (1 + nb) * TILE * BK; }
+  static constexpr int SMEM = STAGES * stage_bytes(V31_WG_BN / TILE) + 32 * STAGES + 1024;
   static_assert(CONS % 8 == 0 && CONS <= 256, "V31_WG_NREG: setmaxnreg's counts are multiples of 8, at most 256");
+  static_assert(V31_WG_BN == 128 || V31_WG_BN == 256, "V31_WG_BN: 128 or 256");
 };
-constexpr int G_NCT = WRing::NCT, G_SMEM = WRing::SMEM, G_WG_NREG = V31_WG_NREG, G_WG_STAGES = V31_WG_STAGES;
+constexpr int G_NCT = WRing::NCT, G_SMEM = WRing::SMEM, G_WG_NREG = V31_WG_NREG, G_WG_STAGES = V31_WG_STAGES,
+              G_BN = V31_WG_BN, G_NBW = V31_WG_BN / TILE;
 #define WG_FENCE asm volatile("wgmma.fence.sync.aligned;" ::: "memory")
 #define WG_COMMIT asm volatile("wgmma.commit_group.sync.aligned;" ::: "memory")
 #define WG_WAIT(n) asm volatile("wgmma.wait_group.sync.aligned " #n ";" ::: "memory")
@@ -974,8 +983,11 @@ DEV uint64_t desc_sw128(uint32_t addr) {
 }
 // d = A B + (sd ? d : 0) over one k32 atom of a 64 x N warpgroup tile
 template <int N> DEV void wg_imma(int* d, uint64_t da, uint64_t db, uint32_t sd) {
-  static_assert(N == 128 || N == 64, "n128 or n64");
-  if constexpr (N == 128)
+  static_assert(N == 256 || N == 128 || N == 64, "n256, n128 or n64");
+  if constexpr (N == 256)
+    asm volatile("{\n .reg .pred p;\n setp.ne.b32 p, %130, 0;\n wgmma.mma_async.sync.aligned.m64n256k32.s32.s8.s8 " ACC128_S
+                 ", %128, %129, p;\n}" : ACC128_R : "l"(da), "l"(db), "r"(sd));
+  else if constexpr (N == 128)
     asm volatile("{\n .reg .pred p;\n setp.ne.b32 p, %66, 0;\n wgmma.mma_async.sync.aligned.m64n128k32.s32.s8.s8 " ACC64_S
                  ", %64, %65, p;\n}" : ACC64_R : "l"(da), "l"(db), "r"(sd));
   else
@@ -999,19 +1011,22 @@ DEV void wg_store_words(const int* d, uint16_t* words, size_t tile, int S, int s
     w[(p + 8 * TILE) >> 1] = __byte_perm((u32)d[4 * j + 2], (u32)d[4 * j + 3], 0x5410);
   }
 }
-template <bool PROTO>
+template <bool PROTO, int NB>
 __global__ void __maxnreg__(V31_WG_NREG) gemm_kernel(const GArgs a) {
   using W = WRing;
   constexpr int ST = W::STAGES;
+  constexpr uint32_t STAGE = W::stage_bytes(NB);
+  static_assert(NB == 1 || NB == 2, "one or two tiles a CTA");
   extern __shared__ __align__(1024) uint8_t gsm[];
-  const uint32_t base = (smem_u32(gsm) + 1023) & ~1023u, bars = base + ST * W::STAGE;
-  volatile int* tids = reinterpret_cast<volatile int*>(gsm + (base - smem_u32(gsm)) + ST * W::STAGE + 16 * ST);
-  const int tiles_m = a.M / TILE, tiles_n = a.N / TILE, tiles = tiles_m * tiles_n, KT = a.K / BK;
+  const uint32_t base = (smem_u32(gsm) + 1023) & ~1023u, bars = base + ST * STAGE;
+  volatile int* tids = reinterpret_cast<volatile int*>(gsm + (base - smem_u32(gsm)) + ST * STAGE + 16 * ST);
+  // a work item is NB column-adjacent tiles; tiles keep their 128 x 128 indexing in words and O
+  const int tiles_m = a.M / TILE, tiles_n = a.N / TILE, items_n = tiles_n / NB, items = tiles_m * items_n, KT = a.K / BK;
   const int TT = PROTO ? a.TT : 0, KS = KT + (PROTO && TT ? 2 * a.lp / BK : 0);
   const int wg = threadIdx.x / 128;
   auto full = [&](int i) { return bars + 8 * i; };
   auto empty = [&](int i) { return bars + 8 * (ST + i); };
-  auto stage = [&](int i) { return base + i * W::STAGE; };
+  auto stage = [&](int i) { return base + i * STAGE; };
   if (threadIdx.x == 0) {
     for (int i = 0; i < ST; i++) { mbar_init(full(i), 1); mbar_init(empty(i), 8); }
     asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
@@ -1028,26 +1043,25 @@ __global__ void __maxnreg__(V31_WG_NREG) gemm_kernel(const GArgs a) {
       uint32_t pph = 0;
       for (;;) {
         mbar_wait(empty(ps), pph ^ 1);
-        if (pt >= tiles) {
+        if (pt >= items) {
           tids[ps] = -1;
           mbar_arrive(full(ps));
           break;
         }
         if (pkt == 0) tids[ps] = pt;
         int tm, tn;
-        raster(pt, tiles_m, tiles_n, a.group, tm, tn);
-        mbar_expect_tx(full(ps), W::STAGE);
-        if (pkt < KT) {
-          tma_load(stage(ps), &a.maps->a, full(ps), pkt * BK, tm * TILE);
-          tma_load(stage(ps) + W::A_BYTES, &a.maps->b, full(ps), pkt * BK, tn * TILE);
-        } else {
-          tma_load(stage(ps), &a.maps->pa, full(ps), (pkt - KT) * BK, tm * TILE);
-          tma_load(stage(ps) + W::A_BYTES, &a.maps->pb, full(ps), (pkt - KT) * BK, tn * TILE);
-        }
+        raster(pt, tiles_m, items_n, a.group, tm, tn);
+        mbar_expect_tx(full(ps), STAGE);
+        const bool body = pkt < KT;
+        const CUtensorMap *ma = body ? &a.maps->a : &a.maps->pa, *mb = body ? &a.maps->b : &a.maps->pb;
+        const int kc = (body ? pkt : pkt - KT) * BK;
+        tma_load(stage(ps), ma, full(ps), kc, tm * TILE);
+#pragma unroll
+        for (int j = 0; j < NB; j++) tma_load(stage(ps) + W::A_BYTES + j * TILE * BK, mb, full(ps), kc, (NB * tn + j) * TILE);
         if (++pkt == KT + TT) {
           pkt = 0;
           const u32 q = a.ctr ? gridDim.x + (atomicAdd(a.ctr, 1u) - a.base) : (u32)pt + gridDim.x;
-          pt = q < (u32)tiles ? (int)q : tiles;
+          pt = q < (u32)items ? (int)q : items;
         }
         if (++ps == ST) { ps = 0; pph ^= 1; }
       }
@@ -1064,29 +1078,33 @@ __global__ void __maxnreg__(V31_WG_NREG) gemm_kernel(const GArgs a) {
     const int t = tids[s];
     if (t < 0) break;
     int tm, tn;
-    raster(t, tiles_m, tiles_n, a.group, tm, tn);
+    raster(t, tiles_m, items_n, a.group, tm, tn);
+    tn *= NB;
     const size_t tile = (size_t)tm * tiles_n + tn;
-    int d[64];
+    constexpr int NA = 64 * NB;
+    int d[NA];
     int pend = -1;   // the stage whose atoms may be in flight, released once they're done
 #pragma unroll 1
     for (int kt = 0; kt < KS; kt++) {
       if (kt) mbar_wait_warp(full(s), ph);
       const uint32_t a0 = stage(s) + wg * 64 * BK, b0 = stage(s) + W::A_BYTES;
       WG_FENCE;
-      wg_imma<128>(d, desc_sw128(a0), desc_sw128(b0), kt > 0);
-      wg_imma<128>(d, desc_sw128(a0 + 32), desc_sw128(b0 + 32), 1);
-      wg_imma<128>(d, desc_sw128(a0 + 64), desc_sw128(b0 + 64), 1);
-      wg_imma<128>(d, desc_sw128(a0 + 96), desc_sw128(b0 + 96), 1);
+      wg_imma<128 * NB>(d, desc_sw128(a0), desc_sw128(b0), kt > 0);
+      wg_imma<128 * NB>(d, desc_sw128(a0 + 32), desc_sw128(b0 + 32), 1);
+      wg_imma<128 * NB>(d, desc_sw128(a0 + 64), desc_sw128(b0 + 64), 1);
+      wg_imma<128 * NB>(d, desc_sw128(a0 + 96), desc_sw128(b0 + 96), 1);
       WG_COMMIT;
       if (PROTO && !(a.diag & 1) && kt < KT && (((kt + 1) * BK) % a.L == 0 || kt + 1 == KT)) {
         WG_WAIT(0);
-        acc_fence<64>(d);
+        acc_fence<NA>(d);
         if (lane == 0) {
           if (pend >= 0) mbar_arrive(empty(pend));
           mbar_arrive(empty(s));
         }
         pend = -1;
-        wg_store_words(d, a.words, tile, a.S, ((kt + 1) * BK + a.L - 1) / a.L, r0, q);
+        // accumulators 64 j .. 64 j + 63 are tile tn + j's, in the n128 layout
+#pragma unroll
+        for (int j = 0; j < NB; j++) wg_store_words(d + 64 * j, a.words, tile + j, a.S, ((kt + 1) * BK + a.L - 1) / a.L, r0, q);
       } else {
         WG_WAIT(1);
         if (lane == 0 && pend >= 0) mbar_arrive(empty(pend));
@@ -1095,7 +1113,7 @@ __global__ void __maxnreg__(V31_WG_NREG) gemm_kernel(const GArgs a) {
       if (++s == ST) { s = 0; ph ^= 1; }
     }
     WG_WAIT(0);
-    acc_fence<64>(d);
+    acc_fence<NA>(d);
     if (lane == 0 && pend >= 0) mbar_arrive(empty(pend));
     if constexpr (PROTO) {
 #pragma unroll 1
@@ -1104,7 +1122,7 @@ __global__ void __maxnreg__(V31_WG_NREG) gemm_kernel(const GArgs a) {
         mbar_wait_warp(full(s), ph);
         const uint32_t a0 = stage(s) + wg * 64 * BK, b0 = stage(s) + W::A_BYTES;
 #pragma unroll
-        for (int h = 0; h < 2; h++) {
+        for (int h = 0; h < 2 * NB; h++) {
           int tt[32];
           const uint32_t bh = b0 + h * 64 * BK;
           WG_FENCE;
@@ -1124,7 +1142,7 @@ __global__ void __maxnreg__(V31_WG_NREG) gemm_kernel(const GArgs a) {
     }
     const size_t row = (size_t)tm * TILE + r0;
 #pragma unroll
-    for (int j = 0; j < 16; j++) {
+    for (int j = 0; j < 16 * NB; j++) {
       const size_t p = row * a.N + tn * TILE + 8 * j + 2 * q, p8 = p + (size_t)8 * a.N;
       int2 lo = make_int2(d[4 * j], d[4 * j + 1]), hi = make_int2(d[4 * j + 2], d[4 * j + 3]);
       if (PROTO && !(a.diag & 4)) {
@@ -1526,7 +1544,8 @@ struct Knobs {
 };
 static void set_carveout(int pct) {
   if (pct < 0) return;
-  const void* ks[] = {(const void*)gemm_kernel<true>,  (const void*)gemm_kernel<false>,  (const void*)wrap_kernel,
+  const void* ks[] = {(const void*)gemm_kernel<true, 1>,  (const void*)gemm_kernel<false, 1>,
+                      (const void*)gemm_kernel<true, G_NBW>,  (const void*)gemm_kernel<false, G_NBW>,  (const void*)wrap_kernel,
                       (const void*)wrap2_kernel<128>,  (const void*)wrap2_kernel<256>,   (const void*)wrap3_kernel<128>,
                       (const void*)wrap3_kernel<256>,  (const void*)wrap4_kernel<128>,  (const void*)wrap4_kernel<256>,
                       (const void*)wrap_a_kernel,      (const void*)form_a_kernel,       (const void*)form_b_kernel<false>,
@@ -1539,7 +1558,7 @@ static void set_carveout(int pct) {
 
 // One shape's prover: every buffer of a call, NB copies of the committed values (words, O) for the overlapped arm.
 struct Ctx {
-  int m, n, k, lp, t, row, L, S, NT, kb64, dz, dy, TL, TT, tiles, tiles_n, lpt, grid, nsm, capA, capB, nb = 1;
+  int m, n, k, lp, t, row, L, S, NT, kb64, dz, dy, TL, TT, tiles, tiles_n, lpt, grid, nsm, capA, capB, nb = 1, items, pair;
   u64 leaves;
   Seeds seeds;
   int8_t *A, *B, *U, *V, *X, *XT, *W, *PA, *PB, *WW = nullptr;
@@ -1576,7 +1595,9 @@ struct Ctx {
     leaves = (u64)tiles * lpt;
     capA = capB = cap;
     CK(cudaDeviceGetAttribute(&nsm, cudaDevAttrMultiProcessorCount, 0));
-    grid = std::min(tiles, nsm);
+    pair = G_BN == 2 * TILE && tiles_n % 2 == 0;
+    items = tiles >> pair;
+    grid = std::min(items, nsm);
     int lo, hi;
     CK(cudaDeviceGetStreamPriorityRange(&lo, &hi));
     if (kn.cprio != "hi" && kn.cprio != "lo" && kn.cprio != "eq") { fprintf(stderr, "V31_CPRIO: hi, lo or eq\n"); exit(2); }
@@ -1625,8 +1646,10 @@ struct Ctx {
       maps_dw = dalloc<Maps>(1);
       CK(cudaMemcpy(maps_dw, &mw, sizeof mw, cudaMemcpyHostToDevice));
     }
-    CK(cudaFuncSetAttribute(gemm_kernel<true>, cudaFuncAttributeMaxDynamicSharedMemorySize, G_SMEM));
-    CK(cudaFuncSetAttribute(gemm_kernel<false>, cudaFuncAttributeMaxDynamicSharedMemorySize, G_SMEM));
+    CK(cudaFuncSetAttribute(gemm_kernel<true, 1>, cudaFuncAttributeMaxDynamicSharedMemorySize, G_SMEM));
+    CK(cudaFuncSetAttribute(gemm_kernel<false, 1>, cudaFuncAttributeMaxDynamicSharedMemorySize, G_SMEM));
+    CK(cudaFuncSetAttribute(gemm_kernel<true, G_NBW>, cudaFuncAttributeMaxDynamicSharedMemorySize, G_SMEM));
+    CK(cudaFuncSetAttribute(gemm_kernel<false, G_NBW>, cudaFuncAttributeMaxDynamicSharedMemorySize, G_SMEM));
     CK(cudaFuncSetAttribute(wrap_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, TILE * 129 * 4));
     CK(cudaFuncSetAttribute(wrap2_kernel<128>, cudaFuncAttributeMaxDynamicSharedMemorySize, lp * 128));
     CK(cudaFuncSetAttribute(wrap2_kernel<256>, cudaFuncAttributeMaxDynamicSharedMemorySize, lp * 128));
@@ -1675,9 +1698,7 @@ struct Ctx {
   void wrap(cudaStream_t st) {
     const WrapArgs w{XT, BtT, listA, cntA, listB, cntB, dO, m, n, capA, capB, offB, lp, NT};
     if (kn.wrap == 5) {
-      gemm_kernel<false><<<grid, G_NCT, G_SMEM, st>>>(
-          GArgs{maps_dw, nullptr, nullptr, dO, m, n, k, L, S, 0, 8, lp, dz, kn.dyn ? gctr : nullptr, gbase, 0});
-      gbase += (u32)tiles;
+      launch<false>(st, GArgs{maps_dw, nullptr, nullptr, dO, m, n, k, L, S, 0, 8, lp, dz, kn.dyn ? gctr : nullptr, gbase, 0});
       wrap_a_kernel<<<dim3(n / TILE, m / TILE), 256, 0, st>>>(w);
     } else if (kn.wrap == 1) wrap_kernel<<<dim3(n / TILE, m / TILE), 256, TILE * 129 * 4, st>>>(w);
     else if (kn.wrap == 3 && wcw == 256) wrap3_kernel<256><<<dim3(n / 256, m / TILE), 256, (lp + 1) * 128, st>>>(w);
@@ -1687,11 +1708,15 @@ struct Ctx {
     else if (wcw == 256) wrap2_kernel<256><<<dim3(n / 256, m / TILE), 512, lp * 128, st>>>(w);
     else wrap2_kernel<128><<<dim3(n / 128, m / TILE), 256, lp * 128, st>>>(w);
   }
-  // launches that share gctr run in one stream's order, so each one's base is the tiles launched before it
+  // launches that share gctr run in one stream's order, so each one's base is the work items launched before it
+  template <bool PROTO> void launch(cudaStream_t st, const GArgs& g) {
+    if (pair) gemm_kernel<PROTO, G_NBW><<<grid, G_NCT, G_SMEM, st>>>(g);
+    else gemm_kernel<PROTO, 1><<<grid, G_NCT, G_SMEM, st>>>(g);
+    gbase += (u32)items;
+  }
   void gemm(cudaStream_t st, int b, bool proto, int diag = 0) {
-    if (proto) gemm_kernel<true><<<grid, G_NCT, G_SMEM, st>>>(gargs(b, true, diag));
-    else gemm_kernel<false><<<grid, G_NCT, G_SMEM, st>>>(gargs(b, false));
-    gbase += (u32)tiles;
+    if (proto) launch<true>(st, gargs(b, true, diag));
+    else launch<false>(st, gargs(b, false));
   }
   void compute(cudaStream_t st, int b, const Cheat& ch = Cheat{}) {
     coins(st);
@@ -1767,7 +1792,9 @@ static std::vector<uint8_t> readfile(const std::string& p, size_t want) {
 
 struct KAttr { const char* name; const void* fn; };
 static void kernel_attrs(FILE* f) {
-  const KAttr ks[] = {{"gemm_proto", (const void*)gemm_kernel<true>}, {"gemm_plain", (const void*)gemm_kernel<false>},
+  const KAttr ks[] = {{"gemm_proto", (const void*)gemm_kernel<true, 1>}, {"gemm_plain", (const void*)gemm_kernel<false, 1>},
+                      {"gemm_proto_wide", (const void*)gemm_kernel<true, G_NBW>},
+                      {"gemm_plain_wide", (const void*)gemm_kernel<false, G_NBW>},
                       {"form_a", (const void*)form_a_kernel}, {"form_b", (const void*)form_b_kernel<false>},
                       {"form_b5", (const void*)form_b_kernel<true>},
                       {"wrap", (const void*)wrap_kernel}, {"wrap2_128", (const void*)wrap2_kernel<128>},
@@ -1987,11 +2014,11 @@ static int cmd_bench(int reps, const std::string& out, const std::string& pdir, 
            "\"leaves\": %llu, \"gpu\": \"%s\", \"sms\": %d, \"grid\": %d, \"copies\": %d, \"wrap_rate_A\": %.6f, \"wrap_rate_B\": %.6f, "
            "\"lt\": {\"algo\": %d, \"tile\": %d, \"stages\": %d, \"splitk\": %d, \"candidates\": %d}, "
            "\"cutlass\": {\"kernel\": \"%s\", \"candidates\": %d}, \"steady\": %s, "
-           "\"carve\": %d, \"dyn\": %d, \"cprio\": \"%s\", \"wrap\": %d, \"wcw\": %d, \"ccta\": %d, \"pf\": %d, \"maxnreg\": %d, \"wg_nreg\": %d, \"wg_stages\": %d, \"arms\": {",
+           "\"carve\": %d, \"dyn\": %d, \"cprio\": \"%s\", \"wrap\": %d, \"wcw\": %d, \"ccta\": %d, \"pf\": %d, \"maxnreg\": %d, \"wg_nreg\": %d, \"wg_stages\": %d, \"gemm_bn\": %d, \"arms\": {",
            name, m, n, k, lp, t, row, c.S, c.dz, c.dy, (unsigned long long)c.leaves, prop.name, c.nsm, c.grid, c.nb,
            (double)wa / ((double)m * k), (double)wbn / ((double)n * k), lt.algo_id, lt.tile, lt.stages, lt.splitk, lt.ncand,
            cut.name.c_str(), cut.ncand, tm.steady ? "true" : "false", c.kn.carve, c.kn.dyn, c.kn.cprio.c_str(), c.kn.wrap, c.wcw,
-           c.kn.ccta, c.kn.pf, V31_MAXNREG, G_WG_NREG, G_WG_STAGES);
+           c.kn.ccta, c.kn.pf, V31_MAXNREG, G_WG_NREG, G_WG_STAGES, c.pair ? G_BN : TILE);
     for (size_t a = 0; a < arms.size(); a++)
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a]);
     printf("}, \"gamma_call\": %.4f, \"gamma_ovl\": %.4f, \"gamma_gemm\": %.4f, \"plain_over_lt\": %.4f, ", med[7] / med[0],
