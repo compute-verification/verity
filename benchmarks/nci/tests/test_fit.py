@@ -32,7 +32,7 @@ def test_reach_at_sequence_threads_kimi_k2():
     of Kimi K2's pretraining, at its shortest length, uses at least N* weights in its counted multiplications (87.6B,
     the Besiroglu refit at a 405B-class target) when its tokens' routed slots spread over the experts as kappa.py routes
     them, 8 of 384 a token, load-balanced; one token uses fewer, so Reach is false at token threads, the threading the
-    rungs use, for a token-routed MoE (ASK-68 adopts it for dense recipes only). A token's counted multiplications use its active weights outside the embedding and the LM head, and the LM
+    rungs use, for a token-routed MoE (the policy adopts it for dense recipes only). A token's counted multiplications use its active weights outside the embedding and the LM head, and the LM
     head, whose backward is counted; a sequence's use every routed expert one of its S tokens reaches, E (1 - (1 - a/E)^S)
     per MoE layer in expectation. It fails when N* exceeds what a sequence reaches, a sequence routed to fewer than the
     `fewest` experts per layer among them, or when a token reaches N*, which would leave the conjectures' why stale."""

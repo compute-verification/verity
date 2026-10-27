@@ -20,7 +20,7 @@ committed row longer than one SHA-512 block.
   any run (`loop.commit_weights`), the pin naming checkpoint role `TORCH_LOOP_MLP_H128_W8A8`. The circuit then reads each
   unit's `wrow` and `sw` from them at public positions (`interface.Read`), so they are no free input: 1,081,344 of the
   2,162,688 input bits of the default shape stay free. With it on, the members' private bodies are shared-row.
-- Committed activations (CMP-91): each window commits its `x` and `sx` rows, one a (request, step, layer), under domains
+- Committed activations: each window commits its `x` and `sx` rows, one a (request, step, layer), under domains
   binding the run root (`TorchLoop.commit_activations`). Their entries are in the registration's window, fixed before the
   draw, and their salts in the window's `activations-private.json`. No read of them is declared, so they leave the free
   count as it is.
@@ -56,12 +56,12 @@ committed row longer than one SHA-512 block.
   composes into C-Flock's unit statement (slow); a tampering loop's outputs are not its Definition's; the loop loads no
   vLLM. The checkpoint role's files are the served weights bit for bit, its entry pins them and names the linears in order,
   and the gate's own code reads the loop's rows from them and digests them to the role's checkpoint digest.
-- `verity_torch_loop/frozen.py` and `serve_frozen.py`: one decode step of the frozen H200 shape (CMP-92 Phase 2: width
+- `verity_torch_loop/frozen.py` and `serve_frozen.py`: one decode step of the frozen H200 shape (width
   16,384, 256 query heads of 64 with one KV head, MLP 65,536), the first `--layers` of its 52, every matmul coordinate a unit
   on the H200's bindings (`ScaledMmS8Coordinate_v1{K=16384}` and `{K=65536}` on `GEMM_SM90_S8`, `GemmCoordinate{K=64}` on
   `GEMM_HOPPER` for QKᵀ and PV), one window per template. The row ops run in torch and are committed as inputs until
-  CIR-100's Definitions land. `frozen_w.py`: W per block (core's `Stratified`) and pooled per week, month and year
-  (`density_bound`), at δ = 1% and 1e-6. `run.sh` with `PP_TORCH_FROZEN=1` audits each window, honest and tampered (PRF-173).
+  their Definitions land. `frozen_w.py`: W per block (core's `Stratified`) and pooled per week, month and year
+  (`density_bound`), at δ = 1% and 1e-6. `run.sh` with `PP_TORCH_FROZEN=1` audits each window, honest and tampered.
 - End to end: `benchmarks/prove_path/run.sh` with `PP_TORCH_LOOP=1` audits the honest and the tampered window from their
   records alone, against the registered circuit (`records_audit.py audit --circuit SHA512`) and against the compiler's
   output (`--opening`, `--compilers`): live coins, C-Flock `--zk` behind the Lean firewall, the Lean verifier of record,
@@ -69,7 +69,7 @@ committed row longer than one SHA-512 block.
   (`records_audit.py --registered PIN`) and adds an arm serving other weights, which Lean's registered reads refuse
   (r20261025-220011-057f). `PP_TORCH_LOOP_WIRED=1` audits the wired circuit under `stratified:3` (a unit of every template),
   with an arm whose quantize units' codes are tampered.
-- `verity_torch_loop/weights.py`: the demo's seeded weights and their registration root (CMP-95 interface 1), for any
+- `verity_torch_loop/weights.py`: the demo's seeded weights and their registration root, for any
   decoder shape (the H200 demo's frozen shape, Phase 1's CPU model): a SHA-512 counter generator from (seed, tensor, row)
   to every tensor, the weights stream's layout (`manifest`), and each tensor as a registered value of core's for the
   program that reads it (its digest and parameter widths, as `registered.registered_entries` derives the domains; `tok`
@@ -78,13 +78,13 @@ committed row longer than one SHA-512 block.
   The H200 demo's manifest is the one under its seed (`DEMO_SEED`), with each tensor's SHA-256, and its registration
   digest is taken under the test salt key for the placeholder program `TEST_PROGRAM`.
 
-## The decoder (CMP-92)
+## The decoder
 
 `verity_torch_loop/transformer.py` is the demo's standard workload: a 2-layer decoder-only transformer (width 128, 2 heads
 of 64, MLP 512, byte vocabulary, context 32, greedy decoding). Its static matmuls are `ScaledMmS8Coordinate_v1{K=128|512}`
 units. Attention's QKᵀ and PV are `GemmCoordinate_v2{K=64, DOT=HopperBF16WgmmaDot16_v1}` units over the KV cache
 (`--bf16-dot ampere`: `AmpereBF16TcDot16_v2`), computed through the Definition's kernel. PV's 32 positions are padded with
 +0 to 64, since C-Flock pins a unit through a row of more than one SHA-512 block. RMSNorm, softmax, ReLU, the quantizer,
-the adds and argmax run in torch, and are not units until their Definitions land (CIR-100). `serve_transformer.py` writes
+the adds and argmax run in torch, and are not units until their Definitions land. `serve_transformer.py` writes
 its window as `serve.py` writes the MLP's, `tests/test_transformer.py` covers both, and `benchmarks/prove_path/run.sh`
 with `PP_TORCH_DECODER=1` audits it.
