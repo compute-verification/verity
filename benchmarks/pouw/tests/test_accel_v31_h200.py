@@ -199,6 +199,45 @@ def test_a_served_order_step_is_against_its_variants_fill_bench_lines(tmp_path, 
             "served1-gemm1-L4096's wgl 0.160 s") in capsys.readouterr().out
 
 
+def test_a_steps_power_floor_is_its_joules_over_the_boards_limit(tmp_path, capsys, monkeypatch):
+    """With the board's energy on the lines: each served-order N's watts and joules a step, its floor (the joules over
+    the power limit), and the serial split's joules (a served call's tensor, hashing and other arms, no pad) and their
+    time at the limit; a split arm's joules a step and watts; lines without energy print none."""
+    calls = h200_step.MODELS["8b"]
+    lines = [json.loads(_fill_line(n, k, True)) for n, k in calls]
+    j = {"gemm": 1.0, "coins": 0.05, "coins_w": 0.025, "form_a": 0.0125, "form_b": 0.0125, "commit": 0.4}
+    for x in lines:
+        x["lp"], x["power_limit_w"] = 512, 700.0
+        x["gsms"] = [{"n": 64, "sms": [64, 68]}]
+        x["arms"] |= {"wgl": {"ms": 1.25, "mhz": 1980}, "ovl_w_g64": {"ms": 2.0, "mhz": 1980, "j": 1.3}}
+        for a, v in j.items():
+            x["arms"][a]["j"] = v
+    f = tmp_path / "fill-bench-served1-L4096.jsonl"
+    f.write_text("\n".join(json.dumps(x) for x in lines) + "\n")
+    shapes = [{"shape": f"s{i}", "m": 16384, "n": nk[0], "k": nk[1], "calls": c} for i, (nk, c) in enumerate(calls.items())]
+    g = tmp_path / "fill-step-served1-L4096.jsonl"
+    g.write_text(json.dumps({"fill_step": True, "step": "s0,s1,s2,s3*32", "layers": 32, "lp": 512, "L": 4096, "row": 16384,
+                             "o": True, "steady": True, "power_limit_w": 700.0, "shapes": shapes,
+                             "gsms": [{"n": 64, "sms": [64, 68]}],
+                             "arms": {"step_g64": {"ms": 240.0, "mhz": 1900, "calls": 1, "j": 175.0, "w": 700.0}}}) + "\n")
+    so = h200_step.served_order(h200_step.step_rows([str(g)]), h200_step.rows([str(f)]))
+    n64 = so[0]["n"][64]
+    assert n64["w"] == 700.0 and n64["j"] == 175.0 and n64["floor"] == pytest.approx(0.25)
+    assert so[0]["serial_j"] == pytest.approx(128 * 1.5) and so[0]["serial_floor"] == pytest.approx(128 * 1.5 / 700)
+    sp = h200_step.split_steps(h200_step.rows([str(f)]), calls=calls)[(512, 4096, 16384, True, "served1-L4096")]
+    assert sp["n"][64]["j"] == pytest.approx(128 * 1.3) and sp["n"][64]["w"] == pytest.approx(1.3 / 2e-3)
+    monkeypatch.setattr(sys, "argv", ["h200_step.py", str(f), str(g)])
+    assert h200_step.main() == 0
+    out = capsys.readouterr().out
+    assert "| 64 | 64 + 68 | 0.240 | 1.500 | 0.256 | 0.282 | 50.0% | 1900 | 700 | 175 | 0.250 |" in out
+    assert "| 64 | 64 + 68 | 0.256 | 1.600 | - | - | - | 30.8% | 650 | 166 |" in out
+    assert ("N 64: step 0.240 s, gamma_u 1.500, hashing hidden 50.0%; fill-bench's step at N 64 0.256 s; serial 0.282 s "
+            "(hashing 0.083 s), gamma_u against these lines' wgl 0.160 s; 700 W, 175 J a step, its floor at the 700 W "
+            "limit 0.250 s; the serial split 192 J a step, 0.274 s at the 700 W limit") in out
+    assert h200_step.serial_joules(h200_step.fill_steps([json.loads(_fill_line(n, k, True)) for n, k in calls],
+                                                        calls=calls)[(256, 4096, 16384, True, "")]) is None
+
+
 def test_pipe_duty_is_each_kernels_busy_time_over_the_overlapped_call(tmp_path, capsys):
     """h200_pipes.py: a pipe's busy time is its share of peak over the kernel's elapsed cycles (active / elapsed scales
     it) times the kernel's duration (in ncu's unit, refused when it's none it knows), the larger of its issue and

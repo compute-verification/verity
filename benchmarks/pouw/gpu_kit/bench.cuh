@@ -90,6 +90,7 @@ PoisonGate poison_gate(void* dev, size_t bytes, cudaStream_t s, Arm&& arm, Accep
 struct Sample {
   unsigned sm_mhz = 0;  // 0: unknown
   unsigned long long throttle = 0;
+  unsigned long long energy_mj = 0;  // the board's energy since the driver loaded; 0: unknown
 };
 
 class Nvml {
@@ -103,6 +104,8 @@ class Nvml {
     void* r = dlsym(lib_, "nvmlDeviceGetCurrentClocksEventReasons");
     reasons_ = reinterpret_cast<int (*)(void*, unsigned long long*)>(
         r ? r : dlsym(lib_, "nvmlDeviceGetCurrentClocksThrottleReasons"));
+    energy_ = reinterpret_cast<int (*)(void*, unsigned long long*)>(dlsym(lib_, "nvmlDeviceGetTotalEnergyConsumption"));
+    limit_ = reinterpret_cast<int (*)(void*, unsigned*)>(dlsym(lib_, "nvmlDeviceGetEnforcedPowerLimit"));
     cudaDeviceProp p;
     GK_CK(cudaGetDeviceProperties(&p, cuda_device));
     char u[64];
@@ -120,7 +123,13 @@ class Nvml {
     unsigned v = 0;
     if (clock_(h_, 1 /* NVML_CLOCK_SM */, &v) == 0) s.sm_mhz = v;
     if (reasons_) reasons_(h_, &s.throttle);
+    if (energy_ && energy_(h_, &s.energy_mj) != 0) s.energy_mj = 0;
     return s;
+  }
+  // the board's enforced power limit in W; 0: unknown
+  double power_limit_w() const {
+    unsigned mw = 0;
+    return h_ && limit_ && limit_(h_, &mw) == 0 ? mw / 1000.0 : 0;
   }
 
  private:
@@ -128,6 +137,8 @@ class Nvml {
   void* h_ = nullptr;
   int (*clock_)(void*, int, unsigned*) = nullptr;
   int (*reasons_)(void*, unsigned long long*) = nullptr;
+  int (*energy_)(void*, unsigned long long*) = nullptr;
+  int (*limit_)(void*, unsigned*) = nullptr;
   std::string uuid_;
 };
 
@@ -147,6 +158,10 @@ struct Item {
   double ms = 0;
   Sample before, during, after;  // NVML before the item, while the GPU runs it, and after it
   unsigned sm_mhz() const { return during.sm_mhz ? during.sm_mhz : after.sm_mhz; }
+  // the board's energy from `before` to `after` in mJ, the host's gaps around the item included (NAN: unknown)
+  double mj() const {
+    return before.energy_mj && after.energy_mj >= before.energy_mj ? (double)(after.energy_mj - before.energy_mj) : NAN;
+  }
 };
 
 struct Timing {
@@ -251,14 +266,18 @@ inline void summary(const Timing& t, const std::vector<Arm>& arms, FILE* f = std
   }
 }
 
-// Every item as a JSON line, for dump.py's reader: {"gk": "item", "arm", "rep", "calls", "ms", "sm_mhz": {...}, ...}.
+// Every item as a JSON line, for dump.py's reader: {"gk": "item", "arm", "rep", "calls", "ms", "sm_mhz": {...}, ...,
+// "mj": the board's energy over it, or null}.
 inline void items_jsonl(const Timing& t, const std::vector<Arm>& arms, FILE* f) {
-  for (const Item& it : t.items)
+  for (const Item& it : t.items) {
+    char mj[32] = "null";
+    if (!std::isnan(it.mj())) snprintf(mj, sizeof mj, "%.0f", it.mj());
     fprintf(f,
             "{\"gk\": \"item\", \"arm\": \"%s\", \"rep\": %d, \"calls\": %d, \"ms\": %.6f, \"sm_mhz\": {\"before\": %u, "
-            "\"during\": %u, \"after\": %u}, \"throttle\": \"0x%llx\"}\n",
+            "\"during\": %u, \"after\": %u}, \"throttle\": \"0x%llx\", \"mj\": %s}\n",
             arms[it.arm].name.c_str(), it.rep, it.calls, it.ms, it.before.sm_mhz, it.during.sm_mhz, it.after.sm_mhz,
-            it.before.throttle | it.during.throttle | it.after.throttle);
+            it.before.throttle | it.during.throttle | it.after.throttle, mj);
+  }
 }
 
 // ---- the dump format ------------------------------------------------------------------------------------------------

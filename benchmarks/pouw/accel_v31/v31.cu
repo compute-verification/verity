@@ -3671,15 +3671,21 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
       fill_samples(f, c, out + "/samples/" + name + "-ovl-g" + std::to_string(gn), pfile, sd, A, (u32)rng());
     }
     f.use(dflt);
-    std::vector<double> med(arms.size()), mhz(arms.size());
+    std::vector<double> med(arms.size()), mhz(arms.size()), jc(arms.size()), w(arms.size());
     for (size_t a = 0; a < arms.size(); a++) {
-      std::vector<double> v, fq;
+      std::vector<double> v, fq, j, p;
       for (const auto& it : tm.items)
-        if (it.arm == (int)a) { v.push_back(it.ms / it.calls); if (it.sm_mhz()) fq.push_back(it.sm_mhz()); }
+        if (it.arm == (int)a) {
+          v.push_back(it.ms / it.calls);
+          if (it.sm_mhz()) fq.push_back(it.sm_mhz());
+          if (!std::isnan(it.mj())) { j.push_back(it.mj() / 1000 / it.calls); p.push_back(it.mj() / it.ms); }
+        }
       med[a] = gk::median(v);
       mhz[a] = gk::median(fq);
+      jc[a] = gk::median(j);
+      w[a] = gk::median(p);
       for (const auto& x : per)
-        if (x.first == arms[a].name) { med[a] /= x.second; arms[a].calls *= x.second; }
+        if (x.first == arms[a].name) { med[a] /= x.second; jc[a] /= x.second; arms[a].calls *= x.second; }
     }
     auto at = [&](const char* nm) -> double {
       for (size_t a = 0; a < arms.size(); a++)
@@ -3711,10 +3717,10 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
       const Split* p = split_of(gsms[i]);
       printf("%s{\"n\": %d, \"sms\": [%d, %d]}", i ? ", " : "", gsms[i], p ? p->sms[0] : f.nsm, p ? p->sms[1] : f.nsm);
     }
-    printf("], \"arms\": {");
+    printf("], \"power_limit_w\": %s, \"arms\": {", jn(nv.power_limit_w()).c_str());
     for (size_t a = 0; a < arms.size(); a++)
-      printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f, \"calls\": %d}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a],
-             arms[a].calls);
+      printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f, \"calls\": %d, \"j\": %s, \"w\": %s}", a ? ", " : "", arms[a].name.c_str(),
+             med[a], mhz[a], arms[a].calls, jn(jc[a]).c_str(), jn(w[a]).c_str());
     const double l = at("lt");
     printf("}, \"gamma_ovl\": %s, \"gamma_ovl_w\": %s, \"gamma_ovl_pad\": %s, \"gamma_ovl_nomem\": %s, \"gamma_call\": %s, "
            "\"gamma_gemm\": %s, ",
@@ -3899,13 +3905,23 @@ static int cmd_fill_step(int reps, const std::string& out, const std::string& pd
     const Split* p = split_of(gsms[i]);
     printf("%s{\"n\": %d, \"sms\": [%d, %d]}", i ? ", " : "", gsms[i], p ? p->sms[0] : fs[0].nsm, p ? p->sms[1] : fs[0].nsm);
   }
-  printf("], \"arms\": {");
+  auto jn = [](double x) {
+    char b[32];
+    if (std::isnan(x)) return std::string("null");
+    snprintf(b, sizeof b, "%.4f", x);
+    return std::string(b);
+  };
+  printf("], \"power_limit_w\": %s, \"arms\": {", jn(nv.power_limit_w()).c_str());
   for (size_t a = 0; a < arms.size(); a++) {
-    std::vector<double> v, fq;
+    std::vector<double> v, fq, j, p;
     for (const auto& it : tm.items)
-      if (it.arm == (int)a) { v.push_back(it.ms / it.calls); if (it.sm_mhz()) fq.push_back(it.sm_mhz()); }
-    printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f, \"calls\": %d}", a ? ", " : "", arms[a].name.c_str(), gk::median(v),
-           gk::median(fq), arms[a].calls);
+      if (it.arm == (int)a) {
+        v.push_back(it.ms / it.calls);
+        if (it.sm_mhz()) fq.push_back(it.sm_mhz());
+        if (!std::isnan(it.mj())) { j.push_back(it.mj() / 1000 / it.calls); p.push_back(it.mj() / it.ms); }
+      }
+    printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f, \"calls\": %d, \"j\": %s, \"w\": %s}", a ? ", " : "", arms[a].name.c_str(),
+           gk::median(v), gk::median(fq), arms[a].calls, jn(gk::median(j)).c_str(), jn(gk::median(p)).c_str());
   }
   printf("}}\n");
   fflush(stdout);
