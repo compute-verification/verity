@@ -119,8 +119,8 @@ GREEDY = {"kind": "greedy"}
 #: id form; the lowering reads a slot's row only through this
 SLOT_ROW = IO.SlotRow
 #: the window's slot rows, a per-window registered value: row k is slot k's `SLOT_ROW` row, committed under the window's
-#: run root before its draw. The circuit doesn't tie them to the certified bytes yet (the scan registration's state row,
-#: #4853, does), so the audit counts their reads free
+#: run root before its draw. The circuit doesn't tie them to the certified bytes yet (the scan registration's state row
+#: does), so the audit counts their reads free
 SLOT_ROWS = "slot-rows"
 #: a request held across the window's end, which the class doesn't take: whether the network certifier's lanes hold one
 #: across a window boundary is open, and a slot that does needs a Program running into the next

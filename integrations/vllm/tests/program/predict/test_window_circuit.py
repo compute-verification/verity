@@ -54,7 +54,9 @@ ROW, MASK = "SlotRow_v1{NP=4}", "SlotMask_v1{}"
 
 def held(circuit) -> dict[str, dict[str, str]]:
     """`interface.input_count`'s pins and the window's roots holding every registered parameter of ``circuit``: each
-    weight's own, ``weights/<label>@<words>``, pinned by the verifier at the root the window's registration records for it."""
+    weight's own, ``weights/<label>@<words>``, pinned by the verifier at the root the window's registration records for it.
+    `SLOT_ROWS` is one of them, so this pins each slot's occupancy, prompt length and token ids at the prover's own root,
+    which is why a count under it reports zero free inputs: nothing yet ties the slot rows to the certified bytes."""
     roots = {p: "ab" * 64 for p in circuit.registered.params}
     return {"pins": roots, "roots": roots}
 
@@ -444,7 +446,7 @@ def test_every_input_row_is_wired_or_registered_counted_from_the_description(win
     weight and row width, ``weights/<label>@<words>``, and the embedding's table, ``.../table``) and the window's slot rows,
     the two slots' 6 i32s each (occupancy, prompt length and 4 ids). Then no input row is free, so a proof of the window's
     units leaves nothing but the declared advice to the prover. The slot rows are committed under the window's run root, and
-    nothing ties them to the certified bytes until the scan registration's state root pins them (#4853): unpinned, they
+    nothing ties them to the certified bytes until the scan registration's state root pins them: unpinned, they
     alone are free. Every other registered read, table read and opening is of the weights (the GEMM slices', norms' and RoPE
     tables' rows; the embedding table's root, domain and rows), so with no pin all of them are free, a weight whose window
     root is another's is free by its own reads, and a pin of ``weights`` holds none of them."""

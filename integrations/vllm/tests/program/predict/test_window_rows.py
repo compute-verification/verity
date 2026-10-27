@@ -5,7 +5,10 @@ attention), with random weights registered under a committer's key.
 """
 from __future__ import annotations
 
+import json
 import re
+from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -20,6 +23,7 @@ from verity_vllm.program.predict import window_weights as WW
 
 from verity.core.protocols.pouw.audit import hm96_salt
 from verity.core.protocols.sampled_proofs.one_stage import registered as CR
+from verity.core.protocols.sampled_proofs.one_stage import registration as REG
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.commitments.gates import embedding as E
@@ -30,6 +34,8 @@ LAW = {"law": "stratified", "k": 2}
 RUN = "ab" * 64
 #: slot 0 a prompt of 4 (its last output from position 3's select), slot 1 a prompt of 3
 SLOTS = ([1, 4, 17, 3, 250, 9], [1, 3, 5, 77, 42, 0])
+#: the same window at another occupancy and other lengths: slot 0 empty, slot 1 a prompt of 2
+OTHER = ([0] * 6, [1, 2, 5, 77, 0, 0])
 #: the nodes prefill computes at its last prompt position only: the final norm, the LM head and the token select
 PRUNED = 3
 EMBED = "model.embed_tokens.weight"
@@ -383,7 +389,10 @@ def test_the_registered_values_are_each_weights_rows_and_the_slot_rows(window):
     s = got[WC.SLOT_ROWS]
     assert (s.leaves, s.words, s.window, s.schema) == (2, 12, RUN, CR.SCHEMA_V2) and _i32(s.rows[:][1]) == SLOTS[1]
     assert bytes(s.salts[0]) == hm96_salt(KEY, WR.SLOT_NONCE, 0) and WR.SLOT_NONCE > max(nonces.values())
-    assert len({bytes(v.salts[0]) for v in got.values()}) == len(got)
+    assert WR.index_salt(KEY, 3) == hm96_salt(KEY, WR.INDEX_NONCE + 3, 0) and WR.INDEX_NONCE >= WR.SLOT_NONCE + (1 << 32)
+    assert len({bytes(v.salts[0]) for v in got.values()} | {WR.index_salt(KEY, 0)}) == len(got) + 1
+    with pytest.raises(ValueError, match="a window's index is a u32"):
+        WR.index_salt(KEY, 1 << 32)
     s8 = got[WB.weight_param("model.layers.0.mlp.down_proj.weight", 512)].rows[:]
     assert s8.shape == (8, 512) and np.array_equal(s8.reshape(-1).view(np.uint8), fields["model.layers.0.mlp.down_proj.weight"])
     with pytest.raises(ValueError, match="'weights/x@3/rows' is no weight parameter"):
@@ -395,7 +404,7 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
     """The rows recorded into a `Window` (its registered values under the committer's key, the tables' supplied) are
     every unit's Definition on the inputs the window commits: its wired rows, its registered reads' rows and its openings',
     each word template's outputs under the reference evaluator, each embedding read's by `gates.embedding.reference`; the
-    window closes over them, labelled by step and source. What no cheaper test reaches: the circuit's own wires and reads
+    window closes over them, labelled by step, slot and form. What no cheaper test reaches: the circuit's own wires and reads
     resolved by the window, against every Definition. Slow (minutes) for the window's members, which trace the embedding
     read's population Program, and the reference evaluator on every unit."""
     low, _f, values, weights, slots = window
@@ -431,5 +440,113 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
     c = win.close(salt_key=bytes(32))
     assert c is not None
     labels = win.labels()
-    seen = {lab["source"] for m in labels["members"] for *_, lab in m["labels"]}
-    assert seen == {"served", "computed", "evaluated"} and all(m["labels"] for m in labels["members"])
+    seen = {lab["form"] for m in labels["members"] for *_, lab in m["labels"]}
+    assert seen == set(WR.FORMS) and all(m["labels"] for m in labels["members"])
+    assert {int(x) for v in rows.source.values() for x in v} == {WR.SERVED, WR.COMPUTED, WR.EVALUATED}
+
+
+class _Runs:
+    """A window's `record` as `Rows.record` calls it, keeping each run's template, unit count and label."""
+
+    def __init__(self) -> None:
+        self.runs: list[tuple[str, int, Any]] = []
+
+    def record(self, fn, ins, outs, label) -> None:
+        self.runs.append((descriptor_id(fn), len(outs[0]), label))
+
+
+def _runs(rows) -> list[tuple[str, int, Any]]:
+    got = _Runs()
+    rows.record(got)
+    return got.runs
+
+
+def _two(window) -> dict[str, tuple[Any, list[WR.Slot]]]:
+    """The window at two occupancies, each its slot rows and slots: `SLOTS` with slot 0 served (its request's values), and
+    `OTHER`, every node computed."""
+    low, _f, _v, weights, slots = window
+    rows_, store = _served(low, slots[0], T=1)
+    s0 = WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows_, *_read(store)))
+    return {"served": (SLOTS, [s0, slots[1]]), "other": (OTHER, [WR.Slot(low.fn, CLASS, r, weights) for r in OTHER])}
+
+
+def test_a_windows_labels_are_its_class_structure_alone(window):
+    """`Rows.record` labels each run by its step, slot and form, all three the lowering's, so the window at two
+    occupancies (slot 0 served at a prompt of 4 and slot 1 at 3, or slot 0 empty and slot 1 at 2) records the same runs
+    under byte-identical labels, though its rows and its units' sources differ. Every unit is in one run, and both forms
+    and both slots are there."""
+    low, _f, values, *_ = window
+    rows = {k: WR.Rows(low, ss, values) for k, (_r, ss) in _two(window).items()}
+    a, b = rows["served"], rows["other"]
+    assert any(not np.array_equal(a.source[t], b.source[t]) for t in a.source)
+    assert any(not np.array_equal(x, y) for t in a.outs for x, y in zip(a.outs[t], b.outs[t]))
+    runs = _runs(a)
+    assert json.dumps(runs) == json.dumps(_runs(b))
+    assert all(set(lab) == {"step", "slot", "form"} for *_, lab in runs)
+    assert {lab["form"] for *_, lab in runs} == set(WR.FORMS) and {lab["slot"] for *_, lab in runs} >= {0, 1}
+    assert {t: sum(n for u, n, _ in runs if u == t) for t in a.n} == a.n
+
+
+#: the keys of `Window.write`'s public JSON whose values are hiding commitments or digests over them, and the commit's seconds
+HIDING = {"root", "roots", "registered_roots", "paths", "public_sha512", "leaf_layer", "registration_digest", "seconds"}
+PRIVATE = re.compile(r"[mt]\d+-private\.bin|index\.json|index-salt\.bin")
+
+
+def _hide(x: Any, role: str) -> Any:
+    if isinstance(x, dict):
+        return {k: _hide(v, role) for k, v in x.items()}
+    if isinstance(x, list):
+        return [_mask(v) if isinstance(v, dict) else _hide(v, role) for v in x]
+    return f"<{role}>"
+
+
+def _mask(x: Any) -> Any:
+    if isinstance(x, dict):
+        return {k: _hide(v, k) if k in HIDING else _mask(v) for k, v in x.items()}
+    return [_mask(v) for v in x] if isinstance(x, list) else x
+
+
+def _public(c, d: Path) -> dict[str, Any]:
+    """Window dir ``d``'s public files, each hiding commitment and digest over one replaced by its role (`HIDING`; a public
+    body's ``b || c`` strings by their length, its table refs kept), each prover-only file by its name once it is its
+    owner's alone."""
+    out: dict[str, Any] = {}
+    for f in sorted(d.iterdir()):
+        if PRIVATE.fullmatch(f.name):
+            assert f.stat().st_mode & 0o077 == 0, f"{f.name} is readable by others"
+            out[f.name] = "private"
+        elif f.name in ("registration.json", "window.json"):
+            out[f.name] = _mask(json.loads(f.read_text()))
+        elif f.suffix == ".bin":
+            k = int(f.name[1:].split("-")[0])
+            ports = ([c.window.row_tables[k].port] if f.name[0] == "t"
+                     else [c.window.members[k].port(p) for p, _ in c.window.members[k].all_rows])
+            body, bc = f.read_bytes(), sum(len(c.bc[p]) for p in ports)
+            out[f.name] = (len(body), body[bc:])
+        else:
+            out[f.name] = f.read_bytes()
+    return out
+
+
+@pytest.mark.slow
+def test_two_windows_differing_in_occupancy_and_lengths_have_one_public_record(window, tmp_path):
+    """The window at two occupancies (`_two`), each closed and written by `Window.write` as the served path writes it (its
+    slot rows the window's value, its index salt window 0's under `KEY`), has one public record: every public file is
+    byte for byte the other's once each hiding commitment (a root, a row's ``b || c``, a registered read's path) and each
+    digest over one (a public body's, the leaf layer, the registration's) is replaced by its role. The labels, the
+    index's hiding leaf, the unit files, the table refs, the domains and the registration's provenance all agree, and the
+    index and its salt are prover only. What the labels test can't reach: everything else `Window.write` makes public.
+    Slow (minutes) for the two windows' closes, as the test above."""
+    low, _f, values, *_ = window
+    pub = {}
+    for name, (srows, slots) in _two(window).items():
+        vals = {**values, WC.SLOT_ROWS: WR.slot_rows_value(PROGRAM, srows, KEY, 0, window=RUN)}
+        win = IF.Window(low.circuit, RUN, LAW, 64, registered=vals)
+        win.supply(CR)
+        WR.Rows(low, slots, vals).record(win)
+        c = win.close()
+        prov = {"activations": {"program": WC.NAME, "values": {WC.SLOT_ROWS: vals[WC.SLOT_ROWS].entry()}}}
+        win.write(c, tmp_path / name, prov, registrar=REG, index_salt=WR.index_salt(KEY, 0))
+        pub[name] = _public(c, tmp_path / name)
+    assert pub["served"] == pub["other"]
+    assert {"index.json", "index-salt.bin", "circuit.json", "registration.json"} <= set(pub["served"])

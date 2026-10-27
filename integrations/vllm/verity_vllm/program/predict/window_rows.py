@@ -24,8 +24,11 @@ function of the window's values:
   range, and the earlier Calls' running state;
 - each `AllGather_v1` the concatenation of its parts, read through the circuit's wires once their writers hold them.
 
-`Rows.record` gives a `Window` each template's units in runs of one step and one source (`SOURCES`: served, computed, or
-evaluated by its Definition), every input by reference but an opening's ports.
+`Rows.record` gives a `Window` each template's units in runs of one step, one slot and one form (`FORMS`: a node's value,
+or its Definition's function of the window's values), every input by reference but an opening's ports. The lowering
+fixes all three, so a label is class structure and never a value: which slots are occupied, at what lengths, and where a
+node's value came from (`SOURCES`) are the slot rows' and the rows' own, committed hiding, and the labels show none of
+them. The index they make is the prover's, bound by its hiding leaf under `index_salt`.
 """
 from __future__ import annotations
 
@@ -52,16 +55,22 @@ from . import window_weights as WW
 from .window_builder import WEIGHTS
 from .window_circuit import SLOT_ROWS, Lowered, WindowClass, _spans
 
-#: a unit's source, its runs' label: its node's served value, the class Program's value at a node the engine didn't compute,
-#: or its Definition's function of the window's values
+#: a unit's source: its node's served value, the class Program's value at a node the engine didn't compute, or its
+#: Definition's function of the window's values. It follows occupancy and lengths, so it is the committer's own bookkeeping
+#: (`Rows.source`) and never a label
 SOURCES = ("served", "computed", "evaluated")
 SERVED, COMPUTED, EVALUATED = range(3)
+#: a unit's form, its runs' label beside its step and slot: a unit a node's lowering filled (`_Program.outs`) or one its
+#: Definition fills; the lowering fixes it
+FORMS = ("node", "evaluated")
 
 #: a weight's elements [lo, hi) in its leaves' unsigned width: ``weights(label, lo, hi)``
 Weights = Callable[[str, int, int], np.ndarray]
 #: the salt nonce of window 0's slot rows under the committer's key, each next window's the next: above every weight
 #: parameter's (`window_weights.weight_nonces`, from 2^62) and below 2^63
 SLOT_NONCE = WW.WEIGHTS_NONCE + (1 << 32)
+#: the salt nonce of window 0's index (`index_salt`), each next window's the next: above every window's slot rows'
+INDEX_NONCE = SLOT_NONCE + (1 << 32)
 
 
 def positions(fn: Any) -> list[int]:
@@ -395,6 +404,7 @@ class Rows:
         self.outs = {t: [np.zeros((n[t], w), dtype=np.uint16) for _, w in lay.outs] for t, lay in self.lays.items()}
         self.held = {t: np.zeros((n[t], len(lay.outs)), dtype=bool) for t, lay in self.lays.items()}
         self.source = {t: np.full(n[t], EVALUATED, dtype=np.int8) for t in self.lays}
+        self.node = {t: np.zeros(n[t], dtype=bool) for t in self.lays}
         ports = {(o.reader, p) for o in (c.registered.openings if c.registered else ()) for p in o.ports}
         self.inputs = {t: {p: np.zeros((n[t], w), dtype=np.uint16) for p, w in lay.rows if (t, p) in ports}
                        for t, lay in self.lays.items()}
@@ -418,6 +428,7 @@ class Rows:
             w = _words(S.values[j])
             for lo, hi, r in pieces:
                 self._put(r.tid, r.unit, r.out, w[lo:hi].reshape(-1, r.words), S.source[j])
+                self.node[r.tid][r.unit:r.unit + (hi - lo) // r.words] = True
         emb = [j for j, node in enumerate(nodes) if node.fn.name == "Embedding"]
         for p, (j, (feed, row)) in enumerate(zip(emb, P.tokens)):
             r, t = P.outs[j][0][2], S.tokens[p]
@@ -506,26 +517,34 @@ class Rows:
             if pending and not progress:
                 raise ValueError(f"gathers {sorted(pending)}: parts whose writers no node or gather fills")
 
-    def steps(self, tid: str) -> np.ndarray:
-        """Each unit of ``tid``'s step (its lowering's label)."""
+    def _span(self, tid: str, k: int) -> np.ndarray:
         out = np.full(self.n[tid], -1, dtype=np.int64)
-        for at, count, _slot, step in self.lowered.spans.get(tid, ()):
-            out[at:at + count] = step
+        for span in self.lowered.spans.get(tid, ()):
+            out[span[0]:span[0] + span[1]] = span[k]
         return out
 
+    def steps(self, tid: str) -> np.ndarray:
+        """Each unit of ``tid``'s step (its lowering's label)."""
+        return self._span(tid, 3)
+
+    def slots(self, tid: str) -> np.ndarray:
+        """Each unit of ``tid``'s slot (its lowering's), -1 for a unit of no slot's."""
+        return self._span(tid, 2)
+
     def record(self, win: IF.Window) -> None:
-        """Every unit into ``win``, template by template in unit order, in runs of one step and one source, each labelled
-        ``{"step", "source"}``: each input by reference but an opening's ports, each port in its element width."""
+        """Every unit into ``win``, template by template in unit order, in runs of one step, one slot and one form, each
+        labelled ``{"step", "slot", "form"}`` (module docstring): each input by reference but an opening's ports, each port
+        in its element width."""
         for tid, fn in self.fns.items():
-            lay, steps, src = self.lays[tid], self.steps(tid), self.source[tid]
-            key = steps * len(SOURCES) + src
-            ends = [0, *(np.flatnonzero(np.diff(key)) + 1).tolist(), self.n[tid]]
+            lay, steps, slots, node = self.lays[tid], self.steps(tid), self.slots(tid), self.node[tid]
+            cut = (np.diff(steps) != 0) | (np.diff(slots) != 0) | (np.diff(node) != 0)
+            ends = [0, *(np.flatnonzero(cut) + 1).tolist(), self.n[tid]]
             ins_w, outs_w = lay.widths[:len(lay.rows)], lay.widths[len(lay.rows):]
             for a, b in zip(ends, ends[1:]):
                 ins = [None if p not in self.inputs[tid] else _elements(self.inputs[tid][p][a:b], w)
                        for (p, _), w in zip(lay.rows, ins_w)]
                 outs = [_elements(o[a:b], w) for o, w in zip(self.outs[tid], outs_w)]
-                win.record(fn, ins, outs, {"step": int(steps[a]), "source": SOURCES[int(src[a])]})
+                win.record(fn, ins, outs, {"step": int(steps[a]), "slot": int(slots[a]), "form": FORMS[0 if node[a] else 1]})
 
 
 def _elements(words: np.ndarray, width: int) -> np.ndarray:
@@ -544,5 +563,14 @@ def slot_rows_value(program: str, slot_rows: Sequence[Sequence[int]], key: bytes
                       keep_rows=True, window=window)
 
 
-__all__ = ["COMPUTED", "EVALUATED", "Rows", "SERVED", "SLOT_NONCE", "SOURCES", "Served", "Slot", "positions",
-           "slot_rows_value"]
+def index_salt(key: bytes, index: int) -> bytes:
+    """Window ``index``'s index salt (`interface.Window.write`'s ``index_salt``, `rows.index_leaf`): drawn under the
+    committer's secret ``key`` at salt nonce `INDEX_NONCE` plus the window's ``index``, which no other value under ``key``
+    takes, so the committer draws it again from its key alone."""
+    if not 0 <= index < 1 << 32:
+        raise ValueError(f"window {index}: a window's index is a u32")
+    return H1R.salts(key, INDEX_NONCE + index, 1)
+
+
+__all__ = ["COMPUTED", "EVALUATED", "FORMS", "INDEX_NONCE", "Rows", "SERVED", "SLOT_NONCE", "SOURCES", "Served", "Slot",
+           "index_salt", "positions", "slot_rows_value"]

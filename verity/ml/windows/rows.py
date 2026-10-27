@@ -33,8 +33,8 @@ window-domain rule (``verity.ml.commitments.window``): ``binding = identity_dige
 schema, leaves, run})``, every field a registration field and ``run`` the record's run root, so the verifier recomputes every domain
 from the registration and the Commit's record (``expected_ports``).  The leaf layer is the SHA-512 of the canonical map from each
 member (its template, or its chunk's name) to the SHA-512 of its public body (``leaf_layer``).  ``write`` puts into a window
-directory ``registration.json``, ``index.json`` (the integration's labels of the units, opaque here, its SHA-512 in the
-window's provenance), per member
+directory ``registration.json``, ``index.json`` (the integration's labels of the units, opaque here and prover only, with its
+salt in ``index-salt.bin``; the window's provenance names its hiding leaf, `index_leaf`), per member
 ``m<k>-public.bin`` and ``m<k>-private.bin`` (the circuit prover's public and prover bodies; the private one is prover
 only) and ``m<k>-units.json`` (its global unit indices), and ``window.json``; ``flock_inputs.flock_input_files`` wraps
 member ``k``'s bodies as the circuit prover's ``m<k>-pub-<n>.bin`` (``rows: false``) and ``m<k>-inst-<n>.bin``.
@@ -102,6 +102,10 @@ SEGMENT_KEY = "engine_step"
 #: `commit`'s rows of a wired input port given by reference: its writers' output rows (`Member.wired`), their salts and
 #: ``b || c`` taken, never hashed again
 WIRED = "wired"
+#: ``index.json``'s salt beside it (prover only), the tag its inner digest is taken under and its leaf's rule (`index_leaf`)
+INDEX_SALT = "index-salt.bin"
+INDEX_TAG = b"verity/window-index/v1\0"
+INDEX_RULE = "hm96-sha512/v1 leaf of SHA-512(\"verity/window-index/v1\\0\" || index.json) under the 192-byte salt index-salt.bin"
 
 
 @dataclass(frozen=True)
@@ -808,6 +812,22 @@ def index_bytes(doc: dict[str, Any]) -> bytes:
     return (json.dumps(doc, separators=(",", ":")) + "\n").encode()
 
 
+def index_leaf(ib: bytes, salt: bytes) -> bytes:
+    """``index.json``'s hiding commitment (``ib``, its bytes): the ``hm96-sha512/v1`` leaf of its tagged SHA-512 under ``salt``
+    (192 bytes, `INDEX_RULE`), what the registration binds of the labels. An integration's labels may name what it served (a
+    request, a token row), and over so few candidates an unsalted digest of them would be no commitment at all."""
+    if len(salt) != SALT_BYTES:
+        raise ValueError(f"an index's salt is {SALT_BYTES} bytes, not {len(salt)}")
+    x = hashlib.sha512(INDEX_TAG + bytes(ib)).digest()
+    return INST.tree_leaf(INST.default_key, INST.commit_string(INST.default_key, x, bytes(salt)))
+
+
+def _private(path: Path, data: bytes) -> None:
+    """``data`` at ``path``, readable by its owner alone: a file only the prover reads."""
+    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f:
+        f.write(data)
+
+
 def registered_entry(c: Committed, m: Member, trees: dict[int, RT.RowTable] | None = None) -> dict[str, Any]:
     """Linked member ``m``'s public header ``registered`` entry: its ``x`` table's rows are rows of its row table (the value,
     named by the table's port), each at its rank with its path to the table's root (``RT.RowTable.path``), which the Lean
@@ -823,15 +843,21 @@ def registered_entry(c: Committed, m: Member, trees: dict[int, RT.RowTable] | No
 
 
 def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: dict[str, Any], extra: dict[str, Any] | None = None, *,
-          kind: str = "served", registered: Mapping[str, dict[str, Any]] | None = None, registrar: Any) -> dict[str, Any]:
+          kind: str = "served", registered: Mapping[str, dict[str, Any]] | None = None, registrar: Any,
+          index_salt: bytes | None = None) -> dict[str, Any]:
     """The window's files, its registration's window of ``kind`` (`registration`, by ``registrar``, which also names and digests
-    the record: ``FORMAT``, ``digest``); the window's provenance gets the index's SHA-512 (so the registration binds the unit ->
-    identity map).  ``registered``: by member key, an outside value's reads (``salts_of``)."""
+    the record: ``FORMAT``, ``digest``); the window's provenance gets the index's hiding leaf (`index_leaf`), so the
+    registration binds the unit -> label map and says nothing of it. ``index.json`` and its salt are prover only: the salt is
+    ``index_salt`` (192 bytes, a committer's drawn under its key) or else fresh bytes from the OS.  ``registered``: by member
+    key, an outside value's reads (``salts_of``)."""
     d = Path(out_dir)
     d.mkdir(parents=True, exist_ok=True)
     ib = index_bytes(index)
-    (d / "index.json").write_bytes(ib)
-    rec = registration(c, {**provenance, "index": hashlib.sha512(ib).hexdigest(), "order": ORDER}, kind=kind, registrar=registrar)
+    salt = os.urandom(SALT_BYTES) if index_salt is None else bytes(index_salt)
+    leaf = index_leaf(ib, salt).hex()
+    _private(d / "index.json", ib)
+    _private(d / INDEX_SALT, salt)
+    rec = registration(c, {**provenance, "index_leaf": leaf, "order": ORDER}, kind=kind, registrar=registrar)
     (d / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True) + "\n")
     trees: dict[int, RT.RowTable] = {}
     members = []
@@ -839,9 +865,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
         reads = registered_entry(c, m, trees) if m.links else (registered or {}).get(m.key)
         pub = c.public_body(k)
         (d / f"m{k}-public.bin").write_bytes(pub)
-        fd = os.open(d / f"m{k}-private.bin", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "wb") as f:
-            f.write(c.private_body(k))
+        _private(d / f"m{k}-private.bin", c.private_body(k))
         ub = index_bytes(units_doc(m))
         (d / f"m{k}-units.json").write_bytes(ub)
         members.append({"k": k, "name": m.key, "template": m.template, "n": m.n, "base": m.base, "ports": [list(p) for p in m.all_rows],
@@ -857,9 +881,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
     for t, tab in enumerate(c.window.row_tables):
         pub = c.table_public(t)
         (d / f"t{t}-public.bin").write_bytes(pub)
-        fd = os.open(d / f"t{t}-private.bin", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        with os.fdopen(fd, "wb") as f:
-            f.write(c.table_private(t))
+        _private(d / f"t{t}-private.bin", c.table_private(t))
         dom = c.domains[tab.port]
         tables.append({"k": t, **tab.doc(), "step_index": c.window.places[t], "root": c.table_roots[tab.port].hex(),
                        "domain": dom.domain_id.hex(), "binding": dom.binding.hex(), "public": f"t{t}-public.bin",
@@ -873,7 +895,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
            "partition": c.window.partition, "partition_digest": c.window.partition_digest, "run": c.window.run,
            "domain_tag": DOMAIN_TAG, "registration": registrar.FORMAT, "registration_digest": registrar.digest(rec),
            "leaf_layer": rec["leaf_layer"],
-           "leaf_layer_rule": LEAF_LAYER, "index_sha512": hashlib.sha512(ib).hexdigest(),
+           "leaf_layer_rule": LEAF_LAYER, "index_leaf": leaf, "index_rule": INDEX_RULE,
            "salt_rule": "chacha20 (rfc 8439), a fresh 32-byte os key per window, nonce = the row port's index over all members "
            "(12 bytes le), row i at stream offset 192 i; the key is dropped after expansion", "seconds": c.seconds, **(extra or {})}
     (d / "window.json").write_text(json.dumps(win, indent=1, default=str) + "\n")

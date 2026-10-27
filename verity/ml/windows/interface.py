@@ -21,7 +21,8 @@ at a time, in four records:
    (`flock_inputs.flock_input_files`), for the prover behind the firewall.
 
 An integration may label each run of units it records with one opaque JSON value (``label``): the window's
-``index.json``, whose SHA-512 the registration binds. Verity never reads a label.
+``index.json``, prover only, which the registration binds by its hiding leaf (`rows.index_leaf`). Verity never reads a
+label.
 
 The verifier's window comes from the records alone (`of_records`: ``circuit.json`` held to the registration's digest),
 never from the integration's code. A unit's rows are its Definition's bit rows: one row per parameter, the little-endian
@@ -1671,12 +1672,12 @@ class Window:
                               blocks=blocks.doc(sum(self.circuit.units.values()), self.window.partition_digest) if blocks else None)
 
     def write(self, c: CS.Committed, out_dir: str | Path, provenance: Mapping[str, Any], *, registrar: Any,
-              kind: str = "served") -> dict[str, Any]:
-        """The window's files (`rows.write`, its ``index.json`` the labels) and ``circuit.json``, the registration core's record
-        made by ``registrar`` (core's ``one_stage.registration``), its window naming ``provenance``, the circuit record's
-        SHA-512, the advice binding and each registered value's root by parameter (``registered_roots``, which
-        `input_count` holds to the verifier's pins); each member reading a registered value, its header naming each table
-        row's position and path (`close`)."""
+              kind: str = "served", index_salt: bytes | None = None) -> dict[str, Any]:
+        """The window's files (`rows.write`, its prover-only ``index.json`` the labels, bound by their hiding leaf under
+        ``index_salt``) and ``circuit.json``, the registration core's record made by ``registrar`` (core's
+        ``one_stage.registration``), its window naming ``provenance``, the circuit record's SHA-512, the advice binding and
+        each registered value's root by parameter (``registered_roots``, which `input_count` holds to the verifier's pins);
+        each member reading a registered value, its header naming each table row's position and path (`close`)."""
         d = Path(out_dir)
         d.mkdir(parents=True, exist_ok=True)
         body = circuit_bytes(self.circuit_record())
@@ -1684,7 +1685,8 @@ class Window:
         roots = {p: v.root.hex() for p, v in sorted((self.registered or {}).items())}
         bound = {**provenance, "circuit": hashlib.sha512(body).hexdigest(), **(self.advice or {}),
                  **({"registered_roots": roots} if roots else {})}
-        return CS.write(c, d, bound, self.labels(), kind=kind, registered=self._entries, registrar=registrar)
+        return CS.write(c, d, bound, self.labels(), kind=kind, registered=self._entries, registrar=registrar,
+                        index_salt=index_salt)
 
 
 class Integration(Protocol):
