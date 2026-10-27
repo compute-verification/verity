@@ -44,8 +44,8 @@ on it:
   both reps open, 448 openings each; one opening fewer, or one past the tops, is refused).
 * `TopsAt`: holds in the same check (the reps' tops differ at levels 1–3).
 * `HonestWitSatisfies`: passed in the same check (`test_the_deployed_runs_parts_satisfy`, `vstar-trace --sat
-  --session`): all 10 parts, each at the table `verify --zk` sets up at the draw its session records, under the zero mask and a random
-  one, 20 of 20 lines with no bad rows, pin or region bits.
+  --session`): all 10 parts, each at the table `verify --zk` sets up at the draw its session records, under the zero
+  mask and a random one, 20 of 20 lines with no bad rows, pin or region bits.
 * `NoCollAt`: passed (`test_the_deployed_runs_calls_have_no_collision`, `vstar-trace
   --nocoll`): per part and over all 10 together, no SHA-512 output has two inputs (`findColl = none` on full input
   bytes): 44,952 calls, 32,323 distinct outputs for 32,323 distinct inputs. A planted pair (a recorded output under an
