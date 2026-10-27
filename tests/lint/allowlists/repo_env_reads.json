@@ -206,7 +206,6 @@
     {"file": "benchmarks/resource_accounting/probe.py", "count": 1},
     {"file": "benchmarks/rho/run.py", "count": 1},
     {"file": "benchmarks/serve_bandwidth/mix.py", "count": 1},
-    {"file": "benchmarks/served_commit/d2h_bw.py", "count": 4},
     {"file": "benchmarks/served_commit/gather_bench.py", "count": 3},
     {"file": "benchmarks/served_commit/prof_arm.py", "count": 4},
     {"file": "benchmarks/served_commit/rows_floor.py", "count": 10},
