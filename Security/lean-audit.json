@@ -3788,40 +3788,98 @@
    "type_hash": "ce044d7f61c49917c656e0fef2aa65fc8cf9359727b975c2ee1adb3aec56f5e1"
   },
   "Accounting.SecurityProofs.Overhead.EndToEnd": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Accounting.SecurityProofs.Overhead.EndToEnd : Accounting.Guarantees.Overhead.EndToEnd"],
+   "assumptions": [],
+   "type_hash": "e494f7e9fdee0d1f69db2ecd858524c9fd4d38a1db47613646a0c7b2dbb84a67"
   },
   "Accounting.SecurityProofs.Overhead.EndToEnd_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Accounting.SecurityProofs.Overhead.EndToEnd_honest : Accounting.Guarantees.Overhead.EndToEnd_honest"],
+   "assumptions": [],
+   "type_hash": "35798db56a1ae4e40444a65c0384c14163ef3bbff357cdba8e2d714bfea1a08c"
   },
   "Accounting.SecurityProofs.Overhead.EndToEnd_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Overhead.EndToEnd_nontrivial : Accounting.Guarantees.Overhead.EndToEnd_nontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "15d0a69e3e89d58bf4c17b89413cb9903259810967eea2b7fab28b79321cdb83"
   },
   "Accounting.SecurityProofs.Overhead.OverheadOfReference": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference : Accounting.Guarantees.Overhead.OverheadOfReference"
+   ],
+   "assumptions": [],
+   "type_hash": "3301ea09066ec2ba00c276387f0af14789d91ea42ab58287344c8567987f426d"
   },
   "Accounting.SecurityProofs.Overhead.OverheadOfReference_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference_honest :",
+    "  Accounting.Guarantees.Overhead.OverheadOfReference_honest"
+   ],
+   "assumptions": [],
+   "type_hash": "80b367a343f546d52e255d62b5619baba9c97979ff052393537fa880d12c22db"
   },
   "Accounting.SecurityProofs.Overhead.OverheadOfReference_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference_nontrivial :",
+    "  Accounting.Guarantees.Overhead.OverheadOfReference_nontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "00521c36d8deccc1e03b279668fc2151ad3f11e57192f6e15ab59f5a4ebec77a"
   },
   "Accounting.SecurityProofs.Overhead.ReferenceBound": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": ["Accounting.SecurityProofs.Overhead.ReferenceBound : Accounting.Guarantees.Overhead.ReferenceBound"],
+   "assumptions": [],
+   "type_hash": "6699f2ff43f3bfe299e3477bf5eb4fdbc73e492dee30becfdb99129d2eac4a98"
   },
   "Accounting.SecurityProofs.Overhead.ReferenceBound_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Overhead.ReferenceBound_honest : Accounting.Guarantees.Overhead.ReferenceBound_honest"
+   ],
+   "assumptions": [],
+   "type_hash": "e4e69d2078606ba375d73e06585c47213a188a55910a66cdcf97c789fbcf2696"
   },
   "Accounting.SecurityProofs.Overhead.ReferenceBound_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Overhead.ReferenceBound_nontrivial : Accounting.Guarantees.Overhead.ReferenceBound_nontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "f5fee46f6c6c68ac3f439479b2bac9cf7570076f034633eab36980c8b28d8870"
   },
   "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise : Accounting.Guarantees.Overhead.ThresholdOfPointwise"
+   ],
+   "assumptions": [],
+   "type_hash": "9fc69eefc40894253aff3cf6b1a6823d1a664a0826c6ff6ea4d435c8e28dbcfd"
   },
   "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_honest": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_honest :",
+    "  Accounting.Guarantees.Overhead.ThresholdOfPointwise_honest"
+   ],
+   "assumptions": [],
+   "type_hash": "2dd2bca82c4494127f0735d2cbe7b37fc348403b0dd8aa0d07af931353966922"
   },
   "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_nontrivial": {
-   "owner": "@training"
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_nontrivial :",
+    "  Accounting.Guarantees.Overhead.ThresholdOfPointwise_nontrivial"
+   ],
+   "assumptions": [],
+   "type_hash": "c520fee443c14e03aac108231f673c2722fcf07997c7559c763556b7a49a4593"
   },
   "Accounting.SecurityProofs.PearlCEndToEndPerRun": {
    "owner": "@memory-accounting",
@@ -14595,6 +14653,37 @@
     "Accounting.SecurityProofs.Memory.CountingAdvice"
    ]
   },
+  "Definitions.Accounting.Guarantees.Overhead": {
+   "digest": "d8d764de1e1314d59faf174b2c28ed4db92a9235c351c9dd827cdfeffaf75e03",
+   "definitions": {
+    "Accounting.Guarantees.Overhead.EndToEnd": "18d21ccdce1eae00c9755d9078bec3d0046583c362f0b6ed81f3417c9de3a94a",
+    "Accounting.Guarantees.Overhead.EndToEnd_honest": "7c6bc7e34519a870ff2afca44d9083ba2580125b3c6c2c99f44ff58700e30a45",
+    "Accounting.Guarantees.Overhead.EndToEnd_nontrivial": "8582514910a7cd070f95d7bc33c0c6c30692bc6ee37ea614a9a663e6683f33af",
+    "Accounting.Guarantees.Overhead.OverheadOfReference": "02337e1e0fcf019ba4d02638f2a93d410852e603f4fca59fb45458e9cad1f908",
+    "Accounting.Guarantees.Overhead.OverheadOfReference_honest": "0eb764b38b67c78c77007d0f5da85da3da9633e1203bce6ab843885f83d9e7ef",
+    "Accounting.Guarantees.Overhead.OverheadOfReference_nontrivial": "e8d84dd85a4612eff767582ea472a6482538a591273df6074bd9dc5a7b4c9afa",
+    "Accounting.Guarantees.Overhead.ReferenceBound": "ec10b767fa09dbeb0b4bc686d110e6001615aff0500f9a8ff5530dcf232c0d7c",
+    "Accounting.Guarantees.Overhead.ReferenceBound_honest": "121a225b90b8e52141365d24d88d56708d5f9391a838a562e0bb22b03b00e7b9",
+    "Accounting.Guarantees.Overhead.ReferenceBound_nontrivial": "59a4d97d4391d3be93f9b05d166645f57520893570f5aae201550eb598568809",
+    "Accounting.Guarantees.Overhead.ThresholdOfPointwise": "abce0adcf3ecdf852ee4b68f4908c3c5b803916ac9a91038122554be8c0e9b33",
+    "Accounting.Guarantees.Overhead.ThresholdOfPointwise_honest": "ba26961849e3aa4d1cdc5227a93aa839f4a49ac7068e50713115551a0fa4fca5",
+    "Accounting.Guarantees.Overhead.ThresholdOfPointwise_nontrivial": "2cd37d15fc96b6d29b31d8d631ff9af0f0e54f5669dbdfe337161e9067b1a385"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Overhead.EndToEnd",
+    "Accounting.SecurityProofs.Overhead.EndToEnd_honest",
+    "Accounting.SecurityProofs.Overhead.EndToEnd_nontrivial",
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference",
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference_honest",
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference_nontrivial",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound_honest",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound_nontrivial",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_honest",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_nontrivial"
+   ]
+  },
   "Definitions.Accounting.Guarantees.PerRun": {
    "digest": "f9031d56e0bccf3376726e64c491827fa7eef030da6eb09a50e9829cefb2aff4",
    "definitions": {
@@ -15711,6 +15800,33 @@
     "Accounting.SecurityProofs.Memory.AddsP2RingIsolated",
     "Accounting.SecurityProofs.Memory.Counting",
     "Accounting.SecurityProofs.Memory.CountingAdvice"
+   ]
+  },
+  "Definitions.Accounting.Overhead": {
+   "digest": "13dff5097945c1a0e6e8253c89a7bc4134e4ab706959874fcd4af78d46014ab2",
+   "definitions": {
+    "Accounting.Overhead.Class": "55484740e2806d10245d2cbbdf066510e069f8febf451048edc3988b9a0b8cd5",
+    "Accounting.Overhead.Task": "ae9c966618fffb1c475c1f09a123e80058ce48b6b45dc05223b20536d0e1a720",
+    "Accounting.Overhead.Task.draw": "f92e7f4077218998f94161f9bff0366d333c2fb8a8cceb5356b9b227faf4af7a",
+    "Accounting.Overhead.Task.fintype": "a65ccd39e0ba1e01cbf17c53166a12726e2e009b24de866123933c003335cb2a",
+    "Accounting.Overhead.Task.game": "a9e8db6f1bb249aac1cf833175b98ff0382b6cb5ad3ec1dcb01817f2732f8f7f",
+    "Accounting.Overhead.Task.play": "6c0b9a655e5342879cdff39e574ec4cfde831e33e71b61c92464c5c4424ad267",
+    "Accounting.Overhead.Task.prob": "82ebfe2f9de15aa49f6f8f26953381442205e22254c42bc7781d22923f59ccda",
+    "Accounting.Overhead.Task.Ω": "5d29d0793b3e25a64b500585f254375ba12971e4910a4832417e235079c8283a",
+    "Accounting.Overhead.overhead": "2a37acf2bc38be64c038c978524fb581e1bfb23a785cd62daf802eacf5e1a199",
+    "Accounting.Overhead.success": "6a6a8245a5ab05c0702dc6a8a04647f15c332779270788ce98bde6c107f13a7c",
+    "Accounting.Overhead.threshold": "40c98e1e90dc0482dae4c6e3fd92220bdec23b5a413fa1b263666b264ef65757"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference",
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference_honest",
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference_nontrivial",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound_honest",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound_nontrivial",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_honest",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_nontrivial"
    ]
   },
   "Definitions.Accounting.PerRun": {
@@ -19053,6 +19169,15 @@
     "Accounting.SecurityProofs.JointPeriod",
     "Accounting.SecurityProofs.JointPeriodLive",
     "Accounting.SecurityProofs.Localization",
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference",
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference_honest",
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference_nontrivial",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound_honest",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound_nontrivial",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_honest",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_nontrivial",
     "Accounting.SecurityProofs.PouwLocalOff",
     "Accounting.SecurityProofs.Recall",
     "Accounting.SecurityProofs.RequirementCredits",
@@ -19300,6 +19425,18 @@
     "Accounting.SecurityProofs.JointHorizonBlocksLive",
     "Accounting.SecurityProofs.JointHorizonLive",
     "Accounting.SecurityProofs.JointPeriodLive",
+    "Accounting.SecurityProofs.Overhead.EndToEnd",
+    "Accounting.SecurityProofs.Overhead.EndToEnd_honest",
+    "Accounting.SecurityProofs.Overhead.EndToEnd_nontrivial",
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference",
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference_honest",
+    "Accounting.SecurityProofs.Overhead.OverheadOfReference_nontrivial",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound_honest",
+    "Accounting.SecurityProofs.Overhead.ReferenceBound_nontrivial",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_honest",
+    "Accounting.SecurityProofs.Overhead.ThresholdOfPointwise_nontrivial",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
