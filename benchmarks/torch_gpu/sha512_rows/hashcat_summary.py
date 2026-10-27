@@ -1,4 +1,4 @@
-"""hashcat.sh's summary (HASH-24): hashcat's SHA-512 rates as compressions a second against sha512x.cuh's default
+"""hashcat.sh's summary: hashcat's SHA-512 rates as compressions a second against sha512x.cuh's default
 compression at the one locked SM clock, the SASS a compression of each, and VERDICT lines.
 
     python3 hashcat_summary.py OUT      (writes OUT/summary.json, prints the VERDICT lines)
@@ -22,7 +22,7 @@ import statistics
 import sys
 import time
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "hash", "intpipe"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import sass_count
 
 CFGS = ("1700-O", "1700-pure", "1710-O", "1710-pure", "1700-O-w4")
@@ -275,15 +275,15 @@ def main(out: str) -> None:
              f"{fmt(ratio(honest['gcomp_per_s'], base['gcomp_per_s']))}x ours {base_name} and "
              f"{fmt(ratio(honest['gcomp_per_s'], opt))}x hashcat's best -O") if honest["gcomp_per_s"] else ""
     if pure is None or opt_shape is None or not forms_ok or not base["timed"]:
-        print("VERDICT HASH-24: incomplete (a rate, a check or hashcat_forms is missing; summary.json)")
+        print("VERDICT overall: incomplete (a rate, a check or hashcat_forms is missing; summary.json)")
     elif pure <= SAME and opt_shape <= SAME:
-        print(f"VERDICT HASH-24: no faster public SHA-512 compression on this GPU: hashcat's full-digest kernels (pure) "
+        print(f"VERDICT overall: no faster public SHA-512 compression on this GPU: hashcat's full-digest kernels (pure) "
               f"run {fmt(pure)}x ours {base_name} per SM-clock, and its best -O rate ({opt_name}, {fmt(opt)} Gcomp/s, "
               f"{fmt(hc[opt_cfg]['over_ours'])}x ours) is our compression in -O's shape within 3% (-O / hashcat_forms "
               f"{skip['name']} = {fmt(opt_shape)}){whole}: -O's lead is OPTI_TYPE_EARLY_SKIP, ZERO_BYTE, "
               f"PRECOMPUTE_INIT and no feed-forward, which a commitment of variable blocks can't take")
     else:
-        print(f"VERDICT HASH-24: hashcat is faster per compression: pure / ours {base_name} = {fmt(pure)} per SM-clock, "
+        print(f"VERDICT overall: hashcat is faster per compression: pure / ours {base_name} = {fmt(pure)} per SM-clock, "
               f"its best -O ({opt_name}) / our compression in its shape ({skip['name']}) = {fmt(opt_shape)}{whole}: "
               f"a port candidate")
 
