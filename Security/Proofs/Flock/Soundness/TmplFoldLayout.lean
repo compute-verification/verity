@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.TmplLayOk
 import Proofs.Flock.Soundness.TmplWf
 
 /-!
-# The template fold is its reference on `layoutM`'s layouts (PRF-133, part 3, stage 2)
+# The template fold is its reference on `layoutM`'s layouts
 
 `fold_eq_foldRef` with its layout hypotheses discharged by `layoutM` (`layouts_defPos`, `layouts_lanes`), and then
 (`fold_eq_foldRef_wf`) with the template's discharged by `Tmpl.wellFormed`, which `parse` checks: each call's binding of
