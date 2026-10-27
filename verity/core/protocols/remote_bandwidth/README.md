@@ -27,7 +27,7 @@ seed, codec, plans, receipts, openings, draws). Where they differ, the Python is
 | `RemoteAudit.Registry` | one live registration a node, `registry/v0` | `audit.Registry` |
 | `RemoteAudit.Receipts`, `Plan`, `Codec`, `Wire` | seeds, the chain over appends, plans, receipts, trees, decoding and the openings frame | `receipts.py`, `codec.py`, `wire.py` |
 | `RemoteAudit.Shared`, `Flight` | one openings coin over several windows; a paced session at two windows in flight | `audit.Params.groups_per_coin`, `audit.Pace` |
-| `RemoteAudit.Pooled`, `Line` | the openings' pooled bound in exact rationals; the memory line of record | `pooled.py`, `line.py` |
+| `RemoteAudit.Pooled`, `Line` | the openings' pooled bound in exact rationals; the memory line of record, refused unless the record is of the registration given with it (`lineOfRegistered`) | `pooled.py`, `line.py` |
 | `RemoteAudit.Schedule` | the schedule check: each pass's plan is a function of the published schedule | `schedule.py` |
 | `RemoteAudit.Store`, `Unboxed` | whether a registered store is the one a pinned model fixes | `store.py` |
 | `RemoteAudit.P2`, `P2Session` | a P2 store's registration, receipts and openings, and its session | `p2.py`, `p2_party.py` |
@@ -81,7 +81,8 @@ Their named assumptions are `Accounting.Remote.Held.Assumptions` (`NoOutsideComp
   `decode`, and `P2Codec`.
 - `coins.py`: a session's live coins, one epoch of `sampled_proofs.challenger` (`Coins`, `Released`), released after
   the root each follows, with the commitment and every opening disclosed only at the session's end
-  (`audit.Session.disclose`); `released_reason` holds the challenger's signed log to the session's record, and
+  (`audit.Session.disclose`), so the prover holds none of it while the session runs, and no guarantee takes a hiding
+  premise on it; `released_reason` holds the challenger's signed log to the session's record, and
   `trusted` reads the auditor's session through `challenger.pinned_session`.
 - `ledger.py`: the declared outputs of an accepted session (`declared`): γ at the specified and measured R, per window
   and over the session (`gamma`), and the memory line's snapshot, time-held and link-charged forms (`memory`) on the

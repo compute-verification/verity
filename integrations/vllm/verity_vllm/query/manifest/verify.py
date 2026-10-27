@@ -3,9 +3,9 @@ integration's query path rebuilds and returns the `verity-sweep/manifest-verify/
 (`verity_vllm.pipeline.manifest_verify`) rebuilds it and writes the record beside the Commit (`commit/manifest_verify.json`).
 
 `ok` iff the used manifest's `manifest_digest` == the digest of its own rows == the rebuilt digest, the program digests agree and
-the rebuilt manifest is complete.  [rev-cb F-cb-11] the manifest of record is a FUNCTION of the Program x declared workload: a weakened
+the rebuilt manifest is complete.  The manifest of record is a FUNCTION of the Program x declared workload: a weakened
 manifest in the evidence dir has the wrong digest here even when its own `manifest_digest` is honest.  A verify FAIL is a Commit FAIL
-(EXEC-05: `required_value_coverage/manifest_of_record_verified` in verdict.json), never a footnote.  Replaces `required_manifest verify`
+(`required_value_coverage/manifest_of_record_verified` in verdict.json), never a footnote.  Replaces `required_manifest verify`
 (the v1 builders' rebuild) on the row path since the v2 flip; the record's fields are unchanged so the regression harness lifts
 `used_digest` / `used_program_digest` / `used_identities` as before.
 """
@@ -44,7 +44,7 @@ def verify(used: dict[str, Any], rebuilt: dict[str, Any], *, manifest_path: str 
             why.append(f"rows digest {rows_digest[:16]} != the Program x workload's manifest {rec['rebuilt_digest'][:16]} ({rec['used_identities']} vs {rec['rebuilt_identities']} identities): not the manifest of record")
         if rec["used_program_digest"] != rec["rebuilt_program_digest"]:
             u, b = str(rec["used_program_digest"]), str(rec["rebuilt_program_digest"])
-            if u[:16] == b[:16] or len(u) != len(b):                          # [exec M-0545] a prefix passed as --workload-digest: say so, full width
+            if u[:16] == b[:16] or len(u) != len(b):                          # a prefix passed as --workload-digest: say so, full width
                 why.append(f"program_digest {u} ({len(u)} hex) != the rebuilt {b} ({len(b)} hex): pass the FULL digest (workload_program.json), not a prefix")
             else:
                 why.append(f"program_digest {u[:16]} != the Build's {b[:16]}")

@@ -2531,7 +2531,8 @@ def test_a_reply_rings_the_root_poster_and_a_quiet_one_rings_no_one(fake, regist
 
 def test_a_long_post_goes_out_whole_with_its_rest_as_quiet_replies(fake, registry, routes_dirs, capsys):
     box = inbox(fake, routes_dirs, "infra")
-    lines = [f"*@infra:* row {i} " + "x" * 90 for i in range(80)] + ["see <!date^1791361800^{time}|1:30 AM PDT (08:30Z)> -> " + "y " * 900]
+    lines = [f"*@infra:* row {i} " + "x" * 370 for i in range(8)] + ["see <!date^1791361800^{time}|1:30 AM PDT (08:30Z)> -> "
+                                                                     + ("y" * 150 + " ") * 20]
     assert run(capsys, "send", "--as", "circuits", "--to", "@infra", "--text", "\n".join(lines))[0] == 0
     root = fake.messages[COORD][1]
     rest = [m for m in fake.messages[COORD] if m.get("thread_ts") == root["ts"]]
@@ -2543,6 +2544,81 @@ def test_a_long_post_goes_out_whole_with_its_rest_as_quiet_replies(fake, registr
     assert body.split() == f"<!subteam^SINFRA|@infra> {chr(10).join(lines)}".split()
     assert "<!date^1791361800^{time}|1:30 AM PDT (08:30Z)>" in body
     assert len(bells(fake, box)) == 1
+
+
+def words(n: int) -> str:
+    return " ".join(f"w{i}" for i in range(n))
+
+
+def posts(fake) -> list[dict]:
+    return [p for m, p in fake.calls if m == "chat.postMessage"]
+
+
+def test_a_61_word_reply_posts_with_a_note_naming_the_count_the_limit_and_the_fix(fake, registry, capsys):
+    root = fake.add(COORD, text="@infra is node 2 free?", username="circuits", bot_id=BOT)
+    rc, _, err = run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--text", words(60))
+    assert rc == 0 and "words" not in err
+    rc, _, err = run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--text", words(61))
+    assert rc == 0 and "61 words, past the 60" in err and "research msg linear comment ISSUE --file BODY.md --as ME" in err
+    assert len(posts(fake)) == 2 and slack.plain(posts(fake)[-1]["text"]) == words(61)
+
+
+def test_a_121_word_reply_is_refused_with_the_fix_and_nothing_is_posted(fake, registry, capsys):
+    root = fake.add(COORD, text="@infra is node 2 free?", username="circuits", bot_id=BOT)
+    for dry in ((), ("--dry-run",)):
+        rc, _, err = run(capsys, "reply", "--as", "infra", "--thread", root["ts"], *dry, "--text", words(121))
+        assert rc == 2 and "121 words, past twice the 60" in err and "nothing was posted" in err
+        assert "research msg linear comment ISSUE --file BODY.md --as ME" in err and "dry-run: chat.postMessage" not in err
+    assert posts(fake) == []
+
+
+def test_a_machine_report_is_held_to_no_length(fake, registry, capsys):
+    """Drive and the merge train post their reports (a red suite's failing lines, a revert) through `send` and `reply`."""
+    root = fake.add(COORD, text="@infra is node 2 free?", username="circuits", bot_id=BOT)
+    for verb in ("send", "reply"):
+        rc, _, err = run(capsys, verb, "--as", "infra", "--thread", root["ts"], "--quiet", "--machine", "--text", words(400))
+        assert rc == 0 and "words" not in err
+    assert len(posts(fake)) == 2
+
+
+def test_an_announcement_of_200_words_posts_with_a_note_and_one_of_301_is_refused(fake, registry, capsys):
+    head = len(slack.plain(slack.announcement({"handle": "infra"}, [], "", None, [])).split())   # its header's words count too
+    rc, _, err = run(capsys, "announce", "--as", "infra", "--text", words(200 - head))
+    assert rc == 0 and "200 words, past the 150" in err and len(posts(fake)) == 1
+    for argv in (["announce"], ["send", "--kind", "announce"]):
+        rc, _, err = run(capsys, *argv, "--as", "infra", "--text", words(301 - head))
+        assert rc == 2 and "301 words, past twice the 150" in err and "nothing was posted" in err
+    assert len(posts(fake)) == 1
+    rc, _, err = run(capsys, "send", "--as", "infra", "--to", "@ci", "--kind", "fyi", "--text", words(150))
+    assert rc == 2 and "past twice the 60" in err                                        # 150 is an announcement's alone
+
+
+def test_a_long_post_outside_the_front_door_and_a_status_line_are_untouched(fake, registry, capsys):
+    rc, _, err = run(capsys, "reply", "--as", "top", "--channel", "ask-the-team", "--thread", "1700000050.000001",
+                     "--text", words(400))
+    assert rc == 0 and "words" not in err
+    rc, _, err = run(capsys, "send", "--as", "infra", "--channel", "agent-alerts", "--text", words(400))
+    assert rc == 0 and "words" not in err
+    root = fake.add(COORD, text="@infra is node 2 free?", username="circuits", bot_id=BOT)
+    rc, _, err = run(capsys, "close", "--as", "infra", "--thread", root["ts"], "--note", words(400))
+    assert rc == 0 and "words" not in err
+    assert [p["channel"] for p in posts(fake)] == ["C0CA1JZSYNR", ALERTS, COORD]
+
+
+def test_a_filed_ask_whose_root_is_its_first_line_and_link_passes_however_long_its_brief(fake, registry, capsys, monkeypatch):
+    from research import linear
+
+    filed = []
+    monkeypatch.setattr(linear, "ask_issue", lambda team, sender, body, **kw: filed.append(body) or (
+        {"identifier": "INF-9", "url": "https://linear.app/x/issue/INF-9", "project": None, "projectMilestone": None}, None))
+    brief = "4 GPUs on node 2 for 6 h\n" + words(400)
+    rc, _, err = run(capsys, "ask", "--as", "compute-accounting", "--to", "@infra", "--dry-run", "--text", brief)
+    assert rc == 0 and "would file the ask in Linear team INF" in err and "words" not in err and filed == []
+    rc, _, err = run(capsys, "ask", "--as", "compute-accounting", "--to", "@infra", "--text", brief)
+    assert rc == 0 and "words" not in err and filed == [brief]
+    assert slack.plain(posts(fake)[-1]["text"]) == "@infra 4 GPUs on node 2 for 6 h\nLinear: INF-9 (https://linear.app/x/issue/INF-9)"
+    rc, _, err = run(capsys, "ask", "--as", "infra", "--to", "@console", "--text", brief)   # no team: it would go out whole
+    assert rc == 2 and "past twice the 60" in err and filed == [brief] and len(posts(fake)) == 1
 
 
 def test_send_refuses_a_post_that_names_only_its_author(registry, capsys):
@@ -3467,7 +3543,7 @@ def test_a_long_quiet_reply_is_quiet_from_its_first_piece(fake, registry, routes
     the one delivered, then rang the root's poster."""
     circuits = inbox(fake, routes_dirs, "circuits")
     root = fake.add(COORD, text="@infra a long one", username="circuits", bot_id=BOT)
-    body = "\n".join(f"row {i} " + "x" * 90 for i in range(60))
+    body = "\n".join(f"row {i} " + "x" * 400 for i in range(15))
     assert run(capsys, "reply", "--as", "infra", "--thread", root["ts"], "--quiet", "--text", body)[0] == 0
     assert len([m for m in fake.messages[COORD] if m.get("thread_ts") == root["ts"]]) >= 2 and bells(fake, circuits) == []
 
