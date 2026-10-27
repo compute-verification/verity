@@ -498,8 +498,8 @@ def test_the_audit_names_the_teams_it_cant_read_skips_them_and_never_fails_on_th
     would read its unread team as clean."""
     reg = json.loads(registry.read_text())
     for h in reg["handles"]:
-        if h["handle"] in ("soundness", "training"):
-            h["linear"] = {"soundness": "HASH", "training": "TRN"}[h["handle"]]
+        if h["handle"] in ("kernels", "training"):
+            h["linear"] = {"kernels": "HASH", "training": "TRN"}[h["handle"]]
     registry.write_text(json.dumps(reg))
     lin.visible = [k for k in linear.owners(reg) if k not in ("HASH", "TRN")]
     lin.open = [issue("INF-2", "Todo", project=None, projectMilestone=None)]
@@ -509,9 +509,9 @@ def test_the_audit_names_the_teams_it_cant_read_skips_them_and_never_fails_on_th
     assert rc == 1 and rep["unread"] == ["HASH", "TRN"] and [f["issue"] for f in rep["findings"]] == ["INF-2"]
     assert err.strip() == "linear audit: the app can't read team(s) HASH, TRN, so their issues aren't audited"
     n = len(lin.sent("pageInfo"))
-    rc, out, err = run(capsys, "linear", "audit", "soundness", "TRN", *now)
+    rc, out, err = run(capsys, "linear", "audit", "kernels", "TRN", *now)
     assert rc == 0 and out.strip() == "0 finding(s)" and "HASH, TRN" in err and len(lin.sent("pageInfo")) == n   # no audit of every team
-    rc, out, err = run(capsys, "linear", "audit", "soundness", "infra", *now)
+    rc, out, err = run(capsys, "linear", "audit", "kernels", "infra", *now)
     assert rc == 1 and "INF-2 orphan" in out and "team(s) HASH," in err and lin.audited["team"]["or"][0] == {"key": {"in": ["INF"]}}
     assert linear.Linear(KEY, FakeLinear()).unread(["inf", "Infra", "COMMS", "HASH"]) == ["HASH"]   # a key or a name, any case
 
