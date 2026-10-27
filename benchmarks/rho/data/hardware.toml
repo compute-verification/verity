@@ -1,9 +1,12 @@
-# Layer 1, the prior: the conversion to gates, locations, fleets (the inventory), horizons (rho/hardware.py).
+# The physical model: the conversion to gates, locations, fleets (the inventory), horizons (rho/hardware.py).
 
-# The one conversion from the FLOP model's inputs to Boolean gates (hardware.Units). rho and the time to the target
-# don't depend on it (tests/test_hardware.py); what it sets is the gate counts printed beside them.
+# The one conversion from the FLOP model's inputs to Boolean gates (hardware.Units). The overhead and the time to the
+# target don't depend on it (tests/test_hardware.py); what it sets is the gate counts printed beside them. basis says where it
+# comes from: "flop-model" (an assumed conversion) or "boolean:<design>" (counted on one Boolean design); a structure's
+# s_times must come from the same one (data/exclusion.toml, classes.Structure.check).
 [units]
 gates_per_flop = { value = 250, unit = "gate/FLOP", low = 50, high = 1000, source = "an FP8 E4M3 multiply-add (2 FLOPs) as two-input Boolean gates: a 4 x 4 mantissa product, a 5-bit exponent sum and an FP32 accumulate's align, add and normalize, about 500 gates; low: the mantissa product alone; high: a BF16 product into an FP32 accumulator", status = "assumed" }
+basis = "flop-model"
 
 # A location is the largest set of devices joined by links no certifier sees. flops is the datasheet's dense FLOP/s at
 # the training precision (FP8), which Units turns into Φ in gates per second; hosts are servers or compute trays, each
@@ -37,7 +40,7 @@ host_memory = { value = 1.6e13, unit = "bit", source = "NVIDIA DGX B200 datashee
 host_ops = { value = 4.817e14, unit = "op/s", source = "2 x Xeon Platinum 8570 (DGX B200 datasheet): 112 cores x 2,048 INT8 AMX ops per cycle x 2.1 GHz base", status = "derived" }
 links = { value = 4.8e12, unit = "bit/s", low = 3.2e12, high = 4.8e12, source = "NVIDIA DGX B200 datasheet: 8 x ConnectX-7 at 400 Gb/s and 2 dual-port BlueField-3; low: the compute fabric alone", status = "datasheet" }
 
-# A rack is one location (Daniel, 25 Oct): its 18 compute trays share one NVLink domain no certifier sees.
+# A rack is one location (ruled): its 18 compute trays share one NVLink domain no certifier sees.
 [location.gb200-nvl72]
 devices = { value = 72, unit = "GPU", source = "NVIDIA GB200 NVL72 spec: 72 Blackwell GPUs, 36 Grace CPUs, one NVLink domain", status = "datasheet" }
 flops = { value = 3.6e17, unit = "FLOP/s", low = 1.8e17, high = 3.6e17, source = "NVIDIA GB200 NVL72 spec: FP8/FP6 720 PFLOPS with sparsity, 360 dense; low: FP16/BF16 360 sparse, 180 dense", status = "datasheet" }
@@ -50,11 +53,11 @@ links = { value = 4.32e13, unit = "bit/s", low = 2.88e13, high = 7.2e13, source 
 # benchmarks/nci/tiers.py's server, which its DEFAULTS describe (100,000 of them for a year).
 [location.rtx-pro-6000-server]
 devices = { value = 8, unit = "GPU", source = "benchmarks/nci/tiers.py DEFAULTS: 8 RTX PRO 6000s a server (hbm_gb 768)", status = "declared" }
-flops = { value = 8e15, unit = "FLOP/s", low = 4e15, high = 8e15, source = "benchmarks/census/hardware.json rtx-pro-6000-server/e4m3 x 8 (tiers node_flops); low: rtx-pro-6000-server/bf16 x 8", status = "datasheet" }
+flops = { value = 7.48486656e15, unit = "FLOP/s", low = 3.74243328e15, high = 8e15, source = "benchmarks/nci/tiers.py node_flops: 8 cards at the ACCEL model's card table (Verity.Accel.Sm120), 188 SMs x 1024 FP8 E4M3 MACs a SM-clock x 2 FLOP at the clock's ceiling, 2,430 MHz (every card of a measured node reports it as its max, application, default and boost SM clock); low: BF16, 2 tensor units a MAC; high: benchmarks/census/hardware.json rtx-pro-6000-server/e4m3 x 8, NVIDIA's family headline at about 2,597 MHz", status = "datasheet" }
 memory = { value = 6.597069766656e12, unit = "bit", source = "benchmarks/census/hardware.json rtx-pro-6000-server memory_bytes x 8 GPUs", status = "datasheet" }
 hosts = { value = 1, unit = "server", source = "one server", status = "declared" }
 host_memory = { value = 1.52e13, unit = "bit", source = "benchmarks/nci/tiers.py DEFAULTS host_gb 1900", status = "declared" }
-host_ops = { value = 9.437184e14, unit = "op/s", source = "benchmarks/nci/tiers.py host_share: two Xeon 6776Ps, 128 cores x 2,048 INT8 AMX ops per cycle x 3.6 GHz (11.8% of the GPUs' FP8 rate)", status = "derived" }
+host_ops = { value = 9.437184e14, unit = "op/s", source = "benchmarks/nci/tiers.py host_share: two Xeon 6776Ps, 128 cores x 2,048 INT8 AMX ops per cycle x 3.6 GHz (12.6% of the GPUs' FP8 rate at the card table's peak)", status = "derived" }
 links = { value = 3.2e12, unit = "bit/s", source = "benchmarks/nci/tiers.py DEFAULTS nic", status = "declared" }
 
 # Four DGX H200s whose certifiers sit on the rack's uplinks only: the servers' links to each other are seen by none.
@@ -71,7 +74,7 @@ links = { value = 1.92e13, unit = "bit/s", low = 3.2e12, high = 1.92e13, source 
 [fleet.reference-h200]
 location = "h200-hgx"
 count = { value = 12500, unit = "location", source = "a 100k-GPU frontier cluster", status = "assumed" }
-eps_dark = { value = 0.01, low = 0.001, high = 0.05, source = "ruling: Daniel 25 Oct, one connected unencumbered pool, d in {0.001, 0.01}", status = "ruled" }
+eps_dark = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool; high: the earlier 1% point", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.166, high = 0.55, source = "benchmarks/nci/tiers.py DEFAULTS mfu (Llama 3 405B: 38-43% of BF16 peak; PaLM 540B 46.2%); low: DeepSeek-V3 in FP8, 6 x 37e9 x 14.8e12 FLOP over 2.788M H800-hours at 1,979 TFLOP/s; high: PaLM-class", status = "assumed" }
 mfu_serve = { value = 0.4, source = "the served work's MFU, prefill-heavy (sizes a fleet to its committed work; no regime reads it)", status = "assumed" }
 mfu_dark = { value = 0.4, low = 0.166, high = 0.55, source = "as mfu_train: one connected pool trains like the monitored fleet; the range lets its interconnect help or hurt", status = "assumed" }
@@ -79,7 +82,7 @@ mfu_dark = { value = 0.4, low = 0.166, high = 0.55, source = "as mfu_train: one 
 [fleet.reference-h100]
 location = "h100-hgx"
 count = { value = 12500, unit = "location", source = "a 100k-GPU frontier cluster (xAI Colossus phase 1: 100k H100s)", status = "assumed" }
-eps_dark = { value = 0.01, low = 0.001, high = 0.05, source = "ruling: Daniel 25 Oct, one connected unencumbered pool, d in {0.001, 0.01}", status = "ruled" }
+eps_dark = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool; high: the earlier 1% point", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_train", status = "assumed" }
 mfu_serve = { value = 0.4, source = "as fleet.reference-h200 mfu_serve", status = "assumed" }
 mfu_dark = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_dark", status = "assumed" }
@@ -87,7 +90,7 @@ mfu_dark = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference
 [fleet.reference-b200]
 location = "b200-hgx"
 count = { value = 12500, unit = "location", source = "a 100k-GPU frontier cluster", status = "assumed" }
-eps_dark = { value = 0.01, low = 0.001, high = 0.05, source = "ruling: Daniel 25 Oct, one connected unencumbered pool, d in {0.001, 0.01}", status = "ruled" }
+eps_dark = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool; high: the earlier 1% point", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_train", status = "assumed" }
 mfu_serve = { value = 0.4, source = "as fleet.reference-h200 mfu_serve", status = "assumed" }
 mfu_dark = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_dark", status = "assumed" }
@@ -95,7 +98,7 @@ mfu_dark = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference
 [fleet.reference-gb200]
 location = "gb200-nvl72"
 count = { value = 1389, unit = "location", source = "about 100k GPUs as NVL72 racks (100,008)", status = "assumed" }
-eps_dark = { value = 0.01, low = 0.001, high = 0.05, source = "ruling: Daniel 25 Oct, one connected unencumbered pool, d in {0.001, 0.01}", status = "ruled" }
+eps_dark = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool; high: the earlier 1% point", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_train", status = "assumed" }
 mfu_serve = { value = 0.4, source = "as fleet.reference-h200 mfu_serve", status = "assumed" }
 mfu_dark = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_dark", status = "assumed" }
@@ -103,7 +106,7 @@ mfu_dark = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference
 [fleet.reference-gb200-400k]
 location = "gb200-nvl72"
 count = { value = 5556, unit = "location", source = "about 400k GPUs as NVL72 racks (400,032), a 2027-scale campus", status = "assumed" }
-eps_dark = { value = 0.01, low = 0.001, high = 0.05, source = "ruling: Daniel 25 Oct, one connected unencumbered pool, d in {0.001, 0.01}", status = "ruled" }
+eps_dark = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool; high: the earlier 1% point", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_train", status = "assumed" }
 mfu_serve = { value = 0.4, source = "as fleet.reference-h200 mfu_serve", status = "assumed" }
 mfu_dark = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_dark", status = "assumed" }
@@ -111,7 +114,7 @@ mfu_dark = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference
 [fleet.reference-h200-rack4]
 location = "h200-hgx-rack4"
 count = { value = 3125, unit = "location", source = "fleet.reference-h200's 100k GPUs, four servers a location", status = "derived" }
-eps_dark = { value = 0.01, low = 0.001, high = 0.05, source = "ruling: Daniel 25 Oct, one connected unencumbered pool, d in {0.001, 0.01}", status = "ruled" }
+eps_dark = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool; high: the earlier 1% point", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_train", status = "assumed" }
 mfu_serve = { value = 0.4, source = "as fleet.reference-h200 mfu_serve", status = "assumed" }
 mfu_dark = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference-h200 mfu_dark", status = "assumed" }
@@ -119,7 +122,7 @@ mfu_dark = { value = 0.4, low = 0.166, high = 0.55, source = "as fleet.reference
 [fleet.tiers-reference]
 location = "rtx-pro-6000-server"
 count = { value = 1e5, unit = "location", source = "benchmarks/nci/tiers.py DEFAULTS nodes", status = "declared" }
-eps_dark = { value = 0.01, low = 0.001, high = 0.05, source = "ruling: Daniel 25 Oct, one connected unencumbered pool, d in {0.001, 0.01} (tiers' unmonitored is 0)", status = "ruled" }
+eps_dark = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool (tiers' unmonitored is 0); high: the earlier 1% point", status = "ruled" }
 mfu_train = { value = 0.4, source = "benchmarks/nci/tiers.py DEFAULTS mfu", status = "declared" }
 mfu_serve = { value = 0.4, source = "as fleet.reference-h200 mfu_serve", status = "assumed" }
 mfu_dark = { value = 0.4, source = "as mfu_train", status = "assumed" }
