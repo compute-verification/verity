@@ -19,6 +19,11 @@ serial call's parts with those seeds: tensor `gemm` (served: cuBLASLt's O, then 
 hashing `coins`, `coins_w`, `pad` and `commit`, other `form_a` and `form_b`. Where the lines time wgmma.linear (`wgl`, a
 -DV31_WG build's served bench), gamma_u is against its step from the same lines.
 
+Lines with split arms (fill-bench's V31_GSMS: the compute on N of the H200's SMs, the commit on the rest) give each N's
+step from its arm of record (`ovl_w_gN`, a filler's `ovl_pad_gN`; N 0 the same calls on every SM), the GEMM alone on N SMs
+against the whole GPU's (`gemm_gN` over `gemm`), the commit alone on the rest (`commit_gN`), the hashing hidden (the serial
+split's sum less the step, over its hashing), and the step with each call's best N (that call's shape on its own split).
+
     python3 h200_step.py BENCH.jsonl ... [--wgmma 3.06]
 """
 from __future__ import annotations
@@ -69,7 +74,38 @@ def fill_steps(lines: list[dict], m: int = 16384, calls: dict[tuple[int, int], i
         out[key] = {"s": sec, "record": rec, "step": sec[rec], "tensor": part("gemm"),
                     "hashing": part("coins", "coins_w", "pad", "commit"), "other": part("form_a", "form_b"),
                     "macs": sum(calls[nk] * m * nk[0] * nk[1] for nk in calls),
-                    "mhz": (min(mhz), max(mhz)) if mhz else None}
+                    "mhz": (min(mhz), max(mhz)) if mhz else None, "by": by}
+    return out
+
+
+def split_steps(lines: list[dict], m: int = 16384, calls: dict[tuple[int, int], int] = CALLS
+                ) -> dict[tuple[int, int, int, bool, str], dict]:
+    """Per (L', L, ROW, served, variant) of fill-bench's lines with split arms: for each N every call timed, its step and
+    hidden hashing, its GEMM and commit seconds a step on the split's sides and their SM counts; and the step with each
+    call on its fastest N (`best`: N by call, and its step)."""
+    out = {}
+    for key, v in fill_steps(lines, m, calls).items():
+        by = v["by"]
+        ns = sorted({g["n"] for r in by.values() for g in r.get("gsms", [])})
+        rec = v["record"]
+        serial = v["tensor"] + v["hashing"] + v["other"]
+        per: dict[int, dict] = {}
+        for n in ns:
+            ms = {a: [by[nk]["arms"].get(f"{a}_g{n}", {}).get("ms") for nk in calls] for a in (rec, "gemm", "commit")}
+            if None in ms[rec]:
+                continue
+            sec = {a: None if None in x else sum(calls[nk] * y for nk, y in zip(calls, x)) / 1e3 for a, x in ms.items()}
+            sms = next((tuple(g["sms"]) for r in by.values() for g in r.get("gsms", []) if g["n"] == n), None)
+            per[n] = {"step": sec[rec], "gemm": sec["gemm"], "commit": sec["commit"], "sms": sms,
+                      "hidden": (serial - sec[rec]) / v["hashing"] if v["hashing"] else None,
+                      "slowdown": sec["gemm"] / v["tensor"] if sec["gemm"] and v["tensor"] else None}
+        if not per:
+            continue
+        pick = {nk: min(per, key=lambda n: by[nk]["arms"][f"{rec}_g{n}"]["ms"]) for nk in calls}
+        best = sum(calls[nk] * by[nk]["arms"][f"{rec}_g{pick[nk]}"]["ms"] for nk in calls) / 1e3
+        out[key] = {"record": rec, "serial": serial, "hashing": v["hashing"], "tensor": v["tensor"], "wgl": v["s"]["wgl"],
+                    "lt": v["s"]["lt"], "n": per, "pick": {by[nk]["shape"]: pick[nk] for nk in calls}, "best": best,
+                    "best_hidden": (serial - best) / v["hashing"] if v["hashing"] else None}
     return out
 
 
@@ -146,6 +182,33 @@ def main() -> int:
             print(f"summary: {model} no-fold {'served' if o else 'filler'} L {L} L' {lp} row {row} {var}: step "
                   f"{f(step)} s ({v['record']}), {vs}gamma_lt {f(step / lt if step else None)} against cuBLASLt's "
                   f"{lt:.3f} s; tensor {v['tensor']:.3f}, hashing {v['hashing']:.3f}, other {v['other']:.3f} s serial")
+    for model, calls in MODELS.items():
+        sp = split_steps(lines, calls=calls)
+        if not sp:
+            continue
+        ref = wg.get(model)
+        print(f"\n{model}, Dither's no-fold call on a split (the compute on N SMs, the commit on the rest)\n\n"
+              "| L' | L | ROW | kind | variant | N | SMs | step s | gamma_u | gemm on N s | GEMM slowdown | commit on the rest s "
+              "| hashing hidden |")
+        print("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+        f = lambda x, p=".3f": "-" if x is None else format(x, p)  # noqa: E731
+        for (lp, L, row, o, var), v in sp.items():
+            r = v["wgl"] or ref
+            for n, x in v["n"].items():
+                sms = f"{x['sms'][0]} + {x['sms'][1]}" if x["sms"] and n else "every SM"
+                print(f"| {lp} | {L} | {row} | {'served' if o else 'filler'} | {var} | {n} | {sms} | {x['step']:.3f} | "
+                      f"{f(x['step'] / r if r else None)} | {f(x['gemm'])} | {f(x['slowdown'])} | {f(x['commit'])} | "
+                      f"{f(x['hidden'], '.1%')} |")
+        for (lp, L, row, o, var), v in sp.items():
+            r, rn = v["wgl"] or ref, "these lines' wgl" if v["wgl"] else "wgmma's"
+            n1 = min(v["n"], key=lambda n: v["n"][n]["step"])
+            one = v["n"][n1]
+            gu = lambda x: f", gamma_u {x / r:.3f}" if r else ""  # noqa: E731
+            against = f", gamma_u against {rn} {r:.3f} s" if r else ""
+            print(f"summary: {model} no-fold {'served' if o else 'filler'} split L {L} L' {lp} row {row} {var}: best N "
+                  f"{n1} step {one['step']:.3f} s{gu(one['step'])}, hashing hidden {f(one['hidden'], '.1%')}; each call's "
+                  f"N ({', '.join(f'{s} {n}' for s, n in v['pick'].items())}) step {v['best']:.3f} s{gu(v['best'])}, hashing "
+                  f"hidden {f(v['best_hidden'], '.1%')}; serial {v['serial']:.3f} s (hashing {v['hashing']:.3f} s){against}")
     if not found:
         print("summary: no complete step (a bench shape is missing)")
     return 0 if found else 1

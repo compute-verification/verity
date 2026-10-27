@@ -1,6 +1,7 @@
 """Each pipe's duty over Dither's overlapped call, from run.sh's MODE=fill FILL_PROF=1 outputs: Nsight Compute's pipe
 utilization of every kernel of `v31 fill-once` (ncu-VTAG-LL-SHAPE.raw.csv, OVL_CALLS calls) and fill-bench's own time of an
-overlapped call (fill-bench-VTAG-LL.jsonl's ovl arm, beside cuBLASLt's lt).
+overlapped call (fill-bench-VTAG-LL.jsonl's ovl arm, beside cuBLASLt's lt; on V31_GSM's split, its ovl_w_gN arm, whose
+calls form W' each as fill-once's do, so the weight side's kernels count there).
 
 A kernel's busy time on a pipe is its share of the pipe's peak over its elapsed cycles (ncu's pct_of_peak_sustained_active,
 scaled by sm__cycles_active / sm__cycles_elapsed) times its duration; a pipe's duty is the call's busy time over the
@@ -22,6 +23,7 @@ from pathlib import Path
 
 PCT = re.compile(r"^sm__(inst_executed_pipe_|pipe_)(\w+?)(_cycles_active)?\.avg\.pct_of_peak_sustained_active$")
 SKIP = ("gen_kernel", "fill_b_kernel", "perm_kernel", "ne_kernel")
+SKIP_W = ("gen_kernel", "ne_kernel")   # over an ovl_w arm, whose calls form W' each
 HASH = ("salt_", "leaf_", "node_kernel", "level_kernel", "quad_", "seg_kernel", "top_small")
 SCALE = {"ns": 1e-9, "nsecond": 1e-9, "us": 1e-6, "usecond": 1e-6, "ms": 1e-3, "msecond": 1e-3, "s": 1.0, "second": 1.0}
 #: the pipes the table names (a column each), by ncu's pipe name; the rest go in `other pipes`
@@ -34,11 +36,11 @@ def _num(s: str) -> float:
     return float(s) if s and s not in ("n/a", "N/A") else float("nan")
 
 
-def kind(name: str) -> str | None:
+def kind(name: str, skip: tuple[str, ...] = SKIP) -> str | None:
     """ncu's demangled name ("void gemm_kernel<true, 2>(GArgs)"): our kernels by their base name; cuBLASLt's (V31_LTW)
     by the gemm, xmma or cutlass in its name."""
     base = re.split(r"[<(]", re.sub(r"^void\s+", "", name), maxsplit=1)[0].strip()
-    if base.startswith(SKIP):
+    if base.startswith(skip):
         return None
     if base.startswith(HASH):
         return "hash"
@@ -47,7 +49,7 @@ def kind(name: str) -> str | None:
     return "other"
 
 
-def read_ncu(path: Path) -> list[dict]:
+def read_ncu(path: Path, skip: tuple[str, ...] = SKIP) -> list[dict]:
     """One dict a kernel: name, kind, seconds, and {(issue|cycles, pipe): % of peak over its elapsed cycles}."""
     rows = list(csv.reader(path.read_text().splitlines()))
     head = next(i for i, r in enumerate(rows) if "Kernel Name" in r)
@@ -63,7 +65,7 @@ def read_ncu(path: Path) -> list[dict]:
     out = []
     for r in data[first:]:
         name = r[at["Kernel Name"]]
-        k = kind(name)
+        k = kind(name, skip)
         if k is None:
             continue
         t = _num(r[at["gpu__time_duration.sum"]]) * SCALE[unit]
@@ -120,8 +122,11 @@ def main(argv: list[str]) -> int:
         if not b:
             print(f"{f.name}: no fill-bench line for {vtag}-L{L} {shape}", file=sys.stderr)
             continue
-        ovl, lt = b["arms"]["ovl"]["ms"] * 1e-3, b["arms"]["lt"]["ms"] * 1e-3
-        pipe, kinds = busy(read_ncu(f), calls)
+        g = b.get("gsm") or 0
+        arm = f"ovl_w_g{g}" if g and f"ovl_w_g{g}" in b["arms"] else "ovl"
+        ovl, lt = b["arms"][arm]["ms"] * 1e-3, b["arms"]["lt"]["ms"] * 1e-3
+        pipe, kinds = busy(read_ncu(f, SKIP if arm == "ovl" else SKIP_W), calls)
+        vtag += "" if arm == "ovl" else f" ({arm})"
         duty = {p: v / ovl for p, v in pipe.items()}
         cols = [100 * shown(duty, names) for _, names in SHOWN]
         named = {n for _, names in SHOWN for n in names}
