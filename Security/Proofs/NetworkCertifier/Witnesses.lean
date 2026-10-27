@@ -8,7 +8,7 @@ import Definitions.NetworkCertifier.Guarantees.SampledCharge
 /-!
 # The honest and nontrivial lemmas of the network certifier's acceptance guarantees
 
-Each guarantee that says what an accepted run establishes has two lemmas (lean-proofs' standing rulings, 26 Oct):
+Each guarantee that says what an accepted run establishes has two lemmas:
 `G_honest`, its hypotheses at the honest deployed instance, and `G_nontrivial`, its conclusion false at an instance
 whose verifier accepts everything.
 
