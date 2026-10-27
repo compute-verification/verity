@@ -1,6 +1,6 @@
 """replay_step: one vLLM v1 scheduler step as a Boolean Definition, held to the replay (the fixture's steps, as
 `benchmarks/network_e2e/encodings/replay_vectors.py --fixture 40` cut them from the replay of a CPU trace, four
-TRACE-CORPUS traces and two async CPU traces), to its reference on random walks over configurations the corpus doesn't
+corpus traces and two async CPU traces), to its reference on random walks over configurations the corpus doesn't
 serve (async scheduling and the walk entries among them), and refusing what its size class or the prefix layer's counts
 can't express."""
 from __future__ import annotations

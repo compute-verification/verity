@@ -79,7 +79,7 @@ b‖c check refuses ``srv``. A restarted carry-in (the priors, or counts fitted 
 which takes any carry-in, and refused by `charge_chain.check_chain` (``CH-carry``) on its b‖c.
 
 **Stand-ins** (named, each a piece not ready):
-- *the evictable and returned counts*: ENC-DERIVED's evictable and returned-block counts are held at 0 (ReplayStep_v1's
+- *the evictable and returned counts*: the derived evictable and returned-block counts are held at 0 (ReplayStep_v1's
   ``evict`` and ``ret``), true of a slice that stops or preempts nothing; on one that does, the rows differ from the
   clear recompile's and ``rows`` refuses. `compile_slice_v2.CompileSlice_v2` derives them from vLLM's block pool;
 - *the still-sent fields*: ``adv`` holds only the decisions, the count and the step count, so ChargeLink_v1 codes the
@@ -109,13 +109,13 @@ below P. The served bits and the unit's ANDs are the same at every G: a block's 
 ANDs (`cache_step`'s cost; a lookup, which writes nothing, about half), and each step's three lookups walk min(CN + 1, CU)
 units and its two computes ⌊(B − 1 + T) / B⌋. On corpus-smallkv's class (CN 24, CU 25, B 16) a step's calls are 1.06M
 ANDs and the unit about 7.6M, past circuit-check's lowering: its circuit = reference tests, sidecar and ZK run
-(`benchmarks/network_traces/compile_slice_zk.py`) are at the demonstration class (`demo`, 59,341 ANDs) and at vLLM
-8eb1's sizes under a sync scheduler (the sync class, no prefix caching: 857,866 ANDs, ChargeLink_v1{32}'s 97,159 and
-its 5,509 copies of the words it carries among them, `charge_chain.size`'s ``carry``), and at the corpus class the
-run's staged verdict words are the reference's. 8eb1's engine class is AS = 1, its AsyncScheduler, where the ZK run
-proves w212. At AS = 1 ``rows`` is ``map``'s: R² products of a slot's row and 2·R·(R − 1) one-to-one ANDs a step in
-place of the slot-for-slot comparison (`demo_async`, 32,236 ANDs; 8eb1's async window 1 at its own statics, 314,936,
-and at its engine class 1,021,302, of them 123,120 the map's).
+(`benchmarks/network_traces/compile_slice_zk.py`) are at the demonstration class (`demo`, 59,341 ANDs) and at the
+served vLLM run's sizes under a sync scheduler (the sync class, no prefix caching: 857,866 ANDs, ChargeLink_v1{32}'s
+97,159 and its 5,509 copies of the words it carries among them, `charge_chain.size`'s ``carry``), and at the corpus
+class the run's staged verdict words are the reference's. That run's engine class is AS = 1, its AsyncScheduler, where
+the ZK run proves w212. At AS = 1 ``rows`` is ``map``'s: R² products of a slot's row and 2·R·(R − 1) one-to-one ANDs a
+step in place of the slot-for-slot comparison (`demo_async`, 32,236 ANDs; its async window 1 at its own statics,
+314,936, and at its engine class 1,021,302, of them 123,120 the map's).
 """
 from __future__ import annotations
 

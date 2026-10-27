@@ -1,7 +1,7 @@
 """The I/O tie's prototype (`io_tie`) on the warden's own egress: variable-length responses on a link served through
 the warden's schedule (`warden.Warden._egress` cuts every cell, the certifier's grid lays them out a row a bucket, as
 `warden_rows` registers them); advice-v0-shaped outputs, from which the verifier computes each window's map (through
-advice v1's order permutation where the engine's numbering isn't the arrival order, as on TRACE-CORPUS's heavy trace);
+advice v1's order permutation where the engine's numbering isn't the arrival order, as on the corpus's heavy trace);
 and the Commit's sampled ids, one hiding row a step, which each bucket's unit reads at its outputs' steps as
 registered rows. The reference accepts every honest window and refuses every way the cells can differ from the map and
 the port, every port that isn't the Commit's and a connection the warden failed; the Boolean parts agree with it."""
