@@ -242,7 +242,7 @@ class Reference:
                 "elapsed_max_ns": max(elapsed), "elapsed_median_ns": statistics.median(elapsed)}
 
 
-# ---------------------------------------------------------------------------------------------------------- vllm-gpu (#188)
+# ----------------------------------------------------------------------------------------------------------------- vllm-gpu
 
 class VllmGpu:
     """The GPU twins of `verity_vllm.engine.pous`, through their tree's frozen harness `verity-vllm pous-dense-bench`."""
@@ -423,7 +423,7 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
     ap.add_argument("--rtt-allowance-ns", type=int, default=0, help="reference: the memory challenger's round-trip allowance")
     ap.add_argument("--workers", type=int, default=cpus(), help="reference: CPU processes (default: the usable CPUs)")
     ap.add_argument("--max-segments", type=int, default=0, help="reference, band-gpu, p2-v1-gpu: only the first N segments (0: all)")
-    ap.add_argument("--impl-tree", help="vllm-gpu: the tree holding verity_vllm.engine.pous (#188)")
+    ap.add_argument("--impl-tree", help="vllm-gpu: the tree holding verity_vllm.engine.pous")
     ap.add_argument("--impl-commit", help="the implementation's source commit, recorded")
     ap.add_argument("--build-dir", default="/workspace/pous_build", help="vllm-gpu, band-gpu, p2-v1-gpu: the pous_native JIT build directory")
     ap.add_argument("--python", default=sys.executable, help="vllm-gpu: the interpreter with torch")

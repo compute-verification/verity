@@ -3,7 +3,7 @@
 This package (`pous_grader`) is code: the grader, its driver `grade.sh`, the trusted-file hashes and the submissions. It
 imports only Lean. PoUS's definitions, guarantees and proofs for the timed POUS audit game, whose responder gets no
 outside help (a deployment accounts for help: `../README.md`, "The protocol, in outline"), are part of the security
-analysis, `Security/` (Daniel's Lean layout ruling, 5 Oct), listed below by their paths there. Declarations kept their
+analysis, `Security/`, listed below by their paths there. Declarations kept their
 names (`python3 tools/move/lean.py --resolve MODULE` maps a module's old name). Conventions follow the other Lean
 packages: the same toolchain and Mathlib pin, `autoImplicit` off, no `axiom` (an assumption is a named `Prop`
 hypothesis), and a check file.
@@ -32,8 +32,8 @@ Definitions/Pous/Model/Continuous.lean
                                     deadline, every answer past `Δ` counted) and a responder on its clock; the
                                     arrivals the memory challenger draws (queued, never dropped) and the memory at each time
 Definitions/Pous/Model/{Digest,SecureErasure}.lean
-                                    the keyed digest of a region (from PR #1010, without its bandwidth
-                                    assumption); the secure-erasure audit: a keyed fill of all volatile memory,
+                                    the keyed digest of a region (with no bandwidth assumption); the
+                                    secure-erasure audit: a keyed fill of all volatile memory,
                                     timed spot reads, and the foreign content the prover keeps (4 Oct model)
 Definitions/Pous/Accounting/{Params,LemmaA,PubMeets,GradedMeets,Rebuild,EraseMeets}.lean
                                     ρ, δ, expansion, `Meets`; Lemma A's bound and A7′'s rows;
@@ -65,7 +65,7 @@ Definitions/Pous/Guarantees/SecureErasure.lean
                                     band at every `N` and at 96 GiB (`SecureErasureMeetsFamily`,
                                     `SecureErasureMeets96GiB`); no named assumption, no bandwidth-separation premise;
                                     in the ideal-permutation model only, not a bound on a band-fill wipe at the
-                                    reference `Π₂` (art:7617c8017e80)
+                                    reference `Π₂`
 Proofs/Pous/Statements.lean         trusted, the lemmas' statements (math, not claims): 42 lemmas, the
                                     completeness theorem `ContinuousComplete` and `InvExPostFactoTwoLayer`, which
                                     `N10Refuted` negates, among them `DigestAU` and `SecureErasureMeets`; it
@@ -132,8 +132,8 @@ as guarantees the sanity theorems, every `Pous.SecurityProofs.X` (among them the
 certificate, and the dense scheme at the 64 KB point, with the implementation's tagged keying and its per-segment tags),
 the raw-storage refutations the `m1p` guarantees cite, and P2 in the cost model (`PousP2Ring`: `meets_of_meetsOn`, the
 non-vacuity theorems `complete`, `tight` and `tight_p16448`, and the refutation `not_meetsOn_b19_k88`), and the
-continuous audit's counting step (`PousContinuous.pr_misses_le`, `pr_misses_gt_le`). When a changed record lands on
-`main`, Daniel gets a DM showing it (Verity's `AGENTS.md`).
+continuous audit's counting step (`PousContinuous.pr_misses_le`, `pr_misses_gt_le`). A changed record that lands on
+`main` is announced as Verity's `AGENTS.md` says ("The lock").
 
 **Submissions** are one file that imports only the trusted layers (`Definitions.Pous`, `Definitions.Pous.Assumptions`,
 `Definitions.Pous.Guarantees`, `Proofs.Pous.Statements`), the proved `Proofs.Pous.Sanity` and `Proofs.Pous.Accounting.Numbers`, and `Mathlib.*`, and declares `theorem solution : Pous.Guarantees.<Name>`. `grade.sh` builds the trusted layer and the
