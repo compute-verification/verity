@@ -26,7 +26,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-from verity.ml.circuits.codec import _spec_id, decode_program, encode_program, program_digest
+from verity.ml.circuits.codec import descriptor_id, decode_program, encode_program, program_digest
 from verity.ml.circuits.defs import Body, CompositeDefinition, Node, SpecializedDefinition
 from verity.ml.circuits.constants import REGISTRATION
 from verity.ml.circuits.program import Program, is_input
@@ -139,7 +139,7 @@ class RequestComponent:
     bindings: tuple[str, ...] = ()  # each component parameter's binding time (`verity.ml.circuits.constants`: registration or run)
 
     def to_json(self) -> dict:
-        return {"specialization": _spec_id(self.fn), "program_digest": self.program_digest, "program_fn": self.program_fn,
+        return {"specialization": descriptor_id(self.fn), "program_digest": self.program_digest, "program_fn": self.program_fn,
                 "n_params": len(self.params), "param_groups": {g: self.groups.count(g) for g in dict.fromkeys(self.groups)},
                 "input_gates": self.input_gates, "body_gates": self.body_gates,
                 "n_nodes": self.n_nodes, "local_offsets_sha256": self.local_offsets_sha256, "steps": len(self.step_nodes),
@@ -194,7 +194,7 @@ def _canonicalize(dp, canon: dict[str, tuple[Any, dict]] | None = None) -> None:
 
 
 def _repoint(fn, subst: dict[str, Any]) -> None:
-    """Re-point `fn`'s node callees and function-valued statics at their canonical objects (`subst`, by `_spec_id`), in
+    """Re-point `fn`'s node callees and function-valued statics at their canonical objects (`subst`, by `descriptor_id`), in
     place. Each substitute must have the id it replaces (`_canonical`): a complete specialization's id is formatted once
     from its bindings, so a static swapped for another id would leave it stale."""
     if fn._body is None:
@@ -210,10 +210,10 @@ def _repoint(fn, subst: dict[str, Any]) -> None:
 def _canonical(v, subst):
     """`v`'s substitute in `subst`, or `v` itself; refused (IdentityConflict) before it is applied when its id is not `v`'s."""
     from verity.ml.circuits.defs import IdentityConflict
-    key = _spec_id(v)
+    key = descriptor_id(v)
     c = subst.get(key, v)
-    if c is not v and _spec_id(c) != key:
-        raise IdentityConflict(f"E_IDENTITY: {key!r} would be re-pointed to a definition of another id, {_spec_id(c)!r}")
+    if c is not v and descriptor_id(c) != key:
+        raise IdentityConflict(f"E_IDENTITY: {key!r} would be re-pointed to a definition of another id, {descriptor_id(c)!r}")
     return c
 
 
@@ -304,7 +304,7 @@ def request_component(desc: dict, registry, wrapper_params: list[tuple[str, str]
     # the sampling-event vocabulary is `verity_vllm.program.sampling_event`'s (greedy and seeded Gumbel selects alike), read nowhere else
     bounds, lo = [], 0
     for i, n in enumerate(nodes):
-        if is_sampling_event(_spec_id(n.fn)):
+        if is_sampling_event(descriptor_id(n.fn)):
             bounds.append((lo, i + 1))
             lo = i + 1
     if lo != len(nodes):
@@ -547,7 +547,7 @@ class WorkloadProgram:
                 else:
                     local_inputs.append({"local_param": j, "name": pn, "global": params[pi][0], "root_node": pi, "gates": [body.offsets[pi], body.offsets[pi + 1]]})
                     pi += 1
-            reqs.append({"request_id": r.request_id, "index": r.index, "root_node": k, "specialization": _spec_id(c.fn),
+            reqs.append({"request_id": r.request_id, "index": r.index, "root_node": k, "specialization": descriptor_id(c.fn),
                          "program_digest": c.program_digest, "gates": [G, G + c.body_gates], "local_input_gates": c.input_gates,
                          "n_instances": c.n_nodes, "local_offsets_sha256": c.local_offsets_sha256,
                          "rule": {"body_gate": f"global = {G} + (local_root_gate - {c.input_gates})",
@@ -656,7 +656,7 @@ class WorkloadProgram:
 
     def artifact(self) -> dict:
         params, ret = self.fn.signature()
-        return {"schema": SCHEMA, "workload_digest": self.digest, "workload_fn": _spec_id(self.fn), "gates": self.program.gates, "population": self.population(),
+        return {"schema": SCHEMA, "workload_digest": self.digest, "workload_fn": descriptor_id(self.fn), "gates": self.program.gates, "population": self.population(),
                 # [R17-1] the declared LAG static (also inside workload_fn / the digest) and the lengths rule it fixes
                 "lag": self.lag, "lengths": served_lengths_rule(self.lag),
                 "input_gates": self.program.input_gates, "n_root_nodes": len(self.program.root.body.nodes), "manifest_digest": self.manifest_digest,
