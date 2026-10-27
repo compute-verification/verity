@@ -203,7 +203,8 @@ theorem names_of_acceptsZKR (I : Inputs) (ht : I.tags.typed = false) {c : Flock.
   obtain ⟨hsz, hstJ⟩ := setupOf_tableJH hTags.1 hd hs
   have hjs : (partOf I d 0).val < sts.size := by rw [hsz]; exact (partOf I d 0).isLt
   have hcst : sts[(partOf I d 0).val].c = c := by
-    have h1 := (Hidden.setupHidden_spec' (hstJ _ hjs)).parse
+    have h1 := (Hidden.setupHidden_spec' (hstJ _ hjs)).parseF
+      ((FlockSoundness.Discharge.Exec.tagsAt_isTmpl _ _ _).trans (HmOut.parse_isTmpl hc))
     rw [parseH_tagsAt ((zkTags_typed I).trans ht), hc] at h1
     exact (Except.ok.inj h1).symm
   have hdn := dupName_of_checkRegistered (array_forM_ok hreg _ hjs)
