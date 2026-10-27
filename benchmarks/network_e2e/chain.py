@@ -1,4 +1,4 @@
-"""network-e2e's stages after N2 and the proofs, toward the one command over varied traffic: the advice (I1 v0,
+"""network-e2e's steps after N2 and the proofs, toward the one command over varied traffic: the advice (I1 v0,
 `verity.core.protocols.certifier.advice`), its bits per link-window (v0's `bits_by_window` beside ENC-DERIVED's residual,
 `encodings/derived.py`), the prove path's audit of a committed run's step units compiled from that advice (PROVE-PATH,
 `benchmarks/prove_path`), and NEG's negatives (`benchmarks/network_traces/negatives.py`). Each stage's result says what it

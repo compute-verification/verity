@@ -18,11 +18,11 @@ one, with its seed and prefix-cache mode. If a request's output ids moved with t
 
 `WARDEN`'s traces serve a trace's server and load through the active warden: `warden_serve.py serve` in front of the
 server, a process beside it on its host (``warden beside the server, not on the auditor host``), and the client
-(`drive_warden`) speaking cells through the warden's shim. The warden, the client and the server each run on cores of
-their own (`cpu_plan`), the warden under `warden_probe.py` (its every tick, publish and collection) and the host's load
+(`drive_warden`) speaking cells through the relay's shim. The relay, the client and the server each run on cores of
+their own (`cpu_plan`), the relay under `warden_probe.py` (its every tick, publish and collection) and the host's load
 sampled every 100 ms (`host_sample.py`), so that a late tick can be told apart from a stalled client. DIR/<trace>/warden/
-holds what the warden published (its deployment, certified records and connection log), the probes' records and the
-shim's record of every connection; `summarize` runs `warden_serve.py check` on it first. Which warden served (its
+holds what the relay published (its deployment, certified records and connection log), the probes' records and the
+shim's record of every connection; `summarize` runs `warden_serve.py check` on it first. Which relay served (its
 egress from the release a, or from the admission s) is the trace's meta.json `warden.egress_base`
 (`egress_base`). Every trace's server also loads `vllm_accept_stamp`, which records each request's
 TCP accept, headers and body in the API server, so that the order requests arrived in can be told apart on each side of
@@ -536,7 +536,7 @@ def taskset(cpus: list[int] | None) -> list[str]:
 
 
 def egress_base(warden) -> str:
-    """Which point the warden's D counts from, read from its module's docstring: egress cell i at
+    """Which point the relay's D counts from, read from its module's docstring: egress cell i at
     a + D + i/r from the release a (the ingress end), or at s + D + i/r from the admission s."""
     doc = warden.__doc__ or ""
     if "before a + D" in doc:

@@ -10,7 +10,7 @@ compressions a frame and 2 a node of its depth-D tree (`nodes`), and the XOR as 
 `checked` requires `composed` to equal `size`, which traces both, at every N of a ladder. `composed_v4` and
 `n3_v4.size` are the same for v4.
 
-`composed_v5` is `n3_v5`'s N3Window_v5, and `levers` prices v5's cost levers on the busy link-windows from it.
+`composed_v5` is `n3_v5`'s N3Window_v5, and `levers` prices v5's cost levers on the busy sampling blocks from it.
 
     python -m workload.n3_cost --out FILE [--lab RUN_DIR] [--sim] [--check N ...] [--check-v4 N ...]
         [--runs EGRESS INGRESS] [--served N ...] [--levers [--check-v5 N ...]]
@@ -41,9 +41,9 @@ the 3 ANDs that join them (`head_check.size`)."""
 
 SERVED = {"T": 600, "R": 1686, "B": 4096, "L": 9, "windows_a_day": 1440, "egress_frames": (34_499, 35_386),
           "ingress_share": 21_372 / 715_340}
-"""llama8b-node1's served rows (run r20261006-035423-2cd5): windows of T = 600 buckets of 100 ms and r = 1,686 slots of 4,096 bytes, so
-1,440 a day; busy egress link-windows of 34,499 to 35,386 real frames; and 21,372 ingress frames to 715,340 egress ones
-over the ten configurations, which `served` takes as each link-window's ingress share."""
+"""llama8b-node1's served rows: sampling periods of T = 600 buckets of 100 ms and r = 1,686 slots of 4,096 bytes,
+so 1,440 a day; busy egress sampling blocks of 34,499 to 35,386 real frames; and 21,372 ingress frames to 715,340
+egress ones over the ten configurations, which `served` takes as each sampling block's ingress share."""
 
 
 def leaf_blocks(B: int) -> int:
@@ -318,7 +318,8 @@ prompt's bytes packed whole, and keep rows of B."""
 
 def levers(lab_fmt: U.Format | None, check_v5: list[int], runs: tuple[int, int] = (1, 2),
            egress_rows: tuple[int, ...] = EGRESS_ROWS) -> dict:
-    """v5's cost levers on served rows' busy link-windows, at one busy window's depths and a day's (`served`'s formats):
+    """v5's cost levers on served rows' busy sampling blocks, at one busy sampling block's depths and a day's
+    (`served`'s formats):
     v4; lever 1, v5's rows of B bytes; lever 2, the frames' placement a template's (`SERVED_TEMPLATES`, the descriptor
     then only r and the segments, P = Q = 1), on v4 and on v5; lever 4 on both, egress rows of `egress_rows[0]` bytes
     under frames of B (the rest of `egress_rows` beside it); and lever 3's estimate on v5 with lever 2, and with 2
@@ -475,7 +476,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="v4's runs a port-window, egress and ingress")
     ap.add_argument("--served", type=int, nargs="*", default=[2, 16, 256, 4096, 16384],
                     help="the N of the served ladder, beside the busy windows' own")
-    ap.add_argument("--levers", action="store_true", help="v5's cost levers on the busy link-windows instead of `served`")
+    ap.add_argument("--levers", action="store_true",
+                    help="v5's cost levers on the busy sampling blocks instead of `served`")
     ap.add_argument("--check-v5", type=int, nargs="*", default=[2, 3, 64],
                     help="with --levers, the N at which `composed_v5` must equal `n3_v5.size`, at one busy window's depths")
     args = ap.parse_args(argv)

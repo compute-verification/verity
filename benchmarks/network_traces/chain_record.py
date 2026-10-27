@@ -122,7 +122,8 @@ WARDEN_STUBBED = (
 REHEARSAL_ACCEPTS = ("honest", "token")
 #: a proof block's outputs, at most 16 bits: a faulty proof block's leak
 OUT_BITS = 16
-#: what `horizon_k`'s K rests on until its two per-window inputs are discharged (all_protocols' `compose.HORIZON_CONDITION`)
+#: what `horizon_k`'s K rests on until its two per-sampling-block inputs are discharged (all_protocols'
+#: `compose.HORIZON_CONDITION`)
 HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted (#4367) is conditional: its per-window inputs hesc "
                      "(proofs' SampledKSLive) and hleak (the live SampledLeakAccepted) are not discharged")
 #: the all-protocols runner's network accounting, whose `block_leg` is the block record's one certifier entry
@@ -558,10 +559,11 @@ def audit_of(d: Path) -> dict:
 
 def horizon_k(audits: list[dict], delta: Fraction, network: dict) -> dict:
     """`NetTiming.Guarantees.HorizonLeakAccepted`'s K over one monitoring period, as all_protocols' `compose.horizon_leak`
-    counts it: the faulty units paid once over the period, ``Fmax = ⌈ln(1/δ)/q⌉`` with ``q`` the least ``k_i/n_i`` of
-    its compute audits (a stratified audit's least stratum's, `audit_of`'s ``q``), so K = the network's own terms (``network``: the advice's and the syncs' bits, and the cells')
-    + ``Fmax·16 + ⌈log2 (N + 1)^Fmax⌉ + Σ_i (free_i + jitter_i)``, ``N = Σ_i n_i``, except with probability
-    ``δ + Σ_i (e_i + e'_i)``. The theorem is conditional on its per-window inputs, so this K is cited as conditional."""
+    counts it: the faulty proof blocks paid once over the period, ``Fmax = ⌈ln(1/δ)/q⌉`` with ``q`` the least
+    ``k_i/n_i`` of its compute audits (a stratified audit's least stratum's, `audit_of`'s ``q``), so K = the network's
+    own terms (``network``: the advice's and the syncs' bits, and the cells') + ``Fmax·16 + ⌈log2 (N + 1)^Fmax⌉ +
+    Σ_i (free_i + jitter_i)``, ``N = Σ_i n_i``, except with probability ``δ + Σ_i (e_i + e'_i)``. The theorem is
+    conditional on its per-sampling-block inputs, so this K is cited as conditional."""
     q = min(Fraction(a["q"]) if "q" in a else Fraction(a["drawn"], a["units"]) for a in audits)
     fmax = math.ceil(math.log(1 / float(delta)) / float(q) * (1 + 1e-12))
     n = sum(a["units"] for a in audits)

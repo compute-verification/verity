@@ -3,15 +3,16 @@
 Network accounting end to end on a served model, as one command and one report. From a certifier-serve rehearsal (the
 network certifier in front of a served endpoint, `benchmarks/network_traces/certifier_serve.py`), it takes:
 
-- N2's verdict of record on every link-window, and the link's network verdict;
+- N2's verdict of record on every sampling block, and the link's network verdict;
 - head checks proved with C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify --zk`
-  (`benchmarks/network_traces/n2_zk.py`): every honest link-window at both ends, and the egress ends of the tampered
+  (`benchmarks/network_traces/n2_zk.py`): every honest sampling block at both ends, and the egress ends of the tampered
   and extra runs;
-- the negatives, each refused: `late`, `extra` and a tampered head (the honest run's window 0 egress head, one count off);
-- the chain's stages after N2 and the proofs (`chain.py`): the advice and its bits per link-window, the prove path's
+- the negatives, each refused: `late`, `extra` and a tampered head (the honest run's sampling block 0 egress head, one
+  count off);
+- the chain's steps after N2 and the proofs (`chain.py`): the advice and its bits per sampling block, the prove path's
   audit, the registry of negatives and, on the advice profile, the I/O tie.
 
-`e2e.py` is the driver and `chain.py` holds the chain's stages; their docstrings have each option and each check. It
+`e2e.py` is the driver and `chain.py` holds the chain's steps; their docstrings have each option and each check. It
 reuses the rehearsal and `n2_zk.py`'s driver and re-implements neither. `encodings/` measures the advice's encodings, and
 `traces/` records the vLLM scheduler traces they are measured on (`traces/README.md`).
 
@@ -20,8 +21,8 @@ reuses the rehearsal and `n2_zk.py`'s driver and re-implements neither. `encodin
 `verity bench network_e2e ARGS` runs `run.sh`, ARGS being `e2e.py`'s. Proving runs under `research run` on a CPU node,
 whose command is in `run.sh`'s header: it builds C-Flock's `flock-circuit`, the Lean `flock-verify`, the Lean firewall and
 network-records (`benchmarks/pouw/hidden_zk/job.sh`'s `setup`, cached on the node), then runs `e2e.py` with the report
-in `$OUT`. `E2E_MEM_GB` is the proving sessions' memory cap. Exit 0 means the report says OK. `research run` publishes
-the report with the run's outputs in the evidence store, where results are read.
+in `$OUT`. `E2E_MEM_GB` is the proving runs' memory cap. Exit 0 means the report says OK. `research run` publishes the
+report with the run's outputs in the evidence store, where results are read.
 
 N2 alone, without proofs, runs on any machine with `lake` on the PATH (the Lean audit's network-records is built on first
 use):
@@ -31,8 +32,8 @@ uv run --extra torch-cpu verity bench network_e2e --from REHEARSAL --out DIR --n
 ~~~
 
 When `n2_zk.sh` has already proved these runs, don't prove them again: pass its run's `out/n2zk` (or a tarball of it) as
-`--proofs DIR` instead of `--no-prove`. The report adopts those proofs only if every proved unit's public row carries the
-certificate digest of the `--from` runs' record for that end and link-window (`e2e.adopt`).
+`--proofs DIR` instead of `--no-prove`. The report adopts those proofs only if every proved proof block's public row
+carries the certificate digest of the `--from` runs' record for that end and sampling block (`e2e.adopt`).
 
 To rehearse first, pass `--upstream URL` (an OpenAI streaming endpoint), `--vllm MODEL` (vLLM started on this host's
 GPU) or `--endpoint-peer NAME:PORT` (node NAME's endpoint on its loopback, through an ssh forward) instead of `--from`.
@@ -57,9 +58,9 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
   the honest run and rebuilt from its certified I/O (`chain.served_advice`). `--advice FILE` (with `--serving-config`)
   gives an advice instead.
 - `--prove-path DIR` adopts a `prove_path.py audit` run's output. Each arm's committed advice must be the report's
-  advice of its window by content (`chain.held_to`), and only a prove path bound to these runs counts in the OK.
-  `--prove-path-registered FILE` says who registered each audited window's advice and where its serving record is;
-  when it was registered is read off the record and the endpoint's trace (`chain.serve_record`, `chain.closes`).
+  advice of its Commit window by content (`chain.held_to`), and only a prove path bound to these runs counts in the OK.
+  `--prove-path-registered FILE` says who registered each audited Commit window's advice and where its serving record
+  is; when it was registered is read off the record and the endpoint's trace (`chain.serve_record`, `chain.closes`).
 - The registry of negatives (`benchmarks/network_traces/negatives.py`'s `suite`) runs on the runs unless
   `--no-negatives`; each row that ran must be refused by the code it names. On the advice profile the I/O tie
   (`chain.tie`) runs instead and is required (`chain.tie_gate`).
@@ -89,28 +90,29 @@ An honest run is required, because the tampered head is made from it. Two runs o
 
 `report.json` (`verity-network-e2e/report/v3`) holds:
 
-- per run: the rehearsal's own check, the gate's `end.json` verdict, N2's network verdict and its refused link-windows,
-  and, per proved end, whether Lean held it and its proving session's cost (below);
-- per link-window: N2's verdict, each end's proved verdict (accept or refuse, from the verdict row the verifier opens),
-  and the head-check parts that fail (a diagnostic, evaluated in the clear on the rehearsal's witness);
+- per run: the rehearsal's own check, the gate's `end.json` verdict, N2's network verdict and its refused sampling
+  blocks, and, per proved end, whether Lean held it and its proving run's cost (below);
+- per sampling block: N2's verdict, each end's proved verdict (accept or refuse, from the verdict row the verifier
+  opens), and the head-check parts that fail (a diagnostic, evaluated in the clear on the rehearsal's witness);
 - per negative: refused or not, and by what (N2, the rehearsal's check, the proved head checks);
-- one link-window proved alone (`n2_zk`'s cost pass), and the claim (below);
-- the chain's stages that ran (`chain`: the advice, its bits per link-window, the prove path, the negatives' rows), and
-  `stubbed`.
+- one sampling block proved alone (`n2_zk`'s cost pass), and the claim (below);
+- the chain's steps that ran (`chain`: the advice, its bits per sampling block, the prove path, the negatives' rows),
+  and `stubbed`.
 
-`report.md` renders the same thing as tables. OK means: the honest run was accepted on every link-window by N2 and, where
-proofs ran, by every proved head check held by Lean; each negative was refused by everything that checked it; a given
-advice is these runs' and rebuilt from their certified I/O; a bound prove path and the registry of negatives, where they
-ran, passed. On the advice profile the rehearsal's own check stands in for N2, and a negative counts only for its own
-violation. `report.md`'s title says what the OK rests on (`ran`) and what didn't run (`not_run`), so an OK on the
-self-check alone reads as that. When it isn't OK, `why_not` (and the line under the title) says which of these failed, a
-missing negative's run among them.
+`report.md` renders the same thing as tables. OK means: the honest run was accepted on every sampling block by N2 and,
+where proofs ran, by every proved head check held by Lean; each negative was refused by everything that checked it; a
+given advice is these runs' and rebuilt from their certified I/O; a bound prove path and the registry of negatives,
+where they ran, passed. On the advice profile the rehearsal's own check stands in for N2, and a negative counts only for
+its own violation. `report.md`'s title says what the OK rests on (`ran`) and what didn't run (`not_run`), so an OK on
+the self-check alone reads as that. When it isn't OK, `why_not` (and the line under the title) says which of these
+failed, a missing negative's run among them.
 
 ## What it proves, and what it doesn't
 
 The claim is in `e2e.py` (`CLAIM`) and in both files, word for word. **It covers counts only.** For the rehearsal's one
-link, every honest link-window's per-bucket frame counts match the planned occupancy profile (on a served link, the counts
-its ingress head derives). That fixes the link's timing to the profile. Late, extra and a tampered head are each refused.
+link, every honest sampling block's per-bucket frame counts match the planned occupancy profile (on a served link, the
+counts its ingress head derives). That fixes the link's timing to the profile. Late, extra and a tampered head are each
+refused.
 
 It does not cover:
 
@@ -131,21 +133,21 @@ Zero-knowledge gaps, from `verity/core/protocols/certifier/README.md` ("Zero kno
 what's open"):
 
 - N2's verdicts here are decided in the clear (`LinkWindows.unproved_outcome`, as for any run that proves nothing),
-  which reads the heads and the certifier's salts. `n2_zk` now decides each link-window on a `--zk` proof of N2's
-  registered unit, one member a round; this report doesn't read that summary yet, so it proves nothing itself and
-  refuses to adopt such a run (``--no-prove`` takes N2's verdicts only).
-- The proofs an adopted earlier `n2_zk` summary holds are of its row adapter, not of N2's registered unit, so
+  which reads the heads and the certifier's salts. `n2_zk` now decides each sampling block on a `--zk` proof of N2's
+  registered proof block, one member a round; this report doesn't read that summary yet, so it proves nothing itself
+  and refuses to adopt such a run (``--no-prove`` takes N2's verdicts only).
+- The proofs an adopted earlier `n2_zk` summary holds are of its row adapter, not of N2's registered proof block, so
   `LinkWindows.proved` (which refuses a proof of any other Program) doesn't take them. Lean holds each proof to the
   program and partition that `n2_zk` wrote.
 - The certificate's link to its head is checked on the host (`CertifiedRecord.verify`).
 
 ## Cost
 
-Each end of a link-window is one unit of its member's statement. All of an end's link-windows are proved in one session,
-one statement and one pair of proofs (`circuit.rep0.bin`, `circuit.rep1.bin`), and Lean verifies them at once, so a
-link-window has no proving time or proof of its own. The report gives each session's prover seconds, Lean verify seconds,
-proof bytes and peak memory, undivided. Peak memory is the largest process the driver had run by the end of the session
-(`RUSAGE_CHILDREN`, which only grows). `n2_zk` proves the honest members first, so the tampered and extra sessions' peaks
-include theirs. Beside the sessions is `n2_zk`'s cost pass: a session on the honest statement whose verifier draws one
-link-window, per end, which is what one link-window costs proved alone. The driver's own peak (the unit's lowering)
-is shown when it proved.
+Each end of a sampling block is one proof block of its member's statement. All of an end's sampling blocks are proved in
+one proving run, one statement and one pair of proofs (`circuit.rep0.bin`, `circuit.rep1.bin`), and Lean verifies them
+at once, so a sampling block has no proving time or proof of its own. The report gives each proving run's prover
+seconds, Lean verify seconds, proof bytes and peak memory, undivided. Peak memory is the largest process the driver had
+run by the end of the proving run (`RUSAGE_CHILDREN`, which only grows). `n2_zk` proves the honest members first, so the
+tampered and extra runs' peaks include theirs. Beside them is `n2_zk`'s cost pass: a proving run on the honest
+statement whose verifier draws one sampling block, per end, which is what one sampling block costs proved alone. The
+driver's own peak (the proof block's lowering) is shown when it proved.

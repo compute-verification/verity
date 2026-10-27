@@ -795,8 +795,8 @@ FIELDS = """\
   (`vllm_accept_stamp`); `<trace>/server.log`, `<trace>/meta.json`: the server's log, argv, timings, adversary (seed and
   prefix-cache mode) and warden (its schedule, where it ran).
 - `<trace>/warden/`, a warden trace's: what the warden published (`deployment.json`, `requests.records`,
-  `responses.records`, an admission-based warden's `fails.records`, `certified.jsonl`, `warden.json` with every connection's
-  buckets and outcome), its `serve.log`, the client shim's record of every connection (`client.json`) and
+  `responses.records`, an admission-based relay's `fails.records`, `certified.jsonl`, `warden.json` with every
+  connection's buckets and outcome), its `serve.log`, the client shim's record of every connection (`client.json`) and
   `warden_serve.py check`'s `check.json` and `check.log`; where the trace probed them, the warden's every tick,
   publish and collection (`ticks.json`, `warden_probe.py`, with a spawned publisher's keeps as it wrote them in
   `publisher_keeps.jsonl` and its pid in `publisher.pid`), the host's load every 100 ms (`host.jsonl`,

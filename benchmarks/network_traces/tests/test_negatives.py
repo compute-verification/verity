@@ -629,7 +629,7 @@ def test_io_tie_request_refuses_the_prompt_split_that_n2s_counts_accept():
 
 def test_phase_6s_split_of_339_and_16_token_prompts_is_refused_by_the_ingress_tie_alone():
     """The prompt split at the link's 4096-byte cells: prompts of 339 and 16 tokens served (two request cells,
-    then one; 338 is one cell at the warden's cut), advised as 16 and 339. The cells' total is honest's and
+    then one; 338 is one cell at the relay's cut), advised as 16 and 339. The cells' total is honest's and
     the first request's end a cell earlier, so N2's advised counts accept it under a tie the prover states (the acausal
     release); IoTieRequest's reference on the warden's ingress refuses it, and with it N2's advised view."""
     pytest.importorskip(NG.IO_REQUEST_MODULE)
@@ -866,7 +866,7 @@ def test_wrong_token_changes_one_committed_sampled_id_and_keeps_the_registered_r
 
 
 def test_a_changed_byte_of_a_wardens_committed_cell_doesnt_read_under_its_root():
-    """On the warden's bucket rows: connection 1's data cell and pad in bucket 0's row, bucket 1 empty. The
+    """On the relay's bucket rows: connection 1's data cell and pad in bucket 0's row, bucket 1 empty. The
     row reads under the signed root at its position; with one byte of the data cell changed it doesn't, and neither
     does the honest row at another position."""
     WR = pytest.importorskip(NG.WARDEN_ROWS_MODULE)
