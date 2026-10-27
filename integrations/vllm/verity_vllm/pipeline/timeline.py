@@ -185,7 +185,7 @@ def report(events: list[dict[str, Any]], *, attempt: str = "last") -> dict[str, 
     leaf = [s for s in spans if s not in envelope]
     # a category's time = union of its LEAF spans that have no finer child span of the same category inside them (avoid double counting
     # `commit.commit_delta` (bash, whole process) + `engine.build` (python, inside it)): keep spans not strictly containing another span
-    # [SYS-06] a span marked `par` (row_pod's concurrent Build derives) is a leaf by construction: it may overlap -- even strictly
+    # A span marked `par` (row_pod's concurrent Build derives) is a leaf by construction: it may overlap -- even strictly
     # contain -- a sibling that ran beside it, and must not be read as that sibling's wrapper.
     def contains(a: dict, b: dict) -> bool:
         if a["fields"].get("par"):
@@ -301,7 +301,7 @@ def collect(dirs: list[Path]) -> dict[str, Any]:
             tls = sorted(row_dir.glob("timeline*.jsonl"), key=lambda p: p.stat().st_mtime)
             if tls:
                 for tl in tls:
-                    rep = report(read(tl))            # last attempt in an append-only file (SYS-01c)
+                    rep = report(read(tl))            # last attempt in an append-only file
                     rows.append({"row": row_dir.name, "source": tl.name, "measured": True, "elapsed_s": rep["elapsed_s"],
                                  "attempts_in_file": rep["attempts_in_file"],
                                  "categories": {k: v["union_s"] for k, v in rep["categories"].items()}, "engine": rep["engine"],
