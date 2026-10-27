@@ -1,7 +1,7 @@
 """Build the vLLM engine under the frozen profile κ, and read back what the built engine executes.
 
 `profile.apply_env()`, `cp = checkpoint_for(case, manifests/checkpoints.json)` (case B0 = SmolLM2-135M, B1 = Qwen2.5-1.5B),
-`LLM(**engine_kwargs(cp, replay=False, enforce_eager=True), enable_prefix_caching=False, ...)`, `runner = get_model_runner(llm)`
+`LLM(**engine_kwargs(cp, replay=False, enforce_eager=True), enable_prefix_caching=False, ...)`, `runner = handle.model_runner(llm)`
 (DESIGN §1 / §10).  The row's declared execution decides `enforce_eager`, and a declared `TargetProfile` adds its engine args and
 environment knobs; after the build the effective execution, compilation, attention version and async-scheduling mode are read back
 from the engine's `vllm_config` and checked against the declaration.
@@ -18,7 +18,7 @@ from typing import Any
 
 import torch
 
-from verity_vllm.engine import env as engine_env, served
+from verity_vllm.engine import env as engine_env, handle, served
 
 
 CASE = "B0"                       # default checkpoint role (SmolLM2-135M); [M6] `build_engine(case="B1")` serves Qwen2.5-1.5B
@@ -220,7 +220,7 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     t0 = time.perf_counter()
     llm = LLM(**kw)
     build_s = time.perf_counter() - t0
-    runner = prof.get_model_runner(llm)
+    runner = handle.model_runner(llm)
     model = runner.get_model()
     eng = Engine(llm, runner, model, cp, kw, env_flags, build_s, case, target, execution, None, engine_env.set_since(env0))
     eng.effective = effective_execution_doc(llm, model)      # [R15 EXEC-02] read back from vllm_config: what this engine really executes
