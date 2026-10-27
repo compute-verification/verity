@@ -46,7 +46,7 @@
 # development key, so the run is a development run and credits nothing. The COINS line says which.
 # A step that can't run says why, and the chain stops there. C-Flock, Lean's flock-verify and sampled-proofs-verifier and the
 # tree's venv are built while the endpoint serves, C-Flock in FLOCK_WORK (kept on the node, so a rerun reuses its build).
-#   research run --on vy-dc-h200 --project verity --source TREE --cwd clone --timeout 4h -- \
+#   research run --on vy-dc-h200 --project verity --source TREE --cwd clone --timeout 6h -- \
 #     bash benchmarks/one_stage/served_verdicts.sh
 # `served_verdicts.sh circuits K`, in TREE with D and OUT, counts serve dir D's window K's circuits alone (its advice written).
 # Defaults are vy-dc-h200's: the int8 B4 row and taps of r20261026-185144-3ccb, vLLM's venv /workspace/cp/venv312, CUDA 13.0.
