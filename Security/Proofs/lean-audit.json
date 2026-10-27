@@ -62,7 +62,8 @@
   "Proofs.Properties.SampledProofs.OneStageZk",
   "Proofs.Properties.Composed",
   "Proofs.Properties.Onsite",
-  "Proofs.Properties.Remote"
+  "Proofs.Properties.Remote",
+  "Proofs.Properties.SampledProofs.OneStageZkRun"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
