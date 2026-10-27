@@ -2,7 +2,7 @@
 The handshake's messages, its LMS signatures, its ML-KEM-1024 encapsulation and the channel's framing are the deployment
 layer's; this module takes the handshake's transcript and gives each direction a sender and a receiver.
 
-Every channel has a SHA-512 chain key (Daniel, 26 Oct). An onsite device's is its imprint key, a key class of its own:
+Every channel has a SHA-512 chain key. An onsite device's is its imprint key, a key class of its own:
 installed over the cable once per auditor device, then ratcheted. A remote party with no cable holds a chain key
 installed at provisioning, and each of its sessions also XORs in an ML-KEM-1024 shared secret (``ind-cca/ml-kem-1024``,
 the one-hash rule's transport exception), so its security never drops below the chain key's alone. No session runs on a

@@ -92,7 +92,7 @@ INSTANCES: dict[str, Instance] = {i.id: i for i in (
     # 8554's prefixes (its §9) and, for keys derived from a seed (its Appendix A), SHA-512 as a PRF keyed by the seed
     Instance("lms-sha512-n64", "LMS over SHA-512"),
     # FIPS 203's ML-KEM at its 1024 parameters (Module-LWE with the Fujisaki-Okamoto transform), through the `cryptography`
-    # package: the one-hash rule's transport exception (AGENTS.md, Daniel, 26 Oct), only for a remote party's sessions,
+    # package: the one-hash rule's transport exception (AGENTS.md), only for a remote party's sessions,
     # whose key is the XOR of its PRF output with the chain key's (verity.ml.crypto.transport), never on pair links
     Instance("ml-kem-1024", "ML-KEM-1024", algebraic=True),
 )}
@@ -230,7 +230,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "Every uplink of the spatial unit passes through a network certifier the auditor trusts, with its parameters "
           "fixed before the run: every boundary link is certified, and nothing leaves the unit another way",
           "Certifier coverage", "standard"),
-    # the transport's premises (Security/Definitions/Core/Assumptions/Transport.lean; Daniel, 26 Oct 6:42 PM PDT):
+    # the transport's premises (Security/Definitions/Core/Assumptions/Transport.lean):
     # `WitnessPathPrivate c` is the per-channel premise beside the per-party `Confined p` and the site's `Covered`, read
     # by Verity.Guarantees.TransportPassiveZk with `ChannelHides` as its keyed alternative
     Entry("witness-path-private", "assumption",

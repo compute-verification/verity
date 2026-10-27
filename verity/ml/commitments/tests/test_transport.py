@@ -251,7 +251,7 @@ def test_the_imprint_binds_both_ids_and_both_randomnesses_and_refuses_a_mismatch
 
 def test_the_session_modes_and_the_two_ends():
     """The chain key alone (onsite) and the chain key with an ML-KEM-1024 secret (remote) give different sessions, each
-    bound to the transcript and to the KEM secret; there is no session on a KEM secret alone (Daniel, 26 Oct), and a KEM
+    bound to the transcript and to the KEM secret; there is no session on a KEM secret alone, and a KEM
     secret is exactly 32 bytes. The initiator's and the responder's ends talk in both directions, and no end opens what
     it sent. No repr shows a key."""
     sessions = {T.session(TRANSCRIPT, key=ROOT), T.session(TRANSCRIPT, key=ROOT, kem_secret=SS),

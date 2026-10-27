@@ -8,7 +8,7 @@ reads them. A `Site` says which nodes are the prover's own machines and which au
 per-party premise beside `Faithful p` and `Secret p`; a `Channel` names its auditor end and who can read its bytes in
 transit. `ViewIsRecord` is what zero knowledge needs of the transport, for one test, with its probabilities `Game.value`
 over uniform draws (`Game.draw`). The premises on a channel are in `Assumptions/Transport`: `WitnessPathPrivate c` (the
-per-channel premise, Daniel, 26 Oct), `ImprintPathPrivate c`, `ChannelHides` and `ChannelAuthentic`.
+per-channel premise), `ImprintPathPrivate c`, `ChannelHides` and `ChannelAuthentic`.
 -/
 
 namespace Verity.Transport

@@ -186,9 +186,9 @@ def test_the_declared_capacity_rests_on_the_nodes_inventory() -> None:
                                      "MIG and MPS need no clause", "the auditor's inventory of the node"))
 
 
-def test_the_transport_claims_of_26_oct() -> None:
-    """Daniel, 26 Oct 6:42 PM PDT: ML-KEM-1024 is a lattice KEM, the one-hash rule's transport exception, so its IND-CCA
-    is an algebraic claim; the transport's four premises are bare ids, the per-channel one beside `Confined p`."""
+def test_the_transport_claims() -> None:
+    """ML-KEM-1024 is a lattice KEM, the one-hash rule's transport exception, so its IND-CCA is an algebraic claim; the
+    transport's four premises are bare ids, the per-channel one beside `Confined p`."""
     e = get("ind-cca/ml-kem-1024")
     assert (e.kind, e.name, e.label, e.standing) == (
         "assumption", "Indistinguishability under chosen-ciphertext attack of ML-KEM-1024", "IND-CCA · ML-KEM-1024",
