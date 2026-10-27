@@ -8,14 +8,10 @@ import Definitions.Pous.Game.Oracle
 import Definitions.Pous.Game.Prob
 import Definitions.Pous.Model.Audit
 import Definitions.Pous.Model.BandChain
-import Definitions.Pous.Model.BandGraph
-import Definitions.Pous.Model.ColumnGame
 import Definitions.Pous.Model.Continuous
 import Definitions.Pous.Model.Dense
-import Definitions.Pous.Model.Digest
 import Definitions.Pous.Model.FreeBlocks
 import Definitions.Pous.Model.Graded
-import Definitions.Pous.Model.HashChain
 import Definitions.Pous.Model.Inc
 import Definitions.Pous.Model.Invertible
 import Definitions.Pous.Model.Labelling

@@ -1,3 +1,4 @@
+import Proofs.Pous.Defs
 import Proofs.Pous.Thm1.Theorem1iiTimed
 import Proofs.Pous.TrackA.FibreCount
 import Proofs.Pous.TrackA.A1Compression

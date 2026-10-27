@@ -3,7 +3,7 @@ import Definitions.Pous.Assumptions
 import Proofs.Pous.Statements
 import Proofs.Pous.Sanity
 import Proofs.Pous.Accounting.Numbers
-import Definitions.Pous.Model.BandGraph
+import Proofs.Pous.Defs.Model.BandGraph
 
 /-!
 # Band-graph combinatorics (game-independent)

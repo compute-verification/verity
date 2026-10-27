@@ -1,4 +1,4 @@
-import Definitions.Pous.Model.ColumnGame
+import Proofs.Pous.Defs.Model.ColumnGame
 
 /-!
 # The band graph of the column game (trusted)

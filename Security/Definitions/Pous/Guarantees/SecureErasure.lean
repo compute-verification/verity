@@ -1,4 +1,4 @@
-import Definitions.Pous.Model.Digest
+import Mathlib.Algebra.BigOperators.Fin
 import Definitions.Pous.Model.BandChain
 import Definitions.Pous.Accounting.EraseMeets
 

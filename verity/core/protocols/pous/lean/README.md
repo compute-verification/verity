@@ -14,18 +14,15 @@ Definitions/Pous/Game/{Prob,Oracle}.lean
                                     bits, uniform probability, ideal primitive, parallel oracle programs
 Definitions/Pous/Model/{Scheme,Audit,Inc}.lean
                                     encoding schemes, the audit game, INC and TimedINC
-Definitions/Pous/Model/{M1,M1p,HashChain,Pebbling,Labelling,Invertible,ColumnGame,Dense,SampledAudit}.lean
+Definitions/Pous/Model/{M1,M1p,Pebbling,Labelling,Invertible,Dense,SampledAudit}.lean
                                     model M1, M1 on `[0, p)` (`m1p`, the abstract model at P2's domain),
-                                    B3's chain, Fisch's stacked DRGs and white/green game,
-                                    Pietrzak's one-way labels, P3's invertible labels, the two-directional column
-                                    game, the dense scheme S1 (one segment, segmented, and tagged as the code
-                                    keys it), the state after a history
+                                    Fisch's stacked DRGs and white/green game,
+                                    Pietrzak's one-way labels, P3's invertible labels, the dense scheme S1 (one
+                                    segment, segmented, and tagged as the code keys it), the state after a history
 Definitions/Pous/Model/{P3Chain,BandChain,PubEncoder}.lean
                                     the overwrite chain on an ideal permutation, P3 with it as `H`, the
                                     band and the dense chain scheme over it, the public-encoder setup check
-Definitions/Pous/Model/{BandGraph,SegLift}.lean
-                                    the band graph the column game's band certificates are stated over; a
-                                    segment's parents at their global positions, which the tagged transfer reads
+Definitions/Pous/Model/SegLift.lean a segment's parents at their global positions, which the tagged transfer reads
 Definitions/Pous/Model/Graded.lean  the graded audit: up to `t` late rounds, each within a hard `(D_late, Q_late)`
 Definitions/Pous/Model/Continuous.lean
                                     the continuous audit: an explicit memory challenger (sequential reveal, a hard
@@ -71,6 +68,10 @@ Proofs/Pous/Statements.lean         trusted, the lemmas' statements (math, not c
                                     `N10Refuted` negates, among them `DigestAU` and `SecureErasureMeets`; it
                                     imports no proof, and grade.sh grades `KFloor`, `Theorem1ii` and the open
                                     `A2LemmaAM1`, `A5RabinGcd` and `A7Params` against it
+Proofs/Pous/Defs/Model/{HashChain,ColumnGame,BandGraph,Digest}.lean
+                                    trusted, the definitions only the lemmas' statements read: B3's chain, the
+                                    two-directional column game, the band graph its band certificates are stated
+                                    over, the keyed digest of a region
 Proofs/Pous.lean                    proved, the proofs: imports every proof module, and proves
                                     Pous.SecurityProofs.X : Pous.Guarantees.X for each proved guarantee
 Proofs/Pous/{Sanity,Accounting/Numbers}.lean
@@ -157,5 +158,5 @@ sha256sum lean-toolchain lakefile.toml lake-manifest.json grade.sh Grader/Regist
   ../../../../../Security/Definitions/Pous.lean \
   ../../../../../Security/Proofs/Pous/Statements.lean ../../../../../Security/Proofs/Pous/Sanity.lean \
   ../../../../../Security/Proofs/Pous/Accounting/Numbers.lean \
-  $(find ../../../../../Security/Definitions/Pous ../../../../../Security/Definitions/Pous -name '*.lean' | LC_ALL=C sort -u) > TRUSTED.sha256
+  $(find ../../../../../Security/Definitions/Pous ../../../../../Security/Proofs/Pous/Defs -name '*.lean' | LC_ALL=C sort -u) > TRUSTED.sha256
 ~~~

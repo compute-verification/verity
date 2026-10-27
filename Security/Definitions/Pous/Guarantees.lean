@@ -7,7 +7,6 @@ import Definitions.Pous.Accounting.PubMeets
 import Definitions.Pous.Accounting.GradedMeets
 import Definitions.Pous.Accounting.Rebuild
 import Definitions.Pous.Assumptions
-import Definitions.Pous.Model.HashChain
 import Definitions.Pous.Model.Dense
 import Definitions.Pous.Model.Inc
 import Definitions.Pous.Model.Invertible
@@ -21,7 +20,6 @@ import Definitions.Pous.Guarantees.P2
 import Definitions.Pous.Guarantees.Obligation
 import Definitions.Pous.Guarantees.SecureErasure
 import Definitions.Pous.Guarantees.StreamedWipe
-import Definitions.Pous.Model.BandGraph
 import Definitions.Pous.Model.SegLift
 import Definitions.Pous.Model.Continuous
 
