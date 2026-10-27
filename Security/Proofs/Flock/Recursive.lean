@@ -67,6 +67,7 @@ import Proofs.Flock.Recursive.KSStatement
 import Proofs.Flock.Recursive.KS
 import Proofs.Flock.Recursive.KSV
 import Proofs.Flock.Recursive.KSDeployed
+import Proofs.Flock.Claims.Recursion.DeployedCounts
 import Proofs.Flock.Recursive.KSProved
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), hidden unit circuits' class,
 registered table and registered schedule, with the holographic table at them (`Holo`), the proofs of its guarantees

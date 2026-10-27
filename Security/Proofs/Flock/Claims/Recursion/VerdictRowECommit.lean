@@ -18,12 +18,13 @@ open Flock
 open Claims (Msg)
 
 /-- **Two staged rec-open parts' `acc`/`acc_out` slots at one chain position carry one commit string**: at staged
-`.recOpen` parts `s` and `s'` of `x` the witnesses check against, with their tables labelled in order and the reads
+`.recOpen` parts `s` and `s'` of `x` at one staging message (`hxO`, `hxO'`) the witnesses check against, with their tables labelled in order and the reads
 files `own`, `own'`, the slots at units `n` and `n'` whose chain positions agree (`hpos`) read one commit string,
 wherever the true calls `L` and the setups' evaluations at `xs ∋ xO, xO'` have no collision, at a record that lists
 the registered reads' evaluations (`RegListed`). -/
-theorem accCommit_eq {st st' : Stage} {s s' : ℕ} {x xO xO' : Msg} {w w' : Claims.Flock.Wit}
-    (hS : StagedPart st s x xO) (hS' : StagedPart st' s' x xO')
+theorem accCommit_eq {st : Stage} {s s' : ℕ} {x xO xO' : Msg} {w w' : Claims.Flock.Wit}
+    (hS : StagedPart st s x xO) (hS' : StagedPart st s' x xO')
+    {ms : List (Msg × Claims.Out)} (hxO : xO = staged st x ms s) (hxO' : xO' = staged st x ms s')
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true)
     (hck' : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO' w' = true) {r : XR}
     (hr : readX x = some r) {c c' : Circuit} (hpc : r.w.parts[s]?.bind partCircuit = some c)
@@ -51,19 +52,18 @@ theorem accCommit_eq {st st' : Stage} {s s' : ℕ} {x xO xO' : Msg} {w w' : Clai
     (hx : xO ∈ xs) (hx' : xO' ∈ xs) :
     Claims.Recursion.VStarB.readForms w (hmCommit c q n) =
       Claims.Recursion.VStarB.readForms w' (hmCommit c' q' n') := by
-  obtain ⟨reg, rws, a0, hreg, -, hrw, ha, hs, t, positions, paths, ht, hp, he, hlt, hps, -, hrd⟩ :=
+  obtain ⟨reg, rws, a0, hreg, -, hrw, ha, hs, t, positions, paths, ht, hp, he, -, hps, -, hrd⟩ :=
     accRow_table hS hck hr hpc hsv hsch hsu h0 hidx hown hnm hq hn hnp
-  obtain ⟨reg', rws', a0', hreg', -, hrw', ha', hs', t', positions', paths', ht', hp', he', hlt', hps', -, hrd'⟩ :=
+  obtain ⟨reg', rws', a0', hreg', -, hrw', ha', hs', t', positions', paths', ht', hp', he', -, hps', -, hrd'⟩ :=
     accRow_table hS' hck' hr hpc' hsv' hsch hsu' h0' hidx' hown' hnm' hq' hn' hnp'
-  have ho := mem_regOpenings hsu hown (st := sts[0]) (by simp) (by simpa using hreg) (mem_portOpenings ht hp he hlt)
+  have ho := mem_regOpenings hsu hown (st := sts[0]) (by simp) (by simpa using hreg) (mem_portOpenings ht hp he hnp)
   have ho' := mem_regOpenings hsu' hown' (st := sts'[0]) (by simp) (by simpa using hreg')
-    (mem_portOpenings ht' hp' he' hlt')
+    (mem_portOpenings ht' hp' he' hnp')
   have hpp : positions.getD (Registered.ref t sts[0].c.ports.size q n) 0 =
       positions'.getD (Registered.ref t' sts'[0].c.ports.size q' n') 0 := by
     rw [hps, hps', hpos]
   rw [hpp] at ho
-  obtain ⟨ms, -, -, -, rfl, -, -⟩ := hS
-  obtain ⟨ms', -, -, -, rfl, -, -⟩ := hS'
+  subst hxO hxO'
   have hsite := accRow_site_eq (setupO_some hsu).1 (setupO_some hsu').1 hrw ha hs hrw' ha' hs'
   have hbc := bc_eq_of_setup hD hl hc hx hx' ho ho' (sameRoot_of_site hsite)
   rw [hrd, hrd', hbc]
