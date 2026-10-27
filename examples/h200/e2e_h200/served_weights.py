@@ -2,7 +2,7 @@
 every tensor of a decoder of any `Shape` (the H200 demo's frozen shape `H200`, Phase 1's CPU model `PHASE1`), and the
 registration of those tensors as core's registered values (``one_stage.registered``), computed in parallel.
 
-No torch: memory-accounting's encoder and the H200 demo run it with `examples/h200` on their path
+No torch: PoUS's encoder and the H200 demo run it with `examples/h200` on their path
 (``PYTHONPATH=examples/h200 python -m e2e_h200.served_weights ...``).
 
 * **The model** (`Shape`): a pre-norm decoder with learned absolute positions, ``heads`` query heads of ``head_dim`` and
@@ -95,7 +95,7 @@ class Shape:
     context: int
     #: s8 codes in one registered row of a linear: the K of the part a unit reads
     row_codes: int
-    #: ``tok``'s row format: ``hm96-sha512/row/v2``, the rows the demo's proofs cover (proofs, 26 Oct 00:39Z);
+    #: ``tok``'s row format: ``hm96-sha512/row/v2``, the rows the demo's proofs cover;
     #: ``hm96-sha512/row-seg/v1`` is ``EmbeddingRead_v1``'s
     tok_schema: str = REG.SCHEMA_V2
     #: ``tok``'s rows: ``"coordinate"`` (H, V), a coordinate over the tokens (the default),
@@ -577,7 +577,7 @@ def write(shape: Shape, seed: bytes, path: str | Path, *, workers: int = 1, star
     return done
 
 
-#: the H200 demo's seed (compute-accounting, 25 Oct 23:33Z): public, so its weights are reproducible; the demo's salt key is
+#: the H200 demo's seed: public, so its weights are reproducible; the demo's salt key is
 #: the prover's, drawn from the OS at registration
 DEMO_SEED = b"verity/cmp92/h200/weights/v1"
 #: the fixture's public seed and dummy salt key: test values, never the demo's

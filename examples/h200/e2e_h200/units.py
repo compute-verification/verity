@@ -4,8 +4,8 @@ The units are circuits' FAMILIES map's (`plan.Map`): each `Family` is one `plan.
 over one table, its unit i's output that table's bytes at ``offset + i * stride``. `Family.replay` gives a unit's opened
 inputs, its committed outputs (its output rows' bytes, as 16- or 32-bit words where the rows are) and what replay computes.
 
-Every unit's words are compositions of the replay lane's templates (`tpl`, ``replay.template(key).evaluate``: main's
-Definition where it exists, else the lane's reference), until the replay lane adds the map's templates:
+Every unit's words are compositions of `replay.py`'s templates (`tpl`, ``replay.template(key).evaluate``: main's
+Definition where it exists, else its reference), until the map's own templates exist:
 
 * ``EmbeddingCoordinate_v1{V}``: that template;
 * ``RmsSumSqChunks_v1{C, K}``: ``RmsSumSqPart_v1{C = K}`` a chunk; ``RmsNormOutSums_v1{C, S, G, N, EPS}``:

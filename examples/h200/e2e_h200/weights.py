@@ -1,7 +1,7 @@
-"""The seeded weights the skeleton serves: ALLP-IFACE's generator and stream (`e2e_h200.served_weights`, CMP-95 item 1),
+"""The seeded weights the skeleton serves: the generator and stream of `e2e_h200.served_weights`,
 with the reads the driver, the store and replay make.
 
-The weights stream (every tensor's little-endian bytes in `tensors(shape)` order, no padding) is what memory-accounting's
+The weights stream (every tensor's little-endian bytes in `tensors(shape)` order, no padding) is what PoUS's
 store P2-encodes and what the store's decode call stages from; `generate` gives any tensor without the store, which replay
 reads a drawn unit's weight row from, so a wrong decode shows as a mismatch.
 """

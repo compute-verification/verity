@@ -1,4 +1,4 @@
-"""M3's registration of one H200 step (PRF-172): the step's committed roots and a ``subset:K`` law over its whole partition,
+"""M3's registration of one H200 step: the step's committed roots and a ``subset:K`` law over its whole partition,
 fixed before any coin. The live coin's session binds the digest as its root (`m3coin.py`).
 
     python examples/h200/m3reg.py --roots roots.json --run RUN_ID --step 31 --k 8 --out DIR

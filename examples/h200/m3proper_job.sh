@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# M3 proper on the H200 (CMP-161, PRF-172). PHASE=commit writes a new salt secret (~/.local/state/m3proper-1de3, 0600,
+# M3 proper on the H200. PHASE=commit writes a new salt secret (~/.local/state/m3proper-1de3, 0600,
 # never under $OUT, kept by `research keep`) and m3draw's roots.json for f3ca's prompts and flags. PHASE=replay re-runs
 # under it with kv_reads' KeepingDriver for inputs/blocks.json's slots, holds every root to inputs/roots.json and leaves
 # the drawn slots' rows beside the secret (m3bundle.py's input). The card is leased for the run only.

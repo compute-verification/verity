@@ -1,7 +1,7 @@
-"""The weights' store and its decode call: the stand-in for memory-accounting's layout and decode call, on
-the conventions kernels' decode-to-staging kernel already reads (`benchmarks/torch_gpu/s8_dec_linear`, KP2-DEC).
+"""The weights' store and its decode call: the stand-in for PoUS's layout and decode call, on
+the conventions kernels' decode-to-staging kernel already reads (`benchmarks/torch_gpu/s8_dec_linear`).
 
-**Layout.** W is ALLP-IFACE's weights stream (`weights.Weights.stream`: every tensor's little-endian bytes, s8 codes, f32
+**Layout.** W is the weights stream (`weights.Weights.stream`: every tensor's little-endian bytes, s8 codes, f32
 scales and bf16 gains and embeddings, at `Tensor.offset`). Block j of the store carries W bytes
 [2054 j, 2054 j + 2054) as bytes 2 .. 2055 of its big-endian 2,056-byte row, P2 v4 (`p2-16448/v4`,
 `verity.core.protocols.pous.schemes.p2`) at the registered point, keys from `sha512_keys` under `expand_prefix(salt)`; the
@@ -14,7 +14,7 @@ payload): a refused block raises, never stages.
 
 Stores:
 * `P2Store`: the encoded rows C, in host memory or on a CUDA device; built by `encode` (the CPU reference, ~1 s a block with
-  gmpy2: tiny shapes only) or loaded from a file of raw rows (`load`), the form memory-accounting's store ships in.
+  gmpy2: tiny shapes only) or loaded from a file of raw rows (`load`), the form PoUS's store ships in.
 * `GeneratorStore`: no store; ``stage`` regenerates the tensor from the seed. The FIXTURE for running the frozen shape's
   compute before C* is on the card; the record says so.
 * `FileStore`: W itself, the file network's load sink writes, read in place. Before it serves, every tensor's
@@ -172,7 +172,7 @@ class P2Store(Store):
         self._stage = None
         if stage_lib:
             sys.path.insert(0, str(ROOT / "benchmarks" / "torch_gpu" / "s8_dec_linear"))
-            from stage import Stage  # kernels' KP2-DEC wrapper
+            from stage import Stage  # the kernels' decode-to-staging wrapper
             self._stage = Stage(stage_lib, rows.device)
 
     @classmethod

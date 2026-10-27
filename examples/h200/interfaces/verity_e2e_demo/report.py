@@ -11,7 +11,7 @@ inputs, which leave Markdown out, cover it), filled from one of three places, ea
 * `DERIVED`: a formula over the other two, filled once all its inputs are.
 
 A name with no value renders as ``⟨NAME⟩`` only in a draft (``render(..., draft=True)``, never ``main``), the closing
-table saying what fills it; a report is refused while any number is unfilled, naming each. A value may carry a ``label`` (``PyTorch dry run``, ``HASH-20 bench``), printed beside it wherever it appears,
+table saying what fills it; a report is refused while any number is unfilled, naming each. A value may carry a ``label`` (``PyTorch dry run``, ``H200 bench``), printed beside it wherever it appears,
 for a number that is not the demo block's own; ``--record-label`` labels every number read from the block records,
 once at the top and in the sources table.
 

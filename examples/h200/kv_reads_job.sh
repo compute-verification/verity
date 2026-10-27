@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# kv_reads.py on the H200 (CMP-161): m3draw's run again under its salt secret (~/.local/state/m3draw-1de3, 0600, never
+# kv_reads.py on the H200: m3draw's run again under its salt secret (~/.local/state/m3draw-1de3, 0600, never
 # under $OUT), its roots held to inputs/roots.json (m3draw commit's), and drawn attention blocks of step 31 opened with
 # the K and V rows they read at steps 0 .. 31, each against its own step's root. The card is leased for the replay only:
 # the open (CPU, ~40 min) runs after the lease is released, its state beside the secret and removed at exit.
