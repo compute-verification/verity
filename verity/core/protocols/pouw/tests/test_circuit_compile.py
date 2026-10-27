@@ -27,7 +27,7 @@ from verity.ml.circuits.ops import s8 as S8
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean import s8 as BS8
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Coll, array_of, concat
+from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.types import Array, Record, Tuple, Value
 from verity.core.protocols.pouw import grind as GR
 from verity.core.protocols.pouw.circuit import compile as C

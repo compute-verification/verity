@@ -724,7 +724,7 @@ def j10r_misformed(rng: random.Random, lay: dict, prefix: str = "") -> str:
 def _alt_layout(rng: random.Random, lay: dict) -> dict:
     """Another layout of `lay`'s linears: another slot, another n, or the calls in another order, with other units or
     other strata than `lay`'s."""
-    (r, c), out = lay["tile"], json.loads(json.dumps(lay))
+    (_r, c), out = lay["tile"], json.loads(json.dumps(lay))
     while True:
         match rng.choice(["m", "n", "calls", "drop"]):
             case "m":

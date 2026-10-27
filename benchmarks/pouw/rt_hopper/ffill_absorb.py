@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dc"))
-import ffill_ref as F  # noqa: E402
+import ffill_ref as F
 
 MAXP = 128 * 63
 D = 32 * MAXP

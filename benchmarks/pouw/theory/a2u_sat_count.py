@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cpw_sass_count import CC_ARCH, parse  # noqa: E402
+from cpw_sass_count import CC_ARCH, parse
 
 KERNEL = re.compile(r"^([slu]|o\d|tu?)_(\d+)_(\d+)(?:_(\d+))?$")
 

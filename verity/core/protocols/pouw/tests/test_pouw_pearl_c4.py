@@ -35,12 +35,12 @@ from verity.core.protocols.pouw.schemes import pearl_kw as P
 
 # the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
-from clear_audit import Prover  # noqa: E402
-import clear_work as CW  # noqa: E402
+from clear_audit import Prover
+import clear_work as CW
 
 # the device-run replay is a benchmark's (benchmarks/pouw/pearl_c4), imported by name so that its forkserver workers find it
 sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "pearl_c4"))
-import replay as R  # noqa: E402
+import replay as R
 
 K = 128
 FMTS = ("nvfp4", "mxfp4")

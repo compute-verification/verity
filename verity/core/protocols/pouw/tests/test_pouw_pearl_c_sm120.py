@@ -19,8 +19,7 @@ import pearl_c_u_vectors as UV
 import pearl_c_vectors as CV
 import test_pouw_pearl_c_debit as TD
 import test_pouw_pearl_c_u as TU
-from verity.ml.circuits.silicon.models import (ADA_E4M3_M16N8K32, BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_BF16_M16N8K16,
-                                 HOPPER_E4M3_K32)
+from verity.ml.circuits.silicon.models import (ADA_E4M3_M16N8K32, BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_BF16_M16N8K16)
 from verity.core.protocols.pouw.protocol import Matmul, Shape, Tile
 from verity.core.protocols.pouw.schemes import get
 from verity.core.protocols.pouw.schemes import pearl_c as C
@@ -28,11 +27,11 @@ from verity.core.protocols.pouw.schemes import pearl_c_debit as D
 from verity.core.protocols.pouw.schemes import pearl_c_u as U
 from verity.core.protocols.pouw.schemes import pearl_c_work as W
 from verity.core.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES, H100, SM120, SM120_UNPROMOTED, Device, Prices
+from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES, H100, SM120, SM120_UNPROMOTED, Prices
 
 # the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
-import clear_work as CW  # noqa: E402
+import clear_work as CW
 
 SM120_ATOM = BLACKWELL_SM120_E4M3_M16N8K32
 

@@ -16,7 +16,7 @@ from verity.core.protocols.pouw.schemes import ncp
 
 # the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
-from clear_audit import Lottery, Prover, Sampled, Verifier, reference_kernel, tickets  # noqa: E402
+from clear_audit import Lottery, Prover, Sampled, Verifier, reference_kernel, tickets
 
 BEACON, SOURCE = b"beacon round 1", b"verifier secret"
 

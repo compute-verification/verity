@@ -41,10 +41,10 @@ def test_each_familys_row_is_pinned(reading):
     family's row shows here, with the row it moved."""
     rows = {x.family: x for x in H.rows(reading)}
     assert list(rows) == list(PINS[reading])
-    for fam, (skip, machine, luck, core, gamma, floor, p1) in PINS[reading].items():
+    for fam, (skip, mach, luck, core, gamma, floor, p1) in PINS[reading].items():
         x = rows[fam]
         got = (x.skip, x.machine, x.luck, x.core)
-        assert got == pytest.approx((skip, machine, luck, core), abs=2e-6), (fam, got)
+        assert got == pytest.approx((skip, mach, luck, core), abs=2e-6), (fam, got)
         assert x.mand == 0 and x.core == pytest.approx(x.skip + x.mand + x.machine + x.luck, abs=1e-12), fam
         assert x.gamma == pytest.approx(gamma, abs=2e-4) and x.floor == floor, fam
         assert (x.p1["core"] if x.p1 else None) == (None if p1 is None else pytest.approx(p1, abs=2e-6)), fam

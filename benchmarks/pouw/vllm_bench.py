@@ -35,7 +35,6 @@ import argparse
 import contextlib
 import json
 import os
-import statistics
 import sys
 import time
 from pathlib import Path

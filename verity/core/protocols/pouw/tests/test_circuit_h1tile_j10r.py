@@ -10,7 +10,6 @@ from fractions import Fraction
 
 import pytest
 
-from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.ops.boolean import gemm as BG

@@ -34,7 +34,6 @@ import numpy as np
 import torch
 import torch.nn.functional as Fn
 
-from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.ops import gemm as G

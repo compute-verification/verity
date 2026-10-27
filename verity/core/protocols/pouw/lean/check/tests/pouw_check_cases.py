@@ -261,7 +261,7 @@ LIVE_ARGS = {"live-incomplete": {"complete": False}, "live-unreserved": {"reserv
 def _derived(name: str, case: dict, rng: random.Random):
     """The value of a mutation whose value depends on the honest case."""
     p, rec, ans = case["params"], case["record"], case["answer"]
-    items, bits, tw = rec["window"]["public"], p["grid_bits"], p["check"]["tile_work"]
+    items, bits, _tw = rec["window"]["public"], p["grid_bits"], p["check"]["tile_work"]
     ell = items["work"]["level"]
     if name in ("params-query-other", "answer-other"):
         return _hex(rng)

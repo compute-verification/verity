@@ -33,7 +33,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import nvf4_bench as NB  # noqa: E402
+import nvf4_bench as NB
 
 FP8 = 1  # the harness's kind
 ONE = struct.pack("<f", 1.0)

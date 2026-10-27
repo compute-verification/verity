@@ -56,7 +56,7 @@ def test_record_round_trips_into_the_planners_model():
     model = from_record(rec).model(source="art:x")
     c = Candidate("op", "K2048", 4096, 1, 16, ands=2_650_000, cap=4096)
     a0, a1 = model.statement(c)
-    v, s = fitted.verify.coef, fitted.stage.coef
+    v, _s = fitted.verify.coef, fitted.stage.coef
     assert a0 == pytest.approx(TRUE["one"] + v["one"] / 55, rel=1e-9)
     assert a0 + a1 * 4096 == pytest.approx(TRUE["one"] + (fitted.verify(obs[-2]) + fitted.stage(obs[-2])) / 55, rel=1e-9)
     assert model.unit(c) == pytest.approx(TRUE["ands*drawn"] * 2_650_000, rel=1e-9) and model.source == "art:x"

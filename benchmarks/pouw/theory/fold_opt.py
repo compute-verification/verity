@@ -203,7 +203,7 @@ def two_instruction_yp(yp, pool):
     """Confirm y' is a length-2 program: v1 = u = y ^ d ^ k (one LOP3), then y' = IMAD(a, v1, z) (one instruction over the
     pool extended with v1). The first value u is itself a single instruction (checked separately), so y' at length 2 is
     the honest prefix, below the duo word's three."""
-    y, d, k, z, a = pool["y"], pool["d"], pool["k"], pool["z"], pool["a"]
+    y, d, k, _z, _a = pool["y"], pool["d"], pool["k"], pool["z"], pool["a"]
     nv = len(yp)
     v1 = [u32(y[i] ^ d[i] ^ k[i]) for i in range(nv)]
     ext = dict(pool)

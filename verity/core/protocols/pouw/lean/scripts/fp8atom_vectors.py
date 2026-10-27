@@ -326,7 +326,7 @@ def expected(acc: int, a, b) -> int:
 
 
 def out_class(w: int) -> str:
-    e, m = (w >> 23) & 0xFF, w & 0x7FFFFF
+    e, _m = (w >> 23) & 0xFF, w & 0x7FFFFF
     if w == 0x7FFFFFFF:
         return "nan"
     if e == 0xFF:

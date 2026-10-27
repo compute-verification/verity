@@ -20,7 +20,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
 
-import sass_gate as SG  # noqa: E402
+import sass_gate as SG
 
 FIX = Path(__file__).parent / "fixtures" / "sass_gate"
 NOTES = json.loads((FIX / "tool_notes.json").read_text())

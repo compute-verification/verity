@@ -37,9 +37,9 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from checked_strip import (MASK, TS_SHAPES, Block, co32c_words, cross_ranks, instance, n_digits, o_routes,  # noqa: E402
+from checked_strip import (TS_SHAPES, Block, co32c_words, cross_ranks, instance, n_digits, o_routes,
                            s32, ts_best)
-from exact_kit.checks import Checks  # noqa: E402
+from exact_kit.checks import Checks
 
 WIDTHS = (8, 16, 32, 64)
 QSTAR_X = 10.66

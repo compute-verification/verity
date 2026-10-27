@@ -26,7 +26,7 @@ from verity.core.protocols.pouw.schemes import ncp
 
 # the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
-from clear_audit import Prover, Sampled, Verifier  # noqa: E402
+from clear_audit import Prover, Sampled, Verifier
 
 PINNED = json.loads(V.OUT.read_text())
 

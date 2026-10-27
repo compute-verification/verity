@@ -13,7 +13,7 @@ import pytest
 
 import pearl_vectors as PV
 from verity.ml.crypto.blake3 import blake3
-from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, PoUWScheme, Shape, Tile
+from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, PoUWScheme, Shape
 from verity.core.protocols.pouw.schemes import get
 from verity.core.protocols.pouw.schemes import pearl_kw as P
 

@@ -27,8 +27,8 @@ from verity.core.protocols.pouw.schemes.pearl_c_device import SM120
 
 # the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
-from clear_audit import Prover  # noqa: E402
-import clear_work as CW  # noqa: E402
+from clear_audit import Prover
+import clear_work as CW
 
 S = C.PearlC(k_min=32, tile=(16, 16), forming="v1")
 K = 128

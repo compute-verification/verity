@@ -77,11 +77,11 @@ def test_the_designs_reproduce_skips_figures():
     20261017T0320Z-draft-eps1-calc Round 10). Dither-1S binds at 8B 32K decode: QKᵀ's one-sided strip is 2L of its
     d = 128 products a word."""
     two = design("dither-2s")
-    for sums, eps in (("vsum", 0.0032750), ("vfold", 0.0029227)):
+    for sums, want in (("vsum", 0.0032750), ("vfold", 0.0029227)):
         q = E.design_skip(replace(two, sums=sums), vector="VF3q-16")
-        assert (q.ctx, q.phase) == (2048, "prefill") and q.eps_time == pytest.approx(eps, rel=1e-4), sums
+        assert (q.ctx, q.phase) == (2048, "prefill") and q.eps_time == pytest.approx(want, rel=1e-4), sums
     assert E.design_skip(replace(two, sums="vsum")).eps_time == pytest.approx(0.0036468, rel=1e-4)
-    for name, eps, ctx, phase in (("dither-2s", 0.0032546, 2048, "prefill"),
+    for name, want, ctx, phase in (("dither-2s", 0.0032546, 2048, "prefill"),
                                   ("dither-2s-fill", 0.0016511, 2048, "prefill"),
                                   ("dither-2s-pv", 0.0024783, 2048, "prefill"),
                                   ("dither-c", 0.0034120, 8192, "prefill"),
@@ -90,7 +90,7 @@ def test_the_designs_reproduce_skips_figures():
                                   ("dither-1s", 0.1230973, 32768, "decode")):
         q = E.design_skip(design(name))
         assert (q.model, q.ctx, q.phase) == ("llama-3.1-8b", ctx, phase), name
-        assert q.eps_time == pytest.approx(eps, rel=1e-4) and q.credit == "floor", name
+        assert q.eps_time == pytest.approx(want, rel=1e-4) and q.credit == "floor", name
 
 
 def test_the_registry_skip_is_eps_budgets_number():
@@ -237,9 +237,9 @@ def test_the_peel_is_priced_at_bc_kernels_measured_kernel():
 def test_pv_units_price_as_checked_strip_without_the_scaling_and_the_sink(monkeypatch):
     monkeypatch.setattr(E, "PV_SCALE_OPS", 0.0)
     monkeypatch.setattr(E, "pv_ts", E.pv_ts.__wrapped__)
-    for m, c, eps, gamma in (("llama-3.1-8b", 2048, 0.043914, 1.4080), ("llama-3.1-70b", 8192, 0.010158, 1.2985)):
+    for m, c, want, gamma in (("llama-3.1-8b", 2048, 0.043914, 1.4080), ("llama-3.1-70b", 8192, 0.010158, 1.2985)):
         e, g = E.pv_ts(m, c, 0, sink=False)
-        assert eps <= e < eps + 1e-4 and g == pytest.approx(gamma, abs=1e-4)   # the zero-instance routes add < 0.01%
+        assert want <= e < want + 1e-4 and g == pytest.approx(gamma, abs=1e-4)   # the zero-instance routes add < 0.01%
 
 
 def test_smaller_p_blocks_cost_more_eps_and_gamma():

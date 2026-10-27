@@ -15,16 +15,16 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
 
-import arm as A  # noqa: E402
-import baselines as B  # noqa: E402
-import bench as H  # noqa: E402
-import chain as CH  # noqa: E402
-import derive as DV  # noqa: E402
-import fill as F  # noqa: E402
-import identity as I  # noqa: E402
-import report as R  # noqa: E402
-import schedule as S  # noqa: E402
-import shapes as SH  # noqa: E402
+import arm as A
+import baselines as B
+import bench as H
+import chain as CH
+import derive as DV
+import fill as F
+import identity as I
+import report as R
+import schedule as S
+import shapes as SH
 
 UUID5 = "GPU-0a1b2c3d-0000-1111-2222-333344445555"
 

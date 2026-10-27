@@ -20,8 +20,8 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "facet_break"))
-import loads as L  # noqa: E402
-from verity_machine_model import eps as E  # noqa: E402
+import loads as L
+from verity_machine_model import eps as E
 
 BLOCK_WARPS = {9: 4, 10: 16}
 INS = re.compile(r"/\*([0-9a-f]{4,})\*/\s+((?:@!?U?P[T0-9]+\s+)?)([A-Z][A-Z0-9_.]*)([^;]*);")

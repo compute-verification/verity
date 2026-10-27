@@ -98,7 +98,7 @@ def sh(cmd, out=None, err=None, env=None) -> int:
 
 def arm_doc(arm) -> dict:
     sys.path.insert(0, str(HERE.parent / "harness"))
-    import ledger  # noqa: PLC0415
+    import ledger
 
     fl = {k: v for k, v in dataclasses.asdict(arm.filler).items() if v is not None} if arm.filler else None
     variant = ledger.variant_record(family=f"filler-{arm.name}", device="sm120", schemes=["dfill-receipt"],
@@ -350,7 +350,7 @@ def report(out: Path, arm=None, version: str | None = None, coins: float = S.PRE
 
 
 def record(res: dict, doc: dict, run_dir: Path, by: str | None) -> dict:
-    import ledger  # noqa: PLC0415
+    import ledger
 
     lin = doc["lineage"]
     g = res["gates"]
@@ -493,7 +493,7 @@ def show(res: dict) -> None:
           + f" (mixes: {fmt((res['min_mix'] or {}).get('coverage'))} at {(res['min_mix'] or {}).get('entry')})"
           + f"; nominal ÷ capacity {fmt(res['score_nominal'])}, at 0.99 for all {fmt(res['score_at_target'])}")
     if "score_under_ch_if_gated" in res:
-        print(f"  SCORE under CH (every filler at 0.99; CH withdrawn, decision 27; "
+        print("  SCORE under CH (every filler at 0.99; CH withdrawn, decision 27; "
               + ("of the fixed work v4 credits" if res["scorer"] == S.V4 else "v2's reading, for comparison")
               + f"): {fmt(res['score_under_ch'])}" + ("" if res["scored"] else
                                                       f" ({fmt(res['score_under_ch_if_gated'])} if gated)"))
@@ -558,12 +558,12 @@ def show(res: dict) -> None:
 
 
 def leaderboard(local: list[Path], refresh: bool, as_json: bool) -> int:
-    import ledger  # noqa: PLC0415
+    import ledger
 
     entries = []
     try:
         if refresh:
-            from research.store import cli as SC  # noqa: PLC0415
+            from research.store import cli as SC
             SC.main(["refresh"])
         entries = [(art, m) for art, m, _ in ledger.attempts() if m.get("scorer", "").startswith("filler-scorer/")]
     except Exception as ex:  # noqa: BLE001  the store is optional here; local run dirs still list

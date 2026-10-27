@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import cgemm_ref as cr  # noqa: E402
+import cgemm_ref as cr
 
 T = cr.T
 
@@ -35,7 +35,7 @@ def check(d: Path) -> dict:
     out = cr.check(d)
     meta = json.loads((d / "meta.json").read_text())
     cw = json.loads((d / "cw_meta.json").read_text())
-    m_, n, k, seed, inv_s = meta["m"], meta["n"], meta["k"], meta["seed"], np.float32(meta["inv_s"])
+    _m, n, k, seed, inv_s = meta["m"], meta["n"], meta["k"], meta["seed"], np.float32(meta["inv_s"])
     key = b"".join(struct.pack(">Q", int(w, 16)) for w in meta["key"])
     tiles_n = n // T
     nd = out["digits"]

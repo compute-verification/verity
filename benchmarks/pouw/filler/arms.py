@@ -95,8 +95,8 @@ def _record_rules():
     for p in (HERE.parent / "harness", REPO / "tools" / "research" / "src"):
         if str(p) not in sys.path:
             sys.path.append(str(p))
-    import ledger  # noqa: PLC0415
-    from research.store import canon, ids, model  # noqa: PLC0415
+    import ledger
+    from research.store import canon, ids, model
     return ledger, canon, ids, model
 
 

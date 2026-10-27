@@ -140,7 +140,7 @@ import string
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -762,7 +762,7 @@ def later(t: Any, minutes: int) -> str | None:
     if m is None:
         return None
     try:
-        d = datetime(*map(int, m.groups()), tzinfo=timezone.utc) + timedelta(minutes=minutes)
+        d = datetime(*map(int, m.groups()), tzinfo=UTC) + timedelta(minutes=minutes)
     except (ValueError, OverflowError):
         return None
     return f"{d.year:04d}-{d.month:02d}-{d.day:02d}T{d.hour:02d}:{d.minute:02d}:{d.second:02d}Z"

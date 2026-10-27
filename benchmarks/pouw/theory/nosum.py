@@ -169,7 +169,6 @@ def main() -> int:
     # enumeration coverage: the brief's unit list is all present.
     needed = ["RT core", "Texture", "ROP", "Video", "L2 reduction", "TMA bulk reduce", "DSMEM", "TMA bulk copy",
               "Uniform datapath"]
-    joined = " | ".join(u["unit"] for u in UNITS)
     for n in needed:
         checks.check(f"enumerated: {n}", any(n.split()[0] in u["unit"] or n in u["unit"] for u in UNITS))
 

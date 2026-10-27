@@ -983,7 +983,6 @@ def main():
                  "Dither mean ½ΣP, variance ΣP²/4", bad == 0, f"{bad} mismatches over 6 instances (every coin point)")
     EV2 = Fraction(sum(v * v for v in range(-128, 127)), 255)
     EP2 = Fraction(sum(p * p for p in range(-63, 63)), 126)
-    EV2_7 = Fraction(sum(v * v for v in range(-64, 63)), 127)
     ratios = {"uniform entries, 8-bit served": float((EV2 + EP2 + Fraction(3, 4)) / EP2),
               "same rms in LSBs on both sides": 2.0,
               "served rms half the peeled rms (outlier-heavy activations)": 1.25}

@@ -39,7 +39,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import share  # noqa: E402  CAP's constants: MACs a token, non-GEMM times, FA2, the int8 peak
+import share
 
 V2, V3, V4, V5 = "filler-scorer/v2", "filler-scorer/v3", "filler-scorer/v4", "filler-scorer/v5"
 #: the active lock. V3 adds the arm's record checked before its lease (`arms.record_problems`), each point's slowdown
@@ -1463,16 +1463,16 @@ def entry_v5(e: dict, stats: dict, coins: float = PREFILL_COINS) -> dict:
     if e["kind"] == "decode":
         st = stats[("decode", e["B"], e["L"])]
         r = decode_entry(st, e["B"], e["L"])
-        n_pre, f_pre, gemm, n_dec, f_dec = 0.0, 0.0, 0.0, r["serving_macs"], r["filler_macs"]
+        _n_pre, f_pre, gemm, n_dec, f_dec = 0.0, 0.0, 0.0, r["serving_macs"], r["filler_macs"]
     elif e["kind"] == "prefill":
         st = stats[("prefill", PREFILL_M, 0)]
         r = prefill_entry(st)
-        n_pre, f_pre, gemm, n_dec, f_dec = r["serving_macs"], r["filler_macs"], st["alone_ms"] + share.FA2_MS_8192, 0.0, 0.0
+        _n_pre, f_pre, gemm, n_dec, f_dec = r["serving_macs"], r["filler_macs"], st["alone_ms"] + share.FA2_MS_8192, 0.0, 0.0
     else:
         pre, dec = stats[("prefill", PREFILL_M, 0)], stats[("decode", e["B"], e["L"])]
         r = mix_entry(pre, dec, e["P"], e["D"], e["B"], e["L"])
         m = mix_parts(pre, dec, e["P"], e["D"], e["B"], e["L"])
-        n_pre, f_pre, gemm, n_dec, f_dec = m["n_pre"], m["f_pre"], m["gemm_pre_ms"], m["n_dec"], m["f_dec"]
+        _n_pre, f_pre, gemm, n_dec, f_dec = m["n_pre"], m["f_pre"], m["gemm_pre_ms"], m["n_dec"], m["f_dec"]
     dp = defer_pass(n_dec, r["mhz"], 1, e.get("B"), e.get("L")) if n_dec else \
         {"pass_ms": 0.0, "added_ms": 0.0, "displaces": 0.0, "s": None, "d": None}
     pre_ms = (EGEMM - 1 + coins) * gemm
@@ -1821,7 +1821,7 @@ def honesty(arm, stats: dict, phases_points, *, control: dict | None = None, has
     filler credited for S steps a tile that runs S - S/CHEAT beside serving and S alone, `control`) is caught as too good,
     so the check can see a dishonest arm at the run's own spread. filler-scorer/v4 passes `whole`, each point's
     `whole_of_peak` (the kernel's serving and filler MACs together over its SMs' peak), and refuses any above 1."""
-    import arms as A  # noqa: PLC0415
+    import arms as A
 
     unstable = [f"{ph} {b}/{l}" for ph, b, l in phases_points if A.placed(arm, ph, b, l) != A.placed(arm, ph, b, l)]
     fast = [f"{k[0]} {k[1]}/{k[2]}: {v['beside_over_alone']:.3f} > {v['too_good_limit']:.3f}" for k, v in stats.items()

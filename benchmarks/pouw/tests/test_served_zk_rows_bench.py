@@ -13,8 +13,8 @@ from verity.ml.commitments import rowleaf as RL
 from verity.ml.commitments.indexed import RangeIndexedDomain
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
-import rows_bench as RB  # noqa: E402
-import statement as ST  # noqa: E402
+import rows_bench as RB
+import statement as ST
 
 
 class _Host:

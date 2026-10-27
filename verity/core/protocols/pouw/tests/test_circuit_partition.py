@@ -10,7 +10,7 @@ from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.cut import CallGraph, check_cut
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
-from verity.ml.circuits.types import Array, Tuple
+from verity.ml.circuits.types import Array
 
 from verity.core.protocols.pouw.circuit import ncp2
 from verity.core.protocols.pouw.circuit import partition as P

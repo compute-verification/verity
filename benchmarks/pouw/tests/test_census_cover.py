@@ -41,7 +41,7 @@ from fractions import Fraction
 from pathlib import Path
 
 import pytest
-from verity_machine_model.model import DATA, attacks, devices, model, vector, vectors
+from verity_machine_model.model import DATA, devices, model, vector
 
 POUW = Path(__file__).resolve().parents[1]
 SASS = Path(__file__).resolve().parent / "fixtures" / "census_cover_sass.json"

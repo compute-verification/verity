@@ -91,7 +91,7 @@ def _check_shape(rng, r, c, K, adversarial, out):
     pairs = [(i, j) for i in range(r) for j in range(c)]
     ok("served z == plain A.B^T (clean integer product)", z == [plain_dot(i, j) for i, j in pairs])
 
-    ks, m = lay.ks, lay.m
+    ks, _m = lay.ks, lay.m
     ok_prefix, ok_final_differs = True, 0
     for R, Cs, words, rws, cls in per_lane:
         X = [[(a[i][t] + (rws[i][0][t] & 1)) & 0xFF for t in range(K)] for i in R]
@@ -158,7 +158,7 @@ def collect(seed: int = 1):
 
 
 def _sizing() -> str:
-    r, c, K = 8, 16, 256
+    _r, _c, K = 8, 16, 256
     ks = K // 32
     m = SG.n_digits(ks)
     floor = 32 * 32 * (ks + m)

@@ -136,7 +136,7 @@ def test_a_stratum_short_of_its_floor_is_refused():
 
 
 def test_a_windows_draw_from_the_challengers_coins_is_held_to_its_evidence_by_the_lean_run(
-        tmp_path, signer, monkeypatch):  # noqa: F811
+        tmp_path, signer, monkeypatch):
     """A window's stream on the auditor's challenger's coins: the honest draw's outcome is accepted by the Lean run,
     and each of `coin_outcomes`' negatives is a reject the Lean run refused at its select (`coins`)."""
     def register(coins, i, window_root):

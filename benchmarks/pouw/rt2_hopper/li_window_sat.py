@@ -41,7 +41,7 @@ import z3
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from verity.core.protocols.pouw.circuit import segment as SG  # noqa: E402
+from verity.core.protocols.pouw.circuit import segment as SG
 
 LOW = ("LOP3", "IADD3", "IMAD", "LEA")
 HIGH = ("IMAD.HI", "IMAD.WIDE.HI", "SHF.L", "SHF.R", "LEA.HI", "PRMT")
@@ -84,7 +84,6 @@ class Program:
 
     def run(self, inputs: list, m: z3.ModelRef | None = None) -> list:
         """The outputs on `inputs` (z3 bit-vectors, symbolic or concrete); with `m`, the program the model fixes."""
-        w = self.w
         ev = (lambda e: m.eval(e, model_completion=True)) if m is not None else (lambda e: e)
         vals = list(inputs)
         for j, ins in enumerate(self.ins):

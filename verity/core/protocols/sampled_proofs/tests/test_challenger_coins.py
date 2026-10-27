@@ -141,7 +141,7 @@ def test_coins_skipped_after_the_commitment_are_caught_by_the_log():
     assert T.read_reason(ch.commitment, skipped.to_json(), ROOT, read) is None
 
 
-def test_a_served_challengers_coins_replay_against_its_signed_log(tmp_path, signer):  # noqa: F811
+def test_a_served_challengers_coins_replay_against_its_signed_log(tmp_path, signer):
     """Over a challenger served on loopback (`remote.serve`): the draw opens its coins in one round trip, and the
     verifier replays it against the commitment and roots it trusts from the challenger's directory and the auditor's
     ledger (`remote.trusted_session`)."""
@@ -186,7 +186,7 @@ def test_the_proof_service_draws_from_the_challengers_coins_after_the_receipt():
 COIN_CASES = ["honest", "skipped", "wrong", "before", "missing", "empty", "no-window", "off-main", "other-window"]
 
 
-def coin_outcomes(tmp_path, signer, monkeypatch, register, positions: int = 16):  # noqa: F811
+def coin_outcomes(tmp_path, signer, monkeypatch, register, positions: int = 16):
     """Each of `COIN_CASES`' outcomes over a served challenger: `register(coins, i, window_root)` is case i's stream on
     the challenger's `coins` and its registration under `window_root`, drawn after the registration's digest, its proof
     delivered, and its outcome run with the case's evidence (`coins_reason`'s: the challenger key, the auditor's
@@ -253,7 +253,7 @@ def assert_only_honest_coins_accepted(outcomes) -> None:
 
 
 def test_the_lean_run_refuses_a_draw_whose_coins_the_challenger_did_not_release_after_the_registration(
-        tmp_path, signer, monkeypatch):  # noqa: F811
+        tmp_path, signer, monkeypatch):
     """On a stream drawing from the challenger (`coin_source` `challenger`, which its digest names), every outcome's run
     by the verifier of record (`Run.run`) checks the draw's coins: with their evidence for the registration's window
     (`window_root`) it accepts the honest draw, and it rejects, failing `run` with the select step's `coins`, each of

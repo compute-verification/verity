@@ -100,7 +100,6 @@ def main() -> int:
     rng = random.Random(20261017)
     sys.path.insert(0, str(HERE.parents[0] / "receipts"))
     sys.path.insert(0, str(HERE.parents[0] / "edited_gemm"))
-    import egemm_depthr_check as fold_ref
     import receipt_folds as rf
 
     with tempfile.TemporaryDirectory() as tmp:

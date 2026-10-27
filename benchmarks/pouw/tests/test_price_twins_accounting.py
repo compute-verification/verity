@@ -24,9 +24,9 @@ from verity.core.protocols.pouw.schemes.pearl_c_device import SM120, SM120_UNPRO
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
 sys.path.insert(0, str(Path(__file__).parents[1] / "clear"))
-import clear_work as CW  # noqa: E402
+import clear_work as CW
 
-import price_twins as P  # noqa: E402
+import price_twins as P
 
 GAMMA0 = Fraction(1, 400)            # TT_OUT's γ0, at every cap (`gammaFromTTOut`)
 DEVICES = {"pearl-c-sm120/v1": SM120, "pearl-c-sm120/v2": SM120_UNPROMOTED}

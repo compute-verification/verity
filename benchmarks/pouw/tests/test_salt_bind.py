@@ -36,8 +36,8 @@ from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
 from verity.core.protocols.sampled_proofs import challenger as Ch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
-import served_commit as SC  # noqa: E402
-import of_record as OR  # noqa: E402
+import served_commit as SC
+import of_record as OR
 
 _CASES = Path(CC.__file__).resolve().parent / "lean/check/tests"
 for _name in ("pouw_rounds_cases", "pouw_pass_cases", "pouw_check_cases", "pouw_opening_cases"):

@@ -60,8 +60,8 @@ def run(args) -> int:
         print(f"{head}; exchange 5d/(4L) / (1 − {s.tensor:.4f}), MAC-times a MAC saved:")
         for name, x in s.rates.items():
             print(f"             {name}: {x:.3f}")
-    print(f"  at the no-fold receipt's L, where the k = L/2 products are k32 MMAs at full rate (post-additions only; the "
-          f"pre-additions and operand fix-ups are BET-ALGO-LAB's), the cheapest route's exchange:")
+    print("  at the no-fold receipt's L, where the k = L/2 products are k32 MMAs at full rate (post-additions only; the "
+          "pre-additions and operand fix-ups are BET-ALGO-LAB's), the cheapest route's exchange:")
     for big in T.NOFOLD_L:
         cells = []
         for reading in T.READINGS:

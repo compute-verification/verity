@@ -84,7 +84,7 @@ from verity_machine_model import eps as E
 from verity_machine_model.model import device
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from facet_break.loads import class_of  # noqa: E402
+from facet_break.loads import class_of
 
 SEED = 0xF0D5
 M32 = (1 << 32) - 1

@@ -7,7 +7,6 @@ from verity.core.protocols.pouw.serving import (
     DEFERRED,
     HASH_FORMATS,
     SCHEDULES,
-    SERIAL,
     GateRecord,
     KernelVariant,
     PassCommitment,

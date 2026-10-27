@@ -49,7 +49,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
-from verity_machine_model.eps import PRODUCTS, Design, design, designs, honest, machine, setup
+from verity_machine_model.eps import PRODUCTS, Design, design, designs, machine, setup
 from verity_machine_model.model import DATA, device, devices
 
 L = 32                      # transcript stride and the low-rank noise's rank
