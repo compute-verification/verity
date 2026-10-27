@@ -324,7 +324,7 @@ def Block.rels (k : Block m) : List (ByteArray × (Fin m → Bool)) := (k.b, k.x
 def Block.bits (k : Block m) : List (Fin m → Bool) := k.x :: k.rest.map Prod.snd
 
 /-- Every release of the block answers bytes tagged `tg`, and it has one release per chunk of `sp`. -/
-def Block.Fits {Y : Type} (k : Block m) (tg : Tag) (sp : Split Y m) : Prop :=
+def Block.Fits {Yd : Type} (k : Block m) (tg : Tag) (sp : Split Yd m) : Prop :=
   (∀ z ∈ k.rels, tagOf z.1 = some tg) ∧ k.rest.length = sp.rest.length
 
 /-- The draw's block, before the session: the reduction reaches the session at the draw it reads back to. -/
@@ -514,9 +514,10 @@ theorem dominated_of_drive {V : Vocab d α} {θ F c : ByteArray} (σ : Game.Stra
     (spP : Game.Split (Fin 2 → Fin mPts → 𝔽) m) (spR : (k : ℕ) → Game.Split (Fin k → 𝔽) m)
     (rootOf : ByteArray → Array ByteArray) (bytesOf : ByteArray → ByteArray) (pfOf : ByteArray × Array ByteArray → Array ByteArray)
     (hok : ∀ hs e, P ⟨θ, F, c, hs.map (Game.recOf releaseOf), e.1, e.2⟩ →
-      ∃ x rB pts N' rs, Game.LiveDrive.reached (q := fun o => ZkExec.LiveAcceptsZK I o) Game.LiveDrive.nOfJ
+      ∃ x rB pts N' rs, Game.LiveDrive.reached
+          (q := fun o : Reg × Finset (Fin n) × Exec.Transcript => ZkExec.LiveAcceptsZK I o) Game.LiveDrive.nOfJ
           Game.LiveDrive.mkJ (Game.LiveDrive.appJ dg) (fun x => (planZ (Game.LiveDrive.drawOS law pop x) R₀).length)
-          mPts N (fun x rB pts rs pf => (R₀, Game.LiveDrive.drawOS law pop x,
+          mPts N (fun x rB pts rs pf => (R₀, Game.LiveDrive.drawOS (n := n) law pop x,
             wr (Game.LiveDrive.drawOS law pop x) R₀ ⟨rB, pts, rs, pf⟩)) src m (uniform_of_A3 hA3) tagOf spΩ spP spR
           rootOf bytesOf hs = .at (.rnds x rB pts N' rs) ∧
         ZkExec.AcceptsZK I (wr (Game.LiveDrive.drawOS law pop x) R₀ ⟨rB, pts, rs, pfOf e⟩)) :

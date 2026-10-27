@@ -264,11 +264,19 @@ namespace PlayDevice
 open Lean (Json)
 open SampledProofs.Challenger
 
-/-- A request's family and the root its coin is released after: the request's bytes are the family's label (UTF-8)
-then the 64-byte root. -/
+/-- A request's family and its bytes: the label's length in UTF-8 (two bytes, big-endian), the label, then the bytes
+the coin is released after. -/
+def requestParts (b : ByteArray) : Option (String × ByteArray) :=
+  if b.size < 2 then none else
+  let n := (b.get! 0).toNat * 256 + (b.get! 1).toNat
+  if b.size < 2 + n then none else
+  (String.fromUTF8? (b.extract 2 (2 + n))).map fun l => (l, b.extract (2 + n) b.size)
+
+/-- A request's family and the root its coin is released after: the SHA-512 of the bytes it carries. The prover sends
+the bytes (the registration, a session's root_B digests, a round's message) and the device answers on their digest,
+as the proof service's client, which holds the bytes, asks the device. -/
 def requestOf (b : ByteArray) : Option (String × ByteArray) :=
-  if b.size < 64 then none else
-  (String.fromUTF8? (b.extract 0 (b.size - 64))).map fun l => (l, b.extract (b.size - 64) b.size)
+  (requestParts b).map fun (l, x) => (l, Flock.Sha512.hash x)
 
 /-- A coin's bytes from its released bits, bit `t` bit `t mod 8` of byte `⌊t/8⌋` (`Properties.Challenger.bitsOf`'s
 order). -/
