@@ -53,16 +53,17 @@ them out of an audit (its summary says so), for a run of several audits of one c
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
         --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--skip-negatives]
-    records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--registration FILE]
+    records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
 
 ``count``: a stated record that declares its inputs (cuts, registered reads, ingress: `interface.Circuit.declared`) counted
 from its description alone (`declared_count`), before the committer writes its members' rows. A registered read counts as
-registered only at a parameter ``--pin`` names, with the root the verifier fixed before the run, and only where the
-window's registration (``--registration``) records that root for it (`registration_roots`, `interface.held_params`), any
-other free. A pin names its parameter alone: for vLLM's window circuit, each weight's ``weights/<label>@<words>``. The
-served model's weights record, whose root of record the checkpoint's pinned shards fix before the run
-(`verity_vllm.check.weights_of_record`) and which `verity-vllm advice --weights-of-record` records for ``weights`` in each
-window's registration, holds none of them until each weight's committed root is tied to it (VLLM-125).
+registered only at a parameter ``--pin`` or ``--pins`` names (`pins_of`), with the root the verifier fixed before the run,
+and only where the window's registration (``--registration``) records that root for it (`registration_roots`,
+`interface.held_params`), any other free. A pin names its parameter alone: for vLLM's window circuit, each weight's
+``weights/<label>@<words>``, whose root of record the served model's weights record states (``--pins RECORD``:
+`verity_vllm.program.predict.window_circuit.weights_record`'s ``registered_roots``, from the checkpoint's pinned shards
+before the run), and which `verity-vllm advice --weights-of-record` records in each window's registration. Its rotary
+table has no root of record, so its reads stay free.
 
 ``--compilers FILE``: ``{name: {"digest": hex, "argv": [...], "code": [path, ...], "pythonpath": [path, ...]}}``, the
 registered compilers the verifier holds, each by the name and digest a registration names it under. A registration names
@@ -306,6 +307,28 @@ def pin_arg(s: str) -> tuple[str, str]:
     if not (name and eq and re.fullmatch(r"[0-9a-fA-F]+", root)):
         raise argparse.ArgumentTypeError(f"a pin is NAME=ROOT, ROOT hex digits, not {s!r}")
     return name, root
+
+
+def pins_of(pin: Iterable[tuple[str, str]], files: Iterable[str] = ()) -> dict[str, str]:
+    """The verifier's pins, ``{param: root}``: each ``--pin NAME=ROOT`` and each ``--pins FILE``'s, a JSON ``{param: root}``
+    or a weights record of record whose ``registered_roots`` they are (vLLM's `window_circuit.weights_record`, each weight's
+    ``weights/<label>@<words>``). Refused (ValueError) where two name one parameter, a record isn't of record, or a root
+    isn't hex digits."""
+    out = list(pin)
+    for f in files:
+        doc = json.loads(Path(f).read_text())
+        if isinstance(doc, Mapping) and "registered_roots" in doc:
+            if doc.get("of_record") is not True:
+                raise ValueError(f"{f}: a weights record not of record (of_record {doc.get('of_record')!r}) pins nothing")
+            doc = doc["registered_roots"]
+        if not isinstance(doc, Mapping):
+            raise ValueError(f"{f}: pins are {{param: root}}, not {type(doc).__name__}")
+        out += list(doc.items())
+    pins = dict(out)
+    if len(pins) != len(out):
+        raise ValueError(f"two pins name one parameter: {sorted(n for n in pins if [p for p, _ in out].count(n) > 1)}")
+    IF.held_params(pins, {})
+    return pins
 
 
 #: the groups of committed values a window's registration may name, each ``{program, values: {param: entry}}``: its
@@ -772,15 +795,18 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pin", action="append", default=[], type=pin_arg, metavar="NAME=ROOT", help="a registered parameter, by "
                    "the record's name for it, and the root the verifier fixed for it before the run (repeatable; none: every "
                    "registered read is free)")
+    p.add_argument("--pins", action="append", default=[], metavar="FILE", help="pins as a JSON {param: root}, or a weights "
+                   "record of record's registered_roots (vLLM's window_circuit.weights_record), with --pin's (repeatable)")
     p.add_argument("--registration", help="the window's registration, whose roots for its parameters (`registration_roots`) are held "
                    "to the pins (none: no root is the window's, and every registered read is free)")
     a = ap.parse_args(argv)
     if a.cmd == "count":
         for m in a.catalog:
             importlib.import_module(m)
-        pins = dict(a.pin)
-        if len(pins) != len(a.pin):
-            ap.error(f"--pin names a parameter twice: {[n for n, _ in a.pin]}")
+        try:
+            pins = pins_of(a.pin, a.pins)
+        except ValueError as e:
+            ap.error(f"--pin/--pins: {e}")
         roots = registration_roots(json.loads(Path(a.registration).read_text())) if a.registration else {}
         print(json.dumps(declared_count(json.loads(Path(a.circuit).read_text()), a.bits, pins=pins, roots=roots),
                          sort_keys=True))

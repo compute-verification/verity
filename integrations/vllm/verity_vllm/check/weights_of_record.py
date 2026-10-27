@@ -486,9 +486,11 @@ def diff_records(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
 
 
 def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: str | None = None, kv_cache_dtype: str = "auto",
-                      fields: list[tuple[str, list[int], int]] | None = None) -> dict[str, Any]:
+                      fields: list[tuple[str, list[int], int]] | None = None,
+                      on_field: Callable[[str, np.ndarray], None] | None = None) -> dict[str, Any]:
     """The record: per Program weight field the digest of the checkpoint-composed served tensor; root over the ordered list.
-    `fields` (field, shape, bits) replaces the Program's `weights` struct parameter (`served_record`)."""
+    `fields` (field, shape, bits) replaces the Program's `weights` struct parameter (`served_record`); `on_field(field, words)`
+    is given each field it digests, its raw words row-major as digested."""
     t0 = time.perf_counter()
     inst, res = program["instances"], program.get("result") or {}
     tp = res.get("tp") if isinstance(res.get("tp"), dict) else {}
@@ -538,6 +540,8 @@ def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: s
             continue
         b = np.ascontiguousarray(arr).reshape(-1).view(np.uint8)      # arr.tobytes()'s bytes, not copied again
         n_bytes += b.nbytes
+        if on_field is not None:
+            on_field(field, arr)
         out_fields.append({"field": field, "served_name": live, "shape": shape, "bits": bits, "digest": hashlib.sha256(b).hexdigest(),
                            "pinned": True, **note})
     root = root_of_fields(out_fields)

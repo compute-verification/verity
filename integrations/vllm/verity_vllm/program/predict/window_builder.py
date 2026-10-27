@@ -27,8 +27,8 @@ WEIGHTS = WR.PARAM
 def weight_param(label: str, words: int) -> str:
     """The registered parameter of weight ``label`` (its name in the weights record) read in rows of ``words`` u16 words:
     one registration a weight and row width, so every read's base and steps are whole rows of it (`interface._reads_of`)
-    and its pin is a root over the weight's own rows (`interface.registered_reads`). A pin of `WEIGHTS` pins them all
-    (`interface.input_count`)."""
+    and its pin is a root over the weight's own rows (`interface.registered_reads`), the weights record's root of record for
+    it (`window_circuit.weights_record`); a pin of `WEIGHTS` pins none of them (`interface.input_count`)."""
     return f"{WEIGHTS}/{label}@{words}"
 
 

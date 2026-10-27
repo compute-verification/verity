@@ -305,7 +305,16 @@ def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_
         got = json.loads(capsys.readouterr().out)
         assert got == RA.declared_count(doc, 1687, pins=dict(RA.pin_arg(p) for p in pins), roots=roots)
         assert got["free"] == (0 if pins and roots == PIN_A else inputs), (pins, reg)
-    for bad in (["--pin", "a"], ["--pin", "a=zz"], ["--pin", "a=" + "ab" * 64, "--pin", "a=" + "cd" * 64]):
+    (tmp_path / "pins.json").write_text(json.dumps(PIN_A))
+    (tmp_path / "record.json").write_text(json.dumps({"of_record": True, "registered_roots": PIN_A}))
+    (tmp_path / "not-of-record.json").write_text(json.dumps({"of_record": False, "registered_roots": PIN_A}))
+    for f in ("pins.json", "record.json"):
+        capsys.readouterr()
+        assert RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687", "--pins", str(tmp_path / f),
+                        "--registration", str(tmp_path / "core.json")]) == 0
+        assert json.loads(capsys.readouterr().out)["free"] == 0
+    for bad in (["--pin", "a"], ["--pin", "a=zz"], ["--pin", "a=" + "ab" * 64, "--pin", "a=" + "cd" * 64],
+                ["--pin", "a=" + "ab" * 64, "--pins", str(tmp_path / "pins.json")], ["--pins", str(tmp_path / "not-of-record.json")]):
         with pytest.raises(SystemExit):
             RA.main(["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687", *bad])
     with pytest.raises(ValueError, match="counted from its members"):

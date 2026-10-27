@@ -10,7 +10,9 @@ from collections import Counter
 import numpy as np
 import pytest
 from tests.program.predict import test_steps as S
-from tests.program.predict.test_window_circuit import CLASS, GRAIN, OTHER, WINDOW, _blocks, _label, _labels, _source, held
+from tests.program.predict.test_window_circuit import (CLASS, GRAIN, OTHER, ROPE, WINDOW, _alone, _blocks, _checkpoint, _label, _labels,
+                                                       _source, held)
+from verity_vllm.pipeline import advice as ADV
 from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict import window_builder as WB
 from verity_vllm.program.predict import window_circuit as WC
@@ -68,6 +70,31 @@ def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words
         i = np.arange(w.units, dtype=np.int64)
         reader, writer = labels[w.reader][w.at + i // w.cut[1]], labels[w.writer][w.source(i)]
         assert (reader[:, 0] == writer[:, 0]).all() and (writer[:, 1] <= reader[:, 1]).all(), w.doc()
+
+
+@pytest.mark.parametrize("flip, param", [("model.layers.1.mlp.down_proj.weight", "model.layers.1.mlp.down_proj.weight@512"),
+                                         ("model.layers.0.self_attn.v_proj.weight_scale",
+                                          "model.layers.0.self_attn.qkv_proj.weight_scale@32")])
+def test_the_weights_records_roots_hold_every_int8_weight_read_but_the_rotary_tables(tmp_path, flip, param):
+    """On TINY's exact-int8 checkpoint the weights record (`weights_record` at the window's grain) has a root of record for
+    each weight parameter the window circuit registers, each linear's s8 codes and f32 row scales their own, but the rotary
+    table: pinned at them, every weight read but the rotary table's is registered, the window's free bits are its reads
+    alone and its ingress the slots' rows. A window that served one byte changed in a linear's codes, or in its scales,
+    registers another root for that parameter alone, whose reads go free besides."""
+    reg = _registered()
+    circuit = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN)
+    doc = json.loads(json.dumps(circuit.description()))
+    rec = WC.weights_record(reg, *_checkpoint(tmp_path, quant=INT8_EXACT_QUANT), grain=GRAIN)
+    pins = ADV.registered_weights(rec)
+    assert (rec["of_record"], len(pins), list(rec["unrooted"])) == (True, 23, [ROPE])
+    assert set(pins) == set(circuit.registered.params) - {ROPE}
+    rope = _alone(doc, ROPE)
+    assert IF.input_count(doc, pins=pins, roots=pins) == {"units": 1774, "inputs": 10617760, "wired": 1601056,
+                                                         "registered": 9016320 - rope, "ingress": 2 * 6 * 32, "free": rope}
+    served = ADV.registered_weights(WC.weights_record(reg, *_checkpoint(tmp_path / "served", flip=flip, quant=INT8_EXACT_QUANT),
+                                                      grain=GRAIN))
+    assert [p for p in pins if pins[p] != served[p]] == [f"{WC.WEIGHTS}/{param}"]
+    assert IF.input_count(doc, pins=pins, roots=served)["free"] == rope + _alone(doc, f"{WC.WEIGHTS}/{param}") > rope
 
 
 def test_a_word_is_whole_leaves_of_one_byte_width():
