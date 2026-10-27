@@ -59,10 +59,10 @@ theorem innerHidden_cost (h : ByteArray → ByteArray) {tags : Tags} {cf pf : By
   have hpp : pop = pop' := Except.ok.inj (hpop.symm.trans hpop')
   have hpub : st'.pub = pop := (hn' rfl).trans hpp.symm
   rw [hpub] at hrows
-  have hstd : HmOut.parseWith (M := V) (Hashes.ofSha512 Sha512.hash) tags cf [] = .ok st'.c :=
+  have hstd : HmOut.parseWith (M := Except String) (Hashes.ofSha512 Sha512.hash) tags cf [] = .ok st'.c :=
     (With.outParseWith_std tags cf []).trans s'.parse
-  have hrow : HmRow.loadPublicWith (M := V) (Hashes.ofSha512 Sha512.hash) tags { st'.c with outPorts := #[] } pf =
-      .ok pop :=
+  have hrow : HmRow.loadPublicWith (M := Except String) (Hashes.ofSha512 Sha512.hash) tags
+      { st'.c with outPorts := #[] } pf = .ok pop :=
     (With.loadPublicWith_std _ _ _).trans (FlockSoundness.Discharge.Hidden.loadPublic_nil hpop)
   obtain ⟨D, hD, hDp, -⟩ := FlockSoundness.Discharge.Layout.drawn_spec hdr
   have hN : D.population ≤ 2 ^ 28 := by
@@ -219,8 +219,8 @@ theorem innerSetupIns_le_acc (hacc : (run H P (V IV st) x ω r).out = .acc) :
 
 end Runs
 
-/-- **Route 2C's `λ₂ ≥ 100` at the deployed brings, at an accepted statement**, without `hS`: `lamLin2_deployedB_ge_acc`
-with the inner session's setup inputs from the run (`innerSetupIns_le_acc`). -/
+/-- **Route 2C's `λ₂ ≥ 100` at the deployed brings, at an accepted statement**, without `hS`:
+`lamLin2_deployedB_ge_acc` with the inner session's setup inputs from the run (`innerSetupIns_le_acc`). -/
 theorem lamLin2_deployedB_ge_accepted (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
