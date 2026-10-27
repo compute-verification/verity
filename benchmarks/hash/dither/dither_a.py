@@ -26,11 +26,11 @@ stream at the forward's last call, and under piecewise graphs at every qkv call 
 forks, and a piece ends at an attention).  Between steps dither_one's Window builds the admit and z tables, the step
 trees, the round and the receipt trees, as dither-1s's: the A table before the call's units, z before the draw, the
 step and receipt trees between steps, and nothing waits on the side stream but those.  With z="zy" (the arms' -zy) z
-is committed as CA's leaves instead of the window's row z tables: the epilogue writes one record a 32 x 32 unit (its z,
+is committed as the per-unit z/y leaves instead of the window's row z tables: the epilogue writes one record a 32 x 32 unit (its z,
 then its y = dequant(z); a slot past m is zero codes under s_a = +0, so its z is 0 and its y h1zy's dq(0, +0, s_w), as
 `scaled_mm_zy`'s) and the window builds every call's leaf table between steps in the row z tables'
 place, beside the receipt trees, each root the call's leaf of the z-step tree, so the round over them still comes before
-the draw (CA, 00:33Z: every leaf in its registered root before the draw coin, nothing written after it).  With ao="a" (the arms' -ao) the
+the draw (every leaf in its registered root before the draw coin, nothing written after it).  With ao="a" (the arms' -ao) the
 A tables run on a third stream above the units' priority: A_w waits on its quantizer and the units of call w on
 A_w, so each call's A table still precedes its seeds and units, and A_(w+1) runs beside call w's units (the same
 launches; only the streams they wait on change); with ao="as" (-aos; kh and hbk, whose seeds are a launch of their own)
@@ -45,10 +45,10 @@ The round's leaves are a-step, admit-step, z-step, then y-step (under "zy") and 
 Under "zy" the serving stream copies each call's served y, the bytes the next layer reads, into y records after its GEMM
 (`dithera_ycommit`, dq(0, +0, s_w) past m as the records'); between steps the window builds the served y's tables, whose
 roots are the y-step leaves, and a y table over the zy records' y halves, and a call whose two roots differ refuses its
-step (CA's RT4-INT-11). The
-receipt-step leaf is the calls' receipt-table roots, so the round recorded before the next coin fixes the receipts
-(RT4-INT-13); the round waits on the receipt trees for it. Open: the z/y leaves still go under the round recorded after
-the coin the step's noise read (RT4-INT-12, which needs the units after their round's coin, beside the next step).
+step. The
+receipt-step leaf is the calls' receipt-table roots, so the round recorded before the next coin fixes the receipts;
+the round waits on the receipt trees for it. Open: the z/y leaves still go under the round recorded after the coin the
+step's noise read (the statement's order needs the units after their round's coin, beside the next step: dither_so).
 
     import dither_a as DA
     DA.patch(t=T, h1c="libh1c.so", h1o="libh1o.so", unit="h1r")   # before LLM()
@@ -59,7 +59,7 @@ the coin the step's noise read (RT4-INT-12, which needs the units after their ro
 A, admit and z roots and the round against commit.py; z = A B^T (int_mm, the A the A table committed) on every call and
 zero past m; the served y (dumped) = dequant(z); every record's y (-zy) = dequant(z) at s_a, and dq(0, +0, s_w) past m,
 as the served y's records; every receipt = h1r v1's on the saved slots under the window's salt and
-the CPU's roots (another unit implementation); three units' receipts by CA's definition on the CPU (`h1v3_unit`), and
+the CPU's roots (another unit implementation); three units' receipts by H1V3's Definition on the CPU (`h1v3_unit`), and
 their receipts and z by H1V3's own code with the peel (`h1v3_itself`: this source's h1tile unless DITHER_H1V3_TREE names a
 tree; one without the peel is refused).  The control (nothing written: the A slot, z, receipts) must be refused on z and on the receipts; the
 fault must be refused on the receipts at exactly the flipped words, z and y untouched; "fault_y" (bit 0 of every call's
@@ -106,8 +106,8 @@ CAPTURES = ("gate", "control", "fault", "fault_rr")
 LIB_ENV = DO.LIB_ENV
 LIB = "dithera"
 UNITS = ("h1r", "kh", "hbk", "hbr"); KONE = ("hbk", "hbr")
-# z's commitment: "row" each slot's N int32 a hiding leaf (dither_one's z table, built between steps); "zy" CA's leaf
-# (the coordinator's 22:40Z shape): one hiding leaf a credited UR x UC unit holding its z (int32) then its y = dequant(z)
+# z's commitment: "row" each slot's N int32 a hiding leaf (dither_one's z table, built between steps); "zy" the per-unit
+# leaf: one hiding leaf a credited UR x UC unit holding its z (int32) then its y = dequant(z)
 # (bf16), past m z 0 and y dq(0, +0, s_w) (h1zy's empty slot), which the epilogue writes as one record a unit and the
 # window commits between steps (ZY_KIND, provisional until INT-TIE names the fields); "none" no z stored
 # and no z table, y only: the leaves'
@@ -126,7 +126,7 @@ ZY1_ENV = "DITHER_ZY1"
 # "1": the z/y and y tables' rows in a row tile past m take their x from `dead_rows` (hashed once a window, from the
 # bytes such a row holds) and hash no segments; the same leaves and roots
 ZDEAD_ENV = "DITHER_ZDEAD"
-# "1" (-zy under DITHER_ZDEAD): RT4-INT-11's compare of the served y with the records' y halves made on their bytes in
+# "1" (-zy under DITHER_ZDEAD): the compare of the served y with the records' y halves made on their bytes in
 # `dithera_ycommit` (the rows the two y tables hash), a call that differs refusing its step as unequal roots do; the
 # units' y tables are built, and their roots compared, only at a captured step, whose check reads them and whose
 # verdict wants both compares to refuse the same calls
@@ -452,8 +452,8 @@ class Side:
                                         out=win.pre["mid"].leaves_addr(2) + 64 * w, **(dead[w]["zy"] if dead else {}))
                                     for w in range(win.L)])
             win.pre["z"] = self.zyset
-            # RT4-INT-11: the served y committed under the round (its roots the y-step leaves) and the units' y (the
-            # records' y halves, read in place), compared by root between steps
+            # the served y committed under the round (its roots the y-step leaves) and the units' y (the records' y
+            # halves, read in place), compared by root between steps
             yi = win.round_kinds.index("y-step")
             yb, ub = [y_bytes(u) for u in self.unit_of], [zy_bytes(u) for u in self.unit_of]
             cnt = [zy_count(win, w, self.unit_of[w]) for w in range(win.L)]
@@ -587,7 +587,7 @@ class Side:
     def y_leaves(self) -> None:
         """Between steps (the window's `before_mid`): the served y's tables, whose roots are the round's y-step leaves,
         and the units' y tables (under DITHER_ZY1 built with the z tables); `ybad` the calls whose two roots differ (a
-        refused window, RT4-INT-11); under YCMP_ENV, at a step no capture reads, the calls `dithera_ycommit` flagged."""
+        refused window); under YCMP_ENV, at a step no capture reads, the calls `dithera_ycommit` flagged."""
         win = self.win
         roots = self.ycmp is None or win.cap is not None
         if not self.zy1:
@@ -964,7 +964,7 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
                          torch.zeros(1, dtype=torch.float32, device=win.dev), win.sw[w]).view(torch.int16)
             for w in range(L)] if zy else []
     if zy:
-        # RT4-INT-11: the served y's records (what ycommit read from the served y) hashed here, their step root the
+        # the served y's records (what ycommit read from the served y) hashed here, their step root the
         # round's y-step leaf; the run-time check (device roots of the served y against the units' y) against the
         # CPU's byte compare of the two, which under one domain and label is the roots' compare
         ys_cpu, cpu_bad, dump_bad, fy_bad = {}, [], [], []
@@ -994,7 +994,7 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
             doc["fault_y_bad"] = fy_bad[:4]
     rleaf = None
     if "receipt-step" in kinds:
-        # RT4-INT-13: the receipt roots under the round; three calls' roots rehashed from the captured receipts
+        # the receipt roots under the round; three calls' roots rehashed from the captured receipts
         r_dev = [unwords(g["r_roots"][8 * w:8 * w + 8]) for w in range(L)]
         rs = s if r_round is None else r_round["s"]
         rleaf = CM.step_root(CM.domain({"window": W, "step": rs, "linears": L}, L, "receipt-step"), r_dev)
@@ -1101,7 +1101,7 @@ def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 
         doc["conforming"] = not fault_bad and not z_bad and not y_bad and not yleaf_bad and commits_ok
         doc["ok"] = not rc_bad and doc["conforming"]
         return doc
-    # three units' receipts by CA's definition on the CPU and by H1V3's own code; its z (peeled: A B^T) against ours
+    # three units' receipts by H1V3's Definition on the CPU and by H1V3's own code; its z (peeled: A B^T) against ours
     units_doc, h1v3_in = [], []
     if which == "gate":
         rng = np.random.default_rng(s)

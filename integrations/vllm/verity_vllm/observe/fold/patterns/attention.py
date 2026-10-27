@@ -59,7 +59,7 @@ class AttentionScope:
             return unsupported(node, "unified_attention_with_output without exactly one FA2/FA3 op child", found=[n.op for n in fas],
                                descendants=[n.op for n in node.walk() if n is not node][:16])
         fa = fas[0]
-        # [R13 hopper] the FA library the launch went to must be the record target's EFFECTIVE version (`TargetProfile.flash_attn_version`,
+        # the FA library the launch went to must be the record target's EFFECTIVE version (`TargetProfile.flash_attn_version`,
         # else vLLM's selector default for the capability): the FA2 and FA3 ops bind different registered chains (`frontend.targets`).
         tp = target_of(ctx)[0]
         fa_v = tp.effective_flash_attn_version()
@@ -125,8 +125,8 @@ class AttentionScope:
         if pdrop not in (None, 0.0):
             return unsupported(node, "dropout is not modelled", p_dropout=pdrop)
         if self.num_splits is not None:
-            # paged (block-table) varlen KV forces `num_splits = 1` inside FA2 (`flash_api.cpp:763`, b1.fa2_kblock_n's
-            # D54 note): the aligned split-KV kernel whose kBlockN is the pinned `bn`.  A bound `num_splits` of 0
+            # paged (block-table) varlen KV forces `num_splits = 1` inside FA2 (`flash_api.cpp:763`, `b1.fa2_kblock_n`'s
+            # docstring): the aligned split-KV kernel whose kBlockN is the pinned `bn`.  A bound `num_splits` of 0
             # (heuristic) or 1 is that path; anything else is a geometry we have not measured.
             if not isinstance(first(a.get("block_table"), a.get("page_table")), ViewDesc):
                 return unsupported(node, "FA op without a block table (non-paged KV): the pinned kBlockN is the paged aligned path's",
@@ -149,7 +149,7 @@ class AttentionScope:
             return unsupported(node, "FA2 query rows differ from the step's token rows", M=M, rows=len(ctx.start.rows))
         if fa_v == 2 and self.bn != b1.fa2_kblock_n(D):
             return unsupported(node, "pinned kBlockN is not the FA2 head-dim dispatch rule's", bn=self.bn, rule=b1.fa2_kblock_n(D), D=D)
-        # [R13 hopper] the attention Definition of the record's target (`frontend.targets.attention_spec`): Attention_v3{BN} on the
+        # the attention Definition of the record's target (`frontend.targets.attention_spec`): Attention_v3{BN} on the
         # accepted target (Ampere step, FA2); Attention_v2{BN, DOT=<target step>, INV} otherwise — forced FA2 on Hopper: BN = fa2_kblock_n(D),
         # INV = Fa2InvSum; native FA3: BN = fa3_kblock_n(D, max_seqlen_q, NH/KVH) (the sm90 tile rule), INV = Fa3InvSum.
         kernel_name = "flash_fwd_splitkv_kernel" if fa_v == 2 else "FlashAttnFwdSm90"

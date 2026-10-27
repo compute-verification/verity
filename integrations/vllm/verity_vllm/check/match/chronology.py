@@ -32,8 +32,8 @@ def chronology(run: MatchRun, facts: dict, present: dict[str, list[int]], engine
     res, gp, tokens, steps, samples, rec, B = run.res, run.gp, run.tokens, run.steps, run.samples, run.rec, run.fold
     tokens_optional, tokens_path, oracle_dir = run.tokens_optional, run.tokens_path, run.oracle_dir
     c = NamedCheck(res, "G6", "chronology: declared == realized == observed arrival; contiguous rows; output events = TokenSelects, k-th = k-th token, feed the next row; bounded")
-    # [F-r17-01, rev M-0035] the driver's tokens.json is PART of the record: without it every output-association leg (driver-served token k
-    # == the recorder's k-th TokenSelect, served length == the driver's, the R17-1 two-length claims, the tokens.json lag attestation) is
+    # the driver's tokens.json is PART of the record: without it every output-association check (driver-served token k
+    # == the recorder's k-th TokenSelect, served length == the driver's, the driver's two-length claims, the tokens.json lag attestation) is
     # silently skipped.  Fail closed by name; `tokens_optional=True` (CLI --tokens-optional) accepts a record without it for mechanism /
     # fixture runs, LABELLED in checks[G6].tokens_json=false -- never a row of record (row_pod always produces the file).
     if tokens is None and not tokens_optional:
@@ -62,19 +62,19 @@ def chronology(run: MatchRun, facts: dict, present: dict[str, list[int]], engine
         events, served = _output_events(c, steps, samples, g, ent, ps)
         _served_lengths(c, rule, _lag_obs, steps, g, ent, ps, tr, events, served)
         _fed_forward(c, steps, rec, g, ent, ps, events, served)
-        # [rev-pm M-0622 TIP (a)] eos_verified is a verdict on THIS request's G6 evidence: any G6 problem on the request (an output
+        # eos_verified is a verdict on THIS request's G6 evidence: any G6 problem on the request (an output
         # association failure -- SampleEnd token != driver token -- a chronology mismatch, ...) makes it False, never True beside a FAIL
         if len(c.problems) > _n_problems_before and ent.get("eos_verified") is True:
             ent["eos_verified"] = False
             ent["eos_verified_note"] = f"{len(c.problems) - _n_problems_before} G6 problem(s) on this request: the EOS evidence is not accepted"
-            ent.pop("eos_lag_rows_accepted", None)   # [R17-1] no lag row is 'accepted' on a request whose EOS evidence is not
-        ent["g6_problems"] = len(c.problems) - _n_problems_before   # [R17 stoch] the scheduled workload state is built from established requests only
+            ent.pop("eos_lag_rows_accepted", None)   # no lag row is 'accepted' on a request whose EOS evidence is not
+        ent["g6_problems"] = len(c.problems) - _n_problems_before   # the scheduled workload state is built from established requests only
     conc = _achieved_concurrency(c, res, gp, steps, present)
-    # [COORD M-0169 / M-0571 (3)] the top-p split count S is a WORKLOAD-level derived value of the chronology this check established:
+    # the top-p split count S is a WORKLOAD-level derived value of the chronology this check established:
     # S_t = SplitsFor_v1(|live(t)|, num_SMs) per engine step; every top-p TokenSelect of the fold at t must carry it (the launch's S,
     # host-computed by vLLM -- no kernel, no fold instance of its own). Nothing to check on a greedy fold; a top-p fold against a Program
     # without a declared num_SMs fails closed.
-    # [R17 stoch, BRIEF §6 / COORD R17-1] |live(t)| is the SCHEDULED workload state -- declared arrivals, served lengths (the cap, or the
+    # |live(t)| is the SCHEDULED workload state -- declared arrivals, served lengths (the cap, or the
     # verified EOS position), the declared lag rows after an EOS stop (the post-EOS step is active computation: its row is in the sampler
     # batch) and the prefill chunks -- derived from the per-request facts established above; the record's logits rows and the SampleEnd
     # batch must equal it at every step. The observed row count is never the source of |live(t)|: an unscheduled sampler row would
@@ -83,10 +83,9 @@ def chronology(run: MatchRun, facts: dict, present: dict[str, list[int]], engine
     geo = sampler_geometry_check(gp, B, engine_step_of, steps, rec.get("sampler_batch"), scheduled)
     for p in geo["problems"]:
         c.fail(p)
-    # [R17-1] the lag finding of the record as a whole: exercised iff some request stopped on an EOS before its cap; VARIABLE lag (two
+    # the lag finding of the record as a whole: exercised iff some request stopped on an EOS before its cap; VARIABLE lag (two
     # EOS-stopped requests of ONE record with different post-EOS row counts) is evidence the profile is not the constant-lag scheduler
-    # the Program declares -- surfaced by name (a G6 FAIL + res.alerts entry; the lane posts ALERT + a DECISIONS-PENDING entry), never
-    # absorbed into whichever value most requests show
+    # the Program declares -- surfaced by name (a G6 FAIL + res.alerts entry), never absorbed into whichever value most requests show
     li = c.info["lag"]
     li["exercised"] = bool(_lag_obs)
     li["eos_stop_requests"] = sorted(_lag_obs)
@@ -114,7 +113,7 @@ def chronology(run: MatchRun, facts: dict, present: dict[str, list[int]], engine
     res["achieved_concurrency"] = conc
     res["sampler_geometry"] = geo["info"]
     res["scheduled_live"] = c.info["scheduled_live"]
-    res["lag"] = dict(li)   # [R17-1] the finalizer's fields: declared / record_attests / exercised / variable_lag / lag_rows_observed / lengths
+    res["lag"] = dict(li)   # the finalizer's fields: declared / record_attests / exercised / variable_lag / lag_rows_observed / lengths
     c.done()
 
 
@@ -160,12 +159,12 @@ def _lag_rule(c: NamedCheck, gp: dict, facts: dict, driver: ServedTokens | None)
     sr, lag_block = (None, None) if stop is None else (stop.stop_rule, stop.lag)
     eos_ids = (set(int(x) for x in sr.eos_token_ids) if sr is not None and sr.eos_token_ids
                else (set() if sr is not None and sr.ignore_eos else None))   # ignore_eos: declared EMPTY set -> every early stop fails, named
-    # [R17-1 / DP-pad-02 (b); supersedes the ruling-21 reader] LAG -- the rows the scheduler computes after an EOS stop -- is the PROGRAM's
+    # LAG -- the rows the scheduler computes after an EOS stop -- is the PROGRAM's
     # declared specialization parameter (GP-01 `lag.value` == the Workload_v1 `lag` static == stop_rule.lag/eos_lag_rows; from_gprog verified
     # the block against the descriptor).  G6 consumes THAT value and nothing else; the record's own attestation (RunHeader.profile
     # .engine_kwargs.async_scheduling, the engine's RESOLVED read-back) must AGREE with it (G1 compares the engine fact; here the lag it
     # implies) -- a disagreement or a record that does not attest FAILS by name.  Nothing is ever inferred from the trace: a Program that
-    # declares no lag (pre-R17-1 Build) cannot have an EOS stop checked (FAIL by name per request); when no request stops early the lag is
+    # declares no lag (an older Build) cannot have an EOS stop checked (FAIL by name per request); when no request stops early the lag is
     # not exercised and the record is labelled so (lag.exercised false), never silently accepted as a lag-N record.
     rec_lag, rec_lag_src = eos_lag_rows(facts)                       # what the RECORD attests (for the agreement check + the label)
     decl_lag = None if stop is None else stop.declared_lag
@@ -183,7 +182,7 @@ def _lag_rule(c: NamedCheck, gp: dict, facts: dict, driver: ServedTokens | None)
         c.fail(f"the Program is specialized for LAG {decl_lag} (async_scheduling={bool(decl_lag)}: {decl_src}) but the record does not attest "
                f"async_scheduling ({rec_lag_src}; RunHeader.profile.engine_kwargs / RunHeader.engine_kwargs / capture/versions.json): the "
                f"declared scheduler cannot be checked against the record, refuse by name (R17-1)")
-    # the lag G6 CONSUMES: the Program's declaration (None = pre-R17-1 Program: no rule to apply; every EOS stop then fails by name below)
+    # the lag G6 CONSUMES: the Program's declaration (None = it declares none: no rule to apply; every EOS stop then fails by name below)
     eos_lag = decl_lag if lag_declared else None
     eos_lag_src = (f"Program lag {decl_lag} ({decl_src}); record attests {rec_lag_src}" if lag_declared
                    else f"Program declares no lag (pre-R17-1 Build); record attests {rec_lag_src} (NOT used as the rule)")
@@ -199,7 +198,7 @@ def _lag_rule(c: NamedCheck, gp: dict, facts: dict, driver: ServedTokens | None)
                      "agree": (decl_lag == rec_lag) if (lag_declared and rec_lag is not None) else None,
                      "exercised": False, "eos_stop_requests": [], "lag_rows_observed": {}, "variable_lag": False,
                      "lengths": gp.get("lengths") or ((gp.get("chronology") or {}).get("lengths") if isinstance(gp.get("chronology"), dict) else None)}
-    # [R17-1] the driver's tokens.json carries the same recorded fact (doc.lag.value from resolved_async_scheduling) and per request its
+    # the driver's tokens.json carries the same recorded fact (doc.lag.value from resolved_async_scheduling) and per request its
     # served_output_len / executed_prefix_len claims: one record, one fact -- a tokens.json whose lag disagrees with the header's attestation
     # is a record that does not attest one execution (named); the per-request claims are checked against the observed rows below
     _tok_lag = driver.lag if driver is not None else None
@@ -285,7 +284,7 @@ def _served_lengths(c: NamedCheck, rule: LagRule, lag_obs: dict[str, int], steps
     rid, LP, last = g["request_id"], g["prompt_len"], ps[-1]
     gen, finish_reason, finish_step = (None, None, None) if tr is None else (tr.generated_token_ids, tr.finish_reason, tr.finish_step)
     cap = int(g["max_tokens"])
-    # [COORD M-0213 (1)(2) / ruling 21 / DP-pad-02] the request's served rows are its answer a_r = the events up to and including
+    # the request's served rows are its answer a_r = the events up to and including
     # the FIRST declared EOS (or all of them on a length stop) plus, after an EOS stop ONLY, exactly the placeholder rows the
     # record's attested scheduler computes (eos_lag_rows: async_scheduling=True -> 1, False -> 0, unattested -> refuse by name).
     # Every accepted lag row's input is the preceding sample (the feed-forward check below), its own sample is fed nowhere and
@@ -300,7 +299,7 @@ def _served_lengths(c: NamedCheck, rule: LagRule, lag_obs: dict[str, int], steps
     lag_rows = len(served) - a_r
     ent["answer_events"] = a_r
     ent["lag_rows"] = lag_rows
-    # [R17-1] the two lengths, kept distinct on the record: what was DESIGNATED as output vs what RAN
+    # the two lengths, kept distinct on the record: what was DESIGNATED as output vs what RAN
     ent["served_output_len"] = a_r
     ent["executed_prefix_len"] = len(served)
     ent["cap_exhausted"] = (a_r == cap)
@@ -312,7 +311,7 @@ def _served_lengths(c: NamedCheck, rule: LagRule, lag_obs: dict[str, int], steps
             # downstream state, stoch's scheduled live included, is built on it)
             c.fail(f"{rid}: EOS stop at engine step {served[first_eos][0]} on a record whose attested scheduler ({rec_lag_src}) is not the "
                    f"Program's declared LAG {decl_lag}: the {lag_rows} post-EOS row(s) are not accepted as the declared lag (R17-1)")
-    # the driver's own claims for the two lengths (tokens.json, R17-1 schema: served = len(generated_token_ids), executed = served + the
+    # the driver's own claims for the two lengths (tokens.json: served = len(generated_token_ids), executed = served + the
     # record's lag on an EOS stop) must be what the record's rows show -- a claim beside the rows, named when it disagrees
     for _k, _claim, _v in (("served_output_len", None if tr is None else tr.served_output_len, a_r),
                            ("executed_prefix_len", None if tr is None else tr.executed_prefix_len, len(served))):
@@ -326,7 +325,7 @@ def _served_lengths(c: NamedCheck, rule: LagRule, lag_obs: dict[str, int], steps
         c.fail(f"{rid}: the driver's generated_token_ids has {len(list(gen))} tokens but the request's answer is {a_r} event(s) "
                f"(up to its first declared EOS): {'the rows after the EOS are not output (a lag row sample reported)' if len(list(gen)) > a_r else 'output tokens the record never sampled'} (M-0213)")
     if len(served) > cap:
-        # [R17-1, rev M-0027 (4)] REQUIRED from the trace, not assumed: a length stop runs no row after the cap under ANY lag (vLLM knows the
+        # REQUIRED from the trace, not assumed: a length stop runs no row after the cap under ANY lag (vLLM knows the
         # length ahead; the scheduler computes a post-EOS row only for an EOS stop) -- an executed row past the cap is execution past cap
         c.fail(f"{rid}: execution past cap -- {len(served)} output events executed but the declared max_tokens is {cap} (executed_prefix_len "
                f"{len(served)} > served_output_len {a_r} = cap; a length stop computes no post-cap row under any LAG, the Program's LAG "
@@ -335,7 +334,7 @@ def _served_lengths(c: NamedCheck, rule: LagRule, lag_obs: dict[str, int], steps
         ent["finish"] = "eos" if a_r < cap else "?"
         if finish_reason not in (None, "stop"):
             c.fail(f"{rid}: {a_r} events < max_tokens but driver finish_reason {finish_reason!r}")
-        # [rev-pm ALERT M-0537 / F-pm-24] the driver's finish_reason is the prover's word; the EOS itself is the evidence: the last
+        # the driver's finish_reason is the prover's word; the EOS itself is the evidence: the last
         # ANSWER token (tied to a SampleEnd + the driver's generated_token_ids by the output association above) must be one of the
         # Program's declared EOS ids. A request that stopped early on any other token (dropped, aborted, stop string, a prover that
         # skipped the tail) is NOT an EOS truncation and FAILS -- whatever finish_reason says. No declared set -> fail closed.
@@ -353,7 +352,7 @@ def _served_lengths(c: NamedCheck, rule: LagRule, lag_obs: dict[str, int], steps
             ent["eos_token"] = int(last_tok)
     else:
         ent["finish"] = "length"
-    # [LIFTING-SPEC v0.3 s7 [P1] (i), the other direction; R17-1] executed activity may not run PAST the answer by more than the
+    # executed activity may not run PAST the answer by more than the
     # Program's DECLARED lag: executed_prefix_len == a_r + LAG exactly on an EOS stop (an EOS is among the served tokens), == a_r on a
     # length stop (vLLM knows the length ahead: no placeholder row). Under a declared ignore_eos (empty set) there is nothing to pass.
     finish_step_expected = last
@@ -398,7 +397,7 @@ def _served_lengths(c: NamedCheck, rule: LagRule, lag_obs: dict[str, int], steps
     if ent.get("eos_verified") and eos_lag:
         ent["eos_lag_rows_accepted"] = lag_rows
     # the driver's finish_step names the step the request FINISHED at: the EOS step on an EOS stop (the lag row, if any, comes after
-    # it -- pad's fixture M-0162: finish_step 10, EOS at 10, lag row at 11), the last row on a length stop
+    # it -- e.g. finish_step 10, EOS at 10, lag row at 11), the last row on a length stop
     if finish_step is not None and finish_step != finish_step_expected:
         c.fail(f"{rid}: driver finish_step {finish_step} != observed {finish_step_expected}"
                + (f" (the EOS step; the request's last served row is the lag row at {last})" if finish_step_expected != last else ""))
@@ -433,7 +432,7 @@ def _fed_forward(c: NamedCheck, steps: dict, rec: dict, g: dict, ent: dict, ps: 
 
 def _achieved_concurrency(c: NamedCheck, res: dict, gp: dict, steps: dict, present: dict[str, list[int]]) -> dict:
     """Live requests per engine step, observed against programmed."""
-    # achieved concurrency (BRIEF §11: a configured limit is not proof the run exercised that many simultaneous requests): the
+    # achieved concurrency (a configured limit is not proof the run exercised that many simultaneous requests): the
     # observed number of distinct requests with rows per engine step, against the programmed one from the declaration alone
     # (members with a_r <= e <= a_r + cap_r - 1); observed < programmed is explained only by EOS-truncated requests
     obs_per_step = {s: len({r for r, _ in steps[s]["rows"]}) for s in steps}
@@ -448,12 +447,12 @@ def _achieved_concurrency(c: NamedCheck, res: dict, gp: dict, steps: dict, prese
             "observed_histogram": dict(sorted(collections.Counter(obs_per_step.values()).items())),
             "programmed_histogram": dict(sorted(collections.Counter(prog_per_step.values()).items())),
             "engine_steps_observed": len(steps), "engine_steps_programmed": len(prog_per_step)}
-    # [F-pm-24] the shortfall is explained only by EOS-VERIFIED truncation: an unverified early stop does not unlock it
+    # the shortfall is explained only by EOS-VERIFIED truncation: an unverified early stop does not unlock it
     trunc = [e for e in res["requests"] if e.get("eos_truncated") or (e.get("finish") == "eos")]
     if obs_max != prog_max and not (trunc and all(e.get("eos_verified") is True for e in trunc)):
         c.fail(f"achieved concurrency {obs_max} != programmed {prog_max} with no EOS-verified truncated request "
                f"({len(trunc)} truncated, {sum(1 for e in trunc if e.get('eos_verified') is True)} EOS-verified): declared schedule not exercised")
-    # [COORD M-0571 (1)] per ENGINE STEP: the waiver applies only to steps AFTER a verified EOS. A request that reached its cap or
+    # per ENGINE STEP: the waiver applies only to steps AFTER a verified EOS. A request that reached its cap or
     # stopped on a verified EOS occupies exactly the steps it was observed in; one that stopped early WITHOUT a verified EOS was
     # programmed to continue for (cap - served) more steps -- those steps are named here as "declared schedule not exercised"
     expected_per_step: dict[int, int] = collections.defaultdict(int)

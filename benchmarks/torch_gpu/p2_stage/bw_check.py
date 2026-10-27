@@ -107,7 +107,7 @@ def fixture(args, dev: torch.device) -> dict:
 def random_check(units: int, sample: int, dev: torch.device) -> dict:
     gen = torch.Generator(device=dev).manual_seed(units)
     rows = torch.randint(0, 256, (p2.UNIT_BLOCKS * units, L.ROW), dtype=torch.uint8, device=dev, generator=gen)
-    seed = hashlib.sha512(b"kernels-kstage/bw-check/random/%d" % units).digest()
+    seed = hashlib.sha512(b"verity/p2-stage/bw-check/random/%d" % units).digest()
     tree = K.Tree(units, dev)
     salts_raw = os.urandom(R.SALT_BYTES * tree.G)
     P = K.Pass(seed, units, dev)
@@ -142,7 +142,7 @@ def timed(fn, reps: int = 5) -> float:
 
 
 def bench(dev: torch.device) -> dict:
-    seed = hashlib.sha512(b"kernels-kstage/bw-check/bench").digest()
+    seed = hashlib.sha512(b"verity/p2-stage/bw-check/bench").digest()
     rows = torch.randint(0, 256, (CHUNK, L.ROW), dtype=torch.uint8, device=dev)
     P = K.Pass(seed, CHUNK // p2.UNIT_BLOCKS, dev)
     unit_s = timed(partial(P.read, rows, 0, 0, CHUNK))

@@ -1,5 +1,5 @@
 """Onsite's and remote's Lean (`onsite serve`, `remote serve`: each product's executable, the core CLI) against the Python
-reference (`reference.py`: the trial's composition rule with top's reject dominance, over the harness's framing of the
+reference (`reference.py`: the trial's composition rule with reject dominance, over the harness's framing of the
 core interface and the components' own Python). Hypothesis draws each component's case to accept, reject, be undecided or
 fail to decode (from its own difftest's generator: PoUW's `pouw_check_cases` and, made once, `pouw_period_cases`'
 periods, the network certifier's period `build`,
@@ -345,7 +345,7 @@ def recorded(tmp_path_factory):
 
 
 def test_the_rule_changes_the_trial_only_where_a_rejection_meets_an_undecided_component():
-    """Over every list of up to four verdicts, top's rule and the trial's agree but where a component rejects while
+    """Over every list of up to four verdicts, the composition's rule and the trial's agree but where a component rejects while
     another is undecided: the trial waits for the missing statement, and the port rejects."""
     for n in range(1, 5):
         for vs in itertools.product([R.ACCEPT, R.REJECT, R.UNDECIDED], repeat=n):
@@ -475,7 +475,7 @@ class Trial(R.Product):
 
 @pytest.mark.slow
 def test_a_reference_without_reject_dominance_is_caught(onsite_server, recorded):
-    """The difftest tells top's rule from the trial's: the case it shrinks to has a component that rejects and one that
+    """The difftest tells the composition's rule from the trial's: the case it shrinks to has a component that rejects and one that
     is undecided, under a commitment that binds their digests."""
     trial = R.Registered(R.ONSITE.id, R.ONSITE.registration, R.ONSITE.committer,
                          Trial(R.ONSITE.id, R.ONSITE.product.components))

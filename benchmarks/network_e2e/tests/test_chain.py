@@ -213,8 +213,8 @@ def _serve_arm(d: Path, name: str, w: int, bits: int, *, forged=False, root=None
 
 
 def test_a_serve_run_audit_is_bound_to_the_runs_by_the_endpoints_commit_window_it_proves(tmp_path):
-    """PROVE-PATH's `--serve-run` audits of the endpoint's own Commit windows (as r20261024-154338-7679's of 8eb1's
-    w212, one of the honest run's, registered apart by the lane, and r20261024-143655-ccc8's of its w5): bound to these
+    """The prove path's `--serve-run` audits of the endpoint's own Commit windows (one of them a window of the honest
+    run whose advice was registered apart): bound to these
     runs when every arm's Commit is the endpoint's (its windows.jsonl's run id and root) and sealed while serving, every
     arm's advice is held by content to the report's advice of its window (its root registered under that Commit, in the
     report's own advice or apart, and the registration's opening opening it to the report's advice), and an honest arm
@@ -318,7 +318,7 @@ def test_a_serve_run_audit_is_bound_to_the_runs_by_the_endpoints_commit_window_i
 def test_at_serve_time_is_before_its_draw_and_no_later_than_the_next_windows_close(tmp_path):
     """A Commit window's advice was registered at serve time when it was registered before its draw (every rank's
     `advice_before_draw`, the verifier's receipt of the registration before any coin) and no later than the next
-    window's close in the endpoint's trace (the lead's ruling, 24 Oct); after serving when either fails, and unknown
+    window's close in the endpoint's trace; after serving when either fails, and unknown
     while either is. Its lag after its own window's close is always printed, in seconds."""
     ep = _endpoint(tmp_path)
     io = json.loads((ep / "io.json").read_text())["requests"]
@@ -428,7 +428,7 @@ def test_the_serving_runs_record_times_the_registration_and_its_end_bounds_the_l
 
 
 def test_the_endpoints_own_advice_is_the_runs_by_its_commit_windows_each_opened_and_rebuilt(tmp_path):
-    """vllm's own-advice endpoint's first three Commit windows (r20261024-094558-6d6a's records, trimmed: its scheduler
+    """The own-advice endpoint's first three Commit windows (its served run's records, trimmed: its scheduler
     trace, its windows.jsonl and `verity-vllm advice`'s registrations and openings, as the endpoint committed them
     mid-serve) and the certified I/O of their nine requests: bound and rebuilt, each window opening its registered root;
     not bound when a window falls outside the run's link-windows, holds a request the run didn't certify, opens another
@@ -498,7 +498,7 @@ def _reregister(d: Path, data: bytes) -> None:
 
 def test_commit_windows_that_carry_a_request_across_their_close_bind_as_one_advice_that_charges_the_carry_once(
         tmp_path):
-    """The gate endpoint's (r20261025-060356-5c72, serve 9ff3's) Commit windows 113 to 116, trimmed: 114 ends three
+    """The gate endpoint's Commit windows 113 to 116, trimmed: 114 ends three
     requests with outputs still to keep and 115 carries them in (window advice v1). Bound and rebuilt from the certified
     I/O of their nine requests, 114 and 115 joined into one advice (`window_chain.join`), which holds each carried
     request's record and state once where 115's string repeats them; the windows that carry nothing are charged their
@@ -843,7 +843,7 @@ TOKEN = HERE / "tests" / "data" / "token"
 
 
 def test_a_token_runs_changed_ids_fall_in_the_link_windows_its_certified_egress_carries_them(tmp_path):
-    """r20261024-111424-88c9's token run (its ingress and egress records, plan, calibration and the shim's server.json,
+    """A token run (its ingress and egress records, plan, calibration and the shim's server.json,
     not its certified heads): the shim changed varied.00000's first three outputs and varied.00001's first twenty, which
     its certified egress carries in link-windows 0 and 1, each output placed as the tie places it (its stream's next id
     event). An output the egress doesn't carry falls in none, and a run whose shim logged no change has none."""
