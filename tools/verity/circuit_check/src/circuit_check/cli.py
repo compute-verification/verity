@@ -2,7 +2,7 @@
 
     circuit-check F32Add_v1 'RMSNormTriton_v1{N=64,EPS=1e-05}'     Definitions
     circuit-check rope-head gemm-coordinate/k64/sm80-mma-bf16       templates, subcircuits
-    circuit-check path/to/build_request_LP3_T2                      a served row's request Program
+    circuit-check path/to/build_request_LP3_T2                      a served workload's request Program
     circuit-check verity/ml/circuits/ops/boolean/gf2k.circuit-check.py
                                                                     the targets a sidecar's bindings reach that its module defines
     circuit-check --all                                             every registered Definition and template (the suite's set)

@@ -1,7 +1,7 @@
 [project]
 name = "verity-circuit-check"
 version = "0.1.0"
-description = "circuit-check: the standard property checks every Definition, subcircuit template and served row passes (correspondence with the reference evaluator on edge inputs, redundant and dead gates, the partition invariant, Boolean lowering pins)."
+description = "circuit-check: the standard property checks every Definition, subcircuit template and served workload passes (correspondence with the reference evaluator on edge inputs, redundant and dead gates, the partition invariant, Boolean lowering pins)."
 requires-python = ">=3.12"
 dependencies = ["verity", "verity-vllm", "verity-flock", "verity-numerical", "numpy"]
 

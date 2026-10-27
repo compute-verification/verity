@@ -1,4 +1,4 @@
-"""circuit-check over every registered Definition and subcircuit template, a served row's request Program, and the checks' own
+"""circuit-check over every registered Definition and subcircuit template, a served workload's request Program, and the checks' own
 negatives (each check fires by name on a circuit built to break it).
 
 A failure is a correctness or invariant violation.  The ones `main` already has are listed in `circuit_check.known` with their
@@ -300,8 +300,8 @@ def test_row(tmp_path, results):
 
 @pytest.mark.slow
 def test_a_call_output_no_commitment_holds_is_named(tmp_path):
-    """The attention fixture's o_proj Gemm returns a value no later Call reads and the query does not require: a unit would end
-    at an uncommitted value, across Calls."""
+    """The attention fixture's o_proj Gemm returns a value no later Call reads and the query does not require: a proof block
+    would end at an uncommitted value, across Calls."""
     r = CK.check_row(_request_program(tmp_path, attn=True), OPTS, memo=MEMO, pins=PINS)
     assert "partition/output-not-committed Gemm_v1{K=48,N=16} (4 Call(s) under model.model.layers.0.self_attn.o_proj)" in \
         [f["name"] for f in r["failures"]]
@@ -385,7 +385,7 @@ def test_the_probed_entries_are_the_ends_and_each_regions_edges():
 
 def test_a_registered_table_is_probed_and_never_flattened(monkeypatch):
     """A Definition whose table parameter is over the input budget is checked on its other parameters' vectors plus one
-    instance per probed entry, each reading the table lazily; the record names the probed entries and counts the words read."""
+    vector per probed entry, each reading the table lazily; the record names the probed entries and counts the words read."""
     from verity.ml.circuits.evaluation import evaluate
 
     read, holds = _table_read(), _holds()
@@ -468,7 +468,7 @@ def test_a_value_computed_twice_in_one_unit_is_a_redundant_gate():
 
 
 def test_a_value_computed_in_two_units_is_a_recompute_failure():
-    """Two identical calls, each returned by its own unit (the body reads only its parameters, which `word.unit_rule` partitions
+    """Two identical calls, each returned by its own proof block (the body reads only its parameters, which `word.unit_rule` partitions
     node by node; the whole Definition's cut compares them)."""
     from verity.ml.circuits.refs import array_of
     from verity.ml.circuits.types import Array, Value
@@ -485,7 +485,7 @@ def test_a_value_computed_in_two_units_is_a_recompute_failure():
     assert [w["count"] for w in inner["warnings"] if w["check"] == "redundant-gates" and w["code"] == "ir"] == [1]
 
 
-#: a Boolean Call family (`RoPEHead_v1`'s Boolean version) whose cut computes 1,120 values in two units
+#: a Boolean Call family (`RoPEHead_v1`'s Boolean version) whose cut computes 1,120 values in two proof blocks
 BOOL_RECOMPUTE = "RoPEHead_v2{D=8}"
 
 
@@ -499,7 +499,7 @@ def _partition(fn, q_word, opts=OPTS):
 @pytest.mark.slow
 @pytest.mark.usefixtures("suite")
 def test_a_boolean_call_that_recomputes_across_units_passes_with_the_count():
-    """A Boolean Call is judged by `Q_word` v2: the values two units compute are recorded, in the entry and the summary, not
+    """A Boolean Call is judged by `Q_word` v2: the values two proof blocks compute are recorded, in the entry and the summary, not
     failed; under v1 the same cut fails by name."""
     from verity.ml.circuits import boolean as BL
 
@@ -535,7 +535,8 @@ def test_a_boolean_call_with_another_partition_code_still_fails(monkeypatch):
 
 
 def test_q_call_is_recorded_per_call_and_refuses_a_gate_wider_than_32_bits():
-    """`Q_call` v1 beside `Q_word`: a Boolean Call's units, committed bits and the values two units compute (reported); a Call with
+    """`Q_call` v1 beside `Q_word`: a Boolean Call's proof blocks, committed bits and the values two proof blocks compute
+    (reported); a Call with
     a 64-bit gate is refused, a warning and the summary's `q_call_refused`, not a failure."""
     from verity.ml.circuits.defs import PrimitiveDefinition
     from verity.ml.circuits.types import Array, Value
@@ -554,7 +555,7 @@ def test_q_call_is_recorded_per_call_and_refuses_a_gate_wider_than_32_bits():
     assert CK.summarize([{"definition": wide.id, "partition": rec, "failures": [], "warnings": []}])["q_call_refused"] == {wide.id: "gate-too-wide"}
 
 
-#: `Q_call{32}` on `BOOL_RECOMPUTE`: its eight 16-bit outputs, two to a unit, and the same values computed in two units as v2 reports
+#: `Q_call{32}` on `BOOL_RECOMPUTE`: its eight 16-bit outputs, two to a proof block, and the same values computed in two proof blocks as v2 reports
 QCALL_ROPE = {"X": 32, "checked": True, "units": 8, "committed": 128, "committed_bits": 128, "recomputed_across": 1120, "redundant_gates": 0,
               "codes": []}
 
@@ -745,7 +746,7 @@ def test_a_word_definition_that_differs_from_its_boolean_definition_is_caught():
 
 def test_a_boolean_constant_is_checked_on_its_one_instance():
     """A Boolean constant (`Const<w>[0x..]_v2`, `verity.ml.circuits.ops.boolean.scalar.const_word`) takes no operands: its lowering
-    and its word view each compare its one instance, every bit, so a constant one bit off its word constant is named."""
+    and its word view each compare its one vector, every bit, so a constant one bit off its word constant is named."""
     from verity.ml.circuits import boolean as BL
     from verity.ml.circuits.boolean.forms import const_bits
     from verity.ml.circuits.boolean.trace import definition

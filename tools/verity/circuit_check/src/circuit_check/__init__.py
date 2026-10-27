@@ -1,5 +1,5 @@
 """circuit-check: the property checks every circuit passes whenever it is built or changed (a Definition, a subcircuit template,
-a served row's Program, their Boolean lowerings).
+a served workload's Program, their Boolean lowerings).
 
     checks    the checks and the report (`verity-circuit-check/v1`)
     bodies    a composite's evaluation and its non-constant gates, body by body
