@@ -23,7 +23,7 @@ from the warden's; v0's is the identity) and was admitted at bucket admitted[i],
 non-decreasing in arrival order; its output k must be released at admitted[i] + D + ⌊k / r⌋, so advice v0's release
 is held to the schedule. No prover value says where a cell goes. The advice is private; here the verifier computes
 the map in the clear from the opened advice and the admissions (which the warden's wiring gives, opened to the
-verifier tonight), the named gap ("the advice is opened to the verifier until the compile unit exists"). The target
+verifier for now), the named gap ("the advice is opened to the verifier until the compile unit exists"). The target
 reads the map inside the proof under the advice's hiding root.
 
 **The port is the Commit's**: its sampled ids, one hiding row a step (`port_row`: the step's P ids, u32be in
