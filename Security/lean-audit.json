@@ -50,18 +50,6 @@
    "owner": "@memory-accounting",
    "digest": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
   },
-  "Accounting.Assumptions.LateAnswers": {
-   "owner": "@memory-accounting",
-   "digest": "72307f0620e23e5d5f32d4344c14092e57d847c16efb9d7c9ecdb3d013f22f65"
-  },
-  "Accounting.Assumptions.LiveReads": {
-   "owner": "@memory-accounting",
-   "digest": "fe631f101be2748e869a59f9a122a639f83cd5b6c7fc8e51e971f4b7f9595f18"
-  },
-  "Accounting.Assumptions.LiveVerdicts": {
-   "owner": "@memory-accounting",
-   "digest": "930f3b00f63507822ce5d1efb42692c8e75bb0cdfce7adc553e70faaf5305d9d"
-  },
   "Accounting.Assumptions.PouwDetection": {
    "owner": "@compute-accounting",
    "digest": "3fc26faa7c656f11bfca790d2e20bd400fe1d80ed62b71c22fe2f32e056b67e1"
@@ -77,10 +65,6 @@
   "Accounting.Assumptions.PouwLuck": {
    "owner": "@compute-accounting",
    "digest": "0a53fdf464410f9e8d1e6a3af8793d11656045cb65e70da05e11362d45ac4c4c"
-  },
-  "Accounting.Assumptions.QuietReads": {
-   "owner": "@memory-accounting",
-   "digest": "9385275735b41b7287ba8c27a322a720f6562eb20d427aaa58e6173ede376108"
   },
   "Accounting.Assumptions.RateComputeAdditive": {
    "owner": "@memory-accounting",
@@ -249,10 +233,6 @@
   "Accounting.Assumptions.TS.WordsWritten": {
    "owner": "@compute-accounting",
    "digest": "f25002293156695a436d17dbd4ddccf594544b7187a569385947d7dc90dcecf7"
-  },
-  "Accounting.Assumptions.UniformLabels": {
-   "owner": "@memory-accounting",
-   "digest": "8a5606786b3b26b8e965277006ad1272a3769f44ae8512e98c60ecd6430e4672"
   },
   "Accounting.Assumptions.WordCostsMacs": {
    "owner": "@lean",
@@ -477,10 +457,6 @@
   "Accounting.Placed.Holding": {
    "owner": "@lean",
    "digest": "3518954773e68e4f3e14e2c6ddd6635884d611c8e5da4db11ad8bfa846774bab"
-  },
-  "Accounting.Placed.LatencyAtMost": {
-   "owner": "@memory-accounting",
-   "digest": "4a835db3935ea4ef4c6278765c992ee1ffbca80874a7ba6d848b5ce45d455eb1"
   },
   "Accounting.Placed.Links": {
    "owner": "@lean",
@@ -12471,7 +12447,6 @@
     "Accounting.Placed.x": "994440becd8445d653a65b364659a7498c1ea20fa4c58dc13c6780b6bf12fef7"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
     "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
     "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots",
     "Accounting.SecurityProofs.Actual.Runtime",
@@ -12483,10 +12458,6 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
-    "Accounting.SecurityProofs.Actual.WipeLag",
-    "Accounting.SecurityProofs.Actual.WipeReadHeld",
-    "Accounting.SecurityProofs.Actual.WipeReadHeldPrf",
-    "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -12514,15 +12485,12 @@
     "Nci.SecurityProofs.FitRate"
    ]
   },
-  "Definitions.Accounting.Actual.WipeDraw": {
-   "digest": "8edcc4e14b715e5920f4e9ba34cf1f43c4e8a0afa28c9f61590f1a8ea9ba32ed",
+  "Definitions.Accounting.Actual.Sampler": {
+   "digest": "e93a07d613ef24d8ce4fed26d4b9caf7e4c26bc0726e85305ada1a4f371bc77a",
    "definitions": {
-    "Accounting.Actual.drawDistinguisher": "35049525481fdcd2b2ff4072d63eec83d93c173877d33160490b4e29463f0dad",
-    "Accounting.Actual.drawIndex": "8843cc1d2031da572630f337d1b193c29c4764618993516d8ff83ef9cde37fe7",
     "Accounting.Actual.wordIndex": "d33dadd3418335eec0660359ccf6e2bc823b564c2bb7bd6cd5318f174a710aa5"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
     "Accounting.SecurityProofs.Remote.HeldDrawn",
     "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
@@ -12530,31 +12498,6 @@
     "Accounting.SecurityProofs.Remote.PooledDraw",
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
     "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork"
-   ]
-  },
-  "Definitions.Accounting.Actual.WipeHeld": {
-   "digest": "d10182107aa699d46e6951392f4b620db032fa27e47950e96a88a65f18fa1a77",
-   "definitions": {
-    "Accounting.Actual.answered": "82f30dee710bd4f4f4c3f8e8b1ee6f29a131b11e09e29c3c15e228674116ba88",
-    "Accounting.Actual.contents": "c59367b779f35f3ea3fa1454dee9bb299988eec9fade90eb0b8ad0066e19e80c",
-    "Accounting.Actual.unanswered": "a104943d3d4d233095e8a2613aad83c1fb8c5084971587797915d2db759d146c"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
-    "Accounting.SecurityProofs.Actual.WipeLag",
-    "Accounting.SecurityProofs.Actual.WipeReadPool"
-   ]
-  },
-  "Definitions.Accounting.Actual.WipePrf": {
-   "digest": "987a8904e11188238975658f0d1682b32661d29b26290bf962d7138757ce3280",
-   "definitions": {
-    "Accounting.Actual.heldDistinguisher": "4e4772c3c0c859ba772d2e807b1ced9f5fffe849a128c4050a97adeadf2ff79d",
-    "Accounting.Actual.heldEvent": "11fc8639ed7fdbdd660311119a8a4c4aaa5ff93d341225873a03c26d83642f92",
-    "Accounting.Actual.tableLabel": "f2722da234dc0b431f0f10fa8ff94602339d37a01afea5e0c33ef7ed2533e8ca"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.Actual.WipeReadHeldPrf",
-    "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw"
    ]
   },
   "Definitions.Accounting.Assumptions.Compose": {
@@ -12875,23 +12818,6 @@
     "Accounting.Assumptions.TS.ModesRun": "1dd8096f404cb332474ed4919a8171d4dfe7cf3f2ad76a846dc1283b73e437f3"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.UnitFixedOfWords"]
-  },
-  "Definitions.Accounting.Assumptions.WipeRead": {
-   "digest": "a054e60327c69db6035cee8f0741c06fe41d3ae1d234e1de03db3c1e00fb7ac9",
-   "definitions": {
-    "Accounting.Assumptions.LateAnswers": "72307f0620e23e5d5f32d4344c14092e57d847c16efb9d7c9ecdb3d013f22f65",
-    "Accounting.Assumptions.LiveReads": "fe631f101be2748e869a59f9a122a639f83cd5b6c7fc8e51e971f4b7f9595f18",
-    "Accounting.Assumptions.LiveVerdicts": "930f3b00f63507822ce5d1efb42692c8e75bb0cdfce7adc553e70faaf5305d9d",
-    "Accounting.Assumptions.QuietReads": "9385275735b41b7287ba8c27a322a720f6562eb20d427aaa58e6173ede376108",
-    "Accounting.Assumptions.UniformLabels": "8a5606786b3b26b8e965277006ad1272a3769f44ae8512e98c60ecd6430e4672"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
-    "Accounting.SecurityProofs.Actual.WipeReadHeld",
-    "Accounting.SecurityProofs.Actual.WipeReadHeldPrf",
-    "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
-    "Accounting.SecurityProofs.Actual.WipeReadPool"
-   ]
   },
   "Definitions.Accounting.Bandwidth.Causal": {
    "digest": "77c0e7236051b937516370d1b66cdabfd998ca6d239df4ace8f07b4195a4d0bc",
@@ -13475,12 +13401,7 @@
     "Accounting.req": "961f514b6304465dc1e7e4fa55e51c523c147c776780150b65c6454bdaed6fea"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
     "Accounting.SecurityProofs.Actual.Runtime",
-    "Accounting.SecurityProofs.Actual.WipeLag",
-    "Accounting.SecurityProofs.Actual.WipeReadHeld",
-    "Accounting.SecurityProofs.Actual.WipeReadHeldPrf",
-    "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -14042,35 +13963,6 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeDarkSlots",
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots"
    ]
-  },
-  "Definitions.Accounting.Guarantees.Actual.WipeBridge": {
-   "digest": "1f3ad22556027fbf8d790e9433a90c70f149e9f3b4e3b790ff68a4d35f1b2e9e",
-   "definitions": {
-    "Accounting.Guarantees.Actual.AnsweredOfQuiet": "d995b35ad0509b18b5aa458adb938c9000e2ef0d29eef133e5c278297f1a077c",
-    "Accounting.Guarantees.Actual.WipeLag": "1b1da8aaaf848b32b285ccef37e813543ddf9d74d0b1e150d21186798350033d",
-    "Accounting.Guarantees.Actual.WipeReadHeld": "20826dd48cdcc354946c9c7c0b54f1925eeeee22321e7e22d976b9c3284943f1",
-    "Accounting.Guarantees.Actual.WipeReadPool": "5ab5cc66a0a0e029bb9c3242fdf674c65d836aef0f8aabd41bcbb1836776283b"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
-    "Accounting.SecurityProofs.Actual.WipeLag",
-    "Accounting.SecurityProofs.Actual.WipeReadHeld",
-    "Accounting.SecurityProofs.Actual.WipeReadPool"
-   ]
-  },
-  "Definitions.Accounting.Guarantees.Actual.WipeDraw": {
-   "digest": "8a7c6cbee4201fd52a0406312d9992243d218d7d67591d5f738119cc77944933",
-   "definitions": {
-    "Accounting.Guarantees.Actual.WipeReadHeldPrfDraw": "5c64de29201b1c8a1ac69aaeff6e26a26c8d17842f5fec1d7844dd549066dcda"
-   },
-   "guarantees": ["Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw"]
-  },
-  "Definitions.Accounting.Guarantees.Actual.WipePrf": {
-   "digest": "4321729824bf3d56eb4d65274b8b361451ff0aa761c09280767b5165286005c5",
-   "definitions": {
-    "Accounting.Guarantees.Actual.WipeReadHeldPrf": "6c8b8d8c503d75828440e9358f1ae11d0a55791ac148ad445bbdde133a42dd26"
-   },
-   "guarantees": ["Accounting.SecurityProofs.Actual.WipeReadHeldPrf"]
   },
   "Definitions.Accounting.Guarantees.Bandwidth": {
    "digest": "71fb78cd62c87a3e6762f035dfab04f030ac6c761371e26bb809172c897d7fb0",
@@ -15652,7 +15544,7 @@
    ]
   },
   "Definitions.Accounting.Physical": {
-   "digest": "73dd130ac4c8d39fdaa54c6ae860941a1b15809c866c332556a7e3f495d502f3",
+   "digest": "0b94e407f8c752218c33d2a60fdc2348da2be15e8b2b39cb38ad25d2b43ade60",
    "definitions": {
     "Accounting.Actual.Run.record": "cef12634f1151508a108f7cc4f75fa0152800cf5a567b253af90bfd921aefccd",
     "Accounting.CausalStrategy": "c925dc397dff2c7afd95eeafa0c098ada1ed84ad87f7acaec4069157ab2d4083",
@@ -15660,7 +15552,6 @@
     "Accounting.DeclaredLinks": "1d42c317ec6a1bf9a8840fe0946906a0218f8f32ec847718d03f1ee6f1af1a60",
     "Accounting.Placed.Causal": "2f04d6a4fe23b7a63aebd7193ea1d651866d0c4924150d9e15f1c357f33321f6",
     "Accounting.Placed.ComputeRate": "96822ce429b2fa6114048640d01228d12b1cfb6ff66fbb3af883ef7fc773eb15",
-    "Accounting.Placed.LatencyAtMost": "4a835db3935ea4ef4c6278765c992ee1ffbca80874a7ba6d848b5ce45d455eb1",
     "Accounting.Placed.Links": "21289f1d8100bbc4b24f3fb015950d0d11f515aeb18b02f70d65a6b68f2f813b",
     "Accounting.Placed.Memory": "f12294cc702724cca24f7a1192e560840420a9a1ab87d3eff59ab7a9f53edd15",
     "Accounting.Placed.Spec": "b1bacd8a93bd348e554d654f301218d19023c6018637e1667d2984b36593eda6",
@@ -15674,7 +15565,6 @@
     "Accounting.uncertifiedCapacity": "50c8f9c62d90bc1ad68df65c869ad6c4257dd4b1dd3e44b9255753d6c33e503c"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
     "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
     "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots",
     "Accounting.SecurityProofs.Actual.Runtime",
@@ -15686,10 +15576,6 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
-    "Accounting.SecurityProofs.Actual.WipeLag",
-    "Accounting.SecurityProofs.Actual.WipeReadHeld",
-    "Accounting.SecurityProofs.Actual.WipeReadHeldPrf",
-    "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
     "Accounting.SecurityProofs.B4",
     "Accounting.SecurityProofs.B4Covered",
     "Nci.SecurityProofs.FitRate"
@@ -18913,7 +18799,6 @@
     "Verity.Implementation.inp": "997e0ba3c6cf816c20ad7aecf22ecb9aef93d68ebcf8cec1ed8c071b89d64202"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.Actual.AnsweredOfQuiet",
     "Accounting.SecurityProofs.Actual.DampenerWindowsCap",
     "Accounting.SecurityProofs.Actual.DampenerWindowsCapSlots",
     "Accounting.SecurityProofs.Actual.Runtime",
@@ -18925,10 +18810,6 @@
     "Accounting.SecurityProofs.Actual.ThreadedRuntimeSlots",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
-    "Accounting.SecurityProofs.Actual.WipeLag",
-    "Accounting.SecurityProofs.Actual.WipeReadHeld",
-    "Accounting.SecurityProofs.Actual.WipeReadHeldPrf",
-    "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -24301,8 +24182,6 @@
     "Pous.pr": "e2d360abdc3bb446124cc63b9261aab7c0e25149c089edabce91272c925d6edb"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.Actual.WipeReadHeldPrf",
-    "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -25012,8 +24891,6 @@
     "Pous.permsp": "d4fa4566b0ea5f7ad48a716aa9c4a6397da89f45fcd110dc2fa0502ecabfe819"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.Actual.WipeReadHeldPrf",
-    "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
     "Accounting.SecurityProofs.B2",
     "Accounting.SecurityProofs.B2Adds",
     "Accounting.SecurityProofs.B2AddsP2Ring",
@@ -25281,8 +25158,6 @@
     "Pous.StreamedWipe.wipeDistinguisher": "98d326b027d2aba7126dd5f1b6c43c56b1c26f2cdafc080de2d3d8824a3edaf1"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.Actual.WipeReadHeldPrf",
-    "Accounting.SecurityProofs.Actual.WipeReadHeldPrfDraw",
     "Accounting.SecurityProofs.Remote.HeldDrawn",
     "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
