@@ -1636,7 +1636,7 @@
   },
   "Pouw.Assumptions.OutsourceWithinEgressPeriod": {
    "owner": "@compute-research",
-   "digest": "013bcc3c0b1aa40378be24e92307dd2c92358f76931d7c812b2d5207d7f70d15"
+   "digest": "bcf74db8eeb773a4906b41f338e74a7c736ef6c3ab069d7161683a1bd410c53a"
   },
   "Pouw.Assumptions.OwnDither": {
    "owner": "@compute-research",
@@ -10108,28 +10108,25 @@
    "owner": "@compute-research",
    "signature": [
     "Pouw.SecurityProofs.OnsiteFreed_honest :",
-    "  And (Pouw.SecurityProofs.DitherWitness.twPd.DualOpt Pouw.SecurityProofs.DitherWitness.twμ 1)",
+    "  And (Pouw.Witness.twPd.DualOpt Pouw.Witness.twμ 1)",
     "    (And",
     "      (Real.instLT.lt 0",
-    "        (Finset.univ.sum fun r =>",
-    "          instHMul.hMul (Pouw.SecurityProofs.DitherWitness.twμ r)",
-    "            (instHMul.hMul 1 (Pouw.SecurityProofs.DitherWitness.twPd.hon r))))",
+    "        (Finset.univ.sum fun r => instHMul.hMul (Pouw.Witness.twμ r) (instHMul.hMul 1 (Pouw.Witness.twPd.hon r))))",
     "      (And (Real.instLE.le 0 0)",
-    "        (And Pouw.SecurityProofs.DitherWitness.tw.G1",
-    "          (And Pouw.SecurityProofs.DitherWitness.tw.G2",
-    "            (And Pouw.SecurityProofs.DitherWitness.tw.P1",
-    "              (And Pouw.SecurityProofs.DitherWitness.tw.P2",
+    "        (And Pouw.Witness.tw.G1",
+    "          (And Pouw.Witness.tw.G2",
+    "            (And Pouw.Witness.tw.P1",
+    "              (And Pouw.Witness.tw.P2",
     "                (And",
-    "                  (Pouw.Assumptions.RemoteWorkFloor Pouw.SecurityProofs.DitherWitness.tw",
-    "                    Pouw.SecurityProofs.DitherWitness.twRound 2 Pouw.SecurityProofs.DitherWitness.twVerdict",
-    "                    Pouw.SecurityProofs.DitherWitness.twμ Pouw.SecurityProofs.OnsiteFreedWitness.twF (1 / 2))",
+    "                  (Pouw.Assumptions.RemoteWorkFloor Pouw.Witness.tw Pouw.Witness.twRound 2",
+    "                    Pouw.SecurityProofs.OnsiteFreedWitness.twWork Pouw.Witness.twμ",
+    "                    Pouw.SecurityProofs.OnsiteFreedWitness.twF (1 / 2))",
     "                  (And",
-    "                    (Pouw.Assumptions.OutsourceWithinEgressPeriod Pouw.SecurityProofs.DitherWitness.tw",
-    "                      Pouw.SecurityProofs.DitherWitness.twRound 2 Pouw.SecurityProofs.DitherWitness.twμ 0)",
+    "                    (Pouw.Assumptions.OutsourceWithinEgressPeriod Pouw.Witness.tw Pouw.Witness.twRound 2",
+    "                      Pouw.Witness.twμ 0)",
     "                    (And",
-    "                      (Pouw.Assumptions.CertifiedImport Pouw.SecurityProofs.DitherWitness.tw",
-    "                        Pouw.SecurityProofs.DitherWitness.twRound 2 Pouw.SecurityProofs.OnsiteFreedWitness.twNet",
-    "                        Pouw.SecurityProofs.DitherWitness.twDev 0 0)",
+    "                      (Pouw.Assumptions.CertifiedImport Pouw.Witness.tw Pouw.Witness.twRound 2",
+    "                        Pouw.SecurityProofs.OnsiteFreedWitness.twNet Pouw.Witness.twDev 0 0)",
     "                      (And",
     "                        (Real.instLT.lt",
     "                          (instHDiv.hDiv",
@@ -10137,57 +10134,47 @@
     "                              (instHAdd.hAdd",
     "                                (instHSub.hSub",
     "                                  (Finset.univ.sum fun r =>",
-    "                                    instHMul.hMul (Pouw.SecurityProofs.DitherWitness.twμ r)",
-    "                                      (instHMul.hMul 1 (Pouw.SecurityProofs.DitherWitness.twPd.hon r)))",
+    "                                    instHMul.hMul (Pouw.Witness.twμ r) (instHMul.hMul 1 (Pouw.Witness.twPd.hon r)))",
     "                                  Pouw.SecurityProofs.OnsiteFreedWitness.twF)",
     "                                (instHMul.hMul 0 0)))",
     "                            (Finset.univ.sum fun r =>",
-    "                              instHMul.hMul (Pouw.SecurityProofs.DitherWitness.twμ r)",
-    "                                (instHMul.hMul 1 (Pouw.SecurityProofs.DitherWitness.twPd.hon r))))",
+    "                              instHMul.hMul (Pouw.Witness.twμ r) (instHMul.hMul 1 (Pouw.Witness.twPd.hon r))))",
     "                          1)",
     "                        (And (Real.instLT.lt (instHAdd.hAdd (1 / 2) 0) 1)",
-    "                          (And Pouw.SecurityProofs.DitherWitness.honest.ExchangeFree",
-    "                            (∀ (o : Pouw.SecurityProofs.DitherWitness.twRound.Orc)",
-    "                              (x :",
-    "                                Fin 2 →",
-    "                                  Prod Pouw.SecurityProofs.DitherWitness.twRound.Draw",
-    "                                    Pouw.SecurityProofs.DitherWitness.twRound.Chk),",
-    "                              Pouw.SecurityProofs.DitherWitness.honest.Passes",
-    "                                (Pouw.Dither.onsiteVerdict Pouw.SecurityProofs.DitherWitness.twVerdict",
+    "                          (And Pouw.Witness.honest.ExchangeFree",
+    "                            (∀ (o : Pouw.Witness.twRound.Orc)",
+    "                              (x : Fin 2 → Prod Pouw.Witness.twRound.Draw Pouw.Witness.twRound.Chk),",
+    "                              Pouw.Witness.honest.Passes",
+    "                                (Pouw.Dither.onsiteVerdict Pouw.SecurityProofs.OnsiteFreedWitness.twWork",
     "                                  Pouw.SecurityProofs.OnsiteFreedWitness.twNet)",
-    "                                Pouw.SecurityProofs.DitherWitness.twDev o x)))))))))))))"
+    "                                Pouw.Witness.twDev o x)))))))))))))"
    ],
    "assumptions": [],
-   "type_hash": "0e0433a70ca691339a6cf3dee24a3ec99bb41fca5db4afaab2545a9a9e179e08"
+   "type_hash": "7627cc1a888bd3439b026910d2ecb4eda844722b6252425088a015b009fce70b"
   },
   "Pouw.SecurityProofs.OnsiteFreed_nontrivial": {
    "owner": "@compute-research",
    "signature": [
     "Pouw.SecurityProofs.OnsiteFreed_nontrivial :",
     "  Not",
-    "    (Pouw.Dither.FreedSound Pouw.SecurityProofs.DitherWitness.tw Pouw.SecurityProofs.DitherWitness.twRound 2",
-    "      (Pouw.Dither.onsiteVerdict (fun x x_1 x_2 x_3 => True) fun x x_1 x_2 x_3 => True)",
-    "      Pouw.SecurityProofs.DitherWitness.twDev Pouw.SecurityProofs.DitherWitness.twPd 1",
+    "    (Pouw.Dither.FreedSound Pouw.Witness.tw Pouw.Witness.twRound 2",
+    "      (Pouw.Dither.onsiteVerdict (fun x x_1 x_2 x_3 => True) fun x x_1 x_2 x_3 => True) Pouw.Witness.twDev",
+    "      Pouw.Witness.twPd 1",
     "      (fun x =>",
     "        instHDiv.hDiv",
     "          (Real.instMax.max 0",
     "            (instHAdd.hAdd",
     "              (instHSub.hSub",
     "                (Finset.univ.sum fun r =>",
-    "                  instHMul.hMul (Pouw.SecurityProofs.DitherWitness.twμ r)",
-    "                    (instHMul.hMul 1 (Pouw.SecurityProofs.DitherWitness.twPd.hon r)))",
+    "                  instHMul.hMul (Pouw.Witness.twμ r) (instHMul.hMul 1 (Pouw.Witness.twPd.hon r)))",
     "                Pouw.SecurityProofs.OnsiteFreedWitness.twF)",
     "              (instHMul.hMul 0 0)))",
-    "          (Finset.univ.sum fun r =>",
-    "            instHMul.hMul (Pouw.SecurityProofs.DitherWitness.twμ r)",
-    "              (instHMul.hMul 1 (Pouw.SecurityProofs.DitherWitness.twPd.hon r))))",
-    "      (Finset.univ.sum fun r =>",
-    "        instHMul.hMul (Pouw.SecurityProofs.DitherWitness.twμ r)",
-    "          (instHMul.hMul 1 (Pouw.SecurityProofs.DitherWitness.twPd.hon r)))",
-    "      fun x => instHAdd.hAdd (1 / 2) 0)"
+    "          (Finset.univ.sum fun r => instHMul.hMul (Pouw.Witness.twμ r) (instHMul.hMul 1 (Pouw.Witness.twPd.hon r))))",
+    "      (Finset.univ.sum fun r => instHMul.hMul (Pouw.Witness.twμ r) (instHMul.hMul 1 (Pouw.Witness.twPd.hon r))) fun x =>",
+    "      instHAdd.hAdd (1 / 2) 0)"
    ],
    "assumptions": [],
-   "type_hash": "1c6a8be37950f4d2d1524691e8fca382350901e3a271851aef69fe49b5d7a79d"
+   "type_hash": "d4c91cf9fdef3c6f85636bd6a7513a765e26a6093c62f9f031276985a6581a53"
   },
   "Pouw.SecurityProofs.PearlC.GammaFp4ChainOnlySm120IssueLut256_8192": {
    "owner": "@compute-accounting",
@@ -25934,7 +25921,7 @@
    "guarantees": ["Pouw.SecurityProofs.Dimension.A2WordsIff"]
   },
   "Definitions.Pouw.Assumptions.Dither": {
-   "digest": "22e60d7a52f8007c757754a55e214d48b1e5e1e95b644464eccbfee0852e2c0a",
+   "digest": "e8a2480f2c99b53f365cf03311c0d41a097b6dcfb17d638eba637080ae52622b",
    "definitions": {
     "Pouw.Assumptions.CoinsConfidential": "d8393ab6968720ddd2ebc0ab09931d9b238144a58e0fb8b5391cf9385cd23115",
     "Pouw.Assumptions.ImportWithinCertifier": "da3d3b0e08858ad33f905c8e639f5f63d576cccc0197c9ae5dac826a40b6084d",
@@ -25942,9 +25929,7 @@
     "Pouw.Assumptions.OwnDither": "14587c33d7d3ff0bdab1def743552da1bfff7faa306ac293271baf4686c60772",
     "Pouw.Assumptions.ProofSystemSound": "d56e224bb81a43377e362a0b70e2a39751b98bb316ca7044d538e6eb2cd1cf3a",
     "Pouw.Assumptions.SAKMatmul": "aca93284b4344597af71ea0c3d855de46f764cce17a7649612e8145c68315919",
-    "Pouw.Assumptions.SAKSha": "b5e591ee106588c0a39051b7bb8ff598566ebfba0dfcba9771ec134bc0b7fde5",
-    "Pouw.Assumptions.ServiceSound": "b1173d6ee843470ffa0ab5ac7e9893218a98f5b65331af984bc59b49767e6a0b",
-    "Pouw.Assumptions.ShaSpeed": "0a00c902779109296ffa552dc3dfa5cb4bbc79f0d60ce3e40e87c89a52e18a07"
+    "Pouw.Assumptions.SAKSha": "b5e591ee106588c0a39051b7bb8ff598566ebfba0dfcba9771ec134bc0b7fde5"
    },
    "guarantees": [
     "Pouw.SecurityProofs.Dither.FleetSound",
@@ -26053,10 +26038,10 @@
    ]
   },
   "Definitions.Pouw.Assumptions.OnsiteFreed": {
-   "digest": "c08bb55e5aedbc73c7de7cfa237606ceda0f3160a299e15391506e0a56aa2220",
+   "digest": "70ac4d2511852101d8794b878034189ffe4949bbbf2b5dfa87bfbfcdbb65c776",
    "definitions": {
     "Pouw.Assumptions.CertifiedImport": "0f7df21f278a9ef9041ce53b73206c604a6339505cc9b57d2c1c165f47d065bf",
-    "Pouw.Assumptions.OutsourceWithinEgressPeriod": "013bcc3c0b1aa40378be24e92307dd2c92358f76931d7c812b2d5207d7f70d15",
+    "Pouw.Assumptions.OutsourceWithinEgressPeriod": "bcf74db8eeb773a4906b41f338e74a7c736ef6c3ab069d7161683a1bd410c53a",
     "Pouw.Assumptions.RemoteWorkFloor": "94149488193a30d3ff759729014af0c567a5fb05dbd73bcc0a391aa941016751"
    },
    "guarantees": [
@@ -28534,11 +28519,11 @@
    ]
   },
   "Definitions.Pouw.OnsiteFreed": {
-   "digest": "8d9661d1b35fb5e1c4a8896948a08ee55e57e7467b19b46b965758a06f1ff333",
+   "digest": "a9de4b98a3a095efb2fbfe118963e96967c93d0e11b4a527692da4272cdfd806",
    "definitions": {
-    "Pouw.Dither.Prover.ExchangeFree": "ccea515898e003a33ce95485ae9954a7ec2887f704db911e4951f361fde3aac0",
+    "Pouw.Dither.Prover.ExchangeFree": "b9980411c6ca8cf283cb81aad42970c010633209c61dd18fb7dd923ea5138b26",
     "Pouw.Dither.noReadings": "2903a53018d912a5bd86d2f97cef8ddffeb75dcda7ac5f5dbedd266882ede7cb",
-    "Pouw.Dither.onsiteVerdict": "8c8a686b4ecd6fba49478a381359cd1182aac642fb45abfce1fa7d565673bb16"
+    "Pouw.Dither.onsiteVerdict": "64345b6a6ec6cf21d4b79ed820ef55b88ae08ab32ecd7902beb83be0732bfd31"
    },
    "guarantees": [
     "Pouw.SecurityProofs.OnsiteFreed",
@@ -31931,7 +31916,9 @@
     "Pouw.SecurityProofs.Dither.WorkMoment_honest",
     "Pouw.SecurityProofs.Dither.WorkMoment_nontrivial",
     "Pouw.SecurityProofs.Dither.WorkSound_honest",
-    "Pouw.SecurityProofs.Dither.WorkSound_nontrivial"
+    "Pouw.SecurityProofs.Dither.WorkSound_nontrivial",
+    "Pouw.SecurityProofs.OnsiteFreed_honest",
+    "Pouw.SecurityProofs.OnsiteFreed_nontrivial"
    ]
   },
   "Flock.Bytes": {
@@ -51292,57 +51279,12 @@
    },
    "guarantees": ["Flock.SecurityProofs.ZeroKnowledgeHidden"]
   },
-  "Proofs.Pouw.DitherWitness": {
-   "digest": "1c30d0c0c49dbb5d38dd3f7ca05e44ddf2838063fba6d9ce12e86c2626d4ae76",
-   "definitions": {
-    "Pouw.SecurityProofs.DitherWitness.RCell": "94f700ba1b1c06aecae6cbde395f1f17fa0263fb74c79b0ef20ff71560dc5d51",
-    "Pouw.SecurityProofs.DitherWitness.TAlg": "f2e57b2b642039905579641ac94f8af9e2b64c6a67aa9030db87b0b583398f14",
-    "Pouw.SecurityProofs.DitherWitness.TAlg.calls": "fd706efbf5519adae1c2a1649dfac6dcfa4da21e9c000e71c62548d0cd533a5e",
-    "Pouw.SecurityProofs.DitherWitness.TAlg.ofFun": "bb5ebcc30493d1f2f6ca371348d38158be55399775f93fe78c0df613e975cbfb",
-    "Pouw.SecurityProofs.DitherWitness.TAlg.run": "f1ade4446a9e1955d8fd1b8e62b2735c2bda52aafdd4b84e2653b7a3dc00a346",
-    "Pouw.SecurityProofs.DitherWitness.TAlg.use": "451ed88915c69fecb9b0de66529cebb9786eda820c227df5c9326c0677a403b9",
-    "Pouw.SecurityProofs.DitherWitness.TDraw": "1d466015c3c892e022ab26183890975e7d1014a812de063f4594a6ca4f3d3f55",
-    "Pouw.SecurityProofs.DitherWitness.TRoot": "ffd6e251eeb2651a25c350cda9c59d33c77487730433d5f79bbab71100f24fb9",
-    "Pouw.SecurityProofs.DitherWitness.TTr": "a1dbd4d114d41e71d0964432e32c8eab62951f1ff287973680035b1e4ea3b9e6",
-    "Pouw.SecurityProofs.DitherWitness.constAlg": "5d1adfb035288d0f3184ba5145670009d723edd47f66f5deb69075bb61736b42",
-    "Pouw.SecurityProofs.DitherWitness.dec": "de26b0718a4d695226b089a91579a1209c9391044cc174eb60b316d96a7fdf86",
-    "Pouw.SecurityProofs.DitherWitness.enc": "df6c6b95d2fb0df6380a3dede5298ac8511c453dca02533a9e4c260e74b4f5e5",
-    "Pouw.SecurityProofs.DitherWitness.hAnswer": "c76699042b874f0dc12fe815cf6aa5bc11b41633249c385e353d63e4195cdc33",
-    "Pouw.SecurityProofs.DitherWitness.hWork": "e96ce192f33b09a67b742cb7f4e6a864ce3ae1fbb9ce7e1943b74e85bc30e7a8",
-    "Pouw.SecurityProofs.DitherWitness.honest": "78cb42d66998b8acba725d8d9abdc9cac4d47e45b26cbd91548ca91b52283f51",
-    "Pouw.SecurityProofs.DitherWitness.hw": "549b7b5312a0e75cceddf7c2433791c7aaaba40f29ee76bd6b692c4a63f13149",
-    "Pouw.SecurityProofs.DitherWitness.nonconst": "895f0a47d8e158767439c65db82b80d3f60bcaaa8e03721f19448b5689597572",
-    "Pouw.SecurityProofs.DitherWitness.tm": "49365b58b7887a9a02f638b5d88c54ad17e2b2eb87072f4b02fbbbaa83705a93",
-    "Pouw.SecurityProofs.DitherWitness.tw": "9ff40000e72509785bd3df7639c56c43fc7394f37814aa89a1f6be055a1b0782",
-    "Pouw.SecurityProofs.DitherWitness.twAdv": "87b3b99f695996174acce06ca3067dfca949ec4a725c1422f33124b4171a3310",
-    "Pouw.SecurityProofs.DitherWitness.twBadv": "408a5ff636152252d3e6db2b80a319a104230eed8e3c343452c5cde1a48de7a6",
-    "Pouw.SecurityProofs.DitherWitness.twDev": "3185037457637ae5beda8397b7498947e75cdd06a727c34891725dcfb2f921b5",
-    "Pouw.SecurityProofs.DitherWitness.twHmm": "bc070742990e99a7ec848d7d8f0752949b94a5ff6467a3b86cbcc7c448e109e6",
-    "Pouw.SecurityProofs.DitherWitness.twHo": "1258c07e26cd2279a1e8af6da2a3955df068948c96f6ceb2fcb80141d4792530",
-    "Pouw.SecurityProofs.DitherWitness.twHon": "a4b533f7c1d12cafec843dea41e20f94d0e53da58dd055c6ec341fb9b684395d",
-    "Pouw.SecurityProofs.DitherWitness.twHsha": "b549bba57de1abb2419730da0358d2bac40c93de9c8c3fa5a24198b44710ec22",
-    "Pouw.SecurityProofs.DitherWitness.twInst": "68647bdf9d348d5efe0608cf4a7b4b26295e80bf9ce3b5aef7be7f6d1daa548a",
-    "Pouw.SecurityProofs.DitherWitness.twNF": "48183adc3e5247e2921bd5b14d1290176b258816035b8d3d62bff726a158aea3",
-    "Pouw.SecurityProofs.DitherWitness.twPd": "7e48621d88c4684504e8fb938cabad2bbcc1146fd6afdf5e42865e72855e09bf",
-    "Pouw.SecurityProofs.DitherWitness.twQ": "d0b7ef455d298d47700cf2ce8d81cbe0b50f85ec3ecc2133f40150c8676a9959",
-    "Pouw.SecurityProofs.DitherWitness.twReg": "4ba4802e6254f29187df9f5f82ff3c21130dd81d4ce1a0bd1764d7d475d932dd",
-    "Pouw.SecurityProofs.DitherWitness.twRound": "32fc1ddb9e0bdf861b7bc14913d9bb074467f125cc57fb317e9d523b1fa0269c",
-    "Pouw.SecurityProofs.DitherWitness.twSel": "2389ba54df0ae08dc45c642332b5d6d642617a776e86dbf2085ff2081d49c28b",
-    "Pouw.SecurityProofs.DitherWitness.twVerdict": "e348a836df9c468a2d44e7b2840a1994059afdab5eb9e00967ca79e894bd4c43",
-    "Pouw.SecurityProofs.DitherWitness.twδ": "d06accfbc371f121783f788907c17bf0af3bc4f9bb5f0d6cc264782d73c5db74",
-    "Pouw.SecurityProofs.DitherWitness.twε": "8224b85829f12abfba069fd8e81f40c8615e26080a1e8bb3b9466da522d5a9d7",
-    "Pouw.SecurityProofs.DitherWitness.twη": "0171db6aa2f2befbc6525e36ee6e7f082f88bb895aeaa001943fc2319aa471b8",
-    "Pouw.SecurityProofs.DitherWitness.twκ": "4796e68508d307ccb62237fe4f38d774e3e665db5595df57600cc6c51a50b700",
-    "Pouw.SecurityProofs.DitherWitness.twμ": "94af1c53fc82b17bc3e9d33465b15a076980b136c274def1130dac4956bfa702",
-    "Pouw.SecurityProofs.DitherWitness.twξ": "86085f4455102a1e3f305243849351d156a5573e0525bb98018716fa6ce24bfa"
-   },
-   "guarantees": ["Pouw.SecurityProofs.OnsiteFreed_honest", "Pouw.SecurityProofs.OnsiteFreed_nontrivial"]
-  },
   "Proofs.Pouw.OnsiteFreed": {
-   "digest": "a39e1cd5dba35f26c345ede290c7ff2aa55fcde23f8ba8d6c2b141db51be62f6",
+   "digest": "be2c859f3edc5b30123e247c79b9f3b831eb0faf048a8f96b60246d0e6c073e4",
    "definitions": {
-    "Pouw.SecurityProofs.OnsiteFreedWitness.twF": "4bd814a3c7440580a87dec5d311349acb1b20692de8eea847ff88f75d2aac1f7",
-    "Pouw.SecurityProofs.OnsiteFreedWitness.twNet": "356b030fbba6cf0d9b17551c1612f7fd51179261dd6d2b45ab00b43d006f86ea"
+    "Pouw.SecurityProofs.OnsiteFreedWitness.twF": "4f9446506ba51369978548c44cf4a47c79723bf3425a8c80220d912da4ab1a29",
+    "Pouw.SecurityProofs.OnsiteFreedWitness.twNet": "c61095c3a2c19598e0d67ea70ee2dab548dd605bb71c4e672af0d2eb74a663c5",
+    "Pouw.SecurityProofs.OnsiteFreedWitness.twWork": "cbd1289061856f009326a2c6ca5cc940704b78e1b5ca0fea2b1e8d216ceebc47"
    },
    "guarantees": ["Pouw.SecurityProofs.OnsiteFreed_honest", "Pouw.SecurityProofs.OnsiteFreed_nontrivial"]
   },
