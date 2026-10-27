@@ -189,13 +189,19 @@ A spec-level reference for network accounting's timing channel:
   `benchmarks/network_traces/load_relay.py`);
 - the blocks (`blocks`): the server blocks, the server-time block and the transfer gates of a circuit, schema
   `verity/blocks/v1`, kept in this module until the window interface carries it in ``circuit.json``. `check` refuses
-  blocks whose servers don't partition the units, a boundary row that is no transfer's (an ``ingress``, a registered
-  read no transfer brings in, a wire between servers, an external port's row no transfer covers), a transfer's read
-  or write that isn't whole rows of its value, an out value a row of which no unit writes or two do, and a wire
-  transfer not paired (one value, its out on one server and its in on another, of one shape and one step a row).
-  `pins` gives the verifier's pinned roots from the certificates alone, so the interface's ``input_count`` under them
-  has no free input, and `certified` refuses a wire whose two certifiers' roots differ (the receiver's commits under
-  the sender's salts, so the rows that arrived are the rows that left);
+  blocks whose servers don't partition the units, an inference block on two servers (below), a boundary row that is no
+  transfer's (an ``ingress``, a registered read no transfer brings in, a wire between servers, an external port's row
+  no transfer covers), a transfer's read or write that isn't whole rows of its value, an out value a row of which no
+  unit writes or two do, and a wire transfer not paired (one value, its out on one server and its in on another, of one
+  shape and one step a row). `pins` gives the verifier's pinned roots from the certificates alone, so the interface's
+  ``input_count`` under them has no free input, and `certified` refuses a wire whose two certifiers' roots differ (the
+  receiver's commits under the sender's salts, so the rows that arrived are the rows that left). An inference block
+  runs on a single server (NET-92, Daniel's ruling of 26 Oct): a server's ingress and egress carry only its inference
+  blocks' declared inputs and outputs, so which server may read an inference block's input bits is unambiguous. `check`
+  reads each unit's (slot, step) from the record's inference entries (``blocks.inference``) and refuses, by name, a
+  block whose units are on two servers, and two servers or more over a record that states no inference block;
+  `server_blocks` is that part alone. Which server runs which units is protocol structure, public like NCI's
+  declaration and not a private partition, so it is checked in the clear with no proof unit;
 - the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
   warden ingress row, the slot state the bucket before carries and the Programs' row (registered reads), and computes
   the next state (each block to the slot holding its connection, a new connection to the lowest free slot, its prompt

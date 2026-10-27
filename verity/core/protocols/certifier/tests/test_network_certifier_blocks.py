@@ -4,13 +4,16 @@ row of NP + 1 = 16 words, and O = 2 output steps. `AmpereBF16TcDot16_v3`'s unit 
 unit u is wired to its output, and its ``o0`` is response row u (the circuit's external output). The network certifier on
 the server's uplink commits and signs the load, the request and the response (`transfer_rows`), and the verifier's pins
 come from its certificates alone (`blocks.pins`): with them the circuit's free inputs are 0. The demo's own request and
-response rows (`transfer_rows.request_rows`, `response_rows`) bind at the frozen shape on stand-in units (`demo`)."""
+response rows (`transfer_rows.request_rows`, `response_rows`) bind at the frozen shape on stand-in units (`demo`). Cut in
+two servers, each inference block (the record's (slot, step) of each unit) runs on one of them (NET-92)."""
 
 from __future__ import annotations
 
 import copy
 import hashlib
+import math
 import random
+import re
 from dataclasses import replace
 
 import pytest
@@ -68,10 +71,20 @@ WIRE_IN = {"server": "s1", "dir": "in", "kind": "wire", "value": "h", "window": 
            "t": {"base": 1, "radix": [S * O], "step": [0]}}
 
 
-def two_servers() -> tuple[IF.Circuit, dict]:
-    """The circuit cut in two servers, the dot's units s0's and the cast's s1's: the dot's outputs cross from s0 to s1
-    as a wire ``h``, s0's egress (transfers[4]) and s1's ingress (transfers[5]), each under its uplink's certifier."""
-    c = circuit(wired=False, reads=(IF.Read(CAST, "a", "h", 0, (S * O,), 0, (2,)),), params={"h": 2 * S * O})
+def inference(cast: int) -> IF.Blocks:
+    """The circuit's inference blocks: the dot's unit j·O + k is slot j's step k, and the cast's unit j·O + k slot j's step
+    ``cast`` + k (at 0 the dot's own block, at O blocks of its own after the dot's)."""
+    return IF.Blocks(S, cast + O, (IF.InferenceEntry(DOT, 0, (S, O), ("slot", "step"), 0),
+                                   IF.InferenceEntry(CAST, 0, (S, O), ("slot", "step"), cast)))
+
+
+def two_servers(cast: int = O) -> tuple[IF.Circuit, dict]:
+    """The circuit cut in two servers, the dot's units s0's and the cast's s1's, the cast in inference blocks of its own
+    (`inference`; at ``cast`` 0 in the dot's, so every inference block is on both servers): the dot's outputs cross from
+    s0 to s1 as a wire ``h``, s0's egress (transfers[4]) and s1's ingress (transfers[5]), each under its uplink's
+    certifier."""
+    c = circuit(wired=False, reads=(IF.Read(CAST, "a", "h", 0, (S * O,), 0, (2,)),), params={"h": 2 * S * O},
+                blocks=inference(cast))
     b = blocks()
     b["server"] = [{"name": "s0", "uplink": UPLINK, "units": [[DOT, 0, S * O]]},
                    {"name": "s1", "uplink": UPLINK1, "units": [[CAST, 0, S * O]]}]
@@ -289,7 +302,7 @@ def test_refuses_an_uncovered_external_row(tiny):
 
 def test_refuses_a_wire_between_servers_and_an_ingress_declaration(tmp_path):
     c, b = two_servers()
-    crossed = circuit()
+    crossed = circuit(blocks=inference(O))
     b2 = blocks()
     b2["server"] = b["server"]
     b2["transfers"][3]["server"] = "s1"
@@ -385,7 +398,8 @@ def unpaired(name: str) -> tuple[IF.Circuit, dict]:
     elif name == "a response of it":
         t.append({**copy.deepcopy(RESPONSE), "value": "h"})
     elif name == "other rows":
-        c = circuit(wired=False, reads=(IF.Read(CAST, "a", "h", 0, (S * O,), 0, (2,)),), params={"h": 2 * S * O + 2})
+        c = circuit(wired=False, reads=(IF.Read(CAST, "a", "h", 0, (S * O,), 0, (2,)),), params={"h": 2 * S * O + 2},
+                    blocks=inference(O))
         t[5]["t"]["radix"] = [S * O + 1]
     elif name == "other steps":
         t[5]["t"]["base"] = 2
@@ -415,6 +429,101 @@ def test_a_wires_in_may_come_before_its_out_but_not_on_its_own_server():
     b["transfers"] += [copy.deepcopy(WIRE_OUT), {**copy.deepcopy(WIRE_IN), "server": "s0"}]
     with pytest.raises(ValueError, match="wire 'h': from server s0 to itself"):
         BK.check(record(c), b, layouts(c))
+
+
+#: the refusal of an inference block on two servers (NET-92), where both are named
+ON_TWO = ("inference block (slot {slot}, step {step}): units of {a} on server {sa} and of {b} on server {sb}; an inference "
+          "block runs on one server, the one that may read its inputs (NET-92)")
+
+
+def test_refuses_an_inference_block_on_two_servers():
+    """NET-92 (Daniel, 26 Oct): a server's ingress and egress carry only its inference blocks' declared inputs and outputs,
+    and an inference block runs on one server. Cut dot | cast with the cast in the dot's own inference blocks, every
+    (slot, step) is on both servers, refused by name; with the cast in blocks of its own (`two_servers`) the same cut is
+    accepted. Two servers over a record that states no inference block are refused, nothing then saying which server runs
+    each (one server needs none: `tiny`'s record states none)."""
+    c, b = two_servers(cast=0)
+    with pytest.raises(ValueError, match=re.escape(ON_TWO.format(slot=0, step=0, a=DOT, sa="s0", b=CAST, sb="s1"))):
+        BK.check(record(c), b, layouts(c))
+    ok, b = two_servers()
+    assert [(s.name, s.uplink) for s in BK.check(record(ok), b, layouts(ok)).servers] == [("s0", UPLINK), ("s1", UPLINK1)]
+    bare = replace(ok, blocks=None)
+    with pytest.raises(ValueError, match=r"2 servers over a circuit record that states no inference block \(blocks.inference\)"):
+        BK.check(record(bare), b, layouts(bare))
+
+
+def entries(doc: dict, edit) -> dict:
+    """``doc`` with its inference entries ``edit``ed."""
+    doc = copy.deepcopy(doc)
+    doc["blocks"]["inference"]["entries"] = edit(doc["blocks"]["inference"]["entries"])
+    return doc
+
+
+@pytest.mark.parametrize("edit,why", [
+    (lambda es: es[:1], rf"template {CAST}: inference entries tile units \[0, 0\) of its {S * O}"),
+    (lambda es: [es[0], {**es[1], "at": 1, "radix": [S, O - 1]}], rf"template {CAST}: units \[0, 1\) are in no inference entry"),
+    (lambda es: [*es, {**es[1], "radix": [1, 1]}], rf"template {CAST}: units \[0, 1\) are in two inference entries"),
+    (lambda es: [es[0], {**es[1], "axes": ["step", "step"]}], "one the slot and at most one the step"),
+    (lambda es: [es[0], {**es[1], "template": "Gemm_v2{}"}], "a template of the record's"),
+    (lambda es: {}, "its entries, a list"),
+])
+def test_refuses_inference_entries_that_dont_tile_the_units(edit, why):
+    c, b = two_servers()
+    with pytest.raises(ValueError, match=why):
+        BK.check(entries(record(c), edit), b, layouts(c))
+
+
+#: a record's templates (the circuit's two, at other unit counts) and their inference entries ``(at, radix, axes, step)``:
+#: the slot digit fastest, slowest and alone, the step digit slowest, fastest and absent
+GRID = {DOT: (60, [(0, [3, 4, 5], ["step", "-", "slot"], 0)]),
+        CAST: (25, [(0, [5, 2], ["slot", "step"], 1), (10, [3, 5], ["-", "slot"], 3)])}
+
+
+def block_of(t: str, u: int) -> tuple[int, int]:
+    """Unit ``u`` of template ``t``'s (slot, step), from its digits one by one."""
+    for at, radix, axes, step in GRID[t][1]:
+        if at <= u < at + math.prod(radix):
+            i, digits = u - at, []
+            for r in reversed(radix):
+                i, d = divmod(i, r)
+                digits.insert(0, d)
+            return digits[axes.index("slot")], step + (digits[axes.index("step")] if "step" in axes else 0)
+    raise AssertionError(f"{t} {u}")
+
+
+def placed(server_of) -> tuple[dict, list[dict]]:
+    """`GRID`'s record, and its servers from each unit's ``server_of(t, u)``, each server's units its runs."""
+    runs: dict[str, list[list]] = {}
+    for t, (n, _es) in GRID.items():
+        for u in range(n):
+            r = runs.setdefault(server_of(t, u), [])
+            if r and r[-1][0] == t and r[-1][1] + r[-1][2] == u:
+                r[-1][2] += 1
+            else:
+                r.append([t, u, 1])
+    doc = {"templates": [[t, n] for t, (n, _es) in GRID.items()],
+           "blocks": {"inference": {"entries": [{"template": t, "at": at, "radix": r, "axes": a, "step": st}
+                                                for t, (_n, es) in GRID.items() for at, r, a, st in es]}}}
+    return doc, [{"name": s, "uplink": f"{s}/uplink", "units": runs[s]} for s in sorted(runs)]
+
+
+@pytest.mark.parametrize("seed", range(8))
+def test_each_inference_block_on_one_server_however_the_runs_cut_the_entries(tiny, seed):
+    """`server_blocks` against each unit's (slot, step) worked out digit by digit: units placed on a random server per
+    inference block, whatever runs that cuts each entry into, are accepted; moving one unit to another server refuses
+    exactly its block, by name (every block has at least 3 units)."""
+    _c, _doc, lays = tiny
+    rng, names = random.Random(seed), ["s0", "s1", "s2"]
+    home = {block_of(t, u): None for t, (n, _es) in GRID.items() for u in range(n)}
+    home = {k: rng.choice(names) for k in home}
+    doc, servers = placed(lambda t, u: home[block_of(t, u)])
+    assert [s.name for s in BK.server_blocks(doc, servers, lays)] == sorted(set(home.values()))
+    t = rng.choice(sorted(GRID))
+    u = rng.randrange(GRID[t][0])
+    (slot, step), other = block_of(t, u), rng.choice([s for s in names if s != home[block_of(t, u)]])
+    doc, moved = placed(lambda t2, u2: other if (t2, u2) == (t, u) else home[block_of(t2, u2)])
+    with pytest.raises(ValueError, match=re.escape(f"inference block (slot {slot}, step {step}): ")):
+        BK.server_blocks(doc, moved, lays)
 
 
 def test_refuses_a_wire_whose_rows_arrived_other_than_they_left(tmp_path):
