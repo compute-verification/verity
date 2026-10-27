@@ -22,14 +22,17 @@ the window's game is `Vocab.game` at the strategy it commits to (`prob_follow`),
 wipe's target bound the window's error (`prob_unclean_le`), and that bound is within the budget or the event is empty
 (`prob_windows_le`).
 
-`overhead_nontrivial`: at a window where a claim fails above the summed errors (the hypotheses of
-`soundness_of_subprotocols_nontrivial_of`), one server and one window whose run succeeds exactly when the window is not
-clean make `OverheadFor`'s conclusion fail for the verifier that accepts everything.
+`overhead_nontrivial`: at a registered window where a claim fails above the summed errors, one server and one window
+whose run succeeds exactly when that claim fails make `Bound` fail for the verifier that accepts everything
+(`oneDeployment_bound_fails`). The toy vocabulary is such a window: its errors are `0` (`toyVocab_error`) and PoUW's
+claim fails on every play (`toyVocab_pouw_fails`). `overhead_nontrivial_premises` shows that every other premise of
+`OverheadFor` holds there and that soundness for that verifier fails (through
+`soundness_of_subprotocols_nontrivial_of`).
 -/
 
 namespace Verity
 
-open Accounting Overhead
+open Accounting Accounting.Overhead Overhead
 open scoped ENNReal
 
 namespace Overhead
@@ -269,19 +272,6 @@ theorem minServerTime_le {V : Vocab d α} {In L Srv ιP Act : Type} [Fintype Srv
 
 /-! ### The one-window deployment of `overhead_nontrivial` -/
 
-/-- The strategy of a game whose messages `follow` has fixed: there are none left to send. -/
-def followStrategy {β : Type} : (g : Game β) → (s : Game.Strategy g) → Game.Strategy (follow g s)
-  | .ret _, _ => PUnit.unit
-  | .send _ k, s => followStrategy (k s.1) s.2
-  | @Game.coin _ _ _ _ k, s => fun c => followStrategy (k c) (s c)
-
-/-- Commit to the window `w` and play its game. -/
-def oneStrategy (V : Vocab d α) (w : Window V) : Game.Strategy (windows V 1) :=
-  ⟨w, Game.Strategy.bind _ _ (followStrategy _ w.σ) fun _ => PUnit.unit⟩
-
-/-- One input, whose acceptable outputs are those with `[true]` at the one position. -/
-def oneTask : Task Unit (Fin 1 → List Bool) := ⟨Unit, fun _ => ((), {y | y 0 = [true]})⟩
-
 /-- One window played is its window's game. -/
 theorem prob_windows_one (V : Vocab d α) (P : List (Window V × Outcome) → Prop) (s : Game.Strategy (windows V 1)) :
     Game.prob P (windows V 1) s = Game.prob (fun o => P [(s.1, o)]) (V.game s.1.θ s.1.F s.1.c) s.1.σ := by
@@ -299,66 +289,10 @@ theorem prob_one (V : Vocab d α) (w : Window V)
   rw [Game.avg_const, prob_windows_one]
   rfl
 
-/-- One computed gate of width one, at leaf `()`, cell `0` and tick `0`, whose value is `b`. -/
-def oneCircuit (b : Bool) : Placed Unit where
-  N := 1
-  w _ := 1
-  isInput _ := false
-  reads _ := ∅
-  reads_lt _ _ h := by simp at h
-  input_reads _ _ := rfl
-  op _ _ := BitVec.ofBool b
-  op_congr _ _ _ _ := rfl
-  outputs := ∅
-  x _ := ()
-  t _ := 0
-  cell _ := 0
-  cell_inj g h _ := Fin.ext (by have := g.isLt; have := h.isLt; omega)
-
-/-- `oneCircuit b`'s run: its gate's value is `b`, and nothing is held. -/
-def oneRun (b : Bool) : Actual.Run Unit where
-  A := oneCircuit b
-  val _ := BitVec.ofBool b
-  faithful _ _ := rfl
-  held _ _ := ∅
-  holding := ⟨fun _ _ _ h => by simp at h, fun _ h => absurd h Bool.false_ne_true,
-    fun _ _ h => absurd h (Finset.notMem_empty _)⟩
-
-/-- One counted product, at the gate, when `b`. -/
-def oneProds (b : Bool) : Nci.Ldl.Products (oneRun b).A.toCircuit Unit Unit where
-  J := if b then {()} else ∅
-  rep _ := ⟨0, Nat.one_pos⟩
-  rep_inj := by intro p _ q _ _; exact Subsingleton.elim p q
-  rep_op _ _ := rfl
-  act _ := ()
-
-/-- A wipe that leaves nothing. -/
-def oneWipe (d : Device ι) : WipeLive d Outcome where
-  fill := 0
-  fill_le := Nat.zero_le _
-  accepts _ := True
-  kept _ := 0
-
 theorem oneWipe_survives (f : ℝ) (o : Outcome) : (oneWipe d).Survives f o := by
   unfold WipeLive.Survives oneWipe
   simp only [Nat.cast_zero, mul_zero, zero_add, sub_zero]
   positivity
-
-/-- The first window's claim `a` fails on its play. -/
-def oneBad (V : Vocab d α) (a : Audit) (ws : List (Window V × Outcome)) : Prop :=
-  ∃ e, ws[0]? = some e ∧ ¬ V.Holds e.1.θ e.1.F e.1.c e.1.σ a e.2
-
-open Classical in
-/-- One server and one window of two ticks; the run's gate holds `1`, and is a counted product, exactly when the
-window's claim `a` fails. -/
-noncomputable def oneDeployment (V : Vocab d α) (a : Audit) : Deployment V Unit Unit Unit Unit Unit 1 where
-  run _ ws := oneRun (decide (oneBad V a ws))
-  prods _ ws := oneProds (decide (oneBad V a ws))
-  X _ := Finset.univ
-  H := 1
-  win := (Equiv.punitProd (Fin 1)).symm
-  ω := 2
-  wipe _ := oneWipe d
 
 open Classical in
 theorem oneDeployment_run_of_bad (V : Vocab d α) (a : Audit) {x : Unit} {ws : List (Window V × Outcome)}
@@ -416,12 +350,126 @@ theorem eq_true_of_succeeds {b : Bool} {pos : Fin 1 → Unit × ℕ × ℕ}
     exact absurd this (by decide)
   · rfl
 
+/-- The one-window deployment meets the wipe's target with no error: its wipe leaves nothing. -/
+theorem oneDeployment_wipeSound (V : Vocab d α) (a : Audit) (acc : Sent → Prop) (f : ℝ) :
+    (oneDeployment V a).WipeSound acc f (fun _ => 0) := fun _ =>
+  le_of_eq (prob_eq_zero_of_not (fun o h => h.2.2 (oneWipe_survives f o)) _ _)
+
+/-- A clean window materializes nothing: the run's gate is a counted product only where claim `a` fails. -/
+theorem oneDeployment_servingCap (V : Vocab d α) (a : Audit) (f : ℝ) (Phys : Actual.Run Unit → Prop) {q : ℝ}
+    (hq : 0 ≤ q) : (oneDeployment V a).ServingCap f Phys q := by
+  intro x ws i e he _ hc _
+  have hb : ¬ oneBad V a ws := by
+    rintro ⟨e', he', hn⟩
+    rw [Fin.val_eq_zero, he'] at he
+    cases he
+    exact hn (hc.1 a)
+  have hJ := Deployment.inWindow_subset (oneDeployment V a) x ws i
+  rw [oneDeployment_J_of_not_bad V a hb] at hJ
+  rw [Finset.subset_empty.1 hJ]
+  simpa using hq
+
+/-- Nothing is materialized outside the one window. -/
+theorem oneDeployment_darkShare (V : Vocab d α) (a : Audit) : (oneDeployment V a).DarkShare 0 := by
+  classical
+  intro x ws
+  have : (oneDeployment V a).dark x ws = ∅ := by
+    apply Finset.filter_false_of_mem
+    intro p _ h
+    exact h 0 (inWindow_one V a x ws _)
+  rw [this]
+  simp
+
+/-- The run succeeds only with its one counted product materialized. -/
+theorem oneDeployment_materialization (V : Vocab d α) (a : Audit) :
+    (oneDeployment V a).Materialization oneTask 1 0 := by
+  classical
+  intro pos τ
+  refine le_of_eq (prob_eq_zero' fun ω ws hw => ?_)
+  obtain ⟨hs, hc⟩ := hw
+  have hb : oneBad V a ws := of_decide_eq_true (eq_true_of_succeeds hs)
+  rw [oneDeployment_J_of_bad V a hb] at hc
+  simp at hc
+
+/-- **The bound fails on the one-window deployment** for the verifier that accepts everything, at a registered window
+where claim `a` fails with probability above a budget `ε₀` that covers the subprotocols' summed errors: the window is
+accepted, and the run succeeds below `T_min` exactly when the claim fails. -/
+theorem oneDeployment_bound_fails (V : Vocab d α) (a : Audit) (w : Window V) (hreg : V.Registered w.θ w.F)
+    (ε₀ : ℝ≥0∞) (herr : ∑ b, V.error b w.θ w.F w.c w.σ ≤ ε₀)
+    (hlt : ε₀ < Game.prob (fun o => ¬ V.Holds w.θ w.F w.c w.σ a o) (V.game w.θ w.F w.c) w.σ) :
+    ¬ Bound V oneTask (oneDeployment V a) (fun _ => True) (fun _ => 0) (1 / 2) 0 1 0 (fun _ => ((), 0, 0))
+      (fun _ => oneStrategy V w) (fun _ => ε₀) := by
+  classical
+  unfold Bound
+  rw [prob_one, prob_one]
+  intro h
+  have hle : Game.prob (fun o => ¬ V.Holds w.θ w.F w.c w.σ a o) (V.game w.θ w.F w.c) w.σ ≤ ε₀ := by
+    refine le_trans (prob_le_of_registered V hreg fun o hr ho => ?_) (h.trans ?_)
+    · have hb : oneBad V a [(w, o)] := ⟨(w, o), rfl, ho⟩
+      refine ⟨⟨rfl, fun e he => ?_⟩, ?_, ?_⟩
+      · rw [List.mem_singleton] at he
+        subst he
+        exact ⟨trivial, hr⟩
+      · rw [oneDeployment_run_of_bad V a hb]
+        exact oneSucceeds
+      · rw [oneMin V a]
+        exact lt_of_le_of_lt (Nat.cast_le_one.2 (oneServerTime_le V a _ _)) one_lt_two
+    · have hmid : ∀ o : Outcome, ¬ ∃ i : Fin 1, ∃ e, [(w, o)][(i : ℕ)]? = some e ∧
+          ε₀ < windowError V (fun _ => 0) e.1 := by
+        rintro o ⟨i, e, he, hlt'⟩
+        rw [Fin.val_eq_zero, List.getElem?_cons_zero, Option.some.injEq] at he
+        subst he
+        simp only [windowError, add_zero] at hlt'
+        exact absurd herr (not_le.2 hlt')
+      rw [prob_eq_zero_of_not hmid]
+      simp
+  exact lt_irrefl _ (hle.trans_lt hlt)
+
+/-! ### The toy vocabulary -/
+
+theorem toyVocab_registered : toyVocab.Registered ByteArray.empty ByteArray.empty := rfl
+
+/-- The toy finder finds no collision, so every subprotocol's error is its `δ = 0` plus no loss. -/
+theorem toyVocab_error (a : Audit) (θ F c : ByteArray) (σ : Game.Strategy (toyVocab.game θ F c)) :
+    toyVocab.error a θ F c σ = 0 := by
+  have hcr : toyVocab.FinderCR a θ F c σ := by
+    show Claims.Finder.Pr sha512Msg toyFinder ≤ 0
+    have hz : ∀ s : toyFinder.S, ¬ ∃ u v, toyFinder.out s = some (u, v) ∧ Claims.Collision sha512Msg u v :=
+      fun _ ⟨_, _, h, _⟩ => by simp [toyFinder] at h
+    simp only [Claims.Finder.Pr, Claims.Pr, hz, Finset.filter_false, Finset.card_empty, Nat.cast_zero, zero_div,
+      le_refl]
+  simp only [Vocab.error, condError, hcr, ↓reduceIte]
+  simp [PeriodLive.error, toyVocab]
+
+/-- PoUW's claim fails on every play: no gate is computed, and the certificate asks for one. -/
+theorem toyVocab_pouw_fails (θ F c : ByteArray) (σ : Game.Strategy (toyVocab.game θ F c)) (o : Outcome) :
+    ¬ toyVocab.Holds θ F c σ .pouw o := by
+  show ¬ ((1 : ℝ) ≤ ((∅ : Finset (Fin (toyVocab.circuitOf F).N)).card : ℝ))
+  simp
+
+theorem toyVocab_prob_pouw_fails (w : Window toyVocab) :
+    Game.prob (fun o => ¬ toyVocab.Holds w.θ w.F w.c w.σ .pouw o) (toyVocab.game w.θ w.F w.c) w.σ = 1 := by
+  have : (fun o => ¬ toyVocab.Holds w.θ w.F w.c w.σ .pouw o) = fun _ => True :=
+    funext fun o => eq_true (toyVocab_pouw_fails _ _ _ _ o)
+  rw [this, Game.prob_true]
+
+/-- Soundness fails at the toy vocabulary for the verifier that accepts everything. -/
+theorem toyVocab_not_sound : ¬ toyVocab.SoundnessFor (fun _ => True) := by
+  have hlt : ∑ b, toyVocab.error b toyWindow.θ toyWindow.F toyWindow.c toyWindow.σ <
+      Game.prob (fun o => ¬ toyVocab.Holds toyWindow.θ toyWindow.F toyWindow.c toyWindow.σ .pouw o)
+        (toyVocab.game toyWindow.θ toyWindow.F toyWindow.c) toyWindow.σ := by
+    rw [toyVocab_prob_pouw_fails]
+    simp [toyVocab_error]
+  exact soundness_of_subprotocols_nontrivial_of toyVocab toyWindow.θ toyWindow.F toyWindow.c toyWindow.σ
+    toyVocab_registered .pouw hlt
+
 end Overhead
 
 /-- **The overhead guarantee at every acceptance.** -/
 theorem overheadFor (acc : Sent → Prop) : OverheadFor acc := by
   classical
   intro ι d α _ V In L Srv ιP Act _ m B G D f εWipe Phys q qD N η hω hq hV hW hPhys hCap hDark hCov pos τ ε
+  unfold Bound
   have hin : ∀ x 𝒴 ws, (AcceptedBy V acc B ws ∧ Succeeds (D.run x ws) pos 𝒴 ∧
       (serverTime D.X (D.run x ws).A : ℝ) < minServerTime D.ω N q qD (Fintype.card Srv)) →
       (∃ i : Fin B, ∃ e, ws[(i : ℕ)]? = some e ∧
@@ -465,61 +513,20 @@ theorem overheadFor (acc : Sent → Prop) : OverheadFor acc := by
 /-- **The overhead guarantee at the verifier of record.** -/
 theorem overhead : Overhead := overheadFor Accepts
 
-/-- **The overhead guarantee needs the verifier.** At a window where claim `a` fails above the summed errors, on
-`oneDeployment` (one server, one window, a run that succeeds exactly when that claim fails) every premise holds and
-the conclusion fails for the verifier that accepts everything. -/
-theorem overhead_nontrivial : Overhead_nontrivial := by
-  classical
-  intro ι d α _ V θ F c σ hreg a hlt
-  refine ⟨soundness_of_subprotocols_nontrivial_of V θ F c σ hreg a hlt, oneTask, oneDeployment V a, 0, fun _ => 0,
-    1 / 2, 0, 1, 0, fun _ => ((), 0, 0), fun _ => oneStrategy V ⟨θ, F, c, σ⟩, fun _ => ∑ b, V.error b θ F c σ,
-    Nat.succ_pos 1, by norm_num, fun w => ?_, ?_, fun x ws => ?_, fun pos τ => ?_, ?_⟩
-  · apply le_of_eq
-    apply prob_eq_zero_of_not
-    intro o h
-    exact h.2.2 (oneWipe_survives 0 o)
-  · intro x ws i e he _ hc _
-    have hb : ¬ oneBad V a ws := by
-      rintro ⟨e', he', hn⟩
-      rw [Fin.val_eq_zero, he'] at he
-      cases he
-      exact hn (hc.1 a)
-    have hJ := Deployment.inWindow_subset (oneDeployment V a) x ws i
-    rw [oneDeployment_J_of_not_bad V a hb] at hJ
-    rw [Finset.subset_empty.1 hJ]
-    norm_num
-  · have : (oneDeployment V a).dark x ws = ∅ := by
-      apply Finset.filter_false_of_mem
-      intro p _ h
-      exact h 0 (inWindow_one V a x ws _)
-    rw [this]
-    simp
-  · refine le_of_eq (prob_eq_zero' fun ω ws hw => ?_)
-    obtain ⟨hs, hc⟩ := hw
-    have hb : oneBad V a ws := of_decide_eq_true (eq_true_of_succeeds hs)
-    rw [oneDeployment_J_of_bad V a hb] at hc
-    simp at hc
-  · rw [prob_one, prob_one]
-    intro h
-    have hle : Game.prob (fun o => ¬ V.Holds θ F c σ a o) (V.game θ F c) σ ≤ ∑ b, V.error b θ F c σ := by
-      refine le_trans (prob_le_of_registered V hreg fun o hr ho => ?_) (h.trans ?_)
-      · have hb : oneBad V a [((⟨θ, F, c, σ⟩ : Window V), o)] := ⟨((⟨θ, F, c, σ⟩ : Window V), o), rfl, ho⟩
-        refine ⟨⟨rfl, fun e he => ?_⟩, ?_, ?_⟩
-        · rw [List.mem_singleton] at he
-          subst he
-          exact ⟨trivial, hr⟩
-        · rw [oneDeployment_run_of_bad V a hb]
-          exact oneSucceeds
-        · rw [oneMin V a]
-          exact lt_of_le_of_lt (Nat.cast_le_one.2 (oneServerTime_le V a _ _)) one_lt_two
-      · have hmid : ∀ o : Outcome, ¬ ∃ i : Fin 1, ∃ e, [((⟨θ, F, c, σ⟩ : Window V), o)][(i : ℕ)]? = some e ∧
-            ∑ b, V.error b θ F c σ < windowError V (fun _ => 0) e.1 := by
-          rintro o ⟨i, e, he, hlt'⟩
-          rw [Fin.val_eq_zero, List.getElem?_cons_zero, Option.some.injEq] at he
-          subst he
-          simp [windowError] at hlt'
-        rw [prob_eq_zero_of_not hmid]
-        simp
-    exact lt_irrefl _ (hle.trans_lt hlt)
+/-- **The overhead guarantee needs the verifier.** At the toy vocabulary, on the one-window deployment on PoUW's claim,
+the bound fails for the verifier that accepts everything. -/
+theorem overhead_nontrivial : Overhead_nontrivial :=
+  oneDeployment_bound_fails toyVocab .pouw toyWindow toyVocab_registered 0 (by simp [toyVocab_error])
+    (by rw [toyVocab_prob_pouw_fails]; exact zero_lt_one)
+
+/-- At `Overhead_nontrivial`'s instance every other premise of `OverheadFor` holds, and soundness for the verifier that
+accepts everything fails. -/
+theorem overhead_nontrivial_premises :
+    0 < (oneDeployment toyVocab .pouw).ω ∧ (0 : ℝ) < 1 / 2 ∧ ¬ toyVocab.SoundnessFor (fun _ => True) ∧
+      (oneDeployment toyVocab .pouw).WipeSound (fun _ => True) 0 (fun _ => 0) ∧
+      (oneDeployment toyVocab .pouw).ServingCap 0 (fun _ => True) (1 / 2) ∧
+      (oneDeployment toyVocab .pouw).DarkShare 0 ∧ (oneDeployment toyVocab .pouw).Materialization oneTask 1 0 :=
+  ⟨Nat.succ_pos 1, by norm_num, toyVocab_not_sound, oneDeployment_wipeSound _ _ _ _,
+    oneDeployment_servingCap _ _ _ _ (by norm_num), oneDeployment_darkShare _ _, oneDeployment_materialization _ _⟩
 
 end Verity
