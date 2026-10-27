@@ -1,4 +1,4 @@
-"""verity_vllm.program.predict.window_circuit on sm_90 (VLLM-127): the H200's Program binds FA3's `Attention_v4`, which the
+"""verity_vllm.program.predict.window_circuit on sm_90: the H200's Program binds FA3's `Attention_v4`, which the
 lowering cuts by key block as `Attention_v20` (`CUTS`): a head's units are its first visited block `AttnBlockFirst_v1` and its
 end `AttnHeadEnd_v1` at FA3's dot and reciprocal, and past one key block (TINY's kBlockN on sm_90 is 128) each full block
 `AttnBlock_v4{FIRST=False, CHECK=False}`, reading that block's gather, made once. An attention version with no cut
@@ -139,7 +139,7 @@ def test_a_head_with_no_cut_past_keys_is_refused_by_name(monkeypatch):
                            "and 45 GB on a pod; set VERITY_VLLM_FA3_LLAMA_1B=1")
 @pytest.mark.parametrize("cls", [WindowClass(4, 32, 4), CLASS_OF_RECORD], ids=["4,32,4", "class-of-record"])
 def test_int8_llama_3_2_1b_lowers_on_sm_90(cls):
-    """int8 Llama-3.2-1B's window circuit on the H200 (exact-int8 linears, FA3's heads at D 64 and kBlockN 192) at CIR-95's
+    """int8 Llama-3.2-1B's window circuit on the H200 (exact-int8 linears, FA3's heads at D 64 and kBlockN 192) at the default
     grain: every head `Attention_v20`'s Calls (no whole `AttentionHead_v4`, no guarded full block), no unit past 256 rows in
     and out, and no free input row. Its numbers (units, free inputs, the most rows a unit, peak RSS, the heads' census) are
     printed as a JSON line."""

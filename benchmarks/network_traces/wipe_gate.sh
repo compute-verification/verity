@@ -10,9 +10,12 @@
 # is a visible failure, never retried. Then `status` every 15 s until the run ends (status.json), and its bundle with
 # witness/, the lane's own (`fetch`), to bundle.tgz. Exits with the gate run's rc.
 #
-# 400 requests, the gate's most, are 259 link-windows at its fixed seed (`warden_serve.prompt_traffic`): 828.8 s from
-# the session's origin, which is about 15 s after the request at HEIGHT 12. A wipe whose [t0, t1) lies within
-# [origin + 1 s, origin + 827.8 s) is covered; then
+# 1700 requests, the gate's most (`auditor.WARDEN_REQUESTS`), on the gate's most prompts, 400 (`WARDEN_PROMPTS`; request
+# j sends the (j mod n)-th), are 1064 link-windows at its fixed seed (`warden_serve.prompt_traffic`): 3404.8 s from the
+# session's origin, which is about 16 s after the request at HEIGHT 13. At about 5 one-time signatures a link-window
+# they take about 5300 of height 13's 8192 (height 12's 4096 sign about 819 windows). A gate pinned before 1700 takes
+# 400 requests at most, 259 link-windows: give it REQUESTS=400 HEIGHT=12 MINUTES=20. A wipe whose [t0, t1) lies within
+# [origin + 1 s, origin + 3403.8 s) is covered; then
 #
 #   python benchmarks/network_traces/wipe_egress.py $OUT/bundle.tgz --t0-ns T0 --t1-ns T1 --out egress.json
 #
@@ -21,7 +24,8 @@ set -euo pipefail
 : "${OUT:?}"
 GATE_KEY=${GATE_KEY:-$HOME/.ssh/vy-gate-network-accounting}
 CHALLENGER=${CHALLENGER:-research@204.12.178.84}
-PEER=${PEER:-vy-dc-h200-2} PORT=${PORT:-18776} REQUESTS=${REQUESTS:-400} HEIGHT=${HEIGHT:-12} MINUTES=${MINUTES:-20}
+PEER=${PEER:-vy-dc-h200-2} PORT=${PORT:-18776} REQUESTS=${REQUESTS:-1700} HEIGHT=${HEIGHT:-13} MINUTES=${MINUTES:-60}
+PROMPTS=$((REQUESTS < 400 ? REQUESTS : 400))
 LATE_S=${LATE_S:-60}
 SSH=(ssh -T -o BatchMode=yes -o IdentitiesOnly=yes -o ServerAliveInterval=15 -i "$GATE_KEY" "$CHALLENGER")
 REQUEST="warden-rehearse --peer $PEER --port $PORT --minutes $MINUTES --requests $REQUESTS --height $HEIGHT --scan"
@@ -35,7 +39,7 @@ if [ -n "${AT:-}" ]; then
   [ "$now" -ge "$at" ] || sleep $((at - now))
 fi
 echo "$(date -u +%FT%TZ): $REQUEST"
-PYTHONPATH=$PWD python3 benchmarks/network_traces/demo_stub.py prompts --count "$REQUESTS" | "${SSH[@]}" "$REQUEST" \
+PYTHONPATH=$PWD python3 benchmarks/network_traces/demo_stub.py prompts --count "$PROMPTS" | "${SSH[@]}" "$REQUEST" \
   | tee "$OUT/start.json"
 RUN=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["run"])' "$OUT/start.json")
 echo "$(date -u +%FT%TZ): gate run $RUN"

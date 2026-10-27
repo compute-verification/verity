@@ -10,7 +10,7 @@ Under this query the boundary Values are exactly the Values that leave a module 
 Program's output) and the prescribed inputs a module body reads.  v1's "promotion" of interior rows whose output another module
 reads (F-r19-int-20) is not a pass here: such a Value crosses the body boundary and so is a boundary Value by definition.
 
-Literals.  The IR has no literal operand (a reference is `("p", i, j)` -- a parameter leaf -- or `("n", k, j)` -- a body node's
+Literals.  A Program has no literal operand (a reference is `("p", i, j)` -- a parameter leaf -- or `("n", k, j)` -- a body node's
 output leaf): a literal is a Call that reads no Value (`Const<w>[bits]`, a zero-arity gate), whose output is a function of its binding
 record alone and so is written in the Program descriptor.  Both ProgramView readers read the Program function's body, whose prescribed
 inputs are its parameters (never `Input<w>` gates, which only the lowered root circuit has), so there a Call with no reads is always

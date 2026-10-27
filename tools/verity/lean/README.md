@@ -318,7 +318,7 @@ are is decided by code, not by text: every failure carries one (`check.py`'s `Fa
 `orphan.file`, its first part the check its text names first), `report.json` and `audit.json` list them beside the texts
 (`failure_codes`, and `settled_codes` for what `--regenerate` settled), and the record differences are the codes in
 `RECORD_DIFFERENCE`, so rewording a message changes nothing a train commits.
-When the change lands on `main` (`research merge --push`, `research queue land`), Daniel gets a DM with each new, removed
+When the change lands on `main` (`research merge --push`, or drive's landing), Daniel gets a DM with each new, removed
 or changed guarantee and each changed definition (`research.spec_alert`); nobody approves it first. A guarantee whose
 statement is the same but prints differently (the same type hash and named assumptions, after a toolchain bump or a change
 of notation) gets one line, "printed differently", and is left out of the DM. Definitions are compared by name, so one

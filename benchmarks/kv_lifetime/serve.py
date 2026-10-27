@@ -1,4 +1,4 @@
-"""A chat workload from ShareGPT served by vLLM on one GPU (in process), with every KV block's allocation, prefix hit
+"""A chat workload from ShareGPT served by vLLM on one GPU (in process), with every KV page's allocation, prefix hit
 and release logged (`lifetimes.Recorder`) and each step's step-model quantities, for the KV-credit frontier.
 
 Workloads (`--workload`), each from ShareGPT_V3_unfiltered_cleaned_split.json (`--sharegpt`), conversations drawn at
@@ -17,8 +17,8 @@ Output lengths are forced (`ignore_eos`, `max_tokens` the reply's length).
 aborted, the pending turns dropped and the prefix cache emptied. A step is timed from its `schedule` to its
 `update_from_output` (sync scheduling), and records T (token rows), X (sampled rows), Q (the token rows' keys), K (the
 scheduled requests' keys after the step), n (requests), n0 (requests' first steps), the running and waiting requests
-and the pool's free blocks, on the clock of `lifetimes.Recorder` (seconds from the first phase's start). A request's
-blocks carry its origin (`lifetimes.Recorder.allocating`): its submit time, lowered by the prefix hits it takes, so a
+and the page pool's free pages, on the clock of `lifetimes.Recorder` (seconds from the first phase's start). A request's
+pages carry its origin (`lifetimes.Recorder.allocating`): its submit time, lowered by the prefix hits it takes, so a
 turn that reuses cached history inherits the history's origin while a re-prefilled one starts fresh.
 
 Writes to `--out`: events.npz (the recorder's arrays and the steps), serve.json (arguments, engine facts, each

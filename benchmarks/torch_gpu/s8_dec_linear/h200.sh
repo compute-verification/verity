@@ -4,7 +4,7 @@
 #
 #   tar -C BUILD_RUN/out/ship -cf /tmp/ship.tar .
 #   research run --on vy-dc-h200 --project verity --campaign pous --source . --cwd source --timeout 60m \
-#     --env GPU_LEASE_WHO=kernels-kp2dec [--env STEPS=bench,scale] --send /tmp/ship.tar \
+#     --env GPU_LEASE_WHO=LANE [--env STEPS=bench,scale] --send /tmp/ship.tar \
 #     -- bash benchmarks/torch_gpu/s8_dec_linear/h200.sh [RUN_ARGS...]
 #
 # Outside the lease: the ship unpacked and held to its MANIFEST.sha256, the card, the toolkit and the Python recorded. Under one
