@@ -61,3 +61,6 @@ Mirror each refusal in Python and add difftest cases. Check that honest a5 `--v2
 
 ## 21:35Z
 Resend your waiting runs to vy-nebius-cpu-6 or cpu-2 (briefs/common.md, "New slots"): r20261027-203036-87d8, -203036-b2d5, -205040-5817 and -204505-8c33 (vy-nebius-1), and -202840-d3b2 (cpu-1).
+
+## 22:10Z NEW ORDER (briefs/common.md)
+STOP the refusal batches (3c71, b624's rounds/sizes, the RecordDrawn refusals): push and checkpoint them, and cancel their waiting tries. KEEP #5330: mark it when 8c33 passes. Then you move to the registration cluster's sampled-proofs Lean side (PRF-268); I'll brief you when you end your turn.

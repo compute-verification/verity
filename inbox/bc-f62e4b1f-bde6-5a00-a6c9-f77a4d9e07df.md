@@ -7,3 +7,6 @@ CANON-C's try ee8b failed in `Security/Proofs/Properties/Verity/SampledDeploy.le
 
 ## 21:14Z
 Ruling on CANON-B's flag: v2 takes exactly one session for now (a v2 refusal ONE4 adds), so `DrawAt dj S` at session 0 is the whole draw. CANON-B proves `RecordDrawn` from ONE4's new refusals (`one-session`, `draw-law`, `draw-file`, `units-identity`, `proved-units`).
+
+## 22:10Z NEW ORDER (briefs/common.md)
+STOP: push, write a checkpoint note, cancel waiting tries (b7e2), and end your turn. The canon line pauses until the canonical objects land.

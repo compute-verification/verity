@@ -75,3 +75,9 @@ Two demos (Daniel, 2:25 PM PDT): a PR titled "two demos" whose records passed at
 
 ## Records runs go to cpu-6 (21:55Z)
 Send records runs to vy-nebius-cpu-6 only. cpu-2 is low on inodes, and infra asks for no new records runs there until its cleanup lands. cpu-2's soundness pool is fine for short tries and suites. Leave runs already started on cpu-2 alone.
+
+## NEW ORDER (Daniel, 2:56 PM PDT, 27 Oct): dedupe first, proofs after
+First every smell is cleaned up and the remote demo runs on the right names and organization, with one canonical object per concept and no duplicates. Then the end-to-end security proofs, restarted on the canonical objects. Nobody starts new proof work. F2/F3 move: soundness restates them once C3 (Wed 9 AM PDT) holds.
+- KEEP and land (marked or one step away): #5324, #5603, #5616, the flock-verify setup-cache fix, #4822, #5233, #5105, #5330, #4987 (its current records, then its mark), #5490, #5273 and the wipe chain.
+- STOP (push what you have, write a checkpoint note saying where it stands, cancel your waiting runs by id, end your turn): the canon line (CANON-A/B/C, ONE9-E), ONE8's transfer branch, ONE5's `RoundsByDevice`, ONE4's refusal batches (b624/3c71: rounds, sizes, the `RecordDrawn` refusals), ONE19's Pub nontrivial, ONE78's openings, #5326/#5327 (F3) and #5320/#5321.
+- Soundness owns the **registration cluster** (PRF-268, P-TOP-3, C3): one registration log that every subprotocol and both composites read. New workers take its duplicates.
