@@ -3,7 +3,7 @@
 // form and a Karatsuba form, to bound how far their squaring sits above a tuned one (the rebuild's x is the
 // adversary's squaring rate).
 //
-// Form 0 is ra-word-codec's `kv.cu` at KV_FIELD = 768 (`cursor/ra-word-codec-10bf`, acd61664f): column by column, each
+// Form 0 is the word codec's `kv.cu` at KV_FIELD = 768 (at acd61664f): column by column, each
 // unordered pair once, a three-word accumulator (three instructions a product), then two folds of 2^768 = 825.
 // Form 1 is the row form: each row's low halves in one carry chain and its high halves in a second, so a product costs
 // two instructions and no third accumulator word; the doubling and the squares are one chain each; the fold is two
