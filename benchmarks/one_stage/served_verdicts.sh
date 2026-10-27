@@ -14,7 +14,7 @@
 #     so the engine's idle closes them into one window. The lease ends once every closed window is sealed.
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows): every
 #     closed window's advice under the prove path's registered compiler and the weights registration (`--weights-of-record`),
-#     then this window's request Programs (`tools/advice_compile.py`); the window circuit (`prove_path.py window-circuit
+#     then this window's request Programs (`tools/advice_compile.py`); V3b's window circuit (`prove_path.py window-circuit
 #     --pins` the registration, and PIN's NAME=ROOT if set), its registered and free input bits at those
 #     pins: at each class of CLASSES (default 4,32,4, V2's), each within WC_TIMEOUT (default 30m), all of which the run needs;
 #     and at the class of record, a measurement within WC_RECORD_TIMEOUT (default 2h), run last, after the record (step 5),
@@ -49,7 +49,7 @@
 #   research run --on vy-dc-h200 --project verity --source TREE --cwd clone --timeout 6h -- \
 #     bash benchmarks/one_stage/served_verdicts.sh
 # `served_verdicts.sh circuits K`, in TREE with D and OUT, counts serve dir D's window K's circuits alone (its advice written).
-# Defaults are vy-dc-h200's: the int8 B4 row and taps under $H (ROW), vLLM's venv /workspace/cp/venv312, CUDA 13.0.
+# Defaults are vy-dc-h200's: the int8 B4 row and taps of r20261026-185144-3ccb, vLLM's venv /workspace/cp/venv312, CUDA 13.0.
 # The serve dir D (row dirs, advice, the window circuits' records) stays on the node under `research keep`; $OUT keeps the
 # public records and every log.
 set -uo pipefail
@@ -213,7 +213,7 @@ circuit() {  # window K's circuit at class $1 within $2 (NAME=LIMIT), its line h
 circuits() {  # in TREE: every class of CLASSES gates (0 iff each counted)
   local bad=0 c
   grep -q '"window-circuit"' benchmarks/prove_path/prove_path.py \
-    || { say "MISSING the window circuit: this tree's prove_path.py has no window-circuit"; return 1; }
+    || { say "MISSING V3b's window circuit (#4317 with #4757, VLLM-103): this tree's prove_path.py has no window-circuit"; return 1; }
   for c in $CLASSES; do circuit "$c" "WC_TIMEOUT=${WC_TIMEOUT:-30m}" "WINDOW-CIRCUIT class $c" || bad=1; done
   return "$bad"
 }
@@ -235,7 +235,7 @@ stop() { say "STOP at $1 (exit $2)"; exit "$2"; }
 for f in "$ROW/manifest.json" "$HIDDEN_SO" "$NORM_TAP_SO" "$PY"; do [ -e "$f" ] || { say "PREFLIGHT: no $f"; exit 3; }; done
 command -v gpu-lease >/dev/null || { say "PREFLIGHT: no gpu-lease on this node"; exit 3; }
 mkdir -p "$D" "$ROOT/cache" "$FW"
-KEEP_WHY="served_verdicts.sh's serve dirs (sealed row dirs, advice, window circuits) and C-Flock's build"
+KEEP_WHY="VLLM-33 Wed 28: served_verdicts.sh's serve dirs (sealed row dirs, advice, window circuits) and C-Flock's build"
 { "$PY" -m research keep "$ROOT" --owner @vllm --expires 7d --priority high --why "$KEEP_WHY" \
   || research keep "$ROOT" --owner @vllm --expires 7d --priority high --why "$KEEP_WHY"; } 2>&1 | tail -2
 
@@ -274,14 +274,14 @@ if [ -n "${H1_GATE:-}" ]; then
   "$PY" benchmarks/one_stage/served_verdicts.py gate --gate "$H1_GATE" ${MAIN_FILE:+--main "$MAIN_FILE"} 2>&1 \
     | tee -a "$OUT/verdicts.txt"
   [ "${PIPESTATUS[0]}" = 0 ] || stop gate 3
-  H1_COINS="PoUW H1: each window's coins from a session of its own on vy-challenger-1's gate (peer ${H1_PEER:-vy-dc-h200}, T ${H1_T:-512}, S $WINDOW_STEPS), a development run under a development key: it credits nothing"
+  H1_COINS="PoUW H1: each window's coins from a session of its own on vy-challenger-1's gate (peer ${H1_PEER:-vy-dc-h200}, T ${H1_T:-512}, S $WINDOW_STEPS), a development run under TOP-84's development key: it credits nothing"
   export POUW_CMD=${POUW_CMD:-"$TREE/.venv/bin/python benchmarks/one_stage/served_verdicts.py pouw \$1 \$2 \$3"}
 fi
 if [ -n "${PP_CHALLENGER:-}" ]; then
   say "COINS sampled proofs: the live challenger $PP_CHALLENGER (peer ${PP_PEER:-?}); $H1_COINS"
 else
   say "COINS sampled proofs: the verifier's own live coins (Lean's IO.getRandomBytes, in-process); $H1_COINS; the bandwidth" \
-      "verifier is the one on vy-auditor-2 (10.96.0.36:7952)"
+      "verifier on vy-auditor-2 (10.96.0.36:7952) is INF-263, due Tue 27 Oct 18:00Z"
 fi
 
 # 1-2. the endpoint and its requests, under the GPU lease
@@ -325,7 +325,7 @@ EOF
 for f in serve.json windows.jsonl seals.jsonl requests.jsonl load.jsonl; do cp "$D/$f" "$OUT/serve/" 2>/dev/null; done
 [ -d "$D/h1" ] && (cd "$D" && find h1 -name pouw-h1-calls.json -exec cp --parents {} "$OUT/serve/" \;)
 
-# 3. sampled proofs: the window, its advice and Programs, the window circuit, then C-Flock --zk and the Lean verifier
+# 3. sampled proofs: the window, its advice and Programs, V3b's window circuit, then C-Flock --zk and the Lean verifier
 PICK=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS" ${WINDOW:+--window "$WINDOW"} 2> "$OUT/window.err")
 [ -n "$PICK" ] || { say "WINDOW refused: $(cut -c1-600 "$OUT/window.err")"; stop window 12; }
 K=$(echo "$PICK" | "$PY" -c 'import json, sys; print(json.load(sys.stdin)["window"])')
