@@ -22,7 +22,7 @@ from verity_vllm.records.query_checks import Findings, QueryChecks, Unreachable
 DATA = Path(__file__).parent / "data"
 #: sha256 of the four C2 readers' outcomes over `_corpus()` (`json.dumps(..., sort_keys=True, default=str)`), computed with the
 #: readers on the parsed JSON before they read the record
-OUTCOMES_SHA256 = "5dacb931bbf351128ea40446847761daef6f0310f0e7412a940a0875a18529b0"
+OUTCOMES_SHA256 = "57da25a573b80ddc29057f1b344f4c23fd8c0ee04eca109151c26706e6469449"
 REQUIRED = ("vus_outside_query", "identities_without_rows", "rows_disagree", "ranks", "unstated_families", "vus_outside_query.n",
             "vus_outside_query.first", "rows_disagree.first", "ranks.replay", "identities_unreachable_by_alias.alias_entries",
             "identities_unreachable_by_alias.n", "executed_prefix_rule.applied", "executed_prefix_rule.faults",

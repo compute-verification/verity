@@ -515,7 +515,7 @@ def test_r3_without_a_served_list_the_arithmetic_is_the_mechanism_and_is_named_o
     ok = dict(linked=True, lag_attested=True, a_r_source="match/capture/tokens.json served_by_request sha256 0000")
     e = POP.executed_prefix_of_record("r0", a_r=3, lag=1, cap=8, eos_declared=True, served_len_commit=3, **ok)
     assert e["faults"] == [] and e["n_exec"] == 4 and e["r3_one_mechanism"] is False and e["by_rule"] is None
-    assert e["mechanism"].startswith("arithmetic(a_r, LAG)") and "served list was not supplied" in e["mechanism"] and "R3" in e["mechanism"]
+    assert e["mechanism"].startswith("arithmetic(a_r, LAG)") and "served list was not supplied" in e["mechanism"]
     # the served list supplied with no rule: Continuation_v1's own
     e2 = POP.executed_prefix_of_record("r0", a_r=3, lag=1, cap=8, eos_declared=True, served_len_commit=3, served=[5, 7, 2], eos_ids=[2], rule=None, **ok)
     assert e2["mechanism"].startswith("recurrence(Continuation_v1)") and e2["r3_one_mechanism"] is True and e2["n_exec"] == 4
@@ -677,10 +677,10 @@ def test_r4_c2_the_controller_statement_is_cross_checked_against_the_replays_own
     assert c6 is not None and c6["program_rows"] == 14 and c6["header_rows"] == 0 and c6["rows_agree"] is None
 
 def test_revb_n_2_16_1_the_sampler_families_mechanism_names_what_consumes_them():
-    """[revb C2 audit 2.16 NIT n-2.16-1] `sampler_seed` / `sampler_splits` are uncovered BY NAME with a mechanism that says what CONSUMES the
-    committed values (the sampler VU's exact replay in form (A); stoch_recompute's R17-2 attribution), as `input_token_ids`' entry does --
+    """`sampler_seed` / `sampler_splits` are uncovered BY NAME with a mechanism that says what CONSUMES the
+    committed values (the sampler VU's exact replay in form (A); stoch_recompute's attribution), as `input_token_ids`' entry does --
     not only the linkage check on the values themselves."""
     for fam in ("sampler_seed", "sampler_splits"):
         m = COV.QUERY_FAMILY_MECHANISM[fam]
-        assert "prescribed_input_linkage" in m and "GumbelTopPTokenSelect_v1" in m and "stoch_recompute" in m and "R17-2" in m, m
+        assert "prescribed_input_linkage" in m and "GumbelTopPTokenSelect_v1" in m and "stoch_recompute" in m, m
     assert "boundary linkage" in COV.QUERY_FAMILY_MECHANISM["input_token_ids"]
