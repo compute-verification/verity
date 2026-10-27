@@ -49,6 +49,9 @@ the units, their feeds, gathers and weight reads, and wires them):
   read: one key's own row (RoPE's, or its value's GEMM slices gathered once, at its position), a full block's
   `AllGather_v1{BN, D}` (made once, when the block fills, and read by every later position) or the first block's
   `AllGather_v1{NVIS, D}`. A layer's cache is refused unless it is the keys its earlier positions' nodes read and one more.
+- Any other attention version (FA3's `Attention_v4` on sm_90) is its heads, a unit each of its own head Definition
+  (`AttentionHead_v4{T}`), while T is at most `KEYS`: a head's keys and values are one row a KV group, an
+  `AllGather_v1{T, D}` over every key's own row, and past `KEYS` keys it is refused.
 - `TokenSelect_v4{V}` is its function at ``grain.select`` logits a chunk (its body's own form at another C): chunks
   `TokenSelectChunk_v2{C}`, each reading its C logits through one gather, and `TokenSelectCombine_v2{V, C}` over them:
   ``best`` through one gather of the chunks' maxima, ``idx`` cut a row a chunk, and ``x0`` (``logits[0]``) from one
@@ -77,9 +80,9 @@ the run), and like entries that follow on merge, at one step and then at consecu
 Refused by name (`Unexpressible`): a window past its class's slots (more requests than slots, more anchored at a boundary
 than its lanes, an anchor that is no boundary, a prompt past the cap, more outputs than the cap), a request whose Program
 would read more than its prompt and the weights (a stochastic request's seed, a prefix-cache hit's prefix, a TP rank's
-peers), a request a Commit window carries in or out,
-byte ingress, a family this lowering doesn't know, a weight whose leaves aren't whole u16 words, a row form the cut rule
-can't state and a unit of more than ``grain.rows`` rows. The circuit is completeness only: that it computes what serving ran
+peers), a request a Commit window carries in or out, byte ingress, a family this lowering doesn't know, a head past `KEYS`
+keys of an attention version with no per-key-block cut, a weight whose leaves aren't whole u16 words, a row form the cut
+rule can't state and a unit of more than ``grain.rows`` rows. The circuit is completeness only: that it computes what serving ran
 is held by the units' proofs on their committed rows, never by this lowering.
 """
 from __future__ import annotations
@@ -106,6 +109,9 @@ from .window_builder import WEIGHTS, Grain, Row, _Builder, _step
 NAME = "verity-vllm/window"
 PROMPT = "prompt"
 GREEDY = {"kind": "greedy"}
+#: the most keys a head reads through one `AllGather_v1{T, D}` where its attention's version has no per-key-block cut (its
+#: gather's T parts and output within a unit's 256 rows, with room for its reader's cut)
+KEYS = 136
 
 
 @dataclass(frozen=True)
@@ -504,10 +510,10 @@ class _Program:
 
     def _Attention(self, j: int, node: Any) -> None:
         s = node.fn.bindings
-        if node.fn.version not in (18, 19):
-            raise Unexpressible(f"{node.fn.id}: the window's lowering cuts `Attention_v18`'s heads as v19's, not "
-                                f"v{node.fn.version}'s")
         T, NH, KVH, D, BN = s["T"], s["NH"], s["KVH"], s["D"], s["BN"]
+        if node.fn.version not in (18, 19):
+            self._whole_heads(j, node)
+            return
         plan = self._plan(node.fn, NH)
         q, kc, vc = node.args
         keys = {"k": self._cache("k", kc, T, KVH), "v": self._cache("v", vc, T, KVH)}
@@ -524,6 +530,25 @@ class _Program:
                 else:
                     self._each(tid, port, u, [(r,) for r in self._block(keys[kind], *x, BN)], NH // KVH)
             calls.append((tid, u))
+        self.outs[j] = [(0, NH * D, Row(tid, u, "o0", D))]
+
+    def _whole_heads(self, j: int, node: Any) -> None:
+        """An attention whose version has no per-key-block cut (FA3's `Attention_v4`): a unit a head of its own head
+        Definition, its keys and values each one row a KV group, an `AllGather_v1{T, D}` over every key's row (`_cache`'s),
+        refused past `KEYS` keys."""
+        s = node.fn.bindings
+        T, NH, KVH, D = s["T"], s["NH"], s["KVH"], s["D"]
+        if T > KEYS:
+            raise Unexpressible(f"{node.fn.id}: a head of {T} keys, past the {KEYS} one `AllGather_v1` reads; the window's "
+                                f"lowering cuts only `Attention_v18`'s and v19's heads by key block, not v{node.fn.version}'s")
+        head = self._heads(node.fn, "AttentionHead", NH)
+        q, kc, vc = node.args
+        tid, u = self.b.unit(head, NH)
+        self._each(tid, "q", u, self._split(q.refs, NH))
+        for port, c in (("k", kc), ("v", vc)):
+            rows = self._cache(port, c, T, KVH).rows
+            self._each(tid, port, u, [(r,) for r in self.b.gathers([tuple(r[g] for r in rows) for g in range(KVH)])],
+                       NH // KVH)
         self.outs[j] = [(0, NH * D, Row(tid, u, "o0", D))]
 
     def _TokenSelect(self, j: int, node: Any) -> None:
@@ -715,5 +740,5 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
     return class_circuit(registered, cls, None, grain, name)
 
 
-__all__ = ["CLASS_OF_RECORD", "FAMILIES", "Grain", "NAME", "Row", "WindowClass", "class_circuit", "class_program", "stop_ids",
-           "window_circuit"]
+__all__ = ["CLASS_OF_RECORD", "FAMILIES", "Grain", "KEYS", "NAME", "Row", "WindowClass", "class_circuit", "class_program",
+           "stop_ids", "window_circuit"]
