@@ -42,12 +42,14 @@ mod 2^16. The operand rows A[i], B[j] are taken in the clear (their commitments 
                                                 built from the tiles' A and B rows and those rows' coins alone
     python3 v31.py params DIR NAME:M:N:K ...    CGP1 params for `v31 bench` (a fresh Ks each)
     python3 v31.py table BENCH.jsonl ...        gamma beside D6 v1.1's prediction, shape by shape
+    python3 v31.py timeline TRACE.csv           a kernel timeline of serial and overlapped calls (run.sh's MODE=nsys)
 
 Run from the source tree's root with ``PYTHONPATH=.``.
 """
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import os
@@ -779,6 +781,99 @@ def cmd_table(a: argparse.Namespace) -> int:
     return 0
 
 
+COMPUTE_KERNELS = ("bits_kernel", "noise_kernel", "perm_kernel", "form_a_kernel", "form_b_kernel", "wrap", "gemm_kernel")
+
+
+def kernel_name(full: str) -> str:
+    """A demangled kernel name without `void`, its parameters and its argument types' casts: `gemm_kernel<true>`."""
+    s, depth, out = full.strip().removeprefix("void "), 0, []
+    for ch in s:
+        if ch == "(" and depth == 0:
+            break
+        depth += (ch == "<") - (ch == ">")
+        out.append(ch)
+    return "".join(out).replace("(bool)1", "true").replace("(bool)0", "false").replace("(int)", "")
+
+
+def spans_union(spans: list[tuple[int, int]]) -> list[tuple[int, int]]:
+    out: list[tuple[int, int]] = []
+    for s, e in sorted(spans):
+        if out and s <= out[-1][1]:
+            out[-1] = (out[-1][0], max(out[-1][1], e))
+        else:
+            out.append((s, e))
+    return out
+
+
+def covered(spans: list[tuple[int, int]], s: int, e: int) -> int:
+    """The time in [s, e) under the (disjoint) spans."""
+    return sum(max(0, min(e, b) - max(s, a)) for a, b in spans)
+
+
+def cmd_timeline(a: argparse.Namespace) -> int:
+    """`v31 once` under V31_ONCE_OVL in Nsight Systems (its `nsys stats -r cuda_gpu_trace` CSV): each kernel's time in the
+    second serial call and its median over the steady overlapped calls (each one's compute beside the previous call's
+    commit, the first overlapped call's left out), with the share of it that ran beside the other stream; the steady
+    period (GEMM end to GEMM end); and the steady window's time with compute alone, the commit alone, both, and neither.
+    A kernel's k-th launch belongs to call k // (its launches / the calls), the calls counted by the protocol GEMM's."""
+    ks = []
+    with open(a.csv, newline="") as f:
+        for r in csv.DictReader(f):
+            if r.get("Name", "").startswith("[CUDA") or not r.get("Start (ns)"):
+                continue
+            ks.append((int(r["Start (ns)"]), int(r["Start (ns)"]) + int(r["Duration (ns)"]), kernel_name(r["Name"])))
+    ks.sort()
+    ncalls = sum(n == "gemm_kernel<true>" for _, _, n in ks)
+    if ncalls < a.serial + 3:
+        print(f"{ncalls} calls: want {a.serial} serial and at least 3 overlapped", file=sys.stderr)
+        return 2
+    by_name: dict[str, list[tuple[int, int]]] = {}
+    for s, e, n in ks:
+        by_name.setdefault(n, []).append((s, e))
+    calls: list[list[tuple[int, int, str]]] = [[] for _ in range(ncalls)]
+    for n, v in by_name.items():
+        if len(v) % ncalls:
+            continue
+        per = len(v) // ncalls
+        for j, (s, e) in enumerate(v):
+            calls[j // per].append((s, e, n))
+    is_compute = {n: n.startswith(COMPUTE_KERNELS) for n in by_name}
+    first_ovl = a.serial
+    steady = range(first_ovl + 1, ncalls)
+    comp_spans = spans_union([(s, e) for c in calls[first_ovl:] for s, e, n in c if is_compute[n]])
+    comm_spans = spans_union([(s, e) for c in calls[first_ovl:] for s, e, n in c if not is_compute[n]])
+    print(f"{a.csv}: {ncalls} calls ({a.serial} serial), steady overlapped calls {steady.start}..{steady.stop - 1}\n")
+    print("| kernel | launches a call | serial ms | overlapped ms (median) | overlapped / serial | beside the other stream |")
+    print("|---|---|---|---|---|---|")
+    names = list(dict.fromkeys(n for _, _, n in calls[a.serial - 1]))
+    for n in names:
+        ser = sum(e - s for s, e, m in calls[a.serial - 1] if m == n)
+        per_call, beside = [], []
+        for i in steady:
+            mine = [(s, e) for s, e, m in calls[i] if m == n]
+            per_call.append(sum(e - s for s, e in mine))
+            other = comm_spans if is_compute[n] else comp_spans
+            beside.append(sum(covered(other, s, e) for s, e in mine))
+        med = float(np.median(per_call))
+        side = sum(beside) / max(1, sum(per_call))
+        print(f"| {n} | {len([m for _, _, m in calls[a.serial - 1] if m == n])} | {ser / 1e6:.3f} | {med / 1e6:.3f} | "
+              f"{med / max(ser, 1):.2f} | {100 * side:.0f}% |")
+    gend = [max(e for s, e, n in c if n == "gemm_kernel<true>") for c in calls]
+    periods = [gend[i] - gend[i - 1] for i in steady]
+    ser_call = calls[a.serial - 1]
+    ser_span = max(e for s, e, _ in ser_call) - min(s for s, _, _ in ser_call)
+    print(f"\nserial call: {ser_span / 1e6:.3f} ms; steady period (GEMM end to GEMM end): median "
+          f"{np.median(periods) / 1e6:.3f} ms, {', '.join(f'{p / 1e6:.3f}' for p in periods)}")
+    w0, w1 = gend[steady.start - 1], gend[steady.stop - 1]
+    cs, ms = ([(max(s, w0), min(e, w1)) for s, e in sp if e > w0 and s < w1] for sp in (comp_spans, comm_spans))
+    comp, comm = sum(e - s for s, e in cs), sum(e - s for s, e in ms)
+    both = sum(covered(ms, s, e) for s, e in cs)
+    win = w1 - w0
+    print(f"steady window {win / 1e6:.3f} ms: compute alone {(comp - both) / win:.1%}, commit alone {(comm - both) / win:.1%}, "
+          f"both {both / win:.1%}, neither {(win - comp - comm + both) / win:.1%}")
+    return 0
+
+
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -805,9 +900,12 @@ def main(argv: list[str]) -> int:
     p.add_argument("--row", type=int, default=1024)
     p = sub.add_parser("table")
     p.add_argument("files", nargs="+")
+    p = sub.add_parser("timeline")
+    p.add_argument("csv")
+    p.add_argument("--serial", type=int, default=2, help="the serial calls before the overlapped ones (`v31 once`'s 2)")
     a = ap.parse_args(argv[1:])
     return {"cpu-run": cmd_cpu_run, "gpu-prep": cmd_gpu_prep, "gpu-check": cmd_gpu_check, "gpu-sample": cmd_gpu_sample,
-            "params": cmd_params, "table": cmd_table}[a.cmd](a)
+            "params": cmd_params, "table": cmd_table, "timeline": cmd_timeline}[a.cmd](a)
 
 
 if __name__ == "__main__":

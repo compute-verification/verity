@@ -16,8 +16,11 @@
 # MODE=prof: after the gates, in place of the bench, Nsight Compute (--set full) on PROF_KERNELS (an ncu -k regex, default
 # the form, wrap and commit kernels; PROF_COUNT launches, default 10) of `v31 once` on each of SHAPES for each of VARIANTS:
 # out/ncu-TAG-SHAPE.ncu-rep, its details page as CSV and its raw page (every metric, the stall reasons among them).
+# MODE=nsys: after the gates, Nsight Systems on `v31 once` with OVL_CALLS (default 6) overlapped calls after its two
+# serial ones, on each of SHAPES for each of VARIANTS: out/nsys-TAG-SHAPE.nsys-rep, its kernel trace as CSV, and
+# `v31.py timeline`'s summary of it (.timeline.md: each kernel serial and overlapped, the steady period, the streams' overlap).
 #
-# HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof (default bench); SHAPES: bench's NAME:M:N:K list
+# HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof|nsys (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
 # cprio (lo), carve (100), dyn (1), wrap (2; 1 to 4), wcw (256), ccta (1), pf (0) (v31.cu's Knobs) and nreg (the GEMM's
 # register cap, a build of its own; default v31.cu's), default row=8192; REPS (default 7); Q, the proof blocks a verdict
@@ -201,6 +204,29 @@ elif [ "$MODE" = prof ] && ! grep -qv ' rc 0$' "$O/rc.txt"; then
       done
     done'
   echo "lease prof rc $?" >> "$O/rc.txt"
+elif [ "$MODE" = nsys ] && ! grep -qv ' rc 0$' "$O/rc.txt"; then
+  NSYS=$(command -v nsys || ls /opt/nvidia/nsight-systems/*/bin/nsys 2>/dev/null | head -1)
+  export NSYS OVL_CALLS=${OVL_CALLS:-6}
+  [ -n "$NSYS" ] || echo "nsys rc no-nsys" >> "$O/rc.txt"
+  # shellcheck disable=SC2016,SC2086
+  $LEASE bash -c '
+    for v in $VARIANTS; do
+      tag=$(tr ',' '-' <<< "$v" | tr -d '=')
+      n=$(knob "$v" nreg "")
+      for s in $SHAPES; do
+        f="$O/nsys-$tag-${s%%:*}"
+        env $(knob_env "$v") V31_ONCE_OVL="$OVL_CALLS" "$NSYS" profile -t cuda -s none --cpuctxsw none -f true -o "$f" \
+          "$W/v31${n:+-n$n}" once "$W/params" "$LP" "$T" "$(knob "$v" row 8192)" "$s" > "$f.log" 2>&1
+        echo "nsys $tag ${s%%:*} rc $?" >> "$O/rc.txt"
+      done
+    done'
+  echo "lease nsys rc $?" >> "$O/rc.txt"
+  for f in "$O"/nsys-*.nsys-rep; do
+    [ -f "$f" ] || continue
+    "$NSYS" stats -r cuda_gpu_trace -f csv --force-export=true -o "${f%.nsys-rep}" "$f" >> "${f%.nsys-rep}.log" 2>&1
+    $PY $D/v31.py timeline "${f%.nsys-rep}_cuda_gpu_trace.csv" > "${f%.nsys-rep}.timeline.md" 2>> "${f%.nsys-rep}.log"
+    echo "timeline $(basename "${f%.nsys-rep}") rc $?" >> "$O/rc.txt"
+  done
 elif [ "$MODE" != gates ]; then
   echo "$MODE skipped: a gate or its check failed" >> "$O/rc.txt"
 fi

@@ -162,6 +162,30 @@ def test_table_sets_gamma_beside_d6(tmp_path, capsys):
     assert "| -, -, 2.600, - | -, -, - |" in row
 
 
+def test_timeline_splits_calls_and_measures_the_overlap(tmp_path, capsys):
+    ms = 1_000_000
+    spans = [   # (start, end, kernel) in ms: two serial calls, then four overlapped, call 5's compute 5 ms late
+        (0, 10, "w"), (10, 30, "g"), (30, 60, "l"),
+        (60, 70, "w"), (70, 90, "g"), (90, 120, "l"),
+        (120, 130, "w"), (130, 150, "g"), (150, 190, "l"),
+        (150, 165, "w"), (165, 190, "g"), (190, 230, "l"),
+        (190, 205, "w"), (205, 230, "g"), (230, 270, "l"),
+        (235, 245, "w"), (245, 270, "g"), (270, 300, "l"),
+    ]
+    names = {"w": "void wrap4_kernel<(int)128>(WrapArgs)", "g": "void gemm_kernel<(bool)1>(GArgs)",
+             "l": "void leaf_persist<V31Row>(Persist, Domain, V31Row)"}
+    rows = ['"Start (ns)","Duration (ns)","Strm","Name"', f'{5 * ms},{ms},7,"[CUDA memset]"']
+    rows += [f'{s * ms},{(e - s) * ms},{13 if n == "l" else 14},"{names[n]}"' for s, e, n in spans]
+    (tmp_path / "t.csv").write_text("\n".join(rows) + "\n")
+    assert v31.main(["v31", "timeline", str(tmp_path / "t.csv")]) == 0
+    out = capsys.readouterr().out
+    assert "| wrap4_kernel<128> | 1 | 10.000 | 15.000 | 1.50 | 100% |" in out
+    assert "| gemm_kernel<true> | 1 | 20.000 | 25.000 | 1.25 |" in out
+    assert "| leaf_persist<V31Row> | 1 | 30.000 | 40.000 | 1.33 | 68% |" in out
+    assert "steady period (GEMM end to GEMM end): median 40.000 ms, 40.000, 40.000, 40.000" in out
+    assert "steady window 120.000 ms: compute alone 0.0%, commit alone 4.2%, both 95.8%, neither 0.0%" in out
+
+
 def test_challenger_keeps_the_order_and_never_redraws():
     sh = v31.Shape(128, 128, 768)
     ch = v31.StubChallenger(os.urandom(64))

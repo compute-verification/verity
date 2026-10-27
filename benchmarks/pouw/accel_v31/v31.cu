@@ -1784,14 +1784,17 @@ static int cmd_bench(int reps, const std::string& out, const std::string& pdir, 
   return 0;
 }
 
-// One shape's call (compute, then commit) twice on synthetic operands, nothing timed: what a profiler watches.
+// One shape's call (compute, then commit) twice on synthetic operands, then V31_ONCE_OVL (default 0) overlapped calls,
+// nothing timed: what a profiler watches.
 static int cmd_once(const std::string& pdir, int lp, int t, int row, const std::string& sh) {
   char name[64];
   int m, n, k;
   if (sscanf(sh.c_str(), "%63[^:]:%d:%d:%d", name, &m, &n, &k) != 4) { fprintf(stderr, "bad shape %s\n", sh.c_str()); return 2; }
+  const int novl = env_int("V31_ONCE_OVL", 0);
   Ctx c;
   c.setup(m, n, k, lp, t, row, pdir + "/" + std::to_string(m) + "x" + std::to_string(n) + "x" + std::to_string(k) + "-lp" +
-          std::to_string(lp) + "-t" + std::to_string(t) + "-r" + std::to_string(row) + ".bin", std::max(64, k / 8), 1);
+          std::to_string(lp) + "-t" + std::to_string(t) + "-r" + std::to_string(row) + ".bin", std::max(64, k / 8),
+          novl ? 2 : 1);
   gen_kernel<<<m, 256, 0, c.s0>>>(c.A, k, 1u, true);
   gen_kernel<<<n, 256, 0, c.s0>>>(c.B, k, 2u, false);
   std::vector<uint8_t> sd(320);
@@ -1801,6 +1804,8 @@ static int cmd_once(const std::string& pdir, int lp, int t, int row, const std::
     c.compute(c.s0, 0);
     c.commit(c.s0, 0);
   }
+  for (int i = 0; i < novl; i++) c.call_ovl(c.s0);
+  c.ovl_drain(c.s0);
   CK(cudaStreamSynchronize(c.s0));
   CK(cudaGetLastError());
   const std::vector<u64> r = c.root();
