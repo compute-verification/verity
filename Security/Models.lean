@@ -23,8 +23,6 @@ import Definitions.Nci.Guarantees.CoveringTwoCosts
 import Definitions.Nci.Guarantees.CoveringPriced
 import Definitions.Nci.Guarantees.CoverAdditive
 import Definitions.Nci.Guarantees.CoverFanOut
-import Definitions.Nci.Guarantees.CoverFanOutValue
-import Definitions.Nci.Guarantees.CoverPartialSum
 import Definitions.Nci.Guarantees.CoverTraining
 import Definitions.Nci.Guarantees.CoverChained
 import Definitions.Nci.Guarantees.Ldl

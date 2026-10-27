@@ -33,10 +33,10 @@ PHI = 6.7e9
 
 #: Kimi K2 full pretraining with every field the classes read, at the values their docstrings use
 KIMI = Profile(
-    name="full", kappa=0.602, state_bits=1.04e12 * 16, b=2.5, b_w=2.5, c_w=2.5, c_a=4, b_a=4, f=4, width=390,
+    name="full", kappa=0.602, state_bits=1.04e12 * 16, b=2.5, b_w=2.5, c_w=2.5, c_a=4, b_a=4, f=4,
     beta_x=0.87, legs=512, fanout=37248, per_param=2, vocab=163840, bcol=1, thread_d=10, thread_e=37248, thread_c=2,
     kappa_forward=0.294, kappa_wgrad=0.294, layers=61, layer_weights=4e8, layer_bits=1.04e12 * 2.5 / 61,
-    thread_k=2e7, entry_width=512, price=2.8, price_max=8, gamma=1, beta_v=0.63, map_width=7168, map_width_min=7168,
+    thread_k=2e7, price=2.8, price_max=8, gamma=1, beta_v=0.63, map_width=7168, map_width_min=7168,
     h_eff=17, b_ps=1, step_tokens=6.7e7)
 DECLARED = FlopBudget(6.4e16, K)
 WINDOW = FlopBudget(5.5e20, 7.3e11)
@@ -58,16 +58,6 @@ def test_fanout_matches_its_docstrings():
     assert math.isclose(gates(FWD, classes.fanout_read(K, 2.5, 4, 512, 37248, 1, 163840, 1)), 3.6e4, rel_tol=0.01)
     assert math.isclose(gates(DGRAD, classes.fanout_read(K, 2.5, 4, 512, 37248, 2, 163840, 1)), 7.3e4, rel_tol=0.01)
     assert math.isclose(gates(FWD, K * 37248), 8900, rel_tol=0.01)
-
-
-def test_partial_sums_match_their_docstrings():
-    assert math.isclose(gates(FWD, classes.partial_sum(K, 2.5, 4, 390, 37248)), 6.1e4, rel_tol=0.02)
-    assert math.isclose(gates(FWD, classes.partial_sum_keyed(K, 2.5, 512, 37248, 163840, 1, 512)), 1.6e4, rel_tol=0.02)
-    assert math.isclose(gates(FWD, classes.partial_sum_keyed(K, 2.5, 512, 37248, 163840, 2.5, 512)), 1.9e4,
-                        rel_tol=0.02)
-    r = max(classes.ps_rate(2.5, 1, 390, 37248, 2 * K, i / 1000) for i in range(1001))
-    assert math.isclose(r, 9.6e-5, rel_tol=0.02)
-    assert classes.partial_sum_keyed(K, 2.5, 100, 37248, 163840, 1, 512) == math.inf
 
 
 def test_the_covering_family_matches_its_docstrings():
@@ -189,7 +179,7 @@ def test_every_premise_a_class_cites_is_listed_with_a_known_standing():
 def test_premise_status_is_the_weakest_and_never_strengthens_with_k():
     assert premise_status(CLASSES["fanout"].cites, K) == "supported"
     assert premise_status(CLASSES["fanout-read"].cites, K) == "contested"
-    assert premise_status(CLASSES["partial-sum"].cites, WINDOW.inputs) == "refuted"
+    assert premise_status(CLASSES["fanout"].cites, WINDOW.inputs) == "contested"
     assert premise_status(("Nci.Guarantees.CoveringBound",), K) == "supported"
     for arg in CLASSES.values():
         s = [STANDINGS.index(premise_status(arg.cites, 10 ** e)) for e in range(4, 13)]

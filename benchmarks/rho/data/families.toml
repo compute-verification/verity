@@ -10,7 +10,6 @@ b = { value = 2.5, low = 0.8, high = 4.5, source = "UpdateHardness at Kimi K2 (F
 b_w = { value = 2.5, low = 0.8, high = 4.5, source = "benchmarks/nci/parameters.json b_w.pretrained/frontier-lossy", status = "measured" }
 b_a = { value = 4, low = 1, high = 16, source = "benchmarks/nci/parameters.json b_a.activation", status = "assumed" }
 f = { value = 4, low = 1, high = 8, source = "FanOutReadIntensity docstring (Kimi K2 at f = 4)", status = "conjecture" }
-width = { value = 390, low = 48, high = 512, source = "PartialSumCoverBound docstring (a = 390)", status = "derived" }
 per_param = { value = 2, low = 1, high = 2, source = "Dgrad on the forward's tokens (FanOutIntensity docstring)", status = "derived" }
 bcol = { value = 1, low = 1, high = 2.5, source = "ColumnsIncompressible at Kimi K2 (FanOutIntensity docstring)", status = "conjecture" }
 beta_x = { value = 0.87, low = 0.39, high = 0.94, source = "note:training-20261024T2336Z-report-tvi-findings: replay-consistent, exact block on Qwen2.5-1.5B (art:ff2237e531a9); the best coder's rate, so an upper bound on what the premise may assume, carried to other models at fixed F/d", status = "assumed" }

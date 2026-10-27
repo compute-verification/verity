@@ -8,11 +8,6 @@ import Proofs.Nci.Cover.CoveringAdditive
 import Proofs.Nci.Cover.CoveringAdditiveWitness
 import Proofs.Nci.Cover.FanOut
 import Proofs.Nci.Cover.FanOutWitness
-import Proofs.Nci.Cover.FanOutChain
-import Proofs.Nci.Cover.FanOutValue
-import Proofs.Nci.Cover.FanOutValueWitness
-import Proofs.Nci.Cover.PartialSum
-import Proofs.Nci.Cover.PartialSumWitness
 import Proofs.Nci.Cover.Bits
 import Proofs.Nci.Cover.Sum
 import Proofs.Nci.Cover.Training
@@ -32,11 +27,8 @@ relates this vocabulary to Daniel's (`Nci.Covering`) on a declaration's gates: i
 parameter-hardness agree. The additive covering bound (`Definitions.Nci.Guarantees.CoverAdditive`), stated in Daniel's
 vocabulary, is `CoveringAdditive`, with its witness (`CoveringAdditiveWitness`). The fan-in/fan-out bounds
 (`Definitions.Nci.Guarantees.CoverFanOut`) have their plan (`FanOutPlan`), its pieces (`FanOutWalk`, `FanOutRootCost`), the
-bounds (`FanOut`), their witness (`FanOutWitness`), and the key chains' one spent value each (`FanOutChain`). The read
-tier from wiring (`Definitions.Nci.Guarantees.CoverFanOutValue`) is `FanOutValue`, with its witness
-(`FanOutValueWitness`). The partial-sum bounds (`Definitions.Nci.Guarantees.CoverPartialSum`) have their pieces
-(`PartialSumRead`, `PartialSumCube`, `PartialSumRate`, `PartialSumCover`, `PartialSumKeyed`), the bounds (`PartialSum`)
-and their witness (`PartialSumWitness`). `Bits` translates a declaration's gates to the bits the cover theorem counts:
+bounds (`FanOut`) and their witness (`FanOutWitness`). `Bits` translates a declaration's gates to the bits the cover
+theorem counts:
 the block of a set of gates, what it computes and what it is handed. `Sum` adds the per-block bounds over a division at
 the NCI policy's rate. `Training` joins them to a declaration that complies with the NCI policy
 (`Definitions.Nci.Guarantees.CoverTraining`), `Aligned` gives its variant on whole-word activations, and `Checked` carries it

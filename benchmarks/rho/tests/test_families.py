@@ -150,7 +150,7 @@ def test_a_family_key_its_kind_lacks_is_refused():
 #: the fields the classes and attacks read beyond `thread_c`, at the values tests/test_classes.py and test_attacks.py
 #: give Kimi K2 full pretraining, and how near the derivation from the matrices comes
 KIMI = {"kappa_forward": (0.294, 0.005), "kappa_wgrad": (0.294, 0.005), "layers": (61, 0), "layer_weights": (4e8, 0.01),
-        "layer_bits": (1.04e12 * 2.5 / 61, 0), "thread_k": (2e7, 0), "entry_width": (512, 0), "c_w": (2.5, 0),
+        "layer_bits": (1.04e12 * 2.5 / 61, 0), "thread_k": (2e7, 0), "c_w": (2.5, 0),
         "c_a": (4, 0), "price": (2.8, 0), "price_max": (8, 0), "gamma": (1, 0), "beta_v": (0.63, 0),
         "map_width": (7168, 0), "map_width_min": (7168, 0), "h_eff": (17, 0), "b_ps": (1, 0), "step_tokens": (6.7e7, 0),
         "token_state_bits": (5.9e11, 0.005), "shared_state_bits": (1.18e10, 0.012), "flops_per_token": (2.07e11, 0.002),
@@ -209,7 +209,7 @@ def test_an_adapter_s_shape_is_the_adapter_s():
     assert p.token_state_bits == pytest.approx(per_token * (p.b_w + REG["family.full.grad_bits"]))
     # the dense layer's MLP adapter: 16 x (2 x (7168 + 18432) + (18432 + 7168))
     assert p.layer_weights == 16 * 3 * (7168 + 18432)
-    assert (p.tile_inputs, p.tile_outputs) == (7168, 16) and p.entry_width == 16
+    assert (p.tile_inputs, p.tile_outputs) == (7168, 16)
     tied = family(REG, "tinylora").profile(kimi, RUN)
     assert tied.state_splits is False and tied.decode_flops > 0 and tied.layer_weights <= REG["family.tinylora.params"]
 
