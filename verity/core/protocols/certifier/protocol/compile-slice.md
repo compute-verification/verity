@@ -24,7 +24,7 @@ advice input is exactly ℓ_w gates wide, so the charge is ℓ_w.
   charge's context, counts decisions only, as `code_v1`'s does, and the admission doesn't reset it as it resets the
   scan's ``pc``. Each of 8eb1's 339 windows opens with one. Over them the chain is `code_v1`'s charge of the decisions
   alone (its other counts 0) on every window, 5,500 bits; charged as a 1, the forced admissions would change 330
-  windows' charges (`benchmarks/network_e2e/encodings/tests/test_served_window.py`).
+  windows' charges (`examples/network_vllm/encodings/tests/test_served_window.py`).
 - The slice has no coder state, codeword or context counter: ChargeLink_v1 reads its contexts and estimates from ``cin``
   and the committed decisions. Its counts other than the decisions are coded as 0 (`arith_encode.ZERO_COUNTS`, the
   still-sent fields' stand-in).
