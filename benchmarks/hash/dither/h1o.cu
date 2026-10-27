@@ -515,7 +515,7 @@ extern "C" int h1o_ref_launch(const H1Call* call_dev, int units, const u64* seed
   return (int)cudaGetLastError();
 }
 
-// ASK-64's perCall measurement (labelled `percall-rtt`, measured only): between a call's A table and its units, the A
+// The per-call challenger round's measurement (labelled `percall-rtt`, measured only): between a call's A table and its units, the A
 // root to the host, a host function that holds the stream one challenger round, and a 64-byte coin back to the device,
 // all three on the caller's stream, so a captured graph keeps them (memcpy nodes and a host node).  The round is
 // simulated: the host function spins for the next of the waits h1o_percall_init took (the measured round trips, replayed

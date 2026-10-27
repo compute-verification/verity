@@ -470,7 +470,7 @@ class _Fold:
 
     def _journal(self, kind: str, view: ViewDesc | None, refs: Refs | None, *, alloc: int | None = None, rows: list | None = None,
                  what: str = "", event: int | None = None) -> None:
-        """Append one memory access to `accesses` (D82), its refs the `Refs` read (expanded by a reader, `memory.access_runs`; VLLM-14)."""
+        """Append one memory access to `accesses` (D82), its refs the `Refs` read (expanded by a reader, `memory.access_runs`)."""
         self.accesses.append({"seq": len(self.accesses), "event": event if event is not None else self.cur_event, "step": self.cur_step,
                               "kind": kind, "view": view, "alloc": alloc if alloc is not None else (view.alloc if view is not None else None),
                               "rows": rows, "refs": refs, "what": what})
