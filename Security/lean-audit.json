@@ -8349,10 +8349,31 @@
    "assumptions": [],
    "type_hash": "8cde8a03744aead7d37650a220d532f712e5bda0a694ddcc01fc4a95f6f2e08e"
   },
+  "Nci.Hardness.SecurityProofs.FanOutBlockCap": {
+   "owner": "@training"
+  },
+  "Nci.Hardness.SecurityProofs.FanOutBlockCap_honest": {
+   "owner": "@training"
+  },
+  "Nci.Hardness.SecurityProofs.FanOutBlockCap_nontrivial": {
+   "owner": "@training"
+  },
   "Nci.Hardness.SecurityProofs.FanOutBoundPriced": {
    "owner": "@training"
   },
+  "Nci.Hardness.SecurityProofs.FanOutBoundPriced_honest": {
+   "owner": "@training"
+  },
+  "Nci.Hardness.SecurityProofs.FanOutBoundPriced_nontrivial": {
+   "owner": "@training"
+  },
   "Nci.Hardness.SecurityProofs.PricedOfActivationRate": {
+   "owner": "@training"
+  },
+  "Nci.Hardness.SecurityProofs.PricedOfActivationRate_honest": {
+   "owner": "@training"
+  },
+  "Nci.Hardness.SecurityProofs.PricedOfActivationRate_nontrivial": {
    "owner": "@training"
   },
   "Nci.Ldl.SecurityProofs.BlockDescription": {
@@ -8361,17 +8382,35 @@
    "assumptions": [],
    "type_hash": "d1c71dbd142515141df808dd2abbc82cc1b3b9d503f612903796f3a855584c90"
   },
+  "Nci.Ldl.SecurityProofs.BlockDescription_honest": {
+   "owner": "@training"
+  },
+  "Nci.Ldl.SecurityProofs.BlockDescription_nontrivial": {
+   "owner": "@training"
+  },
   "Nci.Ldl.SecurityProofs.Counting": {
    "owner": "@training",
    "signature": ["Nci.Ldl.SecurityProofs.Counting : Nci.Ldl.Guarantees.Counting"],
    "assumptions": [],
    "type_hash": "0e41f456944712df04e7f72687cc21961d41fca84227d6ffe55e42671b9835fb"
   },
+  "Nci.Ldl.SecurityProofs.Counting_honest": {
+   "owner": "@training"
+  },
+  "Nci.Ldl.SecurityProofs.Counting_nontrivial": {
+   "owner": "@training"
+  },
   "Nci.Ldl.SecurityProofs.FanOutBound": {
    "owner": "@training",
    "signature": ["Nci.Ldl.SecurityProofs.FanOutBound : Nci.Ldl.Guarantees.FanOutBound"],
    "assumptions": [],
    "type_hash": "cbe091114f7d58bb20b6bfda7500d46b00512a6e5ac0977029fb70e0b4a46905"
+  },
+  "Nci.Ldl.SecurityProofs.FanOutBound_honest": {
+   "owner": "@training"
+  },
+  "Nci.Ldl.SecurityProofs.FanOutBound_nontrivial": {
+   "owner": "@training"
   },
   "Nci.SecurityProofs.ActivationsBoundOn": {
    "owner": "@lean",
@@ -12151,11 +12190,24 @@
    "Nci.Cover.SecurityProofs.FanOutReadCoverBound": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named ValueReadHardness and ColumnsIncompressible (Security/Definitions/Nci/Assumptions/Cover.lean, Security/Definitions/Nci/Assumptions/CoverFanOut.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
    "Nci.Cover.SecurityProofs.FanOutReadIntensityStructural": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named ConditionalUpdateHardness, ColumnsIncompressible and PerValueCut (Security/Definitions/Nci/Assumptions/Cover.lean, Security/Definitions/Nci/Assumptions/CoverFanOut.lean, Security/Definitions/Nci/CoverFanOutValue.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
    "Nci.Cover.SecurityProofs.FanOutReadCoverBoundStructural": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and inference blocks of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean), under the named ConditionalUpdateHardness, ColumnsIncompressible and PerValueCut (Security/Definitions/Nci/Assumptions/Cover.lean, Security/Definitions/Nci/Assumptions/CoverFanOut.lean, Security/Definitions/Nci/CoverFanOutValue.lean), not about the NCI check's code; a check of declared inference blocks joined to it is what would give it an acceptance.",
+   "Nci.Hardness.SecurityProofs.FanOutBlockCap": "frozen (no-function): It is about an arbitrary declaration and counted products each reading one activation occurrence, with activation fan-out at most e (Security/Definitions/Nci/Hardness.lean), under the named Priced (Security/Definitions/Nci/Assumptions/Hardness.lean), and caps the products computed whole in any set of at most c gates reading at most k unregistered inputs: a per-block cap, not about the NCI check's code; a check of declared (c,k)-partitions joined to it is what would give it an acceptance.",
+   "Nci.Hardness.SecurityProofs.FanOutBlockCap_honest": "lemma: the honest lemma of Nci.Hardness.SecurityProofs.FanOutBlockCap: its premises hold together at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean), not a Lean function's acceptance.",
+   "Nci.Hardness.SecurityProofs.FanOutBlockCap_nontrivial": "lemma: the nontrivial lemma of Nci.Hardness.SecurityProofs.FanOutBlockCap: at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean) with the price β = 2, Priced fails and every other premise holds, and its bound is false; not a Lean function's acceptance.",
    "Nci.Hardness.SecurityProofs.FanOutBoundPriced": "frozen (no-function): It is about an arbitrary declaration, a (c,k)-partition of it and counted products each reading one activation occurrence, whole in a block, with activation fan-out at most e (Security/Definitions/Nci/Hardness.lean), under the named Priced (Security/Definitions/Nci/Assumptions/Hardness.lean), not about the NCI check's code; a check of declared (c,k)-partitions joined to it is what would give it an acceptance.",
+   "Nci.Hardness.SecurityProofs.FanOutBoundPriced_honest": "lemma: the honest lemma of Nci.Hardness.SecurityProofs.FanOutBoundPriced: its premises hold together at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean), not a Lean function's acceptance.",
+   "Nci.Hardness.SecurityProofs.FanOutBoundPriced_nontrivial": "lemma: the nontrivial lemma of Nci.Hardness.SecurityProofs.FanOutBoundPriced: at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean) with the price β = 2, Priced fails and every other premise holds, and its bound is false; not a Lean function's acceptance.",
    "Nci.Hardness.SecurityProofs.PricedOfActivationRate": "frozen (no-function): It is about an arbitrary declaration, a registration of it, counted products and a fixed decoder (Security/Definitions/Nci/Ldl.lean, Security/Definitions/Nci/Hardness.lean), under the named EvaluatesBlocks and ActivationRate (Security/Definitions/Nci/Assumptions/Ldl.lean), and concludes the Priced inequality at the registered blocks: a relation between premises, not a Lean function's acceptance.",
+   "Nci.Hardness.SecurityProofs.PricedOfActivationRate_honest": "lemma: the honest lemma of Nci.Hardness.SecurityProofs.PricedOfActivationRate: its premises hold together at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean), not a Lean function's acceptance.",
+   "Nci.Hardness.SecurityProofs.PricedOfActivationRate_nontrivial": "lemma: the nontrivial lemma of Nci.Hardness.SecurityProofs.PricedOfActivationRate: at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean) with the rate β = 2, ActivationRate fails and every other premise holds, and its bound is false; not a Lean function's acceptance.",
    "Nci.Ldl.SecurityProofs.BlockDescription": "frozen (no-function): It is about an arbitrary declaration, a registration of it (its registered values and a Verity.Partition into blocks) and a fixed decoder (Security/Definitions/Nci/Ldl.lean), under the named EvaluatesBlocks (Security/Definitions/Nci/Assumptions/Ldl.lean), not about the NCI check's code; a check of declared (c,k)-partitions joined to it is what would give it an acceptance.",
+   "Nci.Ldl.SecurityProofs.BlockDescription_honest": "lemma: the honest lemma of Nci.Ldl.SecurityProofs.BlockDescription: its premises hold together at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean), not a Lean function's acceptance.",
+   "Nci.Ldl.SecurityProofs.BlockDescription_nontrivial": "lemma: the nontrivial lemma of Nci.Ldl.SecurityProofs.BlockDescription: at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean) with the read cap k = 0, ReadCap fails and every other premise holds, and its bound is false; not a Lean function's acceptance.",
    "Nci.Ldl.SecurityProofs.Counting": "frozen (no-function): It is stated over an arbitrary circuit, a Verity.Partition of it into blocks of exactly c gates and counting weights on its operation gates (Security/Definitions/Nci/Ldl.lean), and is a counting fact, not a Lean function's acceptance.",
+   "Nci.Ldl.SecurityProofs.Counting_honest": "lemma: the honest lemma of Nci.Ldl.SecurityProofs.Counting: its premises hold together at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean), not a Lean function's acceptance.",
+   "Nci.Ldl.SecurityProofs.Counting_nontrivial": "lemma: the nontrivial lemma of Nci.Ldl.SecurityProofs.Counting: at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean) with weight 2 on the product's gate, the per-block weight cap fails and every other premise holds, and its bound is false; not a Lean function's acceptance.",
    "Nci.Ldl.SecurityProofs.FanOutBound": "frozen (no-function): It is about an arbitrary declaration, a (c,k)-partition of it, counted product occurrences with activation fan-out at most e and a fixed decoder (Security/Definitions/Nci/Ldl.lean), under the named EvaluatesBlocks and ActivationRate (Security/Definitions/Nci/Assumptions/Ldl.lean), not about the NCI check's code; a check of declared (c,k)-partitions joined to it is what would give it an acceptance.",
+   "Nci.Ldl.SecurityProofs.FanOutBound_honest": "lemma: the honest lemma of Nci.Ldl.SecurityProofs.FanOutBound: its premises hold together at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean), not a Lean function's acceptance.",
+   "Nci.Ldl.SecurityProofs.FanOutBound_nontrivial": "lemma: the nontrivial lemma of Nci.Ldl.SecurityProofs.FanOutBound: at the one-product instance Nci.Ldl.Honest (Security/Definitions/Nci/Ldl/Instances.lean) with the rate β = 2, ActivationRate fails and every other premise holds, and its bound is false; not a Lean function's acceptance.",
    "Nci.Cover.SecurityProofs.CoverTraining": "frozen (no-function): It is about an arbitrary reference training circuit, its circuit bit by bit (Circuit.ofDecl, Security/Definitions/Nci/BitView.lean) with its products and an upstream certificate, and a declaration that contains it with its baseline registered (the named BaselineRegistered, Security/Definitions/Nci/Assumptions/Baseline.lean), under the named UpdateHardness on the bit view (Security/Definitions/Nci/Assumptions/Cover.lean), not about the NCI check's code; Security/Proofs/Nci/Cover/Checked.lean joins it to a verdict (coverTrained, from NciCheck.Properties.Witnesses), and stating that join among the properties is what would give it an acceptance.",
    "Nci.Cover.SecurityProofs.CoverTrainingAligned": "frozen (no-function): Like CoverTraining, it is about an arbitrary reference training circuit bit by bit (Circuit.ofDecl, with activation regions of whole words, wordBits, Security/Definitions/Nci/BitView.lean) and a declaration that contains it with its baseline registered (the named BaselineRegistered), under the named UpdateHardness on the bit view (Security/Definitions/Nci/Assumptions/Cover.lean), not about the NCI check's code; stating its join to a verdict among the properties, as for CoverTraining, is what would give it an acceptance.",
    "Nci.Cover.SecurityProofs.PartialSumsRead": "frozen (no-function): It is about an arbitrary training circuit, its products with a keyed token structure and a matrix cube and a cover of it (Security/Definitions/Nci/Cover.lean, Security/Definitions/Nci/CoverFanOut.lean, Security/Definitions/Nci/CoverPartialSum.lean), a fact of their wiring, not about the NCI check's code; a check of declared inference blocks joined to the cover theorem is what would give it an acceptance.",
