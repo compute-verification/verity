@@ -27,9 +27,9 @@ from tests.pipeline.served_rope import D, HEADS, LAW, ROPE
 
 
 def _commit(tmp_path) -> dict:
-    """The deferred Commit's output dir and row dir, and the world that served it."""
+    """An old record's deferred Commit (vllm-v1, by name): its output dir and row dir, and the world that served it."""
     pytest.importorskip("torch")
-    return SR.commit(tmp_path)
+    return SR.commit(tmp_path, commit_scheme="vllm-v1")
 
 
 def test_a_deferred_commits_serving_rows_are_the_verifiers_window_over_the_served_values(tmp_path):

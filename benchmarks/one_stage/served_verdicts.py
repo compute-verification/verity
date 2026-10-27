@@ -2,7 +2,9 @@
 sampled proofs, and the one record of every verdict (CMP-153's block record).
 
     served_verdicts.py window SERVE_DIR [--slots N] [--window K]
+    served_verdicts.py gate [--gate CMD] [--lane vllm] [--main FILE]
     served_verdicts.py pieces --serve-run DIR --window K --out DIR
+    served_verdicts.py pouw SERVE_DIR WINDOW DIR [--gate CMD] [--key-sha512 HEX] [--main FILE] [--python PY]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
@@ -15,6 +17,19 @@ window's ``[lo, hi)`` in the run's committed engine steps.
 its piece where one is named (``POUW_CMD``, ``BANDWIDTH_CMD``, ``POUS_CMD``, ``CERTIFIER_CMD``: a command run as
 ``bash -c CMD _ SERVE_DIR WINDOW DIR``, which writes its core answer to ``DIR/answer.json``), else prints a ``MISSING`` line
 naming it and its issue. A piece that ran but wrote no answer is its error; no verdict is made for a piece that didn't run.
+A development piece writes ``DIR/development.json`` (`DEVELOPMENT`) in place of a core answer: its verdict is printed as a
+development run's, and it credits nothing.
+
+``gate``: before serving with H1's coins from infra's gate (``--gate``, default ``H1_GATE``): refused while the key's lane
+(``--lane``) has a period open, which a reserve would join; prints one ``GATE`` line with the gate's latest pin and,
+with ``--main``, whether that pin is on the verifier's first-parent line of main (a session pinned off it is refused).
+
+``pouw``: PoUW's development piece (``POUW_CMD``): window K's H1 outcome (``windows.jsonl``'s ``pouw_h1``) and record
+(``h1/w<K>/pouw-h1-calls.json``); with the auditor host's challenger's coins, the window's session as the gate's ``fetch``
+gives it, the auditor's ledger and pins log as the gate answers now and main's first-parent history (``--main``),
+checked by `pouw_h1_gpu.check_challenger` under the key the deployment pins (``--key-sha512``). Its verdict is accept when
+H1's tables are tied to the window's Commit, its coins are the session the ledger opened and ended for it, and its record
+is one manifest under them; core's credit refuses the window and is shown beside it (`DEV_WHY`).
 
 ``record``: sampled proofs' answer from the records audit `prove_path/run.sh` (``PP_RECORDS=1``) kept under
 ``--sampled-proofs`` (its ``NAME`` dir: ``summary.json``, ``window/audit.json``, ``windows/rank0/registration.json``), read
@@ -29,10 +44,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import socket
 import subprocess
 import sys
-from collections.abc import Mapping, Sequence
+import tarfile
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -45,8 +62,8 @@ for _p in (ROOT / "benchmarks" / "all_protocols", ROOT / "benchmarks" / "e2e_dem
 #: is, what the piece does), in the chain's order
 PIECES: dict[str, tuple[str, str, str, str, str]] = {
     "work": ("PoUW", "pouw", "vllm-serve-arms", "VLLM-33 G1",
-             ("H1 credit on the served window; its coins are in-process until vy-challenger-1's gate takes this node's "
-              "key (--challenger-gate, --challenger-peer vy-dc-h200; INF-263, Daniel's card due Tue 27 Oct 15:00Z)")),
+             ("H1 on the served window: with H1_GATE its coins are vy-challenger-1's (--challenger-gate, a development run "
+              "that credits nothing until the lane's Cursor secret, Daniel's call), else in-process")),
     "bandwidth": ("the bandwidth audit", "bandwidth", "vllm-serve-arms", "VLLM-33 G2",
                   ("the remote bandwidth audit of the served window, against the bandwidth verifier on vy-auditor-2 at "
                    "10.96.0.36:7952 (INF-263, due Tue 27 Oct 18:00Z)")),
@@ -59,6 +76,14 @@ PIECES: dict[str, tuple[str, str, str, str, str]] = {
 #: the record's subprotocol outside this chain
 WIPE = ("the wipe", "wipe", "memory-accounting", None, "no step of this chain runs the wipe")
 NAMES = {"integrity": "sampled proofs", **{k: v[0] for k, v in PIECES.items()}, "wipe": WIPE[0]}
+#: a development piece's document, written in place of its core answer
+DEVELOPMENT = "development.json"
+#: why a development piece's verdict credits nothing, so its subprotocol's row in the record stays missing
+DEV_WHY = ("a development run: H1's coins come from vy-challenger-1's gate under the lane's development key (TOP-84), and "
+           "a window counts for credit only under the lane's own Cursor secret (Daniel's call); core's credit also needs "
+           "the window in a period whose open commits its draw K, rows and weights")
+#: H1's record of a window (`pouw_h1.CALLS_FILE`) under the serve dir
+H1_CALLS = "h1/w{k}/pouw-h1-calls.json"
 
 
 def _lines(path: Path) -> list[dict[str, Any]]:
@@ -131,13 +156,114 @@ def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | Non
         with open(d / "piece.log", "w") as log:
             rc = subprocess.run(["bash", "-c", cmd, "_", str(serve_dir), str(window), str(d)], stdout=log,
                                 stderr=subprocess.STDOUT, env=env, check=False).returncode
+        label = name.upper()
         try:
             a = json.loads((d / "answer.json").read_text())
             got[comp] = {"verdict": a.get("verdict"), "reason": a.get("reason"), "rc": rc}
         except (OSError, ValueError) as e:
-            got[comp] = {"verdict": "error", "reason": f"its piece wrote no answer (exit {rc}): {e}", "rc": rc}
-        print(f"{name.upper()} {json.dumps(got[comp], sort_keys=True)}", flush=True)
+            try:
+                got[comp], label = {**development_line(json.loads((d / DEVELOPMENT).read_text())), "rc": rc}, \
+                    f"{label} (development run, credits nothing)"
+            except (OSError, ValueError):
+                got[comp] = {"verdict": "error", "reason": f"its piece wrote no answer (exit {rc}): {e}", "rc": rc}
+        print(f"{label} {json.dumps(got[comp], sort_keys=True)}", flush=True)
     return got
+
+
+def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
+    """A development piece's line (`pouw`'s document): its verdict, why it rejects, the window's session and how each
+    check came out, core's credit refusal, and that it credits nothing."""
+    check, credit = doc.get("check") or {}, doc.get("credit") or {}
+    return {"verdict": doc.get("verdict"), "development": True, "credited": False, "reasons": doc.get("reasons"),
+            "coin_source": doc.get("coin_source"), "session": (doc.get("session") or {}).get("session"),
+            "tied": doc.get("tied"), "coins": check.get("reason", "unchecked"), "manifest": check.get("manifest", "unchecked"),
+            "gate_passed": doc.get("gate_passed"), "credit": credit.get("window")}
+
+
+def _gate_out(gate: str, *words: str) -> bytes:
+    """The gate's answer to `words` through its command `gate`, the words one shell-quoted line as `commit_coins.Gate`
+    sends them; RuntimeError naming what it said when it refuses."""
+    p = subprocess.run([*shlex.split(gate), shlex.join(words)], capture_output=True, check=False)
+    if p.returncode:
+        said = (p.stdout + p.stderr).decode(errors="replace").strip()
+        raise RuntimeError(f"the gate refused {words[0]} (exit {p.returncode}): {said[-400:]}")
+    return p.stdout
+
+
+def gate_ready(gate: str, lane: str, main: Path | None = None) -> tuple[bool, str]:
+    """Whether this run may reserve its windows' sessions at `gate` (the ``gate`` subcommand), and its ``GATE`` line."""
+    from verity_vllm.protocols.pouw.h1 import window as PHW
+
+    ledger = _gate_out(gate, "ledger").decode().splitlines()
+    pins = [json.loads(x) for x in _gate_out(gate, "pins").decode().splitlines() if x.strip()]
+    pin, period = (pins[-1] if pins else {}), PHW.open_period(ledger, lane)
+    on = None if main is None else pin.get("commit") in main.read_text().split()
+    where = "" if on is None else f", {'on' if on else 'NOT on'} the verifier's first-parent line of main"
+    line = (f"GATE {'refused' if period else 'ready'}: lane {lane}'s open period "
+            f"{period and period.get('period')}{' (a reserve would join it)' if period else ''}; the ledger's "
+            f"{len(ledger)} entries; pinned {str(pin.get('commit'))[:12]} (main {str(pin.get('main'))[:12]}, "
+            f"{pin.get('pinned_utc')}){where}")
+    return period is None, line
+
+
+def check_challenger(calls: Path, tree: Path, ledger: Path, pins: Path, main: Path | None, key: str, out: Path,
+                     python: str) -> dict[str, Any]:
+    """`pouw_h1_gpu.py --check-challenger` (run by `python` in integrations/vllm, so ``tests`` is that package's) of the
+    window's record `calls` against its session's tree `tree`; its ``pouw_h1_challenger.json``."""
+    out.mkdir(parents=True, exist_ok=True)
+    argv = [python, "-m", "tests.protocols.pouw_h1_gpu", "--check-challenger", str(calls), str(tree), "--key-sha512", key,
+            "--ledger", str(ledger), "--pins", str(pins), *(["--main", str(main)] if main else []), "--out", str(out)]
+    p = subprocess.run(argv, cwd=ROOT / "integrations" / "vllm", capture_output=True, text=True, check=False)
+    (out / "check.log").write_text(p.stdout + p.stderr)
+    try:
+        return json.loads((out / "pouw_h1_challenger.json").read_text())
+    except (OSError, ValueError) as e:
+        raise RuntimeError(f"pouw_h1_gpu --check-challenger wrote no verdict (exit {p.returncode}): "
+                           f"{(p.stdout + p.stderr).strip()[-400:]}") from e
+
+
+Check = Callable[[Path, Path, Path, Path, "Path | None", str, Path], Mapping[str, Any]]
+
+
+def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str | None, main: Path | None,
+         check: Check) -> dict[str, Any]:
+    """PoUW's development piece on window `window` (module docstring), its document written to ``out/development.json``;
+    `check` is `check_challenger` with its Python bound."""
+    out.mkdir(parents=True, exist_ok=True)
+    line = next((w for w in _lines(serve_dir / "windows.jsonl") if int(w["window"]) == window), {})
+    h1 = line.get("pouw_h1") or {}
+    calls = serve_dir / H1_CALLS.format(k=window)
+    doc: dict[str, Any] = {"window": window, "credited": False, "why": DEV_WHY, "coin_source": h1.get("coin_source"),
+                           "tied": h1.get("tied"), "steps_served": h1.get("steps_served"), "session": h1.get("session"),
+                           "gate_passed": (h1.get("gate") or {}).get("gate_passed"), "check": None, "credit": None}
+    reasons = []
+    if not h1 or "error" in h1:
+        reasons.append(f"H1's window: {h1.get('error') or 'its line has no pouw_h1 (served without --protocols)'}")
+    elif h1.get("tied") is not True:
+        reasons.append(f"ROOTS1: H1's tables are not tied to the window's Commit ({(h1.get('roots1') or {}).get('reason')})")
+    if h1 and "error" not in h1 and h1.get("coin_source") != "challenger":
+        reasons.append(f"coins: {h1.get('coin_source')}, not the auditor host's challenger's, so nothing checks them")
+    elif h1.get("coin_source") == "challenger":
+        try:
+            if not (gate and key):
+                raise ValueError("no gate or no key pin to check the window's session by (H1_GATE, H1_KEY_SHA512)")
+            sid = json.loads(calls.read_text())["commitment"]["session"]["session"]
+            tgz, tree = out / "session.tgz", out / "session"
+            tgz.write_bytes(_gate_out(gate, "fetch", sid))
+            with tarfile.open(tgz) as t:
+                t.extractall(tree, filter="data")
+            (out / "ledger.jsonl").write_bytes(_gate_out(gate, "ledger"))
+            (out / "pins.jsonl").write_bytes(_gate_out(gate, "pins"))
+            got = check(calls, tree / sid, out / "ledger.jsonl", out / "pins.jsonl", main, key, out / "check")
+        except (OSError, RuntimeError, ValueError, KeyError, TypeError, tarfile.TarError) as e:
+            reasons.append(f"coins: {type(e).__name__}: {e}"[:600])
+        else:
+            doc["check"] = {k: got.get(k) for k in ("ok", "reason", "manifest", "rounds", "coin_source")}
+            doc["credit"] = {k: (got.get("credit") or {}).get(k) for k in ("window", "manifest", "k", "drawn", "eps")}
+            reasons += [f"{k}: {got[r]}" for k, r in (("coins", "reason"), ("manifest", "manifest")) if got.get(r)]
+    doc.update(verdict="reject" if reasons else "accept", reasons=reasons)
+    (out / DEVELOPMENT).write_text(json.dumps(doc, indent=1, sort_keys=True, default=str) + "\n")
+    return doc
 
 
 def sampled_proofs_row(audit_dir: Path) -> dict[str, Any]:
@@ -154,11 +280,18 @@ def sampled_proofs_row(audit_dir: Path) -> dict[str, Any]:
 
 
 def piece_row(key: str, pieces_dir: Path) -> dict[str, Any]:
-    """A subprotocol's runner row from its piece's answer, or ``missing`` with its issue."""
+    """A subprotocol's runner row from its piece's answer, or ``missing`` with its issue; a development piece's is
+    ``missing`` with its document when it accepts (it credits nothing), else ``reject``."""
     from verity_all_protocols import runner, table
 
     _name, comp, owner, issue, what = PIECES.get(key, WIPE)
-    f = pieces_dir / comp / "answer.json"
+    f, dev = pieces_dir / comp / "answer.json", pieces_dir / comp / DEVELOPMENT
+    if not f.exists() and dev.exists():
+        doc = json.loads(dev.read_text())
+        if doc.get("verdict") == "accept":
+            return {"verdict": "missing", "owner": owner, "issue": issue, "why": DEV_WHY, "development": doc}
+        return {"verdict": "reject", "owner": owner, "reason": "; ".join(doc.get("reasons") or ())[:2000],
+                "development": doc}
     if not f.exists():
         return {"verdict": "missing", "owner": owner, "issue": issue, "why": what}
     try:
@@ -177,14 +310,16 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     report = {"format": runner.FORMAT, "window": window, "node": node, "run": run, "protocols": dict(rows)}
     verdicts = {NAMES[k]: r.get("verdict") for k, r in rows.items()}
     missing = {NAMES[k]: r.get("issue") for k, r in rows.items() if r.get("verdict") == "missing"}
+    dev = {"development": {NAMES[k]: r["development"]["verdict"] for k, r in rows.items() if "development" in r}}
+    dev = dev if dev["development"] else {}
     bad = sorted(NAMES[k] for k, r in rows.items() if r.get("verdict") not in ("accept", "missing"))
     if bad:
         composed = "reject" if any(rows[k].get("verdict") in ("reject", "error") for k in rows) else "pending"
         line = {"composed": composed, "by": bad, "verdicts": verdicts, "missing": missing, "block_record": None,
-                "why": "block_record carries an accepted subprotocol's certificate only"}
+                "why": "block_record carries an accepted subprotocol's certificate only", **dev}
         return report, None, line
     rec = BR.from_period(report, steps=steps, deployment=BR.REFERENCE)
-    line = {"composed": rec["composed"]["verdict"], "verdicts": verdicts, "missing": missing,
+    line = {"composed": rec["composed"]["verdict"], "verdicts": verdicts, "missing": missing, **dev,
             "record_missing": rec["composed"]["missing"], "check": BR.check(rec), "steps": list(steps), "node": node,
             "deployment": rec["monitoring_period"]["deployment"]["id"]}
     return report, rec, line
@@ -197,6 +332,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     w.add_argument("serve_dir", type=Path)
     w.add_argument("--slots", type=int, default=8)
     w.add_argument("--window", type=int)
+    g = sub.add_parser("gate")
+    g.add_argument("--gate", default=os.environ.get("H1_GATE"))
+    g.add_argument("--lane", default="vllm")
+    g.add_argument("--main", type=Path, default=os.environ.get("MAIN_FILE") or None)
+    o = sub.add_parser("pouw")
+    o.add_argument("serve_dir", type=Path)
+    o.add_argument("window", type=int)
+    o.add_argument("out", type=Path)
+    o.add_argument("--gate", default=os.environ.get("H1_GATE"))
+    o.add_argument("--key-sha512", default=os.environ.get("H1_KEY_SHA512"))
+    o.add_argument("--main", type=Path, default=os.environ.get("MAIN_FILE") or None)
+    o.add_argument("--python", default=os.environ.get("PY") or sys.executable)
     p = sub.add_parser("pieces")
     r = sub.add_parser("record")
     for q in (p, r):
@@ -214,6 +361,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         except ValueError as e:
             print(f"served_verdicts.py window: {e}", file=sys.stderr)
             return 1
+        return 0
+    if a.cmd == "gate":
+        if not a.gate:
+            print("GATE refused: no gate command (--gate, H1_GATE)", flush=True)
+            return 1
+        try:
+            ok, line = gate_ready(a.gate, a.lane, a.main)
+        except (OSError, RuntimeError, ValueError) as e:
+            ok, line = False, f"GATE refused: {type(e).__name__}: {e}"[:800]
+        print(line, flush=True)
+        return 0 if ok else 1
+    if a.cmd == "pouw":
+        doc = pouw(a.serve_dir, a.window, a.out, gate=a.gate, key=a.key_sha512, main=a.main,
+                   check=lambda *x: check_challenger(*x, python=a.python))
+        print(f"POUW-DEV {json.dumps(development_line(doc), sort_keys=True, default=str)}", flush=True)
         return 0
     if a.cmd == "pieces":
         a.out.mkdir(parents=True, exist_ok=True)
