@@ -25,7 +25,7 @@
    "generate": ["python3", "scripts/desc_difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
   "NciCheck.DifftestMain": {
-   "why": "4,000 random declarations and divisions, the description-sized difftest's 335 on E_REINTERPRET (references naming leaves of other widths than their types give them, which both sides refuse as program, and their well-typed neighbours, expanded gate by gate where the Program decodes), and two pinned ones (θ with an input bound per run, refused theta-not-registered, and θ the registered input, accepted), on which NciCheck.check gives what scripts/nci_reference.py computes from InferenceOnly.Complies' definitions: per IU its size and novel reads, the verdict and the first failing IU with its rule, or the first malformation's code",
+   "why": "4,000 random declarations and divisions, the description-sized difftest's 335 on E_REINTERPRET (references naming leaves of other widths than their types give them, which both sides refuse as program, and their well-typed neighbours, expanded gate by gate where the Program decodes), and two pinned ones (θ with an input bound per run, refused theta-not-registered, and θ the registered input, accepted), on which NciCheck.check gives what scripts/nci_reference.py computes from Nci.Complies' definitions: per IU its size and novel reads, the verdict and the first failing IU with its rule, or the first malformation's code",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "4337"],
    "data": {
     "difftest/instances.jsonl": "a29efe48563e56c3a83587c9f2ab3519332f1919a9c236178564b7deb17f1fb4",

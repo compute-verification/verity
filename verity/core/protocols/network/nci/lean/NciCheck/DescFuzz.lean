@@ -5,7 +5,7 @@ import Std.Data.HashSet
 # The desc fuzzer: the statements behind `DescAgrees`, decided on generated Programs
 
 `NciCheck.Properties.DescAgrees` (`Desc.check` agrees with the unrolled `NciCheck.evaluate`) follows from three open
-statements in `Security/Properties/Proofs/InferenceOnly/` (`Novel.descAgrees_of_open`). Each is a `∀` over Programs that pass
+statements in `Security/Properties/Proofs/Nci/` (`Novel.descAgrees_of_open`). Each is a `∀` over Programs that pass
 `Desc.evaluate`'s refusals: `decode`, `orderViolation = none`, `Desc.rootLaidOut`, `Desc.inputsAtRoot`,
 `Desc.walkable` and `Desc.analyze`. On one such Program each conclusion is decidable, and `check` decides it:
 

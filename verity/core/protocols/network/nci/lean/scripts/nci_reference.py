@@ -2,7 +2,7 @@
 
     check(instance) -> {"gates", "ius", "complies", "failure"} | {"error": code}
 
-`InferenceOnly.Complies Γ α` (`Security/Definitions/InferenceOnly.lean`): the computed gates of `D` divide into isolation units of at most `Γ`
+`Nci.Complies Γ α` (`Security/Definitions/Nci.lean`): the computed gates of `D` divide into isolation units of at most `Γ`
 gates, each with `novelReads R = width(into(R) \\ θ) ≤ α · size R`, where `into(R)` is the gates outside `R` with a wire
 into `R` (`Security/Definitions/Core/Circuit.lean`). The instance and the refusal codes are the ones `NciCheck.Check`'s
 docstring gives: the declaration's circuit is the canonical layout of a descriptor v1 Program (`verity.ml.circuits`),

@@ -5,11 +5,11 @@ import Proofs.Accounting.Bandwidth.TickedJoint
 /-!
 # Bandwidth adds, by counting (Mbw), on a strategy causal from every tick
 
-Mbw (section 5 of `note:console/20261012T0645Z-draft-actual-circuit-model`) for the chip of a strategy
-`S : (Store × Bits n) × Oracle → Actual.Run L`, causal from every tick, whose view determines `z`: a decoder `ζ`
-recovers `z` from the chip's content at the window's start and what crosses into it in the window (the console's "state
-at the seed, its links' deliveries in the window"). HBM's and the rest's replies may depend on `z` as well as the store
-(`SplitsJoint`, `Causal.Splits` with them at `z`); the chip's widths, queries and crossings are one interface's.
+The actual-circuit model's Mbw for the chip of a strategy `S : (Store × Bits n) × Oracle → Actual.Run L`, causal from
+every tick, whose view determines `z`: a decoder `ζ` recovers `z` from the chip's content at the window's start and what
+crosses into it in the window (the actual-circuit model's "state at the seed, its links' deliveries in the window").
+HBM's and the rest's replies may depend on `z` as well as the store (`SplitsJoint`, `Causal.Splits` with them at `z`);
+the chip's widths, queries and crossings are one interface's.
 
 `run_eq_joint` is `Causal.run_eq` for such a strategy: one transducer from `CausalFrom S` gives one `Ticked.Chip` for
 every `z`, and `Interface.observe_eq` replays each `z`'s run. `audit_joint` is then `Ticked.audit_joint`'s bound: at
@@ -281,7 +281,7 @@ theorem audit_links_joint (S : (Store N b × Bits n) × Oracle N b h → Actual.
 /-- **Mbw on a strategy causal from every tick, from the links, in the capacity form** (`e = 0`): as
 `audit_links_joint`, with HBM hearing only the chip in place of passive memory, and every tick's HBM signal counted at
 `βm` bits, its ports' capacities summed: on `βm T + (M + 1) + βs T + λ < k b + n` at `AuditRO`'s error. So an accept
-gives `n ≤ βm T − cert_bw`, the console's `q ≤ β_HBM T − cert_bw`. -/
+gives `n ≤ βm T − cert_bw`, the actual-circuit model's `q ≤ β_HBM T − cert_bw`. -/
 theorem audit_capacity_joint (S : (Store N b × Bits n) × Oracle N b h → Actual.Run L) (hc : CausalFrom S) {K : Type*}
     (β : K → ℕ) (link : ∀ r, Fin (S r).A.N → Fin (S r).A.N → K) (hα : Alphabet S β link) (X : Finset L)
     (t₀ T M qt : ℕ) (hM : ∀ r, (S r).mem X t₀ ≤ M)

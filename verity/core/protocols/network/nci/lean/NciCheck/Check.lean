@@ -4,7 +4,7 @@ import Flock.Program
 /-!
 # The NCI policy's check of a declared division
 
-`InferenceOnly.Complies Γ α` (`Security/Definitions/InferenceOnly.lean`) holds of a declaration `(D, θ)` when `D`'s computed gates divide
+`Nci.Complies Γ α` (`Security/Definitions/Nci.lean`) holds of a declaration `(D, θ)` when `D`'s computed gates divide
 into isolation units (IUs) of at most `Γ` gates, each reading at most `α` bits of novel information per gate:
 `novelReads R = width(into(R) \ θ) ≤ α · size R`. The verifier's side is the check of one declared division: `evaluate`
 decides that it is a partition of the computed gates into IUs (`Verity.Partition`) and that every IU meets both bounds,
