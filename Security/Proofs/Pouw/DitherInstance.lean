@@ -13,9 +13,9 @@ import Proofs.Pouw.Dither
   its work ends by its root's arrival, at most `Δ` after them (`RootAfterCoin`), so the two run in a window from
   `t b − wall(commit b)` to `t b + wall(work b)`. G2 bounds their use by `ρ_r` times that window, and block `b + 1`'s
   commit phase starts after block `b`'s work (`CommitAfterWork`), so the windows are disjoint inside `[0, T]`
-  (`sum_windows_le_T`). A selected answer starts after its block's work and arrives `τ_ans` after its check coin, before
-  the period's end (`AnswerAfterWork`), so it runs within the period (`AnswersFit`). No count of sampling blocks or of
-  selected ones is read.
+  (`sum_windows_le_T`). A selected answer starts after its block's dither coins, inside the period, and arrives within
+  `τ_ans` of its check coin, before the period's end (`AnswerAfterWork`, `Timed`), so it runs within the period
+  (`AnswersFit`). No count of sampling blocks or of selected ones is read.
 * `workSoundAt_of_workSound`, `workSoundOnCard_of_workSound`: at every `x` meeting the floors, and at the `x`
   `CardWithinAccel` gives; `WorkSoundH200`, `WorkSoundSm120`, `WorkSoundOnCardH200` and `WorkSoundOnCardSm120` from
   `Proofs.Pouw.Dither.WorkSound`.
@@ -80,11 +80,6 @@ theorem workSoundAtX_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Ve
       dev sel Pd := by
     intro A o x hv b hb r
     have h1 := (g2.2 (A.answer b) (A.answerIn o x b)).2 r
-    have hw := (g2.2 (A.work b) (A.workIn o x b)).2 r
-    have hww : 0 ≤ G.wall (A.work b) (A.workIn o x b) := by
-      by_contra hneg
-      push_neg at hneg
-      nlinarith [g2.1 r, hw.1, hw.2]
     have hwa : G.wall (A.answer b) (A.answerIn o x b) ≤ Pd.T := by
       have h2 := ans A o x b hb
       have h3 := (hv.2.1 b).1

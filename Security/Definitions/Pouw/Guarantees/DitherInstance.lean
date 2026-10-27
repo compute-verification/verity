@@ -59,8 +59,9 @@ with its dual price `μ` at the sampling blocks' honest use: with `WorkSound`'s 
   - the period is refused if the network certifier saw a root arrive later than `Δ` after its block's coins, or a
     selected block's answer later than `τ_ans` after its check coin. An answer may arrive after later blocks' coins;
   - an operand root arrives no sooner than its commit phase after the previous block's work (`CommitAfterWork`), a
-    root no sooner than its work (`RootAfterCoin`), a selected answer no sooner than its block's work and its own run
-    (`AnswerAfterWork`), and the period's length `T` is at least 0.
+    root no sooner than its work after its coins (`RootAfterCoin`), a selected answer no sooner than its own run after
+    its block's dither coins (`AnswerAfterWork`), and the period's length `T` is at least 0. These three are the
+    node's wall time in the model, which no verdict reads; the orderings among the signed times are `Timed`'s checks.
 
   No count of sampling blocks or of selected ones is a hypothesis: the blocks' commit phases and work run one block at
   a time, so they fit in `T` at any `nsb`. The answers run beside later blocks, and no answer's use is counted, only
