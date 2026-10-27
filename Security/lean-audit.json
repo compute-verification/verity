@@ -13753,11 +13753,11 @@
    ]
   },
   "Definitions.Accounting.Guarantees.FixedMachine": {
-   "digest": "3dc0ac2313927b5c936a3a035ee358e713e48736b168afc99ad5ffe58d49085d",
+   "digest": "c97c15763e4a0e51aef49d624adfe9c282ce8c288e8297ab33c1e4f61099c40c",
    "definitions": {
-    "Accounting.Guarantees.FixedMachine.BlockDescription": "ae30036a2c56758612ee894b4f4afff33d937384a7fca2a864db1efc822c23ac",
-    "Accounting.Guarantees.FixedMachine.BlockDescription_honest": "ce2f6dff539c3c48a2e3737bfb9a315933f80f577314e3b6d3c29742f94127b5",
-    "Accounting.Guarantees.FixedMachine.BlockDescription_nontrivial": "10d843ea12d63de66a23cd1b7f6ba57ae8711419c77dbeb158330c25a2e8cdd0",
+    "Accounting.Guarantees.FixedMachine.BlockDescription": "f541bc66f12355546bc0180b42f4bc730f500eb4b4837207bdc168dd4e2dc847",
+    "Accounting.Guarantees.FixedMachine.BlockDescription_honest": "9fd34253785dca3dbf4d114d17e8cd8c5c3d64354050a5fbbc406c96022d9fe8",
+    "Accounting.Guarantees.FixedMachine.BlockDescription_nontrivial": "6f61b1e087e72046469c6678f5ed99e31146737d3c7b3d9a4c286626aeac3fcb",
     "Accounting.Guarantees.FixedMachine.GateCount": "7e66c352fe3ee54d101a940dac9658ed5e37978bfdaf70dc685bade114f2db19"
    },
    "guarantees": [
@@ -18000,6 +18000,7 @@
     "Accounting.SecurityProofs.Actual.WindowsAt",
     "Accounting.SecurityProofs.FixedMachine.BlockDescription",
     "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest",
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription_nontrivial",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
@@ -18370,6 +18371,7 @@
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.FixedMachine.BlockDescription",
     "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest",
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription_nontrivial",
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
     "Accounting.SecurityProofs.JointHorizonBlocksA",
@@ -18809,6 +18811,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.FixedMachine.BlockDescription",
     "Accounting.SecurityProofs.FixedMachine.BlockDescription_honest",
+    "Accounting.SecurityProofs.FixedMachine.BlockDescription_nontrivial",
     "Accounting.SecurityProofs.FixedMachine.GateCount"
    ]
   },
