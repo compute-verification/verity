@@ -116,6 +116,7 @@ import Proofs.Flock.Soundness.Audit.TwoStage
 import Proofs.Flock.Soundness.Audit.Examples
 import Proofs.Flock.Soundness.Audit.Flock
 import Proofs.Flock.Soundness.Audit.Extraction
+import Proofs.Flock.Soundness.Audit.FlockCompiled
 import Proofs.Flock.Soundness.Audit.FlockBatched
 import Proofs.Flock.Soundness.Audit.Stratified
 import Proofs.Flock.Soundness.ExecDraw
@@ -128,6 +129,7 @@ import Proofs.Flock.Soundness.KeyedDraw
 import Proofs.Flock.Soundness.Audit.RegDraw
 import Proofs.Flock.Soundness.Audit.StratifiedMiss
 import Proofs.Flock.Soundness.Audit.Work
+import Proofs.Flock.Soundness.Audit.FlockWork
 import Proofs.Flock.Soundness.Audit.Closure
 import Proofs.Flock.Soundness.Audit.Window
 import Proofs.Flock.Soundness.Audit.FlockBatchedAcc
