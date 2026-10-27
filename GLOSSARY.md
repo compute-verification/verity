@@ -188,6 +188,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "staging", "the staging decode" for copying a stored model's bytes into GPU memory and decoding them to the served weights; `benchmarks/torch_gpu/p2_stage`, until it is renamed | the store's load |
 | "post-landing run", "postland" | after-landing run |
 | "train" for a batch of PRs landed on one check | none: check-mode landing is deleted, and drive lands the reviewed prefix of `next` |
+| "example" (`examples/`, `verity example`) | demo (`demos/`, `verity demo`) |
 | tick(g) | t(g) |
 | D for the chosen-state budget | Λ (D is the declared circuit) |
 | D_b^τ for the PRF distinguisher | 𝒟_b^τ |
