@@ -56,7 +56,9 @@ PRs land on an eyeball review, and the full check runs after landing. ci's `rese
   You hear back only if yours is held, ejected or reverted.
 - Drive stacks admitted PRs on `next`, non-Lean changes first. Reviewers ci staffs, never the owner, record a verdict at
   the head (`research queue review N --land|--hold REASON --by LANE`); no other per-head grant exists. Drive
-  fast-forwards `main` to the longest reviewed prefix whose merges are clean and whose `.py` files compile. A change to a
+  fast-forwards `main` to the longest reviewed prefix whose merges are clean and whose `.py` files compile; while no Lean
+  check runs, it moves reviewed members below those awaiting a verdict, so a PR waiting for review holds only itself (a
+  hold still keeps what is above it). A change to a
   `lean-audit.json` lock or to Lean that runs as code (a `.lean` outside `Security/`) also waits for a `lean-audit` that
   passed at or above it; Lean proofs alone land on the verdict.
 - One run checks `main`'s tip after each landing. A red suite's culprit is rung and reverted 60 min later unless a fix is
