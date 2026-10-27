@@ -82,8 +82,8 @@ auditing tree. The compile command is ``argv --advice FILE --out FILE``:
 * it exits 0 having compiled, `REFUSED` (2) on advice it refuses, the reason on stderr, and any other code on an error.
 
 ``--challenger``: the draw on the auditor's challenger's coins (`a5_coins`), not the verifier's own, as `prove_path.py audit`
-takes them: ``local``, a development session on this machine, ``loopback:HOST:PORT``, that session in the challenger
-party's own process (`challenger_party.py`, `verity run CONFIG --party challenger`), or ``gate:USER@HOST``, vy-challenger-1 through infra's gate with
+takes them: ``local``, a development session on this machine, ``loopback:HOST:PORT``, that session on the challenger
+party's host (`challenger_party.py`, `verity run CONFIG --party challenger`), or ``gate:USER@HOST``, vy-challenger-1 through infra's gate with
 the lane's gate key ``--gate-key``, its challenger on ``--peer``'s 127.0.0.1 (so the audit runs on that peer), under the
 deployment's key record ``--challenger-key``. The gate opens a root once, ever.
 
