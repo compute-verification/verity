@@ -11,7 +11,10 @@
 #     why, or NO WEIGHTS REGISTRATION why not, and then every weight read counts free.
 #  2. requests: REQUESTS greedy requests (default SLOTS) from the certifier's traffic generator (`examples/vllm/serve_load.py --varied`:
 #     prompts of PROMPTS tokens, at most MAX_TOKENS outputs), numbered under one release run and sent together (RATE a second),
-#     so the engine's idle closes them into one window. The lease ends once every closed window is sealed.
+#     so the engine's idle closes them into one window. The lease ends once every closed window is sealed. With
+#     CERTIFIER_FRONT (a command run in TREE as `bash -c CERTIFIER_FRONT _ PORT D OUT/certifier-front`) the load is
+#     the network certifier's warden in front of the endpoint (`benchmarks/network_traces/certifier_piece.py front`,
+#     SERVE_ARGS then with `--protocol ids --id-payload 503`), and serve_load's requests follow only if it fails.
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows): every
 #     closed window's advice under the prove path's registered compiler and the weights registration (`--weights-of-record`),
 #     then this window's request Programs (`tools/advice_compile.py`); V3b's window circuit (`prove_path.py window-circuit
@@ -174,11 +177,19 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   fi
   say "SERVE $(grep -m1 'SERVE-OPENAI listening' "$OUT/serve.log" | cut -c1-300)"
   weights
-  release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
-  "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$REQUESTS" --rate "$RATE" --prompt-range "$PROMPTS" \
-    --max-tokens "$MAX_TOKENS" --release "$release" --seed "$SEED" --out "$D/load.jsonl" > "$OUT/load.log" 2>&1
-  rc=$?
-  say "REQUESTS (exit $rc, release run $release): $(tail -1 "$OUT/load.log" | cut -c1-300)"
+  rc=1
+  if [ -n "${CERTIFIER_FRONT:-}" ]; then
+    (cd "$TREE" && bash -c "$CERTIFIER_FRONT" _ "$PORT" "$D" "$OUT/certifier-front") > "$OUT/certifier-front.log" 2>&1
+    rc=$?
+    say "CERTIFIER-FRONT (exit $rc): $(tail -1 "$OUT/certifier-front.log" | cut -c1-600)"
+  fi
+  if [ "$rc" != 0 ]; then
+    release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
+    "$PY" "$TREE/examples/vllm/serve_load.py" --port "$PORT" --model "$REPO" --varied "$REQUESTS" --rate "$RATE" --prompt-range "$PROMPTS" \
+      --max-tokens "$MAX_TOKENS" --release "$release" --seed "$SEED" --out "$D/load.jsonl" > "$OUT/load.log" 2>&1
+    rc=$?
+    say "REQUESTS (exit $rc, release run $release): $(tail -1 "$OUT/load.log" | cut -c1-300)"
+  fi
   for _ in $(seq 1 450); do     # every closed window's seal line
     c=$(count "$D/windows.jsonl"); s=$(count "$D/seals.jsonl")
     [ "$c" -gt 0 ] && [ "$s" -ge "$c" ] && break

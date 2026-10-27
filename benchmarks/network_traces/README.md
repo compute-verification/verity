@@ -58,6 +58,16 @@ node as the draw's peer, since the gate key and the warden run's witness never g
 vy-nebius-cpu-2 has its line (ports 7821-7830) since 27 Oct; without the gate's coins the chain draws on the
 verifier's (`--coins verifier`, the default).
 
+`certifier_piece.py` is the network certifier's piece of `benchmarks/one_stage/served_verdicts.sh`. Its `front`
+(`CERTIFIER_FRONT`) is that run's load: the gate's scan rehearsal sends one group of the window circuit's class (4
+prompts of 24 ids, 4 ids out, `--window-per-group`) to serve-openai, all of it in link-window 0, so the engine closes it
+into the one window the run audits, and the gate's fetch is kept in the serve dir's `private/certifier`. Its `piece`
+(`CERTIFIER_CMD`) runs the chain's warden path on that fetch with the serve dir's endpoint records, run dir and
+quarantine private beside the fetch, and answers with `network-period check` on the rows form of the scan's link-window
+(`scan_period.rows_case`). The answer is accept only when the chain accepted, every request of the audited window is a
+certified one inside that link-window, and the Lean check accepts. Anything else is a reject, or undecided when a step
+couldn't run.
+
 ## The chain's run of record
 
 The run of record takes the network chain end to end on the gate's machines:
