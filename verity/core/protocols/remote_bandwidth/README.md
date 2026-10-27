@@ -109,7 +109,7 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
   window's draws after its roots; and, once the session has its outcome and no root can follow, the commitment and
   every released coin's opening (`audit.Session.disclose`; the remote session's `coins` after `ended`), which it
   checks each coin it was sent against (`received_reason`). The commitment's root is a function of every coin, so the
-  prover holds none of it while the session runs (`PROTOCOL.md` §4).
+  prover holds none of it while the session runs, and no guarantee takes a hiding premise on it (`PROTOCOL.md` §4).
 - `receipts.py`: seeds, plans, receipts and their trees.
 - `codec.py`: the store's encoding (kv/v0).
 - `p2.py`: the audit over PoUS's P2-encoded weights store (`PROTOCOL.md` §11): the registration from PoUS's setup,
@@ -145,7 +145,8 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
   `benchmarks/remote_session/store_layout.py` writes pins and synthetic checkpoints.
 - `timing.py`: the honest schedule, the stated claim read through the ledger, and the sketch's rank bound.
 - `monitoring.py`: one accepted session's `q_bytes` and `eps` over a week, a month and a year of a deployment's
-  sessions, at δ = 1% and 10⁻⁶: pooled by #4413's count bound (all but M − 1 sessions certify), with each session at
+  sessions, at δ = 1% and 10⁻⁶: pooled by `prCoin_count_le_choose`'s count bound (all but M − 1 sessions certify;
+  `short_sessions` in `verity/core/protocols/pous/wipe_monitoring.py`, shared with the wipe's), with each session at
   δ/T beside it. The deployment's machines and window are parameters.
 
 Tests: `uv run tools/verity/check/suites.py verity/core/protocols/remote_bandwidth` (the Python), and
