@@ -21,12 +21,12 @@ over its span, and `max(0, w − lost)` weights bytes a tick, `w` the weights bl
   a window each at g = 1), draw `c` with the receipts its windows have in the state the record's session reaches,
   drawing `min(s, U_c)` at the session's `samples` s) and
   the record of outcome `ω` the prover's holding the deployed commitment `com ω` (`played`), whose trace of record
-  (`ofRecord`, the trace with the Lean verifier's verdict on the record as its own) meets the memory model's premises
-  (the links' ceiling `Links`, `SquaringCeiling`, `Disks`, `ChipCeiling`, `Routed`, `Paced` at the record's groups
-  `recordPace`, `Covers`, `SketchBoundAt` at `δs` and `NoOutsideCompute`, statement C in full: no device outside the
-  node computes on a registered block or a receipt during the session, and the draw's `Live` at every fixed coin
-  commitment, `Refused` at the receipts `R`, `Counted`, of the session the prover plays holding `com`, `play com`) and
-  the record's one code-to-model premise (`Registered`, `Properties.RemoteAudit.Line.Premises`), the probability that
+  (`ofRecord`, the trace over the registration's blocks with the Lean verifier's verdict on the record as its own)
+  meets the memory model's premises (the links' ceiling `Links`, `SquaringCeiling`, `Disks`, `ChipCeiling`, `Routed`,
+  `Paced` at the record's groups `recordPace`, `Covers`, `SketchBoundAt` at `δs` and `NoOutsideCompute`, statement C in
+  full: no device outside the node computes on a registered block or a receipt during the session, and the draw's
+  `Live` at every fixed coin commitment, `Refused` at the receipts `R`, `Counted`, of the session the prover plays
+  holding `com`, `play com`; no code-to-model premise, `Properties.RemoteAudit.Line.Premises`), the probability that
   the Lean verifier accepts the record's session and the line it reads off the Lean verifier's record (`lineOf`: its
   groups, draws and registered blocks the record's) credits a stretch more than the trace held over its span
   (`Credits`) is at most `δs + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind)`, `δ` the one the line reads its
@@ -59,6 +59,14 @@ for each of the session's windows on an accepted record (its parameters' `window
   read (the greedy over groups highest rate first attains the fractional knapsack's optimum, and the line's rates are
   the model's or above).
 
+`LineHeld` reads the record the Lean verifier makes on the node's registration, whose registered blocks are the
+registration's on an accepted run (`record_summary`). A record the verifier's `line_record` is handed bare it checks
+against the registration given with it, a third property of the code, proved:
+
+* **LineRegistered**: a line `line_record` reads off a record given bare (`lineOfRegistered`) is of a record of the
+  registration given with it: the record names its digest, and its registered blocks, which the line credits, are
+  the registration's.
+
 A stretch after the first starts at its first group's coin `s_lo`, earlier than its paced session's `start = e_lo`, so
 the guarantee as stated (`[e_0, s_C)`) does not reach it: the model's argument bounds absence over `[s_0, s_C)` and
 holds from any start in `[s_0, e_0]`, which the proof of `LineHeld` uses.
@@ -78,6 +86,18 @@ def LineChecked : Prop :=
     1 ≤ blockBytes ∧ 1 ≤ rates.encodeSquarings ∧ 0 ≤ rates.squaringsPerS ∧ 0 ≤ rates.diskBytesPerS ∧
       0 ≤ rates.linkBytesPerS ∧ 0 ≤ rates.rebuildBurstBytes ∧ 0 ≤ rates.diskBurstBytes ∧
       0 ≤ rates.linkBurstBytes ∧ 0 ≤ l.wrong
+
+/-- **The verifier refuses a line that isn't registered.** A line `line_record` computes off a record given bare,
+drawn `g` windows a coin (`lineOfRegistered`), is of a record of the registration given with it: the record names that
+registration's digest, its registered blocks, which the line credits, are the registration's, and the line is the
+record's (`lineOfRecordOn`). -/
+def LineRegistered : Prop :=
+  ∀ (onRecord : Bool) (g : ℕ) (reg : RemoteAudit.Registration) (digest : ByteArray)
+    (sm : RemoteAudit.Session.Summary) (samples : ℕ) (seen : Array Seen) (per blockBytes chipBytes nodeBytes : ℕ)
+    (δ : ℚ) (rates : Rates) (l : Line),
+    lineOfRegistered onRecord g reg digest sm samples seen per blockBytes chipBytes nodeBytes δ rates = .ok l →
+    digest = reg.digest ∧ sm.blocks = reg.blocks ∧
+      lineOfRecordOn onRecord g sm samples seen per blockBytes chipBytes nodeBytes δ rates = .ok l
 
 /-- **The arithmetic link.** Each stretch `x` of form `i` (time-held, link-charged) of a line the code computes: its
 closing group is a group of the record, its span is `[spanStart, spanStop)` on the record's clock, nonempty, ending at
@@ -129,13 +149,13 @@ def HeldAt {Ω : Type} (T : Trace Ω) (ω : Ω) (node : Node) (r : Record) (form
 /-- **The memory line of record, link-charged.** On a trace over a session's coins, one for each of its draws
 (`Node.draws`, a window each at g = 1), the prover's records read through the coin commitment (`recordCommitted`,
 each record's opening draw at its `samples` s) and the record of each outcome the one played holding the deployed
-commitment (`played`), whose trace of record (`ofRecord`: its verdict the Lean verifier's on the record) meets the
-memory model's premises at the node's rates and the record's groups and the record's code-to-model premise
-(`Registered`), the probability that the Lean verifier accepts the record's session and a stretch of the record's
-link-charged line credits more than the trace held over its span is at most
-`δs + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind)`, `δ` the line's, `adv_c` the advantage on `prf c` of draw
-`c`'s distinguisher at it with leaf `c` of the coin commitment committing zeros, `hide_c` draw `c`'s hiding term and
-`bind` the receipts' binding term at `R`, over the session's draws. -/
+commitment (`played`), whose trace of record (`ofRecord`: over the registration's blocks, its verdict the Lean
+verifier's on the record) meets the memory model's premises at the node's rates and the record's groups, the
+probability that the Lean verifier accepts the record's session and a stretch of the record's link-charged line
+credits more than the trace held over its span is at most `δs + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind)`,
+`δ` the line's, `adv_c` the advantage on `prf c` of draw `c`'s distinguisher at it with leaf `c` of the coin
+commitment committing zeros, `hide_c` draw `c`'s hiding term and `bind` the receipts' binding term at `R`, over the
+session's draws. -/
 def LineHeld : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax)
     (rest : Coins node.draws κ X → Fin node.draws → ℕ → ℕ) (recs : Cm → Coins node.draws κ X → Record)
@@ -150,7 +170,6 @@ def LineHeld : Prop :=
     Routed (ofRecord T node r) → Paced (ofRecord T node r) (recordPace node r) → Covers (ofRecord T node r) →
     SketchBoundAt (ofRecord T node r) O δs → NoOutsideCompute (ofRecord T node r) O → (∀ c, Live (F.view c)) →
     Refused (F.play com) prf rest (ofRecord T node r) R → Counted (F.play com) (ofRecord T node r) →
-    Registered (ofRecord T node r) node →
     Pouw.pr (fun ω => Verified node (r ω) ∧ ¬ HeldAt (ofRecord T node r) ω node (r ω) 1) ≤
       δs + ((node.delta : ℝ) + ((∑ _t : Fin node.draws, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
@@ -173,7 +192,6 @@ def LineHeldIdentity : Prop :=
     Routed (ofRecord T node r) → Paced (ofRecord T node r) (recordPace node r) → Covers (ofRecord T node r) →
     SketchBoundAt (ofRecord T node r) O δs → NoOutsideCompute (ofRecord T node r) O → (∀ c, Live (F.view c)) →
     Refused (F.play com) prf rest (ofRecord T node r) R → Counted (F.play com) (ofRecord T node r) →
-    Registered (ofRecord T node r) node →
     Pouw.pr (fun ω => Verified node (r ω) ∧ ¬ HeldAt (ofRecord T node r) ω node (r ω) 0) ≤
       δs + ((node.delta : ℝ) + ((∑ _t : Fin node.draws, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)

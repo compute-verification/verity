@@ -47,15 +47,15 @@ difftest's `session` reads one, `Difftest.eventOf`):
   (`Difftest.recordJ`);
 * `{"op": "close", "node"}`: `Registry.close`'s registration, or `{"refused": true}`;
 * `{"op": "registry"}`: the registry, `registry/v0`;
-* `{"op": "line_record", "record", "samples", "seen", "per", "block_bytes", "chip_bytes", "node_bytes", "delta",
-  "rates"}`, with `"clock"` and `"session"` if given: an accepted paced session's memory line read off its record
-  (`record`, as `outcome` gives it: `Line.lineOfRecordOn`, its groups, windows and registered blocks the record's, the
-  times and reads beside each group `seen`, held to the record's times on its `clock`, its W the pooled bound of its
-  windows, or at `groups_per_coin` g > 1 of its draws, `Pooled.pooled`), or off the record `Shared.run g` makes of the
-  session's transcript `session` (`Line.lineOfRun`), as the difftest's `line_record` writes it
-  (`Difftest.lineRecordFn`), or `{"refused": why}`, a record drawn g > 1 a coin at one window in flight among them
-  (`Line.SHARED`): the line of record (`benchmarks/remote_session/auditor_line.py`) is this answer, held equal to
-  `line.py`'s;
+* `{"op": "line_record", "record", "registration", "samples", "seen", "per", "block_bytes", "chip_bytes",
+  "node_bytes", "delta", "rates"}`, with `"clock"` and `"session"` if given: an accepted paced session's memory line
+  read off its record (`record`, as `outcome` gives it: `Line.lineOfRecordOn`, its groups, windows and registered
+  blocks the record's, the times and reads beside each group `seen`, held to the record's times on its `clock`, its W
+  the pooled bound of its windows, or at `groups_per_coin` g > 1 of its draws, `Pooled.pooled`), refused unless the
+  record is of `registration` (`Line.lineOfRegistered`), or off the record `Shared.run g` makes of the session's
+  transcript `session` (`Line.lineOfRun`), as the difftest's `line_record` writes it (`Difftest.lineRecordFn`), or
+  `{"refused": why}`, a record drawn g > 1 a coin at one window in flight among them (`Line.SHARED`): the line of
+  record (`benchmarks/remote_session/auditor_line.py`) is this answer, held equal to `line.py`'s;
 * `{"op": "line", "groups", "per", "blocks", "block_bytes", "chip_bytes", "node_bytes", "windows", "delta", "rates"}`:
   the same line of groups and windows given (`Line.line`, `Difftest.lineFn`).
 

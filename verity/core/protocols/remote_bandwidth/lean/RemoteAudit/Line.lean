@@ -10,7 +10,8 @@ The line of record a gate run publishes (the verifier process's `line_record` re
 `Security/Definitions/Accounting/Guarantees/RemoteHeld.lean`, read over each stretch of a paced session's groups in exact
 rationals, every refusal the Python's word for word. `lineOfRecord` reads the session's groups, its windows and its
 registered blocks off the Lean verifier's record of it (`Session.Summary`), each group's times and reads beside it
-(`Seen`); `line` takes them given. The wrong receipts W are the pooled bound of the record's windows
+(`Seen`), refused unless the record is of the registration given with it (`lineOfRegistered`); `line` takes them
+given. The wrong receipts W are the pooled bound of the record's windows
 (`RemoteAudit.Pooled.pooled`: their receipts and draws at δ). A record drawn g > 1 windows a coin (`Shared`) has the
 same groups, and its pooled bound reads its draws, each its g windows' receipts and draws summed (`ofSummaryAt`,
 `lineOfRecordAt`); at one window in flight it has no line (`SHARED`). `line.py`'s docstring has the form;
@@ -307,6 +308,24 @@ def lineOfRecordOn (onRecord : Bool) (g : Nat) (sm : Session.Summary) (samples :
   match ofSummaryAt g sm samples seen, (if onRecord then timesOff sm seen else none) with
   | .ok _, some why => .error why
   | _, _ => lineOfRecordAt g sm samples seen per blockBytes chipBytes nodeBytes δ rates
+
+/-- Why a record `sm` naming registration `digest` is not a record of registration `reg`: it names another, or its
+registered blocks are not `reg`'s; none if it is. -/
+def unregistered (reg : Registration) (digest : ByteArray) (sm : Session.Summary) : Option String :=
+  if digest != reg.digest then some "the record is not of the registration given"
+  else if sm.blocks != reg.blocks then
+    some s!"the record's {sm.blocks} registered blocks are not the registration's {reg.blocks}"
+  else none
+
+/-- `lineOfRecordOn` of a record drawn `g` windows a coin that names registration `digest`, refused first unless it is
+a record of the registration `reg` given with it (`unregistered`), so that the line credits that registration's
+registered blocks. -/
+def lineOfRegistered (onRecord : Bool) (g : Nat) (reg : Registration) (digest : ByteArray) (sm : Session.Summary)
+    (samples : Nat) (seen : Array Seen) (per blockBytes chipBytes nodeBytes : Nat) (δ : Rat) (rates : Rates) :
+    Except String Line :=
+  match unregistered reg digest sm with
+  | some why => .error why
+  | none => lineOfRecordOn onRecord g sm samples seen per blockBytes chipBytes nodeBytes δ rates
 
 /-- The record `Shared.run g` makes of a session drawn `g` windows a coin from `s` over `events`, none where the run
 fails or doesn't accept (`Session.State.summary`): `LineHeld`'s `Record.summary` at a node of `g` windows a draw
