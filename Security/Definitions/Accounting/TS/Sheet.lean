@@ -3,8 +3,8 @@ import Definitions.Accounting.TS.Machine
 /-!
 # The data-sheet machine (trusted)
 
-The TS machine a device's vendor documents give on their own (note:20261017T1818Z-draft-axioms §2; decision 96:
-data-sheet constants, no GPU self-attestation), over instruction classes `K` and Nsight Compute pipes `P`. Every facet
+The TS machine a device's vendor documents give on their own (data-sheet
+constants, no GPU self-attestation), over instruction classes `K` and Nsight Compute pipes `P`. Every facet
 is SM-clocked, and each row is in SMSP-cycles a warp instruction (four SMSPs an SM):
 
 * issue: `1` for every class, uniform-datapath classes included (A2, A2u);

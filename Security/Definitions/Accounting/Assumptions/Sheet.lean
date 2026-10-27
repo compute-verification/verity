@@ -4,8 +4,8 @@ import Definitions.Accounting.Assumptions.TS
 /-!
 # The data-sheet axioms A1–A7 (trusted)
 
-Seven physical assumptions (note:20261017T1818Z-draft-axioms §2), each a `Prop` taken as a hypothesis, never an
-`axiom`, and each a vendor statement (decision 96: data-sheet constants, no GPU self-attestation). Each docstring opens
+Seven physical assumptions, each a `Prop` taken as a hypothesis, never an
+`axiom`, and each a vendor statement (data-sheet constants, no GPU self-attestation). Each docstring opens
 with its claim id (`verity.core.claims`) and names its document. A1–A5 are claimed for a run of the stated device
 against its sheet (`Accounting.TS.Sheet`), the node's devices the stated ones by `accounting-declared-device` (`Run`'s
 section, below). A6 and A7 are claimed for a cheater's labelled run (`Anatomy`) at §0.4's and §1.3's labelling, as
@@ -25,7 +25,7 @@ open Accounting.TS
 section Run
 
 /-! A1–A5 are claimed for a run of the stated device, and which device a run is on is the auditor's to know, not the
-run's: `accounting-declared-device` (ASK-74 = A), per node and per window, says every GPU on the node is declared, each
+run's: `accounting-declared-device`, per node and per window, says every GPU on the node is declared, each
 is the declared board and vBIOS, and no SM clock exceeds `fmax`, the top of that vBIOS's clock table. A1's clock rests
 on it: nothing checks a clock, an offset or a lock at run time but the prover's own driver. -/
 
@@ -52,7 +52,7 @@ the device's catch-all class, priced at its issue slot (`NOROW` alone on sm_120 
 lines too, its instructions timed beside the IGMMA, r20261021-070616-d06c; the exporters' `CATCH_ALL`). sm_120's is a vector class, so A6 reads such an instruction as a lane head of at most two words a lane;
 one with a wider destination is assumed to be a memory access (`LDL.128`, `LD.128`), which heads no vector word. The
 DC readings' are neither writers nor vector classes, so they head no word. A reading whose classes have none leaves an
-unlisted instruction free on every row (RT2-HOPPER-2, note:20261019T1140Z-draft-rt2-hopper), as sm_120's measured
+unlisted instruction free on every row, as sm_120's measured
 reading does. **Bulk count**: a bulk or TMA instruction (`cp.async.bulk`, `cp.reduce.async.bulk` and their tensor
 forms) of size `S` counts `S/99 KB` in sm_120's UTMABIG (A5b), at most one, so `K` holds it in at most its slot. -/
 def SheetDispatch (Q : Run K) : Prop := ∑ k, Q.n k ≤ Q.cycles
@@ -77,8 +77,7 @@ of bank bytes at that rate, the bytes it reads or writes on one side of a block'
 shared memory moves `3S`), so its `S/99 KB` of a UTMABIG count holds `S` (sm_120's UTMABIG holds 99 KB, a block's
 most). No vendor document states what the bulk engine's traffic costs the banks, so it is named, as A2u is: no census
 program exceeds 1 on DS_smem with it, and R6r's measured row already charges TMAred512 its 512 B. Without it DS-120
-charges a bulk reduction one issue slot and no other row, and a fold on the bulk engine costs less than the menu's
-(RT4-SHEET-1, note:20261019T2300Z-draft-rt4-sheet). -/
+charges a bulk reduction one issue slot and no other row, and a fold on the bulk engine costs less than the menu's. -/
 def SheetSmem (S : Sheet K P) (Q : Run K) : Prop := ∑ k, S.smem k * Q.n k ≤ 32 * Q.cycles
 
 end Run

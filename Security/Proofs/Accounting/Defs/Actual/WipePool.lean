@@ -18,7 +18,7 @@ to what the prover holds.
 * `prEv E P a`: the probability that every wipe of `P` passes and the run's un-held total `a + Σ_t x_t` satisfies `E`.
 * `UnheldFails`: at every wipe, a draw that challenges a block of `U` fails it, the pool lemmas' hypothesis
   (`Accounting.SecurityProofs.Actual.WipePool`). Every tree meets it once each `U` is empty, so it is no physical
-  premise; the pool's physical premise is memory-accounting's restatement on the challenger's verdicts (MEM-55).
+  premise; the pool's physical premise is memory-accounting's restatement on the challenger's verdicts.
 -/
 
 namespace Accounting

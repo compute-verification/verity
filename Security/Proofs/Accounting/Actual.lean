@@ -20,7 +20,7 @@ import Proofs.Accounting.Actual.WipeDraw
 /-!
 # The actual circuit's guarantees
 
-The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security/Definitions/Accounting/Actual.lean`):
+The model of `Security/Definitions/Accounting/Actual.lean`:
 
 * `Actual/Split.lean`: what a region reads from outside itself is what its location carried in plus what crossed its
   boundary, and so in any set of gates.
@@ -28,9 +28,9 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
   `Links`, ingress and egress are at most `β_X` a tick; compute rate at a pricing of at least one per gate bounds the
   gates; the state is its part in a set of gates plus its part outside.
 * `Actual/Windows.lean`: `WindowsAt`, the capacity form at any cuts and with no memory constraint: the windows divide
-  the developer's region into IUs of at most `Φ_X (τ (j + 1) − τ j)` gates, each reading in a set `G` at most the state's
-  part in `G` at its cut plus `β_X (τ (j + 1) − τ j)`; `Windows`, its instance at the cuts `kω` and `G = univ`, IUs of at
-  most `Φ_X ω` gates, each reading at most `M_X + β_X ω` novel bits.
+  the developer's region into isolation blocks of at most `Φ_X (τ (j + 1) − τ j)` gates, each reading in a set `G` at
+  most the state's part in `G` at its cut plus `β_X (τ (j + 1) − τ j)`; `Windows`, its instance at the cuts `kω` and
+  `G = univ`, isolation blocks of at most `Φ_X ω` gates, each reading at most `M_X + β_X ω` novel bits.
 * `Actual/Runtime.lean`: `Runtime`, the corollary `t_A(P) ≥ ω (G f(K_A) / (n K_A) − 1)`, from `Windows` and B5.
 * `Actual/Threaded.lean`: `ThreadedRuntime`, the memory cap over threads: when the developer's region over `[0, t)`
   contains a threaded reference circuit, `b_a |M| ≤ n ⌈t/ω⌉ K Λ(K)` with `K = R + r ω` the state at a window's start
@@ -73,7 +73,7 @@ The model of `note:console/20261012T0645Z-draft-actual-circuit-model` (`Security
   abstract run tree of a prover's wipes: on a tree meeting `UnheldFails`, every wipe passes with the un-held fractions
   summing to at least `H` with probability at most `exp(−k H)`, at any number of wipes; `WipePoolDelta`, at
   `H = ln(1/δ)/k`, at most `δ`. `UnheldFails` holds of every tree once each un-held set is empty, so it is no physical
-  premise; the pool's physical premise is memory-accounting's restatement on the challenger's verdicts (MEM-55).
+  premise; the pool's physical premise is memory-accounting's restatement on the challenger's verdicts.
 * `Actual/WipeReadPool.lean`: `WipeReadPool`, the pool per read on the challenger's verdicts, by Ville's inequality
   on the coins: every read accepted with the un-answered fractions summing to at least `H` on at most `exp(−H)` of
   them, under live verdicts alone.

@@ -1,5 +1,5 @@
 """The schedule check: each pass's plan is a fixed function of the schedule the prover publishes, which `audit.ledger`
-requires before it credits an appended block (`audit.Session.scheduled`).  Of record in its Lean,
+requires before it credits an appended chunk (`audit.Session.scheduled`).  Of record in its Lean,
 `lean/RemoteAudit/Schedule.lean`; this is held to it by the difftest (`lean/tests/test_schedule.py`, refusals compared
 word for word).
 
@@ -16,13 +16,13 @@ each session's own schedule's bits are.
 The schedule (`Schedule`; JSON `{"registered", "appends", "steps"}`):
 
 - `registered`: `[first, count, free]` runs of the registered store, in store order and disjoint, each freed at step
-  `free`, so resident through it; every other registered block is resident throughout;
-- `appends`: one list a session's append, in order, of its blocks in index order, each `null` (never resident:
+  `free`, so resident through it; every other registered chunk is resident throughout;
+- `appends`: one list a session's append, in order, of its chunks in index order, each `null` (never resident:
   withdrawn, or its encode never landed), `[write, null]` (resident from step `write + 1` on) or `[write, free]` (resident
   from step `write + 1` through `free`, `free > write`), memory-map/v1's writes and frees (`memory_map.schedule`);
 - `steps`: the passes' steps, strictly increasing, below 2^64.
 
-A pass at step s reads the schedule's plan at s (`Schedule.plan`): the blocks resident then, as runs in store order,
+A pass at step s reads the schedule's plan at s (`Schedule.plan`): the chunks resident then, as runs in store order,
 adjacent runs joined, which is the plan `memory_map.Replay` builds.  The appends are the schedule's, the first at N,
 each at the next fresh index (`Schedule.append_runs`).  `bits` is the size of the schedule's encoding (`encode`: LEB128
 integers, prefix-free, so fewer than 2^b schedules encode in b bits), at most the cap.
@@ -38,7 +38,7 @@ STEP_LIMIT = 1 << 64
 """Steps are below 2^64."""
 
 Block = tuple[int, int | None] | None
-"""An appended block: None never resident, or its write's step and its free's, if it is freed."""
+"""An appended chunk: None never resident, or its write's step and its free's, if it is freed."""
 
 
 class Refused(ValueError):
@@ -75,14 +75,14 @@ def _block_code(b: Block) -> list[int]:
 
 @dataclass(frozen=True, slots=True)
 class Schedule:
-    """A session's schedule: the registered runs it frees, each append's blocks and the passes' steps."""
+    """A session's schedule: the registered runs it frees, each append's chunks and the passes' steps."""
 
     registered: tuple[tuple[int, int, int], ...]
     appends: tuple[tuple[Block, ...], ...]
     steps: tuple[int, ...]
 
     def plan(self, blocks: int, s: int) -> tuple[tuple[int, int], ...]:
-        """The plan at step `s` in a store of `blocks` registered blocks: the blocks resident then, as runs in store
+        """The plan at step `s` in a store of `blocks` registered chunks: the chunks resident then, as runs in store
         order, adjacent runs joined."""
         spans, cur = [], 0
         for f, c, e in self.registered:
@@ -126,7 +126,7 @@ class Schedule:
         return out
 
     def encode(self) -> bytes:
-        """LEB128 integers, each list after its length: the registered runs, each append's blocks (a tag, 0 never
+        """LEB128 integers, each list after its length: the registered runs, each append's chunks (a tag, 0 never
         resident, 1 never freed, else free − write + 1, then the write's step) and the steps (the first, then each
         one's rise)."""
         return b"".join(_varint(n) for n in self.numbers())
@@ -136,7 +136,7 @@ class Schedule:
         return 8 * len(self.encode())
 
     def malformed(self, blocks: int) -> str | None:
-        """Why the schedule is not one over `blocks` registered blocks: the first rule it breaks."""
+        """Why the schedule is not one over `blocks` registered chunks: the first rule it breaks."""
         rs = self.registered
         if any(c == 0 or f + c > blocks or e >= STEP_LIMIT or (k > 0 and rs[k - 1][0] + rs[k - 1][1] > f)
                for k, (f, c, e) in enumerate(rs)):
@@ -235,7 +235,7 @@ def _block(x: object) -> Block:
 
 def of_json(j: object) -> tuple[Schedule, int, int, list[tuple[int, tuple[tuple[int, int], ...]]],
                                 list[tuple[int, int]]]:
-    """The JSON form's schedule, registered blocks, cap, passes and appends (`Malformed` if they aren't)."""
+    """The JSON form's schedule, registered chunks, cap, passes and appends (`Malformed` if they aren't)."""
     if not isinstance(j, Mapping) or not {"blocks", "cap", "schedule", "passes", "appends"} <= set(j):
         raise Malformed("the schedule check's inputs are its blocks, cap, schedule, passes and appends")
     passes = []
