@@ -251,7 +251,7 @@ theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {
     obtain ⟨rfl, rfl⟩ := hpair
     rw [← hD] at hbs hfd
     subst hT'
-    exact ⟨tags0, circuitB, pubB, registered, rB, record, _, _, proofs, (by first | rfl | exact hT), hc, hp, hreg, hrB, hu, hds, hbs,
+    exact ⟨tags0, circuitB, pubB, registered, rB, record, _, _, proofs, rfl, hc, hp, hreg, hrB, hu, hds, hbs,
       hf, hzv, hsc, hfd, hid, hrt⟩
 
 /-- **Piece E: a V\* part's compiled verdict is the model's decision at its session.** Where part `j`'s compiled
