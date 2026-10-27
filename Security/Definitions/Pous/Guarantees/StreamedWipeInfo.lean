@@ -7,7 +7,7 @@ import Definitions.Pous.Model.StreamedWipeInfo
 
 `StreamedWipe` bounds the probability that an accepted prover recovers the whole prior content `z`. This file states
 the same retention in Shannon's form, which composes with other accounts of information: how much an accepted run's
-state tells about `z`, in bits. It is MEM-98, which the end-to-end overhead bound reads through the WipeState bridge.
+state tells about `z`, in bits. The end-to-end overhead bound reads it through the WipeState bridge.
 The game is `Security/Definitions/Pous/Model/StreamedWipe.lean`, the vocabulary
 `Security/Definitions/Pous/Model/StreamedWipeInfo.lean`, and the information theory
 `Security/Definitions/Core/Information.lean`.
