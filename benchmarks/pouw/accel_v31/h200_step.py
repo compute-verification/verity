@@ -23,20 +23,21 @@ ARMS = ("lt", "plain", "coins", "form", "wrap", "gemm", "commit", "call", "ovl")
 
 
 def rows(paths: list[str]) -> list[dict]:
+    """Each bench line, with its variant: the file's name past `bench-` (run.sh writes a variant's lines to one file)."""
     out = []
     for p in paths:
         for line in Path(p).read_text().splitlines():
             if line.startswith("{") and '"gamma_ovl"' in line:
-                out.append(json.loads(line))
+                out.append(json.loads(line) | {"variant": Path(p).stem.removeprefix("bench-")})
     return out
 
 
-def steps(lines: list[dict], m: int = 16384) -> dict[tuple[int, int, int], dict]:
-    """Per (L', t, ROW): each arm's seconds a step and the step's MACs, for groups that timed every call of the step."""
-    groups: dict[tuple[int, int, int], dict[tuple[int, int], dict]] = {}
+def steps(lines: list[dict], m: int = 16384) -> dict[tuple[int, int, int, str], dict]:
+    """Per (L', t, ROW, variant): each arm's seconds a step and the step's MACs, for groups that timed every call."""
+    groups: dict[tuple[int, int, int, str], dict[tuple[int, int], dict]] = {}
     for r in lines:
         if r["m"] == m and (r["n"], r["k"]) in CALLS:
-            groups.setdefault((r["lp"], r["t"], r["row"]), {})[(r["n"], r["k"])] = r
+            groups.setdefault((r["lp"], r["t"], r["row"], r.get("variant", "")), {})[(r["n"], r["k"])] = r
     out = {}
     for key, by in sorted(groups.items()):
         if set(by) != set(CALLS):
@@ -54,18 +55,18 @@ def main() -> int:
     ap.add_argument("--wgmma", type=float, default=3.06, help="wgmma.linear's step at M = 16,384, s (HASH-22)")
     a = ap.parse_args()
     st = steps(rows(a.files))
-    print("| L' | t | L | ROW | ovl s | gamma_u ovl | call s | gamma_u call | gemm s | coins + commit s | form + wrap s | "
-          "plain s | cuBLASLt s | residual (ovl) | SM MHz (ovl) |")
-    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
-    for (lp, t, row), v in st.items():
+    print("| L' | t | L | ROW | variant | ovl s | gamma_u ovl | call s | gamma_u call | gemm s | coins + commit s | "
+          "form + wrap s | plain s | cuBLASLt s | residual (ovl) | SM MHz (ovl) |")
+    print("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+    for (lp, t, row, var), v in st.items():
         s = v["s"]
         mhz = f"{v['mhz'][0]:.0f}-{v['mhz'][1]:.0f}" if v["mhz"] else "-"
-        print(f"| {lp} | {t} | {lp * t} | {row} | {s['ovl']:.3f} | {s['ovl'] / a.wgmma:.3f} | {s['call']:.3f} | "
+        print(f"| {lp} | {t} | {lp * t} | {row} | {var} | {s['ovl']:.3f} | {s['ovl'] / a.wgmma:.3f} | {s['call']:.3f} | "
               f"{s['call'] / a.wgmma:.3f} | {s['gemm']:.3f} | {s['coins'] + s['commit']:.3f} | {s['form'] + s['wrap']:.3f} | "
               f"{s['plain']:.3f} | {s['lt']:.3f} | {1 - v['macs'] / (s['ovl'] * THETA):.3f} | {mhz} |")
-    for (lp, t, row), v in st.items():
+    for (lp, t, row, var), v in st.items():
         s = v["s"]
-        print(f"summary: L {lp * t} row {row}: step {s['ovl']:.3f} s overlapped, gamma_u {s['ovl'] / a.wgmma:.3f} against "
+        print(f"summary: L {lp * t} row {row} {var}: step {s['ovl']:.3f} s overlapped, gamma_u {s['ovl'] / a.wgmma:.3f} against "
               f"wgmma's {a.wgmma} s; serial {s['call']:.3f} s; gemm {s['gemm']:.3f}, hashing {s['coins'] + s['commit']:.3f}, "
               f"other {s['form'] + s['wrap']:.3f} s")
     if not st:

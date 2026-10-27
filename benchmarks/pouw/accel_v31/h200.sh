@@ -4,7 +4,8 @@
 # (one lease) and its bench (another):
 #   gates  run.sh's own at L' 256 t 3, then at L' 512 t 8 and 16: one and several whole segments, a partial last one,
 #          wrap-heavy and all-127 operands, a third Z digit, 8 KiB rows, and the three cheats (skip, forge, forgeO);
-#          the first t runs them all, the second its own whole-segment gate
+#          the first t runs them all, the second its own whole-segment gate (QUICK=1: each t its own gate and skip
+#          cheat alone, for a knob sweep whose variants the bench's sampled tiles check)
 #   bench  the frozen shape's calls at M = 16,384 (q, standing for o too, kv, up, down and the head) at ROW 1 KiB (the
 #          protocol's leaf) and 8 KiB
 # then h200_step.py's step (52 layers plus the head) a t and a ROW, gamma_u against wgmma.linear's 3.06 s (HASH-22).
@@ -12,7 +13,7 @@
 #   research run --on vy-dc-h200 --project verity --campaign cmp-172 --source . --cwd source --timeout 120m \
 #     --env GPU_LEASE_WHO=kernels-kcommitfb -- bash benchmarks/pouw/accel_v31/h200.sh
 #
-# Env: TS (default "8 16"), VARIANTS (default "row=1024 row=8192"), REPS (default 5), SHAPES, and run.sh's.
+# Env: TS (default "8 16"), VARIANTS (default "row=1024 row=8192"), REPS (default 5), QUICK, SHAPES, and run.sh's.
 set -uo pipefail
 D=benchmarks/pouw/accel_v31
 O=${OUT:?}
@@ -45,7 +46,10 @@ c-t16-forgeO 256 256 16384 llm forgeO:0.25 512 16 1024
 first=1
 for t in ${TS:-8 16}; do
   mkdir -p "$O/t$t"
-  if [ "$first" = 1 ]; then g=$ALL; else g="g-t$t 256 256 16384 llm none 512 $t 1024"; fi
+  g="g-t$t 256 256 16384 llm none 512 $t 1024"
+  if [ "${QUICK:-0}" = 1 ]; then g="$g
+c-t$t-skip 256 256 16384 llm skip:3 512 $t 1024"
+  elif [ "$first" = 1 ]; then g=$ALL; fi
   OUT="$O/t$t" T=$t GATES="$g" bash $D/run.sh > "$O/t$t/run.log" 2>&1
   echo "t$t run.sh rc $?" >> "$O/rc.txt"
   first=0
