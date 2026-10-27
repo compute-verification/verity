@@ -191,7 +191,7 @@ def _rms_build(S: Any):
 
 RmsNormTorchBackward = specialized(
     "RmsNormTorchBackward", 1, ("H", "LANES"), _rms_build, _rms_signature,
-    doc="torch 2.14 CUDA autograd of HF LlamaRMSNorm (bf16) for one token on bits: g = f32(bf16(dy w)); dx = bf16(RN(g r) + "
+    doc="torch 2.14 CUDA autograd of HF's RMS norm (bf16) for one token on bits: g = f32(bf16(dy w)); dx = bf16(RN(g r) + "
         "RN(RN(RN(RN(gr -0.5) RN(RN(r r) r)) f32(1/H)) RN(2 f32(x)))), gr = sum RN(g f32(x)) in Reduce.cuh's float4 order at "
         "LANES threads; r the saved rsqrt; NaN 0x7FFF")
 
@@ -274,8 +274,8 @@ def _wgrad_build(S: Any):
 
 RmsNormTorchWeightGrad = specialized(
     "RmsNormTorchWeightGrad", 1, ("M", "H"), _wgrad_build, _wgrad_signature,
-    doc="torch 2.14 CUDA autograd of HF LlamaRMSNorm's weight (bf16) for one of its H columns on bits: bf16(sum f32(bf16(dy "
-        "hb))) over M tokens, the sum Reduce.cuh's column order at `column_ctas` CTAs on sm_120; NaN 0x7FFF")
+    doc="torch 2.14 CUDA autograd of HF's RMS norm weight (bf16) for one of its H columns on bits: bf16(sum f32(bf16(dy "
+        "hb))) over M tokens, the sum Reduce.cuh's column order at `column_ctas` CTAs on cc 12.0's 188 SMs; NaN 0x7FFF")
 
 
 # --- SiLU ------------------------------------------------------------------------------------------------------------------
