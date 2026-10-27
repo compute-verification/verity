@@ -362,7 +362,7 @@ theorem endsW_of (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg �
   have hkc : keyCopy p ht wt q.key = _root_.Flock.Readable.copyOf p 0 ht wt (r0 / cS.g) (r0 % cS.g) 0 := by
     simp only [keyCopy, hk, hc0, Nat.add_zero]
   rw [hkc, he2]
-  obtain ⟨hi', hnames, hrow⟩ := copy_rowElems hsh.2 hr hss hsv hpc hxO ht hpar hshp hholo hpart hiN hoN r0
+  obtain ⟨hi', -, hnames, hrow⟩ := copy_rowElems hsh.2 hr hss hsv hpc hxO ht hpar hshp hholo hpart hiN hoN r0
   have hPP : RecVStar.partPorts (DecompBR.shI v.2.1 v.2.2) q.key.1 = .ok P := partPorts_of hS1 hgs hgj
   rw [hshI] at hPP
   obtain ⟨_hPs, hnm⟩ := hnames P hPP
