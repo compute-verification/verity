@@ -342,7 +342,7 @@ class MatchOracle:
         AddScalar / Square / Mean / Rsqrt / ScaleRow / Narrow ... all hinted `model.layers.N.input_layernorm`) is read at the producer's
         instances only; when the producer family occurs k > 1 times per row (the fused norm's two NarrowF32ToBf16: residual, normed) the
         manifest must say which by `ordinal` (index in Program/fold order per row), else the member is 'ambiguous producer' -- partial,
-        never guessed from which candidate happens to equal the committed bytes (that would make F-cb-03 invisible).
+        never guessed from which candidate happens to equal the committed bytes (that would hide a swapped residual / normed pair).
 
         An `interior` producer (a `call_boundaries` row, op path `<module>/<fx node>`) is read at its module's instances of the producer
         family.  When every row's group holds the same k > 1 producer instances and their member views together are the identity's
@@ -949,7 +949,7 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
                             "pairs": len(padding_pairs), "steps": sorted({s for s, _ in padding_pairs}),
                             "pair_list": [[s, r] for s, r in sorted(padding_pairs)],          # the pairs themselves, for the cross-document check
                             "rule": "bot-by-enablement entries materialize identities the executed prefix left inactive: no oracle value exists; "
-                                    "their words are checked == bot_word by the inactive-stratum check, not by the oracle (LIFTING-SPEC v0.7 B9.1)"}}
+                                    "their words are checked == bot_word by the inactive-stratum check, not by the oracle"}}
                if padding_not_cmp else {}),
             "steps_compared": sorted(steps_cmp), "steps_not_snapshotted": steps_not_snap, "complete": complete,
             "attribution": {"complete": attribution_complete, "pairs": len(pairs_seen), "unverified": attrib_missing[:max_report], "unverified_n": len(attrib_missing),

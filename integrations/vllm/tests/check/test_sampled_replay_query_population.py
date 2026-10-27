@@ -289,7 +289,7 @@ def test_f_moe_r17_05_batch_level_planes_are_classified_per_listed_request_and_e
 def test_r17_26_the_executed_prefix_classifies_not_executed_identities_by_name_and_never_shrinks_the_query(world):
     """A request that stopped at a declared EOS executed n_exec = min(a_r + LAG, cap) steps: the manifest of
     record stays the cap-length population (same query_total, same digests); its identities at request-relative steps >= n_exec are the
-    NAMED class not-executed(R17-1, a_r, LAG) -- a third bucket beside reached / uncovered, out of the sampling pool (never a stratum that
+    NAMED class not-executed(a_r, LAG) -- a third bucket beside reached / uncovered, out of the sampling pool (never a stratum that
     grades 'not evaluated'), on the scope line; reached + uncovered + not-executed == |Q(P)|.  A prefix whose early stop is not a declared
     EOS is NOT classified and fails the checks by name."""
     man = _manifest_for(world)
@@ -464,7 +464,7 @@ def test_f_r17b_39_the_last_phase_is_anchored_to_the_last_executed_step_and_the_
 
 
 def _rule_like_pad(served, *, cap, A, eos):
-    """A stand-in with pad's `executed_prefix_by_rule` semantics (verity.ir/continuation.py a80a99ae7): the FIRST EOS stops, the lag slot(s)
+    """A stand-in with `executed_prefix_by_rule`'s semantics (program/lifting/continuation.py): the FIRST EOS stops, the lag slot(s)
     after it are executed rows without a served token, served past the first EOS / an early stop without EOS / over the cap are problems."""
     eos = set(eos)
     a = len(served)
@@ -474,9 +474,9 @@ def _rule_like_pad(served, *, cap, A, eos):
     if a > cap:
         problems.append(f"served {a} tokens over the declared cap {cap}")
     if past:
-        problems.append(f"served past an EOS at index {first}: positions {past} (rev F-r17-14: the rule stops at the FIRST EOS)")
+        problems.append(f"served past an EOS at index {first}: positions {past} (the rule stops at the FIRST EOS)")
     if a < cap and first is None:
-        problems.append(f"served {a} of its cap {cap} but no served token is a declared EOS id (F-pm-24)")
+        problems.append(f"served {a} of its cap {cap} but no served token is a declared EOS id")
     n = cap if first is None else min(first + 1 + A, cap)
     return {"ok": not problems, "executed_prefix_len": n, "eos_step": first if not problems else None, "lag_steps": list(range(first + 1, n)) if first is not None else [],
             "first_eos_index": first, "served_past_first_eos": past, "cap_exhausted": (a == cap and first is None), "eos_stop": first is not None and not past,

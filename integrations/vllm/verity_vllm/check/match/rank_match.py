@@ -375,7 +375,7 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
         # the value leg over the STORED steps (tp2_match `check` part 2: received == AllReduce2/AllGather2(part_rank0, part_rank1) bit-exact,
         # both ranks) is REQUIRED here: every common (step, k) must have been checked, none mismatching
         c = _Check(res, "provenance", "tp2_match provenance: received == Def(part_rank0 .. part_rank{world-1}) bit-exact at every (step, k), every rank, "
-                                      "over stored tensors DIGEST-BOUND to the recorder rows this leg loaded (rev F-r17-03)")
+                                      "over stored tensors DIGEST-BOUND to the recorder rows this leg loaded")
         n_checked, n_left, n_mis = int(provenance.get("collectives_checked") or 0), int(provenance.get("fused_norm_unfused_left_to_commit") or 0), int(provenance.get("n_mismatches") or len(provenance.get("mismatches") or []))
         if not provenance.get("pass"):
             c.fail(f"provenance FAIL: {n_mis} mismatches, first {json.dumps((provenance.get('mismatches') or [None])[0])[:200]}")
@@ -386,7 +386,7 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
         # digests (an older record, or hand-written) or from another run is refused by name.
         psha = provenance.get("recorder_sha256")
         if not isinstance(psha, dict) or not psha:
-            c.fail("provenance record carries no recorder_sha256: not bound to any recorder rows (another run, a hand-written file, or a pre-F-r17-03 tp2_match)")
+            c.fail("provenance record carries no recorder_sha256: not bound to any recorder rows (another run, a hand-written file, or an older tp2_match)")
         elif recorder_sha256 is None:
             c.fail("the recorder files' digests were not given to this leg (recorder_sha256=None): the provenance record cannot be bound to the rows loaded")
         else:

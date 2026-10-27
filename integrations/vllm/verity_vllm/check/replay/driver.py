@@ -1,4 +1,4 @@
-"""Sampled exact VU replay -- the local replay check of record (serialized as `C2`; DECISIONS-2 §4 C2).
+"""Sampled exact VU replay -- the local replay check of record (serialized as `C2`).
 
 For a sampled VU `V` (one Call of the Program) the check is
 
@@ -617,7 +617,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     # AcceleratorError; every VU would come back 'not evaluated' and the honest row would FAIL closed): the caller names the retention and
     # the replay runs SERIAL in the parent's own CUDA context.  A child that hits the device anyway is a pool failure -> serial fallback.
     if retention == "device" and int(workers) > 1:
-        pool_note = "device-retained committed store: forked evaluator disabled, serial replay in the parent's CUDA context (F-cb-44)"
+        pool_note = "device-retained committed store: forked evaluator disabled, serial replay in the parent's CUDA context"
         workers = 1
     results, workers, note, prewarmed, memory = _evaluated(_one, picked, indices, weights, int(workers), worker_peak)
     pool_note = note or pool_note

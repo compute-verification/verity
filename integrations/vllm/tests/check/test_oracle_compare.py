@@ -453,7 +453,7 @@ def test_exploded_module_is_read_at_the_manifest_producer_with_ordinal(tmp_path)
     prod = {(op, "0"): {"spec": "NarrowF32ToBf16_v1", "ordinal": 1}, (op, "1"): {"spec": "NarrowF32ToBf16_v1", "ordinal": 0}}
     res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed), producers=prod)
     assert res["compared"] == 4 and res["equal"] == 4 and res["mismatch_n"] == 0, res
-    # the same members with the residual/normed bytes exchanged under their names (F-cb-03 on a fused norm): named, not re-guessed
+    # the same members with the residual/normed bytes exchanged under their names (on a fused norm): named, not re-guessed
     committed[(0, f"{op}/0")], committed[(0, f"{op}/1")] = committed[(0, f"{op}/1")], committed[(0, f"{op}/0")]
     res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed), producers=prod)
     assert res["result"] is False and res["mismatch_n"] == 4 and {m["identity"]["output_member"] for m in res["mismatch"]} == {"0", "1"}
@@ -554,7 +554,7 @@ def test_verdict_names_the_failing_component_not_the_oracle_partial_note():
           "why": "root_compare: run root 0123456789abcdef != expected root fedcba9876543210 (--expect-root)",
           "oracle_compare": {"result": None, "why": partial_note, "grade": "attribution-complete", "compared": 848, "mismatch_n": 0},
           "components": {"root_compare": {"result": False, "why": "run root 0123456789abcdef != expected root fedcba9876543210 (--expect-root)",
-                                          "reference": "--expect-root (caller-pinned root; independent only if produced by another tree/pod, COORD M-0286)"},
+                                          "reference": "--expect-root (caller-pinned root; independent only if produced by another tree/pod)"},
                          "oracle_compare": {"result": None, "why": partial_note, "grade": "attribution-complete", "reference": "live Match oracle of this attempt (--match-dir)"}}}
     commit = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "binding": _bnd(1),
               "value_correspondence": vc, "oracle_compare": {"result": None, "why": partial_note, "compared": 848, "attribution": {"complete": True}}}

@@ -90,7 +90,7 @@ OLD_TO_NEW: list[dict[str, str]] = [
     {"old": "run_root", "where": "runs.jsonl commit", "new": "every check's inputs.run_root"},
     {"old": "rules_version", "where": "runs.jsonl commit", "new": "verdict.execution.rules_version"},
     {"old": "manifest_verify.ok", "where": "commit/manifest_verify.json", "new": "required_value_coverage/manifest_of_record_verified"},
-    {"old": "commit_summary.pass", "where": "commit_summary.json", "new": "compat.commit_summary_pass (deprecated, F-r19-int-21: rc == 0 and tokens_equal)"},
+    {"old": "commit_summary.pass", "where": "commit_summary.json", "new": "compat.commit_summary_pass (deprecated: rc == 0 and tokens_equal)"},
     {"old": "commit_summary.rc", "where": "commit_summary.json", "new": "compat.rc; verdict.outcome is not PASS when rc != 0"},
     {"old": "commit_summary.openings", "where": "commit_summary.json", "new": "deprecated (always None since runs.jsonl stopped carrying it); runtime_match/openings is the fact"},
     {"old": "commit_summary.coverage", "where": "commit_summary.json", "new": "deprecated (always None); required_value_coverage/manifest_coverage is the fact"},

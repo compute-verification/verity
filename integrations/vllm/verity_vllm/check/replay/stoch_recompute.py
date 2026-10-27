@@ -246,7 +246,7 @@ def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set 
     served = list(served)
     if eos_ids is None:
         if len(served) < cap:
-            return None, info | {"unjudged": "the Program declares no stop_rule.eos_token_ids: an early stop cannot be read as an EOS stop (F-pm-24)"}
+            return None, info | {"unjudged": "the Program declares no stop_rule.eos_token_ids: an early stop cannot be read as an EOS stop"}
         eos_ids, t_eos = set(), None
     else:
         t_eos = next((k + 1 for k, y in enumerate(served[:cap]) if y is not None and int(y) in eos_ids), None)
@@ -278,7 +278,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
         nothing after; a request that runs to C has no lag slot (nothing is scheduled past the length bound);
       * expected positions = {prompt_len - 1 + (t - 1) : r_t = 1}; every drawn position not in the set is 'the RNG advanced without r_t'
         (a draw past the cap without an EOS, a second draw after the lag slot, a draw for another row's counter), every expected position
-        not drawn is 'an executed slot did not draw' (a deleted step, F-pm-24 territory); one draw per engine step, in order;
+        not drawn is 'an executed slot did not draw' (a deleted step); one draw per engine step, in order;
       * an undeclared stop rule with an early stop, or an EOS before the cap with the profile unattested, leaves the request UNJUDGED --
         named, never a pass.
 
@@ -396,7 +396,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
                          + f"): {what} -- the RNG advanced without r_t")
         if missing:
             probs.append(f"draw ledger {rid}: {len(missing)} executed slot(s) did not draw (positions {missing[:4]} of the expected "
-                         f"{expected[0]}..{expected[-1]}): a deleted step (F-pm-24 territory)" + (" -- the lag slot did not draw" if t_eos is not None and t_eos < T and missing[-1] == expected[-1] else ""))
+                         f"{expected[0]}..{expected[-1]}): a deleted step" + (" -- the lag slot did not draw" if t_eos is not None and t_eos < T and missing[-1] == expected[-1] else ""))
         out["requests"][rid] = ent
     n_ex = out["requests_with_eos_before_cap"]
     out["measured"] = (f"R5 MEASURED on this record: {n_ex} request(s) stopped at EOS before the cap; the drawn positions of every request equal "
