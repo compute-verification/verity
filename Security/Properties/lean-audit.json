@@ -52,7 +52,8 @@
   "Properties.Composition",
   "Properties.Nci.Protocol",
   "Properties.Verity.Soundness",
-  "Properties.Verity.Game"
+  "Properties.Verity.Game",
+  "Properties.Verity.ServingRoute"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -531,6 +532,7 @@
   },
   "Properties.Verity": {
    "imports": [
+    "Properties.Verity",
     "CoreOnsite",
     "Properties.Composition",
     "Properties.Flock.Circuit.CircuitOf",
@@ -539,7 +541,7 @@
     "Definitions.Hash.RowLeaf",
     "Flock.Hash"
    ],
-   "except": [],
+   "except": ["Properties.Verity.ServingRoute"],
    "why": "soundness at the verifier of record is stated over onsite's compiled code and its SHA-512, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the period model's vocabulary (Accounting.PeriodLive, the one definition of a period), the shared game and the row-leaf opening it reads the commitment through, never over a proof"
   },
   "Properties.Pouw.Period": {
@@ -586,6 +588,11 @@
    "imports": ["NetworkCheck.Period", "Mathlib.Algebra.BigOperators.Fin"],
    "except": [],
    "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, never a proof"
+  },
+  "Properties.Verity.ServingRoute": {
+   "imports": ["Properties.Verity.Soundness", "Definitions.Accounting.Assumptions.ServingRoute"],
+   "except": [],
+   "why": "the serving route end to end is stated over Verity.Soundness's vocabulary, game and event (Properties.Verity.Soundness) and the serving route's parameters, play and named premises (Definitions.Accounting.Assumptions.ServingRoute), never over a proof"
   }
  },
  "reads_exempt": {
@@ -2422,6 +2429,9 @@
    "assumptions": [],
    "type_hash": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
   },
+  "Verity.SecurityProofs.OnsiteServingEndToEnd": {
+   "owner": "@training"
+  },
   "Verity.soundness_of_subprotocols": {
    "owner": "@proofs",
    "signature": ["Verity.soundness_of_subprotocols : Verity.Soundness"],
@@ -3580,7 +3590,8 @@
    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecureWide": "frozen: endToEndRingAt with c from P2RingRoundSecureWide, at every N it covers (2^19 to 2^27); a bound on a game's probability in the ring model, not a property of one function, resting on the open conjecture P2RingRoundSecureWide, unchecked in N above 2^25",
    "Pous.EndToEnd.SecurityProofs.endToEndRingDemo": "frozen: endToEndRingOfRoundSecureWide at Demo B's store (1038*2^16 blocks, state bound 1,060,008,348,186 bits); a bound on a game's probability in the ring model, not a property of one function, resting on the open conjecture P2RingRoundSecureWide, unchecked in N above 2^25",
    "Pous.Period.SecurityProofs.periodHeldAt": "frozen (premise): periodHeld at every point of the composed check (Pous.EndToEnd.AcceptedAt: SetupProtocol.protocol.check at the point's parameters and PousCheck.Run.checkAt) and every block count N of the ring game from 2^19 to 2^27; stated over an abstract joint run of the device model and takes CoinCommitHides at N, the open conjecture P2RingRoundSecureWide and Pous.Period.RingDeviceAt (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run, read at N), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
-   "Pous.Period.SecurityProofs.periodHeldDemo": "frozen (premise): periodHeldAt at Demo B's store, N = 1038*2^16 blocks, state bound 1,060,008,348,186 bits; its premises are periodHeldAt's."
+   "Pous.Period.SecurityProofs.periodHeldDemo": "frozen (premise): periodHeldAt at Demo B's store, N = 1038*2^16 blocks, state bound 1,060,008,348,186 bits; its premises are periodHeldAt's.",
+   "Verity.SecurityProofs.OnsiteServingEndToEnd": "frozen (no-function): The serving route end to end at onsite's verifier of record: for every strategy of Verity.Vocab.game, Pr[Accepts ∧ Registered ∧ success ∧ windows < windowsMin N] is at most the summed subprotocol errors plus delta_b plus eta. Verity.Soundness and the five subprotocol targets are hypotheses (their event, Accepts ∧ Registered ∧ some claim of Vocab.Holds fails, read as is), and ServingBridge and ServingCoverage (Security/Definitions/Accounting/Assumptions/ServingRoute.lean) are named premises over the experiment, not a function's acceptance; it is Accounting.SecurityProofs.ServingRoute.ServingEndToEnd at that event, whose honest and nontrivial witnesses (LEAN-66) check the route, and it rests on ActivationRate at serving scale through the bridge's PerBlockCap, which is contested (note:training-20261024T2336Z-report-tvi-findings, E1's P0)."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {

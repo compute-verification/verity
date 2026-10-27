@@ -4337,6 +4337,24 @@
   "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial": {
    "owner": "@training"
   },
+  "Accounting.SecurityProofs.ServingRoute.ServingEndToEnd": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.ServingRoute.ServingEndToEnd_honest": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.ServingRoute.ServingEndToEnd_nontrivial": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.ServingRoute.ServingPerBlockCap": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.ServingRoute.ServingPerBlockCap_honest": {
+   "owner": "@training"
+  },
+  "Accounting.SecurityProofs.ServingRoute.ServingPerBlockCap_nontrivial": {
+   "owner": "@training"
+  },
   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Sketch.CommitThenProject : Accounting.Guarantees.Sketch.CommitThenProject"],
@@ -12315,7 +12333,13 @@
    "Accounting.SecurityProofs.Overhead.ReferenceBound_nontrivial": "frozen (no-function): ReferenceBound's nontrivial witness (LEAN-66): without the reference's success (over the empty class, whose threshold is infinite) or its size (the unit task's circuits with an operation gate) it is false; a negated statement, not a function's acceptance.",
    "Accounting.SecurityProofs.Overhead.OverheadOfReference": "frozen (no-function): The overhead T(eta; A) / T(eta; A_phys) at least rho (Step 8), from ThresholdOfPointwise's and ReferenceBound's hypotheses over an arbitrary task, two classes and a reference circuit: not a function's acceptance.",
    "Accounting.SecurityProofs.Overhead.OverheadOfReference_honest": "frozen (no-function): OverheadOfReference's honest witness (LEAN-66): its hypotheses hold at the NOT task with rho = 2, A the circuits with at least two operation gates, A_phys every circuit and the NOT circuit as the reference; a statement about a constructed task, not a function's acceptance.",
-   "Accounting.SecurityProofs.Overhead.OverheadOfReference_nontrivial": "frozen (no-function): OverheadOfReference's nontrivial witness (LEAN-66): without the coverage exception, the pointwise size bound or the reference's success it is false at the unit task; a negated statement, not a function's acceptance."
+   "Accounting.SecurityProofs.Overhead.OverheadOfReference_nontrivial": "frozen (no-function): OverheadOfReference's nontrivial witness (LEAN-66): without the coverage exception, the pointwise size bound or the reference's success it is false at the unit task; a negated statement, not a function's acceptance.",
+   "Accounting.SecurityProofs.ServingRoute.ServingPerBlockCap": "frozen (no-function): The serving route's per-block cap (FanOutBound's per-block step at the serving scale), over an arbitrary declaration, its counted operations and product occurrences, and a decoder for every registration within the serving budget (c_S, k_S): Lemma 1's EvaluatesBlocks and the activation premise ActivationRate (Security/Definitions/Nci/Assumptions/Ldl.lean) are named premises about them, not a function's acceptance. ActivationRate at serving scale is contested: a server-day block can replay training steps from data (note:training-20261024T2336Z-report-tvi-findings, E1's P0).",
+   "Accounting.SecurityProofs.ServingRoute.ServingEndToEnd": "frozen (no-function): The serving route end to end, over an arbitrary causal game (Verity.Game) at every strategy and an arbitrary play of the serving route (Accounting.ServingRoute.Play): the joint guarantee's bound is a hypothesis and ServingBridge and ServingCoverage (Security/Definitions/Accounting/Assumptions/ServingRoute.lean) are named premises over the experiment, not a function's acceptance; Verity.OnsiteServingEndToEnd (security_properties) instantiates it at Verity.Soundness's event.",
+   "Accounting.SecurityProofs.ServingRoute.ServingPerBlockCap_honest": "frozen (no-function): ServingPerBlockCap's honest witness (LEAN-66): at a constructed declaration (Counter's one constant gate, a product of one activation) with the decoder that outputs its program, its premises hold together at (c_S, k_S) = (1, 0), beta = 1 and Lambda = 0, with one operation counted; an existential over declarations and decoders, not a function's acceptance. It rests on no run and no art:.",
+   "Accounting.SecurityProofs.ServingRoute.ServingPerBlockCap_nontrivial": "frozen (no-function): ServingPerBlockCap's nontrivial witness (LEAN-66): at Counter's gate, without ActivationRate (a decoder printing the activations on the empty program) or without EvaluatesBlocks (a decoder that outputs nothing), every other premise holds and the cap fails; a negated statement over arbitrary declarations, not a function's acceptance.",
+   "Accounting.SecurityProofs.ServingRoute.ServingEndToEnd_honest": "frozen (no-function): ServingEndToEnd's honest witness (LEAN-66): at a constructed experiment (the game with one run) on one server with one window of one gate in the serving class, whose verifier accepts and whose computation succeeds with probability 1, its hypotheses hold at errors 0 and windowsMin N = 1 > 0; an existential over games, not a function's acceptance, and not the deployed instance at the onsite reference numbers.",
+   "Accounting.SecurityProofs.ServingRoute.ServingEndToEnd_nontrivial": "frozen (no-function): ServingEndToEnd's nontrivial witness (LEAN-66): at a constructed experiment whose verifier accepts every run, dropping the joint guarantee's bound, ServingBridge or ServingCoverage makes it false (a play with no window, outside the class, or one window counting 1 < N = 2); a negated statement over arbitrary games, not a function's acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
