@@ -11,6 +11,10 @@
 //   s, ss       W in shared memory ([word][thread]); the chaining value in registers, or in shared memory too
 //   d, ds, dr   two rows a thread interleaved (rounds2): W in registers or shared memory, the chaining values in shared
 //               memory (d, ds) or registers (dr)
+//   rs<SSss>    rs with sha512x.cuh's V: the pipe of S0, S1, s0 and s1's shifts (README "Compression variants"), some on
+//               IMAD, which issues to the FMA pipe beside the ALU: with one warp a scheduler the ALU's throughput bounds
+//               rs, and the FMA pipe is idle
+// The rest use V 0.
 // Each at the register caps CAPS (__maxnreg__; 255 none), launched as one CTA an SM (its shared memory) of 1, 2 or 4
 // warpgroups.
 //
@@ -46,22 +50,28 @@ constexpr int ROWB = 512, TSTRIDE = 528, TROWS = 128, TILE_BYTES = TROWS * TSTRI
 constexpr int MIN_SMEM = 120 * 1024;  // more than half an SM's shared memory: one CTA an SM
 
 struct VarSpec {
-  int chains, st_smem, w_smem, roll, sx;
+  int chains, st_smem, w_smem, roll, sx, v;
 };
-static const char* const NAMES[] = {"r", "r0", "r2", "rs", "s", "ss", "d", "ds", "dr"};
+#define LR_V(a, b, c, d) ((a) | (b) << 2 | (c) << 4 | (d) << 6)
+static const char* const NAMES[] = {"r", "r0", "r2", "rs", "s", "ss", "d", "ds", "dr", "rs0011", "rs0033", "rs1100", "rs3300"};
 __host__ __device__ constexpr VarSpec spec(int var) {
   switch (var) {
-    case 0: return {1, 0, 0, 1, 1};
-    case 1: return {1, 0, 0, 0, 1};
-    case 2: return {1, 0, 0, 2, 1};
-    case 3: return {1, 1, 0, 1, 0};
-    case 4: return {1, 0, 1, 1, 0};
-    case 5: return {1, 1, 1, 1, 0};
-    case 6: return {2, 1, 0, 1, 0};
-    case 7: return {2, 1, 1, 1, 0};
-    default: return {2, 0, 0, 1, 0};
+    case 0: return {1, 0, 0, 1, 1, 0};
+    case 1: return {1, 0, 0, 0, 1, 0};
+    case 2: return {1, 0, 0, 2, 1, 0};
+    case 3: return {1, 1, 0, 1, 0, 0};
+    case 4: return {1, 0, 1, 1, 0, 0};
+    case 5: return {1, 1, 1, 1, 0, 0};
+    case 6: return {2, 1, 0, 1, 0, 0};
+    case 7: return {2, 1, 1, 1, 0, 0};
+    case 8: return {2, 0, 0, 1, 0, 0};
+    case 9: return {1, 1, 0, 1, 0, LR_V(0, 0, 1, 1)};
+    case 10: return {1, 1, 0, 1, 0, LR_V(0, 0, 3, 3)};
+    case 11: return {1, 1, 0, 1, 0, LR_V(1, 1, 0, 0)};
+    default: return {1, 1, 0, 1, 0, LR_V(3, 3, 0, 0)};
   }
 }
+#undef LR_V
 
 // the shared memory a CTA of `wgs` warpgroups takes: the tile, then each warpgroup's schedules, then its chaining values
 __host__ __device__ constexpr int w_words(const VarSpec& v) { return v.w_smem ? v.chains * 16 * 128 : 0; }
@@ -78,7 +88,7 @@ __device__ __forceinline__ void hash_chunk(const uint8_t* tile, const int* rows,
   if constexpr (V.sx) {
     u64 w[16];
     sx::load_chunk(tile + rows[0] * TSTRIDE + 128 * c, w);
-    sx::compress<0, V.roll>(st[0], w);
+    sx::compress<V.v, V.roll>(st[0], w);
   } else {
     u64 v[C][8];
 #pragma unroll
@@ -94,7 +104,7 @@ __device__ __forceinline__ void hash_chunk(const uint8_t* tile, const int* rows,
         sx::load_chunk(tile + rows[1] * TSTRIDE + 128 * c, W1);
         sx::rounds2<0>(v[0], W0, v[1], W1);
       } else {
-        sx::rounds<0, 1>(v[0], W0);
+        sx::rounds<V.v, 1>(v[0], W0);
       }
     } else {
       u64 w0[16], w1[16];
@@ -103,7 +113,7 @@ __device__ __forceinline__ void hash_chunk(const uint8_t* tile, const int* rows,
         sx::load_chunk(tile + rows[1] * TSTRIDE + 128 * c, w1);
         sx::rounds2<0>(v[0], w0, v[1], w1);
       } else {
-        sx::rounds<0, 1>(v[0], w0);
+        sx::rounds<V.v, 1>(v[0], w0);
       }
     }
 #pragma unroll
@@ -165,8 +175,8 @@ struct Kern {
 };
 #define CAPS_OF(V) {V, 64, rate<V, 64>}, {V, 72, rate<V, 72>}, {V, 80, rate<V, 80>}, {V, 96, rate<V, 96>}, \
                    {V, 128, rate<V, 128>}, {V, 255, rate<V, 255>}
-static const Kern KERNS[] = {CAPS_OF(0), CAPS_OF(1), CAPS_OF(2), CAPS_OF(3), CAPS_OF(4),
-                             CAPS_OF(5), CAPS_OF(6), CAPS_OF(7), CAPS_OF(8)};
+static const Kern KERNS[] = {CAPS_OF(0), CAPS_OF(1), CAPS_OF(2), CAPS_OF(3),  CAPS_OF(4),  CAPS_OF(5), CAPS_OF(6),
+                             CAPS_OF(7), CAPS_OF(8), CAPS_OF(9), CAPS_OF(10), CAPS_OF(11), CAPS_OF(12)};
 
 static u64 splitmix(u64 i) {
   u64 z = (u64)SEED + (i + 1) * 0x9e3779b97f4a7c15ull;

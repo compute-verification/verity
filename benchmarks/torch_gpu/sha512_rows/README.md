@@ -76,7 +76,7 @@ A trailing `s` runs the rounds straight-line (`engine.variant_flags`).
 On sm_90 IMAD issues to the FMA pipe, beside the ALU's SHF, LOP3 and IADD3, so a split can issue more than the ALU alone.
 The default is `0000`, plain funnel shifts; `pouw` is commit_gpu's `sha::compress`. `rows.cu` builds the row kernel in every variant in `VARIANTS`; `SHA512_ROWS_V` sets the other kernels' variant.
 
-Mode 3 is the balanced schedule: `0033` takes S0 and S1 off the ALU. Two of the schedule's forms don't survive ptxas: a
+Mode 3 is the balanced schedule: `0033` takes s0 and s1 off the ALU. Two of the schedule's forms don't survive ptxas: a
 mad.wide with a 64-bit addend becomes a mul.wide and an IADD3, so an add can't leave the ALU that way, and a mad.hi's
 addend costs two moves. `rotr3` uses neither.
 
