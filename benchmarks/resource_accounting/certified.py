@@ -42,13 +42,15 @@ import sys
 from fractions import Fraction
 from pathlib import Path
 
+from verity.core.protocols.profile import WINDOW_DELTA
+
 ROOT = Path(__file__).resolve().parents[2]
 TWINS = ROOT / "benchmarks" / "pouw" / "harness" / "price_twins.py"
 CLEAR = ROOT / "benchmarks" / "pouw" / "clear"
 #: the panel line and version Pearl-C's arms run (`price_twins.statement` drops the hashing format)
 SCHEME, LINE, VERSION = "pearl-c-sm120-v1-h3", "pearl-c-sm120", "v1-h3"
 EPS_S = Fraction(1, 1000)
-DELTA = Fraction(1, 2 ** 40)
+DELTA = WINDOW_DELTA
 #: the PR whose (n, k) and layout lookup prices γ at the Llama linears (compute-accounting's)
 GAMMA_PIN = "#1809"
 #: the served layout whose twin is γ's max over its linears

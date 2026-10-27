@@ -236,6 +236,7 @@ from verity.core.protocols.certifier.lean_audit import Audit
 from verity.core.protocols.certifier.schedule import ClockSync, expected_grids, handing_buckets
 from verity.core.protocols.certifier.served import Admission, ServedProfile
 from verity.core.protocols.certifier.service import LinkWindows
+from verity.core.protocols.profile import WINDOW_DELTA
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs.service import Registration
 
@@ -255,7 +256,7 @@ REVEAL_MARGIN_S = 300.0
 #: in time has handed it before
 PACED_MS = 50.0
 PROOF_DEADLINE_S = 600.0
-DELTA = 2.0 ** -40
+DELTA = float(WINDOW_DELTA)
 STRATEGIES = ("honest", "late", "extra")
 TAMPERS = ("late", *ar.LIVE_TAMPERS)
 # `check`'s verdict on each run it expects to accept: honest, and token and byte, whose frames only the I/O tie reads

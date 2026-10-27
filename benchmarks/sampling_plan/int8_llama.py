@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from inputs import (EPILOGUE, I, KEY, MODELS, S8_STEP, SCHEMES, SHA512, Model, leaf_chain, observations,  # noqa: E402
                     s8_coord_ands, serve_rows, tree_chain)
 
+from verity.core.protocols.profile import WINDOW_DELTA  # noqa: E402
 from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, pressure  # noqa: E402
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
 from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
@@ -35,7 +36,7 @@ from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment
                                                            needs_benchmark, overlaps, perturb, row_ands, structure,
                                                            weigh)
 
-DELTA = 2.0 ** -40
+DELTA = float(WINDOW_DELTA)
 CHUNKS = (2048, 1024, 512, 256, 128, 64, 32)
 WINDOWS = {"round": 1, "hour": 3600 / 12.6, "day": 86400 / 12.6, "week": 48_000}
 TARGETS = (1e-3, 1e-4)

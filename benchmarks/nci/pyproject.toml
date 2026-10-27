@@ -12,4 +12,8 @@ inputs = [
   # tiers.CARD pins the ACCEL model's sm_120 card table, and CREDITED_CLOCK_HZ PoUW's H1 record (test_tiers.py)
   "Security/Definitions/Core/Accel/Sm120.lean",
   "verity/core/protocols/pouw/circuit/h1device.py",
+  # tiers' p_evade is the integrity profile's WINDOW_DELTA, and the rest is what importing the profile reads
+  "verity/core/protocols/profile.py",
+  "verity/__init__.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py", "verity/ml/__init__.py",
+  "verity/ml/circuits",
 ]

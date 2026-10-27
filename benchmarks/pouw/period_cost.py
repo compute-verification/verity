@@ -57,8 +57,10 @@ import sys
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+from verity.core.protocols.profile import WINDOW_DELTA
+
 A, B, P, P0 = 0.218, 0.998, 7 / 8, 0.5
-DELTA_S_LOG2 = 40
+DELTA_S_LOG2 = WINDOW_DELTA.denominator.bit_length() - 1
 EPS_FLAT = 0.00571
 TARGET = 0.01
 DAY = 86_400.0

@@ -58,6 +58,8 @@ import argparse
 import json
 import math
 
+from verity.core.protocols.profile import WINDOW_DELTA
+
 YEAR = 3.156e7
 GB = 8e9
 #: Lemma M's audit window: the most a helper can add to a store under audit is the side channel over it
@@ -109,7 +111,7 @@ DEFAULTS = {
     "f": 0.95, "pous_delta": 0.01, "pous_floor": 0.0, "t_read": 1e-3, "wipe_s": 3600.0, "hbm_gb": 768.0,
     "host_gb": 1900.0, "disk_gb": 0.0,
     "tau": 860.0, "export": 4.4e9, "nic": 3.2e12,
-    "share": 0.01, "overhead": 4.8e12, "replay": 1.1e5, "step_flop": 1.43e4, "p_evade": 2.0 ** -40, "identities": 1.0,
+    "share": 0.01, "overhead": 4.8e12, "replay": 1.1e5, "step_flop": 1.43e4, "p_evade": float(WINDOW_DELTA), "identities": 1.0,
     "luck": 8.0, "step_bits": 16.0, "intake_x": 1.0, "lag_s": 3600.0, "g": 1.0, "mfu": 0.4, "m": 1.0,
     "floor_steps": 1.0,
     "K": 2e7, "Gamma": 6.4e16, "d": 1.0, "e": 37248.0, "kappa": 0.6, "thread_bits": 4.46e7, "block_mults": 1.0,
