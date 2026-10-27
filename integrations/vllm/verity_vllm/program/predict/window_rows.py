@@ -242,6 +242,19 @@ def _op(d: Mapping[str, Any]) -> tuple[str, tuple[str, ...]]:
     return str(d["op_path"]), tuple(str(m[0]) for m in d["members"])
 
 
+def _sites(ops: Sequence[tuple[str, tuple[str, ...]]]) -> dict[tuple[str, tuple[str, ...]], tuple[str, tuple[str, ...], int]]:
+    """Each of a step's ops, in Program order, -> its site: its op path less its last ``/`` part (a call boundary's fx node,
+    which counts on over the request's steps, `query.manifest.bind`), its members' names, and its ordinal among the step's
+    ops there."""
+    seen: dict[tuple[str, tuple[str, ...]], int] = {}
+    out = {}
+    for op, members in ops:
+        at = (op.rsplit("/", 1)[0], members)
+        out[(op, members)] = (*at, seen.get(at, 0))
+        seen[at] = seen.get(at, 0) + 1
+    return out
+
+
 @dataclass
 class Served:
     """One request's served values by class node: its Program's rows as `ProgramIndex.describe` gives them, each with its
@@ -251,8 +264,9 @@ class Served:
     The request's prefill is its step 0: each op (its op path and members) a row a prompt position, or one row, its last
     position's, where prefill prunes it; the ops in the order of their last prompt position's rows, the one position that
     computes them all, which is the class Program's node order within a position however the prefill interleaves the
-    others. Step s ≥ 1 is position LP − 1 + s, a row each of those ops, matched to them by op. A row whose spec isn't its
-    class node's descriptor id is refused by name."""
+    others. Step s ≥ 1 is position LP − 1 + s, a row each of those ops, matched to them by site (`_sites`), since a call
+    boundary's op path names an fx node numbered over the request's steps. A row whose spec isn't its class node's
+    descriptor id is refused by name."""
     rows: Sequence[Mapping[str, Any]]
     read: Callable[[int, str, str, int, int], tuple[np.ndarray | None, str]]
     prefill: list[list[Mapping[str, Any]]] = field(init=False)
@@ -276,17 +290,20 @@ class Served:
         for (op, _), v in zip(order, self.prefill):
             if [int(d["row"]) for d in v] not in (list(range(self.LP)), [0]):
                 raise ValueError(f"{op}: prefill rows {[d['row'] for d in v]}, not one a prompt position nor the last one's")
+        site = _sites(order)
+        sites = set(site.values())
         self.decode = []
         for s in range(1, len(steps)):
             by: dict[tuple[str, tuple[str, ...]], Mapping[str, Any]] = {}
             for d in steps[s]:
                 if by.setdefault(_op(d), d) is not d:
                     raise ValueError(f"step {s}: op {_op(d)} served at two rows")
-            if missing := [o for o in order if o not in by]:
+            at = {v: by[o] for o, v in _sites(list(by)).items()}
+            if missing := [o for o in order if site[o] not in at]:
                 raise ValueError(f"step {s}: none of the prefill's op {missing[0]} ({len(missing)} ops)")
-            if extra := [o for o in by if o not in ops]:
+            if extra := [_op(d) for v, d in at.items() if v not in sites]:
                 raise ValueError(f"step {s}: op {extra[0]}, which the prefill never computes ({len(extra)} ops)")
-            self.decode.append([by[o] for o in order])
+            self.decode.append([at[site[o]] for o in order])
 
     @classmethod
     def of_record(cls, pi: Any, store: Any, rid: str, arrive: int) -> Served:

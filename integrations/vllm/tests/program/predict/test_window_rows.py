@@ -278,6 +278,35 @@ def test_a_served_prefill_is_read_by_op_however_its_rows_interleave(window):
     assert all(np.array_equal(a, b) for x, y in zip(got.values, s0.values) for a, b in zip(x, y))
 
 
+def test_a_call_boundary_is_matched_at_its_site_whatever_its_fx_node_counts_to(window):
+    """A call boundary's op path names its fx node, which counts on over the request's steps (the served int8 linears'
+    ``…/row_quant`` to ``…/row_quant_63`` at the prefill, ``…/row_quant_64`` on at the first decode step): a decode step's
+    op is the prefill's at its site, its op path less the fx node, by its ordinal among the step's ops there. One missing
+    there is refused."""
+    low, _f, _t, weights, slots = window
+    s0, K = slots[0], 32
+    rows, store = _served(low, s0, T=1)
+    by: dict[tuple, list[int]] = {}
+    for d in rows:
+        by.setdefault(tuple(m[0] for m in d["members"]), []).append(int(d["op_path"][2:]))
+    a, b = next(sorted(set(v))[:2] for v in by.values() if len(set(v)) > 1)
+
+    def spell(op: str, step: int) -> str:
+        k = int(op[2:])
+        n = 2 * step + (k == b)
+        return op if k not in (a, b) else "m/row_quant" + (f"_{n}" if n else "")
+
+    rows = [{**d, "op_path": spell(d["op_path"], d["step"])} for d in rows]
+    store = {(st, spell(op, st), m): v for (st, op, m), v in store.items()}
+    served = WR.Served(rows, _read(store))
+    assert [served.prefill[k][0]["op_path"] for k in (a, b)] == ["m/row_quant", "m/row_quant_1"]
+    assert [served.decode[0][k]["op_path"] for k in (a, b)] == ["m/row_quant_2", "m/row_quant_3"]
+    got = WR.Slot(low.fn, CLASS, SLOTS[0], weights, served)
+    assert all(np.array_equal(x, y) for u, w in zip(got.values, s0.values) for x, y in zip(u, w))
+    with pytest.raises(ValueError, match=r"step 1: none of the prefill's op \('m/row_quant_1', .*\) \(1 ops\)"):
+        WR.Served([d for d in rows if d["op_path"] != "m/row_quant_3"], _read(store))
+
+
 def test_the_registered_values_are_each_weights_rows_and_the_slot_rows(window):
     """Each weight's parameter is its words in rows of its reading port's (``row/v2``), the table's its V rows of H
     (``row-seg``), and the slot rows the slots' rows of i32s under the window's root, each committed under the committer's
