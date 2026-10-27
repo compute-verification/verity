@@ -518,8 +518,10 @@ def _attention_backward_sig(S):
     return (("do", q), ("qe", q), ("ke", kv), ("v", kv), ("y", y), ("p", p), ("cs", cs)), Tuple(q, kv, kv)
 
 
-_BLOCK = ("exact-model-tested; against the model composed of its Definitions' models at N = 16 with two query heads a KV head "
-          "and one (tests/test_torch_attention.py)")
+_BLOCK = ("exact-model-tested; against the model composed of its Definitions' models at N = 16 (tests/test_torch_attention.py), "
+          "which is the GPU's on every output and intermediate of both layers' attention, forward and backward, of the 2-layer "
+          "smollm2-135m step r20261027-031630-ce8e at S = 256 (difftest r20261027-051850-ed47, 10,452,992 words): sm_120 "
+          "(RTX PRO 6000, torch 2.14.0+cu130), 0 mismatches")
 
 EagerAttentionTorch = CompositeDefinition(
     "EagerAttentionTorch", 1, _BLOCK_KEYS, _attention_sig, _attention,
