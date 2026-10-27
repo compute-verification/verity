@@ -5,13 +5,13 @@ proofs themselves (`SampledProofs.OneStageZk.protocol`, `verity/sampled-proofs/o
 each session's files, which the caller hands in as blobs), work by proof of useful work (`PouwCheck.protocol`), space by
 PoUS's check of a run (`PousCheck.RunProtocol.protocol`), bandwidth by the remote bandwidth audit's session
 (`RemoteAudit.Protocol.protocol`), communication by the network certifier over the period
-(`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the period's link-windows certified and proved, and the bound `K`
-on what left the site), and the wipe by the memory challenger's streamed-label wipe of the period
-(`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`). Composed on the caller's blobs, every component accepts
-or onsite doesn't, and any component's rejection rejects onsite whatever the others answer. Before composing, in its
-commit phase, onsite checks the registration by NCI's check of record (`NciCheck.Protocol.protocol`, `verity/nci/v1`, a
-registration check and not a component): a registration it refuses refuses onsite, and so does one other than the
-registration sampled proofs' one-stage audit commits to (`Core.Composition.registeredB`).
+(`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the period's link-windows certified, and proved under one-stage
+v2 on the same blobs, and the bound `K` on what left the site), and the wipe by the memory challenger's streamed-label
+wipe of the period (`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`). Composed on the caller's blobs, every
+component accepts or onsite doesn't, and any component's rejection rejects onsite whatever the others answer. Before
+composing, in its commit phase, onsite checks the registration by NCI's check of record (`NciCheck.Protocol.protocol`,
+`verity/nci/v1`, a registration check and not a component): a registration it refuses refuses onsite, and so does one
+other than the registration sampled proofs' one-stage audit commits to (`Core.Composition.registeredB`).
 -/
 import CoreComposition.Blobs
 import CoreComposition.Cases

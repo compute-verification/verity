@@ -3,7 +3,8 @@
 * a served plan of the period's prompts, a link-window per group, puts period p's requests in link-window p, each with
   its own prompt, and has no period past the session's; the toy's stub serves those bodies (``ignore_eos``, no
   ``min_tokens``) and refuses any other, a body that still sends ``min_tokens`` among them;
-* N2's outcome of record is one-stage's answer on the link-window's one unit, and its refusal a reject;
+* `run_windows` reads each link-window's registration, one-stage v2 evidence, delivered salts and the files its proof
+  names off N2's verifier directory, with the link's v2 parameters and circuit file, and `_keep` keeps that circuit file;
 * the integrity leg's accepted audit is re-decided at the leg's δ (one-stage's bound on wrong units), and its refusal
   kept as it is;
 * the certified text matches the registered outputs by stream, else by content, and a changed byte is no match; a
@@ -11,9 +12,10 @@
 * a tied period reports its integrity audit's output class and Lean's refusals at the output port's registered read,
   and the leg asserts an honest relay's accepted audit proved the class and a tampered relay's was refused there;
 * `case_of`'s case of signed link-windows and the period's audit is the period check's (its Python mirror, which
-  `network-period` is held to): accepted with K and eps at each δ, the audit charged its Program's units' committed
-  bits (16 a unit, or 40), refused when N2 refused a link-window, the case names another first window or the audit's
-  registration another Program;
+  `network-period` is held to): the mirror runs one-stage v2 on each link-window's proof (undecided with no session's
+  proof), refuses a link-window v2 refuses, a case naming another first window and an audit registered over another
+  Program, and once v2 accepts the proofs accepts with K and eps at each δ, the audit charged its Program's units'
+  committed bits (16 a unit, or 40);
 * a loop period's value files give its requests' prompt tokens, steps and width, and its registered outputs are the
   stub's for those tokens (`torch_loop_stub.step_outputs`), so an honest certifier session's egress carries them; its
   audit's Program, rebuilt from its records (`audit_program`), is its registration's, of its population's units, each
@@ -40,10 +42,10 @@
 * the scan's answer of link-window 0 is its audit record re-decided at the leg's δ, a refusal a reject, beside its
   Program's descriptor, and `rows_case_of`'s case is the rows form's: a signed rows period of the mirror's
   (`period_case.build`), taken apart into a warden run's windows and scans and rebuilt, is the same commitment and
-  evidence, and the mirror accepts it;
-* each term of a case is decided at its share of the δ (`term_delta`): a signed clock case of two audits and a signed
-  rows period of the mirror's (three scans, its two audits in no term) are accepted with eps that δ, an unsplit one
-  with eps their sum, which `holds_at` refuses;
+  evidence, and the mirror refuses it by name at the scan's answer (one-stage v2 can't run the scan's proof);
+* each term of a case is decided at its share of the δ (`term_delta`): a signed clock case of two audits, its
+  link-windows' proofs accepted, is accepted with eps that δ, an unsplit one with eps their sum, which `holds_at`
+  refuses;
 * `block_leg` turns a period's accepted answer, clock form (r20261025-213746-7692's period 0) or rows form
   (r20261025-235229-305e's), into the block record's certifier leg, K held at each δ its exact eps is at most, and
   refuses a rejected answer; where #4454's ``verity/block-record/v1`` is in the tree, each leg fits its schema, is
@@ -69,6 +71,7 @@ from verity.core.protocols.certifier.certificate import SALT_BYTES, Certificate,
 from verity.core.protocols.certifier.schedule import ClockSync
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.ml.commitments.window import window_domain
 from verity.ml.crypto import lms
 from verity_all_protocols import runner as RN, table as T
 from verity_all_protocols.table import check_answer
@@ -120,11 +123,6 @@ def plan(periods: int) -> tuple[dict, dict]:
                           window_per_group=True)
 
 
-def link_window(w: int, program: str = "cc" * 64) -> dict:
-    return {"format": R.FORMAT, "protocol": R.PROTOCOL, "program": program, "partition": f"n2/{w}", "population": 1,
-            "law": {"law": "subset", "k": 1}, "window": {"kind": "served", "window": w}}
-
-
 def test_a_period_is_its_own_link_window_with_its_own_prompts_and_the_last_takes_the_tail():
     report, p = plan(3)
     assert [L.period_windows(p, i, len(PROMPTS), 3, [0, 1, 2]) for i in range(3)] == [[0], [1], [2]]
@@ -154,18 +152,6 @@ def test_the_stub_refuses_a_body_that_still_sends_min_tokens():
     assert S.refusal(fixed, STEPS) is None and S.refusal(varied, STEPS) is None
     for body in (fixed | {"min_tokens": STEPS}, fixed | {"min_tokens": 1}, varied | {"min_tokens": 1}):
         assert "min_tokens" in S.refusal(body, STEPS)
-
-
-def test_n2s_outcome_is_one_stages_answer_on_the_link_windows_one_unit():
-    reg = link_window(4)
-    a = L.answer_of_outcome(reg, {"units": [0]}, True, None)
-    assert check_answer(a) == a and a["verdict"] == "accept" and a["commitment"] == R.digest(reg)
-    p = CC.integrity(a["profile"])
-    assert p["delta"] == L.N2_DELTA and p["drawn"] == [("unit", 1)]
-    assert [(lv["name"], lv["size"], lv["draw"]) for lv in p["levels"]] == [("unit", 1, {"subset": 1})]
-    assert a["public"]["proved"] == a["public"]["drawn"] == [0]
-    r = L.answer_of_outcome(reg, {}, False, "N2's verifier of record: {}")
-    assert check_answer(r) == r and r["verdict"] == "reject" and r["profile"] is None and r["public"] is None
 
 
 @pytest.mark.parametrize("delta, bound", [(Fraction(1, 100), 921), (Fraction(1, 10 ** 6), 1022)])
@@ -252,16 +238,27 @@ def test_a_tied_period_reports_its_audits_output_class_and_lean_refusals_of_the_
     assert not any("witness" in f for f in L.PUBLIC_SESSION)
 
 
-def session_run(windows: list[int], refused: frozenset[int] = frozenset()) -> dict:
-    """A run as `run_windows` reads it, its link-windows signed by a small deployed-size LMS key."""
+ZK = PERIOD.ZK
+
+
+def session_run(windows: list[int], tmp: Path, refused: frozenset[int] = frozenset()) -> dict:
+    """A run as `run_windows` reads it: N2's link on the planned profile, under one of the one-stage difftest's
+    programs registered with a law that draws no unit (so one-stage v2 leaves each link-window undecided: no case here
+    carries a proof it accepts), its link-windows registered under their served domains and chained, each with v2's
+    evidence (no session, the mirror's public file, `one_stage_zk_case.undecided`) and two delivered salts, and signed
+    by a small deployed-size LMS key; a ``refused`` link-window's evidence names a unit no session proved, which v2
+    refuses. The circuit and public files are under ``tmp``."""
     report, _ = plan(len(windows))
     setup = cs.ar.Setup(report)
-    params = lms.Params(64, 4, 3)
+    params = lms.Params(64, 4, 4)
     key = lms.keygen(params, hashlib.sha512(b"certifier leg").digest())
-    session, link = hashlib.sha512(b"session").digest()[:lms.SESSION_BYTES], "n2"
+    session, link, run = hashlib.sha512(b"session").digest()[:lms.SESSION_BYTES], "n2", "r-leg"
     sync = ClockSync(setup.sync_set.deltas[0], setup.sync_set.rhos[0])
     q = iter(range(2 ** params.H))
     salts = iter(hashlib.sha512(b"salt %d" % i).digest()[:SALT_BYTES] for i in range(1 << 10))
+    prog, law = PERIOD.OS.SETUPS[0], PERIOD.EMPTY_LAWS[0]
+    part = {"program": prog.sha512, "query": prog.query}
+    (tmp / "circuit.txt").write_bytes(ZK.CIRCUIT)
 
     def sign(d: Direction, w: int, digest: bytes) -> dict:
         c = Certificate(key.I, link, d, w, digest, b"")
@@ -269,28 +266,81 @@ def session_run(windows: list[int], refused: frozenset[int] = frozenset()) -> di
         return L._cert({"digest": c.digest.hex(), "direction": c.direction.value, "key_id": c.key_id.hex(),
                         "link": c.link, "signature": c.signature.hex(), "window": c.window})
 
-    xs = {}
+    xs, previous = {}, None
     for w in windows:
-        reg = link_window(w)
-        xs[w] = {"registration": reg,
-                 "answer": L.answer_of_outcome(reg, {"units": [0]}, w not in refused, "N2's verifier of record: {}"),
+        root = hashlib.sha512(b"root %d" % w).hexdigest()
+        domain = window_domain(prog.sha512, PERIOD.OS.P.digest(part), PERIOD.VALUE, PERIOD.SCHEMA, PERIOD.LEAVES,
+                               f"{run}/{link}/{w}")
+        reg = PERIOD.OS._json(PERIOD.OS.R.record(
+            prog.program, prog.query, law, PERIOD.OS.SCHEME,
+            [{"port": PERIOD.VALUE, "root": root, "leaves": PERIOD.LEAVES, "domain": domain}], PERIOD.served(w),
+            previous=previous, partition=part))
+        previous = R.digest(reg)
+        one = ZK.undecided(prog, law, reg, {PERIOD.VALUE: root})
+        if w in refused:
+            one["proved_units"] = [0]
+        (tmp / f"w{w:03d}-pub-1.bin").write_bytes(ZK.PUBLIC)
+        xs[w] = {"registration": reg, "one_stage": one,
+                 "salts": {k: hashlib.sha512(b"%s %d" % (k.encode(), w)).hexdigest() * 3 for k in ("o0", "pub")},
+                 "blobs": [str(tmp / f"w{w:03d}-pub-1.bin")],
                  "certificates": [sign(Direction.EGRESS, w, hashlib.sha512(b"e%d" % w).digest()),
                                   sign(Direction.INGRESS, w, hashlib.sha512(b"i%d" % w).digest())],
                  "clock": L.clock_evidence({"session": session.hex()}
                                            | sign(Direction.EGRESS, w, clock_commitment(next(salts), sync)))}
     dep = {"certifier_key": {"params": [params.N, params.W, params.H], "public": lms.public_key(key).hex()},
-           "links": {"n2": link}, "session": session.hex()}
-    return {"deployment": dep, "calibration": report, "windows": xs}
+           "links": {"n2": link}, "run_id": run, "session": session.hex()}
+    one_stage = {"anchors": [], "delta": "1/1099511627776", "law": law, "leaf_layer": None, "log": [],
+                 "partition": part, "program": prog.desc, "proofs": {"circuit": ZK.sha(ZK.CIRCUIT), "registered": None},
+                 "query": prog.query, "registered": None, "scheme": PERIOD.OS.SCHEME, "work_table": None}
+    return {"deployment": dep, "calibration": report, "plan": plan(len(windows))[1], "one_stage": one_stage,
+            "circuit": str(tmp / "circuit.txt"), "windows": xs}
+
+
+def decided(case: dict) -> dict:
+    """The mirror's answer on a case of `case_of`, its blobs read off their paths as ``network-period check`` reads
+    them."""
+    return PERIOD.reference({**case, "blobs": [Path(b).read_bytes() for b in case["blobs"]]})
+
+
+def proofs_accepted(monkeypatch) -> None:
+    """One-stage v2 accepting each link-window's proof, as on a real session's proof: the mirror runs no prover and
+    raises on an acceptance, so here the rest of the check (its K, eps and profile) runs as if v2 had accepted."""
+    monkeypatch.setattr(PERIOD, "_proved", lambda *a: None)
 
 
 @pytest.mark.parametrize("delta", L.DELTAS)
-def test_the_case_is_the_period_checks(delta):
-    rw = session_run([1, 2])
+def test_the_case_is_the_period_checks(delta, tmp_path, monkeypatch):
+    """`case_of`'s case is the clock form's: the link's ends and run, N2's one-stage v2 parameters with the stream's
+    registrations before the period as their log, each audit's Program, each link-window's v2 evidence and salts, and
+    the files its proof names as blobs; the mirror passes every check of each link-window up to one-stage v2 and runs
+    v2 on it (undecided: no session's proof), refuses a link-window v2 refuses, a case naming another first window and
+    an audit registered over another Program, and once v2 accepts the proofs accepts with K and eps at each δ, the
+    audit charged its Program's units' committed bits (16 a unit, or 40)."""
+    rw = session_run([0, 1, 2], tmp_path)
     audits = [audited(delta)]
     case = L.case_of(rw, [1, 2], audits, 1, [FREE], [PROGRAM])
-    assert sorted(case["params"]) == PERIOD.PARAMS_KEYS
-    assert case["params"]["audits"] == [{"free": FREE, "program": PROGRAM, "steps": 2 * cs.WINDOW_BUCKETS}]
-    a = PERIOD.reference(case)
+    p = case["params"]
+    assert sorted(p) == PERIOD.PARAMS_KEYS and p["run"] == "r-leg" and p["link"] == "n2"
+    assert p["one_stage"] == {**rw["one_stage"], "log": [rw["windows"][0]["registration"]]}
+    assert p["audits"] == [{"free": FREE, "program": PROGRAM, "steps": 2 * cs.WINDOW_BUCKETS}]
+    assert case["blobs"] == [rw["circuit"], *rw["windows"][1]["blobs"], *rw["windows"][2]["blobs"]]
+    e = json.loads(bytes.fromhex(case["evidence"]))
+    assert all(sorted(x) == PERIOD.CLOCK_WINDOW_KEYS for x in e["windows"])
+    a = decided(case)
+    assert (a["verdict"], a["reason"]) == ("undecided", "window 1: one-stage v2: verifier of record"), a
+    assert decided(L.case_of(rw, [1, 2], audits, 0, [FREE], [PROGRAM]))["verdict"] == "reject"
+    refused = session_run([0, 1, 2], tmp_path, frozenset({2}))
+    a = decided(L.case_of(refused, [1, 2], audits, 1, [FREE], [PROGRAM]))
+    assert a["verdict"] == "reject" and a["reason"].startswith("window 2: one-stage v2: "), a
+    wide = json.loads(PERIOD.audit_descriptor(((1024, 5),)))
+    other = decided(L.case_of(rw, [1, 2], audits, 1, [FREE], [wide]))
+    assert other["verdict"] == "reject" and "not its Program" in other["reason"], other
+    with pytest.raises(ValueError, match="free-input counts"):
+        L.case_of(rw, [1, 2], audits, 1, [], [PROGRAM])
+    with pytest.raises(ValueError, match="Programs"):
+        L.case_of(rw, [1, 2], audits, 1, [FREE], [])
+    proofs_accepted(monkeypatch)
+    a = decided(case)
     assert a["verdict"] == "accept", a["reason"]
     pub = a["public"]
     bound = audits[0][1]["public"]["bound"]
@@ -298,22 +348,56 @@ def test_the_case_is_the_period_checks(delta):
     assert pub["audits"][0]["wrong_units"] == bound and pub["audits"][0]["jitter"] == 0
     assert pub["audits"][0]["free"] == FREE and pub["audits"][0]["faulty_bits"] == 16 * bound
     assert pub["K"] == pub["schedules"] + pub["audits"][0]["faulty_sets"] + 16 * bound + FREE
-    wide = json.loads(PERIOD.audit_descriptor(((1024, 5),)))
-    a40 = PERIOD.reference(L.case_of(rw, [1, 2], [audited(delta, wide)], 1, [FREE], [wide]))
+    a40 = decided(L.case_of(rw, [1, 2], [audited(delta, wide)], 1, [FREE], [wide]))
     assert a40["public"]["audits"][0]["faulty_bits"] == 40 * bound and a40["public"]["K"] == pub["K"] + 24 * bound
-    assert PERIOD.reference(L.case_of(rw, [1, 2], audits, 0, [FREE], [PROGRAM]))["verdict"] == "reject"
-    refused = session_run([1, 2], frozenset({2}))
-    assert PERIOD.reference(L.case_of(refused, [1, 2], audits, 1, [FREE], [PROGRAM]))["verdict"] == "reject"
-    other = PERIOD.reference(L.case_of(rw, [1, 2], audits, 1, [FREE], [wide]))
-    assert other["verdict"] == "reject" and "not its Program" in other["reason"]
-    with pytest.raises(ValueError, match="free-input counts"):
-        L.case_of(rw, [1, 2], audits, 1, [], [PROGRAM])
-    with pytest.raises(ValueError, match="Programs"):
-        L.case_of(rw, [1, 2], audits, 1, [FREE], [])
 
 
-def test_a_clock_certificate_is_the_evidence_without_the_session_or_the_sync():
-    rw = session_run([1])
+def test_run_windows_reads_what_n2_writes(tmp_path):
+    """`run_windows` reads a run's link-windows off N2's verifier directory as `n2_zk.member` writes it (each
+    link-window's registration, one-stage v2 evidence, delivered salts, public file and sessions' files, and the link's
+    v2 parameters and circuit file) and the client's certificates, and `_keep` keeps the member's circuit file but no
+    statement's copy of it or prover's file."""
+    (tmp_path / "made").mkdir()
+    rw = session_run([0, 1], tmp_path / "made")
+    s, run = tmp_path / "s", tmp_path / "s" / "rehearsal" / "honest"
+    v = s / "n2zk" / "honest" / "verifier"
+    for d in (run / "client", v):
+        d.mkdir(parents=True)
+    for f, x in (("deployment.json", rw["deployment"]), ("plan.json", rw["plan"]),
+                 ("calibration.json", rw["calibration"])):
+        (run / f).write_text(json.dumps(x))
+    (run / "client" / "certificates.jsonl").write_text("".join(
+        json.dumps(c | {"session": "x"}) + "\n" for x in rw["windows"].values() for c in x["certificates"]))
+    (run / "client" / "clocks.jsonl").write_text("".join(
+        json.dumps(x["clock"] | {"session": "x"}) + "\n" for x in rw["windows"].values()))
+    (s / "n2zk" / "summary.json").write_text(json.dumps({"members": {"honest": {"windows": [
+        {"window": w} for w in rw["windows"]]}}}))
+    (v / "one-stage.json").write_text(json.dumps(rw["one_stage"]))
+    (v / "circuit.txt").write_bytes(ZK.CIRCUIT)
+    for w, x in rw["windows"].items():
+        pre = f"w{w:03d}-"
+        (v / f"{pre}registration.json").write_text(json.dumps(x["registration"]))
+        (v / f"{pre}one-stage.json").write_text(json.dumps(x["one_stage"]))
+        (v / f"{pre}delivered.json").write_text(json.dumps({"salts": x["salts"], "output": 3}))
+        (v / f"{pre}pub-1.bin").write_bytes(ZK.PUBLIC)
+        (v / f"{pre}session-s0-session.json").write_bytes(b"{}")
+    got = L.run_windows({"dir": str(s)}, "honest")
+    assert (got["one_stage"], got["circuit"]) == (rw["one_stage"], str(v / "circuit.txt"))
+    for w, x in rw["windows"].items():
+        pre = f"w{w:03d}-"
+        assert got["windows"][w] == x | {"blobs": [str(v / f"{pre}pub-1.bin"), str(v / f"{pre}session-s0-session.json")]}
+    kept = tmp_path / "kept"
+    for f in ("member/verifier/circuit.txt", "member/w000/statement/circuit.txt", "member/w000/statement/inst-1.bin",
+              "member/prover-instances.bin", "member/verifier/w000-pub-1.bin"):
+        (s / "src" / f).parent.mkdir(parents=True, exist_ok=True)
+        (s / "src" / f).write_bytes(b"x")
+    L._keep(s / "src", kept)
+    assert sorted(str(f.relative_to(kept)) for f in kept.rglob("*") if f.is_file()) == [
+        "member/verifier/circuit.txt", "member/verifier/w000-pub-1.bin"]
+
+
+def test_a_clock_certificate_is_the_evidence_without_the_session_or_the_sync(tmp_path):
+    rw = session_run([1], tmp_path)
     c = rw["windows"][1]["clock"]
     assert sorted(c) == ["digest", "direction", "key_id", "link", "signature", "window"]
     assert L.clock_evidence({"session": rw["deployment"]["session"], **c}) == c
@@ -726,7 +810,7 @@ def mirror_rows_run(monkeypatch, seed: int) -> tuple[dict, dict, dict, dict, lis
     return case, c, e, rw, ws
 
 
-def test_a_signed_rows_period_rebuilt_by_rows_case_of_is_accepted(monkeypatch):
+def test_a_signed_rows_period_rebuilt_by_rows_case_of_is_the_mirrors_and_refused_at_the_scans_answer(monkeypatch):
     case, c, e, rw, ws = mirror_rows_run(monkeypatch, 19)
     p = case["params"]
     assert not p["lms"]["toy"] and len(c["audits"]) == 2 and p["first"] == 3
@@ -739,43 +823,28 @@ def test_a_signed_rows_period_rebuilt_by_rows_case_of_is_accepted(monkeypatch):
     assert got["params"]["scan"] == p["scan"]
     assert got["params"]["audits"] == [{"free": f, "program": q, "steps": len(ws) * T} for f, q in zip(free, programs)]
     a = PERIOD.reference(got)
-    assert a["verdict"] == "accept" and len(a["public"]["scans"]) == len(ws) and a["public"]["schedules"] == 0
-
-
-def _record(reg: dict, answer: dict) -> dict:
-    """The accepted audit record an answer of the mirror's re-decides from: its registration's law and its units."""
-    return {"accepted": True, "registration": reg, "draw": {**reg["law"], "units": answer["public"]["drawn"]},
-            "proved_units": answer["public"]["proved"]}
+    assert a["verdict"] == "reject" and a["reason"].startswith(
+        f"window {ws[0]}: the scan's answer: the check takes no answer for a link-window"), a
 
 
 @pytest.mark.parametrize("delta", L.DELTAS)
-def test_each_term_is_decided_at_its_share_of_the_periods_delta(monkeypatch, delta):
+def test_each_term_is_decided_at_its_share_of_the_periods_delta(monkeypatch, delta, tmp_path):
     assert L.term_delta(delta, 5) == delta / 5
     with pytest.raises(ValueError, match="at least one term"):
         L.term_delta(delta, 0)
     accept = {"verdict": "accept"}
-    rw, second = session_run([1, 2]), AUDITED | {"partition": "cc" * 64}
+    rw, second = session_run([1, 2], tmp_path), AUDITED | {"partition": "cc" * 64}
     records = [(AUDITED, ACCEPTED | {"registration": AUDITED}), (second, ACCEPTED | {"registration": second})]
-    for d, eps in ((L.term_delta(delta, len(records)), delta), (delta, 2 * delta)):
-        audits = [(r, L.audit_answer(r, accept, rec, d)) for r, rec in records]
-        a = PERIOD.reference(L.case_of(rw, [1, 2], audits, 1, [FREE, FREE], [PROGRAM, PROGRAM]))
-        assert a["verdict"] == "accept" and Fraction(a["public"]["eps"]) == eps
+    with monkeypatch.context() as m:
+        proofs_accepted(m)
+        for d, eps in ((L.term_delta(delta, len(records)), delta), (delta, 2 * delta)):
+            audits = [(r, L.audit_answer(r, accept, rec, d)) for r, rec in records]
+            a = decided(L.case_of(rw, [1, 2], audits, 1, [FREE, FREE], [PROGRAM, PROGRAM]))
+            assert a["verdict"] == "accept" and Fraction(a["public"]["eps"]) == eps
     L.holds_at(0, a, 2 * delta)
     with pytest.raises(RuntimeError, match="term_delta"):
         L.holds_at(0, a, delta)
     L.holds_at(0, {"verdict": "reject", "public": None}, delta)
-    case, c, e, rws, ws = mirror_rows_run(monkeypatch, 28)
-    p = case["params"]
-    assert (len(c["audits"]), len(ws)) == (2, 3)
-    d = L.term_delta(delta, len(ws))
-    scans = {w: (r, L.audit_answer(r, accept, _record(r, x["answer"]), d), p["scan"])
-             for w, r, x in zip(ws, c["windows"], e["windows"])}
-    audits = [(r, L.audit_answer(r, accept, _record(r, x), d)) for r, x in zip(c["audits"], e["audits"])]
-    a = PERIOD.reference(L.rows_case_of(rws, ws, scans, audits, p["first"], [x["free"] for x in p["audits"]],
-                                        [x["program"] for x in p["audits"]]))
-    assert a["verdict"] == "accept" and a["public"]["eps"] == str(delta)
-    assert [t["delta"] for t in [*a["public"]["audits"], *a["public"]["scans"]]] == [str(d)] * (2 + 3)
-    L.holds_at(0, a, delta)
 
 
 ANSWERS = json.loads((Path(__file__).parent / "fixtures" / "certifier-period-answers.json").read_text())

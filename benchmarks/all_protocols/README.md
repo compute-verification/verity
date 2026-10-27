@@ -58,7 +58,9 @@ every machine of a census deployment, the pooled total first and the per-window 
   `period` of `periods`), in front of the loop's model (`benchmarks/network_traces/torch_loop_stub.py`), a link-window
   per window; N2's verdict of record on each link-window (`--zk` behind the Lean firewall); the certified outputs
   checked against the period's registered ones; then `NetworkCheck.Period` (`verity/certifier/v0`,
-  `network-period check`) on the period's link-windows and its compute audit, whose free inputs are the window's
+  `network-period check`) on the period's link-windows, running one-stage v2 on each one's proof itself (`n2_zk.py`
+  writes v2's parameters and each link-window's evidence beside the proof; the case's blobs are the paths of the files
+  the proofs name), and its compute audit, whose free inputs are the window's
   unregistered input rows (`circuit.json`): on acceptance `public.K`, the bits a covert sender in the server can move over the link in the
   period, except with probability `public.eps`, at δ = 1/100 (beside it the case at 10⁻⁶ and the tampered run's, whose
   tampered period must reject). `eps` sums its terms' δ (each audit's, and in the rows form each link-window's scan's),
@@ -79,7 +81,8 @@ every machine of a census deployment, the pooled total first and the per-window 
   --window-per-group`, the gate's scan rehearsal, a period's link-windows its group's in `groups.json`), honest and with
   the stub's tampers (`WARDEN_TAMPER`, default `late,byte`), publishing the gate's public files alone to
   `$OUT/warden-session/`. Its link-window 0 is proved by the scan (`scan_zk.py prove --warden-run --draw`), and a period
-  whose every link-window has a scan answer is decided in certifier/v0's rows form; a later period waits on
+  whose every link-window has a scan answer is put to certifier/v0's rows form, which refuses it by name at the scan's
+  answer until one-stage v2 runs the scan; a later period waits on
   `scan_zk --window W`, and the stub's `byte` and `extra` pass the scan, so only the in-the-clear tie refuses them. `block_leg`
   turns a period's accepted answer of either path into the block record's `certifier` entry (`verity/block-record/v1`,
   CMP-95 item 6), the one shape a loop's run and the H200 fallback write.

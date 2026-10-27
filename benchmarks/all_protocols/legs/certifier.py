@@ -29,11 +29,16 @@ records' canonical events, each response F of them in the plan's order) must be 
 value files' last-linear outputs, request by request (`io`, the leg's own check, written to ``io.json``; on a tied
 period a diagnostic, "The output tie" below): while the
 integrity leg accepts, a mismatch is the leg's error; when it refuses (a loop-tampered period), the mismatch is recorded
-(``refused``) and the case decides on that audit. The case (`case_of`) is the period's link-windows, each with its N2
-registration, its one-stage answer from N2's outcome of record (Selection All: its one unit, `answer_of_outcome`), its
-two certificates and its clock certificate as the client kept them, the salted certificate alone (`clock_evidence`: the
-sync and its salt are witness); and the period's compute audit, the integrity leg's registration and audit record
-re-decided by one-stage's own bound at its term's δ (`audit_answer`). Its answer is ``network-period check``'s at
+(``refused``) and the case decides on that audit. The case (`case_of`, the clock form) is N2's link on the planned
+profile (its ends, its run, and the one-stage v2 parameters N2 wrote for it, `n2_zk.one_stage_params`) and the
+period's link-windows, each with its N2 registration, its one-stage v2 evidence (`n2_zk.one_stage_evidence`: what its
+audit record was handed, and its proof's files by SHA-512), the salts N2's prover delivered for its ``pub`` and ``o0``
+rows, its two certificates and its clock certificate as the client kept them, the salted certificate alone
+(`clock_evidence`: the sync and its salt are witness); the case's blobs are the paths of the files those proofs name
+(N2's circuit file, each link-window's public file and sessions' files, in the session's scratch), so the period check
+runs one-stage v2 on each link-window's proof itself and opens its public row; and the period's compute audit, the
+integrity leg's registration and audit record re-decided by one-stage's own bound at its term's δ (`audit_answer`).
+Its answer is ``network-period check``'s at
 δ = 1/100 (`DELTAS`), and ``out/`` also holds the case and answer at δ = 10⁻⁶ and the tampered run's (``tamper.*``).
 At each δ every term of the case is decided at δ over the case's term count (`term_delta`: the answer's ``eps`` is the
 sum of its terms' δ), so an accepted answer's ``eps`` is δ itself, which the leg asserts (`holds_at`). The period
@@ -81,9 +86,10 @@ per link-window the scan's registration in the commitment (its ``rows/<direction
 roots and domains, `scan_zk.warden_roots`) and, in the evidence, its answer, the three records' certificates and the
 two rows' registrations, under the deployment's key and its one schedule; the scan's Program its descriptor
 (`scan_zk`'s ``joint/program.json``, the generator form's), off which the period check reads the scan's terms (it
-refuses a checker form, whose egress rows are inputs, by name). A period with a link-window the scan didn't answer
-raises (`WARDEN_PENDING`: link-window 0 alone is proved yet, and a ``late`` run's is refused before the scan registers
-it).
+refuses a checker form, whose egress rows are inputs, by name). The period check refuses the scan's answer by name
+after its checks (one-stage v2 can't run the scan's proof itself yet), so a rows-form period rejects there until it
+can. A period with a link-window the scan didn't answer raises (`WARDEN_PENDING`: link-window 0 alone is proved yet,
+and a ``late`` run's is refused before the scan registers it).
 
 Layout terms (`layout`): the audit's free inputs (`free_inputs`, from the window's ``circuit.json``: every unit's
 input-row bits, less the rows wires feed or ``external`` names) and its Program (`audit_program`, the window's
@@ -127,8 +133,6 @@ SESSION = "certifier-session"
 #: the δ a period's certificate holds at: its answer's, then the one written beside it, each split across the case's
 #: terms (`term_delta`)
 DELTAS = (Fraction(1, 100), Fraction(1, 10 ** 6))
-#: N2's stream decides at `certifier_serve.DELTA`
-N2_DELTA = Fraction(2) ** -40
 #: the lines of a failed session step's log its error carries (`failed`)
 LOG_TAIL = 40
 #: the leg's records, by ``CERTIFIER_PATH``: ``certifier`` (the default), `certifier_serve.py`'s certifier-only path
@@ -379,9 +383,11 @@ def _stub(steps: int, h: int, log: Path, tamper: str | None = None,
 
 
 def _keep(src: Path, dst: Path) -> None:
-    """`n2_zk.sh`'s keep: everything but a prover's file (``inst-*``, ``prover-instances.bin``) or a circuit."""
+    """`n2_zk.sh`'s keep: everything but a prover's file (``inst-*``, ``prover-instances.bin``) or a statement's copy
+    of the circuit; a member's ``verifier/circuit.txt``, which one-stage v2 reads among the case's blobs, is kept."""
     for f in src.rglob("*"):
-        if f.is_file() and f.name != "circuit.txt" and not f.name.startswith("inst-") and f.name != "prover-instances.bin":
+        if (f.is_file() and (f.name != "circuit.txt" or f.parent.name == "verifier") and not f.name.startswith("inst-")
+                and f.name != "prover-instances.bin"):
             (dst / f.relative_to(src)).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(f, dst / f.relative_to(src))
 
@@ -801,25 +807,6 @@ def warden_io(run: Path, period: int, windows: Sequence[int], outputs: Mapping[t
 
 # --- the case ------------------------------------------------------------------------------------------------------------
 
-def answer_of_outcome(reg: Mapping[str, Any], draw: Mapping[str, Any], accepted: bool, reason: str | None,
-                      delta: Fraction = N2_DELTA) -> dict[str, Any]:
-    """One-stage's answer for a link-window's registration from N2's outcome of record: on acceptance its one unit drawn
-    and proved, the profile and bound one-stage's (`audit.profile`, `audit.wrong_units`) at the stream's δ."""
-    commitment = R.digest(reg)
-    if not accepted:
-        return {"commitment": commitment, "profile": None, "protocol": ONE_STAGE, "public": None,
-                "reason": reason or "N2's verifier of record refused the link-window", "verdict": "reject"}
-    law = dict(reg["law"])
-    units = sorted(draw.get("units") or range(reg["population"]))
-    d = {**law, "units": units}
-    profile = A.profile(reg, d, delta).to_json()
-    profile["delta"] = str(delta)
-    wrong = A.wrong_units(reg, d, delta)
-    return {"commitment": commitment, "profile": profile, "protocol": ONE_STAGE,
-            "public": {"bound": wrong["bound"], "drawn": units, "per_template": wrong.get("per_template"),
-                       "proved": units}, "reason": None, "verdict": "accept"}
-
-
 def audit_answer(reg: Mapping[str, Any], integrity: Mapping[str, Any], record: Mapping[str, Any] | None,
                  delta: Fraction) -> dict[str, Any]:
     """The period's compute audit as one-stage answers it at ``delta``: the integrity leg's refusal as it is; on its
@@ -846,27 +833,33 @@ def _cert(doc: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def run_windows(sess: Mapping[str, Any], strategy: str) -> dict[str, Any]:
-    """A run of the session: its deployment, plan and calibration, and per link-window N2's registration, one-stage
-    answer, the client's certificates (egress first) and clock certificate."""
+    """A run of the session: its deployment, plan and calibration, N2's one-stage v2 parameters for the link
+    (``one_stage``, `n2_zk.one_stage_params`) and its circuit file, and per link-window N2's registration, one-stage v2
+    evidence (`n2_zk.one_stage_evidence`, None for a link-window N2 decided without an audit record, a late one), the
+    salts its prover delivered for the ``pub`` and ``o0`` rows, the files its proof names (``blobs``: the public file
+    and the sessions' files), and the client's certificates (egress first) and clock certificate."""
     run = Path(sess["dir"]) / "rehearsal" / strategy
     v = Path(sess["dir"]) / "n2zk" / strategy / "verifier"
     member = json.loads((Path(sess["dir"]) / "n2zk" / "summary.json").read_text())["members"].get(strategy) or {}
     decided = {r["window"]: r for r in member.get("windows") or []}
     certs, clocks = _jsonl(run / "client" / "certificates.jsonl"), _jsonl(run / "client" / "clocks.jsonl")
     windows = {}
-    for w, row in sorted(decided.items()):
-        reg = json.loads((v / f"w{w:03d}-registration.json").read_text())
-        draw = json.loads((v / f"w{w:03d}-draw.json").read_text())
+    for w in sorted(decided):
+        pre = f"w{w:03d}-"
+        one = v / f"{pre}one-stage.json"
         mine = {c["direction"]: _cert(c) for c in certs if c.get("window") == w and "digest" in c}
         clock = next((c for c in clocks if c.get("window") == w and "digest" in c), None)
-        windows[w] = {"registration": reg,
-                      "answer": answer_of_outcome(reg, draw, bool(row.get("accepted")),
-                                                  f"N2's verifier of record: {row.get('public')}"),
+        windows[w] = {"registration": json.loads((v / f"{pre}registration.json").read_text()),
+                      "one_stage": json.loads(one.read_text()) if one.is_file() else None,
+                      "salts": json.loads((v / f"{pre}delivered.json").read_text())["salts"],
+                      "blobs": [str(v / f"{pre}pub-1.bin"), *sorted(str(f) for f in v.glob(f"{pre}session-*"))],
                       "certificates": [mine[d] for d in ("egress", "ingress") if d in mine],
                       "clock": None if clock is None else clock_evidence(clock)}
     return {"run": run, "deployment": json.loads((run / "deployment.json").read_text()),
             "plan": json.loads((run / "plan.json").read_text()),
-            "calibration": json.loads((run / "calibration.json").read_text()), "windows": windows}
+            "calibration": json.loads((run / "calibration.json").read_text()),
+            "one_stage": json.loads((v / "one-stage.json").read_text()) if (v / "one-stage.json").is_file() else None,
+            "circuit": str(v / "circuit.txt"), "windows": windows}
 
 
 def clock_evidence(certificate: Mapping[str, Any]) -> dict[str, Any]:
@@ -922,33 +915,49 @@ def audit_program(period_dir: Path) -> dict[str, Any]:
     return desc
 
 
+def _end(grid: Any, profile: Sequence[Sequence[int]] | None) -> dict[str, Any]:
+    """An end of the link as certifier/v0 reads it: its grid (`grid.GridParams`) and occupancy profile, or null."""
+    return {"grid": {k: getattr(grid, k) for k in ("allocation", "bucket_ms", "buckets", "frame_bytes", "queue_capacity")},
+            "profile": None if profile is None else [list(row) for row in profile]}
+
+
 def case_of(rw: Mapping[str, Any], windows: Sequence[int], audits: Sequence[tuple[dict, dict]], first: int,
             free: Sequence[int], programs: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-    """``verity/certifier/v0``'s case (`NetworkCheck.Period`'s formats) of the link-windows ``windows`` of a run
-    (`run_windows`) and the compute ``audits`` (registration, answer), each with its ``free`` inputs (`free_inputs`)
-    and its Program (`audit_program`); the observation horizon is the link-windows' buckets."""
+    """``verity/certifier/v0``'s case (`NetworkCheck.Period`'s formats) in the clock form of the link-windows
+    ``windows`` of a run (`run_windows`) and the compute ``audits`` (registration, answer), each with its ``free``
+    inputs (`free_inputs`) and its Program (`audit_program`); the observation horizon is the link-windows' buckets.
+    The link is N2's on the run's planned profile (`n2_zk.link`): its ends' grids and occupancy profiles, its run, and
+    N2's one-stage v2 parameters with ``log`` the registrations of the run's link-windows before ``first``, which the
+    period check runs v2 under on each link-window's evidence and delivered salts. Its ``blobs`` are the paths of the
+    files those proofs name (the circuit file, each link-window's public file and sessions' files), which `check` hands
+    ``network-period check``."""
     sys.path.insert(0, str(TRACES))
     import certifier_serve as cs
 
     if len(free) != len(audits):
         raise ValueError(f"{len(free)} free-input counts for {len(audits)} audits")
+    if rw["one_stage"] is None:
+        raise RuntimeError("N2 wrote no one-stage v2 parameters for the run (n2_zk.one_stage_params)")
     dep, setup = rw["deployment"], cs.ar.Setup(rw["calibration"])
     key = cs.read_public(dep["certifier_key"])
     N, W, H = dep["certifier_key"]["params"]
+    occupancy = rw["plan"].get("occupancy") or {}
     xs = [rw["windows"][w] for w in windows]
-    program = {x["registration"]["program"] for x in xs}
-    if len(program) != 1:
-        raise RuntimeError(f"the link-windows register {len(program)} Programs, not the link's one")
-    params = {**layout(free, programs, len(xs) * cs.WINDOW_BUCKETS), "key": key.public.hex(),
-              "link": dep["links"]["n2"], "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": program.pop(),
-              "session": dep["session"], "sync_set": {"deltas": list(setup.sync_set.deltas),
+    log = [x["registration"] for w, x in sorted(rw["windows"].items()) if w < first]
+    params = {**layout(free, programs, len(xs) * cs.WINDOW_BUCKETS),
+              "egress": _end(setup.egress_params, occupancy.get("egress")), "first": first,
+              "ingress": _end(setup.ingress_params, occupancy.get("ingress")), "key": key.public.hex(),
+              "link": dep["links"]["n2"], "lms": {"H": H, "N": N, "W": W, "toy": False},
+              "one_stage": {**rw["one_stage"], "log": log}, "run": dep["run_id"], "session": dep["session"],
+              "sync_set": {"deltas": list(setup.sync_set.deltas),
                            "rhos": [[r.numerator, r.denominator] for r in setup.sync_set.rhos]},
-              "windows": len(xs), "first": first}
+              "windows": len(xs)}
     commitment = canonical_json({"audits": [r for r, _ in audits], "windows": [x["registration"] for x in xs]})
     evidence = canonical_json({"audits": [a for _, a in audits],
-                               "windows": [{"answer": x["answer"], "certificates": x["certificates"],
-                                            "clock": x["clock"]} for x in xs]})
-    return {"commitment": commitment.hex(), "evidence": evidence.hex(), "params": params}
+                               "windows": [{"certificates": x["certificates"], "clock": x["clock"],
+                                            "one_stage": x["one_stage"], "salts": x["salts"]} for x in xs]})
+    blobs = [rw["circuit"], *(b for x in xs for b in x["blobs"])]
+    return {"blobs": blobs, "commitment": commitment.hex(), "evidence": evidence.hex(), "params": params}
 
 
 def rows_case_of(rw: Mapping[str, Any], windows: Sequence[int], scans: Mapping[int, tuple[dict, dict, dict]],
@@ -984,7 +993,8 @@ def rows_case_of(rw: Mapping[str, Any], windows: Sequence[int], scans: Mapping[i
 
 
 def check(exe: str, case: Mapping[str, Any]) -> dict[str, Any]:
-    """``network-period check`` on the case: its answer."""
+    """``network-period check`` on the case: its answer, the case's ``blobs`` (paths, `case_of`'s) its BLOB
+    arguments."""
     with tempfile.TemporaryDirectory() as d:
         files = []
         for name, data in (("params.json", canonical_json(case["params"])),
@@ -992,7 +1002,7 @@ def check(exe: str, case: Mapping[str, Any]) -> dict[str, Any]:
                            ("evidence.json", bytes.fromhex(case["evidence"]))):
             (Path(d) / name).write_bytes(data)
             files.append(str(Path(d) / name))
-        p = subprocess.run([exe, "check", *files], capture_output=True, text=True)
+        p = subprocess.run([exe, "check", *files, *map(str, case.get("blobs") or ())], capture_output=True, text=True)
     if p.returncode not in (0, 1, 2) or not p.stdout.strip():
         raise RuntimeError(f"network-period check exited {p.returncode}: {p.stderr[-2000:]}")
     return json.loads(p.stdout.strip().splitlines()[-1])
@@ -1360,8 +1370,8 @@ def block_leg(answer: Mapping[str, Any], *, server: str, runs: Sequence[str], so
 
 __all__ = ["BLOCK_DELTAS", "BLOCK_ERROR_FROM", "DELTAS", "PATHS", "PROTOCOL", "PUBLIC_SESSION", "STUBBED",
            "TAMPERED_WINDOW", "WARDEN_PENDING", "WARDEN_PUBLIC", "WARDEN_TAMPERED_PERIOD", "WARDEN_TAMPERS",
-           "answer_of_outcome", "audit_answer", "block_leg", "case_of", "certified_events", "certifier_leg", "check",
-           "relay", "relayed", "tie_holds", "tie_of", "audit_program",
+           "audit_answer", "audit_program", "block_leg", "case_of", "certified_events", "certifier_leg", "check",
+           "relay", "relayed", "tie_holds", "tie_of",
            "clock_evidence", "failed", "free_inputs", "holds_at", "io", "layout", "leg", "loop_units", "match_ids",
            "match_outputs", "n2_refusal", "n2_report", "once", "period_windows", "publish", "registered_outputs", "requests_of",
            "rows_case_of", "SCAN_DRAW", "SCAN_KEEP", "scan_dry", "scan_prove", "scan_schedule",

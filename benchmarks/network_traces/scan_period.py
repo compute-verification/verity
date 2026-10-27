@@ -16,8 +16,9 @@ answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the 
 * **forged**: the honest case with the responses record's certificate's signature changed: a certificate the network
   certifier didn't sign.
 * **The check**: each case through the mirror (``--mirror``, `period_case.py` loaded by path: `reference`) and
-  ``network-period check`` (``--lean``), whose verdicts must agree and be the case's: accept where the scan's answer
-  accepts, else reject. ``DIR`` gets each case's files and ``period.json``, each case's answers.
+  ``network-period check`` (``--lean``), whose verdicts must agree and be reject: the period check refuses the rows
+  form at the scan's answer until one-stage v2 runs the scan, and the forged and tampered cases before it. ``DIR``
+  gets each case's files and ``period.json``, each case's answers.
 """
 from __future__ import annotations
 
@@ -122,8 +123,7 @@ def main(argv=None) -> int:
         (a.out / name).mkdir(exist_ok=True)
         (a.out / name / "case.json").write_text(json.dumps(case, indent=1, sort_keys=True))
         py, lean = m.reference(case), lean_check(a.lean, case, a.out / name)
-        scan_said = {x["answer"]["verdict"] for x in json.loads((Path(scan) / "answers.json").read_text())["windows"]}
-        want = "accept" if not round_ and scan_said == {"accept"} else "reject"
+        want = "reject"
         good = py.get("verdict") == lean.get("verdict") == want and py.get("public") == lean.get("public")
         ok &= good
         reg = json.loads(bytes.fromhex(case["commitment"]))["windows"][0]

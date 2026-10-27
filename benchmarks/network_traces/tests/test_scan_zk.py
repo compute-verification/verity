@@ -330,11 +330,11 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     case on a node: scan_period.sh): the deployment's key, session and schedule, the registered Program and its
     descriptor (``joint/program.json``) as the scan, the registration, and its answer, three records' certificates
     (requests, responses, fails: its own) and two row registrations, each named by the registration's roots. The
-    period's mirror accepts the honest case, its scan's terms read off the test class's own templates, and refuses the
-    forged case (a certificate's signature changed) at the certificates, the tampered case (another Program's
-    registration) at the registration and the chain case (the round's registration of the Program) at its refusal; a
-    group of two link-windows is refused by name. Slow (the test class's Program, about 15 s): the period check reads
-    the scan's templates' signatures, which no stand-in can stand for."""
+    period's mirror reads the scan's terms off the test class's own templates, and refuses the forged case (a
+    certificate's signature changed) at the certificates, the tampered case (another Program's registration) at the
+    registration, and the honest and chain cases at the scan's answer, which it takes for no link-window until one-stage
+    v2 runs the scan; a group of two link-windows is refused by name. Slow (the test class's Program, about 15 s): the
+    period check reads the scan's templates' signatures, which no stand-in can stand for."""
     import scan_period as SP
 
     PC = SP.mirror(PERIOD_CASE)
@@ -382,12 +382,11 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     bits = {tp: dict(ins + outs) for tp, (ins, outs) in ports.items()}
     assert PC.params(p).scan == PC.Scan(T, T * bits["first"]["prog"], 16 + bits["first"]["o1"] + bits["first"]["o2"],
                                         16 + bits["egress"]["o1"])
-    out = PC.reference(case)
-    assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, 2 * T), out
-    refused = {r: PC.reference(SP.rows_case(run, scan, r)) for r in ("forged", "tampered", "chain")}
+    refused = {r: PC.reference(SP.rows_case(run, scan, *r)) for r in ((), ("forged",), ("tampered",), ("chain",))}
+    answer = ("reject", "window 0: the scan's answer: the check takes no answer for a link-window")
     assert {r: (a["verdict"], a["reason"]) for r, a in refused.items()} == {
-        "forged": ("reject", "window 0: certificates"), "tampered": ("reject", "window 0: registration"),
-        "chain": ("reject", "window 0: service: the scan's chain round refused: {'x': 'y'}")}
+        (): answer, ("forged",): ("reject", "window 0: certificates"),
+        ("tampered",): ("reject", "window 0: registration"), ("chain",): answer}
     (scan / "answers.json").write_text(json.dumps({"registration": reg, "windows": [{"window": w} for w in (0, 1)]}))
     with pytest.raises(SystemExit, match="a group of 2 link-windows .* scan_zk.py --group 1"):
         SP.rows_case(run, scan)
