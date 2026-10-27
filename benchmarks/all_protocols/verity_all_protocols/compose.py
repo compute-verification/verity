@@ -71,29 +71,33 @@ def bind(protocol: str, components: Sequence[tuple[str, str]]) -> bytes:
     return hashlib.sha512(protocol.encode() + b"\0" + body).digest()
 
 
-def onsite_inputs(cases: Mapping[str, Mapping[str, Any]], digests: Mapping[str, str]) -> tuple[bytes, bytes, bytes]:
-    """Onsite's params, commitment and evidence from each component's case and its commitment's digest (its answer's
-    ``commitment``), both keyed by the component's protocol id: what ``onsite check`` reads (the composition README's
-    table)."""
+def onsite_inputs(cases: Mapping[str, Mapping[str, Any]], digests: Mapping[str, str],
+                  protocol: str = PROTOCOL) -> tuple[bytes, bytes, bytes]:
+    """The product ``protocol``'s (onsite's by default) params, commitment and evidence from each component's case and its
+    commitment's digest (its answer's ``commitment``), both keyed by the component's protocol id: what ``onsite check``
+    and ``product IDS check`` read (the composition README's table)."""
     ids = sorted(cases)
     params = canonical_json({"components": [{"id": i, "params": cases[i]["params"]} for i in ids]})
-    commitment = bind(PROTOCOL, [(i, digests[i]) for i in ids])
+    commitment = bind(protocol, [(i, digests[i]) for i in ids])
     evidence = canonical_json({"components": [{"commitment": cases[i]["commitment"], "evidence": cases[i]["evidence"],
                                                "id": i, "params": cases[i]["params"]} for i in ids]})
     return params, commitment, evidence
 
 
-def onsite_check(exe: str, cases: Mapping[str, Mapping[str, Any]], digests: Mapping[str, str]) -> dict[str, Any]:
-    """``onsite check`` on the components' cases (`onsite_inputs`): its answer line, parsed."""
-    params, commitment, evidence = onsite_inputs(cases, digests)
+def onsite_check(exe: str | Sequence[str], cases: Mapping[str, Mapping[str, Any]], digests: Mapping[str, str],
+                 protocol: str = PROTOCOL) -> dict[str, Any]:
+    """``onsite check`` (or ``product IDS check``: ``exe`` as an argv, with ``protocol`` its product's id) on the
+    components' cases (`onsite_inputs`): its answer line, parsed."""
+    params, commitment, evidence = onsite_inputs(cases, digests, protocol)
+    argv = [exe] if isinstance(exe, str) else list(exe)
     with tempfile.TemporaryDirectory() as d:
         files = []
         for name, data in (("params.json", params), ("commitment.bin", commitment), ("evidence.json", evidence)):
             (Path(d) / name).write_bytes(data)
             files.append(str(Path(d) / name))
-        p = subprocess.run([exe, "check", *files], capture_output=True, text=True, check=False)
+        p = subprocess.run([*argv, "check", *files], capture_output=True, text=True, check=False)
     if p.returncode not in (0, 1, 2):
-        raise RuntimeError(f"onsite check exited {p.returncode}: {p.stderr[-2000:]}")
+        raise RuntimeError(f"{' '.join(argv)} check exited {p.returncode}: {p.stderr[-2000:]}")
     return json.loads(p.stdout.strip().splitlines()[-1])
 
 
