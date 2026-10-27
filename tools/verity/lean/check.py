@@ -64,7 +64,7 @@ environment extension loaded, so none of the package's code runs), and replays t
                  the bound fails; or a
                  witness doesn't have that form, ranges over its instance instead of building it, takes a hypothesis
                  that is no named assumption the lock lists, or is an honest one at an accept-all verifier
-                 (`witness_failures`, LEAN-66), unless `unwitnessed`, which only shrinks, lists the guarantee with its
+                 (`witness_failures`), unless `unwitnessed`, which only shrinks, lists the guarantee with its
                  statement's hash
     reads        a definition a guarantee's statement reads lies outside the spec (the `layers` prefixes) of its package
                  and of the packages it requires by path, and outside a pinned dependency, unless a `reads_exempt`
@@ -1579,7 +1579,6 @@ def vacuous_meets(body: dict, claim: str) -> str | None:
 #: `Flock.Zk.verify`), the
 #: `acceptance` kind; with none, a read of a module whose last component is one of `EXCLUSION_MODULES` and a conclusion
 #: headed by one of `BOUND_HEADS` (a partition's or a covering's bound, which no verifier accepts), the `exclusion` kind
-#: (top, LEAN-66 21:52Z)
 SCOPE_COMPONENT = "Claims"
 SCOPE_MODULES = ("Properties.Verity",)
 VERIFIER_PREFIXES = ("accept", "verify")
@@ -1734,7 +1733,7 @@ def witness_shapes(name: str, pin: dict, policy: dict, own: set[str]) -> str:
 
 def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
     """Every guarantee in scope (`witness_scope`) has two witnesses beside it (`witnesses`: {guarantee: {honest: [theorem],
-    nontrivial: theorem, kind?}}, LEAN-66), each a guarantee, as a claim has its `fails` and `meets` (`claim_failures`), so
+    nontrivial: theorem, kind?}}), each a guarantee, as a claim has its `fails` and `meets` (`claim_failures`), so
     a statement that says nothing fails. Each witness constructs its instance: it takes no `∀` binder before its
     conclusion (`instance_binders`; a `nontrivial` one, a `∀` for each `∃` of the conclusion) and no hypothesis beyond the
     named assumptions the lock lists (`assumes`). Read as `statement_read` reads them:
@@ -1875,7 +1874,7 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
 
 
 def exclusion_failures(n: str, g: str, read: dict, np_: dict, pin: dict, heads: list[str]) -> list[Failure]:
-    """How ``n``, the `nontrivial` witness of the exclusion theorem ``g``, falls short of the form ruled for it (lean, 27 Oct):
+    """How ``n``, the `nontrivial` witness of the exclusion theorem ``g``, falls short of the form it must have:
     at an explicit circuit, (each other premise of ``g`` holds) ∧ ¬ (a named premise of ``g``) ∧ ¬ (``g``'s bound). Among
     the conjuncts of its conclusion (`Facts.lean`'s `conclusion`, in any order), one is `¬ C …` with C a head of ``g``'s
     conclusion, one is `¬ P …` with P one of ``g``'s premises (under its own `∀` binders if it has them), and the others,
@@ -1942,8 +1941,8 @@ def unwitnessed_kept(policy: dict, facts: dict, kept: dict) -> dict:
 
 def unwitnessed_entry(v) -> tuple[str, str | None] | None:
     """An `unwitnessed` entry as (its type hash, the half it exempts): a hash exempts both witnesses, and
-    {type_hash, missing: honest or nontrivial, why} only that half of a guarantee whose `witnesses` entry lists the other
-    (LEAN-66, lean 27 Oct 00:59Z); None for any other form."""
+    {type_hash, missing: honest or nontrivial, why} only that half of a guarantee whose `witnesses` entry lists the other;
+    None for any other form."""
     if isinstance(v, str):
         return v, None
     if isinstance(v, dict) and isinstance(v.get("type_hash"), str) and v.get("missing") in ("honest", "nontrivial") \
