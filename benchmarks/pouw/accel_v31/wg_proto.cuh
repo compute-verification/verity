@@ -180,6 +180,22 @@ template <int BN, bool SPLIT> WGD void imma_atom(int32_t* d, uint32_t a, uint32_
     imma<BN>(d, desc_sw128(a), desc_sw128(b), sd);
   }
 }
+// one k-tile's four k32 atoms; CHAIN (a split 128 x 256 tile): the n128 half 0's four, then half 1's, so each MMA's
+// accumulator is the last one's, in place of the halves in turn
+#ifndef V31_QORD
+#define V31_QORD 0
+#endif
+template <int BN, bool SPLIT, bool CHAIN> WGD void imma_ktile(int32_t* d, uint32_t a, uint32_t b, uint32_t sd) {
+  if constexpr (CHAIN && SPLIT && BN == 256) {
+#pragma unroll
+    for (int h = 0; h < 2; h++)
+#pragma unroll
+      for (int k = 0; k < 4; k++) imma<128>(d + 64 * h, desc_sw128(a + 32 * k), desc_sw128(b + 128 * BK * h + 32 * k), sd || k > 0);
+  } else {
+#pragma unroll
+    for (int k = 0; k < 4; k++) imma_atom<BN, SPLIT>(d, a + 32 * k, b + 32 * k, sd || k > 0);
+  }
+}
 template <int NA> WGD void acc_fence(int32_t* d) {
 #pragma unroll
   for (int i = 0; i < NA; i++) asm volatile("" : "+r"(d[i])::"memory");
@@ -508,10 +524,7 @@ __device__ void body(const Args& p, const H& h = H{}) {
       mbar_wait_warp(bars + 8 * s, ph);
       const uint32_t a0 = base + s * T::STAGE + wg * 64 * BK, b0 = base + s * T::STAGE + T::A_BYTES;
       WGP_FENCE;
-      imma_atom<BN, RP == 5>(d, a0, b0, i > 0);
-      imma_atom<BN, RP == 5>(d, a0 + 32, b0 + 32, 1);
-      imma_atom<BN, RP == 5>(d, a0 + 64, b0 + 64, 1);
-      imma_atom<BN, RP == 5>(d, a0 + 96, b0 + 96, 1);
+      imma_ktile<BN, RP == 5, V31_QORD != 0>(d, a0, b0, i > 0);
       WGP_COMMIT;
       WGP_WAIT(1);
       if (pend >= 0 && lane == 0) mbar_arrive(bars + 8 * (STAGES + pend));
