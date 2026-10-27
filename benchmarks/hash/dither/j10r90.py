@@ -31,7 +31,7 @@ time (on the GPU): plain INT8 as s8_simple runs it, torch._int_mm and the f32 ep
 against each build's J10-R call (seeds, rows and units: kh_units_multi_j10r_sm on every SM, the served launch), arms
 interleaved rep by rep; overhead = units / plain and gamma = (plain + units) / plain, a call and summed over a layer's
 linears (q, kv, o, up, down; the head once a step). With --wgmma, KP2-S8's wgmma.linear (the fastest exact plain INT8 on
-the H200, #4463 and #4520) at its tuned config is a second plain arm in the same rotation, its bf16 output equal to
+the H200) at its tuned config is a second plain arm in the same rotation, its bf16 output equal to
 plain's on every cell. After the reps every build's receipts are compared word for word with the base's.
 """
 from __future__ import annotations

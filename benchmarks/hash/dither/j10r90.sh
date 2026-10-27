@@ -16,7 +16,7 @@
 #   check  (vy-dc-h200, under gpu-lease) job.sh's j10r90: unitsbench.py's J10-R gates at its own shapes, then j10r90.py
 #          check at the frozen shape
 #   time   (vy-dc-h200, under gpu-lease) job.sh's j10r90t: j10r90.py time; with an s8-ship.tar sent (KP2-S8's
-#          s8_linear/build.sh ship plus its wgmma.py and configs.py, #4520), wgmma.linear as a second plain arm
+#          s8_linear/build.sh ship plus its wgmma.py and configs.py), wgmma.linear as a second plain arm
 #
 #   research run --on auto --cwd source --timeout 30m -- bash benchmarks/hash/dither/j10r90.sh build
 #   (or on the H200's host, outside any lease; where the host has no /workspace/cp/venv312, VERITY_BENCH_VENV names a

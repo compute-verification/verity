@@ -2,8 +2,8 @@
 the credited one-stream call (kh_one_peel's two-launch form: h1s_noise into the workspace, then h1u, or h1k in a K-split
 build; z = A B^T) on per-unit noise, against the same call on J10 banded noise at bands of g column tiles
 (kh_one_peel_band: h1j_noise hashes each band's row tiles once, into its leader's workspace region, and every unit's
-columns; the units read their rows from the leader's region), gated against CA's banded reference (#2866,
-`banded.banded_reference` under the tree `j10b_ref.ca_tree` finds: send banded-1a4d1de024.tar.gz) and labelled
+columns; the units read their rows from the leader's region), gated against CA's banded reference
+(`banded.banded_reference` under the tree `j10b_ref.ca_tree` finds: send banded-1a4d1de024.tar.gz) and labelled
 `j10b_ref.CA_LABEL`.
 
     arms  NAME-osp              per-unit noise (kh_one_peel), the baseline

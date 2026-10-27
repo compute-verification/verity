@@ -1,4 +1,4 @@
-"""dither_so's J10-R units form ($DITHER_SO_UNITS=j10r; RT-ALGO-16's verifier form, #3574: each unit's call is its call's
+"""dither_so's J10-R units form ($DITHER_SO_UNITS=j10r; RT-ALGO-16's verifier form: each unit's call is its call's
 first position and its blocks `core_check.j10r_blocks` at the call's slot M, as credit derives them from the window's
 layout, when M is "slot" on a slot T with every row tile computed, `forms.j10r_part`): the gate's references for it,
 swapped into dither_a's check as j10served.py swaps banded noise's.

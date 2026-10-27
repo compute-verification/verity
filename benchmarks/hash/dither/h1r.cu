@@ -16,7 +16,7 @@
 //               operands, one folds.  Version 4 (`h1s_unit`) splits it six ways: two warps hash a chunk ahead, two
 //               build the segments, and the fold is split in two by the fx1 + duo chains it feeds.
 //               `h1r_launch_j10r` runs version 1 under J10-R's call-scale noise (`h1r_seeds_jr`, `h1r_units_jr_k`;
-//               RT-ALGO-16's verifier form, #3574): the served J10-R units' receipts reference.
+//               RT-ALGO-16's verifier form): the served J10-R units' receipts reference.
 //
 // A step is a table of calls (`H1Call`): A [T, K] and B [N, K] s8 row-major (16-byte aligned rows), the unit positions
 // base (plus the step's, read from the device) + u, the call's roots and its row tiles' live bits (a unit is live iff its
@@ -328,7 +328,7 @@ __device__ __forceinline__ u32 wrap_s8(u32 P, u32 N) {
 // 256 terms in a four-word temporary, so cr stays one accumulator), from the fragments of X (af), wb (wf) and B (bf) and
 // the segment's noise words of rows g + 8 j (nb4) and of columns 8 j + g (nc4); the binary operands are made where they
 // are read (xa and -b a row half at a time, -c a column fragment at a time), to keep the builders under their registers.
-// xa B^T is skipped in a row half where no lane has an xa (A = 127 is rare in served rows; kernels-dither-hb's #2752)
+// xa B^T is skipped in a row half where no lane has an xa (A = 127 is rare in served rows)
 template <class E>
 __device__ __forceinline__ void peel_mmas(int (&Y)[2][4][4], int (&cr)[2][4][4], const u32 (&af)[2][4],
                                           const u32 (&wf)[4][2], const u32 (&bf)[4][2], const u32 (&IB)[4][2],

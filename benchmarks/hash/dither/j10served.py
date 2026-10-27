@@ -1,6 +1,6 @@
 """J10 banded noise served (kernels-j10; measured only, nothing here is served or credited): sbench.py through hb_sbench.py,
 plus each credited one-stream arm's twin on J10 banded noise at bands of G column tiles, paired with it in one run. Every
-banded arm's gate holds it to CA's banded reference itself (#2866, `banded.banded_reference` under the tree
+banded arm's gate holds it to CA's banded reference itself (`banded.banded_reference` under the tree
 `j10b_ref.ca_tree` finds: send banded-1a4d1de024.tar.gz) and requires it; its check docs carry `j10b_ref.CA_LABEL`.
 
     dither-1s-hbk-bG     (H200, B200) dither-1s-hbk with h1u.cu's kh_one_peel_band at G in place of kh_one_peel, from the

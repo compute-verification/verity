@@ -514,7 +514,7 @@ def _window(dev) -> Window:
     return WIN
 
 
-# A kernel op (`torch.library.Library`, a CUDA implementation), not a `custom_op`: #2684's trace counts an op without a
+# A kernel op (`torch.library.Library`, a CUDA implementation), not a `custom_op`: the credit gate's trace counts an op without a
 # Python definition as one GEMM, and its two fresh results, z and y, as written by it.
 _LIB = torch.library.Library(LIB, "DEF")
 _LIB.define("one_mm(Tensor xq, Tensor s_a, Tensor w, Tensor s_w, int idx) -> (Tensor, Tensor)")
@@ -542,7 +542,7 @@ CG = None
 
 
 def credit_doc() -> dict:
-    """#2684's verdicts over the traced calls: how many, how many credited, each refusal's reason and the kernels."""
+    """The credit gate's verdicts over the traced calls: how many, how many credited, each refusal's reason and the kernels."""
     return {"calls": CREDIT.get("calls", 0), "credited": CREDIT.get("credited", 0),
             "reasons": dict(CREDIT.get("reasons", {})), "kernels": dict(CREDIT.get("kernels", {})),
             "sample": CREDIT.get("sample", [])}
@@ -550,7 +550,7 @@ def credit_doc() -> dict:
 
 def patch(t: int, h1c: str, h1o: str, key: bytes | None = None, gate: bool = False, credit: str | None = None) -> None:
     """Every int8-exact linear through ``dither1::one_mm`` (call before the engine is built, in its process).  ``credit``,
-    the path of #2684's `credit_gate.py`: each `apply` runs inside its `Trace` and its verdict on (the y handed back, the
+    the path of `credit_gate.py`: each `apply` runs inside its `Trace` and its verdict on (the y handed back, the
     op's z) is tallied in `CREDIT` (an eager engine: a compiled one never runs `apply` per call)."""
     from collections import Counter
 

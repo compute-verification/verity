@@ -46,8 +46,8 @@ Arms:
                  (the window's salt and root(A_j), root(B_j): epsilon 'seeded') and units in the forward; admit and z
                  tables, the step trees, the round and the receipt trees between steps.  It serves the dithered product, so
                  its tokens are not exact's (reported, not gated)
-    dither-1s-credit  dither-1s on an eager engine with every linear's `apply` inside CA's credit gate (#2684's
-                 `credit_gate.Trace`, the file DITHER_CREDIT_GATE names): the gate reports its verdicts (`credit_2684`)
+    dither-1s-credit  dither-1s on an eager engine with every linear's `apply` inside CA's credit gate
+                 (`credit_gate.Trace`, the file DITHER_CREDIT_GATE names): the gate reports its verdicts (`credit_2684`)
     dither-1s-warp  dither-1s with its units a warp each (DITHER_UNITS=warp, `h1o_units`), not a block each
     dither-1s-split  dither-1s with its units in the split form (DITHER_UNITS=split, `h1o_unitss`: six warps a unit)
     dither-1s-cpeel  dither-1s with the credited peel (DITHER_PEEL=1, `h1o_unitsbp`; CA, 11:02Z and 12:16Z, H1V3's

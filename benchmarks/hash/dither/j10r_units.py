@@ -1,6 +1,6 @@
 """J10-R's receipts-only units (h1u.cu's kh_seeds_j10r and kh_units_multi_j10r) on the host: the call's seed data and every
-unit's receipt, bit for bit the receipt of J10R's `h1tile.j10r_reference` (`PouwH1Tile_v5` / `_v6`, #3403 on
-cursor/h1-j10r-1de3 at 559bc0aa69), vectorized as served_h1/receipts.py's `tile_receipts` over each unit's J10-R noise.
+unit's receipt, bit for bit the receipt of J10R's `h1tile.j10r_reference` (`PouwH1Tile_v5` / `_v6`, at
+559bc0aa69), vectorized as served_h1/receipts.py's `tile_receipts` over each unit's J10-R noise.
 
 A call is A [T, K] (its slot: T rows, the rows past M zero) and B [N, K]; unit u = ri (N / 32) + cj is at position base + u,
 and `base`, the call's first unit position, is J10-R's ``call``. seed_c = seeds.call_seed(salt, base, roots); unit (ri, cj)'s

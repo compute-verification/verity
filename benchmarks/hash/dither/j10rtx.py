@@ -17,7 +17,7 @@ until CA's reference lands. Measured only: nothing here is served or credited.
           reference at band G (h1r.cu's h1r_launch_band: v1, full compressions, the rows from the leader's seed_j in the
           seeds buffer), its CPU units on j10b_ref's noise (h1v3_ca's word functions: dither_one.h1v3_unit with h1tile's
           rows taken from the leader), z held to A B^T (peeled), and CA's banded reference itself on the same units, which
-          the gate requires (#2866: banded.banded_reference under the tree j10b_ref.ca_tree finds, j10ca_ref.py; send
+          the gate requires (banded.banded_reference under the tree j10b_ref.ca_tree finds, j10ca_ref.py; send
           banded-1a4d1de024.tar.gz). Then the band workspace of the gate
           step against j10b_ref.row_block (the first and last live band of each call whole, up to 384 drawn bands 8
           blocks each) and no 0xA5 block left in a live band.

@@ -62,7 +62,7 @@
 //   kh_lanes(A, B, L, K, seeds, out, lr, stream)   L drawn leaves on gathered operands: their receipts and lane records
 //              (option A's partials, partials.py; at the end of this file)
 //   kh_seeds_j10r(data, call, base, U, seeds, stream), kh_units_multi_j10r(calls, ncalls, units, M, live, mode, stream)
-//              kh_units_multi's receipts under J10-R's call-scale noise (#3574's form; at the end of this file), with
+//              kh_units_multi's receipts under J10-R's call-scale noise (the verifier's form; at the end of this file), with
 //              kh_units_multi_j10r_sm and a served step's seeds from h1r's call table, kh_seeds_j10r_h1r; a call's
 //              workspace is kh_j10r_jw_bytes(M, N, K): kh_j10r_rows_bytes(M, K) but with H1U_JW (its column tiles and
 //              W' once a call, after JX's rows); kh_j10r_workspace_bytes(M, N, K, rc) is the size a caller allocates
@@ -1010,7 +1010,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
     for (int d = 0; d < PD; ++d) load_seg(d, pa[d], pb[d]);
   }
   // CS: set st's blocks i = r st + e (pass i's, i = 0 the coins' block), lane's e and column (32 / r of them a warp);
-  // its body under CS, since #3889's Sm (WarpSmemX, JcSmem) have no nm
+  // its body under CS, since the Sm variants (WarpSmemX, JcSmem) have no nm
   const auto cs_hash = [&](u32 st) {
     if constexpr (CS) {
       const u32 cl = 5 - js.lr, e = lane >> cl, col = (js.rank << cl) + (lane & ((1u << cl) - 1)), i = (st << js.lr) + e;
@@ -2767,7 +2767,7 @@ extern "C" int kh_one_peel_band(const void* A, const void* B, unsigned rows, uns
   return one_call<true>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream, band, mode);
 }
 
-// J10-R (CA's RT-ALGO r3 at 3dc80591df; RT-ALGO-16's verifier form, #3574, whose credit derives a unit's call and
+// J10-R (CA's RT-ALGO r3 at 3dc80591df; RT-ALGO-16's verifier form, whose credit derives a unit's call and
 // blocks at the window's slot M): the call's noise is one stream, h1tile.noise(cseed, Layout(rows, N, K)) at call
 // scale, row i's blocks at i RB and column j's at rows RB + j CB, so unit (ri, cj) reads call rows 32 ri .. and
 // columns 32 cj .. of it.
