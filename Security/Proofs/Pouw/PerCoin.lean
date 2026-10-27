@@ -1,5 +1,6 @@
-import Definitions.Pouw.Assumptions.PerCoin
+import Definitions.Pouw.Guarantees.PerCoin
 import Proofs.Pouw.Sanity
+import Proofs.Pouw.Theorem1
 
 /-!
 # TT per coin: its finder, and TT's budget form from it
@@ -9,6 +10,8 @@ import Proofs.Pouw.Sanity
   on every coin, with the error `ε(q_A, N)` plus the probability that `H` collides on the finder's log.
 * `ttPerCoin_outputPriced` (honest): it holds with error 0 in the witness model `outputPriced`.
 * `ttPerCoin_false_of_const` (nontrivial): it fails below error 1 wherever a free constant transcript is correct.
+* `gammaFromTTPerCoin`, `endToEndPerCoin`: `G_γ` and resource exhaustion from it, each at the adversary's own cost
+  and query count, with the finder's collision outside the event.
 -/
 
 namespace Pouw.Proofs
@@ -101,5 +104,48 @@ theorem ttPerCoin_false_of_const [Fintype Q] [DecidableEq Q] [Fintype R] [Fintyp
       rw [finderQueries_length]; exact hcalls x.1 x.2
     rw [List.eq_nil_of_length_eq_zero h0] at hy
     simp at hy
+
+/-- **(a) per coin**: `G_γ` from `TTPerCoin`, pointwise by `wins_imp_tt` at `T` the adversary's own cost. -/
+theorem gammaFromTTPerCoin : Pouw.Guarantees.GammaFromTTPerCoin := by
+  intro Q R S _ _ _ _ CM P D γ₀ Ωmax ε hQ hγ₀ hΩ hW hTT U hU A
+  obtain ⟨_, h⟩ := hTT
+  refine le_trans (pr_mono ?_) (h U hU A)
+  rintro ⟨H, s⟩ ⟨hwin, hc⟩
+  refine ⟨?_, hc⟩
+  have h1 := wins_imp_tt P U H s _ hΩ (hW U hU) hwin
+  rw [div_lt_iff₀ (by linarith : (0 : ℝ) < 1 - γ₀)] at h1
+  exact h1.trans_eq (mul_comm _ _)
+
+/-- **(d) per coin**: `TTPerCoin` and the `Ω_max` bound give resource exhaustion with `δ_s = (1 − ε_s)^t` and
+`η = ε(A.queries U, N)`. -/
+theorem endToEndPerCoin : Pouw.Guarantees.EndToEndPerCoin := by
+  intro Q R S _ _ _ _ CM P D γ₀ Ωmax ε hQ hγ₀ hΩ hW hTT U hU A t εs hεs
+  have hG := gammaFromTTPerCoin Q R S CM P D γ₀ Ωmax ε hQ hγ₀ hΩ hW hTT U hU A
+  let E1 := fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
+    AuditAccepts (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
+      εs * totalWref P U.layout <
+        ∑ u ∈ range U.layout.N \ correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1), (P.Wref U.layout u : ℝ)
+  let E2 := fun y : (Q → R) × S =>
+    Wins P U (reductionGamma γ₀ Ωmax) (CM.cost A.online y.1 U A.act (A.pre.eval y.1) y.2)
+        (A.transcript U y.1 y.2) y.1 y.2 ∧
+      ¬ Collides y.1 (finderQueries hQ A U y.1 y.2)
+  have hE1 : pr E1 ≤ (1 - εs) ^ t := by
+    let G := fun y : ((Q → R) × S) × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
+      AuditAccepts (correctSet P U y.1.1 y.1.2 (A.transcript U y.1.1 y.1.2)) y.2 ∧
+        εs * ∑ u ∈ range U.layout.N, (P.Wref U.layout u : ℝ) <
+          ∑ u ∈ range U.layout.N \ correctSet P U y.1.1 y.1.2 (A.transcript U y.1.1 y.1.2), (P.Wref U.layout u : ℝ)
+    calc pr E1 = pr G := pr_equiv (Equiv.prodAssoc _ _ _).symm G
+      _ ≤ _ := workWeightedSampling ((Q → R) × S) (P.Wref U.layout) U.layout.N t
+          (fun y => correctSet P U y.1 y.2 (A.transcript U y.1 y.2)) εs hεs
+  calc _ ≤ pr (fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) => E1 x ∨ E2 (x.1, x.2.1)) :=
+        pr_mono fun x hx => by
+          by_cases h1 : E1 x
+          · exact Or.inl h1
+          · refine Or.inr ⟨wins_of_accept P U x.1 x.2.1 _ (reductionGamma_lt_one hγ₀ hΩ) hx.2.1 ?_, hx.2.2⟩
+            by_contra h2
+            exact h1 ⟨hx.1, lt_of_not_ge h2⟩
+    _ ≤ pr E1 + pr (fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) => E2 (x.1, x.2.1)) :=
+        pr_or_le _ _
+    _ ≤ (1 - εs) ^ t + ε (A.queries U) U.layout.N := add_le_add hE1 ((pr_fst2_le E2).trans hG)
 
 end Pouw.Proofs

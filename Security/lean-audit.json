@@ -9704,6 +9704,7 @@
    "assumptions": [],
    "type_hash": "5285cb8cbec9dd6a634d4653607b825be7d9eea4c260b93e29cb3fad67b09cee"
   },
+  "Pouw.SecurityProofs.EndToEndPerCoin": {"owner": "@compute-accounting"},
   "Pouw.SecurityProofs.Eps1.ClassPSlots": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.Eps1.ClassPSlots : Pouw.Guarantees.Eps1.ClassPSlots"],
@@ -9728,6 +9729,7 @@
    "assumptions": [],
    "type_hash": "4b3596da16a1c3c644897e041329065e140b1884887a3ddf279b46ee703d6cc6"
   },
+  "Pouw.SecurityProofs.GammaFromTTPerCoin": {"owner": "@compute-accounting"},
   "Pouw.SecurityProofs.NCP.BiasU8Iff": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.NCP.BiasU8Iff : Pouw.Guarantees.NCP.BiasU8Iff"],

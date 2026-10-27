@@ -2,6 +2,7 @@ import Definitions.Pouw.Guarantees.Game
 import Proofs.Pouw.Sampling
 import Proofs.Pouw.Theorem1
 import Proofs.Pouw.Reduction
+import Proofs.Pouw.PerCoin
 
 /-!
 # Proofs of the game's guarantees
@@ -19,3 +20,5 @@ theorem EndToEnd : Pouw.Guarantees.EndToEnd := Pouw.Proofs.endToEnd
 end Pouw.SecurityProofs
 
 theorem Pouw.SecurityProofs.GammaFromTT : Pouw.Guarantees.GammaFromTT := @Pouw.Proofs.gammaFromTT
+theorem Pouw.SecurityProofs.GammaFromTTPerCoin : Pouw.Guarantees.GammaFromTTPerCoin := @Pouw.Proofs.gammaFromTTPerCoin
+theorem Pouw.SecurityProofs.EndToEndPerCoin : Pouw.Guarantees.EndToEndPerCoin := @Pouw.Proofs.endToEndPerCoin
