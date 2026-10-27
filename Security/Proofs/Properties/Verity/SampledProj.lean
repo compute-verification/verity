@@ -61,8 +61,8 @@ theorem sess0_of_accept {s : Sent} {p : _root_.SampledProofs.OneStageZk.Params}
   exact ⟨⟨record, proofs⟩, p, c, e, pub, prof, s0, rest, hc, hacc, hl,
     tags0, circuitB, pubB, rd, b, ht, hcB, hpB, hrd, hb, hu, hf⟩
 
-/-- **Session 0's transcript is accepted** at inputs that are the session's wherever v2 accepts (`Drive.covers`'
-`SessionInputs`). -/
+/-- **Session 0's transcript is accepted** at inputs that are the session's wherever v2 accepts (`SessionInputs`,
+as `Canon.InputsAt` states it). -/
 theorem acceptsZK_of_sess0 {s : Sent} {t : Exec.Transcript} {I : Exec.Inputs} (h : Sess0 s t)
     (hI : ∀ p c e pub prof, SampledCase s p c e →
       _root_.SampledProofs.OneStageZk.checkBlobs p c e (Core.Blobs.ofArray s.blobs) = .accept pub prof →

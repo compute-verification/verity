@@ -1,4 +1,4 @@
-import Proofs.Properties.Verity.SampledProj
+import Proofs.Properties.Verity.SampledRecs
 
 /-!
 # The reduction at a live session, from what the play's releases read back to
@@ -16,7 +16,8 @@ device's releases with `Readers`. `Drive.canon` then follows from what the relea
 
 `Canon.recordOfZKJ_proj` and `Canon.pointsHash_pfOf` turn these into `Drive.canon`'s record and hash. `covers` needs
 one more fact, `InputsAt`: where v2 accepts off the break, the session's inputs are `A`'s (`acceptsZK_proj`).
-`accept_le_of_canon` is `SampledDeploy.accept_le` at `τOf := (drive …).τ`.
+`accept_le_of_canon` is `SampledDeploy.accept_le` at `τOf := (drive …).τ` and `col := colAt recsAt pairs`: the
+pieces' breaks, on records of an accepting case's uses, are its collisions or the forger's success (`brk_of_break`).
 -/
 
 open Lean (Json)
@@ -155,24 +156,30 @@ end
 
 /-- **`SampledDeploy.accept_le` from what the releases read back to**: at each session `A θ F c σ r hr`, its readers
 `Rd`, and the play's session at `A`'s inputs (`InputsAt`), its releases split into blocks (`RunsAt`), the record's draw
-(`DrawsAt`) and its link points and rounds (`LinksAt`) those blocks' reads, off the collision `col` and the forger's
-success, sampled proofs' verdict accepts at most as often as the live audit does at the reduction's strategy. -/
+(`DrawsAt`) and its link points and rounds (`LinksAt`) those blocks' reads, off the collision `colAt recsAt pairs` reads
+(a break on an accepting case's uses, `brk_of_break`, or a collision among `pairs`) and the forger's success, sampled
+proofs' verdict accepts at most as often as the live audit does at the reduction's strategy. -/
 theorem accept_le_of_canon {V : Vocab d α} (kd : ByteArray → ℕ) (desc : ByteArray → Claims.Msg)
     (A : ∀ (θ F c : ByteArray) (_σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed), V.parsed F = some r →
       Flock.Guarantees.LiveAt r.n r.D r.hU (kd θ) (⌊(V.certOf θ).ε * r.n⌋₊ + 1) (desc θ))
-    (col : ByteArray → ByteArray → ByteArray → Outcome → Option (Claims.Msg × Claims.Msg))
+    (pairs : ByteArray → Outcome → List (ByteArray × ByteArray))
     (Rd : ∀ θ F c σ r hr, Readers (A θ F c σ r hr))
-    (hIn : ∀ θ F c σ r hr, InputsAt V (fun o => ColEvent (col θ F c) o ∨ V.Forges .sampled θ o) (A θ F c σ r hr).I)
-    (hRuns : ∀ θ F c σ r hr, RunsAt V θ F c (fun o => ColEvent (col θ F c) o ∨ V.Forges .sampled θ o) (Rd θ F c σ r hr))
-    (hDraw : ∀ θ F c σ r hr, DrawsAt V θ F c (fun o => ColEvent (col θ F c) o ∨ V.Forges .sampled θ o) (Rd θ F c σ r hr))
-    (hLink : ∀ θ F c σ r hr, LinksAt V θ F c (fun o => ColEvent (col θ F c) o ∨ V.Forges .sampled θ o) (Rd θ F c σ r hr)) :
+    (hIn : ∀ θ F c σ r hr,
+      InputsAt V (fun o => ColEvent (V.colAt recsAt pairs θ) o ∨ V.Forges .sampled θ o) (A θ F c σ r hr).I)
+    (hRuns : ∀ θ F c σ r hr,
+      RunsAt V θ F c (fun o => ColEvent (V.colAt recsAt pairs θ) o ∨ V.Forges .sampled θ o) (Rd θ F c σ r hr))
+    (hDraw : ∀ θ F c σ r hr,
+      DrawsAt V θ F c (fun o => ColEvent (V.colAt recsAt pairs θ) o ∨ V.Forges .sampled θ o) (Rd θ F c σ r hr))
+    (hLink : ∀ θ F c σ r hr,
+      LinksAt V θ F c (fun o => ColEvent (V.colAt recsAt pairs θ) o ∨ V.Forges .sampled θ o) (Rd θ F c σ r hr)) :
     ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed)
       (hr : V.parsed F = some r), V.Registered θ F →
-      Game.prob (fun o => V.Verdict .sampled o ∧ ¬ ColEvent (col θ F c) o ∧ ¬ V.Forges .sampled θ o) (V.game θ F c) σ ≤
+      Game.prob (fun o => V.Verdict .sampled o ∧ ¬ ColEvent (V.colAt recsAt pairs θ) o ∧ ¬ V.Forges .sampled θ o)
+          (V.game θ F c) σ ≤
         FlockSoundness.Game.prob (fun o => ZkExec.LiveAcceptsZK (A θ F c σ r hr).I o) (A θ F c σ r hr).GH
           (drive V θ F c σ _ (Rd θ F c σ r hr) (hIn θ F c σ r hr) (hRuns θ F c σ r hr) (hDraw θ F c σ r hr)
             (hLink θ F c σ r hr)).τ :=
-  accept_le_of_drives kd desc A col fun θ F c σ r hr =>
+  accept_le_of_drives kd desc A (fun θ _ _ => V.colAt recsAt pairs θ) fun θ F c σ r hr =>
     drive V θ F c σ _ (Rd θ F c σ r hr) (hIn θ F c σ r hr) (hRuns θ F c σ r hr) (hDraw θ F c σ r hr)
       (hLink θ F c σ r hr)
 
