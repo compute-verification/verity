@@ -1,71 +1,56 @@
-import Properties.Verity.Toy
+import Properties.Verity.Onsite
 import Proofs.Properties.Verity.Soundness
 
 /-!
-# The toy deployment's honest lemma
+# Onsite's honest lemma
 
-`Verity.Toy.soundness_honest`: at the honest deployed instance, each claim the toy deployment decides holds on almost
-every play of its honest prover at the honest commitment (`Vocab.HonestHolds G.commit`), sampled proofs' from `Vocab.holds_sampled_of_opens` at the honest prover's case
-(`SampledHonest`), the network certifier's from its honest lemma (`NetworkHonest`) at the honest commitment.
-`soundness_honest_event` is `soundness_at_honest`'s event at the toy, at that instance: the toy's compiled verifier
-accepting registered files while a claim it decides fails has probability `0`. The model-level instance stays the
-one `_nontrivial` (`soundness_at_nontrivial_of … .sampled`); the toy gets none of its own.
+`Verity.Onsite.soundness_honest`: at onsite's honest instance, each claim onsite decides holds on almost every play of
+its honest prover at the honest commitment (`Vocab.HonestHolds G.commit`), sampled proofs' from
+`Vocab.holds_sampled_of_opens` at the honest prover's case (`SampledHonest`), and each other claim's from its honest
+lemma (`NetworkHonest`, `PouwHonest`, `PousHonest`, `BandwidthHonest`). `soundness_honest_event` is
+`soundness_at_honest`'s event at onsite: onsite's compiled verifier accepting registered files while a claim fails has
+probability `0` against the honest prover. The model-level instance stays the one `_nontrivial`
+(`soundness_at_nontrivial_of … .sampled`).
 
 `Vocab.not_honestHolds_sampled_of_unopened` is why `Vocab.HonestHolds` reads the honest commitment: at a commitment
 that opens no gate, sampled proofs' claim fails on every play, whatever the strategy.
 -/
 
-namespace Verity.Toy
+namespace Verity.Onsite
 
 open Accounting Core
 open scoped ENNReal
 
 variable {ι α : Type} [Fintype α] {d : Device ι}
 
-theorem comp_mem (k : Index) : comp k ∈ Core.Toy.components := by
-  cases k <;> simp [comp, Core.Toy.components]
-
-theorem ofAudit_sampled : ofAudit .sampled = some .sampled := rfl
-theorem ofAudit_network : ofAudit .network = some .network := rfl
-theorem ofAudit_pouw : ofAudit .pouw = none := rfl
-theorem ofAudit_pous : ofAudit .pous = none := rfl
-theorem ofAudit_poub : ofAudit .poub = none := rfl
-
-/-- The toy decides exactly sampled proofs' and the network certifier's claims. -/
-theorem decides_iff (a : Audit) : deployment.Decides a ↔ a = .sampled ∨ a = .network := by
-  cases a <;> simp [Deployment.Decides, deployment, ofAudit_sampled, ofAudit_network, ofAudit_pouw, ofAudit_pous,
-    ofAudit_poub]
-
 /-- **Sampled proofs' claim at the honest commitment**, from the honest prover's case. -/
 theorem honestHolds_sampled (G : Given d α) (h : SampledHonest G) :
-    (vocab G).HonestHolds G.commit (audit .sampled) := by
+    (vocab G).HonestHolds G.commit .sampled := by
   intro θ F hreg
   obtain ⟨hc, ho, hε⟩ := h θ F hreg
   exact prob_play_eq_zero _ _ θ F _ _ (fun log e b hn => hn ((vocab G).holds_sampled_of_opens θ F (G.commit θ F)
     ((vocab G).honest θ F (G.commit θ F)) ⟨θ, F, G.commit θ F, log, e, b⟩ hc ho hε)) _
 
-/-- **The network certifier's claim at the honest commitment**, from its honest lemma. -/
-theorem honestHolds_network (G : Given d α) (h : NetworkHonest G) :
-    (vocab G).HonestHolds G.commit (audit .network) :=
-  h
-
-/-- **The toy's honest lemma.** -/
+/-- **Onsite's honest lemma.** -/
 theorem soundness_honest : SoundnessHonest := by
-  intro ι α _ d G hs hn a ha
-  rcases (decides_iff a).1 ha with rfl | rfl
+  intro ι α _ d G hs hn hw hp hb a _
+  cases a
   · exact honestHolds_sampled G hs
-  · exact honestHolds_network G hn
+  · exact hw
+  · exact hp
+  · exact hb
+  · exact hn
 
-/-- **`soundness_at_honest`'s event at the toy**: at registered files and the honest commitment, the toy's compiled
-verifier accepting while a claim it decides fails has probability `0` against the honest prover. -/
-theorem soundness_honest_event (G : Given d α) (hs : SampledHonest G) (hn : NetworkHonest G) (θ F : ByteArray)
-    (hreg : (vocab G).Registered θ F) :
-    Game.prob (fun o => AcceptsAt deployment o.sent ∧ (vocab G).Registered o.params o.file ∧
-        ∃ a, deployment.Decides a ∧ ¬ (vocab G).Holds θ F (G.commit θ F) ((vocab G).honest θ F (G.commit θ F)) a o)
+/-- **`soundness_at_honest`'s event at onsite**: at registered files and the honest commitment, onsite's compiled
+verifier accepting while a claim fails has probability `0` against the honest prover. -/
+theorem soundness_honest_event (G : Given d α) (hs : SampledHonest G) (hn : NetworkHonest G) (hw : PouwHonest G)
+    (hp : PousHonest G) (hb : BandwidthHonest G) (θ F : ByteArray) (hreg : (vocab G).Registered θ F) :
+    Game.prob (fun o => AcceptsAt onsite o.sent ∧ (vocab G).Registered o.params o.file ∧
+        ∃ a, onsite.Decides a ∧ ¬ (vocab G).Holds θ F (G.commit θ F) ((vocab G).honest θ F (G.commit θ F)) a o)
       ((vocab G).game θ F (G.commit θ F)) ((vocab G).honest θ F (G.commit θ F)) = 0 :=
-  soundness_at_honest (vocab G) deployment G.commit (soundness_honest ι α d G hs hn) θ F (G.commit θ F) hreg rfl
+  soundness_at_honest (vocab G) onsite G.commit (soundness_honest ι α d G hs hn hw hp hb) θ F (G.commit θ F) hreg rfl
 
-end Verity.Toy
+end Verity.Onsite
 
 namespace Verity.Vocab
 
