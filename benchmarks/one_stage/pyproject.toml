@@ -21,4 +21,9 @@ inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml", "benchma
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/input_sets.py",
           "benchmarks/numerical/python/verity_numerical/bench/templates.py",
-          "integrations/vllm/verity_vllm", "benchmarks/network_traces"]
+          "integrations/vllm/verity_vllm", "benchmarks/network_traces",
+          # test_prove_bundle_coin: prove_bundle's imports, and the live coin held_coin re-derives (m3coin's derivation,
+          # served_commit's pinned challenger key and its pin's bytes)
+          "benchmarks/e2e_demo", "benchmarks/prove_path", "integrations/torch_loop", "benchmarks/e2e_h200/m3coin.py",
+          "benchmarks/e2e_h200/m3reg.py", "benchmarks/pouw/served_zk/served_commit.py",
+          "benchmarks/pouw/tests/fixtures/challenger-key.json"]

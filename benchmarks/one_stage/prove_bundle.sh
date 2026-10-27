@@ -15,6 +15,8 @@
 # (Window.write's files), bundle.json and bundle.bin beside it with a live draw, and optionally tampered/; the layouts are
 # PRF-172's. PB_STEP=1 with PB_K=K: the torch loop's step as such a tree, its K blocks drawn live over the step registration. PB_LEAN_JOBS: Lean verifies at
 # once beside the one session proving.
+# A delivered step is held to its live coin (prove_bundle.py --coin): PB_MAIN is main's first-parent history (default
+# the run's inputs/main.txt, `research run --send`).
 # PB_BUILD_ONLY=1 builds the three binaries, keeps them in $OUT/bin with the stamp of the trees they're built from
 # (verity/ml/flock and verity/core/service/flock), and stops. PB_BINARIES=DIR (on the node, e.g. that run's out/bin) uses them
 # when DIR's stamp is this source's, and otherwise builds here: M3 builds before its window, not in it.
@@ -100,7 +102,14 @@ fi
 if [ -n "$STEP" ]; then
   cp "$STEP/step-registration.json" "$STEP/receipt.json" "$STEP/draw.json" "$O/" 2>/dev/null
   log "prove: each drawn block held to the registered step, then proved, then the negatives"
-  "$PY" benchmarks/one_stage/prove_bundle.py --step "$STEP" \
+  COIN=()
+  if [ -n "${PB_IN_ART:-}${PB_IN:-}" ]; then
+    # a delivered step's draw must re-derive from the challenger's live coin: main's first-parent history holds its pins
+    MAIN=${PB_MAIN:-${RESEARCH_RUN_DIR:-}/inputs/main.txt}
+    [ -s "$MAIN" ] || { echo "prove-bundle: a delivered step needs main's first-parent history (PB_MAIN, or --send main.txt)"; exit 11; }
+    COIN=(--coin --main "$MAIN")
+  fi
+  "$PY" benchmarks/one_stage/prove_bundle.py --step "$STEP" "${COIN[@]}" \
     --bin "$BIN" --lean "$LEAN" --firewall "$FWL" --out "$W/pb" ${PB_FLIPS:+--flips $PB_FLIPS} \
     --lean-jobs "${PB_LEAN_JOBS:-1}" > "$O/prove_bundle.log" 2> "$O/prove_bundle.err"
 else

@@ -198,13 +198,76 @@ def hold_step(sdir: Path) -> tuple[dict, dict[str, bool], dict[int, dict], list[
     return reg, held, blocks, sorted(set(units) - set(dirs))
 
 
+#: infra's published pin of vy-challenger-1's key (`served_commit.CHALLENGER_KEY_PIN`; its tests pin these bytes)
+CHALLENGER_PIN = REPO / "benchmarks" / "pouw" / "tests" / "fixtures" / "challenger-key.json"
+
+
+def _lms_verify(key, message: bytes, signature: bytes) -> bool:
+    from verity.ml.crypto import lms
+    p = lms.Params(64, key.W, key.H)
+    try:
+        return lms.verify(p, key.public, message, lms.Signature.decode(p, signature))
+    except ValueError:
+        return False
+
+
+def held_coin(sdir: Path, reg: dict, draw: dict, main: Path | None) -> tuple[dict[str, bool], list[int] | None, dict]:
+    """The step's live coin, `e2e_h200/m3coin.py`'s (``coin.json`` with its session's files beside it, in ``sdir`` or
+    ``sdir/coin/``), re-derived here rather than taken from ``draw.json``: ``({check: ok}, the derived units, info)``.
+    The session is the one vy-challenger-1's ledger, signed under infra's pinned key (`CHALLENGER_PIN`), opens on the
+    step registration's digest, from a commit on main's first-parent line (``main``: ``git rev-list --first-parent``);
+    its commitment opens the recorded coin after that digest; and the units are m3coin's ``derive(coin, DOMAIN,
+    {registration: digest}).subset(k, population, "m3")`` under m3coin's fixed scheme, label and domain, which must equal
+    ``draw.json``'s and the coin record's."""
+    sys.path[:0] = [str(REPO / "benchmarks" / "e2e_h200"), str(REPO / "benchmarks" / "pouw" / "served_zk")]
+    import m3coin as COIN
+    import served_commit as SC
+    from verity.core.protocols.sampled_proofs import challenger as Ch, remote as RM
+    path = next((p for p in (sdir / "coin.json", sdir / "coin" / "coin.json") if p.is_file()), None)
+    if path is None:
+        return {"coin": False}, None, {"why": "no coin.json in the step tree"}
+    coin, d, digest = json.loads(path.read_text()), path.parent, RB.step_digest(reg)
+    k, n = reg["law"]["k"], reg["population"]
+    held = {"coin:registration": coin.get("registration") == digest,
+            "coin:layout": (coin.get("scheme"), coin.get("families"), coin.get("domain"), coin.get("law"),
+                            coin.get("population")) == (COIN.SCHEME, [[COIN.LABEL, 1]], COIN.DOMAIN, reg["law"], n)}
+    info: dict = {"session": (coin.get("reserve") or {}).get("session"), "commitment": coin.get("commitment")}
+    opening, derived = None, None
+    try:
+        opening = Ch.LiveOpening.from_json(coin.get("opening"))
+        derived = sorted(COIN.draw(opening.coin, digest, k, n))
+    except (Ch.CoinError, TypeError, ValueError) as e:
+        info["why"] = f"opening: {e}"
+    held["coin:units"] = derived is not None and derived == draw.get("units") and sorted(coin.get("units") or []) == derived
+    try:
+        if opening is None or main is None:
+            raise ValueError("no opening" if opening is None else "no main first-parent history (--main) to hold the pins to")
+        key = SC.pinned_challenger_key(CHALLENGER_PIN)
+        sid, window, after = info["session"], {"root": digest}, bytes.fromhex(digest)
+        sess = d / sid / "out" if (d / sid / "out").is_dir() else d / sid
+        ledger = d / f"{sid}.ledger.jsonl"
+        commitment, roots = RM.trusted_session(sess, [ledger], window, key, _lms_verify)
+        pins = [x for x in (d / f"{sid}.pins.jsonl").read_text().split("\n") if x]
+        audited = Ch.pinned_session(Ch.ledger_head([RM.ledger_lines(ledger)], key, _lms_verify), window, key, pins,
+                                    RM.main_lines(main), _lms_verify)
+        held.update({"coin:session": audited.session == sid, "coin:roots": roots == {COIN.LABEL: (after,)},
+                     "coin:commitment": commitment.root.hex() == coin.get("commitment"),
+                     "coin:opens": Ch.live_reason(commitment, opening, COIN.LABEL, 0, after) is None})
+    except (Ch.CoinError, OSError, ValueError, KeyError, TypeError) as e:
+        held["coin:session"] = False
+        info["why"] = f"session: {e}"
+    return held, derived, info
+
+
 TIES = {"lean": "each drawn block's one-member window: its C-Flock --zk session behind the Lean firewall, decided by Lean "
                 "verify --zk --partition --program (the window's statement, its port roots and its member's Definition)",
         "python": "each drawn block's rows to the registered step root (replay_bundle.check: the unit path, slot_path and "
                   "step_path, and each row's string the window's leaf; replay_bundle.check_step: the commitment's step root, "
                   "slot roots, layout and context the registration's, the block the drawn index's), the receipt naming the "
                   "step registration's digest, and the draw under the registered law over the registered population "
-                  "(draw.check_draw)"}
+                  "(draw.check_draw), and with --coin those units re-derived from the challenger's live coin over the "
+                  "step registration's digest, its session the one the challenger's ledger opens on it under infra's "
+                  "pinned key (held_coin)"}
 
 
 def make_step(s: Path, out: Path, k: int, lean: str, kv: bool = False) -> int:
@@ -484,8 +547,14 @@ def main_step(a, out: Path) -> int:
     sdir = Path(a.step)
     reg, held, blocks, missing = hold_step(sdir)
     drawn = json.loads((sdir / "draw.json").read_text())
+    derived, coin = None, None
+    if a.coin:
+        got, derived, coin = held_coin(sdir, reg, drawn, Path(a.main) if a.main else None)
+        held.update(got)
     print("DRAWN " + json.dumps({"registration": RB.step_digest(reg), "receipt": json.loads((sdir / "receipt.json").read_text()),
                                  "law": reg["law"], "population": reg["population"], "units": drawn.get("units"),
+                                 "derived": derived, "coin": coin and {**coin, "held": {k: v for k, v in held.items()
+                                                                                        if k.startswith("coin")}},
                                  "blocks": {str(g): RB.block_of(reg, g) for g in drawn.get("units") or []}},
                                 sort_keys=True), flush=True)
     for g, b in sorted(blocks.items()):
@@ -496,7 +565,7 @@ def main_step(a, out: Path) -> int:
     failures = {**{str(g): "no block delivered for the drawn index" for g in missing},
                 **{str(g): "refused before proving: " + ", ".join(k for k, v in b["held"].items() if not v)
                    for g, b in refused.items()}}
-    summary: dict = {"format": FORMAT, "ties": TIES, "held": held,
+    summary: dict = {"format": FORMAT, "ties": TIES, "held": held, "derived": derived, "coin": coin,
                      "step": {x: reg[x] for x in ("run", "program", "block", "step", "step_root", "slots", "units_per_slot",
                                                   "population", "law", "layout_digest", "context")}
                      | {"registration": RB.step_digest(reg)},
@@ -546,6 +615,9 @@ def main(argv=None) -> int:
     ap.add_argument("--window", help="the prover's window: what Window.write wrote, private files included")
     ap.add_argument("--step", help="a step tree: step-registration.json, receipt.json, draw.json and "
                                    "blocks/<index>/{window/, bundle.{json,bin}, tampered/?}, the draw the step registration's")
+    ap.add_argument("--coin", action="store_true",
+                    help="with --step: the draw must re-derive from the challenger's live coin (coin.json, `held_coin`)")
+    ap.add_argument("--main", help="with --coin: main's first-parent history (git rev-list --first-parent origin/main)")
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
     ap.add_argument("--firewall", required=True)
