@@ -6,8 +6,8 @@ change that closes it has to say so here. Two recorded sets, both fetched fixtur
 * `rec-coins/16-16-8-n64` (`r20261009-111638-6720`'s inner statement and honest inner session, and level 3's `pub.bin`,
   `registered.json` and outer session, proved again at the current leaf scheme by `r20261010-040650-84a9`), with level
   3's statement restaged by `rec_vstage.stage` as `test_lean_rec_coins` restages it, and checked as
-  `verity/flock-circuit`; its outer session was proved before #1677's OS masks and before #4319's coin schedule, so
-  every identity refuses it at its Hello, and only the checks that don't read the Hello are asserted on it. The inner
+  `verity/flock-circuit`; its outer session was proved before the OS masks and the current coin schedule, so every
+  identity refuses it at its Hello, and only the checks that don't read the Hello are asserted on it. The inner
   description is not
   registered (no staging runs `inner_registered register`). V*'s sessions hide their outputs, as `ZkOuterR.hTags`
   (`TagsOkZHJ`) takes them, and their shared-row public file passes `ScopeZR`, `Typable`'s statement check; the
@@ -18,8 +18,8 @@ change that closes it has to say so here. Two recorded sets, both fetched fixtur
   programs xz-compressed, the inner transcript is tracked beside it (`f1-gate-transcript`), and each is checked against
   the art's own listing once decompressed; RecCap's statement and session were staged and proved over the gate's inner
   session after it (`r20261020-002938-635a`, `85-rec-reprice.sh` STEP=vcap and STEP=oprove LEVELS=cap). All ten
-  sessions were proved again over those statements at #4319's coin schedule, one firewalled session each (STEP=oprove
-  MODES=firewall WARM=0 RUNS=1: `r20261027-202029-0707`, and L0's in `r20261027-205158-8c3a`). Lean's verifier
+  sessions were proved again over those statements at the current coin schedule, one firewalled session each
+  (STEP=oprove MODES=firewall WARM=0 RUNS=1). Lean's verifier
   builds the inner statement from its own partition object and program (`AcceptsPublic`), V*'s seven staged statements
   are the ones `outerStatementsAt` lists, each session is one of them byte for byte (`RecVStar.checkStmt`) and draws every unit,
   and the rate is below 1 at `k = 2^23` (at `2^21` for these sessions). The sessions were proved with #1677's OS masks
@@ -162,7 +162,7 @@ def test_the_recorded_level_meets(outer, check):
 
 def test_the_recorded_level_is_refused_at_its_hello(outer):
     """`AcceptsZKR` refuses the level's session as `verity/flock-circuit` at its Hello: its prover (505b9bfb1) lacked
-    #1677's `osMasks` and drew coins at the schedule before #4319's."""
+    the OS masks (`osMasks`) and drew its coins at an earlier schedule."""
     assert (outer["accepts_zkr"]["ok"], outer["accepts_zkr"].get("why")) == (False, S2_R7)
 
 
