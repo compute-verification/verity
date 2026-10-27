@@ -8,7 +8,7 @@
   that nothing registered predicts. Its canonical bytes, or an `Advice` of either, which is held to its encoding. Nothing else is advice.
 - `ingress`: each request's certified body by its id (I1's `RequestAdvice.id`, the body's `user`), the fixed ingress schema: an
   OpenAI completions request with `prompt` as token ids. Sampling parameters are values the request brings, never advice. A body
-  given as the warden's attested bytes is ingress v0 (`program.registry.io_shell`, under `Registered.served_model`), and its
+  given as the network certifier's attested bytes is ingress v0 (`program.registry.io_shell`, under `Registered.served_model`), and its
   request gets the parse unit `IngressPrompt_v1{MODEL, LP, V}` (`RequestUnit.parse`): the unit that reads the ingress transfer
   gates, whose ids output is the request Program's `prompt` input and whose ``ok`` proves the bytes are in the schema.
 
