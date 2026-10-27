@@ -359,10 +359,10 @@ level and K′ are in `window`'s docstring). This section is the window's layout
 that a drawn tile's reads are a function of public inputs alone. `benchmarks/pouw/served_zk/served_commit.py` commits a
 window this way.
 
-**The fixed length.** Correct tokens served past the honest run's end-of-sequence are not useful work, so a row of record
+**The fixed length.** Correct tokens served past the honest run's end-of-sequence are not useful work, so a workload of record
 serves at a public fixed length, ignore_eos at each slot's public max_tokens, which the window registers (its `length`
 item) and the verifier checks against its own parameters, so W_use is public (Daniel, 19 Oct, ASK-39). PouwCheck refuses
-a row whose stop mode is not `fixed` (`window-form: eos-keyed-row`), a served length or max_tokens other than the
+a workload whose stop mode is not `fixed` (`window-form: eos-keyed-row`), a served length or max_tokens other than the
 verifier's (`window-form: length-mismatch`, `window-form: max-tokens`), and a window registered before the rule, with no
 `length` item (`window-form: no-fixed-length`), which is not of record (`window.length_problem`). A served H1 window's
 credit holds it the same way (`credit._length`, `PouwCheck.Credit.Internal.length`): its period's open, which the auditor
@@ -1634,10 +1634,12 @@ registered Definitions, each checked by circuit-check at its sidecar's binding (
 Not here yet: P·V as a registered Call, and a staged split for a dot whose operands its holder computes; a padded tile for a
 site that fills none (decode's few tokens); the vLLM integration serving the compiled Program.
 
-## ACCEL (protocol v3.1)
+## Dither (v3.2)
 
-ACCEL, credit for a served model's int8 matmuls from committed noised prefix sums, is specified in
-`verity/core/protocols/pouw/accel/PROTOCOL.md` while it is experimental.
+Dither, PoUW's no-fold protocol, credit for a served model's int8 matmuls from committed noised prefix sums, is specified
+in `verity/core/protocols/pouw/dither/PROTOCOL.md` while it is experimental. The served PoUW moves to Dither's no-fold
+receipt (CMP-172): its H1 and J10-R units fold their words into keyed receipts, whose detection rests on
+`SharedNoiseLucks` (`Properties.Pouw.PeriodJ10R`), and that premise has no place in Dither.
 
 ## Not here yet
 
