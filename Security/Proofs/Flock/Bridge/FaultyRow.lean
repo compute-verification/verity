@@ -106,16 +106,16 @@ theorem faulty_row {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (kd : ℕ)
     have hne := (hc' p hp).1 x hx (posOf C a) ha hn
     obtain ⟨y, hy⟩ := Option.ne_none_iff_exists'.1 hne
     have hau : P.unit a ≠ some u := fun h => hn (posOf_mem_unitGates.2 h)
-    rw [localEval_of_not_mem P Xv hau]
+    rw [Partition.localEval_of_not_mem P Xv hau]
     simp only [Xv, hy, Option.getD_some]
-  have hrun := runIn_posOf_of (κ := κ) P u (P.localEval Xv u) (fun _ h => localEval_of_mem P Xv h) ref hread g.val g
-    rfl hu
+  have hrun := runIn_posOf_of (κ := κ) P u (P.localEval Xv u) (fun _ h => Partition.localEval_of_mem P Xv h) ref
+    hread g.val g rfl hu
   have hVi : P.localEval Xv u i = false := by
     have hne : P.unit i ≠ some u := by rw [hiu]; simp
-    rw [localEval_of_not_mem P Xv hne]
+    rw [Partition.localEval_of_not_mem P Xv hne]
     simp only [Xv, hread_i, F1, hbi, Option.getD_some]
   have hVg : P.localEval Xv u g = false := by
-    rw [localEval_of_mem P Xv hu, hop]
+    rw [Partition.localEval_of_mem P Xv hu, hop]
     simp [Op.apply, xorSum, hVi]
   rw [hVg] at hrun
   obtain ⟨bb, hbb, hrb⟩ := (hc' _ hpg).2 hb
