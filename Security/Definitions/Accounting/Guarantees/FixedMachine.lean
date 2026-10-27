@@ -47,24 +47,27 @@ def GateCount : Prop :=
   ∀ (H : Circuit) (S : H.StateWires) (T : ℕ) (L : Type) (A : Placed L), Accounting.FixedMachine H S T A →
     A.size A.computed = T * H.size H.computed
 
-/-- **`BlockDescription`'s premises hold together at the honest machine**: `H₀` is Boolean, the empty evaluator
-performs the final-state extraction `y₀` on `R₀`'s proof block at `M₀`, `A₀` is `H₀` run `T₀` steps, its one location's
-region is the proof block, the initial state is its initial information within `D₀ = 1` bit, and every run of `A₀`
-holds `R₀`'s registered values. -/
+/-- **`BlockDescription`'s premises hold together at the honest machine**: `R₀` registers `H₀` run `T₀` steps, `H₀` is
+Boolean, the empty evaluator is within `0` bits and performs the final-state extraction `y₀` on `R₀`'s proof block at
+`M₀`, `A₀` is `H₀` run `T₀` steps, its one location's region is the proof block, the initial state is its initial
+information within `D₀ = 1` bit, and every run of `A₀` holds `R₀`'s registered values. -/
 def BlockDescription_honest : Prop :=
-  H₀.Boolean ∧ Evaluates M₀ () 0 R₀ [] y₀ ∧ Accounting.FixedMachine H₀ S₀ T₀ A₀ ∧
+  R₀.d.D = H₀.unroll S₀ T₀ ∧ H₀.Boolean ∧ ([] : List Bool).length ≤ 0 ∧ Evaluates M₀ () 0 R₀ [] y₀ ∧
+    Accounting.FixedMachine H₀ S₀ T₀ A₀ ∧
     (∀ u, (R₀.P.gates u).map φ₀.e.toEmbedding = A₀.region (X₀ u) (Set.Ici 0)) ∧
     (∀ u, InitialBudget A₀ (R₀.d.θ.map φ₀.e.toEmbedding) (a₀ u) (X₀ u) (D₀ u)) ∧
     ∀ x, R₀.Honest (φ₀.pull x)
 
 /-- **Without `FixedMachine`, an explicit circuit beats `BlockDescription`'s bound**: at the honest machine's
-registration, decoder and evaluator (`H₀` Boolean, the empty evaluator performing `y₀` on `R₀` at `M₀`), the
-hard-coding circuit `Hard` meets the other premises in its own gate numbering (its one proof block, its operation gate,
-is the region of its one location; with gate `0` registered its initial budget is `0` bits), it is no fixed machine of
-`H₀` at any number of steps, and its string `hardString` is not described within its `0`-bit budget, no ingress, one
-proof block and the empty evaluator. The premises that read the renumbering `φ` have none to read at `Hard`. -/
+registration, decoder and evaluator (`R₀` registers `H₀` run `T₀` steps, `H₀` Boolean, the empty evaluator within `0`
+bits performing `y₀` on `R₀` at `M₀`), the hard-coding circuit `Hard` meets the other premises in its own gate
+numbering (its one proof block, its operation gate, is the region of its one location; with gate `0` registered its
+initial budget is `0` bits), it is no fixed machine of `H₀` at any number of steps, and its string `hardString` is not
+described within its `0`-bit budget, no ingress, one proof block and the empty evaluator. The premises that read the
+renumbering `φ` have none to read at `Hard`. -/
 def BlockDescription_nontrivial : Prop :=
-  H₀.Boolean ∧ Evaluates M₀ () 0 R₀ [] y₀ ∧ (∀ T, ¬ Accounting.FixedMachine H₀ S₀ T Hard) ∧
+  R₀.d.D = H₀.unroll S₀ T₀ ∧ H₀.Boolean ∧ ([] : List Bool).length ≤ 0 ∧ Evaluates M₀ () 0 R₀ [] y₀ ∧
+    (∀ T, ¬ Accounting.FixedMachine H₀ S₀ T Hard) ∧
     Hard.region univ (Set.Ici 0) = {⟨1, by decide⟩} ∧ InitialBudget Hard {⟨0, by decide⟩} ∅ univ 0 ∧
     ¬ BlockDescribed M₀ () 0 Hard univ 0 1 0 hardString
 

@@ -7,8 +7,8 @@ import Proofs.Core.Unroll
 # Proofs: a fixed machine's proof blocks are described within their budgets
 
 * `card_unregistered_le`: a proof block that is the region of a location over the run reads at most its initial budget
-  plus its ingress in unregistered bits: an unregistered gate it reads is placed outside the location, and counted in the
-  ingress, or inside it, where it is an input gate and so initial information;
+  plus its ingress in unregistered bits: an unregistered gate it reads is placed outside the location, and counted in
+  the ingress, or inside it, where it is an input gate and so initial information;
 * `BlockDescription`: Lemma 1's program for the proof block, at most `|e| + ⌈log₂ B⌉ + D + in_X([0, ∞))` bits;
 * `GateCount`: an isomorphism keeps the size, and `H` run `T` steps has size `T · |H|`;
 * the witnesses at `FixedMachine.Instances`: the honest machine's premises, and the hard-coding circuit, which meets
@@ -107,7 +107,7 @@ theorem evaluates_y₀ : Evaluates M₀ () 0 R₀ [] y₀ := by
   rfl
 
 theorem BlockDescription_honest : Guarantees.FixedMachine.BlockDescription_honest := by
-  refine ⟨boolean_H₀, evaluates_y₀, ⟨φ₀⟩, ?_, ?_, ?_⟩
+  refine ⟨rfl, boolean_H₀, le_rfl, evaluates_y₀, ⟨φ₀⟩, ?_, ?_, ?_⟩
   · rintro ⟨u, hu⟩
     obtain rfl : u = 0 := by have : u < 1 := hu; omega
     ext g
@@ -207,6 +207,6 @@ theorem not_described_Hard : ¬ BlockDescribed M₀ () 0 Hard univ 0 1 0 hardStr
   norm_num at this
 
 theorem BlockDescription_nontrivial : Guarantees.FixedMachine.BlockDescription_nontrivial :=
-  ⟨boolean_H₀, evaluates_y₀, not_fixed_Hard, region_Hard, initialBudget_Hard, not_described_Hard⟩
+  ⟨rfl, boolean_H₀, le_rfl, evaluates_y₀, not_fixed_Hard, region_Hard, initialBudget_Hard, not_described_Hard⟩
 
 end Accounting.SecurityProofs.FixedMachine
