@@ -3,6 +3,7 @@ import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
 import Proofs.Flock.Claims.Recursion.CapLowerPin
 import Proofs.Flock.Claims.Recursion.ResPiecesD
 import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+import Proofs.Flock.Claims.Recursion.VerdictRowEBytes
 
 /-!
 # The steps half of P3 (`StepsW`): the outer witnesses' chain carries row D's running sums
