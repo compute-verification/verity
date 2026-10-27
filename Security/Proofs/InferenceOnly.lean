@@ -36,9 +36,9 @@ import Proofs.InferenceOnly.CoveringTwoCostsWitness
 import Proofs.InferenceOnly.CoveringPriced
 import Proofs.InferenceOnly.CoveringPricedWitness
 import Proofs.InferenceOnly.Cover
-import Proofs.InferenceOnly.Ldl
 import Proofs.InferenceOnly.PartitionCovers
 import Proofs.InferenceOnly.CompliesCK
+import Proofs.InferenceOnly.Ldl
 import Proofs.InferenceOnly.LdlWitnesses
 import Proofs.InferenceOnly.Hardness
 import Proofs.InferenceOnly.Ldl.Witnesses

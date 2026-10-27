@@ -23,6 +23,10 @@ import Proofs.Core.Round
 import Proofs.Core.Prims.Round
 import Proofs.Core.TC
 import Proofs.Core.Fp32
+import Proofs.Core.Formalism
+import Proofs.Core.Expand
+import Proofs.Core.Padding
+import Proofs.Core.AndSize
 import Proofs.Core.Accel.Principles
 import Proofs.Core.Accel.Float
 import Proofs.Core.Accel.Decode
@@ -32,10 +36,6 @@ import Proofs.Core.NaiveStrassen
 import Proofs.Core.Bilinear
 import Proofs.Core.HongKung
 import Proofs.Core.Blocks
-import Proofs.Core.Formalism
-import Proofs.Core.Expand
-import Proofs.Core.Padding
-import Proofs.Core.AndSize
 
 /-!
 # Proofs of core's guarantees
