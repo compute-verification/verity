@@ -5,6 +5,8 @@ import Proofs.Properties.Verity.PlayFinder
 import Proofs.Flock.Bridge.FaultyRightC
 import Proofs.Flock.Soundness.Audit.Circuit
 import Properties.Verity.Extract
+import Proofs.Flock.Bridge.Lowers
+import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
 
 /-!
 # Sampled proofs' target at the deployment, with no hypothesis on the strategy
@@ -37,6 +39,11 @@ the deployment's constants (`k = kDep`, `M = R_w = 2^192`, `ρ = 1/2`, `v ≤ 2^
 costs up to `2^80`, `⊤` above. From these `SampledDeploy.sampledIn` builds the coupling `SampledIn` at every strategy:
 `units_eq` is `unitsOfFile_eq`, `hε` is `LiveAt.sound_honest` at `K₀ = ⌊ε n⌋ + 1`, and `delta_le` is
 `deltaPub_le_deployed`. Files that don't parse have no units, and files that fail the commit phase's check no verdict.
+
+The honest side: `honestHolds_sampled_of_bits` is `honestHolds_sampled` at an extractor that reads wire bits off the
+registrant's openings (`valsOfBits`), from the honest prover's bits being the key circuit's evaluation and the honest
+commitment opening every gate that isn't a constant to them; the parse's constants are input gates
+(`parsedConsts_isInput`) and their openings hold (`bits_of_consts`), and no draw enters.
 -/
 
 namespace Verity
@@ -283,6 +290,19 @@ theorem correct_extractOf (read : ByteArray → FileRead) (rounds : ByteArray �
   rw [Finset.card_eq_zero.1 hw] at hmem
   exact Finset.notMem_empty u hmem
 
+/-- **Opened values that are an evaluation read as it.** Where the constants `κ` fix only input gates (`hκin`) and
+agree with the circuit's evaluation on `xv` (`hκ`), and `val` opens that evaluation at every other wire's position
+(`hw`), the wire values opened at `val`, read at `κ`, are that evaluation. -/
+theorem openedOf_eq_eval (C : FlockSoundness.Audit.Circuit) (κ : Fin C.N → Option Bool) (val : ℕ → Option Bool)
+    (xv : Fin C.N → Bool) (hκin : ∀ g b, κ g = some b → (C.op g).isInput = true)
+    (hκ : ∀ g b, κ g = some b → C.eval xv g = b)
+    (hw : ∀ g, κ g = none → val (Flock.Bridge.posOf C g) = some (C.eval xv g)) (g : Fin C.N) :
+    Flock.Bridge.openedOf C κ val g = C.eval xv g := by
+  unfold Flock.Bridge.openedOf
+  cases hk : κ g with
+  | some b => simp [hκin g b hk, hκ g b hk]
+  | none => simp [hw g hk]
+
 /-- **The session's openings are the evaluation on its extracted values.** Where the constants `κ` fix only input
 gates (`hκin`) and agree with the key circuit's evaluation on the session's extracted values `A.Xr τ` (`hκ`), and the
 deployed commitment opens that evaluation at every other wire (`hcom`), the wire values the session's witness opens
@@ -294,13 +314,9 @@ theorem openedOf_valE {n : ℕ} {D : Flock.Desc} {hU : FlockSoundness.Built D.un
     (hκ : ∀ g b, κ g = some b → A.Cc.eval (A.Xr τ) g = b)
     (hcom : ∀ g, κ g = none → ∃ d : Claims.Msg,
       A.Cd.Opens Claims.Sampling.sha512Msg A.roots ⟨Flock.Bridge.posOf A.Cc g, A.Cc.eval (A.Xr τ) g, d⟩ = true)
-    (g : Fin A.Cc.N) : Flock.Bridge.openedOf A.Cc κ (A.valE q τ) g = A.Cc.eval (A.Xr τ) g := by
-  have hv : κ g = none → A.valE q τ (Flock.Bridge.posOf A.Cc g) = some (A.Cc.eval (A.Xr τ) g) := fun hk =>
-    Flock.Bridge.witDep_val (Flock.Bridge.stmtOf A.P A.κ kd desc q A.roots) rfl g (hcom g hk)
-  unfold Flock.Bridge.openedOf
-  cases hk : κ g with
-  | some b => simp [hκin g b hk, hκ g b hk]
-  | none => simp [hv hk]
+    (g : Fin A.Cc.N) : Flock.Bridge.openedOf A.Cc κ (A.valE q τ) g = A.Cc.eval (A.Xr τ) g :=
+  openedOf_eq_eval A.Cc κ (A.valE q τ) (A.Xr τ) hκin hκ (fun g hk =>
+    Flock.Bridge.witDep_val (Flock.Bridge.stmtOf A.P A.κ kd desc q A.roots) rfl g (hcom g hk)) g
 
 /-- **Sampled proofs' extracted transcript is correct where the session opens the evaluation.** Where the
 vocabulary's extractor is `extractOf` at the values the session's extractor opens (`hext`), and, at files that parse
@@ -331,6 +347,115 @@ theorem correct_extract_of_opens {V : Vocab d α} (kd : ByteArray → ℕ) (desc
     (fun θ F c σ r hr => (A θ F c σ r hr).valE (q θ) (τOf θ F c σ r hr)) θ F c σ hr
     ((A θ F c σ r hr).Xr (τOf θ F c σ r hr))
     (openedOf_valE (A θ F c σ r hr) (q θ) (τOf θ F c σ r hr) (fun g => parsedConsts (some r) g) hκin hκ hcom)
+
+/-! ## The extractor at the registrant's openings -/
+
+/-- **The parse's constants are inputs**: its constant's and zero's gates are input gates of the key circuit. -/
+theorem parsedConsts_isInput (r : Flock.Bridge.Parsed) (g : Fin (Flock.Bridge.keyCircuit r.D r.hU r.n).N) (b : Bool)
+    (h : parsedConsts (some r) g = some b) : ((Flock.Bridge.keyCircuit r.D r.hU r.n).op g).isInput = true := by
+  have h01 : g.val = 0 ∨ g.val = 1 := by
+    simp only [parsedConsts] at h
+    split_ifs at h with h1 h2
+    · exact Or.inl (by simpa [FlockSoundness.Discharge.Placed.oneGate] using h1)
+    · exact Or.inr (by simpa [FlockSoundness.Discharge.Placed.zeroGate] using h2)
+    all_goals simp at h
+  have h2 : 2 ≤ FlockSoundness.Discharge.Placed.inGates r.n
+      (FlockSoundness.Discharge.Placed.circuitRows r.D.unroll r.hU).nIn := Nat.le_add_right 2 _
+  have hg : g.val < FlockSoundness.Discharge.Placed.inGates r.n
+      (FlockSoundness.Discharge.Placed.circuitRows r.D.unroll r.hU).nIn := by
+    omega
+  have hu : (FlockSoundness.Discharge.Placed.keyProg r.D.unroll r.hU r.n).unit g = none :=
+    FlockSoundness.Discharge.Layout.unit_uniform_input r.n g hg
+  exact (FlockSoundness.Prog.input_iff _ g).1 hu
+
+open Classical in
+/-- **Wire bits as opened values**: `w g` at wire `g`'s position (`posOf`), nothing at any other position. -/
+noncomputable def valsOfBits (C : FlockSoundness.Audit.Circuit) (w : Fin C.N → Bool) (p : ℕ) : Option Bool :=
+  if h : ∃ g, Flock.Bridge.posOf C g = p then some (w h.choose) else none
+
+theorem valsOfBits_posOf (C : FlockSoundness.Audit.Circuit) (w : Fin C.N → Bool) (g : Fin C.N) :
+    valsOfBits C w (Flock.Bridge.posOf C g) = some (w g) := by
+  have h : ∃ g', Flock.Bridge.posOf C g' = Flock.Bridge.posOf C g := ⟨g, rfl⟩
+  rw [valsOfBits, dif_pos h, Flock.Bridge.posOf_injective h.choose_spec]
+
+/-- **At a constant, an evaluation's transcript holds the constant**: where the opened values `val` read as the key
+circuit's evaluation on `xv` (`hev`), whose constants are the parse's (`hκ`), a transcript equal to theirs (`hT`) holds
+at each of the parse's constants its constant's bit. -/
+theorem bits_of_consts {o : Option Flock.Bridge.Parsed} {r : Flock.Bridge.Parsed} (ho : o = some r)
+    (val : ℕ → Option Bool) (xv : Fin (Flock.Bridge.keyCircuit r.D r.hU r.n).N → Bool)
+    (hev : ∀ g, Flock.Bridge.openedOf (Flock.Bridge.keyCircuit r.D r.hU r.n) (fun g => parsedConsts (some r) g) val g =
+      (Flock.Bridge.keyCircuit r.D r.hU r.n).eval xv g)
+    (hκ : ∀ g b, parsedConsts (some r) g = some b → (Flock.Bridge.keyCircuit r.D r.hU r.n).eval xv g = b)
+    (T : (Flock.Bridge.Parsed.circuit o).Transcript)
+    (hT : HEq T (Flock.Bridge.transcriptOf r.D r.hU r.n (fun g => parsedConsts (some r) g) val))
+    (g : Fin (Flock.Bridge.Parsed.circuit o).N) (b : Bool) (hb : parsedConsts o g = some b)
+    (i : Fin ((Flock.Bridge.Parsed.circuit o).w g)) : (T g).getLsbD i.val = b := by
+  subst ho
+  obtain rfl := eq_of_heq hT
+  have hi : i.val = 0 := by
+    have : i.val < 1 := i.isLt
+    omega
+  show (BitVec.ofBool (Flock.Bridge.openedOf _ _ val g)).getLsbD i.val = b
+  rw [hev g, hκ g b hb, hi]
+  simp
+
+/-- **Sampled proofs' honest lemma at the registrant's openings** (`Vocab.HonestHolds commit .sampled`). Where the
+vocabulary's extractor is `extractOf` at wire bits `w` (`hext`: at files that parse to `r`, the commitment `c` and the
+strategy `σ`, the bits of the registrant's openings, `valsOfBits`), and at registered files that parse, the honest
+prover's bits are the key circuit's evaluation on inputs `xv` that agree with the parse's constants (`h`), and the
+honest commitment opens every gate that isn't a constant to the extractor's bit there (`hopen`, `Vocab.Opens`), the
+honest prover meets sampled proofs' claim on every play (`honestHolds_sampled`); at the constants `Vocab.Opens` holds
+by `h`. The bits are defined at every wire, so no draw enters: nothing asks that a draw read each committed value. -/
+theorem honestHolds_sampled_of_bits (V : Vocab d α) (commit : ByteArray → ByteArray → ByteArray)
+    (hε : ∀ θ, 0 ≤ (V.certOf θ).ε)
+    (w : ∀ (θ F c : ByteArray) (_σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed), V.parsed F = some r →
+      Fin (Flock.Bridge.keyCircuit r.D r.hU r.n).N → Bool)
+    (hext : V.extract = extractOf V.read V.rounds V.sign
+      fun θ F c σ r hr => valsOfBits (Flock.Bridge.keyCircuit r.D r.hU r.n) (w θ F c σ r hr))
+    (h : ∀ θ F, V.Registered θ F → ∀ (r : Flock.Bridge.Parsed) (hr : V.parsed F = some r),
+      ∃ xv : Fin (Flock.Bridge.keyCircuit r.D r.hU r.n).N → Bool,
+        (∀ g b, parsedConsts (some r) g = some b → (Flock.Bridge.keyCircuit r.D r.hU r.n).eval xv g = b) ∧
+        ∀ g, parsedConsts (some r) g = none →
+          w θ F (commit θ F) (V.honest θ F (commit θ F)) r hr g = (Flock.Bridge.keyCircuit r.D r.hU r.n).eval xv g)
+    (hopen : ∀ θ F, V.Registered θ F → ∀ g, (V.read F).consts g = none →
+      V.Opens θ F (commit θ F) g (V.extract θ F (commit θ F) (V.honest θ F (commit θ F)) g)) :
+    V.HonestHolds commit .sampled := by
+  refine honestHolds_sampled V commit hε fun θ F hreg => ?_
+  cases hr : V.parsed F with
+  | none =>
+    have hn : V.units F = 0 := by
+      show Flock.Bridge.Parsed.units (V.parsed F) = 0
+      rw [hr]
+      rfl
+    have hN : (V.circuitOf F).N = 0 := by
+      show (Flock.Bridge.Parsed.circuit (V.parsed F)).N = 0
+      rw [hr]
+      rfl
+    exact ⟨fun u => absurd u.isLt (by omega), fun g => absurd g.isLt (by omega)⟩
+  | some r =>
+    obtain ⟨xv, hκ, hw⟩ := h θ F hreg r hr
+    let vals : ∀ (θ F c : ByteArray) (_σ : Game.Strategy (V.game θ F c)) (r : Flock.Bridge.Parsed),
+        V.parsed F = some r → ℕ → Option Bool :=
+      fun θ F c σ r hr => valsOfBits (Flock.Bridge.keyCircuit r.D r.hU r.n) (w θ F c σ r hr)
+    have hev : ∀ g, Flock.Bridge.openedOf (Flock.Bridge.keyCircuit r.D r.hU r.n) (fun g => parsedConsts (some r) g)
+        (vals θ F (commit θ F) (V.honest θ F (commit θ F)) r hr) g = (Flock.Bridge.keyCircuit r.D r.hU r.n).eval xv g :=
+      openedOf_eq_eval _ _ _ xv (parsedConsts_isInput r) hκ fun g hk => by
+        show valsOfBits _ _ _ = _
+        rw [valsOfBits_posOf, hw g hk]
+    have hT : HEq (V.extract θ F (commit θ F) (V.honest θ F (commit θ F)))
+        (Flock.Bridge.transcriptOf r.D r.hU r.n (fun g => parsedConsts (some r) g)
+          (vals θ F (commit θ F) (V.honest θ F (commit θ F)) r hr)) := by
+      rw [hext]
+      exact transcriptAt_heq _ hr
+    refine ⟨?_, fun g => ?_⟩
+    · rw [hext]
+      exact correct_extractOf V.read V.rounds V.sign vals θ F (commit θ F) (V.honest θ F (commit θ F)) hr xv hev
+    · cases hc : (V.read F).consts g with
+      | none => exact hopen θ F hreg g hc
+      | some b =>
+        unfold Vocab.Opens
+        rw [hc]
+        exact bits_of_consts (o := V.parsed F) hr _ xv hev hκ _ hT g b hc
 
 /-- **Sampled proofs at the deployment.** At files that parse to `r` (`Vocab.parsed`), every `θ`, `c` and strategy
 `σ`: C-Flock's live session at the parse (`A`, `K₀ = ⌊ε n⌋ + 1`, its cost `t'` the strategy's), the session's
