@@ -346,9 +346,9 @@
  ],
  "layers": {
   "Properties.Composition": {
-   "imports": ["CoreComposition.Product"],
+   "imports": ["CoreComposition.Product", "CoreComposition.Registered"],
    "except": [],
-   "why": "the properties are stated against the composition's own functions and the core interface's, on Lean core: nothing of Mathlib or of `security`"
+   "why": "the properties are stated against the composition's own functions and the core interface's, the registration check's included (CoreComposition.Registered), on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Pouw": {
    "imports": ["PouwWindow", "PouwCheck", "PouwCommit"],
