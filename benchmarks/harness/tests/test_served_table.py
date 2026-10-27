@@ -16,7 +16,7 @@ COMMIT_SPEC = "llama31-8b-fp8-1gpu-commit-served"
 ADDED = calendar.timegm((2026, 10, 24, 1, 0, 0))
 COMMIT = served_table.Protocol("Commit", (COMMIT_SPEC,), "commit@compiled", "stock-fp8", own_arm="commit")
 BY_SPEC = {
-    "protocols": (served_table.Protocol("PoUS bandwidth audit", ("llama31-8b-fp8-1gpu-bandwidth-served",),
+    "protocols": (served_table.Protocol("PoUS bandwidth audit", ("llama31-8b-fp8-1gpu-bandwidth-served-r6",),
                                         "bandwidth-audit", None), COMMIT),
     "factors": served_table.Protocol("conversion factor", ("llama31-8b-fp8-1gpu-compiled-full",), served_table.SERVED,
                                      "stock-fp8"),
@@ -195,7 +195,7 @@ def test_the_served_table_takes_each_points_newest_passing_unsuperseded_run_from
     [line] = [line for line in markdown.splitlines() if line.startswith("| Commit |") and "b8-p512-mixed" in line]
     assert "| 1.500× ± 0.000 | 1.500× ± 0.000 | 1.500× ± 0.000 | 3 | r20261024-030000-0002 |" in line
     assert "served Commit at b8 \\| mechanism evidence only / no pinned sm_120 build" in line
-    assert "| PoUS bandwidth audit | `llama31-8b-fp8-1gpu-bandwidth-served` | b8-p512-mixed | — | — | — | — | no passing run |" in markdown
+    assert "| PoUS bandwidth audit | `llama31-8b-fp8-1gpu-bandwidth-served-r6` | b8-p512-mixed | — | — | — | — | no passing run |" in markdown
     assert "r20261024-030000-0005" in markdown.split("Passed over")[1]
 
 
