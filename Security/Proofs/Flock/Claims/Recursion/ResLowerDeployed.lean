@@ -24,8 +24,8 @@ salt inputs and the two row inputs collide or are equal (`commit_tie`). The veri
 (`findColl (L.calls x s w ++ vcallsAt H D xO)`) to charge the collision. `layoutBTops` records the hm96 calls of the
 message-round ports only (`heldRows`), not of `v` or `out`. The layout of record, `DeployedR.layR`, adds them
 (`DeployedR.valCalls`): each instance's salt and row calls at `v` (its input columns, `rowHidden`) and at `out` (its
-output columns, `outRowForms`), and at a `rec-open` part's `dirs` (`openPorts`, whose check 5 evaluations are
-`openSetupSt`).
+output columns, `outRowForms`), and at a `rec-open` part's `coef` and `dirs` (`openPorts`, whose check 5 evaluations
+are `openSetupSt`).
 
 * `commit_tie`: two commit strings at SHA-512 agree, and both salts' and both rows' inputs are among a list of true
   evaluations with no collision, so the rows are equal.
@@ -128,14 +128,16 @@ def resSetupSt (src : Option RecCoins.Source) (st : Stmt) : List Msg :=
     | _, _ => []
   | _, _ => []
 
-/-- **Check 5's evaluations at one statement `st`** of a `rec-open` unit, at its source `src`: `checkOpen`'s at `dirs`
-(the verifier's `dirs` rows, `openRows`, under `verifierSalt` of META's `program_sha512`). None at any other unit. -/
+/-- **Check 5's evaluations at one statement `st`** of a `rec-open` unit, at its source `src`: `checkOpen`'s at `coef`
+and at `dirs` (the verifier's `coef` and `dirs` rows, `openRows`, under `verifierSalt` of META's `program_sha512`), in
+`checkOpen`'s order. None at any other unit. -/
 def openSetupSt (src : Option RecCoins.Source) (st : Stmt) : List Msg :=
   match RecOpen.params st.c.unit.name, src with
   | some (L, H), some f =>
     match (f.load st.c.unit.name).toOption, (st.c.metaJ.getObjValAs? String "program_sha512").toOption with
     | some inn, some prog => match FlockSoundness.Discharge.Recursion.openRows inn L H with
-      | some (_, dr) => commitIns dr (RecCoins.verifierSalt prog RecCoins.DIRS_VALUE)
+      | some (cr, dr) => commitIns cr (RecCoins.verifierSalt prog RecCoins.COEF_VALUE) ++
+          commitIns dr (RecCoins.verifierSalt prog RecCoins.DIRS_VALUE)
       | none => []
     | _, _ => []
   | _, _ => []
@@ -387,8 +389,8 @@ theorem mem_valPorts_open {r : XR} {s : ℕ} {ss : Array VStar.Stmt} (hss : RecV
   dsimp only
   exact List.mem_flatMap.2 ⟨nm, hnm, by rw [hq]; exact List.mem_map.2 ⟨i, List.mem_range.2 hi, rfl⟩⟩
 
-/-- **`DeployedR.layR` records check 5's calls at a `rec-open` part**: each instance `i < n`'s hm96 calls at port `dirs` are
-among part `s`'s recorded calls. -/
+/-- **`DeployedR.layR` records check 5's calls at a `rec-open` part**: each instance `i < n`'s hm96 calls at ports `coef`
+and `dirs` are among part `s`'s recorded calls. -/
 theorem portCalls_sub_layR_open (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {ss : Array VStar.Stmt}
     (hss : RecVStar.statements r.shape = .ok ss) {lv LANES HH n : ℕ} (hsv : ss[s]? = some (.recOpen lv LANES HH n))
