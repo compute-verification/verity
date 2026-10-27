@@ -137,7 +137,7 @@ def project(probe: Mapping[str, int], at: Any, cls: Any) -> dict[str, int]:
 COMPOSED = ("circuits' compositions r20261025-183214-951f, r20261025-183237-6217 and r20261025-183911-2915 "
             "(art:65bc8cddf39ec0076f17c19b4e13a74ad26554736b531b43fe6063f778cdcaf3)")
 #: the source of a scan slot unit circuit-check lowered whole, of 3 rows in and out
-ROWS_3 = "circuit-check r20261026-221417-e6ac; k_log an estimate, not composed: its 3 rows' (rows_k)"
+ROWS_3 = "circuit-check --no-cache r20261027-045850-de6d; k_log an estimate, not composed: its 3 rows' (rows_k)"
 #: ANDs and k_log a unit at Llama-3.2-1B, each with its source: k_log is CIR-95's table at its cut reads
 #: (note:circuits/20261024T0443Z-report-windows-advice-windows, r20261025-093758-baf3) unless said otherwise
 MEASURED: dict[str, tuple[int, int, str]] = {
@@ -156,12 +156,12 @@ MEASURED: dict[str, tuple[int, int, str]] = {
     "AttnBlock_v5{D=64,NVIS=128,FIRST=false,BN=128,CHECK=false}": (9_281_000, 26, "#4263, r20261025-123346-091b"),
     "AttnBlock_v5{D=64,NVIS=128,FIRST=false,BN=128,CHECK=true}": (9_281_000, 26, "CHECK=false's (#4263, r20261025-123346-091b), "
                                                                    "which circuits found it equal to"),
-    "ScanSlots_v1{NS=9353,NP=1024,IDB=17,K0=12,K=45}": (0, 23, ("wires (circuit-check r20261026-221417-e6ac); k_log an "
+    "ScanSlots_v1{NS=9353,NP=1024,IDB=17,K0=12,K=45}": (0, 23, ("wires (circuit-check --no-cache r20261027-045850-de6d); k_log an "
                                                         "estimate, not composed: its 9 rows' (rows_k), the state row 149,648 bits")),
     "OutCollect_v1{KO=64,FIRST=true}": (155, 22, ROWS_3),
     "OutCollect_v1{KO=64,FIRST=false}": (2_141, 22, ROWS_3),
-    "SlotEntry_v1{KO=64,IDB=17,NP=1024}": (5_676, 22, ("C-Flock's lowering (ir_lower) in r20261026-224516-d171, whose "
-                                           "circuit-check passed it (3,064 IR gates, past whole lowering's 256); k_log an "
+    "SlotEntry_v1{KO=64,IDB=17,NP=1024}": (5_676, 22, ("C-Flock's lowering (ir_lower) in r20261027-045850-de6d, whose "
+                                           "circuit-check --no-cache passed it (3,064 IR gates, past whole lowering's 256); k_log an "
                                            "estimate, not composed: its 3 rows' (rows_k)")),
 }
 #: `AttnBlockFirst_v1{D=64,NVIS,BN=128}`'s ANDs where #4263 (r20261025-123346-091b: NVIS 1, 17, 128) and circuits (`COMPOSED`)
