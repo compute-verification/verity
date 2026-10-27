@@ -189,13 +189,19 @@ A spec-level reference for network accounting's timing channel:
   `benchmarks/network_traces/load_relay.py`);
 - the blocks (`blocks`): the server blocks, the server-time block and the transfer gates of a circuit, schema
   `verity/blocks/v1`, kept in this module until the window interface carries it in ``circuit.json``. `check` refuses
-  blocks whose servers don't partition the units, a boundary row that is no transfer's (an ``ingress``, a registered
-  read no transfer brings in, a wire between servers, an external port's row no transfer covers), a transfer's read
-  or write that isn't whole rows of its value, an out value a row of which no unit writes or two do, and a wire
-  transfer not paired (one value, its out on one server and its in on another, of one shape and one step a row).
-  `pins` gives the verifier's pinned roots from the certificates alone, so the interface's ``input_count`` under them
-  has no free input, and `certified` refuses a wire whose two certifiers' roots differ (the receiver's commits under
-  the sender's salts, so the rows that arrived are the rows that left);
+  blocks whose servers don't partition the units, an inference block on two servers (below), a boundary row that is no
+  transfer's (an ``ingress``, a registered read no transfer brings in, a wire between servers, an external port's row
+  no transfer covers), a transfer's read or write that isn't whole rows of its value, an out value a row of which no
+  unit writes or two do, and a wire transfer not paired (one value, its out on one server and its in on another, of one
+  shape and one step a row). `pins` gives the verifier's pinned roots from the certificates alone, so the interface's
+  ``input_count`` under them has no free input, and `certified` refuses a wire whose two certifiers' roots differ (the
+  receiver's commits under the sender's salts, so the rows that arrived are the rows that left). An inference block
+  runs on a single server (NET-92, Daniel's ruling of 26 Oct): a server's ingress and egress carry only its inference
+  blocks' declared inputs and outputs, so which server may read an inference block's input bits is unambiguous. `check`
+  reads each unit's (slot, step) from the record's inference entries (``blocks.inference``) and refuses, by name, a
+  block whose units are on two servers, and two servers or more over a record that states no inference block;
+  `server_blocks` is that part alone. Which server runs which units is protocol structure, public like NCI's
+  declaration and not a private partition, so it is checked in the clear with no proof unit;
 - the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
   warden ingress row, the slot state the bucket before carries and the Programs' row (registered reads), and computes
   the next state (each block to the slot holding its connection, a new connection to the lowest free slot, its prompt
@@ -208,11 +214,14 @@ A spec-level reference for network accounting's timing channel:
   Program reads is the scan's state row b − 1 (`verity/certifier/scan-state/v1`, `token_row`): its occupancy word
   `occ` (1 for a slot whose Program starts at b, 0 for an empty slot), its prompt's length `fields` and its prompt ids,
   which the scan reads off the warden's signed ingress cells, so no other tie holds them to the certified bytes;
-  `slot_row` gives each one's bits in the state row, for a reader that takes them as i32s (vllm's `SlotRow_v1`). A
-  Program gives all its outputs to the Programs' row at its anchor (n, u32, and 64 ids of 17 bits at w63's class); an
-  empty slot's entry is all zero (its outputs masked by `occ`, never on the egress). A window whose warden refused a
-  connection, traffic past its slots, has no certified record, and the period check refuses it. `Class.serves` names
-  the warden parameters it takes every run of. `benchmarks/network_traces/scan_zk.py` proves both sides of a group of
+  `slot_row` gives each one's bits in the state row, for a reader that takes them as i32s (vllm's `SlotRow_v1`), and
+  `window_state` the rows a window circuit of the link-window from bucket t0 reads, the scan's rows t0 − 1 on (the
+  empty state's for row −1). A Program gives all its outputs to the Programs' row at its anchor (n, u32, and 64 ids
+  of 17 bits at w63's class); an empty slot's entry is all zero (its outputs masked by `occ`, never on the egress). A
+  request the class can't hold is refused at the scan's unit, never truncated: a prompt of more than `KI` ids (1,024
+  at w63's class) at its cell, a Program's n over `KO` at its anchor. A window whose warden refused a connection,
+  traffic past its slots, has no certified record, and the period check refuses it. `Class.serves` names the warden
+  parameters it takes every run of. `benchmarks/network_traces/scan_zk.py` proves both sides of a group of
   link-windows in one registration: ingress unit t's state and view outputs are committed as registered reads of the
   scan's state and view rows t, which ingress unit t + 1 and egress unit t read, and egress unit t's row as a
   registered read of the warden's egress row t, so the chains are wires through the registered roots;
