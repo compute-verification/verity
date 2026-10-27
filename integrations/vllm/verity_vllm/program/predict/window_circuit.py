@@ -53,11 +53,10 @@ the units, their feeds and weight reads, and wires them). Every unit reads its w
   the versions cut by key block and the cut of each.
 - Any other attention version (`Attention_v2`, as `fa3_construction = "guard-every-block"` binds) is its heads, a unit
   each of its own head Definition (`AttentionHead_v2{T}`), reading its KV group's every key's rows.
-- `TokenSelect_v4{V}` is its function at groups of `GROUP` logits (its body's own form at another chunk): V / C units
-  `TokenSelectGroups_v1{C, GROUP}`, C = ``grain.select``, each reading its C logits as the LM head's rows that hold them and
-  writing its groups' bests as one row and their indices as another, and `TokenSelectCombine_v2{V, GROUP}` over them:
-  ``best`` and ``idx`` a row a unit, and ``x0`` (``logits[0]``) from one `Gemm_v2{K, 1}` unit over the LM head's input and
-  its first weight row. A V that isn't whole units, or units that aren't whole groups, is refused.
+- `TokenSelect_v4{V}` is its function at groups of `GROUP` logits: V / C units `TokenSelectGroups_v1{C, GROUP}`, C =
+  ``grain.select``, each reading its C logits as the LM head's rows and writing its groups' bests as a row and their indices
+  as another, then `TokenSelectCombine_v2{V, GROUP}` over those rows and ``x0`` (``logits[0]``), from one `Gemm_v2{K, 1}`
+  unit over the LM head's input and its first weight row. A V that isn't whole units of whole groups is refused.
 - `SiluMul_v2{I}` is P units `SiluMul_v2{I / P}`, each reading its gate and up elements as the gate-up GEMM's rows, P the
   fewest that leaves a unit within ``grain.rows`` rows; `RMSNormTriton_v5` and `RMSNormFusedCuda_v2` are one unit each.
 
@@ -89,8 +88,8 @@ more than its prompt and the weights (a stochastic request's seed, a prefix-cach
 a Commit window carries in or out, byte ingress, a family this lowering doesn't know, a weight whose leaves aren't whole u16
 words, a read that cuts a writer's row, and at `settle`, every one named at once, a template's port read at two row counts
 or as rows that aren't its outer elements cut that many ways, a unit of more than ``grain.rows`` rows, and then a unit
-C-Flock's composer wouldn't prove (`interface.check_proof_block`). The circuit is completeness only: that it computes what serving ran is held by the units' proofs on their committed rows, never by this
-lowering.
+C-Flock's composer wouldn't prove (`interface.check_proof_block`). The circuit is completeness only: that it computes what
+serving ran is held by the units' proofs on their committed rows, never by this lowering.
 
 Its weight reads, the embedding's table reads and its openings count registered (`interface.input_count`) only where the
 verifier pinned that weight's own parameter, ``weights/<label>@<words>``, before the run, at the root the window's
@@ -105,7 +104,7 @@ from __future__ import annotations
 import bisect
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from itertools import accumulate
+from itertools import accumulate, product
 from typing import Any
 
 from verity.ml.circuits.codec import descriptor_id
@@ -600,8 +599,7 @@ class _Program:
         self.outs[j] = [(0, NH * D, Row(tid, u, "o0", D))]
 
     def _TokenSelect(self, j: int, node: Any) -> None:
-        V = node.fn.bindings["V"]
-        nodes = node.fn.body.nodes
+        V, nodes = node.fn.bindings["V"], node.fn.body.nodes
         chunk, combine = nodes[0].fn, nodes[-1].fn
         if chunk.name != "TokenSelectChunk" or combine.name != "TokenSelectCombine" or V < 2:
             raise Unexpressible(f"{node.fn.id}: its body is not chunks and one combine")
@@ -609,8 +607,7 @@ class _Program:
         if V % C or (C % GROUP and C < V):
             raise Unexpressible(f"{node.fn.id}: {V} logits aren't units of {C}, each groups of {GROUP}: bind the grain's "
                                 f"select to a divisor of V that is a multiple of {GROUP}")
-        (logits,) = node.args
-        n, parts = -(-C // GROUP), []
+        (logits,), n, parts = node.args, -(-C // GROUP), []
         for lo in range(0, V, C):
             tid, u = self.b.unit(bind(TokenSelectGroupsV1, C=C, G=GROUP))
             self.b.feed(tid, "x", u, 1, self.rows(logits.refs.slice(lo, lo + C)))
@@ -719,9 +716,9 @@ def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None
     """``cls``'s circuit (module docstring): the class Program lowered once a slot, node by node, slot k reading its lane of the
     scan state row before its anchor (`WindowClass.anchor`), each allocation's slots side by side in its template; its blocks'
     slots are the slots. Its registered parameters are the weights (`window_builder.weight_param`) and ``SCAN_STATE``'s
-    ``cls.buckets`` rows, row a the scan's state row before bucket a (`ingress_scan.window_state`). A window's circuit is
-    every slot's; ``programs`` is the first slots only, a probe's census (`class_size`). Unless not ``provable`` (a probe's,
-    or a test's of a class too small to prove), every unit is a proof block C-Flock's composer proves (`_Builder.settle`)."""
+    ``cls.buckets`` rows, row a the scan's state row before bucket a (`ingress_scan.window_state`). A window's circuit is every
+    slot's; ``programs`` is the first slots only, a probe's census (`class_size`). Each unit is a proof block C-Flock's composer
+    proves (`_Builder.settle`) unless not ``provable`` (a probe's, or a test's of too small a class)."""
     return lower(registered, cls, programs, grain, name, provable=provable).circuit
 
 
@@ -739,9 +736,8 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
     entry = bind(IO.SlotEntry, KO=cls.outputs, IDB=cls.scan.IDB, NP=cls.prompt, STOP=stop_ids(registered))
     b, fn = _Builder(grain, programs, provable), class_program(registered, cls).program.fn
     progs = [_Program(b, fn, cls, f"class Program {k}", k, scan, entry) for k in range(programs)]
-    for j, node in enumerate(fn.body.nodes):
-        for r in progs:
-            r.lower(j, node)
+    for (j, node), r in product(enumerate(fn.body.nodes), progs):
+        r.lower(j, node)
     for r in progs:
         if r.position != cls.positions:
             raise Unexpressible(f"{r.name}: {r.position} positions, not its class's {cls.positions}")
