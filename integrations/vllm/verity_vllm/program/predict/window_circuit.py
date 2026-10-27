@@ -54,8 +54,8 @@ the units, their feeds, gathers and weight reads, and wires them):
 
 The weights record is never one registered parameter: each weight a port reads is its own at the port's row width
 (`window_builder.weight_param`: ``weights/<label>@<words>``, a tied embedding twice, once as its table's rows and once as the
-LM head's), its reads' bases and steps whole rows of it, so each is pinned as a root over its own rows and the window's
-members take its rows as registered rows (`interface.members`). A pin of `WEIGHTS` pins them all.
+LM head's), its reads' bases and steps whole rows of it, so each is pinned as a root over its own rows, by its own name,
+and the window's members take its rows as registered rows (`interface.members`).
 
 A reader port that reads several writers' rows is cut (`interface.Layout.cut`), one cut per template and port: the cut ``d``
 divides every use's row count, leaves its reader at most ``grain.rows`` rows in and out, and makes the fewest gather units,
@@ -79,6 +79,11 @@ byte ingress, a family this lowering doesn't know, a head past `KEYS` keys of an
 cut, a weight whose leaves aren't whole u16 words, a row form the cut rule can't state and a unit of more than ``grain.rows``
 rows. The circuit is completeness only: that it computes what serving ran
 is held by the units' proofs on their committed rows, never by this lowering.
+
+Its weight reads, the embedding's table reads and its openings count registered (`interface.input_count`) only where the
+verifier pinned that weight's own parameter, ``weights/<label>@<words>``, before the run, at the root the window's
+registration records for it; anywhere else they are free. The pins are the hiding roots the committer registered once per
+model and key, never roots the verifier computes (`window_weights`).
 """
 from __future__ import annotations
 
