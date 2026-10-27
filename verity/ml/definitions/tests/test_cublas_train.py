@@ -115,3 +115,18 @@ def test_route_gemm_on_bits_is_the_route_model(route) -> None:
         got = np.asarray(BS.evaluate_words(target, x, np.broadcast_to(w, (len(x), *w.shape)))).astype(np.uint16)
         assert np.array_equal(got, BC.cublas_route_rows(route, x, w)), route
     assert all((got != BC.cublas_route_rows(r, x, w)).all() for r in ROUTES if r != route), "the cancelling words tell routes apart"
+
+
+def test_aligned_route_on_bits_takes_each_residue_tile_first() -> None:
+    """At K 64 over 3 slices at k-tile 16, a +-2^13 pair at words 0 and 12 sits in one k16 step of a chain with the zeros at each
+    slice's back, and in two of the residue-first chain (8 words and 8 zeros, then 16 words), so the small words each step
+    absorbs differ and the bits tell the two layouts apart."""
+    route = ROUTES[-1]
+    x, w = BC.route_probe_rows(16, 64, 3, np.random.default_rng(117))[1]
+    wf = np.where(np.abs(BC.DR.bf16_to_f32_words(w).view(np.float32)) >= 256, np.float32(2.0 ** -8),
+                  BC.DR.bf16_to_f32_words(w).view(np.float32))
+    wf[:, 0], wf[:, 12] = 2.0 ** 13, -2.0 ** 13
+    w = (wf.view(np.uint32) >> 16).astype(np.uint16)
+    got = np.asarray(BS.evaluate_words(CB.route_gemm(route, 64, 3), x, np.broadcast_to(w, (len(x), *w.shape)))).astype(np.uint16)
+    assert np.array_equal(got, BC.cublas_route_rows(route, x, w))
+    assert (got != BC.cublas_route_rows({**route, "tile_k": 32}, x, w)).all(), "a whole-slice tile is the zeros at the back"
