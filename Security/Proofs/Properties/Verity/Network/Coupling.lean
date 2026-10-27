@@ -4,12 +4,12 @@ import Definitions.Claims
 /-!
 # S7: an event of the network audit's own coins below a sampled run's `PrBad`
 
-The probability step of NET-85 (`Verity.Legs.NetworkWindowLe`), with nothing of the network audit in it. The network
-audit's own coin `x : α` gives a run of the sampled verifier, its tape and coins `g x`; when `g` carries the uniform
-coin to the uniform tape and coins (`Pouw.pr (q ∘ g) = Claims.Pr q`), an event `A` of the coin whose every point leads
-to a run in the event `B` at every extractor coin is no likelier than `B` over the tape, the run's coins and the
-extractor's coins (`pr_le_of_coins`). `Claims.Pr` and `Pouw.pr` are one definition, so the marginal of `B` over the
-extractor's coins is `pr_fst_eq`.
+The probability step of NET-85 (`Verity.Subprotocol.NetworkWindowLe`), with nothing of the network audit in it. The
+network audit's own coin `x : α` gives a run of the sampled verifier, its tape and coins `g x`; when `g` carries the
+uniform coin to the uniform tape and coins (`Pouw.pr (q ∘ g) = Claims.Pr q`), an event `A` of the coin whose every
+point leads to a run in the event `B` at every extractor coin is no likelier than `B` over the tape, the run's coins
+and the extractor's coins (`pr_le_of_coins`). `Claims.Pr` and `Pouw.pr` are one definition, so the marginal of `B`
+over the extractor's coins is `pr_fst_eq`.
 -/
 
 namespace Verity.Network

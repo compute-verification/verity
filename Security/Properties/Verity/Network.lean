@@ -23,7 +23,8 @@ def NetworkPeriod (s : Sent) (p : NetworkCheck.Period.Params) (c : NetworkCheck.
   ∃ n ps b d k ev, Decoded s n ps b d k ev ∧
     ∃ x ∈ Properties.Composition.triples Core.Onsite.components ps ev, x.1 = NetworkCheck.Period.protocol ∧
       (canonicalJson x.2.1.params.toUTF8 >>= NetworkCheck.Period.paramsOf) = .ok p ∧
-        NetworkCheck.Period.commitmentOf x.2.2.commitment = .ok c ∧ NetworkCheck.Period.evidenceOf x.2.2.evidence = .ok e
+        NetworkCheck.Period.commitmentOf x.2.2.commitment = .ok c ∧
+          NetworkCheck.Period.evidenceOf x.2.2.evidence = .ok e
 
 /-- **Onsite's network component accepting is the period check accepting the period its case decodes to.** -/
 theorem componentAccepts_network {s : Sent} (h : ComponentAccepts .network s) :
