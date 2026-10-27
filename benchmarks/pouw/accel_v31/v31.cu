@@ -49,6 +49,7 @@
 #include <random>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "../commit_gpu/commit_gpu.cuh"
@@ -2180,8 +2181,10 @@ struct Ctx {
 
   void setup(int m_, int n_, int k_, int lp_, int t_, int row_, const std::string& params_path, int cap, int want_nb) {
     m = m_; n = n_; k = k_; lp = lp_; t = t_; row = row_;
-    if (m % TILE || n % TILE || k % BK || lp % BK || k % lp || 32768 % row || row % 16) {
-      fprintf(stderr, "shape m %d n %d k %d L' %d ROW %d: m, N, K, L' multiples of 128, L' | K, ROW | 32768\n", m, n, k, lp, row);
+    // form_a_kernel's CTA: L' threads, and 64 L' bytes of dynamic shared memory beside its static, under 48 KiB (no opt-in)
+    if (m % TILE || n % TILE || k % BK || lp % BK || k % lp || lp > 640 || 32768 % row || row % 16) {
+      fprintf(stderr, "shape m %d n %d k %d L' %d ROW %d: m, N, K, L' multiples of 128, L' | K, L' <= 640, ROW | 32768\n", m, n,
+              k, lp, row);
       exit(2);
     }
     L = t * lp; S = (k + L - 1) / L; NT = k / lp; kb64 = (k + 511) / 512 * 64;
@@ -3938,23 +3941,26 @@ static int cmd_fill_step(int reps, const std::string& out, const std::string& pd
 // ---------------------------------------------------------------- the per-call binding (v31lib.py over ctypes)
 // One process, one device: every context shares its compute and commit streams (V31_GSM, V31_GSM_BY: its split's, shared
 // by the contexts on that split; calls run in issue order, each commit beside the next call's compute), a domain slot each
-// (COMMIT_GPU_DOMS of them) and one ROW (commit_gpu's
-// C fixes it). Every
-// function returns 0, or -1 with the reason in v31_error(); a CUDA failure exits the process (commit_gpu's CK). Not
-// thread-safe: one thread drives every context.
-static std::string g_err;
+// (COMMIT_GPU_DOMS of them) and one ROW (commit_gpu's C fixes it). Every function returns 0, or -1 with the reason in
+// v31_error() (the calling thread's); a CUDA failure exits the process (commit_gpu's CK). The thread that made the first
+// live context drives every context, and any other is refused.
+static thread_local std::string g_err;
 static int g_dev = -1, g_row = 0, g_live = 0;
+static std::thread::id g_thread;
 static bool g_dom[COMMIT_GPU_DOMS] = {};
 static cudaStream_t g_s0 = nullptr, g_s1 = nullptr;
 struct LibCtx {
   Fill f;
   int dom = -1;
+  int8_t* own_b = nullptr;   // the context's own weights buffer (v31_set_b's), where v31_point_b(null) points f.B back
 };
 static int fail(const std::string& why) {
   g_err = why;
   return -1;
 }
 static LibCtx* ctx_of(void* h) { return static_cast<LibCtx*>(h); }
+static int foreign() { return g_live && std::this_thread::get_id() != g_thread ? fail("another thread made the live contexts") : 0; }
+#define V31_FILL(h) if (foreign()) return -1; Fill& f = ctx_of(h)->f
 
 extern "C" {
 const char* v31_error() { return g_err.c_str(); }
@@ -3963,6 +3969,7 @@ const char* v31_error() { return g_err.c_str(); }
 // committed, T_S implied) or a filler's, committed under the CGP1 params file's domain and salted under its Ks
 // (v31lib.Prover writes it), on CUDA device dev. Null on failure.
 void* v31_create(int m, int n, int k, int lp, int L, int row, int served, const char* params_path, int dev) {
+  if (foreign()) return nullptr;
   const std::string bad = Fill::bad_shape(m, n, k, lp, L, row);
   if (!bad.empty()) { fail(bad); return nullptr; }
   if (g_dev >= 0 && dev != g_dev) { fail("one device a process: contexts are on device " + std::to_string(g_dev)); return nullptr; }
@@ -3986,37 +3993,47 @@ void* v31_create(int m, int n, int k, int lp, int L, int row, int served, const 
   c->f.o = served != 0;
   c->f.setup(m, n, k, lp, L, row, read_params(params_path), dom, g_s0, g_s1);
   c->dom = dom;
+  c->own_b = c->f.B;
   g_dom[dom] = true;
   g_dev = dev;
   g_row = row;
-  g_live++;
+  if (!g_live++) g_thread = std::this_thread::get_id();
   return c;
 }
 
 // m n k lp L row S tiles lpt leaves depth calls W o, as u64 (W the committed prefix-sum segments: S - 1 served, S filler)
 int v31_info(void* h, uint64_t* out) {
-  const Fill& f = ctx_of(h)->f;
+  V31_FILL(h);
   const uint64_t v[14] = {(u64)f.m, (u64)f.n, (u64)f.k, (u64)f.lp, (u64)f.L, (u64)f.row, (u64)f.S, (u64)f.tiles, (u64)f.lpt,
                           f.leaves, (u64)f.cm[0].depth, f.calls, (u64)f.Wn, (u64)f.o};
   memcpy(out, v, sizeof v);
   return 0;
 }
 
-// The weights (n x k int8, row-major) from host memory, or from device memory when on_device
-int v31_set_b(void* h, const void* B, int on_device) {
-  Fill& f = ctx_of(h)->f;
+// The weights (n x k int8, row-major) from host memory into the context's own buffer
+int v31_set_b(void* h, const void* B) {
+  V31_FILL(h);
   CK(cudaStreamSynchronize(f.cs()));
-  CK(cudaMemcpy(f.B, B, (size_t)f.n * f.k, on_device ? cudaMemcpyDeviceToDevice : cudaMemcpyHostToDevice));
+  f.B = ctx_of(h)->own_b;
+  CK(cudaMemcpy(f.B, B, (size_t)f.n * f.k, cudaMemcpyHostToDevice));
+  f.wformed = false;
+  return 0;
+}
+// Or at device pointer B, no copy and no wait: a call reads the pointer it was issued with, so B stays unchanged until
+// the calls issued after have formed (v31_sync). Null: the context's own buffer again, as v31_set_b last wrote it.
+int v31_point_b(void* h, const void* B) {
+  V31_FILL(h);
+  f.B = B ? (int8_t*)B : ctx_of(h)->own_b;
   f.wformed = false;
   return 0;
 }
 
-// A (m x k int8, row-major, from host memory or device memory when on_device) into this context's own operand buffer, in
-// the compute stream's order (after every issued call's form); *dev gets the buffer's device pointer, for v31_prove's
-// a_dev. The pad (a null a_dev) overwrites the same buffer.
-int v31_load_a(void* h, const void* A, int on_device, void** dev) {
-  Fill& f = ctx_of(h)->f;
-  CK(cudaMemcpyAsync(f.A, A, (size_t)f.m * f.k, on_device ? cudaMemcpyDeviceToDevice : cudaMemcpyHostToDevice, f.cs()));
+// A (m x k int8, row-major) from host memory into this context's own operand buffer, in the compute stream's order (after
+// every issued call's form); *dev gets the buffer's device pointer, for v31_prove's a_dev. The pad (a null a_dev)
+// overwrites the same buffer.
+int v31_load_a(void* h, const void* A, void** dev) {
+  V31_FILL(h);
+  CK(cudaMemcpyAsync(f.A, A, (size_t)f.m * f.k, cudaMemcpyHostToDevice, f.cs()));
   CK(cudaStreamSynchronize(f.cs()));
   *dev = f.A;
   return 0;
@@ -4029,7 +4046,7 @@ int v31_load_a(void* h, const void* A, int on_device, void** dev) {
 // values can't be opened after). cheat (testing): "none", "skip:TAU" (noise tile TAU of X zeroed), "forge:S0[:FRAC]" (T_S0
 // of every 1/FRAC-th tile overwritten; served, S0 0: O), "forgeO[:FRAC]" (forge:0) or "nodither" (d_A and d_B zero).
 int v31_prove(void* h, const uint8_t* seeds, uint64_t off, const void* a_dev, const char* cheat, uint64_t* call) {
-  Fill& f = ctx_of(h)->f;
+  V31_FILL(h);
   const std::string cs = cheat ? cheat : "none";
   if (cs != "none" && cs != "nodither" && cs.compare(0, 5, "skip:") && cs.compare(0, 6, "forge:") && cs.compare(0, 6, "forgeO"))
     return fail("cheat " + cs + ": none | skip:TAU | forge:S0[:FRAC] | forgeO[:FRAC] | nodither");
@@ -4061,7 +4078,7 @@ static int refused(const Fill& f, int b, uint64_t c) {
 
 // Call c's root (64 bytes), once its commit is done
 int v31_root(void* h, uint64_t c, uint8_t* out) {
-  Fill& f = ctx_of(h)->f;
+  V31_FILL(h);
   const int b = f.ready(c);
   if (b < 0) return fail("call " + std::to_string(c) + " isn't one of the last two calls");
   if (refused(f, b, c)) return -1;
@@ -4073,7 +4090,7 @@ int v31_root(void* h, uint64_t c, uint8_t* out) {
 
 // Call c's leaves at pos[0 .. np): their rows (np x row bytes) and paths (np x depth digests, the leaf's sibling first)
 int v31_open(void* h, uint64_t c, const uint64_t* pos, int np, uint8_t* rows, uint8_t* paths) {
-  Fill& f = ctx_of(h)->f;
+  V31_FILL(h);
   const int b = f.ready(c);
   if (b < 0) return fail("call " + std::to_string(c) + " isn't one of the last two calls");
   if (refused(f, b, c)) return -1;
@@ -4085,26 +4102,26 @@ int v31_open(void* h, uint64_t c, const uint64_t* pos, int np, uint8_t* rows, ui
 }
 
 // Testing: call c's committed values (leaves x row bytes, dither.values_buffer: per tile its W prefix-sum segments, then its O
-// rows when served), every tree level (leaves first, (2 width - 1) x 64 bytes), or the A operand its last call formed from
-// (the pad, m x k bytes)
+// rows when served), or the A operand its last call formed from (the pad, m x k bytes)
 int v31_values(void* h, uint64_t c, uint8_t* out) {
-  Fill& f = ctx_of(h)->f;
+  V31_FILL(h);
   const int b = f.ready(c);
   if (b < 0) return fail("call " + std::to_string(c) + " isn't one of the last two calls");
   CK(cudaMemcpy(out, f.values_of(b), (size_t)f.leaves * f.row, cudaMemcpyDeviceToHost));
   return 0;
 }
-int v31_levels(void* h, uint64_t c, uint8_t* out) {
-  Fill& f = ctx_of(h)->f;
-  const int b = f.ready(c);
-  if (b < 0) return fail("call " + std::to_string(c) + " isn't one of the last two calls");
-  std::vector<u64> lv(8 * f.levels_count());
-  CK(cudaMemcpy(lv.data(), f.cm[b].levels, lv.size() * 8, cudaMemcpyDeviceToHost));
-  for (size_t i = 0; i < lv.size(); i++) sha::put_be64(out + 8 * i, lv[i]);
+// Call c's every tree level (leaves first, (2 width - 1) nodes of 8 native u64 words) into page-locked dst on the commit
+// stream behind c's commit, at once: dst is whole after v31_sync, and call c + 2's commit, which reuses the copy's buffer,
+// runs after the copy in that stream's order
+int v31_levels_async(void* h, uint64_t c, void* dst) {
+  V31_FILL(h);
+  if (c >= f.calls || c + 2 < f.calls) return fail("call " + std::to_string(c) + " isn't one of the last two calls");
+  if (f.pend == (int)(c & 1)) f.flush();
+  CK(cudaMemcpyAsync(dst, f.cm[c & 1].levels, f.levels_count() * 64, cudaMemcpyDeviceToHost, f.ms()));
   return 0;
 }
 int v31_pad(void* h, uint8_t* out) {
-  Fill& f = ctx_of(h)->f;
+  V31_FILL(h);
   CK(cudaStreamSynchronize(f.cs()));
   CK(cudaMemcpy(out, f.A, (size_t)f.m * f.k, cudaMemcpyDeviceToHost));
   return 0;
@@ -4112,7 +4129,7 @@ int v31_pad(void* h, uint8_t* out) {
 
 // Every issued call's compute and commit done
 int v31_sync(void* h) {
-  Fill& f = ctx_of(h)->f;
+  V31_FILL(h);
   f.flush();
   CK(cudaStreamSynchronize(f.cs()));
   CK(cudaStreamSynchronize(f.ms()));
@@ -4122,13 +4139,30 @@ int v31_sync(void* h) {
 
 void v31_destroy(void* h) {
   LibCtx* c = ctx_of(h);
-  if (!c) return;
+  if (!c || foreign()) return;
   c->f.flush();
+  c->f.B = c->own_b;
   c->f.release();
   g_dom[c->dom] = false;
   if (--g_live == 0) g_dev = -1;
   delete c;
 }
+
+// cuBLASLt's D (m x n int32) = A (m x k int8) B^T (B n x k), row-major, the GEMM a V31_LTW call makes, from any thread:
+// lt_setup autotuned at these pointers on stream st, then lt_run at the same shapes; lt_algo: algo, tile, stages, split-K
+void* v31_lt_create(int m, int n, int k, const void* A, const void* B, void* D, void* st) {
+  Lt* L = new Lt();
+  lt_setup(*L, m, n, k, (const int8_t*)A, (const int8_t*)B, (int*)D, (cudaStream_t)st);
+  return L;
+}
+void v31_lt_run(void* h, const void* A, const void* B, void* D, void* st) {
+  lt_run(*(Lt*)h, (const int8_t*)A, (const int8_t*)B, (int*)D, (cudaStream_t)st);
+}
+void v31_lt_algo(void* h, int* out) {
+  const Lt& L = *(Lt*)h;
+  out[0] = L.algo_id, out[1] = L.tile, out[2] = L.stages, out[3] = L.splitk;
+}
+void v31_lt_destroy(void* h) { lt_free(*(Lt*)h); delete (Lt*)h; }
 }   // extern "C"
 #else
 int main(int argc, char** argv) {

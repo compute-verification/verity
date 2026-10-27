@@ -1,7 +1,7 @@
 """A TP rank's stochastic Program is the TP1 Program under the rank wrapper's `inner` scope (`vllm_meta.WithPeers` calls the TP1 wrapper
 as its submodule `inner`): its selector is `inner/gumbel_topp_token_select[0]`, not `gumbel_topp_token_select[0]` at the root.  The
 selector's seed and splits reads are the sampler's (`runner.sampler/seed`, `runner.sampler/splits`), never token ids a module body
-consumes: phi4-14b TP2 B8 stoch's manifest (cov-lw04-gm357) required an `input_token_ids` identity `inner/in` per sampling event, which
+consumes: a stochastic TP2 B8 manifest (phi4-14b) required an `input_token_ids` identity `inner/in` per sampling event, which
 no collector binds, and the composition took it as its reference for the token ids."""
 
 from __future__ import annotations

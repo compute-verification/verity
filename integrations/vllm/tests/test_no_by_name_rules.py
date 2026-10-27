@@ -3,7 +3,7 @@
 A *by-name rule* answers a verification question ("is this Value a boundary value?", "which module do we hook?", "which
 family is a collective?", "does this model have a qkv bias?") from a model name, a module-path fragment or a Definition
 family string instead of from the Program, the query or the runtime correspondence (Draft 3.1 §12.4: an answer of the
-form "because the name is in this list" is a structural leak).  The inventory (Appendix A of the ontology draft, 22 Sep)
+form "because the name is in this list" is a structural leak).  The inventory (Appendix A of the ontology draft)
 found 98 such decision points, ~68 structural; v2 retires them phase by phase.  This test pins the current set so that it
 can only shrink.
 
