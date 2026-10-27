@@ -1,11 +1,11 @@
-"""`SplitsFor_v1(n_live, num_SMs)` -- the split count S of vLLM's `_apply_topp_split` as a VALUE of the live sampler batch
-(RULING M-0571 (3); LIFTING-SPEC [D4]; pad M-0070).  CPU, torch-free.
+"""`SplitsFor_v1(n_live, num_SMs)` -- the split count S of vLLM's `_apply_topp_split` as a VALUE of the live sampler batch.
+CPU, torch-free.
 
   * the threshold tables at 142 (L40S) and 132 (H100) SMs, computed -- they differ (n = 17, 34..35, 67..71), so S is a function of
     (n, num_SMs), never a per-device-class table;
   * domain: n_live in 1..64, num_SMs >= 1; n_live = 0 (no sampling event) and n_live > 64 (not the split pipeline) REFUSE by name;
   * range: a power of two in 1..32 (Value<6>), non-increasing in n_live, non-decreasing in num_SMs;
-  * the real record: the R15 B8 staggered row (157 engine steps, 526 sampled rows, 8 requests arriving 0..44 with caps 2..128): the
+  * the real record: the B8 staggered workload (157 engine steps, 526 sampled rows, 8 requests arriving 0..44 with caps 2..128): the
     mask kernel's constexpr S at every step == SplitsFor_v1(live count at that step, 142) -- the live count from the DECLARED
     chronology (arrivals + caps, every request served to its cap) and from the realized one agree at every step; the flips are
     (step 0, live 1, S 32) -> (step 32, live 5, S 16) -> (step 101, live 4, S 32).
