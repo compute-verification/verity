@@ -694,6 +694,100 @@ theorem sessionUses_points {slot : Nat} {record : String} {us : List (Challenger
 
 end SampledProofs.OneStageZk
 
+namespace Verity.Game.LiveDrive
+
+/-! ## The tagged releases as blocks
+
+Where the tagged releases read, by family and root, as the draw's use's run, then the link points', then the rounds'
+uses' in turn (`Challenger.unflatten`), they are `Drive.canon`'s blocks: the draw's, the link points' and one round
+block a round use (`blocks_of_runs`). -/
+
+section
+variable {Msg : Type} (m : Nat) (tagOf : Msg → Option Tag)
+
+/-- Releases of `m` bits each are the releases of a list of `m`-bit releases. -/
+theorem rels_of_sizes : ∀ (T : List (Σ m' : Nat, Msg × (Fin m' → Bool))), (∀ z ∈ T, z.1 = m) →
+    ∃ T' : List (Msg × (Fin m → Bool)), T = T'.map (rel m)
+  | [], _ => ⟨[], rfl⟩
+  | ⟨m', b, x⟩ :: T, h => by
+    obtain ⟨T', hT'⟩ := rels_of_sizes T fun z hz => h z (List.mem_cons_of_mem _ hz)
+    have hm : m' = m := h _ List.mem_cons_self
+    subst hm
+    exact ⟨(b, x) :: T', by rw [hT']; rfl⟩
+
+/-- **A list of releases is a block**: one release per chunk of `sp`, each tagged `tg`. -/
+theorem block_of_list {Yd : Type} (sp : Split Yd m) (tg : Tag) (l : List (Msg × (Fin m → Bool)))
+    (hl : l.length = sp.rest.length + 1) (htg : ∀ z ∈ l, tagOf z.1 = some tg) :
+    ∃ k : Block Msg m, k.rels = l ∧ k.Fits m tagOf tg sp := by
+  match l, hl with
+  | (b, x) :: rest, hl => exact ⟨⟨b, x, rest⟩, rfl, htg, by simpa using hl⟩
+
+theorem flatMap_of_map {α β δ : Type} {f : α → List δ} {g : β → List δ} :
+    ∀ (xs : List α) (ys : List β), xs.map f = ys.map g → xs.flatMap f = ys.flatMap g
+  | [], [], _ => rfl
+  | [], _ :: _, h => by simp at h
+  | _ :: _, [], h => by simp at h
+  | x :: xs, y :: ys, h => by
+    simp only [List.map_cons, List.cons.injEq] at h
+    rw [List.flatMap_cons, List.flatMap_cons, h.1, flatMap_of_map xs ys h.2]
+
+theorem rounds_of_lists {γ : Type} (RF : RoundBlock Msg m → Prop) (P : γ → List (Msg × (Fin m → Bool)) → Prop)
+    (hr : ∀ u l, P u l → ∃ r : RoundBlock Msg m, r.k.rels = l ∧ RF r) :
+    ∀ bs : List (γ × List (Msg × (Fin m → Bool))), (∀ b ∈ bs, P b.1 b.2) →
+      ∃ rds : List (RoundBlock Msg m), rds.map (fun r => r.k.rels) = bs.map Prod.snd ∧ ∀ r ∈ rds, RF r
+  | [], _ => ⟨[], rfl, by simp⟩
+  | (u, l) :: bs, h => by
+    obtain ⟨r, hr1, hr2⟩ := hr u l (h _ List.mem_cons_self)
+    obtain ⟨rds, h1, h2⟩ := rounds_of_lists RF P hr bs fun b hb => h b (List.mem_cons_of_mem _ hb)
+    refine ⟨r :: rds, by simp [hr1, h1], fun r' hr' => ?_⟩
+    rcases List.mem_cons.1 hr' with rfl | hr'
+    · exact hr2
+    · exact h2 r' hr'
+
+/-- **The tagged releases are the draw's block, the link points' and the rounds'**: where the releases read, by their
+family and root (`key`), as the draw's use's run, the link points', then the rounds' uses' in turn, each release
+tagged by its family and root (`tk`), the draw's and the points' runs one release per chunk of their coins, and each
+round's run a round block (`hr`), the releases are those blocks. -/
+theorem blocks_of_runs {γ Yd Yp : Type} (spΩ : Split Yd m) (spP : Split Yp m) (key : Msg → String × ByteArray)
+    (run : γ → String × ByteArray) (cnt : γ → Nat) (tk : String × ByteArray → Tag) (T : List (Msg × (Fin m → Bool)))
+    (dU pU : γ) (rUs : List γ)
+    (hT : T.map (key ∘ Prod.fst) = (dU :: pU :: rUs).flatMap fun u => List.replicate (cnt u) (run u))
+    (htag : ∀ z ∈ T, tagOf z.1 = some (tk (key z.1)))
+    (hd : tk (run dU) = .draw) (hdn : cnt dU = spΩ.rest.length + 1)
+    (hp : tk (run pU) = .points) (hpn : cnt pU = spP.rest.length + 1)
+    (RF : RoundBlock Msg m → Prop)
+    (hr : ∀ u ∈ rUs, ∀ l : List (Msg × (Fin m → Bool)), l.length = cnt u → (∀ z ∈ l, tagOf z.1 = some (tk (run u))) →
+      ∃ r : RoundBlock Msg m, r.k.rels = l ∧ RF r) :
+    ∃ (kd kp : Block Msg m) (rds : List (RoundBlock Msg m)),
+      T = kd.rels ++ kp.rels ++ rds.flatMap (fun r => r.k.rels) ∧ kd.Fits m tagOf .draw spΩ ∧
+        kp.Fits m tagOf .points spP ∧ rds.length = rUs.length ∧ ∀ r ∈ rds, RF r := by
+  obtain ⟨bs, hfst, hflat, hbs⟩ := _root_.SampledProofs.Challenger.unflatten (key ∘ Prod.fst) cnt run _ T hT
+  have tags : ∀ b ∈ bs, ∀ z ∈ b.2, tagOf z.1 = some (tk (run b.1)) := fun b hb z hz => by
+    rw [htag z (by rw [hflat]; exact List.mem_flatMap.2 ⟨b, hb, hz⟩)]
+    exact congrArg (fun k => some (tk k)) ((hbs b hb).2 z hz)
+  rcases bs with _ | ⟨⟨d, l0⟩, _ | ⟨⟨p, l1⟩, bs'⟩⟩
+  · cases hfst
+  · cases hfst
+  simp only [List.map_cons, List.cons.injEq] at hfst
+  obtain ⟨rfl, rfl, hrest⟩ := hfst
+  obtain ⟨kd, hkd, hkdF⟩ := block_of_list m tagOf spΩ .draw l0 (by rw [(hbs _ List.mem_cons_self).1, hdn])
+    (fun z hz => by rw [tags _ List.mem_cons_self z hz, hd])
+  obtain ⟨kp, hkp, hkpF⟩ := block_of_list m tagOf spP .points l1
+    (by rw [(hbs _ (List.mem_cons_of_mem _ List.mem_cons_self)).1, hpn])
+    (fun z hz => by rw [tags _ (List.mem_cons_of_mem _ List.mem_cons_self) z hz, hp])
+  obtain ⟨rds, hrds, hRF⟩ := rounds_of_lists m RF
+    (fun u l => u ∈ rUs ∧ l.length = cnt u ∧ ∀ z ∈ l, tagOf z.1 = some (tk (run u)))
+    (fun u l h => hr u h.1 l h.2.1 h.2.2) bs' (fun b hb => by
+      have hb' : b ∈ (d, l0) :: (p, l1) :: bs' := List.mem_cons_of_mem _ (List.mem_cons_of_mem _ hb)
+      exact ⟨hrest ▸ List.mem_map_of_mem hb, (hbs b hb').1, tags b hb'⟩)
+  refine ⟨kd, kp, rds, ?_, hkdF, hkpF, ?_, hRF⟩
+  · rw [hflat, hkd, hkp, List.flatMap_cons, List.flatMap_cons, List.append_assoc, flatMap_of_map rds bs' hrds]
+  · rw [← hrest, List.length_map, ← List.length_map (f := fun r => r.k.rels), hrds, List.length_map]
+
+end
+
+end Verity.Game.LiveDrive
+
 namespace Verity.Served
 
 /-! ## `served`, as a fold of one step -/
