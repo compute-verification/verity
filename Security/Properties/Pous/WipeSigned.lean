@@ -16,8 +16,8 @@ hashes the strings the run hashes and outputs two distinct ones with one SHA-512
 (`wipeForger`) outputs the prover's signature and the message it signs, which verifies under the trusted key and which
 the challenger never signed under it (`euf-cma/lms-sha512-n64`).
 
-It is the step from the code to the game that `MemoryChallenger.Properties.WipeSurvivorBound` (MEM-84) and the
-composition read: the accepted wipe is the game's accepted session at the run's labels and reads, so the streamed
+It is the step from the code to the game that `MemoryChallenger.Properties.WipeSurvivorBound` and the composition
+read: the accepted wipe is the game's accepted session at the run's labels and reads, so the streamed
 wipe's guarantees (`Pous.Guarantees.StreamedWipe` and its instances at 2152 reads) bound it, with nothing between the
 code and the game but the game's shape (C5, C6 and every tier declared), which the challenger's deployment makes true.
 
