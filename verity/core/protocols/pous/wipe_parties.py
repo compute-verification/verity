@@ -1,6 +1,5 @@
 """The streamed wipe as two parties of the deployment layer (`verity.core.deploy`): the memory challenger (`Challenger`)
-and the prover (`Prover`), the protocol `wipe_party` speaks as a byte stream, in messages
-(`note:memory-accounting/20261026T2305Z-draft-deployment-api-v3` §1, the wipe's port).
+and the prover (`Prover`), the protocol `wipe_party` speaks as a byte stream, in messages.
 
 ~~~text
 memory-challenger -> prover   Fill {first, count} + labels (private) ... FillDone; then per batch Read {indices} (coins); End

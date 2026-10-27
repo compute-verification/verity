@@ -1,4 +1,4 @@
-"""The required-value manifest FORMAT (`manifest_format`, MAN-01): name / spec parsing, the identity digest, the coverage check's negatives
+"""The required-value manifest FORMAT (`manifest_format`): name / spec parsing, the identity digest, the coverage check's negatives
 the manifest makes detectable BY CONSTRUCTION (omit a whole producer family; omit one step; drop one member and bind another twice; a member
 committed short) and the binding loader's two engine-step shapes -- over manifests of record built by the v2 query
 (`test_sampled_replay.v2_manifest`) on a synthetic wired Program (no torch, no pod)."""
@@ -155,7 +155,7 @@ def _members_by_step_op(ids: list[dict]) -> dict[tuple[int, str], set[str]]:
 
 
 def test_fresh_b1_manifest_loads_in_binding_and_composition_skips(tmp_path):
-    """rel M-0213/M-0245: a B=1 manifest writes engine_steps as the request's engine-step NUMBERS (ints); binding.load_required_manifest
+    """A B=1 manifest writes engine_steps as the request's engine-step NUMBERS (ints); binding.load_required_manifest
     keeps them as numbers and declares no composition (composition_check skips, named).  A B>=2 GLOBAL manifest declares the dict
     composition and the loader keeps it; a manifest mixing the two shapes is refused by name."""
     inst, _woff = _program()

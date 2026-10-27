@@ -69,7 +69,7 @@ theorem label_eq_of_late {R R' : Actual.Run L} {ℓ : L → L → ℕ} (hc : R.A
 
 variable {Ω₀ B : Type*} {n : ℕ}
 
-/-- **The verdict binds one label to what `X` sent** (red team 3's `VerdictBinds`, now a consequence): under causality, a
+/-- **The verdict binds one label to what `X` sent** (once assumed, now a consequence): under causality, a
 latency ceiling from `X` to `Y` and the late-answer rule, two coins on which read `j` is accepted at the same arrival
 tick, with what `X` sent during the deadline alike, are accepted on the same label. -/
 theorem verdictBinds_of_lateAnswers {S : Ω₀ × (Fin n → B) → Actual.Run L} {ℓ : L → L → ℕ} {X Y : Finset L}

@@ -1,5 +1,4 @@
-// R10 acq-native, SECONDARY bet: one gather-copy kernel per legal collection point (owner 2's lifetime table, out/gen/r10/acq-life/lifetimes.md):
-// the staged tensors of a window are copied into the arena by ONE launch instead of one cudaMemcpyAsync each.  Descriptors live in a
+// One gather-copy kernel per legal collection point: the staged tensors of a window are copied into the arena by ONE launch instead of one cudaMemcpyAsync each.  Descriptors live in a
 // host-mapped pinned ring; the collector copies a flush's descriptors to a device ring ahead of the launch (or, capturing a graph, passes
 // the host-mapped ring, read over PCIe).  src == nullptr means "write zeros" (alignment gaps).
 #include <cuda_runtime.h>

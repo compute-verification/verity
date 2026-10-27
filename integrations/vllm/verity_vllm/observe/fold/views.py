@@ -1,6 +1,6 @@
 """Physical view geometry (pure): element runs, leading-axis indexing, view algebra on `ViewDesc`.
 
-Implemented by lane L2 (memory).  Contract used by `memory.py`, `resolver.py` patterns and `fold.py`:
+Contract used by `memory.py`, `resolver.py` patterns and `fold.py`:
 
     row_view(v, i)            -> ViewDesc        v[i] along the leading axis (rank-1 lower; a 1-D view gives rank 0)
     rows_view(v, lo, hi)      -> ViewDesc        v[lo:hi] along the leading axis
@@ -16,7 +16,7 @@ Implemented by lane L2 (memory).  Contract used by `memory.py`, `resolver.py` pa
 
 Views never carry values; all functions are total on well-formed descriptors and raise ValueError otherwise.
 
-Conventions (L2):
+Conventions:
 
 - Well-formed means non-negative shape entries and non-negative strides (torch never produces negative strides;
   they are rejected with ValueError rather than silently mis-mapped).  Size-1 axes are free: their stride is

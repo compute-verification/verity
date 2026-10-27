@@ -41,8 +41,8 @@ whose schedule advanced some request ran a forward) and so is the lag (per reque
 advanced it; NOT `iterations - forwards`, which an idle gap between arrivals inflates), and when that disagrees with the arrival
 loop's inference `attribute()` repairs `timing["engine_steps"]`, `timing["output_lag_steps"]` and every request's
 `arrive_step_realized` / `first_step` (the forward index at admission, the loop's meaning) / `finish_step` (the forward that
-scheduled its last token), keeping the loop's values under `timing["chunk_attribution"]["corrections"]`.  `arrivals.py` on `lane/coverage` (integ, 22:12Z) now derives the
-forwards from the scheduler itself; on that loop the correction is a no-op and `corrections` stays None.
+scheduled its last token), keeping the loop's values under `timing["chunk_attribution"]["corrections"]`.  Where `arrivals.py` derives the
+forwards from the scheduler itself, the correction is a no-op and `corrections` stays None.
 
 Request ids.  The pinned vLLM runs the scheduler under an internal id f"{submitted}-{8 hex}" (`input_processor.assign_request_id`)
 and returns outputs under the submitted id; `external_id` maps the scheduler's ids back (run `0917T213719-880581` showed the
@@ -214,8 +214,8 @@ def attribute(timing: dict, collector: Collector, prompt_len: dict[str, int], *,
         loop_steps = timing.get("engine_steps")
         fwd_s = _forward_map(ran_s)
         # the exact per-request values (the loop's meanings: first_step = forward index at admission, finish_step = the forward
-        # that sampled the last token); a correction is recorded only when a VALUE the loop wrote differs (the loop on
-        # lane/coverage derives the forwards from the scheduler itself and agrees -> corrections None)
+        # that sampled the last token); a correction is recorded only when a VALUE the loop wrote differs (a loop that
+        # derives the forwards from the scheduler itself agrees -> corrections None)
         exact: dict[str, dict[str, int]] = {}
         for rid, rec in recs.items():
             e: dict[str, int] = {}
@@ -238,7 +238,7 @@ def attribute(timing: dict, collector: Collector, prompt_len: dict[str, int], *,
                                     "requests": {rid: {k: rec.get(k) for k in ("arrive_step_realized", "first_step", "finish_step")} for rid, rec in recs.items()}},
                            "corrected": {"engine_steps": n_fwd, "output_lag_steps": lag_s, "requests": exact}, "applied": False}
             if resolved_lag is not None and lag_s != int(resolved_lag):
-                # [rev F-r17-16 (a) / R17-1] the derived lag contradicts the RESOLVED profile: the snapshots missed a forward (sync frees the
+                # the derived lag contradicts the RESOLVED profile: the snapshots missed a forward (sync frees the
                 # finishing request inside step()); the loop's fields stand, the outputs inference is the forward map, the contradiction is named
                 problems.append(f"scheduler-state inference: derived output lag {lag_s} contradicts the resolved async_scheduling LAG "
                                 f"{int(resolved_lag)} (R17-1: the record's lag is the resolved profile, never a schedule-delta inference) -- "
@@ -325,7 +325,7 @@ def attribute(timing: dict, collector: Collector, prompt_len: dict[str, int], *,
             problems.append(f"{rid}: {len(ts)} token-producing forwards for {n_gen} generated tokens")
         if ts and rec.get("finish_step") is not None and ts[-1] != int(rec["finish_step"]):
             problems.append(f"{rid}: finish_step {rec['finish_step']} != the forward of the last served token {ts[-1]}")
-    # [rev F-r17-16 (b)] a correction that fails THIS function's own consistency check is not applied: the loop's step fields are restored
+    # a correction that fails THIS function's own consistency check is not applied: the loop's step fields are restored
     # (timing.engine_steps / output_lag_steps, each request's arrive_step_realized / first_step / finish_step), `corrections.applied` is False
     # and the revert is a named problem -- the derived chunk keys above stay as the diagnostic they are, under consistent: False
     if corrections is not None and corrections.get("applied") and problems:

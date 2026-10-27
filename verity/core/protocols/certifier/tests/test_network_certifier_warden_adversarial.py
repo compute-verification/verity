@@ -1,7 +1,5 @@
-"""Adversarial cases against the active warden (`warden`, the byte-only relay), for the v3 red team (REDTEAM-ADVICE of
-network-accounting, `note:network-accounting/20261024T0558Z-finding-redteam-v3`), first aimed at the byte-cell warden at
-316f3292b6, where the egress base and the fail reason were open; the warden now closes both, and the first two cases and
-the regression after them pin that.
+"""Adversarial cases against the active warden (`warden`, the byte-only relay). The warden closes the egress base and
+the fail reason as channels, and the first two cases and the regression after them pin that.
 
 The warden's own tests show the honest path: the egress cells, their sizes and buckets are a function of (admission s,
 the egress length, the fail cell) and the public parameters, and the server's timing never reaches the wire. These show
