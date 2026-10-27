@@ -115,7 +115,7 @@ env -u GPU_LEASE_TIMED gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash -c '
   echo "leased at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"
   now=$(date -u +%s); w0=$(date -u -d 2026-10-27T08:00:00Z +%s); w1=$(date -u -d 2026-10-27T10:00:00Z +%s)
   if [ $((now + 60 * LEASE_MIN)) -gt "$w0" ] && [ "$now" -lt "$w1" ]; then
-    echo "a lease from now could reach INF-242 window (Tue 27 Oct 08:00-10:00Z): released unused" >> "$O/rc.txt"
+    echo "a lease from now could reach the card's booked window (Tue 27 Oct 08:00-10:00Z): released unused" >> "$O/rc.txt"
     step window 3; exit 3
   fi
   base=(session --store "$ENC" --layout "$LAYOUT" --lib "$LIB" --node "$NODE" --registration "$REG"
