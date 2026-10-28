@@ -50,7 +50,7 @@ counters from its rule over its statics instead: that is how a matmul family sta
 its served MACs (m·n·k) apart from its tail atoms (k-steps appended to the same product) and a fold Definition its receipt folds; the
 class's ancestors add up what the rule says. A class of a family `RULED` names is refused while `FAMILY_COUNTS` has no rule for it
 (the family's module registers it when imported, which decoding a Program never does), and so is a Definition carrying a rule
-(`.counts`) that `FAMILY_COUNTS` lacks: neither is counted by `PRODUCTS`.  The s8 family's served MACs are S8-PORT's, whose
+(`.counts`) that `FAMILY_COUNTS` lacks: neither is counted by `PRODUCTS`.  The s8 family's served MACs (`ops.s8`) are those whose
 roles Lean's `Accounting.Gates.roleOf` states: a served product's main chain toward its committed words, which only an `S8Dot`
 or `S8Matmul` has.  `GemmAccumulatorS8` and PoUW's segment dots (`PouwSegDot_v2`, `PouwSegDot0_v2`: an H1 tile's lanes) perform
 their products and serve none (`serves_none`).  `served_macs_by_precision` splits the served MACs by the
