@@ -662,10 +662,8 @@ def committed_session(server, committed, session: dict | None, asked: dict) -> D
     req = p2_party.request_of(reg.node, **asked)
     held = p2_party.SESSION if session is None else session
     coins_ = [expand(b"committed coin %d" % j, coins.COIN_BYTES) for j in range(2 * held["windows"])]
-    try:
-        events = p2_events(committed, Plan.whole(reg.blocks), p2_party.params_of(reg, req, held), coins_, 0)
-    except ValueError:
-        events = []
+    events = [] if any(asked[k] != held[k] for k in p2_party.SESSION) else p2_events(
+        committed, Plan.whole(reg.blocks), p2_party.params_of(reg, req, held), coins_, 0)
     v = {"registration": json.dumps(p2_party.registration_json(reg)).encode().hex(),
          "request": p2_line("request", req).hex(), "session": session, "coins": [c.hex() for c in coins_], "chunk": 2,
          "not_before_ns": 0, "events": events}
