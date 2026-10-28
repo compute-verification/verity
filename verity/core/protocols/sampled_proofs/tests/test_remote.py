@@ -1475,3 +1475,58 @@ def test_any_other_failure_to_connect_raises_at_once(error):
     with pytest.raises(type(error)):
         R.connect_when_listening("127.0.0.1:7811", None, failing, 120, clock, sleep)
     assert len(tries) == 1 and slept == []
+
+
+def test_a_client_session_is_the_gates_open_answer_and_shows_its_secret_in_no_repr():
+    answer = {"session": "s-1", "seq": 5, "root": "11" * 64, "port": 7811, "secret": SECRET.hex(),
+              "commitment": "cd" * 64}
+    s = R.ClientSession.of_answer(answer, "127.0.0.1:7811")
+    assert s == R.ClientSession("s-1", "127.0.0.1:7811", SECRET, "cd" * 64)
+    assert SECRET.hex() not in repr(s) and repr(SECRET) not in repr(s)
+    assert R.ClientSession.of_answer({k: v for k, v in answer.items() if k != "secret"}, "h:1").secret is None
+    with pytest.raises(KeyError):
+        R.ClientSession.of_answer({k: v for k, v in answer.items() if k != "commitment"}, "h:1")
+
+
+def test_a_client_sessions_secret_file_is_new_mode_600_and_read_back_only_in_its_form(tmp_path):
+    f = tmp_path / "secret"
+    R.write_secret(f, SECRET)
+    assert f.read_text() == SECRET.hex() + "\n" and f.stat().st_mode & 0o777 == 0o600
+    assert R.read_secret(f) == SECRET
+    with pytest.raises(FileExistsError):
+        R.write_secret(f, bytes(32))
+    assert R.read_secret(f) == SECRET
+    for i, bad in enumerate((SECRET.hex()[:32], SECRET.hex().upper(), SECRET.hex() + "00", "zz" * 32)):
+        (tmp_path / str(i)).write_text(bad + "\n")
+        with pytest.raises(C.CoinError, match="64 lowercase hex digits") as refusal:
+            R.read_secret(tmp_path / str(i))
+        assert bad not in str(refusal.value)
+
+
+def test_a_client_session_connects_with_its_secret_once_its_address_listens():
+    clock, sleep, slept = _clock_and_sleep()
+    tries = []
+
+    def connect(address, secret):
+        tries.append((address, secret))
+        if len(tries) < 2:
+            raise ConnectionRefusedError(111, "Connection refused")
+        return "client"
+
+    s = R.ClientSession("s-1", "127.0.0.1:7811", SECRET, "cd" * 64)
+    assert s.connect(connect, 120, clock, sleep) == "client"
+    assert tries == [("127.0.0.1:7811", SECRET)] * 2 and slept == [0.5]
+
+
+def test_a_client_session_holds_its_challenger_to_the_commitment_its_open_answered(tmp_path, signer):
+    host = Host(tmp_path, signer, secret=SECRET)
+    signed = host.challenger.commitment.root.hex()
+    s = R.ClientSession(host.session.id, host.address, SECRET, signed)
+    with s.connect() as client:
+        assert s.commitment_reason(client.commitment) is None
+        C.LiveRecord(client, "positions", itertools.count().__next__).record(root(0))
+    assert host.ended() is None and host.trusted()[1]["positions"] == (root(0),)
+    for held, why in (("dd" * 64, f"answered the hello with coin commitment {signed[:16]}…, not {'dd' * 8}…, "
+                                  "the one its open answered: refused before its first coin"),
+                      (None, f"answered no coin commitment to hold its challenger's {signed[:16]}… to")):
+        assert why in dataclasses.replace(s, commitment=held).commitment_reason(host.challenger.commitment)

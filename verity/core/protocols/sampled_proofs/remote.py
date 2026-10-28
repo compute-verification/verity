@@ -35,7 +35,10 @@ their frames back to back, then the replies in order, the wire and the release l
 raises `CoinError` on a refusal, a broken stream, or an opening that isn't the coin asked for opened against the
 commitment after `after` (`live_reason`), and refuses every coin after.  A client whose session the gate has just opened
 connects with `connect_when_listening`: until the session's tunnel listens, the connection is refused before any hello,
-so it is tried again, up to `TUNNEL_WAIT_S`, then refused; nothing else is retried.
+so it is tried again, up to `TUNNEL_WAIT_S`, then refused; nothing else is retried.  `ClientSession` is the client's
+handle on that session: its id, its address, its hello's secret (in no repr; a file holds it as `read_secret` reads it
+and `write_secret` writes it, mode 600) and the coin commitment the open answered, which the challenger's answer to the
+hello must be before the first coin (`ClientSession.commitment_reason`).
 
 The verifier reads the challenger's directory from the auditor's side (the challenger's own run), never from the prover's
 bundle (`trusted_session`), and the auditor's signed ledger of which session is a window's, every head the auditor
@@ -51,10 +54,12 @@ import hashlib
 import hmac
 import json
 import os
+import re
 import socket
 import struct
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -414,6 +419,63 @@ def connect_when_listening(address: str, secret: bytes | None, connect: Callable
             sleep(0.5)
 
 
+def read_secret(path: str | os.PathLike) -> bytes:
+    """A session's secret from the file at `path`: 64 lowercase hex digits; `CoinError` otherwise, naming the file and
+    nothing of what it holds."""
+    text = Path(path).read_text().strip()
+    if not re.fullmatch(r"[0-9a-f]{64}", text):
+        raise CoinError(f"{path}: a session's secret is 64 lowercase hex digits")
+    return bytes.fromhex(text)
+
+
+def write_secret(path: str | os.PathLike, secret: bytes) -> None:
+    """`secret` into a new file at `path`, mode 600, as `read_secret` reads it."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(secret.hex() + "\n")
+
+
+@dataclass(frozen=True)
+class ClientSession:
+    """A session as its client holds it once the auditor host's gate has opened it (`Session` is the challenger's side):
+    its id, the HOST:PORT its challenger listens on for the client, the secret its hello carries (None for a challenger
+    that takes none), which no repr shows, and the root (hex) of the coin commitment the open answered, which the
+    challenger's answer to the hello must be (None: none held)."""
+    id: str
+    address: str
+    secret: bytes | None = field(default=None, repr=False)
+    commitment: str | None = None
+
+    @classmethod
+    def of_answer(cls, answer: Mapping[str, Any], address: str) -> ClientSession:
+        """The session the gate's open answer `answer` names, its challenger at `address`: the answer's ``session``, its
+        ``secret`` (lowercase hex) when it carries one, and its ``commitment``.  It checks nothing else of the answer,
+        whose form is its caller's to hold."""
+        secret = answer.get("secret")
+        return cls(answer["session"], address, None if secret is None else bytes.fromhex(secret), answer["commitment"])
+
+    def connect(self, connect: Callable[..., Any] | None = None, wait_s: float = TUNNEL_WAIT_S,
+                clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep) -> Any:
+        """The session's client once its address listens (`connect_when_listening` over `connect`), its hello carrying
+        the session's secret.  Its caller holds the challenger's commitment to the session's (`commitment_reason`)
+        before the first coin."""
+        return connect_when_listening(self.address, self.secret, connect, wait_s, clock, sleep)
+
+    def commitment_reason(self, commitment: LiveCommitment) -> str | None:
+        """Why `commitment`, the challenger's answer to the hello, is not the coin commitment the session's open
+        answered; None when it is.  A session that holds none is refused too: a caller that takes a challenger's
+        commitment unchecked doesn't ask."""
+        got = commitment.root.hex()
+        if self.commitment is None:
+            return (f"session {self.id}'s open answered no coin commitment to hold its challenger's {got[:16]}… to: "
+                    "refused before its first coin")
+        if got != self.commitment:
+            return (f"session {self.id}'s challenger at {self.address} answered the hello with coin commitment "
+                    f"{got[:16]}…, not {self.commitment[:16]}…, the one its open answered: refused before its first "
+                    "coin")
+        return None
+
+
 def _read(path: Path, what: str) -> str | None:
     try:
         return path.read_text(encoding="utf-8")
@@ -507,5 +569,6 @@ def trusted_session(directory: str | os.PathLike, heads: Sequence[str | os.PathL
 
 
 __all__ = ["CLOSE", "HEADER", "HELLOS", "KEY", "MAX_BATCH", "MAX_HEAD", "RECORD", "RELEASES", "ROOT_BYTES",
-           "RemoteChallenger", "Session", "close_session", "greet", "hello_lines", "ledger_lines", "log_lines",
-           "main_lines", "open_session", "released_roots", "serve", "session_files", "trusted_session"]
+           "ClientSession", "RemoteChallenger", "Session", "close_session", "greet", "hello_lines", "ledger_lines",
+           "log_lines", "main_lines", "open_session", "read_secret", "released_roots", "serve", "session_files",
+           "trusted_session", "write_secret"]
