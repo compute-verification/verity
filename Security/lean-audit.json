@@ -1271,6 +1271,7 @@
    "digest": "8ed5bc6c9f877e1d994af693541c6e1be76f4708ae20468313c71f656cb2a0b8"
   },
   "Nci.Assumptions.ThetaRegistered": {
+   "owner": "@compute-accounting",
    "digest": "afd7f09e9bdab67ea4a2a26dc3760bfe5d0d3649fde36ad2357b96c9b16ac1b7"
   },
   "Nci.Assumptions.TrainingIncompressible": {
