@@ -8,9 +8,9 @@ At `devSm120v2` (G = 0) the FP32 add enters neither the credit (`creditDev` has 
 add is none) nor the debit (`debitDev`'s `add/G` is 0, and rev1's later promotions into +0 are none without promotion).
 `fs` and `bf16` agree between `Prices.sm120` and `Prices.sm120Loop`, and `qa` enters only `W_ref`, which TT_OUT doesn't
 read. So each TT_OUT form at `devSm120v2 Prices.sm120` is the one at `devSm120v2 Prices.sm120Loop`, and one grant covers
-both: per unit and per tile, the cap (`ttOutPearlCDev_sm120v2_loop`, `ttOutTilePearlCDev_sm120v2_loop`), the chain cap,
-U-only binding and the chain-only reading. The unrev'd forms hold by `Iff.rfl`; the rev1-based U-only forms need the
-debit's later-promotion sum to vanish first.
+both: per unit and per tile, the cap (`ttOutPearlCDev_sm120v2_loop`, `ttOutTilePearlCDev_sm120v2_loop`), the chain cap
+and the chain-only reading, and per unit U-only binding. The unrev'd forms hold by `Iff.rfl`; the rev1-based U-only form
+needs the debit's later-promotion sum to vanish first.
 
 For v1 (G = 4) they are different statements: the credit prices the `k/(32·G) − 1` promotion adds at the record's add,
 so a v1 grant has to name both records.
@@ -93,14 +93,6 @@ theorem ttOutPearlCDevUOnly_sm120v2_loop :
       TTOutPearlCDevUOnly CM (devSm120v2 Prices.sm120Loop) sem ρ := by
   unfold TTOutPearlCDevUOnly
   rw [pearlCProtocolDevRev1_sm120v2_loop]
-  exact Iff.rfl
-
-/-- v2's TT_OUT under U-only binding per tile is the same at both FP32 prices. -/
-theorem ttOutTilePearlCDevUOnly_sm120v2_loop :
-    TTOutTilePearlCDevUOnly CM (devSm120v2 Prices.sm120) sem ρ ↔
-      TTOutTilePearlCDevUOnly CM (devSm120v2 Prices.sm120Loop) sem ρ := by
-  unfold TTOutTilePearlCDevUOnly
-  rw [pearlCProtocolDevRev1_sm120v2_loop, pearlCTilesDevRev1_sm120v2_loop]
   exact Iff.rfl
 
 end Pouw.PearlC

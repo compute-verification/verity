@@ -49,12 +49,10 @@ import Definitions.Pouw.Assumptions.PearlC.TTOut
 import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
 import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1
 import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
-import Definitions.Pouw.Assumptions.PearlC.TTOutFp4ChainOnly
 import Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1
 import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeedK
-import Definitions.Pouw.Assumptions.PearlC.TTOutTileUOnly
 import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 import Definitions.Pouw.Assumptions.RelativeSecurity

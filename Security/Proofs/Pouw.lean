@@ -151,7 +151,6 @@ import Proofs.Pouw.PearlC.TileCircuit
 import Proofs.Pouw.PearlC.TileProtocol
 import Proofs.Pouw.PearlC.TileValues
 import Proofs.Pouw.PearlC.TileGamma
-import Proofs.Pouw.PearlC.TileUOnlyGamma
 import Proofs.Pouw.PearlC.UOnlyGamma
 import Proofs.Pouw.PearlC.UOnlyLoopGamma
 import Proofs.Pouw.PearlC.W1BudgetAbort
