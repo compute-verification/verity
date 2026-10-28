@@ -962,6 +962,10 @@
    "owner": "@proofs",
    "digest": "54f1596725c64b488d92de3b28e1b65bd106b82fb7340d6e295841ea82416c30"
   },
+  "FlockSoundness.Assumptions.LinkCRZCAt": {
+   "owner": "@proofs",
+   "digest": "4d260e2bc700709383db0595b199c6ff3798e35dc9a90ba9a906092eec9df1e8"
+  },
   "FlockSoundness.Assumptions.RecordCustodyExec": {
    "owner": "@proofs",
    "digest": "9aaf647d65d56a4c584fe7f90319613b4e47f457a9de6f115e9f6716727e2645"
@@ -12574,7 +12578,7 @@
    "Verity.SecurityProofs.ToCircuitAnd": "frozen (no-function): It is about an arbitrary C-Flock circuit of the Boolean profile and its toCircuit (FlockSoundness.Audit.Circuit, Security/Definitions/Core/Boolean.lean): which of its gates are AND gates (Verity.Circuit.IsAnd); not about a function's code.",
    "Accounting.SecurityProofs.AccelRate": "frozen (no-function): It shows the instructions of runs of the machine model 𝓜 back to back (Verity.Accel.Machine.run) meet a rate at their backlogs summed, not a Lean function's acceptance.",
    "Accounting.SecurityProofs.AccelAdditive": "frozen (no-function): It bounds the resource units of disjoint sets of the instructions a period issues on the machine model 𝓜 by the period's rate, not a Lean function's acceptance.",
-   "Flock.SecurityProofs.DeltaPubDeployed": "frozen (no-function): a fact about SampledKSLivePub's error, not a run of a Lean function: at the deployment's parameters (k = ⌈2^24/e⌉, ρ = 1/2, M = Rw = 2^192, budgets up to 2^82, t' ≤ 2^80, at most 2^40 committed wires, K₀ ≤ n ≤ K₀·kd) the rate hypothesis holds and deltaPub < 1; it reads DeltaPubDeployed (Security/Proofs/Flock/Bridge/PublicDeployed.lean), so the lock records its text."
+   "Flock.SecurityProofs.DeltaPubDeployed": "frozen (no-function): a fact about SampledKSLivePub's error, not a run of a Lean function: at the deployment's parameters (k = ⌈2^24/e⌉, ρ = 1/2, M = Rw = 2^192, budgets q_F = 2(t' + v), q_S = t' + v for t', v ≤ 2^80, at most 2^40 committed wires, K₀ ≤ n ≤ K₀·kd) the rate hypothesis holds and deltaPub < 1; it reads DeltaPubDeployed (Security/Proofs/Flock/Bridge/PublicDeployed.lean), so the lock records its text."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -42979,10 +42983,10 @@
    "guarantees": ["Flock.SecurityProofs.DeltaPubDeployed", "Flock.SecurityProofs.SampledKSLivePub"]
   },
   "Proofs.Flock.Bridge.PublicDeployed": {
-   "digest": "ec0aeebbc912b6af0ab01c53496fda04c4414600addf1604dc41a01295d300bb",
+   "digest": "e4b6cfafd1f5821f942705dad52ab7983429b3661f3b7ef75a64e7acc6d04fbe",
    "definitions": {
     "Flock.Bridge.kDep": "42de2a83a7ada5b7648cc8ae849f80addd01693605d8f38a0b276a1788c50800",
-    "Flock.Guarantees.DeltaPubDeployed": "ea36f50d3234447fc82529abdbbac712789c6d8b357f7d74764ae7376087e22f"
+    "Flock.Guarantees.DeltaPubDeployed": "6963609c14b3b2a7b4caed6e6c63a8d4b4fced8a369d4b060f74e8b7af9354d4"
    },
    "guarantees": ["Flock.SecurityProofs.DeltaPubDeployed"]
   },
@@ -49948,13 +49952,17 @@
    ]
   },
   "Proofs.Flock.Soundness.Assumptions.Finders": {
-   "digest": "79d069c3d25dedd1e28979f6494d94dd9bcf41791e7bbcbc961d6de555dd73c4",
+   "digest": "a73a71bb7ecc2049cb6dc4747b16c702107d9b26af3b3c0b62812f67bfa3717b",
    "definitions": {
     "FlockSoundness.Assumptions.LinkCRAt": "54f1596725c64b488d92de3b28e1b65bd106b82fb7340d6e295841ea82416c30",
+    "FlockSoundness.Assumptions.LinkCRZCAt": "4d260e2bc700709383db0595b199c6ff3798e35dc9a90ba9a906092eec9df1e8",
     "FlockSoundness.Assumptions.TableCRAt": "59144eca1337195cff560732b0893d04b932ff1e49776abb46964fa283596148",
     "FlockSoundness.Assumptions.TableCRZAt": "406013c1a29772f3fdb909233b6aae28f7b15c544dfd7be1e6cc47d09c18cca5"
    },
    "guarantees": [
+    "Flock.SecurityProofs.SampledKSLivePub",
+    "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
