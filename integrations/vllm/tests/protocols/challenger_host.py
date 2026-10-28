@@ -4,7 +4,7 @@ pair, the serving side's `RemoteChallenger` on the other; the session's close is
 auditor's signed ledger (`Ledger`, infra's ``windows.jsonl``, v2) opens the session for its window before the first coin and
 ends it once it has ended, sealing its files (the refused hellos' log, empty here, among them) and naming its record's
 leaf, its commitment and how many hellos it refused. The verifier reads `directory` under `key`, as the ledger opens and ends it.
-`Gate` is infra's v2 gate instead, whose ledger `pouw_h1_challenger.Ledger` reads with core's check. Each seals the host's
+`Gate` is infra's v2 gate instead, whose ledger `pouw_h1_challenger`'s readers take as core's check reads it. Each seals the host's
 pins log (`PINS`, one pin of `PINNED`, every open's ``pinned``) in its opens as the gate does (``pins: {lines, sha512}``),
 and writes it as infra publishes it (``pins.jsonl``, the gate's ``pins``), so `challenger.pinned_session` holds each
 session to it, and to the verifier's copy of main's first-parent history `MAIN`, which holds `PINNED`. Each holds a
@@ -112,6 +112,35 @@ def write_pins(path: Path, pins=PINS) -> Path:
     """`pins` (the host's pins log, its lines) at `path`, as infra publishes it (the gate's ``pins``)."""
     path.write_text("".join(line + "\n" for line in pins))
     return path
+
+
+def ledger_of(heads, key: LC.ChallengerKey, pins=None, main=None) -> tuple:
+    """``(key, lines, pins, main)``, the auditor's ledger as `pouw_h1_challenger`'s readers take it: the longest of the
+    published heads `heads` (each its lines) as core's check of record reads them under `key`
+    (`challenger.ledger_head`), the host's pins log of `pins` (every published head of it, each its lines,
+    `pouw_h1_challenger.pins_of`) and the verifier's copy of main's first-parent history `main`; `CoinError` as core
+    refuses them."""
+    return key, LC.ledger_head([list(h) for h in heads], key, PHC.lms_verify), PHC.pins_of(pins), main
+
+
+def ledger_at(heads, key: LC.ChallengerKey, pins=None, main=None) -> tuple:
+    """`ledger_of` the heads at `heads` (each a ``windows.jsonl``) and the pins log's at `pins` (each a ``pins.jsonl``,
+    `pouw_h1_challenger.pins_head`)."""
+    log = PHC.pins_head(pins)
+    return ledger_of([R.ledger_lines(p) for p in heads], key, None if log is None else [log], main)
+
+
+def windows(ledger: tuple) -> dict:
+    """Core's table of the windows of `ledger` (`ledger_of`'s), `challenger.verify_ledger`: each root to its session's
+    ``reserve``, ``open`` and ``end`` entries."""
+    key, lines = ledger[:2]
+    return LC.verify_ledger([line.encode() for line in lines], key.public[:16], lambda m, s: PHC.lms_verify(key, m, s))
+
+
+def periods(ledger: tuple) -> dict:
+    """Core's table of the periods of `ledger` (`ledger_of`'s), `challenger.verify_periods`."""
+    key, lines = ledger[:2]
+    return LC.verify_periods([line.encode() for line in lines], key.public[:16], lambda m, s: PHC.lms_verify(key, m, s))
 
 
 def entropy(seed: int):
@@ -303,10 +332,11 @@ class Gate:
         self._complete[session] = body["complete"] is True
         return self.append("end", session, body)
 
-    def ledger(self, pins=None, main=MAIN) -> PHC.Ledger:
-        """The ledger as `pouw_h1_challenger.Ledger` reads it, under the host's pins log `pins` (its lines; by default
-        the gate's own) and the verifier's copy of main's first-parent history `main` (None: no copy)."""
-        return PHC.Ledger.of([self.lines], self.key, pins=[self.pins if pins is None else list(pins)], main=main)
+    def ledger(self, pins=None, main=MAIN) -> tuple:
+        """The gate's ledger as `pouw_h1_challenger`'s readers take it (`ledger_of`), under the host's pins log `pins`
+        (its lines; by default the gate's own) and the verifier's copy of main's first-parent history `main` (None: no
+        copy)."""
+        return ledger_of([self.lines], self.key, pins=[self.pins if pins is None else list(pins)], main=main)
 
     def pins_head(self, path: Path) -> Path:
         """The gate's pins log at `path`, as infra publishes it."""

@@ -987,23 +987,23 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     other = _descriptor(((64, K), (32, K)), ("q", "k"))
     assert _credit(auditor, rec, st, descriptor=other, run=_verifier(drawn))["credit"] is None
     auditor.ledger.period_close(PERIOD)
-    ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN)
+    ledger = CH.ledger_at([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN)
     evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, st, _descriptor(), live)
-    got, why = PHC.period_credit(ledger, PERIOD, [evidence], run=_verifier(drawn))
+    got, why = PHC.period_credit(*ledger, PERIOD, [evidence], run=_verifier(drawn))
     assert why is None and got == {"windows": [[0]], "work": [CR.credited_work(LAYOUT, [0], served)], "k": k,
                                    "delta": str(CR.DELTA), "eps": [out["eps"]]}, why
-    unpinned = PHC.Ledger.load([auditor.ledger.path], auditor.key, main=CH.MAIN)
-    assert PHC.period_credit(unpinned, PERIOD, [evidence], run=_verifier(drawn))[1] == (
+    unpinned = CH.ledger_at([auditor.ledger.path], auditor.key, main=CH.MAIN)
+    assert PHC.period_credit(*unpinned, PERIOD, [evidence], run=_verifier(drawn))[1] == (
         "circuit", f"window 0 of period {PERIOD} doesn't count toward it, so the period earns nothing: {LC.NO_PINS}")
-    off_main = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN[:1])
-    assert PHC.period_credit(off_main, PERIOD, [evidence], run=_verifier(drawn))[1] == (
+    off_main = CH.ledger_at([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN[:1])
+    assert PHC.period_credit(*off_main, PERIOD, [evidence], run=_verifier(drawn))[1] == (
         "circuit", f"window 0 of period {PERIOD} doesn't count toward it, so the period earns nothing: "
                    f"{LC.first_parent_reason(auditor.session_id, CH.PINNED, list(CH.MAIN[:1]))}")
-    assert PHC.period_credit(ledger, PERIOD, [{**evidence, "descriptor": other.hex()}], run=_verifier(drawn))[1][0] == \
+    assert PHC.period_credit(*ledger, PERIOD, [{**evidence, "descriptor": other.hex()}], run=_verifier(drawn))[1][0] == \
         "circuit"
     b = SV.register_weights(_circuit(), [(64, K)], {0: _rows("s_w")}, _model_key().key).registered[K].entry()
     forged = {**evidence, "entries": [b if CR.is_held(e["value"]) else e for e in evidence["entries"]]}
-    refused = PHC.period_credit(ledger, PERIOD, [forged], run=_verifier(drawn))[1]
+    refused = PHC.period_credit(*ledger, PERIOD, [forged], run=_verifier(drawn))[1]
     assert refused[0] == "window" and refused[1].startswith(f"window 0 of period {PERIOD} is refused, so the period "
                                                             "earns nothing: weights: "), refused
 
@@ -1020,11 +1020,11 @@ def test_a_period_open_without_draw_k_is_refused(periodic):
     assert out["k"] is None and out["credit"] is None
     assert out["window"][0] == "budget" and "commits no draw K" in out["window"][1]
     auditor.ledger.period_close(PERIOD)
-    ledger = PHC.Ledger.load([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN)
-    reasons = PHC.period_reason(ledger, PERIOD, [auditor.session_id], [auditor.window["root"]])
+    ledger = CH.ledger_at([auditor.ledger.path], auditor.key, pins=[auditor.ledger.pins_path], main=CH.MAIN)
+    reasons = PHC.period_reason(*ledger[:2], PERIOD, [auditor.session_id], [auditor.window["root"]])
     assert len(reasons) == 1 and reasons[0].startswith(f"budget: period {PERIOD}'s open commits no draw K"), reasons
     evidence = PHC.window_evidence(rec, auditor.directory, auditor.window, [], _descriptor())
-    assert PHC.period_credit(ledger, PERIOD, [evidence])[1][0] == "budget"
+    assert PHC.period_credit(*ledger, PERIOD, [evidence])[1][0] == "budget"
     with pytest.raises(ValueError, match="layout"):
         PHC.draw_k(None)
 
@@ -1101,7 +1101,7 @@ def _two_window_period(tmp_path):
         sessions.append(s)
         roots.append(root)
     ledger.period_close(PERIOD)
-    return PHC.Ledger.of([ledger.lines], ledger.key, pins=[CH.PINS], main=CH.MAIN), sessions, roots
+    return CH.ledger_of([ledger.lines], ledger.key, pins=[CH.PINS], main=CH.MAIN), sessions, roots
 
 
 def test_a_window_presented_outside_its_periods_close_or_out_of_order_is_refused(tmp_path):
@@ -1110,19 +1110,19 @@ def test_a_window_presented_outside_its_periods_close_or_out_of_order_is_refused
     period is refused, by `period_reason` and by `period_credit` before any window is read."""
     ledger, sessions, (a, b) = _two_window_period(tmp_path)
     other = hashlib.sha512(b"another window").hexdigest()
-    assert PHC.period_reason(ledger, PERIOD, sessions, [a, b]) == []
+    assert PHC.period_reason(*ledger[:2], PERIOD, sessions, [a, b]) == []
 
     def why(presented):
-        (reason,) = PHC.period_reason(ledger, PERIOD, sessions, presented)
+        (reason,) = PHC.period_reason(*ledger[:2], PERIOD, sessions, presented)
         return reason
     assert why([b, a]).startswith(f"order: window 0 of period {PERIOD} is {b[:16]}...")
     assert why([a]).startswith(f"missing: window 1 of period {PERIOD}")
     assert why([a, b, a]).startswith("period: the windows presented run past the 2")
     assert why([other, a, b]).startswith(f"period: window {other[:16]}... is not one of period {PERIOD}'s windows")
     stub = dict.fromkeys(CR.PERIOD_KEYS)
-    got, refused = PHC.period_credit(ledger, PERIOD, [{**stub, "window": {"root": b}}, {**stub, "window": {"root": a}}])
+    got, refused = PHC.period_credit(*ledger, PERIOD, [{**stub, "window": {"root": b}}, {**stub, "window": {"root": a}}])
     assert got is None and refused[0] == "order"
-    assert PHC.period_credit(ledger, PERIOD, [{**stub, "window": {"root": a}}])[1][0] == "missing"
+    assert PHC.period_credit(*ledger, PERIOD, [{**stub, "window": {"root": a}}])[1][0] == "missing"
 
 
 def test_a_credit_bit_changed_after_the_draw_coin_is_refused(periodic):

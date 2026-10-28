@@ -808,8 +808,6 @@ KNOWN: dict[str, str] = {
     "integrations/vllm/verity_vllm/pipeline/serve_commit.py::Ledger": "homonym, one request as served: rename (vllm)",
     "integrations/vllm/verity_vllm/program/frontend/registration.py::Registration":
         "homonym, the builder's allocation of registered inputs: rename (circuits)",
-    "integrations/vllm/verity_vllm/protocols/pouw/h1/challenger.py::Ledger":
-        "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes it (deleted) (vllm)",
     "integrations/vllm/verity_vllm/protocols/pouw/h1/served_files.py::Registration":
         "duplicate of the registration log (`Verity.Registration`, not yet in Core: LEAN-93): becomes its builder entry (vllm)",
     "integrations/vllm/verity_vllm/protocols/pouw/h1/window.py::Window":

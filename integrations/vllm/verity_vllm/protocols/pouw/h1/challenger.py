@@ -31,8 +31,9 @@ verifier's check that a served window's coins are that challenger's.
   and refuses a second one for the root, ever; the session's ``end`` entry seals the SHA-512 of each file of its
   ``out/``, the coins each family released, whether that was all of them (``complete``), the leaf its record was signed
   at and its commitment's root. The ledger is read only with core's check of record, the one infra's ``auditor.py``
-  imports: `Ledger.of` is `challenger.ledger_head` over every head infra published, under the verifier's own key
-  (`pinned_key`, its pin from config), and that check's tables of windows and periods. `session_reason` holds a window to
+  imports: every reader here takes the ledger as its lines, `challenger.ledger_head` over every head infra published,
+  under the verifier's own key (`pinned_key`, its pin from config), and reads that check's tables of windows and periods
+  (`challenger.verify_ledger`, `challenger.verify_periods`). `session_reason` holds a window to
   the one session the ledger opened for its Commit's root, ended, closed and complete with the window's commitment
   (`held`), and reads that session's tree from the gate's ``fetch`` (never the prover's bundle) as core reads a session
   (`challenger.pinned_session` and `challenger.session_named`: its record, signed close, release log and refused
@@ -46,12 +47,12 @@ verifier's check that a served window's coins are that challenger's.
   seals the log's lines (``pins``), and the log, as infra published it (the gate's ``pins``, put by ``publish.sh`` as
   kind ``challenger-pins/v1``, labelled ``challenger-pins head``), must begin with them and record the open's
   ``pinned`` commit as main's, and that commit must be on the verifier's own first-parent history of main (``main``,
-  ``git rev-list --first-parent origin/main``, `remote.main_lines`; `Ledger.main`), not only in main's history. Its
+  ``git rev-list --first-parent origin/main``, `remote.main_lines`), not only in main's history. Its
   heads are read as core reads a ledger's (`pins_head`, `pins_of`: the longest, any two extending one another). No pins
   log, a cut one, a tree it doesn't record, no copy of main, or a pin off main's first-parent line, credits nothing.
 * **Periods**: a lane's period is its windows between its ``period-open`` and ``period-close`` entries (session null),
   each window counted at its reserve (or a one-step v2 open) whose prover (``for``, else ``by``) is the lane, as core's
-  check lists them (`Ledger.periods`). `period_reason`, a reading of that table, refuses a period the ledger doesn't
+  check lists them (`challenger.verify_periods`). `period_reason`, a reading of that table, refuses a period the ledger doesn't
   close, one whose close isn't complete (an empty one, or a window never opened, never ended, unclosed or short of its
   coins), an accepted window that isn't one of its windows, and a window of it that has no accepted window (abandoned
   after its coins).
@@ -76,7 +77,6 @@ import hashlib
 import itertools
 import json
 import re
-from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
@@ -289,62 +289,30 @@ def draw_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received: S
     return None if why is None else f"the window's draw coin: {why}"
 
 
-@dataclass(frozen=True)
-class Ledger:
-    """The auditor's ledger as core's check of record reads it under the verifier's challenger `key`: `lines`, the
-    longest of every head infra published, each checked and any two extending one another (`challenger.ledger_head`),
-    and that check's tables (`challenger.verify_ledger`, `challenger.verify_periods`): each window root to its one
-    session's ``reserve`` (None for a one-step open), ``open`` and ``end`` (None while it hasn't ended) entries, and each
-    period's name to its ``lane``, ``open`` and ``close`` (None while it is open) entries, its ``windows`` (session ids,
-    in order), its ``cap`` and its ``circuit``. `pins` is the host's pins log as infra published it (`pins_of`; None
-    without one) and `main` the verifier's own first-parent history of main (``git rev-list --first-parent
-    origin/main``; None without one): every session read from it must be run from a commit the log records and main's
-    first-parent line holds (`challenger.pinned_session`)."""
-
-    key: ChallengerKey
-    lines: tuple[str, ...]
-    windows: Mapping[str, Mapping[str, Any]]
-    periods: Mapping[str, Mapping[str, Any]]
-    pins: tuple[str, ...] | None = None
-    main: tuple[str, ...] | None = None
-
-    @classmethod
-    def of(cls, heads: Sequence[Sequence[str]], key: ChallengerKey, verify: Any = lms_verify,
-           pins: Sequence[Sequence[str]] | None = None, main: Sequence[str] | None = None) -> Ledger:
-        """The ledger of `heads` (every published head, each its lines) and the pins log of `pins` (every published head
-        of it, each its lines, `pins_of`), refused (`CoinError`) as core refuses them, its sessions held to `main`."""
-        lines = ledger_head([list(h) for h in heads], key, verify)
-        log = pins_of(pins)
-        raw, I = [line.encode() for line in lines], key.public[:16]
-
-        def verifies(message: bytes, signature: bytes) -> bool:
-            try:
-                return verify(key, message, signature) is True
-            except ValueError:
-                return False
-
-        return cls(key, tuple(lines), Ch.verify_ledger(raw, I, verifies), Ch.verify_periods(raw, I, verifies),
-                   None if log is None else tuple(log), None if main is None else tuple(main))
-
-    @classmethod
-    def load(cls, heads: Sequence[str | Path], key: ChallengerKey, verify: Any = lms_verify,
-             pins: Sequence[str | Path] | None = None, main: Sequence[str] | None = None) -> Ledger:
-        """`of` the heads at `heads` (each a ``windows.jsonl``) and the pins log's at `pins` (each a ``pins.jsonl``,
-        `pins_head`), its sessions held to `main`."""
-        log = pins_head(pins)
-        return cls.of([remote.ledger_lines(p) for p in heads], key, verify, None if log is None else [log], main)
-
-    def window(self, root: str) -> Mapping[str, Any] | None:
-        return self.windows.get(root)
-
-    def pinned(self, window: Mapping[str, Any], verify: Any = lms_verify) -> Ch.Audited:
-        """The session this ledger opens for `window`, run from a commit its pins log records and its `main`'s
-        first-parent line holds (`challenger.pinned_session`); `CoinError` naming why not."""
-        return pinned_session(list(self.lines), dict(window), self.key, _listed(self.pins), _listed(self.main), verify)
-
-
 def _listed(lines: Sequence[str] | None) -> list[str] | None:
     return None if lines is None else list(lines)
+
+
+def _signed(key: ChallengerKey, verify: Any) -> Callable[[bytes, bytes], bool]:
+    def verifies(message: bytes, signature: bytes) -> bool:
+        try:
+            return verify(key, message, signature) is True
+        except ValueError:
+            return False
+    return verifies
+
+
+def _windows(key: ChallengerKey, lines: Sequence[str], verify: Any) -> dict[str, dict]:
+    """Core's table of the auditor's ledger `lines` under `key` (`challenger.verify_ledger`): each window root to its one
+    session's ``reserve`` (None for a one-step open), ``open`` and ``end`` (None while it hasn't ended) entries."""
+    return Ch.verify_ledger([line.encode() for line in lines], key.public[:16], _signed(key, verify))
+
+
+def _periods(key: ChallengerKey, lines: Sequence[str], verify: Any) -> dict[str, dict]:
+    """Core's periods of the auditor's ledger `lines` under `key` (`challenger.verify_periods`): each period's name to its
+    ``lane``, ``open`` and ``close`` (None while it is open) entries, its ``windows`` (session ids, in order), its
+    ``cap`` and its ``circuit``."""
+    return Ch.verify_periods([line.encode() for line in lines], key.public[:16], _signed(key, verify))
 
 
 #: ``fetch(session)``: the session's tree on the auditor's side (the gate's ``fetch SESSION``, unpacked: its
@@ -352,28 +320,31 @@ def _listed(lines: Sequence[str] | None) -> list[str] | None:
 Fetch = Callable[[str], "str | Path | None"]
 
 
-def evidence(ledger: Ledger, root: str, fetch: Fetch, verify: Any = lms_verify
+def evidence(key: ChallengerKey, lines: Sequence[str], pins: Sequence[str] | None, main: Sequence[str] | None, root: str,
+             fetch: Fetch, verify: Any = lms_verify
              ) -> tuple[dict[str, Any], LiveCommitment, dict[str, tuple[bytes, ...]]]:
-    """The files of the session `ledger` opens for window root `root`, from its ``out/`` as `fetch` gives it
-    (`remote.session_files`), the coin commitment its challenger signed and the roots its signed release log shows it
-    received, as core reads a session run from main's code (`Ledger.pinned`: `challenger.pinned_session` under the
-    ledger's pins log, then `challenger.session_named`); `CoinError` naming why."""
+    """The files of the session the auditor's ledger `lines` opens for window root `root` under `key`, from its ``out/``
+    as `fetch` gives it (`remote.session_files`), the coin commitment its challenger signed and the roots its signed
+    release log shows it received, as core reads a session run from main's code (`challenger.pinned_session` under the
+    host's pins log `pins` and the verifier's first-parent history of main `main`, then `challenger.session_named`);
+    `CoinError` naming why."""
     window = {"root": root}
     # TODO: `Ch.credited_session(lines, window, key, descriptor, verify)` here once core has it.
-    audited = ledger.pinned(window, verify)
+    audited = pinned_session(list(lines), window, key, _listed(pins), _listed(main), verify)
     tree = fetch(audited.session)
     if tree is None:
         raise CoinError(f"session {audited.session} has no tree on the auditor's side (the gate's fetch)")
     files = remote.session_files(Path(tree) / "out")
-    trusted, received = session_named(audited, ledger.key, files, verify)
+    trusted, received = session_named(audited, key, files, verify)
     return files, trusted, received
 
 
-def held(given: Any, ledger: Ledger, commit: str | None = None) -> tuple[str | None, Mapping[str, Any] | None]:
-    """The window of `ledger` that the session `given` (the gate's answer a window or a Commit carries, `session_of`) is,
-    ended with its client closing it after every coin of its families was released, under the answer's coin commitment,
-    and None; or why it isn't and None. `commit` is the Commit root the verifier holds for it, which the answer's must
-    be."""
+def held(given: Any, key: ChallengerKey, lines: Sequence[str], commit: str | None = None, verify: Any = lms_verify
+         ) -> tuple[str | None, Mapping[str, Any] | None]:
+    """The window of the auditor's ledger `lines` (under `key`, `_windows`) that the session `given` (the gate's answer
+    a window or a Commit carries, `session_of`) is, ended with its client closing it after every coin of its families
+    was released, under the answer's coin commitment, and None; or why it isn't and None. `commit` is the Commit root the
+    verifier holds for it, which the answer's must be."""
     try:
         given = session_of(given)
     except ValueError as e:
@@ -383,7 +354,7 @@ def held(given: Any, ledger: Ledger, commit: str | None = None) -> tuple[str | N
     sid, root = given["session"], given["root"]
     if commit is not None and root != commit:
         return f"the window's session is for Commit {root}, not the window's Commit {commit}", None
-    window = ledger.window(root)
+    window = _windows(key, lines, verify).get(root)
     if window is None:
         return f"the auditor's ledger has no session for Commit {root}, so the window's coins are no session's of record", None
     opened, end = window["open"], window["end"]
@@ -406,42 +377,48 @@ def held(given: Any, ledger: Ledger, commit: str | None = None) -> tuple[str | N
     return None, window
 
 
-def session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, registered: bytes | None = None,
-                   commit: str | None = None, verify: Any = lms_verify) -> str | None:
-    """Why the window (its H1 commitment `commits`) isn't held to the one session the auditor's `ledger` opened for its
-    Commit's root, ended closed and complete under the window's commitment (`held`), with that session's coins (its
-    ``out/`` as `fetch` gives it, read as core reads a session run from main's code, `evidence`, and checked as
+def session_reason(commits: Mapping[str, Any], key: ChallengerKey, lines: Sequence[str], pins: Sequence[str] | None,
+                   main: Sequence[str] | None, fetch: Fetch, registered: bytes | None = None, commit: str | None = None,
+                   verify: Any = lms_verify) -> str | None:
+    """Why the window (its H1 commitment `commits`) isn't held to the one session the auditor's ledger `lines` (the
+    longest of every head infra published, `challenger.ledger_head` under the verifier's challenger key `key`) opened
+    for its Commit's root, ended closed and complete under the window's commitment (`held`), with that session's coins
+    (its ``out/`` as `fetch` gives it, read as core reads a session run from main's code, `evidence`, and checked as
     `trusted_rounds_reason` checks a session's: its salt by `core_check.salt`, S the ledger's reserve's session and R
-    its open's root, and its rounds by `core_check.rounds`, both under the ledger's pins log and `main`); None when it
-    is. `registered` is the weights' root the period registered and `commit` the window's Commit root as the verifier
-    holds it, which the window's must be. A Pearl-C pass's (``scheme`` one of `pouw_pearl_c_device.SCHEMES`) session
-    is held to its salt session instead (`salt_session_reason`). Fails closed."""
+    its open's root, and its rounds by `core_check.rounds`, both under the host's pins log `pins`, as infra published it
+    (`pins_of`; None without one), and the verifier's own first-parent history of main `main` (``git rev-list
+    --first-parent origin/main``; None without one)); None when it is. `registered` is the weights' root the period
+    registered and `commit` the window's Commit root as the verifier holds it, which the window's must be. A Pearl-C
+    pass's (``scheme`` one of `pouw_pearl_c_device.SCHEMES`) session is held to its salt session instead
+    (`salt_session_reason`). Fails closed."""
     if commits.get("coin_source") != "challenger":
         return ("the window's coins were held in the serving process, not drawn by the auditor host's challenger (the pouw "
                 "setting 'challenger'), so no session binds them")
     if commits.get("scheme") in PPD.SCHEMES:
-        return salt_session_reason(commits, ledger, fetch, registered, commit, verify)
-    why, window = held(commits.get("session"), ledger, commit)
+        return salt_session_reason(commits, key, lines, pins, main, fetch, registered, commit, verify)
+    why, window = held(commits.get("session"), key, lines, commit, verify)
     if why is not None:
         return why
     if registered is not None and commits.get("weights_root") != bytes(registered).hex():
         return "the window's weights' root is not the one the period registered"
     sid, root = window["open"]["session"], Ch.root_of(window["open"])
     try:
-        files, trusted, received = evidence(ledger, root, fetch, verify)
+        files, trusted, received = evidence(key, lines, pins, main, root, fetch, verify)
     except CoinError as e:
         return f"session {sid} is not trusted: {e}"
-    return _window_reason(commits, ledger.key, list(ledger.lines), _listed(ledger.pins), _listed(ledger.main),
-                          {"root": root}, files, trusted, received, sid, verify)
+    return _window_reason(commits, key, list(lines), _listed(pins), _listed(main), {"root": root}, files, trusted,
+                          received, sid, verify)
 
 
-def salt_session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch, registered: bytes | None = None,
-                        commit: str | None = None, verify: Any = lms_verify) -> str | None:
+def salt_session_reason(commits: Mapping[str, Any], key: ChallengerKey, lines: Sequence[str],
+                        pins: Sequence[str] | None, main: Sequence[str] | None, fetch: Fetch,
+                        registered: bytes | None = None, commit: str | None = None, verify: Any = lms_verify
+                        ) -> str | None:
     """Why a Pearl-C pass (its device run's commitment `commits`) isn't held to its salt session, the one whose salt
     coin follows the pass's salt epoch's root R = `salt.epoch_open_root` of its weights' root W (``weights_root``)
     and its epoch's number k (``pass_index``, an integer in [0, 2^64)) rather than a window's open root
     (statement: Lean `Properties.Pouw.LiveSalt.Accepted`); None when it is. R is recomputed here, never read from the
-    pass. The session is the one the auditor's `ledger` opened on R, ended closed and complete under the commitment the
+    pass. The session is the one the auditor's ledger `lines` opened on R, ended closed and complete under the commitment the
     pass names (`held`, its ``session``: id, ledger ``seq``, R and commitment, never its hello's ``secret``; `commit`
     and `registered`, when the verifier holds them, must be W), reserved with the salt coin alone
     (`window.SALT_FAMILIES`) and having released that coin and nothing else. Its coins are read as core reads a session
@@ -462,7 +439,7 @@ def salt_session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch
         return f"the pass's pass_index names no salt epoch: {e}"
     if isinstance(commits.get("session"), Mapping) and "secret" in commits["session"]:
         return "the pass's session names its hello's secret, which a pass never records: a refused pass"
-    why, window = held(commits.get("session"), ledger, root.hex())
+    why, window = held(commits.get("session"), key, lines, root.hex(), verify)
     if why is not None:
         return why
     sid, reserve, end = window["open"]["session"], window["reserve"], window["end"]["body"]
@@ -473,7 +450,7 @@ def salt_session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch
     if json.dumps(end.get("released"), sort_keys=True) != json.dumps({Wd.SALT: 1}):
         return f"session {sid} released {end.get('released')}, not its one salt coin: a refused pass"
     try:
-        _, trusted, received = evidence(ledger, root.hex(), fetch, verify)
+        _, trusted, received = evidence(key, lines, pins, main, root.hex(), fetch, verify)
     except CoinError as e:
         return f"session {sid} is not trusted: {e}"
     if (why := Wd.salt_epoch_reason(trusted)) is not None:
@@ -495,18 +472,19 @@ def salt_session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch
     return None
 
 
-def _incomplete(ledger: Ledger, outcome: Mapping[str, Any]) -> str:
+def _incomplete(windows: Mapping[str, Mapping[str, Any]], outcome: Mapping[str, Any]) -> str:
     if outcome["root"] is None:
         return "reserved and never opened"
-    end = ledger.windows[outcome["root"]]["end"]
+    end = windows[outcome["root"]]["end"]
     if end is None:
         return f"Commit {outcome['root']}, never ended"
     return f"Commit {outcome['root']}, ended {end['body'].get('ended')!r}, released {end['body'].get('released')}"
 
 
-def period_reason(ledger: Ledger, period: str, accepted: Sequence[str], presented: Sequence[str] | None = None,
-                  verify: Any = lms_verify) -> list[str]:
-    """Why the auditor's `ledger` doesn't credit the lane's period `period`, given `accepted` (the session ids of its
+def period_reason(key: ChallengerKey, lines: Sequence[str], period: str, accepted: Sequence[str],
+                  presented: Sequence[str] | None = None, verify: Any = lms_verify) -> list[str]:
+    """Why the auditor's ledger `lines` (under `key`, its periods as core's check lists them, `_periods`) doesn't credit
+    the lane's period `period`, given `accepted` (the session ids of its
     windows that `session_reason` accepted), one reason each; [] when it does. Refused: a period the ledger has no
     period-open for, or no period-close (its windows aren't all known); an accepted window that isn't one of the
     period's (its lane's reserves and one-step opens between its period-open and its period-close); a close that isn't
@@ -516,18 +494,19 @@ def period_reason(ledger: Ledger, period: str, accepted: Sequence[str], presente
     order, also core's rules of record: `credit.period` (exactly the close's windows, in its order, the close complete)
     and `credit.committed_k` (the open committed ``draw_k``), each refusal as ``code: why``; a period's credit itself is
     `period_credit`'s."""
-    p = ledger.periods.get(period)
+    p = _periods(key, lines, verify).get(period)
     if p is None:
         return [f"the auditor's ledger has no period {period}"]
-    out = _period_reasons(ledger, period, p, accepted)
+    out = _period_reasons(_windows(key, lines, verify), period, p, accepted)
     if presented is not None:
-        lines = list(ledger.lines)
-        why = CR.period(ledger.key.to_json(), lines, period, list(presented), verify) or CR.committed_k(lines, period)[1]
+        lines = list(lines)
+        why = CR.period(key.to_json(), lines, period, list(presented), verify) or CR.committed_k(lines, period)[1]
         out += [] if why is None else [f"{why[0]}: {why[1]}"]
     return out
 
 
-def _period_reasons(ledger: Ledger, period: str, p: Mapping[str, Any], accepted: Sequence[str]) -> list[str]:
+def _period_reasons(windows: Mapping[str, Mapping[str, Any]], period: str, p: Mapping[str, Any],
+                    accepted: Sequence[str]) -> list[str]:
     out = [f"session {s}, an accepted window, is not one of period {period}'s windows ({p['windows']}, lane {p['lane']}'s "
            "between its period-open and its period-close)" for s in accepted if s not in p["windows"]]
     if p["close"] is None:
@@ -538,7 +517,7 @@ def _period_reasons(ledger: Ledger, period: str, p: Mapping[str, Any], accepted:
         out.append(f"period {period} closed with no window")
     for w in listed:
         if not w["complete"]:
-            out.append(f"period {period}'s window {w['session']} is incomplete ({_incomplete(ledger, w)}): a refused "
+            out.append(f"period {period}'s window {w['session']} is incomplete ({_incomplete(windows, w)}): a refused "
                        "window refuses its period")
         elif w["session"] not in accepted:
             out.append(f"period {period}'s window {w['session']} (Commit {w['root']}) ended complete and has no accepted "
@@ -727,20 +706,21 @@ def window_evidence(record: Mapping[str, Any], directory: str | Path, window: Ma
             "window": dict(window)}
 
 
-def period_credit(ledger: Ledger, period: str, windows: Sequence[Mapping[str, Any]], verify: Any = lms_verify,
-                  run: Any = None) -> tuple[dict | None, Any]:
+def period_credit(key: ChallengerKey, lines: Sequence[str], pins: Sequence[str] | None, main: Sequence[str] | None,
+                  period: str, windows: Sequence[Mapping[str, Any]], verify: Any = lms_verify, run: Any = None
+                  ) -> tuple[dict | None, Any]:
     """Period `period`'s credit and None, or None and the refusal: core's `credit.period_credit` over the auditor's
-    `ledger` and each window's evidence (`window_evidence`), which must be exactly the windows the period's close lists,
-    in its order, the close complete, its open's ``draw_k``, circuit files and weights' root committed, and every window
-    credited at that K, its ``b/<K>`` the period's weights, each window's session run from a commit the ledger's pins
-    log records on its `main` (core's `challenger.credited_session`, ``circuit``), and each drawn proof block verified from its
-    statement's proof files by `run` (default credit's verifier of record). The credit is ``{windows, work, k, delta,
-    eps}``."""
-    return CR.period_credit(ledger.key.to_json(), list(ledger.lines), _listed(ledger.pins), _listed(ledger.main),
-                            period, [dict(w) for w in windows], verify, **({} if run is None else {"run": run}))
+    ledger `lines` under `key` and each window's evidence (`window_evidence`), which must be exactly the windows the
+    period's close lists, in its order, the close complete, its open's ``draw_k``, circuit files and weights' root
+    committed, and every window credited at that K, its ``b/<K>`` the period's weights, each window's session run from a
+    commit the host's pins log `pins` records on the verifier's first-parent history of main `main` (core's
+    `challenger.credited_session`, ``circuit``), and each drawn proof block verified from its statement's proof files by
+    `run` (default credit's verifier of record). The credit is ``{windows, work, k, delta, eps}``."""
+    return CR.period_credit(key.to_json(), list(lines), _listed(pins), _listed(main), period, [dict(w) for w in windows],
+                            verify, **({} if run is None else {"run": run}))
 
 
-__all__ = ["DRAW_EPS", "EXPECTED_CREDIT", "Fetch", "Ledger", "REPLY_FIELDS", "SCHEME", "SESSION_FIELDS", "address", "carried",
+__all__ = ["DRAW_EPS", "EXPECTED_CREDIT", "Fetch", "REPLY_FIELDS", "SCHEME", "SESSION_FIELDS", "address", "carried",
            "credit_reason", "draw_k", "draw_reason", "drawn_of", "evidence", "families", "held", "lms_verify",
            "manifest_reason", "period_credit", "period_reason", "pinned_key", "pins_head", "pins_of", "program_salt_of",
            "salt_session_reason", "session_of", "session_reason", "statement", "trusted_rounds_reason", "window_evidence"]
