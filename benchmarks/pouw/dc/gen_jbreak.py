@@ -1,4 +1,4 @@
-"""Writes probes/sm90_jbreak.inc, the probe list of probes/sm90_jbreak.cu (DC-DESIGN r2's stress of the H200 rows).
+"""Writes probes/sm90_jbreak.inc, the probe list of probes/sm90_jbreak.cu (the stress of the H200 rows).
 
   python3 gen_jbreak.py            # rewrites probes/sm90_jbreak.inc
 """
@@ -55,7 +55,7 @@ def probes() -> list[str]:
     def jbku(form, lane, r):
         out.append(f'JBKU({form.replace("_", "")}_{lane}_r{r}, {form}, {X[lane]}, {r}, "{WG[form]}=4;{lane_pat(lane, r)}")')
 
-    # FACET-BREAK's break beside wgmma: one-read FP lanes on 2-3 chains, 2 warps a SMSP, across the facet
+    # facet_break's break beside wgmma: one-read FP lanes on 2-3 chains, 2 warps a SMSP, across the facet
     for lane in ("fmuli", "faddi"):
         for c in (2, 3):
             for r in (128, 192, 256, 320, 384, 512):
