@@ -53,13 +53,13 @@ def test_the_datacenters_own_bound_counts_where_it_is_tighter():
 
 
 def test_the_serving_block_reads_the_lesser_of_the_ingress_and_ks_share():
-    """At W63 a location's share of the datacenter's K, 44.8 kbit/s in the registered reading's per-period form, is
+    """At W63 a location's share of the datacenter's K, 45.0 kbit/s in the registered reading's per-period form, is
     below the declared ingress, 91.1 kbit/s, so it sets the certified channel and the serving cut cites K's statement
     and the datacenter's composition. A datacenter's own bound below the sum lowers it further; without `leak` the
     ingress stands."""
     c, r, w = ctx(), w63(), 86400.0
     share = r.certifier.leak_share(c, w)
-    assert share / w == pytest.approx(44_815, rel=1e-4) and r.certifier.prompts(c) == pytest.approx(91_075)
+    assert share / w == pytest.approx(44_975, rel=1e-4) and r.certifier.prompts(c) == pytest.approx(91_075)
     side = c.location.hosts * (r.certifier.timing + r.certifier.side) * w
     assert r.leak_binds(c) and r.budget(c).inputs == pytest.approx(r.state(c) + share + side)
     assert {"NetTiming.Guarantees.PeriodLeakAccepted", "draft:datacenter-leak"} <= set(r.cites(c))

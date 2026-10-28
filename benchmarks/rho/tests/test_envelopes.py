@@ -290,7 +290,7 @@ def test_a_servers_certified_ingress_is_its_declared_inputs_and_line_rate_the_up
 
 def test_onsite_w63_beside_the_reference():
     """W63's cadence beside the reference H200 server (`reference-onsite-h200`, ingress α Φ = 3.23 Mbit/s): 91.1 kbit/s
-    a 32-bucket link-window, 0.028 α Φ at v4-pro-session, and the network certifiers' K a location's share of 44.8
+    a 32-bucket link-window, 0.028 α Φ at v4-pro-session, and the network certifiers' K a location's share of 45.0
     kbit/s below it, so a day's input drops from 3.19e11 to 4.40e10 bits (4.80e10 at r_in alone) and the lower bound's
     padded size ratio, which a dark share of 1% caps near 100, rises from 98.7 to 99.8, with the best attack's at 249
     and 250. At line rate the reference falls to remote's (2.99, at the card table's clock), and W63 doesn't: K caps

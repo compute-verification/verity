@@ -235,10 +235,10 @@ def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatc
     assert certified["r_in"] == pytest.approx(91_075) and certified["window_buckets"] == 32
     assert certified["faulty_unit_bits"] == 356_592
     k = certified["leak"]
-    assert k["reading"] == "registered" and k["binds"] and k["share"] == pytest.approx(44_815, rel=1e-4)
+    assert k["reading"] == "registered" and k["binds"] and k["share"] == pytest.approx(44_975, rel=1e-4)
     assert k["total"] == pytest.approx(k["links"] * k["per_link"]) and k["datacenter"] == k["total"]
-    assert "**Leak bound K** (registered reading, over the monitoring period): 1.41e+12 bits per link;" in text
-    assert "4.48e+04 bit/s, sets the certified channel." in text
+    assert "**Leak bound K** (registered reading, over the monitoring period): 1.42e+12 bits per link;" in text
+    assert "4.5e+04 bit/s, sets the certified channel." in text
     reference = run.certified(build(REG, "reference-onsite-h200"))
     assert not reference["declared"] and reference["intake"] == 1
     assert run.certified_md(reference)[0] == ("**Certified ingress:** 3.23e+06 bit/s into a location, intake 1 × α Φ: "
