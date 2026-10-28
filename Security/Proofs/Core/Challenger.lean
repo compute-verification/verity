@@ -49,6 +49,35 @@ theorem coin_of_log {R C : Type} {n : Nat} {log : (Fin n → C) → Log R C} {vc
   split_ifs at hc with h1 h2
   exact ⟨h2, Option.some_injective _ hc⟩
 
+namespace Log
+
+variable {R C : Type}
+
+theorem coins_map_released (l : List C) : coins (l.map (Entry.released (R := R))) = l := by
+  induction l with
+  | nil => rfl
+  | cons c l ih => simp [coins, ih]
+
+theorem before_map_released (l : List C) (i : Nat) :
+    before (l.map (Entry.released (R := R))) i = (l.take i).map Entry.released := by
+  induction l generalizing i with
+  | nil => simp [before]
+  | cons c l ih => cases i <;> simp [before, ih]
+
+/-- **A challenger that releases its flips in order, with nothing else in its log, meets both of its premises**, so
+they are not contradictory. -/
+theorem released_in_order {n : Nat} :
+    ChallengerLogsCoins (fun ω : Fin n → C => (List.ofFn ω).map (Entry.released (R := R))) ∧
+      FlipsAfterRecorded (fun ω : Fin n → C => (List.ofFn ω).map (Entry.released (R := R))) := by
+  refine ⟨fun ω => by rw [coins_map_released], fun i ω ω' h => ?_⟩
+  simp only [before_map_released]
+  congr 1
+  refine List.ext_getElem? fun j => ?_
+  simp only [List.getElem?_take, List.getElem?_ofFn]
+  split_ifs with h1 h2 <;> first | rfl | simp [h ⟨j, h2⟩ h1]
+
+end Log
+
 end Challenger
 
 namespace SecurityProofs
