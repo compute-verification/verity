@@ -179,6 +179,12 @@ def request_component(r, canon: dict):
 
 
 def predict_workload(phi: Phi, comps: dict | None = None, canon: dict | None = None) -> dict:
+    """`workload_program`'s digest, function id, root node count and lag."""
+    wl = workload_program(phi, comps, canon)
+    return {"digest": wl.digest, "function": wl.fn.id[:300], "n_root_nodes": len(wl.program.root.body.nodes), "lag": wl.lag}
+
+
+def workload_program(phi: Phi, comps: dict | None = None, canon: dict | None = None):
     """GP-01's composition (`program.workload.WorkloadProgram`) over the predicted request components, manifest order, with the
     lag the declared target resolves (`TargetProfile.lag()`); `comps` holds components already built under `canon`
     (`request_component`), by (LP, T), so a caller that has each request's Program need not hold them all."""
@@ -196,8 +202,7 @@ def predict_workload(phi: Phi, comps: dict | None = None, canon: dict | None = N
     for i, q in enumerate(reqs):
         lp, cap = int(q["prompt_len"]), int(q["max_tokens"])
         wreqs.append(W.WorkloadRequest(request_id_of(i), i, lp, cap, int(q.get("arrive_step") or 0), comps[(lp, cap - 1)], T=cap - 1))
-    wl = W.WorkloadProgram(wreqs, manifest_digest=None, lag=int(phi.target_profile().lag()))
-    return {"digest": wl.digest, "function": wl.fn.id[:300], "n_root_nodes": len(wl.program.root.body.nodes), "lag": wl.lag}
+    return W.WorkloadProgram(wreqs, manifest_digest=None, lag=int(phi.target_profile().lag()))
 
 
 # ------------------------------------------------------------------------------------------------------------------- divergence
