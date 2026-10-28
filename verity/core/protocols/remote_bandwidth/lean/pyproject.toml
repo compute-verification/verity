@@ -28,11 +28,11 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/primitives/randomness", "verity/core/difftest/lean",
           # the P2 store (`p2.py`, `RemoteAudit.P2`): PoUS's setup, P2 and vk, whose Lean leaf and path check
           # (`pous/check`'s `PousCheck.Merkle`) `lake` builds; the configurations of pous_check's other requires, which
-          # `lake` reads to resolve them, and of their modules the table of separators every module reads
-          # (`Identity.Domains`); and the committed C*, whose registration and openings test_p2.py replays
+          # `lake` reads to resolve them; and the committed C*, whose registration and openings test_p2.py replays
           "verity/core/protocols/remote_bandwidth/p2.py", "verity/core/protocols/pous",
           "verity/core/primitives/identity/lakefile.toml",
           "verity/core/primitives/identity/lake-manifest.json", "verity/core/primitives/identity/lean-toolchain",
+          # and of the identity package's modules, the table of separators every module here reads (`Identity.Domains`)
           "verity/core/primitives/identity/Identity/Domains.lean",
           "verity/core/devices/memory_challenger/lean/lakefile.toml",
           "verity/core/devices/memory_challenger/lean/lake-manifest.json",
