@@ -6,7 +6,7 @@
 #
 # Outside the lease: the workspace synced with the members' CUDA torch (`uv sync --all-packages --extra torch`). Under one
 # lease of at most LEASE_MIN minutes (default 20): the H1 tests (TESTS, default tests/protocols/test_pouw_h1*.py) with
-# the GPU, into $OUT/tests.log, then h1_zy_gpu.py (with H1_ZY_ARGS) into $OUT/h1_zy_gpu.json. Each step's exit code is in
+# the GPU, into $OUT/tests.log and $OUT/tests.xml, then h1_zy_gpu.py (with H1_ZY_ARGS) into $OUT/h1_zy_gpu.json. Each step's exit code is in
 # $OUT/rc.txt, and the script exits non-zero if any failed. CUDA: the toolkit (default the first of /usr/local/cuda-13.0
 # and /usr/local/cuda).
 set -uo pipefail
@@ -29,7 +29,7 @@ env -u GPU_LEASE_TIMED gpu-lease 1 --wait --max-min "${LEASE_MIN:-20}" -- bash -
   echo "leased at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"
   nvidia-smi -i "$GPU_LEASE_UUID" --query-gpu=name,driver_version,clocks.max.sm --format=csv > "$O/gpu.txt" 2>&1
   # shellcheck disable=SC2086
-  (cd "$V" && "$PY" -m pytest -q -p no:cacheprovider $TESTS) > "$O/tests.log" 2>&1
+  (cd "$V" && "$PY" -m pytest -rs --junitxml "$O/tests.xml" $TESTS) > "$O/tests.log" 2>&1
   echo "tests rc $? at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"
   # shellcheck disable=SC2086
   (cd "$V" && "$PY" tests/protocols/h1_zy_gpu.py --out "$O" $H1_ZY_ARGS) > "$O/h1_zy_gpu.log" 2>&1

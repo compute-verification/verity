@@ -17,7 +17,8 @@ KEY = bytes(range(32))
 
 
 def _core(program, value, words, key, nonce, keep_rows=False, row_salts=None, schema=G.SCHEMA_V2, later=False, rows=None,
-          **binding):
+          also=None, **binding):
+    assert also is None, "core commits the value alone"
     words = NR._host(words)
     n = len(words)
     assert rows is None or np.array_equal(np.asarray(rows[:]), words)
