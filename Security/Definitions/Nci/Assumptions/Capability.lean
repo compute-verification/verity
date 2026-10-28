@@ -27,10 +27,10 @@ than excluding them by vocabulary:
   that measure joint description cost, not storage width. A low-rank factorization, a predictor, a seed, a previous
   checkpoint or a replay of the training prefix within the decoder's budget lowers the prices; the premise must reflect
   them, and it fails where they make the state cheap.
-* `DistributedDependence`: a structural property of the training computation, checkable on a named circuit. A block that
-  completes a counted product of token `j` without being handed anything from `j`'s own computation must hold more
-  updated state than its budget pays for. With update hardness it forces one handed gate per use, with no positive
-  information rate assumed for any activation.
+* `DistributedDependence`: a block that completes a counted product of token `j` while handed fewer than `r` values
+  from `j`'s own computation must hold more updated state than its budget pays for. With update hardness it forces `r`
+  handed gates per use, with no information rate assumed for any activation. At width 1 it is a property of the
+  wiring, checkable on a named circuit; a larger width is measured.
 * `CoversEfficientMethods`: the task-level hypothesis. Computationally competitive ways of reaching the target can't
   escape every analysed structure. It is the least certain of the three, and the one a cheap compact-state method
   refutes.
@@ -67,24 +67,25 @@ def LocalUpdateHardness (R : Registration) (B : Nci.Covering.MulBlocks R.d) (W :
     ENNReal.ofReal (∑ i ∈ U, W.p i - Λw) ≤
       (LDL M t r (R.d.D.bits (R.d.D.eval a) ((U.image σ).sort (· ≤ ·))) : ℝ≥0∞)
 
-/-- NEW PREMISE. **Distributed dependence** ([DISTRIBUTED-DEPENDENCE]) at the description budget `kb` (Lemma 1's
-`k + ⌈log₂ B⌉ + a_blk` plus update hardness's deficit `Λw`): a proof block of the registration that computes a counted
-product of token `j` whole, while reading no gate of `j`'s computation `T j`, holds versions, among its gates and what
-it reads, of updated slots priced above `kb`.
+/-- NEW PREMISE. **Distributed dependence** ([DISTRIBUTED-DEPENDENCE]) of width `r` at the description budget `kb`
+(Lemma 1's `k + ⌈log₂ B⌉ + a_blk` plus update hardness's deficit `Λw`): a proof block of the registration that computes
+a counted product of token `j` whole, while reading fewer than `r` gates of `j`'s computation `T j`, holds versions,
+among its gates and what it reads, of updated slots priced above `kb`.
 
-In words: if a block isn't handed any value from a use's upstream computation, reproducing the operand that use needs
-forces it to obtain more updated state than one block can describe. The token computations are disjoint and hold no
-registered gate (`Nci.Covering.MulBlocks.T_disjoint`, `T_θ`), so a block serves at most as many uses as it has
-unregistered input bits.
+In words: unless a block is handed `r` values from a use's own upstream computation, reproducing the operand that use
+needs forces it to obtain more updated state than one block can describe. The token computations are disjoint and hold
+no registered gate (`Nci.Covering.MulBlocks.T_disjoint`, `T_θ`), so a block serves at most `k / r` uses.
 
-It is a property of a named circuit, checkable there. A first layer, whose activations are a function of the token id,
-fails it, and so does a layer of fixed features `a_j = h_θ(x_j)` that a block computes from registered information; their
-products are not counted. That alternative implementations keep a comparable structure is the coverage question
-(`CoversEfficientMethods`), not this one. -/
-def DistributedDependence (R : Registration) (B : Nci.Covering.MulBlocks R.d) (W : UpdatedState B) (kb : ℝ) :
-    Prop :=
+At width 1 it is a property of the wiring alone, checkable on a named circuit. A larger width is the empirical part:
+how many bits of a use's upstream values a block must import before rebuilding the rest within its budget gets cheap,
+which the operand's local description length given the held state measures. A first layer, whose activations are a
+function of the token id, fails it at every width, and so does a layer of fixed features `a_j = h_θ(x_j)` that a block
+computes from registered information; their products are not counted. That alternative implementations keep a
+comparable structure is the coverage question (`CoversEfficientMethods`), not this one. -/
+def DistributedDependence (R : Registration) (B : Nci.Covering.MulBlocks R.d) (W : UpdatedState B) (r : ℕ)
+    (kb : ℝ) : Prop :=
   ∀ (u : Fin R.B) (j : Fin B.nt), (∃ i, (i, j) ∈ B.P ∧ B.m (i, j) ⊆ R.P.gates u) →
-    Disjoint (R.d.D.into (R.P.gates u)) (B.T j) →
+    (R.d.D.into (R.P.gates u) ∩ B.T j).card < r →
     ∃ (U : Finset (Fin B.nw)) (σ : Fin B.nw → Fin R.d.D.N),
       (∀ i ∈ U, σ i ∈ W.ver i ∧ σ i ∈ R.P.gates u ∪ R.d.D.into (R.P.gates u)) ∧ kb < ∑ i ∈ U, W.p i
 

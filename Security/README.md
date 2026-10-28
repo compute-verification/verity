@@ -158,20 +158,23 @@ evidence, not proof.
 With Lemma 1, a block holds updated state priced at most k' + λ_w, whether it loads, decompresses or computes it
 (`Nci.Guarantees.UpdatedStatePerBlock`).
 
-**H2, distributed dependence** (`Nci.Assumptions.DistributedDependence`). The upstream computations T_j of distinct
-uses are disjoint and hold no registered gate. A block that completes a counted multiplication of use j while reading
-nothing of T_j holds updated state priced above k' + λ_w: without a value from j's own upstream computation,
-reproducing j's operand needs more updated state than one block can describe. H1 alone isn't enough: in one trained
-layer over cheaply computable features a_j = h_θ(x_j), a block pays once for w_i and generates every a_j itself. H2 is a
-property of a named circuit, checkable there; first layers and fixed features fail it, and their products aren't
-counted.
+**H2, distributed dependence of width r** (`Nci.Assumptions.DistributedDependence`). The upstream computations T_j of
+distinct uses are disjoint and hold no registered gate. A block that completes a counted multiplication of use j while
+reading fewer than r values of T_j holds updated state priced above k' + λ_w: without enough of j's own upstream
+values, reproducing j's operand needs more updated state than one block can describe. H1 alone isn't enough: in one
+trained layer over cheaply computable features a_j = h_θ(x_j), a block pays once for w_i and generates every a_j
+itself. At r = 1, H2 is a property of the wiring, checkable on a named circuit; first layers and fixed features fail
+it, and their products aren't counted. A larger r is the empirical part: how many bits of a use's upstream values a
+block must import before rebuilding the rest within t gets cheap, which the operand's local description length given
+the held state measures.
 
-With H1 and one price β_w per slot, a block holds at most (k' + λ_w)/β_w slots, and each use it serves costs it a fresh
-bit from that use's own region, which no other use shares, so (`Nci.Guarantees.ProductsPerBlock`)
+With H1 and one price β_w per slot, a block holds at most (k' + λ_w)/β_w slots, and each use it serves costs it r fresh
+bits from that use's own region, which no other use shares, so (`Nci.Guarantees.ProductsPerBlock`)
 
-$$ q_I \;\le\; k \cdot \frac{k' + \lambda_w}{\beta_w}. $$
+$$ q_I \;\le\; \frac{k}{r} \cdot \frac{k' + \lambda_w}{\beta_w}. $$
 
-No activation is assumed to carry a positive information rate. Overlapping regions need a multiplicity argument,
+No activation is assumed to carry an information rate. At r = 1 the bound is about k²/β_w, which at a token-sized k
+exceeds what a block computes anyway: the wiring alone gives no slowdown, and the bound bites only through a large r. Overlapping regions need a multiplicity argument,
 repeated products of one slot and one use a reuse factor, and multiplications split between blocks their own account.
 
 Stronger bounds are refinements, each a hypothesis still to earn: an activation rate,

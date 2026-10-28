@@ -10,9 +10,10 @@ hard-to-localize computation, and part 4, its consequence for cost:
 * `UpdatedStatePerBlock`: Lemma 1 (`Verity.Guarantees.BlockDescription`) with local update hardness. A proof block can
   hold updated state priced at most `k' + Λw`, `k' = k + ⌈log₂ B⌉ + a_blk`, whether it loads it, decompresses it or
   computes it.
-* `ProductsPerBlock`: with distributed dependence and one price `βw` per slot, each proof block computes at most
-  `k · (k' + Λw) / βw` counted products whole: it holds at most `(k' + Λw)/βw` slots, and each use it serves costs it
-  one handed gate from that use's own computation. No activation is assumed to carry a positive information rate.
+* `ProductsPerBlock`: with distributed dependence of width `r` and one price `βw` per slot, each proof block computes
+  at most `(k / r) · (k' + Λw) / βw` counted products whole: it holds at most `(k' + Λw)/βw` slots, and each use it
+  serves costs it `r` handed gates from that use's own computation. No activation is assumed to carry an information
+  rate.
 * `CapabilityFloor`: coverage with a cost floor `Lc` on covered computations (from `ProductsPerBlock` and Theorem 3,
   `Verity.Guarantees.Counting`) gives that reaching the target below `min(Lc, Tmax)` has probability at most `η`.
 
@@ -39,15 +40,15 @@ def UpdatedStatePerBlock : Prop :=
       Assumptions.LocalUpdateHardness R B W M r t Λw →
       HeldStateAtMost R W ((k + Nat.clog 2 R.B + aBlk : ℕ) + Λw)
 
-/-- **A block computes few counted products** (distributed dependence with a held-state budget, one price `βw > 0` per
-slot). If every proof block holds updated state priced at most `kb` (`UpdatedStatePerBlock`'s conclusion) and
-distributed dependence holds at `kb`, each proof block of a `(c, k)`-partition computes at most `k · kb / βw` counted
-products whole. -/
+/-- **A block computes few counted products** (distributed dependence of width `r ≥ 1` with a held-state budget, one
+price `βw > 0` per slot). If every proof block holds updated state priced at most `kb` (`UpdatedStatePerBlock`'s
+conclusion) and distributed dependence holds at width `r` and budget `kb`, each proof block of a `(c, k)`-partition
+computes at most `(k / r) · (kb / βw)` counted products whole. -/
 def ProductsPerBlock : Prop :=
   ∀ (R : Registration) (c k : ℕ), R.P.IsCK R.d c k →
-    ∀ (B : Nci.Covering.MulBlocks R.d) (W : UpdatedState B) (βw kb : ℝ), 0 < βw → (∀ i, W.p i = βw) →
-      HeldStateAtMost R W kb → Assumptions.DistributedDependence R B W kb →
-      ∀ u, ((B.P.filter fun q => B.m q ⊆ R.P.gates u).card : ℝ) ≤ k * (kb / βw)
+    ∀ (B : Nci.Covering.MulBlocks R.d) (W : UpdatedState B) (r : ℕ) (βw kb : ℝ), 0 < r → 0 < βw →
+      (∀ i, W.p i = βw) → HeldStateAtMost R W kb → Assumptions.DistributedDependence R B W r kb →
+      ∀ u, ((B.P.filter fun q => B.m q ⊆ R.P.gates u).card : ℝ) ≤ (k : ℝ) / r * (kb / βw)
 
 /-- **Covered success below the floor is rare** (part 4's counting step). Under coverage of efficient methods at cost
 range `Tmax` and error `η`, if every covered computation in the class `𝒜` costs at least `Lc` (the per-block cap and
