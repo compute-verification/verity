@@ -16,8 +16,9 @@
 * **certs**: the client's kept files (``--client``, by default the certifier rehearsal's own directory ``--run``):
   ``certificates.jsonl`` and ``clocks.jsonl``, each certificate's public part (`certifier_serve.keep_certificates`),
   held again to the certifier's key and session in ``--run``'s ``deployment.json`` by the client's own
-  `check_certificates`. Each window's two certified records (``--run``'s ``certified.jsonl``, their heads and salts)
-  are held by the Lean's audit (`certifier_serve._certified`: `NetworkCheck.Records`' ``verdicts-no-grid``, N2's
+  `check_certificates`, each refusal the Lean's (`client_certificates`: `NetworkCheck.LinkWindow.refusals`,
+  `audit.certificate_refusals` beside it as the reference, ``client_check``'s ``by``). Each window's two certified
+  records (``--run``'s ``certified.jsonl``, their heads and salts) are held by the Lean's audit (`certifier_serve._certified`: `NetworkCheck.Records`' ``verdicts-no-grid``, N2's
   audit without its head checks, `audit.Audit` beside it as the reference, each row's ``by`` and ``reference``) under
   the syncs the certifier signed (``--run``'s salted ``clocks.jsonl``, `advised.SignedClocks`), never the plan's, and
   their certificates, and the clocks', must be exactly the client's. ``--deployed`` refuses a key that isn't LMS at
@@ -79,8 +80,9 @@ CLEAR = {
                 "opened to its registered root and rebuilt from the certified I/O, and the I/O tie (IoTieRequest's "
                 "reference, network-e2e's stand-ins for the warden's rows and the Commit's port) on the honest run",
     "certificates": "at the client, on its kept certificates (their public parts): each certificate's and clock "
-                    "certificate's LMS signature under the certifier's key and session (check_certificates); and the "
-                    "Lean's audit (NetworkCheck.Records, audit.Audit its reference) of the rehearsal's certified heads "
+                    "certificate's LMS signature under the certifier's key and session, by the Lean "
+                    "(NetworkCheck.LinkWindow.refusals, audit.certificate_refusals its reference); and the Lean's "
+                    "audit (NetworkCheck.Records, audit.Audit its reference) of the rehearsal's certified heads "
                     "under its salted clock openings (witness a rehearsal publishes), whose certificates must be "
                     "exactly the client's",
     "n2": "at the verifier: the registration records, the draw, the certificates' public fields, the clock syncs, the "
@@ -250,8 +252,11 @@ def certs(run: Path, client: Path, deployed: bool = False) -> dict:
 def client_certificates(dep: dict, windows: int, kept: Path, kept_clocks: Path) -> dict:
     """The client's kept files (`certifier_serve.keep_certificates`: each certificate's public part with its session,
     no head, sync or salt) held again to the deployment's key and session, window by window, by the client's own
-    `check_certificates` on the answer they make up."""
+    `check_certificates` on the answer they make up, each refusal the Lean's (`lean_audit.certificate_refusals`:
+    `NetworkCheck.LinkWindow.refusals`, ``by`` ``lean``, with `audit.certificate_refusals` beside it as the reference, a
+    window where the two differ refused whole)."""
     import certifier_serve as cs
+    from verity.core.protocols.certifier import lean_audit
 
     lines = lambda p: [json.loads(x) for x in p.read_text().splitlines() if x.strip()]
     certs, clocks = lines(kept), lines(kept_clocks)
@@ -263,14 +268,14 @@ def client_certificates(dep: dict, windows: int, kept: Path, kept_clocks: Path) 
                   "certificates": [strip(d) for d in certs if "unsigned" not in d and d["window"] == w],
                   "clocks": [strip(d) for d in clocks if d["window"] == w],
                   "unsigned": [d["unsigned"] for d in certs if "unsigned" in d and d["unsigned"][2] == w]}
-        got, synced, unsigned, no = cs.check_certificates(dep, w, answer, seen)
+        got, synced, unsigned, no = cs.check_certificates(dep, w, answer, seen, lean_audit.certificate_refusals)
         refused += no + [f"window {w}: the signer refused {u}" for u in unsigned]
         for c in got:
             by_window[(c.direction.value, c.window)] = json.dumps(cs.certificate_json(c), sort_keys=True)
         kept_clock += [json.dumps(cs.certificate_json(k), sort_keys=True) for k in synced]
     if sessions - {dep["session"]}:
         refused.append(f"certificates of another session: {sorted(sessions - {dep['session']})}")
-    return {"certificates": len(by_window), "clock_certificates": len(kept_clock), "refused": refused,
+    return {"certificates": len(by_window), "clock_certificates": len(kept_clock), "refused": refused, "by": "lean",
             "by_window": by_window, "clocks": kept_clock}
 
 

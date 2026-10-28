@@ -6,6 +6,8 @@ comes from several links; on `service.py`'s calls; and a refusal, never a Python
 from __future__ import annotations
 
 import dataclasses
+import functools
+import hashlib
 import os
 import shutil
 import subprocess
@@ -366,3 +368,113 @@ def test_a_forked_process_starts_its_own_executable(lean):
     assert os.waitpid(pid, 0)[1] == 0
     assert ok == 1 and child != parent
     assert lean_audit.Audit(server=lean).check_link("a", rec, [], s, ss, g) == honest and lean._proc.pid == parent
+
+
+def _digest(i: int) -> bytes:
+    return hashlib.sha512(b"served certificate %d" % i).digest()
+
+
+@functools.lru_cache(maxsize=None)
+def _served():
+    """A toy key's certificates as a reveal endpoint serves window 1 of link "n2" in `SESSION`, each named by the
+    refusal it gets as the first certificate of its kind: kept (``egress``, ``ingress``, the clock certificate
+    ``clock``), another key's, another link's and another window's, an ingress clock certificate, a forged signature,
+    one that doesn't decode, an altered digest, and a clock certificate signing ``seen``'s digest."""
+    key, other = V2._key(4), V2._key(4, seed=1)
+    i, o = Issuer(V2._Signer(key), SESSION), Issuer(V2._Signer(other), SESSION)
+    egress = i.sign("n2", Direction.EGRESS, 1, _digest(0))
+    certs = {"egress": egress, "ingress": i.sign("n2", Direction.INGRESS, 1, _digest(1)),
+             "key": o.sign("n2", Direction.EGRESS, 1, _digest(2)),
+             "link": i.sign("m", Direction.EGRESS, 1, _digest(3)), "window": i.sign("n2", Direction.EGRESS, 2, _digest(3)),
+             "forged": dataclasses.replace(egress, signature=bytes([egress.signature[0] ^ 1]) + egress.signature[1:]),
+             "undecoded": dataclasses.replace(egress, signature=egress.signature[:-1]),
+             "altered": dataclasses.replace(egress, digest=_digest(9)),
+             "clock": i.sign("n2", Direction.EGRESS, 1, _digest(5)),
+             "ingress clock": i.sign("n2", Direction.INGRESS, 1, _digest(6)),
+             "seen": i.sign("n2", Direction.EGRESS, 1, _digest(7))}
+    return LmsKey(key.params, lms.public_key(key)), certs
+
+
+def _refusals(lean, certificates, clocks, seen=(), session=SESSION):
+    """The Lean's refusals and the reference's of window 1 of "n2" under the toy key, which must be one."""
+    key, _ = _served()
+    got = lean_audit.certificate_refusals(key, session, "n2", 1, certificates, clocks, seen, server=lean)
+    assert got == audit.certificate_refusals(key, session, "n2", 1, certificates, clocks, seen)
+    return got
+
+
+def test_the_clients_certificate_refusals_are_the_references(lean):
+    """`lean_audit.certificate_refusals` (`network-records verdicts`' ``certificates``, `NetworkCheck.LinkWindow`) gives
+    `audit.certificate_refusals`'s refusal of each certificate and clock certificate of a served window: another key's,
+    another link's or window's, a forged signature, one that doesn't decode and an altered digest, a second of a
+    direction, an ingress clock certificate and one signing a digest that `seen` holds, and in another session every
+    signature; the honest ones are kept."""
+    _, c = _served()
+    certs = [c[k] for k in ("key", "link", "window", "forged", "undecoded", "altered", "egress", "clock", "ingress")]
+    clocks = [c[k] for k in ("ingress clock", "seen", "clock", "egress")]
+    assert _refusals(lean, certs, clocks, [_digest(7)]) == (
+        ["key", "link-window", "link-window", "signature", "signature", "signature", None, "second", None],
+        ["clock", "reused", None, "second"])
+    assert _refusals(lean, certs, clocks) == (
+        ["key", "link-window", "link-window", "signature", "signature", "signature", None, "second", None],
+        ["clock", None, "second", "second"])
+    assert _refusals(lean, certs, clocks, session=bytes(lms.SESSION_BYTES)) == (
+        ["key", "link-window", "link-window"] + ["signature"] * 6, ["clock"] + ["signature"] * 3)
+    assert _refusals(lean, [], []) == ([], [])
+
+
+def test_on_generated_answers_the_lean_is_the_reference(lean):
+    """On answers drawn from the served certificates in any order and number, with any of their digests seen: the Lean's
+    refusals are the reference's, every refusal among them."""
+    _, c = _served()
+    pool = sorted(c.values(), key=lambda x: (x.link, x.direction.code, x.window, x.digest, x.signature))
+    found = set()
+
+    @settings(derandomize=True, database=None, deadline=None, max_examples=200)
+    @given(st.lists(st.sampled_from(pool), max_size=6), st.lists(st.sampled_from(pool), max_size=6),
+           st.sets(st.sampled_from([_digest(k) for k in range(10)])))
+    def same(certificates, clocks, seen):
+        a, b = _refusals(lean, certificates, clocks, sorted(seen))
+        found.update(a + b)
+
+    same()
+    assert found == {None, "key", "link-window", "clock", "signature", "second", "reused"}, found
+
+
+def test_a_certificate_disagreement_refuses_the_window(lean, monkeypatch):
+    """With the reference made to keep everything, every certificate and clock certificate of the window is a
+    `disagreement`, those the Lean keeps among them; a reference that raises where the Lean answers raises."""
+    key, c = _served()
+    monkeypatch.setattr(audit, "certificate_refusals",
+                        lambda key, s, link, w, xs, ks, seen=(): ([None] * len(xs), [None] * len(ks)))
+    assert lean_audit.certificate_refusals(key, SESSION, "n2", 1, [c["egress"], c["forged"]], [c["clock"]],
+                                           server=lean) == (["disagreement"] * 2, ["disagreement"])
+    assert lean_audit.certificate_refusals(key, SESSION, "n2", 1, [c["egress"]], [], server=lean) == ([None], [])
+
+    def boom(*a, **k):
+        raise ArithmeticError("reference")
+
+    monkeypatch.setattr(audit, "certificate_refusals", boom)
+    with pytest.raises(RuntimeError, match="the reference raised where the Lean check answered"):
+        lean_audit.certificate_refusals(key, SESSION, "n2", 1, [c["egress"]], [], server=lean)
+
+
+def test_certificates_outside_the_domain_are_refused(lean):
+    """A key other than an `LmsKey`, a certificate of ill-typed fields (a negative window, a link that isn't a string)
+    and an LMS key of another length each raise `ValueError`, with no refusal computed in Python."""
+    key, c = _served()
+
+    class OtherKey:
+        key_id = key.key_id
+
+        def verify(self, message, signature):
+            return True
+
+    with pytest.raises(ValueError, match="not an LmsKey"):
+        lean_audit.certificate_refusals(OtherKey(), SESSION, "n2", 1, [c["egress"]], [], server=lean)
+    for bad in (dataclasses.replace(c["egress"], window=-1), dataclasses.replace(c["egress"], link=b"n2")):
+        with pytest.raises(ValueError, match="ill-typed fields"):
+            lean_audit.certificate_refusals(key, SESSION, "n2", 1, [bad], [], server=lean)
+    with pytest.raises(ValueError, match="outside the Lean audit's domain: .*an LMS public key is"):
+        lean_audit.certificate_refusals(LmsKey(key.params, key.public[:-1]), SESSION, "n2", 1, [c["egress"]], [],
+                                        server=lean)

@@ -2,7 +2,8 @@
 certifier-serve run's records, clock certificates and the client's kept copies (`n2_zk.virtual`, fresh keys, each
 window's declared sync signed), refuses the window of a record whose signature is changed, every window from a clock
 certificate's, a kept certificate whose signature is changed, and a key under `lms.DEPLOYED`'s height with --deployed;
-each record's verdict is the Lean audit's, which refuses the changed one beside a reference that accepts it;
+each record's verdict is the Lean audit's, which refuses the changed one beside a reference that accepts it, and each
+kept certificate's the Lean check's, which refuses the changed one's window beside a reference that keeps it;
 the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
 several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose faulty
 window was drawn; the draw's bound at δ is C(n − b − 1, k) / C(n, k)'s; leak counts the scan's widths and terms on a
@@ -104,6 +105,7 @@ def test_certs_accepts_the_kept_files(honest):
     assert got["verdict"] == "accepted", got.get("why")
     assert got["certified_windows"] == got["windows"] == got["clocks_signed"]
     assert all(r["by"] == "lean" and r["reference"] is True for r in got["rows"])
+    assert got["client_check"]["by"] == "lean" and not got["client_check"]["refused"]
     assert got["client_check"]["records_are_the_clients"] and got["client_check"]["clocks_are_the_clients"]
     assert got["signed_are_declared"] and not got["key"]["deployed"]
     assert cr.certs(honest, honest / "client", deployed=True)["verdict"] == "refused"
@@ -144,6 +146,20 @@ def test_a_certified_record_is_the_lean_audits_and_a_reference_that_accepts_it_d
     got = cr.certs(tmp_path / "rec", tmp_path / "rec" / "client")
     assert [(r["by"], r["reference"]) for r in got["rows"] if not r["certified"]] == [("lean", True)]
     assert got["certified_windows"] == got["windows"] - 1 and got["verdict"] == "refused"
+
+
+def test_a_kept_certificate_is_the_lean_checks_and_a_reference_that_keeps_it_doesnt_keep_it(honest, tmp_path,
+                                                                                            monkeypatch):
+    """The client check's refusals are the Lean's (`NetworkCheck.LinkWindow.refusals`): beside a reference that keeps
+    every certificate, the window whose kept certificate's signature is changed is refused whole, each of its
+    certificates and its clock certificate as a disagreement, and the step refuses."""
+    monkeypatch.setattr(audit, "certificate_refusals",
+                        lambda key, s, link, w, xs, ks, seen=(): ([None] * len(xs), [None] * len(ks)))
+    _corrupt(honest, tmp_path / "kept", "client/certificates.jsonl", 0)
+    got = cr.certs(tmp_path / "kept", tmp_path / "kept" / "client")
+    cc = got["client_check"]
+    assert cc["by"] == "lean" and len(cc["refused"]) == 3 and all("disagree" in r for r in cc["refused"])
+    assert cc["certificates"] == 2 * got["windows"] - 2 and got["verdict"] == "refused"
 
 
 def test_certs_refuses_a_client_without_clocks(honest, tmp_path):
