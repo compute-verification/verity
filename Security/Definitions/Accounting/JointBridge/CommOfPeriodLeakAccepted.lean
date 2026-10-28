@@ -11,10 +11,12 @@ fields. `RealizesCommOfPeriodLeakAccepted` is a run whose communication audit is
 that `NetTiming.Guarantees.PeriodLeakAccepted` is about: each window audited by the sampled verifier at a statement
 registered as `sw i`, the network certifier recording each window's observations and registering its records at the
 transfer gates (its openings `tops s`). The run's claim at `K` is that every window meets `NetTiming.WindowGood`, the
-event whose secrets `PeriodLeakAccepted` counts, so `K` is the bits of that count; the audit's own coins, at each
-window, are a run of the sampled verifier against a prover whose tape is the rest of the coins. The run carries the
-deployed network certifier in `PeriodLeakAccepted`'s form, and its trust, `trusted-host`
-(`Verity.Assumptions.TrustedHost`), is a field: the per-window bound (`window_le`) is what its records give.
+event whose secrets `PeriodLeakAccepted` counts, and `K` is at least `log2` of that count at the period's schedules,
+caps, partitions and faulty bits (`count_le`); the audit's own coins, at each window, are a run of the sampled verifier
+against a prover whose tape is the rest of the coins. The run carries the deployed network certifier in
+`PeriodLeakAccepted`'s form, its records the device's run on the period's schedule (`obs_run`), and its trust,
+`trusted-host` (`Verity.Assumptions.TrustedHost`), is a field: the per-window bound (`window_le`) is what its records
+give.
 -/
 
 namespace Accounting.JointBridge
@@ -30,16 +32,21 @@ bound `Dj`, at `δ` and the decoder `decode`, with the claim at `K`. Every field
 * at the coins, each window's statement (`stmt`), the audit's extracted witness there (`wit`) and the network
   certifier's record of the window (`obs`);
 * the claim at `K` is that every window meets `WindowGood` (`comm_iff`): that is the event whose secrets
-  `PeriodLeakAccepted`'s count bounds, so `K` is the bits of that count,
-  `log2 (#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i)`. No field ties the
-  number `K` to the count yet (the follow-up: `Properties.NetworkPeriod.rowsKBoundsCount`, that the rows form's `K` is
-  at least `⌈log2⌉` of the count);
+  `PeriodLeakAccepted`'s count bounds;
 * the statements are in the sampled audit's scope (`scope`): the registration refuses any other;
 * the deployed network certifier, in `PeriodLeakAccepted`'s form: one device (`device`) on the server's uplink, with
   its connections `Conn`, cells `Cell` and the server's state `Srv`, whose run (`run`) on a schedule and the server's
   state gives the cells the client receives and its records of the period's windows; its record format (`fmt`) and
   what reaches it from the server on each connection (`arr`);
 * the network certifier runs its code on its host (`trusted`, `trusted-host`);
+* each window's partition (`Pw`, its registration's) and a bound `β` on the committed bits of each of its possible
+  faulty sets;
+* the schedules the period admits (`Ss`), each giving connection `c` at most `cap c` cells and held by the record
+  format; at the coins, the network certifier's schedule (`sched`), one of them (`sched_mem`), and the server's state
+  (`srv`), on which the records are the device's run (`obs_run`);
+* `K` is at least `log2` of `PeriodLeakAccepted`'s count at these (`count_le`):
+  `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i ≤ 2^K`, which the period
+  check's `K` gives at its numbers (`Properties.NetworkPeriod.RowsKBoundsCount`, `ClockKBoundsCount`);
 * at each window and every value of the other coins, the network audit's own coins are a run of the sampled verifier
   at the window's statement against a prover (`prover`, on a finite tape `Tape`, the rest of the coins), and the
   probability over the audit's own coins that the network certifier accepts while the window fails `WindowGood` is at
@@ -102,6 +109,33 @@ structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Typ
   on. Its records are what `window_le`'s per-window bound comes from; deriving `window_le` from `PeriodLeakAccepted`
   at this deployed period and this premise, not at the period of no windows, is the follow-up. -/
   trusted : Verity.Assumptions.TrustedHost device run fun p => tapCode fmt p.1 (arr p.2)
+  /-- each window's partition -/
+  Pw : Fin n → Partition
+  /-- the registration's partition -/
+  hPw : ∀ i, D.partition (sw i) = some (Pw i)
+  /-- a bound on the committed bits of each of window `i`'s possible faulty sets -/
+  β : Fin n → ℕ
+  hβ : ∀ i, ∀ F ∈ faultySets (sw i).design (Pw i) δ, faultyBits (sw i).prog (Pw i) F ≤ β i
+  /-- the most cells the period admits on each connection -/
+  cap : Conn → ℕ
+  /-- the schedules the period admits -/
+  Ss : Set (WardenSchedule Conn)
+  hcap : ∀ s ∈ Ss, ∀ c, s.cells c ≤ cap c
+  /-- the record format holds the client's view on every admitted schedule -/
+  hfit : ∀ s ∈ Ss, fmt.fits s
+  /-- the network certifier's schedule at the coins -/
+  sched : ((i : I) → Ω i) → WardenSchedule Conn
+  /-- the server's state at the coins -/
+  srv : ((i : I) → Ω i) → Srv
+  /-- the records are the deployed device's run on the schedule and the server's state -/
+  obs_run : ∀ ξ, obs ξ = (run device (sched ξ, srv ξ)).2
+  /-- the schedule is one the period admits -/
+  sched_mem : ∀ ξ, sched ξ ∈ Ss
+  /-- `K` is at least `log2` of `PeriodLeakAccepted`'s count at the period's schedules, caps, partitions and faulty
+  bits -/
+  count_le : ∃ N : ℕ, Ss.encard * (((∏ c, (cap c + 1)) * ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \
+      reg (sw i)).card * (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞) ≤ N ∧
+    (N : ℝ) ≤ 2 ^ K
   /-- the network audit's acceptance with window `i` failing its good event, over the audit's own coins, is at most
   the sampled verifier's `PrBad` at the window's statement and prover: the per-window bound that the trusted network
   certifier's records (`trusted`) give. It is a field until it is derived from `PeriodLeakAccepted` at the deployed

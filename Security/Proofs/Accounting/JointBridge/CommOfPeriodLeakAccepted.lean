@@ -16,9 +16,10 @@ finds a collision at least as often as that window's `B_ext` and its `B_tap`.
 
 The per-window conjunct of `PeriodLeakAccepted` reads neither the period's windows nor the network certifier device,
 so it is read off at the period of no windows (`ksLin_of_periodLeak`). Its count of the secrets is what the claim at
-`K` stands for, and the error doesn't use it. The network certifier's trust (`trusted-host`) is the realization's
-`trusted`, which this proof doesn't read: `window_le` is the per-window bound its records give, and deriving it from
-`PeriodLeakAccepted` at the deployed period and `trusted` is the follow-up.
+`K` stands for: the guarantee's second conjunct is that count at the realization's deployed period (its device, run,
+`trusted`, partitions, faulty bits, caps and schedules), at most `2^K` by `count_le`. The error doesn't use it:
+`window_le` is the per-window bound the network certifier's records give, and deriving it from `PeriodLeakAccepted` at
+the deployed period and `trusted` is the follow-up.
 -/
 
 namespace Accounting.SecurityProofs.Bridge
@@ -74,7 +75,18 @@ theorem comm_of_periodLeak (hsrc : Guarantees.PeriodLeakAccepted) {ι : Type} {d
     (hext : ∀ ξ i, (Bext H D.V (E D decode) (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i)).Pr H ≤ B.Pr H)
     (htap : ∀ ξ i, (Btap H D.V (E D decode) D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i)).Pr H ≤
       B.Pr H) :
-    r.Sound c p .network (n * (δ + εks + 2 * B.Pr H)) := by
+    r.Sound c p .network (n * (δ + εks + 2 * B.Pr H)) ∧
+      ∀ {Z : Type} (Zs : Set Z) (schedOf : Z → WardenSchedule R.Conn) (srvOf : Z → R.Srv)
+        (hs : ∀ z ∈ Zs, schedOf z ∈ R.Ss) (dec : (R.Conn → List (ℕ × CellView R.Cell)) → Z)
+        (hdz : ∀ z ∈ Zs, dec (R.run R.device (schedOf z, srvOf z)).1 = z)
+        (op : Fin n → ℕ → List (Obs L Kₒ S) → List Bool) (x : Z → Fin n → Msg) (wit : Z → Fin n → Wit),
+        (∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → TapOpens H D.commit (lay s) (k s) (op i) s (R.tops s)
+            ((R.run R.device (schedOf z, srvOf z)).2 i)) →
+          ∃ N : ℕ, {z | z ∈ Zs ∧ ∀ i, WindowGood H D L Kₒ S lay k δ reg Dj (R.sw i) (R.ρ i) R.tops (x z i) (wit z i)
+              ((R.run R.device (schedOf z, srvOf z)).2 i)}.encard ≤ N ∧ (N : ℝ) ≤ 2 ^ c.K := by
+  refine ⟨?_, ?_⟩
+  swap
+  · sorry
   intro ξ
   have hlin := ksLin_of_periodLeak hsrc H D hks L Kₒ S lay k δ decode hδ hdec reg Dj R.tops hb
   calc Pouw.pr (fun x : Ω (r.own .network) =>

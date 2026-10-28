@@ -12,6 +12,10 @@ strategy (in the causal game, `Accounting.PeriodLive.finder .network s`), and it
 collision (`Claims.Sampling.Bext`) and every collision against the network certifier's openings (`NetTiming.Btap`), each
 with at least that finder's probability. So the binding failure is an event of the finder, not a number of its own:
 `ecr/sha-512` is asked of `B` only, where the one theorem reads its error (`Accounting.PeriodLive.error`).
+
+What the claim at `K` stands for is `PeriodLeakAccepted`'s count at the run's deployed period: a covert sender in the
+server over the schedules the period admits, whose records the network certifier registers, has at most `2^K` secrets
+whose every window meets `WindowGood`, so it moves at most `K` bits through the network certifier in the period.
 -/
 
 namespace Accounting.Guarantees.Bridge
@@ -28,7 +32,12 @@ trace's commitment binds (`CommitmentScheme.Binds`), at `δ ≥ 0` and a decoder
 where each window's prover has `κ − δ + √(γ·Pr[B]) ≤ ε_ks` (`Claims.Sampling.KS`'s knowledge error), and at a finder
 `B` (the network component's: `PeriodLive.finder .network s` at the strategy `s`) that outputs a collision of `H` at
 least as often as each window's extraction finder `B_ext` and its finder `B_tap` of the collisions against the network
-certifier's openings, the network audit's `PeriodRun.Sound` holds at `n · (δ + ε_ks + 2 · Pr[B])`. -/
+certifier's openings:
+
+* the network audit's `PeriodRun.Sound` holds at `n · (δ + ε_ks + 2 · Pr[B])`;
+* a covert sender in the server over schedules the period admits (`R.Ss`), whose secrets a decoder recovers from the
+  client's view, and at whose every window's statement the network certifier registers its observations at that
+  window's operator (`TapOpens`), has at most `2^c.K` secrets whose every window meets `WindowGood`. -/
 def CommOfPeriodLeakAccepted : Prop :=
   ∀ {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit} {I : Type} {Ω : I → Type}
     [DecidableEq I] [∀ i, Fintype (Ω i)] {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
@@ -43,6 +52,14 @@ def CommOfPeriodLeakAccepted : Prop :=
     (hext : ∀ ξ i, (Bext H D.V (E D decode) (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i)).Pr H ≤ B.Pr H)
     (htap : ∀ ξ i, (Btap H D.V (E D decode) D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i)).Pr H ≤
       B.Pr H),
-    r.Sound c p .network (n * (δ + εks + 2 * B.Pr H))
+    r.Sound c p .network (n * (δ + εks + 2 * B.Pr H)) ∧
+      ∀ {Z : Type} (Zs : Set Z) (schedOf : Z → WardenSchedule R.Conn) (srvOf : Z → R.Srv)
+        (hs : ∀ z ∈ Zs, schedOf z ∈ R.Ss) (dec : (R.Conn → List (ℕ × CellView R.Cell)) → Z)
+        (hdz : ∀ z ∈ Zs, dec (R.run R.device (schedOf z, srvOf z)).1 = z)
+        (op : Fin n → ℕ → List (Obs L Kₒ S) → List Bool) (x : Z → Fin n → Msg) (wit : Z → Fin n → Wit),
+        (∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → TapOpens H D.commit (lay s) (k s) (op i) s (R.tops s)
+            ((R.run R.device (schedOf z, srvOf z)).2 i)) →
+          ∃ N : ℕ, {z | z ∈ Zs ∧ ∀ i, WindowGood H D L Kₒ S lay k δ reg Dj (R.sw i) (R.ρ i) R.tops (x z i) (wit z i)
+              ((R.run R.device (schedOf z, srvOf z)).2 i)}.encard ≤ N ∧ (N : ℝ) ≤ 2 ^ c.K
 
 end Accounting.Guarantees.Bridge
