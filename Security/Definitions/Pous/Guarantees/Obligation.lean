@@ -13,8 +13,9 @@ a payload and a responder fixed by the other tags' keys pass with probability at
 count (`ObligationOfStatic`, no premise), so within P2's graded bound wherever `P2RingRoundSecure` gives it, from `2^19`
 to `2^25` blocks (`ObligationOfRoundSecure`), and to `2^27` under the widened conjecture `P2RingRoundSecureWide`
 (`ObligationOfRoundSecureWide`). `ObligationDemo` is the demo's memory term at `1038·2^16` blocks, outside the first
-range, and `ObligationDemoWide` its 105-read window's bound under the widened one. Over a uniform offset a block's
-code has one distribution for every content fixed before the offset is drawn (`P2ContentAbsorbs`).
+range, and `ObligationDemoWide` its 105-read window's bound under the widened one; `ObligationWide320` bounds a
+320-read window by `2^-20` at every block count of the widened range. Over a uniform offset a block's code has one
+distribution for every content fixed before the offset is drawn (`P2ContentAbsorbs`).
 
 The game has one snapshot per window: a store that changes between a window's rounds is outside every statement here.
 A window certifies the state bound at some boundary, not at each: below `S₀` at `m` of its `k` boundaries passes with
@@ -188,5 +189,34 @@ def ObligationDemoWide : Prop :=
                 varPassesOn _ 105 105 (W (rest tag y.1)) (A₁ (rest tag y.1)) (A₂ (rest tag y.1))
                   (snap tag y.1, y.2.1, y.2.2)) ≤
               ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130)
+
+/-- **A `k`-read window's bound from P2's per-round floor**: `(1 − p)^k + k·ε₀ ≤ c`, the graded bound
+`ObligationOfRoundSecure` gives a window whose state is at most `S₀` at each of its `k` challenge times, at most `c`. -/
+def RoundsBound (p ε₀ : ℝ≥0∞) (k : ℕ) (c : ℝ≥0∞) : Prop := (1 - p) ^ k + k * ε₀ ≤ c
+
+/-- **A 320-read window at `2^-20`, from the widened per-round floor.** If `P2RingRoundSecureWide p ε₀ D Q L` and
+`RoundsBound p ε₀ 320 2^-20`, `(1 − p)^320 + 320·ε₀ ≤ 2^-20` (which `p = 0.043`, `ε₀ = 2^-137` meet,
+`PousP2Rounds.floor_043_eps_320`: `0.957^320 ≈ 7.8·10^-7`), then at every block count `N` from `2^19` to `2^27` (the
+registered point's `2^19` and the demo's `1038·2^16` among them), for every injective snapshot, every schedule at most
+`S₀ = ⌊ρ·N·16448⌋` bits at each of a window's 320 challenge times, and every payload, preprocessor and responder chosen
+from the other tags' key pairs, the window passes with probability at most `2^-20`. At the demo's `N`, `S₀` is
+`ObligationDemo`'s 1,060,008,348,186 bits.
+
+Frozen (no-function, hash): it bounds P2's ring-model audit at a snapshot of a mutable store, not the PoUS code, and
+rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in `N` above `2^25`. -/
+def ObligationWide320 : Prop :=
+  ∀ (p ε₀ : ℝ≥0∞) (D Q L : ℕ), RoundsBound p ε₀ 320 ((2⁻¹ : ℝ≥0∞) ^ 20) →
+    Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L →
+    ∀ (N : ℕ) [NeZero N], 2 ^ 19 ≤ N → N ≤ 2 ^ 27 →
+      ∀ (T : Type) [Fintype T] [DecidableEq T] (tag : Fin N → T), Function.Injective tag →
+        ∀ (Sz : ℕ → ℕ), (∀ j < 320, Sz j ≤ (p2ring N 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ) →
+          ∀ (W : RestKeys tag 16448 (2 ^ 16448 - 21065) → Bits (p2ring N 16448 (2 ^ 16448 - 21065) 16432).n)
+            (A₁ : RestKeys tag 16448 (2 ^ 16448 - 21065) →
+              Preprocessor (p2ring N 16448 (2 ^ 16448 - 21065) 16432) (Sz 0))
+            (A₂ : RestKeys tag 16448 (2 ^ 16448 - 21065) →
+              VarResponderOn (p2ring N 16448 (2 ^ 16448 - 21065) 16432) Sz D Q L),
+            pr (fun y : Oracle 16448 (2 ^ 16448 - 21065) T × Unit × (Fin 320 → Fin N) =>
+                varPassesOn _ 320 320 (W (rest tag y.1)) (A₁ (rest tag y.1)) (A₂ (rest tag y.1))
+                  (snap tag y.1, y.2.1, y.2.2)) ≤ (2⁻¹ : ℝ≥0∞) ^ 20
 
 end Pous.Guarantees
