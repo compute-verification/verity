@@ -66,9 +66,9 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                            land="review", after_landing_no_cache=True,
                            landing_gates=("gates/g.py",), max_lean_checks=3, nonlean_first=False, reviewed_first=False,
                            stale_days=3, stale_close_days=7)
-    assert DriveFlags.parse("") == DriveFlags() == DriveFlags(None, None, False, (), "review", False)
+    assert DriveFlags.parse("") == DriveFlags() == DriveFlags(None, None, False, (), "review", "main", False)
     assert f.line() == ("on=m1,m2 marked_after=2026-10-12T06:00:00Z regenerate_locks=True first=1858 land=review "
-                        "after_landing_no_cache=True landing_gates=gates/g.py max_lean_checks=3 nonlean_first=False reviewed_first=False stale_days=3 "
+                        "land_into=main after_landing_no_cache=True landing_gates=gates/g.py max_lean_checks=3 nonlean_first=False reviewed_first=False stale_days=3 "
                         "stale_close_days=7 stale_keep=")
     for text, why in (('on = "m1,m2"', 'on = \'m1,m2\': a list of names, as ["a", "b"]'),
                       ("on = []", "on = []: at least one machine"),
@@ -81,6 +81,8 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                       ('land = "fast"', "land = 'fast': one of review"),
                       ('land = "check"', "land = 'check': train landing was deleted with its code (#5070): drive lands on "
                                          "review only"),
+                      ('land_into = "next"', "land_into = 'next': \"checked\" (main follows it to fully checked commits) or "
+                                             "\"main\""),
                       ("after_landing_no_cache = 1", "after_landing_no_cache = 1: true or false"),
                       ('landing_gates = "g.py"', "landing_gates = 'g.py': a list of Python scripts by their path"),
                       ('landing_gates = ["../g.py"]', "landing_gates = ['../g.py']: a list of Python scripts"),
@@ -100,7 +102,7 @@ def test_an_unknown_key_is_refused_naming_the_keys_drive_reads_and_the_one_it_li
     with pytest.raises(QueueError) as e:
         DriveFlags.parse("max_lean_check = 4\n", "d.toml")
     assert str(e.value) == ("d.toml: unknown key 'max_lean_check' (did you mean 'max_lean_checks'?): drive reads only on, "
-                            "marked_after, regenerate_locks, first, land, after_landing_no_cache, landing_gates, max_lean_checks, "
+                            "marked_after, regenerate_locks, first, land, land_into, after_landing_no_cache, landing_gates, max_lean_checks, "
                             "nonlean_first, reviewed_first, stale_days, stale_close_days, stale_keep; rename or remove it")
     with pytest.raises(QueueError, match=r"unknown key 'max_running': drive reads only on, "):
         DriveFlags.parse("max_running = 4\n")
@@ -117,7 +119,7 @@ def test_drive_reads_the_flags_at_main_in_its_clone_never_the_callers_tree_and_t
     lines = [x for x in capsys.readouterr().out.splitlines() if "flags from" in x]
     assert lines == [f"research queue drive: flags from {DRIVE_FLAGS} at main {sha[:12]}: on=m1,m2 "
                      "marked_after=2026-10-12T06:00:00Z regenerate_locks=True first=1858 land=review "
-                     "after_landing_no_cache=True landing_gates=gates/g.py max_lean_checks=3 nonlean_first=False reviewed_first=False stale_days=3 "
+                     "land_into=main after_landing_no_cache=True landing_gates=gates/g.py max_lean_checks=3 nonlean_first=False reviewed_first=False stale_days=3 "
                      "stale_close_days=7 stale_keep="]
 
     on_main(world, FLAGS.replace("max_lean_checks = 3", "max_lean_checks = 6"))

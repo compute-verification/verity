@@ -548,6 +548,20 @@ def gates_at(repo: Path, ref: str) -> tuple[str, ...]:
     return DriveFlags.parse(f"landing_gates = {json.dumps(gates)}\n", source).landing_gates
 
 
+def into_at(repo: Path, ref: str) -> str:
+    """drive.toml's `land_into` at ``ref``, "main" when it has none.  Only that key is read, as `gates_at` reads its own: drive's
+    config read names a bad key, and every `Queue` reads this one."""
+    r = _git(repo, "show", f"{ref}:{DRIVE_FLAGS}", check=False)
+    if r.returncode:
+        return "main"
+    source = f"{DRIVE_FLAGS} at {ref}"
+    try:
+        into = tomllib.loads(r.stdout).get("land_into")
+    except tomllib.TOMLDecodeError as e:
+        raise QueueError(f"{source}: not TOML: {e}") from None
+    return "main" if into is None else DriveFlags.parse(f"land_into = {json.dumps(into)}\n", source).land_into
+
+
 def run_gate(repo: Path, main: str, head: str, path: str) -> tuple[int | None, str]:
     """The landing gate ``path`` as it is at ``main`` (so the change it judges can't weaken it), run as `python3 PATH MAIN HEAD
     --json` in ``repo``: (its exit, its output), or (None, why it didn't run)."""
@@ -978,7 +992,7 @@ class Queue:
         if self.land_into is not None:
             return self.land_into
         if self._into is None:
-            self._into = flags_at(self.workdir, "refs/remotes/origin/main").land_into
+            self._into = into_at(self.workdir, "refs/remotes/origin/main")
         return self._into
 
     @property
@@ -2540,7 +2554,7 @@ class Preflight:
         if missing():
             raise QueueError(f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)")
         main, into = _out(self.repo, "rev-parse", "refs/queue/preflight/main"), "main"
-        if (land := flags_at(self.repo, "refs/queue/preflight/main").land_into) != "main" and not _git(
+        if (land := into_at(self.repo, "refs/queue/preflight/main")) != "main" and not _git(
                 self.repo, *STALL, "fetch", "-q", self.remote, f"+refs/heads/{land}:refs/queue/preflight/{land}", check=False).returncode:
             main, into = _out(self.repo, "rev-parse", f"refs/queue/preflight/{land}"), land
         r = _git(self.repo, *STALL, "ls-remote", "--exit-code", self.remote, f"refs/heads/{BRANCH}", check=False)
