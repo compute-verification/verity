@@ -1,29 +1,14 @@
-"""Dither's no-fold call (verity/core/protocols/pouw/circuit/dither.py) on the CPU: the reference prover's committed
-values and tree, and the verifier's checks, so the GPU prover's output (v31.cu's Fill, bound per call by v31lib.py) is
-judged bit for bit and a call is accepted or refused by the checks its proof blocks' Programs make.
+"""Dither's no-fold call on the CPU at a whole call's size: the reference prover's committed values and tree, and the
+verifier's checks, so the GPU prover's output (v31.cu's Fill, bound per call by v31lib.py) is judged bit for bit and a
+call is accepted or refused by the checks its proof blocks' Programs make.
 
-A call is O = (A + d_A)(B + d_B)^T over the integers, A m x K and B N x K int8. A served call's A is the caller's
-activations and its seeds come from the challenger's raw coin after the operand roots (dither.seeds); a filler call's A
-is its pad and its seeds come from its live coin after its monitoring period's salt (dither.fill_seeds). Each seed is a
-stream of SHA-512 counter-mode chunks ``prg(seed, tag, idx) = SHA-512(seed || tag || be64(idx))``, the tag zero-padded
-to 8 bytes, one compression a 512-bit chunk:
-    d_A[i, k]   bit k % 512 (LSB first) of prg(s_dA, "dA", i ceil(K / 512) + k // 512); d_B likewise under "dB"
-    V[i, c]     ((r 161) >> 32) - 80, r the little-endian u32 word (i L' + c) of the "V" stream (16 words a chunk):
-                uniform on -80..80 within 161 / 2^32; U[j, c] likewise under "U"
-    pi_tau      Fisher-Yates over L' with word tau L' + c of the "P" stream: c from L' - 1 down to 1, x = (w_c (c + 1)) >> 32,
-                swap perm[c] and perm[x]; pi_tau(c) = perm[c]
-    pad[i]      a filler call's A row i: the first K bytes of chunks i ceil(K / 64) .. of the "pad" stream, as int8
-The operands are X = wrap8(A + d_A + V[:, k % L']) and W' = wrap8(B + d_B + U[:, pi_tau(k % L')]), tau = k // L', L' a
-noise tile's length. A segment is L inner indices (S = ceil(K / L) of them, t = min(L, K) / L' at most 8); per output cell the
-prefix sums are T_s = X W'^T over the first min(s L, K) indices mod 2^16 (s = 1..S). A served call commits T_1 .. T_{S-1}
-and O mod 2^32 (T_S is implied by O); a filler call commits T_1 .. T_S.
-
-Layout (public structure). Output tiles are 128 x 128 (tile id tm (N / 128) + tn), a tile's cells in row-major order.
-Per tile, its committed prefix sums (u16, 32 KiB a segment), then a served call's O (u32, 64 KiB), little-endian
-(dither.values_buffer), cut into leaf rows of ROW bytes. Each row is an hm96-sha512/row/v2 row of 8 ROW bits
-(``verity.ml.commitments``) in one frame-v3-sha512 tree a call, under dither.Shape.domain (SERVED_TAG or FILL_TAG); the
-leaf at position pos of a call at salt offset off is salted ``prf_salt(Ks, off + pos)`` (commit_gpu's PRF). A proof block
-(i, j, s) opens the rows that hold cell (i, j)'s T_s and T_{s-1}, and at a served call's s = S its O (`Fill.opened`).
+The call is verity/core/protocols/pouw/circuit/dither.py's, and this module is its client: `Fill` is `dither.Shape` at
+the GPU prover's defaults (its segments, layout and domain), the seeds are `dither.seeds` (a served call's) and
+`dither.fill_seeds` (a filler's), every stream is `dither.prg`'s, the permutations are `dither.perms` and the tree is
+`dither.commit` under `dither.salts(Ks, off)`. What it adds is numpy, where dither's own forms are pure Python: the
+noise of whole operands (`CallNoise`), X and W' (`form`), the prefix sums T_s and a served call's O (`fill_values`),
+their bytes in `dither.values_buffer`'s layout (`fill_buffer`) and a filler's pad (`pad_rows`). A served call commits
+T_1 .. T_{S-1} and O mod 2^32 (T_S is implied by O); a filler call commits T_1 .. T_S.
 
 The verifier opens q proof blocks drawn by the check coin (a cell uniformly, then s with probability its segment's share
 of K) and runs the proof block's checks in the clear on the opened rows, a stand-in for its C-Flock --zk proof: the rows
@@ -51,7 +36,7 @@ import json
 import os
 import re
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -60,71 +45,29 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "commit_gpu"))
 import reference as cref
 
 from verity.core.protocols.pouw.circuit import dither
-from verity.ml.commitments.identity import identity_digest_sha512
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.limits import VerificationLimits
-from verity.ml.commitments.merkle import (
-    Commitment,
-    CommitmentDomain,
-    Opening,
-    tree_levels,
-    verify_opening,
-)
+from verity.core.protocols.pouw.circuit.dither import NOISE, PAD, STREAMS, TILE, leaf_h, prf_salt, prg, wrap8
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest
-
-INST, KEY = cref.INST, cref.KEY
-TILE = 128
-NOISE = 80
-STREAMS = ("dA", "dB", "U", "V", "P")
+from verity.ml.commitments.rowleaf import row_leaf
 
 
 # ---------------------------------------------------------------------------------------------------------- the coins
-prg = dither.prg
+def chunks(seed: bytes, tag: str, idx) -> bytes:
+    """Chunks `idx` of stream `tag` of `seed` (`dither.prg`), back to back."""
+    return b"".join(prg(seed, tag, b) for b in idx)
 
 
-def stream(seed: bytes, tag: str, first: int, blocks: int) -> bytes:
-    return b"".join(prg(seed, tag, first + b) for b in range(blocks))
-
-
-def bits(seed: bytes, tag: str, rows: int, k: int) -> np.ndarray:
+def bits(seed: bytes, tag: str, rows: range, k: int) -> np.ndarray:
+    """`dither.dithers`' rows `rows` (len(rows) x k bits): row i is chunks i ceil(k / 512) .., LSB first."""
     kb = -(-k // 512)
-    raw = np.frombuffer(stream(seed, tag, 0, rows * kb), dtype=np.uint8).reshape(rows, kb * 64)
-    return np.unpackbits(raw, axis=1, bitorder="little")[:, :k].astype(np.int64)
-
-
-def words32(seed: bytes, tag: str, count: int) -> np.ndarray:
-    return np.frombuffer(stream(seed, tag, 0, -(-count // 16)), dtype="<u4")[:count].astype(np.uint64)
-
-
-def noise(seed: bytes, tag: str, rows: int, lp: int) -> np.ndarray:
-    r = words32(seed, tag, rows * lp)
-    return (((r * np.uint64(2 * NOISE + 1)) >> np.uint64(32)).astype(np.int64) - NOISE).reshape(rows, lp)
-
-
-def perms(seed: bytes, tiles: int, lp: int) -> np.ndarray:
-    w = words32(seed, "P", tiles * lp).reshape(tiles, lp)
-    out = np.empty((tiles, lp), dtype=np.int64)
-    for tau in range(tiles):
-        p = list(range(lp))
-        for c in range(lp - 1, 0, -1):
-            x = (int(w[tau, c]) * (c + 1)) >> 32
-            p[c], p[x] = p[x], p[c]
-        out[tau] = p
-    return out
-
-
-def bits_rows(seed: bytes, tag: str, rows: range, k: int) -> np.ndarray:
-    """``bits`` for some rows only (a sampled tile's)."""
-    kb = -(-k // 512)
-    raw = np.frombuffer(b"".join(prg(seed, tag, i * kb + b) for i in rows for b in range(kb)), dtype=np.uint8)
+    raw = np.frombuffer(chunks(seed, tag, (i * kb + b for i in rows for b in range(kb))), dtype=np.uint8)
     return np.unpackbits(raw.reshape(len(rows), kb * 64), axis=1, bitorder="little")[:, :k].astype(np.int64)
 
 
-def noise_rows(seed: bytes, tag: str, rows: range, lp: int) -> np.ndarray:
-    """``noise`` for some rows only: row r's words are chunks r L' / 16 .. (L' a multiple of 16)."""
+def noise(seed: bytes, tag: str, rows: range, lp: int) -> np.ndarray:
+    """V's (tag "V") or U's ("U") rows `rows` (len(rows) x L', each on -NOISE .. NOISE), as `dither.noise_a` and
+    `noise_b` draw them: row r's words are chunks r L' / 16 .. (L' a multiple of 16)."""
     per = lp // 16
-    w = np.frombuffer(b"".join(prg(seed, tag, r * per + b) for r in rows for b in range(per)), dtype="<u4").astype(np.uint64)
+    w = np.frombuffer(chunks(seed, tag, (r * per + b for r in rows for b in range(per))), dtype="<u4").astype(np.uint64)
     return (((w * np.uint64(2 * NOISE + 1)) >> np.uint64(32)).astype(np.int64) - NOISE).reshape(len(rows), lp)
 
 
@@ -140,23 +83,17 @@ class CallNoise:
 
     @staticmethod
     def expand(sh: Fill, seeds: dict[str, bytes]) -> CallNoise:
-        return CallNoise(bits(seeds["dA"], "dA", sh.m, sh.k), bits(seeds["dB"], "dB", sh.n, sh.k),
-                         noise(seeds["U"], "U", sh.n, sh.lp), noise(seeds["V"], "V", sh.m, sh.lp),
-                         perms(seeds["P"], sh.k // sh.lp, sh.lp))
+        return CallNoise.rows(sh, seeds, range(sh.m), range(sh.n))
 
     @staticmethod
     def rows(sh: Fill, seeds: dict[str, bytes], ia: range, ja: range) -> CallNoise:
         """The noise of A's rows ia and B's rows ja (and every permutation)."""
-        return CallNoise(bits_rows(seeds["dA"], "dA", ia, sh.k), bits_rows(seeds["dB"], "dB", ja, sh.k),
-                         noise_rows(seeds["U"], "U", ja, sh.lp), noise_rows(seeds["V"], "V", ia, sh.lp),
-                         perms(seeds["P"], sh.k // sh.lp, sh.lp))
+        return CallNoise(bits(seeds["dA"], "dA", ia, sh.k), bits(seeds["dB"], "dB", ja, sh.k),
+                         noise(seeds["U"], "U", ja, sh.lp), noise(seeds["V"], "V", ia, sh.lp),
+                         np.array(dither.perms(seeds, sh.k, sh.lp), dtype=np.int64))
 
 
 # ------------------------------------------------------------------------------------------------------------ forming
-def wrap8(x: np.ndarray) -> np.ndarray:
-    return ((x + 128) & 255) - 128
-
-
 def v_full(sh: Fill, c: CallNoise, rows: slice | None = None) -> np.ndarray:
     V = c.V if rows is None else c.V[rows]
     return np.tile(V, (1, sh.k // sh.lp))
@@ -186,119 +123,27 @@ def imatmul(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return np.rint(a.astype(np.float64) @ b.astype(np.float64).T).astype(np.int64)
 
 
-# ------------------------------------------------------------------------------------------------------------- leaves
-def leaf_h(row: bytes, salt: bytes) -> bytes:
-    x = sha512_row_v2_digest(row, 8 * len(row))
-    return INST.tree_leaf(KEY, INST.commit_string(KEY, x, salt))
-
-
 def levels_bytes(levels: list[list[bytes]]) -> bytes:
     return b"".join(b"".join(lv) for lv in levels)
 
 
 # ----------------------------------------------------------------------------------------------------------- the call
-SERVED_TAG = "verity/pouw/dither/call/v1"
-FILL_TAG = "verity/pouw/dither/fill/v1"
-FILL_STREAMS = ("pad", "dA", "dB", "U", "V", "P")
-K_LIMIT = 1 << 17
+#: the seeds' order in the 6 x 64 bytes v31.cu takes: `dither.fill_seeds`' streams
+FILL_STREAMS = (PAD, *STREAMS)
 
 
 @dataclass(frozen=True)
-class Fill:
-    """A no-fold call: m x n output cells at contraction k, noise tiles of lp (L'), segments of L, leaf rows of `row`
-    bytes, O committed (`o`: a served call; a filler's commits none) (dither.Shape)."""
+class Fill(dither.Shape):
+    """`dither.Shape` at the GPU prover's defaults: a filler's call at L' 256 and L 2,048, in the protocol's rows of
+    16 KiB."""
 
-    m: int
-    n: int
-    k: int
     lp: int = 256
     L: int = 2048
-    row: int = 1024
     o: bool = False
-
-    def __post_init__(self) -> None:
-        if self.m % TILE or self.n % TILE or self.m <= 0 or self.n <= 0:
-            raise ValueError(f"m and N multiples of {TILE}, not {self.m} x {self.n}")
-        if self.lp % 32 or self.lp <= 0 or self.k % self.lp:
-            raise ValueError(f"L' a multiple of 32 dividing K, not L' {self.lp} at K {self.k}")
-        if self.k >= K_LIMIT:
-            raise ValueError(f"K below {K_LIMIT}, not {self.k}")
-        if self.L <= 0 or self.L % self.lp:
-            raise ValueError(f"L a multiple of L' {self.lp}, not {self.L}")
-        if min(self.L, self.k) > 8 * self.lp:
-            raise ValueError(f"t = min(L, K) / L' is at most 8 (verity/core/protocols/pouw/dither/PROTOCOL.md, The segment "
-                             f"and the noise tile), not {min(self.L, self.k)} / {self.lp} at L {self.L}, K {self.k}")
-        if self.row % 16 or 32768 % self.row:
-            raise ValueError(f"rows of a multiple of 16 bytes dividing 32 KiB, not {self.row}")
-
-    @property
-    def S(self) -> int:
-        return -(-self.k // self.L)
-
-    @property
-    def W(self) -> int:
-        """Segments whose prefix sums are committed: S - 1 when O is (T_S is implied by it), else S."""
-        return self.S - 1 if self.o else self.S
-
-    @property
-    def tiles(self) -> int:
-        return (self.m // TILE) * (self.n // TILE)
-
-    @property
-    def row_w(self) -> int:
-        return 32768 // self.row
-
-    @property
-    def row_o(self) -> int:
-        return 65536 // self.row if self.o else 0
-
-    @property
-    def lpt(self) -> int:
-        return self.W * self.row_w + self.row_o
-
-    @property
-    def leaves(self) -> int:
-        return self.tiles * self.lpt
-
-    def seg(self, s: int) -> tuple[int, int]:
-        return (s - 1) * self.L, min(s * self.L, self.k)
-
-    def label(self) -> dict:
-        return {"m": self.m, "n": self.n, "k": self.k, "lp": self.lp, "t": self.L // self.lp, "row": self.row,
-                "leaves": self.leaves}
-
-    def domain(self) -> CommitmentDomain:
-        return CommitmentDomain(identity_digest_sha512(SERVED_TAG if self.o else FILL_TAG, self.label()), -1,
-                                RangeIndexedDomain(0, self.leaves), hash="sha512")
-
-    def tile_of(self, i: int, j: int) -> tuple[int, int]:
-        return (i // TILE) * (self.n // TILE) + j // TILE, (i % TILE) * TILE + j % TILE
-
-    def word_leaf(self, i: int, j: int, s: int) -> tuple[int, int]:
-        """(leaf position, byte offset) of T_s at cell (i, j), s <= W."""
-        if not 1 <= s <= self.W:
-            raise ValueError(f"T_{s} isn't committed (segments 1 .. {self.W})")
-        t, c = self.tile_of(i, j)
-        per = self.row // 2
-        return t * self.lpt + (s - 1) * self.row_w + c // per, 2 * (c % per)
-
-    def o_leaf(self, i: int, j: int) -> tuple[int, int]:
-        """(leaf position, byte offset) of O at cell (i, j)."""
-        if not self.o:
-            raise ValueError("a filler call commits no O")
-        t, c = self.tile_of(i, j)
-        per = self.row // 4
-        return t * self.lpt + self.W * self.row_w + c // per, 4 * (c % per)
-
-    def opened(self, i: int, j: int, s: int) -> list[int]:
-        """The leaves proof block (i, j, s) opens: T_s's (s <= W), T_{s-1}'s (s > 1), and at s = S O's."""
-        pos = [self.word_leaf(i, j, s)[0]] if s <= self.W else []
-        pos += [self.word_leaf(i, j, s - 1)[0]] if s > 1 else []
-        return sorted(set(pos + ([self.o_leaf(i, j)[0]] if s == self.S and self.o else [])))
 
 
 served_seeds = dither.seeds
-fill_seeds = call_seeds = dither.fill_seeds
+call_seeds = dither.fill_seeds
 
 
 def fill_seeds_bytes(seeds: dict[str, bytes]) -> bytes:
@@ -307,13 +152,14 @@ def fill_seeds_bytes(seeds: dict[str, bytes]) -> bytes:
 
 
 def fill_seeds_from(b: bytes, served: bool = False) -> dict[str, bytes]:
-    return {s: b[64 * i:64 * i + 64] for i, s in enumerate(FILL_STREAMS) if not (served and s == "pad")}
+    return {s: b[64 * i:64 * i + 64] for i, s in enumerate(FILL_STREAMS) if not (served and s == PAD)}
 
 
 def pad_rows(seeds: dict[str, bytes], rows: range, k: int) -> np.ndarray:
-    """dither.pad_rows: row i is the first k bytes of chunks i ceil(k / 64) .. of the pad stream, as int8."""
+    """`dither.pad_rows` for consecutive rows: row i is the first k bytes of chunks i ceil(k / 64) .. of the pad stream,
+    as int8."""
     kb = -(-k // 64)
-    raw = np.frombuffer(stream(seeds["pad"], "pad", rows.start * kb, len(rows) * kb), dtype=np.int8)
+    raw = np.frombuffer(chunks(seeds[PAD], PAD, range(rows.start * kb, rows.stop * kb)), dtype=np.int8)
     return raw.reshape(len(rows), kb * 64)[:, :k].copy()
 
 
@@ -356,43 +202,15 @@ def fill_buffer(f: Fill, T: np.ndarray, O: np.ndarray | None = None) -> bytes:
     return np.ascontiguousarray(np.concatenate(parts, axis=1)).tobytes()
 
 
-@dataclass
-class FillCommitted:
-    f: Fill
-    ks: bytes
-    values: bytes
-    off: int = 0
-    levels: list[list[bytes]] = field(default_factory=list)
-
-    @property
-    def root(self) -> bytes:
-        return self.levels[-1][0]
-
-    def row(self, pos: int) -> bytes:
-        return self.values[pos * self.f.row:(pos + 1) * self.f.row]
-
-    def salt(self, pos: int) -> bytes:
-        return cref.prf_salt(self.ks, self.off + pos)
-
-    def path(self, pos: int) -> tuple[bytes, ...]:
-        return tuple(self.levels[d][(pos >> d) ^ 1] for d in range(len(self.levels) - 1))
-
-
-def fill_commit(f: Fill, values: bytes, ks: bytes, off: int = 0) -> FillCommitted:
-    """The call's values (`fill_buffer`) under its root, leaf pos salted prf_salt(ks, off + pos) (dither.commit under
-    dither.salts(ks, off))."""
-    if len(values) != f.leaves * f.row:
-        raise ValueError(f"the call's values are {f.leaves * f.row} bytes, not {len(values)}")
-    cm = FillCommitted(f, ks, values, off)
-    dom = f.domain()
-    cm.levels = [list(lv) for lv in tree_levels(dom, [row_leaf(dom, p, leaf_h(cm.row(p), cm.salt(p)), V2)
-                                                      for p in range(f.leaves)])]
-    return cm
+def fill_commit(f: Fill, values: bytes, ks: bytes, off: int = 0) -> dither.Tree:
+    """The call's values (`fill_buffer`) under its root, leaf pos salted prf_salt(ks, off + pos): `dither.commit` under
+    `dither.salts(ks, off)`."""
+    return dither.commit(f, values, dither.salts(ks, off))
 
 
 def fill_params(f: Fill, ks: bytes) -> bytes:
     """The CGP1 params of a no-fold call's tree: its leaves, row bits, the prover's private Ks and the domain."""
-    return cref.params(f.leaves, 8 * f.row, ks, KEY, False, f.domain().domain_id)
+    return cref.params(f.leaves, 8 * f.row, ks, dither.KEY, False, f.domain().domain_id)
 
 
 def fill_picks(f: Fill, coin: bytes, q: int) -> list[tuple[int, int, int]]:
@@ -412,10 +230,10 @@ def fill_check(f: Fill, seeds: dict[str, bytes], root: bytes, i: int, j: int, s:
     (PouwDitherBlock); for a served call's s = S (PouwDitherLast), O against (A + d_A)(B + d_B)^T mod 2^32 and T_{S-1}
     against X W'^T over k < (S - 1) L mod 2^16. ans: {"rows": {pos: (row, salt, path)}, "A": A's row i (the pad's when
     absent), "B": B's row j}."""
-    dom, cmt, lim = f.domain(), Commitment(root, f.leaves), VerificationLimits()
+    dom = f.domain()
     rows = {}
     for pos, (row, salt, path) in ans["rows"].items():
-        if not verify_opening(dom, cmt, Opening(pos, leaf_h(row, salt), tuple(path)), V2, lim):
+        if not dither.opens(dom, root, f.leaves, pos, row, salt, path):
             return f"leaf {pos}: its row and salt don't open the root"
         rows[pos] = row
 
@@ -453,8 +271,8 @@ def fill_check(f: Fill, seeds: dict[str, bytes], root: bytes, i: int, j: int, s:
 
 
 def fill_cells_positions(f: Fill, i: int, j: int, s: int) -> list[int]:
-    """The leaves a proof block (i, j, s) opens (dither.Shape.opened)."""
-    return f.opened(i, j, s)
+    """The leaves a proof block (i, j, s) opens (`dither.Shape.opened`), in leaf order."""
+    return sorted(f.opened(i, j, s))
 
 
 def fill_verdict(f: Fill, seeds: dict[str, bytes], root: bytes, picks: list[tuple[int, int, int]], answer, label: str) -> tuple[bool, list[str], str]:
@@ -537,7 +355,7 @@ def cmd_fill_sample(a: argparse.Namespace) -> int:
         bad = 0
         for j in range(f.lpt):
             pos = tile * f.lpt + j
-            leaf = row_leaf(dom, pos, leaf_h(words[j * f.row:(j + 1) * f.row], cref.prf_salt(ks, off + pos)), V2)
+            leaf = row_leaf(dom, pos, leaf_h(words[j * f.row:(j + 1) * f.row], prf_salt(ks, off + pos)), V2)
             bad += leaf != g_leaves[64 * j:64 * j + 64]
         rep["tiles"].append({"tile": tile, "words_equal": (d / f"t{idx}_words.bin").read_bytes() == words, "leaves": f.lpt,
                              "leaves_bad": bad})
@@ -756,7 +574,7 @@ def main(argv: list[str]) -> int:
     p.add_argument("shapes", nargs="+", help="[name:]M:N:K")
     p.add_argument("--lp", type=int, default=256)
     p.add_argument("--L", type=int, default=2048, help="the segment length (0: K), at most 8 L' below K")
-    p.add_argument("--row", type=int, default=1024)
+    p.add_argument("--row", type=int, default=Fill.row, help="the leaf row's bytes (default the protocol's 16 KiB)")
     p.add_argument("--served", action="store_true", help="served calls (O committed, dither.TAG), not the filler's")
     p = sub.add_parser("fill-sample")
     p.add_argument("dir")
