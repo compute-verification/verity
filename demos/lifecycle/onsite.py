@@ -18,12 +18,11 @@ certifier splitting it (`uncertified`) and every host holding the prover's memor
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import replace
 from typing import Any
 
 from lifecycle import (CERTIFIER, CHALLENGER, D, DEVELOPER, LATER, NODE, OUTSIDE, PLAN, SHARED, SIZES, THETA_ROWS,
                        VERIFIER, Developer, Layout, Link, Loc, Tape, Verifier, answer, body, digest, frame,
-                       frame_commitment, load_of, msg, opens, products, schema, theta_of)
+                       frame_commitment, hardware, load_of, msg, opens, products, schema, theta_of)
 from verity.core.deploy import runtime
 from verity.core.deploy.manifest import Channel, Manifest, Role
 from verity.core.deploy.party import Finish, Identity, Received, Send
@@ -43,10 +42,10 @@ AUDITOR = {CERT: CERT_KEY, CHAL: ""}
 one of them (`owner`)."""
 CHAL_LINK = Link("chal0-link", (CHAL, "node0"), 100_000, 1_000_000)
 """The memory challenger's link to the node: 1 ms each way."""
-LAYOUT = replace(NODE, locs=(*NODE.locs, Loc(CERT, "certifier", "site0", "auditor", key=CERT_KEY),
-                             Loc(CHAL, "challenger", "site0", "auditor")),
-                 links=(Link(UPLINK, ("node0", CERT), 100_000, 100_000), Link("uplink0-out", (CERT, OUTSIDE), 100_000, 0),
-                        CHAL_LINK))
+LAYOUT = hardware("", NODE.body.cards, (*NODE.body.locs, Loc(CERT, "certifier", "site0", "auditor", key=CERT_KEY),
+                                         Loc(CHAL, "challenger", "site0", "auditor")),
+                  (Link(UPLINK, ("node0", CERT), 100_000, 100_000), Link("uplink0-out", (CERT, OUTSIDE), 100_000, 0),
+                   CHAL_LINK))
 """The site's first hardware registration entry: the node, its uplink split by the network certifier (node to
 certifier, certifier to the outside), and the memory challenger with its link to the node."""
 ROWS = 2
@@ -164,7 +163,7 @@ def theta_reach(layout: Layout, store: str) -> tuple[int, int]:
     link to its host."""
     parent, host = layout.loc(store).parent, layout.host(store)
     devs = [parent] if layout.kind(parent) == "device" else [x.id for x in layout.of_kind("device") if x.parent == host]
-    lat = min(x.lat for x in layout.links if host in x.ends and "challenger" in map(layout.kind, x.ends))
+    lat = min(x.latency for x in layout.links if host in x.ends and "challenger" in map(layout.kind, x.ends))
     return min(layout.device(d)["bw"] for d in devs), lat
 
 
@@ -224,7 +223,7 @@ class OnsiteVerifier(Verifier):
                                          {"elapsed_ticks": rp["elapsed_ticks"], "bound_ticks": rp["bound_ticks"]})}
 
 
-MS = CHAL_LINK.lat // 1_000_000
+MS = CHAL_LINK.latency // 1_000_000
 MANIFEST = Manifest(
     ID, 1, "demos/lifecycle/onsite.py:MANIFEST",
     parties=(Role(DEVELOPER, "developer", needs=("coins", "clock")), Role(VERIFIER, "auditor", needs=("coins",)),

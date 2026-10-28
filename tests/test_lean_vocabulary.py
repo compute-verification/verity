@@ -127,6 +127,8 @@ CANONICAL: dict[str, tuple[str, ...]] = {
 
 RA, RA_PY = "verity/core/protocols/remote_bandwidth/lean/RemoteAudit/", "verity/core/protocols/remote_bandwidth/audit.py"
 MC, MC_PY = "verity/core/devices/memory_challenger/lean/MemoryChallenger/", "verity/core/protocols/pous/"
+RG, RG_PY = ("verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.",
+             "verity/core/protocols/registration.py::")
 #: A Python class held to a code-Lean declaration by a `verity_difftest` port, ``python key: (Lean key, port, reason)``: the
 #: pair counts once, as its Lean. The port is a `[[lean_exe]]` of a tracked lakefile.
 MIRRORS: dict[str, tuple[str, str, str]] = {
@@ -154,6 +156,9 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
                                           "memory-challenger-difftest", "the memory challenger's port, for the streamed wipe"),
     f"{MC_PY}run.py::Session": ("verity/core/protocols/pous/check/PousCheck/Run.lean::PousCheck.Run.Session", "pous-run",
                                 "the PoUS run's protocol port reads the sessions the Python records"),
+    f"{RG_PY}Card": (f"{RG}Card", "core-registration", "the executable registration log's port"),
+    f"{RG_PY}Link": (f"{RG}Link", "core-registration", "the executable registration log's port"),
+    f"{RG_PY}Site": (f"{RG}Site", "core-registration", "the executable registration log's port"),
 }
 
 
@@ -371,7 +376,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 387
+KNOWN_MAX = 390
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -770,8 +775,6 @@ KNOWN: dict[str, str] = {
         "duplicate of the Site (`Verity.Site`, not yet in Core: LEAN-93): becomes a client of its link (top)",
     "examples/lifecycle/lifecycle.py::Placement":
         "duplicate of `CircuitRequirement.Placement`: becomes a client of it (top)",
-    "examples/lifecycle/lifecycle.py::Registration":
-        "duplicate of the registration log (`Verity.Registration`, not yet in Core: LEAN-93): becomes a client of it (top)",
     "examples/lifecycle/lifecycle.py::Statement": "homonym, a drawn unit's public statement in the demo: rename (top)",
     "examples/lifecycle/onsite.py::Challenger": "duplicate of `parties.Challenger`: becomes a client of the memory challenger's (top)",
     # infra/
@@ -884,6 +887,12 @@ KNOWN: dict[str, str] = {
         "homonym, a link-window's witness: rename (network-accounting)",
     "verity/core/protocols/interface/CoreProtocol/Profile.lean::Core.Draw":
         "homonym, how a profile level is drawn: rename (proofs)",
+    "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Card":
+        "duplicate of `Verity.Accel.Card`: becomes a reading of it and `Verity.DeviceFigures`, which one Properties statement relates to the executable log's card (proofs)",
+    "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Link":
+        "duplicate of the Site's link (`Verity.Site.Link`): becomes a reading of it, which one Properties statement relates to the executable log's (proofs)",
+    "verity/core/protocols/interface/CoreProtocol/Registration.lean::Core.Registration.Site":
+        "duplicate of the Site (`Verity.Site`): becomes a reading of it, which one Properties statement relates to the executable log's fold (proofs)",
     "verity/core/protocols/network/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Link":
         "homonym, one egress link's opening: rename (proofs)",
     "verity/core/protocols/network/lean/NetworkCheck/LinkWindow.lean::NetworkCheck.LinkWindow.Verdict":
@@ -949,6 +958,8 @@ KNOWN: dict[str, str] = {
         "duplicate of the Site (`Verity.Site`, not yet in Core: LEAN-93): becomes a reading of it: the card by digest; prices stay the scheme's (compute-accounting)",
     "verity/core/protocols/pouw/schemes/pearl_kw.py::Device":
         "homonym, a code's parameters: rename (compute-accounting)",
+    "verity/core/protocols/registration.py::Hardware":
+        "duplicate of the Site's entry (`Verity.Site.Entry`): becomes a reading of it through `Core.Registration`'s hardware entry (proofs)",
     "verity/core/protocols/remote_bandwidth/audit.py::Ledger": "homonym, the γ cost terms: rename (memory-accounting)",
     "verity/core/protocols/remote_bandwidth/audit.py::Record":
         "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes a reading of it (memory-accounting)",

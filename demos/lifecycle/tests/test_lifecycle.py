@@ -82,20 +82,21 @@ UPLINK9 = (L.Link("u9", ("node0", "cert9"), 1, 1), L.Link("u9-out", ("cert9", L.
 ENTRIES = {
     "accepted": (None, L.LATER),
     "stale": ("previous", L.LATER),
-    "gpu0-again": ("duplicate-id", L.Registration("", locs=(L.Loc("gpu0", "device", "node0", card=A),))),
-    "no-parent": ("unknown-ref", L.Registration("", locs=(L.Loc("hbm9", "memory", "gpu9", tier="hbm", bytes=1),))),
-    "device-at-site": ("kind", L.Registration("", locs=(L.Loc("gpu9", "device", "site0", card=A),))),
-    "loop-link": ("kind", L.Registration("", links=(L.Link("l9", ("node0", "node0"), 1, 1),))),
-    "not-the-sheet": ("card-digest", L.Registration("", cards=(replace(L.CARD_A, tc=1 << 20),))),
-    "unregistered-card": ("card-digest", L.Registration("", locs=(L.Loc("gpu9", "device", "node0", card="00"),))),
-    "over-hbm": ("capacity", L.Registration("", locs=(L.Loc("gpu9", "device", "node0", card=A),
+    "gpu0-again": ("duplicate-id", L.hardware("", locs=(L.Loc("gpu0", "device", "node0", card=A),))),
+    "no-parent": ("unknown-ref", L.hardware("", locs=(L.Loc("hbm9", "memory", "gpu9", tier="hbm", bytes=1),))),
+    "device-at-site": ("kind", L.hardware("", locs=(L.Loc("gpu9", "device", "site0", card=A),))),
+    "loop-link": ("kind", L.hardware("", links=(L.Link("l9", ("node0", "node0"), 1, 1),))),
+    "no-sheet": ("card-digest", L.hardware("", cards=(replace(L.CARD_A, sku="sim-int8-z"),))),
+    "not-the-sheet": ("figures", L.hardware("", cards=(replace(L.CARD_A, peak_rate=(1 << 40,) * 5),))),
+    "unregistered-card": ("card-digest", L.hardware("", locs=(L.Loc("gpu9", "device", "node0", card="00"),))),
+    "over-hbm": ("capacity", L.hardware("", locs=(L.Loc("gpu9", "device", "node0", card=A),
                                                       L.Loc("hbm9", "memory", "gpu9", tier="hbm", bytes=(64 << 30) + 1)))),
-    "empty-memory": ("capacity", L.Registration("", locs=(L.Loc("dram9", "memory", "node0", tier="dram"),))),
-    "foreign-certifier": ("owner", L.Registration("", locs=(L.Loc("cert9", "certifier", "site0", "auditor", key="00"),),
+    "empty-memory": ("capacity", L.hardware("", locs=(L.Loc("dram9", "memory", "node0", tier="dram"),))),
+    "foreign-certifier": ("owner", L.hardware("", locs=(L.Loc("cert9", "certifier", "site0", "auditor", key="00"),),
                                                   links=UPLINK9)),
-    "auditor-host": ("owner", L.Registration("", locs=(L.Loc("node9", "host", "site0", "auditor"),))),
-    "bare-uplink": ("uncertified", L.Registration("", links=(L.Link("u9", ("node0", L.OUTSIDE), 1, 1),))),
-    "unreached-host": ("challenger-reach", L.Registration("", locs=(L.Loc("node1", "host", "site0"),
+    "auditor-host": ("owner", L.hardware("", locs=(L.Loc("node9", "host", "site0", "auditor"),))),
+    "bare-uplink": ("uncertified", L.hardware("", links=(L.Link("u9", ("node0", L.OUTSIDE), 1, 1),))),
+    "unreached-host": ("challenger-reach", L.hardware("", locs=(L.Loc("node1", "host", "site0"),
                                                                     L.Loc("dram1", "memory", "node1", tier="dram", bytes=1)),
                                                           links=(L.Link("n01", ("node0", "node1"), 1, 1),))),
 }
@@ -130,7 +131,7 @@ def test_projections() -> None:
     on, rem = _first("onsite"), _first("remote")
     grown = on.add(replace(L.LATER, previous=on.head))
     a, b, r = on.accounting(1), grown.accounting(1), rem.accounting(1)
-    assert b["pouw"]["tc"] - a["pouw"]["tc"] == L.CARD_B.tc and b["pous"]["hbm"] - a["pous"]["hbm"] == 128 << 30
+    assert b["pouw"]["tc"] - a["pouw"]["tc"] == L.macs_per_tick(L.CARD_B) and b["pous"]["hbm"] - a["pous"]["hbm"] == 128 << 30
     assert a["certifier"]["certified"] == a["certifier"]["boundary"] == ["uplink0"] and a["certifier"]["uncertified_bits"] == 0
     assert r["certifier"]["certified"] == [] and r["certifier"]["uncertified_bits"] == r["bandwidth"]["boundary_bits"]
     assert on.device("gpu0") == {"tc": 64, "bw": 3200, "chip": 1 << 25, "mem": 64 << 30}
@@ -147,7 +148,7 @@ def test_projections() -> None:
 ])
 def test_check_placement(p: dict[str, Any], name: str | None) -> None:
     on = _first("onsite")
-    layout = L.check_registration(on, L.Registration(on.head, locs=(
+    layout = L.check_registration(on, L.hardware(on.head, locs=(
         L.Loc("tiny", "memory", "node0", tier="dram", bytes=8),)), onsite.AUDITOR)
     p = {"layout": layout.head, **p}
     if name is None:

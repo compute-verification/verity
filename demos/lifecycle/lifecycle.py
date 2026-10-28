@@ -7,8 +7,9 @@ The phases, each a function here:
 
 1. **Hardware registration** (`check_registration`): the site's `Layout`, one tree of locations (site, hosts, devices by
    card digest, memory leaves by tier and bytes, and the auditor's certifiers and challengers) with its links, folded
-   from an append-only log of `Registration` entries. The first entry comes before anything else; each later one is
-   checked against the layout its prefix folds to before anything is placed on what it adds.
+   from the hardware entries of the registration log (`verity.core.protocols.registration`, `hardware`), each checked
+   by the log's own check. The first entry comes before anything else; each later one is checked against the layout
+   its prefix folds to before anything is placed on what it adds.
 2. **Registration** (`register`, `check_baseline`): the builder B by its descriptor (its advice cap and its static
    placement plan) and the registered information, theta's and the initial state's hiding commitments, before any coin.
 3. **Operation** (`operate`): the developer serves a declaration period's requests through the model (`forward`),
@@ -35,7 +36,7 @@ import json
 import sys
 import textwrap
 from collections.abc import Mapping, Sequence
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from functools import cache
 from pathlib import Path
@@ -44,6 +45,7 @@ from typing import Any
 import numpy as np
 
 from verity.core.deploy.party import Finish, Identity, Received, Record, Send, Timer
+from verity.core.protocols import registration as REG
 from verity.core.protocols.pouw import window as pouw_window_rules
 from verity.core.protocols.sampled_proofs.coins import OwnRandomness, draw_first
 from verity.core.protocols.sampled_proofs.one_stage import registered as R
@@ -266,153 +268,106 @@ class Refusal(Exception):
 
 # --- 1. hardware registration ------------------------------------------------------------------------------------------
 
-OUTSIDE = "outside"
-"""The far end of a boundary link: the rest of the world, a location every layout has."""
-TIERS = ("hbm", "dram", "disk")
+OUTSIDE = REG.OUTSIDE
+"""The far end of a boundary link: the rest of the world, an end every site has."""
+TIERS = REG.TIERS
 """A memory leaf's tier."""
-PARENTS = {"site": (None,), "host": ("site",), "device": ("host",), "memory": ("device", "host"), "certifier": ("site",),
-           "challenger": ("site",)}
-"""Each kind of location and the kinds its parent may be: memory under a device or a host, a device under a host, a host
-under the site, and the auditor's devices at the site, placed by their links."""
-LINKS = (("host", "host"), ("host", "outside"), ("certifier", "host"), ("certifier", "outside"), ("challenger", "host"))
-"""The kinds a link may join, sorted. A certifier sits on an uplink by splitting it: host to certifier, certifier to
-`OUTSIDE`."""
-AUDITOR_KINDS = ("certifier", "challenger")
+TICKS_PER_SECOND = 10 ** 9
+"""A tick is a nanosecond."""
+Card, Loc, Link = REG.Card, REG.Loc, REG.Link
+"""The registration log's card, location and link (`verity.core.protocols.registration`): a device names its card by
+digest, a memory leaf its tier and bytes, the auditor's devices their keys, and a link its two ends, its bits a tick each
+way (`beta`) and its latency in ticks."""
 
 
-@dataclass(frozen=True)
-class Card:
-    """An SKU's data-sheet card, in `Accounting.Device`'s terms: int8 tensor-core multiply-adds a tick (`rate .tc`), bits
-    from device memory to the chip a tick (`bw`), bits of on-chip state (`chip`) and bytes of device memory (`mem`). A
-    tick is a nanosecond. A device names its card by digest."""
-
-    sku: str
-    tc: int
-    bw: int
-    chip: int
-    mem: int
-
-    def digest(self) -> str:
-        return digest("lifecycle/card/v1", asdict(self))
+def sheet(sku: str, macs_per_tick: int, bw: int, chip: int, mem: int) -> Card:
+    """A simulated SKU's data sheet: a 1 GHz tensor clock, `macs_per_tick` int8 multiply-adds a tick in every operand
+    class, bits from device memory to the chip a tick (`bw`), bits of on-chip state and bytes of device memory."""
+    rate = macs_per_tick * TICKS_PER_SECOND
+    return Card(sku, TICKS_PER_SECOND, (rate,) * len(REG.OPERAND_CLASSES), bw, chip, mem)
 
 
-SHEETS = {c.sku: c for c in (Card("sim-int8-a", 64, 3200, 1 << 25, 64 << 30),
-                             Card("sim-int8-b", 128, 6400, 1 << 26, 128 << 30))}
-"""The auditor's data sheets for the simulated SKUs. A registered card must be one of them: a device's limits are the
-auditor's, never the developer's word."""
+def macs_per_tick(c: Card) -> int:
+    """`Accounting.Device`'s `rate .tc`: a card's peak int8 multiply-adds a tick, at uniform int8 operands."""
+    return c.peak_rate[REG.OPERAND_CLASSES.index("uniform-s8")] // TICKS_PER_SECOND
 
 
-@dataclass(frozen=True)
-class Loc:
-    """A location in the site's tree, and who owns it. A device names its card's digest, a memory leaf its tier and its
-    bytes, a certifier its signing key."""
-
-    id: str
-    kind: str
-    parent: str | None = None
-    owner: str = "prover"
-    card: str = ""
-    tier: str = ""
-    bytes: int = 0
-    key: str = ""
+SHEETS = {c.sku: c for c in (sheet("sim-int8-a", 64, 3200, 1 << 25, 64 << 30),
+                             sheet("sim-int8-b", 128, 6400, 1 << 26, 128 << 30))}
+"""The auditor's data sheets for the simulated SKUs. A registered card must be within one of them: a device's limits are
+the auditor's, never the developer's word."""
 
 
-@dataclass(frozen=True)
-class Link:
-    """A link between two locations (`OUTSIDE` among them), with its bits a tick each way (`β`) and its latency in
-    ticks."""
-
-    id: str
-    ends: tuple[str, str]
-    beta: int
-    lat: int
+def auditor_of(keys: Mapping[str, str] | None) -> REG.Auditor:
+    """The auditor the log is checked against: its data sheets (`SHEETS`, at tolerance 0) and its own devices' keys."""
+    return REG.Auditor(tuple(SHEETS.values()), tuple(sorted((keys or {}).items())))
 
 
-@dataclass(frozen=True)
-class Registration:
-    """One entry of the hardware registration log: the cards, locations and links it adds, chained to the log's head
-    (`previous`). It is atomic: checked as a whole against the layout its prefix folds to."""
-
-    previous: str
-    cards: tuple[Card, ...] = ()
-    locs: tuple[Loc, ...] = ()
-    links: tuple[Link, ...] = ()
-
-    def to_json(self) -> dict[str, Any]:
-        return {"previous": self.previous, "cards": [asdict(c) for c in self.cards], "locs": [asdict(x) for x in self.locs],
-                "links": [{**asdict(x), "ends": list(x.ends)} for x in self.links]}
-
-    @classmethod
-    def of(cls, j: Mapping[str, Any]) -> Registration:
-        return cls(str(j["previous"]),
-                   tuple(Card(str(c["sku"]), int(c["tc"]), int(c["bw"]), int(c["chip"]), int(c["mem"])) for c in j["cards"]),
-                   tuple(Loc(str(x["id"]), str(x["kind"]), None if x["parent"] is None else str(x["parent"]),
-                             str(x["owner"]), str(x["card"]), str(x["tier"]), int(x["bytes"]), str(x["key"]))
-                         for x in j["locs"]),
-                   tuple(Link(str(x["id"]), (str(x["ends"][0]), str(x["ends"][1])), int(x["beta"]), int(x["lat"]))
-                         for x in j["links"] if len(x["ends"]) == 2))
-
-    def digest(self) -> str:
-        return digest("lifecycle/hardware/v1", self.to_json())
+def hardware(previous: str = "", cards: Sequence[Card] = (), locs: Sequence[Loc] = (),
+             links: Sequence[Link] = ()) -> REG.Entry:
+    """A hardware entry of the registration log: the cards, locations and links it adds, chained to the log's head
+    (`previous`). It is atomic: checked as a whole against the site its prefix folds to."""
+    return REG.Entry(previous, REG.Hardware(tuple(cards), tuple(locs), tuple(links)))
 
 
 @dataclass(frozen=True)
 class Layout:
-    """The site, as one object: its cards, its tree of locations with their owners, and its links, folded from the
-    hardware registration log. `head` is the log's head, the digest a placement names. Every subprotocol's accounting is
-    a projection of it (`accounting`)."""
+    """The site, as one object: the registration log's site (`REG.Site`), its composite and the log's head, the digest a
+    placement names. Every subprotocol's accounting is a projection of it (`accounting`)."""
 
     protocol: str
     head: str
-    cards: tuple[Card, ...] = ()
-    locs: tuple[Loc, ...] = ()
-    links: tuple[Link, ...] = ()
+    site: REG.Site = REG.Site()
 
     @classmethod
     def genesis(cls, protocol: str) -> Layout:
         """The empty layout a deployment's log starts from: its head names the composite."""
-        return cls(protocol, digest("lifecycle/hardware/genesis", protocol))
+        return cls(protocol, REG.genesis(protocol))
+
+    @property
+    def locs(self) -> tuple[Loc, ...]:
+        return self.site.locs
+
+    @property
+    def links(self) -> tuple[Link, ...]:
+        return self.site.links
 
     def digest(self) -> str:
         return self.head
 
-    def add(self, entry: Registration) -> Layout:
-        """The layout `entry` folds this one to, unchecked (`check_registration` checks it)."""
-        return Layout(self.protocol, entry.digest(), self.cards + entry.cards, self.locs + entry.locs,
-                      self.links + entry.links)
+    def add(self, entry: REG.Entry) -> Layout:
+        """The layout a hardware entry folds this one to, unchecked (`check_registration` checks it)."""
+        return Layout(self.protocol, entry.digest(), self.site.add(entry.body))
 
     def loc(self, i: str) -> Loc | None:
-        return next((x for x in self.locs if x.id == i), None)
+        return self.site.loc(i)
 
-    def kind(self, i: str) -> str:
-        return "outside" if i == OUTSIDE else self.loc(i).kind
+    def kind(self, i: str) -> str | None:
+        return self.site.kind(i)
 
     def of_kind(self, kind: str) -> list[Loc]:
         return [x for x in self.locs if x.kind == kind]
 
     def card(self, device: str) -> Card:
-        return next(c for c in self.cards if c.digest() == self.loc(device).card)
+        return self.site.card(self.loc(device))
 
     def host(self, i: str) -> str:
         """The host a location is in."""
         x = self.loc(i)
-        while x.kind != "host":
-            x = self.loc(x.parent)
-        return x.id
+        return x.id if x.kind == "host" else self.site.host(x)
 
     def boundary(self) -> list[Link]:
         """The prover's boundary links: a host's link to `OUTSIDE`, or to the certifier that splits its uplink."""
-        return [x for x in self.links if tuple(sorted(map(self.kind, x.ends))) in (("host", "outside"), ("certifier", "host"))]
+        return [x for x in self.links if self.site.boundary(x)]
 
     def certified(self, link: Link) -> bool:
-        return "certifier" in map(self.kind, link.ends)
+        return self.site.certified(link)
 
     def device(self, i: str) -> dict[str, int]:
         """`Accounting.Device`'s view of a device leaf: its card's rate, bandwidth and on-chip state, and as its memory the
         bytes of the memory leaves under it."""
         c = self.card(i)
-        return {"tc": c.tc, "bw": c.bw, "chip": c.chip,
-                "mem": sum(x.bytes for x in self.of_kind("memory") if x.parent == i)}
+        return {"tc": macs_per_tick(c), "bw": c.bw, "chip": c.chip, "mem": self.site.held(i)}
 
     def accounting(self, ticks: int) -> dict[str, dict[str, Any]]:
         """Each subprotocol's accounting over `ticks`, projected from the layout: PoUW's compute (the devices' cards'
@@ -430,77 +385,34 @@ class Layout:
                               "uncertified_bits": sum(x.beta for x in boundary if not self.certified(x)) * ticks}}
 
 
-def check_registration(layout: Layout, registration: Registration, auditor: Mapping[str, str] | None = None) -> Layout:
-    """Phase 1, the verifier's side: one entry of the hardware registration log checked against the layout its prefix
-    folds to, and the layout it folds to, or a refusal by name, the first hit winning. `auditor` maps the auditor's own
-    devices to their keys.
+def check_registration(layout: Layout, entry: REG.Entry, auditor: Mapping[str, str] | None = None) -> Layout:
+    """Phase 1, the verifier's side: one hardware entry of the registration log checked against the layout its prefix
+    folds to, by the log's own check (`REG.hardware_refusal`), and the layout it folds to, or a refusal by the name of
+    the first check it fails (`REG.REFUSALS`). `auditor` maps the auditor's own devices to their keys.
 
     - `previous`: the entry isn't chained to the log's head.
+    - `hardware`: the entry isn't a hardware entry.
     - `duplicate-id`: an id, or a card, is registered already.
     - `unknown-ref`: a parent or a link's end isn't registered.
-    - `kind`: the tree is ill-formed (`PARENTS`, `LINKS`), or a certifier doesn't split exactly one uplink.
-    - `card-digest`: a card isn't the auditor's data sheet for its SKU, or a device's card isn't registered.
+    - `kind`: the tree is ill-formed (`REG.PARENTS`, `REG.LINKS`), or a certifier doesn't split exactly one uplink.
+    - `card-digest`: a card's SKU has no data sheet, or a device's card isn't registered.
+    - `figures`: a card's clock or peak rates aren't its data sheet's, or its memory figures differ.
     - `capacity`: a memory leaf holds nothing, or a device's memory leaves exceed its card's memory.
     - `owner`: a certifier or challenger isn't one of the auditor's own devices with its key, or a prover location is
       registered as the auditor's.
     - onsite, `uncertified`: some boundary link has no certifier splitting it.
     - onsite, `challenger-reach`: a host holding the prover's memory has no link to a memory challenger."""
-    auditor = auditor or {}
-    if registration.previous != layout.head:
-        raise Refusal("previous", f"the entry follows {registration.previous[:16]}..., not the log's head "
-                                  f"{layout.head[:16]}...")
-    m = layout.add(registration)
-    ids = [x.id for x in m.locs] + [x.id for x in m.links] + [OUTSIDE]
-    cards = [c.digest() for c in m.cards]
-    if dup := sorted({i for i in ids if ids.count(i) > 1} | {c.sku for c in m.cards if cards.count(c.digest()) > 1}):
-        raise Refusal("duplicate-id", f"{dup} registered twice")
-    known = {x.id for x in m.locs} | {OUTSIDE}
-    for x in registration.locs:
-        if x.parent is not None and x.parent not in known:
-            raise Refusal("unknown-ref", f"{x.id}'s parent {x.parent!r} isn't registered")
-    for x in registration.links:
-        if bad := [e for e in x.ends if e not in known]:
-            raise Refusal("unknown-ref", f"link {x.id} names {bad}, which aren't registered")
-    for x in registration.locs:
-        if (x.kind not in PARENTS or (None if x.parent is None else m.kind(x.parent)) not in PARENTS[x.kind]
-                or (x.kind == "memory") != (x.tier in TIERS)):
-            raise Refusal("kind", f"{x.kind} {x.id} can't sit under {x.parent!r}")
-    for x in registration.links:
-        if x.ends[0] == x.ends[1] or tuple(sorted(map(m.kind, x.ends))) not in LINKS or x.beta <= 0 or x.lat < 0:
-            raise Refusal("kind", f"link {x.id} can't join {list(x.ends)}")
-    for c in m.of_kind("certifier"):
-        far = sorted(m.kind(e) for x in m.links if c.id in x.ends for e in x.ends if e != c.id)
-        if far != ["host", "outside"]:
-            raise Refusal("kind", f"certifier {c.id} doesn't split one uplink: it links to {far}")
-    for c in registration.cards:
-        if SHEETS.get(c.sku) != c:
-            raise Refusal("card-digest", f"card {c.sku} ({c.digest()[:16]}...) isn't the auditor's data sheet for it")
-    for x in registration.locs:
-        if x.kind == "device" and x.card not in cards:
-            raise Refusal("card-digest", f"{x.id}'s card {x.card[:16]}... isn't registered")
-    for x in registration.locs:
-        if x.kind == "memory" and x.bytes <= 0:
-            raise Refusal("capacity", f"memory {x.id} holds nothing")
-    for d in m.of_kind("device"):
-        if (held := m.device(d.id)["mem"]) > m.card(d.id).mem:
-            raise Refusal("capacity", f"{d.id}'s memory leaves hold {held} bytes, over its card's {m.card(d.id).mem}")
-    for x in registration.locs:
-        if x.kind in AUDITOR_KINDS and (x.owner != "auditor" or auditor.get(x.id) != x.key):
-            raise Refusal("owner", f"{x.kind} {x.id} isn't one of the auditor's own devices")
-        if x.kind not in AUDITOR_KINDS and x.owner != "prover":
-            raise Refusal("owner", f"{x.kind} {x.id} is a prover's location, registered as the {x.owner}'s")
-    if m.protocol == "onsite":
-        if bare := [x.id for x in m.boundary() if not m.certified(x)]:
-            raise Refusal("uncertified", f"boundary links {bare} have no certifier splitting them")
-        reached = {e for x in m.links if "challenger" in map(m.kind, x.ends) for e in x.ends}
-        if far := sorted({m.host(x.id) for x in m.of_kind("memory")} - reached):
-            raise Refusal("challenger-reach", f"hosts {far} hold the prover's memory, and no memory challenger links "
-                                              "to them")
-    return m
+    if entry.previous != layout.head:
+        raise Refusal("previous", f"the entry follows {entry.previous[:16]}..., not the log's head {layout.head[:16]}...")
+    if not isinstance(entry.body, REG.Hardware):
+        raise Refusal("hardware", "the entry registers information, not hardware")
+    if name := REG.hardware_refusal(auditor_of(auditor), layout.protocol, layout.site, entry.body):
+        raise Refusal(name, f"the hardware entry {entry.digest()[:16]}... fails the registration log's {name} check")
+    return layout.add(entry)
 
 
 CARD_A, CARD_B = SHEETS["sim-int8-a"], SHEETS["sim-int8-b"]
-NODE = Registration("", (CARD_A, CARD_B), (
+NODE = hardware("", (CARD_A, CARD_B), (
     Loc("site0", "site"), Loc("node0", "host", "site0"),
     Loc("gpu0", "device", "node0", card=CARD_A.digest()), Loc("hbm0", "memory", "gpu0", tier="hbm", bytes=64 << 30),
     Loc("gpu1", "device", "node0", card=CARD_B.digest()), Loc("hbm1", "memory", "gpu1", tier="hbm", bytes=128 << 30),
@@ -508,7 +420,7 @@ NODE = Registration("", (CARD_A, CARD_B), (
     Loc("nvme0", "memory", "node0", tier="disk", bytes=1 << 40)))
 """What both composites' sites register first: one node with two devices, each with its HBM, and the host's DRAM and
 disk. Each composite adds its links and the auditor's devices (`remote.LAYOUT`, `onsite.LAYOUT`)."""
-LATER = Registration("", locs=(
+LATER = hardware("", locs=(
     Loc("gpu2", "device", "node0", card=CARD_B.digest()), Loc("hbm2", "memory", "gpu2", tier="hbm", bytes=128 << 30),
     Loc("nvme1", "memory", "node0", tier="disk", bytes=1 << 40)))
 """The hardware a site adds after its first declaration: a third device and a disk."""
@@ -952,7 +864,6 @@ def compose(protocol: str, answers: Mapping[str, Mapping[str, Any]]) -> dict[str
 DECLARATION_SECONDS = 60
 """A stated parameter: a declaration period's length in a deployment, which scales a monitoring period's declarations and
 the layout's capacity in each."""
-TICKS_PER_SECOND = 10 ** 9
 PERIODS = {"week": 7 * 24 * 3600, "month": 30 * 24 * 3600, "year": 365 * 24 * 3600}
 
 
@@ -1060,12 +971,13 @@ class Developer:
         self.theta, self.cheat, self.product = c["theta"], c.get("cheat"), c["product"]
         self.load, self.state = list(c.get("load", ())), c["state0"]
         first, later, plan = c["layout"], c["later"], c["plan"]
-        new = next(x.id for x in later.locs if x.kind == "device")
+        new = next(x.id for x in later.body.locs if x.kind == "device")
         if self.cheat == "placement":
             plan = ((1, (*plan[0][1][:-1], new)), *plan[1:])
         if self.cheat == "hardware":
-            old = next(x.id for x in first.locs if x.kind == "device")
-            later = replace(later, locs=tuple(replace(x, id=old) if x.id == new else x for x in later.locs))
+            old = next(x.id for x in first.body.locs if x.kind == "device")
+            later = replace(later, body=replace(later.body, locs=tuple(replace(x, id=old) if x.id == new else x
+                                                                       for x in later.body.locs)))
         self.builder = Builder(plan=plan)
         self.onsite = params["protocol"] == "onsite"
         genesis = Layout.genesis(params["protocol"])
@@ -1242,8 +1154,8 @@ class Verifier:
         k, j = m.fields["k"], body(m)
         if m.type == "Hardware":
             try:
-                reg = Registration.of(j)
-            except (KeyError, TypeError, ValueError, IndexError) as e:
+                reg = REG.entry_of(j)
+            except (REG.Malformed, KeyError, TypeError, ValueError, IndexError) as e:
                 raise Refusal("hardware", f"the hardware registration doesn't parse: {type(e).__name__}") from None
             self.layout = check_registration(self.layout, reg, self.auditor)
             self.public["hardware"].append({"after": len(self.declarations), "head": self.layout.head, **j})
@@ -1376,7 +1288,7 @@ def summary(outcome: Mapping[str, Any]) -> list[str]:
     """The verifier's public outcome as lines, phase by phase."""
     out: list[str] = []
     hw = list(outcome.get("hardware", ()))
-    skus = {digest("lifecycle/card/v1", c): c["sku"] for h in hw for c in h["cards"]}
+    skus = {REG.card_of(c).digest(): c["sku"] for h in hw for c in h["cards"]}
 
     def where(x: Mapping[str, Any]) -> str:
         detail = (skus.get(x["card"], "?") if x["kind"] == "device" else f"{x['tier']} {x['bytes'] >> 30} GiB"
