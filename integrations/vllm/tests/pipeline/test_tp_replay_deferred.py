@@ -318,19 +318,17 @@ def _in_process(fins):
                                   "query_population": C2.query_population_component(rows, True)}, default=str))
 
 
-def _seal_deferred(tmp_path, commit_scheme=step_rows.NAME):
+def _seal_deferred(tmp_path):
     """A one-run TP2 Commit (the config run's only-arm form) as `tp-commit --replay-deferred` leaves it: every rank PENDING, its bundle
     sealed (a real dumped store of one committed run, its binding map, its weights tree), `replay_deferred.json` naming them.  Every
-    rank commits under `commit_scheme` and the TP run root is that scheme's form (rows-sha512: v2; vllm-v1: an old record's v1)."""
+    rank commits under rows-sha512 and the TP run root is its v2 form."""
     pytest.importorskip("torch")
     from tests.check.opened import commit_steps
     from verity_vllm.commit import store_dump as SD
 
     out = tmp_path / "commit"
     out.mkdir()
-    com, rc = commit_steps({0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]},
-                           commit_scheme=commit_scheme if commit_scheme == step_rows.NAME else None)
-    tag = RT.TP_ROOT_TAG if commit_scheme == step_rows.NAME else RT.TP_ROOT_TAG_V1
+    com, rc = commit_steps({0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]})
     root = rc.run_root.hex()
     man = tmp_path / "manifest.json"
     man.write_text(json.dumps({"identities": [], "ranks": WORLD}))
@@ -350,7 +348,7 @@ def _seal_deferred(tmp_path, commit_scheme=step_rows.NAME):
         fins.append({k: v for k, v in f.items()})
     vec = {r: rc.run_root for r in range(WORLD)}
     rows = [{"pair": 0, "arm": "instrumented", "tokens_equal_ref": True, "wall_s": 1.0,
-             "commit": {"tp_run_root": RT.combine(tag, WORLD, vec).hex(), "world": WORLD, "per_rank": per_rank,
+             "commit": {"tp_run_root": RT.combine(RT.TP_ROOT_TAG, WORLD, vec).hex(), "world": WORLD, "per_rank": per_rank,
                         "commitment_vector": [{"rank": r, "run_root": root} for r in range(WORLD)], "commit_pass": None, "commit_fail_reason": RB.PENDING}}]
     sr_comp, lk_comp = C2.sampled_replay_components(rows, VERSIONS)
     qp_comp = C2.query_population_component(rows, True)
@@ -365,7 +363,7 @@ def _seal_deferred(tmp_path, commit_scheme=step_rows.NAME):
     assert summ["pass"] is None and summ["commit_pass"] is None and len(summ["replay_deferred"]["bundles"]) == WORLD
     (out / "runs.jsonl").write_text("".join(json.dumps(r, default=str) + "\n" for r in rows))
     (out / "summary.json").write_text(json.dumps(summ, default=str))
-    (out / "versions.json").write_text(json.dumps({**VERSIONS, "root_tag": tag.decode()}))
+    (out / "versions.json").write_text(json.dumps({**VERSIONS, "root_tag": RT.TP_ROOT_TAG.decode()}))
     (out / "finalize_pair0.json").write_text(json.dumps(fins, default=str))
     (out / "coverage.json").write_text(json.dumps({"verdict": "PASS", "identity_coverage": True, "reason": None, "replay_pending_ranks": [0, 1],
                                                    "value_correspondence": vc}))
@@ -541,15 +539,6 @@ def test_a_bundle_that_is_not_the_records_is_refused_before_any_replay(deferred,
     assert "evaluate" not in stubbed and not TPR.result_path(deferred.out, 0, 1).exists()
     with pytest.raises(TPR.Refused, match=named):
         TPR.replay_rank(TPR.Options(commit_out=str(deferred.out), checkpoint_dir="/ck"), deferred.out, deferred.dd, 0, 1)
-
-
-def test_an_old_vllm_v1_record_replays_under_its_v1_tag_and_never_as_v2(tmp_path, stubbed):
-    d = _seal_deferred(tmp_path, "vllm-v1")
-    assert len(d.rc.run_root) == 32 and len(bytes.fromhex(RB.open_bundle(d.dd["bundles"][1]["path"])["context"]["tp_run_root"])) == 32
-    assert TPR.main(TPR.Options(commit_out=str(d.out), checkpoint_dir="/ck", ranks="1")) == 4 and stubbed["evaluate"][2]["run_root"] == d.rc.run_root
-    _tamper_versions(d.out, root_tag=RT.TP_ROOT_TAG.decode())
-    with pytest.raises(TPR.Refused, match="rank 0 root is 32 bytes, a vllm-v1"):
-        TPR.replay_rank(TPR.Options(commit_out=str(d.out), checkpoint_dir="/ck"), d.out, d.dd, 0, 0)
 
 
 def test_a_manifest_that_is_not_the_commits_is_refused(deferred, stubbed, tmp_path):

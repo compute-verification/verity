@@ -94,25 +94,27 @@ def test_a_changed_missing_or_extra_file_is_refused(tmp_path, tamper, why):
         RB.open_bundle(b)
 
 
-def _deferred(out, **kw):
-    """`defer` of a small committed store, its write started beside the checks (`start`) unless `replay_bundle_overlap=0`."""
+def _deferred(out, keys=None, **kw):
+    """`defer` of a small committed store (under `keys`, another commit's step keys, when given), its write started beside the checks
+    (`start`) unless `replay_bundle_overlap=0`; with the committer's step keys."""
     torch = pytest.importorskip("torch")
     from tests.check.opened import commit_steps
     from tests.commit.test_store_dump import STEPS
     from verity_vllm.pipeline.timeline import Timeline
 
-    com, rc = commit_steps(STEPS)
+    com, rc = commit_steps(STEPS, row_keys=keys)
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
     args = SimpleNamespace(**{"replay_deferred": "full", "replay_bundle_overlap": 1, "retain": "host", "required_manifest": None, "openings": 64, **kw})
     started, row, deferred = RB.start(out, 1, com, rc, args, None), {"commit": {}}, {}
     assert RB.defer(out, 1, com, rc, args, tl=Timeline(None), arm="instrumented", versions={}, reqs=[], sampling={}, tokens={}, stop_of_record=None,
                     ids_full=None, declaration=None, required_classes=[], row=row, deferred=deferred, started=started)
-    return started, deferred[1], {p.relative_to(RB.partial(out, 1)).as_posix(): p.read_bytes() for p in RB.partial(out, 1).rglob("*") if p.is_file()}
+    files = {p.relative_to(RB.partial(out, 1)).as_posix(): p.read_bytes() for p in RB.partial(out, 1).rglob("*") if p.is_file()}
+    return started, deferred[1], files, com.row_keys
 
 
 def test_a_store_written_beside_the_checks_is_the_store_defer_writes(tmp_path):
-    started, ctx, files = _deferred(tmp_path / "beside")
-    inline, ctx0, files0 = _deferred(tmp_path / "inline", replay_bundle_overlap=0)
+    started, ctx, files, keys = _deferred(tmp_path / "beside")
+    inline, ctx0, files0, _ = _deferred(tmp_path / "inline", keys, replay_bundle_overlap=0)
     assert started is not None and started.future.done() and inline is None
     assert files == files0 and ctx[RB.HASHED] == ctx0[RB.HASHED] and set(ctx[RB.HASHED]) == {f for f in files if f.endswith(".bin") and f.startswith("store/")}
     assert {k: v for k, v in ctx.items() if k != "engine_of_record"} == {k: v for k, v in ctx0.items() if k != "engine_of_record"}

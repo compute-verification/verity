@@ -29,11 +29,11 @@ def _spec(t: tuple, i: int) -> tuple[str, Any, int, str, tuple | None]:
     return str(t[0]), t[1], ordinal, (str(t[3]) if len(t) > 3 else "uint8"), (tuple(t[4]) if len(t) > 4 else None)
 
 
-def committer(retain: str = "host", run_id: str = "opened-test", commit_scheme: str | None = None) -> NativeHostCommitter:
+def committer(retain: str = "host", run_id: str = "opened-test") -> NativeHostCommitter:
     saved = os.environ.get("VERITY_RETAIN")
     os.environ["VERITY_RETAIN"] = retain
     try:
-        return NativeHostCommitter(None, run_id=run_id, gpu_tree=True, commit_scheme=commit_scheme)
+        return NativeHostCommitter(None, run_id=run_id, gpu_tree=True)
     finally:
         if saved is None:
             del os.environ["VERITY_RETAIN"]
@@ -41,10 +41,13 @@ def committer(retain: str = "host", run_id: str = "opened-test", commit_scheme: 
             os.environ["VERITY_RETAIN"] = saved
 
 
-def commit_steps(steps: dict[int, list[tuple]], *, retain: str = "host", run_id: str = "opened-test", commit_scheme: str | None = None):
+def commit_steps(steps: dict[int, list[tuple]], *, retain: str = "host", run_id: str = "opened-test",
+                 row_keys: dict[int, bytes] | None = None):
     """Commit `steps[s]` (tensors in acquisition order) as packed step blocks -> (committer, run commitment).  Tensors sit at 4-byte-aligned
-    offsets of the step block; a step missing below the last one is a one-tensor placeholder (steps are numbered densely)."""
-    com = committer(retain, run_id, commit_scheme)
+    offsets of the step block; a step missing below the last one is a one-tensor placeholder (steps are numbered densely).  `row_keys`,
+    another commit's step keys (`replay_row_keys`), commit its trees again; unset, every step draws a fresh key."""
+    com = committer(retain, run_id)
+    com.replay_row_keys = None if row_keys is None else dict(row_keys)
     C = com.chunk
     for s in range(max(steps) + 1 if steps else 0):
         metas, buf = [], bytearray()
@@ -69,7 +72,7 @@ def commit_host_steps(steps: dict[int, list[tuple]], *, run_id: str = "opened-te
         for i, t in enumerate(steps.get(s) or [PLACEHOLDER]):
             name, raw, ordinal, dtype, shape = _spec(t, i)
             if ordinal != i:
-                raise ValueError(f"step {s} {name}: ordinal {ordinal} != position {i} (the per-tensor path numbers tensors by position)")
+                raise ValueError(f"step {s} {name}: ordinal {ordinal} != position {i} (the direct path numbers tensors by position)")
             tensors.append((name, raw, dtype, shape or (len(raw),)))
         stream.append(tensors)
     return com, com.commit_offline(stream)

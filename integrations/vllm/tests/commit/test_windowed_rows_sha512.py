@@ -377,8 +377,6 @@ def test_what_rows_sha512_refuses(monkeypatch):
     with pytest.raises(ValueError, match="windowed worker"):
         NC.NativeCollectCommitter(eng, **base)
     monkeypatch.setenv("VERITY_WINDOW_MB", WINDOW_MB)
-    with pytest.raises(ValueError, match="windowed worker"):
-        NC.NativeCollectCommitter(eng, layout="chunk-leaf-v2", **base)
     for scheme in ("vllm-v1", "rows-sha256"):
         with pytest.raises(ValueError, match="unknown commit scheme"):
             NC.NativeCollectCommitter(eng, commit_scheme=scheme, **base)

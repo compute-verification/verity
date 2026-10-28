@@ -10,8 +10,8 @@
 * The verifier's side (`window_of_record`, `source`) on a TP Commit of two rows-sha512 ranks served on CPU under the SHA-512 TP run
   root (`tests.pipeline.served_tp`): each rank's registration passes, held to the verifier's own window of that rank from the
   Commit's record alone, and is refused for another rank, another TP run root, other served Programs, a stand-in, a record whose TP
-  run root does not combine its ranks' roots (a 32-byte rank root by name), and a rank Program not of record; an old record's
-  vllm-v1 ranks under the SHA-256 v1 root are refused as served by name (``sha512``).
+  run root does not combine its ranks' roots (a 32-byte rank root by name), and a rank Program not of record; a window held to an
+  old record's 32-byte TP run root is refused as served by name (``sha512``).
 * A deferred TP Commit that wrote no window (`served_tp --deferred`): each rank's ``stand-in`` from its sealed bundle (`from_bundle`)
   holds the values the in-Commit window of the same ranks holds, names the rank's rows-sha512 root under the TP run root and the
   bundle's manifest, and passes `source`; a stand-in naming another bundle, another link or another rank, or of a rank whose bundle
@@ -182,7 +182,7 @@ def test_a_ranks_window_over_its_committed_values_binds_the_tp_run_root(tmp_path
     from tests.pipeline import served_rope
 
     monkeypatch.setattr(T, "I", 32)            # SiluMul's in0 (2I words) is one whole SHA-512 block
-    c = served_rope.commit(tmp_path, commit_scheme=step_rows.NAME)
+    c = served_rope.commit(tmp_path)
     (pf := tmp_path / "silu.json").write_text(json.dumps({"templates": [SILU], "law": "subset:1"}))
     r = DRW.of_record(RB.path(c["out"], 1), str(c["row_dir"]))
     bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
@@ -239,15 +239,6 @@ def served_tp(tmp_path_factory):
     return ST.commit(tmp_path_factory.mktemp("served-tp"), world=2, I=256, law="subset:2")
 
 
-@pytest.fixture(scope="module")
-def served_tp_v1(tmp_path_factory):
-    """An old record's TP Commit: vllm-v1 ranks under the SHA-256 ``verity/tp-run-root/v1``."""
-    pytest.importorskip("torch")
-    from tests.pipeline import served_tp as ST
-
-    return ST.commit(tmp_path_factory.mktemp("served-tp-v1"), world=2, I=256, law="subset:2", commit_scheme="vllm-v1")
-
-
 def _registered(c, rank: int) -> dict:
     return json.loads((c["windows"] / f"rank{rank}" / "registration.json").read_text())
 
@@ -280,14 +271,14 @@ def test_a_ranks_served_window_under_a_sha512_tp_run_root_passes(served_tp):
         assert SRT.source(w["window"], mine, held) == {"ok": True, "codes": [], "detail": {"kind": "served", "run": mine.run, "tp": held["tp"]}}
 
 
-def test_a_ranks_served_window_under_an_old_records_sha256_tp_run_root_is_refused_by_name(served_tp_v1):
-    """A served window names a SHA-512 commitment, as `deferred_rows.source` holds a deferred Commit's (one hash): an old record's
-    windows, vllm-v1 ranks under the SHA-256 v1 TP run root and held to the verifier's on everything else, are refused by ``sha512``."""
-    assert SRT.record(served_tp_v1["commit"])["root_tag"] == RT.TP_ROOT_TAG_V1.decode()
+def test_a_ranks_served_window_under_an_old_records_sha256_tp_run_root_is_refused_by_name(served_tp):
+    """A served window names a SHA-512 commitment, as `deferred_rows.source` holds a deferred Commit's (one hash): a window held to
+    a record whose TP run root is 32 bytes (an old record's SHA-256 v1 root), and to the verifier's on everything else, is refused
+    by ``sha512``."""
     for r in range(2):
-        mine, held = _mine(served_tp_v1, r)
-        assert len(bytes.fromhex(held["tp"]["tp_run_root"])) == len(bytes.fromhex(held["tp"]["run_root"])) == 32
-        got = SRT.source(_registered(served_tp_v1, r)["window"], mine, held)
+        mine, held = _mine(served_tp, r)
+        tp = {**held["tp"], "tp_run_root": held["tp"]["tp_run_root"][:64]}
+        got = SRT.source({**_registered(served_tp, r)["window"], "tp": tp}, mine, {**held, "tp": tp})
         assert (got["ok"], got["codes"]) == (False, ["sha512"])
 
 

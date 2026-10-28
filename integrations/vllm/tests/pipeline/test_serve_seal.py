@@ -35,10 +35,8 @@ def test_a_windows_requests_are_named_by_user_with_their_rows_and_first_step():
 def _sealed(tmp_path):
     torch = pytest.importorskip("torch")
     from tests.check.opened import commit_steps
-    from verity_vllm.commit import step_rows
 
-    com, rc = commit_steps({0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]},
-                           commit_scheme=step_rows.NAME)
+    com, rc = commit_steps({0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]})
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
     leds = _ledgers()
     reqs, rows = ss.window_requests(ROWS, NAMES.get, leds.get)
@@ -85,7 +83,7 @@ def _interior_window(tmp_path, gap=None):
     for i, (name, nb) in enumerate(spec):
         tensors.append((name, bytes(stream[off:off + nb].numpy()), i, "int32" if ".m1/" in name else "bfloat16", (nb // 2,)))
         off += nb
-    com, rc = commit_steps({0: tensors, 1: [("runner.sampler", b"\x01\x02\x03\x04")]}, commit_scheme=step_rows.NAME)
+    com, rc = commit_steps({0: tensors, 1: [("runner.sampler", b"\x01\x02\x03\x04")]})
     assert com.chunk == C
     (lo, hi, fam), = HR._excluded_chunk_ranges(com._layouts[0], HR.HIDDEN_M1_FAMILIES, C)
     blk, used = com._gpu_blocks[0]
@@ -164,7 +162,6 @@ def _sealed_parts(tmp_path, with_manifest: bool, port=None, embed_ids=None, name
     its `served_record.SamplerInputsSource` kept the rows ``kept`` (`SERVED_ROWS` by default)."""
     torch = pytest.importorskip("torch")
     from tests.check.opened import commit_steps
-    from verity_vllm.commit import step_rows
     from verity_vllm.commit.served_record import PORT_NAMES, SamplerInputsSource, StepInputPort
 
     fx = json.loads(PARTS.read_text())
@@ -182,7 +179,7 @@ def _sealed_parts(tmp_path, with_manifest: bool, port=None, embed_ids=None, name
                     continue
                 raw = b"".join(int(x).to_bytes(4, "little") for x in embed_ids[int(s)])
             steps[int(s)].append((m["name"], raw, m["ordinal"], m["dtype"], shape))
-    com, rc = commit_steps(steps, commit_scheme=step_rows.NAME)
+    com, rc = commit_steps(steps)
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
     if port:
         com.sources = [StepInputPort(com, T), SamplerInputsSource(com)]
@@ -314,7 +311,7 @@ def test_the_committer_commits_the_steps_ids_once_as_the_ports():
     torch = pytest.importorskip("torch")
     from tests.check.opened import committer
 
-    com = committer(commit_scheme="rows-sha512")
+    com = committer()
     com.plan_inputs = {"model.embed_tokens", "model.layers.0.mlp.act_fn"}
     emb = torch.nn.Embedding(4, 2)
     assert com._acquires_input("model.embed_tokens", emb)
@@ -387,19 +384,18 @@ def test_a_steps_stream_starts_with_its_input_ids_then_positions_padded_to_the_t
 def test_a_sealed_windows_context_carries_its_served_rows_and_the_port_its_streams_start_with(tmp_path):
     torch = pytest.importorskip("torch")
     from tests.check.opened import commit_steps
-    from verity_vllm.commit import step_rows
     from verity_vllm.commit.served_record import PORT_NAMES, SamplerInputsSource, StepInputPort
     from verity_vllm.pipeline import deferred_rows as DR
 
     def i64(xs, T):
         return b"".join(int(x).to_bytes(8, "little") for x in [*xs, *[0] * (T - len(xs))])
 
-    com0, _ = commit_steps({0: [("x", b"\0")]}, commit_scheme=step_rows.NAME)
+    com0, _ = commit_steps({0: [("x", b"\0")]})
     T = com0.chunk // 8
     steps = {0: [(PORT_NAMES[0], i64([1, 2, 3, 4, 5], T), 0, "int64", (T,)), (PORT_NAMES[1], i64([0, 1, 2, 0, 1], T), 1, "int64", (T,)),
                  ("model.embed_tokens/in", i64([1, 2, 3, 4, 5], 5), 2, "int64", (5,))],
              1: [(PORT_NAMES[0], i64([7, 8], T), 0, "int64", (T,)), (PORT_NAMES[1], i64([3, 2], T), 1, "int64", (T,))]}
-    com, rc = commit_steps(steps, commit_scheme=step_rows.NAME)
+    com, rc = commit_steps(steps)
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
     com.sources = [StepInputPort(com, T), SamplerInputsSource(com)]
     com.sources[1].rows = SERVED_ROWS

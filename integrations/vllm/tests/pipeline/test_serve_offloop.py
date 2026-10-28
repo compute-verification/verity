@@ -80,9 +80,8 @@ def _commit(com: Any, steps: dict[int, list[tuple[str, bytes]]]) -> Any:
 
 def _window_a() -> tuple[Any, Any, dict[str, Any]]:
     from tests.check.opened import committer
-    from verity_vllm.commit import step_rows
 
-    com = committer(commit_scheme=step_rows.NAME)
+    com = committer()
     com.pool = PP.PinnedPool(1 << 14, exact=False, populate_threads=0)
     rc = _commit(com, A)
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
