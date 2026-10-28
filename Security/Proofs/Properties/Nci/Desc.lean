@@ -20,7 +20,7 @@ Not proved here: that `analyze`'s reads per root node are the unrolled operands 
 through §7's resolution), `Novel.ReadsExact`, proved in `Proofs.Properties.Nci.Agrees` (`Novel.readsExact`). That
 `novelWidth` is the width of the union of the gates it is given is proved in `Width` (`novelWidthExact`). The difftest
 holds the description-sized check against the unrolled one too (`runs` `NciCheck.DescDifftestMain` in the package's
-`lean-audit.json`: 3,993 declarations).
+`lean-audit.json`: 3,993 registered circuits).
 -/
 
 namespace NciCheck.Properties.SecurityProofs.Desc
