@@ -176,7 +176,7 @@ def committer_resident(workload: dict[str, Any], host_cap_bytes: int | None, *, 
     the C2 Programs and match oracle, the leaf digests, the binding index, the forked replay workers, the serving base and the margins.
     #23 B64 Llama: pool 183,694 MiB + resident 122,745 MiB; the pool alone fit the 239,372 MiB limit and the run OOM'd at it."""
     from verity_vllm.pipeline.telemetry import admission as plan
-    cfg = plan.admission_row_from_workload(workload, pairs=max(1, int(pairs)), replay_workers=replay_workers, host_limit_bytes=host_cap_bytes, stages="commit")
+    cfg = plan.row_config_from_workload(workload, pairs=max(1, int(pairs)), replay_workers=replay_workers, host_limit_bytes=host_cap_bytes, stages="commit")
     cfg.host_cpus = os.cpu_count() or cfg.host_cpus
     commit = plan.predict(cfg)["commit"]
     live = dict(commit["live_at_peak"])

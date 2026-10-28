@@ -41,19 +41,19 @@ ATTEMPTS = {
 @pytest.mark.parametrize(("name", "model", "requests", "max_context"),
                          [("log", "phi3-mini", 16, 576), ("preflight", "llama32-1b", 4, 288), ("row.log", "phi3-mini", 16, 576),
                           ("none", "llama32-1b", 1, 1152)])
-def test_admission_row_from_attempt_reads_the_row(tmp_path: Path, name: str, model: str, requests: int, max_context: int):
+def test_row_config_from_attempt_reads_the_row(tmp_path: Path, name: str, model: str, requests: int, max_context: int):
     for f, text in ATTEMPTS[name].items():
         (tmp_path / f).write_text(text)
-    cfg = A.admission_row_from_attempt(str(tmp_path))
+    cfg = A.row_config_from_attempt(str(tmp_path))
     assert (cfg.model, cfg.requests, cfg.max_context) == (model, requests, max_context)
 
 
-def test_admission_row_from_attempt_is_pinned(tmp_path_factory):
+def test_row_config_from_attempt_is_pinned(tmp_path_factory):
     out = {}
     for name, files in ATTEMPTS.items():
         d = tmp_path_factory.mktemp(name.replace(".", "_"))
         for f, text in files.items():
             (d / f).write_text(text)
-        cfg = A.admission_row_from_attempt(str(d))
+        cfg = A.row_config_from_attempt(str(d))
         out[name] = {k: v for k, v in dataclasses.asdict(cfg).items() if k != "notes"} | {"notes": cfg.notes}
     assert hashlib.sha256(json.dumps(out, sort_keys=True, default=str).encode()).hexdigest()[:16] == "02bada87b8b14031"
