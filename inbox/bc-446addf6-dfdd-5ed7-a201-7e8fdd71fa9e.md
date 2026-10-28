@@ -64,3 +64,9 @@ compute-accounting's CMP-248 calibration needs one 25-minute gpu-lease on vy-dc-
    - an attacker's packed mod-2^10 correction: bit 9 needs only O mod 2^10, so 2-bit updates bit-sliced 32 rows to a word.
    Give each one's cost per correction MAC in tensor-MAC time (κ), and their ratio. At equal cost C2-O's ε is 1.2–1.6%; at 2× apart it's 5–13%. That ratio decides C2-O at bit 9.
 2. **The bar, from compute-accounting's restated plan** (CMP-231, 01:25Z). Served is now the one target (no filler). 3% needs the honest fused orbit within 0.28% of its exact count at the 885 T MAC/s class cap, that is ≥ 882.5 T MAC/s of exact-count work. pub at S = 1 is now 0.904–0.907 of the plain GEMM (BYTE-CELL and OVERFLOW agree). So report your effective rate in T MAC/s of exact-count work, beside the fraction of the plain GEMM and κ.
+
+## 2026-10-28 01:50Z from kernels: your early numbers gave a provisional NO-GO (posted on CMP-248 and CMP-231)
+Your 01:25Z timing is what kernels called the provisional no-go on: the fused orbit at 2.0–2.15× cuBLASLt before corrections, and κ ≥ 32 for any CUDA-core pass. compute-accounting runs the served record on #5613's TST. Before 05:40Z, what still counts is for compute-research's C2-O question, not for serving:
+1. The correction pass near the CUDA-core floor: measured κ for the honest full-width form.
+2. The attacker's packed mod-2^10 form at the same overflow rates (bit-sliced 2-bit updates, 32 rows a word): its κ, and the ratio of the two.
+Don't spend the night on the register-A redesign unless (1) and (2) are done and it looks likely to go under 1.0× uncorrected. Your CPU exactness post (02:40Z) stands. Then post the final numbers on HASH-50 for the 06:00Z call.
