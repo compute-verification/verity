@@ -12978,7 +12978,7 @@
    "guarantees": ["PousCheck.Properties.SecurityProofs.timedAuditAccepts"]
   },
   "PouwCheck.Check": {
-   "digest": "70c9923ee3f4136cff9ad8d5172bbb1b283a078309ed99dee8da5b786285f2d2",
+   "digest": "5014076abb8d5a1cfbafb2d9f5a25cc25624c88f53f91d0bc5ed549195c0b8cc",
    "definitions": {
     "PouwCheck.Ascending": "5b24f399fc5f235318482805b82195fcd9be209ce00f792764266c5d6b990d75",
     "PouwCheck.Ascending._sparseCasesOn_1": "0c39ffd45af4e037eade16be68e5fa6788d2bbe70b8d526e16bcd2e57c0da613",
@@ -13005,7 +13005,7 @@
     "PouwCheck.levelOf": "48f5e3917b350202b7eac92f3d54572ce99d84524251aeb9ae909a94f33bfa4c",
     "PouwCheck.oneStage": "7c719a8a358542840a7addee323c893bd08649baf8394bc21abdc81c1da2b026",
     "PouwCheck.outcome": "d8e32e6c0da2a8a77932d5353f22a4469a1b68bd461df7acebdf562f4c13dcd9",
-    "PouwCheck.registered": "84ff25d82e0157258f9d596e30c085f7327d53fe9cabb1a6326167fe2529f94a",
+    "PouwCheck.registered": "a0baed51275c534b325ace2ad64b3f9f7d492de257f21a31a48035eb57f8944d",
     "PouwCheck.registeredSorted": "f3f3a15aa0a16dd4cffc22b3339539e97103a4defb099402d8529770c8ee58f4",
     "PouwCheck.rootWJson": "59a1924b50d1366c4da946502953c90fb8130f0ef9a79bb0e1d93705c7787fb6",
     "PouwCheck.subsetLaw": "55ca9133ec253a0ade5266bff2c39d16213c5ab5821cf83854ad3ad9fdf492d0",
@@ -13275,7 +13275,7 @@
    ]
   },
   "PouwCheck.Inputs": {
-   "digest": "d8f3c5ef2a3b981a31370d8c967ef8304ae631b969484407dd6c3a9782abac20",
+   "digest": "f311ecaad5f5949b1c797e1371fd0dc7921ae05023ed934e0318257f36340f33",
    "definitions": {
     "PouwCheck.CheckItem": "a8c3b6782e136e39d6ba8abc4ad388ca594f2ae5ed7f0e9a20bf108367f859ce",
     "PouwCheck.CheckItem.coins": "967fa4f2acda567918b67eb4dbe81db67c0ef1a754b208dc248f40874af1f926",
@@ -13292,6 +13292,12 @@
     "PouwCheck.Evidence.protocol": "cef4d6c424ff77fa2fe72802035786e8cfbfb50be010572b473c1401b5ac144c",
     "PouwCheck.Evidence.said": "120d9bbfb88192148b5a4f5fb7c669b4f1fb427d9154919eace620fce159e0d3",
     "PouwCheck.Evidence.salt": "6d4f8c82efd49b80b84796c2b5cdf2447d5021e85489663bfb566a77d97627ad",
+    "PouwCheck.ExecutionBlockItem": "1da39d3f38bfc66ed0f8b2a8d2d663db8be11828e6372b5dd64fc7c9034face0",
+    "PouwCheck.ExecutionBlockItem.activations": "1d225efa7be7ab501af13956f5dc5e5fa9a929b2b1018b41b7825c4783ec6b05",
+    "PouwCheck.ExecutionBlockItem.context": "c8ee3ac116be250754e99f2613682de34099248ac02f743a6680a81907cc185e",
+    "PouwCheck.ExecutionBlockItem.items": "128431f6be899192f9b1ffec2f692114f7b320f24c855913de2b83807c2b9cbb",
+    "PouwCheck.ExecutionBlockItem.kind": "8831e6bf7febc33126773053c8e49dd9cf1ce5d64cbdf2c75aa6ef720795dae1",
+    "PouwCheck.ExecutionBlockItem.registered": "4c004f98e088150b4b31a4a8a5334743120a9e7c767e7ff357876b6de3dffdb9",
     "PouwCheck.LIVE_PARAMS": "a4aa5341875d04d742c98312744d2bfc3bd5cfcaa978bf73681d070992f4f698",
     "PouwCheck.Law": "b71b9d310989a2d8253805b3d78aa998de6cab4e19872e808a812643ecebc733",
     "PouwCheck.Law.bernoulli": "ce5981cb8912702d9968fd9fad7c5342d76298d331ddcae7440c3876137d3d33",
@@ -13312,7 +13318,7 @@
     "PouwCheck.Params.lo": "56d918d0f77567d0b0b0a1f309f802b6a24e4c7dc5be9e1896a7d2d41c80bed3",
     "PouwCheck.Params.maxTokens": "223d13fbd2cb6e8645945b1c923955d7aa2bd79b7eecd31e7dcb72f1836f0758",
     "PouwCheck.Params.query": "6dce4e5cd974597d0bb7233fd0dd8aed2e9e0678277ee73c4266cb155e54b50f",
-    "PouwCheck.Registration": "033283f2919d0350646a0302eefb1f2bb975611831ca749028abef5181b2c3c6",
+    "PouwCheck.Registration": "6be5d90a4cb41bf03b66fe012deda5bfd6fbd22ed112b2fd561bdfd65b584db8",
     "PouwCheck.Registration.bytes": "baeff8fe91acf5297042e6c9221f1cfcbc8aa7d4af1b66929363679ccaa5e023",
     "PouwCheck.Registration.digest": "d03388f5dc140200c477293df1832100c228e2084ef8e49435c034c2214f5907",
     "PouwCheck.Registration.format": "04247820bd84289e937d29fbb93bb2c6e21d5d65c776fa53ae3b7f2d46187264",
@@ -13323,7 +13329,7 @@
     "PouwCheck.Registration.query": "cea0c55c52410100ec28d74574558a0857196b7a4d734fae068b840fce799492",
     "PouwCheck.Registration.roots": "0766f411c3c8d8a12d27889db3daca646c218ac11288a4f87f9d53e17ed0bceb",
     "PouwCheck.Registration.scheme": "a7c8008e4dfe1c99d38a1c0140580292f7779a0788750f78786dc15e54dc7e86",
-    "PouwCheck.Registration.window": "6d5643873efb301049a06660062d770375023786c69fc944f1ac71afc048a912",
+    "PouwCheck.Registration.window": "7fc77bf2b6934f8c8a7569359c8dc41e0865067a176f978176c6f2399a054940",
     "PouwCheck.Root": "35bccbcd7104a542530a8ffc2a93e0c93bf41b6187e85011e650a5467959812f",
     "PouwCheck.Root.port": "618bd1f5e78ab7861425e2405f7513d02c79e4117455b628247fa4f85c0830be",
     "PouwCheck.Root.root": "4c4e8d6334d5c963547fb94bf4e94cc72fca5428af91383848f9c0c9bfc49019",
@@ -13378,7 +13384,7 @@
     "PouwCheck.rangeOf": "9d7c2f9b2d0c19ea4ade7014c7e80a84bba91983cf3d01c0d56bdbb54d0867a2",
     "PouwCheck.ratioField": "fbe08744ccfadc8920d70bae2d203c1892927538c395ea279081c209ec005acc",
     "PouwCheck.ratioField._sparseCasesOn_1": "6b14fb22bf6a44b230e8ca60b8a77910dcba107a7e80cad48f643b1fb18c2e86",
-    "PouwCheck.registrationOf": "10b35b28a1506dbfe557a11970bc6f4c6e39122ebf3999682c15e77b6ba2f8dc",
+    "PouwCheck.registrationOf": "d31df461cedeab9bf95c6e8fe411bda168fcd10e0b0836d9a3ac3b0b2a2157fb",
     "PouwCheck.rootOf?": "7b0cddacb4a5f93ab1971d436fe5e52b097baeb015a1be59b5ef1fa782fb8c2a",
     "PouwCheck.saltOf": "d3d4c74f405ef49530eafbc48adc2d5ec2c433506357b7d708cc388e7c8b2de1",
     "PouwCheck.saltOf._sparseCasesOn_1": "17628a3d90cb620c8ebd5affd4efbfabcdc2eff4ccb4c48eb796a9ac33e1e5f0",
@@ -13598,7 +13604,7 @@
    ]
   },
   "PouwCheck.WindowSalt": {
-   "digest": "ca07babca389d57a778fee427bf9e7b6467fecbd6a132f6a57d793b2c9f79a06",
+   "digest": "8b1e7ea1d4421915373baeff2f79d6a665c4f67152b961f32c8549d135a218e3",
    "definitions": {
     "PouwCheck.ANCHORED_EPOCH_TAG": "d284656dd4ec78550b5e6974d6b676ebe17b38910fb1e3343c976bbe23c78bf7",
     "PouwCheck.NO_WINDOW_SALT": "e78d5c0b6cc504082889c682abec1b03378ee36bb3ae0b940f86922494e2353d",
@@ -13617,7 +13623,7 @@
     "PouwCheck.saltEpoch": "8c2f5127e3d139858cd6ca66d434e76b7bab47a73c37e6e758f0c5b39f937f21",
     "PouwCheck.sized": "cf51414cfe401ce1826273308131fc7376a08b4b57c0c6a6998840b5d4772fb3",
     "PouwCheck.valuesRoot?": "fb4f979eb350604963953802f6f1bff911d131ce34895b4c7a7479bde54afe94",
-    "PouwCheck.windowAnchors": "99cb3ee8237e95a96eb9c69adb906e10ce9a29195e6a57e59fc2fdb941149673",
+    "PouwCheck.windowAnchors": "48a5c0e7157d7c3a84c9fcfd7c7b961d063c6dbacf29e8ba01b369e2c9e55ad7",
     "PouwCheck.windowAnchors._sparseCasesOn_3": "ec9d29ce8576d1febd20064a07d6d17ac74d857f798795a90d528ff741d17497",
     "PouwCheck.windowSaltCheck": "ec8286c7ccb41cdea57ca6d8f88da84135cc89d87166a6b2f5e98735db2ace82",
     "PouwCheck.windowSaltReason": "28302c3d6e3a786cf602d7cf4efc287e4c0d33ca2d197d6c5248eb5fe3ca3c46"
@@ -15390,7 +15396,7 @@
    ]
   },
   "Properties.Pouw.Check": {
-   "digest": "60da16bf5aa73b578621884e2333ca29fe054677612d7df0e8893341752fafb5",
+   "digest": "b4e0ef787d983008ce0ec67a52c5fe10d96ae82b9586ea4a0b8deac18d1f4edc",
    "definitions": {
     "Properties.Pouw.Check.AcceptMeans": "eb7a3dd56b36eab62a09481e26ee9f10db0f933101991d7cf002300f060e95ae",
     "Properties.Pouw.Check.AcceptedDraw": "5ac2c07d99f9cb69d7ce9d3bf887ed7b7b6411d527d6939f295d5f6b4fe0abeb",
@@ -15400,7 +15406,7 @@
     "Properties.Pouw.Check.DigestIsOneStage's": "a7a8903ac99905a7e7ef7330cc725a679b3c71ca53710d4da53ef7db22e8254e",
     "Properties.Pouw.Check.NeverNull": "5b5530557f2e1764808d796fc9d377cd785dccbf9f897f03c18696ca5ea9a217",
     "Properties.Pouw.Check.PublishesPublic": "6107e69cb7a5f60b2a42765dea6a9132389076fefd46c8be72b078077fd601a3",
-    "Properties.Pouw.Check.RegistrationKeeps": "51627c61b76092da0c276964f5f3521910cf38027cb590d2e07fd56fcfbad5e1",
+    "Properties.Pouw.Check.RegistrationKeeps": "c72c1e70eeda3167b58e3b42f30ce5d3175dd6a81b2469794117459af9886c1b",
     "Properties.Pouw.Check.SaltKept": "fe44f25be5b87b38ef19756e7cbd051427139234b29c59775e9f5bb75985309c",
     "Properties.Pouw.Check.ServiceAccepted": "78a9ed3e1e9ff45ca7ad9aa23075079e41a260ce5c81b4ca76ded7f2c98c0072",
     "Properties.Pouw.Check.UndecidedOnlyFromService": "e047bfde57ad6a81c306573894df65fb73e1453ca4e6558868be2f27b089c050"
