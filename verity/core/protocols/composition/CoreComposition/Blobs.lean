@@ -55,11 +55,11 @@ theorem registeredB_on (id : String) (R : Protocol) (s : String) (cs : List Blob
 /-- The composition `id` of the components `cs`, which read the caller's blobs, whose components `ss` must all commit
 to one record: `same` of the components without blobs, whose check on blobs `bs` is `same`'s check of the
 components on `bs`. -/
-def sameB (id : String) (ss : List String) (cs : List BlobProtocol) : BlobProtocol :=
+def sameB (id : String) (ss : List (String × Records)) (cs : List BlobProtocol) : BlobProtocol :=
   { same id ss (cs.map (·.toProtocol)) with checkBlobs := fun ps c ev bs => checkSame id ss (cs.map (·.onBlobs bs)) ps c ev }
 
 /-- On the caller's blobs a `sameB` is `same` of its components on them. -/
-theorem sameB_on (id : String) (ss : List String) (cs : List BlobProtocol) (blobs : Array ByteArray) :
+theorem sameB_on (id : String) (ss : List (String × Records)) (cs : List BlobProtocol) (blobs : Array ByteArray) :
     (sameB id ss cs).on blobs = same id ss (cs.map (·.onBlobs (Blobs.ofArray blobs))) := rfl
 
 /-- `ordered` of the components' ids. -/

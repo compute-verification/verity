@@ -11,11 +11,12 @@ or `run.sh`.
 Remote Verity (`verity/remote/v0`, `Core.Remote` in `verity/core/protocols/remote/CoreRemote.lean`) is what the verifier
 establishes with no hardware of its own at the prover's site. It composes two protocols (`Core.Remote.components`):
 
-- integrity, by sampled proofs' one-stage audit (`verity/sampled-proofs/one-stage/v1`): the prover commits every value of
+- integrity, by sampled proofs' one-stage audit (`verity/sampled-proofs/one-stage/v2`): the prover commits every value of
   a served window under hiding leaves, a live coin from the challenger draws proof blocks, the prover proves each drawn
   block in C-Flock `--zk`, and the Lean verifier checks each proof against the committed roots;
-- work, by PoUW's window check (`verity/pouw/v1`): the GPU's time is credited to useful matmuls through receipts the live
-  coins open.
+- work, by PoUW's period check (`verity/pouw/period/v1`, onsite's work component too): the GPU's time is credited to
+  useful matmuls through receipts the live coins open, the period's windows all or nothing, each window on the one-stage
+  audit's window record.
 
 Remote accepts only when both accept over one commitment that binds both; either one's rejection rejects it, whatever the
 other answers. It rests on live coins (drawn after the commitment, never redrawn) and on what each component's own

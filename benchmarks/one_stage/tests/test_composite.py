@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import composite as C
 
 V2 = "verity/sampled-proofs/one-stage/v2"
-POUW = "verity/pouw/v1"
+POUW = "verity/pouw/period/v1"
 
 
 def put(d: Path, id: str, params: dict, commitment: bytes, evidence: bytes, digest: bytes | None,
@@ -58,9 +58,9 @@ def test_remote_case_orders_by_id_and_binds_the_digests(tmp_path):
     assert C.main(["remote", "--cases", str(v2), "--cases", str(pw), *outs(tmp_path)]) == 0
     out = tmp_path / "private"
     assert (out / "params.json").read_bytes() == \
-        b'{"components":[{"id":"verity/pouw/v1","params":{"k":2}},{"id":"verity/sampled-proofs/one-stage/v2",' \
+        b'{"components":[{"id":"verity/pouw/period/v1","params":{"k":2}},{"id":"verity/sampled-proofs/one-stage/v2",' \
         b'"params":{"delta":"1/100"}}]}'
-    body = ('{"components":[{"commitment":"' + "bb" * 64 + '","id":"verity/pouw/v1"},{"commitment":"' + "aa" * 64 +
+    body = ('{"components":[{"commitment":"' + "bb" * 64 + '","id":"verity/pouw/period/v1"},{"commitment":"' + "aa" * 64 +
             '","id":"verity/sampled-proofs/one-stage/v2"}]}')
     assert (out / "commitment.bin").read_bytes() == hashlib.sha512(b"verity/remote/v0\0" + body.encode()).digest()
     e = json.loads((out / "evidence.json").read_bytes())
@@ -170,11 +170,11 @@ def test_the_private_out_may_not_lie_in_the_public_out(tmp_path):
 def test_a_missing_case_is_left_out_and_lean_s_verdict_stands(tmp_path, capsys):
     v2 = put(tmp_path / "v2", V2, {}, b"\x01", b"{}", b"\xaa" * 64, verdict="accept")
     exe = lean(tmp_path, {"protocol": "verity/remote/v0", "verdict": "reject",
-                          "reason": "params: verity/pouw/v1 is missing"}, 1)
+                          "reason": "params: verity/pouw/period/v1 is missing"}, 1)
     assert C.main(["remote", "--cases", str(v2), *outs(tmp_path), "--exe", exe]) == 1
     assert [c["id"] for c in json.loads((tmp_path / "private" / "params.json").read_bytes())["components"]] == [V2]
     lines = (tmp_path / "public" / "verdicts.txt").read_text().splitlines()
-    assert lines == [f"PIECE {V2} accept", "NOT_ESTABLISHED missing verity/pouw/v1",
+    assert lines == [f"PIECE {V2} accept", "NOT_ESTABLISHED missing verity/pouw/period/v1",
                      "VERDICT verity/remote/v0 reject params"]
     assert capsys.readouterr().out.splitlines()[1:4] == lines
     record = json.loads((tmp_path / "public" / "composite.json").read_bytes())
@@ -196,7 +196,7 @@ def test_a_case_without_its_answer_is_missing(tmp_path):
     pw = put(tmp_path / "pouw", POUW, {}, b"\x02", b"{}", b"\xbb" * 64)
     (pw / "answer.json").unlink()
     assert C.main(["remote", "--cases", str(v2), "--cases", str(pw), *outs(tmp_path)]) == 0
-    assert "NOT_ESTABLISHED missing verity/pouw/v1" in (tmp_path / "public" / "verdicts.txt").read_text()
+    assert "NOT_ESTABLISHED missing verity/pouw/period/v1" in (tmp_path / "public" / "verdicts.txt").read_text()
 
 
 def test_onsite_without_its_registration_leaves_it_out_for_lean_to_refuse(tmp_path):

@@ -67,8 +67,9 @@ PoUW has other guarantees, outside protocol soundness.
 ## The remote protocol in Lean
 
 Remote (`verity/core/protocols/remote`, `Core.Remote.protocol`) is the composite for an auditor with no devices at the
-site. It composes two subprotocols, sampled proofs' one-stage audit and PoUW's window check, and accepts only when both
-accept and the commitment binds both (`Properties.Composition`, proved). Onsite adds PoUS, PoUB and network certification; memory wipes are a component of neither yet.
+site. It composes two subprotocols, sampled proofs' one-stage audit (v2) and PoUW's period check
+(`verity/pouw/period/v1`, onsite's work component too), and accepts only when both accept, the commitment binds both
+(`Properties.Composition`, proved), and every window of the period names v2's window record (`Core.Remote.windowRecords`). Onsite adds PoUS, PoUB and network certification; memory wipes are a component of neither yet.
 
 - **Guarantees:** the table's sampled-proofs and PoUW rows, both proved. The composed statement, `Verity.Soundness`, is
   not in Lean yet (above), so the two compose by hand, and nothing ties the deployed verdicts to the theorems: on

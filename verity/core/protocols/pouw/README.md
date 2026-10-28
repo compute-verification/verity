@@ -11,10 +11,11 @@ parameter: it surfaces the ε at δ its draw established.
 ## PoUW in the remote protocol
 
 The remote protocol, for an auditor with no devices at the datacenter, composes two subprotocols: sampled proofs'
-one-stage audit and PoUW's commit-period check (`Core.Remote.components` in
-`verity/core/protocols/remote/CoreRemote.lean`, id `verity/remote/v0`). It accepts only when both components accept
-their own cases and its commitment binds both components' commitments; either one's rejection rejects it
-(`Core.Composition.product`, `verity/core/protocols/composition/README.md`). PoUW's half of the remote demo has no
+one-stage audit and PoUW's period check, `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), as onsite does
+(`Core.Remote.components` in `verity/core/protocols/remote/CoreRemote.lean`, id `verity/remote/v0`). It accepts only
+when both components accept their own cases, its commitment binds both components' commitments, and every window of the
+period names the one-stage audit's window record as its Commit record; either one's rejection rejects it
+(`Core.Composition.sameB`, `verity/core/protocols/composition/README.md`). PoUW's half of the remote demo has no
 runner yet: the remote demo, `verity example vllm`, runs the sampled-proofs half. The remote protocol's front door is
 `verity/core/protocols/remote/`; PoUW is also a component of the onsite protocol (`verity/core/protocols/onsite`).
 
@@ -22,8 +23,9 @@ runner yet: the remote demo, `verity example vllm`, runs the sampled-proofs half
 
 The verifier is Lean, three Lake packages under `lean/`:
 
-- `lean/check` (`pouw_check`): `PouwCheck.protocol`, the `Core.Protocol` with id `verity/pouw/v1` that the remote
-  protocol composes. `PouwCheck.check` decides one commit period from its registration (the commitment) and the proof
+- `lean/check` (`pouw_check`): `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), the `Core.Protocol` both the
+  onsite and the remote protocol compose, and `PouwCheck.protocol` (`verity/pouw/v1`), one commit period's check, which
+  neither composes. `PouwCheck.check` decides one commit period from its registration (the commitment) and the proof
   service's answer to it (the evidence); `PouwCheck.Credit` decides what a served commit period, and a credit period
   (below), credits. Its executable is `pouw-check` (`id | check | serve`, the core interface's commands).
 - `lean/window` (`pouw_window`): what a commit period registers and makes public: its grid level, its draw size K′, its

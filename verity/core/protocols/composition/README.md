@@ -12,8 +12,8 @@ subprotocols' packages, with no Mathlib:
   that pin the rules (`Guards.lean`).
 - `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): sampled proofs, PoUW, PoUS, proof of useful
   bandwidth (PoUB), network certification and the memory challenger's wipe, after NCI's registration check.
-- `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): sampled proofs and PoUW, on one window
-  record.
+- `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): sampled proofs and PoUW's period, on one
+  window record.
 
 The rule and the formats are written once, over any list of subprotocols, and the two products are values of it that
 differ in their id and subprotocols. Each product's executable is the core CLI (`onsite id | check | serve`,
@@ -56,8 +56,7 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 | subprotocol | onsite | remote | `Core.Protocol` | id |
 | --- | --- | --- | --- | --- |
 | network certification (over the period: its sampling blocks of transfer blocks certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
-| PoUW (its period credit: the period's windows credited all or nothing) | yes | | `PouwCheck.Period.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/period/v1` |
-| PoUW (its window check) | | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
+| PoUW (its period credit: the period's windows credited all or nothing) | yes | yes | `PouwCheck.Period.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/period/v1` |
 | sampled proofs (the one-stage audit on the proofs themselves, which it reads as blobs) | yes | yes | `SampledProofs.OneStageZk.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v2` |
 | PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
 | proof of useful bandwidth, PoUB (its session) | yes | | `RemoteAudit.Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/v0` |
@@ -102,13 +101,15 @@ adds nothing to what is public or kept.
 
 ## One record
 
-Every subprotocol whose commitment is a window record must commit to the composition's one. `same id ss components`
-(`sameB` over blobs) is the product of the subprotocols, except that once the cases fit, subprotocols `ss` that didn't
-all commit to the first one's digest reject it whatever the subprotocols answer (`strays`: `record: s committed D, t
-committed D'`); one whose commitment doesn't decode rejects as a subprotocol. Its formats are the product's. Remote is
-one: `sameB "verity/remote/v0" [verity/pouw/v1, verity/sampled-proofs/one-stage/v2] components`, whose PoUW window and
-one-stage audit each commit to the window record. At onsite the one-stage audit commits to the record NCI checked
-(above). Onsite's PoUW period and network certification name one record a window, in their evidence and their period
+Every subprotocol that commits to window records must commit to the composition's one. `same id ss components`
+(`sameB` over blobs) is the product of the subprotocols, except that once the cases fit, subprotocols `ss`, each with its
+reading of the records its case commits to (`Records`: `committed`, its commitment's digest, or a reading of its own),
+that didn't all commit to the first record reject it whatever the subprotocols answer (`strays`: `record: s committed D,
+t committed D'`); one whose records don't decode rejects as a subprotocol. Its formats are the product's. Remote is one:
+`sameB "verity/remote/v0" [(verity/sampled-proofs/one-stage/v2, committed), (verity/pouw/period/v1,
+PouwCheck.Period.windowRecords)] components`, whose one-stage audit commits to the window record and whose PoUW period
+names each of its windows' records (its Commit records, which its credit binds under the auditor's ledger), so every
+window of the period is on v2's record. At onsite the one-stage audit commits to the record NCI checked (above). Onsite's PoUW period and network certification name one record a window, in their evidence and their period
 commitment, so they join the check when each window's record names the registration log's head (`Core.Registration`,
 `../interface`), which then is the one every subprotocol names.
 

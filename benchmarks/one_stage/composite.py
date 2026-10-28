@@ -48,7 +48,7 @@ PRODUCTS = {"onsite": "verity/onsite/v0", "remote": "verity/remote/v0"}
 COMPONENTS = {
     "onsite": ("verity/certifier/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1", "verity/remote-bandwidth/v0",
                "verity/sampled-proofs/one-stage/v2", "verity/wipe/v0"),
-    "remote": ("verity/pouw/v1", "verity/sampled-proofs/one-stage/v2"),
+    "remote": ("verity/pouw/period/v1", "verity/sampled-proofs/one-stage/v2"),
 }
 REGISTRATION = "verity/nci/v1"
 USAGE = 64

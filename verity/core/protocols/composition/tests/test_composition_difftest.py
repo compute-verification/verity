@@ -1,8 +1,8 @@
 """Onsite's and remote's Lean (`onsite serve`, `remote serve`: each product's executable, the core CLI) against the Python
 reference (`reference.py`: the trial's composition rule with reject dominance, over the harness's framing of the
 core interface and the components' own Python). Hypothesis draws each component's case to accept, reject, be undecided or
-fail to decode (from its own difftest's generator: PoUW's `pouw_check_cases` and, made once, `pouw_period_cases`'
-periods, the network certifier's period `build`,
+fail to decode (from its own difftest's generator: PoUW's `pouw_period_cases`' periods, made once, the network
+certifier's period `build`,
 sampled proofs' audits as v2's cases, `v2_case`, the wipe's signed wipes, `wipe_protocol_case.case`; space's and
 bandwidth's from the small periods of their hooks, `periods.py`), and onsite's registration case from NCI's declarations
 (on v2's own registration record and log, mostly, else on NCI's own, which onsite refuses: one registration digest in
@@ -39,11 +39,6 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 JSON = st.recursive(st.none() | st.booleans() | st.integers(-3, 3) | st.text(max_size=3),
                     lambda inner: st.lists(inner, max_size=3) | st.dictionaries(st.text(max_size=3), inner, max_size=3),
                     max_leaves=6)
-
-
-#: PoUW's mutations of its window that leave the case's framing whole (`case-*` break the line `serve` reads, which a
-#: composition's evidence can't carry).
-POUW_REFUSALS = [n for n in R.POUW_CASES.NAMES if not n.startswith("case-") and n != "answer-undecided"]
 
 
 @functools.cache
@@ -147,9 +142,6 @@ def component_case(draw, C, kind: str | None) -> dict:
     kind = kind or draw(st.sampled_from(kinds(C)))
     if isinstance(C, R.Recorded):
         case = C.cases[kind][0]
-    elif C is R.POUW:
-        name = {R.ACCEPT: "honest", R.UNDECIDED: "answer-undecided"}.get(kind) or draw(st.sampled_from(POUW_REFUSALS))
-        case = R.POUW_CASES.instance(draw(st.randoms(use_true_random=False)), name)
     elif C is R.POUW_PERIOD:
         case = draw(st.sampled_from(pouw_periods()[kind]))
     elif C is R.CERTIFIER:
@@ -184,21 +176,36 @@ def registration_case(draw, committed: dict) -> dict:
             "digest": bytes.fromhex(digest) if digest else committed["root"]}
 
 
-def one_record(product: R.Same, cases: list[dict]) -> list[dict]:
-    """The cases with every component of ``product.same`` committing to the first one's record, each with its digest as
-    its Python reads it on `BLOBS`: a pair that passes `Core.Composition.strays` and leaves the verdict to the
-    components."""
-    first = next(c for c in cases if c["id"] in product.same)
-    by_id = {C.id: C for C in product.components}
+def windows_on(evidence: bytes, commit: str | None = None) -> tuple[bytes, str | None]:
+    """A period's evidence with every window's Commit record the first window's (or ``commit``, hex), and that record;
+    the evidence as it is, and none, when it holds no window naming a Commit record."""
+    try:
+        j = json.loads(evidence)
+        ws = j["windows"]
+        commit = commit or next(w["commit"] for w in ws if isinstance(w, dict) and isinstance(w.get("commit"), str))
+    except (ValueError, KeyError, TypeError, StopIteration):
+        return evidence, None
+    ws = [{**w, "commit": commit} if isinstance(w, dict) else w for w in ws]
+    return bytes.fromhex(R.POUW_PERIOD_CASES._hex({**j, "windows": ws})), commit
 
-    def recommit(c: dict) -> dict:
-        if c["id"] not in product.same or c is first:
-            return c
-        C = by_id[c["id"]]
-        case = {"commitment": first["root"].hex(), "evidence": c["evidence"].hex(), "params": c["params"]}
-        digest = C.answer({**case, "blobs": BLOBS} if getattr(C, "blobs", False) else case)["commitment"]
-        return {**c, "root": first["root"], "digest": bytes.fromhex(digest) if digest else first["root"]}
-    return [recommit(c) for c in cases]
+
+def one_record(product: R.Same, cases: list[dict]) -> list[dict]:
+    """Remote's cases on one record: v2 committing to the period's first window's Commit record, and every window of the
+    period naming it, each case with its digest as its Python reads it on `BLOBS`: a pair that passes
+    `Core.Composition.strays` and leaves the verdict to the components. The cases as they are when the period names no
+    Commit record."""
+    assert [s for s, _ in product.same] == [R.V2, R.POUW_PERIOD.id]
+    by_id = {c["id"]: c for c in cases}
+    period, v2 = by_id[R.POUW_PERIOD.id], by_id[R.V2]
+    evidence, commit = windows_on(period["evidence"])
+    if commit is None:
+        return cases
+    root = bytes.fromhex(commit)
+    case = {"commitment": commit, "evidence": v2["evidence"].hex(), "params": v2["params"], "blobs": BLOBS}
+    digest = R.SAMPLED_PROOFS.answer(case)["commitment"]
+    on = {R.POUW_PERIOD.id: {**period, "evidence": evidence},
+          R.V2: {**v2, "root": root, "digest": bytes.fromhex(digest) if digest else root}}
+    return [on.get(c["id"], c) for c in cases]
 
 
 #: The binding breaks come five times: with `commitment-size` they are the breaks that leave every component's case standing,
@@ -278,7 +285,7 @@ def composite(draw, product: R.Product | R.Registered) -> dict:
         rdigest = reg["digest"]
         if rm in ("registration-id", "registration-case-id"):
             (rnamed if rm == "registration-id" else rentry)["id"] = draw(st.sampled_from(
-                [R.POUW.id, "verity/stub/nci/v0", ""]))
+                ["verity/pouw/v1", "verity/stub/nci/v0", ""]))
         elif rm == "registration-params":
             rentry["params"] = {"k": draw(st.integers(4, 6))}
         elif rm == "registration-digest":
@@ -334,7 +341,7 @@ class UndecidedPort(D.ProtocolPort):
 
 class RejectingPort(D.ProtocolPort):
     """A product port whose drawn cases reject: its two components must commit to one window record, and on one
-    record integrity (v2) refuses PoUW's window (its program reads registered values, outside v2's mirror), so the
+    record integrity (v2) refuses the period's window record as its own (it registers none of v2's ports), so the
     drawn cases don't reach undecided. Its bar is the two ways its components' records meet, counted in `seen`."""
     accepted = R.REJECT
 
@@ -421,6 +428,46 @@ def test_remote_refuses_two_records_and_else_keeps_the_products_verdict():
         seen[f"was {was['verdict']}, two" if two else "same"] += 1
     check()
     assert seen["two"] > 20 and seen["one"] > 20 and seen["was undecided, two"] > 0, dict(seen)
+
+
+def remote_case(cases: list[dict]) -> dict:
+    """Remote's case on its components' cases as they are, with no break of its own."""
+    return {"commitment": R.bind(R.REMOTE.id, [(c["id"], c["digest"]) for c in cases]).hex(),
+            "evidence": canonical({"components": [{"commitment": c["root"].hex(), "evidence": c["evidence"].hex(),
+                                                   "id": c["id"], "params": c["params"]} for c in cases]}).encode().hex(),
+            "params": {"components": [{"id": c["id"], "params": c["params"]} for c in cases]},
+            "blobs": [b.hex() for b in BLOBS]}
+
+
+def test_remote_refuses_a_period_window_on_another_record(remote_server):
+    """An honest period whose windows all name v2's record passes remote's record check, and the same period with one
+    window's Commit record another (a `verity/registration/v2` record that registers one more value) is refused by it,
+    in Lean as in Python: every window of the period must be on v2's record."""
+    seen = collections.Counter()
+
+    @settings(max_examples=8, database=None, deadline=None, suppress_health_check=list(HealthCheck))
+    @given(component_case(R.POUW_PERIOD, R.ACCEPT), component_case(R.SAMPLED_PROOFS, R.ACCEPT), st.data())
+    def check(period, v2, data):
+        cases = one_record(R.REMOTE, [period, v2])
+        on = remote_case(cases)
+        assert len(set(R.REMOTE.committed(on))) == 1, R.REMOTE.committed(on)
+        for out in (R.REMOTE.answer(on), remote_server.exchange(on)):
+            assert not (out["reason"] or "").startswith("record: "), out
+        rec = json.loads(cases[1]["root"])
+        other = R.POUW_PERIOD_CASES._hex({**rec, "registered": [*rec["registered"], {"value": "other"}]})
+        windows = json.loads(cases[0]["evidence"])["windows"]
+        i = data.draw(st.integers(0, len(windows) - 1))
+        evidence = json.loads(cases[0]["evidence"])
+        evidence["windows"][i] = {**windows[i], "commit": other}
+        off = remote_case([{**cases[0], "evidence": bytes.fromhex(R.POUW_PERIOD_CASES._hex(evidence))}, cases[1]])
+        got = R.REMOTE.committed(off)
+        assert len(set(got)) == 2 and None not in got, got
+        for out in (R.REMOTE.answer(off), remote_server.exchange(off)):
+            assert out["verdict"] == R.REJECT, out
+            assert out["reason"].startswith(f"record: {R.V2} committed {got[0]}, {R.POUW_PERIOD.id} committed "), out
+        seen[len(windows)] += 1
+    check()
+    assert sum(seen.values()) > 0, dict(seen)
 
 
 @pytest.mark.slow

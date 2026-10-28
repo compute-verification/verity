@@ -7,9 +7,9 @@ except on few proof blocks) and PoUW (the hardware's time went to the declared w
 
 **The open gap.** Remote's composed soundness theorem, `Verity.Soundness`, is not in Lean yet. It is due after the Lean
 dedupe (one vocabulary), and its owner is soundness. Today the pieces below compose by hand: each is proved on its own,
-and no Lean theorem states remote's guarantee from them. Nothing yet ties the deployed verifier's verdicts to those
-theorems either, because remote reads sampled proofs' one-stage v1, which takes the sessions' verdicts as evidence
-instead of computing them.
+and no Lean theorem states remote's guarantee from them. Remote reads sampled proofs' one-stage v2, which runs
+`flock-verify --zk` on each session's files itself, and PoUW's period, onsite's work component, whose credit is proved
+under the PoUW assumptions below; no Lean theorem yet ties their verdicts together into remote's.
 
 This file is an outline with signposts. The Lean is the definition. The vocabulary is the Glossary's: `ARCHITECTURE.md`'s
 Glossary, and `GLOSSARY.md` for the notation and the older names. The lifecycle's terms (a declaration, declaring, the
@@ -55,16 +55,20 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `window
 
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
-| Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the declared circuit outside the proof blocks the draw misses | `SampledProofs.OneStage.protocol` (`verity/core/service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
-| PoUW ([README](../pouw/README.md)) | the period's credited work, in live words, is the declared work's | `PouwCheck.protocol` (`verity/core/protocols/pouw/lean/check`) | `verity/pouw/v1` |
+| PoUW ([README](../pouw/README.md)) | the period's credited work, in live words, is the declared work's: its windows credited all or nothing | `PouwCheck.Period.protocol` (`verity/core/protocols/pouw/lean/check`), onsite's work component too | `verity/pouw/period/v1` |
+| Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the declared circuit outside the proof blocks the draw misses | `SampledProofs.OneStageZk.protocol` (`verity/core/service/sampled_proofs`): `flock-verify --zk` on each session's files, handed in as blobs | `verity/sampled-proofs/one-stage/v2` |
 
 **Coming, not there yet:** the inference-only policy (its Lean is still named `Nci`, `NciCheck`) is to join as a third
 subprotocol. Under it, the declared circuit divides into inference blocks of bounded size, each reading a bounded amount
 of fresh input (input that isn't registered information). Its check reads only the declared circuit and the registered
 information, so it needs no hardware at the site. On `main`, `Core.Remote.components` holds only the two rows above.
 
-The code is `CoreRemote.lean`, `protocol = product "verity/remote/v0" [PouwCheck.protocol,
-SampledProofs.OneStage.protocol]`. Its executable is `remote id | check PARAMS COMMITMENT EVIDENCE | serve`
+The code is `CoreRemote.lean`, `protocol = sameB "verity/remote/v0" records [PouwCheck.Period.protocol,
+SampledProofs.OneStageZk.protocol]`: the product of the two on the caller's blobs, where v2's commitment is the window
+record and every window of the period must name that record as its Commit record (`windowRecords`, the record the
+period's credit binds under the auditor's ledger, `PouwCheck.Credit.commitOf?`). A window on another record rejects
+remote whatever the two answer (`record: verity/sampled-proofs/one-stage/v2 committed D, verity/pouw/period/v1
+committed D'`). Its executable is `remote id | check PARAMS COMMITMENT EVIDENCE | serve`
 (`RemoteMain.lean`). The Lake package `core_remote` is code: it has no Mathlib and nothing of `Security/`
 (`lean-audit.json`). The product's rule and its difftest are the composition's ([README](../composition/README.md),
 `verity/core/protocols/composition/tests/test_composition_difftest.py`).
@@ -118,8 +122,8 @@ PoUW `--zk`), and a chain can be "none" while each piece is proved.
 | Sampled proofs' accept rule | `Properties.SampledProofs.AcceptMeans` (`Security/Properties/SampledProofs.lean`; proof `acceptMeans`) | **proved** | — |
 | A C-Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ faulty proof blocks outside what the draw catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/Refused.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
 | Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
-| The verifier's verdicts tied to those theorems | none: remote reads one-stage v1, which takes the verdicts as evidence; v2 (`verity/sampled-proofs/one-stage/v2`) runs `flock-verify verify --zk` itself, and remote doesn't read v2 yet | **open** | — |
-| PoUW's accept rule, and its accepted prefix tied to the period credit | `Properties.Pouw.Check.AcceptMeans`, and `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (`Security/Properties/Pouw/Period.lean`; proofs `Properties.Pouw.Check.acceptMeans`, `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod` and `checkedCreditPeriod`, all in `Security/Properties/lean-audit.json`) | **proved**, under the PoUW assumptions below | — |
+| The verifier's verdicts tied to those theorems | none: remote reads one-stage v2 (`verity/sampled-proofs/one-stage/v2`), which runs `flock-verify verify --zk` itself, and no theorem yet states remote's guarantee from its verdicts | **open** | — |
+| PoUW's period credit: an accepted period's credited prefix | `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, `CheckedCreditPeriod`'s conclusion at `PouwCheck.Credit.window`'s verdict over J10-R's tile stratum, the guarantee `PouwCheck.Period.protocol` names (`GUARANTEE`) and refuses every other window form for (`Security/Properties/Pouw/PeriodJ10R.lean`; proof `Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod` in `Security/Properties/lean-audit.json`) | **proved**, under the PoUW assumptions below | — |
 | PoUW's credit over a monitoring period | `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod` | **proved** | — |
 | PoUW's proof layer | `Accounting.Guarantees.TS.SessionSoundAt`: proved, but it needs `AcceptedLive`, which no served path meets yet | **open** as a chain | PoUW `--zk`: broken at the proof layer |
 | The overhead over remote, per period | `Nci.Guarantees.DampenerRemote` (`Security/Definitions/Nci/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
@@ -147,26 +151,20 @@ Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means
   challenger runs, stated in prose in `verity/core/protocols/sampled_proofs/README.md` and not yet in Lean. No `.lean`
   file defines either, and no guarantee takes either as a hypothesis.
 
-PoUW, as `H1CheckedCreditPeriod` takes them (the general `CheckedCreditPeriod` takes all but `SaltIsLiveCoin` and
-`StagedPins`):
+PoUW, as `H1J10RCheckedCreditPeriod` takes them (`Security/Properties/Pouw/PeriodJ10R.lean`):
 
-- `Properties.Pouw.Period.ServiceSound`: the proof service is sound at δ_ks against PoUW's check, which is C-Flock's
-  soundness at each drawn unit (`Flock.Guarantees.EndToEndRegisteredRows` for one session). It is a named assumption: no
-  theorem discharges it yet.
-- `Properties.Pouw.Period.DrawIsCoin`: the units the check publishes as drawn are the model's draw at the window's live
-  coin. A protocol-code fact still to prove.
-- `Properties.Pouw.Period.RegisteredBeforeDraw`: each window's registration is fixed before its draw coin. It states
-  the order only, and the binding it is used for also needs the rows committed by the registration, which the deployed
-  path doesn't do yet: its registered roots are tags, with no row committed (`anchors []`).
+- `Properties.Pouw.PeriodJ10R.TileServiceSound`: the proof service is sound against `Credit.window` at each drawn unit,
+  C-Flock's soundness under live coins. A fact to prove: no theorem discharges it yet.
+- `Properties.Pouw.PeriodJ10R.TileDrawIsCoin`: on every accepted window, the units the check demands proofs of are the
+  tile stratum's draw at the window's draw coin. A protocol-code fact still to prove.
+- `Properties.Pouw.PeriodJ10R.RegisteredBeforeDraw`: each window's registration is fixed before its draw coin. It
+  states the order only, and the binding it is used for also needs the rows committed by the registration, which the
+  deployed path doesn't do yet.
 - `Properties.Pouw.Period.SaltIsLiveCoin`: each window's salt is its round's live coin. The deployed path doesn't meet
   it: the loop is given its salt before it serves, and nothing in the record binds the salt to a live coin (`Security/Properties/Pouw/Period.lean`,
   `SaltIsLiveCoin`'s docstring).
-- `Properties.Pouw.Period.StagedPins`: the staged statement the service proves pins the flat tile the receipts are
-  claims of. Neither side has a Lean function yet.
-- `Accounting.Assumptions.TS.OperandHMu` (H-μ⁺, the Duo receipts' premise): a cheater can't predict its skipped words'
-  values better than μ.
-- `Accounting.Assumptions.TS.ReceiptLuckAt` and `Accounting.Assumptions.Compose.GuessLuckAt`: a skipped round passes
-  its receipt, or a guessed fold state passes, only at the stated rate.
+- `Properties.Pouw.PeriodJ10R.SharedNoiseLucks`: the Duo receipts' lucks (H-μ⁺, `OperandHMu`, with `ReceiptLuckAt`
+  and `GuessLuckAt`) at J10-R's shared noise, one computational claim over a call's joint coins.
 - `Accounting.Assumptions.TS.UnitFixed`: the run's fixed and folded words are at least those of the units it didn't
   skip. It stays an assumption until those words are defined from the committed values.
 - `Accounting.Assumptions.TS.AcceptedLive`, the proof layer's (`SessionSoundAt`'s), not the period credit's: an
@@ -174,7 +172,7 @@ PoUW, as `H1CheckedCreditPeriod` takes them (the general `CheckedCreditPeriod` t
 - The data sheet: `Accounting.Assumptions.TS.SheetClock`, `SheetDispatch`, `SheetTensor`, `SheetPipe`, `SheetSmem`,
   `SheetWords`, `SheetSemantics`, `FoldOpt`, `FoldOptFoldedAt` and `FillOpt`: the GPU's clock, rates and semantics are
   the data sheet's, and the folds are optimal. The live-words credit over a monitoring period (`CircuitCreditPeriod`,
-  `H1CheckedCreditPeriod`) doesn't read them. The time credit `Accounting.Guarantees.Compose.CircuitCredit` does, and it
+  `H1J10RCheckedCreditPeriod`) doesn't read them. The time credit `Accounting.Guarantees.Compose.CircuitCredit` does, and it
   is what backs the overhead bound's `PouwSound` (below), so the overhead over remote rests on the data sheet.
 
 The overhead, `DampenerRemote`:
