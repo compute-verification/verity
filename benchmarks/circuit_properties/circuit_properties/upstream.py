@@ -1,5 +1,5 @@
-"""The upstream certificate, `Nci.Capability.Consumers.Upstream` (`Security/Definitions/Nci/Capability/Consumers.lean`),
-decided on a named circuit, with the overlap weights it is used with.
+"""The upstream certificate, `Nci.Capability.Consumers.Upstream` (`Security/Definitions/Nci/Capability/Consumers.lean`, in
+#6245, not yet on `main`), decided on a named circuit, with the overlap weights it is used with.
 
 Lean's objects, one for one:
 

@@ -61,7 +61,7 @@ measures each and sets a_out, a_in and |𝒥| per position beside benchmarks/rho
 
 ## The upstream certificate
 
-`Nci.Capability.Consumers.Upstream` (`Security/Definitions/Nci/Capability/Consumers.lean`) says every required gate of a
+`Nci.Capability.Consumers.Upstream` (#6245's Lean, not yet on `main`) says every required gate of a
 consumer reaches, inside its region, a gate each of its finishing sets reads: a block that finishes it imports from its
 region or recomputes its required gates, which gives the local cap h_w·(k + c/g), g the fewest required gates.
 
