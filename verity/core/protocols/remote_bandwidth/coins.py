@@ -1,4 +1,4 @@
-"""The remote audit's coins on the proof service's one challenger (`verity/remote-bandwidth/coins/v1`): session k's coins
+"""The remote audit's coins on the proof system's one challenger (`verity/remote-bandwidth/coins/v1`): session k's coins
 are one epoch of `sampled_proofs.challenger`'s live coins, drawn and committed by the challenger before the session, on
 its own host when it is remote (`sampled_proofs.remote`), each opened once, after the root the verifier recorded, and
 their commitment released to the prover only at the session's end.
@@ -29,7 +29,7 @@ session, logs each root before its coin leaves and signs the log, which the veri
 roots (`receipts.seed`); the openings are drawn from a coin of their own.  An append's coin answers the append's root, a
 commitment the prover has already made: committed before the session like every coin, it opens after that root, once.
 
-`Coins` is the verifier's side: the challenger (a `LiveChallenger`, or a `remote.RemoteChallenger` on the challenger's
+`SessionCoins` is the verifier's side: the challenger (a `LiveChallenger`, or a `remote.RemoteChallenger` on the challenger's
 host) and one `LiveRecord` a family, so each coin is asked for after its root and recorded with it.  What the verifier
 takes from the challenger afterwards, the commitment it signed and the roots its signed release log shows it received
 (`trusted`: `remote.trusted_session` under the auditor's ledger, whose window `{root: R}` opens exactly one session,
@@ -196,7 +196,7 @@ def received_reason(commitment: Any, received: Sequence[Released], openings: Seq
     return None
 
 
-class Coins:
+class SessionCoins:
     """Session `session`'s coins over the registration whose digest is `registration`, `windows` windows drawn
     `per_coin` a coin (`openings_coins`), through `challenger` (a `LiveChallenger` or a `remote.RemoteChallenger`),
     committed before the session.  Each family's coins open in order, each once, after the root recorded for it
@@ -285,13 +285,13 @@ class Coins:
 
 
 def local(registration: bytes, session: int, windows: int, entropy: Callable[[int], bytes], *,
-          appends: int = APPENDS, per_coin: int = 1, clock: Callable[[], float] = time.monotonic) -> Coins:
+          appends: int = APPENDS, per_coin: int = 1, clock: Callable[[], float] = time.monotonic) -> SessionCoins:
     """Session `session`'s coins from a challenger in the verifier's process, drawing from `entropy`."""
-    return Coins(LiveChallenger(SCHEME, session, families(windows, appends, per_coin), entropy), registration, session,
-                 windows, per_coin=per_coin, clock=clock)
+    return SessionCoins(LiveChallenger(SCHEME, session, families(windows, appends, per_coin), entropy), registration,
+                        session, windows, per_coin=per_coin, clock=clock)
 
 
-def released_reason(coins: Coins, windows: Sequence[Sequence[bytes]], appends: Sequence[bytes],
+def released_reason(coins: SessionCoins, windows: Sequence[Sequence[bytes]], appends: Sequence[bytes],
                     signed: LiveCommitment, received: Mapping[str, Sequence[bytes]], in_flight: int = 2) -> str | None:
     """Why the session's coins, `coins`, are not the challenger's as it signed them; None when they are.  `windows` is
     each released window's roots and `appends` each append's root, in the order the session received them; `signed` is
@@ -333,7 +333,7 @@ def released_reason(coins: Coins, windows: Sequence[Sequence[bytes]], appends: S
     return None
 
 
-def trusted(coins: Coins, directory: Any, heads: Sequence[Any], key: ChallengerKey, pins: Any, main: Any,
+def trusted(coins: SessionCoins, directory: Any, heads: Sequence[Any], key: ChallengerKey, pins: Any, main: Any,
             verify: Verify, period: str | None = None) -> tuple[LiveCommitment, dict[str, tuple[bytes, ...]]]:
     """What the challenger signed for the session's window, read on the auditor's side: the one challenger session the
     auditor's ledger (the heads infra published at `heads`) opens for ``{root: R}``, R the session's own (`window`),
@@ -353,6 +353,6 @@ def trusted(coins: Coins, directory: Any, heads: Sequence[Any], key: ChallengerK
     return remote.trusted_session(directory, heads, w, key, verify)
 
 
-__all__ = ["APPEND", "APPENDS", "CHALLENGE", "COIN_BYTES", "Coins", "LABELS", "OPENINGS", "RELEASED_FORM", "Released",
-           "SCHEME", "WINDOW_DOMAIN", "coin", "coin_reason", "families", "layout_reason", "local", "openings_coins",
+__all__ = ["APPEND", "APPENDS", "CHALLENGE", "COIN_BYTES", "LABELS", "OPENINGS", "RELEASED_FORM", "Released", "SCHEME",
+           "SessionCoins", "WINDOW_DOMAIN", "coin", "coin_reason", "families", "layout_reason", "local", "openings_coins",
            "received_reason", "released", "released_reason", "trusted", "window", "window_root"]
