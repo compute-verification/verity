@@ -23,7 +23,7 @@ and noise periods NOFOLD-OPT's (see "The segment and the noise period").
 physical model 𝓜 it is proved over (the Lean's `Accel`).
 
 **The receipt is no-fold** (CMP-172, 27 Oct, 03:05Z). Each segment's 16-bit noised prefix sums are committed as SHA-512
-hiding leaves before the check coin, and the sampled cells are opened after it; no word is folded into a keyed receipt.
+hiding leaves before the check coin, and the sampled dot products are opened after it; no word is folded into a keyed receipt.
 The served PoUW moves to this receipt, and `SharedNoiseLucks`, the premise its folds' detection rests on, has no place in
 Dither: detection rests on the value root's binding before the coin, SHA-512's extraction and the proved sampling rate.
 
@@ -50,7 +50,7 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation (CMP-158), and the
 - **Sampling block**: the proof blocks of a set of independent calls (none reads another's output), which go through
   their runs together. Unlike the Glossary's default, its draw is not stratified by subcircuit (see "The sampling
   design").
-- **Proof block**: what one check proves with C-Flock `--zk`: one segment of one output cell of a call, the Glossary's
+- **Proof block**: what one check proves with C-Flock `--zk`: one segment of one dot product of a call, the Glossary's
   proof block in Dither's partition.
 - **W_b and W_p**: sampling block b's and proof block p's public cost, the honest cost at μ° from the public shape. W_b
   is the sum of its proof blocks' W_p. W is work at the period's prices, as in the Glossary's W_cert.
@@ -83,19 +83,19 @@ weights (for PV, A is P and B is the value cache).
 **Noise.** The live coins give each call its dithers d_A ∈ {0,1}^{m×K} and d_B ∈ {0,1}^{N×K}, and HYB noise:
 - U is N×L′ and V is m×L′, both uniform on ±80, periodic along K with period L′.
 - U's columns are permuted afresh (π_τ) in every noise tile τ.
-- A segment is t noise tiles, so L = t·L′. L, the word interval (one 16-bit word a cell every L inner indices), and L′,
+- A segment is t noise tiles, so L = t·L′. L, the word interval (one 16-bit word a dot product every L inner indices), and L′,
   the noise period, are separate parameters (see "The segment and the noise period").
 
 **The tensor operands** are X = wrap8(A + d_A + V) and W′ = wrap8(B + d_B + U π_τ), tile by tile, with wrap indicators
 w_X and w_W.
 
-**Per output cell (i, j)**, the committed values are:
+**Per dot product (i, j)**, the committed values are:
 - the prefix sums T_s = Σ over the first s·L inner indices of X W′ᵀ, mod 2^16, for s = 1..S − 1 with S = ⌈K/L⌉;
 - O at 32 bits, bound to them by O = T_S + 256(w_X W′ᵀ + X w_Wᵀ + 256 w_X w_Wᵀ) − Z_X Uᵀ − V Y_Wᵀ. Here
   Z_X = Σ_τ (A + d_A + V)_τ π_τᵀ, Y_W = Σ_τ (B + d_B)_τ, and T_S is taken at full width.
 
 T_S is implied by O, not committed: the s = S proof block, which opens the whole rows, derives it from O by that
-identity (NOFOLD-OPT; it takes no premise). At L ≥ K a cell commits O alone.
+identity (NOFOLD-OPT; it takes no premise). At L ≥ K a dot product commits O alone.
 
 **Leaves and roots.** Every root is a binary frame-v3-sha512 tree of hm96-sha512/row/v2 rows of 16 KiB, hiding leaves
 under the prover's salts (`verity.ml.commitments`: `rowleaf`, `hm96`, `merkle`). A 16 KiB row costs 8.6 SHA-512
@@ -103,17 +103,17 @@ compressions a KiB, against 8.9 for an 8-chunk leaf in a 16-ary tree, so Dither 
 (NOFOLD-OPT, CMP-172).
 - Each call has an operand root, bound in its sampling block's dither run's commit phase, and a value root holding its
   T_s and O, bound in that run's response phase (see "A sampling block's runs"), both before the block's check coin.
-  The sampled cells are opened after it.
+  The sampled dot products are opened after it.
 - The weights are in the period's weight root, bound once a period, before any of the period's coins.
 
 **The value root's layout**, pinned for kernels (KCOMMIT-FB, HASH-27). It is V31-GPU's `v31.py` layout at 16 KiB rows,
 under Dither's tag and without segment S's rows:
-- A call's m × N output is cut into 128 × 128 tiles, tile t = t_m·(N/128) + t_n, each tile's cells row-major
+- A call's m × N output is cut into 128 × 128 tiles, tile t = t_m·(N/128) + t_n, each tile's dot products row-major
   (c = 128 r + col). m and N are multiples of 128, and L′ a multiple of 32 dividing K.
 - A tile's words of segment s, for s = 1..S − 1, are its 16,384 T_s as little-endian u16 (32 KiB, two rows). Its O
   values are 16,384 little-endian u32 (64 KiB, four rows). So a tile takes P = 2(S − 1) + 4 rows, and no row is padded:
   - row t·P + 2(s − 1) + r, for r = 0, 1, is bytes [16,384 r, 16,384 (r + 1)) of tile t's segment-s words;
-  - row t·P + 2(S − 1) + h, for h = 0..3, is the O of tile t's cells 4,096 h to 4,096 h + 4,095.
+  - row t·P + 2(S − 1) + h, for h = 0..3, is the O of tile t's dot products 4,096 h to 4,096 h + 4,095.
 - A row's leaf is hm96's leaf over the row's `sha512/row/v2` digest (131,072 bits), salted with `prf_salt(Ks, off + pos)`:
   192 bytes of commit_gpu's PRF (`benchmarks/pouw/commit_gpu/reference.py`), keyed by the prover's private Ks, at the
   call's salt offset off plus the row's position pos. No coin feeds a salt. frame-v3-sha512's leaf prefix (the domain id
@@ -203,7 +203,7 @@ Block b + 1's dither run starts at b's value-root receipt, beside b's check run.
 
 ## The proof block and its Program
 
-**A proof block** is one cell (i, j) and one segment s of a call. Its Program opens these from their hiding leaves,
+**A proof block** is one dot product (i, j) and one segment s of a call. Its Program opens these from their hiding leaves,
 inside the proof:
 - A's and B's row segments s (for s = S, the whole rows A[i,·] and B[j,·]), each from where its class binds it;
 - T_{s−1} (with T_0 = 0), and T_s for s < S or O for s = S, from the call's value root.
@@ -220,7 +220,7 @@ mod 2^16, from the whole rows, their wraps and the coins, and also checks O ≡ 
 
 C-Flock `--zk` proves it on the committed values. The Definition and its circuit-check sidecar are not written yet.
 
-O is checked only in its cell's last segment, never in a proof block of its own. At A = B = 0 its 32 bits alone are
+O is checked only in its dot product's last segment, never in a proof block of its own. At A = B = 0 its 32 bits alone are
 guessed with probability 0.1145 at K = 64, and its high word with probability 1.
 
 ## The outcome

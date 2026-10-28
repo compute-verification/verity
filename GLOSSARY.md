@@ -134,6 +134,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 
 | Old name, where it stays | Term |
 |---|---|
+| "cell" (of a matmul); `NoFold.cells` | dot product |
 | "Candidate A", "Candidate B"; the `candidate` feature and label keys, `CandidateA`, `CandidateB`, `account_candidate_a` | the archived proof systems A-GKR, B-Ligero |
 | the `candidate` label values `SP1` and `C` (`research.store.vocab.CANDIDATES`) | D-SP1, and the VOLE candidate (not C-Flock) |
 | `verity.ml.circuits.targets.target.Target`, `TARGETS`, `FIRST`; the result fingerprint's `profile` | subcircuit (a `GemmCoordinate<K>` at one semantics) |
@@ -245,14 +246,14 @@ bake it in, and renaming would invalidate every one of them for no semantic gain
 - **The ACCEL ops** are the ACCEL model's six instruction kinds (`Accel.Op`), each priced by a card's rates.
 - **The card premise** (`CardWithinAccel`): anything the card computes in time T, the ACCEL machine computes within T at
   the card's rates. Its evidence is **the opcode table**, which places every opcode of the card on the ACCEL ops.
-- **Segment**: L consecutive inner indices of one output cell, between two committed prefix sums. A Dither proof block is
-  one segment of one cell.
+- **Segment**: L consecutive inner indices of one dot product, between two committed prefix sums. A Dither proof block is
+  one such segment.
 - **Noise period** L′: the period of Dither's noise along K; a segment is t = L/L′ noise periods.
 - **Prefix sums** T_s: Dither's committed running sums along a segment, stored as 16-bit elements.
 - **Dither** is the protocol, PoUW's no-fold design, at v3.2 (`verity/core/protocols/pouw/dither/PROTOCOL.md` while it is
   experimental; the Lean's `Pouw.Dither`), proved over the ACCEL model. Its receipt is no-fold: each
-  segment's 16-bit noised prefix sums are committed as SHA-512 hiding leaves, hm96 rows of 16 KiB, before the check coin,
-  and the sampled cells are opened after it. The served PoUW moves to it, and `SharedNoiseLucks`, which the served H1
+  segment's 16-bit noised prefix sums are committed as hm96 rows of 16 KiB before the check coin,
+  and the sampled dot products are opened after it. The served PoUW moves to it, and `SharedNoiseLucks`, which the served H1
   and J10-R folds rest on, has no place in it.
 
 ## Narrower senses
