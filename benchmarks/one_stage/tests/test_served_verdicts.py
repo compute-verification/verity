@@ -79,6 +79,43 @@ def test_the_published_window_counts_none_of_its_requests(tmp_path):
     assert json.loads(out.getvalue()) == S.public_pick(got, 4)
 
 
+REGISTRATION = {"schema": "verity-vllm/advice-registration/v1", "row_bits": 256, "rows": 2, "T": 600,
+                "binding": {"compiler": {"name": "c", "digest": "d"}, "advice": {"root": "ab" * 64, "bits": 392}},
+                "compiler": {"name": "c", "digest": "d", "cap_bits": 8388608}, "bits_by_window": {"0": 392, "1": 7},
+                "registered_roots": {"weights/w@16": "cd" * 64}, "requests": 3, "refused": {"q0": "2 of its 3 tokens"}}
+
+
+def test_the_published_registration_pads_the_advices_length_to_the_cap(tmp_path, capsys):
+    """The advice registration's public form states no length of the advice but its compiler's cap, counts and refuses
+    none of its requests, and keeps its roots, compiler and binding's root."""
+    got = S.public_registration(REGISTRATION)
+    assert got["binding"]["advice"] == {"root": "ab" * 64, "bits": 8388608} and got["rows"] == 32768
+    assert got["bits_by_window"] == {"0": 8388608, "1": 8388608} and got["padded"] == list(S.PADDED)
+    assert not {"requests", "compiled", "refused"} & set(got) and "392" not in json.dumps(got)
+    assert {k: got[k] for k in ("registered_roots", "compiler", "T", "schema")} == {
+        k: REGISTRATION[k] for k in ("registered_roots", "compiler", "T", "schema")}
+    (tmp_path / "r.json").write_text(json.dumps(REGISTRATION))
+    assert S.main(["public-registration", str(tmp_path / "r.json")]) == 0
+    assert json.loads(capsys.readouterr().out) == got
+
+
+def test_the_sampled_proofs_line_names_the_partition_and_its_draw_and_no_advice_length(tmp_path, capsys):
+    row = {"ok": True, "accepted": True, "draw": [0, 2], "population": 3,
+           "leak": {"advice_bits": 832, "bound": "vacuous", "other_inputs": 786432, "registered": 0}}
+    part = {"templates": ["SiluMul_v2{I=8192}"], "law": "subset:2",
+            "scope": {"op_path_prefix": "model.layers.0.mlp.", "steps": [0, 1]}}
+    line = S.sampled_line(row, part)
+    head, _, rec = line.partition(": RECORDS ")
+    assert head == "over SiluMul_v2{I=8192} at model.layers.0.mlp. steps [0, 1] (law subset:2), drawn members [0, 2] of 3"
+    assert json.loads(rec)["leak"] == {"bound": "vacuous", "other_inputs": 786432, "registered": 0} and "832" not in line
+    (tmp_path / "log").write_text("+ set -x\nRECORDS " + json.dumps(row) + "\n")
+    (tmp_path / "p.json").write_text(json.dumps(part))
+    assert S.main(["sampled-line", str(tmp_path / "log"), "--partition", str(tmp_path / "p.json")]) == 0
+    assert capsys.readouterr().out == line + "\n"
+    (tmp_path / "log").write_text("refused\n")
+    assert S.main(["sampled-line", str(tmp_path / "log")]) == 1
+
+
 def test_one_piece_runs_alone_or_all_but_it(tmp_path, capsys):
     """``only`` runs the named pieces alone and ``skip`` all but them, so the certifier's can run beside the others."""
     assert list(S.pieces(tmp_path, 1, tmp_path / "pieces", env={}, only=["certifier"])) == ["certifier"]

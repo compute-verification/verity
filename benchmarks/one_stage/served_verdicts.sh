@@ -26,7 +26,9 @@
 #     lease ends once every closed window is sealed. What names a window's requests (the serve dir's windows.jsonl,
 #     seals.jsonl and requests.jsonl, the load's records, timings file and log) stays in the serve dir on the node; what
 #     leaves it is their aggregate ($OUT/serve/overhead.json, except with LOAD=front, whose warden-paced load no stock
-#     control compares to) and verdict lines that count no window's requests.
+#     control compares to) and verdict lines that count no window's requests. The advice registration's published copies
+#     ($OUT/registration-w$K.json, the records audit's served-records) carry the advice's length padded to its compiler's
+#     cap (`served_verdicts.py public-registration`), and the audit's log stays in the serve dir.
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; its
 #     WINDOW line gives its engine steps and whether its requests filled the SLOTS slots, and CLASSES the window circuit's
 #     classes beside the certifier's scan class, CERTIFIER_SCAN, default W63, the one the gate serves): every
@@ -478,10 +480,11 @@ done
 # the advice and compile logs name the request Programs by their prompt lengths and count the window's requests, which
 # are values: they stay in the serve dir
 [ -f "$D/advice/w$K/registration.json" ] || { say "ADVICE w$K: none written (the serve dir's advice.log, on the node)"; stop advice 14; }
-cp "$D/advice/w$K/registration.json" "$OUT/registration-w$K.json"
+"$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" public-registration "$D/advice/w$K/registration.json" > "$OUT/registration-w$K.json" \
+  || { say "ADVICE w$K: its registration has no public form"; stop advice 14; }
 "$PY" tools/advice_compile.py "$D" --window "$K" > "$D/compile_w$K.log" 2>&1
 rc=$?
-say "ADVICE w$K: $("$PY" -c 'import json, sys; w = json.load(open(sys.argv[1]))["windows"][sys.argv[2]]; print("root", w["root"][:16] + "…", "bits", w["bits"])' \
+say "ADVICE w$K: $("$PY" -c 'import json, sys; w = json.load(open(sys.argv[1]))["windows"][sys.argv[2]]; print("root", w["root"][:16] + "…", "bits padded to the cap")' \
   "$D/advice/.w$K/windows.json" "$K" 2>&1 | cut -c1-200); $("$PY" -c 'import json, sys; print(len(json.load(open(sys.argv[1])).get("registered_roots") or {}))' \
   "$D/advice/w$K/registration.json" 2>&1 | cut -c1-200) weight roots recorded (${WA[*]:-$NO_WEIGHTS}); compile (advice_compile.py) exit $rc$([ "$rc" = 0 ] || echo ", the serve dir's compile_w$K.log on the node")"
 [ "$rc" = 0 ] || stop compile 15
@@ -492,10 +495,19 @@ wait "$BUILD"; rc=$?
 [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; stop build "$rc"; }
 [ "$MAX_TOKENS" = 1 ] && export PP_PARTITION=${PP_PARTITION:-benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step0.json}
 env -u PYTHONPATH PP_SERVE_RUN="$D" PP_WINDOW="$K" PP_SERVE_ROWS="$D/windows/w$K" PP_RECORDS=1 PP_ONLY="${PP_ONLY:-honest}" \
-  PP_VLLM_PYTHON="$PY" PP_FLOCK_WORK="$FW" OUT="$OUT/sampled-proofs" bash benchmarks/prove_path/run.sh > "$OUT/sampled-proofs.log" 2>&1
+  PP_VLLM_PYTHON="$PY" PP_FLOCK_WORK="$FW" OUT="$OUT/sampled-proofs" bash benchmarks/prove_path/run.sh > "$D/sampled-proofs.log" 2>&1
 rc=$?
-say "SAMPLED-PROOFS (run.sh exit $rc): $(grep -m1 '^RECORDS' "$OUT/sampled-proofs.log" | cut -c1-3000)"
-[ -n "$(grep -m1 '^RECORDS' "$OUT/sampled-proofs.log")" ] || say "SAMPLED-PROOFS: no RECORDS line; $(grep -v '^+' "$OUT/sampled-proofs.log" | tail -3 | tr '\n' ' ' | cut -c1-600)"
+# run.sh's records copy holds the window's request lists (windows.jsonl) and the advice's length (registration.json):
+# the published copy is the registration's public form alone
+SR=$OUT/sampled-proofs/served-records
+rm -f "$SR/windows.jsonl"
+if [ -f "$SR/registration.json" ]; then
+  "$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" public-registration "$SR/registration.json" > "$SR/registration.public.json" \
+    && mv "$SR/registration.public.json" "$SR/registration.json" || rm -f "$SR/registration.json" "$SR/registration.public.json"
+fi
+say "SAMPLED-PROOFS (run.sh exit $rc): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" sampled-line "$D/sampled-proofs.log" \
+  --partition "${PP_PARTITION:-benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1.json}" 2>&1 | cut -c1-3000)$(
+  grep -q '^RECORDS' "$D/sampled-proofs.log" || echo " (run.sh's log in the serve dir, on the node)")"
 
 # 4. the other subprotocols, each its piece's verdict or MISSING with the command it lacks
 TPY=$TREE/.venv/bin/python
