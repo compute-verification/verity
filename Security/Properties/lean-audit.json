@@ -10651,7 +10651,7 @@
    ]
   },
   "MemoryChallenger.WipeProtocol": {
-   "digest": "5b7a293c18d51c3d52439568286f9261be47a8004d05e9252780a942a4bd0e63",
+   "digest": "011aae63c7fb08cb0b5e501c13d11e40321e15d59a63f64a66a7ccd15422b0ac",
    "definitions": {
     "MemoryChallenger.WipeProtocol.EPS": "3531a8db9b9865dca0216151f8cd12d96646f4f742bffc1f22bcf747a9ab0383",
     "MemoryChallenger.WipeProtocol.EXPERIMENTAL": "dda750b69b6a3dce5216ff99221e1a320df9f6ebbc871ff9f1a844fcd1e41ab0",
@@ -10684,7 +10684,7 @@
     "MemoryChallenger.WipeProtocol.digest": "d9caf6f75a0a5ed9286b92cdfecd6e590a1ec306464ff86131c03301348c8656",
     "MemoryChallenger.WipeProtocol.fillBits": "2e0c25f793835b270b0a7b5cf2ac43531072cd93754991996be96b14a9cfa45a",
     "MemoryChallenger.WipeProtocol.foreignBits": "8ddc228413957f7732e20f7b4c1eba7efc73fc6f5559af4896e54edca10b8ab4",
-    "MemoryChallenger.WipeProtocol.gaps": "cb6573f90cca7340b2c64ffeaca1e97b0195a60f34915df3d27f0d812a3327bc",
+    "MemoryChallenger.WipeProtocol.gaps": "7159d5e624fc64e1145087940688364399f8cc97f760937d6dedee9f8497a54d",
     "MemoryChallenger.WipeProtocol.memoryBits": "e3db7869d85dbda0befcefa074fb025c0ad1904bffb010fa10348a96b74260c7",
     "MemoryChallenger.WipeProtocol.mkProtocol": "1ef346d63f26cc061cfa2480be577c0d42d709d5818508427afbe5abcf072714",
     "MemoryChallenger.WipeProtocol.outsideBits": "ff895eefb5cb61ce41e8ea0e9ecba4149e6cc022c53cbbfbe419fa2fc8b504df",
@@ -14412,10 +14412,10 @@
    ]
   },
   "Properties.Pous.Wipe": {
-   "digest": "99860529101aba5409c9bdb5a1a8133c3769f1d3c5c3a075fa05541e04f85a88",
+   "digest": "1d4b12e1da9e50ddcf7537b25ef299c8e406a61aab7da1b0adce076d7374e3f6",
    "definitions": {
     "MemoryChallenger.Properties.WipeSurvivorBound": "023c3f96c30e8f5bc7a8f43219b03a87f08c74cec8839a2cfcda88e451d320be",
-    "MemoryChallenger.Properties.WipeSurvivorBoundHonest": "b4ee7d08abfe1c1ae23740573ac5fd95988a24c5556f28a35b0821b8dfa7bbb6",
+    "MemoryChallenger.Properties.WipeSurvivorBoundHonest": "7fd1c347f437e8e85999da4a3607879a94c0751b56016eae963d3a2524293e01",
     "MemoryChallenger.Properties.WipeSurvivorBoundNontrivial": "e9a539290c7c26f336dd7ee8a806fdb1b6907ce0778143d542a3c5fe3e67369a",
     "MemoryChallenger.Properties.cheat": "77cd207d90f2c3d500f09453fd9d826e7f93ad5350447327f1fa9e9d1be1c569",
     "MemoryChallenger.Properties.honest": "f1a0aa2ef440014fa97d0ce75b546bc090bd811a57e65d9030b4d94006b497b4",

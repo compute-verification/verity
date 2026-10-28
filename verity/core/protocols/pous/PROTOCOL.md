@@ -538,7 +538,7 @@ its own `N` and `R`.
 
 `verity/wipe/v0` publishes this threshold at the session's `k`, which the memory challenger chooses (`wipe_party
 --reads`, 2152 by default) and its commitment names, at `r = ratio(k)`, the largest `r` the condition allows, with `R`
-every declared tier's bytes past the fill (`wipe_period.certify`, `MemoryChallenger.WipeProtocol.certify`; up to
+every declared tier's bytes past the fill (`wipe_period.certify`, `MemoryChallenger.WipeProtocol.certify`; from 1 to
 `MAX_READS = 2^17` reads). One 32 MiB segment at `k = 2152` (`r = 24`) is 11,709,069 bits plus the egress, under the
 family's `⌈M/19⌉ = 14,128,182`; the H200 filled whole at `k = 2906` is `StreamedWipeMeetsH200`'s figure.
 
