@@ -51,11 +51,32 @@ m.products, m.s_x, m.a_out, m.a_in        # 46792704, 681, 17920, 1536
 
 `references.layer(C, T)` is one b1 layer (σ(`LayerPre_v1`), the Boolean `Attention_v3`, σ(`LayerPost_v1`)) at T
 positions; `references.configs()` lists the served configurations and two shapes with no served workload (Qwen2.5-7B,
-Llama-3.1-405B), labeled as constructed. The circuits are forward layers: the IR declares no training (backward,
-optimizer) circuit.
+Llama-3.1-405B), labeled as constructed. They are forward layers; the training step is `TrainStep_v1` (below).
 
     uv run --extra torch-cpu benchmarks/circuit_properties/run.py [--models NAME,...] [--T T] [--out DIR]
 
 measures each and sets a_out, a_in and |𝒥| per position beside benchmarks/rho's `fanout`, `legs` and layer products
 (its `models.toml` row, and `derived_fanout` / `derived_legs` of the config's matrices), checks whole-in-block under
 `Blocks.by_root` and a cut at the middle gate, and writes `properties.json`.
+
+## The upstream certificate
+
+`Nci.Capability.Consumers.Upstream` (`Security/Definitions/Nci/Capability/Consumers.lean`) says every required gate of a
+consumer reaches, inside its region, a gate each of its finishing sets reads: a block that finishes it imports from its
+region or recomputes its required gates, which gives the local cap h_w·(k + c/g), g the fewest required gates.
+
+- `upstream`: the certificate on an explicit wiring, as the Lean states it (`Consumers` with `G_sub` and `A_θ`,
+  `of_uses`, `of_outputs`, `MulBlocks`, `holds`, overlap weights), and `required`, the largest certified G of a region.
+- `regions.required_size`: |`required`| for a region that is a union of whole activations, along the call hierarchy,
+  for regions of 10^9 gates and more; the tests hold it equal to `required` on the explicit wiring.
+- `certcheck`: a training step's consumers. Uses (`Consumers.ofUses`) are one token's input to one layer (`LAYER`: its
+  forward GEMMs' products, or its input-gradient GEMMs'), or, finer, one GEMM's input (`GEMM`); outputs
+  (`Consumers.ofOutputs`) are a weight gradient coordinate's bits. Each consumer's region, classes and verdict (|A|, |G|,
+  and why G is empty), the regions' overlap weights, and where the step's counted products are.
+- `training`: `TrainStep_v1` as a Program, at smollm2-135m's shape or at a scaled shape the registry refuses in five
+  places, which `training.scaled` lifts.
+
+      uv run benchmarks/circuit_properties/run_certcheck.py [--shape scaled|real] [--tokens ..] [--layers ..] [--out DIR]
+
+runs every consumer of the scaled step (or the given tokens and layers of the real one), the explicit cross-checks
+(`upstream.holds` on a region listed gate by gate), and writes `certcheck.json`.
