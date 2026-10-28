@@ -60,7 +60,7 @@ theorem ks_deployed
 /-- **A charge bounds every possible faulty set**, at every deployment and `δ`: each statement's partition's units'
 committed bits, all of them. -/
 theorem charge_bounds {Coin Col T : Type} (D : Claims.Sampling.Deploy Coin Col T) (δ : ℝ) :
-    ∃ β : Claims.Sampling.Stmt → ℕ, ∀ s P, D.partition s = some P →
+    ∃ β : Claims.Sampling.AuditStatement → ℕ, ∀ s P, D.partition s = some P →
       ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s := by
   refine ⟨fun s => ((D.partition s).map fun P => faultyBits s.prog P (Finset.range P.rus.length)).getD 0, ?_⟩
   intro s P hP F hF
@@ -103,7 +103,7 @@ theorem SampledLeakAccepted_honest
     (hprog : ProgramScope D) (hchecks : ChecksScope shaD D) :
     NetTiming.Guarantees.SampledAuditAccepted ∧ Claims.Sampling.KS shaD D ∧
       Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode ∧
-      ∀ δ : ℝ, ∃ β : Claims.Sampling.Stmt → ℕ, ∀ s P, D.partition s = some P →
+      ∀ δ : ℝ, ∃ β : Claims.Sampling.AuditStatement → ℕ, ∀ s P, D.partition s = some P →
         ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s :=
   ⟨NetTiming.SecurityProofs.SampledAuditAccepted,
     ks_deployed D hflock hε own at_ row salt π layer hcommit hrow hfixed hsessions hnum hslots iroots hopens hfix hprog
@@ -124,7 +124,7 @@ theorem SampledLeakRegistered_honest
     (hprog : ProgramScope D) (hchecks : ChecksScope shaD D) :
     NetTiming.Guarantees.SampledAuditAccepted ∧ Claims.Sampling.KS shaD D ∧ D.commit.Binds shaD ∧
       Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode ∧
-      ∀ δ : ℝ, ∃ β : Claims.Sampling.Stmt → ℕ, ∀ s P, D.partition s = some P →
+      ∀ δ : ℝ, ∃ β : Claims.Sampling.AuditStatement → ℕ, ∀ s P, D.partition s = some P →
         ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s :=
   ⟨NetTiming.SecurityProofs.SampledAuditAccepted,
     ks_deployed D hflock hε own at_ row salt π layer hcommit hrow hfixed hsessions hnum hslots iroots hopens hfix hprog
@@ -137,19 +137,19 @@ end Honest
 /-! ## At the accepting verifier -/
 
 /-- A layout of one link of one slot, with no gate. -/
-def trivLay : Layout 1 1 := ⟨fun _ _ _ => (0, []), fun _ => []⟩
+def trivLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (0, []), fun _ => []⟩
 
 /-- One input gate and its negation, the negation returned. -/
 def notProg : Claims.Sampling.Prog := ⟨[.input, .not 0], [1]⟩
 
 /-- The program, drawn `all`. -/
-def notStmt : Claims.Sampling.Stmt := ⟨[], notProg, ⟨"", 0, []⟩, ⟨[⟨.all, none⟩]⟩, []⟩
+def notStmt : Claims.Sampling.AuditStatement := ⟨[], notProg, ⟨"", 0, []⟩, ⟨[⟨.all, none⟩]⟩, []⟩
 
 /-- One class of one stratum of one replay unit, the proof unit `{0, 1}`. -/
 def notPart : Claims.Sampling.Partition := ⟨[[[[[0, 1]]]]]⟩
 
 /-- Step `t`'s ingress is the input, and its egress slot's presence gate the negation. -/
-def notLay : Layout 1 1 := ⟨fun _ _ _ => (1, []), fun _ => [0]⟩
+def notLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (1, []), fun _ => [0]⟩
 
 /-- One step: no frame on the link, every status complete. -/
 def obs0 : Obs 1 1 1 := ⟨fun _ _ => none, 0, fun _ => .complete⟩
@@ -177,7 +177,7 @@ theorem notLay_fits : notLay.Fits notProg 1 := by
     subst hg
     rfl
 
-theorem rejCm_val_none (H : Msg → Msg) (s : Claims.Sampling.Stmt) (w : Claims.Sampling.Wit) (g : ℕ) :
+theorem rejCm_val_none (H : Msg → Msg) (s : Claims.Sampling.AuditStatement) (w : Claims.Sampling.Wit) (g : ℕ) :
     w.val H rejCm s g = none := by
   simp [Wit.val, Commitment.Opens, rejCm, OC.eval]
 
@@ -229,7 +229,7 @@ omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **No witness is in `RLeak`** at `leakD`, at one step at `δ = 0`, whatever the inputs `As` admits: the step the
 trace carries has no frame, where the circuit, the negation of the ingress the trace carries, holds one, and the only
 possible faulty set is empty, since the one unit is drawn `all`. -/
-theorem leakD_noRLeak (H : Msg → Msg) (As : Claims.Sampling.Stmt → (ℕ → Bool) → Set (ℕ → Bool)) (x : Msg)
+theorem leakD_noRLeak (H : Msg → Msg) (As : Claims.Sampling.AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)) (x : Msg)
     (w : Claims.Sampling.Wit) :
     ¬ RLeak H (leakD Coin).commit (leakD Coin).parse (leakD Coin).partition 1 1 1 (fun _ => notLay) (fun _ => 1) 0 As 1
       x w := by
