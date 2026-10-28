@@ -1,11 +1,11 @@
-"""hashcat.sh's summary: hashcat's SHA-512 rates as compressions a second against sha512x.cuh's default
+"""hashcat.sh's summary: hashcat's SHA-512 rates as compressions a second against sx's default
 compression at the one locked SM clock, the SASS a compression of each, and VERDICT lines.
 
     python3 hashcat_summary.py OUT      (writes OUT/summary.json, prints the VERDICT lines)
 
 A hashcat benchmark candidate is one SHA-512 block (-m 1700: 7 bytes; -m 1710: 7 bytes and the 12-byte salt; both under
 112 bytes with the padding), so hashcat's H/s is its compressions a second. A rate per SM-clock is compressions a second
-over SMs x MHz x 1e6. Ours is sx0000 (sha512x.cuh's default force-included in commit_gpu), a0r0l is commit_gpu's own
+over SMs x MHz x 1e6. Ours is sx0000 (sx's default as commit_gpu's sha::compress, -DSHA_SX), a0r0l is commit_gpu's own
 default build; hashcat_forms is sx0000's compression in hashcat's shapes (its header), and the honest chain and -O's shape
 at each CTA size in whole waves (shapes.jsonl). Two rates match within 3%; the verdict takes hashcat's best -O setting
 against our best -O-shaped form.
