@@ -767,7 +767,11 @@ PouwDitherLast = CompositeDefinition(
 
 
 def block_definition(sh: Shape, s: int) -> Any:
-    """Proof block (·, ·, s)'s Definition: `PouwDitherBlock_v1` at its segment for s < S, `PouwDitherLast_v1` at s = S."""
+    """Proof block (·, ·, s)'s Definition: `PouwDitherBlock_v1` at its segment for s < S, `PouwDitherLast_v1` at s = S. Any
+    other form is refused: a C2-O call's blocks are `dither_c2o.block_definition`'s."""
+    if type(sh) is not Shape:
+        raise ValueError(f"v3.2's blocks are a Shape's, not a {type(sh).__name__}'s: a C2-O call's are "
+                         f"`dither_c2o.block_definition`'s")
     lo, hi = sh.seg(s)
     if s == sh.S and sh.o:
         return bind(PouwDitherLast, K=sh.k, L=sh.L)
