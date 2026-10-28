@@ -5,7 +5,8 @@ In a recorded run the fast path never writes ROOT (the commit's shared source tr
 updated `lean-audit.json` is restored to the committed bytes by the next requirer iteration's `sync`, so without an
 explicit keep the record a lane must commit survives nowhere the run keeps. These tests stub the slot, the tree sync
 and check.py itself, and check the keep under `out/record/` (recorded and not), the ROOT write-back (unrecorded
-only), which path a refused `build` slot takes, and how a run finds and repairs a tree another run left mid-way."""
+only), which path a refused `build` slot takes, and how a run finds and repairs a tree another run left mid-way. Two
+stand-in packages that read each other's builds check that one `--update` run regenerates and keeps both records (LEAN-133)."""
 from __future__ import annotations
 
 import importlib.util
@@ -157,6 +158,120 @@ def test_the_dev_cache_path_never_builds_in_a_shipped_tree(fast, tmp_path, monke
     said = []
     assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 2
     assert not calls and any("--cwd clone" in s for s in said)
+
+
+S, P = "s", "s/props"
+
+
+def record(h: str, proved_in: list[str] | None = None) -> str:
+    return json.dumps({**({"proved_in": proved_in} if proved_in else {}), "guarantees": {"G": {"type_hash": h}}}) + "\n"
+
+
+#: each package's record as the fake check.py's build has it, which `--update` writes
+BUILT = {S: record("new", ["proofs"]), P: record("new")}
+
+
+@pytest.fixture()
+def pair(tmp_path, monkeypatch):
+    """`audit_records` on two stand-in packages each of whose records read the other's build, as `Security`'s and
+    `Security/Properties`' do (`s` names `s/proofs` under `proved_in`, which requires `s` and `s/props` by path), with the
+    real `sync`, requirers and pass cache, and a fake check.py over a fixed build: a package's records pass when its lock is
+    `BUILT`'s, fail on a record difference (`regenerated` in the report) otherwise, and `--update` writes `BUILT`'s; a
+    package in the returned set fails for another reason. Each call is (package, `--update`, both locks as it saw them)."""
+    root = tmp_path / "root"
+    files = {"s/lakefile.toml": 'name = "s"\n', "s/lean-audit.json": record("old", ["proofs"]), "s/S.lean": "",
+             "s/proofs/lakefile.toml": 'name = "proofs"\n', "s/proofs/lean-audit.json": "{}\n",
+             "s/proofs/lake-manifest.json": json.dumps({"packages": [{"type": "path", "dir": ".."},
+                                                                     {"type": "path", "dir": "../props"}]}),
+             "s/props/lakefile.toml": 'name = "props"\n', "s/props/lean-audit.json": record("old"), "s/props/P.lean": "",
+             "s/props/lake-manifest.json": json.dumps({"packages": [{"type": "path", "dir": ".."}]})}
+    for f, text in files.items():
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
+        (root / f).write_text(text)
+    cache = tmp_path / "cache"
+    monkeypatch.setattr(LC, "ROOT", root)
+    monkeypatch.setattr(LC.LA, "ROOT", root)
+    monkeypatch.setattr(LC.LA.COMMON, "cache_dir", lambda: cache)
+    monkeypatch.setattr(LC.LA.COMMON, "tracked_files", lambda _: sorted(files))
+    monkeypatch.setattr(LC, "records_tree", lambda: cache / LC.RECORDS / "local")
+    monkeypatch.setattr(LC.LEAN_SLOT, "hold", lambda *a, **k: None)
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
+    calls, other, real = [], set(), LC.subprocess.run
+
+    def run(argv, **kw):
+        if argv[1:2] != [str(LC.AUDIT_PY)]:
+            return real(argv, **kw)
+        at, out, update = Path(argv[-1]), Path(argv[argv.index("--out") + 1]), "--update" in argv
+        p = os.path.relpath(at, kw["cwd"])
+        calls.append((p, update, {q: (Path(kw["cwd"]) / q / LC.LOCK).read_text() for q in (S, P)}))
+        fails, regen = [], None
+        if p in other:
+            fails = ["fresh.rejected: fresh: the kernel rejected a declaration"]
+        elif update:
+            (at / LC.LOCK).write_text(BUILT[p])
+        elif (at / LC.LOCK).read_text() != BUILT[p]:
+            fails, regen = [f"guarantees.reads-changed: {p}: what G reads changed"], str(out / "audit-x" / LC.LOCK)
+        reps = [{"package": str(at.resolve()), "failures": fails, **({"regenerated": regen} if regen else {})},
+                *([{"package": str((at / "proofs").resolve()), "failures": []}] if p == S else [])]
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "audit.json").write_text(json.dumps({"passed": not fails, "packages": reps}) + "\n")
+        return type("P", (), {"returncode": 1 if fails else 0})()
+
+    monkeypatch.setattr(LC.subprocess, "run", run)
+    return root, calls, other
+
+
+@pytest.mark.parametrize("hold", [lambda *a, **k: None, refuse], ids=["slot", "dev-cache"])
+def test_one_update_regenerates_a_requirer_failing_only_on_record_differences_and_its_commit_runs_nothing(
+        pair, tmp_path, monkeypatch, hold):
+    """LEAN-133: `--records Security --update` failed `Security/Properties`, whose records read Security's build, and a second
+    run had to regenerate its lock. One run now regenerates and keeps both, each audited on the records regenerated before
+    it, and keeps each pass under the regenerated locks, so a commit of both records needs no run of either package."""
+    root, calls, _ = pair
+    monkeypatch.setattr(LC.LEAN_SLOT, "hold", hold)
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-pair")
+    said = []
+    assert LC.audit_records(S, tmp_path / "deps", update=True, log=said.append) == 0
+    assert [(p, up) for p, up, _ in calls] == [(S, True), (P, False), (P, True)], "the requirer is updated after it fails"
+    assert calls[1][2] == {S: BUILT[S], P: record("old")}, "the requirer is audited on PKG's regenerated record"
+    out = run_dir / "lean-audit"
+    kept = {S: out / "record" / S / LC.LOCK, P: out / "record" / P / LC.LOCK}
+    assert {p: k.read_text() for p, k in kept.items()} == BUILT and (out / "record" / LC.LOCK).read_text() == BUILT[S]
+    for p in (S, P):
+        assert sum(f"commit it over {p}/{LC.LOCK}" in s for s in said) == 1, f"one line says what to commit {p}'s record over"
+    assert any(f"{P} requires {S}, and every failure of its records is a record difference" in s for s in said)
+    assert json.loads((run_dir / "result.json").read_text())["validation"]["status"] == "passed"
+    for p, k in kept.items():
+        (root / p / LC.LOCK).write_bytes(k.read_bytes())
+    calls.clear()
+    for p in (S, P):
+        said.clear()
+        assert LC.audit_records(p, tmp_path / "deps", log=said.append) == 0
+        assert sum("reused, nothing built" in s for s in said) == 2, f"--records {p} at the commit of both records"
+    assert calls == []
+
+
+def test_a_requirer_failing_for_another_reason_fails_and_without_update_none_is_updated(pair, tmp_path):
+    root, calls, other = pair
+    other.add(P)
+    said = []
+    out = tmp_path / "out"
+    assert LC.audit_records(S, tmp_path / "deps", update=True, out=out, log=said.append) == 1
+    assert [(p, up) for p, up, _ in calls] == [(S, True), (P, False)], "no --update on a requirer that fails otherwise"
+    assert not (out / "record" / P).exists() and (out / "record" / S / LC.LOCK).read_text() == BUILT[S]
+    assert any(f"{P} requires {S}" in s and "not only on record differences" in s for s in said)
+    assert (root / P / LC.LOCK).read_text() == record("old")
+    other.clear()
+    calls.clear()
+    said.clear()
+    (root / S / LC.LOCK).write_text(record("old", ["proofs"]))
+    assert LC.audit_records(S, tmp_path / "deps", out=tmp_path / "out2", log=said.append) == 1
+    assert [(p, up) for p, up, _ in calls] == [(S, False), (P, False)], "without --update no package is updated"
+    assert any(f"if that is meant, run --records {S} --update" in s for s in said)
 
 
 def module(lib: Path, name: str, olean: bytes = b"olean\x02rest", trace: str | None = None, hashed: str = "aa") -> Path:
