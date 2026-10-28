@@ -24,7 +24,10 @@
 #           served_stack is false for both
 # Env: ARM, T (8192), N (64), WARM (2·T/1024), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments, split
 # on spaces), PROTOCOLS_CONFIG (one --protocols-config argument), PYSAMPLE=1 (Nsight Systems' Python backtrace sampling at
-# PYHZ, 1000, for the host gaps), SEQS (--max-num-seqs and --window-requests, T/1024, 2·T/1024 for graphs and async; the
+# PYHZ, 1000, for the host gaps; its sqlite export keeps none of the Python frames), PYSPY=1 (py-spy 0.4.2, installed under
+# UTIL_ROOT/tools/pyspy, launches the server under the session, since the node's ptrace_scope 1 lets it read only its own
+# children, and records it and its subprocesses at PYSPY_HZ, 20, as a Chrome trace in the scratch, which `pyspy_steps.py`
+# cuts to the full steps into pyspy_steps.json), SEQS (--max-num-seqs and --window-requests, T/1024, 2·T/1024 for graphs and async; the
 # window's request cap also bounds the requests in flight), HEADS (the merged heads, written to heads.txt with the tree's
 # commit and parents), RELEASE_AFTER (a Commit arm's values held on the device, --retain device --retain-device-gb
 # RETAIN_DEVICE_GB (32) --release-after RELEASE_AFTER), STANDIN_DRAWS (protocols of RELEASE_AFTER no drawer serves yet: the
@@ -70,6 +73,9 @@ if [ "${1:-}" != leased ]; then
     lrc=$?; say "LEAN pouw-check-difftest built (exit $lrc): $(tail -1 "$OUT/lean.txt" | cut -c1-200)"
     [ "$lrc" = 0 ] || exit 4
   fi
+  if [ "${PYSPY:-0}" = 1 ] && [ ! -x "$ROOT/tools/pyspy/bin/py-spy" ]; then
+    uv pip install -q --target "$ROOT/tools/pyspy" --python "$PY" py-spy==0.4.2 >> "$OUT/pyspy.txt" 2>&1 || { say "PYSPY: install failed"; exit 3; }
+  fi
   research keep "$ROOT/scratch" --owner @vllm --expires 3d --priority normal \
     --why "vllm-util80: serve dirs of the utilization runs (request bodies, outputs, H1 transcripts)" > /dev/null 2>&1
   say "ARM $ARM T $T N $N WARM $WARM SEQS $SEQS row $(basename "$ROW") tree $(git -C "$TREE" rev-parse --short HEAD 2>/dev/null)" \
@@ -80,6 +86,11 @@ if [ "${1:-}" != leased ]; then
   "$PY" "$TREE/benchmarks/one_stage/served_util.py" --sqlite "$SCR/prof.sqlite" --trace "$D/advice_trace.jsonl" \
     --serve-dir "$D" --timings "$SCR/main.timings.json" --arm "$ARM" --T "$T" --N "$N" --out "$OUT/util.json" > "$OUT/util.txt" 2>&1
   say "ANALYSIS rc=$?"; cat "$OUT/util.txt"
+  if [ "${PYSPY:-0}" = 1 ]; then
+    "$PY" "$TREE/benchmarks/one_stage/pyspy_steps.py" --trace-json "$SCR/pyspy.json" --t0 "$SCR/pyspy.t0" \
+      --steps "$D/advice_trace.jsonl" --timings "$SCR/main.timings.json" --T "$T" --out "$OUT/pyspy_steps.json" > "$OUT/pyspy_steps.txt" 2>&1
+    say "PYSPY ANALYSIS rc=$?"; cat "$OUT/pyspy_steps.txt"
+  fi
   if [ -d "$D/windows" ]; then
     say "SEALED $(du -sh "$D/windows" | cut -f1), deleted"; rm -rf "$D/windows"
   fi
@@ -121,6 +132,11 @@ print("UTIL engine options overridden (not the served stack):", json.dumps(over)
 sys.exit(cli.main())' serve-openai)
     say "ENGINE $UTIL_ENGINE_JSON" ;;
 esac
+if [ "${PYSPY:-0}" = 1 ]; then
+  serve=("$ROOT/tools/pyspy/bin/py-spy" record --rate "${PYSPY_HZ:-20}" --idle --threads --subprocesses --nolineno
+         --format chrometrace -o "$SCR/pyspy.json" -- "${serve[@]}")
+  date -u +%s.%N > "$SCR/pyspy.t0"
+fi
 SESS=util80-${RESEARCH_RUN_ID:-local}
 pysample=(); sample=none
 [ "${PYSAMPLE:-0}" = 1 ] && { pysample=(--python-sampling=true --python-sampling-frequency="${PYHZ:-1000}"); sample=process-tree; }
@@ -193,7 +209,13 @@ say "MAIN $N requests (exit $lrc): $(tail -1 "$SCR/main.log" | cut -c1-200)"
 "$NSYS" stop --session="$SESS" > "$OUT/nsys_stop.txt" 2>&1
 say "CAPTURE stop (exit $?)"
 # the server's own stop drains its seals; nsys's shutdown signals the whole tree, the spawned sealer with it
+pspid=; [ "${PYSPY:-0}" = 1 ] && [ -n "$spid" ] && pspid=$(ps -o ppid= -p "$spid" | tr -d ' ')
 [ -n "$spid" ] && { kill -TERM "$spid"; reap; say "SERVE: its own stop $(grep -a 'SERVE-OPENAI stopping' "$SCR/serve.log" | tail -1 | cut -c1-120)"; }
+# py-spy writes its trace once its children are gone, or at a SIGINT; nsys's shutdown would SIGTERM it unwritten
+if [ -n "$pspid" ]; then
+  for i in $(seq 1 300); do alive "$pspid" || break; [ "$i" = 60 ] && kill -INT "$pspid"; sleep 1; done
+  say "PYSPY $(du -sh "$SCR/pyspy.json" 2>/dev/null | cut -f1) ($(alive "$pspid" && echo 'still up' || echo done))"
+fi
 "$NSYS" shutdown --session="$SESS" --kill=sigterm > /dev/null 2>&1
 wait "$srv"; say "SERVE stopped (exit $?)"
 reap
