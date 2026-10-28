@@ -2629,7 +2629,6 @@
   "Bandwidth.SecurityProofs.AuditInteractive": "e84d0ec0ef60a9cd526409b8f0d28c9387b2bff7fede93929c3b8ced09e11609",
   "Bandwidth.SecurityProofs.AuditInteractiveRO": "773fffc72e9e6aec423289610c8d2f368e2cf0ba69e5815cab71804d2d9c1077",
   "Bandwidth.SecurityProofs.AuditJoint": "2fd703e87c9dd8656f589273f5e3105b34eefdf94bc6223dceb6625d95507a1b",
-  "Bandwidth.SecurityProofs.AuditRO": "dbe5fade7cf30f05e73d4385c923b22d8c58b01feeff6b334ef879ea207761f6",
   "Bandwidth.SecurityProofs.AuditRelay": "0fe66fd603e783a1c5e889f218ec0a4acaee1afc91e09411b7939048763df73e",
   "Bandwidth.SecurityProofs.HonestPasses": "49bc1714ad2ff09df8968490d1fdbbb60cb38a219cc689e27206f0eac7c207e9",
   "Flock.SecurityProofs.ClaimsStated": "f6d2860cab7c3a1fa7ef9c5606fb73022c00cb5014777733e04e9bf2cad48007",
@@ -2849,7 +2848,8 @@
   "Verity.SecurityProofs.PrivateOutBitsLe": "a595e2305f68fd4b90134f54bc1e597de991458da482ef92bfbc67d7d7a782f3",
   "Verity.SecurityProofs.RefineWrong": "52a2253ccd78c6339acebc6fe4e9ea3afaaff0120bb36457ff76a2a605ce5ad6",
   "Verity.SecurityProofs.ServingBlockSum": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
-  "Accounting.SecurityProofs.RatePooled": "e61727e981125bd0882fc93a541bd73dc760d696d4ebb876a094ca58ff96d36f"
+  "Accounting.SecurityProofs.RatePooled": "e61727e981125bd0882fc93a541bd73dc760d696d4ebb876a094ca58ff96d36f",
+  "Accounting.SecurityProofs.Remote.AuditRO": "742a3c4f0cba3aa06f167857be9f51ee5663b4e55a29f62d7b09e68c5cb4bdc5"
  },
  "layers": {
   "Definitions.Core": {
@@ -4416,6 +4416,12 @@
    "assumptions": [],
    "type_hash": "6f9da408630883d8770f358eaddf47063f1b76099677faea7bdb35c5e45d777a"
   },
+  "Accounting.SecurityProofs.Remote.AuditRO": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Remote.AuditRO : Accounting.Guarantees.Remote.AuditRO"],
+   "assumptions": [],
+   "type_hash": "742a3c4f0cba3aa06f167857be9f51ee5663b4e55a29f62d7b09e68c5cb4bdc5"
+  },
   "Accounting.SecurityProofs.Remote.Held": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Remote.Held : Accounting.Guarantees.Remote.Held"],
@@ -5403,12 +5409,6 @@
    "signature": ["Bandwidth.SecurityProofs.AuditJoint : Bandwidth.Guarantees.AuditJoint"],
    "assumptions": [],
    "type_hash": "2fd703e87c9dd8656f589273f5e3105b34eefdf94bc6223dceb6625d95507a1b"
-  },
-  "Bandwidth.SecurityProofs.AuditRO": {
-   "owner": "@memory-accounting",
-   "signature": ["Bandwidth.SecurityProofs.AuditRO : Bandwidth.Guarantees.AuditRO"],
-   "assumptions": [],
-   "type_hash": "dbe5fade7cf30f05e73d4385c923b22d8c58b01feeff6b334ef879ea207761f6"
   },
   "Bandwidth.SecurityProofs.AuditRelay": {
    "owner": "@memory-accounting",
@@ -12805,7 +12805,6 @@
    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
    "Pous.SecurityProofs.P2RingAuditSecureOfReduces": "frozen (no-function,hash): It relates two statements about P2 in the ring model (Security/Definitions/Pous/P2/Cost.lean), not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingReducesToM1p.",
-   "Bandwidth.SecurityProofs.AuditRO": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model (Security/Definitions/Accounting/Bandwidth/Game.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the Device it ranges over, not the bandwidth audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, bandwidth-regen-time, bandwidth-instantiation and random-oracle carry it to a deployed device.",
    "Bandwidth.SecurityProofs.HonestPasses": "completeness: an honest device (no on-chip state, side sources or regeneration, N queries) is accepted on every store, oracle and sample with ingress exactly N * b, so AuditRO's event is not vacuous and the gap between N * b and its floor k * b - S - c - G * b - lam is in the lock",
    "Accounting.SecurityProofs.PouwEndToEndPerRun": "frozen (conjecture,no-function,hash): It is Pouw.SecurityProofs.EndToEnd per run, a consequence of the named open conjecture TT when the cost model truncates (Accounting.BudgetAbort, Security/Definitions/Accounting/PerRun.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal, not over a Lean function.",
    "Accounting.SecurityProofs.ComputeOfPouwPerRun": "frozen (conjecture,no-function,hash): It carries PouwEndToEndPerRun, a consequence of the named open conjecture TT over PoUW's game with a uniform oracle, to the compute audit of an abstract run of the device model (Security/Definitions/Accounting/Pouw.lean), not to a Lean function.",
@@ -12849,7 +12848,7 @@
    "Accounting.SecurityProofs.B2Window": "frozen (no-function,world-unlisted): It is stated over arbitrary families of a location's windows with the ring's oracle locations (Accounting.RingWindow), takes the multiplications' latency and the windows' span as hypotheses that are not on the premises list, and concludes the existence of a PoUS sequential responder (SeqResponderOn), not a Lean function's acceptance.",
    "Accounting.SecurityProofs.B2WindowAudit": "frozen (no-function,world-unlisted): It takes PoUS's sequential audit security (AuditSecureOn) at an arbitrary scheme as a hypothesis, and B2Window's hypotheses on an arbitrary family of windows (the multiplications' latency, the windows' span and their query budgets), which are not on the premises list; the event it bounds is the windows' answering every challenge, not a Lean function's acceptance.",
    "Accounting.SecurityProofs.B2WindowP2Ring": "frozen (no-function,world-unlisted): It is B2WindowAudit at P2's deployed point under Pous.P2.Assumptions.P2RingAuditSecure D Q L, paced (windows of at most T ticks, T ≤ D·ℓ), and takes B2Window's hypotheses on an arbitrary family of windows, which are not on the premises list; the event it bounds is the windows' answering every challenge, not a Lean function's acceptance.",
-   "Accounting.SecurityProofs.BandwidthOfAudit": "frozen (no-function,hash): It carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to the bandwidth audit of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/BandwidthAudit.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.BandwidthOfAudit": "frozen (no-function,hash): It carries Accounting.SecurityProofs.Remote.AuditRO, a bound in the random-oracle model over an abstract chip program, to the bandwidth audit of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/BandwidthAudit.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.CapacityOfStateBound": "frozen (no-function): It carries an abstract state-bounded game's soundness, a hypothesis, to the capacity audit of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/Capacity.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.DerivedStateResidual": "frozen (no-function): Like CovertResidual, it is stated over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/Capacity.lean), and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.RateAudit": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model whose tags absorb a certified stream and whose rebuilt words are paid in compute (Security/Definitions/Accounting/RateAudit.lean), with the device's bounds (S_chip, the side link's cap * T, queries) as fields of the Device it ranges over and the compute budget, c_tag and c_enc as parameters, not the rate audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, rate-codec-work, rate-device, bandwidth-instantiation and random-oracle carry it to a deployed device.",
@@ -13281,7 +13280,7 @@
    "Flock.SecurityProofs.IntegrityPeriodLog": "frozen (hash,world-unlisted,scope): It is EndToEndHidden at every window of the period, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each window is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.IntegrityBlock": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.IntegrityBlocks": "frozen (hash,world-unlisted,scope): It is IntegrityHorizon on a horizon's server-time blocks, EndToEndHidden at every session, so it takes what EndToEndHidden takes: the table and link finders' collision bounds (TableCRZ, LinkCRZC, at the strategy each session is played with) as hypotheses instead of a collision disjunct tied to the run, two premises that aren't on the list (A3, the verifier's IO.getRandomBytes is uniform, and live-verifier custody, RecordCustodyZKJ), and hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
-   "Accounting.SecurityProofs.BandwidthOfAuditPerRun": "frozen (no-function,hash): It is BandwidthOfAudit at the coins drawn: it carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to the per-run bandwidth guarantee (BandwidthSoundPerRun) of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/BandwidthAudit.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.BandwidthOfAuditPerRun": "frozen (no-function,hash): It is BandwidthOfAudit at the coins drawn: it carries Accounting.SecurityProofs.Remote.AuditRO, a bound in the random-oracle model over an abstract chip program, to the per-run bandwidth guarantee (BandwidthSoundPerRun) of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/BandwidthAudit.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
    "NetTiming.SecurityProofs.HorizonWrongUnitsLe": "frozen (no-function): It is a fact of probability over an abstract horizon of windows on a product of live coins (Fin m → Ω), each with an abstract draw whose law (a uniform k-subset of its units) is a hypothesis, an abstract set of wrong units read only from earlier windows' coins, and an abstract acceptance event whose soundness error is a hypothesis, not a run of the sampled verifier or of the challenger's draw (Flock.Draw): it bounds Pr[every window accepts ∧ F ≤ Σ wrong units] by (1 − q)^F + Σ ε_i, and the leak those wrong units carry (the count over the horizon, with A3 and KS at the deployment) is not stated here.",
    "Flock.SecurityProofs.SampledKSLiveStated": "frozen (no-function): It states no property of the verifier: it reads SampledKSLive (Security/Proofs/Flock/Bridge/Statement.lean), so the lock records its text, and it leaves when a guarantee proves SampledKSLive at the deployed sampled verifier.",
    "NetTiming.SecurityProofs.SampledLeakRegistered": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with Claims.Sampling.KS and Commitment.Binds at each deployment, and the registration's openings RegOpens), and bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts, not runs of the network check's code; it is NetTiming.sampledLeak_registered's statement with sampledLeak_reg's count, at the registered inputs' registration values (AsReg at regVal) rather than the trace's, a disagreement being a collision Breg finds.",
@@ -13289,7 +13288,7 @@
    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod": "frozen (no-function): It carries C-Flock's integrity audit over a horizon of windows (Flock.Guarantees.IntegrityHorizon) to the sampled audit's per-period guarantee (PeriodRun.Sound) of an abstract period of the device model whose verdict is a field of the run, not a Lean function, through a realization whose fields are properties of the deployed run (Accounting.RealizesIntegrityOfIntegrityPeriod, Security/Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod.lean): wrong_eq is the program-from-circuit correspondence (M1) until Lowers/progOf/partOf land, and units_eq with gates_nonempty is the partition's public unit-size property. It bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": "lemma: the forking step behind the remote audit's receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which PooledDraw and the drawn memory-line guarantees charge, over a session and its receipts, not a Lean function: with the held row by definition the plurality of the rows the receipt shows over window t's continuations (Accounting.Remote.Draw.Receipts.held, at Accounting.Remote.Draw.cont) and no premise beyond L_t holding every receipt window t opens, the binding term is at most sum_t sqrt(|L_t| s_t (fork_t + split_t)), fork_t the chance that two runs from window t's cut on independent openings coins hash a SHA-512 collision between one receipt's two openings' checks (Receipts.Broken, Hash.SecurityProofs.RowBinding) and split_t the chance that their roots, ranks or verifiers differ (Receipts.Split); split_t is not bounded here: the deployed prover holds no coin commitment until the session's outcome, but that window t's roots read only its cut is not a premise (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": "lemma: ReceiptsBindingOfFork under claim cr/sha-512 (Claims.StrictBirthday) at each window's fork finder (Accounting.Remote.Draw.Receipts.finder, at q_t SHA-512 calls): the receipts' binding term is at most sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), not a Lean function; where the window's cut fixes its roots split_t = 0 and it is sum_t sqrt(|L_t| s_t) q_t/2^256.5 (Accounting.SecurityProofs.Remote.Binding.binding_le_of_fixed), ledger.binding's form, which the code charges at the session's bounds (L_t the most receipts a window of the session can have, s_t its draw cap), not at one record's U_t and s'_t; that the deployed play's cut fixes the roots is not a premise (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
-   "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod": "frozen (no-function,hash): It is BandwidthOfAuditPerRun on a period's coins: it carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to PoUB's per-period guarantee (PeriodRun.Sound at .poub) of an abstract period of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/JointPeriod.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod": "frozen (no-function,hash): It is BandwidthOfAuditPerRun on a period's coins: it carries Accounting.SecurityProofs.Remote.AuditRO, a bound in the random-oracle model over an abstract chip program, to PoUB's per-period guarantee (PeriodRun.Sound at .poub) of an abstract period of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/JointPeriod.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Gates.EncodeChainRefuted": "frozen (no-function): A counterexample to the named conjecture EncodeChainHardness, a circuit of the gate model with no budgeted gate that computes more words of the codec than its units allow, inside the conjecture's floor at every field of whole bytes with room for them, not a property of a Lean function.",
    "Accounting.SecurityProofs.Gates.FoolingCap": "frozen (no-function): A counting bound over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean), every set of inputs and every list of outputs read mod 2^j, not a property of a Lean function: the property's census check has no Lean code yet.",
    "Flock.SecurityProofs.SampledKSLiveV3": "frozen (no-function): SampledKSLiveV2 on the event that the verifiers accept the files, proved from it; it reads SampledKSLiveV3 (Security/Proofs/Flock/Bridge/Refused.lean), whose event is flock-verify --zk's acceptance (Flock.PortRoots.check: row/v1, row/v2 or row-seg/v1 ports, distinct names, no colliding per-schema roots) and the sampled-proofs run's Slots.popOk, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
@@ -13427,7 +13426,8 @@
    "Nci.Guarantees.CapabilityFloor": "unstated: under coverage of efficient methods, success below the floor on covered computations has probability at most eta; proof not written yet.",
    "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts with fixed-length advice, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "Pous.SecurityProofs.StreamedWipeMeetsH200": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 2906 reads, an H200 of 141 GiB filled whole, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
-   "Nci.Guarantees.StatHeldBudget": "unstated: min-entropy hardness bounds the priced state every proof block holds by k + Lambda, counting the block's views; proof not written yet."
+   "Nci.Guarantees.StatHeldBudget": "unstated: min-entropy hardness bounds the priced state every proof block holds by k + Lambda, counting the block's views; proof not written yet.",
+   "Accounting.SecurityProofs.Remote.AuditRO": "frozen (no-function,hash): It bounds acceptance of an abstract chip program in the random-oracle model (Security/Definitions/Accounting/Bandwidth/Game.lean), with the device's bounds (S_chip, cap_side * T, T / R_regen, queries) as a field of the Device it ranges over, not the bandwidth audit's code; the claims bandwidth-s-chip, bandwidth-side-cap, bandwidth-regen-time, bandwidth-instantiation and random-oracle carry it to a deployed device."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -16330,10 +16330,10 @@
     "Accounting.SecurityProofs.BandwidthOfAudit",
     "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
     "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
+    "Accounting.SecurityProofs.Remote.AuditRO",
     "Bandwidth.SecurityProofs.AuditInteractive",
     "Bandwidth.SecurityProofs.AuditInteractiveRO",
     "Bandwidth.SecurityProofs.AuditJoint",
-    "Bandwidth.SecurityProofs.AuditRO",
     "Bandwidth.SecurityProofs.AuditRelay",
     "Bandwidth.SecurityProofs.B3",
     "Bandwidth.SecurityProofs.B3Capacity",
@@ -17418,20 +17418,18 @@
    "guarantees": ["Accounting.SecurityProofs.AccelAdditive", "Accounting.SecurityProofs.AccelRate"]
   },
   "Definitions.Accounting.Guarantees.Bandwidth": {
-   "digest": "71fb78cd62c87a3e6762f035dfab04f030ac6c761371e26bb809172c897d7fb0",
+   "digest": "6c1c75ddbe1763710d0b9bd4f8025c0610684cc46fb93a5566ff59a129649c2a",
    "definitions": {
-    "Bandwidth.Guarantees.AuditInteractive": "88c232fe1a99541d794dbda074c79d85e02793e42882609a11f3dfcfecac6573",
-    "Bandwidth.Guarantees.AuditInteractiveRO": "0adfab2ceb5337aeca9609347520057420daa4fb968411e0bb30f78818282a9d",
-    "Bandwidth.Guarantees.AuditJoint": "fb08920344c3579785fb15cff191687b1480334351ea3f19a50436a485808d3d",
-    "Bandwidth.Guarantees.AuditRO": "a0e22d8455ef8a7064dfc16c8e7301e0dcaec1d6ff1838f2a1c937e810282f20",
-    "Bandwidth.Guarantees.AuditRelay": "d79eb32b815f2d9722200c33e7a91ea3372fa9dc0133873016ea7e2a1750fe37",
+    "Bandwidth.Guarantees.AuditInteractive": "4ebca6ada8737a1aa61b499ef8d53982306fe7d2b90e96e41a596165ad1614da",
+    "Bandwidth.Guarantees.AuditInteractiveRO": "d4137be1adb4c89630cf81cbc4fdf0ba37da38638a42fa600fa5458ff2c9b365",
+    "Bandwidth.Guarantees.AuditJoint": "cabac35b9cad7283ccfdeff4ec0388043ace582ee5568bb78546877e3f6c5298",
+    "Bandwidth.Guarantees.AuditRelay": "aa8b1f58c667d463ac59996a696c7374b63c8fc580b408e2000e99a19df1b3bc",
     "Bandwidth.Guarantees.HonestPasses": "ea463a38fea8188b52f9b1c359364c3adc9256df140c00493c7e612ffe2f8f2d"
    },
    "guarantees": [
     "Bandwidth.SecurityProofs.AuditInteractive",
     "Bandwidth.SecurityProofs.AuditInteractiveRO",
     "Bandwidth.SecurityProofs.AuditJoint",
-    "Bandwidth.SecurityProofs.AuditRO",
     "Bandwidth.SecurityProofs.AuditRelay",
     "Bandwidth.SecurityProofs.HonestPasses"
    ]
@@ -18074,6 +18072,13 @@
     "Accounting.SecurityProofs.Remote.HeldOverTime",
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinks"
    ]
+  },
+  "Definitions.Accounting.Guarantees.RemotePass": {
+   "digest": "8e711cba454ab06d62b6359fdf6c16cfa5fbbf6bee514157820b6cdea38c1004",
+   "definitions": {
+    "Accounting.Guarantees.Remote.AuditRO": "cf27b440ac2129f487e4f07608b2277deb36cee0ef2f65decb29201f3e8b3ad7"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Remote.AuditRO"]
   },
   "Definitions.Accounting.Guarantees.RemoteSketch": {
    "digest": "c60362ffb59d956be55efcc71f5b9108e9025bc59343c7877a6ba334a0e7c520",
@@ -28362,6 +28367,7 @@
     "Accounting.SecurityProofs.RateSketchTable",
     "Accounting.SecurityProofs.RateTensorSketchTable",
     "Accounting.SecurityProofs.RateWindowDraw",
+    "Accounting.SecurityProofs.Remote.AuditRO",
     "Accounting.SecurityProofs.Remote.HeldDrawn",
     "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
@@ -28390,7 +28396,6 @@
     "Bandwidth.SecurityProofs.AuditInteractive",
     "Bandwidth.SecurityProofs.AuditInteractiveRO",
     "Bandwidth.SecurityProofs.AuditJoint",
-    "Bandwidth.SecurityProofs.AuditRO",
     "Bandwidth.SecurityProofs.AuditRelay",
     "Bandwidth.SecurityProofs.B3",
     "Bandwidth.SecurityProofs.B3Capacity",
