@@ -28,6 +28,15 @@ if [ "${ARMSET:-}" = diag ]; then
         stride0:$D,ROWS=4096+65536,CAPS=2+8+16+132+0,STRIDE0=1 fused:$D,ROWS=4096+65536,CAPS=2+8+16+132+0,VERITY_ROWS_FORM=fused
         ph16:$D,ROWS=4096+65536,CAPS=2+8+16+132,VERITY_ROWS_PHASES=16 gdef:$D,ROWS=4096+65536,CAPS=8+16+0,GPRIO=0"
 fi
+# ARMSET=lifetime: the GEMM's loss against the compressions a hash launch runs a thread (VERITY_ROWS_PHASES), at T 8,192 and 512
+if [ "${ARMSET:-}" = lifetime ]; then
+  D=THREADS=256,TREE=0
+  ARMS="p8_4k:$D,ROWS=4096,VERITY_ROWS_PHASES=8,CAPS=16+33+66+132+264 p33_4k:$D,ROWS=4096,VERITY_ROWS_PHASES=33,CAPS=16+33+66+132+264+0
+        p16_16k:$D,ROWS=16384,VERITY_ROWS_PHASES=16,CAPS=8+16+33+66+132 p64_16k:$D,ROWS=16384,VERITY_ROWS_PHASES=64,CAPS=16+33+66+132+264
+        p64_64k:$D,ROWS=65536,VERITY_ROWS_PHASES=64,CAPS=8+16+33+66+132
+        p33_4k_t512:$D,T=512,ROWS=4096,VERITY_ROWS_PHASES=33,CAPS=2+8+16+33+66+132
+        p64_16k_t512:$D,T=512,ROWS=16384,VERITY_ROWS_PHASES=64,CAPS=2+8+16+33+66+132"
+fi
 say "leased CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES-unset}"
 nvidia-smi --query-gpu=name,uuid,clocks.sm,clocks.max.sm,power.limit,memory.used --format=csv | tee -a "$OUT/steps.txt"
 nvidia-smi --query-gpu=timestamp,clocks.sm,power.draw,utilization.gpu,temperature.gpu --format=csv -lms 200 \
