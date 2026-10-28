@@ -16,13 +16,34 @@ section Bc
 
 variable {tags : Tags} {st : Stmt} (L : Layout st) (F : Aliased.UnitFacts tags st)
 
-/-- The pin carries 1, in every block of a satisfying witness. -/
-theorem pin_bit {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
-    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
+/-- The pin carries 1, in every block of a witness that satisfies the statement off some rows (`SatEx`). -/
+theorem pin_bit_ex {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {D : ℕ → Prop}
+    {z : Model.Witness (L.model regs).m} (hz : SatEx (L.model regs) D z) (o : Fin (2 ^ (L.model regs).nbl)) :
     blockBit (L.model regs) z o st.pin = true := by
   rw [blockBit_of_lt _ z o L.pin_lt]
   have hpin : (⟨st.pin, L.pin_lt⟩ : Fin (2 ^ (L.model regs).kLog)) = (L.model regs).pin := Fin.ext rfl
   rw [hpin, hz.2.1 o]
+  rfl
+
+/-- The pin carries 1, in every block of a satisfying witness. -/
+theorem pin_bit {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
+    blockBit (L.model regs) z o st.pin = true :=
+  pin_bit_ex L (hz.ex fun _ => False) o
+
+include F in
+/-- The unit range's first slot's forced-zero row carries 0, in every block of a witness that satisfies every row but
+the unit input rows (`SatEx`, `UnitIn`), when the range has a slot. -/
+theorem zero_bit_ex (hupv : 0 < st.c.upv) (hg : 0 < st.c.g) {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))}
+    {z : Model.Witness (L.model regs).m} (hz : SatEx (L.model regs) (UnitIn st.c) z)
+    (o : Fin (2 ^ (L.model regs).nbl)) :
+    blockBit (L.model regs) z o (zeroCol st.c) = false := by
+  have hs₀ : 0 < st.c.unitRange.count := by rw [L.unit_count]; exact Nat.mul_pos hg hupv
+  have h0 := Aliased.zeroPos_block_ex L regs F hs₀ hz (not_unitIn_zero L F 0) o
+  unfold zeroCol
+  rw [blockBit_of_lt _ z o (y := st.c.unitRange.slot 0 + st.c.unit.useful) (Aliased.zeroPos L regs F hs₀).isLt]
+  show FlockSoundness.bit ((L.model regs).block z o (Aliased.zeroPos L regs F hs₀)) = false
+  rw [h0]
   rfl
 
 include F in
@@ -30,14 +51,8 @@ include F in
 a slot. -/
 theorem zero_bit (hupv : 0 < st.c.upv) (hg : 0 < st.c.g) {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))}
     {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
-    blockBit (L.model regs) z o (zeroCol st.c) = false := by
-  have hs₀ : 0 < st.c.unitRange.count := by rw [L.unit_count]; exact Nat.mul_pos hg hupv
-  have h0 := Aliased.zeroPos_block L regs F hs₀ hz o
-  unfold zeroCol
-  rw [blockBit_of_lt _ z o (y := st.c.unitRange.slot 0 + st.c.unit.useful) (Aliased.zeroPos L regs F hs₀).isLt]
-  show FlockSoundness.bit ((L.model regs).block z o (Aliased.zeroPos L regs F hs₀)) = false
-  rw [h0]
-  rfl
+    blockBit (L.model regs) z o (zeroCol st.c) = false :=
+  zero_bit_ex L F hupv hg (hz.ex _) o
 
 include F in
 /-- **The four copies into template instance `g`'s row `p`**, in every block of a satisfying witness of the untyped statement: the first
