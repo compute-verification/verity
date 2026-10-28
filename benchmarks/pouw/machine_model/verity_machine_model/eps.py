@@ -1,11 +1,10 @@
-"""ε for a PoUW design in the tensor–scalar model (note:20261017T0310Z-report-eps1-program §2), every term from data,
-in two layers that are never mixed (Daniel, 17 Oct 06:29Z). The protocol with 100% checking, every word and operand
-verified, has the core ε, Corollary D3's
+"""ε for a PoUW design in the tensor–scalar model, every term from data, in two layers that are never mixed. The
+protocol with 100% checking, every word and operand verified, has the core ε, Corollary D3's
 
     1 − ε_core = (1 − ε_skip − ε_mand − ε_machine − ε_luck) · (1 − ε_sched) · (1 − ε_clock)
 
 ε_luck in it: every check is one draw, so an accepted cheater spends Theorem S's budget with every block checked
-(LEDGER, note:20261017T1723Z-draft-ledger; JL is not assumed). The sampling compiler adds ε_sample = ε_adapt, a function
+(LEDGER; JL is not assumed). The sampling compiler adds ε_sample = ε_adapt, a function
 of the proof block and its selection rule, 0 at 100% sampling. Each term is a fraction of honest time.
 
 - **Π** is a named vector's rows at its epoch, as the price LP reads them: row r holds Σ_k c_kr·n_k SMSP-cycles for n_k warp

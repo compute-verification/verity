@@ -61,6 +61,7 @@
   "Flock.Test.TmplFold",
   "Flock.Test.NetAt",
   "Flock.Test.MaskLog",
+  "Flock.Test.CoinsTree",
   "Flock.Test.FrameStep",
   "Flock.Test.RegionBytes",
   "Flock.Test.PlainHidden",
@@ -473,6 +474,24 @@
    "Flock.Firewall.Contract.holds_finish": "frozen: not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
    "Flock.Firewall.Contract.holds_fixed": "frozen: not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement",
    "Flock.Firewall.Contract.holds_masked": "frozen: not in the shape sweep (art:cb189f04): needs an entry under shape.properties, or a restatement"
+  },
+  "inline": {
+   "Flock.Firewall.Contract.holds_coins": {
+    "List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.coins stream k cs relayed opening)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Flock.Firewall.Contract.holds_commit": {
+    "List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.commit msg i sent)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Flock.Firewall.Contract.holds_computed": {
+    "List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.fixed what src want sent ps)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Or (Eq src Flock.Firewall.Contract.By.recheck) (Or (Eq src Flock.Firewall.Contract.By.shadow) (Eq src Flock.Firewall.Contract.By.own))": "a disjunction, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Flock.Firewall.Contract.holds_fixed": {
+    "List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.fixed what src want sent ps)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+   },
+   "Flock.Firewall.Contract.holds_masked": {
+    "List.instMembership.mem t.items.toList (Flock.Firewall.Contract.Item.masked v p sent)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion"
+   }
   }
  },
  "reads": {

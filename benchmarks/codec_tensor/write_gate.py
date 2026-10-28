@@ -1,4 +1,4 @@
-"""The write gate (21:50Z steering) for the step's weight GEMM: under Nsight Compute, one launch of each linear's fused
+"""The write gate for the step's weight GEMM: under Nsight Compute, one launch of each linear's fused
 kernel at the configs the step picked (`step.json`), sketched and untagged, and the reader's commit kernels, and per
 kernel the L2 write sectors from the SMs against what it must write (all sources' are recorded beside them: the
 profiler's own writes come from other units, 15 sectors a launch and up to 2 MB at a KV launch). A sketched launch

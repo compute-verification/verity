@@ -18,8 +18,8 @@ Ports.  A Definition returning one collection (`Array<N, Value<w>>`, a `Value<w>
 one width) and its leaf interval in the Call's output, so an operand run `("n", j, lo, hi)` resolves to the ports of Call `j` it
 overlaps -- the Value(s) read.
 
-Representation (F-r19-int-25).  A request Program's volume is in its READS, not its Calls: at LP=4096 every attention row reads one
-K and one V run of every earlier token (#11: 7.5e5 Calls, 3.4e8 operand runs, 99.6 % of them in attention rows), so anything held per
+Representation.  A request Program's volume is in its READS, not its Calls: at LP=4096 every attention row reads one
+K and one V run of every earlier token (nearly all of a Program's operand runs are in its attention rows), so anything held per
 read as a Python object (the decoded JSON run lists, a `ValueRef` tuple, a `CallView.reads` tuple) is tens of GB.  Both readers
 therefore build ONE columnar body (:class:`_Columns`): flat `array` columns of Call ids and port-name indices with per-Call offsets
 for the reads (6 bytes per read), per-Call indices into small tables for the spec / form / ports, the names as one list of strings.

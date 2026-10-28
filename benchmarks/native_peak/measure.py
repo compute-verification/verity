@@ -16,7 +16,7 @@ that binary is already on the machine, otherwise it is recorded as "not captured
 
 result.json (`research/result/v0.1`, kind `native-peak/v1`) carries the headline fields at the top level -- device, dtype,
 accumulate, method, flop_per_second, spec_flop_per_second, fraction_of_spec, sass, kernel, driver, cuda, clocks_mhz, power_w,
-sizes -- so `research data select --where meta.dtype=bf16` works, and the same identity in `workload_fingerprint`.  Spec peaks are
+sizes -- so a store query can select on them (`meta.dtype`), and the same identity in `workload_fingerprint`.  Spec peaks are
 datasheet dense (non-sparse) tensor-core numbers with FP32 accumulate; a card the table does not know gets `spec_flop_per_second:
 null`.  Nothing here is a proof; it is the native anchor for `overhead.vs_native_peak`.
 """
@@ -33,6 +33,9 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "config"))
+from verity_config.settings import SHARED
 
 RESULT_SCHEMA = "research/result/v0.1"
 KIND = "native-peak/v1"
@@ -544,7 +547,7 @@ def environment(device: int) -> dict:
 
 
 def source_commit() -> str | None:
-    env = os.environ.get("RESEARCH_SOURCE_COMMIT")
+    env = SHARED.RESEARCH_SOURCE_COMMIT
     if env:
         return env
     name = Path.cwd().name
@@ -655,9 +658,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--no-sass", action="store_true", help="do not attempt the ncu SASS capture even if ncu is present")
     a = ap.parse_args(argv)
     sizes = parse_sizes(a.sizes)
-    run_dir = Path(a.out or os.environ.get("RESEARCH_RUN_DIR") or "benchmarks/native_peak/out")
+    run_dir = Path(a.out or SHARED.RESEARCH_RUN_DIR or "benchmarks/native_peak/out")
     run_dir.mkdir(parents=True, exist_ok=True)
-    run_id = os.environ.get("RESEARCH_RUN_ID") or f"local-{int(time.time())}"
+    run_id = SHARED.RESEARCH_RUN_ID or f"local-{int(time.time())}"
     t0 = time.time()
 
     import torch

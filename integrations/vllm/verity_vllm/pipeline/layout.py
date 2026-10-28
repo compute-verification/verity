@@ -94,7 +94,7 @@ def component_dir(wp: dict[str, Any], LP: int, T: int, record_dir: str | os.Path
 
 def declared_component(wp: dict[str, Any], LP: int, T: int) -> str | None:
     """What the Build recorded for shape (LP, T): the absolute path (1.0/1.1), else the relative one (a 1.1 record whose absolute was
-    dropped), else None (the shape was never composed: F-pad-26(b), refuse by name)."""
+    dropped), else None (the shape was never composed: refuse by name)."""
     key = f"{int(LP)},{int(T)}"
     absolute = ((wp.get("inputs") or {}).get("derived") or {}).get(key)
     if absolute:

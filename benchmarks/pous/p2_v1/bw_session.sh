@@ -2,12 +2,11 @@
 # One remote bandwidth session over C* on the demo card (bandwidth.py session), served from the mem69-v2 encoded store through
 # kernels' staging decode, and the cheat that skips a layer's reads; cwd = the source tree's root:
 #
-#   research run --on vy-dc-h200-2 --project verity --campaign e2e-demo --source . --cwd source --timeout 60m \
-#     --env GPU_LEASE_WHO=bw-h200 [--env PARTY='ssh ... VERB' --env PARTY_HOST=ADDRESS] \
-#     [--send store-layout.json] [--send p2lib.tar] -- bash benchmarks/pous/p2_v1/bw_session.sh
+#   OUT=DIR RESEARCH_RUN_DIR=RUN GPU_LEASE_WHO=bw-h200 [PARTY='ssh ... VERB' PARTY_HOST=ADDRESS] \
+#     bash benchmarks/pous/p2_v1/bw_session.sh      # on the demo card's node; RUN/inputs/ may hold store-layout.json, p2lib.tar
 #
 # The verifier is `p2_party` on this host by default (VERIFIER, a shell command speaking --stdio), which certifies
-# nothing. PARTY is the auditor's instead: the ssh command to vy-auditor-2's gate verb that starts `p2_party --listen`
+# nothing. PARTY is the auditor's instead: the ssh command to the auditor host's gate verb that starts `p2_party --listen`
 # there, once a session (the honest one, then the cheat), whose port this host reaches at PARTY_HOST and whose stdout
 # ends with the verifier's own record of the answer (`bandwidth.py session --party`). Or CONNECT=HOST:PORT reaches a
 # `p2_party --listen --sessions 2` already listening, the cheat at CHEAT_CONNECT (by default the same listener), with
@@ -21,7 +20,7 @@
 #
 # Outside the lease: both held to their pins, the store's registration to the tracked one, and the toy's session on the
 # CPU (P2's reference decode, the same verifier) as a preflight. Under one untimed lease of at most LEASE_MIN minutes
-# (default 10), refused near the card's booked window (Tue 27 Oct 08:00-10:00Z): MODE's sessions (default both), the honest one
+# (default 10), refused near the card's booked window (`w0` to `w1`): MODE's sessions (default both), the honest one
 # (WINDOWS x PASSES, SAMPLES openings a window, expect accept) and then the cheat (SKIP_LAYER's reads skipped, one window
 # of one pass, expect reject). Each step's exit code is in $OUT/rc.txt and each session's verdict line in
 # $OUT/verdicts.txt; exits non-zero if any failed.
@@ -115,7 +114,7 @@ env -u GPU_LEASE_TIMED gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash -c '
   echo "leased at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"
   now=$(date -u +%s); w0=$(date -u -d 2026-10-27T08:00:00Z +%s); w1=$(date -u -d 2026-10-27T10:00:00Z +%s)
   if [ $((now + 60 * LEASE_MIN)) -gt "$w0" ] && [ "$now" -lt "$w1" ]; then
-    echo "a lease from now could reach INF-242 window (Tue 27 Oct 08:00-10:00Z): released unused" >> "$O/rc.txt"
+    echo "a lease from now could reach the booked window (Tue 27 Oct 08:00-10:00Z): released unused" >> "$O/rc.txt"
     step window 3; exit 3
   fi
   base=(session --store "$ENC" --layout "$LAYOUT" --lib "$LIB" --node "$NODE" --registration "$REG"

@@ -1,4 +1,4 @@
-"""M3's registration of one H200 step (PRF-172): the step's committed roots and a ``subset:K`` law over its whole partition,
+"""M3's registration of one H200 step: the step's committed roots and a ``subset:K`` law over its whole partition,
 fixed before any coin. The live coin's session binds the digest as its root (`m3coin.py`).
 
     python examples/h200/m3reg.py --roots roots.json --run RUN_ID --step 31 --k 8 --out DIR
@@ -57,7 +57,7 @@ def build(roots: dict, run: str, step: int, k: int, source: str) -> dict:
                  "order": "global index i = slot * units_a_slot + commit unit; commit unit u in the layout's unit order"}
     slot_block = hashlib.sha512(b"".join(bytes.fromhex(r) for r in s["slot_roots"])).hexdigest()
     rec = {"format": FORMAT, "protocol": PROTOCOL, "run": run, "source": source, "program": None,
-           "program_note": "the H200 Program digest isn't built yet (ALLP-H200's 307c/4ec7); the partition is the step's commit units",
+           "program_note": "the H200 Program digest isn't built yet; the partition is the step's commit units",
            "partition": digest(PARTITION, partition), "partition_record": partition,
            "population": slots * U, "law": {"law": "subset", "k": k}, "scheme": SCHEME,
            "context": roots["context"], "row_schema": roots["row_schema"],
@@ -74,7 +74,7 @@ def build(roots: dict, run: str, step: int, k: int, source: str) -> dict:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--roots", required=True)
-    ap.add_argument("--run", required=True, help="the research run whose roots these are")
+    ap.add_argument("--run", required=True, help="the run whose roots these are")
     ap.add_argument("--step", type=int, required=True)
     ap.add_argument("--k", type=int, default=8)
     ap.add_argument("--source", default=None, help="the commit the run ran (default: this tree's HEAD)")

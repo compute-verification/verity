@@ -211,7 +211,8 @@ def test_an_int32_table_opens_as_the_checkpoints_i64_words_in_range(tmp_path):
 
 # ------------------------------------------------------------------------------------------------ the bundle is the record's
 
-def _deferred(tmp_path, steps=None):
+def _deferred(tmp_path, steps=None, tree=None):
+    """A deferred record and its sealed bundle; ``tree``: the bundle's weights tree (its ``extra`` the cos/sin cache)."""
     pytest.importorskip("torch")
     from tests.check.opened import commit_steps
     from verity_vllm.commit import store_dump as SD
@@ -220,8 +221,10 @@ def _deferred(tmp_path, steps=None):
     p = RB.partial(tmp_path, 1)
     SD.dump(com, rc, p / "store")
     (p / "weights" / "extra").mkdir(parents=True)
-    (p / "weights" / "tree.json").write_text(json.dumps({"names": [], "extra": {"model.rotary_emb.cos_sin_cache": 0}}))
-    (p / "weights" / "extra" / "0.bin").write_bytes(COS_SIN.tobytes())
+    tree = tree or {"names": [], "extra": {"model.rotary_emb.cos_sin_cache": 0}}
+    (p / "weights" / "tree.json").write_text(json.dumps(tree))
+    for i in tree["extra"].values():
+        (p / "weights" / "extra" / f"{i}.bin").write_bytes(COS_SIN.tobytes())
     (tmp_path / "binding_map_p1.json").write_text(json.dumps({"entries": []}))
     sr, lk = RB.deferred_records(RB.path(tmp_path, 1))
     row = {"pair": 1, "arm": "instrumented", "commit": {"run_root": rc.run_root.hex(), "commit_pass": None, "sampled_replay": sr, "boundary_linkage": lk}}
@@ -273,11 +276,11 @@ STEPS = {0: [("model.embed_tokens", bytes(range(256)) * 5), ("model.layers.0.sel
 PICKS = [(0, "model.layers.0.self_attn.qkv_proj", 10, 20), (1, "runner.sampler", 0, 4)]
 
 
-def _kept(tmp_path):
+def _kept(tmp_path, tree=None):
     from verity_vllm.check import oracle_compare as OC
     from verity_vllm.commit import store_dump as SD
 
-    out = _deferred(tmp_path, STEPS)
+    out = _deferred(tmp_path, STEPS, tree)
     b = RB.open_bundle(RB.path(out, 1))
     _rows, _row, _verdict, store, run = CPU.of_record(b, out)
     with SD.touched(store) as t:
@@ -293,7 +296,7 @@ def test_the_slim_keep_reopens_every_pick_against_the_run_root_and_nothing_else(
     from verity_vllm.commit import store_dump as SD
 
     out, b, store, run, t, want, c, plan = _kept(tmp_path)
-    doc = CPU.keep(out, b, store, run, t, plan, c)
+    doc = CPU.keep(out, b, store, run, t, plan, c, opened=set())
     k = CPU.slim_path(out, 1)
     assert json.loads((k / CPU.SLIM_DOC).read_text()) == doc and not k.with_name(k.name + ".partial").exists()
     assert (doc["schema"], doc["pair"], doc["run_root"], doc["picked"], doc["picks"], doc["commit_pass"]) == (
@@ -319,15 +322,50 @@ def test_the_slim_keep_reopens_every_pick_against_the_run_root_and_nothing_else(
 def test_the_slim_keep_is_written_only_for_the_replay_s_own_draw(tmp_path):
     out, b, store, run, t, _want, c, plan = _kept(tmp_path)
     for bad in (dict(plan, picked=1), {k: v for k, v in plan.items() if k != "plan"}, dict(plan, picks=plan["picks"][:1])):
-        assert CPU.keep(out, b, store, run, t, bad, c) is None
-    assert CPU.keep(out, b, store, run, t, plan, {"sampled_replay": {"grade": "not-evaluated"}}) is None
+        assert CPU.keep(out, b, store, run, t, bad, c, opened=set()) is None
+    assert CPU.keep(out, b, store, run, t, plan, {"sampled_replay": {"grade": "not-evaluated"}}, opened=set()) is None
     assert not list(out.glob("replay_slim_p*"))
+
+
+def test_a_rows_sha512_keep_carries_only_the_salt_keys_of_the_tensors_its_replay_opened_never_the_registrations_key(tmp_path):
+    """The slim keep is published, and ``Kw`` opens every weights leaf (each tensor's salt key derives from it): no file of a
+    rows-sha512 keep holds ``Kw`` or an unopened tensor's ``tensor_key(Kw, t)``, only those of the tensors the replay opened, with the
+    bundle's bytes of those alone.  A replay from the keep opens the same tensors and reports the rest unopened, not mismatched."""
+    tree = weights_tree(_served()) | {"extra": {"model.rotary_emb.cos_sin_cache": 2}}
+    out, b, store, run, t, _want, c, plan = _kept(tmp_path, tree)
+    names = [n for n, *_r in tree["names"]]
+    assert WK.hex().encode() in (Path(b["path"]) / "weights" / "tree.json").read_bytes(), "the private bundle holds Kw"
+    for opened in ({QKV, "model.rotary_emb.cos_sin_cache"}, {QKV}):
+        CPU.keep(out, b, store, run, t, plan, c, opened=opened)
+        k = CPU.slim_path(out, 1)
+        held = [i for i, n in enumerate(names) if n in opened]
+        secret = [WK, *(step_rows.tensor_key(WK, i) for i in range(len(names)) if i not in held)]
+        for f in (x for x in k.rglob("*") if x.is_file()):
+            data = f.read_bytes()
+            assert not [s for s in secret if s in data or s.hex().encode() in data], f"{f.relative_to(k)} holds Kw or an unopened tensor's key"
+        kt = json.loads((k / "weights" / "tree.json").read_text())
+        assert "key" not in kt and kt["tensor_keys"] == {str(i): step_rows.tensor_key(WK, i).hex() for i in held}
+        assert (kt["root"], kt["tensor_roots"], kt["names"]) == (tree["root"], tree["tensor_roots"], tree["names"])
+        assert kt["extra"] == {n: i for n, i in tree["extra"].items() if n in opened}
+        assert sorted(x.name for x in (k / "weights" / "extra").glob("*")) == [f"{i}.bin" for i in sorted(kt["extra"].values())]
+    ckd = tmp_path / "ck"
+    ckd.mkdir()
+    (ckd / "config.json").write_text("{}")
+    _shard(ckd / "model.safetensors", PARTS)
+    CPU.keep(out, b, store, run, t, plan, c, opened={QKV, "model.rotary_emb.cos_sin_cache"})
+    k = CPU.slim_path(out, 1)
+    words, wc = CPU.open_weights(k, json.loads((k / "weights" / "tree.json").read_text()), tree["root"],
+                                 WR.CheckpointIndex(str(ckd), verify_shards=False), threads=2)
+    assert wc["equal"] is True and set(words) == {QKV, "model.rotary_emb.cos_sin_cache"} and wc["mismatched_n"] == 0, wc
+    assert {u["name"]: u["why"] for u in wc["unopened"]} == {n: "the slim keep carries no salt key for it" for n in ("model.norm.weight", "model.unknown.weight")}
+    with pytest.raises(KeyError, match="carries no salt key"):
+        CPU.tensor_root_of(json.loads((k / "weights" / "tree.json").read_text()), 1, PARTS["model.norm.weight"].view(np.uint8))
 
 
 def _decided(tmp_path):
     """A record whose deferred replay was decided and left its keep, and its instrumented row as it awaited the replay."""
     out, b, store, run, t, _want, c, plan = _kept(tmp_path)
-    CPU.keep(out, b, store, run, t, plan, c)
+    CPU.keep(out, b, store, run, t, plan, c, opened=set())
     rows, row, verdict, _s, _r = CPU.of_record(b, out)
     rc = row["commit"]
     rc.update(commit_fail_reason=RB.PENDING, value_correspondence={"method": "offline-suite", "result": None, "why": None,

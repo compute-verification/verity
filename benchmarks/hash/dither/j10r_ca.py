@@ -1,12 +1,11 @@
-"""A CPU twin of J10-R for this lane's measured-only arm (kh_one_j10): CA's RT-ALGO r3 form J10-R
-(benchmarks/pouw/rt_algo_r3/rt_algo_r3_check.py on cursor/ca-rt-algo-r3-ea24 at 3dc80591df,
-note:compute-accounting/20261019T0845Z-draft-rt-algo-r3), never served or credited until CA adopts J10 and the verifier
-takes the form. Its noise is RT-ALGO's reference for J10-R, h1tile.noise(seed_c, Layout(M, N, K)) at call scale: one
-SHA-512 counter stream for the call, row i's blocks at Layout.row(i) = i rb and column j's at Layout.col(j) = M rb + j cb
-(RT-ALGO-16's tag-separated counters are a proposed fix, not in that reference), unit (I, J) reading call rows
+"""A CPU twin of J10-R for the measured-only arm kh_one_j10: the form J10-R of `SOURCE`
+(benchmarks/pouw/rt_algo_r3/rt_algo_r3_check.py), never served or credited until J10 is ruled in and the verifier
+takes the form. Its noise is that reference's for J10-R, h1tile.noise(seed_c, Layout(M, N, K)) at call scale: one
+SHA-512 counter stream for the call, row i's chunks at Layout.row(i) = i rb and column j's at Layout.col(j) = M rb + j cb
+(tag-separated counters are a proposed fix, not in that reference), unit (I, J) reading call rows
 32 I .. 32 I + 31 and columns 32 J .. 32 J + 31. seed_c is seeds.seed(salt, STEP, root_a, root_b), the step position 7
-RT-ALGO's forms use. Each unit keeps its own fold keys (h1tile.fold_keys of its receipt seed), and its z and receipt are
-v3's (h1v3_ca) on that noise.
+the reference's forms use. Each unit keeps its own fold keys (h1tile.fold_keys of its receipt seed), and its z and
+receipt are v3's (h1v3_ca) on that noise.
 """
 from __future__ import annotations
 
@@ -20,7 +19,7 @@ from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.pouw.circuit import segment as SG
 
-SOURCE = "benchmarks/pouw/rt_algo_r3/rt_algo_r3_check.py @ cursor/ca-rt-algo-r3-ea24 3dc80591df (form J10-R)"
+SOURCE = "benchmarks/pouw/rt_algo_r3/rt_algo_r3_check.py @ 3dc80591df (form J10-R)"
 STEP = 7
 
 
@@ -89,8 +88,8 @@ def reference(a: np.ndarray, b: np.ndarray, salt: bytes, base: int, roots: tuple
 
 def injected_is_v3(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], salt: bytes, position: int,
                    roots: tuple[bytes, bytes]) -> bool:
-    """`unit` on a unit's own noise and keys gives h1v3_ca.reference's z and receipt (RT-ALGO's
-    check_injected_reference_is_h1tile, for v3)."""
+    """`unit` on a unit's own noise and keys gives h1v3_ca.reference's z and receipt
+    (rt_algo_r3_check's check_injected_reference_is_h1tile, for v3)."""
     lay = HT.Layout(len(a), len(b), len(a[0]))
     rows, cols = HT.noise(SD.seed(salt, position, *roots), lay)
     keys = HT.fold_keys(SD.receipt_seed(salt, position, *roots), lay)

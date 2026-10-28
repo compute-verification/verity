@@ -1,5 +1,5 @@
 """The class circuit's row census (V3c): per template, its units' input rows by what fills them (``wired``, ``registered``
-(the weights'), ``value`` (a per-window registered value's, such as the slot rows), ``table_root``, ``opening``, else
+(the weights'), ``value`` (a per-window registered value's, such as the scan state rows), ``table_root``, ``opening``, else
 ``free``) and their bytes, its output rows and their bytes, and the SHA-512
 compressions a by-reference commit spends on them: every output row hashed fresh, every input row only re-leafed in its
 port's tree, since a wired row's b||c is its writer's and a registered row's the registration's.
@@ -104,7 +104,7 @@ def main(argv=None) -> int:
         from tests.program.predict import test_steps as S
         reg = S._registered()
         cls = WindowClass(8, 4, 2, lanes=4, every=16) if a.slots else WindowClass(2, 4, 2)
-        circuit = class_circuit(reg, cls, None, Grain(gemm_words=512, rows=9, select=64))
+        circuit = class_circuit(reg, cls, None, Grain(gemm_words=512, rows=9, select=64), provable=False)
     else:
         cfg = json.loads((Path.cwd() / "integrations/vllm/tests/program/predict/fixtures/llama32-1b.config.json").read_text())
         target = {"compute_capability": [12, 0], "num_sms": 188}
@@ -117,7 +117,7 @@ def main(argv=None) -> int:
         cls = WindowClass(*map(int, a.cls.split(","))) if a.cls else CLASS_OF_RECORD
         if a.probe:
             cls = WindowClass(*map(int, a.probe.split(",")))
-            circuit = class_circuit(reg, cls, 1)
+            circuit = class_circuit(reg, cls, 1, provable=False)
         else:
             built, program = WC.class_program(reg, cls), WC.class_program
             WC.class_program = lambda r, c: built if c == cls else program(r, c)

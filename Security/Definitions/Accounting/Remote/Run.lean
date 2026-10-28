@@ -5,9 +5,9 @@ import Definitions.Pouw.Basic.Prob
 # A remote audit's run, and the routes its guarantees compose (trusted)
 
 A run of the remote audit on node `N` with parameters `a`, over the audit's coins `Ω` (the verifier's seeds σ_t, its
-samples and the oracle), uniform (`Pouw.pr`). Each field is a quantity of the console's actual-circuit model (v2.9) at
-each outcome, over the audited interval `I = [t_0, t_P)`, where `t_j` is the tick of pass `j`'s oracle query
-`H(σ_t, root_{j−1})`, so that by the oracle's Merkle chain pass `j`'s correct receipts are computed in `[t_j, t_{j+1})`:
+samples and the oracle), uniform (`Pouw.pr`). Each field is a quantity of the actual-circuit model at each outcome, over
+the audited interval `I = [t_0, t_P)`, where `t_j` is the tick of pass `j`'s oracle query `H(σ_t, root_{j−1})`, so that
+by the oracle's Merkle chain pass `j`'s correct receipts are computed in `[t_j, t_{j+1})`:
 
 * `read ω m`: the bits tier `m`'s port carried to the node's compute (`ingressFrom X_N m I`); `readOut ω`, the bits
   memory tiers outside the node carried to any compute.
@@ -26,22 +26,21 @@ each outcome, over the audited interval `I = [t_0, t_P)`, where `t_j` is the tic
 
 A route is a bound the run meets except with probability `δ` over the coins when the audit accepts (`Run.Holds`); a
 model row that holds on every outcome is a route at `δ = 0`. The compositions (`Accounting.SecurityProofs.Remote`)
-compose them by a union bound; each lane proves a route for the runs its game or the actual circuit realizes:
+compose them by a union bound; each route is proved for the runs its game or the actual circuit realizes:
 
 * `Sampled ε`: correct receipts cover `(1 − ε) · C` (μ_sample); the verifier checks `committed · b ≥ C` and samples.
 * `Paid`: each correct receipt's word was paid for, by a read, a held bit or a rebuild, at whatever location computed
-  it (conservation of bits; lane ra-remote-lean's two-tier conservation and chained passes).
+  it (conservation of bits, with two-tier conservation and chained passes).
 * `PaidJoint`: `Paid` with Mbw's independent data counted against the same payment (Mbw at every location).
 * `CoLocated`: the same paid at the node: a word read, held or rebuilt by the node, carried in over its boundary, or
-  computed outside from a `z` carried out (`b / z_b` per bit) or computed there (lane ra-bound-lean). Only the
-  statement without Identity takes it.
+  computed outside from a `z` carried out (`b / z_b` per bit) or computed there. Only the statement without Identity
+  takes it.
 * `ChipState`: `state ≤ P · (M_N + 1)` (the Memory row and `LengthCode`; B3's charge at each `t_j`).
 * `Rebuild`: `rebuilt · c_word ≤ b · rebuildWork`: rebuilding `x` bits takes at least `x · c_word / b` work at π_r
-  (WorkHardness in partial-completion form; lane ra-partial-lean).
+  (WorkHardness in partial-completion form).
 * `Fit W_r`: the rebuild fits at π_r beside `W_r`, `W_r + rebuildWork ≤ Φ_r · T`. At `W_r = 0` it is the Compute row
   alone (`δ = 0`); at `W_r > 0` it needs W (`Assumptions.ComputeAdditive`) and `Certified W_r`.
-* `Certified W_r`: PoUW's account did at least `W_r` at π_r (PoUW's per-run guarantee at π_r, lane ra-per-run's
-  `ComputeSoundPerRun`).
+* `Certified W_r`: PoUW's account did at least `W_r` at π_r (PoUW's per-run guarantee at π_r, `ComputeSoundPerRun`).
 * `Links`: the boundary's signals are within `β_in · T` and `β_out · T` (the Links row).
 * `Ports`: each tier's port is within `β_m · T` (the Links row at each tier's port).
 

@@ -66,7 +66,7 @@ read-only deploy key; if `watch.log` shows `FETCH-FAILED`, remove `--reap` until
 | `/data/boot` | `/post_start.sh` | `post_start.sh` |
 | `/data/state/root-research` | `/root/.research` | the guard's and the steward's state |
 | `/data/state/runpod` | `/root/.runpod` | the RunPod CLI config and its ssh key |
-| `/data/state/config-verity` | `/root/.config/verity` | `r2.env` (R2 credentials), `relay.env` (`SLACK_BOT_TOKEN`, `GH_TOKEN`), `store-index.env` (`STORE_INDEXER_DATABASE_URL`), `store-export.env` (`RESEARCH_EXPORT_BUCKET` and the export bucket's read-only `RESEARCH_EXPORT_ACCESS_KEY_ID` / `RESEARCH_EXPORT_SECRET_ACCESS_KEY`, optionally `RESEARCH_EXPORT_ENDPOINT`) and `panels.key` |
+| `/data/state/config-verity` | `/root/.config/verity` | `r2.env` (R2 credentials), `relay.env` (`SLACK_BOT_TOKEN`, `GH_TOKEN`), `store-index.env` (`STORE_INDEXER_DATABASE_URL`), `store-export.env` (`RESEARCH_EXPORT_BUCKET`; optionally a key pair of its own, `RESEARCH_EXPORT_ACCESS_KEY_ID` / `RESEARCH_EXPORT_SECRET_ACCESS_KEY`, which must be able to list the bucket, else `store_index.sh` uses `r2.env`'s; optionally `RESEARCH_EXPORT_ENDPOINT`) and `panels.key` |
 | `/data/state/secrets` | | `notes-git-credentials`, `verity-deploy` (read-only deploy key), `panels-key-push`, `known_hosts`, `msg.env` (`SLACK_BOT_TOKEN`, a copy of `relay.env`'s, for `msg.sh`; root, 0600) |
 | `/data/slack-app` | | `token.json`: the Slack app's configuration token pair, the one copy (top and comms, 19 Oct 15:33Z), which `research msg slack-app` rotates in place (root, 0600; the directory 0700) |
 | `/data/uv` | `/root/.local/bin/uv`, `/root/.local/share/uv/python`, `/usr/local/bin/python3.12` | uv and CPython 3.12 |

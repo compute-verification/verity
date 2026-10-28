@@ -1,6 +1,6 @@
 """The private placement of the circuit on the hardware, and the crossing edges it implies.
 
-`Placement` has the shape of Lean's `Accounting.Requirement.Placement` (PR #2399) and its Lean-code mirror
+`Placement` has the shape of Lean's `Accounting.Requirement.Placement` and its Lean-code mirror
 (`CircuitRequirement.Placement`): the values are the circuit's gates in canonical order (`Fin n`), each with its engine
 step (`step`) and the device leaf at which it is produced or, for an input, stored (`leaf`), and `ticks[x][s]` is the tick
 at which device x begins engine step s. A value's tick is `ticks[leaf v][step v]` (`Placement.tick`), and `paced(X)` is

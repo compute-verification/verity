@@ -21,10 +21,13 @@ op's outputs, one row a slot: ``embed``; per layer ``l<i>.`` ``attn_sums`` (RMSN
 word), ``wq``, ``wk``, ``wv``, ``softmax`` (heads x 32, the slot's first position + 1 of each head's its probabilities and the
 rest +0), ``pv``, ``o_amax``, ``o_quant``, ``wo``, ``attn_residual``, ``mlp_sums``, ``mlp_norm``, ``up_amax``, ``up_quant``,
 ``wup``, ``down_amax``, ``down_quant`` (RELU), ``wdown``, ``mlp_residual``; then ``final_sums``, ``final_norm``,
-``head_amax``, ``head_quant``, ``head`` and ``argmax``. The map's units (`plan.Units`) are slices of these rows. RMSNorm
-sums in chunks and groups (`shape.Forms`), which changes its words from one sequential sum wherever a row is more than one
-chunk. With ``keep=False`` a group's tables are dropped once committed (a run of record keeps no step's tables: a drawn slot
-is opened by replaying its request, `opening`).
+``head_amax``, ``head_quant``, ``head`` and ``argmax``; under the committer's ``residual`` fusion (`plan.Map`) there is no
+``wo`` or ``wdown``, their coordinates' words being added straight into the residual, under its ``norm`` fusion no
+``attn_norm``, ``mlp_norm`` or ``final_norm``, and those quantizers' amax words are every part's, then the row's, and
+under its ``pv`` fusion no ``softmax``. The map's units
+(`plan.Units`) are slices of these rows. RMSNorm sums in chunks and groups (`shape.Forms`), which changes its words from one
+sequential sum wherever a row is more than one chunk. With ``keep=False`` a group's tables are dropped once committed (a
+run of record keeps no step's tables: a drawn slot is opened by replaying its request, `opening`).
 """
 from __future__ import annotations
 
@@ -136,7 +139,7 @@ class Driver:
         self.subcircuits = list(subcircuits)
         self.calls = [s for s in self.subcircuits if hasattr(s, "call")]
         self.attn = A.Attention(self.device, attention)
-        self.groups = tables(shape)
+        self.groups = tables(shape, committer.fused)
         self.forms = forms(shape)
         self.k: torch.Tensor | None = None      # the driver's own KV pool, (layers, batch, context, head_dim) int16
         self.v: torch.Tensor | None = None
@@ -190,16 +193,25 @@ class Driver:
 
     def _norm(self, T: dict, op: str, gain: str, lo: int, hi: int, x: torch.Tensor) -> torch.Tensor:
         """RMSNorm ``op`` (``attn``, ``mlp``, ``final``) of rows lo .. hi: its chunk sums into ``op_sums``, its output into
-        ``op_norm``."""
+        ``op_norm`` (none under the ``norm`` fusion)."""
         f, n = self.forms, x.shape[1]
         h, sums = O.rmsnorm(x, self.params.gain[gain], self.params.eps, f.chunk, f.groups(n))
         T[op + "_sums"][0].view(torch.float32)[lo:hi] = sums
-        self._bf(T[op + "_norm"])[lo:hi] = h
+        if op + "_norm" in T:
+            self._bf(T[op + "_norm"])[lo:hi] = h
         return h
 
-    def _quantize(self, T: dict, op: str, lo: int, hi: int, x: torch.Tensor, relu: bool = False) -> O.Quant:
-        """The quantizer ``op`` of rows lo .. hi: its amax words into ``op_amax``, its codes and scale into ``op_quant``."""
-        q = O.quantize(x, relu, self.forms.parts(x.shape[1])[1])
+    def _quantize(self, T: dict, op: str, lo: int, hi: int, x: torch.Tensor, relu: bool = False,
+                  normed: bool = False) -> O.Quant:
+        """The quantizer ``op`` of rows lo .. hi: its amax words into ``op_amax``, its codes and scale into ``op_quant``.
+        ``normed``: it quantizes an RMSNorm's output, whose amax words under the ``norm`` fusion are every part's (the fused
+        parts of `shape.Forms.norm_parts`), then the row's."""
+        n = x.shape[1]
+        if normed and "norm" in self.committer.fused:
+            parts, pw = self.forms.norm_parts(n)
+            q = O.quantize(x, relu, pw, every=parts > 1)
+        else:
+            q = O.quantize(x, relu, self.forms.parts(n)[1])
         T[op + "_amax"][0].view(torch.int16)[lo:hi] = q.amax
         t = T[op + "_quant"]
         t[0][lo:hi] = q.codes
@@ -249,7 +261,7 @@ class Driver:
                 m = hi - lo
                 xs = x[lo:hi]
                 h = self._norm(T, "attn", p + "attn_norm", lo, hi, xs)
-                q = self._quantize(T, "attn", lo, hi, h)
+                q = self._quantize(T, "attn", lo, hi, h, normed=True)
                 qv = self._linear(st, p + "wq", lo, q, w["wq"])
                 self._bf(T["wq"])[lo:hi] = qv
                 kk = self._linear(st, p + "wk", lo, q, w["wk"])
@@ -268,24 +280,27 @@ class Driver:
                 sc, pr, att = self.attn(qv.view(m, sh.heads, sh.head_dim), keys, vals, p_c + 1)
                 c0 = self._tick(sec, "attention", a0)
                 del sc
-                soft = self._bf(T["softmax"])[lo:hi].view(m, sh.heads, PV_K)
-                soft.zero_()
-                soft[:, :, :pr.shape[-1]] = pr
+                if "softmax" in T:
+                    soft = self._bf(T["softmax"])[lo:hi].view(m, sh.heads, PV_K)
+                    soft.zero_()
+                    soft[:, :, :pr.shape[-1]] = pr
                 att = att.reshape(m, sh.width)
                 self._bf(T["pv"])[lo:hi] = att
                 q = self._quantize(T, "o", lo, hi, att)
                 o = self._linear(st, p + "wo", lo, q, w["wo"])
-                self._bf(T["wo"])[lo:hi] = o
+                if "wo" in T:
+                    self._bf(T["wo"])[lo:hi] = o
                 xs = O.add(xs, o)
                 self._bf(T["attn_residual"])[lo:hi] = xs
                 h = self._norm(T, "mlp", p + "mlp_norm", lo, hi, xs)
-                q = self._quantize(T, "up", lo, hi, h)
+                q = self._quantize(T, "up", lo, hi, h, normed=True)
                 u = self._linear(st, p + "wup", lo, q, w["wup"])
                 self._bf(T["wup"])[lo:hi] = u
                 q = self._quantize(T, "down", lo, hi, u, relu=True)
                 del u
                 dn = self._linear(st, p + "wdown", lo, q, w["wdown"])
-                self._bf(T["wdown"])[lo:hi] = dn
+                if "wdown" in T:
+                    self._bf(T["wdown"])[lo:hi] = dn
                 xs = O.add(xs, dn)
                 self._bf(T["mlp_residual"])[lo:hi] = xs
                 x[lo:hi] = xs
@@ -299,7 +314,7 @@ class Driver:
         nxt = torch.empty(n, dtype=torch.int64, device=dev)
         for lo, hi in ch:
             h = self._norm(T, "final", "final_norm", lo, hi, x[lo:hi])
-            q = self._quantize(T, "head", lo, hi, h)
+            q = self._quantize(T, "head", lo, hi, h, normed=True)
             logits = self._linear(st, "head", lo, q, head)
             self._bf(T["head"])[lo:hi] = logits
             nxt[lo:hi] = O.argmax(logits)

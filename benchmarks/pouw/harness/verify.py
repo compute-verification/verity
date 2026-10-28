@@ -55,7 +55,9 @@ from pathlib import Path
 
 import arm as A
 import ledger as L
+from verity_config.settings import of
 
+settings = of(__file__)
 VERSION = "verify/v1"
 EXIT_OK, EXIT_REJECTED, EXIT_USAGE = 0, 1, 2
 ACCEPT = re.compile(r"^\s*ACCEPT\b")
@@ -275,19 +277,19 @@ def ledger(result: dict, a: argparse.Namespace, log) -> dict:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     p.add_argument("result", type=Path, help="the run's result JSON (bench.py --out)")
-    p.add_argument("--run-id", default=os.environ.get("RESEARCH_RUN_ID"))
-    p.add_argument("--commit", default=os.environ.get("RESEARCH_SOURCE_SHA"))
+    p.add_argument("--run-id", default=settings.RESEARCH_RUN_ID)
+    p.add_argument("--commit", default=settings.RESEARCH_SOURCE_SHA)
     p.add_argument("--out", type=Path, help="write the result here instead of rewriting RESULT_JSON")
     g = p.add_argument_group("the attempt records (ledger.py)")
-    g.add_argument("--tier", choices=L.TIERS, default=os.environ.get("POUW_TIER", "2a"),
+    g.add_argument("--tier", choices=L.TIERS, default=settings.POUW_TIER,
                    help="2a: a one-GPU screen (the default); 2b: a timed whole-node window, the panel's measurements")
     g.add_argument("--hypothesis", help="the attempt's one line: what it changes and what it should buy")
     g.add_argument("--parent", help="the attempt it changes: its record's art: id, or its variant id")
     g.add_argument("--outcome", choices=L.OUTCOMES, help="the lane's verdict, when it has one already (default: screened)")
     g.add_argument("--reason", help="the outcome's one-line reason (required unless screened)")
-    g.add_argument("--by", default=os.environ.get("GPU_LEASE_WHO") or os.environ.get("RESEARCH_LANE"),
+    g.add_argument("--by", default=settings.GPU_LEASE_WHO or settings.RESEARCH_LANE,
                    help="the lane (default: $GPU_LEASE_WHO)")
-    g.add_argument("--publish", action="store_true", default=os.environ.get("POUW_LEDGER_PUBLISH") == "1",
+    g.add_argument("--publish", action="store_true", default=settings.POUW_LEDGER_PUBLISH,
                    help="put the records into the evidence store (default when POUW_LEDGER_PUBLISH=1)")
     g.add_argument("--push", action="store_true", help="with --publish: push them onto the store's remote")
     g.add_argument("--store", help="the store's root (default: $RESEARCH_STORE or ~/.research/store)")

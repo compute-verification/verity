@@ -347,7 +347,7 @@ def test_the_sketch_charges_the_outside_factor_the_node_states(store) -> None:
 
 def test_the_node_carries_a_write_ceiling_per_tier() -> None:
     """Beside its read ceilings a node has one GPU's and the host DRAM's write ceilings, `timing`'s in `Node.stated`
-    and by default, each a positive finite rate, and no DPU's (MEM-45)."""
+    and by default, each a positive finite rate, and no DPU's."""
     for n in (ledger.Node.stated(), ledger.Node.stated(reported_read_bytes_per_s=2e13), node()):
         assert (n.gpu_write_bytes_per_s, n.host_write_bytes_per_s) == (
             timing.GPU_WRITE_BYTES_PER_S, timing.HOST_WRITE_BYTES_PER_S) == (1.597e12, 819.2e9)

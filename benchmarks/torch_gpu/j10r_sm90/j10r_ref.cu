@@ -22,11 +22,9 @@
 #include <cstdint>
 #include <cuda_runtime.h>
 
-namespace jr {
+#include "../sha512_rows/sha512x.cuh"
+
 typedef unsigned long long u64;
-#include "../../codec_tensor/sha512.cuh"
-}  // namespace jr
-using jr::u64;
 typedef unsigned int u32;
 
 constexpr int TILE = 32, THREADS = 256, CHUNK = 16, MAXM = 4, WARPS = THREADS / 32;
@@ -55,9 +53,8 @@ __device__ void noise_block(const u64* tag, const u64* seed, u64 t, u32* out) {
   u64 w[16] = {tag[0], tag[1], tag[2], seed[0], seed[1], seed[2], seed[3], seed[4], seed[5], seed[6], seed[7], t,
                0x8000000000000000ULL, 0, 0, 96 * 8};
   u64 s[8];
-#pragma unroll
-  for (int j = 0; j < 8; ++j) s[j] = jr::kSha512Iv[j];
-  jr::sha512_compress(s, w);
+  sx::iv(s);
+  sx::compress<0, 2>(s, w);
 #pragma unroll
   for (int j = 0; j < 8; ++j) {
     out[2 * j] = (u32)(s[j] >> 32);
@@ -78,9 +75,9 @@ __global__ void __launch_bounds__(128) k_seeds(const u64* __restrict__ data, u64
   msg[29] = msg[30] = 0;
   msg[31] = 224 * 8;
   u64 s[8];
-  for (int j = 0; j < 8; ++j) s[j] = jr::kSha512Iv[j];
-  jr::sha512_compress(s, msg);
-  jr::sha512_compress(s, msg + 16);
+  sx::iv(s);
+  sx::compress<0, 2>(s, msg);
+  sx::compress<0, 2>(s, msg + 16);
   u64* o = i == n ? seedc : sigma + 8 * (u64)i;
   for (int j = 0; j < 8; ++j) o[j] = s[j];
 }

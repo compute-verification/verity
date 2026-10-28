@@ -265,8 +265,8 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("builds", nargs="+", help="request Program dirs of a Build (each holds descriptor.json.gz)")
     ap.add_argument("--json")
-    ap.add_argument("--rate-256", type=float, default=66.12, help="GB/s, rows_floor minb2 at 256-byte rows (r20261017-234343-61c6)")
-    ap.add_argument("--rate-4k", type=float, default=230.61, help="GB/s, rows_floor minb2 at 4 KiB rows (r20261017-234343-61c6)")
+    ap.add_argument("--rate-256", type=float, default=66.12, help="GB/s, rows_floor minb2 at 256-byte rows")
+    ap.add_argument("--rate-4k", type=float, default=230.61, help="GB/s, rows_floor minb2 at 4 KiB rows")
     a = ap.parse_args()
     res = []
     for b in a.builds:

@@ -1,14 +1,18 @@
-"""served_session: the plan is the gate's scan rehearsal at the scan's class (KI prompt ids in, KO out), which this tree's
-gate accepts, and a request the gate or the class refuses is refused with its reason; a session through a stub gate keeps
-the lane's fetch (with witness/) 0700 under KEEP and publishes only the bundle less witness/ and its outcome, removes
+"""served_session: the plan is the gate's scan rehearsal inside the scan's class (PROMPT_IDS prompt ids in, at most KO
+out), which this tree's gate accepts, with the endpoint's sealed flags and its hand start, and a request the gate or
+the class refuses is refused with its reason; a session through a stub gate keeps
+the session's fetch (with witness/) 0700 under KEEP and publishes only the bundle less witness/ and its outcome, removes
 a published file that holds a prompt's ids, and refuses a KEEP inside --out; --at waits on the injected clock and sends
 nothing when late; chain runs chain_record.sh's warden path on the kept fetch, and is refused without the leak guard;
-its draw on the gate's coins names the auditor's node as the coin link's peer, and the served node is refused."""
+on the endpoint's records artifact it reads requests.jsonl rebuilt in KEEP from the artifact's users map and the
+certified I/O, and refuses an endpoint with neither or an I/O that doesn't read whole; its draw on the gate's coins
+names the auditor's node as the coin link's peer, and the served node is refused."""
 from __future__ import annotations
 
 import io
 import json
 import os
+import shlex
 import sys
 import tarfile
 from datetime import datetime, UTC
@@ -53,26 +57,36 @@ else:
 
 
 def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it():
-    assert (SS.KI, SS.KO) == (sz.CLASS.KI, sz.CLASS.KO)
+    assert (SS.KI, SS.KO) == (sz.CLASS.KI, sz.CLASS.KO) and SS.PROMPT_IDS == 256 < SS.KI
     a = SS.parser().parse_args(["plan"])
     a.minutes = SS.A.warden_minutes(a.requests, a.height) + SS.MARGIN
     ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, b"seed")
-    assert len(ps) == 64 and {len(p) for p in ps} == {SS.KI} and all(0 <= t < SS.VOCAB for p in ps for t in p)
+    assert len(ps) == 64 and {len(p) for p in ps} == {SS.PROMPT_IDS} and all(0 <= t < SS.VOCAB for p in ps for t in p)
     assert SS.prompts(2, 4, 256, b"seed") != SS.prompts(2, 4, 256, b"other")
     data = json.dumps(ps, separators=(",", ":")).encode()
     doc = SS.plan(a, data)
-    assert doc["request"] == ("warden-rehearse --peer vy-dc-h200-2 --port 18782 --minutes 20 --requests 400 --height 12 "
+    assert doc["request"] == ("warden-rehearse --peer vy-dc-h200-2 --port 18782 --minutes 10 --requests 113 --height 12 "
                               "--scan --prompts --tokens 64")
-    assert doc["prompts"] == {"count": 64, "ids": 64 * SS.KI} and doc["prompts_bytes"] <= SS.A.WARDEN_PROMPTS_BYTES
-    assert "--port 18782 --protocol ids --id-payload 503 --admit release-order" in doc["endpoint"]
-    assert doc["endpoint"].endswith(f"--max-model-len {SS.KI + SS.KO}")
-    assert f"PORT=18782 ADMIT=release-order PROTOCOL=ids MAX_MODEL_LEN={SS.KI + SS.KO}" in doc["hand_start"]
+    assert doc["prompts"] == {"count": 64, "ids": 64 * SS.PROMPT_IDS} and doc["prompts_bytes"] <= SS.A.WARDEN_PROMPTS_BYTES
+    assert doc["endpoint"].endswith("--port 18782 --protocol ids --id-payload 503 --admit release-order "
+                                    "--scheme rows-sha512 --seal --retain-exclude hidden_m1")
+    run = shlex.split(doc["runs"]["chain"])
+    assert "--store-read" in run[:run.index("--")] and run[run.index("--run-max") + 1] == "14400"
+    inner = SS.parser().parse_args(shlex.split(run[-1])[2:])
+    assert (inner.cmd, inner.endpoint, inner.eos_ids, inner.draw, inner.coins, str(inner.challenger_key)) == (
+        "chain", "ART", "128001", 8, "gate", "$RESEARCH_RUN_DIR/inputs/challenger-key.json")
+    assert all(w in doc["hand_start"] for w in ("--required-manifest ROW/manifest.json", "not examples/vllm/serve.sh",
+                                                 "--disk-floor-gb 40"))
+    long = SS.parser().parse_args(["plan", "--prompt-ids", str(SS.KI)])
+    long.minutes = a.minutes
+    assert SS.plan(long, b"[[1]]")["endpoint"].endswith(f"--max-model-len {SS.KI + SS.KO}")
 
 
 @pytest.mark.parametrize("flags, why", [
-    (["--tokens", "32"], "exactly KO = 64"),
+    (["--tokens", "65"], "1 to KO = 64"),
+    (["--tokens", "0"], "1 to KO = 64"),
     (["--prompt-ids", "1025"], "1 to KI = 1024"),
-    (["--prompts", "200"], "the gate refuses it: --prompts: over 1048576 bytes"),
+    (["--prompts", "200", "--prompt-ids", "1024"], "the gate refuses it: --prompts: over 1048576 bytes"),
     (["--requests", "100000", "--minutes", "60"], "the gate refuses it: --requests '100000'"),
     (["--minutes", "5"], "the gate refuses it: --minutes 5"),
 ])
@@ -96,7 +110,7 @@ def test_a_session_keeps_the_lanes_fetch_apart_and_publishes_the_bundle_less_wit
     assert _session(tmp_path, monkeypatch) == 0
     assert (tmp_path / "request").read_text().endswith("--scan --prompts --tokens 64")
     prompts = (tmp_path / "prompts.json").read_bytes()
-    assert [len(p) for p in json.loads(prompts)] == [SS.KI] * 3
+    assert [len(p) for p in json.loads(prompts)] == [SS.PROMPT_IDS] * 3
     keep, kept = tmp_path / "keep", tmp_path / "keep" / RUN / "fetch.tar.gz"
     assert [p.stat().st_mode & 0o777 for p in (keep, keep / RUN, kept)] == [0o700, 0o700, 0o600]
     assert f"{RUN}/witness/prompts.json" in SS.members(kept.read_bytes())
@@ -107,7 +121,7 @@ def test_a_session_keeps_the_lanes_fetch_apart_and_publishes_the_bundle_less_wit
     doc = json.loads((out / "session.json").read_text())
     assert (doc["run"], doc["rc"], doc["verdict"]["accepted"], doc["windows"], doc["session_s"]) == (RUN, 0, True, 4,
                                                                                                      12.8)
-    assert doc["prompts"] == {"count": 3, "ids": 3 * SS.KI} and doc["keep"] == str(kept)
+    assert doc["prompts"] == {"count": 3, "ids": 3 * SS.PROMPT_IDS} and doc["keep"] == str(kept)
     assert not any(n in p.read_bytes() for p in out.iterdir() for n in SS.needles(json.loads(prompts)))
 
 
@@ -153,6 +167,7 @@ def test_chain_runs_chain_records_warden_path_on_the_kept_fetch_and_needs_the_le
     monkeypatch.setenv("SEEN", str(tmp_path / "seen"))
     keep = tmp_path / "keep"
     (keep / RUN / "endpoint").mkdir(parents=True)
+    (keep / RUN / "endpoint" / "requests.jsonl").write_text("")
     (keep / RUN / "fetch.tar.gz").write_bytes(b"")
     argv = ["chain", "--run", RUN, "--keep", str(keep), "--eos-ids", "256", "CR_N2_DRAW=4"]
     assert SS.main(argv) == 2
@@ -166,6 +181,50 @@ def test_chain_runs_chain_records_warden_path_on_the_kept_fetch_and_needs_the_le
     assert SS.main([*argv, "N2_DRAW=4"]) == 2
     assert SS.main([*argv, "--draw", "8"]) == 0
     assert "CR_SCAN_ARGS=--draw 8" in (tmp_path / "seen").read_text().splitlines()
+
+
+def test_chain_on_vllms_art_reads_requests_jsonl_rebuilt_in_keep_from_its_users_map(tmp_path, monkeypatch, capsys):
+    here, art, keep = tmp_path / "here", tmp_path / "art" / "serve", tmp_path / "keep"
+    for d in (here, art, keep / RUN, tmp_path / "bin"):
+        d.mkdir(parents=True)
+    (here / "chain_record.sh").write_text('env | grep "^CR_ENDPOINT=" > "$SEEN"\n')
+    (here / "leak_guard.py").write_text("")
+    (keep / RUN / "fetch.tar.gz").write_bytes(b"")
+    for f in ("advice_trace.jsonl", "windows.jsonl", "serve.json"):
+        (art / f).write_text("{}\n")
+    users = [json.dumps({"engine_id": f"e{j}", "user": f"user-{j}"}) + "\n" for j in range(3)]
+    (art / SS.USERS).write_text("".join(users))
+    (tmp_path / "bin" / "research").write_text(f'#!/bin/sh\n[ "$*" = "data fetch art:ep --to $5" ] && cp -a {art.parent}/. "$5/"\n')
+    (tmp_path / "bin" / "research").chmod(0o755)
+    monkeypatch.setattr(SS, "HERE", here)
+    monkeypatch.setenv("SEEN", str(tmp_path / "seen"))
+    monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}{os.pathsep}{os.defpath}")
+    io = {"accepted": True, "violations": [], "records": [
+        {"user": "user-0", "prompt": [5, 6], "max_tokens": 4, "output": [9, 128001]},
+        {"user": "user-1", "prompt": [7], "max_tokens": 4, "output": [1, 2]},
+        {"user": "user-2", "prompt": [8], "max_tokens": 4, "output": [1, 2, 3, 4]}]}
+    monkeypatch.setattr(SS, "certified_io", lambda fetch: io)
+    argv = ["chain", "--run", RUN, "--keep", str(keep), "--endpoint", "art:ep", "--eos-ids", "128001"]
+    assert SS.main(argv) == 0
+    dest = keep / RUN / "endpoint-rebuilt"
+    assert (tmp_path / "seen").read_text().strip() == f"CR_ENDPOINT={dest}" and dest.stat().st_mode & 0o777 == 0o700
+    got = [json.loads(x) for x in (dest / "serve" / "requests.jsonl").read_text().splitlines()]
+    assert [(r["engine_id"], r["user"], r["prompt_ids"], r["streamed_ids"], r["finish"]) for r in got] == [
+        ("e0", "user-0", [5, 6], [9, 128001], {"reason": "stop", "stop_reason": None}),
+        ("e1", "user-1", [7], [1, 2], {"reason": "stop", "stop_reason": None}),
+        ("e2", "user-2", [8], [1, 2, 3, 4], {"reason": "length", "stop_reason": None})]
+    assert not (art / "requests.jsonl").exists()
+    for bad in ({"engine_id": "e3", "user": None}, {"engine_id": "e3", "user": "user-1"}):
+        (art / SS.USERS).write_text("".join(users) + json.dumps(bad) + "\n")
+        assert SS.main(argv) == 2
+        assert f"engine request e3's user {bad['user']!r} is no certified request left" in capsys.readouterr().err
+    io["accepted"] = False
+    assert SS.main(argv) == 2 and "doesn't read whole off its cells" in capsys.readouterr().err
+    (art / SS.USERS).unlink()
+    assert SS.main([*argv[:-4], "--endpoint", str(art), "--eos-ids", "128001"]) == 2
+    assert f"no {SS.USERS} beside an advice_trace.jsonl" in capsys.readouterr().err
+    assert SS.main([*argv[:-4], "--endpoint", "art:other", "--eos-ids", "128001"]) == 2
+    assert "only when launched with --store-read" in capsys.readouterr().err
 
 
 def _gate_chain(tmp_path, monkeypatch, peer):

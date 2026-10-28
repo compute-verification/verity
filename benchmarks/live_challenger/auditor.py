@@ -1,6 +1,5 @@
-"""The auditor host's challenger service (vy-challenger-1; RT4-INT-17, -18, -24, -25, -27, -29, -30): `serve.py` runs only as
-the `auditor` user, from a tree infra pinned, one session a window, each recorded in a signed append-only ledger before its
-first coin.
+"""The auditor host's challenger service: `serve.py` runs only as the `auditor` user, from a pinned
+tree, one session a window, each recorded in a signed append-only ledger before its first coin.
 
     vy-challenger-gate reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE]
     vy-challenger-gate open --session S --root R
@@ -25,14 +24,14 @@ first coin.
   (`vy-challenger-gate LANE`, from `/etc/vy/challenger-gate-keys`, `vy-challenger-setup`), and only such a key reserves and
   opens a window: the reserve records that name as `by`, its prover. A key forced with no name (the shared lane key, which
   the control pod's publisher holds) reads only: `status`, `ledger`, `pins`, `pubkey`, `fetch`. A lane names a window and gets a
-  session; it never names code. Infra's `vy-admin` runs the same gate (`sudo vy-challenger-gate VERB ...`, `by` vy-admin),
+  session; it never names code. The admin account `vy-admin` runs the same gate (`sudo vy-challenger-gate VERB ...`, `by` vy-admin),
   and it alone may reserve a window for a lane that has no key of its own (`--for LANE`: the reserve records `for` and
   keeps `by` vy-admin, and the window's prover is LANE). Nothing else runs as `research` there, and nothing runs as
   `auditor` but the session unit, `reserve`, `admit` and a rehearsal's unit (the certifier's or the warden's).
 - **What runs.** `/opt/vy-challenger/current` -> `/opt/vy-challenger/<commit>`, a root-owned `git archive` of that commit
   (`pin.sh`); the commit is the directory's name, and every entry names it (`pinned`). pin.sh pins only a commit on
   origin/main's first-parent history, which it fetches from GitHub itself, and appends `pin_line(commit, main, utc)` to
-  the pins log (`/opt/vy-challenger/pins.jsonl`, root's, `chattr +a`; `record_pin`) before it moves `current` (RT4-INT-40).
+  the pins log (`/opt/vy-challenger/pins.jsonl`, root's, `chattr +a`; `record_pin`) before it moves `current`.
   A reserve or an open is refused unless that log records this tree's pin (`pins_refusal`, the verifier's `pins_reason`),
   and each open seals the log as it stands (`pins: {lines, sha512}`), so `pinned_session` can hold the session to a pin
   the log records, and that pin to the auditor's own first-parent list of main. The key (`/var/lib/vy-challenger/key`,
@@ -63,7 +62,7 @@ first coin.
   ended (its host stopped): a refused window to the verifier, like one whose `closed` or `complete` is false.
 - **The coins' path**: the device that runs a server's network certifier produces its live coins. `serve.py` listens
   on this host's 127.0.0.1 at the open's port and opens no tunnel of its own. That port is one of the peer's certifier
-  coin link (`coin_ports`: the peer's line `PEER LO-HI` of /etc/vy/coin-ports, infra's, within 7811..7899), which
+  coin link (`coin_ports`: the peer's line `PEER LO-HI` of /etc/vy/coin-ports, within 7811..7899), which
   carries it to the same port of the peer's loopback, where the prover's client connects; a reserve for a peer with no
   such line is refused. The certifier on this host owns that link and counts it (`coin_link.py`,
   `verity.core.protocols.certifier.coin_link`): `run` starts it once serve.py listens and stops it once serve.py exits
@@ -130,7 +129,7 @@ first coin.
   accepts, exit 0, since only the I/O tie refuses it), `--requests` 4 to 400, `--in-flight` 1 to 4 requests sent
   together and `--tokens` 16 to 64 tokens out of each, each recorded and passed on only when given
   (`certifier_serve.py`'s 4 and 64 otherwise), `--profile planned|served` N2's profile, planned by default: the planned
-  egress occupancy, or NET-54's served profile, whose egress counts derive from the ingress head's, and the sampling
+  egress occupancy, or the served profile, whose egress counts derive from the ingress head's, and the sampling
   and the keys' height below). With `--traffic varied` (recorded only then) the rehearsal runs `certifier_serve.py`'s varied plan:
   Poisson arrivals of varied prompts as id requests, each ending at the model's EOS or its `max_tokens` (1 to
   `--tokens`, the cap), and the responses written as id events (each sampled token's id), N2 on the advice profile;
@@ -192,9 +191,9 @@ first coin.
   `end.json` adds `device`, the check's verdict (`warden_outcome`: accepted, the number of problems and the counts
   `WARDEN_COUNTS` names), each registration's root by value and each witness file by name and size. `fetch RUN` gives
   `witness/` only to the run's own lane key (the request's `by`) and to vy-admin.
-- **The load** (CMP-97 option (a); a lane's own gate key or vy-admin, in the rehearsal unit, one at a time with the
-  rehearsals): the demo's weights, plain INT8 as CMP-95 interface 1 generates them from its public seed, sit on this
-  host's store disk (`/var/lib/vy-challenger/store`, `Host.store`, infra's mount, `auditor`'s) and are relayed to the
+- **The load** (a lane's own gate key or vy-admin, in the rehearsal unit, one at a time with the
+  rehearsals): the demo's weights, plain INT8 as interface 1 generates them from its public seed, sit on this
+  host's store disk (`/var/lib/vy-challenger/store`, `Host.store`, its own mount, `auditor`'s) and are relayed to the
   H200 once a serving session. `weights-write [--shape h200|tiny]` writes the shape's stream there once
   (`load_relay.py write`, `WEIGHTS_MINUTES`): a stream already there is read back and kept only when its tensors'
   SHA-256 fold to the pin of interface 1's manifest (`load_relay.STORE_DIGESTS`), else refused and left unrecorded;
@@ -216,8 +215,8 @@ first coin.
   and at most 1 (1 by default), each a plain decimal of at most 4 places, recorded in every request and passed on
   every one (`sampling_argv`), so every request the rehearsal sends carries both: an endpoint applies its own
   generation config (a committing LLAMA32_1B's: temperature 0.6, top_p 0.9) to a request that omits them. The gate
-  takes a top_p below 1, which tonight the compile unit refuses (CIR-87: the seeded top-p sampler's split count reads
-  the live row count).
+  takes a top_p below 1, which the compile unit refuses while the seeded top-p sampler's split count reads the live
+  row count.
 - **A rehearsal's keys** (`--height`, both verbs): LMS (N = 64, W = 1) at a tree height within `REHEARSAL_HEIGHT`, the
   deployed key's (`lms.DEPLOYED`, 20) by default, so that a rehearsal signs as the deployed device does unless its
   request says otherwise; recorded in every request and passed on every one. `certifier_serve.load_key` makes each
@@ -320,7 +319,7 @@ REHEARSAL_HEIGHT = (10, lms.DEPLOYED.H)
 KEYGEN_LEAVES_S = 4096
 #: a warden rehearsal's `--requests` (and a scan rehearsal's on its own `--prompts`, `WARDEN_PROMPT_REQUESTS`): 1700 at
 #: `WARDEN_RATE` is one session of about 57 minutes, about 1080 of the scan's 3.2 s link-windows, past the 745 that
-#: memory-accounting's whole-node wipe needs (H200-GATE, 27 Oct)
+#: the whole-node wipe needs
 WARDEN_REQUESTS = (4, 1700)
 #: the one-time signatures a warden rehearsal's key gives a link-window: a certificate for each of its three links'
 #: records (ingress, egress and the fails link) and a signed head for the ingress and egress cells' rows
@@ -363,8 +362,8 @@ WITNESS = "witness"
 LOAD_SHAPES = ("h200", "tiny")
 #: a load's streams to the H200's sink, each through a tunnel of its own, and how many by default
 LOAD_STREAMS, LOAD_DEFAULT_STREAMS = (1, 8), 4
-#: the link's rate a load's minutes are sized on (infra measured about 95 MB/s over 4 streams from this host to
-#: vy-dc-h200-2 through the tunnel), and the seconds the endpoint has after the load to answer
+#: the link's rate a load's minutes are sized on (about 95 MB/s, measured over 4 streams from this host to
+#: the H200 through the tunnel), and the seconds the endpoint has after the load to answer
 LOAD_RATE, LOAD_READY_S = 80e6, 900
 #: a store write's minutes: interface 1's H200 stream generated (about 15 s a GiB a core), written and read back
 WEIGHTS_MINUTES = 150
@@ -386,13 +385,17 @@ class Refused(Exception):
     """A request the gate or the session refuses, with why."""
 
 
+#: the auditor host's name, which its records give it
+HOST_NAME: str = json.loads((HERE / "host.json").read_text())["name"]
+
+
 @dataclass(frozen=True)
 class Host:
     """Where the service keeps its state, and the name its records give the host."""
 
     root: Path = Path("/var/lib/vy-challenger")
     peers: Path = Path("/etc/vy/peers")
-    name: str = "vy-challenger-1"
+    name: str = HOST_NAME
     pins: Path = Path("/opt/vy-challenger/pins.jsonl")
 
     @property
@@ -422,7 +425,7 @@ class Host:
 
     @property
     def store(self) -> Path:
-        """The store disk (infra's mount, `auditor`'s): interface 1's weights stream a shape
+        """The store disk (its own mount, `auditor`'s): interface 1's weights stream a shape
         (`load_relay.write_store`)."""
         return self.root / "store"
 

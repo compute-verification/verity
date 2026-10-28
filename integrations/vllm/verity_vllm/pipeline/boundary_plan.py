@@ -23,7 +23,7 @@ from typing import Any, Mapping
 from verity_vllm.acquire import gate as G
 from verity_vllm.acquire.sources import call_boundary_plan as CBP
 from verity_vllm.acquire.sources import call_boundary_source as CB
-from verity_vllm.config import option
+from verity_vllm.config import option, workload_arg
 from verity_vllm.pipeline import commit_plan as CP
 
 SCHEMA = "verity-vllm/call-boundary-plan/v1"
@@ -79,7 +79,7 @@ def verdict_entry(args: Any, rec: dict[str, Any] | None) -> dict[str, Any]:
 class Options:
     """The call-boundary check of a row's Build over the Programs its Commit reads, and on a PASS the Commit's call-boundary plan."""
 
-    workload: str = option("--workload", help="the row's workload (the Commit's --workload)")
+    workload: str = option("--workload", type=workload_arg, help="the row's workload (the Commit's --workload)")
     required_manifest: str = option("--required-manifest", help="the Commit's required-value manifest")
     program_digest: str | None = option("--program-digest", default=None, help="the Commit's Program digest of record")
     program_dir: str | None = option("--program-dir", default=None, help="B=1: the Build's request Program dir")

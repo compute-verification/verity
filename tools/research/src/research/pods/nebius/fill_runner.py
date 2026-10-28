@@ -127,7 +127,7 @@ VERITY_DISK_PATH = os.environ.get("FILL_VERITY_DISK_PATH", "/workspace")
 # cores.py): CLAIMS/<name>.cpus, live while its job holds it flock'ed, taken under CLAIMS/.lock; CLAIMS/wait.* are the runs
 # waiting for cores, which the pool lets go first
 CLAIMS = Path(os.environ.get("FILL_CPU_CLAIMS_DIR", "/workspace/research/locks/cpu-claims"))
-# the pool lends its idle slots to queued pous CPU jobs (Daniel 19:12Z: borrowing goes both ways); a Verity job that can't start
+# the pool lends its idle slots to queued pous CPU jobs (borrowing goes both ways); a Verity job that can't start
 # takes a slot back by requeueing the newest lent job (143, as a preempted job)
 VERITY_LEND = os.environ.get("FILL_VERITY_LEND", "1") == "1"
 COMMIT_PREFIX = "verity-commit-"
@@ -658,7 +658,7 @@ def repin(f: dict, fs: list[dict]) -> None:
 
 
 def rank(name: str, h: dict) -> int:
-    """Node 2's order (Daniel): circuits' Commit guests, then pous, then proofs and the rest of Verity's jobs."""
+    """Node 2's order: circuits' Commit guests, then pous, then proofs and the rest of Verity's jobs."""
     return 0 if name.startswith(COMMIT_PREFIX) else 1 if h["project"] != "verity" else 2
 
 

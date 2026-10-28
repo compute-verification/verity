@@ -2,7 +2,7 @@
 # Pearl-C4's shipped tree, built off the GPU box:
 #   pearl_c4.cubin   pearl_c4.cu with CUDA 12.9's nvcc for sm_120a (-fmad=false, no -lineinfo), against GPU 2's hashing module
 #                    pinned at HASH_COMMIT (benchmarks/pouw/pouw_hash/pouw_hash.cuh, its sha256 checked) and the tree's
-#                    benchmarks/pouw/pearl_c/sha512.cuh (the seeds' and lines' SHA-512); refused unless
+#                    benchmarks/pouw/pearl_c/sha512.cuh (the seeds' and lines' SHA-512, sha512_rows' sha512x.cuh); refused unless
 #                    sass.py passes (no warning, spill, stack or local memory; each kernel's OMMA, HMMA and E2M1 counts)
 #   sass.json        registers and those counts per kernel
 #   check/, check2/  fixture.py's buffers for NVFP4 and MXFP4 at 128x128x1024 and 256x384x2048 (needs verity and numpy)
@@ -30,7 +30,7 @@ rm -r "$OUT/pearl_c4.sass" "$OUT/inc"
   uv run python benchmarks/pouw/pearl_c4/fixture.py "$OUT/check2" --shape 256x384x2048)
 cp "$HERE/dev.py" "$HERE/run.sh" "$OUT/"
 { "$C9/bin/nvcc" --version | tail -2; echo "nvcc $FLAGS"; } > "$OUT/toolchain.txt"
-{ git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/pouw/pearl_c4 benchmarks/pouw/pearl_c/sha512.cuh verity/core/protocols/pouw verity
+{ git -C "$ROOT" rev-parse HEAD; git -C "$ROOT" status --porcelain -- benchmarks/pouw/pearl_c4 benchmarks/pouw/pearl_c/sha512.cuh benchmarks/torch_gpu/sha512_rows/sha512x.cuh verity/core/protocols/pouw verity
   echo "pouw_hash.cuh $HASH_COMMIT $HASH_SHA256"; } > "$OUT/source.txt"
 (cd "$OUT" && find . -type f ! -name MANIFEST.sha256 | LC_ALL=C sort | xargs sha256sum > MANIFEST.sha256)
 du -sh "$OUT" | cut -f1 | xargs echo "tree:"

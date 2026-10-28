@@ -37,8 +37,7 @@ lane field.
 word view (the multiply's, `Pouw.H1Zy.immaS8Bits_bv`, from Baugh–Wooley and the clamp).
 
 `Stream`: at the same `K`, a lane's `ok` over `PouwH1Tile_v3` is its `ok` over `PouwH1Tile_v1` at every seed
-(`Pouw.H1Zy.laneOkZ_eq_laneOk`, `Pouw.H1Zy.laneZ3_eq`). `Proofs.Accounting.TS.Session.Lanes.Stream` reads it as
-`LeafChecks`' lane field at v3 lanes.
+(`Pouw.H1Zy.laneOkZ_eq_laneOk`, `Pouw.H1Zy.laneZ3_eq`).
 
 `LaneChunk`: a lane's `n` chunk statements, each `ok = true`, chunk `c + 1`'s carry in chunk `c`'s carry out, give the
 whole lane's `ok = true` at the chain machine's words on the rows they read joined (`Pouw.H1Zy.laneOk_of_chunks`), and so

@@ -31,7 +31,8 @@ against): registered tensor ``t``'s bytes are its rows (the last zero-padded), s
 u64be t)`` under the registration's fresh key ``Kw``, in a tree under ``CommitmentDomain(binding_t, -1, RangeIndexedDomain(0, N_t),
 "sha512")`` with ``binding_t = identity_digest_sha512(WEIGHTS_TAG, {geo, tensor: t, entry, row_bits})`` over its names entry
 ``[name, dtype, shape, bytes]``; the weights root is ``vllm_v1.weights_root`` over the tensor roots under SHA-512 (:func:`weights_root`).
-The tree (:func:`weights_tree`) keeps ``Kw`` beside the roots, so a replay of the registration reproduces them.
+The tree (:func:`weights_tree`) keeps ``Kw`` beside the roots, so a replay of the registration reproduces them.  ``Kw`` stays in the
+private bundle: a published slim keep carries ``Ks_t`` of the tensors its replay opened instead (`pipeline.cpu_replay.slim_tree`).
 """
 from __future__ import annotations
 
@@ -47,16 +48,15 @@ from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth, tree_le
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest, sha512_row_v2_prefix
 
 __all__ = ["DOMAIN_TAG", "INST", "KEY", "KEY_BYTES", "NAME", "OWNER", "ROOT_BYTES", "ROW_BYTES", "SALT_BYTES", "SCHEMA", "WEIGHTS_TAG", "binding",
-           "domain", "fold_path", "fold_range", "hiding_leaf", "leaf", "levels", "path", "range_shape", "row_prefix", "run_root", "salt",
+           "domain", "fold_path", "fold_range", "hiding_leaf", "keyed_tensor_root", "leaf", "levels", "path", "range_shape", "row_prefix", "run_root", "salt",
            "step_root", "t_nibbles", "t_table", "tensor_hs", "tensor_key", "tensor_root", "weights_domain", "weights_root", "weights_tree"]
 
 NAME = "rows-sha512"
 INST = hm96.SHA512
 KEY = INST.default_key
 SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
-_TAG = "verity-vllm/{}-rows/v1"
-DOMAIN_TAG = _TAG.format("step")
-WEIGHTS_TAG = _TAG.format("weights")
+DOMAIN_TAG = "verity-vllm/step-rows/v1"
+WEIGHTS_TAG = "verity-vllm/weights-rows/v1"
 OWNER = -1
 ROW_BYTES = 4096
 SALT_BYTES = INST.salt_bytes
@@ -190,8 +190,13 @@ def tensor_hs(data: bytes | memoryview, ks: bytes, key: bytes = KEY) -> list[byt
 
 def tensor_root(geo: bytes, tensor: int, entry: Sequence, data: bytes | memoryview, wk: bytes) -> bytes:
     """Registered tensor ``tensor``'s root: its rows' tree under :func:`weights_domain`, salted from ``tensor_key(wk, tensor)``."""
+    return keyed_tensor_root(geo, tensor, entry, data, tensor_key(wk, tensor))
+
+
+def keyed_tensor_root(geo: bytes, tensor: int, entry: Sequence, data: bytes | memoryview, ks: bytes) -> bytes:
+    """:func:`tensor_root` under the tensor's own salt key ``ks``, for a reader that holds it and not ``Kw``."""
     dom = weights_domain(geo, tensor, entry)
-    hs = tensor_hs(data, tensor_key(wk, tensor))
+    hs = tensor_hs(data, ks)
     if len(hs) != dom.count:
         raise ValueError(f"tensor {tensor}: {len(hs)} rows, its entry {list(entry)} is {dom.count}")
     return tree_levels(dom, [leaf(dom, i, h) for i, h in enumerate(hs)])[-1][0]

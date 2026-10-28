@@ -1,7 +1,7 @@
-"""[R15 compiled] Unit tests of the graph-replay-safe acquisition source (torch required; CUDA tests skipped without a GPU).
+"""Unit tests of the graph-replay-safe acquisition source (torch required; CUDA tests skipped without a GPU).
 
   * the record op is traced by Dynamo (fullgraph) into the graph of a module tree whose forwards were wrapped before compilation,
-    survives Inductor, is captured into a CUDA graph and replays without Python (the mechanism M-0115 rests on)
+    survives Inductor, is captured into a CUDA graph and replays without Python
   * renumbering: the k-th record of a base id in graph order gets FLAG | k << INV_SHIFT | base (shared-module call sites)
   * the ring: a replayed graph's slots are drained with the step's row count; a slot is never allocated inside capture; eager ids outside a
     step allocate nothing; compiled_omit:<leaf> leaves the module unwrapped; compiled_late_drain drains the previous step's values

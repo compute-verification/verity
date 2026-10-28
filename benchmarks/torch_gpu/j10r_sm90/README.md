@@ -48,8 +48,8 @@ INT8, and a slow but exact CUDA kernel to fall back on. The fast kernels are `be
   word for word), its `_sm` launch word for word against its plain launch, and the fallback on the sampled proof blocks
   (receipts, z, seeds). Writes `check.json` and exits 4 on any difference.
 - `bench.py`: the call's arms interleaved, in an order that rotates each rep:
-  - plain, s8_linear's `int_mm.linear` (#4472, the exact W8A8 linear's int_mm backend);
-  - `wgmma`, KP2-S8's `wgmma.scaled_mm` (s8_linear, #4520, its files sent with the run) at its
+  - plain, s8_linear's `int_mm.linear` (the exact W8A8 linear's int_mm backend);
+  - `wgmma`, s8_linear's `wgmma.scaled_mm` (its files in `LIBS`) at its
     tuned config for the linear and M, held to plain's output on every cell;
   - `torch._int_mm` alone;
   - each build's proof blocks (seeds plus `_sm`, the served launch);
@@ -61,10 +61,10 @@ INT8, and a slow but exact CUDA kernel to fall back on. The fast kernels are `be
   wgmma.
 - `prof.py`: `run` makes one call of each linear with an h1u build's served launch, each in its own NVTX range, for
   ncu to profile; `summary` keeps the pipe, issue, occupancy, memory, stall and SASS-mix columns of ncu's raw page.
-- `job.sh`: `gpu` runs on vy-dc-h200-3. Before the lease it computes the fixtures and builds the fallback where they
-  weren't sent, builds the h1u arms (`H1U_ARMS`; by default HASH-21's kr, kra and kraq, with the defines and flags of
-  KCOMMIT-FB's j10r90.sh, then kraq4 and kraqwxsc, HASH-22's fastest exact arms without and with JW, `h1u.cu`'s
-  `H1U_JW`) from this tree where none was sent, builds s8_linear's cubin with its own `build.sh` where
-  its files were sent, and generates the operands. Then, under one lease, it runs the check, the bench and the
+- `job.sh`: `gpu` runs on an H200. Before the lease it computes the fixtures and builds the fallback where `LIBS` lacks
+  them, builds the h1u arms (`H1U_ARMS`; by default kr, kra and kraq, with the defines and flags of
+  `benchmarks/hash/dither/j10r90.sh`, then kraq4 and kraqwxsc, the fastest exact arms without and with JW, `h1u.cu`'s
+  `H1U_JW`) from this tree where `LIBS` holds none, builds s8_linear's cubin with its own `build.sh` where `LIBS` holds
+  its files, and generates the operands. Then, under one lease, it runs the check, the bench and the
   profile (`STEPS`). `build` and `cpu` do the fallback's build and the fixtures on a node with nvcc. The file's header
   gives the commands.

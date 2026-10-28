@@ -41,7 +41,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "verity"
 
-#: For each unit (a package, or a module, under ``verity``), the other units it may import.  ``errors`` is shared by all.
+#: For each unit (a package, or a module, under ``verity``), the other units it may import.  ``errors`` and ``settings`` are shared by all.
 ALLOWED = {
     "ml.circuits": set(),
     "ml.randomness": set(),
@@ -62,14 +62,17 @@ ALLOWED = {
     "core.claims": set(),
     # 2026-10-27 (memory accounting, the deployment API v3, note:memory-accounting/20261026T2305Z-draft-deployment-api-v3):
     # the wire is what both sides parse with, stdlib only; the deployment layer is protocol-agnostic and reads frames with
-    # it, and signs and verifies only through keys its caller hands it, so neither gains an ml edge.
+    # it, signs and verifies only through keys its caller hands it, and checks a configuration against what a protocol and
+    # a workload declare to it, so neither gains an ml edge.
     "core.wire": set(),
     "core.deploy": {"core.wire"},
     "core.protocols.profile": {"ml.circuits"},
     # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof service's challenger
     # draws with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
-    "core.protocols.sampled_proofs": {"core.claims", "ml.circuits", "ml.commitments", "ml.randomness",
-                                      "core.protocols.profile"},
+    # Its challenger, firewall, workers and verifier are
+    # parties of the deployment layer (`parties`), their messages the wire's.
+    "core.protocols.sampled_proofs": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
+                                      "ml.randomness", "core.protocols.profile"},
     # 2026-10-27 (memory accounting, the deployment API v3): the wipe's memory challenger and prover are parties of the
     # deployment layer (`wipe_parties`), their messages the wire's.
     "core.protocols.pous": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments", "ml.crypto",
@@ -96,8 +99,7 @@ ALLOWED = {
 #: repository's own directories.
 FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_torch", "verity_cli", "verity_difftest",
                       "circuit_check", "research", "cluster", "sp1", "vllm", "torch", "jax", "onnx", "archive", "backends",
-                      "benchmarks", "examples", "frontends", "infra", "integrations", "tools", "veritor",
-                      "verity_torch_loop")
+                      "benchmarks", "examples", "frontends", "infra", "integrations", "tools", "veritor")
 #: ``verity``'s third-party dependencies (the root's ``pyproject.toml``); anything else it imports is the stdlib or
 #: ``verity``.  A protocol imports none: it is the standard library and ``verity``, and the application composes protocols.
 DEPENDENCIES = {"numpy"}
@@ -134,7 +136,7 @@ ML_IMPORTS_CORE = {
 }
 #: A verifier imports no ``verity.ml`` code (AGENTS.md "Design rules"): Lean is the definition and the
 #: verifier of record, and ml's Python mirrors it.  Until a protocol's verifier of record is its Lean (the switch procedure,
-#: ``.agents/skills/friction/SKILL.md``), its Python verifier keeps the ml edges ``ALLOWED`` gave it on 18 Oct, frozen here,
+#: ``.agents/skills/friction/SKILL.md``), its Python verifier keeps the ml edges ``ALLOWED`` gave it when they were frozen here,
 #: and gains none; a core unit not listed has none.  When ``ALLOWED`` drops an edge, drop it here too.
 CORE_ML_EDGES = {
     "core.protocols.profile": {"ml.circuits"},
@@ -147,13 +149,13 @@ CORE_ML_EDGES = {
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto"},
 }
 #: The units of ``verity.ml`` core's Python verifiers read, directly or through one another (what ``ALLOWED`` lets core
-#: reach): their verdicts rest on them, so they are on the soundness path, and AGENTS.md names each.  Frozen on 18 Oct
+#: reach): their verdicts rest on them, so they are on the soundness path, and AGENTS.md names each.  Frozen
 #: with ``CORE_ML_EDGES``: it only shrinks, as each protocol's verifier of record becomes its Lean.  The rest of ml
 #: (C-Flock's prover, the private circuits) is not on it.
 SOUNDNESS_PATH = {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto", "ml.kernels",
                   "ml.randomness"}
 #: What a test that refuses a new core -> ml edge says.
-LEAN_OF_RECORD = ("a verifier imports no verity.ml code (Daniel, 18 Oct; AGENTS.md \"Design rules\", \"Lean is the definition "
+LEAN_OF_RECORD = ("a verifier imports no verity.ml code (AGENTS.md \"Design rules\", \"Lean is the definition "
                   "and the verifier of record\"): state it in Lean and import nothing from verity.ml")
 #: Files outside ``infra/`` that import a package of it, each with why.
 INFRA_IMPORTERS = {
@@ -161,10 +163,18 @@ INFRA_IMPORTERS = {
                                                 "deploy and Slack code in the follow-up to the platform layout move (#1450)",
 }
 #: Files outside ``benchmarks/`` that import a module of it, by name or by path, each with its owner and what it imports.
-#: ``benchmarks/`` is measurement only (top's repository organization plan, 27 Oct): a number a protocol uses reaches it
+#: ``benchmarks/`` is measurement only: a number a protocol uses reaches it
 #: through a card file citing an ``art:`` id, never as an import, and code a protocol runs moves out to the package that
 #: uses it.  It only shrinks.
 BENCHMARKS_IMPORTERS = {
+    # the H200 example: its runner loads benchmark code by path
+    "examples/h200/e2e_h200/attention.py": "compute-accounting: kernels' attn_ref (`benchmarks/torch_gpu/attn_ref`)",
+    "examples/h200/e2e_h200/commit.py": "compute-accounting: kernels' commit_slots (`benchmarks/torch_gpu/commit_slots`)",
+    "examples/h200/e2e_h200/percall.py": "compute-accounting: J10-R's sm_90 build (`benchmarks/torch_gpu/j10r_sm90`)",
+    "examples/h200/e2e_h200/store.py": "compute-accounting: P2's store (`benchmarks/pous`) and the s8 decode linear "
+                                       "(`benchmarks/torch_gpu/s8_dec_linear`)",
+    "examples/h200/interfaces/verity_e2e_demo/replay_bundle.py": "compute-accounting: kernels' commit_slots "
+                                                                 "(`benchmarks/torch_gpu/commit_slots`)",
     # the served path: verity_vllm runs benchmarks' code
     "integrations/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's store (`benchmarks/pous/p2_v1`) and the "
                                                        "staging decode (`benchmarks/torch_gpu/p2_stage`), through "
@@ -176,10 +186,6 @@ BENCHMARKS_IMPORTERS = {
     "integrations/vllm/verity_vllm/protocols/remote_bandwidth/in_place.py": "proofs: the remote session's `device` and "
                                                                             "`inplace` (`benchmarks/remote_session`)",
     "integrations/vllm/verity_vllm/engine/int8_credited_env.py": "circuits (vllm): `benchmarks/vllm_encoded/paged.py`",
-    "integrations/torch_loop/verity_torch_loop/pouw.py": "compute-accounting: a live window's salt session "
-                                                         "(`benchmarks/pouw/window_salt/window_salt.py`)",
-    "integrations/torch_loop/verity_torch_loop/pouw_audit.py": "compute-accounting: the one-stage audit from the records "
-                                                               "(`benchmarks/prove_path/records_audit.py`)",
     "verity/core/protocols/pous/check/timed_audit.py": "memory-accounting: the memory challenger, the strict timed audit's "
                                                        "reference (`benchmarks/pous/band_gpu/memory_challenger.py`)",
     "verity/ml/flock/python/verity_flock/struct_lower.py": "proofs: H1's unit (`benchmarks/pouw/h1_prove`, `hidden_zk`)",
@@ -189,7 +195,7 @@ BENCHMARKS_IMPORTERS = {
         "verity/ml/flock/python/verity_flock/bench.py", "verity/ml/flock/python/verity_flock/boolean_export.py",
         "verity/ml/flock/python/verity_flock/circuit.py", "verity/ml/flock/python/verity_flock/circuit_bench.py",
         "verity/ml/flock/python/verity_flock/instances.py", "verity/ml/flock/python/verity_flock/ir_bench.py",
-        "verity/ml/flock/python/verity_flock/lean_rows.py", "verity/ml/flock/python/verity_flock/register.py",
+        "verity/ml/flock/python/verity_flock/register.py",
         "verity/ml/flock/tests/plain_hidden.py", "verity/ml/flock/tests/served_registered.py",
         "verity/ml/flock/tests/test_backend.py", "verity/ml/flock/tests/test_circuit.py",
         "verity/ml/flock/tests/test_class_statement.py", "verity/ml/flock/tests/test_derive.py",
@@ -227,15 +233,13 @@ BENCHMARKS_IMPORTERS = {
                     "(`benchmarks/pous/band_gpu`)"),
     "verity/ml/circuits/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
-    **dict.fromkeys(("integrations/torch_loop/tests/test_pouw.py", "integrations/vllm/tests/protocols/pouw_h1_circuits.py",
+    **dict.fromkeys(("integrations/vllm/tests/protocols/pouw_h1_circuits.py",
                      "integrations/vllm/tests/protocols/pouw_h1_gpu.py",
                      "integrations/vllm/tests/protocols/test_pouw_h1_circuits.py"),
                     "compute-accounting: H1's prover, producer and the live challenger's auditor "
                     "(`benchmarks/pouw/h1_prove`, `served_h1`, `benchmarks/live_challenger`)"),
     **dict.fromkeys(("integrations/vllm/tests/protocols/challenger_host.py", "integrations/vllm/tests/protocols/local_gate.py"),
                     "proofs: the live challenger's gate and model registry (`benchmarks/live_challenger`)"),
-    "integrations/torch_loop/tests/test_checkpoint.py": "circuits: the live challenger's model registry "
-                                                        "(`benchmarks/live_challenger/models.py`)",
     **dict.fromkeys(("integrations/vllm/tests/engine/ppl_oracle.py", "integrations/vllm/tests/engine/fattn_oracle.py",
                      "integrations/vllm/tests/engine/int8_store_gpu.py"),
                     "circuits (vllm): the int8 step's oracles (`benchmarks/ppl/steps.py`, `benchmarks/pouw/edited_gemm`) "
@@ -339,8 +343,8 @@ def test_core_unit_imports_only_inward(unit: str) -> None:
 def test_every_source_belongs_to_a_unit_or_is_a_grouping() -> None:
     """A new package under ``verity`` is a new unit, listed in ``ALLOWED``; what is outside every unit is a grouping's
     ``__init__.py`` (``ml``, ``core``, ``core.protocols``) or a file directly under ``verity/``, and imports the standard
-    library and nothing else: ``verity/__init__.py`` re-exports nothing and ``verity/errors.py`` is shared by every unit, the
-    stdlib-only references included."""
+    library and nothing else: ``verity/__init__.py`` re-exports nothing, and ``verity/errors.py`` and the settings registry
+    ``verity/settings.py`` are shared by every unit, the stdlib-only references included."""
     offenders = []
     for path in _sources():
         if _unit(_dotted(path)) is not None:
@@ -652,10 +656,10 @@ def _tracked_python() -> dict[str, str]:
 
 
 def test_nothing_outside_benchmarks_imports_it() -> None:
-    """``benchmarks/`` is measurement only (top's repository organization plan, 27 Oct): no file outside it imports a module
+    """``benchmarks/`` is measurement only: no file outside it imports a module
     of it, by name or by path, apart from ``BENCHMARKS_IMPORTERS``, which only shrinks."""
     packages = _benchmarks_packages()
-    assert {"verity_bench", "verity_numerical", "verity_e2e_demo", "e2e_h200"} <= packages, packages
+    assert {"verity_bench", "verity_numerical"} <= packages, packages
     found = _benchmarks_importers(_tracked_python(), packages)
     offenders = [f"{f}:{hit}" for f, hits in found.items() if f not in BENCHMARKS_IMPORTERS for hit in hits]
     assert not offenders, ("benchmarks/ is measurement only, and nothing outside it imports it: move the code you need out "

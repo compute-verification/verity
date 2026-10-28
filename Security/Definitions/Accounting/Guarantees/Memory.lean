@@ -5,15 +5,14 @@ import Definitions.Pous.Assumptions.P2
 /-!
 # Memory adds, by counting (trusted)
 
-Lemma M of the actual-circuit model (note `console/20261012T0645Z-draft-actual-circuit-model`, section 5): a location
-that passes a PoUS audit while it keeps `q` other bits, uniform and independent of PoUS's setup and challenges, held
-more than what PoUS certifies of it plus those `q` bits, up to a slack `k`. PoUS's responder is the location `X` with
-its helper table, with a state of `M + H` bits: `M ≥ mem_X(t_j)` and `H ≥ 2^{e_j} h_j` at every challenge `j`, `e_j`
-the challenge-dependent bits `X` sends out during the window. What PoUS certifies of `X` alone is `S − H`, so an accept
-gives `q < M − (S − H) + k`, the residual plus `k`. Stated as `q + S < M + H + k`, which is that when `H ≤ S`, and
-still true when the help exceeds `S`, where `S − H` would truncate to `0` in `ℕ` and `q < M + k` can fail (help that
-holds all of `C` passes). The model's `mem_X(t)` and `held` instantiate the state once the actual circuit's
-definitions land.
+Lemma M of the actual-circuit model: a location that passes a PoUS audit while it keeps `q` other bits, uniform and
+independent of PoUS's setup and challenges, held more than what PoUS certifies of it plus those `q` bits, up to a slack
+`k`. PoUS's responder is the location `X` with its helper table, with a state of `M + H` bits: `M ≥ mem_X(t_j)` and
+`H ≥ 2^{e_j} h_j` at every challenge `j`, `e_j` the challenge-dependent bits `X` sends out during the window. What PoUS
+certifies of `X` alone is `S − H`, so an accept gives `q < M − (S − H) + k`, the residual plus `k`. Stated as
+`q + S < M + H + k`, which is that when `H ≤ S`, and still true when the help exceeds `S`, where `S − H` would truncate
+to `0` in `ℕ` and `q < M + k` can fail (help that holds all of `C` passes). The model's `mem_X(t)` and `held`
+instantiate the state once the actual circuit's definitions land.
 
 * `Counting`: the counting core. Of the `2^q` values `z` that an `M`-bit state can carry, at most `2^(q − k)` leave more
   than `2^(M − q + k)` states that carry them: the fibres are disjoint, and Markov's inequality over `z`.

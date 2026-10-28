@@ -1,7 +1,6 @@
-"""[R19 tp2, F-r19-tp2-1] tp2_match STRUCTURE row rule for MID-MODULE all-gathers (F-r19-moe-1: OlmoeAttention gathers q and k inside
-self_attn, N tokens x 1024 per call).  Measured on row #70 (vyv-tp2, run r20260922-072919-fcdd): 66/66 sites named-equal at every one of
-128 steps on both ranks, provenance 8448/8448, tokens equal -- and `structure.pass` False only because the R13 rule read the prefill's
-all-gather rows as `== [#requests]` while the q/k gathers carry the prompt tokens (rows [8, 3755]).  CPU-only, torch-free.
+"""tp2_match STRUCTURE row rule for MID-MODULE all-gathers (OlmoeAttention gathers q and k inside self_attn, N tokens x 1024 per
+call): a prefill step's all-gathers are the logits gather (#requests rows) and the q/k gathers, which carry the prompt tokens (rows
+[8, 3755]), so a rule that reads every prefill all-gather as `== [#requests]` fails a run whose sites are all named-equal.  CPU-only, torch-free.
 
   * positive: prefill all-gathers = the logits gather (#requests rows) + mid-module gathers (prompt-token rows) -> PASS
   * NEGATIVE: a mid-module gather with any other row count -> FAIL

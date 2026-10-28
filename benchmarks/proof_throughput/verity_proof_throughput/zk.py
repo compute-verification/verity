@@ -1,6 +1,6 @@
 """Configuration 2, recursive zero knowledge: what it is to report, and what of it runs today.
 
-The design (note:proofs/20261017T0724Z-draft-zk-server): workers prove the inner statement natively with ZK off and run the
+The design: workers prove the inner statement natively with ZK off and run the
 outer proof's arithmetic unmasked; a ZK server, compiled Lean on a CPU node, draws the masks and salts, checks the outer
 relations and releases the masked proof; the auditor runs the Lean verifier on what is released. The worker/server split
 doesn't exist yet. What runs today, and what the ZK point (``job.sh ZK=1``, ``zk-point``) measures as its stand-in:

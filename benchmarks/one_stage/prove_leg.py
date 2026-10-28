@@ -610,7 +610,6 @@ def n2_member(name: str, key: tuple[int, int, int], insts: Sequence, pubs: Seque
     sys.path.insert(0, str(HERE.parent / "network_traces"))
     import n2_zk as N
 
-    N.builders()
     bits = N.row_bits(N.HC.unit(key[0], key[1], bool(key[2])))
     words = [N.rows_of(i) for i in insts]
     values = {r: np.asarray([w[r] for w in words], dtype=np.uint16) for r in N.ROWS}

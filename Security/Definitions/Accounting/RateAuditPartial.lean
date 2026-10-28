@@ -5,12 +5,12 @@ import Definitions.Accounting.RateAuditJoint
 # The rate audit with partial completion (trusted)
 
 `RateAudit.lean`'s game, except that rebuilding is no longer all-or-nothing. There, `rebuild j` returns the whole word
-`E_j` at `c_enc`, so a device that keeps part of a word and completes the rest (the red team's F27: keep a word's top
-bits, complete the bottom `x` from the known payload by a lattice) falls outside the game. Here the chip may instead
-`complete j x g`: obtain `x ≤ b` bits of information about word `j`, any `x`-bit function `g` of it (its bottom `x` bits,
-or anything else), at a compute cost `cost x` that depends only on `x`. The device keeps whatever else of the word it
-needs in its on-chip state, device memory or side sources, which the audit counts as before. A whole rebuild is
-`complete j b _ id`, at `cost b`, so every device of `RateAudit.lean`'s game is one of this game.
+`E_j` at `c_enc`, so a device that keeps part of a word and completes the rest (keep a word's top bits, complete the
+bottom `x` from the known payload by a lattice) falls outside the game. Here the chip may instead `complete j x g`:
+obtain `x ≤ b` bits of information about word `j`, any `x`-bit function `g` of it (its bottom `x` bits, or anything
+else), at a compute cost `cost x` that depends only on `x`. The device keeps whatever else of the word it needs in its
+on-chip state, device memory or side sources, which the audit counts as before. A whole rebuild is `complete j b _ id`,
+at `cost b`, so every device of `RateAudit.lean`'s game is one of this game.
 
 The cost is a parameter of the game, as `c_enc` is in `RateAudit.lean`. What it must be for a deployed codec is the
 named assumption `Accounting.Assumptions.WorkHardness` (`Definitions/Accounting/Assumptions/RateAudit.lean`): completing `x`

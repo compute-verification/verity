@@ -12,7 +12,7 @@ vector   row r of a tile: position 32 (ii·m + s) + kk (task ii of the tile, ste
          byte 4·reg + q of lane 4 (r mod 8) + (kk mod 16) / 4 with reg = 2 ⌊kk / 16⌋ + ⌊r / 8⌋, q = kk mod 4; so
          n = 32 m T. Vector v = 16 (b·TPC + j) + r
 S        k × n signs: K_S = derive(σ, SIGN_DOMAIN, {"tag": NAME, "k": k, "n": n}), row c the first ⌈n / 8⌉ bytes of
-         K_S.stream(("row", c)), bit p (byte p // 8, LSB first) 1 → −1, 0 → +1 (ra-sketch-tag's)
+         K_S.stream(("row", c)), bit p (byte p // 8, LSB first) 1 → −1, 0 → +1 (the sketch tag's)
 B        S as the MMAs' B registers: `sign_fragments` (packed words, one prmt a register) and `b_fragments` (the
          registers themselves, which the sketch warps load)
 sketch   σ_v = S · e_v over the integers (|σ_v[c]| ≤ 128 n < 2^24), k int32 little-endian words
@@ -71,7 +71,7 @@ def tiles_per_cta(nbs: int, groups: int, t: int) -> int:
 def pass_seed(sigma: bytes, j: int, root: bytes) -> bytes:
     """Pass j's seed from the window's σ and the previous pass's root (red team F29): its receipt is this module's at
     that seed, so the signs are fresh every pass and exist only once root_(j−1) does. The first 32 bytes of
-    `remote_bandwidth.receipts.seed` (ra-remote-driver's chain; a tag's seed is 32 bytes)."""
+    `remote_bandwidth.receipts.seed` (the remote driver's chain; a tag's seed is 32 bytes)."""
     if len(sigma) != 32 or len(root) != 64 or not 0 <= j < 1 << 32:
         raise ValueError("σ is 32 bytes, the root 64 and j a u32")
     return hashlib.sha512(PASS_DOMAIN + sigma + j.to_bytes(4, "big") + root).digest()[:32]

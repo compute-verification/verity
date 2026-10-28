@@ -5,7 +5,7 @@ import Definitions.Nci.Reads
 /-!
 # NCI's guarantee in reads form
 
-B5 of the actual-circuit model (`note:console/20261012T0645Z-draft-actual-circuit-model`, section 7): the bound for
+B5 of the actual-circuit model: the bound for
 updated matrix multiplications before its division by `α`. It is about any division into IUs that are small and read
 little, not only one that witnesses compliance, so it applies to divisions that physics gives (the windows of an actual
 circuit), where the cap `K` on an IU's reads comes from memory and links rather than from `α`.

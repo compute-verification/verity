@@ -8,7 +8,7 @@ by its path, the config without its timing), digested (SHA-512).  The wrappers a
 absolute path, and the Program digest holds what they compute.  A Commit process seeds its fresh Inductor dir with the Build's winners
 at their paths (`served-pin seed`, `ops/served_commit.sh`), as a served process restarted on its own cache reads them, and the treatment
 refuses to serve when the artifact its own Build read is not the Build of record's (`ServedCommit.rebuild`, `differences`).  A
-process that serves the row without the source's hooks (the control arm, a bench) has no launch record and checks its winners
+process that serves the workload without the source's hooks (the control arm, a bench) has no launch record and checks its winners
 (`served-pin check`).
 """
 from __future__ import annotations

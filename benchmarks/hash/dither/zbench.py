@@ -30,6 +30,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import torch
+from verity_config.settings import of
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "served_h1"))
@@ -39,6 +40,7 @@ from dither_a import UNIT, Y_KIND, ZY_KIND, y_bytes, y_fields, zy_bytes, zy_coun
 from h1c import H1C, Dom, Tab, unwords
 from h1cgate import POISON, cpu_receipts, linears, n_digits
 
+settings = of(__file__)
 SETS = ("zy", "ys", "yu", "receipts")
 ZYU = ("zy", "ys", "yu")
 BUFS = ("level", "segs", "dom", "roots")
@@ -185,7 +187,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     dev = torch.device("cuda")
     key = os.urandom(64)
-    window = os.environ.get("RESEARCH_RUN_ID") or "zbench"
+    window = settings.RESEARCH_RUN_ID or "zbench"
     rec = Records(window, a.t, dev)
     s0 = 7
     ws = [0, 1, 2, 3, rec.L - 4, rec.L - 3, rec.L - 2, rec.L - 1]
