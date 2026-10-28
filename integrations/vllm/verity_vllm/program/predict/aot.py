@@ -252,7 +252,7 @@ def write_row(row: str, out: str, *, config: str | None = None, jobs: int = 1, l
     Path(out, "build_workload", "workload_program.json").write_text(json.dumps(
         {"ok": True, "workload_digest": wp["digest"], "function": wp["function"], "lag": lag, "built_by": ROW_BUILT_BY,
          "applicability": {"engine": {"async_scheduling": bool(lag["async_scheduling"])}}}, indent=1) + "\n")
-    policy = dict(word="16/32", norm_scales=True, guarded_max=True, taps=MN.taps_of(True, True), query=QUERY_OF_RECORD,
+    policy = dict(word="16/32", norm_scales=True, taps=MN.taps_of(True, True), query=QUERY_OF_RECORD,
                   jobs=jobs or MN.cpus(), log=log)
     if len(phi.requests) > 1:
         man = MN.build_global(w, out, workload_digest=wp["digest"], **policy)
