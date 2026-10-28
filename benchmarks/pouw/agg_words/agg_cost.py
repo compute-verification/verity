@@ -4,9 +4,10 @@ Every input is a cited measurement or an estimate, labelled in `INPUTS`; every o
 
 A group is a g_r x g_c tile of one call's cells (g = g_r g_c) and one segment of L inner indices; its word is
 W = sum f(T_s - T_(s-1)) mod 2^16 over the group's cells. A proof block is one group: g L MACs on the noised operands, f
-and the sum, and the openings of the g_r A rows, g_c B rows and the word's row. Per-cell (g = 1) is Dither's block. Serve-time
-hashing is priced at GD-HASH's measured cost a byte beside the GEMM (no free share), and also, for comparison, at
-p1a-levers' free-share model."""
+and the sum, and the openings of the g_r A rows, g_c B rows and the word's row, at C-Flock's 81,402 ANDs a SHA-512
+compression. Per-cell (g = 1) is Dither's block. Serve-time hashing is priced at GD-HASH's measured cost a byte beside the
+GEMM (no free share), scaled to the word row's size, and also, for comparison, at p1a-levers' free-share model. J is
+against the brief's stock step; `cap_knob` gives the best g and tile at each block cap 2^26..2^30."""
 from __future__ import annotations
 
 import json
@@ -23,11 +24,18 @@ INPUTS = {
                            "(note:compute-research/20261028T1945Z-report-gd-hash, r20261028-192103-b3eb)"),
     "h_grid_16k": (1910, "MAC-times a byte past the beside capacity, the hash on the whole grid (gd-hash)"),
     "beside_cap_GB_16k": (1.9, "the most bytes a forward hashed beside the GEMM at 16 KiB rows (gd-hash)"),
+    "h_scale_4k": (521.0 / 398.0, "estimate: h at 4 KiB word rows over 16 KiB, as the whole-card SHA-512 bar's 521 GB/s over 398 (BENCH-34)"),
+    "h_scale_1k": (((2 + 9 + 1) / 8) / ((2 + 129 + 1) / 128), "estimate: h at 1 KiB word rows over 16 KiB, as compressions a byte "
+                                                             "(hm96's two hiding ones and one tree node a row included)"),
     "clock_Hz": (1.769e9, "the measured SM clock at T 8,192 (BENCH-34)"),
     "bar_GBps_16k": (521.0, "SHA-512 across the card at 16 KiB rows (BENCH-34 / commit-bytes)"),
     "step80_ms": (11.14, "the 80% step at 1,769 MHz (p1a-levers: 19.71 M SM-cycles)"),
     "ideal_ms_1769": (15.769e6 / 1.769e9 * 1e3, "ideal cycles 15.769 M at 1,769 MHz (p1a-levers)"),
     "stock_u": (0.2397, "stock vLLM tensor utilization at T 8,192 (BENCH-34, run b57f's comparison)"),
+    "t_stock_ms": (35.88, "the brief's stock: BENCH-34's stock-n2048 arm, eager sync, 23.97% at 1,833 MHz, a T 8,192 step "
+                          "(art:a5ea06dd0a7cb46424f76fa4b0524327ddbc57659f7dfa2888ddcf8c50acdcfa)"),
+    "t_stock_fast_ms": (21.60, "the fastest unverified arm, stock-async-stack-n2048 (r20261028-075211-2cd6, GD-SMELL S4); "
+                               "both J terms scale by t_stock_ms over it and the best g doesn't move"),
     "q": (math.log(2 ** 40) / 0.01, "draws a window, Lambda/eps at delta 2^-40, eps 1%, uniform weights (estimate)"),
     "P3": (2.8e9, "C-Flock --zk ANDs a GPU-s (modelled, estimate)"),
     "ands_per_mac": (146_345 / 1024, "PouwDitherBlock_v1 at L 1,024 (counted by agg_ands.py; MACs and noise, no openings)"),
@@ -36,15 +44,16 @@ INPUTS = {
     "sum_ands_per_word": (888 / 64, "sum of 64 words mod 2^16 (counted), per word"),
     "cap": (2 ** 27, "C-Flock's compose refuses a proof block above 2^27 ANDs (inbox 19:16Z)"),
     "cap_padded": (2 ** 26, "the same with compose's power-of-two padding, k_pad 1 (note:compute-research/20261028T1915Z-report-gd-model)"),
+    "sha512_ands": (81_402, "C-Flock's SHA-512 circuit, rows a compression, 1.40x optimize.SHA512_ANDS's 58,120 (inbox 20:00Z, "
+                            "note:compute-research/20261028T1938Z-report-gd-sis); hm96's hiding part is two of them"),
     "f_instr_per_cell": (19, "mix4 in an epilogue: 4 x (SHF, LOP3, IMAD, LOP3) + SHF, LOP3 + IADD (estimate)"),
     "int_ops_per_s": (132 * 64 * 1.769e9, "H200 INT32 lanes: 132 SMs x 64 a clock at 1,769 MHz (estimate; 2x if IMAD on FMA)"),
 }
 V = {k: v for k, (v, _) in INPUTS.items()}
-SHA512_ANDS, HM96_ANDS = 58_120, 116_240
 
 
 def row_ands(nbytes: int) -> int:
-    return HM96_ANDS + SHA512_ANDS * ceil((nbytes + 17) / 128)
+    return V["sha512_ands"] * (2 + ceil((nbytes + 17) / 128))
 
 
 def tile(g: int, cA: float, cB: float) -> tuple[int, int]:
@@ -66,16 +75,17 @@ def block(g: int, L: int, K: int, a_row: int, b_row: int | None, w_row: int, per
     parts = {"macs": macs * per_mac, "f_and_sum": (g * (V["f_ands"] + V["sum_ands_per_word"]) if g > 1 else 0),
              "open_A": gr * cA, "open_B": gc * cB, "open_word": row_ands(w_row)}
     total = sum(parts.values()) if per_mac == V["ands_per_mac"] else macs * per_mac + parts["f_and_sum"]
-    return {"g": g, "tile": [gr, gc], "L": L, "K": K, "block_macs": macs, "parts": parts, "ands": total,
+    return {"g": g, "tile": [gr, gc], "L": L, "K": K, "w_row": w_row, "block_macs": macs, "parts": parts, "ands": total,
             "fits_2^27": total <= V["cap"], "fits_2^26": total <= V["cap_padded"]}
 
 
 def window(g: int, L: int, K: int, steps: float, blk: dict, words_per_cell: float, cells: float) -> dict:
-    stock_ms = V["ideal_ms_1769"] / V["stock_u"]
+    stock_ms = V["t_stock_ms"]
     prove_s = V["q"] * blk["ands"] / V["P3"]
     gb = cells * 2 * words_per_cell / g / 1e9
     exposed_free_share_ms = max(0.0, gb - V["free_pouw_GB_at_80"]) / V["bar_GBps_16k"] * 1e3
     h = V["h_beside_16k"] if gb <= V["beside_cap_GB_16k"] else V["h_grid_16k"]
+    h *= {16384: 1.0, 4096: V["h_scale_4k"], 1024: V["h_scale_1k"]}[blk["w_row"]]
     exposed_ms = gb * 1e9 * h / (540_672 * V["clock_Hz"]) * 1e3
     f_ms = cells * V["f_instr_per_cell"] / V["int_ops_per_s"] * 1e3 if g > 1 else 0.0
     return {"pouw_GB_a_step": gb, "hash_exposed_ms": exposed_ms, "hash_exposed_ms_p1a_free_share": exposed_free_share_ms,
@@ -112,8 +122,8 @@ def main(out: str) -> None:
     for a_row in (2048, 4096, 16384):
         for b_row in (2048, 16384, None):
             key = f"A{a_row}_B{b_row or 'public'}"
-            b1 = block(1, L, K, a_row, b_row, 1024, V["ands_per_mac"])
-            bg = block(128, L, K, a_row, b_row, 1024, V["ands_per_mac"])
+            b1 = block(1, L, K, a_row, b_row, defaults["w_row"], V["ands_per_mac"])
+            bg = block(128, L, K, a_row, b_row, defaults["w_row"], V["ands_per_mac"])
             w1, wg = window(1, L, K, 1, b1, 1, cells), window(128, L, K, 1, bg, 1, cells)
             d_serve = w1["J_serve_hidden_f"] - wg["J_serve_hidden_f"]
             res["row_sensitivity"][key] = {
@@ -139,7 +149,7 @@ def main(out: str) -> None:
             for k in range(0, 10):
                 g = 1 << k
                 b = block(g, L, K, **defaults, per_mac=V["ands_per_mac"])
-                if not b["fits_2^26"]:
+                if not b["fits_2^27"]:
                     continue
                 w = window(g, L, K, steps, b, 1, cells)
                 J = w[f_key] + w["J_prove"]
@@ -147,6 +157,47 @@ def main(out: str) -> None:
                     best = (g, J, w[f_key], w["J_prove"])
             res["g_opt"][f"{f_key}_steps{steps}"] = {"g": best[0], "J": best[1], "J_serve": best[2], "J_prove": best[3]}
             print("g_opt", f_key, steps, res["g_opt"][f"{f_key}_steps{steps}"])
+    res["cap_knob"] = {}
+    for k_log in (26, 27, 28, 29, 30):
+        row = {"g_max": max(1 << k for k in range(0, 16)
+                            if block(1 << k, L, K, **defaults, per_mac=V["ands_per_mac"])["ands"] <= 2 ** k_log)}
+        for steps in (1, 1000, 10_000, 100_000, 1_000_000):
+            cands = []
+            for k in range(0, 16):
+                g = 1 << k
+                b = block(g, L, K, **defaults, per_mac=V["ands_per_mac"])
+                w = window(g, L, K, steps, b, 1, cells)
+                cands.append((w["J_serve_hidden_f"] + w["J_prove"], g, b["tile"], b["ands"] <= 2 ** k_log))
+            free = min(cands)
+            capped = min(c for c in cands if c[3])
+            row[steps] = {"g_opt": capped[1], "tile": capped[2], "J": capped[0], "g_opt_uncapped": free[1],
+                          "J_uncapped": free[0], "cap_binds": capped[1] != free[1]}
+        res["cap_knob"][k_log] = row
+        print("cap", k_log, row)
+    res["w_row_sensitivity"] = {}
+    for w_row in (1024, 4096, 16384):
+        rows = {**defaults, "w_row": w_row}
+        entry = {"g1_ands": block(1, L, K, **rows, per_mac=V["ands_per_mac"])["ands"],
+                 "g128_ands": block(128, L, K, **rows, per_mac=V["ands_per_mac"])["ands"]}
+        for steps in (1, 1000, 10_000, 100_000):
+            cands = []
+            for k in range(0, 10):
+                b = block(1 << k, L, K, **rows, per_mac=V["ands_per_mac"])
+                if b["fits_2^27"]:
+                    w = window(1 << k, L, K, steps, b, 1, cells)
+                    cands.append((w["J_serve_hidden_f"] + w["J_prove"], 1 << k, w["J_serve_hidden_f"], w["J_prove"]))
+            J, g, js, jp = min(cands)
+            entry[steps] = {"g_opt": g, "J": J, "J_serve": js, "J_prove": jp}
+        res["w_row_sensitivity"][w_row] = entry
+        print("w_row", w_row, entry)
+    saved = V["sha512_ands"]
+    res["sha_sensitivity"] = {}
+    for sha in (58_120, 81_402):
+        V["sha512_ands"] = sha
+        b1, b128 = (block(g, L, K, **defaults, per_mac=V["ands_per_mac"]) for g in (1, 128))
+        res["sha_sensitivity"][sha] = {"g1_ands": b1["ands"], "g128_ands": b128["ands"], "g128_tile": b128["tile"]}
+    V["sha512_ands"] = saved
+    print("sha", res["sha_sensitivity"])
     res["g_min_bytes"] = {S: math.ceil(cells * 2 * (S - 1) / (V["free_pouw_GB_at_80"] * 1e9)) for S in (2, 4, 8)}
     res["g_max_cap"] = {f"L{L_}": {k: int(V["cap"] // (L_ * V[k])) for k in ("ands_per_mac", "ands_per_mac_cal")}
                         for L_ in (256, 512, 1024, 2048)}
