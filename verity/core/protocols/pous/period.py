@@ -395,14 +395,132 @@ def challenger(directory: str | os.PathLike, *, workers: int | None = None) -> m
     return mc.LmsSigner(key, state)
 
 
+LEDGER_SCHEMAS = ("verity/challenger-auditor/v1", "verity/challenger-auditor/v2")
+"""The schemas of the auditor's ledger entries (`sampled_proofs.challenger.LEDGER_TAGS`), whose copies `cite` cuts."""
+_ENTRY = ["body", "kind", "prev", "schema", "seq", "session", "sig"]
+_CLOSE = ["chain", "ended", "lines", "session", "signature"]
+
+
+def _json(data: str | bytes) -> Any:
+    """`data` parsed, or the `ValueError` saying why it isn't JSON, for the caller to keep the file as it is."""
+    try:
+        return json.loads(data)
+    except ValueError as e:
+        return e
+
+
+def _entry(line: Any) -> dict | None:
+    """`line` as an entry of the auditor's ledger (`sampled_proofs.challenger.ledger_text`'s form), else None."""
+    if type(line) is not str or not line.startswith('{"body":'):
+        return None
+    e = _json(line)
+    return e if isinstance(e, dict) and sorted(e) == _ENTRY and e["schema"] in LEDGER_SCHEMAS else None
+
+
+def _ledger(lines: Sequence[Any]) -> list[dict] | None:
+    entries = [_entry(x) for x in lines]
+    return entries if entries and all(e is not None for e in entries) else None
+
+
+def cited(entries: Sequence[dict], sessions: Collection[str]) -> list[int]:
+    """The indices of a ledger's `entries` its window cites: every entry of `sessions` and the open and close of each
+    period holding one of them (a period holds the sessions whose reserve, or one-step v2 open, falls in its lane between
+    its open and its close, as `challenger.verify_periods` counts them). Raises `ValueError` naming a session of
+    `sessions` the ledger doesn't open, or when `sessions` is empty: a reader of what's kept would find no entry of it."""
+    if not sessions:
+        raise ValueError("no challenger session is cited beside the auditor's ledger, so none of its entries would be kept")
+    keep: set[int] = set()
+    current: dict[Any, int] = {}
+    held: set[int] = set()
+    for i, e in enumerate(entries):
+        b, kind = e["body"], e["kind"]
+        if kind == "period-open":
+            current[b.get("lane")] = i
+        elif kind == "period-close":
+            if current.pop(b.get("lane"), None) in held:
+                keep.add(i)
+        elif e["session"] in sessions:
+            keep.add(i)
+            if kind == "reserve" or (kind == "open" and e["schema"] == LEDGER_SCHEMAS[1] and "reserve" not in b):
+                if (o := current.get(b.get("for") or b.get("by"))) is not None:
+                    keep.add(o)
+                    held.add(o)
+    opened = {e["session"] for e in entries if e["kind"] == "open"}
+    if missing := sorted(set(sessions) - opened):
+        raise ValueError(f"the auditor's ledger opens no session {missing[0]}, which a challenger close record beside it "
+                         f"cites ({len(entries)} entries, {len(missing)} of {len(sessions)} cited sessions unopened)")
+    return sorted(keep)
+
+
+def cite(files: Mapping[str, bytes]) -> dict[str, bytes]:
+    """`files` (path -> bytes) with every copy of the auditor's ledger cut to the entries its window cites (`cited`). A
+    copy is a `.jsonl` file each of whose lines is a ledger entry (infra's ``windows.jsonl``, ASCII as `ledger_text`
+    writes it) or a list of such lines in a `.json` document (`window_salt.Issued.live`'s ``ledger``); the sessions it
+    cites are those of the challenger close records (``{chain, ended, lines, session, signature}``, as `.json` files or
+    inside one) under the copy's directory, its own document included. A copy with no close record beside it is kept
+    whole: nothing cites its entries, so nothing says what a reader of it needs. A document holding a cut copy is
+    written back as `json.dumps(doc, sort_keys=True)`, as ``salt.json`` is written; every other file is kept as it is.
+    Raises `ValueError` naming the file when a copy would keep no entry of a session cited beside it, so the records
+    never hold a ledger cut short of what their window cites. PoUW's verifier reads the whole ledger (every entry,
+    chained from seq 0), so the uncut copy it reads stays on disk."""
+    parsed = {name: _json(data) for name, data in files.items() if name.endswith(".json") and b'"session"' in data}
+    docs = {name: doc for name, doc in parsed.items() if not isinstance(doc, ValueError)}
+    closes: list[tuple[str, str]] = []
+
+    def walk(name: str, v: Any) -> None:
+        if isinstance(v, dict):
+            if sorted(v) == _CLOSE and type(v["session"]) is str:
+                closes.append((name, v["session"]))
+            for x in v.values():
+                walk(name, x)
+        elif isinstance(v, list):
+            for x in v:
+                walk(name, x)
+
+    for name, doc in docs.items():
+        walk(name, doc)
+
+    def cut(name: str, lines: list[str], entries: list[dict]) -> list[str] | None:
+        scope = name.rsplit("/", 1)[0] + "/" if "/" in name else ""
+        if not (sessions := {s for n, s in closes if n.startswith(scope)}):
+            return None
+        try:
+            return [lines[i] for i in cited(entries, sessions)]
+        except ValueError as e:
+            raise ValueError(f"{name}: {e}") from None
+
+    out = dict(files)
+    for name, data in files.items():
+        if name.endswith(".jsonl") and b"verity/challenger-auditor/" in data and data.isascii():
+            lines = [x for x in data.decode("ascii").split("\n") if x]
+            if (entries := _ledger(lines)) is not None and (kept := cut(name, lines, entries)) is not None:
+                out[name] = "".join(x + "\n" for x in kept).encode()
+
+    def copies(name: str, v: Any) -> Any:
+        if isinstance(v, dict):
+            return {k: copies(name, x) for k, x in v.items()}
+        if isinstance(v, list):
+            if (entries := _ledger(v)) is not None:
+                return v if (kept := cut(name, v, entries)) is None else kept
+            return [copies(name, x) for x in v]
+        return v
+
+    for name, doc in docs.items():
+        if b"verity/challenger-auditor/" in files[name] and (kept := copies(name, doc)) != doc:
+            out[name] = json.dumps(kept, sort_keys=True).encode()
+    return out
+
+
 def records(period_dir: str | os.PathLike, skip: Collection[str] = ("answers",)) -> bytes:
     """The period's records as one byte string, the store the node keeps for the period: each file under `period_dir`
-    (but those under `skip`) in path order, framed `u32 len(path) ‖ path ‖ u64 len(bytes) ‖ bytes`."""
+    (but those under `skip`) in path order, every copy of the auditor's ledger cut to the entries its window cites
+    (`cite`), framed `u32 len(path) ‖ path ‖ u64 len(bytes) ‖ bytes`."""
     root = Path(period_dir)
+    files = {f.relative_to(root).as_posix(): f.read_bytes() for f in sorted(
+        p for p in root.rglob("*") if p.is_file() and p.relative_to(root).parts[0] not in skip)}
     out = bytearray()
-    for f in sorted(p for p in root.rglob("*") if p.is_file() and p.relative_to(root).parts[0] not in skip):
-        name, data = f.relative_to(root).as_posix().encode(), f.read_bytes()
-        out += len(name).to_bytes(4, "big") + name + len(data).to_bytes(8, "big") + data
+    for name, data in cite(files).items():
+        out += len(name.encode()).to_bytes(4, "big") + name.encode() + len(data).to_bytes(8, "big") + data
     return bytes(out)
 
 
@@ -414,7 +532,8 @@ CPUs each may run on (`setup_store`; `challenger`, from `challenger_party.main`)
 def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     """Space's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`). By default the node's store is
     set up once, at the smallest point P2's certificates cover (`point_for`): `W` is the node's records at its
-    first period, encoded in up to `SETUP_WORKERS` processes and kept beside the periods (`pous-store`), and every period
+    first period (`records`, the auditor's ledger in them cut to the entries their window cites), encoded in up to
+    `SETUP_WORKERS` processes and kept beside the periods (`pous-store`), and every period
     audits it with fresh coins, so an accepted period certifies `s_bits > 0` at the certificate's `eps`. With
     `{"pous": {"point": "small"}}` in `period.json`, each period sets the period's own records up at the small point
     instead, certifying nothing. The memory challenger is a party of its own on `period.json`'s `challenger_host`
@@ -468,6 +587,6 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     return answer
 
 
-__all__ = ["PROTOCOL", "SETUP_WORKERS", "Period", "Prover", "SetupInputs", "Store", "answer", "audit", "case",
-           "certificate", "certify", "challenger", "encode", "gaps", "honest", "leg", "point_for",
+__all__ = ["LEDGER_SCHEMAS", "PROTOCOL", "SETUP_WORKERS", "Period", "Prover", "SetupInputs", "Store", "answer", "audit",
+           "case", "certificate", "certify", "challenger", "cite", "cited", "encode", "gaps", "honest", "leg", "point_for",
            "point_of", "profile", "records", "run", "serve", "setup_case", "setup_inputs", "setup_store", "tie"]

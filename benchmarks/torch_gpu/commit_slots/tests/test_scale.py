@@ -1,4 +1,4 @@
-"""Planning a run stays linear in its units at circuits' FAMILIES scale (6,102,102 units a slot, CMP-96): the layout digest
+"""Planning a run stays linear in its units at the families map's scale (6,102,102 units a slot): the layout digest
 and every unit's domain id are the reference's bytes, computed once (the digest) and once a unit (the ids); a group the
 layout repeats is laid out once; and a host Plan of over six million units builds."""
 from __future__ import annotations
@@ -20,7 +20,7 @@ CTX = bytes(range(64))
 
 
 def families_like(layers: int, coords: int = 4, chunks: int = 1) -> S.Layout:
-    """A layout shaped like the FAMILIES map's: one group a layer, all the same `Group`, of ``coords`` one-row units (a
+    """A layout shaped like the families map's: one group a layer, all the same `Group`, of ``coords`` one-row units (a
     coordinate's 16-bit row) and ``chunks`` two-row units (a quantizer chunk's codes, then its f32 scale)."""
     units = [(S.Row((S.Part(0, 2 * i, 2),)),) for i in range(coords)]
     units += [(S.Row((S.Part(1, 64 * i, 64),)), S.Row((S.Part(2, 0, 4),))) for i in range(chunks)]
@@ -94,8 +94,8 @@ def test_planning_is_linear_in_the_units() -> None:
 @needs_cxx
 @pytest.mark.slow
 def test_a_host_plan_of_over_six_million_units() -> None:
-    """A host Plan at the FAMILIES map's size: 52 layers of 117,400 units (117,000 one-row, 400 two-row), 6,104,800 units and
-    6,125,600 rows a slot. Takes about 20 s and 2.3 GB on vy-nebius-cpu-4 (the leaf tables are 224 bytes a row); before the
+    """A host Plan at the families map's size: 52 layers of 117,400 units (117,000 one-row, 400 two-row), 6,104,800 units and
+    6,125,600 rows a slot. Takes about 20 s and 2.3 GB on a CPU node (the leaf tables are 224 bytes a row); before the
     layout digest was cached, planning was quadratic in the units and this never finished. What it catches that
     test_planning_is_linear_in_the_units can't: a linear but slow step a unit (a Python object or call a row) at full size."""
     layout = families_like(52, coords=117_000, chunks=400)

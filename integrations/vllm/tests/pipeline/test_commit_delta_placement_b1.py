@@ -1,10 +1,9 @@
-"""[R17 F-r17b-42 (ii), exec M-0885 / revb M-0893] the not-executed(R17-1) placement of the layouts-only MANIFEST COVERAGE runs at B=1.
+"""the not-executed placement of the layouts-only MANIFEST COVERAGE runs at B=1.
 
 commit_delta.main() places the population over the executed prefix of record in three sites: the binding-map coverage (alpha), the
-layouts-only manifest coverage (beta) and the sampled replay (gamma).  (beta) was gated `if len(reqs) > 1 and ...` = B >= 2 only, so a
-B=1 EOS-stopped request's CAP-shape manifest was required in full: the sync twin (r17_2325, LP 32 / T 10 / cap 31) failed COMMIT at
-MANIFEST COVERAGE with 8,295 'uncovered' identities = exactly the never-executed steps 11..31 (pad's bot count), while (alpha) and (gamma)
-had classified the same set.  This test reads the SOURCE (torch-free, the class of test_commit_delta_cli.py) and asserts that the `if`
+layouts-only manifest coverage (beta) and the sampled replay (gamma).  Gated `if len(reqs) > 1 and ...` (B >= 2 only), (beta)
+would require a B=1 EOS-stopped request's CAP-shape manifest in full and fail COMMIT at MANIFEST COVERAGE on exactly the
+never-executed steps, which (alpha) and (gamma) classify.  This test reads the SOURCE (torch-free, the class of test_commit_delta_cli.py) and asserts that the `if`
 whose body calls `restrict_manifest_identities` tests the manifest only -- never the request count -- so one request maps to r0 and the
 same restrict_* run as at B >= 2.
 """
@@ -44,7 +43,7 @@ def test_the_manifest_coverage_placement_is_not_gated_on_the_request_count_f_r17
     assert ifs, "the layouts-only manifest coverage no longer places the requirement over the executed prefix (restrict_manifest_identities gone)"
     for node in ifs:
         assert not _mentions_len_reqs(node.test), (
-            "F-r17b-42 (ii): the manifest-coverage placement is gated on len(reqs) -- at B=1 the cap-shape manifest would be required in full "
+            "the manifest-coverage placement is gated on len(reqs) -- at B=1 the cap-shape manifest would be required in full "
             f"(line {node.lineno}: {ast.unparse(node.test)[:120]})")
         src = ast.unparse(node.test)
         assert "required_manifest" in src and "identities" in src, f"the placement's own condition (the manifest with identities) is gone: {src[:120]}"

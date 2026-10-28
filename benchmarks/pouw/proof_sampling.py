@@ -1,7 +1,7 @@
-"""The proof draw under Daniel's one-σ order: the cheater's best response and the minimax draw (cmp-13, SAMPLING).
+"""The proof draw under the one-σ order: the cheater's best response and the minimax draw (SAMPLING).
 
 A round's s proofs are whole dot products (DPs), drawn i.i.d. from a distribution ρ over the round's DPs. The cheater
-knows σ before it evaluates (SPEC note:20261017T0324Z-draft-eps1-spec §2.6) and picks, in each round:
+knows σ before it evaluates (SPEC §2.6) and picks, in each round:
 
 - deficient DPs, each of which passes a drawn proof with probability ≤ p over σ (Theorem S's luck);
 - steering attacks: a producer row's noise-active coordinates (R_i ≠ 0, plus one outlier) written wrong so that the

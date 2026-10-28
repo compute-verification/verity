@@ -1,5 +1,4 @@
-"""The POUS benchmark harness: one command per (scheme, implementation, weight set, hardware), recorded through
-`research run` as an Attempt.
+"""The POUS benchmark harness: one command per (scheme, implementation, weight set, hardware).
 
     python benchmarks/pous/bench.py --scheme band-chain/d12/v1 --impl reference --weight-set qwen2.5-0.5b/linears+head \\
       --hardware l40s-48gb/bf16 --out DIR [--workers N] [--max-segments N] [--audits 20]
@@ -9,7 +8,7 @@
       --weight-set qwen2.5-0.5b/linears+head --hardware rtx-4090/e4m3 --out DIR [--nvme-dir DIR]
 
 Every implementation passes the same gates and reports the same metrics, written to `bench-result.json`
-(`verity-pous/bench-result/v1`) and, under `research run`, to `$RESEARCH_RUN_DIR/result.json`:
+(`verity-pous/bench-result/v1`) and, when `RESEARCH_RUN_DIR` is set, to `$RESEARCH_RUN_DIR/result.json`:
 
 * **Gates.**
   - The scheme's pinned conformance vectors (`verity/core/protocols/pous/tests/fixtures/schemes/<name>.json`), through
@@ -27,9 +26,9 @@ Implementations (`IMPLS`), each adding one class:
 
 * `reference`: `verity.core.protocols.pous` itself, the specification, over CPU processes. W is filled deterministically, since the
   decode's cost does not depend on its bytes.
-* `vllm-gpu`: the GPU twins and kernels of `verity_vllm.engine.pous` (#172, #188), from `--impl-tree`.
+* `vllm-gpu`: the GPU twins and kernels of `verity_vllm.engine.pous`, from `--impl-tree`.
   - It runs through that tree's frozen harness, `verity-vllm pous-dense-bench`, with the flags of the band's run of
-    record (`r20260928-032701-b4a1`, `FROZEN_FLAGS`).
+    record (`FROZEN_FLAGS`).
   - Nothing here changes that harness; its `dense-bench.json` is read back.
 * `p2-v1-gpu`: P2 v4, the specification (`p2_v1/`): its reference pinned by the spec's vectors, its GPU library
   (decode with per-block keys on `p2_gpu/p2dec.cu`'s tuned squaring, encode by two roots) and the same harness steps as `band-gpu`
@@ -75,7 +74,7 @@ SCHEMA = "verity-pous/bench-result/v1"
 WEIGHT_SETS = HERE / "weight_sets.json"
 FROZEN_FLAGS = ["--reps", "3", "--thread-rows", "500", "--word-io", "--fused", "--pair", "--pair-max-rows", "7500", "--chunked",
                 "--chunked-threads", "64", "--split", "--fused-x", "--whole-chain"]
-"""`pous-dense-bench`'s kernel flags in the band's run of record (`r20260928-032701-b4a1`, #188 at `4e491631`)."""
+"""`pous-dense-bench`'s kernel flags in the band's run of record (the implementation at `4e491631`)."""
 SALT = bytes(range(24))
 BATCHES = ("1", "8", "32")
 
@@ -242,7 +241,7 @@ class Reference:
                 "elapsed_max_ns": max(elapsed), "elapsed_median_ns": statistics.median(elapsed)}
 
 
-# ---------------------------------------------------------------------------------------------------------- vllm-gpu (#188)
+# ---------------------------------------------------------------------------------------------------------------- vllm-gpu
 
 class VllmGpu:
     """The GPU twins of `verity_vllm.engine.pous`, through their tree's frozen harness `verity-vllm pous-dense-bench`."""
@@ -405,132 +404,7 @@ class P2V3McGpu(P2V3Gpu):
         return harness.run(a, ws, out, w_segment=_w_segment, framing=harness.MC, **kw)
 
 
-# ---------------------------------------------------------------------------------------------------------- p2-gpu
-
-class P2Gpu:
-    """P2's GPU decode (`benchmarks/pous/p2_gpu/`, the efficient-cryptography campaign's tuned CGBN kernel, bc-28faaf0e).
-
-    Two builds run on the same C:
-    - `-DP2_DERIVE`, the scheme's own key schedule (M1: fresh per-block `K_j, t_j`), whose rate is the result. The keys
-      are expanded in the timed kernel, by ChaCha8 from one 32-byte seed per segment, so only the seeds cross from the
-      host and nothing key-sized is stored (the 1.05× space bound).
-    - The campaign's shared-key build (M2, not covered by the pinned P2 theorems), for comparison only.
-
-    C is random blocks below p, with four blocks encoded by the reference planted in it. The kernel's sampled outputs
-    (the first 1,024 blocks, 1,024 pseudo-random ones, the last, and the planted ones) are checked against the
-    reference's decode.  The timed audit and its negative control run on the same C through `verity.core.protocols.pous.protocol`."""
-
-    name = "p2-gpu"
-
-    def run(self, a: argparse.Namespace, ws: dict[str, Any], out: Path) -> dict[str, Any]:
-        import numpy as np
-
-        from verity.core.protocols.pous import protocol, schemes
-        from verity.core.protocols.pous.labels import salt_value, tag
-        from verity.core.protocols.pous.schemes import p2
-        from verity.core.protocols.pous.verifier import VerifierKey, leaf_hash
-
-        base = schemes.get(a.scheme)
-        if not isinstance(base, schemes.P2) or base.params.expander != p2.CHACHA8:
-            raise SystemExit(f"p2-gpu's kernel expands ChaCha8 keys: it runs p2-16448/v2, not {a.scheme}")
-        pb, nb, bps = base.params.payload_bytes, base.params.block_bytes, base.params.blocks_per_segment
-        n = -(-ws["bytes"] // pb)
-        if a.max_segments:
-            n = min(n, a.max_segments * bps)
-        scheme = schemes.get(a.scheme, segments=-(-n // bps))
-        params, f, nl = scheme.params, p2._field(scheme.params), nb // 4
-        work = Path(a.scratch) / "p2"
-        work.mkdir(parents=True, exist_ok=True)
-        bins = Path(a.p2_bin)
-
-        rng = np.random.default_rng(20260928)
-        c = rng.integers(0, 1 << 32, size=(params.blocks, nl), dtype=np.uint32)
-        c[:, -1] = np.minimum(c[:, -1], 0xFFFFFFFE)                   # every block below p = 2^w − c0
-        planted = {}
-        t0 = time.perf_counter()
-        for g in sorted({1, n // 3, (2 * n) // 3, n - 2}):
-            s, j = divmod(g, bps)
-            m = int.from_bytes(hashlib.shake_256(f"verity-pous/bench/p2/{g}".encode()).digest(pb), "little")
-            k, tj = p2.block_keys(params, SALT, s, j)
-            c[g] = np.frombuffer(f.rho(f.sigma(f.rho((m + tj) % f.p), k)).to_bytes(nb, "little"), dtype=np.uint32)
-            planted[g] = m
-        encode_s = (time.perf_counter() - t0) / len(planted)
-        (work / "c.bin").write_bytes(c.tobytes())
-        seeds = [p2.segment_seed(SALT, s) for s in range(params.segments)]
-        (work / "seeds.bin").write_bytes(params.segments.to_bytes(4, "little") + bps.to_bytes(4, "little") + b"".join(seeds))
-        shared = [int.from_bytes(hashlib.shake_256(f"verity-pous/bench/p2/shared/{x}".encode()).digest(nb + 8), "little")
-                  for x in ("K", "t0", "step")]
-        shared = [shared[0] % (1 << params.w), shared[1] % f.p, shared[2] % f.p]
-        (work / "params.bin").write_bytes(params.w.to_bytes(4, "little") + params.c0.to_bytes(4, "little")
-                                          + b"".join(x.to_bytes(nb, "little") for x in shared))
-        (work / "specials.bin").write_bytes(len(planted).to_bytes(4, "little") + b"".join(
-            g.to_bytes(8, "little") + c[g].tobytes() for g in planted))
-        (work / "nospec.bin").write_bytes(bytes(4))
-
-        def kernel(binary: str, specials: str, sample: Path, extra: list[str]) -> dict[str, Any]:
-            cmd = [str(bins / binary), str(work / "params.bin"), str(work / specials), str(sample), str(n * nb), "7",
-                   str(work / "c.bin"), *extra]
-            proc = subprocess.run(cmd, capture_output=True, text=True)
-            (out / f"{binary}.log").write_text(proc.stdout + proc.stderr)
-            if proc.returncode != 0:
-                raise SystemExit(f"{binary} exited {proc.returncode}: {proc.stderr[-400:]}")
-            return json.loads(proc.stdout.strip().splitlines()[-1])
-
-        m1 = kernel("p2dec_16448_32_s2_derive", "specials.bin", out / "sample-m1.bin", [str(work / "seeds.bin")])
-        m2 = kernel("p2dec_16448_32_s2", "nospec.bin", out / "sample-m2.bin", [])
-
-        def check(sample: Path, decode, expect: dict[int, int]) -> dict[str, Any]:
-            data = sample.read_bytes()
-            count = int.from_bytes(data[4:8], "little")
-            seen, bad, off = set(), 0, 8
-            for _ in range(count):
-                g = int.from_bytes(data[off:off + 8], "little")
-                cv = int.from_bytes(data[off + 8:off + 8 + nb], "little")
-                mv = int.from_bytes(data[off + 8 + nb:off + 8 + 2 * nb], "little")
-                off += 8 + 2 * nb
-                if g in seen:
-                    continue
-                seen.add(g)
-                bad += mv != decode(g, cv) or (g in expect and mv != expect[g])
-            return {"passed": bad == 0 and bool(seen) and all(g in seen for g in expect), "checked": len(seen),
-                    "mismatches": bad, "planted": sum(g in seen for g in expect), "planted_of": len(expect)}
-
-        def m1_decode(g: int, cv: int) -> int:
-            k, tj = p2.chacha_keys(params, seeds[g // bps], g % bps)
-            return (f.sq(f.sigma(f.sq(cv), k)) - tj) % f.p
-
-        def m2_decode(g: int, cv: int) -> int:
-            return (f.sq(f.sigma(f.sq(cv), shared[0])) - (shared[1] + g * shared[2])) % f.p
-
-        blocks = [c[g].tobytes()[::-1] for g in range(params.blocks)]    # the device holds little-endian limbs; the wire is big-endian
-        vk = VerifierKey.from_leaves(params, SALT, [leaf_hash(params, SALT, g, b) for g, b in enumerate(blocks)])
-        honest = Reference._audits(protocol, scheme, vk, blocks.__getitem__, a.audits, a.rtt_allowance_ns)
-        wrong = [bytes(nb) if g % 10 == 0 else b for g, b in enumerate(blocks)]
-        negative = Reference._audits(protocol, scheme, vk, wrong.__getitem__, a.audits, a.rtt_allowance_ns)
-        gate, gaps = certificate_gate(scheme, honest["k"], honest["limit_ns"])
-        nt = max(params.segments, TAG_SEGMENTS)
-        pass_s = m1["ms_med"] / 1e3
-        return {
-            "implementation": {"name": self.name, "commit": a.impl_commit, "kernel": "benchmarks/pous/p2_gpu s2, TPI 32, 64-thread blocks",
-                               "keys": "per block, expanded on the device by ChaCha8 from a 32-byte seed per segment"},
-            "device": {"gpu": m1.get("gpu"), "sms": m1.get("sms"), "regs": m1.get("regs")},
-            "segments": params.segments, "blocks": n, "weight_bytes": n * pb,
-            "gates": {"reference_decode": check(out / "sample-m1.bin", m1_decode, planted),
-                      "m2_reference_decode": check(out / "sample-m2.bin", m2_decode, {}),
-                      "certificate": gate, "segment_tags": tags_gate([tag(salt_value(SALT), s).to_bytes(32, "little")
-                                                                       for s in range(nt)], nt),
-                      "timed_audit": {"passed": honest["accepted"] == honest["audits"]},
-                      "negative_control": {"passed": negative["accepted"] == 0, "accepted": negative["accepted"]}},
-            "metrics": {"decode_pass_s": pass_s, "ewb": n * pb / pass_s, "stored_GBps": m1["GBps_stored_med"],
-                        "m2_shared_key": {"decode_pass_s": m2["ms_med"] / 1e3, "ewb": n * pb / (m2["ms_med"] / 1e3),
-                                          "stored_GBps": m2["GBps_stored_med"]},
-                        "h2d_GBps": m1.get("h2d_GBps"), "reference_encode_s_per_block": encode_s,
-                        "audit": honest, "negative_audit": negative, "kernel": {"m1": m1, "m2": m2}},
-            "profile": profile_json(scheme, honest["k"], honest["limit_ns"], gaps) if honest["accepted"] else None,
-        }
-
-
-IMPLS = {c.name: c for c in (Reference, VllmGpu, BandGpu, P2V1Gpu, P2V3Gpu, P2V3McGpu, P2Gpu)}
+IMPLS = {c.name: c for c in (Reference, VllmGpu, BandGpu, P2V1Gpu, P2V3Gpu, P2V3McGpu)}
 
 
 def main(argv: list[str] | None = None, **kw: Any) -> int:
@@ -547,13 +421,11 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
                          "the loop and the step floor but no limit, audit or control, and is labelled timed: false")
     ap.add_argument("--rtt-allowance-ns", type=int, default=0, help="reference: the memory challenger's round-trip allowance")
     ap.add_argument("--workers", type=int, default=cpus(), help="reference: CPU processes (default: the usable CPUs)")
-    ap.add_argument("--max-segments", type=int, default=0, help="reference, band-gpu, p2-v1-gpu, p2-gpu: only the first N segments (0: all)")
-    ap.add_argument("--impl-tree", help="vllm-gpu: the tree holding verity_vllm.engine.pous (#188)")
+    ap.add_argument("--max-segments", type=int, default=0, help="reference, band-gpu, p2-v1-gpu: only the first N segments (0: all)")
+    ap.add_argument("--impl-tree", help="vllm-gpu: the tree holding verity_vllm.engine.pous")
     ap.add_argument("--impl-commit", help="the implementation's source commit, recorded")
     ap.add_argument("--build-dir", default="/workspace/pous_build", help="vllm-gpu, band-gpu, p2-v1-gpu: the pous_native JIT build directory")
     ap.add_argument("--python", default=sys.executable, help="vllm-gpu: the interpreter with torch")
-    ap.add_argument("--p2-bin", default=str(HERE / "p2_gpu" / "bin"), help="p2-gpu: the directory of the built kernels")
-    ap.add_argument("--scratch", default="/tmp/pous-bench", help="large inputs (C, keys), kept out of the run directory")
     ap.add_argument("--kernels", default="", help="band-gpu: kernel settings over harness.KERNELS, as JSON (harness.SWITCHES)")
     ap.add_argument("--tokens", default="1,8,32,2048", help="band-gpu, p2-v1-gpu: the synthetic loop's token counts T")
     ap.add_argument("--reps", type=int, default=20, help="band-gpu, p2-v1-gpu: timed repetitions after one warm-up; every rep is recorded")

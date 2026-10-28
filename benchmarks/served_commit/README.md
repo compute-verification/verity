@@ -6,18 +6,16 @@ per-token latency (p50 and p99), per model and batch, under continuous batching 
 stochastic. It renders no tables: `benchmarks/g2/` does, from the evidence store (`curve.py` the overhead curve over every
 labeled run, `served.py` the served arm's runs).
 
-- `arm.py`: the arms' base, and its two Commit arms, `served-commit` (values retained in host memory, each run's linkage
-  checked) and `served-commit-noretain` (authentication state only; openings by replay). Those two, and every `prof_arm.py`
-  arm that doesn't name `rows-sha512`, commit under `vllm-v1` (SHA-256), which their `install` refuses. `prof_arm.py`'s
-  rows arms and the harness's `commit` arms measure the Commit. Its docstring has what a run does, and which runs its gate
-  accepts without a root (declared warm-ups, named in the verdict).
+- `arm.py`: the arms' base, `ServedCommitArm`, whose `install` refuses its default scheme, `vllm-v1` (SHA-256), so an
+  arm that runs names `rows-sha512`. `prof_arm.py`'s rows arms and the harness's `commit` arms measure the Commit. Its
+  docstring has what a run does, and which runs its gate accepts without a root (declared warm-ups, named in the verdict).
 - `served_arm.py` and `served_arm.sh`: the served arm, the Commit at 4 KiB rows against compiled and eager stock in one run
   (the specs `*-rtx-served-arm`). With `PIN_BUILD` (a Build of record's `build.json`) every arm compiles the Build's
   kernels and `out/pin_check.txt` says so, which a counted compiled ratio needs.
 - `run.sh`: `verity bench served_commit`, one spec's sweep in one process; `SPEC` names the spec.
 - `tp_decode.py` and `tp_decode.sh`: one Commit arm against stock in one TP engine, eager (GLM-5.3 TP8).
 - Measurement: `prof.sh` runs a sweep with the arms of `prof_arm.py` (roots and plans per run, native drain, rows-sha512,
-  serving on a high-priority stream over the worker's hashing, the finalize profile, NVTX ranges; `-base` and `-batch`
+  serving on a high-priority stream over the worker's hashing, NVTX ranges; `-base` and `-batch`
   arms turn the decode host-cost changes off, or all but the batched captured copies; `-ring8` and `-w64` arms size the
   staging ring at 32 windows of 256 or 64 MiB; `-cap` arms hash in launches of at most `PROF_ROWS_CAP` CTAs while the
   ring has room; `-4k` arms hash 4 KiB rows, and `-layer` arms acquire only each layer's residual stream, K and V; no

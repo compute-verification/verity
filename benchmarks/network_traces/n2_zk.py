@@ -350,28 +350,10 @@ def _one_stage():
     return SimpleNamespace(a0=a0, a8=a8, np=np, P=P, PF=PF, V2=V2, FC=FC, CS=CS)
 
 
-def builders() -> tuple:
-    """Give the traced parts the head check calls that carry no builder (`gates.lms._leaf_definition`'s; `head_check`'s,
-    `frame_v3._part` and `boolean.trace.definition` keep one) the builder their trace was taken from, so C-Flock lowers
-    each activation by it, commits included (`ir_lower._boolean_activation`, which calls ``build(C, S, *e)`` for a part
-    with statics and ``build(C, *e)`` without). Gate by gate their linear forms grow without bound: one SHA-512
-    compression passes 1 GB. Returns the parts."""
-    from verity.ml.commitments.gates import lms
-    from verity.ml.commitments.gates.sha512 import compress_gadget
-
-    parts = ((lms.Sha512Compress, lambda C, *e: compress_gadget(C, list(e[:8]), list(e[8:24]))),
-             (lms.LmsEqual, lms._build_equal))
-    for d, build in parts:
-        if getattr(d, "build", None) is None:
-            d.build = build
-    return tuple(d for d, _ in parts)
-
-
 def stager(M, lw: LinkWindows, out: Path) -> SimpleNamespace:
     """The one circuit: `LinkWindows.proof_unit` lowered once on rows ``pub`` and ``wit`` with output row ``o0``, bound
     to the registered partition and Program, which are written beside it as the verifier's own. Its ports are
     `service.PORTS`, each the length the verifier opens (`LinkWindows.bits`)."""
-    builders()
     rows = [(r, M.V2, lw.bits(r), list(lw.layout[r])) for r in SVC.ROWS]
     out.mkdir(parents=True, exist_ok=True)
     (out / "partition.json").write_text(json.dumps(lw.partition, sort_keys=True))

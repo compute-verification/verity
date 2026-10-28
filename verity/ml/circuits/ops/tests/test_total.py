@@ -247,7 +247,7 @@ def test_mma_campaign_records_target_words() -> None:
             )
 
 
-# --- Hopper: veritor.tensor-core.hopper_bf16_wgmma_k16@1 (lane HP, gpu/tc-hopper) ------------------------
+# --- Hopper: veritor.tensor-core.hopper_bf16_wgmma_k16@1 (veritor's H100 campaign, gpu/tc-hopper) -------
 
 HP = HOPPER_BF16_WGMMA_K16
 HDATA = FIXTURES / "tc-hopper-2026-09-07"

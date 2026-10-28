@@ -10,7 +10,7 @@ through `dither_one.check`, then timed against each other.
           int8 weights and positive scales; a decode step of m = 32 random rows captured per `Window.captures` (gate,
           control, fault, fault_wb, and peeled fault_xa; every buffer 0xA5 first) and `dither_one.check` on each: the A,
           admit and z roots and the round = commit.py's, every receipt = h1r v1's, every z = h1o_ref's (peeled: = A B^T,
-          and y = today's scaled_mm on every call), y = dequant(z), 3 units = CA's H1V3 on the CPU and H1V3's own code
+          and y = today's scaled_mm on every call), y = dequant(z), 3 units = H1V3 on the CPU and H1V3's own code
           (this source's h1tile unless DITHER_H1V3_TREE names a tree); the control refused and every fault conforming (`gate_verdict`; the
           perturbed noised word must move z and y in its cell, peeled too); wb's density and the xa entries (A = 127
           and b = 1) as the run reads them; the occupancy calculator's blocks an SM for each units kernel
@@ -38,7 +38,9 @@ sys.path.insert(0, str(HERE))
 
 import dither_fused as DF  # noqa: E402
 import dither_one as DO  # noqa: E402
+from verity_config.settings import of  # noqa: E402
 
+settings = of(__file__)
 SHAPES = {"self_attn.qkv_proj": (6144, 4096), "self_attn.o_proj": (4096, 4096), "mlp.gate_up_proj": (28672, 4096),
           "mlp.down_proj": (4096, 14336)}
 T, M = 64, 32
@@ -87,14 +89,14 @@ def step(win: DO.Window, xs: list, outs: list) -> None:
 def gate(form: str, dev) -> tuple:
     os.environ[DO.UNITS_ENV] = form.split("-")[0]
     os.environ[DO.PEEL_ENV] = "1" if form.endswith("-cpeel") else "0"
-    win = DO.Window(T, os.urandom(64), os.environ["DITHER_H1C"], os.environ[DO.LIB_ENV], True, dev)
+    win = DO.Window(T, os.urandom(64), settings.need("DITHER_H1C"), settings.need(DO.LIB_ENV), True, dev)
     outs = [(torch.empty(M, n, dtype=torch.bfloat16, device=dev), torch.empty(M, n, dtype=torch.int32, device=dev))
             for n, _ in win.nk]
     step(win, operands(win, 7), outs)
     win.arm(M)
     for i in range(len(win.captures)):
         step(win, operands(win, 100 + i), outs)
-    caps = {n: DO.check(win, os.environ[DO.LIB_ENV], n) for n in win.captures}
+    caps = {n: DO.check(win, settings.need(DO.LIB_ENV), n) for n in win.captures}
     return win, outs, caps, DO.gate_verdict(caps["gate"], *(caps[n] for n in win.captures[1:]))
 
 

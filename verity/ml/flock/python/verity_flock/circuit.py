@@ -936,6 +936,14 @@ def write_public_inputs(text: str, words: dict, n: int, path) -> None:
     Path(path).write_bytes(json.dumps(head, sort_keys=True).encode() + b"\n" + _public_bytes(pins, words, n))
 
 
+def public_file(head: dict, public: bytes) -> bytes:
+    """The verifier's own ``flock-circuit-inputs`` file of header ``head`` (``rows`` false) and its public bytes, its header
+    line as C-Flock writes it (`Instances::public_file`: compact, key-sorted, UTF-8), so the file's SHA-512 is the prover's
+    record's ``public_file_sha512``."""
+    line = json.dumps(dict(head, rows=False), sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return line.encode() + b"\n" + public
+
+
 def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None, indices: list | None = None,
           share_rows: bool = False, rows: dict | None = None, outs: dict | None = None, tables: dict | None = None,
           refs: dict | None = None, salts: dict | None = None, registered: dict | None = None,
@@ -1071,8 +1079,7 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
         with open(path, "wb") as f:
             f.write(json.dumps(head, sort_keys=True).encode() + b"\n" + private + public)
     if pub_path is not None:
-        with open(pub_path, "wb") as f:
-            f.write(json.dumps(dict(head, rows=False), sort_keys=True).encode() + b"\n" + public)
+        Path(pub_path).write_bytes(public_file(head, public))
     return head
 
 
