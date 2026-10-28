@@ -788,13 +788,10 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
             self._memcpy, self._memset = self._rt.cudaMemcpyAsync, self._rt.cudaMemsetAsync
             self.name = f"{self.name}_fast"
         self._dtype_names: dict = {}
-        # GPU-RESIDENT hashing (the hidden path's chunk tree `hidden_gpu_tree.cu`): leaves = SHA-256(16-word chunk header || 256 B chunk) computed on the GPU
-        # over the packed step stream IN THE ARENA, tree levels on the GPU, only the 32 B merkle root comes back; no D2H of the stream, no hashlib
-        # threads.  Openings are served lazily: chunk bytes D2H from the retained arena block + sibling path from the GPU levels (counted under
-        # opening_generation).  Leaf rule differs from pos_leaf (256 B chunks, hidden-path chunk header) -> the step root binds the GPU merkle root the same way.
+        # GPU-tree steps: each step's levels and retained bytes kept per step (`_gpu_levels`, `_gpu_blocks`), openings served lazily from
+        # them.  A served run's are the windowed collector's (`native_collect`, rows-sha512); offline (`commit_block_offline`) the same
+        # per-step state from the CPU reference, under rows-sha512 or vllm-v1's chunk leaves (256 B chunks, hidden-path chunk header)
         self.gpu_tree = bool(gpu_tree)
-        self._gpu_ext = None
-        self._HG = None
         self._gpu_levels: dict[int, list] = {}
         self._gpu_blocks: dict[int, tuple] = {}
         self._gpu_t: dict[str, float] = {"leaf_ms": 0.0, "tree_ms": 0.0}
@@ -1075,20 +1072,19 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
     # ------------------------------------------------------------------ lifecycle
 
     def register_weights(self) -> dict:
-        """Registered input: every parameter + buffer hashed once (vllm-v1: chunked pos_leaf leaves, per-tensor subtree, fold of subtree
-        roots, SHA-256; rows-sha512: `weights_rows`, SHA-512).  Timed and reported apart from steady state, outside its denominator."""
+        """Registered input: every parameter + buffer hashed once (rows-sha512: `weights_rows`, SHA-512; the offline core's vllm-v1:
+        chunked pos_leaf leaves, per-tensor subtree, fold of subtree roots, SHA-256).  Timed and reported apart from steady state,
+        outside its denominator."""
         t0 = time.perf_counter()
-        # host (default) | device | device-checked: device hashes the same leaves into the same per-tensor tree on the GPU, rows-sha512's
-        # rows by native_rows.cu (`weights_rows`), vllm-v1's pos_leaf leaves over self.chunk-byte pieces by native_leafhash.cu (`leafhash`);
-        # the weights tree over the tensor roots is built the same either way.  device-checked computes both and refuses a mismatch.
+        # host (default) | device | device-checked: device hashes rows-sha512's rows into the same per-tensor tree on the GPU, by
+        # native_rows.cu (`weights_rows`); the weights tree over the tensor roots is built the same either way.  device-checked computes
+        # both and refuses a mismatch.
         mode = settings.VERITY_WEIGHTS_HASH
         if mode not in ("host", "device", "device-checked"):
             raise ValueError(f"VERITY_WEIGHTS_HASH must be host | device | device-checked, got {mode!r}")
-        LH = None
         WR = weights_rows.WeightsRows(self._geo_digest, weights_rows.key(getattr(self, "weights_tree", None))) if self.rows else None
         if mode != "host" and WR is None:
-            from verity_vllm.commit.committer import leafhash as LH  # noqa: N812
-            LH.ext()                                          # JIT once; a build failure here fails the registration by name, not silently host
+            raise ValueError(f"VERITY_WEIGHTS_HASH={mode}: the weights hash on the device under {step_rows.NAME} only (`weights_rows`)")
         roots, names, n_bytes, checked = [], [], 0, 0
         seen: set[int] = set()
         items = list(self.model.named_parameters()) + list(self.model.named_buffers())
@@ -1103,19 +1099,11 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
             if WR is not None:
                 r, c = WR.root(len(roots), entry, flat, mode)
                 checked += c
-            elif mode == "host" or not flat.is_cuda:
+            else:
                 host = flat.cpu()                    # blocking D2H, once
                 mv = memoryview(host.numpy()).cast("B")
                 leaves = self._hash_leaves(mv)
                 r = scheme.fold(leaves)
-            else:
-                r = LH.tensor_root_device(flat, self.chunk)
-                if mode == "device-checked":
-                    rh = LH.tensor_root_host(flat, self.chunk)
-                    if rh != r:
-                        raise RuntimeError(f"weights registration: device root != host root for {name} ({nb} B, chunk {self.chunk}): "
-                                           f"{r.hex()[:16]} vs {rh.hex()[:16]} -- refusing to commit (SYS-05 device-checked)")
-                    checked += 1
             roots.append(r)
             n_bytes += nb
             names.append(entry)
@@ -1284,116 +1272,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
 
     ALIGN = 4
     GPU_TREE_SRC = 0                       # hidden-path chunk header field `src_mask` (0: not an FA2 tap stream); the tag field carries the step index
-    layout = "chunk-leaf-v1"               # the GPU tree's leaf rule, which padding leaves follow; `native_collect` also implements chunk-leaf-v2
-
-    def _gpu_ext_load(self):
-        if self._gpu_ext is None:
-            import sys as _sys
-
-            _tree = os.path.realpath(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))))
-            src_dir = os.path.join(_tree, "out", "gen", "r9", "cmt-hidden", "src")
-            if not os.path.isfile(os.path.join(src_dir, "hidden_gpu.py")):
-                # a tree whose hidden_gpu copy pod_hidden_gpu.sh never materialised imports the SHIPPED copy of the same
-                # tree -- never another tree's, never a default path
-                src_dir = os.path.join(_tree, "verity_vllm", "commit", "committer", "hidden_gpu_src")
-            if src_dir not in _sys.path:
-                _sys.path.insert(0, src_dir)
-            import hidden_gpu as HG  # the hidden-value driver: JIT-builds hidden_gpu_tree.cu on first use
-
-            # the module that LOADED must be this tree's, and so must verity.ml.circuits / verity_vllm / vllm-poc as
-            # this process resolves them: PRECHECK_FAIL_SOURCE_IDENTITY by name at the import site, before the extension is built or used
-            from verity_vllm.pipeline import source_identity as _sid
-
-            _sid.assert_loaded_module_is_ours(HG, "hidden_gpu", _tree)
-            # the document of THIS check (hidden_gpu loaded:true from its resolved path, plus
-            # verity.ml.circuits / verity_vllm / vllm-poc as loaded in this process) is written beside the attempt when the driver names the
-            # dir ($VERITY_SOURCE_IDENTITY_DIR, set by commit_delta from --out): <dir>/source_identity.gpu_ext_load.json.  The start-of-run
-            # record has hidden_gpu loaded:false; this one is the evidence that what LOADED at the import site was this tree's.
-            _sid_out = os.path.join(d, "source_identity.gpu_ext_load.json") if (d := settings.VERITY_SOURCE_IDENTITY_DIR) else None
-            _sid_doc = _sid.precheck("commit.gpu_ext_load", _tree, out=_sid_out)
-            _sid_doc.setdefault("loaded_modules", {})["hidden_gpu"] = {"file": getattr(HG, "__file__", None), "repo": getattr(HG, "REPO", None)}
-            if _sid_out:
-                with open(_sid_out, "w") as _f:
-                    json.dump(_sid_doc, _f, indent=1, default=str)
-
-            # a killed build's torch `lock` (every later worker once hung in file_baton.wait on one) is cleared inside HG.ext(), under
-            # the build dir's lock (native_jit.jit_load)
-            self._gpu_ext = HG.ext()
-            self._HG = HG
-        return self._gpu_ext
-
-    def _commit_step_gpu(self, job: _StepJob) -> None:
-        """Worker: GPU-resident leaves + tree over the packed step block on the side stream; keeps the block for lazy openings."""
-        from verity_vllm.commit import hidden_stream as hs
-
-        e = self._gpu_ext_load()
-        side = self._side_stream()
-        t0 = time.perf_counter()
-        with torch.inference_mode(), torch.cuda.stream(side):
-            side.wait_event(job.event)
-            blocks = job.overflow + [(job.arena, job.cursor)]
-            if len(blocks) > 1:                                   # overflow: concatenate the used parts into one block (rare; counted)
-                total = sum(u for _b, u in blocks)
-                cat = self.arena.take(total, wait=False)          # the block that fits may be one this step holds
-                base = 0
-                for blk, used in blocks:
-                    if used:
-                        cat[base:base + used].copy_(blk[:used])
-                        for m in job.metas:
-                            if m.dev_block is blk:
-                                m.dev_off += base
-                        base += used
-                for blk, _u in blocks:
-                    self.arena.release(blk)
-                job.arena, job.cursor, job.overflow = cat, total, []
-            used = job.cursor
-            padded = -(-used // GPU_CHUNK_BYTES) * GPU_CHUNK_BYTES
-            if padded > job.arena.numel():
-                big = self.arena.take(padded, wait=False)
-                big[:used].copy_(job.arena[:used])
-                self.arena.release(job.arena)
-                job.arena = big
-            if padded > used:
-                job.arena[used:padded].zero_()
-            for m in () if hasattr(job.metas, "scan") else job.metas:     # a cached plan's record (plan_cache) is placed already
-                m.stream_off, m.dev_block = m.dev_off, None
-            stream_i32 = job.arena[:padded].view(torch.int32)
-            ev = [torch.cuda.Event(enable_timing=True) for _ in range(3)]
-            ev[0].record(side)
-            memtrace("worker: before leaves", job.step)
-            leaves = e.chunk_leaves(stream_i32, GPU_CHUNK_BYTES // 4, job.step, self.GPU_TREE_SRC, job.step, padded // 4, 0)
-            ev[1].record(side)
-            levels = e.tree_levels(leaves)
-            ev[2].record(side)
-            memtrace("worker: before keep-copy", job.step)
-            keep = self._retain_copy(job.arena, padded, side)     # compact retained copy on device | host | none (lazy openings / replay)
-            mr_t = levels[-1].to("cpu", non_blocking=True)
-            done = torch.cuda.Event()
-            done.record(side)
-            done.synchronize()                                    # keep-copy + root D2H complete before the arena block can be reused
-            if self.retain != "device":
-                levels = self._levels_to_host(levels)             # authentication state to host; the device keeps only arena blocks
-                torch.cuda.current_stream().synchronize()
-            self._footprint_absorbed(job, padded, levels, keep)
-            self.arena.release(job.arena)
-            job.arena = None
-            memtrace("worker: block released", job.step)
-        mr = mr_t.numpy().astype("uint32").tobytes() if hasattr(mr_t, "numpy") else bytes(mr_t)
-        self._gpu_t["leaf_ms"] += ev[0].elapsed_time(ev[1])
-        self._gpu_t["tree_ms"] += ev[1].elapsed_time(ev[2])
-        t1 = time.perf_counter()
-        n = int(leaves.shape[0])
-        nbytes = job.metas.nbytes if hasattr(job.metas, "scan") else sum(m.nbytes for m in job.metas)
-        layout_dig = self.layout_digest(job.metas)
-        root = scheme.step_root(self.program_digest, self._ctx_digest(job.step), self._geo_digest, layout_dig, n, mr)
-        t2 = time.perf_counter()
-        self.spans.add("hashing", t1 - t0, step=job.step, nbytes=nbytes, leaves=n)
-        self.spans.add("root_finalisation", t2 - t1, step=job.step)
-        self._gpu_levels[job.step] = levels
-        self._gpu_blocks[job.step] = (keep, used)
-        self._layouts[job.step] = job.metas
-        self._done[job.step] = StepCommitment(job.step, root, mr, n, nbytes, len(job.metas), layout_dig, job.t_step_end, t2, job.backlog,
-                                              hashing_s=t1 - t0, root_finalisation_s=t2 - t1)
+    layout = "chunk-leaf-v1"               # the offline GPU tree's leaf rule, which padding leaves follow
 
     def commit_block_offline(self, step: int, stream: bytes | bytearray, metas: list[TensorMeta]) -> StepCommitment:
         """CPU reference of the GPU chunk tree for ONE packed step block (tests; no CUDA): the same 256 B chunk leaves (hidden-path chunk header), the
@@ -1501,12 +1380,8 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
         return freed
 
     def _gpu_layout(self, step: int, words: int):
-        from verity_vllm.commit import hidden_stream as hs
-
-        v2 = bool(getattr(self, "layout_v2", False))               # chunk-leaf-v2 (behind --layout): M := 0, the length is bound by n_leaves
-
         class _L:                                                 # duck-typed StreamLayout for the hidden-value chunk header: (HB, M, NB) = (step, words, 0)
-            HB, M, NB = step, (0 if v2 else words), 0
+            HB, M, NB = step, words, 0
 
         return _L
 
@@ -1815,7 +1690,8 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
 
     def _commit_step(self, job: _StepJob) -> None:
         if self.gpu_tree and job.arena is not None:
-            return self._commit_step_gpu(job)
+            raise RuntimeError(f"step {job.step}: the GPU tree commits a served step under {step_rows.NAME} only, on the windowed "
+                               "collector (native_collect_v2b)")
         if "noworker" in self.ABL:
             job.event.synchronize()
             for blk in [job.arena, *(b for b, _u in job.overflow)] if job.arena is not None else []:
@@ -2354,7 +2230,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
 
     def _level_path(self, levels: list, index: int) -> tuple:
         """Leaf `index`'s sibling path in a GPU-tree step's levels."""
-        return tuple(self._HG.gpu_open(levels, index) if self._HG is not None and not self.rows else open_levels(levels, index))
+        return tuple(open_levels(levels, index))
 
     def verify(self, run: RunCommitment, opening: Opening) -> bool:
         """Production verifier core: shape rule + fold to the bare root, then the context binding to the ORIGINAL step root, then the
