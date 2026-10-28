@@ -639,6 +639,45 @@ def test_a_window_serving_other_weights_than_the_periods_is_refused(edit):
         SV.trees(run)
 
 
+def test_a_weight_is_copied_to_the_host_and_held_to_its_periods_rows_once_a_process(monkeypatch):
+    """`host_weight` copies a weight once while it is the same tensor, unwritten: read-only, sharing no memory with it. The
+    period registered from those copies (`weights_of`) never compares them to its rows again, and its windows register
+    what windows of a period registered from fresh arrays do. A weight written in place is copied again and refused."""
+    ws = _weights()
+    got = SV.weights_of([SimpleNamespace(weight=c, weight_scale=s) for c, s in ws])
+    w, s = got[1]
+    assert all(a is b for a, b in zip(SV.host_weight(*ws[1]), got[1]))
+    assert not (w.flags.writeable or s.flags.writeable) and not np.shares_memory(w, ws[1][0].numpy())
+    assert (s.dtype, s.shape) == (np.dtype("<f4"), (32,)) and np.array_equal(s, ws[1][1].numpy().reshape(-1))
+    a = np.zeros((2, 2), np.int8)
+    assert SV.host_weight(a, np.ones(2))[0] is not SV.host_weight(a, np.ones(2))[0] and a.flags.writeable
+    gone = torch.zeros(2, 2, dtype=torch.int8)
+    SV.host_weight(gone, torch.ones(2))
+    i = id(gone)
+    del gone
+    assert i not in SV._HOST
+
+    period, fresh = SV.register_weights(_period(ws).circuit, SHAPES, got, WKEY), _period(ws)
+    assert (period.root(), period.entries()) == (fresh.root(), fresh.entries()) and sorted(period.held) == [0, 1, 2]
+    compared, real = [], SV.chunk_words
+    monkeypatch.setattr(SV, "chunk_words", lambda codes, *x: (compared.append(codes), real(codes, *x))[1])
+    windows, checked = [], []
+    for weights in (period, period, fresh, fresh):
+        compared.clear()
+        torch.manual_seed(0)
+        run, _ws, _got = _window(W1, ws=ws, weights=weights)
+        assert not run.served.refused
+        windows.append((run.served.entries(), run.served.digest(), run.round_log, run.calls_root()))
+        checked.append(sorted(w for w, (h, _s) in got.items() if any(c is h for c in compared)))
+    assert windows[1:] == windows[:-1] and checked == [[], [], [0, 1, 2], []]
+
+    with torch.no_grad():
+        ws[1][0][3, 5] ^= 1
+    assert SV.host_weight(*ws[1])[0] is not w
+    run, _ws, _got = _window(W1, ws=ws, weights=period)
+    assert any("linears [1]' codes or s_w are not their rows of the period's registered" in r for r in run.served.refused)
+
+
 def test_round_r_lists_step_rs_a_tables_whole_under_its_root():
     """Each round's root lists step r's A tables ``a/<K>@<r>``, one a K, whole, as aligned subtrees (`credit.cover`) whose
     tree is the table's registered root, and no other round lists them (`credit.round_root`)."""

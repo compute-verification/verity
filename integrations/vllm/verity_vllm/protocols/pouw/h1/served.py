@@ -59,7 +59,8 @@
   that call's manifest row (``tables.registered``), so its
   round's root commits it before the round's coin, and round s's root also lists step s's A tables whole
   (`Served.segments`, `credit.round_root`). A weight is taken once, and one that changes within the window
-  is refused. Without the period's `Weights` (an in-process window, which credits nothing) the window registers its own
+  is refused. Its host codes are copied once a process (`host_weight`), and the period's `Weights` holds them to its rows
+  once (`Weights.matches`). Without the period's `Weights` (an in-process window, which credits nothing) the window registers its own
   ``b/<K>`` there, under the run's key.
 * **The Commit** (ROOTS1): with ``tap`` (`pouw_h1_commit.CommitTap`, the Commit in the serving engine) its
   AROW of each step's calls of K is that step's A table's value (`credit.commit_rows`), and the window also registers each round's input-ids table ``ids@<s>`` (`ids_words`: its M slots' token ids, two words each),
@@ -87,6 +88,7 @@ from __future__ import annotations
 
 import collections
 import hashlib
+import weakref
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping, Sequence
 
@@ -138,8 +140,38 @@ def nonce(call: int, table: str) -> int:
 
 def weights_of(layers: Sequence[Any]) -> dict[int, tuple[np.ndarray, np.ndarray]]:
     """Each served linear's B as the period registers it, by its index among `layers` (the int8 arm's linear layers, as
-    `H1Run` numbers them): its int8 codes ``(n, K)`` and its f32 s_w ``(n,)``."""
-    return {w: (PH.numpy_of(m.weight), PH.numpy_of(m.weight_scale).astype("<f4").reshape(-1)) for w, m in enumerate(layers)}
+    `H1Run` numbers them): its int8 codes ``(n, K)`` and its f32 s_w ``(n,)`` (`host_weight`)."""
+    return {w: host_weight(m.weight, m.weight_scale) for w, m in enumerate(layers)}
+
+
+#: the copies `host_weight` made, by the weight's id: the weight and its scale (weak references), their `_tensor_key`s, and
+#: the codes and s_w
+_HOST: dict[int, tuple[Any, Any, tuple, np.ndarray, np.ndarray]] = {}
+
+
+def host_weight(weight: Any, scale: Any) -> tuple[np.ndarray, np.ndarray]:
+    """A served linear's int8 codes and its s_w as f32 ``(n,)`` on the host, read-only, copied once a process: the weights
+    are fixed after install, so each window reuses the copy while ``weight`` and ``scale`` are the tensors it was made from,
+    with the same storage, shape, dtype and version. Anything else (a weight replaced or written in place, or an array that
+    isn't a tensor) is copied again."""
+    key, hit = (_tensor_key(weight), _tensor_key(scale)), _HOST.get(id(weight))
+    if None not in key and hit is not None and hit[0]() is weight and hit[1]() is scale and hit[2] == key:
+        return hit[3], hit[4]
+    w = weight.detach().to("cpu", copy=True).numpy() if hasattr(weight, "detach") else np.array(weight)
+    s = PH.numpy_of(scale).astype("<f4").reshape(-1)
+    w.flags.writeable = s.flags.writeable = False
+    if None not in key:
+        i = id(weight)
+        _HOST[i] = (weakref.ref(weight, lambda _r: _HOST.pop(i, None)), weakref.ref(scale), key, w, s)
+    return w, s
+
+
+def _tensor_key(t: Any) -> tuple | None:
+    """What a write to or a move of tensor ``t`` changes (its version counts in-place writes through any view), or None
+    when ``t`` isn't a tensor."""
+    if not (hasattr(t, "data_ptr") and hasattr(t, "_version")):
+        return None
+    return t.data_ptr(), tuple(t.shape), tuple(t.stride()), str(t.dtype), str(t.device), t._version
 
 
 @dataclass(frozen=True)
@@ -155,6 +187,8 @@ class Weights:
     circuit: str
     registered: dict[int, G.Registered]
     at: dict[int, tuple[int, int]]
+    #: each linear's read-only codes and s_w known to be its rows (`matches`), as arrays, not copies
+    held: dict[int, tuple[np.ndarray, np.ndarray]] = field(default_factory=dict, compare=False, repr=False)
 
     def root(self) -> bytes:
         return CR.weights_root({k: r.root for k, r in self.registered.items()})
@@ -163,11 +197,17 @@ class Weights:
         return [self.registered[k].entry() for k in sorted(self.registered)]
 
     def matches(self, w: int, codes: np.ndarray, scales: np.ndarray) -> bool:
-        """Whether linear `w`'s served codes and s_w are its registered rows: its n leaves a row from leaf n·lo."""
+        """Whether linear `w`'s served codes and s_w are its registered rows: its n leaves a row from leaf n·lo. Read-only
+        arrays it registered or found to match (`host_weight`'s, the same every window) aren't compared again."""
+        if (hit := self.held.get(w)) is not None and hit[0] is codes and hit[1] is scales:
+            return True
         k, lo = self.at[w]
         n, reg = Wt.chunks(k), self.registered[k]
         got = chunk_words(codes, scales, n)
-        return np.array_equal(got, np.asarray(reg.rows[n * lo:n * lo + len(got)], np.uint16))
+        ok = np.array_equal(got, np.asarray(reg.rows[n * lo:n * lo + len(got)], np.uint16))
+        if ok and not (codes.flags.writeable or scales.flags.writeable):
+            self.held[w] = (codes, scales)
+        return ok
 
 
 def register_weights(circuit: str, shapes: Sequence[tuple[int, int]], weights: Mapping[int, tuple[Any, Any]], key: bytes,
@@ -179,7 +219,7 @@ def register_weights(circuit: str, shapes: Sequence[tuple[int, int]], weights: M
     `audit.hm96_salt` of the period's key ``key`` at ``B_NONCE`` plus K's place, its rows kept (`Weights.matches`).
     Committed once, before the period's first window's salt. ValueError on an odd K, a K `weights.chunks` refuses, or a
     weight that isn't its linear's n × K int8 codes and n scales."""
-    ks, reg, at = sorted({int(k) for _n, k in shapes}), {}, {}
+    ks, reg, at, held = sorted({int(k) for _n, k in shapes}), {}, {}, {}
     for i, k in enumerate(ks):
         if k % 2:
             raise ValueError(f"K = {k}: a row's codes are whole u16 words")
@@ -192,9 +232,11 @@ def register_weights(circuit: str, shapes: Sequence[tuple[int, int]], weights: M
                 raise ValueError(f"linear {w}'s weight is not its {n} × {k} int8 codes and {n} scales")
             rows.append(chunk_words(codes, scales.astype("<f4").reshape(-1), x))
             at[w], lo = (k, lo), lo + n
+            if not (codes.flags.writeable or scales.flags.writeable) and scales.dtype == np.dtype("<f4") and scales.ndim == 1:
+                held[w] = (codes, scales)
         words = np.concatenate(rows)
         reg[k] = NR.commit(circuit, f"{prefix}b/{k}", words, key, B_NONCE + i, keep_rows=True)
-    return Weights(circuit, reg, at)
+    return Weights(circuit, reg, at, held)
 
 
 @dataclass
@@ -442,7 +484,7 @@ class Served:
         held = self._weights.get(call.layer)
         if weight is None or (held is not None and held[0] is weight):
             return
-        w, s = PH.numpy_of(weight), None if scale is None else PH.numpy_of(scale).astype("<f4").reshape(-1)
+        w, s = (PH.numpy_of(weight), None) if scale is None else host_weight(weight, scale)
         if w.dtype != np.int8 or w.shape != (call.n, call.k) or s is None or s.shape != (call.n,):
             self.refused.append(f"call {call.index}: its weight is not its {call.n} × {call.k} int8 codes and {call.n} scales")
         elif held is None:
@@ -673,6 +715,6 @@ def digest_of(entries: Sequence[Mapping[str, Any]], refused: Sequence[str]) -> b
 
 __all__ = ["B_NONCE", "EMPTY_ID", "FILE", "IDS_NONCE", "LOCAL_SESSION", "ModelKey", "NONCE", "PREFIX", "Served",
            "unit_of",
-           "V2", "Weights", "WindowCommitmentEntries", "card_arch", "chunk_words", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "ids_words", "layout",
+           "V2", "Weights", "WindowCommitmentEntries", "card_arch", "chunk_words", "declared", "declared_layout", "descriptor", "digest_of", "file_name", "host_weight", "ids_words", "layout",
            "model_key", "nonce", "RECEIPT_NONCE", "reads_file", "receipt_words", "record_words", "register", "register_weights", "row_words", "trees",
            "weights_of", "write_program"]
