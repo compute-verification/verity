@@ -25,6 +25,7 @@ import importlib.util
 import json
 import os
 import shlex
+import signal
 import socket
 import sys
 import tarfile
@@ -284,6 +285,49 @@ def test_a_step_that_cant_run_refuses_and_leaves_the_certifier_missing(case, tmp
     assert rec is not None and line["composed"] == "pending" and "the network certifier" in line["missing"]
 
 
+def _piece(tmp_path: Path, warden: dict, chain: Path) -> tuple[int, Path, Path]:
+    """The piece run in this process on a kept run and `chain`'s outputs, the period check a stub that accepts: its
+    exit, DIR and the serve dir."""
+    d = _serve_dir(tmp_path / "serve", warden)
+    lean = tmp_path / "network-period"
+    lean.write_text(f"#!/bin/sh\ncat <<'EOF'\n{json.dumps(CP.answer('reject', 'stub'))}\nEOF\n")
+    lean.chmod(0o755)
+    cmd = f'mkdir -p "$RESEARCH_RUN_DIR" && cp -r {shlex.quote(str(chain / "out"))} "$RESEARCH_RUN_DIR/"'
+    piece = tmp_path / "pieces" / "certifier"
+    rc = CP.main(["piece", str(d), str(K), str(piece), "--lean", str(lean), "--chain-cmd", cmd])
+    return rc, piece, d
+
+
+def test_sigterm_while_the_guard_reads_releases_nothing_to_dir(tmp_path, warden, monkeypatch):
+    """SIGTERM from the piece's time limit reaching it while the leak guard reads (the signal sent to this process from
+    a stand-in guard) refuses the piece with nothing released: DIR holds only refused.txt, and the answer, the chain's
+    report and the period's files stay in the hold, out of the record."""
+    def slow_guard(d, hold, unpacked, quarantine):
+        os.kill(os.getpid(), signal.SIGTERM)
+        pytest.fail("SIGTERM didn't end the piece")
+    monkeypatch.setattr(CP, "guard", slow_guard)
+    rc, piece, d = _piece(tmp_path, warden, _chain_out(tmp_path / "chain", "accepted", warden["w"]))
+    assert rc == 3 and "SIGTERM: the piece's time limit" in (piece / CP.REFUSED).read_text()
+    assert [p.name for p in piece.iterdir()] == [CP.REFUSED]
+    (hold,) = (d / CP.PRIVATE / "held").iterdir()
+    assert (hold / "answer.json").is_file() and (hold / "chain" / "report" / "report.json").is_file()
+
+
+def test_a_chain_file_holding_a_witness_value_is_moved_out_of_dir(tmp_path, warden):
+    """The chain's job.json carrying a piece of the warden run's witness (a salt of its cells.salts, as hex): the guard
+    moves DIR/chain/job.json to the quarantine and releases the rest, the answer with it."""
+    with tarfile.open(warden["fetch"]) as tar:
+        m = next(m for m in tar if m.name.endswith("/witness/cells.salts"))
+        salt = tar.extractfile(m).read(32)[16:]
+    chain = _chain_out(tmp_path / "chain", "accepted", warden["w"])
+    (chain / "out" / "job.json").write_text(json.dumps({"x": salt.hex()}))
+    rc, piece, d = _piece(tmp_path, warden, chain)
+    assert rc == 1 and (piece / "answer.json").is_file() and (piece / "chain" / "report" / "report.json").is_file()
+    assert not (piece / "chain" / "job.json").exists()
+    assert (d / CP.PRIVATE / "quarantine" / "files" / "chain" / "job.json").is_file()
+    assert list((d / CP.PRIVATE / "held").iterdir()) == []
+
+
 def test_a_rehearsal_the_gates_check_failed_late_leaves_the_certifier_missing_not_rejected(tmp_path, warden, capsys,
                                                                                           monkeypatch):
     """Each request late past the warden's D·τ: the gate's check fails the rehearsal, and the served answers, longer
@@ -310,17 +354,18 @@ def test_a_rehearsal_the_gates_check_failed_late_leaves_the_certifier_missing_no
 
 def test_the_case_is_written_only_from_period_files_the_leak_guard_left(tmp_path, warden):
     """`composite.py` reads a case's commitment and evidence as hex, where the leak guard finds only a binary witness
-    file's pieces: so the case is written from DIR/period after the guard has read its files raw, and not at all when
-    the guard moved one of them (here the evidence, holding a witness file's text)."""
+    file's pieces: so the case is written from DIR/period after the guard has read its files raw in the hold and
+    released them, and not at all when the guard moved one of them (here the evidence, holding a witness file's text)."""
     fetch = tmp_path / "fetch.tar.gz"
     fetch.write_bytes(warden["fetch"].read_bytes())
     unpacked, run = CP.unpack(fetch)
     for name, evidence in (("clean", b'{"windows":[]}'), ("leaky", (run / "witness" / "certified.jsonl").read_bytes())):
-        d = tmp_path / name
-        (d / "period").mkdir(parents=True)
+        d, hold = tmp_path / name, tmp_path / f"{name}-held"
+        d.mkdir()
+        (hold / "period").mkdir(parents=True)
         for f, b in (("params.json", b'{"k":1}'), ("commitment.bin", b"\1\2"), ("evidence.json", evidence)):
-            (d / "period" / f).write_bytes(b)
-        g = CP.guard(d, unpacked, tmp_path / f"{name}-quarantine")
+            (hold / "period" / f).write_bytes(b)
+        g = CP.guard(d, hold, unpacked, tmp_path / f"{name}-quarantine")
         CP.write_case(d)
         if name == "clean":
             assert g == 0 and not (d / "period").exists()
@@ -329,6 +374,7 @@ def test_the_case_is_written_only_from_period_files_the_leak_guard_left(tmp_path
         else:
             assert g == 3 and not (d / CP.CASE).exists()
             assert sorted(p.name for p in (d / "period").iterdir()) == ["commitment.bin", "params.json"]
+            assert (tmp_path / "leaky-quarantine" / "files" / "period" / "evidence.json").is_file()
 
 
 def test_the_placement_names_the_kept_gate_a_local_gate_the_prover_node_and_refuses_without_the_session(tmp_path,
@@ -370,7 +416,8 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert [len(p) for p in prompts] == [CP.PROMPT_IDS] * CP.PROMPTS and all(t < 128000 for p in prompts for t in p)
     kept = serve / CP.PRIVATE / RUN / "fetch.tar.gz"
     assert [p.stat().st_mode & 0o777 for p in (serve / "private", serve / CP.PRIVATE, kept)] == [0o700, 0o700, 0o600]
-    assert sorted(p.name for p in out.iterdir()) == ["bundle.tgz", "session.json", "start.json", "status.json"]
+    assert sorted(p.name for p in out.iterdir()) == ["bundle.tgz", "leak-guard.json", "session.json", "start.json",
+                                                     "status.json"]
     assert json.loads((out / "session.json").read_text())["keep"] == str(kept)
     assert (kept.parent / CP.SESSION).read_text() == (out / "session.json").read_text()
     assert json.loads((out / "session.json").read_text())["gate"] == CP.SS.GATE
@@ -513,8 +560,8 @@ def test_the_front_warms_the_endpoint_up_a_window_at_a_time_before_it_asks_the_g
         "--tokens 4 --window-per-group")
     warm = json.loads((out / "warmup.json").read_text())["requests"]
     assert [(w["user"], w["finish_reason"]) for w in warm] == [(u, "length") for u in users]
-    assert sorted(p.name for p in out.iterdir()) == ["bundle.tgz", "session.json", "start.json", "status.json",
-                                                     "warmup.json"]
+    assert sorted(p.name for p in out.iterdir()) == ["bundle.tgz", "leak-guard.json", "session.json", "start.json",
+                                                     "status.json", "warmup.json"]
 
 
 def test_a_warm_up_that_fails_or_isnt_recorded_closed_refuses_the_front_before_the_gate(tmp_path, endpoint):
