@@ -31,14 +31,14 @@ namespace FlockSoundness.Accounting
 
 /-- **The shapes of every plan table**: `StmtShape.InRange` with two regions more, the two `contra` regions a refused draw's
 table adds to a reference setup's statement. -/
-def Stmt.InRangeWide (st : Stmt) : Prop := st.kLog ≤ 27 ∧ st.nRegions ≤ 1026 ∧ st.mPts ≤ 64
+def StmtShape.InRangeWide (st : StmtShape) : Prop := st.kLog ≤ 27 ∧ st.nRegions ≤ 1026 ∧ st.mPts ≤ 64
 
 /-- `piopNumMax` at 1026 regions (2054 claims). -/
 def piopNumMaxWide (m L₀ : ℕ) : ℕ :=
   (L₀ + 1) * (m - 13) + L₀ * 127 + L₀ * (2 * (m - 6)) + L₀ * m
     + L₀ * (2 + 2 * 21 + 63) + L₀ * (7 * 2054 + 1) + L₀
 
-theorem piopError_le_wide (m L₀ : ℕ) (st : Stmt) (hst : st.InRangeWide) :
+theorem piopError_le_wide (m L₀ : ℕ) (st : StmtShape) (hst : st.InRangeWide) :
     piopError m st.kLog st.nClaims L₀ ≤ ((piopNumMaxWide m L₀ : ℚ) / 2 ^ 128 : ℚ) := by
   obtain ⟨hk, hR, _⟩ := hst
   unfold piopError qF
@@ -46,7 +46,7 @@ theorem piopError_le_wide (m L₀ : ℕ) (st : Stmt) (hst : st.InRangeWide) :
   gcongr
   have h1 : m - st.kLog ≤ m := Nat.sub_le _ _
   have h2 : st.kLog - 6 ≤ 21 := by omega
-  have h3 : st.nClaims ≤ 2054 := by unfold Stmt.nClaims; omega
+  have h3 : st.nClaims ≤ 2054 := by unfold StmtShape.nClaims; omega
   unfold piopNumMaxWide
   exact_mod_cast (by gcongr : (L₀ + 1) * (m - 13) + L₀ * 127 + L₀ * (2 * (m - 6))
       + L₀ * (m - st.kLog) + L₀ * (2 + 2 * (st.kLog - 6) + 63) + L₀ * (7 * st.nClaims + 1) + L₀
@@ -59,7 +59,7 @@ def repUpWide (s : Schedule) : ℚ := (piopNumMaxWide s.m s.listBound₀ : ℚ) 
 /-- `linkUp` at 1026 regions. -/
 def linkUpWide (s : Schedule) : ℚ := s.listBound₀ * 1026 * (64 / 2 ^ 128) ^ 2
 
-theorem tableError_le_up_wide (s : Schedule) (hs : ∀ l ∈ s.levels, l.Ok) (st : Stmt) (hst : st.InRangeWide) :
+theorem tableError_le_up_wide (s : Schedule) (hs : ∀ l ∈ s.levels, l.Ok) (st : StmtShape) (hst : st.InRangeWide) :
     tableError s st ≤ ((linkUpWide s + repUpWide s ^ 2 : ℚ) : ℝ) := by
   have h1 : linkError s st ≤ (linkUpWide s : ℝ) := by
     obtain ⟨_, hR, hp⟩ := hst
@@ -110,7 +110,7 @@ theorem fast100_range : ∀ m s, fast100 m = some s → 22 ≤ m ∧ m ≤ 35 :=
   exact hm m (by simp [h])
 
 /-- **The soundness number for `fast100` at every shape in `StmtShape.InRangeWide`**: at most `2^-205` per table. -/
-theorem tableError_le_205_wide {m : ℕ} {s : Schedule} (hs : fast100 m = some s) (st : Stmt) (hst : st.InRangeWide) :
+theorem tableError_le_205_wide {m : ℕ} {s : Schedule} (hs : fast100 m = some s) (st : StmtShape) (hst : st.InRangeWide) :
     tableError s st ≤ (2 : ℝ) ^ (-(205 : ℝ)) := by
   obtain ⟨h1, h2⟩ := fast100_range m s hs
   refine (tableError_le_up_wide s (fast100_levels_ok m s hs) st hst).trans ?_
