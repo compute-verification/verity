@@ -671,13 +671,14 @@ def test_h3_is_sha512_throughout():
 def test_hm96_salts_are_chacha20s_stream():
     """The prover's hm96 salts are ChaCha20 blocks under its key (RFC 8439 §2.3.2's block, its 96-bit nonce and 32-bit counter
     as this layout's 64-bit counter and nonce), leaf i's three blocks 3i … 3i + 2."""
-    from verity.core.protocols.pouw.audit import chacha20_block, hm96_salt
+    from verity.core.protocols.pouw.audit import hm96_salt
+    from verity.ml.crypto import chacha20
 
-    block = chacha20_block(bytes(range(32)), 1 | 0x09000000 << 32, 0x4A000000)
+    block = chacha20.keystream(bytes(range(32)), 0x4A000000, 1 | 0x09000000 << 32, 1)
     assert block.hex() == ("10f1e7e4d13b5915500fdd1fa32071c4c7d1f4c733c068030422aa9ac3d46c4e"
                            "d2826446079faa0914c2d705d98b02a2b5129cd1de164eb9cbd083e8a2503c4e")
     key = bytes(range(32, 64))
-    assert hm96_salt(key, 5, 2) == b"".join(chacha20_block(key, c, 5) for c in (6, 7, 8))
+    assert hm96_salt(key, 5, 2) == chacha20.keystream(key, 5, 6, 3)
 
 
 def test_h3_lifecycle_commits_hm96_sha512_trees():

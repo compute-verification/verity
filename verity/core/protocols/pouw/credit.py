@@ -197,6 +197,7 @@ from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, chunks, l
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.ml.commitments.merkle import root_from_subtrees
 
 #: the verifier of record over a statement's proof files (`proofs.verify`)
 Run = Callable[..., tuple[list | None, tuple[str, str] | None]]
@@ -222,7 +223,6 @@ _DIGEST = re.compile(r"[0-9a-f]{128}")
 _DIGITS = re.compile(r"[1-9][0-9]*")
 _A = re.compile(r"([1-9][0-9]*)(?:@([0-9]+))?")
 _HEX = re.compile(r"(?:[0-9a-f]{2})+")
-_FRAME = b"veritor/protocol/merkle/frame/v3\0"
 
 SALT_FORM = "the window's Program salt is not a SHA-512 digest (128 lowercase hex)"
 CALLS_FORM = "the window's manifest is not a list of call rows"
@@ -2569,35 +2569,6 @@ def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: 
     return {"windows": out, "work": work, "k": big_k, "delta": str(DELTA), "eps": eps}, None
 
 
-def _uint(n: int) -> bytes:
-    return n.to_bytes(max(1, (n.bit_length() + 7) // 8), "big")
-
-
-def _frame(tag: bytes, *parts: bytes) -> bytes:
-    """frame-v3's SHA-512 hash (`verity.ml.commitments.merkle.frame_hash`)."""
-    return hashlib.sha512(_FRAME + len(tag).to_bytes(4, "big") + tag
-                          + b"".join(len(p).to_bytes(8, "big") + p for p in parts)).digest()
-
-
-def merkle_depth(count: int) -> int:
-    return 0 if count <= 1 else (count - 1).bit_length()
-
-
-def tree_root(domain: bytes, count: int, have: dict[tuple[int, int], bytes]) -> bytes | None:
-    """The root of the frame-v3 SHA-512 tree of domain id `domain` over `count` leaves, from the subtree roots `have`
-    (``(level, index)`` to its root, level 0 a leaf) and the domain's pads past `count`; None where a node below
-    `count` is in none of them."""
-    def at(level: int, index: int) -> bytes | None:
-        if (level, index) in have:
-            return have[(level, index)]
-        if level == 0:
-            return _frame(b"pad", domain, _uint(index)) if index >= count else None
-        left, right = at(level - 1, 2 * index), at(level - 1, 2 * index + 1)
-        return None if left is None or right is None else _frame(b"node", domain, _uint(level - 1), _uint(index), left,
-                                                                 right)
-    return at(merkle_depth(count), 0)
-
-
 def cover(lo: int, hi: int) -> list[tuple[int, int]]:
     """Rows ``[lo, hi)`` as the fewest aligned subtrees, ``(level, index)`` in row order: what the serving process lists
     for a round's rows of an A value."""
@@ -2803,7 +2774,7 @@ def _a_link(rounds: Any, entries: Any, calls: int = 0, rows: dict[str, int] | No
                 at += 1 << level
             if at != end:
                 return "a-link", untiled
-        if tree_root(domain, count, have) != root:
+        if root_from_subtrees(domain, count, have) != root:
             return "a-link", (f"registered {_what(v)} {v}'s root is not the tree over the segments the round roots "
                               "commit: its rows are not the ones fixed under each round's root before that round's coin. "
                               f"Register the {_what(v)} whose rows each round's root committed")
@@ -2905,6 +2876,6 @@ __all__ = ["CALL_RANGE_CODE", "CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "CO
            "SALT_ONLY", "SCHEMA", "SERVED_ROWS", "STATEMENT_KEYS", "TILE_FN", "VERDICTS", "WEIGHTS_FIELD", "WINDOW_FN", "WINDOW_KEYS",
            "call_work", "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_length", "committed_rows", "committed_weights", "cover",
            "credited_work", "domain_of", "draw_root", "drawn", "established", "a_value", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "law", "layout_of", "live_of",
-           "merkle_depth", "partition_of", "passes_distinct", "pearl_c_period_credit", "period", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
-           "served_rows", "served_work", "slots_step", "step_row", "step_tables", "strata", "table_rows", "tree_root",
+           "partition_of", "passes_distinct", "pearl_c_period_credit", "period", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
+           "served_rows", "served_work", "slots_step", "step_row", "step_tables", "strata", "table_rows",
            "window"]

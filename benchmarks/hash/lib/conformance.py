@@ -44,6 +44,7 @@ from verity.ml.commitments.merkle import Opening as MerkleOpening  # noqa: E402
 from verity.ml.commitments.multiproof import multiproof, multiproof_from_paths, verify_multiproof  # noqa: E402
 from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, row_bytes, sha512_row_digest,  # noqa: E402
                                            sha512_row_seg_digest, sha512_row_v2_digest)
+from verity.ml.crypto import chacha20  # noqa: E402
 
 KEY = hm96.SHA512.default_key
 SALT = hm96.SHA512.salt_bytes
@@ -75,10 +76,10 @@ def splitk_vectors() -> dict:
 
 
 def rfc_salts_identity(key: bytes, nonce: int, n: int) -> bytes:
-    """RFC 8439's block (32-bit counter, 12-byte nonce n0 n1 n2) is audit's (64-bit counter, 64-bit nonce) at counter = ctr +
-    2^32 n0, nonce = n1 + 2^32 n2: the n salts of serving_rows.salts(key, nonce, n) from audit.chacha20_block."""
+    """RFC 8439's block (32-bit counter, 12-byte nonce n0 n1 n2) is crypto.chacha20's (64-bit counter, 64-bit nonce) at
+    counter = ctr + 2^32 n0, nonce = n1 + 2^32 n2: the n salts of serving_rows.salts(key, nonce, n) from chacha20.keystream."""
     n0, n1 = nonce & 0xFFFFFFFF, nonce >> 32
-    return b"".join(audit.chacha20_block(key, b + (n0 << 32), n1) for b in range(3 * n))
+    return chacha20.keystream(key, n1, n0 << 32, 3 * n)
 
 
 def rfc_salts(key: bytes, nonce: int, n: int) -> tuple[bytes, str]:
@@ -87,7 +88,7 @@ def rfc_salts(key: bytes, nonce: int, n: int) -> tuple[bytes, str]:
         from verity.ml.windows.rows import salts
         return salts(key, nonce, n), "serving_rows.salts"
     except Exception:  # noqa: BLE001 - its numpy-side dependencies may be absent on a node
-        return rfc_salts_identity(key, nonce, n), "audit.chacha20_block identity"
+        return rfc_salts_identity(key, nonce, n), "chacha20.keystream identity"
 
 
 class Dev:

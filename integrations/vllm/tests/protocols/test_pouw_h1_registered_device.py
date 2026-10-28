@@ -34,7 +34,7 @@ def _words(n: int, w: int) -> np.ndarray:
 
 def _numpy(words, nonce, given=None, **binding):
     dom = G.domain(PROGRAM, "h1/v", words.shape[1], words.shape[0], G.WORD_BITS, **binding)
-    return NR._numpy(words, KEY, nonce, given, dom.domain_id), dom.domain_id
+    return NR._numpy(words, KEY, nonce, given, dom), dom.domain_id
 
 
 def _core(words, nonce, given=None, **binding):

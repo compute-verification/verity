@@ -10,6 +10,7 @@ import pytest
 
 from verity.core.protocols.pouw.audit import hm96_salt
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.ml.commitments.hm96 import batch
 from verity_vllm.protocols.pouw.h1 import registered as NR
 
 PROGRAM, WINDOW = "ab" * 64, "cd" * 64
@@ -26,7 +27,7 @@ def test_salts_are_hm96_salts_across_a_chacha_pass():
     """Row j's salt is `hm96_salt(key, nonce, j)`, a u64 nonce past 2^32 included, and rows past the first pass too."""
     for nonce in (0, 7, (1 << 42) + 3, (1 << 63) + 5):
         assert NR.salts(KEY, nonce, 3) == b"".join(hm96_salt(KEY, nonce, j) for j in range(3))
-    n = NR._SALTED + 4
+    n = batch._ROWS + 4
     got = NR.salts(KEY, 11, n)
     assert len(got) == 192 * n and all(got[192 * j:192 * (j + 1)] == hm96_salt(KEY, 11, j) for j in range(n - 8, n))
 
@@ -68,7 +69,7 @@ def test_a_windows_reads_are_cores_statement_drawn_once(monkeypatch):
     words = np.random.default_rng(4).integers(0, 1 << 16, (9, 40), dtype=np.uint16)
     ref, got = _core(PROGRAM, "h1/v", words, KEY, 3), NR.commit(PROGRAM, "h1/v", words, KEY, 3, True)
     calls = []
-    monkeypatch.setattr(NR, "hm96_salt", lambda *a: calls.append(a))
+    monkeypatch.setattr(NR.Salts, "__getitem__", lambda self, j: calls.append(j))
     ps, more = [7, 0, 3, 7], [8, 3]
     drawn = I._Drawn({"core": ref, "h1": got}, {"core": [ps, more], "h1": [more, ps]})
     for name, v in (("core", ref), ("h1", got)):

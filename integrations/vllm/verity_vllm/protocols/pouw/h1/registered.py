@@ -5,11 +5,10 @@ salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words i
 * **The rows' digests.** Row j's bit row is its words little-endian, so ``x_j = SHA-512(sha512_row_v2_prefix(16 W) ||
   words[j])`` is hashed straight from the array's memory, rows split among threads (`hashlib` releases the GIL on a
   buffer of 2 KiB or more, which every H1 row is: a z/y record is 6 KiB, an A or B row K + 4 bytes).
-* **The salts.** ChaCha20 blocks 3j, 3j + 1, 3j + 2 under the key at the nonce, every row's at once
-  (`crypto.chacha20.keystream`, `audit.chacha20_block`'s layout).
+* **The salts.** hm96's one salt stream, every row's at once (`hm96.batch.salts`).
 * **The commit strings.** ``b = x ⊕ M y`` gathers hm96's byte tables over every row (`hm96.batch.masks`), ``c``
   and the tree leaf hash from the instance's one-block prefixes, and the frame-v3-sha512 leaves, nodes and pads from
-  their tag's and domain's constant prefix (`merkle.frame_hash`'s message), so a row costs a few short SHA-512 calls.
+  the domain's (`CommitmentDomain.leaf`, `merkle.tree_levels`), so a row costs a few short SHA-512 calls.
 * **What it holds.** The ``b || c`` strings and the tree's levels, 64 bytes a node. The salts are drawn again on read
   (`Salts`), and the rows are kept only with ``keep_rows`` (`Rows`): a window's call tables and its own ``b/<K>`` are
   rebuilt by the prover from what it keeps (`pouw_h1_prover.keep_call`, its weights), so `Served` keeps none of their
@@ -38,21 +37,18 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.pouw.audit import hm96_salt
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.commitments import hm96
 from verity.ml.commitments.hm96 import batch
-from verity.ml.commitments.merkle import merkle_depth
+from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 from verity.ml.commitments.rowleaf import (ROW_SEG_BYTES, sha512_row_seg_prefix, sha512_row_seg_segment_prefix,
                                            sha512_row_seg_segments, sha512_row_v2_prefix)
-from verity.ml.crypto import chacha20
 
 _INST = hm96.SHA512
-_FRAME = b"veritor/protocol/merkle/frame/v3\0"
 #: `commit`'s path (`path`): ``"auto"``, ``"gpu"`` or ``"numpy"``, set by the caller that configures the run
 MODE = "auto"
-#: rows a salt pass, rows a digest task
-_SALTED, _ROWS = 1 << 16, 1 << 11
+#: rows a digest task
+_ROWS = 1 << 11
 
 
 @cache
@@ -62,7 +58,7 @@ def _pool() -> ThreadPoolExecutor:
 
 def salts(key: bytes, nonce: int, n: int) -> bytes:
     """Rows 0 .. n - 1's salts, concatenated: row j's `audit.hm96_salt(key, nonce, j)`."""
-    return b"".join(chacha20.keystream(key, nonce, 3 * lo, 3 * min(_SALTED, n - lo)) for lo in range(0, n, _SALTED))
+    return batch.salts(key, nonce, np.arange(n, dtype=np.uint64))
 
 
 def _digests(words: np.ndarray, lo: int, hi: int, head: Any, out: np.ndarray) -> None:
@@ -101,40 +97,6 @@ def row_digests(words: np.ndarray, schema: str = G.SCHEMA_V2) -> np.ndarray:
     return out
 
 
-def _part(p: bytes) -> bytes:
-    return len(p).to_bytes(8, "big") + p
-
-
-def _uint(v: int) -> bytes:
-    return _part(v.to_bytes(max(1, (v.bit_length() + 7) // 8), "big"))
-
-
-class _Frame:
-    """`merkle.frame_hash` under one frame-v3-sha512 domain, each tag's constant prefix hashed once."""
-
-    def __init__(self, domain_id: bytes) -> None:
-        def head(tag: bytes) -> Any:
-            return hashlib.sha512(_FRAME + len(tag).to_bytes(4, "big") + tag + _part(domain_id))
-        self.leaf, self.node, self.pad = head(b"leaf"), head(b"node"), head(b"pad")
-
-    def levels(self, leaves: list[bytes]) -> tuple[tuple[bytes, ...], ...]:
-        """`merkle.tree_levels` of ``leaves``."""
-        level = leaves + [self._h(self.pad, _uint(r)) for r in range(len(leaves), 1 << merkle_depth(len(leaves)))]
-        out = [tuple(level)]
-        while len(level) > 1:
-            d = _uint(len(out) - 1)
-            level = [self._h(self.node, d + _uint(i // 2) + _part(level[i]) + _part(level[i + 1]))
-                     for i in range(0, len(level), 2)]
-            out.append(tuple(level))
-        return tuple(out)
-
-    @staticmethod
-    def _h(head: Any, rest: bytes) -> bytes:
-        h = head.copy()
-        h.update(rest)
-        return h.digest()
-
-
 class Salts(Sequence):
     """A registered value's salts, drawn again on read: item j is `audit.hm96_salt(key, nonce, j)`; `at` draws many at
     once."""
@@ -150,7 +112,7 @@ class Salts(Sequence):
             return [self[i] for i in range(*j.indices(self.n))]
         if not -self.n <= j < self.n:
             raise IndexError(j)
-        return hm96_salt(self.key, self.nonce, j % self.n)
+        return batch.salts(self.key, self.nonce, [j % self.n])
 
     def at(self, positions: Sequence[int] | np.ndarray) -> bytes:
         """Items ``positions`` (each in [0, n)) concatenated, drawn in one pass (`hm96.batch.salts`)."""
@@ -226,7 +188,7 @@ def commit(program: str, value: str, words: np.ndarray, key: bytes, nonce: int, 
 
         bcs, levels = D.device_commit(words, key, nonce, given, dom.domain_id)
     else:
-        bcs, levels = _numpy(words, key, nonce, given, dom.domain_id, schema)
+        bcs, levels = _numpy(words, key, nonce, given, dom, schema)
     return G.Registered(program=program, value=value, words=int(w), word_bits=G.WORD_BITS,
                         rows=Rows(np.ascontiguousarray(words) if keep_rows else None, n),
                         salts=Salts(key, nonce, n) if fixed is None else fixed,
@@ -247,7 +209,7 @@ def public_salts(head: bytes, first: int, n: int) -> bytes:
                     for u in range(first, first + n) for i in range(_INST.salt_bytes // 64))
 
 
-def _numpy(words: np.ndarray, key: bytes, nonce: int, given: bytes | None, domain_id: bytes,
+def _numpy(words: np.ndarray, key: bytes, nonce: int, given: bytes | None, dom: CommitmentDomain,
            row_schema: str = G.SCHEMA_V2) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
     """`commit`'s ``b || c`` strings and tree levels from NumPy and `hashlib`: the reference."""
     n = words.shape[0]
@@ -255,7 +217,6 @@ def _numpy(words: np.ndarray, key: bytes, nonce: int, given: bytes | None, domai
     b = (row_digests(words, row_schema)
          ^ np.frombuffer(batch.masks(_INST, _INST.default_key, ys), np.uint8).reshape(n, 64)).tobytes()
     salt_h, leaf_h = hashlib.sha512(_INST.salt_prefix), hashlib.sha512(_INST.leaf_prefix(_INST.default_key))
-    frame, schema = _Frame(domain_id), _part(row_schema.encode())
     bcs, leaves = [], []
     for j in range(n):
         h = salt_h.copy()
@@ -263,10 +224,9 @@ def _numpy(words: np.ndarray, key: bytes, nonce: int, given: bytes | None, domai
         bc = b[64 * j:64 * (j + 1)] + h.digest()
         g = leaf_h.copy()
         g.update(bc)
-        u = _uint(j)
         bcs.append(bc)
-        leaves.append(frame._h(frame.leaf, u + u + schema + _part(g.digest())))
-    return tuple(bcs), frame.levels(leaves)
+        leaves.append(dom.leaf(j, j, row_schema, g.digest()))
+    return tuple(bcs), tree_levels(dom, leaves)
 
 
 __all__ = ["MODE", "Rows", "Salts", "commit", "path", "public_salts", "row_digests", "salts"]

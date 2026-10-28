@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from verity.core.protocols.pouw import weights as Wt
-from verity.core.protocols.pouw.audit import chacha20_block, hm96_salt
+from verity.core.protocols.pouw.audit import hm96_salt
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.commitments import hm96
 from verity.ml.commitments.hm96 import batch as hm96_batch
@@ -21,6 +21,30 @@ from verity.ml.crypto import chacha20
 CIRCUIT = "ab" * 64
 PREFIX = "h1/"
 KEY = bytes(range(32))
+_M32 = 0xFFFFFFFF
+
+
+def chacha20_block(key, counter, nonce):
+    """ChaCha20's block function in plain Python, 20 rounds, a 64-bit counter (words 12, 13) and a 64-bit nonce (words 14,
+    15): the reference numpy's stream is held to."""
+    s = [0x61707865, 0x3320646E, 0x79622D32, 0x6B206574, *struct.unpack("<8I", key),
+         counter & _M32, counter >> 32, nonce & _M32, nonce >> 32]
+    x = list(s)
+
+    def qr(a, b, c, d):
+        for p, q, r, n in ((a, b, d, 16), (c, d, b, 12), (a, b, d, 8), (c, d, b, 7)):
+            x[p] = (x[p] + x[q]) & _M32
+            x[r] ^= x[p]
+            x[r] = ((x[r] << n) | (x[r] >> (32 - n))) & _M32
+
+    for _ in range(10):
+        qr(0, 4, 8, 12), qr(1, 5, 9, 13), qr(2, 6, 10, 14), qr(3, 7, 11, 15)
+        qr(0, 5, 10, 15), qr(1, 6, 11, 12), qr(2, 7, 8, 13), qr(3, 4, 9, 14)
+    return struct.pack("<16I", *[(x[i] + s[i]) & _M32 for i in range(16)])
+
+
+def reference_salt(key, nonce, j):
+    return b"".join(chacha20_block(key, 3 * j + i, nonce) for i in range(3))
 
 
 def scalar_roots(circuit, prefix, linears, rows, key):
@@ -165,17 +189,17 @@ def test_keystream_is_chacha20_block_and_hm96_salt(nonce, first):
     key = bytes(range(7, 39))
     assert chacha20.keystream(key, nonce, first, 4) == b"".join(chacha20_block(key, first + i, nonce) for i in range(4))
     j = first // 3
-    assert chacha20.keystream(key, nonce, 3 * j, 3) == hm96_salt(key, nonce, j)
+    assert chacha20.keystream(key, nonce, 3 * j, 3) == hm96_salt(key, nonce, j) == reference_salt(key, nonce, j)
 
 
 @pytest.mark.parametrize("nonce", [0, Wt.B_NONCE, (1 << 64) - 1])
 def test_hm96_salts_are_hm96_salt_at_each_row(nonce):
-    """numpy's salts at any rows, in their order and repeated, are the reference's row by row, the counter's 32-bit carry
-    and its last whole salt included; a row past it is refused."""
+    """numpy's salts at any rows, in their order and repeated, are the plain reference's row by row, the counter's 32-bit
+    carry and its last whole salt included; a row past it is refused."""
     key, last = bytes(range(3, 35)), ((1 << 64) - 3) // 3
     rows = [5, 0, (1 << 32) // 3, 1 << 40, 5, last, 2]
-    assert hm96_batch.salts(key, nonce, rows) == b"".join(hm96_salt(key, nonce, j) for j in rows)
-    assert hm96_batch.salts(key, nonce, np.array(rows[:3], dtype=np.int64)) == b"".join(hm96_salt(key, nonce, j) for j in rows[:3])
+    assert hm96_batch.salts(key, nonce, rows) == b"".join(reference_salt(key, nonce, j) for j in rows)
+    assert hm96_batch.salts(key, nonce, np.array(rows[:3], dtype=np.int64)) == b"".join(reference_salt(key, nonce, j) for j in rows[:3])
     assert hm96_batch.salts(key, nonce, []) == b""
     for bad in ([last + 1], [-1], [0.5]):
         with pytest.raises(ValueError):

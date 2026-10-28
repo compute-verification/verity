@@ -32,6 +32,7 @@ from verity.core.protocols.pouw.salt import pouw_salt, pouw_window
 from verity.errors import ProtocolError
 from verity.ml.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
 from verity.ml.commitments import hm96
+from verity.ml.commitments.hm96 import batch as hm96_batch
 from verity.ml.commitments.gates import sha512 as sha512_gates
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, sha512_row_seg_digest
 from verity.ml.randomness import derive
@@ -49,32 +50,12 @@ HM96_KEY = hm96.SHA512.default_key
 HM96_SALT = hm96.SHA512.salt_bytes
 #: the hm96 salt stream's nonce of each tree: an activation tree's is its unit index, below 2^62
 HM96_WEIGHTS, HM96_TRANSCRIPT = 1 << 62, 1 << 63
-_M32 = 0xFFFFFFFF
-
-
-def chacha20_block(key: bytes, counter: int, nonce: int) -> bytes:
-    """ChaCha20's block function, 20 rounds, with a 64-bit counter (words 12, 13) and a 64-bit nonce (words 14, 15): C-Flock's
-    ``chacha20_block`` (``verity/ml/flock/cuda/sha512.cuh``), the stream its hm96 leaf salts are drawn from."""
-    s = [0x61707865, 0x3320646E, 0x79622D32, 0x6B206574, *struct.unpack("<8I", key),
-         counter & _M32, counter >> 32, nonce & _M32, nonce >> 32]
-    x = list(s)
-
-    def qr(a: int, b: int, c: int, d: int) -> None:
-        for p, q, r, n in ((a, b, d, 16), (c, d, b, 12), (a, b, d, 8), (c, d, b, 7)):
-            x[p] = (x[p] + x[q]) & _M32
-            x[r] ^= x[p]
-            x[r] = ((x[r] << n) | (x[r] >> (32 - n))) & _M32
-
-    for _ in range(10):
-        qr(0, 4, 8, 12), qr(1, 5, 9, 13), qr(2, 6, 10, 14), qr(3, 7, 11, 15)
-        qr(0, 5, 10, 15), qr(1, 6, 11, 12), qr(2, 7, 8, 13), qr(3, 4, 9, 14)
-    return struct.pack("<16I", *[(x[i] + s[i]) & _M32 for i in range(16)])
 
 
 def hm96_salt(key: bytes, nonce: int, i: int) -> bytes:
-    """Leaf i's 192-byte salt in the tree with salt nonce `nonce`: ChaCha20 blocks 3i, 3i + 1 and 3i + 2 under the prover's
-    32-byte `key` (C-Flock's ``hm96_salt``)."""
-    return b"".join(chacha20_block(key, 3 * i + j, nonce) for j in range(3))
+    """Leaf i's 192-byte salt in the tree with salt nonce `nonce` under the prover's 32-byte `key`: row i of hm96's one salt
+    stream (`hm96.batch.salts`, C-Flock's ``hm96_salt``)."""
+    return hm96_batch.salts(key, nonce, [i])
 
 
 @functools.lru_cache(maxsize=1)
@@ -130,7 +111,8 @@ def commit_rows(binding: bytes, owner: int, rows: Sequence[bytes], hash: str = "
     if hash == HM96:
         if salt_key is None:
             raise ProtocolError(f"an {HM96} tree takes the prover's salt key")
-        rows = [r + hm96_salt(salt_key, nonce, i) for i, r in enumerate(rows)]
+        ys = hm96_batch.salts(salt_key, nonce, range(len(rows)))
+        rows = [r + ys[HM96_SALT * i:HM96_SALT * (i + 1)] for i, r in enumerate(rows)]
     return MerkleTree(rows_domain(binding, owner, len(rows), hash, digests), dict(enumerate(rows)), lambda _: ROW_SCHEMA)
 
 
@@ -242,6 +224,6 @@ def transcript_domain(epoch: Epoch, count: int, hash: str = "sha256") -> Commitm
 
 
 __all__ = ["EPOCH_SALT_DOMAIN", "HM96", "HM96_KEY", "HM96_SALT", "HM96_TRANSCRIPT", "HM96_WEIGHTS", "ROW_SCHEMA", "SALT_DOMAIN",
-           "TILE_SCHEMA", "Epoch", "Hm96Domain", "TileRef", "Workload", "activation_binding", "chacha20_block", "commit_rows",
+           "TILE_SCHEMA", "Epoch", "Hm96Domain", "TileRef", "Workload", "activation_binding", "commit_rows",
            "hm96_kernel_constants", "hm96_salt", "opened_value", "rows_domain", "salt_of", "tile_refs", "transcript_binding",
            "transcript_domain", "weight_binding", "weights_root"]
