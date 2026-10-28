@@ -43,7 +43,7 @@ input names it.
 **The appends.** A step's written blocks are the remote audit's append for that step. A payload row's commit string is the
 append leaf's (`hm96-sha512/row/v2` of the same 4,096 bytes under the same salt: the leaf hides ``d_j``), so an append's root
 is a function of its instance's payload rows' ``b || c`` and its public ``first`` and ``count``. The chain over the steps'
-appends is then the record's (remote_bandwidth's `Record.appends`): no dummy append, none out of the map's order, no re-key the
+appends is then the record's (remote_bandwidth's `Summary.appends`): no dummy append, none out of the map's order, no re-key the
 map doesn't write. That is checked on the commitments, outside the circuit, with no gate. An append's coin ``c_a`` isn't read
 here: it keys the block's encoding, which the opening's decode checks against the same leaf (under zero knowledge, the
 block-decode unit's payload-against-digest check, with ``c_a`` a public input beside the append's root and count).
