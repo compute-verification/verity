@@ -9,6 +9,9 @@ line (behind a comment marker or not). Identifiers (`proof_unit`) are code; the 
 record or a digest (``ALLOWED``, one reason each; an entry that matches nothing fails too), and a file whose lines a PR
 already queued on `next` rewrites (``PENDING``), until that PR lands and the rename follows it.
 
+A retired id (``IDS``: PoUB's `verity/remote-bandwidth/` tags, `verity/poub/` since MEM-152's move) is matched as written
+in every tracked file, the Lean's too, with the same ``ALLOWED`` spellings.
+
 The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``:
 "block" is reserved for parts of circuits, the subprotocols go by their names, and "leg" is retired). Their code
 keeps the old words until its owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a
@@ -24,6 +27,10 @@ from test_repository import ROOT, _tracked
 TERMS = {"proof unit": "proof block", "faulty unit": "faulty proof block", "proof service": "proof system"}
 _SEP = r"(?:[ \t]+|-|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
 _TERM = re.compile(rf"\b(?:(?:proof|faulty){_SEP}units?|proof{_SEP}services?)\b", re.I)
+
+#: Each retired id, as written, and what it is now.
+IDS = {"verity/remote-bandwidth": "verity/poub", "verity-remote-bandwidth": "verity-poub"}
+_ID = re.compile(r"verity[/-]remote-bandwidth")
 
 #: The retired-terms table, the Glossary's older names (`ARCHITECTURE.md` links it).
 GLOSSARY = "GLOSSARY.md"
@@ -57,6 +64,12 @@ ALLOWED: dict[str, str] = {
     "verity/proof-service/": "the stream's and outcome's record formats (`sampled_proofs.service.STREAM`, `OUTCOME`), "
                              "which their digests hash",
     "report-proof-service-": "a cited note's id",
+    'RETIRED = "verity/remote-bandwidth"': "baked into recorded transcripts",
+    '"protocol":"verity/remote-bandwidth/v0"': "two recorded block records (`examples/h200/interfaces/tests/fixtures/`), "
+                                               "runs' outputs",
+    "verity/remote-bandwidth/tests/p2-store/w": "how the recorded P2 fixture's W was drawn "
+                                                "(`verity/core/protocols/poub/tests/fixtures/p2-store.json`), which its "
+                                                "commitment and C* hash; the PoUB move's map keeps it",
 }
 
 PENDING: dict[str, str] = {
@@ -133,6 +146,23 @@ def offenders(files: list[str], read=_read) -> tuple[list[tuple[str, int, str]],
     return out, used
 
 
+def id_offenders(files: list[str], read=_read) -> tuple[list[tuple[str, int, str]], set[str]]:
+    """(file, line, the id as written) for each of IDS in any file but PENDING and this one, and the ALLOWED spellings
+    used."""
+    out, used = [], set()
+    for f in sorted(f for f in files if f not in PENDING and f != "tests/test_retired_terms.py"):
+        text = read(f)
+        if text is None or "remote-bandwidth" not in text:
+            continue
+        allowed = [(m.start(), m.end(), s) for s in ALLOWED for m in re.finditer(re.escape(s), text)]
+        for m in _ID.finditer(text):
+            if spelling := next((s for a, b, s in allowed if a <= m.start() and m.end() <= b), None):
+                used.add(spelling)
+                continue
+            out.append((f, text.count("\n", 0, m.start()) + 1, m[0]))
+    return out, used
+
+
 def doc_offenders(files: list[str], read=_read) -> list[tuple[str, int, str]]:
     """(file, line, the term as written) for each of DOC_TERMS in a maintained doc's prose."""
     out = []
@@ -156,7 +186,13 @@ def test_no_retired_term_in_prose():
         "a retired term: say " + " and ".join(f'"{new}" for "{old}"' for old, new in TERMS.items())
         + f' (ARCHITECTURE.md, Glossary, "Block"; {GLOSSARY}); a spelling baked into a record or a digest goes in ALLOWED'
         + " with its reason:\n" + "\n".join(f"  {f}:{n}: {term}" for f, n, term in bad))
-    assert not set(ALLOWED) - used, f"ALLOWED entries that match nothing any more: {sorted(set(ALLOWED) - used)}"
+    ids, used_ids = id_offenders(_tracked())
+    assert not ids, (
+        "a retired id: write " + " and ".join(f'"{new}" for "{old}"' for old, new in IDS.items())
+        + "; v0's tags before the move are `verity/core/protocols/poub/retired.py`'s, and a spelling baked into a record"
+        + " or a digest goes in ALLOWED with its reason:\n" + "\n".join(f"  {f}:{n}: {i}" for f, n, i in ids))
+    unused = set(ALLOWED) - used - used_ids
+    assert not unused, f"ALLOWED entries that match nothing any more: {sorted(unused)}"
 
 
 def test_no_retired_term_in_the_maintained_docs():
@@ -188,6 +224,11 @@ def test_the_scan_reads_each_form():
                      ("a.py", 1, "proof units"), ("a.py", 3, "faulty unit"), ("b.rs", 1, "proof /// unit"),
                      ("d.py", 1, "Proof-Service"), ("d.py", 1, "proof # services")]
     assert used == {"N, the round's proof units", "verity/proof-service/"}
+    ids = {"e.lean": 'def ID : String := "verity/remote-bandwidth/v0"',
+           "f.py": 'RETIRED = "verity/remote-bandwidth"\nFIXTURE = "verity-remote-bandwidth/x"\nP = "verity/poub/v0"\n',
+           "g.md": "`verity/remote-bandwidth/v0`, verity_remote_bandwidth"}
+    assert id_offenders(list(ids), read=ids.__getitem__) == ([("e.lean", 1, "verity/remote-bandwidth"),
+        ("f.py", 2, "verity-remote-bandwidth"), ("g.md", 1, "verity/remote-bandwidth")], {'RETIRED = "verity/remote-bandwidth"'})
 
 
 def test_the_doc_scan_reads_each_form():
