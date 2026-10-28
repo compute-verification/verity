@@ -1,11 +1,11 @@
-"""[R19 moe F-r19-moe-1, row #70] the naming of TP collective rows (`AllReduce2Rule` / `AllGather2Rule`, `_collective_hint`).
+"""The naming of TP collective rows (`AllReduce2Rule` / `AllGather2Rule`, `_collective_hint`).
 
 A collective whose rank-local operand is produced UNDER its own module (vLLM `RowParallelLinear`: the Gemm and its all-reduce in one
-forward) keeps the module vocabulary `<module>/<node>[i]/all_reduce` -- the Gemm under the module is the rank's partial (TP-04).  A
+forward) keeps the module vocabulary `<module>/<node>[i]/all_reduce` -- the Gemm under the module is the rank's partial.  A
 collective issued MID-module, whose rank-local operand is another module's output (OLMoE `OlmoeAttention._apply_qk_norm`: q and k
 all-gathered inside `self_attn`, each a slice of the `qkv_proj` Gemm's output), is named at its call SITE `<module>.<fx node>/<node>`,
 which the v2 query (`required.collective_sites`) turns into the module's k-th collective identity with its own `shard_rank<r>` member.
-Without the site the manifest folded both gathers into one `self_attn/out` of twice the width with no partial to bind (row #70:
+Without the site the manifest folded both gathers into one `self_attn/out` of twice the width with no partial to bind (on OLMoE at TP2:
 6,944 unbound identities per rank).  CPU, meta tensors; no vLLM.
 
 Run: `PYTHONPATH=.:../.. python -m pytest -q -p no:cacheprovider tests/correspondence/test_tp_collective_site.py`

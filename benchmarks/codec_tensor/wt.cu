@@ -21,6 +21,8 @@
 #include <cstring>
 #include <cuda_runtime.h>
 
+#include "sha512.cuh"
+
 #ifndef WT_FIELD
 #define WT_FIELD 1279
 #endif
@@ -78,7 +80,7 @@ static_assert(TW * PB >= 8192 && (TW * S) % 16 == 0, "a task's words");
 constexpr int MAXK = 3;
 constexpr int TASK_BYTES = 8192;
 constexpr int SB = TW * S;                              // a task's stored bytes
-// WT_MASK=1: `wide.py`'s masked word, σ_K (kMask) between consecutive rounds. WT_FOLD6=1: sqr is ra-squaring-ceiling's
+// WT_MASK=1: `wide.py`'s masked word, σ_K (kMask) between consecutive rounds. WT_FOLD6=1: sqr is the squaring ceiling's
 // FOLD 6 (`benchmarks/word_codec/kv.cu`'s KV_FOLD6), its half squares ordered to fit the p1024 12-warp fused kernels;
 // 2: its half squares folded as they are made (sqr_fold6_lean).
 #ifndef WT_MASK
@@ -265,7 +267,7 @@ __device__ __forceinline__ void sqr_fold(const u32 (&a)[NL], u32 (&x)[NL]) {
   fold_top(x, c0, c1);
 }
 
-// WT_FOLD6=1: ra-squaring-ceiling's FOLD 6 (`benchmarks/rate_squaring/sq.cu`, as `benchmarks/word_codec/kv.cu`'s
+// WT_FOLD6=1: the squaring ceiling's FOLD 6 (`benchmarks/rate_squaring/sq.cu`, as `benchmarks/word_codec/kv.cu`'s
 // KV_FOLD6). sqr_dbl_n is its FOLD 5 square: the off-diagonal products column by column, each column's accumulator
 // starting at the previous one's carry, then y = 2 S + sum a_i^2 2^(64 i) in one carry chain.
 template <int N>
@@ -1756,7 +1758,7 @@ __global__ void __maxnreg__(168) gemm_ws_kernel(const void *__restrict__ wstore,
 // y_j = BLAKE3-keyed(K, u64be j ‖ E_j) over E's blocks of TAG_BLOCK bytes, so a full block's message is four whole
 // chunks: a quad of lanes hashes one block, a chunk a lane, and joins the chunks' chaining values with two parent
 // compressions over shuffles (lanes 0 and 2, then lane 0). Every add of the compression is an IMAD by kOne, which moves
-// the adds to the FMA pipe (ra-tag-fast's V1, +32% on sm_120); kOne sits in constant memory so ptxas can't fold it.
+// the adds to the FMA pipe (the fast tagger's V1, +32% on sm_120); kOne sits in constant memory so ptxas can't fold it.
 // leaf_c = SHA512(prefix(leaf) ‖ u64be c ‖ 16 tags), five compressions from the prefix's midstate; the root is the
 // RFC 6962 SHA-512 tree over the leaves, a level at a time with the odd last node promoted (the same tree).
 constexpr int TAG_BLOCK = 4088;
@@ -1939,8 +1941,6 @@ __global__ void __launch_bounds__(128) b3_chain_kernel(u64 steps, unsigned long 
   if ((cv[0] ^ cv[5]) == 0x12345679u) atomicXor(xr, (unsigned long long)cv[1]);
 }
 
-#include "sha512.cuh"
-
 struct Mid {
   u64 h[8];
 };
@@ -1991,7 +1991,7 @@ __device__ __forceinline__ void node_hash(const u64 *L, const u64 *R, u64 *out) 
     prev = cur;
   }
 #pragma unroll
-  for (int i = 0; i < 8; ++i) s[i] = kSha512Iv[i];
+  for (int i = 0; i < 8; ++i) s[i] = sx::IV_DEV[i];
   sha512_compress(s, w);
 #pragma unroll
   for (int i = 0; i < 16; ++i) w[i] = 0;
@@ -2020,7 +2020,7 @@ __global__ void __launch_bounds__(128) tag_level_kernel(const u64 *__restrict__ 
 // wt_set_pass puts the messages' fixed bytes in kPass (zeros where s_j, j, the root, K_S and the row go); pass_kernel,
 // one CTA on the stream after the previous commit, fills them in, so the chain needs no host round trip.
 //
-// A WT_RECEIPT = 1 build's receipt is sketch-sha512 instead (`sketch_receipt.py`, the remote bandwidth driver's kind):
+// A WT_RECEIPT = 1 build's receipt is the remote bandwidth driver's sketch-sha512 instead (`receipts.SketchReceipter`):
 // s_j is the whole 64-byte SHA-512 (`receipts.seed`), K_S = derive(s_j, "verity/remote-bandwidth/sketch-signs/v0",
 // {"k": k_s, "n": 4096, "tag": "sketch-sha512"}) at the registration's k_s (16 or 64), a vector is the store's block,
 // its 4,096 bytes in store order (store-order/v0: task q's halves are blocks 2 q and 2 q + 1, receipt_warp), and
@@ -2048,7 +2048,7 @@ __constant__ u64 kRcptMid[8];
 // SHA-512 of the len bytes at m (big-endian words, the standard padding).
 __device__ void sha512_bytes(const uint8_t *m, int len, u64 (&s)[8]) {
 #pragma unroll
-  for (int i = 0; i < 8; ++i) s[i] = kSha512Iv[i];
+  for (int i = 0; i < 8; ++i) s[i] = sx::IV_DEV[i];
   const int nb = (len + 17 + 127) / 128;
   for (int blk = 0; blk < nb; ++blk) {
     u64 w[16];
@@ -2108,7 +2108,7 @@ __global__ void __launch_bounds__(PASS_THREADS) pass_kernel(unsigned j, const u6
       for (int b = 0; b < 8; ++b) v = (v << 8) | m[8 * i + b];
       w[i] = v;
     }
-    for (int i = 0; i < 8; ++i) h[i] = kSha512Iv[i];
+    for (int i = 0; i < 8; ++i) h[i] = sx::IV_DEV[i];
     sha512_compress(h, w);
     for (int i = 0; i < 8; ++i) g_pass.leafmid[i] = g_leafmid.h[i] = h[i];
   }
@@ -2146,7 +2146,7 @@ __global__ void __launch_bounds__(PASS_THREADS) pass_kernel(unsigned j, const u6
 
 // --- the fused decode GEMM --------------------------------------------------------------------------------------------
 //
-// The copy lane bulk-copies task i's TW stored words (SB bytes) into stage i mod stages; the D decoder warps decode
+// The copy lane copies task i's TW stored words (SB bytes) in bulk into stage i mod stages; the D decoder warps decode
 // them in place; warp D, the MMA warp, takes the tasks in order and runs the plain kernel's 16 tiles on each. The copy
 // lane is the MMA warp's lane 0, which copies task i + stages once the warp's loads of task i are behind `empty`, or
 // with two MMA warps, or a sketch, a producer warp's after them (fused_producers), which copies once `empty` lets it. The warps after these, if any, tag the layer's store (`tag_warp`), read through L2 behind the bulk copies.
@@ -3541,7 +3541,7 @@ int wt_set_dbg(uint8_t *p) {
 
 // One window's tag (ro-blake3/v1 or ro-sketch-blake3/v0): K as BLAKE3's 8 little-endian key words, and the leaves'
 // prefix block Z(LEAF_DOMAIN ‖ frame(name) ‖ frame(σ)) (128 bytes), whose midstate the leaves start from. A
-// WT_RECEIPT build's sketch warps start from the same midstate: there leaf_prefix is sketch_receipt.prefix(seed).
+// WT_RECEIPT build's sketch warps start from the same midstate: there leaf_prefix is receipts.sketch_prefix(seed).
 int wt_set_tag(const u32 *key, const uint8_t *leaf_prefix) {
   u64 w[16];
   for (int i = 0; i < 16; ++i) {
@@ -3550,7 +3550,7 @@ int wt_set_tag(const u32 *key, const uint8_t *leaf_prefix) {
     w[i] = v;
   }
   Mid mid;
-  for (int i = 0; i < 8; ++i) mid.h[i] = SHA512_IV_HOST[i];
+  sx::iv(mid.h);
   sha512_compress(mid.h, w);
   const u32 one = 1;
   if (cudaMemcpyToSymbol(kTagKey, key, 8 * 4) || cudaMemcpyToSymbol(kOne, &one, 4) ||

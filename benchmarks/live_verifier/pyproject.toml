@@ -1,4 +1,4 @@
-# The remote bandwidth audit's verifier on its auditor host (vy-auditor-1): `host.py`, the gate every key of the host's research is
+# The remote bandwidth audit's verifier on its auditor host: `host.py`, the gate every key of the host's research is
 # forced to, and the run, replay and store put its units run as `auditor` (pods/nebius/verifier/). Not a package: the suite runs the
 # gate in this process with its root steps (chown, systemctl) injected, holds its whitelist to verifier.py's own parser, and runs a
 # run through `tests/stub_verifier.py` (a real session over the remote audit's in-process harness, `test_session.run`, at the
@@ -9,6 +9,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/core/protocols/record.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/remote_bandwidth", "verity/ml/__init__.py",
           "verity/ml/circuits", "verity/ml/crypto", "verity/ml/commitments", "verity/ml/randomness",
           # the Lean verifier a session runs beside audit.Session, and the difftest a replay serves: their Lake packages

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# hashcat's SHA-512 kernels against sha512x.cuh's default compression on one leased GPU, in one lease at one locked SM
+# hashcat's SHA-512 kernels against sx's default compression on one leased GPU, in one lease at one locked SM
 # clock. hashcat (HC_TAG, default v7.1.2) is built from its source in scratch. Its benchmark (`hashcat -b`: the mask
 # ?a?a?a?a?a?a?a, a 7-byte candidate, and for -m 1710 the self-test salt's 12 bytes, so one SHA-512 block a candidate) runs
 # -m 1700 and -m 1710 each with its optimized kernel (-O, what `hashcat -b` runs by default) and its pure one, at -w 3
 # (the benchmark's default), and -m 1700 -O at -w 4. Ours: commit_gpu's raw rate (`commit_gpu sha`, sha_rate: each thread
-# chains full compressions of a variable block) for commit_gpu's default build (a0r0l) and sx0000, sha512x.cuh's default
-# force-included (ruler.sh's builds), each checked bit for bit against reference.py in the lease before it is timed; and
+# chains full compressions of a variable block) for commit_gpu's default build (a0r0l) and sx0000, sx's default under
+# -DSHA_SX (ruler.sh's builds), each checked bit for bit against reference.py in the lease before it is timed; and
 # hashcat_forms.cu, our compression in hashcat's shapes (its header), its first digests checked against hashlib, and the
 # honest chain and -O's shape at each CTA size in SHAPES, in whole waves of the CTAs an SM holds (commit_gpu's sha launches
 # 8 CTAs of 256 an SM, 3 resident, a partial last wave).
@@ -15,8 +15,10 @@
 # hashcat's cached kernels (cubins from its cuLink) and of ours (sass_count.py), then hashcat_summary.py: summary.json and
 # verdict.txt's VERDICT lines.
 #
-#   research run --on vy-dc-h200 --project verity --campaign hash --source . --cwd source --timeout 90m \
-#     --env GPU_LEASE_WHO=kernels-kcommit -- bash benchmarks/torch_gpu/sha512_rows/hashcat.sh
+#   OUT=DIR bash benchmarks/torch_gpu/sha512_rows/hashcat.sh
+#
+# Needs a CUDA GPU (an H200, or an RTX PRO 6000), CUDA's nvcc, `gpu-lease` on PATH, `sudo -n nvidia-smi` for the clock
+# lock and network access for hashcat's source.
 # ROUNDS (3), LOCK_MHZ (1980), LEASE_MIN (25), HC_TAG (v7.1.2), JOBS (16), SHAPES ("128 256 384 512 640 768 1024"),
 # PY (python3; it needs numpy: on a node without it, PY="uv run -q --no-project --with numpy python").
 set -uo pipefail
@@ -39,7 +41,7 @@ build() {
   if [ "$t" != a0r0l ]; then
     sx=$($PY -c "import sys; sys.path.insert(0, '$X'); import engine; print(*engine.variant_flags('${t#sx}'))") ||
       { echo "build $t rc flags" >> "$O/rc.txt"; return; }
-    flags="$flags -include $X/as_commit_gpu.cuh $sx"
+    flags="$flags -DSHA_SX $sx"
   fi
   # shellcheck disable=SC2086
   nvcc -O3 -std=c++17 -gencode arch=compute_$SM,code=sm_$SM -Xptxas -v $flags -o "$W/commit_gpu_$t" $D/commit_gpu.cu \
@@ -91,7 +93,7 @@ gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash -c '
   probe() { "$W/hashcat_forms" time 5 2>/dev/null | python3 -c "import sys, json; print(int(min(json.loads(l)[\"mhz\"] for l in sys.stdin)))"; }
   sudo -n nvidia-smi -i "$U" -lgc "$LOCK,$LOCK" > "$O/lock.txt" 2>&1; echo "lock rc $?" >> "$O/rc.txt"
   trap "sudo -n nvidia-smi -i $U -rgc >> $O/lock.txt 2>&1; nvidia-smi -i $U -q -d CLOCK > $O/clock-after.txt 2>&1" EXIT
-  # a lock this card resolves below LOCK (vy-dc-h200 put -lgc 1980,1980 at 1830, r20261027-040452-3d4d): unlocked, if the
+  # a lock this card resolves below LOCK (an H200 puts -lgc 1980,1980 at 1830 under load): unlocked, if the
   # boost holds LOCK under load, else the lock as it resolves. Within 1% is held: on the RTX PRO 6000 NVML reads the lock
   # 0.4% low (-lgc 2085,2085 at 2077).
   locked=$(probe) free=n/a mode=locked

@@ -203,8 +203,8 @@ INSTANCES_TIERS = ("vu-k1536", "tu-k16", "vu-k1536-neg")
 #: The frozen FP8 Ada input set (``fp8-ada-mma-draft/2026-09-22``): the synthetic VUs ``archive/direct/ligero/fp8/chain.py``
 #: draws (``instances_fp8``: uniform finite E4M3 bytes from seed :data:`FP8_ADA_INSTANCES_SEED`, model-recorded accumulators).
 #: :data:`FP8_ADA_INSTANCES_DIGEST` is ``chain.instances_digest(4096)`` = sha256 of
-#: ``"fp8-ada synthetic|seed=20260922|n=4096|K=1536"`` -- pinned here (frozen 2026-09-22) so the canonical tables
-#: (``verity_numerical.bench.tables``) recognise the set without importing the prover; a change to the recipe is a new tier.
+#: ``"fp8-ada synthetic|seed=20260922|n=4096|K=1536"`` -- pinned here (frozen 2026-09-22) so a reader
+#: recognises the set without importing the prover; a change to the recipe is a new tier.
 _FP8_ADA = census.INPUT_SETS["bench-instances-fp8-ada-v1"]
 FP8_ADA_INSTANCES_DATASET, FP8_ADA_INSTANCES_TIER = _FP8_ADA.dataset, _FP8_ADA.tier
 FP8_ADA_INSTANCES_SEED, FP8_ADA_INSTANCES_DIGEST = _FP8_ADA.seed, _FP8_ADA.manifest_sha256
@@ -213,7 +213,7 @@ FP8_ADA_INSTANCES_SEED, FP8_ADA_INSTANCES_DIGEST = _FP8_ADA.seed, _FP8_ADA.manif
 #: b-hopper) -- ``random_finite_bf16`` words resp. uniform finite E4M3 bytes from the same seed, model-recorded accumulators
 #: (``benchmarks/tc_probe/instances_hw.py`` regenerates them from the recipe).  The digests are ``relchain.instances_digest(rel, 4096)``
 #: = sha256 of ``"<relation> synthetic|seed=20260922|n=4096|K=1536"`` -- pinned here (frozen 2026-09-23, lane b-merge-h100, after
-#: the rows with preserved proof dumps) so the canonical tables recognise the sets without importing the prover; a change to a
+#: the rows with preserved proof dumps) so a reader recognises the sets without importing the prover; a change to a
 #: recipe is a new tier.
 _BF16_HOPPER = census.INPUT_SETS["bench-instances-bf16-hopper-v1"]
 BF16_HOPPER_INSTANCES_DATASET, BF16_HOPPER_INSTANCES_TIER = _BF16_HOPPER.dataset, _BF16_HOPPER.tier

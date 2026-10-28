@@ -25,7 +25,7 @@ store      `engines` arenas of `arena_blocks` each, in GPU order, then `host_blo
 payload    `audit.payload_tree` over the store, chunk j salted with store_salt(key, PAYLOAD_LABEL, j) under the
            verifier's key (its payload-key message), so its root follows from the pin, the store's shape and that key
            (`expected_root`, in worker processes: at a whole node's 130M chunks 665 s on 11 cores, the Lean's
-           `Store.expectedRoot` 436 s on 11 threads, 23 Oct, `benchmarks/remote_session/binding_bench.py`)
+           `Store.expectedRoot` 436 s on 11 threads, `benchmarks/remote_session/binding_bench.py`)
 binding    at startup the pin read, every pinned file held to it, the arena laid out and its weights chunks' digests
            computed; at each hello (`Binding.hold`) the store its size makes and that store's payload root under the
            verifier's key, against the hello's, else Refused with why
@@ -81,7 +81,8 @@ def store_salt(key: bytes, label: bytes, c: int) -> bytes:
 
 
 def canonical_json(obj) -> bytes:
-    """`verity.ml.circuits.codec.canonical_json`'s bytes, which this protocol may not import."""
+    """`verity.ml.circuits.codec.canonical_json`'s bytes, which this protocol may not import, on every value codec
+    takes; a string past ASCII without DEL, which codec refuses, is escaped, as `RemoteAudit.Store.pyJson` escapes it."""
     return json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
 
 
@@ -429,7 +430,7 @@ def _subtree(digests: str, shape: tuple[int, int, int, int], node: bytes, key: b
                 level.append(dom.pad(j))
                 continue
             r = j % A if j < engines * A else W
-            x = d[64 * r:64 * (r + 1)] if r < W else zero
+            x = d[codec.DIGEST_BYTES * r:codec.DIGEST_BYTES * (r + 1)] if r < W else zero
             level.append(dom.leaf(j, j, audit.PAYLOAD_SCHEMA, receipts.hidden_digest(x, store_salt(key, PAYLOAD_LABEL, j))))
     return _up(dom, level, 0, first)
 

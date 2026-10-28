@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Dither's served standard number on node 2 (sbench.py), on one leased GPU for at most SBENCH_MAX_MIN (40) minutes: libh1c.so, libh1f.so
+# Dither's served standard number (sbench.py) on one leased GPU for at most SBENCH_MAX_MIN (40) minutes: libh1c.so, libh1f.so
 # and libh1o.so built for sm_$SBENCH_ARCH first (the dither arms'; 120a, else 100a on the B200 or 90a on the H200, every
 # library below and FlashInfer's JIT built for it).  Extra arguments go to sbench.py (e.g. --arms exact,dither --gate --ops decode
 # --t 64); SBENCH_SCRIPT runs another script with the same libraries and environment (h1ogate.py: the units kernels at
@@ -12,8 +12,8 @@
 # Inside the lease everything runs on the leased GPU's NUMA node (numabind.py: that node's CPUs among the run's, and its
 # memory), or unbound with DITHER_NUMA=0 or without numactl or a node; numa.json, the `numa:` line and summary.json's "numa"
 # say which.
-#   research run --on vy-nebius-2 --project verity --campaign dither-loop --source . --cwd source \
-#     --env GPU_LEASE_WHO=WHO -- bash benchmarks/hash/dither/sbench.sh
+# On an RTX PRO 6000 under a GPU lease (SBENCH_ARCH=100a on a B200, 90a on an H200):
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=WHO bash benchmarks/hash/dither/sbench.sh
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT"
 # the run's scratch, under SBENCH_SCRATCH_ROOT (/workspace/pouw, else, where that can't be made, as on the CPU nodes,
@@ -38,9 +38,9 @@ esac
 GEN="arch=compute_$ARCH,code=sm_$ARCH"
 echo "sbench: sm_$ARCH" | tee "$OUT/arch.txt"
 # SBENCH_SHIP_OUT=1 builds the libraries below and the coins' Lean verifier, writes them to out/sbench-ship.tar and exits;
-# SBENCH_SHIP=TAR (such a tar, sent with research run --send) takes them in place of building, so a node that may not build
-# (n1, n3) builds nothing.  A ship is refused (exit 17) unless its key is this run's (what the builds read: the CUDA
-# sources here, sha512_rows' sha512x.cuh and the coins' Lean packages' trees; the arms that pick builds; SBENCH_ARCH and the flags), its
+# SBENCH_SHIP=TAR (such a tar, copied to the host) takes them in place of building, so a host that may not build builds
+# nothing.  A ship is refused (exit 17) unless its key is this run's (what the builds read: the CUDA
+# sources here, verity/ml/kernels/sha512.cuh and the coins' Lean packages' trees; the arms that pick builds; SBENCH_ARCH and the flags), its
 # MANIFEST.sha256 holds and lake build --no-build then finds the coins' verifier built, so one ship serves every commit
 # that leaves those alone.  Neither covers --bw-passes.
 COINS_PKG=verity/core/protocols/pouw/lean/check
@@ -50,7 +50,7 @@ SHIP_LIBS="HB_H1U HB_H1U_KSPLIT HB_H1U_KRONLY HB_H1U_KC HB_H1U_KC_B DITHER_H1C_K
 COINS_PKGS=$(python3 -c 'import json, os, sys; p = sys.argv[1]; print(p, *(os.path.normpath(os.path.join(p, x["dir"]))
   for x in json.load(open(os.path.join(p, "lake-manifest.json")))["packages"] if x["type"] == "path"))' "$COINS_PKG")
 ship_key() {
-  git ls-tree -r HEAD -- benchmarks/hash/dither benchmarks/torch_gpu/sha512_rows/sha512x.cuh | grep -E '\.(cu|cuh)$'
+  git ls-tree -r HEAD -- benchmarks/hash/dither verity/ml/kernels/sha512.cuh | grep -E '\.(cu|cuh)$'
   for p in $COINS_PKGS; do echo "lean $p $(git rev-parse "HEAD:$p")"; done
   echo "arms $(for t in dither-a-kh dither-a-hbk dither-a-hbr dither-a-hbc; do case " $* " in *$t*) printf '%s ' $t ;; esac; done)"
   echo "CUDA=$CUDA ARCH=$ARCH HB_KC_FLAGS=${HB_KC_FLAGS:-} HB_KC_H1C_FLAGS=${HB_KC_H1C_FLAGS:-}${HB_KC_FLAGS_B:+ HB_KC_FLAGS_B=$HB_KC_FLAGS_B}"
@@ -205,8 +205,8 @@ git show "$CREDIT_GATE_SHA:integrations/vllm/verity_vllm/protocols/pouw/credit_g
   && export DITHER_CREDIT_GATE=$S/credit_gate.py || echo "sbench: no credit_gate.py at $CREDIT_GATE_SHA"
 # H1V3 (with the wrap correction and the peel, z = A B^T): dither_one's gate runs its h1tile.reference.  By default
 # this source's own (PouwH1Tile_v4, ungated); H1V3_SHA names another commit, from this repository, else (the node's lacks
-# the commit) the archive sent with the run: `git archive --format=tar.gz $H1V3_SHA verity > h1v3-$H1V3_SHA.tar.gz`,
-# `research run --send` it
+# the commit) the archive `git archive --format=tar.gz $H1V3_SHA verity > h1v3-$H1V3_SHA.tar.gz` makes, in
+# $RESEARCH_RUN_DIR/inputs
 if [ -n "${H1V3_SHA:-}" ]; then
   mkdir -p "$S/h1v3"
   if git cat-file -e "$H1V3_SHA^{commit}" 2>/dev/null; then

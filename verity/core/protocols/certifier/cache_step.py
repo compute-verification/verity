@@ -1,9 +1,9 @@
-"""vLLM's prefix cache, as ENC-DERIVED's rules derive it, as a Boolean Definition: one row's pass over the cache.
+"""vLLM's prefix cache as the derived encoding derives it, as a Boolean Definition: one row's pass over the cache.
 
     CacheStep_v1{N, U, TW, RW, L} (table, pfx, r, admit, sent, K, wh, nins, units) -> (ok, table', pfx', trail)
 
 `ReplayStep_v1` (`replay_step`) takes each admitting row's prefix-cache hit as witness that it only bounds, so a hit
-the cache didn't give would be a channel nobody charges. ENC-DERIVED's rules
+the cache didn't give would be a channel nobody charges. The derived encoding's rules
 (`benchmarks/network_e2e/encodings/derived.py`, `Prefixes`) fix the hit while the cumulative pool bound rules out
 eviction, and fix the canonical sources always. Past the bound, advice v1 sends and charges each hit's shortfall from
 the longest cached prefix. This Definition is those rules over a committed cache state, with
@@ -323,8 +323,9 @@ def _body(B, S, valid, parent, tok, owner, pfx, r, admit, sent, K, wh, nins, uni
 
 CacheStep = CompositeDefinition(
     "CacheStep", 1, STATICS, _sig, _body, conformance="exact-model-tested",
-    doc="one row's pass over the prefix cache's table (ENC-DERIVED's rules): its hit checked against the cached prefix, "
-        "derived while the pool bound holds, and the units it computes owned or appended (`cache_step.reference`)")
+    doc="one row's pass over the prefix cache's table (the derived encoding's rules): its hit checked against the "
+        "cached prefix, derived while the pool bound holds, and the units it computes owned or appended "
+        "(`cache_step.reference`)")
 
 
 def unit(**st):

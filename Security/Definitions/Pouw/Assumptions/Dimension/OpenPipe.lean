@@ -1,10 +1,10 @@
 import Definitions.Pouw.Assumptions.Dimension.Forest
 
 /-!
-# The open quadratic pipe (trusted statements; staged for the red team's R11-1)
+# The open quadratic pipe (trusted statements; staged)
 
 `ClosedPipe` forbids an FP32 step to read an instruction priced at 16 or more: a real program that adds FP32 terms
-to a tensor-core word had to be rebuilt as a closed pipe, which is the tensor-core-junk half of P9B-1. The **open**
+to a tensor-core word had to be rebuilt as a closed pipe, which is the tensor-core-junk case. The **open**
 pipe allows it. An FP32 step `a·b + c` may take any earlier priced value (a tensor-core word, an INT result, a
 priced load or an FP32 output) as its addend `c`, or as its factor `b` when `a` is a constant. It stays quadratic: a
 product of two non-constant factors multiplies two free values (`QuadStep` over all earlier priced values).
@@ -123,7 +123,7 @@ def PerWordCost (γ₂ : ℝ) {N m n k : ℕ} (M : Machine (Noise N m n k)) (w :
   ∀ q : M.Prog, ∀ S ⊆ U ×ˢ range (nonFinal k m n), (∀ x ∈ S, w x.1 x.2 ∈ M.outputs q) →
     (1 - γ₂) * (16 * S.card : ℝ) ≤ M.cost q
 
-/-- **An open-pipe program that no closed pipe is** (the tensor-core-junk shape of P9B-1): for every `k ≥ 1024` with
+/-- **An open-pipe program that no closed pipe is** (the tensor-core-junk shape): for every `k ≥ 1024` with
 `16 ∣ k`, `m, n ≥ 1` and a unit `u₀ ∈ U`, some `R` passes `Admissible`, is checkpoint independent and has MinRank ≥
 16, and some `OpenQuadPipe 16 8` program on the noise coordinates outputs the non-final checked words. One of its
 FP32 steps is an FFMA `a·b + w` of two free values whose addend `w` is the output of a tensor-core instruction (`u₀`'s

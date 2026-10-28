@@ -140,46 +140,27 @@ noncomputable def condError {O : Type} {G : Verity.Game O} (P : Verity.Game.Stra
     (δ : Verity.Game.Strategy G → ℝ≥0∞) (s : Verity.Game.Strategy G) : ℝ≥0∞ :=
   if P s then δ s else ⊤
 
-/-- The wipe that opens a server-time block, read off the run: the bits of device memory its fill covers, the memory
-challenger's verdict, and `kept`, the bits of foreign content beyond the committed carried state that the block can
-read back from what the wipe leaves (`Accounting.BlockWipe`'s fields, on the run rather than on a product of coins). -/
-structure WipeLive {ι : Type} (d : Device ι) (O : Type) where
-  /-- the bits of device memory the fill covers -/
-  fill : ℕ
-  fill_le : fill ≤ d.mem
-  /-- the memory challenger's verdict on the wipe -/
-  accepts : O → Prop
-  /-- the bits of foreign content beyond the committed carried state that survive the wipe into the block -/
-  kept : O → ℕ
-
-/-- **The wipe's survivor bound** at fraction `f`, on the run `o`: `BlockWipe.Survives`' bound. -/
-def WipeLive.Survives {ι : Type} {d : Device ι} {O : Type} (w : WipeLive d O) (f : ℝ) (o : O) : Prop :=
-  (w.kept o : ℝ) ≤ f * w.fill + 2 * 128 + (d.chip + (d.mem - w.fill))
-
 /-- A horizon of `B` server-time blocks read off one run of the game `G`: each block's period, over its own circuit,
-the wipe that opens it, the bits of weights its PoUS store holds, its PoUS challenge times on the run, and the read
-deadline. -/
+its PoUS challenge times on the run, and the read deadline. The wipe that opens each block is core's `Verity.Wipe`,
+read on the run through a map of the run into the wipe's game at its boundary (`Verity.Wipe.OfRun`), which the joint
+guarantee takes beside the horizon (`Accounting.Guarantees.JointHorizonBlocksLive`). -/
 structure BlocksLive {ι : Type} (d : Device ι) (α : Type) [Fintype α] (B : ℕ) (C : Fin B → Verity.Circuit)
     {O : Type} (G : Verity.Game O) where
   /-- block `b`'s period -/
   block : (b : Fin B) → PeriodLive d α (C b) G
-  /-- the wipe that opens block `b` -/
-  wipe : Fin B → WipeLive d O
-  /-- the bits of weights block `b`'s PoUS store holds (U) -/
-  weights : Fin B → ℕ
   /-- block `b`'s PoUS challenge times on the run -/
   chal : Fin B → O → Finset ℕ
   /-- the read deadline, in ticks (T_read) -/
   readDeadline : ℕ
 
-/-- **Block `b`'s memory term** on the run `o` of the strategy `s` (`BlocksRun.MemoryTerm`'s): at each of its
-PoUS challenge times, the bits of its weights that its capacity account doesn't hold in device memory are at most
-`0.07 · U + S_chip + ∑_i cap_i · T_read`. -/
+/-- **Block `b`'s memory term at share `σ`** on the run `o` of the strategy `s` (`BlocksRun.MemoryTerm`'s): at each of
+its PoUS challenge times, the bits of device memory its capacity account doesn't hold, `M` less what it holds, are at
+most `σ · M + S_chip + ∑_i cap_i · T_read`, `M` the device's memory. -/
 def BlocksLive.MemoryTerm {ι : Type} [Fintype ι] {d : Device ι} {α : Type} [Fintype α] {B : ℕ}
-    {C : Fin B → Verity.Circuit} {O : Type} {G : Verity.Game O} (S : BlocksLive d α B C G)
+    {C : Fin B → Verity.Circuit} {O : Type} {G : Verity.Game O} (S : BlocksLive d α B C G) (σ : ℝ)
     (s : Verity.Game.Strategy G) (b : Fin B) (o : O) : Prop :=
-  ∀ t ∈ S.chal b o, (S.weights b : ℝ) -
+  ∀ t ∈ S.chal b o, (d.mem : ℝ) -
       ((((S.block b).world s o).schedule t).mem (((S.block b).world s o).acct .capacity) : ℝ) ≤
-    7 / 100 * S.weights b + d.chip + (∑ i, d.cap i * S.readDeadline : ℕ)
+    σ * d.mem + d.chip + (∑ i, d.cap i * S.readDeadline : ℕ)
 
 end Accounting

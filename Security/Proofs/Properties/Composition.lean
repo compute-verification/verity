@@ -5,9 +5,10 @@ import Proofs.Flock.Claims.Complete.Json.Hex
 /-!
 # The composition's properties, proved
 
-`answerAccepts`, `acceptMeans` and `acceptRegistration` of `Properties.Composition`, by unfolding
-`Core.Protocol.answer`, `Core.Composition.check` into `run` and `judge`, and `Core.Composition.checkRegistered` into its
-registration check and then `check`. `bindCollision`, because `bindMessage` is injective in the digests: past the id
+`answerAccepts`, `acceptMeans`, `acceptSame` and `acceptTied` of `Properties.Composition`, by unfolding
+`Core.Protocol.answer`, `Core.Composition.check` into `run` and `judge`, `Core.Composition.checkSame` into `strays` and
+then `check`, and `Core.Composition.holdTies` into its ties' `strays`; a `strays` that finds nothing is one value for all
+(`oneRecord_of_strays`, `tied_of_strays`). `bindCollision`, because `bindMessage` is injective in the digests: past the id
 and the zero byte, its JSON reads back entry by entry, each escaped string ending at its first unescaped quote
 (`canonStr_split`) and lowercase hex decoding to its bytes (`unhex_hexOf`).
 -/
@@ -145,46 +146,142 @@ theorem acceptMeans : AcceptMeans := by
   simp only at hd ⊢
   rw [hd]
 
-theorem acceptRegistration : AcceptRegistration := by
-  intro id R s cs n ps b d k ev pub prof h
-  simp only [checkRegistered] at h
-  split at h
-  · cases h
-  rename_i hn
-  split at h
-  · cases h
-  rename_i hk
-  split at h
-  · cases h
-  rename_i hp
-  split at h
-  · cases h
-  rename_i hv
-  split at h
-  · cases h
-  rename_i hd
+theorem mapM_none {α β : Type} {f : α → Option β} : ∀ {l : List α}, l.mapM f = none → ∃ x ∈ l, f x = none
+  | [], h => by simp at h
+  | a :: l, h => by
+    cases ha : f a with
+    | none => exact ⟨a, List.mem_cons.2 (Or.inl rfl), ha⟩
+    | some b =>
+      cases hl : l.mapM f with
+      | none =>
+        obtain ⟨x, hx, e⟩ := mapM_none hl
+        exact ⟨x, List.mem_cons.2 (Or.inr hx), e⟩
+      | some zs => simp [List.mapM_cons, ha, hl] at h
+
+theorem mapM_some {α β : Type} {f : α → Option β} :
+    ∀ {l : List α} {ys : List β}, l.mapM f = some ys → ∀ x ∈ l, ∃ y ∈ ys, f x = some y
+  | [], _, _, x, hx => absurd hx List.not_mem_nil
+  | a :: l, ys, h, x, hx => by
+    cases ha : f a with
+    | none => simp [List.mapM_cons, ha] at h
+    | some b =>
+      cases hl : l.mapM f with
+      | none => simp [List.mapM_cons, ha, hl] at h
+      | some zs =>
+        simp only [List.mapM_cons, ha, hl, Option.pure_def, Option.bind_eq_bind, Option.bind_some,
+          Option.some.injEq] at h
+        subst h
+        rcases List.mem_cons.1 hx with rfl | hx
+        · exact ⟨b, List.mem_cons.2 (Or.inl rfl), ha⟩
+        · obtain ⟨y, hy, e⟩ := mapM_some hl x hx
+          exact ⟨y, List.mem_cons.2 (Or.inr hy), e⟩
+
+theorem eq_of_bne_false {a b : ByteArray} (h : (a != b) = false) : a = b := by
+  have h' : (a.data == b.data) = true := by simpa [bne, BEq.beq, ByteArray.beq] using h
+  exact ByteArray.ext (by simpa using h')
+
+/-- A `mapM` whose entries past the first all have the first's second component: either `f` has no value on some
+entry, or every entry's value has that one. -/
+theorem one_of_mapM {α : Type} {f : α → Option (String × ByteArray)} {l : List α}
+    (h : ∀ s d rest, l.mapM f = some ((s, d) :: rest) → rest.find? (fun x => x.2 != d) = none) :
+    (∃ x ∈ l, f x = none) ∨ ∃ d, ∀ x ∈ l, ∃ s, f x = some (s, d) := by
+  cases hm : l.mapM f with
+  | none => exact Or.inl (mapM_none hm)
+  | some ys =>
+    match ys, hm with
+    | [], hm =>
+      refine Or.inr ⟨ByteArray.empty, fun x hx => ?_⟩
+      obtain ⟨y, hy, -⟩ := mapM_some hm x hx
+      exact absurd hy List.not_mem_nil
+    | (s, d) :: rest, hm =>
+      refine Or.inr ⟨d, fun x hx => ?_⟩
+      obtain ⟨⟨t, d'⟩, hy, e⟩ := mapM_some hm x hx
+      refine ⟨t, ?_⟩
+      rw [e]
+      rcases List.mem_cons.1 hy with hy | hy
+      · cases hy; rfl
+      · have hf : (d' != d) = false := by simpa using List.find?_eq_none.1 (h s d rest hm) _ hy
+        rw [eq_of_bne_false hf]
+
+theorem oneRecord_of_strays {ss : List String} {cs : List Protocol} {ev : List Case}
+    (h : strays ss cs ev = none) : OneRecord ss cs ev := by
+  have h' := one_of_mapM (f := fun s => (committedBy s cs ev).map (s, ·)) (l := ss) (fun s d rest hm => by
+    unfold strays at h
+    rw [hm] at h
+    simpa using h)
+  rcases h' with ⟨s, hs, e⟩ | ⟨d, hd⟩
+  · exact Or.inl ⟨s, hs, by simpa using e⟩
+  · refine Or.inr ⟨d, fun s hs => ?_⟩
+    obtain ⟨t, e⟩ := hd s hs
+    cases hc : committedBy s cs ev with
+    | none => rw [hc] at e; cases e
+    | some d' => rw [hc] at e; cases e; rfl
+
+theorem tied_of_strays {t : Tie} {ev : List Case} (h : t.strays ev = none) : Tied t ev := by
+  have h' := one_of_mapM (f := fun n => (named ev n).map (n.1, ·)) (l := t.names) (fun s d rest hm => by
+    have hm' : t.names.mapM (fun n : String × (ByteArray → Option ByteArray) =>
+        ((ev.find? fun (k : Case) => k.id == n.1).bind fun k => n.2 k.commitment).map (n.1, ·)) =
+        some ((s, d) :: rest) := hm
+    unfold Tie.strays at h
+    simp only [hm'] at h
+    simpa using h)
+  rcases h' with ⟨n, hn, e⟩ | ⟨d, hd⟩
+  · exact Or.inl ⟨n, hn, by simpa using e⟩
+  · refine Or.inr ⟨d, fun n hn => ?_⟩
+    obtain ⟨s, e⟩ := hd n hn
+    cases hc : named ev n with
+    | none => rw [hc] at e; cases e
+    | some d' => rw [hc] at e; cases e; rfl
+
+theorem acceptSame : AcceptSame := by
+  intro id ss cs ps c ev pub prof h
+  unfold checkSame at h
   split at h
   · cases h
   rename_i answers hrun
   split at h
   · cases h
   rename_i hs
-  have hv' : (registrationAnswer R n k).verdict = .accept := Decidable.of_not_not hv
-  have hc : check id cs ps b ev = .accept pub prof := by
+  have hc : check id cs ps c ev = .accept pub prof := by
     unfold check
     rw [hrun]
     exact h
-  refine ⟨Decidable.of_not_not hn, Decidable.of_not_not hk, Decidable.of_not_not hp, answerAccepts _ _ _ _ hv', ?_, ?_,
-    acceptMeans _ _ _ _ _ _ _ hc⟩
-  · rw [← answer_digest hv']
-    exact Decidable.of_not_not hd
-  · have hs' : committedBy s cs ev = some d := Decidable.of_not_not hs
-    unfold committedBy at hs'
-    cases hf : (cs.zip ev).find? (fun x => x.1.id == s) with
-    | none => rw [hf] at hs'; cases hs'
-    | some x =>
-      rw [hf] at hs'
-      exact ⟨x, List.mem_of_find?_eq_some hf, by simpa using List.find?_some hf, hs'⟩
+  exact ⟨acceptMeans _ _ _ _ _ _ _ hc, oneRecord_of_strays hs⟩
+
+theorem findSome_none {t : List Tie} {ev : List Case} (h : t.findSome? (·.strays ev) = none) :
+    ∀ x ∈ t, x.strays ev = none := by
+  induction t with
+  | nil => intro x hx; exact absurd hx List.not_mem_nil
+  | cons a t ih =>
+    intro x hx
+    rw [List.findSome?_cons] at h
+    cases ha : a.strays ev with
+    | some _ => rw [ha] at h; cases h
+    | none =>
+      rw [ha] at h
+      rcases List.mem_cons.1 hx with rfl | hx
+      · exact ha
+      · exact ih h x hx
+
+theorem acceptTied : AcceptTied := by
+  intro ties ev o pub prof h
+  cases o with
+  | reject r => cases h
+  | accept p q =>
+    simp only [holdTies] at h
+    split at h
+    · cases h
+    rename_i hf
+    exact ⟨h, fun t ht => tied_of_strays (findSome_none hf t ht)⟩
+  | undecided r =>
+    simp only [holdTies] at h
+    split at h
+    · cases h
+    · cases h
+
+/-- Ties over no components hold every outcome as it is. -/
+theorem holdTies_nil (ev : List Case) (o : Outcome Keyed Keyed) : holdTies [] ev o = o := by
+  cases o <;> rfl
 
 /-! ## `bind`'s messages, read back
 

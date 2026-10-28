@@ -1,5 +1,5 @@
 """A served audit window's commitment in the ZK statement's format, from a retained Pearl-C pass, registered, drawn and
-judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `register`, `select`, `deliver` and
+judged through the proof system (`sampled_proofs.service`, P1: a `Stream`'s `register`, `select`, `deliver` and
 `outcome`), and the check that a hidden tile proof's committed rows are the drawn tile's.
 
   python served_commit.py params PASS_DIR OUT [--eps E --delta D --entries P --max-tokens T --registration-deadline S]
@@ -242,7 +242,7 @@ def items_of(params: dict, ell: int, root_w: str | None, length: Mapping[str, An
 
 #: what one-stage's record shows besides the two salted roots, each declared to the service's rule with its reason
 LAYOUT = (
-    ("population", "structure", "N, the padded tile count g_(ℓ+1): the draw's range, a function of the registered level"),
+    ("population", "structure", "N, the padded tile count g_(ell+1): the draw's range, a function of the registered level"),
     ("window", "output", "PoUW's registered items, exactly `pouw.window.REGISTERED` (work, check, sampling, length, root_W), "
                          "each the verifier's own recomputation at the registered level, the length its fixed max_tokens "
                          "(`public_problem`)"),

@@ -5,7 +5,7 @@
 //   mode -1  read only: every 16 bytes loaded once and XOR-folded (the floor of a receipt's cost)
 //   mode  0  gf31-poly/v1 over 2,056-byte blocks, the bandwidth audit's uncertified fast check
 //   mode  2  ro-blake3/v1 over 2,056-byte blocks, the bandwidth audit's certified receipt, with its leaves and tree
-//   mode  3  sk16: the cost of a sketch-then-hash receipt over the same blocks (ra-sketch-tag's shape, not its format):
+//   mode  3  sk16: the cost of a sketch-then-hash receipt over the same blocks (the sketch tag's shape, not its format):
 //            each block's 2,056 bytes as int8 against 16 rows of ±1 signs (dp4a), the 16 int32 sums hashed by one keyed
 //            BLAKE3 compression under the block's index, then ro-blake3/v1's leaves and tree over those 32-byte digests;
 //            the signs are drawn once a run from its seed (a deployment draws them a pass, F29: the cost is the same)

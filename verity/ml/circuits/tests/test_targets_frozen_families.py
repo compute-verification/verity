@@ -24,7 +24,7 @@ def test_no_new_veritor_family() -> None:
     declared |= {t.family for t in T.TARGETS.values() if t.family.startswith("veritor.")}
     new = declared - GRANDFATHERED
     assert not new, (
-        f"new veritor.* gate-family id(s) {sorted(new)}: the prefix is frozen (CIR-12) - "
+        f"new veritor.* gate-family id(s) {sorted(new)}: the prefix is frozen - "
         "give the new family a fresh id outside veritor.*, or, for a truly pre-existing id, "
         "add it to GRANDFATHERED here with the pin that bakes it in"
     )

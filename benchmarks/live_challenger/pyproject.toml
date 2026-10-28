@@ -1,5 +1,5 @@
-# The proof service's challenger on its auditor host: `serve.py` over `verity.core.protocols.sampled_proofs.remote`, which
-# `auditor.py` runs there as the auditor user, one session a window under its signed ledger (`run.sh`: a research run's
+# The proof system's challenger on its auditor host: `serve.py` over `verity.core.protocols.sampled_proofs.remote`, which
+# `auditor.py` runs there as the auditor user, one session a window under its signed ledger (`run.sh`: a development
 # session elsewhere). Not a package: the suite runs serve.py as a process over loopback with a test key, the Lean verifier's
 # coins stubbed (`tests/stub_serve.py`).
 [tool.pytest.ini_options]
@@ -9,6 +9,7 @@ testpaths = ["tests"]
 # The load's verbs read and write the store with `benchmarks/network_traces/load_relay.py`, which commits with the
 # certifier's transfer rows and PoUS's P2 scheme. The rehearsal unit's RuntimeMaxSec bounds the gate's --minutes.
 inputs = ["benchmarks/network_traces/load_relay.py", "verity/core/protocols/certifier", "verity/core/protocols/pous",
+          "verity/core/protocols/record.py",
           "tools/research/src/research/pods/nebius/challenger/vy-certifier@.service",
           "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/sampled_proofs/__init__.py",

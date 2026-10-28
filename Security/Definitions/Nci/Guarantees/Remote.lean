@@ -4,10 +4,9 @@ import Definitions.Nci.Assumptions.Remote
 /-!
 # The compute dampener, remote protocol: the guarantees
 
-The remote dampener `1/ρ = s + (r̂ + ε' + JΔ/H + ν)/MFU₀` (Notion, "The dampener ρ, remote protocol";
-`benchmarks/nci/tiers.py` at T1 and T2: `residual_share`, `fit.residual_with_lag` and `fit.dampener`), with its two
-terms that `DampenerThreaded` takes inside its residual's hypothesis derived, and the two that sampled proofs and PoUW's
-deficit add:
+The remote dampener `1/ρ = s + (r̂ + ε' + JΔ/H + ν)/MFU₀` (`benchmarks/nci/tiers.py` at T1 and T2: `residual_share`,
+`fit.residual_with_lag` and `fit.dampener`), with its two terms that `DampenerThreaded` takes inside its residual's
+hypothesis derived, and the two that sampled proofs and PoUW's deficit add:
 
 * `CertificateSlack` ([CERTIFICATE-SLACK]): over `N` windows, each certificate wrong with probability at most `p`
   (`PouwSound`), the windows whose certificates are wrong hold more than `ε' C` of the capacity with probability at most
@@ -82,7 +81,7 @@ def DampenerRemote : Prop :=
     0 < θ → (∀ b, 0 ≤ w b) → 0 < q → q ≤ 1 → 0 ≤ B → (∀ ω, ∀ b ∈ bad ω, w b ≤ B) →
     Assumptions.SampledDetection μ bad detected ident τ q →
     0 < κ → 0 < C → 0 ≤ U → 0 < mfu → mfu ≤ 1 → 0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd →
-    Complies Γ α d → Assumptions.BaselineRegistered r d (PartialContainment.ofContainment Mc) →
+    Complies Γ α d → Assumptions.ThetaRegistered r d (PartialContainment.ofContainment Mc) →
     T.Threaded Γ (α * Γ) dd e →
     Assumptions.WeightsIncompressible r T Γ (α * Γ) b_w b_a → (d.D.size d.D.computed : ℝ) ≤ C →
     (∀ ω, 0 < M ω) → (∀ ω, M ω ≤ Mu ω + Mr ω + T.M.card + Mx ω) →

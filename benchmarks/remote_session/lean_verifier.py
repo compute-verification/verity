@@ -1,4 +1,4 @@
-"""The remote audit's verifier of record, the Lean process `remote-audit-verifier` (`RemoteAudit.Verifier`, in
+"""The remote audit's verifier, the Lean process `remote-audit-verifier` (`RemoteAudit.Verifier`, in
 verity/core/protocols/remote_bandwidth/lean), as `verifier.py` runs it beside `audit.Session`: one request a JSON line
 on its stdin (an openings frame's bytes right after its line), each answered by one line on its stdout; a window's
 check runs on the process's threads and its verdict comes on a line of its own, handed to `done` as it arrives.
@@ -251,7 +251,7 @@ def released_coins(c: coins.Coins) -> tuple[list[bytes], list[bytes]]:
             [coins.coin(o) for o in c.opened(coins.APPEND)])
 
 
-class Transcript:
+class DifftestCase:
     """A session's difftest case (`ra_cases`: what `replay.py transcript` replays through both verifiers), written to
     `path` as the session runs, on a thread of its own so the session's loop never waits on the disk: its registration,
     parameters and `not_before_ns`, then each event in the order the verifiers took it (`event`, as the Lean read it),

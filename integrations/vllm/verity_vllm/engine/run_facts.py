@@ -101,14 +101,13 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
             manifest["engine_kwargs"].update({k: v for k, v in engine.target.engine_args().items()})
         # the effective execution, read back from the built engine: engine_kwargs.enforce_eager = what LLM() got (eager runs
         # stay byte-identical: True as before); a compiled engine adds its compilation_config kwarg and the read-back facts (mode, cudagraph
-        # mode, capture sizes, partition) to the header's `compilation` block -- the RunHeader attests the execution GM-01 compares against
+        # mode, capture sizes, partition) to the header's `compilation` block -- the RunHeader attests the execution the global match compares against
         manifest["engine_kwargs"]["enforce_eager"] = bool(engine.kwargs.get("enforce_eager", False))
         if engine.kwargs.get("compilation_config") is not None:
             manifest["engine_kwargs"]["compilation_config"] = engine.kwargs["compilation_config"]
-        # the record attests the async-scheduling mode the engine RESOLVED (scheduler_config after
-        # VllmConfig.__post_init__: True by default on this stack), not the CLI default None the harness leaves in place -- async scheduling
-        # changes the step/observer interleaving GM-01 and the Match resolver reason about, so a header without it is unattested execution.
-        # Every header now carries the key (profile id moves once, for all workloads alike; leaf ids already tolerate that: p=<profile_id>/...).
+        # the record attests the async-scheduling mode the engine RESOLVED (scheduler_config after VllmConfig.__post_init__: True by
+        # default on this stack), not the CLI default None the harness leaves in place -- async scheduling changes the step/observer
+        # interleaving the global match and the Match resolver reason about, so a header without it is unattested execution.
         manifest["engine_kwargs"]["async_scheduling"] = resolved_async_scheduling(engine.llm)
         if "async_scheduling" in engine.kwargs:
             notes["async_scheduling_requested"] = engine.kwargs["async_scheduling"]
@@ -120,7 +119,7 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
             # output code of every compiled piece is on disk by now (vLLM compiles + captures during engine init), digested exactly as
             # commit_delta does (kernel_identity.collect: kernel_set_sha256 over {(kernel name, source sha256)}, call_set over the launch
             # programs).  The dir is vLLM's per-config inductor_cache (it exports TORCHINDUCTOR_CACHE_DIR at initialize_cache) or the explicit
-            # per-process override; a null pin here on a compiled engine is an error of record (GM-01 G1 fails closed on it).
+            # per-process override; a null pin here on a compiled engine is an error of record (the global match's G1 fails closed on it).
             gk = generated_kernels_of_this_process()
             # the manifest (-> profile id) carries production.py's summary shape only; the per-piece inventory and the dir it was read from
             # go to the header notes (paths differ per process; the digests do not)
@@ -230,7 +229,7 @@ def versions_doc(engine: Engine | None = None) -> dict:
     doc["host"] = host_doc()
     if engine is not None:                    # the effective LLM(**kw) of this run (CLI overrides included)
         doc["engine_kwargs"] = {k: v for k, v in engine.kwargs.items() if k not in ("model", "tokenizer") and isinstance(v, (int, float, str, bool, type(None)))}
-        # capture/versions.json is GM-01's second engine-fact source (record_engine_facts: every location must
+        # capture/versions.json is the global match's second engine-fact source (record_engine_facts: every location must
         # agree): the RESOLVED async_scheduling, the same read-back the RunHeader.profile carries -- never the requested kwarg (usually absent)
         doc["engine_kwargs"]["async_scheduling"] = resolved_async_scheduling(engine.llm)
         # the execution the workload DECLARED and the one the engine REALISES (vllm_config read-back), in every

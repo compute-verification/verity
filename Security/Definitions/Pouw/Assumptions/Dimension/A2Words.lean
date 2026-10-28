@@ -3,7 +3,7 @@ import Definitions.Pouw.Assumptions.Dimension.Pipe
 /-!
 # A2 on the checked words: extra outputs do not matter (trusted statements)
 
-The red team's P9B-1 (`red-team.md`, Phase 9B). A2 matches only the outputs in its target set, the checked words
+A2 matches only the outputs in its target set, the checked words
 (`wordSet`). A real program may also output functions the model prices above their real cost (triple products at
 8 each, FP32 sums of a tensor-core word); the unrestricted clause made those refute A2 below `γ₂ ≈ 1/2`.
 
@@ -11,7 +11,7 @@ The red team's P9B-1 (`red-team.md`, Phase 9B). A2 matches only the outputs in i
 * `A2WitnessExtra`: the quadratic closed-pipe machine whose every program also outputs every function that is not a
   checked word satisfies `A2(0)` into `QuadPipe` for the checked words, while no program, of any class and at any
   cost, has all of its outputs among its slots: the unrestricted clause fails for it.
-* `A2Separation` (P12-1): the same in A2's own terms. With `EmptyQuadPipe` the machine has a program, so it fails the
+* `A2Separation`: the same in A2's own terms. With `EmptyQuadPipe` the machine has a program, so it fails the
   unrestricted A2 (`Set.univ`) at every `γ₂` and into every class, and it meets the restricted one.
 -/
 
@@ -32,7 +32,7 @@ def extraMachine (N m n k cs : ℕ) (W : Set (Noise N m n k → ℚ)) : Machine 
 
 /-! ## Pinned statements -/
 
-/-- **Extra outputs do not matter** (P9B-1): if `M` satisfies `A2(γ₂)` into `Alg` for the target set `W`, then so does
+/-- **Extra outputs do not matter**: if `M` satisfies `A2(γ₂)` into `Alg` for the target set `W`, then so does
 `M` with any extra outputs outside `W`. -/
 def A2ExtraOutputs : Prop :=
   ∀ (N m n k : ℕ) (M : Machine (Noise N m n k)) (Alg : List (Instr (Noise N m n k)) → Prop)
@@ -54,7 +54,7 @@ def A2WitnessExtra : Prop :=
 and its pipe is empty. So `quadMachine` and `extraMachine` have a program. -/
 def EmptyQuadPipe : Prop := ∀ (N m n k cs : ℕ), QuadPipe cs ([] : List (Instr (Noise N m n k)))
 
-/-- **The two forms of A2 separate** (red team P12-1): for every instance, `extraMachine` for the non-final checked
+/-- **The two forms of A2 separate**: for every instance, `extraMachine` for the non-final checked
 words satisfies the restricted `A2(0)` into `QuadPipe cs` for those words, and it fails the unrestricted A2 (target
 set `Set.univ`: every output must be a slot) at every `γ₂` and into every class. -/
 def A2Separation : Prop :=

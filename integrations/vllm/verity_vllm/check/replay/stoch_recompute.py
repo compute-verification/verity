@@ -236,8 +236,8 @@ def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set 
     """[R3's one mechanism] the executed set {t : r_t = 1} (t from 1) the Program's stop rule PREDICTS for one request from
     its SERVED tokens (draw k serves slot k + 1), its cap C and the scheduler profile A (0 = sync, 1 = async: one lag slot after an EOS):
     r_1 = 1; while no served token is an EOS, every slot up to C executes; the first EOS at slot t_eos (before C) is followed by exactly
-    min(A, C - t_eos) executed lag slot(s) and nothing after -- the same rule as pad's `verity_vllm.program.lifting.continuation.recurrence` /
-    `executed_slots` (spec s7 three-state machine; n_executed = min(n + 1, C) under A = 1) and moe's executed-prefix rule (`commit.executed_prefix`).  Returns
+    min(A, C - t_eos) executed lag slot(s) and nothing after -- the same rule as `verity_vllm.program.lifting.continuation.recurrence` /
+    `executed_slots` (spec s7 three-state machine; n_executed = min(n + 1, C) under A = 1) and the executed-prefix rule (`commit.executed_prefix`).  Returns
     None (with the reason) when the rule cannot be evaluated: an undeclared EOS set with fewer draws than the cap, or an EOS before the cap
     with the profile unattested.  When the continuation module is importable the two computations are compared and a disagreement is named."""
     from verity_vllm.program.lifting import continuation as CT  # the Continuation_v1 recurrence: THE mechanism, not a twin of it
@@ -246,16 +246,16 @@ def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set 
     served = list(served)
     if eos_ids is None:
         if len(served) < cap:
-            return None, info | {"unjudged": "the Program declares no stop_rule.eos_token_ids: an early stop cannot be read as an EOS stop (F-pm-24)"}
+            return None, info | {"unjudged": "the Program declares no stop_rule.eos_token_ids: an early stop cannot be read as an EOS stop"}
         eos_ids, t_eos = set(), None
     else:
         t_eos = next((k + 1 for k, y in enumerate(served[:cap]) if y is not None and int(y) in eos_ids), None)
     if t_eos is not None and t_eos < cap and A is None:
         return None, info | {"unjudged": f"EOS served at slot {t_eos} before the cap {cap} and the scheduler profile (eos_lag_rows / "
-                                         f"async_scheduling) is unattested: the lag slot cannot be judged (M-0213 / ruling 21)"}
+                                         f"async_scheduling) is unattested: the lag slot cannot be judged"}
     if A is not None and int(A) not in (0, 1):
-        return None, info | {"unjudged": f"scheduler profile A = {A} is not an admitted profile (DP-pad-02: LAG in (0, 1)); the recurrence refuses it"}
-    # served[:cap]: the recurrence runs over the C slots (pad's expected_draw_positions does the same); draws past C are EXTRA positions for
+        return None, info | {"unjudged": f"scheduler profile A = {A} is not an admitted profile (LAG in (0, 1)); the recurrence refuses it"}
+    # served[:cap]: the recurrence runs over the C slots (`expected_draw_positions` does the same); draws past C are EXTRA positions for
     # the comparison to name, never a reason to stop judging.  A = 0 when no EOS is served before the cap: the lag term is
     # then never reached, so the profile does not matter.
     slots = CT.recurrence([None if y is None else int(y) for y in served[:cap]], cap=cap, A=int(A) if A is not None else 0, eos=eos_ids)
@@ -278,7 +278,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
         nothing after; a request that runs to C has no lag slot (nothing is scheduled past the length bound);
       * expected positions = {prompt_len - 1 + (t - 1) : r_t = 1}; every drawn position not in the set is 'the RNG advanced without r_t'
         (a draw past the cap without an EOS, a second draw after the lag slot, a draw for another row's counter), every expected position
-        not drawn is 'an executed slot did not draw' (a deleted step, F-pm-24 territory); one draw per engine step, in order;
+        not drawn is 'an executed slot did not draw' (a deleted step); one draw per engine step, in order;
       * an undeclared stop rule with an early stop, or an EOS before the cap with the profile unattested, leaves the request UNJUDGED --
         named, never a pass.
 
@@ -312,7 +312,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
     if lag_rec is not None and lag_decl is not None and int(lag_decl) != lag_rec:
         out["problems"].append(f"draw ledger: the Program declares stop_rule.eos_lag_rows {lag_decl} but the record attests {lag_src} -> {lag_rec}")
     if lag is not None and int(lag) not in (0, 1):
-        out["problems"].append(f"draw ledger: scheduler profile A = {lag} is not 0 or 1 (R17-1 check_lag: one rule, no other profile)")
+        out["problems"].append(f"draw ledger: scheduler profile A = {lag} is not 0 or 1 (check_lag: one rule, no other profile)")
     probs = out["problems"]
     for rid, dr in sorted(draws_seen.items()):
         dr = sorted(dr, key=lambda x: (x["step"], x["row"]))
@@ -341,7 +341,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
             out["requests"][rid] = ent
             continue
         t_eos = info.get("t_eos")
-        # the RULE's positions are pad's (`expected_draw_positions`, 35408bbe9): slot t at pos L - 1 + (t - 1), the query position whose
+        # the RULE's positions are those of `expected_draw_positions`: slot t at pos L - 1 + (t - 1), the query position whose
         # logits slot t samples = the record's own `pos` fact (device_facts_match on every checked row; qwen B8 L=1024: first draw 1023);
         # served[:T] and A = 0 without an EOS as in expected_executed_slots (the same recurrence; a disagreement between the two calls is named)
         from verity_vllm.program.lifting import continuation as CT
@@ -358,7 +358,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
             probs.append(f"draw ledger {rid}: expected_draw_positions slots {pad_pos['slots'][:4]}.. != executed_slots {exp_slots[:4]}..: one recurrence, two answers")
         ent["lag_positions"] = pad_pos["lag_positions"]
         ent["first_forbidden_position"] = pad_pos["first_forbidden_position"]
-        cmp = CT.compare_draw_positions(expected, drawn)          # pad's comparison: extra / missing / repeated / out-of-order BY NAME
+        cmp = CT.compare_draw_positions(expected, drawn)          # the continuation's comparison: extra / missing / repeated / out-of-order BY NAME
         extra, missing = cmp["extra"], cmp["missing"]
         ent["expected_executed_slots"] = {"n": len(exp_slots), "first": exp_slots[0], "last": exp_slots[-1]}
         ent["expected_positions"] = {"n": len(expected), "first": expected[0], "last": expected[-1]}
@@ -366,8 +366,8 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
         ent["expected_not_drawn"] = missing
         ent["repeated"] = cmp["repeated"]
         ent["ordered_set_equal"] = cmp["ok"]
-        ent["compare"] = "verity_vllm.program.lifting.continuation.compare_draw_positions (pad 61fe06dff)"
-        if cmp["ok"] is False and not extra and not missing:      # repeated / out of order: pad's names, ours to carry
+        ent["compare"] = "verity_vllm.program.lifting.continuation.compare_draw_positions"
+        if cmp["ok"] is False and not extra and not missing:      # repeated / out of order: the continuation's names, ours to carry
             probs.extend(f"draw ledger {rid}: {p}" for p in cmp["problems"])
         if t_eos is None or t_eos >= T:
             ent["finish"] = "length" if t_eos is None else "eos-at-cap"
@@ -396,7 +396,7 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
                          + f"): {what} -- the RNG advanced without r_t")
         if missing:
             probs.append(f"draw ledger {rid}: {len(missing)} executed slot(s) did not draw (positions {missing[:4]} of the expected "
-                         f"{expected[0]}..{expected[-1]}): a deleted step (F-pm-24 territory)" + (" -- the lag slot did not draw" if t_eos is not None and t_eos < T and missing[-1] == expected[-1] else ""))
+                         f"{expected[0]}..{expected[-1]}): a deleted step" + (" -- the lag slot did not draw" if t_eos is not None and t_eos < T and missing[-1] == expected[-1] else ""))
         out["requests"][rid] = ent
     n_ex = out["requests_with_eos_before_cap"]
     out["measured"] = (f"R5 MEASURED on this record: {n_ex} request(s) stopped at EOS before the cap; the drawn positions of every request equal "

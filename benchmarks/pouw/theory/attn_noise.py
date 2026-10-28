@@ -1,4 +1,4 @@
-"""ATTN-NOISE's exact check: attention's committed words at every operand value (RT-COMPOSE's B3), and its noise's h.
+"""ATTN-NOISE's exact check: attention's committed words at every operand value (B3: K = V = 0), and its noise's h.
 
 Coordinates are checked_strip.py's (Lean's `Definitions.Pouw.RelativeSecurity`): the peeled side P carries U (and, in
 two-sided designs, a fresh bit c), the served side V carries a fresh bit b an entry. The forms:
@@ -15,25 +15,27 @@ Parts:
 - C. B3's premises: one-sided noise (U's weights 0) has rank 0 at every instance and every word constant at the zero
   instance (`not_chainBound_noNoise`); row dither (U of period r = 1) has rank k/L, one a word. Mutations put each
   premise on the adopted form and are caught by part B's check.
-- G. Per unit (decision 107: one output coordinate), the noise bits a cheat must match per unit of work it saves (h,
-  GRIND, decision 112), from how units share an operand row's noise: matching one side's noise leaves a unit's words
+- G. Per unit (one output coordinate), the noise bits a cheat must match per unit of work it saves (h, GRIND),
+  from how units share an operand row's noise: matching one side's noise leaves a unit's words
   affine in the other side's coins, which have no floor (`crossRankLe_dClean`'s case). Then the SHA-512 compressions
-  a drawn unit spends deriving its noise in its proof (decision 105) on the deployed NS 1 patch layout (4 rows × 128
-  columns a compression; V's over Vᵀ) and on a layout with each unit's operand noise contiguous, and decision 112's
-  grind bound a seed at prefill and at decode.
+  a drawn unit spends deriving its noise in its proof on the deployed NS 1 patch layout (4 rows × 128
+  columns a compression; V's over Vᵀ) and on a layout with each unit's operand noise contiguous, and GRIND's
+  bound a seed at prefill and at decode.
 
-Run from the repository root: `uv run --no-project --with numpy --with python-sat --with-editable
-benchmarks/pouw/exact_kit python -B benchmarks/pouw/theory/attn_noise.py --mutations`.
+Run from the repository root: `uv run python -B benchmarks/pouw/theory/attn_noise.py --mutations`.
 `benchmarks/pouw/tests/test_theory_attn_noise.py` runs it in the pouw suite.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import sys
 from pathlib import Path
 
 import numpy as np
+
+from verity.core.protocols.pouw.credit import DELTA
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -43,10 +45,10 @@ from narrow_u import NarrowBlock, planes  # noqa: E402
 
 INSTANCES = ("zero", "P = 0", "V = 0", "one-hot P", "uniform P", "random")
 #: SHA-512's output bits a compression in counter mode (one block a counter value).
-SHA_BITS = 512
+SHA_BITS = 8 * hashlib.sha512().digest_size
 #: The NS 1 patch: 4 rows × 128 columns of 1-bit noise a compression (sha_noise.cuh, cgemm_ref.patch_bits).
 PATCH_ROWS, PATCH_COLS = 4, 128
-#: A drawn unit's seed: decision 105's 2 compressions (SHA-512 of the window coin and the two roots).
+#: A drawn unit's seed: 2 compressions (SHA-512 of the window coin and the two roots).
 SEED = 2
 
 
@@ -89,7 +91,11 @@ def h_decode(L, d=128, u_bits_qk=64 * 5, u_bits_pv=32 * 7):
             "P·V, V column (b)": L, "P·V, P row (U)": u_bits_pv / d}
 
 
-def grind_eps(L, delta_log2=40, t_log2=128, d=128):
+#: The per-window δ's bits: δ = 2^-DELTA_LOG2 (PoUW's `credit.DELTA`).
+DELTA_LOG2 = DELTA.denominator.bit_length() - 1
+
+
+def grind_eps(L, delta_log2=DELTA_LOG2, t_log2=128, d=128):
     """Decision 112's (iv): a seed's grind premium is at most log₂(T/δ)/h units, so ε_grind ≤ log₂(T/δ)/(h·N) over
     the N units the seed covers, one seed a matmul (one head). Prefill: QKᵀ covers the causal L(L + 1)/2 scores,
     P·V L·d outputs; decode: L scores and d outputs."""
@@ -165,14 +171,14 @@ def main():
                  all(w_ == "QKᵀ, K row (b)" for w_ in worst.values()) and h["L=2048"]["QKᵀ, K row (b)"] == 1 / 16
                  and h["L=32768"]["QKᵀ, K row (b)"] == 1 / 256 and h["L=8192"]["P·V, V column (b)"] == 1
                  and h["L=2048"]["P·V, P row (U)"] == 1.75, str(out["h"]))
-    checks.check("G2 decision 105's noise per drawn unit: QKᵀ 5 compressions (4 contiguous); P·V 3 + k/128 on the "
+    checks.check("G2 the noise per drawn unit: QKᵀ 5 compressions (4 contiguous); P·V 3 + k/128 on the "
                  "patch layout over Vᵀ (19, 67, 259 at k = 2K, 8K, 32K) against 2 + ⌈(224 + k)/512⌉ contiguous (7, 19, "
                  "67)", comp["k=2048"] == {"QKᵀ": (5, 4), "P·V": (19, 7)} and comp["k=8192"]["P·V"] == (67, 19)
                  and comp["k=32768"]["P·V"] == (259, 67), str(comp))
     grind = {f"L={n}": grind_eps(n) for n in (2048, 8192, 32768)}
     out["grind ε bound a seed (T = 2^128, δ = 2^-40)"] = {key: {f: round(v, 6) for f, v in g.items()}
                                                           for key, g in grind.items()}
-    checks.check("G3 decision 112's grind bound a seed, one seed a matmul: prefill QKᵀ 2.625/(L + 1) of its work "
+    checks.check("G3 GRIND's bound a seed, one seed a matmul: prefill QKᵀ 2.625/(L + 1) of its work "
                  "(0.128% at 2K, 0.008% at 32K) and P·V 1.3125/L; at decode one query's Q row and P row bind, "
                  "37.5% of the step's QKᵀ and 75% of its P·V at any L: decode needs more units a seed",
                  abs(grind["L=2048"]["prefill QKᵀ"] - 2.625 / 2049) < 1e-6

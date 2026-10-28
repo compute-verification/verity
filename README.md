@@ -1,3 +1,5 @@
+[quick overview written by Claude...]
+
 # Verity
 
 Verity lets an AI developer prove to an auditor what its datacenter's hardware computed, so that the auditor can bound
@@ -22,8 +24,7 @@ verifier still decides, a difftest holds it to the Lean until the Lean replaces 
 | Sampled proofs | The auditor draws proof blocks of a committed circuit with live coins, and C-Flock proves each drawn block's values in the committed trace right. The result bounds how many proof blocks are faulty. | [`verity/core/protocols/sampled_proofs`](verity/core/protocols/sampled_proofs/README.md), C-Flock in [`verity/ml/flock`](verity/ml/flock/README.md) |
 | Proof of useful work (PoUW) | A credited size S of noised matrix products, at least (1 − ε)·S of their AND gates computed right. Dither is its no-fold design, stated over the ACCEL model of the accelerator. | [`verity/core/protocols/pouw`](verity/core/protocols/pouw/README.md), [Dither](verity/core/protocols/pouw/dither/PROTOCOL.md) |
 | Proof of useful space (PoUS) | A lower bound on the bits a device's memory held, from timed rounds the memory challenger runs and signs. | [`verity/core/protocols/pous`](verity/core/protocols/pous/README.md) |
-| The bandwidth audit | A lower bound on the bits read from PoUS's store. | [`verity/core/protocols/bandwidth`](verity/core/protocols/bandwidth/PROTOCOL.md) |
-| Proof of useful bandwidth (PoUB) | The same, over a node's registered store. | [`verity/core/protocols/remote_bandwidth`](verity/core/protocols/remote_bandwidth/README.md) |
+| Proof of useful bandwidth (PoUB) | A lower bound on the bits read from a node's registered store. | [`verity/core/protocols/remote_bandwidth`](verity/core/protocols/remote_bandwidth/README.md) |
 | Network certification | An auditor-trusted device on each node's uplink, the network certifier, certifies that the traffic carried only values in the committed trace, and bounds the bits that left the site. | [`verity/core/protocols/certifier`](verity/core/protocols/certifier/README.md) |
 | Memory wipes | A registered server's life is cut into server blocks, each opened by a certified memory wipe, so state crosses a boundary only as a committed value. | `verity/core/devices/memory_challenger/lean` |
 | The inference-only policy | Inference rather than training: the declared circuit divides into inference blocks of c gates, each reading at most k bits of fresh input. A protocol with no rounds, which the verifier checks from the declared circuit and the registered information alone. | [`verity/core/protocols/network/nci`](verity/core/protocols/network/nci/README.md) |
@@ -32,15 +33,14 @@ verifier still decides, a difftest holds it to the Lean until the Lean replaces 
 
 The subprotocols run composed, as one protocol with one verdict
 ([`verity/core/protocols/composition`](verity/core/protocols/composition/README.md)): a run is accepted only if
-every subprotocol accepts its own case, and the commitment binds all of theirs.
+every subprotocol accepts its own case, the commitment binds all of theirs, and the subprotocols whose commitment is
+the run's record (the inference-only policy and sampled proofs at both, PoUW too at remote) commit to one record.
 
 - **Onsite** (`verity/core/protocols/onsite`), for an auditor with devices at the datacenter: sampled proofs, PoUW,
-  PoUS, PoUB and network certification.
+  the inference-only policy, PoUS, PoUB, network certification and the memory wipe.
 - **Remote** ([`verity/core/protocols/remote/README.md`](verity/core/protocols/remote/README.md)), for an auditor with
-  no devices there: sampled proofs and PoUW. Start there for its lifecycle, guarantee, assumptions and demo.
-
-The memory wipe and the bandwidth audit over PoUS's store are not subprotocols of either yet, and the inference-only
-policy is not yet a subprotocol of the composites.
+  no devices there: sampled proofs, PoUW and the inference-only policy. Start there for its lifecycle, guarantee,
+  assumptions and demo.
 
 ## The vLLM integration
 
@@ -76,17 +76,19 @@ on a CPU machine). For GLM-5.3 and DeepSeek-V4-Pro, the circuits predicted ahead
 traced Build on every rank (`verity-vllm predict compare`). `verity-vllm row chain WORKLOAD` reruns a workload's Build,
 Match and Commit from scratch on its GPUs.
 
-Llama-3.2-1B in int8 on one H200 goes through sampled proofs end to end ([`examples/vllm`](examples/vllm/README.md)):
-vLLM serves it, its values are committed under SHA-512, live coins draw proof blocks, C-Flock `--zk` proves them, and
-the Lean verifier accepts them and refuses every tampered case. Each drawn proof block is part of one serving step's
-circuit, not yet of the whole served run's.
+Llama-3.2-1B in bf16 on one RTX PRO 6000 has gone through sampled proofs end to end in a run of record: vLLM serves it,
+its values are committed under SHA-512, live coins sample proof blocks, C-Flock `--zk` proves them, and the Lean verifier
+accepts them and refuses every tampered case. Each sampled proof block is part of one serving step's circuit, not yet of
+the whole served run's. The vLLM demo ([`examples/vllm`](examples/vllm/README.md)) serves Llama-3.2-1B INT8 on one H200,
+the default of `benchmarks/one_stage/served_verdicts.sh`, through sampled proofs and PoUW, and has no passing run of
+record yet.
 
 Not yet:
 
 - GLM-5.3 and DeepSeek-V4-Pro through sampled proofs and the Lean verifier.
 - Coverage counted in AND gates, as a share of the served computation.
 - The whole served run's circuit committed and proved, and the weights tied to a checkpoint in zero knowledge.
-- PoUW, PoUS, the bandwidth audit, PoUB and network certification composed on one served engine.
+- PoUW, PoUS, PoUB and network certification composed on one served engine.
 
 ## Where to start
 
@@ -114,11 +116,16 @@ GPU machine.
 
 | Demo | What it serves and audits | Command | Details |
 | --- | --- | --- | --- |
-| The H200 demo | A fixed multi-query attention shape on one H200, every proof block's values committed. It runs sampled proofs: live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. The other onsite subprotocols (PoUS, the bandwidth audit, network certification, memory wipes) are only a skeleton on fixture coins, and the demo claims none of them. | `verity example h200` | `examples/h200/README.md`, `examples/h200/interfaces/README.md` |
-| vLLM | Llama-3.2-1B in bf16, served by vLLM on one RTX PRO 6000 through the committing endpoint. It runs sampled proofs: live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. | `verity example vllm` | `examples/vllm/README.md` |
+| The H200 demo | A fixed multi-query attention shape on one H200, every proof block's values committed. It runs sampled proofs, remote's sampled-proofs half: live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. Its other pieces are only a skeleton on fixture coins, and the demo claims none of them: PoUS, network certification and memory wipes (onsite's subprotocols), and the bandwidth audit over PoUS's store (a subprotocol of neither composite). | `verity example h200` | `examples/h200/README.md`, `examples/h200/interfaces/README.md` |
+| vLLM | Llama-3.2-1B INT8, served by vLLM on one H200 through the committing endpoint. It runs the remote protocol's two subprotocols: live coins sample proof blocks, which C-Flock `--zk` proves and the Lean verifier checks, and PoUW runs on the served model as a development run that credits nothing. Onsite's subprotocols run on the same served run where each has its piece. | `verity example vllm` | `examples/vllm/README.md` |
+| Lifecycle | Both composites, onsite and remote, stepped through one monitoring period on CPU in about 2 s: a toy two-layer int8 model, every party simulated in one process, a labelled stand-in for C-Flock's prover, and the verdict by the composition's Python mirror, with every deviation it lists refused. The only example that steps through the whole remote composite. It runs; nothing about it is proved. | `verity example lifecycle` | `examples/lifecycle/README.md` |
 | Full utilization | An 8B model's linear layers in s8 at M = 16,384 on one H200, with PoUW crediting the work through Dither's no-fold receipt. No runner yet. | none yet | `examples/dither_full_util/README.md` |
 
-The remote protocol's demo is `verity example vllm`, its sampled-proofs half; PoUW's half has no runner yet.
+The remote protocol's verifier, `remote check`, has no run of record yet; its first is due Wed 28 Oct, 11 AM PDT.
+`verity example lifecycle` is the only example that steps through the whole remote composite, with a stand-in prover.
+The remote protocol's demo is the vLLM demo (`verity example vllm`): sampled proofs and PoUW on one served run, with
+PoUW's verdict a development run that credits nothing, while `verity example h200` runs remote's sampled-proofs half
+([the remote protocol's demo](verity/core/protocols/remote/README.md#the-demo)).
 
 The prover's side serves and proves. The auditor's side runs the verifier, the challenger that draws the live coins,
 the network certifier and the memory challenger, and those must run on machines the prover doesn't control.

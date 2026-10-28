@@ -72,40 +72,11 @@ def EncardAccSeqsLeSync : Prop :=
 
 /-- **A fixed clock.** With the clock-sync value fixed (`Sync = Unit`), the accepted sequences number at most
 `#Ac · D^n`. Instantiated for constant-rate release under a fixed logical schedule, timing carries nothing beyond the
-jitter, and nothing at all under J (`D = 1`): the Notion zero-capacity theorem, with content advice. -/
+jitter, and nothing at all under J (`D = 1`): the zero-capacity theorem, with content advice. -/
 def EncardAccSeqsLeFixedClock : Prop :=
   ∀ {L K S : ℕ} {In Ac : Type} [Fintype Ac] (W : ℕ)
     (P : Program L S In (Ac × (Fin W → Unit))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
     (AccSeqs P op n D).encard ≤ ((Fintype.card Ac * D ^ n : ℕ) : ℕ∞)
-
-/-- **Theorem 3, the block cap, under the two dataflow conditions.** The advice is content advice `Ac` and timing
-advice `At β` per block `β`. The cells `C` carry the Program's occupancy predictions `occ c : U c`, at step `step c`,
-in block `blk c`. Then the accepted sequences number at most
-`#Ac · D^n · ∏_β min(#At β, ∏_{c ∈ β} #U c)`. -/
-def EncardAccSeqsLeBlocks : Prop :=
-  ∀ {L K S : ℕ} {In Ac B C : Type} {At : B → Type} {U : C → Type}
-    [Fintype Ac] [Fintype B] [DecidableEq B] [∀ β, Fintype (At β)] [Fintype C] [DecidableEq C] [∀ c, Fintype (U c)]
-    (P : Program L S In (Ac × ((β : B) → At β))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ)
-    (step : C → ℕ) (blk : C → B) (occ : (c : C) → List In → Ac × ((β : B) → At β) → U c)
-    (h1 : FramesReadNoTimingAdvice P step occ) (h2 : OccupancyReadsOwnBlock blk occ),
-    (AccSeqs P op n D).encard ≤
-      ((Fintype.card Ac * D ^ n *
-        ∏ β, min (Fintype.card (At β)) (∏ c ∈ univ.filter (fun c => blk c = β), Fintype.card (U c)) : ℕ) : ℕ∞)
-
-/-- **The left-packed instance.** Cells are the (link, step) pairs of the horizon, and the Program's occupancy at a
-cell is the count of its row, a value in `Fin (S + 1)`. Then the block cap reads
-`#Ac · D^n · ∏_β min(#At β, (S + 1)^|β|)`. -/
-def EncardAccSeqsLeBlocksCounts : Prop :=
-  ∀ {L K S : ℕ} {In Ac B : Type} {At : B → Type}
-    [Fintype Ac] [Fintype B] [DecidableEq B] [∀ β, Fintype (At β)]
-    (P : Program L S In (Ac × ((β : B) → At β))) (op : ℕ → List (Obs L K S) → In) (n D : ℕ)
-    (blk : Fin L × Fin n → B)
-    (h1 : FramesReadNoTimingAdvice P (fun c : Fin L × Fin n => (c.2 : ℕ))
-      (fun c ins a => rowCount (P.rows c.2 ins a c.1)))
-    (h2 : OccupancyReadsOwnBlock blk (fun c : Fin L × Fin n => fun ins a => rowCount (P.rows c.2 ins a c.1))),
-    (AccSeqs P op n D).encard ≤
-      ((Fintype.card Ac * D ^ n *
-        ∏ β, min (Fintype.card (At β)) ((S + 1) ^ (univ.filter (fun c => blk c = β)).card) : ℕ) : ℕ∞)
 
 /-! ## Theorem 3 for the shipped schedule: the constant-rate Program
 
@@ -341,14 +312,14 @@ boundaries, declared at each window's first bucket with the sync, makes the advi
 `log2(N · #Σ_sync)` bits per window. `SecurityProofs.EncardAccSeqsLeConstantRate` with `Ac = Fin N`, or with
 `Fin W → Fin N` for switching, states both, so no new guarantee is needed.
 
-**At today's parameters.** The recordings use one scheduler configuration. κ needs a grid that covers the honest step
-rate, calibrated as ρ's 8 values are, which is not done yet. Taking 8 values of κ gives N = 8:
+**At the recorded parameters.** The recordings use one scheduler configuration. κ needs a grid that covers the honest
+step rate, calibrated as ρ's 8 values are, and κ has none. Taking 8 values of κ gives N = 8:
 
 | Charge | Per window | Per audit of W = 1,440 windows (a day) |
 |---|---|---|
 | Egress, one profile per audit | 7 bits, plus 3 bits once | 3 + 1,440 · 7 = 10,083 bits |
 | Egress, a profile per window | 7 + 3 = 10 bits | 14,400 bits |
-| Egress today, with `A_c` left out | 7 bits | 10,080 bits (`egress_bits_per_day_one_clock`) |
+| Egress with one clock, `A_c` left out | 7 bits | 10,080 bits (`egress_bits_per_day_one_clock`) |
 
 ### The coins (D7)
 
