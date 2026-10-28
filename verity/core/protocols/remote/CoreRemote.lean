@@ -94,7 +94,7 @@ private def strayOf (policy v2 : String) (rs : List String) : Option String :=
 #guard (windowRecords PouwCheck.Period.protocol (periodOn [record 0, record 0])).map (·.length) == some 2
 #guard (windowRecords PouwCheck.Period.protocol (periodOn [record 0])) ==
   (committed SampledProofs.OneStageZk.protocol.toProtocol (committing SampledProofs.OneStageZk.protocol (record 0)))
-#guard (committed NciCheck.Protocol.protocol.toProtocol (committing NciCheck.Protocol.protocol (record 0))) ==
+#guard (committed NciCheck.Protocol.protocol (committing NciCheck.Protocol.protocol (record 0))) ==
   (committed SampledProofs.OneStageZk.protocol.toProtocol (committing SampledProofs.OneStageZk.protocol (record 0)))
 #guard strayOf (record 0) (record 0) [record 0, record 0] == none
 -- a window on another record
