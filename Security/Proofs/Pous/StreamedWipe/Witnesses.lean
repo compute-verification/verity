@@ -13,15 +13,15 @@ For each claim of `Security/Definitions/Pous/Claims/StreamedWipeServer.lean`, wh
   `(r − 1)^k · 2^129 ≤ r^k` at the deployed `k = 5500` and its `r = 62`, and the 5 GB point, each decided by the kernel.
 * **The nontrivial lemma** (`<claim>_fails`): the claim is false at `StreamedWipe.acceptAll`, at the same numbers. The
   prover `keepAll` stays inside the physical model: its fill writes its prior content into the first `q` of its `M_s`
-  bits, with no egress, and its keep reads it back. Against the verdict that accepts everything it is accepted and keeps
-  its content with probability 1 (`winRealBy_acceptAll_keepAll`), and the PRF's advantage against the distinguisher
-  built from it, `wipeDistinguisherBy acceptAll keepAll`, is 0, so `1 ≤ 2^-128 + 0` would follow
+  bits, with no egress, and its keep reads it back. Against the acceptance rule that accepts everything it is accepted
+  and keeps its content with probability 1 (`winRealBy_acceptAll_keepAll`), and the PRF's advantage against the
+  distinguisher built from it, `wipeDistinguisherBy acceptAll keepAll`, is 0, so `1 ≤ 2^-128 + 0` would follow
   (`keepAll_not_within`).
 
 The bad event is not always true: a prover that keeps nothing, such as the honest server, is accepted and keeps its
-prior content with probability at most `2^-q` under every verdict, so at `q ≥ 128` it stays within the claims' bound
-(`keepNothing_within`, `honest_within`). The PRF term is the advantage of a distinguisher built from the prover: at
-`Accepts`, `wipeDistinguisherBy` and `winRealBy` are `StreamedWipe.wipeDistinguisher P` and `StreamedWipe.winReal`
+prior content with probability at most `2^-q` under every acceptance rule, so at `q ≥ 128` it stays within the claims'
+bound (`keepNothing_within`, `honest_within`). The PRF term is the advantage of a distinguisher built from the prover:
+at `Accepts`, `wipeDistinguisherBy` and `winRealBy` are `StreamedWipe.wipeDistinguisher P` and `StreamedWipe.winReal`
 (`wipeDistinguisherBy_accepts`, `winRealBy_accepts`).
 -/
 
@@ -30,7 +30,7 @@ namespace Pous.Claims
 open Finset Pous Pous.StreamedWipe
 open scoped ENNReal
 
-/-- At the wipe's own verdict the distinguisher is the game's, built from the prover. -/
+/-- At the wipe's own acceptance rule the distinguisher is the game's, built from the prover. -/
 theorem wipeDistinguisherBy_accepts {N k b q M E : ℕ} (P : Prover N k b q M E) :
     wipeDistinguisherBy Accepts P = wipeDistinguisher P := rfl
 
@@ -78,8 +78,8 @@ theorem keepAll_not_within {N k b q M E κ : ℕ} (hN : 0 < N) (h : q ≤ M) (pr
   exact pow_lt_one₀ zero_le (ENNReal.inv_lt_one.2 ENNReal.one_lt_two) (by norm_num)
 
 /-- **A prover that keeps nothing doesn't meet the threshold**: if its keep is a constant `w`, it is accepted and keeps
-its prior content with probability at most `2^-q`, under every verdict. -/
-theorem winRealBy_le_of_keep_const (V : Verdict) {N k b q M E κ : ℕ} (prf : Bits κ → Fin N → Bits b)
+its prior content with probability at most `2^-q`, under every acceptance rule. -/
+theorem winRealBy_le_of_keep_const (V : Acceptance) {N k b q M E κ : ℕ} (prf : Bits κ → Fin N → Bits b)
     (P : Prover N k b q M E) (w : Bits q) (hw : ∀ σ ξ c, P.keep σ ξ c = w) :
     winRealBy V prf P ≤ (2⁻¹ : ℝ≥0∞) ^ q := by
   classical
@@ -104,8 +104,8 @@ theorem winRealBy_le_of_keep_const (V : Verdict) {N k b q M E κ : ℕ} (prf : B
   exact_mod_cast hcard
 
 /-- **The bad event is not always true**: a prover that keeps nothing and holds at least 128 bits of prior content is
-within the claims' bound under every verdict, `acceptAll` included. -/
-theorem keepNothing_within (V : Verdict) {N k b q M E κ : ℕ} (hq : 128 ≤ q) (prf : Bits κ → Fin N → Bits b)
+within the claims' bound under every acceptance rule, `acceptAll` included. -/
+theorem keepNothing_within (V : Acceptance) {N k b q M E κ : ℕ} (hq : 128 ≤ q) (prf : Bits κ → Fin N → Bits b)
     (P : Prover N k b q M E) (w : Bits q) (hw : ∀ σ ξ c, P.keep σ ξ c = w) :
     winRealBy V prf P ≤ (2⁻¹ : ℝ≥0∞) ^ 128 + prfAdvantage prf (wipeDistinguisherBy V P) :=
   ((winRealBy_le_of_keep_const V prf P w hw).trans
