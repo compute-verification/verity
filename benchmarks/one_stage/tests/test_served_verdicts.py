@@ -4,8 +4,10 @@ with the command it lacks and given no verdict, one that refused to run is missi
 wrote no answer errs; and sampled proofs' accepted answer composes, with the others missing, to a pending block record that
 `block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing composes to reject with no
 block record. The record accepts only when every subprotocol accepted on its node, and names each one missing, rejecting,
-malformed or about another server. The wipe composes only when its answer accepts on the record's server. PoUW's
-development piece checks the window's gate session and credits nothing, and the gate is refused while the lane has a period
+malformed or about another server. An accepted network certifier's clause names the one link K counts and every other
+link of the node uncounted and uncertified; one whose certifier ran on the node names no link. The wipe composes only
+when its answer accepts on the record's server. PoUW's development piece checks the window's gate session and credits
+nothing, and the gate is refused while the lane has a period
 open. The period the served windows join opens, through infra's own gate, on the Program serve-openai declared and
 the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
 `served_verdicts.sh`'s window circuits gate on every class of CLASSES, and the class of record's count after them
@@ -312,6 +314,41 @@ def test_an_accepted_certifier_answer_says_what_its_trusted_host_premise_rests_o
     _report, _rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
                                    servers={k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]})
     assert line["reason"].split("; the network certifier: ", 1)[1].startswith(f"accept (trusted-host {premise}; ")
+
+
+def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_gate_names_none(tmp_path):
+    """The network certifier's placement as its piece writes it. On the gate's host, its ``links`` are the relayed link
+    K counts and the gate's ssh link it doesn't: the accept's clause names the counted link and says every other link of
+    the node is uncounted and uncertified, before the premise. Under ``--gate local`` it has no links, and the clause
+    states the premise alone."""
+    node, host = "vy-dc-h200", "204.12.178.84"
+    gated = {"kind": "not-placed", "parties": {"network_certifier": host, "prover": node, "verifier": node},
+             "trusted-host": f"assumed, the auditor's devices not placed: the network certifier ran on {host}, not the "
+                             f"prover's {node}",
+             "links": [{"name": "certified", "from": host, "to": node, "counted": True,
+                        "via": "the warden's tunnel to the endpoint's port"},
+                       {"name": "gate", "from": node, "to": host, "counted": False,
+                        "via": "ssh, both ways: the session's request and prompts, its status and its fetch"}],
+             "uncounted": f"every link of {node}'s but the certified one"}
+    local = {"kind": "prover-node", "parties": {"network_certifier": node, "prover": node, "verifier": node},
+             "trusted-host": f"unmet: the network certifier ran on the prover's node {node} (the front's --gate local)",
+             "links": [], "uncounted": f"every link of {node}'s"}
+    clause = {}
+    for name, place in (("gated", gated), ("local", local)):
+        (d := tmp_path / name / "certifier").mkdir(parents=True)
+        (d / "answer.json").write_text(json.dumps({
+            "protocol": "verity/certifier/v0", "verdict": "accept", "reason": None, "commitment": "cd" * 64,
+            "public": {"K": 15764, "eps": "1/100", "windows": 1}, "profile": {"placement": place}}))
+        (d / S.RAN).write_text(json.dumps({"server": node, "rc": 0, "limit": "60m"}))
+        _report, _rec, line = S.record(_rows(_accepted(), d.parent), window=1, steps=(5, 11), node=node, run="r1",
+                                       servers={k: S.piece_server(k, d.parent) for k in [*S.PIECES, "wipe"]})
+        clause[name] = line["reason"].split("; the network certifier: ", 1)[1]
+    assert clause["gated"].startswith(
+        f"accept (K counts the relayed link alone, {host} to {node} through the warden's tunnel to the endpoint's "
+        f"port; every link of {node}'s but the certified one is uncounted and uncertified; "
+        f"trusted-host {gated['trusted-host']}; ")
+    assert clause["local"].startswith(f"accept (trusted-host {local['trusted-host']}; ")
+    assert "K counts" not in clause["local"]
 
 
 def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp_path):

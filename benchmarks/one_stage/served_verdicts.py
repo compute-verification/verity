@@ -710,13 +710,19 @@ def _ratio(e: Fraction, deltas: Sequence[Fraction]) -> str:
 
 def terms(r: Mapping[str, Any], leg: Mapping[str, Any] | None) -> list[str]:
     """What an accepted answer holds beyond its verdict: where its profile says when its weights were held and what share
-    of the checkpoint they are, those; where it says which host ran each party, what its `trusted-host` premise rests on
-    (the network certifier's ``placement``); and each δ of the block record's at which its leg's quantity is not
-    established."""
+    of the checkpoint they are, those; where it says which host ran each party (the network certifier's ``placement``),
+    the link K counts, named, with every other link of the node uncounted and uncertified, and what its `trusted-host`
+    premise rests on; and each δ of the block record's at which its leg's quantity is not established. A placement
+    with no links (the front's ``--gate local``) states no link."""
     profile = (r.get("answer") or {}).get("profile")
     w = profile.get("weights") if isinstance(profile, Mapping) else None
     place = profile.get("placement") if isinstance(profile, Mapping) else None
-    out = [f"trusted-host {place['trusted-host']}"] if isinstance(place, Mapping) and place.get("trusted-host") else []
+    place = place if isinstance(place, Mapping) else {}
+    counted = [f"{x['from']} to {x['to']} through {x['via']}" for x in place.get("links") or () if x.get("counted")]
+    others = place.get("uncounted") or "every other link of the node"
+    out = ([f"K counts the relayed link alone, {'; '.join(counted)}; {others} is uncounted and uncertified"]
+           if counted else [])
+    out += [f"trusted-host {place['trusted-host']}"] if place.get("trusted-host") else []
     if isinstance(w, Mapping) and w.get("held"):
         out.append(f"its weights {w['held']}, not concurrently with the block")
     if isinstance(w, Mapping) and w.get("share"):
