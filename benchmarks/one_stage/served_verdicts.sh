@@ -88,7 +88,7 @@
 # none, which credit refuses), and its fixed length SLOTS requests of MAX_TOKENS (`--cap 1`: one window); `period served`
 # holds the Program serve-openai then declared to it, and `period close` closes it once the windows are sealed, or
 # when the endpoint never listens. The PERIOD lines say what it committed; $OUT/serve keeps period.json, the Program
-# (h1/window-program.json.gz and its meta) and H1_CIRCUITS' circuit-files.json. H1_STATEMENTS and
+# (h1/window-program.json.gz and its meta) and H1_CIRCUITS' circuit-files.json and live file. H1_STATEMENTS and
 # H1_LIVE_EVIDENCE (files) go to PoUW's piece as its --statements and --live-evidence, the evidence core's credit reads.
 # A step that can't run says why, and the chain stops there. C-Flock, Lean's flock-verify and sampled-proofs-verifier and the
 # tree's venv are built while the endpoint serves, C-Flock in FLOCK_WORK (kept on the node, so a rerun reuses its build).
@@ -458,7 +458,9 @@ EOF
 for f in serve.json windows.jsonl seals.jsonl period.json; do cp "$D/$f" "$OUT/serve/" 2>/dev/null; done
 [ -d "$D/h1" ] && (cd "$D" && find h1 -name pouw-h1-calls.json -exec cp --parents {} "$OUT/serve/" \;
                    cp --parents h1/window-program.json.gz h1/window-program.meta.json "$OUT/serve/" 2>/dev/null)
-[ -n "${H1_CIRCUITS:-}" ] && [ -f "$H1_CIRCUITS/circuit-files.json" ] && cp "$H1_CIRCUITS/circuit-files.json" "$OUT/serve/"
+for f in circuit-files.json live.circuit.txt; do
+  [ -n "${H1_CIRCUITS:-}" ] && [ -f "$H1_CIRCUITS/$f" ] && cp "$H1_CIRCUITS/$f" "$OUT/serve/"
+done
 # the serve dir's step trace and the load's records stay on the node; what the stock control's table reads is their aggregate
 "$PY" "$TREE/benchmarks/one_stage/served_overhead.py" metrics "$D" > "$OUT/serve/overhead.json" 2> "$D/overhead.err" \
   || { say "OVERHEAD: no aggregate: $(cut -c1-300 "$D/overhead.err")"; rm -f "$OUT/serve/overhead.json"; }
