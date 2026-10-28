@@ -1,4 +1,4 @@
-"""Kernel census (lane L5, DESIGN §8): every device kernel the bare run launches must be accounted for by a pattern.
+"""Kernel census (DESIGN §8): every device kernel the bare run launches must be accounted for by a pattern.
 
 Two halves, one CLI:
 
@@ -55,7 +55,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm import settings
-from verity_vllm.config import UsageError, option
+from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.observe.kernel_trace import kernels_of_trace_events, load_trace, summarize_kernels
 from verity_vllm.properties.record import seal
 
@@ -581,7 +581,7 @@ def reconciliation_markdown(rep: dict) -> str:
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    workload: str | None = option("--workload", default=None, help="GPU half: run the profiled bare workload")
+    workload: str | None = option("--workload", type=workload_arg, default=None, help="GPU half: run the profiled bare workload")
     out: str | None = option("--out", default=None, help="GPU half: output directory (census.json, traces/)")
     checkpoints: str = option("--checkpoints", default="manifests/checkpoints.json")
     max_tokens: int | None = option("--max-tokens", type=int, default=None)

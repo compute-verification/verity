@@ -22,11 +22,12 @@ constructions: `ro-blake3/v1` and `ro-sha512/v1`, the certified ones, and `gf31-
   `audit.Verifier(vk, params, secret, state, device=, commitment=, salt_source=)` takes, and `verifier.window()`
   takes no number. `gpu.py windows` runs every window through them: the timed windows, the skip controls, and one
   window per tag at a deadline no certificate allows, which checks the openings of a tag whose timed windows are late.
-- `reference.py` computes the expected roots with the core reference on CPU processes, and the store's PoUS leaves
-  under a salt (`store_leaves`), which `gpu.py windows` calls under the lease, once the GPU is known.
+- `reference.py` computes the expected roots with the core reference on CPU processes, and the store's leaves as proof
+  of useful space (PoUS) commits them under a salt (`store_leaves`), which `gpu.py windows` calls under the lease, once
+  the GPU is known.
 - The harness runs the verifier and its state on the GPU's node too, to measure. In a deployment the verifier is the
   auditor's hardware, on a machine the prover doesn't control, and what runs on the GPU's node (`challenger_device`,
-  `Prover`) is the prover's (`PROTOCOL.md` §0).
+  `Prover`) is the prover's (`PROTOCOL.md` §2).
 - `run.sh` is one Attempt on vy-nebius-2. It builds and runs the reference outside the lease, then under
   `gpu-lease 1 --wait` runs `bwtag`'s gates, its timing and `gpu.py windows`. A failed gate times nothing. Its header
   lists the outputs.
@@ -71,9 +72,10 @@ measure what is left of each on the card.
 
 ## Write ceilings
 
-The remote bandwidth audit's write ceilings (`timing.GPU_WRITE_BYTES_PER_S`, `timing.HOST_WRITE_BYTES_PER_S`) bound how
-fast a fill can write labels into a tier. These files measure what the node's writers reach, each arm gated before it is
-timed (the destination poisoned with 0xA5, sampled slots checked, and a control that writes nothing rejected).
+The write ceilings of proof of useful bandwidth (PoUB), `timing.GPU_WRITE_BYTES_PER_S` and
+`timing.HOST_WRITE_BYTES_PER_S`, bound how fast a fill can write labels into a tier. These files measure what the node's
+writers reach, each arm gated before it is timed (the destination poisoned with 0xA5, sampled slots checked, and a
+control that writes nothing rejected).
 
 - `write.cu` (`bwwrite`) on one card: labels derived on the device by 16-byte stores (plain and evict-first) and by
   bulk (TMA) stores from shared memory, the driver's memset, labels streamed in over PCIe by the copy engines (H2D)

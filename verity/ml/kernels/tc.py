@@ -380,7 +380,8 @@ def gemm_coordinate_pad_kernel(steps: Mapping[Any, GroupSum]) -> Callable[..., A
     coord = gemm_coordinate_kernel(steps)
 
     def kernel(x: np.ndarray, w: np.ndarray, *, T: int, K: int, DOT: Any):
-        pad = lambda a: np.pad(a, ((0, 0), (0, K - T)))
+        def pad(a):
+            return np.pad(a, ((0, 0), (0, K - T)))
         return coord(pad(x), pad(w), K=K, DOT=DOT)
 
     return kernel

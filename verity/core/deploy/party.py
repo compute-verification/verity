@@ -12,6 +12,9 @@ returning the actions it takes:
 - `Finish(outcome, refused, kind)`: the party's conclusion, or its refusal by name; it receives nothing after. A
   refusal's name is public; the outcome is of `kind`.
 
+A peer's frame reaches a party that has a clock stamped with its arrival on that clock (`Received.at`), a reading the
+runtime takes for it and its transcript keeps.
+
 Besides its peers' messages and its sources', the runtime tells a party that a channel closed (`Closed`) or that a frame
 on it was refused (`Refused {name, detail}`, after which the party is finished refused by that name unless it finishes
 first). A party does no I/O and reads no ambient clock or randomness: its coins and clock readings are messages from its sources,
@@ -49,10 +52,13 @@ class Identity:
 
 @dataclass(frozen=True)
 class Received:
-    """A message that reached a party on `channel`: a peer's name, or a source's."""
+    """A message that reached a party on `channel`: a peer's name, or a source's. `at` is when the runtime took a peer's
+    frame off its channel, in ns on the party's own clock source (virtual time in a simulated run); None for a source's
+    message, what the runtime tells it, and every message to a party that has no clock."""
 
     channel: str
     message: Message
+    at: int | None = None
 
 
 @dataclass(frozen=True)

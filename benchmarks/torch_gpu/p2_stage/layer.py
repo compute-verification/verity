@@ -51,11 +51,11 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "s8_linear"))
-import gemm as G  # noqa: E402
+import gemm as G
 import int_mm as IM
-import layout as L  # noqa: E402
-import stage as S  # noqa: E402
-from p2_v1 import gpu  # noqa: E402
+import layout as L
+import stage as S
+from p2_v1 import gpu
 
 LAYERS = 52
 DEVICE = torch.device("cuda")
@@ -286,7 +286,7 @@ def stage(args, lay, src, read: L.Read, dev, out: Out, layer: int) -> tuple[dict
         ok &= bool(same) and gaps == 0
         del buf
     ok &= controls(args, lay, src, read, store, out, layer, names[0])
-    del store
+    store = None
     return staged, whole_s, ok
 
 
@@ -419,7 +419,7 @@ def gemm(args, staged: dict, out: Out) -> tuple[dict[int, float], bool]:
                        int_mm_s=[round(t, 6) for t in t_int], scaled_mm_s=[round(t, 6) for t in t_all],
                        tops=round(2 * M * N * K / min(t_all) / 1e12, 1))
             total += min(t_all)
-            del x, sx, y
+            x = sx = y = None
             if DEVICE.type == "cuda":
                 torch.cuda.empty_cache()
         if len(staged) == len(L.MATRICES):

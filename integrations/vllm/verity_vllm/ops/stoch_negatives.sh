@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# sweep/stoch_negatives.sh — the two named negatives of a `Sampling=stochastic` row (R15 lane stoch, PLAN §2 row 10 task 3).
+# stoch_negatives.sh — the two named negatives of a `Sampling=stochastic` workload.
 #
 #   N1 wrong-seed      the RUN is served with a different per-request seed than the MANIFEST OF RECORD declares
 #   N2 chain-mutation  the RUN is served with a different sampler chain (top_p 0.9) than the Program was BUILT for (top_p 0.95)
@@ -26,6 +26,7 @@ PY=${PY:-/workspace/venv-cu129/bin/python}; PY312=${PY312:-/workspace/venv-py312
 GPU_UTIL=${GPU_UTIL:-0.3}
 D=${SWEEP_DIR:-/workspace/cp/sweep}/$ROW                  # the row's Build (build_request = the Program of record)
 WL=workloads/$ROW.json                       # the manifest of record
+"${PY312%/*}/verity-vllm" workload-file "$WL" > /dev/null || exit 2
 [ -f "$WL" ] || { echo "no manifest $WL"; exit 2; }
 [ -d "$D/build_request" ] || { echo "no build_request under $D (run the row's Build first)"; exit 2; }
 mkdir -p "$OUT"

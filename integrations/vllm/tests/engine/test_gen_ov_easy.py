@@ -36,9 +36,9 @@ WORKLOAD = "workloads/workload_b7_32x16_1req.json"
 STATIC_KEYS = ("H", "NL", "NH", "KVH", "D", "I", "V", "QKV", "GU", "EPS", "ROPE_THETA", "MAX_POS", "BIAS", "tie_word_embeddings")
 
 #: the KEY SET of `_BATCH_INVARIANT_MATMUL_TUNED_CONFIGS["ada"]` in the pinned vLLM (d9105ea80,
-#: vllm/model_executor/determinism/batch_invariant_configs.py, read on pod cp-ov-easy 2026-09-17): (N, K) -> block_k.  Since R15
-#: (GEMM-ADA-TABLE) all five rows are pinned verbatim in `verity_vllm.program.frontend.gemm_targets.ADA_TUNED_GEMM` (re-exported by
-#: `gen_llama_patterns`); this lane's GEMM shapes hit none of them and take the DEFAULT tiling.
+#: vllm/model_executor/determinism/batch_invariant_configs.py): (N, K) -> block_k.  All five rows are pinned verbatim in
+#: `verity_vllm.program.frontend.gemm_targets.ADA_TUNED_GEMM` (re-exported by `gen_llama_patterns`); these GEMM shapes hit none
+#: of them and take the DEFAULT tiling.
 ADA_TUNED_KEYS: dict[tuple[int, int], int] = {(12288, 2048): 64, (2048, 6144): 128, (4096, 2048): 64, (151936, 2048): 64, (2048, 2048): 64}
 
 
@@ -112,7 +112,7 @@ def test_profile_is_discovered_by_case_and_is_the_base_pattern_list():
     prof = profile_for_case("B7")
     assert prof is B7.PROFILE and prof.notes["case"] == "B7" and prof.config is B7.C and prof.id == B7.PROFILE_ID
     assert prof.id not in (BASE.PROFILE.id, Q15.PROFILE.id, L.PROFILE.id, Q.PROFILE.id)
-    # configuration-only: the base pattern list, re-parameterized, behind the target's tuned-GEMM sibling ([P6] every derived profile
+    # configuration-only: the base pattern list, re-parameterized, behind the target's tuned-GEMM sibling (every derived profile
     # registers it; no B7 shape is a tabled key, see below, so it never fires here)
     assert [p.name for p in prof.patterns] == ["gemm.matmul_kernel_persistent.tuned", *[p.name for p in BASE.PROFILE.patterns]]
     assert [type(p) for p in prof.patterns[1:]] == [type(p) for p in BASE.PROFILE.patterns]
@@ -121,7 +121,7 @@ def test_profile_is_discovered_by_case_and_is_the_base_pattern_list():
     assert pins["gemm"] == BASE.PROFILE.notes["pins"]["gemm"] and pins["rms_norm"] == BASE.PROFILE.notes["pins"]["rms_norm"]
     assert pins["attention"]["kBlockN"] == 64 == Q15.PROFILE.notes["pins"]["attention"]["kBlockN"]
     assert pins["kv_cache"] == BASE.PROFILE.notes["pins"]["kv_cache"]
-    assert prof.accepted is False          # [P6] the engine arg (gpu_memory_utilization) is the workload's / the CLI's, not a profile fact
+    assert prof.accepted is False          # the engine arg (gpu_memory_utilization) is the workload's / the CLI's, not a profile fact
 
 
 def test_weight_field_maps_the_untied_lm_head_onto_its_own_field():
@@ -148,7 +148,7 @@ def test_weight_field_maps_the_untied_lm_head_onto_its_own_field():
 
 def test_check_header_requires_the_recorded_tie_to_agree_with_C():
     assert B7.check_header(_header(B7.HF_CONFIG, B7.REPO_ID)) == []                              # the checkpoint's own config: consistent
-    # [X-07] the base check now compares the recorded tie to C (it used to reject every untied config); B7's own filter is a no-op
+    # the base check now compares the recorded tie to C (it used to reject every untied config); B7's own filter is a no-op
     assert BASE.make_check_header(B7.C)(_header(B7.HF_CONFIG, B7.REPO_ID)) == []
     tied = dict(B7.HF_CONFIG, tie_word_embeddings=True)
     out = B7.check_header(_header(tied, B7.REPO_ID))
@@ -170,12 +170,12 @@ def test_no_b7_gemm_shape_is_a_tuned_table_key():
         for (n, k) in shapes.values():
             assert GP.tuned_launch_config(full_table, M, n, k) is None
             assert GP.tuned_launch_config(GP.ADA_TUNED_GEMM, M, n, k) is None
-    # the lane's other two configurations, for the record: QWEN05 hits no key, LLAMA32_1B exactly its o_proj
+    # the other two configurations, for the record: QWEN05 hits no key, LLAMA32_1B exactly its o_proj
     assert not (set(_gemm_shapes(Q.C).values()) & set(ADA_TUNED_KEYS))
     assert set(_gemm_shapes(L.C).values()) & set(ADA_TUNED_KEYS) == {(2048, 2048)} and _gemm_shapes(L.C)["o_proj"] == (2048, 2048)
-    # [R15 moe GEMM-ADA-TABLE] the registry now pins all five ada keys verbatim (block_k per key as vLLM has it), not only (2048, 2048)
+    # the registry now pins all five ada keys verbatim (block_k per key as vLLM has it), not only (2048, 2048)
     assert set(GP.ADA_TUNED_GEMM) == set(ADA_TUNED_KEYS) and all(GP.ADA_TUNED_GEMM[nk]["BLOCK_SIZE_K"] == bk for nk, bk in ADA_TUNED_KEYS.items())
-    assert isinstance(B7.PROFILE.patterns[1], GemmLaunch) and B7.PROFILE.patterns[0].name.endswith(".tuned")   # [P6] the target's tuned sibling first, inert on B7's shapes
+    assert isinstance(B7.PROFILE.patterns[1], GemmLaunch) and B7.PROFILE.patterns[0].name.endswith(".tuned")   # the target's tuned sibling first, inert on B7's shapes
 
 
 def test_every_b7_gemm_k_is_a_multiple_of_the_pinned_block_k():
@@ -232,7 +232,7 @@ def test_run_config_dry_run_resolves_b7_and_forwards_the_engine_arg():
 # the serving-family reference (gen_ov_easy_family): Serve_v4, whose untied binding reads its own lm_head field
 # ---------------------------------------------------------------------------------------------------------
 
-#: the leaf kinds a `Serve_v4` body expands to under this lane's profiles (the base ids of the derived flat bodies of
+#: the leaf kinds a `Serve_v4` body expands to under these profiles (the base ids of the derived flat bodies of
 #: LLAMA32_1B / QWEN05 / B7; `match_program` expands the family down to exactly these)
 LEAF_BASES = {"Attention_v3", "Embedding_v1", "Gemm_v1", "RMSNormFusedCuda_v2", "RMSNormTriton_v1", "RoPE_v1", "SiluMul_v1",
               "TokenSelect_v1", "BiasAdd_v1"}

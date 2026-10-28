@@ -102,7 +102,7 @@ namespace Run
 variable {ι : Type} {d : Device ι} {α ΩW ΩQ ΩS : Type} [Fintype α] (r : Run d α ΩW ΩQ ΩS)
 
 /-- PoUW's reads (`read_pouw`): the bits the compute account read from device memory over the compute window, the
-PoUW run's bandwidth charge (decision 9). -/
+PoUW run's bandwidth charge. -/
 def pouwRead (ω : ΩW × ΩQ × ΩS) : ℕ := (r.schedule ω).read (r.win .compute) (r.acct .compute)
 
 /-- The bits every account read from device memory over the bandwidth window (`read_total`). -/

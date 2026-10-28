@@ -187,7 +187,7 @@ A spec-level reference for network accounting's timing channel:
   it for the transfer it expects, and `port` the verifier's own `--registered` port of the value at the signed root
   (`benchmarks/network_traces/transfer_zk.py`; the load relayed and committed as it crosses,
   `benchmarks/network_traces/load_relay.py`);
-- the blocks (`blocks`): the server blocks, the server-time block and the transfer gates of a circuit, schema
+- the blocks (`blocks`): the proof blocks each server runs, the steps the circuit spans and its transfer gates, schema
   `verity/blocks/v1`, kept in this module until the window interface carries it in ``circuit.json``. `check` refuses
   blocks whose servers don't partition the units, an inference block on two servers (below), a boundary row that is no
   transfer's (an ``ingress``, a registered read no transfer brings in, a wire between servers, an external port's row
@@ -200,8 +200,9 @@ A spec-level reference for network accounting's timing channel:
   blocks' declared inputs and outputs, so which server may read an inference block's input bits is unambiguous. `check`
   reads each unit's (slot, step) from the record's inference entries (``blocks.inference``) and refuses, by name, a
   block whose units are on two servers, and two servers or more over a record that states no inference block;
-  `server_blocks` is that part alone. Which server runs which units is protocol structure, public like NCI's
-  declaration and not a private partition, so it is checked in the clear with no proof block;
+  `server_blocks` is that part alone. Which server runs which units is protocol structure, public like the
+  registration the inference-only policy checks and not a private partition, so it is checked in the clear with no
+  proof block;
 - the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
   warden ingress row, the slot state the bucket before carries and the Programs' row (registered reads), and computes
   the next state (each block to the slot holding its connection, a new connection to the lowest free slot, its prompt
@@ -214,7 +215,7 @@ A spec-level reference for network accounting's timing channel:
   Program reads is the scan's state row b − 1 (`verity/certifier/scan-state/v1`, `token_row`): its occupancy word
   `occ` (1 for a slot whose Program starts at b, 0 for an empty slot), its prompt's length `fields` and its prompt ids,
   which the scan reads off the warden's signed ingress cells, so no other tie holds them to the certified bytes;
-  `slot_row` gives each one's bits in the state row, for a reader that takes them as i32s (vllm's `SlotRow_v1`), and
+  `slot_row` gives each one's bits in the state row, for a reader that takes them as i32s (vllm's `ScanSlots_v2`), and
   `window_state` the rows a window circuit of the link-window from bucket t0 reads, the scan's rows t0 − 1 on (the
   empty state's for row −1). A Program gives all its outputs to the Programs' row at its anchor (n, u32, and 64 ids
   of 17 bits at w63's class); an empty slot's entry is all zero (its outputs masked by `occ`, never on the egress). A
@@ -293,7 +294,10 @@ The two terms of the charge the capacity bounds leave open are fixed in the trus
   scheduler, admission on a step clock and a registered list of N profiles: `log2 N` once per audit, or
   `log2(N · #Σ_sync)` per window when the profile may switch at window boundaries;
 - the challenger's coins (D7), an ingress link whose timing is charged on the ingress grid and whose content costs
-  0 bits.
+  0 bits. The coin link (`coin_link`, run by `benchmarks/live_challenger/coin_link.py`) carries a window's session
+  between the prover and the challenger: it re-cuts every frame into cells and re-clocks both directions on their own
+  grids, exempts only the verified, expected, once-only coin openings, and counts everything else
+  (`protocol/coin-link.md`).
 
 ~~~python
 from verity.core.protocols.certifier.audit import Audit
@@ -353,9 +357,9 @@ to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
   plain unit's public row with both ends' grids at the warden's parameters digest, which both take as an input (the
   warden's deployment publishes it), and no sync read, as in the Python; it refuses a warden case whose digest isn't 64
   bytes, whose ends have a profile, or whose two grids differ.
-- every recorded proving run of N2 replays through both to the verdict it recorded, negative controls included
-  (`benchmarks/network_traces/n2_lean_replay.py`): 193 link-windows of seven runs, plain and served, 180 accepted and 13
-  refused, each with nine injected controls that both reject (r20261026-050730-1027, again r20261026-104647-916d). The
+- every proving run of N2 recorded before the switch replayed through both to the verdict it recorded, negative
+  controls included: 193 link-windows of seven runs, plain and served, 180 accepted and 13 refused, each with nine
+  injected controls that both reject (r20261026-050730-1027, again r20261026-104647-916d). The
   warden runs give 30 link-windows from r20261026-080827-2bd2 and r20261026-100351-ca6a, the latter a draw of 8 on the
   H200 warden run c20261026T092338Z-22b5. Of those, 21 are accepted and 9 refused (r20261026-104647-c07b,
   r20261026-105654-6220). Each has ten controls: nine that both reject, among them another warden's digest, and
