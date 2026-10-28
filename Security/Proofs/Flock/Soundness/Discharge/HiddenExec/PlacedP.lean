@@ -202,7 +202,7 @@ noncomputable def SitesHP.progPlaces_of_layout (outs : Finset (Fin N))
   inst := inst
   o := si.o
   col := si.col hrows
-  placed := si.placed hrows
+  placed S R u h := (si.placed hrows S R u h).sat
   aliased S R u h :=
     (si.acc S R u h).aliased_of_layout (hrows S R u h) (inst u) (si.o S R u h) (si.hvu S R u h) (hal S R u h)
 
