@@ -1,6 +1,6 @@
 """memory-map/v1 from the circuit (`verity.core.protocols.remote_bandwidth.memory_map`): the KV blocks each serving step wrote
 and freed, from the Program of record and the engine's page layout, with each block's digest from the values served (the
-Commit's committed words, `pipeline.memory_map`).
+Commit's committed words, `pipeline.memory_map`), as `Lines` builds it (`protocols.remote_bandwidth.memory_map`: j and the rules).
 
 ~~~text
 row       one position's K (or V) in a layer: a row of an attention Call's `kc` (`vc`), `Array(T, row)`, or MLA's latent row
@@ -28,25 +28,15 @@ block     4,096 bytes of a plane (`store.registry._page_blocks`), at slot `first
 appended  a block whose rows are all born, at the step of the last (its completion), if a later step reads it: a step's
           record, its frees then its writes, takes effect after the step's reads (remote_bandwidth's convention),
           so a block whose last structural reader is the step that completes it is never read while resident and is in
-          no record; nor
-          is a block with a row no step writes (it stays dirty).  A step's blocks are one append, by slot
-written   an appended block, in the record of the step its append's encode landed in (deferred residency, remote_bandwidth's
-          ``PROTOCOL.md`` §4: the session's `Deferral`; without one, at its completion), uncredited until then.  A line
-          writes the appends landed by then in order, and one that would write a slot an earlier one there writes waits a
-          line, with every append after it
-freed     a written block in the record of its rows' last structural reader (memory-map/v1's free), or of the step after
-          its write's if that is no earlier (its page was freed before its encode landed: memory-map/v1 withdraws such a
-          block, no write, no free and no credit, which this builder doesn't emit yet, so it writes the block and frees it
-          a line later, past that reader).  And a slot's registered block (a KV page's filler, registered before
-          the seed) at the step a write first reaches it, even the one completing it: its bytes are no longer that block's,
-          and a block not yet written is uncredited (the `Store`'s dirty).  A page's untouched blocks stay held, counting
-          against capacity, until then: a request's end frees only the blocks it wrote.  A line frees no slot it writes
-          (the write releases its block)
-re-key    a live written block as old as the session's lifetime cap, appended again with its d_j at a fresh j: its old j
-          freed in the record of the step before its append's, its new one written where that encode lands, uncredited
-          in between.  Which appends are re-keys is the session's (`Deferral`); the blocks they take are the live written
+          no record; nor is a block with a row no step writes (it stays dirty).  A step's blocks are one append, by slot
+written   an appended block, where its append's encode landed (the session's `Deferral`; without one, at its completion)
+freed     a written block at its rows' last structural reader (memory-map/v1's free).  And a slot's registered block (a KV
+          page's filler, registered before the seed) at the step a write first reaches it, even the one completing it: its
+          bytes are no longer that block's, and a block not yet written is uncredited (the `Store`'s dirty).  A page's
+          untouched blocks stay held, counting against capacity, until then: a request's end frees only the blocks it wrote
+re-key    a live written block as old as the session's lifetime cap, its old j freed in the record of the step before its
+          append's.  Which appends are re-keys is the session's (`Deferral`); the blocks they take are the live written
           ones of the oldest appends (a window is a prefix of them), not freed at that step
-j         N plus every block appended before it, in append order
 d_j       `codec.digest` of the block's payload: its rows' served words in slot order, each word little-endian
 step      the engine's: request r's step s is `arrive[r] + s`
 ~~~
@@ -55,12 +45,13 @@ The map is the prover's witness (d_j hashes user data): it goes to the prover's 
 """
 from __future__ import annotations
 
+from collections import deque
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
 from verity.core.protocols.remote_bandwidth import codec
-from verity.core.protocols.remote_bandwidth.memory_map import SLOT_LIMIT, Header, Step, Written
+from verity.core.protocols.remote_bandwidth.memory_map import SLOT_LIMIT, Header, Step
 from verity.ml.circuits.census import census, step_ends
 from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.program import Program, is_input
@@ -69,6 +60,7 @@ from verity.ml.circuits.requirement import from_census
 from verity.ml.circuits.types import Array
 from verity_vllm.query.required import SAMPLING_EVENTS
 from verity_vllm.protocols.remote_bandwidth.interface import PageLayout
+from verity_vllm.protocols.remote_bandwidth.memory_map import Lines
 from verity_vllm.protocols.remote_bandwidth.registry import _page_blocks
 
 #: an attention Call's cached K and V parameters
@@ -135,11 +127,10 @@ class Deferral:
     lifetime: int
 
 
-@dataclass
+@dataclass(frozen=True)
 class _Append:
     made: int
     landed: int | None
-    first: int
     count: int
     rekey: bool
     blocks: list[tuple[int, bytes, int]]
@@ -464,7 +455,7 @@ def record(requests: Mapping[str, Rows], arrive: Mapping[str, int], payload: Cal
             if w is not None and w < last:
                 done.setdefault(w, []).append((slot, d, last))
     head = Header(registration, layout.blocks if layout.blocks is not None else len(pool.firsts) * pool.region)
-    steps = _lines(filler, _appends(done, deferral, head.blocks))
+    steps = _lines(filler, _appends(done, deferral, head.blocks), head.blocks)
     if any(x >= SLOT_LIMIT for st in steps for x in (*st.freed, *(w.slot for w in st.written))):
         raise ValueError(f"a slot past memory-map/v1's {SLOT_LIMIT}")
     return head, steps
@@ -475,11 +466,7 @@ def _appends(done: Mapping[int, list[tuple[int, bytes, int]]], deferral: Deferra
     as its encodes have them, which must be the circuit's in order from index `n` up to the last made (the circuit's after
     it the session never made); a re-key's blocks are taken when its line closes (`_lines`)."""
     if deferral is None:
-        out, j = [], n
-        for w in sorted(done):
-            out.append(_Append(w, w, j, len(done[w]), False, sorted(done[w])))
-            j += len(done[w])
-        return out
+        return [_Append(w, w, len(done[w]), False, sorted(done[w])) for w in sorted(done)]
     es = [(m - deferral.first_step, None if r is None else r - deferral.first_step, f, c) for m, r, f, c in deferral.encodes]
     out, j, last = [], n, -1
     for u, (m, r, f, c) in enumerate(es):
@@ -491,7 +478,7 @@ def _appends(done: Mapping[int, list[tuple[int, bytes, int]]], deferral: Deferra
                              "none before it is made")
         if whole and c != len(done[m]):
             raise ValueError(f"the session's append at step {m} is of {c} blocks, and the circuit completed {len(done[m])} there")
-        out.append(_Append(m, r, f, c, not whole, sorted(done[m]) if whole else []))
+        out.append(_Append(m, r, c, not whole, sorted(done[m]) if whole else []))
         j, last = j + c, m
     missed = [w for w in done if w <= last and not any(a.made == w and not a.rekey for a in out)]
     if missed:
@@ -499,41 +486,28 @@ def _appends(done: Mapping[int, list[tuple[int, bytes, int]]], deferral: Deferra
     return out
 
 
-def _lines(filler: Mapping[int, list[int]], appends: list[_Append]) -> list[Step]:
-    """The record's lines from the slots whose filler a write first reaches at each step and the session's `appends`, step by
-    step: each step's frees, its re-key (of the next step's append), the appends it makes, then its writes."""
-    #: each slot's written block: its index, the step writing it, the slot, its digest and its rows' last structural reader
-    live: dict[int, tuple[int, int, int, bytes, int]] = {}
-    frees: dict[int, set[int]] = {}
-    queue: list[_Append] = []
-    out, k, t, end = [], 0, 0, max(filler, default=-1)
-    while t <= end or k < len(appends) or queue or frees:
-        freed = set(filler.get(t, ())) | frees.pop(t, set())
+def _lines(filler: Mapping[int, list[int]], appends: list[_Append], n: int) -> list[Step]:
+    """The record's lines (`Lines`, from index `n`) from the slots whose filler a write first reaches at each step and the
+    session's `appends`, step by step: each step's frees, its re-key (of the next step's append: the live blocks of the oldest
+    appends, read past the step), the appends it makes, then the writes of those landed by then."""
+    lines, landing, out, k, t, end = Lines(n), deque(), [], 0, 0, max(filler, default=-1)
+    while t <= end or k < len(appends) or landing or lines.busy:
+        lines.free(filler.get(t, ()))
         while k < len(appends) and appends[k].made == (t + 1 if appends[k].rekey else t):
             a, k = appends[k], k + 1
             if a.rekey:
-                old = sorted(v for v in live.values() if v[1] < t < v[4])[:a.count]
+                old = sorted(lines.held(t).items(), key=lambda xb: xb[1].index)[:a.count]
                 if len(old) < a.count:
                     raise ValueError(f"the session re-keys {a.count} blocks at step {t}, and the circuit holds {len(old)} live")
-                for _, _, x, _, last in old:
-                    frees[last].discard(x)
-                    freed.add(x)
-                    del live[x]
-                a.blocks = sorted((x, d, last) for _, _, x, d, last in old)
+                made = lines.rekey(sorted(x for x, _ in old))
+            else:
+                made = lines.append(*zip(*a.blocks))
             if a.landed is not None:
-                queue.append(a)
-        seen: set[int] = set()
-        written = []
-        while queue and queue[0].landed <= t and not seen & {x for x, _, _ in queue[0].blocks}:
-            a = queue.pop(0)
-            for u, (x, d, last) in enumerate(a.blocks):
-                live[x] = (a.first + u, t, x, d, last)
-                frees.setdefault(last if last > t else t + 1, set()).add(x)
-                written.append(Written(x, a.first + u, d))
-                seen.add(x)
-        freed -= seen
-        if freed or written:
-            out.append(Step(t, tuple(sorted(freed)), tuple(written)))
+                landing.append((a.landed, made.first))
+        while landing and landing[0][0] <= t:
+            lines.land(landing.popleft()[1])
+        if (line := lines.close(t)) is not None:
+            out.append(line)
         t += 1
     return out
 
