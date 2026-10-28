@@ -8,8 +8,8 @@ key block, which the tests hold to the exact lowering at larger classes:
 
 * every template but the heads is a fixed number of units a position (`projected`), a slot's where it places them
   (`placed`: `TokenFeed_v1` a prompt position past the first; `ScanSlots_v2`, at the class's scan state row, and
-  `SlotEntry_v1` one a Program; `OutCollect_v1` one a position, its first the first's), read off the probe, which is
-  refused unless each divides evenly;
+  `SelectEntry_v1` one a Program; `SelectCollect_v1` one at every other position, its first the first's), read off the
+  probe, which is refused unless each divides evenly;
 * a head over T keys is `AttentionHead_v19`'s Calls: `AttnBlockFirst_v1{NVIS}` (its last NVIS = T - (nb - 1)·BN keys),
   nb - 1 `AttnBlock_v5` and `AttnHeadEnd_v1`, nb = ceil(T / BN), a full block's CHECK whether FA2 guards it (its
   ``MASKED_FROM``, `attention_vocab.fa2_masked_from` of the Program's one-row decode: its first visited block only). A
@@ -44,8 +44,9 @@ END = "AttnHeadEnd_v1"
 BLOCK = "AttnBlock_v5"
 FEED = "TokenFeed_v1"
 SCAN = "ScanSlots_v2"
-COLLECT = "OutCollect_v1"
-ENTRY = "SlotEntry_v1"
+#: a position's select with the slot's collector, at every position but the last, and the last's with the slot's entry
+COLLECT = "SelectCollect_v1"
+ENTRY = "SelectEntry_v1"
 
 
 def label(fn: Any) -> str:
@@ -80,8 +81,8 @@ def _one(xs: list[Any], what: str) -> Any:
 
 def placed(lab: str, T: int, P: int) -> int | None:
     """A Program's units of template ``lab`` at position T of its P, for a slot's template: `TokenFeed_v1` at each of its NP
-    prompt positions past the first, `ScanSlots_v2` at the first, `SlotEntry_v1` at the last and `OutCollect_v1` at each
-    (its first the first's); None for any other, a fixed count at every position."""
+    prompt positions past the first, `ScanSlots_v2` at the first, `SelectEntry_v1` at the last and `SelectCollect_v1` at
+    each other (its first the first's); None for any other, a fixed count at every position."""
     fam, s = statics(lab)
     if fam == FEED:
         return int(1 < T <= s["NP"])
@@ -90,7 +91,7 @@ def placed(lab: str, T: int, P: int) -> int | None:
     if fam == ENTRY:
         return int(T == P)
     if fam == COLLECT:
-        return int(T == 1) if s["FIRST"] else int(T > 1)
+        return int(T == 1 < P) if s["FIRST"] else int(1 < T < P)
     return None
 
 
@@ -174,6 +175,24 @@ MEASURED: dict[str, tuple[int, int, str]] = {lab: (ands, k, SOURCES["measured"][
     "OutCollect_v1{KO=64,FIRST=false}": (2_141, 22, ROWS_3),
     "SlotEntry_v1{KO=64,IDB=17,NP=1024}": (5_676, 22, None),
 }.items()}
+
+
+def _calls(*labs: str) -> tuple[int, int, str]:
+    """A unit of Calls of ``labs``, the first its largest: their `MEASURED` ANDs summed and the first's k_log (its rows'
+    too), an estimate, not composed."""
+    return (sum(MEASURED[lab][0] for lab in labs), MEASURED[labs[0]][1],
+            f"its Calls' ANDs summed ({', '.join(labs)}), k_log the first's: not composed")
+
+
+#: the select with its collector, and the last position's with the slot's entry (`io_shell.SelectCollect_v1`,
+#: `SelectEntry_v1`)
+_COMBINE = "TokenSelectCombine_v2{V=128256,C=16}"
+MEASURED |= {
+    "SelectCollect_v1{V=128256,C=16,KO=64,FIRST=true}": _calls(_COMBINE, "OutCollect_v1{KO=64,FIRST=true}"),
+    "SelectCollect_v1{V=128256,C=16,KO=64,FIRST=false}": _calls(_COMBINE, "OutCollect_v1{KO=64,FIRST=false}"),
+    "SelectEntry_v1{V=128256,C=16,KO=64,FIRST=false,IDB=17,NP=1024}": _calls(
+        _COMBINE, "OutCollect_v1{KO=64,FIRST=false}", "SlotEntry_v1{KO=64,IDB=17,NP=1024}"),
+}
 #: `AttnBlockFirst_v1{D=64,NVIS,BN=128}`'s ANDs where the heads' run (NVIS 1, 17, 128) and the compositions (`COMPOSED`)
 #: composed it, linear between
 FIRST_BLOCKS = {1: 96_886, 2: 165_175, 4: 300_567, 5: 367_670, 6: 435_639, 8: 571_031, 12: 843_099, 14: 979_101, 15: 1_047_070,
