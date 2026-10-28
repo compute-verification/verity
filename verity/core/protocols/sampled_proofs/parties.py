@@ -64,7 +64,6 @@ from verity.core.deploy.runtime import ProtocolDef
 from verity.core.wire import Body, Hex, Int, Message, Schema, Str
 
 from .one_stage import registration as R
-from .one_stage.proofs import V2
 
 ID = R.PROTOCOL
 VERSION = 1
