@@ -44,9 +44,25 @@ def test_a_deferred_run_runs_only_its_steps_and_what_they_need_inside_a_recorded
 
 def test_a_deferred_run_is_refused_with_a_part_or_a_step_ci_toml_doesnt_declare(monkeypatch, tmp_path, capsys):
     assert _main(monkeypatch, tmp_path, ["--deferred", "pytest", "tests"]) == (2, None)
-    assert _main(monkeypatch, tmp_path, ["--deferred", "pytest", "--shard", "1/3"]) == (2, None)
     assert _main(monkeypatch, tmp_path, ["--deferred", "pytest,nope"]) == (2, None)
     assert "no job nope" in capsys.readouterr().err
+    assert _main(monkeypatch, tmp_path, ["--deferred", "pytest", "--shard", "3/3"]) == (2, None)
+    assert "--shard 3/3: that shard holds none of those steps" in capsys.readouterr().err
+
+
+def test_a_sharded_deferred_run_runs_those_steps_parts_in_its_shard_alone(monkeypatch, tmp_path):
+    """Drive's after-landing run as N runs at once (`after_landing_shards`): shard K runs the deferred steps' parts that ci.toml's
+    plan with N shards puts in shard K, and is recorded as a deferred run naming its shard, so the N together cover each step."""
+    steps = "pytest,circuit-check,flock-rust-tests"
+    rc, only = _main(monkeypatch, tmp_path, ["--deferred", steps, "--shard", "3/3", "--keep-going"])
+    whole = CHECK.deferred_parts(steps)
+    assert rc == 0 and only == [p for p in CHECK.shard("3/3")["parts"] if p in whole]
+    assert {p.partition(":")[0] for p in only} == {"circuit-check", "flock-rust-tests", "flock-circuit-build"}
+    doc = json.loads((tmp_path / "result.json").read_text())
+    assert doc["kind"] == CHECK.DEFERRED_KIND and (doc["deferred"]["k"], doc["deferred"]["n"]) == (3, 3)
+    assert doc["deferred"]["deferred"] == steps.split(",")
+    rc, only = _main(monkeypatch, tmp_path, ["--deferred", steps, "--shard", "1/3", "--keep-going"])
+    assert rc == 0 and {p.partition(":")[0] for p in only} == {"pytest"}
 
 
 def test_record_of_a_deferred_run_launches_it_without_the_check_tool_and_without_lean(monkeypatch):

@@ -1428,6 +1428,11 @@ def test_train_sh_refuses_every_flag_but_agreement(tmp_path):
     assert p.returncode == 2 and "train: --circuit-cache refused without --no-cache" in p.stderr, p.stderr
     p = train("--against", "main")
     assert p.returncode == 2 and "train: --against refused" in p.stderr, p.stderr
+    for bad in ("3", "0/3", "a/b"):
+        p = train("--shard", bad)
+        assert p.returncode == 2 and "train: --shard needs K/N" in p.stderr, p.stderr
+    p = train("--deferred", "pytest,lean-audit", "--shard", "2/3", "--no-cache", "--no-regenerate")
+    assert p.returncode == 1 and "no parent store key" in p.stderr, p.stderr
 
 
 @pytest.mark.parametrize("twins", [False, True])
@@ -1539,6 +1544,10 @@ def test_train_sh_runs_with_priority_and_posts_a_launch_that_registers_no_run(tm
     args = argv.read_text().split()
     assert p.returncode == 0 and args[args.index("--deferred"):] == ["--deferred", "pytest,circuit-check", "--no-cache",
                                                                      "--circuit-cache", "--no-regenerate"], args
+    p = train("HEAD", "vy-x", "--deferred", "pytest", "--shard", "2/3")
+    args = argv.read_text().split()
+    assert p.returncode == 0 and args[-4:] == ["--deferred", "pytest", "--shard", "2/3"], args
+    assert "shard 2/3" in p.stdout and f"train-{git('rev-parse', 'HEAD')[:12]}-2of3.log" in p.stdout, p.stdout
 
     (tmp_path / "origin.git").rename(tmp_path / "gone.git")
     (tmp_path / "bin" / "sleep").write_text("#!/bin/sh\n")                # the fetch's backoffs: nothing launches to wait for

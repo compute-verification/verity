@@ -21,13 +21,17 @@
 # `--no-regenerate` fails lean-audit on a lock record difference rather than passing it on a regenerated record: drive's
 # after-landing run (`after_landing_no_cache`), where nothing commits regenerated records.
 #
+# `--shard K/N`: shard K of ci.toml's plan with N shards (`check.py --shard`): with `--deferred`, only those steps' parts in
+# it (drive's `after_landing_shards`, one launch per shard); alone, a shard Attempt of the check, which `check.py --record
+# --combine` joins with the other N-1 into the commit's check.
+#
 # Run it where the parent store key is (the Cursor secrets), from a Verity checkout with `machines.d` for MACHINE. It refuses a
 # temporary credential, which cannot mint the run's custody key, a shell that skips the store-backed tests, and a COMMIT that is
 # empty (its tree is its base's: where it leaves origin/main, or its parent for a commit on main) or that origin doesn't hold.
 set -euo pipefail
-[ $# -ge 2 ] || { sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
-pass=() deferred= nocache= ccache= noregen=
+pass=() deferred= nocache= ccache= noregen= shard=
 while [ $# -gt 0 ]; do
   case $1 in
     --agreement) pass+=(--agreement) ;;
@@ -36,7 +40,9 @@ while [ $# -gt 0 ]; do
     --no-regenerate) noregen=1 ;;
     --deferred) [[ $# -ge 2 && $2 =~ ^[a-z0-9-]+(,[a-z0-9-]+)*$ ]] || { echo "train: --deferred needs STEP,..." >&2; exit 2; }
       deferred=$2; shift ;;
-    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement and --deferred STEPS alone" >&2; exit 2 ;;
+    --shard) [[ $# -ge 2 && $2 =~ ^[1-9][0-9]*/[1-9][0-9]*$ ]] || { echo "train: --shard needs K/N" >&2; exit 2; }
+      shard=$2; shift ;;
+    *) echo "train: $1 refused: train.sh runs the merge queue's check, which takes --agreement, --deferred STEPS and --shard K/N alone" >&2; exit 2 ;;
   esac
   shift
 done
@@ -50,6 +56,7 @@ done
 [ -z "$nocache" ] || pass+=(--no-cache)
 [ -z "$ccache" ] || pass+=(--circuit-cache)
 [ -z "$noregen" ] || pass+=(--no-regenerate)
+[ -z "$shard" ] || pass+=(--shard "$shard")
 [ -z "${VERITY_SKIP_STORE:-}" ] || { echo "train: VERITY_SKIP_STORE is set; a recorded train runs the store-backed tests" >&2; exit 1; }
 [ -z "${AWS_SESSION_TOKEN:-}" ] || { echo "train: AWS_SESSION_TOKEN is set; a temporary credential cannot mint the custody key" >&2; exit 1; }
 [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${R2_ENDPOINT:-}" ] || { echo "train: no parent store key (AWS_ACCESS_KEY_ID, R2_ENDPOINT)" >&2; exit 1; }
@@ -61,7 +68,7 @@ die() { echo "train: $*" | tee -a "$why" >&2; exit 1; }
 tell() {
   local rc=$?
   if [ "$rc" -ne 0 ]; then
-    { echo "@${TRAIN_AS:-ci} train: ${sha:-$commit} on $machine${deferred:+ --deferred $deferred} registered no run (exit $rc):"
+    { echo "@${TRAIN_AS:-ci} train: ${sha:-$commit} on $machine${deferred:+ --deferred $deferred}${shard:+ --shard $shard} registered no run (exit $rc):"
       tail -n 5 "$why"; [ -z "$log" ] || { echo "$log:"; tail -n 12 "$log" 2>/dev/null; }; } > "$why.post"
     uv run -q research msg reply --as "${TRAIN_AS:-ci}" --thread "${MERGE_THREAD:-1790957906.278529}" --quiet --report \
       --file "$why.post" > /dev/null 2>&1 || echo "train: and could not post that to the merge thread" >&2
@@ -89,13 +96,13 @@ else
 fi
 [ -z "$base" ] || [ "$(git -C "$root" rev-parse "$sha^{tree}")" != "$(git -C "$root" rev-parse "$base^{tree}")" ] \
   || die "${sha:0:12} is empty (its tree is its base ${base:0:12}'s): nothing to check"
-tree="${TMPDIR:-/tmp}/train-${sha:0:12}"
+tree="${TMPDIR:-/tmp}/train-${sha:0:12}${shard:+-${shard/\//of}}"
 git -C "$root" worktree remove --force "$tree" 2>/dev/null || true
 git -C "$root" worktree add -q --detach "$tree" "$sha" 2>>"$why" || die "git worktree add $tree failed"
 exec 9>&-
 log="$tree.log"
 cd "$tree"
-echo "train: ${sha:0:12} on $machine; log $log"
+echo "train: ${sha:0:12} on $machine${shard:+ shard $shard}; log $log"
 # `research run` stays attached to the run until it ends; the run doesn't need it (custody publishes from the machine)
 setsid nohup uv run -q python tools/verity/check/check.py --record --on "$machine" --priority --keep-going ${pass[@]+"${pass[@]}"} \
   > "$log" 2>&1 < /dev/null &

@@ -402,6 +402,9 @@ class DriveFlags:
     stale_close_days: int = 0
     #: PRs the stale rule never judges: their owners keep them open with a reason
     stale_keep: tuple[int, ...] = ()
+    #: the after-landing run as N runs at once, shard K of ci.toml's plan with N shards each (`drive.Driver.start_postland`):
+    #: 1, or a plan's N; it takes about its longest shard rather than every step on one slot
+    after_landing_shards: int = 1
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml", strict: bool = False) -> "DriveFlags":
@@ -437,6 +440,10 @@ class DriveFlags:
             if not (on := names("on")):
                 raise bad("on", "at least one machine (train.sh's: a machine, or `auto`)")
             got["on"] = ",".join(on)
+        if "after_landing_shards" in doc:
+            if type(doc["after_landing_shards"]) is not int or doc["after_landing_shards"] < 1:
+                raise bad("after_landing_shards", "a whole number, 1 or a shard plan's N in tools/verity/check/ci.toml")
+            got["after_landing_shards"] = doc["after_landing_shards"]
         if "max_lean_checks" in doc:
             if type(doc["max_lean_checks"]) is not int or doc["max_lean_checks"] < 1:
                 raise bad("max_lean_checks", "a whole number, 1 or more")
@@ -3921,7 +3928,7 @@ def main(argv: list[str]) -> int:
             Driver(q, on=flags.on, regenerate_locks=flags.regenerate_locks, after_landing_no_cache=flags.after_landing_no_cache,
                    reviews=labels.reviews, ready_by=labels.ready_by, max_lean_checks=flags.max_lean_checks,
                    stale_days=flags.stale_days, stale_close_days=flags.stale_close_days,
-                   stale_keep=flags.stale_keep).tick(dry_run=a.dry_run)
+                   stale_keep=flags.stale_keep, after_landing_shards=flags.after_landing_shards).tick(dry_run=a.dry_run)
             return 0
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")

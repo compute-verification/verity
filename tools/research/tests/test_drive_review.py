@@ -103,6 +103,31 @@ def test_a_reviewed_prefix_lands_and_awaits_the_after_landing_run_of_every_step(
     assert "lean-agreement" in pl["verified_as"]["steps"]         # ci's baseline passed it, and nothing it checks changed since
 
 
+def test_a_sharded_after_landing_run_verifies_main_only_once_every_shard_passed(world, monkeypatch):
+    """`after_landing_shards = N`: the after-landing run is N runs at once, shard K of ci.toml's plan with N shards each, so it
+    takes about its longest shard rather than every step on one slot (2.5 h). `main` is verified once each shard passed; a shard
+    that never started launches the run again, whole."""
+    h = Review(world, monkeypatch)
+    h.d.after_landing_shards = 3
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    main = _main(world)
+    assert [(c, kw.get("shard")) for c, _, kw in h.posted] == [(main, "1/3"), (main, "2/3"), (main, "3/3")]
+    h.run_state.update({"r-post-0": ("done", 0, None), "r-post-1": ("running", None, None), "r-post-2": ("done", 0, None)})
+    h.evidence = [_steps_run(world.tmp, "r-post-0", {s: "passed" for s in AFTER_LANDING})]
+    h.tick()
+    pl = h.postland()
+    assert pl["run"]["groups"] == [["r-post-0"], ["r-post-1"], ["r-post-2"]] and pl["verified"] != main, "one shard runs on"
+    h.run_state["r-post-1"] = ("done", 75, None)
+    h.tick()
+    assert h.postland()["verified"] != main and len(h.posted) == 6, "a shard that never started: the run again, whole"
+    h.run_state.update({f"r-post-{i}": ("done", 0, None) for i in (3, 4, 5)})
+    h.tick()
+    pl = h.postland()
+    assert pl["verified"] == main and pl["run"] is None, world.logs
+
+
 def test_an_unreviewed_member_new_to_next_or_a_held_one_stops_the_prefix_below_it(world, monkeypatch):
     h = Review(world, monkeypatch)
     for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt")):
