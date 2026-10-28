@@ -26,7 +26,8 @@
 #     send, first-token and done times (the load's timings file, `serve_load.py`'s docstring) stay in the serve dir beside
 #     load.jsonl; each committed step's end is the serve dir's step_trace.jsonl's t_end, on the clock of the timings'
 #     start_unix. The serve dir's requests.jsonl, step traces, load.jsonl and timings hold request values and stay on the
-#     node (`serve_commit.MIRRORED`); what leaves is `served_overhead.py metrics`' aggregate ($OUT/serve/overhead.json).
+#     node (`serve_commit.MIRRORED`); what leaves is `served_overhead.py metrics`' aggregate ($OUT/serve/overhead.json),
+#     except with LOAD=front, whose warden-paced load no stock control compares to.
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows): every
 #     closed window's advice under the prove path's registered compiler and the weights registration (`--weights-of-record`),
 #     then this window's request Programs (`tools/advice_compile.py`); V3b's window circuit (`prove_path.py window-circuit
@@ -463,9 +464,14 @@ for f in serve.json windows.jsonl seals.jsonl period.json; do cp "$D/$f" "$OUT/s
 for f in circuit-files.json live.circuit.txt; do
   [ -n "${H1_CIRCUITS:-}" ] && [ -f "$H1_CIRCUITS/$f" ] && cp "$H1_CIRCUITS/$f" "$OUT/serve/"
 done
-# the serve dir's step trace and the load's records stay on the node; what the stock control's table reads is their aggregate
-"$PY" "$TREE/benchmarks/one_stage/served_overhead.py" metrics "$D" > "$OUT/serve/overhead.json" 2> "$D/overhead.err" \
-  || { say "OVERHEAD: no aggregate: $(cut -c1-300 "$D/overhead.err")"; rm -f "$OUT/serve/overhead.json"; }
+# the serve dir's step trace and the load's records stay on the node; what the stock control's table reads is their aggregate.
+# A front's load is the warden's, paced by its buckets, which no stock run's is, and one window's aggregate is its timing.
+if [ "$LOAD" = front ]; then
+  say "OVERHEAD: none with LOAD=front (the warden paces its requests, so no stock control compares)"
+else
+  "$PY" "$TREE/benchmarks/one_stage/served_overhead.py" metrics "$D" > "$OUT/serve/overhead.json" 2> "$D/overhead.err" \
+    || { say "OVERHEAD: no aggregate: $(cut -c1-300 "$D/overhead.err")"; rm -f "$OUT/serve/overhead.json"; }
+fi
 
 # 3. sampled proofs: the window, its advice and Programs, V3b's window circuit, then C-Flock --zk and the Lean verifier
 PICK=$("$PY" benchmarks/one_stage/served_verdicts.py window "$D" --slots "$SLOTS" ${WINDOW:+--window "$WINDOW"} 2> "$OUT/window.err")
