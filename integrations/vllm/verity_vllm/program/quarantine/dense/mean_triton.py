@@ -25,7 +25,7 @@ different register order or per-thread width changes the rounding of most random
 seed-7 difftest found the layout is *specialisation-dependent*: for `N % 16 != 0` Triton cannot prove the alignment and
 the layout is `sizePerThread=1` (`size_per_thread`, below); the body follows the same rule.
 
-[R15 dense, F-dense-05] PROMOTED: the Definition now lives in the accepted registry (`verity.ml.definitions.registry.dense.MeanTriton`, bound by the pinned `b1-eager-v3` vocabulary; the X-08 pattern) — this module re-exports
+PROMOTED: the Definition now lives in the accepted registry (`verity.ml.definitions.registry.dense.MeanTriton`, bound by the pinned `b1-eager-v3` vocabulary; the X-08 pattern) — this module re-exports
 the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID` are unchanged (no registry clash).
 """
 from __future__ import annotations
