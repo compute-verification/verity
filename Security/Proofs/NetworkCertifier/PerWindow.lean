@@ -29,7 +29,7 @@ theorem windows_bound_le_perWindow (a s D T W m : ℕ) (hs : 0 < s) :
   exact Nat.mul_le_mul_right _ (Nat.mul_le_mul_left _ (Nat.pow_le_pow_right hs (min_le_right W m)))
 
 /-- The ingress bound at `n = m·T`, read per sampling block. -/
-theorem ingress_bound_eq_perWindow (r : Fin L → ℕ) (T m D : ℕ) :
+theorem ingress_bound_eq_perSamplingBlock (r : Fin L → ℕ) (T m D : ℕ) :
     (∏ ℓ, (r ℓ + 1)) ^ (m * T) * D ^ (m * T) = ((∏ ℓ, (r ℓ + 1) ^ T) * D ^ T) ^ m := by
   rw [pow_mul', pow_mul', ← mul_pow, Finset.prod_pow]
 
@@ -51,24 +51,24 @@ theorem encard_decodable_le_constantRate_perWindow {Ac : Type} [Fintype Ac]
   (encard_decodable_le_constantRate I T W ss frames (m * T) D m le_rfl view hW2 hJ Zs hacc dec hdec).trans
     (Nat.cast_le.mpr (windows_bound_le_perWindow _ _ _ _ _ _ ss.size_pos))
 
-theorem encard_ingress_obsDecodable_le_perWindow (I : Interaction L K S Msg In Act Wire) (T m D : ℕ)
+theorem encard_ingress_obsDecodable_le_perSamplingBlock (I : Interaction L K S Msg In Act Wire) (T m D : ℕ)
     (r : Fin L → ℕ) (hW4 : Packed I.certifier) (hr : Allocated I.certifier r) (hJ : JitterBounded I.certifier D)
     (c : Fin L → List (List Bool)) (Ms : Set Msg)
     (hacc : ∀ msg ∈ Ms, StatusComplete (m * T) (I.obsRun msg (m * T)))
     (hc : ∀ msg ∈ Ms, ∀ ℓ, linkFrames (I.obsRun msg (m * T)) ℓ <+: c ℓ)
     (dec : List (Obs L K S) → Msg) (hdec : ∀ msg ∈ Ms, dec (I.obsRun msg (m * T)) = msg) :
     Ms.encard ≤ ((((∏ ℓ, (r ℓ + 1) ^ T) * D ^ T) ^ m : ℕ) : ℕ∞) := by
-  rw [← ingress_bound_eq_perWindow]
+  rw [← ingress_bound_eq_perSamplingBlock]
   exact encard_ingress_obsDecodable_le I (m * T) D r hW4 hr hJ c Ms hacc hc dec hdec
 
-theorem encard_ingress_obsDecodable_le_contents_perWindow (I : Interaction L K S Msg In Act Wire) (T m D : ℕ)
+theorem encard_ingress_obsDecodable_le_contents_perSamplingBlock (I : Interaction L K S Msg In Act Wire) (T m D : ℕ)
     (r : Fin L → ℕ) (hW4 : Packed I.certifier) (hr : Allocated I.certifier r) (hJ : JitterBounded I.certifier D)
     (Cs : Set (Fin L → List (List Bool))) (Ms : Set Msg)
     (hacc : ∀ msg ∈ Ms, StatusComplete (m * T) (I.obsRun msg (m * T)))
     (hc : ∀ msg ∈ Ms, ∃ c ∈ Cs, ∀ ℓ, linkFrames (I.obsRun msg (m * T)) ℓ <+: c ℓ)
     (dec : List (Obs L K S) → Msg) (hdec : ∀ msg ∈ Ms, dec (I.obsRun msg (m * T)) = msg) :
     Ms.encard ≤ Cs.encard * ((((∏ ℓ, (r ℓ + 1) ^ T) * D ^ T) ^ m : ℕ) : ℕ∞) := by
-  rw [← ingress_bound_eq_perWindow]
+  rw [← ingress_bound_eq_perSamplingBlock]
   exact encard_ingress_obsDecodable_le_contents I (m * T) D r hW4 hr hJ Cs Ms hacc hc dec hdec
 
 end NetTiming

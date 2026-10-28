@@ -255,10 +255,10 @@ def EncardIngressDecodableLeContents : Prop :=
     Ms.encard ≤ Cs.encard * (((∏ ℓ, (r ℓ + 1)) ^ n * D ^ n : ℕ) : ℕ∞)
 
 /-- **The K charge's unit: `T·log2(r ℓ + 1)` bits per ingress sampling block.** `EncardIngressObsDecodableLe` over the
-first `m` whole windows of `T` buckets, the horizon `n = m·T`: for one content assignment `c`, at most
+first `m` whole sampling blocks of `T` buckets, the horizon `n = m·T`: for one content assignment `c`, at most
 `(∏_ℓ (r ℓ + 1)^T · D^T)^m` messages. Each sampling block contributes the factor `(r ℓ + 1)^T`, its `T·log2(r ℓ + 1)`
-bits, and each window `D^T` of jitter, 1 under J. -/
-def EncardIngressObsDecodableLePerWindow : Prop :=
+bits, and `D^T` of jitter, 1 under J. -/
+def EncardIngressObsDecodableLePerSamplingBlock : Prop :=
   ∀ {L K S : ℕ} {Msg In Act Wire : Type}
     (I : Interaction L K S Msg In Act Wire) (T m D : ℕ) (r : Fin L → ℕ)
     (hW4 : Packed I.certifier) (hr : Allocated I.certifier r) (hJ : JitterBounded I.certifier D)
@@ -268,10 +268,10 @@ def EncardIngressObsDecodableLePerWindow : Prop :=
     (dec : List (Obs L K S) → Msg) (hdec : ∀ msg ∈ Ms, dec (I.obsRun msg (m * T)) = msg),
     Ms.encard ≤ ((((∏ ℓ, (r ℓ + 1) ^ T) * D ^ T) ^ m : ℕ) : ℕ∞)
 
-/-- **Content plus timing, per sampling block.** `EncardIngressObsDecodableLeContents` over the first `m` whole windows
-of `T` buckets: at most `#Cs · (∏_ℓ (r ℓ + 1)^T · D^T)^m` messages, `log2 #Cs` bits of content plus
-`T·Σ_ℓ log2(r ℓ + 1)` bits of timing and `T·log2 D` of jitter per window. -/
-def EncardIngressObsDecodableLeContentsPerWindow : Prop :=
+/-- **Content plus timing, per sampling block.** `EncardIngressObsDecodableLeContents` over the first `m` whole
+sampling blocks of `T` buckets: at most `#Cs · (∏_ℓ (r ℓ + 1)^T · D^T)^m` messages, `log2 #Cs` bits of content plus
+`T·Σ_ℓ log2(r ℓ + 1)` bits of timing and `T·log2 D` of jitter per sampling block. -/
+def EncardIngressObsDecodableLeContentsPerSamplingBlock : Prop :=
   ∀ {L K S : ℕ} {Msg In Act Wire : Type}
     (I : Interaction L K S Msg In Act Wire) (T m D : ℕ) (r : Fin L → ℕ)
     (hW4 : Packed I.certifier) (hr : Allocated I.certifier r) (hJ : JitterBounded I.certifier D)
@@ -357,11 +357,11 @@ the ingress grid, and their content is exempt.
 
 - **Timing.** The coin link is one more ingress link, at τ_in and an allocation r_coin. It adds a factor
   `(r_coin + 1)^T` per window to the ingress count, which is `T·log2(r_coin + 1)` bits per sampling block, the K
-  charge's unit (`SecurityProofs.EncardIngressObsDecodableLePerWindow`). r_coin isn't calibrated. At r_coin = 1, one 4
-  KiB frame per bucket, it is 600 bits per sampling block (10 bit/s): 864,000 bits a day, 0.0095 of K = 9.12e7. That is
-  on top of the `requests` link's 3,077.6 bits per sampling block (51.3 bit/s, 0.0486 of K a day), for 0.0581 of K a day
-  in all.
-- **Content: 0 bits.** `SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow` charges `log2 #Cs` for the
+  charge's unit (`SecurityProofs.EncardIngressObsDecodableLePerSamplingBlock`). r_coin isn't calibrated. At r_coin = 1,
+  one 4 KiB frame per bucket, it is 600 bits per sampling block (10 bit/s): 864,000 bits a day, 0.0095 of K = 9.12e7.
+  That is on top of the `requests` link's 3,077.6 bits per sampling block (51.3 bit/s, 0.0486 of K a day), for 0.0581 of
+  K a day in all.
+- **Content: 0 bits.** `SecurityProofs.EncardIngressObsDecodableLeContentsPerSamplingBlock` charges `log2 #Cs` for the
   content, where `Cs` is one set of content assignments covering every message counted. Conditioned on the
   challenger's coins, which is how the model treats a randomized outside party, the coin link's content is one fixed
   stream `c_coin`: the challenger's coin tree, read in order. So `Cs = Cs_requests × {c_coin}`, and the coins add

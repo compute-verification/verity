@@ -112,11 +112,12 @@ theorem EncardAccSeqsLeConstantRatePerWindow : NetTiming.Guarantees.EncardAccSeq
   fun T W ss frames op m D _ => NetTiming.encard_accSeqs_le_constantRate_perWindow T W ss frames op m D
 theorem EncardDecodableLeConstantRatePerWindow : NetTiming.Guarantees.EncardDecodableLeConstantRatePerWindow :=
   fun I T W ss frames m D _ => NetTiming.encard_decodable_le_constantRate_perWindow I T W ss frames m D
-theorem EncardIngressObsDecodableLePerWindow : NetTiming.Guarantees.EncardIngressObsDecodableLePerWindow :=
-  @NetTiming.encard_ingress_obsDecodable_le_perWindow
-theorem EncardIngressObsDecodableLeContentsPerWindow :
-    NetTiming.Guarantees.EncardIngressObsDecodableLeContentsPerWindow :=
-  @NetTiming.encard_ingress_obsDecodable_le_contents_perWindow
+theorem EncardIngressObsDecodableLePerSamplingBlock :
+    NetTiming.Guarantees.EncardIngressObsDecodableLePerSamplingBlock :=
+  @NetTiming.encard_ingress_obsDecodable_le_perSamplingBlock
+theorem EncardIngressObsDecodableLeContentsPerSamplingBlock :
+    NetTiming.Guarantees.EncardIngressObsDecodableLeContentsPerSamplingBlock :=
+  @NetTiming.encard_ingress_obsDecodable_le_contents_perSamplingBlock
 
 theorem EncardAccSeqsWithinLeConstantRate : NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRate :=
   fun bits hbits b T ss frames op n D m _ hm =>

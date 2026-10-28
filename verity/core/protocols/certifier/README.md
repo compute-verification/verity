@@ -366,7 +366,7 @@ to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
   `unread`, a sync off Σ_sync that changes neither verdict.
 - the Python keeps running beside the Lean as the reference.
 - the Lean's verdict has its property in `Security/Properties/NetworkCertifier/LinkWindow.lean`
-  (`Properties.NetworkCertifier.LinkWindowAcceptMeans`, proved): an accepted sampling block was proved, opened to the
+  (`Properties.NetworkCertifier.SamplingBlockAcceptMeans`, proved): an accepted sampling block was proved, opened to the
   word 0b11, certified on both ends and synced within Σ_sync (a warden link's syncs are not asked of), and its public
   outputs are verdict 1 and deadline 1.
 

@@ -220,7 +220,7 @@ theorem acceptedRowsAreProgramRows : AcceptedRowsAreProgramRows := by
       LmsVerifies (deviceParams x) m r.certificate.signature → Signed x.issuer.session (deviceCode x) m :=
     fun r hr m hm hv => Classical.byContradiction fun hn => hf ⟨r, hr, m, hm, hv, hn⟩
   have dev := fun {d l w r dg} (hs : Signs (deviceParams x) c d l w r dg) => device_record hcr hsig hs
-  obtain ⟨hfit, eg, ig, hpd, he, hi⟩ := acceptsLinkWindows _ c e hacc
+  obtain ⟨hfit, eg, ig, hpd, he, hi⟩ := acceptsSamplingBlocks _ c e hacc
   have heg : egressDigest (deviceParams x) = eg := by
     simp [egressDigest, hpd.1, Except.toOption]
   have hpe : (deviceParams x).egress = #[x.config.egressLink] := rfl

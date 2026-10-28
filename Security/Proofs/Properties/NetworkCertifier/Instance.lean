@@ -4,11 +4,11 @@ import Proofs.Properties.CertifierNetwork.Certify
 /-!
 # The completeness theorems' honest cases, instantiated
 
-Each completeness theorem of `Outcomes` (`honestAccepted`, `accepts_of_linkWindowsAccepted`, `undecided_of_somePending`,
-`answer_of_decodedAccepted`) has one instance here whose hypotheses hold: a unit of one egress link (`out`) and one
-ingress link (`in`) over one window of a one-bucket grid, a toy LMS key (`N = 8`, `W = 8`, `H = 1`, two leaves), and
-the two records an honest certifier issues for it, each under a 64-byte salt and signed at its own leaf
-(`honestAccepted_instance`); the same unit with no records is undecided (`somePending_instance`).
+Each completeness theorem of `Outcomes` (`honestAccepted`, `accepts_of_samplingBlocksAccepted`,
+`undecided_of_somePending`, `answer_of_decodedAccepted`) has one instance here whose hypotheses hold: a unit of one
+egress link (`out`) and one ingress link (`in`) over one window of a one-bucket grid, a toy LMS key (`N = 8`, `W = 8`,
+`H = 1`, two leaves), and the two records an honest certifier issues for it, each under a 64-byte salt and signed at its
+own leaf (`honestAccepted_instance`); the same unit with no records is undecided (`somePending_instance`).
 
 Two hypotheses stay hypotheses, each of a function no proof can evaluate: the parameters digests (`ParamsDigests`),
 since `parametersDigest` reads `Flock.canon`, well-founded recursion the kernel does not evaluate; and, for `answer`,
@@ -210,12 +210,12 @@ theorem honestAccepted_instance {eg ig : ByteArray} (hpd : ParamsDigests params 
     subst hl hw
     exact ⟨hi, salt, dgi, σi, hib, hia, hif, hibm, hip, his, hidl, hdgi, hreci, mi, hmi, hσi⟩
 
-/-- **`accepts_of_linkWindowsAccepted`'s hypothesis holds**: for parameters digests `eg` and `ig`, every sampling block
-of the honest commitment is accepted. -/
-theorem linkWindowsAccepted_instance {eg ig : ByteArray} (hpd : ParamsDigests params eg ig) :
-    ∃ c, LinkWindowsAccepted params c evidence :=
+/-- **`accepts_of_samplingBlocksAccepted`'s hypothesis holds**: for parameters digests `eg` and `ig`, every sampling
+block of the honest commitment is accepted. -/
+theorem samplingBlocksAccepted_instance {eg ig : ByteArray} (hpd : ParamsDigests params eg ig) :
+    ∃ c, SamplingBlocksAccepted params c evidence :=
   let ⟨c, h⟩ := honestAccepted_instance hpd
-  ⟨c, acceptsLinkWindows params c evidence h⟩
+  ⟨c, acceptsSamplingBlocks params c evidence h⟩
 
 /-- **`undecided_of_somePending`'s hypothesis holds**: for parameters digests `eg` and `ig`, the unit with no records
 has every sampling block pending, so it is undecided. -/

@@ -248,7 +248,7 @@ theorems whose bounds the calibration reports (`verity.core.protocols.certifier.
 - egress, for the shipped schedule (`NetTiming.SecurityProofs.Schedule`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardDecodableLeConstantRate` and `EncardDecodableLeConstantRatePerWindow`;
 - ingress, the K charge (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
-  `EncardIngressObsDecodableLe` and `EncardIngressObsDecodableLePerWindow`.
+  `EncardIngressObsDecodableLe` and `EncardIngressObsDecodableLePerSamplingBlock`.
 
 The other 29 are the rest of the Capacity table's bounds and the schedule's causality rule:
 
@@ -261,7 +261,7 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   `EncardAccSeqsLeConstantRateWindows`, `EncardAccSeqsLeConstantRatePerWindow`.
 - **The ingress bound** (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardIngressDecodableLe`, `EncardIngressObsDecodableLeContents`, `EncardIngressDecodableLeContents`,
-  `EncardIngressObsDecodableLeContentsPerWindow`.
+  `EncardIngressObsDecodableLeContentsPerSamplingBlock`.
 - **The leak bound** (`NetTiming.SecurityProofs.AdviceString`): `EncardAccSeqsWithinLeConstantRate`,
   `EncardDecodableWithinLeCompiled`, `EncardDecodableWithinLeCompiledPerWindow`.
 - **Advice v1's charge** (`NetTiming.SecurityProofs.AdviceV1`): `EncardChargedLe`, at most `2^c` decision streams
@@ -407,10 +407,10 @@ lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The wit
    windows of `T` buckets, `n = m·T`, each with its parent's hypotheses at that horizon and no other: the shipped
    schedule's bound is `#Ac · (#Σ_sync · D^T)^m` (`EncardAccSeqsLeConstantRatePerWindow`,
    `EncardDecodableLeConstantRatePerWindow`), and the ingress bound `(∏_ℓ (r ℓ + 1)^T · D^T)^m` per content assignment
-   (`EncardIngressObsDecodableLePerWindow`, and its `Contents` version). The egress factor per window is the bound's,
-   not a count per window: content advice and an earlier window's sync can first show in a later window, so one window
-   may continue a given prefix in more than `#Σ_sync · D^T` ways. So the egress bound is cumulative from the run's
-   first window, and a temporal unit that starts later is not bounded by its own windows. Ingress is not affected:
+   (`EncardIngressObsDecodableLePerSamplingBlock`, and its `Contents` version). The egress factor per window is the
+   bound's, not a count per window: content advice and an earlier window's sync can first show in a later window, so one
+   window may continue a given prefix in more than `#Σ_sync · D^T` ways. So the egress bound is cumulative from the
+   run's first window, and a temporal unit that starts later is not bounded by its own windows. Ingress is not affected:
    `Packed`, `Allocated` and `JitterBounded` bound every step's branching whatever came before.
 2. **The Program reads ingress up to and including step t.** The note's W1 lag allows only ingress before t. This is
    more permissive, so the bounds cover more Programs.
@@ -442,7 +442,7 @@ The ingress bound adds these:
 11. **One allocation per link, one bucket width.** Link `ℓ` has allocation `r ℓ` (`Allocated`) within the shared slot
     count `S`, and every link shares the step, a bucket of ∂X. Ingress links with different bucket widths are not
     modelled. Over the first `m` whole windows each sampling block contributes `(r ℓ + 1)^T`
-    (`EncardIngressObsDecodableLePerWindow`).
+    (`EncardIngressObsDecodableLePerSamplingBlock`).
 12. **No Program, no clock.** The bound reads no Program and no advice: the outside sender chooses when frames arrive,
     so no clock pins ingress timing. Jitter on the inward release adds `D^n` (J, `D = 1` when tested ideal). W3's frame
     length and the FIFO rule are not used; the FIFO certifier attains the bound (`EncardFifoGrids`, read for the ingress

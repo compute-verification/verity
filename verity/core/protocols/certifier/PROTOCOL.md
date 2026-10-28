@@ -1035,7 +1035,7 @@ records, `cr/sha-512`, the signature's unforgeability and an honest network cert
 | A fixed clock, under J (D = 1) | 0 bits of timing | `SecurityProofs.EncardAccSeqsLeFixedClock`; for the shipped schedule, `SecurityProofs.EncardAccSeqsLeConstantRateFixedClock` |
 | Ingress, where no clock applies | `log2(r_in + 1)/τ_in` bit/s per link, under J (D = 1), statuses complete | `SecurityProofs.EncardIngressDecodableLe`, `SecurityProofs.EncardIngressObsDecodableLe` |
 | Ingress, content plus timing | `log2 #Cs` bits plus the ingress timing | `SecurityProofs.EncardIngressDecodableLeContents`, `SecurityProofs.EncardIngressObsDecodableLeContents` |
-| Ingress, per sampling block (the K charge's unit) | `T·log2(r_in + 1)` bits per sampling block over the first m whole windows, plus `T·log2 D` of jitter per window, statuses complete. Unlike egress, each step's bound does not depend on what came before | `SecurityProofs.EncardIngressObsDecodableLePerWindow`; content plus timing, `SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow`; for a decoder of the wire, W2 and `SecurityProofs.EncardIngressDecodableLe` at n = m·T |
+| Ingress, per sampling block (the K charge's unit) | `T·log2(r_in + 1)` bits per sampling block over the first m whole windows, plus `T·log2 D` of jitter per window, statuses complete. Unlike egress, each step's bound does not depend on what came before | `SecurityProofs.EncardIngressObsDecodableLePerSamplingBlock`; content plus timing, `SecurityProofs.EncardIngressObsDecodableLeContentsPerSamplingBlock`; for a decoder of the wire, W2 and `SecurityProofs.EncardIngressDecodableLe` at n = m·T |
 
 **The advice string's row.** The advice string is the constant-rate Program's content advice, so its charge is `A_c`.
 The Lean statement keeps the charge abstract (`Security/Definitions/NetworkCertifier/AdviceString.lean`): a function
@@ -1109,9 +1109,9 @@ are the bounds `calibration.calibrate` reports: egress over a monitoring period
 (`capacity.egress_bits_per_day_one_clock`, `SecurityProofs.EncardDecodableLeConstantRate`) and per window
 (`clock_sync.bits_per_window`, `SecurityProofs.EncardDecodableLeConstantRatePerWindow`), and ingress over a monitoring period (the
 K charge, `k_charge.share_of_k_by_span` from each link's `rate_bps`, `SecurityProofs.EncardIngressObsDecodableLe`) and
-per sampling block (`envelope_bits_per_window`, `SecurityProofs.EncardIngressObsDecodableLePerWindow`, whose interaction
-is any link's). The steps of their proofs are lemmas (`Security/Proofs/NetworkCertifier/Lemmas.lean`): proved and
-audited, with no record.
+per sampling block (`envelope_bits_per_window`, `SecurityProofs.EncardIngressObsDecodableLePerSamplingBlock`, whose
+interaction is any link's). The steps of their proofs are lemmas (`Security/Proofs/NetworkCertifier/Lemmas.lean`):
+proved and audited, with no record.
 
 The shipped schedule's egress bounds are proved in Lean for `constantRate`, the Program of `schedule`, with no
 dataflow hypothesis: for every frame function, sync set and operator, over a monitoring period within the W windows with advice
@@ -1149,8 +1149,8 @@ establishes `StatusComplete` for the windows audited. That is the acceptance hyp
 `SecurityProofs.EncardIngressObsDecodableLe`, `SecurityProofs.EncardIngressDecodableLe`, their `Contents` versions and
 the two per-window forms. Over the first m whole windows of a run (n = m·T; for the K charge, the run from the last
 wipe) the count factors per sampling block: `(r_ℓ + 1)^T` on each link in each window, `T·log2(r_in + 1)` bits, which is
-the K charge's unit (`SecurityProofs.EncardIngressObsDecodableLePerWindow`, and
-`SecurityProofs.EncardIngressObsDecodableLeContentsPerWindow` for the `Contents` version).
+the K charge's unit (`SecurityProofs.EncardIngressObsDecodableLePerSamplingBlock`, and
+`SecurityProofs.EncardIngressObsDecodableLeContentsPerSamplingBlock` for the `Contents` version).
 
 The `Contents` versions drop the one given content: messages whose frames follow some content assignment in a set `Cs`
 number at most `#Cs` times that count. So Lean proves, for the set `Ms` of messages counted, `log2 #Ms ≤ log2 #Cs` plus

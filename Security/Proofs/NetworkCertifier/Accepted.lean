@@ -8,7 +8,7 @@ import Proofs.NetworkCertifier.Schedule
 `Properties.NetworkCertifier.AcceptedRunsAreProgramRuns`, proved from what an accepted run's records are
 (`Properties.NetworkCertifier.acceptedRowsAreProgramRows`, which holds unless the run yields a SHA-512 collision or an
 LMS forgery, as this does) and the program's `expectedRow` being the reference's (`CodeExpectedRow`). The syncs the
-evidence declares are each in Σ_sync (the check's `advice` test, through `acceptsLinkWindows`), so they are advice of
+evidence declares are each in Σ_sync (the check's `advice` test, through `acceptsSamplingBlocks`), so they are advice of
 the reference's constant-rate Program; the device's egress records are the Program's grids, whose rows, read back as
 bits, are `expectedRow`'s (`bytesGrid_slot`); and its records of every sampling block are complete.
 
@@ -45,7 +45,7 @@ theorem acceptedRunsAreProgramRuns : AcceptedRunsAreProgramRuns := by
   refine Or.inl ?_
   intro K In Ac frames a op o linkOf hlink hlen hobs hopen
   obtain ⟨hcov, hcomp, hgrid⟩ := hpr
-  obtain ⟨hfit, eg, ig, -, he, -⟩ := acceptsLinkWindows _ c e hacc
+  obtain ⟨hfit, eg, ig, -, he, -⟩ := acceptsSamplingBlocks _ c e hacc
   have h0 : 0 < e.links.size := by rw [hfit.1]; exact Nat.one_pos
   have hl0 : e.links[0]? = some e.links[0] := Array.getElem?_eq_getElem h0
   have hmem : e.links[0] ∈ e.links.toList := Array.mem_toList_iff.mpr (Array.getElem_mem h0)
