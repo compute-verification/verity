@@ -3,7 +3,7 @@
 //
 // Operand classes (Verity.OperandClass), each byte drawn from a hash of its position: s8 uniform on [-128, 127], s2 on
 // [-2, 1], u2 on [0, 3], u4 on [0, 15], zero. Kernels:
-//   wgmma  r20261027-220336-dfa1's arm: one warpgroup an SM issuing wgmma m64n256k32 back to back on A and B resident in
+//   wgmma  one warpgroup an SM issuing wgmma m64n256k32 back to back on A and B resident in
 //          shared memory (KS k-slices, cycled), the tensor pipe's issue limit with no loads. ENC is the instruction's operand
 //          types: s8s8 (the class's bytes), u8u8 or s8u8 (the offset re-encoding: each value plus OFF, read as u8; s8's OFF
 //          is 128, s2's 2, the unsigned classes' 0).

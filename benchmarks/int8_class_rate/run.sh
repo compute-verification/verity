@@ -4,13 +4,13 @@
 # exit, then ROUNDS rounds of every class through each kernel and encoding, SECS seconds an arm. Timings only: the one
 # nvidia-smi query is of clocks. The build runs outside the lease, in a scratch directory.
 #
-#   research run --on vy-dc-h200 --project verity --source . --cwd source --env GPU_LEASE_WHO=compute-accounting \
+#   research run --on NODE --project verity --source . --cwd source --env GPU_LEASE_WHO=compute-accounting \
 #     -- bash benchmarks/int8_class_rate/run.sh
 #
 # Env: CLASSES (default "s8 s2 u2 u4 zero"), ENCODINGS (wgmma's, default "s8s8 u8u8"; u8u8 runs on s8 and s2, the classes
 # an offset changes), KERNELS (default "wgmma lt"), RATIOS (default "0 1.70 2.3", 0 first), SECS (15), LT_SECS (10),
 # ROUNDS (2), CLOCK (1830), LEASE_MIN (30). cuBLASLt runs alone only: beside it the hash's resident CTAs, though paced,
-# hold the SMs its GEMM's CTAs need (r20261028-012156-430f: 29 T MAC/s), which measures scheduling, not the rate.
+# hold the SMs its GEMM's CTAs need, which measures scheduling, not the rate.
 # Writes $OUT/rates.jsonl (class_rate's lines, each with its round), card.json and summary.txt (summarize.py's reading
 # of this card).
 set -uo pipefail

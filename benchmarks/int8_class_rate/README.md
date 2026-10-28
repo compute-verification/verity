@@ -6,7 +6,7 @@ compressions a T MAC, at the declared clock (1830 MHz, locked under the lease). 
 capacity a card registers per class; the bound reads the data sheet until a reading is accepted. Timings only: every
 rate and clock comes from the kernels' own `clock64` over `%globaltimer`, and the one `nvidia-smi` query is of clocks.
 
-- `class_rate.cu`: the kernels. `wgmma` is r20261027-220336-dfa1's arm, one warpgroup an SM issuing wgmma m64n256k32
+- `class_rate.cu`: the kernels. `wgmma` is one warpgroup an SM issuing wgmma m64n256k32
   back to back on shared-memory operands, in three operand encodings: s8·s8, and the offset re-encoding as u8·u8 or
   s8·u8. `lt` is cuBLASLt's int8 GEMM at 8192³, its output checked at sampled entries. Beside each, SHA-512 runs on
   a second stream, each warp paced to the target ratio of the alone arm's rate, and the arm reports the ratio it
@@ -20,7 +20,7 @@ rate and clock comes from the kernels' own `clock64` over `%globaltimer`, and th
   ratio.
 
 ~~~text
-research run --on vy-dc-h200 --project verity --source . --cwd source --env CARD=vy-dc-h200 \
+research run --on NODE --project verity --source . --cwd source --env CARD=NODE \
   --env GPU_LEASE_WHO=compute-accounting -- bash benchmarks/int8_class_rate/run.sh
 python3 benchmarks/int8_class_rate/summarize.py ~/.research/runs/RUN1/out ~/.research/runs/RUN2/out [--json FILE]
 ~~~
