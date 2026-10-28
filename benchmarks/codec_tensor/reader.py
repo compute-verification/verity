@@ -28,8 +28,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import receipts as rb
-from verity.core.protocols.remote_bandwidth.store import SALT_DOMAIN, store_salt
+from verity.core.protocols.remote_bandwidth import receipts as rb, store
 from verity.ml.commitments import merkle_depth
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import domain_message
@@ -56,7 +55,7 @@ def pack64(bits: np.ndarray) -> np.ndarray:
 
 def chain_messages(plan: rb.Plan, key: bytes) -> dict[str, tuple[bytes, int]]:
     """A pass's seed-dependent messages with the seed's 64 bytes zero, each with where those bytes go (`rb_chain_set`):
-    the receipt prefix (`rb.prefix`) and the salts' input (`store_salt`) take the seed, the tree's binding
+    the receipt prefix (`rb.prefix`) and the salts' input (`store.store_salt`) take the seed, the tree's binding
     (`rb.binding`) the seed, and its domain message (`rb.domain`'s) the binding."""
     z, f = bytes(64), b"\xff" * 64
     positions = RangeIndexedDomain(0, rb.leaves(plan.length))
@@ -66,7 +65,7 @@ def chain_messages(plan: rb.Plan, key: bytes) -> dict[str, tuple[bytes, int]]:
 
     out = {}
     for name, fn in (("receipt", rb.prefix), ("binding", lambda s: rb.TREE_DOMAIN + s + plan.digest),
-                     ("domain", dom), ("salt", lambda s: SALT_DOMAIN + key + s)):
+                     ("domain", dom), ("salt", lambda s: store.SALT_DOMAIN + key + s)):
         m0, m1 = fn(z), fn(f)
         a = next(i for i, (x, y) in enumerate(zip(m0, m1)) if x != y)
         if m0[a:a + 64] != z or m1[a:a + 64] != f or m0[:a] + m0[a + 64:] != m1[:a] + m1[a + 64:]:
@@ -117,7 +116,7 @@ class Reader:
         self.seed, self.plan, self.key, self.positions, self.leaves = seed, plan, key, n, rb.leaves(n)
         last = n - rb.PER_LEAF * (self.leaves - 1)
         self.dom = rb.domain(seed, plan)
-        salt_in = SALT_DOMAIN + key + seed
+        salt_in = store.SALT_DOMAIN + key + seed
         self.call("rb_set", rb.prefix(seed), sha512_row_v2_prefix(8 * rb.DIGEST_BYTES * rb.PER_LEAF),
                   sha512_row_v2_prefix(8 * rb.DIGEST_BYTES * last), rb.HM96.salt_prefix, rb.HM96.leaf_prefix(rb.KEY),
                   rb.KEY, self.dom.domain_id, rb.SCHEMA.encode(), len(rb.SCHEMA), salt_in, len(salt_in), n)
@@ -235,7 +234,7 @@ class Reader:
         lo = (c - c0) * rb.PER_LEAF
         leaf = tuple(digest(y) for y in ys[lo:lo + rb.PER_LEAF])
         path = tuple(digest(levels[h][((c >> h) ^ 1) - (c0 >> h)]) for h in range(len(levels) - 1))
-        return leaf, path, store_salt(self.key, self.seed, c)
+        return leaf, path, store.store_salt(self.key, self.seed, c)
 
 
 def gate(reader: Reader, torch, blocks: int, rng: np.random.Generator) -> dict:
@@ -263,7 +262,7 @@ def gate(reader: Reader, torch, blocks: int, rng: np.random.Generator) -> dict:
     levels = reader.levels(reader.commit(ys, 0, reader.leaves, salts), 0, pad=True)
     receipter = rb.Receipter(seed)
     ref_ys = [receipter(j, host[j * BLOCK:(j + 1) * BLOCK].tobytes(), z) for j, z in zip(order, zs)]
-    ref_salts = [store_salt(key, seed, c) for c in range(reader.leaves)]
+    ref_salts = [store.store_salt(key, seed, c) for c in range(reader.leaves)]
     tree = rb.tree(seed, plan, ref_ys, ref_salts)
     got = [digest(y) for y in ys]
     sl = salts.cpu().numpy().tobytes()
@@ -295,7 +294,7 @@ def gate(reader: Reader, torch, blocks: int, rng: np.random.Generator) -> dict:
                                                               half, half // 2)]
     receipter = rb.Receipter(seed)
     ref_ys = [receipter(j, host[j * BLOCK:(j + 1) * BLOCK].tobytes(), bytes(BLOCK)) for j in plan]
-    tree = rb.tree(seed, plan, ref_ys, [store_salt(key, seed, c) for c in range(reader.leaves)])
+    tree = rb.tree(seed, plan, ref_ys, [store.store_salt(key, seed, c) for c in range(reader.leaves)])
     h0, h1 = (half // rb.PER_LEAF).bit_length() - 1, (half // 2 // rb.PER_LEAF).bit_length() - 1
     opened = []
     for p in sorted({0, 1, 17, half - 1, half, half + 33, plan.length - 1, *map(int, rng.integers(0, plan.length, 6))}):
@@ -332,7 +331,7 @@ def chain_gate(reader: Reader, torch, rng: np.random.Generator) -> dict:
         chained, root, sl = reader.consts(), digest(levels[-1][0]), salts.cpu().numpy().tobytes()
         reader.begin(seed, plan, key)
         torch.cuda.synchronize()
-        ref_salts = [store_salt(key, seed, c) for c in range(reader.leaves)]
+        ref_salts = [store.store_salt(key, seed, c) for c in range(reader.leaves)]
         tree = rb.tree(seed, plan, [digest(y) for y in ys.cpu().numpy()], ref_salts)
         out[name] = {"positions": plan.length, "leaves": reader.leaves, "consts": chained == reader.consts(),
                      "salts": sl == b"".join(ref_salts), "root": root == tree.commitment.root}
@@ -384,7 +383,7 @@ def sketch_gate(reader: Reader, torch, blocks: int, rng: np.random.Generator, ro
                          "receipts_plain": [digest(y) for y in plain] == ref_plain}
     salts = torch.empty(reader.leaves * rb.SALT_BYTES, dtype=torch.uint8, device="cuda")
     levels = reader.levels(reader.commit(ys, 0, reader.leaves, salts), 0, pad=True)
-    tree = rb.tree(seed, plan, ref_ys, [store_salt(key, seed, c) for c in range(reader.leaves)])
+    tree = rb.tree(seed, plan, ref_ys, [store.store_salt(key, seed, c) for c in range(reader.leaves)])
     root = digest(levels[-1][0])
     got = [digest(y) for y in ys]
     sl = salts.cpu().numpy().tobytes()

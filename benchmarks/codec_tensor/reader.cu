@@ -5,8 +5,8 @@
 //
 //   y_p      SHA512(Z(D(receipt) ‖ frame(seed)) ‖ u64be j ‖ (E_j ⊕ spread(z_j))): a thread a block, 33 compressions
 //            from the first block's midstate (the seed's)
-//   salt_c   XOF(D(store salt) ‖ key ‖ seed ‖ u64be c)[0 : 192], XOF(m) = SHA512(m ‖ u32be 0) ‖ SHA512(m ‖ u32be 1) ‖ …:
-//            the store's PRF (`NodeMemory.salt`, `store.store_salt`)
+//   salt_c   XOF(D(store salt) ‖ key ‖ seed ‖ u64be c)[0 : 192], XOF(m) = SHA512(m ‖ u32be 0) ‖ SHA512(m ‖ u32be 1)
+//            ‖ …: the store's PRF (`NodeMemory.salt`, `store.store_salt`)
 //   leaf c   x = SHA512(P(512 m) ‖ y_(16c) ‖ … ‖ y_(16c+m−1)) (sha512/row/v2 of its m receipts), b = x ⊕ M_key·salt (the
 //            Hankel matrix of hm96-sha512's key), c' = SHA512(salt prefix ‖ salt), value = SHA512(leaf prefix ‖ b ‖ c'),
 //            digest = frame-v3-sha512 leaf(c, c, "hm96-sha512/row/v2", value): a thread a leaf

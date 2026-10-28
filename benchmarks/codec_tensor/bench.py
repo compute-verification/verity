@@ -692,7 +692,7 @@ def receipt_commit_gate(torch, tags_dev, nvec: int, seed: bytes) -> dict:
     levels = READER.levels(READER.commit(ys, 0, READER.leaves), 0, pad=True)
     host = ys.cpu().numpy()
     got = [RD.digest(y) for y in host]
-    tree = SR.rb.tree(seed, plan, got, [RD.store_salt(STORE_KEY, seed, c) for c in range(READER.leaves)])
+    tree = SR.rb.tree(seed, plan, got, [RD.store.store_salt(STORE_KEY, seed, c) for c in range(READER.leaves)])
     root = RD.digest(levels[-1][0])
     return {"blocks": n, "leaves": READER.leaves,
             "leaves_ok": [RD.digest(x) for x in levels[0].cpu().numpy()] == list(tree._levels[0]),
