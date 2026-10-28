@@ -76,7 +76,7 @@ what it brought), each window's arriving whole so their request cells are the ho
 on every bucket row on the verifier's lanes from its advice and the warden's release (`request_tie`), whose verdict is
 the tie source's for `N2_LINK` (`n2_advice`). Without a frame size, the tie is the stand-in on the prompt lengths.
 
-`Negative.waits` names the interfaces a negative waits on; one with none runs today. `table` renders the registry.
+`Negative.waits` names the interfaces a negative waits on; one with none runs. `table` renders the registry.
 """
 from __future__ import annotations
 
@@ -585,7 +585,7 @@ def commit_edit(edit: Callable) -> Callable[[Path, Path, Path], Path]:
 class Negative:
     """One tampering: its `family` (the goal's four: `io`, `advice`, `token`, `circuit`), what it `tampers` (`plan`,
     `certified`, `frames`, `advice` or `commit`), the `check` that must refuse it and its refusal `code` (`served`: the code on a
-    served link where it differs), the interfaces it `waits` on (each by what it is; none: it runs today), and `make`,
+    served link where it differs), the interfaces it `waits` on (each by what it is; none: it runs), and `make`,
     the pure function that writes the tampered copy."""
 
     name: str
@@ -676,7 +676,7 @@ def table(markdown: bool = True) -> str:
     for n in NEGATIVES.values():
         code = f"{q}{n.code}{q}" + (f" (served: {q}{n.served}{q})" if n.served else "")
         rows.append((f"{q}{n.name}{q}", n.family, n.tampers, n.check, code,
-                     f"pending: {', '.join(n.waits)}" if n.waits else "runs today"))
+                     f"pending: {', '.join(n.waits)}" if n.waits else "runs"))
     if not markdown:
         return "\n".join("\t".join(r) for r in rows)
     out = ["| " + " | ".join(rows[0]) + " |", "|" + "---|" * len(rows[0])]

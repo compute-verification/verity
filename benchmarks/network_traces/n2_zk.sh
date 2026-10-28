@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # N2's verdict of record from zero-knowledge proofs of its registered unit (n2_zk.py) on a CPU machine, on hidden_zk's
 # builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame, N2's
-# network-records and the sampled-proofs verifier built in the tree. From a clone:
-#   research run --on vy-nebius-2 --source . --project verity --cwd clone --mem-gb 96 --send n2-runs.tar.gz \
-#     --env N2_MEM_GB=96 --env N2_RUNS=n2-runs.tar.gz -- bash benchmarks/network_traces/n2_zk.sh
+# network-records and the sampled-proofs verifier built in the tree. From a clone, as a job of 96 GB whose input is the
+# runs' tarball n2-runs.tar.gz:
+#   env N2_MEM_GB=96 N2_RUNS=n2-runs.tar.gz bash benchmarks/network_traces/n2_zk.sh
 # The runs: certifier-serve's honest, extra and late runs, from N2_RUNS (a tarball sent with `--send`, holding honest/,
 # extra/ and late/ as `certifier_serve.py rehearse` writes them) or else made here by `n2_zk.py virtual` (stub
 # endpoint, injected clock).
@@ -12,7 +12,8 @@
 #      session at a time)  N2_DEBUG_CLEAR=1 (each verdict also carries the in-the-clear comparison)  N2_CACHE (the build cache,
 #      kept across runs where writable)  N2_DRY=1 (the link-windows and their references only)
 # Kept in $OUT/n2zk: n2_zk's records and logs, the public files and everything the verifier received; never a prover's
-# file (inst-*, prover-instances.bin) nor a circuit (its pin is kept). $OUT/runs: the runs' public files.
+# file (inst-*, prover-instances.bin) nor a circuit (its pin is kept). $OUT/runs: the runs' public files, never their
+# request values (plan.json's and probe.json's requests, io.json's certified I/O).
 set -uo pipefail
 export HZ_CONFIGS=n2zk HZ_MEM_GB=${N2_MEM_GB:?}
 if [ -n "${N2_CACHE:-}" ] && mkdir -p "$N2_CACHE" 2>/dev/null && [ -w "$N2_CACHE" ]; then export HZ_CACHE=$N2_CACHE; fi
@@ -40,7 +41,8 @@ else
     || { log "n2zk: virtual FAILED"; exit 7; }
 fi
 mkdir -p "$OUT/runs"
-(cd "$RUNS" && find . -type f \( -name '*.json' -o -name 'certified.jsonl' \) -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/runs/")
+(cd "$RUNS" && find . -type f \( -name '*.json' -o -name 'certified.jsonl' \) ! -name plan.json ! -name probe.json ! -name io.json \
+  -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/runs/")
 EXTRA=; [ -d "$RUNS/extra" ] && EXTRA=$RUNS/extra
 LATE=; [ -d "$RUNS/late" ] && LATE=$RUNS/late
 log "n2zk: proving${N2_DEBUG_CLEAR:+, debug clear}${N2_DRY:+, dry}"

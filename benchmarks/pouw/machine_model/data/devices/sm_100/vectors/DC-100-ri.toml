@@ -8,6 +8,6 @@
 name = "DC-100-ri"
 epoch = "DC-100-ri"
 summary = "the B200 (sm_100) census as DC-100, with UNI,JI100_0 refit to the uniform instruction's measured cost beside the saturated async tcgen05.mma (0.0008624 vs DC-100's 0.906): the async-joint issue price silicon charges, not the scalar-saturated-stream estimate (the headline binds the issue ceiling above it, so it does not move)"
-note = "note:20261017T1834Z-draft-rt-isa Round 2 (the uniform chain beside the saturated tcgen05.mma r20261017-205856-aae0: 0.00088 SMSP-cycles an instruction, less 2%); on DC-100 (note:20261017T0452Z-draft-eps1-dc)"
+note = "the uniform chain beside the saturated tcgen05.mma: 0.00088 SMSP-cycles an instruction, less 2%; on DC-100"
 rows = ["issue", "M", "A", "I", "SHFL", "TL", "TM100_0", "JI100_0", "UP"]
 credits = []
