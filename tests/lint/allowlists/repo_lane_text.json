@@ -735,6 +735,7 @@
     {"file": "infra/slack-events/tests/test_consumer.py", "count": 5},
     {"file": "integrations/vllm/pyproject.toml", "count": 3},
     {"file": "integrations/vllm/tests/acquire/fa2_attn_oracle.py", "count": 2},
+    {"file": "integrations/vllm/tests/acquire/test_compiled_manifest.py", "count": 6},
     {"file": "integrations/vllm/tests/acquire/test_compiled_source.py", "count": 2},
     {"file": "integrations/vllm/tests/acquire/test_fa2_tap_bounded.py", "count": 3},
     {"file": "integrations/vllm/tests/acquire/test_fa2_tap_geometry.py", "count": 3},
@@ -840,6 +841,7 @@
     {"file": "integrations/vllm/tests/pipeline/test_admit_r19_host_working_set.py", "count": 3},
     {"file": "integrations/vllm/tests/pipeline/test_commit_delta_cli.py", "count": 3},
     {"file": "integrations/vllm/tests/pipeline/test_commit_delta_placement_b1.py", "count": 5},
+    {"file": "integrations/vllm/tests/pipeline/test_compiled_merge_identity.py", "count": 7},
     {"file": "integrations/vllm/tests/pipeline/test_coverage_workloads.py", "count": 1},
     {"file": "integrations/vllm/tests/pipeline/test_engine_schedule.py", "count": 2},
     {"file": "integrations/vllm/tests/pipeline/test_global_program_regress.py", "count": 22},
@@ -933,6 +935,7 @@
     {"file": "integrations/vllm/tests/test_no_by_name_rules.py", "count": 1},
     {"file": "integrations/vllm/tests/test_target_family.py", "count": 4},
     {"file": "integrations/vllm/tests/tools/test_ratchet_gate.py", "count": 7},
+    {"file": "integrations/vllm/tools/migrate/superseded_quarantine.py", "count": 1},
     {"file": "integrations/vllm/tools/ratchet_gate.py", "count": 6},
     {"file": "integrations/vllm/verity_vllm/acquire/compiled.py", "count": 7},
     {"file": "integrations/vllm/verity_vllm/acquire/fa2_tap_src/fa2_stubs.cu", "count": 1},
@@ -1627,9 +1630,6 @@
     {"file": "verity/ml/flock/verifier/layout_agree.py", "count": 1},
     {"file": "verity/ml/flock/verifier/qword_agree.py", "count": 3},
     {"file": "verity/ml/flock/verifier/qword_program_agree.py", "count": 6},
-    {"file": "verity/ml/flock/verifier/template_query_agree.py", "count": 1},
-    {"file": "integrations/vllm/tools/migrate/superseded_quarantine.py", "count": 1},
-    {"file": "integrations/vllm/tests/acquire/test_compiled_manifest.py", "count": 6},
-    {"file": "integrations/vllm/tests/pipeline/test_compiled_merge_identity.py", "count": 7}
+    {"file": "verity/ml/flock/verifier/template_query_agree.py", "count": 1}
   ]
 }
