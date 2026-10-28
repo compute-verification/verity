@@ -2,7 +2,8 @@
 each a case in its protocol's formats and its answer on it. An honest window (`pouw_check_cases`) and an honest period
 (`pouw_period_cases`) written from their inputs accept, with the digest the product binds; a served H1 window
 (``fixtures/served-h1-window``, window 0's line of a served H200 run's windows.jsonl, a development window in no
-period) is MISSING from both, with why, as an empty case its protocol rejects; and ``--exe`` is the answer of record."""
+period) is MISSING from both, with why, and writes no case, so `composite.py` leaves it out and names it missing; the
+directory is private as `composite.py` reads it; and ``--exe`` is the answer of record."""
 
 from __future__ import annotations
 
@@ -46,6 +47,8 @@ def test_an_honest_window_is_a_v1_piece_that_accepts(tmp_path):
     assert got["commitment"] == CC.digest(CC.commitment(bytes.fromhex(case["commitment"]))).hex()
     piece = C.piece(out)
     assert piece["id"] == P.V1 and piece["commitment"].hex() == case["commitment"] and piece["blobs"] == []
+    assert stat.S_IMODE(out.stat().st_mode) == 0o700
+    assert {f.name: stat.S_IMODE(f.stat().st_mode) for f in out.iterdir()} == dict.fromkeys(P.CASE_FILES, 0o600)
 
 
 def test_an_honest_period_is_a_period_piece_that_accepts(tmp_path):
@@ -71,17 +74,28 @@ def test_a_deployment_key_file_is_the_key_the_period_pins():
 
 
 def test_a_served_h1_window_is_missing_from_both_with_why(tmp_path, capsys):
-    assert P.main(["v1", "--out", str(tmp_path / "v1"), "--serve-run", str(SERVED), "--window", "0"]) == 1
-    assert P.main(["period", "--out", str(tmp_path / "period"), "--serve-run", str(SERVED), "--window", "0"]) == 1
+    assert P.main(["v1", "--out", str(tmp_path / "v1"), "--serve-run", str(SERVED), "--window", "0"]) == 2
+    assert P.main(["period", "--out", str(tmp_path / "period"), "--serve-run", str(SERVED), "--window", "0"]) == 2
     said = capsys.readouterr().out
     assert f"MISSING {P.V1}: window 0's PoUW is H1's per-call credit (pouw:eps1-sm120-h1fx1)" in said
     assert f"MISSING {P.PERIOD}: window 0's session s20261027T201610Z-c43d is in no period" in said
     for d, protocol in ((tmp_path / "v1", P.V1), (tmp_path / "period", P.PERIOD)):
-        a = json.loads((d / "answer.json").read_text())
-        assert (a["protocol"], a["verdict"], a["commitment"]) == (protocol, "reject", None)
-        assert a["reason"].startswith("params: ")
+        assert [f.name for f in d.iterdir()] == ["missing.json"]
         assert json.loads((d / "missing.json").read_text())["protocol"] == protocol
-        assert C.piece(d)["id"] == protocol
+        assert C.case_dirs([d]) == []
+    assert C.main(["remote", "--cases", str(tmp_path / "v1"), "--private-out", str(tmp_path / "priv"),
+                   "--public-out", str(tmp_path / "pub")]) == 0
+    assert f"NOT_ESTABLISHED missing {P.V1}, verity/sampled-proofs/one-stage/v2" in capsys.readouterr().out
+
+
+def test_a_rerun_that_goes_missing_leaves_no_stale_case(tmp_path):
+    case = pouw_check_cases.instance(random.Random(0), "honest")
+    reg, ans = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
+    out = tmp_path / "pouw"
+    P.main(["v1", "--out", str(out), "--params", str(_json(tmp_path / "p.json", case["params"])),
+            "--registration", str(_json(tmp_path / "r.json", reg)), "--answer", str(_json(tmp_path / "a.json", ans))])
+    assert P.main(["v1", "--out", str(out), "--serve-run", str(SERVED), "--window", "0"]) == 2
+    assert [f.name for f in out.iterdir()] == ["missing.json"]
 
 
 def test_a_window_the_run_lacks_is_missing(tmp_path):
@@ -94,8 +108,13 @@ def test_the_exe_is_the_answer_of_record(tmp_path):
     line = {"commitment": None, "profile": None, "protocol": P.V1, "public": None, "reason": "stub", "verdict": "reject"}
     exe.write_text(f"#!/bin/sh\necho \"$@\" > {tmp_path}/argv\necho '{json.dumps(line)}'\nexit 1\n")
     exe.chmod(exe.stat().st_mode | stat.S_IXUSR)
+    case = pouw_check_cases.instance(random.Random(0), "honest")
+    reg, ans = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
     out = tmp_path / "pouw"
-    assert P.main(["v1", "--out", str(out), "--exe", str(exe), "--serve-run", str(SERVED), "--window", "0"]) == 1
+    assert P.main(["v1", "--out", str(out), "--exe", str(exe),
+                   "--params", str(_json(tmp_path / "p.json", case["params"])),
+                   "--registration", str(_json(tmp_path / "r.json", reg)),
+                   "--answer", str(_json(tmp_path / "a.json", ans))]) == 1
     assert json.loads((out / "answer.json").read_text())["reason"] == "stub"
     assert (tmp_path / "argv").read_text().split() == ["check", *(str(out / f) for f in
                                                                   ("params.json", "commitment.bin", "evidence.json"))]

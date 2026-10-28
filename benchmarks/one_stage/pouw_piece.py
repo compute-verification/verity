@@ -1,4 +1,4 @@
-"""PoUW's piece of the composed checks (`composite.py --piece`): its case and its answer on it, in one directory.
+"""PoUW's piece of the composed checks (`composite.py --cases`): its case and its answer on it, in one directory.
 
     pouw_piece.py v1 --out DIR [--exe PATH] (--params P --registration R --answer A | --serve-run SERVE_DIR --window K)
     pouw_piece.py period --out DIR [--exe PATH] (--key F --ledger F --pins F --main F --name NAME --windows F
@@ -14,18 +14,19 @@ commitment the auditor's ledger (``--ledger``, its lines), its evidence ``{pins,
 ``--pins``, its lines; each window's evidence in the close's order, ``--windows``, a JSON list in `credit.PROVED_KEYS`'s
 form).
 
-The directory gets ``params.json``, ``commitment.bin`` and ``evidence.json`` (canonical), ``case.json`` (``{params,
-commitment, evidence, blobs}``, the commitment and evidence hex, no blobs: neither protocol reads any) and
-``answer.json``: the line ``EXE check params.json commitment.bin evidence.json`` prints, the Lean's (``--exe``, its
-package's ``pouw-check`` or ``pouw-period``), or without ``--exe`` the Python reference's (`core_check.case`,
-`period_check.case`, which the difftests hold to the Lean).
+The directory, private as `composite.py` reads it (0700, its files 0600: the evidence and params are witness), gets
+``params.json``, ``commitment.bin`` and ``evidence.json`` (canonical), ``case.json`` (``{params, commitment, evidence,
+blobs}``, the commitment and evidence hex, no blobs: neither protocol reads any) and ``answer.json``: the line ``EXE
+check params.json commitment.bin evidence.json`` prints, the Lean's (``--exe``, its package's ``pouw-check`` or
+``pouw-period``), or without ``--exe`` the Python reference's (`core_check.case`, `period_check.case`, which the
+difftests hold to the Lean). Prints one ``PIECE`` line and exits 0 when the answer accepts, 1 when it rejects, 2 when
+it is undecided, as the check does.
 
 ``--serve-run SERVE_DIR --window K`` takes the inputs from a served run (`served_verdicts.sh`'s serve dir, or its
 ``out/serve``), and names its piece MISSING, with why, wherever the run doesn't hold them (`v1_missing`,
-`period_missing`): a missing piece is an empty case (``{}`` and two empty byte strings) with its own answer, a reject
-naming the input that didn't decode, so the product still composes and rejects on it, and ``missing.json`` says why.
-Prints one ``PIECE`` line, after a ``MISSING`` line for a missing piece; exits 0 when the answer accepts, 1 when it
-rejects, 2 when it is undecided, as the check does.
+`period_missing`): the directory then holds only ``missing.json`` saying why, no case and no answer, so `composite.py`
+leaves the protocol out and Lean's verdict on the product names it missing. It prints one ``MISSING`` line and exits
+2: nothing was decided.
 """
 from __future__ import annotations
 
@@ -37,12 +38,15 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from composite import write_private
+
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import period_check as PC
 
 V1, PERIOD = CC.ID, PC.ID
 CASE = {V1: CC.case, PERIOD: PC.case}
 EXIT = {"accept": 0, "reject": 1, "undecided": 2}
+CASE_FILES = ("params.json", "commitment.bin", "evidence.json", "case.json", "answer.json")
 
 
 class Missing(Exception):
@@ -77,24 +81,22 @@ def answer(protocol: str, out: Path, exe: str | None) -> dict:
 
 def write(out: Path, protocol: str, params: Any, commitment: bytes, evidence: bytes, exe: str | None = None) -> dict:
     """The piece in `out` (module docstring) and its answer."""
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "params.json").write_bytes(canonical(params))
-    (out / "commitment.bin").write_bytes(commitment)
-    (out / "evidence.json").write_bytes(evidence)
+    (out / "missing.json").unlink(missing_ok=True)
     case = {"blobs": [], "commitment": commitment.hex(), "evidence": evidence.hex(), "params": params}
-    (out / "case.json").write_text(json.dumps(case, sort_keys=True) + "\n")
+    write_private(out, {"params.json": canonical(params), "commitment.bin": commitment, "evidence.json": evidence,
+                        "case.json": (json.dumps(case, sort_keys=True) + "\n").encode()})
     a = answer(protocol, out, exe)
     if a.get("protocol") != protocol:
         raise RuntimeError(f"the answer is {a.get('protocol')}'s, not {protocol}'s")
-    (out / "answer.json").write_bytes(canonical(a) + b"\n")
+    write_private(out, {"answer.json": canonical(a) + b"\n"})
     return a
 
 
-def missing(out: Path, protocol: str, why: str, exe: str | None = None) -> dict:
-    """A missing piece: the empty case, its answer, and ``missing.json`` saying why."""
-    a = write(out, protocol, {}, b"", b"", exe)
-    (out / "missing.json").write_text(json.dumps({"protocol": protocol, "why": why}, sort_keys=True) + "\n")
-    return a
+def missing(out: Path, protocol: str, why: str) -> None:
+    """A missing piece: no case and no answer, only ``missing.json`` saying why."""
+    for f in CASE_FILES:
+        (out / f).unlink(missing_ok=True)
+    write_private(out, {"missing.json": (json.dumps({"protocol": protocol, "why": why}, sort_keys=True) + "\n").encode()})
 
 
 def _window(serve_dir: Path, k: int) -> dict:
@@ -160,9 +162,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         if a.window is None:
             ap.error("--serve-run takes --window")
         why = (v1_missing if protocol == V1 else period_missing)(a.serve_run, a.window)
+        missing(a.out, protocol, why)
         print(f"MISSING {protocol}: {why}", flush=True)
-        got = missing(a.out, protocol, why, a.exe)
-    elif all(getattr(a, f) is not None for f in given):
+        return EXIT["undecided"]
+    if all(getattr(a, f) is not None for f in given):
         if protocol == V1:
             params = json.loads(a.params.read_text())
             commitment = canonical(json.loads(a.registration.read_text()))
