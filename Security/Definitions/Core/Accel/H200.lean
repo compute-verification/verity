@@ -10,10 +10,11 @@ A table is a SKU's, at its firmware's maximum. This one is the H200 SXM 141 GB (
 692-2G520-0280-001, vBIOS 96.00.A5.00.03, 700 W): 132 SMs (H100 whitepaper V1.04 Table 3, H100 SXM5) at 1980 MHz SM
 and 3201 MHz HBM3e, the card's maximum and application clocks (Table 3: 'GPU Boost Clock … 1980 MHz', footnote 2 'GPU
 Peak Clock and GPU Boost Clock are synonymous'). Its supported clocks top at those two, and its SM and memory clock
-offset ranges are [0, 0]. The tensor runs at 1830 MHz (`tensorClock`), every other resource at 1980 MHz (`clock`):
-with the tensor pipe full the SMs' own clock (clock64 over the global timer) reads 1830 MHz while the driver reports
-1980, and with the tensor idle it reads 1980; the data sheet quotes its dense tensor peaks at 1830 MHz, the tensor boost
-clock. Which SKU and firmware a node's cards are is part of the premise that reads the table
+offset ranges are [0, 0]. Each rate is at its clock's ceiling, not at a clock a loaded card holds: the tensor's at
+1830 MHz (`tensorClock`), the tensor boost clock the data sheet quotes its dense tensor peaks at and the most the SMs'
+own clock (clock64 over the global timer) reads with the tensor pipe full, while the driver reports 1980; every other
+resource's at 1980 MHz (`clock`). Under its power limit a loaded card holds lower clocks. Which SKU and firmware a
+node's cards are is part of the premise that reads the table
 (`Assumptions.CardWithinAccel`); nothing the protocol checks attests it. Data-sheet numbers until measurements replace
 them.
 
@@ -23,7 +24,7 @@ them.
 
 **Rates**, a SM-clock each (CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 9.0, unless named):
 * tensor: 4096 `s8` MACs a clock of `tensorClock`, 989.4 · 10¹² a second (the data sheet's 1,979 dense INT8 TOPS over
-  2 · 132 SMs at 1830 MHz; measured 4096 at 1830 MHz), whichever instruction issues them (`mma.sync` measured at 65.6%
+  2 · 132 SMs at 1830 MHz; measured 4096 a SM-clock), whichever instruction issues them (`mma.sync` measured at 65.6%
   of `wgmma`); a MAC of `e4m3` or `e5m2` uses 1 unit (the same peak), `f16` or `bf16` 2, `tf32` 4, FP64 (DMMA) 59/2
   (67 TFLOPS over 132 SMs at the 1980 MHz FP64 boost clock is 128 MACs a clock of 1980 MHz, 29.58 units a MAC at
   1830 MHz, rounded down), `b1` 1/8 (measured); the FP4 formats, which the card lacks, 1 (an op the card lacks only adds
@@ -45,7 +46,8 @@ namespace Verity.Accel.H200
 /-- The clock's ceiling, Hz: every resource's but the tensor's. -/
 def clock : ℚ≥0 := 1980 * 10 ^ 6
 
-/-- The tensor's clock's ceiling, Hz: the SMs' clock with the tensor pipe full. -/
+/-- The tensor's clock's ceiling, Hz: the data sheet's tensor boost clock, and the most the SMs' clock reads with the
+tensor pipe full. -/
 def tensorClock : ℚ≥0 := 1830 * 10 ^ 6
 
 /-- **The H200 SXM's table.** -/

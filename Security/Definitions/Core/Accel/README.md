@@ -26,8 +26,9 @@ Resources: `tensor` (s8 MACs), `issue` (warp instructions), the `alu`, `imad`, `
 | `Accel.Sm120.card` | RTX PRO 6000 Blackwell Server Edition, 188 SMs | 2430 MHz | 2430 MHz | GDDR7 at 12481 MHz on 512 bits, 1597.6 GB/s |
 
 Both cards' firmware refuses or clamps every clock above these, and both report SM and memory clock offset ranges of
-[0, 0]. The H200's SMs read 1830 MHz with the tensor pipe full while the driver reports 1980, so its tensor rate is
-taken at 1830 MHz (`Accel.H200.tensorClock`), the clock its data sheet quotes the tensor peaks at. The table also gives the device model's limits (`Card.toDevice`, `Accounting.Device`). A run that fits the
+[0, 0]. The H200's tensor rate is taken at its tensor clock's ceiling, 1830 MHz (`Accel.H200.tensorClock`): the clock
+its data sheet quotes the tensor peaks at, and the most its SMs' clock reads with the tensor pipe full while the driver
+reports 1980. Every rate is a ceiling, not a clock a loaded card holds: under its power limit it holds less. The table also gives the device model's limits (`Card.toDevice`, `Accounting.Device`). A run that fits the
 model stays within them summed over a window (`fits_toDevice`), and no per-tick `Accounting.Schedule` is built from a
 run.
 
