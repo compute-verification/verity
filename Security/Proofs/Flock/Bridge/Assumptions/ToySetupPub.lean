@@ -19,7 +19,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
 open FlockSoundness.Discharge.Tables (LiveOutJ)
-open Flock.Test.ToyPubFiles (circuit circuitFile publicFile pub draw)
+open Flock.Test.ToyPubFiles (circuit circuitFile publicFile pub)
 
 /-- The toy session's inputs: `verify --zk`'s for one session of the toy's files. -/
 abbrev toyPubI : Inputs := Bridge.servedI circuitFile publicFile
@@ -59,7 +59,7 @@ def ToySetupPub : Prop :=
     (y₀ : DrawSetupZHJ (inputsJ toyPubI 0) (mPtsOf circuit.g (1 / nTab toyPubI)) S₀ d₀)
     (wr : (S : Finset (Fin 1)) → (R : Unit) →
       LiveOutJ (planZHJ (Reg := Unit) dj y₀ S R).length (mPtsOf circuit.g (1 / nTab toyPubI)) → Discharge.Exec.Transcript),
-    (∀ S R o, recordDraw (wr S R o).record = some draw) ∧
+    (∀ S R o, recordDraw (wr S R o).record = some Flock.Test.ToyPubFiles.draw) ∧
     ∃ (hCust : FlockSoundness.Assumptions.Zk.RecordCustodyZKJ toyPubI dj
         (fun S R => (planZHJ (Reg := Unit) dj y₀ S R).length) wr 1)
       (dg : ByteArray → ByteArray) (N : ℕ)

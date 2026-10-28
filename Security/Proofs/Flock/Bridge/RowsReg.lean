@@ -388,7 +388,7 @@ theorem sampledKSLiveV2_le_pub :
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_live I ht (Flock.Desc.parse_flat hD) (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags
           hCust.1
-          fun _ => drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
+          fun _ => ZkHidden.drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
     let BR := Bridge.strictComp (StrictCR.oneRun G τ fun o =>
         rd.pick o.1 (Discharge.ZkReg.regPathsHJ I D.unroll pub o.2.2 rd.port)) qR
     let B := Bridge.pubFinderR dj y₀ P vb wo k Rw M (2 * (t' + v)) (t' + v) t' (reg σ) (cont σ) BR

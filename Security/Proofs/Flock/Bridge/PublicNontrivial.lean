@@ -71,7 +71,7 @@ namespace Flock.Guarantees
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.Exec FlockSoundness.Refine
   FlockSoundness.Discharge.ZkLink FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.Placed
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden
-open Flock.Test.ToyPubFiles (circuit pub draw progDesc progQuery)
+open Flock.Test.ToyPubFiles (circuit pub progDesc progQuery)
 open Flock.Assumptions (toyPubI toyPubI_typed toyPubI_tags toyPubI_div ToyΩ toyLb toySrc toySrc_uniform)
 open Flock.Bridge.ToyPub (gOut xIn)
 
@@ -108,7 +108,7 @@ theorem sampledKSLivePub_nontrivial (hf : Bridge.Assumptions.ToyFilesParse) (hs 
     (2 ^ 192) hk hRw hM (1 / 2) hρ hρk t' 1 le_rfl τ v qR ⟨"", 0, []⟩
   have hlt := Bridge.deltaPubR_lt_one (n := 1) (kd := 1) (K₀ := 1) one_pos le_rfl (by norm_num)
     (Bridge.ToyPub.ioSum_le hU) (mul_nonneg (mul_nonneg (sq_nonneg _) (Nat.cast_nonneg _)) (Claims.Pr_nonneg _)) hB
-  have hown : ∀ t : Discharge.Exec.Transcript, recordDraw t.record = some draw →
+  have hown : ∀ t : Discharge.Exec.Transcript, recordDraw t.record = some Flock.Test.ToyPubFiles.draw →
       Discharge.ZkReg.OwnReadsHJ toyPubI (Bridge.ToyPub.lieOwn (Reg := Unit) dj y₀ toyPubI_typed hc hscope hU hpub)
         circuit pub t rd.isRead rd.port rd.readAt := fun t ht =>
     Bridge.ToyPub.ownReads_lie dj y₀ toyPubI_typed hc hscope hU hpub le_rfl le_rfl ht hDd hDp hdp hidx
