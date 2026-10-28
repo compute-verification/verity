@@ -12,8 +12,8 @@ enum Kind { LEAF, PAD, NODE, HM96, EMPTY, LEAF_AT };
 // LEAF, PAD, NODE: 0 compile-time nb, 1 run-time nb; LEAF 2 compile-time a body a length (frame_leaf_nb), NODE 2 run-time
 // through Compact. PAD 2 pad_of, NODE 3 node_at from node_mid, LEAF_AT 1 from its head (leaf_head, leaf_tail). HM96 0 to 4:
 // the table and loop of the mask, and the frame leaf's nb; 5 and 6: mask_lanes over a strided salt in two column orders,
-// then the leaf from its head.
-constexpr int HM96_FORMS = 7;
+// 7: mask_positions over the packed salt, each then the leaf from its head.
+constexpr int HM96_FORMS = 8;
 
 struct Case {
   int32_t kind, form, sl, level;
@@ -24,9 +24,9 @@ struct Out {
   uint8_t bc[128], hs[64], out[64];
   int32_t status, pad_[3];
 };
-// the key's tables: the nibble table, and the byte table at strides 272 and 256
+// the key's tables: the nibble table, the byte table at strides 272 and 256, and the position table
 struct Tabs {
-  const uint8_t *nib, *b272, *b256, *key;
+  const uint8_t *nib, *b272, *b256, *pos, *key;
 };
 
 RC_HD void words(const uint8_t* p, u64* w, int n) {
@@ -94,10 +94,11 @@ template <int FORM>
 struct Cols {
   RC_HD uint32_t operator()(int k) const { return FORM == 5 ? k : (7 * k + 5) % 12; }
 };
-// HM96 5 and 6: the salt as little-endian u32 words 3 apart, the mask in column order Cols, and the leaf from its head
+// HM96 5 and 6: the salt as little-endian u32 words 3 apart, the mask in column order Cols; 7: the words packed, the mask from
+// the position table; then the leaf from its head
 template <int FORM>
 RC_HD int hm96_lanes(const Case& k, const rc::Hm96K& H, const Tabs& T, const u64* x, const u64* Y, Out& o) {
-  constexpr uint32_t YS = 3;
+  constexpr uint32_t YS = FORM == 7 ? 1 : 3;
   uint32_t y[48 * YS], mk[16];
   for (int w = 0; w < 48; ++w) {
     uint32_t v = 0;
@@ -105,7 +106,8 @@ RC_HD int hm96_lanes(const Case& k, const rc::Hm96K& H, const Tabs& T, const u64
     y[w * YS] = v;
   }
   u64 my[8], B[16], h[8], mid[8], tail[16], f[8];
-  rc::mask_lanes(rc::ByteTab<256, false>{T.b256}, y, YS, Cols<FORM>{}, mk);
+  if constexpr (FORM == 7) rc::mask_positions(rc::PosTab<false>{T.pos}, y, mk);
+  else rc::mask_lanes(rc::ByteTab<256, false>{T.b256}, y, YS, Cols<FORM>{}, mk);
   rc::mask_words(mk, my);
   for (int w = 0; w < 8; ++w) B[w] = x[w] ^ my[w];
   rc::salt_digest(H.mid_salt, rc::SaltU32{y, YS}, B + 8);
@@ -193,6 +195,7 @@ RC_HD int run(const Case& k, const Tabs& T, rc::FrameK& F, rc::NodeK& N, Out& o)
       words(k.y, Y, 24);
       if (k.form == 5) return hm96_lanes<5>(k, H, T, x, Y, o);
       if (k.form == 6) return hm96_lanes<6>(k, H, T, x, Y, o);
+      if (k.form == 7) return hm96_lanes<7>(k, H, T, x, Y, o);
       if (rc::frame_plan(k.did, k.schema, k.sl, F)) return -1;
       if (F.sx == 0) return hm96_by_form<0>(k.form, F, H, T, k.pos, x, Y, o);
       if (F.sx == 4) return hm96_by_form<4>(k.form, F, H, T, k.pos, x, Y, o);
@@ -231,11 +234,12 @@ extern "C" void rc_hm96_plan(const uint8_t* key, uint64_t* out) {
   for (int i = 0; i < 8; ++i) out[i] = H.mid_salt[i], out[8 + i] = H.mid_leaf[i];
 }
 
+// pos: the key's position table (PosTab's, 192 * 256 entries of 64 bytes)
 extern "C" void rc_cases(const Case* cases, int n, const uint8_t* key, const uint8_t* nib, const uint8_t* b272,
-                         const uint8_t* b256, Out* outs) {
+                         const uint8_t* b256, const uint8_t* pos, Out* outs) {
   static rc::FrameK F;
   static rc::NodeK N;
-  const Tabs T{nib, b272, b256, key};
+  const Tabs T{nib, b272, b256, pos, key};
   for (int i = 0; i < n; ++i) {
     outs[i] = Out{};
     outs[i].status = run(cases[i], T, F, N, outs[i]);
@@ -254,12 +258,13 @@ __global__ void k_cases(const Case* cases, int n, Tabs T, rc::FrameK* F, rc::Nod
 
 // rc_cases on the device, a thread a case: 0, or the CUDA error
 extern "C" int rc_cases_cuda(const Case* cases, int n, const uint8_t* key, const uint8_t* nib, const uint8_t* b272,
-                             const uint8_t* b256, Out* outs) {
+                             const uint8_t* b256, const uint8_t* pos, Out* outs) {
+  constexpr size_t POS_BYTES = 192 * 256 * 64;
   Case* dc = nullptr;
   Out* dout = nullptr;
   rc::FrameK* dF = nullptr;
   rc::NodeK* dN = nullptr;
-  uint8_t *dkey = nullptr, *dnib = nullptr, *d272 = nullptr, *d256 = nullptr;
+  uint8_t *dkey = nullptr, *dnib = nullptr, *d272 = nullptr, *d256 = nullptr, *dpos = nullptr;
   cudaError_t e = cudaMalloc(&dc, sizeof(Case) * n);
   if (!e) e = cudaMalloc(&dout, sizeof(Out) * n);
   if (!e) e = cudaMalloc(&dF, sizeof(rc::FrameK) * n);
@@ -268,19 +273,21 @@ extern "C" int rc_cases_cuda(const Case* cases, int n, const uint8_t* key, const
   if (!e) e = cudaMalloc(&dnib, rc::TN_BYTES);
   if (!e) e = cudaMalloc(&d272, 256 * 272);
   if (!e) e = cudaMalloc(&d256, 256 * 256);
+  if (!e) e = cudaMalloc(&dpos, POS_BYTES);
   if (!e) e = cudaMemcpy(dc, cases, sizeof(Case) * n, cudaMemcpyHostToDevice);
   if (!e) e = cudaMemcpy(dkey, key, 256, cudaMemcpyHostToDevice);
   if (!e) e = cudaMemcpy(dnib, nib, rc::TN_BYTES, cudaMemcpyHostToDevice);
   if (!e) e = cudaMemcpy(d272, b272, 256 * 272, cudaMemcpyHostToDevice);
   if (!e) e = cudaMemcpy(d256, b256, 256 * 256, cudaMemcpyHostToDevice);
+  if (!e) e = cudaMemcpy(dpos, pos, POS_BYTES, cudaMemcpyHostToDevice);
   if (!e) e = cudaMemset(dout, 0, sizeof(Out) * n);
   if (!e) {
-    k_cases<<<(n + 31) / 32, 32>>>(dc, n, Tabs{dnib, d272, d256, dkey}, dF, dN, dout);
+    k_cases<<<(n + 31) / 32, 32>>>(dc, n, Tabs{dnib, d272, d256, dpos, dkey}, dF, dN, dout);
     e = cudaGetLastError();
   }
   if (!e) e = cudaMemcpy(outs, dout, sizeof(Out) * n, cudaMemcpyDeviceToHost);
   cudaFree(dc); cudaFree(dout); cudaFree(dF); cudaFree(dN);
-  cudaFree(dkey); cudaFree(dnib); cudaFree(d272); cudaFree(d256);
+  cudaFree(dkey); cudaFree(dnib); cudaFree(d272); cudaFree(d256); cudaFree(dpos);
   return (int)e;
 }
 #endif
