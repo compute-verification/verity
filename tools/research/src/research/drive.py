@@ -1461,27 +1461,37 @@ class Driver:
         else:
             self.q.log(f"research queue drive: could not post to the merge thread (the next tick retries): {' '.join(to)}: {text}")
 
-    def tell_unmarked(self, drive: dict, entries: dict) -> None:
-        """Tell the owner of each open PR that a PR marked ready waits for because it isn't marked at its head (the marked one
-        contains its head, or its commits at an older head: `Queue.entries`), once per pair of heads (else a PR waits on another's
-        unmarked commits and no one tells that owner).  A PR that isn't marked, or waits for a reason of its own (a
-        hold, a warming check), tells no one; one it waits for that is marked but waits itself tells its own blockers' owners."""
+    def tell_contained(self, drive: dict, entries: dict) -> None:
+        """Tell each PR marked ready that the sync left off `next` because it contains the head, or the commits at an older
+        head, of an open PR that isn't admitted (`Queue.entries`), and that PR, once per pair of heads: else the marked one waits
+        and no one hears.  Both owners are rung.  One unmarked at its head is asked for its mark; one ejected, held, without
+        an owner or waiting itself is named with why, and the fix: admit it, drop its commits, or ask @top to close it.  A PR that
+        isn't marked, or waits for a reason of its own (a hold, a warming check), tells no one; one left out because a PR it
+        contains didn't merge is `_tell_out`'s."""
         q = self.q
         hold = q.rules().hold_label
         for n, e in entries.items():
-            if e.state != "waiting" or not e.why.startswith("contains ") or not q.ready(n, e.pr.head):
+            if e.state != "waiting" or not e.why.endswith("which isn't admitted") or not q.ready(n, e.pr.head):
                 continue
-            for b in (entries[a] for a in e.after):
-                if b.state != "waiting" or b.pr.owner is None or hold in b.pr.labels or q.ready(b.pr.number, b.pr.head):
+            for b in (entries[a] for a in e.after if entries[a].state in ("waiting", "refused")):
+                m, h = b.pr.number, b.pr.head
+                marked = q.ready(m, h)
+                if b.state == "waiting" and b.pr.owner is not None and hold not in b.pr.labels and not marked:
+                    if (key := f"unmarked:{n}@{e.pr.head}:{m}@{h}") in drive["told"]:
+                        continue
+                    by = self.ready_by(n, e.pr.head) or q.handle(e.pr) or e.pr.owner
+                    at = _out(q.workdir, "merge-base", e.pr.head, h)
+                    self.refuse(drive, key,
+                                f"#{n} (marked by {by}) waits for your mark of #{m}, which it contains (at {at[:12]}): "
+                                f"mark #{m} ready at {h[:8]}, or withdraw it (`research queue eject {m} --reason ...`) and "
+                                f"#{n} carries it", q.handle(b.pr), q.handle(e.pr))
                     continue
-                if (key := f"unmarked:{n}@{e.pr.head}:{b.pr.number}@{b.pr.head}") in drive["told"]:
-                    continue
-                by = self.ready_by(n, e.pr.head) or q.handle(e.pr) or e.pr.owner
-                at = _out(q.workdir, "merge-base", e.pr.head, b.pr.head)
-                self.refuse(drive, key,
-                            f"#{n} (marked by {by}) waits for your mark of #{b.pr.number}, which it contains (at {at[:12]}): "
-                            f"mark #{b.pr.number} ready at {b.pr.head[:8]}, or withdraw it (`research queue eject "
-                            f"{b.pr.number} --reason ...`) and #{n} carries it", q.handle(b.pr))
+                admit = (f"lift #{m}'s `{hold}` label" if hold in b.pr.labels else
+                         f"clear what #{m} waits for" if marked and b.state == "waiting" else f"mark #{m} ready at {h[:8]}")
+                self.refuse(drive, f"contained:{n}@{e.pr.head}:{m}@{h}",
+                            f"#{n} at {e.pr.head[:8]} is out of `{q.branch}`: it contains {e.contains(m)}, and #{m} at "
+                            f"{h[:8]} isn't admitted ({b.why}). Fix: {admit}, drop #{m}'s commits from #{n}, or ask @top to "
+                            f"close #{m}", q.handle(e.pr), q.handle(b.pr))
 
     def _tell_out(self, drive: dict, state: dict) -> None:
         """Tell each PR the last sync left off `next` once per head: one that didn't merge (`conflicts`), and one that contains
@@ -1593,7 +1603,7 @@ class Driver:
             entries = q.sync(dry_run)[1]
             state = {**q.load_state(), "drive": drive}
             self._tell_out(drive, state)
-            self.tell_unmarked(drive, entries)
+            self.tell_contained(drive, entries)
         landed, why = None, self._unbaselined(drive)
         if why is None:
             landed, why = self.land_reviewed(drive, dry_run)
