@@ -59,7 +59,7 @@ end Chain
 windows (`Verity.Play`), window `w`'s chained prover any function of the earlier windows' coins, their draws among
 them. -/
 abbrev Session (n P N b h ρ S L q r s d : ℕ) : Type :=
-  Verity.Play n (WindowCoins P N b h ρ r s d) (fun _ => Chain P N b h ρ S L q r s)
+  Verity.Play n (fun _ => WindowCoins P N b h ρ r s d) (fun _ => Chain P N b h ρ S L q r s)
 
 namespace Session
 
