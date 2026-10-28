@@ -136,9 +136,6 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
     "verity/core/protocols/certifier/certificate.py::Certificate":
         ("verity/core/protocols/network/lean/NetworkCheck/Check.lean::NetworkCheck.Check.Certificate", "network-check",
          "the network check's protocol port decodes the certificates the Python issues"),
-    "verity/core/protocols/certifier/grid.py::Record":
-        ("verity/core/devices/certifier/lean/CertifierDevice/Certifier.lean::CertifierDevice.Record",
-         "certifier-device-difftest", "the certifier device's port replays the Python grid's records"),
     "verity/core/protocols/sampled_proofs/service.py::Law": (f"{FLOCK}Draw.lean::Flock.Draw.Law", "sampled-proofs-difftest",
                                                              "the service's port parses the Python's laws"),
     "verity/ml/crypto/lms.py::Signature": ("verity/core/primitives/lms/lean/Lms/Verify.lean::Lms.Signature", "lms-difftest",
@@ -860,8 +857,6 @@ KNOWN: dict[str, str] = {
         "duplicate of the Site (`Verity.Site`): becomes a reading of it (proofs)",
     "verity/core/deploy/party.py::Record": "homonym, a party's log entry: rename (proofs)",
     "verity/core/deploy/transcript.py::Transcript": "homonym, a party's message log: rename (proofs)",
-    "verity/core/devices/certifier/lean/CertifierDevice/Certifier.lean::CertifierDevice.Record":
-        "duplicate of `NetworkCheck.Check.Certificate`: becomes `grid.Record`'s port beside `RecordHead` (moved) (network-accounting)",
     "verity/core/devices/certifier/lean/CertifierDevice/Issuer.lean::CertifierDevice.Certificate":
         "duplicate of `NetworkCheck.Check.Certificate`: becomes it (deleted; it already requires `network_check`) (network-accounting)",
     "verity/core/devices/certifier/lean/CertifierDevice/Online.lean::CertifierDevice.Link":
