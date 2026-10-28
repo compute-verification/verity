@@ -39,7 +39,8 @@
 # RETAIN_DEVICE_GB (32) --release-after RELEASE_AFTER), STANDIN_DRAWS (protocols of RELEASE_AFTER no drawer serves yet: the
 # harness draws each window for each once its windows.jsonl line is out, reading only the step-input port's ids and
 # positions at each of its steps, 16T bytes a step, which the seal's positions check reads and the release keeps only when a
-# draw names them; standin_draws.txt counts them).
+# draw names them; standin_draws.txt counts them), STANDIN_POLL_S (0.2, how often the stand-in drawer reads windows.jsonl;
+# serve-openai scans its draws every VERITY_DRAWS_POLL_S, also 0.2: with the seal's store slim, a window's release waits on both).
 # A Commit arm at T 8,192 needs VERITY_LEARN_HOST_BUDGET_MB above its step's committed bytes (the default 4,096 MiB fails
 # every step closed: "bounded staging: learning step 0 exceeds the transient host budget").
 # Published ($OUT): util.json and util.txt, the profile (prof.nsys-rep), serve.json, summary.json, windows.jsonl's timings
@@ -176,7 +177,7 @@ srv=$!
 drawer=
 if [ -n "${STANDIN_DRAWS:-}" ]; then
   "$PY" -c 'import json, os, sys, time
-d, protos, done = sys.argv[1], [p for p in sys.argv[2].split(",") if p], set()
+d, protos, poll, done = sys.argv[1], [p for p in sys.argv[2].split(",") if p], float(sys.argv[3]), set()
 while True:
     try:
         lines = open(f"{d}/windows.jsonl").read().split("\n")[:-1]
@@ -195,7 +196,7 @@ while True:
                 os.rename(tmp, f"{d}/draws/w{k}.{p}.json")
                 done.add((k, p))
                 print(f"w{k} {p}", flush=True)
-    time.sleep(0.2)' "$D" "$STANDIN_DRAWS" > "$OUT/standin_draws.txt" 2>&1 &
+    time.sleep(poll)' "$D" "$STANDIN_DRAWS" "${STANDIN_POLL_S:-0.2}" > "$OUT/standin_draws.txt" 2>&1 &
   drawer=$!
 fi
 spid=
