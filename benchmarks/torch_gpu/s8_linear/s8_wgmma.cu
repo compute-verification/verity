@@ -452,53 +452,24 @@ DEV void body(const Params& p, const CUtensorMap* rmap = nullptr, int32_t* zout 
     if constexpr (RR == 0) {
       y_store<0, NA / 4>(d, p, row, col0, live0, live1, r0, r1);
     } else {
-      // the reduction: chunk c's four atoms take accumulator groups 4 c .. 4 c + 3, in A's order, as A.  The first half's
-      // atoms run under the second half's y words and the second half's under the first's, so no thread reads an accumulator
-      // an atom in flight reads.  Each half's atoms follow, in this order: a wait on every R stage holding one of its chunks
-      // (a stage the first half waited on is waited on again: unreleased, it returns at once), its accumulator groups put in
-      // A's order, the fence.  The wait's loop ends the code ptxas may move into the other half's atoms, and nothing between
-      // a fence and its atoms writes a register a wgmma reads; otherwise ptxas serializes the wgmma pipeline.  Each R stage
-      // is released once no atom reads it (s8mrb: once the bulk add has read the sums over it)
+      // the reduction: chunk c's four atoms take accumulator groups 4 c .. 4 c + 3, in A's order, as A, then the y words.
+      // Between the fence and the wait only atoms and their addresses: the tile's R stages are waited on and its groups put
+      // in A's order before the fence, since a barrier's wait loop there, or a y word computed under the atoms, makes
+      // ptxas serialize the wgmma pipeline.  Each R stage is released once no atom reads it (s8mrb: once the bulk add has
+      // read the sums over it)
       using G = Red<TM, BN, RR>;
       constexpr int CH = G::CH, Q = G::Q, RST = G::RST;
       int rs[RST];
-      uint32_t rp[RST];
 #pragma unroll
-      for (int i = 0; i < RST; i++)
-        if (i * Q < CH / 2) {
-          mbar_wait_warp(bars + 8 * s, ph);
-          rs[i] = s;
-          rp[i] = ph;
-          if (++s == STAGES) { s = 0; ph ^= 1; }
-        }
-      a_order<0, NA / 8>(d);
+      for (int i = 0; i < RST; i++) {
+        mbar_wait_warp(bars + 8 * s, ph);
+        rs[i] = s;
+        if (++s == STAGES) { s = 0; ph ^= 1; }
+      }
+      a_order<0, NA / 4>(d);
       WG_FENCE;
 #pragma unroll
       for (int c = 0; c < CH; c++) {
-        if (c == CH / 2) {
-          WG_COMMIT;
-          y_store<NA / 8, NA / 4>(d, p, row, col0, live0, live1, r0, r1);
-          WG_WAIT(0);
-          if constexpr (FL == 0) {
-#pragma unroll
-            for (int i = 0; i < RST; i++)
-              if ((i + 1) * Q <= CH / 2 && lane == 0) release<CL>(bars + 8 * (STAGES + rs[i]));
-          }
-#pragma unroll
-          for (int i = 0; i < RST; i++) {
-            if ((i + 1) * Q <= CH / 2) continue;
-            if (i * Q < CH / 2) {
-              mbar_wait_warp(bars + 8 * rs[i], rp[i]);
-            } else {
-              mbar_wait_warp(bars + 8 * s, ph);
-              rs[i] = s;
-              rp[i] = ph;
-              if (++s == STAGES) { s = 0; ph ^= 1; }
-            }
-          }
-          a_order<NA / 8, NA / 4>(d);
-          WG_FENCE;
-        }
         const uint32_t a = base + rs[c / Q] * T::STAGE + (c % Q) * G::CHUNK;
 #pragma unroll
         for (int jj = 0; jj < 4; jj++) {
@@ -507,10 +478,15 @@ DEV void body(const Params& p, const CUtensorMap* rmap = nullptr, int32_t* zout 
         }
       }
       WG_COMMIT;
-      y_store<0, NA / 8, true>(d, p, row, col0, live0, live1, r0, r1);
       WG_WAIT(0);
       acc_fence<RR / 2>(zs);
       acc_fence<NA>(d);
+      if constexpr (FL == 0) {
+#pragma unroll
+        for (int i = 0; i < RST; i++)
+          if (lane == 0) release<CL>(bars + 8 * (STAGES + rs[i]));
+      }
+      y_store<0, NA / 4, true>(d, p, row, col0, live0, live1, r0, r1);
       // accumulator i of the 64 x RR sums: row `row` + 8 ((i / 2) % 2), column 8 (i / 4) + 2 (x % 4) + i % 2
       if constexpr (FL == 0) {
 #pragma unroll
@@ -518,9 +494,6 @@ DEV void body(const Params& p, const CUtensorMap* rmap = nullptr, int32_t* zout 
           const int zr = row + 8 * ((i / 2) % 2), zc = 8 * (i / 4) + 2 * (x % 4) + i % 2;
           if (zr < M) atomicAdd(zout + (size_t)zr * RR + zc, zs[i]);
         }
-#pragma unroll
-        for (int i = 0; i < RST; i++)
-          if ((i + 1) * Q > CH / 2 && lane == 0) release<CL>(bars + 8 * (STAGES + rs[i]));
       } else {
         // both warpgroups' atoms are done with R before either writes its sums over it; warpgroup w's 64 rows of Z are
         // contiguous, so one bulk add takes them
