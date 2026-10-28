@@ -258,7 +258,7 @@ theorem check_sound {sh : Shape} {inRow outRow : Nat → Nat → Array Nat} {row
             refine ⟨xs.filterMap id, ?_, rfl, ?_, hc', h1, h2⟩
             · rw [← hlen, ← ordered_split ho]
             · cases hxs : xs.filterMap id with
-                | nil => simp [hxs] at he
+              | nil => simp [hxs] at he
               | cons _ _ => simp
 
 def NO_LINKS : String :=
