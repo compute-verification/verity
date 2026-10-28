@@ -2,13 +2,13 @@
 (`reference.Recorded`), all on one store: the committed 9-block `C*` of the remote bandwidth audit's fixture
 (`remote_bandwidth/tests/fixtures/p2-store.json`), registered for PoUB-P2 on its PoUS setup. Space's
 (`pous.period.audit` of that `C*` on node `n0`, signed by a key at S1's deployed parameters, `mc_cases.deployed_signer`)
-honest, under a prover that answers every other round with zeros, the honest audit's case carrying a setup that
-published another commitment (a run committed to a different setup, refused by the setup tie), and an honest run on
-another store (`OTHER_STORE`, accepted, which onsite's store tie refuses beside PoUB-P2's case); PoUB-P2's (`p2_case`,
-its sessions over a socket pair against `remote-audit-verifier`, as `remote_bandwidth/lean/tests/test_p2_party.py` runs
-them) honest, under a prover whose receipts skip a unit's reads, and the honest session's log stopped before its last
-window is verified; and of each, its honest case with params or evidence that don't decode. A P2 case is recorded as the
-composition hands it, without its `store_root`: onsite reads the store off its commitment's registration."""
+honest, under a prover that answers every other round with zeros, the honest audit's case committed to a setup with
+another salt (refused by the setup tie), and an honest run on another store (`OTHER_STORE`, accepted, which onsite's
+store tie refuses beside PoUB-P2's case); PoUB-P2's (`p2_case`, its sessions over a socket pair against
+`remote-audit-verifier`, as `remote_bandwidth/lean/tests/test_p2_party.py` runs them) honest, under a prover whose
+receipts skip a unit's reads, and the honest session's log stopped before its last window is verified; and of each, its
+honest case with params or evidence that don't decode. A P2 case is recorded as the composition hands it, without its
+`store_root`: onsite reads the store off its commitment's registration."""
 
 from __future__ import annotations
 
@@ -76,10 +76,13 @@ def _with_setup(case: dict, setup_of: dict, trusted: tuple[bytes, ...]) -> tuple
     return case | {"evidence": canonical_json_bytes(ev).hex()}, answer
 
 
-def _other_setup(setup_of: dict) -> dict:
-    """The setup case `setup_of` publishing another commitment: a setup the run is not committed to."""
-    c = bytes.fromhex(setup_of["commitment"])
-    return setup_of | {"commitment": (bytes([c[0] ^ 1]) + c[1:]).hex()}
+def _other_salt(case: dict) -> dict:
+    """Space's `case` committed to a setup with another salt, on the same root: a run its setup's tie refuses, and one
+    onsite's store tie, which reads the root, doesn't."""
+    published = json.loads(bytes.fromhex(case["commitment"]))
+    salt = bytes.fromhex(published["salt"])
+    published["salt"] = (bytes([salt[0] ^ 1]) + salt[1:]).hex()
+    return case | {"commitment": canonical_json_bytes(published).hex()}
 
 
 def _undecodable(cid: str, case: dict, digest: str) -> dict:
@@ -112,7 +115,7 @@ def build(tmp: Path) -> None:
     zeros = space("zeros", prover=lambda blocks: lambda i: bytes(len(blocks[i])) if i % 2 else blocks[i])
     other = space("other", run=OTHER_POUS_STORE)
     R.POUS.cases.update({R.ACCEPT: (honest.case, honest.answer), R.REJECT: (zeros.case, zeros.answer),
-                         "other-setup": _with_setup(honest.case, _other_setup(honest.setup_case), (signer.public_key,)),
+                         "other-setup": _with_setup(_other_salt(honest.case), honest.setup_case, (signer.public_key,)),
                          OTHER_STORE: (other.case, other.answer)}
                         | _undecodable(R.POUS.id, honest.case, honest.answer["commitment"]))
     why = R.POUS.cases["other-setup"][1]["reason"]
