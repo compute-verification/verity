@@ -11,7 +11,8 @@ from fractions import Fraction
 
 import pytest
 
-from test_remote_bandwidth import A, N, SCHEDULE, Clock, Entropy, challenger, drive, finish, params, partial, store  # noqa: F401
+from remote_bandwidth_fakes import Clock, Entropy
+from test_remote_bandwidth import A, N, SCHEDULE, challenger, drive, finish, params, partial, store  # noqa: F401
 from verity.core import claims
 from verity.core.protocols.remote_bandwidth import audit, codec, ledger, line, receipts, timing
 from verity.core.protocols.remote_bandwidth.audit import Pace, Session
