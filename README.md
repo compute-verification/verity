@@ -42,8 +42,6 @@ the run's record (the inference-only policy and sampled proofs at both, PoUW too
   no devices there: sampled proofs, PoUW and the inference-only policy. Start there for its lifecycle, guarantee,
   assumptions and demo.
 
-The bandwidth audit over PoUS's store is not a subprotocol of either yet.
-
 ## The vLLM integration
 
 [`integrations/vllm`](integrations/vllm/README.md) attaches Verity to vLLM. It builds each served workload's circuit
