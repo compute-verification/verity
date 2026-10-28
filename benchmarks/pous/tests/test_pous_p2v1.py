@@ -710,7 +710,7 @@ def _live():
 
 
 def test_the_signed_sessions_are_on_disk_before_any_verdict_runs(tmp_path, monkeypatch):
-    """A verdict that fails after the sessions signed (r20261009-034919-c88c: `judge` could not import the Lean's server)
+    """A verdict that fails after the sessions signed (as when `judge` could not import the Lean's server)
     takes nothing with it: every signed session is in `sessions_out` first, whole, and still verifies under its signer."""
     from verity.core.protocols.pous import memory_challenger as mc
     from verity.core.protocols.pous import schemes
@@ -739,8 +739,8 @@ def test_the_signed_sessions_are_on_disk_before_any_verdict_runs(tmp_path, monke
 
 def test_a_test_signed_audit_leaves_nothing_in_tmpdir(tmp_path_factory, monkeypatch):
     """`--signer test`'s leaf state and session log are in a temporary directory the audit removes, whether it ends or
-    fails: nothing removes one left in `$TMPDIR` (`pous-session-log-*` and `pous-test-signer-*` held 82% of vy-nebius-2's
-    /workspace inodes, 19 Oct)."""
+    fails: nothing removes one left in `$TMPDIR` (`pous-session-log-*` and `pous-test-signer-*` held 82% of a GPU node's
+    /workspace inodes once)."""
     import tempfile
 
     from verity.core.protocols.pous.schemes import p2

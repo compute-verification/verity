@@ -125,6 +125,6 @@ def ir_binary(prover_run: Path) -> str:
 
 
 def takes_lane() -> bool:
-    """Whether the installed ``verity_flock.register`` takes ``--lane`` (required from flock-backend a9d13f68, PR #34; unknown before)."""
+    """Whether the installed ``verity_flock.register`` takes ``--lane`` (required from flock-backend a9d13f68; unknown before)."""
     r = subprocess.run([sys.executable, "-m", "verity_flock.register", "--help"], capture_output=True, text=True)
     return "--lane" in r.stdout

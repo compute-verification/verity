@@ -38,7 +38,7 @@ It bounds a number and establishes no security level: `KSLin2` at the deployment
 coin server's record, which reads back; `ksLin2_deployed_full`), Holo statements being
 candidate 3's own model, and `BitsLin2` there, that `Pr[acc ∧ ¬R] ≤ t·2^{−λ₂}`, follows from it
 (`bitsLin2On_of_ksLin2On`). The proved level at the deployment is still `Claims.Recursion.lam`'s, about 65 bits, below
-the 100-bit floor (ASK-73).
+the 100-bit floor.
 -/
 
 namespace RecDeploy

@@ -553,7 +553,7 @@ static int run_cpollute(std::string& j, const std::string& dir, const Dev& d) {
   OK(cudaStreamCreateWithFlags(&sa, cudaStreamNonBlocking));
   OK(cudaStreamCreateWithFlags(&sb, cudaStreamNonBlocking));
   // A module's first launch loads it (lazy loading), which waits for running kernels: launch each once alone first,
-  // or the modules run only after clevel's wait gives up (run r20261012-083549-7727).
+  // or the modules run only after clevel's wait gives up.
   {
     const uint32_t one = 1;
     int n1 = 1;
