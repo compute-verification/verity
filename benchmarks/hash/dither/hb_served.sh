@@ -173,7 +173,9 @@ h1v3_tree() {  # SHA DIR [PREFIX]: DIR/verity from the sent PREFIX-SHA.tar.gz (h
   mkdir -p "$2"
   if [ -f "$INPUTS/$p-$1.tar.gz" ]; then tar -xzf "$INPUTS/$p-$1.tar.gz" -C "$2"
   else git -C "$ROOT" archive "$1" verity 2>/dev/null | tar -x -C "$2" 2>/dev/null; fi
-  [ -f "$2/verity/ml/protocols/pouw/circuit/h1tile.py" ] || { echo "hb_served: ${p^^}_NO_TREE at $1" >&2; exit 14; }
+  # h1tile is in ml from ONE-14 on, in core at the commits before it
+  [ -f "$2/verity/ml/protocols/pouw/circuit/h1tile.py" ] || [ -f "$2/verity/core/protocols/pouw/circuit/h1tile.py" ] ||
+    { echo "hb_served: ${p^^}_NO_TREE at $1" >&2; exit 14; }
 }
 if [ -n "${H1V3_SHA:-}" ]; then
   h1v3_tree "$H1V3_SHA" "$S/h1v3"; export DITHER_H1V3_TREE=$S/h1v3 DITHER_H1V3_SHA=$H1V3_SHA
@@ -193,7 +195,7 @@ if [ -n "${J10R_SHA:-}" ]; then
   echo "j10r $J10R_SHA" >> "$OUT/env/wrapper.txt"
 fi
 case " $* " in *dither-1s-hbp*|*dither-1s-hbk*)
-  grep -qs "^def peel_seg" "$HB_H1V3_PEEL_TREE/verity/ml/protocols/pouw/circuit/h1tile.py" || {
+  grep -qs "^def peel_seg" "$HB_H1V3_PEEL_TREE"/verity/{ml,core}/protocols/pouw/circuit/h1tile.py || {
     echo "hb_served.sh: dither-1s-hbp needs H1V3 with the peel (peel_seg) at $HB_H1V3_PEEL_SHA" >&2
     exit 2; } ;;
 esac
