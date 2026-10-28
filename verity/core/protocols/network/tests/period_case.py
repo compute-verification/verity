@@ -24,9 +24,10 @@ none of them and neither registration, as the warden leaves a window in which it
 registration holding both rows' roots and domains, answered by one-stage with a stratified or subset draw at the
 period's δ; the scan's Program is its generator form, stand-ins of its three templates at small widths in the Boolean
 profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in the checker form is a bad
-scan (`bad_scans`). Beside them, the compute audits,
-each registered over its Program, a population of one or two stand-in templates whose units commit from 8 to 320 bits
-(`audit_descriptor`), and answered with a subset or stratified draw (a work law's) and its bound on wrong units.
+scan (`bad_scans`), as is each check's negative of what `NetTiming.Layout.Fits` asks (`scan_negatives`). Beside them,
+the compute audits, each registered over its Program, a population of one or two stand-in templates whose units commit
+from 8 to 320 bits (`audit_descriptor`), and answered with a subset or stratified draw (a work law's) and its bound on
+wrong units.
 `case(kind, seed, form)` is a small period of the form aimed at a verdict, or at a decoding failure (`KINDS`), and
 `cases(seed, form)` one of each with its answer, as a composition's difftest takes a real component's cases.
 
@@ -53,7 +54,7 @@ from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.certifier.warden import WardenParams
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k
-from verity.ml.circuits import boolean as BL, codec, population
+from verity.ml.circuits import annotations as AN, boolean as BL, codec, population
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
@@ -94,6 +95,13 @@ EGRESS_PARAMS = ("state",)
 BOOL_BYTE, BOOL_U16 = ["Array", 8, ["Value", 1]], ["Array", OUT_BITS, ["Value", 1]]
 #: the checker form's, which took the rows its units compared as inputs
 CHECKER_PARAMS = (("row", "sin", "prog", "sout", "view"), ("state", "row"))
+#: the closure digests (`slot_entry_digest`) of `io_shell.SlotEntry_v1` at its circuit-check rows,
+#: `SlotEntry_v1{KO=2,IDB=17,NP=4,STOP=[]}` and `SlotEntry_v1{KO=64,IDB=17,NP=1024,STOP=[128001]}`, in that order, which
+#: `test_slot_entry_pins.py` recomputes from `io_shell`
+SLOT_ENTRY_PINS = ("0763102b5fd38583279471486ff8ce51b9caae1bc5dece3d7712ddcec456f1bb"
+                   "4e543343ed1399c0665043402d7100173a270cb6a8cc541b60bcdd29b37d7d0a",
+                   "662360bfd2b31949f09447a32dec775c3e2e26e2d9132af8898609475e75a753"
+                   "4cb522ce4f794bc5fcce71a7f09ec5a2170e0b2406339cc4d9268ea8487e3361")
 
 # --- the mirror --------------------------------------------------------------------------------------------------------
 
@@ -237,6 +245,134 @@ def _members(x: dict) -> int:
     return x["n"] if x["form"] in ("batch", "scan") else 1
 
 
+def leaves_of(t) -> int:
+    """`Ty.leaves`: a descriptor type's leaves."""
+    kind = t[0]
+    if kind == "Value":
+        return 1
+    if kind == "Array":
+        return t[1] * leaves_of(t[2])
+    return sum(leaves_of(f if kind == "Tuple" else f[1]) for f in t[1])
+
+
+def _parts(refs: dict, nodes: list) -> list[dict]:
+    """`Flock.Program.parseParts`'s parts of a sequence: a concatenation's spliced in, an alias the parts of the earlier
+    node's argument it names."""
+    if "concat" in refs:
+        return [q for r in refs["concat"] for q in _parts(r, nodes)]
+    if "alias" in refs:
+        k, x = refs["alias"]
+        return _parts(nodes[k]["args"][x]["refs"], nodes)
+    return [refs]
+
+
+def _affine(q: dict) -> tuple | None:
+    """An affine part as the decoder reads it, `(space, index, base, count)`, a part of no references at index 0 and in
+    the nodes' space unless it names the parameters'."""
+    if "affine" not in q:
+        return None
+    s, i, b, c = q["affine"]
+    return (s, i, b, c) if c else ("p" if s == "p" else "n", 0, 0, 0)
+
+
+def _part_names(q: dict) -> list[tuple[str, int]]:
+    """`partNames`: the collections a part names, its space and index, or each item's of an explicit part."""
+    if "explicit" in q:
+        return [(s, i) for s, i, _ in q["explicit"]]
+    a = q.get("affine") or q["strided"]
+    return [("p" if a[0] == "p" else "n", a[1] if a[-1] else 0)]
+
+
+def _own_returns(j: dict):
+    """`ownReturns`: whether every leaf a composite returns is a gate it computes, never a parameter's leaf passed
+    through: each part of its return names nodes of its body, none a scan, each calling a primitive or a composite of
+    which the same holds."""
+    defs, callees, memo = j["definitions"], j["callees"], {}
+
+    def computed(nodes: list, s: str, k: int) -> bool:
+        if s != "n" or k >= len(nodes) or nodes[k]["form"] == "scan":
+            return False
+        f = callees[nodes[k]["fn"]]
+        return defs[f]["form"] == "primitive" or own(f)
+
+    def own(fid: str) -> bool:
+        if fid not in memo:
+            body = defs[fid]["body"]
+            memo[fid] = all(computed(body["nodes"], s, k)
+                            for q in _parts(body["ret"], body["nodes"]) for s, k in _part_names(q))
+        return memo[fid]
+    return own
+
+
+def _input_arg(arg: dict, nodes: list, j: dict) -> int | None:
+    """`inputArg`: the root node an argument reads when it is that input node's leaves in order from its first."""
+    ps = _parts(arg["refs"], nodes)
+    a = _affine(ps[0]) if len(ps) == 1 else None
+    if a is None or a[0] != "n" or a[2] != 0 or a[1] >= len(nodes):
+        return None
+    fid = j["callees"][nodes[a[1]]["fn"]]
+    return a[1] if j["definitions"][fid]["form"] == "primitive" and INPUT_ID.match(fid) else None
+
+
+#: `Flock.Steps.FUEL`: the most steps `Prog.gate`'s walk to an operand takes
+FUEL = 2 ** 62
+
+
+def _walkable(j: dict) -> bool:
+    """`NciCheck.Desc.walkable` as C-Flock's decoder gives a Program (its layout, callees first and the root without
+    parameters): `(A + 1) · (H + 2)` at most half of `FUEL`, for the root's activations `A` (its own and each composite
+    node member's, multiplied through batches and scans) and the depth `H` they nest to, and no scan of no iterations
+    with output leaves. `rootLaidOut` and `inputsAtRoot` the decoder gives too."""
+    defs, callees, memo = j["definitions"], j["callees"], {}
+
+    def of(fid: str) -> tuple[int, int]:
+        if defs[fid]["form"] == "primitive":
+            return 0, 0
+        if fid not in memo:
+            subs = [(_members(n), *of(callees[n["fn"]])) for n in defs[fid]["body"]["nodes"]]
+            memo[fid] = (1 + sum(m * a for m, a, _ in subs), 1 + max((h for _, _, h in subs), default=0))
+        return memo[fid]
+    acts, depth = of(j["root"])
+    empty = any(n["form"] == "scan" and n["n"] == 0 and leaves_of(j["types"][n["out"]]) > 0
+                for d in defs.values() if d["form"] != "primitive" for n in d["body"]["nodes"])
+    return (acts + 1) * (depth + 2) <= FUEL // 2 and not empty
+
+
+def _topological(j: dict) -> bool:
+    """`Prog.orderViolation` is none: each argument of a body the root reaches names only the body's parameters and
+    its earlier nodes (an affine or strided part of no leaves names nothing; the returns aren't read)."""
+    defs, callees = j["definitions"], j["callees"]
+    seen, todo = set(), [j["root"]]
+    while todo:
+        fid = todo.pop()
+        if fid in seen or defs[fid]["form"] == "primitive":
+            continue
+        seen.add(fid)
+        body = defs[fid]["body"]
+        for k, x in enumerate(body["nodes"]):
+            for a in x.get("args", ()):
+                for q in _parts(a["refs"], body["nodes"]):
+                    r = q.get("affine") or q.get("strided")
+                    names = [(s, i) for s, i, _ in q["explicit"]] if "explicit" in q else [r[:2]] if r[-1] else []
+                    if any(not i < (len(body["params"]) if s == "p" else k) for s, i in names):
+                        return False
+            todo.append(callees[x["fn"]])
+    return True
+
+
+def slot_entry_digest(j: dict, key: str) -> str:
+    """The SHA-512, in hex, of the canonical JSON object that maps each Definition `key` reaches (itself, its nodes'
+    callees, theirs, …) to its `annotations.definition_digest`: the template's whole body."""
+    defs, callees, seen, todo = j["definitions"], j["callees"], {}, [key]
+    while todo:
+        k = todo.pop()
+        if k not in seen:
+            seen[k] = AN.definition_digest(j, k)
+            if defs[k]["form"] == "composite":
+                todo += [callees[x["fn"]] for x in defs[k]["body"]["nodes"]]
+    return hashlib.sha512(codec.canonical_json(seen)).hexdigest()
+
+
 def _audit(a, ctx: str) -> Audit:
     """`auditOf`: the layout terms and the Program's descriptor, whose root's template instances are the audit's units,
     each committing its template's return; a root with no template refused. It reads the descriptor's root nodes and
@@ -256,8 +392,12 @@ def _audit(a, ctx: str) -> Audit:
 def _scan(j, program: str, s: WardenParams) -> Scan:
     """`scanOf`: the scan's terms from its Program's descriptor, which must be the registered Program and the generator
     form of the schedule's link-window in the Boolean profile's types (`BOOL_BYTE`, `BOOL_U16`), an egress template
-    with a row among its parameters (the checker form) refused first. It reads the descriptor's template nodes and
-    signatures; C-Flock's decoder, which Lean runs on it, refuses no descriptor this module writes."""
+    with a row among its parameters (the checker form) refused first. Then what `NetTiming.Layout.Fits` asks: the
+    walk within `FUEL` (`_walkable`), the root returning every egress leaf, the egress template returning only gates it
+    computes (`_own_returns`), each ingress row and every template argument one input node's leaves (`_input_arg`),
+    no egress argument an ingress row's, and the Program topological (`_topological`). It reads the descriptor's
+    nodes, signatures and returns; C-Flock's
+    decoder, which Lean runs on it, refuses no descriptor this module writes."""
     if not isinstance(j, dict) or j.get("schema") != SCHEMA:
         raise D.Reject("scan: not a Program's descriptor")
     if program_sha512(j) != program:
@@ -290,6 +430,30 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
     bits = lambda b: sum(bits_of(t) for _, t in b["params"])  # noqa: E731
     if inputs != bits(bf) + (T - 1) * sum(bits(b) for _, b in later) + T * bits(be):
         raise D.Reject("scan: an input gate that is no template's parameter")
+    if not _walkable(j):
+        raise D.Reject("scan: not laid out as C-Flock's decoder lays a Program out, or past what its resolution walks "
+                       "(NciCheck.Desc.rootLaidOut, inputsAtRoot and walkable)")
+    ke = max(k for k, x in enumerate(nodes) if defs[callees[x["fn"]]]["form"] != "primitive")
+    if not any(a[:3] == ("n", ke, 0) and T * leaves_of(be["ret_type"]) <= a[3]
+               for q in _parts(defs[j["root"]]["body"]["ret"], nodes) if (a := _affine(q))):
+        raise D.Reject("scan: the root doesn't return every egress leaf, so an egress gate would be one the Program "
+                       "doesn't return (NetTiming.Layout.Fits)")
+    if not _own_returns(j)(callees[xe["fn"]]):
+        raise D.Reject("scan: the egress template returns a leaf it doesn't compute (a parameter's, passed through), "
+                       "so an egress gate would be an input (NetTiming.Layout.Fits)")
+    ingress = [xf, *(x for x, _ in later)]
+    rows = [_input_arg(x["args"][0], nodes, j) if x["args"] else None for x in ingress]
+    if None in rows:
+        raise D.Reject("scan: an ingress template's row is not one input node's leaves, so an ingress gate would be no "
+                       "input (NetTiming.Layout.Fits)")
+    if any(_input_arg(a, nodes, j) is None for x in [*ingress, xe] for a in x["args"]):
+        raise D.Reject("scan: a template's argument is not one input node's leaves")
+    if any(_input_arg(a, nodes, j) in rows for a in xe["args"]):
+        raise D.Reject("scan: an egress template's argument is an ingress row's input node, so an egress gate would "
+                       "depend on the ingress (NetTiming.Layout.Fits)")
+    if not _topological(j):
+        raise D.Reject("scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program is not "
+                       "topological, so a gate's operands could be gates after it")
     return Scan(T, T * bits_of(bf["params"][1][1]), bits_of(bf["ret_type"]), bits_of(be["ret_type"]))
 
 
@@ -1218,7 +1382,8 @@ def _scan_widths(desc: dict) -> tuple[int, int, int, int]:
 def bad_scans(p: dict) -> list[dict]:
     """Rows-form parameters whose scan `scanOf` refuses, each one change to `p`: not a descriptor, another Program's
     (its SHA-512 not `program`), and, each under its own SHA-512, the checker form (its egress row an input), templates
-    with other parameters, another number of instances, rows not the schedule's, and an input gate no template's."""
+    with other parameters, another number of instances, rows not the schedule's, an input gate no template's, and each
+    negative of a check of what `NetTiming.Layout.Fits` asks (`scan_negatives`)."""
     s, desc = p["schedule"], p["scan"]
     T, row, widths = s["window"], s["lanes"] * s["slots"] * s["cell_bytes"], _scan_widths(desc)
 
@@ -1242,7 +1407,115 @@ def bad_scans(p: dict) -> list[dict]:
             own(scan_descriptor(T, row, widths, counts=(2, T - 1, T))),
             own(scan_descriptor(T, row, widths, counts=(1, T, T))),
             own(scan_descriptor(T, row + 1, widths)),
-            p | {"scan": extra, "program": program_sha512(extra)}]
+            p | {"scan": extra, "program": program_sha512(extra)},
+            *(q for q, _ in scan_negatives(p).values())]
+
+
+#: A primitive that is no input, a constant gate the `row` negative binds bucket 0's row to.
+ZERO = "NetworkPeriodScanZero_v1"
+#: Members of each of the `walk` negative's nested batches: three deep, past `Flock.Steps.FUEL`'s walk.
+DEEP = 2 ** 30
+
+
+def scan_negatives(p: dict) -> dict[str, tuple[dict, str]]:
+    """Rows-form parameters each refused by one of `scanOf`'s checks of what `NetTiming.Layout.Fits` asks and by none
+    before it, each one change to `p`'s generator-form scan under its own SHA-512, with a fragment of both refusals:
+    `walk`, the egress template calling a composite of `2^90` gates in three nested batches, unread, so the walk to an
+    operand is past `FUEL`; `returns`, the root returning an input leaf for the last egress leaf; `computes`, the egress
+    template returning its `state`'s first 16 leaves as its u16; `row`, bucket 0's row bound to a constant primitive's
+    gates (an input node like it appended, keeping the input count); `argument`, egress member 0's first state leaf the
+    last ingress template's first output leaf (a later step's ingress when `T > 1`); `ingress`, the egress state the
+    last ingress template's row input node (resized, the state's node resized to keep the count); and `topological`,
+    the last ingress template's row input node moved after the templates, so the template names a later node."""
+    desc = p["scan"]
+
+    def parts() -> tuple[dict, list, list[int]]:
+        d = json.loads(D.canonical(desc))
+        nodes = d["definitions"][d["root"]]["body"]["nodes"]
+        ts = [k for k, x in enumerate(nodes) if d["definitions"][d["callees"][x["fn"]]]["form"] != "primitive"]
+        return d, nodes, ts
+
+    def own(d: dict) -> dict:
+        return p | {"scan": d, "program": program_sha512(d)}
+
+    def typed(d: dict, t: list) -> int:
+        d["types"].append(t)
+        return len(d["types"]) - 1
+
+    out = {}
+    d, nodes, ts = parts()
+    v, mix = typed(d, ["Value", 1]), d["callees"].index(MIX.id)
+    arr = typed(d, ["Array", DEEP, ["Value", 1]])
+    one = {"refs": {"affine": ["p", 0, 0, 1]}, "type": v}
+    for i in range(1, 4):
+        fid = f"NetworkPeriodScanDeep{i}_v0"
+        d["definitions"][fid] = {"bindings": {}, "form": "composite", "id": fid, "body": {
+            "nodes": [{"args": [one, one][:3 - min(i, 2)], "axes": [None, None][:3 - min(i, 2)], "fn": mix,
+                       "form": "batch", "n": DEEP, "out": arr}],
+            "params": [["a", ["Value", 1]]], "ret": {"affine": ["n", 0, 0, 1]}, "ret_type": ["Value", 1]}}
+        d["callees"].append(fid)
+        mix = len(d["callees"]) - 1
+    egress = d["definitions"][d["callees"][nodes[ts[-1]]["fn"]]]["body"]
+    egress["nodes"].append({"args": [one], "fn": mix, "form": "call", "out": v})
+    out["walk"] = own(d), "past what its resolution walks"
+
+    d, nodes, ts = parts()
+    r = d["definitions"][d["root"]]["body"]
+    ret = _parts(r["ret"], nodes)
+    i = next(i for i, q in enumerate(ret) if (_affine(q) or ())[:2] == ("n", ts[-1]))
+    s, k, b, c = ret[i]["affine"]
+    r["ret"] = {"concat": [*ret[:i], {"affine": [s, k, b, c - 1]}, {"affine": ["n", 0, 0, 1]}, *ret[i + 1:]]}
+    out["returns"] = own(d), "the root doesn't return every egress leaf"
+
+    d, nodes, ts = parts()
+    egress = d["definitions"][d["callees"][nodes[ts[-1]]["fn"]]]["body"]
+    egress["ret"] = {"concat": [{"affine": ["p", 0, 0, OUT_BITS]}, *_parts(egress["ret"], egress["nodes"])[1:]]}
+    out["computes"] = own(d), "returns a leaf it doesn't compute"
+
+    d, nodes, ts = parts()
+    k0 = nodes[ts[0]]["args"][0]["refs"]["affine"][1]
+    d["definitions"][ZERO] = {"form": "primitive", "id": ZERO, "params": [], "ret": ["Value", 1]}
+    d["callees"].append(ZERO)
+    nodes.append(dict(nodes[k0]))
+    nodes[k0] = nodes[k0] | {"fn": len(d["callees"]) - 1}
+    out["row"] = own(d), "an ingress template's row is not one input node's leaves"
+
+    d, nodes, ts = parts()
+    a = nodes[ts[-1]]["args"][0]
+    s, k, b, c = a["refs"]["affine"]
+    a["refs"] = {"concat": [{"affine": ["n", ts[-2], 0, 1]}, {"affine": [s, k, b + 1, c - 1]}]}
+    out["argument"] = own(d), "a template's argument is not one input node's leaves"
+
+    d, nodes, ts = parts()
+    kr, ks = (nodes[k]["args"][0]["refs"]["affine"][1] for k in ts[-2:])
+    R, S = nodes[kr]["n"], nodes[ks]["n"]
+    nodes[kr] = nodes[kr] | {"n": max(R, S), "out": typed(d, ["Array", max(R, S), ["Value", 1]])}
+    nodes[ks] = nodes[ks] | {"n": min(R, S), "out": typed(d, ["Array", min(R, S), ["Value", 1]])}
+    nodes[ts[-1]]["args"][0]["refs"] = {"affine": ["n", kr, 0, S]}
+    out["ingress"] = own(d), "an egress template's argument is an ingress row's input node"
+
+    d, nodes, ts = parts()
+    kr = nodes[ts[-2]]["args"][0]["refs"]["affine"][1]
+    at = lambda i: len(nodes) - 1 if i == kr else i - (i > kr)  # noqa: E731
+
+    def moved(r: dict) -> dict:
+        if "concat" in r:
+            return {"concat": [moved(q) for q in r["concat"]]}
+        if "alias" in r:
+            return {"alias": [at(r["alias"][0]), r["alias"][1]]}
+        if "explicit" in r:
+            return {"explicit": [[s, i if s == "p" else at(i), x] for s, i, x in r["explicit"]]}
+        key = "affine" if "affine" in r else "strided"
+        s, i, *rest = r[key]
+        return {key: [s, i if s == "p" else at(i), *rest]}
+    r = d["definitions"][d["root"]]["body"]
+    for x in nodes:
+        for a in x.get("args", ()):
+            a["refs"] = moved(a["refs"])
+    r["ret"] = moved(r["ret"])
+    nodes.append(nodes.pop(kr))
+    out["topological"] = own(d), "a body names a later node"
+    return out
 
 
 def _bad_commitments(c: dict, b: bytes) -> list[bytes]:
