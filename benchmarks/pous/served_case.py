@@ -149,6 +149,27 @@ def judged(case: Mapping[str, Any], answer: dict[str, Any], exe: str | os.PathLi
     return lean
 
 
+#: the longest slice of a string `write` writes at once: a served PoUS case's evidence is gigabytes of hex
+CHUNK = 1 << 26
+
+
+def _dump(f: Any, doc: Mapping[str, Any]) -> None:
+    """``doc`` as ``json.dumps(doc, sort_keys=True, separators=(",", ":"))`` would write it, each top-level string
+    longer than `CHUNK` written raw in slices. Those are a case's commitment and evidence, hex once `_shape` has read
+    them, which JSON escapes nothing of."""
+    for i, k in enumerate(sorted(doc)):
+        v = doc[k]
+        f.write(("," if i else "{") + json.dumps(k) + ":")
+        if isinstance(v, str) and len(v) > CHUNK:
+            f.write('"')
+            for j in range(0, len(v), CHUNK):
+                f.write(v[j:j + CHUNK])
+            f.write('"')
+        else:
+            f.write(json.dumps(v, sort_keys=True, separators=(",", ":")))
+    f.write(("}" if doc else "{}") + "\n")
+
+
 def write(private: Path, case: Mapping[str, Any], answer: Mapping[str, Any]) -> Path:
     """``case.json`` and ``answer.json`` into ``private`` (0700, each file 0600): the piece composite.py reads."""
     private.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -157,7 +178,7 @@ def write(private: Path, case: Mapping[str, Any], answer: Mapping[str, Any]) -> 
         path = private / name
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w") as f:
-            f.write(json.dumps(doc, sort_keys=True, separators=(",", ":")) + "\n")
+            _dump(f, doc)
         os.chmod(path, 0o600)
     return private
 
@@ -234,6 +255,7 @@ def pous_piece(window: Path, private: Path | None = None, *, schemes: Mapping[st
     _need(tuple(inputs[:2]) == (published.commitment, published.salt),
           "setup's own commitment and salt are not the ones it published")
     case = period.case(point, sid, trusted, published, digests, session, period.setup_case(point.params, *inputs))
+    del inputs
     got = pous_answer(case, schemes=schemes, protocol=public["protocol"])
     _need(got == inner, f"the run protocol answers the case {got['verdict']} ({got['reason']}), not as the run did "
                         f"({inner['verdict']}: {inner['reason']})")

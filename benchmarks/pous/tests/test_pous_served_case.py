@@ -246,6 +246,18 @@ def test_with_the_lean_its_answer_is_written_when_it_agrees(tmp_path):
         SC.wipe_piece(window, schemes=ts.SCHEMES, exe=_fake_lean(tmp_path, other))
 
 
+def test_a_case_is_written_as_canonical_json_whatever_its_size(tmp_path, monkeypatch):
+    """A string past `CHUNK` goes out in slices, the file the same bytes as one canonical dump."""
+    window, serve, w = _wipe_window(tmp_path)
+    monkeypatch.setattr(SC, "CHUNK", 7)
+    private, got = SC.wipe_piece(window, schemes=ts.SCHEMES)
+    for name, doc in (("case.json", w.case), ("answer.json", got)):
+        assert (private / name).read_text() == json.dumps(doc, sort_keys=True, separators=(",", ":")) + "\n"
+    SC.write(tmp_path / "empty", {}, {"a": "0123456789abcdef", "b": [1, {"d": 2, "c": None}]})
+    assert (tmp_path / "empty" / "case.json").read_text() == "{}\n"
+    assert (tmp_path / "empty" / "answer.json").read_text() == '{"a":"0123456789abcdef","b":[1,{"c":null,"d":2}]}\n'
+
+
 def test_the_cli_refuses_a_test_signed_session_and_what_is_no_piece(tmp_path, capsys):
     """Under the deployed schemes a test signer's session is no accept, so the run's answer stands refused (exit 1);
     an answer of another protocol is no piece (exit 2)."""
