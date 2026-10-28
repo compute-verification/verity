@@ -2060,7 +2060,7 @@
   },
   "Verity.Committed.Honest": {
    "owner": "@lean",
-   "digest": "0a4f2c916452e983bb5f36924f0e135a1f795b58b155960c67cfcce3b12ca7ec"
+   "digest": "c3f32aeb6eaac8b444a4289e3b60c65616ec8e84eb541e1b0aaa7272e9b3c3f1"
   },
   "Verity.Declaration.Contains": {
    "owner": "@lean",
@@ -2068,7 +2068,7 @@
   },
   "Verity.Evaluates": {
    "owner": "@lean",
-   "digest": "e6ffb734aa9967ab730adf8846a81aa573d0a5e1c738580a49d710731725d020"
+   "digest": "74963e5415e5b4df8ed3d6079fbdc47d8f7ad16d03bf89bc492b06d7ecb7a485"
   },
   "Verity.Partition.Fits": {
    "owner": "@proofs",
@@ -19486,7 +19486,7 @@
    ]
   },
   "Definitions.Core.Formalism": {
-   "digest": "9aa7d675f568999c5419f6ce58d307a73a659dac06fa835a289861ada75bdf69",
+   "digest": "6873496bfce0839d3a75aff447ea946177f4357dd67f98d5e924821d3269218a",
    "definitions": {
     "Verity.Circuit.Affine": "07c5e2cd229c4e65ff7121784d37106a206f5bbe952384f97c0004fb1723a144",
     "Verity.Circuit.Boolean": "a995dfb38aab58517bf9c93b3b0d18603dd69feadf4fc73472ad6f28f1a17ede",
@@ -19494,21 +19494,21 @@
     "Verity.Circuit.andSize": "3b849ed3179d9c2b65811c48d03e2adcf55b4ef7d51aebf4132aa3f03824141a",
     "Verity.Circuit.bitZ": "6e6df84b2a57ea4f505984ed58d1b5ddda2506cde0e6494be29dc3db1b6189da",
     "Verity.Circuit.bits": "45f1ab981d34eac7925bd50b8583e9dce1c4439155dc5fec59e9c7a78117de94",
+    "Verity.Committed": "9ec7c636cba8a4365930aeb36d026490a08c3bcaaebbb04d58ec77f33eb48cdb",
+    "Verity.Committed.B": "5067d5fb548efa5b804693064110135ed00d2b84f21d5bec8914bfab999404cf",
+    "Verity.Committed.Honest": "c3f32aeb6eaac8b444a4289e3b60c65616ec8e84eb541e1b0aaa7272e9b3c3f1",
+    "Verity.Committed.P": "70dedda960097327627aab4639c44039455b7fd0c6f2acb87fb74d91360a1634",
+    "Verity.Committed.d": "334e020c95958bc7ccd784b7f64be7f7b1d04143d419d1e9a6557fbe40ebbbb0",
+    "Verity.Committed.recompute": "b8c02b58fe9022d57ba988e4e97af9ff122e2c93a544d09f6e6936a6d5fa7096",
+    "Verity.Committed.val": "fb294d0a04e53598869edf865e3ea15a5e33ca1a8f1f95b4aff4cac234aa6b54",
     "Verity.Declaration.unregistered": "9c3fc707649a9ace5a6f7e78392f398cd871d51d874b3c00d0190866d6268025",
     "Verity.Decoder": "32b50b1c92e0a6bf91d2718836a6105fd2aa6491e10b4fc78e36cef49ed2a634",
     "Verity.Decoder.run": "0d0404da4fae79570ec9d0c60b7a725829f656bdcd665fd20bf0526e45d1f3d1",
-    "Verity.Evaluates": "e6ffb734aa9967ab730adf8846a81aa573d0a5e1c738580a49d710731725d020",
+    "Verity.Evaluates": "74963e5415e5b4df8ed3d6079fbdc47d8f7ad16d03bf89bc492b06d7ecb7a485",
     "Verity.LDL": "f81389f381a8ab1600a672fd46d11b2796b1149214dd45f29f2b140fb4121a3f",
     "Verity.Pad": "13c3f0af9ee792a76b6c5a0ac8940d4d87d8df9f5febc587d43733957b8e14fa",
     "Verity.Partition.IsCK": "a78011b108a9369070c518c56ec7264ee084cb9aab661d2ab5ba77a6b4c26cd2",
-    "Verity.Registration": "4d3873d7edaca6f9c5ecedd369b1c30bfda178515ddd025eb4ecb271db2d5f6d",
-    "Verity.Registration.B": "c47d2b430260bf14d31509f683ee910a131434405a51f20f2a2d709bf9d8f729",
-    "Verity.Registration.Honest": "0a4f2c916452e983bb5f36924f0e135a1f795b58b155960c67cfcce3b12ca7ec",
-    "Verity.Registration.P": "8cc64704c089d0c7dc56fa04b75795936fa9b272e07cec36a33e0d11c1064eb7",
-    "Verity.Registration.d": "6e1e93675ff8e83d2f40c3a8c8370a20c5777f666ff060cb389515ba2690c864",
-    "Verity.Registration.recompute": "51f1593bec32e117d833e68df76650f6e943d00901420ae442ccd2cc29e8e7bd",
-    "Verity.Registration.val": "eecd31e4b834b02f3fac7260073edd5dbb81de978ffaba9b7ad2730d0c350a5a",
-    "Verity.blockProgram": "46eb91fb1ad8504bc8495266d44b120c3d72a162d5a1c8386ebe92592a9829ca",
+    "Verity.blockProgram": "528c99130597ba1a120be028a35d8f039600d8273b5b98a592934c4f07f94791",
     "Verity.creditSize": "0b747984e6f21e1cf881b2437ab24b27a28bb32a68c4c506e5f073cbd62d9229",
     "Verity.indexCode": "216f0f6d0fa5066656396f830b46c8cf48acaf6ba4f14be91df4018037744cc8",
     "Verity.slowdown": "bcc17fbdb9d4847eb2dad542959451341d0437675065f525f0bb8c86b421ac7b"
@@ -19739,10 +19739,10 @@
    ]
   },
   "Definitions.Core.Guarantees.Formalism": {
-   "digest": "a62782efa0698643db511df7c0215814bfe418e250d776ab69c6670c9a73def4",
+   "digest": "b7e9d9851aa8902968bf7f70396f17f2a37ada0e00edcd56b25cc51bdf481451",
    "definitions": {
     "Verity.Guarantees.AndSizeLe": "9350d1ae3f31c74ddd50f1897253f464f1fa16189f0058edb6be6125a78b1aca",
-    "Verity.Guarantees.BlockDescription": "f949fc60d3af21c28b2093681ba1b3a2b62924451a7ebcda748aa35db70a8c22",
+    "Verity.Guarantees.BlockDescription": "05aafa32e2979c6debb18ab8accb4fb2b9b16db0cc4b8861d1fb890ee769790c",
     "Verity.Guarantees.CKSize": "e5ae2c049103314a92e25cf1222e01ac19facf5f244deab0b45fbbbbd2db4db0",
     "Verity.Guarantees.Counting": "c00a9fa2cdff42ac249540011e33c688fbeeac8c0a799d92139829829671facd",
     "Verity.Guarantees.CountingSum": "0a0b8bba8cac0cd66ec998958d7b16614b762c7e3b58e09e82bc841a787c8c76",
