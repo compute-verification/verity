@@ -82,6 +82,16 @@ def test_a_machine_that_cant_be_read_is_skipped_and_with_neither_a_pool_nor_node
     assert target is None and f"{CPU1}'s research pool skipped: OSError: no slots" in why
 
 
+def test_a_node_2_that_takes_runs_only_through_its_pools_is_never_offered_from_its_share():
+    """A slot-only node 2 (remote.RUNS_VIA_SLOT_FILE) refuses a run its share would place: a job a pool fits goes to the pool,
+    and one no pool fits is refused here, naming node 2's pools, rather than sent to be refused there."""
+    marked = {"slot_only": remote.RUNS_VIA_SLOT_FILE, **share(free=48)}
+    target, why = auto.choose({N2: marked, CPU1: pool(slot("r0"))}, 4, 16)
+    assert target == (CPU1, "research") and why.startswith(f"{N2} takes runs only through its pools")
+    with pytest.raises(auto.Unplaceable, match=f"{N2} takes no run from its share.*--on {N2} --pool POOL"):
+        auto.choose({N2: marked, CPU1: pool(slot("r0"))}, 33, 16)
+
+
 def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_the_pool(tmp_path, monkeypatch):
     """`read` as the machines run it: the payload is `python3 -` with cores.py and the tree's slot.py inlined; here both machines
     are this one, the claims a tmp dir whose files this test holds locked, and slot.py a stand-in that echoes its pool."""
@@ -106,6 +116,9 @@ def test_the_probe_reads_live_claims_and_waiters_and_runs_the_trees_slot_py_on_t
     assert docs[CPU1] == {"research": {"file": "/workspace/research/locks/research/slots", "slots": [], "waiters": []}}
     assert (claims / "gone.cpus").exists(), "the probe only reads: a leftover is the next taker's to remove"
     assert auto.read(src, 8, reach=lambda name: [sys.executable, "-"])[N2]["share"]["fits"] is True, "nothing holds them now"
+    (marker := tmp_path / "runs-via-slot").write_text("")
+    monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(marker))
+    assert auto.read(src, 4, reach=lambda name: [sys.executable, "-"])[N2]["slot_only"] == str(marker)
     monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path))
     monkeypatch.setattr(auto, "MIN_FREE_INODES", 2**62)
     short = auto.read(src, 4, reach=lambda name: [sys.executable, "-"])[CPU1]["research"]

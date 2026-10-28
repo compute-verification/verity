@@ -43,8 +43,9 @@ DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 400_000, 50
 
 
 class Unplaceable(Exception):
-    """No pool fits the job and node 2 can't be read: its queue would place it on a node that isn't up (26 Oct: node 2 stopped,
-    and an `--on auto` job too big for a pool slot was refused there with a stale admission window)."""
+    """No pool fits the job and node 2 can't be read, or takes runs only through its pools (remote.RUNS_VIA_SLOT_FILE): its
+    queue would place it where nothing runs it (26 Oct: node 2 stopped, and an `--on auto` job too big for a pool slot was
+    refused there with a stale admission window). A slot-only node 2 offered its share to a 33-CPU job and then refused it."""
 
 PROBE = '''
 import json, os, sys, types
@@ -94,6 +95,8 @@ def disk_short():
 out = {}
 if SHARE is not None:
     out["share"] = doc(lambda: share(SHARE, CLAIMS, CPU_ROOT))
+    if os.path.exists(SLOT_ONLY):
+        out["slot_only"] = SLOT_ONLY
 short = disk_short()
 for pool, slots in POOLS.items():
     out[pool] = {"error": f"disk: {short}"} if short else \
@@ -121,12 +124,13 @@ def share_cpus(source: Path) -> str | None:
 
 
 def payload(source: Path, cpus: int, share: str | None, pools: list[str]) -> bytes:
-    from . import cores
+    from . import cores, remote
     from .pods.nebius import slot_only
 
     head = {"CORES_SRC": Path(cores.__file__).read_text(), "SLOT_SRC": (Path(source) / SLOT_PY).read_text() if pools else "",
             "JOB_CPUS": max(cpus, 1), "SHARE": share, "CLAIMS": str(cores.CLAIMS), "CPU_ROOT": str(cores.CPU_ROOT),
-            "POOLS": {p: slot_only.POOLS[p] for p in pools}, "DISK": DISK_PATH, "MIN_INODES": MIN_FREE_INODES, "MIN_GB": MIN_FREE_GB}
+            "POOLS": {p: slot_only.POOLS[p] for p in pools}, "DISK": DISK_PATH, "MIN_INODES": MIN_FREE_INODES, "MIN_GB": MIN_FREE_GB,
+            "SLOT_ONLY": remote.RUNS_VIA_SLOT_FILE}
     return ("".join(f"{k} = {v!r}\n" for k, v in head.items()) + PROBE).encode()
 
 
@@ -191,7 +195,9 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float) -> tuple[tuple
     cpus = max(cpus, 1)
     n2 = docs.get(AUTO_NODE)
     share = n2.get("share") if isinstance(n2, dict) else None
-    if not isinstance(share, dict) or "error" in share:
+    if isinstance(n2, dict) and n2.get("slot_only"):
+        share, said = None, f"{AUTO_NODE} takes runs only through its pools ({n2['slot_only']}), so not from its share"
+    elif not isinstance(share, dict) or "error" in share:
         why = share.get("error") if isinstance(share, dict) else n2 if isinstance(n2, str) else "not read"
         share, said = None, f"{AUTO_NODE}'s share wasn't read ({why})"
     else:
@@ -213,9 +219,11 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float) -> tuple[tuple
         (_, _, target) = min(ranked)
         return target, "; ".join(notes) + f": the shortest line per run that fits is {target[0]}'s {target[1]} pool"
     if share is None:
-        raise Unplaceable("; ".join(notes) + f": no pool fits and {AUTO_NODE} can't be reached, so nothing would run it. "
+        cant = "takes no run from its share" if isinstance(n2, dict) and n2.get("slot_only") else "can't be reached"
+        raise Unplaceable("; ".join(notes) + f": no pool fits and {AUTO_NODE} {cant}, so nothing would run it. "
                           f"Give it a node yourself: `research run --on MACHINE --mem-gb N`, a CPU node whose free memory fits "
-                          f"it (`research pods list`), or shrink --cpus/--mem-gb to a pool slot's")
+                          f"it (`research pods list`), or `--on {AUTO_NODE} --pool POOL` where a slot of that pool gives its "
+                          f"CPUs, or shrink --cpus/--mem-gb to a pool slot's")
     if share.get("fits") and not share["waiters"]:
         return None, "; ".join(notes) + f": no pool fits, and it starts on {AUTO_NODE} now"
     return None, "; ".join(notes) + f": no pool fits, so {AUTO_NODE}'s line"
