@@ -250,9 +250,9 @@ def quant_warps(k: int) -> int:
 
 
 # Per architecture and K: (M floor, num_warps, rows a program), ksweep.py --quant-only's gated winners over 16 warps a row;
-# the quantizer is ALU-bound on its per-element div.rn, so fewer warps a row win once M fills the SMs.
+# the quantizer is ALU-bound on its per-element division, so fewer warps a row win once M fills the SMs.
 QUANT_PLANS: dict[str, dict[int, tuple[tuple[int, int, int], ...]]] = {
-    "sm_90": {2048: ((2048, 4, 1), (1024, 8, 1)), 4096: ((1024, 8, 1),), 8192: ((1024, 8, 1),), 14336: ((256, 16, 2),)},
+    "sm_90": {2048: ((2048, 4, 1), (1024, 8, 1)), 4096: ((1024, 8, 1),), 8192: ((1024, 8, 1),)},
 }
 
 

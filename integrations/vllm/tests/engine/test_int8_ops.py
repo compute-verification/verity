@@ -92,7 +92,7 @@ def test_every_quantizer_plan_is_the_torch_body():
     else 16 warps a row."""
     from verity_vllm.engine import int8_fused as F
     assert F.quant_plan(1023, 2048, "sm_90") == (16, 1) and F.quant_plan(1024, 2048, "sm_90") == (8, 1)
-    assert F.quant_plan(2048, 2048, "sm_90") == (4, 1) and F.quant_plan(256, 14336, "sm_90") == (16, 2)
+    assert F.quant_plan(2048, 2048, "sm_90") == (4, 1) and F.quant_plan(256, 14336, "sm_90") == (16, 1)
     assert F.quant_plan(8192, 2048, "sm_120") == F.quant_plan(8192, 3072, "sm_90") == (16, 1)
     plans = sorted({(k, floor, warps, rows) for table in F.QUANT_PLANS.values() for k, plan in table.items()
                     for floor, warps, rows in plan})
