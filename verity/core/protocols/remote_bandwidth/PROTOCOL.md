@@ -170,7 +170,7 @@ session's two ends (§5). The live-coin design needs a trusted floor to be affor
   receipts, and opens what the verifier draws.
 - **The challenger** is the proof service's one challenger (`sampled_proofs.challenger`, on the auditor's host through
   `sampled_proofs.remote` when it is remote). It draws every coin of a session, commits to them before the session,
-  and releases each once, after the root the verifier recorded for it, in a release log it signs (`coins.Coins`).
+  and releases each once, after the root the verifier recorded for it, in a release log it signs (`coins.SessionCoins`).
 - **The verifier** is remote. It holds a secret `source` (for the codec seed) and a clock, keeps the record, and checks.
   In the reference, `audit.AuditRun` is the verifier and drives the challenger.
 
@@ -443,7 +443,7 @@ stream's first SHA-512 block.
 their payloads in an append tree (`append_tree`: the payload tree's leaves, \(x_j = d_j\), in a frame-v3-sha512 domain
 bound to the registration's digest over the indices it takes) and sends its root and size (`AuditRun.append`). The
 verifier assigns the store's next fresh indices, from \(N\) up, asks the challenger for the append's coin \(c_a\), its
-next append coin, opened after the append's root (`Coins.append`), and replies with the first index and the coin:
+next append coin, opened after the append's root (`SessionCoins.append`), and replies with the first index and the coin:
 
 ~~~text
 prover → verifier   {"type": "append", "root": hex(append tree's root), "count": n}

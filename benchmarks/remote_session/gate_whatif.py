@@ -6,7 +6,7 @@ and root's receipt on the challenger's come back to the nanosecond, and so the l
 (`identity`, checked; the script exits 1 when it fails).
 
 The loop replayed is `verifier.py`'s at k = 1, as a session's record shows it, and a record of another form is refused:
-at root g the verifier asks the challenger for openings coin g and σ_(g+2) in one round trip (`coins.Coins.ahead`),
+at root g the verifier asks the challenger for openings coin g and σ_(g+2) in one round trip (`coins.SessionCoins.ahead`),
 sends window g's draws (its `draws_sent_ns` D_g), then σ_(g+2) (its `released_ns` R_(g+2)); σ_0 and σ_1 each go alone,
 stamped before they are asked (`audit.AuditRun._release`), and the last two groups' openings coins go alone. Group g's
 root arrives at A_g. The prover's record (`prover.json`) has each pass from its coin's arrival to its root, ph_g, and
@@ -148,7 +148,7 @@ def record(s: dict, lines: list[str], auditor: list[dict], prover: dict, tau: in
              or log[j + 1][:3] != ("challenge", g + 2, log[j][2])]
     if alone:
         raise Refused(f"σ_(g+2) wasn't asked with openings coin g, after its root, in one round trip at g = {alone[:8]} "
-                      "(coins.Coins.ahead): the replay models a k = 1 loop whose every root asks its two coins at once")
+                      "(coins.SessionCoins.ahead): the replay models a k = 1 loop whose every root asks its two coins at once")
     R = [w["released_ns"] for w in seen]
     A = [w["arrivals_ns"][-1] for w in seen]
     D = [w["draws_sent_ns"] for w in seen]

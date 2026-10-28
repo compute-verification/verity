@@ -280,8 +280,8 @@ class Session(audit.AuditRun):
     codecs = (P2Codec,)
     block_bytes = UNIT_BYTES
 
-    def __init__(self, params: audit.Params, registration: Registration, coins_: coins.Coins, *, not_before_ns: int,
-                 clock: Callable[[], int] = time.monotonic_ns) -> None:
+    def __init__(self, params: audit.Params, registration: Registration, coins_: coins.SessionCoins, *,
+                 not_before_ns: int, clock: Callable[[], int] = time.monotonic_ns) -> None:
         if type(registration) is not Registration:
             raise ValueError("a P2 session is over a P2 Registration")
         super().__init__(params, registration, None, coins_, not_before_ns=not_before_ns, clock=clock)

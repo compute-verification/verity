@@ -13,10 +13,10 @@ many reads of a node's registered blocks the node made in each window, from rece
    receipt kind, `bind`, the layout and the rows.  The verifier keeps one live registration a node (`Registry`): a
    second while one is live is refused and draws nothing, and a registration ends only when the verifier closes it,
    counting its sessions, an unended one as failed.
-2. Coins.  Before the session the proof service's challenger draws two live coins a window, its challenge `σ_t` and
-   its openings coin, and a coin an append, and commits to them (`coins.Coins`: session k's epoch of the one challenger,
-   on its own host when it is remote).  Each coin opens once, after the root the verifier recorded for it, which the
-   challenger's signed log keeps (`AuditRun.released_reason`), and the prover is sent its value and that root
+2. Coins.  Before the session the proof system's challenger draws two live coins a window, its challenge `σ_t` and
+   its openings coin, and a coin an append, and commits to them (`coins.SessionCoins`: session k's epoch of the one
+   challenger, on its own host when it is remote).  Each coin opens once, after the root the verifier recorded for it,
+   which the challenger's signed log keeps (`Session.released_reason`), and the prover is sent its value and that root
    (`coins.Released`).  The commitment, a function of every coin, reaches the prover only once the session has its
    outcome, with every released coin's opening (`AuditRun.disclose`), and the prover checks each coin it was sent
    against them then (`Prover.end`).
@@ -891,7 +891,7 @@ def _within(spans: list[tuple[int, int]], first: int, count: int) -> bool:
 
 class AuditRun:
     """The verifier's side of one session, driven by the coins it releases and the roots it receives, on its own clock.
-    `coins` are the session's coins through the one challenger (`coins.Coins`), committed before the session, each
+    `coins` are the session's coins through the one challenger (`coins.SessionCoins`), committed before the session, each
     asked for after the root it follows: σ_0 after the session's window root, σ_t after the last root received,
     window t's openings coin after its last root and an append's coin after its root.  `not_before_ns`, which
     every session names, is the earliest its first coin may leave on the verifier's clock: the previous session's
@@ -904,7 +904,7 @@ class AuditRun:
     codecs: tuple[type, ...] = (Codec,)
     block_bytes: int = BLOCK_BYTES
 
-    def __init__(self, params: Params, registration: Registration, tiles: Tiles | None, coins_: coins.Coins, *,
+    def __init__(self, params: Params, registration: Registration, tiles: Tiles | None, coins_: coins.SessionCoins, *,
                  not_before_ns: int, clock: Callable[[], int] = time.monotonic_ns) -> None:
         if type(params.codec) not in self.codecs:
             raise ValueError(f"a {type(self).__name__} is over a store under {[c.__name__ for c in self.codecs]}, not "
@@ -917,7 +917,7 @@ class AuditRun:
         if type(not_before_ns) is not int or not_before_ns < 0:
             raise ValueError("not_before_ns is the previous session's last deadline over the store, or the clock at "
                              "registration for its first: a nonnegative integer")
-        if (type(coins_) is not coins.Coins or coins_.registration != registration.digest
+        if (type(coins_) is not coins.SessionCoins or coins_.registration != registration.digest
                 or coins_.windows != params.windows or coins_.per_coin != params.groups_per_coin):
             raise ValueError(f"the challenger's coins are not this session's: {params.windows} windows' coins, "
                              f"{params.groups_per_coin} a draw, for this registration")
@@ -957,7 +957,7 @@ class AuditRun:
 
     def _release(self, t: int, now: int) -> coins.LiveOpening:
         """σ_t, after the last root received (R before any).  `now`, read before the coin leaves (and before the
-        challenger is asked, unless it was asked with the coin before it, `coins.Coins.ahead`), is its release in the
+        challenger is asked, unless it was asked with the coin before it, `coins.SessionCoins.ahead`), is its release in the
         record: the coin leaves later, so the record's span is the longer."""
         opening = self.coins.challenge(t, self._latest)
         self.windows.append(_Window(coins.coin(opening), now))
@@ -1057,7 +1057,7 @@ class AuditRun:
         the store's next fresh indices, from the first returned, and a plan received after this may hold them, until
         the lifetime cap: they join the window of the next root received, and no plan of a window `Params.lifetime` or
         more after it may hold them.  The seed of every pass whose root comes after this binds it (`chained`).  The
-        reply is the first index and the append's coin `c_a`, released now after the append's root (`coins.Coins.append`),
+        reply is the first index and the append's coin `c_a`, released now after the append's root (`coins.SessionCoins.append`),
         under which the prover encodes the blocks (`Store.encode`) and an opening decodes them.  Its rejection, `append`,
         if it is malformed or would take the store past its codec's `max_blocks`; `coin`, releasing none, if its root was
         sent before (a retry never redraws), the last window's roots are final, so no root can follow it, or the session's
@@ -1447,7 +1447,7 @@ class Registry:
                 index: int | None = None, challenger: Callable[[int], object] | None = None) -> AuditRun:
         """The next session over the node's live registration, k its sessions so far (`index`, if given, must be k),
         kept to be counted at `close`.  Its coins are epoch k of `challenger(k)`, the one challenger's session for it
-        (`coins.Coins`), or without one a challenger in this process drawing from `entropy` (`coins.local`).  Refused
+        (`coins.SessionCoins`), or without one a challenger in this process drawing from `entropy` (`coins.local`).  Refused
         for a registration that isn't its node's live one, drawn here."""
         x = self._live.get(getattr(registration, "node", None))
         if x is None or x.registration is None or x.registration != registration:
@@ -1457,8 +1457,8 @@ class Registry:
             raise RegistryError(f"the registration's next session is {k}, not {index}")
         g = params.groups_per_coin
         c = (coins.local(registration.digest, k, params.windows, entropy, per_coin=g) if challenger is None
-             else coins.Coins(challenger(k), registration.digest, k, params.windows, per_coin=g))
-        session = AuditRun(params, registration, tiles, c, not_before_ns=not_before_ns, clock=clock)
+             else coins.SessionCoins(challenger(k), registration.digest, k, params.windows, per_coin=g))
+        session = Session(params, registration, tiles, c, not_before_ns=not_before_ns, clock=clock)
         x.sessions.append(session)
         return session
 

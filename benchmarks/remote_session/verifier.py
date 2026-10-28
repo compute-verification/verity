@@ -36,7 +36,7 @@ passes, each boundary message at `AuditRun.next_boundary_ns`, WINDOWS stretches 
 root, its roots final then, so its openings coin is asked for after that root first: the challenger's signed log
 fixes each group's end there, and `auditor_line.py` reads the line on the challenger's clock from it. A boundary due by
 then leaves right behind the close, so its coin, after the same root, is asked for in the same round trip, second
-(`coins.Coins.ahead`): at k = 1, every root's two coins are one round trip to the challenger.  At F = 1 a group's
+(`coins.SessionCoins.ahead`): at k = 1, every root's two coins are one round trip to the challenger.  At F = 1 a group's
 boundary is due at its k-th root, so its coin is asked for first, after that root, and the close second, and the
 prover waits a round trip on each coin.
 
@@ -82,7 +82,7 @@ verifiers, rejections included. A message the driver couldn't read is in no even
 keeps DIR in scratch and preserves what it keeps of it (the writing-runs skill): a 60 s window's openings are about
 0.6 GB of JSON.
 
-A session's coins are an epoch of the proof service's one challenger (`coins.Coins`): from a challenger in this process
+A session's coins are an epoch of the proof system's one challenger (`coins.SessionCoins`): from a challenger in this process
 (`--challenger local`, the default), from `benchmarks/live_challenger/serve.py`, started for the session on this
 machine and reached through `sampled_proofs.remote`'s client (`--challenger serve`, `challengers.Serve`), or from the
 auditor host's challenger through its gate, a session reserved in the audit's period and opened at the session's
