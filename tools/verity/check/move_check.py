@@ -100,13 +100,15 @@ ROOT = Path(__file__).resolve().parents[3]
 IMPORT = re.compile(r"^(\s*from\s+)([\w.]+)(\s+import\b.*)$|^(\s*import\s+)([\w.]+)(.*)$")
 LEAN_IMPORT = re.compile(r"^(\s*(?:(?:public|private|meta)\s+)*import\s+(?:all\s+)?)([\w.]+)(\s*(?:--.*)?)$")
 RELATIVE = re.compile(r"""(["'])(\.\.?(?:/[^"'\s]*)?)\1""")
-#: a Lean name where it is declared: after a declaring keyword, as a constructor (`| c`, `| c : T`) or a field (`  f : T`)
+#: a Lean name where it is declared: after a declaring keyword, as a constructor (`| c`, `| c : T`) or a field (`  f : T`);
+#: and the scopes that qualify it (`namespace N`, `section`, `mutual`, each closed by an `end`)
 LEAN_DECL = re.compile(r"""^[ \t]*(?:
       (?:@\[[^\]\n]*\][ \t]*)*(?:(?:private|protected|public|noncomputable|partial|unsafe|nonrec|scoped|local|meta)[ \t]+)*
-        (?:def|theorem|lemma|abbrev|instance|opaque|axiom|structure|inductive|class(?:[ \t]+inductive)?|namespace)[ \t]+
+        (def|theorem|lemma|abbrev|instance|opaque|axiom|structure|inductive|class(?:[ \t]+inductive)?)[ \t]+
         ([^\s:({\[⦃]+)
     | \|[ \t]*([\w'.]+)(?=[ \t]*(?:[:({\[⦃]|$))
     | [ \t]+([\w'.]+)(?=[ \t]*:(?!=))
+    | (?:(?:noncomputable|public|private)[ \t]+)*(namespace|section|mutual|end)\b[ \t]*([^\s]*)
     )""", re.M | re.X)
 LEAN_COMMENT = re.compile(r"/-.*?-/|--[^\n]*", re.S)
 #: the lines a destination package's lakefile may change from the source package's
@@ -848,8 +850,23 @@ def landings(entries: list[dict], base: Tree, head: Tree) -> list[dict]:
 
 
 def lean_declared(text: str) -> list[str]:
-    """The names ``text`` (a `.lean` file) declares, as written where it declares them."""
-    return [next(filter(None, m.groups())) for m in LEAN_DECL.finditer(LEAN_COMMENT.sub("", text))]
+    """The names ``text`` (a `.lean` file) declares, as written where it declares them and in full: below its namespaces,
+    and a field's or a constructor's below the structure or inductive type before it."""
+    out, scopes, owner = [], [], ""
+    for m in LEAN_DECL.finditer(LEAN_COMMENT.sub("", text)):
+        kw, decl, ctor, field, scope, arg = m.groups()
+        if scope == "end":
+            scopes = scopes[:-1]
+        elif scope in ("section", "mutual"):
+            scopes.append("")
+        elif name := arg if scope else decl or ctor or field:
+            full = ".".join(filter(None, [*scopes, owner if not kw and not scope else "", name.removeprefix("_root_.")]))
+            out += dict.fromkeys((name, full))
+            if scope:
+                scopes.append(name)
+            elif kw:
+                owner = name if kw.split()[-1] in ("structure", "inductive", "class") else ""
+    return out
 
 
 def renaming(base: Tree, table: dict[str, str], declared: list[str], now: set[str], rewrites,

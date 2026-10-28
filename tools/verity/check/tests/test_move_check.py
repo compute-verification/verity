@@ -620,10 +620,14 @@ def test_a_word_no_edited_lean_file_declares_is_refused(tmp_path):
 
 
 def test_lean_declared_reads_declarations_constructors_and_fields():
+    """Each name as written and in full: below its namespaces, a field or a constructor below its structure or type; a
+    section or a `mutual` block adds no part, and `end` closes it."""
     text = ("/-- `def notMe` in a docstring. -/\n@[simp] private theorem a_b : True := trivial\nnamespace Law.X\n"
             "structure S where\n  draw : Nat\n  h : draw = 1 := by rfl\ninductive T\n  | leaf\n  | node (l : T) : T\n"
-            "def f : T → Nat\n  | .leaf => 0\n  | x => 1\n-- def notMeEither\nnoncomputable def escape := 1\n")
-    assert MC.lean_declared(text) == ["a_b", "Law.X", "S", "draw", "h", "T", "leaf", "node", "f", "escape"]
+            "section\ndef f : T → Nat\n  | .leaf => 0\n  | x => 1\nend\n-- def notMeEither\nend Law.X\n"
+            "noncomputable def escape := 1\n")
+    assert MC.lean_declared(text) == ["a_b", "Law.X", "S", "Law.X.S", "draw", "Law.X.S.draw", "h", "Law.X.S.h", "T",
+                                      "Law.X.T", "leaf", "Law.X.T.leaf", "node", "Law.X.T.node", "f", "Law.X.f", "escape"]
 
 
 AREAS = {
