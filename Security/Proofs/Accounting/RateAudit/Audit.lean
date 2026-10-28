@@ -291,7 +291,7 @@ open Bandwidth.AuditRO (card_sample)
 /-- `RateAudit`'s bound for a relay device whose side sources ignore the oracle. -/
 theorem _root_.Accounting.Rate.RelayDevice.audit {N b h ρ S L q : ℕ} (A : RelayDevice N b h ρ S L q)
     (hA : ∀ E R O O', A.side E R O = A.side E R O') (s k F cTag cEnc lam : ℕ) :
-    pr (fun x : Store N b × Coins N b h ρ s =>
+    pr (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
           A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b ρ S L F cTag cEnc k lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam := by
@@ -299,7 +299,7 @@ theorem _root_.Accounting.Rate.RelayDevice.audit {N b h ρ S L q : ℕ} (A : Rel
   rcases Nat.eq_zero_or_pos k with rfl | hk0
   · refine (pr_le_of_card _ 1 0 one_ne_zero ?_).trans (by simp)
     rw [Finset.filter_false_of_mem (fun x _ hx => by simp [floor] at hx), Finset.card_empty, zero_mul, zero_mul]
-  have hsplit : ∀ x : Store N b × Coins N b h ρ s,
+  have hsplit : ∀ x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)),
       (A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
         A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b ρ S L F cTag cEnc k lam) →
       (((queried A x.1 x.2.1 x.2.2.1).card < k ∧ ∀ i, x.2.2.2 i ∈ queried A x.1 x.2.1 x.2.2.1) ∨
@@ -315,7 +315,7 @@ theorem _root_.Accounting.Rate.RelayDevice.audit {N b h ρ S L q : ℕ} (A : Rel
       · push Not at hall
         obtain ⟨i, hi⟩ := hall
         exact Or.inl (Or.inr ⟨i, hi, hacc i⟩)
-  have hΩ : Fintype.card (Store N b × Coins N b h ρ s) =
+  have hΩ : Fintype.card (Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N))) =
       Fintype.card (Store N b) * (Fintype.card (Bits ρ) * (Fintype.card (Oracle N b h ρ) * N ^ s)) := by
     simp only [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin]
   by_cases hN : N ^ s = 0
@@ -324,7 +324,7 @@ theorem _root_.Accounting.Rate.RelayDevice.audit {N b h ρ S L q : ℕ} (A : Rel
   refine (pr_mono hsplit).trans ?_
   refine (pr_or_le _ _).trans (add_le_add ((pr_or_le _ _).trans (add_le_add ?_ ?_)) ?_)
   · -- the sample misses the words never queried
-    have hc := pr_le_of_card (fun x : Store N b × Coins N b h ρ s =>
+    have hc := pr_le_of_card (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         (queried A x.1 x.2.1 x.2.2.1).card < k ∧ ∀ i, x.2.2.2 i ∈ queried A x.1 x.2.1 x.2.2.1) (N ^ s) ((k - 1) ^ s)
         hN (by
       rw [hΩ]
@@ -342,7 +342,7 @@ theorem _root_.Accounting.Rate.RelayDevice.audit {N b h ρ S L q : ℕ} (A : Rel
     rw [Nat.cast_pow, Nat.cast_pow, div_eq_mul_inv, div_eq_mul_inv, mul_pow, ENNReal.inv_pow]
   · -- a guessed tag
     refine (pr_exists_le _).trans ?_
-    have hi : ∀ i : Fin s, pr (fun x : Store N b × Coins N b h ρ s =>
+    have hi : ∀ i : Fin s, pr (fun x : Store N b × (Bits ρ × Oracle N b h ρ × (Fin s → Fin N)) =>
         x.2.2.2 i ∉ queried A x.1 x.2.1 x.2.2.1 ∧
           A.tags x.1 x.2.1 x.2.2.1 (x.2.2.2 i) = x.2.2.1 (x.2.1, x.2.2.2 i, x.1 (x.2.2.2 i))) ≤
         ((1 : ℕ) : ℝ≥0∞) / ((2 ^ h : ℕ) : ℝ≥0∞) := fun i =>
@@ -367,6 +367,8 @@ theorem _root_.Accounting.Rate.RelayDevice.audit {N b h ρ S L q : ℕ} (A : Rel
 
 /-- **The rate audit in the random-oracle model** (`Accounting.Guarantees.RateAudit`). -/
 theorem RateAudit : Accounting.Guarantees.RateAudit :=
-  fun _ _ _ _ _ _ _ s k F cTag cEnc lam A => A.toRelay.audit (fun _ _ _ _ => rfl) s k F cTag cEnc lam
+  fun _ _ _ _ _ _ _ s k F cTag cEnc lam A => by
+    rw [Bandwidth.pr_coins_flat]
+    exact A.toRelay.audit (fun _ _ _ _ => rfl) s k F cTag cEnc lam
 
 end Accounting.SecurityProofs
