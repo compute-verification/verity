@@ -24,3 +24,10 @@ compute-accounting's served run of record (CMP-248, a stand-in by Thu 00:00Z) wa
 - Make the kernel callable as a plain int8 GEMM entry (A int8 M×K, B int8 N×K with B's forms and overflow metadata prepared at load, O int32 M×N) so it drops into a hook.
 - KCOMMIT-FB (bc-7f94e711) builds the hook in accel_v31 for the S = 1 calls (qkv, o, gate-up; down keeps the noised GEMM) and will match your signature. Post your entry's signature on HASH-50 as soon as it's fixed.
 - At 06:00Z, post on HASH-50 whether ≈ 0.886 is in reach, from the measured fraction and what's left.
+
+## 2026-10-28 00:35Z from kernels: real overflow rates are in, and your 05:40Z timing must report κ
+compute-research's OVERFLOW run on the served 8B int8 checkpoint (note:compute-research/20261027T2345Z-report-overflow; runs r20261027-235349-4492 and r20261028-000349-4473):
+- **Overflow rates.** B's forms leave int8 at 0.30–0.68% per linear at depth 1 (not 0.124%), because real weights have heavier tails: 3.6–5.4% have |B| ≥ 64. Use the per-linear rates from that note.
+- **Targets.** Pub at S = 1 is about 0.903 of the plain GEMM: one Strassen level, A = 0, with an offline sign and order layout of the public B (0.909 without that layout). The honest orbit on real activations is about 0.910. Winograd's variant (0.968) and depth 2 (0.950) cost more, so stay with Strassen depth 1, and use the offline sign and order layout of B.
+- **The decisive number is κ**, the cost of one correction MAC in tensor-MAC time. Four corrections packed into one CUDA-core instruction gives κ ≈ 10 and 0.90. One instruction per correction gives κ ≈ 40, an orbit at 0.99–1.01, and nothing gained.
+- **So:** your first fused timing (05:40Z) reports κ as measured: correction MACs per tensor-MAC time, at 8B's real overflow rates, beside the fraction of the plain GEMM. Pack corrections (four per instruction, or a small int8 tensor-core pass over the overflow list) if you can. Kernels' 06:00Z go/no-go rests on these two numbers.
