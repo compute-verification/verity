@@ -11,7 +11,7 @@ lean = "Security/Definitions/Accounting/Sheets/B200.lean"
 [fmax]
 mhz = 1965
 grade = "measured only (the driver's maximum)"
-source = "no NVIDIA document read states a B200 clock (Blackwell Architecture Technical Brief V2.1, the Lenovo HGX B200 Product Guide, nvidia.com's HGX page); the driver's maximum at default clocks on vy-dc-b200 is 1965 MHz (sm_100/table.toml, EPS1 DC), and the tensor and clock probes saw at most 1957.1 MHz; the brief's 'FP64 Tensor Core 37 teraFLOPS' at the Guide's 64 FP64 results an SM clock over 148 SMs puts the FP64 clock at 1927 to 1980 MHz"
+source = "no NVIDIA document read states a B200 clock (Blackwell Architecture Technical Brief V2.1, the Lenovo HGX B200 Product Guide, nvidia.com's HGX page); the driver's maximum at default clocks on the deployed B200 is 1965 MHz (sm_100/table.toml, EPS1 DC), and the tensor and clock probes saw at most 1957.1 MHz; the brief's 'FP64 Tensor Core 37 teraFLOPS' at the Guide's 64 FP64 results an SM clock over 148 SMs puts the FP64 clock at 1927 to 1980 MHz"
 
 [sms]
 value = 148
