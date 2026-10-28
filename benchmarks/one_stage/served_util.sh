@@ -25,7 +25,10 @@
 # on spaces), PROTOCOLS_CONFIG (one --protocols-config argument), PYSAMPLE=1 (Nsight Systems' Python backtrace sampling at
 # PYHZ, 1000, for the host gaps), SEQS (--max-num-seqs and --window-requests, T/1024, 2·T/1024 for graphs and async; the
 # window's request cap also bounds the requests in flight), HEADS (the merged heads, written to heads.txt with the tree's
-# commit and parents).
+# commit and parents), RELEASE_AFTER (a Commit arm's values held on the device, --retain device --retain-device-gb
+# RETAIN_DEVICE_GB (32) --release-after RELEASE_AFTER), STANDIN_DRAWS (protocols of RELEASE_AFTER no drawer serves yet: the
+# harness draws each window for each with no reads once its windows.jsonl line is out, so its release keeps only the other
+# protocols' leaves; standin_draws.txt counts them).
 # A Commit arm at T 8,192 needs VERITY_LEARN_HOST_BUDGET_MB above its step's committed bytes (the default 4,096 MiB fails
 # every step closed: "bounded staging: learning step 0 exceeds the transient host budget").
 # Published ($OUT): util.json and util.txt, the profile (prof.nsys-rep), serve.json, summary.json, windows.jsonl's timings
@@ -93,6 +96,7 @@ args=(--model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision ve
       --max-num-batched-tokens "$T" --max-model-len 1088 --window-steps 1 --no-prefix-caching)
 [ "$ARM" = graphs ] || [ "$ARM" = async ] || args+=(--required-manifest "$ROW/manifest.json")
 [ -n "${PROTOCOLS_CONFIG:-}" ] && args+=(--protocols-config "$PROTOCOLS_CONFIG")
+[ -n "${RELEASE_AFTER:-}" ] && args+=(--retain device --retain-device-gb "${RETAIN_DEVICE_GB:-32}" --release-after "$RELEASE_AFTER")
 commit=(--scheme rows-sha512 --gpu-tree --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb "${TAP_CAP_MB:-2048}"
         --window-gb 32 --seal-hold-gb 32 --seal-warm-gb 0 --disk-floor-gb "${DISK_FLOOR_GB:-20}")
 serve=("$PY" -m verity_vllm.pipeline.cli serve-openai)
@@ -122,7 +126,30 @@ cd "$TREE/integrations/vllm" || exit 9
 "$NSYS" launch --session-new="$SESS" --trace=cuda,nvtx --cuda-graph-trace=node "${pysample[@]}" \
   "${serve[@]}" "${args[@]}" ${EXTRA:-} > "$SCR/serve.log" 2>&1 &
 srv=$!
-trap '"$NSYS" shutdown --session="$SESS" --kill=sigterm >/dev/null 2>&1; wait "$srv"; exit 143' TERM INT
+drawer=
+if [ -n "${STANDIN_DRAWS:-}" ]; then
+  "$PY" -c 'import json, os, sys, time
+d, protos, done = sys.argv[1], [p for p in sys.argv[2].split(",") if p], set()
+while True:
+    try:
+        lines = open(f"{d}/windows.jsonl").read().split("\n")[:-1]
+    except FileNotFoundError:
+        lines = []
+    for x in lines:
+        k = json.loads(x).get("window")
+        for p in protos if k is not None else ():
+            if (k, p) not in done:
+                os.makedirs(f"{d}/draws", exist_ok=True)
+                tmp = f"{d}/draws/.w{k}.{p}.tmp"
+                with open(tmp, "w") as f:
+                    json.dump({"window": k, "protocol": p, "reads": []}, f)
+                os.rename(tmp, f"{d}/draws/w{k}.{p}.json")
+                done.add((k, p))
+                print(f"w{k} {p}", flush=True)
+    time.sleep(0.2)' "$D" "$STANDIN_DRAWS" > "$OUT/standin_draws.txt" 2>&1 &
+  drawer=$!
+fi
+trap '"$NSYS" shutdown --session="$SESS" --kill=sigterm >/dev/null 2>&1; wait "$srv"; [ -n "$drawer" ] && kill "$drawer"; exit 143' TERM INT
 up=0
 for _ in $(seq 1 1500); do
   grep -q "SERVE-OPENAI listening" "$SCR/serve.log" && { up=1; break; }
@@ -132,7 +159,7 @@ done
 log() { grep -aE "SERVE-OPENAI|UTIL engine|\[engine\]|H1|declare|Error|error|refus|Traceback" "$SCR/serve.log" | grep -av prompt | tail -${1:-40} > "$OUT/serve.log.txt"; }
 if [ "$up" != 1 ]; then
   log 80; say "SERVE: not listening: $(grep -am1 -E 'UsageError|Error|refus' "$SCR/serve.log" | cut -c1-400)"
-  "$NSYS" shutdown --session="$SESS" --kill=sigterm > /dev/null 2>&1; wait "$srv"; exit 10
+  "$NSYS" shutdown --session="$SESS" --kill=sigterm > /dev/null 2>&1; wait "$srv"; [ -n "$drawer" ] && kill "$drawer"; exit 10
 fi
 say "SERVE $(grep -am1 'SERVE-OPENAI listening' "$SCR/serve.log" | cut -c1-200)"
 load() {  # $1 requests, $2 seed, $3 name
@@ -149,6 +176,7 @@ say "MAIN $N requests (exit $lrc): $(tail -1 "$SCR/main.log" | cut -c1-200)"
 say "CAPTURE stop (exit $?)"
 "$NSYS" shutdown --session="$SESS" --kill=sigterm > /dev/null 2>&1
 wait "$srv"; say "SERVE stopped (exit $?)"
+[ -n "$drawer" ] && { kill "$drawer"; say "STANDIN draws $(wc -l < "$OUT/standin_draws.txt") ($STANDIN_DRAWS, no reads)"; }
 trap - TERM INT
 log
 "$NSYS" export --type sqlite --force-overwrite=true -o "$SCR/prof.sqlite" "$SCR/prof.nsys-rep" > "$OUT/nsys_export.txt" 2>&1
