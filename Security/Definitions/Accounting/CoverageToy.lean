@@ -1,4 +1,4 @@
-import Definitions.Accounting.Overhead
+import Definitions.Accounting.Slowdown
 
 /-!
 # The floor's toy instance
@@ -8,7 +8,7 @@ The task and computations at which `Nci.Guarantees.CapabilityFloor`'s witnesses
 target, all of whose outputs are acceptable), and the run of the empty actual circuit.
 -/
 
-namespace Accounting.Overhead.Toy
+namespace Accounting.Slowdown.Toy
 
 open Accounting
 
@@ -56,4 +56,4 @@ def cost : Actual.Run Unit → ℕ := fun _ => 5
 /-- A cost of `0` for every run. -/
 def free : Actual.Run Unit → ℕ := fun _ => 0
 
-end Accounting.Overhead.Toy
+end Accounting.Slowdown.Toy
