@@ -1,6 +1,6 @@
 """`tools/agent-guard/hook.sh` runs origin/main's hooks and Slack registry whatever the branch has: a branch that tracks
 `.cursor/hooks.json` runs hooks from its own tree, so without it a branch cut before a guard landed would never run that
-guard (a cloud agent on such a branch could write Linear through the connector, as Daniel)."""
+guard (a cloud agent on such a branch could write Linear through the MCP connector under its connecting user's name)."""
 import json
 import os
 import shutil
