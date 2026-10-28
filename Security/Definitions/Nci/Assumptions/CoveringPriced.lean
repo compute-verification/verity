@@ -5,9 +5,8 @@ import Definitions.Nci.Assumptions.CoveringTwoCosts
 
 `ParameterHardAt` (`Definitions.Nci.Assumptions.CoveringTwoCosts`) charges every updated weight one cost `c_w`. A block may
 complete whichever weights it likes, so that `c_w` is what the cheapest weights cost to rebuild, and on real models the
-cheapest 1% of the weights cost 2–5 times less than the mean (training's realism check,
-note:training-20261022T1045Z-cover-assumptions-realism, §3: at 1,000 steps after `θ`, bf16 2.3–3.4 bits against a mean
-of 6.7). Here each weight `i` has its own price `p i` (`ParameterHardPricedAt`) and a block pays the sum of the prices of
+cheapest weights cost several times less than the mean. Here each weight `i` has its own price `p i`
+(`ParameterHardPricedAt`) and a block pays the sum of the prices of
 the weights it completes, which recovers about the mean. At `p = fun _ => c_w` it is `ParameterHardAt`. Activation-chaining
 is unchanged: `ActivationChainedAt` at an activation cost `c_a`, and `𝓜*` is `chainedBlocksAt`.
 -/

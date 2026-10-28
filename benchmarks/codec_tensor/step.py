@@ -4,14 +4,14 @@ WT_RECEIPT build's `--rows` 64) and the FP8 MMA, then the step's leaves and tree
 rest of the GPU's memory at `--batch` sequences,
 held as words of the same field and decoded inside attention (`benchmarks/word_codec/kv.cu`'s `kv_attn`); the step's new tokens' KV is encoded (`step.cu`'s
 `kv_append`, all layers in one launch on a second stream, beside the step). With sketch-sha512 (a WT_RECEIPT build)
-the KV carries the same receipts: each token-layer is one of the store's registered 4 KiB blocks (store-order/v0),
+the KV carries the same receipts: each token-layer is one of the store's registered 4 KiB chunks (store-order/v0),
 attention is `kv_attn`'s form 13, which sketches the words it decodes under the pass's signs (`kv_rc_pass`, from
-`wt_pass`'s signs and receipt midstate), and after each layer `kv_rc_receipts` hashes the layer's blocks' sketches
-into their sketch-sha512 receipts, store block nvec + u layers + l after the weights' nvec, in the one buffer the
+`wt_pass`'s signs and receipt midstate), and after each layer `kv_rc_receipts` hashes the layer's chunks' sketches
+into their sketch-sha512 receipts, store chunk nvec + u layers + l after the weights' nvec, in the one buffer the
 pass's commit covers. The same step on
 plain data (each linear's fastest native FP8 GEMM, the faster plain attention form, a plain append) is its
 denominator, and a native pass (a read of every byte the step reads) its unit. Writes `step.json` and `step.log` under
-`--out`, and in a `research run` its `result.json`.
+`--out`, and, with `RESEARCH_RUN_DIR` set, its `result.json` there.
 
 Nothing is timed before its gate passed:
 - wt.cu's decode primitives at inputs that take their rare branches (`gate_prims`), which no gate's random words reach;
@@ -24,7 +24,7 @@ Nothing is timed before its gate passed:
   CUDA-core forms 1 and 2, the tensor-core forms 4 and 5, and with the KV's receipts form 13) and at every split count
   tried, equals its plain form (0 or 3) bit for bit at each k, and each plain form is within RTOL of float64 attention
   (on a few sequences); form 13's per-head shares equal S · e over each head's words of each token-layer and its
-  receipts `sketch_receipt`'s of the blocks, every one, at each k and split count;
+  receipts `sketch_receipt`'s of the chunks, every one, at each k and split count;
 - the append: encoded, the cache's bytes equal `kv_encode` of the same words at each slot's index; plain, the words;
 - the per-pass key (red team F29, `bench.gate_pass`): each sketched step starts with `wt_pass`, which derives pass j's
   seed pass_seed(σ, j, root_(j−1)), signs, key and leaves' prefix on the device from the previous step's root (the
@@ -228,9 +228,9 @@ def gate_attention(kv, torch, b: int, ctx: int, ks, sms: int, log, wt=None) -> d
     attention on the first few sequences. With wt (a WT_RECEIPT build: the KV's receipts), the receipt form under
     RECEIPT_SEED's signs and receipt midstate (kv_rc_pass): at each k and split count its shares (into shares set to
     -1, so each slot's must be written) equal S · e over each KV head's 512 positions (`sketch_receipt.kv_positions`)
-    of each token-layer of the encoded store, and kv_rc_receipts' over them `sketch_receipt`'s of the blocks, every
+    of each token-layer of the encoded store, and kv_rc_receipts' over them `sketch_receipt`'s of the chunks, every
     token-layer of the layer, at receipt index KV_RC_JBASE + u layers + layer, the other layer's rows untouched; the
-    shares sum to S · e of the whole block."""
+    shares sum to S · e of the whole chunk."""
     rc = wt is not None
     sh = KB.attn_shape(kv)
     tl, tle = K.TOKEN_LAYER_BYTES, sh["tle"]
@@ -276,7 +276,7 @@ def gate_attention(kv, torch, b: int, ctx: int, ks, sms: int, log, wt=None) -> d
         signs = torch.from_numpy(SR.sign_words(np.packbits(ub, axis=1, bitorder="little")).view(np.int32)).cuda()
         mid = BW.to_dev(torch, BW.receipt_mid(wt, seed))
         kv.call("kv_rc_pass", KB.ptr(signs), KB.ptr(mid), st)
-        head = hashlib.sha512(SR.prefix(seed))
+        receipter = SR.rb.SketchReceipter(seed)
         heads = [SR.kv_positions(g) for g in range(K.KV_HEADS)]
         pos = [torch.from_numpy(p).cuda() for p in heads]
         sk = torch.empty(slots * K.KV_HEADS, 16, dtype=torch.int32, device="cuda")
@@ -293,7 +293,7 @@ def gate_attention(kv, torch, b: int, ctx: int, ks, sms: int, log, wt=None) -> d
             sigma = share.sum(1, dtype=torch.int32)
             whole[f"k{k}"] = bool(torch.equal(sigma, SKT.sketch_torch(torch, blocks, ub)))
             sg = sigma.cpu().numpy().astype("<i4")
-            ys = b"".join(BW.root_words(SR.receipt_of(head, KV_RC_JBASE + u * layers + layer, sg[u].tobytes()))
+            ys = b"".join(BW.root_words(receipter.receipt(KV_RC_JBASE + u * layers + layer, sg[u].tobytes()))
                           for u in range(slots))
             del blocks, share, sigma
         for form in encs:
@@ -455,7 +455,7 @@ class Step:
             for l, name in self.lins:
                 self.tag_off[(k, l, name)] = tot
                 tot += self.prm[(name, k, "sketch")][3]
-                # store-order/v0: a linear's receipts are its own store blocks, so the pass's plan is the store's
+                # store-order/v0: a linear's receipts are its own store chunks, so the pass's plan is the store's
                 if wt.receipt and self.tag_off[(k, l, name)] * BW.SR.BLOCK != self.off[(l, name)]:
                     raise RuntimeError(f"{name} layer {l}: receipts from {self.tag_off[(k, l, name)]}, not its store's "
                                        f"block {self.off[(l, name)] // BW.SR.BLOCK}")
@@ -487,7 +487,7 @@ class Step:
             BW.READER.chain_begin(self.plan(k), BW.STORE_KEY)
 
     def plan(self, k: int):
-        """The pass's plan: every block of the store, the weights' then the KV's token-layers, in store order."""
+        """The pass's plan: every chunk of the store, the weights' then the KV's token-layers, in store order."""
         return SR.rb.Plan.whole(self.nvec[k] + self.nkv)
 
     def lin_plain(self, l: int, name: str) -> None:
@@ -572,7 +572,7 @@ class Step:
         receipts, and its first linear's first receipts are `sketch_receipt`'s of that linear's first blocks
         (`gemm_blocks`) at that seed; with the KV's receipts, layer 0's attention after it (form 13 under the signs and
         midstate kv_rc_pass took from the pass) receipts its first token-layers as `sketch_receipt` does at that seed,
-        store blocks nvec + u layers."""
+        store chunks nvec + u layers."""
         torch, wt = self.torch, self.wt
         self.set_keys(k)
         self.step(k, "none", "W")
@@ -609,8 +609,8 @@ class Step:
             nv, few = self.nvec[k], min(64, self.slots)
             kvb = self.KV.view(torch.int8).view(self.slots, self.layers, SR.BLOCK)[:few, 0]
             sk = SKT.sketch_torch(torch, kvb, bits[:SR.ROWS]).cpu().numpy().astype("<i4")
-            head = hashlib.sha512(SR.prefix(seed))
-            ys = b"".join(BW.root_words(SR.receipt_of(head, wt.jbase + nv + u * self.layers, sk[u].tobytes()))
+            receipter = SR.rb.SketchReceipter(seed)
+            ys = b"".join(BW.root_words(receipter.receipt(wt.jbase + nv + u * self.layers, sk[u].tobytes()))
                           for u in range(few))
             rows = self.tags.view(-1, wt.tag_bytes)[nv:nv + few * self.layers:self.layers]
             out["kv_receipts"] = BW.host_bytes(rows) == ys
@@ -647,7 +647,7 @@ class Step:
 
     def attn(self, l: int, form: int, k: int, splits: int | None = None) -> None:
         """Layer l's attention; the receipt form's shares are hashed into layer l's receipts, slot u's the store's
-        block nvec + u layers + l (after the weights')."""
+        chunk nvec + u layers + l (after the weights')."""
         sp = splits if splits is not None else self.splits[(form, k)]
         st = BW.stream(self.torch)
         rc = self.kv.so.kv_attn(self.KV.data_ptr(), form, self.q.data_ptr(), self.o_attn.data_ptr(),
@@ -839,7 +839,7 @@ POINTS_SCHEMA = "verity/hbm-step-points/v0"
 
 
 def step_points(res: dict, run_id: str | None) -> dict:
-    """The step's points for ra-overhead-frontier's model, one a k: d and the step over plain, and the weights' decode
+    """The step's points for the overhead frontier's model, one a k: d and the step over plain, and the weights' decode
     o_W and receipt τ_W per weight pass (its `o_w`, `tau_w` at the linears' M), attention per KV pass, the append."""
     pts = []
     for k, r in res["model"]["k"].items():

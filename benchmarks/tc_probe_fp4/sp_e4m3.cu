@@ -1,4 +1,4 @@
-// 2:4 sparse E4M3 on sm_120 (lane pouw rtx-pro GPU 4, tc-model/sm120-e4m3-sp-k64): one
+// 2:4 sparse E4M3 on sm_120 (tc-model/sm120-e4m3-sp-k64): one
 //   mma.sp::ordered_metadata.sync.aligned.m16n8k64.row.col.kind::f8f6f4.f32.e4m3.e4m3.f32
 // per tile, against the dense
 //   mma.sync.aligned.m16n8k32.row.col.kind::f8f6f4.f32.e4m3.e4m3.f32

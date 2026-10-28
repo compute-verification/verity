@@ -285,7 +285,7 @@ theorem ParseFactsPre.facts {tags : Tags} {pre : Array (String × Net)} {c : Cir
     recSparse := P.recSparse, recOpening := P.recOpening, typed := P.typed }
 
 set_option maxHeartbeats 4000000 in
-/-- **What `HmRow.parse` accepted, with nets `pre` first, of any kind** (a typed flat class's unit net, #307, or a
+/-- **What `HmRow.parse` accepted, with nets `pre` first, of any kind** (a typed flat class's unit net, or a
 templated file's committed unit net): its nets are `pre`'s, then the file's own, each `Net.parse`'s or a lookup slot,
 and its unit is the first named `unit`. -/
 theorem parse_factsPre_nets {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
@@ -581,7 +581,7 @@ theorem parse_factsPre_nets {tags : Tags} {bytes : ByteArray} {tables : List (St
           recResiduals := by cases w'''; exact hres, recSparse := by cases w''''; exact hsparse,
           recOpening := by cases w5; exact hopening, typed := rfl }
 
-/-- **What `HmRow.parse` accepted, with nets `pre` first** (a typed flat class's unit net, #307): its nets are `pre`'s,
+/-- **What `HmRow.parse` accepted, with nets `pre` first** (a typed flat class's unit net): its nets are `pre`'s,
 then the file's own, each `Net.parse`'s or a lookup slot, and its unit is the first named `unit`. -/
 theorem parse_facts_nets {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {pre : Array (String × Net)}
     {c : Circuit} (hpre : ∀ x ∈ pre.toList, Built x.2) (h : HmRow.parse tags bytes tables (pre := pre) = .ok c) :

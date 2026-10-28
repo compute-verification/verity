@@ -9,16 +9,17 @@ combination, openings or verdict. Measurement only.
 One engine process per arm (``--arm``), since the row size is a module constant set on each rank before its committer is built
 (`prof_arm.Rows4kArm`):
 
-- ``rows``: rows-sha512's step at 256 B rows, the row size it had before 4 KiB (so its roots are no scheme's now), with
+- ``rows``: rows-sha512's step at 256 B rows (whose roots are no scheme's), with
   `tp-commit`'s acquisition: the acquired classes' modules, the MoE block
-  stream, every TP collective's rank-local partial, the capture map's routes and attention taps, and the block-FP8 linears'
-  input quantization (`acquisition_manifest` names its family; the vocabulary-range tap, one small tensor a step, is off);
-- ``rows-layer``: rows-sha512 acquiring only what a per-layer unit commits (`per_layer`): each decoder layer's residual stream
+  stream, every TP collective's rank-local partial, the capture map's routes and attention taps, and the FP8 linears'
+  per-scale-group input quantization (`acquisition_manifest` names its family; the vocabulary-range tap, one small tensor a step, is off);
+- ``rows-layer``: rows-sha512 acquiring only what a per-layer proof block commits (`per_layer`): each decoder layer's residual stream
   as its fused add-RMSNorm leaves it (`LayerStreamSource`), the MLA cache entry and the DSA indexer's cache row and scale each
   attention layer writes, the embedding's ids and output, the final norm, the logits and the sampled ids;
 - ``rows-4k`` and ``rows-layer-4k``: the same at 4 KiB rows, rows-sha512's row size.
 
-A batch's requests are the row's request with its prompt rotated by ``--rotate`` tokens per request, at the row's prompt length
+A batch's requests are the workload's request with its prompt rotated by ``--rotate`` tokens per request, at the workload's
+prompt length
 and cap, all arriving at once; every request decodes to its cap (``ignore_eos``), so a batch's runs have the same steps. Per run,
 `runs.jsonl` has the step walls and outputs, and `phases` reads TTFT (the mean over the requests, and the time to the batch's last
 first token) and the decode TPOT (the mean step wall once every request decodes) from them. A Commit run passes its gate when its
@@ -39,15 +40,15 @@ from typing import Any
 
 #: arm -> (row bytes, per-layer acquisition)
 ARMS = {"rows": (256, False), "rows-4k": (4096, False), "rows-layer": (256, True), "rows-layer-4k": (4096, True)}
-#: the modules a per-layer unit keeps of the committer's selection: the embedding (its ids and output), the final norm, the logits, and
-#: the sampler where the runner has one as a module (the sampled ids come from the committer's `runner.sample` wrap either way)
+#: the modules a per-layer proof block keeps of the committer's selection: the embedding (its ids and output), the final norm,
+#: the logits, and the sampler where the runner has one as a module (the sampled ids come from the committer's `runner.sample` wrap either way)
 UNIT_MODULES = ("model.embed_tokens", "model.norm", "logits_processor", "runner.sampler")
 UNIT_REQUIRED = UNIT_MODULES[:3]
 ROOT_BYTES = 64
 
 
 def requests_at(wl: dict[str, Any], batch: int, rotate: int) -> list[dict[str, Any]]:
-    """``batch`` requests from the row's first: its prompt rotated by ``rotate`` tokens per request, its cap, all at step 0."""
+    """``batch`` requests from the workload's first: its prompt rotated by ``rotate`` tokens per request, its cap, all at step 0."""
     base = wl["requests"][0]
     ids = [int(t) for t in base["prompt_token_ids"]]
     keep = {k: base[k] for k in ("max_tokens", "temperature", "top_p", "top_k", "seed") if k in base}
@@ -78,7 +79,7 @@ def phases(walls: list[float], outs: list[int], batch: int) -> dict[str, Any]:
 
 def acquisition_manifest(world: int) -> dict[str, Any]:
     """The rows each rank's taps read (`acquire.sources.taps.attach_rank`): a `DeepGemmFp8Linear_v1` Call per rank, so every rank
-    attaches the block-FP8 linears' input quantization as a GLM-5.3 Commit's manifest has it do. No Program, no population."""
+    attaches the FP8 linears' per-scale-group input quantization as a GLM-5.3 Commit's manifest has it do. No Program, no population."""
     return {"ranks": world, "identities": [{"rank": r, "spec": "DeepGemmFp8Linear_v1{}"} for r in range(world)]}
 
 
@@ -130,7 +131,7 @@ class LayerStreamSource:
 
 
 def per_layer(com: Any, model: Any) -> dict[str, Any]:
-    """Keep of `com`'s acquisition what a per-layer unit commits: of its modules `UNIT_MODULES`, of its sources the attention
+    """Keep of `com`'s acquisition what a per-layer proof block commits: of its modules `UNIT_MODULES`, of its sources the attention
     source with only the cache rows each attention layer writes, and `LayerStreamSource`."""
     from verity_vllm.acquire.sources import attention_source as AS
 
@@ -150,7 +151,7 @@ def per_layer(com: Any, model: Any) -> dict[str, Any]:
 
 def make(worker: Any, *, arm: str, **kw: Any) -> dict[str, Any]:
     """On a rank (`LLM.collective_rpc` with a callable): the arm's committer as `tp-commit` makes it (`tp2_commit_make`), under
-    rows-sha512 at the arm's row size; on a per-layer arm, then only the per-layer unit's acquisition (`per_layer`)."""
+    rows-sha512 at the arm's row size; on a per-layer arm, then only the per-layer proof block's acquisition (`per_layer`)."""
     from verity_vllm.acquire.sources import taps as TAPS
     from verity_vllm.commit import step_rows
     from verity_vllm.commit.committer import host_retention, native_collect, native_host

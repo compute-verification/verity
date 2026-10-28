@@ -1,5 +1,5 @@
-"""`SiluMul_v2` (`registry.act`, promoted from quarantine `act`) is vLLM `_C.silu_and_mul` on the words the red-team measured on
-sm_120 where `SiluMul_v1` is not (r20260930-092038-7dbc, `silu-edge-cases`), and `SiluMul_v1` on every other word. The served
+"""`SiluMul_v2` (`registry.act`, promoted from quarantine `act`) is vLLM `_C.silu_and_mul` on the words measured on
+sm_120 where `SiluMul_v1` is not (`silu-edge-cases`), and `SiluMul_v1` on every other word. The served
 vocabulary `b1-eager-v3` binds it; the older vocabularies keep `SiluMul_v1`. The replay's row kernel is the same function."""
 from __future__ import annotations
 

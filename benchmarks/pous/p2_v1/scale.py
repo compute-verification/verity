@@ -1,4 +1,4 @@
-"""P2 at device scale: what a store of B blocks costs to build, check, hold beside a served model and audit, on one GPU
+"""P2 at device scale: what a store of B labels costs to build, check, hold beside a served model and audit, on one GPU
 (`pod.sh IMPL=p2-scale` runs the GPU part; `cpu` and `setup-check` need no GPU).
 
     scale.py cpu --out DIR --cpus 124,126 [--siblings 125,127] [--blocks 2]
@@ -7,16 +7,16 @@
     scale.py audit --out DIR --p2-lib LIB --build-dir BUILD --log2 19,25 --verifier-cpu V --responder-cpu R \
         [--workers N] [--fit-python PY --fit-model ID --fit-cpus LIST]
 
-- `cpu`: one block's encode, `E(m) = ρ(σ_K(ρ(m + t)))`, on one core: `reference.encode` with gmpy2's `powmod` (two
+- `cpu`: one label's encode, `E(m) = ρ(σ_K(ρ(m + t)))`, on one core: `reference.encode` with gmpy2's `powmod` (two
   exponentiations by `(p + 1) / 4`), and the special-form chain (`w − 2` squarings with two folds each, times the inverse
   of `y^((c0 − 1)/4)`) on gmpy2; one root by Python's own `pow` and by `schemes.p2`'s pure-Python field. Then the chain's
-  aggregate rate with one process per listed core, and per listed SMT sibling too. Every block decodes back by
+  aggregate rate with one process per listed core, and per listed SMT sibling too. Every label decodes back by
   `reference.decode`.
-- `setup-check`: a store of `--blocks` blocks (one segment) under `schemes.p2`'s framing, encoded on the CPU, then the
+- `setup-check`: a store of `--blocks` labels (one segment) under `schemes.p2`'s framing, encoded on the CPU, then the
   public-encoder check two ways: Python's `setup.verifier_key_from_encoding` and the Lean `pous-setup check`.
-- `gpu`: the device's encode throughput (`p2v1_encode`, two roots a block) at growing batches, each batch decoded back to
-  its payloads and sampled blocks held to `reference.decode`; and the decode rate, the setup check's device step.
-- `audit`: for each B = 2^e, a store of B uniformly random canonical blocks on the device (every canonical block is the
+- `gpu`: the device's encode throughput (`p2v1_encode`, two roots a label) at growing batches, each batch decoded back to
+  its payloads and sampled labels held to `reference.decode`; and the decode rate, the setup check's device step.
+- `audit`: for each B = 2^e, a store of B uniformly random canonical labels on the device (every canonical label is the
   encoding of its decode, and an answer's time does not depend on its bytes), the leaves the verifier keeps hashed by a
   process pool, then the harness's honest timed audit (`p2_v1/memory_challenger.py`: k = 105, Δ = 0.5 ms plus the loopback
   allowance fixed before it). Beside it: the device decode of all of `C` (the setup check's device step at B), the cost of
@@ -621,7 +621,7 @@ def fit_beside(a: argparse.Namespace, backend: Any, c: Any, st: dict[str, Any], 
     from band_gpu import harness as H
     from p2_v1 import reference as R
 
-    # the decode passes' cached blocks would otherwise count against vLLM: only the store and the responder stay
+    # the decode passes' cached labels would otherwise count against vLLM: only the store and the responder stay
     torch.cuda.empty_cache()
     free, total = torch.cuda.mem_get_info(backend.device)
     util = max(0.05, int((free - a.headroom_gib * (1 << 30)) / total * 1000) / 1000)

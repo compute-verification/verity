@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 
 from verity.ml.circuits import annotations as A
-from verity.ml.circuits import codec, partition_object as PO
+from verity.ml.circuits import codec
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of

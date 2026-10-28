@@ -26,9 +26,9 @@ Pearl-C prover writes, through the clear audit (`clear_audit`).  This directory 
     share of the unit's `creditDevRev1` (F1; `tile_cap`);
   - under a hashing format with the row cap (-h3, `row_cap`), so is each credited A row's debit over the credited columns,
     at most ρ times its cells' credit (`TTOutRowSeed.lean`'s (C2)), and at most 4ρ at Pearl-C's census ks below k_min
-    (`row_cap_multiple`, `pearlCTilesDevRev1RowCapAt`; Daniel's card a6872606), the tile's cap staying ρ.
+    (`row_cap_multiple`, `pearlCTilesDevRev1RowCapAt`), the tile's cap staying ρ.
   A failure is a wrong tile, reported as a reason; nothing raises.
-* **Voluntary rows (V-EX; the assessor's B at 17:32Z).**
+* **Voluntary rows.**
   - A record may give up up to ⌈m/64⌉ A rows (`voluntary_a`), and a weight up to ⌈n/64⌉ B rows (`voluntary_b`, the same
     in every unit of the weight). They are committed in `records_root` with the excluded rows, before the draw coin.
   - A voluntary row earns no credit. Its words are still formed, checked and hashed on every drawn tile that holds it.

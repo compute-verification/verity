@@ -1,5 +1,5 @@
 """`TritonBlockRMSNorm_v1` at DeepSeek-V4's q norm against rows the H200 committed (`fixtures/dsv4_q_norm_commit_20261021.json`:
-DeepSeek-V4-Pro B1 attempt 3's Commit r20261021-092814-0b1c, read by r20261021-180952-300c): the Definition and its row kernel give
+a DeepSeek-V4-Pro B1 Commit): the Definition and its row kernel give
 every committed output, and the epilogue in two roundings (`eps + mul(scale_a(sum), rcp(N))`, the PTX as written) misses each
 fixture row the fixture says it misses, by as many words, so the rows keep telling ptxas's FFMA apart from it."""
 from __future__ import annotations

@@ -17,7 +17,8 @@ the identifier and the message are SHA-512 words as `merkle` lays them out (byte
 P (2^W - 1) chain hashes whatever the digits. The tree level puts the current node on the side q's bit names
 (`LmsNode_v1`, a conditional swap).
 
-**The parts,** each its own traced Definition, so a unit of a proof is at most one level of the tree's two compressions:
+**The parts,** each its own traced Definition (`trace.part`, which C-Flock lowers by its builder), so a unit of a proof is at
+most one level of the tree's two compressions:
 
     Sha512Compress_v1                 (cv: Array<8, Word>, block: Array<16, Word>) -> Array<8, Word>, one compression
     LmsMessage_v1{N, W}               (I, q32, C, message) -> Array<P, Array<W, Value<1>>>: Q and its checksum's digits
@@ -33,9 +34,8 @@ fold into the traced circuit; a ``Sha512Compress_v1`` call does not fold them, b
 """
 from __future__ import annotations
 
-from functools import lru_cache
 from types import SimpleNamespace
-from typing import Callable, Sequence
+from typing import Sequence
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean import trace as TR
@@ -133,24 +133,6 @@ def node_hash(C, N: int, I, r, d, cur, sib):
 
 # --- traced Definitions ------------------------------------------------------------------------------------------------------
 
-def _leaf_definition(name: str, statics: tuple[str, ...], signature: Callable, build: Callable, doc: str) -> CompositeDefinition:
-    """A Definition traced from ``build(C, S, *elements)`` once per binding of ``statics``."""
-
-    @lru_cache(maxsize=None)
-    def traced(*key) -> TR.Traced:
-        S = SimpleNamespace(**dict(zip(statics, key)))
-        params, ret = signature(S)
-        return TR.trace(lambda C, *e: build(C, S, *e), [t for _, t in params], ret)
-
-    def body(B, S, *colls):
-        params, ret = signature(S)
-        return TR.emit(traced(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
-
-    d = CompositeDefinition(name, 1, statics, signature, body, conformance="exact-model-tested", doc=doc)
-    d.traced = traced  # type: ignore[attr-defined]
-    return d
-
-
 def _group(e: Sequence, n: int) -> list[list]:
     return [list(e[k:k + n]) for k in range(0, len(e), n)]
 
@@ -163,7 +145,7 @@ def _sig_compress(S):
     return (("cv", DIGEST), ("block", Array(16, WORD))), DIGEST
 
 
-Sha512Compress = _leaf_definition(
+Sha512Compress = TR.part(
     "Sha512Compress", (), _sig_compress, lambda C, S, *e: compress_gadget(C, list(e[:8]), list(e[8:24])),
     "One SHA-512 compression (FIPS 180-4 §6.4.2) with its feed-forward, on 64-bit words LSB first")
 
@@ -178,7 +160,7 @@ def _build_message(C, S, *e):
     return message_digits(C, S.N, S.W, e[0:2], e[2], e[3:3 + k], e[3 + k:11 + k])
 
 
-LmsMessage = _leaf_definition(
+LmsMessage = TR.part(
     "LmsMessage", ("N", "W"), _sig_message, _build_message,
     "The P Winternitz digits of Q = H(I || u32(q) || u16(D_MESG) || C || message) and of its checksum (RFC 8554 §4.4)")
 
@@ -189,7 +171,7 @@ def _sig_step(S):
     return (("I", IDENT), ("q", U32), ("i", Array(16, BIT)), ("j", Array(S.W, BIT)), ("a", Array(S.W, BIT)), ("s", V)), V
 
 
-LmsChainStep = _leaf_definition(
+LmsChainStep = TR.part(
     "LmsChainStep", ("N", "W"), _sig_step,
     lambda C, S, *e: chain_step(C, S.N, S.W, e[0:2], e[2], e[3], e[4], e[5], e[6:]),
     "Step j of chain i: H(I || u32(q) || u16(i) || u8(j) || s) if the chain's digit a <= j, else s")
@@ -201,7 +183,7 @@ def _sig_leaf(S):
     return (("I", IDENT), ("r", U32), ("K", V)), V
 
 
-LmsLeaf = _leaf_definition(
+LmsLeaf = TR.part(
     "LmsLeaf", ("N",), _sig_leaf, lambda C, S, *e: leaf_hash(C, S.N, e[0:2], e[2], e[3:]),
     "The tree's leaf r over the one-time public key K: H(I || u32(r) || u16(D_LEAF) || K)")
 
@@ -217,7 +199,7 @@ def _build_node(C, S, *e):
     return node_hash(C, S.N, e[0:2], e[2], e[3][0], e[4:4 + k], e[4 + k:4 + 2 * k])
 
 
-LmsNode = _leaf_definition(
+LmsNode = TR.part(
     "LmsNode", ("N",), _sig_node, _build_node,
     "The tree's node r over cur and its sibling: H(I || u32(r) || u16(D_INTR) || left || right), cur the right child iff d")
 
@@ -232,7 +214,7 @@ def _build_equal(C, S, *e):
     return [and_reduce(C, [(x ^ y).inv() for a, b in zip(e[:k], e[k:]) for x, y in zip(a, b)])]
 
 
-LmsEqual = _leaf_definition("LmsEqual", ("N",), _sig_equal, _build_equal, "1 iff x = y")
+LmsEqual = TR.part("LmsEqual", ("N",), _sig_equal, _build_equal, "1 iff x = y")
 
 
 # --- the verifier ------------------------------------------------------------------------------------------------------------
@@ -265,7 +247,6 @@ class _Wires:
 def _body(B, S, I, root, message, q, Cv, y, path):
     p, k = _check(S), S.N // 8
     X = _Wires(B)
-    V = _value(S.N)
     qb = X.refs(q)
     q32 = X.coll(U32, qb + X.const(0, 32 - S.H))
     digits = B.call(bind(LmsMessage, N=S.N, W=S.W), I, q32, Cv, message)

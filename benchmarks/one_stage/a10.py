@@ -187,7 +187,7 @@ class Committed:
                 out["unopened"] += 1
                 continue
             raw = np.ascontiguousarray(arr).reshape(-1).view(np.uint8)
-            if raw.size != int(nb) or CPU.tensor_root(raw, int(tree["chunk"])) != bytes.fromhex(tree["tensor_roots"][i]):
+            if raw.size != int(nb) or CPU.tensor_root_of(tree, i, raw) != bytes.fromhex(tree["tensor_roots"][i]):
                 out["mismatched"].append(n)
                 continue
             words[n] = raw.view(CPU.WORDS[dt][1])

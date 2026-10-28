@@ -5,8 +5,7 @@ the stacking law, read in bytes:
 
     stock(L) = 128 R_cap L / E + R_in L        f = stock(L) / M_dyn
 
-- R_cap is the honest Program's nonlinear units a second: #4622's gate model, property/v1's budgeted units plus data
-  products (a product of two run-time values: the attention row's Q′K′ᵀ and P V′; a MAC by a weight is free).
+- R_cap is the honest Program's nonlinear units a second: property/v1's budgeted units plus data products (a product of two run-time values: the attention row's Q′K′ᵀ and P V′; a MAC by a weight is free).
 - E is the nonlinear units an encode of one 1024-bit word costs.
 - L is a carrier's lifetime.
 - R_in is the node's run-input bytes a second.
@@ -59,8 +58,8 @@ At f ≥ 1 no KV is credited.
   `decoder-e2e-h200-mqa.json` (the e2e demo's frozen MQA H200 shape, units estimated from its shapes).
   `--m-dyn-node BYTES` spreads the input term over the node's pool, since the cut scales with the requests and R_in L
   doesn't.
-- `beta_job.sh` runs `beta.py` for `research run` on a CPU node, on the Program the census read (r20261018-045058-23f7's
-  Build), whose descriptor decodes only with that commit's `verity` and `verity_vllm` (`inputs/tree.tar.gz`).
+- `beta_job.sh` runs `beta.py` as a job on a CPU node, on the Program the census read (the Build its `ART`
+  names), whose descriptor decodes only with its own commit's `verity` and `verity_vllm` (`inputs/tree.tar.gz`).
 
 What is measured and what is modeled:
 
@@ -90,15 +89,15 @@ serve it:
 - `frontier.py --atoms atoms.json --out frontier.json` composes a decode token-step and a prefill token per model and layer
   kind (GQA, MLA with or without DSA, Gated DeltaNet, lightning attention, dense or MoE FFN) from the atoms, with the KV
   quantized as built or once at its write. It refuses atoms that don't reproduce the census's measured 8B token units. It counts
-  in nonlinear units (#4622's gate model): property/v1's units plus one a data product, a product of two run values that
+  in nonlinear units: property/v1's units plus one a data product, a product of two run values that
   property/v1 left free as s8 lanes (attention's QKᵀ and PV, DSA's indexer dots, linear attention's chunked prefill products),
   with E a word in the same units (`E_WORD`). It gives:
   - the nonlinear units and honest operations by class, and the data products a token by kind;
   - the dynamic memory's kind, bytes, write path and cut widths;
   - the roofline serving model's R_cap, M_dyn and turnover;
   - f at each E and L, and again with the softmax's work a key at property/v1's floor (`softmax_floor`), with every
-    requantization and linear epilogue at one rounding an element as well (`exact_floor`), and before #4622 (property/v1's
-    units, E 364,497);
+    requantization and linear epilogue at one rounding an element as well (`exact_floor`), and in property/v1's units
+    without data products (`before`, E 364,497);
   - f with R_cap and with the decode rate alone as the pool's context varies (`sweep`, up to each model's max_context).
 
   It also writes the tables as `frontier.md`.
@@ -112,6 +111,6 @@ serve it:
 | DSA's indexer scores, top-k and row selection | modeled: a unit per operation (`MODELED`); the served Waksman form is refused by property/v1 |
 | the floors | modeled: the softmax at one rounding a head-key; a requantization or an epilogue at the measured count of its essential rounding (`ESSENTIAL_ROUNDING`) |
 | data products | shapes: a unit each (`PRODUCT`); the attention row's 2 S D a head matches `products_pass.py`'s measured 16,384 at D = 128, S = 64 |
-| E a word | the conjecture (`SquaringFloor`, `ChainSum` at 2^-40) and the best construction found (the seam square), in nonlinear units (note:20261026T0110Z-report-s5-lowerbounds) |
+| E a word | the conjecture (`SquaringFloor`, `ChainSum` at 2^-40) and the best construction found (the seam square), in nonlinear units |
 | shapes, experts, KV and state sizes | config: each model's `config.json` at its recorded revision |
 | R_cap, batch, t_step | modeled: roofline on the reference node (`node` in `frontier_models.json`) |

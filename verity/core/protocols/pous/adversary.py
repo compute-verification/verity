@@ -502,7 +502,7 @@ class Measurement:
 
 def measure(name: str, v: View, holding: Holding, indices: Iterable[int] | None = None,
             game_limit: int | None = None) -> Measurement:
-    """Preprocess `holding` from `v`, answer every index (default: all `B`), and compare with the true blocks.
+    """Preprocess `holding` from `v`, answer every index (default: all `B`), and compare with the true labels.
     `game_rounds` is Lean's game on the same holding, searched up to `game_limit` (default twice the most rounds an
     answer took, plus 2)."""
     state = preprocess(v, holding)

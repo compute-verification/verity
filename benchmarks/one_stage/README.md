@@ -28,7 +28,10 @@ negatives.
   the dense layers' 861 per rank, by `subset:512`), or by default the CPU TP stand-in
   (`integrations/vllm/tests/pipeline/served_tp.py`). A member's whole population is one M0 statement, whose shape takes at most
   `2^(35 - k_log)` instances: 2,048 at I=1536 (`k_log` 24) and 8,192 at I=256 (`k_log` 22), so a rank's `SiluMul_v2{I=256}`
-  (172,200 routed-expert and 21,525 shared-expert units) is not a member.
+  (172,200 routed-expert and 21,525 shared-expert units) is not a member. Each session's `circuit.txt` files and lookup tables
+  go to the store by SHA-512 (`sha512/<hex>`, the Lean verifier's `--archive` layout) through
+  `integrations/vllm/verity_vllm/ops/store_trees.sh`, epoch_store.sh's put, and the run is labelled `circuits` with each tree's
+  art id, so the run can be verified again from the store.
 - `a5_row_tables.py` (`a5_tp.sh` with `STANDIN=row-tables`): A5 on a window with row tables, which no TP window of record has
   yet: `integrations/vllm/tests/pipeline/test_row_tables.py`'s ScaledMmS8Coordinate chunks, whose `x` rows link four row
   tables over two engine steps, each chunk one table's, as rank 0 of a one-rank step on a local challenger's coins. Lean
@@ -63,7 +66,7 @@ negatives.
   bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the workload's Build and Match of record, a config-run Commit that seals
   `commit/replay_bundle_p0/` (a single-GPU workload defers only as a config run), its replay on CPU, and the row dir in the evidence
   store. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
-- `served_verdicts.sh` (with `served_verdicts.py`): the Wed 28 run (VLLM-33), one served window through every subprotocol
+- `served_verdicts.sh` (with `served_verdicts.py`): one served window through every subprotocol
   (`research run --on vy-dc-h200 --project verity --cwd clone -- bash benchmarks/one_stage/served_verdicts.sh`). It serves
   Llama-3.2-1B int8 on one H200 under `gpu-lease` (`serve-openai --scheme rows-sha512 --seal --admit release-order`), sends a
   few greedy requests from the certifier's traffic generator, and seals each window. Before the first request, the committer
@@ -75,7 +78,7 @@ negatives.
   `WC_RECORD_TIMEOUT` (default 2h): a timeout or refusal there is reported and never fails the run. Then comes the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is C-Flock `--zk` on the drawn proof blocks
   and the Lean verifier. Then come PoUW, the bandwidth audit, PoUS and the network certifier. Each runs its piece where
   `POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD` or `CERTIFIER_CMD` names one; otherwise its `MISSING` line names its issue, and it
-  gets no verdict. Finally the all-protocols window report and CMP-153's block record. Each step's verdict line is in
+  gets no verdict. Finally the all-protocols window report and the block record. Each step's verdict line is in
   `out/verdicts.txt`.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
@@ -104,11 +107,10 @@ negatives.
   per-statement and per-unit costs with their standard errors, writing `costfit` observations. `ZK_DRAWS=c` proves every
   staged unit: the cost of c drawn units in one statement, up to a table's 2^(35 − k_log) (2048 at K = 4096). Each point
   takes its own GPU lease, and a node without CUDA 13.3 gets its packages unpacked under `FLOCK_WORK`.
-- `prove_bundle.sh`: a drawn-unit replay bundle (`benchmarks/e2e_demo`, `verity/drawn-unit-bundle/v2`) proved by
-  `prove_bundle.py`. `prove_bundle.py make` writes the torch loop's window under the fixture's test key and the bundle of
-  its draw: the fixture's `FIXTURE_DRAW`, or with `PB_K=K` a live one over a window registered `subset:K`, the
-  challenger's receipt of the registration and then Lean `flock-verify draw --registration` of the registered law's
-  units over the whole partition on its own coins. The bundle is held to the prover's window: its own check (the draw's
+- `prove_bundle.sh`: a drawn-unit replay bundle (`examples/h200/interfaces`, `verity/drawn-unit-bundle/v2`) proved by
+  `prove_bundle.py`: `PB_BUNDLE` of the window `PB_WINDOW`, else the store's `BUNDLE_WINDOW` (a W8A8 MLP's window under a
+  test key, its tampered twin and the interfaces' bundle of four drawn units under the window's registered `subset:4`).
+  `tests/test_prove_bundle.py` holds that bundle to the window's public part (`tests/fixtures/bundle-window-public`). `PB_LIVE=1` requires the bundle's draw to be live. The bundle is held to the prover's window: its own check (the draw's
   law the registered one among it), its run, registration and partition, each drawn member's public body and a live
   draw's receipt and record. Each drawn member is one `prove --zk` session behind the Lean firewall, one at a time, served the bundle's
   draw, with Lean `verify --zk` as the verdict, overlapping the next session. The negatives are `zk_mutants.py`'s one-bit
@@ -119,7 +121,7 @@ negatives.
 - `zk_cost_cpu.sh`: the same sessions on a CPU node (`zk_cost.py prove --cpu`), proved by the CPU prover that
   `prove_path/run.sh` builds, with the firewall's send check. It runs in a proofs slot, one point at a time. Each session's
   record carries its wall time and its summed peak memory (prover, live verifier and firewall), which is what a CPU node
-  spends on one drawn statement of a block's draw (PRF-171).
+  spends on one drawn statement of a block's draw.
 - `forged_proofs.sh`: the fixture of C-Flock's forged-proof negatives (`verity/ml/flock/tests/test_lean_forged_proofs.py`),
   on hidden_zk's cached builds (`forged_proofs.py`). A small A8 unit (`LlBf16DotprodDot_v1` at K = 128) staged bound to its partition,
   with one honest drawn `--zk` session and two whose committed output word is wrong, proved with the prover's self-check
@@ -149,6 +151,12 @@ negatives.
   same for each of its split units, and with `--also`/`--also-file` for Definitions a split main lacks would use.
   `m1_unit.py` builds one family's unit through M0's `UnitStager`, flat or `--structural`, and with `--bin`
   and `--lean` proves one round of it on stand-in bf16 values under `--zk` and verifies it with the Lean verifier.
+- `served_stock.sh` (with `served_overhead.py`): `served_verdicts.sh`'s stock control, the same endpoint, engine and load
+  served with `serve-openai --no-commit` and no protocol, once per fresh endpoint for `REPS` endpoints. `served_overhead.py
+  table` compares the composed run with it on two clocks, each the same code in both runs: the client's
+  (`serve_load.py --varied`'s timings files) and the engine's step trace (`advice_trace.jsonl`). It reports time per output
+  token, time to first token and tokens per second as composed over stock, the composed run's window open and close on
+  the engine loop, and `verity-bench served-table`'s single-protocol rows beside them.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as

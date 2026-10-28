@@ -3,7 +3,7 @@ import Proofs.Pouw.Eps1.Basics
 /-!
 # Theorem B in M3: a word-local program's instructions
 
-QSTAR's Theorem B (note:20261017T0344Z-draft-eps1-qstar, (b); gap list E6, E7: note:20261017T0801Z-draft-lean-stmt):
+QSTAR's Theorem B (gap list E6, E7):
 a word-local program costs at least 4 instructions a word at the zero instance and at least 8 at a general (int8)
 instance.
 

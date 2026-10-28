@@ -3,8 +3,8 @@ import Definitions.Accounting.Assumptions.TS
 /-!
 # The tensor–scalar model's guarantee statements (trusted)
 
-EPS1's statements over `Accounting.TS` (note:20261017T0324Z-draft-eps1-spec, EPS1-TENSOR
-note:20261017T0321Z-draft-eps1-tensor), each `def G : Prop`, proved (or a `sorry` stub) as
+EPS1's statements over `Accounting.TS`,
+each `def G : Prop`, proved (or a `sorry` stub) as
 `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.TS`:
 
 * `TimeBound`: Lemma 1, `T(P) ≥ B(P)/f_max`.
@@ -15,12 +15,12 @@ note:20261017T0321Z-draft-eps1-tensor), each `def G : Prop`, proved (or a `sorry
   proof soundness at `δ_ZK` and the Definitions' pinning, each relation on its path's coins, and E1(c) (`RightFixed`);
   `BindingOfFork`: binding's failure squared is at most its fork form's, two runs off one commitment opening it
   differently, so `δ_bind = √δ_fork`.
-* `DrawnRightOff`: a sampled window's drawn units are right at their committed values outside `S·(δ_bind + δ_ks)`,
-  from binding at every position's cut, joint proof soundness and pinning; `ProofsSoundOfDrawn`: (I8) at `n_π = 1`,
-  `δ_ZK = δ_ks`, from it, the share covering every unit that isn't good (a unit whose late cone the run computed,
-  drawn at each unit's coin, decision 119), and E1(c) per unit with its fold clause (`UnitFixed`);
-  `DrawnBindingOfFork`: a round's binding failure squared is at most `|L|²` times the fork form at its positions' cuts,
-  `L` the positions its units read, so `δ_bind = |L|·√δ_fork`.
+* `DrawnRightOff`: a sampled window's drawn units are right at their committed values outside `S·(δ_bind + δ_ks)`, from
+  binding at every position's cut, joint proof soundness and pinning; `ProofsSoundOfDrawn`: (I8) at `n_π = 1`,
+  `δ_ZK = δ_ks`, from it, the share covering every unit that isn't good (a unit whose late cone the run computed, drawn
+  at each unit's coin), and E1(c) per unit with its fold clause (`UnitFixed`); `DrawnBindingOfFork`: a round's binding
+  failure squared is at most `|L|²` times the fork form at its positions' cuts, `L` the positions its units read, so
+  `δ_bind = |L|·√δ_fork`.
 * `FloorCreditD3`: Corollary D3, the credit at the floor, with every term `≥ 0` and `T(H) = γ_♭·T_cred`.
 * `BindingFacetD1`, `VectorThresholdD1`: Corollary D1, one binding facet, and the vector route's threshold
   `q ≥ 32(α + β·φ_del)/(β·ω)`.

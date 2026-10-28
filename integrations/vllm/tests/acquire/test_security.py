@@ -1,4 +1,4 @@
-"""Security harness (R9 CMT-3, task 3) — the four validity conditions of DANIEL-BRIEF A3 / BRIEF §3, as executable tests over every
+"""Security harness — the four validity conditions of a commitment, as executable tests over every
 commitment construction in `schemes.SCHEMES`:
 
   (1) binding under the primitive        — an opening authenticates only the committed bytes (altered value rejected)

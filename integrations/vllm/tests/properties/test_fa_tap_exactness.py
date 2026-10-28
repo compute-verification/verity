@@ -171,7 +171,7 @@ def test_a_guarded_record_needs_its_baseline_and_word_3_checked_in_every_case():
 
 
 def _ms_stream(rows, row_max, scale_log2):
-    """A stream with the MS class: ROW word 0 = `row_max` per visited block (kernel visit order), MS = the IR's max_scaled of it."""
+    """A stream with the MS class: ROW word 0 = `row_max` per visited block (kernel visit order), MS = the circuit's max_scaled of it."""
     import numpy as np
 
     from verity.ml.definitions.numerics.derived_rows import guard_neg_inf_zero, mul_ftz

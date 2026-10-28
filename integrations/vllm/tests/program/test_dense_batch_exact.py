@@ -1,10 +1,10 @@
 """The call boundaries' host evaluation off the per-instance path: the same words, computed in batches.
 
 A gemma2-9b B8 Commit evaluates its call boundaries on the host while it holds the leased GPU, and the GPU idles at 0% until each step's
-words are hashed.  cov-gm192 (B8 1024/128 stoch) spent 1,747 s of its 1,919 s lease in `work.pair0.instrumented` (other models take
+words are hashed.  A B8 1024/128 stochastic workload spent 1,747 s of its 1,919 s lease in `work.pair0.instrumented` (other models take
 7-16 s): about 1,250 s in the logits `Gemm_v2{K=3584,N=256000,DOT=HopperBF16WgmmaDot16_v1}`, kernel-only, evaluated one row at a time
 (2.9 s a row, the 917,504,000-word W read and scanned for finiteness on every row, numpy's k16 chain keeping ~3 of 8 threads busy), and
-about 475 s in the 168 GemmaRMSNorm bodies a step, each instance a Python call (`MeanTriton` per row, the IR reference for the scalar
+about 475 s in the 168 GemmaRMSNorm bodies a step, each instance a Python call (`MeanTriton` per row, the reference evaluator for the scalar
 add and the rsqrt).  Now the chain is `cpp/k16_chain.cpp` in integers (each W row read once for all of a step's rows, the GIL
 released), and every dense kernel and `Gemm_v2` has a batch form; on 4 CPUs a decode step's call boundaries take 3.3 s instead of 13.2.
 

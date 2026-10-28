@@ -2,7 +2,7 @@ import Flock.Firewall.Drive
 import Proofs.Flock.Claims.Complete.Zk.MaskRank
 
 /-!
-# The frame's rank check is the prover's (Stage B, `FrameAdmits`)
+# The frame's rank check is the prover's (`FrameAdmits`)
 
 At the opening's label the deployed frame refuses coins at which the mask slot's weights have GF(2)-rank short of
 `128 k` over the `k` claim points so far (`Frame.Masker.label`, `Frame.maskRank`): it reduces each word's weight row,

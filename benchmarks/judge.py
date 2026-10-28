@@ -9,8 +9,7 @@
 ``research compare`` shows every recorded difference between two runs and leaves to the workload whether a difference
 invalidates the comparison.  This script is that judgment for the proof campaign.  Two results are comparable only
 when they agree on the contract's identity fields -- ``proof_class``, ``authentication``, ``profile``, ``domain``,
-``K`` (``verity_numerical.bench.contract.IDENTITY_FIELDS``; ``archive/AGENTS.md``: never compare across
-``proof_class``).  A field either result lacks counts as a disagreement.  On disagreement the judge REFUSES (exit 2)
+``K`` (``verity_numerical.bench.contract.IDENTITY_FIELDS``; never compare across ``proof_class``).  A field either result lacks counts as a disagreement.  On disagreement the judge REFUSES (exit 2)
 and prints nothing that looks like a ratio.  ``--allow K`` (repeatable) lets a named identity field differ when that
 difference *is* the experiment (a scaling curve); the output then labels it.  Exit 0: judged; 1: a run could not be read.
 
@@ -19,18 +18,12 @@ alongside: two results that both record it and disagree (dataset, tier, manifest
 batch size) are REFUSED; a result that lacks it or records ``null`` was not measured on the shared input set, and the
 judge says so in a WARNING and goes on -- the comparison then rests on the identity fields alone.
 
-Results recorded before the contract (the ``dot-product-vector`` workload's early baselines) carry none of the
-identity fields.  For those, and only those, the judge derives them from the vector fixture the run names --
-``fixtures/typed-obligation-v0/<vector>.json``, whose sha256 must equal the recorded ``vector_sha256`` -- through the
-workload's own ``campaign_fields``, and says which fields were derived rather than recorded.  Nothing else is inferred.
 Each result is also checked against the contract; problems are listed, not enforced (an early baseline has many).
 """
 
 from __future__ import annotations
 
 import argparse
-import hashlib
-import importlib.util
 import json
 import os
 import sys
@@ -46,8 +39,6 @@ for candidate, module in ((REPO, "verity"), (REPO / "benchmarks" / "numerical" /
 
 from verity_numerical.bench import contract  # noqa: E402
 
-FIXTURES = REPO / "fixtures" / "typed-obligation-v0"
-LEGACY_WORKLOAD = "dot-product-vector"
 EX_REFUSED = 2
 
 
@@ -79,38 +70,6 @@ def load(run_dir: Path) -> dict[str, Any]:
     return doc
 
 
-def _vector_run():
-    spec = importlib.util.spec_from_file_location("vector_run", REPO / "archive" / "sp1" / "benchmarks" / "dot_product" / "vector_run.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def legacy_fields(fp: dict[str, Any]) -> tuple[dict[str, Any], list[str], str | None]:
-    """For a pre-contract ``dot-product-vector`` fingerprint: ``(derived identity fields, their names, note)``.  Derived
-    only from the named fixture when its sha256 matches the recorded one; otherwise nothing, with the reason."""
-
-    if fp.get("workload") != LEGACY_WORKLOAD:
-        return {}, [], None
-    missing = [f for f in (*contract.IDENTITY_FIELDS, "B") if f not in fp]
-    if not missing:
-        return {}, [], None
-    vector = fp.get("vector")
-    path = FIXTURES / f"{vector}.json" if isinstance(vector, str) else None
-    if path is None or not path.is_file():
-        return {}, [], f"identity fields not recorded and the fixture {path} is absent; nothing derived"
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
-    if digest != fp.get("vector_sha256"):
-        return {}, [], f"identity fields not recorded and {path.name} (sha256 {digest[:12]}) is not the recorded vector ({str(fp.get('vector_sha256'))[:12]}); nothing derived"
-    rec = json.loads(path.read_text())
-    guest = fp.get("guest") or {}
-    observed = guest.get("observed") or guest.get("expected") or {}
-    diagnostic = bool(observed.get("guest_features"))
-    derived = _vector_run().campaign_fields(rec, fp.get("backend"), diagnostic)
-    picked = {f: derived[f] for f in missing if f in derived}
-    return picked, sorted(picked), f"derived from fixtures/typed-obligation-v0/{path.name} (sha256 matches the recorded vector_sha256), not recorded in the result"
-
-
 def flatten(d: Any, prefix: str = "") -> dict[str, Any]:
     if not isinstance(d, dict):
         return {prefix.rstrip("."): d}
@@ -127,12 +86,6 @@ def flatten(d: Any, prefix: str = "") -> dict[str, Any]:
 def judge(base_dir: Path, cand_dir: Path, allow: list[str]) -> dict[str, Any]:
     rb, rc = load(base_dir), load(cand_dir)
     fb, fc = dict(rb.get("workload_fingerprint") or {}), dict(rc.get("workload_fingerprint") or {})
-    derived: dict[str, Any] = {}
-    for who, fp in (("baseline", fb), ("candidate", fc)):
-        fields, names, note = legacy_fields(fp)
-        fp.update(fields)
-        if note:
-            derived[who] = {"fields": names, "note": note}
     refused = contract.incomparable(fb, fc, allow)
     conflict, warnings = contract.compare_instances(fb, fc)
     ib, ic = contract.identity(fb), contract.identity(fc)
@@ -148,7 +101,6 @@ def judge(base_dir: Path, cand_dir: Path, allow: list[str]) -> dict[str, Any]:
         "refused": [{"field": f, "baseline": _show(a), "candidate": _show(b)} for f, a, b in refused]
         + ([{"field": contract.INSTANCES_FIELD, "baseline": conflict[0], "candidate": conflict[1]}] if conflict else []),
         "warnings": warnings,
-        "derived": derived,
         "contract": {"baseline": contract.validate(rb), "candidate": contract.validate(rc)},
     }
     refused = rep["refused"]
@@ -195,8 +147,6 @@ def render(rep: dict[str, Any]) -> str:
         mark = "=" if row["same"] else "->"
         tag = "  (allowed to differ)" if row["allowed"] and not row["same"] else ("" if row["same"] else "  DIFFERS")
         lines.append(f"  {row['field']:<16} {_fmt(row['baseline']):>36}  {mark:>2}  {_fmt(row['candidate']):<36}{tag}")
-    for who, d in rep["derived"].items():
-        lines.append(f"  note: {who} {', '.join(d['fields']) or '(nothing)'} {d['note']}")
     for w in rep.get("warnings", ()):
         lines.append(f"  WARNING: {w}")
     lines.append("")

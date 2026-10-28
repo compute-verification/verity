@@ -33,15 +33,17 @@ A deferred Commit's run takes its window in the other form too, `served` (`a5.sh
 (`commit --serving-rows`, `serving_rows.readers`, which the deferred Commit runs at its C2 site before the bundle is sealed,
 `c2_replay.serving_rows`), serving's own commitment, made before any draw. A5 takes it only over a
 SHA-512 run root of record (64 bytes: serving's record is hm96-sha512 rows in frame-v3-sha512 trees), so a vllm-v1 run's served
-window is refused by name (`source`: `sha512`). The summary reports the form (`source`) and the commitment it names
-(`commitment`).
+window is refused by name (`source`: `sha512`), and only when the record's weights root, the tree its rows' weights were opened
+against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_rows.weights_tree`). The summary reports the form
+(`source`) and the commitment it names (`commitment`).
 
 * **Serving's files.** `--window DIR` (a TP Commit: `--windows DIR`'s `rank<r>/`) is what serving wrote: for a deferred Commit,
   what `verity-vllm serving-rows` wrote (window kind `stand-in`, its run the Commit's run root, its `of` and `link`
   `deferred_rows.stand_in`'s) or what the in-Commit hook wrote (`served`, its run the Commit's run root, no stand-in link). Each
-  holds `registration.json` (core's v1 record), `window.json`, and per member k `m<k>-public.bin` and `m<k>-private.bin` (prover
-  only). The prover wraps each member's bodies under the circuit for its template (`flock_inputs.flock_input_files`): every
-  member's public file before the draw, and a drawn member's prover's file (`inst`, its rows and salts) after it, under the
+  holds `registration.json` (core's v1 record), `window.json`, per member k `m<k>-public.bin` and `m<k>-private.bin`, and per
+  registered value its members read by reference `v<j>-private.bin` (the private files: prover only). The prover wraps each
+  member's bodies under the circuit for its template (`flock_inputs.flock_input_files`): every member's public file before the
+  draw, and a drawn member's prover's file (`inst`, its rows and salts, gathered from both private files) after it, under the
   header its public file was held to (`stage`).
 * **The verifier's own copies.** A deferred Commit: `--bundle` and `--row-dir` are its record and its Build's Programs of record, and
   the verifier derives its window and the record's commitment from them alone (`deferred_rows.of_record`, `window_of`). A TP
@@ -93,7 +95,7 @@ window is refused by name (`source`: `sha512`). The summary reports the form (`s
   `verify --coins os --stratified K` holds it to the stratified law it derives from its own `--program` and `--partition`.
   C-Flock's firewall checks only a `--zk` statement's sends, so a plain prover isn't behind it (the summary's ``plain``).
 * **The draw from the auditor's challenger** (`--challenger local|gate:USER@HOST`, a TP Commit; `a5_coins`), on the proof
-  service's path of record: the step's one challenger session, opened on the TP run root once every rank has passed its
+  system's path of record: the step's one challenger session, opened on the TP run root once every rank has passed its
   checks before the draw and planned the coins its draw reads (`a5_coins.need`), and only under a reserve that covers
   them all (`a5_coins.reserve_reason`), and each rank's own `service.Stream` over its window's templates in their order (one stratified Spec over their mixed population, its law the
   partition file's rule, `stratified:K` among them), on the session's coins (`coins.ChallengerCoins` over
@@ -423,9 +425,9 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
 
 def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) -> dict[str, dict]:
     """The verifier's wiring check (§16.13, `wiring.check_drawn`) on altered wires, each with the units it alters drawn: the first
-    wire's writers rotated (each unit reading another unit's row), two wires of one output swapped (a split's partial read into
-    another combine slot), and a wired row's string flipped in its reader's public body (a partial that is not the one its
-    writer committed), its unit 0 drawn."""
+    wire's unit 0 reading another unit's row, neither its writer's nor its own, of its words where one is (``words``: same,
+    else other; rotating the writers is the honest wire at one unit a member or on a fan-out), two wires of one output swapped (a split's partial read into another combine slot), and a wired row's string
+    flipped in its reader's public body (a partial that is not the one its writer committed), its unit 0 drawn."""
     neg: dict[str, dict] = {}
     k = next((k for k, m in enumerate(members) if m.wired), None)
     if k is None:
@@ -438,8 +440,18 @@ def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) 
     def units(j: int) -> range:
         return range(members[j].base, members[j].base + members[j].n)
 
-    neg["chunk-wired-to-another-unit (§16.13)"] = {
-        "refused": bool(WI.check_drawn(rewired(k, ((p, o, ws[1:] + ws[:1]), *rest)), publics, units(k)))}
+    words, me = dict(members[k].rows)[p], members[k].base
+
+    def others(same: bool) -> Iterator[int]:
+        return (x.base + i for x in members if not same or dict(x.out_rows).get(o) == words for i in range(x.n)
+                if x.base + i not in (ws[0], me))
+
+    same = next(others(True), None)
+    other = same if same is not None else next(others(False), None)
+    if other is not None:
+        neg["chunk-wired-to-another-unit (§16.13)"] = {
+            "refused": bool(WI.check_drawn(rewired(k, ((p, o, (other, *ws[1:])), *rest)), publics, [me])),
+            "words": "same" if same is not None else "other"}
     swap = next(((j, a, b) for j, m in enumerate(members) for a in range(len(m.wired)) for b in range(a + 1, len(m.wired))
                  if m.wired[a][1] == m.wired[b][1] and m.wired[a][2] != m.wired[b][2]), None)
     if swap is not None:
@@ -964,8 +976,10 @@ def deferred(a: argparse.Namespace, sets: dict, out: Path) -> bool:
     mine = DRW.window_of(r, a.partition)
     manifest = hashlib.sha256((Path(a.bundle) / RB.MANIFEST).read_bytes()).hexdigest()
 
+    weights_root = str((r.row["commit"].get("weight_registration") or {}).get("root") or "")
+
     def source(w: dict) -> dict:
-        src = DRW.source(w, mine.run, manifest, r.commitment)
+        src = DRW.source(w, mine.run, manifest, r.commitment, weights_root)
         return {"ok": all(src.values()), "codes": [c for c, v in src.items() if not v],
                 "detail": {"kind": w.get("kind"), "run": w.get("run"), "commitment": w.get("commitment"), "of": w.get("of")}}
 

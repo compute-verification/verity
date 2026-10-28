@@ -1,4 +1,4 @@
-"""A drawn H1 leaf proved as its lanes and their combine (PRF-134, option A): the statement set, the values each statement
+"""A drawn H1 leaf proved as its lanes and their combine: the statement set, the values each statement
 reads and at which row, and the lane partials' layout, the after-draw value the statements share.
 
 Serving keeps one CP-W receipt a 32 × 32 leaf. A drawn leaf's proof is its 32 lane statements and one combine statement

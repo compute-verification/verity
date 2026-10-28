@@ -132,7 +132,7 @@ def test_a_challenger_has_no_entropy_of_its_own():
 
 
 def test_a_served_challengers_coins_are_named_by_a_claim_instance():
-    """CMP-52: the Lean verifier of record's `coins` is named by A3 (`verifier.CLAIM`, ``uniform/io-getrandombytes``),
+    """The Lean verifier of record's `coins` is named by A3 (`verifier.CLAIM`, ``uniform/io-getrandombytes``),
     and a challenger keeps the claim instance its entropy carries; one without a claim instance, `os.urandom` among
     them, is refused as a served challenger's source (`challenger.served_claim`)."""
     assert Ch.served_claim(verifier.coins) == verifier.CLAIM == "uniform/io-getrandombytes"
@@ -165,7 +165,7 @@ def test_a_served_window_draws_every_coin_from_its_entropy_and_none_from_the_os(
         assert Ch.order_reason(live.commitment, label, roots, rec.openings) is None
 
 
-#: The PoUW and proof-service modules that read the operating system's randomness, each with why it isn't a coin, or
+#: The PoUW and proof-system modules that read the operating system's randomness, each with why it isn't a coin, or
 #: the claim instance that names it
 OS_RANDOMNESS = {
     "pouw/circuit/anchors.py": "ncp-v2's window secret (`Ledger.open`'s `_fresh_source`, `secrets`), named by A5's "
@@ -175,7 +175,7 @@ OS_RANDOMNESS = {
 
 
 def test_the_served_path_takes_no_os_randomness_for_its_coins():
-    """No PoUW or proof-service module reads `os.urandom`, `os.getrandom`, `secrets` or `random.SystemRandom` but those
+    """No PoUW or proof-system module reads `os.urandom`, `os.getrandom`, `secrets` or `random.SystemRandom` but those
     `OS_RANDOMNESS` names: every coin comes from a challenger's named entropy, the Lean verifier of record's `coins` on
     the served path."""
     import ast

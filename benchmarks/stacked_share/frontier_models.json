@@ -15,7 +15,6 @@
  "workload": {"context": 8192, "prompt": 4096, "sweep": [2048, 8192, 32768, 131072],
               "source": "this census's reference: a pool full of requests decoding at context S, prefills of prompt P from position 0; sweep: the contexts `frontier.sweep` takes the pool to, with prefills of min(P, S), leaving out a model past its max_context (its config's max_position_embeddings)"},
  "anchor": {
-  "art": "art:dc25549e6f14f82f2ece12f1e65054ee48d6008be4b6c9fd97cd606d2fa8f500",
   "model": "Llama-3.1-8B",
   "source": "units-8b.json of the int8 census (benchmarks/stacked_share/job.sh): property/v1 on the exact-int8 request Program, LP=256, T=31",
   "token": {"gathers": 4113, "roundings": 10930965, "compare_select": 2556032},

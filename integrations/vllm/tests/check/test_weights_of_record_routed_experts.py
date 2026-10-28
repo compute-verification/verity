@@ -1,16 +1,16 @@
-"""[F-r16-15, rev M-0131 / coord M-0130 (c) F-r16-MOE-PIN] the fused-expert stacks under vLLM 0.28's RoutedExperts submodule.
+"""The fused-expert stacks under vLLM 0.28's RoutedExperts submodule.
 
-The int-1 canary's OLMoE Commit FAILed closed at the weights pin: vLLM 0.28.1rc1 (the pods' engine) owns the fused expert stacks on a
-RoutedExperts submodule of the FusedMoE layer -- served name `model.layers.N.mlp.experts.routed_experts.w13_weight` -- and MAN-09's
+A canary's OLMoE Commit FAILed closed at the weights pin: vLLM 0.28.1rc1 (the pods' engine) owns the fused expert stacks on a
+RoutedExperts submodule of the FusedMoE layer -- served name `model.layers.N.mlp.experts.routed_experts.w13_weight` -- and the weights pin's
 composition rule matched only `<layer>.mlp.experts.(w13|w2)_*`, so all 32 stacks of OLMoE (about 90 percent of its parameters) were
 'no checkpoint tensor and no composition rule' (compared 180 / unresolved 32 / complete False).  A missing composition rule, named
-correctly, not a mismatch (COORD ruling 5: repair from evidence, log it).
+correctly, not a mismatch (repair from evidence, log it).
 
 The rule now accepts the OPTIONAL `routed_experts` segment (nothing else), keeps the container the served name declares (`mlp.experts`,
 Mixtral's `block_sparse_moe.experts`) as the home of the checkpoint's `<container>.<e>.<part>.<suffix>` tensors, and takes the per-expert
 part names from what the checkpoint carries for expert 0: HF gate_proj|up_proj|down_proj (OLMoE, Qwen3-MoE) or Mixtral's w1|w3|w2 -- the
 same layout vLLM's RoutedExperts._load_w13 / _load_w2 fill (w1 = gate first half, w3 = up second half, w2 = down; read on cp-r4's
-vllm 0.28.1rc1.dev472 routed_experts.py).  Negatives (coord (c)): one element of one expert flipped, two experts permuted, an expert
+vllm 0.28.1rc1.dev472 routed_experts.py).  Negatives: one element of one expert flipped, two experts permuted, an expert
 replaced by another's tensors, an unknown segment -- every one refused BY NAME; the honest served stacks pass with every field compared.
 CPU, synthetic checkpoint (real safetensors), no torch.
 """
@@ -120,7 +120,7 @@ def test_unknown_segments_and_absent_parts_are_refused_by_name_never_guessed(moe
 
 
 def test_expert_level_substitutions_fail_the_pin_by_name(moe):
-    """coord M-0130 (c): wrong-expert / permuted-expert negatives -- a served stack that is not the checkpoint's experts in the checkpoint's
+    """Wrong-expert / permuted-expert negatives -- a served stack that is not the checkpoint's experts in the checkpoint's
     order is a named FAIL, whatever the scalar statistics (a permutation keeps every byte, only the order changes)."""
     rec = _record(moe)
     honest = moe["served"]
@@ -132,7 +132,7 @@ def test_expert_level_substitutions_fail_the_pin_by_name(moe):
         assert res["result"] is False and [m["served_name"] for m in res["mismatched"]] == [field], res
         assert "1 served weight(s) differ from the checkpoint of record: " + field in res["why"]
         return res
-    # (1) one element of ONE expert's slice flipped (rev M-0131 acceptance: flipweight on ...routed_experts.w2_weight)
+    # (1) one element of ONE expert's slice flipped (flipweight on ...routed_experts.w2_weight)
     s = dict(honest); w = s[moe["w2"]].copy(); w[2, 3, 1] ^= 0x0040; s[moe["w2"]] = w
     _fails(s, moe["w2"])
     # (2) two experts permuted (same bytes, wrong order): the stack is not the checkpoint's experts by index

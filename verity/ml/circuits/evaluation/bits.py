@@ -82,7 +82,7 @@ def _group(gates: list[tuple[int, int, np.ndarray, np.ndarray]], size: int) -> l
     return [(int(kinds[s]), outs[s:e], a[s:e], b[s:e]) for s, e in zip(cuts[:-1], cuts[1:])]
 
 
-def compile(target: Any) -> Compiled:  # noqa: A001 (the module's verb; `builtins.compile` is not used here)
+def compile(target: Any) -> Compiled:  # shadows `builtins.compile`, unused here: the module's verb
     spec = _spec(target)
     hit = _COMPILED.get(spec)
     if hit is not None:

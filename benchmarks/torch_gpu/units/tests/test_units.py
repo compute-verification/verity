@@ -12,16 +12,16 @@ import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import add as AD  # noqa: E402
-import argmax as AM  # noqa: E402
-import build_check  # noqa: E402
-import fixture as F  # noqa: E402
-import quant as Q  # noqa: E402
-import rmsnorm as RN  # noqa: E402
-import softmax as SM  # noqa: E402
-import sweep as SW  # noqa: E402
-import words as W  # noqa: E402
-from verity.ml.circuits.ops import fp32, mufu, prims  # noqa: E402
+import add as AD
+import argmax as AM
+import build_check
+import fixture as F
+import quant as Q
+import rmsnorm as RN
+import softmax as SM
+import sweep as SW
+import words as W
+from verity.ml.circuits.ops import fp32, mufu, prims
 
 F32_SPECIALS = [0x00000000, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 0xFFC00001, 0x7F800001, 0x00000001, 0x80000001,
                 0x007FFFFF, 0x00800000, 0x7F7FFFFF, 0xFF7FFFFF, 0x3F800000, 0xBF800000, 0x3F800001, 0x4B000000, 0x42FE0000]
@@ -247,7 +247,7 @@ def test_add_twin_is_Bf16AddF2fp():
 
 
 class Rows:
-    """CIR-104's references as `ops.rows` states them: Argmax_v1's scan and Bf16AddRow_v1's Bf16AddF2fp per element."""
+    """The references as `ops.rows` states them: Argmax_v1's scan and Bf16AddRow_v1's Bf16AddF2fp per element."""
     argmax = staticmethod(lambda x: scan(x))
     add_row = staticmethod(lambda a, b: [fp32.Bf16AddF2fp.evaluate(p, q) for p, q in zip(a, b)])
 
@@ -374,7 +374,7 @@ def test_build_check_holds_each_arch_to_its_kernels():
 
 def test_build_check_takes_sm_120a_constants_and_integer_division():
     """sm_120a's ptxas loads constants with HFMA2 (no .MMA) and computes units_relu's unrolled trip count by the
-    compiler's integer division (the SASS of r20261027-020639-df6d); neither touches an integer kernel's values."""
+    compiler's integer division; neither touches an integer kernel's values."""
     bodies = dict(BODIES, units_argmax=["HFMA2 R16, -RZ, RZ, 0, 0", "HFMA2 R5, -RZ, RZ, 1.875, 1.1920928955078125e-07",
                                         "SEL R3, R1, R2, P0"],
                   units_relu=["I2F.U32.RP R0, R2", "MUFU.RCP R0, R0", "F2I.FTZ.U32.TRUNC.NTZ R9, R8", "I2F.U64.RP R4, R2",

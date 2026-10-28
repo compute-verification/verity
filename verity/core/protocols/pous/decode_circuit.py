@@ -1,5 +1,5 @@
-"""P2's decode of one block as a Boolean circuit: ``m = sq(σ_K(sq(c))) − t mod p``, with `schemes.p2`'s v4 keys (K and
-t from counter-mode SHA-512 of the block's expansion base), so that PoUS's setup can prove a block of C decodes to its
+"""P2's decode of one label as a Boolean circuit: ``m = sq(σ_K(sq(c))) − t mod p``, with `schemes.p2`'s v4 keys (K and
+t from counter-mode SHA-512 of the label's expansion base), so that PoUS's setup can prove a label of C decodes to its
 row of W.
 
     PousP2Decode_v2{W, C0, L}   (block: Array<W>, base: Array<8L>) -> Array<W − 15>    payload ‖ ok
@@ -19,9 +19,9 @@ an integer is bits least significant first.  A big-endian integer of N bytes and
 `PousByteSwap_v1{N}`, which is wiring.  A chaining value is SHA-512's eight words, each least significant bit first, and
 every compression is `answer_circuit`'s `PousSha512Compress_v1` (core's `compress_gadget`).
 
-**The decode** (`schemes.p2.decode_segment` for one block):
+**The decode** (`schemes.p2.decode_segment` for one label):
 
-- ``block`` is the block's W/8 bytes, so c = int.from_bytes(block, "big"); ``base`` is `schemes.p2`'s v4 expansion base
+- ``block`` is the label's W/8 bytes, so c = int.from_bytes(block, "big"); ``base`` is `schemes.p2`'s v4 expansion base
   ``expand_prefix(params, salt) ‖ u64be(s) ‖ u64be(j)``, L bytes (144 at the registered point: the prefix is zero-padded
   to one 128-byte block);
 - K is the first W/8 bytes of the stream ``D = "K"``, and t the first W/8 bytes of ``D = "t"``, both big-endian.  The
@@ -31,20 +31,21 @@ every compression is `answer_circuit`'s `PousSha512Compress_v1` (core's `compres
 
 When ``ok`` is 1 the payload is the reference's, byte for byte.  `schemes.p2` rejects a first t candidate ≥ p and reads
 the next; the circuit reads only the first, and says so with ``ok`` = 0.  That happens with probability C0 / 2^W per
-block (2^-16433.6 at the registered point), so an honest prover meets it never, and a circuit that read the next
+label (2^-16433.6 at the registered point), so an honest prover meets it never, and a circuit that read the next
 candidate would cost 33 more compressions for it.
 
 `sq(a)` is a² mod p, negated when a is odd: `PousModSquare_v1` (`pous.circuit`), then p − s when bit 0 of a is set.  For
 a below p and odd, a² mod p is not 0 (p is prime), so p − s is below p; ``ok`` already rejects every input that could
 make it p.
 
-Costs at the registered point are pinned in `tests/test_pous_decode_circuit.py`: 31,960,530 ANDs per block, of which the
+Costs at the registered point are pinned in `tests/test_pous_decode_circuit.py`: 31,960,530 ANDs per label, of which the
 two `sq` are 28,147,478 (each 14,040,852 for the square and 32,887 for the negation), the 67 SHA-512 compressions
 3,697,905 (one for the prefix, 33 per stream), σ_K 32,895 and the subtraction with its bounds 82,252.
 """
 from __future__ import annotations
 
 from verity.ml.circuits.boolean.forms import ONE, ZERO, and_reduce, const_bits
+from verity.ml.circuits.boolean.trace import part
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll, concat
 from verity.ml.commitments.gates.sha512 import IV, pad_tail
@@ -116,11 +117,9 @@ def finish(C, W: int, C0: int, u, t, c):
 
 # --- the Definitions -------------------------------------------------------------------------------------------------------
 
-PousSha512Head = CompositeDefinition(
-    "PousSha512Head", 1, (), lambda S: ((("msg", bits(1024)),), bits(512)),
-    _traced_body(lambda S: ("sha512-head",), lambda S: lambda C, m: compress(C, _iv_bits(), m),
-                 lambda S: ((("msg", bits(1024)),), bits(512))),
-    conformance="protocol-defined", doc="SHA-512's chaining value after one message block from the IV (FIPS 180-4)")
+PousSha512Head = part(
+    "PousSha512Head", (), lambda S: ((("msg", bits(1024)),), bits(512)), lambda C, S, m: compress(C, _iv_bits(), m),
+    "SHA-512's chaining value after one message block from the IV (FIPS 180-4)", conformance="protocol-defined")
 
 
 def _mid_sig(S):
@@ -159,13 +158,11 @@ def _chunk_sig(S):
     return _ctr_inputs(r), bits(512)
 
 
-PousSha512CtrChunk = CompositeDefinition(
-    "PousSha512CtrChunk", 1, ("L", "D", "I"), _chunk_sig,
-    _traced_body(lambda S: ("sha512-ctr-chunk", S.L, S.D, S.I),
-                 lambda S: lambda C, cv, *rest: ctr_chunk(C, S.L, S.D, S.I, cv, rest[0] if rest else []), _chunk_sig),
-    conformance="protocol-defined",
-    doc="SHA-512(base ‖ D ‖ u32be I) for an L-byte base, from the chaining value of its whole blocks and its rest: one "
-        "compression")
+PousSha512CtrChunk = part(
+    "PousSha512CtrChunk", ("L", "D", "I"), _chunk_sig,
+    lambda C, S, cv, *rest: ctr_chunk(C, S.L, S.D, S.I, cv, rest[0] if rest else []),
+    "SHA-512(base ‖ D ‖ u32be I) for an L-byte base, from the chaining value of its whole blocks and its rest: one "
+    "compression", conformance="protocol-defined")
 
 
 def _ctr_sig(S):

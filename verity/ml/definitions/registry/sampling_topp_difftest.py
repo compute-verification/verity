@@ -1,4 +1,4 @@
-"""[R15 stoch] The Definition the differential test of `GumbelTopPTokenSelect_v1{V,S}(logits, top_p, seed, pos, temp)` checks
+"""The Definition the differential test of `GumbelTopPTokenSelect_v1{V,S}(logits, top_p, seed, pos, temp)` checks
 production against (`spec`: the registered composite's body that returns ALSO its intermediate masked fp32 row, so the
 `TopPMask_v1{V,S}` value is checked lane by lane, not only the sampled token), and the registered family (`spec_registered`).
 The adapter (gate G4, `verity_vllm.properties.admission`: cases and the pinned production chain of vLLM d9105ea80's
@@ -16,7 +16,7 @@ from verity.ml.circuits.types import Array, Tuple
 
 def _difftest_body(B, S, logits, top_p, seed, pos, temp):
     """`GumbelTopPTokenSelect_v1{V}` returning ALSO its intermediate masked fp32 row (production output 1), so the difftest checks
-    `TopPMask_v1{V}` lane by lane and not only the sampled token.  Same body as the registered composite; [R16 stoch] S is an OPERAND
+    `TopPMask_v1{V}` lane by lane and not only the sampled token.  Same body as the registered composite; S is an OPERAND
     of the registered forms (`splits`, i32) -- here the launch geometry `production` recorded (`splits_for(1, num_SMs)` of the device)
     enters as a `Const32[S]`, the same way the fold carries the split kernels' constexpr."""
     scaled = B.call(bind(TemperatureScale, V=S.V), logits, temp)

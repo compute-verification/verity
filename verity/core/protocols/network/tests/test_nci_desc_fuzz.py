@@ -3,7 +3,7 @@
 `verity/core/protocols/network/nci/lean/scripts/desc_fuzz_programs.py` writes the 1,330 Programs `NciCheck/DescFuzzMain.lean`
 decides the statements behind `DescAgrees` on (`runs` in that package's `lean-audit.json`), which the Lean audit runs and
 caches on the Lean package's files alone, against the data's SHA-256 in the record. So the first test is what says the
-data is still what the generator writes. The second, that it holds the shape #4066 fixed: one gate reading, through one
+data is still what the generator writes. The second, that it holds this shape: one gate reading, through one
 reference to one root node, whole batch members returning leaves of arguments they share, each another root node's
 output, which `NciCheck.Desc` once attributed to the copy's first piece's node alone.
 """

@@ -3,9 +3,9 @@ backend = "vllm"
 id = "qwen3-8b-bf16-rtx-served-arm"
 # G2's served arm (benchmarks/served_commit/served_arm.py) for Qwen3-8B: the compiled Commit at rows-sha512's 4 KiB rows
 # (G2's served-commit-rows-4k, control stock@compiled) against stock as vLLM serves it (stock@compiled) and the
-# batch-invariant eager stock every eager row is timed against (stock), interleaved rep by rep on one RTX PRO 6000. The
-# eager Commit is qwen3-8b-bf16-rtx-served-arm-eager's: four 16 GB engines don't fit one GPU beside the Commit's buffers.
-# G2's H200 served preset otherwise (qwen3-8b-bf16-h200-served), and G2's width sweep.
+# batch-invariant eager stock every eager row is timed against (stock), interleaved rep by rep on one RTX PRO 6000, over
+# G2's width sweep. The eager Commit is qwen3-8b-bf16-rtx-served-arm-eager's: four 16 GB engines don't fit one GPU beside
+# the Commit's buffers.
 arms = ["stock", "stock@compiled", "served-commit-rows-4k"]
 arm_modules = ["served_commit.served_arm:ROWS_4K"]
 sweep = "width"

@@ -17,7 +17,7 @@ from .band import POINT, chain_certificate
 
 
 class Dense(Scheme):
-    """The dense scheme: every earlier block of the segment is a parent."""
+    """The dense scheme: every earlier label of the segment is a parent."""
 
     name = dense_codec.DENSE.name
     backend = staticmethod(dense_codec.reference)

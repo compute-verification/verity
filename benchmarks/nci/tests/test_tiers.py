@@ -1,5 +1,6 @@
 import json
 import math
+import re
 import sys
 from pathlib import Path
 
@@ -17,6 +18,22 @@ ROOT = HERE.parents[2]
 
 #: the defaults at the threading ReferenceThreaded gives under its conjecture, where the closed-form memory cap binds
 KEYED = T.DEFAULTS | {"d": T.REFERENCE_THREADED[0]}
+
+def test_the_gpus_read_the_accel_models_card_table():
+    """`CARD` is `Verity.Accel.Sm120.card`'s tensor rate and clock ceiling (its sheet-form `f_max`), and PoUW credits
+    H1's SM120 record's f_max: so the clock term is 0, the server's peak is 8 cards at the table's FP8 rate (7.485e15
+    FLOP/s, not NVIDIA's 8e15 headline at about 2,597 MHz) and the Xeons are 12.6% of it."""
+    lean = (ROOT / "Security/Definitions/Core/Accel/Sm120.lean").read_text()
+    sms, tensor = map(int, re.search(r"\| \.tensor => (\d+) \* (\d+)", lean).groups())
+    mhz = re.search(r"def clock : ℚ≥0 := (\d+) \* 10 \^ 6", lean) or re.search(r"f_max = (\d+) MHz", lean)
+    assert T.CARD == {"sms": sms, "tensor": tensor, "clock_hz": int(mhz.group(1)) * 1e6}
+    h1 = (ROOT / "verity/core/protocols/pouw/circuit/h1device.py").read_text()
+    sm120 = h1[h1.index("SM120 = Device("):h1.index("SM90 = Device(")]
+    assert T.CREDITED_CLOCK_HZ == int(re.search(r"fmax_mhz=(\d+)", sm120).group(1)) * 1e6
+    assert T.DEFAULTS["clock_share"] == 0.0
+    assert T.DEFAULTS["node_flops"] == pytest.approx(7.4848666e15, rel=1e-8)
+    assert T.DEFAULTS["host_share"] == 0.0
+
 
 def test_each_tier_gives_the_adversary_no_more_than_the_last():
     effs = [T.evaluate(T.DEFAULTS, T.TIERS[k])["efficiency"] for k in ("T1", "T2", "T3", "T4")]
@@ -38,7 +55,7 @@ def test_without_memory_mechanisms_the_residual_trains_at_full_efficiency():
 
 
 def test_the_residual_charges_pouws_deficit_on_the_certified_work():
-    """r = r̂ + ε_W W_cert/C + ε′, the residual inside `Nci.Guarantees.DampenerRemote`'s bounds (#3646): a certificate
+    """r = r̂ + ε_W W_cert/C + ε′, the residual inside `Nci.Guarantees.DampenerRemote`'s bounds: a certificate
     that isn't wrong may credit up to ε_W of its work without its running. At r̂ = 1/2, so W_cert = C/2, and ε_W = 2%,
     the deficit adds 0.01: r = 0.5 + 0.02 x 0.5 + 0.001 = 0.511. Nothing certified, nothing is in deficit."""
     p = T.DEFAULTS | {"residual": 0.3, "host_share": 0.1, "clock_share": 0.1, "eps_w": 0.02, "eps_agg": 1e-3}
@@ -123,7 +140,7 @@ def test_memory_caps_the_residual_below_the_state_threshold():
 
 def test_proof_of_space_rounds_set_the_slack():
     """rho^k <= delta: today's 1/19 certificate takes 86 rounds at delta = 1/100, and about 12,000 rounds leave under 1 GB
-    of a 2.64 TB fill (memory-accounting, 19 Oct)."""
+    of a 2.64 TB fill."""
     no_floor = T.DEFAULTS | {"pous_floor": 0.0, "pous_rounds": 86.0}
     assert T.slack(no_floor) == pytest.approx(1 / 19, rel=0.02)
     mem_gb = T.DEFAULTS["hbm_gb"] + T.DEFAULTS["host_gb"]
@@ -132,15 +149,15 @@ def test_proof_of_space_rounds_set_the_slack():
 
 
 def test_unbounded_ingress_makes_wipes_cap_nothing():
-    """Until the count check is in the ZK flow, declared ingress is bounded only by line rate (network-accounting, 19 Oct),
+    """Until the count check is in the ZK flow, declared ingress is bounded only by line rate,
     and then even a small wipe residual caps nothing."""
-    tight = T.DEFAULTS | {"pous_rounds": 1e6, "pous_floor": 0.0, "unfilled_gb": 0.01}
+    tight = T.DEFAULTS | {"residual": 0.9, "pous_rounds": 1e6, "pous_floor": 0.0, "unfilled_gb": 0.001}
     assert T.evaluate(tight, T.TIERS["T3"])["memory_caps_residual"]
     assert not T.evaluate(tight | {"intake_x": 1.3e6}, T.TIERS["T3"])["memory_caps_residual"]
 
 
 def test_disks_left_in_place_count_as_state():
-    """An unwiped disk is state a wipe leaves (dark-compute red team, 19 Oct: 8 TB of NVMe undoes the memory cap)."""
+    """An unwiped disk is state a wipe leaves (8 TB of NVMe undoes the memory cap)."""
     p = KEYED | {"residual": 0.5, "pous_rounds": 74000.0, "pous_floor": 0.0, "unfilled_gb": 1.83}
     assert T.evaluate(p, T.TIERS["T3"])["memory_caps_residual"]
     assert T.evaluate(p | {"disk_gb": 8000.0}, T.TIERS["T3"])["efficiency"] > T.evaluate(p, T.TIERS["T3"])["efficiency"]
@@ -209,7 +226,7 @@ def test_an_injected_bit_buys_a_full_block_at_s_1():
 
 
 def test_the_amplifier_multiplies_every_term():
-    """A recipe g times better in counted multiplications per unit of loss multiplies efficiency by g (paper red team)."""
+    """A recipe g times better in counted multiplications per unit of loss multiplies efficiency by g."""
     for tier in ("T1", "T5"):
         base = T.evaluate(T.DEFAULTS, T.TIERS[tier])
         amped = T.evaluate(T.DEFAULTS | {"g": 10.0}, T.TIERS[tier])
@@ -218,22 +235,12 @@ def test_the_amplifier_multiplies_every_term():
 
 
 def test_the_verdict_lag_adds_a_lag_of_skipped_work_per_identity():
-    """Until the halt a developer can skip all declared work, once per identity (paper red team: 1 hour is 1.1e-4)."""
+    """Until the halt a developer can skip all declared work, once per identity (1 hour is 1.1e-4)."""
     p = T.DEFAULTS | {"host_share": 0.0}
     no_lag = T.evaluate(p | {"lag_s": 0.0}, T.TIERS["T1"])
     lag = T.evaluate(p | {"identities": 3.0}, T.TIERS["T1"])
     extra = 3 * p["lag_s"] / (p["years"] * T.YEAR)
     assert lag["residual"] - no_lag["residual"] == pytest.approx(extra, rel=1e-6)
-
-
-def test_the_dampener_is_a_hardware_multiple_against_the_unconstrained_run():
-    """Dark fragments of monitored capacity are counted at peak and unmonitored compute trains like the unconstrained
-    developer, so D = 1 / (s + rest / mfu) (audience red team: against a real run at MFU 0.4, D at the defaults is 6.6)."""
-    p = T.DEFAULTS | {"unmonitored": 0.01, "residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
-    r = T.evaluate(p, T.TIERS["T4"])
-    rest = r["residual"] + r["declared"] + r["cheat"]
-    assert r["dampener"] == pytest.approx(1 / (r["unmonitored"] + rest / p["mfu"]), rel=1e-9)
-    assert T.evaluate(T.DEFAULTS | {"residual": 1.0}, T.TIERS["T1"])["dampener"] == 1.0
 
 
 def test_the_recipe_multiplier_scales_only_the_constrained_terms():

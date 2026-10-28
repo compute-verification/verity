@@ -1,7 +1,8 @@
 """The attention family's Definition modules import only `verity` and Definition modules: what the catalog move needs of them.
 
-A Definition module of the family (`DEFINITION_MODULES`, verity#1130's DSA and sparse-MLA modules included) imports the standard
-library, numpy, `verity`, the family's other Definition modules, and from another family's registry module only the Definitions
+A Definition module of the family (`DEFINITION_MODULES`, the DSA and sparse-MLA modules included) imports the standard
+library, numpy, `verity`, the evidence its conformance texts cite (`EVIDENCE`), the family's other Definition modules, and from
+another family's registry module only the Definitions
 and the word constants of a Definition body that `OTHER_FAMILIES` names.  Its vocabulary (`MOVES`) is `attention_vocab`'s, which no
 Definition module imports.  An import is any import statement, at module level or in a function.
 """
@@ -44,6 +45,8 @@ OTHER_FAMILIES = {
 THIRD_PARTY = {"numpy"}
 #: the catalog, where the layout move put core's Definitions and silicon models
 CATALOG = "verity.ml.circuits"
+#: `evidence.json`'s ids, read with the standard library only
+EVIDENCE = "verity.ml.definitions.evidence"
 
 
 def _core(name: str) -> bool:
@@ -59,8 +62,9 @@ def _core(name: str) -> bool:
                                 or any(map(under, ("verity.core.protocols", "verity.core.claims"))))
 
 
-def _catalog(name: str) -> bool:
-    return name == CATALOG or name.startswith(CATALOG + ".")
+def _verity(name: str) -> bool:
+    """`name` is a module a Definition module may import from `verity`: core's, the catalog's, or the evidence."""
+    return _core(name) or name in (CATALOG, EVIDENCE) or name.startswith(CATALOG + ".")
 
 
 def _top_level(mod: str) -> set[str]:
@@ -96,7 +100,7 @@ def _violations(mod: str) -> list[str]:
                 top = a.name.split(".")[0]
                 if a.name.startswith(PKG + "."):
                     out.append(f"{mod}:{node.lineno}: `import {a.name}` (name what it takes: from ... import)")
-                elif not _core(a.name) and top not in THIRD_PARTY and top not in sys.stdlib_module_names and not _catalog(a.name):
+                elif not _verity(a.name) and top not in THIRD_PARTY and top not in sys.stdlib_module_names:
                     out.append(f"{mod}:{node.lineno}: imports {a.name}")
         elif isinstance(node, ast.ImportFrom):
             base = (node.module if node.level == 0
@@ -109,8 +113,7 @@ def _violations(mod: str) -> list[str]:
                         out.append(f"{mod}:{node.lineno}: imports {PKG}.{a.name}")
             elif base.startswith(PKG + "."):
                 take(base[len(PKG) + 1:], [a.name for a in node.names], node.lineno)
-            elif (not _core(base) and top not in ("__future__", *THIRD_PARTY) and top not in sys.stdlib_module_names
-                  and not _catalog(base)):
+            elif not _verity(base) and top not in ("__future__", *THIRD_PARTY) and top not in sys.stdlib_module_names:
                 out.append(f"{mod}:{node.lineno}: imports {base}")
         elif isinstance(node, ast.Call) and getattr(node.func, "attr", getattr(node.func, "id", None)) in ("import_module", "__import__"):
             out.append(f"{mod}:{node.lineno}: imports by name")

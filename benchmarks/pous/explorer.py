@@ -8,7 +8,8 @@ misses F ≤ f₀, the (1 − α) quantile of the honest miss count, Poisson wit
 ε_proof(d) + g(f₀)] ≤ β with g(f) = min over θ > 0 of (θf + ln(1/β)) / ((1 − e^−θ) λT).  The honest model sets only the
 false-alarm rate, never soundness.  ε_proof(d) is an ideal-permutation-model bound, and τ counts whole `Π₂` calls of
 `call_ns`, the model's unit: at the reference Feistel-SHAKE256 `Π₂` a prover rebuilds a label from 1.53% of `C` in 481
-Keccak-f, about a tenth of a call, so neither bounds an adversary there (red team, 4 Oct 2026, art:7617c8017e80).
+Keccak-f, about a tenth of a call, so neither bounds an adversary there (the red team's state attack,
+`verity.core.protocols.pous.primitives.pi2_keccak_f`).
 
 The page evaluates the file with plain floats and closed forms only (§6 "The rules"), and `evaluate` is that evaluation
 here, from the file alone:
@@ -61,16 +62,16 @@ US_PER_KIB = 0.15
 #: z of the lognormal's 99th percentile
 Z99 = 2.3263478740408408
 
-#: ε_proof, the per-answer slack, by the adversary's effective call count D = d: lean's estimates at 64 KiB (from
+#: ε_proof, the per-answer slack, by the adversary's effective call count D = d: estimates at 64 KiB (from
 #: `Security/Proofs/Pous/Chain/Family.lean`'s certificate, not proved; D = 0 is the extracted single-segment
 #: value ≈ 0.21%)
 EPS_PROOF = (
     {"D": 0, "eps_proof_fraction": 0.0021, "status": "extracted", "source": "single-segment ε_proof(0) ≈ 0.21% from Chain/Family.lean's certificate (replaces the D = 1 placeholder 0.40%)"},
-    {"D": 1, "eps_proof_fraction": 0.0040, "status": "estimate", "source": "lean, Slack 1790904948.520999 (k 93)"},
-    {"D": 2, "eps_proof_fraction": 0.0060, "status": "estimate", "source": "lean, Slack 1790904948.520999 (k 97)"},
-    {"D": 3, "eps_proof_fraction": 0.0081, "status": "estimate, upper", "source": "lean, Slack 1790904948.520999 (k 101)"},
-    {"D": 4, "eps_proof_fraction": 0.0101, "status": "estimate, upper", "source": "lean, Slack 1790904948.520999 (k 106)"},
-    {"D": 5, "eps_proof_fraction": 0.0120, "status": "estimate, upper", "source": "lean, Slack 1790904948.520999 (k 111)"},
+    {"D": 1, "eps_proof_fraction": 0.0040, "status": "estimate", "source": "estimated from Chain/Family.lean's certificate at k 93"},
+    {"D": 2, "eps_proof_fraction": 0.0060, "status": "estimate", "source": "estimated from Chain/Family.lean's certificate at k 97"},
+    {"D": 3, "eps_proof_fraction": 0.0081, "status": "estimate, upper", "source": "estimated from Chain/Family.lean's certificate at k 101"},
+    {"D": 4, "eps_proof_fraction": 0.0101, "status": "estimate, upper", "source": "estimated from Chain/Family.lean's certificate at k 106"},
+    {"D": 5, "eps_proof_fraction": 0.0120, "status": "estimate, upper", "source": "estimated from Chain/Family.lean's certificate at k 111"},
 )
 
 #: the weight sets the schemes were screened on (`weight_sets.json`); overheads compare only within one set, since each
@@ -97,7 +98,7 @@ SCHEMES = (
      "art": "art:0daa432488c965e8ef090e73b2005be6b6e25f9bc6d89a63e49d34d706a84360"},
     {"weight_set": _QWEN, "d": 5, "block_bytes": 65_536, "kind": "measured",
      "overhead_x_by_tokens": {"1": 132.27, "8": 153.4, "32": 148.9, "2048": 22.8},
-     "art": "art:88ea542b5f887b9ca25422bb58e05e2e9fbf3d3d149e1191d10d8ca559829c83", "note": "timed run r20261001-153056-53c6"},
+     "art": "art:88ea542b5f887b9ca25422bb58e05e2e9fbf3d3d149e1191d10d8ca559829c83", "note": "a timed run"},
     {"weight_set": _QWEN, "d": 12, "block_bytes": 65_536, "kind": "measured",
      "overhead_x_by_tokens": {"1": 376.39, "8": 314.44, "32": 305.56, "2048": 46.88},
      "art": "art:4354a29314cf3e25917e1ddbc30fda90807650b4d6c94caceffbf3ad8ab80924"},

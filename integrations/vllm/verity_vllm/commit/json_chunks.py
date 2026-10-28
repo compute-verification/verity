@@ -2,7 +2,7 @@
 
 A served window's binding map has up to about a million entries, and it is encoded and hashed on the seal's thread beside the
 serving engine: one `json.dumps` over it is one C call that holds the GIL for seconds, and the engine's thread waits that long
-for its next step (r20261025-025509-2a3e, warden c20261025T031516Z-f31a). Encoded `CHUNK` items at a time, the engine's thread
+for its next step. Encoded `CHUNK` items at a time, the engine's thread
 takes the GIL between them. The pieces concatenate to the bytes the one call writes.
 """
 from __future__ import annotations

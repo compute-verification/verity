@@ -17,8 +17,9 @@ The run of a plan issues exactly the plan's instructions, tick by tick (`run_pla
 instruction and each thread steps once, and its stores are the plan's instructions applied in order (`run_mem`). The
 kernel's length is within the bound (`kernel_length_le`). Every tick is within every resource's rate but
 `tensorLong`'s; for `tensorLong`, 21 consecutive ticks hold an idle one (`block_long`), so a window of `L` ticks uses at
-most `524,288 (L - ⌊L/21⌋)` units (`window_long`), within `tensorLong`'s 540,672 a tick, and within M1's 499,712 with a
-backlog of a tick should CALIB's clock check reinstate it (RT-MODEL M14): the run meets G2's rates (`kernel_rate`).
+most `524,288 (L - ⌊L/21⌋)` units (`window_long`), within `tensorLong`'s 540,672 a tick, and within the 1830 MHz cap's
+499,712 with a backlog of a tick, should a clock check on the H200 reinstate that cap: the run meets G2's rates
+(`kernel_rate`).
 
 The values: the loads copy `A` and `B` to shared memory (`loads_exec`); the idle ticks do nothing, so the MMA ticks run
 the MMAs in order (`mmas_ticks`); MMA `κ · blocks n + e` adds slice `κ`'s products to block `e`'s accumulators and

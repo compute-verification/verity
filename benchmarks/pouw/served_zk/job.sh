@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# served_zk's window through the proof service on a node's CPUs: SZ_CALLS served calls of a retained request committed as
+# served_zk's window through the proof system on a node's CPUs: SZ_CALLS served calls of a retained request committed as
 # one audit window (padded with filler tiles to a grid level), registered with exactly PoUW's public items, received,
 # drawn subset:K' once, every drawn tile proved hidden and opened, a filler tile proved beside them, and the outcome; after
 # serve.sh's run SERVED_RUN retained its two requests under $WORK/passes/$SERVED_RUN.
@@ -72,7 +72,7 @@ export HZ_CASES=${HZ_CASES:-honest message_byte_differs_from_the_committed_row o
 source "$SRC/benchmarks/pouw/hidden_zk/job.sh"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}
 PASSES=$WORK/passes/${SERVED_RUN:?serve.sh run id}
-export PYTHONPATH=$SRC:$SRC/integrations/vllm:$SRC/benchmarks/pouw:$SRC/verity/ml/flock/python:$SRC/verity/core/difftest/python
+export PYTHONPATH=$SRC:$SRC/tools/config:$SRC/integrations/vllm:$SRC/benchmarks/pouw:$SRC/verity/ml/flock/python:$SRC/verity/core/difftest/python
 SC="$Z/served_commit.py"
 VPY=${SZ_PYTHON:-$WORK/venv312/bin/python}
 

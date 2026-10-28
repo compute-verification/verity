@@ -1,17 +1,17 @@
-"""Lane `pad` (R17) — the two R17 rulings as tiny-circuit tests, **lifted-padded** (LIFTING-SPEC v0.5 Part A; nothing here is a panel row).
+"""Two rules of the lifted-padded Program as tiny-circuit tests (nothing here is a panel workload).
 
-R17-6(a) total relation behaviour for NONCANONICAL `1‖nonzero` words, stated and tested PER OPERATION CLASS (A3.2): arithmetic (the strict
+(a) Total relation behaviour for NONCANONICAL `1‖nonzero` words, stated and tested PER OPERATION CLASS (A3.2): arithmetic (the strict
 class), selection (`LSelect`), indexing (`LGatherRow`, `Lifted[Embedding]`), state ops (`Lifted[StepBody]`: the K/V cache), plus the
 activity primitives.  Every class maps ANY noncanonical operand, in ANY position (the untaken branch and the unselected row included), to
 the one noncanonical word `INV_w` — never to ⊥, never to an Active value, never to the operand's own bits; a RANDOM noncanonical word is
 treated like `INV_w` itself.  A3.3 (honest computation emits canonical values) is MEASURED gate for gate on the lifted composites and the
 lifted serving Program; A3.4 (the commitment layer never normalizes) on `commit_leaf`; A3.5 (boundaries reject by name) on `check_boundary`.
 
-R17-6(b) TRUE widened widths (A4): the width of a lifted set is `Σ (w+1)`; admissibility is the UNCHANGED `partition.validate_width` at the
+(b) TRUE widened widths (A4): the width of a lifted set is `Σ (w+1)`; admissibility is the UNCHANGED `partition.validate_width` at the
 lifted parameter `W_MAX_LIFTED`; the active-reference rule at 32 fails on a 33-bit leaf BY DESIGN and is reported, never used as the lifted
 verdict; a lifted use document carries `kind = vu-partition-lifted` and `rules_version = lifted-v1` (A5) and `gate_G8` refuses it by name.
 
-R17-1 LAG declared (A2): the attestation (`lag_from_header`) and the declaration (`declared_lag_of_row`) go through GP-01's ONE rule
+LAG declared (A2): the attestation (`lag_from_header`) and the declaration (`declared_lag_of_row`) go through GP-01's ONE rule
 (`eos_lag_rows_declared`); the lifted tool's R0 needs both, equal; a Build that declared no lag is never ok (tested in test_lifted_record).
 """
 from __future__ import annotations
@@ -25,15 +25,15 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from verity.ml.circuits import Program, bind  # noqa: E402
-from verity.ml.circuits.defs import REGISTRY  # noqa: E402
-from verity.ml.definitions.registry import b1, lifted as L, pad_prims as PP, prims as P  # noqa: E402
+from verity.ml.circuits import Program, bind
+from verity.ml.circuits.defs import REGISTRY
+from verity.ml.definitions.registry import b1, lifted as L, pad_prims as PP, prims as P
 from verity_vllm.program.lifting import lifted_records
 from verity_vllm.program.lifting import lifted_compose
-from verity.ml.definitions.numerics import serve3_reference as ref  # noqa: E402
-from verity.ml.definitions.registry.b1 import weights_type  # noqa: E402
-from tests.program.test_serve3 import D_MAX, LP, TINY, _inputs  # noqa: E402
-from verity.ml.circuits.types import Array, Value  # noqa: E402
+from verity.ml.definitions.numerics import serve3_reference as ref
+from verity.ml.definitions.registry.b1 import weights_type
+from tests.program.test_serve3 import D_MAX, LP, TINY, _inputs
+from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.workload import eos_lag_rows_declared
 
 I32, BF16 = Value(32), Value(16)
@@ -41,8 +41,8 @@ BOT32, BOT16, INV32, INV16 = L.enc_bot(32), L.enc_bot(16), L.inv(32), L.inv(16)
 RNG = np.random.default_rng(1706)
 
 class _V1AndV2:
-    """The lifted relation under test = `Lifted[p]_v1` (the propagation relation, v0.5.2 A3 — FACTS under v0.6 A9.4) and, on the SAME
-    vectors, `Lifted[p]_v2` at `enable = Active(1)` must agree with it (v0.6 A9.3: the enabled result is v0.5.2's relation)."""
+    """The lifted relation under test = `Lifted[p]_v1` (the propagation relation) and, on the SAME
+    vectors, `Lifted[p]_v2` at `enable = Active(1)` must agree with it (the enabled result is the propagation relation)."""
 
     def __init__(self, p):
         self.v1, self.v2 = L.lifted_prim_v1(p), L.lifted_prim(p)
@@ -61,7 +61,7 @@ def _rand(w: int, n: int) -> list[int]:
 
 
 def _noncanonical(w: int) -> int:
-    """A RANDOM `1‖nonzero` word of `w+1` bits that is neither ⊥ nor `INV_w` (SPEC v0.5 A1): what a dishonest prover might commit.
+    """A RANDOM `1‖nonzero` word of `w+1` bits that is neither ⊥ nor `INV_w`: what a dishonest prover might commit.
     At `w = 1` the only noncanonical word IS `INV_1 = 0b11`."""
     if w == 1:
         return L.inv(1)
@@ -78,13 +78,13 @@ def _run(sp, inputs):
 
 
 def _runl(lsp, inputs, enable: int = 1):
-    """Run a LIFTED composite (`lift_def`) as a Program: its last parameter is the enable (v0.6 B7), a one-leaf Boolean word; the A3
-    rows below are its relation at `enable = Active(1)` (A9.4: facts about the total relation)."""
+    """Run a LIFTED composite (`lift_def`) as a Program: its last parameter is the enable, a one-leaf Boolean word; the A3
+    rows below are its relation at `enable = Active(1)` (facts about the total relation)."""
     return _run(lsp, list(inputs) + [[enable]])
 
 
 def _all_words_canonical(prog, t) -> bool:
-    # G1 (v0.7 A11): an ordinary gate (an input, an unwidened constant) has no tag -- its word is a value, not a lifted word to classify
+    # G1: an ordinary gate (an input, an unwidened constant) has no tag -- its word is a value, not a lifted word to classify
     return all(L.valid(prog.circuit.gate(g).prim.ret.w - 1, t[g]) for g in range(prog.gates) if L.is_lifted_prim(prog.circuit.gate(g).prim))
 
 
@@ -289,7 +289,7 @@ def test_a4_true_widths_admissibility_is_the_unchanged_validator_at_w_max_lifted
     assert adm["ok"] is True and adm["kind"] == "vu-partition-lifted" and adm["rules_version"] == "lifted-v1" and adm["w_max_lifted"] == 64
     assert adm["verdict"]["w_max"] == 64 and adm["verdict"]["max_seen"] == v1.width.max_seen
     assert adm["active_reference_rule_verdict"]["w_max"] == 32 and adm["active_reference_rule_verdict"]["status"] != "ok"
-    # A4.4 / revb B1 condition: max_seen (the validator's) and the n_out histogram (the boundary module's), complete over the family
+    # A4.4: max_seen (the validator's) and the n_out histogram (the boundary module's), complete over the family
     ws = adm["width_summary"]
     assert ws["max_seen"] == v1.width.max_seen and ws["complete"] is True and ws["sets_visited"] == v1.count and ws["sets_unsupported"] == 0
     hist = {int(k): v for k, v in ws["n_out_histogram"].items()}
@@ -298,7 +298,7 @@ def test_a4_true_widths_admissibility_is_the_unchanged_validator_at_w_max_lifted
     assert ws["max_seen"] <= 33 * ws["max_n_out"]
     h_small = L.n_out_histogram(fam, max_sets=3)
     assert h_small["complete"] is False and h_small["sets_visited"] == 3
-    # revb M-0071 N5: the four A4.4 / A7(iii) names on EVERY summary -- w_out_lifted_max (the boundary module's Σ(w+1) per set, == the
+    # the four A4.4 / A7(iii) names on EVERY summary -- w_out_lifted_max (the boundary module's Σ(w+1) per set, == the
     # validator's max_seen on a fully certified family), n_out_max, growth_max (= n_out_max: one tag bit per escaping leaf), the histogram;
     # w_out_payload_max beside them as information; readiness at 32 (not ok: 33-bit gates, by design) and at w_max_lifted (ok)
     assert all(k in ws for k in L.WIDTH_SUMMARY_FIELDS) and ws["rules_version"] == "lifted-v1"
@@ -338,7 +338,7 @@ def test_a5_lifted_use_document_carries_its_own_kind_and_rules_version_and_gate_
     assert use["schema"] == "verity-ir/query-use/v1" and use["use"]["kind"] == L.USE_KIND_LIFTED == "vu-partition-lifted"
     assert use["use"]["w_max"] == 64 and use["use"]["rules_version"] == "lifted-v1" and use["use"]["w_max_active_reference"] == 32
     assert use["verdict"]["status"] == "ok" and "kind" not in qdoc and "w_max" not in qdoc  # the query document is unchanged in shape
-    assert use["width_summary"]["max_seen"] == v1.width.max_seen > 32 and use["width_summary"]["complete"] is True  # revb B1 condition
+    assert use["width_summary"]["max_seen"] == v1.width.max_seen > 32 and use["width_summary"]["complete"] is True
     assert sum(use["width_summary"]["n_out_histogram"].values()) == v1.count
     assert QA.check_query_document(qdoc) == [] and QA.check_use_document(use, qdoc["program_digest"], qdoc) == []  # structurally a use doc
     # G8 (the active-reference gate) refuses the lifted document by NAME: a lifted verdict never reads as a panel-row G8 pass
@@ -350,7 +350,7 @@ def test_a5_lifted_use_document_carries_its_own_kind_and_rules_version_and_gate_
 
 
 # ---------------------------------------------------------------------------------------------------------
-# A2 — R17-1: one lag rule (GP-01's), two readers (attestation / declaration)
+# A2 — one lag rule (GP-01's), two readers (attestation / declaration)
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -369,22 +369,23 @@ def test_a2_lag_from_header_is_gp01s_rule_on_the_attested_engine_block():
 
 
 def test_a2_declared_lag_of_row_reads_the_builds_declaration_through_the_same_rule():
-    # moe's fields first (M-0015), GP-01's pre-M-0015 field as fallback; a bare boolean knob goes through the rule; nothing defaults
+    # `lag.value` and `stop_rule.lag` first, GP-01's older `stop_rule.eos_lag_rows` as fallback; a bare boolean knob goes through the
+    # rule; nothing defaults
     assert lifted_records.declared_lag_of_row({"lag": {"value": 1}, "stop_rule": {"eos_lag_rows": 1}}) == (1, "lag.value")
     assert lifted_records.declared_lag_of_row({"stop_rule": {"lag": 0, "eos_lag_rows": 0}}) == (0, "stop_rule.lag")
     assert lifted_records.declared_lag_of_row({"stop_rule": {"eos_lag_rows": 1}}) == (1, "stop_rule.eos_lag_rows")
     assert lifted_records.declared_lag_of_row({"stop_rule": {"eos_lag_rows": eos_lag_rows_declared({"async_scheduling": True})}}) == (1, "stop_rule.eos_lag_rows")
     assert lifted_records.declared_lag_of_row({"lag": {"value": False}}) == (0, "lag.value")  # the knob, through the one rule
-    assert lifted_records.declared_lag_of_row({"stop_rule": {"eos_token_ids": [1]}}) == (None, None)  # a pre-R17-1 Build: declared NOTHING
+    assert lifted_records.declared_lag_of_row({"stop_rule": {"eos_token_ids": [1]}}) == (None, None)  # a Build from before the lag was declared: NOTHING
     assert lifted_records.declared_lag_of_row({"stop_rule": {"eos_lag_rows": None}}) == (None, None)  # GP-01's None (undeclared engine): nothing
     assert lifted_records.declared_lag_of_row(None) == (None, None) and lifted_records.declared_lag_of_row({}) == (None, None)
     with pytest.raises(ValueError, match="must be declared as one of"):
         lifted_records.declared_lag_of_row({"lag": {"value": 2}})
-    with pytest.raises(ValueError, match="disagrees with itself"):  # moe M-0047: lag.value == stop_rule.lag == stop_rule.eos_lag_rows, or refused
+    with pytest.raises(ValueError, match="disagrees with itself"):  # lag.value == stop_rule.lag == stop_rule.eos_lag_rows, or refused
         lifted_records.declared_lag_of_row({"lag": {"value": 1}, "stop_rule": {"lag": 0}})
     assert lifted_records.declared_lag_of_row({"lag": {"value": 1}, "stop_rule": {"lag": 1, "eos_lag_rows": 1}}) == (1, "lag.value")
     assert lifted_records.LAG_DECLARED_FIELDS == ("lag.value", "stop_rule.lag", "stop_rule.eos_lag_rows")
-    # rev F-r17-02: the static lives in the Program's spec id (`workload_fn` = Workload_v1{...,lag=n}), NOT in a bindings dict of the Root
+    # the static lives in the Program's spec id (`workload_fn` = Workload_v1{...,lag=n}), NOT in a bindings dict of the Root
     # wrapper; it is the digest-bound source, read first, and a sidecar edited against it is refused by name
     fn1 = 'Workload_v1{requests=[{"dict":{"arrive_step":0,"cap":32,"fn":{"fn":"WorkloadRequest_v1{program_fn=\\"Derived[x]{lag=7}\\"}"}}}],shared=0,lag=1}'
     assert lifted_records.declared_lag_of_row({"workload_fn": fn1}) == (1, "workload_fn:lag=")                       # the digest's static alone
@@ -393,16 +394,16 @@ def test_a2_declared_lag_of_row_reads_the_builds_declaration_through_the_same_ru
         lifted_records.declared_lag_of_row({"workload_fn": fn1, "lag": {"value": 0}, "stop_rule": {"lag": 0, "eos_lag_rows": 0}})
     fn0 = fn1[: -len("lag=1}")] + "lag=0}"
     assert lifted_records.declared_lag_of_row({"workload_fn": fn0}) == (0, "workload_fn:lag=")
-    assert lifted_records.declared_lag_of_row({"workload_fn": "Workload_v1{requests=[],shared=0}"}) == (None, None)  # a pre-R17-1 id declares NOTHING
+    assert lifted_records.declared_lag_of_row({"workload_fn": "Workload_v1{requests=[],shared=0}"}) == (None, None)  # an id without the lag static declares NOTHING
     assert lifted_records.declared_lag_of_row({"workload_fn": "Serve_v2{STEPS=31}"}) == (None, None)                 # not a workload id: nothing
     with pytest.raises(ValueError, match="must be declared as one of"):
         lifted_records.declared_lag_of_row({"workload_fn": "Workload_v1{requests=[],shared=0,lag=2}"})
-    # the real R16 row artefacts (pre-R17-1 Builds) declare nothing through EVERY source — never a default
+    # the recorded workload artefacts (Builds from before the lag was declared) declare nothing through EVERY source — never a default
     import glob as _glob
     for p in _glob.glob("out/gen/sweep/evidence/pad/*/*/build_workload/workload_program.json"):
         wp = json.load(open(p))
         assert wp["workload_fn"].startswith("Workload_v1{") and lifted_records.declared_lag_of_row(wp) == (None, None), p
-    # the compose passes the lag as the Workload_v1 static exactly when the tree's WorkloadProgram takes one (moe a96a2071b); inspected, not guessed
+    # the compose passes the lag as the Workload_v1 static exactly when the tree's WorkloadProgram takes one; inspected, not guessed
     import inspect
     from verity_vllm.program import workload as W
     takes_lag = "lag" in inspect.signature(W.WorkloadProgram.__init__).parameters
@@ -410,7 +411,7 @@ def test_a2_declared_lag_of_row_reads_the_builds_declaration_through_the_same_ru
 
 
 def test_a2_the_lifted_program_is_a_function_of_the_declared_lag():
-    """DP-pad-02 (b): a different LAG is a different Program (id, gate count) — the value is a static, never read from the record."""
+    """A different LAG is a different Program (id, gate count) — the value is a static, never read from the record."""
     eos = (15,)
     p0, p1 = L.lserve(TINY, LP, D_MAX, eos, lag=0), L.lserve(TINY, LP, D_MAX, eos, lag=1)
     assert p0.id != p1.id and "LAG" in p0.id

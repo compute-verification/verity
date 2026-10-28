@@ -1,4 +1,4 @@
-"""The columnar `ProgramView` (F-r19-int-25) reads exactly what the materialized reader read.
+"""The columnar `ProgramView` reads exactly what the materialized reader read.
 
 `from_instances` streams the rows of `instances.json.gz` into flat int columns and hands out `CallView`s / `ValueRef`s lazily; the
 oracle below is the reader it replaced (`json.load` of the document, a `CallView` per row with a tuple of `ValueRef`s), kept here

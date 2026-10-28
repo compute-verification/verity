@@ -292,8 +292,6 @@ def test_generic_argv_parse():
 def test_registry_loads_repo_declarations_and_file_fallback(tmp_path):
     tc = tools_registry.load("tc_probe", REPO)
     assert tc.name == "tc_probe" and tc.spec == "benchmarks.tc_probe.tool:TC_PROBE" and "hw.family" in tc.key_conditions
-    bv = tools_registry.load("bench_vu", REPO)
-    assert bv.name == "bench_vu" and "root" in bv.param_artifacts
     with pytest.raises(LookupError):
         tools_registry.load("nope", REPO)
     src = tmp_path / "src"
@@ -419,15 +417,6 @@ def test_tc_probe_declaration_parses_real_flags_and_optional_instruction():
     assert D.derivation_id(tc, {}, key, {"hw.family": "rtx4090"}, tc.key_conditions) != D.derivation_id(tc, {}, key2, {"hw.family": "rtx4090"}, tc.key_conditions)
     _, key3 = tc.resolve_params(argv + ["--replay-golden", "verity/ml/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json"], REPO)
     assert key3["replay_golden"].startswith("sha256:")
-
-
-def test_bench_vu_declaration_resolves_dataset_root_by_content():
-    bv = tools_registry.load("bench_vu", REPO)
-    argv = ["python", "-m", "archive.direct.ligero.run", "bench-vu", "--mode", "fiat-shamir", "--zk", "--total-vus", "1000", "--device", "cuda", "--out", "/x"]
-    params, key = bv.resolve_params(argv, REPO)
-    assert key["cmd"] == "bench-vu" and key["mode"] == "fiat-shamir" and key["zk"] is True and key["total_vus"] == 1000
-    assert "device" not in key and "out" not in key and "vus" not in key
-    assert key["root"].startswith("sha256:") and "fixtures" not in key["root"]
 
 
 # ---- derivation, reuse key, scratch ----------------------------------------------------------------------------------------------------------

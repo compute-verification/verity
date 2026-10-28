@@ -1,6 +1,6 @@
 """J10's banded H1 noise on words: `h1tile`'s unit under one noise seed a call, the bit-exact reference a banded kernel is
-held to. Daniel approved the luck claims' scope for it on 19 Oct (ASK-66: "Yes, same values; served only after kernels
-measure the gain"). It is not yet the unit's gates. Its coin is the Lean `Accounting.TS.CallCoin` of one row block by one
+held to. The luck claims cover it at the same values; it is served only once kernels measure the gain. It is not the
+unit's gates. Its coin is the Lean `Accounting.TS.CallCoin` of one row block by one
 band.
 
 A call's column tiles are cut into bands of g ≤ `BAND_MAX` column tiles from column tile 0 (`band_start`), the last band

@@ -5,7 +5,7 @@ import Proofs.Pous.Statements
 # The digest is almost universal
 
 `Pous.Guarantees.DigestAU` from root counting: a nonzero polynomial of degree at most `d` over a field vanishes at at
-most `d` points (`Polynomial.card_roots'`). Ported from PR #1010 (`PousBandwidth` there), the digest's lemmas only.
+most `d` points (`Polynomial.card_roots'`). Ported from the older `PousBandwidth` proof, the digest's lemmas only.
 -/
 
 namespace PousDigest

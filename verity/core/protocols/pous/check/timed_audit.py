@@ -6,7 +6,7 @@ records of runs.
     uv run python verity/core/protocols/pous/check/timed_audit.py --replay RUN_DIR... [--out FILE]
 
 `--generated` compares the two on honest P2 v4 records, at reduced widths and at the registered point, and on negative
-controls of each part of the verdict (a wrong, flipped, short or long block, a leaf file of another store under its own
+controls of each part of the verdict (a wrong, flipped, short or long label, a leaf file of another store under its own
 root, a wrong index, source or order, a late answer, too few or too many answers, no audit, a wrong root or limit, the
 certificate's refusals of `k`, `Δ` and the RTT allowance, and records that are not P2 v4 or malformed), and through the
 files on records whose JSON holds floats, `NaN` or `Infinity` (`file_instances`). It prints each
@@ -16,7 +16,7 @@ control is an instance built to be refused, faulted or rejected; the generator c
 `--replay` judges each audit document of a run's record (`bench/audit-p2-<arm>.json` with `bench/ready-p2-<arm>.json`
 and `bench/leaves-p2.bin`, as `band_gpu/harness.py` keeps them) both ways and prints
 `N runs, N same verdict, K negative controls` over the documents it can replay. A document whose answers do not carry
-their blocks cannot be replayed (the audit checks each block against its leaf), and neither can a record of another
+their labels cannot be replayed (the audit checks each label against its leaf), and neither can a record of another
 version than P2 v4; it says which, and counts neither. Where a document kept the verdicts its run computed (`verdicts`,
 `judge`'s), each one that ran is held to the replay's of the same name, and `M with recorded verdicts, M recorded as
 replayed` follows; the exit is 0 iff every document replays the same both ways and as recorded.
@@ -69,7 +69,7 @@ def lean_verdict(ready: Any, leaves: bytes, doc: Any) -> dict[str, Any]:
 
 
 class Store:
-    """A P2 v4 store for the verdict: its blocks need only match their leaves (the audit checks leaves, not codewords)."""
+    """A P2 v4 store for the verdict: its labels need only match their leaves (the audit checks leaves, not codewords)."""
 
     def __init__(self, params, seed: bytes, salt: bytes = b"s" * 24) -> None:
         from verity.core.protocols.pous.verifier import VerifierKey, leaf_hash
@@ -88,7 +88,7 @@ class Store:
 
 def record(s: Store, rng: random.Random, *, k: int, deadline: int, rtt: int, strict: bool, audits: int,
            elapsed: Callable[[int], int] | None = None) -> dict[str, Any]:
-    """An honest audit document, as `memory_challenger.audit` writes it: each answer the block of the index revealed."""
+    """An honest audit document, as `memory_challenger.audit` writes it: each answer the label of the index revealed."""
     from verity.core.protocols.pous import protocol
 
     limit = deadline + rtt
@@ -121,7 +121,7 @@ def _flip(h: str) -> str:
 
 
 def controls(s: Store, doc: dict, other: Store) -> Iterator[tuple[str, Any, bytes, Any]]:
-    """Negative controls of an honest document `doc` of `s` (with at least two answers and an index of another block):
+    """Negative controls of an honest document `doc` of `s` (with at least two answers and an index of another label):
     `(name, ready, leaves, doc)`."""
     ready, leaves, a0 = s.ready, s.leaves, _answer(doc)
     elsewhere = next(i for i in range(s.params.blocks) if i != a0["index"])

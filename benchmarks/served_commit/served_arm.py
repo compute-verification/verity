@@ -1,8 +1,8 @@
-"""G2's served arm: the Commit at rows-sha512's 4 KiB rows timed against stock as vLLM serves it (compiled) and against the
+"""The served arm: the Commit at rows-sha512's 4 KiB rows timed against stock as vLLM serves it (compiled) and against the
 batch-invariant eager stock every eager row is timed against, in one interleaved run on one GPU (`served_arm.sh`, the specs
-`*-rtx-served-arm`). Measurement only.
+`*-rtx-served-arm`). Measurement only; `benchmarks/g2/served.py` renders its runs.
 
-- ``served-commit-rows-4k`` (`ROWS_4K`, `ROWS_4K_FP8`): G2's compiled Commit arm (`prof_arm.Rows4kArm`, the served compiled
+- ``served-commit-rows-4k`` (`ROWS_4K`, `ROWS_4K_FP8`): the compiled Commit arm (`prof_arm.Rows4kArm`, the served compiled
   source under CUDA graphs), built at vLLM's serving defaults compiled whatever the spec's ``eager`` (its ``execution``), with
   ``stock@compiled`` (``stock-fp8@compiled``) as its token control.
 - ``commit-rows-4k-eager`` (`EAGER_ROWS_4K`, `EAGER_ROWS_4K_FP8`): the harness's eager ``commit`` (`verity_bench.vllm.commit_arm`)

@@ -1,5 +1,5 @@
 {
- "about": "Pinned vectors of Q_word v1 (verity.primitives.circuits.cut, verity.primitives.circuits.partition_object) beyond partition_vectors.json, checked by verity/primitives/circuits/tests/test_qword_vectors.py; written by it with --write.  Programs are descriptor bytes (TWide_v1, TNarrow_v1 and TAdd64_v1 are test primitives: n leaves of Value<32> or two Value<64>, one output).",
+ "about": "Pinned vectors of Q_word v1 (verity.ml.circuits.cut, verity.ml.circuits.partition_object) beyond partition_vectors.json, checked by verity/ml/circuits/tests/test_qword_vectors.py; written by it with --write.  Programs are descriptor bytes (TWide_v1, TNarrow_v1 and TAdd64_v1 are test primitives: n leaves of Value<32> or two Value<64>, one output).",
  "constants": {
   "wiring": [
    "Bf16ToF32_v1",

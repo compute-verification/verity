@@ -1,8 +1,8 @@
-"""verity_vllm.program.quarantine.dense — lane `dense` (overnight swarm 2026-09-17, Gemma-2-2B): provisional exact
+"""verity_vllm.program.quarantine.dense — Gemma-2-2B's provisional exact
 definitions for the operations vLLM d9105ea80 runs UNFUSED for `Gemma2ForCausalLM` under `VLLM_BATCH_INVARIANT=1` (eager,
 sm_89), one module per definition (one `SEMANTIC_ID` each), a `*_difftest.py` adapter next to each.
 
-What Gemma-2 adds over the Llama/Qwen profile (all of these were `Unsupported` in the wave-1 run, 1000 events per step):
+What Gemma-2 adds over the Llama/Qwen profile:
 
   GemmaRMSNorm = `ir.ops.rms_norm` / `ir.ops.fused_add_rms_norm` (vllm/ir/ops/layernorm.py) as ATen ops on an f32 copy:
       x32 = x.to(f32)                     -> Transparent noop (exact widening; consumers re-point to the bf16 source)
@@ -21,7 +21,7 @@ NOT here (mechanism gap): the FA2 attention body with `Is_softcap=true` (`tanh.a
 registered hardware primitive models MUFU.TANH; the base `AttentionScope` keeps reporting it as `Unsupported: softcap is not
 modelled`.
 
-Conventions (checked against wave-1's exhaustive GPU tables, `out/gen/lanes/dense2/runs/gemma2_2b_32x16/probes/`): every
+Conventions (checked against exhaustive GPU tables): every
 ATen CUDA kernel here converts f32 -> bf16 with the hardware `cvt.rn.bf16.f32` (c10::BFloat16(float) on sm_80+ is
 `__float2bfloat16`), so NaN words are 0x7FFF (`F2fpBf16`), not the software 0x7FC0.
 """

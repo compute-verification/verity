@@ -1,5 +1,5 @@
 """Derive-neutrality, the suite's tier: GLM-5.3's served constructions derived on vLLM-free stand-ins keep the Program digest, gate
-count and node count pinned in `derive_neutrality.json` -- the three facts the 14 Oct neutrality proof compared across trees, here
+count and node count pinned in `derive_neutrality.json` -- the three facts the neutrality proof compared across trees, here
 on every change.  The TP toy's ranks at world 2 and 8, the DSA indexer and IndexShare layers on the H200, the routed-MoE FP8 chain
 at vLLM's sm_90 defaults, and RMSNorm (unfused, and fused with the residual) at GLM-5.3's width under the declared non-BI H200.
 

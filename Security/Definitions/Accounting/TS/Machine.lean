@@ -3,7 +3,7 @@ import Mathlib
 /-!
 # The tensor–scalar machine (trusted)
 
-EPS1's tensor–scalar (TS) model (note:20261017T0324Z-draft-eps1-spec §0.1–§0.3, §1.1): instruction classes `K`,
+EPS1's tensor–scalar (TS) model (§0.1–§0.3, §1.1): instruction classes `K`,
 facets `R`, each facet a row `a r : K → ℝ` (the cycles of facet `r` one instruction of class `k` occupies, per SMSP),
 SM-clocked or fixed-clock, and the highest SM clock `fmax` any program runs at (P1: 2,430 MHz on sm_120).
 

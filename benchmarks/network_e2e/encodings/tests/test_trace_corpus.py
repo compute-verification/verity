@@ -1,4 +1,4 @@
-"""TRACE-CORPUS's traces as advice (`trace_corpus.py`): the mapping on a hand-made trace in the corpus's format, and
+"""The trace corpus's traces as advice (`trace_corpus.py`): the mapping on a hand-made trace in the corpus's format, and
 every code's round trip on it under the trace's own serving caps."""
 
 from __future__ import annotations

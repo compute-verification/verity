@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.TmplUnrollAt
 import Flock.TmplValue
 
 /-!
-# A templated unit's committed net, satisfied, composes its Definitions (PRF-133)
+# A templated unit's committed net, satisfied, composes its Definitions
 
 Column values `z` that satisfy the committed net `Tmpl.unrollAt` builds, its whole `2^unitLog`-row slot, read through
 `posMap`'s positions satisfy the template's logical rows (`rowHolds_of_netSat`), so `Flock.TmplValue.rows_eval` applies:

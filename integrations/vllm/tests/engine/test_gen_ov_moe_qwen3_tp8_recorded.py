@@ -1,7 +1,7 @@
 """The Qwen3-MoE fold scope and the TP8 collectives' peer reads on RECORDED events: Qwen3-235B-A22B BF16 at TP8.
 
 `fixtures/qwen3_235b_a22b_tp8_moe_l47.rank{0,7}.jsonl.gz` are layer 47 of ranks 0 and 7 of the 235B Match of record (B1 i256 o32, RTX PRO
-6000, vLLM d9105ea80, batch-invariant eager; run r20261003-163309-0f1d), cut by `tests/engine/moe_scope_cut.py --logits` (each
+6000, vLLM d9105ea80, batch-invariant eager), cut by `tests/engine/moe_scope_cut.py --logits` (each
 `moe_scope_cut` Note names the source log and its sha256): the RunHeader, the layer's weight Roots and the lm_head shard's, and for the
 prefill step (256 rows) and the first decode step (1 row) the scope, the layer's all-reduce right after it, and the step's
 `logits_processor` nodes (the lm_head shard's GEMM and the logits all-gather).  `fixtures/QWEN3_235B_A22B.config.json` is the
@@ -16,7 +16,7 @@ checkpoint's config.json at the recorded revision (its sha256 is the header's `c
     how a rank Program reading one `peers_<k>` Input per peer reads it, and the two compare equal; without the split at field boundaries
     the one-row reads do not.
 Not covered: the Build's TP8 rank Program itself (here a Program of that form over the same fields), the collective ordinals of a whole
-step (the cut numbers only its own collectives), and the cross-rank leg.
+step (the cut numbers only its own collectives), and the cross-rank check.
 """
 from __future__ import annotations
 

@@ -270,7 +270,7 @@ void fa2_rows(const uint16_t* Q, const uint16_t* K, const uint16_t* V, int KVH, 
 //   * finalize: inv_sum = (sum == 0 || sum != sum) ? 0.f : 1.f / sum (FA2: ? 1.f), scores_scale = inv_sum * 1.f.
 // kBlockN is checked against the sm90 bf16 forward tiles vLLM reaches rather than left free, so the entry point denotes one
 // kernel family: 128 (hdim 128 causal / paged non-TMA; hdim 64 in the 192 x 128 tile) and 192 (hdim 64 under one MMA
-// warpgroup, seqlen_q * qheads_per_kvhead <= 64: the 64 x 192 tile) [R13 hopper].  D: 64 or 128 (ksteps = D / 16).
+// warpgroup, seqlen_q * qheads_per_kvhead <= 64: the 64 x 192 tile).  D: 64 or 128 (ksteps = D / 16).
 // hdim 256 (GLM-5.3's dense MHA prefill, qk 192 + 64 = v 256) runs the 128 x 80 tile: kBlockN 80 (5 P.V k16 steps a block,
 // 16 QK k16 steps) and RescaleOBeforeGemm = true, which moves block n's rescale of O from the end of fwd_step(n) to just before
 // P(n+1) V(n+1)'s gemm in fwd_step(n-1) (and the tail): the same O = O * scale + P V per element, so the same recurrence.

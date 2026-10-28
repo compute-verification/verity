@@ -109,12 +109,12 @@ def test_profile_is_discovered_by_case_and_shares_the_base_patterns(case, module
     assert prof is mod.PROFILE and prof.notes["case"] == case and prof.config is mod.C
     assert prof.id == mod.PROFILE_ID and prof.id != BASE.PROFILE.id
     base_names = [p.name for p in BASE.PROFILE.patterns]
-    # [P6] every configuration-derived profile: the target's tuned-GEMM specialization right before the base GemmLaunch, then the base list
+    # every configuration-derived profile: the target's tuned-GEMM specialization right before the base GemmLaunch, then the base list
     names = [p.name for p in prof.patterns]
     assert names == [GP.GemmLaunchTuned.name, *base_names]
     assert names.index(GP.GemmLaunchTuned.name) == names.index("gemm.matmul_kernel_persistent") - 1
     assert isinstance(prof.patterns[0], GP.GemmLaunchTuned) and isinstance(prof.patterns[1], GemmLaunch)
-    # [R15 moe GEMM-ADA-TABLE] the ada record pins all five vLLM keys; Llama's shapes hit (2048, 2048) only (the others are Qwen3-class)
+    # the ada record pins all five vLLM keys; Llama's shapes hit (2048, 2048) only (the others are Qwen3-class)
     assert set(prof.notes["pins"]["gemm_tuned_ada"]) == {"N=2048,K=2048", "N=2048,K=6144", "N=4096,K=2048", "N=12288,K=2048", "N=151936,K=2048"}
     assert GP.GemmLaunchTuned.name not in base_names                                             # the base profile is untouched
     assert prof.kernel_allowlist is BASE.PROFILE.kernel_allowlist                                # the frozen census allowlist, referenced
@@ -311,7 +311,7 @@ def test_tuned_table_row_is_the_pinned_vllm_table_and_the_bucket_rule():
     assert GP.tuned_launch_config(GP.ADA_TUNED_GEMM, 4096, 2048, 2048)[0]["BLOCK_SIZE_M"] == 64     # above the table: last bucket
     assert GP.tuned_launch_config(GP.ADA_TUNED_GEMM, 32, 3072, 2048) is None                       # qkv_proj: not a key -> default
     assert GP.tuned_launch_config(GP.ADA_TUNED_GEMM, 32, 2048, 8192) is None                       # down_proj: (N,K) order matters
-    for (n, k), row in GP.ADA_TUNED_GEMM.items():          # [R15 moe GEMM-ADA-TABLE] five keys; vLLM's (2048, 6144) row has block_k 128
+    for (n, k), row in GP.ADA_TUNED_GEMM.items():          # five keys; vLLM's (2048, 6144) row has block_k 128
         assert row["BLOCK_SIZE_K"] == (128 if (n, k) == (2048, 6144) else 64) and [m for m, _ in row["m_buckets"]] == sorted(m for m, _ in row["m_buckets"])
     assert not any(consts.get("HAS_BIAS") for consts in [GP.tuned_launch_config(GP.ADA_TUNED_GEMM, 32, 2048, 2048)[0]])
 
@@ -386,11 +386,11 @@ def test_tuned_pattern_keeps_the_delegated_guards():
 
 
 def test_base_and_qwen05_profiles_do_not_have_the_tuned_pattern_but_pin_the_targets_geometry():
-    """[R13 ampere] The launch geometry is a TARGET fact, not a model-profile fact: the base `GemmLaunch` pins the registered target's
+    """The launch geometry is a TARGET fact, not a model-profile fact: the base `GemmLaunch` pins the registered target's
     `launch_config` (the sm_89 table row for a tabled (N,K) on the default `ada` target), so the profiles without the tuned pattern
     accept the tabled launch exactly as Bet A (`gemm_pins_for`) pins it — and still refuse any other tiling."""
     consts, warps, stages = GP.tuned_launch_config(GP.ADA_TUNED_GEMM, 32, 2048, 2048)
-    for prof in (BASE.PROFILE,):                                       # [P6] the derived Qwen-0.5B profile now carries the tuned pattern too
+    for prof in (BASE.PROFILE,):                                       # the derived Qwen-0.5B profile carries the tuned pattern too
         assert not any(isinstance(p, GP.GemmLaunchTuned) for p in prof.patterns)
         r, _ = _resolve(prof, 32, 2048, 2048, consts, warps, stages)
         g = [m for m in members(r) if isinstance(m, Compute)]
@@ -399,7 +399,7 @@ def test_base_and_qwen05_profiles_do_not_have_the_tuned_pattern_but_pin_the_targ
         assert isinstance(r, Unsupported) and r.detail["mismatches"]["BLOCK_SIZE_M"] == {"observed": 128, "pinned": 16}, r
 
 
-# --- [R13 ampere] the GEMM target registry decides the geometry per capture host (B-AMPERE-GEMM-TILE fix) ----------------------
+# --- the GEMM target registry decides the geometry per capture host ----------------------
 
 A100_GPU = {"name": "NVIDIA A100-SXM4-80GB", "compute_capability": "8.0", "multi_processor_count": 108, "tuned_gemm_arch_family": None}
 H100_GPU = {"name": "NVIDIA H100 80GB HBM3", "compute_capability": "9.0", "multi_processor_count": 132, "tuned_gemm_arch_family": "hopper"}
@@ -409,7 +409,7 @@ L40S_GPU = {"name": "NVIDIA L40S", "compute_capability": "8.9", "multi_processor
 @pytest.mark.parametrize("M", [1, 32, 129])
 def test_a100_header_o_proj_default_tiling_is_the_registered_ampere_gemm(M):
     """Positive: on an A100 header (cc 8.0, family None) vLLM launches the o_proj with the DEFAULT tiling (no Ampere table) — the
-    registered `ampere` target's geometry: `Gemm_v1{K,N}` through the base pattern, NUM_SMS 108 pinned from the header (X-01)."""
+    registered `ampere` target's geometry: `Gemm_v1{K,N}` through the base pattern, NUM_SMS 108 pinned from the header."""
     consts, warps, stages = DEFAULT_TILING
     for prof in (L.PROFILE, BASE.PROFILE):
         r, (a, w, c) = _resolve(prof, M, 2048, 2048, consts, warps, stages, gpu=A100_GPU, num_sms=108)
@@ -438,7 +438,7 @@ def test_l40s_header_keeps_the_ada_table_and_pins_142_sms():
 
 
 def test_h100_header_binds_the_hopper_target_and_gemm_v2():
-    """[R13 hopper] cc 9.0 is the registered `hopper` GEMM target (vLLM family "hopper": the sm_90 tuned table; Triton lowers tl.dot to wgmma
+    """cc 9.0 is the registered `hopper` GEMM target (vLLM family "hopper": the sm_90 tuned table; Triton lowers tl.dot to wgmma
     there, another k16 step): the launch must show the HOPPER table's tiling for (M, N, K) and binds `Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16}`
     — the sm_89 tiling (BLOCK_SIZE_K 64) on an H100 header is a pin mismatch, and the accepted `Gemm_v1` is NOT what an H100 launch binds."""
     from verity_vllm.program.frontend.gemm_targets import HOPPER_TUNED_GEMM

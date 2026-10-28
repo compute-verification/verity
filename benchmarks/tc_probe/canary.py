@@ -1,12 +1,13 @@
 """Canary: the fixed small tile set that says a pinned instruction still computes its model's words.  Run it on the anchor after any
 driver / ptxas / toolkit change, on a second physical device of the SKU (TRUSTED_STABLE), or whenever anyone asks "did it break":
 
-    python benchmarks/tc_probe/tc_probe.py --instruction sm89.mma.m16n8k32.e4m3 --out $RESEARCH_RUN_DIR --canary [--sass-check]
+    python benchmarks/tc_probe/tc_probe.py --instruction sm89.mma.m16n8k32.e4m3 --out DIR --canary [--sass-check]
 
-A canary is < 1 minute on the device, exits non-zero on any mismatch against a declared model, and under ``research run`` writes a
-``tc-evidence/v1`` ``result.json`` whose ``tc_evidence.canary`` holds the counts and whose ``workload_fingerprint.family`` is
-``canary``; the lane then labels the artifact ``family=canary instruction=<id> hardware=<sku family> model=<name>
-model_agrees=<true|false>`` (the ``research data label`` lines are printed at the end; ``trust.py`` reads them).
+A canary is < 1 minute on the device, exits non-zero on any mismatch against a declared model, and in a recorded run
+(``RESEARCH_RUN_ID`` set) writes a ``tc-evidence/v1`` ``result.json`` whose ``tc_evidence.canary`` holds the counts and whose
+``workload_fingerprint.family`` is ``canary``; whoever ran it then labels the artifact ``family=canary instruction=<id>
+hardware=<sku family> model=<name> model_agrees=<true|false>`` (the label commands are printed at the end; ``trust.py`` reads
+the labels).
 
 The tile set is a pure function of the instruction id, the repository fixtures and :data:`CANARY_SEED` (:func:`canary_plan`,
 :func:`canary_tiles`, witnessed by :func:`canary_digest`):
@@ -18,13 +19,11 @@ The tile set is a pure function of the instruction id, the repository fixtures a
   (:data:`trust.REGRESSION_TILES`): ``family:<name>`` tiles join the family set, ``replay:<fragment>`` files
   are replayed in full (golden records; the tc-total special captures for BF16).
 
-TODO(pod): the device half (``run_canary``: ``Probe.tiles`` + ``model_eval`` + ``replay_golden``) has not been executed on
-silicon from this laptop.  First pod run per anchor: ``research run --tool tc_probe --project verity -- python
-benchmarks/tc_probe/tc_probe.py --instruction <id> --out $RESEARCH_RUN_DIR --canary --sass-check``, check the wall time (< 60 s) and
-that ``probe_results.json["canary"]["digest"]`` equals :func:`canary_digest` computed offline, then label the artifact.  BF16
-anchors have no ``adder_width_cancellation`` / ``acc_only_lsb_walk`` families yet (they are FP8-only in ``families()``): the
-trust framework's PINNED criterion P3 lists them as missing for every BF16 instruction until ``families()`` yields them for BF16
-and the anchors are re-swept.
+The device half is ``run_canary`` (``Probe.tiles`` + ``model_eval`` + ``replay_golden``).  On an anchor's first canary (the
+command above with ``--sass-check``), check the wall time (< 60 s) and that ``probe_results.json["canary"]["digest"]`` equals
+:func:`canary_digest` computed offline, then label the artifact.  BF16 anchors have no ``adder_width_cancellation`` /
+``acc_only_lsb_walk`` families (they are FP8-only in ``families()``), so the trust framework's PINNED criterion P3 lists them as
+missing for every BF16 instruction.
 """
 from __future__ import annotations
 

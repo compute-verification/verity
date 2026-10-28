@@ -677,7 +677,7 @@ def run(out: str, seed: int, n: int, clamp_n: int, min_driver: int, want_cc: str
     os.environ["VLLM_BATCH_INVARIANT"] = "1"
     import torch
     import vllm
-    import vllm._custom_ops  # noqa: F401
+    import vllm._custom_ops
 
     outdir = Path(out)
     outdir.mkdir(parents=True, exist_ok=True)

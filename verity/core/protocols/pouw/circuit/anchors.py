@@ -1,4 +1,4 @@
-"""The anchored inputs' anchors: what each must equal, built by the verifier (the red team's X-SPC-72).
+"""The anchored inputs' anchors: what each must equal, built by the verifier.
 
 `ncp-v2`'s index binding is Program inputs, so each needs an anchor the verifier owns:
 

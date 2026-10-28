@@ -33,7 +33,8 @@ from verity.core.protocols.certifier.active import (
 from verity.core.protocols.certifier.audit import Audit, Verdict
 from verity.core.protocols.certifier.calibration import choose_syncs
 from verity.core.protocols.certifier.commitment import commit
-from verity.core.protocols.certifier.grid import GridParams, Reason, Certifier, occupancy, row_count
+from verity.core.protocols.certifier.grid import GridParams, Reason, Record, Status, Certifier, occupancy, row_count
+from verity.core.protocols.certifier.pacer import Report
 from verity.core.protocols.certifier.schedule import (
     ClockSync,
     LogicalFrame,
@@ -931,6 +932,63 @@ def test_a_frame_late_past_every_sync_is_rejected(honest_run):
     assert late_wire != wire
 
 
+def test_a_paced_proxys_pacer_writes_its_records_buckets_and_one_it_got_late_faults_its_window(honest_run):
+    """With `paced`, the pacer writes every egress bucket, in order, and reports each. On the injected clock a
+    bucket's time (origin 0, on the host's monotonic clock) has long passed when its tick hands it, so each reaches the
+    pacer late and every egress window fails closed (`monitor-unavailable`), each record published once its last
+    bucket's report is in. The wire is the records' grids, and the ingress records are the unpaced run's."""
+    async def reported(proxy, t):
+        await proxy.until(lambda p: len(p.releases) > t)
+
+    paced, wire = asyncio.run(replay(honest(), probe=reported, paced=0.05))
+    assert [r.t for r in paced.releases] == list(range(WINDOWS * EGRESS.buckets))
+    assert all(r.written and 0 < r.arrived <= r.start for r in paced.releases)
+    egress = [r for r in paced.records if r.link == "responses"]
+    assert [(r.window, r.status.reason) for r in egress] == [(w, Reason.MONITOR_UNAVAILABLE) for w in range(WINDOWS)]
+    assert wire == b"".join(b"".join(row[: row_count(row)]) + bytes((EGRESS.allocation - row_count(row)) * B)
+                            for r in egress for row in r.grid)
+    assert [r for r in paced.records if r.link == "requests"] == \
+        [r for r in honest_run[0].records if r.link == "requests"]
+
+
+def test_a_pacers_report_faults_the_open_window_or_the_record_held_for_a_closed_one():
+    """A report faults its bucket's window: the open window's certifier, or the record held for a window that closed
+    before its last bucket's writes were reported, published then with its first fault kept. A bucket that reached the
+    pacer in time and whose release started within the slack faults nothing; one that reached it late, or whose release
+    started past the slack, is `monitor-unavailable` at its release's report, and one the link refused
+    `delivery-refused` at its writes'."""
+    clock, T = VirtualClock(), EGRESS.buckets
+    proxy = Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests",
+                  clock=clock, sleep=clock.sleep, paced=0.05)
+
+    def both(t: int, arrived: float, start: float, written: bool) -> None:
+        proxy._report(Report(t, arrived, start, None, True))
+        proxy._report(Report(t, arrived, start, start + 0.001, written))
+
+    proxy._unwritten[0] = 2
+    both(0, -0.04, 0.0, True)
+    assert proxy.shaper.certifier._fault is None
+    proxy._report(Report(1, 0.001, 0.001, None, True))
+    assert proxy.shaper.certifier._fault is Reason.MONITOR_UNAVAILABLE
+    record = Record("responses", 1, ((None,) * EGRESS.allocation,) * T, Status())
+    held = {1: record, 2: dataclasses.replace(record, window=2, status=Status(Reason.OVERFLOW)),
+            3: dataclasses.replace(record, window=3)}
+    proxy._held |= held
+    proxy._unwritten.update({1: 2, 2: 1, 3: 1})
+    both(T, -0.04, 0.0, True)
+    assert proxy.records == []
+    proxy._report(Report(2 * T - 1, -0.04, 0.03, None, True))
+    assert proxy.records == []
+    proxy._report(Report(2 * T - 1, -0.04, 0.03, 0.031, True))
+    both(3 * T - 1, -0.04, 0.0, False)
+    both(4 * T - 1, -0.04, 0.0, False)
+    assert proxy.records == [dataclasses.replace(record, status=Status(Reason.MONITOR_UNAVAILABLE)), held[2],
+                             dataclasses.replace(held[3], status=Status(Reason.DELIVERY_REFUSED))]
+    assert not proxy._held and len(proxy.releases) == 5
+    with pytest.raises(ValueError, match="past the slack"):
+        Proxy(("127.0.0.1", 9), EGRESS, INGRESS, SYNC_SET, SYNCS, origin=0.0, ingress_link="requests", paced=0.025)
+
+
 SECRET, SESSION = bytes(range(aead.SECRET_BYTES)), b"session 1"
 
 
@@ -948,7 +1006,7 @@ def test_a_sealed_pair_link_carries_only_ciphertext_and_every_record_is_the_unse
     bucket, padding sealed too, so it holds no frame's bytes and no run of zeros, and opened in order under the
     egress direction's keys it is the unsealed run's wire, byte for byte. The same secret seals the run to the same
     wire, and another secret to another wire with the same records. Without a pair (the default) the proxy is
-    today's."""
+    unsealed."""
     plain, plain_wire = honest_run
     pair, sealer = pair_halves()
     proxy, wire = asyncio.run(replay(honest(), pair=pair, sealer=sealer))
@@ -1186,7 +1244,7 @@ def test_a_requests_frames_and_signed_records_are_its_token_counts_whatever_its_
 
 
 def registration(window: int, provenance: dict | None = None) -> Registration:
-    """A stand-in for the proof service's registration of PoUW window `window` (`Stream.register`'s): a record whose
+    """A stand-in for the proof system's registration of PoUW window `window` (`Stream.register`'s): a record whose
     provenance names the window, with its receipt and digest."""
     record = {"window": {"kind": "served", "window": window} if provenance is None else provenance}
     return Registration(record, R.receipt(record, "test", received=str(window)), R.digest(record), window)
@@ -1302,7 +1360,7 @@ def test_one_salt_per_pouw_window_of_its_width(honest_run):
 
 
 def test_reveal_takes_the_windows_registration_and_fails_closed_without_it():
-    """`reveal(p, registration)` gives PoUW window p's salt only on the registration the proof service returned for p.
+    """`reveal(p, registration)` gives PoUW window p's salt only on the registration the proof system returned for p.
     It refuses none, another window's, a receipt or digest that isn't the record's, a receipt of another format, a
     provenance the reader (`registered`) doesn't read as p, and anything that isn't a `Registration`; a window whose
     last ingress record is unpublished; and one whose salt a proxy back from maintenance never drew. A reader the
@@ -1685,7 +1743,7 @@ def test_reveals_over_the_endpoint_beside_a_run_are_signed_both_ways_and_given_o
 
 def test_two_runs_on_one_link_name_neither_take_nor_give_each_others_reveals(tmp_path):
     """Two proxies with the same ingress link name, certifier key (one signer, as a certifier restarted on its host
-    holds it) and PoUW window, in runs `RUN` and `OTHER_RUN` (RT4-INT-3: their p's collide): a request the challenger
+    holds it) and PoUW window, in runs `RUN` and `OTHER_RUN` (their p's collide): a request the challenger
     signed for one run is refused by the other and spends nothing there, and each answer names its own run and
     verifies for it and not for the other, so a consumer keying on (key id, run id, p) never takes one for the other.
     A `RemoteCertifier` refuses another run's answer that an endpoint replays whole, or relabels with its run, and

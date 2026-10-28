@@ -14,10 +14,10 @@ from verity_vllm.check.match import split_selects
 from verity_vllm.check.match import supplied_inputs as SI
 from verity_vllm.check.match.canonical_operands import as_progression as _asP, weight_field_name as _field_name
 from verity_vllm.check.match.peer_reads import PeerReads
-from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  # [R15 stoch] the step-boundary families
+from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event  # the step-boundary families
 
 PAD_SPECS = ("Const", "I32Eq_v1", "BitNot_v1", "BitAnd_v1", "SelectI32_v1", "SelectBf16_v1")
-# [R16 stoch/global, COORD M-0169 (4)] the derived top-p split count S: the fold emits it as `Const32[S]` "splits", the 6th operand
+# the derived top-p split count S: the fold emits it as `Const32[S]` "splits", the 6th operand
 # (index 5) of the top-p select, the one sampling event with a 6th operand (patterns.TokenSelectGumbelTopP._stage3); the request Program
 # takes it as the request-owned INPUT `splits` (int32 [T+1], after the seed) and event s reads `splits[s:s+1]` (vllm_meta.StochasticRequest).
 # compare BINDS the two: the fold's constant at the request's event s IS the value of the Program's input entry s -- canonicalised
@@ -47,7 +47,7 @@ def _registry():
 class Prog(PeerReads, PX.PrefixInput):
     """A decoded root body as an instance sequence."""
 
-    compact = False   # operand representation: runs (record) | run progressions ([R17 mfast] cb_a.compact); set per instance in __init__
+    compact = False   # operand representation: runs (record) | run progressions (cb_a.compact); set per instance in __init__
     fold_form: dict | None = None   # a fold's `compiler_form.fold_in_form` record, set by its loader's caller
 
     def __init__(self, label: str, desc: dict, weight_fields: dict[int, str], tok_node: int, oracle_rows: list[dict] | None = None,
@@ -59,7 +59,7 @@ class Prog(PeerReads, PX.PrefixInput):
         self.inputs: dict[int, tuple[str, int]] = {}
         self.inst: list[dict] = []  # k, spec, form, args=[runs | progressions], out
         if self.compact:
-            # [R17 mfast] the root body read straight from the descriptor JSON into run progressions: no Node / Coll / Refs objects for
+            # the root body read straight from the descriptor JSON into run progressions: no Node / Coll / Refs objects for
             # the root, no per-row expansion of a Strided (compact.lean_root; the non-root Definitions are decoded as decode_program does)
             from verity_vllm.program.compact import lean_root
             lr = lean_root(desc, _registry())
@@ -86,7 +86,7 @@ class Prog(PeerReads, PX.PrefixInput):
                 self.inst.append({"k": k, "spec": fid if n.form != "batch" else f"batch:{fid}", "form": n.form,
                                   "args": [runs(a.refs) for a in n.args], "out": str(n.out)})
             # the decoded IR (node objects + Refs trees, O(LP^2) leaves for a long prefill's K/V gathers) is not retained: comparisons read
-            # `inst` only, and keeping it doubled the resident Program (GM-01 > 351 GiB at LP 4096, M-0815).  `n_nodes` keeps the count.
+            # `inst` only, and keeping it doubled the resident Program (GM-01 > 351 GiB at LP 4096).  `n_nodes` keeps the count.
             self.n_nodes = len(body.nodes)
             self.nodes = None
             self.param_names = [n for n, _ in getattr(body, "params", ())]   # empty for a lowered root; kept for callers that inspect it
@@ -94,7 +94,7 @@ class Prog(PeerReads, PX.PrefixInput):
         if len(self.inst) > 50_000:   # the decoded body is a reference cycle (nodes <-> body); collect it now, not at an arbitrary later point
             import gc
             gc.collect()
-        # [R15 stoch] the seed parameters (a stochastic Program's declared runtime inputs: the request wrapper's `seed`, the fold's
+        # the seed parameters (a stochastic Program's declared runtime inputs: the request wrapper's `seed`, the fold's
         # `seed_<i>` per seeded request in request order, fold._header) are lowered to `Input64_v1` batch nodes of one 64-bit value
         # (the root's params are lowered to Input batches, `program._lower_root`; names are not kept).  They canonicalise as
         # ("SEED", lo, hi) on both sides; `seed_index[k]` = the ordinal of seed node k = the index of the request it belongs to.
@@ -104,7 +104,7 @@ class Prog(PeerReads, PX.PrefixInput):
         self.seed_index = {k: i for i, k in enumerate(seed_in)}
         self.weight_fields = weight_fields  # input node index -> field name
         self.tok_node = tok_node
-        # [R17 D90] the request's PEER inputs (a TP rank Program's `peers_<k>` = the other rank's partial of its k-th collective, issue order):
+        # the request's PEER inputs (a TP rank Program's `peers_<k>` = the other rank's partial of its k-th collective, issue order):
         # `peer_fields[node]` = sorted [(leaf offset, k)] of the fields the Input node holds -- the derived Program lowers one Input per
         # `peers_<k>` (one field at offset 0), the fold ONE homogeneous Record per request (its fields at increasing offsets, program.json
         # `peers_layout`).  A read canonicalises as ("PEER", k, lo, hi) with lo/hi relative to the field on BOTH sides.  Set by the loaders.
@@ -145,7 +145,7 @@ class Prog(PeerReads, PX.PrefixInput):
                         if run[0] == "n":
                             readers[run[1]] += 1
         else:
-            # [R17 mfast] Only the reader counts of the CANDIDATE constants are consulted below (a Const32 instance read as a select's splits
+            # Only the reader counts of the CANDIDATE constants are consulted below (a Const32 instance read as a select's splits
             # operand), so count per progression: a progression over one node (dI == 0) is `count` reads of it; a node-index progression
             # (dI != 0: the gathers, 97 % of all runs) is one read of every candidate it visits -- found by bisection in the sorted
             # candidates instead of enumerating its runs.  Exactly the record's per-run count on every consulted key.
@@ -216,7 +216,7 @@ class Prog(PeerReads, PX.PrefixInput):
         steps, cur = [], []
         for i, r in enumerate(self.inst):
             cur.append(i)
-            if _is_sampling_event(r["spec"]):   # [R15 stoch] TokenSelect_v1 | GumbelTopPTokenSelect_v1 | GumbelTokenSelect_v1
+            if _is_sampling_event(r["spec"]):   # TokenSelect_v1 | GumbelTopPTokenSelect_v1 | GumbelTokenSelect_v1
                 steps.append(cur)
                 cur = []
         if cur:
@@ -226,7 +226,7 @@ class Prog(PeerReads, PX.PrefixInput):
         for s, idxs in enumerate(steps):
             for j, i in enumerate(idxs):
                 self.i2step[i] = (s, j)
-        # [R17 mfast] for the compact canon: `_eq_until[s]` = the last step t >= s such that steps s..t all have len(steps[s]) instances
+        # for the compact canon: `_eq_until[s]` = the last step t >= s such that steps s..t all have len(steps[s]) instances
         # (a gather whose producers are one per step maps uniformly across equal-sized steps)
         n = len(steps)
         eq = [0] * n
@@ -255,7 +255,7 @@ class Prog(PeerReads, PX.PrefixInput):
             return out
         for ai, a in enumerate(r["args"]):
             if bound and ai == SPLITS_OPERAND:
-                # [M-0169 (4)] the fold's Const32[S] at this select = the Program's `splits` input entry of the same event ordinal
+                # the fold's Const32[S] at this select = the Program's `splits` input entry of the same event ordinal
                 e = self.i2step[i][0]
                 out.append([("SPLITS", e, e + 1)])
                 continue
@@ -285,7 +285,7 @@ class Prog(PeerReads, PX.PrefixInput):
             if idx0 in getattr(self, "splits_nodes", ()):
                 return [("SPLITS", (lo0, hi0), (dL, dH), c)]
             if idx0 in getattr(self, "peer_fields", ()):
-                return self._peer_srcP(p, unfold)   # [R17 D90] the k-th received-collective peer input of the request
+                return self._peer_srcP(p, unfold)   # the k-th received-collective peer input of the request
             if idx0 in self.pfx:
                 return self._pfx_srcP(p, unfold)
             if idx0 in getattr(self, "witness_fields", ()):
@@ -352,9 +352,9 @@ class Prog(PeerReads, PX.PrefixInput):
             if idx in self.seed_nodes:
                 return ("SEED", lo, hi)
             if idx in getattr(self, "splits_nodes", ()):
-                return ("SPLITS", lo, hi)   # [M-0169 (4)] the request-owned derived split count, entry per sampling event
+                return ("SPLITS", lo, hi)   # the request-owned derived split count, entry per sampling event
             if idx in getattr(self, "peer_fields", ()):
-                return self._peer_src(idx, lo, hi)   # [R17 D90] the k-th received-collective peer input of the request
+                return self._peer_src(idx, lo, hi)   # the k-th received-collective peer input of the request
             if idx in self.pfx:
                 return self._pfx_src(idx, lo, hi)
             if idx in getattr(self, "witness_fields", ()):
@@ -362,7 +362,7 @@ class Prog(PeerReads, PX.PrefixInput):
             if idx in self.weight_fields:
                 return ("W", _field_name(self.weight_fields[idx]), lo, hi)
             wr = getattr(self, "oracle_wmap", None)
-            if wr:  # locate the field range containing lo (offsets are Record-global: node base + in-node offset, [R15 fp8])
+            if wr:  # locate the field range containing lo (offsets are Record-global: node base + in-node offset,)
                 import bisect
                 b0 = getattr(self, "input_base", {}).get(idx, 0)
                 glo, ghi = lo + b0, hi + b0
@@ -376,7 +376,7 @@ class Prog(PeerReads, PX.PrefixInput):
             # follow the live branch: SelectI32(live, y, pad) / batch(SelectBf16, live, row, zero) -> operand 1
             live_arg = self.inst[j]["args"][1]
             if len(live_arg) == 1 and live_arg[0][0] == "n":
-                if self.compact:   # [R17 mfast] one progression of exactly one run, else not the single-run live operand the rule wants
+                if self.compact:   # one progression of exactly one run, else not the single-run live operand the rule wants
                     if live_arg[0][3] != 1:
                         return ("MUX-UNFOLD-FAILED", j, lo, hi)
                     i2, lo2, _hi2 = live_arg[0][1]

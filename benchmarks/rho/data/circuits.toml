@@ -1,0 +1,23 @@
+# Training steps measured as Boolean circuits (rho/circuits.py): what the circuits census counts on a step's circuit and
+# what circuit_properties' measure finds of its counted products, beside the run it is one step of (data/models.toml)
+# and the structure (data/exclusion.toml) its s_x is. The runs that measured it are that structure's evidence.
+
+# SmolLM2-135M's optimizer step as TrainStep_v1 builds it: bf16 weights and activations with an f32 master copy, AdamW
+# (foreach; lr 3e-4, betas 0.9 and 0.95, eps 1e-8, weight decay 0.1), gradient clipping at 1.0, eager attention, SFT
+# cross-entropy (mean), as torch's eager kernels run it on the RTX PRO 6000 (sm_120): every product a 16-lane bf16 dot,
+# whole (HopperBF16WgmmaDot16_v2) or one K step of a split-K or batched GEMM (HopperBf16Dot16Step_v1, StepFirst_v1).
+[circuit.smollm2-135m-step]
+definition = "TrainStep_v1{L=30,B=8,S=512}"
+run = "smollm2-135m-step"
+structure = "train-step-v1"
+batch = { value = 8, unit = "sequence", source = "TrainStep_v1's B", status = "declared" }
+seq_len = { value = 512, unit = "token", source = "TrainStep_v1's S", status = "declared" }
+gates = { value = 3119517145616196, unit = "gate", source = "TrainStep_v1{L=30,B=8,S=512}'s gates (AND, XOR and NOT), the circuits census's (verity.ml.circuits.census) count by class: 2,678,375,243,722,752 in tensor-core dots, 441,139,404,615,942 in CUDA-core gates", status = "measured" }
+ands = { value = 1032863473843566, unit = "gate", source = "TrainStep_v1{L=30,B=8,S=512}'s AND gates, the circuits census's count by class: 879,553,933,283,328 in tensor-core dots, 153,309,540,560,238 in CUDA-core gates", status = "measured" }
+products = { value = 1877353168896, unit = "product", source = "TrainStep_v1{L=30,B=8,S=512}'s bf16 multiply-adds, the circuits census's served MACs: 16 a dot, over 61,605,937,152 whole dots (HopperBF16WgmmaDot16_v2) and 55,728,635,904 dot steps (HopperBf16Dot16Step_v1, StepFirst_v1)", status = "measured" }
+products_steps = { value = 891658174464, unit = "product", source = "the products in TrainStep_v1's dot steps, the circuits census's count: the split-K weight gradients, the LM head's input gradient, attention's batched GEMMs and the split-K routes' padded lanes", status = "measured" }
+padded = { value = 7431782400, unit = "product", source = "the split-K routes' padded lanes in TrainStep_v1's weight gradients, the circuits census's route shapes: K_eff over 4,096 tokens of 4,192 for q and o, 4,544 for k and v, 4,128 for gate, up and down", status = "measured" }
+s_x = { value = 113, unit = "gate", source = "circuit_properties' measure (s_x) on TrainStep_v1's GEMM routes: the fewest gates in a counted product's lane-exclusive subcircuit, a dot step's lane (every split-K weight gradient and attention's batched GEMMs, products_steps)", status = "measured" }
+s_x_unsplit = { value = 681, unit = "gate", low = 681, high = 739, source = "circuit_properties' measure (s_x, s_x_max) on TrainStep_v1's unsplit GEMM routes, a whole dot's lane (HopperBF16WgmmaDot16_v2: the layers' forward and input gradients and the LM head's forward)", status = "measured" }
+a_out = { value = 49152, unit = "product", source = "circuit_properties' measure (a_out, a GEMM route's width N) on TrainStep_v1's routes: the most counted products one activation value feeds, the final norm's output into the LM head's 49,152 columns", status = "measured" }
+a_in = { value = 64, unit = "product", source = "circuit_properties' measure (a_in) on TrainStep_v1's routes: the fewest counted products summed into one output, attention's q k^T and dP over a 64-wide head (BatchedGemm_v2 at K = 64)", status = "measured" }

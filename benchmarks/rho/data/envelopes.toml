@@ -1,10 +1,11 @@
-# Layer 2, the envelopes (rho/envelopes.py): the NCI check's registration (a policy) and each regime's envelopes, one
+# Protocol soundness, the envelopes (rho/envelopes.py): the NCI check's registration (a policy) and each regime's envelopes, one
 # flat table per regime whose every key is a field of one envelope (Pouw, Detection, Wipe, Certifier) or the regime's
 # own form. A regime's `base` is a table it inherits and overrides.
 
 [policy.kimi-k2-1m-raw]
 gamma = { value = 6.4e16, unit = "FLOP", source = "benchmarks/nci/calibrations.json kimi-k2-1m-raw: 1M tokens x 2 x 32B active", status = "declared" }
 k = { value = 2e7, unit = "bit", low = 2.2e6, high = 8.8e7, source = "benchmarks/nci/calibrations.json kimi-k2-1m-raw (2.5 MB); low: kimi-k2-1m-coded; high: kimi-k2-11mb-raw", status = "declared" }
+inference_overhead = { value = nan, unit = "x", source = "not modeled: a placeholder for the honest inference workload's overhead under this partition; this package models no honest inference circuit to partition" }
 
 [regime.unmonitored]
 kind = "unmonitored"
@@ -13,10 +14,10 @@ kind = "unmonitored"
 # PoUW: residual, clock_share, host, eps_w, eps_agg, window_delta_*; detection: identities, lag_s (and, sampled, the rest).
 [regime.remote]
 kind = "remote"
-residual = { value = 0.323, low = 0.01, high = 1, source = "benchmarks/nci/tiers.py DEFAULTS residual: the floor credit at the locked clock, honest kernels at 1.72x the floor (run r20261017-123922-e558); low: best plausible design; high: nothing credited, as in a training window today", status = "measured" }
-clock_share = { value = 0.064, low = 0, high = 0.3, source = "benchmarks/nci/tiers.py DEFAULTS clock_share: 2,597 MHz against the credited 2,430 (C4 dossier, RTX PRO 6000); low: credit at the true maximum or an auditor-read clock offset", status = "measured" }
-host = { value = 1, low = 0, high = 1, source = "benchmarks/nci/tiers.py audited_residual: the host CPUs count at their INT8 datasheet peak until something credits or bounds them; low: credited or bounded", status = "assumed" }
-eps_w = { value = 0.00744, low = 6e-4, high = 0.00917, source = "benchmarks/nci/tiers.py DEFAULTS eps_w (CircuitCredit, draft #2638); low: best plausible design (C7 dossier); high: CircuitCredit at r = 4 (exposure.RANGES)", status = "derived" }
+residual = { value = 0.323, low = 0.01, high = 1, source = "benchmarks/nci/tiers.py DEFAULTS residual: the floor credit at the locked clock, honest kernels at 1.72x the floor (measured); low: best plausible design; high: nothing credited, as in a training window today", status = "measured" }
+clock_share = { value = 0, low = 0, high = 0.3, source = "benchmarks/nci/tiers.py DEFAULTS clock_share: PoUW credits 2,430 MHz (H1's SM120 record), the ACCEL model's card table's ceiling for the RTX PRO 6000 Server Edition (Verity.Accel.Sm120), and all eight cards of a measured node (board 900-2G153-0000-000) report 2,430 MHz as their max, application, default and boost SM clock, so no capacity runs above the credited clock; the C4 dossier's 2,597 MHz is NVIDIA's family headline, not a clock this SKU reports; high: a card whose SKU or firmware reaches past its table (the premise that names them is unattested)", status = "measured" }
+host = { value = 0, source = "hosts carry no compute (GLOSSARY.md, the device model; Daniel, 27 Oct): a server's compute is its accelerators', so the host CPUs add nothing to the slowdown's free share. 1 counts them at their INT8 datasheet peak (Location.host_phi), periods.py's row without the hosts assumption", status = "ruled" }
+eps_w = { value = 0.00744, low = 6e-4, high = 0.00917, source = "benchmarks/nci/tiers.py DEFAULTS eps_w (CircuitCredit, draft); low: best plausible design (C7 dossier); high: CircuitCredit at r = 4 (exposure.RANGES)", status = "derived" }
 eps_agg = { value = 1e-4, low = 1e-6, high = 1e-3, source = "benchmarks/nci/tiers.py DEFAULTS eps_agg: per-window failure 3 x 2^-40 at the theorem's delta 2.7e-8 (Markov over the windows)", status = "derived" }
 window_delta_coin = { value = 9.09e-13, source = "CircuitCredit's per-window failure p = delta_s + delta_bind + delta_ks = 3 x 2^-40 (eps_agg's source): delta_s = 2^-40, the coins' draw", status = "derived" }
 window_delta_crypto = { value = 1.82e-12, source = "CircuitCredit's per-window failure: delta_bind + delta_ks = 2 x 2^-40, commitment binding (SHA-512) and the proof system's knowledge soundness", status = "derived" }
@@ -38,28 +39,28 @@ floor_steps = { value = 1, low = 1, high = 1e12, source = "benchmarks/nci/tiers.
 chord = { value = 5.7568542e7, unit = "product/bit", source = "benchmarks/nci/tiers.py chord at DEFAULTS and the injected bits: the steepest secant to S_1 = sqrt(2 b_w b_a Gamma), on the (1, 0) piece", status = "derived" }
 chord_kappa = { value = 0.6, source = "benchmarks/nci/tiers.py DEFAULTS kappa (the products-to-FLOP rate tiers values chi at)", status = "declared" }
 
-# The remote envelopes plus a wipe every 24 h at Daniel's operating point (5 GB per server, of its whole memory M_s), a
+# The remote envelopes plus a wipe every 24 h at the ruled operating point (5 GB per server, of its whole memory M_s), a
 # certifier on each host and side channels. Wipe: wipe_s, per, k_wipe, game_delta_coin, prf_advantage; certifier:
 # declared (off: the ingress is intake x alpha Phi; regime.onsite-w63 sets a cadence), intake, timing, side.
 [regime.onsite]
 kind = "onsite"
 base = "remote"
-wipe_s = { value = 86400, unit = "s", low = 3600, high = 604800, source = "ruling: Daniel 25 Oct, 24 h wipes", status = "ruled" }
+wipe_s = { value = 86400, unit = "s", low = 3600, high = 604800, source = "ruled: 24 h wipes", status = "ruled" }
 per = "server"
-k_wipe = { value = 4e10, unit = "bit/server", low = 2e10, high = 9.32e11, source = "ruling: Daniel 26 Oct 12:16 PM PDT, the wipe leaves at most 5 GB of the server's assumed memory capacity M_s, every tier included (the operating point; the per-server statement is memory-accounting's, Wed 28 Oct 06:00Z); low: half; high: the per-device measurement's 116.5 GB a server (8 x 10 GB of HBM and 36.5 GB of host, DPU, BMC and flash unwiped: regime.onsite-per-device)", status = "ruled" }
-game_delta_coin = { value = 2.938735877055719e-39, source = "the streamed wipe's retention game (#4707): accepted with probability at most 2^-128 + Adv_PRF; the coins' 2^-128", status = "derived" }
+k_wipe = { value = 4e10, unit = "bit/server", low = 2e10, high = 9.32e11, source = "ruled: the wipe leaves at most 5 GB of the server's assumed memory capacity M_s, every tier included (the operating point); low: half; high: the per-device measurement's 116.5 GB a server (8 x 10 GB of HBM and 36.5 GB of host, DPU, BMC and flash unwiped: regime.onsite-per-device)", status = "ruled" }
+game_delta_coin = { value = 2.938735877055719e-39, source = "the streamed wipe's retention game: accepted with probability at most 2^-128 + Adv_PRF; the coins' 2^-128", status = "derived" }
 prf_advantage = { value = 2.938735877055719e-39, source = "Adv_PRF of the streamed wipe's label function, taken at the PoUS statements' epsilon_crypto = 2^-128 (Security/Definitions/Pous/Guarantees.lean)", status = "assumed" }
 declared = false
-intake = { value = 1, unit = "x", low = 1, high = 1.3e6, source = "draft:NET-92 (Daniel 26 Oct 6:55 PM PDT): a server's ingress carries only its inference blocks' declared inputs, at most alpha Phi at full use (benchmarks/nci/tiers.py DEFAULTS intake_x); high: line rate, the upper end until NET-92's PR 5 states the per-server bits in Lean", status = "derived" }
+intake = { value = 1, unit = "x", low = 1, high = 1.3e6, source = "draft:declared-ingress: a server's ingress carries only its inference blocks' declared inputs, at most alpha Phi at full use (benchmarks/nci/tiers.py DEFAULTS intake_x); high: line rate, the upper end until Lean states the per-server bits", status = "derived" }
 timing = { value = 860, unit = "bit/s/host", low = 61.3, high = 1e4, source = "benchmarks/nci/tiers.py DEFAULTS tau: the network appendix's program format; low: the llama8b-node1 calibration's requests (51.3) and coin (10) links", status = "derived" }
-side = { value = 1e3, unit = "bit/s/host", low = 0.1, high = 1e6, source = "ruling: Daniel 25 Oct, 1 kb/s per server (benchmarks/datacenter account.py DEDICATED_RACKS sigma); range: the plausible covert channels", status = "ruled" }
+side = { value = 1e3, unit = "bit/s/host", low = 0.1, high = 1e6, source = "ruled: 1 kb/s per server (benchmarks/datacenter account.py DEDICATED_RACKS sigma); range: the plausible covert channels", status = "ruled" }
 form = "certified"
 
-# The onsite envelopes with each server's ingress at its inference blocks' declared inputs (NET-92) at the warden form's
-# W63 parameters, per link-window as the bound is stated, in its honest-delta form, with no faulty ingress unit
-# (note:network-accounting/20261027T0530Z-draft-net92-perserver-guarantee): a toy cadence (4 lanes, at most two
-# requests a lane a 3.2 s link-window), so its ingress, 0.028 alpha Phi on an H200 server at v4-pro-session, feeds the
-# serving rho credits only if outputs outnumber prompts more than 20:1. A deployment's own cadence replaces it once it
+# The onsite envelopes with each server's ingress at its inference blocks' declared inputs at the warden form's W63
+# parameters, per link-window as the bound is stated, in its honest-delta form, with no faulty ingress unit
+# (draft:per-server-ingress): a toy cadence (4 lanes, at most two requests a lane a 3.2 s link-window), so its ingress,
+# 0.028 alpha Phi on an H200 server at v4-pro-session, feeds the serving this package credits only if outputs outnumber
+# prompts more than 20:1. A deployment's own cadence replaces it once it
 # feeds that serving. declared_x: a multiple of the declared bound, at most line rate.
 [regime.onsite-w63]
 base = "onsite"
@@ -69,54 +70,54 @@ cell_rate = { value = 4, unit = "cell/lane/bucket", source = "benchmarks/network
 lanes = { value = 4, unit = "lane/server", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class lanes", status = "declared" }
 cells = { value = 47, unit = "cell/request", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class C (WardenParams ingress_cells)", status = "declared" }
 id_bits = { value = 17, unit = "bit", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class IDB", status = "declared" }
-hold = { value = 21, unit = "bucket", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class D (WardenParams delay), a lane held at least D + 1 buckets a request", status = "declared" }
+hold = { value = 27, unit = "bucket", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class D (WardenParams delay), a slot held D + 1 buckets from its admission", status = "declared" }
 outputs = { value = 64, unit = "id/request", source = "benchmarks/network_traces/scan_zk.py W63: IS.Class KO", status = "declared" }
 bucket_s = { value = 0.1, unit = "s", source = "benchmarks/network_traces/scan_zk.py W63: WardenParams bucket_ms", status = "declared" }
-window_buckets = { value = 32, unit = "bucket", source = "benchmarks/network_traces/scan_zk.py W63: WardenParams window, a link-window's buckets, the length PR 5's windowBits is stated per", status = "declared" }
-declared_x = { value = 1, unit = "x declared", low = 1, high = 1e8, source = "ruling: Daniel 26 Oct 6:55 PM PDT (NET-92), a server's ingress carries only its inference blocks' declared inputs (draft:NET-92, note:network-accounting/20261027T0220Z-finding-net92-plan); high: line rate, the upper end until NET-92's PR 5 states the per-server bits in Lean (the ingress is at most the location's links, 5.3e7 x the declared bound on a server and 2.7e7 x on a GB200 tray)", status = "ruled" }
+window_buckets = { value = 32, unit = "bucket", source = "benchmarks/network_traces/scan_zk.py W63: WardenParams window, a link-window's buckets, the length the per-server bound's windowBits is stated per", status = "declared" }
+declared_x = { value = 1, unit = "x declared", low = 1, high = 1e8, source = "ruled: a server's ingress carries only its inference blocks' declared inputs (draft:declared-ingress); high: line rate, the upper end until Lean states the per-server bits (the ingress is at most the location's links, 5.3e7 x the declared bound on a server and 2.6e7 x on a GB200 tray)", status = "ruled" }
 
-# Today's wipe: about 12 GB a server, every tier but the boot disk, which it doesn't reach. memory-accounting's Tuesday
-# measurement decides whether the 5 GB of regime.onsite is reached.
+# Today's wipe: about 12 GB a server, every tier but the boot disk, which it doesn't reach. A measurement of the wipe
+# decides whether the 5 GB of regime.onsite is reached.
 [regime.onsite-today]
 base = "onsite"
-k_wipe = { value = 9.6e10, unit = "bit/server", low = 4e10, high = 9.32e11, source = "today's wipe, about 12 GB a server, as the training lane's coordinator relayed it (26 Oct; memory-accounting's Tuesday measurement decides whether 5 GB is reached); low: Daniel's 5 GB; high: the per-device measurement's 116.5 GB a server", status = "assumed" }
+k_wipe = { value = 9.6e10, unit = "bit/server", low = 4e10, high = 9.32e11, source = "today's wipe, about 12 GB a server (a measurement of the wipe decides whether 5 GB is reached); low: the ruled 5 GB; high: the per-device measurement's 116.5 GB a server", status = "assumed" }
 boot_disk_bits = { value = 1.536e13, unit = "bit/server", low = 0, high = 3.072e13, source = "NVIDIA DGX H200 datasheet: the OS on 2 x 1.92 TB NVMe M.2, mirrored, taken whole as what today's wipe leaves there; pending a datasheet reading or a measurement of what the wipe reaches; low: a wipe that reaches it; high: the two drives written apart", status = "assumed" }
 
-# The sensitivity: per device on HBM only, with each host's memory, DPU, BMC and flash unwiped (10 GB a device, measured
-# 26 Oct).
+# The sensitivity: per device on HBM only, with each host's memory, DPU, BMC and flash unwiped (10 GB a device,
+# measured).
 [regime.onsite-per-device]
 base = "onsite"
 per = "device"
-residual_bits = { value = 8e10, unit = "bit/device", low = 4e10, high = 1.6e11, source = "memory-accounting r20261026-003454-bfd2: 10 GB per H200 today (7.8 fill floor + 2.3 driver reserve + 0.1 chip); low: Daniel's 5 GB per device target", status = "measured" }
+residual_bits = { value = 8e10, unit = "bit/device", low = 4e10, high = 1.6e11, source = "measured: 10 GB per H200 today (7.8 fill floor + 2.3 driver reserve + 0.1 chip); low: the ruled 5 GB per device target", status = "measured" }
 host_residual_bits = { value = 2.92e11, unit = "bit/host", low = 0, high = 1.2e12, source = "benchmarks/nci/tiers.py unfilled_gb less the GPUs': the 29.5 GB host gap and about 7 GB of DPU, BMC and flash; low: a fill that reaches it; high: 150 GB", status = "measured" }
 
-# Per device at Daniel's earlier 5 GB a device target, the host still unwiped.
+# Per device at the earlier ruled 5 GB a device target, the host still unwiped.
 [regime.onsite-5gb]
 base = "onsite-per-device"
-residual_bits = { value = 4e10, unit = "bit/device", low = 2e10, high = 8e10, source = "ruling: Daniel's 5 GB per device target; high: today's 10 GB", status = "ruled" }
+residual_bits = { value = 4e10, unit = "bit/device", low = 2e10, high = 8e10, source = "ruled: 5 GB per device target; high: today's 10 GB", status = "ruled" }
 
 # What Lean proves today: Windows, every server's whole memory M_s and the location's line rate over the window.
 [regime.onsite-links]
 base = "onsite"
 form = "links"
 
-# PoUW as deployed on the demo H200: per-call J10-R (CMP-126) on vy-dc-h200-2, every static INT8 matmul a unit (f = 1),
-# credit all or nothing per period (H1J10RCheckedCreditPeriod, #4541), which credits words, not time. C is the H200's
-# INT8 tensor capacity over the step (9.894e14 MACs/s, benchmarks/pouw/machine_model sm_90 theta's sheet figure at the
-# 1,830 MHz tensor clock Phi is quoted at); W_cert the step's served MACs at batch 4,096. clock_share and host are
-# provisional: compute-research's card table (CMP-165) supersedes them. The remote and onsite-today H200 regimes carry
-# the same three keys (tests/test_envelopes.py holds them).
+# PoUW as deployed on the demo H200: per-call J10-R, every static INT8 matmul a unit (f = 1), credit all or nothing
+# per period (H1J10RCheckedCreditPeriod), which credits words, not time, so no clock is credited. C is the H200's INT8
+# tensor capacity over the step at the ACCEL model's card table (Verity.Accel.H200:
+# 4,096 MACs a SM-clock on 132 SMs at the clock's ceiling, 1,980 MHz, 1.0705e15 MACs/s), so the clock term is 0; W_cert
+# the step's served MACs at batch 4,096. host is 0: hosts carry no compute. The remote and onsite-today H200 regimes carry the same
+# three keys (tests/test_envelopes.py holds them).
 [regime.remote-h200-pouw]
 base = "remote"
-residual = { value = 0.954, low = 0, high = 1, source = "1 - W_cert/C on vy-dc-h200-2 at batch 4,096: W_cert = 5.722e14 MACs a step (52 layers x 2.686e9 + the head's 4.19e6 MACs a token, x 4,096) over C = 12.60 s x 9.894e14 MACs/s, so 4.6% credited. The step: #4562's served step 3.78 s (r20261026-030611-8b64: forward 3.22 + attention 0.56), the commit at 1 KiB rows +0.42 s (#4915's KCOMMIT, r20261027-004614-d98c), PoUW's units 5.59 s and their commit 2.81 s (kraqwxsc, r20261026-113133-5cb4, steps 1-2). The same run's commit-bound 82.94 s step (FAMILIES' slot commit holding the forward at about 75 s, CMP-96) gave 0.993. low: PoUW fills the GPU with credited work at the tensor rate (0.237 at the served wgmma's measured 76% of the sheet, r20261026-023715-dd1e); high: nothing credited (the run's credit is blocked on #4654's lanes and CMP-127)", status = "measured" }
-clock_share = { value = 0.082, low = 0, high = 0.082, source = "provisional, superseded by compute-research's card table (CMP-165), which takes the clock at the SKU's true maximum: here f_max 1,980 MHz over the 1,830 MHz tensor clock Phi is quoted at, 1980/1830 - 1 (J10-R credits words, so no clock is credited); low: the clock at the true maximum or auditor-read", status = "assumed" }
-host = { value = 1, low = 0, high = 1, source = "provisional, superseded by compute-research's card table (CMP-165), the host at a measured peak: nothing credits or bounds the hosts (J10-R credits GPU words only), 2.9% of Phi at location.h200-hgx's two Xeon 8480Cs; low: credited or bounded", status = "assumed" }
+residual = { value = 0.958, low = 0, high = 1, source = "1 - W_cert/C on the demo H200 server at batch 4,096: W_cert = 5.722e14 MACs a step (52 layers x 2.686e9 + the head's 4.19e6 MACs a token, x 4,096) over C = 12.60 s x 1.0705e15 MACs/s (the ACCEL card table's 1,980 MHz ceiling; 0.954 at the sheet's 1,830 MHz), so 4.2% credited. The step, measured: the served step 3.78 s (forward 3.22 + attention 0.56), the commit at 1 KiB rows +0.42 s, PoUW's units 5.59 s and their commit 2.81 s. A commit-bound 82.94 s step (the slot commit holding the forward at about 75 s) gives 0.993. low: PoUW fills the GPU with credited work at the tensor rate (0.298 at the served wgmma's measured 76% of the sheet's 1,830 MHz rate, over the table's 1,980); high: nothing credited", status = "measured" }
+clock_share = { value = 0, low = 0, high = 0.082, source = "the ACCEL model's card table (Verity.Accel.H200): C counts the tensor at 1,980 MHz, the H200 SXM's clock ceiling (H100 whitepaper V1.04 Table 3 boost clock; the driver's maximum on the demo H200 servers, with memory at 3,201 MHz and 700 W), and J10-R credits words, not a clock (H1J10RCheckedCreditPeriod), so no capacity runs above what C counts; high: C at the sheet's 1,830 MHz tensor clock (H1's SM90 record tensor_mhz), 1980/1830 - 1", status = "datasheet" }
+host = { value = 0, source = "as regime.remote host: hosts carry no compute; 1 would add location.h200-hgx's two Xeon 8480Cs at 2.9% of Phi (J10-R credits GPU words only)", status = "ruled" }
 
 [regime.onsite-today-h200-pouw]
 base = "onsite-today"
-residual = { value = 0.954, low = 0, high = 1, source = "as regime.remote-h200-pouw residual", status = "measured" }
-clock_share = { value = 0.082, low = 0, high = 0.082, source = "as regime.remote-h200-pouw clock_share (provisional, CMP-165 supersedes)", status = "assumed" }
-host = { value = 1, low = 0, high = 1, source = "as regime.remote-h200-pouw host (provisional, CMP-165 supersedes)", status = "assumed" }
+residual = { value = 0.958, low = 0, high = 1, source = "as regime.remote-h200-pouw residual", status = "measured" }
+clock_share = { value = 0, low = 0, high = 0.082, source = "as regime.remote-h200-pouw clock_share", status = "datasheet" }
+host = { value = 0, source = "as regime.remote-h200-pouw host", status = "ruled" }
 
 # Wipes and certifiers with nothing credited: the serving cut alone.
 [regime.onsite-no-pouw]

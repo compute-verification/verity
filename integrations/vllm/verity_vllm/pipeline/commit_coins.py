@@ -1,39 +1,37 @@
-"""The Commit's coins from the auditor host's challenger (VLLM-17, CIR-72): one session a Commit, which draws its openings
+"""The Commit's coins from the auditor host's challenger: one challenge phase a Commit, which draws its openings
 and its served C2 replay challenge after each run's root of record.
 
 * **Serving** (the Commit's ``--challenger-gate CMD`` and ``--challenger-peer NAME``; `of_options`): before its engine,
-  the Commit reserves a session on infra's challenger gate (`Gate`: ``reserve --peer NAME --scheme SCHEME --families
-  families(runs)``, `benchmarks/live_challenger/auditor.py` on the auditor host, under the lane's own gate key). Once its
+  the Commit reserves a challenge phase on the auditor's challenger gate (`Gate`: ``reserve --peer NAME --scheme SCHEME --families
+  families(runs)``, `benchmarks/live_challenger/auditor.py` on the auditor host, under the caller's own gate key). Once its
   first instrumented run's root of record is fixed (rows-sha512's 64-byte root, `commit.step_rows`; a TP Commit's run
-  root v2, `tp.run_root`), it opens that session on it (``open --session S --root R``): the gate signs the open entry
-  binding the session to the root before the challenger serves a coin, and refuses a second session for the root, ever.
+  root v2, `tp.run_root`), it opens that challenge phase on it (``open --session S --root R``): the gate signs the open entry
+  binding the challenge phase to the root before the challenger serves a coin, and refuses a second challenge phase for the root, ever.
   The Commit then reaches the challenger on its own 127.0.0.1 (this machine's certifier coin link), refuses one whose coin
   commitment isn't the gate's answer before its first coin (`pouw_h1_window.connect`), and for run i opens coin i of
-  each family in `FAMILIES` after run i's root (`Session.draw`); it closes the session after its last run. The draws
+  each family in `FAMILIES` after run i's root (`Session.draw`); it closes the challenge phase after its last run. The draws
   derive from the coins (`verity.ml.randomness.derive`): opening positions (`positions`) and population identities
   (`identities`) from `POSITIONS` and `IDENTITIES`, and the served C2 replay's challenge (`replay_challenge`) is the
   `REPLAY` coin.
 * **Without a gate** each run's coins are this process's own bytes (``source`` ``in-process``): the run is a measurement,
   and its coins credit nothing, as H1's in-process coins (`pouw_h1_challenger.session_reason`). ``--replay-challenge``
   still names the C2 replay's challenge there (``source`` ``flag``).
-* **Checking** (`reason`): the verifier reads the auditor's signed ledger as infra published it (every head,
-  `challenger.ledger_head`), the one session it opens for the Commit's root, run from a commit the host's pins log
+* **Checking** (`reason`): the verifier reads the auditor's signed ledger as published (every head,
+  `challenger.ledger_head`), the one challenge phase it opens for the Commit's root, run from a commit the host's pins log
   records on the verifier's own first-parent history of main (`challenger.pinned_session`, the log's heads read by
-  `pouw_h1_challenger.pins_head`, main's history by `remote.main_lines`), and that session's files from the gate's ``fetch`` (never the prover's bundle) under the key the deployment pins
+  `pouw_h1_challenger.pins_head`, main's history by `remote.main_lines`), and that challenge phase's files from the gate's ``fetch`` (never the prover's bundle) under the key the deployment pins
   (`remote.trusted_session`): the coin commitment the challenger signed and the roots its signed release log shows it
-  received. The Commit's session must be that session, its coins that commitment's, and the log must show each run's
-  coin of each family released after that run's root of record: coins held in the Commit's process, a session opened on
-  another root, a second session for the Commit's root, a coin drawn before its root and a ledger cut before the
-  session's end are refused.
+  received. The Commit's challenge phase must be that challenge phase, its coins that commitment's, and the log must show each run's
+  coin of each family released after that run's root of record: coins held in the Commit's process, a challenge phase opened on
+  another root, a second challenge phase for the Commit's root, a coin drawn before its root and a ledger cut before the
+  challenge phase's end are refused.
 """
 from __future__ import annotations
 
 import json
 import secrets
 import shlex
-import socket
 import subprocess
-import time
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
@@ -52,7 +50,7 @@ ROOT_BYTES = remote.ROOT_BYTES
 
 
 def families(runs: int) -> list[list[Any]]:
-    """The session's layout for a Commit of `runs` instrumented runs: a coin of each family a run."""
+    """The challenge phase's layout for a Commit of `runs` instrumented runs: a coin of each family a run."""
     return [[f, int(runs)] for f in FAMILIES]
 
 
@@ -95,20 +93,8 @@ class Gate:
         return p.returncode, p.stdout
 
 
-def _connect(at: str, given: Mapping[str, Any], tries: int = 60) -> Any:
-    """`pouw_h1_window.connect`, retried while the session's port on this machine comes up."""
-    for i in range(tries):
-        try:
-            return PHW.connect(at, given)
-        except (ConnectionRefusedError, socket.timeout):
-            if i == tries - 1:
-                raise
-            time.sleep(1)
-    raise AssertionError("unreachable")
-
-
 class Session:
-    """The Commit's session on the auditor host's challenger: reserved for `runs` runs (`reserve`), opened on the first
+    """The Commit's challenge phase on the auditor host's challenger: reserved for `runs` runs (`reserve`), opened on the first
     run's root of record (`draw` of run 0), a coin of each family a run, closed after the last (`close`)."""
 
     def __init__(self, gate: Gate, reserved: Mapping[str, Any], runs: int, address: Callable[[int], str] | None = None) -> None:
@@ -133,7 +119,7 @@ class Session:
             self.given = PHC.session_of({k: v for k, v in answer.items() if k in (*PHC.SESSION_FIELDS, *PHC.REPLY_FIELDS)})
         except ValueError as e:
             raise CoinError(f"the challenger gate's open answer: {e}") from e
-        self.client = _connect(self._address(int(answer["port"])), self.given)
+        self.client = PHW.connect(self._address(int(answer["port"])), self.given)
         c = self.client.commitment
         if c.scheme != SCHEME or [list(f) for f in c.families] != families(self.runs):
             self.close()
@@ -141,7 +127,7 @@ class Session:
                             f"{families(self.runs)}")
 
     def draw(self, root: bytes) -> dict[str, Any]:
-        """The next run's coins, coin i of each family opened after its root of record `root` (the session opened on run
+        """The next run's coins, coin i of each family opened after its root of record `root` (the challenge phase opened on run
         0's), and its record (`record_of`)."""
         root = bytes(root)
         if len(root) != ROOT_BYTES:
@@ -158,7 +144,7 @@ class Session:
                 "openings": {f: o.to_json() for f, o in openings.items()}}
 
     def close(self) -> str | None:
-        """Close the session (the gate's end entry then seals it); why it didn't close cleanly, or None."""
+        """Close the challenge phase (the gate's end entry then seals it); why it didn't close cleanly, or None."""
         if self.client is None:
             return None
         client, self.client = self.client, None
@@ -170,7 +156,7 @@ class Session:
 
 
 def of_options(args: Any, runs: int, gate_run: Run | None = None) -> Session | None:
-    """The Commit's session from its ``--challenger-gate`` and ``--challenger-peer`` (reserved now, before any root), or
+    """The Commit's challenge phase from its ``--challenger-gate`` and ``--challenger-peer`` (reserved now, before any root), or
     None without a gate; `SystemExit` when they don't go together."""
     gate, peer = getattr(args, "challenger_gate", None), getattr(args, "challenger_peer", None)
     if bool(gate) != bool(peer):
@@ -246,10 +232,10 @@ def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Seq
            main: Sequence[str] | None) -> str | None:
     """Why the Commit's coins (`runs`, each instrumented run's ``coins`` record, in order) aren't the auditor host's
     challenger's, drawn after `roots` (each run's root of record as the verifier holds it); None when they are. The
-    session is read from `directory` (its ``out/`` from the gate's ``fetch``) and the ledger from `heads` (every head infra
+    challenge phase is read from `directory` (its ``out/`` from the gate's ``fetch``) and the ledger from `heads` (every head
     published, each a ``windows.jsonl``), under `key`, the challenger key the deployment pins, the host's pins log
-    from `pins` (every head infra published, each a ``pins.jsonl``) and `main`, the verifier's own first-parent history
-    of main (``git rev-list --first-parent origin/main``), which must hold the session's pin. Fails closed."""
+    from `pins` (every head published, each a ``pins.jsonl``) and `main`, the verifier's own first-parent history
+    of main (``git rev-list --first-parent origin/main``), which must hold the challenge phase's pin. Fails closed."""
     if not runs or len(runs) != len(roots):
         return f"the Commit's coins name {len(runs)} runs' draws, not one for each of its {len(roots)} runs of record"
     if any(r.get("source") != CHALLENGER for r in runs):

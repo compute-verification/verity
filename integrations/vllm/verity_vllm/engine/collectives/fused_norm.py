@@ -1,4 +1,4 @@
-"""`fused_allreduce_rms_norm` as one recorded TP collective, for the Match recorder (`rank_worker.tp2_coll_install`, VLLM-12).
+"""`fused_allreduce_rms_norm` as one recorded TP collective, for the Match recorder (`rank_worker.tp2_coll_install`).
 
 DeepSeek-V3.2's decoder layer (GLM-5.3 on CUDA, vLLM d9105ea80: `vllm/models/deepseek_v32/nvidia/model.py`) runs its o_proj and MoE
 with ``reduce_results=False`` and reduces each output in the RMSNorm after it: `fused_allreduce_rms_norm(hidden_states, residual,

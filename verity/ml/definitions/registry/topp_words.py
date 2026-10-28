@@ -2,7 +2,7 @@
 word-sized primitives, so a partition query (`Q_word`) cuts it into ordinary 16- and 32-bit units.
 
 `TopPMaskWordx{V}_v1` is the same function as ONE primitive (a `Value<V>`, every split count, `splits` an operand): about 10^11
-ANDs at V = 128256, a single word gate no query can cut. With `splits` a constant (the registered S, #197, CIR-87) the pipeline
+ANDs at V = 128256, a single word gate no query can cut. With `splits` a constant (the registered S) the pipeline
 is fixed, and this module restates it at that S:
 
 * `topp_keep_builder.keep_word` is the pipeline written once over vectors of words, each step an operation on whole vectors that an
@@ -12,7 +12,7 @@ is fixed, and this module restates it at that S:
   the Definition's gates are exactly the instances the circuit counts.
 
 `TopPKeepWord_v1{V,S}` equals `topp_keep(x, p, S)` (and so `TopPMaskWordx{V}_v1` at `splits = S`) on every row: the test
-evaluates the Definition with the IR's evaluator against `topp_split`. `TopPMask_v2{V,S}` applies it lane by lane with a select
+evaluates the Definition with the circuit evaluator against `topp_split`. `TopPMask_v2{V,S}` applies it lane by lane with a select
 (no `BitAt`), and `GumbelTopPTokenSelect_v2{V,S}` is `GumbelTopPTokenSelect_v1{V}` at the constant split count.
 """
 from __future__ import annotations
@@ -228,7 +228,7 @@ def TopPMaskV2(B, st, logits, top_p, splits):
            conformance="exact-model-tested")
 def GumbelTopPTokenSelectV2(B, st, logits, top_p, seed, pos, temp, splits):
     """`GumbelTopPTokenSelect_v1{V}` with its keep word as word gates at the split count S (`TopPMask_v2{V,S}`), the same
-    operands: the served token wherever `splits` is S, the constant a single-request workload's Program passes (#197)."""
+    operands: the served token wherever `splits` is S, the constant a single-request workload's Program passes."""
     from verity.ml.definitions.registry import sampling as SM
 
     scaled = B.call(bind(SM.TemperatureScale, V=st.V), logits, temp)

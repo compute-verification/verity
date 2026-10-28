@@ -4,7 +4,7 @@ import Proofs.Accounting.Compose.CircuitWork
 import Proofs.Accounting.ComposePeriod.Covers
 
 /-!
-# PoUW's work over an accounting period: proofs
+# PoUW's work over a monitoring period: proofs
 
 `Accounting.Guarantees.ComposePeriod.PeriodBudget` is proved here: a window's `serviceGame` is one round
 `.round d pass (fun _ => .done)`, `periodGame` puts the next window's game in place of its end (`consGame`), and
@@ -18,8 +18,8 @@ conditioning on the first round's coins as `expect_weight_le` does, its probabil
 
 `CircuitWorkPeriod` is proved here from the period layer's covers (`PeriodCoversStmt`, which
 `circuitWorkPeriod_of_covers` reads as a hypothesis and `ComposePeriod/Covers.lean` proves as `periodCovers`), and
-`CircuitCreditPeriod` from its assembly at `a, b > 0`. It is `CircuitWork`'s proof at `n` rounds
-(note:compute-accounting/20261019T0739Z-draft-int-period), on the accepted prefix's live tiles:
+`CircuitCreditPeriod` from its assembly at `a, b > 0`. It is `CircuitWork`'s proof at `n` rounds, on the accepted
+prefix's live tiles:
 * per window, `ServiceBudget` at the detected live weights (`liveShare`: `0` on a tile of no live words, else
   `liveCone`), which are at most `shareCone`, so `CircuitWork`'s `ρ`, stage-share and luck premises hold of them, with
   its `LuckAt` from `PerLiveTile` (`luckAt_of_perLiveTile`: luck `1` on a dead tile, of weight `0`); then

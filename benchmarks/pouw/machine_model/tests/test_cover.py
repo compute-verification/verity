@@ -45,6 +45,13 @@ def _edit(d, name: str, old: str, new: str) -> None:
     p.write_text(text.replace(old, new, 1))
 
 
+def test_a_missing_fetched_table_names_the_fetch(tmp_path):
+    d = _copy(tmp_path)
+    (d / "corpus.json").unlink()
+    with pytest.raises(FileNotFoundError, match="uv run research data fetch-fixtures benchmarks/pouw/machine_model"):
+        C.load(d)
+
+
 def test_an_opcode_without_a_row_fails(tmp_path):
     d = _copy(tmp_path)
     p = d / "rows.toml"
@@ -120,7 +127,7 @@ def test_the_envelope_is_accel_op_and_the_proposed_entries_say_why(cover):
                                              "collective", "tex", "-"]
     assert [p["key"] for p in env["pipe"]] == ["alu", "imad", "fma", "shfl", "f64", "sfu", "collective"]
     for e in (*env["op"], *env["pipe"], *env["fmt"]):
-        assert "proposed" not in e or "CMP-165" in e["proposed"] or e["key"] == "collective", e["key"]
+        assert "proposed" not in e or "MODEL-MIN" in e["proposed"] or e["key"] == "collective", e["key"]
     for dev in C.DEVICES:
         assert C.rho(cover, dev, "fma") == 128
         assert C.rho(cover, dev, "dram") == pytest.approx(env["device"][dev]["dram"] /

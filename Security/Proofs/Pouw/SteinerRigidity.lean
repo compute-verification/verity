@@ -3,7 +3,7 @@ import Mathlib
 /-!
 # Steiner rigidity in the rank metric (PoUW work floor)
 
-The setting of `note:20261015T0416Z-draft-steiner-rigidity-laminar`: matrices over a field `F`, the rank metric
+The setting of the laminar Steiner-rigidity draft: matrices over a field `F`, the rank metric
 `d(A, B) = rank (A - B)`, and a Steiner tree as a finite tree whose vertices carry matrices, its length the sum over
 its edges of the rank of the difference of the endpoints' labels.
 

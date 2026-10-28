@@ -16,7 +16,7 @@ Kernel-pinned, as Lean data (their checks, one theorem per part, in `Proofs/Pouw
 
 The bulk, as gzipped text with the SHA-256 of each uncompressed file in `conformance/SHA256SUMS` (`runs` in
 `lean-audit.json` pins them; `verity/core/protocols/pouw/tests/test_lean_package.py` checks that this script still writes them):
-* `conformance/steps.txt.gz`: the 10,549 steps, then red-team R1's 166,000 differential steps (`R1_FAMILIES`);
+* `conformance/steps.txt.gz`: the 10,549 steps, then R1's 166,000 differential steps (`R1_FAMILIES`);
 * `conformance/adds.txt.gz`: the 5,000 FP32 adds.
 
 `Definitions/Pouw/Fp8Atom/Vectors/coverage.json` records the families, what they reach, and what is pinned.
@@ -226,8 +226,7 @@ FAMILIES = [
 ]
 
 
-# Red-team R1's differential families (`internal/pouw-fp8/lean-atom-r1-diff-gen.py`, 29 Sep 00:15Z), in the bulk only.
-# Each draws from its own generator in the order R1's script does, so the steps are R1's.
+# The R1 differential families, in the bulk only. Each draws from its own generator in the order R1's generator does.
 R1_SEED = 20260929
 
 

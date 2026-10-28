@@ -1,12 +1,11 @@
 import Mathlib.Data.Fintype.Card
 import Mathlib.Data.Finset.Card
+import Definitions.Core.Boolean
 
 /-!
-# Circuits, partitions, and the correctness of a unit
+# Partitions of a circuit, and the correctness of a unit
 
-A circuit is Boolean: input gates, and AND, XOR and NOT gates over earlier gates, and rows: the AND
-of the XOR of some earlier gates and the XOR of others, a row as the verifier parses it (PROTOCOL.md
-§16.5; the compiled lowering reads a template's rows as these gates, `Lowering.lean`). A partition puts
+The circuit is the Boolean one (`Definitions.Core.Boolean`: `Op`, `Circuit`, `Circuit.eval`). A partition puts
 every computed gate in exactly one of `n` units; the input gates are the input unit (`none`). The
 committed wires are derived, never stored: the inputs, the outputs, and every gate that a gate of
 another unit reads (`Partition.committed`).
@@ -21,67 +20,9 @@ The lemmas about them (composition, congruence, refinement) are in `Proofs.Flock
 
 namespace FlockSoundness.Audit
 
-/-- The XOR of the values at a list of places. -/
-def xorSum {ι : Type} (l : List ι) (v : ι → Bool) : Bool := (l.map v).foldr Bool.xor false
-
-/-- A gate. -/
-inductive Op (N : ℕ) where
-  | input
-  | and (a b : Fin N)
-  | xor (a b : Fin N)
-  | not (a : Fin N)
-  /-- A row: `(⊕_{x ∈ a} x) ∧ (⊕_{x ∈ b} x)`. -/
-  | row (a b : List (Fin N))
-
-namespace Op
-
-variable {N : ℕ}
-
-/-- The gates an operation reads. -/
-def args : Op N → List (Fin N)
-  | input => []
-  | and a b => [a, b]
-  | xor a b => [a, b]
-  | not a => [a]
-  | row a b => a ++ b
-
-def isInput : Op N → Bool
-  | input => true
-  | _ => false
-
-/-- The operation applied to the values of its arguments (an input gate has no operation). -/
-def apply : Op N → (Fin N → Bool) → Bool
-  | input, _ => false
-  | and a b, v => v a && v b
-  | xor a b, v => Bool.xor (v a) (v b)
-  | not a, v => !v a
-  | row a b, v => xorSum a v && xorSum b v
-
-end Op
-
-/-- A Boolean circuit, its gates in topological order. -/
-structure Circuit where
-  N : ℕ
-  op : Fin N → Op N
-  topo : ∀ g, ∀ a ∈ (op g).args, a < g
-  outputs : Finset (Fin N)
-
 namespace Circuit
 
 variable (C : Circuit)
-
-/-- Evaluation with some gates fixed: a fixed gate takes its given value, and every other gate
-applies its operation to its arguments' values. -/
-def run (fix : Fin C.N → Option Bool) (g : Fin C.N) : Bool :=
-  match fix g with
-  | some b => b
-  | none => (C.op g).apply fun x => if _h : x < g then run fix x else false
-termination_by g.val
-decreasing_by all_goals assumption
-
-/-- The circuit's evaluation on inputs `a`. -/
-def eval (a : Fin C.N → Bool) : Fin C.N → Bool :=
-  C.run fun g => if (C.op g).isInput then some (a g) else none
 
 /-- The input unit: the committed inputs are the anchors' values. -/
 def InputsAgree (X a : Fin C.N → Bool) : Prop :=

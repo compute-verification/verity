@@ -2,7 +2,7 @@
 name: friction
 description: >
   What to do when a tool, rule, check or step gets in your way in Verity: fix it yourself, ask its owner or your
-  coordinator when you can't tell, take only keys, access and claims to Daniel, record a ruling where the next agent reads
+  coordinator when you can't tell, take only claims and his own clicks to Daniel, record a ruling where the next agent reads
   it, or leave a friction note. Holds the standing rulings AGENTS.md and the other skills don't state (what an agent may
   change without asking, protocol and claim rulings) and the friction note format. Use when you worked around something,
   a step bit you twice or keeps you waiting, you see a better abstraction, you're unsure a change is yours, you just got a
@@ -20,7 +20,8 @@ bundle (`git bundle create B origin/BASE..BRANCH`, `research data put --kind evi
 art id, the branch and its head sha.
 
 Friction in shared infrastructure (Linear, Slack and `research msg`, `research run`, the queue, notes, the store) is usually
-everyone's: ask in the workflow thread first, `research msg reply --thread 1792037552.043289`, one question per post,
+everyone's: ask in the workflow thread first, `research msg reply --thread TS` with its `RULES_THREAD` in
+`infra/control/top_watch.py`, one question per post,
 starting with the tool's name. The tool's owner decides, makes the answer stick in code or its skill, and replies
 `settled: <PR or section>`.
 
@@ -46,7 +47,7 @@ follow it. Otherwise ask the owner of what the change touches, or your coordinat
 (a handle holder: `research msg send --to @HANDLE`; a worker: its report), with the case, the change and your
 recommendation in a few lines, and prepare the change meanwhile. Only keys and access, and claims (what a guarantee says
 or rests on), go on to Daniel (`.agents/skills/asking-daniel/SKILL.md`). Spend, a short budget line included, is the call
-of the lead whose line pays (13 Oct).
+of the lead whose line pays.
 
 For a new rule, gate or required review, price it first with `.agents/skills/process-design/SKILL.md`.
 
@@ -90,114 +91,117 @@ note in its report, and its coordinator saves it. The notes are public: nothing 
 
 The admin (`@top`) reads new friction notes daily (`research notes mcp`'s `search_notes`, `kind: friction`, `since`),
 files each repeat or repeated wait as a dated issue in its owner's team, and checks that the fix landed and held; only one
-whose fix needs keys or a claim goes to Daniel.
+whose fix needs a claim or his own accounts goes to Daniel.
 
 ## Standing rulings
 
-Daniel's rulings in force that `AGENTS.md` and the other skills don't state, dated so citations find them. The history
-behind these and every earlier ruling, to 19 Oct, is `note:top/20261020T0640Z-report-friction-rulings-archive`.
+Daniel's rulings in force that `AGENTS.md` and the other skills don't state, each stated as itself. Who set each one,
+when and why, and every retired ruling, are in his decisions log in Notion.
 
 What an agent may change:
 
-- (6 Oct) Each owner removes the smells it finds in its own files without asking: code serving a retired question, two
+- Each owner removes the smells it finds in its own files without asking: code serving a retired question, two
   sources of truth for one thing, variants a ruling already chose between, old vocabulary, machinery for a retired
   process, structure that doesn't earn itself, dead references. What crosses owners goes to that owner.
-- (13 Oct) Close an old PR without asking when every commit on it is already in another open PR.
-- (14 Oct) Hard switches: once a replacement lands, no second path stays alive beside it, and every bridge kept for the
+- Close an old PR without asking when every commit on it is already in another open PR.
+- Hard switches: once a replacement lands, no second path stays alive beside it, and every bridge kept for the
   transition names its end state. The admin audits for splits and tells Daniel when an abstraction fails or turns into
   red tape.
-- (3 Oct) A protocol importing another protocol is the importing protocol's owner's call, told to the imported one's
+- A protocol importing another protocol is the importing protocol's owner's call, told to the imported one's
   owner, and the edges stay acyclic (`ALLOWED` in `tests/test_boundaries.py`).
-- (30 Sep) The Lean lane changes `tools/verity/lean`, the lean-proofs skill, `check`'s Lean steps, shared Lean foundations
+- The Lean lane changes `tools/verity/lean`, the lean-proofs skill, `check`'s Lean steps, shared Lean foundations
   and Lean or Mathlib bumps (in a PR of their own, announced first) without asking. A changed record in another lane's
   package goes through that lane.
-- (28–29 Sep) Changes that speed up checks or merges land ahead of other work, and merge velocity outranks CI spend.
-- (5 Oct) Build a design Daniel hands over unless a measured cost breaks a budget, it opens a soundness or zero-knowledge
+- Changes that speed up checks or merges land ahead of other work, and merge velocity outranks CI spend.
+- Build a design Daniel hands over unless a measured cost breaks a budget, it opens a soundness or zero-knowledge
   hole, or it contradicts a proved theorem. Then build the nearest version you can defend and report. Taste isn't a reason.
-- (1 Oct) Plan in hours: a pilot, trial or rollout gets hours, not days.
-- (30 Sep) GPU work runs only as items its lane owner approved, each naming its research question; idle GPUs beat padded
-  ones. RunPod tops itself up, so a low balance is not a blocker (29 Sep).
-- (2 Oct) An overhead reported to Daniel is the `--zk` prover's only, over the time the computation's FLOPs take at the
+- Plan in hours: a pilot, trial or rollout gets hours, not days.
+- GPU work runs only as items its lane owner approved, each naming its research question; idle GPUs beat padded
+  ones. RunPod tops itself up, so a low balance is not a blocker.
+- An overhead reported to Daniel is the `--zk` prover's only, over the time the computation's FLOPs take at the
   census's dense datasheet peak for its dtype, to one significant digit.
 
 Keys and access:
 
-- (25 Oct) The control pod holds a Nebius key that can only stop and read instances, root only, for infra's backstops,
-  so stopping a machine never waits on an agent VM. A key that could also start, create or delete is a new ask.
-- (25 Oct) Workers open and edit their own lane's PRs with `research queue open|edit`, through a GitHub App on the
+- Keys and access between our own machines and accounts are the lanes' call: the lane that needs a key or a grant
+  (a lane key, a forced-command key, a challenger's or a wipe's key) sets it up with the machine's owner, infra for
+  shared nodes, with no ask and no wait. This is a simulation: nothing mimics deployment settings, and it needn't be
+  perfect. Daniel only clicks what needs an account he holds (the GitHub organization's admin, billing, the Nebius and
+  Cloudflare consoles).
+- The control pod holds a Nebius key that can only stop and read instances, root only, for infra's backstops,
+  so stopping a machine never waits on an agent VM.
+- Workers open and edit their own lane's PRs with `research queue open|edit`, through a GitHub App on the
   control pod with pull-requests write only (no contents) whose token no worker holds; the tool refuses a PR whose head
   branch isn't the caller's lane's. Drive's App stays the only one that can move `main`.
-- (25 Oct, TOP-84) A lane's development gate key on an auditor's gate (vy-challenger-1, vy-auditor-2) is no ask: the lane
-  makes an ed25519 key, sends infra only the public half, and infra registers it under that lane. Only the per-lane Cursor
-  secret that credit-bearing windows need is Daniel's.
+- A lane's gate key on an auditor's gate (vy-challenger-1, vy-auditor-2): the lane makes an ed25519 key, sends
+  infra only the public half, and infra registers it under that lane.
 
 Landing:
 
-- (25 Oct 09:40Z, delegated to the vLLM coordinator) The vLLM integration's lint ratchets are no-growth: no change adds an
+- The vLLM integration's lint ratchets are no-growth: no change adds an
   exception or raises a recorded count, and a change to a lint's own code or thresholds is judged like source. Dedicated
   cleanup lanes pay the exceptions down; a feature PR owes none (`integrations/vllm/tools/ratchet_gate.py`).
-- (25 Oct 11:20Z, the vLLM coordinator under that delegation) A `# noqa` is an exception too: in `integrations/vllm`, no
+- A `# noqa` is an exception too: in `integrations/vllm`, no
   change adds more `noqa` lines than it removes. One that moves with its code counts as kept, and deleting a stale one is a
   retirement. The ratchet gate counts them, with no allowlist.
-- (26-27 Oct, the vLLM coordinator, rolling out Daniel's 25 Oct ask repo-wide) Outside `integrations/vllm/` and
-  `archive/`, the same gate holds `tests/lint/`'s no-growth lists and checks each PR's changed Python, as drive lands
-  before the suites run (22:45Z): fix the code, never the list; a rename moves its entries (`--move OLD NEW`); a list may
-  catch up to what its base's lint finds in its tree, no further (06:20Z). Ruff: the root `ruff.toml`, per (file, rule),
-  `noqa` uncounted (23:47Z). No new direct environment read: use the area's settings registry (a `settings.py`, or a
-  list mark at the PR's base) (01:30Z). No new swallowing handler: re-raise, record, or test first (02:05Z).
+- Outside `integrations/vllm/`, the same gate holds `tests/lint/`'s no-growth lists and checks each PR's changed Python,
+  as drive lands before the suites run: fix the code, never the list; a rename moves its entries (`--move OLD NEW`); a
+  list may catch up to what its base's lint finds in its tree, no further. Ruff: the root `ruff.toml`, per (file, rule),
+  `noqa` uncounted. No new direct environment read: use the area's settings registry (a `settings.py`, or a list mark at
+  the PR's base). No new swallowing handler: re-raise, record, or test first.
 
 Protocols and claims:
 
-- (26 Oct, tentative) Credit and every report of computation are in AND gates. 𝓜's resources appear only inside
+- Credit and every report of computation are in AND gates (tentative). 𝓜's resources appear only inside
   exclusion, which reports in AND gates. Credit is a statement about values; SAK is exclusion's premise only. Whoever
   finds a reason this is wrong floats it at once.
-- (26 Oct) A workload is what a datacenter runs over a monitoring period (its Programs, their inputs and placement), at
+- A workload is what a datacenter runs over a monitoring period (its Programs, their inputs and placement), at
   every scale; workloads compose, and "row" never names one.
-- (25 Oct) The warden and the network certifier are one device: a tap on each AI server's uplink, whose one code run
-  under one `trusted-host` gives both the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement
+- The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-host` gives
+  both the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement
   ties them by a premise or trusts them separately.
-- (21 Oct) θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
+- θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
   are never θ (drops `NciCheck.Baseline`'s output provenance).
-- (8 Oct) A protocol's verifier of record switches from Python to Lean only on evidence: its gap list shows nothing the
+- A protocol's verifier switches from Python to Lean only on evidence: its gap list shows nothing the
   Python checks that the Lean doesn't, and every recorded run replayed through the Lean gets the Python's verdict,
   negative controls included. The Python keeps running as the reference, the switch is one reversible line, and it moves
-  the protocol's properties from `Models/` to `Properties/`. Where it leads (18 Oct): Lean is the definition and the
-  verifier of record, `verity.ml`'s Python mirrors it under difftest, and a verifier imports no `verity.ml` code.
-- (26 Oct) An auditor device releases its commitment to its coins only after the prover's commitment is in, so no
+  the protocol's properties into `Properties/`. Where it leads: Lean is the definition and the
+  verifier, `verity.ml`'s Python mirrors it under difftest, and a verifier imports no `verity.ml` code.
+- An auditor device releases its commitment to its coins only after the prover's commitment is in, so no
   soundness statement takes a hiding premise on it. A guarantee whose break includes a forged device release names two
   premises outside the theorem: `ecr/sha-512` for its finders and `euf-cma/lms-sha512-n64` for the forgery finder.
-- (17 Oct) The prover controls the audited circuit's inputs and knows every coin once it is issued, so no defense assumes
+- The prover controls the audited circuit's inputs and knows every coin once it is issued, so no defense assumes
   the circuit can't learn a coin, and verifier coins stay public. Only the weights may take a private encoding from a
   trusted third party, salted after the commitment with secrets the prover never sees, as one deployment variant.
-- (17 Oct) No private or trapdoor encoding for KV. Credited dynamic memory rests on the public codec, and the stacking
+- No private or trapdoor encoding for KV. Credited dynamic memory rests on the public codec, and the stacking
   bound on the named conjecture `EncodeChainHardness`, with the claims resting on it listed as conditional.
-  (`EncodeChainHardness` is falsified, `EncodeChainRefuted`; since 26 Oct the bound rests on `SquaringFloor` and
+  (`EncodeChainHardness` is falsified, `EncodeChainRefuted`; the bound now rests on `SquaringFloor` and
   `ChainSum` in the repriced gate model, a thin lane a compare-select unit, listed the same way.)
-- (12 Oct) Memory and bandwidth accounting: no bound assumes the weights are incompressible, and a scheme may refuse
+- Memory and bandwidth accounting: no bound assumes the weights are incompressible, and a scheme may refuse
   all-zero weights; exhaustion is over the node's whole memory, KV included; no overhead target beyond 99%; guarantees
   are for the whole node. The remote bandwidth audit treats the prover's resources as one pool (conservation, no identity
   assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
   model's logits.
-- (18 Oct, ASK-16) PoUW's guarantees, and only PoUW's, may rest on named random-oracle premises for SHA-512
+- PoUW's guarantees, and only PoUW's, may rest on named random-oracle premises for SHA-512
   (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. C-Flock's
   knowledge soundness keeps the collision form.
-- (19 Oct, ASK-72 and ASK-73) The deployed recursion's bound record states its inner claim at IVStar at the weight
+- The deployed recursion's bound record states its inner claim at IVStar at the weight
   `coverW`, the least at which the premise P3 (`Bound.WeightCovers`) holds. Its security level is below the 100-bit floor
   under every weight (`Claims.Recursion.lam`), and every table, README or claim that cites it gives its λ and says so.
-- (13 Oct) `Flock.Guarantees.RecursiveAuditC3` may rest on `registrant-holds-openings`; in Lean the salt is a binder
+- `Flock.Guarantees.RecursiveAuditC3` may rest on `registrant-holds-openings`; in Lean the salt is a binder
   applied at the salts the prover's workers committed under, never `∃ salt` or a `Classical.choose` of one.
-- (13 Oct) A guarantee's checked family may fold in a check the compiled verifier already runs, or a new fail-closed
+- A guarantee's checked family may fold in a check the compiled verifier already runs, or a new fail-closed
   refusal modelled the same way. A free parameter whose adversarial values break a proof is closed by a side condition
   decidable at any literal instantiation, discharged by computation at use, never a listed assumption.
-- (9 Oct) The end goal is sampled proofs through recursion with hidden unit circuits and a hidden partition; the auditor
+- The end goal is sampled proofs through recursion with hidden unit circuits and a hidden partition; the auditor
   checks only padded counts. One key per protecting party, drawn once at setup from the OS before anything else, public
   and a constant in V\*; hm96's pinned key stays only where a key is wired into a circuit, as a named exception. Salts
   are drawn from the OS, not expanded by a PRG.
-- (5 Oct) A circuit restatement of a verifier (VBridge's V\*) is proved in one direction, that the circuit accepting
-  implies the verifier of record accepts; completeness stays a test.
-- (2 Oct) `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption, and nobody works on proving the
+- A circuit restatement of a verifier (VBridge's V\*) is proved in one direction, that the circuit accepting
+  implies the verifier accepts; completeness stays a test.
+- `hash-derived-key` (`Hm96Hiding` at the pinned key) stays a named assumption, and nobody works on proving the
   pinned key behaves like a fresh one.
-- (1 Oct) A table that tabulates a fixed function is a value, even with no program parameter; an operation's own
+- A table that tabulates a fixed function is a value, even with no program parameter; an operation's own
   definition holds only the hardware's measured tables. No protocol gets an exemption for public values: in development a
   proof may be replaced by replay, or verification skipped, as a labelled shortcut, never as the protocol.
 

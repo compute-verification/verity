@@ -2,7 +2,9 @@
 
 Protocol 2 (the private circuit) end to end: the private circuit's description is a value of the public universal unit
 `UniversalUnit_v1{G, N_IN, N_OUT}` (`verity.ml.private_circuits.universal`), proved by C-Flock's circuit prover under `--zk` and
-verified by the Lean verifier.
+verified by the Lean verifier. The universal unit is not the path to hiding a circuit: circuit hiding is recursion's
+(`--hide`, the recursive session's private-circuit form in `verity/ml/flock/verifier/PROTOCOL.md`). These runs measure the
+unit for comparison.
 
 - `universal.py`: the driver; its docstring says what it builds, what it checks and what a row records.
 - `pod.sh`: the entry point on a CPU node. It builds `flock-circuit` and `flock-verify` once per `FLOCK_WORK`, from this

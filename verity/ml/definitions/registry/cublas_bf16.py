@@ -38,6 +38,17 @@ rows against partition, reduction-order and partial-type alternatives.  On cc 12
 (M, K, N), a `splitKreduce_kernel` whose workspace is bf16: `CublasSplitKGemmBf16Partials` is that route, the same chunks and chains
 with each partial rounded to bf16 before the reduction widens it; at others it launches a cutlass kernel alone, whose grid.z
 slices meet in its epilogue through the bf16 output: `CublasSerialSplitKGemm`.
+
+smollm2-135m's training step (`TRAIN_CAPTURE`) reuses these Definitions on bits for every GEMM it runs.  F.linear's three GEMMs
+at x (M, K), W (N, K) are each one row's `x @ w^T` (`TRAIN_LINEAR_ROLES`): forward x = X's row against W's rows, dX = dY's row
+against W^T's, dW = dY^T's row against X^T's.  `train_route` is the route sm_120 takes for one at the captured (M, K, N), and
+`route_gemm` binds a route, an explicit parameter: unsplit `Gemm_v3`, `CublasSplitKGemmBf16Partials_v2`,
+`CublasSerialSplitKGemm_v2`, or, where cuBLAS slices K over grid.z at ceil(K / z) rounded up to 8 (B 8 x S 512's dW),
+`CublasSplitKGemmBf16PartialsAligned_v1{K, N, SPLIT_K, ALIGN, TILE_K, DOT}`, on bits only, whose chunks need not be whole
+k16 steps: each chunk's chain takes its k-tiles of TILE_K words residue first, as the launched cutlass kernel does;
+`train_linear` is the two together.  Eager attention's six bmm's (`TRAIN_BMM`) are all unsplit, the batch on grid.z and no
+reduction kernel: `attention_bmm` binds `BatchedGemm_v2` over B members (heads), one query or key row each.  Either refuses a
+shape or role the capture does not cover.
 """
 from __future__ import annotations
 
@@ -54,25 +65,29 @@ from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.ops.boolean import cast as BCAST
 from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.ops.boolean import gemm as BG
-from verity.ml.circuits.refs import array_of
+from verity.ml.circuits.refs import Coll, array_of, broadcast, concat
 from verity.ml.circuits.types import Array, Type
+from verity.ml.definitions.evidence import EVIDENCE
 
 __all__ = ["BatchedGemm", "BatchedGemmWord", "ChainStep", "CublasSerialSplitKGemm", "CublasSerialSplitKGemmWord",
-           "CublasSplitKGemm", "CublasSplitKGemmBf16Partials",
+           "CublasSplitKGemm", "CublasSplitKGemmBf16Partials", "CublasSplitKGemmBf16PartialsAligned",
            "CublasSplitKGemmBf16PartialsWord", "CublasSplitKGemmF32Out", "CublasSplitKGemmF32OutWord", "CublasSplitKGemmWord",
            "GemmF32Out", "GemmF32OutWord", "HOPPER_STEP",
-           "HopperBf16Dot16Step", "HopperBf16Dot16StepFirst", "HopperBf16Dot16StepFirstX", "HopperBf16Dot16StepX", "chain_step",
-           "conformance_cc12", "dot_step", "split_bounds"]
+           "HopperBf16Dot16Step", "HopperBf16Dot16StepFirst", "HopperBf16Dot16StepFirstX", "HopperBf16Dot16StepX",
+           "TRAIN_BMM", "TRAIN_BMM_SHAPES", "TRAIN_CAPTURE", "TRAIN_LINEARS", "TRAIN_LINEAR_ROLES", "TRAIN_M", "TRAIN_ROUTES",
+           "aligned_bounds", "attention_bmm", "chain_step", "conformance_cc12", "dot_step", "residue_first", "route_gemm",
+           "split_bounds", "train_linear", "train_route"]
 
 BF16, F32 = Array(16, BL.BIT), Array(32, BL.BIT)
+_CAPTURE = EVIDENCE["glm53_bf16_gemm_capture"]
 CONFORMANCE = ("exact-model-tested: every output word at K/N statics 6144/{19360,160,256}, 7168/{16160,64,384,2048,1024,512}, "
                "and batched (B 8) 192/512 and 512/256, at the captured M (1, 4, 16, 128, 256; the gates' cuBLAS tier 17, 32, 128, "
                "256), on cc 9.0 with 132 SMs (torch 2.13.0+cu129 on its libcublas.so.12), under vLLM's served default (split counts "
                "2 to 5 each fitting only the stated hypothesis; the absorbs never split) and the split-K-off variant: property "
-               "glm53_bf16_gemm_capture, run r20261016-234133-bbc8, record c0e09902b0a2057a, "
-               "art:5fcc5a4937ac75ceec31bd22abc11194ec0c55d27e77ffd3690b1ad8976feeaf "
+               f"glm53_bf16_gemm_capture, run {_CAPTURE['run']}, record {_CAPTURE['record'][:16]}, {_CAPTURE['art']['record']} "
                "(tests/properties/glm53_bf16_gemm_capture_gpu.py)")
-CC12_PROBES = "runs r20261018-193726-ac32, r20261018-195453-7c31 and r20261018-200645-a453"
+_PROBES = EVIDENCE["cublas_cc12_probes"]["runs"]
+CC12_PROBES = f"runs {', '.join(_PROBES[:-1])} and {_PROBES[-1]}"
 
 
 def conformance_cc12(launch: str) -> str:
@@ -85,6 +100,15 @@ def conformance_cc12(launch: str) -> str:
 CONFORMANCE_CC12 = conformance_cc12("`splitKreduce_kernel` with a bf16 workspace (M 1 to 303, split counts 2 to 16)")
 CONFORMANCE_CC12_SERIAL = conformance_cc12("a cutlass kernel whose grid.z slices meet through the bf16 output, no reduction kernel "
                                            "(M 303, K 12288, 5 slices)")
+TRAIN_CAPTURE = ("a capture of the training workload's GEMMs on cc 12.0 with 188 SMs (torch 2.14.0+cu130 on "
+                 "cuBLAS 13.1.1.3, deterministic, CUBLAS_WORKSPACE_CONFIG=:4096:8) at B 1 x S 256 and B 8 x S 512, every "
+                 "launch's kernel and grid recorded, each role's sampled words fitting its route exactly on random and "
+                 "count-probe words")
+CONFORMANCE_ALIGNED = ("exact-model-tested: every output word of the B 8 x S 512 step's dW in a full-tensor dump of the step "
+                       "(row GEMMs at K 4096: N 576 over 7 and 3 grid.z slices at TILE_K 32 and over 12 at TILE_K 64, N 1536 "
+                       "over 3 at TILE_K 32), where cuBLAS launches a cutlass kernel over grid.z and `splitKreduce_kernel` with "
+                       "a bf16 workspace, at ALIGN 8, and every sampled word of the same GEMMs in "
+                       f"{TRAIN_CAPTURE}")
 
 
 class ChainStep(NamedTuple):
@@ -219,6 +243,46 @@ def _serial_splitk(gemm, add, cast, widen):
     return body
 
 
+def aligned_bounds(K: int, splits: int, align: int) -> list[tuple[int, int]]:
+    """cuBLAS 13.1.1.3's cc 12.0 grid.z split-K intervals: chunks of ceil(K / splits) rounded up to ``align``, then the final
+    remainder; refuses statics that do not make exactly ``splits`` chunks."""
+    if K <= 0 or align <= 0:
+        raise ValueError("CublasSplitKGemmBf16PartialsAligned: unsupported statics (K_and_ALIGN_positive)")
+    if splits < 2:
+        raise ValueError("CublasSplitKGemmBf16PartialsAligned: unsupported statics (SPLIT_K_at_least_2)")
+    chunk = -(-(-(-K // splits)) // align) * align
+    bounds = list(range(0, K, chunk)) + [K]
+    if len(bounds) != splits + 1:
+        raise ValueError("CublasSplitKGemmBf16PartialsAligned: unsupported statics (SPLIT_K_chunks_at_ALIGN)")
+    return list(zip(bounds, bounds[1:]))
+
+
+def residue_first(lo: int, hi: int, tile_k: int) -> tuple[int, int]:
+    """A chunk [lo, hi) as the cutlass kernel's predicated k-tiles take it: (r, z), its first r = (hi - lo) mod ``tile_k``
+    words, then z constant-0 words to a whole tile, then its remaining words in whole tiles; refuses a ``tile_k`` that is not
+    whole k16 steps."""
+    if tile_k <= 0 or tile_k % 16:
+        raise ValueError("CublasSplitKGemmBf16PartialsAligned: unsupported statics (TILE_K_whole_k16_steps)")
+    r = (hi - lo) % tile_k
+    return r, (tile_k - r) % tile_k
+
+
+def _aligned_splitk(B, S, x, w):
+    space, idx, leaf = B.call(BL.constant(0)).refs[0]
+    acc = None
+    for lo, hi in aligned_bounds(S.K, S.SPLIT_K, S.ALIGN):
+        r, z = residue_first(lo, hi, S.TILE_K)
+        k = hi - lo + z
+        zeros = broadcast(space, idx, leaf, 16 * z)
+        xs = Coll(Array(k, BF16), concat([x[lo:lo + r].refs, zeros, x[lo + r:hi].refs]))
+        ws = Coll(Array(S.N, Array(k, BF16)),
+                  concat([p for n in range(S.N) for p in (w[n][lo:lo + r].refs, zeros, w[n][lo + r:hi].refs)]))
+        p = B.call(bind(GemmF32Out, K=k, N=S.N, DOT=S.DOT), xs, ws)
+        p = B.batch(BCAST.Bf16ToF32, B.batch(BG.F2fpBf16, p, axes=(0,)), axes=(0,))
+        acc = p if acc is None else B.batch(EW.F32Add, acc, p, axes=(0, 0))
+    return B.batch(BG.F2fpBf16, acc, axes=(0,))
+
+
 GEMM_F32_DOC = "`x[K] @ W[N, K]^T` with the f32 accumulator as the output: `DotBf16{K, DOT}` on each W row (torch.mm out_dtype=float32)"
 BATCHED_DOC = "torch.bmm on bf16: `Gemm{K, N, DOT}` of each member's x against its W (w[b][n][k] the operand at [b, k, n])"
 SPLITK_DOC = ("cuBLAS 12.9.1's cc 9.0, 132-SM split-K: equal 64-element-aligned contiguous chunks and a final remainder, one ascending DOT "
@@ -229,6 +293,13 @@ SPLITK_BF16_DOC = ("cuBLAS 12.9.1's cc 12.0, 188-SM split-K with a bf16 workspac
 SERIAL_SPLITK_DOC = ("cuBLAS 12.9.1's cc 12.0, 188-SM serial split-K: `split_bounds`' chunks in order, one ascending DOT chain from +0 "
                      "per chunk, added in f32 to the previous chunk's bf16 output (widened) and rounded to bf16, the first chunk's "
                      "rounded alone")
+ALIGNED_DOC = ("cuBLAS 13.1.1.3's cc 12.0, 188-SM split-K over grid.z with a bf16 workspace: `aligned_bounds`' chunks "
+               "(ceil(K / SPLIT_K) rounded up to ALIGN, then the remainder), each chunk's ascending DOT chain from +0 over "
+               "its k-tiles of TILE_K words as the cutlass kernel's predicated mainloop takes them, the residue tile first "
+               "(`residue_first`: the chunk's first (length mod TILE_K) words, then constant-0 words to a whole tile, then "
+               "the rest), each partial rounded to bf16 (F2fpBf16) into the "
+               "workspace, then `splitKreduce_kernel`'s serial f32 reduction of the widened partials in increasing split order "
+               "and one final bf16 rounding, on bits")
 
 GemmF32OutWord = CompositeDefinition("GemmF32Out", 1, ("K", "N", "DOT"), _gemm_f32_type(P.BF16, P.F32), _gemm_f32(G.DotBf16),
                                      doc=GEMM_F32_DOC, conformance=CONFORMANCE)
@@ -268,6 +339,10 @@ CublasSerialSplitKGemm = CompositeDefinition(
     "CublasSerialSplitKGemm", 2, ("K", "N", "SPLIT_K", "DOT"), _gemm_f32_type(BF16, BF16),
     _serial_splitk(GemmF32Out, EW.F32Add, BG.F2fpBf16, BCAST.Bf16ToF32), doc=f"{SERIAL_SPLITK_DOC}, on bits",
     conformance=CONFORMANCE_CC12_SERIAL)
+CublasSplitKGemmBf16PartialsAligned = CompositeDefinition(
+    "CublasSplitKGemmBf16PartialsAligned", 1, ("K", "N", "SPLIT_K", "ALIGN", "TILE_K", "DOT"), _gemm_f32_type(BF16, BF16),
+    _aligned_splitk,
+    doc=ALIGNED_DOC, conformance=CONFORMANCE_ALIGNED)
 GemmF32Out.word = lambda b: bind(GemmF32OutWord, K=b["K"], N=b["N"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 BatchedGemm.word = lambda b: bind(BatchedGemmWord, B=b["B"], K=b["K"], N=b["N"], DOT=word_of(b["DOT"]))  # type: ignore[attr-defined]
 CublasSplitKGemmF32Out.word = lambda b: bind(CublasSplitKGemmF32OutWord, K=b["K"], N=b["N"], SPLIT_K=b["SPLIT_K"],  # type: ignore[attr-defined]
@@ -278,3 +353,84 @@ CublasSplitKGemmBf16Partials.word = lambda b: bind(CublasSplitKGemmBf16PartialsW
                                                    SPLIT_K=b["SPLIT_K"], DOT=word_of(b["DOT"]))
 CublasSerialSplitKGemm.word = lambda b: bind(CublasSerialSplitKGemmWord, K=b["K"], N=b["N"],  # type: ignore[attr-defined]
                                              SPLIT_K=b["SPLIT_K"], DOT=word_of(b["DOT"]))
+
+TRAIN_M = (256, 4096)
+TRAIN_LINEARS = ((576, 576), (576, 192), (576, 1536), (1536, 576), (576, 49152))
+#: F.linear's GEMMs at x (M, K), W (N, K): role -> (x's rows, w's rows, the row GEMM's (K, N) at (M, K, N))
+TRAIN_LINEAR_ROLES: dict[str, tuple[str, str, Callable[[int, int, int], tuple[int, int]]]] = {
+    "fwd": ("X", "W", lambda M, K, N: (K, N)),
+    "dX": ("dY", "W^T", lambda M, K, N: (N, K)),
+    "dW": ("dY^T", "X^T", lambda M, K, N: (M, K)),
+}
+#: eager attention's bmm's after repeat_kv, per head: op -> (x's rows, w's rows, the row GEMM's (K, N) at (S, D))
+TRAIN_BMM: dict[str, tuple[str, str, Callable[[int, int], tuple[int, int]]]] = {
+    "qk": ("q", "k", lambda S, D: (D, S)),
+    "pv": ("p", "v^T", lambda S, D: (S, D)),
+    "dp": ("do", "v", lambda S, D: (D, S)),
+    "dv": ("p^T", "do^T", lambda S, D: (S, D)),
+    "dq": ("ds", "k^T", lambda S, D: (S, D)),
+    "dk": ("ds^T", "q^T", lambda S, D: (S, D)),
+}
+TRAIN_BMM_SHAPES = ((256, 64), (512, 64))
+_NOSPLIT = {"kernel": "nosplit"}
+#: (M, K, N, role) -> the route sm_120 takes, in `bf16_gemm_check.cublas_route_rows`' form
+TRAIN_ROUTES: dict[tuple[int, int, int, str], dict[str, Any]] = {
+    **{(M, K, N, role): _NOSPLIT for M in TRAIN_M for K, N in TRAIN_LINEARS for role in TRAIN_LINEAR_ROLES},
+    (256, 576, 1536, "dX"): {"kernel": "splitk", "SPLIT_K": 8, "partial": "bf16"},
+    (256, 576, 49152, "dX"): {"kernel": "splitk", "SPLIT_K": 17, "partial": "bf16"},
+    (4096, 576, 49152, "dX"): {"kernel": "serialk", "SPLIT_K": 7},
+    (4096, 576, 49152, "dW"): {"kernel": "serialk", "SPLIT_K": 2},
+}
+#: B 8 x S 512's grid.z dW: (K, N) -> (grid.z, the k-tile of the cutlass kernel launched, its name's ``_{TILE_K}x{stages}``)
+_GRID_Z_DW = {(576, 576): (7, 32), (576, 192): (12, 64), (576, 1536): (3, 32), (1536, 576): (3, 32)}
+for (_K, _N), (_z, _t) in _GRID_Z_DW.items():
+    TRAIN_ROUTES[(4096, _K, _N, "dW")] = {"kernel": "splitk", "SPLIT_K": _z, "partial": "bf16", "align": 8, "tile_k": _t}
+
+
+def train_route(role: str, M: int, K: int, N: int) -> dict[str, Any]:
+    """The cuBLAS route sm_120 takes for F.linear's ``role`` GEMM at x (M, K), W (N, K) (`TRAIN_CAPTURE`); refuses any the
+    capture does not cover."""
+    if role not in TRAIN_LINEAR_ROLES:
+        raise ValueError(f"train_route: role {role!r} (only {', '.join(TRAIN_LINEAR_ROLES)})")
+    if (M, K, N, role) not in TRAIN_ROUTES:
+        raise ValueError(f"train_route: (M, K, N) = ({M}, {K}, {N}) is not captured (M in {TRAIN_M}, (K, N) in {TRAIN_LINEARS})")
+    return dict(TRAIN_ROUTES[(M, K, N, role)])
+
+
+def route_gemm(route: dict[str, Any], K: int, N: int) -> Any:
+    """``route``'s Definition on bits at the row GEMM (K, N), `HopperBF16WgmmaDot16_v2` its k16 step: (x: Array<K, BF16>,
+    w: Array<N, Array<K, BF16>>) -> Array<N, BF16>."""
+    kind, dot = route.get("kernel"), BG.HopperBF16WgmmaDot16
+    if kind == "nosplit":
+        return bind(BG.Gemm, K=K, N=N, DOT=dot)
+    if "align" in route and kind == "splitk" and route.get("partial") == "bf16":
+        if "tile_k" not in route:
+            raise ValueError(f"route_gemm: route {route} has no tile_k, the grid.z kernel's k-tile")
+        z, align, tile = int(route["SPLIT_K"]), int(route["align"]), int(route["tile_k"])
+        for lo, hi in aligned_bounds(K, z, align):
+            residue_first(lo, hi, tile)
+        return bind(CublasSplitKGemmBf16PartialsAligned, K=K, N=N, SPLIT_K=z, ALIGN=align, TILE_K=tile, DOT=dot)
+    partials = CublasSplitKGemmBf16Partials if route.get("partial") == "bf16" and "align" not in route else None
+    split = {"serialk": CublasSerialSplitKGemm, "splitk": partials}.get(kind)
+    if split is None:
+        raise ValueError(f"route_gemm: route {route} has no Definition on bits")
+    split_bounds(K, int(route["SPLIT_K"]))
+    return bind(split, K=K, N=N, SPLIT_K=int(route["SPLIT_K"]), DOT=dot)
+
+
+def train_linear(role: str, M: int, K: int, N: int) -> Any:
+    """`route_gemm` of `train_route`: one row of F.linear's ``role`` GEMM at x (M, K), W (N, K) as sm_120 computes it."""
+    return route_gemm(train_route(role, M, K, N), *TRAIN_LINEAR_ROLES[role][2](M, K, N))
+
+
+def attention_bmm(op: str, S: int, D: int, B: int = 1) -> Any:
+    """`BatchedGemm_v2{B, K, N, HopperBF16WgmmaDot16_v2}` of eager attention's bmm ``op`` (`TRAIN_BMM`) at S tokens and head
+    dimension D: B members (heads), each one x row against its head's w rows; refuses any (S, D) the capture does not cover."""
+    if op not in TRAIN_BMM:
+        raise ValueError(f"attention_bmm: op {op!r} (only {', '.join(TRAIN_BMM)})")
+    if (S, D) not in TRAIN_BMM_SHAPES:
+        raise ValueError(f"attention_bmm: (S, D) = ({S}, {D}) is not captured (only {TRAIN_BMM_SHAPES})")
+    if B < 1:
+        raise ValueError(f"attention_bmm: B = {B}")
+    K, N = TRAIN_BMM[op][2](S, D)
+    return bind(BatchedGemm, B=B, K=K, N=N, DOT=BG.HopperBF16WgmmaDot16)

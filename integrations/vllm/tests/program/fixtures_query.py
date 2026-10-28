@@ -1,4 +1,4 @@
-"""Small-statics Program fixtures and explicit-oracle helpers for the query track (window 2026-09-17).
+"""Small-statics Program fixtures and explicit-oracle helpers for the query track.
 
 Shared by the boundary / query-API / partition test suites (import as `tests.program.fixtures_query`).  Every
 constructor returns a `Program` small enough for the explicit oracle (`layout.GateSelection.in_` / `.out` on the expanded
@@ -96,7 +96,7 @@ def attn_block_program(FIRST: bool, D: int = 16, BN: int = 16, NVIS: int | None 
 
 
 def attention_head_v1_program(T: int = 72, D: int = 16) -> Program:
-    """`AttentionHead_v1{T,D}`: the legacy chain of every pre-D54 record (`Serve_v1`), kBlockN = 64 as the module constant:
+    """`AttentionHead_v1{T,D}`: the legacy chain of every record without a geometry (`Serve_v1`), kBlockN = 64 as the module constant:
     T=72 -> two blocks (the FIRST one with 8 visible columns, then a full 64-column block with FOUR PV k-step batches)."""
     return Program(bind(b1.AttentionHead, T=T, D=D))
 

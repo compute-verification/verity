@@ -1,13 +1,18 @@
-"""`served_verdicts.py`, the Wed 28 run's window pick, its subprotocols' pieces and its record, on toy serve dirs and answers:
+"""`served_verdicts.py`'s window pick, its subprotocols' pieces and its record, on toy serve dirs and answers:
 the window it audits holds the most requests and none carried across windows; a subprotocol with no piece is named missing
 with its issue and given no verdict; and sampled proofs' accepted answer composes, with the others missing, to a pending
 block record that `block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing
-composes to reject with no block record. PoUW's development piece checks the window's gate session and credits nothing,
+composes to reject with no block record. The wipe composes only when its answer accepts on the record's server. PoUW's development piece checks the window's gate session and credits nothing,
 and the gate is refused while the lane has a period open. `served_verdicts.sh`'s window circuits gate on every class of
-CLASSES, and the class of record's count after them gates nothing."""
+CLASSES, and the class of record's count after them gates nothing; its endpoint gets one token budget, T, with or without
+H1. Its load, `serve_load.py --varied`, writes each
+request's send, first-token and done times beside its record, on an injected clock and a stand-in endpoint."""
 from __future__ import annotations
 
+import argparse
+import importlib.util
 import io
+import itertools
 import json
 import os
 import subprocess
@@ -17,14 +22,17 @@ from pathlib import Path
 
 import jsonschema
 import pytest
+from verity.core.protocols.pous import wipe_period as W
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import served_verdicts as S
-from verity_all_protocols import runner, table
 from verity_e2e_demo import block_record as BR
 
 SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v1.schema.json").read_text())
+_SL = importlib.util.spec_from_file_location("serve_load", HERE.parents[2] / "examples" / "vllm" / "serve_load.py")
+SL = importlib.util.module_from_spec(_SL)
+_SL.loader.exec_module(SL)
 
 
 def _write(d: Path, name: str, rows: list[dict]) -> None:
@@ -88,7 +96,7 @@ def _accepted() -> dict:
     a = {"protocol": "verity/sampled-proofs/one-stage/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
          "public": {"bound": 2, "drawn": [0, 3], "per_template": None, "proved": [0, 3]},
          "profile": {"levels": [{"name": "unit", "size": 4}], "drawn": {"unit": 2}, "delta": "1/100"}}
-    return runner.row_of(next(e for e in table.TABLE if e.name == "integrity"), a, Path("/nonexistent"))
+    return S.row_of(S.INTEGRITY_OWNER, a, Path("/nonexistent"))
 
 
 def _rows(integrity: dict, pieces: Path) -> dict:
@@ -102,7 +110,7 @@ def test_sampled_proofs_alone_composes_to_a_pending_block_record(tmp_path):
     assert rec["legs"]["integrity"]["quantity"]["value"] == 2 and rec["server_time"] == [{"server": "vy-dc-h200", "steps": [5, 11]}]
     assert (line["composed"], line["record_missing"]) == ("pending", ["bandwidth", "certifier", "pous", "pouw", "wipe"])
     assert line["missing"] == {"PoUW": "VLLM-33 G1", "the bandwidth audit": "VLLM-33 G2", "PoUS": "MEM-94",
-                               "the network certifier": "NET-83", "the wipe": None}
+                               "the network certifier": "NET-83", "the wipe": "MEM-96"}
     assert report["protocols"]["work"] == {"verdict": "missing", "owner": "vllm-serve-arms", "issue": "VLLM-33 G1",
                                            "why": S.PIECES["work"][4]}
 
@@ -112,6 +120,56 @@ def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp
     assert row["verdict"] == "error" and "no summary" in row["reason"]
     _report, rec, line = S.record(_rows(row, tmp_path), window=1, steps=(5, 11), node="n", run=None)
     assert rec is None and (line["composed"], line["by"]) == ("reject", ["sampled proofs"])
+
+
+WIPE_ACCEPT = {"protocol": W.PROTOCOL, "verdict": "accept", "reason": None, "commitment": "cd" * 64,
+               "public": {"certified": True, "egress_mib": 0, "eps": str(W.EPS), "foreign_bits": 4096, "k": 5500,
+                          "memory_bits": 1 << 40, "r": "1/2"},
+               "profile": {"delta": str(W.EPS)}}
+WIPE_REJECT = {"protocol": W.PROTOCOL, "verdict": "reject", "reason": "a read came back late", "commitment": "cd" * 64,
+               "public": None, "profile": None}
+
+
+@pytest.mark.parametrize("case", ["accept", "elsewhere", "unserved", "refused", "reject"])
+def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_server(tmp_path, monkeypatch, capsys, case):
+    """`record` takes the wipe out of ``record_missing`` only when its answer accepts and its served.json names the
+    record's node: served on another server it stays missing (``elsewhere``), an accepting answer with no served.json
+    names no server and stays missing (``unserved``), a wipe that wrote no answer (served_wipe.sh refused) stays missing
+    with its issue, and one whose answer rejects makes the record reject with no block record."""
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    wipe = tmp_path / "pieces" / "wipe"
+    wipe.mkdir(parents=True)
+    if case == "refused":
+        (wipe / "refused.txt").write_text("WIPE REFUSED: the card has a compute process\n")
+    else:
+        (wipe / "answer.json").write_text(json.dumps(WIPE_REJECT if case == "reject" else WIPE_ACCEPT))
+        if case != "unserved":
+            (wipe / "served.json").write_text(json.dumps({"server": "vy-dc-h200-2" if case == "elsewhere" else "vy-dc-h200"}))
+    (tmp_path / "serve").mkdir()
+    rc = S.main(["record", "--serve-run", str(_serve_dir(tmp_path / "serve")), "--window", "1",
+                 "--sampled-proofs", str(tmp_path / "audit"), "--pieces", str(tmp_path / "pieces"),
+                 "--out", str(tmp_path / "record"), "--node", "vy-dc-h200"])
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    if case == "reject":
+        assert rc == 1 and (line["composed"], line["by"], line["block_record"]) == ("reject", ["the wipe"], None)
+        assert not (tmp_path / "record" / "block-record.json").exists()
+        return
+    rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert rc == 0 and line["check"] == {} and line["composed"] == "pending"
+    if case == "accept":
+        assert line["record_missing"] == ["bandwidth", "certifier", "pous", "pouw"]
+        assert rec["legs"]["wipe"]["server"] == "vy-dc-h200" and rec["legs"]["wipe"]["quantity"]["value"] == 4096
+        assert rec["legs"]["wipe"]["runs"] == ["r1"] and rec["composed"]["legs"]["wipe"] == "accept"
+        return
+    assert line["record_missing"] == ["bandwidth", "certifier", "pous", "pouw", "wipe"]
+    if case == "elsewhere":
+        assert rec["legs"]["wipe"]["server"] == "vy-dc-h200-2" and rec["composed"]["elsewhere"] == ["wipe"]
+    elif case == "unserved":
+        assert rec["legs"]["wipe"] is None and "the wipe" not in line["missing"]
+    else:
+        assert rec["legs"]["wipe"] is None and line["missing"]["the wipe"] == "MEM-96"
 
 
 SID = "s20261026T221500Z-ab12"
@@ -270,3 +328,119 @@ def test_any_class_of_classes_that_does_not_count_fails_the_run(tmp_path, classe
     assert any("prove_path.py window-circuit: refused at" in line for line in lines) == (answers.get("8,64,4") == "refuse")
     measured = [line for line in lines if line.startswith("WINDOW-CIRCUIT class record (measurement)")]
     assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "2h")
+
+
+def _serve_argv(tmp_path: Path, env: dict[str, str]) -> tuple[int, list[str]]:
+    """`served_verdicts.sh serve` in a toy tree whose venv python records serve-openai's argv and exits before listening,
+    under a no-op `sleep`: the exit status and that argv."""
+    tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
+    for d in (tree / "integrations" / "vllm", bin_, venv):
+        d.mkdir(parents=True)
+    for path, body in ((venv / "python", f"printf '%s\\n' \"$@\" > {tmp_path}/argv; exit 1"), (bin_ / "sleep", "exit 0")):
+        path.write_text(f"#!/bin/sh\n{body}\n")
+        path.chmod(0o755)
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(tmp_path / "serve"),
+           "OUT": str(tmp_path / "out"), **env}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "serve"], cwd=tree, env=env, check=False,
+                        capture_output=True).returncode
+    return rc, (tmp_path / "argv").read_text().splitlines()
+
+
+@pytest.mark.parametrize("env, budget", [
+    ({}, "512"),
+    ({"H1_GATE": GATE}, "512"),
+    ({"H1_GATE": GATE, "H1_T": "8192"}, "8192"),
+    ({"H1_T": "8192"}, "8192"),
+    ({"T": "2048", "H1_T": "8192", "H1_GATE": GATE}, "2048"),
+])
+def test_the_engine_gets_one_token_budget_with_or_without_h1(tmp_path, env, budget):
+    """serve-openai gets ``--max-num-batched-tokens`` once, T (default H1_T, else 512), whether H1 serves or not; without
+    it the engine would take serve-openai's own 2048 with H1 off."""
+    rc, argv = _serve_argv(tmp_path, env)
+    assert rc == 10 and argv[:3] == ["-m", "verity_vllm.pipeline.cli", "serve-openai"], (rc, argv)
+    assert argv.count("--max-num-batched-tokens") == 1 and argv[argv.index("--max-num-batched-tokens") + 1] == budget
+    assert ("--protocols" in argv) == ("H1_GATE" in env)
+
+
+class _Response:
+    """`urlopen`'s response, read whole or line by line; reading line i sets ``now[0]`` to ``times[i]``, and reading past the
+    last line to ``end``."""
+
+    def __init__(self, lines: list[bytes], now: list[float] | None = None, times: list[float] = (), end: float = 0.0) -> None:
+        self.lines, self.now, self.times, self.end = lines, now, list(times), end
+
+    def __enter__(self) -> _Response:
+        return self
+
+    def __exit__(self, *exc: object) -> bool:
+        return False
+
+    def read(self) -> bytes:
+        return b"".join(self.lines)
+
+    def __iter__(self):
+        for i, line in enumerate(self.lines):
+            if self.now is not None:
+                self.now[0] = self.times[i]
+            yield line
+        if self.now is not None:
+            self.now[0] = self.end
+
+
+def _sse(*events: dict | bytes) -> list[bytes]:
+    """serve-openai's stream of ``events``, as `urlopen`'s response yields it: each event's data line, then its blank line."""
+    return [x for e in events for x in (b"data: " + (e if isinstance(e, bytes) else json.dumps(e).encode()) + b"\n", b"\n")]
+
+
+def test_serve_load_times_a_request_at_its_send_its_first_output_id_and_its_end(monkeypatch):
+    """A streamed request's first token is the first event carrying output ids, not the stream's opening event, and its end
+    comes once the stream is read past [DONE]; its ids and finish are what they were. An unstreamed one has no first token."""
+    now = [1.0]
+    lines = _sse({"choices": [{"text": "", "token_ids": None}]}, {"choices": [{"token_ids": [7]}]},
+                 {"choices": [{"token_ids": [8], "finish_reason": "length"}]}, b"[DONE]")
+    stream = _Response(lines, now, times=[2, 2, 3, 3, 4, 4, 5, 5], end=6.0)
+    monkeypatch.setattr(SL.urllib.request, "urlopen", lambda req, timeout=None: stream)
+    times: dict = {}
+    assert SL.post(0, {"stream": True}, times=times, clock=lambda: now[0]) == {"token_ids": [7, 8], "finish_reason": "length"}
+    assert times == {"send": 1.0, "first_token": 3.0, "done": 6.0}
+    whole = _Response([json.dumps({"choices": [{"token_ids": [7]}]}).encode()])
+    monkeypatch.setattr(SL.urllib.request, "urlopen", lambda req, timeout=None: whole)
+    times = {}
+    assert SL.post(0, {}, times=times, clock=lambda: now[0]) == {"choices": [{"token_ids": [7]}]} and set(times) == {"send", "done"}
+
+
+def test_serve_load_varied_writes_each_requests_timings_beside_its_record(tmp_path, monkeypatch):
+    """A varied run's timings file beside its record: its release run and wall-clock start, and one entry a request in
+    release order, its times on the injected clock from the run's start (send, then first token, then done) and its
+    streamed ids counted; the record's lines are what they were."""
+    ticks = itertools.count()
+
+    def clock() -> float:
+        return float(next(ticks))
+
+    def urlopen(req, timeout=None):
+        b = json.loads(req.data)
+        if req.full_url.endswith("/tokenize"):
+            return _Response([json.dumps({"tokens": [128000] + [1000 + ord(c) for c in b["prompt"]]}).encode()])
+        ids = list(range(500, 500 + b["max_tokens"]))
+        return _Response(_sse({"choices": [{"text": "", "token_ids": None}]},
+                              *({"choices": [{"token_ids": [t], "finish_reason": "length" if t == ids[-1] else None}]} for t in ids),
+                              b"[DONE]"))
+
+    monkeypatch.setattr(SL.urllib.request, "urlopen", urlopen)
+    out = tmp_path / "load.jsonl"
+    a = argparse.Namespace(port=0, model="m", varied=3, fixed=0, rate=2.0, prompt_range="16:24", max_tokens=4, seed=1,
+                           release="run", jitter_ms=0.0, out=str(out))
+    assert SL.run_varied(a, clock=clock, wall=lambda: 1.7e9, sleep=lambda s: None) == 0
+    rows = [json.loads(line) for line in out.read_text().splitlines()]
+    assert SL.timings_path(out) == tmp_path / "load.timings.json"
+    doc = json.loads(SL.timings_path(out).read_text())
+    assert set(doc) == {"clock", "release_run", "start_unix", "requests"} and (doc["release_run"], doc["start_unix"]) == ("run", 1.7e9)
+    assert [set(r) for r in rows] == [{"user", "release", "at_s", "delay_s", "prompt", "max_tokens", "response"}] * 3
+    assert [(t["user"], t["release"], t["at_s"]) for t in doc["requests"]] == [(r["user"], r["release"], r["at_s"]) for r in rows]
+    assert [r["release"] for r in rows] == [0, 1, 2]
+    for t, r in zip(doc["requests"], rows):
+        assert set(t) == {"user", "release", "at_s", "send_s", "first_token_s", "done_s", "tokens", "ok"} and t["ok"]
+        assert 0 < t["send_s"] < t["first_token_s"] < t["done_s"]
+        assert r["response"] == {"token_ids": list(range(500, 500 + r["max_tokens"])), "finish_reason": "length"}
+        assert t["tokens"] == r["max_tokens"]

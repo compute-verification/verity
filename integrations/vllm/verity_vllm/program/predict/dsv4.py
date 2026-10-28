@@ -324,7 +324,7 @@ class _Model(dsa._Model):
         C, net, r, P = self.C, self.net, self.net.ratios[L], hist["from"]
         D, DR, NH, NHP, window = (int(C[k]) for k in ("HEAD_DIM", "QK_ROPE", "NH", "PADDED_HEADS", "WINDOW"))
         G, scale, sink = net.G, float(C["ATTN_SCALE"]), self.w[(L, "attn.attn_sink")].refs.slice(0, NH)
-        BN, blocks = G["BN"], lambda n, b: -(-n // b)  # noqa: E731
+        BN, blocks = G["BN"], lambda n, b: -(-n // b)
         consts: dict[int, Refs] = {}
 
         def i32(v: int) -> Refs:

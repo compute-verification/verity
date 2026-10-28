@@ -2,7 +2,7 @@
 ``the same GEMM inside the replayed model``).
 
 ``independent_gemm(node, opened_inputs) -> bytes`` predicts the committed bytes of one GEMM
-output row (the default VU: one node instance at one position) from the description node and
+output row (the default proof block: one node instance at one position) from the description node and
 the authenticated openings of its inputs, using nothing but the explicit numerical model
 measured in this lane:
 
@@ -39,7 +39,7 @@ How the epilogue is chosen (the model must be told, it must not guess by trying 
 
 W1's GEMM node (``verity.bi_mm``) opens ``x`` = the producer's row (with ``extra["arg_cols"]["x"]``
 = the column slice when the producer is wider) and ``w`` = the *parameter* leaf in its own
-``[N, K]`` layout (the runtime saw ``weight.t()``; W1's own checker transposes back).  The row VU
+``[N, K]`` layout (the runtime saw ``weight.t()``; W1's own checker transposes back).  The row proof block
 is ``M = 1``: one opened input row -> the ``N`` BF16 words of one output row.
 
 A slice/split-K cuBLAS kernel is described by a ``const`` arg ``split_k`` (or ``attrs.split_k``)
@@ -86,7 +86,7 @@ def _f32_to_bf16(bits):
     is_nan = exponent_all_ones & ((bits & np.uint32(0x007FFFFF)) != 0)
     return np.where(is_nan, np.uint32(0x7FC0), rounded).astype(np.uint16)
 
-MODEL_VERSION = "gemm.bf16.v1 = ampere_bf16_m16n8k16 chain (silicon.AMPERE_BF16_M16N8K16: groups (8,8), width 25, exponent floor -132) + epilogue; A100 validation 2026-09-07"
+MODEL_VERSION = "gemm.bf16.v1 = ampere_bf16_m16n8k16 chain (silicon.AMPERE_BF16_M16N8K16: groups (8,8), width 25, exponent floor -132) + epilogue; validated on the A100"
 EPILOGUES = {
     "none": 0,
     "bias_fp32_in_kernel": 1,  # vLLM matmul_kernel_persistent via aten::addmm; cuBLASLt bias epilogue
@@ -361,7 +361,7 @@ def coverage(node: Any, opened_inputs: Mapping[str, Any]) -> dict[str, Any]:
     if arch_note is None:
         return {"covered": False, "family": None, "kernel_path": impl, "spec": None, "reason": f"unresolved: no validated per-instruction model for arch {arch!r}"}
     explicit_split = _const(n, opened_inputs, "split_k")
-    # Capture format v2 (W3c): a coordinate VU opens one *row block* of the parameter (a column
+    # Capture format v2 (W3c): a coordinate proof block opens one *row block* of the parameter (a column
     # of W^T), so the opened N is the block height, not the launch's N.  The description declares
     # the launch's N (``consts.N`` or the node's output width) and the family is looked up there;
     # the arithmetic of one column of a single-chain kernel is the same chain.

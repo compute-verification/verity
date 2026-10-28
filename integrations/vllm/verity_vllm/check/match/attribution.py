@@ -28,11 +28,11 @@ def attribute_instances(run: MatchRun, hdr_reqs: list[dict]) -> Attribution:
     """Attribute every fold instance to its request: the fold's meta channel, else the rows of its engine step."""
     B, steps = run.fold, run.steps
     n_in = B.n_input_nodes
-    # [R16 global, F-fp8-GM1 / M-0823] the shared weights = the Input nodes no request owns (one per leaf field of a mixed-width Record:
-    # FP8 435; one node for a homogeneous bf16 Record) -- never `n_input_nodes - 1`.  [R15 stoch] the request-owned inputs are the prompts
+    # the shared weights = the Input nodes no request owns (one per leaf field of a mixed-width Record:
+    # FP8 435; one node for a homogeneous bf16 Record) -- never `n_input_nodes - 1`.  The request-owned inputs are the prompts
     # (one per header request) + the seeds (compare.Prog.seed_index).  A layout that does not hold is a G2 failure by name, not a guess.
     _seed_index_all = dict(getattr(B, "seed_index", {}))
-    _peer_index_all = dict(getattr(B, "peer_index", {}))   # [R17 D90] TP rank fold: peers node -> request index (one per request)
+    _peer_index_all = dict(getattr(B, "peer_index", {}))   # TP rank fold: peers node -> request index (one per request)
     weights_nodes_error = None
     try:
         weights_nodes = frozenset(IL.weights_input_nodes(B, len(hdr_reqs), len(_seed_index_all), len(_peer_index_all),
@@ -42,7 +42,7 @@ def attribute_instances(run: MatchRun, hdr_reqs: list[dict]) -> Attribution:
     meta_of = {o["node"] + n_in: o for o in B.oracle_rows}
     per_req: dict[str, list[int]] = collections.OrderedDict()
     unattributed = []
-    # [R19, F-r19-int-15] weight-only instances (every node operand a shared weight or an earlier weight-only instance: gemma2's RMSNorm
+    # weight-only instances (every node operand a shared weight or an earlier weight-only instance: gemma2's RMSNorm
     # scale `1 + w`, 11235 on #57 B8 1024/128) carry no request's data.  They are SHARED -- owned by no request, read like a weight --
     # and belong to the leg of every request with rows in their engine step (OCC.shared_legs: the request's own derive computes the node
     # inside its forward at that step).  The same rule X-09 (batch_decomp.decompose) applies, after the meta channel and before the row-count rule,
@@ -95,7 +95,7 @@ def requests_observed(run: MatchRun, att: Attribution, g_ids: list[str]) -> dict
         c.fail(f"{len(unattributed)} fold instances attributed to no request")
     c.info.update({"n_instances": len(B.inst), "attributed": sum(len(v) for v in per_req.values()), "unattributed": len(unattributed),
                    "engine_steps": len(steps),
-                   # [F-r19-int-15] weight-only instances: owned by no request, in the leg of every request with rows in their step
+                   # weight-only instances: owned by no request, in the leg of every request with rows in their step
                    "weight_only_shared": len(shared_idx),
                    "weight_only_specs": dict(collections.Counter(B.inst[i]["spec"].split("{")[0] for i in shared_gi).most_common(6))})
     c.done()

@@ -42,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, NamedTuple
 
 from verity.core.protocols.certifier import advice as I1
-from verity.core.protocols.certifier.advice import (  # noqa: F401 -- the advice's parts, as `predict.batch._solo` reads them
+from verity.core.protocols.certifier.advice import (  # the advice's parts, as `predict.batch._solo` reads them
     KINDS,
     WIDTH_BITS,
     MalformedAdvice,

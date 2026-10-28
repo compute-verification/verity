@@ -23,15 +23,16 @@ using sx::u64;
 
 // --- layout, as engine.py lays it out ------------------------------------------------------------------------------------
 
-struct RowSpec {     // 112 bytes: row g's bytes in slot s are a_len at a + s a_stride, then b_len at b + s b_stride
+struct RowSpec {     // 752 bytes: row g's bytes in slot s are a_len at a + s a_stride, then b_len at b + s b_stride
   u64 a, a_stride;
   u64 b, b_stride;
   u32 a_len, b_len;
   u32 nbytes;        // a_len + b_len
   u32 a16;           // a and a_stride are multiples of 16
   u64 mid[8];        // row_setup: the chaining value after P(8 nbytes), sha512/row/v2's first block
+  u64 kw[80];        // row_setup, when the last block is padding alone (pad_alone): its K[t] + W[t], for compress_kw
 };
-static_assert(sizeof(RowSpec) == 112, "RowSpec is 112 bytes");
+static_assert(sizeof(RowSpec) == 752, "RowSpec is 752 bytes");
 
 struct LeafRow {     // 224 bytes: row g's frame leaf, rank and position in the domain dids[did]; its salt is row salt_row's
   u64 rank, position;
@@ -161,7 +162,12 @@ SX_HD void place(u64* w, const u64* v, u32 off) {
 
 // --- sha512/row/v2 -------------------------------------------------------------------------------------------------------
 
-// row_setup: P(8 nbytes) = ("verity/sha512-row/v2\0" || u64be(8 nbytes)) zero-padded to 128 bytes, compressed from the IV
+// whether an n-byte row's last block is its padding alone (0x80 and the length, or the length): n mod 128 is 0 or at least
+// 112. That block is the same in every slot, so row_setup schedules it once and row_digest runs its rounds alone.
+SX_HD bool pad_alone(u32 n) { return n % 128 == 0 || n % 128 >= 112; }
+
+// row_setup: P(8 nbytes) = ("verity/sha512-row/v2\0" || u64be(8 nbytes)) zero-padded to 128 bytes, compressed from the IV,
+// and with pad_alone, the last block's K[t] + W[t]
 template <class C>
 SX_HD void row_setup(RowSpec& r) {
   Msg m;
@@ -170,6 +176,12 @@ SX_HD void row_setup(RowSpec& r) {
   put(m, 8 * (u64)r.nbytes, 8);
   sx::iv(r.mid);
   C::run(r.mid, m.w);
+  if (pad_alone(r.nbytes)) {
+    u64 w[16] = {};
+    w[0] = r.nbytes % 128 == 0 ? 0x8000000000000000ull : 0;
+    w[15] = 8 * (128 + (u64)r.nbytes);
+    sx::kw_of(w, r.kw);
+  }
 }
 
 // the 8 message bytes at row offset o (o < nbytes + 1), past part a's whole blocks: the row's bytes, then 0x80, then zeros
@@ -190,7 +202,7 @@ template <class C>
 SX_HD void row_digest(const RowSpec& r, u64 s, u64* x) {
   const uint8_t* a = reinterpret_cast<const uint8_t*>(r.a + s * r.a_stride);
   const uint8_t* b = reinterpret_cast<const uint8_t*>(r.b + s * r.b_stride);
-  const u32 n = r.nbytes, blocks = (n + 17 + 127) / 128, fast = r.a16 ? r.a_len / 128 : 0;
+  const u32 n = r.nbytes, blocks = (n + 17 + 127) / 128, fast = r.a16 ? r.a_len / 128 : 0, last = blocks - pad_alone(n);
   for (int i = 0; i < 8; ++i) x[i] = r.mid[i];
   u64 w[16];
 #ifdef __CUDA_ARCH__
@@ -209,12 +221,13 @@ SX_HD void row_digest(const RowSpec& r, u64 s, u64* x) {
 #ifdef __CUDA_ARCH__
 #pragma unroll 1
 #endif
-  for (u32 k = fast; k < blocks; ++k) {
+  for (u32 k = fast; k < last; ++k) {
 #pragma unroll
     for (int i = 0; i < 16; ++i) w[i] = row_word(a, r.a_len, b, n, 128 * k + 8 * i);
     if (k + 1 == blocks) w[15] = 8 * (128 + (u64)n);
     C::run(x, w);
   }
+  if (last < blocks) C::kw(x, r.kw);
 }
 
 // --- hm96-sha512 under hiding leaves, then the frame-v3-sha512 leaf ------------------------------------------------------

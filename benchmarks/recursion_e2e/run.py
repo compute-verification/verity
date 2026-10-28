@@ -1,15 +1,15 @@
-"""``verity bench recursion_e2e COMMAND``: the recursive session through pod 85's steps, timed stage by stage (README.md).
+"""``verity bench recursion_e2e COMMAND``: the recursive run through pod 85's steps, timed step by step (README.md).
 
-    plan   [POINT]                 the stages, each statement's lease, and the job's launch command
+    plan   [POINT]                 the steps, each statement's lease, and the job's launch command
     run    [POINT] [--e2e] [--dry-run] [--here]
-                                   one research run of job.sh: a firewalled run (85's CPU prover) or --cpu a plain run on
-                                   vy-nebius-cpu-2 pinned to --cores, a GPU run vy-nebius-1's queue (--here: job.sh in this
-                                   shell, e.g. inside a run); --e2e: one pass, every stage once, no warm session
+                                   one recorded run of job.sh: a firewalled run (85's CPU prover) or --cpu a plain run on
+                                   a CPU node pinned to --cores, a GPU run a GPU node's queue (--here: job.sh in this
+                                   shell, e.g. inside a run); --e2e: one pass, every step once, no warm run
     result --dir OUT [--out FILE] [--md FILE]
                                    the result from a job's out/ (the job runs it last, into out/recursion_e2e.json)
     table  RESULT... [--merge] [--json]
                                    the table from results: a recursion_e2e.json or a run id (its records fetched and read)
-    store  RESULT... [--merge]     the results and their table as one art (research data put); prints its art: id
+    store  RESULT... [--merge]     the results and their table as one art in the evidence store; prints its art: id
 
 POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 --lease-min M --neg challenge,query
        --forge KINDS (85's forgeries; with coef, dirs or message the forge-after step too, unless --no-forge-after)
@@ -39,43 +39,43 @@ E2E = (*RP.E2E_STEPS, "negative")
 KIND = "bench/recursion-e2e/v1"
 RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 
-# Each V* statement's firewalled session at K = 4096, N = 2, end to end (s), on the CPU prover, one at a time. No one
-# ratio to the dev session fits, so each statement has its own. A session's time is the Lean session loop's.
-# A lease or a run holds MARGIN times its statements' sessions.
+# Each V* statement's firewalled release at K = 4096, N = 2, end to end (s), on the CPU prover, one at a time. No one
+# ratio to the dev run fits, so each statement has its own. A release's time is the Lean session loop's.
+# A lease or a run holds MARGIN times its statements' releases.
 FW_S = {"L0": 3738, "L1": 894, "L2": 836, "L3": 469, "alg-p0": 815, "alg-p1": 847,
         "cap": 63, "cap-L1": 86, "cap-L2": 74, "cap-L3": 51}
 MARGIN = 1.5
 SETUP_MIN = 5  # the job's start, its retention record and its result
 OTHER_MIN = {"build": 6, "inner": 3, "icheck": 1, "vstage": 6, "vcap": 1, "oreplay": 2, "lean": 12, "forge-after": 15,
              "negative": 30}
-#: the forgeries the firewall stops before release (FIREWALL-REFUSED, no session for Lean), which forge-after makes on the
-#: honest sessions after proving instead (forge_after.CASES)
+#: the forgeries the firewall stops before release (FIREWALL-REFUSED, no release for Lean), which forge-after makes on the
+#: honest releases after proving instead (forge_after.CASES)
 FORGE_AFTER = ("coef", "dirs", "message")
-#: rec_vstage.FORGERIES, each with the V* statements it stages under forged-<kind>/ and oprove proves one session each, named
+#: rec_vstage.FORGERIES, each with the V* statements it stages under forged-<kind>/ and oprove proves one release each, named
 #: as LEVELS names them (`statements`): the levels it forges (L3 is the last at K = 4096; sum's openings either side of the
 #: reps' seam), and with the algebra every part, those it leaves as the honest one too (forged-message's alg-p1). Each is
-#: sized as its honest statement's firewalled session, which bounds the forged one
+#: sized as its honest statement's firewalled release, which bounds the forged one
 FORGED = {"message": "alg", "sum": "L0,L3,alg", "comb": "alg", "top": "L3", "top-salt": "L0", "coef": "L0", "dirs": "L0",
           "filler": "alg"}
 
 # Where a run goes. 85's CPU prover needs no GPU, so a firewalled run (and --cpu) goes straight to a CPU node that takes
-# plain runs, pinned to CORES (infra, 24 Oct 13:08Z); vy-nebius-1/2/3 and vy-nebius-cpu-1 take runs only through slots.
+# plain runs, pinned to CORES; the SLOT_ONLY nodes take runs only through slots.
 CPU_NODE, PLAIN_CPU_NODES = "vy-nebius-cpu-2", ("vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5")
 SLOT_ONLY = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-nebius-cpu-1")
 CPU_WORK = "/workspace/cache/rec-bench"
 
 STAGES = {
     "build": "the CUDA prover (60-circuit.sh), flock-verify (lake build), the inner statement staged with plain and hm96 leaves",
-    "inner": "M0 (ZK off) against the rec_live proxy, WARM + RUNS sessions; today's M0 and --zk on loopback beside it",
-    "icheck": "upstream's replay of the inner session and V*'s hashing reference (rec_vstar)",
+    "inner": "M0 (ZK off) against the rec_live proxy, WARM + RUNS runs; the non-recursive M0 and --zk on loopback beside it",
+    "icheck": "upstream's replay of the inner run and V*'s hashing reference (rec_vstar)",
     "vstage": "V*'s fold points, InnerFold.lean, and each statement staged (RecOpen per level, InnerRepCheck parts)",
     "vcap": "RecCap over each level's committed tops",
     "oprove": "each V* statement proved with --zk on loopback serve, one at a time, per mode (firewall: the Lean session loop)",
-    "oreplay": "upstream's replay --zk of each V* session",
-    "lean": "flock-verify verify --zk on each V* session with V*'s own inputs, the inner session, the inner statement",
-    "forge-after": "coef, dirs and message forged on the honest L0 and alg-p0 sessions' statements after proving "
+    "oreplay": "upstream's replay --zk of each V* release",
+    "lean": "flock-verify verify --zk on each V* release with V*'s own inputs, the inner run, the inner statement",
+    "forge-after": "coef, dirs and message forged on the honest L0 and alg-p0 releases' statements after proving "
                    "(forge_after.py), each refused by Lean beside its accepted honest control",
-    "negative": "the lean step again over each copy of the inner session with one coin of rep 0 flipped, which Lean must refuse",
+    "negative": "the lean step again over each copy of the inner run with one coin of rep 0 flipped, which Lean must refuse",
 }
 
 
@@ -86,7 +86,7 @@ def statements(levels: str = "") -> list[str]:
 
 
 def stmt_lease_min(stmt: str, sessions: int = 1) -> int:
-    """A lease (minutes) that holds ``sessions`` firewalled sessions of ``stmt`` with MARGIN."""
+    """A lease (minutes) that holds ``sessions`` firewalled releases of ``stmt`` with MARGIN."""
     return math.ceil(MARGIN * sessions * FW_S[stmt] / 60)
 
 
@@ -102,7 +102,7 @@ def levels(a) -> str:
 
 
 def max_min(a) -> int:
-    """The job's limit: its statements' firewalled sessions (with MARGIN) plus each other step's minutes per repeat."""
+    """The job's limit: its statements' firewalled releases (with MARGIN) plus each other step's minutes per repeat."""
     sessions = a.oprove_warm + a.oprove_runs
     fw = "firewall" in a.modes.split(",")
     forged = [s for k in forge(a) for s in statements(FORGED[k])]
@@ -120,7 +120,7 @@ def cpu_run(a) -> bool:
 
 
 def on(a) -> str:
-    """The machine: --on, else a plain CPU node for a CPU run and vy-nebius-1's queue for a GPU one."""
+    """The machine: --on, else a plain CPU node for a CPU run and the GPU node's queue for a GPU one."""
     m = a.on or (CPU_NODE if cpu_run(a) else NODE)
     if m in PLAIN_CPU_NODES and not cpu_run(a):
         raise SystemExit(f"--on {m}: a CPU node has no GPU; --oprove-gpu 1 and GPU modes need a GPU node")
@@ -144,8 +144,8 @@ def steps(arg: str) -> list[str]:
 
 
 def preset(a: argparse.Namespace) -> argparse.Namespace:
-    """``--e2e``: one pass: the steps one recursive session needs and its negative, each once,
-    one session per prove and no warm one."""
+    """``--e2e``: one pass: the steps one recursive run needs and its negative, each once,
+    one release per prove and no warm one."""
     if a.e2e:
         a.steps, a.repeat, a.oprove_runs, a.oprove_warm = ",".join(E2E), 1, 1, 0
         a.env = ["WARM=0", "RUNS=1", *a.env]
@@ -201,7 +201,7 @@ def job_command(a: argparse.Namespace, root: Path) -> list[str]:
             *(["--preemptible"] if a.preemptible else []), "--project", "verity",
             "--campaign", "recursion-e2e", "--source", str(root), "--cwd", "source", "--mem-gb", str(mem_gb(a)),
             "--cpus", str(a.cpus), "--max-min", str(limit),
-            "--question", f"recursion_e2e: 85-rec-reprice's stages at K = {a.K}, N = {a.N}, oprove {a.modes}, timed and repeated",
+            "--question", f"recursion_e2e: 85-rec-reprice's steps at K = {a.K}, N = {a.N}, oprove {a.modes}, timed and repeated",
             "--", *job]
 
 
@@ -216,7 +216,7 @@ def cmd_plan(a) -> int:
     a = preset(a)
     env = dict(e.split("=", 1) for e in job_env(a))
     print(f"K = {a.K}, N = {a.N}: 85-rec-reprice.sh's steps on {on(a)}, CPU steps {a.repeat}x, oprove {a.modes} "
-          f"with {a.oprove_warm} warm + {a.oprove_runs} timed sessions per statement, each prove's lease {env['GPU_MAX_MIN']} min")
+          f"with {a.oprove_warm} warm + {a.oprove_runs} timed releases per statement, each prove's lease {env['GPU_MAX_MIN']} min")
     for s in steps(a.steps):
         print(f"  {s:<8} {STAGES[s]}")
     if "oprove" in steps(a.steps) and "firewall" in a.modes.split(","):
@@ -323,12 +323,12 @@ def main(argv: list[str] | None = None) -> int:
                        help="default every step but forge-after, which --forge adds")
         p.add_argument("--repeat", type=int, default=3, help="each CPU step's invocations (REPEAT_<STEP>=n via --env)")
         p.add_argument("--modes", default="firewall", help="oprove's prover sides (firewall, host, dev); the last one's "
-                       "sessions are the ones oreplay, lean and negative verify (default firewall: outer proofs go through "
+                       "releases are the ones oreplay, lean and negative verify (default firewall: outer proofs go through "
                        "the firewall, one at a time)")
         p.add_argument("--oprove-warm", type=int, default=0)
-        p.add_argument("--oprove-runs", type=int, default=1, help="timed sessions per V* statement (default 1)")
+        p.add_argument("--oprove-runs", type=int, default=1, help="timed releases per V* statement (default 1)")
         p.add_argument("--lease-min", type=int, default=0, help="each prove's GPU lease, minutes (85's GPU_MAX_MIN; default "
-                       "sized from the firewall's L3 session: lease_min)")
+                       "sized from the firewall's L3 release: lease_min)")
         p.add_argument("--neg", default="challenge,query", help="inner coins the negative flips, space or comma separated ('' for none)")
         p.add_argument("--forge", default="", help=f"85's forgeries vstage stages and oprove proves (of {', '.join(FORGED)}; "
                        "default none); with any of coef, dirs, message the forge-after step runs after lean")
@@ -336,18 +336,18 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--cpu", action="store_true", help="GPU=0: the CPU prover end to end, no lease (a small K and N)")
         p.add_argument("--oprove-gpu", choices=["auto", "0", "1"], default="auto",
                        help="V*'s prover: 0 the CPU prover (auto under the firewall: node 1's lease pool stops a lease whose "
-                            "GPU idles about 10 min, as a firewalled session's does), 1 the GPU one under a lease")
+                            "GPU idles about 10 min, as a firewalled release's does), 1 the GPU one under a lease")
         p.add_argument("--on", "--node", dest="on", default="", metavar="MACHINE",
                        help=f"default {CPU_NODE} for a CPU run (firewalled on the CPU prover, or --cpu), a plain run there; "
                             f"else {NODE}'s queue")
         p.add_argument("--cores", default="0-31", help="a plain run's cores on its CPU node (taskset -c; default 0-31)")
         p.add_argument("--preemptible", action="store_true",
-                       help="queue the run preemptible (a guest on another lane's node, vy-nebius-2's rule)")
+                       help="queue the run preemptible (a guest on a node that admits guests only so)")
         p.add_argument("--mem-gb", type=int, default=0, help="the run's memory (default mem_gb: 128 with a firewalled oprove, else 64)")
         p.add_argument("--cpus", type=int, default=32)
         p.add_argument("--max-min", type=int, default=0, help="the run's limit (default from the lease model: max_min)")
         p.add_argument("--e2e", action="store_true", help="one pass: build, inner, vstage, vcap, oprove, lean, negative once each, "
-                       "one session per prove and no warm one")
+                       "one release per prove and no warm one")
         p.add_argument("--env", action="append", default=[], metavar="KEY=VALUE",
                        help="passed to job.sh and on to 85 (LEVELS=L0, REPEAT_LEAN=1, TAG=..., KEEP_DATA=1, ...); repeatable")
 
@@ -355,7 +355,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("run")
     point(p)
     p.add_argument("--dry-run", action="store_true")
-    p.add_argument("--here", action="store_true", help="job.sh in this shell (inside a run), not a new research run")
+    p.add_argument("--here", action="store_true", help="job.sh in this shell (inside a run), not a new recorded run")
     p = sub.add_parser("result")
     p.add_argument("--dir", required=True)
     p.add_argument("--out")

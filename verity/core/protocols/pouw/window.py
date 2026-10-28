@@ -1,9 +1,7 @@
-"""PoUW's audit window as the proof service sees it: what the window makes public, the grid its tile count is padded to,
-the size of the uniform draw, and the window's advice (its per-call entries and the map from a drawn index to a tile),
-with the window statement's reference (`note:verity-root/20261006T0545Z-draft-daniel-one-recursive-architecture-v2`,
-PoUW; the joint note's L2, L3 and L4).
+"""PoUW's audit window as the proof system sees it: what the window makes public, the grid its tile count is padded to,
+the size of the uniform draw, and the window's advice (its per-call entries and the map from a drawn index to a tile).
 
-**Public items** (`PUBLIC`), the draft's list and the rows' fixed length (19 Oct).  The service refuses a registration
+**Public items** (`PUBLIC`), the draft's list and the rows' fixed length.  The service refuses a registration
 that makes anything else public; the window's own root and W's root are salted roots, which the rule allows.
 
     item       kind         source     what it is
@@ -19,8 +17,7 @@ that makes anything else public; the window's own root and W's root are salted r
 2^(s+1) differ by a factor of at most 1 + 2^-s (9/8 at s = 3).  A window with N_real real tiles registers one level ℓ, the
 largest point g_ℓ <= N_real: it is credited g_ℓ tiles' work and pads its tiles to N = g_(ℓ+1) > N_real with filler tiles,
 at least one.  So N is `pad(N_real + 1)`, the least grid point at or above the real tiles and the one filler a window
-always has: the private partition's unit-count bucket n_b (`note:circuits/20261006T0615Z-draft-private-partitions`,
-G6) on the same grid, one bucket and not two.  Both outputs are fixed by ℓ, so the window's influenceable public output is one grid level, and over a
+always has: the private partition's unit-count bucket n_b on the same grid, one bucket and not two.  Both outputs are fixed by ℓ, so the window's influenceable public output is one grid level, and over a
 declared range [lo, hi] it takes `levels(lo, hi)` = q values: log2 q bits in the draft's leakage bound.  The honest cost is
 under 1 − 2^-s of the credit (at most 11% at s = 3) and the factor N / g_ℓ <= 1 + 2^-s in K′.
 
@@ -28,8 +25,7 @@ under 1 − 2^-s of the credit (at most 11% at s = 3) and the factor N / g_ℓ <
 credited work and w_max the most work a tile does (`k_prime`).  A wrong set holding a share ε of W has at least ε·W/w_max
 tiles, so a draw of K′ without replacement misses it with probability at most δ.  Filler tiles are credited nothing.
 
-**The fixed length**: correct tokens served past the honest run's end of sequence are not useful work (Daniel, 19 Oct,
-ASK-39).  A row of record serves its slot's public max_tokens whatever it samples (vLLM's ``ignore_eos``), so W_use is
+**The fixed length**: correct tokens served past the honest run's end of sequence are not useful work.  A row of record serves its slot's public max_tokens whatever it samples (vLLM's ``ignore_eos``), so W_use is
 public: the `length` item is ``{"stop": "fixed", "max_tokens": [...], "served": [...]}``, one entry a slot, and
 `length_problem` refuses an EOS-keyed row (`window-form: eos-keyed-row`) and a slot that served another length
 (`window-form: length-mismatch`).  A registration made before the rule carries `LEGACY_REGISTERED`, without the item,
@@ -48,7 +44,7 @@ is its tiles, the filler covers the rest, every call's -h3 root is the pass's, t
 disjoint, and the registered level is `bucket` of the real tiles; given the records and the side rows' indices it also
 holds those to the entries.  It is not proved yet: no Program states it.
 
-**The layout for gates** (`note:proofs/20261006T1940Z-draft-units-to-inner-layout`, §2) is specified in PoUW's PROTOCOL.md,
+**The layout for gates** is specified in PoUW's PROTOCOL.md,
 "The served audit window": the entry row (`Entry`, 336 bytes), the side rows (`side_row`), the dense side trees of 2^D
 leaves (`DEPTHS`) padded with frame-v3's pad leaf under the window's side domains (`side_domain`, `side_levels`,
 `side_path`), and the tile instances' public inputs (`PUBLIC_PORTS`, `sessions`, `session_cap`, `instance_ts`,
@@ -56,7 +52,7 @@ leaves (`DEPTHS`) padded with frame-v3's pad leaf under the window's side domain
 
 **Live windows** (decision 36).  The check item's optional ``coins`` is the window's coin mode, ``live`` or ``seeded``
 (`mode`; an item that names none is seeded, as Pearl-C's served path registers).  A seeded window's noise is its scheme's
-derivation from the salt and the prover's roots.  A live window's comes from the proof service's challenger
+derivation from the salt and the prover's roots.  A live window's comes from the proof system's challenger
 (`verity.core.protocols.sampled_proofs.challenger`), whose first client this is: the epoch's coins are the layout
 `live_families(R)` under `LIVE_SCHEME`, its salt coin, its draw coin and R round coins (``pouw/round``, rounds numbered
 from 0 as Compose's `Declared.round` numbers them), all committed before the epoch.  The salt coin opens once, after the
@@ -106,7 +102,7 @@ PUBLIC = (
 )
 #: the items a registration carries; the verdict and the draw come after it
 REGISTERED = ("work", "check", "sampling", "length", "root_W")
-#: what a registration made before the fixed-length rule (19 Oct) carries: no `length`, so not of record
+#: what a registration made before the fixed-length rule carries: no `length`, so not of record
 LEGACY_REGISTERED = ("work", "check", "sampling", "root_W")
 KINDS = ("call", "filler", "none")
 #: the check item's coin mode (`mode`), Compose's `CoinMode`

@@ -4,11 +4,10 @@ import Definitions.Accounting.Confidence
 /-!
 # The bandwidth audit on a strategy's runs: the chip's ports (trusted)
 
-The vocabulary of B3 and Mbw on the runs of a strategy (`note:console/20261012T0645Z-draft-actual-circuit-model`, v2.8:
-section 5's Mbw and the rows B3 and Mbw). A strategy here maps the store (for Mbw, the store and `z`) and the oracle to a
-run, `S : ε × Oracle N b h → Actual.Run L`; the chip is the location `X` and the window is `[t₀, t₀ + T)`. What the chip
-did since `t₀` is `Actual.Run.acts` over `X` (`Acts`), and what reaches it at a tick is what its ports carry
-(`portSignals`: each port a link and the leaf of `X` it delivers to).
+The vocabulary of the actual-circuit model's rows B3 and Mbw on the runs of a strategy. A strategy here maps the store
+(for Mbw, the store and `z`) and the oracle to a run, `S : ε × Oracle N b h → Actual.Run L`; the chip is the location
+`X` and the window is `[t₀, t₀ + T)`. What the chip did since `t₀` is `Actual.Run.acts` over `X` (`Acts`), and what
+reaches it at a tick is what its ports carry (`portSignals`: each port a link and the leaf of `X` it delivers to).
 
 Three hypotheses on the chip's ports, each over the window, each a constraint of the model's table that the guarantees
 take as a hypothesis:

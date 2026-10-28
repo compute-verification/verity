@@ -68,17 +68,19 @@ def commit(root: Path, *, seed: int = 17, silu: str | None = None, I: int | None
     prefix = ProgramIndex(inst).prefix
     (p / "weights" / "extra").mkdir(parents=True)
     names, roots, extra = [], [], {}
+    geo, wk = bytes(range(32)), bytes(range(64))
     for i, (field, (flo, fhi)) in enumerate(woff.items()):
         raw = np.ascontiguousarray(w[flo:fhi]).view(np.uint8)
         name = field[len(prefix):]
         names.append([name, "bfloat16", [fhi - flo], int(raw.size)])
-        roots.append(CPU.tensor_root(raw, CHUNK))
+        roots.append(step_rows.tensor_root(geo, i, names[-1], raw, wk) if com.rows else CPU.tensor_root(raw, CHUNK))
         (p / "weights" / "extra" / f"{i}.bin").write_bytes(raw.tobytes())
         extra[name] = i
-    geo = bytes(range(32))
-    wroot = scheme.weights_root(geo, scheme.names_digest(names), roots).hex()
-    (p / "weights" / "tree.json").write_text(json.dumps({"names": names, "tensor_roots": [r.hex() for r in roots], "root": wroot,
-                                                         "chunk": CHUNK, "geo_digest": geo.hex(), "extra": extra}))
+    tree = (step_rows.weights_tree(geo, names, scheme.names_digest(names), roots, wk) if com.rows else
+            {"names": names, "tensor_roots": [r.hex() for r in roots], "root": scheme.weights_root(geo, scheme.names_digest(names), roots).hex(),
+             "chunk": CHUNK, "geo_digest": geo.hex()})
+    wroot = tree["root"]
+    (p / "weights" / "tree.json").write_text(json.dumps(tree | {"extra": extra}))
     (out / "binding_map_p1.json").write_text(json.dumps(bmap))
     sr, lk = RB.deferred_records(RB.path(out, 1))
     row = {"pair": 1, "arm": "instrumented", "commit": {"run_root": rc.run_root.hex(), "commit_pass": None, "sampled_replay": sr,

@@ -1,10 +1,9 @@
-"""Continuation_v1 -- controller first (CONTINUATION-SPEC v0.1 s7; COORD R17-32; revb S-r17b-16).
+"""Continuation_v1 -- controller first.
 
-The spec's reference evaluator (`next_flags`), the INDEPENDENTLY written three-state machine, and the checker's recurrence over a raw
-transcript agree on EVERY EOS pattern for small caps under both profiles; the named invariants hold; the edge-case table of s7 is one test
-each; the R17-1 guard chain (`LStepLive`/`LSelect`/`LBot`, simulated with the registered evaluators) computes exactly `r` / `u` of the rule
-(spec s6 'reuse where it implements the contract'); the derived invariant reproduces the three real records' executed lengths; the wrong
-profile FAILS by name.  Everything labelled lifted-padded; nothing here reads a trace to set A.
+The reference evaluator (`next_flags`), the INDEPENDENTLY written three-state machine, and the checker's recurrence over a raw
+transcript agree on EVERY EOS pattern for small caps under both profiles; the named invariants hold; each edge case is one test; the lag
+unit's guard chain (`LStepLive`/`LSelect`/`LBot`, simulated with the registered evaluators) computes exactly `r` / `u` of the rule;
+the derived invariant reproduces the three real records' executed lengths; the wrong profile FAILS by name.  Everything labelled lifted-padded; nothing here reads a trace to set A.
 """
 from __future__ import annotations
 
@@ -39,7 +38,7 @@ def test_reference_evaluator_three_state_machine_and_recurrence_agree_on_every_p
     n = 0
     for pat in all_patterns(cap):
         ref = K.three_state_run(pat, cap=cap, A=A)
-        # the spec's evaluator unrolled by hand
+        # the reference evaluator unrolled by hand
         e, r, ev = True, True, []
         for t in range(1, cap + 1):
             ev.append((e, r))
@@ -63,12 +62,12 @@ def test_derived_invariant_n_executed_equals_the_run_count_on_every_pattern(A):
             n_served = sum(1 for e, _ in ref if e)
             n_exec = sum(1 for _, r in ref if r)
             assert n_exec == K.n_executed_derived(n_served, cap=cap, A=A), (cap, A, pat)
-            # R17-1's expected_served(a_r, cap, lag) is the same number with a_r = n_served (one rule, two names)
+            # the lag rule's expected_served(a_r, cap, lag) is the same number with a_r = n_served (one rule, two names)
             assert n_exec == L.expected_served(n_served, cap, A)
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the worked example (spec s4) and the edge-case table (spec s7)
+# the worked example and the edge cases
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -151,17 +150,17 @@ def test_edge_unscheduled_request_is_pending_not_inactive_named_by_the_slot_map(
     chunked = K.slot_map([0, 1, 2], arrive_step=0, prefill_steps=[0, 1], chunked_prefill_observed=True)
     assert not chunked["ok"] and any("chunked prefill" in p for p in chunked["problems"]) and any("prefill spans 2" in p for p in chunked["problems"])
     assert chunked["chunked_prefill_attested"] == "observed" and chunked["vacuous_by_absence"] == []
-    # revb S-r17b-20 n1: the two prefill sub-checks are VACUOUS when the capture attests nothing -- named, never counted as a pass
+    # the two prefill sub-checks are VACUOUS when the capture attests nothing -- named, never counted as a pass
     assert ok["chunked_prefill_attested"] == "absent" and ok["prefill_steps_attested"] == "absent" and len(ok["vacuous_by_absence"]) == 2
-    assert "moe's applicability" in ok["positive_attestation"]
+    assert "the workload's applicability" in ok["positive_attestation"]
     attested = K.slot_map([3, 4, 5, 6], arrive_step=3, prefill_steps=[3], chunked_prefill_observed=False)
     assert attested["ok"] and attested["vacuous_by_absence"] == [] and attested["chunked_prefill_attested"] == "not-observed" and attested["prefill_steps_attested"] == [3]
 
 
 def test_r5_rng_advances_iff_run_is_stated_and_the_lag_slot_is_the_one_post_eos_draw():
-    """revb S-r17b-16 R5 / S-r17b-20: the Definition SAYS it (RNG_STATEMENT) and the rule's accounting names the draws: one per executed
-    slot, exactly one after the served EOS under A = 1 (at pos = prompt_len - 1 + n, the ledger's query position, stoch M-0749), none under A = 0, none at an inactive slot."""
-    assert "iff r_t" in K.RNG_STATEMENT and "one draw" in K.RNG_STATEMENT and "M-0469" in K.RNG_STATEMENT
+    """The Definition SAYS it (RNG_STATEMENT) and the rule's accounting names the draws: one per executed slot, exactly one after the
+    served EOS under A = 1 (at pos = prompt_len - 1 + n, the ledger's query position), none under A = 0, none at an inactive slot."""
+    assert "iff r_t" in K.RNG_STATEMENT and "one draw" in K.RNG_STATEMENT and "keyed by (seed, pos)" in K.RNG_STATEMENT
     asy = K.rng_accounting(K.recurrence([ORD, ORD, EOS[0], 9, None, None], cap=6, A=1, eos=EOS), prompt_len=32)
     assert asy["draws"] == 4 and asy["draw_slots"] == [1, 2, 3, 4] and asy["draws_after_served_eos"] == 1 and asy["lag_draw_slot"] == 4
     assert asy["lag_draw_pos"] == 32 - 1 + 3 and asy["inactive_slots_draw_nothing"] == [5, 6]  # pos = prompt_len - 1 + n, n = 3 served (slot 4 at L - 1 + 3)
@@ -195,7 +194,7 @@ def test_rev_m0445_negatives_lag_token_served_eos_set_extended_second_lag_row():
     # lag-slot token served: one entry past the emit prefix -> (b) and (c) by name
     r = K.check_transcript(executed_slots_of_record=exe, raw_by_slot=raw, served_of_record=served + [9], cap=8, A=1, eos=EOS)
     assert {"b_served_equals_emit_tokens", "c_lag_token_not_served"} <= set(r["failed"]) and r["checks"]["c_lag_token_not_served"]["served_entries_past_emit_prefix"] == 1
-    # a served early stop on a token outside the pinned set (the record stopped on 9 with 9 not in EOS): (e) F-pm-24, and the executed set disagrees
+    # a served early stop on a token outside the pinned set (the record stopped on 9 with 9 not in EOS): (e), and the executed set disagrees
     r = K.check_transcript(executed_slots_of_record=[1, 2, 3, 4], raw_by_slot={1: ORD, 2: ORD, 3: ORD, 4: 9}, served_of_record=[ORD, ORD, ORD, 9], cap=8, A=0, eos=EOS)
     assert "e_stop_under_pinned_set" in r["failed"] and "never extend the set" in r["checks"]["e_stop_under_pinned_set"]["why"]
     # a second lag row (execution at slot 6 under A = 1): past the stop
@@ -207,8 +206,7 @@ def test_rev_m0445_negatives_lag_token_served_eos_set_extended_second_lag_row():
 
 
 def test_f_r17_14_the_rule_stops_at_the_first_eos_a_served_eos_x_eos_transcript_fails_by_name():
-    """rev M-0540 F-r17-14 (owner moe): `executed_prefix_of_record` tested only the LAST served token; Continuation_v1 stops at the FIRST
-    EOS by construction (`e_{t+1} = h AND e AND NOT b`), so served `[EOS, x, EOS]` (cap 5, A = 1, eos {7}) predicts served `[7]`,
+    """Continuation_v1 stops at the FIRST EOS by construction (`e_{t+1} = h AND e AND NOT b`), so served `[EOS, x, EOS]` (cap 5, A = 1, eos {7}) predicts served `[7]`,
     executed `[1, 2]`, and a record that served three tokens and executed four fails (a) (b) (c) (d) (f) by name -- the named negative."""
     slots = K.recurrence([7, 3, 7, 5, 5], cap=5, A=1, eos=(7,))
     assert K.served_output(slots) == [7] and K.executed_slots(slots) == [1, 2] and K.lag_slots(slots) == [2]
@@ -223,8 +221,8 @@ def test_f_r17_14_the_rule_stops_at_the_first_eos_a_served_eos_x_eos_transcript_
 
 
 def test_executed_prefix_by_rule_is_moes_block_read_from_the_recurrence_first_eos_and_the_real_records():
-    """revb R3 'one mechanism': the executed prefix FROM the rule -- equal to moe's executed_prefix_of_record on every well-formed record
-    (the three real ones + the length stop), and FAIL by name where moe's last-token test accepts [EOS, x, EOS] (rev F-r17-14)."""
+    """One mechanism: the executed prefix FROM the rule -- equal to the Commit's executed_prefix_of_record on every well-formed record
+    (the three real ones + the length stop), and FAIL by name on [EOS, x, EOS], which a last-token test accepts."""
     for n_served, cap, n_exec, eos_id in ((11, 32, 12, 0), (8, 32, 9, 0), (11, 32, 12, 50279)):
         served = [5] * (n_served - 1) + [eos_id]
         r = K.executed_prefix_by_rule(served, cap=cap, A=1, eos=(eos_id,))
@@ -234,17 +232,17 @@ def test_executed_prefix_by_rule_is_moes_block_read_from_the_recurrence_first_eo
         assert r0["ok"] and r0["executed_prefix_len"] == n_served and r0["lag_steps"] == []
     full = K.executed_prefix_by_rule([5] * 32, cap=32, A=1, eos=(0,))
     assert full["ok"] and full["executed_prefix_len"] == 32 and full["cap_exhausted"] and full["eos_stop"] is False and full["lag_steps"] == []
-    # F-r17-14: [EOS, x, EOS] is a problem BY NAME (moe's last-token test says ok, executed 4)
+    # [EOS, x, EOS] is a problem BY NAME (a last-token test says ok, executed 4)
     bad = K.executed_prefix_by_rule([7, 3, 7], cap=5, A=1, eos=(7,))
     assert not bad["ok"] and bad["first_eos_index"] == 0 and bad["served_past_first_eos"] == [1, 2] and "FIRST EOS" in bad["why"] and bad["eos_stop"] is None
-    # F-pm-24: an early stop on a token outside the pinned set; over the cap; nothing served
-    assert "F-pm-24" in K.executed_prefix_by_rule([5, 5, 9], cap=8, A=1, eos=(7,))["why"]
+    # an early stop on a token outside the pinned set; over the cap; nothing served
+    assert "no served token is a declared EOS id" in K.executed_prefix_by_rule([5, 5, 9], cap=8, A=1, eos=(7,))["why"]
     assert "over the declared cap" in K.executed_prefix_by_rule([5] * 9, cap=8, A=0, eos=(7,))["why"]
     assert not K.executed_prefix_by_rule([], cap=8, A=0, eos=(7,))["ok"]
 
 
 # ---------------------------------------------------------------------------------------------------------
-# IsEOS total (revb R2) and the profile source (revb R6)
+# IsEOS total and the profile source
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -272,7 +270,7 @@ def test_profile_a_is_the_resolved_header_field_through_the_one_lag_rule_never_d
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the R17-1 guard chain computes exactly r / u of the rule (spec s6; revb 'wiring matches pad's unit')
+# the lag unit's guard chain computes exactly r / u of the rule
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -292,7 +290,7 @@ def test_r17_1_guard_chain_is_run_and_next_input_of_continuation_v1_on_every_pat
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the three real records (numbers of record; the captures are read by lifted_record's R9)
+# the three real records (numbers of record)
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -305,14 +303,14 @@ def test_derived_invariant_reproduces_the_real_records_executed_lengths_under_th
 
 
 # ---------------------------------------------------------------------------------------------------------
-# revb M-0615 (R5, F-r17b-35): the rule's draw positions, and the ledger compared to them by name
+# the rule's draw positions, and the ledger compared to them by name
 # ---------------------------------------------------------------------------------------------------------
 
 
 def test_r5_expected_draw_positions_are_the_run_slots_and_the_ledger_is_compared_by_name():
     L_ = 32
-    # the earlystop shape: 11 served (EOS last), cap 32, A = 1 -> 12 draws at pos 31..42 (slot t at L - 1 + (t - 1), the ledger's pos fact,
-    # stoch M-0749), the lag draw at 42 (= pad's lag_draw_pos of record)
+    # the earlystop shape: 11 served (EOS last), cap 32, A = 1 -> 12 draws at pos 31..42 (slot t at L - 1 + (t - 1), the ledger's pos fact),
+    # the lag draw at 42 (= the lag_draw_pos of record)
     exp = K.expected_draw_positions([ORD] * 10 + [EOS[0]], cap=32, A=1, eos=EOS, prompt_len=L_)
     assert exp["positions"] == list(range(31, 43)) and exp["lag_positions"] == [42] and exp["n"] == 12 and exp["first_forbidden_position"] == 43
     assert exp["served_positions"] == list(range(31, 42))
@@ -327,7 +325,7 @@ def test_r5_expected_draw_positions_are_the_run_slots_and_the_ledger_is_compared
     assert at_cap["positions"] == list(range(31, 39)) and at_cap["lag_positions"] == []
     # the ledger: measured exactly -> ok
     assert K.compare_draw_positions(exp["positions"], list(range(31, 43)))["ok"]
-    # F-r17b-35 (a): over-cap draws with NO EOS are EXTRA positions by name (never silent)
+    # over-cap draws with NO EOS are EXTRA positions by name (never silent)
     c = K.compare_draw_positions(full["positions"], list(range(31, 40)))
     assert not c["ok"] and c["extra"] == [39] and "without r_t" in c["problems"][0]
     # two draws after the served EOS (a second lag draw), a missing served draw, a repeated position, out of order: each named
@@ -347,9 +345,10 @@ def test_r5_expected_draw_positions_are_the_run_slots_and_the_ledger_is_compared
 
 
 def test_r5_positions_are_the_ledgers_pos_fact_draw_k_at_prompt_len_minus_1_plus_k_stoch_m_0749():
-    """One convention on the record: stoch's draw ledger (M-0749) maps draw k (k from 0, slot t = k + 1) to pos = prompt_len - 1 + k, the query
-    position whose logits are sampled and the `pos` fact the sampled rows carry (an 8-token prompt's first draw is at pos 7, M-0469's llama B8
-    record).  pad's positions are the same numbers -- the ledger imports `recurrence`/`executed_slots` and a disagreement is 'two mechanisms'."""
+    """One convention on the record: the draw ledger maps draw k (k from 0, slot t = k + 1) to pos = prompt_len - 1 + k, the query
+    position whose logits are sampled and the `pos` fact the sampled rows carry (an 8-token prompt's first draw is at pos 7, the llama B8
+    record).  `expected_draw_positions` gives the same numbers -- the ledger imports `recurrence`/`executed_slots` and a disagreement is
+    'two mechanisms'."""
     L_, C = 8, 6
     exp = K.expected_draw_positions([ORD, ORD, EOS[0]], cap=C, A=1, eos=EOS, prompt_len=L_)
     ledger = [L_ - 1 + k for k in range(4)]  # 3 served + the lag draw = draws k = 0..3
@@ -361,10 +360,10 @@ def test_r5_positions_are_the_ledgers_pos_fact_draw_k_at_prompt_len_minus_1_plus
 
 
 def test_f_r17b_40_first_draw_is_at_the_last_prompt_position_qwen_b8_l_1024_first_pos_1023_last_1057_at_cap_35():
-    """revb F-r17b-40 (MINOR, M-0793) / stoch M-0771: the record's device key -- qwen B8 request with L = 1024, cap 35, no EOS: first_pos 1023,
-    last_pos 1057, 388/388 device_facts_match on exactly those positions.  pad's map is pos = prompt_len - 2 + t (slot 1 at L - 1)."""
+    """The record's device key -- qwen B8 request with L = 1024, cap 35, no EOS: first_pos 1023, last_pos 1057, 388/388
+    device_facts_match on exactly those positions.  The map is pos = prompt_len - 2 + t (slot 1 at L - 1)."""
     exp = K.expected_draw_positions([ORD] * 35, cap=35, A=1, eos=EOS, prompt_len=1024)
     assert exp["positions"][0] == 1023 and exp["positions"][-1] == 1057 and exp["n"] == 35 and exp["lag_positions"] == []
     assert exp["positions"] == [1024 - 2 + t for t in range(1, 36)] and exp["first_forbidden_position"] == 1058
-    # llama B8, the 8-token prompt of M-0469: pos 7 first
+    # llama B8, an 8-token prompt: pos 7 first
     assert K.expected_draw_positions([ORD] * 4, cap=4, A=0, eos=EOS, prompt_len=8)["positions"] == [7, 8, 9, 10]

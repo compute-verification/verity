@@ -14,8 +14,7 @@ as leaf w·(P / G) + j of one hm96-sha512/row/v2 registration in a frame-v3-sha5
 is public and in the record (`Served.record`'s ``G``). At G = P a window is one row, the slice's ``srv``. At G < P the
 slice is `compile_slice.CompileSliceBlocks_v1{…, G}`, whose ``srv0`` … ``srv{P/G − 1}`` are the window's blocks: unit w's
 row ``srv{j}`` is held by its b‖c to leaf w·(P / G) + j, and step u is checked against row u // G. Its ANDs are the
-G = P unit's: at 8eb1's engine class, G = 2 gives 27 rows and 1,021,302 ANDs, as at G = 54 = P (run
-r20261025-004442-ebac, each built in about 21 s at 3.0 GB).
+G = P unit's: at 8eb1's engine class, G = 2 gives 27 rows and 1,021,302 ANDs, as at G = 54 = P.
 
 **The unit** reads two rows:
 - ``pub``, opened: the block's G steps' statics. For each step, R slots of (valid, start, n), in the Programs' batch
@@ -30,7 +29,7 @@ is 0x3. The request ids and kinds are not the Program's to show. `IoTieRequest` 
 certified request's prompt ids at those positions, and the egress tie holds each decode slot's input to the request's last
 sample.
 
-**Positions.** The tie reads the Programs' positions, which are public, and binds no position leaf of the Commit. On vllm's
+**Positions.** The tie reads the Programs' positions, which are public, and binds no position leaf of the Commit. On vLLM's
 eager path a Program's RoPE positions are static structure (`RotaryEmbeddingRule` refuses computed ones), so no eager
 Program reads a committed position. The compiled path's RoPE reads ``c00.input/positions``, a committed value
 (`verity_vllm.program.predict.compiled`). For a compiled-path window the committed positions are what the compute read, and the
@@ -55,7 +54,7 @@ flags cost 2·(G − 1) more. Every committed row a unit reads is hashed in-circ
 So a served-class unit fits 2^27 up to G = 64, four units a window.
 
 **Open.**
-- vllm's serve call (`commit_served`) registers at G = P. It is to pass the tie's G.
+- vLLM's serve call (`commit_served`) registers at G = P. It is to pass the tie's G.
 - `benchmarks/prove_path/served_statics_zk.py` takes the Programs' statics from the honest rows, as compile(advice) lays
   out a step whose advice's rows they are, and checks them natively against each step's committed positions
   (`served_tie_window.statics_held`). The verifier is to compile them from the advice.

@@ -5,7 +5,7 @@ The witness-conditioned oracle exempted every tensor in the cone of an align cal
 differed from the capture's.  Those four members are functions of the router's top-k ids as well as of atomicAdd's order, so a
 committed routing that is not the capture's also made the witness differ, and exempted the MoE output it changed and everything after
 it.  At a B1 decode (6 pairs on 6 distinct experts) the schedule has no freedom at all: rank is 0, start 1 and par 6 for every routing,
-and blk differs exactly when the ids do.  DeepSeek-V4-Pro's Commit r20261018-023527-3dc1 showed it on rank 0: 928 decode-step
+and blk differs exactly when the ids do.  A DeepSeek-V4-Pro Commit showed it on rank 0: 928 decode-step
 witnesses differ in align.blk alone, and 52 of step 0's in align.par, which only the per-expert counts decide.  The oracle now exempts
 nothing and fails a differing witness by name with what it implies (`oracle_witness.implied`)."""
 from __future__ import annotations

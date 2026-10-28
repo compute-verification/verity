@@ -1,4 +1,4 @@
-"""Query artifact identities and the use document (query track, 2026-09-17 window; design §8).
+"""Query artifact identities and the use document.
 
 Four identities, each with one meaning:
 

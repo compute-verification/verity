@@ -1,4 +1,4 @@
-"""What an integration hands Verity (Daniel, 24 Oct: integrations are frontends, and Verity is agnostic to them): a circuit in
+"""What an integration hands Verity (integrations are frontends, and Verity is agnostic to them): a circuit in
 proof blocks with its public layout, registered by digest; when the circuit depends on run-time choices, a registered
 compiler and its advice, an opaque bit string whose length is charged; the circuit's values, committed in a
 `verity.ml.commitments` scheme and registered before any coin; and on a draw, the drawn units' openings. A window is one

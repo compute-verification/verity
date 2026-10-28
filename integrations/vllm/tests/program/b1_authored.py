@@ -1,4 +1,4 @@
-"""The B1 serving program authored in torch through the frontend (lane FE2).
+"""The B1 serving program authored in torch through the frontend.
 
     Gate -> exactly one Value<w>.
     Composite interfaces -> ordered collections of value references.
@@ -317,7 +317,7 @@ def Serve(prompt: Arr["LP", I32], weights: Dep(lambda S: b1.weights_type(S["C"])
     return torch.stack(toks)
 
 
-# -- [E7 D54/D57 2026-09-13] the attention chain with the kernel's key-block size as a DECLARED static BN (b1.AttnBlockV3 / -----
+# -- the attention chain with the kernel's key-block size as a DECLARED static BN (b1.AttnBlockV3 / -----
 # -- AttentionHeadV3 / AttentionV3) and Serve_v4 (b1.ServeV4): the v1 bodies with `BN` bound from the program identity instead ---
 # -- of the constant 64.  Registered ids AttnBlock_v3{D,NVIS,FIRST,BN} / AttentionHead_v3{T,D,BN} / Attention_v3{...,BN} / ----------
 # -- Serve_v4{C,LP,STEPS,BN}; `check_identity` against the registry as for v1. ---------------------------------------------------
@@ -461,7 +461,7 @@ def ServeV4(prompt: Arr["LP", I32], weights: Dep(lambda S: b1.weights_type(S["C"
 
 def _callable(f):
     """A static-valued function as a frontend callable: a `Prim`/`Bound`/`Function` as is; a registered primitive or a
-    complete registered specialisation wrapped (`_ir_static` maps both back to the same IR definition)."""
+    complete registered specialisation wrapped (`_ir_static` maps both back to the same circuit Definition)."""
     if hasattr(f, "_resolve"):
         return f
     if isinstance(f, PrimitiveDefinition):
@@ -476,7 +476,7 @@ ATTENTION_FA2 = {"BN": BN, "DOT": ops.AmpereBF16TcDot16, "INV": ops.Fa2InvSum}  
 
 
 def attention_fa2(D: int) -> dict:
-    """[E7 D54] The FA2 attention record at head dim `D` (`b1.attention_fa2`): `BN = b1.fa2_kblock_n(D)` -- Serve_v4's geometry."""
+    """The FA2 attention record at head dim `D` (`b1.attention_fa2`): `BN = b1.fa2_kblock_n(D)` -- Serve_v4's geometry."""
     return {"BN": b1.fa2_kblock_n(D), "DOT": ops.AmpereBF16TcDot16, "INV": ops.Fa2InvSum}
 
 

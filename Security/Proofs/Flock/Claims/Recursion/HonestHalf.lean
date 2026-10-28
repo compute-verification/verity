@@ -23,10 +23,10 @@ where some run has every part accepting. `honest_half_tops` gives that run: the 
 prover at `deployedB` of the deployed brings at `x` (`bringsAt`: the deployed assigner `A0`, the deployed inner prover
 `IrDep` and the fitted records), and every part `s < nS x` accepts on it.
 
-This file has the run's records (`bLAt`, `IAt`, `DAt`) and the premises witnessed outside Lean, all on one run,
-r20261027-014625-06c6 (`HonestFixture`): the run accepting (`HonestRunAccepted`), and no collision among a part's
-recorded calls (`NoCollAt`, SHA-512's collision event, which passed on that run's tree in r20261027-033500-eeb1). Each
-part's staging setting up follows from the run accepting (`stagedSetsUp_accepted`).
+This file has the run's records (`bLAt`, `IAt`, `DAt`) and the premises witnessed outside Lean, all on one run
+(`HonestFixture`): the run accepting (`HonestRunAccepted`), and no collision among a part's recorded calls (`NoCollAt`,
+SHA-512's collision event, which passed on that run's tree). Each part's staging setting up follows from the run
+accepting (`stagedSetsUp_accepted`).
 `bringsAt_deployedB`: the brings here are `RecursiveKS`'s `deployedB` at `bringsAt mask Ir b0 x`.
 -/
 
@@ -83,10 +83,10 @@ verifier accepts the reference prover's run on tape `ω` and coins `r`. A concre
 session of the honest deployed recursive run is accepted by the compiled `flock-verify` (composed per part; no single
 compiled verdict exists).
 
-The witness is run r20261027-014625-06c6 (`benchmarks/recursion_e2e --e2e --cpu`, K = 64, N = 16, under the firewall,
-at f1asm 16a44e3b86). The compiled verifier printed `VERDICT {"accepted":true}` on each of the 10 V\* parts (L0–L3,
+The witness is a run of `benchmarks/recursion_e2e --e2e --cpu` (K = 64, N = 16, under the firewall, at
+16a44e3b86). The compiled verifier printed `VERDICT {"accepted":true}` on each of the 10 V\* parts (L0–L3,
 alg-p0, alg-p1, cap, cap-L1–L3), and the inner session was accepted. With a challenge or query coin flipped, the parts
-that read it refused. The outer tree is art:886efa1d995543a70ba46e6ef713a2afe89a7022b7fc4988c9cc2dbd629a43a8.
+that read it refused.
 
 Only Python joins the 10 per-part verdicts, so what the run witnesses is that every part's session accepted, not that
 one compiled verifier accepted the whole outer statement. -/

@@ -136,8 +136,8 @@ def canary(deps: Deps, now: float) -> bool:
 
 
 def stall(deps: Deps, now: float) -> bool:
-    """Ring @comms when the last event published is STALL_S old and the consumer has finished no message since (19-23 Oct
-    production consumed nothing while health looked clean).  At most every STALL_EVERY_S; an unknown time rings nothing."""
+    """Ring @comms when the last event published is STALL_S old and the consumer has finished no message since (health
+    looks clean while nothing is consumed).  At most every STALL_EVERY_S; an unknown time rings nothing."""
     enq, done, rung = (deps.read(k) for k in (LAST_ENQUEUED, LAST_DONE, STALL_RUNG))
     if not isinstance(enq, (int, float)) or now - enq < STALL_S or (isinstance(done, (int, float)) and done >= enq):
         return False
