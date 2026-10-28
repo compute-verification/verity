@@ -8,7 +8,7 @@ own Commit.
   hooks sit on top of the committer's, and closes it first thing at the window's close, before the committer comes off.
   The H1 window's T is the engine's token budget (``--max-num-batched-tokens``) and its S the Commit window's steps
   (``--window-steps``); a window that closes early (idle, ``--window-gb``, ``--window-requests``) closes H1's with its
-  remaining steps empty (`pouw_h1.H1Run.close`).
+  remaining steps empty (`pouw_h1.H1Run.close`), unless it served none on in-process coins (`UNSERVED`).
 * **Once a server.** The period's declared Program over the served linears at (T, S) and its digest
   (`pouw_h1_served.declared`), and the weights' ``b/<K>`` registered under it (`pouw_h1_served.register_weights`), with a
   key of this process's: no auditor's registration (``model-key``) is read yet. The Program holds one batch of K's tile
@@ -97,6 +97,10 @@ LISTEN_S = 0.1
 MARGIN = timedelta(minutes=5)
 #: the subprotocol H1's draw of each window is put under in serve-openai's draw-gated release (``--release-after``)
 DRAWER = "pouw"
+#: the ``release`` of a window on in-process coins that served no step (async scheduling's last call, which only returns
+#: outputs, can open one at the stop): its option stays unclosed, so its S steps aren't padded and nothing is drawn, as it
+#: holds no session, credits nothing and seals nothing
+UNSERVED = "none: the window served no step and holds no session"
 #: an s_a's bytes a row (f32)
 S_A_BYTES = 4
 
@@ -625,23 +629,27 @@ class H1Windows:
         """Window ``window``'s release: its option closed (the empty steps' calls, its manifest committed, the draw coin
         opened and its session closed), with ``draws`` its draw put (`drawn`), and, with ``sessions``, its end entry
         waited for; its outcome, recorded in ``outcomes``, with ``error`` when any of it failed. ``off``: on ``closer``,
-        one of the windows ``releasing``."""
+        one of the windows ``releasing``. A window on in-process coins that served no step is `UNSERVED`."""
         t0 = t1 = self.clock()
         end = drawn = None
+        unserved = held is None and error is None and run.step < 0
         try:
             try:
-                comp.close()
+                if not unserved:
+                    comp.close()
             except (ValueError, RuntimeError, OSError) as e:      # the window's failure, its outcome's error
                 error = error or f"{type(e).__name__}: {e}"
             finally:
                 t1 = self.clock()
-                if self.draws is not None:
+                if self.draws is not None and not unserved:
                     drawn = self.drawn(window, run, held, error)
                 if held:
                     end = self.sessions.ended(held["session"])
             seconds = {**seconds, "queued": round(t0 - queued, 4), "release": round(t1 - t0, 4),
                        "ended": round(self.clock() - t1, 4)}
             out = self._outcome(window, run, held, end, seconds)
+            if unserved:
+                out.update(steps_served=0, release=UNSERVED)
             if drawn is not None:
                 out["draw"] = drawn
             if error is not None:
