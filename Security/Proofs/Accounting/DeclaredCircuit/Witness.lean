@@ -841,12 +841,12 @@ theorem sum_ge {n P c : ℕ} (f : Fin n → Fin P → ℕ) (h : ∀ w j, c ≤ f
 /-! ## Where `G` bounds something
 
 The run credits the whole store, so `G`'s session threshold `Σ credit − (0.0015 + γ)·n·P·N·32768` is positive while
-`0.0015 + γ < 1` (`threshold_pos`), and each window's while `0.01 + γ < 1` (`window_pos`). The carriers' share of `γ`
-is linear in the life `L`: `C/(N·32768) ≤ (8·L·R + 1)/(N·32768) + 128·L·P·c/E` (`carrier_le`), `R` a window's
-run-input bytes and `c` the caps' total. At DCR-RT's inputs (the 18 Oct numbers: `P = 984` passes a 60 s window,
-`E = 364,497`, 100 KB/s of run inputs, the pass's other resources `γ₀ ≤ 0.835%`, here `N ≥ 2^24` tiles) both thresholds
-are positive up to `L = 6` for 8B (`c = 0.442`, `bounds_8b`); for 70B TP8 (`c = 0.0918`) the session's up to `L = 31`
-and every window's up to `L = 30` (`bounds_70b`). -/
+`0.0015 + γ < 1` (`threshold_pos`), and each window's while `0.01 + γ < 1` (`window_pos`). The carriers' share of `γ` is
+linear in the life `L`: `C/(N·32768) ≤ (8·L·R + 1)/(N·32768) + 128·L·P·c/E` (`carrier_le`), `R` a window's run-input
+bytes and `c` the caps' total. At the reference inputs (`P = 984` passes a 60 s window, `E = 364,497`, 100 KB/s of run
+inputs, the pass's other resources `γ₀ ≤ 0.835%`, here `N ≥ 2^24` tiles) both thresholds are positive up to `L = 6` for
+8B (`c = 0.442`, `bounds_8b`); for 70B TP8 (`c = 0.0918`) the session's up to `L = 31` and every window's up to `L = 30`
+(`bounds_70b`). -/
 
 /-- The run's credit at step `t`, as `G` reads it. -/
 def credit (n P N τ : ℕ) (val : ℕ → ℕ → ℕ) (t : ℕ) : ℕ :=
@@ -982,7 +982,7 @@ theorem gamma_bound {N ρ S Lr τ Xr k L P E L₀ P₀ E₀ N₀ R₀ : ℕ} (ca
     exact div_le_div₀ (mul_nonneg (by positivity) (hc0.trans hc₀)) s3 (by positivity) hEr
   linarith
 
-/-- **8B**: at DCR-RT's inputs (`c ≤ 0.442`, at most 984 passes and 6,000,000 run-input bytes a 60 s window,
+/-- **8B**: at the reference inputs (`c ≤ 0.442`, at most 984 passes and 6,000,000 run-input bytes a 60 s window,
 `E ≥ 364,497`, `γ₀ ≤ 0.835%`, `N ≥ 2^24`), both of `G`'s thresholds are positive at a carrier life of `L ≤ 6`. -/
 theorem bounds_8b {N ρ S Lr τ Xr k L P E : ℕ} (caps : Gates.Caps) (Aud : Gates.Audit)
     (hN : 16777216 ≤ N) (hL : L ≤ 6) (hP : P ≤ 984) (hE : 364497 ≤ E) (hc : 0 ≤ caps.total)
@@ -1002,8 +1002,8 @@ theorem bounds_8b {N ρ S Lr τ Xr k L P E : ℕ} (caps : Gates.Caps) (Aud : Gat
   norm_num at hγ
   constructor <;> linarith
 
-/-- **70B TP8**: at DCR-RT's inputs with `c ≤ 0.0918`, the session threshold is positive at a carrier life of `L ≤ 31`,
-and every window's at `L ≤ 30`. -/
+/-- **70B TP8**: at the reference inputs with `c ≤ 0.0918`, the session threshold is positive at a carrier life of
+`L ≤ 31`, and every window's at `L ≤ 30`. -/
 theorem bounds_70b {N ρ S Lr τ Xr k L P E : ℕ} (caps : Gates.Caps) (Aud : Gates.Audit)
     (hN : 16777216 ≤ N) (hP : P ≤ 984) (hE : 364497 ≤ E) (hc : 0 ≤ caps.total)
     (hc₀ : caps.total ≤ 459 / 5000) (hR : ∀ v, caps.runBytes v ≤ 6000000)

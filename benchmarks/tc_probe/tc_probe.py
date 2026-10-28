@@ -70,8 +70,8 @@ finite-sweep families and compares every output element with the model(s); ``--f
 
 Seeds are fixed (``--seed``, default 20260902) and recorded.  Outputs under ``--out``: ``probe_results.json`` (identity, layout
 check, per-family counts per model, first mismatches with A/B/C/D words, family summaries, SASS counts), ``capture_sample.json``
-(golden-format records sampled per family), ``tiles_<family>.npz`` (the full capture: A, Bt, C, D per tile) and, under
-``research run``, ``result.json`` with ``kind: tc-evidence/v1`` (``workload_fingerprint`` = instruction, arch, sku, driver, nvcc,
+(golden-format records sampled per family), ``tiles_<family>.npz`` (the full capture: A, Bt, C, D per tile) and, in a recorded
+run (``RESEARCH_RUN_ID`` set), ``result.json`` with ``kind: tc-evidence/v1`` (``workload_fingerprint`` = instruction, arch, sku, driver, nvcc,
 seed, n, families, models; ``tc_evidence`` = per-family counts, ``model_agrees`` per model, first mismatches; validation passed
 iff every mismatch count against a pinned model and every replay is zero).  ``--compile-only`` builds the instruction's kernel
 for its arch (sm_90a compiles wherever the toolkit is, whatever the GPU), runs ``--sass-check`` (cuobjdump: MMA-class
@@ -1510,7 +1510,7 @@ def sweep(probe: Probe, ins: Instruction, args, out: Path, identity: dict) -> tu
                 mism = (model != D) | err
                 any_mism |= mism
                 fam["models"][mname] = {"mismatches": int(mism.sum()), "domain_errors": int(err.sum())}
-            # compatibility with the WP1 field names: the first (declared) model's count
+            # the legacy bench-result/v1 field names (trust.py reads them): the first (declared) model's count
             fam["mismatches_vs_model"] = fam["models"][model_names[0]]["mismatches"]
             fam["model_domain_errors"] = fam["models"][model_names[0]]["domain_errors"]
             for t, i, j in list(zip(*np.nonzero(any_mism)))[:FIRST_MISMATCHES]:
@@ -1692,7 +1692,8 @@ def compile_only(ids: list[str], out: Path, args) -> int:
         print(id_, json.dumps({k: v for k, v in entry.items() if k not in ("instruction", "sass")}),
               json.dumps({k: v for k, v in entry.get("sass", {}).items() if k in ("ok", "kernel", "tile_kernel_mma_count", "error")}), flush=True)
     (out / "probe_results.json").write_text(json.dumps(results, indent=1))
-    run_id = os.environ.get("RESEARCH_RUN_ID")
+    from verity_config.settings import SHARED  # here, not at the top: verity/ml/circuits/ops' tests import this module's tiles
+    run_id = SHARED.RESEARCH_RUN_ID
     if run_id:
         checks = {id_: {"compiled": e["compiled"], "sass_ok": e.get("sass", {}).get("ok", False), "mma_count": e.get("sass", {}).get("tile_kernel_mma_count"),
                         "expected_mma_count": e.get("sass", {}).get("expected_mma_count"), "single_instruction": e.get("sass", {}).get("single_instruction"),
@@ -1798,7 +1799,7 @@ def main() -> int:
             ap.error("--no-input-d is a tcgen05 mode (sm100.tcgen05.mma.bf16)")
         probe.set_enable_input_d(False)
         identity["enable_input_d"] = 0
-    results["pipeline"] = ins.models[0].pipeline.name  # WP1 field
+    results["pipeline"] = ins.models[0].pipeline.name  # the legacy field trust.py reads
     print("device", json.dumps(identity), flush=True)
     print("layout_check", json.dumps(results["layout_check"]), flush=True)
 
@@ -1883,7 +1884,8 @@ def main() -> int:
     results["hypothesis_findings"] = findings
     (out / "probe_results.json").write_text(json.dumps(results, indent=1))
 
-    run_id = os.environ.get("RESEARCH_RUN_ID")
+    from verity_config.settings import SHARED  # here, not at the top: verity/ml/circuits/ops' tests import this module's tiles
+    run_id = SHARED.RESEARCH_RUN_ID
     if run_id:
         import canary as CANARY  # the label contract of tc-evidence/v1 lives there (no-op if --canary imported it already)
 
@@ -2008,7 +2010,7 @@ def main() -> int:
         })
         if evidence.get("labels"):
             print("labels (apply to the result artifact once `research run` has stored it):", flush=True)
-            for cmd in CANARY.label_commands("<artifact-id>", evidence["labels"], os.environ.get("RESEARCH_LANE", "<lane>")):
+            for cmd in CANARY.label_commands("<artifact-id>", evidence["labels"], SHARED.RESEARCH_LANE or "<lane>"):
                 print("   ", cmd, flush=True)
     print("FAILURES" if failures else "ALL HARDWARE WORDS REPRODUCED" if not findings else "RECORDED (hypothesis findings)",
           failures or findings, f"{results['seconds']}s", flush=True)

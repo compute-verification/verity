@@ -14,14 +14,14 @@ in the payload and holds only public structure, hiding commitments and paths bes
 * ``target``: the card's binding of the templates' dot, ``{binding, card, dot}`` (`BINDINGS`: ``GEMM_SM90_S8`` for the
   H200's INT8 and ``GEMM_HOPPER`` for its BF16, ``GEMM_SM120_S8`` for the RTX PRO 6000; ``BOOLEAN_…`` the same cards' dots
   on bits, which the Boolean-profile templates bind). Every unit's template binds that dot, as circuits resolves the binding.
-* ``draw``: the drawn units (global indices), the law, and ``source``: ``live`` (the proof service's draw of record, with
+* ``draw``: the drawn units (global indices), the law, and ``source``: ``live`` (the proof system's draw of record, with
   ``receipt``, the challenger's live-coin receipt, which a live draw must carry) or ``fixture`` (chosen by hand). The law is
   the window's registered one, fixed before any coin, and a live draw's ``record`` (the verifier's draw object, when it
   carries one) is a draw under it over the registered population, of exactly the bundle's units (`check` against the
   registration).
-* ``weights``: the registered values the units read (core's ``one_stage.registered``, as `verity_torch_loop.weights` registers the
-  seeded weights: ``registered.domain(program, value, words, leaves, word_bits)``, rows in ``hm96-sha512/row/v2``):
-  ``{program, values: [{value, root, leaves, words, word_bits, domain, row_schema}]}``.
+* ``weights``: the registered values the units read (core's ``one_stage.registered``, as `e2e_h200.served_weights`
+  registers the seeded weights: ``registered.domain(program, value, words, leaves, word_bits)``, rows in
+  ``hm96-sha512/row/v2``): ``{program, values: [{value, root, leaves, words, word_bits, domain, row_schema}]}``.
 * ``commitment``: the serving steps' commitment (kernels' commit call, `commit_slots`: step tree over
   slot trees over unit trees over rows, only each unit's outputs committed, one row ``hm96-sha512/row/v2`` under the step's
   salt key, C-Flock's ``hm96_salt`` with the slot as nonce). ``{format, reference, context, layout, layout_digest, slots,
@@ -200,13 +200,6 @@ def target(binding: str) -> dict[str, Any]:
         raise ValueError(f"{binding}: not one of {sorted(BINDINGS)}")
     card, statics = BINDINGS[binding]
     return {"binding": binding, "card": card, "dot": statics["DOT"].id}
-
-
-def torch_loop_coords(label: Mapping[str, Any], offset: int, block: int = 0) -> dict[str, Any]:
-    """`integrations/torch_loop`'s unit labels (``{request: "r<j>", step, layer, op}``, one per linear's run of units) as
-    coordinates: slot j, and ``unit`` the output coordinate within the run."""
-    return {"block": block, "step": int(label["step"]), "slot": int(str(label["request"]).lstrip("r")),
-            "layer": int(label["layer"]), "op": str(label["op"]), "unit": int(offset)}
 
 
 def block_domain(context: bytes, layout: S.Layout, block: int, steps: Sequence[int]) -> CommitmentDomain:
@@ -469,13 +462,13 @@ def _pieces(at: Any) -> list[Read | Position | RegisteredRead] | None:
 
 class WindowLocate:
     """`build`'s ``locate`` and ``reads`` from the H200 window writer's ``Window.locate(step, slot, family, index, port)``
-    (circuits' interface on CIR-115, ``examples/h200/e2e_h200/window.py``), whose pieces are the port's bytes in
+    (circuits' interface, ``examples/h200/e2e_h200/window.py``), whose pieces are the port's bytes in
     order: ``Segment(step, slot, row, offset, nbytes)`` (bytes of a committed row, ``row`` its index in the slot: a `Read`),
     ``Absent(nbytes)`` (zero bytes, a key at or past n), ``Run(name)`` (``n``, the position + 1, one word: a `Position`) and
     ``Registered(value, row, offset, nbytes)`` (bytes of a registered weight). A port of one Registered piece is a registered
     read: its position is the piece's byte offset in the value, ``row * stride(value) + offset``, over the registered row's
     bytes, which the piece must be exactly (``stride`` defaults to one registered row: ``row`` is the registered row, as
-    circuits' `Window.locate` names CMP-160's rows). ``Run("token")`` is ingress, which no commitment holds: refused. Coordinates
+    circuits' `Window.locate` names the weights registration's rows). ``Run("token")`` is ingress, which no commitment holds: refused. Coordinates
     are ``{step, slot, op: the family, unit: the block's index in it}``."""
 
     def __init__(self, window: Any, layout: S.Layout, weights: Mapping[str, Any] | None = None,
@@ -691,7 +684,7 @@ def check_reads(commitment: Mapping[str, Any], rows: Sequence[tuple[Mapping[str,
 
 
 def build(window_dir: str | Path, drawn: Sequence[int], *, commitment: Commitment, locate: Locate, binding: str,
-          coords: Coords = torch_loop_coords, reads: Reads | None = None,
+          coords: Coords, reads: Reads | None = None,
           weights: Mapping[str, Any] | None = None, draw: Mapping[str, Any] | None = None, workers: int = 1
           ) -> tuple[dict[str, Any], bytes]:
     """The bundle of ``drawn`` (global unit indices) from the window in ``window_dir`` (what ``Window.write`` wrote, prover's
@@ -1113,7 +1106,7 @@ def check(doc: Mapping[str, Any], payload: bytes, *, registration: Mapping[str, 
     return bad
 
 
-#: a step's commit-slots roots registered before a coin draws its proof blocks (PRF-172's M3): the draw's population is
+#: a step's commit-slots roots registered before a coin draws its proof blocks (M3): the draw's population is
 #: every (slot, layout unit) of the step, and each drawn block is proved from a one-member window of its own. ``steps``
 #: (optional, `STEPS_KEY`) names the root of every step of the block a drawn block can read (attention's K and V rows at
 #: steps 0 .. the drawn step), ``[{step, root}]``; a registration without it holds every read to the drawn step
@@ -1241,177 +1234,24 @@ def read(path: str | Path) -> tuple[dict[str, Any], bytes]:
     return json.loads(p.read_text()), p.with_suffix(".bin").read_bytes()
 
 
-# --- the torch loop's fixture ------------------------------------------------------------------------------------------
-
-LINEAR_NAMES = ("wup", "wdown")
-FIXTURE_SALT_KEY = hashlib.sha256(b"verity/drawn-unit-bundle/fixture-salt-key (a test key)").digest()
-CONTEXT_TAG = "verity/drawn-unit-bundle/torch-loop/context/v1"
-RUN_ID = "drawn-unit-bundle-fixture"
-
-
-def torch_loop_weights(model: Any, salt_key: bytes, program: str) -> dict[str, REG.Registered]:
-    """The torch loop's linears as registered values, named as `verity_torch_loop.weights` names a decoder's (``l<i>.wup``,
-    ``l<i>.wdown`` and their ``.scale``): a weight row is output channel c's s8 codes as 64 u16 words, a scale row its f32
-    bits; row/v2 rows; row i's salt ChaCha20 under ``salt_key`` at the value's index as nonce (`rows.salts`)."""
-    out: dict[str, REG.Registered] = {}
-    for layer, lin in enumerate(model.layers):
-        codes = lin.wq.contiguous().numpy().view(np.uint8)
-        words = codes.reshape(codes.shape[0], -1).view("<u2").astype(np.uint16)
-        scales = lin.sw.contiguous().numpy().view(np.uint32)
-        for name, rows, bits in ((f"l{layer}.{LINEAR_NAMES[layer]}", [list(map(int, r)) for r in words], 16),
-                                 (f"l{layer}.{LINEAR_NAMES[layer]}.scale", [[int(s)] for s in scales], 32)):
-            ys = CS.salts(salt_key, len(out), len(rows))
-            out[name] = REG.Registered.commit(program, name, rows, [ys[i * SALT:(i + 1) * SALT] for i in range(len(rows))],
-                                              word_bits=bits, schema=REG.SCHEMA_V2)
-    return out
-
-
-def torch_loop_reads(c: Mapping[str, Any], template: str, port: str) -> tuple[str, int] | None:
-    """The torch loop's registered reads: a unit's ``wrow`` and ``sw`` are its layer's weight and scale rows at its output
-    coordinate."""
-    if port == "wrow":
-        return f"l{c['layer']}.{LINEAR_NAMES[c['layer']]}", c["unit"]
-    if port == "sw":
-        return f"l{c['layer']}.{LINEAR_NAMES[c['layer']]}.scale", c["unit"]
-    return None
-
-
-def torch_loop_layout(h: int, layers: int) -> S.Layout:
-    """The torch loop's step layout: a group a layer, its tensors the linear's input codes (``h`` bytes), their f32 scale and
-    the linear's bf16 output (``2h`` bytes). Its units: the input quantizer (the codes row, then the scale row), then one unit
-    per output coordinate (its 2-byte row), the proof block `ScaledMmS8Coordinate_v1` proves."""
-    quant = (S.Row((S.Part(0, 0, h),)), S.Row((S.Part(1, 0, 4),)))
-    group = S.Group((h, 4, 2 * h), (quant, *((S.Row((S.Part(2, 2 * c, 2),)),) for c in range(h))))
-    return S.Layout(f"torch-loop/mlp-w8a8-h{h}/every-linear/v1", (group,) * layers)
-
-
-def torch_loop_locate(h: int) -> Locate:
-    """The torch loop's rows in its step layout: a unit's ``x`` and ``sx`` are its layer's quantizer's rows 0 and 1 (their
-    producer), its ``o0`` its own coordinate's unit; ``wrow`` and ``sw`` are registered reads."""
-    def locate(c: Mapping[str, Any], template: str, port: str) -> tuple[int, int, dict[str, Any] | None] | None:
-        base = c["layer"] * (h + 1)
-        producer = {"layer": c["layer"], "op": f"{c['op']}.input_quant", "unit": base}
-        return {"x": (base, 0, producer), "sx": (base, 1, producer), "o0": (base + 1 + c["unit"], 0, None)}.get(port)
-    return locate
-
-
-def _step_key(salt_key: bytes, block: int, step: int) -> bytes:
-    return hashlib.sha256(salt_key + f"/block/{block}/step/{step}".encode()).digest()
-
-
-def torch_loop_window(out: str | Path, requests: Sequence[int] = (3, 7), steps: int = 1, cap: int = 8, tamper: bool = False,
-                      salt_key: bytes = FIXTURE_SALT_KEY, law: str | None = None
-                      ) -> tuple[Any, dict[str, REG.Registered], Commitment]:
-    """The torch loop's window written to ``out`` with its step commitments (a test salt key a step, from ``salt_key``): every
-    row a unit commits or reads in the step commitment carries that commitment's salt, and every weight row its registered
-    value's, so each window string is the one its opening reaches: -> (the loop, its registered weights, its commitment).
-    ``law``: the law it registers (`draw.parse_law`; default the fixture's, ``subset:len(FIXTURE_DRAW)``). Needs torch and
-    `integrations/torch_loop` on the path."""
-    from verity.core.protocols.sampled_proofs.one_stage import registration as R
-    from verity_torch_loop import loop as L
-
-    loop = L.TorchLoop(L.Model(), list(requests), steps, tamper, RUN_ID)
-    win = loop.window(D.parse_law(law or f"subset:{len(FIXTURE_DRAW)}"), cap)
-    h, program = loop.model.h, f"torch-loop/mlp-w8a8-h{loop.model.h}/seed{loop.model.seed}"
-    weights = torch_loop_weights(loop.model, salt_key, program)
-    layout, locate = torch_loop_layout(h, len(loop.model.layers)), torch_loop_locate(h)
-    context = identity_digest_sha512(CONTEXT_TAG, {"run": loop.run_root, "program": program})
-    spans, base = _run_starts(win.labels()), win._bases()
-    lo_of = [a for a, _, _, _ in spans]
-
-    def coords_of(u: int) -> dict[str, Any]:
-        a, _, lab, start = spans[bisect.bisect_right(lo_of, u) - 1]
-        return torch_loop_coords(lab, u - start)
-
-    data, grids = [], {}
-    for m in win.window.members:
-        lay = IF.layout(win.circuit.template(m.template))
-        got = win._recorded[m.template]
-        ports = [np.concatenate([b.words[g] for b in got]) for g in range(len(lay.rows) + len(lay.outs))]
-        lo = m.base - base[m.template]
-        d = {"rows": {p: ports[g][lo:lo + m.n] for g, (p, _) in enumerate(lay.rows)},
-             "outs": {p: ports[len(lay.rows) + j][lo:lo + m.n] for j, (p, _) in enumerate(lay.outs)}}
-        data.append(d)
-        for i in range(m.n):
-            c = coords_of(m.base + i)
-            for p, arr in (*d["rows"].items(), *d["outs"].items()):
-                at = locate(c, m.template, p)
-                if at is None:
-                    continue
-                g = layout.row_base[at[0]] + at[1]
-                grid = grids.setdefault((c["block"], c["step"]), [[None] * layout.row_count for _ in requests])
-                row = np.ascontiguousarray(arr[i]).astype("<u2").tobytes()
-                if grid[c["slot"]][g] not in (None, row):
-                    raise ValueError(f"block {c['block']} step {c['step']} slot {c['slot']} row {g}: read as two values")
-                grid[c["slot"]][g] = row
-    if any(r is None for grid in grids.values() for rows in grid for r in rows):
-        raise ValueError("a row of the step layout has no unit committing or reading it")
-    com = Commitment(context, layout, len(requests),
-                     {k: StepRecord(_step_key(salt_key, *k), tuple(tuple(rows) for rows in grid)) for k, grid in grids.items()})
-
-    salts_of = {}
-    for m in win.window.members:
-        lay = IF.layout(win.circuit.template(m.template))
-        for p, _ in (*lay.rows, *lay.outs):
-            ys = b""
-            for u in range(m.base, m.base + m.n):
-                c = coords_of(u)
-                at, hit = locate(c, m.template, p), torch_loop_reads(c, m.template, p)
-                if at is not None:
-                    rec = com.steps[c["block"], c["step"]]
-                    ys += S.row_salts(rec.salt_key, c["slot"], layout.row_base[at[0]] + at[1], 1)
-                else:
-                    value, pos = hit
-                    ys += weights[value].salts[pos]
-            salts_of[m.port(p)] = ys
-    committed = CS.commit(win.window, data, salt_key=salt_key, salts_of=salts_of)
-    win.write(committed, out, {"loop": "torch-loop", **steps_provenance(com)}, registrar=R)
-    return loop, weights, com
-
-
-FIXTURE_DRAW = (5, 200, 300, 511)
-
-
-def fixture_bundle(scratch: str | Path) -> tuple[dict[str, Any], bytes]:
-    """The fixture: the torch loop (requests 3 and 7, one step, width 128: 512 units in members of 8) written to ``scratch``,
-    and the bundle of `FIXTURE_DRAW` (slot 0 layer 0, slot 0 layer 1, slot 1 layer 0, slot 1 layer 1), its templates on the
-    RTX PRO 6000's dot (``GEMM_SM120_S8``) and its draw a fixture's. It is built, not tracked; the suite pins its digests
-    (`digests`)."""
-    _, weights, com = torch_loop_window(scratch)
-    return build(scratch, FIXTURE_DRAW, commitment=com, locate=torch_loop_locate(128), binding="GEMM_SM120_S8",
-                 reads=torch_loop_reads, weights=weights,
-                 draw={"source": "fixture", "law": {"law": "subset", "k": len(FIXTURE_DRAW)}})
-
-
 def digests(doc: Mapping[str, Any], payload: bytes) -> dict[str, str]:
     """The SHA-512s of a bundle's document as `write` writes it and of its payload."""
     return {"json": hashlib.sha512((json.dumps(doc, indent=1, sort_keys=True) + "\n").encode()).hexdigest(),
             "bin": hashlib.sha512(payload).hexdigest()}
 
 
-def fixture(out_dir: str | Path, scratch: str | Path) -> tuple[Path, Path]:
-    """`fixture_bundle` written to ``out_dir`` as ``drawn-unit-bundle.{json,bin}``."""
-    return write(*fixture_bundle(scratch), out_dir, "drawn-unit-bundle")
-
-
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="The drawn-unit replay bundle: check one, or write the torch loop's fixture.")
+    ap = argparse.ArgumentParser(description="The drawn-unit replay bundle: check one.")
     sub = ap.add_subparsers(dest="cmd", required=True)
     c = sub.add_parser("check")
     c.add_argument("bundle")
     c.add_argument("--registration")
-    f = sub.add_parser("fixture")
-    f.add_argument("--out", required=True)
-    f.add_argument("--scratch", required=True)
     a = ap.parse_args(argv)
-    if a.cmd == "check":
-        doc, pay = read(a.bundle)
-        reg = json.loads(Path(a.registration).read_text()) if a.registration else None
-        bad = check(doc, pay, registration=reg)
-        print(json.dumps({"units": len(doc["units"]), "ok": not bad, "bad": bad}, sort_keys=True))
-        return 0 if not bad else 1
-    print(json.dumps([str(p) for p in fixture(a.out, a.scratch)]))
-    return 0
+    doc, pay = read(a.bundle)
+    reg = json.loads(Path(a.registration).read_text()) if a.registration else None
+    bad = check(doc, pay, registration=reg)
+    print(json.dumps({"units": len(doc["units"]), "ok": not bad, "bad": bad}, sort_keys=True))
+    return 0 if not bad else 1
 
 
 if __name__ == "__main__":

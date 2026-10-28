@@ -22,7 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import VLLM, WORKLOAD_SCHEMA, checkpoint_entries, option
+from verity_vllm.config import VLLM, WORKLOAD_SCHEMA, checkpoint_entries, option, workload_arg
 from verity_vllm.observe import prefix_cache as PC
 
 #: shared prefix length (tokens); a multiple of vLLM's block_size 16 so every prefix block is a full, cacheable block
@@ -155,7 +155,7 @@ class ExtractOptions:
     run_or_log: str = option("run_or_log")
     out: str | None = option("--out", default=None)
     instances: str | None = option("--instances", default=None)
-    workload: str | None = option("--workload", default=None)
+    workload: str | None = option("--workload", type=workload_arg, default=None)
     cmd: str = field(default="extract", init=False)
 
 

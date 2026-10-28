@@ -23,7 +23,7 @@ def utc(s: str) -> datetime:
 
 
 def test_each_landed_pr_is_split_into_its_five_steps(tmp_path):
-    """19 Oct: Daniel asked why `main` is a bottleneck; a PR waited 11 h from its mark, under 1.5 h of it in machines and checks."""
+    """Why `main` is a bottleneck: a PR waited 11 h from its mark, under 1.5 h of it in machines and checks."""
     d = tmp_path / "r20261019-103100-0002"
     d.mkdir()
     (d / "slot.json").write_text(json.dumps({"state": "held", "took": "2026-10-19T10:40:00Z"}))

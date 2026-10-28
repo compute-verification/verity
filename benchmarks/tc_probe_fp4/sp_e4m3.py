@@ -49,6 +49,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import probe as P
 import k32
 
+from verity_config.settings import SHARED
+
 SCHEMA = "pouw-rtxpro/tc-sparse-e4m3/v1"
 INSTRUCTION_ID = "sm120.mma.sp.m16n8k64.e4m3"
 PTX = "mma.sp::ordered_metadata.sync.aligned.m16n8k64.row.col.kind::f8f6f4.f32.e4m3.e4m3.f32"
@@ -273,7 +275,7 @@ class Device:
 
 class FakeDevice:
     """CPU stand-in (``--fake-silicon MODEL``): the sparse words are MODEL's, the dense twins the dense atom's model; a dry run,
-    refused under a research run."""
+    refused with ``RESEARCH_RUN_ID`` set."""
 
     def __init__(self, model_name: str):
         models = candidates()
@@ -283,7 +285,7 @@ class FakeDevice:
 
     def identity(self) -> dict:
         return {"device": f"FAKE SILICON ({self.model_name})", "compute_capability": "fake", "driver": None, "gpu_uuid": "GPU-fake",
-                "backend": "fake", "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES")}
+                "backend": "fake", "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES}
 
     def clocks(self, uuid):
         return None
@@ -655,8 +657,8 @@ def verify(args) -> int:
            "finding": finding, "failures": failures, "seconds": round(time.time() - t_all, 1)}
     (out / "sparse.json").write_text(json.dumps(doc, indent=1))
     ok = not failures and bool(fams)
-    if os.environ.get("RESEARCH_RUN_ID"):
-        res = {"schema": "research/result/v0.1", "kind": "tc-evidence/v1", "run_id": os.environ["RESEARCH_RUN_ID"],
+    if SHARED.RESEARCH_RUN_ID:
+        res = {"schema": "research/result/v0.1", "kind": "tc-evidence/v1", "run_id": SHARED.need("RESEARCH_RUN_ID"),
                "instruction": INSTRUCTION_ID, "ptx": PTX, "sku": ident.get("device"), "gpu_uuid": ident.get("gpu_uuid"),
                "driver": ident.get("driver"), "compute_capability": ident.get("compute_capability"), "model_agrees": None,
                "candidate_finding": {"agreeing": finding["candidates_reproducing_every_sparse_word"],
@@ -704,8 +706,8 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--out", required=True)
     b.add_argument("--arch", default="sm_120a")
     args = ap.parse_args(argv)
-    if getattr(args, "fake_silicon", None) and os.environ.get("RESEARCH_RUN_ID"):
-        ap.error("--fake-silicon is a dry run and never publishes: not under a research run")
+    if getattr(args, "fake_silicon", None) and SHARED.RESEARCH_RUN_ID:
+        ap.error("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     if args.cmd == "build":
         out = Path(os.path.expandvars(args.out))
         out.mkdir(parents=True, exist_ok=True)

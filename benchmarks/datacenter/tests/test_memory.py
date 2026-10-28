@@ -6,39 +6,41 @@ from __future__ import annotations
 
 import pytest
 
-from datacenter import (BLOCK_BITS, Append, Assumption, Block, Cadence, Challenge, Datacenter, Deviation, Device, Held,
-                        Interval, Link, Plan, Read, ReadWindow, Rekey, Release, Refused, Store, account, audit, place,
-                        register, run)
+from datacenter import (BLOCK_BITS, Append, Assumption, Cadence, Challenge, Datacenter, Deviation, DeviceEntry, Held,
+                        Interval, LinkEntry, Plan, Read, ReadWindow, Refused, Rekey, Release, StoreEntry, Zone, account,
+                        audit, place, register, run)
 from datacenter.models import WEIGHTS, X, two_stage
 
 GB = 8e9
 US = Assumption("hop", 1e-6, "s", "measured")
-KV = Store("kv", 1 * GB, "a.gpu")            # 1 GB of KV pages, registered on a.gpu
+KV = StoreEntry("kv", 1 * GB, "a.gpu")            # 1 GB of KV pages, registered on a.gpu
 PCIE, NET = 64e9 * 8, 400e9
 PROGRAM = two_stage()
 REG = register(PROGRAM, WEIGHTS)
 INPUTS = {"x": X}
 
 
-def node(n: str) -> Block:
-    gpu = Device(f"{n}.gpu", "gpu", rate={"square-1024": Assumption("rtx-pro-6000/squarings-p1024", 1.499e10, "1/s"),
-                                          "mac:bf16": Assumption(f"{n}.gpu.bf16", 1e12, "MAC/s"),
-                                          "cuda:gate": Assumption(f"{n}.gpu.gates", 1e14, "gate/s")},
-                 memory=Assumption(f"{n}.gpu.hbm", 96 * GB, "bits"),
-                 bandwidth=Assumption(f"{n}.gpu.hbm_bw", 1.6e12 * 8, "bit/s"))
-    dram = Device(f"{n}.dram", "dram", memory=Assumption(f"{n}.dram.size", 512 * GB, "bits"),
-                  bandwidth=Assumption(f"{n}.dram.bw", 200e9 * 8, "bit/s"))
-    return Block(n, [gpu, dram])
+def node(n: str) -> Zone:
+    gpu = DeviceEntry(f"{n}.gpu", "gpu",
+                      rate={"square-1024": Assumption("rtx-pro-6000/squarings-p1024", 1.499e10, "1/s"),
+                            "mac:bf16": Assumption(f"{n}.gpu.bf16", 1e12, "MAC/s"),
+                            "cuda:gate": Assumption(f"{n}.gpu.gates", 1e14, "gate/s")},
+                      memory=Assumption(f"{n}.gpu.hbm", 96 * GB, "bits"),
+                      bandwidth=Assumption(f"{n}.gpu.hbm_bw", 1.6e12 * 8, "bit/s"))
+    dram = DeviceEntry(f"{n}.dram", "dram", memory=Assumption(f"{n}.dram.size", 512 * GB, "bits"),
+                       bandwidth=Assumption(f"{n}.dram.bw", 200e9 * 8, "bit/s"))
+    return Zone(n, [gpu, dram])
 
 
 def datacenter() -> Datacenter:
     net = Assumption("uplink", NET, "bit/s", "declared")
     pcie = Assumption("pcie5x16", PCIE, "bit/s")
-    fabric = [Device("a.cert", "certifier"), Device("b.cert", "certifier"), Device("leaf", "switch"),
-              Device("challenger", "challenger"), Device("world", "outside")]
-    links = [Link("a.gpu", "a.dram", pcie, kind="pcie"), Link("b.gpu", "b.dram", pcie, kind="pcie"),
-             Link("a.gpu", "a.cert", net, US), Link("a.cert", "leaf", net, US), Link("b.gpu", "b.cert", net, US),
-             Link("b.cert", "leaf", net, US), Link("challenger", "leaf", net, US), Link("world", "leaf", net, US)]
+    fabric = [DeviceEntry("a.cert", "certifier"), DeviceEntry("b.cert", "certifier"), DeviceEntry("leaf", "switch"),
+              DeviceEntry("challenger", "challenger"), DeviceEntry("world", "outside")]
+    links = [LinkEntry("a.gpu", "a.dram", pcie, kind="pcie"), LinkEntry("b.gpu", "b.dram", pcie, kind="pcie"),
+             LinkEntry("a.gpu", "a.cert", net, US), LinkEntry("a.cert", "leaf", net, US),
+             LinkEntry("b.gpu", "b.cert", net, US), LinkEntry("b.cert", "leaf", net, US),
+             LinkEntry("challenger", "leaf", net, US), LinkEntry("world", "leaf", net, US)]
     tick = Assumption("tick", 1e-4, "s", "declared")                # 100 µs ticks
     return Datacenter("dc0", [node("a"), node("b")], fabric, links, Cadence(buckets=4, tick=tick))
 
@@ -82,13 +84,13 @@ def test_a_small_sample_locates_by_latency_and_labels_rebuilt_in_time_locate_now
     p, plan, profile = setup(Plan(Interval(0, 1000), challenges=[Challenge("kv", 0, 1, sample=block)]))
     assert {"a.gpu", "a.dram", "b.gpu"} <= set(account(audit(run(p, INPUTS, plan), profile), profile).located["kv"])
     for regen, located in ((0.0, True), (1000.0, True), (10.0, False)):
-        labels = Store("labels", 1 * GB, "a.gpu", "labels", regen)
+        labels = StoreEntry("labels", 1 * GB, "a.gpu", "labels", regen)
         p, plan, profile = setup(Plan(Interval(0, 1000), challenges=[Challenge("labels", 0, 1, sample=block)]), (labels,))
         assert bool(account(audit(run(p, INPUTS, plan), profile), profile).located["labels"]) == located, regen
 
 
 def test_a_store_changes_as_blocks_land_and_leave_under_the_verifiers_coins():
-    """Memory's event shapes. KV blocks are appended under append coins and count from when their encode lands
+    """A store's event shapes. KV blocks are appended under append coins and count from when their encode lands
     (deferred residency); they are released, or re-keyed at their lifetime cap (the old indices go at once, the new
     ones count from their residency); a block released before it lands is withdrawn and never counts. A store's bits
     change mid-window, so a challenge's Held is the average over its interval."""

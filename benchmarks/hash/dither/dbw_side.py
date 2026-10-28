@@ -81,7 +81,6 @@ def main() -> int:
     ap.add_argument("--lib", help="session.so (without it the prover's options name its backend: --cpu BLOCKS)")
     ap.add_argument("--kv", help="kv.so (p1024, masked)")
     ap.add_argument("--lean-exe", type=Path, help="a built remote-audit-verifier (default: the verifier builds it)")
-    ap.add_argument("--verdict", default=V.VERDICT, choices=V.VERDICTS)
     ap.add_argument("--jitter-ms", type=float, default=50.0)
     ap.add_argument("--quantile", default="max", choices=("p50", "p99", "p999", "max"))
     ap.add_argument("--pings", type=int, default=1000)
@@ -145,7 +144,7 @@ def main() -> int:
     conn.send, conn.recv = sent, got
     v = V.Verifier(conn, source=os.urandom(32), windows=1, window_ns=10 ** 9, samples=2773, delta=2.0 ** -40,
                    jitter_ns=round(a.jitter_ms * 1e6), log=lambda m: print(m, flush=True), hbm_bytes=a.hbm_bytes,
-                   verdict=a.verdict, lean_exe=a.lean_exe)
+                   lean_exe=a.lean_exe)
     try:
         reg, cal = v.register()
     except (audit.RegistryError, ValueError, wire.Closed) as e:
@@ -168,7 +167,7 @@ def main() -> int:
     def record() -> None:
         (a.out / "verifier.json").write_text(json.dumps(
             {"schema": "verity/remote-session/verifier/v0", "peer": list(peer), "registration": wire.registration_json(reg),
-             "verdict": v.verdict, "calibration": cal, "rtt": rtt, "allowance_ns": allowance, "sessions": results,
+             "verdict": "lean", "calibration": cal, "rtt": rtt, "allowance_ns": allowance, "sessions": results,
              "registry": v.registry_json()}, indent=1))
 
     record()

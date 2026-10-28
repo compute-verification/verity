@@ -30,8 +30,8 @@ to `VStmt.Loads` (`loads_of_verifiesV`), and `RecursiveAudit`'s (i) reads it in 
   `verifyCmd` forms them; `find?_circuit`: `Tags.circuit`'s name names `Tags.circuit`. With refusal (5)'s name
   equation they give V*'s tags.
 * `firstDiff?_eq_none`: byte strings without a first difference are equal (`forIn_none_all`, the loop running through).
-* `checkFile_ok`, `checkParsed_ok`, `checkParsed_leavesOut`, `check_ok`, `checkCircuit_ok`, `checkStmt_ok`: what each check gives when it
-  passes.
+* `checkFile_ok`, `checkParsed_ok`, `checkParsed_leavesOut`, `checkParsed_v1`, `check_ok`, `checkCircuit_ok`,
+  `checkStmt_ok`: what each check gives when it passes.
 * `checkHolo_ok`, `checkCircuit_holo`, `checkCircuit_plain`: the circuit check pins the parsed circuit's META `holo`
   (`RecResiduals.holoOf`) to `i`'s holo flag at a part's statement and to `false` elsewhere, so a plain session's
   circuits are plain.
@@ -234,8 +234,29 @@ theorem checkParsed_ok {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkP
         · cases h
         · rename_i h3
           simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, Bool.not_eq_true', Array.isEmpty_iff, not_or,
-            Classical.not_not, Bool.not_eq_false] at h1 h2 h3
-          exact ⟨h1.1, h1.2, h2, h3⟩
+            Classical.not_not, Bool.not_eq_false] at h1 h2
+          exact ⟨h1.1, h1.2, h2, Classical.byContradiction fun hne =>
+            h3 (by rw [Bool.or_eq_true]; exact Or.inl (bne_iff_ne.2 hne))⟩
+  · cases h
+
+/-- **The parse check's rows are `sha512/row/v1`'s**: no row port of the circuit is a bit row (`v2`). -/
+theorem checkParsed_v1 {s : VStar.Stmt} {c : Flock.Circuit} (h : RecVStar.checkParsed s c = .ok ()) :
+    ∀ p ∈ c.ports.toList, p.v2 = false := by
+  unfold RecVStar.checkParsed at h
+  dsimp only at h
+  split at h
+  · rw [pure_bind] at h
+    split at h
+    · cases h
+    · split at h
+      · cases h
+      · split at h
+        · cases h
+        · rename_i h3
+          intro p hp
+          cases hv : p.v2
+          · rfl
+          · exact absurd (by rw [Bool.or_eq_true]; exact Or.inr (List.any_eq_true.2 ⟨p, hp, hv⟩)) h3
   · cases h
 
 /-- **The parse check's output leaves**: the circuit's output leaves are its unit's output words in order, as V*'s

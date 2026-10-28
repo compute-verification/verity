@@ -1,6 +1,5 @@
-"""N2, the egress side of the step-indexed scan (note:network-accounting/20261025T0830Z-report-net68-scan-router; the
-cells as note:network-accounting/20261025T0720Z-draft-n2-egress-encoder renders them): each egress bucket's cells
-computed, as the unit's gates, from the scan's slot state, the generator form. Nothing here is in a Spec yet.
+"""N2, the egress side of the step-indexed scan: each egress bucket's cells computed, as the unit's gates, from the
+scan's slot state, the generator form. Nothing here is in a Spec yet.
 
 **One unit a link ℓ and bucket t** (`EgressBucket`). It reads one row, ``state``, the egress view of the slot state
 S_t the scan's ingress step t wrote (a registered read of the scan's view leaf t), and computes the row of R B-byte

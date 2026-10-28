@@ -11,13 +11,13 @@ inputs, which leave Markdown out, cover it), filled from one of three places, ea
 * `DERIVED`: a formula over the other two, filled once all its inputs are.
 
 A name with no value renders as ``⟨NAME⟩`` only in a draft (``render(..., draft=True)``, never ``main``), the closing
-table saying what fills it; a report is refused while any number is unfilled, naming each. A value may carry a ``label`` (``PyTorch dry run``, ``HASH-20 bench``), printed beside it wherever it appears,
+table saying what fills it; a report is refused while any number is unfilled, naming each. A value may carry a ``label`` (``PyTorch dry run``, ``H200 commit bench``), printed beside it wherever it appears,
 for a number that is not the demo block's own; ``--record-label`` labels every number read from the block records,
 once at the top and in the sources table.
 
 **Demo A** composes sampled proofs, PoUW and the network certifier (`DEMO_A`): accept when all three accepted on the
 block's server, reject when one rejected, pending otherwise, with their errors summed as
-``Accounting.Guarantees.JointHorizon`` states it. PoUS, the bandwidth audit and the wipe compose at M4 (Demo B).
+``Accounting.Guarantees.JointHorizonLive`` states it. PoUS, the bandwidth audit and the wipe compose at M4 (Demo B).
 
 **The guarantee** cites ``Flock.Guarantees.JointStratified`` when ``JOINT_LOCKED`` is true (it is in the lock), else
 the per-subcircuit bound, with the joint figure labelled unlocked.
@@ -95,7 +95,7 @@ from verity_e2e_demo import block_record
 
 TEMPLATE = Path(__file__).parent / "demo_a.template"
 MEASUREMENTS = "verity/demo-a-measurements/v1"
-DELTA = Fraction(1, 100)
+DELTA = block_record.DELTAS[0]
 #: the share of compute spent on proving in part 3
 BUDGET = Fraction(1, 100)
 #: M3's draw: k units over the whole partition
@@ -109,19 +109,19 @@ FALLBACK_STATUS = "M3 fallback: live-drawn, opened, replayed (Python); not prove
 M3_STATUS = f"M3: {HANDFUL} live-drawn H200 proof blocks, each proved in C-Flock --zk and accepted by the Lean verifier"
 #: what keeps the CPU demo's ACCEPT from being "no stubs", until the measurements file's ``fixed`` names it
 STUBS = {
-    "pouw-live-salt": "PoUW's salt isn't yet the live coin read in its answer, nor its rows the committed activations "
-                      "(#4405, #4426), so the demo's ACCEPT isn't yet \"no stubs\".",
+    "pouw-live-salt": "PoUW's salt isn't yet the live coin read in its answer, nor its rows the committed activations, "
+                      "so the demo's ACCEPT isn't yet \"no stubs\".",
     "certifier-output-tie": "The network certifier's output tie isn't proved yet: the certified egress isn't yet shown "
-                            "equal to #4426's committed output rows inside the period's --zk proof (NET-80), so the "
+                            "equal to the committed output rows inside the period's --zk proof, so the "
                             "demo's ACCEPT isn't yet \"no stubs\".",
     "torch-loop-wiring": "The torch loop's ReLU and per-row quantize are not proved units: each linear's input is a "
-                         "committed value, not tied to the previous linear's outputs, until CMP-91 wires each linear "
-                         "as one ScaledMmS8_v1{128,128} unit to QuantRowS8_v1 (#4433), directly or through "
+                         "committed value, not tied to the previous linear's outputs, until each linear is wired "
+                         "as one ScaledMmS8_v1{128,128} unit to QuantRowS8_v1, directly or through "
                          "output-port registered reads, so the demo's ACCEPT isn't yet \"no stubs\".",
     "pouw-salt-order": "PoUW's H1 anchors (x, sx, the weight rows, sw) are committed before the draw coin but not "
-                       "before the salt (coin 0), so a prover could choose x after seeing it, which breaks #4363's "
-                       "binding premise (RT-LEAN L22), until ALLP-SALT's follow-up to #4405 and #4426 commits each "
-                       "activation entry first and releases the salt against R = SHA-512(tag ‖ W ‖ X ‖ k), so the "
+                       "before the salt (coin 0), so a prover could choose x after seeing it, which breaks the H1 "
+                       "anchors' binding premise, until each activation entry is committed first and the salt "
+                       "released against R = SHA-512(tag ‖ W ‖ X ‖ k), so the "
                        "demo's ACCEPT isn't yet \"no stubs\".",
 }
 DEMO_A = ("integrity", "pouw", "certifier")
@@ -177,19 +177,18 @@ RECORD: dict[str, str] = {
 
 #: filled by the measurements file: {NAME: which run or field fills it}
 MEASURED: dict[str, str] = {
-    "COMMITTED_ROWS": "CMP-97's block run: the per-step commit calls' rows (HASH-13 `commit_slots`, #4469), summed "
+    "COMMITTED_ROWS": "the block run: the per-step commit calls' rows (`commit_slots`), summed "
                       "over the block's steps",
-    "COMMITTED_BYTES": "CMP-97's block run: the bytes those commit calls hashed",
-    "BLOCK_ROOT": "the block root of CMP-97's drawn-unit bundle (`verity/drawn-unit-bundle`, #4500)",
-    "REGISTRATION_ROOT": "the seeded weights' registration root (CMP-95 item 1, #4445)",
-    "CHALLENGER_RUN": "CMP-97's block run: the challenger's coin record for the block's draw",
-    "ZK_SESSIONS": "PRF-171's prove run: its C-Flock --zk sessions behind the firewall (`sessions/index.jsonl`)",
-    "PROVE_RUN": "PRF-171's prove run id (PRF-172's main path)",
-    "FLIP_VERDICT": "PRF-171's flipped-bit run: the Lean verifier's verdict with one committed bit flipped",
-    "FLIP_RUN": "PRF-171's flipped-bit run id",
-    "JOINT_LOCKED": "LEAN-56: true once `Flock.Guarantees.JointStratified` is in the lock (`Security/lean-audit.json`) "
-                    "on main by M3",
-    "EPS_KS": "the bound's knowledge-soundness term for C-Flock --zk at the block's sessions (PRF-169)",
+    "COMMITTED_BYTES": "the block run: the bytes those commit calls hashed",
+    "BLOCK_ROOT": "the block root of the block run's drawn-unit bundle (`verity/drawn-unit-bundle`)",
+    "REGISTRATION_ROOT": "the seeded weights' registration root (`e2e_h200/served_weights.py`)",
+    "CHALLENGER_RUN": "the block run: the challenger's coin record for the block's draw",
+    "ZK_SESSIONS": "the prove run: its C-Flock --zk sessions behind the firewall (`sessions/index.jsonl`)",
+    "PROVE_RUN": "the prove run's id",
+    "FLIP_VERDICT": "the flipped-bit run: the Lean verifier's verdict with one committed bit flipped",
+    "FLIP_RUN": "the flipped-bit run's id",
+    "JOINT_LOCKED": "true once `Flock.Guarantees.JointStratified` is in the lock (`Security/lean-audit.json`) on main",
+    "EPS_KS": "the bound's knowledge-soundness term for C-Flock --zk at the block's sessions",
     "EPS_BIND": "the bound's binding term for the block's hm96-sha512 commitments",
     "H_A": "the bound (BOUND_CITATION) at δ = 1/100 on the block's draw, harm in ANDs: "
            "`sampled_proofs.optimize.certify` on the block's sizes and k",
@@ -197,40 +196,40 @@ MEASURED: dict[str, str] = {
     "BLOCK_ANDS": "the block's circuit: ANDs over all its proof blocks (circuit-check's ANDs a unit × units, per "
                   "subcircuit)",
     "BLOCK_OUTPUT_BITS": "the block's circuit: output bits over all its proof blocks",
-    "POUW_EPS": "CMP-126 (H200-POUW): PoUW's ε at δ = 1/100 from the block's one draw, its tiles a subcircuit at the "
+    "POUW_EPS": "the per-call noise run: PoUW's ε at δ = 1/100 from the block's one draw, its tiles a subcircuit at the "
                 "planner's k",
-    "POUW_COVERAGE": "CMP-126: the share of the block's static INT8 MACs its tiles cover (`range`)",
-    "POUW_CERTIFIED_SHARE": "CMP-126: PoUW's certified share at CMP-127's ρ",
-    "POUW_RHO": "CMP-127: ρ, the live share in `H1J10RCheckedCreditPeriod`",
-    "PROVING_GPU_S": "PRF-171's prove run: GPU-seconds of proving over every drawn unit's session",
-    "BLOCK_GPU_S": "CMP-97's block run: H200-seconds the block served",
-    "PROVE_S_PER_AND": "PRF-171's prove run, fitted by `sampled_proofs.costfit`: GPU-seconds of proving per AND",
-    "REPLAY_GPU_S": "CMP-97: H200-seconds to replay the block's drawn units (the drawn-unit bundle's builder)",
-    "COMMIT_GBPS": "CMP-97's block run: the commit call's throughput on the H200 (HASH-13, HASH-20)",
+    "POUW_COVERAGE": "the per-call noise run: the share of the block's static INT8 MACs its tiles cover (`range`)",
+    "POUW_CERTIFIED_SHARE": "the per-call noise run: PoUW's certified share at POUW_RHO's ρ",
+    "POUW_RHO": "ρ, the live share in `H1J10RCheckedCreditPeriod`",
+    "PROVING_GPU_S": "the prove run: GPU-seconds of proving over every drawn unit's session",
+    "BLOCK_GPU_S": "the block run: H200-seconds the block served",
+    "PROVE_S_PER_AND": "the prove run, fitted by `sampled_proofs.costfit`: GPU-seconds of proving per AND",
+    "REPLAY_GPU_S": "the block run: H200-seconds to replay the block's drawn units (the drawn-unit bundle's builder)",
+    "COMMIT_GBPS": "the block run: the commit call's throughput on the H200",
     "PLANNER_PREDICTED_S": "`sampled_proofs.optimize`'s cost for the block's draw, at the cost model fitted before the "
                            "block ran",
-    "SERVE_COMMIT_S": "CMP-97's block run: seconds of commits a step (HASH-20)",
-    "SERVE_STEP_S": "CMP-97's block run: seconds a step",
-    "SERVE_NOISE_S": "CMP-126 (kraqwxsc): seconds per-call noise adds a step, its source naming the noise run, then the "
-                     "plain run it is measured against (r20261026-113133-5cb4 against r20261026-120015-3773)",
-    "SERVE_NOISE_BATCH": "CMP-126: the batch those two runs served",
-    "SERVE_NOISE_UNITS_S": "CMP-126: of SERVE_NOISE_S, the seconds a step of per-call noise's units",
-    "SERVE_NOISE_COMMIT_S": "CMP-126: of SERVE_NOISE_S, the seconds a step of committing their values",
-    "SERVE_NOISE_GAMMA_STEP": "CMP-126: γ_step, the noise run's step over the plain run's",
-    "SERVE_NOISE_BASE_S": "CMP-126: the plain run's served step, mostly FAMILIES' slot commit (`commit_gpu`)",
-    "SERVE_STEP_4562_S": "#4562's served step on the H200, in seconds",
-    "SERVE_NOISE_UNITS_PEAK": "RHO-H200 (r20261027-022021-3a48): the share of the tensor peak per-call noise's units "
+    "SERVE_COMMIT_S": "the block run: seconds of commits a step",
+    "SERVE_STEP_S": "the block run: seconds a step",
+    "SERVE_NOISE_S": "the per-call noise run (kraqwxsc): seconds per-call noise adds a step, its source naming the noise "
+                     "run, then the plain run it is measured against (`r... against r...`)",
+    "SERVE_NOISE_BATCH": "the batch those two runs served",
+    "SERVE_NOISE_UNITS_S": "of SERVE_NOISE_S, the seconds a step of per-call noise's units",
+    "SERVE_NOISE_COMMIT_S": "of SERVE_NOISE_S, the seconds a step of committing their values",
+    "SERVE_NOISE_GAMMA_STEP": "γ_step, the noise run's step over the plain run's",
+    "SERVE_NOISE_BASE_S": "the plain run's served step, mostly FAMILIES' slot commit (`commit_gpu`)",
+    "SERVE_STEP_4562_S": "the earlier per-call build's (`percall:kraq`) served step on the H200, in seconds",
+    "SERVE_NOISE_UNITS_PEAK": "the tensor-peak run: the share of the tensor peak per-call noise's units "
                               "reach, ALU-bound",
-    "SERVE_COMMIT_OVERHEAD_S": "CMP-149 (r20261027-004614-d98c): the commit's own overhead a step at 1 KiB rows, after "
-                               "#4915",
-    "SIMULATED_RTT_MS": "CMP-97's block run: the challenger's simulated round trip",
+    "SERVE_COMMIT_OVERHEAD_S": "the commit overhead run: the commit's own overhead a step at 1 KiB rows, with each add's "
+                               "tables dropped at their read",
+    "SIMULATED_RTT_MS": "the block run: the challenger's simulated round trip",
     "STEP_S_B512": "M3's block run on the H200 at batch 512: seconds a step",
     "ROW_SLOT_NS_B512": "the same run: nanoseconds a step per row-slot",
     "STEP_S_B1024": "M3's block run on the H200 at batch 1,024: seconds a step",
     "ROW_SLOT_NS_B1024": "the same run: nanoseconds a step per row-slot",
     "STEP_S_KERNELS": "kernels' faster step at batch 512: seconds a step",
-    "WORLD_GATES_YEAR": f"the world's compute, AND gates a year, labelled {WORLD_LABEL} (census entry pending, CMP-133)",
-    "PLANNER": "proofs' planner (PRF-166, `benchmarks/sampling_plan/demo_a.py`) at its commit, and the recorded run of it "
+    "WORLD_GATES_YEAR": f"the world's compute, AND gates a year, labelled {WORLD_LABEL} (census entry pending)",
+    "PLANNER": "proofs' planner (`benchmarks/sampling_plan/demo_a.py`) at its commit, and the recorded run of it "
                "at 1% of a one-week sampling block (`--spans week`)",
     "H_POOLED": "PLANNER's run: `for_budget` at 1% of a one-week sampling block, a unit's harm its own ANDs, the plan of "
                 "record's faulty ANDs at δ = 1% (`plan_of_record-week.json` › at › 0.01 › free_compute)",
@@ -259,9 +258,9 @@ DERIVED: dict[str, str] = {
     "PLANNER_RATIO": "PROVING_GPU_S / PLANNER_PREDICTED_S",
     "SERVE_COMMIT_SHARE": "SERVE_COMMIT_S / SERVE_STEP_S",
     "SERVE_NOISE_RATIO_4562": "(SERVE_STEP_4562_S + SERVE_NOISE_S) / SERVE_STEP_4562_S, to two figures",
-    "BOUND_CITATION": "JOINT_LOCKED: LEAN-56's `Flock.Guarantees.JointStratified` when locked, else #4358's "
+    "BOUND_CITATION": "JOINT_LOCKED: `Flock.Guarantees.JointStratified` when locked, else the "
                       "per-subcircuit bound with the joint figure unlocked",
-    "HORIZON_CITATION": "JOINT_LOCKED: LEAN-56's `JointStratifiedHorizon` when locked, else #4358's "
+    "HORIZON_CITATION": "JOINT_LOCKED: `JointStratifiedHorizon` when locked, else "
                         "`Flock.Guarantees.IntegrityHorizon` per subcircuit with the joint figure unlocked",
     "SUBCIRCUIT_COUNT": "the subcircuits measured (part 2), else the block record's per-subcircuit draw",
     "N_HOURS": "the largest subcircuit fixed proving cost / 1%, in hours",
@@ -406,8 +405,8 @@ def load_measurements(doc: Mapping[str, Any]) -> tuple[dict[str, V], list[dict[s
         runs = {n: set(RUN_ID.findall(values[n].source)) for n in planned}
         if len(planned) != len(PLANNED) or not all(runs.values()) or len(set.intersection(*runs.values())) == 0:
             raise ValueError(f"measurements: {', '.join(f'⟨{n}⟩' for n in PLANNED)} are filled together from one "
-                             f"recorded run of proofs' planner, each source naming that run (`research run ... "
-                             f"benchmarks/sampling_plan/demo_a.py --spans week`); got {sorted(planned)}")
+                             f"recorded run of proofs' planner, each source naming that run (`benchmarks/sampling_plan/demo_a.py "
+                             f"--spans week`); got {sorted(planned)}")
     if "WORLD_GATES_YEAR" in values and values["WORLD_GATES_YEAR"].label != WORLD_LABEL:
         raise ValueError(f"measurements: ⟨WORLD_GATES_YEAR⟩ is labelled {WORLD_LABEL!r}, the census entry's")
     subcircuits = [dict(s) for s in doc.get("subcircuits") or []]
@@ -451,10 +450,10 @@ def derive(values: Mapping[str, V], subcircuits: Sequence[Mapping[str, Any]]) ->
     if noise is not None and step:
         put("SERVE_NOISE_RATIO_4562", f"{float((step + noise) / step):.2g}", "SERVE_NOISE_S", "SERVE_STEP_4562_S")
     if (lk := values.get("JOINT_LOCKED")) is not None:
-        put("BOUND_CITATION", "LEAN-56's `Flock.Guarantees.JointStratified` (locked)" if lk.value is True else
-            "#4358's per-subcircuit bound, the joint figure unlocked", "JOINT_LOCKED")
-        put("HORIZON_CITATION", "LEAN-56's `JointStratifiedHorizon` (locked)" if lk.value is True else
-            "#4358's `Flock.Guarantees.IntegrityHorizon` per subcircuit, the joint figure unlocked", "JOINT_LOCKED")
+        put("BOUND_CITATION", "`Flock.Guarantees.JointStratified` (locked)" if lk.value is True else
+            "the per-subcircuit bound, the joint figure unlocked", "JOINT_LOCKED")
+        put("HORIZON_CITATION", "`JointStratifiedHorizon` (locked)" if lk.value is True else
+            "`Flock.Guarantees.IntegrityHorizon` per subcircuit, the joint figure unlocked", "JOINT_LOCKED")
     if subcircuits:
         out["SUBCIRCUIT_COUNT"] = V(len(subcircuits), DERIVED["SUBCIRCUIT_COUNT"], "; ".join(
             sorted({s["label"] for s in subcircuits if s.get("label")})) or None)
@@ -503,10 +502,10 @@ def serve_noise_line(values: Mapping[str, V], quiet: str | None = None) -> str:
             f"({c('SERVE_NOISE_UNITS_S')} s of units plus {c('SERVE_NOISE_COMMIT_S')} s of commit, "
             f"{runs('SERVE_NOISE_S')}): {c('SERVE_NOISE_GAMMA_STEP')}× against that commit-bound "
             f"{c('SERVE_NOISE_BASE_S')} s served step, which is mostly FAMILIES' slot commit (`commit_gpu`), and about "
-            f"{c('SERVE_NOISE_RATIO_4562')}× against #4562's {c('SERVE_STEP_4562_S')} s served step. The units are "
-            f"ALU-bound at about {c('SERVE_NOISE_UNITS_PEAK', _pct)} of the tensor peak (RHO-H200, "
-            f"{runs('SERVE_NOISE_UNITS_PEAK')}). The commit's own overhead is a separate line (CMP-149): "
-            f"+{c('SERVE_COMMIT_OVERHEAD_S')} s at 1 KiB rows after #4915 ({runs('SERVE_COMMIT_OVERHEAD_S')}).")
+            f"{c('SERVE_NOISE_RATIO_4562')}× against the earlier per-call build's {c('SERVE_STEP_4562_S')} s served "
+            f"step. The units are ALU-bound at about {c('SERVE_NOISE_UNITS_PEAK', _pct)} of the tensor peak "
+            f"({runs('SERVE_NOISE_UNITS_PEAK')}). The commit's own overhead is a separate line: "
+            f"+{c('SERVE_COMMIT_OVERHEAD_S')} s at 1 KiB rows ({runs('SERVE_COMMIT_OVERHEAD_S')}).")
 
 
 def _records(records: Sequence[Mapping[str, Any]], failures: int = 0) -> str:
@@ -576,9 +575,9 @@ def _caveats(records: Sequence[Mapping[str, Any]], values: Mapping[str, V], extr
         return "\n".join(f"- {x}" for x in [*lines, *extra])
     r = records[0]
     if (k := values.get("DRAWN_UNITS")) is not None and k.value != HANDFUL:
-        lines.append(f"This block drew k = {_fmt(k.value)}, not M3's handful of {HANDFUL} (PRF-171).")
+        lines.append(f"This block drew k = {_fmt(k.value)}, not M3's handful of {HANDFUL}.")
     lines.append("The challenger and the network certifier run on the prover's node for the demo, not on a machine the "
-                 "prover doesn't control (fine for the demo, Daniel, 25 Oct 7:34 PM PDT).")
+                 "prover doesn't control: the demo assumes the prover leaves them alone.")
     for p in DEMO_A:
         lg = r["legs"].get(p)
         if lg is None or lg["server"] != r["server"]:
@@ -587,7 +586,7 @@ def _caveats(records: Sequence[Mapping[str, Any]], values: Mapping[str, V], extr
             lines.append(f"{PROTOCOL_NAMES[p].capitalize()} ran on a fixture, not on the block "
                          f"(block record {r['run']}).")
     if not r["composed"]["joint_horizon"]["statement"].get("proved"):
-        lines.append("JointHorizon is stated, not yet proved: the error sum in part 1 is the sum it states.")
+        lines.append("JointHorizonLive is stated, not yet proved: the error sum in part 1 is the sum it states.")
     lines.append("PRF-167: the state carried across a wipe has no cross-session binding term yet, so the bound holds "
                  "per server-time block.")
     lines.append("`pous-ring-instantiation` is M4's: PoUS's S_cert, the bandwidth audit's Q_cert and the wipe's foreign_bits "
@@ -618,7 +617,7 @@ def _sources(order: Sequence[str], values: Mapping[str, V], subcircuits: Sequenc
             continue
         if name == "SUBCIRCUITS":
             src = "; ".join(f"{s['name']}: {s['source']}" for s in subcircuits) or \
-                  "CMP-97's block and PRF-171's prove run: per subcircuit its units, drawn units, ANDs a unit, " \
+                  "the block run and the prove run: per subcircuit its units, drawn units, ANDs a unit, " \
                   "output bits a unit and fixed proving cost per sampling block (`sampled_proofs.costfit`'s " \
                   "statement_fixed)"
             filled += bool(subcircuits)
@@ -737,7 +736,7 @@ def section_rows(sections: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
                 raise ValueError(f"measurements: row {row.get('what')!r} names no {', '.join(missing)}; every number "
                                  f"carries its run, its own verdict line quoted, and its target")
             if NOISE_ROW.search(str(row["what"])):
-                raise ValueError(f"measurements: row {row['what']!r} states per-call noise on its own (CMP-126): put "
+                raise ValueError(f"measurements: row {row['what']!r} states per-call noise on its own: put "
                                  f"the {', '.join(n for n in SERVE_NOISE if n in MEASURED)} values in `values` and "
                                  f"\"serve_noise\": true on its section, which states the seconds it adds a step with "
                                  f"both ratios")
@@ -774,7 +773,7 @@ def _line(lines: Sequence[str], head: str) -> list[tuple[str, dict[str, Any]]]:
 
 
 def proved_section(proved: Mapping[str, Any]) -> tuple[dict[str, Any], bool]:
-    """DRAWPROVE's run as a section, one row per drawn proof block and one for the bundle's verdict, and whether every
+    """The drawn-block proving run as a section, one row per drawn proof block and one for the bundle's verdict, and whether every
     drawn proof block was proved and accepted (module docstring); refuses a VERDICT for a block the coin didn't draw."""
     run, drawn, lines = proved.get("run"), proved.get("drawn"), proved.get("lines")
     if not RUN_ID.search(str(run or "")) or not isinstance(lines, list) or not isinstance(drawn, list) or not drawn:

@@ -1,4 +1,4 @@
-"""served_zk's window through the proof service (`served_zk/served_commit.py` over P1, `sampled_proofs.service`): a
+"""served_zk's window through the proof system (`served_zk/served_commit.py` over P1, `sampled_proofs.service`): a
 window of served calls' side rows committed as C-Flock commits a unit's rows, its tiles padded with filler tiles to a
 grid level, registered with exactly PoUW's public items, received by a `Stream`, drawn once, each drawn tile's proof
 opened against the window root, delivered once, and the final outcome publishing exactly the public items."""
@@ -253,11 +253,11 @@ UNFIXED = {"eos-keyed-row": {**SERVED, "ignore_eos": False},
 
 
 def test_rows_of_record_serve_a_public_fixed_length(served):
-    """Daniel, 19 Oct (ASK-39): the window registers its rows' fixed length, the verifier's max_tokens per slot served under
-    ignore_eos, so its useful work is public.  A fixed-length window registers; a row served until EOS, a served length
-    other than max_tokens, or a max_tokens other than the verifier's is refused as ``window-form``; and a window with no
-    length item (registered before the rule) is refused as not of record.  The committer's max_tokens is the served
-    request's (`e2e.SERVED_TOKENS`), and the runner's record of it has the name the committer reads."""
+    """The window registers its rows' fixed length, the verifier's max_tokens per slot served under ignore_eos, so its
+    useful work is public.  A fixed-length window registers; a row served until EOS, a served length other than
+    max_tokens, or a max_tokens other than the verifier's is refused as ``window-form``; and a window with no length
+    item (registered before the rule) is refused as not of record.  The committer's max_tokens is the served request's
+    (`e2e.SERVED_TOKENS`), and the runner's record of it has the name the committer reads."""
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
     import e2e
     assert (SC.MAX_TOKENS, SC.SERVED_RECORD) == (e2e.SERVED_TOKENS, e2e.SERVED_RECORD)

@@ -1,5 +1,5 @@
-"""The H200 window writer (CIR-115): where each proof block's input ports read their bytes in the step commitments, the
-counterpart of the toy's ``torch_loop_window`` (`verity_e2e_demo.replay_bundle`) for circuits' FAMILIES map (`plan.Map`).
+"""The H200 window writer: where each proof block's input ports read their bytes in the step commitments, for
+circuits' FAMILIES map (`plan.Map`).
 
 **The layout.** `shared_layout` is FAMILIES' shared-row commit layout, one commit unit a row of at most
 ``row`` bytes (1 KiB), built from the map's groups (the embedding, each layer, the head):
@@ -12,7 +12,10 @@ counterpart of the toy's ``torch_loop_window`` (`verity_e2e_demo.replay_bundle`)
 - kept: K and V (``wk`` and ``wv``), a slot's one row each, since their positions are read at later steps.
 
 At the frozen shape and 1 KiB it is 21,857 rows a slot under ``layout_digest`` `FROZEN_DIGEST`, and its
-writers (`writers`) are circuits' writers artifact's.
+writers (`writers`) are circuits' writers artifact's. Under the ``residual`` fusion (`plan.FUSIONS`) the projections' rows
+go: 18,529 rows and 24,008,260 B a slot, 1,099 writers. With ``norm`` as well each norm's output rows go too: 15,169 rows
+and 20,569,300 B a slot, 1,204 writers. With ``pv`` too each layer's softmax rows go: 14,337 rows and 19,717,332 B a slot,
+1,152 writers.
 
 **The reads.** `Window.locate` gives a proof block's input port as `Piece`\\ s, its bytes theirs in order:
 
@@ -46,7 +49,7 @@ from typing import Any
 
 import numpy as np
 
-from .commit import _slots
+from .commit import _slots, fusion_tag
 from .plan import Entry, Map, Table, Units
 from .shape import PV_K, Shape, forms
 from .units import sources
@@ -137,8 +140,8 @@ def _shared_group(entries: list[Entry], row: int) -> L.Group:
             (g,) = [u for u in us if u.template == "AllGather_v1"]
             rows += [L.Row((L.Part(s, g.offset + i * g.stride, g.nbytes),)) for i in range(g.count)]
         elif k == "quant":
-            (q,) = us
-            rows += [L.Row((L.Part(s, q.offset + i * q.stride, q.nbytes), L.Part(s + 1, 0, 4))) for i in range(q.count)]
+            (q,) = [u for u in us if u.scale or u.scale_only]
+            rows += [L.Row((L.Part(s, q.offset + i * q.stride, q.stride), L.Part(s + 1, 0, 4))) for i in range(q.count)]
         else:
             if t.nbytes > row:
                 raise ValueError(f"{t.op}: {t.nbytes} B doesn't pool into {row} B rows")
@@ -153,14 +156,16 @@ def _shared_group(entries: list[Entry], row: int) -> L.Group:
     return L.Group(tuple(sizes), tuple((r,) for r in rows))
 
 
-def shared_layout(shape: Shape, row: int = ROW) -> Any:
-    """FAMILIES' shared-row layout at ``shape``, one commit unit a row of at most ``row`` bytes (a quantizer's row is its
-    chunk's codes and the scale), as the `slots.Layout` that commits it; every layer's group is one `L.Group`."""
+def shared_layout(shape: Shape, row: int = ROW, fused: frozenset[str] = frozenset()) -> Any:
+    """FAMILIES' shared-row layout at ``shape`` with the map's fusions ``fused``, one commit unit a row of at most ``row``
+    bytes (a quantizer's row is its chunk's codes and the scale), as the `slots.Layout` that commits it; every layer's group
+    is one `L.Group`."""
     S, _ = _slots()
-    m = Map(shape)
+    m = Map(shape, fused)
     layer = _shared_group(m.layer(0), row)
     groups = [layer if 1 <= i <= shape.layers else _shared_group(entries, row) for i, entries in enumerate(m.groups())]
-    lay = S.Layout(f"e2e-h200/{shape.name}/c{shape.context}/families-shared-rows-{row}b/v1", tuple(groups))
+    lay = S.Layout(f"e2e-h200/{shape.name}/c{shape.context}/families-shared-rows-{row}b{fusion_tag(m.fused)}/v1",
+                   tuple(groups))
     check_shared(lay, m)
     return lay
 
@@ -173,7 +178,7 @@ def check_shared(layout: Any, m: Map) -> None:
         if id(g) not in seen:
             seen.add(id(g))
             src = _sources(entries)
-            outputs += [(gi, src[t.op], u.offset + i * u.stride, u.nbytes)
+            outputs += [(gi, src[t.op] + 1, 0, 4) if u.scale_only else (gi, src[t.op], u.offset + i * u.stride, u.nbytes)
                         for t, us in entries for u in us if u.template != "AllGather_v1" for i in range(u.count)]
     L.check_shared(L.Layout(layout.name, tuple(layout.groups)), outputs)
 
@@ -227,12 +232,13 @@ class _Index:
 class Window:
     """Proof blocks' reads and outputs in the step commitments of a run at ``shape``: ``schedule[s]`` has ``slots`` and
     ``positions`` (`commit.StepTables`, `driver.StepResult`), batch row b of step s being sequence ``slots[b]`` at position
-    ``positions[b]``; ``layout`` is `shared_layout` (by default) or any layout of the map's tables."""
+    ``positions[b]``; ``layout`` is `shared_layout` (by default) or any layout of the map's tables, ``fused`` the map's
+    fusions."""
 
-    def __init__(self, shape: Shape, schedule: Sequence[Any], layout: Any = None) -> None:
+    def __init__(self, shape: Shape, schedule: Sequence[Any], layout: Any = None, fused: frozenset[str] = frozenset()) -> None:
         self.shape, self.schedule = shape, schedule
-        self.layout = shared_layout(shape) if layout is None else layout
-        self.map, self.f, self.src = Map(shape), forms(shape), sources(shape)
+        self.layout = shared_layout(shape, fused=fused) if layout is None else layout
+        self.map, self.f, self.src = Map(shape, fused), forms(shape), sources(shape)
         groups = self.map.groups()
         if len(groups) != len(self.layout.groups):
             raise ValueError(f"the layout has {len(self.layout.groups)} groups, the map {len(groups)}")
@@ -265,17 +271,14 @@ class Window:
         base = self._row_base[gi]
         return tuple(Segment(step, slot, base + r, o, n) for r, o, n in self._ix(gi).cover(s, lo, hi, widest))
 
-    def _scale(self, step: int, slot: int, op: str, codes: Segment) -> Segment:
-        """Quantizer ``op``'s scale in the commit unit of its chunk row ``codes``."""
-        gi, s, _ = self.tables[op]
-        ix, base = self._ix(gi), self._row_base[gi]
-        u = int(np.searchsorted(ix.unit_rows, codes.row - base, side="right")) - 1
-        end = ix.unit_rows[u + 1] if u + 1 < len(ix.unit_rows) else len(ix.row_bytes)
-        a = ix.parts[s + 1]
-        hit = a[(a[:, 2] >= ix.unit_rows[u]) & (a[:, 2] < end)]
-        if len(hit) != 1 or hit[0, 1] - hit[0, 0] != 4:
-            raise ValueError(f"{op}'s chunk row {codes.row} hasn't one scale in its commit unit")
-        return Segment(step, slot, base + int(hit[0, 2]), int(hit[0, 3]), 4)
+    def _scale(self, step: int, slot: int, op: str, chunk: int) -> Segment:
+        """Quantizer ``op``'s scale as committed with its chunk ``chunk``: the layout commits the scale once a chunk, the
+        chunks' in order (beside the codes in a shared row, or in the chunk's own commit unit)."""
+        gi, s, t = self.tables[op]
+        a = self._ix(gi).parts[s + 1]
+        if len(a) != t.nbytes // self.f.qchunk(t.nbytes) or (a[:, 1] - a[:, 0] != 4).any():
+            raise ValueError(f"{op}'s layout doesn't commit its scale once a chunk")
+        return Segment(step, slot, self._row_base[gi] + int(a[chunk, 2]), int(a[chunk, 3]), 4)
 
     def _registered(self, value: str, lo: int, hi: int) -> tuple[Registered, ...]:
         """Bytes ``lo .. hi`` of registered value ``value`` as pieces of its registered rows."""
@@ -330,17 +333,22 @@ class Window:
     def ports(self, family: str) -> tuple[str, ...]:
         u = self.family(family)
         t = u.template
-        if t == "ScaledMmS8CoordinateRows_v1":
+        if t in ("ScaledMmS8CoordinateRows_v1", "ScaledMmS8ResidualCoordinateRows_v1"):
             r = self._r(u)
-            return tuple(f"x{i}" for i in range(r)) + ("sx",) + tuple(f"wrow{i}" for i in range(r)) + ("sw",)
+            ports = tuple(f"x{i}" for i in range(r)) + ("sx",) + tuple(f"wrow{i}" for i in range(r)) + ("sw",)
+            return ports + ("r",) if t == "ScaledMmS8ResidualCoordinateRows_v1" else ports
         if t == "PvRow_v1":
             return ("p",) + tuple(f"v{j}" for j in range(PV_K)) + ("n",)
+        if t == "QkSoftmaxPvPad_v1":
+            return ("q", "k") + tuple(f"v{j}" for j in range(PV_K)) + ("n",)
         return {"EmbeddingCoordinate_v1": ("tok", "col", "pos"), "RmsSumSqChunks_v1": ("x",),
                 "RmsNormOutSums_v1": ("x", "w", "s"), "RowAbsMax_v1": ("x",), "QuantChunkS8_v1": ("x", "amax"),
+                "RmsNormAbsMax_v1": ("x", "w", "s"), "RmsNormQuantCodes_v1": ("x", "w", "s", "amax"),
+                "QuantScaleS8_v1": ("amax",),
                 "QkSoftmaxRowPad_v1": ("q", "k", "n"), "Bf16AddRow_v2": ("a", "b"), "Argmax_v2": ("logits",)}[t]
 
     def _r(self, u: Units) -> int:
-        k = self.tables[self.src[u.table] + "_quant"][2].nbytes
+        k = self.tables[self.src[u.name] + "_quant"][2].nbytes
         return k // self.f.qchunk(k)
 
     def _check(self, step: int, slot: int, u: Units, index: int) -> None:
@@ -373,6 +381,8 @@ class Window:
         if t == "RowAbsMax_v1":
             op = u.table[:-len("_amax")]
             x = self.src[op + "_quant"]
+            if x not in self.tables:
+                return seg(u.table, 0, u.offset)
             parts, w = self.f.parts(self.tables[x][2].nbytes // 2)
             if u.name.endswith(".part"):
                 return seg(x, 2 * w * i, 2 * w * (i + 1))
@@ -384,20 +394,31 @@ class Window:
             n = self.tables[amax][2].nbytes
             return {"x": lambda: seg(self.src[u.table], 2 * u.nbytes * i, 2 * u.nbytes * (i + 1)),
                     "amax": lambda: seg(amax, n - 2, n)}[port]()
-        if t == "ScaledMmS8CoordinateRows_v1":
-            qop = self.src[u.table] + "_quant"
+        if t in ("RmsNormAbsMax_v1", "RmsNormQuantCodes_v1", "QuantScaleS8_v1"):
+            op = u.table.rsplit("_", 1)[0]
+            m = self.tables[op + "_amax"][2].nbytes
+            if t == "QuantScaleS8_v1":
+                return seg(op + "_amax", m - 2, m)
+            norm = self.src[op + "_quant"][:-len("_norm")]
+            n = 2 * (u.nbytes if t == "RmsNormQuantCodes_v1" else self.f.norm_parts(self.shape.width)[1])
+            return {"x": lambda: seg(self.src[norm], n * i, n * (i + 1)),
+                    "w": lambda: self._registered(norm + "_norm", n * i, n * (i + 1)),
+                    "s": lambda: whole(norm + "_sums"), "amax": lambda: seg(op + "_amax", m - 2, m)}[port]()
+        if t in ("ScaledMmS8CoordinateRows_v1", "ScaledMmS8ResidualCoordinateRows_v1"):
+            qop = self.src[u.name] + "_quant"
             k = self.tables[qop][2].nbytes
             q = self.f.qchunk(k)
+            if port == "r":
+                return seg(self.src[u.table][0], 2 * i, 2 * (i + 1))
             if port == "sx":
-                (x0,) = seg(qop, 0, q)
-                return (self._scale(step, slot, qop, x0),)
+                return (self._scale(step, slot, qop, 0),)
             if port == "sw":
-                return self._registered(u.table + ".scale", 4 * i, 4 * (i + 1))
+                return self._registered(u.name + ".scale", 4 * i, 4 * (i + 1))
             r = int(port.removeprefix("wrow").removeprefix("x"))
             if port.startswith("wrow"):
-                return self._registered(u.table, k * i + r * q, k * i + (r + 1) * q)
+                return self._registered(u.name, k * i + r * q, k * i + (r + 1) * q)
             return seg(qop, r * q, (r + 1) * q)
-        if t in ("QkSoftmaxRowPad_v1", "PvRow_v1"):
+        if t in ("QkSoftmaxRowPad_v1", "PvRow_v1", "QkSoftmaxPvPad_v1"):
             layer, d = u.table.split(".")[0], self.shape.head_dim
             if port == "n":
                 return (Run("n"),)
@@ -422,8 +443,10 @@ class Window:
         u = self.family(family)
         self._check(step, slot, u, index)
         lo = u.offset + index * u.stride
+        if u.scale_only:
+            return ((self._scale(step, slot, u.table, index),),)
         codes = self._segments(step, slot, u.table, lo, lo + u.nbytes, widest=False)
-        return (codes, (self._scale(step, slot, u.table, codes[0]),)) if u.scale else (codes,)
+        return (codes, (self._scale(step, slot, u.table, index),)) if u.scale else (codes,)
 
     def bundle(self, step: int, slot: int, family: str, index: int, port: str) -> Any:
         """Port ``port`` of the block as the drawn-block bundle's ``locate`` returns it (the bundle's stub):
@@ -518,6 +541,9 @@ class Window:
             lo = u.offset + np.arange(u.count) * u.stride
             k = np.searchsorted(a[:, 0], lo, side="right") - 1
             row, off = base + a[k, 2], a[k, 3] + lo - a[k, 0]
+            if u.scale_only:
+                at = {int(r): int(o) for _, _, r, o in ix.parts[s + 1]}
+                off = np.array([at[int(r)] for r in a[k, 2]], np.int64)
             g = int(np.sum(row == row[0]))
             i = np.arange(u.count)
             if not ((row == row[0] + i // g).all() and (off == off[0] + (i % g) * u.nbytes).all()):

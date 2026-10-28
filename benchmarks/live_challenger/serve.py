@@ -1,4 +1,4 @@
-"""The proof service's challenger on its auditor host (`verity.core.protocols.sampled_proofs.remote`): one epoch's coins for
+"""The proof system's challenger on its auditor host (`verity.core.protocols.sampled_proofs.remote`): one epoch's coins for
 one client session, its record signed with the host's LMS key and written before the first coin opens, and its release
 log signed when the session ends.
 
@@ -31,7 +31,7 @@ log signed when the session ends.
   signs its release log and how it ended and writes `challenger.json` (`remote.close_session`).  On the auditor host
   (`auditor.py`) the session has a secret, `--secret-file` (64 hex digits, given to the window's opener by the gate),
   which the client's hello must carry, and `--root`, the window's Commit root: a salt family's coin (label `salt` or
-  `.../salt`) opens only after that root (RT4-INT-24), and any other is refused, which ends the session.
+  `.../salt`) opens only after that root, and any other is refused, which ends the session.
 - **Signing.**  The key's leaf state is opened only for each signature (the session id's start with the record's, then
   the close's), under `--sign-lock` when given (the auditor host's `sign.lock`, which every signer of the key takes), so
   the host's other sessions and the ledger sign between them.

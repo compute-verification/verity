@@ -20,10 +20,10 @@ computes.
   exactly ℓ_w gates wide. core refuses ℓ_w past the cap, so the count is the check. ``steps`` is advice because how
   many engine steps a certifier window holds is the scheduler's timing, which no public input fixes.
 - ``ing`` (*ingress*, unpadded): the window's K arrival slots' ``a_valid``, ``a_id`` and prompt length ``a_P``, which
-  the layout maps to the ingress gates of each request's arrival (IO-TIE's N1).
+  the layout maps to the ingress gates of each request's arrival.
 - ``req`` (*registered*): each slot's served output length ``a_O`` (and at AS = 1 ``a_cap``, O being its max_tokens),
   the request Program's end, and ``tok``, each slot's first CU·B token ids (its prompt, then its outputs), the request
-  Program's token at each position (vllm's V3).
+  Program's token at each position (vLLM's V3).
 - ``srv`` (*registered*): the served rows, each step's R rows (valid, request, kind, start, n) in slot order, as
   `compile_slice.rows_bits` packs them, zero on an idle step: CompileSlice_v2's ``srv`` row at G = P, the row
   `served_rows` registers and its consumers read. At AS = 1 they stay in slot order: CompileSlice_v2's witnessed
@@ -66,7 +66,7 @@ CompileSlice_v2's 83,092 and 91,785: dropping the witness checks saves more than
 and holding ``srv`` and ``cout`` to the computed rows is 543 and 572 of them. On corpus-smallkv's first seven steps
 (CN 24, CU 25, 16-token blocks of 17-bit tokens, CD 1, SW 12, DA 7) the computing part is 12,477,467 ANDs against
 CompileSlice_v2's 7,984,682, and is its reference on the honest advice (its served rows the fixture's), one step fewer
-and each decision flipped (run r20261025-081855-e60d, with ``srv`` and ``cout`` outputs). There a step makes W + A = 3
+and each decision flipped (with ``srv`` and ``cout`` outputs). There a step makes W + A = 3
 read-only lookups of KL = 25 units (168,368 ANDs each) and as many computes with a KC = 16-unit window (227,862 each,
 masked by admission), where CompileSlice_v2's witness named the R admitted rows, and R + W + A threshold searches
 (1,440 each).

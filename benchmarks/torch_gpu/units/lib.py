@@ -8,9 +8,11 @@ from __future__ import annotations
 import ctypes as C
 import functools
 import hashlib
-import os
 from pathlib import Path
 
+from verity_config.settings import of
+
+settings = of(__file__)
 HERE = Path(__file__).resolve().parent
 KERNELS = ("units_rmsnorm", "units_quant", "units_quant4", "units_softmax", "units_argmax", "units_relu", "units_add",
            "units_sweep")
@@ -39,9 +41,8 @@ def arch() -> str:
 
 
 def cubin_path(arch: str = "sm_90a") -> Path:
-    env = os.environ.get("UNITS_CUBIN")
-    if env:
-        return Path(env)
+    if settings.UNITS_CUBIN:
+        return Path(settings.UNITS_CUBIN)
     beside = HERE / f"units.{arch}.cubin"
     return beside if beside.exists() else HERE / "build" / f"units.{arch}.cubin"
 
@@ -55,7 +56,7 @@ class Lib:
         self.path, self.arch = Path(path), arch
         self.cubin = self.path.read_bytes()
         self.sha256 = hashlib.sha256(self.cubin).hexdigest()
-        self.cu = C.CDLL(os.environ.get("UNITS_LIBCUDA", "libcuda.so.1"))
+        self.cu = C.CDLL(settings.UNITS_LIBCUDA)
         for f, a in CUDA.items():
             getattr(self.cu, f).argtypes, getattr(self.cu, f).restype = a, i32
         torch.cuda.init()

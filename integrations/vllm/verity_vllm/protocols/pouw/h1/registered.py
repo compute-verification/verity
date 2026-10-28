@@ -1,4 +1,4 @@
-"""H1's served tables registered at serving scale (VLLM-76): `registered.Registered.commit` of rows of 16-bit words as
+"""H1's served tables registered at serving scale: `registered.Registered.commit` of rows of 16-bit words as
 ``hm96-sha512/row/v2`` bit rows, row j salted `audit.hm96_salt` of the run's key at the value's nonce, with the same
 salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words instead of Python ints.
 
@@ -16,10 +16,11 @@ salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words i
   rows and a window holds a few hundred bytes a row (its ``b || c`` and about two tree nodes, as Python bytes), where
   Python ints held some 36 bytes a word. The period's `Weights` keeps its rows, two bytes a word, for `Weights.matches`.
 
-* **On the GPU** (VLLM-79): where this process has CUDA, `commit` hashes the same strings, leaves and levels on the device
+* **On the GPU**: where this process has CUDA, `commit` hashes the same strings, leaves and levels on the device
   (`pouw_h1_registered_device`, `pouw_cuda/registered_rows.cu`), a thread a row and a node, and only the domain id and
-  the result's bytes touch the host (`path`, `MODE`), and `public_salts` derives a public table's salts there. The
-  NumPy path above is the reference the device is held to
+  the result's bytes touch the host (`path`, `MODE`), and `public_salts` derives a public table's salts there. With
+  ``later`` it hands back the hash still running on the device's stream (`Later`), for a caller that reads the root
+  only when it needs it. The NumPy path above is the reference the device is held to
   (``tests/protocols/test_pouw_h1_registered_device.py``) and the fallback everywhere else.
 
 `commit` returns a `registered.Registered` whose ``rows`` and ``salts`` are those sequences; everything `Served`,
@@ -31,7 +32,7 @@ from __future__ import annotations
 
 import hashlib
 import os
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from functools import cache
 from typing import Any
@@ -136,7 +137,8 @@ class _Frame:
 
 
 class Salts(Sequence):
-    """A registered value's salts, drawn again on read: item j is `audit.hm96_salt(key, nonce, j)`."""
+    """A registered value's salts, drawn again on read: item j is `audit.hm96_salt(key, nonce, j)`; `at` draws many at
+    once."""
 
     def __init__(self, key: bytes, nonce: int, n: int) -> None:
         self.key, self.nonce, self.n = bytes(key), int(nonce), int(n)
@@ -151,10 +153,17 @@ class Salts(Sequence):
             raise IndexError(j)
         return hm96_salt(self.key, self.nonce, j % self.n)
 
+    def at(self, positions: Sequence[int] | np.ndarray) -> bytes:
+        """Items ``positions`` (each in [0, n)) concatenated, drawn in one pass (`crypto.chacha20.hm96_salts`)."""
+        at = np.asarray(positions)
+        if at.size and (int(at.min()) < 0 or int(at.max()) >= self.n):
+            raise IndexError(f"a position outside the value's {self.n} rows")
+        return chacha20.hm96_salts(self.key, self.nonce, at)
+
 
 class Rows(Sequence):
-    """A registered value's rows: item j row j's words as ints (a slice, the words ``(·, W)`` u16), when kept; else every
-    read refused, the prover rebuilding them from what it keeps (`pouw_h1_prover`)."""
+    """A registered value's rows: item j row j's words as ints (a slice, the words ``(·, W)`` u16; `at`, any rows' words),
+    when kept; else every read refused, the prover rebuilding them from what it keeps (`pouw_h1_prover`)."""
 
     def __init__(self, words: np.ndarray | None, n: int) -> None:
         self.words, self.n = words, int(n)
@@ -163,12 +172,22 @@ class Rows(Sequence):
         return self.n
 
     def __getitem__(self, j: Any) -> Any:
+        if isinstance(j, slice):
+            return self._kept()[j]
+        return tuple(int(v) for v in self._kept()[j])
+
+    def at(self, positions: Sequence[int] | np.ndarray) -> np.ndarray:
+        """Rows ``positions`` (each in [0, n)) as their words ``(·, W)`` u16, gathered at once."""
+        at = np.asarray(positions, dtype=np.int64)
+        if at.size and (int(at.min()) < 0 or int(at.max()) >= self.n):
+            raise IndexError(f"a position outside the value's {self.n} rows")
+        return self._kept()[at]
+
+    def _kept(self) -> np.ndarray:
         if self.words is None:
             raise LookupError("this registered value's rows aren't kept here: the prover rebuilds them from its own "
                               "(pouw_h1_prover.keep_call, its weights)")
-        if isinstance(j, slice):
-            return self.words[j]
-        return tuple(int(v) for v in self.words[j])
+        return self.words
 
 
 def path() -> str:
@@ -185,34 +204,66 @@ def path() -> str:
     return "gpu" if D.available() else "numpy"
 
 
-def commit(program: str, value: str, words: np.ndarray, key: bytes, nonce: int, keep_rows: bool = False,
-           row_salts: bytes | None = None, schema: str = G.SCHEMA_V2, **binding: Any) -> G.Registered:
+def _host(words: Any) -> np.ndarray:
+    if hasattr(words, "detach"):
+        import torch
+
+        t = words.detach()
+        return t.view(torch.uint8).cpu().numpy().view("<u2") if t.dtype == torch.uint16 else t.cpu().numpy()
+    return np.asarray(words)
+
+
+class Later:
+    """A `commit` whose hash runs on the GPU meanwhile (its ``later``): ``ready()`` without blocking, ``result()`` its
+    `registered.Registered`, waited for."""
+
+    def __init__(self, hashing: Any, made: Callable[..., G.Registered]) -> None:
+        self.hashing, self.made = hashing, made
+
+    def ready(self) -> bool:
+        return self.hashing.ready()
+
+    def result(self) -> G.Registered:
+        return self.made(*self.hashing.result())
+
+
+def commit(program: str, value: str, words: Any, key: bytes, nonce: int, keep_rows: bool = False,
+           row_salts: bytes | None = None, schema: str = G.SCHEMA_V2, later: bool = False,
+           **binding: Any) -> G.Registered | Later:
     """`registered.Registered.commit(program, value, rows, salts, schema=schema, **binding)` of ``words`` ``(n, W)``
     u16, ``rows`` their rows and ``salts`` row j's `audit.hm96_salt(key, nonce, j)`, or with ``row_salts`` (n salts
     concatenated, each used once) those, ``key`` and ``nonce`` unread. ``schema``: ``SCHEMA_V2``, or ``SCHEMA_SEG`` (an
     embedding table's rows, hashed with NumPy wherever `path` says). ``binding``: the domain's other arguments
-    (``window``, ``produced``, ``session``). ``keep_rows``: hold the rows (`Rows`), else none. Hashed where `path` says."""
-    words = np.asarray(words)
-    if words.ndim != 2 or not words.shape[0] or not words.shape[1] or words.dtype != np.uint16:
-        raise ValueError("a registered value is at least one row of 16-bit words, every row the same width")
+    (``window``, ``produced``, ``session``). ``keep_rows``: hold the rows (`Rows`), else none. Hashed where `path` says;
+    ``words`` an array, or a u16 tensor, which the GPU path hashes where it is when that is a CUDA device and every
+    other path reads on the host. ``later``: on the GPU path, a `Later` of it, the hash left running on the device's
+    stream; elsewhere the `Registered` itself."""
     if schema not in (G.SCHEMA_V2, G.SCHEMA_SEG):
         raise ValueError(f"rows of {schema!r}: {G.SCHEMA_V2} or {G.SCHEMA_SEG}")
-    n, w = words.shape
+    gpu = schema == G.SCHEMA_V2 and path() == "gpu"
+    if not (gpu and getattr(words, "is_cuda", False)):
+        words = _host(words)
+    if len(words.shape) != 2 or not words.shape[0] or not words.shape[1] or str(words.dtype) not in ("uint16",
+                                                                                                  "torch.uint16"):
+        raise ValueError("a registered value is at least one row of 16-bit words, every row the same width")
+    n, w = (int(d) for d in words.shape)
     dom = G.domain(program, value, w, n, G.WORD_BITS, **binding)
     given = None if row_salts is None else bytes(row_salts)
     fixed = None if given is None else tuple(given[192 * j:192 * (j + 1)] for j in range(n))
     if fixed is not None and (len(given) != 192 * n or len(set(fixed)) != n):
         raise ValueError(f"one {_INST.salt_bytes}-byte salt per row, never reused")
-    if schema == G.SCHEMA_V2 and path() == "gpu":
+
+    def made(bcs: tuple[bytes, ...], levels: tuple[tuple[bytes, ...], ...]) -> G.Registered:
+        return G.Registered(program=program, value=value, words=int(w), word_bits=G.WORD_BITS,
+                            rows=Rows(np.ascontiguousarray(_host(words)) if keep_rows else None, n),
+                            salts=Salts(key, nonce, n) if fixed is None else fixed,
+                            bcs=bcs, levels=levels, schema=schema, **binding)
+    if gpu:
         from verity_vllm.protocols.pouw.h1 import registered_device as D
 
-        bcs, levels = D.device_commit(words, key, nonce, given, dom.domain_id)
-    else:
-        bcs, levels = _numpy(words, key, nonce, given, dom.domain_id, schema)
-    return G.Registered(program=program, value=value, words=int(w), word_bits=G.WORD_BITS,
-                        rows=Rows(np.ascontiguousarray(words) if keep_rows else None, n),
-                        salts=Salts(key, nonce, n) if fixed is None else fixed,
-                        bcs=bcs, levels=levels, schema=schema, **binding)
+        hashing = D.device_hash(words, key, nonce, given, dom.domain_id)
+        return Later(hashing, made) if later else made(*hashing.result())
+    return made(*_numpy(words, key, nonce, given, dom.domain_id, schema))
 
 
 def public_salts(head: bytes, first: int, n: int) -> bytes:
@@ -251,4 +302,4 @@ def _numpy(words: np.ndarray, key: bytes, nonce: int, given: bytes | None, domai
     return tuple(bcs), frame.levels(leaves)
 
 
-__all__ = ["MODE", "Rows", "Salts", "commit", "path", "public_salts", "row_digests", "salts"]
+__all__ = ["MODE", "Later", "Rows", "Salts", "commit", "path", "public_salts", "row_digests", "salts"]

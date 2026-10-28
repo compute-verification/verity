@@ -3,7 +3,7 @@ import Definitions.Accounting.Sheets.H200
 import Mathlib.Tactic.NormNum
 
 /-!
-# The H200's tensor rates against its data sheet (RT-MODEL M9)
+# The H200's tensor rates against its data sheet
 
 The H200 instance's tensor rates, held to the sheet's dense peaks (`Accounting.TS.Sheets.H200`, A3), format by format.
 
@@ -12,11 +12,11 @@ The H200 instance's tensor rates, held to the sheet's dense peaks (`Accounting.T
   ways.
 * `tensorLong_sheet`: a tick's `tensorLong` units over a MAC's `weight`, at f_max, are at least the sheet's figure a
   second at the clock the sheet quotes it at (1830 MHz for s8, FP8, f16, bf16 and tf32, 1980 MHz for f64). So no
-  format's long-window rate in the model is under the sheet's (θ at or above the sheet, RT-MODEL M14).
+  format's long-window rate in the model is under the sheet's (θ at or above the sheet).
 
-M9 asked for a check against the sheet that would fail a long-window rate above the sheet's, the rate M1 found. M14
-then set that rate at or above anything the card might reach, so the check here runs the other way: it fails a rate
-under the sheet's. M1's 499,712 a tick passes it with equality on the formats quoted at 1830 MHz and fails it on f64,
+The long-window rate is set at or above anything the card might reach, so the check here fails a rate under the
+sheet's, not one above it. The 1830 MHz cap's 499,712 a tick passes it with equality on the formats quoted at 1830 MHz
+and fails it on f64,
 which the sheet quotes at 1980 MHz: at weight 32, DMMA over a long window would get 15,616 MACs a tick against the
 sheet's 16,896.
 -/

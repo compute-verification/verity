@@ -21,24 +21,28 @@ b          its offset: LE(XOF(DOMAIN ‖ frame ‖ seed ‖ u32be 2^32 − 3 ‖
            LAYERS + layer, added to t(i) in every round of its words (0 under the seed's key)
 ~~~
 
+The table is the store's codec (`verity.core.protocols.remote_bandwidth.codec`), whose field, key, ρ, rounds and bound
+offset these are: `key` is its `derive` over a `Sloth` at the fields above and any k ≥ 1, which at p512 and p1024,
+k ≥ 2, is `codec.key` of the codec a registration names, and `encode_word`, `decode_word` and `binding` are its own.
+This module keeps the KV cache's layout and the kernel's root chain.
+
 A KV token-layer is written after the codec seed, so it is encoded under its bound key (`encode_token_layer(...,
 bound=True)`), with d kept beside it and given to `decode_token_layer`.  Under the seed's key alone its writer could
 pick its encoding (all zeros, or another block's) and write the token-layer that decodes from it, holding nothing for
 it; under the bound key a chosen encoding decodes to a token-layer with the digest it was decoded under only by a
-search over SHA-512.  The bound key is `verity.core.protocols.remote_bandwidth.codec`'s for block slot · LAYERS + layer,
-byte for byte.  `kv.cu` takes it as each token-layer's offset b (`kv_encode_bound`, `kv_decode_bound`, and
-`benchmarks/vllm_encoded/paged.cu`'s paths), gated against these vectors (`kv_bench.py`'s `gate_bound`); `kv_twin.py`
-takes the seed's key only.
+search over SHA-512.  The bound key is the store codec's for block slot · LAYERS + layer.  `kv.cu` takes it as each
+token-layer's offset b (`kv_encode_bound`, `kv_decode_bound`, and `benchmarks/vllm_encoded/paged.cu`'s paths), gated
+against these vectors (`kv_bench.py`'s `gate_bound`); `kv_twin.py` takes the seed's key only.
 
-The derivation is `benchmarks/codec_tensor/wide.py`'s (ra-codec-tensor) under a domain of its own, at the fields
-ra-codec-theory chose (2^1536 − 3453 its operating point), whose words have no slack. A payload is any word below p. For p = 2^n − c
+The derivation is `benchmarks/codec_tensor/wide.py`'s under a domain of its own, at the fields
+the codec's cost model chose (2^1536 − 3453 its operating point), whose words have no slack. A payload is any word below p. For p = 2^n − c
 with c < 2^16 a payload at or above p has its top 16 bits all ones, a NaN in bf16 (and its top byte 0xFF, a NaN in
 E4M3), so every word of finite values is one; `encode_word` refuses the rest.
 
 Encoding a word costs k roots, each (p+1)/4 = (2^M − 1)·2^b + LOW: x_M = a^(2^M − 1) by M's bits from the top
 (x_2j = x_j^(2^j)·x_j, x_(j+1) = x_j²·a), then b squarings with a multiply by a at LOW's set bits, b = 8 or the
-fewest bits that hold (c − 1)/4, so n − 3 squarings and 16 to 20 multiplies (`root_multiplies`), then the square
-test (one more). Decoding costs k squarings.
+fewest bits that hold (c − 1)/4 (`low_bits`), so n − 3 squarings and 16 to 20 multiplies (`root_multiplies`), then
+the square test (one more). Decoding costs k squarings.
 
 The KV cache's layout (`token_layer_words`): a token's keys and values in one layer, K then V, each `KV_HEADS` ×
 `HEAD_DIM` bf16 (Llama-3.1-70B: 8 × 128, 4,096 bytes together), are the payloads of W = ⌈4096 / S⌉ consecutive words,
@@ -49,15 +53,11 @@ slot s's layer l at index (s · LAYERS + l) · W.
 from __future__ import annotations
 
 import hashlib
-import struct
-from dataclasses import dataclass
 
-DOMAIN = b"verity/word-codec/kv/v0\0"
-SEED_BYTES = 32
-DIGEST_BYTES = 64
-TWEAK_INDEX = (1 << 32) - 1
-MASK_INDEX = (1 << 32) - 2
-BIND_INDEX = (1 << 32) - 3
+from verity.core.protocols.remote_bandwidth.codec import (  # noqa: F401  the store codec's, which this module's users take
+    BIND_INDEX, DOMAIN, P512, P1024, SEED_BYTES, Field, Key, Sloth, binding, decode_word, derive, encode_word, rho,
+    rho_inv)
+
 LOW_MIN = 8
 
 # Llama-3.1-70B's attention: 80 layers, 8 KV heads of 128, bf16.
@@ -70,52 +70,8 @@ TOKEN_BYTES = LAYERS * TOKEN_LAYER_BYTES
 # sha512/row/v2's first block for a row of TOKEN_LAYER_BYTES (`verity.ml.commitments.rowleaf`, held to it by the tests).
 ROW_PREFIX = (b"verity/sha512-row/v2\0" + (8 * TOKEN_LAYER_BYTES).to_bytes(8, "big")).ljust(128, b"\0")
 
-
-@dataclass(frozen=True, slots=True)
-class Field:
-    name: str
-    n: int
-    c: int
-
-    @property
-    def p(self) -> int:
-        return (1 << self.n) - self.c
-
-    @property
-    def limbs(self) -> int:
-        return self.n // 32
-
-    @property
-    def word_bytes(self) -> int:
-        return self.n // 8
-
-    @property
-    def root_exp(self) -> int:
-        return (self.p + 1) // 4
-
-    @property
-    def low_bits(self) -> int:
-        return max(LOW_MIN, ((self.c - 1) // 4).bit_length())
-
-    @property
-    def chain(self) -> tuple[int, int]:
-        """(M, LOW) with (p+1)/4 = (2^M − 1)·2^b + LOW, b = `low_bits`."""
-        b = self.low_bits
-        return self.n - 2 - b, (1 << b) - (self.c - 1) // 4
-
-    @property
-    def root_squarings(self) -> int:
-        """The chain's squarings: M − 1 for x_M, then b."""
-        return self.chain[0] - 1 + self.low_bits
-
-    @property
-    def root_multiplies(self) -> int:
-        m, low = self.chain
-        return m.bit_length() - 1 + m.bit_count() - 1 + low.bit_count()
-
-
-FIELDS = {f.name: f for f in (Field("p512", 512, 569), Field("p768", 768, 825), Field("p1024", 1024, 105),
-                               Field("p1280", 1280, 1665), Field("p1536", 1536, 3453))}
+FIELDS = {f.name: f for f in (P512, Field("p768", 768, 825), P1024, Field("p1280", 1280, 1665),
+                               Field("p1536", 1536, 3453))}
 
 
 def field(name: str) -> Field:
@@ -125,59 +81,31 @@ def field(name: str) -> Field:
         raise ValueError(f"unknown field {name!r}; known: {sorted(FIELDS)}") from None
 
 
+def low_bits(f: Field) -> int:
+    return max(LOW_MIN, ((f.c - 1) // 4).bit_length())
+
+
+def chain(f: Field) -> tuple[int, int]:
+    """(M, LOW) with (p+1)/4 = (2^M − 1)·2^b + LOW, b = `low_bits`."""
+    b = low_bits(f)
+    return f.n - 2 - b, (1 << b) - (f.c - 1) // 4
+
+
+def root_multiplies(f: Field) -> int:
+    m, low = chain(f)
+    return m.bit_length() - 1 + m.bit_count() - 1 + low.bit_count()
+
+
 def check_fields() -> None:
     for f in FIELDS.values():
-        m, low = f.chain
-        assert f.n % 32 == 0 and f.p % 4 == 3 and f.p.bit_length() == f.n and f.c < 1 << 16
-        assert 0 < low < 1 << f.low_bits and ((1 << m) - 1) * (1 << f.low_bits) + low == f.root_exp
-
-
-@dataclass(frozen=True, slots=True)
-class Key:
-    field: Field
-    c: tuple[int, ...]
-    tau: int
-    mask: int | None = None
-    seed: bytes | None = None
-
-    @property
-    def rounds(self) -> int:
-        return len(self.c)
-
-    def tweak(self, i: int) -> int:
-        return self.tau * i % self.field.p
-
-    def sigma(self, x: int) -> int:
-        v = x ^ self.mask
-        return v if v < self.field.p else x
-
-
-def xof(message: bytes, length: int) -> bytes:
-    out = b""
-    ctr = 0
-    while len(out) < length:
-        out += hashlib.sha512(message + struct.pack(">I", ctr)).digest()
-        ctr += 1
-    return out[:length]
-
-
-def _message(f: Field, seed: bytes, j: int) -> bytes:
-    name = f.name.encode()
-    return DOMAIN + bytes([len(name)]) + name + seed + struct.pack(">I", j)
-
-
-def _element(f: Field, seed: bytes, j: int) -> int:
-    return int.from_bytes(xof(_message(f, seed, j), f.word_bytes + 8), "little") % f.p
+        m, low = chain(f)
+        assert f.full_slot and f.p % 4 == 3 and f.p.bit_length() == f.n and f.c < 1 << 16
+        assert 0 < low < 1 << low_bits(f) and ((1 << m) - 1) * (1 << low_bits(f)) + low == f.root_exp
+        assert f.root_squarings == m - 1 + low_bits(f)
 
 
 def key(name: str, seed: bytes, rounds: int, mask: bool = False) -> Key:
-    f = field(name)
-    if type(seed) is not bytes or len(seed) != SEED_BYTES:
-        raise ValueError(f"a seed is {SEED_BYTES} bytes")
-    if not 1 <= rounds < BIND_INDEX:
-        raise ValueError("a word has at least one round")
-    k = int.from_bytes(xof(_message(f, seed, MASK_INDEX), f.word_bytes), "little") if mask else None
-    return Key(f, tuple(_element(f, seed, j) for j in range(rounds)), _element(f, seed, TWEAK_INDEX) or 1, k, seed)
+    return derive(seed, Sloth(field(name), rounds, bool(mask)))
 
 
 def digest(data: bytes) -> bytes:
@@ -185,60 +113,6 @@ def digest(data: bytes) -> bytes:
     if len(data) != TOKEN_LAYER_BYTES:
         raise ValueError(f"a token-layer is {TOKEN_LAYER_BYTES} bytes")
     return hashlib.sha512(ROW_PREFIX + bytes(data)).digest()
-
-
-def binding(d: bytes, block: int, k: Key) -> int:
-    """`b`, the offset of block `block`'s bound key from its token-layer's digest `d`."""
-    if type(d) is not bytes or len(d) != DIGEST_BYTES:
-        raise ValueError(f"a token-layer's digest is {DIGEST_BYTES} bytes")
-    if not 0 <= block < 1 << 64 or k.seed is None:
-        raise ValueError("a bound key is of a u64 block, under its codec seed")
-    f = k.field
-    message = _message(f, k.seed, BIND_INDEX) + struct.pack(">Q", block) + d
-    return int.from_bytes(xof(message, DIGEST_BYTES), "little") % f.p
-
-
-def rho(a: int, f: Field) -> int:
-    p = f.p
-    if not 0 <= a < p:
-        raise ValueError("ρ takes a canonical element")
-    s = pow(a, f.root_exp, p)
-    square = s * s % p == a
-    if (s & 1) == (0 if square else 1):
-        return s
-    return p - s if s else 0
-
-
-def rho_inv(y: int, f: Field) -> int:
-    p = f.p
-    if not 0 <= y < p:
-        raise ValueError("ρ⁻¹ takes a canonical element")
-    q = y * y % p
-    return q if y & 1 == 0 else (p - q) % p
-
-
-def encode_word(m: int, i: int, k: Key, b: int = 0) -> int:
-    f = k.field
-    if not 0 <= m < f.p:
-        raise ValueError("a payload is a word below p")
-    t = (k.tweak(i) + b) % f.p
-    x = m
-    for j, c in enumerate(k.c):
-        if j and k.mask is not None:
-            x = k.sigma(x)
-        x = rho((x + c + t) % f.p, f)
-    return x
-
-
-def decode_word(y: int, i: int, k: Key, b: int = 0) -> int:
-    f = k.field
-    t = (k.tweak(i) + b) % f.p
-    x = y
-    for j in reversed(range(k.rounds)):
-        x = (rho_inv(x, f) - k.c[j] - t) % f.p
-        if j and k.mask is not None:
-            x = k.sigma(x)
-    return x
 
 
 def token_layer_words(f: Field) -> int:

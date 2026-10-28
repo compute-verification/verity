@@ -3,10 +3,9 @@ import Definitions.Pouw.RelativeSecurity
 /-!
 # The grinding premium under hashed seeds (trusted)
 
-GRIND (decision 112, note:compute-accounting/20261018T0700Z-draft-grind). A unit's seed is
-`SHA-512(tag ‖ salt ‖ position ‖ root(A) ‖ root(B))`: the salt is a live coin, the roots are hiding commitments, and a
-cheater re-rolls a root for free through its blinds, so `T` hash queries give it `T` fresh seeds (the random-oracle
-model, `random-oracle`). These are the lemmas that price that, each `def G : Prop` proved as
+GRIND: a unit's seed is `SHA-512(tag ‖ salt ‖ position ‖ root(A) ‖ root(B))`: the salt is a live coin, the roots are
+hiding commitments, and a cheater re-rolls a root for free through its blinds, so `T` hash queries give it `T` fresh
+seeds (the random-oracle model, `random-oracle`). These are the lemmas that price that, each `def G : Prop` proved as
 `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.TS.Grind`. They are stated over abstract per-query bounds, so a
 service statement cites them without these definitions reaching into its own:
 
@@ -19,8 +18,8 @@ service statement cites them without these definitions reaching into its own:
 * `GrindPremium`: the two together, with the commitment's binding a parameter. `R q` is what the cheater realizes
   through query `q`, and it equals the oracle's gain `g q` off an event `Break` of probability at most `δb` (opening a
   root two ways after its seed, at the same `T`). Some query realizes a gain of at least `π` with probability at most
-  `T·M·e^{-θπ} + δb`. It is gap (7)'s steer bound (note:proofs/20261018T0343Z-draft-pouw-gap7-statement) at
-  `Steer := {π ≤ gain}`, `μ^m := M·e^{-θπ}`, relative to the stage's savings (RT4's change 2).
+  `T·M·e^{-θπ} + δb`. It is gap (7)'s steer bound at `Steer := {π ≤ gain}`, `μ^m := M·e^{-θπ}`, relative to the stage's
+  savings.
 * `GrindPremiumAt`: `GrindPremium` at the premium `π* = ln(T·M/δ)/θ`, so the grind is priced into ε by `π*` a seed group
   and the bound holds outside `δ + δb`. With `M = 1` and `θ = h·ln 2` a unit of work, `π* = log₂(T/δ)/h` units.
 * `GrindMass`: the expectation form. The `T` queries' moments sum to at most `T·M` in mean, so by Markov and Jensen

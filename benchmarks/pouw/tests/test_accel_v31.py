@@ -1,17 +1,20 @@
 """Dither v3.1's CPU reference (benchmarks/pouw/accel_v31/v31.py): the binding identity, the row layout, and the stub
 challenger's verdicts on an honest call and on calls that skip a noise tile or forge committed values; and Dither's
 no-fold call (`Fill`) against dither.py's known answers, with its verdicts, sample check and table; and both shapes' bound
-on t = min(L, K) / L'."""
+on t = min(L, K) / L'. perm_kernel launches within its launch bounds, and with VERITY_POUW_V31_LIB naming a libv31.so built
+for the GPU in hand, the GPU forms W' at L' 1,024 and 2,048 under the permutation perm_kernel writes."""
 from __future__ import annotations
 
 import hashlib
 import json
 import os
+import re
 import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
+import settings
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "accel_v31"))
 import fill_dither
@@ -342,7 +345,7 @@ def test_fill_verdicts(cheat, served, L):
 def test_both_shapes_refuse_t_past_8():
     """t = min(L, K) / L' is at most 8 (dither/PROTOCOL.md, "The segment and the noise period"), in v3.1's Shape and in
     Fill: L 8,192 at L' 256 is refused at K 16,384 and L 4,096 at L' 512 passes, as do the defaults, L >= K at
-    L' >= K / 8, and every call the GPU's gates (v31lib.GATES) and fill_dither.py's cases build."""
+    L' >= K / 8, and every call the GPU's gates (v31lib.GATES and PIPELINE) and fill_dither.py's cases build."""
     with pytest.raises(ValueError, match="at most 8"):
         v31.Shape(128, 128, 16384, 256, 32)
     with pytest.raises(ValueError, match="at most 8"):
@@ -355,6 +358,8 @@ def test_both_shapes_refuse_t_past_8():
         v31.Fill(*map(int, dims), kind == "served")
     for line in fill_dither.CASES.strip().splitlines():
         v31.Fill(*map(int, line.split()[1:7]), line.split()[7] == "served")
+    for dims, served in v31lib.PIPELINE:
+        v31.Fill(*dims, served)
 
 
 @pytest.mark.parametrize("served", [False, True])
@@ -410,9 +415,14 @@ def test_fill_table(tmp_path, capsys):
     fused = dict(served, arms=dict(served_arms, wgl={"ms": 2.5, "mhz": 1980}), gamma_ovl_w_wgl=1.25 * 2.0 / 2.5, wg=1, rp=4,
                  wbn=256, fused_leaves=3 * 28672, o_leaves=4 * 28672, fused_blocks=(3 * 129 + 40) * 28672, row_blocks=129)
     no_row = dict(fused, fused_leaves=0, fused_blocks=129 * 28672, lminb=4, sahead=1)
-    (tmp_path / "b.jsonl").write_text("x\n" + "\n".join(json.dumps(x) for x in (line, later, served, fused, no_row)) + "\n")
+    words = dict(fused, rp=5, S=4, W=3, wgw=1, r5w=0, leaves=10 * 28672)
+    tst = dict(words, r5w=1, tst=1)
+    lines = (line, later, served, fused, no_row, words, tst)
+    (tmp_path / "b.jsonl").write_text("x\n" + "\n".join(json.dumps(x) for x in lines) + "\n")
     assert v31.main(["v31", "fill-table", str(tmp_path / "b.jsonl")]) == 0
-    row, row2, row3, row4, row5 = capsys.readouterr().out.splitlines()[-5:]
+    row, row2, row3, row4, row5, row6, row7 = capsys.readouterr().out.splitlines()[-7:]
+    assert "| served r16384 hi k1 s1 wg256 rp5 r5w0 |" in row6 and row6.endswith("| 30.0% / 33.1% |")
+    assert "| served r16384 hi k1 s1 wg256 rp5 tst |" in row7
     assert row.endswith("| - | - | - |") and row3.endswith("| - | - | - |")
     assert "| served r16384 hi k1 s1 wg256 rp4 |" in row4 and row4.endswith("| 2.500 | 1.000 | 75.0% / 82.8% |")
     assert row5.endswith("| 0.0% / 25.0% |") and "| served r16384 hi k1 s1 wg256 rp4 m4 sa |" in row5
@@ -423,3 +433,60 @@ def test_fill_table(tmp_path, capsys):
     assert "| r1024 hi k1 s1 p2 ltw |" in row2 and "| 1.070 | 1.020 | 1.700 |" in row2
     assert "| served r16384 hi k1 s1 |" in row3 and "| 1.250 | 1.300 | - | - | 1.700 |" in row3
     assert "| 80.0% | 0.010, 0.020, -, 0.100, 0.200, 2.050, 1.200 |" in row3
+
+
+def test_fill_table_sets_the_commits_parts_against_the_ruler_and_the_bar(tmp_path, capsys):
+    """A line that carries the commit's parts gets a second table: each part's compressions a SM-cycle, over the build's
+    ruler (of_sha) and, given --bar, over the card's bar; its variant names the leaf path (nofull: rows hashed through the
+    padding checks; mN and smN: the leaf and salt kernels at MINB N; cf: each group's levels folded by its own CTA rather
+    than by level kernels; mkN: the salt kernel's mask N). A line that timed only some arms (V31_ARMS) shows "-" for the
+    rest."""
+    arms = {a: {"ms": ms, "mhz": 2000} for a, ms in (("lt", 2.0), ("ovl", 2.1), ("commit", 1.2), ("leaf", 1.0),
+                                                      ("leaf_nomem", 0.9), ("salt", 0.2), ("sha", 0.5))}
+    line = {"fill": True, "shape": "8b-up", "m": 16384, "n": 28672, "k": 4096, "L": 4096, "S": 1, "row": 16384, "o": True,
+            "cprio": "hi", "ccta": 4, "sched": 1, "arms": arms, "gamma_ovl": 1.05, "gamma_ovl_w": 1.06, "gamma_call": 1.7,
+            "gamma_gemm": 1.025, "full": 1, "lminb": 6, "lfold": 0, "comp": {"sha": 1e8, "leaf": 3e8, "salt": 6e7},
+            "per_sm_cycle": {"sha": 0.018, "leaf": 0.0171, "leaf_nomem": 0.0175, "salt": 0.0144, "commit": None},
+            "of_sha": {"leaf": 0.95, "leaf_nomem": 0.9722, "salt": 0.8, "commit": None}}
+    before = dict(line, full=0, lminb=5, sminb=5, lfold=1)
+    only = dict(line, mask=2, arms={x: arms[x] for x in ("salt", "sha")}, gamma_ovl=None, gamma_ovl_w=None, gamma_call=None,
+                gamma_gemm=None)
+    (tmp_path / "b.jsonl").write_text("\n".join(json.dumps(x) for x in (line, before, only)) + "\n")
+    assert v31.main(["v31", "fill-table", str(tmp_path / "b.jsonl"), "--bar", "0.018"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    parts = out[out.index("| shape | variant | sha / SM-cycle | part | ms | MHz | compressions | / SM-cycle | of sha | of bar |"):]
+    assert out[4].startswith("| 8b-up | 16384 x 28672 x 4096 | 4096 | 1 | served r16384 hi k4 s1 m6 mk2 | - | - | - | - |")
+    assert len(parts) == 2 + 3 * 4
+    assert parts[12].endswith(" s1 m6 mk2 | 0.01800 | salt | 0.200 | 2000 | 60000000 | 0.01440 | 0.800 | 0.800 |")
+    leaf, nomem, salt, commit = parts[2:6]
+    assert leaf == "| 8b-up | served r16384 hi k4 s1 m6 | 0.01800 | leaf | 1.000 | 2000 | 300000000 | 0.01710 | 0.950 | 0.950 |"
+    assert nomem.endswith("| leaf_nomem | 0.900 | 2000 | 300000000 | 0.01750 | 0.972 | 0.972 |")
+    assert salt.endswith("| salt | 0.200 | 2000 | 60000000 | 0.01440 | 0.800 | 0.800 |")
+    assert commit.endswith("| commit | 1.200 | 2000 | 360000000 | - | - | - |")
+    assert "| served r16384 hi k4 s1 sm5 cf nofull | 0.01800 | leaf |" in parts[6]
+    v31.main(["v31", "fill-table", str(tmp_path / "b.jsonl")])
+    assert capsys.readouterr().out.splitlines()[-12].endswith("| 0.01710 | 0.950 | - |")
+
+
+def test_perm_kernel_launches_within_its_bounds():
+    """perm_kernel's SHA-512 takes 90 registers a thread, so a CTA of 1,024 never launches and pi stays unwritten: every
+    launch takes PERM_THREADS(L') threads, at most the kernel's __launch_bounds__ of 512."""
+    src = (Path(v31.__file__).parent / "v31.cu").read_text()
+    bound = int(re.search(r"__launch_bounds__\((\d+)\) perm_kernel\(", src).group(1))
+    cap = int(re.search(r"PERM_THREADS\(int lp\) \{ return lp < (\d+) \? lp : \1; \}", src).group(1))
+    assert cap <= bound <= 512
+    launches = re.findall(r"perm_kernel<<<[^,]+, ([^,]+),", src)
+    assert launches and set(launches) == {"PERM_THREADS(lp)"}
+
+
+@pytest.mark.skipif(not settings.V31_LIB, reason="VERITY_POUW_V31_LIB names a libv31.so (v31lib.build_lib) for the GPU in hand "
+                    "(about 5 s)")
+@pytest.mark.parametrize("name", ["f-lp1024", "c-skip-lp1024", "s-lp1024", "f-lp2048"])
+def test_gpu_forms_w_prime_under_the_written_permutation(name):
+    """At L' >= 1,024 the GPU forms W' under the pi_tau perm_kernel writes: its values and every tree level are the
+    reference's, an honest call is accepted and one that skips a noise tile refused. Had perm_kernel's CTA not launched,
+    v31_prove would refuse the call (a launch failed) rather than commit W' under an unwritten pi."""
+    _, kind, *dims, a_kind, cheat = next(g.split() for g in v31lib.GATES.strip().splitlines() if g.split()[0] == name)
+    rep = v31lib.gate_case(v31lib.Lib(settings.V31_LIB), name, kind == "served", *map(int, dims), a_kind, cheat, 64,
+                           np.random.default_rng(7))
+    assert rep["exact"] and rep["good"], rep

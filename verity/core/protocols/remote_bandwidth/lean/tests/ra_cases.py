@@ -34,7 +34,7 @@ from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES as LIVE_C
 HERE = Path(__file__).resolve().parent
 PACKAGE = HERE.parent
 EXE = "remote-audit-difftest"
-#: The ports' side of record (`verity_difftest`): the Lean, as `benchmarks/remote_session/verifier.py`'s `VERDICT`.
+#: The ports' side of record (`verity_difftest`): the Lean, the verifier `benchmarks/remote_session/verifier.py` runs.
 OF_RECORD = "lean"
 #: What the Python raises where the Lean refuses: a decoder's `Reject`, and the Python's own refusals, `ValueError`
 #: (`verity.errors.ProtocolError` and `InvalidArtifact` among them), `TypeError` and `IndexError`.

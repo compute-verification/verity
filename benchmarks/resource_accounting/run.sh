@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# The matmul chain's recorded run on node 2, from the run tree's root:
-#   research run --on vy-nebius-2 --project verity --campaign resource-accounting --source <tree> --cwd source \
-#     --env GPU_LEASE_WHO=<id> [--env SHAPES=o,qkv,gate_up,down BATCHES=... ARMS=... REPS=5 LEASE_MIN=30] -- \
+# The matmul chain's recorded run on an RTX PRO 6000 node, from the run tree's root (OUT, or RESEARCH_RUN_DIR's out/):
+#   GPU_LEASE_WHO=<id> [SHAPES=o,qkv,gate_up,down BATCHES=... ARMS=... REPS=5 LEASE_MIN=30] \
 #     bash benchmarks/resource_accounting/run.sh
 # In order, the first failure ends the run:
 #  1. on the CPUs, outside the lease: GPU 1's ship (pearl_c_sm120/build.sh, its SASS gate) into scratch, unless ARMS has no
@@ -54,7 +53,7 @@ LEASE_MIN=${LEASE_MIN:-30}; VERIFY_AT=${VERIFY_AT:-o:32}; LEASE=${LEASE:-1 --wai
 [ "$LEASE_MIN" -le 30 ] || { echo "RUN_FAIL_LEASE: LEASE_MIN=$LEASE_MIN is over 30 minutes" >&2; exit 2; }
 stamp() { echo "ra-matmul: $* at $(date -u +%H:%M:%SZ)"; }
 on() { case $PHASE in all|"$1") return 0 ;; *) return 1 ;; esac; }
-export PYTHONPATH=$PWD:$PWD/integrations/vllm:$PWD/benchmarks/pouw
+export PYTHONPATH=$PWD:$PWD/tools/config:$PWD/integrations/vllm:$PWD/benchmarks/pouw
 HEAD=$(git rev-parse HEAD); echo "tree $HEAD" | tee "$OUT/tree.txt"
 PASSES=$S/passes${LEG:+/$LEG}
 

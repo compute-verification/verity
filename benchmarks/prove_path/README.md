@@ -1,15 +1,16 @@
 # Prove path
 
 Network accounting under arbitrary vLLM usage proves a served run's step units after the fact: a precommitted compiler turns
-the run's advice into each step's Programs, the committing vLLM has recorded each step's values, and the proof service draws
+the run's advice into each step's Programs, the committing vLLM has recorded each step's values, and the proof system draws
 units on live coins, proves them with C-Flock `--zk` behind the Lean firewall, and the Lean verifier accepts or refuses them.
 `prove_path.py` is that path on a committed run, a TP Commit (`--tp-commit`), a single-GPU one (`--bundle`, TP1) or a closed
 Commit window of a `verity-vllm serve-openai` run (`--serve-run`, TP1): the prover commits the advice under hiding rows (a
 served window's the server committed) and each rank's window over the compiler's Programs for it, and the verifier audits each
 rank through the one-stage audit's per-rank `service.Stream` on its own coins or a challenger's (`--challenger local`,
 `benchmarks/one_stage/a5.py`). `run.sh` builds the prover and the Lean verifier and runs it on the CPU TP stand-in, on a
-deferred TP Commit (`PP_TP`), on a single-GPU Commit's row dir from the store (`PP_LLAMA`) or on a served window
-(`PP_SERVE_RUN`), with one forged run that must be refused. The docstrings say how.
+deferred TP Commit (`PP_TP`), on a single-GPU Commit's row dir on the node (`PP_LLAMA`) or on a served window
+(`PP_SERVE_RUN`), with one forged run that must be refused. Row dirs and serve runs are the node's own, never fetched from the
+store, since their bundles and requests hold request values. The docstrings say how.
 
 ## What changes when Programs come from advice
 
@@ -124,7 +125,7 @@ history would discharge, and doesn't discharge them yet.
 `advice_bits`, `delta`, `wrong_units`, `location_bits`, `harm_bound` and `exfiltration_bound`):
 - c, which the run doesn't print. Once the advice is the only free input outside the registration, c is `advice.bits`,
   the registration's `window.advice.bits`: the I1 advice's length, which `prove_path.py advice` prints as `bits`. Over
-  several windows, `BitsCount` charges their sum.
+  several windows, c is their sum.
 - δ is `delta`. Per rank, `ranks.<r>.audit.wrong_units` is `{delta, of, bound, rule, per_template}` (the
   `wrong_units` function in `verity/core/protocols/sampled_proofs/one_stage/audit.py`). Except with probability δ, at most
   `bound` of the `of` units are faulty, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
@@ -155,8 +156,6 @@ guarantee above.
 - The certifier's wire (`Security/Definitions/NetworkCertifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
   `NetTiming.Packed` and `NetTiming.Allocated`, and J `NetTiming.JitterBounded`. They enter through the wire bounds, which
   have no sampled form yet.
-- The advice (`Security/Definitions/NetworkCertifier/Assumptions/AdviceString.lean`): `NetTiming.BitsCount`,
-  `NetTiming.CompilerDeterministic` and `NetTiming.CompilerPrecommitted`.
 - For privacy, not soundness, under `--zk`: `Claims.Hm96Hiding` (`Security/Definitions/Claims/Hm96.lean`).
 
 **Off the page:** whether the circuit matches the model. That is completeness: an honest run on a circuit that doesn't
@@ -258,9 +257,9 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
 ## The class circuit's size and its window's commit
 
 `class_size.py` sizes a class circuit in ANDs and C-Flock blocks, and `class_rows.py` counts its rows by what fills them and
-their SHA-512 compressions (`--probe S,NP,O` lowers one Program at a small class). `window_cost.py` (VLLM-128) prices a
+their SHA-512 compressions (`--probe S,NP,O` lowers one Program at a small class). `window_cost.py` prices a
 window's commit from that census, or from a probe projected to a class (`--project 8,1024,64`, which reproduces the exact
-census unit for unit), against CMP-149's target of 0.20 to 0.25 of the served window. It reports in ANDs (58,120 a
+census unit for unit), against its target of 0.20 to 0.25 of the served window. It reports in ANDs (58,120 a
 compression) and in seconds (the window's rows on the GPU's hashing rates, the registration on the CPU's, which
 `--measure-cpu` measures). It covers each lever alone and the plan stacked, the pad pass at three traffics, the
 registration's bytes and files, and totals over a week, a month and a year. With `--stream SIZING` it also prices serving's

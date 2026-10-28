@@ -7,7 +7,7 @@
     uv run tools/verity/check/suites.py --fresh             run even where a pass is cached
     uv run tools/verity/check/suites.py --list              each suite, its inputs, and whether a pass is cached
     uv run tools/verity/check/suites.py flock -- -k tanh    arguments after `--` go to pytest
-    uv run tools/verity/check/suites.py --known-red origin/main   what is red on main: its newest check's failed tests, as JSON
+    uv run tools/verity/check/suites.py --known-red origin/main   what is red on main: its newest checked commit's failed tests, as JSON
 
 A suite is a directory whose `pyproject.toml` configures pytest (`[tool.pytest.ini_options]`). Its inputs are its own directory,
 the directories of the workspace packages it depends on (its dependencies, extras and dependency groups, and theirs
@@ -112,11 +112,13 @@ suite runs in one process. Each test process's thread pools (OpenMP, so torch's,
 lane runs at once ran 159-191 threads each (24 Oct, load 522 on cpu-5's 192 cores).
 
 Known red on main. With `--changed REV` (a PR's quick tier, a lane's pre-mark run; never check's own run), a failure is judged
-against what is already red on `main` (CI-173): the failed tests in the suite reports of the newest ended post-landing run or
-recorded check of REV's newest first-parent commit that has one in the evidence store (`known_red`, read in a process of its own
-that alone gets a recorded run's store key: `known_red_on_main`). A failed suite whose every failed test is on that list, and that
-failed for nothing else, is `known-red` and fails nothing; one with other failures still fails, and says which of them are red on
-`main` too. Where the list can't be read, every failure counts. `--known-red REV` prints the list.
+against what is already red on `main` (CI-173): the failed tests in the suite reports of the ended after-landing runs or recorded
+checks of REV's newest first-parent commit that has one in the evidence store, merged over all of that commit's parts (`known_red`,
+read in a process of its own that alone gets a recorded run's store key, `$CHECK_STORE_CUSTODY` or the run's own custody dir:
+`known_red_on_main`, CI-211). A failed suite whose every failed test is on that list, and that failed for nothing else, is
+`known-red` and fails nothing; one with other failures still fails, and says which of them are red on `main` too. The output names
+the runs and commit the list came from, or why none was found (no store remote here, a failed refresh, none in the walk), and then
+every failure counts. `--known-red REV` prints the list.
 
 `--timeouts` (`check` passes it) bounds each suite's run by its `[tool.verity.tests] timeout_s`, else `SUITE_TIMEOUT_S`: a suite
 still running then has its process group killed and fails as timed out (`timed_out` in --json), so a hung test costs the check
@@ -1001,6 +1003,13 @@ def per_test_dir(suite: Suite) -> Path:
     return CACHE / PER_TEST / suite.name.replace("/", "_")
 
 
+def _out_of_space(log: Path | None) -> bool:
+    """Whether a suite's log shows a full disk (ENOSPC), which fails tests whatever their inputs."""
+    if log is None or not log.is_file():
+        return False
+    return "[Errno 28]" in log.read_text(errors="replace")
+
+
 class PerTest:
     """One suite's per-test verdicts for one run: which passes it may reuse (`reusable`), and keeping the passes it earns (`keep`)."""
 
@@ -1149,8 +1158,8 @@ class PerTest:
     def keep(self, r: "Result", head: str, used_now: dict, min_s: float) -> int:
         """Record the outcomes of a run the guard vouches for (a report, no read outside the inputs, every worker's record), each
         under its module's key, beside those recorded before under the same key and reads: every failure, and every pass of at
-        least ``min_s`` seconds. A test with both under one key is `nondeterministic`: its inputs were identical. The number of
-        passes kept."""
+        least ``min_s`` seconds. A test with both under one key is `nondeterministic`: its inputs were identical. A run whose
+        log shows a full disk keeps no failure, since the machine failed them, not their inputs. The number of passes kept."""
         if not r.reported or r.outside or r.unguarded or not (r.passed or r.failed_tests):
             return 0
         base = "" if self.suite.path == "." else self.suite.path + "/"
@@ -1159,7 +1168,7 @@ class PerTest:
         for node, s in (r.passed or {}).items():
             if s >= min_s:
                 by_module.setdefault(base + node.split("::", 1)[0], ({}, {}))[0][node] = s
-        for node in r.failed_tests or []:
+        for node in [] if _out_of_space(r.log) else r.failed_tests or []:
             by_module.setdefault(base + node.split("::", 1)[0], ({}, {}))[1][node] = when
         self.dir.mkdir(parents=True, exist_ok=True)
         n = 0
@@ -1608,6 +1617,18 @@ def store_custody() -> None:
         os.environ[CUSTODY_ENV], os.environ[STORE_REQUIRED_ENV] = str(d), "1"
 
 
+def read_report(report: Path) -> dict | None:
+    """The guard's report, or None when there is none to read: missing, empty, or cut short by a pytest that died in its
+    session finish.  None fails that suite alone (not `reported`); the invocation's other suites keep their verdicts."""
+    try:
+        rep = json.loads(report.read_text())
+    except (OSError, ValueError) as e:
+        if report.exists():
+            print(f"suites: {report}: no report ({type(e).__name__}: {e})", file=sys.stderr)
+        return None
+    return rep if isinstance(rep, dict) else None
+
+
 def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: int = 1, watch: list[str] = (),
         reuse: list[str] = (), timeout_s: float = 0.0, threads: int = 0) -> Result:
     slug = suite.path.replace("/", "_") if suite.path != "." else "repository"
@@ -1675,7 +1696,7 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     sig = signal.Signals(-rc).name if rc < 0 else ""
     timed_out = timeout_s if expired.is_set() else 0.0
     oom = sig == "SIGKILL" and not timed_out and ooms is not None and (oom_kills() or 0) > ooms
-    rep = json.loads(report.read_text()) if report.exists() else None
+    rep = read_report(report)
     ran_all = rc == 0 or (rc == 5 and bool(reuse))           # 5: nothing left to run, every test's pass reused
     rep = rep or {}
     reported = bool(rep)
@@ -1903,6 +1924,12 @@ KNOWN_RED_WALK = 200
 KNOWN_RED_REPORTS = ("suites.json", "suites-lean.json")
 #: what `known_red_on_main` may take: a refresh of the store's attempts and one run's reports
 KNOWN_RED_S = 300
+#: the windows `known_red` refreshes the store's attempts over first, in hours before `main`'s tip landed, before the walk's whole
+#: span: a cold catalog fetches every attempt in its window (3,349 for 27 Oct's first 11 h took 188 s), and drive's after-landing
+#: run of `main` is rarely more than a few hours old
+KNOWN_RED_WINDOWS_H = (6, 24)
+#: how far before a window its refresh starts: a run's id is its start on its own machine's clock, which may trail git's
+KNOWN_RED_SKEW_S = 3600
 
 
 def _reported_red(store, rid: str) -> dict[str, list[str]] | None:
@@ -1922,37 +1949,85 @@ def _reported_red(store, rid: str) -> dict[str, list[str]] | None:
     return None
 
 
+def _run_id_at(t: int) -> str:
+    """The prefix of the ids of runs started at ``t`` (seconds since the epoch, UTC): what `LocalStore.refresh`'s ``since`` takes."""
+    return "r" + time.strftime("%Y%m%d-%H%M%S", time.gmtime(t))
+
+
 def known_red(rev: str, store=None) -> dict:
-    """What is red on `main`: the failed tests in the suite reports of the newest ended check (a post-landing run, or a recorded
-    check: `plan.own_checks`) of the newest of ``rev``'s first `KNOWN_RED_WALK` first-parent commits that has one,
-    ``{"run", "commit", "red": {suite path: [node id]}}``; ``{"why"}`` when no such run is in the evidence store."""
+    """What is red on `main`: the failed tests in the suite reports of the ended checks (drive's after-landing runs, or recorded
+    checks: `plan.own_checks`) of the newest of ``rev``'s first `KNOWN_RED_WALK` first-parent commits that has one, merged over
+    all of that commit's runs that reported (an after-landing run is one attempt per twin part, and only the part that ran a suite
+    reports it), ``{"runs", "commit", "red": {suite path: [node id]}}``; ``{"why"}`` when none is in the evidence store, saying
+    whether this machine's store has no remote, its refresh failed, or no check in the walk reported.
+
+    A cold catalog fetches every attempt it refreshes, so the attempts are refreshed over `KNOWN_RED_WINDOWS_H` first and the walk's
+    whole span last. A commit counts in a window only if it landed inside it: every run of a newer commit started later still, so
+    is already indexed, and the newest commit with a check is the one found."""
+    sha = _git("rev-parse", "--verify", "-q", f"{rev}^{{commit}}").strip()
+    walk = [(c, int(t)) for c, t in (ln.split() for ln in
+                                     _git("log", "--first-parent", "-n", str(KNOWN_RED_WALK), "--format=%H %ct", sha).splitlines())]
     if store is None:
         from research.store.local import LocalStore
 
         store = LocalStore()
-    if store.remote is not None:
-        store.refresh(attempts_only=True)
     spec = importlib.util.spec_from_file_location("suites_plan", HERE / "plan.py")
     plan = sys.modules[spec.name] = importlib.util.module_from_spec(spec)      # dataclasses resolve their module by name
     spec.loader.exec_module(plan)
-    for commit in _git("rev-list", "--first-parent", "-n", str(KNOWN_RED_WALK), rev).split():
-        for rid in plan.own_checks(store, commit):
-            if (red := _reported_red(store, rid)) is not None:
-                return {"run": rid, "commit": commit, "red": red}
-    return {"why": f"no check of {rev[:12]} or its last {KNOWN_RED_WALK - 1} first-parent commits reported its suites in the store"}
+    tip, oldest = walk[0][1], walk[-1][1]
+    windows = [None] if store.remote is None else [*(s for h in KNOWN_RED_WINDOWS_H if (s := tip - h * 3600) > oldest), oldest]
+    unread = 0
+    for since in windows:
+        if since is not None:
+            try:
+                unread += len(store.refresh(attempts_only=True, since=_run_id_at(since - KNOWN_RED_SKEW_S))["errors"])
+            except Exception as e:  # noqa: BLE001  (an unreadable store is a why, and every failure counts)
+                return {"why": f"refreshing the store's attempts from {_run_id_at(since - KNOWN_RED_SKEW_S)} failed "
+                               f"({type(e).__name__}: {e})"}
+        for commit, landed in walk:
+            if since is not None and landed < since:
+                break
+            runs = {rid: red for rid in plan.own_checks(store, commit) if (red := _reported_red(store, rid)) is not None}
+            if runs:
+                merged: dict[str, list[str]] = {}
+                for red in runs.values():
+                    for suite, tests in red.items():
+                        merged[suite] = list(dict.fromkeys([*merged.get(suite, []), *tests]))
+                return {"runs": sorted(runs), "commit": commit, "red": merged}
+    span = (f"{sha[:12]}{f' ({rev})' if not sha.startswith(rev) else ''} or its last {len(walk) - 1} first-parent commits "
+            f"(back to {time.strftime('%Y-%m-%d %H:%MZ', time.gmtime(oldest))})")
+    if store.remote is None:
+        n = store.index.sql("SELECT count(*) FROM attempts")[0][0]
+        return {"why": f"this machine's store has no remote (no ~/.research/store.toml, $RESEARCH_STORE_CONFIG or a recorded run's "
+                       f"custody key) and none of the {n} attempts it holds is a check of {span} that reported its suites"}
+    return {"why": f"no check of {span} reported its suites in the store (attempts refreshed from "
+                   f"{_run_id_at(oldest - KNOWN_RED_SKEW_S)}"
+                   + (f", {unread} of them unreadable)" if unread else ")")}
+
+
+def store_key(env: dict) -> dict[str, str]:
+    """The variables that hand `LocalStore` a recorded run's store key when this machine has no store config of its own (a node's
+    `research` user has none): from `$CHECK_STORE_CUSTODY` (what check.py and the quick tier hand their steps), else from the custody
+    dir beside the run's own run dir (`check.py`'s `custody_dir`: a `research run` job's). Empty when there is none or no need."""
+    if env.get("RESEARCH_STORE_CONFIG") or (Path.home() / ".research" / "store.toml").is_file():
+        return {}
+    dirs = [env.get(CUSTODY_ENV)]
+    if env.get("RESEARCH_RUN_DIR") and env.get("RESEARCH_RUN_ID"):
+        dirs.append(str(Path(env["RESEARCH_RUN_DIR"]).resolve().parent.parent / "requests" / env["RESEARCH_RUN_ID"] / "custody"))
+    for d in map(Path, filter(None, dirs)):
+        if (d / "store.toml").is_file() and (d / "cred.json").is_file():
+            cred = json.loads((d / "cred.json").read_text())
+            return {"RESEARCH_STORE_CONFIG": str(d / "store.toml"),
+                    **{k: cred[k] for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN") if cred.get(k)}}
+    return {}
 
 
 def known_red_on_main(rev: str) -> dict:
     """`known_red` in a process of its own (`--known-red`), which alone gets the store key a recorded run's custody holds when this
-    machine has no store config of its own (as `verity/ml/flock/verifier/ci.py`'s `store_env`): the tests' environment never
-    does. ``{"why"}`` when it can't be read."""
+    machine has no store config of its own (`store_key`, as `verity/ml/flock/verifier/ci.py`'s `store_env`): the tests'
+    environment never does. ``{"why"}`` when it can't be read."""
     env = dict(os.environ)
-    custody = Path(env[CUSTODY_ENV]) if env.get(CUSTODY_ENV) else None
-    if (custody is not None and not env.get("RESEARCH_STORE_CONFIG") and not (Path.home() / ".research" / "store.toml").is_file()
-            and (custody / "store.toml").is_file() and (custody / "cred.json").is_file()):
-        cred = json.loads((custody / "cred.json").read_text())
-        env["RESEARCH_STORE_CONFIG"] = str(custody / "store.toml")
-        env.update({k: cred[k] for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN") if cred.get(k)})
+    env.update(store_key(env))
     try:
         p = subprocess.run([sys.executable, str(Path(__file__).resolve()), "--known-red", rev], cwd=ROOT, env=env,
                            capture_output=True, text=True, timeout=KNOWN_RED_S)
@@ -1970,7 +2045,8 @@ def mask_known_red(failed: list[Result], doc: dict) -> list[str]:
     if "red" not in doc:
         return [f"known red on `main`: not read ({doc.get('why')}), so every failure here counts"]
     red = {s: set(ts) for s, ts in doc["red"].items()}
-    lines = [f"known red on `main` (run {doc['run']}, at {doc['commit'][:12]}): a test that failed there too fails nothing here"]
+    lines = [f"known red on `main` (run{'s' if len(doc['runs']) > 1 else ''} {', '.join(doc['runs'])}, at {doc['commit'][:12]}): "
+             "a test that failed there too fails nothing here"]
     for r in failed:
         tests, there = set(r.failed_tests or ()), red.get(r.suite.path, set())
         if not tests & there:
@@ -2031,9 +2107,9 @@ def main(argv: list[str] | None = None) -> int:
                     "per-test reuse; runs nothing")
     ap.add_argument("--lean-built", action="store_true", help=f"the Lean verifier is built and `lake` is on the PATH (check's "
                     f"lean-suites step): don't run `lake build` before {', '.join(AFTER_LEAN)}")
-    ap.add_argument("--known-red", metavar="REV", help="print, as JSON, what is red on main at REV (`known_red`: the newest check of "
-                    "its first-parent commits in the evidence store) and run nothing; with --changed, a suite whose every failed "
-                    "test is on that list fails nothing")
+    ap.add_argument("--known-red", metavar="REV", help="print, as JSON, what is red on main at REV (`known_red`: the checks of the "
+                    "newest of its first-parent commits checked in the evidence store, merged, with their runs and commit, or why "
+                    "none was found) and run nothing; with --changed, a suite whose every failed test is on that list fails nothing")
     a = ap.parse_args(argv)
     sys.stdout.reconfigure(line_buffering=True)
     if not in_git():
@@ -2041,6 +2117,7 @@ def main(argv: list[str] | None = None) -> int:
               f"(`research run --on` ships one; a tree the archive stream or an older launcher shipped isn't)", file=sys.stderr)
         return 2
     if a.known_red:
+        os.environ.update(store_key(dict(os.environ)))        # this process runs no tests, so it may hold the run's store key
         print(json.dumps(known_red(a.known_red)))
         return 0
     store_custody()
@@ -2210,8 +2287,7 @@ def main(argv: list[str] | None = None) -> int:
                      "or give the test a stand-in for it" if files else ""))
         if r.nondeterministic:
             print(f"        NONDETERMINISTIC: {', '.join(r.nondeterministic[:5])}{' ...' if len(r.nondeterministic) > 5 else ''} both passed "
-                  "and failed under one key: their inputs were identical, so each is flaky; delete it, don't rerun or fix it "
-                  "(Daniel, 6 Oct)")
+                  "and failed under one key: their inputs were identical, so each is flaky; delete it, don't rerun or fix it")
         if r.contradicts:
             print(f"        CONTRADICTS a cached pass: {', '.join(r.contradicts[:5])}{' ...' if len(r.contradicts) > 5 else ''}"
                   " -- a key misses an input, or a test's outcome isn't a function of its inputs")

@@ -75,6 +75,10 @@ from verity.core.protocols.sampled_proofs import remote as R
 
 CHALLENGER_ENV, SESSION_ENV, SECRET_ENV = "POUW_CHALLENGER", "POUW_CHALLENGER_SESSION", "POUW_CHALLENGER_SECRET_FILE"
 COMMITMENT_ENV, GATE_ENV = "POUW_CHALLENGER_COMMITMENT", "POUW_CHALLENGER_GATE"
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "tools" / "config"))
+from verity_config.settings import of  # noqa: E402
+
+settings = of(__file__)
 IN_PROCESS = "in-process (not certified)"
 STAND_IN_TAG = b"verity/served-h1/stand-in-root/v1"
 STAND_IN = "a stand-in (coins.stand_in_root of the session), never a window's root"
@@ -111,10 +115,10 @@ def session(address: str | None = None, sid: str | None = None, secret_file: str
     """The window's challenger session: `address`, `sid`, `secret_file` and `commitment`, else ``$POUW_CHALLENGER``,
     ``$POUW_CHALLENGER_SESSION``, ``$POUW_CHALLENGER_SECRET_FILE`` and ``$POUW_CHALLENGER_COMMITMENT``; None (none) for
     the in-process challenger.  An address without its id, or a secret or commitment without both, is refused."""
-    at = address or os.environ.get(CHALLENGER_ENV) or None
-    sid = sid or os.environ.get(SESSION_ENV) or None
-    secret_file = secret_file or os.environ.get(SECRET_ENV) or None
-    commitment = commitment or os.environ.get(COMMITMENT_ENV) or None
+    at = address or settings.get(CHALLENGER_ENV)
+    sid = sid or settings.get(SESSION_ENV)
+    secret_file = secret_file or settings.get(SECRET_ENV)
+    commitment = commitment or settings.get(COMMITMENT_ENV)
     if (at is None) != (sid is None) or ((secret_file or commitment) is not None and at is None):
         raise Ch.CoinError(f"a challenger session is an id and an address from infra's gate (and its secret), not "
                            f"{sid or at or secret_file or commitment!r} alone (--challenger and --session, or "
@@ -546,7 +550,7 @@ def main(argv: list[str] | None = None) -> int:
     f.add_argument("--rounds", type=int, required=True)
     o = sub.add_parser("open", help="reserve a development window's session at infra's gate and open it on its stand-in "
                                     "root; prints the gate's answers (never the secret) and the client's env")
-    o.add_argument("--gate", default=os.environ.get(GATE_ENV), help=f"infra's gate, USER@HOST (default ${GATE_ENV})")
+    o.add_argument("--gate", default=settings.get(GATE_ENV), help=f"infra's gate, USER@HOST (default ${GATE_ENV})")
     o.add_argument("--ssh-key", help="the lane's own gate key (default: ssh's own); a key the gate reads only is refused")
     o.add_argument("--peer", required=True, help="the node the window's client runs on, as the gate names it")
     o.add_argument("--epoch", type=int, required=True)

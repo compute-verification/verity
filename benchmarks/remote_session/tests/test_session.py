@@ -2,9 +2,8 @@
 a clock that advances by one tick per pass with both sides settled around each tick, so a session runs one schedule:
 an honest session is accepted and its γ terms computed, a prover that dropped blocks is rejected at its openings, a
 second session waits out the first's deadline, and KV pages appended and released mid-session (a memory map's steps)
-are audited, accepted when held and rejected when dropped. Sessions run under the verifier's default verdict, `lean`:
-the Lean verifier decides, `audit.Session` keeps the books beside it, and the two must agree at every event, window
-verdict and record field."""
+are audited, accepted when held and rejected when dropped. The Lean verifier decides, `audit.Session` keeps the books
+beside it, and the two must agree at every event, window verdict and record field."""
 from __future__ import annotations
 
 import os
@@ -148,12 +147,12 @@ class TickingBackend(prover.CpuBackend):
         return out
 
 
-def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1, checks=None,
+def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sessions: int = 1,
         read_bytes_per_s: float = 1e20, tiers: dict | None = None, lifetime: int | None = None,
-        layout: list | None = None, host_bytes: int = 0, paces: list | None = None, verdict: str = verifier.VERDICT,
-        then=None, transcript: Path | None = None, challenger=None, appends: int | None = None, store=None,
+        layout: list | None = None, host_bytes: int = 0, paces: list | None = None, then=None,
+        transcript: Path | None = None, challenger=None, appends: int | None = None, store=None,
         binding=None, groups_per_coin: int = 1, **kv):
-    """The verifier's sessions and the prover's over one registration, under `verdict`, each paced by its entry in
+    """The verifier's sessions and the prover's over one registration, each paced by its entry in
     `paces` if given, its coins from `challenger` (the verifier's own by default), `appends` append coins a session
     (by default as the prover's hello says, `Verifier.appends_of`), `groups_per_coin` windows a draw; `then(v)` once
     they end. With `store` (a `remote_bandwidth.store.Store`) the prover's blocks are that store's, and with `binding`
@@ -175,9 +174,8 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     th.start()
     v = verifier.Verifier(vconn, source=os.urandom(32), windows=windows, window_ns=20, samples=samples,
                           delta=2.0 ** -40, jitter_ns=10 ** 9, clock=clock, log=lambda m: None,
-                          checks=checks, lifetime=lifetime, host_bytes=host_bytes, verdict=verdict,
-                          transcript=transcript, challenger=challenger, appends=appends, binding=binding,
-                          groups_per_coin=groups_per_coin)
+                          lifetime=lifetime, host_bytes=host_bytes, transcript=transcript,
+                          challenger=challenger, appends=appends, binding=binding, groups_per_coin=groups_per_coin)
     try:
         v.register()
         allowance = v.allowance(v.ping(4))
@@ -221,7 +219,7 @@ def test_a_session_on_the_pass_clock_runs_one_schedule(monkeypatch):
 
 
 def test_a_prover_reporting_a_slow_read_cannot_lower_either_ledgers_capacity(monkeypatch):
-    """MEM-24: the capacity is the verifier's, and the prover's calibration can only raise it."""
+    """The capacity is the verifier's, and the prover's calibration can only raise it."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     (slow,), _ = run("honest", read_bytes_per_s=1.0)
     (fast,), _ = run("honest", read_bytes_per_s=1e20)
@@ -232,7 +230,7 @@ def test_a_prover_reporting_a_slow_read_cannot_lower_either_ledgers_capacity(mon
 
 
 def test_the_ledgers_are_the_nodes_whatever_share_of_it_the_store_is_on(monkeypatch):
-    """MEM-26: R is every GPU's HBM and the host's DRAM, S_chip every GPU's chip and the host's caches, and the squaring
+    """R is every GPU's HBM and the host's DRAM, S_chip every GPU's chip and the host's caches, and the squaring
     ceiling the node's, for a store on one GPU too: its calibration's one-GPU read lowers none of them, and its
     certified bytes are the same at either R."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
@@ -249,7 +247,7 @@ def test_the_ledgers_are_the_nodes_whatever_share_of_it_the_store_is_on(monkeypa
 
 
 def test_the_timing_parts_reproduce_the_whole_node_sessions_split_and_sum_to_its_timing_term():
-    """r20261015-203743-d101 (15 Oct), 8 GPUs' HBM and a host tier, every pass the whole store: its parts are #2089's
+    """A whole-node session (`d101`), 8 GPUs' HBM and a host tier, every pass the whole store: its parts are the timing
     split, and at either R they sum to the ledger's timing term."""
     d101 = {"span_ns": 420_074_057_129, "passes": 6430, "reads_bytes": 4_888_145_229_250_560, "pass_ns": 65_259_603,
             "tiers": {"hbm": {"bytes": 751_619_276_800, "ms": 61.502974},
@@ -393,8 +391,9 @@ def test_kv_pages_appended_and_released_mid_session_are_audited(monkeypatch):
 def test_a_session_reserves_append_coins_only_when_its_plan_appends_and_an_append_past_them_is_refused(monkeypatch):
     """Each session's coins are W challenges, W openings coins and its append coins: none, and no append family, under
     a plan of honest sessions (the hello says so), and `coins.APPENDS` under one with a kv session, on which both are
-    accepted.  At `appends=0` the kv session's first append has no coin and is its `coin` rejection, the honest one
-    accepted (on the books; `python`, since the Lean takes only the append coins released)."""
+    accepted.  At `appends=0` the kv session's first append has no coin: the books reject it as `coin` and the Lean,
+    which takes only the append coins released, otherwise, so the session is refused there as `disagreement`, the
+    honest one accepted."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     import challengers
 
@@ -407,47 +406,27 @@ def test_a_session_reserves_append_coins_only_when_its_plan_appends_and_an_appen
 
     monkeypatch.setattr(challengers.Local, "open", opened)
     pair = ((coins.CHALLENGE, 3), (coins.OPENINGS, 3))
-    (r,), (p,) = run("honest", samples=8, verdict="python")
+    (r,), (p,) = run("honest", samples=8)
     assert r["accepted"] and p["accepted"] and layouts == [pair]
     layouts.clear()
-    (honest, kv), (ph, pk) = run("honest,kv:2", sessions=2, samples=8, kv_every=4, kv_pool=8, verdict="python")
+    (honest, kv), (ph, pk) = run("honest,kv:2", sessions=2, samples=8, kv_every=4, kv_pool=8)
     assert honest["accepted"] and kv["accepted"] and ph["accepted"] and pk["accepted"] and kv["appended"] > 0
     assert layouts == [pair + ((coins.APPEND, coins.APPENDS),)] * 2
     layouts.clear()
-    (honest, kv), (ph, pk) = run("honest,kv:2", sessions=2, samples=8, kv_every=4, kv_pool=8, appends=0,
-                                 verdict="python")
+    (honest, kv), (ph, pk) = run("honest,kv:2", sessions=2, samples=8, kv_every=4, kv_pool=8, appends=0)
     assert layouts == [pair] * 2
     assert honest["accepted"] and ph["accepted"] and honest["challenger"]["reason"] is None
-    assert not kv["accepted"] and kv["failure"]["failure"] == "coin" and kv["appended"] == 0
+    assert not kv["accepted"] and kv["failure"]["failure"] == "disagreement" and kv["appended"] == 0
+    assert kv["disagreement"]["event"] == "append" and kv["disagreement"]["python"]["failure"] == "coin"
     assert kv["challenger"]["reason"] is None and not pk["accepted"]
 
 
-def test_kv_pages_are_checked_by_worker_processes_under_seeds_that_bind_the_appends(monkeypatch):
-    """Each pass's seed binds the appends sent before its root, and the verifier's check workers recompute it from
-    the window's snapshot (`checks.Checks.snapshot`, the appends' head at each root among it): a kv session checked
-    by one worker process is accepted, as `Session.verify` accepts it."""
-    from checks import Checks
-
-    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    checks = Checks(1)
-    try:
-        (r,), (p,) = run("kv:2", samples=16, kv_every=2, kv_pool=8, checks=checks)
-    finally:
-        checks.close(wait=True)
-    assert r["accepted"] and p["accepted"] and r["failure"] is None and r["appended"] > 0
-
-
-def test_a_frame_that_doesnt_decode_is_malformed_on_a_window_with_no_draws():
-    """A batch whose frame doesn't decode is `malformed` to the check (`checks.check`), and a window with no draws (none
-    a session makes) settles `malformed` whatever its batches, as `Session.verify` and the Lean's settle give it."""
-    import pickle
+def test_a_window_with_no_draws_settles_malformed_whatever_its_batches():
+    """A window with no draws (none a session makes) settles `malformed` whatever its batches' results, as
+    `Session.verify` and the Lean's settle give it."""
     from types import SimpleNamespace
 
-    from checks import Checks, check
-
-    snap = pickle.dumps(SimpleNamespace(registration=SimpleNamespace(key=None)))
-    result = check(snap, 0, [], [(1).to_bytes(4, "big")])
-    assert (result["failure"], result["at"], result["n"]) == ("malformed", None, 0)
+    from checks import Checks
 
     class Books:
         _fail = audit.Session._fail
@@ -458,7 +437,7 @@ def test_a_frame_that_doesnt_decode_is_malformed_on_a_window_with_no_draws():
         def _live(self) -> None:
             pass
 
-    for results in ([], [result]):
+    for results in ([], [{"failure": None, "at": None}]):
         books = Books()
         assert Checks.settle(books, 0, results, 0) == audit.Verdict(0, False, "malformed") == books.windows[0].verdict
 
@@ -1013,8 +992,7 @@ def test_the_line_of_record_deducts_at_least_the_auditors_s_chip():
 def test_the_auditor_line_reads_a_last_root_by_its_request_not_by_its_value():
     """A prover that repeats a root doesn't make a group's last root early on the challenger's clock: window 2's last
     root is also its boundary σ_3's (asked before it came), and window 4's is window 1's, but `auditor_seen` reads each
-    at its openings request, so every L is the honest 1.5 coin intervals (red team (g)1,
-    note:20261024T0330Z-report-redteam-night)."""
+    at its openings request, so every L is the honest 1.5 coin intervals."""
     import json
 
     import auditor_line as al
@@ -1038,8 +1016,8 @@ def test_a_paced_session_whose_openings_come_beside_its_passes_gets_the_same_ver
     so both verifiers take openings between a paced session's roots and coins; the honest session is still accepted
     and the dropper rejected, with no disagreement."""
     pace = verifier.pace_of("1:4:40:2", 1.0)
-    (r, r2), (pr, pr2) = run("honest,skip:0.25", paces=[pace, pace], defer_openings=False, verdict="both")
-    assert r["verdict"] == "both" and r["disagreement"] is None and r2["disagreement"] is None
+    (r, r2), (pr, pr2) = run("honest,skip:0.25", paces=[pace, pace], defer_openings=False)
+    assert r["verdict"] == "lean" and r["disagreement"] is None and r2["disagreement"] is None
     assert r["accepted"] and pr["accepted"] and len(r["lean_check_ns"]) == r["windows"] == 12
     assert not r2["accepted"] and r2["failure"]["failure"] == "receipt" and pr2["failure_on_dropped"]
 
@@ -1155,8 +1133,7 @@ def test_a_layout_that_is_not_the_stores_regions_in_order_is_refused(layout):
 
 
 def greeted(lifetime: int | None, deferred: bool, *, hello: dict | None = None, drop: tuple[str, ...] = (),
-            plan: str = "honest", verdict: str = verifier.VERDICT
-            ) -> tuple[verifier.Verifier, ValueError | None, list[str]]:
+            plan: str = "honest") -> tuple[verifier.Verifier, ValueError | None, list[str]]:
     """A prover of `plan` whose backend says `deferred` greeting a verifier of lifetime cap `lifetime`, its hello with
     `hello`'s fields too and without `drop`'s: the verifier, its refusal if it refused, and the reason the prover read
     in its `bye`."""
@@ -1181,7 +1158,7 @@ def greeted(lifetime: int | None, deferred: bool, *, hello: dict | None = None, 
     th = threading.Thread(target=prove, daemon=True)
     th.start()
     v = verifier.Verifier(wire.Conn(a), source=os.urandom(32), windows=3, window_ns=20, samples=6, delta=2.0 ** -40,
-                          jitter_ns=10 ** 9, log=lambda m: None, lifetime=lifetime, verdict=verdict)
+                          jitter_ns=10 ** 9, log=lambda m: None, lifetime=lifetime)
     refused = None
     try:
         v.register()
@@ -1221,12 +1198,11 @@ def test_only_a_hello_whose_plan_appends_nothing_reserves_no_append_coins():
     assert v.registry.drawn(b"test-node") == 0
 
 
-@pytest.mark.parametrize("verdict", verifier.VERDICTS)
-def test_a_hello_asking_for_receipts_that_bind_tiles_is_refused_under_each_verdict(verdict):
+def test_a_hello_asking_for_receipts_that_bind_tiles_is_refused():
     """A hello asking that its receipts bind PoUW's tile outputs (`bind`): the Lean covers receipts of blocks alone, so
     both registries refuse it before drawing a registration (`audit.Registry.register` as `Registry.register` does),
     and the prover reads why in its `bye`."""
-    v, refused, heard = greeted(None, False, hello={"bind": True}, verdict=verdict)
+    v, refused, heard = greeted(None, False, hello={"bind": True})
     assert refused is not None and "tile outputs" in str(refused)
     assert heard == [f"refused: {refused}"] and v.registry.drawn(b"test-node") == 0
 
@@ -1247,33 +1223,24 @@ def test_the_verifier_closes_a_registration_left_live_from_its_registry_file(tmp
     assert "closed" in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("verdict", verifier.VERDICTS)
-def test_each_verdict_accepts_an_honest_session_and_rejects_a_dropping_one(monkeypatch, verdict):
-    """`--verdict`: the Lean verifier decides under `lean` and `both` (its check's time is each window's
-    `lean_check_ns`), with `audit.Session` checking beside it under `both`, and `audit.Session` alone under `python`,
-    with no Lean process. Each accepts the honest session, rejects the prover that dropped half its blocks at a receipt,
+def test_the_lean_verifier_accepts_an_honest_session_and_rejects_a_dropping_one(monkeypatch):
+    """The Lean verifier decides each window (its check's time is the window's `lean_check_ns`), `audit.Session`
+    taking its verdicts: it accepts the honest session, rejects the prover that dropped half its blocks at a receipt,
     and closes the registration with the two sessions counted so in both registries."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    closed, lean = [], []
-
-    def then(v):
-        lean.append(v.lean)
-        closed.append(v.close_registration(b"test-node"))
-
-    (honest, dropping), _ = run("honest,skip:0.5", sessions=2, verdict=verdict, then=then)
+    closed = []
+    (honest, dropping), _ = run("honest,skip:0.5", sessions=2,
+                                then=lambda v: closed.append(v.close_registration(b"test-node")))
     assert honest["accepted"] and not dropping["accepted"] and dropping["failure"]["failure"] == "receipt"
-    assert honest["verdict"] == verdict and honest["disagreement"] is None and dropping["disagreement"] is None
+    assert honest["verdict"] == "lean" and honest["disagreement"] is None and dropping["disagreement"] is None
     ns = list(honest["lean_check_ns"].values())
-    if verdict == "python":
-        assert lean == [None] and ns == [None] * 3
-    else:
-        assert lean[0] is not None and len(ns) == 3 and all(type(x) is int and x > 0 for x in ns)
+    assert len(ns) == 3 and all(type(x) is int and x > 0 for x in ns)
     assert closed[0]["sessions"] == ["accepted", "receipt"] and "python" not in closed[0]
 
 
-def test_a_window_the_verifiers_judge_differently_is_refused_as_disagreement(monkeypatch):
-    """Under `both`, a Lean verdict that differs from `audit.Session`'s (the Lean's accepting window 1 read as a
-    rejection at a draw) refuses the session at that window as `disagreement`, which both registries count."""
+def test_a_window_the_lean_rejects_is_rejected_on_the_books_at_its_draw(monkeypatch):
+    """A window's verdict is the Lean's, set on `audit.Session` (`Checks.settle`): the Lean's accepting window 1 read
+    as a rejection at a draw rejects the session there, at that draw, with no disagreement."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     settle = verifier.Pair.settle
 
@@ -1288,15 +1255,12 @@ def test_a_window_the_verifiers_judge_differently_is_refused_as_disagreement(mon
         return settle(self, check, lambda res: answered(changed(res)))
 
     monkeypatch.setattr(verifier.Pair, "settle", wrong)
-    closed = []
-    (r,), (p,) = run("honest", verdict="both", then=lambda v: closed.append(v.close_registration(b"test-node")))
-    assert not r["accepted"] and not p["accepted"] and r["failure"] == {"t": 1, "failure": "disagreement", "at": None}
-    assert r["disagreement"]["event"] == "verify" and r["disagreement"]["python"] == {"accepted": 1}
-    assert closed[0]["sessions"] == ["disagreement"] and "python" not in closed[0]
+    (r,), (p,) = run("honest")
+    assert not r["accepted"] and not p["accepted"] and r["failure"] == {"t": 1, "failure": "receipt", "at": [0, 0]}
+    assert r["disagreement"] is None
 
 
-@pytest.mark.parametrize("verdict", ["both", "python"])
-def test_a_transcript_replays_each_session_to_its_verdict_through_both_verifiers(tmp_path, monkeypatch, verdict):
+def test_a_transcript_replays_each_session_to_its_verdict_through_both_verifiers(tmp_path, monkeypatch):
     """`--transcript DIR`: each session's difftest case, written as it runs, which `replay.py transcript` replays
     through `RemoteAudit.Session` and `audit.Session` alike: the honest session accepted, every window verified, and
     the prover that dropped half its blocks rejected at the window and draw it was rejected at live, at a receipt,
@@ -1308,7 +1272,7 @@ def test_a_transcript_replays_each_session_to_its_verdict_through_both_verifiers
 
     import replay
 
-    (honest, dropping), _ = run("honest,skip:0.5", sessions=2, verdict=verdict, transcript=tmp_path)
+    (honest, dropping), _ = run("honest,skip:0.5", sessions=2, transcript=tmp_path)
     assert honest["accepted"] and dropping["failure"]["failure"] == "receipt"
     f = dropping["failure"]
     rows, verified = [], []
@@ -1366,7 +1330,7 @@ def test_a_session_drawn_four_windows_a_coin_is_accepted_through_both_verifiers_
     assert len({w["draws_sent_ns"] for w in seen[:4]}) == 1 and seen[4]["draws_sent_ns"] >= seen[3]["draws_sent_ns"]
     first = [len(r["draws"].get(t, [])) for t in range(4)]
     assert sum(first) == 2 and first.count(0) >= 2 and len(r["draws"][4]) == 2
-    assert sorted(t for t, v in r["verify_cpu_ns"].items()) == list(range(5))
+    assert sorted(t for t, v in r["verify_latency_ns"].items()) == list(range(5))
     case = json.loads(Path(r["transcript"]["path"]).read_bytes())
     assert case["params"]["groups_per_coin"] == 4 and len(case["coins"]) == 5 + 2
     with replay.server() as s:
@@ -1496,7 +1460,7 @@ def test_books_whose_record_is_not_the_leans_refuse_the_session_as_disagreement(
                                                  *rec.windows[1:]))
 
     monkeypatch.setattr(audit.Session, "record", stale)
-    (r,), _ = run("honest", verdict="both")
+    (r,), _ = run("honest")
     assert not r["accepted"] and r["failure"]["failure"] == "disagreement", r["failure"]
     assert r["disagreement"]["event"] == "record"
 
@@ -1599,7 +1563,7 @@ def test_an_event_the_verifiers_answer_differently_is_refused_as_disagreement(mo
 
     monkeypatch.setattr(verifier.lv, "receive_event", stepless)
     closed = []
-    (r,), _ = run("honest", verdict="both", then=lambda v: closed.append(v.close_registration(b"test-node")))
+    (r,), _ = run("honest", then=lambda v: closed.append(v.close_registration(b"test-node")))
     assert not r["accepted"] and r["failure"] == {"t": 1, "failure": "disagreement", "at": None}
     d = r["disagreement"]
     assert d["event"] == "receive" and d["lean"]["failure"] == "step" and d["python"] == {"ok": True}

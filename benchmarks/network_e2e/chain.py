@@ -1,11 +1,11 @@
-"""network-e2e's stages after N2 and the proofs, toward the one command over varied traffic (G-A): the advice (I1 v0,
-`verity.core.protocols.certifier.advice`), its bits per link-window (v0's `bits_by_window` beside ENC-DERIVED's residual,
-`encodings/derived.py`), the prove path's audit of a committed run's step units compiled from that advice (PROVE-PATH,
-`benchmarks/prove_path`), and NEG's negatives (`benchmarks/network_traces/negatives.py`). Each stage's result says what it
-stood on; `stubs` lists what is still a stand-in.
+"""network-e2e's steps after N2 and the proofs, toward the one command over varied traffic: the advice (I1 v0,
+`verity.core.protocols.certifier.advice`), its bits per link-window (v0's `bits_by_window` beside the derived rules'
+residual, `encodings/derived.py`), the prove path's audit of a committed run's step units compiled from that advice
+(`benchmarks/prove_path`), and the negatives (`benchmarks/network_traces/negatives.py`). Each stage's result says what
+it stood on; `stubs` lists what is still a stand-in.
 
 * **The advice** (`advice`, ``--advice FILE``): I1's JSON (`to_json`), its `encode` bytes, or a prove-path run's stand-in
-  advice from before v0 fixed ``release`` and ``sources`` (r20261024-052710-8932's ``advice/advice.json``), upgraded as
+  advice from before v0 fixed ``release`` and ``sources`` (its ``advice/advice.json``), upgraded as
   `advice_windows.advice_of_workload` now writes it: no sources, each kept output released in its step's bucket. It is
   bound to the runs only on the advice profile, by the honest run's certified I/O (``io.json``): every advice request is
   a certified request (its ``user``), once.
@@ -35,19 +35,18 @@ stood on; `stubs` lists what is still a stand-in.
   of its window (`held_to`: its root registered under that Commit, its opening opening it to that advice, which the
   report's OK requires), and an honest arm's is one of the honest run's own Commit windows. When each was registered is
   read off the registration and the endpoint's trace (`closes`), never the job's.
-* **The negatives** (`negatives`): NEG's `suite` on the runs, handed the advice's v0 bytes for its advice negatives and,
-  given each request's sampled ids (``--ids``), the I/O tie's verdict on every negative it reads (IO-TIE's reference on
-  a fake upstream's cells and Commit port of the advice and those ids, under the map the verifier computes from the
-  advice).
-* **The I/O tie on the runs** (`tie`, on the advice profile, where NEG's registry doesn't run): NEG's `tie_run` on each
-  run, IO-TIE's reference in the clear on its stand-ins (each window's certified frames held to their head, the sampled
-  ids as the Commit's port), with each run's ids from the endpoint's records (`served_ids`, the requests that arrived in
-  its link-windows) or ``--ids``, which must give each run's certified requests an id for each output they served
-  (`uncovered`). Honest owes acceptance,
-  and token, whose certified ids aren't the endpoint's, a refusal by content at exactly the link-windows its changed ids
-  fall in (`changed_windows`). The tie is required on the advice profile (`tie_gate`): the report isn't OK when it
-  didn't run, gave the honest run no verdict or didn't accept it, or when a part it must establish there
-  (`TIE_REQUIRED`) didn't hold.
+* **The negatives** (`negatives`): `negatives.suite` on the runs, handed the advice's v0 bytes for its advice negatives
+  and, given each request's sampled ids (``--ids``), the I/O tie's verdict on every negative it reads (`io_tie`'s
+  reference on a fake upstream's cells and Commit port of the advice and those ids, under the map the verifier computes
+  from the advice).
+* **The I/O tie on the runs** (`tie`, on the advice profile, where the negatives registry doesn't run):
+  `negatives.tie_run` on each run, `io_tie`'s reference in the clear on its stand-ins (each window's certified frames
+  held to their head, the sampled ids as the Commit's port), with each run's ids from the endpoint's records
+  (`served_ids`, the requests that arrived in its link-windows) or ``--ids``, which must give each run's certified
+  requests an id for each output they served (`uncovered`). Honest owes acceptance, and token, whose certified ids
+  aren't the endpoint's, a refusal by content at exactly the link-windows its changed ids fall in (`changed_windows`).
+  The tie is required on the advice profile (`tie_gate`): the report isn't OK when it didn't run, gave the honest run no
+  verdict or didn't accept it, or when a part it must establish there (`TIE_REQUIRED`) didn't hold.
 """
 from __future__ import annotations
 
@@ -83,7 +82,7 @@ def _derived():
 
 
 D = _derived()
-ADVICE = "advice"  # certifier_serve's varied plan's N2 profile: the egress counts are N2-ADVICE's to derive
+ADVICE = "advice"  # certifier_serve's varied plan's N2 profile: the egress counts are N2's advised counts' to derive
 
 
 def _sha512(data: bytes) -> str:
@@ -376,7 +375,7 @@ def _same(committed: dict | None, info: dict | None) -> bool | None:
 
 
 def per_unit(rank: dict) -> dict[str, dict]:
-    """A rank's timing per drawn unit, by member, as PROVE-PATH's fixed `per_unit` reads it (92e4e50ca5): each drawn
+    """A rank's timing per drawn unit, by member, as the prove path's `per_unit` reads it: each drawn
     member's prover and Lean verify seconds over the units its one statement proves (``draw_counts``; C-Flock's own
     ``units`` count its virtual units), and its proof's bytes over its reps."""
     out = {}
@@ -408,7 +407,7 @@ def _utc(t: float) -> str:
 
 
 def serve_record(d: Path) -> dict:
-    """The serving run's own record (``d``, the `research run` directory of the serve): by window, what its advice loop
+    """The serving run's own record (``d``, the serve's run directory): by window, what its advice loop
     registered (``out/advice_windows.jsonl``: the root and ``at``, the UTC time of day to the second, stamped once the
     registration was in place), the last window it logged, and when its session ended (``status.json``'s ``ended_utc``,
     None while it serves)."""
@@ -619,10 +618,10 @@ def prove_path(src: Path | list[Path], info: dict | None, advice_bound: bool | N
 # --- the negatives ----------------------------------------------------------------------------------------------------
 
 def negatives(runs: dict[str, Path], work: Path, adv, clock, ids: Path | None = None) -> dict:
-    """NEG's `suite` on ``runs`` (by strategy), its advice negatives made from ``adv``'s v0 bytes, and with ``ids`` (each
-    request's sampled ids, `negatives.read_ids`) the I/O tie's verdict on the negatives it reads. ``ok`` unless a row
-    that ran says otherwise: a pending check's row (``ok`` None) or one that didn't run is the report's to list, not a
-    failure."""
+    """`negatives.suite` on ``runs`` (by strategy), its advice negatives made from ``adv``'s v0 bytes, and with ``ids``
+    (each request's sampled ids, `negatives.read_ids`) the I/O tie's verdict on the negatives it reads. ``ok`` unless a
+    row that ran says otherwise: a pending check's row (``ok`` None) or one that didn't run is the report's to list, not
+    a failure."""
     path = None
     if adv is not None:
         work.mkdir(parents=True, exist_ok=True)
@@ -638,9 +637,8 @@ def negatives(runs: dict[str, Path], work: Path, adv, clock, ids: Path | None = 
 #: the live tampers only the I/O tie refuses, each owed a refusal by content at exactly the link-windows it changed
 TIE_OWED = ("token",)
 #: what the I/O tie must establish on the honest run beside its acceptance, for the report to be OK (`tie_gate`): each a
-#: key of `negatives.tie_run`'s row that must be true, with the report's reason when it isn't. CERT-VARLEN's compact
-#: finish (each response's length and finish held to the advice, `active.compact_finish_violations`; REDTEAM phase 12
-#: target 3) goes here if the tie reports it as a key of its own; as a failing part it already refuses the honest run.
+#: key of `negatives.tie_run`'s row that must be true, with the report's reason when it isn't. The compact
+#: finish (each response's length and finish held to the advice, `active.compact_finish_violations`) goes here if the tie reports it as a key of its own; as a failing part it already refuses the honest run.
 TIE_REQUIRED: dict[str, str] = {
     "finish": "the I/O tie didn't establish the honest run's finish (`negatives.tie_run`'s finish: on a compact run "
               "its records held to its sampled ids, `active.compact_finish_violations`)"}
@@ -719,7 +717,7 @@ def uncovered(run: Path, ids: dict[str, list[int]]) -> str | None:
     advice profile: each request's user and served ``output``), or None when every one has a sampled id for each of
     its served outputs. `negatives.tie_run` gives each sampled id one row of the Commit's port and has no backstop for
     a served output with none (its unplaced count is committed outputs no cell carries), so ids that miss a request,
-    or name it with fewer ids than it served, leave those outputs untied (REDTEAM phase 14)."""
+    or name it with fewer ids than it served, leave those outputs untied."""
     io = _read_json(run / "io.json")
     if not isinstance(io, dict) or not isinstance(io.get("requests"), list):
         return "no certified I/O (io.json) to hold the sampled ids to"
@@ -738,14 +736,14 @@ def uncovered(run: Path, ids: dict[str, list[int]]) -> str | None:
 
 
 def tie(runs: dict[str, Path], ep: Path | None, ids: Path | None, why: str | None = None) -> dict:
-    """The I/O tie's verdict on each run (NEG's `tie_run`: IO-TIE's reference in the clear, on
+    """The I/O tie's verdict on each run (`negatives.tie_run`: `io_tie`'s reference in the clear, on
     `negatives.TIE_STAND_INS`), each run's sampled ids and client aborts ``ids``' (`negatives.read_ids` and
     `negatives.read_aborted`, one map for every run) or else the endpoint's records' ``ep`` for its own link-windows
     (`served_rows`, `negatives.commit_aborted`), and whether it is the verdict the run owes
     (`negatives.tie_ok`): honest's accepted, a negative's it reads refused by its part, and token's (`TIE_OWED`) at
     exactly the link-windows its changed ids fall in (`changed_windows`). A run has no verdict when its ids don't cover
     its certified requests (`uncovered`), when it lacks what the tie opens, or when its tie raises; the row says why.
-    Not run without IO-TIE in the tree or without the ids (``why``: why the endpoint's records aren't here). On the
+    Not run without `io_tie` in the tree or without the ids (``why``: why the endpoint's records aren't here). On the
     advice profile the tie is required: `tie_gate` says what keeps it from passing the report."""
     if NG.io_tie_module() is None:
         return {"ran": False, "why": NG.TIE_MISSING["io-tie"]}
@@ -786,7 +784,7 @@ def tie(runs: dict[str, Path], ep: Path | None, ids: Path | None, why: str | Non
 
 def tie_gate(t: dict | None) -> list[str]:
     """Why the I/O tie (`tie`'s result ``t``) keeps the report from being OK on the advice profile, where it is required;
-    empty when it passes. It fails when it didn't run (no IO-TIE in the tree, no sampled ids), gave the honest run no
+    empty when it passes. It fails when it didn't run (no `io_tie` in the tree, no sampled ids), gave the honest run no
     verdict, didn't accept it, or when a part it must establish beside its verdict (`TIE_REQUIRED`) didn't hold on it.
     The report reads the tie's pass here only: a required part the tie gains fails the report through this."""
     if not t or not t.get("ran"):
@@ -805,21 +803,21 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
     """What the report stood on that isn't yet the chain's own, from what ``r`` (the report) says ran."""
     out, c = [], r.get("chain") or {}
     if not varied_client:
-        out.append("Varied traffic: certifier_serve.py's `rehearse --traffic varied` (CERT-VARLEN, Poisson arrivals, "
+        out.append("Varied traffic: certifier_serve.py's `rehearse --traffic varied` (Poisson arrivals, "
                    "prompts as ids, real EOS) isn't in this tree.")
     if r.get("profile") == ADVICE:
-        out.append("N2 on the advice profile: N2-ADVICE (NetworkAdvisedCounts_v1) hasn't landed, so no link-window has "
-                   "N2's verdict and nothing is proved by n2_zk; the rehearsal's own check (certified I/O, audit, salt) "
-                   "is the verdict.")
+        out.append("N2 on the advice profile: N2's advised counts (NetworkAdvisedCounts_v1) aren't run, so no "
+                   "link-window has N2's verdict and nothing is proved by n2_zk; the rehearsal's own check (certified "
+                   "I/O, audit, salt) is the verdict.")
     a, b = c.get("advice"), c.get("bits") or {}
     served = "served" in b
     if a is None and not served:
         out.append("Advice: none given (--advice, or --endpoint-run for the endpoint's own); a served run's comes from "
-                   "its step trace (ADVICE-SRC).")
+                   "its step trace (`verity-vllm advice`).")
     elif not b.get("bound"):
         out.append(f"Advice: {a['file'] if a else 'the endpoint’s'} is not these runs' ({b.get('bound_why')})"
                    + ("." if served else "; a served run's comes from the committing endpoint's step trace "
-                                         "(ADVICE-SRC)."))
+                                         "(`verity-vllm advice`)."))
     if a is not None and "upgraded" in a["form"]:
         out.append("Advice form: the stand-in's pre-v0 JSON, upgraded to v0 here; the bits are v0's of the upgrade, while "
                    "the prove path committed the file's bytes.")
@@ -832,8 +830,9 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
                    "registered.")
     if served:
         out.append("Advice in the clear: the rehearsal opens each Commit window's advice to its report, where only its "
-                   "registration is public; the compile unit and N2-ADVICE, which take it hidden, haven't landed.")
-    out.append("Coded bits: ENC-CODE's encoding hasn't landed.")
+                   "registration is public; the compile unit and N2's advised counts, which take it hidden, aren't run "
+                   "here.")
+    out.append("Coded bits: the chain doesn't run the advice code (encodings/code_v1.py).")
     p = c.get("prove_path")
     if p is None:
         out.append("Prove path: not given (--prove-path, a prove_path.py run's output).")
@@ -855,10 +854,11 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
         sources = sorted({x["source"] for arm in p["arms"].values() for x in arm["ranks"].values() if x["source"]})
         out.append(f"Prove path: adopted from {p['dir']}, a run of its own (sources {', '.join(sources) or '—'}); it "
                    "proves a TP Commit's step units compiled from that run's advice, not a commit of these runs: the "
-                   "committing endpoint's Commit and ADVICE-SRC's advice are what make it these runs'.")
+                   "committing endpoint's Commit and its own advice (`verity-vllm advice`) are what make it these "
+                   "runs'.")
     n = c.get("negatives") or {}
     if not n.get("ran"):
-        out.append(f"Negatives (NEG's registry): {n.get('why') or 'not run'}.")
+        out.append(f"Negatives (the negatives registry): {n.get('why') or 'not run'}.")
     else:
         pending = sorted(k for k, x in n["rows"].items() if not x.get("ran") or x.get("ok") is None)
         if pending:
@@ -869,21 +869,21 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
         elif not all(t["ran"] for t in ties):
             out.append(f"I/O tie: {next(t['why'] for t in ties if not t['ran'])}.")
         else:
-            out.append("I/O tie: IO-TIE's reference in the clear on a fake upstream's cells and Commit port of the advice "
-                       "and the given ids, not the warden's cells under its root (WARDEN) and vllm's Commit proved in an "
-                       "IoTieWindow unit.")
+            out.append("I/O tie: `io_tie`'s reference in the clear on a fake upstream's cells and Commit port of the "
+                       "advice and the given ids, not the warden's cells under its root and the endpoint's Commit "
+                       "proved in an IoTieWindow unit.")
     t = c.get("tie")
     if t is not None and t["ran"]:
-        out.append(f"I/O tie: IO-TIE's reference in the clear on NEG's stand-ins (each window's certified frames held to "
-                   f"their head and committed under fake salts in place of the warden's cells, the sampled ids from "
-                   f"{t['from']} under fake salts in place of the Commit's port), not vllm's Commit and the warden's "
-                   "cells in an IoTieWindow unit.")
+        out.append("I/O tie: `io_tie`'s reference in the clear on the negatives' stand-ins (each window's certified "
+                   "frames held to their head and committed under fake salts in place of the warden's cells, the "
+                   f"sampled ids from {t['from']} under fake salts in place of the Commit's port), not the endpoint's "
+                   "Commit and the warden's cells in an IoTieWindow unit.")
     where = str(r.get("where") or "")
     if where.startswith("off the prover's node"):
         out.append("Auditor host: the certifier ran on another node than the endpoint's, through an ssh forward, not on "
-                   "the auditor host (#3433 brings the gate's runs: --from RUN.tgz).")
+                   "the auditor host (--from takes a gate run's fetch).")
     elif not where.startswith("gate: "):
-        out.append("Auditor host: the certifier ran off the gate (#3433 brings the gate's runs: --from RUN.tgz).")
+        out.append("Auditor host: the certifier ran off the gate (--from takes a gate run's fetch).")
     return out
 
 
@@ -971,8 +971,8 @@ def markdown(c: dict) -> list[str]:
         cfg = b["config"]
         lines += ["", "## Advice bits per link-window", "",
                   f"T = {b['T']} buckets a window. v0: I1's `bits_by_window` ({b['v0_total']} bits in all). Derived: "
-                  "ENC-DERIVED's residual at its least widths, charged by I1's rule, with the release sent (unshaped) "
-                  "and derived (shaped); forced: the residual's fields only witness fixes. "
+                  "the derived rules' residual at its least widths, charged by I1's rule, with the release sent "
+                  "(unshaped) and derived (shaped); forced: the residual's fields only witness fixes. "
                   + ("Each Commit window's advice is charged per bucket and placed at its first step's bucket. "
                      if served else "") + "Serving config: "
                   + (f"{json.dumps(cfg, sort_keys=True)}, read off {b['config_from']}, so these bits and the "
@@ -1035,7 +1035,7 @@ def markdown(c: dict) -> list[str]:
                       f"{each(x, 'proof_bytes')} | {_cell(x['source'])} |" for r, x in arm["ranks"].items()]
     n = c.get("negatives")
     if n is not None:
-        lines += ["", "## Negatives (NEG's registry)", ""]
+        lines += ["", "## Negatives (the negatives registry)", ""]
         if not n.get("ran"):
             lines.append(f"Not run: {n.get('why')}.")
         else:
@@ -1054,11 +1054,11 @@ def markdown(c: dict) -> list[str]:
         if not t["ran"]:
             lines.append(f"Didn't run: {t['why']}. The advice profile requires it, so the report isn't OK.")
         else:
-            lines += [f"NEG's `tie_run` on each run: IO-TIE's reference in the clear, the sampled ids from {t['from']}. "
-                      "Required on the advice profile: the report is OK only when the tie accepts the honest run, its "
-                      "ids covering every certified request. Owed: honest accepted, token refused by content at exactly "
-                      "the link-windows its changed ids fall in, drop refused by content; late and extra owe nothing "
-                      "here. Window -1: committed outputs no certified cell carries.", "",
+            lines += ["`negatives.tie_run` on each run: `io_tie`'s reference in the clear, the sampled ids from "
+                      f"{t['from']}. Required on the advice profile: the report is OK only when the tie accepts the "
+                      "honest run, its ids covering every certified request. Owed: honest accepted, token refused by "
+                      "content at exactly the link-windows its changed ids fall in, drop refused by content; late and "
+                      "extra owe nothing here. Window -1: committed outputs no certified cell carries.", "",
                       "| run | verdict | ok | codes | refused link-windows (parts) | changed ids' link-windows | requests "
                       "| outputs | placed | unplaced | frames held egress/ingress | why |",
                       "|---|---|---|---|---|---|---|---|---|---|---|---|"]

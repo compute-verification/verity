@@ -114,7 +114,7 @@ def _with_partitions(q: dict[str, Any], key: str, queries: Mapping[str, Mapping[
 
 
 def merge_ranks(parts: list[dict[str, Any]]) -> dict[str, Any]:
-    """The manifest of a TP row from its W rank manifests (TP-04, v1's rank rule): ranks 0..W-1 each exactly once under one world, one
+    """The manifest of a TP workload from its W rank manifests (v1's rank rule): ranks 0..W-1 each exactly once under one world, one
     Program digest per rank, the same engine-step composition on every rank.  Every row keeps its rank's digest (`program_digest_per_rank`);
     the header digest is the labelled fold of the rank digests (`tp-ranks-fold`).  `tp_peer_binding`: every collective output and rank-local
     partial of rank r has each peer's partial at the same (request, step, invocation, module) -- an unbound one makes the merge incomplete."""

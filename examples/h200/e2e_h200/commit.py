@@ -42,9 +42,9 @@ BACKENDS = ("slots", "reference", "host", "device")
 LAG = 2
 
 
-def tables(shape: Shape) -> list[list[Table]]:
+def tables(shape: Shape, fused: frozenset[str] = frozenset()) -> list[list[Table]]:
     """The step's groups of tables in the order the step writes them: the embedding, each layer's ops, the head's."""
-    return [[t for t, _ in g] for g in Map(shape).groups()]
+    return [[t for t, _ in g] for g in Map(shape, fused).groups()]
 
 
 def _slots() -> tuple[Any, Any]:
@@ -55,10 +55,15 @@ def _slots() -> tuple[Any, Any]:
     return S, G
 
 
-def layout(shape: Shape) -> Any:
+def layout(shape: Shape, fused: frozenset[str] = frozenset()) -> Any:
     """The step's `slots.Layout`: each group of the map, its tensors the tables' codes (and a quantizer's scale after its
     codes), one commit unit each unit of the map, its rows that unit's output rows."""
-    return _layout(shape)[0]
+    return _layout(shape, fused)[0]
+
+
+def fusion_tag(fused: frozenset[str]) -> str:
+    """A layout name's mark of the map's fusions: none for the unfused map, else ``-fused-`` and their names."""
+    return "-fused-" + "-".join(sorted(fused)) if fused else ""
 
 
 def _group(entries: list[Entry]) -> tuple[L.Group, list[tuple[str, int]]]:
@@ -72,15 +77,15 @@ def _group(entries: list[Entry]) -> tuple[L.Group, list[tuple[str, int]]]:
         scale = (L.Row((L.Part(src + 1, 0, 4),)),)
         for u in us:
             firsts.append((u.name, len(units)))
-            units += [(L.Row((L.Part(src, u.offset + i * u.stride, u.nbytes),)),) + (scale if u.scale else ())
-                      for i in range(u.count)]
+            units += [scale if u.scale_only else (L.Row((L.Part(src, u.offset + i * u.stride, u.nbytes),)),)
+                      + (scale if u.scale else ()) for i in range(u.count)]
     return L.Group(tuple(sources), tuple(units)), firsts
 
 
-def _layout(shape: Shape) -> tuple[Any, dict[str, int]]:
+def _layout(shape: Shape, fused: frozenset[str] = frozenset()) -> tuple[Any, dict[str, int]]:
     """The layout, and each family's first commit unit. Every layer's group is one `L.Group` (their rows are alike)."""
     S, _ = _slots()
-    m = Map(shape)
+    m = Map(shape, fused)
     layer = _group(m.layer(0))[0]
     groups, bases, u0 = [], {}, 0
     for i, entries in enumerate(m.groups()):
@@ -88,7 +93,7 @@ def _layout(shape: Shape) -> tuple[Any, dict[str, int]]:
         groups.append(g)
         bases.update({name: u0 + k for name, k in firsts})
         u0 += len(g.units)
-    return S.Layout(f"e2e-h200/{shape.name}/c{shape.context}/families/v1", tuple(groups)), bases
+    return S.Layout(f"e2e-h200/{shape.name}/c{shape.context}/families{fusion_tag(fused)}/v1", tuple(groups)), bases
 
 
 def _firsts(entries: list[Entry]) -> list[tuple[str, int]]:
@@ -183,23 +188,24 @@ class Roots:
 
 
 class Committer:
-    """``begin`` a step, ``group`` each of its groups as its tables are written (in `tables` order), ``finish`` it."""
+    """``begin`` a step, ``group`` each of its groups as its tables are written (in `tables` order), ``finish`` it. ``fused``:
+    the map's fusions (`plan.FUSIONS`), whose tables the driver writes."""
 
     def __init__(self, backend: str, context: bytes, key: bytes, shape: Shape | None = None, device: Any = "cpu",
-                 salt: Callable[[int], bytes] | None = None) -> None:
+                 salt: Callable[[int], bytes] | None = None, fused: frozenset[str] = frozenset()) -> None:
         if backend not in BACKENDS:
             raise ValueError(f"the commit backend is one of {BACKENDS}, not {backend!r}")
         if len(context) != 64 or len(key) != 32:
             raise ValueError("the context is 64 bytes (the live coin commitment's root) and the row key 32")
-        self.backend, self.context, self.key, self.salt = backend, context, key, salt
+        self.backend, self.context, self.key, self.salt, self.fused = backend, context, key, salt, frozenset(fused)
         self.streams = backend == "slots"
         if self.streams:
             if shape is None:
                 raise ValueError("the slots backend lays out a shape's tables")
             S, G = _slots()
             self.S, self.G, self.E = S, G, G.E
-            self.groups = tables(shape)
-            self.layout, self.bases = _layout(shape)
+            self.groups = tables(shape, self.fused)
+            self.layout, self.bases = _layout(shape, self.fused)
             dev = torch.device(device)
             self.plan = G.Plan(context, self.layout, device=dev if dev.type == "cuda" else "host")
 

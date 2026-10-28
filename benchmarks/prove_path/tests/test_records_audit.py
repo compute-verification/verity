@@ -521,46 +521,6 @@ def test_the_windows_own_values_the_circuit_reads_are_pinned_only_when_they_are_
             RA.window_pins(bad, circuit)
 
 
-def test_the_toys_ties_are_pinned_and_its_embedding_fed_rows_are_free(tmp_path):
-    """The toy's wired window (`verity_torch_loop`, registered weights): its six ties, each written by a unit's output port
-    and read by the next unit's input port, are pinned; the first linears' ``(x, sx)`` (the embedding's rows, committed as
-    activations) are no parameter of the circuit, so they are neither pinned nor registered, and are its 2,112 free bits.
-    Naming them as parameters read by those linears' input ports (V3b's crafted window) makes them untied: the count is
-    the same 2,112 free bits, where counting them registered would leave none."""
-    sys.path.insert(0, str(HERE.parents[2] / "integrations" / "torch_loop"))
-    from verity_torch_loop import loop as L
-
-    loop = L.TorchLoop(L.Model(), [3, 7], steps=2, wired=True, registered=True)
-    weights = L.commit_weights(L.Model(), wired=True)
-    win = loop.window(D.parse_law("stratified:3"), cap=1, weights=weights)
-    win.write(win.close(salt_key=bytes(32)), tmp_path, {"loop": "torch-loop",
-                                                         "activations": L.activations(loop.model, loop.commit_activations())},
-              registrar=R)
-    doc = json.loads((tmp_path / "circuit.json").read_text())
-    w = json.loads((tmp_path / "registration.json").read_text())["window"]
-    ties, untied = RA.window_pins(w, doc)
-    assert set(ties) == {"up", "up_codes", "up_scale", "down", "down_codes", "down_scale"} and untied == {}
-    assert {"x", "sx"} <= set(w["activations"]["values"]) and not {"x", "sx"} & set(ties)
-    roots = IF.registered_roots(w)
-    assert roots == {v: r.root.hex() for v, r in {**weights, **loop.ties}.items()}
-    pin = {**{v: r.root.hex() for v, r in weights.items()}, **{v: e["root"] for v, e in ties.items()}}
-    honest = RA.declared_count(doc, 0, pins=pin, roots=roots, untied=untied)
-    h, r = L.H, 2
-    assert honest["free"] == r * 16 * (h // 2 + 2) == 2112
-    tm = descriptor_id(L.linear_template(h))
-    crafted = json.loads(json.dumps(doc))
-    crafted["registered"]["params"] |= {"x": r * h // 2, "sx": r * 2}
-    crafted["registered"]["reads"] += [IF.Read(tm, "x", "x", 0, (r,), 0, (h // 2,)).doc(),
-                                       IF.Read(tm, "sx", "sx", 0, (r,), 0, (2,)).doc()]
-    ties2, untied2 = RA.window_pins(w, crafted)
-    assert set(ties2) == set(ties) and set(untied2) == {"x", "sx"}
-    pins = {**pin, **{v: e["root"] for v, e in untied2.items()}}
-    roots2 = {**roots, **{v: e["root"] for v, e in untied2.items()}}
-    assert RA.declared_count(crafted, 0, pins=pins, roots=roots2)["free"] == 0
-    fixed = RA.declared_count(crafted, 0, pins=pins, roots=roots2, untied=untied2)
-    assert (fixed["free"], fixed["registered"], fixed["untied"]) == (2112, honest["registered"], ["sx", "x"])
-
-
 def test_a_window_with_row_tables_is_refused_until_its_records_carry_their_segment_roots(written, monkeypatch):
     mine, doc = IF.of_records(written.dir, D.parse_law(LAW), IF.resolve)
     assert not mine.row_tables

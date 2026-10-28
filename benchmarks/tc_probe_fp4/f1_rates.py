@@ -53,6 +53,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import probe as P  # noqa: E402
+from verity_config.settings import SHARED  # noqa: E402
 
 ARCH = "sm_120a"
 SCHEMA = "pouw-rtxpro/f1-rates-sm120/v1"
@@ -968,7 +969,7 @@ class F1Device:
 
 class FakeF1:
     """CPU stand-in for the driver's dry run: invented rates (NVFP4 at 16 MMAs per SM per 128 clocks, everything else slower per
-    product).  Its numbers are made up; ``--fake-silicon`` never runs under a research run."""
+    product).  Its numbers are made up; ``--fake-silicon`` never runs with ``RESEARCH_RUN_ID`` set."""
 
     SMS, MHZ = 188, 2000.0
 
@@ -977,7 +978,7 @@ class FakeF1:
 
     def identity(self) -> dict:
         return {"device": "FAKE SILICON", "compute_capability": "12.0", "driver": None, "gpu_uuid": "GPU-fake", "backend": "fake",
-                "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES")}
+                "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES}
 
     def clocks(self, uuid):
         return None
@@ -1218,12 +1219,12 @@ def scan_libs(args) -> int:
     (out / "libscan.json").write_text(json.dumps(doc, indent=1) + "\n")
     print("LIBSCAN", [(r["path"], r.get("functions"), r.get("complete"), len(r.get("multiply_opcodes", {}))) for r in recs], flush=True)
     ok = all(r.get("complete") for r in recs if "error" not in r)
-    if os.environ.get("RESEARCH_RUN_ID"):
-        res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": os.environ.get("RESEARCH_RUN_ID"),
+    if SHARED.RESEARCH_RUN_ID:
+        res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": SHARED.RESEARCH_RUN_ID,
                "label": "Measured (the sm_120 SASS of NVIDIA's libraries; no device)",
                "method": "cuobjdump -arch sm_120 -sass of each library, every opcode counted; the multiply-family ones kept",
                "workload_fingerprint": {"tool": "tc_rates_fp4", "version": "1", "step": "scan-libs",
-                                        "libraries": {r["path"]: r.get("sha256") for r in recs}, "commit": os.environ.get("RESEARCH_SOURCE_COMMIT")},
+                                        "libraries": {r["path"]: r.get("sha256") for r in recs}, "commit": SHARED.RESEARCH_SOURCE_COMMIT},
                "validation": {"status": "passed" if ok else "failed", "checker": "every present library's SASS dumped to the end",
                               "detail": "; ".join(f"{r['path']}: {r.get('error') or r.get('functions')}" for r in recs),
                               "evidence": ["libscan.json"]},
@@ -1319,12 +1320,12 @@ def collect(args) -> int:
     meas += [{"name": f"{n}_products_per_sm_per_clock", "value": v["products_per_sm_per_clock"], "unit": "products/(SM*cycle)"}
              for n, v in rows.items()]
     clocks = sorted({f["clocks"] for f in fams.values()})
-    res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": os.environ.get("RESEARCH_RUN_ID"),
+    res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": SHARED.RESEARCH_RUN_ID,
            "clocks": clocks[0] if len(clocks) == 1 else "mixed", "label": "Measured" if clocks == ["locked-2100"] else "Measured, " + ",".join(clocks),
            "method": "F1 instruction microbenchmarks from the fill queue (one family per chunk, each against dense NVFP4 in the same "
                      "process), collected; see f1_table.json",
            "workload_fingerprint": {"tool": "tc_rates_fp4", "version": "1", "build_so_sha256": b["so_sha256"],
-                                    "families": {k: v["sha256"] for k, v in fams.items()}, "commit": os.environ.get("RESEARCH_SOURCE_COMMIT")},
+                                    "families": {k: v["sha256"] for k, v in fams.items()}, "commit": SHARED.RESEARCH_SOURCE_COMMIT},
            "validation": {"status": "passed" if ok else "failed", "checker": "every family's gates (UUID, cc 12.0, SASS per loop, no FTZ FP32, "
                           "outputs finite and bit-identical, one wave) passed in its chunk, on this build", "detail": "; ".join(failures) or
                           f"{len(fams)} families, {len(rows)} rows", "evidence": ["f1_table.json"]},
@@ -1351,17 +1352,17 @@ def build_cmd(args) -> int:
         print(f"  {n:28s} {'ok ' if g['ok'] else 'BAD'} {tag:12s} {sorted(ops)}")
     for n, m in rec["refused"].items():
         print(f"  refused {n}: {(m or [''])[0][:140]}")
-    res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": os.environ.get("RESEARCH_RUN_ID"),
+    res = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": SHARED.RESEARCH_RUN_ID,
            "label": "Measured (ptxas acceptance and SASS of each form; no device)",
            "method": "each F1 form compiled alone for sm_120a, then the accepted forms as one library; loop opcode histograms from cuobjdump",
            "workload_fingerprint": {"tool": "tc_rates_fp4", "version": "1", "step": "build", "so_sha256": rec["so_sha256"],
-                                    "source_sha256": rec["source_sha256"], "commit": os.environ.get("RESEARCH_SOURCE_COMMIT")},
+                                    "source_sha256": rec["source_sha256"], "commit": SHARED.RESEARCH_SOURCE_COMMIT},
            "validation": {"status": "passed" if rec["ok"] else "failed", "checker": "SASS per timed loop; no FADD/FFMA/FMUL .FTZ in the library",
                           "detail": f"{len(rec['kernels'])} accepted, {len(rec['refused'])} refused", "evidence": ["build.json"]},
            "measurements": [{"name": "forms_accepted", "value": len(rec["kernels"]), "unit": "forms"},
                             {"name": "forms_refused", "value": len(rec["refused"]), "unit": "forms"}],
            "measurement_files": ["build.json"], "artifacts": []}
-    if os.environ.get("RESEARCH_RUN_ID"):
+    if SHARED.RESEARCH_RUN_ID:
         (out / "result.json").write_text(json.dumps(res, indent=1) + "\n")
     return 0 if rec["ok"] else 1
 
@@ -1397,8 +1398,8 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--out", required=True)
     c.add_argument("--tolerance", type=float, default=0.02)
     args = ap.parse_args(argv)
-    if getattr(args, "fake_silicon", False) and os.environ.get("RESEARCH_RUN_ID"):
-        ap.error("--fake-silicon is a dry run and never publishes: not under a research run")
+    if getattr(args, "fake_silicon", False) and SHARED.RESEARCH_RUN_ID:
+        ap.error("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     return {"build": build_cmd, "run": run_family, "scan-libs": scan_libs, "collect": collect}[args.cmd](args)
 
 

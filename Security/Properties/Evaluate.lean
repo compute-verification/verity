@@ -27,8 +27,9 @@ fields (`toCore`), which has an inverse (`ofCore`). A function that returns one 
 Stated here: the scalar primitives (`Definitions.Core.Scalar`), the FP32 and BF16 arithmetic (`Definitions.Core.Fp32`),
 the casts (`Definitions.Core.Prims`), the BF16 tensor-core step and its two dot primitives (`Definitions.Core.TC`), and
 the Boolean gates on bits, against Lean core's `Bool` (`Gates`). Not stated, because the definitions they name import
-Mathlib and this module imports none of it: the gates' equality to `Verity.Boolean`'s, the FP8 and FP4 steps
-(`Pouw.Fp8Atom`, `Pouw.PearlC.Fp4`) and the PoUW words (`Pouw.NCP`, `Pouw.Basic`, `Pouw.PearlC.RowCircuit`).
+Mathlib and this module imports none of it: the gates' equality to the Boolean circuit's (`Definitions.Core.Boolean`),
+the FP8 and FP4 steps (`Pouw.Fp8Atom`, `Pouw.PearlC.Fp4`) and the PoUW words (`Pouw.NCP`, `Pouw.Basic`,
+`Pouw.PearlC.RowCircuit`).
 -/
 
 namespace Properties.Evaluator
@@ -234,16 +235,16 @@ end TC
 
 /-! ## The Boolean gates on bits
 
-`Verity.Boolean`'s gates are AND, XOR (`xorSum`, the fold `foldr Bool.xor false`) and NOT of `Bool`s, but its module imports
-Mathlib, so the evaluator's gates are stated here against Lean core's `Bool` operations of the same names: on operands
-that are bits (`Bool.toNat`), each gate's word is the bit of the operation. -/
+The Boolean circuit's gates (`Definitions.Core.Boolean`) are AND, XOR (`xorSum`, the fold `foldr Bool.xor false`) and
+NOT of `Bool`s, but its module imports Mathlib, so the evaluator's gates are stated here against Lean core's `Bool`
+operations of the same names: on operands that are bits (`Bool.toNat`), each gate's word is the bit of the operation. -/
 
 namespace Gates
 
 /-- `And<n>_v1` on bits is the conjunction of its operands. -/
 def AndBits : Prop := ∀ xs : Array Bool, Evaluate.andBits (xs.map Bool.toNat) = (xs.all id).toNat
 
-/-- `Xor<n>_v1` on bits is the XOR of its operands, as `Verity.Boolean.xorSum` folds it. -/
+/-- `Xor<n>_v1` on bits is the XOR of its operands, as `FlockSoundness.Audit.xorSum` folds it. -/
 def XorBits : Prop := ∀ xs : Array Bool, Evaluate.xorBits (xs.map Bool.toNat) = (xs.toList.foldr Bool.xor false).toNat
 
 /-- `Not_v1` on a bit is its negation. -/

@@ -1,7 +1,7 @@
 """The I/O tie's prototype (`io_tie`) on the warden's own egress: variable-length responses on a link served through
 the warden's schedule (`warden.Warden._egress` cuts every cell, the certifier's grid lays them out a row a bucket, as
 `warden_rows` registers them); advice-v0-shaped outputs, from which the verifier computes each window's map (through
-advice v1's order permutation where the engine's numbering isn't the arrival order, as on TRACE-CORPUS's heavy trace);
+advice v1's order permutation where the engine's numbering isn't the arrival order, as on the corpus's heavy trace);
 and the Commit's sampled ids, one hiding row a step, which each bucket's unit reads at its outputs' steps as
 registered rows. The reference accepts every honest window and refuses every way the cells can differ from the map and
 the port, every port that isn't the Commit's and a connection the warden failed; the Boolean parts agree with it."""
@@ -429,7 +429,7 @@ def port_refusals(inst: IT.Instance, link: Link, seed: bytes = b"w") -> list[str
 
 
 def test_the_hosts_registered_reads_climb_the_domain_the_verifiers_port_names():
-    """REDTEAM phase 19 #2: `warden_rows.refusal` climbs under the `dom` it is handed, and the Lean verifier under its
+    """`warden_rows.refusal` climbs under the `dom` it is handed, and the Lean verifier under its
     port's own `domain` and `leaves`, so a port naming another domain or leaf count (another Commit's, say) gets
     another verdict there: the host's read refuses to stand in for it rather than answer for the domain it was
     handed."""
@@ -535,12 +535,12 @@ def serve_trace(shape: IT.Shape, trace: dict) -> tuple[Link, list[int]]:
 
 
 def test_the_heavy_traces_honest_egress_is_accepted_through_its_order():
-    """TRACE-CORPUS's heavy trace (`fixtures/warden-heavy-order.json`, from
-    art:d538087522581c66e103caa5e5929dcc10ed8602aa485d8538cff4d5d3943b16): 1,000 requests, 126,502 outputs over buckets
-    301 … 589, whose engine admits in the API server's body-read order, out of the warden's arrival order. Served
-    through the warden's own egress, every egress window of T = 16 buckets of 1,024 lanes is accepted through advice
-    v1's order permutation, each request on its stream from admission. Without it (v0's identity) the map can't be
-    built: the advice's admissions aren't in its numbering's order, which the warden's FIFO would need."""
+    """The trace corpus's heavy trace (`fixtures/warden-heavy-order.json`, whose ``source`` names the trace): 1,000
+    requests, 126,502 outputs over buckets 301 … 589, whose engine admits in the API server's body-read order, out of
+    the warden's arrival order. Served through the warden's own egress, every egress window of T = 16 buckets of 1,024
+    lanes is accepted through advice v1's order permutation, each request on its stream from admission. Without it
+    (v0's identity) the map can't be built: the advice's admissions aren't in its numbering's order, which the
+    warden's FIFO would need."""
     trace = json.loads((Path(__file__).parent / "fixtures" / "warden-heavy-order.json").read_text())
     sh = IT.Shape(256, 16, 1_024, P=1_024, S=2, DS=10)
     link, order = serve_trace(sh, trace)

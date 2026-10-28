@@ -1,11 +1,12 @@
 schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama31-8b-fp8-1gpu-commit-served-width-h200"
-# `llama31-8b-fp8-1gpu-commit-served-width` on one H200 (vy-dc-h200, sm_90a): the served Commit (rows-sha512 hiding
+# `llama31-8b-fp8-1gpu-commit-served-width` on one H200 (sm_90a): the served Commit (rows-sha512 hiding
 # leaves in a frame-v3-sha512 tree), commit@compiled / stock-fp8@compiled, at b1, b8 and b32, with that spec's arms,
-# sweep, reps and engine settings, so its rows differ from the RTX PRO 6000's in the device alone. The block utilization
+# sweep, reps and engine settings, so its rows differ from the RTX PRO 6000's in the device alone. The `blocks` utilization
 # and pinned 60 GiB pool (458,752 tokens) are the RTX's: two such engines don't fit one H200 either, so every point runs
-# in blocks. Launch with `verity-bench run SPEC --direct vy-dc-h200` (the node's one GPU through its slot and gpu-lease).
+# in `blocks`. Launch with `verity-bench run SPEC --direct NODE`, NODE an H200 VM in
+# `verity_bench.jobs.DIRECT_NODES` (the node's one GPU through its slot and gpu-lease).
 arms = ["stock-fp8@compiled", "commit@compiled"]
 arm_modules = ["verity_bench.vllm.commit_arm:COMMIT_COMPILED"]
 sweep = "width"
@@ -34,6 +35,6 @@ block_gpu_memory_utilization = 0.80
 max_num_batched_tokens = 16384
 block_kv_cache_memory_bytes = 60129542144
 
-# The point's run, its slot and its lease, the wait for kernels' leases on the node's one GPU included.
+# The point's run, its slot and its lease, the wait for other leases on the node's one GPU included.
 [admission]
 max_minutes = 120

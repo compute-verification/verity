@@ -1,4 +1,4 @@
-"""L2: physical view geometry (`verity_vllm.observe.fold.views`) — shapes, transposes, column slices, expands, rank 0."""
+"""Physical view geometry (`verity_vllm.observe.fold.views`) — shapes, transposes, column slices, expands, rank 0."""
 
 from __future__ import annotations
 

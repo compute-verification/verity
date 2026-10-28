@@ -31,7 +31,7 @@ time (on the GPU): plain INT8, s8_linear's `int_mm.linear` with its eager epilog
 epilogue as four eager kernels,
 against each build's J10-R call (seeds, rows and units: kh_units_multi_j10r_sm on every SM, the served launch), arms
 interleaved rep by rep; overhead = units / plain and gamma = (plain + units) / plain, a call and summed over a layer's
-linears (q, kv, o, up, down; the head once a step). With --wgmma, KP2-S8's wgmma.linear (the fastest exact plain INT8 on
+linears (q, kv, o, up, down; the head once a step). With --wgmma, s8_linear's wgmma.linear (the fastest exact plain INT8 on
 the H200) at its tuned config is a second plain arm in the same rotation, its bf16 output equal to
 plain's on every cell. After the reps every build's receipts are compared word for word with the base's.
 """
@@ -40,7 +40,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import random
 import statistics
 import sys
@@ -50,6 +49,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from verity_config.settings import of
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "served_h1"))
@@ -59,8 +59,9 @@ import j10r_units as J10R
 from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import seeds as SD
 
-#: the frozen shape's linears (n, k), KS8-SIMPLE's SHAPES (#4472; MQA decoder: width 16384, 256 query heads of 64, 1 KV head,
-#: MLP 65536, 256 tokens)
+settings = of(__file__)
+#: the frozen shape's linears (n, k), the H200 demo's MQA decoder (benchmarks/torch_gpu/j10r_sm90/shape.py's LINEARS:
+#: width 16384, 256 query heads of 64, 1 KV head, MLP 65536, 256 tokens)
 LINEARS = {"q": (16384, 16384), "kv": (128, 16384), "o": (16384, 16384), "up": (65536, 16384), "down": (16384, 65536),
            "head": (256, 16384)}
 LAYER = ("q", "kv", "o", "up", "down")
@@ -353,7 +354,7 @@ def wgmma_of(d: str):
     """The s8 wgmma kernel's wgmma.linear: its wgmma.py and configs.py from DIR beside build.sh's ship
     (s8_wgmma.cubin, sass.json, MANIFEST.sha256), and a (M, N, K) -> Cfg pick by its tuned table as its run.py's
     table_cfg reads it, else its default."""
-    os.environ.setdefault("S8_WGMMA_CUBIN", str(Path(d) / "s8_wgmma.cubin"))
+    settings.setdefault("S8_WGMMA_CUBIN", str(Path(d) / "s8_wgmma.cubin"))
     sys.path.insert(0, d)
     import wgmma as W
     from configs import CONFIGS
@@ -381,7 +382,7 @@ def time_(args) -> int:
     plains = ["plain"] + (["wgmma"] if W else [])
     doc = {"schema": "j10r90/time/v1", "device": clock.name, "sms": torch.cuda.get_device_properties(0).multi_processor_count,
            "libs": dict(v.partition("=")[::2] for v in args.lib), "plain": "int_mm.linear (eager)",
-           **({"wgmma": "KP2-S8's wgmma.scaled_mm at its tuned table's config", "wgmma_identity": W.lib().identity()}
+           **({"wgmma": "s8_linear's wgmma.scaled_mm at its tuned table's config", "wgmma_identity": W.lib().identity()}
               if W else {}),
            "units": "kh_seeds_j10r + kh_units_multi_j10r_sm at 1/1", "reps": args.reps,
            "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "calls": []}
@@ -539,7 +540,7 @@ def main() -> int:
     ap.add_argument("--dump", help="verify: check's out/ (j10r90-check.json and .npz)")
     ap.add_argument("--jobs", type=int, default=8)
     ap.add_argument("--v6", type=int, default=1, help="verify: units a call also taken through v6 (stream=True)")
-    ap.add_argument("--wgmma", help="time: a dir with KP2-S8's s8_linear ship and its wgmma.py, configs.py: a second plain arm")
+    ap.add_argument("--wgmma", help="time: a dir with the s8_linear ship and its wgmma.py, configs.py: a second plain arm")
     args = ap.parse_args()
     args.ms = [int(x) for x in args.ms.split(",")]
     args.linears = [x for x in LINEARS if x in args.linears.split(",")]

@@ -2,7 +2,7 @@
 
     python benchmarks/tc_probe_fp4/w1_price.py --out $RESEARCH_RUN_DIR --expect-uuid GPU-... [--rows nvf4,mxf4,...] [--reps 10]
     python benchmarks/tc_probe_fp4/w1_price.py --out /tmp/w1 --sass-only          # build + SASS gate, no device
-    python benchmarks/tc_probe_fp4/w1_price.py --out /tmp/w1 --fake-silicon       # CPU dry run of the driver (never under a research run)
+    python benchmarks/tc_probe_fp4/w1_price.py --out /tmp/w1 --fake-silicon       # CPU dry run (refused with RESEARCH_RUN_ID set)
 
 Each row is one ``mma.sync`` of ``rows_fp4.cuh`` (the mnemonic the probe's capture gates), timed by ``w1_price.cu``:
 
@@ -65,6 +65,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import probe as P  # noqa: E402
 import sparse as S  # noqa: E402
+from verity_config.settings import SHARED  # noqa: E402
 
 SOURCE = "w1_price.cu"
 ARCH = "sm_120a"
@@ -381,14 +382,14 @@ class W1Device:
 
 class FakeW1:
     """CPU stand-in for the driver's dry run: a 188-SM part at 2,000 MHz issuing one MMA per SM per 8 clocks (K=64) or 4 (K=32).
-    Its numbers are invented; ``--fake-silicon`` never runs under a research run."""
+    Its numbers are invented; ``--fake-silicon`` never runs with ``RESEARCH_RUN_ID`` set."""
 
     tcgen05 = False
     SMS, MHZ = 188, 2000.0
 
     def identity(self) -> dict:
         return {"device": "FAKE SILICON", "compute_capability": "12.0", "driver": None, "gpu_uuid": "GPU-fake", "backend": "fake",
-                "cuda_visible_devices": os.environ.get("CUDA_VISIBLE_DEVICES")}
+                "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES}
 
     def clocks(self, uuid):
         return None
@@ -480,8 +481,8 @@ def main(argv: list[str] | None = None) -> int:
     bad = [r for r in rows if r not in ROWS] + [o for o in ops if o not in OPS]
     if bad:
         ap.error(f"unknown rows or ops {bad}")
-    if args.fake_silicon and os.environ.get("RESEARCH_RUN_ID"):
-        ap.error("--fake-silicon is a dry run and never publishes: not under a research run")
+    if args.fake_silicon and SHARED.RESEARCH_RUN_ID:
+        ap.error("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     scale_update = not args.no_scale_update
     plan = variants(rows, scale_update)
     items = [("mma", r, m) for r, m in plan] + [("op", o, None) for o in ops]
@@ -690,7 +691,7 @@ def finish(out: Path, record: dict, failures: list[str], args, per_variant: dict
                          "unit": "fp8 MAC", "label": fp8["nvf4_quantize_per_element"]["label"]})
         meas.append({"name": "elapsed", "value": record["elapsed_s"], "unit": "s"})
     ident = record["identity"]
-    doc = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": os.environ.get("RESEARCH_RUN_ID"),
+    doc = {"schema": "research/result/v0.1", "kind": "bench-result/v1", "run_id": SHARED.RESEARCH_RUN_ID,
            "device": ident.get("device"), "gpu_uuid": ident.get("gpu_uuid"), "driver": ident.get("driver"), "nvcc": ident.get("nvcc"),
            "cuda_visible_devices": ident.get("cuda_visible_devices"), "clocks": record.get("clocks", "unlocked"),
            "label": "Measured" + ("" if record.get("clocks", "unlocked") != "unlocked" else ", unlocked clocks"),
@@ -707,7 +708,7 @@ def finish(out: Path, record: dict, failures: list[str], args, per_variant: dict
                                     "warps_per_sm": args.warps_per_sm, "op_warps_per_sm": args.op_warps_per_sm,
                                     "latency_iters": args.latency_iters, "seed": args.seed,
                                     "operands_sha256": record.get("operands_sha256"), "op_inputs_sha256": record.get("op_inputs_sha256"),
-                                    "commit": os.environ.get("RESEARCH_SOURCE_COMMIT")},
+                                    "commit": SHARED.RESEARCH_SOURCE_COMMIT},
            "validation": {"status": "passed" if ok else "failed",
                           "checker": "device UUID + cc 12.0; cuobjdump opcode counts per kernel and per op loop; outputs finite and "
                                      "bit-identical across two launches (no arithmetic check: probe.py's)", "detail": detail,

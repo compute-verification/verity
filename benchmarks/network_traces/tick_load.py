@@ -3,7 +3,7 @@ this process's own CPUs.
 
     python tick_load.py --out DIR [--hogs-per-cpu 3] [--requests 400] [--in-flight 4] [--tokens 64]
         [--token-ms 25] [--delta-buckets 52] [--profile planned|served] [--strategies honest[,late,extra]]
-        [--secret-bit]
+        [--secret-bit] [--paced-ms MS]
 
 It starts a stub OpenAI streaming endpoint on loopback (`/v1/models`, `/tokenize`, and `/v1/completions`, each
 completion `max_tokens` chunks `--token-ms` apart, side by side, as vLLM decodes the requests in flight), then
@@ -12,7 +12,11 @@ completion `max_tokens` chunks `--token-ms` apart, side by side, as vLLM decodes
 `--profile`), and stops the hogs. It writes
 `ticks.json` in `--out`: the CPUs and hogs, the rehearsal's exit and verdict, and per grid the ticks and their lateness
 (median, p99, p99.9, max in ms, the ticks past the slack with their window and bucket, and the windows the honest run
-was refused on). The rehearsal's own outputs are under `--out`/rehearsal.
+was refused on), the requests forwarded to the server past their deadline, by ingress window, with how late in ms
+(`forwards_late`, None for one never forwarded), and from a paced proxy its pacer's release starts and write ends and
+the buckets it got late or released past the slack, each with its write's end and the previous bucket's (`paced`).
+The rehearsal's own outputs are under
+`--out`/rehearsal.
 
 **With `--secret-bit`** the stub times its writes by a secret bit per egress bucket, which is J's question
 (`NetTiming.JitterBounded`): does an offset within a bucket that the prover chooses reach a receiver outside?
@@ -20,13 +24,17 @@ The stub draws a secret of its own, never written, and bucket t's bit and lead (
 and t (`SecretBits`). Once `serve` has written the honest run's `deployment.json` (the plan's probes before it are paced
 as without), each token waits from its pacing to the first slot after it: bucket t's is its lead before t's boundary
 when t's bit is 1, and half a bucket more when 0, so both bits write the same tokens a bucket, and they differ only in
-their phase against the egress tick that writes bucket t. `jitter.json` in `--out` holds, per bucket, its bit, its lead,
+their phase against the egress tick that makes bucket t. `jitter.json` in `--out` holds, per bucket, its bit, its lead,
 the tokens written in its slot, the client's offset of the bucket's arrival after its boundary (`peer.json`'s
-`bucket_lag_ms`: the proxy writes a bucket's cells in one write, so each cell's offset is its bucket's) and the egress
-tick's lateness, and, for the buckets written in and the idle ones (the control), whether those offsets tell the bit
-apart (`distinguish`). It holds timing and the bits, none of the run's records, salts or keys.
+`bucket_lag_ms`: the proxy writes a bucket's cells in one write, so each cell's offset is its bucket's), the egress
+tick's lateness and, from a paced proxy (`certifier_serve.py --paced-ms`), when its pacer started the bucket's write
+after the bucket's time; and, for the buckets written in and the idle ones (the control), whether those offsets tell
+the bit apart (`distinguish`). `next` holds the same of each bucket's client offset against the next bucket's bit, over
+the buckets whose next was written in: that bit's 0 writes half a bucket before the next boundary, so at a pacer
+offset of half a bucket (`certifier_serve.PACED_MS`) just before this bucket's write. It holds timing and the bits,
+none of the run's records, salts or keys.
 
-Run it inside one `research run --on auto --cpus N`, so the hog loads only the run's own cores.
+Run it inside one job of N CPUs, so the hog loads only the job's own cores.
 """
 
 from __future__ import annotations
@@ -65,8 +73,8 @@ class SecretBits:
     from `rehearsal`/honest/deployment.json and the plan's calibration once `serve` has written them. `writes` holds
     each token written in a slot: its bucket and how late after the slot it was written, in ms."""
 
-    def __init__(self, rehearsal: Path, secret: bytes) -> None:
-        self.rehearsal, self.secret = rehearsal, secret
+    def __init__(self, rehearsal: Path, secret: bytes, warden: bool = False) -> None:
+        self.rehearsal, self.secret, self.warden = rehearsal, secret, warden
         self.grid: tuple[float, float] | None = None
         self.writes: list[list] = []
 
@@ -77,8 +85,14 @@ class SecretBits:
 
     def ready(self) -> bool:
         """Whether the grid is known: the origin on this host's monotonic clock as the client takes it, from the
-        deployment's `origin_unix`, and the egress bucket in seconds."""
-        if self.grid is None and (path := self.rehearsal / "honest" / "deployment.json").exists():
+        deployment's `origin_unix`, and the egress bucket in seconds (a warden's, from its own `deployment.json`)."""
+        if self.grid is None and self.warden and (path := self.rehearsal / "deployment.json").exists():
+            try:
+                d = json.loads(path.read_text())
+            except ValueError:  # still being written
+                return False
+            self.grid = (time.monotonic() + d["origin_unix"] - time.time(), d["params"]["bucket_ms"] / 1000)
+        elif self.grid is None and (path := self.rehearsal / "honest" / "deployment.json").exists():
             d = json.loads(path.read_text())
             buckets = json.loads((self.rehearsal / "calibration.json").read_text())["grid"]["window_buckets"]
             self.grid = (time.monotonic() + d["origin_unix"] - time.time(), d["window_s"] / buckets)
@@ -227,9 +241,53 @@ def summary(run: Path) -> dict:
     if (run / "publisher_timing.json").exists():
         out["publisher"] = publisher(json.loads((run / "publisher_timing.json").read_text()), log, buckets)
     check = json.loads((run / "check.json").read_text()) if (run / "check.json").exists() else {}
+    out["forwards_late"] = [[w, ms] for w, ms in log.get("forwards", []) if ms is None or ms > 0]
+    if (paced := log.get("paced")) is not None:
+        out["paced"] = _paced(paced, buckets, slack)
     out["verdict"] = check.get("verdict")
     out["refused_windows"] = {row["window"]: {d: a["raw"] for d, a in row["audit"].items() if a["raw"]}
                               for row in check.get("rows", []) if not row["n2"]["accepted"]}
+    return out
+
+
+def _paced(paced: dict, buckets: int, slack: float) -> dict:
+    """A paced run's pacer reports (`releases`, in ms after each bucket's time): the release starts' and write ends'
+    tails, and the buckets it got late, released past the slack or didn't write, each with its write's end and the
+    previous bucket's."""
+    rows = paced["releases"]
+    start, end = [r[2] for r in rows], {r[0]: r[3] for r in rows}
+    return {"ms": paced["ms"], "buckets": len(rows), "start_median_ms": _quantile(start, 0.5),
+            "start_p99_ms": _quantile(start, 0.99), "start_p999_ms": _quantile(start, 0.999),
+            "start_max_ms": max(start), "arrived_max_ms": max(r[1] for r in rows),
+            "end_p999_ms": _quantile(list(end.values()), 0.999), "end_max_ms": max(end.values()),
+            "late": [[t, t // buckets, t % buckets, a, s, e, end.get(t - 1)] for t, a, s, e, w in rows
+                     if a > 0 or s > slack or not w]}
+
+
+def warden_summary(run: Path) -> dict:
+    """A warden rehearsal's (`--warden`) tick lateness (`warden.json`), its pacer's reports (`paced`), and from
+    `check.json` its verdict, each refused window's records with their status (`uncertified` for a record without its
+    certificate) and its connections that didn't end."""
+    log = json.loads((run / "warden.json").read_text())
+    dep = json.loads((run / "deployment.json").read_text())
+    buckets, slack, ticks = dep["params"]["window"], dep["slack_ms"], log["ticks_ms"]
+    out = {"slack_ms": slack, "egress": {
+        "ticks": len(ticks), "median_ms": _quantile(ticks, 0.5), "p99_ms": _quantile(ticks, 0.99),
+        "p999_ms": _quantile(ticks, 0.999), "max_ms": max(ticks),
+        "past_slack": [[t, t // buckets, t % buckets, x] for t, x in enumerate(ticks) if x > slack],
+        "worst": sorted(enumerate(ticks), key=lambda tx: -tx[1])[:8]}}
+    if (paced := log.get("paced")) is not None:
+        out["paced"] = _paced(paced, buckets, slack)
+    check = json.loads((run / "check.json").read_text()) if (run / "check.json").exists() else {}
+    refused: dict[int, dict[str, str]] = {}
+    for w in check.get("windows", []):
+        if not w["certified"] or w["status"]:
+            refused.setdefault(w["window"], {})[w["record"]] = w["status"] or "uncertified"
+    out["verdict"] = None if not check else "accepted" if check["accepted"] else "refused"
+    out["refused_windows"] = dict(sorted(refused.items()))
+    out["connections_not_ended"] = [[c.get("ordinal"), c["outcome"]] for c in check.get("connections", [])
+                                    if c.get("outcome") != "end"]
+    out["problems"] = check.get("problems", [])[:20]
     return out
 
 
@@ -311,29 +369,69 @@ def distinguish(pairs: list[tuple[float, int]], seed: int = 0) -> dict:
 
 def jitter(run: Path, bits: SecretBits) -> dict:
     """`jitter.json`: per egress bucket of the honest run `run` (the module docstring's `--secret-bit`), and
-    `distinguish` of the client's offsets and of the egress ticks' lateness, for the buckets written in and the idle
-    ones, and for the written ones per quarter of the lead's range."""
+    `distinguish` of the client's offsets, of the egress ticks' lateness and of the pacer's write starts, for the
+    buckets written in and the idle ones, of the client's offsets against the next bucket's bit (`next`), and of the
+    written ones' per quarter of the lead's range."""
     lag = json.loads((run / "client" / "peer.json").read_text())["bucket_lag_ms"]
-    ticks = json.loads(gzip.open(run / "proxy.json.gz").read())["lateness_ms"]["egress"]
+    log = json.loads(gzip.open(run / "proxy.json.gz").read())
+    return _jitter(lag, log["lateness_ms"]["egress"], log.get("paced"), bits)
+
+
+def warden_lags(run: Path) -> list[float | None]:
+    """Per bucket of a warden rehearsal `run`, when its first cell reached a client after its boundary, in ms (None: no
+    connection's): each cell's bucket is the egress record's (`warden_serve.egress_cells`), its arrival the client's."""
+    import warden_serve as ws
+
+    dep = json.loads((run / "deployment.json").read_text())
+    params = ws.WardenParams(**dep["params"])
+    schedule = ws.egress_cells(ws.read_records(run, params)[ws.EGRESS], params)
+    lag: list[float | None] = [None] * (dep["windows"] * params.window)
+    for conn in json.loads((run / "client.json").read_text())["connections"]:
+        if "error" in conn or conn["outcome"] == "refused":
+            continue
+        for (t, _), ms in zip(schedule.get(conn["ordinal"], []), conn["arrivals_ms"]):
+            x = round(ms - t * params.bucket_ms, 3)
+            if t < len(lag) and (lag[t] is None or x < lag[t]):
+                lag[t] = x
+    return lag
+
+
+def warden_jitter(run: Path, bits: SecretBits) -> dict:
+    """`jitter.json` of a warden rehearsal (`--warden`): `jitter`'s, with each bucket's client offset the first of its
+    cells to reach a client (`warden_lags`), the buckets no connection had cells in left out, and each tick's lateness
+    and the pacer's release starts from `warden.json`."""
+    log = json.loads((run / "warden.json").read_text())
+    return _jitter(warden_lags(run), log["ticks_ms"], log.get("paced"), bits)
+
+
+def _jitter(lag: list[float | None], ticks: list[float], paced: dict | None, bits: SecretBits) -> dict:
+    starts = {t: s for t, _, s, _, _ in (paced or {}).get("releases", [])}
     written = Counter(t for t, _ in bits.writes)
     rows = []
     for t, x in enumerate(lag):
         bit, lead = bits.draw(t)
-        rows.append([t, bit, round(lead * 1000, 3), written.get(t, 0), x, ticks[t] if t < len(ticks) else None])
+        rows.append([t, bit, round(lead * 1000, 3), written.get(t, 0), x, ticks[t] if t < len(ticks) else None,
+                     starts.get(t)])
     late = [x for _, x in bits.writes]
     out = {"lead_ms": LEAD_MS, "bucket_ms": None if bits.grid is None else bits.grid[1] * 1000,
+           "paced_ms": (paced or {}).get("ms"),
            "writes": {"n": len(late), "late_median_ms": _quantile(late, 0.5) if late else None,
                       "late_p99_ms": _quantile(late, 0.99) if late else None, "late_max_ms": max(late, default=None)},
-           "columns": ["bucket", "bit", "lead_ms", "tokens_written", "client_offset_ms", "tick_lateness_ms"],
+           "columns": ["bucket", "bit", "lead_ms", "tokens_written", "client_offset_ms", "tick_lateness_ms",
+                       "release_start_ms"],
            "buckets": rows}
     for name, keep in (("written", lambda r: r[3] > 0), ("idle", lambda r: r[3] == 0)):
-        sel = [r for r in rows if keep(r)]
+        sel = [r for r in rows if keep(r) and r[4] is not None]
         out[name] = {"client": distinguish([(r[4], r[1]) for r in sel]),
-                     "tick": distinguish([(r[5], r[1]) for r in sel if r[5] is not None])}
+                     "tick": distinguish([(r[5], r[1]) for r in sel if r[5] is not None]),
+                     "release": distinguish([(r[6], r[1]) for r in sel if r[6] is not None])}
+    following = [(r, n) for r, n in zip(rows, rows[1:]) if n[3] > 0 and r[4] is not None]
+    out["next"] = {"client": distinguish([(r[4], n[1]) for r, n in following]),
+                   "release": distinguish([(r[6], n[1]) for r, n in following if r[6] is not None])}
     quarter = LEAD_MS / 4
     out["written_by_lead"] = {
-        f"{q * quarter:g}-{(q + 1) * quarter:g}": distinguish([(r[4], r[1]) for r in rows
-                                                               if r[3] > 0 and q * quarter <= r[2] < (q + 1) * quarter])
+        f"{q * quarter:g}-{(q + 1) * quarter:g}": distinguish([(r[4], r[1]) for r in rows if r[3] > 0 and r[4] is not None
+                                                               and q * quarter <= r[2] < (q + 1) * quarter])
         for q in range(4)}
     return out
 
@@ -351,21 +449,36 @@ def main(argv=None) -> int:
     ap.add_argument("--strategies", default="honest", help="the rehearsal's strategies, honest, late, extra")
     ap.add_argument("--secret-bit", action="store_true",
                     help="time the stub's writes by a secret bit per egress bucket and write jitter.json")
+    ap.add_argument("--paced-ms", type=float, help="the rehearsal's --paced-ms (certifier_serve.py's or "
+                                                   "warden_serve.py's default if not given; 0: each bucket is written "
+                                                   "on the certifier's loop)")
+    ap.add_argument("--warden", action="store_true",
+                    help="rehearse the warden (warden_serve.py rehearse) instead of the proxy: --requests at --rate a "
+                         "second, each of at most --tokens, windows of --window buckets")
+    ap.add_argument("--rate", type=float, default=1.0, help="with --warden: the requests' Poisson arrivals a second")
+    ap.add_argument("--window", type=int, default=60, help="with --warden: the warden's window, in buckets")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     cpus = sorted(os.sched_getaffinity(0))
-    bits = SecretBits(a.out / "rehearsal", os.urandom(64)) if a.secret_bit else None
+    bits = SecretBits(a.out / "rehearsal", os.urandom(64), warden=a.warden) if a.secret_bit else None
     port = serve_endpoint(a.token_ms / 1000, bits)
     cpu_list = ",".join(map(str, cpus))
+    paced = [] if a.paced_ms is None else ["--paced-ms", str(a.paced_ms)]
+    if a.warden:
+        command = [sys.executable, str(HERE / "warden_serve.py"), "rehearse", "--upstream", f"127.0.0.1:{port}",
+                   "--model", "stub-model", "--requests", str(a.requests), "--rate", str(a.rate), "--max-tokens",
+                   str(a.tokens), "--window", str(a.window), "--tail", str(a.window / 10),
+                   "--out", str(a.out / "rehearsal"), *paced]
+    else:
+        command = [sys.executable, str(HERE / "certifier_serve.py"), "rehearse",
+                   "--upstream", f"http://127.0.0.1:{port}", "--requests", str(a.requests),
+                   "--in-flight", str(a.in_flight), "--tokens", str(a.tokens),
+                   "--delta-buckets", str(a.delta_buckets), "--profile", a.profile,
+                   "--strategies", a.strategies, "--out", str(a.out / "rehearsal"), *paced]
     hogs = [subprocess.Popen(["taskset", "-c", cpu_list, sys.executable, "-c", "while True: pass"])
             for _ in range(a.hogs_per_cpu * len(cpus))]
     try:
-        rc = subprocess.run([sys.executable, str(HERE / "certifier_serve.py"), "rehearse",
-                             "--upstream", f"http://127.0.0.1:{port}", "--requests", str(a.requests),
-                             "--in-flight", str(a.in_flight), "--tokens", str(a.tokens),
-                             "--delta-buckets", str(a.delta_buckets), "--profile", a.profile,
-                             "--strategies", a.strategies, "--out", str(a.out / "rehearsal")],
-                            env=os.environ | {"CERTIFIER_SERVE_TIMING": "1"}).returncode
+        rc = subprocess.run(command, env=os.environ | {"CERTIFIER_SERVE_TIMING": "1"}).returncode
     finally:
         for h in hogs:
             h.kill()
@@ -373,19 +486,27 @@ def main(argv=None) -> int:
             h.wait()
     doc = {"cpus": cpus, "hogs": len(hogs), "rehearse_exit": rc, "token_ms": a.token_ms, "requests": a.requests,
            "in_flight": a.in_flight, "delta_buckets": a.delta_buckets, "profile": a.profile,
-           "strategies": a.strategies}
-    run = a.out / "rehearsal" / "honest"
-    if (run / "proxy.json.gz").exists():
+           "strategies": a.strategies, "paced_ms": a.paced_ms, "warden": a.warden}
+    run = a.out / "rehearsal" if a.warden else a.out / "rehearsal" / "honest"
+    if a.warden and (run / "warden.json").exists():
+        doc |= {"rate": a.rate, "window": a.window} | warden_summary(run)
+    elif (run / "proxy.json.gz").exists():
         doc |= summary(run)
     (a.out / "ticks.json").write_text(json.dumps(doc, indent=1))
     print(json.dumps({k: doc.get(k) for k in ("verdict", "refused_windows")} |
                      {g: {k: doc[g][k] for k in ("ticks", "p999_ms", "max_ms")} | {"past_slack": len(doc[g]["past_slack"])}
                       for g in ("egress", "ingress") if g in doc}), flush=True)
-    if bits is not None and (run / "client" / "peer.json").exists() and (run / "proxy.json.gz").exists():
+    if bits is not None and a.warden and (run / "client.json").exists() and (run / "warden.json").exists():
+        j = warden_jitter(run, bits) | {"hogs": len(hogs), "cpus": cpus, "verdict": doc.get("verdict")}
+    elif bits is not None and (run / "client" / "peer.json").exists() and (run / "proxy.json.gz").exists():
         j = jitter(run, bits) | {"hogs": len(hogs), "cpus": cpus, "verdict": doc.get("verdict")}
+    else:
+        j = None
+    if j is not None:
         (a.out / "jitter.json").write_text(json.dumps(j))
-        print(json.dumps({"jitter": {k: {g: {m: j[k][g].get(m) for m in ("n", "mann_whitney", "decoder", "information")}
-                                         for g in ("client", "tick")} for k in ("written", "idle")}}), flush=True)
+        print(json.dumps({"jitter": {k: {g: {m: d.get(m) for m in ("n", "mann_whitney", "decoder", "information")}
+                                         for g, d in j[k].items()} for k in ("written", "idle", "next")}}),
+              flush=True)
     return rc
 
 

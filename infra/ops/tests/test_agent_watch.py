@@ -1588,7 +1588,7 @@ def silent(tmp_path):
 
 
 def test_a_silent_worker_is_rung_once_then_once_more_a_window_later_then_not_until_it_shows_activity(tmp_path):
-    """Daniel, 19 Oct: agents go quiet and nobody notices (proofs' 20 workers, 18 Oct). A worker ACTIVE 90 min with no note of
+    """Agents go quiet and nobody notices. A worker ACTIVE 90 min with no note of
     its and no push to its branch rings its coordinator's handle; a second silent window rings again; then nothing until a
     note or a push."""
     notes = tmp_path / "notes"
@@ -1630,8 +1630,8 @@ def test_a_silent_worker_still_showing_nothing_six_hours_on_is_one_no_step_for_t
     sweeps(w, clock, 1)
     sweeps(w, clock, 600)
     got = [r for r in records(tmp_path) if r["kind"] == "no_step"]
-    assert [{k: r[k] for k in ("agent", "since", "hours", "handle", "owner")} for r in got] == [
-        {"agent": W1_, "since": W.iso(T0), "hours": 6, "handle": "circuits", "owner": "top"}]
+    assert [{k: r[k] for k in ("agent", "since", "hours", "handle", "owner", "role")} for r in got] == [
+        {"agent": W1_, "since": W.iso(T0), "hours": 6, "handle": "circuits", "owner": "top", "role": "worker"}]
 
 
 def test_a_coordinator_working_with_no_note_or_push_is_silent_but_never_no_step(tmp_path):
@@ -1657,8 +1657,27 @@ def test_a_coordinator_working_with_no_note_or_push_is_silent_but_never_no_step(
     stopped = clock.t
     sweeps(w, clock, 6 * 60)
     got = [r for r in records(tmp_path) if r["kind"] == "no_step"]
-    assert [(r["agent"], r["hours"], r["owner"]) for r in got] == [(CO, 6, "top")]
+    assert [(r["agent"], r["hours"], r["owner"], r["role"]) for r in got] == [(CO, 6, "top", "coordinator")]
     assert W.epoch(got[0]["since"]) >= stopped - 5 * 60
+
+
+def test_a_coordinators_lane_note_is_its_activity(tmp_path):
+    """top, 27 Oct: four silent rings on coordinators in 70 min were false; each was syncing notes signed with its lane, not its
+    id. A note under `lanes/<handle>/` counts for that handle's coordinator."""
+    run = {"status": "RUNNING", "createdAt": W.iso(T0), "updatedAt": W.iso(T0)}
+    notes = tmp_path / "notes"
+    sh = FakeSh({"main": "m" * 40})
+    api, clock, w = coordinators(tmp_path, [{"id": CO, "name": "verity: circuits", "status": "ACTIVE", "latestRunId": "run-r"}],
+                                 {"run-r": run}, notes=notes, git_remote=REMOTE, sh=sh)
+    (notes / "lanes").mkdir(parents=True)
+    w.sweep(lambda r: None)
+    for _ in range(12):
+        sweeps(w, clock, 20)
+        p = note(notes, "circuits", f"c{clock.t:.0f}.md", "circuits coordinator", age_s=0)
+        W.os.utime(p, (clock.t, clock.t))
+    assert [r for r in silent(tmp_path) if r["agent"] == CO] == [], "its lane's notes every 20 min are activity"
+    sweeps(w, clock, 65)
+    assert [r["agent"] for r in silent(tmp_path)] == [CO], "with no note for an hour it is silent again"
 
 
 def test_a_push_to_an_agents_branch_is_activity(tmp_path):
@@ -1951,7 +1970,7 @@ def test_the_deployed_nodes_file_names_the_nebius_nodes_and_an_ssh_argv():
 
 
 def test_a_running_run_that_streams_nothing_for_30_min_is_stalled_cancelled_and_continued(tmp_path):
-    """Daniel, 19 Oct (proofs sat 7 h): a run that reads RUNNING and streams nothing, while its agent's updatedAt stands still,
+    """A run that reads RUNNING and streams nothing, while its agent's updatedAt stands still,
     is a hung call or a suspended VM, which the API doesn't show. Its owner (top, for a coordinator) is rung with the record."""
     api, clock, w = coordinators(tmp_path, [{"id": CO, "name": "verity: circuits", "status": "ACTIVE", "latestRunId": "run-r",
                                              "updatedAt": W.iso(T0)}], {"run-r": {"status": "RUNNING"}}, timers=None)
@@ -2010,7 +2029,7 @@ def run_end_for(tmp_path, roots, clock, w, agent, rid="r20261018-200100-0002"):
 
 
 def test_a_coordinator_idle_after_its_run_ended_is_resumed_with_the_result_10_min_on(tmp_path):
-    """Rule (b), Daniel 19 Oct: a coordinator that ended its turn to wait on a run, and wasn't woken when it ended."""
+    """Rule (b): a coordinator that ended its turn to wait on a run, and wasn't woken when it ended."""
     api, clock, w, sh, roots = nodes_setup(tmp_path)
     ended = run_end_for(tmp_path, roots, clock, w, CO)
     while clock.t < ended + W.RESUME_S - 60:

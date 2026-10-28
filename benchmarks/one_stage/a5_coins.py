@@ -7,7 +7,8 @@ of record, from whose coins each rank's registration draws once (`sampled_proofs
   LMS key made there at `LOCAL_PARAMS`, never under the run's out/: its ledger and the session's out/ are what vy-challenger-1
   writes, and its key is this run's alone, so its draws show the path, not an auditor's coins. Its pins log pins main's
   first-parent commit this tree is built on (`on_main`), as pin.sh pins vy-challenger-1 only to such a commit; its code is this
-  tree's. ``gate:USER@HOST``: vy-challenger-1 through infra's gate with the lane's gate key: `reserve` with this machine as its
+  tree's. ``loopback:HOST:PORT``: the same development session on the challenger party's host
+  (`challenger_party.py`, `Loopback`), asked for its open and finish over loopback TCP. ``gate:USER@HOST``: vy-challenger-1 through infra's gate with the lane's gate key: `reserve` with this machine as its
   peer, `open` on the TP run root (`served_h1.coins.open_window`), the client on the peer's 127.0.0.1:PORT with the session's
   secret, and once the session has ended its `status`, `fetch`, `ledger` and `pins`; the verifier's key is then the
   deployment's record (`served_h1.coins.key_record`), never the session's key.json. The layout is `SCHEME` with one family
@@ -40,6 +41,7 @@ import io
 import json
 import secrets
 import shutil
+import socket
 import subprocess
 import sys
 import tarfile
@@ -137,7 +139,7 @@ def lines(path: Path) -> list[str]:
     return [x for x in path.read_text().split("\n") if x]
 
 
-#: the proof service's rule for a client of a session the gate has just opened (`remote.connect_when_listening`)
+#: the proof system's rule for a client of a session the gate has just opened (`remote.connect_when_listening`)
 TUNNEL_WAIT_S, connect_when_listening = R.TUNNEL_WAIT_S, R.connect_when_listening
 
 
@@ -561,6 +563,34 @@ class Gate:
         return self.H1.published(dest / self.session), dest / "windows.jsonl", dest / "pins.jsonl", self.key
 
 
+class Loopback:
+    """The challenger party's host on this machine (`challenger_party.Host`, `verity run CONFIG --party challenger`'s)
+    at `address` (HOST:PORT): `Local`'s session, asked for over one JSON line each way. Its key comes
+    from the party itself, so its coins are a development session's, not an auditor's (`simulated`)."""
+
+    def __init__(self, address: str) -> None:
+        host, port = address.rsplit(":", 1)
+        self.address, self.session = (host, int(port)), None
+
+    def _ask(self, req: dict) -> dict:
+        with socket.create_connection(self.address) as s, s.makefile("rwb") as f:
+            f.write((json.dumps(req) + "\n").encode())
+            f.flush()
+            got = json.loads(f.readline())
+        if "refused" in got:
+            raise Ch.CoinError(f"the challenger party refused {req['op']}: {got['refused']}")
+        return got
+
+    def open(self, root: str, layout: list, minutes: int = MINUTES, scheme: str = SCHEME) -> tuple[str, str, str]:
+        got = self._ask({"op": "open", "root": root, "layout": layout, "minutes": minutes, "scheme": scheme})
+        self.session = got["session"]
+        return got["address"], got["secret"], got["commitment"]
+
+    def finish(self, dest: Path) -> tuple[Path, Path, Path, Ch.ChallengerKey]:
+        got = self._ask({"op": "finish", "dest": str(dest)})
+        return Path(got["session"]), Path(got["ledger"]), Path(got["pins"]), Ch.ChallengerKey.from_json(got["key"])
+
+
 def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
     p = lms.Params(64, key.W, key.H)
     try:
@@ -592,10 +622,13 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
     first_parent = R.main_lines(main)
     if challenger == "local":
         session = Local(Path(tempfile.mkdtemp(prefix="a5-challenger-")), first_parent)
+    elif challenger.startswith("loopback:"):
+        session = Loopback(challenger.removeprefix("loopback:"))
     elif challenger.startswith("gate:") and peer and key_record:
         session = Gate(challenger.removeprefix("gate:"), ssh_key, peer, key_record, first_parent)
     else:
-        raise SystemExit(f"--challenger is local or gate:USER@HOST (with --peer and --challenger-key), not {challenger!r}")
+        raise SystemExit(f"--challenger is local, loopback:HOST:PORT or gate:USER@HOST (with --peer and --challenger-key), "
+                         f"not {challenger!r}")
     manager = _Manager(ctx=get_context("spawn"))
     manager.start()
     draws = manager.Draws(root, ranks)

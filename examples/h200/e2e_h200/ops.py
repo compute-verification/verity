@@ -17,7 +17,7 @@ makes one from finite inputs), except that `argmax` and `quantize` take a NaN in
     argmax     Argmax_v2{V}: TokenSelect, the first index of the greatest logit, a NaN never taken
 
 The s32 sum is `torch._int_mm` on CUDA (exact for K < 2^17 in any order) and a float64 matmul in row chunks on the CPU (exact: integers below 2^53): the stand-in for
-kernels' KP2-S8 GEMM until it is handed over.
+kernels' s8 GEMM until it is handed over.
 """
 from __future__ import annotations
 
@@ -116,9 +116,10 @@ class Quant:
     amax: torch.Tensor     # (B, P) bf16 words as s16: the first P - 1 parts' max |x|, then the row's
 
 
-def quantize(x: torch.Tensor, relu: bool = False, part: int | None = None) -> Quant:
-    """``part``: the words of a `RowAbsMax_v1` part (the whole row by default). max |x| is the greatest word with its sign
-    cleared, so a NaN is above +inf and the scale of a row with a NaN is 1."""
+def quantize(x: torch.Tensor, relu: bool = False, part: int | None = None, every: bool = False) -> Quant:
+    """``part``: the words of a `RowAbsMax_v1` part (the whole row by default); the amax words are the parts' but the last
+    (every part's with ``every``), then the row's. max |x| is the greatest word with its sign cleared, so a NaN is above +inf
+    and the scale of a row with a NaN is 1."""
     xf = f32(x)
     if relu:
         xf = torch.where(xf < 0, torch.zeros_like(xf), xf)
@@ -128,7 +129,7 @@ def quantize(x: torch.Tensor, relu: bool = False, part: int | None = None) -> Qu
     if relu:
         mag = torch.where(xf == 0, 0, mag)
     mag = mag.reshape(b, n // p, p).amax(-1)
-    amax = torch.cat([mag[:, :-1], mag.amax(-1, keepdim=True)], 1).to(torch.int16)
+    amax = torch.cat([mag if every else mag[:, :-1], mag.amax(-1, keepdim=True)], 1).to(torch.int16)
     am = (mag.amax(-1) << 16).view(torch.float32)
     scale = torch.where(am > 0, div_rn(am, torch.full_like(am, 127.0)), torch.ones_like(am))
     codes = torch.nan_to_num(torch.round(div_rn(xf, scale[:, None])), nan=0.0).clamp(-128, 127).to(torch.int8)

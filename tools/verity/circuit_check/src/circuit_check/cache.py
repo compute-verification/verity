@@ -132,7 +132,7 @@ from . import entries as E
 
 SCHEMA = "circuit-check-cache/v3"
 _ROOT: list[Path] = []
-#: each link in an import path directory outside the tree that leads into it, with where it leads (`_links`): `research run`
+#: each link in an import path directory outside the tree that leads into it, with where it leads (`_links`): a remote run
 #: puts such a shim first on the path (``pyshim/<key>/verity -> <tree>/verity``), so the tree's modules have their files there
 _LINKS: dict[str, str] = {}
 #: what the tracer cannot see: a program started from here, or a repository library loaded by the dynamic loader
@@ -1709,9 +1709,13 @@ _OWN: dict[int, tuple[Any, str]] = {}
 def descriptor(fn: Any) -> str:
     """The digest of every primitive and specialization ``fn`` reaches (through body nodes and function statics), each by its
     descriptor id and the digest of its canonical descriptor entry (`verity.ml.circuits.codec`): what the target is, whatever module or
-    path it was written in.  A body that cannot be built gives the error's type, so no stored entry matches."""
+    path it was written in.  A by-calls root (`targets.is_by_calls`) is its own entry (`by_calls.entry`), without what its body
+    calls.  A body that cannot be built gives the error's type, so no stored entry matches."""
     from verity.ml.circuits import codec as C
     from verity.ml.circuits.defs import FunctionDefinition, PrimitiveDefinition, SpecializedDefinition
+
+    from . import by_calls as BC
+    from . import targets as TG
 
     def statics(v: Any) -> Iterator[Any]:
         if isinstance(v, FunctionDefinition):
@@ -1730,13 +1734,16 @@ def descriptor(fn: Any) -> str:
                 if id(f) in seen:
                     continue
                 seen.add(id(f))
+                by_calls = TG.is_by_calls(f)
                 if isinstance(f, (PrimitiveDefinition, SpecializedDefinition)):
                     e = _OWN.get(id(f))
                     if e is None or e[0] is not f:
-                        e = _OWN[id(f)] = (f, hashlib.sha512(C.canonical_json(C.definition_entry(f))).hexdigest())
+                        own = BC.entry(f) if by_calls else C.definition_entry(f)
+                        e = _OWN[id(f)] = (f, hashlib.sha512(C.canonical_json(own)).hexdigest())
                     parts.append([C.descriptor_id(f), e[1]])
                 if isinstance(f, SpecializedDefinition):
-                    stack.extend(n.fn for n in f.body.nodes)
+                    if not by_calls:
+                        stack.extend(n.fn for n in f.body.nodes)
                     stack.extend(statics(f.bindings))
         except Exception as e:  # noqa: BLE001  (its check raises too, and an errored check is never stored)
             return f"error:{type(e).__name__}"

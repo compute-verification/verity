@@ -124,7 +124,8 @@ class Pouw:
     window_delta_crypto: float = 0.0
     #: the GPUs' capacity above the clock PoUW credits, as a share
     clock_share: float = 0.0
-    #: the host CPUs counted at `host` times their peak (`Location.host_phi`): 1 until something credits or bounds them
+    #: the host CPUs counted at `host` times their peak (`Location.host_phi`): 0 under hosts carry no compute
+    #: (`GLOSSARY.md`), 1 without that assumption
     host: float = 0.0
 
     CITES = ("Nci.Assumptions.PouwSound", "Nci.Guarantees.CertificateSlack")
@@ -226,10 +227,9 @@ class Wipe:
     game_delta_coin: float = 2.0**-128
     prf_advantage: float = 0.0
 
-    #: the per-server bound against `M_s` is memory-accounting's (Wed 28 Oct 06:00Z); per device, the streamed wipe
+    #: the per-server bound against `M_s` is a draft; per device, the streamed wipe
     SERVER = ("draft:wipe-per-server",)
-    DEVICE = ("Pous.Guarantees.StreamedWipeMeets2600GB", "Accounting.Guarantees.Actual.WipeReadHeld",
-              "Accounting.Guarantees.Actual.WipeLag")
+    DEVICE = ("Pous.Guarantees.StreamedWipeMeets2600GB",)
 
     def __post_init__(self) -> None:
         if self.per not in PER:

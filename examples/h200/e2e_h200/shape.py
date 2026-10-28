@@ -1,4 +1,4 @@
-"""The decoder shapes the skeleton runs: ALLP-IFACE's `served_weights.Shape` (CMP-95 item 1), whose tensors and
+"""The decoder shapes the skeleton runs: `served_weights.Shape`, whose tensors and
 weights stream the store holds. `FROZEN` is the H200 demo's frozen shape (the toy); the others are small instances of the same
 MQA architecture (one KV head, query heads covering the width) for CPU runs and tests.
 
@@ -38,12 +38,16 @@ class Forms:
     ``sums_row``: RMSNorm's chunk sums a committed row (32, 128 B: `RmsSumSqChunks_v1{C = 32 chunk, K = chunk}`);
     ``group_chunks``: the chunk sums an RMSNorm group sums (64, so G = 2 at N = 16,384); ``quant_chunk``: a quantizer chunk's
     codes (`QuantChunkS8_v1{8192}`, and the s8 coordinates' R = K / 8192 rows); ``amax_part``: the widest `RowAbsMax_v1` (16,384;
-    a wider row is parts and a combine over the last part and the partials)."""
+    a wider row is parts and a combine over the last part and the partials); under the ``norm`` fusion, ``norm_part``: an
+    amax part (`RmsNormAbsMax_v1{2048}`) and ``norm_codes``: a code block's words (`RmsNormQuantCodes_v1{512}`), the widest
+    C-Flock's stager lowers in under 20 GB."""
     chunk: int = 128
     sums_row: int = 32
     group_chunks: int = 64
     quant_chunk: int = 8192
     amax_part: int = 16384
+    norm_part: int = 2048
+    norm_codes: int = 512
 
     def rows(self, n: int) -> int:
         return n // self.chunk
@@ -64,10 +68,20 @@ class Forms:
         """(parts, part width) of `RowAbsMax` over a row of n: one part while n fits."""
         return (n // self.amax_part, self.amax_part) if n > self.amax_part else (1, n)
 
+    def norm_parts(self, n: int) -> tuple[int, int]:
+        """(parts, part width) of the fused amax over an RMSNorm row of n: one part while n fits."""
+        return (n // self.norm_part, self.norm_part) if n > self.norm_part else (1, n)
+
+    def ncodes(self, n: int) -> int:
+        """A fused code block's words over an RMSNorm row of n."""
+        return min(self.norm_codes, self.qchunk(n))
+
 
 #: MINI: 4 chunk rows of 32 a row of the width, 2 sums rows, 2 RMSNorm groups, quantizer chunks of 32 (R = K / 32), amax
-#: parts of 64 (2 a row of the width, 4 of the MLP's), heads gathered in pairs as at the frozen shape
-FORMS = {s.name: Forms(chunk=32, sums_row=2, group_chunks=2, quant_chunk=32, amax_part=64) for s in (MINI, MINI_ROWS)}
+#: parts of 64 (2 a row of the width, 4 of the MLP's), heads gathered in pairs as at the frozen shape; fused, 2 amax parts of 64
+#: and 2 code blocks of 16 a chunk
+FORMS = {s.name: Forms(chunk=32, sums_row=2, group_chunks=2, quant_chunk=32, amax_part=64, norm_part=64, norm_codes=16)
+         for s in (MINI, MINI_ROWS)}
 
 
 def forms(s: Shape) -> Forms:
@@ -75,6 +89,8 @@ def forms(s: Shape) -> Forms:
     for what, n in (("width", s.width), ("mlp", s.mlp), ("vocab", s.vocab)):
         if n % f.chunk or n % f.qchunk(n) or n % f.parts(n)[1] or f.rows(n) % f.groups(n):
             raise ValueError(f"{s.name}: the {what} {n} isn't whole chunk rows of {f.chunk}, quantizer chunks and amax parts")
+    if s.width % f.norm_parts(s.width)[1] or f.qchunk(s.width) % f.ncodes(s.width):
+        raise ValueError(f"{s.name}: the width {s.width} isn't whole fused amax parts and code blocks")
     if f.chunk % s.head_dim or s.heads % (f.chunk // s.head_dim) or f.rows(s.width) % (f.sums_c(s.width) // f.chunk):
         raise ValueError(f"{s.name}: chunk rows of {f.chunk} don't gather whole heads of {s.head_dim} or whole sums rows")
     return f

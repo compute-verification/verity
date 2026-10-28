@@ -38,7 +38,7 @@ def vocab_kind(ctx: StepContext, role: str, **statics):
 def target_of_header(header) -> tuple[TargetProfile, bool]:
     """`target_of` for a run header."""
     try:
-        # [R13 hopper] the DECLARED profile when the capture recorded one (`profile["target"]`: exact, incl. `flash_attn_version`), else the
+        # the DECLARED profile when the capture recorded one (`profile["target"]`: exact, incl. `flash_attn_version`), else the
         # device document + the layers' reported FA version (`TargetProfile.from_run_profile`)
         tp = TargetProfile.from_run_profile(header.profile or {})
     except (AttributeError, TypeError, ValueError):

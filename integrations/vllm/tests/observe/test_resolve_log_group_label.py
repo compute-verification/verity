@@ -1,4 +1,4 @@
-"""SHARED-CODE (lane ov-moe): `bench.resolve_log.short_label` labels a `resolver.Group` root (D70) instead of raising
+"""`bench.resolve_log.short_label` labels a `resolver.Group` root instead of raising
 `AttributeError: 'Group' object has no attribute 'reason'` — which made the resolve stage (and so G2) fail for any profile
 whose scope pattern returns a Group, e.g. `MoEFusedExperts` on `vllm.moe_forward`."""
 

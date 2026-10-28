@@ -1,4 +1,4 @@
-"""[GEN ov-easy] The serving-family reference a dense profile config is compared against: the registered `Serve_v4{C, LP, STEPS, BN}`
+"""The serving-family reference a dense profile config is compared against: the registered `Serve_v4{C, LP, STEPS, BN}`
 (`b1.ServeV4`), for a tied and an untied output projection alike.
 
 `b1.weights_type(C)` gives an untied checkpoint (`C["tie_word_embeddings"] is False`: Qwen2.5-7B, Mistral-7B, Phi-3-mini) its own
