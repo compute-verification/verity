@@ -219,7 +219,7 @@ bits, and a unit for each data product), and `R_in,w` window `w`'s run-input byt
 `q ≤ c · reads / E + 8 · Σ_w R_in,w / (n − 1)`. -/
 def EncodeBudget : Prop :=
   ∀ (F : Field) (k B E e εnum εden : ℕ) {ι : Type} (W : Dag ι) (caps : Caps) (A : Audit) (m : ℕ → ℕ)
-    (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
+    (x : KeySample k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
     SquaringFloor F e εnum εden → ChainSum F k B e εnum εden → E ≤ k * F.squarings * e →
     εden ≤ 2 ^ 64 * εnum → 0 < k → 2 ^ 66 ≤ F.p → F.p % 4 = 3 →
     Property caps A W → Restricted B W → CodecInputs F W (draws F k) m x → words.Nodup →
