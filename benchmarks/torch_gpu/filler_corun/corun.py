@@ -261,14 +261,14 @@ class Bench:
         bad = int((got != self.reference_digests()).any(dim=1).sum())
         return {"messages": self.nmsg, "mismatches": bad, "ok": bad == 0}
 
-    def gate_hash(self) -> dict:
+    def gate_hash(self, kind: str) -> dict:
         self.o.copy_(self.ref)
         self.reset()
         self.dig.view(torch.uint8).fill_(0xA5)
         threads = self.lib.sms * HASH_THREADS
-        self.hash("hash_rows", HASH_THREADS, 1, self.hash_args(60.0, False, most=-(-self.nmsg // threads)), alone=True)
+        self.hash(kind, HASH_THREADS, 1, self.hash_args(60.0, False, most=-(-self.nmsg // threads)), alone=True)
         torch.cuda.synchronize()
-        return {"gate": "hash_rows", **self.check_digests()}
+        return {"gate": kind, **self.check_digests()}
 
     # ---------------------------------------------------------------- items
     def calibrate(self, cl: int, item_s: float) -> int:
@@ -424,9 +424,10 @@ def main(argv: list[str] | None = None) -> int:
         g["timed"] = cl in cls
         emit(g)
         ok &= g["ok"] or cl not in cls
-    g = b.gate_hash()
-    emit(g)
-    ok &= g["ok"]
+    for kind in ("hash_rows_l1", "hash_rows"):
+        g = b.gate_hash(kind)
+        emit(g)
+        ok &= g["ok"]
     if not ok:
         emit({"verdict": "a gate failed: nothing timed"})
         return 1
