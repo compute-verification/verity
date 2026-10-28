@@ -3,11 +3,11 @@
 # PRO 6000, the default), 89 (one L40S; its forms build as four groups in parallel and run back to back) or 100 (one
 # B200: the legacy mma.sync forms, premise (M′); group 0, int8, must build, and group 1 is dropped if it doesn't).
 #
-#   research run --on vy-nebius-2 --project verity --campaign pouw --source /workspace --cwd clone --custody-ttl 12h \
+#   research run --on MACHINE --project verity --source /workspace --cwd clone --custody-ttl 12h \
 #     --env GPU_LEASE_WHO=tensor -- bash benchmarks/pouw/tensor_kinds/run.sh
-#   research run --on vy-dc-l40s --project verity --source /workspace --cwd source --custody-ttl 12h \
+#   research run --on MACHINE --project verity --source /workspace --cwd source --custody-ttl 12h \
 #     --env GPU_LEASE_WHO=ada --env TK_ARCH=89 -- bash benchmarks/pouw/tensor_kinds/run.sh
-#   research run --on vy-dc-b200 --project verity --campaign eps1 --cwd source --mem-gb 8 \
+#   research run --on MACHINE --project verity --cwd source --mem-gb 8 \
 #     --env GPU_LEASE_WHO=LANE --env TK_ARCH=100 -- bash benchmarks/pouw/tensor_kinds/run.sh
 #
 # The binaries are built and their SASS dumped outside the lease; the timed GPU work runs under `gpu-lease 1 --wait
