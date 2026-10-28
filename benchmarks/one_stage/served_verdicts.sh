@@ -17,8 +17,9 @@
 #     length instead (`serve_load.py --fixed SLOTS --window-steps WINDOW_STEPS`): SLOTS requests of PROMPTS tokens, each
 #     with ignore_eos and max_tokens WINDOW_STEPS, all prefilled at the window's first step and run through its last. With
 #     LOAD=front there are none: CERTIFIER_FRONT's group, sent through the warden, is the run's one load and its execution
-#     block the one the run audits (a period that admits a single block, say), and the front's exit is the requests': a
-#     front that failed stops the endpoint at once, with no window to seal.
+#     block the one the run audits (a period that admits a single block, say). A front that failed before a window
+#     closed stops the endpoint at once, with no window to seal; one that failed after (its leak guard holding a file,
+#     say) leaves its exit to the certifier's verdict, and the run goes on with the window it sealed.
 #     CERTIFIER_FRONT runs within CERTIFIER_FRONT_TIMEOUT (default 20m), and a flag it passes to `certifier_piece.py front`
 #     that this tree's front doesn't take, or a front whose endpoint isn't on the warden's id form (SERVE_ARGS without
 #     `--protocol ids`), is refused before the lease. The
@@ -268,7 +269,8 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     say "REQUESTS (exit $rc, release run $release): $(tail -1 "$D/load.log" | sed -E 's/, prompts .*//' | cut -c1-300)"
   fi
   c=$(count "$D/windows.jsonl"); s=$(count "$D/seals.jsonl")
-  if [ "$LOAD" != front ] || [ "$rc" = 0 ]; then  # a front that failed sent the run's only requests, so none will close
+  # a front that failed before a window closed sent the run's only requests, so none will
+  if [ "$LOAD" != front ] || [ "$rc" = 0 ] || [ "$c" -gt 0 ]; then
     for _ in $(seq 1 450); do     # every closed window's seal line
       c=$(count "$D/windows.jsonl"); s=$(count "$D/seals.jsonl")
       [ "$c" -gt 0 ] && [ "$s" -ge "$c" ] && break
@@ -279,7 +281,8 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   kill -TERM "$srv" 2>/dev/null; wait "$srv"
   say "SERVE stopped (exit $?): $c window(s) closed, $s sealed"
   [ "$period" = 1 ] && say "$("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" period close "$D" --gate "$H1_GATE" 2>&1 | tail -1)"
-  [ "$rc" = 0 ] && [ "$c" -gt 0 ] && [ "$s" -ge "$c" ]
+  # a front's exit is the certifier's verdict (CERTIFIER-FRONT, and its piece reads the session), not the load's
+  { [ "$LOAD" = front ] || [ "$rc" = 0 ]; } && [ "$c" -gt 0 ] && [ "$s" -ge "$c" ]
 }
 
 circuit() {  # window K's circuit at class $1 within $2 (NAME=LIMIT), its line headed $3: 0 iff it counted
