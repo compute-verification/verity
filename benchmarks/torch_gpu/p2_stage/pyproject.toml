@@ -17,6 +17,7 @@ testpaths = ["tests"]
 inputs = ["tools/config/verity_config",
           "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/core/protocols/interface",
+          "verity/core/protocols/record.py",
           "verity/core/protocols/remote_bandwidth", "verity/core/protocols/sampled_proofs",
           "verity/core/protocols/profile.py",
           "verity/core/primitives/identity", "verity/core/primitives/randomness",
@@ -25,4 +26,4 @@ inputs = ["tools/config/verity_config",
           "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/reference.py", "benchmarks/pous/p2_v1/gpu.py",
           "benchmarks/pous/p2_v1/vectors.json", "benchmarks/pous/p2_v1/store-toy",
           "benchmarks/pous/p2_v1/serve.py", "benchmarks/pous/p2_v1/store.py", "benchmarks/torch_gpu/sha512_rows",
-          "benchmarks/torch_gpu/s8_linear/int_mm.py", "verity/core/protocols/record.py"]
+          "benchmarks/torch_gpu/s8_linear/int_mm.py"]
