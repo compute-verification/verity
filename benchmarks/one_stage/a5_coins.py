@@ -564,7 +564,7 @@ class Gate:
 
 
 class Loopback:
-    """The challenger party's host on this machine (`challenger_party.Host`, `verity run CONFIG --party challenger`'s)
+    """The challenger party's host on this machine (`challenger_party.Host`, the ``host`` of sampled proofs' challenger)
     at `address` (HOST:PORT): `Local`'s session, asked for over one JSON line each way. Its key comes
     from the party itself, so its coins are a development session's, not an auditor's (`simulated`)."""
 
