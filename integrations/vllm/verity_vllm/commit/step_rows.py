@@ -68,7 +68,7 @@ ID_BYTES = 32
 STEP_ROOT_TAG = b"verity/fa2c/root/v0"
 RUN_ROOT_TAG = b"verity/cmt-integ/run-root/v0"
 WEIGHTS_ROOT_TAG = b"verity/cmt-integ/weights-root/v0"
-NODE_TAG, LIFT_TAG, EMPTY_TAG = "verity-vllm/node/v1", "verity-vllm/lift/v1", "verity-vllm/empty/v1"
+NODE_TAG, LIFT_TAG, EMPTY_TAG = b"verity-vllm/node/v1", b"verity-vllm/lift/v1", b"verity-vllm/empty/v1"
 
 
 def binding(program: bytes, ctx: bytes, geo: bytes, row_bits: int = 8 * ROW_BYTES) -> bytes:
@@ -168,9 +168,9 @@ def _u64be(value: int, name: str) -> bytes:
     return value.to_bytes(8, "big")
 
 
-def _tagged(tag: str, *parts: bytes) -> bytes:
+def _tagged(tag: bytes, *parts: bytes) -> bytes:
     """``SHA-512(u32be |tag| || tag || (u64be |part| || part)*)``."""
-    h = hashlib.sha512(len(tag).to_bytes(4, "big") + tag.encode())
+    h = hashlib.sha512(len(tag).to_bytes(4, "big") + tag)
     for part in parts:
         h.update(len(part).to_bytes(8, "big"))
         h.update(part)
