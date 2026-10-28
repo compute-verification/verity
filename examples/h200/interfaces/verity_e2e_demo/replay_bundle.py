@@ -461,14 +461,14 @@ def _pieces(at: Any) -> list[Read | Position | RegisteredRead] | None:
 
 
 class WindowLocate:
-    """`build`'s ``locate`` and ``reads`` from the H200 window writer's ``Window.locate(step, slot, family, index, port)``
+    """`build`'s ``locate`` and ``reads`` from the H200 window writer's ``Locator.locate(step, slot, family, index, port)``
     (circuits' interface, ``examples/h200/e2e_h200/window.py``), whose pieces are the port's bytes in
     order: ``Segment(step, slot, row, offset, nbytes)`` (bytes of a committed row, ``row`` its index in the slot: a `Read`),
     ``Absent(nbytes)`` (zero bytes, a key at or past n), ``Run(name)`` (``n``, the position + 1, one word: a `Position`) and
     ``Registered(value, row, offset, nbytes)`` (bytes of a registered weight). A port of one Registered piece is a registered
     read: its position is the piece's byte offset in the value, ``row * stride(value) + offset``, over the registered row's
     bytes, which the piece must be exactly (``stride`` defaults to one registered row: ``row`` is the registered row, as
-    circuits' `Window.locate` names the weights registration's rows). ``Run("token")`` is ingress, which no commitment holds: refused. Coordinates
+    circuits' `Locator.locate` names the weights registration's rows). ``Run("token")`` is ingress, which no commitment holds: refused. Coordinates
     are ``{step, slot, op: the family, unit: the block's index in it}``."""
 
     def __init__(self, window: Any, layout: S.Layout, weights: Mapping[str, Any] | None = None,
