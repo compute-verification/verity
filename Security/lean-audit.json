@@ -2063,6 +2063,7 @@
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
   },
   "Nci.Assumptions.ThetaRegistered": {
+   "owner": "@compute-accounting",
    "digest": "afd7f09e9bdab67ea4a2a26dc3760bfe5d0d3649fde36ad2357b96c9b16ac1b7"
   }
  },

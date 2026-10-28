@@ -239,6 +239,7 @@
    "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
   },
   "Nci.Assumptions.ThetaRegistered": {
+   "owner": "@compute-accounting",
    "digest": "afd7f09e9bdab67ea4a2a26dc3760bfe5d0d3649fde36ad2357b96c9b16ac1b7"
   }
  },
