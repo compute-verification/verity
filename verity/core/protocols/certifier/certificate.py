@@ -60,9 +60,9 @@ is, under the same message, so it names the same key, session and link-window:
 `salt_c` is 64 fresh bytes of the certifier's own coins, as a record's, and never one an earlier clock certificate of
 the issuer has: under one salt two windows of one sync would sign one digest, which shows that their syncs are equal.
 What the certifier signs is witness: the sync and its salt never reach the auditor in the clear, and only the
-certificate, a signature over a hiding commitment, is public. N2's advised verifier reads each window's sync only
-through its opening against the salted digest its certificate signs (`CertifiedClock.refusal`,
-`advised.SignedClocks`). A record certificate signs a record digest salted and a clock certificate a clock digest,
+certificate, a signature over a hiding commitment, is public. A verifier reads each window's sync only through its
+opening against the salted digest its certificate signs (`CertifiedClock.refusal`, `SignedClocks`). A record
+certificate signs a record digest salted and a clock certificate a clock digest,
 each under its own tag, so one opens as the other only on a SHA-512 collision. The Lean device's issuer
 (`CertifierDevice.Issuer.clock`) signs the same, and its difftest holds it to `Issuer.salted_clock`.
 
@@ -517,6 +517,65 @@ class CertifiedClock:
 
     def verify(self, key: PublicKey, session: bytes) -> bool:
         return self.refusal(key, session) is None
+
+
+def _named(c: CertifiedClock) -> str:
+    x = c.certificate
+    if type(x) is not Certificate:
+        return f"a clock opening of a {type(x).__name__}"
+    return f"{x.link} window {x.window}'s {x.direction.value} clock (key {x.key_id.hex()[:16]}…)"
+
+
+@dataclass(frozen=True)
+class SignedClocks:
+    """The syncs the network certifier signed, one salted clock certificate an egress window (`CertifiedClock`,
+    `Issuer.salted_clock`), each sync read through its opening (the sync and `salt_c`, witness) against the salted
+    digest its certificate signs, under the verifier's own certifier `key` and `session`. The openings are the
+    verifier's own read of the certifier's output, never a public answer, which carries the certificates alone.
+    `syncs(link)` is window 0's on, each the sync of the openings that name `link` and the window and hold
+    (`CertifiedClock.refusal`), up to the first window without exactly one such sync. `refused` says why each
+    opening it took no sync from was refused: not a salted clock's opening (a record's `CertifiedRecord` among them),
+    not an egress certificate, another key's, a sync and salt that don't open the digest signed (an altered
+    digest or sync), a signature that doesn't verify (forged, or another session's, or relabelled to another link or
+    window), a salt another link-window's opening has too, or a window with two signed syncs. Whoever delivers the
+    openings, the prover included, can't forge one."""
+
+    key: PublicKey
+    session: bytes
+    openings: Sequence[CertifiedClock]
+    refused: tuple[str, ...] = field(default=(), init=False)
+
+    def __post_init__(self) -> None:
+        held: list[CertifiedClock] = []
+        refused: list[str] = []
+        for c in self.openings:
+            if type(c) is not CertifiedClock:
+                refused.append(f"a {type(c).__name__}: not a salted clock certificate's opening "
+                               "(certificate.CertifiedClock), so it gives no sync")
+            elif (why := c.refusal(self.key, self.session)) is not None:
+                refused.append(f"{_named(c)}: {why}")
+            else:
+                held.append(c)
+        salts: dict[bytes, list[CertifiedClock]] = {}
+        for c in held:
+            salts.setdefault(c.salt, []).append(c)
+        signed: dict[str, dict[int, set[ClockSync]]] = {}
+        for c in held:
+            if (other := next((o for o in salts[c.salt] if o != c), None)) is not None:
+                refused.append(f"{_named(c)}: its salt is also {other.link} window {other.window}'s, under which two "
+                               "windows of one sync sign one digest")
+            else:
+                signed.setdefault(c.link, {}).setdefault(c.window, set()).add(c.sync)
+        refused += [f"{link} window {w}: {len(got)} signed syncs, so it has none"
+                    for link, windows in signed.items() for w, got in sorted(windows.items()) if len(got) > 1]
+        object.__setattr__(self, "_signed", signed)
+        object.__setattr__(self, "refused", tuple(refused))
+
+    def syncs(self, link: str) -> tuple[ClockSync, ...]:
+        windows, out = self._signed.get(link, {}), []
+        while len(got := windows.get(len(out), ())) == 1:
+            out.extend(got)
+        return tuple(out)
 
 
 @dataclass

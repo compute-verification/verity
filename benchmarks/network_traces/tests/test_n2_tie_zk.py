@@ -139,7 +139,7 @@ def test_a_member_fails_on_what_the_scan_reads_as_leaked_not_on_a_find_across_th
     key = next(k for k in sorted(held_pieces) if len(set(pieces[k])) > 2)
     piece = pieces[key]
     res = {"windows": [{"as_expected": True}] * len(rd.windows),
-           "tie": {"accepted": list(tz.EXPECT["honest"]), "advice": tz.AD.digest(rd.advice), "link": tz.LINK,
+           "tie": {"accepted": list(tz.EXPECT["honest"]), "advice": tz.TS.digest(rd.advice), "link": tz.LINK,
                    "registrations": [{}] * len(rd.windows)}}
 
     def member(body: bytes, out):

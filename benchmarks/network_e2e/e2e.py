@@ -46,8 +46,8 @@ then runs this. The README says what the report establishes and what it doesn't.
   the driver had run by its end (``max_child_rss_gb``, `RUSAGE_CHILDREN`, which only grows: n2_zk proves the honest
   members first). Beside them, n2_zk's cost pass (``summary.json``'s ``cost``): one honest link-window proved alone, per
   end (`alone`); and the driver's own peak (the unit's lowering).
-* **Varied traffic** (``rehearse --traffic varied``, passed on): N2's profile is ``advice``, on which N2 gives no
-  verdict without N2's advised counts, so nothing is proved and the rehearsal's own check (certified, the certified I/O,
+* **Varied traffic** (``rehearse --traffic varied``, passed on): N2's profile is ``advice``, whose egress counts no N2
+  unit holds, so N2 gives no verdict, nothing is proved and the rehearsal's own check (certified, the certified I/O,
   audit, salt) is each run's verdict, late, extra and drop its negatives (`CLAIM_ADVICE`).
 * **The chain** (`stages_of`, `chain`'s docstring): ``--advice`` and ``--serving-config``, or ``--endpoint-run``, the
   endpoint's records, whose own advice for the honest run's Commit windows `verity-vllm advice` writes
@@ -155,9 +155,9 @@ CLAIM = {
 
 CLAIM_ADVICE = {
     "statement": (
-        "Certified I/O only, no counts. On the advice profile (varied traffic) N2 gives no verdict: N2's advised "
-        "counts (NetworkAdvisedCounts_v1), which derive each window's egress counts from its ingress head and the "
-        "advice, aren't run here. A report marked OK establishes, for the rehearsal's one link: every link-window's "
+        "Certified I/O only, no counts. On the advice profile (varied traffic) N2 gives no verdict: each window's "
+        "egress counts derive from its ingress head and the advice, which no N2 unit holds. A report marked OK "
+        "establishes, for the rehearsal's one link: every link-window's "
         "records certified under the certifier's key and session; the certified I/O well formed (every request an id "
         "request, every egress frame an id event of a request released by its bucket, every response ending at its "
         "first EOS or at its max_tokens); the certifier's audit of both records and the salt audit accepted (the "
@@ -170,7 +170,7 @@ CLAIM_ADVICE = {
         "the link-windows token changed. The advice's sections say what was checked of the advice, and the prove "
         "path's what it proved."),
     "not_covered": [
-        "N2's counts: no link-window's head is held to a profile or to the advice (N2's advised counts), and nothing "
+        "N2's counts: no link-window's head is held to a profile or to the advice, and nothing "
         "is proved by n2_zk, whose head check is the planned profile's; a tampered head is not refused.",
         "The tie (`io_tie`): no proof holds the certified tokens to the committed values. The tie is `io_tie`'s "
         "reference in the clear on stand-ins: the certified frames under fake salts in place of the warden's cells, and "
@@ -675,7 +675,7 @@ def markdown(r: dict) -> str:
                      f"{', '.join(f'{e}: {v['held']}' for e, v in held.items()) if held else '—'} |")
     lines += ["", "## Link-windows", ""]
     if not r["link_windows"]:
-        lines.append("No N2 verdict on the advice profile (N2's advised counts aren't run here): the rehearsal's own "
+        lines.append("No N2 verdict on the advice profile (no N2 unit holds its egress counts): the rehearsal's own "
                      "check is the verdict.")
     else:
         lines += ["N2: the verdict of record (host). Proof: each end's head check proved --zk and held by Lean, accept "
@@ -794,8 +794,7 @@ def stages_of(runs: dict[str, dict], plan: dict, args, work: Path, clock) -> dic
         log(f"prove path: adopted from {', '.join(map(str, srcs))}, ok {out['prove_path']['ok']}, bound "
             f"{out['prove_path']['bound']}")
     if (plan.get("occupancy") or {}).get("kind") == chain.ADVICE:
-        out["negatives"] = {"ran": False, "why": "its rows take N2's verdict, which the advice profile has none of "
-                                                 "without N2's advised counts"}
+        out["negatives"] = {"ran": False, "why": "its rows take N2's verdict, which the advice profile has none of"}
         out["tie"] = chain.tie({s: r["dir"] for s, r in runs.items()}, getattr(args, "endpoint_dir", None),
                                Path(args.ids) if args.ids else None, getattr(args, "endpoint_why", None))
         log(f"I/O tie: {', '.join(f'{s} {x['verdict']} (ok {x['ok']})' for s, x in out['tie']['runs'].items())}"
@@ -842,9 +841,8 @@ def run(args, rest: list[str], clock=time.monotonic) -> dict:
         advised = profile == chain.ADVICE
         log(f"runs: {', '.join(f'{s} {r['dir']}' for s, r in runs.items())}; N2's profile {profile}")
         if advised:
-            proofs = {"ran": False, "why": "not run: on the advice profile the counts are N2's advised counts "
-                                           "(NetworkAdvisedCounts_v1), which this report doesn't run, and n2_zk "
-                                           "proves the planned profile's head check"}
+            proofs = {"ran": False, "why": "not run: on the advice profile no N2 unit holds the egress counts, and "
+                                           "n2_zk proves the planned profile's head check"}
         elif profile != "planned":
             proofs = {"ran": False, "why": f"not run: the {profile} profile's count check is NetworkServedCounts_v1, "
                                            "which n2_zk doesn't prove"}

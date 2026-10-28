@@ -60,7 +60,7 @@ run's witness are the auditor's, so the draw never runs on the served node, whic
 that is the kept run's peer (its request.json's) or `PEER` is refused. Only P's own line serves P, and a reserve for a
 node with no line is refused: `AUDITOR`'s line is ports 7821-7830 (with its /etc/vy/peers entry), and on
 a node without one the chain draws on the verifier's coins. ``--main`` is the verifier's copy of main's first-parent
-history, fetched from the tree's origin into KEEP/RUN by default as n2_advised_zk.sh does; ``--challenger-key`` is the
+history, fetched from the tree's origin into KEEP/RUN by default (`first_parent`); ``--challenger-key`` is the
 deployment's challenger-key/v1 record (labelled ``challenger-key current``), sent with the run. CR_SCAN_ARGS and
 CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--challenger``, ``--peer``) themselves.
 
@@ -373,7 +373,7 @@ def served_peer(fetch: Path) -> str | None:
 
 
 def first_parent(tree: Path, dest: Path) -> Path:
-    """main's first-parent history from `tree`'s origin, written to `dest` (n2_advised_zk.sh's)."""
+    """main's first-parent history from `tree`'s origin, written to `dest`."""
     git = ["git", "-C", str(tree)]
     shallow = subprocess.run([*git, "rev-parse", "--is-shallow-repository"], capture_output=True, text=True)
     unshallow = ["--unshallow"] if shallow.stdout.strip() == "true" else []

@@ -12,8 +12,8 @@
 #   endpoint with CR_ENDPOINT, the endpoint's own advice bound to the run and the I/O tie on it, both in the clear
 #            (network-e2e's e2e.py --no-prove: chain.served_advice and chain.tie)
 #   n2       N2's units proved by C-Flock --zk and decided by its verifier of record, Lean included: CR_N2_CMD
-#            (a sampled draw on signed clocks); else on the advice profile n2_advised_zk.py --e2e on the bound
-#            advice and the certifier's clock certificates, and on the others n2_zk.py prove
+#            (a sampled draw on signed clocks); else n2_zk.py prove, and on the advice profile, whose egress counts no
+#            N2 unit holds, not run
 #   scan     the scan's chained units, --zk, held by Lean verify --zk --registered (scan_zk.py prove, with
 #            --warden-run when CR_WARDEN_RUN names the gate's warden run and scan_zk takes it)
 #   tie      on the warden path, the I/O tie on the warden's ingress, proved (n2_tie_zk.py prove --class warden)
@@ -31,10 +31,7 @@
 #      isn't LMS at lms.DEPLOYED, H = 20)
 #      CR_ENDPOINT (the endpoint's records, network_e2e chain.ENDPOINT's four files: a tarball's name under inputs/,
 #      an art: id, or a directory)
-#      CR_N2_ROUNDS (n2_zk.py's --rounds)  CR_N2_WINDOWS (n2_advised_zk.py's --windows)
-#      CR_N2_MEMBERS (its --members)  CR_N2_STANDIN=simulated (a dry run's: on the advice profile when the
-#      advice doesn't bind, the advised unit on n2_advised_zk's simulated link, labelled a stand-in)
-#      CR_N2_ARGS (more n2_advised_zk.py arguments, e.g. "--draw 4", a sampled period on the verifier's own coins)
+#      CR_N2_ROUNDS (n2_zk.py's --rounds)
 #      CR_N2_CMD (replaces the above; run with HONEST, CLIENT, BIN, LEAN, E2E and N2OUT set, writing N2OUT/summary.json)
 #      CR_WARDEN_RUN (the warden rehearsal's run, a path under the unpacked gates)  CR_SCAN_ARGS (more scan_zk.py
 #      arguments, e.g. "--draw 8")  CR_SCAN_CMD (replaces scan_zk.py prove; SCANOUT/summary.json)
@@ -178,8 +175,6 @@ elif [ -n "${CR_ENDPOINT:-}" ]; then
   mkdir -p "$OUT/endpoint"; cp "$E2E"/report.json "$E2E"/report.md "$E2E"/endpoint/advice.log "$OUT/endpoint/" 2>/dev/null
   [ -d "$E2E/rehearsal" ] || ln -s "${HONEST%/honest}" "$E2E/rehearsal"
 fi
-BOUND=$("$PY" -c 'import json, sys; b = json.load(open(sys.argv[1]))["chain"]["bits"]; print(int(bool(b["bound"] and b["rebuilt"])))' \
-  "$E2E/report.json" 2>/dev/null || echo 0)
 (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 (cd verity/core/protocols/network/lean && lake build network-records ${CR_PERIOD_ANSWER:+network-period}) \
@@ -199,23 +194,14 @@ keep() {   # keep FROM TO: the public files and what the verifier received, neve
 }
 n2() {
   export HONEST CLIENT BIN LEAN E2E N2OUT=$W/n2
-  local advised="$PY benchmarks/network_traces/n2_advised_zk.py prove --bin $BIN --lean $LEAN --out $N2OUT \
-    ${CR_N2_MEMBERS:+--members $CR_N2_MEMBERS} ${CR_N2_ARGS:-}"
   if [ -n "${CR_N2_CMD:-}" ]; then cmd=$CR_N2_CMD
   elif [ "${CR_PATH:-}" = warden ]; then cmd="$PY benchmarks/network_traces/n2_zk.py prove --warden-run $WARDEN \
     --bin $BIN --lean $LEAN --out $N2OUT ${CR_N2_GPU:+--gpu} ${CR_N2_DRAW:+--draw $CR_N2_DRAW}"
   elif [ "$PROFILE" != advice ]; then cmd="$PY benchmarks/network_traces/n2_zk.py prove --run $HONEST --bin $BIN \
     --lean $LEAN --out $N2OUT ${CR_N2_ROUNDS:+--rounds $CR_N2_ROUNDS}"
-  elif [ "$BOUND" = 1 ]; then cmd="$advised --e2e $E2E ${CR_N2_WINDOWS:+--windows $CR_N2_WINDOWS}"
   else
-    why="the run is on the advice profile, whose counts N2's advised unit decides on the endpoint's advice, and "
-    if [ -z "${CR_ENDPOINT:-}" ]; then why+="no endpoint records were given (CR_ENDPOINT)"
-    else why+="the endpoint's advice doesn't bind to the run: $("$PY" -c 'import json, sys
-b = json.load(open(sys.argv[1]))["chain"]["bits"]; print((b.get("bound_why") or b.get("why") or "")[:400])' "$E2E/report.json" 2>/dev/null)"; fi
-    if [ "${CR_N2_STANDIN:-}" = simulated ]; then
-      echo "the advised unit on n2_advised_zk's simulated link (its certifier signs each window's sync), not the gate's: $why" \
-        > "$W/n2.standin"; cmd=$advised
-    else echo "$why" > "$W/n2.why"; log "chain: n2 not run: $why"; echo 2 > "$W/n2.rc"; return; fi
+    why="the run is on the advice profile, whose egress counts no N2 unit holds"
+    echo "$why" > "$W/n2.why"; log "chain: n2 not run: $why"; echo 2 > "$W/n2.rc"; return
   fi
   log "chain: n2: $cmd"
   bash -c "$cmd" > "$OUT/n2.log" 2>&1

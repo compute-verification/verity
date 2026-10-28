@@ -1,10 +1,9 @@
 """N2's link-window verdict of record in Lean (`NetworkCheck.LinkWindow`, `LinkWindows.lean_verdict`) held to the
 Python (`LinkWindows.python_verdict`), the reference that keeps running beside it: the same accept bit, public outputs
-and digest on plain, served, advised and warden link-windows, honest and tampered (the session refused, rejected, naming
-another Program or other units; the public file's bytes flipped, cut, missing, naming another unit or its unit twice, or
-in a shared-row layout; the salts and the output word forged; each certificate's fields edited, the certificates
-swapped, missing or not certificates; the declared syncs off Σ_sync or missing; an advised window without an advice;
-a warden link under another digest).
+and digest on plain, served and warden link-windows, honest and tampered (the session refused, rejected, naming another
+Program or other units; the public file's bytes flipped, cut, missing, naming another unit or its unit twice, or in a
+shared-row layout; the salts and the output word forged; each certificate's fields edited, the certificates swapped,
+missing or not certificates; the declared syncs off Σ_sync or missing; a warden link under another digest).
 And what `verify` does with the two: the switch (`OF_RECORD`) names the verdict of record, a disagreement or a case the
 Lean can't state (a key other than an `LmsKey`) rejects."""
 
@@ -22,10 +21,8 @@ from verity.core.protocols.certifier.schedule import ClockSync
 from verity.core.protocols.sampled_proofs.one_stage.proofs import Finding
 
 import standin
-import test_network_certifier_advised as advised
 import test_network_certifier_served as served
 import test_network_certifier_service as plain
-from advised_traffic import serve
 
 
 @pytest.fixture(autouse=True)
@@ -37,23 +34,22 @@ class Case:
     """One link-window's draw, certificates, syncs and delivered proof, with the findings of the stand-in Lean run on
     the honest proof."""
 
-    def __init__(self, lw, opening, draw, syncs, tmp, advice=None):
-        self.lw, self.draw, self.syncs, self.tmp, self.advice = lw, draw, syncs, tmp, advice
+    def __init__(self, lw, opening, draw, syncs, tmp):
+        self.lw, self.draw, self.syncs, self.tmp = lw, draw, syncs, tmp
         self.certificates = [r.certificate for r in opening.records]
-        self.delivered = standin.prove(lw, opening, draw, syncs, tmp / "honest", advice=advice)
+        self.delivered = standin.prove(lw, opening, draw, syncs, tmp / "honest")
         self.findings, refused = standin.lean(self.delivered.proof, circuit_sha512=standin.circuit_sha512(self.delivered),
                                               program=lw.program, partition=lw.partition)
         assert refused is None
         self._files = itertools.count()
 
-    def both(self, *, certificates=None, syncs=None, delivered=None, findings=(), advice=()):
+    def both(self, *, certificates=None, syncs=None, delivered=None, findings=()):
         """The Lean's and the Python's verdicts on the case with the given inputs replaced."""
         args = (self.draw, self.certificates if certificates is None else certificates,
                 self.syncs if syncs is None else syncs, delivered or self.delivered,
                 self.findings if findings == () else findings)
         sessions = args[3].sessions()
-        advice = self.advice if advice == () else advice
-        return (self.lw.lean_verdict(*args, sessions, advice), self.lw.python_verdict(*args, sessions, advice))
+        return self.lw.lean_verdict(*args, sessions), self.lw.python_verdict(*args, sessions)
 
     def public(self, data):
         """The honest delivery with the public file's bytes `data` (None: no file)."""
@@ -81,12 +77,6 @@ def _served(tmp):
     return Case(run.lw, opening, run.stream.select(reg), served.SYNCS, tmp)
 
 
-def _advised(tmp):
-    run, session = advised.Run(tmp), serve(advised.SEEDS[0])
-    opening, draw = run.draw(0, session.egress[0], session.ingress[0])
-    return Case(run.lw, opening, draw, advised.SYNCS, tmp, advice=session.link)
-
-
 def _warden(tmp):
     """The plain link as a warden's (`WardenProfile`): both records certified under the warden's parameters digest, no
     occupancy profile."""
@@ -100,7 +90,7 @@ def _warden(tmp):
     return Case(lw, opening, run.stream.select(run.register(opening)), plain.SYNCS, tmp)
 
 
-KINDS = {"plain": _plain, "served": _served, "advised": _advised, "warden": _warden}
+KINDS = {"plain": _plain, "served": _served, "warden": _warden}
 
 
 def _header(data):
@@ -195,8 +185,6 @@ def test_the_lean_verdict_is_the_pythons(tmp_path, kind):
     cases += [{"certificates": cs} for cs in _certificates(c)]
     if kind != "warden":
         cases += [{"syncs": s} for s in _syncs(c)]
-    if kind == "advised":
-        cases += [{"advice": None}, {"advice": "not an advice"}]
     rejected = 0
     for k, kw in enumerate(cases):
         lean, python = c.both(**kw)

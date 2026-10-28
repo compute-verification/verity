@@ -82,7 +82,7 @@ def _derived():
 
 
 D = _derived()
-ADVICE = "advice"  # certifier_serve's varied plan's N2 profile: the egress counts are N2's advised counts' to derive
+ADVICE = "advice"  # certifier_serve's varied plan's N2 profile: its egress counts, from the advice, no N2 unit holds
 
 
 def _sha512(data: bytes) -> str:
@@ -806,9 +806,9 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
         out.append("Varied traffic: certifier_serve.py's `rehearse --traffic varied` (Poisson arrivals, "
                    "prompts as ids, real EOS) isn't in this tree.")
     if r.get("profile") == ADVICE:
-        out.append("N2 on the advice profile: N2's advised counts (NetworkAdvisedCounts_v1) aren't run, so no "
-                   "link-window has N2's verdict and nothing is proved by n2_zk; the rehearsal's own check (certified "
-                   "I/O, audit, salt) is the verdict.")
+        out.append("N2 on the advice profile: no N2 unit holds its egress counts, so no link-window has N2's verdict "
+                   "and nothing is proved by n2_zk; the rehearsal's own check (certified I/O, audit, salt) is the "
+                   "verdict.")
     a, b = c.get("advice"), c.get("bits") or {}
     served = "served" in b
     if a is None and not served:
@@ -830,8 +830,7 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
                    "registered.")
     if served:
         out.append("Advice in the clear: the rehearsal opens each Commit window's advice to its report, where only its "
-                   "registration is public; the compile unit and N2's advised counts, which take it hidden, aren't run "
-                   "here.")
+                   "registration is public; the compile unit, which takes it hidden, isn't run here.")
     out.append("Coded bits: the chain doesn't run the advice code (encodings/code_v1.py).")
     p = c.get("prove_path")
     if p is None:

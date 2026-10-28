@@ -25,9 +25,9 @@ decides nothing.
   certified it); with ``--late``, its ``late`` run. The prover's references (`head_check.reference_parts`, and the unit's
   output word by the gates' references, `LinkWindows.outputs`) say beforehand which windows each member's proofs refuse
   (`expected`).
-* **The period** (``--draw K``): each member's windows sampled rather than all proved, as `n2_advised_zk`'s: every
-  window's salted root committed, then K of them drawn on the verifier's own coins (`LinkWindows.period_draw`), and
-  only those registered, proved and decided; the network verdict is the sampled one, its ``wrong_units`` at the
+* **The period** (``--draw K``): each member's windows sampled rather than all proved: every window's salted root
+  committed, then K of them drawn on the verifier's own coins (`LinkWindows.period_draw`), and only those
+  registered, proved and decided; the network verdict is the sampled one, its ``wrong_units`` at the
   stream's δ, on the Lean verifier of record's draw. ``tampered`` then changes every window (`every_count`), which any
   draw refuses, and with K < n ``other_subset`` proves the honest records on another K-subset (`other_subset`), every
   window accepted, which the network verdict refuses by name (``period-draw``).
@@ -80,7 +80,7 @@ sys.path.insert(0, str(HERE))
 
 import certifier_serve as cs  # noqa: E402
 import leak_scan as LS  # noqa: E402
-from verity.core.protocols.certifier import advised as AD, head_check as HC  # noqa: E402
+from verity.core.protocols.certifier import head_check as HC  # noqa: E402
 from verity.core.protocols.certifier import service as SVC  # noqa: E402
 from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
@@ -187,7 +187,7 @@ def link_windows(run: Path, edit=None, clock=None, warden: bool = False) -> Simp
             failed={e: None if i is None else [k for k, ok in HC.reference_parts(i).items() if not ok]
                     for e, i in zip(ENDS, insts)},
             expect=int(word == 0b11 and others), statement=None))
-    rd = SimpleNamespace(lw=lw, plan=plan, syncs=syncs, windows=out, issuer_refused=refused, advice=None)
+    rd = SimpleNamespace(lw=lw, plan=plan, syncs=syncs, windows=out, issuer_refused=refused)
     if clock is not None:
         st = lw.stream(budget=plan["windows"], delta=cs.DELTA, challenger="n2-zk", coins=cs._no_coins, clock=clock)
         previous = None
@@ -225,7 +225,7 @@ def expected(name: str, rd: SimpleNamespace) -> bool:
     """Whether the member's references are its round's: every unit takes an instance, and its verdict bit is 1 exactly
     where no part fails; honest and other_subset, none fails and every window accepts; tampered, window 0's egress head
     (every window's, ``rd.every``) fails its counts and its signed digest only (its signed digest alone on the advice
-    profile, whose counts the unit leaves to N2's advised unit, and on a warden link, whose counts are its schedule's);
+    profile, whose egress counts no profile holds, and on a warden link, whose counts are its schedule's);
     extra, egress heads fail their counts alone, on one window or more; late, egress heads
     fail their fields and counts, on one window or more. The ingress heads fail nothing, and every negative member
     refuses one window or more."""
@@ -266,7 +266,7 @@ def blobs_of(rd: SimpleNamespace) -> tuple[dict[str, bytes], set[str]]:
 
 #: The scan's one cutter (`leak_scan.public_pieces`: each row cut whole, less the pieces the staged circuit holds, such
 #: as a head's empty buckets, sixteen zero bytes), under the name the drivers that import this module call. The held
-#: blobs are fields of the ``wit`` row (``fields``): an advised head, 157 + L + 4T bytes, ends off a 16-byte boundary,
+#: blobs are fields of the ``wit`` row (``fields``): a head of 157 + L + 4T bytes ends off a 16-byte boundary,
 #: and the instance holds its salt after it, never its zero-padded last chunk.
 public_pieces = functools.partial(LS.public_pieces, fields=True)
 
@@ -416,7 +416,7 @@ def stage(M, sg: SimpleNamespace, members: dict[str, SimpleNamespace], secret: b
         (d / "tables").mkdir(exist_ok=True)
         os.link(sg.circuit, d / "circuit.txt")
         bcs = SVC._commitments(d / "pub-1.bin", 0)
-        mine = lw.public_arguments(x.window, x.root, x.certificates, members[name].syncs, members[name].advice)
+        mine = lw.public_arguments(x.window, x.root, x.certificates, members[name].syncs)
         if not (bcs and mine is not None and lw.row(mine, "pub") == lw.row(x.args, "pub")
                 and SVC._opens(lw.row(mine, "pub"), lw.bits("pub"), salts["pub"][0], bcs["pub"])
                 and SVC._opens(SVC.output_row(words[k]), SVC.OUT_BITS, salts["o0"][0], bcs["o0"])):
@@ -468,8 +468,8 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     verifier receives under ``out / "verifier"`` (`RECEIVED`), each file prefixed by its window. Window j's session
     listens on ``port + j``, or with ``port`` 0 on a port the OS picks free.
 
-    With ``a.draw`` K (> 0), the period is sampled (`LinkWindows.period_draw`): every window's salted root and the
-    advice's digest are committed first, then `coins` draw K of the windows, and only those are registered, proved and
+    With ``a.draw`` K (> 0), the period is sampled (`LinkWindows.period_draw`): every window's salted root is
+    committed first, then `coins` draw K of the windows, and only those are registered, proved and
     decided; the draw is ``period.json`` beside what the verifier receives, and the network verdict is the sampled one,
     with its ``wrong_units`` at the stream's δ (``a.delta``, by default `certifier_serve.DELTA`), on the draw of
     record: the Lean verifier of record's (``--lean``) draw on the coins the period draw read (`service.lean_draw`),
@@ -490,8 +490,7 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     drawn, windows, segment = None, rd.windows, None
     if k is not None:
         try:
-            drawn = lw.period_draw(stream, [x.root.hex() for x in rd.windows], k, coins,
-                                   advice=None if rd.advice is None else AD.digest(rd.advice))
+            drawn = lw.period_draw(stream, [x.root.hex() for x in rd.windows], k, coins)
         finally:
             if callable(getattr(coins, "drawn", None)):
                 segment = coins.drawn()
@@ -521,13 +520,12 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
         late = stream.deliver(draw, delivered.sessions())
         t = time.time()
         outcome = late or lw.outcome(stream, draw, x.certificates, rd.syncs, delivered,
-                                     circuit_sha512=sg.circuit_sha512, opening=x.opening if a.debug_clear else None,
-                                     advice=rd.advice)
+                                     circuit_sha512=sg.circuit_sha512, opening=x.opening if a.debug_clear else None)
         verify_s = round(time.time() - t, 1)
         body = stream.records[-1]
         verdict = (body.get("audit") or {}).get("verdicts", {}).get(SVC.VERIFIER) or {}
         findings, refused = LEAN_RUNS.get(str(delivered.proof.public), (None, "no Lean run"))
-        args = lw.public_arguments(x.window, x.root, x.certificates, rd.syncs, rd.advice)
+        args = lw.public_arguments(x.window, x.root, x.certificates, rd.syncs)
         proof = {"lean_accepted": refused is None and bool(findings) and all(f.accepted for f in findings),
                  "refused": refused, "proved": refused is None and lw.proved(findings or [])
                  and all(list(f.units) == [0] for f in findings),
@@ -557,8 +555,7 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
                **({"clear": verdict["clear"]} if "clear" in verdict else {})}
         row["as_expected"] = (row["accepted"] == bool(x.expect) and not row["late"] and row["decided_by"] == "proof"
                               and proof["proved"] and proof["opened_word"] == x.word and proof["certified"]
-                              and row["public"] == {"verdict": x.expect, "deadline": x.word >> 1 & 1}
-                              | lw._advice_output(rd.advice))
+                              and row["public"] == {"verdict": x.expect, "deadline": x.word >> 1 & 1})
         rows.append(row)
         log(f"{name} window {x.window}: {'accept' if outcome.accepted else 'reject'} public {row['public']}"
             f"{' LATE' if late else ''}, Lean {'proved' if proof['proved'] else 'NOT proved'}, output word "

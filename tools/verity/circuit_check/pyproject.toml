@@ -113,8 +113,6 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/certifier/served_statics.circuit-check.py",
           "verity/core/protocols/certifier/served_statics.circuit-check.json",
           "verity/core/protocols/sampled_proofs/one_stage",
-          "verity/core/protocols/certifier/advised.py", "verity/core/protocols/certifier/advised.circuit-check.py",
-          "verity/core/protocols/certifier/advised.circuit-check.json",
           "verity/core/protocols/pouw/window.py", "verity/core/protocols/sampled_proofs/service.py",
           "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/pouw/weights.py",
           "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py", "integrations/vllm/verity_vllm/program",
@@ -135,6 +133,4 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/certifier/compile_slice_v3.circuit-check.py",
           "verity/core/protocols/certifier/compile_slice_v3.circuit-check.json",
           "verity/core/protocols/certifier/served_rows.py", "verity/core/protocols/certifier/warden.py",
-          "verity/core/protocols/certifier/release.py",
-          "verity/core/protocols/certifier/advised.py", "verity/core/protocols/certifier/advised.circuit-check.py",
-          "verity/core/protocols/certifier/advised.circuit-check.json"]
+          "verity/core/protocols/certifier/release.py"]

@@ -487,10 +487,9 @@ def test_the_certifier_process_keeps_and_signs_as_the_inline_publisher_does(serv
 def test_the_served_proxy_hands_its_certifier_each_egress_windows_sync_which_it_signs(tmp_path):
     """`ServedProxy` hands its `publish` the sync its own shaper ran each egress window under, and none with an ingress
     record or past the shaper's syncs; `CertifyingPublisher` signs it salted beside the window's record (`clocks.jsonl`,
-    with its opening), and an advised link's clock source of record opens exactly those syncs back
-    (`LinkWindows(certified_clocks=…)`)."""
+    with its opening), and the certifier's key opens exactly those syncs back (`certificate.SignedClocks`)."""
+    from verity.core.protocols.certifier.certificate import SignedClocks
     from verity.core.protocols.certifier.grid import Certifier
-    from verity.core.protocols.certifier.service import LinkWindows
 
     probed = {"url": "stub", "body": cs.request_body("stub", TOKENS),
               "responses": [{"events": TOKENS, "first_s": 0.0, "last_s": 0.0}]}
@@ -529,8 +528,8 @@ def test_the_served_proxy_hands_its_certifier_each_egress_windows_sync_which_it_
         signer.close()
     clocks = cs.read_clocks(tmp_path / "clocks.jsonl")
     assert [(c.link, c.window, c.sync) for c in clocks] == [(cs.N2_LINK, w, syncs[w]) for w in (0, 1)]
-    lw = LinkWindows(cs.N2_LINK, e, setup.sync_set, key, "r-clocks", SESSION, ingress=i, certified_clocks=clocks)
-    assert lw.clock_source.syncs(cs.N2_LINK) == tuple(syncs) and lw.clock_source.refused == ()
+    signed = SignedClocks(key, SESSION, tuple(clocks))
+    assert signed.syncs(cs.N2_LINK) == tuple(syncs) and signed.refused == ()
     assert cs.read_clocks(tmp_path / "absent.jsonl") == []
 
 

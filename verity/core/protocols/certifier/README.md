@@ -55,7 +55,7 @@ A spec-level reference for network accounting's timing channel:
   registered bucket row (`warden_rows.bucket_port`), each live connection's lane of r slots read as the warden's cells
   (a `PAD` on its ordinal, a `DATA` of exactly B − 9 bytes, its `END`), each request cell a cell of CERT-VARLEN's id
   request, with its count of prompt fields carried across buckets from the lane's carry-in to its carry-out, which
-  hold each request's prompt_len to the advice's and which N2-ADVICE's advised verdict (`advised.IoTieVerdict`) is
+  hold each request's prompt_len to the advice's and which the ingress tie's verdict (`tie_service.IoTieVerdict`) is
   built from. It has the reference, the lanes the verifier computes from the advice and the warden's release
   (`lanes`, `Release`), and the unit's Boolean Definition (`IoTieRequest`: one `IoTieRequestFrame` and
   `IoTieRequestStep` a cell, `IoTieRequestEnd` a lane); the ingress-ids tie (`io_ids`, `IoTieRequestIds`) adds the
@@ -248,37 +248,21 @@ A spec-level reference for network accounting's timing channel:
   (`Proxy(pair=active.Pair.of(…))`, off by default), between two of the auditor's certifiers, every slot of the link is
   sealed after its record and opened before it (`verity.ml.crypto.aead`, SHA-512 counter mode then HMAC-SHA512, a
   nonce per slot), so the records are the unsealed run's and a unit that doesn't open fails the link closed;
-- an advised link's counts (`advised`, `LinkWindows(advised=AdvisedProfile(windows, request_frames, own))`), a
-  served link under arbitrary traffic: N2's advised unit, `NetworkAdvisedLinkWindow`, adds `NetworkAdvisedCounts_v1`
-  (63,031 ANDs at T = 600, R_in = 1), which holds the egress head's counts to the releases of the prover's advice
-  (`LinkAdvice`: I1's `advice.Advice` and each window's request frames), and the ingress head's counts to the advice:
-  each release eligible under the sync the certifier ran its window under (the verifier's own clock source,
-  `LinkWindows.clock_source`: the certifier's salted clock certificates, `certificate.CertifiedClock`, each sync read
-  through its opening, witness, against the digest the public certificate signs, which each window's
-  declared sync must match, one of Σ_sync, or that window is refused), so never before the bucket of its request's
-  last frame (the request's end on the ingress link, which `advised.ends` derives from v0's prompt lengths and the
-  link's public framing), and each window's ingress total the advice's. Carry-over between windows is the advice's.
-  With the advice fixed the counts are determined, so the egress timing carries at most `advice.bits` (`PROTOCOL.md`,
-  "An advised link"). The prompt lengths are tied to the certified ones only by IO-TIE's `IoTieRequest` verdict
-  (`advised.IoTieVerdict`, naming the link and its ingress registrations), which the verifier takes from its own tie
-  source (`LinkWindows.ties`), never beside the advice: the tie service's (below). The served size class isn't
-  pinned, so there every advised link is refused (fail closed), as is a link without the certifier's clock
-  certificates;
 - the ingress tie through the proof service (`tie_service`): `IngressTie`, each ingress link-window's `IoTieRequest`
   units, one a bucket row of the warden's registered ingress cells, proved as `NetworkIngressTieBucket` (one gate
   naming its pinned circuit digest, `io_request.circuit-check.json`) with the row read off the warden's root
   (`warden_rows.bucket_port`), decided by the verifier of record on its own lanes from the advice and the warden's
-  release, and `IngressTie.tie`, which builds `advised.IoTieVerdict` on the link and the stream's registrations from
-  the stream's outcomes of record alone; `Ties`, the tie, its stream and the release as the `LinkWindows.ties` the
-  advised link reads. A size class no sidecar pins has no accepted proof.
+  release, and `IngressTie.tie`, which builds `IoTieVerdict` on the link and the stream's registrations from the
+  stream's outcomes of record alone; `Ties`, the tie, its stream and the release as the verifier's own tie source,
+  which gives the verdict only on its own link. A size class no sidecar pins has no accepted proof.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's
 Definition, and in `active` the proof service's registration and receipt, which `reveal` reads, and the pair link's
 AEAD (`verity.ml.crypto.aead`). The certificate's signature scheme is a parameter: the certifier's
 `certificate.Issuer` takes a `Signer`, and the audit a `PublicKey`.
-From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` and `advised`
-the circuits and their evaluator.
+From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` the circuits
+and their evaluator.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's
 definitions, proved equal to them in `Security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this
@@ -342,7 +326,7 @@ in-the-clear check, `LinkWindows.clear`, is a debug comparison, off by default. 
 
 `LinkWindows.verify`'s verdict of record on a plain, served or warden link is the Lean's, `NetworkCheck.LinkWindow`
 (`verity/core/protocols/network/lean`, the `link-window` function of `network-records verdicts`), by the one switch line
-`service.OF_RECORD`; an advised link's stays the Python's. `verify` runs both on every proof, and a link-window where
+`service.OF_RECORD`. `verify` runs both on every proof, and a link-window where
 they differ in the accept bit, the public outputs or the digest, or which the Lean refuses, is rejected. The switch went
 to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
 - the gap list is empty for plain and served links. Everything the Python checks, the Lean checks: the findings prove
@@ -350,9 +334,8 @@ to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
   domain, link, window, each end's grid and profile row, both signed digests, a served link's sync words), both rows'
   openings and the word 0b11, both certificates under the LMS key in the certifier session, and the sync in Σ_sync. Both
   take as inputs what the proof service and the lowering give: the findings of the verifier's own C-Flock Lean run, the
-  sessions' SHA-512s, the registration, the draw, and the Program's and partition's digests and the gate ids. On an
-  advised link the window view (`advised.view`, from the tie and clock sources) is the Python's and an input to the Lean,
-  which is why advised stays `python`. The Lean reads an LMS key only, and rejects any other.
+  sessions' SHA-512s, the registration, the draw, and the Program's and partition's digests and the gate ids. The Lean
+  reads an LMS key only, and rejects any other.
 - on a warden link (`service.WardenProfile`) the gap list is empty too: the Lean's warden form (`Kind.warden`) is the
   plain unit's public row with both ends' grids at the warden's parameters digest, which both take as an input (the
   warden's deployment publishes it), and no sync read, as in the Python; it refuses a warden case whose digest isn't 64

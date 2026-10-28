@@ -1,7 +1,7 @@
 """The ingress tie through the proof service: each bucket row of an ingress link-window of the warden's cells proved as
-`io_request.IoTieRequest`, and the verifier of record that builds `advised.IoTieVerdict`, the tie of an advised link's
-requests to its certified ingress, only from IoTieRequest proofs it verified on lanes it computed itself (PROTOCOL.md,
-"The ingress tie").
+`io_request.IoTieRequest`, and the verifier of record that builds `IoTieVerdict`, the tie of a link's requests to its
+certified ingress, only from IoTieRequest proofs it verified on lanes it computed itself (PROTOCOL.md, "The ingress
+tie").
 
 **What is committed** is the warden's own (`warden_rows`): an ingress link-window's T bucket rows, row t bucket t's
 S = L·R slots of B bytes (a slot no connection holds B zero bytes), each an `hm96-sha512/row/v2` row under the
@@ -33,28 +33,29 @@ proof and public inputs alone. It accepts the window when the verifier's own run
 own registered reads at the warden's root (`registered`), accepts every session, they prove this tie's registered unit
 (`proved`: its gate names the pinned digest, every session the registered Program) and every drawn unit, and each
 unit's ``pub`` row opens, under the salt delivered, to the verifier's own lanes and its ``o0`` row to 1. Its public
-outputs are `verdict` and `advice`, A's `advised.digest`. A proof on another advice's lanes or another release opens
-to another ``pub`` row and is refused, and a row that isn't the warden's fails the registered read.
+outputs are `verdict` and `advice`, A's `digest`. A proof on another advice's lanes or another release opens to
+another ``pub`` row and is refused, and a row that isn't the warden's fails the registered read.
 
-**The tie** (`IngressTie.tie`) is `advised.IoTieVerdict(link, registrations, advised.digest(A), accepted)`: the link,
+**The advice** (`LinkAdvice`) is I1's advice (`advice.Advice`) and `received[w]`, window w's request cells, under the
+link's public profile (`AdvisedProfile`: its windows, its framing and its own frames, fixed before the run).
+
+**The tie** (`IngressTie.tie`) is `IoTieVerdict(link, registrations, digest(A), accepted)`: the link,
 the stream's registrations (each one's `registration.digest`, in order), A's digest and one bit a registration, read
 from the stream's outcomes of record alone. Window w is accepted when the stream's w-th registration is window w's and
 its outcome of record accepted, decided on the proof, naming A's digest, and when the release is the warden's schedule
 for A (`io_request.lanes` takes it on every bucket: ordinals admitted in order, each connection one advice request,
 its cells its request's) and gives A's `received`, each window's request cells. Every window is refused when they
-don't, when the stream holds a registration past A's windows or misses one, and when the advised profile's framing
-isn't the warden's cut of A's prompt lengths (`framing`) or names an own frame, which the warden's ingress has none
-of. A connection's lanes chain by construction from (0, 0) into its first bucket to (0, n) out of its `END`'s, so an
+don't, when the stream holds a registration past A's windows or misses one, and when the profile's framing isn't the
+warden's cut of A's prompt lengths (`framing`) or names an own frame, which the warden's ingress has none of. A
+connection's lanes chain by construction from (0, 0) into its first bucket to (0, n) out of its `END`'s, so an
 accepted verdict on every window says what IoTieRequest's units say together: connection i + 1 is an id request of
-v0's `prompt_len` prompt fields (a carried field count is held by the bucket before). That is
-the premise `advised.ends` reads, from the verifier's own tie source alone (`Ties`, the tie, its stream and the
-release as `service.LinkWindows.ties`), never from what the prover delivers, and `advised.view`
-holds the verdict to the link and the registrations the source records, so a verdict on another link or another
-ingress record isn't reused.
+v0's `prompt_len` prompt fields (a carried field count is held by the bucket before). The verifier reads it only from
+its own source (`Ties`: the tie, its stream and the release), never from what the prover delivers, and the verdict
+names the link and its registrations, so a verdict on another link or another ingress record isn't this one's.
 
 **What it doesn't establish.** The prompt ids' values (the ingress-ids tie, `io_ids`). The release is taken in the
 clear (the named gap). That the warden's cells are the frames the ingress certifier counted is the device's: both are
-the auditor's device's record of the link, and the advised unit holds `received` to the certified ingress head.
+the auditor's device's record of the link.
 """
 from __future__ import annotations
 
@@ -69,7 +70,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.program import Program
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
-from verity.core.protocols.certifier import advised as AD, head_check as HC, io_request as Q
+from verity.core.protocols.certifier import advice as ADV, head_check as HC, io_request as Q
 from verity.core.protocols.certifier import service as SVC, warden_rows as WR
 from verity.core.protocols.certifier.certificate import Direction
 from verity.core.protocols.certifier.warden import WardenParams
@@ -91,6 +92,9 @@ WITNESS = ("row",)
 #: the circuit port the warden's rows are read on: each unit's witness row is its bucket row
 REGISTERED = "wit"
 _STATICS = ("B", "L", "R")
+U32_MAX = (1 << 32) - 1
+#: the advice's digest (`digest`), which each window's `advice` output and the tie's verdict name
+DIGEST = "verity-network-certifier/advised-advice/v2"
 
 PUBLIC = (
     S.Public("population", "structure", "T proof units per registration, unit t the link-window's bucket row t"),
@@ -102,7 +106,7 @@ PUBLIC = (
     S.Public("shape", "structure", "B, L, R and T: the cells' bytes, the warden's lanes, its r and its buckets a "
              "window, fixed before the run"),
     S.Public("verdict", "output", "the window's IoTieRequest verdict, every bucket row's, accept or reject"),
-    S.Public("advice", "output", "the advice the window's statement is computed from (`advised.digest`): its v0 "
+    S.Public("advice", "output", "the advice the window's statement is computed from (`digest`): its v0 "
              "prompt lengths and the warden's release give each bucket's lanes (`io_request.lanes`), a unit's public "
              "row in the named gap; `IngressTie.tie` holds every window to one advice"),
 )
@@ -147,12 +151,99 @@ def request_cells(prompt_len: int, B: int) -> int:
 
 
 def framing(B: int, n_max: int) -> tuple[int, ...]:
-    """The link's framing as the warden cuts requests, for `advised.AdvisedProfile.request_frames`: entry n − 1 is the
-    request cells an id request of an n-token prompt takes at B (`request_cells`), n = 1 … n_max."""
+    """The link's framing as the warden cuts requests, for `AdvisedProfile.request_frames`: entry n − 1 is the request
+    cells an id request of an n-token prompt takes at B (`request_cells`), n = 1 … n_max."""
     return tuple(request_cells(n, B) for n in range(1, n_max + 1))
 
 
-def prompt_lens(advice: AD.LinkAdvice) -> tuple[int, ...]:
+@dataclass(frozen=True)
+class AdvisedProfile:
+    """The link's public sizes the tie reads, fixed before the run: its windows; `request_frames`, the link's framing,
+    whose entry n − 1 is the ingress frames a request of an n-token prompt takes, for every prompt length the link
+    admits (`framing`); and `own`, the ingress certifier's own frames at the head of every window's first bucket: 1
+    with its salt on (`active.Proxy(salt=…)`), else 0. The warden's ingress has none, so `IngressTie.tie` refuses a
+    profile with one."""
+
+    windows: int
+    request_frames: tuple[int, ...]
+    own: int = 0
+
+    def __post_init__(self) -> None:
+        if not all(type(x) is int for x in (self.windows, self.own)) or self.windows < 1 or self.own not in (0, 1):
+            raise ValueError(f"a tie's profile has one or more windows and 0 or 1 own frames a window, not {self!r}")
+        frames = self.request_frames
+        if not isinstance(frames, (tuple, list)) or not frames or \
+                not all(type(n) is int and 1 <= n <= U32_MAX for n in frames):
+            raise ValueError(f"a tie's framing is one positive u32 frame count a prompt length, from 1 token on, not "
+                             f"{frames!r:.200}")
+        object.__setattr__(self, "request_frames", tuple(frames))
+
+
+def _sha512_hex(x: Any) -> bool:
+    return type(x) is str and len(x) == 128 and not set(x) - set("0123456789abcdef")
+
+
+@dataclass(frozen=True)
+class LinkAdvice:
+    """What the prover delivers beside the link's public profile: I1's advice and `received[w]`, window w's request
+    frames. It carries no tie: one delivered beside the advice is the prover's (a verdict built from its own advice's
+    digest), so the tie is only `IngressTie.tie`'s, from IoTieRequest proofs the verifier verified. Construction
+    refuses (`advice.MalformedAdvice`) an advice that isn't an `advice.Advice` and a `received` that isn't u32s."""
+
+    advice: ADV.Advice
+    received: tuple[int, ...]
+
+    def __post_init__(self) -> None:
+        if type(self.advice) is not ADV.Advice:
+            raise ADV.MalformedAdvice(f"a link's advice is an advice.Advice, not a {type(self.advice).__name__}")
+        received = self.received
+        if not isinstance(received, (tuple, list)) or not all(type(x) is int and 0 <= x <= U32_MAX for x in received):
+            raise ADV.MalformedAdvice(f"received is a sequence of u32s, not {received!r:.200}")
+        object.__setattr__(self, "received", tuple(received))
+
+
+@dataclass(frozen=True)
+class IoTieVerdict:
+    """The tie of a link's requests to its certified ingress (`IngressTie.tie`): the `IoTieRequest` verdict on each of
+    the link's ingress windows, `accepted[w]`, on the link named `link`, whose ingress windows the challenger
+    registered as `registrations` (each one's `registration.digest`, in window order), on the request view the verifier
+    computed from the advice whose `digest` is `advice`. An accepted verdict on every window says the link's j-th
+    certified request is advice request j and its prompt is v0's `prompt_len` ids long. Only `IngressTie.tie` builds
+    one, from IoTieRequest proofs the verifier verified itself; at a size class with no pinned IoTieRequest digest
+    every window is refused (PROTOCOL.md, fail closed). Construction refuses (`advice.MalformedAdvice`) a `link` that
+    isn't a non-empty string, `registrations` and an `advice` that aren't SHA-512 hex digests, and verdicts that aren't
+    one bool a registration."""
+
+    link: str
+    registrations: tuple[str, ...]
+    advice: str
+    accepted: tuple[bool, ...]
+
+    def __post_init__(self) -> None:
+        if type(self.link) is not str or not self.link:
+            raise ADV.MalformedAdvice("IoTieRequest's verdict names its link, a non-empty string")
+        regs, acc = self.registrations, self.accepted
+        if isinstance(regs, (str, bytes)) or not isinstance(regs, (tuple, list)) or \
+                not all(_sha512_hex(r) for r in regs):
+            raise ADV.MalformedAdvice("IoTieRequest's verdict names each ingress window's registration by its "
+                                      "`registration.digest`, 128 hex digits")
+        if not _sha512_hex(self.advice):
+            raise ADV.MalformedAdvice("IoTieRequest's verdict names its advice by `tie_service.digest`, 128 hex digits")
+        if isinstance(acc, (str, bytes)) or not isinstance(acc, (tuple, list)) or \
+                not all(type(x) is bool for x in acc) or len(acc) != len(regs):
+            raise ADV.MalformedAdvice("IoTieRequest's verdict is one bool an ingress window's registration")
+        object.__setattr__(self, "registrations", tuple(regs))
+        object.__setattr__(self, "accepted", tuple(acc))
+
+
+def digest(link: LinkAdvice) -> str:
+    """The SHA-512 of the advice's canonical encoding (`advice.encode`) and `received`: the `advice` output each window
+    of the tie reports, by which `IngressTie.tie` holds every window to one advice."""
+    body = {"format": DIGEST, "advice": ADV.encode(link.advice).hex(), "received": list(link.received)}
+    return hashlib.sha512(canonical_json(body)).hexdigest()
+
+
+def prompt_lens(advice: LinkAdvice) -> tuple[int, ...]:
     """The advice's v0 prompt lengths, in its requests' order."""
     return tuple(q.prompt_len for q in advice.advice.requests)
 
@@ -321,9 +412,9 @@ class IngressTie:
 
     def lanes(self, advice: Any, releases: Sequence[Q.Release], window: int) -> tuple[tuple[Q.Lane, ...], ...] | None:
         """Each of the window's buckets' lanes from `advice`'s v0 prompt lengths and the warden's `releases`
-        (`io_request.lanes`), None without an `advised.LinkAdvice`, past its windows, or where the release isn't the
+        (`io_request.lanes`), None without a `LinkAdvice`, past its windows, or where the release isn't the
         warden's schedule for its requests."""
-        if type(advice) is not AD.LinkAdvice or not 0 <= window < len(advice.received):
+        if type(advice) is not LinkAdvice or not 0 <= window < len(advice.received):
             return None
         try:
             return tuple(Q.lanes(self.shape, prompt_lens(advice), releases, window * self.T + t)
@@ -409,8 +500,8 @@ class IngressTie:
         `circuit_sha512`, and the verifier's own registered reads at `head`, the warden's head of the registered root,
         `registered`) accepts every session, they prove this tie's registered unit (`proved`) and every drawn unit, and
         each drawn unit's public row opens to the verifier's own copy (`public_arguments` on its bucket's lanes from
-        `advice` and `releases`, `lanes`) and its output row to 1. It reports `advice`'s digest (`advised.digest`),
-        None without an `advised.LinkAdvice`. A head that isn't the registered root's refuses. `opening` (the witness)
+        `advice` and `releases`, `lanes`) and its output row to 1. It reports `advice`'s digest (`digest`), None
+        without a `LinkAdvice`. A head that isn't the registered root's refuses. `opening` (the witness)
         is for a debug comparison only: given, the verdict also carries `clear`'s accept bit, which decides nothing."""
         reg = draw.registration.record
         w, root = reg["window"]["window"], reg["roots"][0]
@@ -429,11 +520,11 @@ class IngressTie:
             accepted = lanes is not None and len(units) == self.T and all(
                 _opened(delivered, u, None if (a := self.public_arguments(lanes[u])) is None else self.row(a, "pub"),
                         self.bits("pub")) == 1 for u in units)
-        public = {"verdict": int(accepted), "advice": AD.digest(advice) if type(advice) is AD.LinkAdvice else None}
+        public = {"verdict": int(accepted), "advice": digest(advice) if type(advice) is LinkAdvice else None}
         sessions = delivered.sessions()
-        digest = _sha512({"format": VERDICT, "registration": draw.registration.digest, "sessions": sessions,
-                          "accepted": accepted, "public": public})
-        verdict = {"of_record": True, "decided_by": "proof", "accepted": accepted, "digest": digest,
+        bound = _sha512({"format": VERDICT, "registration": draw.registration.digest, "sessions": sessions,
+                         "accepted": accepted, "public": public})
+        verdict = {"of_record": True, "decided_by": "proof", "accepted": accepted, "digest": bound,
                    "sessions": sessions, "public": public}
         if opening is not None:
             verdict["clear"] = {"accepted": self.clear(opening, draw, advice, releases)["accepted"]}
@@ -452,21 +543,21 @@ class IngressTie:
         return stream.outcome(draw, {VERIFIER: verdict}, self.statement(draw),
                               session_roots={VALUE: draw.registration.record["roots"][0]["root"]})
 
-    def tie(self, stream: S.Stream, advice: AD.LinkAdvice, profile: AD.AdvisedProfile,
-            releases: Sequence[Q.Release]) -> AD.IoTieVerdict:
-        """The tie of `advice` on this link (the module docstring), `advised.IoTieVerdict` on this link and the stream's
+    def tie(self, stream: S.Stream, advice: LinkAdvice, profile: AdvisedProfile,
+            releases: Sequence[Q.Release]) -> IoTieVerdict:
+        """The tie of `advice` on this link (the module docstring), `IoTieVerdict` on this link and the stream's
         registrations (each one's `registration.digest`, in order), one bit a registration: window w accepted when the
         stream's w-th registration is window w's and its outcome of record accepted, on the proof, naming `advice`'s
         digest, and `releases` is the warden's schedule for `advice`'s requests on every bucket of its windows
         (`lanes`) and gives its `received`; every window refused when they don't, when the stream has more or fewer
         registrations than `advice` has windows, or when `profile`'s framing isn't the warden's cut at B for `advice`'s
         prompt lengths (`framing`) or names an own frame. Raises `ValueError` on a stream that isn't this tie's, an
-        advice that isn't an `advised.LinkAdvice` or a profile that isn't an `advised.AdvisedProfile`."""
+        advice that isn't a `LinkAdvice` or a profile that isn't an `AdvisedProfile`."""
         if stream.spec.digest() != self.spec.digest():
             raise ValueError("the stream is not this tie's: its spec isn't IngressTie.spec")
-        if type(advice) is not AD.LinkAdvice or type(profile) is not AD.AdvisedProfile:
-            raise ValueError("a tie is of an advised.LinkAdvice under an advised.AdvisedProfile")
-        name, lens, n = AD.digest(advice), prompt_lens(advice), len(advice.received)
+        if type(advice) is not LinkAdvice or type(profile) is not AdvisedProfile:
+            raise ValueError("a tie is of a tie_service.LinkAdvice under a tie_service.AdvisedProfile")
+        name, lens, n = digest(advice), prompt_lens(advice), len(advice.received)
         frames, B = profile.request_frames, self.shape.B
         framed = profile.own == 0 and \
             all(k <= len(frames) and frames[k - 1] == request_cells(k, B) for k in set(lens))
@@ -484,17 +575,17 @@ class IngressTie:
                       and verdict.get("decided_by") == "proof")
         held = len(log) == len(ok) == n and framed and released
         accepted = tuple(held and x for x in ok) + (False,) * (len(log) - len(ok))
-        return AD.IoTieVerdict(self.link, tuple(R.digest(r) for r in log), name, accepted)
+        return IoTieVerdict(self.link, tuple(R.digest(r) for r in log), name, accepted)
 
 
 @dataclass(frozen=True)
 class Ties:
-    """The verifier's own tie source on one link (`advised.TieSource`, `service.LinkWindows.ties`): the ingress tie, its
-    stream of record, the challenger's and the verifier of record's, never the prover's, and the warden's ingress
-    release as the verifier read it off the ingress record (`releases`, the named gap). `registrations` is the stream's
-    registrations (each one's `registration.digest`, in order) and `verdict` is `IngressTie.tie` on the stream, so the
-    advised link reads IoTieRequest's verdict only from outcomes the verifier of record decided on proofs. Each raises
-    `ValueError` on another link than the tie's, which the advised link reads as a refusal."""
+    """The verifier's own tie source on one link: the ingress tie, its stream of record, the challenger's and the
+    verifier of record's, never the prover's, and the warden's ingress release as the verifier read it off the ingress
+    record (`releases`, the named gap). `registrations` is the stream's registrations (each one's
+    `registration.digest`, in order) and `verdict` is `IngressTie.tie` on the stream, so IoTieRequest's verdict comes
+    only from outcomes the verifier of record decided on proofs. Each raises `ValueError` on another link than the
+    tie's."""
 
     ingress: IngressTie
     stream: S.Stream
@@ -514,10 +605,11 @@ class Ties:
         self._on(link)
         return tuple(R.digest(r) for r in self.stream.log)
 
-    def verdict(self, link: str, advice: AD.LinkAdvice, profile: AD.AdvisedProfile) -> AD.IoTieVerdict:
+    def verdict(self, link: str, advice: LinkAdvice, profile: AdvisedProfile) -> IoTieVerdict:
         self._on(link)
         return self.ingress.tie(self.stream, advice, profile, self.releases)
 
 
-__all__ = ["Delivered", "IngressTie", "OUTPUTS", "PORTS", "PUBLIC", "REGISTERED", "ROWS", "Ties", "VALUE", "VERIFIER",
-           "WITNESS", "framing", "gate", "prompt_lens", "request_cells", "window_cells"]
+__all__ = ["AdvisedProfile", "Delivered", "IngressTie", "IoTieVerdict", "LinkAdvice", "OUTPUTS", "PORTS", "PUBLIC",
+           "REGISTERED", "ROWS", "Ties", "VALUE", "VERIFIER", "WITNESS", "digest", "framing", "gate", "prompt_lens",
+           "request_cells", "window_cells"]

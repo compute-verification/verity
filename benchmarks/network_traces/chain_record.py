@@ -18,18 +18,18 @@
   held again to the certifier's key and session in ``--run``'s ``deployment.json`` by the client's own
   `check_certificates`. Each window's two certified records (``--run``'s ``certified.jsonl``, their heads and salts)
   are held by the host audit (`certifier_serve._certified`, N2's audit without its head checks) under the syncs the
-  certifier signed (``--run``'s salted ``clocks.jsonl``, `advised.SignedClocks`), never the plan's, and their
+  certifier signed (``--run``'s salted ``clocks.jsonl``, `certificate.SignedClocks`), never the plan's, and their
   certificates, and the clocks', must be exactly the client's. ``--deployed`` refuses a key that isn't LMS at
   `lms.DEPLOYED`.
 * **report**: one JSON and one Markdown report, per step its verdict, its run ids, its ε at δ and what it computed in
   the clear, and the period's terms for `NetTiming.Guarantees.PeriodLeakAccepted` summed by
   `periodLeak_le_sum`. ``--endpoint`` is network-e2e's ``--no-prove`` report on the run and the endpoint's
   records: the endpoint's advice bound to the run and the I/O tie, in the clear, required on the advice profile. N2's
-  summary is `n2_advised_zk.py prove --e2e`'s on the advice profile and `n2_zk.py prove`'s on the others (Selection
-  All: every link-window's one unit proved) or a sampled draw's (``CR_N2_CMD``), read by the same fields. Scan's is
-  `scan_zk.py prove`'s, a stand-in on its own synthetic warden run until its ``--warden-run`` takes the gate's warden
-  rows, accepted only when every round's verdict is the one scan_zk expects and no witness piece reached the
-  verifier (`scan_step`). A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a warden run) never makes
+  summary is `n2_zk.py prove`'s (Selection All: every link-window's one unit proved) or a sampled draw's
+  (``CR_N2_CMD``), read by the same fields; on the advice profile, whose egress counts no N2 unit holds, N2 isn't
+  run. Scan's is `scan_zk.py prove`'s, a stand-in on its own synthetic warden run until its ``--warden-run`` takes
+  the gate's warden rows, accepted only when every round's verdict is the one scan_zk expects and no witness piece
+  reached the verifier (`scan_step`). A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a warden run) never makes
   the report accepted. Without ``--n2`` the report is the scan's part of the record alone (`SCAN_ONLY`, its
   ``scope``), and its verdict is ``scan accepted`` or ``scan refused``: N2 isn't required, and the rest is held as
   before. On the certifier-only path (``--job``'s ``path``, `CERTIFIER_ONLY`) there are no warden rows: the scan
@@ -70,7 +70,7 @@ sys.path.insert(0, str(HERE))
 
 SCHEMA = "verity-network-chain/record-report/v1"
 DELTAS = (0.5, 2.0 ** -20)
-ADVICE = "advice"  # certifier_serve.ADVICE: the profile whose counts N2's advised unit decides on the endpoint's advice
+ADVICE = "advice"  # certifier_serve.ADVICE: the profile whose egress counts derive from the endpoint's advice
 
 CLEAR = {
     "custody": "the SHA-512 of each fetched file against the gate's end.json (public files)",
@@ -185,7 +185,7 @@ def custody(gates: Path) -> dict:
 def certs(run: Path, client: Path, deployed: bool = False) -> dict:
     import certifier_serve as cs
     from verity.ml.crypto import lms
-    from verity.core.protocols.certifier import advised as AD
+    from verity.core.protocols.certifier.certificate import SignedClocks
 
     plan, report, dep = (json.loads((run / f).read_text()) for f in ("plan.json", "calibration.json",
                                                                     "deployment.json"))
@@ -219,7 +219,7 @@ def certs(run: Path, client: Path, deployed: bool = False) -> dict:
     out["client_check"] = {k: v for k, v in held.items() if k not in ("by_window", "clocks")} | {
         "records_are_the_clients": mine == held["by_window"],
         "clocks_are_the_clients": sorted(public(c.certificate) for c in clocks) == sorted(held["clocks"])}
-    signed = list(AD.SignedClocks(key, session, tuple(clocks)).syncs(lw.link))
+    signed = list(SignedClocks(key, session, tuple(clocks)).syncs(lw.link))
     declared = [cs.ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
     rows = []
     for w in range(windows):
@@ -411,7 +411,7 @@ def escaped(name: str, m: dict, s: dict) -> dict | None:
 
 
 def unexpected(name: str, m: dict, escape: dict | None = None) -> list[str]:
-    """What keeps an N2 driver's member from its ``ok``: the conditions `n2_zk` and `n2_advised_zk` hold it to, but
+    """What keeps an N2 driver's member from its ``ok``: the conditions `n2_zk` holds it to, but
     a negative's acceptance when it escaped the draw (`escaped`). A witness piece counts when the scan reads it
     ``leaked`` (`leak_scan.classify`); a ``structured`` find is listed, not counted, as the drivers decide."""
     wins, net, rec = m.get("windows") or [], m.get("network") or {}, m.get("received") or {}

@@ -29,17 +29,16 @@ def _bc(data: bytes, bits: int, salt: bytes) -> bytes:
 
 def prove(lw: SVC.LinkWindows, opening: SVC.Opening, draw: S.Draw, syncs: Sequence[Any], out: Path, *,
           program: str | None = None, accepted: bool = True, word: int | None = None, root: bytes | None = None,
-          salts: dict[str, bytes] | None = None, units: Sequence[int] | None = None,
-          advice: Any = None) -> SVC.Delivered:
-    """The delivered proof of the drawn unit on `opening` under the registered root (or `root`), on an advised link of
-    `advice`: the statement's public file, its one instance's rows committed under `SALTS` (``pub``, ``wit``, ``o0``),
-    one session naming `program` (default: the link's registered Program) that the stand-in Lean `accepted`, and the
-    circuit file. Where the unit takes no instance, the rows are zero and the output 0. `word` forges the output word,
+          salts: dict[str, bytes] | None = None, units: Sequence[int] | None = None) -> SVC.Delivered:
+    """The delivered proof of the drawn unit on `opening` under the registered root (or `root`): the statement's public
+    file, its one instance's rows committed under `SALTS` (``pub``, ``wit``, ``o0``), one session naming `program`
+    (default: the link's registered Program) that the stand-in Lean `accepted`, and the circuit file. Where the unit
+    takes no instance, the rows are zero and the output 0. `word` forges the output word,
     `salts` the salts delivered for ``pub`` and ``o0``, and `units` the public file's unit indices."""
     root = bytes.fromhex(draw.registration.record["roots"][0]["root"]) if root is None else root
-    args = lw.arguments(opening, root, syncs, advice)
+    args = lw.arguments(opening, root, syncs)
     rows = {r: lw.row(args, r) if args is not None else bytes(lw.bits(r) // 8) for r in SVC.ROWS}
-    rows["o0"] = SVC.output_row(lw.outputs(opening, root, syncs, advice) if args is not None else 0)
+    rows["o0"] = SVC.output_row(lw.outputs(opening, root, syncs) if args is not None else 0)
     return _deliver(lw, rows, draw, out, program=program, accepted=accepted, word=word, salts=salts, units=units)
 
 
@@ -155,16 +154,15 @@ def lean(proof: PF.Proof, *, circuit_sha512: str, program: bytes, partition: dic
 
 
 def decide(lw: SVC.LinkWindows, stream: S.Stream, draw: S.Draw, opening: SVC.Opening, syncs: Sequence[Any], out: Path,
-           *, certificates: Sequence[Any] | None = None, advice: Any = None, **kw: Any) -> S.Outcome:
-    """The drawn link-window proved on `opening` (`prove`, with `kw`, on an advised link of `advice`), delivered and
-    decided by the verifier of record on the proof, the certificates (by default the opening's) and `advice`, with the
-    opening's in-the-clear check beside it as the debug comparison, which must agree with the proof's verdict when
-    nothing is forged."""
-    delivered = prove(lw, opening, draw, syncs, out, advice=advice, **kw)
+           *, certificates: Sequence[Any] | None = None, **kw: Any) -> S.Outcome:
+    """The drawn link-window proved on `opening` (`prove`, with `kw`), delivered and decided by the verifier of record
+    on the proof and the certificates (by default the opening's), with the opening's in-the-clear check beside it as the
+    debug comparison, which must agree with the proof's verdict when nothing is forged."""
+    delivered = prove(lw, opening, draw, syncs, out, **kw)
     assert stream.deliver(draw, delivered.sessions()) is None
     certificates = [r.certificate for r in opening.records] if certificates is None else certificates
     outcome = lw.outcome(stream, draw, certificates, syncs, delivered, circuit_sha512=circuit_sha512(delivered),
-                         opening=opening, advice=advice)
+                         opening=opening)
     verdict = stream.records[-1]["audit"]["verdicts"][SVC.VERIFIER]
     assert verdict["decided_by"] == "proof" and verdict["accepted"] == outcome.accepted
     if not kw:

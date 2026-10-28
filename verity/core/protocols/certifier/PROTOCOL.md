@@ -443,7 +443,7 @@ requests' is unheld. Each output's entry in its bucket's port is e = σ·P + row
 bucket's steps, sorted and padded to S. The unit reads the map as 8 bytes a slot, q and e as u32be: e = 2^32 − 1 for
 a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream 0's `PAD`, B zero bytes).
 - **The advice is private**: it is never published; it enters the circuit builder and is proved in zero
-  knowledge. v4 computes the map in the clear from the opened advice v0, as N2's advised mode (`advised`) reads it, and takes the map and the steps as public inputs. That is the **named gap**, the one the compile
+  knowledge. v4 computes the map in the clear from the opened advice v0, and takes the map and the steps as public inputs. That is the **named gap**, the one the compile
   unit carries (the advice's hiding root in the registration, "the advice is opened to the verifier until the
   compile unit exists"). Nothing may call the tie zero-knowledge until it is closed.
 - **The target** reads a committed map inside the proof, bound to the advice's hiding root. The map is registered with
@@ -521,8 +521,7 @@ a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream 0's
   when the compact record lands; until then the tie reads id-event cells, whose `finish_reason` is the template's null and which
   carry no finish.
 
-**The two ingress ties.** N2's advised mode derives each request's ingress end from advice v0's prompt lengths. That rests on
-two ties between the advice's requests and the network certifier's certified ingress record:
+**The two ingress ties** between the advice's requests and the network certifier's certified ingress record:
 - **Each request's arrival ordinal is order[i]: checked in this unit.** The advice numbers requests in order of first
   row (`advice` validates it), and the map's q for request i is order[i] + 1 ((b), (c)). The network certifier writes the stream
   of every cell in a connection's slots (its pads, its data cells and its `END`) as its request's ingress ordinal on
@@ -540,9 +539,9 @@ two ties between the advice's requests and the network certifier's certified ing
 
 **The ingress tie** (`io_request`, `IoTieRequest{B, L, R}`: the reference, the network certifier's own ingress as its fake
 upstream (`serve`, which drives `warden.Warden._ingress`) and the Boolean Definitions, with its sidecar). It is one
-unit a bucket row of the network certifier's ingress at selection `All`, with one output bit, and it is what N2's advised
-verdict requires (the phase-6 attack showed that the advised floor accepts an acausal release under swapped prompt
-lengths). B is the cell size (4,096 served), L the network certifier's lanes and R its r, so a row is the bucket's L·R slots.
+unit a bucket row of the network certifier's ingress at selection `All`, with one output bit. It holds the prompt
+lengths the advice states to the certified bytes: the phase-6 attack swapped two prompt lengths keeping their total,
+which no count of the link's frames refuses, and so released an output before its request was in. B is the cell size (4,096 served), L the network certifier's lanes and R its r, so a row is the bucket's L·R slots.
 The row is the registered port (`warden_rows.bucket_port`: unit t reads row t), as the egress unit's is, so the
 proof system's registered read holds it to the network certifier's ingress root and no gate hashes it. A row's lanes are its
 live connections by ordinal, R slots each (`warden.Warden._ingress`), and an unheld lane is B zero bytes a slot. The
@@ -585,16 +584,32 @@ unit outputs 1 exactly when, in each lane of ordinal q:
   cell, whether it ends the request, the bytes left after it and its prompt fields. The step keeps (left, fields,
   over, padded, ok); the count's carry past 2^32 is kept, so a sum that wraps is refused. Public: the lanes, each
   (q, left, fields, left_out, fields_out). Witness: the row.
-- **What N2's advised mode takes: the verdict** (`advised.IoTieVerdict`). `advised.ends` takes the prompt-length tie
-  only from an `IoTieVerdict(link, registrations, advice, accepted)`: the link, its ingress windows' registrations
-  (each one's `registration.digest`, in order), the advice's digest (`advised.digest`) and one bit a registration,
-  set when every bucket row of that sampling block is accepted. It is built only from IoTieRequest proofs the verifier
-  verified on its own lanes (`lanes` from that advice's prompt lengths and order and the network certifier's release) and given
-  only by the verifier's own tie source (`LinkWindows.ties`, `tie_service.Ties`). It refuses a verdict on another
-  link or other registrations than the source records, and an advised link whose every ingress window isn't
-  accepted. The proof service runs it (`tie_service.IngressTie`, "The tie" below). That makes `advised.ends`'
-  premise a check: connection order[i] + 1 is an id request of `prompt_lens[i]` prompt ids. The advised unit itself
-  doesn't change.
+- **The verdict** (`tie_service.IoTieVerdict`) is `IoTieVerdict(link, registrations, advice, accepted)`: the link,
+  its ingress windows' registrations (each one's `registration.digest`, in order), the advice's digest
+  (`tie_service.digest`) and one bit a registration, set when every bucket row of that sampling block is accepted. It
+  is built only from IoTieRequest proofs the verifier verified on its own lanes (`lanes` from that advice's prompt
+  lengths and order and the network certifier's release) and given only by the verifier's own tie source
+  (`tie_service.Ties`), which gives none on another link or another stream than its own. An accepted verdict on every
+  window says that connection order[i] + 1 is an id request of `prompt_lens[i]` prompt ids. The advice carries no
+  tie, and none the prover states or delivers is taken: the phase-7 attack stated the swapped split, and the phase-10
+  attack delivered a verdict built for the forged advice's digest, every window accepted.
+- **Through the proof service** (`tie_service.IngressTie`). A registration is one ingress sampling block, the
+  network certifier's salted root of its T bucket rows, held to the window's order, and T proof blocks, unit t bucket
+  row t. The unit is `NetworkIngressTieBucket`: one gate naming IoTieRequest and its pinned circuit digest
+  (`io_request.circuit-check.json`), its witness row the bucket row itself, read off the network certifier's root by
+  the verifier's own registered read (`warden_rows.bucket_port`). The statement is a shared-row file whose `wit` table
+  is the registered port. The verifier of record decides each window on the proof alone, each unit's `pub` row opened
+  to its own lanes (`io_request.lanes`, from the advice it holds and the network certifier's release, taken in the
+  clear), and reports the advice's digest. `IngressTie.tie` reads the verdict from the stream's outcomes of record
+  alone, on the link and the stream's registrations. Window w is accepted when its outcome is, decided on the proof
+  for the advice's digest. Every window is refused unless the stream registers exactly the advice's windows in order,
+  the release is the network certifier's schedule for the advice and puts `received`'s request cells in each window,
+  and the profile's framing is the network certifier's cut (`tie_service.framing`) with no own frame. A connection's
+  lanes chain from (0, 0) into its first bucket to (0, n) out of its `END`'s, so the units together hold each
+  request's count across the buckets it spans. A size class with no pinned digest has no accepted proof.
+  `tests/test_network_certifier_tie_service.py` holds the phase-9 attack's carried field count, its forged advice and
+  phase 6's split, refused through the verifier, on stand-in proofs (`tests/standin.py`), and
+  `benchmarks/network_traces/n2_tie_zk.py` proves them live, its `warden` class the warden path's tie.
 - **The first negative** is the phase-6 attack's split (`test_redteam_phase6_split_is_refused`). At B = 4,096, prompts
   of 400 and 16 tokens take 2 cells and 1, released one a bucket (r = 1). The forged advice swaps them, keeping the
   total; its lanes aren't the release's, and built anyway they are refused by the unit, which reads 400 fields in
@@ -692,8 +707,8 @@ S + 1 reads a unit, and recomputes no root and hashes no row.
 - e = σ·P + `row`, with σ the place of `step` among the bucket's steps;
 - the id is port row `step`'s `row`-th id: `runner.sampler/sampled_token_ids` of step `step` at batch row `row`.
 
-So each `release[k]` is output k's frame bucket in the network certifier's certified egress record, which is what N2's
-advised floor reads. The unit checks this by position: a cell's bucket is its row in the network certifier's registered tree,
+So each `release[k]` is output k's frame bucket in the network certifier's certified egress record. The unit checks
+this by position: a cell's bucket is its row in the network certifier's registered tree,
 and the map puts output k's cell in row `release[k]` − w·T and nowhere else.
 
 `window_map` computes the map and the steps. The Commit sets the port's layout and its binding to
@@ -792,187 +807,9 @@ The Program fixes each real frame's content, its **anchor** (the recorded bucket
 `h(k) = max(eligible(k), h(k−1))`, and the certifier's grid **releases** it. Stated in Lean:
 `Security/Definitions/NetworkCertifier/Schedule.lean` (`NetTiming`'s `eligible`, `handingBuckets`, `expectedRow` and
 `constantRate`, the Program whose advice is the content advice and one in-set sync per window), with the certifier
-program's `NetworkCertifier.Schedule` as its code; `schedule.py` (`expected_grids`, `run_shaper`) is the Python.
-
-## An advised link (`advised`)
-
-An advised link is a served link under arbitrary traffic: responses of any length, batched, chunked, preempted and
-timed as serving chose, carried across windows. Nothing fixes its egress counts before the run and FIXLEN doesn't hold,
-so N2 takes them from the prover's advice and holds the advice to the certified ingress head. The advice is
-`advised.LinkAdvice`: I1's advice (`advice.Advice`, v0, "Advice v0" below: one per certifier session, after serving,
-public in v0 and charged by `advice.bits`) and `received[w]`, the request frames the ingress certifier releases in
-window w. It carries no tie: the tie of its requests to the certified ingress, IoTieRequest's verdict
-(`advised.IoTieVerdict`), comes only from the verifier's own tie source (`LinkWindows(ties=…)`, `advised.TieSource`).
-Declared with `LinkWindows(advised=AdvisedProfile(windows, request_frames, own))`, whose `request_frames` is the link's public
-framing: entry n − 1 is the ingress frames a request of an n-token prompt takes (id
-requests, whose frames are a function of the prompt's length alone), for every prompt length the link admits.
-
-- **What N2 reads** (`advised.view`):
-  - of I1's advice, fields `advice.bits` charges: each request's `prompt_len` and `output_len` and each step's rows'
-    `request`, `start` and `n`, through `advice.outputs`, which numbers the kept outputs (request j's λ-th, in step
-    then row order); and `release[k]`, the session-global egress bucket in which output k's frame is released. It
-    reads no `id`, `finish`, `kind`, `cache_hit`, `preempted` or `sources` beyond `Advice`'s own validity;
-  - `received[w]`, which the unit holds to window w's certified ingress head;
-  - the tie: the `IoTieRequest` verdict on each of the link's ingress windows, on the request view computed from
-    this advice, that the link's j-th certified request is advice request j and its prompt v0's `prompt_len` ids. It
-    names the link (`IoTieVerdict.link`), its ingress windows' registrations with the challenger
-    (`IoTieVerdict.registrations`, each one's `registration.digest`), the advice (`IoTieVerdict.advice`, its
-    `advised.digest`) and each window's verdict (`IoTieVerdict.accepted`), and `view` holds the first two to the link
-    and the registrations the verifier's tie source records, so a verdict on another link or ingress record isn't
-    reused;
-  - the framing, and each window's declared sync, which must be one of Σ_sync, the set the certified egress head's
-    parameters digest binds (outside it the window is refused), and the sync the certifier ran that window under,
-    which every floor reads and the declared one must be, and which the verifier takes only from its own clock
-    source (`LinkWindows.clock_source`, `advised.ClockSource`): the certifier's signed clock sync
-    ([protocol/clock-certificate.md](protocol/clock-certificate.md)).
-- **The ingress ends are derived** (`advised.ends`), not advised: advice request j is the link's j-th request and its
-  prompt length is the certified prompt's, which the tie holds (FCFS admission meets the order, since v0's first-row
-  order is then the arrival order), so it ends at request frame `ends[j]` = Σ_{i ≤ j} `request_frames[prompt_len_i −
-  1]`, and the last end must be Σ `received`, the link's certified request frames. A link without the tie, a verdict
-  on another link, other ingress registrations or another advice or that doesn't accept every ingress window, a
-  prompt longer than the framing covers, or ends whose last isn't Σ `received`, refuses the advice. No field but
-  v0's says
-  where a request ends, so the ends cost nothing beside `advice.bits`.
-- **The window's view** (`advised.view`), computed by the verifier in the clear from the advice, the framing and the
-  syncs the certifier ran, is the unit's public input:
-  - `released[t]`, the frames the advice releases in bucket t, at most R (more refuses the advice);
-  - `floor[t]`, the request frames the window's ingress must have released by bucket t, less B_w = Σ_{v<w}
-    `received[v]`. Output λ of request j released at b is eligible no earlier than j's anchor + δ + ⌊λ/ρ⌋
-    (`schedule.eligible`) under the sync (δ, ρ) the certifier ran the window that holds b under, and is released no
-    earlier: so the first `ends[j]` request frames are released by bucket b − δ − ⌊λ/ρ⌋. A frame for which that
-    bucket is before 0, or released past the link's windows or in one without the certifier's signed sync, refuses
-    the advice. Since δ ≥ 0, no sync lets a frame out before the bucket that releases its request's last frame. A
-    release in that bucket is a served clock's, an engine's first output in its request's bucket (a served run's
-    advice, `test_network_certifier_advised_served.py`); on a certified path the proxy hands a frame read in bucket t
-    on at t + 1, so its honest syncs have δ ≥ 1. A window whose declared sync isn't the one the certifier ran it under
-    is refused: a δ below the traffic's would loosen the floor, and the phase-11 attack had an output accepted in its
-    request's own bucket under δ = 0 declared for a window run at δ = 1 (regressions in
-    `test_network_certifier_advised_phase11_floor.py`). The bucket b − δ − ⌊λ/ρ⌋ can fall in a window before the
-    one that releases the frame, so a floor that read a declaration would carry one window's word into another's
-    view. No floor reads one, so a wrong declaration refuses its own window and no other (the phase-15 attack), and the
-    link's verdict, the AND over its windows, refuses the link. The verifier takes the sync the certifier ran each
-    window under only from the certifier's salted clock certificate of the window, opened against the digest it signs
-    under its key and session (the sync and the salt are witness, the certificate public), and a window without a
-    valid one is refused, and the link with it ([protocol/clock-certificate.md](protocol/clock-certificate.md));
-  - `received`, `received[w]`.
-- **The unit** is `NetworkAdvisedLinkWindow` v2{EGRESS, INGRESS, ADVISED}: `NetworkLinkWindow`'s checks, and one gate
-  (`advised.gate`) naming `advised.NetworkAdvisedCounts_v1{T, RIN, OWN}` and its circuit digest pinned in
-  `advised.circuit-check.json`, over the two heads' counts (witness, cut from the heads the head checks open) and the
-  view. Its ok bit is 1 when every ingress count is at most R_in and bucket 0's at least OWN; with the OWN own frames
-  taken off at bucket 0, the ingress prefix sums are at least `floor` and sum to `received`; and the egress counts are
-  `released`. About 105 ANDs a bucket: 63,031 at T = 600, R_in = 1, OWN = 0, and 64,894 at R_in = 4, OWN = 1.
-  Those are over circuit-check's whole-Definition budget (60,000 ANDs), so `check` holds the T = 600 roots to the
-  reference and their pinned digests without lowering them (`--lower-max-ands 70000` lowers them to 62,986 and
-  64,847 with no mismatch); T = 512, R_in = 4, OWN = 1 lowers whole to 55,343 ANDs, which the sidecar pins.
-- **Public** (`PUBLIC_ADVISED`): `PUBLIC_SERVED`'s items but the served sizes, with the advised ones (the link's
-  windows, the framing and OWN), each window's declared sync, and the advice as a protocol output (`OUTPUTS_ADVISED`:
-  the verdict, the deadline bit and the advice's digest). The view is the unit's ``released``, ``floor`` and
-  ``received`` parameters (`ADVICE`), in its public row (``pub``); the heads' counts stay witness.
-- **The verifier of record** is `LinkWindows.verify(…, advice=A)`, which decides on the delivered proof as on any
-  link: it computes `view(A, w)` itself, under the tie from its own tie source alone (`LinkWindows.ties`; no entry
-  point takes one beside the advice), and opens the proof's public row only to its own copy, so a proof made on
-  another advice's view of the window is refused. Without a `LinkAdvice`, a tie source or a clock source
-  (`LinkWindows.clock_source`), or on an advice `view`
-  refuses, the unit takes no instance and the window is refused. The in-the-clear check (`clear`, the debug comparison) runs `advised_check`:
-  `advised.reference` over the opened heads' counts and `view(A, w)`. Each window reports a third public output,
-  `advice`, the SHA-512 of A's canonical
-  encoding (`advice.encode`) and `received` (`advised.digest`), so it names the string the compiler reads too.
-  `network_verdict` takes the advised profile's windows and refuses a window that names another advice than the first
-  accepted window's, so every window is checked against one advice.
-- **Carry-over is stated by the advice, not forbidden.** An output sampled in one window may be released in a later
-  one, and a response may span any windows: `release` says where each frame went out, so no egress queue is carried.
-  The ingress carry is `received`: each window holds its own ingress total to it exactly, so by induction from window
-  0 (B_0 = 0) on a link whose every window is accepted, B_w is the request frames released before window w, and each
-  window's floor is the link's.
-- **Soundness: with the advice fixed, the counts are determined.** On an accepted window w the egress counts are
-  `view(A, w).released`, a function of A's `release` alone: the ingress counts, `received` and the syncs only accept
-  or refuse and change no count. So on a link whose every window is accepted, all naming one advice, the egress
-  timing of accepted runs carries at most `advice.bits` (the accepted-runs bound's A_c) beside the log2 #Σ_sync bits
-  a window the sync charge counts, and nothing else is left free: not the frames' timing within the counts, not the
-  ingress timing, not when the server wrote, and not where a request ends. The advice is held to the ingress head: no
-  frame is released before the ingress certifier released `ends[j]` request frames, δ + ⌊λ/ρ⌋ buckets earlier,
-  under a sync in Σ_sync. Those are request j's and every earlier request's frames because v0's prompt
-  lengths are the link's requests', in arrival order: the tie, below. Without it, a prover that splits the same
-  request frames among the requests otherwise (a short and a long prompt swapped between an early and a later
-  request) lowers the early request's end, and so the floor, and an output released before its request's frames were
-  in is accepted on the same certified record, under an advice `advice.bits` charges no more (the phase-6 attack, a
-  regression in `test_network_certifier_advised_phase6.py`).
-- **The tie is IoTieRequest's verdict, and without it every advised link is refused** (fail closed).
-  The certified prompts are witness, so the verifier can't derive the prompt lengths and order on
-  the host, and a tie the prover states is no tie: the phase-7 attack showed that one stating the swapped split reopens
-  phase 6's acausal release. Nor is a verdict the prover delivers: the phase-10 attack built one for
-  the forged advice's digest, every window accepted, and the verifier of record, which read it off the delivered
-  advice, accepted the swapped split (regressions in `test_network_certifier_advised_phase10.py` and
-  `test_network_certifier_advised_phase6.py`). So the advice carries no tie, and `advised.ends` takes it only as
-  the in-proof `IoTieRequest`:
-  its verdict on every ingress window of this link's registrations, for the same advice digest, from proofs the
-  verifier of record verified itself (`advised.IoTieVerdict`, naming the link, the registrations and the advice),
-  given by the verifier's own tie source (`LinkWindows.ties`). The tie service (`tie_service.IngressTie`) builds it,
-  and `tie_service.Ties` is that source. A registration is one ingress sampling block, the network certifier's salted root of its
-  T bucket rows, held to the window's order, and T proof blocks, unit t bucket row t. The unit is
-  `NetworkIngressTieBucket`: one gate naming IoTieRequest and its pinned circuit digest
-  (`io_request.circuit-check.json`), its witness row the bucket row itself, read off the network certifier's root by the
-  verifier's own registered read (`warden_rows.bucket_port`). The statement is a shared-row file whose `wit` table is
-  the registered port. The verifier of record decides each window on the proof alone, each unit's `pub` row opened to
-  its own lanes (`io_request.lanes`, from the advice it holds and the network certifier's release, taken in the clear), and
-  reports the advice's digest. `IngressTie.tie` reads the verdict from the stream's outcomes of record alone, on the
-  link and the stream's registrations. Window w is accepted when its outcome is, decided on the proof for the
-  advice's digest. Every window is refused unless the stream registers exactly the advice's windows in order, the
-  release is the network certifier's schedule for the advice and puts `received`'s request cells in each window, and the advised
-  profile's framing is the network certifier's cut (`tie_service.framing`) with no own frame. A connection's lanes chain from
-  (0, 0) into its first bucket to (0, n) out of its `END`'s, so the units together hold each request's count across
-  the buckets it spans. A size class with no pinned digest has no accepted proof, and at the served size none is
-  pinned (1,500,947 ANDs a bucket row, about 9.0 × 10^8 a 600-bucket window), so there every advised link is still
-  refused. `tests/test_network_certifier_tie_service.py` holds the phase-9 attack's carried field count, its forged
-  advice and phase 6's split, refused through the verifier, on stand-in proofs (`tests/standin.py`), and
-  `benchmarks/network_traces/n2_tie_zk.py` proves them live. The advised tests stand in for the source with its
-  reference in the clear (`tests/advised_traffic.py`, `StandInTie`).
-- **Bucket 0 is capped at R_in, which holds the own frame.** The ingress certifier releases min(queue, r_in) frames a
-  bucket (`grid.Certifier`) with its own frame queued at the head of the queue, ahead of bucket 0's arrivals and of any
-  request frames carried from the window before (`active.Bucketer`), and a head with a count past its allocation
-  doesn't exist (`certificate.RecordHead`): with R_in request frames arriving in bucket 0 the certified count is R_in,
-  one of them the own frame, and the last request frame goes out in bucket 1.
-- **The ends are where the signed counts put them**: request k ends in the first bucket where the
-  ingress head's signed counts, less one own frame a window, reach `ends[k]`, with `request_frames[n − 1]`
-  `id_request_frames(n, B)`. The floor reads the same prefix sums, so it holds each output to the bucket the signed
-  counts end its request in. The rule is exact, since each window's own frame leaves in its first bucket.
-- **Named gap: the record doesn't hold the prompt lengths the unit reads.** The unit
-  takes v0's prompt lengths, held to the certified ones only by IoTieRequest's verdict (the tie above), because the
-  ingress head doesn't sign them. Design: the ingress head signs each bucket's completed requests inside
-  `RecordHead.encode`, and the unit reads them from the head it opens. It changes the head encoding that Lean pins, so
-  it lands with the head check's and the Lean model's change, not before. With the network certifier's FIFO admission the
-  completed requests follow from the signed counts and the certified prompt lengths, so on ingress what's left is
-  holding v0's prompt lengths to the certified bodies. Each window's sync is signed: the certifier's salted clock
-  certificate beside its egress record, so it needs no head change
-  ([protocol/clock-certificate.md](protocol/clock-certificate.md)).
-- **Named gap: the clock's opening.** A window's clock certificate signs its sync salted
-  (`certificate.clock_commitment`), and until N2's advised unit opens it the verifier of record opens it on the host
-  (`advised.SignedClocks`), so on a refused window it reads the sync the certifier ran. Closing it is a circuit change
-  to N2's advised unit, with its `circuit-check` report, not a Lean one: the design is in
-  [protocol/clock-certificate.md](protocol/clock-certificate.md) ("The opening is on the host").
-- **Premises** of "an honest advised link is accepted", on which N2's claim doesn't rest:
-  - `release` is the certified egress record's: each kept output is one egress frame, in the link's canonical order,
-    which the I/O tie fixes (within a bucket the order doesn't change the counts);
-  - the releases fall in the link's windows, each of which declares a sync in Σ_sync, the one the certifier ran it
-    under, whose clock certificate the certifier signed and the verifier holds (without it, no advised link is
-    accepted);
-  - `received` is the ingress record's;
-  - the link's j-th request is advice request j (FCFS admission: IoTieRequest's ordinals are the verifier's, so an
-    advice numbered in another order, as a runner's batch order numbers v0 and the walk's `walk.order` maps
-    back, is refused), an id request of its prompt length;
-  - IoTieRequest runs in the proof service and accepts every ingress window of the link (until it does, no advised
-    link is accepted);
-  - each window's declared sync has a δ and ρ that every frame released in it meets: a small δ, and ρ at least a
-    stream's frames a bucket (`schedule.eligible` reads the anchor's window's sync, the view the release's, which the
-    verifier sees);
-  - both ends share T and τ_b (checked by `LinkWindows`).
-
-What this establishes: on every accepted sampling block of an advised link, the egress head's counts are the advice's
-releases, and the advice's releases are eligible after the ingress head's releases under the declared sync. What it
-doesn't: the frames (the I/O tie's), that the advice is the computation's (the compiler's and PoUW's), the
-tie itself (IoTieRequest's, through the tie service; no IoTieRequest digest is pinned at the served size class, so
-there no advised link is accepted), the syncs the certifier ran (its report, which no head signs yet), and the
-premises.
+program's `NetworkCertifier.Schedule` as its code; `schedule.py` (`expected_grids`, `run_shaper`) is the Python. The
+certifier signs each egress window's sync, salted, beside its record:
+[protocol/clock-certificate.md](protocol/clock-certificate.md).
 
 ## The audit (`audit`)
 
@@ -1173,11 +1010,11 @@ real EOS. The registered thing is a precommitted ahead-of-time compiler. After s
 **advice** string that encodes everything serving made unpredictable: in advice v0, each request's lengths and finish,
 each step's batch rows, and each step's release bucket. The compiler turns the advice into each step's circuit, and the
 certifier certifies the I/O. Sampled proofs check two things: that the committed values pass the compiled circuits (the
-step units), and that they agree with the certified I/O (the tie units). N2 holds each window's egress counts to the
-ingress counts and the advice. The advice's length is the leak, charged as `A_c` in the accepted-runs bound.
+step units), and that they agree with the certified I/O (the tie units). N2 is to hold each window's egress counts to
+the ingress counts and the advice; no N2 unit does yet. The advice's length is the leak, charged as `A_c` in the accepted-runs bound.
 
 This section attacks that claim through its parts: the advice codec (`advice.py`, with `encode`,
-`decode` and `bits`), N2's advice mode (`advised`), the I/O tie unit (`io_tie`) and the compiler
+`decode` and `bits`), the I/O tie unit (`io_tie`) and the compiler
 (`verity_vllm.program.predict.compile_steps`). It gives the argument, every assumption the argument rests on, what
 each attack costs under the design, and the adversarial cases each part's tests must carry.
 
