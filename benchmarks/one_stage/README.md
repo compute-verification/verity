@@ -80,15 +80,20 @@ negatives.
   `POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD` or `CERTIFIER_CMD` names one; otherwise its `MISSING` line names its issue, and it
   gets no verdict. Finally the all-protocols window report and the block record. Each step's verdict line is in
   `out/verdicts.txt`.
-- `composite.py`: onsite's or remote's case from its subprotocols' cases, and the Lean verdict on it. Each `--piece DIR`
-  holds one subprotocol's `case.json` (its `serve` line, with `blobs` the paths of the files it reads) and its own Lean
-  answer on it, `answer.json`, whose `commitment` is its digest; onsite's `--registration DIR` is NCI's. It writes the
-  product's params, commitment and evidence in the composition's formats (`verity/core/protocols/composition/README.md`)
-  and, with `--exe`, runs `onsite check` or `remote check` on them with the blobs.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
   staged by C-Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
   share proved under `--zk` across its template's statements and held by the Lean verifier with the units it derives itself.
+- `composite.py`: onsite's or remote's case from its subprotocols' cases, and the Lean verdict on it. Each `--cases DIR`
+  is a private directory (0700, files 0600) holding one subprotocol's `case.json` (its `serve` line, with `blobs` the
+  paths of the files it reads) and its own Lean answer on it, `answer.json`, whose `commitment` is its digest (or a
+  directory of such directories); for onsite, NCI's case is the registration. The composed params, commitment and
+  evidence (the composition's formats, `verity/core/protocols/composition/README.md`) and every answer go to
+  `--private-out` (0700, files 0600), since a case's evidence and params are witness. `--public-out` gets only the
+  verdict lines, the composite's commitment, and each case's params digest and commitment, and is refused when it
+  shares a byte run with any case's evidence. With `--exe`, it runs `onsite check` or `remote check` and exits with
+  Lean's code. It decides nothing: a subprotocol with no case is left out, Lean's verdict on what remains stands (a
+  rejection naming the missing case), and the run is labelled `NOT_ESTABLISHED` with what is missing.
 - `a8.sh`: run A8's entry point, on the same builds. A8 is one window of the remote bandwidth audit over a registered store of
   a few thousand blocks with every opening proved by the opening unit (`remote_bandwidth.opening`) under `--zk` and held by
   Lean, honest and with a tampered block, a scan of everything the verifier received for the drawn blocks' bytes, and the
@@ -156,6 +161,12 @@ negatives.
   same for each of its split units, and with `--also`/`--also-file` for Definitions a split main lacks would use.
   `m1_unit.py` builds one family's unit through M0's `UnitStager`, flat or `--structural`, and with `--bin`
   and `--lean` proves one round of it on stand-in bf16 values under `--zk` and verifies it with the Lean verifier.
+- `served_stock.sh` (with `served_overhead.py`): `served_verdicts.sh`'s stock control, the same endpoint, engine and load
+  served with `serve-openai --no-commit` and no protocol, once per fresh endpoint for `REPS` endpoints. `served_overhead.py
+  table` compares the composed run with it on two clocks, each the same code in both runs: the client's
+  (`serve_load.py --varied`'s timings files) and the engine's step trace (`advice_trace.jsonl`). It reports time per output
+  token, time to first token and tokens per second as composed over stock, the composed run's window open and close on
+  the engine loop, and `verity-bench served-table`'s single-protocol rows beside them.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as
