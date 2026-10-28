@@ -1094,8 +1094,8 @@ def test_a_fresh_run_that_fails_what_a_kept_pass_answers_for_says_so(tmp_path):
 
 
 def test_each_failed_suite_is_written_beside_the_json_as_it_fails(tmp_path):
-    """12 Oct: check cc39's repository suite had failed by 20:25Z, but under `--keep-going` the check ran to 20:55Z, and drive
-    knew only then; `suites.failed.json`, rewritten as each suite fails, is what drive reads of a check still running."""
+    """Under `--keep-going` a check runs on for many minutes after a suite fails, and drive would know only at its end;
+    `suites.failed.json`, rewritten as each suite fails, is what drive reads of a check still running."""
     import json
 
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
@@ -1809,8 +1809,8 @@ def test_the_suites_in_one_process_get_the_fewest_slots_that_finish_them_with_th
 
 
 def test_the_suites_in_one_process_get_no_more_slots_than_the_memory_holds(tmp_path, monkeypatch):
-    """18 Oct: a 16 GiB agent-test job on 48 CPUs started 44 test processes, which only the parallel suites' workers were sized
-    against memory for, and the OOM killer took the whole scope."""
+    """A 16 GiB agent-test job on 48 CPUs would start 44 test processes if only the parallel suites' workers were sized
+    against memory, and the OOM killer took the whole scope."""
     S = _suites(monkeypatch, tmp_path)
     assert S.serial_slots([5.0] * 48, 0, 48, 16) == 1, "16 GiB holds one process at TEST_PROCESS_GB"
     assert S.serial_slots([5.0] * 48, 0, 48, 64) == 64 // S.TEST_PROCESS_GB
@@ -1836,8 +1836,8 @@ def test_a_parallel_suite_runs_beside_the_others_on_the_slots_they_leave(tmp_pat
 
 
 def test_mem_gb_defaults_to_the_check_slots_memory(tmp_path, monkeypatch):
-    """17 Oct 11:21Z, cpu-2: a quick tier in a 480 GB pool slot ran circuit_check's suite on 94 workers (784 GB), since only
-    `check` passed `--mem-gb`."""
+    """A quick tier in a 480 GB pool slot would run circuit_check's suite on a worker per CPU (784 GB) if only `check`
+    passed `--mem-gb`."""
     S = _suites(monkeypatch, tmp_path)
     monkeypatch.setenv(S.SLOT_MEM_ENV, "480")
     assert S.slot_mem_gb() == 480.0
@@ -1847,8 +1847,8 @@ def test_mem_gb_defaults_to_the_check_slots_memory(tmp_path, monkeypatch):
 
 
 def test_mem_gb_falls_back_to_the_jobs_cgroup_limit(tmp_path, monkeypatch):
-    """17 Oct 13:02Z, vy-nebius-1: two queued `suites.py verity-flock --fresh` runs, in no check slot, were OOM-killed in
-    their queue scopes."""
+    """A queued `suites.py verity-flock --fresh` run in no check slot sizes itself to its queue scope, which would OOM-kill
+    it otherwise."""
     S = _suites(monkeypatch, tmp_path)
     root = tmp_path / "fs"
     (root / "proc/self").mkdir(parents=True)
