@@ -4,16 +4,18 @@
 // same three roundings in the same order, built with -fmad=false and no FTZ flag, so y is bit-identical to the Triton
 // kernel's at every config.
 //
-// Persistent and warp-specialized, CUTLASS's ping-pong schedule: one CTA an SM (the shared memory), a producer warpgroup
-// whose first thread issues every TMA into STAGES stages of 128 bytes of depth (X's WM rows, then W's BN rows, SWIZZLE_128B),
-// and two consumer warpgroups that take the CTA's tiles in turn, each a whole WM x BN tile with WM x BN / 128 s32
-// accumulators a thread (wgmma m64nBNk32 .s32.s8.s8, WM / 64 of them an atom).  Each consumer's mainloop starts once the
-// other's has issued its last stage (the `order` barriers), so the tensor pipe runs one tile's mainloop while the other
-// consumer's epilogue converts and stores the tile before it.  The producer holds 40 registers and the consumers 232.
-// int8_wgmma_ppm2_*: clusters of two CTAs on M-adjacent tiles of one column of tiles, the pair sharing each W box by TMA
-// multicast (each CTA loads half of it into both).  Barrier arrivals stay at CTA scope (a cluster-scope release puts a
-// MEMBAR.ALL.GPU on every consumer warp's stage).  M, N and K need not be multiples of the tile: a box past the matrix reads
-// zeros, which add nothing, and the epilogue stores rows < M and columns < N alone (N even, K a multiple of 16).
+// Persistent and warp-specialized: one CTA an SM (the shared memory), a producer warpgroup whose first thread issues every
+// TMA into STAGES stages of 128 bytes of depth (X's WM rows, then W's BN rows, SWIZZLE_128B), and two consumer warpgroups
+// with 16,384 s32 accumulators each (128 a thread; wgmma m64nBNk32 .s32.s8.s8).  `pp` is CUTLASS's ping-pong schedule: the
+// consumers take the CTA's tiles in turn, each a whole WM x BN tile, and each one's mainloop starts once the other's has
+// issued its last stage (the `order` barriers), so the tensor pipe runs one tile's mainloop under the other consumer's
+// epilogue of the tile before.  `co` is the cooperative one: both consumers on each 128 x 256 tile, 64 rows each, the
+// epilogue between mainloops.  The producer holds 40 registers and the consumers 232.  `m2` (`ppm2`, `com2`): clusters of
+// two CTAs on M-adjacent tiles of one column of tiles, the pair sharing each W box by TMA multicast (each CTA loads half of
+// it into both).  Barrier arrivals stay at CTA scope (a cluster-scope release puts a MEMBAR.ALL.GPU on every consumer warp's
+// stage).  M, N and K need not be multiples of the tile: a box past the matrix reads zeros, which add nothing, and the
+// epilogue stores rows < M and columns < N alone (N even, K a multiple of 16).  The kernels are named
+// exactlin_scaled_mm_wgmma_*, so a profile's kernel classes count them with exactlin's GEMM.
 #include <cstddef>
 #include <cstdint>
 #include <cuda.h>
@@ -29,7 +31,7 @@ struct alignas(128) Params {
   const float* sa;   // s_a [M]
   const float* sw;   // s_w [N]
   uint16_t* y;       // y [M, N], bf16 words, row-major
-  int M, N, K, group;
+  int M, N, K, group, flags;  // flags: timing probes (1 streaming stores, 2 no epilogue, 4 no stores of y)
 };
 
 // ---------------------------------------------------------------- mbarriers, TMA, wgmma
@@ -135,6 +137,16 @@ DEV uint32_t words(int32_t a, int32_t b, float sr, float c0, float c1) {
   return (uint32_t)__bfloat16_as_ushort(__float2bfloat16_rn(ya)) | (uint32_t)__bfloat16_as_ushort(__float2bfloat16_rn(yb)) << 16;
 }
 
+DEV void put(uint32_t* at, uint32_t v, int flags) {
+  if (flags & 4) {
+    if (v == 0xFFFFFFFFu) *at = v;  // never (a NaN pair): the words are computed, nothing is stored
+  } else if (flags & 1) {
+    __stcs(at, v);
+  } else {
+    *at = v;
+  }
+}
+
 template <int CL> DEV void release(uint32_t bar) {
   if constexpr (CL == 1) {
     mbar_arrive(bar);
@@ -234,12 +246,13 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
         for (int h = 0; h < NH; h++)
           imma<BN>(d[h], desc_sw128(a0 + h * 64 * BK + 32 * k), desc_sw128(b0 + 32 * k), kb > 0 || k > 0);
       WG_COMMIT;
+      // ping-pong: past its last wait on a stage, so the other consumer may start, its MMAs queued behind these
+      if (!CO && kb == KB - 1 && lane == 0) mbar_arrive(order + 8 * wg);
       WG_WAIT(1);
       if (kb > 0 && lane == 0) release<CL>(bars + 8 * (STAGES + sp));
       sp = s;
       if (++s == STAGES) { s = 0; ph ^= 1; }
     }
-    if (!CO && lane == 0) mbar_arrive(order + 8 * wg);
 
     // the tile's scales, every load issued under the last stage's MMAs and before any store of y (which the compiler
     // can't tell from s_w): one load latency a tile rather than one a column group
@@ -258,6 +271,7 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
 #pragma unroll
     for (int h = 0; h < NH; h++) acc_fence<NA>(d[h]);
     if (lane == 0) release<CL>(bars + 8 * (STAGES + sp));
+    if (p.flags & 2) continue;
 
 #pragma unroll
     for (int h = 0; h < NH; h++) {
@@ -269,8 +283,8 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
       for (int q = 0; q < NA / 4; q++) {
         const int col = col0 + 8 * q;
         if (col < N) {
-          if (live0) y0[col / 2] = words(d[h][4 * q], d[h][4 * q + 1], r[h][0], c[q].x, c[q].y);
-          if (live1) y1[col / 2] = words(d[h][4 * q + 2], d[h][4 * q + 3], r[h][1], c[q].x, c[q].y);
+          if (live0) put(y0 + col / 2, words(d[h][4 * q], d[h][4 * q + 1], r[h][0], c[q].x, c[q].y), p.flags);
+          if (live1) put(y1 + col / 2, words(d[h][4 * q + 2], d[h][4 * q + 3], r[h][1], c[q].x, c[q].y), p.flags);
         }
       }
     }
@@ -278,11 +292,11 @@ template <int WM, int BN, int CO, int CL> DEV void body(const Params& p) {
 }
 
 #define KERNELS(S, WM, BN, CO)                                                                                           \
-  extern "C" __global__ void __launch_bounds__(384, 1) int8_wgmma_##S##_##WM##x##BN(const __grid_constant__ Params p) {  \
+  extern "C" __global__ void __launch_bounds__(384, 1) exactlin_scaled_mm_wgmma_##S##_##WM##x##BN(const __grid_constant__ Params p) {  \
     body<WM, BN, CO, 1>(p);                                                                                              \
   }                                                                                                                      \
   extern "C" __global__ void __cluster_dims__(2, 1, 1) __launch_bounds__(384, 1)                                         \
-      int8_wgmma_##S##m2_##WM##x##BN(const __grid_constant__ Params p) {                                                 \
+      exactlin_scaled_mm_wgmma_##S##m2_##WM##x##BN(const __grid_constant__ Params p) {                                                 \
     body<WM, BN, CO, 2>(p);                                                                                              \
   }
 KERNELS(pp, 128, 128, 0)
@@ -300,9 +314,9 @@ using T2 = Tile<128, 256, 1>;
 constexpr int VSMEM[NV] = {T0::SMEM, T0::SMEM, T1::SMEM, T1::SMEM, T2::SMEM, T2::SMEM};
 constexpr int VSTAGES[NV] = {T0::STAGES, T0::STAGES, T1::STAGES, T1::STAGES, T2::STAGES, T2::STAGES};
 constexpr int MAX_DEV = 64;
-const void* const VFN[NV] = {(const void*)int8_wgmma_pp_128x128, (const void*)int8_wgmma_ppm2_128x128,
-                             (const void*)int8_wgmma_pp_64x256,  (const void*)int8_wgmma_ppm2_64x256,
-                             (const void*)int8_wgmma_co_128x256, (const void*)int8_wgmma_com2_128x256};
+const void* const VFN[NV] = {(const void*)exactlin_scaled_mm_wgmma_pp_128x128, (const void*)exactlin_scaled_mm_wgmma_ppm2_128x128,
+                             (const void*)exactlin_scaled_mm_wgmma_pp_64x256,  (const void*)exactlin_scaled_mm_wgmma_ppm2_64x256,
+                             (const void*)exactlin_scaled_mm_wgmma_co_128x256, (const void*)exactlin_scaled_mm_wgmma_com2_128x256};
 // per device: SMs, and per variant the CTAs (or pairs) the card holds at once; 0 until the device's first call
 int g_sms[MAX_DEV], g_most[MAX_DEV][NV];
 
@@ -354,7 +368,7 @@ extern "C" int int8_wgmma_layout(int* out) {
 // y = exactlin(xq W^T) on `stream` with variant v, at most `ctas` CTAs (0: every SM) and raster groups of `group` tile rows
 // (pairs of them with a cluster); returns 0, or a nonzero code naming the failed step, and writes the grid to *grid
 extern "C" int int8_wgmma_launch(int v, const void* xq, const void* w, const float* sa, const float* sw, void* y, int M, int N,
-                                 int K, int group, int ctas, void* stream, int* grid) {
+                                 int K, int group, int ctas, int flags, void* stream, int* grid) {
   if (v < 0 || v >= NV || M < 1 || N < 2 || N % 2 || K < 16 || K % 16 || group < 1) return 10;
   int dev = 0;
   if (cudaGetDevice(&dev) != cudaSuccess || dev >= MAX_DEV) return 11;
@@ -369,6 +383,7 @@ extern "C" int int8_wgmma_launch(int v, const void* xq, const void* w, const flo
   p.N = N;
   p.K = K;
   p.group = group;
+  p.flags = flags;
   const int units = ((M + wm - 1) / wm + cl - 1) / cl * ((N + bn - 1) / bn);
   int cap = cl == 1 ? g_sms[dev] : g_most[dev][v];
   if (ctas > 0) cap = min(cap, cl == 1 ? ctas : max(ctas / 2, 1));

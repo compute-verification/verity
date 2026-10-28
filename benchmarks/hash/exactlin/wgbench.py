@@ -183,8 +183,9 @@ def arm_fn(arm: str, ops: list, ys: list):
         return lambda: [X.scaled_mm(xq, sa, w, sw, y, cfg) for (xq, sa, w, sw), y in zip(ops, ys)]
     if arm == "lt":
         return lambda: [torch._int_mm(xq, w.t()) for (xq, sa, w, sw), y in zip(ops, ys)]
-    cfg = W.WgCfg.parse(arm.removeprefix("wg:"))
-    return lambda: [W.scaled_mm(xq, sa, w, sw, y, cfg) for (xq, sa, w, sw), y in zip(ops, ys)]
+    text, _, flags = arm.removeprefix("wg:").partition("#")
+    cfg, flags = W.WgCfg.parse(text), int(flags or 0)
+    return lambda: [W.scaled_mm(xq, sa, w, sw, y, cfg, flags) for (xq, sa, w, sw), y in zip(ops, ys)]
 
 
 def timed(m, n, k, arms, secs, rounds, clock, dmon, name, kind) -> list[dict]:
@@ -266,6 +267,7 @@ def main() -> int:
     ap.add_argument("--gate-only", action="store_true")
     ap.add_argument("--no-edges", action="store_true")
     ap.add_argument("--time-kinds", default="served", help="input kinds timed (served, random)")
+    ap.add_argument("--probes", default="", help="extra timed arms CFG#FLAGS (int8_wgmma.scaled_mm's flags), not gated")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -293,7 +295,7 @@ def main() -> int:
         return 0
     tmp = Path(tempfile.mkdtemp())
     clock, dmon = Clock(stamp_lib(tmp)), Dmon()
-    arms = ["triton"] + [f"wg:{v}" for v in variants] + ([] if a.no_lt else ["lt"])
+    arms = ["triton"] + [f"wg:{v}" for v in variants] + [f"wg:{v}" for v in a.probes.split(",") if v] + ([] if a.no_lt else ["lt"])
     items = []
     try:
         for lin, m, n, k in shapes:

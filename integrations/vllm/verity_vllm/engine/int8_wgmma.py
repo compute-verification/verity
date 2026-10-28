@@ -1,12 +1,12 @@
 """`int8_wgmma.cu` from Python: `int8_fused.scaled_mm`'s product on sm_90a (the H100 and H200) as a persistent,
-warp-specialized ping-pong wgmma GEMM, bit-identical to `exactlin_scaled_mm_tma` (the same s32 sums, and the same epilogue
-in the same order: cvt.rn.f32.s32, mul.rn by s_a, mul.rn by s_w, cvt.rn.bf16).
+warp-specialized wgmma GEMM (ping-pong or cooperative), bit-identical to `exactlin_scaled_mm_tma` (the same s32 sums, and
+the same epilogue in the same order: cvt.rn.f32.s32, mul.rn by s_a, mul.rn by s_w, cvt.rn.bf16).
 
 `scaled_mm(xq, s_a, w, s_w, y, cfg)` launches it on torch's current stream: xq [M, K] int8, s_a [M] float32, w [N, K] int8
 (row-major), s_w [N] float32 -> y [M, N] bf16, in place.  It allocates nothing and a CUDA graph captures it (the tensor maps
-are kernel parameters, encoded on the host each call).  A config (`WgCfg`, text "ppm2_128x128:g8") is the kernel (a consumer
-tile of 128 x 128 or 64 x 256, `ppm2` for clusters of two CTAs sharing W's boxes by multicast), the raster group (tile rows,
-or pairs of them, a group) and at most how many CTAs (0: one an SM).
+are kernel parameters, encoded on the host each call).  A config (`WgCfg`, text "ppm2_128x128:g8") is the kernel (`VARIANTS`:
+ping-pong with a consumer tile of 128 x 128 or 64 x 256, or cooperative on 128 x 256; `m2` for clusters of two CTAs sharing
+W's boxes by multicast), the raster group (tile rows, or pairs of them, a group) and at most how many CTAs (0: one an SM).
 
 The library is built by the nvcc on the path (`-fmad=false`, no FTZ or fast-math flag) for sm_90a and kept under
 ``~/.cache/verity/int8_wgmma``, keyed by its sources, flags and nvcc's version, as `commit.row_tables_device` builds its
@@ -105,7 +105,7 @@ def lib() -> ctypes.CDLL:
         raise RuntimeError("no nvcc on the path")
     dll = ctypes.CDLL(str(build(tool)))
     dll.int8_wgmma_layout.argtypes = [ctypes.POINTER(_i)]
-    dll.int8_wgmma_launch.argtypes = [_i, _vp, _vp, _vp, _vp, _vp, _i, _i, _i, _i, _i, _vp, ctypes.POINTER(_i)]
+    dll.int8_wgmma_launch.argtypes = [_i, _vp, _vp, _vp, _vp, _vp, _i, _i, _i, _i, _i, _i, _vp, ctypes.POINTER(_i)]
     dll.int8_wgmma_layout.restype = dll.int8_wgmma_launch.restype = _i
     out = (_i * 40)()
     n = dll.int8_wgmma_layout(out)
@@ -135,8 +135,9 @@ def available(index: int) -> bool:
 
 
 def scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
-              cfg: WgCfg) -> int:
-    """xq [M, K] int8, s_a [M] f32, w [N, K] int8 (row-major), s_w [N] f32 -> y [M, N] bf16, in place; returns the grid."""
+              cfg: WgCfg, flags: int = 0) -> int:
+    """xq [M, K] int8, s_a [M] f32, w [N, K] int8 (row-major), s_w [N] f32 -> y [M, N] bf16, in place; returns the grid.
+    `flags` are timing probes (1 streaming stores of y; 2 no epilogue and 4 no stores, which leave y unwritten)."""
     m, k = xq.shape
     n = w.shape[0]
     assert xq.dtype == torch.int8 and w.dtype == torch.int8 and w.shape[1] == k and xq.is_contiguous() and w.is_contiguous()
@@ -148,7 +149,7 @@ def scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.T
     kernel, group, ctas = cfg
     grid = _i()
     rc = lib().int8_wgmma_launch(list(VARIANTS).index(kernel), xq.data_ptr(), w.data_ptr(), s_a.data_ptr(),
-                                 s_w.data_ptr(), y.data_ptr(), m, n, k, group, ctas,
+                                 s_w.data_ptr(), y.data_ptr(), m, n, k, group, ctas, flags,
                                  torch.cuda.current_stream().cuda_stream, ctypes.byref(grid))
     if rc:
         raise RuntimeError(f"int8_wgmma_launch({cfg}, M={m}, N={n}, K={k}) failed at step {rc}")
