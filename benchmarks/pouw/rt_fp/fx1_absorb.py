@@ -1,4 +1,4 @@
-"""RT-FP-2's ISA check: on sm_120, does fx1's multiply absorb an FP route's extraction at no op?
+"""An ISA check: on sm_120, does fx1's multiply absorb an FP route's extraction at no op?
 
     python benchmarks/pouw/rt_fp/fx1_absorb.py OUT        # PTXAS, CUOBJDUMP: the tools (default /usr/local/cuda-13.0/bin)
 
