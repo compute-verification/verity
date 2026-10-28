@@ -27,7 +27,10 @@ from check import mac_ands, sparse_hi, wraps
 CLK = 1.769e9  # measured event clock under the served GEMM, run b57f
 SMS = 132
 S8 = 4096.0  # s8 wgmma MACs a SM-clock (theta tensor.s8.k32, measured 4095.6)
-R_B = 1 / 8  # b1 .and.popc at 8× s8 (r20261028-090323-2c56, #6216)
+# b1 .and.popc against the honest s8 GEMM. r20261028-090323-2c56 (#6216) measured BMMA at 21,845 MACs a SM-clock, 8.00×
+# mma.sync s8's 2,731 but 5.33× wgmma s8's 4,096 (S8): 3/16 against the served GEMM. 1/8 is the default, a margin to
+# the cheater; `--r-b 0.1875` prices the measured b1 against wgmma.
+R_B = 1 / 8
 SP24 = 0.5  # 2:4 sparse s8 wgmma, A in registers: 8191 logical MACs a SM-clock (dc/README, wgsprs_s8)
 ALU = 64.0  # IADD3/LOP3 results a SM-clock (theta alu.iadd3 sheet 64, alu.lop3 measured 63.01)
 ADD = S8 / (2 * ALU)  # MAC-times a sparse add: IADD3 folds two adds an instruction
@@ -181,8 +184,11 @@ def gdm(scheme: str, k: int, noise: str, row: "Row", unit_cells: int, seg: int |
 
 def hyb(c: Call, name: str, perm: str, word_bits: int, amp_v: int = 80, amp_u: int = 80, v_bytes: int = 4,
         fold: bool = False, dither_bits: int = 1, weight_per_call: bool = False, receipt_bits: int = 8,
-        lanes: int = 1, wrap_cost: str | None = None) -> list[Row]:
+        lanes: int = 1, wrap_cost: str | None = None, v32: bool = False) -> list[Row]:
     """Dither-style periodic noise: V, U period L', words every L = t·L' (W of them).
+
+    v32: Dither v3.2's layout, T_s for s < ⌈K/L⌉ only (T_S is implied by O, not committed), so W·L < K and a call
+    credits at most (K − L)/K. Otherwise a word at K is committed too ("v3.2 plus a committed T_S").
 
     Two honest routes for O: the peel (the noised GEMM over the whole K, then 4L'/K of tail products and a wrap correction
     over the wrapped entries, priced at `WRAP_G[wrap_cost]` G a unit wrap rate), or the recompute that Dither v3.2's served
@@ -203,6 +209,8 @@ def hyb(c: Call, name: str, perm: str, word_bits: int, amp_v: int = 80, amp_u: i
                 seg = t * lp
                 floor = (rb * seg + min(cs * lp, (1 - rb) * seg)) / seg
                 credit = w * seg
+                if v32 and credit >= c.k:
+                    continue
                 if floor < 1 - 1e-9:
                     continue
                 f = credit / c.k
@@ -227,7 +235,8 @@ def hyb(c: Call, name: str, perm: str, word_bits: int, amp_v: int = 80, amp_u: i
                         tensor, cuda, prg, wpc, wb * HASH_B / c.k, 4 * HASH_B / c.k, hbm, wb,
                         (f"1 folded {receipt_bits}-bit receipt per {lanes} cell(s) over {w} virtual {word_bits}-bit prefix words a cell, and O (32-bit)" if fold else
                          f"{w} prefix words T_s at {word_bits} bits a cell, and O (32-bit); weight root + per-period W′, U"
-                         + (", Y_W, wrap list" if how == "peel" else "")),
+                         + (", Y_W, wrap list" if how == "peel" else "")
+                         + (" (the word at K included: v3.2 plus a committed T_S)" if credit == c.k else "")),
                         f"{lanes} cell(s)' whole K (lanes form)" if fold else f"one cell × one segment (L = {seg}); the O block opens the whole rows",
                         ("ARX fold unpredictable without its inputs (not SHA-512: a new named premise)" if fold else "SAK on noised operands"),
                     ).finish(c)
@@ -321,8 +330,8 @@ def fresh_v(c: Call) -> list[Row]:
 ENG = {"amp_u": 16, "v_bytes": 1}  # U narrow (weight wraps ≈ 0) and V one PRG byte an entry: neither changes a floor
 
 STRUCTS = {
-    "HYB per-tile π, 16-bit (Dither v3.2 as specified)": lambda c, s: hyb(c, s, "tile", 16),
-    "HYB per-segment π, 16-bit (v3.2 noise)": lambda c, s: hyb(c, s, "segment", 16),
+    "HYB per-tile π, 16-bit (Dither v3.2 as specified)": lambda c, s: hyb(c, s, "tile", 16, v32=True),
+    "HYB per-segment π, 16-bit (v3.2 noise and layout)": lambda c, s: hyb(c, s, "segment", 16, v32=True),
     "HYB per-tile π, 16-bit, U ±16, V 1 B": lambda c, s: hyb(c, s, "tile", 16, **ENG),
     "HYB per-segment π, 16-bit, U ±16, V 1 B": lambda c, s: hyb(c, s, "segment", 16, **ENG),
     "HYB no π, 16-bit, U ±16, V 1 B": lambda c, s: hyb(c, s, "none", 16, **ENG),
@@ -495,6 +504,15 @@ def j_pouw(steps: dict, tl: dict) -> dict:
     return out
 
 
+def forced_table() -> dict:
+    """HYB's forced fraction of G per credited MAC at A = B = 0 (the best attack found), by π, word bits and t = 1..8:
+    min(1, r_b + c/t) at ±80 and 1-bit dithers, for both b1 prices. Unpermuted noise at W = 1; it falls to 2 + 1/W limbs
+    as W grows."""
+    return {f"r_b {rb:g}, {perm} π, {wb}-bit": [round(min(1.0, rb + c_segment(perm, t, 80, wb, 1)[0] / t), 3)
+                                                 for t in range(1, 9)]
+            for rb in (1 / 8, 3 / 16) for perm in ("tile", "segment", "none") for wb in (16, 8)}
+
+
 def best(rows: list[Row], min_credit: float) -> Row | None:
     ok = [r for r in rows if r.credited >= min_credit - 1e-9]
     return min(ok, key=lambda r: (r.objective, -r.credited)) if ok else None
@@ -505,8 +523,10 @@ def main() -> int:
     p.add_argument("--out", type=pathlib.Path, required=True)
     p.add_argument("--min-credit", type=float, default=0.75)
     p.add_argument("--wrap-cost", choices=sorted(WRAP_G), default="measured")
+    p.add_argument("--r-b", type=float, default=R_B, help="b1 MAC-time in s8 G (1/8, or 0.1875 against wgmma)")
     a = p.parse_args()
     WRAP_COST[0] = a.wrap_cost
+    globals()["R_B"] = a.r_b
     out = []
     for name, (n, k) in CALLS.items():
         for m in MS:
@@ -538,6 +558,7 @@ def main() -> int:
                      "session_gd_prover": dict(zip("abc", SESSION)),
                      "costfit_gd_model": {"o": O_AND, "f0": F0, "f1": F1, "m_max": M_MAX},
                      "fold_word_ands": FOLD_WORD_ANDS, "step_cells_token": STEP_CELLS}
+    rep["forced_frac"] = forced_table()
     rep["tiles"] = {"exact rows": tiles(out), "16 KiB value rows": tiles(out, 16384)}
     rep["j_pouw_8192"] = {rb: j_pouw(steps, tl) for rb, tl in rep["tiles"].items()}
     a.out.mkdir(parents=True, exist_ok=True)
@@ -548,7 +569,8 @@ def main() -> int:
 
 
 def render(rep: dict) -> str:
-    lines = ["# PoUW noise structures on the H200 (estimates from theta rates; floor per credited MAC at A = B = 0)", ""]
+    lines = ["# PoUW noise structures on the H200 (estimates from theta rates; floor: the best attack found at A = B = 0 per "
+             f"credited MAC, an upper bound on the true floor; b1 at {rep['rates']['r_b']:g} G)", ""]
     for m in MS:
         lines += [f"## m = {m}", "",
                   "| call | structure | params | floor | credited | tensor | CUDA | PRG/call | weight PRG/call | hash words | hash O | HBM× | serial | overlap |",
@@ -574,6 +596,10 @@ def render(rep: dict) -> str:
         for s, v in sorted(jd.items(), key=lambda kv: kv[1]["J S 1000"]):
             lines.append(f"| {s} | {v['tile']} ({v['k_log']}{', over 2^27' if v['over_cap'] else ''}) | {v['serve_term']:.3f} | "
                          f"{v['prove_gpu_s']:.0f} | {v['J S 1']:.0f} | {v['J S 1000']:.2f} | {v['J S 100000']:.3f} |")
+    if "forced_frac" in rep:
+        lines += ["", "## HYB's forced fraction of G per credited MAC at A = B = 0 (best attack found), ±80, 1-bit dithers", "",
+                  "| b1 price, π, word | " + " | ".join(f"t {t}" for t in range(1, 9)) + " |", "|---" * 9 + "|"]
+        lines += [f"| {k} | " + " | ".join(f"{x:.3f}" for x in v) + " |" for k, v in rep["forced_frac"].items()]
     shown = {(1, 1), (1, 8), (1, 32), (4, 8), (8, 8), (16, 16), (32, 32)}
     for rb, tl in rep.get("tiles", {}).items():
         lines += ["", f"## Proof blocks by tile ({rb}; K 2048 and K 8192 populations, {DRAWS} draws each a window; "
