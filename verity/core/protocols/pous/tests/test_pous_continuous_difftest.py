@@ -80,7 +80,7 @@ class Clock:
 
 
 def verdict(a) -> str:
-    """An `audit.Answer` as a Lean verdict."""
+    """An `audit.ChallengeReply` as a Lean verdict."""
     if getattr(a, "rejected", False):
         assert not a.correct and not a.on_time, a
         return REJECT
