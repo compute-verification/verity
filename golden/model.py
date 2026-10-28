@@ -99,23 +99,20 @@ INPUTS: dict[str, tuple[float, str, str]] = {
     "hash_eff_today": (0.4966, "M", f"{B921}: 149.0 M compressions in 64.12 ms of hash kernels at 1,966 MHz ({LEVERS})"),
     "hash_overlap_today": (0.2245, "M", f"{B921}: 1 - 49.72 ms exclusive / 64.12 ms kernel time of the Commit's hashing"),
     "hash_mhz": (1966.0, "M", f"{B921} the Commit's hashing clock"),
-    # GD-HASH (note:compute-research/20261028T1945Z-report-gd-hash): nothing is free beside the GEMM. h_b / h_x, the
-    # GEMM's loss a byte hashed beside it over the same byte hashed alone, A-B-A r20261028-192103-b3eb at the
-    # cheapest phases; beside capacity, GB a forward below the whole grid against the 64 linears' 14.5 ms at T 8,192
+    # GD-HASH final (note:compute-research/20261028T2045Z-report-gd-hash): h(rb, sigma) = h_x(rb) - sigma h_leaf(rb),
+    # sigma = min(1, G / B), G = eta t_gap r_leaf the leaves a forward that hash in the host gap for nothing; beside
+    # the forward's kernels every byte costs about h_x
     "hash_eff_rows": (0.92, "M", "the row kernel's leaves at stream scale: 0.91-0.93 of HASH-38's bar a clock "
-                                 "(GD-HASH, r20261028-185933-4435); h_x 2,703 / 2,123 / 1,964 MAC-times a byte at "
-                                 "4 / 16 / 64 KiB rows is compressions_per_row at this share"),
-    "beside_4k": (2223 / 2703, "M", "h_b / h_x at 4 KiB rows, T 8,192 (GD-HASH: 2,223 / 2,703)"),
-    "beside_16k": (1465 / 2123, "M", "h_b / h_x at 16 KiB rows, T 8,192 (1,465 / 2,123)"),
-    "beside_64k": (1855 / 1964, "M", "h_b / h_x at 64 KiB rows, T 8,192 (1,855 / 1,964)"),
-    "beside512_4k": (1690 / 2703, "M", "h_b / h_x at 4 KiB rows, T 512, best cap (1,681-1,700)"),
-    "beside512_16k": (1350 / 2123, "M", "h_b / h_x at 16 KiB rows, T 512, best caps (1,308-1,393)"),
-    "beside512_64k": (1494 / 1964, "M", "h_b / h_x at 64 KiB rows, T 512 (1,494)"),
-    "beside_GB_4k": (0.7, "M", "GB a forward beside the GEMM below the whole grid at 4 KiB rows, T 8,192"),
-    "beside_GB_16k": (1.9, "M", "... at 16 KiB rows"),
-    "beside_GB_64k": (3.1, "M", "... at 64 KiB rows"),
-    "beside_gemm_ms": (14.5, "M", "GD-HASH's GEMM loop alone, a forward at T 8,192 (14.43-14.52 ms); capacity scales "
-                                  "with the model's int8 GEMM ms (T 512: 77-199 MB in 1.75 ms, the same rate)"),
+                                 "(GD-HASH, r20261028-185933-4435); h_x 2,703 / 2,123 / 1,968 MAC-times a byte at "
+                                 "4 / 16 / 64 KiB rows is compressions_per_row at this share (34.6 / 27.2 / 25.3 ms "
+                                 "at 13.6 GB against GD-HASH's 34.6 / 27.2 / 25.2)"),
+    "kcommit_over_hx": (1.22, "E", "KCOMMIT's whole committer over the row kernel's h_x: 1.17-1.27 with its fold fix "
+                                   "(312-338 GB/s at 4 KiB, HASH-56 r20261028-162221-9948), 1.42 at the served 277 "
+                                   "GB/s (GD-HASH final's smell); commit.hash_eff 'kcommit' prices it"),
+    "gap_eta_4k": (0.98, "M", "GD-HASH final, gap first (r20261028-202719-cc9b): G over the gap's length in leaf time "
+                              "at 4 KiB rows, 3.45 GB in main's 8.55 ms gap; rows under 4 KiB take it (unmeasured)"),
+    "gap_eta_16k": (1.03, "M", "... at 16 KiB rows, 4.48 GB"),
+    "gap_eta_64k": (0.79, "M", "... at 64 KiB rows, 3.66 GB (the last 64 KiB leaf batches run past the gap)"),
     "guess_p16": (2.79e-5, "E", "Dither PROTOCOL.md: the most predictable 16-bit word's free-guess rate on the H200; "
                                 "x 2^(16 - bits) down to 9 bits, 2^-bits at 8 and under (GD-BITS)"),
     "mix4_ands": (214, "M", "GD-AGG's mix4 (four xorshift-multiply rounds mod 2^16) in circuit, a cell, counted "
@@ -409,10 +406,11 @@ SCHEMA = {
         "bits_per_word": (16, "bits a committed word for the bf16 values (int8 and f32 entries unchanged)"),
         "row_bytes": (4096, "hm96 row size of the Commit's tree (4 KiB today; 16 KiB: lever 11 of P1a)"),
         "hash_eff": (None, "share of HASH-38's bar the hash kernels reach (None: b921's 0.497; the row kernel: "
-                           "INPUTS hash_eff_rows, 0.92)"),
-        "corun": (False, "False (b921's measured overlap) | True or 'corun4' (GD-HASH's beside curve: bytes up to the "
-                         "beside capacity cost the GEMM h_b / h_x of their exclusive time, the rest run alone; hashing "
-                         "in host gaps free, an estimate)"),
+                           "INPUTS hash_eff_rows, 0.92; 'kcommit': KCOMMIT's committer, hash_eff_rows / "
+                           "kcommit_over_hx)"),
+        "corun": (False, "False (b921's measured overlap) | True (GD-HASH final, gap first: each forward's leaves "
+                         "released at its end hash free for eta x the host gap, none under async or CUDA graphs; "
+                         "every other byte, the tree included, exclusive at h_x)"),
         "open": ("whole", "whole (an opened byte range pays every row_bytes row it touches: hm96 hashes whole rows) | "
                           "exact (each read its own row of its size, as costfit's sessions ran)"),
         "seal": ("tree", "tree (per-window tree sealed, b921) | none (5430) | roots (lever 1: seal roots, binding map "
@@ -636,6 +634,11 @@ def commit_bytes_per_token(d: dict, units: list) -> float:
     return stream_bytes_per_token(c["values"], c["bits_per_word"]) + sums
 
 
+def commit_eff(d: dict) -> float:
+    eff = d["commit"]["hash_eff"] or I("hash_eff_today")
+    return I("hash_eff_rows") / I("kcommit_over_hx") if eff == "kcommit" else eff
+
+
 def hash_ms(compressions: float, eff: float, mhz: float) -> float:
     return compressions / (I("sha_bar_per_sm_clock") * I("sms") * mhz * 1e3 * eff)
 
@@ -643,8 +646,8 @@ def hash_ms(compressions: float, eff: float, mhz: float) -> float:
 def commit_parts(d: dict, stock: dict, units: list) -> tuple[dict, dict]:
     """The Commit's parts, ms a step, and what they rest on: its tree's compressions at the hash kernels' share of the
     bar, less what overlaps (today: b921's 22% of the kernel time under tensor work, at its measured GEMM loss;
-    co-run: GD-HASH's beside curve, nothing free under the GEMM, host gaps free), the taps, the gather, the host
-    copies, the event syncs and the seal, each scaled from b921 by bytes or held per step."""
+    co-run: GD-HASH final's h_x - sigma h_leaf, the leaves free up to eta x the host gap, nothing else), the taps,
+    the gather, the host copies, the event syncs and the seal, each scaled from b921 by bytes or held per step."""
     c, p = d["commit"], d["point"]
     bpt = commit_bytes_per_token(d, units)
     if bpt <= 0:
@@ -654,18 +657,19 @@ def commit_parts(d: dict, stock: dict, units: list) -> tuple[dict, dict]:
     step_bytes = bpt * tok_c
     tree = tree_compressions(step_bytes * S, c["row_bytes"])
     comp = tree["compressions"] / S
-    eff = c["hash_eff"] or I("hash_eff_today")
+    eff = commit_eff(d)
     mhz = I("hash_mhz")
     kernel = max(hash_ms(comp, eff, mhz), I("commit_launches") * 0.8 * I("launch_us") / 1e3)
     b921_bytes = I("commit_B_per_token") * 8192
     scale = step_bytes / b921_bytes
-    ratio, beside_gb = beside(c["row_bytes"], tok_c)
+    sigma = 0.0
     if c["corun"]:
-        idle = min(kernel, stock["host gap between forwards"] + stock["launch gaps in the forward"])
-        fits = min(1.0, beside_gb * 1e9 * stock["int8 GEMM"] / I("beside_gemm_ms") / step_bytes)
-        side = min(kernel - idle, kernel * fits)
-        exposed = kernel - idle - side
-        penalty = ratio * side
+        leaf_ms = kernel * tree["rows"] * compressions_per_row(c["row_bytes"]) / tree["compressions"]
+        gap = 0.0 if p["async"] or d["forward"]["graphs"] else stock["host gap between forwards"]
+        eta = _log_interp(c["row_bytes"], (4096, 16384, 65536), [I(f"gap_eta_{r}") for r in ("4k", "16k", "64k")])
+        free = min(leaf_ms, eta * gap)
+        sigma = free / leaf_ms if leaf_ms > 0 else 0.0
+        exposed, penalty = kernel - free, 0.0
     else:
         exposed = kernel * (1 - I("hash_overlap_today"))
         overlapped_cycles = kernel * I("hash_overlap_today") * mhz
@@ -684,8 +688,7 @@ def commit_parts(d: dict, stock: dict, units: list) -> tuple[dict, dict]:
         seal_bytes = (tree["rows"] + tree["nodes"]) * 64
         parts["seal wait"] = seal_bytes / (I("seal_GBs") * 1e6) / S
     info = {"bytes_per_token": bpt, "step_bytes": step_bytes, "tree": tree, "compressions_per_step": comp,
-            "hash_kernel_ms": kernel, "hash_eff": eff, "beside_h_ratio": ratio,
-            "beside_GB_a_step": beside_gb * stock["int8 GEMM"] / I("beside_gemm_ms")}
+            "hash_kernel_ms": kernel, "hash_eff": eff, "gap_sigma": sigma}
     return parts, info
 
 
@@ -698,16 +701,6 @@ def _log_interp(x: float, xs: tuple, ys: list) -> float:
         if lx <= x1:
             return y0 + (y1 - y0) * (lx - x0) / (x1 - x0)
     return pts[-1][1]
-
-
-def beside(row_bytes: int, tok: float) -> tuple[float, float]:
-    """GD-HASH's beside curve at a row size and T: (h_b / h_x, GB a forward that fit beside the GEMM below the whole
-    grid at its 14.5 ms). Rows under 4 KiB take 4 KiB's figures (unmeasured)."""
-    rows = (4096, 16384, 65536)
-    hi = _log_interp(row_bytes, rows, [I("beside_4k"), I("beside_16k"), I("beside_64k")])
-    lo = _log_interp(row_bytes, rows, [I("beside512_4k"), I("beside512_16k"), I("beside512_64k")])
-    gb = _log_interp(row_bytes, rows, [I("beside_GB_4k"), I("beside_GB_16k"), I("beside_GB_64k")])
-    return _log_interp(tok, (512, 8192), [lo, hi]), gb
 
 
 def l_prime(w: dict) -> int:
@@ -955,7 +948,7 @@ def pouw_parts(d: dict, stock: dict) -> tuple[dict, dict]:
     cells = sum(c for c, _ in calls)
     words = sum(c * ((s - 1) * w["word_bits"] / 8 / w["agg"] + 4) for c, s in calls)
     vt = tree_compressions(words, w["value_row_bytes"])
-    vh = hash_ms(vt["compressions"], d["commit"]["hash_eff"] or I("hash_eff_today"), I("hash_mhz"))
+    vh = hash_ms(vt["compressions"], commit_eff(d), I("hash_mhz"))
     parts["dither: value roots hashed"] = vh * (1 - I("hash_overlap_today"))
     info.update({"cells": cells, "t": max(1, L // Lp), "value_bytes": words, "value_tree": vt, "denoise_g_frac": dg})
     return parts, info

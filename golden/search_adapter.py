@@ -15,8 +15,10 @@ attention templates merged), `udraw` (JR2's U, "period" | "call"), `b1` ("card" 
 ("tensor" | "in-model") reach pouw.scheme, pouw.form, commit.open, point.steps_per_window, pouw.tile, prover.k_max,
 prover.m_max, prover.reps, prover.device, prover.warm, sampling.period, sampling.retain, partition.attn_keys,
 partition.census, pouw.u_draw, pouw.b1 and pouw.pricing. `noise: segment` is pi re-drawn each segment. `bits` is the
-T_s word's checked low bits: 8 or fewer cap the floor at 7/8 (GD-BITS). `kernels: bar` is the row kernel GD-HASH
-measured (0.92 of the bar), not the bar.
+T_s word's checked low bits: 8 or fewer cap the floor at 7/8 (GD-BITS). `kernels: bar` is KCOMMIT's committer,
+h_x x kcommit_over_hx (1.17-1.42, GD-HASH final), and `kernels: floor` the row kernel GD-HASH measured (h_x, 0.92 of
+the bar). `overlap: corun` (and `corun4`, the same) is GD-HASH final's gap first: leaves free up to eta x the host
+gap, none under async or CUDA graphs.
 
 A design is feasible when every credited linear's floor (Dither's forced work as a share of its G, at the best attack
 found) is at least 1 - eps ("floor"), every proof block is within the block cap, 2^27 unless kmax raises it
@@ -48,6 +50,7 @@ RANGES = {
     "h1_rest_floor_ms_8k": (10.0, 30.0),
     "noise_fused_keep": (0.05, 0.30),
     "permuted_limbs": (2.0, 3.0),                        # every limb dense on 2:4 to none
+    "kcommit_over_hx": (1.17, 1.42),                     # KCOMMIT with its fold fix to the served 277 GB/s
     "jr2_noise_g": (1.0, 1.81),                          # the noised product alone to GD-NOISE's per-call row
     "jr2_wprg_g_m": (873.0, 3492.0),                     # one PRG byte an entry (GD-NOISE finding 5) to four
     "host_retain_GB": (100.0, 1600.0),                   # half an eighth of a node to the whole node's host memory
@@ -91,7 +94,7 @@ LOWER_MIN = 15.0
 _FUSE = {"all": "every_op", "dedupe": "dedup", "fuse": "fused_mlp", "e1": "e1", "e2": "e2"}
 _NOISE = {"perm": "permuted", "periodic": "periodic", "fresh": "fresh", "segment": "segment"}
 _LAW = {"work": "achievability", "uniform": "uniform", "stratified": "stratified"}
-_OVERLAP = {"none": False, "corun": True, "corun4": "corun4"}
+_OVERLAP = {"none": False, "corun": True, "corun4": True}
 
 
 def to_design(k: dict, point: str = "t8192") -> dict:
@@ -108,8 +111,8 @@ def to_design(k: dict, point: str = "t8192") -> dict:
     for knob, key in (("seal", "seal"), ("host", "host"), ("open", "open")):
         if knob in k:
             s["commit"][key] = k[knob]
-    if "kernels" in k:
-        s["commit"].update({"hash_eff": M.I("hash_eff_rows"), "gather": False} if k["kernels"] == "bar" else {})
+    if "kernels" in k and k["kernels"] in ("bar", "floor"):
+        s["commit"].update({"hash_eff": "kcommit" if k["kernels"] == "bar" else M.I("hash_eff_rows"), "gather": False})
     if "overlap" in k:
         s["commit"]["corun"] = _OVERLAP[k["overlap"]]
     if "noise" in k:

@@ -25,7 +25,8 @@ def test_knobs_reach_the_design():
     d = A.to_design(GOOD, "t512")
     assert d["point"]["T"] == 512 and d["partition"]["kchunk"] == 2 and d["commit"]["values"] == "dedup"
     assert d["pouw"]["L"] == 128 and d["pouw"]["L_prime"] == 64 and d["pouw"]["noise"] == "permuted"
-    assert d["commit"]["hash_eff"] == model.I("hash_eff_rows") and d["commit"]["gather"] is False
+    assert d["commit"]["hash_eff"] == "kcommit" and d["commit"]["gather"] is False
+    assert A.to_design({**GOOD, "kernels": "floor"})["commit"]["hash_eff"] == model.I("hash_eff_rows")
     d = A.to_design({**GOOD, "ptile": (2, 4), "kmax": 28, "reps": 1, "device": "sm120", "period": 10})
     assert d["pouw"]["tile"] == (2, 4) and d["prover"]["k_max"] == 28 and d["prover"]["reps"] == 1
     assert d["prover"]["device"] == "sm120" and d["sampling"]["period"] == 10 and d["partition"]["attn_keys"] == 64

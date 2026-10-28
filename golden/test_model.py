@@ -260,18 +260,21 @@ def test_one_rep_is_cheaper_at_the_floor_and_sm120_at_its_price():
     assert model.J(model.design(prover={"device": "sm120"}))["proving"]["gpu_s"] < two["proving"]["gpu_s"] / 10
 
 
-def test_hashing_beside_the_gemm_is_never_free():
-    """GD-HASH: a byte hashed beside the GEMM costs it h_b / h_x of the byte's exclusive time, up to the beside
-    capacity; the rest runs alone."""
-    for T in (512, 8192):
-        d = model.design(point={"T": T}, commit={"corun": True, "hash_eff": model.I("hash_eff_rows")})
-        r = model.J(d)
-        o, c = r["serve_overhead_ms"], r["commit"]
-        idle = r["stock_parts_ms"]["host gap between forwards"] + r["stock_parts_ms"]["launch gaps in the forward"]
-        hashed = c["hash_kernel_ms"] - min(idle, c["hash_kernel_ms"])
-        assert hashed > 0 or T == 512                                  # T 512's host gap holds all its hashing
-        assert (o["GEMM's loss to co-running hash"] > 0) == (hashed > 0)
-        assert o["Commit hashing (exposed)"] + o["GEMM's loss to co-running hash"] >= c["beside_h_ratio"] * hashed
+def test_hashing_is_free_only_in_the_host_gap():
+    """GD-HASH final: h = h_x - sigma h_leaf, sigma = min(1, G / B). At b921's 13.6 GB a forward and 4 KiB rows, gap
+    first exposes 26.3 ms of 34.6 (sigma 0.25); under async or CUDA graphs G is 0 and every byte costs h_x."""
+    def exposed(**point):
+        r = model.J(model.design(point={"T": 8192, **point},
+                                 commit={"corun": True, "hash_eff": model.I("hash_eff_rows")}))
+        return r["serve_overhead_ms"]["Commit hashing (exposed)"], r["commit"]
+    e, c = exposed(**{"async": False})
+    assert c["hash_kernel_ms"] == pytest.approx(34.6, rel=0.01)
+    assert e == pytest.approx(26.3, rel=0.03) and c["gap_sigma"] == pytest.approx(0.25, abs=0.02)
+    e, c = exposed(**{"async": True})
+    assert e == c["hash_kernel_ms"] and c["gap_sigma"] == 0
+    kc = model.J(model.design(commit={"corun": True, "hash_eff": "kcommit"}))["commit"]["hash_kernel_ms"]
+    assert kc == pytest.approx(1.22 * model.J(model.design(commit={"corun": True, "hash_eff": model.I("hash_eff_rows")}))
+                               ["commit"]["hash_kernel_ms"], rel=1e-3)
 
 
 def test_guessable_words_cost_draws_and_small_groups_are_refused():
