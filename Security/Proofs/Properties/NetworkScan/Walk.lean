@@ -154,18 +154,18 @@ theorem step_below {A : Scope} {k m : ℕ} (hA : A = P.child P.rootScope k m)
     rcases hf' : ((P.defs[sc.d]!).body.nodes[i]!).form
     · rw [Resolve.rs_prim P sc i j hf'] at h
       cases h
-      exact ⟨fun a ha => by cases ha; omega, fun s' hs' => by cases hs'⟩
+      exact ⟨(fun a ha => by cases ha; first | omega | exact Nat.le_add_right_of_le (Nat.le_add_right _ _) | exact Nat.le_add_right _ _), fun s' hs' => by cases hs'⟩
     · rw [Resolve.rs_call P sc i j hf'] at h
       cases h
-      exact ⟨fun a ha => by cases ha, fun s' hs' => by cases hs'; exact Or.inl (Below.child hb)⟩
+      exact ⟨(fun a ha => by cases ha), fun s' hs' => by cases hs'; exact Or.inl (Below.child hb)⟩
     · rw [Resolve.rs_batch P sc i j hf'] at h
       by_cases hcp : (P.defs[((P.defs[sc.d]!).body.nodes[i]!).fn]!).prim = true
       · simp only [hcp, ite_true] at h
         cases h
-        exact ⟨fun a ha => by cases ha; omega, fun s' hs' => by cases hs'⟩
+        exact ⟨(fun a ha => by cases ha; first | omega | exact Nat.le_add_right_of_le (Nat.le_add_right _ _) | exact Nat.le_add_right _ _), fun s' hs' => by cases hs'⟩
       · simp only [hcp, Bool.false_eq_true, ite_false] at h
         cases h
-        exact ⟨fun a ha => by cases ha, fun s' hs' => by cases hs'; exact Or.inl (Below.child hb)⟩
+        exact ⟨(fun a ha => by cases ha), fun s' hs' => by cases hs'; exact Or.inl (Below.child hb)⟩
     · simp only [hf'] at hdn
       obtain ⟨-, hdn⟩ := hdn
       by_cases hn : ((P.defs[sc.d]!).body.nodes[i]!).n = 0
@@ -173,7 +173,7 @@ theorem step_below {A : Scope} {k m : ℕ} (hA : A = P.child P.rootScope k m)
       obtain ⟨carry, y, hret, -, -⟩ := hdn hn
       rw [Resolve.rs_scan P sc i j carry y hf' hn hret] at h
       cases h
-      exact ⟨fun a ha => by cases ha, fun s' hs' => by cases hs'; exact Or.inl (Below.child hb)⟩
+      exact ⟨(fun a ha => by cases ha), fun s' hs' => by cases hs'; exact Or.inl (Below.child hb)⟩
   · rcases sc with ⟨d, off, st⟩ | ⟨parent, d, off, k', m'⟩
     · obtain ⟨-, -, rfl⟩ := hg
       exact absurd h (Resolve.rs_top P d off i j x)
@@ -210,26 +210,26 @@ theorem step_below {A : Scope} {k m : ℕ} (hA : A = P.child P.rootScope k m)
       · rcases hf'' : ((P.defs[parent.d]!).body.nodes[k']!).form
         · rw [Resolve.rs_up P parent d off k' m' i j (Or.inl hf'')] at h
           cases h
-          exact ⟨fun a ha => by cases ha, fun s' hs' => by cases hs'; exact Or.inl hpb⟩
+          exact ⟨(fun a ha => by cases ha), fun s' hs' => by cases hs'; exact Or.inl hpb⟩
         · rw [Resolve.rs_up P parent d off k' m' i j (Or.inr hf'')] at h
           cases h
-          exact ⟨fun a ha => by cases ha, fun s' hs' => by cases hs'; exact Or.inl hpb⟩
+          exact ⟨(fun a ha => by cases ha), fun s' hs' => by cases hs'; exact Or.inl hpb⟩
         · rw [Resolve.rs_up_batch P parent d off k' m' i j hf''] at h
           cases h
-          exact ⟨fun a ha => by cases ha, fun s' hs' => by cases hs'; exact Or.inl hpb⟩
+          exact ⟨(fun a ha => by cases ha), fun s' hs' => by cases hs'; exact Or.inl hpb⟩
         · by_cases hi0 : i = 0
           · subst hi0
             rw [Resolve.rs_up_scan0 P parent d off k' m' j hf''] at h
             by_cases hm0 : m' = 0
             · simp only [hm0, ite_true] at h
               cases h
-              exact ⟨fun a ha => by cases ha, fun s' hs' => by cases hs'; exact Or.inl hpb⟩
+              exact ⟨(fun a ha => by cases ha), fun s' hs' => by cases hs'; exact Or.inl hpb⟩
             · simp only [hm0, ite_false] at h
               cases h
-              exact ⟨fun a ha => by cases ha, fun s' hs' => by cases hs'; exact Or.inl (Below.child hpb)⟩
+              exact ⟨(fun a ha => by cases ha), fun s' hs' => by cases hs'; exact Or.inl (Below.child hpb)⟩
           · rw [Resolve.rs_up_scan P parent d off k' m' i j hi0 hf''] at h
             cases h
-            exact ⟨fun a ha => by cases ha, fun s' hs' => by cases hs'; exact Or.inl hpb⟩
+            exact ⟨(fun a ha => by cases ha), fun s' hs' => by cases hs'; exact Or.inl hpb⟩
 
 /-- **Resolution from below `A`** ends in `A`'s gates, or at the gate a reference of node `k`'s argument resolves to
 from the root, in no more steps. -/
@@ -287,8 +287,9 @@ theorem gateStep_root {k m g : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
   split
   · rename_i k' hk'
     obtain ⟨hk'K, hpk⟩ := DescAgree.find?_range_some hk'
-    simp only [Bool.and_eq_true, decide_eq_true_eq] at hpk
-    have hkk : k' = k := DescAgree.node_unique _ _ hmono' hk'K hk hpk hin
+    simp only [Bool.and_eq_true] at hpk
+    have hkk : k' = k :=
+      DescAgree.node_unique _ _ hmono' hk'K hk ⟨of_decide_eq_true hpk.1, of_decide_eq_true hpk.2⟩ hin
     subst k'
     simp only [hc, Bool.false_eq_true, ite_false, pure, Except.pure, Except.ok.injEq, Sum.inr.injEq]
     congr 1
@@ -300,7 +301,8 @@ theorem gateStep_root {k m g : ℕ} (hk : k < (P.defs[P.root]!).body.nodes.size)
     rename_i hne
     have hnone := Option.eq_none_iff_forall_ne_some.2 hne
     rw [Array.find?_eq_none] at hnone
-    exact hnone k (Array.mem_range.2 hk) (by simp only [Bool.and_eq_true, decide_eq_true_eq]; exact hin)
+    exact hnone k (Array.mem_range.2 hk)
+      (by simp only [Bool.and_eq_true]; exact ⟨decide_eq_true hin.1, decide_eq_true hin.2⟩)
 
 /-- **The operands of a gate of `A`**: each is a resolution from an activation below `A`, of a state that resolves before
 the end of `A`'s gates. -/
@@ -322,9 +324,10 @@ theorem gate_below {k m g p : ℕ} {ops : Array ℕ} {sc : Scope} (hk : k < (P.d
   unfold Prog.gate at h
   have hng : ¬ (g ≥ (P.defs[P.root]!).gates) := by omega
   simp only [hng, ite_false, bind, Except.bind] at h
-  have hF : Flock.Steps.FUEL = (Flock.Steps.FUEL - 1) + 1 := by unfold Flock.Steps.FUEL; norm_num
+  have hF : Flock.Steps.FUEL = (Flock.Steps.FUEL - 1) + 1 := by unfold Flock.Steps.FUEL; omega
   have h0 := gateStep_root P hroot hB hL hk hc hm hg1 hg2
   rw [hF, Flock.Steps.run.eq_2, h0] at h
+  generalize Flock.Steps.FUEL - 1 = fuel at h
   simp only [bind, Except.bind] at h
   refine DescAgree.run_inv "gate location" (gateStep P g)
     (fun sc => Below (P.child P.rootScope k m) sc ∧ Walk.Reach P g sc)

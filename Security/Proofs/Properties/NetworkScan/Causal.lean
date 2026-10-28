@@ -46,7 +46,7 @@ open NciCheck.Properties.SecurityProofs
 open NetworkCheck.Period
 open Properties.NetworkScan.WalkProof
 
-theorem fuel_succ : Flock.Steps.FUEL = (Flock.Steps.FUEL - 1) + 1 := by unfold Flock.Steps.FUEL; norm_num
+theorem fuel_succ : Flock.Steps.FUEL = (Flock.Steps.FUEL - 1) + 1 := by unfold Flock.Steps.FUEL; omega
 
 theorem seq_get_one {s : Seq} {q : Part} (h : s.parts = #[q]) (k : ℕ) : s.get k = q.get k := by
   first
@@ -294,7 +294,8 @@ theorem gateStep_input {q x : ℕ} {r : (ℕ × Array ℕ × Scope) ⊕ Scope} (
   · rename_i k' hk'
     obtain ⟨hk'K, hpk⟩ := DescAgree.find?_range_some hk'
     simp only [Bool.and_eq_true, decide_eq_true_eq] at hpk
-    have hkk : k' = q := DescAgree.node_unique _ _ hmono' hk'K hq hpk ⟨hx1, hx2⟩
+    have hkk : k' = q := DescAgree.node_unique _ _ hmono' hk'K hq
+      (by first | exact hpk | exact ⟨of_decide_eq_true hpk.1, of_decide_eq_true hpk.2⟩) ⟨hx1, hx2⟩
     subst k'
     simp only [hprim, ite_true] at hs
     split at hs
