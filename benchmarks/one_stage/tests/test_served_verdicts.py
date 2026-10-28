@@ -29,7 +29,7 @@ import served_verdicts as S
 from verity_e2e_demo import block_record as BR
 
 SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v1.schema.json").read_text())
-_SL = importlib.util.spec_from_file_location("serve_load", HERE.parents[2] / "examples" / "vllm" / "serve_load.py")
+_SL = importlib.util.spec_from_file_location("serve_load", HERE.parents[2] / "demos" / "vllm" / "serve_load.py")
 SL = importlib.util.module_from_spec(_SL)
 _SL.loader.exec_module(SL)
 
@@ -396,8 +396,8 @@ def test_serve_load_varied_writes_each_requests_timings_beside_its_record(tmp_pa
 
     monkeypatch.setattr(SL.urllib.request, "urlopen", urlopen)
     out = tmp_path / "load.jsonl"
-    a = argparse.Namespace(port=0, model="m", varied=3, rate=2.0, prompt_range="16:24", max_tokens=4, seed=1, release="run",
-                           jitter_ms=0.0, out=str(out))
+    a = argparse.Namespace(port=0, model="m", varied=3, fixed=0, rate=2.0, prompt_range="16:24", max_tokens=4, seed=1,
+                           release="run", jitter_ms=0.0, out=str(out))
     assert SL.run_varied(a, clock=clock, wall=lambda: 1.7e9, sleep=lambda s: None) == 0
     rows = [json.loads(line) for line in out.read_text().splitlines()]
     assert SL.timings_path(out) == tmp_path / "load.timings.json"

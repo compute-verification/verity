@@ -1,10 +1,10 @@
-"""Lane REAL-HF — held-out test of the importer (`verity_vllm.program.frontend.derive`, frozen at tag `derive-freeze-2` = 2a694d0a)
+"""Held-out test of the importer (`verity_vllm.program.frontend.derive`, frozen at tag `derive-freeze-2` = 2a694d0a)
 on REAL `transformers` model classes, not the project's hand-written stand-ins (`derive_examples.HFTinyLM` / `HFGreedy`).
 
 Every case is recorded as one JSONL row (outcome, verbatim refusal, rules fired in order, digest, evaluation vs torch CPU) and
 the test itself only fails on a CRASH (unclassified exception), a WRONG program (values / tokens differ from torch CPU beyond the
 importer's documented tolerance) or lost sharing. An explicit `Unsupported(...)` is a lawful outcome and is reported, not fixed
-(the importer is not modified by this lane; gaps are filed as G-RH-n).
+(the importer is not modified here).
 
 Tiny random-initialised configs (no downloads; HF_HUB_OFFLINE=1): hidden 64, 2 layers, 4 heads, 2 KV heads (GQA models),
 vocab 128, intermediate 128, max_position 64; tie_word_embeddings True/False; f32 and bf16; `attn_implementation` eager / sdpa.
@@ -285,7 +285,7 @@ def _probe_patches(level: int) -> list[str]:
         applied.append("P1:find_packed_sequence_indices->None")
     if level >= 2:
         # P2: `masking_utils.eager_mask` builds the additive mask with a factory zero instead of the literal `torch.tensor(0.0)`
-        # (a 0-d tensor literal created in forward is lifted by export and refused as `hidden_state`, XFER-G6 class).
+        # (a 0-d tensor literal created in forward is lifted by export and refused as `hidden_state`).
         import transformers.masking_utils as mu
         _sdpa_mask = mu.sdpa_mask
 

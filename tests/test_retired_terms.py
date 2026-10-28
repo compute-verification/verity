@@ -58,9 +58,9 @@ ALLOWED: dict[str, str] = {
 PENDING: dict[str, str] = {
     "Security/Proofs/NetworkCertifier/README.md": "#4690 adds lines",
     "benchmarks/census/README.md": "#4731 rewrites its lines",
-    "examples/h200/interfaces/README.md": "#4719 rewrites its lines",
-    "examples/h200/interfaces/verity_e2e_demo/report.py": "#4691 adds a line",
-    "examples/h200/README.md": "#4680 rewrites its lines",
+    "demos/h200/interfaces/README.md": "#4719 rewrites its lines",
+    "demos/h200/interfaces/verity_e2e_demo/report.py": "#4691 adds a line",
+    "demos/h200/README.md": "#4680 rewrites its lines",
     "benchmarks/network_traces/chain_record.py": "#4575 rewrites its lines",
     "benchmarks/network_traces/transfer_zk.py": "#4441 adds it",
     "benchmarks/network_traces/transfer_zk.sh": "#4441 adds it",
@@ -177,7 +177,7 @@ def test_the_doc_scan_reads_each_form():
         "b.md": 'The `legs/pous.py` file and `wipe_period.leg(dir)`; ``a `leg` key``; "leg" is retired.\n'
                 "```sh\nLEGS=A,B ./run.sh  # each leg\n```\n~~~\na leg\n~~~\nA thread block after the fences.\n",
         "c.py": '"""A wrong unit and a leg stay in code until PR 2."""',
-        "benchmarks/numerical/CHANGELOG.md": "a leg",
+        "benchmarks/pouw/CHANGELOG.md": "a leg",
         "verity/README.md": "a leg",
         GLOSSARY: '| "leg"; a physical block | subprotocol |\nA leg outside the table.\n',
     }
