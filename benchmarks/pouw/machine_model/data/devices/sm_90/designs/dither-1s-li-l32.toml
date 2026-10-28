@@ -1,6 +1,6 @@
 # Dither-1S with the LI fold at L = 32 on the H200 (sm_90): one-sided dither and the linears' peel, LI receipts on every
 # committed word and 0.02 verified FFMA a word. The noise is dither-1s-l32's, and ε_skip is this design's own at its ♭
-# (eps_budget's `design_skip`); the fold, honest and ε_mand are measured: LI binds honest on the H200's lane
+# (eps_budget's `design_skip`); the fold, honest and ε_mand are the LI designs': LI binds honest on the H200's lane
 # facet, so output counting closes the lane route.
 name = "dither-1s-li-l32"
 title = "Dither-1S, LI, L = 32"
