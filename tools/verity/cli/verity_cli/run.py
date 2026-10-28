@@ -1,5 +1,5 @@
 """`verity run` and `verity config`: a deployment configuration's parties, run on this machine, and the file itself
-(`verity.core.deploy.config`; `note:memory-accounting/20261026T2305Z-draft-deployment-api-v3`, addenda 23:46Z to 00:30Z).
+(`verity.core.deploy.config`).
 
     verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR]
     verity config new --workload W --protocols P,... [--on MACHINE] [--out FILE]
@@ -85,14 +85,14 @@ class Registry:
         """``party``'s entries under ``cfg``: the workload's party, or each listed component's that declares it, a
         component's after those it requires; refused by name where a component has none yet."""
         w = cfg["workload"]["name"]
-        if party in self.workloads[w].parties:
+        if any(r.name == party for r in self.workloads[w].parties):
             return [(w, self.workers[w])]
         out = []
         for c in _required_first(cfg["protocols"], self.components):
-            if party in self.components[c].parties:
+            if any(r.name == party for r in self.components[c].parties):
                 if party not in self.parties.get(c, {}):
-                    raise K.Refused("no-party", f"{c} has no step-0 {party} yet: verity run runs "
-                                                f"{', '.join(sorted(self.parties))}")
+                    raise Refused("no-party", f"{c} has no step-0 {party} yet: verity run runs "
+                                              f"{', '.join(sorted(self.parties))}")
                 out.append((c, self.parties[c][party]))
         return out
 
@@ -121,8 +121,8 @@ def registry(table: tuple[Path, str] | None = None) -> Registry:
     """Step 0's table: ``table``, else `REGISTRY`; refused by name (``no-table``) when there is neither."""
     table = table or REGISTRY
     if table is None:
-        raise K.Refused("no-table", "step 0 has no table: the toy it ran was removed, and no workload's protocols "
-                                    "have brought theirs yet")
+        raise Refused("no-table", "step 0 has no table: the toy it ran was removed, and no workload's protocols "
+                                  "have brought theirs yet")
     path, module = table
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
@@ -147,13 +147,13 @@ def plan(cfg: Mapping[str, Any], reg: Registry, machine: str, wanted: Sequence[s
     every party the configuration places there; each with its entries (`Registry.entries`)."""
     at = placed(cfg)
     if unknown := [p for p in wanted if p not in at]:
-        raise K.Refused("unknown-party", f"{', '.join(unknown)} (the configuration's: {', '.join(at)})")
+        raise Refused("unknown-party", f"{', '.join(unknown)} (the configuration's: {', '.join(at)})")
     if elsewhere := [p for p in wanted if at[p] != machine]:
-        raise K.Refused("machine", ", ".join(f"{p} runs on {at[p]}, not {machine} (--on)" for p in elsewhere))
+        raise Refused("machine", ", ".join(f"{p} runs on {at[p]}, not {machine} (--on)" for p in elsewhere))
     chosen = list(dict.fromkeys(wanted)) or [p for p, m in at.items() if m == machine]
     if not chosen:
-        raise K.Refused("machine", f"the configuration places no party on {machine} (its machines: "
-                                   f"{', '.join(sorted(set(at.values())))})")
+        raise Refused("machine", f"the configuration places no party on {machine} (its machines: "
+                                 f"{', '.join(sorted(set(at.values())))})")
     for p in chosen:
         reg.entries(cfg, p)
     rank = {p: i for i, p in enumerate(reg.order)}
@@ -164,12 +164,12 @@ def unmet(cfg: Mapping[str, Any], reg: Registry, head: str | None) -> list[str]:
     """The premises the run's placement leaves unmet (module docstring): each party that sends coins on a developer's
     party's machine, and a configured program commit other than the running tree's ``head``."""
     listed = [reg.components[c] for c in cfg["protocols"]]
-    parties, messages, channels = K.declared(listed, reg.workloads[cfg["workload"]["name"]])
+    parties, channels = K.declared(listed, reg.workloads[cfg["workload"]["name"]])
     at = placed(cfg)
-    sources = sorted({ch.source for ch in channels.values() if any(messages[m] == "coins" for m in ch.messages)})
+    sources = sorted({ch.sender for ch in channels.values() if ch.carries_coins})
     out = []
     for p in sources:
-        if shared := sorted(q for q, m in at.items() if m == at[p] and parties[q] == "developer"):
+        if shared := sorted(q for q, m in at.items() if m == at[p] and parties[q].principal == "developer"):
             out.append(f"{p} shares {at[p]} with the developer's {', '.join(shared)}: Faithful and Secret unmet")
     if head != cfg["program"]["commit"]:
         out.append(f"the program is the running tree's {head}, not the configured {cfg['program']['commit']}")
@@ -237,8 +237,8 @@ def begin(cfg: Mapping[str, Any], state: Path, periods: int, machine: str, hooks
     if f.exists():
         run = json.loads(f.read_text())
         if run["configuration"] != digest or run["periods"] != periods:
-            raise K.Refused("state", f"{state} holds the run of configuration {run['configuration'][:16]}… at "
-                                     f"{run['periods']} periods, not {digest[:16]}… at {periods}")
+            raise Refused("state", f"{state} holds the run of configuration {run['configuration'][:16]}… at "
+                                   f"{run['periods']} periods, not {digest[:16]}… at {periods}")
         return run
     run = {"run": settings.run_id(), "periods": periods, "configuration": digest,
            "hooks": sorted(hooks), "parties": placed(cfg), "machine": machine}
@@ -313,7 +313,7 @@ def execute(cfg: Mapping[str, Any], reg: Registry, state: Path, chosen: Sequence
         return 0
     try:
         r = reg.live(cfg, state, here)
-    except (K.Refused, Refused) as e:
+    except Refused as e:
         print(f"verity run: refused {e.name}: {e.detail}", file=sys.stderr)
         return 2
     except OSError as e:
@@ -361,7 +361,7 @@ def run_main(argv: Sequence[str], reg: Registry | None = None, in_process: bool 
         cfg = load(Path(a.config), reg)
         chosen = plan(cfg, reg, a.machine, a.party)
         begin(cfg, state, a.periods, a.machine, hooks_of(cfg, reg))
-    except K.Refused as e:
+    except Refused as e:
         print(f"verity run: refused {e.name}: {e.detail}", file=sys.stderr)
         return 2
     say("RUN", {"state": str(state), "parties": chosen, "configuration": K.digest(cfg), "periods": a.periods})
@@ -409,7 +409,7 @@ def config_main(argv: Sequence[str], reg: Registry | None = None) -> int:
                 sys.stdout.write(text)
             return 0
         cfg = load(Path(a.config), reg)
-    except K.Refused as e:
+    except Refused as e:
         print(f"refused {e.name}: {e.detail}")
         return 2
     print(f"ok {K.digest(cfg)}" if a.cmd == "check" else K.digest(cfg))
