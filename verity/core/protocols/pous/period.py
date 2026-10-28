@@ -53,9 +53,9 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols import record as core_record
 from verity.ml.commitments.identity import canonical_json_bytes
 from verity.ml.crypto import lms
+from verity.core.protocols import record as core_record
 from verity.ml.randomness import derive
 
 from . import challenger_party

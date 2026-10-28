@@ -1388,9 +1388,9 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     ``draw_k`` (`pouw_h1_challenger.period_reason`, core's `credit.period`). Its ``credit`` is core's
     (`pouw_h1_challenger.credit_reason`) over `descriptor`, the bytes of the circuit the period committed
     (`pouw_h1_served.descriptor`; none refuses it)."""
-    from verity.core.protocols.sampled_proofs import challenger as Ch
     from verity.core.protocols.sampled_proofs import remote
     from verity_vllm.protocols.pouw import h1 as PH
+    from verity.core.protocols.sampled_proofs import challenger as Ch
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
     def newest():
