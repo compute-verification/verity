@@ -14,7 +14,7 @@
 #   5. cpu      per statement of CPU_STATEMENTS, the same session set without --gpu (the CPU prover), no lease
 # out/summary.json: per statement and mode, the median timed session's prove time, its phases, GPU busy share and peaks.
 # env: STATEMENTS="4096:1 4096:8 14336:1"  CPU_STATEMENTS="4096:1"  ROWS=8  WARM=1  RUNS=3  VCPUS=4  LEASE_MIN=20  SM=90
-#      CUDA_TK (default: verity/ml/flock/pod/cuda-13.3.sh's)  NSYS=1  FLOCK_WORK (default: a directory under /workspace/tmp, kept between steps)  STEPS="build stage sanity gpu cpu"
+#      CUDA_TK (default: verity/ml/flock/pod/cuda-13.3.sh's)  NSYS=1  NSYS_STATEMENT (default the first)  FLOCK_WORK (default: a directory under /workspace/tmp, kept between steps)  STEPS="build stage sanity gpu cpu"
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
 REPO=$(pwd); O=${RESEARCH_RUN_DIR:-/tmp/flock-s8-block}/out; mkdir -p $O
@@ -68,13 +68,15 @@ free_port() { python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1
 wait_serving() { for i in $(seq 1800); do grep -q SERVING $1 && return 0; kill -0 $2 2>/dev/null || return 1; sleep 1; done; return 1; }
 stamp() { while IFS= read -r l; do printf '%s\t%s\n' "$(date +%s.%N)" "$l"; done; }
 # gpu_sample DIR: until DIR/stop exists, the GPU's utilization, memory, SM clock and power (nvidia-smi) each ~0.2 s, stamped,
-# and where dcgmi runs its SM-active, tensor-pipe-active and DRAM-active shares (fields 1002, 1004, 1005), stamped
+# then the prover's cores' busy jiffies (/proc/stat over PCPU); and where dcgmi runs its SM-active, tensor-pipe-active and
+# DRAM-active shares (fields 1002, 1004, 1005), stamped
 gpu_sample() {
   rm -f $1/stop
   local P2=; command -v dcgmi > /dev/null && { dcgmi dmon -e 1002,1004,1005 -d 200 2>&1 | stamp > $1/dcgm.tsv & P2=$!; }
   while [ ! -e $1/stop ]; do
-    printf '%s\t%s\n' "$(date +%s.%N)" "$(nvidia-smi --query-gpu=utilization.gpu,memory.used,clocks.sm,power.draw \
-      --format=csv,noheader,nounits -i ${GPU_LEASE_UUID:-0} 2>&1)"
+    printf '%s\t%s, %s\n' "$(date +%s.%N)" "$(nvidia-smi --query-gpu=utilization.gpu,memory.used,clocks.sm,power.draw \
+      --format=csv,noheader,nounits -i ${GPU_LEASE_UUID:-0} 2>&1)" \
+      "$(awk -v c=",$PCPU," '$1 ~ /^cpu[0-9]/ && index(c, "," substr($1, 4) ",") {b += $2 + $3 + $4 + $7 + $8 + $9} END {print b}' /proc/stat)"
     sleep 0.2
   done > $1/smi.tsv
   [ -n "$P2" ] && { kill $P2 2>/dev/null; wait $P2 2>/dev/null; }   # dcgmi ends on its next write's SIGPIPE
@@ -115,18 +117,21 @@ fi
 if has gpu; then
   echo "== gpu $(date -u +%T)"
   export -f session spec gpu_sample free_port wait_serving stamp
-  export B O FW PCPU VCPU NC VC NS WARM RUNS STATEMENTS SANITY ROWS NSB NSYS
+  export B O FW PCPU VCPU NC VC NS WARM RUNS STATEMENTS SANITY ROWS NSB NSYS NSYS_STATEMENT
   GPU_LEASE_WHO=${GPU_LEASE_WHO:-flock-s8-block} gpu-lease 1 --wait --max-min ${LEASE_MIN:-20} -- bash -c '
     nvidia-smi -L > $O/lease-gpu.txt
     [ "${SANITY:-1}" = 1 ] && session 64:2 gpu
     for kn in $STATEMENTS; do session $kn gpu; done
     if [ "${NSYS:-0}" = 1 ]; then
-      mkdir -p $O/nsys
-      WARM=0 RUNS=2 NS=2 WRAP="$NSB profile -t cuda --sample=none --cpuctxsw=none -o $O/nsys/prove-%p" session ${STATEMENTS%% *} gpu-nsys
+      rm -rf $FW/nsys-reps; mkdir -p $FW/nsys-reps
+      WARM=0 RUNS=2 NS=2 WRAP="$NSB profile -t cuda --sample=none --cpuctxsw=none -o $FW/nsys-reps/prove-%p" \
+        session ${NSYS_STATEMENT:-${STATEMENTS%% *}} gpu-nsys
     fi'
   if [ "${NSYS:-0}" = 1 ]; then
-    for f in $O/nsys/*.nsys-rep; do $NSB stats -q -r cuda_gpu_kern_sum,cuda_gpu_mem_time_sum -f csv -o ${f%.nsys-rep} $f > /dev/null; done
-    rm -f $O/nsys/*.nsys-rep $O/nsys/*.sqlite
+    mkdir -p $O/nsys; ls -la $FW/nsys-reps > $O/nsys/reps.txt 2>&1
+    for f in $FW/nsys-reps/*.nsys-rep; do
+      $NSB stats -q -r cuda_gpu_kern_sum,cuda_gpu_mem_time_sum -f csv -o $O/nsys/$(basename ${f%.nsys-rep}) $f >> $O/nsys/stats.log 2>&1
+    done
   fi
 fi
 if has cpu; then

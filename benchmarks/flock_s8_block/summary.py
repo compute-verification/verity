@@ -89,6 +89,11 @@ def session_set(d: Path) -> dict:
         if m and len(m) >= 4:
             s["gpu_util_mean_pct"], s["gpu_mem_mean_mib"], s["sm_clock_mean_mhz"], s["power_mean_w"] = (round(x, 2) for x in m[:4])
             s["gpu_busy_s_per_session"] = round(m[0] / 100 * s["session_s"], 4)
+        jif = [(t, v[4]) for t, v in smi if len(v) >= 5]
+        before = [j for t, j in jif if t <= t0]
+        after = [j for t, j in jif if t >= t1]
+        if before and after:
+            s["prover_cores_cpu_s_per_session"] = round((after[0] - before[-1]) / 100 / len(timed), 3)
         mem = [v[1] for _, v in smi if len(v) >= 2]
         s["gpu_mem_peak_mib"] = max(mem) if mem else None
         dcgm = [(t, floats(r.split("GPU", 1)[1])[1:] if "GPU" in r else []) for t, r in stamped(d / "dcgm.tsv")]
