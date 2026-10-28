@@ -8,6 +8,33 @@ probability δ, at most so many proof blocks are faulty, a proof block being fau
 applied to its committed inputs. The protocol is stated in Lean (see "Where things are"); this README outlines it,
 points to the code, and lists what the Lean does not state yet.
 
+Sampled proofs is a subprotocol of both composite protocols. Remote Verity (`verity/remote/v0`,
+`verity/core/protocols/remote/`) composes its one-stage audit (`verity/sampled-proofs/one-stage/v1`) with PoUW
+(`verity/pouw/v1`), and onsite (`verity/core/protocols/onsite/`) composes it with the other subprotocols. In each, the
+composite's verifier runs the one-stage audit's Lean check as a component, and the composite accepts only when every
+component accepts.
+
+## Guarantee and assumptions
+
+The guarantee is knowledge soundness of the sampled audit: except with a bounded probability, when the verifier
+accepts, at most the profile's count of proof blocks are faulty. Its top statement is C-Flock's
+`Flock.Guarantees.SampledKSLiveV3`, stated in `Security/Proofs/Flock/Bridge/Refused.lean` and proved in
+`Security/Proofs/Flock/Bridge/KSLive.lean`, and it bounds the probability
+that `flock-verify --zk` accepts the files and the run passes the registration's population while the claim fails. It
+rests on these named assumptions:
+
+- `UniformRandomBytes`: the bytes the verifier's draw reads from its operating system are uniform (the CSPRNG
+  idealized; its docstring says what that leaves out).
+- `RecordCustodyZKJ`: the record `flock-verify --zk` reads is the one the challenger wrote for the live session, and its
+  draw file is the one `flock-verify draw` printed for the verifier's own draw.
+- `TableCRZAt` (`cr/sha-512`; the statement reads it through its abbreviation `TableCRZ`) and `LinkCRZC`
+  (`ecr/sha-512`): SHA-512's collision resistance, for the collision finders the proof builds from the prover.
+
+The draw happens after the registration, so the prover fixes everything a drawn proof block's statement depends on
+before any coin. In the remote protocol the coins come from the auditor's challenger (or the verifier's own draw),
+which adds two premises about where it runs, `CoinsConfidential` and `OneClock` ("Where things are"). Both are prose
+only: no `.lean` file defines either.
+
 ## Outline
 
 **The one-stage audit** is the audit protocol in use. One round goes like this:
@@ -19,7 +46,7 @@ points to the code, and lists what the Lean does not state yet.
 3. The verifier draws proof blocks from its operating system's randomness under the agreed sampling design and sends the draw
    in the clear, before the session's coin commitment. Nothing is derived from a commitment, and there is no beacon.
 4. The drawn proof blocks are proved in one session, whose statement is the drawn proof blocks'.
-5. Each verifier that runs checks the proofs. The Lean verifier is the verifier of record.
+5. The Lean verifier checks the proofs, and its verdict is the one that counts; the Python beside it is its mirror.
 6. The audit record keeps the registration, the receipt, the draw, the proved proof blocks, the statement's digests and every
    verdict, and, when everything accepted, the integrity profile.
 
@@ -53,12 +80,12 @@ plus a term for which proof blocks are faulty, and compute security by their wor
 
 Everything is committed at serve time: the proof service has no two-stage rule, and the Lean verifier refuses a
 registration that names one.
-Not built yet: the security function and its red-team review, and composition checks such as PoUW's tiles
+Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (the IR checks refinement, `verity.ml.circuits.partition.validate_refinement`).
 
-Serving's record is not yet the scheme the audit proves: run A0 registers a stand-in, a fresh commitment to values
-captured from serving, and says so (`window.kind = "stand-in"`). Run A5 (`benchmarks/one_stage/a5.py`) registers a stand-in
-too: a deferred Commit's serving rows, written after serving from its sealed replay bundle opened against the run's record
+Serving's record is not yet the scheme the audit proves: the benchmark's first run (`benchmarks/one_stage/a0.py`)
+registers a stand-in, a fresh commitment to values captured from serving, and says so (`window.kind = "stand-in"`). Its
+served run (`benchmarks/one_stage/a5.py`) registers a stand-in too: a deferred Commit's serving rows, written after serving from its sealed replay bundle opened against the run's record
 (`verity-vllm serving-rows`), whose `of` names the record's vllm-v1 run root and the bundle's manifest digest; the link from
 those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the in-Commit hook writes before any draw are
 `served`: serving's own commitment, with no claim that they hold the values under the Commit's roots. A deferred window becomes
@@ -71,13 +98,13 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `StratifiedMiss`, `Work`, `Closure`, `Window`), the registration-dependent draw (`RegDraw`), the retired two stages
   (`TwoStage`, with the tight and insecure cases in `Examples`), exfiltration (`Influence`, `Harm`), the compiled layer
   (`Extraction`) and composition (`Circuit`); `Audit/Flock*.lean` instantiate them for C-Flock. The verifier's coins are
-  assumption A3 (`Assumptions.UniformRandomBytes`).
+  the named assumption `Assumptions.UniformRandomBytes`.
 - **The executable draw** is the Lean verifier's `verity/core/service/flock/Flock/Draw.lean` (`flock-verify draw`): the
   samplers, the strata and sizes, the draw object and its checks U1 to U3, specified in
   `verity/ml/flock/verifier/PROTOCOL.md` §7.3. Soundness's `ExecDraw.lean`, `ExecStratified.lean` and `ExecDrawOS.lean`
   prove that its draws accept faulty proof blocks no more often than the modelled sampling designs do, and
   `Audit/FlockWork.lean` that its sizes are the model's.
-- **The verifier of record.** `one_stage.verifier` runs the Lean port of the one-stage audit (the Lake package
+- **The verifier.** `one_stage.verifier` runs the Lean port of the one-stage audit (the Lake package
   `verity/core/service/sampled_proofs`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R7
   (`check`), `matches_public`, the challenger's draw (`select`), `check_draw`, `check_proved`, the whole audit record
   (`audit_record`), and the service's public-items rule (`check_public`), hold on an outcome's verdicts
@@ -108,18 +135,20 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the prover's
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
+  A remote prover reads them the same way: one TCP stream at its own `127.0.0.1` port (`RemoteChallenger`), deployed
+  as the far end of that coin link (`benchmarks/live_challenger/coin_link.py`); remote has no coin path of its own yet.
   The challenger rests on two premises about where it runs, which the network certifier's spec and ACCEL's cite by
-  name:
+  name; both are prose only:
   - `CoinsConfidential`: the challenger's coin stream reaches the network certifier only over a path on auditor hosts
     (`trusted-host`), or the challenger and the certifier are one device at the boundary. So no machine outside the
     boundary reads a coin before the certifier admits it, and a path across a host the prover controls is not
     allowed: it would need an encrypted, authenticated channel, which the challenger doesn't have. Deployed, one
-    auditor host, vy-challenger-1, runs both, and a window's coins leave it only on the peer's certifier coin link,
-    which the gate refuses to open without (`auditor.coin_ports`). In the Lean it is the Prop
-    `Pouw.Assumptions.CoinsConfidential`: a replica's prover is the same function whatever the other replicas' coins,
-    the form ACCEL's pooled guarantee `Pouw.Guarantees.Dither.FleetSound` takes as a hypothesis.
+    auditor host runs both, and a window's coins leave it only on the peer's certifier coin link,
+    which the gate refuses to open without (`auditor.coin_ports`). It is not in Lean: no `.lean` file defines it.
+    ACCEL's pooled guarantee `Pouw.Guarantees.Dither.FleetSound` builds a form of it into its statement instead (each
+    unit's prover is a function of the other units' coins).
   - `OneClock`, a spec premise that no Lean statement reads: the challenger's release times and the certifier's
-    ingress and receipt times are read on one clock. Deployed, that is vy-challenger-1's. A challenger on a device of its own would have to keep its clock within
+    ingress and receipt times are read on one clock. Deployed, that is the auditor host's. A challenger on a device of its own would have to keep its clock within
     1.03 s of the certifier's, the offset ACCEL's timing allows.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
   `draw` (the draw's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof service over it, whose `Stream`
@@ -132,6 +161,9 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   samplers and `draw_first` under each sampling design against the Lean verifier's (`drawOn`) on raw bytes, and
   `tests/test_one_stage.py` the work sizes against the ones C-Flock's
   tests pin. `verity/ml/flock/tests/stratified_agree.py` runs the Lean verifier's draw against `one_stage.draw`.
+- **The parties.** `parties` holds the challenger, the firewall, the workers and the verifier as parties of the
+  deployment layer (`verity.core.deploy`), with their manifest and table (`PROTOCOL`), each machine's work a
+  capability it is given. `verity run CONFIG --party ROLE` runs them.
 - **The benchmark.** `benchmarks/one_stage` runs the one-stage audit end to end with C-Flock's circuit prover and the Lean
   verifier.
 - **The users.** C-Flock draws and checks the draw in its Lean verifier and proves the drawn proof blocks. The vLLM integration
@@ -157,7 +189,7 @@ from verity.core.protocols.sampled_proofs.costfit import fit
 - `service`: the types `Spec`, `Value`, `Public`, `Check` and `Outcome`, and the selection rules `All`, `Law` and
   `Sequential`.
   - `check_public` is the public-items rule on a registration, and `check_verdicts` what an outcome holds the verdicts
-    to before the audit record (the Python; a `Stream` runs each by the verifier of record, `verifier.check_public` and
+    to before the audit record (the Python; a `Stream` runs each by the verifier, `verifier.check_public` and
     `verifier.check_verdicts`).
   - `Stream(spec, unit, budget=, delta=, challenger=, rounds=1)` has the calls `register`, `select` (with a work
     sampling design's `closure=`), `session`, `deliver` and `outcome`, which
@@ -188,14 +220,16 @@ from verity.core.protocols.sampled_proofs.costfit import fit
 - `verdict`: `Verdict`, what every check returns: `ok`, the failure codes in the order found, and a detail per code
   (and `verifiers`: both verifiers' outcomes).
 - `hello`: `check_run`, the run's Hello and its one coin tree over `run_streams`.
-- `verifier`: the verifier of record: `check`, `matches_public`, `check_draw`, `check_proved`, `hello`, `audit_record`,
+- `verifier`: the verifier: `check`, `matches_public`, `check_draw`, `check_proved`, `hello`, `audit_record`,
   `check_public`, `check_verdicts` (given the service's Python verdict), `stream` and `fleet`, by the Lean and the
   Python; `RECORD_VERDICT` names whose is the record's.
-- `proofs`: the proof service's own run of C-Flock's Lean verifier of record on a statement's proof files (`Proof`:
+- `proofs`: the proof service's own run of C-Flock's Lean verifier on a statement's proof files (`Proof`:
   circuit file, public file, sessions): `verify` refuses a circuit file other than the one the auditor committed, runs
   `flock-verify verify --zk --registered` against the verifier's own program, partition and `--registered` file, and
   returns each session's `Finding` (accepted, why, the program its verdict names, its registered finding, the proof blocks it
   proved), so a protocol reads verdicts from that run, never from a record the prover hands in.
+- `parties`: `Challenger`, `Firewall`, `Workers` and `Verifier`, `MANIFEST`, `PROTOCOL` (`PROTOCOLS` by id),
+  `params_of`, and `IDS`, the configuration's component names and their protocol ids.
 - `consumers`: `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `coins`: `OwnRandomness`, the challenger's own randomness; `draw_first`, a one-stage sampling design's draw from it,
   with `closure_of` for a work design's closure; `ChallengerCoins`, a draw's coins from one family of the auditor's
@@ -309,7 +343,7 @@ only inside a proof (`one_stage.registered`).
   no rows, a row format other than `row/v1` (`row/v2` and `row-seg/v1` are named in `served.SCHEMAS` and refused until
   R7 and `Flock.Registered.checkPort` read them), a root the log registered otherwise (R7-held) and a tree no proof block
   reads. `benchmarks/one_stage/a0.py`'s `hold_registered` is the template.
-- The audit record holds `session_registered`, the roots the verifier of record opened the reads against, to the
+- The audit record holds `session_registered`, the roots the verifier opened the reads against, to the
   registered roots (check `registered`), and `integrity_profile.inputs.registered` lists them. `session_registered`
   (`audit.session_registered(verdicts, registration)`) reads them off the accepted verdicts of record (the Lean
   verdict's `registered`), never off the registration, for the registration's own values (its roots' ports and
@@ -331,7 +365,7 @@ digest `SHA-512("verity/partition/v1\0" ‖ canon(object))`.
 - The one-stage audit applies `Q_template_instance` v0 and `Q_template_instances` v0, and `Q_word` v1 at X = 16 and
   `Q_call` v1 at X <= 16. Under a template query each instance of a listed template in the program's root body is one
   proof block, in canonical order (node, then member). Every proof block's committed bits fit a public size class, a power of two
-  from 16 to `UNIT_CLASS_MAX` bits (`unit_class`; provisional), and a program with a wider proof block is refused. The
+  from 16 to `UNIT_CLASS_MAX` bits (`unit_class`), and a program with a wider proof block is refused. The
   template queries are demo queries for template runs, not the serving partition. Only they define strata; any other
   query refuses the stratified and work sampling designs.
 - A record made before the canonical envelope names `{"program", "query"}`, and keeps that object's digest under the same
@@ -398,7 +432,7 @@ The audit record (`audit.audit_record`) is `{"format": "verity/one-stage/audit/v
   registered one).
 - A verdict is `{"accepted": true | false | null, ...}`; null means that verifier did not run, which leaves the record
   incomplete (`complete` is false).
-- The record is accepted only when there is a verifier of record (`of_record`), every one of them ran and accepted, every
+- The record is accepted only when there is a verifier whose verdict counts (`of_record`), every one of them ran and accepted, every
   other verdict that ran accepted, and every check passed. The profiles are present only then.
 - A session that proves one subcircuit's proof blocks is served that subcircuit's share as a `subset:k_s` draw over its `n_s` proof blocks,
   in its own indices; the record keeps the union draw.
@@ -411,7 +445,7 @@ The audit record (`audit.audit_record`) is `{"format": "verity/one-stage/audit/v
   "population", "registration": <digest>, "scheme", "roots": [{"port", "root", "leaves"}], "law", "drawn",
   "inputs": {"anchored": <anchors>, "linked": []}, "budget_log2_t": null, "terms": null, "epsilon_log2": null,
   "evidence": {"receipt": <SHA-512 of canon(receipt)>, "draw": <SHA-512 of canon(draw)>, "sessions", "verdict"}}`,
-  `sessions` being the session records' SHA-512 and `verdict` the verifier of record's digest (a list when the drawn
+  `sessions` being the session records' SHA-512 and `verdict` the verifier's digest (a list when the drawn
   proof blocks were proved in several sessions). Its ε terms come from the soundness analysis, not from the run, so the run leaves them null.
 
 Pinned by `tests/test_one_stage.py` (`test_profile_counts_wrong_units`, `test_the_record_states_the_one_profile_in_its_recorded_bytes`,
@@ -442,7 +476,7 @@ Pinned by `tests/test_consumers.py` and `tests/fixtures/exfiltration_lean.json`,
   one-stage's R1 to R7.
 - **The draw.** `register` logs the record and its receipt, and `select` draws once from the challenger's coins as the
   Lean verifier's `Flock.Draw.drawWith` does, with no derivation, held to `draw.check_draw`.
-- **Sessions over several rounds** (`Stream(rounds=R)`, `Stream.session`), which C-Flock's verifier of record refuses
+- **Sessions over several rounds** (`Stream(rounds=R)`, `Stream.session`), which C-Flock's verifier refuses
   (`verity/ml/flock/verifier/PROTOCOL.md` §16.12).
 - **The salt and the registration deadline**: one salt an epoch, and a late registration ends the epoch. This is PoUW's
   `Pouw.AcceptsBy` (`Security/Definitions/Pouw/Game/Deadline.lean`).
@@ -451,7 +485,7 @@ Pinned by `tests/test_consumers.py` and `tests/fixtures/exfiltration_lean.json`,
   reads. A disagreement stops the stream.
 - **The fleet's halt (R5-all)** (`service.Fleet`): at the failure that brings any stream of an operator to its budget,
   every stream of the operator halts, each outcome not yet final ends as `halted`, never `accept`, and nothing of the
-  operator registers again. Decided by the verifier of record (`verifier.fleet`: `SampledProofs/Fleet.lean` beside
+  operator registers again. Decided by the verifier (`verifier.fleet`: `SampledProofs/Fleet.lean` beside
   `service._fleet_step`, and `Stream.lean`'s `halt`), whose properties are `Security/Properties/SampledProofs/Halt.lean`.
 - **No retries**, **the failure budget**, **the log's history** (a check reads a few records, with the whole log's
   verdict), **the records** (`verity/proof-service/stream/v0` and `outcome/v0`) and what a stream refuses until it is
@@ -463,8 +497,8 @@ log's history by `tests/test_service_history.py`, sessions by `tests/test_servic
 
 ### The verifier's randomness
 
-The draw of record is `coins.OwnRandomness` on the Lean verifier of record's coins (`one_stage.verifier.coins`:
-`IO.getRandomBytes`, A3; `service.Stream`'s default), read with the Lean verifier's samplers (`Flock.Draw`), with no
+The draw of record is `coins.OwnRandomness` on the Lean verifier's coins (`one_stage.verifier.coins`:
+`IO.getRandomBytes`, under `UniformRandomBytes`; `service.Stream`'s default), read with the Lean verifier's samplers (`Flock.Draw`), with no
 hash, no derivation and no beacon, after the registration it follows. `draw_first` reads the bytes as
 `Flock.Draw.drawWith` does. Nothing derives a draw, the proof service's included, except vLLM's legacy replay challenge
 until its re-baseline; `coins`' docstring has the byte layout. Pinned by `tests/test_coins.py`.
@@ -478,7 +512,7 @@ drawn once. The record is each `Segment` (family, first index, `after` and the o
 `read_reason` against the roots the challenger's signed release log shows (`remote.trusted_session`): the draw's coins
 are exactly those released after the commitment, every one read. A stream over `ChallengerCoins` has `coin_source`
 `"challenger"` (its digest says so, and it takes no sampler); any other is `"verifier"`. Every outcome's run by the Lean
-verifier of record (`Run.run`, `SampledProofs.ChallengerCoins`) takes the `coin_source`. From the challenger, the check
+verifier (`Run.run`, `SampledProofs.ChallengerCoins`) takes the `coin_source`. From the challenger, the check
 is mandatory: `Stream.outcome(coins=...)` hands the evidence (`coins_reason`'s `{key, ledger, main, pins, segment,
 session}`), and the run takes the commitment and the roots from the session the auditor's ledger opens for the
 registration's window (`register`'s `window_root`, never a window the evidence names), run from a commit the host's

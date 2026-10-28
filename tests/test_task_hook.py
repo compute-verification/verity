@@ -1,6 +1,6 @@
 """`.cursor/hooks.json`'s Task hook keeps a coordinator from waiting on a local worker in the foreground, which holds its turn
-(and so every Slack, Linear and timer event) until the worker ends (proofs' rule 1, 18 Oct), and keeps a cloud agent from
-writing Linear through its MCP connector, which acts as Daniel."""
+(and so every Slack, Linear and timer event) until the worker ends, and keeps a cloud agent from
+writing Linear through its MCP connector, which acts as the person who connected it."""
 import json
 import os
 import subprocess

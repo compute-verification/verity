@@ -129,11 +129,12 @@ quantizer (2 proof blocks of codes and one of the scale), down and residual.
 - `check.py`: the GPU's roots against the reference's (edge layouts, and the H200 layout at 4,096 to 20,480 slots on
   sampled slots); `bench.py`: GB/s and the share of a serving step at the frozen shape, alone and beside the layer's int8
   GEMMs; `step.py`: one step at a layout file (`slots._layout_json`'s form) timed by phase against the engine's peak,
-  with its peak memory, the leaf kernel alone, a profile and sampled slots against the reference, and `export --shared`,
-  circuits' shared-row layout (`--row-bytes B` cuts its shared rows to B bytes), `count`, a layout's compressions a row-slot on the
-  host twin, and `time --graphs 0 1`, steps eager and on graphs with the host's enqueue time; `launches.py`: an nsys
-  report's enqueue calls a step (how long each held the thread, and from which call they block); `gpu.sh`: these, with
-  the tests, under one GPU lease (its header has the `research run` line; `STEP_WRAP` runs `step.py` under a profiler).
+  with its peak memory, the leaf kernel alone, a profile and sampled slots against the reference; `count`, a layout's
+  compressions a row-slot on the host twin; and `time --graphs 0 1`, steps eager and on graphs with the host's enqueue
+  time. A file of FAMILIES' shared-row layout at B-byte rows is `e2e_h200.window.shared_layout(FROZEN, B)` written by
+  `S._layout_json`. `launches.py`: an nsys report's enqueue calls a step (how long each held the thread, and from which
+  call they block); `gpu.sh`: these, with the tests, under one GPU lease (`OUT=DIR bash gpu.sh` from the tree's root;
+  `STEP_WRAP` runs `step.py` under a profiler).
 - `tests/`: the reference against the fixture and C-Flock's salts and an independent tree build, openings and their
   refusals, the edge layout and FAMILIES' 1 KiB layout written and loaded back to the same layout, digests and roots,
   the host twin against the reference (regrouped layouts included), the streamed slot trees against the leaf
@@ -141,11 +142,12 @@ quantizer (2 proof blocks of codes and one of the scale), down and residual.
   step's memory (counted: its frontier and one pass), a row-slot's compressions (counted), planning at six million
   units, the order a plan drops added tables in, and (with a GPU) the device against the host twin, at a near-full HBM
   no allocator retry while the side stream lags its reads, and a freed table's memory back at its read.
-- `overlap.py`: the commit beside `../../../examples/h200/`'s served step on one GPU: serving alone, the commit alone, today's
-  loop, and overlapped at low, high and equal priority (from the forward's host thread or one of its own), each with the
-  commit on every SM or on a green context of N (`MODE:LAYOUT:STEPS:N`, the forward on every SM, or `:Nr`, on the other
-  SMs' green context; `serve:LAYOUT:STEPS:Nr`, the served step alone there; `--host-lag`, the forward's host waiting on
-  the side stream's reads before it allocates), with nvidia-smi's clocks, power and HBM, torch's allocator counters,
-  each overlapped or capped step's roots against today's loop's and a `VERDICT` line a run; `overlap.sh`: it under one
-  GPU lease (its header has the `research run` line). `green_probe.py`: the commit on a green context of N SMs beside
-  int8 GEMMs on the other SMs or every SM, uncoupled or coupled as today's loop couples them (no model).
+- `overlap.py`: the commit beside `../../../examples/h200/`'s served step on one GPU: serving alone, the commit alone,
+  the serving loop, and overlapped at low, high and equal priority (from the forward's host thread or one of its own),
+  each with the commit on every SM or on a green context of N (`MODE:LAYOUT:STEPS:N`, the forward on every SM, or
+  `:Nr`, on the other SMs' green context; `serve:LAYOUT:STEPS:Nr`, the served step alone there; `--host-lag`, the
+  forward's host waiting on the side stream's reads before it allocates), with nvidia-smi's clocks, power and HBM,
+  torch's allocator counters, each overlapped or capped step's roots against the serving loop's and a `VERDICT` line a
+  run; `overlap.sh`: it under one GPU lease on an H200 (its header has the command). `green_probe.py`: the commit on a
+  green context of N SMs beside int8 GEMMs on the other SMs or every SM, uncoupled or coupled as the serving loop
+  couples them (no model).

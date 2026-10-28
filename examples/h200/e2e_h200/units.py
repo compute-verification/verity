@@ -11,11 +11,14 @@ Definition where it exists, else the lane's reference), until the replay lane ad
 * ``RmsSumSqChunks_v1{C, K}``: ``RmsSumSqPart_v1{C = K}`` a chunk; ``RmsNormOutSums_v1{C, S, G, N, EPS}``:
   ``F32SumPart_v1{G = S / G}`` a group, ``RmsNormRecip_v1{N, G, EPS}`` and ``RmsNormOut_v1`` a word;
 * ``RowAbsMax_v1{N, RELU}``: that template; ``QuantChunkS8_v1{N, RELU}``: ``QuantS8Pair_v1{RELU}`` a pair and
-  ``QuantS8Scale_v1``;
+  ``QuantS8Scale_v1``; ``RmsNormAbsMax_v1{C, S, G, N, EPS}`` and ``RmsNormQuantCodes_v1{C, S, G, N, EPS}`` (``fused``
+  ``norm``): ``RmsNormOutSums_v1``'s, then ``RowAbsMax_v1{C, false}``'s or ``QuantChunkS8_v1{C, false}``'s codes, and
+  ``QuantScaleS8_v1``: ``QuantS8Scale_v1``;
 * ``ScaledMmS8CoordinateRows_v1{K, R, DOT}``: ``ScaledMmS8Coordinate_v1{K}`` on the R rows joined (main's test holds the two
-  equal);
+  equal); ``ScaledMmS8ResidualCoordinateRows_v1{K, R, DOT}``: that, then ``Bf16Add_v2`` with the residual stream's word;
 * ``QkSoftmaxRowPad_v1{T, D}``: ``GemmCoordinate_v2{K = D}`` a key and `softmax_row` over the slot's n = position + 1 keys,
   +0 past them; ``PvRow_v1{T, K, D, DOT}``: ``GemmCoordinatePad_v1{T, K}`` a dimension, absent keys' V rows all-zero;
+  ``QkSoftmaxPvPad_v1{T, K, D, DOT}`` (``fused`` ``pv``): the first's row, then the second's of it;
 * ``Bf16AddRow_v2{N}``: ``Bf16Add_v2`` a word; ``Argmax_v2{V}``: `argmax_row`;
 * ``AllGather_v1{WORLD, N}``: the copy of its parts' rows. Its parts and its output are the same table bytes here, so its
   replay only restates them; the commit holds both, and a drawn gather opens its own rows against the step's root.
@@ -221,12 +224,12 @@ def sources(shape: Shape) -> dict[str, Any]:
 
 class Replayer:
     def __init__(self, shape: Shape, weights: Weights, steps: list[StepTables], tokens: list[np.ndarray],
-                 subcircuits: Sequence[Subcircuit] = ()) -> None:
+                 subcircuits: Sequence[Subcircuit] = (), fused: frozenset[str] = frozenset()) -> None:
         """``steps[s]`` the committed tables of step s (row b: slot ``slots[b]`` at ``positions[b]``), ``tokens[s]`` the bytes
-        its rows embedded."""
+        its rows embedded; ``fused`` the map's fusions."""
         self.shape, self.weights, self.steps, self.tokens = shape, weights, steps, tokens
         self.subcircuits = list(subcircuits)
-        self.map = Map(shape)
+        self.map = Map(shape, fused)
         self.src = sources(shape)
         self._array = lru_cache(maxsize=8)(weights.array)
 
@@ -279,7 +282,9 @@ class Replayer:
         """One family a `plan.Units` of the map, in the order the step writes them."""
         build = {"EmbeddingCoordinate_v1": self._embed, "AllGather_v1": self._gather, "RmsSumSqChunks_v1": self._sums,
                  "RmsNormOutSums_v1": self._norm, "RowAbsMax_v1": self._amax, "QuantChunkS8_v1": self._quant,
-                 "ScaledMmS8CoordinateRows_v1": self._linear, "QkSoftmaxRowPad_v1": self._softmax, "PvRow_v1": self._pv,
+                 "RmsNormAbsMax_v1": self._normed, "RmsNormQuantCodes_v1": self._normed, "QuantScaleS8_v1": self._scale,
+                 "ScaledMmS8CoordinateRows_v1": self._linear, "ScaledMmS8ResidualCoordinateRows_v1": self._linear,
+                 "QkSoftmaxRowPad_v1": self._softmax, "PvRow_v1": self._pv, "QkSoftmaxPvPad_v1": self._head,
                  "Bf16AddRow_v2": self._add, "Argmax_v2": self._argmax}
         return [Family(u.name, u.key, u.status, u.count, build[u.template](step, u))
                 for g in self.map.groups() for _, us in g for u in us]
@@ -328,6 +333,11 @@ class Replayer:
     def _amax(self, step: int, u: Units) -> Replay:
         op = u.table[:-len("_amax")]
         relu = op.endswith("down")
+        if "norm" in self.map.fused and self.src[op + "_quant"].endswith("_norm"):
+            def combine(b: int, i: int):
+                x = self.u16(step, u.table, b)[:u.offset // 2]
+                return [x], self.out(step, u, b, i).view(np.uint16), np.array([row_abs_max(x, False)], np.uint16)
+            return combine
 
         def replay(b: int, i: int):
             x = self.u16(step, self.src[op + "_quant"], b)
@@ -351,18 +361,53 @@ class Replayer:
             return [x, np.array([amax], np.uint16)], got, np.concatenate([codes, np.array([scale], np.uint32).view(np.uint8)])
         return replay
 
+    def _normed(self, step: int, u: Units) -> Replay:
+        """The ``norm`` fusion's amax part i or code block i: RMSNorm's output there from the stream, the gain and the sums,
+        then `row_abs_max` of it, or its codes (`quant_chunk`'s) under the row's amax."""
+        op = u.table.rsplit("_", 1)[0]
+        norm, n = self.src[op + "_quant"][:-len("_norm")], self.shape.width
+        codes = u.template == "RmsNormQuantCodes_v1"
+        groups, c = self.map.f.groups(n), u.nbytes if codes else self.map.f.norm_parts(n)[1]
+
+        def replay(b: int, i: int):
+            x = self.u16(step, self.src[norm], b)[i * c:(i + 1) * c]
+            w = self._gain(norm + "_norm")[i * c:(i + 1) * c]
+            sums = self.raw(step, norm + "_sums", b).view(np.uint32)
+            h = norm_out_sums(x, w, sums, n, groups)
+            if not codes:
+                return [x, w, sums], self.out(step, u, b, i).view(np.uint16), np.array([row_abs_max(h, False)], np.uint16)
+            amax = self.u16(step, op + "_amax", b)[-1]
+            return [x, w, sums, np.array([amax], np.uint16)], self.out(step, u, b, i).view(np.uint8), \
+                quant_chunk(h, amax, False)[0]
+        return replay
+
+    def _scale(self, step: int, u: Units) -> Replay:
+        """``QuantScaleS8_v1``: the scale of quantizer ``u.table``'s chunk row i, from the row's amax."""
+        op = u.table[:-len("_quant")]
+
+        def replay(b: int, i: int):
+            amax = np.array([self.u16(step, op + "_amax", b)[-1]], np.uint16)
+            return [amax], np.atleast_1d(self.word(step, u.table, b)), _word("QuantS8Scale_v1", amax)
+        return replay
+
     def _linear(self, step: int, u: Units) -> Replay:
-        tensor, qop = u.table, self.src[u.table] + "_quant"
+        """A coordinate of linear ``u.name`` (its weight's name); fused with a residual add, its table's stream word is r."""
+        tensor, qop = u.name, self.src[u.name] + "_quant"
         k = self.weights.dims[tensor][1]
         t = _s8mm(k)
+        stream = self.src[u.table][0] if u.template == "ScaledMmS8ResidualCoordinateRows_v1" else None
 
         def replay(b: int, i: int):
             x = self.raw(step, qop, b).view(np.uint8)
             sx = self.word(step, qop, b)
             wrow = self.weights.row(tensor, i).view(np.uint8)
             sw = np.asarray(self._array(f"{tensor}.scale")[i], np.float32).view(np.uint32)
-            want = t.evaluate(x[None], np.array([sx]), wrow[None], np.array([sw]))[0]
-            return [x, np.array([sx]), wrow, np.array([sw])], self.out(step, u, b, i).view(np.uint16), want.astype(np.uint16)
+            want = t.evaluate(x[None], np.array([sx]), wrow[None], np.array([sw]))[0].astype(np.uint16)
+            inputs = [x, np.array([sx]), wrow, np.array([sw])]
+            if stream is not None:
+                r = self.u16(step, stream, b)[i:i + 1]
+                inputs, want = inputs + [r], bf16_add_row(r, want)
+            return inputs, self.out(step, u, b, i).view(np.uint16), want
         return replay
 
     def _softmax(self, step: int, u: Units) -> Replay:
@@ -386,6 +431,19 @@ class Replayer:
             padded = np.zeros((PV_K, values.shape[1]), np.uint16)
             padded[:len(values)] = values
             return [p, padded], self.out(step, u, b, head).view(np.uint16), pv_row(p, padded)
+        return replay
+
+    def _head(self, step: int, u: Units) -> Replay:
+        """The ``pv`` fusion's head: `qk_softmax_pad` of q and the slot's keys, then `pv_row` of that row and its values."""
+        layer, d = int(u.table[1:].split(".")[0]), self.shape.head_dim
+
+        def replay(b: int, head: int):
+            q = self.u16(step, f"l{layer}.wq", b)[head * d:(head + 1) * d]
+            keys, values = self.kv(step, layer, b)
+            k, v = np.zeros((PV_K, d), np.uint16), np.zeros((PV_K, d), np.uint16)
+            k[:len(keys)], v[:len(values)] = keys, values
+            want = pv_row(qk_softmax_pad(q, keys), v)
+            return [q, k, v, np.array([len(keys)], np.uint16)], self.out(step, u, b, head).view(np.uint16), want
         return replay
 
     def _add(self, step: int, u: Units) -> Replay:

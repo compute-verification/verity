@@ -48,6 +48,7 @@
 #include <cstring>
 #include <random>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "../commit_gpu/commit_gpu.cuh"
@@ -122,26 +123,29 @@ __global__ void noise_kernel(Seeds sd, int which, u64 count, int8_t* __restrict_
   for (int i = 0; i < 16; ++i)
     if (16 * b + i < count) out[16 * b + i] = (int8_t)((int)(((u64)dword(st, i) * (2 * NOISE + 1)) >> 32) - NOISE);
 }
-// pi_tau: Fisher-Yates over L' with word tau L' + c of the P stream (c from L' - 1 down to 1), a CTA of L' threads a tile
-__global__ void perm_kernel(Seeds sd, int lp, uint16_t* __restrict__ perm) {
+// pi_tau: Fisher-Yates over L' with word tau L' + c of the P stream (c from L' - 1 down to 1), a CTA of PERM_THREADS(L')
+// threads a tile and 6 L' bytes of shared memory (at most 512 threads: its SHA-512 takes 90 registers, and a 1024-thread CTA
+// of those doesn't launch)
+__host__ __device__ constexpr int PERM_THREADS(int lp) { return lp < 512 ? lp : 512; }
+__global__ void __launch_bounds__(512) perm_kernel(Seeds sd, int lp, uint16_t* __restrict__ perm) {
   extern __shared__ u32 pw[];
   uint16_t* p = reinterpret_cast<uint16_t*>(pw + lp);
-  const int tau = blockIdx.x, t = threadIdx.x;
-  if (t < lp / 16) {
+  const int tau = blockIdx.x;
+  for (int t = threadIdx.x; t < lp / 16; t += blockDim.x) {
     u64 st[8];
     prg(sd.w[S_P], tag_of(S_P), (u64)tau * (lp / 16) + t, st);
 #pragma unroll
     for (int i = 0; i < 16; ++i) pw[16 * t + i] = dword(st, i);
   }
-  p[t] = (uint16_t)t;
+  for (int t = threadIdx.x; t < lp; t += blockDim.x) p[t] = (uint16_t)t;
   __syncthreads();
-  if (t == 0)
+  if (threadIdx.x == 0)
     for (int c = lp - 1; c > 0; --c) {
       const int x = (int)(((u64)pw[c] * (u64)(c + 1)) >> 32);
       const uint16_t s = p[c]; p[c] = p[x]; p[x] = s;
     }
   __syncthreads();
-  perm[(size_t)tau * lp + t] = p[t];
+  for (int t = threadIdx.x; t < lp; t += blockDim.x) perm[(size_t)tau * lp + t] = p[t];
 }
 
 // ---------------------------------------------------------------- forming
@@ -1421,8 +1425,8 @@ struct LtRow {
 // A served call's rows (dither.Shape(o=True)): per tile its W prefix-sum rows (the prefix-sum buffer, W tile-segments a
 // tile), then its O rows: cells c0 + off / 4 .. + 3 of the tile, O = D + tau_j ra_i + sigma_i rb_j mod 2^32 (serve_rows_kernel: rb
 // carries K tau_j; D = a' b'^T from cuBLASLt). One source for both kinds, so a warp whose leaves straddle them diverges only
-// in its loads; the pointers are the tile's first row and column. LIVE: D is being written by the kernel that reads it
-// (RP 4's hash warps), so its loads are coherent (ld.ca), never the read-only path.
+// in its loads; the pointers are the tile's first row and column. LIVE: D or the prefix-sum buffer is being written by the
+// kernel that reads it (RP 4's and 5's hash warps), so its loads are coherent (ld.ca), never the read-only path.
 template <bool LIVE = false> struct ServedSrcT {
   const uint8_t* w;   // a prefix-sum row, or null: an O row
   const int *D, *ra, *sa, *rb, *sb;
@@ -1433,7 +1437,7 @@ template <bool LIVE = false> struct ServedSrcT {
     return D + (u64)(c >> 7) * N + (c & 127);
   }
   DEV uint4 ld16(u32 off) const {
-    if (w) return ldg16(w + off);
+    if (w) return LIVE ? __ldca(reinterpret_cast<const uint4*>(w + off)) : ldg16(w + off);
     const u32 c = c0 + off / 4, r = c >> 7, col = c & 127;
     const uint4* dp = reinterpret_cast<const uint4*>(D + (u64)r * N + col);
     const uint4 d = LIVE ? __ldca(dp) : __ldg(dp);
@@ -1495,20 +1499,21 @@ DEV u32 hash_blocks(u64* x, const Src& src, u32 lb, u32 b0, bool pf, const Stop&
   }
   return end;
 }
-// RP 4's hasher (wg_proto.cuh's H) on a served call's O rows: row j of commit tile ct is leaf ct lpt + wrows + j. Its
-// chaining value goes to xd[pos] and flag[pos] = epoch << 10 | the SHA-512 chunks hashed (all of them, or as many as the
-// hash warp did before the consumers were done); FusedRow takes the leaf phase on from there, and hashes from the first
-// chunk whatever carries another epoch (the prefix-sum rows, a forged copy). A visit hashes at most budget chunks on from the row's
-// own flag (chunk, V31_HCHUNK: the hash warps' visits a row, 0 a row whole in one)
+// RP 4's and 5's hasher (wg_proto.cuh's H) on a served call's rows off .. off + lpo - 1 of each commit tile: row j of commit
+// tile ct is leaf ct lpt + off + j (off wrows: its O rows, in the GEMM of D; 0: every row, in the GEMM of the prefix sums,
+// which runs after it). Its chaining value goes to xd[pos] and flag[pos] = epoch << 10 | the SHA-512 chunks hashed (all of
+// them, or as many as the hash warps did before the consumers were done); FusedRow takes the leaf phase on from there, and
+// hashes from the first chunk whatever carries another epoch (rows no hash warp reached, a forged copy). A visit hashes at
+// most budget chunks on from the row's own flag (chunk, V31_HCHUNK: the hash warps' visits a row, 0 a row whole in one)
 constexpr u32 FUSED_EPOCHS = 1u << 22;
 struct FusedLeaves {
   ServedRow row;
   u64* xd;
   u32* flag;
-  u32 epoch, lpo, chunk;
+  u32 epoch, lpo, chunk, off;
   DEV unsigned lpt() const { return lpo; }
   template <class Stop> DEV bool operator()(unsigned long long ct, unsigned j, const Stop& stop, unsigned budget) const {
-    const u64 pos = ct * row.lpt + row.wrows + j;
+    const u64 pos = ct * row.lpt + off + j;
     const u32 nblk = row_blocks(row.row), f = __ldcg(flag + pos);
     u32 b0 = 0;
     u64 x[8];
@@ -1929,7 +1934,10 @@ static std::string env_str(const char* name, const char* dflt) {
 // L2 scratch slot a CTA), V31_WGG its raster's tile rows a group, V31_RP 3 the register plan that leaves room for a
 // commit CTA beside each GEMM CTA (wg_proto.cuh's gemm_r3; CM 1; the wgl arm keeps RP 0). A served Fill's V31_GEMM 1: its
 // D = a' b'^T on the plain wg GEMM (static schedule), V31_RP 4 hashing the O rows in the GEMM's producer warpgroup
-// (gemm_r4, FusedLeaves; V31_HALL 1: every row there, past the consumers' end, timing the hash warps alone; V31_HCHUNK
+// (gemm_r4, FusedLeaves), V31_RP 5 in a hash warpgroup beside it too (gemm_r5; V31_R5H, one of wg_proto.cuh's R5_SPLITS:
+// the producer and hash warpgroups' registers, the consumers' 256 less; V31_R5W 0: not in the GEMM of the prefix sums,
+// whose RP 5 hashes the prefix-sum rows and whatever O rows the GEMM of D left); V31_HALL 1: every row there, past the
+// consumers' end, timing the hash warps alone, -1: none, timing the GEMM alone in that CTA; V31_HCHUNK
 // C > 0: the hash warps' passes over the posted rows, C chunks of each a visit, in place of each row whole in turn;
 // V31_WGW 0: the prefix-sum segments on gemm_kernel<true> rather than the wg protocol GEMM).
 // A Fill's commit: V31_LMINB 4, its leaf phase's CTAs at 128 registers (leaf_persist's MINB; 5, the default, 96 with spills
@@ -2040,8 +2048,10 @@ struct Ctx {
 
   void setup(int m_, int n_, int k_, int lp_, int t_, int row_, const std::string& params_path, int cap, int want_nb) {
     m = m_; n = n_; k = k_; lp = lp_; t = t_; row = row_;
-    if (m % TILE || n % TILE || k % BK || lp % BK || k % lp || 32768 % row || row % 16) {
-      fprintf(stderr, "shape m %d n %d k %d L' %d ROW %d: m, N, K, L' multiples of 128, L' | K, ROW | 32768\n", m, n, k, lp, row);
+    // form_a_kernel's CTA: L' threads, and 64 L' bytes of dynamic shared memory beside its static, under 48 KiB (no opt-in)
+    if (m % TILE || n % TILE || k % BK || lp % BK || k % lp || lp > 640 || 32768 % row || row % 16) {
+      fprintf(stderr, "shape m %d n %d k %d L' %d ROW %d: m, N, K, L' multiples of 128, L' | K, L' <= 640, ROW | 32768\n", m, n,
+              k, lp, row);
       exit(2);
     }
     L = t * lp; S = (k + L - 1) / L; NT = k / lp; kb64 = (k + 511) / 512 * 64;
@@ -2144,7 +2154,7 @@ struct Ctx {
     const u64 cu = (u64)n * lp, cv = (u64)m * lp;
     noise_kernel<<<(unsigned)((cu / 16 + 127) / 128), 128, 0, st>>>(seeds, S_U, cu, U);
     noise_kernel<<<(unsigned)((cv / 16 + 127) / 128), 128, 0, st>>>(seeds, S_V, cv, V);
-    perm_kernel<<<NT, lp, lp * 6, st>>>(seeds, lp, perm);
+    perm_kernel<<<NT, PERM_THREADS(lp), lp * 6, st>>>(seeds, lp, perm);
   }
   void form(cudaStream_t st) {
     form_a_kernel<<<m / 16, lp, 16 * lp * 4, st>>>(fa());
@@ -2379,10 +2389,11 @@ struct Fill {
   uint8_t* obuf = nullptr;
   int ocap = 0;
   // V31_GEMM 1 (served): D = a' b'^T on wg_proto.cuh's plain GEMM (mode 0, static schedule) in place of cuBLASLt; V31_RP 4
-  // hashes its O rows in the GEMM's producer warpgroup, digests to xd[copy] flagged with the launch's epoch xep[copy];
-  // wgw (V31_WGW, default 1): the prefix-sum segments on the wg protocol GEMM too, in place of gemm_kernel<true>
-  bool wg = false, wgw = false;
-  int wbn = 0, wgrid = 0, hchunk = 0;
+  // hashes its O rows in the GEMM's producer warpgroup (5: and a hash warpgroup, its registers r5h), digests to xd[copy]
+  // flagged with the launch's epoch xep[copy]; wgw (V31_WGW, default 1): the prefix-sum segments on the wg protocol GEMM
+  // too, in place of gemm_kernel<true>, with RP 5's hash warps unless r5w (V31_R5W) is 0
+  bool wg = false, wgw = false, r5w = false;
+  int wbn = 0, wgrid = 0, hchunk = 0, r5h = 0;
   u64* xd[2] = {nullptr, nullptr};
   u32* xf[2] = {nullptr, nullptr};
   u32 xep[2] = {0, 0}, xctr = 0;
@@ -2393,11 +2404,11 @@ struct Fill {
 
   // "": fine; else why the shape can't be committed
   static std::string bad_shape(int m, int n, int k, int lp, int L, int row) {
-    if (m <= 0 || n <= 0 || k <= 0 || m % TILE || n % TILE || k % BK || lp <= 0 || lp % BK || k % lp || lp > 1024 || L <= 0 ||
+    if (m <= 0 || n <= 0 || k <= 0 || m % TILE || n % TILE || k % BK || lp <= 0 || lp % BK || k % lp || lp > 4096 || L <= 0 ||
         L % lp || row <= 0 || row % 16 || 32768 % row)
       return "shape m " + std::to_string(m) + " n " + std::to_string(n) + " k " + std::to_string(k) + " L' " + std::to_string(lp) +
              " L " + std::to_string(L) + " ROW " + std::to_string(row) +
-             ": m, n, K, L' multiples of 128, L' | K, L' <= 1024, L a multiple of L', ROW | 32768 and a multiple of 16";
+             ": m, n, K, L' multiples of 128, L' | K, L' <= 4096, L a multiple of L', ROW | 32768 and a multiple of 16";
     if (k >= (1 << 17)) return "K " + std::to_string(k) + ": below 2^17 (dither.K_LIMIT)";
     const u64 lv = (u64)(m / TILE) * (n / TILE) * (((k + L - 1) / L) * (32768 / row) + 65536 / row);
     if (lv > (1ull << 32)) return "more than 2^32 leaves";
@@ -2516,7 +2527,7 @@ struct Fill {
       bits_kernel<<<(unsigned)((bb + 127) / 128), 128, 0, st>>>(seeds, S_DB, bb, dB);
       if (Wn) {
         noise_kernel<<<(unsigned)((cu / 16 + 127) / 128), 128, 0, st>>>(seeds, S_U, cu, U);
-        perm_kernel<<<NT, lp, lp * 6, st>>>(seeds, lp, perm);
+        perm_kernel<<<NT, PERM_THREADS(lp), lp * 6, st>>>(seeds, lp, perm);
       }
     }
   }
@@ -2545,7 +2556,12 @@ struct Fill {
   // served: the wg GEMMs' arguments (wgmma.linear, the bench's baseline, in any -DV31_WG build), and V31_GEMM 1's D
   void wg_setup() {
 #ifdef V31_WG
-    if (kn.gemm && kn.rp != 0 && kn.rp != 4) { fprintf(stderr, "a served call's V31_RP is 0 or 4\n"); exit(2); }
+    if (kn.gemm && kn.rp != 0 && kn.rp != 4 && kn.rp != 5) {
+      fprintf(stderr, "a served call's V31_RP is 0, 4 or 5\n");
+      exit(2);
+    }
+    r5h = env_int("V31_R5H", wgp::R5_SPLITS[0]);
+    if (!r5_kernel(256)) { fprintf(stderr, "V31_R5H is one of wg_proto.cuh's R5_SPLITS\n"); exit(2); }
     wg = kn.gemm != 0;
     wbn = kn.wgbn == 256 && n % 256 == 0 ? 256 : 128;
     wgrid = std::min((m / wgp::TM) * (n / wbn), nsm);
@@ -2562,19 +2578,22 @@ struct Fill {
       wa_words.K = Wn * L;
       wa_words.L = L;
       wa_words.S = Wn;
+      wa_words.hall = wa_plain.hall;
+      r5w = kn.rp == 5 && env_int("V31_R5W", 1) != 0;
     }
     hchunk = std::max(0, env_int("V31_HCHUNK", 0));
-    if (wg && kn.rp == 4)
+    if (wg && (kn.rp == 4 || kn.rp == 5))
       for (int b = 0; b < 2; b++) {
         xd[b] = dalloc<u64>(8 * (size_t)leaves);
         xf[b] = dalloc<u32>((size_t)leaves);
         CK(cudaMemset(xf[b], 0, 4 * (size_t)leaves));
       }
     const void* ks[] = {(const void*)wgp::gemm<256, 1>, (const void*)wgp::gemm<128, 1>,
-                        (const void*)wgp::gemm_r4<256, FusedLeaves>, (const void*)wgp::gemm_r4<128, FusedLeaves>};
-    const int sm[] = {wgp::Tile<256>::SMEM, wgp::Tile<128>::SMEM, wgp::Tile<256>::SMEM, wgp::Tile<128>::SMEM};
-    for (int i = 0; i < 4; i++) {
-      CK(cudaFuncSetAttribute(ks[i], cudaFuncAttributeMaxDynamicSharedMemorySize, sm[i]));
+                        (const void*)wgp::gemm_r4<256, FusedLeaves>, (const void*)wgp::gemm_r4<128, FusedLeaves>,
+                        r5_kernel(256), r5_kernel(128)};
+    for (int i = 0; i < 6; i++) {
+      CK(cudaFuncSetAttribute(ks[i], cudaFuncAttributeMaxDynamicSharedMemorySize,
+                              i % 2 ? wgp::Tile<128>::SMEM : wgp::Tile<256>::SMEM));
       if (kn.carve >= 0) CK(cudaFuncSetAttribute(ks[i], cudaFuncAttributePreferredSharedMemoryCarveout, kn.carve));
     }
 #else
@@ -2582,6 +2601,13 @@ struct Fill {
 #endif
   }
 #ifdef V31_WG
+  // RP 5's kernel at split hr (null: not one of R5_SPLITS)
+  template <int BN, int I = 0> static const void* r5_kernel_at(int hr) {
+    if constexpr (I == sizeof wgp::R5_SPLITS / sizeof wgp::R5_SPLITS[0]) return nullptr;
+    else if (hr == wgp::R5_SPLITS[I]) return (const void*)wgp::gemm_r5<BN, FusedLeaves, wgp::R5_SPLITS[I]>;
+    else return r5_kernel_at<BN, I + 1>(hr);
+  }
+  const void* r5_kernel(int bn) const { return bn == 256 ? r5_kernel_at<256>(r5h) : r5_kernel_at<128>(r5h); }
   // mode 0: a b^T (s32) into O; mode 2: wgmma.linear's bf16 values (s_a = s_w = 1/127), gamma's baseline
   wgp::Args wg_args(const int8_t* a, const int8_t* b, int mode) const {
     wgp::Args g{};
@@ -2591,17 +2617,23 @@ struct Fill {
     g.M = m; g.N = n; g.K = k; g.L = k; g.S = 1; g.lp = lp; g.group = kn.wgg; g.mode = mode;
     return g;
   }
-  // RP 0 (wgmma.linear's registers, CM 1's kernel: modes 0 and 2 hold no tail), or RP 4 with h
+  // RP 0 (wgmma.linear's registers, CM 1's kernel: modes 0 and 2 hold no tail), or RP 4 or 5 with h (mode 0; RP 5's
+  // mode 1 too)
   void wg_run(cudaStream_t st, const wgp::Args& g, const FusedLeaves* h = nullptr) {
     constexpr int T = wgp::threads<0>();
     const int sm = wbn == 256 ? wgp::Tile<256>::SMEM : wgp::Tile<128>::SMEM;
-    if (h && wbn == 256) wgp::gemm_r4<256, FusedLeaves><<<wgrid, T, sm, st>>>(g, *h);
+    if (h && kn.rp == 5) {
+      void* args[] = {(void*)&g, (void*)h};
+      CK(cudaLaunchKernel(r5_kernel(wbn), dim3(wgrid), dim3(wgp::threads<5>()), args, sm, st));
+    } else if (h && wbn == 256) wgp::gemm_r4<256, FusedLeaves><<<wgrid, T, sm, st>>>(g, *h);
     else if (h) wgp::gemm_r4<128, FusedLeaves><<<wgrid, T, sm, st>>>(g, *h);
     else if (wbn == 256) wgp::gemm<256, 1><<<wgrid, T, sm, st>>>(g);
     else wgp::gemm<128, 1><<<wgrid, T, sm, st>>>(g);
   }
-  FusedLeaves fused_leaves(int b) const {
-    return FusedLeaves{servedrow(b), xd[b], xf[b], xep[b], (u32)(65536 / row), (u32)hchunk};
+  // its O rows (the GEMM of D's hash warps), or every row (the GEMM of the prefix sums')
+  FusedLeaves fused_leaves(int b, bool every = false) const {
+    const ServedRow r = servedrow(b);
+    return FusedLeaves{r, xd[b], xf[b], xep[b], (u32)(every ? r.lpt : r.lpt - r.wrows), (u32)hchunk, (u32)(every ? 0 : r.wrows)};
   }
 #endif
   // a call's FusedLeaves epoch: it wraps below FUSED_EPOCHS, and clears both copies' flags then (a cleared flag only
@@ -2620,7 +2652,7 @@ struct Fill {
     if (o && wg) {
       wgp::Args g = wa_plain;
       g.O = D[b];
-      if (kn.rp == 4) {
+      if (kn.rp == 4 || kn.rp == 5) {
         xep[b] = epoch(st);
         const FusedLeaves h = fused_leaves(b);
         wg_run(st, g, &h);
@@ -2635,7 +2667,12 @@ struct Fill {
     if (wgw) {
       wgp::Args g = wa_words;
       g.words = words[b];
-      wg_run(st, g);
+      if (o && r5w) {
+        const FusedLeaves h = fused_leaves(b, true);
+        wg_run(st, g, &h);
+      } else {
+        wg_run(st, g);
+      }
       return;
     }
 #endif
@@ -2871,6 +2908,13 @@ static void kernel_attrs(FILE* f) {
     fprintf(f, ", \"%s\": {\"regs\": %d, \"local\": %zu, \"smem_static\": %zu}", w.name, a.numRegs, a.localSizeBytes,
             a.sharedSizeBytes);
   }
+  for (const int hr : wgp::R5_SPLITS)
+    for (const int bn : {256, 128}) {
+      cudaFuncAttributes a;
+      CK(cudaFuncGetAttributes(&a, bn == 256 ? Fill::r5_kernel_at<256>(hr) : Fill::r5_kernel_at<128>(hr)));
+      fprintf(f, ", \"wg_%d_r5_%d\": {\"regs\": %d, \"local\": %zu, \"smem_static\": %zu}", bn, hr, a.numRegs,
+              a.localSizeBytes, a.sharedSizeBytes);
+    }
 #endif
   fprintf(f, "}");
 }
@@ -3297,7 +3341,7 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
              bits_kernel<<<(unsigned)((bb + 127) / 128), 128, 0, s>>>(f.seeds, S_DB, bb, f.dB);
              if (!f.Wn) continue;
              noise_kernel<<<(unsigned)((cu / 16 + 127) / 128), 128, 0, s>>>(f.seeds, S_U, cu, f.U);
-             perm_kernel<<<f.NT, lp, lp * 6, s>>>(f.seeds, lp, f.perm);
+             perm_kernel<<<f.NT, PERM_THREADS(lp), lp * 6, s>>>(f.seeds, lp, f.perm);
            }
          }},
         {"form_a", [&](cudaStream_t s, int r) { for (int i = 0; i < r; i++) f.form(s, A, false, 0); }},
@@ -3363,8 +3407,8 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
     f.ready(f.calls - 2);
     f.ready(f.calls - 1);
     CK(cudaGetLastError());
-    // RP 4: the leaves whose row the GEMM's hash warps hashed whole, and the SHA-512 chunks they hashed, of the last
-    // overlapped call
+    // RP 4, 5: the leaves whose row the GEMMs' hash warps hashed whole, and the SHA-512 chunks they hashed, of the last
+    // overlapped call (of every row: the prefix-sum rows too under r5w)
     long long fused = -1, fused_blocks = -1;
     const u32 nblk = (row + 17 + 127) / 128;
     if (f.xf[bl]) {
@@ -3403,12 +3447,13 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
            "\"cutlass\": {\"kernel\": \"%s\", \"candidates\": %d}, \"steady\": %s, "
            "\"carve\": %d, \"dyn\": %d, \"cprio\": \"%s\", \"ccta\": %d, \"pf\": %d, \"maxnreg\": %d, \"wg_nreg\": %d, "
            "\"wg_stages\": %d, \"gemm_bn\": %d, \"sched\": %d, \"ltw\": %d, \"wg\": %d, \"rp\": %d, \"wbn\": %d, "
-           "\"hall\": %d, \"hchunk\": %d, \"wgw\": %d, \"lminb\": %d, \"sahead\": %d, \"fused_leaves\": %lld, \"o_leaves\": %llu, "
-           "\"fused_blocks\": %lld, \"row_blocks\": %u, \"arms\": {",
+           "\"hall\": %d, \"hchunk\": %d, \"r5h\": %d, \"r5w\": %d, \"wgw\": %d, \"lminb\": %d, \"sahead\": %d, \"fused_leaves\": %lld, "
+           "\"o_leaves\": %llu, \"fused_blocks\": %lld, \"row_blocks\": %u, \"arms\": {",
            name, m, n, k, lp, L, row, f.S, f.Wn, f.o ? "true" : "false", (unsigned long long)f.leaves, prop.name, f.nsm, f.grid,
            lt.algo_id, lt.tile, lt.stages, lt.splitk, lt.ncand, cut.name.c_str(), cut.ncand, tm.steady ? "true" : "false",
            f.kn.carve, f.kn.dyn, f.kn.cprio.c_str(), f.kn.ccta, f.kn.pf, V31_MAXNREG, G_WG_NREG, G_WG_STAGES,
-           f.pair ? G_BN : TILE, f.kn.sched, f.ltw ? 1 : 0, f.wg ? 1 : 0, f.kn.rp, f.wbn, env_int("V31_HALL", 0), f.hchunk, f.wgw ? 1 : 0,
+           f.pair ? G_BN : TILE, f.kn.sched, f.ltw ? 1 : 0, f.wg ? 1 : 0, f.kn.rp, f.wbn, env_int("V31_HALL", 0), f.hchunk,
+           f.kn.rp == 5 ? f.r5h : 0, f.r5w ? 1 : 0, f.wgw ? 1 : 0,
            f.kn.lminb, f.kn.sahead ? 1 : 0, fused, f.o ? (unsigned long long)f.tiles * (65536 / row) : 0ull, fused_blocks, nblk);
     for (size_t a = 0; a < arms.size(); a++)
       printf("%s\"%s\": {\"ms\": %.6f, \"mhz\": %.0f}", a ? ", " : "", arms[a].name.c_str(), med[a], mhz[a]);
@@ -3443,21 +3488,25 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
 // ---------------------------------------------------------------- the per-call binding (v31lib.py over ctypes)
 // One process, one device: every context shares its compute and commit streams (calls run in issue order, each commit beside
 // the next call's compute), a domain slot each (COMMIT_GPU_DOMS of them) and one ROW (commit_gpu's C fixes it). Every
-// function returns 0, or -1 with the reason in v31_error(); a CUDA failure exits the process (commit_gpu's CK). Not
-// thread-safe: one thread drives every context.
-static std::string g_err;
+// function returns 0, or -1 with the reason in v31_error() (the calling thread's); a CUDA failure exits the process
+// (commit_gpu's CK). The thread that made the first live context drives every context, and any other is refused.
+static thread_local std::string g_err;
 static int g_dev = -1, g_row = 0, g_live = 0;
+static std::thread::id g_thread;
 static bool g_dom[COMMIT_GPU_DOMS] = {};
 static cudaStream_t g_s0 = nullptr, g_s1 = nullptr;
 struct LibCtx {
   Fill f;
   int dom = -1;
+  int8_t* own_b = nullptr;   // the context's own weights buffer (v31_set_b's), where v31_point_b(null) points f.B back
 };
 static int fail(const std::string& why) {
   g_err = why;
   return -1;
 }
 static LibCtx* ctx_of(void* h) { return static_cast<LibCtx*>(h); }
+static int foreign() { return g_live && std::this_thread::get_id() != g_thread ? fail("another thread made the live contexts") : 0; }
+#define V31_FILL(h) if (foreign()) return -1; Fill& f = ctx_of(h)->f
 
 extern "C" {
 const char* v31_error() { return g_err.c_str(); }
@@ -3466,6 +3515,7 @@ const char* v31_error() { return g_err.c_str(); }
 // committed, T_S implied) or a filler's, committed under the CGP1 params file's domain and salted under its Ks
 // (v31lib.Prover writes it), on CUDA device dev. Null on failure.
 void* v31_create(int m, int n, int k, int lp, int L, int row, int served, const char* params_path, int dev) {
+  if (foreign()) return nullptr;
   const std::string bad = Fill::bad_shape(m, n, k, lp, L, row);
   if (!bad.empty()) { fail(bad); return nullptr; }
   if (g_dev >= 0 && dev != g_dev) { fail("one device a process: contexts are on device " + std::to_string(g_dev)); return nullptr; }
@@ -3489,37 +3539,47 @@ void* v31_create(int m, int n, int k, int lp, int L, int row, int served, const 
   c->f.o = served != 0;
   c->f.setup(m, n, k, lp, L, row, read_params(params_path), dom, g_s0, g_s1);
   c->dom = dom;
+  c->own_b = c->f.B;
   g_dom[dom] = true;
   g_dev = dev;
   g_row = row;
-  g_live++;
+  if (!g_live++) g_thread = std::this_thread::get_id();
   return c;
 }
 
 // m n k lp L row S tiles lpt leaves depth calls W o, as u64 (W the committed prefix-sum segments: S - 1 served, S filler)
 int v31_info(void* h, uint64_t* out) {
-  const Fill& f = ctx_of(h)->f;
+  V31_FILL(h);
   const uint64_t v[14] = {(u64)f.m, (u64)f.n, (u64)f.k, (u64)f.lp, (u64)f.L, (u64)f.row, (u64)f.S, (u64)f.tiles, (u64)f.lpt,
                           f.leaves, (u64)f.cm[0].depth, f.calls, (u64)f.Wn, (u64)f.o};
   memcpy(out, v, sizeof v);
   return 0;
 }
 
-// The weights (n x k int8, row-major) from host memory, or from device memory when on_device
-int v31_set_b(void* h, const void* B, int on_device) {
-  Fill& f = ctx_of(h)->f;
+// The weights (n x k int8, row-major) from host memory into the context's own buffer
+int v31_set_b(void* h, const void* B) {
+  V31_FILL(h);
   CK(cudaStreamSynchronize(f.s0));
-  CK(cudaMemcpy(f.B, B, (size_t)f.n * f.k, on_device ? cudaMemcpyDeviceToDevice : cudaMemcpyHostToDevice));
+  f.B = ctx_of(h)->own_b;
+  CK(cudaMemcpy(f.B, B, (size_t)f.n * f.k, cudaMemcpyHostToDevice));
+  f.wformed = false;
+  return 0;
+}
+// Or at device pointer B, no copy and no wait: a call reads the pointer it was issued with, so B stays unchanged until
+// the calls issued after have formed (v31_sync). Null: the context's own buffer again, as v31_set_b last wrote it.
+int v31_point_b(void* h, const void* B) {
+  V31_FILL(h);
+  f.B = B ? (int8_t*)B : ctx_of(h)->own_b;
   f.wformed = false;
   return 0;
 }
 
-// A (m x k int8, row-major, from host memory or device memory when on_device) into this context's own operand buffer, in
-// the compute stream's order (after every issued call's form); *dev gets the buffer's device pointer, for v31_prove's
-// a_dev. The pad (a null a_dev) overwrites the same buffer.
-int v31_load_a(void* h, const void* A, int on_device, void** dev) {
-  Fill& f = ctx_of(h)->f;
-  CK(cudaMemcpyAsync(f.A, A, (size_t)f.m * f.k, on_device ? cudaMemcpyDeviceToDevice : cudaMemcpyHostToDevice, f.s0));
+// A (m x k int8, row-major) from host memory into this context's own operand buffer, in the compute stream's order (after
+// every issued call's form); *dev gets the buffer's device pointer, for v31_prove's a_dev. The pad (a null a_dev)
+// overwrites the same buffer.
+int v31_load_a(void* h, const void* A, void** dev) {
+  V31_FILL(h);
+  CK(cudaMemcpyAsync(f.A, A, (size_t)f.m * f.k, cudaMemcpyHostToDevice, f.s0));
   CK(cudaStreamSynchronize(f.s0));
   *dev = f.A;
   return 0;
@@ -3532,7 +3592,7 @@ int v31_load_a(void* h, const void* A, int on_device, void** dev) {
 // values can't be opened after). cheat (testing): "none", "skip:TAU" (noise tile TAU of X zeroed), "forge:S0[:FRAC]" (T_S0
 // of every 1/FRAC-th tile overwritten; served, S0 0: O), "forgeO[:FRAC]" (forge:0) or "nodither" (d_A and d_B zero).
 int v31_prove(void* h, const uint8_t* seeds, uint64_t off, const void* a_dev, const char* cheat, uint64_t* call) {
-  Fill& f = ctx_of(h)->f;
+  V31_FILL(h);
   const std::string cs = cheat ? cheat : "none";
   if (cs != "none" && cs != "nodither" && cs.compare(0, 5, "skip:") && cs.compare(0, 6, "forge:") && cs.compare(0, 6, "forgeO"))
     return fail("cheat " + cs + ": none | skip:TAU | forge:S0[:FRAC] | forgeO[:FRAC] | nodither");
@@ -3546,6 +3606,8 @@ int v31_prove(void* h, const uint8_t* seeds, uint64_t off, const void* a_dev, co
   f.set_seeds(seeds);
   *call = f.calls;
   f.issue(off, static_cast<const int8_t*>(a_dev), ch);
+  const cudaError_t e = cudaGetLastError();
+  if (e != cudaSuccess) return fail("call " + std::to_string(*call) + ": a launch failed: " + cudaGetErrorString(e));
   return 0;
 }
 
@@ -3562,7 +3624,7 @@ static int refused(const Fill& f, int b, uint64_t c) {
 
 // Call c's root (64 bytes), once its commit is done
 int v31_root(void* h, uint64_t c, uint8_t* out) {
-  Fill& f = ctx_of(h)->f;
+  V31_FILL(h);
   const int b = f.ready(c);
   if (b < 0) return fail("call " + std::to_string(c) + " isn't one of the last two calls");
   if (refused(f, b, c)) return -1;
@@ -3574,7 +3636,7 @@ int v31_root(void* h, uint64_t c, uint8_t* out) {
 
 // Call c's leaves at pos[0 .. np): their rows (np x row bytes) and paths (np x depth digests, the leaf's sibling first)
 int v31_open(void* h, uint64_t c, const uint64_t* pos, int np, uint8_t* rows, uint8_t* paths) {
-  Fill& f = ctx_of(h)->f;
+  V31_FILL(h);
   const int b = f.ready(c);
   if (b < 0) return fail("call " + std::to_string(c) + " isn't one of the last two calls");
   if (refused(f, b, c)) return -1;
@@ -3586,26 +3648,26 @@ int v31_open(void* h, uint64_t c, const uint64_t* pos, int np, uint8_t* rows, ui
 }
 
 // Testing: call c's committed values (leaves x row bytes, dither.values_buffer: per tile its W prefix-sum segments, then its O
-// rows when served), every tree level (leaves first, (2 width - 1) x 64 bytes), or the A operand its last call formed from
-// (the pad, m x k bytes)
+// rows when served), or the A operand its last call formed from (the pad, m x k bytes)
 int v31_values(void* h, uint64_t c, uint8_t* out) {
-  Fill& f = ctx_of(h)->f;
+  V31_FILL(h);
   const int b = f.ready(c);
   if (b < 0) return fail("call " + std::to_string(c) + " isn't one of the last two calls");
   CK(cudaMemcpy(out, f.values_of(b), (size_t)f.leaves * f.row, cudaMemcpyDeviceToHost));
   return 0;
 }
-int v31_levels(void* h, uint64_t c, uint8_t* out) {
-  Fill& f = ctx_of(h)->f;
-  const int b = f.ready(c);
-  if (b < 0) return fail("call " + std::to_string(c) + " isn't one of the last two calls");
-  std::vector<u64> lv(8 * f.levels_count());
-  CK(cudaMemcpy(lv.data(), f.cm[b].levels, lv.size() * 8, cudaMemcpyDeviceToHost));
-  for (size_t i = 0; i < lv.size(); i++) sha::put_be64(out + 8 * i, lv[i]);
+// Call c's every tree level (leaves first, (2 width - 1) nodes of 8 native u64 words) into page-locked dst on the commit
+// stream behind c's commit, at once: dst is whole after v31_sync, and call c + 2's commit, which reuses the copy's buffer,
+// runs after the copy in that stream's order
+int v31_levels_async(void* h, uint64_t c, void* dst) {
+  V31_FILL(h);
+  if (c >= f.calls || c + 2 < f.calls) return fail("call " + std::to_string(c) + " isn't one of the last two calls");
+  if (f.pend == (int)(c & 1)) f.flush();
+  CK(cudaMemcpyAsync(dst, f.cm[c & 1].levels, f.levels_count() * 64, cudaMemcpyDeviceToHost, f.s1));
   return 0;
 }
 int v31_pad(void* h, uint8_t* out) {
-  Fill& f = ctx_of(h)->f;
+  V31_FILL(h);
   CK(cudaStreamSynchronize(f.s0));
   CK(cudaMemcpy(out, f.A, (size_t)f.m * f.k, cudaMemcpyDeviceToHost));
   return 0;
@@ -3613,7 +3675,7 @@ int v31_pad(void* h, uint8_t* out) {
 
 // Every issued call's compute and commit done
 int v31_sync(void* h) {
-  Fill& f = ctx_of(h)->f;
+  V31_FILL(h);
   f.flush();
   CK(cudaStreamSynchronize(f.s0));
   CK(cudaStreamSynchronize(f.s1));
@@ -3622,13 +3684,30 @@ int v31_sync(void* h) {
 
 void v31_destroy(void* h) {
   LibCtx* c = ctx_of(h);
-  if (!c) return;
+  if (!c || foreign()) return;
   c->f.flush();
+  c->f.B = c->own_b;
   c->f.release();
   g_dom[c->dom] = false;
   if (--g_live == 0) g_dev = -1;
   delete c;
 }
+
+// cuBLASLt's D (m x n int32) = A (m x k int8) B^T (B n x k), row-major, the GEMM a V31_LTW call makes, from any thread:
+// lt_setup autotuned at these pointers on stream st, then lt_run at the same shapes; lt_algo: algo, tile, stages, split-K
+void* v31_lt_create(int m, int n, int k, const void* A, const void* B, void* D, void* st) {
+  Lt* L = new Lt();
+  lt_setup(*L, m, n, k, (const int8_t*)A, (const int8_t*)B, (int*)D, (cudaStream_t)st);
+  return L;
+}
+void v31_lt_run(void* h, const void* A, const void* B, void* D, void* st) {
+  lt_run(*(Lt*)h, (const int8_t*)A, (const int8_t*)B, (int*)D, (cudaStream_t)st);
+}
+void v31_lt_algo(void* h, int* out) {
+  const Lt& L = *(Lt*)h;
+  out[0] = L.algo_id, out[1] = L.tile, out[2] = L.stages, out[3] = L.splitk;
+}
+void v31_lt_destroy(void* h) { lt_free(*(Lt*)h); delete (Lt*)h; }
 }   // extern "C"
 #else
 int main(int argc, char** argv) {

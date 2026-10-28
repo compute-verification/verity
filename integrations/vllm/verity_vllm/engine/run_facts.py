@@ -38,22 +38,22 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
     case = engine.case
     acc = ACCEPTED.get(case, {})
     notes: dict[str, Any] = {"case": case, "accepted_profile_id": acc.get("profile_id"), "accepted_record": acc.get("record")}
-    # [GEN sampling] the manifest records the sampling actually requested (a non-greedy variant is another profile id by construction)
+    # the manifest records the sampling actually requested (a non-greedy variant is another profile id by construction)
     sampling_desc = {"greedy": bool(sampling.get("greedy", True)), "temperature": float(sampling.get("temperature", 0.0)),
                      "top_p": float(sampling.get("top_p", 1.0)), "top_k": int(sampling.get("top_k", 0)),
                      "seeds": [] if sampling.get("seed") is None else [int(sampling["seed"])], "logprobs": sampling.get("logprobs")}
     if int(sampling.get("n") or 1) != 1:
         sampling_desc["n"] = int(sampling["n"])                     # greedy manifests stay byte-identical (same profile id as before)
     if sampling.get("per_request"):
-        sampling_desc["per_request"] = list(sampling["per_request"])   # [ov-sampling] mixed batch: per-request variants
+        sampling_desc["per_request"] = list(sampling["per_request"])   # mixed batch: per-request variants
     try:
         manifest = prof.build_manifest(
             case=case, cp=engine.cp, llm=engine.llm, wheel_sha256=wheel_sha256, vllm_commit=vllm_commit,
             adapter_revision=adapter_revision,
             interception="none (production uninstrumented: StepTrace scheduler observer + engine outputs; Inductor/Triton caches read after the run)",
-            # [R15 compiled] the header says what the engine was built with (a compiled engine used to be labelled enforce_eager True here)
+            # the header says what the engine was built with (a compiled engine used to be labelled enforce_eager True here)
             sampling=sampling_desc, env_flags=engine.env_flags, enforce_eager=bool(engine.kwargs.get("enforce_eager", False)),
-            # lane tp2: the manifest's `parallelism.tensor_parallel_size` / `engine_kwargs.tensor_parallel_size` must say what the
+            # the manifest's `parallelism.tensor_parallel_size` / `engine_kwargs.tensor_parallel_size` must say what the
             # engine was built with (the default 1 made a TP=2 rank's header claim TP=1; only the `backends.all_reduce` probe differed)
             tensor_parallel_size=int(engine.kwargs.get("tensor_parallel_size") or 1),
         )
@@ -64,17 +64,17 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
         manifest["engine_kwargs"]["max_num_seqs"] = engine.kwargs.get("max_num_seqs")
         if engine.kwargs.get("max_num_batched_tokens") is not None:
             manifest["engine_kwargs"]["max_num_batched_tokens"] = engine.kwargs["max_num_batched_tokens"]
-        # [r8 E-cleanup, fp16 M12] the served dtype: `build_manifest` hard-codes "bfloat16"; when the harness passed an explicit
-        # `dtype` to LLM(**kw) (a row's `engine.args.dtype`, e.g. float16) the manifest must say so -- a served-fp16
+        # the served dtype: `build_manifest` hard-codes "bfloat16"; when the harness passed an explicit
+        # `dtype` to LLM(**kw) (a workload's `engine.args.dtype`, e.g. float16) the manifest must say so -- a served-fp16
         # record labelled bf16 is mislabelled evidence.  Runs without the kwarg are byte-identical (same profile id as before).
         if engine.kwargs.get("dtype") not in (None, "auto"):
             manifest["dtype"] = str(engine.kwargs["dtype"])
             manifest["engine_kwargs"]["dtype"] = str(engine.kwargs["dtype"])
-        # [R13 hopper] the attention version the layers actually run (FA2 / FA3), and the declared target when the engine was built for one:
+        # the attention version the layers actually run (FA2 / FA3), and the declared target when the engine was built for one:
         # `TargetProfile.from_run_profile` reads these back on the CPU side (eager resolver) — the same object the builder applied
         manifest.setdefault("backends", {})["attention_flash_attn_version"] = observed_flash_attn_version(engine.model)
         manifest["backends"]["vllm_has_flashinfer"] = vllm_has_flashinfer()     # host fact vLLM keys kernel choices on (nvcc on PATH)
-        # [R15 fp8] the block-scaled FP8 linear kernel the FP8 layers carry (None for a model without FP8 linears): the record attests
+        # the block-scaled FP8 linear kernel the FP8 layers carry (None for a model without FP8 linears): the record attests
         # the kernel whose arithmetic the FP8 Definitions are (CutlassFp8BlockScaledMMKernel), beside the declared `target.fp8_block_gemm`
         from verity_vllm.program.frontend.target_profile import fp8_block_gemm_kernel_of
         fp8k = fp8_block_gemm_kernel_of(engine.model)
@@ -99,16 +99,15 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
         if engine.target is not None:
             manifest["target"] = engine.target.to_json()
             manifest["engine_kwargs"].update({k: v for k, v in engine.target.engine_args().items()})
-        # [R15 compiled] the effective execution, read back from the built engine: engine_kwargs.enforce_eager = what LLM() got (eager runs
+        # the effective execution, read back from the built engine: engine_kwargs.enforce_eager = what LLM() got (eager runs
         # stay byte-identical: True as before); a compiled engine adds its compilation_config kwarg and the read-back facts (mode, cudagraph
-        # mode, capture sizes, partition) to the header's `compilation` block -- the RunHeader attests the execution GM-01 compares against
+        # mode, capture sizes, partition) to the header's `compilation` block -- the RunHeader attests the execution the global match compares against
         manifest["engine_kwargs"]["enforce_eager"] = bool(engine.kwargs.get("enforce_eager", False))
         if engine.kwargs.get("compilation_config") is not None:
             manifest["engine_kwargs"]["compilation_config"] = engine.kwargs["compilation_config"]
-        # [R16 sys int-3, coord M-0213 RULING 21] the record attests the async-scheduling mode the engine RESOLVED (scheduler_config after
-        # VllmConfig.__post_init__: True by default on this stack), not the CLI default None the harness leaves in place -- async scheduling
-        # changes the step/observer interleaving GM-01 and the Match resolver reason about, so a header without it is unattested execution.
-        # Every header now carries the key (profile id moves once, for all rows alike; leaf ids already tolerate that: p=<profile_id>/...).
+        # the record attests the async-scheduling mode the engine RESOLVED (scheduler_config after VllmConfig.__post_init__: True by
+        # default on this stack), not the CLI default None the harness leaves in place -- async scheduling changes the step/observer
+        # interleaving the global match and the Match resolver reason about, so a header without it is unattested execution.
         manifest["engine_kwargs"]["async_scheduling"] = resolved_async_scheduling(engine.llm)
         if "async_scheduling" in engine.kwargs:
             notes["async_scheduling_requested"] = engine.kwargs["async_scheduling"]
@@ -116,11 +115,11 @@ def profile_manifest(engine: Engine, *, adapter_revision: str, wheel_sha256: str
         if facts and facts.get("enforce_eager") is False:
             manifest.setdefault("compilation", {}).update({k: v for k, v in facts.items() if k != "enforce_eager"})
             manifest["compilation"]["enforce_eager"] = False
-            # [R15 compiled, rev-pm M-0266/M-0268 (b)] positive, record-level evidence of compilation an eager run cannot produce: the Inductor
+            # positive, record-level evidence of compilation an eager run cannot produce: the Inductor
             # output code of every compiled piece is on disk by now (vLLM compiles + captures during engine init), digested exactly as
             # commit_delta does (kernel_identity.collect: kernel_set_sha256 over {(kernel name, source sha256)}, call_set over the launch
             # programs).  The dir is vLLM's per-config inductor_cache (it exports TORCHINDUCTOR_CACHE_DIR at initialize_cache) or the explicit
-            # per-process override; a null pin here on a compiled engine is an error of record (GM-01 G1 fails closed on it after M-0266).
+            # per-process override; a null pin here on a compiled engine is an error of record (the global match's G1 fails closed on it).
             gk = generated_kernels_of_this_process()
             # the manifest (-> profile id) carries production.py's summary shape only; the per-piece inventory and the dir it was read from
             # go to the header notes (paths differ per process; the digests do not)
@@ -160,10 +159,10 @@ def model_config_subset(engine: Engine) -> dict:
             "vocab_size", "rms_norm_eps", "tie_word_embeddings", "rope_theta", "max_position_embeddings", "torch_dtype",
             "model_type", "architectures", "attention_bias", "mlp_bias", "rope_parameters", "rope_scaling",
             "qkv_bias", "attn_logit_softcapping", "final_logit_softcapping", "sliding_window", "hidden_act", "hidden_activation",
-            # [SHARED-CODE lane cov-ln, additive] the LayerNorm / GPT-NeoX family's keys (absent on every other config, so their
+            # the LayerNorm / GPT-NeoX family's keys (absent on every other config, so their
             # records are unchanged): eps and rotary base under their names, the partial-rotary fraction, the parallel residual
             "layer_norm_eps", "layer_norm_epsilon", "rotary_emb_base", "rotary_pct", "partial_rotary_factor", "use_parallel_residual",
-            # [ADAPTER lane glm47-flash, additive] multi-head latent attention's and the MoE routing's keys, which an MLA configuration's
+            # multi-head latent attention's and the MoE routing's keys, which an MLA configuration's
             # config root requires (absent on dense configurations; a MoE one gains the routing keys its profile's
             # header check compares when recorded)
             "q_lora_rank", "kv_lora_rank", "qk_nope_head_dim", "qk_rope_head_dim", "v_head_dim", "first_k_dense_replace",
@@ -178,7 +177,7 @@ def model_config_subset(engine: Engine) -> dict:
 
 
 def host_doc() -> dict:
-    """[M6] CPU-side facts that bound the observer's Python cost and would otherwise confound overhead ladders across pods:
+    """CPU-side facts that bound the observer's Python cost and would otherwise confound overhead ladders across pods:
     the CPU model, the visible/quota cores, the kernel clocksource, and the measured cost of one `time.perf_counter()` read.
     On an `acpi_pm` host a clock read is a ~8 µs syscall (vs ~25 ns with `tsc`/`kvm-clock`), and the hook reads the clock
     four times per recorded call (M6 report, addendum)."""
@@ -228,14 +227,14 @@ def versions_doc(engine: Engine | None = None) -> dict:
     except (AssertionError, RuntimeError, torch.cuda.DeferredCudaCallError):
         pass
     doc["host"] = host_doc()
-    if engine is not None:                    # [GEN batch SHARED-CODE] the effective LLM(**kw) of this run (CLI overrides included)
+    if engine is not None:                    # the effective LLM(**kw) of this run (CLI overrides included)
         doc["engine_kwargs"] = {k: v for k, v in engine.kwargs.items() if k not in ("model", "tokenizer") and isinstance(v, (int, float, str, bool, type(None)))}
-        # [R16 sys SYS-04, coord M-0213] capture/versions.json is GM-01's second engine-fact source (record_engine_facts: every location must
+        # capture/versions.json is the global match's second engine-fact source (record_engine_facts: every location must
         # agree): the RESOLVED async_scheduling, the same read-back the RunHeader.profile carries -- never the requested kwarg (usually absent)
         doc["engine_kwargs"]["async_scheduling"] = resolved_async_scheduling(engine.llm)
-        # [R15 EXEC-02 / COORD M-0063 (2)] the execution the row DECLARED and the one the engine REALISES (vllm_config read-back), in every
+        # the execution the workload DECLARED and the one the engine REALISES (vllm_config read-back), in every
         # run header that goes through this engine (Match capture/control, Commit control+treatment = the same engine object): the finalizer
-        # compares `effective_execution.execution_label` with the row id and the Program's applicability (M-0063 (3)).
+        # compares `effective_execution.execution_label` with the row id and the Program's applicability.
         doc["declared_execution"] = getattr(engine, "execution", None)
         doc["effective_execution"] = getattr(engine, "effective", None)
     try:

@@ -9,23 +9,23 @@
         [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
         [--remote-verifier HOST:PORT [--remote-kv-lib SO [--remote-session-lib SO]] [--remote-filler-gib 0]]
 
-It serves what network-accounting's certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
+It serves what the network certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
 ``data: {...}`` event per engine output, the usage chunk, ``data: [DONE]``), or as one JSON response. vLLM's OpenAI server
 is the reference: under ``--protocol vllm`` (the default) a request is parsed by its ``CompletionRequest`` (defaults,
 validation, ``to_sampling_params``) and every chunk is its ``CompletionStreamResponse``, serialized the way its
 ``completion_stream_generator`` does; ``max_tokens`` is bounded by its ``get_max_tokens`` rule. `serve_protocol.PlainProtocol`
 (``--protocol plain``) is the same framing without vLLM, for the CPU tests; `serve_protocol.framing_agrees` holds the two to
-each other and the server records the result at start. ``--protocol ids`` (`serve_protocol.IdsProtocol`) answers a warden's
-id request (exactly ``active.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the scan's id
-form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``. Every
+each other and the server records the result at start. ``--protocol ids`` (`serve_protocol.IdsProtocol`) answers a network
+certifier's id request (exactly ``active.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
+scan's id form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``. Every
 other request (the network certifier's shim and probes, the load) is answered as ``--protocol vllm`` answers it.
 
-Sampling parameters are values the request brings (network-accounting, 24 Oct 07:33Z): the server applies vLLM's neutral
+Sampling parameters are values the request brings: the server applies vLLM's neutral
 defaults, never the model's ``generation_config``, and records each request's ingress (the sampling fields it sent, the
 engine's resulting parameters, the seed and its rule). A request without a ``seed`` is sampled under the public default,
 `engine.served_seed.DEFAULT_SEED`. A ``top_p`` below 1 is refused (`TOP_P_REFUSAL`): the top-p sampler's split count is not
-pinned yet, so its draw is not a function of the committed values (CIR-87).
+pinned yet, so its draw is not a function of the committed values.
 
 The default precision is ``verity_int8`` (int8 linears, vLLM's attention) with the committer's GPU tree: the one setting
 whose 16-token probe (0.81 s at 4 in flight) fits the certifier's plan (about 2.6 s); ``int8_exact`` takes 12.9 s even
@@ -36,8 +36,8 @@ The engine is `verity_vllm.LLM` (in-process engine core, Model Runner V2), stepp
 thread (`EngineLoop`): each HTTP request is admitted with ``add_request`` under the engine id ``cmpl-<hex>-0`` (vLLM's
 ``f"{request_id}-{i}"``), and vLLM's scheduler batches whatever is admitted; each engine output goes back to its
 request's connection as it comes. The HTTP side is an asyncio server on its own thread, one request per connection.
-Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the warden's
-release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the warden sends), where each step's
+Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the network
+certifier's release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the certifier sends), where each step's
 rows also keep the scheduler's order, so a step's new rows are in admission order (`serve_admit.keep_scheduler_rows`;
 ``serve.json``'s ``step_rows``). Under ``--required-manifest`` the engine schedules as the bench row declares (`serve_row`).
 
@@ -55,13 +55,13 @@ streamed ids, the seed it carried, and where its finish says the stream ends. ``
 Under ``--out`` the server writes ``serve.json`` (the engine, the protocol in use, the address), ``windows.jsonl`` (one
 line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds, and the public
 record of the step rows it ran, committed at its close under its run root for the compile slice, `serve_commit.commit_served`,
-whose rows and salts go to ``served_rows/w<k>.json``), ``requests.jsonl``
-(one line a request: the HTTP id, the engine id, the body's ``user``, its release and its place among the engine's adds,
-the runner's ids, the prompt ids, the streamed ids, its ingress, its finish, its committed rows and seeds, and its check)
-and `serve_commit.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``'s default: hm96-sha512 rows in frame-v3-sha512
-trees, 64-byte roots), as the bench row's declared Commit commits, with its committer parts built from the row's
-``--required-manifest`` and taps (the acquisition plan under ``acquisition/``). ``--scheme vllm-v1`` (SHA-256, 32-byte roots)
-only serves again the recorded vllm-v1 run ``--of-record`` names (`serve_seal.scheme_refusal`). ``--seal`` seals each closed
+whose rows and salts go to ``served_rows/w<k>.json``), ``requests.jsonl`` (one line a request: the HTTP id, the engine id, the
+body's ``user``, its release and its place among the engine's adds, the runner's ids, the prompt ids, the streamed ids, its
+ingress, its finish, its committed rows and seeds, and its check), ``request_users.jsonl`` (`serve_commit.REQUEST_USERS`) and
+`serve_commit.advice_trace`'s file. The Commit is rows-sha512 (``--scheme``'s default: hm96-sha512 rows in frame-v3-sha512 trees,
+64-byte roots), as the bench row's declared Commit commits, with its committer parts built from the row's ``--required-manifest``
+and taps (the acquisition plan under ``acquisition/``). ``--scheme vllm-v1`` (SHA-256, 32-byte roots) only serves again the
+recorded vllm-v1 run ``--of-record`` names (`serve_seal.scheme_refusal`). ``--seal`` seals each closed
 window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
 commits the attention interiors without retaining them, and each seal's manifest names them (`serve_seal.RetentionOptions`). Each
 window's finalize, its readback and records, then its seal run on a thread of their own (`serve_seal.Sealer`), in window
@@ -80,7 +80,7 @@ it is written before the pending seals too, and its ``final`` is true only once 
 ``--protocols pouw:eps1-sm120-h1fx1`` serves PoUW H1 on this server's own Commit, one H1 window a Commit window
 (`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
 ``--challenger-peer`` each window's coins come from a session of its own on the auditor host's challenger, reserved
-through infra's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
+through the challenger's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
 ``--remote-verifier HOST:PORT`` proves the engine's store (its weights, and ``--remote-filler-gib``) to the remote
 bandwidth audit's verifier in lockstep with the server's engine steps from its first, a pass a step (`serve_remote`): its
 record is ``remote_session.json``, and a rejected session fails the exit.
@@ -120,7 +120,7 @@ PRECISIONS = ("verity_int8", "int8_exact", "pin")
 #: registers the linears, which is the ``verity_int8`` quantization method a pin's checkpoint may name.
 INT8_PARTS = {"int8_exact": (("linears", "attention"), "all"), "verity_int8": (("linears",), "linears"), "pin": (("linears",), None)}
 TOP_P_REFUSAL = ("serve-openai refuses top_p={top_p} < 1: vLLM's top-p sampler runs with a split count the engine does not pin, "
-                 "so a top-p draw is not a function of the committed values (CIR-87). Send top_p 1 (top_k and temperature are "
+                 "so a top-p draw is not a function of the committed values. Send top_p 1 (top_k and temperature are "
                  "served); the refusal lifts once the split count is pinned.")
 
 
@@ -136,10 +136,10 @@ class Options:
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="local", help="the Commit's run id (default $RESEARCH_RUN_ID)")
     protocol: str = option("--protocol", choices=tuple(PROTOCOLS), default="vllm",
                            help="vllm: vLLM's own request and response classes; plain: the same framing without them; ids: a "
-                                "warden's id requests streamed in the scan's id form, raw, and every other request as vllm "
+                                "network certifier's id requests streamed in the scan's id form, raw, and every other request as vllm "
                                 "(serve_protocol.IdsProtocol)")
     id_payload: int = option("--id-payload", type=int, default=ID_PAYLOAD,
-                             help="--protocol ids: each id event's bytes, the warden's cell payload B − 9 (default 503: the scan's "
+                             help="--protocol ids: each id event's bytes, the network certifier's cell payload B − 9 (default 503: the scan's "
                                   "B = 512)")
     precision: str = option("--precision", choices=PRECISIONS, default="verity_int8",
                             help="verity_int8 (default): int8 linears only, as vLLM's own server serves the int8 pin, the one that fits "
@@ -196,8 +196,8 @@ class Options:
                                        "(--window-gb), and stop cleanly (no new requests) rather than seal a window that would "
                                        "leave less (0: no floor)")
     copy_records_to: str | None = option("--copy-records-to", default=None,
-                                         help="copy serve.json, requests.jsonl, windows.jsonl and the step traces into this "
-                                              "directory (the run's $OUT) after each window and at the stop")
+                                         help="copy serve.json, requests.jsonl, request_users.jsonl, windows.jsonl and the step "
+                                              "traces into this directory (the run's $OUT) after each window and at the stop")
     switch_interval_ms: float = option("--switch-interval-ms", type=float, default=0.1,
                                        help="the interpreter's switch interval while serving (Python's is 5 ms): how long the engine's "
                                             "thread may wait for the GIL after each torch call while the seal's thread runs Python "
@@ -219,7 +219,7 @@ class Options:
                                        help="vLLM's --enable-force-include-usage: the usage chunk on every stream, and usage on each "
                                             "chunk (default on)")
     admit: str = option("--admit", choices=ADMIT, default="arrival",
-                        help="arrival (default): each request to the engine once parsed; release-order: in the warden's release "
+                        help="arrival (default): each request to the engine once parsed; release-order: in the network certifier's release "
                              "order (x-verity-release), each once every earlier-released one is in")
     admit_hold_ms: int = option("--admit-hold-ms", type=int, default=5000,
                                 help="release-order: skip a missing earlier release once a later request has waited this long")
@@ -700,9 +700,7 @@ def main(opts: Options) -> int:
     if com is not None:
         from verity_vllm.engine.step_trace import scheduler_config
 
-        if opts.protocols:
-            arm = SH.H1Windows(llm.model, com, opts.max_num_batched_tokens, opts.window_steps, engine=llm.vllm, out=out,
-                               config=SH.config_of(opts.protocols_config), sessions=SH.sessions_of(opts))
+        arm = SH.arm_of(opts, llm, com, out)
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
         sealer = SS.Sealer(int(opts.seal_hold_gb * SS.GB)) if opts.seal and opts.seal_off_loop else None
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
@@ -743,7 +741,7 @@ def main(opts: Options) -> int:
               "precision": opts.precision, "protocol": proto.name, "id_payload": getattr(proto, "payload", None),
               "framing": framing, "defaults": dict(defaults),
               "generation_config_not_applied": engine.vllm_config.model_config.get_diff_sampling_param(),
-              "default_seed": DEFAULT_SEED, "top_p": "refused below 1 (CIR-87)", "committer": getattr(com, "name", None),
+              "default_seed": DEFAULT_SEED, "top_p": "refused below 1", "committer": getattr(com, "name", None),
               "admit": opts.admit, "admit_hold_ms": opts.admit_hold_ms if order is not None else None,
               "step_rows": "scheduler" if rows is not None else "runner",
               "commit": opts.commit, "scheme": getattr(com, "commit_scheme", SS.V1) if com is not None else None,
@@ -788,6 +786,8 @@ def main(opts: Options) -> int:
             stopped(False)
             print(f"SERVE-OPENAI stopping: {sealer.summary()['held'] / SS.GB:.1f} GB of windows still to seal", flush=True)
             sealer.close()
+        if arm is not None:                              # each H1 window's release (off the loop) ends before ``final``
+            arm.drain()
         watchdog.stop()
         summary = stopped(True)
         print(f"SERVE-OPENAI stopped: {json.dumps(summary)}", flush=True)

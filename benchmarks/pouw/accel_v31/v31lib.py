@@ -4,14 +4,16 @@ ctypes over libv31.so (v31.cu built with -DV31_LIB; `build_lib` below, run.sh's 
 
     p = Prover(m, n, k, lp=128, L=1024, row=16384, served=True, lib=PATH, device=0)   # its CGP1 params (dither's domain,
                                                                                       # a fresh Ks unless ks= is given)
-    p.set_weights(B)                     # n x k int8: a numpy array, or a device pointer (int) with on_device=True
+    p.set_weights(B)                     # n x k int8, a numpy array (kept for the answers' B rows)
+    p.point_weights(ptr)                 # or the weights at a device pointer, no copy (None: set_weights' again)
     seeds = served_seeds(coin, receipt, call)   # dither.seeds: the raw coin, the operand-root receipt, the call's index
-    a_ptr = p.load_a(A)                  # optional: A (m x k int8, host or on_device) into the Prover's buffer
+    a_ptr = p.load_a(A)                  # optional: A (m x k int8, a numpy array) into the Prover's buffer
     c = p.prove(seeds, a_ptr)            # the call's index, at once; a_ptr: A (m x k int8) on the device (None: the
                                          # filler's pad, served=False only)
     root = p.root(c)                     # 64 bytes, once the call's commit is done
     ans = p.answer(c, i, j, s)           # proof block (i, j, s)'s opened rows: {"rows": {pos: (row, salt, path)}, "B": B[j]}
     rows = p.open(c, positions)          # [(row, salt, path)] for any leaves
+    p.levels_async(c, dst)               # every tree level into page-locked dst behind the commit, whole after p.sync()
 
 A served call (served=True, dither.Shape(o=True)) commits per tile T_1 .. T_{S-1} (u16) and then O = (A + d_A)(B +
 d_B)^T mod 2^32 (u32; T_S is implied by O); a filler's commits T_1 .. T_S of its pad. Calls run in issue order on the
@@ -24,11 +26,13 @@ Prover's own. A served call whose A + d_A (or B + d_B) has a row holding both -1
 decomposition (a' = A + d_A - sigma) can't carry it, and `root` raises. v31.cu's knobs come from the environment when a
 Prover is made: V31_LTW=1 has a filler call at S = 1 (L >= K) take cuBLASLt's int32 X W'^T in place of the protocol GEMM,
 its leaves the same bytes (the low halves); V31_PF, V31_CCTA, V31_SCHED and V31_CPRIO tune the commit beside the next
-call's compute.
+call's compute. One thread drives every Prover, the one that made the first live one (any other is refused).
+`Lib.lt_create`, `lt_run`, `lt_algo` and `lt_destroy` are the autotuned cuBLASLt GEMM a V31_LTW call makes, on the
+caller's device pointers: a plain baseline.
 
     python3 v31lib.py gate --lib LIB [--q 64]   the GPU's values, pad and every tree level against the reference and the
                                                 verifier's verdicts on the GPU's own openings, honest and cheating calls,
-                                                filler and served
+                                                filler and served; point_weights, levels_async and the one-thread rule
 
 Run from the source tree's root with ``PYTHONPATH=.``.
 """
@@ -43,6 +47,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Self
 
@@ -74,16 +79,21 @@ class Lib:
             "v31_error": ([], ctypes.c_char_p),
             "v31_create": ([i, i, i, i, i, i, i, ctypes.c_char_p, i], vp),
             "v31_info": ([vp, u64p], i),
-            "v31_set_b": ([vp, vp, i], i),
-            "v31_load_a": ([vp, vp, i, ctypes.POINTER(vp)], i),
+            "v31_set_b": ([vp, vp], i),
+            "v31_point_b": ([vp, vp], i),
+            "v31_load_a": ([vp, vp, ctypes.POINTER(vp)], i),
             "v31_prove": ([vp, u8p, u64, vp, ctypes.c_char_p, u64p], i),
             "v31_root": ([vp, u64, vp], i),
             "v31_open": ([vp, u64, u64p, i, vp, vp], i),
             "v31_values": ([vp, u64, vp], i),
-            "v31_levels": ([vp, u64, vp], i),
+            "v31_levels_async": ([vp, u64, vp], i),
             "v31_pad": ([vp, vp], i),
             "v31_sync": ([vp], i),
             "v31_destroy": ([vp], None),
+            "v31_lt_create": ([i, i, i, vp, vp, vp, vp], vp),
+            "v31_lt_run": ([vp] * 5, None),
+            "v31_lt_algo": ([vp, vp], None),
+            "v31_lt_destroy": ([vp], None),
         }
         for name, (args, res) in sig.items():
             fn = getattr(d, name)
@@ -133,30 +143,28 @@ class Prover:
         return dict(zip(("m", "n", "k", "lp", "L", "row", "S", "tiles", "lpt", "leaves", "depth", "calls", "W", "o"),
                         map(int, out)))
 
-    def set_weights(self, B, on_device: bool = False) -> None:
-        """The weights: an n x k int8 array (kept for the answers' B rows), or a device pointer with on_device."""
-        if on_device:
-            self.lib.check(self.lib.set_b(self.h, ctypes.c_void_p(int(B)), 1))
-            self.B = None
-            return
+    def set_weights(self, B) -> None:
+        """The weights: an n x k int8 array, kept for the answers' B rows (weights on the device: `point_weights`)."""
         B = np.ascontiguousarray(B, dtype=np.int8)
         if B.shape != (self.f.n, self.f.k):
             raise ValueError(f"B is n x k = {self.f.n} x {self.f.k}, not {B.shape}")
-        self.lib.check(self.lib.set_b(self.h, B.ctypes.data_as(ctypes.c_void_p), 0))
+        self.lib.check(self.lib.set_b(self.h, B.ctypes.data_as(ctypes.c_void_p)))
         self.B = B
 
-    def load_a(self, A, on_device: bool = False) -> int:
-        """A (m x k int8: a numpy array, or a device pointer with on_device) into the Prover's own operand buffer, after
-        every issued call's form; returns the buffer's device pointer, for `prove`. The pad overwrites the same buffer."""
-        if on_device:
-            src = ctypes.c_void_p(int(A))
-        else:
-            A = np.ascontiguousarray(A, dtype=np.int8)
-            if A.shape != (self.f.m, self.f.k):
-                raise ValueError(f"A is m x k = {self.f.m} x {self.f.k}, not {A.shape}")
-            src = A.ctypes.data_as(ctypes.c_void_p)
+    def point_weights(self, ptr: int | None) -> None:
+        """The weights where they are, n x k int8 at device pointer ptr, no copy and no wait (unchanged until the calls
+        issued after have formed: `sync`), or None for the Prover's own buffer (`set_weights`'s); the answers' B is None."""
+        self.lib.check(self.lib.point_b(self.h, None if ptr is None else ctypes.c_void_p(int(ptr))))
+        self.B = None
+
+    def load_a(self, A) -> int:
+        """A (an m x k int8 array) into the Prover's own operand buffer, after every issued call's form; returns the
+        buffer's device pointer, for `prove`. The pad overwrites the same buffer."""
+        A = np.ascontiguousarray(A, dtype=np.int8)
+        if A.shape != (self.f.m, self.f.k):
+            raise ValueError(f"A is m x k = {self.f.m} x {self.f.k}, not {A.shape}")
         dev = ctypes.c_void_p()
-        self.lib.check(self.lib.load_a(self.h, src, int(on_device), ctypes.byref(dev)))
+        self.lib.check(self.lib.load_a(self.h, A.ctypes.data_as(ctypes.c_void_p), ctypes.byref(dev)))
         return int(dev.value)
 
     def prove(self, seeds: dict[str, bytes], a_ptr: int | None = None, cheat: str = "none") -> int:
@@ -212,11 +220,16 @@ class Prover:
         self.lib.check(self.lib.values(self.h, c, buf))
         return buf.raw
 
+    def levels_async(self, c: int, dst: int) -> None:
+        """Call c's every tree level (leaves first, each node 8 native u64 words) copied behind its commit to dst, a host
+        pointer to (2 width - 1) x 64 bytes (page-locked, or the copy waits for the commit); whole after `sync`."""
+        self.lib.check(self.lib.levels_async(self.h, c, ctypes.c_void_p(int(dst))))
+
     def levels(self, c: int) -> bytes:
-        depth = self.info()["depth"]
-        buf = ctypes.create_string_buffer((2 * (1 << depth) - 1) * 64)
-        self.lib.check(self.lib.levels(self.h, c, buf))
-        return buf.raw
+        buf = np.zeros(8 * (2 << self.info()["depth"]) - 8, np.uint64)
+        self.levels_async(c, buf.ctypes.data)
+        self.sync()
+        return buf.byteswap().tobytes()
 
     def pad(self) -> bytes:
         buf = ctypes.create_string_buffer(self.f.m * self.f.k)
@@ -241,6 +254,9 @@ f-pad-768 fill 256 384 3072 256 768 1024 pad none
 f-llm-4096 fill 256 256 8192 512 4096 1024 llm none
 f-uniform-1280 fill 256 512 2560 256 1280 1024 uniform none
 f-lp512 fill 256 256 4096 512 1024 2048 llm none
+f-lp1024 fill 256 256 8192 1024 4096 1024 llm none
+c-skip-lp1024 fill 256 256 4096 1024 4096 1024 pad skip:1
+f-lp2048 fill 256 256 6144 2048 8192 1024 llm none
 f-row8k fill 128 256 8192 256 2048 8192 pad none
 f-big fill 512 1024 8192 512 4096 1024 llm none
 c-skip fill 256 256 4096 256 1024 1024 pad skip:5
@@ -252,6 +268,7 @@ s-k served 256 256 4096 512 4096 16384 llm none
 s-s4 served 256 256 4096 128 1024 16384 llm none
 s-partial served 256 384 3072 128 896 8192 llm none
 s-lp256 served 256 256 4096 256 2048 16384 llm none
+s-lp1024 served 256 256 8192 1024 4096 16384 llm none
 s-row1k served 256 512 2048 128 1024 1024 llm none
 s-big served 512 1024 8192 512 4096 16384 llm none
 s-uniform served 256 256 2048 256 2048 16384 uniform rootless
@@ -344,13 +361,16 @@ def gate_case(lib: Lib, name: str, served: bool, m: int, n: int, k: int, lp: int
     return rep
 
 
+#: gate_pipeline's two Provers: ((M, N, K, LP, L, ROW), served)
+PIPELINE = [((256, 384, 4096, 512, 4096, 1024), False), ((384, 256, 2048, 128, 1024, 1024), True)]
+
+
 def gate_pipeline(lib: Lib, q: int, rng: np.random.Generator) -> dict:
     """A filler's Prover and a served Prover of different shapes in one process, their calls interleaved back to back (four
     each, each commit beside the next call's compute, the weight coins every call): every call's root against the
     reference (the c-th call salted from c leaves), a stale call's refusal, and a verdict on each Prover's last call."""
-    shapes = [((256, 384, 4096, 256, 4096, 1024), False), ((384, 256, 2048, 128, 1024, 1024), True)]
     out: dict = {"name": "pipeline", "calls": [], "verdicts": []}
-    ps = [Prover(*s, served=o, lib=lib) for s, o in shapes]
+    ps = [Prover(*s, served=o, lib=lib) for s, o in PIPELINE]
     try:
         ops = []
         for p in ps:
@@ -390,6 +410,31 @@ def gate_pipeline(lib: Lib, q: int, rng: np.random.Generator) -> dict:
     return out
 
 
+def gate_point_levels(lib: Lib, rng: np.random.Generator) -> dict:
+    """`point_weights`, `levels_async` and the one-thread rule: a filler's three calls back to back, the first two on
+    weights a served Prover's A buffer holds, the third on its own after `set_weights` (which leaves the holder's buffer
+    as it was), each call's levels copied behind its commit against the reference's, and a second thread refused."""
+    m, n, k, lp, L, row = 256, 256, 2048, 256, 2048, 1024
+    with Prover(n, 128, k, lp, L, row, served=True, lib=lib) as holder, Prover(m, n, k, lp, L, row, lib=lib) as p:
+        f, B = p.f, [v31.operands(p.f, rng, "llm")[1] for _ in range(2)]
+        p.point_weights(holder.load_a(B[0]))
+        bufs, seeds, equal = [np.zeros(8 * (2 << p.info()["depth"]) - 8, np.uint64) for _ in range(3)], [], []
+        for x, buf in enumerate(bufs):   # call x, back to back
+            if x == 2:
+                p.set_weights(B[1])
+            seeds.append(call_seeds(os.urandom(64), os.urandom(64)))
+            p.levels_async(p.prove(seeds[x]), buf.ctypes.data)
+        p.sync()
+        for x, (sd, buf) in enumerate(zip(seeds, bufs)):
+            values = v31.fill_buffer(f, *v31.fill_values(f, v31.pad_rows(sd, range(m), k), B[x // 2], v31.Coins.expand(f, sd)))
+            equal.append(buf.byteswap().tobytes() == v31.levels_bytes(v31.fill_commit(f, values, p.ks, x * f.leaves).levels))
+        kept = holder.pad() == B[0].tobytes()
+        with ThreadPoolExecutor(1) as other:
+            rc = other.submit(lib.info, p.h, (ctypes.c_uint64 * 14)()).result()
+    return {"name": "point-levels", "levels_equal": equal, "holder_kept": kept, "thread_refused": rc == -1,
+            "good": all(equal) and kept and rc == -1}
+
+
 def _pipeline_check(p: Prover, ops: tuple, c: int, seeds: dict[str, bytes]) -> dict:
     f, (A, B, _) = p.f, ops
     if A is None:
@@ -421,6 +466,11 @@ def cmd_gate(a: argparse.Namespace) -> int:
     (out / "fill-pipeline.json").write_text(json.dumps(rep, indent=1))
     print(f"pipeline: {'good' if rep['good'] else 'BAD'} roots {sum(r['root_equal'] for r in rep['calls'])}/"
           f"{len(rep['calls'])} equal, stale call refused {rep['stale_refused']}; {rep['verdict']}", flush=True)
+    good &= rep["good"]
+    rep = gate_point_levels(lib, rng)
+    (out / "fill-point-levels.json").write_text(json.dumps(rep, indent=1))
+    print(f"point-levels: {'good' if rep['good'] else 'BAD'} levels {sum(rep['levels_equal'])}/3 equal, holder kept "
+          f"{rep['holder_kept']}, second thread refused {rep['thread_refused']}", flush=True)
     good &= rep["good"]
     return 0 if good else 1
 

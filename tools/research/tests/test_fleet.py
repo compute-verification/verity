@@ -57,7 +57,7 @@ def test_a_memory_bound_job_on_few_cores_is_not_idle(tmp_path, monkeypatch):
 
 
 def test_the_daily_post_rings_each_owning_lane_with_only_its_own_idle_machines(tmp_path, monkeypatch):
-    """The lane whose budget line pays for a node stops it (Daniel, 19 Oct 18:11Z, lane contract v2.19 §3c): besides the whole
+    """The lane whose budget line pays for a node stops it (the lane contract, §3c): besides the whole
     report, each lane that owns an idle machine gets one doorbell with only its machines' idle hours and idle $. A machine with no
     `lane`, or no registry entry, is infra's; a lane whose machines were never idle gets nothing."""
     monkeypatch.setattr(F, "FLEET_DIR", tmp_path / "fleet")
