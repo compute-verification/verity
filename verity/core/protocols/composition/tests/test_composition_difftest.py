@@ -253,7 +253,7 @@ def test_product_names_only_the_two_composites():
 
 @pytest.mark.slow
 def test_product_over_remotes_subprotocols_is_remote(product_remote_server):
-    _agree(PRODUCT[R.REMOTE.id], product_remote_server, SEEN["remote"], 200)
+    _agree(PRODUCT[R.REMOTE.id], product_remote_server, SEEN["remote"], 1000)
 
 
 @pytest.mark.slow
