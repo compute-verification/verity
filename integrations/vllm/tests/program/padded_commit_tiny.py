@@ -175,7 +175,7 @@ def required(b: dict[str, Any]) -> dict[str, Any]:
     designated = set(circ.root_outputs())
     req_all = req | prescribed | designated
     t_req = time.perf_counter() - t0
-    verdict = PT.validate_vu_partition(prog, q, L.W_MAX_LIFTED if b["kind"] == "padded" else L.W_MAX)
+    verdict = PT.validate_block_partition(prog, q, L.W_MAX_LIFTED if b["kind"] == "padded" else L.W_MAX)
     return {"fam": fam, "sets": sets, "unsupported": unsupported, "multipart": multipart, "boundary_gates": len(req),
             "prescribed": sorted(prescribed), "designated": sorted(designated), "required": sorted(req_all), "t_required": t_req,
             "verdict": {"status": verdict.status, "count": int(verdict.count)}}
@@ -367,7 +367,7 @@ def run_one(kind: str, case: str, lag: int, draws: int, challenge: str, out: Pat
                                                "Value<33> lifted words (A11: a lifted row is judged at w_max_lifted, status_at_w_max_lifted) -- "
                                                "not a verdict of this row, kept so the two rules are never confused")
     else:
-        width = {"w_max": L.W_MAX, "max_seen": getattr(PT.validate_vu_partition(prog, b["query"], L.W_MAX).width, "max_seen", None)}
+        width = {"w_max": L.W_MAX, "max_seen": getattr(PT.validate_block_partition(prog, b["query"], L.W_MAX).width, "max_seen", None)}
     n_active_events = sum(1 for x in outs if not (kind == "padded" and x == L.enc_bot(32)))
     rec = {"schema": SCHEMA, "label": LABEL if kind == "padded" else "active-reference twin of the tiny fixture (committed the same way; a denominator, never a cell of the first table)",
            "kind": kind, "case": case, "lag": lag, "steps": steps, "program": {"id": prog.root.id[:160], "digest": b["digest"], "gates": prog.gates,
