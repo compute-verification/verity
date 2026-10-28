@@ -98,7 +98,7 @@ from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefi
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.types import Array
 from verity.ml.commitments import advice as AC
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 
 from . import rows as CS
 
@@ -171,14 +171,16 @@ def _static(v: Any) -> Any:
 
 @functools.cache
 def _load_catalog() -> None:
-    """Import every module of `verity.ml.circuits.ops`, the catalog's, and the embedding's registered read
-    (`commitments.gates.embedding`): each registers its Definitions as it loads."""
+    """Import every module of `verity.ml.circuits.ops`, the catalog's, the embedding's registered read
+    (`commitments.gates.embedding`) and the streamed SHA-512 a checkpoint tie reads (`commitments.gates.sha512_stream`):
+    each registers its Definitions as it loads."""
     from verity.ml.circuits import ops
 
     for m in pkgutil.walk_packages(ops.__path__, f"{ops.__name__}."):
         if ".tests" not in m.name:
             importlib.import_module(m.name)
     importlib.import_module("verity.ml.commitments.gates.embedding")
+    importlib.import_module("verity.ml.commitments.gates.sha512_stream")
 
 
 def resolve(tid: str, *, template: bool = True) -> Any:
@@ -272,12 +274,13 @@ def layout(fn: Any) -> RowLayout:
     return RowLayout(rows, outs, widths, tuple(ty.n if isinstance(ty, Array) else 1 for _, ty in params))
 
 
-def unit_rows(fn: Any, cuts: Mapping[str, int] | None = None) -> tuple[list[tuple[str, str, int, list[str]]],
-                                                                         list[tuple[str, tuple[int, ...]]]]:
+def unit_rows(fn: Any, cuts: Mapping[str, int] | None = None, seg: Sequence[str] = ()
+              ) -> tuple[list[tuple[str, str, int, list[str]]], list[tuple[str, tuple[int, ...]]]]:
     """``fn``'s rows as C-Flock's `UnitStager` takes them, ``(in_rows, out_rows)``: one ``hm96-sha512/row/v2`` row per parameter,
-    or per row of a cut one (`Layout.cut`), then one per return field."""
+    or per row of a cut one (`Layout.cut`), then one per return field; a parameter in ``seg`` (`seg_ports`) is one
+    ``hm96-sha512/row-seg/v1`` row."""
     lay = layout(fn)
-    return [(p, V2, 16 * w, ps) for p, w, ps in lay.cut(cuts)], [(V2, (j,)) for j in range(len(lay.outs))]
+    return [(p, SEG if p in seg else V2, 16 * w, ps) for p, w, ps in lay.cut(cuts)], [(V2, (j,)) for j in range(len(lay.outs))]
 
 
 #: C-Flock's composer's sizes (`verity_flock.circuit`, which ``verity`` may not import; the windows tests hold them to
@@ -773,6 +776,26 @@ def committed_reads(registered: Registered | None) -> tuple[Read, ...]:
     return tuple(out)
 
 
+def seg_ports(registered: Registered | None) -> dict[str, frozenset[str]]:
+    """By template, the ports its registered reads (`Read`) fill with a declared table's parameter's rows, which are
+    ``hm96-sha512/row-seg/v1`` leaves (`gates.embedding`), so the port is a row of that schema (`unit_rows`) where every
+    other is ``hm96-sha512/row/v2``. Refused (ValueError) where one port reads a table's rows and another parameter's: a
+    template's port has one row schema."""
+    reg = registered or Registered({})
+    tables = {t.param for t in reg.tables}
+    by: dict[tuple[str, str], set[bool]] = {}
+    for r in reg.reads:
+        by.setdefault((r.reader, r.port), set()).add(r.param in tables)
+    if bad := sorted(k for k, v in by.items() if len(v) > 1):
+        raise ValueError(f"{bad}: a template's port reads a table's row-seg rows and another parameter's row/v2 rows; a port "
+                         "has one row schema")
+    out: dict[str, set[str]] = {}
+    for (tid, p), v in by.items():
+        if True in v:
+            out.setdefault(tid, set()).add(p)
+    return {tid: frozenset(ps) for tid, ps in out.items()}
+
+
 def supplied(registered: Registered | None, entries: Mapping[str, Mapping[str, Any]], program: str, *,
              module: Any) -> dict[str, Any]:
     """The values a window's table reads and verdicts read (`committed_reads`), by name, each one row filled from the entry
@@ -1069,7 +1092,8 @@ def members(circuit: Circuit, cap: int, built: tuple[Any, Mapping[str, Any]] | N
     (`committed_reads`). ``built``: the circuit's population program and query (`Circuit.program`), when the caller has
     them."""
     program, query = built or circuit.program()
-    return _members(circuit.templates, program, query, cap, circuit.wires, circuit.cuts, committed_reads(circuit.registered))
+    return _members(circuit.templates, program, query, cap, circuit.wires, circuit.cuts,
+                    committed_reads(circuit.registered), seg_ports(circuit.registered))
 
 
 class _ReadIndex:
@@ -1156,12 +1180,12 @@ class _Drawn:
 
 def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[str, Any], cap: int,
              wires: Sequence[Wire], cuts: Mapping[str, Mapping[str, int]] | None = None,
-             reads: Sequence[Read] = ()) -> tuple[CS.Member, ...]:
+             reads: Sequence[Read] = (), seg: Mapping[str, frozenset[str]] | None = None) -> tuple[CS.Member, ...]:
     """`members` of ``templates`` (``(Definition, units)``) under their population ``program`` and ``query``. A member's row
     is wired on all its units or on none (`rows.Member.wired`), so a template's units are cut at every wire's ends first. A
     registered read covers whole members (`_reads_of`), so they are cut at every read's ends, and a member it covers is a
     shared-row member: each read port's table the registered rows its units read, each other input row's its units' own
-    rows."""
+    rows. ``seg``: by template, its row-seg ports (`seg_ports`)."""
     if isinstance(cap, bool) or not isinstance(cap, int) or cap < 1:
         raise ValueError(f"a statement holds at least one unit, not {cap!r}")
     cuts, index = cuts or {}, _ReadIndex(reads)
@@ -1176,7 +1200,7 @@ def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[
     for _k, tid, lo, n in ranges:
         lay, kv = lays[tid][0], cuts.get(tid, {})
         rows = tuple((p, w) for p, w, _ in lay.cut(kv))
-        schemas = tuple((p, V2) for p, _ in rows + lay.outs)
+        schemas = tuple((p, SEG if p in (seg or {}).get(tid, ()) else V2) for p, _ in rows + lay.outs)
         mine = sorted(by.get(tid, ()), key=lambda w: w.at)
         ends = sorted({0, n, *(x for w in mine for x in (w.at, w.at + w.reader_units)), *index.ends(tid)})
         live: list[Wire] = []
@@ -1338,9 +1362,9 @@ def descriptor_record(circuit: Circuit, cap: int) -> dict[str, Any]:
         raise ValueError(f"a statement holds at least one unit, not {cap!r}")
     program, query = circuit.program()
     part = PO.build(program, query)
-    sts = {}
+    sts, seg = {}, seg_ports(circuit.registered)
     for fn, tid in zip((f for f, _ in circuit.templates), circuit.ids):
-        i, o = unit_rows(fn, circuit.cuts.get(tid))
+        i, o = unit_rows(fn, circuit.cuts.get(tid), seg.get(tid, ()))
         sts[tid] = {"in_rows": i, "out_rows": o, "reads": "inline"}
     doc = {**_record(circuit.name, list(zip(circuit.ids, (n for _, n in circuit.templates))), sts, circuit.external, query,
                      part["program"], PO.digest(part), "", "", None, ()),
@@ -1525,7 +1549,8 @@ def window_of_record(doc: Mapping[str, Any], law: Mapping[str, Any], resolve: Ca
         check_inputs(lays, cuts, wires, registered, ingress)
         if "blocks" in doc:
             Blocks.of(doc["blocks"], {t: n for t, (_, n) in lays.items()}, doc["partition"])
-        ms = _members(defs, program, query, doc["cap"], wires, cuts, committed_reads(registered))
+        ms = _members(defs, program, query, doc["cap"], wires, cuts, committed_reads(registered),
+                      seg_ports(registered))
     else:
         ms = tuple(CS.Member(m["template"], tuple(map(tuple, m["rows"])), tuple(map(tuple, m["outs"])), m["n"], m["base"],
                              tuple(map(tuple, m["tables"])), m["name"], tuple(map(tuple, m["schemas"])), tuple(m["link_units"]),
@@ -1848,10 +1873,10 @@ class Window:
 
     def circuit_record(self) -> dict[str, Any]:
         """The window's ``circuit.json`` (`circuit_record`), its members stated by its cap and the circuit's wires, each
-        template's statement its bit rows under its cuts (`unit_rows`)."""
-        sts = {}
+        template's statement its bit rows under its cuts and row-seg ports (`unit_rows`)."""
+        sts, seg = {}, seg_ports(self.circuit.registered)
         for fn, tid in zip((f for f, _ in self.circuit.templates), self.circuit.ids):
-            i, o = unit_rows(fn, self.circuit.cuts.get(tid))
+            i, o = unit_rows(fn, self.circuit.cuts.get(tid), seg.get(tid, ()))
             sts[tid] = {"in_rows": i, "out_rows": o, "reads": "inline"}
         blocks = self.circuit.blocks
         return circuit_record(self.window, self.circuit.name, list(zip(self.circuit.ids, (n for _, n in self.circuit.templates))),

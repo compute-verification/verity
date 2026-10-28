@@ -1,0 +1,12 @@
+{
+ "definitions": {
+  "Sha512StreamLast_v1{H=0,W=8,LEN=16}": {
+   "and": 77929,
+   "type": "31bcc492188511b7d793abfe55e3f97c73d31285dc311bc842e169695f66baa56e27051cc06317e8d7976daa24e6acb5a2e7386293a2124ec05a13eeead7eb61"
+  },
+  "Sha512StreamRow_v1{H=2,W=3}": {
+   "and": 0,
+   "type": "eba73b11b0a4d4523f9f71f64af67ddbba6eb40a64e8e5c8204930f29bbb0708aa8fe36c1bb4dbfbb23e226694bd84d83081666edab9b5b3ff7e644d99a6880f"
+  }
+ }
+}
