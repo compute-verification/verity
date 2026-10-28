@@ -3936,7 +3936,7 @@
    ]
   },
   "CertifierDevice.Issuer": {
-   "digest": "bbd3c429365b62feff00d7a4c996e7fa6ad720d14f435a4242c8bc616ec0e97d",
+   "digest": "1f108cece5f7d7575b1d81b81d9b6cb5611f34f750141ea68ba9a572e0d64815",
    "definitions": {
     "CertifierDevice.Certificate": "146b0570158b6385464c1ae979d0a2dd05f1032aaebeda84490df2145d37559a",
     "CertifierDevice.Certificate.digest": "8c257990b4777074e2cbc2e41497c568cd2ebdb97711a862479981bcefde3f9f",
@@ -3951,7 +3951,7 @@
     "CertifierDevice.CertifiedRecord.salt": "74be92dc28194c6eac8a361e8010f6fedccd69cbedc9595035c27bed694a2987",
     "CertifierDevice.CertifiedRecord.verify": "28d1937ab5c0826c9d09aa5c6b56b32e69acc9e3464efd0c90acb69b5e988ef1",
     "CertifierDevice.Issuer": "fb6092afb96866dc56b6b43266583238b9ee4f616624dc365f85fc8d75388409",
-    "CertifierDevice.Issuer.certify": "7e6da78cc620d618febe266ebb56a1495fffa2a8598043573378f9337252eb5f",
+    "CertifierDevice.Issuer.certify": "1867bb81f4cd83fd96e22b23fcbca5fab835da894b57c5880037a529fa8ec984",
     "CertifierDevice.Issuer.finish": "3f475b33599e67efa901072f75ce25371c5c90fd70adea91c607dbd6424f4699",
     "CertifierDevice.Issuer.key": "472ef3df6f7e6c75dfc9e7f99e7936753afbea64578a2e0915a5fe28d4f01081",
     "CertifierDevice.Issuer.prepare": "78feebc27f451df8c3235959f7e9882954ae3d89f2fcc0c21d5ff41c9abf4b53",
