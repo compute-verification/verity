@@ -1754,7 +1754,9 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
     guarantee whose `witnesses` entry lists the other (`unwitnessed_entry`). An entry beside the witnesses it would exempt,
     or of a witness, does nothing (the witnesses are held to their form) and `--update` drops it, so a PR that brings
     witnesses and one that lists the guarantee land in either order. An entry whose guarantee the lock doesn't list yet
-    stands for one a PR ahead on `next` brings. `--update` keeps an entry only while its guarantee is in scope without witnesses and says the same
+    stands for one a PR ahead on `next` brings. Under `--moved`, an entry still at a moved guarantee's old hash stands when
+    the guarantee says the same under its old names (its record's hash, `moved`), so one `--update --moved` run passes.
+    `--update` keeps an entry only while its guarantee is in scope without witnesses and says the same
     (re-keyed when moved or lifted, `unwitnessed_kept`) and adds none, so the list only shrinks
     (`tests/test_lean_packages.py` holds its size)."""
     ws, allow = policy.get("witnesses", {}), policy.get("unwitnessed", {})
@@ -1785,7 +1787,8 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
                 fails.append(Failure("witnesses.unwitnessed-half", g, f"witnesses: `unwitnessed` exempts only {g}'s "
                                      f"{half} witness, and `witnesses` lists none of its: list the other half there"))
                 continue
-            if h != pin.get("type_sha256"):
+            moved_same = h == (guarantees.get(g) or {}).get("type_hash") == (pin.get("moved") or {}).get("sha256")
+            if h != pin.get("type_sha256") and not moved_same:
                 fails.append(Failure("witnesses.unwitnessed-changed", g, f"witnesses: {g} changed since `unwitnessed` "
                                      + (f"exempted its {half} witness, so it carries that witness now" if half else
                                         f"listed it, and the rule holds it to witnesses ({why}), so it carries them now")
