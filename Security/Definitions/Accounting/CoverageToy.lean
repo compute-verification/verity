@@ -4,56 +4,56 @@ import Definitions.Accounting.Overhead
 # The floor's toy instance
 
 The task and computations at which `Nci.Guarantees.CapabilityFloor`'s witnesses
-(`Definitions.Accounting.Guarantees.Coverage`) are stated: one input, no output positions (so every run reaches the
-target, all of whose outputs are acceptable), and the run of the empty actual circuit.
+(`Definitions.Accounting.Guarantees.Coverage`) are stated. A hidden coin `ω` sets the target: the outputs whose one
+position holds `[ω]` are acceptable, and the input says nothing. The covered structure is at least two gates, the cost
+a run's gate count. A guess, the one-gate run writing a fixed bit at the output position, lacks the structure and
+reaches the target on half the coins; no computation does better, since a position holds one gate.
 -/
 
 namespace Accounting.Overhead.Toy
 
 open Accounting
 
-/-- The empty actual circuit, at one leaf. -/
-def empty : Placed Unit where
-  N := 0
-  w := fun g => g.elim0
-  isInput := fun g => g.elim0
-  reads := fun g => g.elim0
-  reads_lt := fun g => g.elim0
-  input_reads := fun g => g.elim0
-  op := fun g => g.elim0
-  op_congr := fun g => g.elim0
+/-- The one-gate actual circuit at one leaf: an input of width one at cell `0`, tick `0`. -/
+def oneGate : Placed Unit where
+  N := 1
+  w := fun _ => 1
+  isInput := fun _ => true
+  reads := fun _ => ∅
+  reads_lt := fun _ _ h => absurd h (Finset.notMem_empty _)
+  input_reads := fun _ _ => rfl
+  op := fun _ _ => 0
+  op_congr := fun _ _ _ _ => rfl
   outputs := ∅
-  x := fun g => g.elim0
-  t := fun g => g.elim0
-  cell := fun g => g.elim0
-  cell_inj := fun g => g.elim0
+  x := fun _ => ()
+  t := fun _ => 0
+  cell := fun _ => 0
+  cell_inj := fun g g' _ => Subsingleton.elim g g'
 
-/-- The run of the empty circuit. -/
-def run : Actual.Run Unit where
-  A := empty
-  val := fun g => g.elim0
-  faithful := fun g => g.elim0
-  held := fun _ _ => ∅
-  holding := ⟨fun _ _ _ h => absurd h (Finset.notMem_empty _), fun g => g.elim0, fun g => g.elim0⟩
+/-- The guess `b`: the one-gate circuit's run, its gate holding `b`. -/
+def guess (b : Bool) : Actual.Run Unit where
+  A := oneGate
+  val := fun _ => BitVec.ofBool b
+  faithful := fun _ h => by cases h
+  held := fun _ _ => Finset.univ
+  holding := ⟨fun _ _ _ _ => ⟨rfl, Or.inl rfl⟩, fun _ _ => Finset.mem_univ _,
+    fun _ _ h => absurd h (Finset.notMem_empty _)⟩
 
-/-- The task: one input, and every output acceptable. -/
-def task : Task Unit (Fin 0 → List Bool) where
-  Ω := Unit
-  draw := fun _ => ((), Set.univ)
+/-- The task: a hidden coin `ω`, one input, and the outputs whose one position holds `[ω]` acceptable. -/
+def task : Task Unit (Fin 1 → List Bool) where
+  Ω := Bool
+  draw := fun ω => ((), {y | y 0 = [ω]})
 
-/-- The computation that runs the empty circuit on its input. -/
-def comp : Unit → Actual.Run Unit := fun _ => run
+/-- The computation that guesses `1` on its input. -/
+def comp : Unit → Actual.Run Unit := fun _ => guess true
 
-/-- No output positions. -/
-def pos : Fin 0 → Unit × ℕ × ℕ := fun i => i.elim0
+/-- The output position: the leaf's cell `0` at tick `0`. -/
+def pos : Fin 1 → Unit × ℕ × ℕ := fun _ => ((), 0, 0)
 
-/-- Every computation has the covered structure. -/
-def covered : (Unit → Actual.Run Unit) → Unit → Prop := fun _ _ => True
+/-- The covered structure: at least two gates. -/
+def covered : (Unit → Actual.Run Unit) → Unit → Prop := fun C x => 2 ≤ (C x).A.N
 
-/-- A cost of `5` for every run. -/
-def cost : Actual.Run Unit → ℕ := fun _ => 5
-
-/-- A cost of `0` for every run. -/
-def free : Actual.Run Unit → ℕ := fun _ => 0
+/-- The cost: a run's gate count. -/
+def cost : Actual.Run Unit → ℕ := fun R => R.A.N
 
 end Accounting.Overhead.Toy
