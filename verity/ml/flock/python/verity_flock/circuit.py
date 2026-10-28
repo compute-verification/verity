@@ -750,7 +750,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
                     *(s for nm, t in texts for s in (f"CIRCUIT {nm} {t.count(chr(10))}\n", t))])
 
 
-def _expanded(lay: IL.Layout, name: str) -> str:
+def _expanded(lay: IL.LoweredUnit, name: str) -> str:
     """A slot type's expanded circuit as ``flock-ir-unit/v2`` text (``ir_lower``'s writer)."""
     return IL.netlist(lay, name, None, None)
 

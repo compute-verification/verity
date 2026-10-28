@@ -98,7 +98,7 @@ def check(types, layouts, unit, tables, seed=0):
 # --- cases ----------------------------------------------------------------------------------------------------------------
 
 def _lay(t, rl, calls=(), reads=(), own=("derive",), ins=(), outs=()):
-    return LY.Layout(t.digest() if t is not None else None, rl, tuple(ins), tuple(outs), own, tuple(calls), tuple(reads))
+    return LY.BlockLayout(t.digest() if t is not None else None, rl, tuple(ins), tuple(outs), own, tuple(calls), tuple(reads))
 
 
 def _wrapper(u: CT.CircuitType) -> CT.CircuitType:
@@ -253,7 +253,7 @@ def test_flat_units_are_ir_lowers_netlists():
         outs = [f for j in range(len(U.out_widths)) for f in C.outputs[f"out{j}"]]
         t = CT.from_gf2(C, ins, outs, [(1, w) for w in U.in_widths], [(1, w) for w in U.out_widths], library.PROGRAM, {})
         cut = lambda g: tuple(itertools.accumulate(len(b) for _, _, b in g))[:-1]  # noqa: E731
-        lay = LY.Layout(t.digest(), None, cut(low.layout.in_groups), cut(low.layout.out_groups), ("derive",), (), ())
+        lay = LY.BlockLayout(t.digest(), None, cut(low.layout.in_groups), cut(low.layout.out_groups), ("derive",), (), ())
         dv = D.Derivation({t.digest(): t}, [lay], 0, {})
         assert D.netlist(dv.unit, low.name) == IL.netlist(low.layout, low.name), template
 

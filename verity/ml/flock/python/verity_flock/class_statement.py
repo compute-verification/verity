@@ -970,7 +970,7 @@ class _UnitCircuit(gf2.Circuit):
 @dataclass
 class _TmplLayout:
     """What `circuit.compose` and `UnitStager` read of a unit's layout, for a unit given as its template: its port groups
-    (`ir_lower.Layout`'s ``(word column, words, port widths)``) and ``counts``, the unrolled rows (`tmpl.totals`, the
+    (`ir_lower.LoweredUnit`'s ``(word column, words, port widths)``) and ``counts``, the unrolled rows (`tmpl.totals`, the
     root's input and output copy rows not ANDs)."""
 
     in_groups: list

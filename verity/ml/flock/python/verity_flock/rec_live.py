@@ -451,7 +451,7 @@ def zp_round(m: int, k_log: int) -> int:
 
 def holo_rounds(m: int, k_log: int, claims: int) -> list[tuple[int, list[int], int, int]]:
     """`rep_rounds` with hidden unit circuits (`rec_algebra.Shape.holo`): z_partial's round squeezes nothing (its frames end
-    in a squeeze of no coins, `verity_flock.rec_session`; `rec_algebra.Coins` skips it), and a round of its own absorbs h (64
+    in a squeeze of no coins, `verity_flock.rec_session`; `rec_algebra.CoinSource` skips it), and a round of its own absorbs h (64
     elements) and squeezes r′ (`rec_algebra.h_round`)."""
     out, k = rep_rounds(m, k_log, claims), zp_round(m, k_log)
     if out[k] != (1, [], 0, 64):

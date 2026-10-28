@@ -962,7 +962,7 @@ def _traced(build: Callable[[], Any]) -> tuple[Any, Any]:
 
 
 def _export_counts(build: Callable[[], Any], name: str) -> dict:
-    """The Boolean export of one proof block's circuit (`boolean_export.Registry.type_of`): its circuit types' AND/XOR/NOT counts, each
+    """The Boolean export of one proof block's circuit (`boolean_export.CircuitTypeTable.type_of`): its circuit types' AND/XOR/NOT counts, each
     distinct sub-circuit once, every type validated and the root evaluated against the circuit on random inputs (raises on a
     disagreement); ``flat_ands`` the circuit's own, fewer by the ANDs it shares across a call (``shared_across_types``)."""
     from verity_flock import boolean_export as BE

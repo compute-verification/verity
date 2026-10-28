@@ -182,7 +182,7 @@ def rows_digest(d: Derived, n: int, lo: int, bits: int) -> str:
 class Derivation:
     """Every layout of a statement derived once (callees first), and the unit's rows in unit coordinates."""
 
-    def __init__(self, types: Mapping[str, CT.CircuitType], layouts: Sequence[LY.Layout], unit: int,
+    def __init__(self, types: Mapping[str, CT.CircuitType], layouts: Sequence[LY.BlockLayout], unit: int,
                  tables: Mapping[str, Sequence[int]]):
         self.types, self.layouts, self.unit_j, self.tables = types, layouts, unit, tables
         self.info = {sha: LY.table_info(ws) for sha, ws in tables.items()}
@@ -278,7 +278,7 @@ class Derivation:
                 i += n
         return out
 
-    def _placements(self, j: int, t: CT.CircuitType, lay: LY.Layout, unit_level: bool) -> dict:
+    def _placements(self, j: int, t: CT.CircuitType, lay: LY.BlockLayout, unit_level: bool) -> dict:
         """Each placed call and read: its layout, base and the export locations of its caller's wires. In the unit's
         coordinates, placed entries follow its own region in item order, each aligned to its range."""
         insts, export_cols, end = [], {}, 0
@@ -321,7 +321,7 @@ class Derivation:
                 end = max(end, base + (1 << s))
         return dict(insts=insts, export_cols=export_cols, end=end, by_item={x["item"]: x for x in insts})
 
-    def _items(self, t: CT.CircuitType, lay: LY.Layout, B: _Build, wire: dict, placed: dict,
+    def _items(self, t: CT.CircuitType, lay: LY.BlockLayout, B: _Build, wire: dict, placed: dict,
                args: Sequence[Form] | None = None) -> list[Form]:
         """Lay out ``t``'s items under ``lay`` into ``B``'s own region, in item order; ``args`` binds an inlined type's
         inputs. Returns its output forms."""

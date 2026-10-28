@@ -28,7 +28,7 @@ def _net(s: int) -> str:
     return "unit" if s == 0 else f"stage{s - 1}"
 
 
-def _run(lay: IL.Layout, ins: Sequence[Sequence[int]], T: int, flip: tuple[int, int] | None = None) -> tuple[list[list[int]], int]:
+def _run(lay: IL.LoweredUnit, ins: Sequence[Sequence[int]], T: int, flip: tuple[int, int] | None = None) -> tuple[list[list[int]], int]:
     """`ir_lower.evaluate_layout` on bit-sliced ports of any width: ``ins[j]`` is input port j's bits (each a T-bit int, one bit
     per lane). Returns each output port's bits and the mask of lanes whose every row holds."""
     mask = (1 << T) - 1
@@ -87,7 +87,7 @@ class ReadSlots(IL.Lowering):
 
     @property
     def counts(self) -> dict:
-        """The unit's and the stages' rows summed (`ir_lower.Layout.counts`' keys), the lookup slots and the stages."""
+        """The unit's and the stages' rows summed (`ir_lower.LoweredUnit.counts`' keys), the lookup slots and the stages."""
         lays = [self.layout, *(st.layout for st in self.tail.stages)]
         c = {k: sum(lay.counts[k] for lay in lays) for k in ("ands", "asserts", "rows", "nnz_a", "nnz_b", "reads", "read_rows")}
         return {**c, "unit_ands": self.layout.counts["ands"], "stages": len(self.tail.stages), "lookups": len(self.reads)}

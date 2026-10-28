@@ -582,7 +582,7 @@ def _leaf_width(target, pos: int) -> int:
 # --- the unit netlist ------------------------------------------------------------------------------------------------------
 
 @dataclass
-class Layout:
+class LoweredUnit:
     """A unit circuit laid out as one Flock block type (C = I; row i is ``(A_i . z)(B_i . z) = z_i``). Input and output ports
     come in groups; each group's bits are consecutive in its own aligned power-of-two range of 128-bit words."""
 
@@ -660,7 +660,7 @@ def _groups(names: Sequence[str], split: Sequence[int] | None) -> list[list[str]
 
 
 def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str], in_split: Sequence[int] | None = None,
-           out_split: Sequence[int] | None = None) -> Layout:
+           out_split: Sequence[int] | None = None) -> LoweredUnit:
     """``flock-ir-unit/v2``: the input port groups first (``in_split``: the port indices where a new group starts), each
     group's bits consecutive in a power-of-two number of 128-bit words aligned to that size, unused bits forced zero; the
     live ANDs and table reads in creation order (a read ``C.lookup`` as its plain rows, :class:`_Read`); one row
@@ -774,7 +774,7 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str], in_spl
     for v in ands:
         a, b = C.data[v]
         rows_a[col[v]], rows_b[col[v]] = and_row(a), and_row(b)
-    lay = Layout(rows_a, rows_b, const, in_groups, out_groups, {})
+    lay = LoweredUnit(rows_a, rows_b, const, in_groups, out_groups, {})
     read_rows = sum(r.rows for r in reads.values())
     lay.counts = {"ands": len(ands) + read_rows, "asserts": len(C.asserts), "rows": len(rows_a), "in_words": lay.in_words, "out_words": lay.out_words,
                   "nnz_a": sum(map(len, rows_a)), "nnz_b": sum(map(len, rows_b)), "reads": len(reads), "read_rows": read_rows,
@@ -881,7 +881,7 @@ class _Read:
         assert at[0] == self.at + self.rows
 
 
-def netlist(lay: Layout, name: str, cut: dict | None = None, leaves: dict | None = None) -> str:
+def netlist(lay: LoweredUnit, name: str, cut: dict | None = None, leaves: dict | None = None) -> str:
     """The layout as ``flock-ir-unit/v2`` text: a header line ``FORMAT name rows const n_in_groups (col words n bits..)..
     n_out_groups (col words n bits..)..``, then one line per row ``|A| A.. |B| B..``, then ``LEAVES <canonical JSON>``
     (:attr:`Lowering.leaves`) and, for a cut lowering, ``CUT <canonical JSON>`` (:attr:`Lowering.cut`): the netlist's sha256
@@ -957,7 +957,7 @@ def unslice_words(sliced: Sequence[int], T: int) -> np.ndarray:
     return out
 
 
-def evaluate_layout(lay: Layout, ports: Sequence[Sequence[int]], T: int, flip: tuple[int, int] | None = None):
+def evaluate_layout(lay: LoweredUnit, ports: Sequence[Sequence[int]], T: int, flip: tuple[int, int] | None = None):
     """Run the laid-out rows bit-sliced over T lanes: ``ports[j]`` is input port j's words, one per lane. Returns
     ``(output words per port (lane-major arrays), per-lane mask of lanes whose every row is satisfied)``. ``flip = (row,
     lane)`` flips that committed bit after witness generation (a negative: a cheating prover's witness)."""
@@ -998,7 +998,7 @@ class Lowering:
     definition: object
     units: Units
     circuit: Circuit
-    layout: Layout
+    layout: LoweredUnit
 
     @property
     def domain(self) -> str:
