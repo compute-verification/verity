@@ -36,7 +36,8 @@
 # rather than the node's network disk: what the step is when the disk doesn't bound the seal), SEQS (--max-num-seqs and --window-requests, T/1024, 2·T/1024 for graphs and async; the
 # window's request cap also bounds the requests in flight), HEADS (the merged heads, written to heads.txt with the tree's
 # commit and parents), RELEASE_AFTER (a Commit arm's values held on the device, --retain device --retain-device-gb
-# RETAIN_DEVICE_GB (32) --release-after RELEASE_AFTER), STANDIN_DRAWS (protocols of RELEASE_AFTER no drawer serves yet: the
+# RETAIN_DEVICE_GB (32) --release-after RELEASE_AFTER), SEAL_HOLD_GB (--seal-hold-gb, 32: the committed bytes of the windows
+# queued or sealing; a window at T 8,192 is 13.6 GB, so 32 seals two at once and 48, with RETAIN_DEVICE_GB 48, three), STANDIN_DRAWS (protocols of RELEASE_AFTER no drawer serves yet: the
 # harness draws each window for each once its windows.jsonl line is out, reading only the step-input port's ids and
 # positions at each of its steps, 16T bytes a step, which the seal's positions check reads and the release keeps only when a
 # draw names them; standin_draws.txt counts them), STANDIN_POLL_S (0.2, how often the stand-in drawer reads windows.jsonl;
@@ -123,7 +124,7 @@ args=(--model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision ve
 [ -n "${PROTOCOLS_CONFIG:-}" ] && args+=(--protocols-config "$PROTOCOLS_CONFIG")
 [ -n "${RELEASE_AFTER:-}" ] && args+=(--retain device --retain-device-gb "${RETAIN_DEVICE_GB:-32}" --release-after "$RELEASE_AFTER")
 commit=(--scheme rows-sha512 --gpu-tree --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb "${TAP_CAP_MB:-2048}"
-        --window-gb 32 --seal-hold-gb 32 --seal-warm-gb 0 --disk-floor-gb "${DISK_FLOOR_GB:-20}")
+        --window-gb 32 --seal-hold-gb "${SEAL_HOLD_GB:-32}" --seal-warm-gb 0 --disk-floor-gb "${DISK_FLOOR_GB:-20}")
 serve=("$PY" -m verity_vllm.pipeline.cli serve-openai)
 case $ARM in
   stock) args+=(--no-commit) ;;
