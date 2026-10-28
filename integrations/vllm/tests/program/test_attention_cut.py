@@ -71,9 +71,9 @@ def test_attentions_v21_and_v22_equal_v18_and_v4():
 @pytest.mark.parametrize("T", [1, 16, 17, 95, 96, 97, 191, 192, 193, 288, 384, 385, 576])
 def test_attention_heads_v21_and_v22_are_their_functions_with_calls_inlined_at_llama_geometry(T):
     """Llama-3.2-1B's heads (D 64) over kBlockN 192, a key's value 2 slices of 32 columns, groups of 96 keys: each cut head's body
-    is Calls only, a softmax and its groups a block and the end, and with them written in place it is v18's circuit (`AttnBlock_v5`
-    in place) and v20's (`AttnBlockFirst_v1`, `AttnBlock_v4` and `AttnHeadEnd_v1` in place) node for node, at every MASKED_FROM's
-    extremes."""
+    is Calls only, a softmax and its groups a block and the end, block 0's softmax alone LAST (no running max out), and with them
+    written in place it is v18's circuit (`AttnBlock_v5` in place) and v20's (`AttnBlockFirst_v1`, `AttnBlock_v4` and
+    `AttnHeadEnd_v1` in place) node for node, at every MASKED_FROM's extremes."""
     D, BN, VS, PK = 64, 192, 32, 96
     nb = -(-T // BN)
     calls = 1 + len(F2.pv_groups(T - (nb - 1) * BN, PK)) + (nb - 1) * (1 + BN // PK) + 1
@@ -85,6 +85,8 @@ def test_attention_heads_v21_and_v22_are_their_functions_with_calls_inlined_at_l
             old = bind(old, T=T, D=D, BN=BN, MASKED_FROM=MF, **kw)
             assert {(n.form, n.fn.base_id) for n in new.body.nodes} <= {("call", f) for f in CUT_STEPS}
             assert len(new.body.nodes) == calls
+            last = [n.fn.bindings["LAST"] for n in new.body.nodes if n.fn.base_id.startswith("AttnBlockSoftmax")]
+            assert last == [False] * (nb - 1) + [True]
             assert _inlined(new, CUT_STEPS) == _inlined(old, frozenset(steps))
 
 

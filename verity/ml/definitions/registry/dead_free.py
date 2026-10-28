@@ -475,8 +475,9 @@ def cut_head(B, S, q, k, v, softmax, name: str):
     """One query head over T keys, each key block a Call of its softmax step and Calls of its P·V groups of PK keys: the first
     visited block `AttnBlockSoftmax_v1{NVIS = T - (nb - 1) BN, FIRST, CHECK}` and its groups (the first from +0), block b below
     it ``softmax{NVIS = BN, CHECK = b >= MASKED_FROM}`` on the running max and lane sums of the last softmax and the O of the last
-    group, then BN / PK groups, and `AttnHeadEnd_v1` on the last softmax's lane sums and the last group's O.  A group's V is its
-    keys' rows of v as slices of VS columns."""
+    group, then BN / PK groups, and `AttnHeadEnd_v1` on the last softmax's lane sums and the last group's O.  Block 0's softmax is
+    LAST, returning no running max, which only a later softmax would read.  A group's V is its keys' rows of v as slices of VS
+    columns."""
     T, D, BN, DOT, MF, VS, PK = S.T, S.D, S.BN, S.DOT, S.MASKED_FROM, S.VS, S.PK
     nb = (T + BN - 1) // BN
     if not 0 <= MF <= nb - 1:
@@ -484,19 +485,20 @@ def cut_head(B, S, q, k, v, softmax, name: str):
 
     def block(b: int, lo: int, hi: int, first: bool, state: tuple):
         step = bind(F2.AttnBlockSoftmaxV1 if first else softmax, D=D, NVIS=hi - lo, FIRST=first, DOT=DOT, CHECK=first or b >= MF,
-                    PK=PK)
+                    PK=PK, LAST=b == 0)
         st = B.call(step, q, k[lo:hi], *state)
-        o = () if first else (st[2],)
+        at = (1 if first else 2) + (b != 0)
+        o = () if first else (st[at - 1],)
         for g, (a, c) in enumerate(F2.pv_groups(hi - lo, PK)):
             pv = bind(F2.AttnBlockPvV1, D=D, N=c - a, VS=VS, DOT=DOT, FIRST=not o)
             vs = _Coll(Array((c - a) * D // VS, Array(VS, BF16)), v[lo + a:lo + c].refs)
-            o = (B.call(pv, st[(2 if first else 3) + g], vs, *o),)
+            o = (B.call(pv, st[at + g], vs, *o),)
         return st, o[0]
 
     st, o = block(nb - 1, (nb - 1) * BN, T, True, ())
     for b in range(nb - 2, -1, -1):
         st, o = block(b, b * BN, (b + 1) * BN, False, (st[0], st[1], o))
-    return B.call(bind(AttnHeadEndV1, D=D, INV=S.INV), st[1], o)
+    return B.call(bind(AttnHeadEndV1, D=D, INV=S.INV), st[0], o)
 
 
 @composite("AttentionHead", 21, ["T", "D", "BN", "DOT", "INV", "MASKED_FROM", "VS", "PK"],
