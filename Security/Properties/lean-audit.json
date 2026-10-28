@@ -272,6 +272,7 @@
   "PouwCommit.Frame",
   "PouwCommit.Rows",
   "PouwCommit.Py",
+  "PouwCommit.Bindings",
   "PouwCommit.Coins",
   "PouwCommit.Draws",
   "Identity.Sha512",
