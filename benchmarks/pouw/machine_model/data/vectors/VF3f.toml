@@ -1,7 +1,7 @@
-# VF3f: The P4 opcode census, and prices for the word-writers VF3e left unpriced (RS-W′ round 5).
+# VF3f: The P4 opcode census, and prices for the word-writers VF3e left unpriced.
 name = "VF3f"
 epoch = "VF3f"
-summary = "The P4 opcode census, and prices for the word-writers VF3e left unpriced (RS-W′ round 5)."
+summary = "The P4 opcode census, and prices for the word-writers VF3e left unpriced."
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",
