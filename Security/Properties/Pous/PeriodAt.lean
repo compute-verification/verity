@@ -50,7 +50,7 @@ structure AuditsOf {B w p : ℕ} [NeZero p] (sch : Scheme (ringRO B w p)) (ΩW �
   /-- the payload `C*` decodes to, as the ring game's bits -/
   W : ΩW × ΩQ → Bits sch.n
   /-- the memory challenger's signed session -/
-  session : ΩW × ΩQ × ((ringRO B w p).Ω × HmCoins × Streams) → PousCheck.Run.Session
+  session : ΩW × ΩQ × ((ringRO B w p).Ω × HmCoins × Streams) → PousCheck.Run.ChallengerRecord
   /-- the memory challenger's record of its sessions -/
   device : ΩW × ΩQ × ((ringRO B w p).Ω × HmCoins × Streams) → MemoryChallenger.Properties.Device
 

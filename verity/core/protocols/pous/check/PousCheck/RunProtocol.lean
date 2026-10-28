@@ -14,9 +14,9 @@ import PousCheck.Run
   the verifier's list of memory-challenger keys, which never comes from the run's record;
 * the commitment: the setup's public outputs (`SetupProtocol.Public.toJson`), which the prover published before any
   challenge; its digest SHA-512 of those bytes;
-* the evidence: `{"digests": hex, "session": Run.Session.toJson, "setup": {"commitment": hex, "evidence": hex}}`, the
-  memory challenger's table of `C*`, the session it signed, and the setup's own commitment and evidence as its case
-  carries them (`SetupProtocol`'s `w_commitment ‖ salt` and `C*` framed);
+* the evidence: `{"digests": hex, "session": Run.ChallengerRecord.toJson, "setup": {"commitment": hex,
+  "evidence": hex}}`, the memory challenger's table of `C*`, the session it signed, and the setup's own commitment and
+  evidence as its case carries them (`SetupProtocol`'s `w_commitment ‖ salt` and `C*` framed);
 * the check: `accepts`, the verifier's whole decision, its first refusal the reason: setup accepts `C*` against the
   server's commitment and salt at the point's parameters and publishes exactly the commitment (`tie`), and `checkAt`
   accepts the run against it. A run committed to any other setup, or to outputs no accepted setup published, is refused.
@@ -91,14 +91,15 @@ def SetupEvidence.ofJson (j : Json) : V SetupEvidence := do
 
 structure Evidence where
   digests : ByteArray
-  session : Run.Session
+  session : Run.ChallengerRecord
   setup : SetupEvidence
 
 def Evidence.toJson (e : Evidence) : Json :=
   Json.mkObj [("digests", hexJ e.digests), ("session", e.session.toJson), ("setup", e.setup.toJson)]
 
 def decodeEvidence (b : ByteArray) : V Evidence := do
-  exactly (fun j => do pure ⟨← hexField j "digests" "evidence", ← Run.Session.ofJson (← J.get j "session" "evidence"),
+  exactly (fun j => do pure ⟨← hexField j "digests" "evidence",
+      ← Run.ChallengerRecord.ofJson (← J.get j "session" "evidence"),
       ← SetupEvidence.ofJson (← J.get j "setup" "evidence")⟩)
     Evidence.toJson (← Core.canonicalJson b)
 
@@ -194,7 +195,7 @@ def tie (pt : Run.Point) (c : SetupProtocol.Commitment) (C : Array (Array ByteAr
 
 /-- The verifier's whole decision on a run at `pt` under `schemes`: the setup tie, then the composed check. -/
 def accepts (schemes : Schemes) (pt : Run.Point) (trusted : List ByteArray) (c : SetupProtocol.Commitment)
-    (C : Array (Array ByteArray)) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session)
+    (C : Array (Array ByteArray)) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengerRecord)
     (sid : ByteArray) : Except String Unit := do
   tie pt c C pub
   Run.checkAt schemes pt trusted pub digests r sid
@@ -206,7 +207,7 @@ def check (schemes : Schemes) (p : Params) (pub : SetupProtocol.Public) (e : Evi
   | .error reason => .reject reason
 
 theorem accepts_iff (schemes : Schemes) (pt : Run.Point) (trusted : List ByteArray) (c : SetupProtocol.Commitment)
-    (C : Array (Array ByteArray)) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session)
+    (C : Array (Array ByteArray)) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengerRecord)
     (sid : ByteArray) :
     accepts schemes pt trusted c C pub digests r sid = .ok () ↔
       SetupProtocol.protocol.check pt.params c C = .accept pub () ∧
@@ -237,7 +238,7 @@ theorem accepts_iff (schemes : Schemes) (pt : Run.Point) (trusted : List ByteArr
 and publishes `pub`, and `Run.check` accepts the run against `pub`, word for word that definition's body
 (`q = P2.Params.deployed`). -/
 theorem accepts_deployed (trusted : List ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray))
-    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray) :
+    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengerRecord) (sid : ByteArray) :
     accepts SCHEMES Run.DEPLOYED trusted c C pub digests r sid = .ok () ↔
       SetupProtocol.protocol.check P2.Params.deployed c C = .accept pub () ∧
         Run.check trusted pub digests r sid = .ok () :=

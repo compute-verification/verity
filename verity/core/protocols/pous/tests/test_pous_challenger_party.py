@@ -47,7 +47,7 @@ def _in_process() -> tuple[period.Period, run.Point, run.Setup, list[bytes], byt
 
 
 def _split(point: run.Point, root: bytes, respond, signer: mc.Signer,
-           warmups: int = CP.WARMUPS) -> tuple[bytes, run.Session, int]:
+           warmups: int = CP.WARMUPS) -> tuple[bytes, run.ChallengerRecord, int]:
     """One session with the challenger's side in a thread and the prover's here, over a socket pair."""
     a, b = socket.socketpair()
     got: dict = {}
@@ -69,7 +69,7 @@ def test_the_split_session_is_the_periods() -> None:
     p, point, published, blocks, digests = _in_process()
     signer = ts.TestSigner(b"challenger host", 2)
     sid, session, rounds = _split(point, published.root, lambda i: blocks[i], signer)
-    mine = run.Session.from_json(json.loads(bytes.fromhex(p.case["evidence"]))["session"])
+    mine = run.ChallengerRecord.from_json(json.loads(bytes.fromhex(p.case["evidence"]))["session"])
     assert sid.hex() == p.case["params"]["session_id"]
     assert [r.index for r in session.signed.rounds] == [r.index for r in mine.signed.rounds]
     assert rounds == CP.WARMUPS + len(session.signed.rounds) == CP.WARMUPS + point.k

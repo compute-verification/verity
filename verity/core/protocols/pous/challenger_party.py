@@ -54,7 +54,7 @@ def _read(f: BinaryIO, n: int) -> bytes:
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog, coins: bytes,
           domain: str, clock: Callable[[], int] = time.perf_counter_ns,
-          warmups: int = WARMUPS) -> tuple[bytes, R.Session]:
+          warmups: int = WARMUPS) -> tuple[bytes, R.ChallengerRecord]:
     """The challenger's side of one session over the connection `f`: the coin tree drawn from `coins` under the id it
     designates from them, `request`'s node and binding (`domain`'s derivation), `warmups` untimed exchanges on
     `WARMUP_INDEX`, then each index sent and its block read on `clock`, the session signed by `signer`; its id and
@@ -76,7 +76,7 @@ def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc
         signed = c.run(respond)
     f.write(END.to_bytes(8, "big"))
     f.flush()
-    return sid, R.Session(signed, c.commitment, c.openings())
+    return sid, R.ChallengerRecord(signed, c.commitment, c.openings())
 
 
 def answer(f: BinaryIO, block_bytes: int, respond: Callable[[int], bytes]) -> int:
@@ -95,7 +95,7 @@ def answer(f: BinaryIO, block_bytes: int, respond: Callable[[int], bytes]) -> in
     return n
 
 
-def report(sid: bytes, session: R.Session, public_key: bytes, warmups: int = WARMUPS) -> dict[str, Any]:
+def report(sid: bytes, session: R.ChallengerRecord, public_key: bytes, warmups: int = WARMUPS) -> dict[str, Any]:
     return {"host": socket.gethostname(), "public_key": public_key.hex(), "session": session.to_json(),
             "session_id": sid.hex(), "warmups": warmups}
 

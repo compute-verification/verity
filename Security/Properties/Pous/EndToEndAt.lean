@@ -79,8 +79,8 @@ session audits `pub` at `pt`, runs under `sid` and is signed under a key in `tru
 commitment in which every recorded answer is the challenged block of `C*`, on time on its own clock, or the run's own
 data holds a SHA-512 collision or an LMS forgery under a key in `trusted`. -/
 def RunCheckAcceptsAt : Prop :=
-  ∀ (pt : Run.Point) (trusted : List ByteArray) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session)
-    (sid : ByteArray),
+  ∀ (pt : Run.Point) (trusted : List ByteArray) (pub : SetupProtocol.Public) (digests : ByteArray)
+    (r : Run.ChallengerRecord) (sid : ByteArray),
     Run.checkAt SCHEMES pt trusted pub digests r sid = .ok () →
     ∀ (dev : Device) (C : Array (Array ByteArray)),
       AuditsSetupAt pt pub r.commitment ∧ r.commitment.session = sid ∧ r.signed.publicKey ∈ trusted ∧
@@ -91,7 +91,7 @@ def RunCheckAcceptsAt : Prop :=
 /-- **What a run must pass at the point `pt`**: setup accepts `C*` at `pt`'s parameters against the server's commitment
 and salt and publishes `pub`, and the composed check at `pt` accepts; `Accepted` at `Run.DEPLOYED`. -/
 def AcceptedAt (pt : Run.Point) (trusted : List ByteArray) (c : SetupProtocol.Commitment)
-    (C : Array (Array ByteArray)) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session)
+    (C : Array (Array ByteArray)) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengerRecord)
     (sid : ByteArray) : Prop :=
   SetupProtocol.protocol.check pt.params c C = .accept pub () ∧ Run.checkAt SCHEMES pt trusted pub digests r sid = .ok ()
 
@@ -100,7 +100,7 @@ from `RunCheckAcceptsAt` and the setup check's `AcceptsDecodes` and `PublishesRo
 set, all proved. -/
 def RunCertifiesAt : Prop :=
   ∀ (pt : Run.Point) (trusted : List ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray))
-    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray) (dev : Device),
+    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengerRecord) (sid : ByteArray) (dev : Device),
     AcceptedAt pt trusted c C pub digests r sid →
       DecodesToCommitment pt.params c C ∧ Published pt.params c C pub ∧ AuditsSetupAt pt pub r.commitment ∧
         r.commitment.session = sid ∧ r.signed.publicKey ∈ trusted ∧
