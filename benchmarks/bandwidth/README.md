@@ -72,8 +72,8 @@ measure what is left of each on the card.
 
 ## Write ceilings
 
-The write ceilings of proof of useful bandwidth (PoUB), the node's `device_write_bytes_per_s` and
-`host_write_bytes_per_s` (`verity.hardware.node`: the GPU card's `memory.bandwidth` and the host card's `memory.write`), bound how fast a fill can write labels into a tier. These files measure what the node's
+The write ceilings of proof of useful bandwidth (PoUB), `timing.GPU_WRITE_BYTES_PER_S` and
+`timing.HOST_WRITE_BYTES_PER_S`, bound how fast a fill can write labels into a tier. These files measure what the node's
 writers reach, each arm gated before it is timed (the destination poisoned with 0xA5, sampled slots checked, and a
 control that writes nothing rejected).
 
