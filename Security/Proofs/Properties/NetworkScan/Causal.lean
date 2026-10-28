@@ -14,10 +14,12 @@ gate of the input node `kl`'s row reads (`param_lands`), which is neither `ke`, 
 egress argument reads, and a gate lies in one root node's gates (`DescAgree.node_unique`): `causal_of_facts`, from
 what `scanOf` checks (`Facts`).
 
-`ScanCausal` is part (3) of `NetTiming.Layout.Fits` at `scanLayout`: `scanOf` takes each template's argument to be one
-input node's leaves (`NetworkCheck.Period.inputArg`) and no egress argument to be an ingress row's input node, so an
-egress member reads only its activation's gates and its arguments' input gates, and a later bucket's ingress gates are
-its row's input node's, which no egress argument names. The walk lemma reads the Program topological, which `ScanCausal`
+`ScanCausal` is part (3) of `NetTiming.BoundaryGates.Fits` at `scanLayout`: `scanOf` takes each template's row, state
+and egress argument to be one input node's leaves (`NetworkCheck.Period.inputArg`) and no egress argument to be an
+ingress row's input node, so an egress member reads only its activation's gates and its arguments' input gates, and a
+later bucket's ingress gates are its row's input node's, which no egress argument names. The ingress templates' entry
+ports, which read the slot entries' input node, are no step's ingress, so the proof doesn't read them. The walk lemma
+reads the Program topological, which `ScanCausal`
 takes as `P.orderViolation = none`; `scanOf` checks it (`Fits.Accepted.topo`), and `Properties.NetworkScan.scanFits`
 reads it from there.
 -/
@@ -26,8 +28,8 @@ namespace Properties.NetworkScan
 
 open NetworkCheck.Period
 
-/-- **The scan is causal** (`NetTiming.Layout.Fits`'s part (3)). If `scanOf` accepts the scan `j`, its canonical text
-`c` decodes to `P` and `P` is topological, then in every flattening `C` of `P` no egress gate of a step depends on an
+/-- **The scan is causal** (`NetTiming.BoundaryGates.Fits`'s part (3)). If `scanOf` accepts the scan `j`, its canonical
+text `c` decodes to `P` and `P` is topological, then in every flattening `C` of `P` no egress gate of a step depends on an
 ingress gate of a later step of the window. -/
 def ScanCausal : Prop :=
   ∀ (j : Lean.Json) (program : String) (s : Schedule) (sc : Scan) (c : String) (P : Flock.Program.Prog)
@@ -404,7 +406,7 @@ structure Facts (P : Prog) (s : Schedule) (kl ke q' : ℕ) : Prop where
   row_in : inputArg P (((P.defs[P.root]!).body.nodes[kl]!).args[0]!) = some q'
   e_args : ∀ b ∈ ((P.defs[P.root]!).body.nodes[ke]!).args, (inputArg P b).isSome = true ∧ inputArg P b ≠ some q'
 
-/-- **Part (3) of `NetTiming.Layout.Fits` at `scanLayout`, from `Facts`.** -/
+/-- **Part (3) of `NetTiming.BoundaryGates.Fits` at `scanLayout`, from `Facts`.** -/
 theorem causal_of_facts {bytes : ByteArray} {P : Prog} {s : Schedule} {kl ke q' : ℕ}
     (hdec : decode bytes = .ok P) (hov : P.orderViolation = none) (F : Facts P s kl ke q')
     (C : Claims.Sampling.Prog) (hF : Flattens P C) :
@@ -604,10 +606,8 @@ theorem scanOf_facts {j : Lean.Json} {program : String} {s : Schedule} {sc : Sca
   have hrow_in : inputArg P (((P.defs[P.root]!).body.nodes[kl]!).args[0]!) = some q' := by
     obtain ⟨hlt, heq⟩ := Array.getElem?_eq_some_iff.1 ha0
     rw [getElem!_pos ((P.defs[P.root]!).body.nodes[kl]!).args 0 hlt, heq]; exact hia
-  simp only [Option.map_some, Option.getD_some, Array.append_singleton, List.push_toArray, List.cons_append,
-    List.nil_append, List.all_toArray', List.all_cons, List.all_nil, Bool.and_true, Bool.and_eq_true,
-    Array.all_eq_true] at hargs
-  obtain ⟨-, -, hae⟩ := hargs
+  simp only [Bool.and_eq_true, Array.all_eq_true] at hargs
+  obtain ⟨-, hae⟩ := hargs
   simp only [Option.map_some, Option.getD_some, Array.append_singleton, List.push_toArray, List.cons_append,
     List.nil_append, List.map_toArray, List.map_cons, List.map_nil, Array.contains_eq_mem, List.mem_toArray,
     List.mem_cons, List.not_mem_nil, or_false, Bool.decide_or, Bool.not_or, Array.all_eq_true, Bool.and_eq_true,
@@ -631,7 +631,7 @@ theorem scanOf_facts {j : Lean.Json} {program : String} {s : Schedule} {sc : Sca
     l_p0 := by
       have := congrArg Array.size hnl
       rw [Array.size_map] at this
-      rw [this]; decide
+      rw [this]; simp [ingressParams]
     l_row := BodiesOk.ty_beq hrow.2
     walk := hwalk.2
     row_in := hrow_in

@@ -5,7 +5,7 @@ import Proofs.Properties.NetworkScan.Causal
 /-!
 # An accepted scan's statements are in the sampled audit's scope, from its layout fitting
 
-`scanFits`: `NetTiming.Layout.Fits`' parts (1) and (2) from what `scanOf`'s acceptance gives the layout
+`scanFits`: `NetTiming.BoundaryGates.Fits`' parts (1) and (2) from what `scanOf`'s acceptance gives the layout
 (`Fits.scanFits_egress_ingress`), and part (3), causality, from the walk lemma (`CausalProof.scanCausal`) at the
 Program `scanOf` checks topological (`Fits.Accepted.topo`).
 
