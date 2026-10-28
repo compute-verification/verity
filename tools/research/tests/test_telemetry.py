@@ -629,7 +629,7 @@ def test_tele_run_reads_a_timeout_change_from_the_control_file_and_records_it(tm
         gate.close()
     recs = [json.loads(l) for l in (d2 / "events.jsonl").read_text().splitlines() if l.strip()]
     ci = [x for x in recs if x.get("kind") == "cancel_intent"]
-    assert ci and ci[0]["actor"] == "timeout" and "timeout_s=0.5" in ci[0]["reason"]
+    assert ci and ci[0]["actor"] == "timeout" and "timeout_s=0.5 (abort)" in ci[0]["reason"], "it names the limit that fired"
     st = json.loads((d2 / "status.json").read_text())
     assert st["state"] == "cancelled" and st["timed_out"] is True
 
