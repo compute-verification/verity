@@ -1,5 +1,5 @@
 import Lms.Hss
-import MemoryChallenger.FrameV3
+import Flock.FV3
 
 /-!
 # A party's signed period root and its liveness records: the checks a period's proof and the verifier run
@@ -11,7 +11,7 @@ root once per period (`Lms.periodRootMessage`, binding the deployment, the party
 link, the period's index and the record count). The records, the root and its signature go to the prover only, as
 witness. `check` is what the period's proof runs on them: the signature verifies under the device's identity for the
 party (`Lms.hssVerify`, two LMS verifications), and each record it reads opens to the root at its position
-(`FrameV3Sha512.verifyOpening`). `checkLiveness` is the verifier's check, in the clear, of the party's one public
+(`FV3.Domain.verifyOpening`). `checkLiveness` is the verifier's check, in the clear, of the party's one public
 liveness record per sampling block (`Lms.verifyLiveness`).
 -/
 
@@ -26,18 +26,18 @@ def PERIOD_BINDING : ByteArray := Sha512.hash "verity/period-records/v1".toUTF8
 def PERIOD_SCHEMA : String := "verity/period-record/v1"
 
 /-- `attest.domain(count)`: the period tree's domain over the positions `0 … count − 1`. -/
-def periodDomain (count : Nat) : FrameV3Sha512.Domain := FrameV3Sha512.Domain.make PERIOD_BINDING (-1) count
+def periodDomain (count : Nat) : FV3.Sha512.Domain := .make PERIOD_BINDING (-1) 0 count
 
 /-- Record `r` as leaf `r` (its rank and its position) of the tree over `records`. -/
 def leaves (records : Array ByteArray) : Array ByteArray :=
   (Array.range records.size).map fun r => (periodDomain records.size).leaf r r PERIOD_SCHEMA records[r]!
 
 /-- `attest.root(records)`: the period tree's root, the empty root for no records. -/
-def root (records : Array ByteArray) : ByteArray := FrameV3Sha512.root (periodDomain records.size) (leaves records)
+def root (records : Array ByteArray) : ByteArray := (periodDomain records.size).root (leaves records)
 
 /-- `attest.path(records, position)`: the siblings of leaf `position`, leaf side first. -/
 def path (records : Array ByteArray) (position : Nat) : Array ByteArray :=
-  FrameV3Sha512.path (FrameV3Sha512.levels (periodDomain records.size) (leaves records)) position
+  FV3.Sha512.path ((periodDomain records.size).levels (leaves records)) position
 
 /-- One record a period's proof reads: its position, its bytes and its path to the root. -/
 structure Read where
@@ -69,7 +69,7 @@ def check (p : Lms.Params) (identity deployment : ByteArray) (party : String) (s
   if s.signature.lower.size ≠ 16 + p.N then return false
   if !(← Lms.hssVerify p identity deployment party s.signature (← s.message deployment party)) then return false
   pure (reads.all fun r =>
-    FrameV3Sha512.verifyOpening (periodDomain s.count) s.root s.count r.position r.record PERIOD_SCHEMA r.path)
+    (periodDomain s.count).verifyOpening s.root s.count r.position r.record PERIOD_SCHEMA r.path)
 
 /-- **The liveness check**, in the clear: `sig` (its bytes) is the party's public liveness record of sampling block
 `block` of the period, at the parameters `p`. Refused for bytes that are not an HSS signature at `p`. -/

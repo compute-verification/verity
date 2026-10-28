@@ -105,25 +105,26 @@ def roleStrings (tag : String) (I : ByteArray) (context : Lms.E ByteArray) (reco
 /-- What the period tree over `records` hashes: each leaf, and each node of each level below the root. -/
 def treeStrings (records : Array ByteArray) : List ByteArray :=
   let d := Attest.periodDomain records.size
-  let levels := FrameV3Sha512.levels d (Attest.leaves records)
+  let levels := d.levels (Attest.leaves records)
   (List.range records.size).map (fun r =>
-      MemoryChallenger.Properties.frameInput "leaf" [d.id, FrameV3Sha512.uint r, FrameV3Sha512.uint r, Attest.PERIOD_SCHEMA.toUTF8, records[r]!]) ++
+      FV3.input "leaf" [d.id, FV3.uint r, FV3.uint r, Attest.PERIOD_SCHEMA.toUTF8, records[r]!]) ++
     (List.range (levels.size - 1)).flatMap fun l => (List.range (levels[l]!.size / 2)).map fun i =>
-      MemoryChallenger.Properties.frameInput "node" [d.id, FrameV3Sha512.uint l, FrameV3Sha512.uint i, (levels[l]!)[2 * i]!, (levels[l]!)[2 * i + 1]!]
+      FV3.input "node" [d.id, FV3.uint l, FV3.uint i, (levels[l]!)[2 * i]!, (levels[l]!)[2 * i + 1]!]
 
 /-- What SHA-512 hashes as a climb goes up from `digest` at `level`, at `cursor`, along the siblings `path`. -/
-def climbInputs (d : FrameV3Sha512.Domain) : Nat → Nat → ByteArray → List ByteArray → List ByteArray
+def climbInputs (d : FV3.Sha512.Domain) : Nat → Nat → ByteArray → List ByteArray → List ByteArray
   | _, _, _, [] => []
   | level, cursor, digest, sib :: rest =>
     let input := if cursor % 2 = 0 then
-        MemoryChallenger.Properties.frameInput "node" [d.id, FrameV3Sha512.uint level, FrameV3Sha512.uint (cursor >>> 1), digest, sib]
-      else MemoryChallenger.Properties.frameInput "node" [d.id, FrameV3Sha512.uint level, FrameV3Sha512.uint (cursor >>> 1), sib, digest]
+        FV3.input "node" [d.id, FV3.uint level, FV3.uint (cursor >>> 1), digest, sib]
+      else FV3.input "node" [d.id, FV3.uint level, FV3.uint (cursor >>> 1), sib, digest]
     input :: climbInputs d (level + 1) (cursor >>> 1) (Sha512.hash input) rest
 
-/-- What `FrameV3Sha512.climb d position schema value path` hashes: the leaf, then each node up to the root. -/
-def climbStrings (d : FrameV3Sha512.Domain) (position : Nat) (schema : String) (value : ByteArray)
+/-- What `FV3.Domain.climb d position schema value path` hashes at a domain starting at 0: the leaf, then each node up
+to the root. -/
+def climbStrings (d : FV3.Sha512.Domain) (position : Nat) (schema : String) (value : ByteArray)
     (path : Array ByteArray) : List ByteArray :=
-  let leaf := MemoryChallenger.Properties.frameInput "leaf" [d.id, FrameV3Sha512.uint position, FrameV3Sha512.uint position, schema.toUTF8, value]
+  let leaf := FV3.input "leaf" [d.id, FV3.uint position, FV3.uint position, schema.toUTF8, value]
   leaf :: climbInputs d 0 position (Sha512.hash leaf) path.toList
 
 /-- What the devices hash for what they sign under the key `pk`: each signed message's input, and each closed period's

@@ -114,7 +114,7 @@ theorem batches_inj {batches batches' : Array StreamedWipe.Batch} {vs : Array By
 theorem recordsRoot_ok {session root : ByteArray} {batches : Array StreamedWipe.Batch}
     (h : StreamedWipe.recordsRoot session batches = .ok root) :
     ∃ vs, batches.mapM StreamedWipe.Batch.value = .ok vs ∧
-      root = FrameV3Sha512.root (domain StreamedWipe.RECORD_BINDING session batches.size)
+      root = (domain StreamedWipe.RECORD_BINDING session batches.size).root
         (WipeTree.leavesOf (domain StreamedWipe.RECORD_BINDING session batches.size) vs) := by
   unfold StreamedWipe.recordsRoot at h
   cases hv : batches.mapM StreamedWipe.Batch.value with

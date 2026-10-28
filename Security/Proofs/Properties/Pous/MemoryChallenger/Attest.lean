@@ -40,11 +40,10 @@ that reads the party's state (`proverSeesMessages_nontrivial`).
 
 namespace MemoryChallenger.Attest.Properties.SecurityProofs
 
-open Flock FrameV3Sha512
+open Flock Flock.FV3.Sha512
 open Accounting.Assumptions
-open MemoryChallenger.Properties (frameInput)
-open MemoryChallenger.Properties.SecurityProofs.Tree (CF next base lev le_depth lev_size get!_mem hash_size lev_width
-  levels_size levels_get levels_eq root_eq frame_last frame_two node_hash leaf_hash next_get isEmpty_of_size)
+open MemoryChallenger.Properties.SecurityProofs.Tree (CF next base lev le_pow_log2ceil lev_size get!_mem hash_size
+  lev_width levels_size levels_get levels_eq root_eq frame_last frame_two node_hash leaf_hash next_get isEmpty_of_size)
 open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj split_bytes be64_size be64_size_inj)
 
 /-- `ByteArray`'s `==` is its arrays', which is lawful. -/
@@ -336,14 +335,14 @@ theorem leaves_get {vs : Array ByteArray} {r : Nat} (hr : r < vs.size) :
   simp [Attest.leaves]
 
 theorem leaf_mem {vs : Array ByteArray} {r : Nat} (hr : r < vs.size) :
-    frameInput "leaf" [(Attest.periodDomain vs.size).id, uint r, uint r, Attest.PERIOD_SCHEMA.toUTF8, vs[r]!] ∈
+    FV3.input "leaf" [(Attest.periodDomain vs.size).id, FV3.uint r, FV3.uint r, Attest.PERIOD_SCHEMA.toUTF8, vs[r]!] ∈
       treeStrings vs := by
   simp only [treeStrings, List.mem_append, List.mem_map, List.mem_range]
   exact Or.inl ⟨r, hr, rfl⟩
 
-theorem node_mem {vs : Array ByteArray} (h0 : vs.size ≠ 0) {l i : Nat} (hl : l < depth vs.size)
+theorem node_mem {vs : Array ByteArray} (h0 : vs.size ≠ 0) {l i : Nat} (hl : l < log2ceil vs.size)
     (hi : i < (lev (Attest.periodDomain vs.size) (Attest.leaves vs) l).size / 2) :
-    frameInput "node" [(Attest.periodDomain vs.size).id, uint l, uint i,
+    FV3.input "node" [(Attest.periodDomain vs.size).id, FV3.uint l, FV3.uint i,
       (lev (Attest.periodDomain vs.size) (Attest.leaves vs) l)[2 * i]!,
       (lev (Attest.periodDomain vs.size) (Attest.leaves vs) l)[2 * i + 1]!] ∈ treeStrings vs := by
   have hn := leaves_isEmpty h0
@@ -372,51 +371,30 @@ def climbRec (d : Domain) : Nat → Nat → ByteArray → List ByteArray → Byt
   | level, cursor, digest, sib :: rest => climbRec d (level + 1) (cursor >>> 1)
       (if cursor % 2 = 0 then d.node level (cursor >>> 1) digest sib else d.node level (cursor >>> 1) sib digest) rest
 
-theorem forIn'_yield {α σ : Type} (F : σ → α → σ) : ∀ (l : List α) (f : (a : α) → a ∈ l → σ → σ),
-    (∀ a h b, f a h b = F b a) → ∀ init : σ,
-      forIn' (m := Id) l init (fun a h b => pure (.yield (f a h b))) = pure (l.foldl F init)
+theorem climbL_climbRec (d : Domain) : ∀ (sibs : List ByteArray) (l c : Nat) (dg : ByteArray),
+    scheme.climbL d.id dg c l sibs = climbRec d l c dg sibs
   | [], _, _, _ => rfl
-  | a :: l, f, hf, init => by
-    rw [List.forIn'_cons, List.foldl_cons, hf]
-    exact forIn'_yield F l (fun a h b => f a (List.mem_cons_of_mem _ h) b) (fun a h b => hf _ _ _) _
+  | sib :: rest, l, c, dg => by
+    have hc : c >>> 1 = c / 2 := by rw [Nat.shiftRight_eq_div_pow, Nat.pow_one]
+    simp only [FV3.Scheme.climbL, climbRec, hc]
+    exact climbL_climbRec d rest (l + 1) (c / 2) _
 
-/-- One step of the climb. -/
-def climbStep (d : Domain) (path : Array ByteArray) (st : ByteArray × Nat) (level : Nat) : ByteArray × Nat :=
-  (if st.2 % 2 = 0 then d.node level (st.2 >>> 1) st.1 path[level]! else d.node level (st.2 >>> 1) path[level]! st.1,
-    st.2 >>> 1)
+theorem climb_eq (d : Domain) (hd : d.start = 0) (pos : Nat) (schema : String) (v : ByteArray)
+    (path : Array ByteArray) : d.climb pos schema v path = climbRec d 0 pos (d.leaf pos pos schema v) path.toList := by
+  simp only [FV3.Domain.climb, hd, Nat.sub_zero]
+  exact climbL_climbRec d path.toList 0 pos _
 
-theorem fold_climb (d : Domain) (path : Array ByteArray) : ∀ (k s : Nat) (st : ByteArray × Nat), s + k = path.size →
-    ((List.range' s k).foldl (climbStep d path) st).1 = climbRec d s st.2 st.1 (path.toList.drop s)
-  | 0, s, st, h => by
-    rw [List.drop_eq_nil_of_le (by simp; omega)]
-    rfl
-  | k + 1, s, st, h => by
-    rw [List.range'_succ, List.foldl_cons, fold_climb d path k (s + 1) _ (by omega),
-      List.drop_eq_getElem_cons (l := path.toList) (i := s) (by simp; omega)]
-    simp only [climbRec, climbStep, Array.getElem_toList, getElem!_pos path s (by omega)]
-
-theorem climb_eq (d : Domain) (pos : Nat) (schema : String) (v : ByteArray) (path : Array ByteArray) :
-    FrameV3Sha512.climb d pos schema v path = climbRec d 0 pos (d.leaf pos pos schema v) path.toList := by
-  unfold FrameV3Sha512.climb
-  simp only [Id.run, Std.Legacy.Range.forIn'_eq_forIn'_range']
-  rw [forIn'_yield (climbStep d path)]
-  · have hs : [:path.size].size = path.size := by simp [Std.Legacy.Range.size]
-    rw [hs]
-    exact fold_climb d path path.size 0 _ (by omega)
-  · intro a h b
-    have ha : a < path.size := by
-      simp only [List.mem_range'_1, Std.Legacy.Range.size] at h
-      omega
-    simp only [climbStep, getElem!_pos path a ha]
+theorem scheme_bytes : scheme.bytes = 64 := rfl
 
 /-- Under no collision among `S`, which holds the tree's node inputs and the climb's, a climb from `digest` at `level`
 and `cursor` that reaches the tree's root started from the tree's node there. -/
 theorem climb_bind {d : Domain} {L : Array ByteArray} {S : List ByteArray} (cf : CF S) (hw : ∀ x ∈ L, x.size = 64)
-    (hnode : ∀ l i, l < depth L.size → i < (lev d L l).size / 2 →
-      frameInput "node" [d.id, uint l, uint i, (lev d L l)[2 * i]!, (lev d L l)[2 * i + 1]!] ∈ S) :
-    ∀ (rest : List ByteArray) (l c : Nat) (dg : ByteArray), l + rest.length = depth L.size →
-      c < 2 ^ (depth L.size - l) → dg.size = 64 → (∀ x ∈ rest, x.size = 64) → (∀ x ∈ climbInputs d l c dg rest, x ∈ S) →
-      climbRec d l c dg rest = (lev d L (depth L.size))[0]! → dg = (lev d L l)[c]!
+    (hnode : ∀ l i, l < log2ceil L.size → i < (lev d L l).size / 2 →
+      FV3.input "node" [d.id, FV3.uint l, FV3.uint i, (lev d L l)[2 * i]!, (lev d L l)[2 * i + 1]!] ∈ S) :
+    ∀ (rest : List ByteArray) (l c : Nat) (dg : ByteArray), l + rest.length = log2ceil L.size →
+      c < 2 ^ (log2ceil L.size - l) → dg.size = 64 → (∀ x ∈ rest, x.size = 64) →
+      (∀ x ∈ climbInputs d l c dg rest, x ∈ S) →
+      climbRec d l c dg rest = (lev d L (log2ceil L.size))[0]! → dg = (lev d L l)[c]!
   | [], l, c, dg, hl, hc, _, _, _, hr => by
     simp only [List.length_nil, Nat.add_zero] at hl
     subst hl
@@ -425,12 +403,12 @@ theorem climb_bind {d : Domain} {L : Array ByteArray} {S : List ByteArray} (cf :
     exact hr
   | sib :: rest, l, c, dg, hl, hc, hdg, hws, hin, hr => by
     simp only [List.length_cons] at hl
-    have hlD : l < depth L.size := by omega
-    have hsz : (lev d L l).size = 2 ^ (depth L.size - l) := lev_size d L l (by omega)
-    have hk : depth L.size - l = (depth L.size - (l + 1)) + 1 := by omega
-    have hp : 2 ^ (depth L.size - l) = 2 ^ (depth L.size - (l + 1)) * 2 := by rw [hk, Nat.pow_succ]
+    have hlD : l < log2ceil L.size := by omega
+    have hsz : (lev d L l).size = 2 ^ (log2ceil L.size - l) := lev_size d L l (by omega)
+    have hk : log2ceil L.size - l = (log2ceil L.size - (l + 1)) + 1 := by omega
+    have hp : 2 ^ (log2ceil L.size - l) = 2 ^ (log2ceil L.size - (l + 1)) * 2 := by rw [hk, Nat.pow_succ]
     have hcur : c >>> 1 = c / 2 := by rw [Nat.shiftRight_eq_div_pow, Nat.pow_one]
-    have hc2 : c >>> 1 < 2 ^ (depth L.size - (l + 1)) := by
+    have hc2 : c >>> 1 < 2 ^ (log2ceil L.size - (l + 1)) := by
       rw [hcur]
       omega
     have hi : c >>> 1 < (lev d L l).size / 2 := by
@@ -447,11 +425,11 @@ theorem climb_bind {d : Domain} {L : Array ByteArray} {S : List ByteArray} (cf :
       by_cases he : c % 2 = 0
       · simp only [climbInputs, he, ↓reduceIte, node_hash] at hup hin
         have e := cf _ (hin _ (List.mem_cons_self ..)) _ hmem hup
-        obtain ⟨ea, -⟩ := frame_two (ps := [d.id, uint l, uint (c >>> 1)]) (by rw [hdg, hl0]) e
+        obtain ⟨ea, -⟩ := frame_two (ps := [d.id, FV3.uint l, FV3.uint (c >>> 1)]) (by rw [hdg, hl0]) e
         rw [ea, hcur, show 2 * (c / 2) = c by omega]
       · simp only [climbInputs, he, ↓reduceIte, node_hash] at hup hin
         have e := cf _ (hin _ (List.mem_cons_self ..)) _ hmem hup
-        obtain ⟨-, eb⟩ := frame_two (ps := [d.id, uint l, uint (c >>> 1)]) (by rw [hsib, hl0]) e
+        obtain ⟨-, eb⟩ := frame_two (ps := [d.id, FV3.uint l, FV3.uint (c >>> 1)]) (by rw [hsib, hl0]) e
         rw [eb, hcur, show 2 * (c / 2) + 1 = c by omega]
     · intro x hx
       apply hin
@@ -468,21 +446,26 @@ position. -/
 theorem opening_bind {vs : Array ByteArray} {S : List ByteArray} {pos : Nat} {v : ByteArray} {path : Array ByteArray}
     (cf : CF S) (hT : ∀ x ∈ treeStrings vs, x ∈ S)
     (hC : ∀ x ∈ climbStrings (Attest.periodDomain vs.size) pos Attest.PERIOD_SCHEMA v path, x ∈ S)
-    (hv : verifyOpening (Attest.periodDomain vs.size) (Attest.root vs) vs.size pos v Attest.PERIOD_SCHEMA path = true) :
+    (hv : (Attest.periodDomain vs.size).verifyOpening (Attest.root vs) vs.size pos v Attest.PERIOD_SCHEMA path =
+      true) :
     vs[pos]? = some v := by
-  simp only [verifyOpening, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, Array.all_eq_true] at hv
-  obtain ⟨⟨⟨⟨⟨-, -⟩, hpos⟩, hlen⟩, hw⟩, hcl⟩ := hv
+  simp only [FV3.Domain.verifyOpening, scheme_bytes, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq,
+    Array.all_eq_true] at hv
+  obtain ⟨⟨⟨⟨⟨⟨-, -⟩, -⟩, hpos⟩, hlen⟩, hw⟩, hcl⟩ := hv
   have hdc : (Attest.periodDomain vs.size).count = vs.size := rfl
-  rw [hdc] at hpos hlen
+  have hds : (Attest.periodDomain vs.size).start = 0 := rfl
+  rw [hds, hdc, Nat.zero_add] at hpos
+  rw [hdc] at hlen
   have h0 : vs.size ≠ 0 := by omega
   have hL := leaves_size vs
-  have hroot : Attest.root vs = (lev (Attest.periodDomain vs.size) (Attest.leaves vs) (depth vs.size))[0]! := by
+  have hroot : Attest.root vs = (lev (Attest.periodDomain vs.size) (Attest.leaves vs) (log2ceil vs.size))[0]! := by
     unfold Attest.root
     rw [root_eq _ _ (leaves_isEmpty h0), hL]
-  rw [climb_eq, hroot] at hcl
+  rw [climb_eq _ hds, hroot] at hcl
   have hleaf := climb_bind (d := Attest.periodDomain vs.size) (L := Attest.leaves vs) cf (leaves_width vs)
     (fun l i hl hi => hT _ (node_mem h0 (by rw [← hL]; exact hl) hi)) path.toList 0 pos _
-    (by rw [hL, Array.length_toList, hlen]; omega) (by rw [hL, Nat.sub_zero]; exact Nat.lt_of_lt_of_le hpos (le_depth _))
+    (by rw [hL, Array.length_toList, hlen]; omega)
+    (by rw [hL, Nat.sub_zero]; exact Nat.lt_of_lt_of_le hpos (le_pow_log2ceil _))
     (hash_size _) (fun x hx => by
       obtain ⟨i, hi, rfl⟩ := List.getElem_of_mem hx
       simpa using hw i (by simpa using hi))
@@ -490,8 +473,8 @@ theorem opening_bind {vs : Array ByteArray} {S : List ByteArray} {pos : Nat} {v 
   simp only [lev, base] at hleaf
   rw [getElem!_pos _ pos (by rw [Array.size_append, hL]; omega), Array.getElem_append_left (by rw [hL]; exact hpos),
     ← getElem!_pos, leaves_get hpos, leaf_hash] at hleaf
-  have e := frame_last (ps := [(Attest.periodDomain vs.size).id, uint pos, uint pos, Attest.PERIOD_SCHEMA.toUTF8])
-    (cf _ (hC _ (List.mem_cons_self ..)) _ (hT _ (leaf_mem hpos)) hleaf)
+  have e := frame_last
+    (ps := [(Attest.periodDomain vs.size).id, FV3.uint pos, FV3.uint pos, Attest.PERIOD_SCHEMA.toUTF8]) (cf _ (hC _ (List.mem_cons_self ..)) _ (hT _ (leaf_mem hpos)) hleaf)
   rw [e, getElem?_pos vs pos hpos, getElem!_pos vs pos hpos]
 
 /-! ## The period check -/
@@ -534,7 +517,7 @@ theorem check_ok {p : Lms.Params} {identity deployment : ByteArray} {party : Str
       (∃ cm, Lms.partyKeyMessage (identity.extract 0 16) deployment party s.signature.lower = .ok cm ∧
         Lms.verify p identity cm s.signature.certificate = .ok true) ∧
       (∃ rm, s.message deployment party = .ok rm ∧ Lms.verify p s.signature.lower rm s.signature.signature = .ok true) ∧
-      ∀ r ∈ reads, verifyOpening (Attest.periodDomain s.count) s.root s.count r.position r.record Attest.PERIOD_SCHEMA
+      ∀ r ∈ reads, (Attest.periodDomain s.count).verifyOpening s.root s.count r.position r.record Attest.PERIOD_SCHEMA
         r.path = true := by
   unfold Attest.check at h
   by_cases hl : s.signature.lower.size = 16 + p.N
@@ -889,19 +872,19 @@ theorem root_one (v : ByteArray) :
     Attest.root #[v] = (Attest.periodDomain 1).leaf 0 0 Attest.PERIOD_SCHEMA v := by
   unfold Attest.root
   rw [root_eq _ _ (leaves_isEmpty (by simp))]
-  simp [lev, base, Attest.leaves, depth]
+  simp [lev, base, Attest.leaves, nextPow2, log2ceil]
 
 /-- A one-record period's record opens at position 0 with no siblings. -/
 theorem opening_one (v : ByteArray) :
-    verifyOpening (Attest.periodDomain 1) (Attest.root #[v]) 1 0 v Attest.PERIOD_SCHEMA #[] = true := by
-  have hc : FrameV3Sha512.climb (Attest.periodDomain 1) 0 Attest.PERIOD_SCHEMA v #[] =
+    (Attest.periodDomain 1).verifyOpening (Attest.root #[v]) 1 0 v Attest.PERIOD_SCHEMA #[] = true := by
+  have hc : (Attest.periodDomain 1).climb 0 Attest.PERIOD_SCHEMA v #[] =
       (Attest.periodDomain 1).leaf 0 0 Attest.PERIOD_SCHEMA v := by
-    rw [climb_eq]
+    rw [climb_eq (Attest.periodDomain 1) rfl]
     rfl
   have hw := root_width #[v]
   rw [root_one] at hw
-  simp only [verifyOpening, hc, root_one, hw]
-  simp [Attest.periodDomain, Domain.make, depth]
+  simp only [FV3.Domain.verifyOpening, hc, root_one, hw, scheme_bytes]
+  simp [Attest.periodDomain, FV3.Sha512.Domain.make, FV3.Domain.make, log2ceil]
 
 /-- What `Lms.key` gives at the deployed parameters: a 16-byte identifier, and a public key of `16 + N` bytes that
 starts with it. -/
