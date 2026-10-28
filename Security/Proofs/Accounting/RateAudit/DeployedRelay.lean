@@ -461,7 +461,7 @@ theorem session_relay_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Store N
     rw [e1, e2]
     refine add_le_add (add_le_add ?_ ?_) le_rfl
     · rw [show ((n : ℝ≥0∞) * P * N) = ((n * P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
-      exact Deployed.horizon_le dbar (n * P * N) (d * n) (by positivity)
+      exact Deployed.pooled_le dbar (n * P * N) (d * n) (by positivity)
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
 
