@@ -3,8 +3,8 @@ window's int8 GEMM cells (`window_b4_census.py`'s census), every tile shape an a
 
 A tile is R rows of activations by C weight columns at depth K: R·C·K MACs, credited as its work, at `ANDS_A_MAC` in
 circuit (the inbox's calibration, an estimate) and opening R activation rows and C weight rows of K bytes and an output
-row of 4·R·C bytes (`row_ands`). A tile past `MAX_PROVED_ANDS` is proved as its R lanes (1×C each), one proof block a
-lane, the tile's ANDs still a draw. Mode 2 adds each tile's serve-time receipt, an estimate: H1's CP-W receipt,
+row of 4·R·C bytes (`row_ands`). A tile past the cap is proved as its R lanes (1×C each), one proof block a lane, the
+tile's ANDs still a draw: its statement holds `_cap(lane) // R` tiles, at the lane's ANDs. Mode 2 adds each tile's serve-time receipt, an estimate: H1's CP-W receipt,
 2(K/32 + m) u32 a tile whatever its shape (`transformer.serve`), at `class_rows`' per-row cost, h at 398 GB/s. Costs
 are `window_b4.costs` (C-Flock's fit, statements shared); `--cap-log 30` models Flock's cap at k_log 30 (a bigger cap's
 extra queries and proof bytes are not priced).
@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -23,7 +24,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import transformer as X
 import window_b4 as W
 
-from verity.core.protocols.sampled_proofs.optimize import Candidate, Objective, for_target, row_ands
+from verity.core.protocols.sampled_proofs.optimize import (Candidate, CostModel, Objective, TemplateCost, for_target,
+                                                           row_ands)
 
 ANDS_A_MAC = 300
 SIDES = (1, 2, 4, 8, 16, 32)
@@ -36,7 +38,9 @@ def receipt_compressions(K: int) -> int:
 
 
 def tiles(census: dict, cap: int) -> tuple[list[Candidate], list[dict]]:
-    """One op a K (the window's int8 linears' cells), one alternative a shape that divides its cells."""
+    """One op a K (the window's int8 linears' cells), one alternative a shape that divides its cells and a form: whole,
+    one proof block a tile, when it fits the cap, and for R > 1 as lanes, when a lane fits. A lane-split tile's statement
+    holds `_cap(lane) // R` tiles, its proof blocks being lanes (`lanes_priced`)."""
     cells: dict[int, int] = {}
     for e in census["templates"]:
         if e["label"].startswith("ScaledMmS8_v1"):
@@ -52,16 +56,27 @@ def tiles(census: dict, cap: int) -> tuple[list[Candidate], list[dict]]:
                 ands = ANDS_A_MAC * R * C * K
                 proved = ands + sum(row_ands(r) for r in rows)
                 lane = ANDS_A_MAC * C * K + sum(row_ands(r) for r in (K,) * (1 + C) + (4 * C,))
-                lanes = proved > cap
-                if lanes and lane > cap:
-                    continue
-                c = Candidate(f"pouw-tile{{K={K}}}", f"PouwTile{{K={K},R={R},C={C}}}", n // (R * C), R * C * K, 16,
-                              cut=f"{R}x{C}", ands=ands, rows=rows, commit_rows=float(receipt_compressions(K)),
-                              cap=X._cap(lane if lanes else proved))
-                out.append(c)
-                table.append({"K": K, "R": R, "C": C, "tiles": c.units, "proved_ands": proved, "lanes": lanes,
-                              "block_ands": lane if lanes else proved, "openings_over_compute": (proved - ands) / ands})
+                for lanes, block in ((False, proved), (True, lane)):
+                    if block > cap or (lanes and R == 1):
+                        continue
+                    form = ",lanes" if lanes else ""
+                    c = Candidate(f"pouw-tile{{K={K}}}", f"PouwTile{{K={K},R={R},C={C}{form}}}", n // (R * C),
+                                  R * C * K, 16, cut=f"{R}x{C}{form}", ands=ands, rows=rows,
+                                  commit_rows=float(receipt_compressions(K)),
+                                  cap=max(1, X._cap(lane) // R) if lanes else X._cap(proved))
+                    out.append(c)
+                    table.append({"K": K, "R": R, "C": C, "tiles": c.units, "proved_ands": proved, "lanes": lanes,
+                                  "block_ands": block, "openings_over_compute": (proved - ands) / ands,
+                                  "template": c.template})
     return out, table
+
+
+def lanes_priced(cm: CostModel, table: list[dict]) -> CostModel:
+    """A lane-split tile's statement priced at its lane's ANDs (a statement's session runs over its proof blocks); its
+    drawn tile still costs the tile's ANDs."""
+    over = {t["template"]: TemplateCost(statement_fixed=cm.statement_fixed + cm.statement_per_and * t["block_ands"])
+            for t in table if t["lanes"]}
+    return replace(cm, templates={**cm.templates, **over})
 
 
 def main() -> None:
@@ -76,28 +91,31 @@ def main() -> None:
     F = W.window_work(cands)
     doc = {"cap_log": args.cap_log, "ands_a_mac": ANDS_A_MAC, "window_macs": F, "table": table, "runs": {}}
     h = 1 / W.SHA512_BPS["card 4 KiB"]
+    split = {k: lanes_priced(m, table) for k, m in W.parts(W.fitted()).items()}
     for name, cm in (("mode1", W.costs()), ("mode2", W.costs(h=h, w=1.0))):
+        cm = lanes_priced(cm, table)
         p = for_target(cands, cm, Objective(W.DELTA, work=1.0), W.EPS * F, by="free_compute", exact=False,
                        grid=args.grid)
         chosen = [c for c in cands if c.template in p.sizes]
-        r = W.report(p, chosen, cm, F, W.parts(W.fitted()))
+        r = W.report(p, chosen, cm, F, split)
         r["shapes"] = {c.op: c.cut for c in chosen}
-        r["block_ands"] = {c.op: next(t["block_ands"] for t in table if f"{t['R']}x{t['C']}" == c.cut
-                                      and c.op.endswith(f"K={t['K']}}}")) for c in chosen}
+        r["block_ands"] = {c.op: next(t["block_ands"] for t in table if t["template"] == c.template) for c in chosen}
         doc["runs"][name] = r
         print(name, r["shapes"], "draws", r["draws"], "proving ANDs %.4g" % r["proving_ands"],
               "fit-GPU-s %.1f" % r["total_gpu_s"], "commit %.4g" % r["commit_gpu_s"], "eps %.4g" % r["eps"],
               "block ANDs", r["block_ands"])
-    cm = W.costs()
-    for shape in sorted({c.cut for c in cands}, key=lambda s: tuple(map(int, s.split("x")))):
-        fixed = [c for c in cands if c.cut == shape]
+    cm = lanes_priced(W.costs(), table)
+    shape_of = {c.template: c.cut.split(",")[0] for c in cands}
+    for shape in sorted(set(shape_of.values()), key=lambda s: tuple(map(int, s.split("x")))):
+        fixed = [c for c in cands if shape_of[c.template] == shape]
         if len({c.op for c in fixed}) < len({c.op for c in cands}):
             continue
         p = for_target(fixed, cm, Objective(W.DELTA, work=1.0), W.EPS * F, by="free_compute", exact=False,
                        grid=args.grid)
+        chosen = [c for c in fixed if c.template in p.sizes]
         doc["runs"][f"shape {shape}"] = {"draws": sum(p.sizes.values()), "total_gpu_s": p.cost["total"],
-                                         "proving_ands": sum(p.sizes[c.template] * cm.ands(c) for c in fixed),
-                                         "lanes": any(t["lanes"] for t in table if f"{t['R']}x{t['C']}" == shape)}
+                                         "proving_ands": sum(p.sizes[c.template] * cm.ands(c) for c in chosen),
+                                         "forms": {c.op: c.cut for c in chosen}}
         print("shape", shape, doc["runs"][f"shape {shape}"])
     Path(args.out).mkdir(parents=True, exist_ok=True)
     (Path(args.out) / f"pouw_tile_cap{args.cap_log}.json").write_text(json.dumps(doc, indent=1, default=str))
