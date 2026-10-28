@@ -4,7 +4,7 @@ import Proofs.Properties.Nci.BaselineSteps
 /-!
 # NCI's core protocol's property, proved
 
-`ProtocolAccepts` (`Properties.Nci.Protocol`) by unfolding `NciCheck.Protocol.check`, with the policy check's verdict
+`ProtocolAccepts` (`Properties.Nci.Protocol`) by unfolding `NciCheck.Protocol.check` past its `names` refusal, with the policy check's verdict
 from `BaselineSteps.evaluate_ok`: `NciCheck.Baseline.evaluate` returns the verdict `NciCheck.Desc.evaluate` gives.
 -/
 
@@ -15,6 +15,8 @@ open Lean (Json)
 theorem ProtocolAccepts : Properties.ProtocolAccepts := by
   intro p c e pub prof h
   unfold NciCheck.Protocol.check at h
+  split at h
+  · cases h
   split at h
   · cases h
   · rename_i out hb

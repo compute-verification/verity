@@ -1,6 +1,6 @@
 /-
 A composition with a registration check, onsite Verity's shape (`Core.Onsite.protocol`, whose registration check is
-NCI's, `verity/nci/v1`): one `Core.Protocol` that runs the registration check's own `answer` on the registration's case
+NCI's, `verity/inference-only/v0`): one `Core.Protocol` that runs the registration check's own `answer` on the registration's case
 in its commit phase, before composing, and then composes its components as `product` does (`check`). The registration
 check is not a component:
 

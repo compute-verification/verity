@@ -7,9 +7,9 @@ and communication by the network certifier over the period (`NetworkCheck.Period
 period's link-windows certified and proved, and the bound `K` on what left the site). `Core.Composition.product` composes
 them: every component accepts or onsite doesn't, and any component's rejection rejects onsite whatever the others answer.
 Before composing, in its commit phase, onsite checks the registration by NCI's check of record
-(`NciCheck.Protocol.protocol`, `verity/nci/v1`, a registration check and not a component): a registration it refuses
-refuses onsite (`Core.Composition.registered`), and so does one other than the registration record sampled proofs'
-one-stage audit commits to: one registration digest in both.
+(`NciCheck.Protocol.protocol`, `verity/inference-only/v0`, a registration check and not a component): a registration
+it refuses refuses onsite (`Core.Composition.registered`), and so does one other than the registration record sampled
+proofs' one-stage audit commits to: one registration digest in both.
 -/
 import CoreComposition.Cases
 import NciCheck.Protocol
@@ -60,7 +60,7 @@ private def unregistered : Answer :=
   Cases.answerRegistered protocol (refused NciCheck.Protocol.protocol) (components.map refused)
     ⟨(List.replicate 128 0).toArray⟩
 #guard unregistered.verdict == .reject && unregistered.published.isNone
-#guard unregistered.reason.map (·.startsWith "registration: verity/nci/v1 reject: params: ") == some true
+#guard unregistered.reason.map (·.startsWith "registration: verity/inference-only/v0 reject: params: ") == some true
 #guard !components.any fun P => (unregistered.reason.map (contains · s!"{P.id} reject")).getD false
 #guard (Cases.answerCases protocol (components.map refused) ⟨(List.replicate 128 0).toArray⟩).reason ==
   some "params: the composition's params: the keys must be [components, registration], not [components]"

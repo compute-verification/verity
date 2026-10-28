@@ -4,8 +4,8 @@ import NciCheck.Protocol
 # What NCI's core protocol's acceptance means
 
 `NciCheck.Protocol.check` (`verity/core/protocols/network/nci/lean/NciCheck/Protocol.lean`, package `nci_check`) is NCI
-as a core protocol, `verity/nci/v1`, the registration check onsite runs before composing (`Core.Onsite.protocol`,
-`Core.Composition.registered`; it is not one of onsite's components): it runs the check of
+as a core protocol, `verity/inference-only/v0`, the registration check onsite runs before composing
+(`Core.Onsite.protocol`, `Core.Composition.registered`; it is not one of onsite's components): it runs the check of
 record, `NciCheck.Baseline.evaluate`, on the instance its params and evidence give (`instanceOf`) and the trusted input
 its params and commitment give (`trustedOf`).
 

@@ -92,7 +92,8 @@ its stub in `Core.Onsite.components` and `Core.Remote.components` with its own `
 checks), and deletes the stub. The difftest's reference (`tests/reference.py`) replaces the stub's mirror with the port's
 own Python (`Ported`), or its Python's answers on cases made once (`Recorded`), and its cases come from the port's own
 difftest or its period hook. Onsite's registration check is NCI's (`NciCheck.Protocol.protocol`, `nci_check`,
-`../network/nci/lean`, `verity/nci/v1`: the declaration's isolation blocks each read at most `α` novel bits per gate).
+`../network/nci/lean`, `verity/inference-only/v0`: the declaration's isolation blocks each read at most `α` novel bits
+per gate).
 
 ## The difftest
 
