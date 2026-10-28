@@ -31,8 +31,10 @@ included), from the run's Nsight Systems export, step trace and serve record:
   declare) at θ_int8 over the wall, labelled as `--credit` says, with the certified MACs (`--certified-over-declared`
   times the declared) beside it.
 - **the rest**, the wall split exclusively, summing to 1. Each instant goes to the first class in `KERNEL_CLASSES` of the
-  kernels running then. With no kernel, it goes to a copy or memset that is running. With neither, it goes to a gap by
-  the gap's length: launch (under 20 µs), host (20 µs to 2 ms), or idle (2 ms or more).
+  kernels running then. With no kernel, it goes to a copy or memset that is running. Failing both, it goes to the step
+  loop's host span, if one is open: a Commit window's close, which starts at the trace time of the last step before it
+  closed and lasts its recorded close seconds, and that close's seal wait. Otherwise it goes to a gap, by the gap's
+  length: launch (under 20 µs), host (20 µs to 2 ms), or idle (2 ms or more).
 
     terms.py served --sqlite PROF.sqlite --trace ADVICE_TRACE.jsonl --util UTIL.json --serve SERVE.json
         --certified-over-declared R [--credit TEXT] [--key all]      prints one JSON object and, with --text, a table
@@ -174,8 +176,8 @@ KERNEL_CLASSES = (
     ("attention (bf16 FA3)", r"flashattn|flash_fwd|flash_attn|fmha|prepare_varlen_num_blocks"),
     ("attention: KV-cache write", r"reshape_and_cache"),
     ("bf16 GEMM (LM head)", r"matmul_kernel_persistent|gemv|nvjet|sm90_xmma|cublas|cutlass.*gemm|gemm"),
-    ("the Commit's hash and leaf kernels", r"sha512|sha_|hm96|merkle|frame|leaf|tree|digest|hash|level_kernel|top_kernel|commit"),
-    ("the Commit's taps", r"tap|collector|readback|snapshot|hidden|matreq"),
+    ("the Commit's hash and leaf kernels", r"sha512|sha_|hm96|merkle|frame|leaf|tree|digest|hash|levels?_kernel|top_kernel|commit"),
+    ("the Commit's taps", r"tap|collector|readback|snapshot|hidden|matreq|gather_copy"),
     ("PoUW H1", r"(^|_)h1|pouw|noise|duo|wrap|bits_kernel|perm_kernel|salt_|fill_kernel|forge|open_kernel|pack_kernel|form_"),
     ("quantize (int8 rows)", r"quant"),
     ("norms", r"norm"),
@@ -186,6 +188,8 @@ KERNEL_CLASSES = (
 )
 COPIES = {1: "H2D copy, no kernel running", 2: "D2H copy, no kernel running"}
 OTHER_COPY = "other copy or memset, no kernel running"
+#: the step loop's host spans, by priority: a window's seal wait, then the rest of its close (finalize, readback, record)
+HOSTS = ("the seal (the step loop waiting on it, GPU idle)", "the Commit's window close on the loop (GPU idle)")
 GAPS = ((20e3, "launch gaps (GPU idle under 20 µs)"), (2e6, "host gaps (GPU idle 20 µs to 2 ms)"),
         (float("inf"), "idle (GPU idle 2 ms or more)"))
 #: short names that say nothing of the kernel (a template's entry point): such a kernel goes by its demangled name
@@ -230,8 +234,9 @@ def served_profile(db: sqlite3.Connection) -> dict:
     return {"zero": zero, "kernels": ks, "copies": sorted(cs), "metrics": dict(series)}
 
 
-def split_wall(kernels: list, copies: list, lo: int, hi: int) -> tuple[dict[str, float], dict[str, list]]:
-    """[lo, hi] split exclusively (ns by label, summing to hi - lo), and each kernel class's kernels by time in the window."""
+def split_wall(kernels: list, copies: list, lo: int, hi: int, hosts: list | None = None) -> tuple[dict[str, float], dict[str, list]]:
+    """[lo, hi] split exclusively (ns by label, summing to hi - lo), and each kernel class's kernels by time in the window.
+    A kernel takes an instant first, then a copy, then a host span (start, end, index into HOSTS), then a gap."""
     ev = []
     for a, b, name in kernels:
         if b > lo and a < hi:
@@ -239,9 +244,12 @@ def split_wall(kernels: list, copies: list, lo: int, hi: int) -> tuple[dict[str,
     for a, b, kind in copies:
         if b > lo and a < hi:
             ev += [(max(a, lo), 1, 1, kind), (min(b, hi), -1, 1, kind)]
+    for a, b, h in hosts or []:
+        if b > lo and a < hi:
+            ev += [(max(a, lo), 1, 2, h), (min(b, hi), -1, 2, h)]
     ev.sort(key=lambda e: (e[0], e[1]))
     out: dict[str, float] = defaultdict(float)
-    kc, cc = [0] * len(KERNEL_CLASSES), defaultdict(int)
+    kc, cc, hc = [0] * len(KERNEL_CLASSES), defaultdict(int), [0] * len(HOSTS)
     t, gap = lo, 0
 
     def close_gap() -> None:
@@ -249,7 +257,7 @@ def split_wall(kernels: list, copies: list, lo: int, hi: int) -> tuple[dict[str,
         if gap:
             out[next(label for limit, label in GAPS if gap < limit)] += gap
             gap = 0
-    for when, d, is_copy, c in [*ev, (hi, 0, 0, 0)]:
+    for when, d, src, c in [*ev, (hi, 0, 0, 0)]:
         if when > t:
             dt = when - t
             k = next((i for i, n in enumerate(kc) if n), None)
@@ -260,13 +268,13 @@ def split_wall(kernels: list, copies: list, lo: int, hi: int) -> tuple[dict[str,
                 close_gap()
                 kind = next((x for x in (2, 1) if cc[x]), None)
                 out[COPIES[kind] if kind else OTHER_COPY] += dt
+            elif any(hc):
+                close_gap()
+                out[HOSTS[next(i for i, n in enumerate(hc) if n)]] += dt
             else:
                 gap += dt
             t = when
-        if is_copy:
-            cc[c] += d
-        else:
-            kc[c] += d
+        [kc, cc, hc][src][c] += d
     close_gap()
     top: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
     for a, b, name in kernels:
@@ -292,6 +300,23 @@ def _mean(series: tuple[list[int], list[float]] | None, lo: int, hi: int) -> flo
     ts, vs = series
     a, b = bisect.bisect_left(ts, lo), bisect.bisect_right(ts, hi)
     return statistics.fmean(vs[a:b]) if b > a else None
+
+
+def host_spans(trace: list[dict], wins: list[dict], st: dict, at) -> list[tuple[int, int, int]]:
+    """Each closed window's close on the step loop, from the trace time of the last step before it closed: the whole close
+    as HOSTS[1], and its seal wait, the last of its on-loop phases, as HOSTS[0]."""
+    before = {r["window"]: r["before_step"] for r in trace if r.get("kind") == "window" and r.get("event") == "close"}
+    out = []
+    for w in wins:
+        b, s = before.get(w["window"]), w.get("seconds") or {}
+        if b is None or b - 1 not in st or not s.get("close"):
+            continue
+        t0 = at(st[b - 1]["t"])
+        out.append((t0, t0 + int(s["close"] * 1e9), 1))
+        if s.get("seal_wait"):
+            end = t0 + int(s.get("on_loop", s["seal_wait"]) * 1e9)
+            out.append((end - int(s["seal_wait"] * 1e9), end, 0))
+    return out
 
 
 def served(prof: dict, trace: list[dict], util: dict, serve: dict, ratio: float, credit: str, key: str = "all") -> dict:
@@ -322,10 +347,12 @@ def served(prof: dict, trace: list[dict], util: dict, serve: dict, ratio: float,
         readings_[name] = {"clock_mhz": mhz, "theta_int8_macs_s": rho, "u": tensor_s / wall,
                            "u_int8_linears": macs["declared"] / rho / wall, "u_bf16": bf16 / (BF16_OVER_INT8 * rho) / wall,
                            "accounted": macs["declared"] / rho / wall, "certified_share": ratio * macs["declared"] / rho / wall}
-    split, top = split_wall(prof["kernels"], prof["copies"], lo, hi)
-    shares = {k: v / (hi - lo) for k, v in sorted(split.items(), key=lambda kv: -kv[1])}
     sv = util.get("serve") or {}
     wins = sv.get("windows") or []
+    split, top = split_wall(prof["kernels"], prof["copies"], lo, hi, host_spans(trace, wins, st, at))
+    shares = {k: v / (hi - lo) for k, v in sorted(split.items(), key=lambda kv: -kv[1])}
+    closes = {r["window"]: r["before_step"] for r in trace if r.get("kind") == "window" and r.get("event") == "close"}
+    measured = [r for r in wins if first < closes.get(r["window"], -1) <= last + 1]
     return {
         "arm": util.get("arm"), "T": util.get("T"), "model": serve.get("model"), "window": key, "steps": last - first + 1,
         "first_step": first, "last_step": last, "wall_s": wall, "step_wall_ms": w.get("step_wall_ms"),
@@ -336,7 +363,11 @@ def served(prof: dict, trace: list[dict], util: dict, serve: dict, ratio: float,
         "top_kernels": {c: [{"name": n, "share": ns / (hi - lo)} for n, ns in v] for c, v in top.items()},
         "windows": {"closed": len(wins), "passed": sum(1 for r in wins if r.get("passed")),
                     "committed_GB": sum(r.get("committed_bytes") or 0 for r in wins) / 1e9,
-                    "seconds": sv.get("window_seconds")} if wins else None,
+                    "seconds": sv.get("window_seconds"),
+                    "measured": {"windows": [r["window"] for r in measured],
+                                 "passed": sum(1 for r in measured if r.get("passed")),
+                                 "committed_GB": sum(r.get("committed_bytes") or 0 for r in measured if r.get("passed")) / 1e9}}
+        if wins else None,
         "commit": serve.get("commit"), "protocols": serve.get("protocols"),
     }
 

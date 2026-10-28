@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -104,6 +105,83 @@ def test_each_period_s_clock_is_nvidia_smi_s_over_its_pinned_window():
     assert [c["blocks_sm_mhz_median"] for c in cp] == [1830, 1750]
     assert cp[0]["smi"] == {"samples": 3, "clocks_sm_mhz": 1980}
     assert cp[1]["smi"] == {"samples": 3, "clocks_sm_mhz": 1770}
+
+
+def _served_export(path: Path, kernels: list, copies: list, metrics: list) -> None:
+    db = sqlite3.connect(path)
+    db.executescript("CREATE TABLE TARGET_INFO_SESSION_START_TIME (utcEpochNs INTEGER); INSERT INTO TARGET_INFO_SESSION_START_TIME VALUES (0);"
+                     "CREATE TABLE StringIds (id INTEGER, value TEXT);"
+                     "CREATE TABLE CUPTI_ACTIVITY_KIND_KERNEL (start INTEGER, end INTEGER, shortName INTEGER, demangledName INTEGER);"
+                     "CREATE TABLE CUPTI_ACTIVITY_KIND_MEMCPY (start INTEGER, end INTEGER, copyKind INTEGER);"
+                     "CREATE TABLE TARGET_INFO_GPU_METRICS (metricId INTEGER, metricName TEXT);"
+                     "CREATE TABLE GPU_METRICS (timestamp INTEGER, metricId INTEGER, value REAL);"
+                     "INSERT INTO TARGET_INFO_GPU_METRICS VALUES (1, 'Tensor Active [Throughput %]'), (2, 'GPC Clock Frequency [MHz]'),"
+                     " (3, 'SM Issue [Throughput %]');")
+    names: dict[str, int] = {}
+    for a, b, short, demangled in kernels:
+        ids = [names.setdefault(x, len(names)) for x in (short, demangled)]
+        db.execute("INSERT INTO CUPTI_ACTIVITY_KIND_KERNEL VALUES (?, ?, ?, ?)", (a, b, *ids))
+    db.executemany("INSERT INTO StringIds VALUES (?, ?)", [(i, s) for s, i in names.items()])
+    db.executemany("INSERT INTO CUPTI_ACTIVITY_KIND_MEMCPY VALUES (?, ?, ?)", copies)
+    db.executemany("INSERT INTO GPU_METRICS VALUES (?, ?, ?)", metrics)
+    db.commit()
+    db.close()
+
+
+def test_a_served_step_s_u_accounted_share_and_rest_sum_to_one(tmp_path, capsys):
+    """Over steps 1-2 (10 to 30 ms): each instant goes to the first kernel class running, then a copy, then the Commit's
+    window close and its seal wait (placed from step 1's trace time), then a gap by its length."""
+    ms = 1_000_000
+    kernels = [(10 * ms, 14 * ms, "exactlin_scaled_mm", "exactlin_scaled_mm"),
+               (12 * ms, 15 * ms, "device_kernel", "void cutlass::device_kernel<flash::FlashAttnFwdSm90<...>>"),
+               (15 * ms + 10_000, 16 * ms, "fused_add_rms_norm_kernel", "fused_add_rms_norm_kernel"),
+               (16 * ms + 500_000, 17 * ms, "rows_levels_kernel", "rows_levels_kernel"),
+               (17 * ms, 18 * ms, "gather_copy_kernel", "gather_copy_kernel"),
+               (21 * ms, 22 * ms, "exactlin_quant_rows", "exactlin_quant_rows"),
+               (40 * ms, 41 * ms, "exactlin_scaled_mm", "exactlin_scaled_mm")]
+    copies = [(18 * ms, 19 * ms, 2), (18 * ms + 500_000, 19 * ms + 500_000, 1)]
+    metrics = [(t * ms, 1, 50.0) for t in range(10, 31)] + [(5 * ms, 1, 90.0)] + [(t * ms, 2, 1.83e9) for t in range(10, 31)] \
+        + [(20 * ms, 3, 7.0)]
+    _served_export(tmp_path / "prof.sqlite", kernels, copies, metrics)
+    model = "verity-int8/Llama-3.2-1B-INT8"
+    trace = [{"kind": "header"},
+             {"kind": "step", "step": 0, "rows": [["r", 0, 8]], "emitted": {}, "t": 0.01},
+             {"kind": "step", "step": 1, "rows": [["a", 0, 1024]], "emitted": {"a": 1}, "t": 0.02},
+             {"kind": "window", "window": 0, "event": "close", "before_step": 2},
+             {"kind": "step", "step": 2, "rows": [["b", 0, 512]], "emitted": {}, "t": 0.03},
+             {"kind": "window", "window": 1, "event": "close", "before_step": 5}]
+    wins = [{"window": 0, "committed_bytes": 13_600_000_000, "passed": True,
+             "seconds": {"close": 0.004, "on_loop": 0.0035, "seal_wait": 0.003}},
+            {"window": 1, "committed_bytes": 1_000_000_000, "passed": False, "seconds": {"close": 0.001}}]
+    util = {"arm": "seal", "T": 8192, "all": {"first_step": 1, "last_step": 2}, "serve": {"windows": wins}}
+    (tmp_path / "trace.jsonl").write_text("\n".join(json.dumps(r) for r in trace))
+    (tmp_path / "util.json").write_text(json.dumps(util))
+    (tmp_path / "serve.json").write_text(json.dumps({"model": model}))
+    assert terms.main(["served", "--sqlite", str(tmp_path / "prof.sqlite"), "--trace", str(tmp_path / "trace.jsonl"),
+                       "--util", str(tmp_path / "util.json"), "--serve", str(tmp_path / "serve.json"),
+                       "--certified-over-declared", "1.5", "--text", str(tmp_path / "out.txt")]) == 0
+    r = json.loads(capsys.readouterr().out)
+    assert math.isclose(r["wall_s"], 0.02) and r["steps"] == 2 and math.isclose(r["shares_sum"], 1)
+    want = {"int8 GEMM (declared linears)": 4, "attention (bf16 FA3)": 1, "launch gaps (GPU idle under 20 µs)": 0.01,
+            "norms": 0.99, "host gaps (GPU idle 20 µs to 2 ms)": 1, "the Commit's hash and leaf kernels": 0.5,
+            "the Commit's taps": 1, "D2H copy, no kernel running": 1, "H2D copy, no kernel running": 0.5,
+            terms.HOSTS[1]: 1, terms.HOSTS[0]: 2, "quantize (int8 rows)": 1, "idle (GPU idle 2 ms or more)": 6}
+    assert r["shares"].keys() == want.keys()
+    for k, v in want.items():
+        assert math.isclose(r["shares"][k], v / 20, abs_tol=1e-6), k
+    m = terms.SERVED_MODELS[model]
+    per_token = 16 * (2048 * 3072 + 2048 * 2048 + 2048 * 16384 + 8192 * 2048)
+    attn = 16 * 32 * 2 * 64 * (1024 * 1025 // 2 + 512 * 513 // 2)
+    assert per_token == 973_078_528 and r["macs"]["declared"] == 1536 * per_token
+    assert r["macs"]["attention"] == attn and r["macs"]["lm_head"] == m["hidden"] * m["vocab"]
+    lo, hi, gpc = r["readings"]["tensor"], r["readings"]["boost"], r["readings"]["measured GPC"]
+    assert math.isclose(lo["theta_int8_macs_s"], 989.4e12, rel_tol=1e-4) and gpc["clock_mhz"] == 1830
+    assert math.isclose(lo["accounted"], 1536 * per_token / 989.4e12 / 0.02, rel_tol=1e-4)
+    assert math.isclose(lo["u"], lo["accounted"] + (attn + m["hidden"] * m["vocab"]) / (0.5 * lo["theta_int8_macs_s"]) / 0.02)
+    assert math.isclose(lo["accounted"] / hi["accounted"], 1980 / 1830) and math.isclose(lo["certified_share"], 1.5 * lo["accounted"])
+    assert math.isclose(r["tensor_active"], 0.5) and r["credit"] == terms.UNCREDITED
+    assert r["windows"]["measured"] == {"windows": [0], "passed": 1, "committed_GB": 13.6}
+    assert terms.UNCREDITED in (tmp_path / "out.txt").read_text()
 
 
 def test_gamma_is_against_the_first_baseline_timed_and_each_baseline_has_its_own():
