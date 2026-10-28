@@ -76,7 +76,7 @@ def registered (p : Params) (c : Registration) : Except String Fixed :=
     .error s!"window: registered kind {win.kind} in context {win.context}, the verifier's served in {p.context}"
   else if ks ≠ registeredSorted then
     if ks = legacySorted then
-      .error "window-form: no-fixed-length: registered before the fixed-length rule, so not of record"
+      .error "window-form: no-fixed-length: registered before the fixed-length rule (19 Oct), so not of record"
     else .error s!"public-items: registered {", ".intercalate ks}, declared {", ".intercalate registeredSorted}"
   else match PouwWindow.lengthProblem (get win.items "length") p.maxTokens with
   | some r => .error r
