@@ -84,6 +84,27 @@ def off_cpu(db: sqlite3.Connection, tid: int, lo: int, hi: int) -> list[tuple[in
     return out
 
 
+def on_cpu(db: sqlite3.Connection, tid: int, lo: int, hi: int) -> dict[int, list[tuple[int, int]]]:
+    """The intervals in [lo, hi] each other thread of ``tid``'s process was on a CPU (``globalTid``'s bits 24-47 are the pid)."""
+    pid = (tid >> 24) & 0xFFFFFF
+    since: dict[int, int] = {}
+    out: dict[int, list[tuple[int, int]]] = defaultdict(list)
+    q = "SELECT start, isSchedIn, globalTid FROM SCHED_EVENTS WHERE start < ? AND ((globalTid >> 24) & 16777215) = ? ORDER BY start"
+    for t, sched_in, g in db.execute(q, (hi, pid)):
+        t, g = int(t), int(g)
+        if sched_in:
+            since[g] = t
+        elif g in since:
+            a, b = max(since.pop(g), lo), min(t, hi)
+            if b > a:
+                out[g].append((a, b))
+    for g, t in since.items():
+        if hi > max(t, lo):
+            out[g].append((max(t, lo), hi))
+    out.pop(tid, None)
+    return out
+
+
 def intersect(xs: list[tuple[int, int]], ys: list[tuple[int, int]]) -> list[tuple[int, int]]:
     """The intersection of two sorted lists of disjoint intervals."""
     out, i, j = [], 0, 0
@@ -154,6 +175,7 @@ def main() -> None:
     per = defaultdict(list)
     by_call, pairs = Counter(), defaultdict(lambda: [0, 0, 0.0])
     wall_by, idle_by, gap_by, incl, off_by, idle_off_by = Counter(), Counter(), Counter(), Counter(), Counter(), Counter()
+    idle_off: list[tuple[int, int]] = []
     kstart = [x for x, _, _ in ks]
     min_gap = a.min_gap_us * 1000
     for x0, x1 in spans:
@@ -190,12 +212,21 @@ def main() -> None:
             gap_by.update(overlap(segs, gaps))
             if offs is not None:
                 mine_off = intersect(offs, [(x0, x1)])
+                waits = intersect(idle, mine_off)
+                idle_off.extend(waits)
                 off_by.update(overlap(segs, mine_off))
-                idle_off_by.update(overlap(segs, intersect(idle, mine_off)))
+                idle_off_by.update(overlap(segs, waits))
                 per["off_cpu"].append(sum(y - x for x, y in mine_off) / 1e6)
-                per["idle_off_cpu"].append(sum(y - x for x, y in intersect(idle, mine_off)) / 1e6)
+                per["idle_off_cpu"].append(sum(y - x for x, y in waits) / 1e6)
             for r0, r1, lab in mine:
                 incl[lab] += min(r1, x1) - max(r0, x0)
+    if idle_off:
+        tnames = {int(g): str(names.get(nm, nm)) for nm, g in db.execute("SELECT nameId, globalTid FROM ThreadNames")} \
+            if su._has(db, "ThreadNames") else {}
+        held = Counter({g: sum(y - x for x, y in intersect(idle_off, ivs)) for g, ivs in on_cpu(db, serving, lo, hi).items()})
+        print("  with the GPU idle and the serving thread off the CPU, its process's other threads on a CPU (ms a step):")
+        for g, ns in held.most_common(6):
+            print(f"    {ns / 1e6 / n:8.2f}  tid {g & 0xFFFFFF} {tnames.get(g, '?')} ({launches.get(g, 0)} launches)")
     for k, v in per.items():
         print(f"  {k:7s} mean {statistics.fmean(v):8.2f}  median {statistics.median(v):8.2f}  (ms a step; n_gaps a count)")
     print(f"  gaps >= {a.min_gap_us} us, by what the serving thread was in (ms a step):")

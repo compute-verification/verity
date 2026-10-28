@@ -42,7 +42,7 @@
 # serve-openai scans its draws every VERITY_DRAWS_POLL_S, also 0.2: with the seal's store slim, a window's release waits on both).
 # A Commit arm at T 8,192 needs VERITY_LEARN_HOST_BUDGET_MB above its step's committed bytes (the default 4,096 MiB fails
 # every step closed: "bounded staging: learning step 0 exceeds the transient host budget").
-# Published ($OUT): util.json and util.txt, host_gaps.txt, the profile (prof.nsys-rep), serve.json, summary.json, windows.jsonl's timings
+# Published ($OUT): util.json and util.txt, host_gaps.txt, phases.txt (PHASES=1: what got ranges, each thread's OS id), the profile (prof.nsys-rep), serve.json, summary.json, windows.jsonl's timings
 # and sizes (in util.json), the step trace, the loads' timings files (times and token counts), steps.txt. Request
 # bodies, outputs, sealed windows (deleted once measured) and the H1 transcripts stay in UTIL_ROOT/scratch/<run id>.
 set -uo pipefail
@@ -95,6 +95,7 @@ if [ "${1:-}" != leased ]; then
   "$PY" "$TREE/benchmarks/one_stage/host_gaps.py" --sqlite "$SCR/prof.sqlite" --trace "$D/advice_trace.jsonl" \
     --timings "$SCR/main.timings.json" --T "$T" > "$OUT/host_gaps.txt" 2>&1
   say "HOST GAPS rc=$?"; cat "$OUT/host_gaps.txt"
+  [ "${PHASES:-0}" = 1 ] && grep -a '^PHASES' "$SCR/serve.log" > "$OUT/phases.txt"
   if [ "${PYSPY:-0}" = 1 ]; then
     "$PY" "$TREE/benchmarks/one_stage/pyspy_steps.py" --trace-json "$SCR/pyspy.json" --t0 "$SCR/pyspy.t0" \
       --steps "$D/advice_trace.jsonl" --timings "$SCR/main.timings.json" --T "$T" --out "$OUT/pyspy_steps.json" > "$OUT/pyspy_steps.txt" 2>&1

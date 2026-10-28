@@ -8,9 +8,11 @@ module's forward: a range is a push and a pop, about a microsecond each.
 """
 from __future__ import annotations
 
+import ctypes
 import functools
 import importlib.abc
 import sys
+import threading
 import types
 from typing import Any
 
@@ -105,9 +107,24 @@ def install() -> None:
     sys.meta_path.insert(0, _AfterImport())
 
 
+def name_threads() -> None:
+    """Say on stdout each Python thread's OS id and name as it starts, and give its OS thread that name (15 bytes, the
+    kernel's limit; Nsight's ``ThreadNames``), so a thread in the profile is one in the code."""
+    libc = ctypes.CDLL(None)
+    boot = threading.Thread._bootstrap_inner  # type: ignore[attr-defined]
+
+    def named(self: threading.Thread) -> None:
+        libc.prctl(15, self.name.replace("ThreadPoolExecutor", "tpe").encode()[:15], 0, 0, 0)  # PR_SET_NAME
+        print(f"PHASES thread {threading.get_native_id()} {self.name}", flush=True)
+        boot(self)
+    threading.Thread._bootstrap_inner = named  # type: ignore[attr-defined]
+    print(f"PHASES thread {threading.get_native_id()} {threading.current_thread().name}", flush=True)
+
+
 def main() -> Any:
     sys.path.pop(0)
     install()
+    name_threads()
     from verity_vllm.pipeline import cli
     return cli.main()
 
