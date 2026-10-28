@@ -66,6 +66,12 @@ def test_chunked_lanes_fit_at_every_served_k():
         assert all(b["k_log"] <= 27 for b in r["proving"]["pouw"]["classes"][0]["blocks"])
 
 
+def test_stratified_draws_are_ln_s_over_delta_over_eps_a_class():
+    r = model.J(model.design(sampling={"law": "stratified"}))["proving"]["values"]
+    S = r["strata"]
+    assert r["draws"] == pytest.approx(S * (math.log(S) + 40 * math.log(2)) / 0.01, rel=0.01)
+
+
 def test_whole_rows_cost_at_least_exact_reads():
     assert model.opened(2048, 4096, "whole") == [4096] and model.opened(8192, 4096, "whole") == [4096, 4096]
     assert model.opened(2, 4096, "exact") == [2]

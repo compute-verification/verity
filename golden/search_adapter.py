@@ -73,7 +73,7 @@ LOWER_MIN = 15.0
 
 _FUSE = {"all": "every_op", "dedupe": "dedup", "fuse": "fused_mlp"}
 _NOISE = {"perm": "permuted", "periodic": "periodic", "fresh": "fresh"}
-_LAW = {"work": "achievability", "uniform": "uniform"}
+_LAW = {"work": "achievability", "uniform": "uniform", "stratified": "stratified"}
 _OVERLAP = {"none": False, "corun": True, "corun4": "corun4"}
 
 

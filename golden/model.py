@@ -23,7 +23,7 @@ The design dict (`design(**overrides)` builds one; `SCHEMA` lists every key, its
               record_bytes_per_cell, trees, h1_host ("pre" | "main" | "main+6192" | "stack" | "floor"), kdhash,
               hash_at_bar, coin_off_loop, noise_fused, denoise_g_frac, value_row_bytes, unit_cells,
               form ("tile" | "lanes")
-    sampling  delta, eps, pouw_sampled, law ("achievability" | "uniform"), retain_GB
+    sampling  delta, eps, pouw_sampled, law ("achievability" | "uniform" | "stratified"), retain_GB
     partition units: [{name, per_token, work, extra_ands, open_rows, out_bits, blocks?}] or None for the preset of
               `commit.values`; a unit drawn as a group of proof blocks lists them, blocks: [{name, count, ands}]
     prover    o_per_and, staged_per_and, stmt_fixed, stmt_per_and, speed, m_max, k_pad, shared
@@ -355,7 +355,9 @@ SCHEMA = {
         "pouw_sampled": (True, "PoUW's units drawn at (eps, delta) a window too (guarantee 2)"),
         "law": ("achievability", "achievability (q_u = min(1, Lambda w_u / C), Partitioning/Guarantees.lean) | uniform "
                                  "(the deployed audit's uniform kd-subset over a population's units, SampledKSLiveV3, "
-                                 "at eps w_avg / w_max of the units, so that eps still bounds the wrong work)"),
+                                 "at eps w_avg / w_max of the units, so that eps still bounds the wrong work) | "
+                                 "stratified (the deployed IntegrityPeriod law, benchmarks/sampling_plan/h200.py: each "
+                                 "unit class its own uniform kd-subset at eps of its units and delta / S, S classes)"),
         "retain_GB": (None, "GB a window may hold until its draw (the Commit's step bytes, Dither's values, H1's "
                             "records, times steps a window; None: INPUTS retain_GB); over it, the design is listed "
                             "infeasible"),
@@ -880,6 +882,9 @@ def proving(d: dict, units: list, label: str) -> dict:
         eps_units = s["eps"] * (F / n_all) / max(u["work"] for u in units)
         kd = uniform_kd(n_all, eps_units, s["delta"])
         out.update({"uniform_kd": kd, "uniform_eps_units": eps_units})
+    elif s["law"] == "stratified":
+        strata = sum(1 for u in units if u["per_token"] > 0)
+        out["strata"] = strata
     elif s["law"] != "achievability":
         raise ValueError(f"sampling.law {s['law']!r}")
     k_pad = round(pv["k_pad"] if pv["k_pad"] is not None else I("k_pad"))
@@ -891,7 +896,12 @@ def proving(d: dict, units: list, label: str) -> dict:
     plan = []
     for u in units:
         n = u["per_token"] * T * S
-        q = kd / n_all if s["law"] == "uniform" else min(1.0, lam * u["work"] / C)
+        if s["law"] == "uniform":
+            q = kd / n_all
+        elif s["law"] == "stratified":
+            q = uniform_kd(n, s["eps"], s["delta"] / out["strata"]) / n if n > 0 else 0.0
+        else:
+            q = min(1.0, lam * u["work"] / C)
         if u.get("credit_work") and W_cred > 0:
             qc = min(1.0, lam * u["credit_work"] / (s["eps"] * W_cred))
             out["draws_compute"] += n * qc
