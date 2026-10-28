@@ -52,6 +52,7 @@
   "Properties.Composition",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
   "Properties.Accounting.JointBridge.WorkOfCreditedWords",
+  "Properties.Flock.Circuit",
   "Properties.Challenger"
  ],
  "proved_in": ["../Proofs"],
@@ -581,6 +582,11 @@
    "imports": ["CoreProtocol", "SampledProofs", "Flock", "Lms", "Lean"],
    "except": [],
    "why": "the challenger's binding is stated against the code's own functions (the interface's `Live`, the challenger's reader `drawCoins`, its record, close and ledger messages) and a model of the device's log on Lean core: nothing of Mathlib or of `security`, never a proof"
+  },
+  "Properties.Flock": {
+   "imports": ["Mathlib", "Definitions.Flock", "Flock", "Properties.Flock"],
+   "except": [],
+   "why": "the circuit a parsed C-Flock circuit file is built into (`Placed.keyProg`, `Layout.outsOf`, `Built`) is defined over the verifier's own types and checks (`Flock.Circuit`, `Flock.Net`) and C-Flock's circuit vocabulary (`Definitions.Flock.Circuit`), never a proof"
   }
  },
  "reads_exempt": {
