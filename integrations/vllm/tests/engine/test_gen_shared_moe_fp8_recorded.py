@@ -1,7 +1,7 @@
 """The block-FP8 shared-expert MoE scope on RECORDED events: GLM-5.3 FP8 at TP8 on 8x H200, vLLM's default kernels.
 
 `fixtures/glm53_tp8_moe_l3.rank0.jsonl.gz` is layer 3 (the first MoE layer) of rank 0's observer log of the Match capture
-`sweep-auto/20261015T085245Z` on vy-glm53-h8 (B1 i256 o32 greedy, vLLM d9105ea80, eager, `VLLM_BATCH_INVARIANT=0`,
+`sweep-auto/20261015T085245Z` on the 8x H200 node (B1 i256 o32 greedy, vLLM d9105ea80, eager, `VLLM_BATCH_INVARIANT=0`,
 `VLLM_DISABLE_SHARED_EXPERTS_STREAM=1`, Build tree b2bf72032; the source log is art:1964424e2964937273c9fb727864e025f02b3326fa6a63c13ef8630afc69f931),
 cut by `tests/engine/moe_scope_cut.py` (its `moe_scope_cut` Note names the source log and its sha256): the RunHeader, the layer's
 weight Roots, and for the prefill step (256 rows) and the first decode step (1 row) the `vllm.moe_forward_shared` scope and the add

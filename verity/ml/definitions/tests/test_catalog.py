@@ -51,6 +51,13 @@ COUNT -= 3  # `GeluTanhMulBf16_v2`, `GeluTanhMul_v2` and `GeluTanhMul_v3`, retir
 COUNT += 1  # `dead_free`'s AttnBlockFirst_v2, a line of its own so it merges with any other change to the count
 
 COUNT += 26  # the training kernels: `torch_attention`'s 7, `torch_loss`'s 13 and `torch_embedding`'s 6
+COUNT += 6  # the step's blocks: `torch_attention`'s 2, `torch_loss`'s 2 rows, `torch_embedding`'s entry and tied
+
+COUNT += 1  # `torch_embedding`'s forward, `EmbeddingTorch_v1`
+
+COUNT += 11  # `torch_embedding`'s EmbeddingBackwardTied_v2, the ids sorted once, and its 10 parts
+
+COUNT += 10  # `torch_clip`'s, clip_grad_norm_ on bf16 grads
 
 COUNT += 1  # dead_free's TokenSelectGroups_v1, a line of its own so it merges with any other change to the count
 
@@ -77,6 +84,11 @@ COUNT += 1  # `torch_train`'s RmsNormTorchWeightGrad_v1
 COUNT += 1  # `cublas_bf16`'s CublasSplitKGemmBf16PartialsAligned_v1
 
 COUNT += 2  # `b1`'s RMSNormFusedCudaAdd_v1 and RMSNormFusedCudaTail_v1, a line of its own so it merges with any other change to the count
+
+COUNT += 3  # `torch_train`'s RmsNormTorch_v1 with its In and Out parts
+
+COUNT += 5  # `torch_step`'s TrainStep_v1 with its TrainStepConstants_v1, and F.linear's three GEMMs, LinearTorch_v1,
+# LinearTorchDx_v1 and LinearTorchDw_v1
 
 
 def test_the_catalog_loads_every_definition_and_no_other():
