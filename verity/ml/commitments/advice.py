@@ -25,7 +25,7 @@ from .indexed import RangeIndexedDomain
 from .merkle import CommitmentDomain
 from .rowleaf import row_leaf
 
-__all__ = ["OWNER", "PORT", "Commitment", "Opening", "commit", "domain", "leaf", "verify"]
+__all__ = ["OWNER", "PORT", "Committed", "Opening", "commit", "domain", "leaf", "verify"]
 
 INST = hm96.SHA512
 OWNER = -1
@@ -56,7 +56,7 @@ class Opening:
 
 
 @dataclass(frozen=True)
-class Commitment:
+class Committed:
     """The prover's side: the rows, their salts and the tree.  `root` is what goes public."""
 
     binding: bytes
@@ -84,11 +84,11 @@ class Commitment:
 
 
 def commit(rows: Sequence[bytes], n_bits: int, binding: bytes, salts: Sequence[bytes] | None = None,
-           key: bytes = INST.default_key) -> Commitment:
+           key: bytes = INST.default_key) -> Committed:
     """Commit `rows` (each ``ceil(n_bits / 8)`` bytes) under `binding`; fresh salts unless `salts` is given."""
     rows = tuple(bytes(r) for r in rows)
     salts = tuple(bytes(s) for s in salts) if salts is not None else tuple(INST.fresh_salt() for _ in rows)
-    return Commitment(bytes(binding), n_bits, rows, salts, key)
+    return Committed(bytes(binding), n_bits, rows, salts, key)
 
 
 def verify(root: bytes, count: int, n_bits: int, binding: bytes, opening: Opening, key: bytes = INST.default_key) -> bool:

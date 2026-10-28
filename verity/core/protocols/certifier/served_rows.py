@@ -116,7 +116,7 @@ def _row(bits: Sequence[int]) -> tuple[bytes, int]:
 class Served:
     """The prover's side: the registration, its rows and their salts, and the steps G a row holds."""
 
-    registration: ADV.Commitment
+    registration: ADV.Committed
     G: int
 
     def record(self) -> dict:

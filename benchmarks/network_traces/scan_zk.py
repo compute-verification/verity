@@ -310,7 +310,7 @@ def block_binding(set_name: str, n: int) -> bytes:
                                                   "schema": BitRowLeaf.hiding_schema})
 
 
-def tree(kind: str, rows: list[list[int]], heads: list, session: bytes) -> ADV.Commitment:
+def tree(kind: str, rows: list[list[int]], heads: list, session: bytes) -> ADV.Committed:
     """`kind`'s rows (bit rows of whole u16 words) committed as hiding rows, bound to the session and the group's
     ingress link-windows' heads: `prog`'s under the block's o1 frame binding (`block_binding`), so the tree is the
     block's o1, the others' by their value (`VALUES`)."""
@@ -319,14 +319,14 @@ def tree(kind: str, rows: list[list[int]], heads: list, session: bytes) -> ADV.C
     return ADV.commit([bit_row((_words(r), 16))[0] for r in rows], len(rows[0]), binding)
 
 
-def tree_bc(reg: ADV.Commitment, i: int, bits: list[int] | None = None) -> bytes:
+def tree_bc(reg: ADV.Committed, i: int, bits: list[int] | None = None) -> bytes:
     """Row ``bits`` (leaf i's own row by default) committed under leaf i's salt, b‖c: as a statement's table row of it
     is, which opens leaf i only when the row is leaf i's."""
     row = reg.rows[i] if bits is None else bit_row((_words(bits), 16))[0]
     return ADV.INST.commit_string(reg.key, BitRowLeaf(reg.n_bits).layout().digest(row), reg.salts[i])
 
 
-def tree_port(kind: str, reg: ADV.Commitment, reads: list[int], reads_from: int) -> dict:
+def tree_port(kind: str, reg: ADV.Committed, reads: list[int], reads_from: int) -> dict:
     """The verifier's own ``--registered`` port of `kind`'s registration: unit ``reads_from + i`` reads leaf reads[i]."""
     n = len(reg.rows)
     e = {"leaves": n, "words": reg.n_bits // 16, "word_bits": 16, "domain": ADV.domain(reg.binding, n).domain_id.hex()}
@@ -334,12 +334,12 @@ def tree_port(kind: str, reg: ADV.Commitment, reads: list[int], reads_from: int)
     return port | ({REG.READS_FROM: int(reads_from)} if reads_from else {})
 
 
-def tree_entry(kind: str, reg: ADV.Commitment, positions) -> dict:
+def tree_entry(kind: str, reg: ADV.Committed, positions) -> dict:
     return {"value": VALUES[kind], "positions": [int(p) for p in positions],
             "paths": [b"".join(reg.open(p).path).hex() for p in positions]}
 
 
-def tree_refusal(port: dict, reg: ADV.Commitment, entry: dict, bcs: list[bytes | None]) -> str | None:
+def tree_refusal(port: dict, reg: ADV.Committed, entry: dict, bcs: list[bytes | None]) -> str | None:
     """The host's read of a statement's entry on a scan registration, as Lean's registered reads make it (in
     `warden_rows.refusal`'s order): None when it holds. A b‖c of None is a row the host can't name (an output the
     reference gives none of), which opens no leaf."""
@@ -573,7 +573,7 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
                            failed=got.failed, failed_why=got.failed_why, run_s=round(time.time() - t0, 1))
 
 
-def _bits(reg: ADV.Commitment, i: int) -> list[int]:
+def _bits(reg: ADV.Committed, i: int) -> list[int]:
     row = reg.rows[i]
     return [row[k // 8] >> k % 8 & 1 for k in range(reg.n_bits)]
 

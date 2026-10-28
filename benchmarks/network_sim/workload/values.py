@@ -27,7 +27,7 @@ class UnitValues:
     unit: str
     gates: tuple[int, ...]
     width: int
-    registration: advice.Commitment
+    registration: advice.Committed
 
     @property
     def root(self) -> bytes:

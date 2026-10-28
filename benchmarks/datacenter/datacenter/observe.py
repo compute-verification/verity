@@ -73,7 +73,7 @@ class Trace:
     placement: Placed
     inputs: dict[str, int | Sequence[int]]
     values: dict[int, int]
-    commitment: advice.Commitment
+    commitment: advice.Committed
     registration: RegisteredInputs | None
     records: list[PortRecord]
     answers: list[Response]
