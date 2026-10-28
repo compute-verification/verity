@@ -36,8 +36,10 @@ and the stream's registrations built from the stream's outcomes of record alone 
   the Definition its pinned digest names), and each link-window a statement of T instances, unit t bucket t, on rows
   ``pub`` and ``wit`` (`IngressTie.layout`) and the output row ``o0``, the verdict bit: a shared-row file whose ``wit``
   table is the window's bucket rows under the warden's salts and paths, its registered port. A round registers,
-  selects, proves live behind the firewall, delivers, and decides on the proof: the verifier's own Lean run with its
-  own registered reads at the warden's root (`IngressTie.registered`), each ``pub`` row opened only to its own copy
+  selects every window (Selection All, which reads no coin: the summary's ``coins``, beside every Flock session's
+  own, `round_coins.FLOCK`), proves live behind the firewall, delivers, and decides on the proof: the verifier's own
+  Lean run with its own registered reads at the warden's root (`IngressTie.registered`), each ``pub`` row opened only
+  to its own copy
   (its lanes from the advice and the release) and each ``o0`` row read. Per window: prove (the session's wall time,
   the prover's ``prove_total_s``, proof bytes) and verify (the verifier of record's run, Lean included). The members
   run one after another, one firewalled session at a time (`n2_zk.ONE_SESSION`: ``--jobs`` is 1).
@@ -67,6 +69,7 @@ sys.path.insert(0, str(HERE))
 import certifier_serve as cs  # noqa: E402
 import leak_scan as LS  # noqa: E402
 import n2_zk as Z  # noqa: E402
+import round_coins as RC  # noqa: E402
 from verity.core.protocols.certifier import advice as ADV, advised as AD, head_check as HC  # noqa: E402
 from verity.core.protocols.certifier import io_request as Q, service as SVC  # noqa: E402
 from verity.core.protocols.certifier import tie_service as TS, warden as W, warden_rows as WR  # noqa: E402
@@ -572,7 +575,8 @@ def prove(a) -> int:
                               "bits": {p: tie.bits(p) for p in TS.PORTS}},
                      "changed": {name: what for name, (_, _, _, what) in plan.items()},
                      "advice": {name: AD.digest(rd.advice) for name, rd in rounds.items()},
-                     "debug_clear": a.debug_clear, "received": RECEIVED}
+                     "debug_clear": a.debug_clear, "received": RECEIVED,
+                     "coins": {"draw": Z.NO_COIN["draw"], "flock": RC.FLOCK}}
     summary["instances_s"] = round(time.time() - t, 1)
     for name, rd in rounds.items():
         summary.setdefault("members", {})[name] = {

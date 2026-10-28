@@ -13,9 +13,10 @@
 #      N2_ADVICE_FROM_IO=1 (--advice-from-io, with N2_E2E: a run with no endpoint advice, such as a gate's rehearsal,
 #      on an advice synthesized from its certified I/O, labelled so)
 #      N2_DRAW (--draw K: each member's period sampled, K of its windows drawn after the period is committed and only
-#      those proved; every window by default, and the verifier's own coins)  N2_DELTA (--delta)
-#      N2_CHALLENGER=local|gate:USER@HOST (--challenger, with N2_DRAW: the draws on the auditor's challenger's coins,
-#      one session for every member, pinned on main's first-parent history fetched from the clone's origin); with
+#      those proved; every window by default)  N2_DELTA (--delta)
+#      N2_CHALLENGER=local|gate:USER@HOST (--challenger, required with N2_DRAW: the draws on the auditor's challenger's
+#      coins, a session of its own for each member, pinned on main's first-parent history fetched from the clone's
+#      origin, or on MAIN_SHA's when set, as for a challenger pinned at a commit of next's first-parent history); with
 #      gate:…, N2_PEER (this node as the gate's /etc/vy/peers names it), N2_CHALLENGER_KEY (the challenger's key record,
 #      challenger-key/v1) and N2_GATE_KEY (the lane's gate key)
 #      N2_MEMBERS (--members, comma-separated; every member by default)
@@ -50,16 +51,19 @@ if [ -f "$E2E" ]; then
   E2E=${E2E%/rehearsal/honest/plan.json}
 fi
 CH=()
-if [ -n "${N2_CHALLENGER:-}" ]; then   # the verifier's own copy of main's first-parent history, which the session's pin must be on
+if [ -n "${N2_CHALLENGER:-}" ]; then   # the verifier's own copy of the first-parent history the session's pin must be on
   UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)
   git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main > "$OUT/fetch-main.log" 2>&1 \
     || git fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main >> "$OUT/fetch-main.log" 2>&1 \
-    && git rev-list --first-parent refs/remotes/origin/main > "$OUT/main.txt" || { tail -5 "$OUT/fetch-main.log"; exit 4; }
+    && git rev-list --first-parent "${MAIN_SHA:-refs/remotes/origin/main}" > "$OUT/main.txt" \
+    || { tail -5 "$OUT/fetch-main.log"; log "n2adv: no first-parent history of ${MAIN_SHA:-origin/main} in this clone"; exit 4; }
   CH=(--challenger "$N2_CHALLENGER" --main "$OUT/main.txt")
   case $N2_CHALLENGER in gate:*)
     [ -n "${N2_PEER:-}" ] && [ -n "${N2_CHALLENGER_KEY:-}" ] || { log "n2adv: N2_CHALLENGER=gate:… needs N2_PEER and N2_CHALLENGER_KEY"; exit 4; }
     CH+=(--peer "$N2_PEER" --challenger-key "$N2_CHALLENGER_KEY" ${N2_GATE_KEY:+--gate-key "$N2_GATE_KEY"});;
   esac
+elif [ -n "${N2_DRAW:-}" ]; then
+  log "n2adv: N2_DRAW needs N2_CHALLENGER (local|gate:USER@HOST): nothing draws on the verifier's own coins"; exit 4
 fi
 log "n2adv: proving, ${E2E:+e2e $E2E windows ${N2_WINDOWS:-all}${N2_CLOCK_STAND_IN:+ clock stand-in}${N2_ADVICE_FROM_IO:+ advice from io}, }seed" \
   "${N2_SEED:-7}, members ${N2_MEMBERS:-all}, draw ${N2_DRAW:-all}${N2_CHALLENGER:+ on $N2_CHALLENGER}${N2_DRY:+, dry}"

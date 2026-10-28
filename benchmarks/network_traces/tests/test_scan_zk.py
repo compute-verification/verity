@@ -10,11 +10,13 @@ its output 0, its state and view the honest ones. A group of link-windows (IO-TI
 template and link-window, its members the Program's ranges. A warden_serve run's directory (`--warden-run`, here the
 synthetic run published as `warden_serve.Publisher` publishes a served one) is read under its deployment's key, its
 registration's ``rows/<direction>/<w>`` roots (`scan_zk.warden_roots`) the root and domain of each row registration in
-``cells.jsonl``, and refused by name where a row, the key or the schedule isn't the warden's. The honest round on the
-challenger's coins (``--challenger``): its flags refused by name where they can't draw, the group's root bound to the
-warden's signed link-windows, and its Spec what the round's registration shows (`service.check_public`) over the units
-its `Stream` takes. w63k4, w63's class at a window circuit's KO 4 and KI 32, serves w63's network certifier at
-egress_cells 5 and reads its rounds as w63's. Nothing here lowers or proves (`scan_zk.prove` does, on a node)."""
+``cells.jsonl``, and refused by name where a row, the key or the schedule isn't the warden's. Every round on a
+challenger session of its own (``--challenger``): flags that can't name one refused by name before anything runs, each
+round's root bound to the warden's signed link-windows, the step and the round, and the honest round's Spec what its
+registration shows (`service.check_public`) over the units its `Stream` takes. w63k4, w63's class at a window circuit's
+KO 4 and KI 32, serves w63's network certifier at egress_cells 5 and reads its rounds as w63's. Nothing here lowers or
+proves (`scan_zk.prove` does, on a node)."""
+
 from __future__ import annotations
 
 import hashlib
@@ -784,17 +786,41 @@ def test_a_fails_reason_outside_its_fails_bucket_is_refused_by_name_and_one_outs
 
 
 @pytest.mark.parametrize("flags,why", [
-    (["--challenger", "local", "--main", "m.txt"], "give --draw"),
-    (["--challenger", "remote", "--draw", "16", "--main", "m.txt"], "local or gate:USER@HOST, not 'remote'"),
-    (["--challenger", "gate:research@h", "--draw", "16", "--main", "m.txt", "--peer", "p"],
-     "needs --peer and --challenger-key"),
+    ([], "nothing draws on the verifier's own coins"),
+    (["--draw", "16", "--main", "m.txt"], "nothing draws on the verifier's own coins"),
+    (["--challenger", "remote", "--main", "m.txt"], "local, loopback:HOST:PORT or gate:USER@HOST, not 'remote'"),
+    (["--challenger", "gate:research@h", "--main", "m.txt", "--peer", "p"], "needs --peer and --challenger-key"),
     (["--challenger", "local", "--draw", "16"], "needs --main"),
     (["--group", "0"], "--group is 1 or more link-windows"),
 ])
-def test_a_challenger_draw_that_cant_draw_is_refused_by_name_before_anything_runs(tmp_path, capsys, flags, why):
+def test_a_scan_that_cant_name_its_challenger_is_refused_by_name_before_anything_runs(tmp_path, capsys, flags, why):
+    """Every round draws, every unit included, so a scan that proves anything names its challenger; only ``--dry``,
+    which draws nothing, runs without one."""
     with pytest.raises(SystemExit):
-        sz.main(["prove", "--dry", "--out", str(tmp_path / "out"), *flags])
-    assert re.search(why, capsys.readouterr().err) and not (tmp_path / "out").exists()
+        sz.main(["prove", "--bin", "b", "--lean", "l", "--out", str(tmp_path / "out"), *flags])
+    assert re.search(re.escape(why), capsys.readouterr().err) and not (tmp_path / "out").exists()
+
+
+def test_each_round_opens_a_session_of_its_own_on_its_root_and_ends_its_turn_on_the_way_out(tmp_path, monkeypatch):
+    """`scan_zk.challenger` on the fake challenger: each round's session is on `round_coins.root` of the group's
+    `window_root`, the step and the round, so no two rounds share coins; leaving the round, by an error too, ends its
+    turn and publishes the session's evidence, and a round that never planned its draw opened nothing."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from test_round_coins import fake_challenger
+
+    a = fake_challenger(tmp_path, monkeypatch)
+    at = sz.link(tmp_path / "syn")
+    roots = {}
+    for name in sz.ROUNDS:
+        with sz.challenger(a, at, name, tmp_path / name) as coins:
+            roots[name] = coins.root
+        assert "was not opened" in coins.published["error"], coins.published
+    assert roots == {n: sz.RC.root(sz.window_root(at), "scan", n) for n in sz.ROUNDS}
+    assert len(set(roots.values())) == len(sz.ROUNDS)
+    with pytest.raises(RuntimeError, match="the round failed"), sz.challenger(a, at, "honest", tmp_path / "again") as coins:
+        raise RuntimeError("the round failed")
+    assert coins.published is not None and not coins.held(b"", b"", None)["ok"]
+    assert not (tmp_path / "coins.log").exists()
 
 
 def test_the_window_root_is_the_wardens_signed_link_windows(tmp_path):
@@ -846,3 +872,55 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
     assert stream.coin_source == "verifier"
     with pytest.raises(ValueError, match="not the check's program"):
         sz.S.Stream(spec, units[::-1], budget=1, delta=2.0 ** -20, challenger=sz.CHALLENGER)
+    with pytest.raises(ValueError, match="generator form is over the scan's 3 templates"):
+        sz.RoundStream(spec, units, 2.0 ** -20, lambda n: bytes(n), (2, 2))
+
+
+def test_the_joint_rounds_stream_holds_its_registration_to_the_generator_form():
+    """The joint round's stream (`RoundStream` at the round's ``(nb, every)``; stand-in templates with the scan's
+    parameters) builds its own Program in the generator form (`scan_root`) at the counts `register` takes, so
+    one-stage's registration check holds the round's registration to it and its proof blocks are in order (`register`'s
+    `population-order`), where `service.Stream`'s own copy, the mixed population, refuses it (`R2-program`); a
+    registration of the generator form at other boundaries is refused, as are counts that aren't N. Without ``scan``
+    the stream's Program is the mixed one. Python's check alone: the stream's registration runs the Lean's
+    (`verifier.check`) too, which the dry run's honest and chain rounds hold."""
+    cls = SimpleNamespace(NR=2, EVERY=2, KO=1, IDB=1)
+    G, T, NE, k = 1, 8, sz.IS.entry_bits(cls), 4
+    nb = G * T // cls.EVERY
+    defs = {"first": _lanes("ScanZkTestScanFirst", ("row",), cls.NR, NE),
+            "ingress": _lanes("ScanZkTestScanBucket", ("row", "sin"), cls.NR, NE),
+            "egress": _lanes("ScanZkTestScanEgress", ("state",), 0, NE)}
+    members = sz.members_of(sz.TEMPLATES, G, T)
+    counts = sz.counts_of(members)
+
+    def root(every: int):
+        return sz.scan_root([(defs[t], counts[t], sz.FIXED[t]) for t in sz.TEMPLATES], nb, every)
+
+    query = sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES])
+    pg = SimpleNamespace(program=root(cls.EVERY), query=query, templates=sz.TEMPLATES, scan=(nb, cls.EVERY),
+                         stagers={t: SimpleNamespace(defn=defs[t]) for t in sz.TEMPLATES})
+    staged = [{"name": m.name, "n": len(m.buckets), "defn": defs[m.template]} for m in members]
+    want = {"scan/state": {"leaves": T, "domain": "cc" * 64}}
+    spec, units, given = sz.spec_of(pg, staged, want, {"scan/state": sz.BitRowLeaf.hiding_schema}, k, "dd" * 64)
+    n = 2 * G * T
+    law = sz.S.selection_law(spec.selection, n)
+
+    def record(program) -> dict:
+        roots = [{"port": "scan/state", "root": "01" * 64, **want["scan/state"]}]
+        return R.record(program, query, sz.DR.parse_law(f"stratified:{k}"), sz.S.SCHEME, roots, {"kind": "stand-in"},
+                        leaf_layer="ee" * 64)
+
+    def check(rec: dict, program) -> tuple[str, ...]:
+        return R.check(rec, program, query, law, sz.S.SCHEME, want, leaf_layer="ee" * 64).codes
+
+    stream = sz.RoundStream(spec, units, 2.0 ** -20, lambda m: bytes(m), pg.scan)
+    own = stream._program(n, given)
+    rec = record(pg.program)
+    assert sz.PA.program_digest(own) == rec["program"] == sz.PA.program_digest(pg.program)
+    assert check(rec, own) == () and sz.PA.in_order(own, query, n)
+    mixed = sz.S.Stream(spec, units, budget=1, delta=2.0 ** -20, challenger=sz.CHALLENGER)._program(n, given)
+    assert "R2-program" in check(rec, mixed)
+    assert "R2-program" in check(record(root(2 * cls.EVERY)), own)
+    assert stream._program(n + 1, given) is None
+    plain = sz.RoundStream(spec, units, 2.0 ** -20, lambda m: bytes(m))._program(n, given)
+    assert sz.PA.program_digest(plain) == sz.PA.program_digest(mixed) != rec["program"]

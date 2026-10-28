@@ -2,7 +2,9 @@
 certifier-serve run's records, clock certificates and the client's kept copies (`n2_zk.virtual`, fresh keys, each
 window's declared sync signed), refuses the window of a record whose signature is changed, every window from a clock
 certificate's, a kept certificate whose signature is changed, and a key under `lms.DEPLOYED`'s height with --deployed;
-the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
+the report needs the endpoint's step on the advice profile, needs each drawing round on a challenger session of its own
+that held (the coins step: none, two on one root or one not held refuse it), never accepts a stand-in, merges N2's
+members proved in
 several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose faulty
 window was drawn; the draw's bound at δ is the integrity profile's count bound, which counts a miss of exactly δ, as
 Lean's does; leak counts the scan's widths and terms on a warden run's files, and refuses a sampled draw and a warden
@@ -156,6 +158,14 @@ def test_job_keeps_no_gate_runs_witness(tmp_path):
     assert kept == ["end.json", "out/deployment.json"]
 
 
+def _held(step: str, *rounds: str, challenger: str = "local") -> dict:
+    """Step `step`'s summary ``coins``: each of `rounds` on a challenger session of its own whose evidence held."""
+    return {"challenger": challenger, "flock": {"by": "the session's coin tree, drawn by the Flock server itself"},
+            "rounds": {r: {"source": f"challenger:{challenger}", "root": hashlib.sha512(f"{step}/{r}".encode()).hexdigest(),
+                           "session": f"{step}-{r}", "coins_reason": None, "error": None, "read_bytes": 64,
+                           "negatives_refused": {"swapped": True}, "ok": True} for r in rounds}}
+
+
 def _steps(tmp_path, job: dict, endpoint: bool = True) -> SimpleNamespace:
     def put(name, doc):
         (tmp_path / name).write_text(json.dumps(doc))
@@ -171,7 +181,8 @@ def _steps(tmp_path, job: dict, endpoint: bool = True) -> SimpleNamespace:
         n2=put("n2.json", {"ok": True, "members": {
             "honest": {"windows": [window], "network": {"accepted": True}, "ok": True},
             "tampered": {"windows": [window | {"accepted": False}], "network": {"accepted": False}, "ok": True}}}),
-        scan=put("scan.json", {"ok": True, "T": 1, "rounds": {"honest": {"audit": {"window_accepted": True}}}}),
+        scan=put("scan.json", {"ok": True, "T": 1, "rounds": {"honest": {"audit": {"window_accepted": True}}},
+                               "coins": _held("scan", "honest")}),
         job=put("job.json", job), warden_run="g1/warden")
 
 
@@ -210,9 +221,11 @@ def test_report_merges_runs_and_counts_a_negative_that_escaped_the_draw(tmp_path
 
     def run(name, member, units):
         doc = {"draw": draw, "ok": name == "honest", "members": {name: member},
-               "sampled": {name: {"draw": {"units": units}, "why": []}}}
+               "sampled": {name: {"draw": {"units": units}, "why": []}}, "coins": _held("n2", name)}
         (tmp_path / f"{name}.json").write_text(json.dumps(doc))
         return str(tmp_path / f"{name}.json")
+
+    Path(steps.job).write_text(json.dumps(ok | {"n2_sampled": True}))
 
     structured = {"leaked": [], "verifier_found": ["head egress 45 @320"], "structured": {"head egress 45 @320": "across"},
                   "control": {"holds_all": True}}
@@ -221,6 +234,7 @@ def test_report_merges_runs_and_counts_a_negative_that_escaped_the_draw(tmp_path
     got = cr.report(steps)
     n2s = got["steps"]["n2"]
     assert got["verdict"] == "accepted" and got["negatives_refused"] == {"n2/moved": "escaped the draw"}
+    assert sorted(got["steps"]["coins"]["rounds"]) == ["n2/honest", "n2/moved", "scan/honest"]
     assert n2s["members"]["honest"]["structured"] == {"head egress 45 @320": "across"}
     assert n2s["members"]["moved"]["escaped_the_draw"] == {"faulty_windows": [0], "drawn": [1, 2]}
     assert n2s["eps_at_delta"]["law"] == "subset:2" and (n2s["eps_at_delta"]["units"], n2s["eps_at_delta"]["drawn"]) == (4, 2)
@@ -232,6 +246,52 @@ def test_report_merges_runs_and_counts_a_negative_that_escaped_the_draw(tmp_path
                                  "received": {**structured, "leaked": ["head egress 45 @320"]}}, [1, 2])
     got = cr.report(steps)["steps"]["n2"]
     assert got["why"].startswith("honest: witness pieces leaked to the verifier: ['head egress 45 @320']")
+
+
+def test_the_coins_step_holds_each_drawing_round_to_a_challenger_session_of_its_own(tmp_path):
+    """Each scan round and each member of a sampled N2 period on a session of its own that held; the tie and N2 at
+    every window read no coin. A round with no session, a sampled period with none, two rounds on one root and a
+    session whose evidence doesn't hold refuse the step, and with it the report."""
+    scan = {"rounds": {"honest": {}, "chain": {}}, "coins": _held("scan", "honest", "chain")}
+    sampled = {"coins": _held("n2", "honest", "tampered")}
+    tie = {"coins": {"draw": cr.NO_COIN, "flock": sampled["coins"]["flock"]}}
+    job = {"challenger": "local", "n2_sampled": True}
+    got = cr.coins_step(scan, sampled, tie, job)
+    assert (got["verdict"], got["why"], got["challenger"]) == ("accepted", None, "local")
+    assert sorted(got["rounds"]) == ["n2/honest", "n2/tampered", "scan/chain", "scan/honest", "tie"]
+    assert got["rounds"]["tie"] == {"source": None, "draw": cr.NO_COIN}
+    assert got["rounds"]["scan/chain"]["source"] == "challenger:local" and got["rounds"]["scan/chain"]["ok"]
+    assert got["open"] == ["every Flock session's coins (scan, N2, tie): the session's coin tree, drawn by the Flock "
+                           "server itself"]
+    assert cr.coins_step(scan, {"coins": {"rounds": {}}}, tie, {**job, "n2_sampled": False})["verdict"] == "accepted"
+
+    def why(scan=scan, sampled=sampled, job=job):
+        got = cr.coins_step(scan, sampled, tie, job)
+        assert got["verdict"] == "refused"
+        return got["why"]
+
+    assert why(scan={**scan, "rounds": {**scan["rounds"], "tampered": {}}}) == "scan/tampered: no challenger session"
+    assert why(sampled={"coins": {"rounds": {}}}) == "n2 (sampled): no challenger session"
+    assert why(sampled={"coins": {"rounds": {**sampled["coins"]["rounds"], "honest": {"source": None, "draw": cr.NO_COIN}}}}) == \
+        "n2/honest: no challenger session"
+    unopened = json.loads(json.dumps(sampled))
+    unopened["coins"]["rounds"]["tampered"] |= {"ok": False, "session": None, "error": "the gate is unreachable"}
+    assert why(sampled=unopened) == "n2/tampered: the gate is unreachable"
+    moved = json.loads(json.dumps(scan))
+    moved["coins"]["rounds"]["chain"] |= {"ok": False, "coins_reason": "the segment's root isn't the round's"}
+    assert why(scan=moved) == "scan/chain: the segment's root isn't the round's"
+    shared = json.loads(json.dumps(scan))
+    shared["coins"]["rounds"]["chain"]["root"] = shared["coins"]["rounds"]["honest"]["root"]
+    assert why(scan=shared) == "scan/chain: its session's root is scan/honest's: each round draws on a session of its own"
+
+    steps = _steps(tmp_path, {"profile": "advice", "rc": {"n2": "0", "scan": "0"}})
+    doc = json.loads(Path(steps.scan).read_text())
+    Path(steps.scan).write_text(json.dumps({**doc, "coins": None}))
+    got = cr.report(steps)
+    assert got["verdict"] == "refused" and got["why"] == {"coins": "refused: scan/honest: no challenger session"}
+    assert "## Coins (the challenger: None)" in cr.markdown(got)
+    Path(steps.scan).write_text(json.dumps(doc))
+    assert "- scan/honest: challenger:local, session scan-honest, held" in cr.markdown(cr.report(steps))
 
 
 @pytest.fixture(scope="module")
@@ -359,7 +419,7 @@ def test_a_scan_only_report_exits_0_on_the_expected_verdicts_and_1_on_a_wrong_on
     n2_summary, steps.n2 = steps.n2, None
     rnd = lambda accepted, found=(): {"audit": {"window_accepted": accepted, "received": {"verifier_found": list(found)}}}
     put = lambda honest, forged, ok=True: Path(steps.scan).write_text(json.dumps(
-        {"ok": ok, "T": 32, "rounds": {"honest": honest, "forged": forged}}))
+        {"ok": ok, "T": 32, "rounds": {"honest": honest, "forged": forged}, "coins": _held("scan", "honest", "forged")}))
     args = ["report", "--custody", steps.custody, "--certs", steps.certs, "--endpoint", steps.endpoint, "--scan",
             steps.scan, "--job", steps.job, "--warden-run", steps.warden_run]
     run = lambda name: (cr.main(args + ["--out", str(tmp_path / name)]),
@@ -474,7 +534,8 @@ def test_a_refused_report_names_each_failing_step_and_its_why_and_a_scan_that_ex
         return {"audit": {"window_accepted": True, "received": {"verifier_found": list(k)}}}
 
     Path(steps.scan).write_text(json.dumps({"ok": False, "T": 1, "rounds": {
-        "honest": found("first o1 0 @0"), "chain": found("first o1 0 @0"), "tampered": found()}}))
+        "honest": found("first o1 0 @0"), "chain": found("first o1 0 @0"), "tampered": found()},
+        "coins": _held("scan", "honest", "chain", "tampered")}))
     got = cr.report(steps)
     why = ("scan_zk exited 1; honest: witness pieces found at the verifier: ['first o1 0 @0']; chain: witness pieces "
            "found at the verifier: ['first o1 0 @0']; scan_zk's ok is not true")

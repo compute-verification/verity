@@ -11,12 +11,13 @@
 #      SC_WARDEN_RUN=DIR (a warden_serve run's directory, `prove --warden-run`)  SC_REHEARSE=1 (first a rehearsal,
 #      `warden_serve.py rehearse --fake --ids` at the class's schedule, SC_REQUESTS requests at SC_RATE a second, the
 #      fake's id-form answer SC_FIRST_MS after each (past the warden's delay: a void run), SC_PROMPT_MAX and
-#      SC_MAX_TOKENS its traffic's sizes, and prove its run)  SC_DRAW=K (`prove --draw K`: Lean draw --stratified K on
-#      the verifier's coins)
-#      SC_CHALLENGER=local|gate:USER@HOST (with SC_DRAW: the honest round's K on the challenger's coins, `prove
-#      --challenger`, pinned on main's first-parent history fetched from the clone's origin; gate: also SC_PEER, this
-#      node as the gate's /etc/vy/peers names it, SC_CHALLENGER_KEY, the deployment's challenger-key/v1 record, and
-#      SC_GATE_KEY, the lane's gate key)
+#      SC_MAX_TOKENS its traffic's sizes, and prove its run)  SC_DRAW=K (`prove --draw K`: each round draws
+#      stratified:K; stratified:N by default)
+#      SC_CHALLENGER=local|gate:USER@HOST (required unless SC_DRY: every round's draw on a session of its own of the
+#      challenger's, `prove --challenger`, pinned on main's first-parent history fetched from the clone's origin, or on
+#      MAIN_SHA's when set, as for a challenger pinned at a commit of next's first-parent history; gate: also SC_PEER,
+#      this node as the gate's /etc/vy/peers names it, SC_CHALLENGER_KEY, the deployment's challenger-key/v1 record,
+#      and SC_GATE_KEY, the lane's gate key)
 #      SC_RSS=1 (each flock-circuit process's own peak RSS, its command and wall, a line each in $OUT/rss.jsonl: a8's
 #      max_child_rss_gb is the largest of every session's so far)
 #      SC_PORT (`prove --port`, the sessions' first loopback port: by default 7811 + 16 × the lowest core the slot
@@ -71,19 +72,23 @@ if [ -n "${SC_REHEARSE:-}" ]; then
   SC_WARDEN_RUN=$W/warden
 fi
 CH=()
-if [ -n "${SC_CHALLENGER:-}" ]; then   # the verifier's own copy of main's first-parent history, which the session's pin must be on
+if [ -n "${SC_CHALLENGER:-}" ]; then   # the verifier's own copy of the first-parent history the session's pin must be on
   UNSHALLOW=(); [ "$(git rev-parse --is-shallow-repository)" = true ] && UNSHALLOW=(--unshallow)
   git fetch -q "${UNSHALLOW[@]}" origin +refs/heads/main:refs/remotes/origin/main > "$OUT/fetch-main.log" 2>&1 \
     || git fetch -q "${UNSHALLOW[@]}" origin +refs/remotes/origin/main:refs/remotes/origin/main >> "$OUT/fetch-main.log" 2>&1 \
-    && git rev-list --first-parent refs/remotes/origin/main > "$OUT/main.txt" || { tail -5 "$OUT/fetch-main.log"; exit 4; }
+    && git rev-list --first-parent "${MAIN_SHA:-refs/remotes/origin/main}" > "$OUT/main.txt" \
+    || { tail -5 "$OUT/fetch-main.log"; log "sczk: no first-parent history of ${MAIN_SHA:-origin/main} in this clone"; exit 4; }
   CH=(--challenger "$SC_CHALLENGER" --main "$OUT/main.txt")
   case $SC_CHALLENGER in gate:*)
     [ -n "${SC_PEER:-}" ] && [ -n "${SC_CHALLENGER_KEY:-}" ] || { log "sczk: SC_CHALLENGER=gate:… needs SC_PEER and SC_CHALLENGER_KEY"; exit 4; }
     CH+=(--peer "$SC_PEER" --challenger-key "$SC_CHALLENGER_KEY" ${SC_GATE_KEY:+--gate-key "$SC_GATE_KEY"});;
   esac
+elif [ -z "${SC_DRY:-}" ]; then
+  log "sczk: SC_CHALLENGER (local|gate:USER@HOST) names the challenger every round draws on: nothing draws on the" \
+    "verifier's own coins"; exit 4
 fi
 SC_PORT=${SC_PORT:-$("$PY" -c 'import os; print(7811 + 16 * min(os.sched_getaffinity(0)))')}
-log "sczk: proving${SC_CLASS:+ at $SC_CLASS}${SC_GROUP:+, group $SC_GROUP}${SC_DRY:+, dry}${SC_WARDEN_RUN:+, warden run $SC_WARDEN_RUN}${SC_DRAW:+, draw $SC_DRAW}${SC_CHALLENGER:+, the honest draw on the coins of $SC_CHALLENGER}, sessions from port $SC_PORT"
+log "sczk: proving${SC_CLASS:+ at $SC_CLASS}${SC_GROUP:+, group $SC_GROUP}${SC_DRY:+, dry}${SC_WARDEN_RUN:+, warden run $SC_WARDEN_RUN}${SC_DRAW:+, draw $SC_DRAW}${SC_CHALLENGER:+, every round on a session of $SC_CHALLENGER}, sessions from port $SC_PORT"
 "$PY" benchmarks/network_traces/scan_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/sczk" --port "$SC_PORT" ${SC_DRY:+--dry} \
   ${SC_CLASS:+--class "$SC_CLASS"} ${SC_GROUP:+--group "$SC_GROUP"} \
   ${SC_WARDEN_RUN:+--warden-run "$SC_WARDEN_RUN"} ${SC_DRAW:+--draw "$SC_DRAW"} "${CH[@]}" 2>&1 \

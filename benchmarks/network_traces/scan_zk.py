@@ -3,13 +3,13 @@
 t, the scan's state S_{t−1} and its boundary's slot entries, and computes S_t and its egress view; egress bucket t
 (`egress.EgressBucket`) reads that view and computes the warden's egress row t. A group of link-windows is one
 registration, every row of every unit, input or output, a registered read, proved by C-Flock `prove --zk` behind the
-Lean firewall and held by Lean `verify --zk --registered`. Standalone: in no Spec, except the honest round on the
-challenger's coins (``--challenger``), a `service.Stream`'s.
+Lean firewall and held by Lean `verify --zk --registered`. Each round is a `service.Stream`'s, its draw on a
+session of the auditor's challenger of its own (``--challenger``, `round_coins`).
 
     python benchmarks/network_traces/scan_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
-        [--class w63|w63k4|test] [--group G] [--warden-run RUN] [--draw K [--challenger local|gate:USER@HOST
-        --main FILE [--peer NAME --challenger-key RECORD] [--gate-key KEY]]]
-    python benchmarks/network_traces/scan_zk.py schedule [--class w63|w63k4|test]    # as warden_serve.py's flags
+        [--class w63|w63k4|test] [--group G] [--warden-run RUN] [--draw K]
+        --challenger local|gate:USER@HOST --main FILE [--peer NAME --challenger-key RECORD] [--gate-key KEY]
+    python benchmarks/network_traces/scan_zk.py schedule [--class w63|w63k4|test]    # its schedule, warden_serve.py's flags
 
 * **The setups** (`SETUPS`, ``--class``): ``w63`` (`W63`, whose `CLASS`, `SHAPE` and `PARAMS` these are), w63's class
   (B 512, r 4, 4 lanes, C 47, IDB 17, EVERY 16, WITHIN 12: 4 Program slots a timestep, 8 a link-window) with the
@@ -61,7 +61,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   ingress units (buckets 1 … G·T − 1) and G·T egress units, each template one batch with its row, state and egress
   parameters inputs of its own and every ingress unit's ``prog<j>`` a row of one input of the slot entries, its members
   split a link-window (`members_of`: ``first``, ``ingress-w`` and ``egress-w``, and ``last``, the group's last ingress
-  unit, whose o1 has no leaf to open), every unit drawn by the verifier's Lean. `program` refuses a Program whose
+  unit, whose o1 has no leaf to open), every unit drawn by default. `program` refuses a Program whose
   one-stage partition or reads (`registered.reads`) aren't the members'. Ingress unit t reads ``row`` (the warden's
   ingress row t), ``sin`` (state leaf t, S_{t−1}; the first unit none) and each slot j's ``prog<j>`` (``prog`` leaf
   j·nb + ⌊t / EVERY⌋, its boundary's entry of the slot, one table row a boundary, `NetworkCheck.Period`'s
@@ -103,25 +103,28 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   to 0, so the link-window is refused. Every unit (the one) is drawn. A prover that sets the bit with n 0 and no
   outputs passes here, since the stand-in's entries are the prover's; an anchored Program's entry is its outputs on the
   `SCAN_STATE` it reads, which the period check holds to the scan's state tree (`stateTied`).
-* **A sampled draw** (``--draw K``): Lean ``draw --stratified K`` on the verifier's own coins (its OS randomness, the
-  rehearsal's live coins), each template's stratum its share and at least one unit; only the drawn units are proved
-  and opened, and an accepted audit carries ε at δ (``wrong_units``: at most ``bound`` of ``of`` units wrong, except
-  with probability δ), its charge terms (`charge_terms`) and each member's cost per drawn unit (`per_unit`). The chain
-  and tampered rounds draw too and are refused all the same: Lean holds every table row of a registered port, drawn or
-  not, an output port's table its instances' rows. A member none of whose units is drawn (G > 1) runs no session.
-* **The challenger's coins** (``--challenger local|gate:USER@HOST --main FILE``, with ``--draw K``): the honest round's
-  K drawn as prove_path's records audit draws (`a5_coins`): one session of the auditor's challenger on the group's root
-  (`window_root`: the warden's session and the group's signed registrations), and the round's `service.Stream`
-  (`spec_of`) on its coins (`a5_coins.RankCoins`): the stream registers the round, the coins commit to the
-  registration's digest, and its select draws once (Lean's `Select.select` on the bytes read). Once the session has
-  ended, the outcome of record is the stream's with the coins' evidence, the Lean's whole run (`Run.run`, coin source
-  the challenger) held to the Python's, and each altered evidence (`a5_coins.negatives`, the evidence for another
-  window) refused by `coins.coins_reason` and the Lean's run (`coins_outcome`). ``local`` is a development session on
-  this machine (its own key; it shows the path, not an auditor's coins); ``gate:USER@HOST`` is the auditor's
-  challenger's through its gate, its challenger on ``--peer``'s 127.0.0.1, under the deployment's key record
-  ``--challenger-key``. The gate opens a root once, ever: a run's group is drawn once (the synthetic run's registrations
-  carry fresh salts, so each synthetic run has a root of its own). The other rounds keep the verifier's Lean's own
-  coins: one session serves one draw, and their refusal is Lean's registered reads, whatever the coins.
+* **A sampled draw** (``--draw K``): ``stratified:K``, each template's stratum its share and at least one unit; only the
+  drawn units are proved and opened, and an accepted audit carries ε at δ (``wrong_units``: at most ``bound`` of ``of``
+  units wrong, except with probability δ), its charge terms (`charge_terms`) and each member's cost per drawn unit
+  (`per_unit`). Without it each round draws ``stratified:N``, every unit. The chain and tampered rounds draw too and are
+  refused all the same: Lean holds every table row of a registered port, drawn or not, an output port's table its
+  instances' rows. A member none of whose units is drawn (G > 1) runs no session.
+* **The challenger's coins** (``--challenger local|gate:USER@HOST --main FILE``, `round_coins`): every round, the
+  block round and the negatives too, draws as prove_path's records audit draws (`a5_coins`), on a session of the
+  auditor's challenger of its own, on the round's root (`round_coins.root` of the group's `window_root`, the warden's
+  session and the group's signed registrations, and the round's name). The round's stream (`RoundStream` on `spec_of`,
+  the joint round's own Program the generator form) on its coins (`a5_coins.RankCoins`) registers the round, the coins
+  commit to the registration's digest, and its select draws once (Lean's `Select.select` on the bytes read). Once the
+  session has ended, the outcome of record is the stream's with the coins' evidence, the Lean's whole run (`Run.run`,
+  coin source the challenger) held to the Python's (`coins_outcome`), and the session's evidence held by
+  `round_coins.RoundSession.held`; for the honest round each altered evidence (`a5_coins.negatives`, the evidence for
+  another window) is also refused by the Lean's run.
+  ``local`` is a development session on this machine (its own key; it shows the path, not an auditor's coins);
+  ``gate:USER@HOST`` is the auditor's challenger's through its gate, its challenger on ``--peer``'s 127.0.0.1, under
+  the deployment's key record ``--challenger-key``. The gate opens a root once, ever: a run's round is drawn once (the
+  synthetic run's registrations carry fresh salts, so each synthetic run has roots of its own). A round whose session
+  doesn't open, or whose evidence doesn't hold, fails; the summary's ``coins`` names each round's session, and each
+  Flock session's coins, which are not the challenger's (`round_coins.FLOCK`).
 * **What the verifier receives** is scanned for every piece of every unit's rows, inputs and outputs, and every salt
   but a public ``o0``'s, which the prover sends so the verifier opens each unit's output (`a8.received`; the slot
   entries' o0 is a committed row, `ROWS_O0`, whose salts it never sends), less the pieces public
@@ -153,6 +156,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import leak_scan as LS  # noqa: E402
+import round_coins as RC  # noqa: E402
 import warden_zk as WZ  # noqa: E402
 from verity.ml.circuits import boolean as BL  # noqa: E402
 from verity.ml.circuits.boolean import trace as TR  # noqa: E402
@@ -256,8 +260,8 @@ FRAME_BINDING = "verity/flock-circuit/binding/v2"
 VALUES = {k: f"verity/certifier/scan-{k}/v1" for k in ("state", "prog", "view")}
 TIMING = ("e2e_s", "wait_s", "witness_s", "prove_total_s", "proof_bytes", "wire_sent", "wire_recv", "k_log", "nbl",
           "dense_m", "units", "ands_per_vu", "prover", "gpu")
-#: the honest round's stream on the auditor's challenger's coins (``--challenger``): its challenger, the format of the
-#: group's root its session opens on (`window_root`), and each member's share of the proof deadline
+#: each round's stream on the auditor's challenger's coins (``--challenger``): its challenger, the format of the
+#: group's root its rounds' roots bind (`window_root`), and each member's share of the proof deadline
 CHALLENGER = "scan_zk.py on the auditor's challenger's coins"
 WINDOW_ROOT = "verity/certifier/scan-window-root/v2"
 MEMBER_DEADLINE_S = 5 * 3600
@@ -372,23 +376,23 @@ def block_binding(set_name: str, n: int) -> bytes:
                                                   "schema": BitRowLeaf.hiding_schema})
 
 
-def tree(kind: str, rows: list[list[int]], heads: list, session: bytes) -> ADV.Registration:
+def tree(kind: str, rows: list[list[int]], heads: list, session: bytes) -> ADV.Committed:
     """`kind`'s rows (bit rows of whole u16 words) committed as hiding rows, bound to the session and the group's
     ingress link-windows' heads: `prog`'s under the block's o0 frame binding (`block_binding`), so the tree is the
     block's o0, the others' by their value (`VALUES`)."""
     n = len(rows)
     binding = block_binding(block_set(heads, session), n) if kind == "prog" else _bound(kind, heads, session)
-    return ADV.register([bit_row((_words(r), 16))[0] for r in rows], len(rows[0]), binding)
+    return ADV.commit([bit_row((_words(r), 16))[0] for r in rows], len(rows[0]), binding)
 
 
-def tree_bc(reg: ADV.Registration, i: int, bits: list[int] | None = None) -> bytes:
+def tree_bc(reg: ADV.Committed, i: int, bits: list[int] | None = None) -> bytes:
     """Row ``bits`` (leaf i's own row by default) committed under leaf i's salt, b‖c: as a statement's table row of it
     is, which opens leaf i only when the row is leaf i's."""
     row = reg.rows[i] if bits is None else bit_row((_words(bits), 16))[0]
     return ADV.INST.commit_string(reg.key, BitRowLeaf(reg.n_bits).layout().digest(row), reg.salts[i])
 
 
-def tree_port(kind: str, reg: ADV.Registration, reads: list[int], reads_from: int) -> dict:
+def tree_port(kind: str, reg: ADV.Committed, reads: list[int], reads_from: int) -> dict:
     """The verifier's own ``--registered`` port of `kind`'s registration: unit ``reads_from + i`` reads leaf reads[i]."""
     n = len(reg.rows)
     e = {"leaves": n, "words": reg.n_bits // 16, "word_bits": 16, "domain": ADV.domain(reg.binding, n).domain_id.hex()}
@@ -396,12 +400,12 @@ def tree_port(kind: str, reg: ADV.Registration, reads: list[int], reads_from: in
     return port | ({REG.READS_FROM: int(reads_from)} if reads_from else {})
 
 
-def tree_entry(kind: str, reg: ADV.Registration, positions) -> dict:
+def tree_entry(kind: str, reg: ADV.Committed, positions) -> dict:
     return {"value": VALUES[kind], "positions": [int(p) for p in positions],
             "paths": [b"".join(reg.open(p).path).hex() for p in positions]}
 
 
-def tree_refusal(port: dict, reg: ADV.Registration, entry: dict, bcs: list[bytes | None],
+def tree_refusal(port: dict, reg: ADV.Committed, entry: dict, bcs: list[bytes | None],
                  refs: list[int] | None = None) -> str | None:
     """The host's read of a statement's entry on a scan registration, as Lean's registered reads make it (in
     `warden_rows.refusal`'s order): None when it holds. ``bcs`` is each instance's b‖c and ``refs`` its table row (its
@@ -647,7 +651,7 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
                            failed=got.failed, failed_why=got.failed_why, run_s=round(time.time() - t0, 1))
 
 
-def _bits(reg: ADV.Registration, i: int) -> list[int]:
+def _bits(reg: ADV.Committed, i: int) -> list[int]:
     row = reg.rows[i]
     return [row[k // 8] >> k % 8 & 1 for k in range(reg.n_bits)]
 
@@ -921,7 +925,7 @@ def program(M, cls: IS.Class, templates: tuple[str, ...], G: int, T: int, out: P
                                       lower_s=round(time.time() - t, 1))
     return SimpleNamespace(program=prog, query=query, templates=templates, members=members, stagers=stagers,
                            units=sum(counts.values()), partition_file=out / "partition.json",
-                           program_file=out / "program.json")
+                           program_file=out / "program.json", scan=(nb, cls.EVERY) if templates == TEMPLATES else None)
 
 
 def port_prefix(defn, mr: SimpleNamespace) -> str:
@@ -1012,42 +1016,29 @@ def staged_wires(members: list[dict]) -> list[str]:
 # --- the challenger's coins ---------------------------------------------------------------------------------------------
 
 def window_root(at: SimpleNamespace) -> str:
-    """The root the challenger's session opens on (128 hex digits): the SHA-512 of the warden's session and the group's
-    registrations, each link's in link-window order, whose heads the warden signed. The gate opens a root once, ever,
-    so a warden run's group is drawn once."""
+    """The group's root (128 hex digits), which each round's session root binds (`round_coins.root`): the SHA-512 of
+    the warden's session and the group's registrations, each link's in link-window order, whose heads the warden
+    signed. The gate opens a root once, ever, so each round of a warden run's group is drawn once."""
     return hashlib.sha512(canonical_json({"format": WINDOW_ROOT, "session": at.session.hex(),
                                           "registrations": {s: [x.registration for x in ws]
                                                             for s, ws in sorted(at.sides.items())}})).hexdigest()
 
 
 @contextmanager
-def challenger(a, at: SimpleNamespace, out: Path):
-    """The challenger's session for the honest round's draw (``--challenger``, as prove_path's `records_audit.audit`
-    starts it): `a5_coins.start` on `window_root` for one rank, its evidence copied to ``out / "challenger"``; once the
-    rounds are done the rank's turn ends whether or not it drew (`Draws.skip`) and the session's evidence is published,
-    which the yielded namespace's ``published`` then holds. None without ``--challenger``. Needs `WZ._one_stage`'s path
-    (a5_coins is one-stage's)."""
-    if not a.challenger:
-        yield None
-        return
-    import a5_coins as AC
-
-    root = window_root(at)
-    manager, draws, finisher = AC.start(a.challenger, root, [0], out / "challenger", a.main, ssh_key=a.gate_key,
-                                        peer=a.peer, key_record=a.challenger_key)
-    coins = SimpleNamespace(AC=AC, draws=draws, root=root, challenger=a.challenger, published=None)
+def challenger(a, at: SimpleNamespace, name: str, out: Path):
+    """Round `name`'s session of the auditor's challenger (``--challenger``, `round_coins.RoundSession`) on its root
+    (`round_coins.root` of `window_root`), its evidence under ``out / "challenger"``; on the way out the round's turn
+    ends whether or not it drew and the session's evidence is published."""
+    coins = RC.RoundSession(a, RC.root(window_root(at), "scan", name), out / "challenger")
     try:
         yield coins
     finally:
-        draws.skip(0)
-        finisher.join()
-        coins.published = draws.evidence()
-        manager.shutdown()
+        coins.close()
 
 
 def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[str, str], k: int,
             root: str) -> tuple[S.Spec, list, dict[str, int]]:
-    """The honest round's `service.Spec` (prove_path's `a5.stream_of`): its unit the round's templates in order, its
+    """A round's `service.Spec` (prove_path's `a5.stream_of`): its unit the round's templates in order, its
     values the round's ports (each member's frame ports and the scan's trees, under their hiding ``schemas``), its
     public items what the registration shows (N, each template's stratum, the group, the leaf layer and each port's
     layout), its selection ``stratified:k``, its proof deadline `MEMBER_DEADLINE_S` a member and its context the
@@ -1071,19 +1062,41 @@ def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[
     return spec, units, counts
 
 
-def coins_outcome(a, coins: SimpleNamespace, spec: S.Spec, units: list, counts: dict, stream: S.Stream, draw: S.Draw,
-                  rec: dict, want: dict, leaf_layer: str, read: bytes, segment: dict | None, sessions: list[str],
-                  verdicts: dict, statement: dict, given: dict) -> tuple[dict | None, dict, dict]:
-    """The honest draw's outcome of record once the challenger's session has ended (prove_path's `a5.coins_outcome`):
-    its proof delivered and its outcome with the coins' evidence (`a5_coins.evidence`), the Lean's whole run (`Run.run`,
-    `coin_source` challenger, its window `window_root`) held to the Python's, the audit failing ``coins`` where
-    `coins.coins_reason` refuses; then each altered evidence (`a5_coins.negatives`, and the evidence for another window)
-    as its own stream's outcome on the honest draw's bytes (`a5_coins.Replay`), refused where `coins_reason` refuses and
-    the Lean's run refuses at its select. -> (the audit record, None where the stream refused or holds the outcome; the
-    negatives; the coins' record)."""
+class RoundStream(S.Stream):
+    """A round's `service.Stream` (budget 1, `CHALLENGER`) on ``coins``, whose own copy of the round's Program is the
+    form `program` registers: with ``scan``, the round's public ``(nb, every)``, the scan's three templates' generator
+    form (`scan_root` over the stream's templates at the counts `register` takes), else the mixed population
+    `service.Stream` builds. `service.Stream` builds only the mixed one, whose digest isn't the generator form's."""
+
+    def __init__(self, spec: S.Spec, units: list, delta: float, coins, scan: tuple[int, int] | None = None):
+        super().__init__(spec, units, budget=1, delta=delta, challenger=CHALLENGER, coins=coins)
+        if scan is not None and len(self.templates or ()) != len(TEMPLATES):
+            raise ValueError(f"the generator form is over the scan's {len(TEMPLATES)} templates "
+                             f"({', '.join(TEMPLATES)})")
+        self.scan = scan
+
+    def _program(self, n: int, counts):
+        mixed = super()._program(n, counts)
+        if mixed is None or self.scan is None:
+            return mixed
+        return scan_root([(t, counts[PA.template_id(t)], FIXED[tp]) for t, tp in zip(self.templates, TEMPLATES)],
+                         *self.scan)
+
+
+def coins_outcome(a, coins: RC.RoundSession, spec: S.Spec, units: list, counts: dict, stream: RoundStream,
+                  draw: S.Draw, rec: dict, want: dict, leaf_layer: str, read: bytes, segment: dict | None,
+                  sessions: list[str], verdicts: dict, statement: dict, given: dict,
+                  negatives: bool = True) -> tuple[dict | None, dict, dict]:
+    """A round's outcome of record once its challenger's session has ended (prove_path's `a5.coins_outcome`): its
+    proof delivered and its outcome with the coins' evidence (`a5_coins.evidence`), the Lean's whole run (`Run.run`,
+    `coin_source` challenger, its window the round's root) held to the Python's, the audit failing ``coins`` where
+    `coins.coins_reason` refuses; then, with `negatives`, each altered evidence (`a5_coins.negatives`, and the evidence
+    for another window) as its own stream's outcome on the draw's bytes (`a5_coins.Replay`), refused where
+    `coins_reason` refuses and the Lean's run refuses at its select. -> (the audit record, None where the stream refused
+    or holds the outcome; the negatives; the coins' record)."""
     AC, root, after = coins.AC, coins.root, bytes.fromhex(draw.registration.digest)
-    published = coins.draws.evidence()
-    ev = AC.evidence(published, segment) if segment is not None else None
+    published = coins.close()
+    ev = coins.evidence(segment)
 
     def outcome(s: S.Stream, d: S.Draw, evidence: dict | None) -> tuple[S.Outcome, dict | None]:
         late = s.deliver(d, sessions)
@@ -1103,10 +1116,10 @@ def coins_outcome(a, coins: SimpleNamespace, spec: S.Spec, units: list, counts: 
         result = {**result, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None,
                   "checks": {**result["checks"], "coins": {"ok": False, "codes": ["coins"], "detail": {"coins": why}}}}
     neg: dict[str, dict] = {}
-    bad = {**AC.negatives(ev, coins.draws.pre()), "coins-for-another-window": ev} if ev is not None else {}
+    bad = {**AC.negatives(ev, coins.pre), "coins-for-another-window": ev} if ev is not None and negatives else {}
     for name, evidence in bad.items():
         window = "00" * 64 if name == "coins-for-another-window" else root
-        s = S.Stream(spec, units, budget=1, delta=a.delta, challenger=CHALLENGER, coins=AC.Replay(read))
+        s = RoundStream(spec, units, a.delta, AC.Replay(read), stream.scan)
         try:
             d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts))
             if d.draw != draw.draw:
@@ -1154,17 +1167,17 @@ def _free_port() -> int:
 
 
 def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: list[dict], trees: dict, out: Path,
-          port: int, k: int | None = None, coins: SimpleNamespace | None = None) -> dict:
+          port: int, k: int | None, coins: RC.RoundSession) -> dict:
     """One round registered (its members' ports under their prefix, `port_prefix`, each a frame domain of a leaf an
     instance or a shared port's table row; the scan's registrations' roots; and the warden's row registrations its
-    warden ports read, `warden_roots`, before any coin), its units drawn by the verifier's Lean (`draw --stratified k`
-    on its own coins; every unit when `k` is None) or, given the challenger's ``coins``, by the round's `service.Stream`
-    on them (`spec_of`; `a5_coins.RankCoins`, rank 0), each member's drawn units proved --zk behind the firewall and
-    held by Lean with the verifier's own registered reads; then each held unit's public ``o0`` (none of the slot
-    entries', `ROWS_O0`) opened under the salt the prover sends. A member with no unit drawn runs no session. Member j's
-    session listens on ``port + j``, or with ``port`` 0 on a port the OS picks free. Writes what the verifier received
-    under ``out / "verifier"``. An accepted audit carries its charge terms (`charge_terms`) and each member's cost per
-    drawn unit; on the challenger's coins, the outcome of record is the stream's (`coins_outcome`)."""
+    warden ports read, `warden_roots`, before any coin), its units drawn ``stratified:k`` (every unit when `k` is None)
+    by the round's `RoundStream` on its challenger's ``coins`` (`spec_of`; `a5_coins.RankCoins`), each member's
+    drawn units proved --zk behind the firewall and held by Lean with the verifier's own registered reads; then each
+    held unit's public ``o0`` (none of the slot entries', `ROWS_O0`) opened under the salt the prover sends. A member
+    with no unit drawn runs no session. Member j's session listens on ``port + j``, or with ``port`` 0 on a port the OS
+    picks free. Writes what the verifier received under ``out / "verifier"``. The outcome of record is the stream's
+    (`coins_outcome`), and ``session`` the round's session held (`round_coins.RoundSession.held`). An accepted audit
+    carries its charge terms (`charge_terms`) and each member's cost per drawn unit."""
     from prove_leg import frame_ports  # one-stage's (`WZ._one_stage` puts it on the path)
 
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
@@ -1201,47 +1214,42 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     checks = {"registration": V.check(rec, pg.program, pg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
     for m in members:
         checks[f"statement/{m['name']}"] = a7.statement_checks({**m, "name": m["at"]}, rec, want)
-    receipt = R.receipt(rec, "one-stage-e2e verifier (scan_zk.py)")
     res: dict = {"checks_before_draw": {c: v["ok"] for c, v in checks.items()}}
     vdir = out / "verifier"
     vdir.mkdir(exist_ok=True)
     if not all(v["ok"] for v in checks.values()):
         return {**res, "checks": checks, "accepted": False, "window_accepted": False, "verdicts": {}, "why": {},
-                "opened": {}, "failed": {c: v.get("codes") for c, v in checks.items() if not v["ok"]}}
-    stream = None
-    if coins is None:
-        p = a0.run([a.lean, "draw", "--program", str(pg.program_file), "--partition", str(pg.partition_file),
-                    "--stratified", str(k)], out / "draw.log")
-        lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
-    else:
-        spec, units, counts = spec_of(pg, members, want, schemas, k, coins.root)
-        rank = coins.AC.RankCoins(coins.draws, 0)
-        draw = refused = None
-        try:
-            stream = S.Stream(spec, units, budget=1, delta=a.delta, challenger=CHALLENGER, coins=rank)
-            rank.plan(coins.AC.need(f"stratified:{k}", pg.program, pg.query, rec["population"]))
-            reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=coins.root, counts=counts)
-            rank.commit(bytes.fromhex(reg.digest))
-            draw = stream.select(reg)
-        except S.Refused as e:
-            refused = e.verdict.to_json()
-        except (ValueError, coins.AC.Ch.CoinError, V.LeanError) as e:
-            refused = {"ok": False, "codes": ["stream"], "detail": {"stream": str(e)}}
-        finally:
-            segment = rank.drawn()
-        read = bytes(rank.read)
-        (out / "segment.json").write_text(json.dumps({"challenger": coins.challenger, "window_root": coins.root,
-                                                      "segment": segment, "read": read.hex(), "need": rank.need},
-                                                     sort_keys=True))
-        if draw is None:
-            coins.draws.skip(0)
-            log(f"{name}: the stream drew nothing on the challenger's coins: {refused}")
-            for f in (out / "registration.json", out / "segment.json"):
-                os.link(f, vdir / f.name)
-            return {**res, "accepted": False, "window_accepted": False, "verdicts": {}, "why": {"draw": refused},
-                    "opened": {}, "draw": {"law": f"stratified:{k}", "coins": coins.challenger, "refused": refused}}
-        lean_draw, receipt = dict(draw.draw), dict(draw.registration.receipt)
-        (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
+                "opened": {}, "failed": {c: v.get("codes") for c, v in checks.items() if not v["ok"]},
+                "session": coins.held(b"", b"", None)}
+    spec, units, counts = spec_of(pg, members, want, schemas, k, coins.root)
+    rank = coins.rank
+    draw = refused = reg = None
+    try:
+        stream = RoundStream(spec, units, a.delta, rank, pg.scan)
+        rank.plan(coins.AC.need(f"stratified:{k}", pg.program, pg.query, rec["population"]))
+        reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=coins.root, counts=counts)
+        rank.commit(bytes.fromhex(reg.digest))
+        draw = stream.select(reg)
+    except S.Refused as e:
+        refused = e.verdict.to_json()
+    except (ValueError, coins.AC.Ch.CoinError, V.LeanError) as e:
+        refused = {"ok": False, "codes": ["stream"], "detail": {"stream": str(e)}}
+    finally:
+        segment = rank.drawn()
+    read = bytes(rank.read)
+    (out / "segment.json").write_text(json.dumps({"challenger": coins.challenger, "window_root": coins.root,
+                                                  "segment": segment, "read": read.hex(), "need": rank.need},
+                                                 sort_keys=True))
+    kept = coins.held(bytes.fromhex(reg.digest) if reg is not None else b"", read, segment)
+    if draw is None:
+        log(f"{name}: the stream drew nothing on the challenger's coins: {refused}")
+        for f in (out / "registration.json", out / "segment.json"):
+            os.link(f, vdir / f.name)
+        return {**res, "accepted": False, "window_accepted": False, "verdicts": {}, "why": {"draw": refused},
+                "opened": {}, "draw": {"law": f"stratified:{k}", "coins": coins.challenger, "refused": refused},
+                "session": kept}
+    lean_draw, receipt = dict(draw.draw), dict(draw.registration.receipt)
+    (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     (out / "draw.json").write_text(json.dumps(lean_draw, sort_keys=True))
     proved, served, n_inst, verdicts, statement, sessions, session_roots = [], [], 0, {}, {}, [], {}
     for j, m in enumerate(members):
@@ -1271,21 +1279,17 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
         sessions += [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]
         log(f"{name}/{m['name']}: {len(local)} units drawn, Lean {lv.get('accepted')} {lv.get('why') or ''}, "
             f"prove {timing.get('prove_total_s')} s, session {proc['wall_s']} s")
-    neg, told = {}, None
-    if stream is None:
-        result = V.audit_record(rec, receipt, lean_draw, rec["law"], sorted(proved), n_inst, statement, verdicts,
-                                a.delta, sessions=sessions, served=sorted(served), session_roots=session_roots)
-    else:  # every verdict of record names the sessions delivered (`service.check_verdicts`)
-        verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in verdicts.items()}
-        given = {"proved_units": sorted(proved), "instances": n_inst, "served": sorted(served),
-                 "session_roots": session_roots}
-        result, neg, told = coins_outcome(a, coins, spec, units, counts, stream, draw, rec, want, leaf_layer, read,
-                                          segment, sessions, verdicts, statement, given)
-        (out / "coins.json").write_text(json.dumps({**told, "negatives": neg}, indent=1, sort_keys=True, default=str))
-        log(f"{name}: the challenger's coins ({coins.challenger}): outcome {told['outcome']}, coins_reason "
-            f"{told['coins_reason']}, run {told['run']}, negatives refused "
-            f"{ {x: y['refused'] for x, y in neg.items()} }")
-        result = result or {"accepted": False, "outcome": told["outcome"]}
+    # every verdict of record names the sessions delivered (`service.check_verdicts`)
+    verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in verdicts.items()}
+    given = {"proved_units": sorted(proved), "instances": n_inst, "served": sorted(served),
+             "session_roots": session_roots}
+    result, neg, told = coins_outcome(a, coins, spec, units, counts, stream, draw, rec, want, leaf_layer, read,
+                                      segment, sessions, verdicts, statement, given, negatives=name == "honest")
+    (out / "coins.json").write_text(json.dumps({**told, "negatives": neg}, indent=1, sort_keys=True, default=str))
+    log(f"{name}: the challenger's coins ({coins.challenger}): outcome {told['outcome']}, coins_reason "
+        f"{told['coins_reason']}, run {told['run']}, negatives refused {kept['negatives_refused']}, Lean's "
+        f"{ {x: y['refused'] for x, y in neg.items()} }")
+    result = result or {"accepted": False, "outcome": told["outcome"]}
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
     held = set(proved) if result.get("accepted") else set()
     public = {m["base"] + i for m in members if m["outputs"] is not None for i in range(m["n"])}
@@ -1304,9 +1308,8 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     if name == "tampered":
         (vdir / f"warden-registration-egress-{at.windows[at.tampered.window]}-tampered.json").write_text(
             json.dumps(at.tampered.registration, indent=1, sort_keys=True))
-    streamed = (out / "receipt.json", out / "segment.json", out / "coins.json") if stream is not None else ()
     for f in (out / "registration.json", pg.partition_file, pg.program_file, out / "draw.json", out / "audit.json",
-              *streamed):
+              out / "receipt.json", out / "segment.json", out / "coins.json"):
         os.link(f, vdir / f.name)
     for m in members:
         for f in (m["dir"] / "circuit.txt", m["dir"] / f"pub-{m['n']}.bin", m["registered_file"]):
@@ -1316,11 +1319,10 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
                 os.link(f, vdir / f"{m['name']}-session-{f.parent.name}-{f.name}")
     got = [w for col in opened.values() for w in col if w is not None]
     window_ok = bool(result.get("accepted")) and len(got) == len(held & public) and all(w == 1 for w in got)
-    source = "the verifier's Lean's own (flock-verify draw, OS randomness)" if stream is None else \
-        f"the auditor's challenger's ({coins.challenger}: a5_coins, the round's service.Stream)"
+    source = f"the auditor's challenger's ({coins.challenger}: a5_coins, the round's service.Stream)"
     return {**res, "accepted": bool(result.get("accepted")), "window_accepted": window_ok, "opened": opened,
             "draw": {"law": f"stratified:{k}", "coins": source, "units": lean_draw["units"], "of": rec["population"]},
-            **({"coins": told, "coin_negatives": {x: y["refused"] for x, y in neg.items()}} if told else {}),
+            "coins": told, "coin_negatives": {x: y["refused"] for x, y in neg.items()}, "session": kept,
             "audit": {x: result.get(x) for x in ("accepted", "complete", "wrong_units")},
             "failed": {c: v.get("codes") for c, v in (result.get("checks") or {}).items() if not v.get("ok")},
             "charge": charge_terms(M, result, members, a.delta),
@@ -1559,60 +1561,56 @@ def prove(a) -> int:
         "pin": g.st.pin, "base": g.base, "n": g.n} for k, pg in pgs.items() for tp, g in pg.stagers.items()}
     log(f"stagers: {summary['stagers']}")
     ok, results = True, {}
-    with challenger(a, at, out) as coins:
-        if coins is not None:
-            summary["coins"] = {"challenger": coins.challenger, "window_root": coins.root, "rounds": ["honest"]}
-            log(f"the honest round draws on the challenger's coins ({coins.challenger}), its session on the group's "
-                f"root {coins.root[:16]}…; the other rounds on the verifier's Lean's own")
-        for j, (name, mrs) in enumerate(h.rounds.items()):
-            pg = pgs[rounds[name][0]]
-            members = [stage(M, pg, mr, out / name / f"stage-{mr.name}") for mr in mrs]
-            if name == "honest":
-                summary["wires"] = staged_wires(members)
-                if summary["wires"]:
-                    raise SystemExit(f"the honest round's chains don't hold on its public files: {summary['wires']}")
-            summary.setdefault("rounds", {})[name] = {
-                m["name"]: {"ands": m["ands"], "k_log": m["k_log"], "nbl": m["nbl"], "m": m["k_log"] + m["nbl"],
-                            "stage_s": m["stage_s"], "outputs": m["outputs"]} for m in members}
-            log(f"staged {name}: " + "; ".join(f"{m['name']} {m['ands']} ANDs a unit, m = {m['k_log']} + {m['nbl']}, "
-                                               f"outputs {m['outputs']}" for m in members))
-            (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-            av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta)
-            trees = {**at.trees, **({"state": at.swapped} if name == "chain" else {}),
-                     **({"prog": at.unread.tree} if name == "unread" else {})}
-            reads = {("egress",): ("view",), BLOCK: ("prog", "state")}.get(pg.templates)
-            trees = {k: v for k, v in trees.items() if reads is None or k in reads}
-            res = audit(M, av, at, pg, name, members, trees, out / name, a.port and a.port + (2 * G + 2) * j, ks[name],
-                        coins if name == "honest" else None)
-            results[name] = res
-            if name == "honest":
-                summary["answers"] = answers(at, out, res, Fraction(a.delta), results.get("block"))
-                log(f"answers: link-windows {at.windows}, each {summary['answers']}")
-            inst = out / name / "instances.bin"
-            inst.write_bytes(b"".join((m["dir"] / f"inst-{m['n']}.bin").read_bytes() for m in members))
-            rec = res["received"] = received(M.a8, out / name / "verifier", inst, *blobs_of(members),
-                                             known(members, at))
-            inst.unlink()
-            good = expected(at, name, res) and unseen(rec)
-            if coins is not None and name == "honest":
-                good = good and bool(res.get("coin_negatives")) and all(res["coin_negatives"].values())
-            ok &= good
-            summary["rounds"][name]["audit"] = res
-            whole = rec.get("whole_rows") or {"rows": 0, "verifier_found": []}
-            log(f"round {name}: drawn {len(res.get('draw', {}).get('units') or [])} of {pg.units}, "
-                f"charge {res.get('charge')}, per unit {res.get('per_unit')}; proofs {res['verdicts']}, audit "
-                f"{res.get('audit')}, opened "
-                f"{ {k: v for k, v in res.get('opened', {}).items()} }, Lean {res['why']}, verifier received "
-                f"{rec['verifier_bytes']} bytes, witness pieces found there: {rec['verifier_found'] or 'none'} (of "
-                f"{rec['blobs']}; {rec['public_pieces']} public, {rec['sparse_pieces']} sparse left out), rows "
-                f"shorter than a piece found whole there: {whole['verifier_found'] or 'none'} (of {whole['rows']}), "
-                f"control {rec['control']['blobs_found']}; {'as expected' if good else 'UNEXPECTED'}")
-            (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-    if coins is not None:
-        pub = coins.published or {}
-        summary["coins"]["session"] = {x: pub.get(x) for x in ("trusted", "error", "plan")}
-        ok &= pub.get("error") is None and (pub.get("trusted") or {}).get("pinned_session") is None
-        log(f"the challenger's session: {summary['coins']['session']}")
+    summary["coins"] = {"challenger": a.challenger, "base": window_root(at), "rounds": {}, "flock": RC.FLOCK}
+    log(f"every round draws on a session of its own of the challenger's ({a.challenger}), on its root over the group's "
+        f"{summary['coins']['base'][:16]}…")
+    for j, (name, mrs) in enumerate(h.rounds.items()):
+        pg = pgs[rounds[name][0]]
+        members = [stage(M, pg, mr, out / name / f"stage-{mr.name}") for mr in mrs]
+        if name == "honest":
+            summary["wires"] = staged_wires(members)
+            if summary["wires"]:
+                raise SystemExit(f"the honest round's chains don't hold on its public files: {summary['wires']}")
+        summary.setdefault("rounds", {})[name] = {
+            m["name"]: {"ands": m["ands"], "k_log": m["k_log"], "nbl": m["nbl"], "m": m["k_log"] + m["nbl"],
+                        "stage_s": m["stage_s"], "outputs": m["outputs"]} for m in members}
+        log(f"staged {name}: " + "; ".join(f"{m['name']} {m['ands']} ANDs a unit, m = {m['k_log']} + {m['nbl']}, "
+                                           f"outputs {m['outputs']}" for m in members))
+        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+        av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta)
+        trees = {**at.trees, **({"state": at.swapped} if name == "chain" else {}),
+                 **({"prog": at.unread.tree} if name == "unread" else {})}
+        reads = {("egress",): ("view",), BLOCK: ("prog", "state")}.get(pg.templates)
+        trees = {k: v for k, v in trees.items() if reads is None or k in reads}
+        with challenger(a, at, name, out / name) as coins:
+            res = audit(M, av, at, pg, name, members, trees, out / name, a.port and a.port + (2 * G + 2) * j,
+                        ks[name], coins)
+        results[name] = res
+        summary["coins"]["rounds"][name] = res["session"]
+        log(f"round {name}'s session: {res['session']['source']} on {res['session']['root'][:16]}…, session "
+            f"{res['session']['session']}, coins_reason {res['session']['coins_reason']}, ok {res['session']['ok']}")
+        if name == "honest":
+            summary["answers"] = answers(at, out, res, Fraction(a.delta), results.get("block"))
+            log(f"answers: link-windows {at.windows}, each {summary['answers']}")
+        inst = out / name / "instances.bin"
+        inst.write_bytes(b"".join((m["dir"] / f"inst-{m['n']}.bin").read_bytes() for m in members))
+        rec = res["received"] = received(M.a8, out / name / "verifier", inst, *blobs_of(members), known(members, at))
+        inst.unlink()
+        good = expected(at, name, res) and unseen(rec) and res["session"]["ok"]
+        if name == "honest":
+            good = good and bool(res.get("coin_negatives")) and all(res["coin_negatives"].values())
+        ok &= good
+        summary["rounds"][name]["audit"] = res
+        whole = rec.get("whole_rows") or {"rows": 0, "verifier_found": []}
+        log(f"round {name}: drawn {len(res.get('draw', {}).get('units') or [])} of {pg.units}, "
+            f"charge {res.get('charge')}, per unit {res.get('per_unit')}; proofs {res['verdicts']}, audit "
+            f"{res.get('audit')}, opened "
+            f"{ {k: v for k, v in res.get('opened', {}).items()} }, Lean {res['why']}, verifier received "
+            f"{rec['verifier_bytes']} bytes, witness pieces found there: {rec['verifier_found'] or 'none'} (of "
+            f"{rec['blobs']}; {rec['public_pieces']} public, {rec['sparse_pieces']} sparse left out), rows "
+            f"shorter than a piece found whole there: {whole['verifier_found'] or 'none'} (of {whole['rows']}), "
+            f"control {rec['control']['blobs_found']}; {'as expected' if good else 'UNEXPECTED'}")
+        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     summary["ok"] = ok
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     log("done: " + ("ok" if ok else "FAILED"))
@@ -1638,18 +1636,8 @@ def main(argv=None) -> int:
                    help="a warden_serve run's directory (rehearse --ids at the class's schedule): its group's "
                         "link-windows, verified under its deployment's key, in place of the synthetic run")
     p.add_argument("--draw", type=int,
-                   help="K: Lean draw --stratified K on the verifier's own coins, only the drawn units proved; default "
-                        "every unit")
-    p.add_argument("--challenger", help="with --draw: the honest round's K drawn on the auditor's challenger's coins "
-                   "(a5_coins, the round's service.Stream), not the verifier's: local, or gate:USER@HOST "
-                   "(the auditor's challenger through its gate, with --peer and --challenger-key)")
-    p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, "
-                   "whose 127.0.0.1 the session's challenger listens on")
-    p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its "
-                   "deployment (challenger-key/v1), never the session's key.json")
-    p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
-    p.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history (git "
-                   "rev-list --first-parent origin/main), which must hold the commit the session's host pins")
+                   help="K: each round draws stratified:K, only the drawn units proved; default stratified:N, every unit")
+    RC.add_args(p, "every round's draw (a5_coins, the round's service.Stream)")
     s = sub.add_parser("schedule", help="a setup's schedule (w63's, PARAMS, by default) as warden_serve.py's schedule "
                                         "flags (serve, rehearse): the warden runs --warden-run reads")
     s.add_argument("--class", dest="setup", choices=sorted(SETUPS), default=W63.name)
@@ -1659,16 +1647,9 @@ def main(argv=None) -> int:
         return 0
     if a.group < 1:
         p.error(f"--group is 1 or more link-windows, not {a.group}")
-    if a.challenger:
-        if a.challenger != "local" and not a.challenger.startswith("gate:"):
-            p.error(f"--challenger is local or gate:USER@HOST, not {a.challenger!r}")
-        if a.draw is None:
-            p.error("--challenger draws the honest round's --draw K on the challenger's coins: give --draw")
-        if a.challenger.startswith("gate:") and not (a.peer and a.challenger_key):
-            p.error("--challenger gate:USER@HOST needs --peer and --challenger-key")
-        if not a.main:
-            p.error("--challenger needs --main: the verifier's git rev-list --first-parent origin/main, which must hold "
-                    "the commit the session's host pins")
+    why = None if a.dry else RC.refusal(a)
+    if why:
+        p.error(why)
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")
     return prove(a)
