@@ -14,22 +14,22 @@
   the width rule with the separator port pinned by the protocol.
 * `anchors`: the anchored inputs' anchors, which the verifier builds (the tile checks' derived noise too, `TileAnchors`, with
   each unit's public input regions), and the window's refusal of a repeated call index.
-* `plan`: closure draws behind a draw-law seam (`CountLaw`, and `WorkLaw`, root's #362 law), and the tile checks' layout.
+* `plan`: closure draws behind a draw-law seam (`CountLaw`, and `WorkLaw`, `Flock/Draw.lean`'s work law), and the tile checks' layout.
 * `pc4`, `pc8`: Pearl-C4's and Pearl-C's (FP8, forming v1) tile checks as Programs, cut into row and tile units, and
   their hiding Programs (``Shape.hidden``), whose tiles return only their tile digest; the rows are C-Flock-committed
   ports and the anchored inputs public input regions (`PORTS`).  No scheme of theirs is in `SCHEMES` yet.
 * `rowk`: their row units cut along k into a head, one form per segment and a tail (``Shape.row_k``, opt-in), so each
   piece fits C-Flock's block.
-* `compile`: PoUW as one pass over a served Program (decision 102, `PROTOCOL.md` §`compile`): `compile(program, scheme,
+* `compile`: PoUW as one pass over a served Program (`PROTOCOL.md` §`compile`): `compile(program, scheme,
   groups)` replaces every registered matmul's dots (`MATMULS`) with the scheme's r × c tile units, each deriving its seed
-  and noise in its own proof from the one coin, the salt (decisions 105, 106), and checks the result; `rebuild` is the
+  and noise in its own proof from the one coin, the salt, and checks the result; `rebuild` is the
   verifier's side. Its schemes are its own `SCHEMES`, not this module's.
 * `seeds`: the seed and the noise blocks a unit derives (`PouwSeed`, `PouwNoiseBlock`, on words and on bits), and its two
-  seeds where its receipt folds take keys (`PouwUnitSeeds`: seed_j and σ_R, decision 121).
-* `h1tile`: `eps1-sm120-h1fx1` as a compile-pass scheme, H1 + fx1 on a warp's tile under CP-W (decision 104).
+  seeds where its receipt folds take keys (`PouwUnitSeeds`: seed_j and σ_R).
+* `h1tile`: `eps1-sm120-h1fx1` as a compile-pass scheme, H1 + fx1 on a warp's tile under CP-W.
 * `h1device`: H1's device records, one an architecture (sm_120, and sm_90 for the H200): the s8 step and its binding, the
   contractions its kernels serve, and its data-sheet facts.
-* `h1zy`: the H1 tile with its served z/y record checked (`PouwH1TileZy`, RT4-INT-33): the record an input, committed
+* `h1zy`: the H1 tile with its served z/y record checked (`PouwH1TileZy`): the record an input, committed
   before its round's coin, its z the tile's A Bᵀ and its y the served dequant (`PouwZyDequant`, the activation scale
   first, no bias).
 * `h1window`: an H1 window as one public Program of those tiles in fixed slots (`PouwH1Window`), the tile R × C a
@@ -47,7 +47,7 @@
 is here, the Programs sampled proofs traces for one PoUW linear and its weight, their partition queries, the served outputs
 and the draw layout; None for any other scheme, which stays refused beside sampled proofs.  The verifier builds these
 Programs itself, from (scheme, m, k, n) and its own anchors, and never takes a prover's descriptor: `Traced.check_descriptor`
-compares an offered one's digest with its own (X-SPC-73).
+compares an offered one's digest with its own.
 """
 from __future__ import annotations
 
@@ -113,13 +113,13 @@ class Traced:
         return [list(b), an["salt"], an["weight"], an["colids"]]
 
     def draw(self, law, anchors, ledger):
-        """The verifier's plan for this call: `plan.draw` over its own layout (`layout`), never a given one (X-SPC-97), each
-        stratum's subset keyed by the call's index (``anchors.call_index``) with its template (X-SPC-96), under the key of
+        """The verifier's plan for this call: `plan.draw` over its own layout (`layout`), never a given one, each
+        stratum's subset keyed by the call's index (``anchors.call_index``) with its template, under the key of
         ``ledger``, the window's `anchors.Ledger` opened from its complete `Receipt` (`Ledger.open`): no key is taken from
         the caller. The draw is refused for a ledger not opened from a receipt or whose draw was sent, and for a call the
         receipt doesn't list or the window already holds, before anything is drawn. So every call's commitment precedes
-        the key (C1), and each call of a window draws under a context of its own: the product law root's window pin takes
-        as M1."""
+        the key (C1), and each call of a window draws under a context of its own: the product law the window pin
+        (`audit_window_split_of_record`) takes as M1."""
         from . import plan
         from .anchors import Ledger
 
@@ -149,7 +149,7 @@ class Traced:
     def check_link(self, plan, call_args: Sequence[Sequence[int]], weight_outputs: Sequence[int]) -> None:
         """Refuse a call whose weight-side inputs differ from the weight Program's outputs at a column strip the plan opens
         (its ("y", strip) leaves, the drawn tiles' column strips): the call's committed inputs opened against the weight
-        Program's output commitment (X-SPC-95). The inputs are the call's parameters the weight Program returns, in its
+        Program's output commitment. The inputs are the call's parameters the weight Program returns, in its
         output order (`ncp-v2`: ys, c0s)."""
         from ..protocol import DomainError
 
