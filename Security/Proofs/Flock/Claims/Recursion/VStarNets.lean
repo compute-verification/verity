@@ -639,11 +639,12 @@ part's circuit file to V\*'s (`checkFile_ok`) and refuses tables (`checkStmt_tab
 theorem nets_three {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {sv : VStar.Stmt} {c : Circuit}
     (hp : partAt x s = some (sv, c)) : c.nets.size = 3 := by
   obtain ⟨r, hr, -, hc⟩ := VStarTraceOk.partAt_some hp
-  obtain ⟨p, r', _, hx, ht, hpi, hr', _, h0, _⟩ := stagedTables hS
+  obtain ⟨p, r', _, hx, ht, hpi, hr', _, h0, hchk⟩ := stagedTables hS
   rw [hr] at hr'
   cases hr'
   have hpc := partCircuit_staged hS hx ht hpi hr hc h0
-  obtain ⟨tags', P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0
+  have hflat := FlockSoundness.Discharge.Recursion.checkParsed_flat (hchk 0 h0).2.2
+  obtain ⟨tags', P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0 hflat
   rw [← hpc]
   obtain ⟨ms, i, spec, sts, rfl, hsu, hck⟩ := hS
   have hpx := parse_of_setupO hsu
@@ -676,7 +677,13 @@ theorem nets_three {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x x
     rw [← htb]
     unfold ProvedScope.circuitOf at hc0
     split at hc0
-    · exact (FlockSoundness.Discharge.HiddenExec.parse_untyped hty hc0).1
+    · obtain ⟨-, -, -, -, -, -, hor⟩ := FlockSoundness.Discharge.Hidden.parseCommit_untyped hty hc0
+      have hi : i.base.read.tags.isTmpl = false := by
+        rcases hor with ⟨hi, -⟩ | ⟨tu, -, -, htu⟩
+        · exact hi
+        · exact absurd (htu.symm.trans hflat) (by simp)
+      rw [FlockSoundness.parseCommit_flat hi] at hc0
+      exact (FlockSoundness.Discharge.HiddenExec.parse_untyped hty hc0).1
     · exact hc0
   exact nets_of_file hcf hparse hname P.unitNet
 

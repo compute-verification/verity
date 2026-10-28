@@ -254,6 +254,7 @@ theorem pastIn (st : Stage) : PastIn st := by
   cases hsv'
   have hc0 := partCircuit_staged hS hx ht hpi hr hpc h0
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0
+    (FlockSoundness.Discharge.Recursion.checkParsed_flat (htab 0 h0).2.2)
   obtain ⟨-, hts⟩ := tablesOf_of_parse hx
   obtain ⟨spec0, hset⟩ := Flock.Readable.setup_of_tablesOf hts
   unfold Flock.Readable.Read.setup at hset
