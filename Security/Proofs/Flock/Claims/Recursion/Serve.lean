@@ -26,12 +26,6 @@ def RP.serve {R₁ R₂ α : Type} (q : R₁ → RP R₂ Seen) : RP R₁ α → 
   | .hash m k => .hash m fun a => RP.serve q (k a)
   | .rerun r k => (q r).bind fun v => RP.serve q (k v)
 
-/-- The draws a program reruns at, in order, against `H` and the runs `run`. -/
-def RP.rerunsAt {R α : Type} (H : Msg → Msg) (run : R → Trace) : RP R α → List R
-  | .ret _ => []
-  | .hash q k => RP.rerunsAt H run (k (H q))
-  | .rerun r k => r :: RP.rerunsAt H run (k (run r).seen)
-
 /-- **The served runs**: the rerun at `r` is seen as what `q r` returns against `run`, and logs no SHA-512 call of its
 own (the outer stage's are counted where it runs). -/
 def servedRun {R₁ R₂ : Type} (H : Msg → Msg) (q : R₁ → RP R₂ Seen) (run : R₂ → Trace) (r : R₁) : Trace :=

@@ -195,6 +195,12 @@ def RP.bind {R α β : Type} : RP R α → (α → RP R β) → RP R β
   | .hash q k, f => .hash q fun a => (k a).bind f
   | .rerun r k, f => .rerun r fun v => (k v).bind f
 
+/-- The draws a program reruns at, in order, against `H` and the runs `run`. -/
+def RP.rerunsAt {R α : Type} (H : Msg → Msg) (run : R → Trace) : RP R α → List R
+  | .ret _ => []
+  | .hash q k => RP.rerunsAt H run (k (H q))
+  | .rerun r k => r :: RP.rerunsAt H run (k (run r).seen)
+
 /-! ## Extractors -/
 
 /-- An extractor: its own coins `C x`, and a rerun program from the **judged run's coins** `r₀` and its coins. -/
