@@ -37,6 +37,13 @@ ALLOWED: dict[str, str] = {
     "verity/core/service/sampled_proofs/SampledProofs/PartitionRef.lean":
         "committedBitsRef, the walk of one activation Partition.committedBits replaced by reading Flock.Qcall.gates' "
         "layout (Gates.readTo): the reference the committed_bits difftest piece holds it to; the verifier never runs it",
+    "verity/core/service/flock/Flock/RecCoins.lean":
+        "open (PRF-283 Decision 1): Inner.load's comb, CircuitFold.folded on the inner statement set up from its flat "
+        "file, folds every row of the unrolled inner unit, until PR 8 folds a templated inner once per Definition "
+        "(InnerSuccinct)",
+    "verity/core/service/flock/Flock/RecVStar.lean":
+        "open (PRF-283 Decision 1): circuitFile regenerates V*'s unrolled circuit text (VStar.emitCircuitOf) for "
+        "checkFile's byte comparison, until PR 8 folds a templated inner once per Definition (InnerSuccinct)",
     "verity/core/service/flock/Flock/NetAt.lean":
         "Tmpl.unrollAt, a templated unit's rows at their committed positions: the reference Tmpl.unitNet is proved "
         "equal to (FlockSoundness.TmplFold.unitNet_eq) and Flock.Test.NetAt compares it with; Tmpl.unitFull, its rows "
@@ -47,13 +54,6 @@ ALLOWED: dict[str, str] = {
     "verity/core/service/flock/Flock/TmplFold.lean":
         "Tmpl.foldRef, the fold over the unrolled rows: the reference Tmpl.foldUnit is difftested against "
         "(Flock.Test.TmplFold) and proved equal to (foldUnit_eq_project)",
-    "verity/core/service/flock/Flock/RecCoins.lean":
-        "open (PRF-283 Decision 1): Inner.load's comb, CircuitFold.folded on the inner statement set up from its flat "
-        "file, folds every row of the unrolled inner unit, until PR 8 folds a templated inner once per Definition "
-        "(InnerSuccinct)",
-    "verity/core/service/flock/Flock/RecVStar.lean":
-        "open (PRF-283 Decision 1): circuitFile regenerates V*'s unrolled circuit text (VStar.emitCircuitOf) for "
-        "checkFile's byte comparison, until PR 8 folds a templated inner once per Definition (InnerSuccinct)",
 }
 
 FIX = ("a verifier of record does work proportional to the description, never to the unrolled circuit (AGENTS.md "
