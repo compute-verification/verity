@@ -114,9 +114,9 @@ def BoundReceiptLink : Prop :=
   ∀ (N a b h S L q Lz qz s k m F cTag cEnc w Fz lam : ℕ) (A : Node N a b h S L q Lz qz),
     (Lz + lam) * w + Fz * a < (m + 1) * a * w →
     pr (fun x : Store N b × BoundReceipt.Coins N a b h s =>
-        A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
-          A.tileWork w x.1 x.2.1 x.2.2.1 ≤ Fz ∧
-          A.footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b 0 S L F cTag cEnc (k - m) lam)
+        A.Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧ A.compute cTag cEnc x.1 x.2.1.1 x.2.1.2 ≤ F ∧
+          A.tileWork w x.1 x.2.1.1 x.2.1.2 ≤ Fz ∧
+          A.footprint x.1 x.2.1.1 x.2.1.2 * cEnc < floor b 0 S L F cTag cEnc (k - m) lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + 2 * (s : ℝ≥0∞) / 2 ^ h + (q.choose (k - m) : ℝ≥0∞) / 2 ^ lam +
         (qz.choose (m + 1) : ℝ≥0∞) / 2 ^ lam
 
@@ -145,10 +145,10 @@ def BoundReceiptLinkInteractive : Prop :=
     A.QueryDetermined →
     (Lz + lam) * w + Fz * a < (m + 1) * a * w →
     pr (fun x : Store N b × BoundReceipt.Coins N a b h s =>
-        (A.under x.2.2.1).Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧
-          (A.under x.2.2.1).compute cTag cEnc x.1 x.2.1 x.2.2.1 ≤ F ∧
-          (A.under x.2.2.1).tileWork w x.1 x.2.1 x.2.2.1 ≤ Fz ∧
-          (A.under x.2.2.1).footprint x.1 x.2.1 x.2.2.1 * cEnc < floor b 0 S L F cTag cEnc (k - m) lam)
+        (A.under x.2.1.2).Accepts x.1 x.2.1.1 x.2.1.2 x.2.2 ∧
+          (A.under x.2.1.2).compute cTag cEnc x.1 x.2.1.1 x.2.1.2 ≤ F ∧
+          (A.under x.2.1.2).tileWork w x.1 x.2.1.1 x.2.1.2 ≤ Fz ∧
+          (A.under x.2.1.2).footprint x.1 x.2.1.1 x.2.1.2 * cEnc < floor b 0 S L F cTag cEnc (k - m) lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + 2 * (s : ℝ≥0∞) / 2 ^ h + (q.choose (k - m) : ℝ≥0∞) / 2 ^ lam +
         (qz.choose (m + 1) : ℝ≥0∞) / 2 ^ lam
 
