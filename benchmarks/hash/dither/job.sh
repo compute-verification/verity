@@ -17,9 +17,6 @@
 #            unitsbench.py (the served noise and units launches at the served window, each build gated against
 #            receipts.py and the base's every word, then timed: each call's units and the step's 128)
 #   unitsprof  the same builds under ncu (--set full; kernels h1u and h1k): unitsbench.py --profile, then the text pages
-#   j10r90   h1u_kr.so (the base) and every h1u_kr*.so shipped: unitsbench.py --multi --j10r --j10r-sm, gated only, then
-#            j10r90.py check (J10-R's units at the frozen shape's linears, M = 4,096 and 16,384); j10r90t: j10r90.py time
-#            (the same calls against plain INT8); j10r90.sh builds the sm_90a arms
 #   partials h1u.so and every h1u_*.so shipped: benchmarks/pouw/tests/test_partials.py and test_lane_refs.py with
 #            PARTIALS_LIB each (option A's partials: kh_seeds_at and kh_lanes byte for byte served_h1/partials.py's cpu
 #            backend and SERVE-REG's gated lane rows)
@@ -35,7 +32,7 @@
 # /workspace/cp/venv312), NVCC (default CUDA 13.0's), NCU (default the ncu beside NVCC).
 # Exit: the bench's (4 a gate failed), 2 a build failed or the shipped libraries are missing or another commit's.
 set -uo pipefail
-ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a kbench|h1|h1u|prof|units|unitsprof|j10r90|j10r90t|partials[,...]}
+ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a kbench|h1|h1u|prof|units|unitsprof|partials[,...]}
 BENCH=${2:-kbench}
 HERE=$(cd "$(dirname "$0")" && pwd)
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
@@ -138,21 +135,6 @@ for b in ${BENCH//,/ }; do
         NCU=${NCU:-$(dirname "$NVCC")/ncu}
         CMDS+=("$NCU --profile-from-start off --clock-control none --set full --nvtx -k regex:h1u|h1k -f -o $OUT/prof $PY $HERE/unitsbench.py$ul --profile --out $OUT ${BENCH_ARGS:-}")
         CMDS+=("$PY $HERE/hb_prof.py --pages $OUT/prof.ncu-rep --ncu $NCU --out $OUT")
-      fi ;;
-    j10r90|j10r90t)
-      # h1u_kr.so (the base) and every other h1u_kr*.so shipped: j10r90 is unitsbench.py's J10-R gates at its own shapes
-      # (--profile: gated, not timed), then j10r90.py check at the frozen shape; j10r90t is j10r90.py time
-      jl=""
-      for f in "$LIBS"/h1u_kr.so "$LIBS"/h1u_kr?*.so; do
-        [ -f "$f" ] || continue
-        v=$(basename "$f" .so); NEED+=("$v"); jl+=" --lib ${v#h1u_}=$f"
-      done
-      [ -f "$LIBS/h1u_kr.so" ] || { echo "job.sh: $b needs $LIBS/h1u_kr.so, the base" >&2; exit 2; }
-      if [ "$b" = j10r90 ]; then
-        CMDS+=("$PY $HERE/unitsbench.py$jl --multi --j10r --j10r-sm --profile --out $OUT/units")
-        CMDS+=("$PY $HERE/j10r90.py check$jl --out $OUT ${BENCH_ARGS:-}")
-      else
-        CMDS+=("$PY $HERE/j10r90.py time$jl --out $OUT ${BENCH_ARGS:-}")
       fi ;;
     partials)
       # every h1u*.so shipped: test_partials.py and test_lane_refs.py with PARTIALS_LIB, their gpu tests (kh_seeds_at and

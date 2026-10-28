@@ -93,8 +93,7 @@ The CPU code a gate holds a kernel to, beside the Definition:
 
 - `job.sh`: libraries built on a CPU node, then kernel benches on a leased H200 or B200, one after another: `kbench`
   (`hb_kbench.py`, checked after by `verify.py`), `h1` (`h1bench.py`), `h1u` (`h1ubench.py`), `prof` (`hb_prof.py` under
-  ncu), `units` and `unitsprof` (`unitsbench.py`), `j10r90` (`j10r90.py`, with `j10r90.sh` and `j10r90.json`) and
-  `partials` (`benchmarks/pouw`'s partials tests on each build).
+  ncu), `units` and `unitsprof` (`unitsbench.py`) and `partials` (`benchmarks/pouw`'s partials tests on each build).
 - `kbench.sh` (`kbench.py`): compute accounting's honest linear against vLLM's int8 GEMM and cuBLASLt on an RTX PRO 6000.
 - `dmmsweep.py`: dither-a's GEMM configs at the decode shapes, each gated before it is timed.
 - `native.sh` (`native.py`): vLLM serving the int8 pin natively, one arm a process.
