@@ -85,7 +85,7 @@ plus a term for which proof blocks are faulty, and compute security by their wor
 Everything is committed at serve time: the proof service has no two-stage rule, and the Lean verifier refuses a
 registration that names one.
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
-per proof block matching this partition (the IR checks refinement, `verity.ml.circuits.partition.validate_refinement`).
+per proof block matching this partition (a tile family built with `each` over the proof blocks nests in them by construction).
 
 Serving's record is not yet the scheme the audit proves: the benchmark's first run (`benchmarks/one_stage/a0.py`)
 registers a stand-in, a fresh commitment to values captured from serving, and says so (`window.kind = "stand-in"`). Its
