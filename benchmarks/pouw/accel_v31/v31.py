@@ -6,8 +6,8 @@ The call is verity/core/protocols/pouw/circuit/dither.py's, and this module is i
 the GPU prover's defaults (its segments, layout and domain), the seeds are `dither.seeds` (a served call's) and
 `dither.fill_seeds` (a filler's), every stream is `dither.prg`'s, the permutations are `dither.perms` and the tree is
 `dither.commit` under `dither.salts(Ks, off)`. What it adds is numpy, where dither's own forms are pure Python: the
-noise of whole operands (`CallNoise`), X and W' (`form`), the prefix sums T_s and a served call's O (`fill_values`), their
-bytes in `dither.values_buffer`'s layout (`fill_buffer`) and a filler's pad (`pad_rows`). A served call commits
+noise of whole operands (`CallNoise`), X and W' (`form`), the prefix sums T_s and a served call's O (`fill_values`),
+their bytes in `dither.values_buffer`'s layout (`fill_buffer`) and a filler's pad (`pad_rows`). A served call commits
 T_1 .. T_{S-1} and O mod 2^32 (T_S is implied by O); a filler call commits T_1 .. T_S.
 
 The verifier opens q proof blocks drawn by the check coin (a cell uniformly, then s with probability its segment's share
@@ -134,11 +134,11 @@ FILL_STREAMS = (PAD, *STREAMS)
 
 @dataclass(frozen=True)
 class Fill(dither.Shape):
-    """`dither.Shape` at the GPU prover's defaults: a filler's call, L' 256, L 2,048 and rows of 1 KiB."""
+    """`dither.Shape` at the GPU prover's defaults: a filler's call at L' 256 and L 2,048, in the protocol's rows of
+    16 KiB."""
 
     lp: int = 256
     L: int = 2048
-    row: int = 1024
     o: bool = False
 
 
@@ -574,7 +574,7 @@ def main(argv: list[str]) -> int:
     p.add_argument("shapes", nargs="+", help="[name:]M:N:K")
     p.add_argument("--lp", type=int, default=256)
     p.add_argument("--L", type=int, default=2048, help="the segment length (0: K), at most 8 L' below K")
-    p.add_argument("--row", type=int, default=1024)
+    p.add_argument("--row", type=int, default=Fill.row, help="the leaf row's bytes (default the protocol's 16 KiB)")
     p.add_argument("--served", action="store_true", help="served calls (O committed, dither.TAG), not the filler's")
     p = sub.add_parser("fill-sample")
     p.add_argument("dir")
