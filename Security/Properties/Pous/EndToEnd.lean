@@ -49,8 +49,11 @@ separately so that each can be rejected alone:
    counter-mode SHA-512 stream that `Randomness.uniform` reads) are as good as uniform: each stream is replaced here by
    `DRAW_BYTES` uniform bytes, and `uniformOn` reads them exactly as the code does.
 
-The ring game takes one more named assumption, `Pous.P2.Assumptions.CoinCommitHides` (`statistical-hiding`), because
-it hands the server the session commitment, and `P2RingAuditSecure`, the conjecture that P2 is secure in the ring model.
+The ring game takes one named assumption, `P2RingAuditSecure`, the conjecture that P2 is secure in the ring model. It
+takes none on the coin tree's hiding: the memory challenger releases the tree's root and key only after the session's
+last answer (`memory_challenger.MemoryChallenger.commitment`), so the server sees each index as its round opens and
+nothing else of the coins. The challenger is held to its coins by being an auditor-trusted device that runs its stated
+code (`pous-ring-device`), not by an early commitment.
 
 Two gaps stood between these statements and the deployed verifier:
 
@@ -246,16 +249,12 @@ def coinKey (k : Bytes 256) : ByteArray :=
 SHA-512 stream `Randomness.uniform` reads (`prf/sha-512`). -/
 abbrev Streams : Type := Fin 105 → Bytes DRAW_BYTES
 
-/-- What the memory challenger publishes about the indices `I` before session `session`: the coin tree's root and its
-hm96 key (`CoinTree.make`), or nothing when the code refuses to build the tree. -/
+/-- What the memory challenger releases about the indices `I` of session `session` once the session is signed, after
+its last answer: the coin tree's root and its hm96 key (`CoinTree.make`), or nothing when the code refuses to build the
+tree. -/
 def coinView (session : ByteArray) (c : HmCoins) (I : Fin 105 → Fin (2 ^ 19)) : Option (ByteArray × ByteArray) :=
   (CoinTree.make session (2 ^ 19) (Array.ofFn fun j => (I j).val) (coinKey c.1)
     (Array.ofFn fun j => bytesOf (c.2 j))).toOption.map fun t => (t.root, t.key)
-
-/-- The session commitment the server sees: the session id, the coin tree's root and key `v`, and the deployed point's
-blocks, rounds, limit and block size, bound to `binding`. -/
-def commitmentOf (session binding : ByteArray) (v : ByteArray × ByteArray) : SessionCommitment :=
-  ⟨session, v.1, v.2, 2 ^ 19, K, LIMIT_NS, q.blockBytes, binding⟩
 
 set_option exponentiation.threshold 20000 in
 /-- **A server in the ring model** holding at most `S` bits between setup and the session and between rounds, each
@@ -264,32 +263,33 @@ operations, for every `ω`):
 
 * `pre W pp C ω` is all that survives setup, `S` bits, a function of `W`, `C` and the whole primitive (perfect
   isolation); it is fixed before the memory challenger's coins are drawn (online coins);
-* `step sc W pp j σ i` answers round `j`'s index `i` from the state `σ`, what is public (`W`, `pp`) and the one session
-  commitment `sc` of the audit, returning the block and the next `S`-bit state.
+* `step W pp j σ i` answers round `j`'s index `i` from the state `σ` and what is public (`W`, `pp`), returning the
+  block and the next `S`-bit state.
 
-Each index is revealed as the previous answer returns, as the memory challenger reveals it. The real memory challenger
-also reveals the next index after a late answer, but a late answer ends the session `late` and fails it, so what a
-server learns from indices seen after one only helps a server the game counts as failed. -/
+Each index is revealed as the previous answer returns, as the memory challenger reveals it, and nothing else of the
+coins reaches the server before its last answer: the coin tree's root and key are released after the session is signed.
+The real memory challenger also reveals the next index after a late answer, but a late answer ends the session `late`
+and fails it, so what a server learns from indices seen after one only helps a server the game counts as failed. -/
 structure Server (S D Q L : ℕ) : Type where
   pre : Preprocessor sch S
-  step : SessionCommitment → Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B →
+  step : Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B →
     OracleAlgorithm (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × Bits S)
-  bounded : ∀ sc W pp j σ i, (step sc W pp j σ i).RingBounded D Q L
+  bounded : ∀ W pp j σ i, (step W pp j σ i).RingBounded D Q L
 
 /-- **The server passes the session**: `ω`, the coins and the streams `x`; the code's sampler reads index `I j` from
-stream `j` at `2^19` blocks, the code builds the coin tree over those indices (`coinView`), and the server, shown the
-session commitment, returns block `I j` of `C` in every one of the 105 rounds, sequentially.
+stream `j` at `2^19` blocks, the code builds the coin tree over those indices (`coinView`, released after the session),
+and the server returns block `I j` of `C` in every one of the 105 rounds, sequentially.
 
 On the device's side, `RunCheckAccepts` is what an accepted composed check gives: the device's session at the
 deployed point, each of its recorded answers the challenged block of `C*`, on time. That a deployed server answering
 such a session is a `Server` passing this event is `pous-ring-device`'s claim, not a theorem here. -/
-def Passes {S D Q L : ℕ} (session binding : ByteArray) (W : Bits sch.n) (A : Server S D Q L)
+def Passes {S D Q L : ℕ} (session : ByteArray) (W : Bits sch.n) (A : Server S D Q L)
     (x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams) : Prop :=
   ∃ (I : Fin 105 → Fin (2 ^ 19)) (v : ByteArray × ByteArray),
     (∀ j, FlockSoundness.Randomness.uniformOn (2 ^ 19) (bytesOf (x.2.2 j)) = some (I j).val) ∧
       coinView session x.2.1 I = some v ∧
       seqAnswers ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).answer x.1)
-          (A.step (commitmentOf session binding v) W (sch.enc W x.1 ()).1) 0 (List.ofFn I)
+          (A.step W (sch.enc W x.1 ()).1) 0 (List.ofFn I)
           (A.pre W (sch.enc W x.1 ()).1 (sch.enc W x.1 ()).2 x.1) =
         List.ofFn fun j => (sch.enc W x.1 ()).2 (I j)
 
@@ -302,11 +302,11 @@ def DrawExact : Prop :=
         ∃ i : Fin (2 ^ 19), FlockSoundness.Randomness.uniformOn (2 ^ 19) (bytesOf s) = some i.val ∧ P i) = pr P
 
 /-- **P2's audit in the ring model, with `ω` uniform, at the deployed point.** For every `(D, Q, L)` at which P2 is
-secure in the ring model (`P2RingAuditSecure`), and given that the coin commitments hide the indices up to `2^-131`
-(`CoinCommitHides`): for every session id and binding, every payload `W` and every `S`-bit, `(D, Q, L)`-bounded server
-(`Server`), the server passes the session with probability at most `1% + 2^-128` over the primitive `ω`, the memory
-challenger's coins and its uniform streams. The budget is `2^-129` (the ideal term), `2^-130` (the instantiation's
-term in `P2RingAuditSecure`), `2^-131` (the hiding) and `ε_rs = 0` (`DrawExact`), which sum to less than `2^-128`.
+secure in the ring model (`P2RingAuditSecure`): for every session id, every payload `W` and every `S`-bit,
+`(D, Q, L)`-bounded server (`Server`), the server passes the session with probability at most `1% + 2^-128` over the
+primitive `ω`, the memory challenger's coins and its uniform streams. The budget is `2^-129` (the ideal term),
+`2^-130` (the instantiation's term in `P2RingAuditSecure`) and `ε_rs = 0` (`DrawExact`), which sum to less than
+`2^-128`. No hiding term: the coin tree's root and key reach no server before its last answer.
 
 It speaks of the deployed system only through the four claims of this module's header, each cited on its own:
 `pous-ring-device` (the deployed server is a `Server`: state bounded between rounds, one session, online coins),
@@ -317,10 +317,9 @@ challenger's `SessionLog` under its host presumption, which `trusted-host` cover
 host. G-2 (the composed check) is fixed in code. What the deployed
 verifier's acceptance gives is `RunCheckAccepts` (this module's header). -/
 def EndToEndRing : Prop :=
-  Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131) →
-    ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
-      ∀ (session binding : ByteArray) (W : Bits sch.n) (A : Server S D Q L),
-        pr (Passes session binding W A) ≤ ENNReal.ofReal Params.δ + Params.εMax
+  ∀ D Q L : ℕ, Pous.P2.Assumptions.P2RingAuditSecure D Q L →
+    ∀ (session : ByteArray) (W : Bits sch.n) (A : Server S D Q L),
+      pr (Passes session W A) ≤ ENNReal.ofReal Params.δ + Params.εMax
 
 /-- **`EndToEndRing` at one root's depth, in the ring model, with `ω` uniform: `D = 16,446`, `Q = 2^20`, `L = 2^64`.**
 The margin first. `P2RingAuditSecure` is claimed at `D = 16,446`, about half of `RingTight`'s falsification at
@@ -346,10 +345,9 @@ squaring. Under the red team's sync model (4.24× and 5.55× at 8 cores) the mar
 (`PousP2Ring.trunc_seq_accepted`, which refutes `k ≤ 88` from `L = 2^30`) passes `k = 105` once it drops about 167
 bits of every block, which takes about `2^168` ring operations per answer; `2^64` is far below that. -/
 def EndToEndRingDeployed : Prop :=
-  Pous.P2.Assumptions.CoinCommitHides coinView ((2⁻¹ : ℝ≥0∞) ^ 131) →
-    Pous.P2.Assumptions.P2RingAuditSecure 16446 (2 ^ 20) (2 ^ 64) →
-      ∀ (session binding : ByteArray) (W : Bits sch.n) (A : Server S 16446 (2 ^ 20) (2 ^ 64)),
-        pr (Passes session binding W A) ≤ ENNReal.ofReal Params.δ + Params.εMax
+  Pous.P2.Assumptions.P2RingAuditSecure 16446 (2 ^ 20) (2 ^ 64) →
+    ∀ (session : ByteArray) (W : Bits sch.n) (A : Server S 16446 (2 ^ 20) (2 ^ 64)),
+      pr (Passes session W A) ≤ ENNReal.ofReal Params.δ + Params.εMax
 
 /-- **Non-vacuity in the ring model, with `ω` uniform: the honest full-state server passes P2's audit.** At the full
 state (`FULL = 2^19 · 16,448` bits, more than `S`), a responder that keeps all of `C` and answers each index from it
@@ -359,10 +357,10 @@ def HonestPassesRing : Prop :=
     ∀ W, pr (seqAcceptsOn sch 105 W A₁ A₂) = 1
 
 /-- **Non-vacuity of `EndToEndRing`'s event, in the ring model, with `ω` uniform**: the honest full-state server, a
-`Server FULL 0 0 0`, passes the session with probability 1 for every 32-byte session id, binding and `W`: the code
-always builds the coin tree, and the draw never fails (`ε_rs = 0`, `DrawExact`). -/
+`Server FULL 0 0 0`, passes the session with probability 1 for every 32-byte session id and `W`: the code always
+builds the coin tree, and the draw never fails (`ε_rs = 0`, `DrawExact`). -/
 def HonestPassesAccepts : Prop :=
-  ∃ A : Server FULL 0 0 0, ∀ session : ByteArray, session.size = 32 → ∀ (binding : ByteArray) (W : Bits sch.n),
-    pr (Passes session binding W A) = 1
+  ∃ A : Server FULL 0 0 0, ∀ session : ByteArray, session.size = 32 → ∀ W : Bits sch.n,
+    pr (Passes session W A) = 1
 
 end Pous.EndToEnd
