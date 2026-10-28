@@ -335,6 +335,12 @@
   "Definitions.Pouw.Fp8Atom",
   "Definitions.Pouw.Game.Defs"
  ],
+ "witnesses": {
+  "Properties.Pouw.ServedValues.SecurityProofs.rightValues": {
+   "honest": ["Properties.Pouw.ServedValues.SecurityProofs.HonestValues.right_values_honest"],
+   "nontrivial": "Properties.Pouw.ServedValues.SecurityProofs.HonestValues.right_values_nontrivial"
+  }
+ },
  "unwitnessed": {
   "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": "244896e8069c5fc7458985bb6a8bd223c15a40c28381c6930a8edda81523f263",
   "Accounting.SecurityProofs.Bridge.WorkOfCreditedWords": "b5df1631d6de9f44fb5a1e710b018846b0292957df4809e64c54ceeda837320f",

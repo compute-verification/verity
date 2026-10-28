@@ -2436,6 +2436,10 @@
   "Flock.SecurityProofs.RecursiveKS": {
    "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
    "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
+  },
+  "Pous.SecurityProofs.StreamedWipeMeetsDisk": {
+   "honest": ["Pous.Claims.StreamedWipeMeetsDisk_meets"],
+   "nontrivial": "Pous.Claims.StreamedWipeMeetsDisk_fails"
   }
  },
  "unwitnessed": {
