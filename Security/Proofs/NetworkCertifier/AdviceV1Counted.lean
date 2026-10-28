@@ -13,10 +13,9 @@ carries nothing from window to window: the carry is the decisions'. The decision
 before; under a book whose `zeros` is empty, it is the decisions' charge without them.
 
 This is not how advice v1 sends counts: `code_v1` codes them inside the arithmetic coder, in the decisions' segment
-(`ChargeCount_v2`'s window), which a separate code does not model.
-
-This module is apart from `Definitions.NetworkCertifier.AdviceV1` because its imports make `^` on `ℕ` elaborate
-through `Monoid.npow` instead of `instPowNat`, which would change that module's definitions' records.
+(`ChargeCount_v2`'s window), which a separate code does not model. So the bounds with this charge are retired lemmas
+(`Proofs.NetworkCertifier.Lemmas`), and the whole-window charge (`Definitions.NetworkCertifier.WindowCharge`) is the
+one the guarantees count.
 -/
 
 namespace NetTiming.AdviceV1
