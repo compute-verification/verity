@@ -1,4 +1,4 @@
-"""ASK-91's k = 256 gate: the cross-group cancellation families mirror a word's two promotion groups, the exhaustive searches
+"""The k = 256 gate: the cross-group cancellation families mirror a word's two promotion groups, the exhaustive searches
 replay the served -h3 bit for bit (`cell` asserts it), and the slice tool's vectorized rules are the scheme's own."""
 
 from __future__ import annotations

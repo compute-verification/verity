@@ -9,14 +9,14 @@
   which the caller gives (128 lowercase hex digits, no other open's, ever), and gives the port its challenger listens on
   at the peer's 127.0.0.1, the session's secret, which only that answer carries and nothing here prints, and the root of
   the coin commitment its challenger signed; the challenger opens the salt coin only after R. The gated served window
-  of record is vllm's H1 path, `integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py` (#3053), which holds its
-  salt, round-0 request table, R, session S and requests_root rules (#2950, PRF-132); serve.py refuses ``--gate``.
+  of record is vllm's H1 path, `integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py`, which holds its
+  salt, round-0 request table, R, session S and requests_root rules; serve.py refuses ``--gate``.
   ``coins.py open`` reserves and opens a session by hand, for development and timing rows only, on `stand_in_root` of
   its session, a stand-in and never a window's root, passed as ``--challenger HOST:PORT``, ``--session ID``,
   ``--secret-file F`` and ``--commitment HEX`` (``$POUW_CHALLENGER``, ``$POUW_CHALLENGER_SESSION``,
   ``$POUW_CHALLENGER_SECRET_FILE``, ``$POUW_CHALLENGER_COMMITMENT``); an address without its session id, either without
   the other, or a secret or commitment without both, is refused. The hello carries the secret
-  (``RemoteChallenger.connect(address, secret)``, infra's hello secret, RT4-INT-29). The session's layout is the
+  (``RemoteChallenger.connect(address, secret)``, the gate's hello secret). The session's layout is the
   window's live epoch (`layout`: `window.LIVE_SCHEME`, the window's epoch, `window.live_families(rounds)`), and the
   client refuses a commitment of any other, or of another root than the gate's open answered.
   Each coin opens there, after the root the serving loop sends, and the challenger logs both before the coin leaves its
@@ -379,7 +379,7 @@ def open_coins(at: Session | None, epoch: int, rounds: int, entropy: Callable[[i
                clock: Callable[[], float] = time.monotonic, sleep: Callable[[float], None] = time.sleep) -> Coins:
     """The window's coins: the challenger of session `at`, its hello carrying the session's secret when it has one, its
     commitment held to `layout` and to the root the gate's open answered when `at` holds one, or with no session the
-    in-process challenger over `entropy` (the Lean verifier of record's coins by default).  The client connects once
+    in-process challenger over `entropy` (the Lean verifier's coins by default).  The client connects once
     the session's tunnel listens (`remote.connect_when_listening` over `connect`, for up to `wait_s`: a caller that knows
     the window's coin deadline passes the time left to it)."""
     if at is None:
