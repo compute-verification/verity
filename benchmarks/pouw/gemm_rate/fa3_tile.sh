@@ -5,8 +5,9 @@
 #   research run --on MACHINE --project verity --source . --cwd source --timeout 60m \
 #     [--env VARIANTS="base:0 m128:128"] [--env VENV=DIR] -- bash benchmarks/pouw/gemm_rate/fa3_tile.sh
 #
-# A variant is NAME:M[:EMU[:DEG]], M the hdim-64 causal tile's kBlockM (0: the pinned 192), EMU a NUM/DEN share of the
-# score columns' exp2 on the FMA pipe and DEG its polynomial's degree (fa3_tile_build.py's --exp2-emu and --exp2-deg).
+# A variant is NAME:M[:EMU[:DEG[:LAZY]]], M the hdim-64 causal tile's kBlockM (0: the pinned 192), EMU a NUM/DEN share of
+# the score columns' exp2 on the FMA pipe (0: none), DEG its polynomial's degree, and LAZY 1 for a kept running max
+# (fa3_tile_build.py's --exp2-emu, --exp2-deg and --lazy-max).
 # KFA3_CACHE (kept outside the run dir) holds vllm-flash-attn at 506341a1 with cutlass, a tree a variant with
 # apply_fa3_tap.py applied (built with VERITY_TAP=0), and its build: KFA3_CACHE/build/NAME/kfa3_NAME.so. VENV is a Python
 # with torch (attn_knobs.sh's). $OUT gets each build's log, build_info.json and sass-NAME.txt (each kernel's MUFU.EX2 and
@@ -44,13 +45,14 @@ grep -qv ' rc 0$' "$O/rc.txt" && { cat "$O/rc.txt" "$O/clone.log"; exit 1; }
 
 pids=()
 for v in $VARIANTS; do
-  IFS=: read -r name m emu deg <<< "$v"
+  IFS=: read -r name m emu deg lazy <<< "$v"
   t=$C/trees/$name
   rm -rf "$t" && mkdir -p "$t/csrc"
   cp -r "$FA/hopper" "$t/hopper" && cp -r "$FA/csrc/common" "$t/csrc/common" && ln -s "$FA/csrc/cutlass" "$t/csrc/cutlass"
   python3 "$TAP/apply_fa3_tap.py" "$t/hopper" "$TAP" > "$O/apply-$name.log" 2>&1
   tm=(); [ "${m:-0}" != 0 ] && tm=(--tile-m "$m")
   [ -n "${emu:-}" ] && [ "$emu" != 0 ] && tm+=(--exp2-emu "$emu" --exp2-deg "${deg:-3}")
+  [ "${lazy:-0}" = 1 ] && tm+=(--lazy-max)
   ( "$VENV/bin/python" "$TREE/benchmarks/pouw/gemm_rate/fa3_tile_build.py" --tree "$t" --name "kfa3_$name" \
       --build-dir "$C/build/$name" "${tm[@]}" --jobs "$JOBS" --cuda "$CUDA_HOME" > "$O/build-$name.log" 2>&1
     echo "build $name rc $?" >> "$O/rc.txt"

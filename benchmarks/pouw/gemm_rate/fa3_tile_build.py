@@ -2,6 +2,7 @@
 causal tile optionally changed, so attn_knobs.py can time it beside the served wheel's `_vllm_fa3_C`.
 
     python fa3_tile_build.py --tree TREE --name NS --build-dir DIR [--tile-m 128] [--exp2-emu NUM/DEN --exp2-deg 3]
+                              [--lazy-max]
 
 TREE is a copy of the pinned tree with `integrations/vllm/verity_vllm/acquire/fa3_tap_src/apply_fa3_tap.py` applied (its
 `fa3_torch_lib_verity.cpp`), built here with VERITY_TAP=0, which is the pinned kernel. The flags are that builder's
@@ -16,8 +17,12 @@ online-softmax arithmetic; only which rows share an M tile changes. The op is `t
 --exp2-emu NUM/DEN computes NUM of every DEN of each thread's score columns' exp2 on the FMA pipe (`exp2_fma`, a
 degree --exp2-deg polynomial) instead of MUFU, which at head dim 64 does one exp2 a score in the time the tensor cores
 take for its 128 MACs. It is not byte-equal: the other columns keep FA3's exact exp2f, and an emulated one differs by at
-most the polynomial's relative error (`COEFFS`), under bf16's half-ulp, before P is rounded to bf16. Without it softmax.h
-is untouched.
+most the polynomial's relative error (`COEFFS`), under bf16's half-ulp, before P is rounded to bf16.
+
+--lazy-max keeps each warp's running max after a tile's first key block, so a later block skips the max's FMNMX per
+score, its shuffles and the output's rescale (`lazy_max_keeps`), which are a fifth of the hdim-64 mainloop's issued
+instructions; P may then exceed 1, and the sum and lse use the kept max. A measurement screen only: it has no overflow
+recovery. Without either flag softmax.h is untouched.
 """
 from __future__ import annotations
 
@@ -49,7 +54,7 @@ def exp2_fma(deg: int) -> str:
     p = f"{c[-1]!r}f"
     for k in reversed(c[:-1]):
         p = f"fmaf({p}, f, {k!r}f)"
-    return f"""// 2^x for x <= 0 on the FMA pipe: x rounded to n by the 1.5 * 2^23 shifter, the polynomial for 2^(x - n) on
+    return f"""// 2^x for x < 128 on the FMA pipe: x rounded to n by the 1.5 * 2^23 shifter, the polynomial for 2^(x - n) on
 // [-0.5, 0.5], and n added to its exponent. x is clamped at -125 so that exponent stays normal: a masked key then weighs
 // 2^-125 rather than 0, below every causal row's sum and output, since a valid row always keeps its own key.
 __forceinline__ __device__ float exp2_fma(float x) {{
@@ -75,6 +80,43 @@ def emulate_exp2(softmax_h: Path, num: int, den: int, deg: int) -> None:
     softmax_h.write_text(s.replace(EXP_ANCHOR, exp2_fma(deg) + EXP_ANCHOR).replace(EXP_LINE, split))
 
 
+LAZY_HELPER = """// [lazy max] Whether every row of this warp already has a finite running max, which a later key block then keeps:
+// its exp2 run against that max, scores_scale is 1, and rescale_o skips the output's multiply. Any row still at -inf
+// (all its keys so far masked) sends the whole warp through the exact path. No overflow recovery: a key block whose
+// scores exceed the kept max by 128 in log2 units gives inf.
+template <typename TensorT>
+__forceinline__ __device__ bool lazy_max_keeps(TensorT const& row_max) {
+    bool finite = true;
+    #pragma unroll
+    for (int mi = 0; mi < size(row_max); ++mi) { finite &= row_max(mi) != -INFINITY; }
+    return __all_sync(0xffffffffu, finite);
+}
+
+"""
+LAZY_PATCHES = (
+    ("template <int kNRows, int Max_offset=0>\nstruct Softmax {\n", LAZY_HELPER + "template <int kNRows, int Max_offset=0>\nstruct Softmax {\n"),
+    ("    float const softmax_scale_log2;\n", "    float const softmax_scale_log2;\n    bool skip_rescale = false;\n"),
+    ("        } else {\n            Tensor scores_max_prev = make_fragment_like(row_max);\n",
+     "        } else if (lazy_max_keeps(row_max)) {\n            cute::fill(scores_scale, 1.f);\n            skip_rescale = true;\n"
+     "        } else {\n            skip_rescale = false;\n            Tensor scores_max_prev = make_fragment_like(row_max);\n"),
+    ("    __forceinline__ __device__ TensorT finalize(float const final_scale=1.f) {\n",
+     "    __forceinline__ __device__ TensorT finalize(float const final_scale=1.f) {\n        skip_rescale = false;\n"),
+    ("TensorT finalize_aux(TensorT const& tSrSAux, float const final_scale=1.f) {\n",
+     "TensorT finalize_aux(TensorT const& tSrSAux, float const final_scale=1.f) {\n        skip_rescale = false;\n"),
+    ("    __forceinline__ __device__ void rescale_o(Tensor1 &acc_o, TensorT const &scores_scale) {\n",
+     "    __forceinline__ __device__ void rescale_o(Tensor1 &acc_o, TensorT const &scores_scale) {\n        if (skip_rescale) { return; }\n"),
+)
+
+
+def lazy_max(softmax_h: Path) -> None:
+    s = softmax_h.read_text()
+    for old, new in LAZY_PATCHES:
+        if s.count(old) != 1:
+            raise SystemExit(f"{softmax_h}: the lazy-max anchor {old.strip()[:60]!r} is not there exactly once")
+        s = s.replace(old, new)
+    softmax_h.write_text(s)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--tree", type=Path, required=True)
@@ -83,6 +125,7 @@ def main() -> None:
     ap.add_argument("--tile-m", type=int)
     ap.add_argument("--exp2-emu", help="NUM/DEN: that share of each thread's score columns' exp2 on the FMA pipe")
     ap.add_argument("--exp2-deg", type=int, default=3, help="the FMA exp2's polynomial degree (3 or 4)")
+    ap.add_argument("--lazy-max", action="store_true", help="keep a warp's running max after the first key block")
     ap.add_argument("--jobs", default="8")
     ap.add_argument("--cuda", type=Path, default=Path("/usr/local/cuda"), help="the CUDA toolkit whose libcuda stub links")
     args = ap.parse_args()
@@ -94,6 +137,8 @@ def main() -> None:
         num, den = (int(x) for x in args.exp2_emu.split("/"))
         emulate_exp2(hop / "softmax.h", num, den, args.exp2_deg)
         emu = {"num": num, "den": den, "deg": args.exp2_deg, "max_rel": {3: 4.6e-4, 4: 1.2e-5}[args.exp2_deg]}
+    if args.lazy_max:
+        lazy_max(hop / "softmax.h")
     os.environ["TORCH_CUDA_ARCH_LIST"] = "9.0a"
     os.environ["MAX_JOBS"] = args.jobs
     from torch.utils.cpp_extension import load
@@ -120,7 +165,7 @@ def main() -> None:
          build_directory=str(args.build_dir), verbose=True, is_python_module=False, with_cuda=True)
     tile = [ln.strip() for ln in (hop / "tile_size.h").read_text().splitlines()
             if "is_causal ? 128 : is_local || paged_kv_non_TMA ? 160 : 192" in ln and not ln.strip().startswith("//")]
-    info = {"name": args.name, "tile_m": args.tile_m, "exp2_emu": emu, "seconds": round(time.time() - t0, 1),
+    info = {"name": args.name, "tile_m": args.tile_m, "exp2_emu": emu, "lazy_max": args.lazy_max, "seconds": round(time.time() - t0, 1),
             "so": str(args.build_dir / f"{args.name}.so"), "hd64_tile_line": tile}
     (args.build_dir / "build_info.json").write_text(json.dumps(info, indent=1))
     print("BUILD-OK", json.dumps(info))
