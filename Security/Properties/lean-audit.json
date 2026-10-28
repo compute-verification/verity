@@ -51,7 +51,8 @@
   "Properties.RemoteAudit.Component",
   "Properties.Composition",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
-  "Properties.Accounting.JointBridge.WorkOfCreditedWords"
+  "Properties.Accounting.JointBridge.WorkOfCreditedWords",
+  "Properties.Core.Site"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -333,7 +334,9 @@
   "Definitions.Pouw.Window",
   "Definitions.Pouw.PearlC",
   "Definitions.Pouw.Fp8Atom",
-  "Definitions.Pouw.Game.Defs"
+  "Definitions.Pouw.Game.Defs",
+  "Properties.Core",
+  "CoreProtocol.Site"
  ],
  "layers": {
   "Properties.Pouw": {
@@ -575,6 +578,11 @@
    "imports": ["Definitions.Core.Formalism", "Properties.Pouw.PeriodJ10R"],
    "except": [],
    "why": "the served period's values in AND gates are stated against served H1's period and premises (`Properties.Pouw.PeriodJ10R`) and the AND count (`Definitions.Core.Formalism`), never a proof"
+  },
+  "Properties.Core": {
+   "imports": ["Definitions.Core", "CoreProtocol.Site"],
+   "except": [],
+   "why": "the Site's code is stated against its own functions (`Core.Site`, `CoreProtocol.Site`) and the spec's Site and registration they copy (`Definitions.Core.Site`), never a proof"
   }
  },
  "reads_exempt": {
@@ -2446,6 +2454,21 @@
    "signature": ["Properties.SampledProofs.noAcceptAfterHalt : Properties.SampledProofs.NoAcceptAfterHalt"],
    "assumptions": [],
    "type_hash": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
+  },
+  "Properties.Site.checks": {
+   "owner": "@lean"
+  },
+  "Properties.Site.entryValid": {
+   "owner": "@lean"
+  },
+  "Properties.Site.fold": {
+   "owner": "@lean"
+  },
+  "Properties.Site.refusedAt": {
+   "owner": "@lean"
+  },
+  "Properties.Site.refuses": {
+   "owner": "@lean"
   }
  },
  "shape": {
@@ -3566,6 +3589,26 @@
    "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent": {
     "function": "RemoteAudit.Protocol.check",
     "outcome": "accept"
+   },
+   "Properties.Site.checks": {
+    "function": "Core.Site.Registration.check",
+    "outcome": "none"
+   },
+   "Properties.Site.entryValid": {
+    "function": "Core.Site.Registration.Entry.refusal",
+    "outcome": "none"
+   },
+   "Properties.Site.fold": {
+    "function": "Core.Site.ofLog",
+    "outcome": "none"
+   },
+   "Properties.Site.refusedAt": {
+    "function": "Core.Site.Registration.check",
+    "outcome": "Except.error"
+   },
+   "Properties.Site.refuses": {
+    "function": "Core.Site.Registration.Entry.refusal",
+    "outcome": "none"
    }
   },
   "frozen": {

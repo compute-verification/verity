@@ -8,7 +8,7 @@ import Flock.Hash
 The spec's `Verity.Site` (`Security/Definitions/Core/Site.lean`) as code, on Lean core and C-Flock's canonical JSON and
 SHA-512: the registered hardware, folded from the registration log (`Site.ofLog`), the check each entry passes
 (`Registration.Entry.refusal`), and the views the protocols read. Its checks are the spec's, clause for clause and in
-the spec's order, over this file's own types, each decidable; `Properties.Site` states that each is the spec's, and
+the spec's order, over this file's own types, each decidable; `Properties.Core.Site` states that each is the spec's, and
 `verity.core.site` is its Python mirror, held to it by the difftest (`site-difftest`).
 
 The digests are parameters as in the spec (`Registration.Digests`); the deployed ones (`Registration.sha512`) are
