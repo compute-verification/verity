@@ -94,6 +94,23 @@ def test_generic_short_names_go_by_their_demangled_name(tmp_path):
         == ["commit", "pouw", "tap", "attention", "copy"]
 
 
+def test_tensor_active_at_the_reference_clock(tmp_path):
+    """The GPC clock comes in Hz under a [MHz] label; each tensor sample is scaled by the clock sample at or before it, so
+    a window at 1,830 MHz and 915 MHz in turn reads half its tensor-busy cycles at the reference in the slow half."""
+    db = sqlite3.connect(_report(tmp_path / "prof.sqlite"))
+    assert U.analyse(tmp_path / "prof.sqlite", _trace(tmp_path / "advice_trace.jsonl"), 8)["all"]["sm_clock_mhz"] is None
+    db.execute("INSERT INTO TARGET_INFO_GPU_METRICS VALUES (0, 3, 'GPC Clock Frequency [MHz]')")
+    for j in range(120):
+        t = j * MS // 2 + MS // 4
+        db.execute("INSERT INTO GPU_METRICS VALUES (?, 0, 3, ?)", (t, 1830e6 if t < 30 * MS else 915e6))
+    db.commit()
+    w = U.analyse(tmp_path / "prof.sqlite", _trace(tmp_path / "advice_trace.jsonl"), 8)["all"]
+    assert w["tensor_active_pct"] == pytest.approx(54.0)
+    assert w["sm_clock_mhz"] == pytest.approx((1830 + 915) / 2, abs=0.1)
+    assert w["tensor_active_pct_at_ref"] == pytest.approx(54.0 * 0.75)
+    assert U.mhz(1599.3) == 1599.3
+
+
 def test_too_few_full_steps_is_said(tmp_path):
     got = U.analyse(_report(tmp_path / "prof.sqlite"), _trace(tmp_path / "advice_trace.jsonl", T=16), 8)
     assert got["all"]["steps"] == 0 and "fewer than two" in got["all"]["note"]
