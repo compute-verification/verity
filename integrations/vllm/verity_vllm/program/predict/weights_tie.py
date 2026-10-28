@@ -18,6 +18,10 @@ template's port has one row schema, so a table's own chain hashes `TABLE_TAG` be
 odd count of bytes where a shard's (after a header safetensors aligns to 8 bytes) and every other chain's pend an even
 count: they are templates of their own. Under a ``work`` law with every unit in the output class (`Tie.outputs`), every unit is proved.
 
+A field the weights record holds to an analytic table (the rotary table, `window_weights`) is no checkpoint bytes: the tie
+reads none of it and names its parameters unrooted, as a registration of no served table does. A registration that roots
+it is refused at the pins, since the tie window holds no root of it.
+
 Public: the layout (the shards, their headers and tensor offsets, each parameter's rows and width), the digests and the
 registered roots. Private: the rows, their salts and every state but the first. Refused by name: a cast or a composition
 whose rows aren't its source tensors' bytes in order (1:1, fused along dim 0 and tied are), a row straddling two tensors, a
@@ -121,8 +125,8 @@ class Chain:
 class Tie:
     """X's tie at a grain, from its public bytes and the verifier's weights record alone (`tie`): the record's ``program``
     digest, the registered ``model``, the ``grain``, each shard's pinned SHA-256, each rooted weight parameter's shape entry
-    (``entries``: value, leaves, words, domain; no root) and the parameters with no root, and its ``chains``; ``run_id``
-    names the run."""
+    (``entries``: value, leaves, words, domain; no root) and the parameters with no root (an analytic table's among them),
+    and its ``chains``; ``run_id`` names the run."""
     program: str
     model: dict[str, str]
     grain: dict[str, int]
@@ -242,7 +246,7 @@ def tie(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None =
     `window_weights.weights_record`'s, at ``registered``'s model and revision): refused (ValueError) by name unless X is of
     record and the registered model's, every rooted parameter's field is its source tensors' bytes in order, uncast and
     unsharded, in whole rows, every byte of every shard after its header is a row of a registered parameter, and each
-    shard's SHA-256 is its pinned one. It commits no weight."""
+    shard's SHA-256 is its pinned one. An analytic table's parameters it leaves unrooted. It commits no weight."""
     rec = record or WW.weights_record(registered, checkpoint_dir, checkpoints_manifest, kv_cache_dtype, grain)
     if rec.get("of_record") is not True:
         raise ValueError(f"the checkpoint is not of record ({rec.get('why') or rec['checkpoint'].get('all_shards_pinned')}): "
@@ -252,7 +256,11 @@ def tie(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None =
         raise ValueError(f"the checkpoint's manifest entry is {entry['repo']}@{entry['revision']}, not the registered model "
                          f"{model['repo']}@{model['revision']}")
     ck = WR.CheckpointIndex(checkpoint_dir, verify_shards=False)
-    entries, fields = rec["registered_entries"], {f["field"]: f for f in rec["fields"]}
+    fields = {f["field"]: f for f in rec["fields"]}
+    entries = {p: e for p, e in rec["registered_entries"].items() if fields[_field(p)].get("pinned") != "analytic"}
+    of: dict[str, list[str]] = {}
+    for p in sorted({*rec["registered_entries"], *rec["unrooted"]}):
+        of.setdefault(_field(p), []).append(p)
     claimed: dict[str, tuple[str, int]] = {}
     alone: list[tuple[str, list[str]]] = []
     for p in sorted(entries, key=lambda p: (_table(p), p)):
@@ -310,7 +318,7 @@ def tie(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None =
         chains.append(Chain(f"tie/{p}", tuple(cv), pend, tuple((p, j) for j in range(entries[p]["leaves"])), len(data),
                             hashlib.sha512(data).digest()))
     return Tie(rec["program_digest"], {"repo": model["repo"], "revision": model["revision"]}, dict(rec["grain"]), shards,
-               {p: dict(e) for p, e in sorted(entries.items())}, dict(rec["unrooted"]), tuple(chains), run_id)
+               {p: dict(e) for p, e in sorted(entries.items())}, WW._unrooted(rec, of, entries), tuple(chains), run_id)
 
 
 def commit(registered: Any, key: bytes, checkpoint_dir: str, checkpoints_manifest: str | None = None, *, law: dict[str, Any],
