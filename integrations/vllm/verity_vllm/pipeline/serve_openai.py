@@ -69,8 +69,8 @@ commits the attention interiors without retaining them, and each seal's manifest
 device pool until every subprotocol named has drawn the window, then keeps on host, and seals, only the leaves their drawn
 blocks open (`serve_release`; PoUW H1's, ``pouw``, from its arm in process once each window's draw coin is open,
 `serve_h1.H1Windows.drawn`, any other's through ``--draws-dir``). Each
-window's finalize, its readback and records, then its seal run on a thread of their own (`serve_seal.Sealer`), in window
-order, while the engine serves the next window: the engine loop's part of a close only detaches the window from the
+window's finalize, its readback and records run on a thread of their own (`serve_seal.Sealer`), then its seal on a second,
+beside the next window's finalize, each in window order, while the engine serves on: the engine loop's part of a close only detaches the window from the
 committer (`NativeHostCommitter.detach`), and it waits only while the windows awaiting their finalize and seal hold
 ``--seal-hold-gb`` of committed values, in the committer's pinned pool, which
 ``--seal-warm-gb`` grows before serving rather than on the engine loop. A window closes once its steps have committed
@@ -93,7 +93,7 @@ record is ``remote_session.json``, and a rejected session fails the exit.
 The engine runs eager, so each step makes hundreds of torch calls, each of which releases the GIL and takes it back. While
 another thread runs Python, each take waits out the interpreter's switch interval, so the server serves with
 ``--switch-interval-ms`` (0.1 ms; Python's is 5 ms) and seals in a spawned process (``--seal-process``, `seal_process.sealer_of`),
-the sealer's thread here only writing each store's files. ``pauses.jsonl`` (`serve_seal.Watchdog`) records each stall of 0.2 s or more.
+the sealer's second thread here only writing each store's files. ``pauses.jsonl`` (`serve_seal.Watchdog`) records each stall of 0.2 s or more.
 """
 from __future__ import annotations
 
