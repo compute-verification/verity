@@ -1,6 +1,7 @@
 import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 import Proofs.Flock.Soundness.Discharge.Aliased.Keys
 import Proofs.Flock.Soundness.Discharge.Const.Inst
+import Properties.Flock.Circuit.Keyed
 
 /-!
 # `ProgPlaces` for the circuit's program on Δ's source keys
@@ -50,12 +51,6 @@ theorem insAt_uniform {k : ℕ} {R : Rows} {ins : ℕ → Fin R.nIn → Fin k} {
       change (Const.Prog.insAt (Prog.snoc (uniform k R ins one hone n) R _ _ _) v.castSucc i).val = _
       rw [Const.Prog.insAt_castSucc]
       simp [insAt_uniform n v i hi]
-
-/-- **The circuit's program on Δ's source keys**: `n` units of the circuit's template instance rows, input `x` of each
-on the gate of its key (`Aliased.keyIdx`), the zero's gate when it reads the zero. -/
-noncomputable abbrev keyProg (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) :
-    Prog (gates (inGates n (circuitRows c hU).nIn) (circuitRows c hU) n) n :=
-  circuitProg c hU n (circuitRows c hU).nIn (Aliased.keyIdx c (circuitRows c hU).nIn)
 
 /-- **Two inputs of one unit of `keyProg` on one gate have one key** (`Aliased.srcKey`), in the program's own instance. -/
 theorem keyProg_wire_key {c : Flock.Circuit} (hU : Built c.unit) {n : ℕ}
