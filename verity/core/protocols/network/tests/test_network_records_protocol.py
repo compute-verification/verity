@@ -371,7 +371,7 @@ def test_the_encoding_round_trips(kind):
     from hypothesis import given, settings
 
     @settings(derandomize=True, database=None, deadline=None, max_examples=30)
-    @given(V2.units(("honest", "status", "extra")))
+    @given(V2.units(("honest", "status", "extra"), links=V2.LINKS if kind in ("raw", "certified") else ("a", "b", "c", "d-e")))
     def roundtrip(d):
         published = [_as(kind, r, d) for r in d.records]
         assert records(b"".join(encode(r) for r in published))[0] == published
