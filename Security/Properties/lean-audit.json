@@ -52,7 +52,8 @@
   "Properties.RemoteAudit.Component",
   "Properties.Composition",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
-  "Properties.Accounting.JointBridge.WorkOfCreditedWords"
+  "Properties.Accounting.JointBridge.WorkOfCreditedWords",
+  "Properties.Remote"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -352,7 +353,10 @@
   "Definitions.Pouw.Window",
   "Definitions.Pouw.PearlC",
   "Definitions.Pouw.Fp8Atom",
-  "Definitions.Pouw.Game.Defs"
+  "Definitions.Pouw.Game.Defs",
+  "Properties.Remote",
+  "CoreRemote",
+  "NciCheck.Protocol"
  ],
  "layers": {
   "Properties.Pouw": {
@@ -605,6 +609,11 @@
    ],
    "except": [],
    "why": "a party's signed periods are stated over the code that checks them (MemoryChallenger.Attest, Lms.Hss), the memory challenger's string framing, the claims' collision finders (Claims.Finder) and the party assumptions (Accounting.Assumptions.Parties), never over a proof"
+  },
+  "Properties.Remote": {
+   "imports": ["Definitions.Core", "CoreRemote", "Properties.Composition", "Properties.Nci", "Properties.NciDesc"],
+   "except": [],
+   "why": "remote's acceptance is stated over the composite's own function (CoreRemote), the composition's properties, the shared definitions and the policy's properties it reads, never over a proof"
   }
  },
  "reads_exempt": {
@@ -2069,6 +2078,12 @@
    "signature": ["Properties.Pouw.Window.workAtRefuses : Properties.Pouw.Window.WorkAtRefuses"],
    "assumptions": [],
    "type_hash": "106f9eeb8a719c5b3bdc75b1580cd548d065c3f5d3b7d429eb3709f3b281ee09"
+  },
+  "Properties.Remote.SecurityProofs.acceptComplies": {
+   "owner": "@soundness"
+  },
+  "Properties.Remote.SecurityProofs.acceptInferenceOnly": {
+   "owner": "@soundness"
   },
   "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent": {
    "owner": "@memory-accounting",
@@ -3659,6 +3674,14 @@
    "MemoryChallenger.Attest.Properties.SecurityProofs.proverSeesMessages": {
     "function": "MemoryChallenger.Attest.Properties.code",
     "outcome": "none"
+   },
+   "Properties.Remote.SecurityProofs.acceptInferenceOnly": {
+    "function": "Core.Remote.protocol",
+    "outcome": "accept"
+   },
+   "Properties.Remote.SecurityProofs.acceptComplies": {
+    "function": "Core.Remote.protocol",
+    "outcome": "accept"
    }
   },
   "frozen": {
