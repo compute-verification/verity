@@ -3,9 +3,9 @@ the honest run and every attack, and the served design's ε and γ.
 
     python3 benchmarks/pouw/e2e_120/run.py [--m M --n N --k K --window S] [--seed SEED] [--json]
 
-With no C-Flock, this is the check alone (`window.Round`, the statement's public file by `window.ideal_proof`): it shows the
+With no Flock, this is the check alone (`window.Round`, the statement's public file by `window.ideal_proof`): it shows the
 honest window accepted and the library rejected, and that MITM and skip-filler are not caught by today's duo check. On the
-pod, benchmarks/pouw/e2e_120/job.sh stages the same `PouwSegCheckDither_v2{S, duo}` statement through C-Flock --zk and the
+pod, benchmarks/pouw/e2e_120/job.sh stages the same `PouwSegCheckDither_v2{S, duo}` statement through Flock --zk and the
 Lean verifier of record, so accept/reject there is the verifier's; `run.py --stage OUT` writes one honest statement's
 circuit.txt, inst.bin and pub.bin for it.
 
@@ -64,7 +64,7 @@ def print_table(result: dict, head: AC.Headline) -> None:
 
 
 def stage_one(out: Path, shape: WD.Shape, seed: int) -> dict:
-    """Write one honest statement for the pod: its circuit.txt, inst.bin and pub.bin through C-Flock's UnitStager, so the Lean
+    """Write one honest statement for the pod: its circuit.txt, inst.bin and pub.bin through Flock's UnitStager, so the Lean
     verifier checks a real proof of today's `PouwSegCheckDither_v2{S, duo}`."""
     import numpy as np
     from verity.ml.circuits.defs import bind
@@ -96,7 +96,7 @@ def main() -> int:
     ap.add_argument("--k", type=int, default=1024)
     ap.add_argument("--window", type=int, default=16)
     ap.add_argument("--seed", type=int, default=1)
-    ap.add_argument("--stage", type=Path, help="write one honest statement for C-Flock under this directory, nothing else")
+    ap.add_argument("--stage", type=Path, help="write one honest statement for Flock under this directory, nothing else")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
     shape = WD.Shape(a.m, a.n, a.k, a.window)

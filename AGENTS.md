@@ -13,12 +13,12 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
     package per protocol: sampled proofs, PoUW, proof of useful space (PoUS), the bandwidth audit, proof of useful
     bandwidth (PoUB) and network certification, each a Python verifier until its Lean verifier (its `lean/`) replaces
     it; the inference-only policy (`network/nci/`) is Lean only. `claims` holds the security claims' ids,
-    `service/flock/` C-Flock's Lean verifier and the ZK server (`Flock.Firewall`), `service/firewall/` the ZK server's
+    `service/flock/` Flock's Lean verifier and the ZK server (`Flock.Firewall`), `service/firewall/` the ZK server's
     release side, and `difftest` the Python held to each Lean.
   - `verity/ml/`: Python and CUDA: the provers, and Python that mirrors the Lean for speed. `circuits` (format in
     `circuits/PROTOCOL.md`; `ops`, the primitive circuits' Definitions; `silicon`, the GPUs' exact semantics),
     `kernels`, `commitments`, `crypto`, `randomness` (the one challenge derivation), `private_circuits`, `definitions`
-    (the served workloads' Definitions) and `flock/` (`verity_flock`, its own distribution: C-Flock, the proof
+    (the served workloads' Definitions) and `flock/` (`verity_flock`, its own distribution: Flock, the proof
     system's prover, with its verifier's specification in `verifier/`). Until each protocol's verifier is Lean, the units its
     Python verifier reads are on the soundness path: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`,
     `ml.kernels`, `ml.commitments`, `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH`, which only shrinks). The rest
@@ -65,7 +65,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   reason: protocol structure, the protocol's outputs, the verifier's coins and draws, and hiding commitments. Partitions
   are private and their properties public: a proof block's outputs fit its Definition's public size class, a power of two
   from 16 to 262,144 bits, and its output bits count in leakage (provisional; `UNIT_CLASS_MAX` = 16 restores the
-  16-bit limit). A plain path, C-Flock without `--zk`, stays for a deployment whose values needn't be hidden: it
+  16-bit limit). A plain path, Flock without `--zk`, stays for a deployment whose values needn't be hidden: it
   works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and `flock-verify`
   refuses a plain session past what the plain theorem covers (one table today).
 - **One proof system** for PoUW, PoUS and network accounting: the workers behind the firewall, the challenger and the
@@ -144,8 +144,8 @@ module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`), w
 ## Checking and merging
 
 There is no GitHub Actions CI. `check` (`verity check`, `tools/verity/check/check.py`) is the one check: every suite,
-`circuit-check --all`, C-Flock's Rust build and tests, the Lean verifier's build and partition check, the Lean check, and
-`lean-agreement` (against upstream's Rust verifier) when C-Flock or its Lean verifier changes.
+`circuit-check --all`, Flock's Rust build and tests, the Lean verifier's build and partition check, the Lean check, and
+`lean-agreement` (against upstream's Rust verifier) when Flock or its Lean verifier changes.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged.
@@ -168,7 +168,7 @@ on review, and the full check runs after landing (how a PR lands: the team skill
 - **One vocabulary.** A concept more than one guarantee reads (the circuit, commitments and hashes, coins and draws,
   probability, partitions and proof blocks, devices and signatures) has one definition, in `Core` or `Hash`, which every
   area and protocol reads; an area defines only its own, and no new Lean adds a second definition.
-- **Lean is code or security analysis.** Code stays with its component and never requires `Security/`: C-Flock's
+- **Lean is code or security analysis.** Code stays with its component and never requires `Security/`: Flock's
   executable verifier and the ZK server (`verity/core/service/flock/`, with the release side in
   `verity/core/service/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
   PoUB's verifier, each in its protocol's `lean/` with a difftest. Under `FC_FIREWALL=1` every byte that leaves is

@@ -1,5 +1,5 @@
 """live.py: a served H1 window's live units (VLLM-85's ``live@<s>``, `circuit.live`) through sampled proofs, the
-verifier's side and the prover's staging; `live.sh` proves them by C-Flock --zk and has Lean verify them.
+verifier's side and the prover's staging; `live.sh` proves them by Flock --zk and has Lean verify them.
 
     python live.py prepare --live DIR --work W
     python live.py summarize --work W --out OUT
@@ -196,7 +196,7 @@ def cmd_prepare(a) -> int:
 
 
 def live_stager(T: int, circuit: Path, part: dict):
-    """C-Flock's stager of `live.template_v2(T)`, bound to the live Program's partition, its circuit written once."""
+    """Flock's stager of `live.template_v2(T)`, bound to the live Program's partition, its circuit written once."""
     from verity_flock import class_statement as CS
     stager = CS.UnitStager(L.template_v2(T), NAME, LR.statement_rows(T, v2=True), LR.STATEMENT_OUT_ROWS, circuit=circuit,
                            bind={"partition": P.digest(part), "program": part["program"]})

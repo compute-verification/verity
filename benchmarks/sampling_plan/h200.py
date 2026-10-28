@@ -8,7 +8,7 @@ nothing carries across it. Its subcircuits are Definitions (`templates`): the W8
 and the row units (RMSNorm, the quantizer, softmax, the residual add, the gathers, the embedding and
 argmax), each id `stub:` until its Definition lands, its ANDs composed from pinned pieces.
 
-**The law is what Lean proves.** Each subcircuit is one sampling block of the block (`IntegrityPeriod`): one C-Flock `--zk`
+**The law is what Lean proves.** Each subcircuit is one sampling block of the block (`IntegrityPeriod`): one Flock `--zk`
 session drawing a uniform `subset:k` of its n units, split over `tables` tables of at most `_cap` drawn units each
 (m = k_log + nbl <= 35). Every subcircuit draws `k = ceil(ln(S/delta)/share)`, so by `IntegrityPeriodLog` each sampling block has
 fewer than `K0 = ln(S/delta) n/k` <= share n units wrong outside delta (the S sampling blocks of the block split delta), and by
@@ -16,7 +16,7 @@ fewer than `K0 = ln(S/delta) n/k` <= share n units wrong outside delta (the S sa
 them (`Stratified.harm_bound`, each unit weighted by its ANDs) are informative: the law-level bound is proved
 (`FlockSoundness.Audit.stratified_isHarmBound_exact`), but no guarantee in the lock composes it with acceptance.
 
-**Cost** is C-Flock's fit (`transformer.costs`: zero-knowledge sessions on sm_120, in RTX PRO 6000 GPU-seconds, taken as
+**Cost** is Flock's fit (`transformer.costs`: zero-knowledge sessions on sm_120, in RTX PRO 6000 GPU-seconds, taken as
 H200 GPU-seconds), per table `statement_fixed + statement_per_and A` and per drawn unit `(per_and + staged_per_and) A`,
 A a unit's ANDs with its rows' openings (`row_ands`); staging is taken to scale with the drawn units, not n. The fit
 measured units of 5.1e6 to 3.0e7 ANDs, so the row subcircuits' (up to 2e8) are extrapolated. Replaying
@@ -167,7 +167,7 @@ def templates(m: Shape, pins: dict[str, int] | None = None, *, tiles: bool = Fal
 
 @dataclass(frozen=True)
 class Rates:
-    """C-Flock's fitted rates (`transformer.costs`) and the commitment rate."""
+    """Flock's fitted rates (`transformer.costs`) and the commitment rate."""
 
     statement_fixed: float
     statement_per_and: float

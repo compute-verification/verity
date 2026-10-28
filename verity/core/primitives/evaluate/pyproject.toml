@@ -16,7 +16,7 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# `lake build` reads this package and C-Flock's verifier (verity/core/service/flock), which it requires by path; the Python
+# `lake build` reads this package and Flock's verifier (verity/core/service/flock), which it requires by path; the Python
 # reference is verity.ml.circuits, with the word primitives the vLLM integration registers (its registry package, and the
 # package's own `__init__`s it imports through), the row primitives' vectors `Security` pins, the vLLM integration's
 # `store_io`, through which the GPU captures held in the evidence store are fetched (and what the store CLI it starts reads of

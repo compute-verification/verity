@@ -1,5 +1,5 @@
-"""DEVELOPMENT BINDING, NOT FOR REVIEW: scratch C-Flock pieces for core's BitAnd_v1, E4m3ToF32_v1 and F32ToE2m1Sat_v1, which
-C-Flock has no piece for on this branch (@circuits' #885 lands core's own). `stage.py` puts them in `ir_lower.PIECES` for the
+"""DEVELOPMENT BINDING, NOT FOR REVIEW: scratch Flock pieces for core's BitAnd_v1, E4m3ToF32_v1 and F32ToE2m1Sat_v1, which
+Flock has no piece for on this branch (@circuits' #885 lands core's own). `stage.py` puts them in `ir_lower.PIECES` for the
 row units only, and every result staged with them is labelled 'core3 scratch'. E4m3ToF32 is a 256-entry table read
 (`fp.lookup`, 201 ANDs, checked on every byte); F32ToE2m1Sat is seven threshold comparisons and a NaN select (180 ANDs,
 checked on 40k words)."""

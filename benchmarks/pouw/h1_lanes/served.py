@@ -1,6 +1,6 @@
 """served.py extract|prepare|summarize: one unit a served H1 window's own draw selected (`h1_prove/served.py`, core's
 `credit.drawn` on the window's signed draw coin), proved as its 32 lanes (`h1zy.PouwH1LaneZy_v1`, option A, run.py's lane
-statement) from the window's committed values, each lane one C-Flock --zk statement whose rows open the window's own
+statement) from the window's committed values, each lane one Flock --zk statement whose rows open the window's own
 registered tables at the rows the verifier reads them.
 
 * **extract** (the H1 venv: it unpickles the prover's saved window, whose classes import torch). From the window's record

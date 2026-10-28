@@ -14,7 +14,7 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# Test-only: `lake` builds this package and, through its path requires, the core protocol interface and C-Flock's verifier's
+# Test-only: `lake` builds this package and, through its path requires, the core protocol interface and Flock's verifier's
 # Lean (`Flock/`, which PousCheck reaches through Flock.HmRow, and the package's configuration); the §7 vectors are the spec's
 # file, which the vector tests read. `interop.py` holds the Lean to the wire's Python reference (`p2_v1`'s package, `wire.py`
 # and `reference.py`) on §7's audit files, and reads §7's entry pins from the spec. `timed_audit.py` holds the Lean to the

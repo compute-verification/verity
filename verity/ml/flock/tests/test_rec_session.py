@@ -157,7 +157,7 @@ def test_h_is_the_dense_fold_of_the_hidden_slots(tmp_path):
 
 
 def _client(addr: str, rec: dict) -> list:
-    """The fake prover: the fixture's honest session as C-Flock's live prover sends it (its Hello without the coin scheme:
+    """The fake prover: the fixture's honest session as Flock's live prover sends it (its Hello without the coin scheme:
     the session ran on seeded coins), each answer kept."""
     host, port = addr.rsplit(":", 1)
     coins = lambda hexes: b"".join(RL.f128_bytes(int(c, 16)) for c in hexes)

@@ -1,5 +1,5 @@
 """warden-zk: the warden's bucket rows read by the proof system. A toy unit over one row's bits, its port registered
-against the warden's signed egress root (`warden_rows`), proved by C-Flock `prove --zk` behind the Lean firewall and
+against the warden's signed egress root (`warden_rows`), proved by Flock `prove --zk` behind the Lean firewall and
 held by the Lean verifier's registered reads (`flock-verify verify --zk --registered`), through the one-stage audit as
 `n2_zk.py` proves N2's head checks.
 

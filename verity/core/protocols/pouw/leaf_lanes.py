@@ -18,7 +18,7 @@ set the lane absorbs in order (T_0 .. T_(KS-1) the prefix sets, O', then D_1 .. 
 the XOR of its 8 chains' y after that set and then of their z: word 2 s is set s's y, word 2 s + 1 its z. That is 260
 words at K = 4096. The combine checks that the rows' XOR, word by word, is the leaf's committed receipt.
 
-**The statements and their reads** (`statements`, `reads`): each a C-Flock statement of one unit, its ports these:
+**The statements and their reads** (`statements`, `reads`): each a Flock statement of one unit, its ports these:
 
 * lane l: ``a0`` .. ``a3`` the leaf's A rows at its row slots, ``b0`` .. ``b7`` its B rows at its column slots, ``zy``
   (its z/y record) and ``partials`` (row l); ``admit`` (the leaf's R admit bits) and a row ``pub`` of the leaf's salt,

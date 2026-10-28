@@ -1,5 +1,5 @@
 """The Ampere tensor-core step under both ids, the vLLM registry's ``AmpereBF16TcDot16_v1`` and core's ``_v2``: the same
-function on the A100 / RTX 4090 captures and on random finite and non-finite words, and C-Flock lowers a program using either
+function on the A100 / RTX 4090 captures and on random finite and non-finite words, and Flock lowers a program using either
 to the same circuit, gate for gate."""
 from __future__ import annotations
 

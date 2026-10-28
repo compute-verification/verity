@@ -1,10 +1,10 @@
-"""Front F6's prover column: the inner C-Flock prover's wall time and peak memory per session at each bucket's nonzero
+"""Front F6's prover column: the inner Flock prover's wall time and peak memory per session at each bucket's nonzero
 bound, fitted from recorded prover runs, and where a session stops fitting on one node.
 
     python -m verity_numerical.bench.unit_costs_prover --inventory unit-costs.json --out DIR
 
 **Source runs** (:data:`SOURCE`): every ``flock-circuit prove --zk`` record of ``benchmarks/pouw/hidden_zk`` on the Nebius
-nodes (CPU prover, Rust, Flock b684b12 with C-Flock's patches; Intel Xeon 6776P, 192 CPUs, 1,716 GiB): the session's
+nodes (CPU prover, Rust, upstream Flock b684b12 with Flock's patches; Intel Xeon 6776P, 192 CPUs, 1,716 GiB): the session's
 instances, its block ``2^k_log`` bits per instance and ``D = 2^dense_m`` bits in all, the circuit text's bytes (one unit
 netlist shared by the instances, plus the SHA-512 and hm96 glue), the prove's median time, the prover process's wall time
 (circuit load included) and peak RSS (GiB), and the prover's threads.
@@ -743,7 +743,7 @@ def render(pr: Mapping[str, Any]) -> str:
     sc = pr["staging_fit"]["coef"]
     law = lambda k: " + ".join(f"{v:.4g}{t}" for v, t in zip(c[k], ("", "·D/2^30", "·cb/GiB", "·2^k_log/2^30")) if v)  # noqa: E731
     L = [f"# F6 prover column: sessions of {pr['slots']} slots, {pr['menu']} buckets, K = {pr['K']}", "",
-         "C-Flock's CPU ZK prover (`flock-circuit prove --zk`, 32 threads, Xeon 6776P), fitted on the source runs below. D: "
+         "Flock's CPU ZK prover (`flock-circuit prove --zk`, 32 threads, Xeon 6776P), fitted on the source runs below. D: "
          "the session's bits (slots x 2^k_log); cb: its circuit text, the netlists of its distinct unit types at "
          f"{pr['bytes_per_nnz']} B per nonzero (a registered type's one unit, a generic type's whole subcircuit, a tree's "
          f"distinct members) plus {pr['glue_bytes'] / 1e6:.0f} MB of glue. A block is at most 2^{pr['k_log_max']} bits "

@@ -29,7 +29,7 @@ salts ``prf_salt(Ks, off + pos)`` (commit_gpu's PRF). A proof block (i, j, s) op
 
 The verifier opens q proof blocks drawn by the check coin (a cell uniformly, then s with probability its segment's share
 of K: each proof block's share of the call's MACs), and runs the Program's checks in the clear on the opened rows, a stand-in
-for the C-Flock --zk proof (the Definition isn't written yet): the rows' leaves and paths against the root, T_s - T_{s-1}
+for the Flock --zk proof (the Definition isn't written yet): the rows' leaves and paths against the root, T_s - T_{s-1}
 against the segment's X W'^T mod 2^16, and at s = S O against (A + d_A)(B + d_B)^T mod 2^32 and the binding identity
 mod 2^16. The operand rows A[i], B[j] are taken in the clear (their commitments are the previous call's and the period's).
 
@@ -796,7 +796,7 @@ def fill_picks(f: Fill, coin: bytes, q: int) -> list[tuple[int, int, int]]:
 
 
 def fill_check(f: Fill, seeds: dict[str, bytes], root: bytes, i: int, j: int, s: int, ans: dict) -> str | None:
-    """A no-fold proof block's checks in the clear (the stand-in for its C-Flock --zk proof; None: passed): the opened rows
+    """A no-fold proof block's checks in the clear (the stand-in for its Flock --zk proof; None: passed): the opened rows
     (`Fill.opened`) against the root; for s < S (or a filler's s = S), T_s - T_{s-1} against the segment's X W'^T mod 2^16
     (PouwDitherBlock); for a served call's s = S (PouwDitherLast), O against (A + d_A)(B + d_B)^T mod 2^32 and T_{S-1}
     against X W'^T over k < (S - 1) L mod 2^16. ans: {"rows": {pos: (row, salt, path)}, "A": A's row i (the pad's when

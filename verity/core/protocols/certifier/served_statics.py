@@ -37,7 +37,7 @@ network verdict, an AND over every window with no ε. A window is its P / G unit
 under one template.
 
 **Cost** (`size`): R·(1 + LW + TW) − 2 ANDs a step, the equalities ANDed, and 2·(G − 1) to AND the steps' flags; the
-unit's C-Flock block is set by its two rows' in-circuit hashing, G·R·(3 + IW + 2·(LW + TW)) bits.
+unit's Flock block is set by its two rows' in-circuit hashing, G·R·(3 + IW + 2·(LW + TW)) bits.
 """
 from __future__ import annotations
 

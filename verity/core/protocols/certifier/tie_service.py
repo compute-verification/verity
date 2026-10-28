@@ -29,7 +29,7 @@ warden's salt, and its ``o0`` row one u16 word holding the output bit; the ``pub
 under a hiding salt (`IngressTie.layout`).
 
 **The verifier of record** is `IngressTie.verify(…, advice=A, releases=…, head=…)`, which decides on the delivered
-proof and public inputs alone. It accepts the window when the verifier's own run of C-Flock's Lean verifier, with its
+proof and public inputs alone. It accepts the window when the verifier's own run of Flock's Lean verifier, with its
 own registered reads at the warden's root (`registered`), accepts every session, they prove this tie's registered unit
 (`proved`: its gate names the pinned digest, every session the registered Program) and every drawn unit, and each
 unit's ``pub`` row opens, under the salt delivered, to the verifier's own lanes and its ``o0`` row to 1. Its public
@@ -405,7 +405,7 @@ class IngressTie:
     def verify(self, draw: S.Draw, delivered: Delivered, *, circuit_sha512: str, advice: Any,
                releases: Sequence[Q.Release], head: WR.CellsHead, opening: WR.Cells | None = None) -> dict[str, Any]:
         """The verdict of record on the window's delivered proof, from public inputs and the proof alone: accepted when
-        the verifier's own run of C-Flock's Lean verifier (`proofs.verify`, on the circuit file the auditor built,
+        the verifier's own run of Flock's Lean verifier (`proofs.verify`, on the circuit file the auditor built,
         `circuit_sha512`, and the verifier's own registered reads at `head`, the warden's head of the registered root,
         `registered`) accepts every session, they prove this tie's registered unit (`proved`) and every drawn unit, and
         each drawn unit's public row opens to the verifier's own copy (`public_arguments` on its bucket's lanes from

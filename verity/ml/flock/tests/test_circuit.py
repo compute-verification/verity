@@ -41,7 +41,7 @@ def assert_public_only(text: str, prover: bytes, verifier: bytes) -> None:
     (hp, bp), (hv, bv) = (b.split(b"\n", 1) for b in (prover, verifier))
     hp, hv = json.loads(hp), json.loads(hv)
     assert set(hv) <= PUBLIC_HEADER and set(hv["frame_v3"]) == PUBLIC_FRAME and hv == dict(hp, rows=False)
-    assert verifier == FC.public_file(hv, bv), "the header line is C-Flock's, so the file's SHA-512 is public_file_sha512"
+    assert verifier == FC.public_file(hv, bv), "the header line is Flock's, so the file's SHA-512 is public_file_sha512"
     ports = [(nm, w) for nm, w, _ in meta["ports"]]
     names = [nm for nm, _ in ports]
     assert names[meta["input_ports"]:] == [nm for nm, _ in meta["out_ports"]], "one output row per output port"

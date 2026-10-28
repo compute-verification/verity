@@ -1,4 +1,4 @@
-"""A chunked serving-rows template's units (`serving_rows.chunked`) on the bit rows C-Flock's `UnitStager` stages: their rows
+"""A chunked serving-rows template's units (`serving_rows.chunked`) on the bit rows Flock's `UnitStager` stages: their rows
 (`unit_rows`) and table reads (`reads`), the most of them one flock-circuit statement holds (`chunk_cap`, a partition file's
 ``chunk_cap``), and a template's units read once cut into its chunks (`split`).  The window's chunks (`serving_rows.members`)
 and the verifier's circuit (``benchmarks/one_stage/compose_circuit.py --template``) are both laid out by `unit_rows` and

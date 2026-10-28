@@ -4,7 +4,7 @@ Proof of useful work: certifies that a served model's declared matrix products w
 committed, noised checked values. An accepted run establishes a credited size S of noised matrix products, at least
 (1 − ε)·S of their AND gates computed right, except with probability δ. One protocol carries several named schemes
 behind one interface (`protocol.PoUWScheme`, `schemes.get`). The proof service registers each commit period, draws its
-proof blocks with live coins, proves them in zero knowledge (C-Flock `--zk`) and verifies them; PoUW states what each
+proof blocks with live coins, proves them in zero knowledge (Flock `--zk`) and verifies them; PoUW states what each
 commit period commits, the Program each drawn proof block must pass, and what the outcome credits. It carries no policy
 parameter: it surfaces the ε at δ its draw established.
 

@@ -1,8 +1,8 @@
-"""C-Flock ZK (lane flock-zk): real against simulated transcripts of ``flock-circuit --zk`` on the checked fields.
+"""Flock ZK (lane flock-zk): real against simulated transcripts of ``flock-circuit --zk`` on the checked fields.
 
 Input: the ``ZKREAL``, ``ZKSIM`` and ``ZKCONTROL`` lines of ``flock-circuit zkstat --zk --n N`` (one verifier coin seed; the
 real sessions draw fresh prover seeds; the simulator sees only the public statement and those coins; the control is the same
-prover with zero pads and a zero mask slot, i.e. the non-ZK session's values in C-Flock ZK's format). For each field
+prover with zero pads and a zero mask slot, i.e. the non-ZK session's values in Flock ZK's format). For each field
 class it runs four tests:
 
 * ``bytes``: two-sample chi-square on the byte histogram (256 bins), real against simulated;

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # One-stage audit, run A7, on a CPU machine: the requirement's plan and memory-map units under the stratified law, wired to
 # the remote bandwidth audit's ledger (a7.py), whose check 3 on each drawn receipt is proved by the check-3 units
-# (`remote_bandwidth.opening`), on hidden_zk's builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean
+# (`remote_bandwidth.opening`), on hidden_zk's builds (its job.sh, sourced: Flock's flock-circuit and the Lean
 # flock-verify, cached under $A7_CACHE). From a clone, since the verifier of record builds the sampled-proofs Lean in the
 # tree:
 #   research run --on M --source . --pool proofs --as LANE --project verity --cwd clone --env A7_MEM_GB=96 -- \

@@ -1,5 +1,5 @@
 """served_zk's window through the proof system (`served_zk/served_commit.py` over P1, `sampled_proofs.service`): a
-window of served calls' side rows committed as C-Flock commits a unit's rows, its tiles padded with filler tiles to a
+window of served calls' side rows committed as Flock commits a unit's rows, its tiles padded with filler tiles to a
 grid level, registered with exactly PoUW's public items, received by a `Stream`, drawn once, each drawn tile's proof
 opened against the window root, delivered once, and the final outcome publishing exactly the public items."""
 from __future__ import annotations
@@ -1409,7 +1409,7 @@ def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
     process, on the committer's side rows and salts: each is over the circuit the verifier pins for the template
     (`core_check.TILES`, Lean's `PouwCheck.tiles`), and each public file's rows are the side trees' leaves, so the opening
     accepts.  Nothing cheaper catches a unit whose committed rows are not the side rows (the index field dropped or moved),
-    or a change to the template or to C-Flock's lowering that moves the circuit off its pin, which only staging shows;
+    or a change to the template or to Flock's lowering that moves the circuit off its pin, which only staging shows;
     about a minute at K = 128."""
     *_, words = served
     params, public, advice, priv = _window(words)
@@ -1431,7 +1431,7 @@ def test_a_staged_unit_opens_under_the_window_root(served, tmp_path):
             [L.ROW_SCHEMA["fp8-pi", SC.SIDES[s]], 16 * L.ROW_WORDS["fp8-pi"](K)] for s in "ab"]
         assert st["circuit_sha512"] == CC.TILES[st["definition"]].circuit, (
             f"unit {t}: {st['definition']} builds circuit {st['circuit_sha512']}, not the one the verifier pins: a change "
-            "to the template or to C-Flock's lowering lands its new digest in PouwCheck/Tile.lean and core_check.TILES")
+            "to the template or to Flock's lowering lands its new digest in PouwCheck/Tile.lean and core_check.TILES")
         op = json.loads((out / "opening.json").read_text())
         assert SC.check(params, rec, draw, t, (out / "pub.bin").read_bytes(), op) is None, t
     assert json.loads((tmp_path / "u25" / "stage.json").read_text())["kind"] == "filler"

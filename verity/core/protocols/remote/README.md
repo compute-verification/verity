@@ -81,7 +81,7 @@ SampledProofs.OneStage.protocol]`. Its executable is `remote id | check PARAMS C
    committed under hiding leaves (hm96 rows in SHA-512 trees) before that declaration period's audit coins.
    `examples/lifecycle/README.md` ("Terms") runs these terms on a toy model.
 3. **The audit**, in each sampling period. The live coins draw proof blocks. The developer proves each drawn block with
-   C-Flock `--zk` behind the firewall, and the Lean verifier `flock-verify` checks each proof. PoUW's check
+   Flock `--zk` behind the firewall, and the Lean verifier `flock-verify` checks each proof. PoUW's check
    (`pouw-check`) reads each PoUW period's commitment and its drawn proofs and receipts, and credits that period's work.
    No proof is retried, and a failed proof is a visible failure.
 4. **The verdict**, by the composition rule (`verity/core/protocols/composition/README.md`). The composite rejects if
@@ -109,14 +109,14 @@ completeness, never a security claim.
 <Area>.Guarantees.G` in `Security/lean-audit.json`. For a property of the code, it's its proof in
 `Security/Properties/lean-audit.json` (`Properties.Composition.acceptMeans : Properties.Composition.AcceptMeans`). The
 last column is the end-to-end chain's status in `benchmarks/prove_path/e2e_chains/README.md`. That page's row for the
-remote composite is "none" (the open gap), so the column gives its subprotocols' rows (Sampled proofs / C-Flock `--zk`,
+remote composite is "none" (the open gap), so the column gives its subprotocols' rows (Sampled proofs / Flock `--zk`,
 PoUW `--zk`), and a chain can be "none" while each piece is proved.
 
 | Piece | Lean declaration | Lock | End to end |
 |---|---|---|---|
 | The verdict rule | `Properties.Composition.AcceptMeans`, `AnswerAccepts` (`Security/Properties/Composition.lean`; proofs `acceptMeans`, `answerAccepts`) | **proved** | — |
 | Sampled proofs' accept rule | `Properties.SampledProofs.AcceptMeans` (`Security/Properties/SampledProofs.lean`; proof `acceptMeans`) | **proved** | — |
-| A C-Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ faulty proof blocks outside what the draw catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/Refused.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
+| A Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ faulty proof blocks outside what the draw catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/Refused.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
 | Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
 | The verifier's verdicts tied to those theorems | none: remote reads one-stage v1, which takes the verdicts as evidence; v2 (`verity/sampled-proofs/one-stage/v2`) runs `flock-verify verify --zk` itself, and remote doesn't read v2 yet | **open** | — |
 | PoUW's accept rule, and its accepted prefix tied to the period credit | `Properties.Pouw.Check.AcceptMeans`, and `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (`Security/Properties/Pouw/Period.lean`; proofs `Properties.Pouw.Check.acceptMeans`, `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod` and `checkedCreditPeriod`, all in `Security/Properties/lean-audit.json`) | **proved**, under the PoUW assumptions below | — |
@@ -150,7 +150,7 @@ Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means
 PoUW, as `H1CheckedCreditPeriod` takes them (the general `CheckedCreditPeriod` takes all but `SaltIsLiveCoin` and
 `StagedPins`):
 
-- `Properties.Pouw.Period.ServiceSound`: the proof system is sound at δ_ks against PoUW's check, which is C-Flock's
+- `Properties.Pouw.Period.ServiceSound`: the proof system is sound at δ_ks against PoUW's check, which is Flock's
   soundness at each drawn unit (`Flock.Guarantees.EndToEndRegisteredRows` for one session). It is a named assumption: no
   theorem discharges it yet.
 - `Properties.Pouw.Period.DrawIsCoin`: the units the check publishes as drawn are the model's draw at the window's live
@@ -212,18 +212,18 @@ and vllm each run remote's sampled-proofs half for real:
 
 - `verity example lifecycle` (`examples/lifecycle/README.md`): the remote composite stepped through one monitoring period
   on CPU in about 2 s: hardware registration, registration, declarations, live draws, each declaration's verdict and the
-  period's accounting, with every deviation it lists refused by name. Its prover is a labelled stand-in for C-Flock, and
+  period's accounting, with every deviation it lists refused by name. Its prover is a labelled stand-in for Flock, and
   its verdict is the composition's Python mirror over per-declaration stand-ins for the two subprotocols, not `remote
   check`. It runs; nothing about it is proved.
 
 - `verity example h200` (`examples/h200/README.md`): a fixed attention shape committed on one H200. Eight proof blocks
-  are drawn by one live coin, each is proved by C-Flock `--zk` and accepted by the Lean verifier, and a flipped bit is
+  are drawn by one live coin, each is proved by Flock `--zk` and accepted by the Lean verifier, and a flipped bit is
   refused. At an 8-block draw, that allows at most 43.77% faulty proof blocks at δ = 1%. It runs, at proof level
   none, and isn't placed: its Lean verifier ran beside the prover. On a CPU at a small shape, run
   `uv run python examples/h200/run.py --out /tmp/e2e` (`--tamper l1.wup` must exit 3).
 - `verity example vllm` (`examples/vllm/README.md`): Llama-3.2-1B in bf16 served by vLLM on one RTX PRO 6000 (its run
   of record), its values committed while serving, and a sampling period's proof blocks drawn by live coins, proved by
-  C-Flock `--zk` and checked by the Lean verifier. It runs, at proof level none: no remote guarantee exists for those
+  Flock `--zk` and checked by the Lean verifier. It runs, at proof level none: no remote guarantee exists for those
   verdicts to reach (the open gap, above). The int8 served run on an H200 (`benchmarks/one_stage/served_verdicts.sh`'s
   default) is tonight's, Tue 27 Oct, 6 PM PDT.
 

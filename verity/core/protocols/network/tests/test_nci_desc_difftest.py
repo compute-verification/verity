@@ -18,7 +18,7 @@ gate reading a nested scan's carry, past `NciCheck.Desc.walkBound`'s limit, wher
 fifth that it holds the empty scans: a scan of no iterations carrying a value, which `Flock.Program.resolve` can't
 resolve, refused read or not, the sixth that it holds the shared members: one copy of pieces of two nodes' outputs,
 which `NciCheck.Desc` once read as all its first piece's node's, and the seventh that the mistyped ones the codec
-refuses are refused as `E_REINTERPRET`, which C-Flock's decoder once let through.
+refuses are refused as `E_REINTERPRET`, which Flock's decoder once let through.
 """
 
 from __future__ import annotations

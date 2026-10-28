@@ -93,7 +93,7 @@ def test_pinned_region_vectors():
             assert e["bytes"] == bytes(b for x in raw for n in (x & 0xF, x >> 4) for b in (n, 0)).hex()
 
 
-#: each anchor's rule id, as META's ``derivation`` names it: part of C-Flock's circuit pin, so a changed rule is a new version
+#: each anchor's rule id, as META's ``derivation`` names it: part of Flock's circuit pin, so a changed rule is a new version
 RULES = {"pc4": {a: f"verity/pouw/anchor/pearl-c4/{a}/v2" for a in ANCHORED},
          "pc8": {a: f"verity/pouw/anchor/pearl-c/{a}/v1" for a in ANCHORED}}
 
@@ -116,7 +116,7 @@ def test_an_anchor_names_its_rule_not_its_function():
 
 @pytest.mark.parametrize("case", RV.CASES, ids=[c[0] for c in RV.CASES])
 def test_the_public_inputs_file_is_c_flocks(case):
-    """`TileAnchors.public_inputs` is C-Flock's ``verity/flock-public-inputs/v1``: a key-sorted JSON header line naming each
+    """`TileAnchors.public_inputs` is Flock's ``verity/flock-public-inputs/v1``: a key-sorted JSON header line naming each
     port's words, seed (the scheme's label) and derivation function, as META does, then each instance's regions, u16 LE,
     instance-major, the ports in the unit's parameter order; a tile, which has no region, or no instance is refused."""
     t = RV.anchors(*case)
@@ -142,8 +142,8 @@ def test_the_public_inputs_file_is_c_flocks(case):
 
 def test_the_public_inputs_file_is_in_parameter_leaf_order():
     """The verifier's file holds each region in the unit's parameter leaf order, and its check refuses any other order:
-    F_B in read order (transposed, code p of line t at word p·k + t, as C-Flock's staging first read it) or two instances
-    swapped, every word otherwise right, is refused at its first differing word, as C-Flock's Lean verifier refuses it."""
+    F_B in read order (transposed, code p of line t at word p·k + t, as Flock's staging first read it) or two instances
+    swapped, every word otherwise right, is refused at its first differing word, as Flock's Lean verifier refuses it."""
     t = RV.anchors("pc4-64", "pc4", 64, None)
     own = t.public_inputs("row_a", (0, 1))
     t.check_public_inputs("row_a", (0, 1), own)

@@ -501,7 +501,7 @@ def entry_leaf(dom: CommitmentDomain, e: int, bc: bytes) -> bytes:
 # ---- the side trees -----------------------------------------------------------------------------------------------------
 
 SIDE_DOMAIN = "verity/pouw/window/side-domain/v1"
-#: the frame's owner, as C-Flock's statement domains have it
+#: the frame's owner, as Flock's statement domains have it
 OWNER = -1
 #: a side row's index field: the row's place in its call (I < 2^13 for A, J < 2^17 for B) as a u32, two u16 words low
 #: first, then six zero words, so the field is one 128-bit word after the row's operand words
@@ -682,7 +682,7 @@ def window_problem(rows: Sequence[bytes], work: Work, bound: int, root_h3: bytes
 
 # ---- the tile instances' public inputs ------------------------------------------------------------------------------------
 
-#: C-Flock's format of the verifier's own ``--public-inputs`` file (its PROTOCOL.md §16.10, Lean's ``HmIn.checkOwn``)
+#: Flock's format of the verifier's own ``--public-inputs`` file (its PROTOCOL.md §16.10, Lean's ``HmIn.checkOwn``)
 PUBLIC_INPUTS_FORMAT = "verity/flock-public-inputs/v1"
 #: a tile instance's public input ports, in order, as its circuit's META ``public_inputs`` must name them: each port's u16
 #: words (whole 128-bit words, so no row leaf shares one), the public datum it is recomputed from and its rule.  t is a
@@ -696,12 +696,12 @@ PUBLIC_PORTS = (
     {"port": "domain_b", "words": 32, "seed": "registration", "derivation": "verity/pouw/window/side-domain-b/v1"},
     {"port": "domain_h3", "words": 32, "seed": "pass", "derivation": "verity/pouw/window/domain-h3/v1"},
 )
-#: C-Flock's largest session: m = k_log + nbl <= 35, nbl = max(3, ⌈log2 blocks⌉) (its PROTOCOL.md §16.5, `shape_in_range`)
+#: Flock's largest session: m = k_log + nbl <= 35, nbl = max(3, ⌈log2 blocks⌉) (its PROTOCOL.md §16.5, `shape_in_range`)
 M_MAX = 35
 
 
 def session_cap(k_log: int, per_block: int = 1) -> int:
-    """The most instances one session holds when each block of 2^`k_log` bits holds `per_block` of them (C-Flock's
+    """The most instances one session holds when each block of 2^`k_log` bits holds `per_block` of them (Flock's
     m <= `M_MAX`)."""
     if not (_positive(k_log) and k_log <= M_MAX - 3 and _positive(per_block)):
         raise ValueError(f"a block of 2^{k_log!r} bits does not fit a session of m <= {M_MAX}")

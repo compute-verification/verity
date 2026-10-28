@@ -1,4 +1,4 @@
-"""A unit's table reads as C-Flock lookup slots (PRF-139): the unit's circuit split at its reads of the pinned MUFU tables, by
+"""A unit's table reads as Flock lookup slots (PRF-139): the unit's circuit split at its reads of the pinned MUFU tables, by
 read depth, into the unit and tail stages wired to ``lookup:<table>`` slots (PROTOCOL.md §16.5), the last stage returning the
 outputs. A slot type's matrix is folded once per statement however many slots of it there are, so a unit's reads no longer
 put their tables' set bits in its own matrix, as `ir_lower._Read`'s inline rows do (about 1e8 entries an EX2 read). Every

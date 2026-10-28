@@ -1,4 +1,4 @@
-"""C-Flock's cost model, fitted from measurements, for the sampling planner (`optimize.CostModel`).
+"""Flock's cost model, fitted from measurements, for the sampling planner (`optimize.CostModel`).
 
 Three regressions on a template's features (`FEATURES`: one, ands, ands staged, ands drawn), each a least squares in
 relative error with non-negative coefficients over the observations that measure it:

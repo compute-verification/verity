@@ -1486,7 +1486,7 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
   messages `rec-sparse-<p>`, `p` one of `pre<j>`, `v2`, `sc<j>`, `u` and `vt` (`rec_sparse.message_ports` without `h`,
   which reads the rep's `rec-c<i>`, and `claim`, which reads `rec-claim`). The sparse phase's `rec-sparse-v`,
   `rec-sparse-zero` and `rec-sparse-tau` are no round's commitment.
-- **Identifier.** The header may carry `identifier`, a JSON object C-Flock does not read (an application's name for what the
+- **Identifier.** The header may carry `identifier`, a JSON object Flock does not read (an application's name for what the
   statement is about, such as PoUW's). The public digest covers the header, so Σ binds it. The verifier needs its own
   `--identifier F` (a JSON object, by path or archive digest), and the header's must equal `F`'s in RFC 8785 form: both are
   `canon`'s on core's RFC 8785 domain (`Program.domainError`, `verity.ml.circuits.codec.jcs_domain_error`: strings and keys ASCII

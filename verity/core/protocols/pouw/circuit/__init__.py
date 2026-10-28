@@ -5,7 +5,7 @@
 * `boolean`: the six of them `pc4`'s and `pc8`'s row units call, and the four Keccak words their hiding tiles' digest calls,
   as Boolean Definitions (`_v2`, the same functions on bits).
 * `hashes`: SHA-512, SHAKE256 and TurboSHAKE128 in gates (`Sha512Compress`, `KeccakF1600`, `KeccakP1600R12`).
-* `leaves`: the tile checks' committed row schemas (C-Flock's ports), Pearl-C's tile digest in gates, and the rows' native
+* `leaves`: the tile checks' committed row schemas (Flock's ports), Pearl-C's tile digest in gates, and the rows' native
   reference.
 * `ncp2`: the unit templates; `weight(shape, kind)`, a weight's Y units once per run; `linear(shape, kind)`, one call's
   Program, reading them; `window(shape, calls, kind)`, calls on one weight in one root.
@@ -16,10 +16,10 @@
   each unit's public input regions), and the window's refusal of a repeated call index.
 * `plan`: closure draws behind a draw-law seam (`CountLaw`, and `WorkLaw`, root's #362 law), and the tile checks' layout.
 * `pc4`, `pc8`: Pearl-C4's and Pearl-C's (FP8, forming v1) tile checks as Programs, cut into row and tile units, and
-  their hiding Programs (``Shape.hidden``), whose tiles return only their tile digest; the rows are C-Flock-committed
+  their hiding Programs (``Shape.hidden``), whose tiles return only their tile digest; the rows are Flock-committed
   ports and the anchored inputs public input regions (`PORTS`).  No scheme of theirs is in `SCHEMES` yet.
 * `rowk`: their row units cut along k into a head, one form per segment and a tail (``Shape.row_k``, opt-in), so each
-  piece fits C-Flock's block.
+  piece fits Flock's block.
 * `compile`: PoUW as one pass over a served Program (decision 102, `PROTOCOL.md` §`compile`): `compile(program, scheme,
   groups)` replaces every registered matmul's dots (`MATMULS`) with the scheme's r × c tile units, each deriving its seed
   and noise in its own proof from the one coin, the salt (decisions 105, 106), and checks the result; `rebuild` is the

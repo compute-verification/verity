@@ -5,7 +5,7 @@ Llama-3.1-8B's four linears with m = 32 (decode_served.py's shapes): a microbenc
 
 Gates before any timing, per shape, from outputs poisoned to 0xA5: hm96_rows.cu's x (sha512/row-seg/v1 and sha512/row/v2),
 b ‖ c, the hm96 leaf and the frame-v3-sha512 root equal Python's (verity.ml.commitments: rowleaf, hm96.SHA512,
-merkle) under salts read from the OS on the host, as C-Flock's are (zk_hooks::LeafSalts), and handed to the device: 192 bytes a
+merkle) under salts read from the OS on the host, as Flock's are (zk_hooks::LeafSalts), and handed to the device: 192 bytes a
 row, read and copied once per commitment, outside the timed graphs; each no-write control (the launch left out) leaves them
 unequal.
 

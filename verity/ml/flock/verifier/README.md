@@ -5,7 +5,7 @@
 Rust verifier is the cross-validation oracle (§17.1).
 
 Scope today: the circuit statement in strict mode, including lookup slots (built from the pinned MUFU tables), tail stages
-and wires. The default, `verity/flock-circuit`, is the format of C-Flock's circuit prover (M0) at commit `eb90718f` (§16.10):
+and wires. The default, `verity/flock-circuit`, is the format of Flock's circuit prover (M0) at commit `eb90718f` (§16.10):
 - serving rows are `hm96-sha512/row/v1` leaves proved in the circuit;
 - every identity and binding digest is SHA-512;
 - the proof's Merkle leaves are `hm96-sha512/v1`;

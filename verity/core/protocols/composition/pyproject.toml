@@ -15,7 +15,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # Test-only: `lake` builds the onsite and remote packages beside this one (each product's executable, whose `serve` the
-# harness drives) and, through their path requires, the core interface, C-Flock's verifier, and the ported components'
+# harness drives) and, through their path requires, the core interface, Flock's verifier, and the ported components'
 # Lean: sampled proofs' one-stage audit (with the LMS verifier and the difftest harness's Lean), PoUW's check (with
 # its window, commitments, and core's identity and randomness), the network certifier's period check (with the
 # certifier program and the LMS verifier), PoUS's run check (with the memory challenger's Lean) and the remote bandwidth

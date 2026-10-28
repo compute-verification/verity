@@ -9,7 +9,7 @@ is checked against; after, the Python is held to the Lean.
 
 - `lean/` is the Lake package `verity_difftest`, lib `Difftest`: `Difftest.serve` answers requests `{"fn", "input"}` one
   JSON line at a time with `{"output"}`, `{"reject"}`, or `{"error"}` for a protocol fault (an unknown `fn`, a bad
-  request, an output with no canonical form). Output is canonical JSON, written by C-Flock's `Flock.canon` (required by path
+  request, an output with no canonical form). Output is canonical JSON, written by Flock's `Flock.canon` (required by path
   from `verity/core/service/flock`). `difftest-example` is the port the harness's own tests drive.
 - `python/verity_difftest` is the Python side: `Port`, `run`, `replay`, `Server`, `server_fixture`, `canonical`. `run`
   keeps one server open, compares outputs as canonical JSON, requires reject parity (both reject or neither; reasons may

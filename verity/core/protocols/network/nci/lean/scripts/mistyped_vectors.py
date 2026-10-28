@@ -1,7 +1,7 @@
 """Declarations whose references name leaves of other widths than their types give them (`E_REINTERPRET`,
 `verity/ml/circuits/PROTOCOL.md` §4.4), and their well-typed neighbours, for the NCI difftests.
 
-The Python codec refuses such a Program as it decodes it (`defs.Builder.finish`), which C-Flock's decoder doesn't look
+The Python codec refuses such a Program as it decodes it (`defs.Builder.finish`), which Flock's decoder doesn't look
 for, so `NciCheck` checks it after decoding (`NciCheck.Widths`). The descriptors here are written as JSON, since the
 Builder refuses to build them. `cases()` holds, as `NciCheck.Desc` reads an instance (θ and the owners per root node):
 

@@ -1,6 +1,6 @@
 """run.py stage|check|targets|all: a served H1 lane past K = 4096 as its chunks along K (`h1zy.PouwH1LaneZyChunk_v1`,
-`h1zy.chunks`), over a 32 × 32 leaf's v1 tile (`h1window.h1_tile`), each chunk one C-Flock statement: whether each chunk's
-statement fits C-Flock's 2^27 block, what its template computes and whether it is the flat unit, short of proving it.
+`h1zy.chunks`), over a 32 × 32 leaf's v1 tile (`h1window.h1_tile`), each chunk one Flock statement: whether each chunk's
+statement fits Flock's 2^27 block, what its template computes and whether it is the flat unit, short of proving it.
 
 * ``stage --k K --chunk C`` (``--chunks N``: N chunks in place of `h1zy.chunks`(K); ``--whole``: the whole lane,
   `h1zy.lane`): the statement's structural stager, `class_statement.UnitStager(..., layout="iv/hybrid/4", structural=True)`

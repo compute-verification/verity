@@ -50,7 +50,7 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation (CMP-158), and the
 - **Sampling block**: the proof blocks of a set of independent calls (none reads another's output), which go through
   their runs together. Unlike the Glossary's default, its draw is not stratified by subcircuit (see "The sampling
   design").
-- **Proof block**: what one check proves with C-Flock `--zk`: one segment of one output cell of a call, the Glossary's
+- **Proof block**: what one check proves with Flock `--zk`: one segment of one output cell of a call, the Glossary's
   proof block in Dither's partition.
 - **W_b and W_p**: sampling block b's and proof block p's public cost, the honest cost at μ° from the public shape. W_b
   is the sum of its proof blocks' W_p. W is work at the period's prices, as in the Glossary's W_cert.
@@ -218,7 +218,7 @@ T_s − T_{s−1} ≡ Σ X W′ᵀ (mod 2^16) over the segment. For s = S it tak
 mod 2^16, from the whole rows, their wraps and the coins, and also checks O ≡ Σ_ℓ (A + d_A)_{iℓ}(B + d_B)_{jℓ}
 (mod 2^32).
 
-C-Flock `--zk` proves it on the committed values. The Definition and its circuit-check sidecar are not written yet.
+Flock `--zk` proves it on the committed values. The Definition and its circuit-check sidecar are not written yet.
 
 O is checked only in its cell's last segment, never in a proof block of its own. At A = B = 0 its 32 bits alone are
 guessed with probability 0.1145 at K = 64, and its high word with probability 1.
@@ -266,7 +266,7 @@ replica's devices did in the period, valued at μ°, is at most the honest optim
   - tokens crossing the replica's boundary at 4 bytes a token (4,500-token requests; about 6.5 times that if HTTP/SSE
     crosses it);
   - in E_out, the answers' proofs, about 0.865 MB each, so about 12 GB a replica-week at q = 13,816. That is 0.75% (H200
-    8B) to 10.1% (RTX PRO 6000 70B) of E, and it raises ε_net by at most 0.0006%. The size is C-Flock `--zk`'s on the
+    8B) to 10.1% (RTX PRO 6000 70B) of E, and it raises ε_net by at most 0.0006%. The size is Flock `--zk`'s on the
     RoPE rows, since the proof block's Definition isn't written.
 - Over P one-week periods, P26 adds ln(P)/(ηq): +0.011% a month and +0.029% a year.
 
@@ -516,7 +516,7 @@ gives ε_skip·W_reg of 1.17e26 a week and 5.24e26 a year at H200 V4, and 1.62e2
 - **Keyed transport**, in place of `WitnessPathPrivate`'s private links (pre-shared keys, ML-KEM for transport only, or
   keys set at provisioning), is the secure-transport workstream's. Whether ML-KEM may bend the one-hash rule is
   Daniel's.
-- **The firewall** (@proofs, with C-Flock's ZK server):
+- **The firewall** (@proofs, with Flock's ZK server):
   - that it proves a replica's answers concurrently, and its release schedule. If it can't, RT-SIZE's queued check
     coins are the fix (CMP-158, RS5), and `Timed` must then read the check coin's time apart from the selection's;
   - main's batch rule fixes every staged statement before any run's challenge phase. Dither's statements are staged

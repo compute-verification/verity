@@ -46,7 +46,7 @@ _AB = (("a", F32), ("b", F32))
 
 def all_any(C, x):
     """(AND, OR) of the bits x, the OR's first level reading the AND's first-level pairs (OR(a, b) = a ^ b ^ ab): a lowering
-    that does not share repeated ANDs (a C-Flock piece) computes each pair once."""
+    that does not share repeated ANDs (a Flock piece) computes each pair once."""
     ab = [C.AND(x[i], x[i + 1]) for i in range(0, len(x) - 1, 2)]
     odd = [x[-1]] if len(x) % 2 else []
     return and_reduce(C, ab + odd), or_reduce(C, [x[2 * i] ^ x[2 * i + 1] ^ p for i, p in enumerate(ab)] + odd)

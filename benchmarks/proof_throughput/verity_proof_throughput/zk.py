@@ -5,7 +5,7 @@ outer proof's arithmetic unmasked; a ZK server, compiled Lean on a CPU node, dra
 relations and releases the masked proof; the auditor runs the Lean verifier on what is released. The worker/server split
 doesn't exist yet. What runs today, and what the ZK point (``job.sh ZK=1``, ``zk-point``) measures as its stand-in:
 
-- ``flock-circuit prove --zk --gpu``: C-Flock's masked protocol (M1, ``verity/ml/flock/live/PROTOCOL.md``), the device
+- ``flock-circuit prove --zk --gpu``: Flock's masked protocol (M1, ``verity/ml/flock/live/PROTOCOL.md``), the device
   proving and the host masking, with the session's B units drawn by the stratified law as in configuration 1;
 - the ZK server (``FC_FIREWALL=1``, PROTOCOL §10): the Lean (``verity/core/service/flock/Flock/Firewall``, the
   ``flock-firewall`` processes the prover starts on its node), which commits level 0 under its own salts and computes the

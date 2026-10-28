@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A served H1 window's live units (VLLM-85's live@<s>) through sampled proofs: each round's statement proved by C-Flock --zk
+# A served H1 window's live units (VLLM-85's live@<s>) through sampled proofs: each round's statement proved by Flock --zk
 # and verified by the Lean verifier against the verifier's own live Program, partition and registered reads (live.py's
 # docstring has the checks). On a node that holds the window's dump (or reads it, --send) (`pouw_h1_gpu --commit --live-dump DIR`):
 #   research run --on vy-nebius-cpu-5 --project verity --campaign pouw --source . --cwd source --mem-gb 128 \

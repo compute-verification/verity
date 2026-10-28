@@ -18,7 +18,7 @@ What may import what (`tests/test_lean_packages.py`): `security` requires only M
 `security` and the code it states properties of, never `security_proofs`; `security_proofs` requires both, the code and
 ArkLib; and no code package requires anything here. The lock's `layers` say which spec modules each module prefix may
 import (the spec imports only itself and Mathlib), and its `trees` forbid a statement from reading, or a definitions or
-properties module from importing, anything in `Proofs/`. C-Flock is the exception until its spec is extracted: its
+properties module from importing, anything in `Proofs/`. Flock is the exception until its spec is extracted: its
 guarantees and assumptions are still in `Proofs/Flock`, which `trees` lists by module.
 
 ## The lock

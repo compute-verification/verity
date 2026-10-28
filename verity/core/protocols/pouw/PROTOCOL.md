@@ -327,7 +327,7 @@ One rule for every construction that serves a checkpoint: Pearl-C4 (`PearlC4.che
 
 ## The proof's identifier (v1) (`identifier`)
 
-Where a drawn tile is checked by a C-Flock proof rather than recomputed, the proof is bound to the oracle, the salt and the
+Where a drawn tile is checked by a Flock proof rather than recomputed, the proof is bound to the oracle, the salt and the
 workload it is for by its `identifier`, a JSON object in the proof's header:
 
 ~~~text
@@ -344,10 +344,10 @@ W           {"matmuls": [{"index": "i", "m": m, "k": k, "n": n, "weight": "w"}, 
   magnitude at most 2^53 − 1: members in key order, no whitespace, and no escapes, since no string here needs one. A
   dimension past 2^53 − 1 is refused; no scheme's domain holds one. The identifier's bytes are this form of the object
   (`identifier_bytes`), and `workload` hashes this form of W (`workload_bytes`).
-- **What binds it.** The proof binds its header's object through `pub.sha`, which seeds C-Flock's Fiat-Shamir transcript:
+- **What binds it.** The proof binds its header's object through `pub.sha`, which seeds Flock's Fiat-Shamir transcript:
   Σ = SHA-512(sigmaTag ‖ c.sha ‖ digest ‖ pub.sha), under `cr/sha-512`.
 - **The verifier's rule.** The verifier never takes the prover's identifier. It recomputes its own from the scheme and the
-  epoch it audits, and hands those bytes to C-Flock's verifier (`--identifier F`). C-Flock's verifier compares them with the
+  epoch it audits, and hands those bytes to Flock's verifier (`--identifier F`). Flock's verifier compares them with the
   proof's header byte for byte, and reports the object in its verdict without reading a field. So a proof that names
   another scheme, salt or workload is refused.
 - **Vectors:** `tests/vectors/identifier_v1.json` (`tests/identifier_vectors.py`) holds one case or more per named scheme:
@@ -503,7 +503,7 @@ the following hold:
 **The tile instances' public inputs.** The K′ drawn tiles are proved in S = ⌈K′/cap⌉ sessions of `cap` instances each
 (`sessions`). Session σ's instance s takes the tile t = drawn[σ·cap + s] while σ·cap + s < K′, and otherwise t = N − 1,
 the window's last tile, which is always a filler tile (`instance_ts`). The verifier writes its own `--public-inputs` file
-F_σ (C-Flock's `verity/flock-public-inputs/v1`, read by Lean's `HmIn.checkOwn`) from the one-stage registration (its
+F_σ (Flock's `verity/flock-public-inputs/v1`, read by Lean's `HmIn.checkOwn`) from the one-stage registration (its
 population N, its sampling design subset:K′, and its window root and domain at port `entries`), its own draw, σ, the cap
 and the pass's tile domain (`public_inputs`). F_σ is a key-sorted JSON header line
 `{"format", "instances": cap, "ports"}`, then each instance's words, u16 little-endian, instance-major, in port order:
@@ -521,7 +521,7 @@ domain_h3  32      pass           verity/pouw/window/domain-h3/v1          the p
 Each port is a whole number of 128-bit words, so no row leaf shares a word with a public input; an instance is 336
 bytes. The window statement is proved as its own direct statement per window, separate from the tiles' sessions.
 
-**Sizing.** Served windows register levels 87 to 143 (N from 9,216 to 1,179,648). A C-Flock session is at most
+**Sizing.** Served windows register levels 87 to 143 (N from 9,216 to 1,179,648). A Flock session is at most
 m = k_log + max(3, ⌈log2 blocks⌉) ≤ 35, so a session of a unit of 2^k_log bits per instance holds at most 2^(35 − k_log)
 instances (`session_cap`). The drawn tile's unit in the served runs, `Pc8TileLeafH3{K=4096, sm120}`, is 3,492,322 ANDs
 at k_log 24; TileRead's three reads add to it.
@@ -1066,14 +1066,14 @@ function's default, so every `pearl-c-h100-*` output and vector above is unchang
       a call that is all one tile row height is.
   - The hiding Programs are `pc4`'s (``Shape.hidden``; the rows and their vectors are under `circuit.pc4` below):
     `Pc8TileHidden` returns its tile digest in place of C̃ and U, the weight's Program is `Pc8Weight`, and the rows are
-    C-Flock's committed ports (`pc8.PORTS`), with `pouw/row-fp32/v1` input rows, `pouw/row-fp8-p/v1` rows and
+    Flock's committed ports (`pc8.PORTS`), with `pouw/row-fp32/v1` input rows, `pouw/row-fp8-p/v1` rows and
     `pouw/row-ok/v1` rows. A 64 × 64 tile's digest is 281 Keccak-p[1600, 12] in gates. `plan.tile_layout` draws a tile
     with its rows, as for `pc4`.
   - **The cap** (`circuit.cap`; opt-in, `pc8.Shape.cap`, off by default, on the hiding Programs only) decides rev1's
     `capOK` (`pearlCTilesDevRev1`: `tileDebitRev1 ≤ ρ·creditDevRev1·tileShare` over a tile's passing rows and all its
     columns, at the record's `cap`) in gates, the debit with it. The call is `Pc8CallCap` (the check `Pc8CheckCap`), cut
     into a unit per word, since a cap word is about 7.8M ANDs at K = 8,192 and a whole cap tile does not stage, and its
-    tile digest and tally cut per tile row, since C-Flock gives each row a unit reads or writes a 2^18-bit hm96 slot in
+    tile digest and tally cut per tile row, since Flock gives each row a unit reads or writes a 2^18-bit hm96 slot in
     a block of at most 2^27 bits (at most 256 rows) and a 64 × 64 tile has 4,096 words:
 
     ~~~text
@@ -1314,31 +1314,31 @@ useful    U/(α_A·α_B), glue
     hashes them, and a word unit would hash about 4.9 KiB of rows for each word.
   - ``ok`` is the row's admission (`parse_row`'s finiteness, then `row_passes`). A row unit returns it as its ok row's
     one word, `SelectBf16` of the bit between the constants 1 and 0 (`pc4.ok_word`), so bits 1–15 are zero in gates.
-    No row check sees a hidden row's bits, C-Flock's and Lean's included, so this is what gives one admission value
+    No row check sees a hidden row's bits, Flock's and Lean's included, so this is what gives one admission value
     one leaf; the reference refuses any other word (`leaves.ok_of`).
   - The noise lines and G are verifier-derived public inputs, built as `ncp-v2`'s anchors are (`anchors.TileAnchors`,
     from the scheme's `noise(ctx)`): the lines are SHA-512 of seeds that read public values alone (seed_A the
     salt, A's root, B's registered root and the matmul index; seed_B the salt and B's root), and G = F_Bᵀ·F_A (`gram`)
     is a function of them. `check_inputs` refuses any other. Both Programs read F_A and F_B; E_A is the call's, E_B and
     G the weight's.
-  - In a unit's proof each anchored input is a C-Flock public input region (`In`), costing no gate: `pc4.PORTS` names
+  - In a unit's proof each anchored input is a Flock public input region (`In`), costing no gate: `pc4.PORTS` names
     each row unit's regions, and each region names its recomputation (`pc4.DERIVATIONS`: the rule, the seed, the domain
-    and the derivation function; as C-Flock's circuit names them, `anchors.public_ports`: the seed by the scheme's label,
+    and the derivation function; as Flock's circuit names them, `anchors.public_ports`: the seed by the scheme's label,
     `pc4.SEEDS`, and the rule by its versioned id, `verity/pouw/anchor/pearl-c4/<anchor>/v2`, never the function's
-    Python name, since both strings are in C-Flock's circuit pin). The verifier values them from its own `--public-inputs` file
-    (`TileAnchors.public_inputs`, C-Flock's `verity/flock-public-inputs/v1`: a header line naming the ports, then each
+    Python name, since both strings are in Flock's circuit pin). The verifier values them from its own `--public-inputs` file
+    (`TileAnchors.public_inputs`, Flock's `verity/flock-public-inputs/v1`: a header line naming the ports, then each
     instance's regions), whose content for one unit is `TileAnchors.regions`: every value unpacked into u16 words (one
     per E2M1 code, two per FP32 word of G, low half first), each region whole 128-bit words, its bytes the words
     little-endian. `tests/vectors/pouw_regions.json` pins both. Each region is in the unit's parameter leaf order, not
     the order its gates first read it (F_B is read transposed), and the order is part of what the verifier checks: a file
     with the right values in another order, or with two instances swapped, is refused (`TileAnchors.check_public_inputs`,
-    as C-Flock's Lean verifier refuses it).
+    as Flock's Lean verifier refuses it).
   - The hiding Programs (``Shape.hidden``: `Pc4CallHidden`, `Pc4CheckHidden`) differ from the plain ones only in the
     tile: `Pc4TileHidden` is `Pc4Tile` and its tile digest (`circuit.leaves.PearlTileDigest`, `pearl_c.leaf` of C̃ and
     U, on `hashes.KeccakP1600R12`), which it returns in place of C̃ and U. The weight's Program is `Pc4Weight` under
     hiding too. A root returns only admission bits and tile digests, and every partition still computes each value in
     exactly one unit.
-  - The hiding is C-Flock's: every row a unit reads or writes is a committed port, which C-Flock commits as an
+  - The hiding is Flock's: every row a unit reads or writes is a committed port, which Flock commits as an
     hm96-sha512 row and hashes in the proof (`--zk`), so the Programs hold no leaf and no salt. `pc4.PORTS` names each
     unit's committed rows: a row unit's input row (bf16), the nvfp4-p row it writes and its ``ok`` row (every output is
     committed, #757), and a tile's TM + TN nvfp4-p rows and its tile digest. A tile reads each row as its row unit wrote
@@ -1384,7 +1384,7 @@ useful    U/(α_A·α_B), glue
     = 4,096, 8 segments), A′_i ‖ P_A,i (3 segments), and Pearl-C's FP32 A_i (16 KiB, 16 segments), fp8-p row (5
     segments) and salt-dead counts (1 KiB at k = 8,192, 1 segment). The cap's per-word and per-row-sum rows are at most
     one SHA-512 block at k ≤ 2^14, so a segment's chain is the row's, and v2 hashes them in fewer blocks. The chunk
-    digests and the strip row are v2 rows padded with zero words to 64, one whole block: C-Flock's composer refuses a
+    digests and the strip row are v2 rows padded with zero words to 64, one whole block: Flock's composer refuses a
     unit none of whose rows hashes a block before its last, and without a whole block the strip, a row digest, the tile
     and the tally would read and write only one-block v2 rows. They are not row-seg rows: padded, each costs two
     compressions, as its short row-seg row did, where a row-seg row padded to a block would cost three. A row digest and
@@ -1395,11 +1395,11 @@ useful    U/(α_A·α_B), glue
     nvfp4-p's codes and scales are core's `nvfp4_row_bytes`, as in flock-fp's packed rows, with P appended: every unit
     that reads such a row reads all of it, since a tile needs A′_i and P_A,i both. The salt is 192 bytes; the verifier
     computes the tree leaf, H(leaf_prefix(key) ‖ b ‖ c), from b ‖ c.
-  - A unit's C-Flock statement names its rows in META (`leaves.statement_rows` of its ports): ``row_schemas``, each
+  - A unit's Flock statement names its rows in META (`leaves.statement_rows` of its ports): ``row_schemas``, each
     row's [schema, bits] (the input rows, one per row a tile reads, then the output rows), and ``out_row_ports``, each
     output row's run of output ports, which META names when an output row is row-seg or a run of several. Every output
     row is a row of exactly its words, as every input row is. A row unit writes A′_i ‖ P_A,i (or the fp8-p row) as three
-    (two) output ports, the codes, the scales and P, which C-Flock commits as one row-seg row of exactly their words
+    (two) output ports, the codes, the scales and P, which Flock commits as one row-seg row of exactly their words
     (#849), and B̃_j ‖ P_B,j (or the registered fp8-p row) as one v2 row of them; the ok word and the tile digest are each
     one port's v2 row, not padded to whole blocks (`cursor/row-v2-out-95d4`). So the writer's leaf is the leaf of the
     unit that reads the row as one input port.
@@ -1409,17 +1409,17 @@ useful    U/(α_A·α_B), glue
     the cap's rows at the k where their words change (sd in one segment and two, cap-flags with and without padding,
     cap-chunks with one digest and two), and
     the digest of two tiles, which the gates compute. `test_circuit_leaves.py` rebuilds every row-seg vector from the
-    spec by hand and reads core's own row-seg vectors as PoUW's rows. C-Flock's ports commit every row byte for byte:
-    `verity/ml/flock/tests/test_pouw_rows.py` recomputes each one's vector through C-Flock's port for the row, and two v2
-    rows and a tile through the Lean verifier's row constants; on C-Flock's writer/reader pairs (`ROW_SEG_PAIRS`: A′_i ‖
+    spec by hand and reads core's own row-seg vectors as PoUW's rows. Flock's ports commit every row byte for byte:
+    `verity/ml/flock/tests/test_pouw_rows.py` recomputes each one's vector through Flock's port for the row, and two v2
+    rows and a tile through the Lean verifier's row constants; on Flock's writer/reader pairs (`ROW_SEG_PAIRS`: A′_i ‖
     P_A,i at k = 4,096, the fp8-p row at k = 1,024; `ROW_V2_PAIRS`: an ok row, a tile digest, B̃_j ‖ P_B,j and the
     registered fp8-p row at k = 1,024) PoUW's commit string is the writer's and the reader's. Each of the six units'
     statement rows compose (a toy unit with the unit's ports): META is `statement_rows`', and every staged row's b ‖ c
-    is PoUW's commit string of its words. No C-Flock composer stages a PoUW unit's own gates with these rows yet
+    is PoUW's commit string of its words. No Flock composer stages a PoUW unit's own gates with these rows yet
     (`class_statement.stage` commits one output port for all of a unit's outputs), so neither does a `--zk` proof.
   - The six PoUW primitives the row units call (`PouwF32SqrtRn`, `PouwETilde`, `PouwBf16Neg`, `PouwSqAcc`, `PouwSqCeil`,
     `PouwSqGe`) have Boolean versions, the same functions on bits (`circuit.boolean`, `_v2`, traced from `forms` builders;
-    their AND counts are pinned in circuit-check's `pins.json`). C-Flock's lowering maps a primitive id to a piece of its own
+    their AND counts are pinned in circuit-check's `pins.json`). Flock's lowering maps a primitive id to a piece of its own
     (`ir_lower.PIECES`); for these six the piece is their Boolean version's builder (`ir_lower._boolean_build`), the one that
     lowers an activation of the Boolean version itself.
   - So do the four Keccak words the hiding tile's digest calls (`PouwXor32`, `PouwChi32`, `PouwRotl64Lo`, `PouwRotl64Hi`,
@@ -1429,11 +1429,11 @@ useful    U/(α_A·α_B), glue
     compound round over round: a 12-round TurboSHAKE128 then has AND operands of 3,518 bits on average (7,970 at most),
     and lowering one permutation runs out of memory. So `PouwChi32_v2` commits its outputs (`forms.Circuit.commit`, a
     row each and no gate), and a Keccak-p[1600, 12] lowered through the four is 38,400 rows, no AND operand over 12 bits.
-    C-Flock's piece for each of the four is its builder too, commits included.
+    Flock's piece for each of the four is its builder too, commits included.
   - The draw is `plan.tile_layout` (beside `ncp-v2`'s `plan.layout`, which is unchanged): one stratum per template,
     each tile at the W_ref it is given, and a drawn tile proved with its closure, its TM `Pc4RowA` units, and with its
     TN `Pc4RowB` units in the weight's Program, each once per plan (`Plan.proved_b`). It opens nothing.
-  - **The row cut (`circuit.rowk`, ``Shape.row_k``) is opt-in**, for both checks. C-Flock proves one instance in at most
+  - **The row cut (`circuit.rowk`, ``Shape.row_k``) is opt-in**, for both checks. Flock proves one instance in at most
     a 2^27-bit block (`verity_flock.circuit.K_MAX`), and a whole row unit outgrows it before the served k (Pearl-C's row
     of A on sm_120 past k = 2,560; Pearl-C4's fills it at 4,096). A shape with ``row_k`` (2,048 deployed, `rowk.ROW_K`)
     cuts each row unit along k into a head (the row's statistics and E′, or a_E), one form per segment of row_k positions
@@ -1445,7 +1445,7 @@ useful    U/(α_A·α_B), glue
     - The tail writes the fp8-p or nvfp4-p row today's row unit writes, so a tile reads its rows unchanged. The pieces
       pass their values in six more rows, v2 in either role (`leaves`' pc8-head, pc8-carry, fp8-codes, pc4-head,
       pc4-carry and nvfp4-codes; `rowk.PORTS8`, `PORTS4`). At row_k = 2,048 each is short (at most 55 words) or whole
-      SHA-512 blocks, the v2 rows C-Flock's widened scope takes; pc8-carry ends in 62 zero words for that.
+      SHA-512 blocks, the v2 rows Flock's widened scope takes; pc8-carry ends in 62 zero words for that.
     - A form reads its segment of F_A and F_B as a public input region under the anchor's slice rule,
       `verity/pouw/anchor/<scheme>/<anchor>/slice/v1` (`rowk.DERIVATIONS8`, `DERIVATIONS4`,
       `anchors.Derivation.per_segment`), which only the cut's shapes name.
@@ -1651,11 +1651,11 @@ receipt (CMP-172): its H1 and J10-R units fold their words into keyed receipts, 
 - For Pearl-C's draw: `GγSampled`, `HonestTileCapRate` and `CompleteSampled` take tickets proportional to the whole
   tile's `Wref`, while the audit weighs a tile by its credited cells. The two agree on fully credited tiles. Closing it
   means Lean statements over credited-cell tickets, or tickets over every cell; lean's to choose (red team #1014).
-- C-Flock's side of the proof's identifier: the header's `identifier`, its binding through `pub.sha`, and the verifier's
+- Flock's side of the proof's identifier: the header's `identifier`, its binding through `pub.sha`, and the verifier's
   `--identifier` (proofs' lane).
 - For `ncp-v2`:
   - the lead domain's shapes (k ≥ 1,088) as a recorded run rather than a test;
-  - C-Flock pieces for the PoUW primitives;
+  - Flock pieces for the PoUW primitives;
   - the floors POUS sets for the zero-work templates other than `dequant` (X-SPC-55; 1 until then);
   - the grant and merge of the window guarantee, `audit_window_split_of_record`
     ([#418](https://github.com/danielreuter/verity/pull/418));

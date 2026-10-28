@@ -19,7 +19,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # record.py's mixes are workloads of the vLLM integration, which test_record loads; the auditor host's gate runs
 # warden_serve.py's rehearsal, which test_warden_serve holds it to. compile_slice_zk's engine class is vLLM 8eb1's trace
 # header, read through the encodings' replay (with the modules `_encodings` loads beside it); the trace is in the
-# encodings' fixtures, one fetched tree, which is listed whole so that suites.py fetches it. leak_scan reads C-Flock's
+# encodings' fixtures, one fetched tree, which is listed whole so that suites.py fetches it. leak_scan reads Flock's
 # proof format with its verifier's reader. A served run's Commit windows are the vLLM integration's window advice, which
 # window_chain joins for n2_advised_zk. n2_advised_zk's period draws take the challenger's coins through one_stage's
 # a5_coins, whose local session is live_challenger's auditor host and serve.py (under its tests' stub).

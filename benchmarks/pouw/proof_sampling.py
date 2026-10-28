@@ -18,7 +18,7 @@ steered consumer as if it had failed (`closure`); at any coordinates of the row,
 fraction (`closure_any`). ε_luck + ε_adapt = luck factor × (saving / S).
 
 Inputs are SPEC's and SKIP's (note:20261017T0340Z-draft-skip) shapes and Theorem S's constants. The proof cost is the
-proofs team's (PRF-57): C-Flock's `--zk` CPU prover by session size, one session at a time per site, one per table
+proofs team's (PRF-57): Flock's `--zk` CPU prover by session size, one session at a time per site, one per table
 until PRF-48. A round is 12.6 s, so proving keeps up only if a session batches enough rounds (`Cost.batch`); a round
 that waits for its own proofs is longer, and ε grows with it (`unbatched`). Run `uv run
 benchmarks/pouw/proof_sampling.py` for the table.

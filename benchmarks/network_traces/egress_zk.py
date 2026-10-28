@@ -1,6 +1,6 @@
 """egress-zk: N2's egress bucket in zero knowledge, the generator form. Every bucket of one egress link-window computed
 by its own `EgressBucket_v1` unit, its computed row, output ``o1``, registered against the warden's signed root
-(`warden_rows.bucket_port`: unit base + t reads row t), proved by C-Flock `prove --zk` behind the Lean firewall and held
+(`warden_rows.bucket_port`: unit base + t reads row t), proved by Flock `prove --zk` behind the Lean firewall and held
 by the Lean verifier's registered reads (`flock-verify verify --zk --registered`); each unit's one public output, its
 16-bit ``o0`` (1 when the state renders a row), opened to the verifier. Standalone: no Spec holds these units yet
 (`verity.core.protocols.certifier.egress`).

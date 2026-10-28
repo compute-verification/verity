@@ -7,7 +7,7 @@ One call's side is `Pc4Call{M,K,N,TM,TN}`, which reads that weight's B̃ codes, 
 inputs.  `Pc4Check{M,K,N,TM,TN}` is both in one root: the whole check of an M × N block, recompute-free.  Each root body
 holds only instances of the unit templates below (the partition is `Q_template_instances` over them, `query`), and every
 value is computed in exactly one of them.  ``Shape.row_k`` cuts each row unit along k into a head, a form per segment of
-row_k positions and a tail (`rowk`), so that a row unit fits C-Flock's block at every served k; off, nothing here changes.
+row_k positions and a tail (`rowk`), so that a row unit fits Flock's block at every served k; off, nothing here changes.
 
     template          one instance per        reads                                    computes and returns
     Pc4RowB{K}        row j of B              B_j, E_B,j, F_B, F_A, G                   B̃_j's codes and scale bytes, P_B,j, ok
@@ -21,10 +21,10 @@ its rows once.
 
 The hiding Programs (``Shape.hidden``: `Pc4CallHidden`, `Pc4CheckHidden`) differ only in the tile: `Pc4TileHidden` is
 `Pc4Tile` and its tile digest (`leaves.PearlTileDigest`, `pearl_c.leaf` of C̃ and U), which it returns in place of C̃ and U.
-The weight's Program is `Pc4Weight` under hiding too.  The hiding is C-Flock's: every row a unit reads or writes is a
-committed port, which C-Flock commits as an hm96-sha512 row and hashes in the proof, so these Programs hold no leaf and no
+The weight's Program is `Pc4Weight` under hiding too.  The hiding is Flock's: every row a unit reads or writes is a
+committed port, which Flock commits as an hm96-sha512 row and hashes in the proof, so these Programs hold no leaf and no
 value is computed in two units.  `PORTS` names each unit's committed rows by schema (`leaves.SCHEMAS`): a row unit's input
-row (bf16), the nvfp4-p row it writes (A′_i ‖ P_A,i or B̃_j ‖ P_B,j) and its ``ok`` row (C-Flock commits every output,
+row (bf16), the nvfp4-p row it writes (A′_i ‖ P_A,i or B̃_j ‖ P_B,j) and its ``ok`` row (Flock commits every output,
 #757), and a tile unit's TM + TN nvfp4-p rows and its tile digest.  A tile reads each row as its row unit wrote it, the
 same words under the same schema, so the units link by equal commit strings.  The rest are the anchored inputs, each a
 public input region that `PORTS` names with its recomputation (`DERIVATIONS`).
@@ -43,7 +43,7 @@ non-negative there).  ``max |x|`` stays the integer maximum, so a non-finite wor
 The noise lines (E_A, E_B, F_A, F_B) and G = F_Bᵀ·F_A (`pearl_c4.gram`) are verifier-derived public inputs, as `ncp2`'s
 anchored inputs are (`anchors.TileAnchors`, `DERIVATIONS`): the lines are SHA-512 of the scheme's seeds (`pearl_c4.line`),
 which read public values alone (seed_A the salt, A's root, B's registered root and the matmul index; seed_B the salt and B's
-root), so they carry no row's value, and G is a function of F_A and F_B, so no unit computes it.  In a unit's proof each is a C-Flock
+root), so they carry no row's value, and G is a function of F_A and F_B, so no unit computes it.  In a unit's proof each is a Flock
 public input region, its values unpacked one u16 word each (G's FP32 words two, low half first), which the verifier takes
 from its own `--public-inputs` file (`TileAnchors.regions`).
 """
@@ -72,7 +72,7 @@ from ..protocol import DomainError
 from ..schemes import pearl_c as C
 from ..schemes import pearl_c4 as S
 from . import anchors as A
-from . import boolean as _boolean  # noqa: F401  registers the _v2 Definitions C-Flock's lowering falls back to
+from . import boolean as _boolean  # noqa: F401  registers the _v2 Definitions Flock's lowering falls back to
 from . import leaves as L
 from . import words as W
 
@@ -279,12 +279,12 @@ Pc4TileHiddenDef = CompositeDefinition(
     doc="`Pc4Tile` with its checked words hidden: their tile digest (`leaves.PearlTileDigest`, `pearl_c.leaf` of C̃ and U).",
     conformance="protocol-defined")
 
-#: each unit's ports under hiding, by role: its C-Flock-committed rows, each (schema, role, ports) whose words are its ports'
+#: each unit's ports under hiding, by role: its Flock-committed rows, each (schema, role, ports) whose words are its ports'
 #: in order (`leaves.words_*`; parameters by name, outputs by index, row r of each where a tile reads TM or TN), inputs and
 #: outputs alike, and its public input regions, each parameter's anchor (`DERIVATIONS`).  Every port is in exactly one.  A
 #: row's role is its tree's, which the row's registration domain binds and which picks its schema (`leaves.ROW_SCHEMA`: a
 #: per-call row is a row-seg row): its digest (`leaves.commit`) does not name it.  `leaves.statement_rows` is a unit's
-#: C-Flock rows from them.
+#: Flock rows from them.
 PORTS = {
     "row_b": {"rows": (("bf16", ROLE_W, ("x",)), ("nvfp4-p", ROLE_W, (0, 1, 2)), ("ok", ROLE_W, (3,))),
               "regions": {"e": "eb", "fb": "fb", "fa": "fa", "g": "g"}},

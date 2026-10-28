@@ -1,4 +1,4 @@
-"""Candidate 3's inner session (hiding model architectures with hidden unit circuits): the unmodified C-Flock prover proves the
+"""Candidate 3's inner session (hiding model architectures with hidden unit circuits): the unmodified Flock prover proves the
 inner statement against `rec_live.Proxy` through a relay on the prover's side, which gives the verifier ``h``, the hidden
 circuits' share of the lincheck's fold, as a round of its own after z_partial (`rec_live.holo_rounds`,
 `rec_algebra.Shape.holo`).

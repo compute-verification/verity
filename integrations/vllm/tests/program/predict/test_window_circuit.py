@@ -806,13 +806,13 @@ def test_a_window_its_slots_dont_place_is_refused_by_name():
 
 
 def _unit_rows(circuit) -> dict[str, int]:
-    """Each template's rows in and out under the circuit's cuts, as C-Flock's `UnitStager` takes them
+    """Each template's rows in and out under the circuit's cuts, as Flock's `UnitStager` takes them
     (`interface.unit_rows`)."""
     return {_label(fn): sum(map(len, IF.unit_rows(fn, circuit.cuts.get(IF.descriptor_id(fn))))) for fn, _ in circuit.templates}
 
 
 def test_no_unit_holds_more_rows_in_and_out_than_the_grain(window):
-    """C-Flock's composer gives each row a unit reads or writes an hm96 slot, so at Llama-3.2-1B's grain a unit fits its
+    """Flock's composer gives each row a unit reads or writes an hm96 slot, so at Llama-3.2-1B's grain a unit fits its
     2^27-bit block with at most 256 rows in and out. A port is cut once a writer row, so a unit's rows are its writers' rows,
     its registered reads and its outputs: at the test grain the largest are SiluMul's (its 16 gate/up slices and its output,
     17), position 4's key block's (5 key rows, 5 value rows, its query and three outputs, 14), the fused norm's (8 down or
@@ -830,7 +830,7 @@ def test_no_unit_holds_more_rows_in_and_out_than_the_grain(window):
 
 
 def _widest_row(circuit) -> dict[str, int]:
-    """Each template's widest row in or out under the circuit's cuts, in bytes, as C-Flock's `UnitStager` frames them (bit
+    """Each template's widest row in or out under the circuit's cuts, in bytes, as Flock's `UnitStager` frames them (bit
     rows of exactly their words, `interface.unit_rows`)."""
     out = {}
     for fn, _ in circuit.templates:
@@ -840,7 +840,7 @@ def _widest_row(circuit) -> dict[str, int]:
 
 
 def test_a_class_too_small_to_prove_is_refused_naming_each_template_c_flock_wouldnt_compose(window):
-    """C-Flock's composer refuses a proof block none of whose rows is over 111 bytes (no row then has a compression before its
+    """Flock's composer refuses a proof block none of whose rows is over 111 bytes (no row then has a compression before its
     last SHA-512 block, so the block's SHA range holds no slot), one of more than 256 rows, or one past 2^27 bits
     (`interface.check_proof_block`), and the class builder refuses such a unit at lowering, naming each. TINY's class is too
     small to prove: 13 templates have no wider row, its heads' of 16 values (RoPE, the key blocks, the head end), the token
@@ -859,7 +859,7 @@ def test_a_class_too_small_to_prove_is_refused_naming_each_template_c_flock_woul
     assert named == set(short)
 
 
-#: the smallest test class C-Flock proves every unit of: a head of 64 values (one of 16 has no row past 111 bytes at any
+#: the smallest test class Flock proves every unit of: a head of 64 values (one of 16 has no row past 111 bytes at any
 #: class), prompts of 27 ids and 26 outputs (the feed's slot and the collector's state 112 bytes), GEMM slices of 64
 #: columns (a key's value one row) and a token select of one unit of 512 logits (32 groups: its indices a row of 128 bytes)
 PROVABLE = {**S.TINY, "hidden_size": 128, "intermediate_size": 256, "num_attention_heads": 2, "num_key_value_heads": 1,
@@ -869,7 +869,7 @@ PROVABLE_CLASS, PROVABLE_GRAIN = WindowClass(2, 27, 26), Grain(gemm_words=8192, 
 
 def test_the_smallest_provable_test_class_lowers_every_unit_to_a_proof_block():
     """At `PROVABLE`'s model, class and grain the class builder's check passes (`interface.check_proof_block`): its 7,752
-    units of 69 templates each have a row past 111 bytes and are proof blocks C-Flock's composer takes, its token selects
+    units of 69 templates each have a row past 111 bytes and are proof blocks Flock's composer takes, its token selects
     a `TokenSelectGroups_v1{512, 16}` unit and a combine a position a slot."""
     circuit = class_circuit(S._registered(PROVABLE), PROVABLE_CLASS, None, PROVABLE_GRAIN)
     n = {_label(fn): k for fn, k in circuit.templates}

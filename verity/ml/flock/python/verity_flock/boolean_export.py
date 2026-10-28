@@ -1,7 +1,7 @@
 """Boolean-circuit export of a served row's leaf templates (the website visualizer's dataset; a derived format, not a
 statement).
 
-Each leaf template of a row's program graph is lowered by :mod:`verity_flock.ir_lower` (its C-Flock template module where
+Each leaf template of a row's program graph is lowered by :mod:`verity_flock.ir_lower` (its Flock template module where
 one exists; ``GemmCoordinate`` as tensor-core k-steps, ``ir_lower.tc_units``, total semantics: ``fp.tc_dot16``). The unit
 circuits are built with the named ``fp`` / ``gf2`` / ``unit`` functions traced, so each unit is a tree of named subcircuits
 (bf16->f32, multiply, align, add, normalize, round, lookup, ...) down to its gates. Gates outside the units (the template's
@@ -312,7 +312,7 @@ def write_modules(reg: Registry, path: Path) -> int:
     return path.stat().st_size
 
 
-# --- the definition walker (templates without a C-Flock unit lowering, attention per T, GEMM coordinates) ---------------
+# --- the definition walker (templates without a Flock unit lowering, attention per T, GEMM coordinates) ---------------
 
 def _split_params(s: str) -> dict:
     out, depth, cur, key = {}, 0, "", None
@@ -1059,7 +1059,7 @@ def _unit_graph(G, owner, head, inv, rank, u, gates, info, leaves, ireads) -> di
 
 # --- templates and rows -------------------------------------------------------------------------------------------------
 
-#: program-graph template -> spine template (C-Flock's lowering module, or the GEMM coordinate as tensor-core k-steps)
+#: program-graph template -> spine template (Flock's lowering module, or the GEMM coordinate as tensor-core k-steps)
 SPINE = {"RoPEHead": "rope-head", "SiluMul_v1": "silu-mul", "RMSNormFusedCuda_v2": "rmsnorm-fused-cuda",
          "RMSNormTriton_v1": "rmsnorm-triton", "GemmCoordinate": "gemm-coordinate", "AttentionHead": "attention-head"}
 NOT_LOWERED: dict[str, str] = {}
@@ -1188,7 +1188,7 @@ def _attention_ids(store: DefStore, tname: str, tp: dict, statics: dict) -> dict
 
 def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | None = None, walker: "Walker | None" = None,
              spec: str | None = None, member: str | None = None) -> dict:
-    """A leaf template's record: its proof blocks under the committed cut and its tail (C-Flock's unit lowerings), or its
+    """A leaf template's record: its proof blocks under the committed cut and its tail (Flock's unit lowerings), or its
     Definition tree (the walker: attention per T, GEMM coordinates, every other template). ``member``: the Definition one
     instance of the group is (a GEMM's output coordinate) when the Call is a batch of them; the record then counts one."""
     cache = {} if cache is None else cache
@@ -1231,7 +1231,7 @@ def template(reg: Registry, tname: str, tp: dict, T_range=None, cache: dict | No
 
 
 def _spine(reg: Registry, sub, base: dict, walker: "Walker", spec: str | None, walked_name: str, name: str, cache: dict) -> dict:
-    """A spine template's record: its C-Flock unit with the instance count and its tail, or, where the kernel's warps differ (no
+    """A spine template's record: its Flock unit with the instance count and its tail, or, where the kernel's warps differ (no
     single unit), its Definition walked."""
     from verity_numerical.bench import lowerings
 
@@ -1382,7 +1382,7 @@ def statics_key(statics: dict) -> str:
 def subcircuit(sub, statics=({},)) -> dict:
     """One bound subcircuit's Boolean export (``verity_numerical.bench.templates.Subcircuit``), self-contained: a template record
     per instance statics (``variants``, keyed by :func:`statics_key`; attention one per key count T), as a row's templates are
-    recorded (a spine template its C-Flock unit and tail, any other its Definition walked), with every definition, subcircuit
+    recorded (a spine template its Flock unit and tail, any other its Definition walked), with every definition, subcircuit
     node and circuit type (``circuit_types`` content, keyed by digest) they reach. Raises where the subcircuit has no core
     Definition (a silicon reference)."""
     reg, cache, store = Registry(), {}, _Encoded()

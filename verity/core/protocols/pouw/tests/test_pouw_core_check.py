@@ -410,7 +410,7 @@ def test_the_opening_reads_what_served_zk_writes():
 
 
 def test_every_pinned_tiles_side_ports_sort_in_port_order():
-    """C-Flock reads port k's b ‖ c at the body's k-th place, in its circuit's port order, so the opening reads each side
+    """Flock reads port k's b ‖ c at the body's k-th place, in its circuit's port order, so the opening reads each side
     row's schema by port name and refuses a header whose keys, in key order, don't list the opened side rows first and in
     port order, rather than read the rows in key order (`schemas-between`, `salted-header-order`). It refuses no honest
     header of a pinned template: each one's side ports (Pc8's a0 and b0, the H1 unit's a0..a3 and b0..b7) sort in port

@@ -2869,7 +2869,7 @@ def test_ready_on_stops_waiting_at_twenty_minutes_and_judge_marks_the_pr_once_th
 
 def test_a_remote_quick_tier_gives_its_suites_the_store_as_a_recorded_check_does(world, monkeypatch):
     """On the machine the workload's environment holds no store credential, so `check.py` hands its steps the run's custody key
-    (CHECK_STORE_CUSTODY) and VERITY_STORE_REQUIRED=1.  A tier that handed neither would skip C-Flock's store-backed tests as "the
+    (CHECK_STORE_CUSTODY) and VERITY_STORE_REQUIRED=1.  A tier that handed neither would skip Flock's store-backed tests as "the
     evidence store is not reachable", and the skip would pass.  It hands both as check.py does, never the caller's,
     and nothing of the recording run's own; with no key staged, the store is still required.  The machine's PYTHONPYCACHEPREFIX
     doesn't reach the suites, or test_remote_cwd.py's runs would write their bytecode there instead of under their own root and

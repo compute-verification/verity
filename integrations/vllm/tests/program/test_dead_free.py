@@ -235,7 +235,7 @@ def test_token_select_by_groups_is_the_chunked_select_at_llama_vocabulary():
 
 
 def _unit(fn, cuts: dict[str, int]) -> tuple[int, int]:
-    """A unit of ``fn`` under ``cuts`` as C-Flock's `UnitStager` composes it (`interface.unit_rows`: a bit row a parameter or a
+    """A unit of ``fn`` under ``cuts`` as Flock's `UnitStager` composes it (`interface.unit_rows`: a bit row a parameter or a
     cut's row, then one an output, each of exactly its words): its rows in and out, and the SHA-512 compression slots
     `circuit.compose` gives its rows' blocks before their last (`circuit._row_slots`).  A row of at most 111 bytes is its last
     block, SHA-512's padding with it, and compose refuses a unit of no slot."""
@@ -262,7 +262,7 @@ def test_every_token_select_unit_at_llama_vocabulary_has_a_row_past_one_sha512_b
 
 @pytest.mark.slow
 def test_the_row_rule_is_the_one_compose_refuses_by():
-    """C-Flock's `UnitStager` (about 10 s, its SHA-512 slot circuits) refuses a unit of 27 groups of one logit, whose rows are 2,
+    """Flock's `UnitStager` (about 10 s, its SHA-512 slot circuits) refuses a unit of 27 groups of one logit, whose rows are 2,
     54 and 108 bytes, and composes one of 28, whose index row is 112: where `_unit` puts the line."""
     for C, slots in ((27, 0), (28, 1)):
         fn = bind(DF.TokenSelectGroupsV1, C=C, G=1)
@@ -513,7 +513,7 @@ def test_attn_block_first_v2_reads_a_value_slice_a_row_at_4_32_4():
     reads q as RoPE's one row, k as RoPE's row a key, and v as the value projection's `Gemm_v2{2048, n}` slices at the window's
     grain, 64 / n a key.  v2's v cut once an element is those rows, n words each, where v1's v has only NVIS elements to cut; with
     its 3 outputs a unit is 5·NVIS + 4 rows in and out, within the grain's cap.  q's row and each k row (128 B) hash past one
-    SHA-512 block, which C-Flock's compose needs of some row of a unit; the value slices (32 B) don't."""
+    SHA-512 block, which Flock's compose needs of some row of a unit; the value slices (32 B) don't."""
     from verity.ml.windows import interface as IF
     from verity_flock.circuit import Port
     from verity_vllm.program.predict.window_builder import Grain

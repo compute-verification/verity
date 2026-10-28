@@ -8,7 +8,7 @@ to those rows of its registered roots and to nothing else (a tampered window's, 
 in-proof negative's window changes the one value it names and makes
 the unit's word reference compute ok = 0 exactly where its record moved, a registration of z alone is refused, the public
 row lays out the unit's salt, position and roots as its parameters read them, and the verifier's shared-row file over the
-opened ``b || c`` and paths is C-Flock's own over the rows."""
+opened ``b || c`` and paths is Flock's own over the rows."""
 from __future__ import annotations
 
 import hashlib
@@ -525,7 +525,7 @@ def test_the_numpy_records_are_h1zys_words():
 
 def test_the_verifiers_shared_row_file_is_c_flocks_and_a_tampered_a_row_opens_no_root(tmp_path):
     """Three units of a window, units 0 and 2 reading the same A rows and units 0 and 1 the same B rows, each its own
-    record: the prover's shared-row statement (`h1unit.statement_tables` through C-Flock's `circuit.write`, as `stage.py`
+    record: the prover's shared-row statement (`h1unit.statement_tables` through Flock's `circuit.write`, as `stage.py`
     stages it) and the verifier's own file (`h1unit.verifier_pub`, from the units' ``b || c``, positions and paths alone)
     are one file byte for byte, every A, B, record and ok table row opening its registered root (`run.registered_opens`,
     flock-verify --registered's check; ok's the verifier's own, `h1unit.register_ok`). An ok row of 0 opens none, ok rows

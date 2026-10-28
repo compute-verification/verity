@@ -1,5 +1,5 @@
 """The routed served-rows tie (`served_tie.ServedRowsTie_v2`) on a sealed served window's real rows, proved in zero
-knowledge: the window's P / G units by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify --zk`, through
+knowledge: the window's P / G units by Flock `prove --zk` behind the Lean firewall and held by Lean `verify --zk`, through
 N2-ZK's audit path (`benchmarks/network_traces/n2_zk.py`: its stager, firewall and received-pieces scan); and the cost.
 
     python benchmarks/prove_path/served_tie_zk.py cost [--out DIR]
@@ -11,7 +11,7 @@ N2-ZK's audit path (`benchmarks/network_traces/n2_zk.py`: its stager, firewall a
 
 * **cost**: a step's and a unit's ANDs (`served_tie.step_size`, `size`) at the compile slice's class, at the sealed run
   9c10's (R 8, P 256, IW 16, L 512, T 2048) and at the served class (T 8192, R 256, L 131072), each beside the all-pairs
-  form's count it replaces (``all_pairs``), and a unit's C-Flock block (``zk_block``): its rows' in-circuit hashing, not
+  form's count it replaces (``all_pairs``), and a unit's Flock block (``zk_block``): its rows' in-circuit hashing, not
   the tie's ANDs, sets it, since every unit hashes the window's whole ``srv`` row and each step's T·PB bytes of positions.
 * **build**: a class's unit at G steps built as a Definition, and each Definition it calls, with seconds and peak RSS.
 * **prove**: the window and the rows as `served_tie_window` opens and binds them natively (``bindings``). Statements of
@@ -27,7 +27,7 @@ N2-ZK's audit path (`benchmarks/network_traces/n2_zk.py`: its stager, firewall a
   not yet a proof row's.
   The received-pieces scan (`leak_scan.public_pieces`, `a8.received`) fails a statement on a ``leaked`` piece, whatever its
   row or its bytes, under the rule every zero-knowledge driver's scan follows (`leak_scan.scan`,
-  ``benchmarks/network_traces/leak_scan.py``): a find counts only inside one field of C-Flock's proof format
+  ``benchmarks/network_traces/leak_scan.py``): a find counts only inside one field of Flock's proof format
   (`redigest.layout`) or one record of a round message, and is excused only by what the statement fixes. The staged circuit's pieces are left
   out before the scan (`public_pieces`).
 * **rescan**: a finished ``prove``'s statements scanned again (`leak_scan.rescan`): the verifier's files searched afresh
@@ -81,7 +81,7 @@ def all_pairs(name: str, c: dict) -> tuple[int, str]:
 
 
 def zk_block(S, ands: int) -> dict:
-    """A unit's C-Flock block as `circuit.compose` places it for one VU: its rows' SHA-512 slots (packed) and hm96 slots,
+    """A unit's Flock block as `circuit.compose` places it for one VU: its rows' SHA-512 slots (packed) and hm96 slots,
     its unit's slot, the mask. The unit's slot is estimated from its ANDs and input bits (the lowered unit's own count
     sets it)."""
     from verity_flock import circuit as FC

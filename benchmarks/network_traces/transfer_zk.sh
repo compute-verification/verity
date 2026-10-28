@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # A server block's proof units read against the network certifier's transfer rows (transfer_zk.py) on a CPU machine, on
-# hidden_zk's builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean
+# hidden_zk's builds (its job.sh, sourced: Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean
 # frame. From a clone:
 #   research run --on NODE --source . --project verity --as LANE --cwd clone --cpus 16 --mem-gb 64 --timeout 180m \
 #     --env TZ_MEM_GB=64 -- env CHECK_SLOTS=SLOTS python3 tools/verity/check/slot.py --by LANE -- \

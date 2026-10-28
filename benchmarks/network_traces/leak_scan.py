@@ -1,12 +1,12 @@
 """The received-pieces leak scan every zero-knowledge driver runs: which witness pieces found in what the verifier received
-(`a8.received`'s ``verifier_found``, each piece raw or as hex) leak, read against C-Flock's proof format.
+(`a8.received`'s ``verifier_found``, each piece raw or as hex) leak, read against Flock's proof format.
 
     sys.path.insert(0, "benchmarks/network_traces"); import leak_scan as LS
     pieces, held, public = LS.public_pieces(a8, blobs, held, circuit)  # each witness row cut whole, less the public
     LS.scan(received, pieces, vdir)    # {"leaked": [k], "structured": {k: "across" | "public"}, "placed": {k: [...]}}
     LS.find_whole(received, short, vdir, control)  # each row shorter than a piece found whole, then `scan`'s rule
 
-It reads the format with C-Flock's own reader (``verity/ml/flock/verifier``: `redigest.layout`, `transcript_check`).
+It reads the format with Flock's own reader (``verity/ml/flock/verifier``: `redigest.layout`, `transcript_check`).
 
 The pieces (`cut`, the one cutter every driver's `public_pieces` runs): each witness row cut into 16-byte pieces that
 cover it whole, its aligned ones and, past its last 16-byte boundary, its last 16 bytes and its last aligned chunk
@@ -21,7 +21,7 @@ reader fixes it reads public, which also excuses a real find of it, and anywhere
 
 The rule:
 * A find counts only where it is one field's bytes: inside one field of a repetition's proof stream (``S.repK.bin``,
-  every read C-Flock's proof format makes of it, `redigest.layout`), inside one 16-byte record of a round message of
+  every read Flock's proof format makes of it, `redigest.layout`), inside one 16-byte record of a round message of
   the session transcript (``streams[K].rounds[r].msg``, as `transcript_check.T` frames it), or anywhere in a file whose
   format isn't read (the rest of a transcript, a stream the format doesn't read whole, any other file). A find that
   straddles two fields, or a hex match a nibble off a message's bytes, doesn't count.
@@ -37,7 +37,7 @@ The rule:
   honest all-zero private row fails wherever an honest prover writes a zero element (861e's carry row ``cin 6``, inside
   the zero high limbs of Ligerito's intro messages, ``lig.msg``, which the reader doesn't check).
 
-A find across fields isn't a missed leak: the reads tile a stream with no gaps and C-Flock's writer
+A find across fields isn't a missed leak: the reads tile a stream with no gaps and Flock's writer
 writes each field whole, so an honest writer's leak lands inside one field. A match across two fields is a coincidental
 alignment of their bytes, and a secret split across adjacent fields the prover picks freely (its salts) needs a modified
 prover, outside this scan's model. A differential against a proof of a different witness is evidence for a manual
@@ -67,7 +67,7 @@ _SWAP = threading.Lock()
 #: ``lig.fold`` (``fold_grinding_nonces``) is one too: the verifier requires it empty, but the scan reads what it got.
 GRIND = ("lig.qn", "lig.fold", "lig.cbn", "lig.consn")
 
-#: A ring switch's grinding nonce, which the verifier requires to be 0 (C-Flock's PROTOCOL.md §8.3): a zero one is a
+#: A ring switch's grinding nonce, which the verifier requires to be 0 (Flock's PROTOCOL.md §8.3): a zero one is a
 #: field the reader fixes, and a nonzero one, which the verifier refuses, stays the prover's.
 RS_NONCE = re.compile(r"rs\.\d+\.nonce")
 
@@ -119,7 +119,7 @@ def is_stream(name: str) -> bool:
 
 @functools.lru_cache(maxsize=8)
 def reads(stream: bytes) -> tuple[tuple[tuple[int, int], ...], frozenset[int]] | None:
-    """A ``--zk`` proof stream's fields, (offset, bytes) in order: every read C-Flock's proof format makes of it
+    """A ``--zk`` proof stream's fields, (offset, bytes) in order: every read Flock's proof format makes of it
     (`redigest.layout`: its elements, hashes, salts and paths and the integers between them), and its nonces' offsets
     (the ``*nonce`` fields and the Ligerito grinding nonces `GRIND`, but a ring switch's that is 0, `RS_NONCE`); None
     when the format doesn't read the whole stream."""

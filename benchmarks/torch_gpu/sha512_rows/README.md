@@ -34,7 +34,7 @@ E.counts()                                                 # the host twin's com
 consecutive slots, so they run the same length. The row kernel starts the rows with the most compressions first
 (`RowTable.order`), so its last wave is short rows; the digests stay in table order. A table can span several layers'
 tensors, which at 4,096 slots fills the GPU better than one layer a call (25 rows × 4,096 slots is 1.5 waves on an H200).
-`SaltKey` draws row r's salt in slot s as ChaCha20 chunks 3r … 3r + 2 under the key with nonce `nonce0 + s` (C-Flock's
+`SaltKey` draws row r's salt in slot s as ChaCha20 chunks 3r … 3r + 2 under the key with nonce `nonce0 + s` (Flock's
 `hm96_salt`, commit_slots' `row_salts`). hm96's mask M·y reads the key's 64 KB Hankel table (`hankel_table`: bytes
 [p, p + 64) of T_v are `byte_tables(key)[p][v]`) from shared memory, commit_gpu's `hm96_mask` with each lane taking T's
 16-byte columns in its own order (`mask_column`), so that a warp's loads of T fall in distinct bank groups whatever the salt
