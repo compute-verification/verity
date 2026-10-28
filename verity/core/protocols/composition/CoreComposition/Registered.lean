@@ -18,9 +18,11 @@ before the challenge; it is its own digest. Its evidence is `product`'s with the
 components': `{"components":[...],"registration":{"commitment":HEX,"evidence":HEX,"id":ID,"params":PARAMS}}`.
 
 A composition with no registration check of its own can still hold its components to one record, remote Verity's shape
-(`Core.Remote.protocol`): `same` is `product` whose components `ss` (at remote, PoUW's window and sampled proofs'
-one-stage audit, each of whose commitment is the window record) must all have committed to the first one's digest. Once the cases fit, one that committed to another rejects whatever the components answer; one whose
-commitment doesn't decode rejects as a component. Its parameters, commitment and evidence are `product`'s.
+(`Core.Remote.protocol`): `same` is `product` whose components `ss`, each with its reading of the records its case
+commits to (`Records`: at remote, sampled proofs' one-stage audit's commitment, the window record, and the Commit record
+each window of PoUW's period names), must all have committed to the first record. Once the cases fit, a record that is
+another rejects whatever the components answer; a component whose records don't decode rejects as a component. Its
+parameters, commitment and evidence are `product`'s.
 -/
 import CoreComposition.Product
 
@@ -116,12 +118,11 @@ def recordsBy (s : String) (r : Records) (cs : List Protocol) (ev : List Case) :
 record on the cases `ev`: the first record that isn't the first one's, with both; `none` when they all committed to it,
 or when one of them reads no records, one not decoding, so that it rejects as a component. -/
 def strays (ss : List (String × Records)) (cs : List Protocol) (ev : List Case) : Option String :=
-  match ss.mapM fun (s, r) => (recordsBy s r cs ev).map fun ds => ds.map (s, ·) with
-  | some xs => match xs.flatten with
-    | (s, d) :: rest => (rest.find? (·.2 != d)).map fun (t, d') =>
-      s!"record: {s} committed {Flock.hexOf d}, {t} committed {Flock.hexOf d'}"
-    | [] => none
-  | none => none
+  match (ss.mapM fun (s, r) => (recordsBy s r cs ev).map fun (ds : List ByteArray) => ds.map (s, ·)).map
+      List.flatten with
+  | some ((s, d) :: rest) => (rest.find? (·.2 != d)).map fun (t, d') =>
+    s!"record: {s} committed {Flock.hexOf d}, {t} committed {Flock.hexOf d'}"
+  | _ => none
 
 /-- `check` of the components `cs`, except that once the cases fit, components `ss` that didn't all commit to one
 record reject whatever the components answer. -/

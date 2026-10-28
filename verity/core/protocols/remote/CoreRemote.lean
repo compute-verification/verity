@@ -75,7 +75,7 @@ private def strayOf (r : String) (rs : List String) : Option String :=
   strays records (components.map (·.toProtocol)) [periodOn rs, v2On r]
 #guard (windowRecords PouwCheck.Period.protocol (periodOn [record 0, record 0])).map (·.length) == some 2
 #guard (windowRecords PouwCheck.Period.protocol (periodOn [record 0])) ==
-  (committed SampledProofs.OneStageZk.protocol (v2On (record 0)))
+  (committed SampledProofs.OneStageZk.protocol.toProtocol (v2On (record 0)))
 #guard strayOf (record 0) [record 0, record 0] == none
 #guard (strayOf (record 0) [record 0, record 1]).map (·.startsWith
   "record: verity/sampled-proofs/one-stage/v2 committed ") == some true
