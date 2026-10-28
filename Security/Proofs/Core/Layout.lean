@@ -2,41 +2,41 @@ import Mathlib.Data.List.Induction
 import Definitions.Core.Layout
 
 /-!
-# The registration log: its check, and the layout along it
+# The hardware registration: its check, and the layout along it
 
-* `Registration.Entry.refusal_eq_none_iff`: an entry is refused exactly when it is invalid, so a refusal names a check
-  the entry fails, the first in `Entry.Valid`'s order.
-* `Registration.valid_append_singleton`: a log with one more entry is valid exactly when the log is and the entry is
-  valid against it, so a log is checked one entry at a time; and every prefix of a valid log is valid
-  (`Registration.Valid.of_prefix`).
+* `HardwareRegistration.Entry.refusal_eq_none_iff`: an entry is refused exactly when it is invalid, so a refusal names
+  a check the entry fails, the first in `Entry.Valid`'s order.
+* `HardwareRegistration.valid_append_singleton`: a log with one more entry is valid exactly when the log is and the
+  entry is valid against it, so a log is checked one entry at a time; and every prefix of a valid log is valid
+  (`HardwareRegistration.Valid.of_prefix`).
 * `Layout.ofLog_prefix`: the layout grows along the log, a prefix's cards, locations and links being a prefix of every
   extension's; and what an id names in a prefix's layout it names in every extension's (`Layout.loc?_ofLog_prefix`,
   `Layout.kind?_ofLog_prefix`), so a later entry changes nothing already registered.
-* `Registration.Valid.ids_nodup` and `Registration.Valid.parents`: a valid log registers each id once, and its layout
-  is a tree, each location under a registered parent of a kind its own allows.
+* `HardwareRegistration.Valid.ids_nodup` and `HardwareRegistration.Valid.parents`: a valid log registers each id once,
+  and its layout is a tree, each location under a registered parent of a kind its own allows.
 * A small onsite site and a later entry for each check, each refused by that check's name
-  (`Registration.Example.onsite_refusals`), and the same entries on a remote site, which accepts the two that only an
-  onsite site refuses (`Registration.Example.remote_refusals`).
+  (`HardwareRegistration.Example.onsite_refusals`), and the same entries on a remote site, which accepts the two that
+  only an onsite site refuses (`HardwareRegistration.Example.remote_refusals`).
 -/
 
 namespace Verity
 
 namespace Layout
 
-open Registration (Entry)
+open HardwareRegistration (Entry)
 
 @[simp] theorem ofLog_nil : ofLog [] = ⟨[], [], []⟩ := rfl
 
-theorem ofLog_append (l l' : Registration) :
+theorem ofLog_append (l l' : HardwareRegistration) :
     ofLog (l ++ l') = ⟨(ofLog l).cards ++ (ofLog l').cards, (ofLog l).locs ++ (ofLog l').locs,
       (ofLog l).links ++ (ofLog l').links⟩ := by
   simp [ofLog]
 
-theorem ofLog_concat (l : Registration) (e : Entry) : ofLog (l ++ [e]) = (ofLog l).add e := by
+theorem ofLog_concat (l : HardwareRegistration) (e : Entry) : ofLog (l ++ [e]) = (ofLog l).add e := by
   simp [ofLog, add]
 
 /-- **The layout grows along the log**: a prefix's cards, locations and links are a prefix of every extension's. -/
-theorem ofLog_prefix {l₁ l₂ : Registration} (h : l₁ <+: l₂) :
+theorem ofLog_prefix {l₁ l₂ : HardwareRegistration} (h : l₁ <+: l₂) :
     (ofLog l₁).cards <+: (ofLog l₂).cards ∧ (ofLog l₁).locs <+: (ofLog l₂).locs ∧
       (ofLog l₁).links <+: (ofLog l₂).links := by
   obtain ⟨t, rfl⟩ := h
@@ -72,17 +72,17 @@ theorem kind?_isSome_of_known {L : Layout} {i : String} (hi : L.Known i) : (L.ki
       simpa [loc?, List.find?_isSome] using ⟨x, hx, rfl⟩
 
 /-- What an id names in a prefix's layout, it names in every extension's. -/
-theorem loc?_ofLog_prefix {l₁ l₂ : Registration} (h : l₁ <+: l₂) {i : String} {x : Loc}
+theorem loc?_ofLog_prefix {l₁ l₂ : HardwareRegistration} (h : l₁ <+: l₂) {i : String} {x : Loc}
     (hx : (ofLog l₁).loc? i = some x) : (ofLog l₂).loc? i = some x :=
   loc?_of_prefix (ofLog_prefix h).2.1 hx
 
-theorem kind?_ofLog_prefix {l₁ l₂ : Registration} (h : l₁ <+: l₂) {i : String} {k : Kind}
+theorem kind?_ofLog_prefix {l₁ l₂ : HardwareRegistration} (h : l₁ <+: l₂) {i : String} {k : Kind}
     (hk : (ofLog l₁).kind? i = some k) : (ofLog l₂).kind? i = some k :=
   kind?_of_prefix (ofLog_prefix h).2.1 hk
 
 end Layout
 
-namespace Registration
+namespace HardwareRegistration
 
 open Layout
 
@@ -96,7 +96,7 @@ theorem Entry.refusal_eq_none_iff {L : Layout} {head : String} {e : Entry} :
 
 @[simp] theorem head_nil : head D c [] = D.genesis c := rfl
 
-@[simp] theorem head_concat (l : Registration) (e : Entry) : head D c (l ++ [e]) = D.entry e := by
+@[simp] theorem head_concat (l : HardwareRegistration) (e : Entry) : head D c (l ++ [e]) = D.entry e := by
   simp [head]
 
 @[simp] theorem valid_nil : Valid D A c [] := by
@@ -104,7 +104,7 @@ theorem Entry.refusal_eq_none_iff {L : Layout} {head : String} {e : Entry} :
 
 /-- **A log is checked one entry at a time**: with one more entry it is valid exactly when it was, and the entry is
 valid against it. -/
-theorem valid_append_singleton {l : Registration} {e : Entry} :
+theorem valid_append_singleton {l : HardwareRegistration} {e : Entry} :
     Valid D A c (l ++ [e]) ↔ Valid D A c l ∧ e.Valid D A c (Layout.ofLog l) (head D c l) := by
   unfold Valid
   constructor
@@ -121,7 +121,7 @@ theorem valid_append_singleton {l : Registration} {e : Entry} :
 
 /-- **Every prefix of a valid log is valid**: an entry valid against its prefix stays valid in every extension of the
 log. -/
-theorem Valid.of_prefix {l₁ l₂ : Registration} (h : l₁ <+: l₂) (hv : Valid D A c l₂) : Valid D A c l₁ := by
+theorem Valid.of_prefix {l₁ l₂ : HardwareRegistration} (h : l₁ <+: l₂) (hv : Valid D A c l₂) : Valid D A c l₁ := by
   obtain ⟨t, rfl⟩ := h
   unfold Valid at hv ⊢
   intro i hi
@@ -129,14 +129,14 @@ theorem Valid.of_prefix {l₁ l₂ : Registration} (h : l₁ <+: l₂) (hv : Val
   simpa [List.getElem_append_left hi, List.take_append_of_le_length (Nat.le_of_lt hi)] using this
 
 /-- **A valid log registers each id once**, the outside's among them. -/
-theorem Valid.ids_nodup {l : Registration} (h : Valid D A c l) : (Layout.ofLog l).ids.Nodup := by
+theorem Valid.ids_nodup {l : HardwareRegistration} (h : Valid D A c l) : (Layout.ofLog l).ids.Nodup := by
   rcases List.eq_nil_or_concat' l with rfl | ⟨l', e, rfl⟩
   · simp [Layout.ids]
   · rw [Layout.ofLog_concat]
     exact (valid_append_singleton.mp h).2.2.1.1
 
 /-- **A valid log's layout is a tree**: each location's parent is registered, and of a kind the location's own allows. -/
-theorem Valid.parents {l : Registration} (h : Valid D A c l) :
+theorem Valid.parents {l : HardwareRegistration} (h : Valid D A c l) :
     ∀ x ∈ (Layout.ofLog l).locs, (∀ p ∈ x.parent, (Layout.ofLog l).Known p) ∧
       x.parent.bind (Layout.ofLog l).kind? ∈ x.kind.parents := by
   induction l using List.reverseRecOn with
@@ -244,6 +244,6 @@ theorem remote_refusals :
 
 end Example
 
-end Registration
+end HardwareRegistration
 
 end Verity

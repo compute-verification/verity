@@ -2,7 +2,7 @@ import Mathlib.Data.List.Perm.Basic
 import Mathlib.Data.List.Nodup
 
 /-!
-# The physical layout and its registration
+# The physical layout and its hardware registration
 
 The site the protocols run on is one `Layout`: the cards its devices name by digest, a tree of locations each with its
 owner, and the links between them.
@@ -16,12 +16,13 @@ owner, and the links between them.
   it, one from it to the outside. The prover's boundary links are a host's links to the outside or to a certifier
   (`Layout.Boundary`), and a link is certified when a certifier is at one of its ends (`Layout.Certified`).
 
-The layout is registered as an append-only log (`Registration`). Each entry adds cards, locations and links, and names
-the head of the log it follows (`Registration.Entry.previous`): the digest of the log's last entry, which names its own
-predecessor, so the head is a digest of the whole prefix. The layout of a log is its entries' additions in order
-(`Layout.ofLog`), and a log is valid when each entry is valid against the layout and head of the prefix before it
-(`Registration.Valid`). An entry is checked as a whole (`Registration.Entry.Valid`), and refused by the first check it
-fails (`Registration.Entry.refusal`):
+The layout is registered as an append-only log, the hardware registration (`HardwareRegistration`; not the declared
+circuit's registration `Verity.Registration`). Each entry adds cards, locations and links, and names the head of the log
+it follows (`HardwareRegistration.Entry.previous`): the digest of the log's last entry, which names its own predecessor,
+so the head is a digest of the whole prefix. The layout of a log is its entries' additions in order (`Layout.ofLog`),
+and a log is valid when each entry is valid against the layout and head of the prefix before it
+(`HardwareRegistration.Valid`). An entry is checked as a whole (`HardwareRegistration.Entry.Valid`), and refused by the
+first check it fails (`HardwareRegistration.Entry.refusal`):
 
 | Refusal | The check |
 | --- | --- |
@@ -35,8 +36,8 @@ fails (`Registration.Entry.refusal`):
 | `uncertified` | onsite: every boundary link is certified |
 | `challengerReach` | onsite: the host of every memory leaf is at an end of a memory challenger's link |
 
-The digests are parameters (`Registration.Digests`), SHA-512 in the deployed check, and the auditor's data sheets and
-keys are the check's own (`Registration.Auditor`). At every choice of them the check is decidable.
+The digests are parameters (`HardwareRegistration.Digests`), SHA-512 in the deployed check, and the auditor's data
+sheets and keys are the check's own (`HardwareRegistration.Auditor`). At every choice of them the check is decidable.
 -/
 
 namespace Verity
@@ -131,28 +132,28 @@ structure Layout where
   links : List Layout.Link
   deriving DecidableEq, Repr
 
-/-- **An entry of the registration log**: the cards, locations and links it adds, and the head of the log it follows
-(`previous`). -/
-structure Registration.Entry where
+/-- **An entry of the hardware registration**: the cards, locations and links it adds, and the head of the log it
+follows (`previous`). -/
+structure HardwareRegistration.Entry where
   previous : String
   cards : List Layout.Card := []
   locs : List Layout.Loc := []
   links : List Layout.Link := []
   deriving DecidableEq, Repr
 
-/-- **The registration log**: the layout's entries, oldest first. It is append-only: an entry is checked against the
-log before it, and nothing after it changes it. -/
-abbrev Registration : Type := List Registration.Entry
+/-- **The hardware registration**: the log of the layout's entries, oldest first. It is append-only: an entry is checked
+against the log before it, and nothing after it changes it. -/
+abbrev HardwareRegistration : Type := List HardwareRegistration.Entry
 
 namespace Layout
 
 /-- The layout an entry extends `L` to, unchecked. -/
-def add (L : Layout) (e : Registration.Entry) : Layout :=
+def add (L : Layout) (e : HardwareRegistration.Entry) : Layout :=
   ⟨L.cards ++ e.cards, L.locs ++ e.locs, L.links ++ e.links⟩
 
 /-- **The layout of a log**: its entries' cards, locations and links, in the log's order. The layout of a prefix of the
 log is the site as registered when that prefix was the log. -/
-def ofLog (log : Registration) : Layout :=
+def ofLog (log : HardwareRegistration) : Layout :=
   ⟨log.flatMap (·.cards), log.flatMap (·.locs), log.flatMap (·.links)⟩
 
 variable (L : Layout)
@@ -208,7 +209,7 @@ instance instDecidablePredLinkCertified : DecidablePred L.Certified := fun _ => 
 
 end Layout
 
-namespace Registration
+namespace HardwareRegistration
 
 open Layout
 
@@ -232,7 +233,7 @@ structure Auditor where
   key : String → Option String
 
 /-- **The log's head**: the digest of its last entry, or of its composite's genesis when it is empty. -/
-def head (D : Digests) (c : Composite) (log : Registration) : String :=
+def head (D : Digests) (c : Composite) (log : HardwareRegistration) : String :=
   match log.getLast? with
   | none => D.genesis c
   | some e => D.entry e
@@ -330,13 +331,13 @@ def refusal : Option Refusal :=
 end Entry
 
 /-- **A valid log** for the composite `c`: each entry is valid against the layout and head of the prefix before it. -/
-def Valid (D : Digests) (A : Auditor) (c : Composite) (log : Registration) : Prop :=
+def Valid (D : Digests) (A : Auditor) (c : Composite) (log : HardwareRegistration) : Prop :=
   ∀ i (h : i < log.length), log[i].Valid D A c (Layout.ofLog (log.take i)) (head D c (log.take i))
 
-instance instDecidableValid (D : Digests) (A : Auditor) (c : Composite) (log : Registration) :
+instance instDecidableValid (D : Digests) (A : Auditor) (c : Composite) (log : HardwareRegistration) :
     Decidable (Valid D A c log) := by
   unfold Valid; infer_instance
 
-end Registration
+end HardwareRegistration
 
 end Verity
