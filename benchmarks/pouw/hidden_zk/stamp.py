@@ -168,6 +168,8 @@ class Stamp:
         self.bases: list[int] = []
         self.binds: list[np.ndarray] = []
         self.calls = 0
+        self.counting = False
+        self.count_s, self.kept = 0.0, None
 
     def input(self, name: str, n: int) -> list:
         bits = [forms.L(frozenset((self.nv + i,)), 0) for i in range(n)]
@@ -181,6 +183,8 @@ class Stamp:
     # --- the walk --------------------------------------------------------------------------------------------------------
     def call(self, key0, groups, fn, cse: bool) -> list:
         """``fn(C, *groups)``'s output forms, ``groups`` lists of this circuit's forms: its template's, renamed."""
+        if self.counting:
+            raise _Builds(getattr(key0[1], "id", key0[1]))
         self.calls += 1
         if not self.calls % GC_CALLS:
             if self.calls % (GC_CALLS << 4):
@@ -240,6 +244,16 @@ class Stamp:
             leaves = [[param_leaf(s, pi, j) for j in range(t.leaves)] for pi, (_, t) in enumerate(params)]
             if any(o not in wires for ls in leaves for o in ls):
                 return False
+            if self.counting:
+                for ls in leaves:
+                    for o in ls:
+                        wires[o]
+                lo, hi = s.offset, s.offset + s.spec.gates
+                for r in s.spec.body.ret:
+                    j = resolve(s, r)
+                    if lo <= j < hi:
+                        wires.setdefault(j, _BIT)
+                return True
             els = []
             for (_, t), ls in zip(params, leaves):
                 at = 0
@@ -278,9 +292,85 @@ class Stamp:
                 wires = IL.lower_gates(self, [IL._PrimGate(t, len(inputs))], {-(i + 1): list(w) for i, w in enumerate(inputs)}, pieces)
                 return [wires[0]]
             _prog, call = IL.standalone(t)
-            wires = dict(zip(call.args, inputs))
+            left = self._reads(call, inputs, pieces)
+            wires = dict(zip(call.args, inputs)) if left is None else _Wires(zip(call.args, inputs), left)
             IL.lower_gates(self, call, wires, pieces)
-            return [wires[r] for r in call.returns]
+            outs = [wires[r] for r in call.returns]
+            if left is not None:
+                self.kept = wires.most
+            return outs
+
+    def _reads(self, call, inputs, pieces) -> dict[int, int] | None:
+        """How many times the walk reads each gate's word, from a walk on constant words (no piece or builder runs), or None
+        where that walk fails: the walk then keeps every word, as `ir_lower.lower` does. The walk's reads don't depend on its
+        words' values, so a count that is off can only make the real walk raise."""
+        t0 = time.time()
+        reads = _Reads(zip(call.args, [[forms.ZERO] * len(w) for w in inputs]))
+        self.counting = True
+        try:
+            IL.lower_gates(self, call, reads, pieces)
+            for r in call.returns:
+                reads[r]
+        except Exception as e:  # noqa: BLE001
+            print(f"STAMP: the walk keeps every word: its counting walk raised {type(e).__name__}: {e}", file=sys.stderr,
+                  flush=True)
+            return None
+        finally:
+            self.counting = False
+            self.count_s = time.time() - t0
+        return reads.n
+
+
+_BIT = [forms.ZERO]
+
+
+class _Builds(Exception):
+    """The counting walk reached a piece or a builder."""
+
+
+class _Reads(dict):
+    """The counting walk's words, counting each gate's reads (``n``)."""
+
+    def __init__(self, items):
+        super().__init__(items)
+        self.n: dict[int, int] = {}
+
+    def __getitem__(self, g):
+        w = dict.__getitem__(self, g)
+        self.n[g] = self.n.get(g, 0) + 1
+        return w
+
+
+class _Wires(dict):
+    """The walk's words, each dropped at its last read (``left``: the reads still to come); a word never read is not kept.
+    ``most``: the most words held at once."""
+
+    def __init__(self, items, left: dict[int, int]):
+        super().__init__(items)
+        self.left, self.most = left, len(self)
+
+    def __setitem__(self, g, w):
+        if g in self.left:
+            dict.__setitem__(self, g, w)
+            if len(self) > self.most:
+                self.most = len(self)
+
+    def setdefault(self, g, w):
+        if g not in self.left:
+            return w
+        if g not in self:
+            self[g] = w
+        return dict.__getitem__(self, g)
+
+    def __getitem__(self, g):
+        w = dict.__getitem__(self, g)
+        k = self.left[g] - 1
+        if k:
+            self.left[g] = k
+        else:
+            del self.left[g]
+            dict.__delitem__(self, g)
+        return w
 
 
 class _Pieces:
@@ -639,7 +729,8 @@ def unit_lowering(definition, name: str, in_rows, public=(), structural: bool = 
     lay.seconds["walk"] = walk
     _trim()
     print(f"STAMP {name}: calls={st.calls} recorded={len(st.tids)} templates={len(st.templates)} closures={len(lay.closures)} "
-          f"bits={st.nv} live_ands={lay.n_live} rows={lay.useful} walk_s={walk:.1f} live_cols_s={lay.seconds['live_cols']:.1f} "
+          f"bits={st.nv} live_ands={lay.n_live} rows={lay.useful} walk_s={walk:.1f} count_s={st.count_s:.1f} words_kept={st.kept} "
+          f"live_cols_s={lay.seconds['live_cols']:.1f} "
           f"at start {start_mem}, after walk {walk_mem}, after layout {_mem()}", file=sys.stderr, flush=True)
     print(f"STAMP-TOP {name}: {_top(st, lay)}", file=sys.stderr, flush=True)
     return StampLowering(name, unit, units, None, lay), out_words
