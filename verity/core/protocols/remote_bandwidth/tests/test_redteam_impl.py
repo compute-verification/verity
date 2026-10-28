@@ -43,7 +43,7 @@ def test_rb1_the_ledger_bounds_every_window_s_shortfall(store) -> None:  # noqa:
 
 
 def test_rb2_the_record_names_its_codec(store) -> None:  # noqa: F811
-    """`Record.public()` repeats the receipt kind and `bind` "since what its receipts rest on depends on them", and
+    """`Summary.public()` repeats the receipt kind and `bind` "since what its receipts rest on depends on them", and
     `ledger` checks `link` against `bind`.  μ_rebuild rests on the codec (field, k, mask), and the record omitted it: a
     session under `p512/k2`, unmasked and resting on the unmeasured assumption 7, had a public record of the same shape
     as one under the stated `p1024/k3/masked`, and `ledger` takes any `rebuild` for either.  Fixed: the record names
