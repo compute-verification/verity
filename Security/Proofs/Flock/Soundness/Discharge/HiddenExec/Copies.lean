@@ -130,7 +130,7 @@ include hR in
 /-- **The unit's inputs on one gate carry one value in the hidden statement** (`Layout.Aliased`), at template instance
 `g`'s stacked unit slots in every block, for an instance that wires them as Δ copies them in the flat twin
 (`Aliased.Copies`). -/
-theorem aliased_of_copiesH {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
+theorem aliased_of_copiesH {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
     (inst : P.IsRowsUnit u ((unitRows st L.unit_built).stack st.c.upv)) {g : ℕ} (hg : g < st.c.g)
     (hcp : Aliased.Copies Lf regs F inst hg) (o : Fin (2 ^ (L.model regs).nbl)) : L.Aliased regs inst o hg := by
   intro c c' hw hc hc' z hz

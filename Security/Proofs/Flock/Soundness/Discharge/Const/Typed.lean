@@ -15,7 +15,7 @@ namespace FlockSoundness.Discharge.Const.UProg
 
 open FlockSoundness Audit
 
-theorem castInst_wire_one {C : Audit.Circuit} {m : ℕ} {P : Audit.Partition C m} {v : Fin m} {R₁ R₂ : Rows}
+theorem castInst_wire_one {C : Verity.Boolean.Circuit} {m : ℕ} {P : Audit.Partition C m} {v : Fin m} {R₁ R₂ : Rows}
     (e : R₁ = R₂) (i : P.IsRowsUnit v R₁) : (Placed.castInst e i).wire R₂.one = i.wire R₁.one := by
   subst e
   rfl

@@ -32,7 +32,7 @@ theorem Types.Flatten.Gate.lift_args {N : ℕ} (w : ℕ → Fin N) (g : Gate) : 
   cases g <;> rfl
 
 theorem Types.Flatten.Gate.isInput_lift {N : ℕ} (w : ℕ → Fin N) (g : Gate) : (g.lift w).isInput = true ↔ g = .input := by
-  cases g <;> simp [Gate.lift, Op.isInput]
+  cases g <;> simp [Gate.lift, Verity.Boolean.Op.isInput]
 
 theorem Types.Flatten.Gate.lift_lift {N M : ℕ} (w : ℕ → Fin N) (f : Fin N → Fin M) (g : Gate) :
     (g.lift w).lift f = g.lift (f ∘ w) := by
@@ -248,7 +248,7 @@ structure UnitSpec where
 theorem getD_of_lt {a : Array ℕ} {i : ℕ} (h : i < a.size) : a.getD i 0 = a[i] := by
   simp [Array.getD, h]
 
-theorem Audit.Partition.mem_committed_iff {C : Audit.Circuit} {n : ℕ} (P : Partition C n) (g : Fin C.N) :
+theorem Audit.Partition.mem_committed_iff {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) (g : Fin C.N) :
     g ∈ P.committed ↔ (C.op g).isInput = true ∨ g ∈ C.outputs ∨ ∃ h, g ∈ (C.op h).args ∧ P.unit h ≠ P.unit g := by
   classical
   simp [Partition.committed]
@@ -578,7 +578,7 @@ theorem wireF_val (hk : one < k) {outs : List ℕ} (p : UProg k one outs) {s : U
   rw [dite_eq_left (p.wireB_lt hk valid hj)]
 
 /-- The gates' operations: a unit's gates over its gates' wires. -/
-def opB (hk : one < k) : {outs : List ℕ} → (p : UProg k one outs) → Fin p.boolN → Op p.boolN
+def opB (hk : one < k) : {outs : List ℕ} → (p : UProg k one outs) → Fin p.boolN → Verity.Boolean.Op p.boolN
   | _, .inputs, _ => .input
   | _, .snoc p s src .., g =>
     if h : g.val < p.boolN then (p.opB hk ⟨g.val, h⟩).lift (Fin.castAdd _)
@@ -593,10 +593,10 @@ theorem gs_bound {outs : List ℕ} (p : UProg k one outs) (s : UnitSpec) {g : �
 
 theorem topoB (hk : one < k) : ∀ {outs : List ℕ} (p : UProg k one outs) (g : Fin p.boolN),
     ∀ a ∈ (p.opB hk g).args, a < g
-  | _, .inputs, _, _, ha => by simp [opB, Op.args] at ha
+  | _, .inputs, _, _, ha => by simp [opB, Verity.Boolean.Op.args] at ha
   | _, .snoc p s src valid, g, a, ha => by
     by_cases h : g.val < p.boolN
-    · simp only [opB, h, dite_true, Audit.Op.args_lift] at ha
+    · simp only [opB, h, dite_true, Verity.Boolean.Op.args_lift] at ha
       obtain ⟨a', ha', rfl⟩ := List.mem_map.1 ha
       have := topoB hk p ⟨g.val, h⟩ a' ha'
       rw [Fin.lt_def] at this ⊢
@@ -620,10 +620,10 @@ def unitB : {outs : List ℕ} → (p : UProg k one outs) → Fin p.boolN → Opt
 
 theorem input_iffB (hk : one < k) : ∀ {outs : List ℕ} (p : UProg k one outs) (g : Fin p.boolN),
     p.unitB g = none ↔ (p.opB hk g).isInput = true
-  | _, .inputs, _ => by simp [unitB, opB, Op.isInput]
+  | _, .inputs, _ => by simp [unitB, opB, Verity.Boolean.Op.isInput]
   | _, .snoc p s src .., g => by
     by_cases h : g.val < p.boolN
-    · simp only [unitB, opB, h, dite_true, Option.map_eq_none_iff, Audit.Op.isInput_lift]
+    · simp only [unitB, opB, h, dite_true, Option.map_eq_none_iff, Verity.Boolean.Op.isInput_lift]
       exact input_iffB hk p _
     · have h' := p.gs_bound s g.isLt h
       simp only [unitB, opB, h, dite_false, dite_true, h', reduceCtorEq, false_iff, Types.Flatten.Gate.isInput_lift]
@@ -637,7 +637,7 @@ noncomputable def outsB {outs : List ℕ} (p : UProg k one outs) : Finset (Fin p
 
 /-- **The program's Boolean circuit**: each unit's unit gates, its inputs on their sources' copies and its `one` on
 `one`; every unit output's copy an output. -/
-noncomputable abbrev CB (hk : one < k) {outs : List ℕ} (p : UProg k one outs) : Audit.Circuit :=
+noncomputable abbrev CB (hk : one < k) {outs : List ℕ} (p : UProg k one outs) : Verity.Boolean.Circuit :=
   ⟨p.boolN, p.opB hk, p.topoB hk, p.outsB⟩
 
 /-- Its partition into the program's units. -/
@@ -650,7 +650,7 @@ noncomputable def outsC {outs : List ℕ} (p : UProg k one outs) : Finset (Fin p
   Finset.univ.filter fun g => ∃ v o, v < outs.length ∧ o < outs.getD v 0 ∧ g.val = p.outGate v o
 
 /-- **The program's rows circuit** (`ProgSpec.circuit`), every unit output's row an output. -/
-noncomputable abbrev C (hk : one < k) {outs : List ℕ} (p : UProg k one outs) : Audit.Circuit :=
+noncomputable abbrev C (hk : one < k) {outs : List ℕ} (p : UProg k one outs) : Verity.Boolean.Circuit :=
   ⟨p.rowsN, (p.toRows hk).op, (p.toRows hk).topo, p.outsC⟩
 
 /-- Its partition into the program's units (`ProgSpec.partition`). -/
@@ -896,7 +896,7 @@ theorem committedB_old (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (
   · by_cases hh : h.val < p.boolN
     · refine Or.inr (Or.inr ⟨⟨h.val, hh⟩, ?_, ?_⟩)
       · change g ∈ ((snoc p s src valid).opB hk h).args at hga
-        rw [opB_old hk hh, Audit.Op.args_lift] at hga
+        rw [opB_old hk hh, Verity.Boolean.Op.args_lift] at hga
         obtain ⟨a, ha, hae⟩ := List.mem_map.1 hga
         have hav : a.val = g.val := by have := congrArg Fin.val hae; simpa using this
         have : a = ⟨g.val, hlt⟩ := Fin.ext hav
@@ -970,7 +970,7 @@ theorem committedB_last (hk : one < k) {outs : List ℕ} (p : UProg k one outs) 
   · exfalso
     by_cases hh : h.val < p.boolN
     · change g ∈ ((snoc p s src valid).opB hk h).args at hga
-      rw [opB_old hk hh, Audit.Op.args_lift] at hga
+      rw [opB_old hk hh, Verity.Boolean.Op.args_lift] at hga
       obtain ⟨a, -, hae⟩ := List.mem_map.1 hga
       have : g.val = a.val := by rw [← hae]; simp
       have := a.isLt
@@ -992,7 +992,7 @@ theorem committedC_old (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (
     change (((snoc p s src valid).toRows hk).op _).isInput = true
     change ((p.toRows hk).op g).isInput = true at hg
     simp only [toRows]
-    rw [ProgSpec.op_castAdd, Audit.Op.isInput_lift]
+    rw [ProgSpec.op_castAdd, Verity.Boolean.Op.isInput_lift]
     exact hg
   · refine Or.inr (Or.inl ?_)
     change _ ∈ outsC _ at hg
@@ -1006,7 +1006,7 @@ theorem committedC_old (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (
     · change _ ∈ (((snoc p s src valid).toRows hk).op _).args
       change g ∈ ((p.toRows hk).op h).args at hga
       simp only [toRows]
-      rw [ProgSpec.op_castAdd, Audit.Op.args_lift]
+      rw [ProgSpec.op_castAdd, Verity.Boolean.Op.args_lift]
       exact List.mem_map_of_mem hga
     · change ((snoc p s src valid).toRows hk).unit _ ≠ ((snoc p s src valid).toRows hk).unit _
       change (p.toRows hk).unit h ≠ (p.toRows hk).unit g at hne

@@ -20,7 +20,7 @@ namespace FlockSoundness.TmplValue
 
 open Flock Flock.Tmpl FlockSoundness.Audit
 
-variable {C : Audit.Circuit} {m : ℕ} {P : Partition C m} {u : Fin m} {t : Tmpl} {net : Net} {k : ℕ}
+variable {C : Verity.Boolean.Circuit} {m : ℕ} {P : Partition C m} {u : Fin m} {t : Tmpl} {net : Net} {k : ℕ}
 
 /-- A copy's constant column carries the transcript's value at the stack's constant. -/
 theorem copyVal_const (h : Flock.Tmpl.unroll t = .ok net) (I : P.IsRowsUnit u ((Rows.ofNet (unroll_built h)).stack k))

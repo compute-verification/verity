@@ -27,7 +27,7 @@ open Game Model Accounting Audit ZkSession
 
 /-- **A game gate as a gate of the Boolean profile**: an input, `And_v1`, `Xor_v1` and `Not_v1` of the same wires; a row
 has none. -/
-def ofOp {N : ℕ} : Op N → Option _root_.Claims.Sampling.BGate
+def ofOp {N : ℕ} : Verity.Boolean.Op N → Option _root_.Claims.Sampling.BGate
   | .input => some .input
   | .and a b => some (.and [a.val, b.val])
   | .xor a b => some (.xor [a.val, b.val])
@@ -36,52 +36,52 @@ def ofOp {N : ℕ} : Op N → Option _root_.Claims.Sampling.BGate
 
 /-- **The program `p` is the circuit `C`, gate by gate**: its gates are `C`'s (`ofOp`), and every gate it returns is one
 of `C`'s outputs. -/
-def GatesAgree (C : Circuit) (p : _root_.Claims.Sampling.Prog) : Prop :=
+def GatesAgree (C : Verity.Boolean.Circuit) (p : _root_.Claims.Sampling.Prog) : Prop :=
   p.gates.length = C.N ∧ (∀ g : Fin C.N, p.gates[g.val]? = ofOp (C.op g)) ∧
     ∀ o ∈ p.outs, ∃ h : o < C.N, (⟨o, h⟩ : Fin C.N) ∈ C.outputs
 
 /-- **The one-stage partition `Q` is `P`**: one slot per unit, slot `u` one proof unit holding the gates of unit `u`. -/
-def UnitsAgree {C : Circuit} {n : ℕ} (P : Partition C n) (Q : _root_.Claims.Sampling.Partition) : Prop :=
+def UnitsAgree {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) (Q : _root_.Claims.Sampling.Partition) : Prop :=
   Q.rus.length = n ∧ ∀ u : Fin n, ∃ l : List ℕ, Q.rus[u.val]? = some [l] ∧
     ∀ g, g ∈ l ↔ ∃ h : g < C.N, P.unit ⟨g, h⟩ = some u
 
 /-- **The openings `val` carry the transcript `Xt`** on every committed wire of `P`. -/
-def OpensOn {C : Circuit} {n : ℕ} (P : Partition C n) (val : ℕ → Option Bool) (Xt : Fin C.N → Bool) : Prop :=
+def OpensOn {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) (val : ℕ → Option Bool) (Xt : Fin C.N → Bool) : Prop :=
   ∀ g ∈ P.committed, val g.val = some (Xt g)
 
-theorem ofOp_ne_const {N : ℕ} (o : Op N) (b : Bool) : ofOp o ≠ some (.const b) := by
+theorem ofOp_ne_const {N : ℕ} (o : Verity.Boolean.Op N) (b : Bool) : ofOp o ≠ some (.const b) := by
   cases o <;> simp [ofOp]
 
-theorem ofOp_reads {N : ℕ} {o : Op N} {x : _root_.Claims.Sampling.BGate} (h : ofOp o = some x) :
+theorem ofOp_reads {N : ℕ} {o : Verity.Boolean.Op N} {x : _root_.Claims.Sampling.BGate} (h : ofOp o = some x) :
     x.reads = o.args.map Fin.val := by
   cases o <;> simp only [ofOp, Option.some.injEq, reduceCtorEq] at h <;> subst h <;>
-    simp [_root_.Claims.Sampling.BGate.reads, Op.args]
+    simp [_root_.Claims.Sampling.BGate.reads, Verity.Boolean.Op.args]
 
-theorem isInput_of_ofOp {N : ℕ} {o : Op N} (h : ofOp o = some .input) : o.isInput = true := by
-  cases o <;> simp_all [ofOp, Op.isInput]
+theorem isInput_of_ofOp {N : ℕ} {o : Verity.Boolean.Op N} (h : ofOp o = some .input) : o.isInput = true := by
+  cases o <;> simp_all [ofOp, Verity.Boolean.Op.isInput]
 
-theorem ofOp_val {N : ℕ} {o : Op N} {x : _root_.Claims.Sampling.BGate} (h : ofOp o = some x)
+theorem ofOp_val {N : ℕ} {o : Verity.Boolean.Op N} {x : _root_.Claims.Sampling.BGate} (h : ofOp o = some x)
     (hi : o.isInput = false) {rd : ℕ → Option Bool} {v : Fin N → Bool} (own : Option Bool)
     (hrd : ∀ a ∈ o.args, rd a.val = some (v a)) : x.val rd own = some (o.apply v) := by
   cases o with
-  | input => simp [Op.isInput] at hi
+  | input => simp [Verity.Boolean.Op.isInput] at hi
   | and a b =>
     simp only [ofOp, Option.some.injEq] at h
     subst h
-    simp [_root_.Claims.Sampling.BGate.val, hrd a (by simp [Op.args]), hrd b (by simp [Op.args]), Op.apply]
+    simp [_root_.Claims.Sampling.BGate.val, hrd a (by simp [Verity.Boolean.Op.args]), hrd b (by simp [Verity.Boolean.Op.args]), Verity.Boolean.Op.apply]
   | xor a b =>
     simp only [ofOp, Option.some.injEq] at h
     subst h
-    simp [_root_.Claims.Sampling.BGate.val, hrd a (by simp [Op.args]), hrd b (by simp [Op.args]), Op.apply]
+    simp [_root_.Claims.Sampling.BGate.val, hrd a (by simp [Verity.Boolean.Op.args]), hrd b (by simp [Verity.Boolean.Op.args]), Verity.Boolean.Op.apply]
   | not a =>
     simp only [ofOp, Option.some.injEq] at h
     subst h
-    simp [_root_.Claims.Sampling.BGate.val, hrd a (by simp [Op.args]), Op.apply]
+    simp [_root_.Claims.Sampling.BGate.val, hrd a (by simp [Verity.Boolean.Op.args]), Verity.Boolean.Op.apply]
   | row a b => simp [ofOp] at h
 
 section Units
 
-variable {C : Circuit} {n : ℕ} {P : Partition C n} {p : _root_.Claims.Sampling.Prog}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {p : _root_.Claims.Sampling.Prog}
 
 theorem read_eq_of_agree (hG : GatesAgree C p) (ref : ℕ → Option Bool) (a : Fin C.N) : p.read ref a.val = ref a.val :=
   _root_.Claims.Sampling.Boundary.read_eq p fun b h => ofOp_ne_const _ b ((hG.2.1 a).symm.trans h)
@@ -185,7 +185,7 @@ end Units
 section Reg
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
-variable (A : Arith F K) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
+variable (A : Arith F K) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
   {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}

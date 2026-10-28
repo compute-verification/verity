@@ -24,14 +24,14 @@ open Flock FlockLevel3 Audit Placed
 
 /-- **A unit cut out as a rows unit reads only its own gates and input gates**, when every column of it that is no
 computed column is on an input gate. -/
-theorem readsOwn_of_rows {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {R : Fin n → Rows}
+theorem readsOwn_of_rows {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {R : Fin n → Rows}
     (I : ∀ u, P.IsRowsUnit u (R u))
     (hread : ∀ u (y : Fin (R u).w), (∀ i, y ≠ (R u).comp i) → P.unit ((I u).wire y) = none) (u : Fin n) :
     P.ReadsOwn u := by
   intro h x hh hx
   obtain ⟨i, rfl⟩ := (I u).onto h hh
   rw [(I u).op i] at hx
-  simp only [Audit.Op.args, List.mem_append, List.mem_map] at hx
+  simp only [Verity.Boolean.Op.args, List.mem_append, List.mem_map] at hx
   obtain ⟨y, rfl⟩ : ∃ y, (I u).wire y = x := by
     rcases hx with ⟨y, -, e⟩ | ⟨y, -, e⟩ <;> exact ⟨y, e⟩
   by_cases hcomp : ∃ j, y = (R u).comp j

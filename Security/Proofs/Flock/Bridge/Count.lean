@@ -22,7 +22,7 @@ namespace Flock.Bridge
 
 open FlockSoundness.Audit
 
-variable {C : FlockSoundness.Audit.Circuit} {n : ℕ} {κ : Fin C.N → Option Bool}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {κ : Fin C.N → Option Bool}
 
 theorem designOf_rules (kd : ℕ) :
     (designOf kd).rules = [⟨.subset kd, none⟩, ⟨.bernoulli 0 1, none⟩] := rfl
@@ -107,9 +107,9 @@ theorem mem_gates_partOf (P : FlockSoundness.Audit.Partition C n) {i : ℕ} (hi 
   | none =>
     have hin : C.op g = .input := by
       have h := (P.input_iff g).1 hu
-      cases hop : C.op g <;> simp_all [FlockSoundness.Audit.Op.isInput]
+      cases hop : C.op g <;> simp_all [Verity.Boolean.Op.isInput]
     have hj0 : j = 0 := by rw [hin] at hj; simpa [gateSize] using hj
-    have hg : g ∈ inputsOf C := by simp [inputsOf, hin, FlockSoundness.Audit.Op.isInput]
+    have hg : g ∈ inputsOf C := by simp [inputsOf, hin, Verity.Boolean.Op.isInput]
     have hpos : off C g.val + j = posOf C g := by rw [posOf_eq, hin, hj0]; simp [gateSize]
     rw [hpos]
     exact List.mem_flatten.2 ⟨[posOf C g], List.mem_flatten.2 ⟨[[posOf C g]],

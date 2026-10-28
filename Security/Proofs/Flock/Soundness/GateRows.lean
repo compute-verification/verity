@@ -18,6 +18,7 @@ evaluates natively. `psum z m n` is the parity of `z` over the bits of `m` below
 namespace FlockSoundness.GateRows
 
 open Audit
+open Verity.Boolean (xorSum)
 
 /-! ## Parity over the bits of a mask -/
 

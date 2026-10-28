@@ -264,7 +264,7 @@ carry (`copyPos_blockHP`, `Aliased.copyPos_of_key`). -/
 theorem aliased_of_keyP (hp : HmIn.parse st.c = .ok pi) (C : CheckFacts st.c) (hR : UnitRowsFlatP st pi)
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     {ri : Array Region} (hRi : HmIn.regions st.c pi st.pub = .ok ri) (hri : ∀ r ∈ ri.toList, r ∈ st.regions.toList)
-    {Cc : Audit.Circuit} {n : ℕ} {P : Audit.Partition Cc n} {u : Fin n}
+    {Cc : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition Cc n} {u : Fin n}
     (inst : P.IsRowsUnit u ((unitRows st L.unit_built).stack st.c.upv)) {g : ℕ} (hg : g < st.c.g)
     (hk : ∀ c c', inst.wire c = inst.wire c' → c.val < ((unitRows st L.unit_built).stack st.c.upv).nIn →
       c'.val < ((unitRows st L.unit_built).stack st.c.upv).nIn → srcKeyP st.c pi c.val = srcKeyP st.c pi c'.val)

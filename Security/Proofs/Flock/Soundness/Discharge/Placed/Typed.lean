@@ -26,12 +26,12 @@ open Model Audit Types.Dag Compose
 /-! ## `ProgPlaces` from places -/
 
 /-- An instance of equal rows. -/
-def castInst {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R₁ R₂ : Rows} (e : R₁ = R₂)
+def castInst {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R₁ R₂ : Rows} (e : R₁ = R₂)
     (i : P.IsRowsUnit u R₁) : P.IsRowsUnit u R₂ :=
   e ▸ i
 
 /-- Aliasing moves along equal rows. -/
-theorem aliased_cast {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {St : Model.BlockR1CS}
+theorem aliased_cast {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {St : Model.BlockR1CS}
     {R₁ R₂ : Rows} (e : R₁ = R₂) (inst : P.IsRowsUnit u R₂) (a : RowsAt St R₂) (h : a.Aliased inst.wire) :
     (a.cast e.symm).Aliased (castInst e.symm inst).wire := by
   subst e; exact h

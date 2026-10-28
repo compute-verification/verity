@@ -33,25 +33,25 @@ open Claims.Sampling
 /-! ## A game circuit as core's -/
 
 /-- A game gate as the Boolean profile's: the same gate. -/
-def coreOp {N : ℕ} : FlockSoundness.Audit.Op N → FlockSoundness.Audit.Op N
+def coreOp {N : ℕ} : Verity.Boolean.Op N → Verity.Boolean.Op N
   | .input => .input
   | .and a b => .and a b
   | .xor a b => .xor a b
   | .not a => .not a
   | .row a b => .row a b
 
-theorem args_coreOp {N : ℕ} (o : FlockSoundness.Audit.Op N) : (coreOp o).args = o.args := by
+theorem args_coreOp {N : ℕ} (o : Verity.Boolean.Op N) : (coreOp o).args = o.args := by
   cases o <;> rfl
 
-theorem isInput_coreOp {N : ℕ} (o : FlockSoundness.Audit.Op N) : (coreOp o).isInput = o.isInput := by
+theorem isInput_coreOp {N : ℕ} (o : Verity.Boolean.Op N) : (coreOp o).isInput = o.isInput := by
   cases o <;> rfl
 
-theorem apply_coreOp {N : ℕ} (o : FlockSoundness.Audit.Op N) (v : Fin N → Bool) :
+theorem apply_coreOp {N : ℕ} (o : Verity.Boolean.Op N) (v : Fin N → Bool) :
     (coreOp o).apply v = o.apply v := by
   cases o <;> rfl
 
 /-- A game circuit as a Boolean circuit: the same gates and outputs. -/
-def coreBool (C : FlockSoundness.Audit.Circuit) : FlockSoundness.Audit.Circuit where
+def coreBool (C : Verity.Boolean.Circuit) : Verity.Boolean.Circuit where
   N := C.N
   op g := coreOp (C.op g)
   topo g a ha := C.topo g a (by rwa [args_coreOp] at ha)
@@ -65,21 +65,21 @@ open Flock.Bridge (coreOp coreBool args_coreOp isInput_coreOp apply_coreOp)
 
 /-- **A game circuit as core's**: its Boolean circuit (`Circuit.ofAudit_eq_toCircuit`), one bit a gate, written out so
 that its gates are the game circuit's. -/
-abbrev Circuit.ofAudit (C : FlockSoundness.Audit.Circuit) : Circuit where
+abbrev Circuit.ofAudit (C : Verity.Boolean.Circuit) : Circuit where
   N := C.N
   w _ := 1
   isInput g := (coreOp (C.op g)).isInput
   reads g := (coreOp (C.op g)).args.toFinset
   reads_lt g a ha := C.topo g a (by rwa [List.mem_toFinset, args_coreOp] at ha)
-  input_reads g h := by simp [FlockSoundness.Audit.Op.args_of_isInput h]
+  input_reads g h := by simp [Verity.Boolean.Op.args_of_isInput h]
   op g v := BitVec.ofBool ((coreOp (C.op g)).apply fun a => (v a).getLsbD 0)
   op_congr g v v' h := by
-    rw [FlockSoundness.Audit.Op.apply_congr (coreOp (C.op g)) fun x hx => by rw [h x (List.mem_toFinset.2 hx)]]
+    rw [Verity.Boolean.Op.apply_congr (coreOp (C.op g)) fun x hx => by rw [h x (List.mem_toFinset.2 hx)]]
   outputs := C.outputs
 
 section OfAudit
 
-variable {C : FlockSoundness.Audit.Circuit}
+variable {C : Verity.Boolean.Circuit}
 
 /-- `Circuit.ofAudit` is the Boolean profile's circuit of the game circuit. -/
 theorem Circuit.ofAudit_eq_toCircuit : Circuit.ofAudit C = (coreBool C).toCircuit := rfl
@@ -120,7 +120,7 @@ theorem Partition.localEval_ofAudit (xs : Fin C.N → Bool) (u : Fin n) (g : Fin
   · rw [(Partition.ofAudit P).localEval_of_mem (Circuit.ofBits xs)
       (show (Partition.ofAudit P).unit g = some u from hu), Circuit.ofAudit_op, P.localEval_of_mem xs hu]
     congr 1
-    exact FlockSoundness.Audit.Op.apply_congr _ fun a ha => by simp [ih a (C.topo g a ha)]
+    exact Verity.Boolean.Op.apply_congr _ fun a ha => by simp [ih a (C.topo g a ha)]
   · rw [(Partition.ofAudit P).localEval_of_not_mem (Circuit.ofBits xs)
       (show (Partition.ofAudit P).unit g ≠ some u from hu), P.localEval_of_not_mem xs hu]
     rfl
@@ -152,13 +152,13 @@ open Claims.Sampling
 
 /-- **The wire values a witness opens**: an input the constants `κ` fix, its constant; every other wire, the value
 opened at its position (`posOf`), `false` where none is. -/
-def openedOf (C : FlockSoundness.Audit.Circuit) (κ : Fin C.N → Option Bool) (val : ℕ → Option Bool) (g : Fin C.N) :
+def openedOf (C : Verity.Boolean.Circuit) (κ : Fin C.N → Option Bool) (val : ℕ → Option Bool) (g : Fin C.N) :
     Bool :=
   if (C.op g).isInput then (κ g).getD ((val (posOf C g)).getD false) else (val (posOf C g)).getD false
 
 section Opened
 
-variable {C : FlockSoundness.Audit.Circuit}
+variable {C : Verity.Boolean.Circuit}
 
 theorem openedOf_of_not_const {κ : Fin C.N → Option Bool} (val : ℕ → Option Bool) {a : Fin C.N}
     (hc : ∀ b, (progOf C κ).gates[posOf C a]? ≠ some (.const b)) :
@@ -173,33 +173,33 @@ theorem openedOf_of_not_const {κ : Fin C.N → Option Bool} (val : ℕ → Opti
 theorem openedOf_const {κ : Fin C.N → Option Bool} (val : ℕ → Option Bool) {a : Fin C.N} {b : Bool}
     (hin : C.op a = .input) (hk : κ a = some b) :
     openedOf C κ val a = b := by
-  simp [openedOf, hin, hk, FlockSoundness.Audit.Op.isInput]
+  simp [openedOf, hin, hk, Verity.Boolean.Op.isInput]
 
 /-- A gate's lowered gates read the positions of its arguments: some lowered gate reads each. -/
 theorem exists_lower_reads {κ : Fin C.N → Option Bool} {g h : Fin C.N} (hg : g ∈ (C.op h).args) :
     ∃ j < gateSize (C.op h), ∃ x, (lower C κ h)[j]? = some x ∧ posOf C g ∈ x.reads := by
   unfold lower
   cases hop : C.op h with
-  | input => rw [hop] at hg; simp [FlockSoundness.Audit.Op.args] at hg
+  | input => rw [hop] at hg; simp [Verity.Boolean.Op.args] at hg
   | and a b =>
     rw [hop] at hg
     refine ⟨0, by simp [gateSize], .and [posOf C a, posOf C b], by simp, ?_⟩
-    simp only [FlockSoundness.Audit.Op.args, List.mem_cons, List.not_mem_nil, or_false] at hg
+    simp only [Verity.Boolean.Op.args, List.mem_cons, List.not_mem_nil, or_false] at hg
     rcases hg with rfl | rfl <;> simp [BGate.reads]
   | xor a b =>
     rw [hop] at hg
     refine ⟨0, by simp [gateSize], .xor [posOf C a, posOf C b], by simp, ?_⟩
-    simp only [FlockSoundness.Audit.Op.args, List.mem_cons, List.not_mem_nil, or_false] at hg
+    simp only [Verity.Boolean.Op.args, List.mem_cons, List.not_mem_nil, or_false] at hg
     rcases hg with rfl | rfl <;> simp [BGate.reads]
   | not a =>
     rw [hop] at hg
     refine ⟨0, by simp [gateSize], .not (posOf C a), by simp, ?_⟩
-    simp only [FlockSoundness.Audit.Op.args, List.mem_cons, List.not_mem_nil, or_false] at hg
+    simp only [Verity.Boolean.Op.args, List.mem_cons, List.not_mem_nil, or_false] at hg
     subst hg
     simp [BGate.reads]
   | row a b =>
     rw [hop] at hg
-    simp only [FlockSoundness.Audit.Op.args, List.mem_append] at hg
+    simp only [Verity.Boolean.Op.args, List.mem_append] at hg
     rcases hg with hg | hg
     · exact ⟨0, by simp [gateSize], .xor (a.map (posOf C)), by simp, List.mem_map.2 ⟨g, hg, rfl⟩⟩
     · exact ⟨1, by simp [gateSize], .xor (b.map (posOf C)), by simp, List.mem_map.2 ⟨g, hg, rfl⟩⟩
@@ -319,7 +319,7 @@ end Opened
 
 /-- The key program's circuit at the descriptor `D`, its unit's rows `hU` and the population `n`. -/
 noncomputable abbrev keyCircuit (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ) :
-    FlockSoundness.Audit.Circuit :=
+    Verity.Boolean.Circuit :=
   (FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).circuit (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)
 
 /-- The key program's partition into its `n` units. -/

@@ -121,7 +121,7 @@ joint inequality `jointZC_ksBound` discharges for `k ≥ 1` accepted reruns, is 
 state term `⨆_j ofReal (ksBoundAccZ_j / (1 − rateZ_j))` at `zcStrat τ`: a drawn unit's `ks` is that term at its own
 table. -/
 theorem _root_.Pouw.Window.flockKnowledgeSound_analysisZC (A : Arith F K) (hA : A.Correct) (Hs : Hashes F D Sl)
-    {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
+    {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
     (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length) {L : Law n}
     (decode : DecoderZK (C := C) planZ tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → (Fin C.N → Bool)) {k : ℕ} (hk : 1 ≤ k)

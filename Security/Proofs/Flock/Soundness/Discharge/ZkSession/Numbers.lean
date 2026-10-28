@@ -174,7 +174,7 @@ theorem TabZK.bound_le_m1 (hF : Fintype.card F = 2 ^ 128) (T : TabZK F mPts) (hT
 
 section Audit
 
-variable (A : Arith F K) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
+variable (A : Arith F K) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 

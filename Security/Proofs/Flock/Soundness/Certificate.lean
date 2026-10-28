@@ -29,6 +29,7 @@ Boolean semantics is stated there.
 namespace FlockSoundness
 
 open Audit
+open Verity.Boolean (xorSum xorSum_congr)
 
 namespace GateRows
 
@@ -185,7 +186,7 @@ end RowsCert
 
 namespace Audit.Partition.IsRowsUnit
 
-variable {C : Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {R : Rows} (I : P.IsRowsUnit u R)
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {R : Rows} (I : P.IsRowsUnit u R)
 
 theorem one_ne_comp (i : Fin R.nComp) : R.one ≠ R.comp i := fun h => by
   have := congrArg Fin.val h
@@ -212,7 +213,7 @@ theorem computes_of_cert {G : Circ} {L : Lay} (cert : RowsCert R G L) (D : (ℕ 
     intro j
     show P.localEval X u (I.wire (R.comp j)) = _
     rw [P.localEval_of_mem X (I.mem j), I.op j]
-    simp only [Op.apply, xorSum_map, Function.comp_def, hzR]
+    simp only [Verity.Boolean.Op.apply, xorSum_map, Function.comp_def, hzR]
   have h1' : zR R.one = true := by
     show P.localEval X u (I.wire R.one) = true
     rw [P.localEval_of_not_mem X (I.outside R.one (one_ne_comp)), h1]

@@ -160,7 +160,7 @@ def IsZeroPos (q : Fin (2 ^ (L.model regs).kLog)) : Prop :=
 /-- **An instance wires template instance `g`'s stacked unit inputs as Δ copies them**: inputs it puts on one gate copy
 one position, or each copies a forced-zero row. A relation between the instance and the statement, which the program's
 construction supplies. -/
-def Copies {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
+def Copies {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
     (inst : P.IsRowsUnit u ((unitRows st L.unit_built).stack st.c.upv)) {g : ℕ} (hg : g < st.c.g) : Prop :=
   ∀ c c', inst.wire c = inst.wire c' → c.val < ((unitRows st L.unit_built).stack st.c.upv).nIn →
     c'.val < ((unitRows st L.unit_built).stack st.c.upv).nIn →
@@ -169,7 +169,7 @@ def Copies {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
 
 /-- **The unit's inputs on one gate carry one value** (`Layout.Aliased`), at template instance `g`'s stacked unit slots
 in every block, for an instance that wires them as Δ copies them (`Copies`). -/
-theorem aliased_of_copies {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
+theorem aliased_of_copies {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
     (inst : P.IsRowsUnit u ((unitRows st L.unit_built).stack st.c.upv)) {g : ℕ} (hg : g < st.c.g)
     (hcp : Copies L regs F inst hg) (o : Fin (2 ^ (L.model regs).nbl)) : L.Aliased regs inst o hg := by
   intro c c' hw hc hc' z hz
@@ -220,7 +220,7 @@ theorem setupH_unitFacts (ht : tags.typed = false)
 that wires template instance `g`'s stacked unit inputs as Δ copies them (`Copies`). -/
 theorem setupH_aliased (ht : tags.typed = false)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
-    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Audit.Circuit} {n : ℕ}
+    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Verity.Boolean.Circuit} {n : ℕ}
     {P : Audit.Partition C n} {u : Fin n}
     (inst : P.IsRowsUnit u ((unitRows st (setupH_layout ht h).unit_built).stack st.c.upv))
     (o : Fin (2 ^ ((setupH_layout ht h).model regs).nbl)) {g : ℕ} (hg : g < st.c.g)
@@ -232,7 +232,7 @@ theorem setupH_aliased (ht : tags.typed = false)
 instance `g`'s stacked unit slots in block `o`, for an instance that wires their inputs as Δ copies them. -/
 noncomputable def setupH_unitPlace (ht : tags.typed = false)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
-    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Audit.Circuit} {n : ℕ}
+    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Verity.Boolean.Circuit} {n : ℕ}
     {P : Audit.Partition C n} {u : Fin n}
     (inst : P.IsRowsUnit u ((unitRows st (setupH_layout ht h).unit_built).stack st.c.upv))
     (o : Fin (2 ^ ((setupH_layout ht h).model regs).nbl)) {g : ℕ} (hg : g < st.c.g)

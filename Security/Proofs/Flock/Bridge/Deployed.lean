@@ -58,7 +58,7 @@ structure RowAt where
 
 section Layout
 
-variable (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt)
+variable (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt)
 
 /-- The wire at claims position `i`. -/
 def wireOf (i : ℕ) : Option (Fin C.N) := (List.finRange C.N).find? fun g => decide (posOf C g = i)
@@ -133,13 +133,13 @@ def rowMsg (p : Flock.Port) (b : List Bool) : Msg :=
   else (Flock.HmRow.rowPrefix (b.length / 16)).data.toList ++ Flock.HmRow.packBits b
 
 /-- The port of the row at claims position `i`. -/
-def portOfPos (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (i : ℕ) :
+def portOfPos (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (i : ℕ) :
     Option Flock.Port :=
   (rowOfPos C rows i).bind fun r => c.ports[r.port]?
 
 /-- **An opening's row message**: its row bits in its row's port's format (`rowMsg`); `sha512/row/v2`'s at a position
 no port's row holds, which opens nothing (`atOf`). -/
-def rowDep (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
+def rowDep (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (place : ℕ → (w : ℕ) × Fin w) (bits : Msg → ℕ → Bool) (o : Opening Bool) : Msg :=
   match portOfPos C rows c o.pos with
   | some p => rowMsg p (SamplingDeploy.rowBits place bits o)
@@ -157,7 +157,7 @@ def rootsOf (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) : List Msg :=
 
 /-- **The deployed trace commitment at a session's rows**: `SamplingDeploy.commit`'s form, at the layout above, each
 row in its port's format (`rowDep`). -/
-noncomputable def commitDep (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
+noncomputable def commitDep (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (nl : ℕ) (roots : List Msg) : Commitment Bool :=
   pathCommit (atOf C rows) (hm96Leaf (rowDep C rows c (placeOf C rows) (bitsOf (Flock.log2ceil nl))) saltOf)
     (pathOf (Flock.log2ceil nl)) (regPath (portsOf c nl roots)) fun _ _ _ => []
@@ -175,7 +175,7 @@ theorem rowMsg_inj {p : Flock.Port} (hp : p.segs.isSome = false) {b b' : List Bo
     exact FlockLevel3.RowV2.packBits_inj hl (List.append_cancel_left h)
 
 /-- **`rowDep` places the value** at a circuit file with no segmented port. -/
-theorem rowDep_places (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
+theorem rowDep_places (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (hseg : c.ports.all (fun p => !p.segs.isSome) = true) (place : ℕ → (w : ℕ) × Fin w) (bits : Msg → ℕ → Bool) :
     RowPlaces (rowDep C rows c place bits) := by
   rintro ⟨i, v, d⟩ ⟨i', v', d'⟩ hi hv h
@@ -199,14 +199,14 @@ theorem rowDep_places (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Opt
 
 /-- **`commitDep` binds, at every `H`**, at a circuit file with no segmented port: the hm96 leaf of a placing row binds
 the value, and the registered path check the leaf. -/
-theorem commitDep_binds (H : Msg → Msg) (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt)
+theorem commitDep_binds (H : Msg → Msg) (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt)
     (c : Flock.Circuit) (hseg : c.ports.all (fun p => !p.segs.isSome) = true) (nl : ℕ) (roots : List Msg) :
     (commitDep C rows c nl roots).Binds H :=
   pathCommit_binds (hm96Leaf_binds H (rowDep_places C rows c hseg _ _) _) (regPath_binds H _)
 
 /-- **A sampled verifier's code whose commitment is `commitDep`'s layout**: at a circuit file whose ports are all
 unsegmented row/v2 rows (`RowsV2`), the rows `SamplingDeploy.commit` hashes. -/
-def LayoutIs (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (nl : ℕ)
+def LayoutIs (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (nl : ℕ)
     (roots : List Msg) (cd : SamplingDeploy.Code) : Prop :=
   RowsV2 c ∧ cd.at_ = atOf C rows ∧ cd.place = placeOf C rows ∧ cd.bits = bitsOf (Flock.log2ceil nl) ∧
     cd.salt = saltOf ∧ cd.π = pathOf (Flock.log2ceil nl) ∧ cd.own = portsOf c nl roots
@@ -214,7 +214,7 @@ def LayoutIs (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt
 open Classical in
 /-- **The evaluation's values as claims openings**: at each wire, its value in `C`'s evaluation on `xv`'s inputs, with
 data its position passes `Cm` under `roots` at, where some does. -/
-noncomputable def witDep (C : FlockSoundness.Audit.Circuit) (Cm : Commitment Bool) (H : Msg → Msg) (roots : List Msg)
+noncomputable def witDep (C : Verity.Boolean.Circuit) (Cm : Commitment Bool) (H : Msg → Msg) (roots : List Msg)
     (xv : Fin C.N → Bool) : Wit :=
   ⟨(List.finRange C.N).map fun g =>
     if h : ∃ d : Msg, Cm.Opens H roots ⟨posOf C g, C.eval xv g, d⟩ = true then

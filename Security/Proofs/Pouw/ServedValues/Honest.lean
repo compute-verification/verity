@@ -36,13 +36,13 @@ def in0 {N : ℕ} : Fin (N + 2) := ⟨0, by omega⟩
 def in1 {N : ℕ} : Fin (N + 2) := ⟨1, by omega⟩
 
 /-- Two input gates, then `N` AND gates of the two, every one an output. -/
-def andCircuit (N : ℕ) : FlockSoundness.Audit.Circuit where
+def andCircuit (N : ℕ) : Verity.Boolean.Circuit where
   N := N + 2
   op g := if g.val < 2 then .input else .and in0 in1
   topo g a h := by
     by_cases hg : g.val < 2
-    · simp [hg, FlockSoundness.Audit.Op.args] at h
-    · simp only [hg, if_false, FlockSoundness.Audit.Op.args, List.mem_cons, List.not_mem_nil, or_false] at h
+    · simp [hg, Verity.Boolean.Op.args] at h
+    · simp only [hg, if_false, Verity.Boolean.Op.args, List.mem_cons, List.not_mem_nil, or_false] at h
       rcases h with rfl | rfl
       · exact Fin.lt_def.mpr (show 0 < g.val by omega)
       · exact Fin.lt_def.mpr (show 1 < g.val by omega)

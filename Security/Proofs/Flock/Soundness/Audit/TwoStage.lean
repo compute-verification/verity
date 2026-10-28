@@ -291,7 +291,7 @@ theorem effEscape_bernoulli_prod {num den : ℕ} [NeZero den] (hnum : num ≤ de
 
 namespace Partition
 
-variable {C : Circuit} {Pf : Partition C nf} {Pc : Partition C nc}
+variable {C : Verity.Boolean.Circuit} {Pf : Partition C nf} {Pc : Partition C nc}
 
 /-- **Variant (a)**: the one-stage audit over the fine partition bounds coarse counts too. -/
 theorem two_stage_a_coarse (r : Refines Pf Pc) {L : Law nf} {Reg : Type}

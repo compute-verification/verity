@@ -397,7 +397,7 @@ open FlockSoundness FlockSoundness.Audit
 (`unit_recOpen`). Let the verifier build `net` from the layout of `VStar.recOpenUnit LANES H` (`netOf`), and let unit `u`
 be an instance of `k` stacked copies of the net's rows, the transcript `X` carrying 1 at the stack's constant. Then at
 copy `j`'s column values (`copyVal`), `laid_recOpenUnit` holds. -/
-theorem unit_recOpenUnit {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {net : Flock.Net} (hB : Built net)
+theorem unit_recOpenUnit {C : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {net : Flock.Net} (hB : Built net)
     {k : ℕ} (I : P.IsRowsUnit u ((Rows.ofNet hB).stack k)) (X : Fin C.N → Bool) {j : ℕ} (hj : j < k)
     (hone : X (I.wire ((Rows.ofNet hB).stack k).one) = true)
     (ms : MerkleScheme) (hms : ∀ l r, ms.node l r = Sha512.hash (l ++ r)) {LANES H : ℕ} {U : VStar.UnitC}

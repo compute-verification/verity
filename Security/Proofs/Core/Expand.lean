@@ -169,13 +169,13 @@ end Verity.SecurityProofs
 namespace Verity.Boolean.Circuit
 
 /-- C-Flock's circuits are Boolean in the draft's sense when no gate is an empty row. -/
-theorem toCircuit_boolean (B : Circuit) (h : ∀ g, B.op g ≠ .row [] []) : B.toCircuit.Boolean where
+theorem toCircuit_boolean (B : Verity.Boolean.Circuit) (h : ∀ g, B.op g ≠ .row [] []) : B.toCircuit.Boolean where
   one_bit _ := rfl
   fanin_pos g hg := by
     show ((B.op g).args.toFinset).Nonempty
     rw [List.toFinset_nonempty_iff]
     have hg' : (B.op g).isInput = false := hg
     have := h g
-    cases hop : B.op g <;> simp_all [Op.args, Op.isInput]
+    cases hop : B.op g <;> simp_all [Verity.Boolean.Op.args, Verity.Boolean.Op.isInput]
 
 end Verity.Boolean.Circuit

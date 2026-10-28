@@ -110,12 +110,12 @@ theorem UnitSpec.R_eq_of_reads {St : BlockR1CS} {s : UnitSpec} {c : TableClass S
   exact compose_congr (by rw [hw, hdn, hu]) _ _
 
 /-- A unit pair's spec. -/
-def UnitPair.toSpec {C CB : Audit.Circuit} {n : ℕ} {P : Partition C n} {PB : Partition CB n} {m : Fin CB.N → Fin C.N}
+def UnitPair.toSpec {C CB : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {PB : Partition CB n} {m : Fin CB.N → Fin C.N}
     {u : Fin n} (U : UnitPair P PB m u) : UnitSpec :=
   ⟨U.types, U.ls, U.info, U.words, U.idx, U.done, U.hd, U.t, U.ht, U.loOf, U.F, U.hF⟩
 
 /-- A unit pair's rows instance wires input column `c` to gate `f c`. -/
-def UnitPair.WireOn {C CB : Audit.Circuit} {n : ℕ} {P : Partition C n} {PB : Partition CB n} {m : Fin CB.N → Fin C.N}
+def UnitPair.WireOn {C CB : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {PB : Partition CB n} {m : Fin CB.N → Fin C.N}
     {u : Fin n} (U : UnitPair P PB m u) (f : ℕ → ℕ) : Prop :=
   ∀ c : Fin (Rows.compose (ofBlock U.words U.done (U.done.getD U.idx default)) U.ord).w, c.val < U.t.inBits →
     (U.rows.wire c).val = f c.val

@@ -217,7 +217,7 @@ theorem audits_seq {α β : Type} (g₁ : Game α) (g₂ : α → Game β) (E₁
 
 namespace Partition
 
-variable {C : Circuit} (P : Partition C n)
+variable {C : Verity.Boolean.Circuit} (P : Partition C n)
 
 /-- **The audit's analysis over a partition.** `X` is the committed transcript, a function of the
 prover's state at registration. `ext S R τ u` is what the extractor recovers for the drawn unit

@@ -25,12 +25,12 @@ namespace FlockSoundness.Discharge.Zero
 
 open Model Audit
 
-theorem castInst_wire {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R₁ R₂ : Rows} (e : R₁ = R₂)
+theorem castInst_wire {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R₁ R₂ : Rows} (e : R₁ = R₂)
     (i : P.IsRowsUnit u R₁) (c : Fin R₂.w) :
     (Placed.castInst e i).wire c = i.wire (Fin.cast (congrArg Rows.w e).symm c) := by
   subst e; rfl
 
-theorem castInst_one {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R₁ R₂ : Rows} (e : R₁ = R₂)
+theorem castInst_one {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R₁ R₂ : Rows} (e : R₁ = R₂)
     (i : P.IsRowsUnit u R₁) : (Placed.castInst e i).wire R₂.one = i.wire R₁.one := by
   subst e; rfl
 

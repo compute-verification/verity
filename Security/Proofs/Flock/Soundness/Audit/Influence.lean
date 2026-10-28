@@ -29,16 +29,9 @@ circuit's outputs, since commitments and leaves are outputs that the verifier se
   audit's error: the value bits and the location term together. `card_guess_le` is its counting step.
 -/
 
-namespace FlockSoundness.Audit
-
-open Game Finset
-open scoped ENNReal
-
-end FlockSoundness.Audit
-
 namespace Verity.Boolean.Circuit
 
-variable (C : Circuit)
+variable (C : Verity.Boolean.Circuit)
 
 /-- `g` feeds `t` along a path none of whose gates is in `K`, both ends included. -/
 inductive FeedsAvoiding (K : Finset (Fin C.N)) : Fin C.N → Fin C.N → Prop
@@ -69,7 +62,7 @@ theorem card_guess_le {M O : Type} [Fintype M] [DecidableEq M] [DecidableEq O] (
 
 namespace Partition
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n)
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
 
 /-- **A separator of the units `B` from the delivered wires `D`** (a downstream cut): every path from a gate of a unit
 of `B` to a wire of `D` meets `K`. -/
@@ -136,7 +129,7 @@ theorem separator_induction {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D : Fin
   have hB : ∀ u, P.unit g = some u → P.localEval X u g = P.localEval Y u g := by
     intro u hu
     rw [P.localEval_of_mem X hu, P.localEval_of_mem Y hu]
-    refine Op.apply_congr _ fun x hx => ?_
+    refine Verity.Boolean.Op.apply_congr _ fun x hx => ?_
     have hxg : x.val < m := hgm ▸ C.topo g x hx
     by_cases hxK : x ∈ K
     · by_cases hxu : P.unit x = some u

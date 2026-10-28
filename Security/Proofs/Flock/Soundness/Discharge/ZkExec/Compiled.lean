@@ -78,7 +78,7 @@ noncomputable def simAuditZC (hdec : DecodesZK (repZ A Hs T) (outZ Hs T) (accZ T
     (simAuditZK (repZ A Hs T) (outZ Hs T) (accZ T) I wr opn dg dec one fin capOf N
       (fun S R pts r => ZkLink.allInh_repZCAt A Hs (T S R) pts r) hdec τ)
 
-variable {C : Circuit} (P : Partition C n) (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planOne T S R).length)
+variable {C : Verity.Boolean.Circuit} (P : Partition C n) (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planOne T S R).length)
   {decode : DecoderZK (C := C) (planOne T) tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : ZkLink.ValueBindingZ A P (planOne T) tab decode Hc)
 

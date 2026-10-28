@@ -100,7 +100,7 @@ theorem name_recOpen (level L H n : ℕ) : (VStar.Stmt.recOpen level L H n).name
 /-- **`unit_check` at the pinned name**: a unit the verifier accepted (`RecOpen.check`) under the name of V*'s statement
 at `L` and `H` (`unitName L H`) computes, in a copy in a unit of any partition, the climb and the consistency term at that
 `L` and `H` (`params_of_check`). -/
-theorem unit_check_pinned {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {c : Flock.Circuit}
+theorem unit_check_pinned {C : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {c : Flock.Circuit}
     (hB : Built c.unit) {k : ℕ} (I : P.IsRowsUnit u ((Rows.ofNet hB).stack k)) (X : Fin C.N → Bool) {j : ℕ}
     (hj : j < k) (hone : X (I.wire ((Rows.ofNet hB).stack k).one) = true)
     (ms : Flock.MerkleScheme) (hms : ∀ l r, ms.node l r = Flock.Sha512.hash (l ++ r))

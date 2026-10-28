@@ -316,7 +316,7 @@ end Law
 
 namespace Partition
 
-variable {C : Circuit} {n m : ℕ} (P : Partition C n)
+variable {C : Verity.Boolean.Circuit} {n m : ℕ} (P : Partition C n)
 
 /-- **Exfiltration under the stratified law**: `audit_exfiltration` at the harm bound of a separated fill of the output
 bits `b_s` per unit of stratum `s`. A prover that picks its strategy from a uniform message and a receiver that sees only

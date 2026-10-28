@@ -102,30 +102,30 @@ theorem portsOfL_ident (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) (root
     portsOfL c (LeafMap.ident c pub nl) roots = portsOf c nl roots := rfl
 
 /-- The port index of the row at claims position `i` (`0` where none). -/
-def portIdxOf (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (i : ℕ) : ℕ :=
+def portIdxOf (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (i : ℕ) : ℕ :=
   ((rowOfPos C rows i).map (·.port)).getD 0
 
 /-- **An opening's path at a leaf map**: its position's port's levels, after the salt. -/
-def pathOfL (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (L : LeafMap) (o : Opening Bool) :
+def pathOfL (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (L : LeafMap) (o : Opening Bool) :
     Msg :=
   pathOf (Flock.log2ceil (L.cnt (portIdxOf C rows o.pos))) o
 
-theorem pathOfL_ident (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
+theorem pathOfL_ident (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (pub : Flock.Public) (nl : ℕ) : pathOfL C rows (LeafMap.ident c pub nl) = pathOf (Flock.log2ceil nl) := rfl
 
 /-- **The deployed trace commitment at a leaf map**: `commitDep` at `L`'s ports, each position's path at its port's
 levels, the row's bits after `L.d` levels, and each row in its port's format (`rowDep`). -/
-noncomputable def commitDepL (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
+noncomputable def commitDepL (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (L : LeafMap) (roots : List Msg) : Commitment Bool :=
   pathCommit (atOf C rows) (hm96Leaf (rowDep C rows c (placeOf C rows) (bitsOf L.d)) saltOf)
     (pathOfL C rows L) (regPath (portsOfL c L roots)) fun _ _ _ => []
 
-theorem commitDepL_ident (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
+theorem commitDepL_ident (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (pub : Flock.Public) (nl : ℕ) (roots : List Msg) :
     commitDepL C rows c (LeafMap.ident c pub nl) roots = commitDep C rows c nl roots := rfl
 
 /-- **`commitDepL` binds, at every `H`**, as `commitDep` does: at a circuit file with no segmented port. -/
-theorem commitDepL_binds (H : Msg → Msg) (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt)
+theorem commitDepL_binds (H : Msg → Msg) (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt)
     (c : Flock.Circuit) (hseg : c.ports.all (fun p => !p.segs.isSome) = true) (L : LeafMap) (roots : List Msg) :
     (commitDepL C rows c L roots).Binds H :=
   pathCommit_binds (hm96Leaf_binds H (rowDep_places C rows c hseg _ _) _) (regPath_binds H _)
@@ -140,7 +140,7 @@ theorem schemaOf_v2 {c : Flock.Circuit} (h : RowsV2 c) {q : ℕ} (hq : q < c.por
   simp [schemaOf, hq, Flock.Registered.portSchema, hpq.1, hpq.2]
 
 /-- **At a `RowsV2` file every row's message is its `sha512/row/v2` input** (`SamplingDeploy.row`). -/
-theorem rowDep_v2 (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) {c : Flock.Circuit}
+theorem rowDep_v2 (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) {c : Flock.Circuit}
     (h : RowsV2 c) (place : ℕ → (w : ℕ) × Fin w) (bits : Msg → ℕ → Bool) :
     rowDep C rows c place bits = SamplingDeploy.row place bits := by
   funext o
@@ -161,7 +161,7 @@ theorem leavesL_v2 {c : Flock.Circuit} (h : RowsV2 c) (L : LeafMap) {q : ℕ} (h
   simp only [leavesL, schemaOf_v2 h hq]
 
 /-- **At a `RowsV2` file `commitDepL` hashes every row as a `sha512/row/v2` row.** -/
-theorem commitDepL_v2 (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) {c : Flock.Circuit}
+theorem commitDepL_v2 (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) {c : Flock.Circuit}
     (h : RowsV2 c) (L : LeafMap) (roots : List Msg) :
     commitDepL C rows c L roots =
       pathCommit (atOf C rows) (hm96Leaf (SamplingDeploy.row (placeOf C rows) (bitsOf L.d)) saltOf)
@@ -170,12 +170,12 @@ theorem commitDepL_v2 (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Opt
   rw [rowDep_v2 C rows h]
 
 /-- **A sampled verifier's code whose commitment is `commitDepL`'s layout**: at a `RowsV2` file, as `LayoutIs`. -/
-def LayoutIsL (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (L : LeafMap)
+def LayoutIsL (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (L : LeafMap)
     (roots : List Msg) (cd : SamplingDeploy.Code) : Prop :=
   RowsV2 c ∧ cd.at_ = atOf C rows ∧ cd.place = placeOf C rows ∧ cd.bits = bitsOf L.d ∧ cd.salt = saltOf ∧
     cd.π = pathOfL C rows L ∧ cd.own = portsOfL c L roots
 
-theorem layoutIsL_ident (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
+theorem layoutIsL_ident (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (pub : Flock.Public) (nl : ℕ) (roots : List Msg) (cd : SamplingDeploy.Code) :
     LayoutIsL C rows c (LeafMap.ident c pub nl) roots cd ↔ LayoutIs C rows c nl roots cd := Iff.rfl
 

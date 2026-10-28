@@ -861,7 +861,7 @@ theorem placement (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g :
 /-- **The unit's inputs on one gate carry one value** at VU `g`'s stacked unit slots in block `o`, in every witness
 satisfying the accepted statement: the inputs that `inst` wires to one gate copy one source's position, or forced-zero
 rows (`UnitPlace.aliased`). -/
-def Aliased (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Audit.Circuit} {n : ℕ}
+def Aliased (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Verity.Boolean.Circuit} {n : ℕ}
     {P : Audit.Partition C n} {u : Fin n} (inst : P.IsRowsUnit u ((unitRows st L.unit_built).stack st.c.upv))
     (o : Fin (2 ^ (L.model regs).nbl)) {g : ℕ} (hg : g < st.c.g) : Prop :=
   ∀ c c', inst.wire c = inst.wire c' → c.val < ((unitRows st L.unit_built).stack st.c.upv).nIn →
@@ -872,7 +872,7 @@ def Aliased (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Audit
 /-- **A drawn unit's place in the accepted statement** (`UnitPlace`, which `loweringSoundB_of_place` and the
 `_placed` forms take): VU `g`'s stacked unit slots in block `o`, given the unit's instance in the audit circuit
 (`inst`, the circuit side), whose inputs on one gate carry one value there (`hal`). -/
-noncomputable def unitPlace (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Audit.Circuit} {n : ℕ}
+noncomputable def unitPlace (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Verity.Boolean.Circuit} {n : ℕ}
     {P : Audit.Partition C n} {u : Fin n} (inst : P.IsRowsUnit u ((unitRows st L.unit_built).stack st.c.upv))
     (o : Fin (2 ^ (L.model regs).nbl)) {g : ℕ} (hg : g < st.c.g) (hal : L.Aliased regs inst o hg) :
     UnitPlace P (L.model regs) u where

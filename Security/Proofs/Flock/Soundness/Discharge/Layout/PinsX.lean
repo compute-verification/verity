@@ -106,7 +106,7 @@ namespace Readers
 
 open Game Model Audit
 
-variable {C : Audit.Circuit} {n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   (rd : Readers C plan tab) {P : Audit.Partition C n}
   (place : ∀ S R u, u ∈ S → UnitPlace P (Partition.tabOf plan tab S R u).S u)

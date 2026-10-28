@@ -27,14 +27,14 @@ namespace FlockSoundness.Discharge.Layout
 
 open Game Model Audit Binding
 
-variable {C : Circuit} {n : ℕ} {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {Reg : Type} {mPts : ℕ}
 
 /-- **Fixed readers and the registration's values.** The commit strings (`Pos`), the commit string holding each wire
 (`pos`) and its bit there (`idx`); where a drawn unit's table's witness holds bit `k < rowBits q` of each commit string
 `q` (`rowAt`), its salt (`saltAt`) and, at a row (`isRow`), its `hm96` slot's 128 output bytes (`bcAt`); and what the
 registration holds: a row's `b ‖ c` (`regBc`), another commit string's value (`regVal`). All are fixed by the draw, the
 registration, the unit and the commit string, before any witness. -/
-structure Readers (C : Circuit) {n : ℕ} {Reg : Type} {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
+structure Readers (C : Verity.Boolean.Circuit) {n : ℕ} {Reg : Type} {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length) where
   Pos : Type
   [finPos : Fintype Pos]

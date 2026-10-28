@@ -20,7 +20,7 @@ The lemmas about them (composition, congruence, refinement) are in `Proofs.Flock
 
 namespace Verity.Boolean.Circuit
 
-variable (C : Circuit)
+variable (C : Verity.Boolean.Circuit)
 
 /-- The input unit: the committed inputs are the anchors' values. -/
 def InputsAgree (X a : Fin C.N → Bool) : Prop :=
@@ -37,13 +37,13 @@ namespace FlockSoundness.Audit
 
 /-- A partition of a circuit's computed gates into `n` units; the input gates are the input unit
 (`none`). -/
-structure Partition (C : Circuit) (n : ℕ) where
+structure Partition (C : Verity.Boolean.Circuit) (n : ℕ) where
   unit : Fin C.N → Option (Fin n)
   input_iff : ∀ g, unit g = none ↔ (C.op g).isInput = true
 
 namespace Partition
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n)
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
 
 open Classical in
 /-- The committed wires: inputs, outputs, and every gate that a gate of another unit reads. -/

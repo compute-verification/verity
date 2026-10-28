@@ -107,7 +107,7 @@ theorem popCount_slotPartition (l : SampledProofs.Slots.Layout) : popCount (slot
   | cons c cs => simp [popCount, slotPartition, popOf, List.length_flatten, Function.comp_def]
 
 /-- `partOf P`'s population has one slot per unit (the input class comes after it). -/
-theorem popCount_partOf_eq {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) :
+theorem popCount_partOf_eq {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) :
     popCount (partOf P) = n := by
   simp [popCount, partOf]
 
@@ -116,7 +116,7 @@ game's partition `partOf P` has population slots. -/
 theorem popCount_partOf {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : SampledProofs.Program}
     {l : SampledProofs.Slots.Layout} (h : PopMatches desc q n)
     (hp : SampledProofs.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : SampledProofs.Slots.layout p q = .ok l)
-    {C : FlockSoundness.Audit.Circuit} (P : FlockSoundness.Audit.Partition C n) :
+    {C : Verity.Boolean.Circuit} (P : FlockSoundness.Audit.Partition C n) :
     popCount (slotPartition l) = popCount (partOf P) := by
   rw [popCount_slotPartition, popOf_size h hp hl, popCount_partOf_eq]
 
@@ -127,7 +127,7 @@ theorem popCount_regMatches {c : SamplingDeploy.Code} {reg : Claims.Msg → Opti
     (hreg : SamplingDeploy.RegMatches c reg) {x : Claims.Msg} {s : Claims.Sampling.Stmt}
     {Pt : Claims.Sampling.Partition} (hx : c.parse x = some s) (hP : c.partition s = some Pt) {n : ℕ}
     (hpop : ∀ g, reg x = some g → PopMatches s.desc g.query n)
-    {C : FlockSoundness.Audit.Circuit} (P : FlockSoundness.Audit.Partition C n) :
+    {C : Verity.Boolean.Circuit} (P : FlockSoundness.Audit.Partition C n) :
     popCount Pt = popCount (partOf P) := by
   obtain ⟨g, l, hg, hd, hl, hPt, -⟩ := hreg x s Pt hx hP
   rw [hPt]

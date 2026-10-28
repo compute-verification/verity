@@ -52,7 +52,7 @@ theorem Xpub_of_not_mem {N : ℕ} {ones zeros : Finset (Fin N)} {vals : Fin N �
 
 namespace Partition.IsRowsUnit
 
-variable {C : Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {R : Rows} (I : P.IsRowsUnit u R)
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {R : Rows} (I : P.IsRowsUnit u R)
 
 /-- **Every committed wire of a rows unit is one of its columns**: a gate of the unit is a computed row's, and a gate its
 rows read is a column's. -/
@@ -64,14 +64,14 @@ theorem exists_wire_of_mem_io {g : Fin C.N} (hg : g ∈ P.io u) : ∃ c, I.wire 
     exact ⟨_, hi⟩
   · obtain ⟨i, rfl⟩ := I.onto h hh
     rw [I.op i] at hgh
-    simp only [Op.args, List.mem_append, List.mem_map] at hgh
+    simp only [Verity.Boolean.Op.args, List.mem_append, List.mem_map] at hgh
     rcases hgh with ⟨c, -, rfl⟩ | ⟨c, -, rfl⟩ <;> exact ⟨c, rfl⟩
 
 end Partition.IsRowsUnit
 
 namespace Partition
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)

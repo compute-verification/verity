@@ -31,6 +31,7 @@ columns, where every satisfying witness carries one value on the unit's inputs t
 namespace FlockSoundness
 
 open Audit Model
+open Verity.Boolean (xorSum xorSum_congr)
 
 namespace Rows
 
@@ -45,7 +46,7 @@ end Rows
 
 namespace Audit.Partition
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n)
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
 
 namespace IsRowsUnit
 
@@ -64,7 +65,7 @@ theorem mem_io_of_read {i : Fin R.nComp} {c : Fin R.w} (hc : c ∈ R.a i ++ R.b 
   classical
   have hread : I.wire c ∈ (C.op (I.wire (R.comp i))).args := by
     rw [I.op i]
-    simp only [Op.args, List.mem_append, List.mem_map]
+    simp only [Verity.Boolean.Op.args, List.mem_append, List.mem_map]
     rcases List.mem_append.1 hc with h | h
     · exact Or.inl ⟨c, h, rfl⟩
     · exact Or.inr ⟨c, h, rfl⟩
@@ -98,7 +99,7 @@ theorem correct {z : Fin R.w → Bool} (hz : R.Sat z) {X : Fin C.N → Bool}
         rw [P.localEval_of_not_mem X hout]
         exact hX c (I.mem_io_of_read hc hout)
     rw [P.localEval_of_mem X (I.mem i), I.op i, hz i]
-    simp only [Op.apply, xorSum_map]
+    simp only [Verity.Boolean.Op.apply, xorSum_map]
     congr 1
     · exact xorSum_congr fun c hc => hcol c (List.mem_append_left _ hc)
     · exact xorSum_congr fun c hc => hcol c (List.mem_append_right _ hc)
@@ -181,7 +182,7 @@ theorem BlockRows.one_eq {S : BlockR1CS} {R : Rows} {col : Fin R.w → Fin (2 ^ 
 /-- **The compiled lowering, for every template.** If a witness satisfies a statement in which unit
 `u`'s rows are placed in block `o` at the columns `col`, and the unit's inputs on one gate carry one
 value there, the transcript decoded from that block makes `u` correct. -/
-theorem lowering_sound {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R : Rows}
+theorem lowering_sound {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R : Rows}
     (I : P.IsRowsUnit u R) {S : BlockR1CS} {col : Fin R.w → Fin (2 ^ S.kLog)}
     (hpl : BlockRows S R col) (o : Fin (2 ^ S.nbl)) {z : WitnessBits S.m} (hz : S.Satisfies z)
     (ha : I.Agree fun c => bit (S.block z o (col c))) :
@@ -190,7 +191,7 @@ theorem lowering_sound {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fi
 
 namespace UnitPlace
 
-variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {S : BlockR1CS} {u : Fin n}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {S : BlockR1CS} {u : Fin n}
 
 theorem agree (pl : UnitPlace P S u) {z : WitnessBits S.m} (hz : S.Satisfies z) :
     pl.inst.Agree fun c => bit (S.block z pl.o (pl.col c)) :=

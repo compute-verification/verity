@@ -24,7 +24,7 @@ namespace FlockSoundness.Discharge.Layout
 
 open Game Model Audit Binding
 
-variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n}
 
 /-- **Each committed wire of a unit is on a column of its instance**: the unit's own gates are its computed rows'
 columns, and the gates they read are columns of those rows. -/
@@ -37,7 +37,7 @@ theorem exists_col_of_io {u : Fin n} {R : Rows} (I : P.IsRowsUnit u R) {g : Fin 
     exact ⟨_, hi⟩
   · obtain ⟨i, rfl⟩ := I.onto h hh
     rw [I.op i] at hgh
-    simp only [Op.args, List.mem_append, List.mem_map] at hgh
+    simp only [Verity.Boolean.Op.args, List.mem_append, List.mem_map] at hgh
     rcases hgh with ⟨c, -, rfl⟩ | ⟨c, -, rfl⟩
     · exact ⟨c, rfl⟩
     · exact ⟨c, rfl⟩
@@ -52,7 +52,7 @@ theorem exists_read_of_io {u : Fin n} {R : Rows} (I : P.IsRowsUnit u R) {g : Fin
   · exact absurd hu hout
   · obtain ⟨i, rfl⟩ := I.onto h hh
     rw [I.op i] at hgh
-    simp only [Op.args, List.mem_append, List.mem_map] at hgh
+    simp only [Verity.Boolean.Op.args, List.mem_append, List.mem_map] at hgh
     rcases hgh with ⟨c, hc, rfl⟩ | ⟨c, hc, rfl⟩
     · exact ⟨i, c, List.mem_append_left _ hc, rfl⟩
     · exact ⟨i, c, List.mem_append_right _ hc, rfl⟩

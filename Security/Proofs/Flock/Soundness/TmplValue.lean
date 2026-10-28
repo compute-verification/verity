@@ -14,6 +14,7 @@ Definition's value (`Tmpl.evalDef`) on its bound inputs (`unrollAt_eval`). A rea
 -/
 
 open Flock Flock.Tmpl FlockSoundness.Audit FlockSoundness.SparseRows
+open Verity.Boolean (xorSum)
 
 namespace FlockSoundness.TmplValue
 

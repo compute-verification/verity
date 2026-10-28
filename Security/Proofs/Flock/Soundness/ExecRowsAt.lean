@@ -16,6 +16,7 @@ committed net read through `pos`. No verifier path reads `ofRowsAt` yet.
 namespace FlockSoundness
 
 open Flock Audit
+open Verity.Boolean (xorSum)
 
 /-- **A net's first `w` rows hold at `z`**: each row's column is the AND of its `A` and `B` rows' XOR sums under `z`
 (`Rows.Sat`'s equation, read off the net's matrices). -/

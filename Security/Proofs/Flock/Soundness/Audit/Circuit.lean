@@ -16,6 +16,7 @@ About the circuits and partitions of `Definitions.Flock.Circuit`:
 -/
 
 namespace FlockSoundness.Audit
+open Verity.Boolean (xorSum)
 
 theorem xorSum_map {ι κ : Type} (l : List ι) (f : ι → κ) (v : κ → Bool) :
     xorSum (l.map f) v = xorSum l (v ∘ f) := by
@@ -26,7 +27,7 @@ end FlockSoundness.Audit
 
 namespace Verity.Boolean.Circuit
 
-variable (C : Circuit)
+variable (C : Verity.Boolean.Circuit)
 
 theorem run_eq (fix : Fin C.N → Option Bool) (g : Fin C.N) :
     C.run fix g = match fix g with
@@ -36,7 +37,7 @@ theorem run_eq (fix : Fin C.N → Option Bool) (g : Fin C.N) :
   cases fix g with
   | some b => rfl
   | none =>
-      exact Op.apply_congr _ fun x hx => by simp [C.topo g x hx]
+      exact Verity.Boolean.Op.apply_congr _ fun x hx => by simp [C.topo g x hx]
 
 theorem run_fixed {fix : Fin C.N → Option Bool} {g : Fin C.N} {b : Bool} (h : fix g = some b) :
     C.run fix g = b := by
@@ -60,7 +61,7 @@ namespace FlockSoundness.Audit
 
 namespace Partition
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n)
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
 
 theorem mem_committed_of_read {g h : Fin C.N} (hg : g ∈ (C.op h).args) (hne : P.unit h ≠ P.unit g) :
     g ∈ P.committed := by
@@ -114,7 +115,7 @@ theorem cone_induction (X a : Fin C.N → Bool) (T : Finset (Fin C.N)) (hin : C.
       · rfl
       · exact absurd ((P.input_iff g).2 h) (by simp [hu])
     rw [P.localEval_of_mem X hu, C.eval_op a hni]
-    refine Op.apply_congr _ fun x hx => ?_
+    refine Verity.Boolean.Op.apply_congr _ fun x hx => ?_
     have hxg : x.val < m := hgm ▸ C.topo g x hx
     have hxt : ∃ t ∈ T, C.Feeds x t := ⟨t, ht, .step hx hgt⟩
     obtain ⟨ihB, ihA⟩ := ih x.val hxg x rfl hxt
@@ -154,7 +155,7 @@ theorem localEval_congr {X Y : Fin C.N → Bool} {u : Fin n} (hXY : ∀ g ∈ P.
   | _ m ih =>
   intro g hgm hu
   rw [P.localEval_of_mem X hu, P.localEval_of_mem Y hu]
-  refine Op.apply_congr _ fun x hx => ?_
+  refine Verity.Boolean.Op.apply_congr _ fun x hx => ?_
   by_cases hxu : P.unit x = some u
   · exact ih x.val (hgm ▸ C.topo g x hx) x rfl hxu
   · rw [P.localEval_of_not_mem X hxu, P.localEval_of_not_mem Y hxu]
@@ -202,7 +203,7 @@ theorem localEval_eq {X Y : Fin C.N → Bool} {u : Fin nc}
   intro g v hgm hv hvu
   have hu : Pc.unit g = some u := by rw [r.sub g, hv]; simp [hvu]
   rw [Pc.localEval_of_mem X hu, Pf.localEval_of_mem Y hv]
-  refine Op.apply_congr _ fun x hx => ?_
+  refine Verity.Boolean.Op.apply_congr _ fun x hx => ?_
   have hxg : x.val < m := hgm ▸ C.topo g x hx
   by_cases hxu : Pc.unit x = some u
   · obtain ⟨v', hv', hv'u⟩ : ∃ v', Pf.unit x = some v' ∧ r.parent v' = u := by

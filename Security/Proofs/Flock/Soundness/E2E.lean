@@ -52,7 +52,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 namespace Partition
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
@@ -69,7 +69,7 @@ constants read, every unit wrong on the program's Boolean circuit `CB` (partitio
 rows, the audit's circuit. `proj` reads the Boolean circuit's wires off the rows' columns. The end-to-end theorems don't
 take it: they are about the rows' circuit. `UProg.rowsL1` proves it for every program of units over circuit types, which
 carries `UProg.flock_e2e_count` and `UProg.flock_e2e_drawn` to the Boolean circuit. -/
-def RowsL1 {CB : Circuit} (PB : Partition CB n) (proj : (Fin C.N → Bool) → Fin CB.N → Bool) (ones : Finset (Fin C.N)) :
+def RowsL1 {CB : Verity.Boolean.Circuit} (PB : Partition CB n) (proj : (Fin C.N → Bool) → Fin CB.N → Bool) (ones : Finset (Fin C.N)) :
     Prop :=
   ∀ vals, (∀ g ∈ ones, vals g = true) → PB.wrong (proj vals) ⊆ P.wrong vals
 

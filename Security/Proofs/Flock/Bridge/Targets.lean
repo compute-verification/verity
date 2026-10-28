@@ -30,7 +30,7 @@ value in `C`'s evaluation on `Xr`'s inputs, each of whose registered openings at
 opens its wire's position under `Cm` and `roots`, and whose evaluation is `κ`'s constant at each constant wire it
 reads, is not faulty in `witDep C Cm H roots Xr` at the statement at constants `κ`. -/
 def FaultyRightTarget : Prop :=
-  ∀ {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val Opn Com : Type}
+  ∀ {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val Opn Com : Type}
     (pos : Fin C.N → Pos) (bit : Val → Fin C.N → Bool) (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com)
     (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool) (roots : List Claims.Msg)
     (Xr : Fin C.N → Bool) (κ : Fin C.N → Option Bool) (u : Fin n),
@@ -43,18 +43,18 @@ def FaultyRightTarget : Prop :=
 
 /-- `partOf P` has one slot per unit, then one per input gate. -/
 def PartRusTarget : Prop :=
-  ∀ {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n),
+  ∀ {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n),
     (partOf P).rus.length = n + (inputsOf C).length
 
 /-- **The Pa lemma**: on `partOf P`, `designOf kd` misses a set `B` of slots with probability `C(n − |B|, kd)/C(n, kd)`. -/
 def PaTarget : Prop :=
-  ∀ {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (kd : ℕ) (B : Finset ℕ), B ⊆ Finset.range n →
+  ∀ {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (kd : ℕ) (B : Finset ℕ), B ⊆ Finset.range n →
     (designOf kd).Pa (partOf P) B = ((n - B.card).choose kd : ℝ) / (n.choose kd : ℝ)
 
 /-- **Outside `RelS` is a count**: at `δ = C(n − K₀, kd)/C(n, kd)`, `1 ≤ kd ≤ n`, a witness outside `RelS` has at
 least `min K₀ (n − kd + 1)` faulty population slots, slots below `n`. -/
 def CountTarget : Prop :=
-  ∀ {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (kd K₀ : ℕ), 1 ≤ kd → kd ≤ n →
+  ∀ {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (kd K₀ : ℕ), 1 ≤ kd → kd ≤ n →
     ∀ (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool) (κ : Fin C.N → Option Bool)
       (desc : Claims.Msg) (q : Claims.Sampling.Query) (roots : List Claims.Msg) (w : Claims.Sampling.Wit),
       ¬ Claims.Sampling.RelS H Cm (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) (stmtOf P κ kd desc q roots)
@@ -73,7 +73,7 @@ parses `x` to `stmtOf` and partitions it to `partOf`, a `witDep` outside `RelS` 
 the record's `R`. -/
 def RelDeployTarget : Prop :=
   ∀ {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T) (cd : SamplingDeploy.Code)
-    {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
+    {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
     (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (nl kd : ℕ) (κ : Fin C.N → Option Bool) (desc : Claims.Msg)
     (q : Claims.Sampling.Query) (roots : List Claims.Msg) (Xr : Fin C.N → Bool) (δ : ℝ) (x : Claims.Msg),
     LayoutIs C rows c nl roots cd →

@@ -55,15 +55,15 @@ def prev (x : Fin K × Fin (nv + 1)) (_h : x.2.val ≠ 0) : Fin K × Fin (nv + 1
 variable (K nv)
 
 /-- Gate `0` of each chain is an input, gate `j + 1` is the NOT of gate `j`. -/
-def op (g : Fin (K * (nv + 1))) : Op (K * (nv + 1)) :=
+def op (g : Fin (K * (nv + 1))) : Verity.Boolean.Op (K * (nv + 1)) :=
   if h : ((E K nv).symm g).2.val = 0 then .input else .not (E K nv (prev ((E K nv).symm g) h))
 
 theorem topo : ∀ g, ∀ a ∈ (op K nv g).args, a < g := by
   intro g a ha
   unfold op at ha
   split_ifs at ha with h
-  · simp [Op.args] at ha
-  · simp only [Op.args, List.mem_singleton] at ha
+  · simp [Verity.Boolean.Op.args] at ha
+  · simp only [Verity.Boolean.Op.args, List.mem_singleton] at ha
     subst ha
     rw [Fin.lt_def, E_val]
     conv_rhs => rw [← (E K nv).apply_symm_apply g, E_val]
@@ -71,7 +71,7 @@ theorem topo : ∀ g, ∀ a ∈ (op K nv g).args, a < g := by
     omega
 
 /-- The chains, their last gates the outputs. -/
-abbrev circuit : Circuit where
+abbrev circuit : Verity.Boolean.Circuit where
   N := K * (nv + 1)
   op := op K nv
   topo := topo K nv
@@ -89,7 +89,7 @@ theorem op_succ (c : Fin K) (i : ℕ) (h : i + 1 < nv + 1) :
 theorem isInput_iff (g : Fin (K * (nv + 1))) :
     ((circuit K nv).op g).isInput = true ↔ ((E K nv).symm g).2.val = 0 := by
   simp only [circuit, op]
-  split_ifs with h <;> simp [h, Op.isInput]
+  split_ifs with h <;> simp [h, Verity.Boolean.Op.isInput]
 
 variable (K nv)
 
@@ -156,7 +156,7 @@ theorem coarse_localEval (X : Fin (K * (nv + 1)) → Bool) (c : Fin K) :
   | succ i ih =>
       intro hj
       rw [Partition.localEval_of_mem _ _ (by rw [coarse_unit]; simp), op_succ c i hj]
-      simp only [Op.apply]
+      simp only [Verity.Boolean.Op.apply]
       rw [ih (by omega), Function.iterate_succ_apply']
 
 /-- A fine unit's local evaluation is the NOT of the gate before it, read from the transcript. -/
@@ -164,7 +164,7 @@ theorem fine_localEval (Y : Fin (K * (nv + 1)) → Bool) (c : Fin K) (i : ℕ) (
     (fine K nv).localEval Y (F K nv (c, ⟨i, by omega⟩)) (E K nv (c, ⟨i + 1, h⟩)) =
       !Y (E K nv (c, ⟨i, by omega⟩)) := by
   rw [Partition.localEval_of_mem _ _ (fine_unit_succ c i h), op_succ c i h]
-  simp only [Op.apply]
+  simp only [Verity.Boolean.Op.apply]
   rw [Partition.localEval_of_not_mem]
   rcases i with _ | i
   · rw [show (⟨0, _⟩ : Fin (nv + 1)) = 0 from rfl, fine_unit_zero]
@@ -340,8 +340,8 @@ theorem interior_not_committed (c : Fin K) (j : Fin (nv + 1)) (h0 : j.val ≠ 0)
   obtain ⟨c', j'⟩ := (E K nv).symm h
   simp only [op, Equiv.symm_apply_apply] at hh
   split_ifs at hh with hj'
-  · simp [Op.args] at hh
-  · simp only [Op.args, List.mem_singleton, EmbeddingLike.apply_eq_iff_eq, prev,
+  · simp [Verity.Boolean.Op.args] at hh
+  · simp only [Verity.Boolean.Op.args, List.mem_singleton, EmbeddingLike.apply_eq_iff_eq, prev,
       Prod.mk.injEq] at hh
     obtain ⟨rfl, -⟩ := hh
     apply hne

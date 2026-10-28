@@ -22,6 +22,7 @@ unchanged.
 namespace FlockSoundness.Types.Flatten
 
 open Flock Flock.DeriveAll Audit Types Types.Dag
+open Verity.Boolean (xorSum xorSum_congr)
 
 /-! ## Gates -/
 
@@ -1102,7 +1103,7 @@ theorem flatten_topo (types : String → Option CircuitType) (words : String →
 
 /-- Gate `g` as a `Verity.Boolean.Op`: its arguments as gates of the array (below it, when `Topo` holds; an argument past the
 array reads `g` itself, which `Topo` rules out). -/
-def toOp (gs : Array Gate) (g : Fin gs.size) : Op gs.size :=
+def toOp (gs : Array Gate) (g : Fin gs.size) : Verity.Boolean.Op gs.size :=
   let fin := fun a : ℕ => if ha : a < gs.size then (⟨a, ha⟩ : Fin gs.size) else g
   match gs[g.val]'g.isLt with
   | .input => .input
@@ -1131,12 +1132,12 @@ theorem toOp_args {gs : Array Gate} (h : Topo gs) (g : Fin gs.size) : ∀ a ∈ 
   intro a ha
   have hlt : ∀ x ∈ gs[n].args, x < n := h n hn
   cases hg : gs[n] with
-  | input => rw [toOp_input hn hg] at ha; simp [Op.args] at ha
+  | input => rw [toOp_input hn hg] at ha; simp [Verity.Boolean.Op.args] at ha
   | and x y =>
     have hx := hlt x (by rw [hg]; simp [Gate.args])
     have hy := hlt y (by rw [hg]; simp [Gate.args])
     rw [toOp_and hn hg (by omega) (by omega)] at ha
-    simp only [Op.args, List.mem_cons, List.not_mem_nil, or_false] at ha
+    simp only [Verity.Boolean.Op.args, List.mem_cons, List.not_mem_nil, or_false] at ha
     rcases ha with rfl | rfl
     · exact hx
     · exact hy
@@ -1144,19 +1145,19 @@ theorem toOp_args {gs : Array Gate} (h : Topo gs) (g : Fin gs.size) : ∀ a ∈ 
     have hx := hlt x (by rw [hg]; simp [Gate.args])
     have hy := hlt y (by rw [hg]; simp [Gate.args])
     rw [toOp_xor hn hg (by omega) (by omega)] at ha
-    simp only [Op.args, List.mem_cons, List.not_mem_nil, or_false] at ha
+    simp only [Verity.Boolean.Op.args, List.mem_cons, List.not_mem_nil, or_false] at ha
     rcases ha with rfl | rfl
     · exact hx
     · exact hy
   | not x =>
     have hx := hlt x (by rw [hg]; simp [Gate.args])
     rw [toOp_not hn hg (by omega)] at ha
-    simp only [Op.args, List.mem_cons, List.not_mem_nil, or_false] at ha
+    simp only [Verity.Boolean.Op.args, List.mem_cons, List.not_mem_nil, or_false] at ha
     subst ha
     exact hx
 
 /-- **A gate array as a `Verity.Boolean.Circuit`**: the same gates, each over gates below it (`Topo`). -/
-def toCircuit (gs : Array Gate) (h : Topo gs) (outs : Finset (Fin gs.size)) : Circuit where
+def toCircuit (gs : Array Gate) (h : Topo gs) (outs : Finset (Fin gs.size)) : Verity.Boolean.Circuit where
   N := gs.size
   op := toOp gs
   topo := toOp_args h
@@ -1177,15 +1178,15 @@ theorem toCircuit_eval (gs : Array Gate) (h : Topo gs) (outs : Finset (Fin gs.si
   cases hg : gs[n] with
   | input =>
     have hop : (toCircuit gs h outs).op ⟨n, hn⟩ = .input := toOp_input hn hg
-    rw [Circuit.eval_input _ _ (by rw [hop]; rfl)]
+    rw [Verity.Boolean.Circuit.eval_input _ _ (by rw [hop]; rfl)]
     simp only [Gate.step, hsz]
   | and x y =>
     have hx := hlt x (by rw [hg]; simp [Gate.args])
     have hy := hlt y (by rw [hg]; simp [Gate.args])
     have hop : (toCircuit gs h outs).op ⟨n, hn⟩ = .and ⟨x, show x < gs.size by omega⟩ ⟨y, show y < gs.size by omega⟩ :=
       toOp_and hn hg _ _
-    rw [Circuit.eval_op _ _ (by rw [hop]; rfl), hop]
-    simp only [Op.apply, Gate.step]
+    rw [Verity.Boolean.Circuit.eval_op _ _ (by rw [hop]; rfl), hop]
+    simp only [Verity.Boolean.Op.apply, Gate.step]
     rw [ih x hx (by omega), ih y hy (by omega), gval_prefix h inp (Nat.le_of_lt hn) hx,
       gval_prefix h inp (Nat.le_of_lt hn) hy]
   | xor x y =>
@@ -1193,20 +1194,20 @@ theorem toCircuit_eval (gs : Array Gate) (h : Topo gs) (outs : Finset (Fin gs.si
     have hy := hlt y (by rw [hg]; simp [Gate.args])
     have hop : (toCircuit gs h outs).op ⟨n, hn⟩ = .xor ⟨x, show x < gs.size by omega⟩ ⟨y, show y < gs.size by omega⟩ :=
       toOp_xor hn hg _ _
-    rw [Circuit.eval_op _ _ (by rw [hop]; rfl), hop]
-    simp only [Op.apply, Gate.step]
+    rw [Verity.Boolean.Circuit.eval_op _ _ (by rw [hop]; rfl), hop]
+    simp only [Verity.Boolean.Op.apply, Gate.step]
     rw [ih x hx (by omega), ih y hy (by omega), gval_prefix h inp (Nat.le_of_lt hn) hx,
       gval_prefix h inp (Nat.le_of_lt hn) hy]
   | not x =>
     have hx := hlt x (by rw [hg]; simp [Gate.args])
     have hop : (toCircuit gs h outs).op ⟨n, hn⟩ = .not ⟨x, show x < gs.size by omega⟩ := toOp_not hn hg _
-    rw [Circuit.eval_op _ _ (by rw [hop]; rfl), hop]
-    simp only [Op.apply, Gate.step]
+    rw [Verity.Boolean.Circuit.eval_op _ _ (by rw [hop]; rfl), hop]
+    simp only [Verity.Boolean.Op.apply, Gate.step]
     rw [ih x hx (by omega), gval_prefix h inp (Nat.le_of_lt hn) hx]
 
 /-- **Type `t`'s Boolean circuit**, as a `Verity.Boolean.Circuit`: `flatten`'s gates, its outputs' gates as outputs. -/
 def flatCircuit (types : String → Option CircuitType) (words : String → Option (Array ℕ)) (loOf : ℕ → ℕ) (F : ℕ)
-    (t : CircuitType) : Circuit :=
+    (t : CircuitType) : Verity.Boolean.Circuit :=
   toCircuit (flatten types words loOf F t).1 (flatten_topo types words loOf F t).1
     (Finset.univ.filter fun g => g.val ∈ (flatten types words loOf F t).2)
 

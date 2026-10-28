@@ -243,7 +243,7 @@ theorem copyPos_of_key {g x x' : ℕ} (hg : g < st.c.g) (hx : x < st.c.upv * (st
 
 /-- **`Copies` from keys**: an instance that puts template instance `g`'s stacked unit inputs on one gate only when they
 have one key (`srcKey`, the same at every template instance) wires them as Δ copies them. -/
-theorem copies_of_key {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
+theorem copies_of_key {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
     (inst : P.IsRowsUnit u ((unitRows st L.unit_built).stack st.c.upv)) {g : ℕ} (hg : g < st.c.g)
     (hk : ∀ c c', inst.wire c = inst.wire c' → c.val < ((unitRows st L.unit_built).stack st.c.upv).nIn →
       c'.val < ((unitRows st L.unit_built).stack st.c.upv).nIn → srcKey st.c c.val = srcKey st.c c'.val) :
@@ -259,7 +259,7 @@ instance `g`'s stacked unit inputs on one gate only when they have one key. -/
 theorem setupH_aliased_of_key {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
-    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Audit.Circuit} {n : ℕ}
+    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Verity.Boolean.Circuit} {n : ℕ}
     {P : Audit.Partition C n} {u : Fin n}
     (inst : P.IsRowsUnit u ((unitRows st (setupH_layout ht h).unit_built).stack st.c.upv))
     (o : Fin (2 ^ ((setupH_layout ht h).model regs).nbl)) {g : ℕ} (hg : g < st.c.g)

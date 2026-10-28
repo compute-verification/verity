@@ -28,6 +28,7 @@ open Flock Flock.Derive
 namespace FlockSoundness
 
 open Audit
+open Verity.Boolean (xorSum xorSum_congr)
 
 namespace Compose
 

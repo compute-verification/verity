@@ -68,7 +68,7 @@ end Data
 
 section Layout
 
-variable {C : FlockSoundness.Audit.Circuit} {rows : Fin C.N → Option RowAt}
+variable {C : Verity.Boolean.Circuit} {rows : Fin C.N → Option RowAt}
 
 theorem rootsOfL_length (c : Flock.Circuit) (L : LeafMap) : (rootsOfL c L).length = c.ports.size := by
   simp [rootsOfL]
@@ -128,7 +128,7 @@ position `i` whose registered row `r` sits at port `r.port`, of the port's bits 
 `r.leaf < L.cnt r.port`, under roots no earlier port shares, a value `v` `RowShaped` of the row's width under a salt of
 `saltLen` bytes, whose hm96 leaf at its port's bytes (`encPortH`, the port's own format) is the registered leaf of
 `L.dig r.port r.leaf`, opens `commitDepL` under `rootsOfL` at `i` to its bit `r.place`. -/
-theorem opens_commitDepL (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
+theorem opens_commitDepL (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (L : LeafMap) {i : ℕ} {r : RowAt} (hr : rowOfPos C rows i = some r)
     (hq : r.port < c.ports.size) (hu : r.leaf < L.cnt r.port) (hd : Flock.log2ceil (L.cnt r.port) ≤ L.d)
     (hb : r.width = c.ports[r.port]!.bits) (h16 : r.width % 16 = 0) (hpl : r.place < r.width)

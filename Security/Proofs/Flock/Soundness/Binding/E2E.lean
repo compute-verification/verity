@@ -57,7 +57,7 @@ theorem prob_split_accept {n : ℕ} (G : Game (Bool × Finset (Fin n))) (S : Str
     (fun o h => (Bool.eq_false_or_eq_true o.1).elim (fun h1 => Or.inl ⟨⟨h1, h.1⟩, h.2⟩)
       fun h1 => Or.inr ⟨h.1, h1⟩) G S).trans (prob_or_le _ _ G S)
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)

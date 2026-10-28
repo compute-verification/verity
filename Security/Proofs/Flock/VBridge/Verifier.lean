@@ -305,7 +305,7 @@ and the consistency term.** If `RecOpen.check` accepted `c` and its unit's name 
 the unit is the verifier's net (`RecOpen.check_ok`). Let unit `u` be an instance of `k` stacked copies of the unit's rows
 (`Rows.ofNet`), the transcript `X` carrying 1 at the stack's constant. Then at copy `j`'s column values (`copyVal`),
 `laid_unit` holds. -/
-theorem unit_check {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {c : Flock.Circuit} (hB : Built c.unit)
+theorem unit_check {C : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {c : Flock.Circuit} (hB : Built c.unit)
     {k : ℕ} (I : P.IsRowsUnit u ((Rows.ofNet hB).stack k)) (X : Fin C.N → Bool) {j : ℕ} (hj : j < k)
     (hone : X (I.wire ((Rows.ofNet hB).stack k).one) = true)
     (ms : Flock.MerkleScheme) (hms : ∀ l r, ms.node l r = Flock.Sha512.hash (l ++ r))

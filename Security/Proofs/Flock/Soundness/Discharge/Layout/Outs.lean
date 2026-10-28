@@ -19,7 +19,7 @@ open Flock FlockLevel3 Audit Placed
 
 /-- **A committed gate a unit computes is an output**, when every unit reads, besides its own computed gates, only input
 gates. -/
-theorem computed_committed_output {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {R : Fin n → Rows}
+theorem computed_committed_output {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {R : Fin n → Rows}
     (I : ∀ u, P.IsRowsUnit u (R u))
     (hread : ∀ u (y : Fin (R u).w), (∀ i, y ≠ (R u).comp i) → P.unit ((I u).wire y) = none)
     {u : Fin n} {g : Fin C.N} (hg : g ∈ P.io u) (hgu : P.unit g = some u) : g ∈ C.outputs := by
@@ -35,11 +35,11 @@ theorem computed_committed_output {C : Audit.Circuit} {n : ℕ} {P : Audit.Parti
   · exfalso
     rcases hh : P.unit h with _ | u'
     · have hi := (P.input_iff h).1 hh
-      cases hop : C.op h <;> simp only [hop, Audit.Op.isInput, Audit.Op.args] at hi hgh <;>
+      cases hop : C.op h <;> simp only [hop, Verity.Boolean.Op.isInput, Verity.Boolean.Op.args] at hi hgh <;>
         first | exact absurd hi (by decide) | exact absurd hgh (List.not_mem_nil)
     · obtain ⟨i, rfl⟩ := (I u').onto h hh
       rw [(I u').op i] at hgh
-      simp only [Audit.Op.args, List.mem_append, List.mem_map] at hgh
+      simp only [Verity.Boolean.Op.args, List.mem_append, List.mem_map] at hgh
       obtain ⟨y, -, rfl⟩ : ∃ y, y ∈ (R u').a i ++ (R u').b i ∧ (I u').wire y = g := by
         rcases hgh with ⟨y, hy, e⟩ | ⟨y, hy, e⟩
         · exact ⟨y, List.mem_append_left _ hy, e⟩

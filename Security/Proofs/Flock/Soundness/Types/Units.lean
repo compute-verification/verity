@@ -26,7 +26,7 @@ namespace FlockSoundness
 open Audit Types.Dag Types.Flatten Compose
 
 /-- A gate as a `Verity.Boolean.Op`, its arguments renamed by `w`. -/
-def Types.Flatten.Gate.lift {N : ℕ} (w : ℕ → Fin N) : Gate → Op N
+def Types.Flatten.Gate.lift {N : ℕ} (w : ℕ → Fin N) : Gate → Verity.Boolean.Op N
   | .input => .input
   | .and a b => .and (w a) (w b)
   | .xor a b => .xor (w a) (w b)
@@ -111,7 +111,7 @@ theorem Rows.one_ne_comp (R : Rows) : ∀ i, R.one ≠ R.comp i := fun i h => by
 
 namespace Audit.Partition
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n)
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
 
 /-- **Unit `u` is an instance of the gate array `gs`**, whose first `k` gates are inputs. Gate `j` is the circuit's gate
 `wire j`: the inputs are gates outside the unit, and every other gate is the unit's, its operation over the wired
@@ -152,18 +152,18 @@ theorem localEval_eq (h : Topo gs) (Xv : Fin C.N → Bool) {inp : ℕ → Bool} 
     | and a b =>
       have ha := hlt a (by rw [hg]; simp [Gate.args])
       have hb := hlt b (by rw [hg]; simp [Gate.args])
-      simp only [Gate.lift, Op.apply, Gate.step]
+      simp only [Gate.lift, Verity.Boolean.Op.apply, Gate.step]
       rw [ih a ha (by omega), ih b hb (by omega), gval_prefix h inp (Nat.le_of_lt hj) ha,
         gval_prefix h inp (Nat.le_of_lt hj) hb]
     | xor a b =>
       have ha := hlt a (by rw [hg]; simp [Gate.args])
       have hb := hlt b (by rw [hg]; simp [Gate.args])
-      simp only [Gate.lift, Op.apply, Gate.step]
+      simp only [Gate.lift, Verity.Boolean.Op.apply, Gate.step]
       rw [ih a ha (by omega), ih b hb (by omega), gval_prefix h inp (Nat.le_of_lt hj) ha,
         gval_prefix h inp (Nat.le_of_lt hj) hb]
     | not a =>
       have ha := hlt a (by rw [hg]; simp [Gate.args])
-      simp only [Gate.lift, Op.apply, Gate.step]
+      simp only [Gate.lift, Verity.Boolean.Op.apply, Gate.step]
       rw [ih a ha (by omega), gval_prefix h inp (Nat.le_of_lt hj) ha]
 
 /-- **The unit computes its type.** An instance of type `t`'s unit gates (its inputs and `one` the first `inBits + 1`)
@@ -198,7 +198,7 @@ theorem sat_localEval (Xv : Fin C.N → Bool) : R.Sat fun c => P.localEval Xv u 
   intro i
   show P.localEval Xv u (I.wire (R.comp i)) = _
   rw [P.localEval_of_mem Xv (I.mem i), I.op i]
-  simp only [Op.apply, xorSum_map, Function.comp_def]
+  simp only [Verity.Boolean.Op.apply, xorSum_map, Function.comp_def]
 
 variable {types : String → Option CircuitType} {ls : Array Layout} {info : String → Option TableInfo}
   {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
@@ -230,7 +230,7 @@ open Audit.Partition
 an instance of the rows `deriveChecked` composes for layout `idx`, of type `t`; on `CB`, of `t`'s unit gates. Through `m`,
 the Boolean unit's inputs and `one` read its rows' input columns and constant, and each of its committed gates is an
 output's copy, read off that output's row: a gate of the unit, committed in `C`. -/
-structure UnitPair {C CB : Audit.Circuit} {n : ℕ} (P : Partition C n) (PB : Partition CB n) (m : Fin CB.N → Fin C.N)
+structure UnitPair {C CB : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) (PB : Partition CB n) (m : Fin CB.N → Fin C.N)
     (u : Fin n) where
   types : String → Option CircuitType
   ls : Array Layout
@@ -258,7 +258,7 @@ structure UnitPair {C CB : Audit.Circuit} {n : ℕ} (P : Partition C n) (PB : Pa
 
 namespace UnitPair
 
-variable {C CB : Audit.Circuit} {n : ℕ} {P : Partition C n} {PB : Partition CB n} {m : Fin CB.N → Fin C.N} {u : Fin n}
+variable {C CB : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {PB : Partition CB n} {m : Fin CB.N → Fin C.N} {u : Fin n}
   (U : UnitPair P PB m u)
 
 /-- The audit's gate the unit's constant reads. -/
@@ -287,7 +287,7 @@ end UnitPair
 
 /-- **`RowsL1` from one pair per unit.** At values carrying 1 on `ones`, which holds each unit's constant, every unit wrong
 on the Boolean circuit `CB` (its values read off the audit's through `m`) is wrong on its rows. -/
-theorem rowsL1_of_pairs {C CB : Audit.Circuit} {n : ℕ} (P : Partition C n) (PB : Partition CB n) (m : Fin CB.N → Fin C.N)
+theorem rowsL1_of_pairs {C CB : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) (PB : Partition CB n) (m : Fin CB.N → Fin C.N)
     (ones : Finset (Fin C.N)) (U : ∀ u, UnitPair P PB m u) (hones : ∀ u, (U u).oneGate ∈ ones) :
     P.RowsL1 PB (fun vals => vals ∘ m) ones := by
   intro vals hv u hu

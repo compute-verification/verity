@@ -75,7 +75,7 @@ theorem saltOf_length {d : ℕ} {o : Opening Bool} (h : (pathOf d o).length = 64
 
 section Layout
 
-variable {C : FlockSoundness.Audit.Circuit} {rows : Fin C.N → Option RowAt}
+variable {C : Verity.Boolean.Circuit} {rows : Fin C.N → Option RowAt}
 
 theorem placeOf_eq {i : ℕ} {r : RowAt} (hr : rowOfPos C rows i = some r) (hpl : r.place < r.width) :
     placeOf C rows i = ⟨r.width, ⟨r.place, hpl⟩⟩ := by
@@ -200,7 +200,7 @@ sits at port `r.port`, of the port's bits (`16 w` of them), at a circuit file th
 leaf at its port's bytes (`encPortH`) is the registered leaf of row `(r.leaf, r.port)`, opens `commitDep` under
 `rootsOf` at `i` to its bit `r.place`, with data `dataOf`: the salt, the row's path in the verifier's tree and the
 value's bits. -/
-theorem opens_commitDep (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
+theorem opens_commitDep (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (pub : Flock.Public) (nl : ℕ) {i : ℕ} {r : RowAt} (hr : rowOfPos C rows i = some r)
     (hq : r.port < c.ports.size) (hu : r.leaf < nl) (hb : r.width = c.ports[r.port]!.bits) (h16 : r.width % 16 = 0)
     (hpl : r.place < r.width) (hdup : Flock.Registered.dupName c = none) (hsep : PortRoots.RootFixesDomain c pub nl)
@@ -287,7 +287,7 @@ theorem hm96Pair_spec_salt (r y r' y' : List UInt8) (hy : y ≠ y') (h : H512 (h
   · exact hm96Pair_spec r y r' y' hr h
 
 /-- **An opening the deployed check passes carries a full path**: `64 · log2ceil nl` bytes after its salt. -/
-theorem pathOf_length_of_opens (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
+theorem pathOf_length_of_opens (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (nl : ℕ) (roots : List Msg) (o : Opening Bool) (h : (commitDep C rows c nl roots).Opens sha512Msg roots o = true) :
     (pathOf (Flock.log2ceil nl) o).length = 64 * Flock.log2ceil nl := by
   unfold commitDep at h
@@ -305,7 +305,7 @@ theorem pathOf_length_of_opens (C : FlockSoundness.Audit.Circuit) (rows : Fin C.
 /-- **The deployed check refuses a salt of another length**: once the path has a level (`2 ≤ nl` units), the leaf of
 a game opening `(r, y)` whose salt isn't `saltLen` bytes is the leaf of an opening the deployed check passes only by a
 SHA-512 collision. -/
-theorem leaf_salt (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (nl : ℕ)
+theorem leaf_salt (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (nl : ℕ)
     (roots : List Msg) (o : Opening Bool) (h : (commitDep C rows c nl roots).Opens sha512Msg roots o = true)
     (hd : 1 ≤ Flock.log2ceil nl) {r y : Msg} (hy : y.length ≠ saltLen)
     (hl : H512 (hm96Input r y) =
@@ -318,7 +318,7 @@ theorem leaf_salt (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option 
 /-- **The deployed check refuses a misshaped value**: at a position whose row has its port's bits, `16 w` of them, a
 game opening of a value that isn't `RowShaped` of the row's width has the leaf of a deployed opening's row only by a
 SHA-512 collision. -/
-theorem leaf_misshaped_dep (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
+theorem leaf_misshaped_dep (C : Verity.Boolean.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (d : ℕ) (o : Opening Bool) {r : RowAt} (hr : rowOfPos C rows o.pos = some r) (hq : r.port < c.ports.size)
     (hb : r.width = c.ports[r.port]!.bits) (hpl : r.place < r.width) (h16 : r.width % 16 = 0) {W : ℕ}
     (hW : r.width ≤ W) {v : BitVal W} (hv : ¬ (RowShaped v ∧ v.1.val = r.width)) (y : Msg)
@@ -342,15 +342,15 @@ theorem sum_filter_map {α : Type} (l : List α) (p : α → Bool) (f : α → �
   | nil => rfl
   | cons a l ih => by_cases hp : p a <;> simp [hp, ih]
 
-theorem off_eq_sum_ite (C : FlockSoundness.Audit.Circuit) (g : ℕ) :
+theorem off_eq_sum_ite (C : Verity.Boolean.Circuit) (g : ℕ) :
     off C g = ∑ h : Fin C.N, if h.val < g then gateSize (C.op h) else 0 := by
   rw [Fin.sum_univ_def, off, sum_filter_map]
   simp
 
-theorem gateSize_pos {N : ℕ} (o : FlockSoundness.Audit.Op N) : 0 < gateSize o := by
+theorem gateSize_pos {N : ℕ} (o : Verity.Boolean.Op N) : 0 < gateSize o := by
   cases o <;> simp [gateSize]
 
-theorem off_add_le_val (C : FlockSoundness.Audit.Circuit) {g g' : Fin C.N} (h : g.val < g'.val) :
+theorem off_add_le_val (C : Verity.Boolean.Circuit) {g g' : Fin C.N} (h : g.val < g'.val) :
     off C g.val + gateSize (C.op g) ≤ off C g'.val := by
   rw [off_eq_sum_ite, off_eq_sum_ite]
   calc (∑ h : Fin C.N, if h.val < g.val then gateSize (C.op h) else 0) + gateSize (C.op g)
@@ -365,20 +365,20 @@ theorem off_add_le_val (C : FlockSoundness.Audit.Circuit) {g g' : Fin C.N} (h : 
         · simp only [hx, ↓reduceIte, Nat.add_zero]
           split_ifs <;> omega
 
-theorem posOf_lt (C : FlockSoundness.Audit.Circuit) {g g' : Fin C.N} (h : g.val < g'.val) : posOf C g < posOf C g' := by
+theorem posOf_lt (C : Verity.Boolean.Circuit) {g g' : Fin C.N} (h : g.val < g'.val) : posOf C g < posOf C g' := by
   have h1 := off_add_le_val C h
   have h2 := gateSize_pos (C.op g)
   have h3 := gateSize_pos (C.op g')
   unfold posOf
   omega
 
-theorem posOf_inj (C : FlockSoundness.Audit.Circuit) {g g' : Fin C.N} (h : posOf C g = posOf C g') : g = g' := by
+theorem posOf_inj (C : Verity.Boolean.Circuit) {g g' : Fin C.N} (h : posOf C g = posOf C g') : g = g' := by
   rcases lt_trichotomy g.val g'.val with hl | he | hl
   · exact absurd h (posOf_lt C hl).ne
   · exact Fin.ext he
   · exact absurd h (posOf_lt C hl).ne'
 
-theorem wireOf_posOf (C : FlockSoundness.Audit.Circuit) (g : Fin C.N) : wireOf C (posOf C g) = some g := by
+theorem wireOf_posOf (C : Verity.Boolean.Circuit) (g : Fin C.N) : wireOf C (posOf C g) = some g := by
   unfold wireOf
   rw [List.find?_eq_some_iff_getElem]
   refine ⟨by simp, g.val, by simp, by simp, fun j hj => ?_⟩
@@ -389,7 +389,7 @@ theorem wireOf_posOf (C : FlockSoundness.Audit.Circuit) (g : Fin C.N) : wireOf C
   simp at this
   omega
 
-theorem rowOfPos_posOf {C : FlockSoundness.Audit.Circuit} (rows : Fin C.N → Option RowAt) (g : Fin C.N) :
+theorem rowOfPos_posOf {C : Verity.Boolean.Circuit} (rows : Fin C.N → Option RowAt) (g : Fin C.N) :
     rowOfPos C rows (posOf C g) = rows g := by
   simp only [rowOfPos, wireOf_posOf, Option.bind_some]
 

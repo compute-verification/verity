@@ -34,7 +34,7 @@ def CreditSizeLe : Prop :=
 NOT and input gates are not AND gates); `and a b` with `a ≠ b` is one; and so is a row `(⊕ a) ∧ (⊕ b)` with a gate `x`
 in `a` an odd number of times and in `b` an even number, and a gate `y` the other way round (the two XORs differ). -/
 def ToCircuitAnd : Prop :=
-  ∀ (B : FlockSoundness.Audit.Circuit) (g : Fin B.N),
+  ∀ (B : Verity.Boolean.Circuit) (g : Fin B.N),
     (B.toCircuit.IsAnd g → (∃ a b, B.op g = .and a b) ∨ ∃ a b, B.op g = .row a b) ∧
       (∀ a b, B.op g = .and a b → a ≠ b → B.toCircuit.IsAnd g) ∧
       ∀ a b x y, B.op g = .row a b → Odd (a.count x) → Even (b.count x) → Even (a.count y) → Odd (b.count y) →

@@ -21,7 +21,7 @@ open Audit Model
 
 /-- **A column on a gate that is no unit's, other than the constant's, is an input column**: a computed column is a gate
 of the unit. -/
-theorem lt_nIn_of_unit_none {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R : Rows}
+theorem lt_nIn_of_unit_none {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R : Rows}
     (I : P.IsRowsUnit u R) {c : Fin R.w} (hu : P.unit (I.wire c) = none) (h1 : c ≠ R.one) : c.val < R.nIn := by
   by_contra hc
   have hw : c.val < R.nIn + R.nComp + 1 := c.isLt
@@ -34,7 +34,7 @@ theorem lt_nIn_of_unit_none {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C
 
 section Partition
 
-variable {C : Audit.Circuit} {n : ℕ} (P : Audit.Partition C n) {Reg : Type} {mPts : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Audit.Partition C n) {Reg : Type} {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 

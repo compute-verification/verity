@@ -105,7 +105,7 @@ end FlockTableC
 
 namespace Partition
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [Inhabited D]
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (plan : Finset (Fin n) → Reg → FlockTableC)
 
 /-- **The compiled session on a draw**: one compiled table, planned by the verifier from the draw

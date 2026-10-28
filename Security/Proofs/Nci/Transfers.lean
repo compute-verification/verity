@@ -143,7 +143,7 @@ theorem width_eq_card {C : Circuit} (hw : ∀ g, C.w g = 1) (S : Finset (Fin C.N
   simp [Circuit.width, hw]
 
 /-- A Boolean circuit's gates are one bit wide: the hypothesis of the Boolean forms below. -/
-theorem boolean_w (B : FlockSoundness.Audit.Circuit) (g : Fin B.toCircuit.N) : B.toCircuit.w g = 1 := rfl
+theorem boolean_w (B : Verity.Boolean.Circuit) (g : Fin B.toCircuit.N) : B.toCircuit.w g = 1 := rfl
 
 section Declaration
 
