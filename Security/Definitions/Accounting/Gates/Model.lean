@@ -21,14 +21,14 @@ fan-in floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate
   Its values on an input are `values` (`val` for one gate's).
 * **Provenance.** Each gate carries its primitive's id (`prim`), which names the device form the bridge to the actual
   run prices (`BlackwellS8ImmaDot32_v1` is sm_120's m16n8k32 IMMA, so `Op.mma` has no m and n), and where it sits in the
-  Definition that made it, as the IR binds it (`site`: step `s` of an `S8Dot_v1` body, with the statics `K`, `L` and
+  Definition that made it, as the IR binds it (`place`: step `s` of an `S8Dot_v1` body, with the statics `K`, `L` and
   `TAIL`; or word `w` of an H1 + fx1 tile's CP-W receipt, with the tile's dot kind, `K` and operand rows). Its role
   (`Gate.role`: a served product's step toward committed word `T_t`, a tail group's step, a limb split's carry or limb
   read, a receipt fold's step) is a function of the two (`roleOf`), never a field, so no gate carries a role its
   primitive and statics don't give it. A gate is committed (`commit`) when its value is one of the circuit's committed
   outputs (`committed`): S8-PORT's COMMIT layout, the final `T_1` or the prefix `T_1 … T_{K/L}`, or an H1 + fx1 tile's
   receipt. Of an H1 + fx1 tile only the receipt's words after its `K`-segment checkpoints have the `served` role:
-  `2·K/32` of them, `256` at `K = 4096`, each checkpoint's two halves (`Site.parts`), never its `z` or a lane's own
+  `2·K/32` of them, `256` at `K = 4096`, each checkpoint's two halves (`Place.parts`), never its `z` or a lane's own
   value.
 * **Inputs.** An input gate reads slot `i` of the input assignment `x : ι → ℤ`, by its binding time (circuits' input
   origins, `verity/ml/circuits/ports.py`). A `registered` input (the weights, the store's payload, a codec's public
@@ -287,16 +287,16 @@ def Role.isTail : Role → Bool
 * `other`: any other place. Every other gate of an H1 + fx1 tile is here: its `z` (each cell's exact product, `EXACT` on
   its rows, which no noise reaches and PIN's warp check never compares), its noise, its sets and folds, and each lane's
   own `PouwXinFinal` words, which aren't committed: only their XOR over lanes is. -/
-inductive Site
+inductive Place
   | dot (K L : ℕ) (tail : List ℕ) (s : ℕ)
   | receipt (dot : String) (K w : ℕ) (a b : List ℕ)
   | other
   deriving DecidableEq, Repr
 
 /-- **The committed words one checkpoint is split into**: `2` for an H1 + fx1 tile's receipt word (a checkpoint's two
-halves, both of role `served t` at one `t`), `1` at any other site. A floor priced per checkpoint, as a dot kind's is,
+halves, both of role `served t` at one `t`), `1` at any other place. A floor priced per checkpoint, as a dot kind's is,
 counts once across a checkpoint's parts, `1/parts` a word. -/
-def Site.parts : Site → ℕ
+def Place.parts : Place → ℕ
   | .receipt .. => 2
   | _ => 1
 
@@ -305,21 +305,21 @@ def tailRole : List ℕ → ℕ → ℕ → Role
   | [], _, _ => .other
   | a :: as, j, g => if j < a then .tail g else tailRole as (j - a) (g + 1)
 
-/-- **The role** of a gate of primitive `prim` at `site` (S8-PORT's `ops/s8.py`). Step `s < K/32` of an `S8Dot_v1`
+/-- **The role** of a gate of primitive `prim` at `place` (S8-PORT's `ops/s8.py`). Step `s < K/32` of an `S8Dot_v1`
 body is on the main chain toward `T_t`, `t = ⌊32·s/L⌋ + 1`, and a later step is tail atom `s − K/32`, in the group
 that holds it.
 
 An H1 + fx1 tile's receipt word `w` after checkpoint `T_s` (`w < 2·(K/32)`, `s = w / 2`, either half) has role
 `served (s + 1)`, toward its products' `T_{s+1}`, their first `32·(s + 1)`: each checkpoint binds one 32-wide
 `K`-segment of the tile's products, whose floor its dot kind prices (GRIND's fold premise, `HMu`'s Lemma B′), and its
-two halves share it (`Site.parts`). The last `2·m` words, after `O′ = T_{KS−1} − U·A_0` and `D_d = U·A_d`, are `other`:
+two halves share it (`Place.parts`). The last `2·m` words, after `O′ = T_{KS−1} − U·A_0` and `D_d = U·A_d`, are `other`:
 they bind the check's cancellation of the columns' keyed word `U` against the rows' digits, which no segment's floor
-prices, so they carry no floor. A receipt word's role reads its site alone, not the primitive that computes it (the
+prices, so they carry no floor. A receipt word's role reads its place alone, not the primitive that computes it (the
 lanes' `PouwXor32`).
 
 Off a dot body and a receipt, `S32ByteCarry` and `S32ClampRest` are a limb split's carries (`N − 1` a split, in
 either form), `S32LowByte` and `S32ClampS8` its limb reads, and `PouwDuoAbsorb_v1` the receipt fold's step. -/
-def roleOf (prim : String) : Site → Role
+def roleOf (prim : String) : Place → Role
   | .dot K L tail s => if s < K / 32 then .served (32 * s / L + 1) else tailRole tail (s - K / 32) 0
   | .receipt _ K w _ _ => if w < 2 * (K / 32) then .served (w / 2 + 1) else .other
   | .other =>
@@ -340,7 +340,7 @@ structure Gate (ι : Type) where
   /-- its primitive's id (`classOf`'s key), which gives its device form -/
   prim : String
   /-- where it sits in the Definition that made it, from the IR's binding -/
-  site : Site
+  place : Place
   /-- its value is one of the circuit's committed outputs -/
   commit : Bool
 
@@ -351,8 +351,8 @@ namespace Gate
 
 variable {ι : Type} (g : Gate ι)
 
-/-- Its role: its primitive's and site's (`roleOf`). -/
-def role : Role := roleOf g.prim g.site
+/-- Its role: its primitive's and place's (`roleOf`). -/
+def role : Role := roleOf g.prim g.place
 
 /-- A gather's index bits: `⌈log₂ (V + 1)⌉` for its column of `V` words, the bits that tell its `V + 1` outcomes apart:
 a word of the column, or its fill for an index outside it. A one-word column is a comparison (`[i = 0]`), one bit. A
@@ -553,7 +553,7 @@ committed outputs, and its inputs' bits. -/
 structure Census where
   /-- s8-family coordinates -/
   family : ℕ
-  /-- their MACs, `k` each, whatever their role or site: every dot product the steps compute -/
+  /-- their MACs, `k` each, whatever their role or place: every dot product the steps compute -/
   dotMacs : ℕ
   /-- the MACs of the steps whose role is served (S8-PORT's `served_macs`): a served product's main chain toward its
   committed words; none of an H1 + fx1 tile's, whose served role is on its receipt's words, which take no MACs -/
