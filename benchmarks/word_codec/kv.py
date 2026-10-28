@@ -34,10 +34,10 @@ search over SHA-512.  The bound key is the store codec's for block slot · LAYER
 token-layer's offset b (`kv_encode_bound`, `kv_decode_bound`, and `benchmarks/vllm_encoded/paged.cu`'s paths), gated
 against these vectors (`kv_bench.py`'s `gate_bound`); `kv_twin.py` takes the seed's key only.
 
-`benchmarks/codec_tensor/wide.py` takes the same derivation under a domain of its own.  These fields' words have no
-slack (2^1536 − 3453 the operating point). A payload is any word below p. For p = 2^n − c with c < 2^16 a payload at
-or above p has its top 16 bits all ones, a NaN in bf16 (and its top byte 0xFF, a NaN in E4M3), so every word of
-finite values is one; `encode_word` refuses the rest.
+The derivation is `benchmarks/codec_tensor/wide.py`'s under a domain of its own, at the fields
+the codec's cost model chose (2^1536 − 3453 its operating point), whose words have no slack. A payload is any word below p. For p = 2^n − c
+with c < 2^16 a payload at or above p has its top 16 bits all ones, a NaN in bf16 (and its top byte 0xFF, a NaN in
+E4M3), so every word of finite values is one; `encode_word` refuses the rest.
 
 Encoding a word costs k roots, each (p+1)/4 = (2^M − 1)·2^b + LOW: x_M = a^(2^M − 1) by M's bits from the top
 (x_2j = x_j^(2^j)·x_j, x_(j+1) = x_j²·a), then b squarings with a multiply by a at LOW's set bits, b = 8 or the

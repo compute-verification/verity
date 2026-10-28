@@ -19,7 +19,7 @@ round j    x ↦ ρ(x + c_j + t(i)); encode is rounds 0 … k − 1 from the pay
 K          a masked key's (`key(..., mask=True)`): LE(XOF(DOMAIN ‖ frame ‖ seed ‖ u32be 2^32 − 2)[0 : S]) mod 2^n, not
            reduced mod p
 σ_K(x)     x ⊕ K if that is below p, else x: an involution on [0, p), applied to x before each round j ≥ 1 of a masked
-           word's encode and after each inverted round j ≥ 1 of its decode
+           word's encode and after each inverted round j ≥ 1 of its decode (`benchmarks/word_codec/kv.py`'s)
 ~~~
 
 The field, the key derivation (under this module's `DOMAIN`), ρ and the rounds are the store codec's
