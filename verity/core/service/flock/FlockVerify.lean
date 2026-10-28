@@ -529,7 +529,7 @@ def sparseInput (args : List String) : Except String (Option RecSparse.Shape) :=
     | _ => .error s!"--sparse {v}: NU,ELL,S_LOG,T_LOG, four natural numbers"
 
 /-- `rec-inner --circuit F --public F [--partition F] [--program F] [--hide] [--sparse NU,ELL,S_LOG,T_LOG]`: the shape of
-V*'s inner session (`RecVStar.innerOf`) from the inner statement, as one `verity/rec-inner/v1` line, for `verify
+V*'s inner session (`RecVStar.innerOf`) from the inner statement, as one `verity/rec-inner/v2` line, for `verify
 --rec-inner`; `--hide`: the verifier's own word that the inner session's circuits are private (`RecVStar.Inner.holo`);
 `--sparse`: its word that the session is candidate 3's, with the bucket's RecSparse shape (`RecVStar.Inner.sparse`). R's
 shape (`RecVStar.Inner.stacked`) is the inner circuit's META's (`RecVStar.stackedShapeOf`), the shape staging committed R

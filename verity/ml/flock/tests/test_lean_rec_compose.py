@@ -22,7 +22,7 @@ pytestmark = [pytest.mark.slow,
               pytest.mark.skipif(not BIN.exists() or shutil.which("lake") is None, reason="the Lean verifier is not built")]
 
 #: the fixture session's table shape (`test_rec_vstar_checks.SHAPES`)
-INNER = {"format": "verity/rec-inner/v1", "m": 25, "k_log": 22, "claims": 8, "regions": 3}
+INNER = {"format": "verity/rec-inner/v2", "m": 25, "k_log": 22, "claims": 8, "regions": 3}
 ROWS = b'{"ports":{"acc0":{}}}'
 FILES = {"inner_circuit": b"circuit", "inner_public": b"public", "inner_partition": b"{}", "inner_session": b"session",
          "inner_transcript": b"transcript", "inner_registration": b"registration",
