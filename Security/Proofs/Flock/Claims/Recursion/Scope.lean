@@ -54,7 +54,7 @@ def rangeOk (sp : RecSparse.Shape) (st : Stmt) : Bool :=
   | .error _ => false
 
 /-- A draw, readable: its `subset` law's `k`, population, units and closure. -/
-def drawOf (D : Draw.UnitDraw) : Claims.Recursion.Draw where
+def drawOf (D : Draw.UnitDraw) : Claims.Recursion.DrawRecord where
   subset := match D.law with
     | .subset k => some k
     | _ => none
@@ -64,7 +64,7 @@ def drawOf (D : Draw.UnitDraw) : Claims.Recursion.Draw where
 
 /-- A V* session's draw as its record holds it, readable; `none` where the record holds none, or one that doesn't
 read. -/
-def recordDrawOf (record : String) : Option Claims.Recursion.Draw :=
+def recordDrawOf (record : String) : Option Claims.Recursion.DrawRecord :=
   (Witness.recordDraw record).bind fun d => match Draw.UnitDraw.ofJson d with
     | .ok D => some (drawOf D)
     | .error _ => none
@@ -251,7 +251,7 @@ theorem fullDrawOk_iff (i : RecVStar.Inner) (record : String) :
   simp only [hD, Option.bind_some, Option.some.injEq, exists_eq_left', bind, Except.bind]
   unfold Witness.fullDraw
   simp only [hd, hD, bind, Except.bind]
-  unfold Claims.Recursion.Draw.Full drawOf
+  unfold Claims.Recursion.DrawRecord.Full drawOf
   rcases hl : D.law with k | _ | _ | _
   · simp only [Option.some.injEq, true_and]
     rw [← Array.toList_range, Array.toList_inj, Array.toList_eq_nil_iff]
