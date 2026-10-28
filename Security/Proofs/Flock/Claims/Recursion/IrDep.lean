@@ -14,8 +14,8 @@ recursive prover `rec_live` runs with C-Flock's prover behind it, as V\*'s stage
   rep's rounds' rows along its schedule (`repRows`), at the proofs at the coins so far. The proofs' frames are causal, so
   round `i`'s rows read only what the coins before round `i` fix.
 * **Its rest** (`depRest`, `rec_vstar.queries`, `rec_vstage`, `verifier_rows`): each rep's openings at each level of table
-  0's schedule (`schAt`), in rep, level and query order, with the position the verifier's rows draw (`Rows.posAt`), the
-  opened row (`openAt`) and its siblings (`sibsOf`), each fitted to its level's `2^lanes` elements and `d - cap`
+  0's schedule (`schAt`), in rep, level and query order, with the position the verifier's rows sample (`Rows.posAt`),
+  the opened row (`openAt`) and its siblings (`sibsOf`), each fitted to its level's `2^lanes` elements and `d - cap`
   siblings as an honest proof has them; each rep's κ, eq(α) at each level's queries and v at its coins
   (`verifierRows`, v with the comb at the lincheck's fold points).
 
@@ -90,7 +90,7 @@ def combAt (xI : Msg) (cs : List Coin) (k : ℕ) : Array F128 :=
 /-- `n` entries of `a`, `d` past its end. -/
 def fitArr {α : Type} (n : ℕ) (d : α) (a : Array α) : Array α := (Array.range n).map fun i => a.getD i d
 
-/-- **Rep `rep`'s opening `j` of level `l`** (`rec_vstar.queries`): the position the verifier's rows draw, the proof's
+/-- **Rep `rep`'s opening `j` of level `l`** (`rec_vstar.queries`): the position the verifier's rows sample, the proof's
 row and siblings at level `l` (`openAt`, `sibsOf`), fitted to the level's lanes and siblings below its cap. -/
 def depOpen (xI : Msg) (cs : List Coin) (ps : Array (_root_.Flock.Proof × F128)) (rep l j : ℕ) :
     _root_.VStar.In.Opening :=
@@ -142,7 +142,7 @@ theorem mem_depOpen {xI : Msg} {cs : List Coin} {ps : Array (_root_.Flock.Proof 
     List.mem_flatMap.2 ⟨l, List.mem_range.2 hl, List.mem_map.2 ⟨j, List.mem_range.2 hj, rfl⟩⟩⟩
 
 /-- **An opening of `depOpenings`** is one of the two reps', at one of the schedule's levels, at the position the
-verifier's rows draw, of the level's lanes and siblings below its cap. -/
+verifier's rows sample, of the level's lanes and siblings below its cap. -/
 theorem mem_depOpenings {xI : Msg} {cs : List Coin} {ps : Array (_root_.Flock.Proof × F128)}
     {o : _root_.VStar.In.Opening} (h : o ∈ depOpenings xI cs ps) :
     o.rep < 2 ∧ o.level < (OpenLower.schAt xI 0).levels.size ∧
@@ -456,7 +456,7 @@ def rowsV (v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock
       (((tabsOf v.2.2)[t]!.extra (pointsOf v.2.1 c₁)).toOption.getD #[]).size)
     (Rows.canonRounds v.2.1 v.2.2 cs k) (((tabsOf v.2.2)[t]!.extra (pointsOf v.2.1 c₁)).toOption.getD #[]) comb
 
-/-- The position verifier rows `r` draw for query `j` of level `l`. -/
+/-- The position verifier rows `r` sample for query `j` of level `l`. -/
 def posOf (r : Except String (Array F128 × RecAlgebra.Info RecAlgebra.Lin × Array (Array (Array F128)))) (l j : ℕ) :
     ℕ :=
   match r with
