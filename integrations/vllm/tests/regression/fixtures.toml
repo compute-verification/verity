@@ -101,9 +101,9 @@ programs_state = "uploaded"
 # labelled decision (Draft 3 §7): Q_word v1 is the partition of record
 [[rows."qwen25-15b__bf16__l40s__tp1__b1__i4096__o512__mixed__greedy__bi-eager".decisions]]
 check = "manifest_digest"
-since = "S1 #232 (merge 269829d84, check r20260928-115839-02d9)"
+since = "S1 (merge 269829d84, check r20260928-115839-02d9)"
 since_commit = "348a4e2ae4861d3de1d63362c463b205c5ba0f9f"
-finding = "S1 #232 (Q_word v1 as the partition of record)"
+finding = "S1 (Q_word v1 as the partition of record)"
 status = "pending_review"
 reason = "The manifest of record is built under Q_word_v1{X=16,W=32,R=no-recompute}: every Value one Call produces and another reads is required, a Value two Calls of one module body exchange too (family call_boundaries, <module>/<fx node>/out). The Program is the one of record (program_digest fdb622a6...). Every one of the v1 manifest's 189239 identities stays (removed_n = 0) and 14336 are added, all call boundaries model.layers.<k>.self_attn.qkv_proj/triton_launch_<n>/out: 28 layers x 512 decode steps, the output of the Triton launch inside each step's QKV projection. Solely the query: the same Programs rebuilt under Q_module_body_v1 with --word-check off, the previous query of record, reproduce expected/<row>.json exactly (189239 identities, manifest_digest 844f2c72...)."
 expected = { identities = 203575, only_new = 14336, removed_n = 0, complete = true, manifest_digest = "cde2b92ae6918a2b0e0915b3532eb7146393c6fd7a86d27b7f327ae7451c95fa" }

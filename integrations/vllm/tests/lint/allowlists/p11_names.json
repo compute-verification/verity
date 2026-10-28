@@ -39,7 +39,6 @@
     {"file": "verity/ml/definitions/numerics/derived_rows.py", "kind": "def-name", "symbol": "<module>", "detail": "rmsnorm_fused_v2_rows"},
     {"file": "verity/ml/definitions/registry/lifted.py", "kind": "def-name", "symbol": "<module>", "detail": "_splits_for_v1"},
     {"file": "verity/ml/definitions/registry/lifted.py", "kind": "def-name", "symbol": "<module>", "detail": "lifted_prim_v1"},
-    {"file": "verity_vllm/program/quarantine/dense/gelu_tanh_mul_bf16.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N", "count": 7},
     {"file": "verity/ml/definitions/numerics/rmsnorm_fused.py", "kind": "def-name", "symbol": "<module>", "detail": "variance_v1"},
     {"file": "verity/ml/definitions/numerics/rmsnorm_fused.py", "kind": "def-name", "symbol": "<module>", "detail": "variance_v2"},
     {"file": "verity/ml/definitions/registry/sampling_twins.py", "kind": "def-name", "symbol": "<module>", "detail": "add_rz_ftz_v1_model"},
