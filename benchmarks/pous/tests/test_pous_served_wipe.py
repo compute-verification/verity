@@ -20,6 +20,7 @@ import pytest
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.core.protocols.pous import wipe_party as WP
 from verity.core.protocols.pous import wipe_period as W
+from verity.core.site import Loc, Registration
 
 WRAPPER = Path(__file__).resolve().parents[1] / "streamed_wipe" / "served_wipe.sh"
 DEMO = WRAPPER.parent / "demo.sh"
@@ -66,8 +67,14 @@ def node(tmp_path) -> dict[str, str]:
                                                        demo=shlex.quote(str(FAKE_DEMO))))
     key = tmp_path / "vy-auditor2-wipe"
     key.write_text("not a key\n")
+    site = tmp_path / "site.json"
+    log = Registration("remote")
+    log = log.append(log.entry(locs=[Loc("site", "site"), Loc("vy-dc-h200", "host", "site"),
+                                     Loc("vy-dc-h200/dram", "memory", "vy-dc-h200", tier="dram", bytes=1 << 25)]))
+    site.write_text(json.dumps(log.to_json()))
     env = {k: v for k, v in os.environ.items() if not k.startswith(("GPU_LEASE_", "WIPE_", "CUDA_VISIBLE"))}
     return env | {"FAKE_BIN": str(bin_), "WIPE_DEMO": str(shim), "WIPE_READS": str(W.READS), "WIPE_NODE": "vy-dc-h200",
+                  "WIPE_SITE": str(site),
                   "WIPE_COMMAND": f"ssh -i {key} -o BatchMode=yes research@10.96.0.36",
                   "FAKE_SMI_LOG": str(tmp_path / "smi.log"), "FAKE_SMI_APPS": "", "FAKE_SMI_USED": "0",
                   "FAKE_LEASE_LOG": str(tmp_path / "lease.log")}
@@ -130,7 +137,7 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     assert demo["lease"] == f"{CARD},GPU-other" and "--wipe-protocol" not in demo["argv"]
     assert demo["argv"] == ["--node", "vy-dc-h200", "--challenger", "vy-auditor-2", "--challenger-address",
                             "10.96.0.36:47611", "--challenger-command", node["WIPE_COMMAND"], "--reads", str(W.READS),
-                            "--no-lean"]
+                            "--site", node["WIPE_SITE"], "--no-lean"]
     last = r.stdout.strip().splitlines()[-1]
     assert last.startswith("WIPE {")
     headline = json.loads(last.removeprefix("WIPE "))
@@ -187,10 +194,24 @@ def test_a_gate_key_not_on_the_node_is_refused(node, tmp_path) -> None:
     assert not (tmp_path / "lease.log").exists() and not (d / "demo-argv.json").exists()
 
 
+@pytest.mark.parametrize("site", [None, "nowhere/site.json"])
+def test_no_registered_site_on_the_node_is_refused(node, tmp_path, site) -> None:
+    """No registered site (WIPE_SITE unset, or not on the node): refused before any lease is asked for, since the wipe's
+    tiers are the node's registered memory and the challenger refuses others."""
+    d = tmp_path / "wipe"
+    env = {k: v for k, v in node.items() if k != "WIPE_SITE"} | ({} if site is None else {"WIPE_SITE": site})
+    r = _wipe(env, d)
+    assert r.returncode == 3, r.stdout + r.stderr
+    refused = (d / "refused.txt").read_text()
+    assert refused.startswith("WIPE REFUSED: no registered site (WIPE_SITE) on vy-dc-h200 (")
+    assert not (tmp_path / "lease.log").exists() and not (d / "demo-argv.json").exists()
+
+
 def test_demo_sh_takes_the_wrappers_options(tmp_path) -> None:
     """The wrapper's default demo.sh is beside it and knows every option the wrapper gives it: an unknown one after them
     is the first it refuses, before it writes or builds anything."""
     r = subprocess.run(["bash", str(DEMO), "--node", "n", "--challenger", "c", "--challenger-address", "h:1",
-                        "--challenger-command", "x", "--reads", "5500", "--wipe-protocol", "e", "--no-lean", "--bogus"],
+                        "--challenger-command", "x", "--reads", "5500", "--site", "s", "--wipe-protocol", "e",
+                        "--no-lean", "--bogus"],
                        env=os.environ | {"OUT": str(tmp_path / "out")}, capture_output=True, text=True)
     assert r.returncode == 2 and r.stdout.strip() == "demo.sh: unknown option --bogus (see the header)", r.stdout + r.stderr

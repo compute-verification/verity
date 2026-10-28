@@ -28,7 +28,7 @@ from verity.core.protocols.pous import wipe_period as W
 from verity.core.protocols.pous import wipe_store as WS
 
 TEST_ID = mc.TEST_PREFIX + W.PROTOCOL
-SMALL = sw.WipeParams(64, W.READS, 1, 1_000, (("gpu", 64 * sw.LABEL_BYTES),))
+SMALL = sw.WipeParams(64, W.READS, 1, 1_000, (("gpu-hbm", 64 * sw.LABEL_BYTES),))
 M = W.SEGMENT_LABELS * sw.LABEL_BITS
 
 
@@ -44,8 +44,8 @@ class Clock:
 
 
 def _run(params: sw.WipeParams = SMALL, secret: bytes = b"wipe period", **kw) -> W.Wipe:
-    return W.run("n0", params, signer=ts.TestSigner(secret, 2), log=ts.session_log(), schemes=ts.SCHEMES,
-                 protocol=TEST_ID, clock=kw.pop("clock", Clock()), coin_secret=b"coins", **kw)
+    return W.run("n0", params, signer=ts.TestSigner(secret, 2), log=ts.session_log(), site=ts.site_of("n0", params.tiers),
+                 schemes=ts.SCHEMES, protocol=TEST_ID, clock=kw.pop("clock", Clock()), coin_secret=b"coins", **kw)
 
 
 SEGMENT_2152 = 11_709_069
@@ -149,8 +149,8 @@ def _split(params: sw.WipeParams, prover: sw.Prover, signer, stop_after: int | N
 
     def side() -> None:
         with a, a.makefile("rwb") as f:
-            got["c"] = WP.serve(f, WP.request_of("n0", params), signer=signer, log=ts.session_log(), egress_bits=0,
-                                clock=Clock())
+            got["c"] = WP.serve(f, WP.request_of("n0", params), site=ts.site_of("n0", params.tiers), signer=signer,
+                                log=ts.session_log(), egress_bits=0, clock=Clock())
 
     t = threading.Thread(target=side)
     t.start()
@@ -199,12 +199,18 @@ def test_the_party_follows_period_json(tmp_path) -> None:
 CONTROL = {"name": "control", "to": "outside", "via": "eth0 10.0.0.13: ssh"}
 
 
-def _side(tmp_path, monkeypatch, wipe: dict) -> Path:
+SITE_TIERS = ((W.TIER, W.SEGMENTS * W.SEGMENT_BYTES),)
+"""n0's registered memory leaves: one segment's worth of host DRAM, the leg's default fill."""
+
+
+def _side(tmp_path, monkeypatch, wipe: dict, tiers=SITE_TIERS) -> Path:
     period = tmp_path / "periods" / "p0"
     period.mkdir(parents=True)
-    (period / "period.json").write_text(json.dumps({"challenger_host": "auditor", "wipe": wipe}))
+    site = ts.write_site(period, "n0", tiers)
+    (period / "period.json").write_text(json.dumps({"challenger_host": "auditor", "site": site, "wipe": wipe}))
     device = tmp_path / "device"
     device.mkdir()
+    ts.write_site(device, "n0", tiers)
     side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
     monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
     return period
@@ -258,7 +264,25 @@ def test_the_leg_refuses_a_session_at_other_reads(tmp_path, monkeypatch) -> None
         doc, node, d, extra)))
     with pytest.raises(RuntimeError, match="ran 2152 reads, not period.json's wipe.reads 5231"):
         W.leg(period, "n0", tmp_path / "out")
-    assert extras == [("--reads", "5231")]
+    assert extras == [("--site", str(period / "site.json"), "--reads", "5231")]
+
+
+def test_the_leg_declares_the_registered_memory_leaves(tmp_path, monkeypatch) -> None:
+    """The wipe declares n0's registered memory leaves, here a GiB of DRAM past the fill, which counts in `R`; a
+    period.json naming no registered site, or one that doesn't register n0 as a host, runs no wipe."""
+    period = _side(tmp_path, monkeypatch, {}, tiers=((W.TIER, W.SEGMENT_BYTES + (1 << 30)),))
+    W.leg(period, "n0", tmp_path / "out")
+    record = json.loads((tmp_path / "out" / "wipe.json").read_text())
+    assert record["wipe"]["outside_bits"] == 8 << 30 and record["wipe"]["memory_bits"] == M + (8 << 30)
+    assert json.loads(bytes.fromhex(json.loads((tmp_path / "out" / "wipe.case.json").read_text())["commitment"]))[
+        "tiers"] == [[W.TIER, W.SEGMENT_BYTES + (1 << 30)]]
+    doc = json.loads((period / "period.json").read_text())
+    (period / "period.json").write_text(json.dumps({k: v for k, v in doc.items() if k != "site"}))
+    with pytest.raises(ValueError, match="period.json names no registered site"):
+        W.leg(period, "n0", tmp_path / "out")
+    (period / "period.json").write_text(json.dumps(doc))
+    with pytest.raises(ValueError, match="'n1' is not a host the registered site has"):
+        W.leg(period, "n1", tmp_path / "out")
 
 
 def test_a_challenger_on_its_own_host_takes_no_egress_from_the_prover(tmp_path, monkeypatch) -> None:
@@ -268,14 +292,17 @@ def test_a_challenger_on_its_own_host_takes_no_egress_from_the_prover(tmp_path, 
 
 
 def test_what_the_bound_does_not_cover() -> None:
-    """The memory outside the declared tier, a placement off its own host, and a counted link left out."""
-    gpu = W.undeclared("gpu-hbm", 100, {"tier": "gpu-hbm", "total_bytes": 1000, "device": "NVIDIA H200"})
+    """The memory outside the declared tiers (a GPU's past its tier, the host's DRAM unless a tier declares it), a
+    placement off its own host, and a counted link left out."""
+    gpu = W.undeclared({"gpu-hbm": 100}, {"tier": "gpu-hbm", "total_bytes": 1000, "device": "NVIDIA H200"})
     assert gpu[0] == {"tier": "gpu-hbm", "bytes": 900, "what": "NVIDIA H200's memory outside the declared tier"}
     assert gpu[1]["tier"] == "host-dram" and gpu[1]["what"] == "the host's DRAM"
-    whole = W.undeclared("gpu-hbm", 1000, {"tier": "gpu-hbm", "total_bytes": 1000, "device": "NVIDIA H200"})
+    whole = W.undeclared({"gpu-hbm": 1000}, {"tier": "gpu-hbm", "total_bytes": 1000, "device": "NVIDIA H200"})
     assert [u["tier"] for u in whole if u["tier"] == "gpu-hbm"] == []
-    host = W.undeclared("host-dram", 100)
+    host = W.undeclared({"host-dram": 100})
     assert host[0]["tier"] == "host-dram" and host[0]["bytes"] == gpu[1]["bytes"] - 100
+    both = W.undeclared({"gpu-hbm": 1000, "host-dram": gpu[1]["bytes"]}, {"tier": "gpu-hbm", "total_bytes": 1000})
+    assert [u["tier"] for u in both if u["tier"] != "disk"] == []
     counted = WP.link("relay", "n0", "outside", "eth1", mbps=10_000, counted_by="network certifier")
     where = WP.placement("n0", "n0", simulated=True, links=[counted, WP.link("control", "n0", "outside", "eth0")],
                          undeclared=gpu[:1])
@@ -289,16 +316,16 @@ def test_what_the_bound_does_not_cover() -> None:
 
 
 def test_what_a_joint_store_and_its_disks_leave_out() -> None:
-    """A joint store declares each part at its own bytes: DRAM outside a host-dram part, nothing of a device declared
-    whole; a virtual disk's backing store, a drive's undeclared spare area and buffered I/O are named."""
+    """A joint store's parts at the declared tiers: DRAM outside a host-dram part, nothing of a device declared whole; a
+    virtual disk's backing store, a drive's undeclared spare area and buffered I/O are named."""
     disk = {"tier": "disk", "total_bytes": 10 ** 12, "spare_bytes": 0, "direct": True,
             "disks": {"vda": {"bytes": 10 ** 12, "driver": "virtio_blk"}, "nvme0n1": {"bytes": 10 ** 12, "driver": "nvme"}}}
     joint = {"tier": "disk+host-dram", "parts": [disk, {"tier": "host-dram", "bytes": 100}]}
-    dram = W.undeclared("disk+host-dram", 10 ** 12 + 100, joint)[0]
+    dram = W.undeclared({"disk": 10 ** 12, "host-dram": 100}, joint)[0]
     assert dram == {"tier": "host-dram", "bytes": os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") - 100,
                     "what": "the host's DRAM outside the declared tier"}
     gpu = {"tier": "disk+gpu-hbm", "parts": [disk, {"tier": "gpu-hbm", "total_bytes": 1000, "bytes": 900}]}
-    assert [u["tier"] for u in W.undeclared("disk+gpu-hbm", 0, gpu) if u["tier"] == "gpu-hbm"] == []
+    assert [u["tier"] for u in W.undeclared({"disk": 10 ** 12, "gpu-hbm": 1000}, gpu) if u["tier"] == "gpu-hbm"] == []
     gaps = W.disk_gaps(joint)
     assert gaps == [
         "disk nvme0n1: its spare area and cache are undeclared (spare_bytes 0), so M doesn't count what they keep",
@@ -328,7 +355,7 @@ def test_an_unmounted_block_device_no_target_is_on_is_undeclared_whole(tmp_path,
     disk = {"tier": "disk", "total_bytes": 1 << 29, "bytes": 1 << 28, "spare_bytes": 0, "direct": True,
             "disks": {"vda": {"bytes": 1 << 29, "driver": "virtio_blk"}}}
     joint = {"tier": "disk+host-dram", "parts": [disk, {"tier": "host-dram", "bytes": 100}]}
-    got = [u for u in W.undeclared("disk+host-dram", 0, joint) if u["tier"] == "disk"]
+    got = [u for u in W.undeclared({"disk": 1 << 29, "host-dram": 100}, joint) if u["tier"] == "disk"]
     assert got == [{"tier": "disk", "bytes": 1 << 30, "what": "the host's block device nvme0n1, outside the declared disks"},
                    {"tier": "disk", "bytes": 1 << 20, "what": "the host's block device vdb, outside the declared disks"}]
     where = WP.placement("n0", "auditor", store=joint, links=[], undeclared=got)
@@ -404,6 +431,6 @@ def test_the_threshold_is_past_the_streamed_wipes_own_bound(labels: int, k: int)
     """The streamed wipe's own bound (`retained_bits`, `Pous.Guarantees.StreamedWipe` before its PRF term, its best
     `g` and exact count) at `δ = 2^-128`, egress 0 and a GiB outside the fill, is at most the threshold `certify`
     publishes (`StreamedWipeMeetsReads`', its `g = n − ⌈n/r⌉` and crude count), at every fill."""
-    p = sw.WipeParams(labels, k, 1, W.LIMIT_NS, (("gpu", labels * sw.LABEL_BYTES + (1 << 30)),))
+    p = sw.WipeParams(labels, k, 1, W.LIMIT_NS, (("gpu-hbm", labels * sw.LABEL_BYTES + (1 << 30)),))
     q, _ = sw.retained_bits(labels, k, W.memory_bits(p), 0, -128)
     assert q <= W.certify(p, 0)["foreign_bits"] < W.memory_bits(p), (labels, k, q)

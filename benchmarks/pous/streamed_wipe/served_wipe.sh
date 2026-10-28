@@ -15,6 +15,8 @@
 #   WIPE_COMMAND     what starts its side (ssh -i ~/.ssh/vy-auditor2-wipe -o BatchMode=yes research@10.96.0.36)
 #   WIPE_READS       the reads the gate's verb runs, which the leg holds the session to (5500)
 #   WIPE_NODE        the wiped server's id (this host's name, as served_verdicts.py record's --node defaults to)
+#   WIPE_SITE        the registered site, the registration log registering WIPE_NODE as a host (infra's):
+#                    the wipe declares its memory leaves, and the challenger refuses others; none refuses the wipe
 # Further arguments go to demo.sh (e.g. --no-lean). The Lean judge (wipe-protocol) is built before the card is checked, in a
 # scratch copy of verity/core (WIPE_PROTOCOL_EXE names one built already), never in this tree's .lake, which
 # served_verdicts.sh's Lean builds write meanwhile. DIR gets demo.sh's outputs (env.txt, gpu.txt, period.json, wipe.json,
@@ -42,6 +44,8 @@ if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the key, the Le
   for ((i = 0; i + 1 < ${#C[@]}; i++)); do [ "${C[$i]}" = -i ] && KEY=${C[$((i + 1))]}; done
   KEY=${KEY/#\~/$HOME}
   [ -z "$KEY" ] || [ -r "$KEY" ] || refuse "no wipe gate key $KEY on $NODE ($(hostname)): infra installs it, and its gate verb on $CH for this card"
+  [ -n "${WIPE_SITE:-}" ] && [ -r "$WIPE_SITE" ] || refuse "no registered site (WIPE_SITE) on $NODE ($(hostname)): the wipe declares the node's registered memory leaves, and the challenger refuses others"
+  export WIPE_SITE=$(cd "$(dirname "$WIPE_SITE")" && pwd)/$(basename "$WIPE_SITE")
   if [ -z "${WIPE_PROTOCOL_EXE:-}" ] && [[ " $* " != *" --no-lean "* ]]; then
     S=$(mktemp -d)
     trap 'rm -rf "$S"' EXIT
@@ -75,7 +79,7 @@ USED=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits -i "$CAR
 unset PYTHONPATH VIRTUAL_ENV
 rc=0
 OUT=$DIR bash "$DEMO" --node "$NODE" --challenger "$CH" --challenger-address "$ADDR" --challenger-command "$CMD" \
-  --reads "$READS" ${WIPE_PROTOCOL_EXE:+--wipe-protocol "$WIPE_PROTOCOL_EXE"} "$@" || rc=$?
+  --reads "$READS" --site "$WIPE_SITE" ${WIPE_PROTOCOL_EXE:+--wipe-protocol "$WIPE_PROTOCOL_EXE"} "$@" || rc=$?
 python3 - "$DIR" "$SERVE_DIR" "$WINDOW" "$NODE" "$CARD" "${WIPE_OWN_LEASE:+own}" "$rc" <<'EOF'
 import json, os, sys
 from pathlib import Path

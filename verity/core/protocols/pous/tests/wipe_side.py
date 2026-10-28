@@ -2,8 +2,8 @@
 same stdin, stdout and socket, signed by a key at S1's deployed parameters whose tree holds leaf 0 alone (as
 `test_pous_memory_challenger._SparseTree`), so no deployed key is made, and timed on a counting clock and reporting the
 fixed window `WINDOW`, so no reading is the machine's. `python wipe_side.py DIR [STREAMER]` keeps its session log in
-`DIR`, and with `STREAMER` (a built `wipe_stream`) streams the fill natively and reports the streamer's gate and figures
-as `main` does."""
+`DIR` and reads its own copy of the registered site from `DIR/site.json` (`main`'s `--site`), and with `STREAMER` (a
+built `wipe_stream`) streams the fill natively and reports the streamer's gate and figures as `main` does."""
 
 from __future__ import annotations
 
@@ -62,7 +62,8 @@ def main() -> int:
             extra["fill"] = streamer.stream(key, n, conn.fileno())
 
         with conn, conn.makefile("rwb") as f:
-            c = WP.serve(f, request, signer=signer, log=mc.SessionLog(device / "sessions"), egress_bits=WP.UNCOUNTED,
+            c = WP.serve(f, request, site=WP.load_site(device / "site.json"), signer=signer,
+                         log=mc.SessionLog(device / "sessions"), egress_bits=WP.UNCOUNTED,
                          clock=itertools.count(10 ** 9, 1_000).__next__, fill=None if streamer is None else native)
     print(json.dumps(WP.report(c, signer.public_key, WINDOW) | extra, sort_keys=True), flush=True)
     return 0

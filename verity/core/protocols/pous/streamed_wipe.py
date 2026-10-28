@@ -16,8 +16,10 @@ c_j   = derive(coin_secret, COIN_DOMAIN, {server, session, n}).uniform(N, j)    
 session has four steps:
 
 1. **Open.** The challenger claims the session id in its `SessionLog` (one session an id) and publishes the
-   `WipeCommitment`: the server, the session, `N`, `k`, the batch size, the deadline a batch and the declared memory tiers,
-   whose sizes add up to at least the fill.
+   `WipeCommitment`: the server, the session, `N`, `k`, the batch size, the deadline a batch and the memory tiers,
+   whose sizes add up to at least the fill.  The tiers are the server's registered memory, `Site.tiers(h)` of the
+   registered site (`WipeParams.of`): the challenger's party (`wipe_party`, `wipe_parties`) refuses, before the
+   session opens, a server the site doesn't register as a host and any other tiers (`WipeParams.check_site`).
 2. **Fill.** `fill(chunk)` streams `L_0 … L_{N-1}` in order; the challenger reads its clock at the first and last chunk.
    `fill_by(send)` is the same fill streamed by `send`, a streamer on the challenger's own host given `K`.
 3. **Challenge.** Once the fill is complete the challenger draws its coins, then reveals them a batch at a time
@@ -48,6 +50,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from verity.core.site import Site
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 from verity.ml.randomness import derive
@@ -115,7 +118,8 @@ def draw_indices(coin_secret: bytes, server: bytes, session: bytes, n: int, k: i
 class WipeParams:
     """`labels` (`N`), the `k` challenges revealed `batch` at a time, each batch's deadline `limit_ns`, and the memory
     tiers inside the boundary as `(name, bytes)`, whose total holds the fill: what they declare past it (`outside_bits`)
-    is memory the fill doesn't reach, which the bound counts in full."""
+    is memory the fill doesn't reach, which the bound counts in full.  A server's tiers are its registered memory leaves
+    (`of`, `check_site`)."""
 
     labels: int
     k: int
@@ -145,6 +149,35 @@ class WipeParams:
     @property
     def batches(self) -> int:
         return -(-self.k // self.batch)
+
+    @classmethod
+    def of(cls, site: Site, server: bytes, labels: int, k: int, batch: int, limit_ns: int) -> WipeParams:
+        """A wipe of `server`'s registered memory: its tiers are `site.tiers(h)` (`registered_tiers`)."""
+        return cls(labels, k, batch, limit_ns, registered_tiers(site, server))
+
+    def check_site(self, site: Site, server: bytes) -> None:
+        """Refuse tiers that aren't `server`'s registered memory, `site.tiers(h)`, tier for tier (in any order: the
+        bound reads only their total)."""
+        if sorted(self.tiers) != sorted(want := registered_tiers(site, server)):
+            raise ValueError(f"the wipe declares the tiers {[list(t) for t in self.tiers]}, not the registered host "
+                             f"{server.decode(errors='replace')!r}'s memory {[list(t) for t in want]}")
+
+
+TIER_NAMES = {"hbm": "gpu-hbm", "dram": "host-dram", "disk": "disk"}
+"""The wipe's name for each of the Site's memory tiers (`verity.core.site.TIERS`): the tier its store fills."""
+
+
+def registered_tiers(site: Site, server: bytes) -> tuple[tuple[str, int], ...]:
+    """`site.tiers(h)` for the host `h` whose id is `server`'s UTF-8, each tier that holds memory under its wipe name
+    (`TIER_NAMES`): the tiers a wipe of it declares. A server the site doesn't register as a host is refused, and so is
+    one that isn't UTF-8, which names no host."""
+    try:
+        host = server.decode()
+    except UnicodeDecodeError:
+        host = None
+    if host is None or site.kind(host) != "host":
+        raise ValueError(f"the server {server.decode(errors='replace')!r} is not a host the registered site has")
+    return tuple((TIER_NAMES[t], b) for t, b in site.tiers(host).items() if b > 0)
 
 
 @dataclass(frozen=True, slots=True)
@@ -475,7 +508,7 @@ def challenges_for(n: int, slack_labels: int, log2_delta: float) -> int:
 
 __all__ = ["COIN_DOMAIN", "COMPLETE", "DEPLOYED_FILL_BYTES", "DEPLOYED_K", "DEPLOYED_LABELS", "EGRESS_MAX_UNITS",
            "EGRESS_UNIT_BITS", "KEY_DOMAIN", "LABEL_BITS", "LABEL_BYTES", "LABEL_TAG", "LATE", "PROTOCOL",
-           "RECORDS_TREE", "RECORD_SCHEMA", "SESSION_TAG", "WRONG", "BatchRecord", "Challenger", "Prover",
+           "RECORDS_TREE", "RECORD_SCHEMA", "SESSION_TAG", "TIER_NAMES", "WRONG", "BatchRecord", "Challenger", "Prover",
            "SignedWipe", "Verdict", "WipeCommitment", "WipeParams", "batch_digest", "challenges_for", "draw_indices",
-           "egress_units", "label", "labels", "log2_error", "message", "records_root", "retained_bits", "verdict",
-           "wipe_key"]
+           "egress_units", "label", "labels", "log2_error", "message", "records_root", "registered_tiers",
+           "retained_bits", "verdict", "wipe_key"]

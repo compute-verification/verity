@@ -14,6 +14,7 @@ import pytest
 import pous_test_signer as ts
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import streamed_wipe as sw
+from verity.core.site import Loc, Registration, Site
 from verity.ml.randomness import derive
 
 SECRET, SERVER = b"auditor secret", b"server-7"
@@ -146,6 +147,32 @@ def test_one_session_an_id():
     challenger(log=log)
     with pytest.raises(mc.SessionLogError):
         challenger(log=log)
+
+
+def test_the_tiers_are_the_registered_hosts_memory():
+    """`WipeParams.of` declares `Site.tiers(h)` under the wipe's tier names, a device's HBM with the host's own DRAM
+    and disk, and `check_site` refuses any other tiers (one missing, one's bytes, one the site doesn't hold) in any
+    order, and a server the site doesn't register as a host: an unknown id, a device's, bytes that aren't UTF-8."""
+    hbm, dram, disk = 141 << 30, 2 << 40, 4 << 40
+    log = Registration("remote")
+    log = log.append(log.entry(locs=[
+        Loc("site", "site"), Loc("server-7", "host", "site"), Loc("server-7/gpu0", "device", "server-7"),
+        Loc("server-7/gpu0/hbm", "memory", "server-7/gpu0", tier="hbm", bytes=hbm),
+        Loc("server-7/dram", "memory", "server-7", tier="dram", bytes=dram),
+        Loc("server-7/nvme0", "memory", "server-7", tier="disk", bytes=disk)]))
+    site = Site.of_log(log)
+    tiers = (("gpu-hbm", hbm), ("host-dram", dram), ("disk", disk))
+    p = sw.WipeParams.of(site, SERVER, N, K, 1, LIMIT)
+    assert p == sw.WipeParams(N, K, 1, LIMIT, tiers) and p.outside_bits == 8 * (hbm + dram + disk) - N * sw.LABEL_BITS
+    sw.WipeParams(N, K, 1, LIMIT, tiers[::-1]).check_site(site, SERVER)
+    for other in (tiers[:2], tiers[:2] + (("disk", disk - 1),), tiers + (("gpu", 1),)):
+        with pytest.raises(ValueError, match="not the registered host 'server-7''s memory"):
+            sw.WipeParams(N, K, 1, LIMIT, other).check_site(site, SERVER)
+    for server in (b"server-8", b"server-7/gpu0", b"server-7\xff"):
+        with pytest.raises(ValueError, match="is not a host the registered site has"):
+            sw.WipeParams.of(site, server, N, K, 1, LIMIT)
+        with pytest.raises(ValueError, match="is not a host the registered site has"):
+            p.check_site(site, server)
 
 
 def test_the_declared_tiers_hold_the_fill():

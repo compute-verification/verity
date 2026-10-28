@@ -30,7 +30,7 @@ from verity.core.protocols.pous import wipe_period as W
 from verity.core.protocols.pous import wipe_store as WS
 
 KEY = bytes(range(32))
-SMALL = sw.WipeParams(64, W.READS, 1, 1_000, (("gpu", 64 * sw.LABEL_BYTES),))
+SMALL = sw.WipeParams(64, W.READS, 1, 1_000, (("gpu-hbm", 64 * sw.LABEL_BYTES),))
 
 
 class Clock:
@@ -113,9 +113,9 @@ def test_a_store_keeping_prior_content_past_the_threshold_is_rejected() -> None:
     n, threshold = W.foreign_labels("fM", params), W.certify(params, 0)["foreign_bits"]
     assert (n - 1) * sw.LABEL_BITS <= threshold < n * sw.LABEL_BITS
     store = WS.StoreProver(params, WS.HostMemory(), clock=Clock(), foreign=n)
-    w = W.run("n0", params, signer=ts.TestSigner(b"store cheat", 2), log=ts.session_log(), schemes=ts.SCHEMES,
-              protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=Clock(), coin_secret=b"coins", egress_bits=0,
-              prover=lambda _: store)
+    w = W.run("n0", params, signer=ts.TestSigner(b"store cheat", 2), log=ts.session_log(),
+              site=ts.site_of("n0", params.tiers), schemes=ts.SCHEMES, protocol=mc.TEST_PREFIX + W.PROTOCOL,
+              clock=Clock(), coin_secret=b"coins", egress_bits=0, prover=lambda _: store)
     store.close()
     assert w.verdict == "reject" and w.report["ended"] == sw.WRONG and "wrong answers" in w.answer["reason"]
 
@@ -226,6 +226,23 @@ def test_without_nvmls_total_the_device_is_cudas_and_says_why(monkeypatch) -> No
     assert other["nvml_error"] == "nvmlDeviceGetHandleByPciBusId_v2 failed for the GPU at 0000:3C:00.0: Not Found (6)"
 
 
+def _period(tmp_path: Path, doc: dict, tiers) -> tuple[Path, Path]:
+    """`periods/p0/period.json` and the challenger side's directory, each with n0's registered site: `tiers`, the
+    memory leaves the store measures."""
+    period, device = tmp_path / "periods" / "p0", tmp_path / "device"
+    period.mkdir(parents=True)
+    device.mkdir()
+    (period / "period.json").write_text(json.dumps(doc | {"site": ts.write_site(period, "n0", tiers)}))
+    ts.write_site(device, "n0", tiers)
+    return period, device
+
+
+def _disk_total(target: Path) -> int:
+    d = WS.Disk([target], reserve_bytes=0, direct=None)
+    d.close()
+    return d.total
+
+
 @pytest.mark.parametrize("nvml", [True, False], ids=["nvml", "no-nvml"])
 def test_the_leg_on_a_gpu_declares_its_driver_reserve(tmp_path, monkeypatch, nvml: bool) -> None:
     """The leg on a GPU (`wipe.store` `cuda`, on `cuda_on_host`) of 64 MiB by CUDA's count and an H200's driver reserve
@@ -235,12 +252,8 @@ def test_the_leg_on_a_gpu_declares_its_driver_reserve(tmp_path, monkeypatch, nvm
     cuda = 64 << 20
     tier = cuda + RESERVE if nvml else cuda
     _drivers(monkeypatch, {"libcuda.so.1": cuda_on_host(cuda)} | ({WS.NVML: nvml_of({BUS: tier}, [])} if nvml else {}))
-    period = tmp_path / "periods" / "p0"
-    period.mkdir(parents=True)
-    (period / "period.json").write_text(json.dumps({"challenger_host": "auditor",
-                                                    "wipe": {"store": "cuda", "segments": 1}}))
-    device = tmp_path / "device"
-    device.mkdir()
+    period, device = _period(tmp_path, {"challenger_host": "auditor", "wipe": {"store": "cuda", "segments": 1}},
+                             (("gpu-hbm", tier),))
     side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
     monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
     out = tmp_path / "out"
@@ -267,22 +280,19 @@ def test_the_leg_on_a_disk_and_a_gpu_declares_the_gpus_driver_reserve(tmp_path, 
     cuda = 64 << 20
     tier = cuda + RESERVE if nvml else cuda
     _drivers(monkeypatch, {"libcuda.so.1": cuda_on_host(cuda)} | ({WS.NVML: nvml_of({BUS: tier}, [])} if nvml else {}))
-    period = tmp_path / "periods" / "p0"
-    period.mkdir(parents=True)
     target = tmp_path / "disk"
     target.mkdir()
-    (period / "period.json").write_text(json.dumps({"challenger_host": "auditor", "wipe": {
+    period, device = _period(tmp_path, {"challenger_host": "auditor", "wipe": {
         "store": "cuda", "segments": 1,
-        "disk": {"paths": [str(target)], "bytes": 1 << 25, "reserve_bytes": 0, "direct": None}}}))
-    device = tmp_path / "device"
-    device.mkdir()
+        "disk": {"paths": [str(target)], "bytes": 1 << 25, "reserve_bytes": 0, "direct": None}}},
+        (("disk", _disk_total(target)), ("gpu-hbm", tier)))
     side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
     monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
     out = tmp_path / "out"
     answer = W.leg(period, "n0", out)
     assert answer["verdict"] == "accept", answer
     record = json.loads((out / "wipe.json").read_text())
-    assert record["wipe"]["tier"] == "disk+gpu-hbm" and answer["profile"]["tiers"][1] == ["gpu-hbm", tier]
+    assert record["wipe"]["tier"] == "disk+gpu-hbm" and answer["profile"]["tiers"][0] == ["gpu-hbm", tier]
     reserve = [g for g in record["uncertified"] if "driver reserves" in g]
     assert len(reserve) == (0 if nvml else 1) and all(f"CUDA's total ({cuda} bytes)" in g for g in reserve)
     assert _fills(target) == []
@@ -299,12 +309,9 @@ def test_the_leg_on_a_store_with_a_native_fill(tmp_path, monkeypatch, wipe_strea
     the device) gated first, against a challenger side of its own host (`wipe_side.py`) streaming natively. The record
     holds the prover's fill and device reads, the signed session's fill and round trips, and the streamer's gate and
     figures; the placement names the store."""
-    period = tmp_path / "periods" / "p0"
-    period.mkdir(parents=True)
-    (period / "period.json").write_text(json.dumps({"challenger_host": "auditor",
-                                                    "wipe": {"store": "host", "segments": 1, "streamer": "native"}}))
-    device = tmp_path / "device"
-    device.mkdir()
+    period, device = _period(tmp_path, {"challenger_host": "auditor",
+                                        "wipe": {"store": "host", "segments": 1, "streamer": "native"}},
+                             (("host-dram", 1 << 25),))
     side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device),
                                 str(wipe_streamer.path)))
     monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
@@ -326,18 +333,15 @@ def test_the_cheats_leg_rejects_under_a_simulated_placement(tmp_path, monkeypatc
     """`main` on period.json's cheat (`foreign_bytes` `fM`) with the challenger a process of its own on the prover's
     node named `simulated`: the wipe rejects, `--expect reject` exits 0, and the record names the placement and what
     the prover kept."""
-    period = tmp_path / "periods" / "p0"
-    period.mkdir(parents=True)
-    (period / "period.json").write_text(json.dumps({"wipe": {"store": "host", "segments": 1, "foreign_bytes": "fM",
-                                                             "placement": "simulated", "egress_bits": 0}}))
-    device = tmp_path / "device"
-    device.mkdir()
+    period, device = _period(tmp_path, {"wipe": {"store": "host", "segments": 1, "foreign_bytes": "fM",
+                                                 "placement": "simulated", "egress_bits": 0}}, (("host-dram", 1 << 25),))
     side = WP.Party("n0", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
     extras = []
     monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): extras.append(extra) or side))
     out = tmp_path / "out"
     assert W.main(["--period", str(period), "--out", str(out), "--node", "n0", "--expect", "reject"]) == 0
-    assert extras == [("--egress-bits", "0")], "the local challenger signs the period's egress count"
+    assert extras == [("--site", str(period / "site.json"), "--egress-bits", "0")], \
+        "the local challenger reads the registered site and signs the period's egress count"
     record = json.loads((out / "wipe.json").read_text())
     n = W.foreign_labels("fM", W.params_for())
     assert record["answer"]["verdict"] == "reject" and record["prover"]["foreign"]["labels"] == n
@@ -415,9 +419,10 @@ def test_one_session_over_a_disk_and_host_memory(tmp_path, foreign: int) -> None
     params = sw.WipeParams(512, W.READS, 1, W.LIMIT_NS, joint.declared())
     store = WS.StoreProver(params, joint, staging=4 * WS.BLOCK, clock=Clock(), foreign=foreign)
     store.gate()
-    w = W.run("n0", params, signer=ts.TestSigner(b"disk %d" % foreign, 2), log=ts.session_log(), schemes=ts.SCHEMES,
-              protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=Clock(), secret=KEY, session_id=bytes(32),
-              coin_secret=b"coins", egress_bits=0, prover=lambda _: store)
+    w = W.run("n0", params, signer=ts.TestSigner(b"disk %d" % foreign, 2), log=ts.session_log(),
+              site=ts.site_of("n0", params.tiers), schemes=ts.SCHEMES, protocol=mc.TEST_PREFIX + W.PROTOCOL,
+              clock=Clock(), secret=KEY, session_id=bytes(32), coin_secret=b"coins", egress_bits=0,
+              prover=lambda _: store)
     [fill] = _fills(tmp_path)
     on_disk, key = fill.read_bytes(), sw.wipe_key(KEY, b"n0", bytes(32))
     assert store.sync_ns == 7 and store.record()["store"]["parts"][0]["tier"] == "disk"
@@ -436,15 +441,12 @@ def test_one_session_over_a_disk_and_host_memory(tmp_path, foreign: int) -> None
 def test_the_leg_on_a_disk_and_host_memory(tmp_path, monkeypatch) -> None:
     """period.json's wipe on host memory and a disk directory in one session against a challenger side of its own
     host: it accepts, both tiers declared, the disk's filesystems no longer undeclared, and the fill file removed."""
-    period = tmp_path / "periods" / "p0"
-    period.mkdir(parents=True)
     target = tmp_path / "disk"
     target.mkdir()
-    (period / "period.json").write_text(json.dumps({"challenger_host": "auditor", "wipe": {
+    period, device = _period(tmp_path, {"challenger_host": "auditor", "wipe": {
         "store": "host", "segments": 1, "disk": {"paths": [str(target)], "bytes": 1 << 25, "reserve_bytes": 0,
-                                                 "direct": None}}}))
-    device = tmp_path / "device"
-    device.mkdir()
+                                                 "direct": None}}},
+        (("disk", _disk_total(target)), ("host-dram", 1 << 25)))
     side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
     monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
     out = tmp_path / "out"
@@ -452,7 +454,7 @@ def test_the_leg_on_a_disk_and_host_memory(tmp_path, monkeypatch) -> None:
     assert answer["verdict"] == "accept", answer
     record = json.loads((out / "wipe.json").read_text())
     disk_total = record["prover"]["store"]["parts"][0]["total_bytes"]
-    assert answer["profile"]["tiers"] == [["disk", disk_total], ["host-dram", 1 << 25]]
+    assert answer["profile"]["tiers"] == [["host-dram", 1 << 25], ["disk", disk_total]]
     assert record["wipe"]["tier"] == "disk+host-dram" and record["wipe"]["segments"] == 2
     assert record["prover"]["fill"]["bytes"] == 1 << 26 and record["prover"]["fill"]["sync_ns"] is not None
     part = record["prover"]["store"]["parts"][0]
@@ -465,24 +467,20 @@ def test_the_leg_on_a_disk_and_host_memory(tmp_path, monkeypatch) -> None:
 def test_the_leg_on_a_disk_and_the_whole_dram(tmp_path, monkeypatch) -> None:
     """wipe.dram after a disk store: the DRAM is a tier declared at all the host's physical memory, so none of it is
     undeclared, and the fill's last segment is in it."""
-    period = tmp_path / "periods" / "p0"
-    period.mkdir(parents=True)
     target = tmp_path / "disk"
     target.mkdir()
-    (period / "period.json").write_text(json.dumps({"challenger_host": "auditor", "wipe": {
+    whole = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+    period, device = _period(tmp_path, {"challenger_host": "auditor", "wipe": {
         "store": "disk", "disk": {"paths": [str(target)], "bytes": 1 << 25, "reserve_bytes": 0, "direct": None},
-        "dram": {"bytes": 1 << 25, "reserve_bytes": 0}}}))
-    device = tmp_path / "device"
-    device.mkdir()
+        "dram": {"bytes": 1 << 25, "reserve_bytes": 0}}}, (("disk", _disk_total(target)), ("host-dram", whole)))
     side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
     monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
     out = tmp_path / "out"
     answer = W.leg(period, "n0", out)
     assert answer["verdict"] == "accept", answer
     record = json.loads((out / "wipe.json").read_text())
-    whole = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
     disk_total = record["prover"]["store"]["parts"][0]["total_bytes"]
-    assert answer["profile"]["tiers"] == [["disk", disk_total], ["host-dram", whole]]
+    assert answer["profile"]["tiers"] == [["host-dram", whole], ["disk", disk_total]]
     assert record["wipe"]["tier"] == "disk+host-dram" and record["wipe"]["segments"] == 2
     assert [u for u in record["placement"]["undeclared_tiers"] if u["tier"] == "host-dram"] == []
     assert _fills(target) == []

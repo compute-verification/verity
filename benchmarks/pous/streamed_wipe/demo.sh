@@ -8,20 +8,23 @@
 #   research run --on NODE --project verity --source . --cwd clone --timeout 90m -- \
 #     bash benchmarks/pous/streamed_wipe/demo.sh [--dry-run] [OPTIONS]
 #
+#   --site LOG           the registered site (required): the registration log, as JSON, registering --node as a
+#                        host. The wipe declares the node's registered memory leaves (Site.tiers), so what the fill
+#                        doesn't reach counts in full in the published foreign_bits (R), and the memory challenger
+#                        refuses other tiers; one on its own host reads its own copy (its wipe_party --site)
 #   --dry-run            a 64-segment (2 GiB) fill with the memory challenger on this node: every step of the hour's
 #                        run but the size and the placement (trusted-host unmet)
 #   --segments N         the fill in 32 MiB segments (default: the device's free memory less --reserve-gib; 64 dry)
-#   --reserve-gib G      device memory left out of the fill (default 1; a fraction too: 0.0625 is 64 MiB);
-#                        the whole device is declared, so what the fill doesn't reach counts in
-#                        full in the published foreign_bits (R)
+#   --reserve-gib G      device memory left out of the fill (default 1; a fraction too: 0.0625 is 64 MiB), which
+#                        counts in R as the registered device memory the fill doesn't reach
 #   --reads K            the timed spot reads, which the certificate is computed at (default 2152; 5231 is the H200's
 #                        StreamedWipeMeets141GB5, r = 59): a challenger here is started with it; one on its own host
 #                        chooses its own (its --challenger-command's wipe_party --reads K), and the leg refuses a
 #                        session at another count
 #   --challenger HOST --challenger-address H:P --challenger-command 'ARGV'
 #                        the memory challenger on a host of its own (all three; infra's wiring of wipe_party's side
-#                        there, e.g. 'python -m verity.core.protocols.pous.wipe_party --device D --listen 0.0.0.0:P
-#                        --reads 5231 --streamer build'); without them it runs on this node, the premise unmet
+#                        there, e.g. 'python -m verity.core.protocols.pous.wipe_party --device D --site S --listen
+#                        0.0.0.0:P --reads 5231 --streamer build'); without them it runs on this node, the premise unmet
 #   --simulated          the memory challenger here, named the stand-in for one on its own host (placement
 #                        `simulated`, the premise assumed; its key in this run's scratch all the same)
 #   --foreign-gb G|fM    the cheat: the prover keeps G GB (10^9 bytes) of prior content in place of the fill's first
@@ -38,15 +41,15 @@
 #   --store cuda|host|disk  host: the CPU stand-in, host memory for the device (no GPU); disk: the --disk targets alone
 #   --disk PATH          a disk target in the same session, ahead of the store (repeatable, one a filesystem): a
 #                        directory, where the run makes a scratch directory of its own (removed on exit) holding the
-#                        fill's file, or a block device nothing holds, written raw. The whole disks under the targets are
-#                        declared, so what the fill doesn't overwrite (the used filesystem, its metadata, the reserve,
-#                        the spare area) counts in R
+#                        fill's file, or a block device nothing holds, written raw. The node's registered disk leaves
+#                        are declared (--site), so what the fill doesn't overwrite of them (the used filesystem, its
+#                        metadata, the reserve, the spare area) counts in R
 #   --disk-gb G          the fill on the disks, in GB (default: all their room)
 #   --disk-reserve-gib G free space each directory target keeps (default 10)
-#   --disk-spare-gb G    the drives' spare area and cache, from their datasheets, declared so they count in R (default
-#                        0, which the record names undeclared on a physical drive)
+#   --disk-spare-gb G    the drives' spare area and cache, from their datasheets, which the store's record counts
+#                        (default 0, which the record names undeclared on a physical drive)
 #   --dram               the host's DRAM in the same session, after the store (cuda or disk): the DRAM available
-#                        (MemAvailable) less --dram-reserve-gib, the whole DRAM declared, so what the fill doesn't
+#                        (MemAvailable) less --dram-reserve-gib, the registered DRAM declared, so what the fill doesn't
 #                        reach counts in R. Launch it with research run --mem-gb near the fill, so no admitted run
 #                        takes the memory meanwhile; gpu-lease's memory cap (90% of MemTotal) is MemTotal less 2 GiB
 #   --dram-gb G          the fill on the DRAM, in GB (implies --dram; default: what's available less the reserve)
@@ -61,7 +64,8 @@
 #
 # Under gpu-lease when the node has it (outside the lease: uv sync, the Lean build, the streamer's build check).
 # Outputs under $OUT (a run's out/; else ./out): gpu.txt, env.txt, disk.txt (with --disk: the block devices,
-# filesystems, swap and each disk's driver), lake-build.log, period.json, wipe.json, wipe.case.json, summary.json.
+# filesystems, swap and each disk's driver), lake-build.log, period.json, site.json (the registered site it read),
+# wipe.json, wipe.case.json, summary.json.
 # summary.json's t0 and t1 are the session's window on the challenger's clock (the prover
 # connected, the session signed), and its `uncertified` what the bound doesn't cover (the placement's links and
 # undeclared tiers, an uncounted egress). Scratch (the challenger's key and session log, the built streamer) is a
@@ -78,10 +82,11 @@ if [ "${1:-}" = leased ]; then
 else
   DRY=0 SEGMENTS= RESERVE=1 CH= CH_ADDR= CH_CMD= THREADS= STORE=cuda GPU=H200 NODE=$(hostname) LIMIT=20000000 LEAN=1
   SIMULATED=0 FOREIGN=0 EXPECT= EGRESS= LINKS= READS= DISKS=() DISK_GB= DISK_RESERVE=10 DISK_SPARE=0 LEASE_MIN=60
-  DRAM=0 DRAM_GB= DRAM_RESERVE=16 WIPE_PROTOCOL=
+  DRAM=0 DRAM_GB= DRAM_RESERVE=16 WIPE_PROTOCOL= SITE_LOG=
   ARGS=("$@")
   while [ $# -gt 0 ]; do
     case "$1" in
+      --site) SITE_LOG=$2; shift ;;
       --dry-run) DRY=1 ;;
       --simulated) SIMULATED=1 ;;
       --egress-bits) EGRESS=$2; shift ;;
@@ -113,6 +118,8 @@ else
     esac
     shift
   done
+  [ -n "$SITE_LOG" ] && [ -r "$SITE_LOG" ] || {
+    echo "demo.sh: --site LOG, the registered site registering $NODE as a host, is required (see the header)"; exit 2; }
   if [ -n "$CH$CH_ADDR$CH_CMD" ] && [ -z "$CH" -o -z "$CH_ADDR" -o -z "$CH_CMD" ]; then
     echo "demo.sh: --challenger, --challenger-address and --challenger-command go together"; exit 2
   fi
@@ -184,6 +191,8 @@ EOF
     TOOLS="{\"wipe-protocol\": \"$ROOT/$L/.lake/build/bin/wipe-protocol\"}"
   fi
   mkdir -p "$S/periods/p0"
+  cp "$SITE_LOG" "$S/periods/p0/site.json"
+  cp "$SITE_LOG" "$O/site.json"
   uv run --no-sync python - "$S/periods/p0/period.json" "$TOOLS" "$STORE" "${SEGMENTS:-null}" "$RESERVE" "${THREADS:-null}" \
     "$LIMIT" "$CH" "$CH_ADDR" "$CH_CMD" "$SIMULATED" "$FOREIGN" "${EGRESS:-null}" "${READS:-null}" "${CTRL_DEV:-}" \
     "${CTRL_SRC:-}" "$CTRL_MBPS" "$LINKS" "$DISK_JSON" "$DRAM_JSON" <<'EOF'
@@ -199,7 +208,7 @@ for spec in filter(None, specs.splitlines()):
     if not (name and to and via):
         sys.exit(f"demo.sh: --link is NAME=TO@VIA, not {spec!r}")
     links.append({"name": name, "to": to, "via": via})
-doc = {"tools": json.loads(tools),
+doc = {"tools": json.loads(tools), "site": "site.json",
        "wipe": {"store": store, "segments": json.loads(segments), "reserve_bytes": int(Fraction(reserve) * 2 ** 30),
                 "streamer": "native", "threads": json.loads(threads), "limit_ns": int(limit),
                 "foreign_bytes": foreign if foreign == "fM" else int(Fraction(foreign) * 10 ** 9),

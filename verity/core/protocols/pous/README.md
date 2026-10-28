@@ -113,7 +113,8 @@ streamed-label wipe") has the messages, the bound, the measured fill and round t
 ~~~python
 from verity.core.protocols.pous import streamed_wipe as sw
 
-p = sw.WipeParams(labels=n, k=sw.DEPLOYED_K, batch=1, limit_ns=limit, tiers=(("hbm", a), ("dram", b), ("nvme", c)))
+p = sw.WipeParams.of(site, server_id, n, sw.DEPLOYED_K, 1, limit)  # the tiers: the server's registered memory, site.tiers(h)
+p.check_site(site, server_id)                                                  # what the challenger's party holds a request to
 c = sw.Challenger(secret, server_id, session_id, p, signer, log=log)          # the id claimed; the commitment published
 for start, data in c.fill(chunk=1 << 20):                                     # the labels, streamed to the server
     send(start, data)
@@ -123,8 +124,10 @@ v, sides = wipe_verdict.judge(signed, c.commitment, trusted={signer.public_key})
 print(v.public())                                                              # {"accepted": ..., "egress_mib": ...}
 ~~~
 
-A period's wipe is `wipe_period`: one streamed wipe of the node, the memory challenger a party of its own on
-`period.json`'s `challenger_host` (`wipe_party`, which streams the fill and times the reads over a socket), judged as the
+A period's wipe is `wipe_period`: one streamed wipe of the node, its tiers the node's memory in the registered site
+(`period.json`'s `site`, a registration log, `verity.core.site`), the memory challenger a party of its own on
+`period.json`'s `challenger_host` (`wipe_party`, which streams the fill and times the reads over a socket, and refuses
+tiers that aren't the node's memory in its own copy of the site, `--site`), judged as the
 wipe's component of onsite Verity, `verity/wipe/v0` (`MemoryChallenger.WipeProtocol`, `wipe-protocol` in
 `verity/core/devices/memory_challenger/lean/`). An accepted wipe publishes `M` (every declared tier), the reads `k` the
 memory challenger chose (`wipe_party --reads`, 2152 by default; the prover never names them), `r = ratio(k)` and the
@@ -145,20 +148,21 @@ and gated on the challenger's host by `wipe_stream`); `benchmarks/pous/streamed_
 past the published figure, which must reject), its `reads` the reads the leg expects, and its `placement` `simulated` names a challenger on the prover's node the stand-in for
 one on its own host. The leg's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
 no network certifier counts (the placement's `links`: `wipe.links`, and the challenger's as the prover connected to it),
-the node's memory outside the declared tier (`undeclared_tiers`: the device's past the declared tier, which a GPU's leg
-declares whole, the host's DRAM, its disks), a GPU's driver reserve when NVML gave no total (the leg declares the larger
-of CUDA's and NVML's totals, and NVML's counts the reserve: `wipe_store.Cuda.info`) and an egress signed `UNCOUNTED`. It
+the node's memory outside the declared tiers (`undeclared_tiers`: a device's past its registered tier, the host's DRAM
+and its disks unless the site registers them), a GPU's driver reserve when NVML gave no total (`wipe_store.Cuda.info`)
+and an egress signed `UNCOUNTED`. It
 also carries the session's window, `t0` (the prover connected) and `t1` (the session signed) on the challenger's clock,
 which a network certifier counts the egress over.
 `wipe.disk` puts the node's disks in the same session (`wipe_store.Disk`, laid ahead of the card or host memory by
 `wipe_store.Joint`; `demo.sh --disk PATH`): a fill file of the session's own in each target directory, or a raw block
-device, written with `O_DIRECT` and synced before the prover acknowledges the fill. The whole disks under the targets
-are declared, with `spare_bytes` for each drive's spare area and cache, so what the fill doesn't overwrite (the used
-filesystem, its metadata, the reserve, the spare area) counts in `R`. That is `Pous.Guarantees.StreamedWipeMeetsDisk`.
+device, written with `O_DIRECT` and synced before the prover acknowledges the fill. The tiers declared are the
+registered site's, so the whole disks the site registers (their spare area and cache among them) count in `R` past what
+the fill overwrites (the used filesystem, its metadata, the reserve, the spare area); the store measures the disks under
+the targets, with `spare_bytes` for each drive's spare area and cache, and what it measures past the registered tier
+goes in `uncertified`. That is `Pous.Guarantees.StreamedWipeMeetsDisk`.
 A virtual disk's backing store, an undeclared spare area, buffered I/O and the disks outside the targets go in
 `uncertified`: every block device in `/sys/block` but loop and RAM devices, mounted or not, each whole. `wipe.dram` puts the host's DRAM in that session too, after the card (`demo.sh --dram`): the fill takes
-what `MemAvailable` says less a reserve, and the whole DRAM is declared (`wipe_store.HostMemory(whole=True)`), so the
-rest counts in `R`.
+what `MemAvailable` says less a reserve, and the DRAM the site registers is declared, so the rest counts in `R`.
 
 Tests: `uv run pytest verity/core/protocols/pous` (about 8 s). P3's 64 KB-label segment vector runs with `VERITY_POUS_SLOW=1`.
 Regenerate the vectors with `python verity/core/protocols/pous/tests/pous_vectors.py`, and the Lean vectors with

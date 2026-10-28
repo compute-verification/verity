@@ -64,8 +64,8 @@ def serve(monkeypatch, params: sw.WipeParams, secret: bytes) -> sw.Challenger:
 
     def side() -> None:
         with a, a.makefile("rwb") as f:
-            got["c"] = WP.serve(f, WP.request_of("n0", params), signer=signer, log=log, egress_bits=0, reads=params.k,
-                                clock=itertools.count(T0, STEP).__next__)
+            got["c"] = WP.serve(f, WP.request_of("n0", params), site=ts.site_of("n0", params.tiers), signer=signer,
+                                log=log, egress_bits=0, reads=params.k, clock=itertools.count(T0, STEP).__next__)
 
     t = threading.Thread(target=side)
     t.start()
@@ -76,7 +76,8 @@ def serve(monkeypatch, params: sw.WipeParams, secret: bytes) -> sw.Challenger:
 
 
 def challenger_caps(secret: bytes, params: sw.WipeParams) -> dict:
-    return {"signer": ts.TestSigner(secret, 2), "log": ts.session_log(), "egress_bits": 0, "reads": params.k}
+    return {"signer": ts.TestSigner(secret, 2), "log": ts.session_log(), "egress_bits": 0, "reads": params.k,
+            "site": ts.site_of("n0", params.tiers)}
 
 
 def wipe(params: sw.WipeParams, secret: bytes, *, mode: str = "live", chunk: int = WP.CHUNK, store=sw.Prover,
@@ -133,6 +134,16 @@ def test_parameters_that_name_the_reads_are_refused():
     assert r.outcomes[C] == {"outcome": {"ended": None, "signed": None}, "refused": "schema"}
     assert r.outcomes[P] == {"outcome": {"answered": 0}, "refused": "schema"}
     assert not [e for e in r.transcripts[C] if e.dir == "out" and e.channel == P and e.kind == "private"]
+
+
+@pytest.mark.parametrize("request_", [WP.request_of("n1", PARAMS),
+                                      WP.request_of("n0", sw.WipeParams(256, 64, 1, 10_000, (("host-dram", 257 * sw.LABEL_BYTES),)))])
+def test_tiers_that_arent_the_registered_hosts_memory_leaves_are_refused(request_):
+    """A run naming a node the registered site doesn't have as a host, or declaring other tiers than its memory leaves,
+    is refused by the challenger before it draws a coin or sends a label, unsigned."""
+    r = wipe(PARAMS, b"unregistered", request=request_)
+    assert r.outcomes[C] == {"outcome": {"ended": None, "signed": None}, "refused": "unregistered"}
+    assert not [e for e in r.transcripts[C] if e.dir == "out" and e.channel in (P, "coins")]
 
 
 class Leaving(WPS.Prover):

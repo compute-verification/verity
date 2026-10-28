@@ -4,15 +4,19 @@ so a key is made in milliseconds.  Its scheme id starts with `memory_challenger.
 by `memory_challenger.SCHEMES`.  Its leaf state, and a test's session log (`session_log`), are each in a fresh directory
 inside `directory`, else inside `DIR`: the directory a suite's fixture gives the running tests, under pytest's basetemp,
 which the check removes when the suite ends.  With neither they refuse, since nothing removes a directory made in
-`$TMPDIR`."""
+`$TMPDIR`.  A test's registered site (`site_of`) registers its wipe's server as a host with the tiers it declares."""
 from __future__ import annotations
 
 import hashlib
+import json
 import tempfile
+from collections.abc import Sequence
 from pathlib import Path
 
+from verity.core.site import Loc, Registration, Site
 from verity.ml.crypto import lms
 from verity.core.protocols.pous import memory_challenger as mc
+from verity.core.protocols.pous import streamed_wipe as sw
 
 HEIGHTS = range(1, 11)
 DIR: Path | None = None
@@ -61,3 +65,23 @@ def session_log(directory: str | Path | None = None) -> mc.SessionLog:
 
 SCHEMES: dict[str, mc.Verify] = {scheme(h): mc.lms_verify(lms.Params(64, 1, h)) for h in HEIGHTS}
 """The mapping a test passes to `memory_challenger.verdict`: the test signers accepted, in that test alone."""
+
+
+def site_log(host: str, tiers: Sequence[tuple[str, int]]) -> Registration:
+    """A remote composite's registration log registering `host` with one memory leaf a tier, each `(name, bytes)` under
+    its wipe name (`streamed_wipe.TIER_NAMES`), directly under the host."""
+    spec = {name: t for t, name in sw.TIER_NAMES.items()}
+    leaves = [Loc(f"{host}/{name}", "memory", host, tier=spec[name], bytes=b) for name, b in tiers]
+    log = Registration("remote")
+    return log.append(log.entry(locs=[Loc("site", "site"), Loc(host, "host", "site"), *leaves]))
+
+
+def site_of(host: str, tiers: Sequence[tuple[str, int]]) -> Site:
+    """The site `site_log(host, tiers)` registers: the wipe's tiers for `host` are `tiers`."""
+    return Site.of_log(site_log(host, tiers))
+
+
+def write_site(directory: Path, host: str, tiers: Sequence[tuple[str, int]]) -> str:
+    """`site_log(host, tiers)` written to `directory/site.json`; its name, as `period.json`'s `site` names it."""
+    (directory / "site.json").write_text(json.dumps(site_log(host, tiers).to_json()))
+    return "site.json"

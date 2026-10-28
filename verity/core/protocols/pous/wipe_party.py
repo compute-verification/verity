@@ -15,9 +15,11 @@ prover that leaves before the session ends leaves it unsigned. The side reports 
 prover connected) and `t1` (the session signed, or ended unsigned) on the challenger host's real-time clock: the
 interval a network certifier counts the session's egress over.
 
-`python -m verity.core.protocols.pous.wipe_party --device DIR [--listen HOST:PORT] [--reads K] [--egress-bits N]
-[--streamer build|PATH [--threads T]]` is the challenger's side (`main`): it reads the request `{"labels", "limit_ns",
-"node", "tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one prover (`serve`) and prints its report.
+`python -m verity.core.protocols.pous.wipe_party --device DIR --site LOG [--listen HOST:PORT] [--reads K]
+[--egress-bits N] [--streamer build|PATH [--threads T]]` is the challenger's side (`main`): it reads the request
+`{"labels", "limit_ns", "node", "tiers"}` as one JSON line on stdin, refuses it unless its tiers are the node's memory
+leaves in the registered site (`--site`, its registration log; `checked_params`), prints `{"listening": PORT}`,
+serves one prover (`serve`) and prints its report.
 With `--streamer` the fill is `wipe_stream`'s, native on this host's CPUs and gated before the side listens, and the
 report adds the streamer's gate (`streamer`) and its figures for the fill (`fill`). `session(party, request, prover)` is
 the leg's side: it starts the challenger's side with `party.command`, connects to `party.address` (by default the port
@@ -39,6 +41,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from verity.core.site import Registration, Site
+
 from . import memory_challenger as mc
 from . import streamed_wipe as sw
 from . import wipe_stream
@@ -53,6 +57,12 @@ UNCOUNTED = sw.EGRESS_MAX_UNITS * sw.EGRESS_UNIT_BITS
 READS = 2152
 """The timed spot reads a challenger runs when its command doesn't name them (`--reads`)."""
 REQUEST_KEYS = {"labels", "limit_ns", "node", "tiers"}
+
+
+def load_site(path: Path) -> Site:
+    """The registered site: the registration log at `path` (`Registration.to_json`) folded (`Site.of_log`). Each entry
+    was checked when it was registered; a challenger reads the auditor's own copy of the log, never the prover's."""
+    return Site.of_log(Registration.of_json(json.loads(path.read_text())))
 
 
 def _read(f: BinaryIO, n: int) -> bytes:
@@ -71,15 +81,24 @@ def params_of(request: Mapping[str, Any], reads: int = READS) -> sw.WipeParams:
     return sw.WipeParams(request["labels"], reads, 1, request["limit_ns"], tuple((t, b) for t, b in request["tiers"]))
 
 
-def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog, egress_bits: int,
-          reads: int = READS, clock: Callable[[], int] = time.perf_counter_ns, chunk: int = CHUNK,
+def checked_params(request: Mapping[str, Any], site: Site, reads: int = READS) -> sw.WipeParams:
+    """`params_of`, the challenger's: tiers that aren't the node's registered memory leaves in `site` are refused
+    (`WipeParams.check_site`)."""
+    p = params_of(request, reads)
+    p.check_site(site, request["node"].encode())
+    return p
+
+
+def serve(f: BinaryIO, request: Mapping[str, Any], *, site: Site, signer: mc.Signer, log: mc.SessionLog,
+          egress_bits: int, reads: int = READS, clock: Callable[[], int] = time.perf_counter_ns, chunk: int = CHUNK,
           fill: Callable[[bytes, int], Any] | None = None) -> sw.Challenger:
-    """The challenger's side of one wipe over the connection `f`: the labels' secret and the session id drawn here, the
-    fill streamed (by `fill(K, N)` when given, which writes the frames to `f`'s connection itself: the native streamer,
-    `wipe_stream`), `reads` batches revealed and their answers read on `clock`, the session signed by `signer` with
-    `egress_bits` once it ends. A prover that closes first leaves it unsigned."""
+    """The challenger's side of one wipe over the connection `f`: the request's tiers checked against `site`, the
+    registered site, the labels' secret and the session id drawn here, the fill streamed (by `fill(K, N)` when given,
+    which writes the frames to `f`'s connection itself: the native streamer, `wipe_stream`), `reads` batches revealed and
+    their answers read on `clock`, the session signed by `signer` with `egress_bits` once it ends. A prover that closes
+    first leaves it unsigned."""
     c = sw.Challenger(secrets.token_bytes(32), request["node"].encode(), secrets.token_bytes(32),
-                      params_of(request, reads), signer, log=log, clock=clock)
+                      checked_params(request, site, reads), signer, log=log, clock=clock)
     try:
         if fill is not None:
             f.flush()
@@ -179,14 +198,14 @@ class Party:
     @classmethod
     def local(cls, host: str, device: str | Path, extra: Sequence[str] = ()) -> Party:
         """The challenger's side as a process on this machine (`host`), its key and session log in `device`, `extra`
-        more of `main`'s arguments (`--streamer build`)."""
+        more of `main`'s arguments (`--site LOG`, `--streamer build`)."""
         return cls(host, (sys.executable, "-m", MODULE, "--device", str(device), "--listen", "127.0.0.1:0", *extra))
 
     @classmethod
     def of(cls, period: Mapping[str, Any], node: str, device: str | Path, extra: Sequence[str] = ()) -> Party:
         """`period.json`'s challenger host (`challenger_host`, by default `node`): this machine's process when it is the
         node (with `extra`), else `challenger.wipe`'s `command` and `address` (`"HOST:PORT"`), which infra writes once
-        the host serves the challenger's side."""
+        the host serves the challenger's side, its own copy of the registered site (`--site`) among its arguments."""
         host = period.get("challenger_host") or node
         if host == node:
             return cls.local(node, device, extra)
@@ -266,6 +285,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     ap = argparse.ArgumentParser(prog=MODULE, description=__doc__.split("\n\n")[0])
     ap.add_argument("--device", required=True, help="the challenger's key and session log (`period.challenger`)")
+    ap.add_argument("--site", required=True, help="the registered site, its registration log as JSON "
+                    "(`verity.core.site.Registration`): the request's tiers must be its node's memory")
     ap.add_argument("--listen", default="127.0.0.1:0", help="HOST:PORT to listen on (port 0: any)")
     ap.add_argument("--reads", type=int, default=READS,
                     help=f"the timed spot reads, which the certificate is computed at (default {READS})")
@@ -276,7 +297,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--threads", type=int, help="the streamer's threads (default: every CPU of this host)")
     a = ap.parse_args(argv)
     request = json.loads(sys.stdin.readline())
-    params_of(request, a.reads)
+    site = load_site(Path(a.site))
+    checked_params(request, site, a.reads)
     device = Path(a.device)
     streamer, extra = None, {}
     if a.streamer:
@@ -299,15 +321,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                 extra["fill"] = streamer.stream(key, n, conn.fileno())
 
             with conn.makefile("rwb") as f:
-                c = serve(f, request, signer=signer, log=mc.SessionLog(device / "sessions"), egress_bits=a.egress_bits,
-                          reads=a.reads, fill=None if streamer is None else native)
+                c = serve(f, request, site=site, signer=signer, log=mc.SessionLog(device / "sessions"),
+                          egress_bits=a.egress_bits, reads=a.reads, fill=None if streamer is None else native)
             t1 = time.time_ns()
     print(json.dumps(report(c, signer.public_key, (t0, t1)) | extra, sort_keys=True), flush=True)
     return 0
 
 
-__all__ = ["CHUNK", "PREMISE", "READS", "REQUEST_KEYS", "UNCOUNTED", "Party", "answer", "commitment_of", "link", "main",
-           "params_of", "placement", "report", "request_of", "serve", "session", "signed_of", "utc"]
+__all__ = ["CHUNK", "PREMISE", "READS", "REQUEST_KEYS", "UNCOUNTED", "Party", "answer", "checked_params",
+           "commitment_of", "link", "load_site", "main", "params_of", "placement", "report", "request_of", "serve",
+           "session", "signed_of", "utc"]
 
 if __name__ == "__main__":
     sys.exit(main())

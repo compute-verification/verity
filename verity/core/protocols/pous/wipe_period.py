@@ -23,11 +23,12 @@ certifier counted over the session. Off it, `foreign_bits` is `M` and `eps` 0, t
 names each gap. `EXPERIMENTAL` says what the bound rests on.
 
 `leg(period_dir, node, out)` is the wipe's leg of `benchmarks/all_protocols`: one wipe as `period.json`'s `wipe` says
-(`CONFIG`: `SEGMENTS` 32 MiB segments in host memory by default, or a GPU's memory through `wipe_store`, the whole
-device declared, the driver's reserve included (`wipe_store.Cuda.info`'s `total_bytes`), so that its memory outside the
-fill counts in `R`, the server's disks ahead of it in the same session, `wipe.disk`, and the host's DRAM after it,
-`wipe.dram`), the memory challenger on `period.json`'s `challenger_host` (`wipe_party.Party.of`; this node by default, a
-process whose key and session log are beside the periods). No network certifier counts the session's egress yet, so the
+(`CONFIG`: `SEGMENTS` 32 MiB segments in host memory by default, or a GPU's memory through `wipe_store`, the server's
+disks ahead of it in the same session, `wipe.disk`, and the host's DRAM after it, `wipe.dram`), its tiers the node's
+registered memory leaves in `period.json`'s `site` (the registration log), so that the registered memory
+outside the fill counts in `R`, and the memory challenger on `period.json`'s `challenger_host` (`wipe_party.Party.of`;
+this node by default, a process whose key and session log are beside the periods), which refuses other tiers. No
+network certifier counts the session's egress yet, so the
 challenger signs `UNCOUNTED` and an accepted leg's bound is vacuous: its verdict is real and its quantity isn't. The
 leg's record names what the bound doesn't cover (`uncertified`): the key off its own host, an uncounted egress, the
 node's memory outside the declared tiers (`undeclared`), a GPU's driver reserve when NVML gave no total, what its disks
@@ -53,6 +54,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from verity.core.site import Site
 from verity.ml.commitments.identity import canonical_json_bytes
 
 from . import memory_challenger as mc
@@ -243,22 +245,25 @@ def timing(signed: sw.SignedWipe | None) -> dict[str, Any] | None:
 
 
 def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | None = None,
-        log: mc.SessionLog | None = None, party: wipe_party.Party | None = None,
+        log: mc.SessionLog | None = None, site: Site | None = None, party: wipe_party.Party | None = None,
         prover: Callable[[sw.WipeParams], sw.Prover] = sw.Prover, egress_bits: int = UNCOUNTED,
         clock: Callable[[], int] = time.perf_counter_ns, secret: bytes | None = None, session_id: bytes | None = None,
         coin_secret: bytes | None = None, stop_after: int | None = None, trusted: Collection[bytes] | None = None,
         schemes: Mapping[str, mc.Verify] = mc.SCHEMES, protocol: str = PROTOCOL,
         chunk: int = wipe_party.CHUNK) -> Wipe:
-    """One wipe of `node` (module docstring), the server id its name's UTF-8. In one process the challenger signs under
-    `signer` with `egress_bits`, claims its session in `log` and reads `clock`; `secret`, `session_id` and `coin_secret`
-    are fresh from the OS unless a test gives them. With `party` its side runs where `party` starts it, with its own
-    secret, coins, key, log, clock and egress count, and those arguments are unused. `prover` makes the prover's side,
+    """One wipe of `node` (module docstring), the server id its name's UTF-8. In one process the challenger checks the
+    tiers against `site`, the registered site, signs under `signer` with `egress_bits`, claims its session in `log` and
+    reads `clock`; `secret`, `session_id` and `coin_secret` are fresh from the OS unless a test gives them. With `party`
+    its side runs where `party` starts it, with its own registered site, secret, coins, key, log, clock and egress count,
+    and those arguments are unused. `prover` makes the prover's side,
     which with `stop_after` leaves after that many reads. `trusted` is the verifier's list of memory-challenger keys (by
     default the challenger's), `schemes` the signature schemes it accepts and `protocol` the id it answers under."""
     params = params_for() if params is None else params
     server = node.encode()
     if party is None:
-        assert signer is not None and log is not None, "an in-process wipe needs the challenger's signer and log"
+        assert signer is not None and log is not None and site is not None, \
+            "an in-process wipe needs the challenger's signer, log and registered site"
+        params.check_site(site, server)
         c = sw.Challenger(secrets.token_bytes(32) if secret is None else secret, server,
                           secrets.token_bytes(32) if session_id is None else session_id, params, signer, log=log,
                           clock=clock, coin_secret=coin_secret)
@@ -287,12 +292,12 @@ CONFIG = {"store": "python", "device": 0, "segments": None, "reserve_bytes": 1 <
           "limit_ns": LIMIT_NS, "streamer": "python", "threads": None, "foreign_bytes": 0, "placement": None,
           "egress_bits": None, "reads": None, "links": [], "disk": None, "dram": None}
 """`period.json`'s `wipe` and its defaults: the prover's `store` (`python`, `streamed_wipe.Prover`; `host`, host memory
-through `wipe_store`; `cuda`, GPU `device`'s memory, declared whole, the driver's reserve included
-(`wipe_store.Cuda.info`'s `total_bytes`), so that what the fill doesn't reach counts in `R`; `disk`, the server's disks
-alone), the fill in 32 MiB `segments` (`SEGMENTS`; for `cuda`, `None` fills the device's free memory less
-`reserve_bytes`), the disks (`disk`, `DISK`: in the same session as a `host` or `cuda` store, ahead of it,
-`wipe_store.Joint`), the host's DRAM (`dram`, `DRAM`: in the same session as a `cuda` or `disk` store, after it), the
-declared `tier` (the store's own by default; a joint store's are its parts'), the deadline a read, and the fill's
+through `wipe_store`; `cuda`, GPU `device`'s memory; `disk`, the server's disks alone; whichever it is, the wipe declares
+the node's registered memory leaves, so that what the fill doesn't reach counts in `R`), the fill in 32 MiB `segments`
+(`SEGMENTS`; for `cuda`, `None` fills the device's free memory less `reserve_bytes`), the disks (`disk`, `DISK`: in the
+same session as a `host` or `cuda` store, ahead of it, `wipe_store.Joint`), the host's DRAM (`dram`, `DRAM`: in the
+same session as a `cuda` or `disk` store, after it), the `tier` the record names the store by (the store's own by
+default; a joint store's are its parts'), the deadline a read, and the fill's
 streamer (`native`, `wipe_stream` on
 `threads` CPUs, or `python`) when the challenger runs on this node. A challenger on its own host streams as its
 `challenger.wipe.command` says. `foreign_bytes` makes the prover the cheat that keeps that much prior content in place
@@ -309,11 +314,12 @@ DISK = {"paths": None, "bytes": None, "reserve_bytes": wipe_store.DISK_RESERVE, 
 """`wipe.disk` and its defaults: the targets (`paths`, each a directory the fill takes a file in or a block device
 written raw, `wipe_store.Disk`), the fill's bytes on them (`None`: all their room, each directory's free space less
 `reserve_bytes`; whole segments either way), the drives' `spare_bytes` (spare area and cache, from their datasheets,
-declared so they count in `R`) and `direct` (`O_DIRECT`; `None` falls back to buffered I/O where it is refused)."""
+measured with the disks, so that what the store measures past the registered disk tier is named in `uncertified`) and
+`direct` (`O_DIRECT`; `None` falls back to buffered I/O where it is refused)."""
 DRAM = {"bytes": None, "reserve_bytes": 16 << 30}
 """`wipe.dram` and its defaults: the fill's `bytes` on the host's DRAM (`None`: what `dram_available` says less
-`reserve_bytes`; whole segments either way), the DRAM declared whole (`wipe_store.HostMemory(whole=True)`), so that
-what the fill doesn't reach counts in `R`."""
+`reserve_bytes`; whole segments either way), the DRAM measured whole (`wipe_store.HostMemory(whole=True)`); the DRAM
+the site registers is declared, so that what the fill doesn't reach of it counts in `R`."""
 
 
 def config(doc: Mapping[str, Any]) -> dict[str, Any]:
@@ -458,20 +464,17 @@ def _parts(store: Mapping[str, Any] | None) -> list[Mapping[str, Any]]:
     return [] if store is None else list(store.get("parts") or [store])
 
 
-def undeclared(tier: str, declared_bytes: int, store: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
-    """The memory this host holds outside the declared tier `tier` (`declared_bytes` of it), which `M` doesn't count:
-    the device's memory outside the tier (from `store`, `wipe_store`'s `info`, when it gives `total_bytes` past the
-    tier), the host's DRAM (outside the     tier when it is the tier; none when it is declared whole) and each of its block devices, mounted or not, whole
-    (`disks`). A joint store's (`wipe_store.Joint`) tiers are its parts', each at its declared bytes, and the disks a
-    `disk` part declares are no one's undeclared memory."""
+def undeclared(declared: Mapping[str, int], store: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
+    """The memory this host holds outside the declared tiers (`declared`, bytes by tier: the registered site's), which
+    `M` doesn't count: a GPU's or the disks' memory outside its tier (from `store`, `wipe_store`'s `info`, or each part
+    of a joint store's, when it gives `total_bytes` past the tier), the host's DRAM (outside the tier when it is
+    declared; none when it is declared whole) and each of its block devices, mounted or not, whole (`disks`). The disks
+    a `disk` part of the store fills are counted in its part, not again."""
     out, parts = [], _parts(store)
-    if store is not None and "parts" in store:
-        declared = {p["tier"]: p.get("total_bytes") or p["bytes"] for p in parts}
-    else:
-        declared = {tier: declared_bytes}
-        if store is not None and store.get("total_bytes", 0) > declared_bytes:
-            out.append({"tier": store["tier"], "bytes": store["total_bytes"] - declared_bytes,
-                        "what": f"{store.get('device', 'the device')}'s memory outside the declared tier"})
+    for p in parts:
+        if p["tier"] != "host-dram" and (rest := p.get("total_bytes", 0) - declared.get(p["tier"], 0)) > 0:
+            out.append({"tier": p["tier"], "bytes": rest,
+                        "what": f"{p.get('device', 'the ' + p['tier'] + ' store')}'s memory outside the declared tier"})
     dram = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
     if (rest := dram - declared.get("host-dram", 0)) > 0:
         out.append({"tier": "host-dram", "bytes": rest, "what": "the host's DRAM outside the declared tier"
@@ -526,23 +529,30 @@ def uncertified(where: Mapping[str, Any], signed: sw.SignedWipe | None) -> list[
 
 def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     """The wipe's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`): one wipe as `period.json`'s
-    `wipe` says (`CONFIG`; by default `SEGMENTS` 32 MiB segments kept by `streamed_wipe.Prover`), the memory challenger a
+    `wipe` says (`CONFIG`; by default `SEGMENTS` 32 MiB segments kept by `streamed_wipe.Prover`), of the node's memory
+    leaves in the registered site `period.json`'s `site` names (its registration log), the memory challenger a
     party of its own on `period.json`'s `challenger_host` (`wipe_party.Party.of`; on this node by default, a process
     whose key and session log are in `wipe-challenger` beside the periods) and the prover here. A `wipe_store` prover
     gates its store before the session. With `wipe-protocol` among the period's tools, the Lean answers (the verifier of
     record) and must agree with the Python; it writes `out/wipe.case.json` (onsite's wipe case) and `out/wipe.json`.
     Which host ran each party, whether `trusted-host`'s premise holds, the memory the prover kept the fill in,
     the links leaving the node (`wipe.links`, and the challenger's on its own host as the prover connected to it) and
-    the node's memory outside the declared tier (`undeclared`) go in `wipe.json` and in an accepted answer's profile
+    the node's memory outside the declared tiers (`undeclared`) go in `wipe.json` and in an accepted answer's profile
     (`placement`, `wipe_party.placement`); `wipe.json` adds the prover's own timings (`prover`: its store, gate, fill
     and device read latency), the signed session's on the challenger's clock (`session`: the fill's GB/s, each read's
     round trip), the streamer's (`report.fill`), the session's window on each side's real-time clock (`window`) and
     what the bound doesn't cover (`uncertified`)."""
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools, c = doc.get("tools") or {}, config(doc)
-    extra = (("--streamer", "build", *(("--threads", str(c["threads"])) if c["threads"] else ()))
-             if c["streamer"] == "native" else ()) + (() if c["egress_bits"] is None else
-                                                       ("--egress-bits", str(c["egress_bits"]))) + (
+    if not doc.get("site"):
+        raise ValueError("period.json names no registered site (`site`, its registration log beside it): the "
+                         "wipe's tiers are the node's registered memory leaves, and the memory challenger refuses others")
+    site_path = Path(period_dir) / doc["site"]
+    site = wipe_party.load_site(site_path)
+    extra = ("--site", str(site_path)) + (
+        ("--streamer", "build", *(("--threads", str(c["threads"])) if c["threads"] else ()))
+        if c["streamer"] == "native" else ()) + (() if c["egress_bits"] is None else
+                                                  ("--egress-bits", str(c["egress_bits"]))) + (
         () if c["reads"] is None else ("--reads", str(c["reads"])))
     party = wipe_party.Party.of(doc, node, Path(period_dir).parent / "wipe-challenger", extra)
     if party.host != node and c["egress_bits"] is not None:
@@ -552,12 +562,9 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     try:
         tier = c["tier"] or (TIER if memory is None else memory.tier)
         reads = c["reads"] or READS
-        if isinstance(memory, wipe_store.Joint):
-            params = params_for(sum(b for _, b in memory.parts) // SEGMENT_BYTES, k=reads, limit_ns=c["limit_ns"],
-                                tiers=memory.declared())
-        else:
-            params = params_for(segments_of(c, memory), k=reads, limit_ns=c["limit_ns"], tier=tier,
-                                tier_bytes=None if memory is None else memory.info().get("total_bytes"))
+        segments = (sum(b for _, b in memory.parts) // SEGMENT_BYTES if isinstance(memory, wipe_store.Joint) else
+                    segments_of(c, memory))
+        params = sw.WipeParams.of(site, node.encode(), segments * SEGMENT_LABELS, reads, 1, c["limit_ns"])
         foreign = foreign_labels(c["foreign_bytes"], params)
         store = None if memory is None else wipe_store.StoreProver(params, memory, foreign=foreign)
         if store is not None:
@@ -583,7 +590,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
         conn = wipe.report["connection"]
         links.append(wipe_party.link("challenger", node, party.host, f"{conn['local']} to {conn['peer']}"))
     where = wipe_party.placement(node, party.host, store=kept, simulated=c["placement"] == "simulated", links=links,
-                                 undeclared=undeclared(tier, memory_bits(params) // 8, kept))
+                                 undeclared=undeclared(dict(params.tiers), kept))
     window = {"challenger": wipe.report.get("window"),
               "prover": {"t0": wipe_party.utc(p0), "t1": wipe_party.utc(p1),
                          "clock": f"{socket.gethostname()}'s real-time clock, around the whole session (the "

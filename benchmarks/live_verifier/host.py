@@ -67,7 +67,9 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   on the gate's stdin, `{"listening"}` and the signed report on its stdout, as a lane's `--challenger-command` expects
   (`benchmarks/pous/block/block.py`). The prover connects to the host's address at the port over direct TCP, which the
   security groups admit from the card only. Each party's LMS key and session log are `<root>/parties/<wipe|pous>/`, made
-  on the host, never leaving it; `party_key wipe|pous` prints the public half, which the lane pins as `--trusted`, and
+  on the host, never leaving it, and the wipe party refuses tiers that aren't the node's memory leaves in the host's own
+  registered site, `<root>/parties/wipe/site.json` (the registration log, infra's to install);
+  `party_key wipe|pous` prints the public half, which the lane pins as `--trusted`, and
   `party_log wipe|pous [LOG]` lets any key read the sessions and each one's stdout as the host kept it (its signed t0 and
   t1). A lane
   never names a path, an address or an egress count: a session signs `UNCOUNTED` egress until the network certifier's
@@ -559,12 +561,13 @@ def party_args(verb: str, rest: list[str]) -> tuple[list[str], int]:
 
 def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
     """The party's command line for `verb` (`PARTIES`): its module from the pinned tree as `auditor`, its key and session log in
-    `<root>/parties/<name>` (made there, never leaving the host), listening on every address at its port. A lane names
+    `<root>/parties/<name>` (made there, never leaving the host), listening on every address at its port; `wipe_party`'s
+    registered site is the host's own copy of the registration log, `<root>/parties/wipe/site.json`. A lane names
     `wipe_party`'s `--reads K`, `--native` (the streamer, built on this host) and `--threads T`, and nothing of
     `challenger_party`'s; never a path, an address or an egress count (the session signs UNCOUNTED, which bounds nothing,
     until the network certifier's count reaches the host)."""
     name, module, port = PARTIES[verb]
-    extra: list[str] = []
+    extra: list[str] = ["--site", str(host.parties / name / "site.json")] if verb == "wipe_party" else []
     args = list(rest)
     while args:
         flag = args.pop(0)
