@@ -185,6 +185,8 @@ def _refusal(com: Any) -> str | None:
     missing = sorted(s for s in com._layouts if s not in com._gpu_blocks)
     if missing:
         return f"steps {missing[:8]} are not packed GPU-tree blocks: not dumped"
+    if held := sorted(s for s, (b, _u) in com._gpu_blocks.items() if getattr(b, "on_device", False)):
+        return f"steps {held[:8]} are held on the device until their window's draw-gated release (--retain device): not dumped"
     return None
 
 
@@ -227,6 +229,7 @@ def _dump_step(com: Any, sc: Any, d: Path, t: Touched | None) -> tuple[dict[str,
     return ({"step": s, "root": sc.root.hex(), "n_leaves": int(sc.n_leaves), "n_bytes": int(sc.n_bytes), "n_tensors": int(sc.n_tensors),
              "used": int(used), "ranges": [[int(lo), int(hi)] for lo, hi, _ in rs], "levels": [_width(lv) for lv in lvs],
              **({} if nodes is None else {"nodes": [[d_, i] for d_, i in nodes]}),
+             **({"drawn_only": True} if getattr(blk, "dropped", False) else {}),
              **({} if salted is None else {"salted": [[a, b] for a, b in salted]})}, digests)
 
 
@@ -341,9 +344,11 @@ class _Seg:
 
 
 class _Block:
-    """A dumped step's retained bytes: `holds(lo, hi)` and `blk[lo:hi]` over the step stream, like the committer's host retainers."""
+    """A dumped step's retained bytes: `holds(lo, hi)` and `blk[lo:hi]` over the step stream, like the committer's host retainers.
+    ``dropped``: a step its window's draw-gated release kept only the drawn leaves of (`device_pool.DrawnRanges`)."""
 
     is_cuda = False
+    dropped = False
 
     def __init__(self, buf: memoryview, ranges: list[list[int]], used: int, chunk: int) -> None:
         self.buf, self.used = buf, int(used)
@@ -467,6 +472,7 @@ class DumpedStore(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
             s = int(st["step"])
             self._layouts[s] = [TensorMeta(o, n, dt, tuple(sh), nb, c, fl, nl, stream_off=so) for o, n, dt, sh, nb, c, fl, nl, so in st["metas"]]
             self._gpu_blocks[s] = (_Block(self._map(d / "raw" / f"s{s}.bin"), st["ranges"], st["used"], self.chunk), int(st["used"]))
+            self._gpu_blocks[s][0].dropped = bool(st.get("drawn_only"))
             lv_buf, off, lvs = self._map(d / "levels" / f"s{s}.bin"), 0, []
             if "salted" in st:
                 at_leaf, k = [], 0
