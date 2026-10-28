@@ -225,7 +225,10 @@ The terms, in the generator reading of the scan's statement (each unit's registe
   (`warden.Warden(paced=…)`, `warden_serve.py --paced-ms`).
 
 Each `prog` entry carries a read bit as well (`ingress_scan.entry_layout`: an occupied slot no Program reads is
-refused), so a scan run past it registers NP = 4,496: 143,872 bits a link-window, or 1,121 a request.
+refused), so a scan run past it registers NP = 4,496: 143,872 bits a link-window, or 1,121 a request. Until each
+due, occupied slot's entry is a wire from its Program's `SlotEntry_v1` unit, that bit is the prover's word (an entry
+of read 1 and no outputs passes the scan), so `NetworkCheck.Period` refuses every rows-form period of a link-window,
+last, by name (`unwired`), and the rows form publishes no K yet.
 Tied (`NetworkCheck.Period`'s `progTied`, scan_zk's block round), these rows are a compute audit's outputs
 and the scan's own free term is 0: the bits are that audit's free inputs (the toy block's `x`), which the rows form's
 K charges to the link-window's term (`tiedAudits`). The egress tie moves the free term from the scan's `prog` to the

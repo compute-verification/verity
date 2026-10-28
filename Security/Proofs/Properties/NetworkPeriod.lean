@@ -7,6 +7,9 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 Each factor is at most 2 to the power of the ceiling of its `log2` (`le_two_pow_clog2`), and `K`'s sums over the
 connections and the windows (the compute audits, or the scans) are sums over `Fin m` and `Fin n` (`Array.ofFn`), so
 `2 ^ K` is the product of the factors' bounds.
+
+`RowsTiedDrawn` and `RowsUnwiredRefused` read the check's refusals off its findings: on acceptance every finding is
+none (`firstFinding_none`), a tied audit's among them, and the rows form's `unwired`.
 -/
 
 namespace Properties.NetworkPeriod
@@ -112,7 +115,7 @@ theorem auditChecks_ok {p : Params} {c : Commitment} {e : Evidence} {pub : Publi
   · cases h
   · rename_i hF
     have h0 := firstFinding_none hF (findingOf y)
-      (List.mem_append_right _ (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy)))
+      (List.mem_append_left _ (List.mem_append_right _ (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy))))
     cases y with
     | error r => cases h0
     | ok f => exact ⟨f, rfl⟩
@@ -215,5 +218,39 @@ theorem rowsTiedDrawn_nontrivial : ¬ RowsTiedDrawnOf acceptAllRows := by
   have := otherAnswer_refused
   rw [ha] at this
   simp [Except.toBool] at this
+
+/-! ## The rows form accepts no period of a link-window -/
+
+theorem rowsUnwiredRefused : RowsUnwiredRefused := by
+  intro p c e pub prof h s sd scan hform
+  unfold check at h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  split at h
+  · cases h
+  simp only [hform] at h
+  split at h
+  · cases h
+  · cases h
+  · rename_i hF
+    have h0 := firstFinding_none hF _ (List.mem_append_right _ (List.mem_singleton_self _))
+    cases hw : p.windows with
+    | zero => rfl
+    | succ n => rw [hw] at h0; simp [unwired] at h0
+
+/-- Its honest side: the refusal is the rows form's alone, and refuses no clock-form period. -/
+theorem rowsUnwiredRefused_honest (ss : NetworkCertifier.SyncSet) (n : ℕ) : unwired (.clock ss) n = none := rfl
+
+/-- **No period check that accepts every period has `RowsUnwiredRefused`'s property** (its nontrivial lemma): such a
+check accepts a rows-form period of one link-window. -/
+theorem rowsUnwiredRefused_nontrivial : ¬ RowsUnwiredRefusedOf acceptAllRows := by
+  intro h
+  let s : Schedule := ⟨0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0⟩
+  let p : Params := ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows s .empty ⟨0, 0, 0, 0⟩, 1⟩
+  exact Nat.one_ne_zero (h p ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ _ _ rfl s .empty ⟨0, 0, 0, 0⟩ rfl)
 
 end Properties.NetworkPeriod
