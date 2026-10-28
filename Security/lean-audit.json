@@ -1426,6 +1426,10 @@
    "owner": "@network-accounting",
    "digest": "d4e0da6a318e51d835db13cda094605ffcd9569955bbc4a27f01e021375f1f5b"
   },
+  "NetTiming.BoundaryGates.Fits": {
+   "owner": "@network-accounting",
+   "digest": "ebd05c19dd122a05cfe405333069c75efe8856277437c8e6766d9f1f6f2c233b"
+  },
   "NetTiming.CompilerDeterministic": {
    "owner": "@network-accounting",
    "digest": "a3885e87bc70035c2b57e25c218870889da0a4197bfc059a90a23d1122bfe6ba"
@@ -1440,15 +1444,11 @@
   },
   "NetTiming.Guarantees.SampledAuditAccepted": {
    "owner": "@proofs",
-   "digest": "3158cc7500c6a6e06d1364fce73173057363ebcf7d97ccaadba0753df8bd0671"
+   "digest": "559db99f683821879b48c8850d8fd77e243272bdbda83d3aaa8a7cdc7a38f2af"
   },
   "NetTiming.JitterBounded": {
    "owner": "@network-accounting",
    "digest": "06b2728bc7d299f10f72698ed3900a75c420de7dccc468770103d11dba1ce7be"
-  },
-  "NetTiming.Layout.Fits": {
-   "owner": "@network-accounting",
-   "digest": "3e19dedcd745f707786efa5ede31d98e6458c9a71ecea1999d70c3219b95b3eb"
   },
   "NetTiming.OccupancyReadsOwnBlock": {
    "owner": "@network-accounting",
@@ -12398,7 +12398,7 @@
    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1, under the named assumption HonestClock (honest-clock), both at the W1 machine (W1.w1Priced), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1, under the named assumption HonestClock (honest-clock), both at the W1 machine (W1.w1Priced), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTNCP_U, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
-   "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": "frozen (no-function): It bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts with some faulty set that RAcc allows at delta, not runs of the network check's code, and takes the layout's fit (Layout.Fits) and the counts of the other inputs and of the faulty units' committed bits as premises; SampledAuditAccepted carries an accepted sampled audit to RAcc delta, so the two composed are the restatement path.",
+   "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": "frozen (no-function): It bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts with some faulty set that RAcc allows at delta, not runs of the network check's code, and takes the layout's fit (BoundaryGates.Fits) and the counts of the other inputs and of the faulty units' committed bits as premises; SampledAuditAccepted carries an accepted sampled audit to RAcc delta, so the two composed are the restatement path.",
    "Flock.SecurityProofs.RecursiveRanRegisteredExec": "frozen (obligation,world-unlisted,scope): RecursiveRanRegistered at the compiled inner protocol the verifier of record runs (innerAt) and the executable's row registration (rowCommit, whose binding is proved), with InnerSound proved and no A3; it takes what an accepted run carries of the rows it read (_hop, _hx) as open obligations, beside the developer's openings (_hreg); beside VBridge and the outer sessions' custody (ZkOuter's fields hRec, Zk.RecordsCustodyZKJ, and hDraw, Zk.DrawCustodyZKHJ), all listed, it takes their scope (ZkOuter's parameter hscope). It stays here until RecursiveAudit is pinned after gap 4.",
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedPerProver": "frozen (no-function,world-unlisted,scope): OverlapFloorKOneSided per prover (CMP-33), the overlapped floor of record at each adversary's own error: the same floor and the same parity luck 0.854 per draw, each adversary's error its own (breakBound: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times its binding and zero-knowledge finder terms, each finder read through ecr/sha-512 at a budget computed from the adversary's time and top where it fails it, capped at 1 and averaged over its coins). It is stated over an arbitrary Machine and Service, an analysis map (ORunMap) and the analysis's collision finders (Finders), not the service's code, and takes three premises: ServiceSoundOverlapPerProver (ServiceSoundOverlap's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the analysis's finder for that adversary (Finders) finds a collision), KScopeOverlapOneSided and ChargeVF3j16Overlap, as OverlapFloorKOneSided does. c = 1 on K's proved one-sided scope; K1 is not claimed outside the two proved scopes, and the verifier can't observe which case applies (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).",
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKPerProver": "frozen (no-function,world-unlisted,scope): OverlapFloorK per prover (CMP-33): the same floor and the same luck 3/4 per draw, each adversary's error its own (breakBound: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times its binding and zero-knowledge finder terms, each finder read through ecr/sha-512 at a budget computed from the adversary's time and top where it fails it, capped at 1 and averaged over its coins). It is stated over an arbitrary Machine and Service, an analysis map (ORunMap) and the analysis's collision finders (Finders), not the service's code, and takes three premises: ServiceSoundOverlapPerProver (ServiceSoundOverlap's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the analysis's finder for that adversary (Finders) finds a collision), KScopeOverlapAffine and ChargeVF3j16Overlap, as OverlapFloorK does. It is a sibling of OverlapFloorKOneSidedPerProver, proved on its own scope; K1 is not claimed outside the two proved scopes (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).",
@@ -15438,14 +15438,14 @@
    "guarantees": ["Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod"]
   },
   "Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted": {
-   "digest": "17465389eba5a99fe74efd8693279b0179e3071c8127f797ceb612440b6dd244",
+   "digest": "c027ad20496902cc46bafa198d6668050df248454269a6f1b982d03dfafeafe5",
    "definitions": {
-    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted": "6f3dc4279b041469954a12363ab687ef9defc76a919943a47c3e1b5f76bb9264",
-    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.Tape": "3be223d33c68e453020623e45920ccd31245d9c575c98e162303d34483077c15",
-    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.prover": "20c5ddd055bb077f41ba3fb9d6c1da03ac0184597ad78d6750c7faab862afc13",
-    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.stmt": "2a0ecab535e81c1604f13b3406ee65455bbd0713e53a7d9328e7b23c578e5fe3",
-    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.tapeFintype": "c05161dc00a702178e8b7f458714aba124370ff57951d15e23cf989b6bbb20a8",
-    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.tops": "6ee6af9f7f6b6b0ab232978fb448109a0a01eed290fafc688440710601a97a96"
+    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted": "be041ea9bcd72db237302fab47a20716348533a6beec1e4d34a94a6f58fcddb3",
+    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.Tape": "3f9c401f11f3e0de1e78a91aa059b22a5d60f36d68c5120a3b8ecda5c3b9ece1",
+    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.prover": "74ec1c9425d2f52fa331dcc9b0b0cbe2e6f373a1bfe20d75f4779072722deabb",
+    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.stmt": "1dfffed2eae7afde2992377043f229ebfd41d94a376808597ab12efd2bc25a91",
+    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.tapeFintype": "3b58b609d9dadb758f251b871da360f476324a1fb89dea2dd271f64e3a2e1b63",
+    "Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.tops": "e7d4bab99d224fe3f228311a5eea301fd481a54a118f8aa6deee0099a4bb33af"
    },
    "guarantees": ["Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted"]
   },
@@ -24165,9 +24165,9 @@
    "guarantees": ["NetTiming.SecurityProofs.HorizonWrongUnitsLe"]
   },
   "Definitions.NetworkCertifier.Guarantees.HorizonLeak": {
-   "digest": "cdf37fe6abf4fea3df2a565d6f8b73ab0d2c7a4672a9e5739db002f64b609213",
+   "digest": "7059487668f2fef788b8b5a420bab35947864aa67e77eba47af85f27aba9538c",
    "definitions": {
-    "NetTiming.Guarantees.HorizonLeakAccepted": "da287f1a46bf66a7036226ade5dcc58c27af981467cefbba08e8898b8a354cd1"
+    "NetTiming.Guarantees.HorizonLeakAccepted": "f88f9663b25b0831869fbcdb907069661d697430e1a025c28c5d0ce9d66a3d41"
    },
    "guarantees": ["NetTiming.SecurityProofs.HorizonLeakAccepted"]
   },
@@ -24179,9 +24179,9 @@
    "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
   },
   "Definitions.NetworkCertifier.Guarantees.SampledAudit": {
-   "digest": "ba4fcf95f37d77cdbc5c1bccd09ffd9c847b1a93bc8eeffa8fa1661549d5d501",
+   "digest": "9bf7ce07b96742c403ad37249e469662f024c6fda2176bd94f867a7a0f12c07d",
    "definitions": {
-    "NetTiming.Guarantees.SampledAuditAccepted": "3158cc7500c6a6e06d1364fce73173057363ebcf7d97ccaadba0753df8bd0671"
+    "NetTiming.Guarantees.SampledAuditAccepted": "559db99f683821879b48c8850d8fd77e243272bdbda83d3aaa8a7cdc7a38f2af"
    },
    "guarantees": [
     "NetTiming.SecurityProofs.SampledAuditAccepted",
@@ -24190,10 +24190,10 @@
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.SampledCharge": {
-   "digest": "b502c22e3b250b6499032c642e623052a0db65e0a22a1e1c83a1b027c8ccdfa1",
+   "digest": "5118b588a25b29d6b23aed200bf6cc46c2f7e5ee057f6d52b1be87afe0cd999a",
    "definitions": {
-    "NetTiming.Guarantees.EncardAccSeqsSampledLe": "6fe6fff3b866eeb9e30182477d22e14ba9679dc097118c4e5181d9cc477079d8",
-    "NetTiming.Guarantees.SampledLeakAccepted": "c5fd3fa54498cded2240a38b19a331f09e7cffeca5e01515fa5683c93c624fdb",
+    "NetTiming.Guarantees.EncardAccSeqsSampledLe": "6a0c10f472ffc975c011a4bf4ddadd694e54802b89ca8085dc019ac9fe3ea567",
+    "NetTiming.Guarantees.SampledLeakAccepted": "24f0129e771739e616882539563c17f2e758415b4eff9cbd1eb4c3f371fc06e7",
     "NetTiming.Guarantees.SampledLeakRegistered": "a1b2b4b58da6a15e7a1a05c286a13829ee735ccc81b995675b44c0bb3d85ff6c"
    },
    "guarantees": [
@@ -24238,10 +24238,10 @@
    ]
   },
   "Definitions.NetworkCertifier.HorizonLeak": {
-   "digest": "7cdd5e96b16d36c6125691d9ba6b0e390e955f73388dc46199dc1b32370c1aa8",
+   "digest": "623bc9d11b775f1d13d59d5c77a0d12aab331c2b35e1b48c3ad885dd4cae952e",
    "definitions": {
-    "NetTiming.HorizonGood": "2c0da92b65a298b678917aa428a58191650d40bafa84ee76d173d908680b41f0",
-    "NetTiming.LeakAt": "d1eff7e70d048eb4d2a1e149a96ceb04654c751eb873342fd5c3d9e276fb963c"
+    "NetTiming.HorizonGood": "c15b645d28e137f1d8b30fb04afbdf7cefec7e0399a4b5c155d57b6626378c99",
+    "NetTiming.LeakAt": "384ba8473c9dfde3a62acf6d4fe887c6b174f2581008ed953e7c49f597d19d55"
    },
    "guarantees": ["NetTiming.SecurityProofs.HorizonLeakAccepted"]
   },
@@ -24262,10 +24262,10 @@
    ]
   },
   "Definitions.NetworkCertifier.Period": {
-   "digest": "6a3043955541087986bd799a087fb63a55dbfc0afdab6e0522910e427f368b4d",
+   "digest": "f62351d06852ca86b3b2aa07501aa2a2ced8998bc90fa46c91bf7508840d32c8",
    "definitions": {
-    "NetTiming.SameRegistration": "296589fbef06a091196a2d94dae9b158ba730860af1eabeaa5b552fca052f3aa",
-    "NetTiming.WindowGood": "b8a5f8236ee7c46052a280f65f3ccf091d8e59c0c4021a8fecd75ca03ed0f685"
+    "NetTiming.SameRegistration": "7604bb256ec6683474664e855d7454fcef82e5bd22247f0e1b78612d6147c6d6",
+    "NetTiming.WindowGood": "3c79b3da5aebc32d34db8adbdea63884d52ac19001dc1060d807ee7e9ad60eea"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",
@@ -24342,25 +24342,30 @@
    ]
   },
   "Definitions.NetworkCertifier.SampledAudit": {
-   "digest": "4ed45c9d72c6886344aa96ddeb9f4add2577650bf220d4c14db78ae1f2b0e44b",
+   "digest": "d714ada41b4cc5227c1f6c86a117aa662223ca7adc2a153db30f846cb29c2ec9",
    "definitions": {
-    "NetTiming.Carries": "e7ac004752a175d793960824660f46b99d8fe3911fef93379ad2e7665d073f86",
+    "NetTiming.BoundaryGates": "fa62e710a7aac7d4f76bb7c7c2a4400f4d483ad59c9d5d7adf193c0ece654d55",
+    "NetTiming.BoundaryGates.Fits": "ebd05c19dd122a05cfe405333069c75efe8856277437c8e6766d9f1f6f2c233b",
+    "NetTiming.BoundaryGates.egress": "7b6781ceed9e705bdcd2f73da44515d154ded194be9ce8c07e8a80adaca1765c",
+    "NetTiming.BoundaryGates.ingress": "0cd000b86e85138614ec3ab7313538273046b378ee4a37b1718995198a41da24",
+    "NetTiming.BoundaryGates.inputOf": "56718453a93fa605c2dfec40d77e72bc9d41ad7311cb582ae189bc9d296dc316",
+    "NetTiming.Carries": "1f721f69fa556e5acbabaa7893cf83989744086cb9b463ef1843cae613640a75",
     "NetTiming.Covered": "ccee422986c657af27297ae2bc6396a375226194e77cac80a7e44f9a70e4814c",
     "NetTiming.Depends": "f211d957c793800d99efe76d3fbd2afc44b357018a916000b6358941e750ac83",
     "NetTiming.FaultyGate": "4f48cf5bca92bba73ee756048da872f5f53491ed43fbc79654bdcb5264cc7f62",
-    "NetTiming.KSAccepted": "4c8a149dac20e935d6f96c4b6df0029ef4f039fce8618be165d254ee7af69bc3",
+    "NetTiming.KSAccepted": "f632a6201349aced4bbba77f283dd73b64c818f5afdd10c7ce2f109584ad58da",
     "NetTiming.Layout": "26a9ae100864386a6350d51b5b6511ead4b61a09a5355752b75f28b2f03e9181",
     "NetTiming.Layout.Fits": "3e19dedcd745f707786efa5ede31d98e6458c9a71ecea1999d70c3219b95b3eb",
     "NetTiming.Layout.egress": "a0e95168b97f01529a65a69348753486689a46062a932d1f2dbbd90c62369a03",
     "NetTiming.Layout.ingress": "1447b138bfb81ed0a928b0541b290f051e19d9e543e1eb3a2789041608cb6a45",
     "NetTiming.Layout.inputOf": "7a78045a4090690a8548b0d4877ead2d00470b9b2a523ac287fbc6476c5c6cba",
     "NetTiming.RAcc": "9f6495e8dec2953eb98f1fdb708ebca4508692fc452dffb098d47857d4debd92",
-    "NetTiming.ScopeAcc": "975ad4464a91ee6c247ac6490a67a4231fa62e4781a10a3ce65e73c1c45b270d",
+    "NetTiming.ScopeAcc": "c7fd760721042dfff5fa8908b38893d3749f30682f2cda072d1b29a9550d03f5",
     "NetTiming.allSlots": "1eb924389e5ffa3b1cce62cd754f9ed3b413f91286b038c394ab98209c426b56",
     "NetTiming.allSlotsFrom": "f33b54b2f78e58e5b6c598b33e8e12f59e362b1e4a555dfe36ab7f2e9af3782b",
     "NetTiming.allSlotsFrom._sparseCasesOn_1": "bcca8d9b059205db51b931ee670d3133083fe08379abd3f4d078670d8448fc4f",
     "NetTiming.allSlotsFrom._sparseCasesOn_4": "5f47fc59eca3ea87c24247696303acec324803ca0c91cf3d5386cded3c7bf333",
-    "NetTiming.circuitProgram": "c3d48e42d46f5f3d33d11e95fb3b5683046f5162ced4db8a4e9c1522e59a1c26",
+    "NetTiming.circuitProgram": "85f4c6d008d69adeff10526a1265862a264adfd985187b519a6a38720e4a89aa",
     "NetTiming.rowOf": "72d1f1c69f134fc7b821df7d86191b279fdf73d5d412f7a072cd9dd5af40da0d",
     "NetTiming.slotGates": "18b5cf00d01de76454aa5c83b4f78ecbfb92810ca9b0389aa74215a1d9372e0d",
     "NetTiming.traceVal": "a0ec132a217fc9cd0dd90cf6b0494a435a3dac6a2b70c8f77ac23113a49c2f81",
@@ -24377,15 +24382,15 @@
    ]
   },
   "Definitions.NetworkCertifier.SampledCharge": {
-   "digest": "d4a4fcd9091e88414ae24ddecf3079887411cf6660140536bf830342727b41b3",
+   "digest": "0c15caf49e3030369cd76e6a8549d4545210be949b20c91c1a6da4bbe7ab5ddc",
    "definitions": {
-    "NetTiming.AccSeqsSampled": "05b16b5446955562b136a894719673fc47a049985da8f9880d9e4fb4ede3b771",
-    "NetTiming.AcceptedFaulty": "df874e0f19724289c18f7080a173db8d45c039c2575c51212f5aa91a88496323",
-    "NetTiming.AsReg": "8bf6242fd353d0c6f35c25d44db15e2edc65fc9ce3e354a8af0d27b4b3958335",
+    "NetTiming.AccSeqsSampled": "ad626b8423fb6d1b02f0a19e7b7bf3cc40e451d1d1fb01e9ceeedd2c65e09e80",
+    "NetTiming.AcceptedFaulty": "ebfd078ac94cee1cb354ad8287355b63d6744527774706f89341de50c27c2798",
+    "NetTiming.AsReg": "bb15096ae290f08ec5e8a81febfa00b335c2113975b212967b2afe09e9d046f4",
     "NetTiming.RLeak": "4a7c0181cfd7ef5345ac0911d549f9b2fac522327910961f3a14ca0d1c88205f",
     "NetTiming.faultyBits": "8cbcfcedec4b99e4491bff7587994f46bb7b20e10acb4a4bf584da5d0f299f7f",
     "NetTiming.faultySets": "32b6dfd30c42f80810aa5181d9d53975b1587fe9ade5d884d45e1f40240e4276",
-    "NetTiming.freeInputs": "71960d7978491121a9408649c5d34ecffa4ac9f8b5067941406386c61c0779a0"
+    "NetTiming.freeInputs": "62e0ab9f2ca47b3d0b1c71f23e09e6ad8eb94741bd83a58b57de638b1ac62bdb"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted",

@@ -4,11 +4,11 @@ import Definitions.NetworkCertifier.SampledCharge
 # The network certifier's rows: its registration at the transfer gates, and the leak relation at them
 
 Definitions only. The audit's trace holds each step's egress rows at the layout's egress gates and its ingress at the
-ingress gates (`Layout`). The network certifier on the server's uplink, which functions as an active warden, registers
-what it records there: openings `ops` under the statement's roots, one at each transfer gate before the horizon, whose
-values (`tapVal ops`) are its records' egress rows and the operator's moves on them (`TapOpens`). Its registered root is
-its signed root for the window, a function of what the server did, so these rows vary with the server's secret, unlike
-the values the prover registers at `reg` (`AsReg`).
+ingress gates (`BoundaryGates`). The network certifier on the server's uplink, which functions as an active warden,
+registers what it records there: openings `ops` under the statement's roots, one at each transfer gate before the
+horizon, whose values (`tapVal ops`) are its records' egress rows and the operator's moves on them (`TapOpens`). Its
+registered root is its signed root for the window, a function of what the server did, so these rows vary with the
+server's secret, unlike the values the prover registers at `reg` (`AsReg`).
 
 An extracted trace that opens a transfer gate to a value other than the network certifier's makes, with the network
 certifier's opening there, two passing openings of one position to different values, so under `CommitmentScheme.Binds` the
@@ -20,7 +20,7 @@ registration rather than by the trace's transfer gates.
 
 A constant gate is committed by nobody, and every trace holds the program's constant there, so at an egress gate the
 program holds constant the network certifier's record must be that constant (an ingress gate is an input,
-`Layout.Fits`).
+`BoundaryGates.Fits`).
 -/
 
 namespace NetTiming
@@ -36,7 +36,7 @@ at the operator `op`: each of its openings `ops` passes under the statement's ro
 ingress gate has an opening, and at an egress gate the program holds constant the opening holds that constant; and each
 step's record exists, its egress rows are the rows the openings hold at the egress gates, and the operator's move on the
 records before it is the ingress they hold at the ingress gates. -/
-def TapOpens {L K S : ℕ} (H : Msg → Msg) (Cm : CommitmentScheme Bool) (lay : Layout L S) (k : ℕ)
+def TapOpens {L K S : ℕ} (H : Msg → Msg) (Cm : CommitmentScheme Bool) (lay : BoundaryGates L S) (k : ℕ)
     (op : ℕ → List (Obs L K S) → List Bool) (s : AuditStatement) (ops : List (Opening Bool)) (o : List (Obs L K S)) : Prop :=
   (∀ q ∈ ops, Cm.Opens H s.roots q = true) ∧
     ∀ t (_ : t < k),
@@ -51,7 +51,7 @@ a partition, and every observation sequence of length `k` with jitter below `Dj`
 (`TapOpens`, its openings `tops s`) with every status complete is among the sequences `AccSeqsSampled` counts at the
 inputs `As s ρ`, `ρ` the trace's committed values. -/
 def RLeakTap (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement) (partition : AuditStatement → Option Partition)
-    (L K S : ℕ) (lay : AuditStatement → Layout L S) (k : AuditStatement → ℕ) (δ : ℝ) (As : AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)) (Dj : ℕ)
+    (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (As : AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)) (Dj : ℕ)
     (tops : AuditStatement → List (Opening Bool)) : Rel Wit :=
   fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧
     ∀ (op : ℕ → List (Obs L K S) → List Bool) (o : List (Obs L K S)),
