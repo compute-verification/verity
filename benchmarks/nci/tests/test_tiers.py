@@ -18,6 +18,13 @@ ROOT = HERE.parents[2]
 
 #: the defaults at the threading ReferenceThreaded gives under its conjecture, where the closed-form memory cap binds
 KEYED = T.DEFAULTS | {"d": T.REFERENCE_THREADED[0]}
+#: Kimi K2's MoE capacity factor, routed slots per token over its top-k: no workload declares one, and the circuits' MoE
+#: Definitions (verity/ml/circuits/ops/moe.py) are dropless, one body per token and top-k slot, which is factor 1, the
+#: one ReferenceLayered states
+CAPACITY_FACTOR = 1
+#: the bits of an entry of Kimi K2's embedding table, bf16: no model config or workload declares its dtype (kappa.MODELS
+#: carries config.json's shapes only), so this is the dtype ReferenceLayered states
+EMBED_BITS = 16
 
 def test_the_gpus_read_the_accel_models_card_table():
     """`CARD` is `Verity.Accel.Sm120.card`'s tensor rate and clock ceiling (its sheet-form `f_max`), and PoUW credits
@@ -268,38 +275,44 @@ def test_the_recipe_multiplier_scales_only_the_constrained_terms():
 
 def test_reference_layered_at_kimi_k2():
     """The falsification test of the conjecture `Nci.Assumptions.ReferenceLayered`: the parameters it states are Kimi
-    K2's shapes' in Dot16 steps, and tiers.py's (d, e) is what `Nci.SecurityProofs.ReferenceThreaded` derives from them
-    at S = K. A keyed reference circuit written as the declarations are computes each matrix-product entry, forward and
-    backward, as a chain of Dot16 steps; its roots are each chain's steps after the first, whose legs are the previous
-    accumulator and the step's 16 activations, so every inner dimension is a whole number of steps, at least two. A
-    value's reach is its forward or gradient fan-out in products, a sixteenth of it in steps with the activations
-    designated round-robin, and the most is an MoE input value's; a lookup's column is a bf16 embedding column, vocab x
-    16 bits; and at S = K the theorem takes the fewest E with S below E + 1 columns, giving (d0 - E, e + E e_lk) with
-    e_lk = 0, layer 0's attention-input projections uncounted. tiers.py counts products, 16 to a step. It can't find a
+    K2's shapes' in the declared BF16 GEMM's steps, and tiers.py's (d, e) is what `Nci.SecurityProofs.ReferenceThreaded`
+    derives from them at S = K. A keyed reference circuit written as the declarations are computes each matrix-product
+    entry, forward and backward, as a chain of the step `GEMM_HOPPER` binds (`HopperBF16WgmmaDot16_v2`, the BF16 GEMM's
+    on sm_90 and sm_120), whose width is the activations it reads; its roots are each chain's steps after the first,
+    whose legs are the previous accumulator and the step's activations, so every inner dimension is a whole number of
+    steps, at least two. A value's reach is its forward or gradient fan-out in products, over kappa.MODELS' top-k and
+    shared experts at `CAPACITY_FACTOR`, a step's width of them to a step with the activations designated round-robin,
+    and the most is an MoE input value's; a lookup's column is an embedding column, vocab x `EMBED_BITS`; and at S = K
+    the theorem takes the fewest E with S below E + 1 columns, giving (d0 - E, e + E e_lk) with e_lk = 0, layer 0's
+    attention-input projections uncounted. tiers.py counts products, a step's width to a step. It can't find a
     reference circuit that isn't keyed: the class is checked against a transformer block on paper."""
+    gemm = (ROOT / "verity/ml/circuits/ops/boolean/gemm.py").read_text()
+    dot = re.search(r'^GEMM_HOPPER: dict = \{"DOT": (\w+)\}$', gemm, re.M).group(1)
+    operand = re.search(rf'^{dot} = definition\(.*?\(\("acc", F32\), \("a", (\w+)\), \("b", \1\)\)', gemm, re.M | re.S)
+    step = int(re.search(rf"^{operand.group(1)} = Array\((\d+), BF16\)$", gemm, re.M).group(1))
     m = kappa.MODELS["kimi-k2"]
-    a, d, slots, ffn = m["attention"], m["d"], m["active"] + m["shared"], m["expert_ffn"]
+    a, d, ffn = m["attention"], m["d"], m["expert_ffn"]
+    slots = math.ceil(m["active"] * CAPACITY_FACTOR) + m["shared"]
     forward = {"attention-side xn": a["q_rank"] + a["kv_rank"] + a["rope"], "c_q": a["heads"] * (a["nope"] + a["rope"]),
                "c_kv": a["heads"] * (a["nope"] + a["v"]), "attention out": d, "moe xn'": m["experts"] + slots * 2 * ffn,
                "expert hidden": d, "dense xn'": 2 * m["ffn"], "dense hidden": d}
     backward = {"d gate, d up": 2 * d, "d mlp out": max(slots * ffn, m["ffn"]), "d attention mid": a["heads"] * a["v"],
                 "d v, d k": a["kv_rank"], "d q": a["q_rank"], "d c_q, d c_kv": d, "d logit": d}
-    step, bf16 = 16, 16
     inner = [n for rows, cols, _, _ in kappa.matrices(m) for n in (rows, cols)] + [d, m["vocab"]]
     reach = forward | backward
     assert all(n % step == 0 and n >= 2 * step for n in inner)
     assert all(v % step == 0 for v in reach.values())
     d0, e = step + 1, max(reach.values()) // step
-    b, e_lk = m["vocab"] * bf16, 0
+    b, e_lk = m["vocab"] * EMBED_BITS, 0
     E = int(T.DEFAULTS["K"] // b)
     assert T.DEFAULTS["K"] < (E + 1) * b and (d0, e, b, E) == (17, 2328, 2621440, 7)
     assert T.REFERENCE_THREADED == (d0 - E, step * (e + E * e_lk)) and T.DEFAULTS["e"] == T.REFERENCE_THREADED[1]
     assert T.DEFAULTS["thread_bits"] == pytest.approx(d0 * b, rel=1e-3)
     nci = ROOT / "Security" / "Definitions" / "Nci"
-    assert f"Nonempty (Layered T {d0} {e} {e_lk} ({m['vocab']} * 16))" in (nci / "Assumptions/Layered.lean").read_text()
+    layered = (nci / "Assumptions/Layered.lean").read_text()
+    assert f"Nonempty (Layered T {d0} {e} {e_lk} ({m['vocab']} * {EMBED_BITS}))" in layered
     stated = (nci / "Guarantees/Layered.lean").read_text()
     assert T.DEFAULTS["K"] == 2e7 and f"S ≤ 2 * 10 ^ 7 → T.Threaded Γ S {d0 - E} {e + E * e_lk}" in stated
-    assert f"T.bound (α * Γ) b_w {d0 - E} {e + E * e_lk} *" in stated
     entry = json.loads((ROOT / "Security" / "lean-audit.json").read_text())["shape"]["conjectures"]
     test = f"benchmarks/nci/tests/{Path(__file__).name}::test_reference_layered_at_kimi_k2"
     assert entry["Nci.Assumptions.ReferenceLayered"] | {"why": ""} == {"status": "open", "test": test, "why": ""}

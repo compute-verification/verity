@@ -8543,12 +8543,6 @@
    "assumptions": [],
    "type_hash": "14031cc870afb5d46cab9fe5d4401dd018bc2db17e335f114a2e75adc1343bb5"
   },
-  "Nci.SecurityProofs.ReferenceTraining": {
-   "owner": "@lean",
-   "signature": ["Nci.SecurityProofs.ReferenceTraining : Nci.Guarantees.ReferenceTraining"],
-   "assumptions": [],
-   "type_hash": "104a6c9425013ffea4548e58627a31cf0d67358b3da5a64e483d59379ff1566b"
-  },
   "Nci.SecurityProofs.ThreadedContainedInfo": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ThreadedContainedInfo : Nci.Guarantees.ThreadedContainedInfo"],
@@ -12251,7 +12245,6 @@
    "Nci.SecurityProofs.ThreadedOfLayered": "frozen (no-function): It is about an arbitrary keyed reference circuit (Layered, Security/Definitions/Nci/Layered.lean) and a threading of it, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.LayeredTraining": "frozen (no-function): It is about an arbitrary keyed reference circuit, a threading of it and a declaration that contains it, under the named WeightsIncompressible (Security/Definitions/Nci/Assumptions/Threads.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Nci.SecurityProofs.ReferenceThreaded": "frozen (conjecture,no-function): It rests on the open conjecture ReferenceLayered, that the reference circuit is keyed at Kimi K2's shapes (Security/Definitions/Nci/Assumptions/Layered.lean), and is about an arbitrary reference circuit and a threading of it, not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Nci.SecurityProofs.ReferenceTraining": "restatable (conjecture,no-function): It is vacuous for a training run. Its declaration must contain the reference circuit gate for gate (Declaration.Contains), which the Dot16 restatement of ReferenceLayered, (17, 2328, 0, 163840 * 16), now allows; but that restatement still assumes its lookups read columns of novel inputs (Layered's col_input, Security/Definitions/Nci/Layered.lean: bf16 embedding columns that are inputs, not weights), and a training run's embedding table is updated weights. Every step after a run's first gathers from a computed table, which is no lookup, so the reference circuit of a run that trains its embedding is keyed only at d0 = 1 and ReferenceLayered fails for it. It fits once Layered's lookups may read weight columns, a trained embedding (LEAN-35, F6). It also rests on the open conjecture ReferenceLayered and the named WeightsIncompressible, and is about an arbitrary reference circuit, not the NCI check's code.",
    "Accounting.SecurityProofs.Actual.DampenerWindowsCap": "frozen (no-function,world-unlisted): It is ThreadedRuntime's memory cap over an arbitrary actual circuit (Accounting.Placed) and a threaded reference circuit its developer's declaration contains, read as the compute dampener's windows hypothesis (Nci.Guarantees.DampenerWindows) when one threading counts the residual and the declared computation together, under the physical constraints Causal, ComputeRate and Links, a bound on the state at each window's start and the named WeightsIncompressible, per-run hypotheses rather than a function's acceptance.",
    "Nci.SecurityProofs.FitRate": "frozen (conjecture,no-function): It is about an arbitrary actual circuit (Accounting.Placed), cuts of its run and a threaded reference circuit contained in its developer's declaration, under the physical constraints Causal and Links, bounds on each server's state at each cut and its link capacity, and the named empirical premises Reach (F3) and Fits (F1 and F4) over the windows pulled into the reference circuit (Security/Definitions/Nci/Assumptions/Fit.lean), per-run hypotheses rather than a function's acceptance. It rests on the open conjecture Reach (shape.conjectures, LEAN-35: false at token threads for a token-routed MoE, the per-sequence form at sequence threads).",
    "Nci.SecurityProofs.FitBoundSlots": "frozen (conjecture,no-function): It is about an arbitrary reference circuit, a threading of it with a slot map and its division into windows, under the named empirical premises ReachSlots (F3) and FitsSlots (F1 and F4 per parameter slot) (Security/Definitions/Nci/Assumptions/Fit.lean), not about the NCI check's code; joining it to Accounting's Windows and the wipe certificate is what would give it an acceptance. It rests on the open conjecture ReachSlots (shape.conjectures, LEAN-35: false at token threads for a token-routed MoE, the per-sequence form at sequence threads).",
@@ -12594,7 +12587,7 @@
    "Nci.Assumptions.ReferenceLayered": {
     "status": "open",
     "test": "benchmarks/nci/tests/test_tiers.py::test_reference_layered_at_kimi_k2",
-    "why": "The reference training circuit, written in the declarations' Dot16 steps, has a threading with a keyed form (Layered) at Kimi K2's shapes: roots of at least 17 legs (the previous accumulator and 16 activations), at most 2,328 counted Dot16 steps (37,248 products) reaching any one value, none reaching a lookup (layer 0's attention-input projections uncounted), and bf16 embedding columns of 163,840 x 16 bits; open, checked against a transformer block on paper only (the Notion page \"Threading at Dot16 granularity\", https://app.notion.com/p/3fe399515d9e81108139f66cfd33db94), since no Lean reference circuit of a transformer exists to build one on. Its test checks that these are Kimi K2's shapes' parameters in 16-wide steps (kappa.py) and that tiers.py's (d, e) = (10, 37248) is what ReferenceThreaded derives from them at S = K (E = 7 columns, e in products); it cannot find a reference circuit that is not keyed."
+    "why": "The reference training circuit, written in the declarations' Dot16 steps, has a threading with a keyed form (Layered) at Kimi K2's shapes: roots of at least 17 legs (the previous accumulator and 16 activations), at most 2,328 counted Dot16 steps (37,248 products) reaching any one value, none reaching a lookup (layer 0's attention-input projections uncounted), and bf16 embedding columns of 163,840 x 16 bits; open, checked against a transformer block on paper only (the Notion page \"Threading at Dot16 granularity\", https://app.notion.com/p/3fe399515d9e81108139f66cfd33db94), since no Lean reference circuit of a transformer exists to build one on. Its test checks that these are Kimi K2's shapes' parameters (kappa.py) in the steps of the declared BF16 GEMM (GEMM_HOPPER's HopperBF16WgmmaDot16, 16 activations a step, verity/ml/circuits/ops/boolean/gemm.py), at capacity factor 1 and with bf16 embeddings, neither of which any workload declares, and that tiers.py's (d, e) = (10, 37248) is what ReferenceThreaded derives from them at S = K (E = 7 columns, e in products); it cannot find a reference circuit that is not keyed."
    },
    "Nci.Assumptions.WeightsSupport": {
     "status": "falsified",
@@ -19042,7 +19035,6 @@
     "Nci.SecurityProofs.PartitionCovers",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceThreaded",
-    "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedContainedInfo",
     "Nci.SecurityProofs.ThreadedContainedInfoFmt",
     "Nci.SecurityProofs.ThreadedContainedInfoFmt2",
@@ -19156,7 +19148,6 @@
     "Nci.SecurityProofs.PartitionCovers",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceThreaded",
-    "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedContainedInfo",
     "Nci.SecurityProofs.ThreadedContainedInfoFmt",
     "Nci.SecurityProofs.ThreadedContainedInfoFmt2",
@@ -19795,7 +19786,6 @@
     "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.PartitionCovers",
     "Nci.SecurityProofs.ReadBound",
-    "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedThrottledDark",
     "Nci.SecurityProofs.ThreadedThrottledDarkSlots",
@@ -22739,7 +22729,6 @@
     "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
     "Nci.SecurityProofs.ReferenceThreaded",
-    "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedOfLayered",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedReadsSlots",
@@ -22819,7 +22808,6 @@
     "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
     "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
-    "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedThrottledDark",
     "Nci.SecurityProofs.ThreadedThrottledDarkSlots",
@@ -22961,7 +22949,7 @@
    "definitions": {
     "Nci.Assumptions.ReferenceLayered": "fc90804727140bffc77562fb496823d54ad4f5f38d71d67124219bf95f0459a5"
    },
-   "guarantees": ["Nci.SecurityProofs.ReferenceThreaded", "Nci.SecurityProofs.ReferenceTraining"]
+   "guarantees": ["Nci.SecurityProofs.ReferenceThreaded"]
   },
   "Definitions.Nci.Assumptions.Ldl": {
    "digest": "b8f07c106255f52731a8f34ff1eb09359980259b8dc298a85845e35e882db025",
@@ -23021,7 +23009,6 @@
     "Nci.SecurityProofs.DampenerThreaded",
     "Nci.SecurityProofs.DampenerThreadedSlots",
     "Nci.SecurityProofs.LayeredTraining",
-    "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedReads",
     "Nci.SecurityProofs.ThreadedReadsSlots",
     "Nci.SecurityProofs.ThreadedThrottled",
@@ -23274,7 +23261,6 @@
     "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
     "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReadBound",
-    "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedThrottled",
     "Nci.SecurityProofs.ThreadedThrottledDark",
     "Nci.SecurityProofs.ThreadedThrottledDarkSlots",
@@ -23532,17 +23518,15 @@
    ]
   },
   "Definitions.Nci.Guarantees.Layered": {
-   "digest": "d4e6bece94d61575652dac307887a13e8f0e37bd7193e35fc138e91295126bf7",
+   "digest": "679ecef73eee70cbec30117c332570aeffe6d26d0b47a9525d296bdf1cf07569",
    "definitions": {
     "Nci.Guarantees.LayeredTraining": "a1736df61eaf2f9a3652ebb8def1a1f96492eb35f2023f1beac10773c43aad41",
     "Nci.Guarantees.ReferenceThreaded": "9384d85cfae9a2f425d2e9620bd2455c8d5d9c30601124d4fe283c74c0124124",
-    "Nci.Guarantees.ReferenceTraining": "69c0bdfeee3d028816ef95dc3f4f7611d9827e846fffae168131a12575082483",
     "Nci.Guarantees.ThreadedOfLayered": "d8b16a2a29b38b05cc9448e33f0b5231a66261706be4dbc1e0011d915566f05e"
    },
    "guarantees": [
     "Nci.SecurityProofs.LayeredTraining",
     "Nci.SecurityProofs.ReferenceThreaded",
-    "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedOfLayered"
    ]
   },
@@ -23689,7 +23673,6 @@
    "guarantees": [
     "Nci.SecurityProofs.LayeredTraining",
     "Nci.SecurityProofs.ReferenceThreaded",
-    "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedOfLayered"
    ]
   },
@@ -23879,7 +23862,6 @@
     "Nci.SecurityProofs.PackedIncompressibleContainedMatMulOn",
     "Nci.SecurityProofs.PackedIncompressibleContainedTrainingOn",
     "Nci.SecurityProofs.ReferenceThreaded",
-    "Nci.SecurityProofs.ReferenceTraining",
     "Nci.SecurityProofs.ThreadedContainedInfo",
     "Nci.SecurityProofs.ThreadedContainedInfoFmt",
     "Nci.SecurityProofs.ThreadedContainedInfoFmt2",
