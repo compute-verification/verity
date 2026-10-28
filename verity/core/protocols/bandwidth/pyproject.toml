@@ -7,4 +7,5 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # What the tests import of `verity`: the audit stands on PoUS's store, setup and `vk`.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/ml/__init__.py",
+          "verity/ml/protocols/__init__.py", "verity/ml/protocols/pous",
           "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto", "verity/ml/randomness"]
