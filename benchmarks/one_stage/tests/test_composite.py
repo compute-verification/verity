@@ -1,6 +1,6 @@
 """composite.py: onsite's and remote's case from their subprotocols' private cases and answers, in the formats the
 composition's Lean reads (params and evidence canonical, the subprotocols in the order of their ids, the commitment `bind`
-of their digests then the registration's), the product's check run on it, and the output split so the public part holds
+of their digests), the product's check run on it, and the output split so the public part holds
 no case's evidence or params."""
 
 from __future__ import annotations
@@ -77,15 +77,13 @@ def test_a_cases_dir_of_case_dirs_reads_each(tmp_path):
     assert [c["id"] for c in json.loads((tmp_path / "private" / "params.json").read_bytes())["components"]] == [POUW, V2]
 
 
-def test_onsite_takes_nci_s_case_as_its_registration(tmp_path):
-    nci = put(tmp_path / "nci", C.REGISTRATION, {"n": 1}, b"\x03", b"{}", b"\xcc" * 64, verdict="accept")
+def test_onsite_has_no_registration_and_an_nci_case_is_a_piece_for_lean_to_refuse(tmp_path):
+    nci = put(tmp_path / "nci", "verity/nci/v1", {"n": 1}, b"\x03", b"{}", b"\xcc" * 64, verdict="accept")
     assert C.main(["onsite", *onsite_cases(tmp_path), "--cases", str(nci), *outs(tmp_path)]) == 0
     out = tmp_path / "private"
-    c = (out / "commitment.bin").read_bytes()
-    assert len(c) == 128 and c[64:] == b"\xcc" * 64
-    assert json.loads((out / "params.json").read_bytes())["registration"] == {"id": C.REGISTRATION, "params": {"n": 1}}
-    assert json.loads((out / "evidence.json").read_bytes())["registration"] == \
-        {"commitment": "03", "evidence": b"{}".hex(), "id": C.REGISTRATION, "params": {"n": 1}}
+    assert len((out / "commitment.bin").read_bytes()) == 64
+    assert "registration" not in json.loads((out / "params.json").read_bytes())
+    assert "verity/nci/v1" in [c["id"] for c in json.loads((out / "params.json").read_bytes())["components"]]
 
 
 def test_a_case_whose_commitment_did_not_decode_stands_in_its_own_commitment(tmp_path):
@@ -199,11 +197,10 @@ def test_a_case_without_its_answer_is_missing(tmp_path):
     assert "NOT_ESTABLISHED missing verity/pouw/period/v1" in (tmp_path / "public" / "verdicts.txt").read_text()
 
 
-def test_onsite_without_its_registration_leaves_it_out_for_lean_to_refuse(tmp_path):
+def test_onsite_with_every_component_is_established(tmp_path):
     assert C.main(["onsite", *onsite_cases(tmp_path), *outs(tmp_path)]) == 0
-    assert "registration" not in json.loads((tmp_path / "private" / "params.json").read_bytes())
     assert len((tmp_path / "private" / "commitment.bin").read_bytes()) == 64
-    assert "NOT_ESTABLISHED missing verity/nci/v1" in (tmp_path / "public" / "verdicts.txt").read_text()
+    assert "NOT_ESTABLISHED" not in (tmp_path / "public" / "verdicts.txt").read_text()
 
 
 def test_the_check_runs_the_products_executable_on_the_private_files_and_blobs(tmp_path):

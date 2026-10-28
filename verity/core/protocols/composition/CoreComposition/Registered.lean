@@ -1,13 +1,11 @@
 /-
-A composition with a registration check, onsite Verity's shape (`Core.Onsite.protocol`, whose registration check is
-NCI's, `verity/nci/v1`): one `Core.Protocol` that runs the registration check's own `answer` on the registration's case
-in its commit phase, before composing, and then composes its components as `product` does (`check`). The registration
-check is not a component:
+A composition with a registration check: one `Core.Protocol` that runs the registration check's own `answer` on the
+registration's case in its commit phase, before composing, and then composes its components as `product` does
+(`check`). The registration check is not a component:
 
 * It rejects when the registration check doesn't accept the registration, whatever the components answer, when the
-  commitment doesn't bind the registration's digest, and when the component whose commitment is the registration (at
-  onsite, sampled proofs' one-stage audit, whose commitment is the run's registration record) committed to another
-  digest: one registration digest in both.
+  commitment doesn't bind the registration's digest, and when the component whose commitment is the registration
+  committed to another digest: one registration digest in both.
 * Otherwise it answers as `product` of its components does on their cases, under the commitment's binding of their
   digests: an accepted registration adds nothing to what the composition makes public or keeps.
 
