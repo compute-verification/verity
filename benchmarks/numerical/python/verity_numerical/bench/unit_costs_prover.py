@@ -45,7 +45,7 @@ as a tc-step-like unit.
 staging ladder (:data:`STAGING`); a registered type lowers one unit, at least the measured registered staging
 (:data:`REGISTERED_STAGING`), a generic type its whole subcircuit, a tree its distinct members.
 
-**The slot sumcheck** (:data:`SLOT_SUMCHECK`; candidate 3, ``note:proofs/20261010T0250Z-draft-f4-bitsumcheck``): V* runs
+**The slot sumcheck** (:data:`SLOT_SUMCHECK`; candidate 3): V* runs
 the slot sumcheck's verifier and opens the committed bits, so each session's prover adds, apart from Flock's prove, K1 ns
 per entry per rep x entries x reps seconds. A slot's entries are its type's *template*, the registered table: the
 nonzeros of what the circuit text holds for the type (:func:`netlists`: a registered type's one unit, a tree's distinct
@@ -91,7 +91,7 @@ MENU_K = 4
 #: per audit (mean) is rare, each of its types a bucket of its own at B = 1 or 16 (whichever costs less at the public count)
 BUCKETS_T = 8
 RARE_DRAWS = 16
-#: candidate 3's slot sumcheck, measured by proofs' K1 on vy-nebius-2's 32 threads (r20261010-093619-c3ee; upper bounds,
+#: candidate 3's slot sumcheck, measured by proofs' K1 on vy-nebius-2's 32 threads (art:10599a37d2ec; upper bounds,
 #: Lean builds loaded the node): ns per entry per rep at ν = 20 and 28, the middle of wide-Morton (the band's low end) and
 #: uniform columns (its high end, the worst case); reps; the committed bits' bytes per entry (8; 64 encoded at rate 1/8);
 #: and the working set per entry (peak RSS 37 GiB at ν = 28). F4's estimate before it: 13 ns (10-16) at ν = 20.

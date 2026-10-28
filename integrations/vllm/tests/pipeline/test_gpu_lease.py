@@ -532,7 +532,7 @@ def test_a_single_gpu_match_holds_its_lease_for_its_gpu_phase_only(tmp_path, lea
         env["GPU_LEASE"] = fake_lease(tmp_path)
         GL.hide_devices(env)
     t.child_env = env
-    with pytest.raises(RD.Stop):              # the stand-in folds nothing, so the Match fails after its legs
+    with pytest.raises(RD.Stop):              # the stand-in folds nothing, so the Match fails after its stages
         t.match()
     assert [json.loads(ln) for ln in (tmp_path / "legs.jsonl").read_text().splitlines()] == legs
     rec = Path(t.d, "match", "lease", GL.RECORD)

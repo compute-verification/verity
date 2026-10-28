@@ -229,7 +229,7 @@ theorem a1CostWitness : A1CostWitness := fun _ _ =>
   ⟨fun hind _ => pipe_a1_half IsPipe hind, fun hind _ => pipe_a1_half IsQuadPipe hind,
     fun hind _ => pipe_a1_half (fun Rs => IsPipe Rs ∧ ¬ IsQuadPipe Rs) hind⟩
 
-/-! ## MinRank ≥ 16 for the shift by 24 (`minrank.md` §3) -/
+/-! ## MinRank ≥ 16 for the shift by 24 -/
 
 /-- `X[a, b]` for the combination `q` of the non-final checkpoint matrices. -/
 noncomputable def ckComb (k : ℕ) (R : Mat) (q : ℕ → ℚ) (a b : ℕ) : ℚ :=

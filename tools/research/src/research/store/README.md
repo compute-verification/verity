@@ -349,9 +349,9 @@ algorithm: `remote-replicas/README.md`.
   lacks, and indexes just those. A fresh machine builds its catalog this way.
 - **Atomic rebuild.** `reindex` builds the new catalog beside the old one, carries the replica records over, and renames it into
   place once complete; an open `LocalStore` notices the new file and reopens it.
-- **Parity.** `research data parity --fresh DIR [--render] [--json-out F]` (`parity.py`) builds a store at DIR from the remote alone
-  and compares it with this one on content: ids and manifest bytes, attempt documents, label content hashes, every verified replica
-  row confirmed by HEAD (manifest + blobs, sizes), and with `--render` the `bench.tables` markdown. Every difference gets a cause
+- **Parity.** `research data parity --fresh DIR [--json-out F]` (`parity.py`) builds a store at DIR from the remote alone
+  and compares it with this one on content: ids and manifest bytes, attempt documents, label content hashes, and every verified replica
+  row confirmed by HEAD (manifest + blobs, sizes). Every difference gets a cause
   (`pending here`, `not pulled`, `uploaded during the run`); anything else fails (exit 1). Read-only for the store under test.
 
 ### 7.3 Fetched fixtures and the public export
@@ -413,7 +413,7 @@ a table read the same key. One constant per key (`vocab.PROOF_CLASS`, never the 
 value form: `enum` (a closed set), `bool` (`true` | `false`), `int`, `number`, `text`, `list`. `research data vocab [--json]`
 prints the table; the groups are:
 
-- **result** — the producing lane about its own result (`ledger_to_store`, or `label` by hand): `candidate` (enum: the backend
+- **result** — the producing lane about its own result (the r20 ledger import, or `label` by hand): `candidate` (enum: the backend
   families A-GKR, B-Ligero, C-Flock, D-SP1, and the frozen ledger's B-AIR, C (the VOLE candidate), SP1 (D-SP1) and shared),
   `proof_class` (enum: the contract's classes + COMPONENT), `soundness`, `K`, `B`, `hardware`,
   `authentication` (enum: included | included-hash | excluded), `campaign`, `relation`, `mode` (enum: interactive | fiat-shamir), `zk` (bool),
@@ -443,7 +443,7 @@ Enum and bool values are compared as the catalog stores them (`scalar_text`: str
 (naming the nearest known one), a measurement (`l`, `subbatches`, `rtt_ms_path`, ...: the number belongs in the result or the
 artifact's meta), a ref written as a label, a value outside its enum, or a word where the form is bool / int / number.
 `--off-vocab` writes it anyway, for a concept the vocabulary has not learnt yet; add the word to `vocab.py` next. Readers stay
-lenient: whatever older writers stored is still read, old spellings as their canonical key. Consumers (`bench.tables`, the trust
+lenient: whatever older writers stored is still read, old spellings as their canonical key. Consumers (`verity_numerical`'s contract tests, the trust
 module) import the constants; the store imports no consumer.
 
 ## 9. CLI (v0.1)
@@ -546,7 +546,7 @@ run-record/v1            every file of a run dir (logs included) as one tree; ou
 telemetry/v1             events.jsonl or resources.jsonl of an attempt
 redteam-findings/v1      meta {findings: [...]}; refs.target
 ledger-row/v1            one frozen overhead-ledger row whose run is not an attempt here: meta = the ledger/v1 row; payload null;
-                         the lane's claims are labels on it (`verity_numerical.bench.ledger_to_store`)
+                         the lane's claims are labels on it
 trust-dossier/v1         the computed trust level of one numerical target (`python benchmarks/tc_probe/trust.py --publish`): meta =
                          the TrustReport (level, criteria with evidence ids, D-entries, references, missing items, triggers, procedure);
                          refs.cited = every artifact it rests on, refs.previous = earlier dossiers; payload null; labels target,

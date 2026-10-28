@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Referee check of CHECKED-STRIP's priced zero-instance routes (note:20261017T0030Z-draft-checked-strip, check H and P7).
+"""A check of checked_strip.py's priced zero-instance routes (its check H and P7).
 
 `checked_strip.py` prices every zero-instance route as bit-sliced binary products at x warp instructions per 32 × 128
 bit products (T increments at 8x an IMMA, D_d and W at 7x, O′'s c·b at x·k/32), and treats x = 12 as conservative because
 a binary word costs about one IMMA word in time. That holds for O′'s c·b, a 1-bit × 1-bit product. The T increment
 Σ (c + U)·b is an 8-bit × 1-bit product and D_d = U·A_d, W = U·b are 7-bit × 1-bit, which IDP.4A takes four to a lane
 instruction: 8 IDP.4A a word, 32 warp instructions an IMMA's 128 words, which is x = 4 for T and 32/7 for D and W, with the
-counting included. IDP.4A takes s8 × s8 bytes, so the same 8 instructions make a T word at any instance: this is SPEC's
-vector route at q = 8, which SPEC's thresholds close only while JI3e_0 binds honest (2.03 there, 11.29 on JI3e_1). This
+counting included. IDP.4A takes s8 × s8 bytes, so the same 8 instructions make a T word at any instance: this is the
+vector route at q = 8, which the stated thresholds close only while JI3e_0 binds honest (2.03 there, 11.29 on JI3e_1). This
 script prices those routes on checked_strip's own facets and tiles (`ts_tile`, `ts_pv`, `ts_best`) and finds the fold
 below which they pay.
 
@@ -25,9 +25,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import checked_strip as cs
 from exact_kit.checks import Checks
 
-#: Warp instructions an IMMA's 128 words cost when each word is 8 IDP.4A, and when it is QSTAR's measured dp4a word (10.59
-#: issue units a word, note:20261017T0344Z-draft-eps1-qstar).
-IDP4A, DP4A_QSTAR = 128 * 8 / 32, 128 * 10.59 / 32
+#: Warp instructions an IMMA's 128 words cost when each word is 8 IDP.4A, and when it is the measured dp4a word (10.59
+#: issue units a word, `scalar_route.py`'s no-table costs).
+IDP4A, DP4A_MEASURED = 128 * 8 / 32, 128 * 10.59 / 32
 
 
 def dp4a(a, b, acc):
@@ -105,7 +105,7 @@ def main() -> int:
     models = list(cs.TS_SHAPES)
     folds = (3, 2.75, 2.6, 2.5, 2.25, 2, 1.5, 1)
     tab = {(m, f): (linears(f, m), linears(f, m, lin_x(12)), linears(f, m, lin_routes(IDP4A)),
-                    linears(f, m, lin_routes(DP4A_QSTAR))) for m in models for f in folds}
+                    linears(f, m, lin_routes(DP4A_MEASURED))) for m in models for f in folds}
     summary = {f"{m} f={f}": "strip-only {:.3%}, x=12 {:.3%}, IDP.4A {:.3%}, dp4a 10.59 {:.3%}".format(*v)
                for (m, f), v in tab.items()}
     checks.check("co32c's linears at the duo fold (f ≥ 2.6): IDP.4A-made T and D words gain nothing",
@@ -118,7 +118,7 @@ def main() -> int:
                  2.5 < knee <= 2.6 and all(tab[(m, f)][2] > tab[(m, f)][0] + 5e-4 for m in models
                                            for f in (2.5, 2.25, 2, 1.5, 1)),
                  "; ".join(summary[f"{m} f={f}"] for m in models for f in (2.5, 2)))
-    checks.check("at FOLD's XOR-in fold (f = 1.5) IDP.4A routes put 8B's linears at ≈ 3.0% (0.83% at QSTAR's measured "
+    checks.check("at the XOR-in fold (f = 1.5) IDP.4A routes put 8B's linears at ≈ 3.0% (0.83% at the measured "
                  "dp4a word), against checked_strip's 0.08% at x = 12",
                  0.025 < tab[(models[0], 1.5)][2] < 0.035 and 0.006 < tab[(models[0], 1.5)][3] < 0.011
                  and tab[(models[0], 1.5)][1] < 0.001, summary[f"{models[0]} f=1.5"])

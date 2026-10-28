@@ -10,10 +10,11 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
   owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing.
   - `verity/core/`: the verifiers, trusted code. `verity/core/protocols/` holds the integrity profile (`profile`) and one
-    package per protocol: sampled proofs, PoUW, PoUS, the bandwidth audit, the remote bandwidth audit and the network
-    certifier, each a Python verifier until its Lean verifier (its `lean/`) replaces it; NCI is Lean only. `claims`
-    holds the security claims' ids, `service/flock/` C-Flock's Lean verifier and the ZK server
-    (`Flock.Firewall`), `service/firewall/` the ZK server's release side, and `difftest` the Python held to each Lean.
+    package per protocol: sampled proofs, PoUW, proof of useful space (PoUS), the bandwidth audit, proof of useful
+    bandwidth (PoUB) and network certification, each a Python verifier until its Lean verifier (its `lean/`) replaces
+    it; the inference-only policy (`network/nci/`) is Lean only. `claims` holds the security claims' ids,
+    `service/flock/` C-Flock's Lean verifier and the ZK server (`Flock.Firewall`), `service/firewall/` the ZK server's
+    release side, and `difftest` the Python held to each Lean.
   - `verity/ml/`: Python and CUDA: the provers, and Python that mirrors the Lean for speed. `circuits` (format in
     `circuits/PROTOCOL.md`; `ops`, the primitive circuits' Definitions; `silicon`, the GPUs' exact semantics),
     `kernels`, `commitments`, `crypto`, `randomness` (the one challenge derivation), `private_circuits`, `definitions`
@@ -76,8 +77,8 @@ The rules in force, each stated as itself; the friction skill has the standing r
   are hash-based (LMS, n = 64). Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
   and Duo receipts, PoUW's per-step keyed u32 mul/xor/rotl folds over committed accumulator words, which bind under the
   named premise H-μ⁺, not yet in a lock.
-- **Live coins only.** No Fiat–Shamir, except at two rates where live coins are impractical: the remote bandwidth
-  audit's pass seeds inside a window, from the window's live challenge and the previous pass's root; and PoUW's
+- **Live coins only.** No Fiat–Shamir, except at two rates where live coins are impractical: PoUB's pass seeds
+  inside a window, from the window's live challenge and the previous pass's root; and PoUW's
   per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the window's
   live salt (`pouw.salt`) and the operands' committed roots, which a drawn unit's proof derives. Grinding is a term
   of the guarantee: a steer that needs m noised coordinates succeeds with probability at most μ^m a try. No
@@ -166,11 +167,12 @@ on review, and the full check runs after landing (how a PR lands: the team skill
   refactored onto the shared one.
 - **One vocabulary.** A concept more than one guarantee reads (the circuit, commitments and hashes, coins and draws,
   probability, partitions and proof blocks, devices and signatures) has one definition, in `Core` or `Hash`, which every
-  area and protocol reads; an area defines only its own, and no new Lean adds a second definition.
+  area and protocol reads; an area defines only its own, and no new Lean or Python adds a second definition
+  (`tests/test_lean_vocabulary.py`).
 - **Lean is code or security analysis.** Code stays with its component and never requires `Security/`: C-Flock's
   executable verifier and the ZK server (`verity/core/service/flock/`, with the release side in
-  `verity/core/service/firewall/`), the PoUS grader, the certifier program, the NCI check and the remote bandwidth
-  audit's verifier, each in its protocol's `lean/` with a difftest. Under `FC_FIREWALL=1` every byte that leaves is
+  `verity/core/service/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
+  PoUB's verifier, each in its protocol's `lean/` with a difftest. Under `FC_FIREWALL=1` every byte that leaves is
   computed by `Flock.Firewall`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released bytes through
   hypotheses not yet proved about the live path. The analysis is `Security/`, three trees: definitions
   (`Definitions/`, the package `security`, Mathlib only: the vocabulary, named assumptions and guarantee
