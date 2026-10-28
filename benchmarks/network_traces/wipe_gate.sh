@@ -5,7 +5,8 @@
 # and KEEP default to site.json's gate_key (under ~/.ssh), gate, peer and keep.
 #
 # With AT (a UTC time) it first waits until then, so a run launched early fires on the clock with no VM awake: give the
-# run a time limit past AT, MINUTES, the fetch and the leak guard (below). Launched more than LATE_S (60) seconds after AT it sends nothing. It
+# run a time limit past AT, MINUTES, the fetch and the leak guard (below). Launched more than LATE_S (60) seconds
+# after AT it sends nothing. It
 # sends the gate REQUESTS prompts of the toy's class (`demo_stub.py prompts`), the toy (`demo_stub.py serve`) already
 # listening on PEER's loopback PORT, and writes the gate's answer to start.json; a refusal (another rehearsal still runs)
 # is a visible failure, never retried. Then `status` every 15 s until the run ends (status.json), and its bundle with
