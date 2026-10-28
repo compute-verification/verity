@@ -1,9 +1,7 @@
 # /etc/vy/peers on vy-challenger-1, the auditor host (us-north1, outside the nodes' private network). Its own line names it by
-# its private address; the others are the machines a session's --peer opens `ssh -R PORT` to (benchmarks/live_challenger/
-# auditor.py), over their public addresses with the auditor's tunnel key: the serving nodes, whose research@ authorizes it under
-# the comment `auditor@vy-challenger-1 tunnel` (vy-challenger-setup made it on this host; its private half never leaves it), and
-# the verifier host vy-auditor-1, whose `challenger` account authorizes it (verifier/setup.sh's TUNNEL_KEYS).
+# its private address; the others are the serving nodes a session's --peer opens `ssh -R PORT` to (benchmarks/live_challenger/
+# auditor.py), over their public addresses with the auditor's tunnel key, which research@ each of them authorizes under the
+# comment `auditor@vy-challenger-1 tunnel` (vy-challenger-setup made it on this host; its private half never leaves it).
 vy-challenger-1 research@10.104.0.21
 vy-nebius-1 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@81.85.2.165
 vy-nebius-2 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes research@81.85.2.121
-vy-auditor-1 -i /var/lib/vy-challenger/.ssh/vy-challenger-tunnel -o IdentitiesOnly=yes challenger@81.85.1.145
