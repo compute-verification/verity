@@ -7,7 +7,7 @@ import Proofs.Properties.Verity.Network.Window
 `Verity.Subprotocol.NetworkWindowLe R A` (the network certifier's refinement) follows from `Verity.Network.windowLe` at any verdict
 `A` under which onsite's network component accepts what the prover sent and S5's guard holds (`networkWindowLe`). In
 the game, `A` is onsite's network coupling's verdict at the code (`Vocab.Coupling.verdict`), whose first conjunct is
-that acceptance and whose other two, the releases logged and the break absent, are the guard
+that acceptance and whose other two, each release at its round of the log and the break absent, are the guard
 (`networkWindowLe_verdict`); remote has no network component. So the network certifier at the code
 (`Verity.Subprotocol.network_atCode`, at the coupling's run, `Vocab.Coupling.atCode`) rests on the bridge's assumptions
 (`KS`, `Commitment.Binds`, `Flock.ListWithin`, and `trusted-host` in the realization) and the named steps
@@ -38,14 +38,13 @@ theorem networkWindowLe {r : PeriodRun d α C Ω} {K : ℝ}
   le_trans (Pouw.pr_mono fun _ hx => ⟨(hA _ hx.1).1, (hA _ hx.1).2, hx.2⟩) (windowLe W h2 h3 h4 h5 h6 hρ hreg hcov ξ i)
 
 /-- **The refinement in the game**: the network certifier's refinement at a coupling's verdict at the code, with the steps at what the prover
-sent at the outcome the coins lead to, S5 guarded by the verdict's releases logged and break absent. -/
+sent at the outcome the coins lead to, S5 guarded by the verdict's releases at their rounds and break absent. -/
 theorem networkWindowLe_verdict {V : Vocab d α} {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
     (q : V.Coupling .onsite .network θ F c σ) {K : ℝ}
     {R : RealizesCommOfPeriodLeakAccepted q.run K H D L Kₒ S lay k δ decode reg Dj n} (W : WindowRuns R)
     (h2 : PeriodRunsV2 W fun ξ => (V.outcome θ F c σ q.coins ξ).sent) (h3 : V2AcceptMeans W)
     (h4 : WindowCoinsLive W)
-    (h5 : SessionIsSampledRun W fun ξ => V.Logged (q.pos .network) .network (V.outcome θ F c σ q.coins ξ) ∧
-      ¬ q.brk ξ)
+    (h5 : SessionIsSampledRun W fun ξ => V.Logged (q.pos .network) .network (V.outcome θ F c σ q.coins ξ) ∧ ¬ q.brk ξ)
     (h6 : NetworkCouples R (fun ξ => (V.outcome θ F c σ q.coins ξ).sent) W)
     (hρ : WindowValuesRegistered R fun ξ => (V.outcome θ F c σ q.coins ξ).sent)
     (hreg : WindowRegistersAs W fun ξ => (V.outcome θ F c σ q.coins ξ).sent)
@@ -88,8 +87,7 @@ theorem coupling_atCode_of_steps {V : Vocab d α} {θ F c : ByteArray} {σ : Gam
       εtap)
     (W : WindowRuns R) (h2 : PeriodRunsV2 W fun ξ => (V.outcome θ F c σ q.coins ξ).sent) (h3 : V2AcceptMeans W)
     (h4 : WindowCoinsLive W)
-    (h5 : SessionIsSampledRun W fun ξ => V.Logged (q.pos .network) .network (V.outcome θ F c σ q.coins ξ) ∧
-      ¬ q.brk ξ)
+    (h5 : SessionIsSampledRun W fun ξ => V.Logged (q.pos .network) .network (V.outcome θ F c σ q.coins ξ) ∧ ¬ q.brk ξ)
     (h6 : NetworkCouples R (fun ξ => (V.outcome θ F c σ q.coins ξ).sent) W)
     (hρ : WindowValuesRegistered R fun ξ => (V.outcome θ F c σ q.coins ξ).sent)
     (hreg : WindowRegistersAs W fun ξ => (V.outcome θ F c σ q.coins ξ).sent)

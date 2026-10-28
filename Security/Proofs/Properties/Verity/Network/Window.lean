@@ -101,10 +101,10 @@ def WindowCoinsLive (W : WindowRuns R) : Prop :=
 accepting run of the sampled verifier, where the guard `G` holds.** Where `G` holds and every session of window `i`'s
 proof is accepted at the coins `ξ` with the network audit's own coin `x`, the sampled verifier's run at the window's
 statement, against its prover at the tape and coins `x` gives, accepts. The guard is what the run may need beyond
-acceptance: at a coupling's verdict at the code (`Vocab.Coupling.verdict`), the releases its check read in the
-device's log and the coupling's break, the events its finder answers for, absent. `fun _ => True` is the unguarded
-form. Were the bridge restated over C-Flock's game instead, the `SampledSession` coupling would give this, with the
-bridge's KS assumption changed: a claims change. -/
+acceptance: at a coupling's verdict at the code (`Vocab.Coupling.verdict`), each release its check read at its round
+of the device's log and the coupling's break, the events its finder answers for, absent. `fun _ => True` is the
+unguarded form. Were the bridge restated over C-Flock's game instead, the `SampledSession` coupling would give this,
+with the bridge's KS assumption changed: a claims change. -/
 def SessionIsSampledRun (W : WindowRuns R) (G : ((i : I) → Ω i) → Prop) : Prop :=
   ∀ ξ i x, G (Function.update ξ (r.own .network) x) → W.session (Function.update ξ (r.own .network) x) i →
     (Claims.run H (R.prover ξ i) D.V (R.stmt ξ i) (W.coins ξ i x).1 (W.coins ξ i x).2).out = .acc
