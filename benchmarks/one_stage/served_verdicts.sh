@@ -532,8 +532,11 @@ say "WINDOW $PICK"
 say "CLASSES: the window circuit's ${CLASSES}; the certifier's scan ${CERTIFIER_SCAN:-W63}, the one class the gate serves"
 CERT=
 if [ -n "${CERTIFIER_CMD:-}" ]; then  # the certifier's chain is the longest piece, so it starts once the window is picked
-  "$PY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" --only certifier \
-    > "$OUT/pieces-certifier.txt" 2>&1 &
+  # kept off CPUs 0 and 1 (CERT_CPUS), which PoUS's answers need idle: the chain's load stretches a round past Δ + RTT
+  PIN=(); N=$(nproc)
+  command -v taskset > /dev/null && [ "$N" -gt 2 ] && PIN=(taskset -c "${CERT_CPUS:-2-$((N - 1))}")
+  ${PIN[@]+"${PIN[@]}"} "$PY" benchmarks/one_stage/served_verdicts.py pieces --serve-run "$D" --window "$K" --out "$OUT/pieces" \
+    --only certifier > "$OUT/pieces-certifier.txt" 2>&1 &
   CERT=$!
 fi
 cd "$TREE/integrations/vllm" || exit 9
