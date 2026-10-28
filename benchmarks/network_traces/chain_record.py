@@ -17,9 +17,10 @@
   ``certificates.jsonl`` and ``clocks.jsonl``, each certificate's public part (`certifier_serve.keep_certificates`),
   held again to the certifier's key and session in ``--run``'s ``deployment.json`` by the client's own
   `check_certificates`. Each window's two certified records (``--run``'s ``certified.jsonl``, their heads and salts)
-  are held by the host audit (`certifier_serve._certified`, N2's audit without its head checks) under the syncs the
-  certifier signed (``--run``'s salted ``clocks.jsonl``, `advised.SignedClocks`), never the plan's, and their
-  certificates, and the clocks', must be exactly the client's. ``--deployed`` refuses a key that isn't LMS at
+  are held by the Lean's audit (`certifier_serve._certified`: `NetworkCheck.Records`' ``verdicts-no-grid``, N2's
+  audit without its head checks, `audit.Audit` beside it as the reference, each row's ``by`` and ``reference``) under
+  the syncs the certifier signed (``--run``'s salted ``clocks.jsonl``, `advised.SignedClocks`), never the plan's, and
+  their certificates, and the clocks', must be exactly the client's. ``--deployed`` refuses a key that isn't LMS at
   `lms.DEPLOYED`.
 * **report**: one JSON and one Markdown report, per step its verdict, its run ids, its ε at δ and what it computed in
   the clear, and the period's terms for `NetTiming.Guarantees.PeriodLeakAccepted` summed by
@@ -79,8 +80,9 @@ CLEAR = {
                 "reference, network-e2e's stand-ins for the warden's rows and the Commit's port) on the honest run",
     "certificates": "at the client, on its kept certificates (their public parts): each certificate's and clock "
                     "certificate's LMS signature under the certifier's key and session (check_certificates); and the "
-                    "host audit of the rehearsal's certified heads and salted clock openings (witness a rehearsal "
-                    "publishes), whose certificates must be exactly the client's",
+                    "Lean's audit (NetworkCheck.Records, audit.Audit its reference) of the rehearsal's certified heads "
+                    "under its salted clock openings (witness a rehearsal publishes), whose certificates must be "
+                    "exactly the client's",
     "n2": "at the verifier: the registration records, the draw, the certificates' public fields, the clock syncs, the "
           "proof's pub row opened to the verifier's own copy and the o0 output word; never a record, head, leaf "
           "salt, sibling or the certifier's salt (n2_zk's RECEIVED, scanned for every piece)",
@@ -229,7 +231,8 @@ def certs(run: Path, client: Path, deployed: bool = False) -> dict:
         elif w >= len(signed):
             rows.append({"window": w, "certified": False, "why": "no clock certificate verifies for the window"})
         else:
-            rows.append({"window": w, "certified": bool(cs._certified(lw, lw.commit(w, *pair), signed))})
+            v = cs._certified(lw, lw.commit(w, *pair), signed)
+            rows.append({"window": w, "certified": v["accepted"], "by": v["by"], "reference": v["reference"]})
     out |= {"clock_certificates": len(clocks), "clocks_signed": len(signed),
             "signed_are_declared": signed == declared[:len(signed)] and len(signed) == len(declared),
             "issuer_refused": refused, "certified_windows": sum(r["certified"] for r in rows), "rows": rows}
