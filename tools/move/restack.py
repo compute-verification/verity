@@ -20,7 +20,7 @@ same script rather than by rename detection:
 
 A branch that already contains M skips to step 3. A branch that doesn't but shares a commit after B with `--onto` or `--main`
 (default origin/main) is `based-after`, and nothing runs: step 3 would bring main's commits since B in a second time and still
-report clean (duplicate imports and lock entries, TOP-90 row 18). Its owner merges main instead (`git merge origin/main`); the
+report clean (duplicate imports and lock entries). Its owner merges main instead (`git merge origin/main`); the
 restack is for branches based at or before B. The branch, its ref and the caller's checkout are never changed: the
 commits go to the object store, and the scratch worktree is removed. Each branch's outcome is `clean` (with the result's
 id), `up-to-date`, `conflicted` (the step and the files), `script-failed` (the script's exit code and the tail of its
@@ -264,7 +264,7 @@ def restack(branch: str, move: str, onto: str | None = None, base: str | None = 
     if not contains(move, head, cwd) and (late := based_after(head, base, [onto, *([main_sha] if main_sha else [])], cwd)):
         return {**r, "status": "based-after", "error": (
             f"{branch} has {late[:12]}, which came after the move's base {base[:12]}: restacking it would bring main's commits "
-            f"since then in a second time, and report clean (duplicate imports and lock entries, TOP-90 row 18). Merge instead: "
+            f"since then in a second time, and report clean (duplicate imports and lock entries). Merge instead: "
             f"`git merge {main or onto[:12]}` once the move has landed, and resolve what that leaves; restack.py is only for "
             f"branches based at or before {base[:12]}")}
     tip, ran = head, False

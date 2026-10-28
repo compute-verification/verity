@@ -193,8 +193,8 @@ def test_a_lock_conflict_beside_a_content_conflict_is_still_a_conflict(repo):
 
 
 def test_a_branch_based_after_the_moves_base_is_refused_with_the_plain_merge(repo, monkeypatch, capsys):
-    """TOP-90 row 18 (25 Oct): a branch based on a main past the move's base restacked `clean` with duplicate imports and lock
-    entries, because the last merge, based on the move, brought main's commits since the base in from both sides. Here main
+    """A branch based on a main past the move's base would restack `clean` with duplicate imports and lock entries, because
+    the last merge, based on the move, brings main's commits since the base in from both sides. Here main
     adds an import after the base, and the moved main has it at the top of the file."""
     git(repo, "checkout", "-q", "-b", "later", "base")
     later = commit(repo, "main after the move's base", {"app/main.py": MAIN + "from app.util import f3\n"})

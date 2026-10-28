@@ -1,5 +1,5 @@
-# The trusted-host rename: what `tools/move/rename.py --map tools/move/host_map.toml` renames (Daniel's ruling, 23 Oct 2026
-# 11:04 PM PDT: no hosting provider's name in any security assumption, claim, guarantee, property or protocol document).
+# The trusted-host rename: what `tools/move/rename.py --map tools/move/host_map.toml` renames (the rule: no hosting
+# provider's name in any security assumption, claim, guarantee, property or protocol document).
 # The assumption is the auditor's trusted host, a role; which provider runs it is implementation, named only in infra and
 # run tooling. Its Lean definition keeps its namespace, so `rename.py --moves` prints the one declaration rename.
 
