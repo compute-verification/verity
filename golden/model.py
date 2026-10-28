@@ -351,8 +351,8 @@ SCHEMA = {
         "eps": (0.01, "share of credited work allowed wrong"),
         "pouw_sampled": (True, "PoUW's units drawn at (eps, delta) a window too (guarantee 2)"),
         "law": ("achievability", "achievability (q_u = min(1, Lambda w_u / C), Partitioning/Guarantees.lean) | uniform "
-                                 "(the deployed audit's uniform kd-subset over a population's units, SampledKSLiveV3; "
-                                 "eps then counts units)"),
+                                 "(the deployed audit's uniform kd-subset over a population's units, SampledKSLiveV3, "
+                                 "at eps w_avg / w_max of the units, so that eps still bounds the wrong work)"),
         "retain_GB": (100.0, "GB a window may hold until its draw (the Commit's step bytes, Dither's values, H1's "
                              "records, times steps a window): an estimate, the H200's 141 GB less weights, KV cache "
                              "and activations; over it, the design is listed infeasible"),
@@ -871,12 +871,15 @@ def proving(d: dict, units: list, label: str) -> dict:
     if F <= 0:
         return out
     if s["law"] == "uniform":
+        # eps counts units under the kd-subset, so K0 wrong units hold up to K0 w_max of the work: eps of the work
+        # (the brief's guarantee) needs eps w_avg / w_max of the units
         n_all = sum(u["per_token"] * T * S for u in units)
-        kd = uniform_kd(n_all, s["eps"], s["delta"])
-        out["uniform_kd"] = kd
+        eps_units = s["eps"] * (F / n_all) / max(u["work"] for u in units)
+        kd = uniform_kd(n_all, eps_units, s["delta"])
+        out.update({"uniform_kd": kd, "uniform_eps_units": eps_units})
     elif s["law"] != "achievability":
         raise ValueError(f"sampling.law {s['law']!r}")
-    k_pad = pv["k_pad"] if pv["k_pad"] is not None else I("k_pad")
+    k_pad = round(pv["k_pad"] if pv["k_pad"] is not None else I("k_pad"))
     universal = pv["stmt"] == "universal"
     if pv["stmt"] not in ("template", "universal"):
         raise ValueError(f"prover.stmt {pv['stmt']!r}")
