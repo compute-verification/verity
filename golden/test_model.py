@@ -66,6 +66,38 @@ def test_chunked_lanes_fit_at_every_served_k():
         assert all(b["k_log"] <= 27 for b in r["proving"]["pouw"]["classes"][0]["blocks"])
 
 
+def test_whole_rows_cost_at_least_exact_reads():
+    assert model.opened(2048, 4096, "whole") == [4096] and model.opened(8192, 4096, "whole") == [4096, 4096]
+    assert model.opened(2, 4096, "exact") == [2]
+    whole = model.J(model.design())["proving"]["total_gpu_s"]
+    exact = model.J(model.design(commit={"open": "exact"}))["proving"]["total_gpu_s"]
+    assert whole > exact
+
+
+@pytest.mark.parametrize("tile,kc", [((1, 1), 1), ((4, 8), 1), ((8, 8), 4)])
+def test_tiles_cover_every_cell_once(tile, kc):
+    d = model.design(partition={"tile": tile, "kchunk": kc})
+    lin = [u for u in model.preset_units(d) if "tile" in u["name"]]
+    for u, (_, K, N) in zip(lin, model.LINEARS):
+        assert u["per_token"] * tile[0] * tile[1] == pytest.approx(model.LAYERS * N * kc)
+        assert u["work"] == tile[0] * tile[1] * model.s8_coord_work(K // kc)
+
+
+def test_joint_moves_pouw_into_the_values_tiles():
+    r = model.J(model.design(pouw={"joint": True}))
+    assert r["proving"]["pouw"]["draws"] == 0
+    assert r["proving"]["values"]["draws_compute"] == pytest.approx(math.log(2 ** 40) / 0.01, rel=1e-3)
+
+
+def test_inputs_override_is_scoped():
+    base = model.J(model.design())["J"]
+    with model.inputs(o_per_and=2 * model.I("o_per_and")):
+        assert model.J(model.design())["J"] > base
+    assert model.J(model.design())["J"] == base
+    with pytest.raises(KeyError):
+        model.inputs(no_such_input=1)
+
+
 def test_unnoised_pouw_earns_no_credit():
     assert not model.J(model.design(pouw={"scheme": "j10r"}))["pouw"]["credit"]["earns_credit"]
     assert model.pouw_credit(model.design(pouw={"L": 8192}))["credited_share_of_linear_macs"] == 0

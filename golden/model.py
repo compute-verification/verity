@@ -86,6 +86,10 @@ INPUTS: dict[str, tuple[float, str, str]] = {
     "corun_share": (0.167, "E", "r20261028-012220-309e: beside a synthetic GEMM at 98.8% of peak, 2 chain-kernel hash "
                                 "warps an SM get 0.167 of the bar at kappa 1.001 (66.5 GB/s at 4 KiB rows); a model for "
                                 "the Commit's row kernel beside the served GEMM until GD-HASH measures it"),
+    "corun4_share": (0.43, "E", "r20261028-012220-309e: 4 hash warps an SM beside the GEMM get 0.43 of the bar ..."),
+    "corun4_gemm_cost": (0.19, "E", "... at a 19% GEMM slowdown (309e, as GD-SEARCH's stub reads it)"),
+    "guess_p16": (2.79e-5, "E", "Dither PROTOCOL.md: the most predictable 16-bit word's free-guess rate on the H200; "
+                                "x 2^(16 - bits) at fewer bits (GD-SEARCH's stub) until GD-BITS"),
     "gemm_corun_penalty_per_hash_cycle": (0.347, "D", f"{B921}'s int8 GEMM 26.95 M cycles against {B57F}'s 17.12 M "
                                                       f"(+9.83 M), over the 28.3 M hash cycles that overlapped it"),
     "taps_ms": (1.41, "M", f"{B921}'s attention and elementwise kernels 8.78 ms against {B57F}'s 7.37 (the Commit's taps)"),
@@ -169,8 +173,32 @@ INPUTS: dict[str, tuple[float, str, str]] = {
 }
 
 
+_OVERRIDE: dict[str, float] = {}
+
+
 def I(key: str) -> float:
-    return INPUTS[key][0]
+    return _OVERRIDE[key] if key in _OVERRIDE else INPUTS[key][0]
+
+
+class inputs:
+    """`with inputs(name=value, ...):` evaluates under those input values (GD-SEARCH's scenarios); unknown names are
+    refused."""
+
+    def __init__(self, values: dict | None = None, **kw):
+        self.values = {**(values or {}), **kw}
+        unknown = set(self.values) - set(INPUTS)
+        if unknown:
+            raise KeyError(f"unknown inputs {sorted(unknown)}")
+
+    def __enter__(self):
+        self.saved = dict(_OVERRIDE)
+        _OVERRIDE.update(self.values)
+        return self
+
+    def __exit__(self, *exc):
+        _OVERRIDE.clear()
+        _OVERRIDE.update(self.saved)
+        return False
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -279,7 +307,10 @@ SCHEMA = {
         "bits_per_word": (16, "bits a committed word for the bf16 values (int8 and f32 entries unchanged)"),
         "row_bytes": (4096, "hm96 row size of the Commit's tree (4 KiB today; 16 KiB: lever 11 of P1a)"),
         "hash_eff": (None, "share of HASH-38's bar the hash kernels reach (None: b921's 0.497; KCOMMIT: 1.0)"),
-        "corun": (False, "hash at the no-cost co-run share beside the GEMMs and at the bar in host gaps"),
+        "corun": (False, "False | True (hash at the no-cost co-run share beside the GEMMs and at the bar in host gaps) "
+                         "| 'corun4' (4 hash warps an SM: corun4_share of the bar at corun4_gemm_cost)"),
+        "open": ("whole", "whole (an opened byte range pays every row_bytes row it touches: hm96 hashes whole rows) | "
+                          "exact (each read its own row of its size, as costfit's sessions ran)"),
         "seal": ("tree", "tree (per-window tree sealed, b921) | none (5430) | roots (lever 1: seal roots, binding map "
                          "and records; an estimate: the tree's wait dropped, b921's other seal host time kept, since "
                          "nobody has split the seal's 1.31 s)"),
@@ -306,6 +337,11 @@ SCHEMA = {
         "denoise_g_frac": (None, "dither: de-noising's cost as a share of G (None: from noise and L')"),
         "value_row_bytes": (16384, "dither: the value root's hm96 row (16 KiB pinned in PROTOCOL.md)"),
         "unit_cells": (1, "PoUW proof block: cells (dither: 1 cell x 1 segment; J10-R tile: 32 x 32 = 1,024)"),
+        "credit": ("all4", "dither's credited linears: all4 (qkv, o, gate_up and down) | k2048 (the K 2,048 three)"),
+        "word_bits": (16, "dither: bits a T_s word (O stays 32)"),
+        "agg": (1, "dither: cells a T_s word"),
+        "joint": (False, "dither: each credited values tile also checks its cells' segments, drawn at the larger of "
+                         "the two laws (no separate PoUW blocks)"),
         "form": ("tile", "j10r/jr2 leaf's proof: tile (one block; ~2^30 at K 2,048, refused by compose) | lanes "
                          "(TOP-138, pouw.leaf_lanes: its 32 lanes of 4 x 8 cells, each in weights.chunks(K) chunks, and "
                          "a combine over the lanes' partials, drawn as one group: delta counts leaves)"),
@@ -323,7 +359,9 @@ SCHEMA = {
     },
     "partition": {
         "units": (None, "list of unit classes {name, per_token, work, extra_ands, open_rows, out_bits}; None: the "
-                        "preset per op of every_op (one s8 coordinate a unit, an element a unit elsewhere)"),
+                        "preset per op of every_op (an r x c tile of a linear a unit, an element a unit elsewhere)"),
+        "tile": ((1, 1), "a linear's proof block: r tokens x c output columns (1 x 1: one s8 coordinate)"),
+        "kchunk": (1, "a linear's K cut into chunks, each a block committing its running sums (4 B a cell a cut)"),
     },
     "prover": {
         "o_per_and": (None, "GPU-s a drawn block's AND (None: costfit)"),
@@ -335,6 +373,9 @@ SCHEMA = {
         "k_pad": (None, "bits past ceil(log2 ANDs) a block's k_log takes (None: 1, compose's range padding; 0: the "
                         "inbox's 2^27 ANDs a block)"),
         "shared": (True, "statements hold only the drawn blocks (IntegrityPeriod's hidden window)"),
+        "stmt": ("template", "template (a statement a block class) | universal (private_circuits' universal unit: each "
+                             "block at its power-of-two size class, statements shared by a size class; no universal "
+                             "overhead counted, an estimate)"),
     },
     "lowering": {
         "gates_per_and": (None, "gates a proof block's AND (None: 1.36, the H1 tile's gates over its lanes' ANDs)"),
@@ -436,7 +477,8 @@ def commit_bytes_per_token(d: dict, units: list) -> float:
         return c["bytes_per_token"]
     if c["values"] == "partition":
         return sum(u["per_token"] * u["out_bits"] for u in units) / 8
-    return stream_bytes_per_token(c["values"], c["bits_per_word"])
+    sums = LAYERS * sum(4 * N for _, K, N in LINEARS) * (d["partition"]["kchunk"] - 1)
+    return stream_bytes_per_token(c["values"], c["bits_per_word"]) + sums
 
 
 def hash_ms(compressions: float, eff: float, mhz: float) -> float:
@@ -463,11 +505,12 @@ def commit_parts(d: dict, stock: dict, units: list) -> tuple[dict, dict]:
     b921_bytes = I("commit_B_per_token") * 8192
     scale = step_bytes / b921_bytes
     if c["corun"]:
+        four = c["corun"] == "corun4"
         tensor_ms = stock["int8 GEMM"] + stock["attention"]
         idle_ms = stock["host gap between forwards"] + stock["launch gaps in the forward"]
-        free = I("corun_share") * tensor_ms * I("gemm_mhz") / mhz + idle_ms
+        free = I("corun4_share" if four else "corun_share") * tensor_ms * I("gemm_mhz") / mhz + idle_ms
         exposed = max(0.0, kernel - free)
-        penalty = 0.0
+        penalty = I("corun4_gemm_cost") * stock["int8 GEMM"] if four else 0.0
     else:
         exposed = kernel * (1 - I("hash_overlap_today"))
         overlapped_cycles = kernel * I("hash_overlap_today") * mhz
@@ -512,7 +555,13 @@ def pouw_forced_frac(d: dict) -> float:
     if w["noise"] == "fresh":
         return 1.0
     t = max(1, L // Lp)
-    return min(1.0, 1.0 / I("b1_rate_vs_s8") + 3.0 / t)
+    unguessed = 1 - min(1.0, I("guess_p16") * 2.0 ** (16 - w["word_bits"]) * w["agg"])
+    return min(1.0, 1.0 / I("b1_rate_vs_s8") + 3.0 / t) * unguessed
+
+
+def dither_linears(d: dict):
+    """The linears dither credits: (name, K, N)."""
+    return [x for x in LINEARS if d["pouw"]["credit"] == "all4" or x[1] == 2048]
 
 
 def pouw_credit(d: dict) -> dict:
@@ -522,7 +571,7 @@ def pouw_credit(d: dict) -> dict:
     w = d["pouw"]
     total = sum(K * N for _, K, N in LINEARS)
     if w["scheme"] == "dither":
-        cred = sum(K * N * (K - w["L"]) / K for _, K, N in LINEARS if w["L"] < K) / total
+        cred = sum(K * N * (K - w["L"]) / K for _, K, N in dither_linears(d) if w["L"] < K) / total
     elif w["scheme"] == "jr2":
         cred = sum(K * N for _, K, N in LINEARS if K == w["K"]) / total
     else:
@@ -545,10 +594,10 @@ def _h1_main_ms_8k(h1_host: str) -> float:
     return s - rest - I("h1_coin_ms")
 
 
-def _dither_calls(tok: float, L: int):
-    """Per credited call class of one token: (cells, segments). Dither credits all four linears."""
-    for _, K, N in LINEARS:
-        yield LAYERS * N * tok, math.ceil(K / L)
+def _dither_calls(d: dict, tok: float):
+    """Per credited call class: (cells, segments)."""
+    for _, K, N in dither_linears(d):
+        yield LAYERS * N * tok, math.ceil(K / d["pouw"]["L"])
 
 
 def pouw_parts(d: dict, stock: dict) -> tuple[dict, dict]:
@@ -605,10 +654,13 @@ def pouw_parts(d: dict, stock: dict) -> tuple[dict, dict]:
         return parts, info
     # dither
     L, Lp = w["L"], l_prime(w)
-    act_entries = LAYERS * tok * (3 * HIDDEN + INTER)          # the four linears' A operands, one int8 entry each
-    pass_ms = 2 * (act_entries + WEIGHT_BYTES) / (I("hbm_GBs") * 1e6)
+    lin = dither_linears(d)
+    act_entries = LAYERS * tok * sum(K for _, K, _ in lin)     # the credited linears' A operands, an int8 entry each
+    wbytes = LAYERS * sum(K * N for _, K, N in lin)
+    G_ms *= wbytes / WEIGHT_BYTES
+    pass_ms = 2 * (act_entries + wbytes) / (I("hbm_GBs") * 1e6)
     parts["dither: noise and dither added to A and B"] = pass_ms * (I("noise_fused_keep") if w["noise_fused"] else 1)
-    dither_bytes = (act_entries + WEIGHT_BYTES) / 8            # d_A and d_B: one bit an operand entry
+    dither_bytes = (act_entries + wbytes) / 8                  # d_A and d_B: one bit an operand entry
     parts["dither: d_A, d_B expanded from the coins (SHA-512 PRF)"] = \
         hash_ms(dither_bytes / 64, 1.0, I("hash_mhz")) * (1 - I("corun_share"))
     if w["denoise_g_frac"] is not None:
@@ -618,9 +670,9 @@ def pouw_parts(d: dict, stock: dict) -> tuple[dict, dict]:
     else:
         dg = min(1.0, 2 * Lp / w["K"] + I("wrap_g_frac"))
     parts["dither: de-noising O"] = dg * G_ms
-    calls = list(_dither_calls(tok, L))
+    calls = list(_dither_calls(d, tok))
     cells = sum(c for c, _ in calls)
-    words = sum(c * (2 * (s - 1) + 4) for c, s in calls)
+    words = sum(c * ((s - 1) * w["word_bits"] / 8 / w["agg"] + 4) for c, s in calls)
     vt = tree_compressions(words, w["value_row_bytes"])
     vh = hash_ms(vt["compressions"], d["commit"]["hash_eff"] or I("hash_eff_today"), I("hash_mhz"))
     parts["dither: value roots hashed"] = vh * (1 - I("hash_overlap_today"))
@@ -655,18 +707,53 @@ def h1_digits(ks: int) -> int:
     return m
 
 
+def opened(nbytes: float, R: int, mode: str) -> list:
+    """The rows a read of nbytes contiguous bytes opens: every R-byte row it touches (whole, at least one; aligned), or
+    one row of its own size (exact)."""
+    if mode == "exact":
+        return [nbytes]
+    return [R] * max(1, math.ceil(nbytes / R))
+
+
+def dither_check(d: dict, K: int, span: int, cells: int) -> tuple[float, list]:
+    """Dither's in-circuit check of `cells` cells over `span` of K: the noised product's ANDs and the coins'
+    expansion, and the T_s rows it opens (value rows of value_row_bytes)."""
+    w = d["pouw"]
+    L, Rv = w["L"], w["value_row_bytes"]
+    segs = max(1, span // L)
+    noise = 2 * span * I("sha512_ands") / 64                   # V and U pi entries expanded from the coins (estimate)
+    words = cells * (segs + 1) * w["word_bits"] / 8 / w["agg"]
+    return cells * span / 32 * I("s8_step_ands") + noise, opened(words, Rv, "whole") + [Rv]
+
+
 def preset_units(d: dict) -> list:
-    """The per-op partition (every committed value a unit's output, at most 16 bits, one unit an output word):
-    one s8 coordinate a unit (opening its two K-byte operand rows and three one-block rows, costfit's
-    ScaledMmS8Coordinate_v1), one element a unit for the elementwise ops (opening one input row), one (head, query)
-    a unit for attention. Rows opened are the Commit's rows, so they grow with commit.row_bytes."""
-    R = d["commit"]["row_bytes"]
-    p = d["point"]
+    """The per-op partition (every committed value a unit's output, at most 16 bits a word): an r x c tile of a
+    linear's outputs over K / kchunk a unit (r A rows, c W rows, the scales and the r output rows; with K chunks, the
+    running sums in and out; at 1 x 1 costfit's ScaledMmS8Coordinate_v1), one element a unit for the elementwise ops
+    (opening one input row), one (head, query) a unit for attention. Rows are the Commit's (W's taken at the same
+    size, an estimate), opened whole or exact (commit.open). Under pouw.joint each credited tile also checks Dither
+    on its cells (`credit_work` its MACs)."""
+    R, mode = d["commit"]["row_bytes"], d["commit"]["open"]
+    p, w = d["point"], d["pouw"]
+    r, c = d["partition"]["tile"]
+    kc = d["partition"]["kchunk"]
     seq_len = (p["real_tokens"] or p["T"]) / p["seqs"]
+    joint = w["joint"] and w["scheme"] == "dither" and d["sampling"]["pouw_sampled"]
+    credited = {x[0] for x in dither_linears(d) if w["L"] < x[1]}
     units = []
     for name, K, N in LINEARS:
-        units.append({"name": f"{name} coordinate (K {K})", "per_token": LAYERS * N, "work": s8_coord_work(K),
-                      "extra_ands": 0.0, "open_rows": [min(K, R), min(K, R), 1, 1, 1], "out_bits": 16})
+        Kc = K // kc
+        rows = [b for _ in range(r) for b in opened(Kc, R, mode)] + [b for _ in range(c) for b in opened(Kc, R, mode)]
+        rows += opened(4 * r, R, mode) + opened(4 * c, R, mode) + [b for _ in range(r) for b in opened(2 * c, R, mode)]
+        if kc > 1:
+            rows += [b for _ in range(2 * r) for b in opened(4 * c, R, mode)]
+        u = {"name": f"{name} {r}x{c} tile (K {K}{f' / {kc}' if kc > 1 else ''})",
+             "per_token": LAYERS * N * kc / (r * c), "work": r * c * s8_coord_work(Kc), "extra_ands": 0.0,
+             "open_rows": rows, "out_bits": 16 * r * c}
+        if joint and name in credited:
+            extra, vrows = dither_check(d, K, Kc, r * c)
+            u.update({"extra_ands": extra, "open_rows": rows + vrows, "credit_work": r * c * Kc})
+        units.append(u)
     attn_work = I("attn_ands_per_mac") * 2 * HD * seq_len / 2
     units.append({"name": "attention (head, query)", "per_token": LAYERS * QH, "work": attn_work, "extra_ands": 0.0,
                   "open_rows": [R, R, R], "out_bits": 16 * HD})
@@ -703,16 +790,19 @@ def pouw_units(d: dict) -> list:
         elif w["form"] != "tile":
             raise ValueError(f"pouw.form {w['form']!r}")
         return [unit]
+    if w["joint"]:
+        return []                                              # checked inside the values tiles (preset_units)
     L, Rv = w["L"], w["value_row_bytes"]
+    R, mode = d["commit"]["row_bytes"], d["commit"]["open"]
     noise_ands = 2 * L * I("sha512_ands") / 64                 # V and U pi entries expanded from the coins (estimate)
     units = []
-    for name, K, N in LINEARS:
+    for name, K, N in dither_linears(d):
         if L >= K:
             continue                                           # O alone: un-noised, credits 0, not drawn
         S_seg = math.ceil(K / L)
         units.append({"name": f"dither block, {name} (1 cell, L {L} of K {K})", "per_token": LAYERS * N * S_seg,
                       "work": L / 32 * I("s8_step_ands"), "extra_ands": noise_ands,
-                      "open_rows": [min(L, Rv), min(L, Rv), Rv, Rv], "out_bits": 16})
+                      "open_rows": opened(L, R, mode) * 2 + [Rv, Rv], "out_bits": 16})
     return units
 
 
@@ -787,24 +877,48 @@ def proving(d: dict, units: list, label: str) -> dict:
     elif s["law"] != "achievability":
         raise ValueError(f"sampling.law {s['law']!r}")
     k_pad = pv["k_pad"] if pv["k_pad"] is not None else I("k_pad")
+    universal = pv["stmt"] == "universal"
+    if pv["stmt"] not in ("template", "universal"):
+        raise ValueError(f"prover.stmt {pv['stmt']!r}")
+    W_cred = sum(u["per_token"] * T * S * u.get("credit_work", 0.0) for u in units)
+    out["draws_compute"] = 0.0
+    plan = []
     for u in units:
         n = u["per_token"] * T * S
         q = kd / n_all if s["law"] == "uniform" else min(1.0, lam * u["work"] / C)
-        draws = n * q
+        if u.get("credit_work") and W_cred > 0:
+            qc = min(1.0, lam * u["credit_work"] / (s["eps"] * W_cred))
+            out["draws_compute"] += n * qc
+            q = max(q, qc)
         own = u["work"] + u["extra_ands"] + sum(row_ands(r) for r in u["open_rows"])
-        blocks = u.get("blocks") or [{"name": u["name"], "count": 1, "ands": own}]
+        blocks = []
+        for b in u.get("blocks") or [{"name": u["name"], "count": 1, "ands": own}]:
+            ands = b["ands"]
+            if universal:
+                ands = 2.0 ** math.ceil(math.log2(max(ands, 2)))
+            k_log = math.ceil(math.log2(max(ands, 2))) + k_pad
+            blocks.append({**b, "ands": ands, "k_log": k_log, "cap": 1 << max(0, pv["m_max"] - k_log),
+                           "nb": n * q * b["count"]})
+        plan.append((u, n, q, own, blocks))
+    pooled: dict[int, float] = {}
+    for _, _, _, _, blocks in plan:
+        for b in blocks:
+            pooled[b["k_log"]] = pooled.get(b["k_log"], 0.0) + b["nb"]
+    for u, n, q, own, blocks in plan:
+        draws = n * q
         cls = {"name": u["name"], "units": n, "work": u["work"], "q": q, "draws": draws, "statements": 0,
                "gpu_s": 0.0, "lower_cpu_s": 0.0, "lower_peak_GiB": 0.0, "lower_peak_GiB_today": 0.0,
                "lower_cpu_s_today": 0.0, "stage_cpu_s": 0.0, "verify_cpu_s": 0.0, "blocks": []}
         for b in blocks:
-            ands, nb = b["ands"], draws * b["count"]
+            ands, nb, k_log, cap = b["ands"], b["nb"], b["k_log"], b["cap"]
             where = u["name"] if len(blocks) == 1 else f"{u['name']}, {b['name']}"
-            k_log = math.ceil(math.log2(max(ands, 2))) + k_pad
-            cap = 1 << max(0, pv["m_max"] - k_log)
             if k_log > I("k_max"):
                 out["infeasible"].append(f"{where}: {ands:.3g} ANDs needs k_log {k_log} > {I('k_max')} (compose "
                                          f"and the prover refuse it)")
-            stmts = math.ceil(nb / cap) if nb > 0 else 0
+            if universal:
+                stmts = math.ceil(pooled[k_log] / cap) * nb / pooled[k_log] if nb > 0 else 0
+            else:
+                stmts = math.ceil(nb / cap) if nb > 0 else 0
             staged = nb if pv["shared"] else min(n * b["count"], stmts * cap)
             gpu = (nb * o * ands + staged * so * ands + stmts * (f0 + f1 * ands)) / speed
             gates = b.get("gates", u.get("gates") if len(blocks) == 1 else None) or ands * gpa
