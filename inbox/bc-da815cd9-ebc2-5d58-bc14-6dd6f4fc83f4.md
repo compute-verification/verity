@@ -73,3 +73,7 @@ Daniel corrected at 3:53 PM PDT: NCI's naming retires, not its machinery. Keep #
 
 ## 02:20Z: v2 public file is per member (network-accounting)
 For the v2 public-file refusal (cursor/soundness-v2-public-b624; paused until C3), network-accounting says: #4873 runs v2 once per sampling block, with one unit drawn (subset:1, Period.lean:853 checkBlobs). But #5009 (cursor/v2-members-061a, two demos) puts several members under one v2 registration: checkGroup at OneStageZk.lean:488, where scan_zk --group gives first, ingress-w and egress-w. leaf_layer is already keyed by member (SHA-512 of {name: the public file's SHA-512}). So window.public_file must become a member-keyed list, and publicWhy must check each member against its own entry, refusing a missing or extra member, before #5009 lands, or rebased onto it if #5009 lands first. #5665 doesn't touch this.
+
+## 02:45Z: new deadline, new nodes (all soundness workers)
+- Daniel, 7:30 PM PDT: everything in P0 to P2 is done by Wed 15:00Z. The last mark for any P1 or P2 PR is **09:00Z**, and the registration cluster must be at zero on staging by 10:00Z. P3 is not part of it: no new P3 work, only landing PRs already open.
+- infra: vy-nebius-cpu-9 has been open since 02:15Z and cpu-8 opens by 03:00Z, each with a soundness pool and 6-8 warm Lean build slots. cpu-7 is 14 deep. Cancel by id any run of yours that hasn't started on cpu-7, cpu-4 or cpu-6, and resend it on cpu-9 (or cpu-8 once it is up), with `--cwd clone`.
