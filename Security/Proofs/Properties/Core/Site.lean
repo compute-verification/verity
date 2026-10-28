@@ -113,7 +113,8 @@ theorem refusal_injective : Function.Injective refusal := by
 @[simp] theorem kind_auditor (k : Core.Site.Kind) : (kind k).auditor = k.auditor := by cases k <;> rfl
 @[simp] theorem outside_eq : Verity.Site.outside = Core.Site.outside := rfl
 
-@[simp] theorem digests_sheet (D : Digests) (k : Core.Site.Sheet) : (digests D).sheet (sheet k) = D.sheet k := rfl
+@[simp] theorem digests_sheet (D : Digests) (k : Core.Site.Sheet) : (digests D).sheet (sheet k) = D.sheet k := by
+  simp only [digests, ofSheet_sheet]
 
 @[simp] theorem digests_entry (D : Digests) (e : Core.Site.Registration.Entry) :
     (digests D).entry (regEntry e) = D.entry e := by
@@ -245,9 +246,10 @@ theorem sheets_iff :
 
 theorem within_iff (τ e x : Core.Site.Figure) :
     Verity.WithinTolerance (figure τ) (figure e) (figure x) ↔ Core.Site.WithinTolerance τ e x := by
+  have hmax : ∀ q : ℚ, ((q.toNNRat : ℚ≥0) : ℚ) = max q 0 := fun _ => rfl
   unfold Verity.WithinTolerance Core.Site.WithinTolerance
   rw [← NNRat.coe_le_coe, ← NNRat.coe_le_coe]
-  simp only [NNRat.coe_mul, NNRat.coe_add, NNRat.coe_one, NNRat.sub_def, Rat.coe_toNNRat, coe_figure]
+  simp only [NNRat.coe_mul, NNRat.coe_add, NNRat.coe_one, NNRat.sub_def, hmax, coe_figure] <;> exact Iff.rfl
 
 theorem pos_iff (q : Core.Site.Figure) : 0 < figure q ↔ 0 < q.1 := by
   rw [← NNRat.coe_pos, coe_figure]
