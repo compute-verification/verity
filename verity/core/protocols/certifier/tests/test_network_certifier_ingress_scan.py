@@ -11,10 +11,14 @@ warden's egress row t from the view ingress bucket t writes, every bucket, and a
 view of another bucket. The ingress circuit computes the reference's outputs on every bucket and on random flips (S_t
 and its view, bit for bit, where ok is 1), refuses each named negative (two blocks swapped, a data cell after a pad, an
 `END` that isn't the request's last cell, a new ordinal not above `last`, a slot reused before its last egress
-bucket, an ordinal or a pad byte changed, a phase of EVERY, a Programs' entry off its anchor, an entry for a slot whose
-occupancy word is 0, a Programs' count over KO, a prompt over KI ids), and computes another
-S_t than the scan's, which the state row its o1 opens refuses, from a digit changed or a Programs' entry off its
-outputs; the same traffic at a KI one below request 3's prompt is refused at the cell that takes it past; a window
+bucket, an ordinal or a pad byte changed, a phase of EVERY, a Programs' count over KO, a prompt over KI ids, and
+`unread`: an occupied slot no Program reads, its entry absent or only its read bit cleared, the latter's S_t and view
+the honest ones, so its ok bit alone refuses it), computes another S_t than the scan's, which the state row its o1
+opens refuses, from a digit changed, a Programs' entry off its outputs or a Program that reads its slot and outputs
+nothing, and ignores every entry outside a due, occupied slot (an entry off its anchor, one over KO off its anchor, an
+entry's padding, a due slot's entry whose occupancy word is 0, which takes no outputs); the Programs' entries are
+`SlotEntry_v1`'s rows, word-aligned, one port a slot; the same traffic at a KI one below request 3's prompt is
+refused at the cell that takes it past; a window
 circuit's state rows (`window_state`) are the scan's from t0 − 1, the empty state's first; the first bucket's circuit
 is the ingress circuit at the empty state, bit for bit; the egress circuit is its reference on the views;
 `scan_traffic.serve`, the zk run's driver, ticks the same rows as the warden; and the w63 class's state is the scan's
@@ -199,7 +203,11 @@ def test_the_state_is_the_layout_neg_sized():
     w63 = IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12)
     assert (w63.K0, w63.K, w63.D, w63.KO, w63.SLOTS, IS.state_bits(w63)) == (12, 45, 27, 64, 4, 149_648)
     assert (w63.KI, w63.prompt_room) == (1024, 2082) and replace(w63, KI=2082).KI == 2082
-    assert (IS.prog_bits(w63), IS.view_bits(w63), w63.egress) == (4480, 4832, EG.Shape(512, 16, 4, 4, 64, 17, 27))
+    assert (IS.prog_bits(w63), IS.view_bits(w63), w63.egress) == (4544, 4832, EG.Shape(512, 16, 4, 4, 64, 17, 27))
+    # an entry is `SlotEntry_v1`'s row: ⌈(33 + KO·IDB) / 16⌉ = 71 u16 words, one port a slot
+    assert IS.entry_layout(w63) == (("read", 1), ("n", 32), ("out", 64 * 17)) and IS.entry_bits(w63) == 71 * 16
+    params = bind(IS.IngressScanBucket, **{k: getattr(w63, k) for k in IS.STATICS}).signature()[0]
+    assert [n for n, _ in params] == ["row", "sin", "prog0", "prog1", "prog2", "prog3"]
     lay = IS.layout(w63)
     at = 0
     for name, (o, w) in lay.items():
@@ -239,15 +247,15 @@ def test_the_state_is_the_layout_neg_sized():
 Case = tuple[bytes, list[int], list[int]]
 
 
-def _negatives(run) -> tuple[dict[str, Case], dict[str, tuple[int, Case]]]:
-    """The cases a check refuses, and those of bucket t whose S_t is another than the scan's (the state row t, which
-    the unit's o1 must open, refuses them)."""
+def _negatives(run) -> tuple[dict[str, Case], dict[str, tuple[int, Case]], dict[str, tuple[Case, Case]]]:
+    """The cases a check refuses, those of bucket t whose S_t is another than the scan's (the state row t, which the
+    unit's o1 must open, refuses them), and pairs of cases whose entries differ only where the unit ignores them."""
     ch, rows, states = run.chain, run.rows, run.states
 
     def honest(t, **kw) -> Case:
         return tuple(kw.get(k, v) for k, v in zip(("row", "sin", "prog"), (ch.ingress[t], ch.states[t], ch.progs[t])))
 
-    out, other = {}, {}
+    out, other, ignored = {}, {}, {}
     blk = _blocks(rows[1])
     assert [[c[0] for c in b] for b in blk] == [[END, PAD], [PAD, PAD]]
     out["swapped"] = honest(1, row=_join([blk[1], blk[0]]))
@@ -280,23 +288,38 @@ def _negatives(run) -> tuple[dict[str, Case], dict[str, tuple[int, Case]]]:
     out["pad-byte"] = honest(t, row=_join(blk))
     out["phase-every"] = honest(2, sin=IS.encode(CLS, replace(states[2], phase=CLS.EVERY)))
     entries = IS.prog_decode(CLS, ch.progs[4])
-    assert entries == [(3, RESPONSES[0] + (0,) * 5), (8, RESPONSES[1])]
+    assert entries == [(1, 3, RESPONSES[0] + (0,) * 5), (1, 8, RESPONSES[1])]
     # request 3 is anchored at 10 in slot 0; slot 1 still holds request 2, live and not anchored there
     late = IS.prog_decode(CLS, ch.progs[10])
-    assert late == [(4, RESPONSES[2] + (0,) * 4), (0, (0,) * CLS.KO)] and states[10].slots[1].live
-    out["prog-off-anchor"] = honest(10, prog=IS.prog_encode(CLS, [late[0], (1, (7,))]))
-    # slot 1 due at 4 with its occupancy word 0: its entry is masked, the honest one refused
-    out["prog-empty-slot"] = honest(4, sin=IS.encode(CLS, replace(states[4], slots=[
-        states[4].slots[0], replace(states[4].slots[1], occ=0)])))
+    assert late == [(1, 4, RESPONSES[2] + (0,) * 4), (0, 0, (0,) * CLS.KO)] and states[10].slots[1].live
+    ignored["prog-off-anchor"] = honest(10, prog=IS.prog_encode(CLS, [late[0], IS.entry(1, (7,))])), honest(10)
+    ignored["over-KO-off-anchor"] = honest(10, prog=IS.prog_encode(CLS, [late[0], IS.entry(CLS.KO + 1, ())])), \
+        honest(10)
+    # the bits past an entry's 33 + KO·IDB, zeros to its word, are read by no gate
+    E, used = IS.entry_bits(CLS), sum(w for _, w in IS.entry_layout(CLS))
+    assert E - used == 7
+    padded = list(ch.progs[4])
+    for j in range(CLS.NR):
+        padded[j * E + used] ^= 1
+        padded[j * E + E - 1] ^= 1
+    ignored["entry-padding"] = honest(4, prog=padded), honest(4)
+    # slot 1 due at 4 with its occupancy word 0: its entry is ignored and the slot takes no outputs
+    empty1 = IS.encode(CLS, replace(states[4], slots=[states[4].slots[0], replace(states[4].slots[1], occ=0)]))
+    ignored["prog-empty-slot"] = honest(4, sin=empty1), honest(4, sin=empty1, prog=IS.prog_encode(CLS, [
+        entries[0], IS.NONE]))
     # slot 1's Program gives KO + 1 outputs, a request its class can't hold (`SlotEntry_v1`'s n = KO + 1, no ids)
-    out["prog-over-KO"] = honest(4, prog=IS.prog_encode(CLS, [entries[0], (CLS.KO + 1, ())]))
+    out["prog-over-KO"] = honest(4, prog=IS.prog_encode(CLS, [entries[0], IS.entry(CLS.KO + 1, ())]))
     # request 3's slot one prompt id further on before its last cell: the cell takes its prompt to KI + 1 ids
     t, j = next((t, j) for t, st in enumerate(states) for j, s in enumerate(st.slots)
                 if s.live and s.q == 3 and s.fields and not s.done)
     slots = list(states[t].slots)
     slots[j] = replace(slots[j], fields=slots[j].fields + 1)
     out["prompt-over-KI"] = honest(t, sin=IS.encode(CLS, replace(states[t], slots=slots)))
-    return out, other
+    out["unread"] = honest(4, prog=IS.prog_encode(CLS, [IS.NONE, entries[1]]))
+    out["unread-read-bit"] = honest(4, prog=IS.prog_encode(CLS, [(0, *entries[0][1:]), entries[1]]))
+    other["prog-outputs"] = 4, honest(4, prog=IS.prog_encode(CLS, [IS.entry(2, RESPONSES[0][:2]), entries[1]]))
+    other["prog-no-outputs"] = 4, honest(4, prog=IS.prog_encode(CLS, [IS.entry(0, ()), entries[1]]))
+    return out, other, ignored
 
 
 def _circuit(fn, args) -> list[list[int]]:
@@ -313,23 +336,30 @@ def _scan_outputs(fn, cases) -> list[tuple[int, list[int], list[int]]]:
 
 
 def test_each_negative_is_refused_by_the_reference_or_computes_another_state(run):
-    refused, other = _negatives(run)
+    refused, other, ignored = _negatives(run)
     for name, case in refused.items():
         assert IS.reference(CLS, *case) == (0, None, None), name
     for name, (t, case) in other.items():
         ok, st, _ = IS.reference(CLS, *case)
         assert ok == 1 and st != run.chain.outputs(t)[0], name
+    for name, (case, same) in ignored.items():
+        assert IS.reference(CLS, *case) == IS.reference(CLS, *same) != (0, None, None), name
+    ok, st, _ = IS.reference(CLS, *ignored["prog-empty-slot"][0])
+    assert IS.decode(CLS, st).slots[1].n == 0 and IS.decode(CLS, st).slots[0].n == 3
+    for name in ("prog-off-anchor", "over-KO-off-anchor", "entry-padding"):
+        t = 10 if "anchor" in name else 4
+        assert IS.reference(CLS, *ignored[name][0]) == (1, *run.chain.outputs(t)), name
 
 
 @pytest.mark.slow
 def test_the_circuits_are_the_references_on_every_bucket_each_negative_and_random_flips(run):
-    """Slow (about 15 s: 217,065 and 137,969 ANDs traced, the ingress unit evaluated on about 90 cases, the first
+    """Slow (about 15 s: 217,065 and 137,969 ANDs traced, the ingress unit evaluated on about 100 cases, the first
     bucket's on about 30, and the egress unit on 31)."""
     ch = run.chain
     T = len(run.rows)
     honest = [(ch.ingress[t], ch.states[t], ch.progs[t]) for t in range(T)]
-    refused, other = _negatives(run)
-    negs = list(refused.values()) + [c for _, c in other.values()]
+    refused, other, ignored = _negatives(run)
+    negs = list(refused.values()) + [c for _, c in other.values()] + [c for pair in ignored.values() for c in pair]
     rng = random.Random(7)
     flips, at = [], []
     for _ in range(60):
@@ -348,8 +378,13 @@ def test_the_circuits_are_the_references_on_every_bucket_each_negative_and_rando
         assert o0 == ok and (not ok or (o1, o2) == (st, view))
     assert got[:T] == [(1, *ch.outputs(t)) for t in range(T)]
     assert [o0 for o0, _, _ in got[T:T + len(refused)]] == [0] * len(refused)
+    # the read bit enters ok alone: a due entry with only its read bit cleared computes the honest S_t and view
+    assert got[T + list(refused).index("unread-read-bit")] == (0, *ch.outputs(4))
     assert [(o0, o1 != ch.outputs(t)[0]) for (t, _), (o0, o1, _) in zip(other.values(), got[T + len(refused):])] \
         == [(1, True)] * len(other)
+    # an ignored entry changes no output bit: each pair's circuit outputs agree, ok 1
+    pairs = got[T + len(refused) + len(other):T + len(negs)]
+    assert [a == b and a[0] == 1 for a, b in zip(pairs[::2], pairs[1::2])] == [True] * len(ignored)
     moved = [o1 != ch.outputs(t)[0] for t, (o0, o1, _) in zip(at, got[T + len(negs):]) if o0]
     assert sum(moved) >= 5, moved
     # the first bucket's unit is the ingress unit at the empty state, its outputs bit for bit where a check fails too
