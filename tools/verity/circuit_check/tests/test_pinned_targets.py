@@ -1,9 +1,10 @@
 """`targets.pinned`: a specialization a pin is held for is a target whatever its size, so ``--all`` and its sidecar compare its
 pin.  `targets.select` dropped one over `targets.MAX_GATES` when its family had a smaller one, which is how
 `ChargeCount_v1{N=14}`'s stale pin went unreported while ``{N=2}`` was checked; the catalog records (`units`) keep it the same
-way, and one stored before its pin is `units.Stale`."""
+way, also one stored before its pin (`test_units`)."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -32,8 +33,9 @@ Parent = CompositeDefinition(
 
 def test_a_pinned_specialization_over_max_gates_is_kept_whatever_its_size(monkeypatch):
     """A family reached at three sizes, the smallest at `MAX_GATES`: its smallest is kept, and of the two over it only the one
-    pinned, also when every one is over it.  The records describe the pinned one, `units._select` and `units.derive` keep what
-    `targets.select` keeps, and a record stored before the pin, which has no descriptor for it, is stale."""
+    pinned, also when every one is over it.  The records describe the pinned one, and `units._select` and `units.derive` keep
+    what `targets.select` keeps.  A record stored before the pin holds no descriptor for it, which `units.plan` computes, and is
+    stale only for an id the pin doesn't keep."""
     g = {n: bind(Leaf, N=n).gates for n in SIZES}
     assert g[2] < g[8] < g[14]
     monkeypatch.setattr(TG, "MAX_GATES", g[2])
@@ -41,19 +43,22 @@ def test_a_pinned_specialization_over_max_gates_is_kept_whatever_its_size(monkey
     small, mid, big = (bind(Leaf, N=n).id for n in SIZES)
     pinned = frozenset({big})
     found = TG.reachable([root])
-    plain = set(TG.select(found, max_gates=g[2]))
+    plain = set(TG.select(found))
     assert small in plain and not {mid, big} & plain
-    kept = set(TG.select(found, max_gates=g[2], pinned=pinned))
+    kept = set(TG.select(found, pinned=pinned))
     assert kept == plain | {big}
     over = {fid: fn for fid, fn in found.items() if fid != small}
-    assert set(TG.select(over, max_gates=g[2], pinned=pinned)) == set(TG.select(over, max_gates=g[2])) | {big}
+    assert set(TG.select(over, pinned=pinned)) == set(TG.select(over)) | {big}
 
     nodes, _ = UN._reach([root], pinned=pinned)
     assert "d" in nodes[big] and "d" not in nodes[mid]
     assert UN._select(nodes, pinned) == kept
     assert set(UN.derive([UN.Entry(("t",), "t", "t", {}, [root], nodes)], pinned=pinned).ids) == kept
     before, _ = UN._reach([root], pinned=frozenset())
-    with pytest.raises(UN.Stale, match="no descriptor"):
+    d = UN.derive([UN.Entry(("t",), "t", "t", {}, [root], before)], pinned=pinned)
+    assert set(d.ids) == kept and "d" not in d.nodes[big]
+    del before[small]["d"]
+    with pytest.raises(UN.Stale, match=re.escape(f"{small}: its record has no descriptor")):
         UN.derive([UN.Entry(("t",), "t", "t", {}, [root], before)], pinned=pinned)
 
 

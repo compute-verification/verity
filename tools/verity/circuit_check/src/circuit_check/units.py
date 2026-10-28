@@ -106,13 +106,25 @@ def _calls(fn: Any) -> list[str]:
     return out[::-1]
 
 
+def _described(fn: Any, k: str) -> dict:
+    """What a record holds of ``fn`` (of kind ``k``) beyond what it reaches: its descriptor and, unless it is a reference, its
+    name and its descriptor id where that is not its id."""
+    from verity.ml.circuits import codec as C
+
+    out = {"d": CC.descriptor(fn)}
+    if k != "R":
+        out["n"] = getattr(fn, "name", None)
+        if (di := C.descriptor_id(fn)) != fn.id:
+            out["di"] = di
+    return out
+
+
 def _reach(roots: list[Any], described: bool = True, pinned: frozenset[str] | None = None) \
         -> tuple[dict[str, dict], dict[str, Any]]:
     """What ``roots`` reach (`targets.reachable`, building every body), each as a record holds it, and the objects; without
-    ``described``, no descriptor, name or descriptor id (a sixth of the build, which only a record checks against).  Described:
-    each one `targets.select` could keep, the ``pinned`` ids (default `targets.pinned`) among them."""
+    ``described``, no descriptor, name or descriptor id (a sixth of the build, which only a record checks against).  Described
+    (`_described`): each one `targets.select` could keep, the ``pinned`` ids (default `targets.pinned`) among them."""
     from verity.ml.circuits import boolean as BL
-    from verity.ml.circuits import codec as C
 
     objs = TG.reachable(roots)
     nodes: dict[str, dict] = {}
@@ -140,12 +152,7 @@ def _reach(roots: list[Any], described: bool = True, pinned: frozenset[str] | No
     for fid, info in nodes.items():
         g, f = info["g"], info["f"]
         if fid in tops or fid in pinned or g <= TG.MAX_GATES or g == least[f] or (info["b"] and g == bits.get(f)):
-            fn = objs[fid]
-            info["d"] = CC.descriptor(fn)
-            if info["k"] != "R":
-                info["n"] = getattr(fn, "name", None)
-                if (di := C.descriptor_id(fn)) != fid:
-                    info["di"] = di
+            info.update(_described(objs[fid], info["k"]))
     return nodes, objs
 
 
@@ -184,8 +191,9 @@ def derive(entries: list[Entry], described: bool = True, pinned: frozenset[str] 
     reach, in `targets.reachable`'s order, `select`'s (the ``pinned`` ids kept, default `targets.pinned`), PoUW's roots whole.
     Each id is the record's of the binding it is first reached through, as `reachable` keeps the object it pops first, and each
     binding's units go to what its own record reaches, as `targets.suite` gives each binding what its own roots reach.
-    ``described``: each suite id's record holds its descriptor, as a stored one does (one stored before its pin has none:
-    `Stale`)."""
+    ``described``: each suite id's record holds its descriptor, as a stored one does, else `Stale`; but a pinned id's record
+    stored before its pin holds none (`targets.select` dropped it then), and `plan` describes it."""
+    pinned = TG.pinned() if pinned is None else pinned
     stack = [(fid, e) for e in entries for fid in e.root_ids]
     nodes: dict[str, dict] = {}
     via: dict[str, Entry] = {}
@@ -197,7 +205,7 @@ def derive(entries: list[Entry], described: bool = True, pinned: frozenset[str] 
             raise Stale(f"{fid}: {e.name}'s record doesn't hold what its roots reach")
         nodes[fid], via[fid] = e.nodes[fid], e
         stack.extend((c, e) for c in e.nodes[fid].get("c", ()))
-    out = _select(nodes, TG.pinned() if pinned is None else pinned)
+    out = _select(nodes, pinned)
     for e in entries:
         if e.kind == "_pouw_roots":
             out.update(e.root_ids)
@@ -208,7 +216,7 @@ def derive(entries: list[Entry], described: bool = True, pinned: frozenset[str] 
         for fid in e.nodes.keys() & out:
             units.setdefault(fid, set()).update(e.units)
     for fid in out if described else ():
-        if "d" not in nodes[fid]:
+        if "d" not in nodes[fid] and fid not in pinned:
             raise Stale(f"{fid}: its record has no descriptor")
     return Derived(sorted(out), units, nodes, via)
 
@@ -337,7 +345,9 @@ class Plan:
 
 def plan(cache: Path, repo: Path, log: Callable[[str], None] | None = None) -> Plan | None:
     """The catalog from the bindings' records (the module's docstring); None when there are none of this checker's version (a
-    full build stores them) or none counts.  `Stale` when a record disagrees with what was built now."""
+    full build stores them) or none counts.  `Stale` when a record disagrees with what was built now.  A pinned id a reused
+    record holds no descriptor for (stored before its pin, `derive`) is made from the binding it is taken from (`_materialize`)
+    and described in this run; that record is not stored again."""
     TG.load_registries()
     first = key(REGISTERED, 0)
     if not CC._dir(cache, first).is_dir():
@@ -387,6 +397,9 @@ def plan(cache: Path, repo: Path, log: Callable[[str], None] | None = None) -> P
             if fid not in objects and (v := d.via.get(fid)) is not None and \
                     (v is e or e.nodes.get(fid, {}).get("d") == v.nodes[fid].get("d")):
                 objects[fid] = fn
+    for fid in d.ids:
+        if "d" not in d.nodes[fid]:
+            d.nodes[fid].update(_described(_materialize(entries, objects, fid, via=d.via.get(fid)), d.nodes[fid]["k"]))
     calls = call_families(entries, d, objects)
     if log:
         log(f"circuit-check: catalog from records: {sum(e.reused for e in entries)} of {len(entries)} bindings reused, "

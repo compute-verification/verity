@@ -859,13 +859,14 @@ def pinned() -> frozenset[str]:
     return frozenset(k for kind in PINNED_KINDS for k in pins.get(kind, {}))
 
 
-def select(found: dict[str, Any], max_gates: int = MAX_GATES, pinned: Iterable[str] = ()) -> dict[str, Any]:
-    """The specialisations the suite checks: every one of at most ``max_gates`` gates, and a family's smallest otherwise, with its
-    smallest Boolean one too when the smallest is not (a Boolean family bound at a word MUFU and at its Boolean version, which
-    the Program on bits calls); every one whose id is ``pinned`` (`pinned`), whatever its size; and every by-calls root
-    (`is_by_calls`), whose gates are never counted."""
+def select(found: dict[str, Any], max_gates: int | None = None, pinned: Iterable[str] = ()) -> dict[str, Any]:
+    """The specialisations the suite checks: every one of at most ``max_gates`` (default `MAX_GATES`) gates, and a family's
+    smallest otherwise, with its smallest Boolean one too when the smallest is not (a Boolean family bound at a word MUFU and at
+    its Boolean version, which the Program on bits calls); every one whose id is ``pinned`` (`pinned`), whatever its size; and
+    every by-calls root (`is_by_calls`), whose gates are never counted."""
     from verity.ml.circuits import boolean as BL
 
+    max_gates = MAX_GATES if max_gates is None else max_gates
     pinned = frozenset(pinned)
     by: dict[str, list[Any]] = {}
     out = {}
