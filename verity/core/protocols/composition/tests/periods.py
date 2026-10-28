@@ -4,11 +4,11 @@
 (`pous.period.audit` of that `C*` on node `n0`, signed by a key at S1's deployed parameters, `mc_cases.deployed_signer`)
 honest, under a prover that answers every other round with zeros, the honest audit's case carrying a setup that
 published another commitment (a run committed to a different setup, refused by the setup tie), and an honest run on
-another store (`OTHER_STORE`, accepted, which onsite's store tie refuses beside PoUB-P2's case); PoUB-P2's (`p2_case`, its sessions over a socket pair
-against `remote-audit-verifier`, as `remote_bandwidth/lean/tests/test_p2_party.py` runs them) honest, under a prover
-whose receipts skip a unit's reads, and the honest session's log stopped before its last window is verified; and of
-each, its honest case with params or evidence that don't decode. A P2 case is recorded as the composition hands it,
-without its `store_root`: onsite reads the store off its commitment's registration."""
+another store (`OTHER_STORE`, accepted, which onsite's store tie refuses beside PoUB-P2's case); PoUB-P2's (`p2_case`,
+its sessions over a socket pair against `remote-audit-verifier`, as `remote_bandwidth/lean/tests/test_p2_party.py` runs
+them) honest, under a prover whose receipts skip a unit's reads, and the honest session's log stopped before its last
+window is verified; and of each, its honest case with params or evidence that don't decode. A P2 case is recorded as the
+composition hands it, without its `store_root`: onsite reads the store off its commitment's registration."""
 
 from __future__ import annotations
 
