@@ -98,7 +98,7 @@ def audit(host: str, port: int, params: reference.Params, salt: bytes, model: by
     return {"root": root.hex(), "epoch_id": epoch.hex(), "source": source.hex(), "limit_ns": limit, "limit_fixed_before_load": fixed,
             "deadline_ns": deadline_ns, "allowance": allowance, "allowance_kind": ALLOWANCE_KIND,
             "rtt_allowance_ns": limit - deadline_ns,
-            "rtt_allowance_within_spec": limit - deadline_ns <= reference.MAX_RTT_ALLOWANCE_NS, "calibration_here": cal,
+            "rtt_allowance_within_spec": limit - deadline_ns <= reference.RTT_ALLOWANCE_CAP_NS, "calibration_here": cal,
             "rtt_after_s": quantiles(after), "pings_raw_s": {"before": before, "after": after}, "k": k, "scheme": reference.PROTOCOL,
             "audit_of_record": {"accepted": accepted[0], "rounds": len(records[0]["answers"]),
                                 "elapsed_max_ns": max(x["elapsed_ns"] for x in records[0]["answers"])},
