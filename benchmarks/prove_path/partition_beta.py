@@ -21,22 +21,29 @@ k and v, which later tokens read). β counts each committed value once, at its w
 * ``e1``: epilogue fusion: RoPE into the qkv tile (a tile of whole rotary pairs), SiluMul into gate_up's (a tile of g, u
   pairs), the norms quantize, o quantized in o's prologue, the residual once a layer (norm1 adds a back before its own
   residual add). A head's q columns, RoPE and attention in one block would drop q' too, but its 64 coordinates alone are
-  17.4 M ANDs, past the cap.
+  17.4 M ANDs and 64 weight columns, k_log 28.
 * ``e2``: ``e1`` with max-first recompute (cut.py's ``Q_word`` v2 recompute): a gate_up tile commits its partial max only,
   and a code block recomputes the tile and writes its int8 codes, so s is never committed; attention likewise writes oq.
 * ``e3``: ``e1`` at the finest GEMM units: a unit a coordinate, or a rotary or (g, u) pair where its epilogue pairs columns,
   each reading its own weight column and its slice's shared rows, and o quantized in a block of its own (a coordinate
-  can't afford the prologue). A unit is drawn by its work and costs its block, so smaller units prove less a window.
+  can't afford the prologue). A unit is drawn by its work and costs its block, so smaller units prove less a window. Its
+  2-byte rows are gathered for their consumers, and a head's q and a KV head's k|v packed into one row each.
 
 Every number is the IR's: widths from the Calls' signatures, MACs from their tensor-core steps, ANDs and two-input gates from
 each primitive's Boolean version (census ``boolean=boolean_version``), summed over a unit's gates (`Q_word` units, tile
-slices) or the whole Call's (a block holding whole ops). A block's opening ANDs are `class_size.opening_ands` of each row it
-reads or writes (a value slice a row, a weight column a row, a key's k and v a row), an estimate of the in-circuit hashing. Its
-``k_log_est`` is `class_size.block_k_log` of its ANDs and those rows, and ``over_cap`` marks one past C-Flock's 2^27-bit
-block. Attention's key blocks, where the window's FA3 BN doesn't set them, are as few as keep a block's ANDs under
-``CAP_ANDS``.
+slices) or the whole Call's (a block holding whole ops). A block commits one row and reads each value as the rows its
+writers committed (a GEMM output a row a tile, a key's k and v the rows of the tiles or the RoPE head that wrote them, a
+weight column a row). C-Flock gives each row a block reads or writes its own 2^18-bit slot, so a read of more than
+`GATHER_FAN` rows goes through gather blocks, copies that re-commit `GATHER_FAN` rows as one. A block's opening ANDs are
+`class_size.opening_ands` of its rows, an estimate of the in-circuit hashing; its ``k_log_est`` is `class_size.block_k_log`
+of its ANDs and those rows, and ``over_cap`` marks one past C-Flock's 2^27-bit block. A unit is drawn by its compute's ANDs,
+a copy (gather, pack) by its openings'.
 
-    python partition_beta.py [--keys 18,35,144,288] [--out FILE.json]
+Attention's unit is a knob: ``group`` query heads of a KV head (1 or 4) over ``key_block`` keys (0: the fewest key blocks
+that fit 2^27 bits; the window's FA3 BN of 192 in ``w``), each non-last key block committing its running state; and in
+(e1) and (e2), optionally, the packs (e3) has. ``--key-blocks`` and ``--groups`` sweep it.
+
+    python partition_beta.py [--keys 18,35,144,288,512] [--key-blocks 0,32,64,128] [--groups 1,4] [--out FILE.json]
 """
 from __future__ import annotations
 
@@ -71,8 +78,9 @@ EMBED_READ = "EmbeddingRead_v1{V=128256,H=2048}"
 CFG = ROOT / "integrations/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
 #: MACs of one tensor-core step, by primitive
 STEP_MACS = {"BlackwellS8ImmaDot32_v1": 32, "HopperBF16WgmmaDot16_v1": 16}
-#: Gemm_v2{2048,16}'s ANDs, at k_log 27 (class_size.MEASURED): about where a block passes C-Flock's 2^27 bits
-CAP_ANDS = 16 * 1_053_595
+#: rows a gather block reads: a consumer of more rows than this reads gathered rows of this many, since C-Flock gives each row
+#: a unit reads its own 2^18-bit slot (one level: 2,048 rows read as 16, the LM head's 8,016 bests as 63)
+GATHER_FAN = 128
 #: Λ/ε at δ = 2^-40, ε = 1%: the expected draws a window
 DRAWS = math.log(2**40) / 0.01
 LAYERS = 16
@@ -234,6 +242,8 @@ class Block:
     per: str = "layer"
     note: str = ""
     weight_rows: int = 1
+    #: drawn by its openings' ANDs rather than its compute's: a copy, which a law by work would never draw
+    drawn_by_openings: bool = False
 
     def rows(self) -> list[int]:
         out = [b for r in self.reads for b in ([r[1]] * r[0] if isinstance(r, tuple) else [r])]
@@ -246,8 +256,10 @@ class Block:
     def row(self) -> dict:
         boundary = self.commits * 8
         k_log = CS.block_k_log(self.ands, self.rows())
+        opening = self.opening_ands()
         return {"block": self.name, "per": self.per, "n_per_token": self.n * (LAYERS if self.per == "layer" else 1),
-                "macs": self.macs, "gates2": self.gates2, "ands": self.ands, "opening_ands_est": self.opening_ands(),
+                "macs": self.macs, "gates2": self.gates2, "ands": self.ands, "opening_ands_est": opening,
+                "drawn_ands": opening if self.drawn_by_openings else self.ands, "rows": len(self.rows()),
                 "boundary_bits": boundary, "size_class": unit_class(boundary) if boundary else None,
                 "reads_bytes": sum(r[0] * r[1] if isinstance(r, tuple) else r for r in self.reads), "weight_bytes": self.weights,
                 "k_log_est": k_log, "over_cap": k_log > CS.K_MAX, "note": self.note}
@@ -312,13 +324,28 @@ class Facts:
         return self.attn["qword"]["macs"] // HEADS, self.attn["call_gates2"] // HEADS, self.attn["call_ands"] // HEADS
 
 
+def gather(name: str, rows: int, nbytes: int, per: str = "layer") -> tuple[list[Block], tuple[int, int]]:
+    """``rows`` rows of ``nbytes`` bytes gathered `GATHER_FAN` to a row, level by level until a consumer reads at most
+    `GATHER_FAN`: the gather blocks (copies, drawn by their openings) and the rows the consumer reads."""
+    blocks, at = [], (rows, nbytes)
+    while at[0] > GATHER_FAN:
+        n = math.ceil(at[0] / GATHER_FAN)
+        blocks.append(Block(f"{name} gather ({GATHER_FAN} rows of {at[1]} B)", n, 0, 0, 0, GATHER_FAN * at[1],
+                            [(GATHER_FAN, at[1])], per=per, drawn_by_openings=True))
+        at = (n, GATHER_FAN * at[1])
+    return blocks, at
+
+
 def gemm_blocks(F: Facts, name: str, K: int, N: int, n: int, reads: list[int], out_bytes: int, prologue=(0, 0),
                 epilogue=(0, 0), note: str = "") -> Block:
     macs, g2, a = F.tile(K, n, prologue, epilogue)
     return Block(name, N / n, macs, g2, a, out_bytes, reads, n * (K + 4), note=note, weight_rows=n)
 
 
-def partitions(F: Facts) -> dict[str, list[Block]]:
+def partitions(F: Facts, key_block: int = 0, group: int = 1, pack: bool | None = None) -> dict[str, list[Block]]:
+    """The partitions at keys ``F.T``, attention's unit ``group`` query heads of a KV head over at most ``key_block`` keys
+    (0: the fewest key blocks that fit 2^27 bits), and, in (e1) and (e2) (``pack``, default off) and (e3) (default on), a
+    head's q and a KV head's k|v re-committed as one row each for the key blocks to read."""
     T = F.T
     X, XQ, S, SQ, GU = F.bf16_row, F.int8_row, F.mlp_bf16, F.mlp_int8, 2 * F.mlp_bf16
     KV = F.kv_row
@@ -326,25 +353,52 @@ def partitions(F: Facts) -> dict[str, list[Block]]:
     hm, hg, ha = F.attn_head()
     norm, quant2, quant8, silu = F.call(F.norm), F.call(F.quant[2048]), F.call(F.quant[8192]), F.call(F.silu)
     rope_head = (HEAD_DIM * F.rope_word["gates2"], HEAD_DIM * F.rope_word["ands"])
-    keys = (T, 2 * KV)  # a q head reads its KV head's T keys and values, a row a key
+    #: a head's 64 bf16 words as the writers commit them: a RoPE head's one row, or a 32-column GEMM tile's two
+    by_head, by_tile = [KV], [2 * t2] * (HEAD_DIM // t2)
     plus = lambda *ws: (sum(w[0] for w in ws), sum(w[1] for w in ws))  # noqa: E731
     out: dict[str, list[Block]] = {}
 
-    def heads(name: str, by_window: bool, extra=(0, 0, 0), commits: int = KV, reads: list[int] | None = None,
-              last_only: bool = False) -> list[Block]:
-        """A layer's 32 query heads over T keys, each cut into key blocks (the window's FA3 BN of 192, else as few as keep a
-        block under the cap), a non-last key block committing its running state (`STATE`); ``last_only``: only the last
+    def heads(name: str, q_rows: list, kv_rows: list, extra=(0, 0, 0), commits: int = KV, extra_reads: tuple = (),
+              last_only: bool = False, by_window: bool = False) -> list[Block]:
+        """A layer's 32 query heads over T keys, ``group`` query heads of a KV head a unit, each cut into kb key blocks of
+        ceil(T / kb) keys (``by_window``: the window's FA3 BN of 192, one head a unit). A block reads its heads' q
+        (``q_rows`` a head), the running state but in the first, and its keys' k and v as their writers commit them
+        (``kv_rows`` a key); a non-last block commits the running state (`STATE` a head). ``last_only``: only the last
         key block, reading the states an earlier pass committed."""
-        kb = math.ceil(T / FA3_BN) if by_window else max(1, math.ceil((ha + extra[2]) / CAP_ANDS))
-        reads = [KV, keys] if reads is None else reads
-        if kb == 1:
-            return [Block(f"{name} T={T}", HEADS, hm + extra[0], hg + extra[1], ha + extra[2], commits, reads)]
-        per_block = (math.ceil(T / kb), 2 * KV)
-        last = Block(f"{name} T={T}, last key block of {kb}", HEADS, hm // kb + extra[0], hg // kb + extra[1],
-                     ha // kb + extra[2], commits, [STATE, per_block] + reads[2:])
-        return [last] if last_only else [
-            Block(f"{name} T={T}, key block 1..{kb - 1} of {kb}", HEADS * (kb - 1), hm // kb, hg // kb, ha // kb, STATE,
-                  [KV, per_block], note="commits the running state (m, l, O): an estimate of its bytes"), last]
+        g = 1 if by_window else group
+        work, ext = [x * g for x in (hm, hg, ha)], [x * g for x in extra]
+        tag = f" ({g} q heads)" if g > 1 else ""
+
+        def blocks(kb: int) -> list[Block]:
+            keys, q, st = [(math.ceil(T / kb), b) for b in kv_rows], [(g, b) for b in q_rows], [g * STATE]
+            m, g2, a = (x // kb for x in work)
+            if kb == 1:
+                return [Block(f"{name}{tag} T={T}", HEADS // g, m + ext[0], g2 + ext[1], a + ext[2], g * commits,
+                              q + keys + list(extra_reads))]
+            last = Block(f"{name}{tag} T={T}, last key block of {kb}", HEADS // g, m + ext[0], g2 + ext[1], a + ext[2],
+                         g * commits, q + st + keys + list(extra_reads))
+            if last_only:
+                return [last]
+            note = "commits the running state (m, l, O): an estimate of its bytes"
+            mid = [Block(f"{name}{tag} T={T}, key blocks 2..{kb - 1} of {kb}", HEADS // g * (kb - 2), m, g2, a,
+                         g * STATE, q + st + keys, note=note)] if kb > 2 else []
+            return [Block(f"{name}{tag} T={T}, first key block of {kb}", HEADS // g, m, g2, a, g * STATE, q + keys,
+                          note=note), *mid, last]
+
+        if by_window:
+            return blocks(math.ceil(T / FA3_BN))
+        if key_block:
+            return blocks(math.ceil(T / key_block))
+        for kb in range(1, T + 1):
+            bs = blocks(kb)
+            if max(CS.block_k_log(b.ands, b.rows()) for b in bs) <= CS.K_MAX:
+                return bs
+        return blocks(T)
+
+    def packs(q_rows: list, kv_rows: list) -> list[Block]:
+        """A head's q, and a KV head's k and v, re-committed as one row each: copies, drawn by their openings."""
+        return [Block("q pack (one row a head)", HEADS, 0, 0, 0, KV, q_rows, drawn_by_openings=True),
+                Block("k|v pack (one row a KV head)", KV_HEADS, 0, 0, 0, 2 * KV, kv_rows, drawn_by_openings=True)]
 
     # today's: each Call a block, every Call output committed
     out["a0"] = [
@@ -362,53 +416,71 @@ def partitions(F: Facts) -> dict[str, list[Block]]:
         Block("ScaledMmS8 down", 1, *F.tile(8192, 2048), X, [SQ], 2048 * 8196),
     ]
 
+    # what a consumer reads of a GEMM's or attention's output: a row a tile (or a unit) that wrote it
+    A2, D8, GU_T, S_T = (2048 // t2, 2 * t2), (2048 // t8, 2 * t8), (16384 // t2, 2 * t2), (16384 // t2, t2)
+    O_H = (HEADS // group, KV * group)
+    #: the reads past `GATHER_FAN` rows, gathered once a layer: d, gu and s as their tiles write them
+    (gd, D8g), (ggu, GUg), (gs, Sg) = gather("d", *D8), gather("gu", *GU_T), gather("s", *S_T)
+
     # the window circuit's grain: GEMM slices, the rest a unit an op (RoPE a head, attention a head's key block)
     out["w"] = [
-        Block("Int8RowQuant{2048}", 3, 0, *quant2, XQ, [X]),
+        Block("Int8RowQuant{2048} (xq1, xq2)", 2, 0, *quant2, XQ, [X]),
+        Block("Int8RowQuant{2048} (oq)", 1, 0, *quant2, XQ, [(HEADS, KV)]),
         gemm_blocks(F, "qkv slice {2048,32}", 2048, 3072, t2, [XQ], 2 * t2),
-        Block("RoPE head", HEADS + KV_HEADS, 0, *rope_head, KV, [KV]),
-        *heads("attention head", True),
+        Block("RoPE head", HEADS + KV_HEADS, 0, *rope_head, KV, by_tile),
+        *heads("attention head", by_head, by_head + by_tile, by_window=True),
         gemm_blocks(F, "o slice {2048,32}", 2048, 2048, t2, [XQ], 2 * t2),
-        Block("RMSNormFused", 2, 0, *norm, 2 * X, [X, X]),
+        Block("RMSNormFused after attention", 1, 0, *norm, 2 * X, [X, A2]),
+        *gd,
+        Block("RMSNormFused after the MLP", 1, 0, *norm, 2 * X, [X, D8g]),
         gemm_blocks(F, "gate_up slice {2048,32}", 2048, 16384, t2, [XQ], 2 * t2),
-        Block("SiluMul", 1, 0, *silu, S, [GU]),
+        *ggu,
+        Block("SiluMul", 1, 0, *silu, S, [GUg]),
         Block("Int8RowQuant{8192}", 1, 0, *quant8, SQ, [S]),
         gemm_blocks(F, "down slice {8192,8}", 8192, 2048, t8, [SQ], 2 * t8),
     ]
 
     # (b) norm and quantize into the GEMM tile that reads them, SiluMul into down's; one tile also commits the residual
     out["b"] = [
-        gemm_blocks(F, "qkv tile + norm1 + quant", 2048, 3072, t2, [X, X], 2 * t2, prologue=plus(norm, quant2)),
+        *gd,
+        gemm_blocks(F, "qkv tile + norm1 + quant", 2048, 3072, t2, [X, D8g], 2 * t2, prologue=plus(norm, quant2)),
         Block("qkv tile 0's residual r1", 1, 0, 0, 0, X, note="the norm's residual output, committed by one qkv tile"),
-        Block("RoPE head", HEADS + KV_HEADS, 0, *rope_head, KV, [KV]),
-        *heads("attention head", False),
-        gemm_blocks(F, "o tile + quant", 2048, 2048, t2, [X], 2 * t2, prologue=quant2),
-        gemm_blocks(F, "gate_up tile + norm2 + quant", 2048, 16384, t2, [X, X], 2 * t2, prologue=plus(norm, quant2)),
+        Block("RoPE head", HEADS + KV_HEADS, 0, *rope_head, KV, by_tile),
+        *heads("attention head", by_head, by_head + by_tile),
+        gemm_blocks(F, "o tile + quant", 2048, 2048, t2, [O_H], 2 * t2, prologue=quant2),
+        gemm_blocks(F, "gate_up tile + norm2 + quant", 2048, 16384, t2, [X, A2], 2 * t2, prologue=plus(norm, quant2)),
         Block("gate_up tile 0's residual r2", 1, 0, 0, 0, X),
-        gemm_blocks(F, "down tile + SiluMul + quant", 8192, 2048, t8, [GU], 2 * t8, prologue=plus(silu, quant8)),
+        *ggu,
+        gemm_blocks(F, "down tile + SiluMul + quant", 8192, 2048, t8, [GUg], 2 * t8, prologue=plus(silu, quant8)),
     ]
 
     # (c) dot-product inputs (bf16) and outputs only, quantize in the GEMM's prologue, the residual stream kept
     out["c"] = [
-        Block("RMSNormFused (x, r)", 2, 0, *norm, 2 * X, [X, X]),
+        Block("RMSNormFused (x, r) after attention", 1, 0, *norm, 2 * X, [X, A2]),
+        *gd,
+        Block("RMSNormFused (x, r) after the MLP", 1, 0, *norm, 2 * X, [X, D8g]),
         gemm_blocks(F, "qkv tile + quant", 2048, 3072, t2, [X], 2 * t2, prologue=quant2),
-        Block("RoPE head", HEADS + KV_HEADS, 0, *rope_head, KV, [KV]),
-        *heads("attention head", False),
-        gemm_blocks(F, "o tile + quant", 2048, 2048, t2, [X], 2 * t2, prologue=quant2),
+        Block("RoPE head", HEADS + KV_HEADS, 0, *rope_head, KV, by_tile),
+        *heads("attention head", by_head, by_head + by_tile),
+        gemm_blocks(F, "o tile + quant", 2048, 2048, t2, [O_H], 2 * t2, prologue=quant2),
         gemm_blocks(F, "gate_up tile + quant", 2048, 16384, t2, [X], 2 * t2, prologue=quant2),
-        Block("SiluMul", 1, 0, *silu, S, [GU]),
+        *ggu,
+        Block("SiluMul", 1, 0, *silu, S, [GUg]),
         gemm_blocks(F, "down tile + quant", 8192, 2048, t8, [S], 2 * t8, prologue=quant8),
     ]
 
     # (d) c with the GEMM inputs committed as int8 codes: the norm and SiluMul blocks quantize; attention's o stays bf16
     out["d"] = [
-        Block("RMSNormFused + quant (xq, r)", 2, 0, *plus(norm, quant2), XQ + X, [X, X]),
+        Block("RMSNormFused + quant (xq, r) after attention", 1, 0, *plus(norm, quant2), XQ + X, [X, A2]),
+        *gd,
+        Block("RMSNormFused + quant (xq, r) after the MLP", 1, 0, *plus(norm, quant2), XQ + X, [X, D8g]),
         gemm_blocks(F, "qkv tile", 2048, 3072, t2, [XQ], 2 * t2),
-        Block("RoPE head", HEADS + KV_HEADS, 0, *rope_head, KV, [KV]),
-        *heads("attention head", False),
-        gemm_blocks(F, "o tile + quant", 2048, 2048, t2, [X], 2 * t2, prologue=quant2),
+        Block("RoPE head", HEADS + KV_HEADS, 0, *rope_head, KV, by_tile),
+        *heads("attention head", by_head, by_head + by_tile),
+        gemm_blocks(F, "o tile + quant", 2048, 2048, t2, [O_H], 2 * t2, prologue=quant2),
         gemm_blocks(F, "gate_up tile", 2048, 16384, t2, [XQ], 2 * t2),
-        Block("SiluMul + quant", 1, 0, *plus(silu, quant8), SQ, [GU]),
+        *ggu,
+        Block("SiluMul + quant", 1, 0, *plus(silu, quant8), SQ, [GUg]),
         gemm_blocks(F, "down tile", 8192, 2048, t8, [SQ], 2 * t8),
     ]
 
@@ -416,20 +488,27 @@ def partitions(F: Facts) -> dict[str, list[Block]]:
     rope_ep = (F.rope_word["gates2"] * t2, F.rope_word["ands"] * t2)  # a q or k tile: every output word rotated
     silu_ep = (F.silu_word["gates2"] * t2 // 2, F.silu_word["ands"] * t2 // 2)  # a tile of t2/2 (g, u) pairs
     add = (2048 * F.add_word["gates2"], 2048 * F.add_word["ands"])
-    e_common = [
-        Block("norm1 + quant (r += a + d; xq1, r)", 1, 0, *plus(norm, quant2, add), XQ + X, [X, X, X],
-              note="adds the previous layer's a and d to the residual it committed"),
-        gemm_blocks(F, "q/k tile + RoPE", 2048, 2560, t2, [XQ], 2 * t2, epilogue=rope_ep,
-                    note="a tile of whole rotary pairs; commits q' and k'"),
-        gemm_blocks(F, "v tile", 2048, 512, t2, [XQ], 2 * t2),
-    ]
-    out["e1"] = e_common + [
-        *heads("attention head", False),
-        gemm_blocks(F, "o tile + quant", 2048, 2048, t2, [X], 2 * t2, prologue=quant2),
-        Block("norm2 + quant (xq2)", 1, 0, *plus(norm, quant2), XQ, [X, X], note="r2 = r1 + a, not committed"),
+
+    def norm1(a, d) -> Block:
+        return Block("norm1 + quant (r += a + d; xq1, r)", 1, 0, *plus(norm, quant2, add), XQ + X, [X, a, d],
+                     note="adds the previous layer's a and d to the residual it committed")
+
+    def norm2(a) -> Block:
+        return Block("norm2 + quant (xq2)", 1, 0, *plus(norm, quant2), XQ, [X, a], note="r2 = r1 + a, not committed")
+
+    qk_tiles = [gemm_blocks(F, "q/k tile + RoPE", 2048, 2560, t2, [XQ], 2 * t2, epilogue=rope_ep,
+                            note="a tile of whole rotary pairs; commits q' and k'"),
+                gemm_blocks(F, "v tile", 2048, 512, t2, [XQ], 2 * t2)]
+    q_e, kv_e = (by_head, [2 * KV]) if pack else (by_tile, by_tile * 2)
+    pk = packs(by_tile, by_tile * 2) if pack else []
+    out["e1"] = [*gd, norm1(A2, D8g), *qk_tiles, *pk,
+        *heads("attention head", q_e, kv_e),
+        gemm_blocks(F, "o tile + quant", 2048, 2048, t2, [O_H], 2 * t2, prologue=quant2),
+        norm2(A2),
         gemm_blocks(F, "gate_up tile + SiluMul", 2048, 16384, t2, [XQ], t2, epilogue=silu_ep,
                     note="g and u columns paired; commits s, half of gu"),
-        Block("Int8RowQuant{8192} (sq)", 1, 0, *quant8, SQ, [S]),
+        *gs,
+        Block("Int8RowQuant{8192} (sq)", 1, 0, *quant8, SQ, [Sg]),
         gemm_blocks(F, "down tile", 8192, 2048, t8, [SQ], 2 * t8),
     ]
 
@@ -437,34 +516,47 @@ def partitions(F: Facts) -> dict[str, list[Block]]:
     code8 = (F.code[8192]["gates2"] * t2 // 2, F.code[8192]["ands"] * t2 // 2)
     code2_head = (F.code[2048]["gates2"] * HEAD_DIM, F.code[2048]["ands"] * HEAD_DIM)
     mx2, mx8 = (F.scale[2048]["gates2"], F.scale[2048]["ands"]), (F.scale[8192]["gates2"], F.scale[8192]["ands"])
-    out["e2"] = e_common + [
-        *heads("attention pass 1 (partial max)", False, commits=4),
-        Block("o scale (max of 32 partial maxima)", 1, 0, *mx2, 4, [4] * HEADS,
+    gmx, MXg = gather("s partial maxima", 16384 // t2, 4)
+    gsq, SQg = gather("sq codes", 16384 // t2, t2 // 2)
+    out["e2"] = [*gd, norm1(A2, D8g), *qk_tiles, *pk,
+        *heads("attention pass 1 (partial max)", q_e, kv_e, commits=4),
+        Block("o scale (max of 32 partial maxima)", 1, 0, *mx2, 4, [(HEADS // group, 4 * group)],
               note="ANDs: Int8RowQuant{2048}'s scale unit, an upper bound"),
-        *heads("attention pass 2 (recompute, oq codes)", False, extra=(0, *code2_head), commits=HEAD_DIM,
-               reads=[KV, keys, 4], last_only=True),
-        gemm_blocks(F, "o tile", 2048, 2048, t2, [XQ], 2 * t2),
-        out["e1"][-4],
+        *heads("attention pass 2 (recompute, oq codes)", q_e, kv_e, extra=(0, *code2_head), commits=HEAD_DIM,
+               extra_reads=(4,), last_only=True),
+        gemm_blocks(F, "o tile", 2048, 2048, t2, [(HEADS // group, HEAD_DIM * group), 4], 2 * t2),
+        norm2(A2),
         gemm_blocks(F, "gate_up pass 1: tile + SiluMul, partial max", 2048, 16384, t2, [XQ], 4, epilogue=silu_ep),
-        Block("s scale (max of 512 partial maxima)", 1, 0, *mx8, 4, [4 * 16384 // t2],
+        *gmx,
+        Block("s scale (max of 512 partial maxima)", 1, 0, *mx8, 4, [MXg],
               note="ANDs: Int8RowQuant{8192}'s scale unit, an upper bound"),
         gemm_blocks(F, "gate_up pass 2: recompute + sq codes", 2048, 16384, t2, [XQ, 4], t2 // 2,
                     epilogue=plus(silu_ep, code8)),
-        out["e1"][-1],
+        *gsq,
+        gemm_blocks(F, "down tile", 8192, 2048, t8, [SQg, 4], 2 * t8),
     ]
 
-    # (e3) e1 at the finest GEMM units, each reading its weight column and sharing its slice's rows
-    out["e3"] = [
-        e_common[0],
+    # (e3) e1 at the finest GEMM units, each reading its weight column and sharing its slice's rows; the 2-byte rows they
+    # write gathered for their consumers
+    pairs, coords = [4] * (HEAD_DIM // 2), [2] * HEAD_DIM
+    p3 = pack is None or pack
+    ga, a3 = gather("o", 2048, 2)
+    gd, d3 = gather("down", 2048, 2)
+    gs, s3 = gather("s", 8192, 2)
+    out["e3"] = [norm1(a3, d3),
         gemm_blocks(F, "q/k rotary pair + RoPE", 2048, 2560, 2, [XQ], 4, epilogue=(2 * F.rope_word["gates2"], 2 * F.rope_word["ands"])),
         gemm_blocks(F, "v coordinate", 2048, 512, 1, [XQ], 2),
-        *heads("attention head", False),
-        Block("Int8RowQuant{2048} (oq)", 1, 0, *quant2, XQ, [X]),
+        *(packs(pairs, pairs + coords) if p3 else []),
+        *heads("attention head", *((by_head, [2 * KV]) if p3 else (pairs, pairs + coords))),
+        Block("Int8RowQuant{2048} (oq)", 1, 0, *quant2, XQ, [O_H]),
         gemm_blocks(F, "o coordinate", 2048, 2048, 1, [XQ], 2),
-        out["e1"][-4],
+        *ga,
+        norm2(a3),
         gemm_blocks(F, "gate_up (g, u) pair + SiluMul", 2048, 16384, 2, [XQ], 2, epilogue=(F.silu_word["gates2"], F.silu_word["ands"])),
-        out["e1"][-2],
+        *gs,
+        Block("Int8RowQuant{8192} (sq)", 1, 0, *quant8, SQ, [s3]),
         gemm_blocks(F, "down coordinate", 8192, 2048, 1, [SQ], 2),
+        *gd,
     ]
     return out
 
@@ -497,14 +589,19 @@ def head_blocks(F: Facts, name: str) -> list[Block]:
     comb_ands, _k, csrc = CS.MEASURED["TokenSelectCombine_v2{V=128256,C=16}"]
     per_group = groups_ands // 167
     if name in ("e1", "e2", "e3"):
+        gb, best_rows = gather("head bests", slices, 6, per="sampled")
         return [Block("LM head slice {2048,16} + best of 16", slices, n * co["macs"], n * co["gates2"],
                       n * co["ands"] + per_group, 2 + 4, [F.bf16_row], n * 2 * 2048, per="sampled",
                       note="epilogue ANDs: TokenSelectGroups' a group of 16 (measured / 167); the index's 4 bytes an estimate"),
-                Block("token select over the slices' bests", 1, 0, 0, comb_ands, 4, [6 * slices], per="sampled",
+                *gb,
+                Block("token select over the slices' bests", 1, 0, 0, comb_ands, 4, [best_rows], per="sampled",
                       note=f"ANDs: TokenSelectCombine_v2's ({csrc}), over 167 x 48 bests")]
+    gl, logit_rows = gather("logit slices", 2672 // n, 2 * n, per="sampled")
     return [Block("LM head slice {2048,16}", slices, n * co["macs"], n * co["gates2"], n * co["ands"], 2 * n, [F.bf16_row],
                   n * 2 * 2048, per="sampled"),
-            Block("TokenSelectGroups_v1{C=2672,G=16}", 48, 0, 0, groups_ands, 167 * 6, [2 * 2672], per="sampled",
+            *[Block(b.name + " (a group's)", 48 * b.n, 0, 0, 0, b.commits, b.reads, per="sampled", drawn_by_openings=True)
+              for b in gl],
+            Block("TokenSelectGroups_v1{C=2672,G=16}", 48, 0, 0, groups_ands, 167 * 6, [logit_rows], per="sampled",
                   note=f"ANDs measured ({gsrc}); commits 167 bests and indices, the index's 4 bytes an estimate"),
             Block("TokenSelectCombine_v2", 1, 0, 0, comb_ands, 4, [167 * 6] * 48, per="sampled")]
 
@@ -520,17 +617,31 @@ def summarize(F: Facts, name: str, blocks: list[Block]) -> dict:
     w = sum(r["n_per_token"] * r["ands"] ** 2 for r in rows)
     wo = sum(r["n_per_token"] * (r["ands"] + r["opening_ands_est"]) ** 2 for r in rows)
     ao = sum(r["n_per_token"] * (r["ands"] + r["opening_ands_est"]) for r in rows)
-    # a unit is drawn by its work (its ANDs) and costs its block, openings and padding included
-    cost_ands = sum(r["n_per_token"] * r["ands"] * (r["ands"] + r["opening_ands_est"]) for r in rows) / ands
-    cost_bits = sum(r["n_per_token"] * r["ands"] * 2 ** r["k_log_est"] for r in rows) / ands
+
+    def cost(rs: list[dict]) -> tuple[float, float]:
+        """Expected ANDs (openings included) and bits a draw: a unit drawn by its `drawn_ands`, costing its block, and each
+        row's share of the bits (``bits_share``)."""
+        drawn = sum(r["n_per_token"] * r["drawn_ands"] for r in rs)
+        a = sum(r["n_per_token"] * r["drawn_ands"] * (r["ands"] + r["opening_ands_est"]) for r in rs) / drawn
+        b = sum(r["n_per_token"] * r["drawn_ands"] * 2 ** r["k_log_est"] for r in rs) / drawn
+        for r in rs:
+            r["bits_share"] = r["n_per_token"] * r["drawn_ands"] * 2 ** r["k_log_est"] / drawn / b
+        return a, b
+
+    cost_ah, cost_bh = cost([dict(r) for r in rows + head])
+    cost_ands, cost_bits = cost(rows)
     return {"partition": name, "keys": F.T, "beta_bytes_per_token": beta, "beta_bytes_per_kmac": 1000 * beta / F.served_macs,
             "served_macs_per_token": F.served_macs, "proved_macs_per_token": macs, "blocks_per_token": n,
             "ands_per_token": ands, "blocks_over_cap_per_token": sum(r["n_per_token"] for r in rows if r["over_cap"]),
             "and_weighted_mean_block_ands": w / ands, "with_openings_and_weighted_mean": wo / ao,
             "expected_proved_ands_per_window_est": DRAWS * w / ands,
             "expected_proved_ands_with_openings_per_window_est": DRAWS * cost_ands,
-            "expected_proved_bits_per_window_est": DRAWS * cost_bits, "head_beta_bytes_per_sampled_token": head_beta,
+            "expected_proved_bits_per_window_est": DRAWS * cost_bits,
+            "with_head_expected_proved_ands_with_openings_per_window_est": DRAWS * cost_ah,
+            "with_head_expected_proved_bits_per_window_est": DRAWS * cost_bh,
+            "head_beta_bytes_per_sampled_token": head_beta,
             "head_ands_per_sampled_token": sum(r["n_per_token"] * r["ands"] for r in head),
+            "head_blocks_over_cap_per_sampled_token": sum(r["n_per_token"] for r in head if r["over_cap"]),
             "beta_with_head_bytes_per_token": beta + head_beta, "blocks": rows, "head_blocks": head}
 
 
@@ -574,30 +685,59 @@ def lm_head(m: dict) -> dict:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--keys", default="18,35,144,288")
+    ap.add_argument("--keys", default="18,35,144,288,512")
+    ap.add_argument("--key-blocks", default="0,32,64,128", help="attention's keys a unit to sweep (0: the fewest that fit)")
+    ap.add_argument("--groups", default="1,4", help="query heads of a KV head a unit to sweep")
     ap.add_argument("--ir", default=None, help="reuse the IR record of an earlier --out")
     ap.add_argument("--out", default=None)
     a = ap.parse_args(argv)
     keys = [int(k) for k in a.keys.split(",")]
     m = json.loads(Path(a.ir).read_text())["ir"] if a.ir else measure(keys)
-    res = {"ir": m, "lm_head": lm_head(m), "at": {}}
+    res = {"ir": m, "lm_head": lm_head(m), "at": {}, "attention_unit": {}}
     for T in keys:
         F = Facts(m, T)
         res["at"][T] = [qword_partition(m, T)] + [summarize(F, k, v) for k, v in partitions(F).items()]
+    slim = ("partition", "beta_bytes_per_token", "beta_with_head_bytes_per_token", "blocks_per_token",
+            "blocks_over_cap_per_token", "expected_proved_ands_with_openings_per_window_est",
+            "expected_proved_bits_per_window_est", "with_head_expected_proved_bits_per_window_est")
+    print("\nattention's unit: keys a unit (0: the fewest that fit) x query heads a unit x packs; proved bits a window, β")
+    for T in keys:
+        F, res["attention_unit"][T] = Facts(m, T), []
+        for kb in (int(k) for k in a.key_blocks.split(",")):
+            for g in (int(x) for x in a.groups.split(",")):
+                for pack in (False, True):
+                    for name, blocks in partitions(F, kb, g, pack).items():
+                        if name in ("a0", "w") or (not pack and name not in ("e1", "e2", "e3")):
+                            continue
+                        s = summarize(F, name, blocks)
+                        att = [r for r in s["blocks"] if r["block"].startswith("attention")]
+                        packed = (pack or None) if name in ("e1", "e2", "e3") else None
+                        res["attention_unit"][T].append({
+                            "key_block": kb, "group": g, "pack": packed, **{k: s[k] for k in slim},
+                            "attention_bits_share": sum(r["bits_share"] for r in att), "attention_blocks": att})
+                        print(f"  T={T:>3} kb={kb:>3} g={g} pack={'-' if packed is None and name not in ('e1', 'e2', 'e3') else int(pack)}"
+                              f" {name:>2}: bits/window 2^"
+                              f"{math.log2(s['expected_proved_bits_per_window_est']):.2f} (attention "
+                              f"{sum(r['bits_share'] for r in att):.0%}, k {sorted({r['k_log_est'] for r in att})}) "
+                              f"β {s['beta_bytes_per_token']:>10,.0f} over cap {s['blocks_over_cap_per_token']:,.0f}")
     for T in keys:
         print(f"\nkeys T={T}")
         for p in res["at"][T]:
             print(f"  {p['partition']:>3}: beta {p['beta_bytes_per_token']:>12,.0f} B/token {p['beta_bytes_per_kmac']:7.2f} B/kMAC"
                   f"  head {p.get('head_beta_bytes_per_sampled_token', 0):>9,.0f} B/sampled token"
-                  f"  blocks/token {p['blocks_per_token']:>10,.0f}  AND-weighted mean block {p['and_weighted_mean_block_ands']:>13,.0f}")
+                  f"  blocks/token {p['blocks_per_token']:>10,.0f}  AND-weighted mean block {p['and_weighted_mean_block_ands']:>13,.0f}"
+                  + (f"  bits/window 2^{math.log2(p['expected_proved_bits_per_window_est']):.2f} (with head 2^"
+                     f"{math.log2(p['with_head_expected_proved_bits_per_window_est']):.2f}) over cap "
+                     f"{p['blocks_over_cap_per_token']:,.0f}" if "expected_proved_bits_per_window_est" in p else ""))
     for T in keys:
         for p in res["at"][T]:
             print(f"\n[{p['partition']}] T={T}: beta {p['beta_bytes_per_token']:,.0f} B/token; blocks/token "
                   f"{p['blocks_per_token']:,.0f}; ANDs/token {p['ands_per_token']:,.0f}; AND-weighted mean "
                   f"{p['and_weighted_mean_block_ands']:,.0f}")
-            for r in p["blocks"][:14]:
+            for r in p["blocks"][:24]:
                 print("   ", {k: r.get(k) for k in ("block", "op", "kind", "n_per_token", "macs", "gates2", "ands",
-                                                    "opening_ands_est", "boundary_bits", "size_class", "k_log_est", "over_cap")
+                                                    "opening_ands_est", "rows", "boundary_bits", "size_class", "k_log_est",
+                                                    "over_cap", "bits_share")
                               if k in r})
     if a.out:
         Path(a.out).write_text(json.dumps(res, indent=1, default=str))
