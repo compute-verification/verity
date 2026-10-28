@@ -68,12 +68,12 @@ many reads of a node's registered blocks the node made in each window, from rece
    `ledger` turns it, with the node's measured capacities and a squaring ceiling at its codec's width (`Rebuild`), into
    each γ term over the session's span and over each window's own (`WindowLedger`), μ_sample read per window and
    pooled over the session's horizon (`pooled`, `floors`).  It credits a receipt of a block appended after the seed
-   only on the property's verdict on the circuits that wrote it (`credit_post_seed`, I2's) and the session's schedule
+   only on the stacking property's verdict on the circuits that wrote it (`credit_post_seed`) and the session's schedule
    check (`schedule`, `Session.scheduled`: every pass's plan the published schedule's at its step, the schedule within
    the cap on its bits the session's parameters committed before its first coin, `Params.schedule_cap`,
    `schedule.py`), and then charges what their carriers may hold (μ_carrier); without both, those receipts are
    certified but not credited.  On the served
-   circuit's requirement linked to the passes (`requirement`, a `RequirementLink`: I4's plan and memory-map units and
+   circuit's requirement linked to the passes (`requirement`, a `RequirementLink`: the plan and memory-map units and
    the census's layout rule, the memory-map unit's verdict on the record's appends and heads among them, `mapped`),
    each pass is credited the bits the circuit reads from complete blocks at its step, less a block for each planned
    block it credits no receipt of (`linked_bits`, `Accounting.Guarantees.RequirementMoved`; `Ledger.linked`), less the
@@ -128,7 +128,7 @@ SLACK_LOG2 = 67
 """AuditRO's slack, the bits a pass is charged beyond `named_bits`: its last term C(q, k)/2^λ is then at most 2^-67 a
 pass, which γ's error and the memory line's δ add once a pass.  Up to 2^17 passes they add at most 2^-50, 2^-10 of
 `DELTA`: an hour, six times the stated 10-minute horizon, of the node's 41.2 ms passes over 130,023,424 blocks
-(532.6 GB, gate runs 8 and 9's store) at `timing.READ_BYTES_PER_S` is 87,326 passes."""
+(532.6 GB, eight GPUs' 62 GiB shards) at `timing.READ_BYTES_PER_S` is 87,326 passes."""
 WINDOW_NS = 60 * 10**9
 SAMPLES = 33_273
 DELTA = 2.0 ** -40
@@ -1377,7 +1377,7 @@ def _outcomes(value: object) -> list[str]:
 
 
 class Registry:
-    """The verifier's registrations, at most one live a node (the red team's KB-4).  `register` draws a codec seed
+    """The verifier's registrations, at most one live a node.  `register` draws a codec seed
     (`register`) only for a node with none live: a second while one is live is refused (`RegistryError`) and counted
     (`refused`), and draws nothing, so a retry never redraws.  A registration ends only when the verifier closes it
     (`close`), which counts each of its sessions as it stands: accepted, the failure that rejected it, or `UNENDED`,
@@ -1499,11 +1499,11 @@ LEDGER_SOURCES = {
 
 
 class PostSeedVerdict(Protocol):
-    """The property's verdict on the circuits that wrote a session's post-seed blocks (I2, property/v1: P(c, R_in, L)),
-    as `ledger` reads it: whether it `holds`, and `carrier_bytes(read_bytes)`, the most the carriers among a window's
-    post-seed blocks can hold when its certified reads are `read_bytes`, R_in·L + (c_ρ·read_bytes·L/E)·b, the side
-    capacity the guarantee adds to c.  That the verdict is of the circuits that wrote this session's appends is I2's
-    to bind and check, not the ledger's."""
+    """The stacking property's verdict on the circuits that wrote a session's post-seed blocks (P(c, R_in, L),
+    `verity.ml.circuits.stacking`), as `ledger` reads it: whether it `holds`, and `carrier_bytes(read_bytes)`, the most
+    the carriers among a window's post-seed blocks can hold when its certified reads are `read_bytes`,
+    R_in·L + (c_ρ·read_bytes·L/E)·b, the side capacity the guarantee adds to c.  That the verdict is of the circuits
+    that wrote this session's appends is the property's proof to bind and check, not the ledger's."""
 
     @property
     def holds(self) -> bool: ...
@@ -1512,15 +1512,16 @@ class PostSeedVerdict(Protocol):
 
 
 class RequirementLink(Protocol):
-    """The served circuit's requirement, linked to a session's passes (A1's `Accounting.Requirement`), as `ledger`
+    """The served circuit's requirement, linked to a session's passes (Lean's `Accounting.Requirement`), as `ledger`
     reads it: whether the link `holds`, and `read_bits(step)`, the bits the circuit reads at a step from complete blocks
     (`creditedReadBits`: the bits of `requirement.credited_reads` in `verity.ml.circuits`; for a store of registered
     blocks only, the weights while KV isn't registered, the bits the step reads of registered values).  It holds once
     the proof blocks have shown, for every pass, that its plan holds every complete block the circuit reads at the
-    pass's step and the layout packs the values read into blocks (`PlanMatches`; the plan unit, I4's: PlanMatch, or
+    pass's step and the layout packs the values read into blocks (`PlanMatches`; the plan unit: PlanMatch, or
     PlanShard for a registered store, with `Packs` under the census's layout rule), and that every free in the memory
     map, of a registered block or a written one, is at its values' last structural reader on the public schedule, a
-    gather that may select one included (the memory-map unit, I4's; `memory_map.py`).  The link
+    gather that may select one included (the memory-map unit; `memory_map.py`), both units Definitions of
+    `verity.ml.circuits.requirement_units`.  The link
     is one-sided: a plan may hold blocks the circuit doesn't read at its step (filler, a gathered table's unselected
     rows, a paused request's pages), which carry none of its reads, so a planned block need carry none of its bits,
     and the ledger credits each pass the circuit's reads, never its receipts (`linked_bits`, `RequirementMoved`).  A
@@ -1794,7 +1795,7 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     (`Accounting.Guarantees.Remote.SketchBoundDeployed`), whose terms add to the failure probability, not to γ:
     `timing.sketch_failure` of the prover's SHA-512 compressions over the session (`PROTOCOL.md` §4).
     The record credits the receipts of registered blocks, and those of blocks appended after the codec seed only on
-    `credit_post_seed`, the property's verdict on the circuits that wrote them (I2's; None credits none, and a verdict
+    `credit_post_seed`, the stacking property's verdict on the circuits that wrote them (None credits none, and a verdict
     that fails is refused), and only with this session's schedule check (`schedule`, `Session.scheduled`): every
     pass's plan the published schedule's at its step and the schedule within the cap on its bits the session committed
     before its coins, so the layout the appended blocks are read at is the verifier's function of the schedule, steered
