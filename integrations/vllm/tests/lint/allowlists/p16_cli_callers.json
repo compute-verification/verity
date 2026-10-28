@@ -12,7 +12,8 @@
     "served-pin": "benchmarks/served_commit/served_arm.sh",
     "serving-rows": "benchmarks/one_stage/a5.sh",
     "tp-serving-rows": "benchmarks/one_stage/a5_tp.sh",
-    "workload": "benchmarks/stacked_share/job.sh"
+    "workload": "benchmarks/stacked_share/job.sh",
+    "weights-tie": "benchmarks/prove_path/run.sh"
   },
   "entries": [
     {"file": "verity_vllm/acquire/served.py", "kind": "uncalled-command", "symbol": "<module>", "detail": "served"},
