@@ -115,7 +115,7 @@ def test_a_piece_that_refused_to_run_is_undecided_not_run_not_rejected(tmp_path,
     env = {"CERTIFIER_CMD": f"echo \"{why}\" > \"$3/refused.txt\"; exit 3"}
     got = S.pieces(tmp_path, 1, tmp_path / "pieces", env=env)
     assert got["certifier"] == {"verdict": "undecided", "reason": S.NOT_RUN, "rc": 3, "refused": why}
-    assert f"NOT RUN the network certifier {{" in capsys.readouterr().out
+    assert "NOT RUN the network certifier {" in capsys.readouterr().out
     row = S.piece_row("communication", tmp_path / "pieces")
     assert (row["verdict"], row["reason"], row["why"]) == ("undecided", S.NOT_RUN, f"its piece refused to run: {why}")
     assert "error" not in row and row["answer"] == CA.Answer.undecided("verity/certifier/v0", S.NOT_RUN).to_json()
@@ -332,7 +332,8 @@ def test_found_takes_a_case_only_with_its_answer_and_once(tmp_path):
     (tmp_path / "e" / "case.json").write_text("{}")
     got, why = S.found([(d.name, d) for d in dirs])
     assert got == {W.PROTOCOL: tmp_path / "d"}
-    assert why == {POUW: "answered by more than one piece: a, b", V2: "undecided; c holds no case.json"}
+    assert why == {POUW: "answered by more than one piece: a, b", V2: "undecided; c holds no case.json",
+                   "e": "its answer.json is no core answer (Refused)"}
     assert S.found([]) == ({}, {})
 
 
@@ -394,9 +395,10 @@ def test_no_byte_of_a_cases_evidence_reaches_a_public_path(tmp_path, monkeypatch
     public = [f for f in out.rglob("*") if f.is_file()]
     assert {f.relative_to(out).as_posix() for f in public} >= {"record/verdicts.json", "record/composite/composite.json",
                                                                "record/composite/verdicts.txt"}
-    seen = set().union(*(_windows(f.read_bytes()) for f in public), _windows(stdout.encode()))
-    for e in evidence.values():
-        assert not seen & (_windows(e) | _windows(e.hex().encode()))
+    runs = {pid: _windows(e) | _windows(e.hex().encode()) for pid, e in evidence.items()}
+    for where, b in [*((f.relative_to(out).as_posix(), f.read_bytes()) for f in public), ("stdout", stdout.encode())]:
+        leaked = sorted(pid for pid, r in runs.items() if not r.isdisjoint(_windows(b)))
+        assert not leaked, f"{where} holds bytes of the evidence of {leaked}"
     private = serve / "private" / "composite" / "w1"
     assert leak in (private / "out" / "answer.json").read_text() and leak in (private / "out" / "check.err").read_text()
     assert evidence[POUW].hex() in (private / "out" / "evidence.json").read_text()

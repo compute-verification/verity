@@ -77,25 +77,16 @@ negatives.
   pins. The run needs every one of those counts. The class of record's count follows them as a measurement under its own
   `WC_RECORD_TIMEOUT` (default 2h): a timeout or refusal there is reported and never fails the run. Then comes the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is C-Flock `--zk` on the drawn proof blocks
   and the Lean verifier. Then come PoUW, the bandwidth audit, PoUS and the network certifier. Each runs its piece where
-<<<<<<< HEAD
-  `POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD` or `CERTIFIER_CMD` names one, writing its core answer and its case; otherwise
-  its answer is `undecided` with the reason `not run`, and its `NOT RUN` line names its issue. Finally the all-protocols
-  window report (`verity/all-protocols-window/v2`), every row a core answer: its verdict is onsite's Lean answer
-  (`composite.py onsite`) when the pieces that wrote a case beside their answer make up onsite (its six subprotocols and
-  NCI's registration), else remote's (`composite.py remote`, PoUW and sampled proofs v2), else `undecided` naming what
-  each lacks. Then the block record, unless the window or a subprotocol rejects; a subprotocol's rejection fails the run.
-  Each step's verdict line is in `out/verdicts.txt`.
-- `composite.py`: onsite's or remote's case from its subprotocols' cases, and the Lean verdict on it. Each `--piece DIR`
-  holds one subprotocol's `case.json` (its `serve` line, with `blobs` the paths of the files it reads) and its own Lean
-  answer on it, `answer.json` (a core answer, read by `verity.core.protocols.answer`), whose `commitment` is its digest;
-  onsite's `--registration DIR` is NCI's. It writes the
-  product's params, commitment and evidence in the composition's formats (`verity/core/protocols/composition/README.md`)
-  and, with `--exe`, runs `onsite check` or `remote check` on them with the blobs.
-=======
-  `POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD` or `CERTIFIER_CMD` names one; otherwise its `MISSING` line names its issue, and it
-  gets no verdict. Finally the all-protocols window report and the block record. Each step's verdict line is in
+  `POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD` or `CERTIFIER_CMD` names one, writing its public core answer and, in its
+  private directory under the serve dir, its case; otherwise its answer is `undecided` with the reason `not run`, and its
+  `NOT RUN` line names its issue. A piece that refused to run (`refused.txt`) is `not run` too: only the protocol's
+  answer rejects. Finally the all-protocols window report (`verity/all-protocols-window/v2`), every row a core answer:
+  its verdict is onsite's Lean verdict (`composite.py onsite`) when the pieces' cases make up onsite (its six
+  subprotocols and NCI's registration), else remote's (`composite.py remote`, PoUW and sampled proofs v2), else
+  `undecided` naming what each lacks. composite.py's private output stays in the serve dir; only its public record
+  (verdicts, commitments, params digests) is published, to `out/record/composite`. Then the block record, unless the
+  window or a subprotocol rejects; a subprotocol's rejection fails the run. Each step's verdict line is in
   `out/verdicts.txt`.
->>>>>>> 66fcea0ace
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
   staged by C-Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's

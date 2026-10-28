@@ -66,7 +66,7 @@ recorder; `--dry-run` prints the command.
    sampling period sealed, then the sampled proofs (C-Flock `--zk` behind the Lean firewall, and the Lean verifier's
    verdict), with one record of every verdict in `$OUT/verdicts.txt`. The chain also runs the other subprotocols where each
    has its piece (PoUW, PoUB, PoUS, memory wipes and network certification), and answers each one missing `undecided`,
-   "not run". The window's verdict is onsite's or remote's Lean answer on the pieces' cases
+   "not run". The window's verdict is onsite's or remote's Lean verdict on the pieces' private cases
    (`benchmarks/one_stage/composite.py`), or `undecided` naming what each lacks. The example's runs of record
    (`example.toml`'s `runs`) ran sampled proofs alone.
 3. `verity example vllm serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed sampling

@@ -426,17 +426,21 @@ def case_dirs(serve_dir: Path, window: int, pieces_dir: Path, extra: Sequence[Pa
 def found(dirs: Sequence[tuple[str, Path]]) -> tuple[dict[str, Path], dict[str, str]]:
     """The cases among ``dirs`` (`case_dirs`'s) by their answers' protocols: each directory holding a core answer and its
     case (``answer.json``, ``case.json``); and for each protocol answered with no case, or by more than one directory,
-    why it has no piece, by its verdict alone (an answer's reason can be witness). A directory with no core answer is no
-    protocol's piece (its row says why)."""
+    why it has no piece, by its verdict alone (an answer's reason can be witness). A directory with no answer is no
+    protocol's piece (its row says why), and one whose answer isn't a core answer is none either: ``why`` says so under
+    its label."""
     by: dict[str, list[tuple[str, Path, CA.Answer]]] = {}
+    why: dict[str, str] = {}
     for label, d in dirs:
+        if not (d / ANSWER).is_file():
+            continue
         try:
             a = CA.of_json(json.loads((d / ANSWER).read_text()))
-        except (OSError, ValueError):
+        except ValueError as e:
+            why[label] = f"its {ANSWER} is no core answer ({type(e).__name__})"
             continue
         by.setdefault(a.protocol, []).append((label, d, a))
     got: dict[str, Path] = {}
-    why: dict[str, str] = {}
     for pid, xs in by.items():
         label, d, a = xs[0]
         if len(xs) > 1:

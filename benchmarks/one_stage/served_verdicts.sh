@@ -35,21 +35,24 @@
 #     `records_audit.py audit --circuit --registered` the registration (V3C_LAW, default subset:1) draws and proves its members.
 #     `served_verdicts.sh v3c` runs only that step on an existing serve dir (D and its window K set), the build first.
 #  4. PoUW (H1 credit), the bandwidth audit, PoUS and the network certifier: `served_verdicts.py pieces` runs each one's piece
-#     where POUW_CMD, BANDWIDTH_CMD, POUS_CMD or CERTIFIER_CMD names it (its answer.json and case.json), else answers it
-#     undecided, "not run", and says NOT RUN with its issue. A subprotocol that runs on the serving engine (H1's `--protocols pouw:...`, the
+#     where POUW_CMD, BANDWIDTH_CMD, POUS_CMD or CERTIFIER_CMD names it (its public answer.json; its case in D/private), else
+#     answers it undecided, "not run", and says NOT RUN with its issue; a piece that refused to run (refused.txt) is "not
+#     run" too, since only the protocol's answer rejects. A subprotocol that runs on the serving engine (H1's `--protocols pouw:...`, the
 #     bandwidth session's `--remote-verifier HOST:PORT`) goes in SERVE_ARGS, serve-openai's further arguments, and its piece
 #     reads what it wrote in the serve dir. The wipe's piece runs in step 1 instead: with WIPE_CMD set (e.g.
 #     'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'), serve() calls it in TREE, under the serve's lease
 #     and before serve-openai starts, with (the serve dir D, `all`, $OUT/pieces/wipe), since the window isn't picked yet, and
 #     says its last line as WIPE. The record reads its pieces/wipe/answer.json, and takes the wipe into the block record
 #     only when that answer accepts and pieces/wipe/served.json names this node as the server it ran on. A wipe that wrote
-#     no answer (refused, or failed before its judge) is undecided, "not run", one served elsewhere stays out of the block
+#     no answer (refused) is undecided, "not run" (one that failed before its judge, an error), one served elsewhere stays out of the block
 #     record, and one whose answer rejects fails the run with no block record: a failed wipe is never accepted.
 #  5. the record: `served_verdicts.py record`: the all-protocols window report ($OUT/record/verdicts.json, every row a
-#     core answer) whose verdict is onsite's Lean answer (`composite.py onsite`, the `onsite` executable) when the pieces
-#     under $OUT/pieces with a case.json beside their answer make up onsite, else remote's (`composite.py remote`), else
-#     undecided naming what each lacks; and the block record ($OUT/record/block-record.json) unless the window or a
-#     subprotocol rejects. The run passes on a window that accepts or is undecided with no subprotocol rejecting.
+#     core answer) whose verdict is onsite's Lean verdict (`composite.py onsite`, the `onsite` executable) when the pieces'
+#     cases (each in its private directory under D, else beside its public answer) make up onsite, else remote's
+#     (`composite.py remote`), else undecided naming what each lacks; and the block record ($OUT/record/block-record.json)
+#     unless the window or a subprotocol rejects. composite.py's private output (the composed case, its evidence, every
+#     answer) stays in D/private/composite/wK; only its public record, held to its form, goes to $OUT/record/composite.
+#     The run passes on a window that accepts or is undecided with no subprotocol rejecting or erring.
 # Coins: sampled proofs' draw is on the verifier's own live coins (Lean's IO.getRandomBytes, in-process) unless PP_CHALLENGER
 # names the live challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). With H1_GATE (the
 # lane's gate command, e.g. "ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84") the endpoint serves
