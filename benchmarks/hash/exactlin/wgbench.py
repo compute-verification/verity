@@ -204,6 +204,11 @@ def gate(m, n, k, variants, kinds=KINDS, seed=0) -> list[dict]:
     return rows
 
 
+def differing(y, zy, ref_y, ref_zy) -> int:
+    """y's differing words plus zy's differing record bytes."""
+    return int((y.view(torch.int16) != ref_y).sum()) + int((zy != ref_zy).sum())
+
+
 def gate_zy(m, n, k, rows, variants, kinds=KINDS, seed=0) -> list[dict]:
     """Per kind, each arm's differing y words plus differing record bytes against the reference."""
     out = []
@@ -218,14 +223,11 @@ def gate_zy(m, n, k, rows, variants, kinds=KINDS, seed=0) -> list[dict]:
         yr = E.dequantize(z, scales, sw)
         ref_y, ref_zy = yr[:m].view(torch.int16).clone(), E.zy_records(z, yr)
         del z, yr
-
-        def bad(y, zy):
-            return int((y.view(torch.int16) != ref_y).sum()) + int((zy != ref_zy).sum())
         row = {"shape": [m, n, k], "rows": rows, "kind": kind, "zy": True}
         y, zy = poisoned(m, n), torch.full((units, E.ZY_BYTES), 0xA5, dtype=torch.uint8, device="cuda")
         try:
             X.scaled_mm_zy(xq, sa, w, sw, y, zy, rows, tri)
-            row["triton_vs_ref"] = bad(y, zy)
+            row["triton_vs_ref"] = differing(y, zy, ref_y, ref_zy)
         except Exception as e:  # noqa: BLE001  (as `gate`)
             row["triton_refused"] = repr(e)[:200]
         for v in variants:
@@ -235,7 +237,7 @@ def gate_zy(m, n, k, rows, variants, kinds=KINDS, seed=0) -> list[dict]:
                 zy.fill_(0xA5)
                 W.scaled_mm_zy(xq, sa, w, sw, y, zy, rows, W.WgCfg.parse(text), int(flags or 0))
                 torch.cuda.synchronize()
-                row[f"{v}#{call}"] = bad(y, zy)
+                row[f"{v}#{call}"] = differing(y, zy, ref_y, ref_zy)
         row["ok"] = all(v == 0 for key, v in row.items() if key not in ("shape", "rows", "kind", "zy", "ok", "triton_refused"))
         out.append(row)
         del xq, w, y, zy, ref_y, ref_zy
