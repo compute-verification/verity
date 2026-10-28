@@ -32,7 +32,8 @@ def gate(ptxas: str, sass: str) -> tuple[dict, list[str]]:
         fm = re.search(r"Function : (\w+)", line)
         if fm:
             cur = fm.group(1)
-            funcs.setdefault(cur, {}).update({"LDL": 0, "STL": 0, "UTMALDG": 0, "IGMMA": 0, "forms": [], "other_mma": []})
+            funcs.setdefault(cur, {}).update({"LDL": 0, "STL": 0, "UTMALDG": 0, "IGMMA": 0, "MEMBAR_GPU": 0, "CCTL_IVALL": 0,
+                                              "forms": [], "other_mma": []})
             continue
         if not cur:
             continue
@@ -40,6 +41,8 @@ def gate(ptxas: str, sass: str) -> tuple[dict, list[str]]:
         r["LDL"] += len(re.findall(r"\bLDL\b", line))
         r["STL"] += len(re.findall(r"\bSTL\b", line))
         r["UTMALDG"] += len(re.findall(r"\bUTMALDG\b", line))
+        r["MEMBAR_GPU"] += len(re.findall(r"\bMEMBAR\.\w*\.?GPU\b", line))
+        r["CCTL_IVALL"] += len(re.findall(r"\bCCTL\.IVALL\b", line))
         for mm in MMA.finditer(line):
             form = mm.group(0)
             if form.startswith("IGMMA.64x256x32") and "U8" not in form:

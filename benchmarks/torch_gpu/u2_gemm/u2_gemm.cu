@@ -93,16 +93,13 @@ DEV uint32_t cta_rank() {
 DEV void cluster_sync() {
   asm volatile("barrier.cluster.arrive.release.aligned;\n barrier.cluster.wait.acquire.aligned;" ::: "memory");
 }
+// an arrive on rank's copy of `bar` at the default .release.cta (the stage was read only by this CTA's retired wgmma, and
+// the peer's TMA refills it through the async proxy): a .release.cluster arrive puts a MEMBAR.ALL.GPU on every consumer
+// warp's path a stage, and an .acquire.cluster wait a CCTL.IVALL
 DEV void mbar_arrive_at(uint32_t bar, uint32_t rank) {
   uint32_t r;
   asm volatile("mapa.shared::cluster.u32 %0, %1, %2;" : "=r"(r) : "r"(bar), "r"(rank));
-  asm volatile("mbarrier.arrive.release.cluster.shared::cluster.b64 _, [%0];" ::"r"(r) : "memory");
-}
-DEV void mbar_wait_cluster(uint32_t bar, uint32_t parity) {
-  asm volatile(
-      "{\n .reg .pred p;\n WAITC:\n mbarrier.try_wait.parity.acquire.cluster.shared::cta.b64 p, [%0], %1;\n @!p bra WAITC;\n}\n" ::"r"(bar),
-      "r"(parity)
-      : "memory");
+  asm volatile("mbarrier.arrive.shared::cluster.b64 _, [%0];" ::"r"(r) : "memory");
 }
 template <int R> DEV void regs_dec() { asm volatile("setmaxnreg.dec.sync.aligned.u32 %0;" ::"n"(R)); }
 template <int R> DEV void regs_inc() { asm volatile("setmaxnreg.inc.sync.aligned.u32 %0;" ::"n"(R)); }
@@ -167,13 +164,6 @@ DEV void load_stage(const Params& p, uint32_t base, uint32_t bars, int s, int tm
     tma_load(bdst, &p.b, full, kb * BK, brow);
   else
     tma_load_mc(bdst, &p.b, full, kb * BK, brow, 0x3);
-}
-
-template <int CL> DEV void wait_empty(uint32_t bar, uint32_t parity) {
-  if constexpr (CL == 1)
-    mbar_wait(bar, parity);
-  else
-    mbar_wait_cluster(bar, parity);
 }
 
 // a 64 x 256 accumulator of warpgroup wg into O: rows r and r + 8, each pair of adjacent columns one 8-byte store
@@ -262,7 +252,7 @@ template <int NWG, int PROD, int CL, int LAG = 0> DEV void body(const Params& p)
           int tm, tn;
           raster(t, rows_u, tiles_n, p.group, tm, tn);
           for (int kb = 0; kb < KB; kb++) {
-            wait_empty<CL>(bars + 8 * (STAGES + s), ph ^ 1);
+            mbar_wait(bars + 8 * (STAGES + s), ph ^ 1);
             load_stage<T, CL>(p, base, bars, s, tm * CL + rank, tn, kb, rank);
             if (++s == STAGES) { s = 0; ph ^= 1; }
           }
@@ -270,7 +260,7 @@ template <int NWG, int PROD, int CL, int LAG = 0> DEV void body(const Params& p)
         // the peer's consumers arrive on this CTA's barriers: it stays until every stage it loaded is released by both
         if constexpr (CL == 2)
           for (int i = 0; i < STAGES; i++) {
-            mbar_wait_cluster(bars + 8 * (STAGES + s), ph ^ 1);
+            mbar_wait(bars + 8 * (STAGES + s), ph ^ 1);
             if (++s == STAGES) { s = 0; ph ^= 1; }
           }
       }
@@ -285,7 +275,7 @@ template <int NWG, int PROD, int CL, int LAG = 0> DEV void body(const Params& p)
   auto refill = [&]() {
     if (tid != 0 || lu >= units) return;
     if (lkb == 0) raster(lu, rows_u, tiles_n, p.group, ltm, ltn);
-    wait_empty<CL>(bars + 8 * (STAGES + ls), lph ^ 1);
+    mbar_wait(bars + 8 * (STAGES + ls), lph ^ 1);
     load_stage<T, CL>(p, base, bars, ls, ltm * CL + rank, ltn, lkb, rank);
     if (++ls == STAGES) { ls = 0; lph ^= 1; }
     if (++lkb == KB) { lkb = 0; lu += step_u; }

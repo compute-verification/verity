@@ -38,7 +38,7 @@ OUT=DIR bash benchmarks/torch_gpu/u2_gemm/run.sh --arms lt,ws_m2,ci3_m2,ci2_m2+h
 
 Arms:
 
-- `lt`: cuBLASLt, as `torch._int_mm` runs it.
+- `lt`, `ltn`: cuBLASLt, as `torch._int_mm(A, W.t())` runs it, on W's transposed view or on a copy of W stored K x N.
 - A kernel's arm (`ws_m1`, `ci3l_m2`, ...): that kernel alone.
 - `ARM+h1` or `ARM+h2`: that kernel with 1 or 2 `hash_k` CTAs an SM beside it, launched once its first call's CTAs are
   resident.

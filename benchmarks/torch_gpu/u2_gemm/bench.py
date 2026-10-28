@@ -195,10 +195,11 @@ class Gemm:
 
 
 class Lt:
-    """cuBLASLt's s8 x s8 -> s32 GEMM, as torch._int_mm(A, W.t()) runs it."""
+    """cuBLASLt's s8 x s8 -> s32 GEMM, as torch._int_mm(A, W.t()) runs it: on W's transposed view (`lt`), or with kn on a
+    copy of W stored K x N (`ltn`)."""
 
-    def __init__(self, a: torch.Tensor, w: torch.Tensor, o: torch.Tensor):
-        self.a, self.wt, self.o = a, w.t(), o
+    def __init__(self, a: torch.Tensor, w: torch.Tensor, o: torch.Tensor, kn: bool = False):
+        self.a, self.wt, self.o = a, w.t().contiguous() if kn else w.t(), o
         self.macs = a.shape[0] * w.shape[0] * a.shape[1]
         try:
             torch._int_mm(self.a, self.wt, out=self.o)
@@ -443,7 +444,8 @@ def main() -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--cubin", type=Path, default=Path(os.environ.get("U2_GEMM_CUBIN", Path(__file__).parent / "build" / "u2_gemm.cubin")))
     ap.add_argument("--arms", default="lt,ws_m1,ws_m2,ci2_m1,ci2_m2,ci2l_m2,ci3_m1,ci3_m2,ci3l_m1,ci3l_m2,ci1_m2",
-                    help="comma-separated: lt (torch._int_mm) and KERNELS' arms; ARM+h1 / ARM+h2: beside 1 or 2 hash_k CTAs an SM")
+                    help="comma-separated: lt and ltn (torch._int_mm, W transposed or stored K x N) and KERNELS' arms; "
+                         "ARM+h1 / ARM+h2: beside 1 or 2 hash_k CTAs an SM")
     ap.add_argument("--shapes", default="25344x16384x32768", help="MxNxK, comma-separated (M a multiple of 384 fits every arm)")
     ap.add_argument("--ops", default="u2", help="operand classes, comma-separated: " + ", ".join(OPS))
     ap.add_argument("--secs", type=float, default=4.0)
@@ -487,7 +489,7 @@ def main() -> int:
                 arm, _, hs = spec.partition("+")
                 if arm in ops:
                     continue
-                op = Lt(a, w, o) if arm == "lt" else Gemm(lib, arm, a, w, o, args.group)
+                op = Lt(a, w, o, kn=arm == "ltn") if arm in ("lt", "ltn") else Gemm(lib, arm, a, w, o, args.group)
                 o.fill_(POISON)
                 control = bool(torch.equal(o, ref))  # the poisoned buffer itself must fail the gate
                 op.call()
