@@ -609,7 +609,7 @@ def test_a_parts_row_ports_are_the_verifiers_shared_rows(algebra, shape, undrawn
 
     Each verify sets the part's statement up over its whole population before any V* check (about 9 minutes at one core and
     4 GB), and none can reuse another's: each runs the verifier on other files. So they run at once, the next test's beside
-    these (with the salted staging, the five took 49 minutes one after the other, `r20261010-121137-2b46`)."""
+    these (with the salted staging, the five took 49 minutes one after the other)."""
     a = next(p for p in sorted(algebra.iterdir()) if "acc0" in json.loads((p / "registered.json").read_text())["ports"])
     unit = _unit(a)
     with cf.ThreadPoolExecutor(max_workers=3) as ex:
