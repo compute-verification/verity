@@ -132,11 +132,11 @@ def test_the_breakdown_splits_each_period_s_gpu_time_exclusively_and_aligns_the_
     _nsys(tmp_path / "nsys-proto.sqlite", [(0, 2 * ms, "noise_kernel"), (2 * ms, 12 * ms, XMMA), (7 * ms, 22 * ms, "leaf_persist"),
                                            (14 * ms, 18 * ms, "salt_persist"), (24 * ms, 26 * ms, "bits_kernel")])
     _nsys(tmp_path / "nsys-plain.sqlite", [(i * ms, (i + 1) * ms, XMMA) for i in range(10)])
-    smi = ["timestamp, clocks.current.sm [MHz], clocks.current.graphics [MHz], power.draw [W], utilization.gpu [%]"]
+    smi = ["timestamp, clocks.current.sm [MHz], clocks.current.graphics [MHz], utilization.gpu [%]"]
     for i in range(60):
         t = i / 2
-        mhz, w = (1980, 450) if 2 <= t <= 6 else (1300, 690) if 17 <= t <= 20 else (1980, 130)
-        smi.append(f"2026/10/27 12:00:{int(t):02d}.{int(t % 1 * 1000):03d}, {mhz} MHz, {mhz} MHz, {w} W, 100 %")
+        mhz = 1980 if 2 <= t <= 6 else 1300 if 17 <= t <= 20 else 1980
+        smi.append(f"2026/10/27 12:00:{int(t):02d}.{int(t % 1 * 1000):03d}, {mhz} MHz, {mhz} MHz, 100 %")
     (tmp_path / "smi.csv").write_text("\n".join(smi) + "\n")
     b = breakdown.breakdown(tmp_path, profile_steps=2)
     p0, q = b["periods"][0], b["periods"][1]
@@ -149,7 +149,7 @@ def test_the_breakdown_splits_each_period_s_gpu_time_exclusively_and_aligns_the_
     assert math.isclose(g["protocol_by_role"]["coins: the dither bits d_A, d_B"]["exclusive_s"], 3.6 * 2 / 26)
     assert k[XMMA]["role"] == "GEMM" and k["noise_kernel"]["role"].startswith("noise")
     assert p0["pipes"]["tensor"] == "not measured (no Nsight Compute run)" and p0["pipes"]["alu"].startswith("not measured")
-    assert p0["clock"]["smi"]["clocks_gr_mhz"] == 1980 and p0["clock"]["smi"]["power_draw_w"] == 450
+    assert p0["clock"]["smi"]["clocks_gr_mhz"] == 1980 and "power_draw_w" not in p0["clock"]["smi"]
     assert q["clock"]["smi"]["clocks_gr_mhz"] == 1300 and q["clock"]["below_ceiling"] == 1 - 1300 / 2000
     assert math.isclose(q["gpu"]["gemm_s"], 2.9) and q["gpu"]["protocol_s"] == 0
     assert math.isclose(p0["host"]["between_blocks_s"], 0.4) and p0["host"]["outside_the_wall"]["verify_s"] == 5.0

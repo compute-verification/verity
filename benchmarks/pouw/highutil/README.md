@@ -32,7 +32,7 @@ resource for pricing it there (CERT-SHARE, CMP-190); `summary.json` only bounds 
   with `NSYS=1` each arm's kernel timeline (`timeline.py`: GEMM share, busy share, idle gaps), with `NCU=1` each kernel's
   tensor-pipe active share and INT8 MACs from Nsight Compute (`pipes.py`), and `breakdown.py`: each period's GPU time
   split among the GEMM, the protocol's own kernels (leaf hashing, salts, tree levels, coins, noise, form) and idle, the
-  tensor pipe's idle time, the clocks and power, the host's time, and each call's counted work a step.
+  tensor pipe's idle time, the clocks, the host's time, and each call's counted work a step.
   `period.py summary OUT` and `breakdown.py OUT` rebuild both from a run's stored outputs, with no GPU.
 - The prover is `benchmarks/pouw/accel_v31` (V31-GPU, with kernels' sm_90a port and no-fold fast path, #5118 and #5202):
   `period.py` imports its `v31` and `v31lib`, and `hu_lib.cu` includes its `v31.cu`; `run.sh` records their hashes. It
