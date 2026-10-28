@@ -129,7 +129,7 @@ def fa3_splits(qlens: list[int], klens: list[int], *, NH: int, KVH: int, D: int,
     blocks per split = ceil(total m x n blocks x 1.1 x KVH / SMs) in f32 with div.full)."""
     g = NH // KVH
     max_q, max_k = max(qlens), max(klens)
-    BM, BN = FA3.kblock_m_for(D, max_q, g), FA3.kblock_n_for(D, max_q, g)
+    BM, BN = FA3.modelled_tile(D, max_q, g)
     nmb = [-(-(q * g) // BM) for q in qlens]
     nnb = [-(-k // BN) for k in klens]
     if split_cap > 0:

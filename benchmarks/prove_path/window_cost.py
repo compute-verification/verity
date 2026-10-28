@@ -65,13 +65,15 @@ import class_rows as CR  # noqa: E402
 import class_size as CS  # noqa: E402
 
 FIRST, END = "AttnBlockFirst_v1", "AttnHeadEnd_v1"
+#: a first block's families (`class_size.FIRSTS`): v2's body is v1's node for node, so it is priced as v1
+FIRSTS = CS.FIRSTS
 #: a full key block by target: FA3's (sm_90) and FA2's (sm_120)
 BLOCKS = {"h200": "AttnBlock_v4", "sm120": "AttnBlock_v5"}
 #: prefill is exact against the decode-shaped Definitions at this many keys or fewer
 EXACT_KEYS = 128
 #: a shared output row's bytes (`P`): 1 KiB rows
 ROW_BYTES = 1024
-#: a member's units: V3c's cap
+#: a member's units: the window's member cap
 CAP = 64
 #: one port root's entry in `registration.json` (``indent=1``): a port name of about 40 characters, 128 hex of root and of
 #: domain, leaves
@@ -98,6 +100,9 @@ ENGINE = Costs("engine", CR.FRESH_EXTRA + 1, CR.REUSED + 1)
 #: `Int8RowQuant_v2{K}` by K, `GemmCoordinate_v3{K}` by K, `AttnBlock_v9{D=64, NVIS=BN, FIRST=False, BN, CHECK}` by (BN, CHECK)
 S8_COORD = {2048: 271_342, 8192: 1_069_678}
 ROW_QUANT = {2048: 7_727_887, 8192: 30_903_055}
+#: the row quantizers priced by `ROW_QUANT`: `Int8RowQuant_v3{K, R}` is v1's body over x by reference, its Boolean twin
+#: `Int8RowQuant_v4{K, R}` v2's gates
+ROW_QUANTS = ("Int8RowQuant_v1", "Int8RowQuant_v3")
 BF16_COORD = {2048: 1_007_682}
 FA3_FULL = {(128, False): 8_131_559, (128, True): 8_131_622, (192, False): 12_107_687, (192, True): 12_107_750}
 #: `AttnBlock_v9{D=64, NVIS, FIRST=True, BN, CHECK=True}`'s ANDs at NVIS = 1 ... 192, the same at every BN >= NVIS (FA3's first
@@ -130,11 +135,11 @@ def unit_ands(lab: str, target: str = "h200") -> int:
     if target == "h200":
         if fam == "ScaledMmS8_v1":
             return s["N"] * S8_COORD[s["K"]]
-        if fam == "Int8RowQuant_v1":
+        if fam in ROW_QUANTS:
             return ROW_QUANT[s["K"]]
         if fam == "Gemm_v2":
             return s["N"] * BF16_COORD[s["K"]]
-        if fam == FIRST and s["D"] == 64:
+        if fam in FIRSTS and s["D"] == 64:
             return FA3_FIRST[s["NVIS"] - 1]
         if fam == "AttnBlock_v4" and s["D"] == 64 and s["NVIS"] == s["BN"]:
             return FA3_FULL[(s["BN"], s["CHECK"])]
@@ -202,7 +207,8 @@ class Heads:
     """The class circuit's attention as `window_circuit` cuts it: S slots of P positions, H heads a position (over the layers),
     R wired rows a key (its key's and its value's rows as their writers hold them), head dim D, key blocks of BN (`BLOCKS`'
     family ``block``), and the rows of a first block, a full block and a head's end (``first``, ``full``, ``end``: `Unit`s of
-    n = 1, a block's ``wired`` and ``wired_bytes`` those beside its keys' and values', R rows and `kv_bytes` a key)."""
+    n = 1, a block's ``wired`` and ``wired_bytes`` those beside its keys' and values', R rows and `kv_bytes` a key). A first
+    block is of family ``first_family`` (`FIRSTS`), its values slices of ``VS`` columns where that is v2."""
     S: int
     P: int
     H: int
@@ -213,6 +219,8 @@ class Heads:
     first: Unit
     full: Unit
     end: Unit
+    first_family: str = FIRST
+    VS: int | None = None
 
     def blocks_at(self, T: int, BN: int) -> tuple[int, int]:
         """(key blocks, the first visited block's keys) of a head over T keys."""
@@ -220,7 +228,7 @@ class Heads:
         return nb, T - (nb - 1) * BN
 
     def first_label(self, nvis: int, BN: int) -> str:
-        return f"{FIRST}{{D={self.D},NVIS={nvis},BN={BN}}}"
+        return f"{self.first_family}{{D={self.D},NVIS={nvis},BN={BN}" + ("}" if self.VS is None else f",VS={self.VS}}}")
 
     def full_label(self, BN: int) -> str:
         """A full block's label, priced at CHECK=false's ANDs wherever the census has CHECK=true (63 ANDs more on the H200)."""
@@ -268,9 +276,10 @@ def split(units: list[Unit], cls: dict, target: str = "h200") -> tuple[list[Unit
     `Heads.units` at the census's BN is exactly the census's attention, each unit's rows and bytes with its count: its first
     blocks, full blocks and head ends, its rows a key read off its first blocks of the two fewest keys."""
     S, P, block = cls["slots"], cls["positions"], BLOCKS[target]
-    firsts = [u for u in units if u.label.startswith(FIRST + "{")]
+    firsts = [u for u in units if u.label.split("{")[0] in FIRSTS]
     ss = [CS.statics(u.label)[1] for u in firsts]
     D, BN = _one([s["D"] for s in ss], "D"), _one([s["BN"] for s in ss], "BN")
+    fam, VS = _one([u.label.split("{")[0] for u in firsts], "family"), _one([s.get("VS") for s in ss], "VS")
     (end,) = [u for u in units if u.label.startswith(END + "{")]
     fulls = [u for u in units if u.label.split("{")[0] in BLOCKS.values()]
     if any(u.label.split("{")[0] != block for u in fulls):
@@ -285,7 +294,7 @@ def split(units: list[Unit], cls: dict, target: str = "h200") -> tuple[list[Unit
     f0 = replace(by_keys[a], label="", n=1, wired=by_keys[a].wired - R * a, wired_bytes=by_keys[a].wired_bytes - kv * a)
     full = (replace(fulls[0], label="", n=1, wired=fulls[0].wired - R * BN, wired_bytes=fulls[0].wired_bytes - kv * BN)
             if fulls else replace(f0, wired=f0.wired + f0.out, wired_bytes=f0.wired_bytes + f0.out_bytes))
-    heads = Heads(S, P, H, R, D, BN, block, f0, full, replace(end, n=1))
+    heads = Heads(S, P, H, R, D, BN, block, f0, full, replace(end, n=1), fam, VS)
 
     def shape(u: Unit) -> tuple:
         return (u.wired, u.registered, u.other, u.out, u.out_bytes, u.x, u.wired_bytes, u.registered_bytes, u.other_bytes)
@@ -440,7 +449,7 @@ def served_ands(rest: list[Unit], heads: Heads, levers: frozenset[str], target: 
 
 def pad_pass(heads: Heads, traffic: Traffic, levers: frozenset[str], base_ands: float, step_s: float, target: str) -> dict:
     """The positions whose values the engine never computed, recomputed as batched decode steps over every slot at once, a
-    slot's run from its first such position (V3c's model: its continuation): an empty slot's every position and a request's
+    slot's run from its first such position (the class's model: its continuation): an empty slot's every position and a request's
     positions past its end, unless ``L2``; without ``L1``, from `EXACT_KEYS` on in a slot whose prompt passes it (its later
     positions read its inexact keys). Its positions, steps, seconds and ANDs (``base_ands`` a position and its heads')."""
     BN = EXACT_KEYS if "L1" in levers else heads.BN
@@ -505,20 +514,27 @@ def _slot_definition(lab: str, cls: WindowClass) -> object:
     fam, s = CS.statics(lab)
     if fam == CS.SCAN:
         return SS.bridge(cls.scan, cls.prompt)
-    make = {CS.FEED: IO.TokenFeed, CS.COLLECT: IO.OutCollect, CS.ENTRY: IO.SlotEntry}[fam]
+    make = {CS.FEED: IO.TokenFeed, CS.COLLECT: IO.SelectCollect, CS.ENTRY: IO.SelectEntry}[fam]
     return bind(make, **s, **({"STOP": ()} if fam == CS.ENTRY else {}))
 
 
-def _slot_unit(u: Unit, lab: str, at: WindowClass, cls: WindowClass) -> Unit:
+def _slot_unit(u: Unit, lab: str, at: WindowClass, cls: WindowClass, groups: int | None) -> Unit:
     """The probe's slot template ``u`` (at class ``at``) as ``lab`` at class ``cls``: its Definition's rows there (as
-    class_rows counts them, uncut), read through ``u``'s one kind of row; refused unless ``u`` is its Definition's at ``at``."""
+    class_rows counts them: a select's bests and indices a row a group unit of ``groups`` logits, the census's
+    `TokenSelectGroups_v1`, every other port uncut), read through ``u``'s one kind of row; refused unless ``u`` is its
+    Definition's at ``at``."""
     kind = [k for k in ("wired", "registered", "other") if getattr(u, k)]
     if len(kind) != 1:
         raise ValueError(f"the probe's {u.label} reads its rows through {len(kind)} kinds of row, not one")
 
     def rows(lab: str, c: WindowClass) -> Unit:
         fn = _slot_definition(lab, c)
-        ins, outs = IF.unit_rows(fn, None)
+        cut = None
+        if "V" in fn.bindings:
+            if groups is None:
+                raise ValueError(f"the probe's {u.label} selects over group units the census has none of")
+            cut = {"best": fn.bindings["V"] // groups, "idx": fn.bindings["V"] // groups}
+        ins, outs = IF.unit_rows(fn, cut)
         ob = [2 * w for _, w in IF.layout(fn).outs]
         return replace(u, label=lab, out=len(outs), out_bytes=sum(ob), x=sum(CR.blocks(128 + b) for b in ob),
                        **{kind[0]: len(ins), f"{kind[0]}_bytes": sum(bits // 8 for _, _, bits, _ in ins)})
@@ -539,11 +555,14 @@ def project(census: dict, slots: int, prompt: int, outputs: int, target: str = "
         raise ValueError(f"a probe of {c0['slots']} Programs: project one")
     rest, heads = split(units_of(census), c0, target)
     at, to = WindowClass(1, c0["prompt"], c0["outputs"]), WindowClass(slots, prompt, outputs, lanes, every)
+    groups = {CS.statics(u.label)[1]["C"] for u in rest if u.label.startswith("TokenSelectGroups_v1{")}
+    if len(groups) > 1:
+        raise ValueError(f"the probe's token selects are group units of {sorted(groups)} logits, not one count")
     out = []
     for u in rest:
         lab, n = CS.projected(u.label, u.n, at, to)
         if CS.placed(u.label, 1, at.positions) is not None:
-            u = _slot_unit(u, lab, at, to)
+            u = _slot_unit(u, lab, at, to, next(iter(groups), None))
         out.append(replace(u, label=lab, n=slots * n))
     cls = {"slots": slots, "prompt": prompt, "outputs": outputs, "positions": to.positions}
     return out, replace(heads, S=slots, P=to.positions), cls
@@ -716,7 +735,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("census", help="class_rows.py --out's JSON")
     ap.add_argument("--target", choices=("h200", "sm120"), default="h200")
-    ap.add_argument("--served-s", type=float, default=1.7, help="the served window's seconds (V3c's estimate: 4 prefill and 63 "
+    ap.add_argument("--served-s", type=float, default=1.7, help="the served window's seconds (an estimate: 4 prefill and 63 "
                     "decode steps)")
     ap.add_argument("--step-ms", type=float, default=23.0, help="a batch decode step's ms (a dry run's)")
     ap.add_argument("--project", default=None, metavar="SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]",
