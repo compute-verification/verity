@@ -24,6 +24,7 @@ import subprocess
 import sys
 import tarfile
 from datetime import UTC, datetime
+from fractions import Fraction
 from pathlib import Path
 
 import jsonschema
@@ -166,6 +167,35 @@ def test_sampled_proofs_alone_composes_to_a_pending_block_record(tmp_path):
     assert line["elsewhere"] == {} and "unserved" not in line
 
 
+def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and_where_its_quantity_is_not_established(
+        tmp_path):
+    """PoUS's answer in the shape its served piece writes: weights reloaded on the card after the window's serve, 64.9% of
+    the checkpoint, at ε = 1/100 + 2^-128, which the block record establishes at neither of its δs. Its accept's clause in
+    the composed reason says each, and the ``RECORD`` line carries that reason."""
+    eps = Fraction(1, 100) + Fraction(1, 2 ** 128)
+    held = "loaded from the served snapshot on the card the window served on, after its serve ended"
+    (d := tmp_path / "pous").mkdir()
+    (d / "answer.json").write_text(json.dumps({
+        "protocol": "verity/pous/p2/v4/run", "verdict": "accept", "reason": None, "commitment": "ef" * 64,
+        "public": {"certified": True, "eps": str(eps), "s_bits": 8169621180},
+        "profile": {"weights": {"held": held, "share": "237568/366225", "covers": "linears"},
+                    "outside": {"bytes": {"the embedding and the head": 525336576, "the norms": 135168,
+                                          "the per-row scales": 1507328}}}}))
+    (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
+    rows = _rows(_accepted(), tmp_path)
+    report, rec, line = S.record(rows, window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
+                                 servers={k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]})
+    assert rec["legs"]["pous"]["at"] == {d: {"holds": False, "why": f"the run established it except with {eps}, more than {d}"}
+                                         for d in ("1/100", "1/1000000")}
+    clause = line["reason"].split("; PoUS: ", 1)[1]
+    assert clause.startswith(f"accept (its weights {held}, not concurrently with the block; they are 64.9% of the "
+                             "checkpoint (linears); the embedding and the head, the norms, the per-row scales are outside "
+                             "its claim; its quantity is not established at δ = 1/100 or 1/1000000: the run established "
+                             "it except with 1/100 + 2^-128)")
+    assert line["reason"] == report["composed"]["reason"] == rec["composed"]["onsite"]["reason"]
+    assert line["reason"].startswith("sampled proofs: accept; ")
+
+
 def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp_path):
     row = S.sampled_proofs_row(tmp_path)
     assert row["verdict"] == "error" and "no summary" in row["reason"]
@@ -287,7 +317,10 @@ def test_the_record_accepts_only_when_every_subprotocol_accepts_on_its_node_and_
     if case == "accept":
         assert (line["composed"], line["record_missing"], line["missing"], line["elsewhere"]) == ("accept", [], {}, {})
         assert rec["composed"]["legs"] == {k: "accept" for k in BR.LEGS}
-        assert rec["composed"]["onsite"]["reason"] == "; ".join(f"{n}: accept" for n in S.NAMES.values())
+        late = {"the network certifier": " (its quantity is not established at δ = 1/1000000: the run established it "
+                                         "except with 1/100)"}
+        assert rec["composed"]["onsite"]["reason"] == line["reason"] == "; ".join(
+            f"{n}: accept{late.get(n, '')}" for n in S.NAMES.values())
         return
     assert line["composed"] == "pending" and line["record_missing"] == [leg]
     if case == "missing":
