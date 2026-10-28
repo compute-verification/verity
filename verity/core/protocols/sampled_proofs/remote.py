@@ -1,8 +1,8 @@
 """The proof service's challenger as a service on its own host, and its client: `LiveChallenger` over one TCP stream.
 
 The challenger is auditor-trusted (`trusted-host`): it runs on a machine the prover doesn't control, and the
-prover's process reaches it over the stream at its own 127.0.0.1:PORT.  For a session of the auditor host,
-vy-challenger-1, that port is one of the prover machine's certifier coin link (`benchmarks/live_challenger/auditor.py`,
+prover's process reaches it over the stream at its own 127.0.0.1:PORT.  For a session on the auditor host, that port is
+one of the prover machine's certifier coin link (`benchmarks/live_challenger/auditor.py`,
 the coins' path; the premises `CoinsConfidential` and `OneClock` are this package's README's); in development
 (`benchmarks/live_challenger/run.sh`) it is `ssh -R PORT` to the prover's machine, as `benchmarks/remote_session` places
 its verifier.  On its host, before the stream opens, `open_session` signs the challenger's record and writes it, the key
@@ -24,10 +24,9 @@ a coin other than its family's next (coin i after the family's i-th root, once: 
 bytes; a refusal or a broken stream ends the session, and no coin opens twice (a retry never redraws).  It appends each
 release to `releases.jsonl` (`LiveRecord.log`'s two events, a line each in canonical JSON, integer nanoseconds on its
 monotonic clock), fsynced, before the opening leaves its host, and answers the client's close only once its signed close
-is written.  A session served with a `secret` (the auditor host's gate gives one to the window's opener, RT4-INT-29)
-refuses a hello that doesn't carry it, so no other process that reaches the port takes the session's coins first.
-`greet` reads the hello alone, so a server can refuse a bad one and take the next connection: a refused hello releases
-nothing.
+is written.  A session served with a `secret` (the auditor host's gate gives one to the window's opener) refuses a hello
+that doesn't carry it, so no other process that reaches the port takes the session's coins first.  `greet` reads the
+hello alone, so a server can refuse a bad one and take the next connection: a refused hello releases nothing.
 
 `RemoteChallenger` is the client's `LiveChallenger`, its `commitment`, `open(label, index, after)` and `open_many`, so
 `LiveRecord` (and a client's seam over it) runs on it unchanged.  `open_many` asks for several coins in one round trip:
@@ -472,11 +471,9 @@ def ledger_lines(path: str | os.PathLike) -> list[str]:
 def main_lines(path: str | os.PathLike) -> list[str]:
     """The verifier's copy of main's first-parent history at `path`, one commit a line, newest first, without their
     newlines; a missing or unreadable file raises `CoinError`.  The auditor host's operator writes the file at each
-    re-pin from
-    ``git rev-list --first-parent origin/main`` (vy-auditor-1 reads it from /opt/vy-verifier/main-first-parent.txt), so
-    the line is main's first-parent commits.  A deployment that wants `pouw.credit`'s freshness floor measured against the
-    checked train heads instead (the commits whose own ``check`` passed and landed them, less a reverted train's) writes
-    ``research queue checked-heads --out`` to the same file (`merge.main_line`)."""
+    re-pin from ``git rev-list --first-parent origin/main``, so its lines are main's first-parent commits.  A deployment
+    that measures `pouw.credit`'s freshness floor against the checked heads instead (the commits whose own ``check``
+    passed and landed them, less a reverted one's) writes those heads to the same file."""
     text = _read(Path(path), "copy of main's history")
     if text is None:
         raise CoinError(f"{Ch.NO_MAIN} (none at {path})")
