@@ -89,7 +89,7 @@ judged through the proof system (`sampled_proofs.service`, P1: a `Stream`'s `reg
   failing closed (``certifier``), each through the certifier's client (`RemoteCertifier`: a signed request, a signed
   answer it verifies): the certifier gives p's salt once, within its reveal deadline on its own clock, so its
   parameters carry no ``registration_deadline``.  The window registers once per PoUW window, stream and prover
-  (`salt.Registrations`, ``reregistered``), and its draw coin is a live epoch's ``pouw/draw`` coin 0, checked against
+  (`salt.WindowOpens`, ``reregistered``), and its draw coin is a live epoch's ``pouw/draw`` coin 0, checked against
   the commitment the challenger reads from its challenger's signed record (`challenger.trusted_commitment`), which the
   draw's check of record verifies again, both under the challenger key the window's deployment pins (`Deployment`,
   beside the certifier's key and run id; `Deployment.pinned` reads it from infra's published pin, `CHALLENGER_KEY_PIN`,
@@ -363,7 +363,7 @@ class Deployment:
 def stream_id(params: dict, stream: str, certifier: Mapping[str, str]) -> bytes:
     """A certified window's stream as the PoUW salt binds it (`salt.pouw_salt`), 64 bytes: the tagged SHA-512 of the
     deployment, the stream's challenger name and the certifier's run (`certifier_run`), so one stream behind two
-    certifier links, or two runs of one, is two streams, and the once-only ledger (`salt.Registrations`), keyed on it,
+    certifier links, or two runs of one, is two streams, and the once-only ledger (`salt.WindowOpens`), keyed on it,
     is keyed on the certifier run. `Stream.digest` can't be the one bound: its Spec reads the window's context, which
     names the pass's manifest and so its salt, and the registered level, which the traffic fixes."""
     return tagged_sha512(STREAM_ID, canonical_json({"certifier": dict(certifier), "challenger": f"{CHALLENGER}/{stream}",
@@ -852,7 +852,7 @@ class Challenger:
     certifier's key and run id, which `certifier` must be the client for, and its challenger's key, under which the
     challenger reads its trusted commitment itself (`challenger.trusted_commitment`).  Every opening is checked against
     it, and the draw's check of record verifies the record again under the key the deployment pins, not the one the
-    record's coins name (``coin-key``).  `registrations` is the deployment's `salt.Registrations`,
+    record's coins name (``coin-key``).  `opens` is the deployment's `salt.WindowOpens`,
     shared by its challengers.  Each registered window's salt, the one its pass was checked against, is held
     (`salts`), and `check` opens its drawn units under it."""
 
@@ -860,7 +860,7 @@ class Challenger:
                  clock: Callable[[], float] | None = None, record: OR.Record | None = None,
                  predates_deadline: bool = False, certifier: Any = None, prover: bytes | None = None,
                  coin_record: str | os.PathLike | None = None, deployment: Deployment | None = None,
-                 registrations: PS.Registrations | None = None) -> None:
+                 opens: PS.WindowOpens | None = None) -> None:
         self.trusted: Ch.LiveCommitment | None = None
         self.signed: dict | None = None
         self.deployment: Deployment | None = None
@@ -891,7 +891,7 @@ class Challenger:
                              "without one")
         self.predates_deadline = predates_deadline
         self.certifier, self.prover = certifier, prover
-        self.registrations = PS.Registrations() if registrations is None else registrations
+        self.opens = PS.WindowOpens() if opens is None else opens
         self.salts: dict[str, bytes] = {}
         self.params, self.coins, self.sampler, self.budget = params, coins, sampler, budget
         self.record = OR.Record() if record is None else record
@@ -1092,8 +1092,8 @@ class Challenger:
         salt = CC.certified_salt(manifest, self.params["context"], reveal, committed, sid, self.prover)
         self._distinct(name, manifest)
         try:
-            self.registrations.admit(p, sid, self.prover, reg.digest)
-        except PS.Reregistered as e:
+            self.opens.admit(p, sid, self.prover, reg.digest)
+        except PS.Reopened as e:
             raise _refused("reregistered", str(e)) from None
         self.regs[name] = (st, reg)
         self.recorded[name] = False
