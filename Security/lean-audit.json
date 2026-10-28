@@ -878,6 +878,10 @@
    "owner": "@proofs",
    "digest": "87e26bc2f159fcfce66f129803f44e25fe5ec95bfe6dd950af54960ba43b28ad"
   },
+  "Flock.Bridge.Assumptions.ServedFilesParse": {
+   "owner": "@proofs",
+   "digest": "41b2e521e39445d071b2052497911f670be1e9b71dd1a33f63e100751d807615"
+  },
   "Flock.Bridge.RootFixesDomainL": {
    "owner": "@proofs",
    "digest": "4179b593d8cf637861117774e87e259638f7a715249ab6ceb8e20ce826d44e7d"
@@ -6254,6 +6258,12 @@
    "signature": ["Flock.SecurityProofs.RecursiveZK : Flock.Guarantees.RecursiveZK"],
    "assumptions": [],
    "type_hash": "444c06834fcb5e3f93c0a11fe5912b8345f27f03f6e8b816b86488ca566ed779"
+  },
+  "Flock.SecurityProofs.SampledKSLiveHonest": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.SampledKSLiveHonest : Flock.Guarantees.SampledKSLiveHonest"],
+   "assumptions": [],
+   "type_hash": "fdf9776391fc68898ff4a46a061525b81c502e54db3384f10cb2287de0633554"
   },
   "Flock.SecurityProofs.SampledKSLivePub": {
    "owner": "@proofs",
@@ -12958,7 +12968,8 @@
    "Pouw.SecurityProofs.OnsiteFreed": "frozen (verdict): a probability statement over quantified work and certifier verdicts whose soundness is the premises RemoteWorkFloor and CertifiedImport, not a property of one function; it gets the shape when the onsite protocol's verdict is a named Lean function the event reads.",
    "Pouw.SecurityProofs.OnsiteFreed_honest": "completeness: OnsiteFreed's honest witness: every premise, RemoteWorkFloor from WorkSound's conclusion, OutsourceWithinEgressPeriod from the per-program premise and CertifiedImport from ImportWithinCertifier among them, holds at the toy instance (Definitions.Pouw.Witness), the bound is below 1, and the onsite verdict accepts the honest prover, which exchanges nothing, so OnsiteFreed is not vacuous.",
    "Pouw.SecurityProofs.OnsiteFreed_nontrivial": "lemma: OnsiteFreed's nontrivial witness, in the Lean check's three-part form: at the toy instance with a work check that accepts everything, every premise of OnsiteFreed but RemoteWorkFloor holds, RemoteWorkFloor fails (the quiet prover exchanges nothing, is accepted and spends 0 < F) and the conclusion fails; a counterexample about no protocol function.",
-   "Pouw.SecurityProofs.outsourcePeriod_of_perProgram": "lemma: the per-program OutsourceWithinEgress implies its period form OutsourceWithinEgressPeriod, one premise's form from another's, about no protocol function's acceptance."
+   "Pouw.SecurityProofs.outsourcePeriod_of_perProgram": "lemma: the per-program OutsourceWithinEgress implies its period form OutsourceWithinEgressPeriod, one premise's form from another's, about no protocol function's acceptance.",
+   "Flock.SecurityProofs.SampledKSLiveHonest": "frozen (no-function): the honest witness of SampledKSLiveV2, SampledKSLiveV3 and SampledKSLivePub, not a run of a Lean function: from one named premise, ServedFilesParse (that the one-stage audit's --zk session files of art:31c671f6's honest case, pinned by SHA-512, parse to a descriptor in scopeOkH whose public file loads with no shared-row tables, as run r20261027-042157-5c54 evaluated beside verify --zk accepting that session), every hypothesis those statements take of the files holds there (Built, TagsOkZHJ, untyped tags, the parse, the public file, scopeOkH); it reads SampledKSLiveHonest (Security/Proofs/Flock/Bridge/Honest.lean), so the lock records its text."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -32579,6 +32590,7 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveZK",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -32704,6 +32716,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -32908,6 +32921,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -33075,6 +33089,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -33111,7 +33126,7 @@
    ]
   },
   "Flock.CoinTree": {
-   "digest": "7f002fc03b0082d27db93f3293c2a7eccf189c43550cc7c509a4cf232c54d532",
+   "digest": "30d64385fa094ec0e03fd3690b18ace8a3af744f8beadf31b47418079e5806dc",
    "definitions": {
     "Flock.CoinTree.SCHEME": "235501eb763963d2826e45654e8f92bf08febcec1687aff89b32b79686a6bcdc",
     "Flock.CoinTree.Spec": "a60170c2f600c552a9b10cfc7420b12d6987c9ba37f9ae9157a41614251439cb",
@@ -33128,7 +33143,8 @@
     "Flock.CoinTree.checkRecord._sparseCasesOn_1": "d07efa30813105428097a3df2a1766dc3f26299bc8638701b13473e988c37328",
     "Flock.CoinTree.instBEqSpec": "e0ebf612fbb304038e72f8fe81af101b01496cd78179a72ad229dab55effae31",
     "Flock.CoinTree.instBEqSpec.beq": "c15389e906fd59c9a2993630761f8770e15022333e1f37f1ec046a1b61580400",
-    "Flock.CoinTree.isHex": "406291475f855f1cab1efe838a5095a30eaec25d9eb2dd981162f4807a8d0081"
+    "Flock.CoinTree.isHex": "406291475f855f1cab1efe838a5095a30eaec25d9eb2dd981162f4807a8d0081",
+    "Flock.CoinTree.ofHello": "a145ee007c12826ee60aca145efa20c71dc9439960cbb439e48cf12ffb7fa6da"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock",
@@ -33200,6 +33216,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -33337,6 +33354,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -33448,6 +33466,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -33633,6 +33652,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -33785,6 +33805,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -33851,6 +33872,7 @@
     "Flock.SecurityProofs.JointStratifiedHorizon",
     "Flock.SecurityProofs.JointStratifiedHorizonMT",
     "Flock.SecurityProofs.JointStratifiedMT",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -34306,6 +34328,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -34622,6 +34645,7 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveZK",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -34777,6 +34801,7 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveZK",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -34989,6 +35014,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -35267,6 +35293,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -35531,6 +35558,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -35649,6 +35677,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -35806,6 +35835,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -35939,6 +35969,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -36231,6 +36262,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -36363,6 +36395,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -36595,6 +36628,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -36895,6 +36929,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -37399,6 +37434,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -37434,7 +37470,7 @@
    ]
   },
   "Flock.ProvedScope": {
-   "digest": "917ad2a9c3d5dc8dbace40caaa6644c48fa4c17ab86234cafbccbc223fdc4fdf",
+   "digest": "24f18015e61bce5c3433130684e3e019b446ac9448a2d2fc6d82d4a9b40fc0e1",
    "definitions": {
     "Flock.ProvedScope.NO_PROGRAM": "c1e8296485c16b9065ec7619c59042d2c85b28a452c8a0fc69bb424a18799cd8",
     "Flock.ProvedScope.bitRows": "dc20bcb262eb035ca8081ca0137f92d04992b583a856c067e408f42845a459f0",
@@ -37464,6 +37500,7 @@
     "Flock.ProvedScope.publicOf": "1cf3af4729961209d3a2cdfe2a31f3ff7351b6b5c7d6380bc22d521c590ad6da",
     "Flock.ProvedScope.refusal": "825013eb2e7fcf7cf668deb72b0a838e2af81bbac7061848510c14e2a42ac571",
     "Flock.ProvedScope.scopeOk": "eb7436b3a4d9fccbfa5fc528f8a9d1f2f320f5b20afd5f81b920f71a6eb3c51c",
+    "Flock.ProvedScope.scopeOkH": "318d23b0bc53a7169e9218a78b16323fb5415e33f63a941d2d1c7d36cd75bf95",
     "Flock.ProvedScope.scopeOkI": "45924f746076eabf0813ad43bb244b5af5658dd6426f9724d2fd76db2ff71cb5",
     "Flock.ProvedScope.scopeWhy": "8c202ec5473ed423386ec28cc2794ef5d3e1c896819b2f22924604227077d3b6",
     "Flock.ProvedScope.segRow": "33846aadab03ac3d93cfc33f65bf3a02b008237bfb0a6f9cf0b5735a9f9ddc0a",
@@ -37519,6 +37556,7 @@
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
@@ -37624,6 +37662,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -38278,6 +38317,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -38621,6 +38661,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -38767,6 +38808,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -39008,6 +39050,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -39238,6 +39281,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -40063,6 +40107,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -40235,6 +40280,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -40535,6 +40581,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -40840,6 +40887,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -40954,6 +41002,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -41073,6 +41122,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -41336,6 +41386,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -41471,6 +41522,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -41715,6 +41767,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -41999,6 +42052,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -42525,12 +42579,18 @@
    ]
   },
   "Flock.Witness": {
-   "digest": "b8d9b884af865851c2a7492f8242e870f82bc67fa7432112c09ef78e5a2d2ace",
+   "digest": "a8cef0f9705a6805d5b08ada45756c58fa85de3318b28147ca937cf6d92c3afd",
    "definitions": {
+    "Flock.Witness.Inputs": "178be9150b934b9af8a07491a225661dd3a0b878c85ee116e7de181897b3ffeb",
+    "Flock.Witness.Inputs.circuitFile": "df0c373a125b8aa3a9cdcd5004cc47edcf9e4a8d966b60ae70f998eca139b789",
+    "Flock.Witness.Inputs.count": "e6c17a95ae787cdf39ea1c2d801c5cfd0b51a9345d897f6ed281cc190458d803",
+    "Flock.Witness.Inputs.tags": "6fafc9a6767b896f11452c0485f46c9c1f011d445eeb5a8a18df1bb4e07e0a1a",
     "Flock.Witness.fullDraw": "09e2c218b8a558633083468beac02edc3420e8d89b374d2e9ece25d9f0a64d20",
     "Flock.Witness.fullDraw._sparseCasesOn_1": "211344d7ce7c6ad41171bd645aaa71d76954acd1001c78c8a8ec02c5404c8a12",
     "Flock.Witness.recordDraw": "ae2200254ae2e92bf8a82f78c96e75c6d30f08c805b3c1c65de39ec7bb3bccbc",
-    "Flock.Witness.recordDraw._sparseCasesOn_1": "07758fa69b20f588d862a991bcb0acf4015e204f16cfce69da6ee5de03bdb0e2"
+    "Flock.Witness.recordDraw._sparseCasesOn_1": "07758fa69b20f588d862a991bcb0acf4015e204f16cfce69da6ee5de03bdb0e2",
+    "Flock.Witness.zkCoins": "761e46bcb1e3e9ae603b91a89a1eaac627f4b766d8d75187e0f443866e0890bb",
+    "Flock.Witness.zkTags": "cc4bb0ccb0bf52949c8ad6e6faa296983f0b4e2210aaed4746d5dc4e12a131aa"
    },
    "guarantees": [
     "Claims.Witness.Recursion.Complete_meets_deployed",
@@ -42538,6 +42598,7 @@
     "Claims.Witness.Recursion.ZKStop_meets_ready",
     "Flock.Guarantees.recursiveKS_nontrivial",
     "Flock.SecurityProofs.RecursiveKS",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "RecDeploy.HonestHalfFixture.honest_half_fixture",
     "RecDeploy.lamLin2_deployed_ge",
     "RecDeploy.lamLin2_deployed_ge_dep"
@@ -42689,6 +42750,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -43323,6 +43385,13 @@
    },
    "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
   },
+  "Proofs.Flock.Bridge.Assumptions.Served": {
+   "digest": "b09a381f9f9ff31506ad28a9f07a85eacb3385b5ba84aba9f3c8d53e5f191ca5",
+   "definitions": {
+    "Flock.Bridge.Assumptions.ServedFilesParse": "41b2e521e39445d071b2052497911f670be1e9b71dd1a33f63e100751d807615"
+   },
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveHonest"]
+  },
   "Proofs.Flock.Bridge.Canon": {
    "digest": "e17a14fb75a8f6dd35a15365374880f112f1cb5a2eaace7de997ccb3e5093f79",
    "definitions": {
@@ -43389,6 +43458,13 @@
     "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.SampledKSLiveV5"
    ]
+  },
+  "Proofs.Flock.Bridge.Honest": {
+   "digest": "0b798ba5631315260eae644e8baef5564c4225ea63f1b48a210f046e45d85bd8",
+   "definitions": {
+    "Flock.Guarantees.SampledKSLiveHonest": "441d88d32209934ccf332d6ba598fd870a07e73c4ed5ec47a3059af6ba8dd6b1"
+   },
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveHonest"]
   },
   "Proofs.Flock.Bridge.LeafMap": {
    "digest": "4a769c9ece3d5321960045ea8c05052eef5078d326915393193ae57a258df909",
@@ -52264,6 +52340,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -54445,6 +54522,7 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -55116,6 +55194,7 @@
     "Flock.SecurityProofs.RecursiveKS",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -55435,6 +55514,7 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
@@ -57016,6 +57096,7 @@
     "Flock.SecurityProofs.RecursiveAuditC3",
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.SampledKSLiveHonest",
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
