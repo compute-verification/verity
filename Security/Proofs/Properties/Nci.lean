@@ -38,13 +38,13 @@ theorem verdict_iff_wellFormed (j : Json) : (∃ out, evaluate j = .ok out) ↔ 
   constructor
   · rintro ⟨out, h⟩
     obtain ⟨i, P, c, dv, h1, h2, h3, h4, -⟩ := (evaluate_ok j out).1 h
-    obtain ⟨hP, hr⟩ := (decodeProgram_ok _ _).1 h2
+    have hP := (decodeProgram_ok _ _).1 h2
     obtain ⟨ht, hs, ho, he⟩ := (divisionOf_isOk h3 _ _).1 ⟨dv, h4⟩
-    exact ⟨i, P, (parse_ok j i).1 h1, hP, hr, (circuitOf_isOk P).1 ⟨c, h3⟩, ht, hs, ho, he⟩
-  · rintro ⟨i, P, hi, hP, hr, hg, ht, hs, ho, he⟩
+    exact ⟨i, P, (parse_ok j i).1 h1, hP, (circuitOf_isOk P).1 ⟨c, h3⟩, ht, hs, ho, he⟩
+  · rintro ⟨i, P, hi, hP, hg, ht, hs, ho, he⟩
     obtain ⟨c, hc⟩ := (circuitOf_isOk P).2 hg
     obtain ⟨dv, hd⟩ := (divisionOf_isOk hc _ _).2 ⟨ht, hs, ho, he⟩
-    exact ⟨_, (evaluate_ok j _).2 ⟨i, P, c, dv, (parse_ok j i).2 hi, (decodeProgram_ok _ _).2 ⟨hP, hr⟩, hc, hd, rfl⟩⟩
+    exact ⟨_, (evaluate_ok j _).2 ⟨i, P, c, dv, (parse_ok j i).2 hi, (decodeProgram_ok _ _).2 hP, hc, hd, rfl⟩⟩
 
 theorem refusalWith_error (e : String) (m : Option String) :
     (refusalWith e m).getObjVal? "error" = .ok (.str e) := by
@@ -97,7 +97,7 @@ theorem CheckAccepts : Properties.CheckAccepts :=
 theorem Decodes : Properties.Decodes := by
   intro j out h
   obtain ⟨i, P, c, dv, h1, h2, h3, h4, -⟩ := (evaluate_ok j out).1 h
-  refine ⟨i, P, (parse_ok j i).1 h1, ((decodeProgram_ok _ _).1 h2).1, circuitFrom h3, laysOut_circuitFrom h3, ?_,
+  refine ⟨i, P, (parse_ok j i).1 h1, (decodeProgram_ok _ _).1 h2, circuitFrom h3, laysOut_circuitFrom h3, ?_,
     dv.n, exists_partition h3 h4 (laysOut_circuitFrom h3)⟩
   have hmem := (divisionOf_ok h3 h4).2.1
   refine ⟨Finset.univ.filter fun g => g.val ∈ dv.theta, fun g => ?_, fun g hg => ?_⟩
@@ -192,7 +192,7 @@ theorem Reports : Properties.Reports := by
   intro j out hev i P d n U hpar hdec hL hθ hU
   obtain ⟨i', P', c, dv, h1, h2, h3, h4, rfl⟩ := (evaluate_ok j out).1 hev
   obtain rfl := parses_unique ((parse_ok j i').1 h1) hpar
-  replace h2 := ((decodeProgram_ok _ _).1 h2).1
+  replace h2 := (decodeProgram_ok _ _).1 h2
   rw [hdec, Except.ok.injEq] at h2
   subst h2
   have S : Setting P i'.theta i'.owner c dv d n U := ⟨h3, h4, hL, hθ, hU⟩
@@ -236,7 +236,7 @@ theorem Witnesses : Properties.Witnesses := by
   intro j out hev i P d hpar hdec hL hθ hc
   obtain ⟨i', P', c, dv, h1, h2, h3, h4, -⟩ := (evaluate_ok j out).1 hev
   obtain rfl := parses_unique ((parse_ok j i').1 h1) hpar
-  replace h2 := ((decodeProgram_ok _ _).1 h2).1
+  replace h2 := (decodeProgram_ok _ _).1 h2
   rw [hdec, Except.ok.injEq] at h2
   subst h2
   obtain ⟨U, hU⟩ := exists_partition h3 h4 hL
@@ -280,11 +280,11 @@ def noGates (s : String) : Json :=
   Json.mkObj [("program", .str s), ("theta", .arr #[]), ("owner", .arr #[]), ("gamma", toJson (0 : ℕ)),
     ("alpha", .arr #[toJson (0 : ℕ), toJson (1 : ℕ)])]
 
-/-- **A well-formed instance's case holds**: where the decoder decodes `s` to a Program with no gates, and the width
-analysis finds no reference read at another width, `noGates s` is well-formed. -/
-theorem wellFormed_instance {s : String} {P : Prog} (hP : Flock.Program.decode s.toUTF8 = .ok P)
-    (hr : ¬ Reinterprets P) (h0 : gates P = 0) : WellFormed (noGates s) := by
-  refine ⟨⟨s, #[], #[], 0, 0, 1⟩, P, ⟨rfl, rfl, rfl, ⟨_, rfl, rfl⟩, ⟨_, _, rfl, rfl, rfl⟩, Nat.one_pos⟩, hP, hr,
+/-- **A well-formed instance's case holds**: where the decoder decodes `s` to a Program with no gates, `noGates s` is
+well-formed. -/
+theorem wellFormed_instance {s : String} {P : Prog} (hP : Flock.Program.decode s.toUTF8 = .ok P) (h0 : gates P = 0) :
+    WellFormed (noGates s) := by
+  refine ⟨⟨s, #[], #[], 0, 0, 1⟩, P, ⟨rfl, rfl, rfl, ⟨_, rfl, rfl⟩, ⟨_, _, rfl, rfl, rfl⟩, Nat.one_pos⟩, hP,
     fun g hg => absurd hg (by omega), fun t ht => absurd ht (by simp), by simp [h0], fun g hg => absurd hg (by omega), ?_⟩
   rintro ⟨g, u, hg, -⟩
   exact absurd hg (by simp)

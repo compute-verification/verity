@@ -40,6 +40,8 @@ inputs = [
     # the Lean verifier's stratified draw against the one-stage protocol's, and the Lean spec of verity.ml.randomness against
     # its pinned vectors
     "verity/core/protocols/sampled_proofs", "verity/core/primitives/randomness", "verity/ml/randomness/tests",
+    # the Lean decoder's width refusals against the codec, on the NCI difftest's mistyped descriptors
+    "verity/core/protocols/network/nci/lean/scripts",
     # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's
     "verity/core/service/flock/Flock/Zk.lean",
     # test_lean_rec_cap_guards.py builds Flock.Test.RecCap, which the Lean check no longer does; its imports reach it through

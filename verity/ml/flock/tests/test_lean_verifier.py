@@ -742,6 +742,35 @@ def test_qword_over_programs_agrees_with_the_reference(tmp_path):
     assert p.returncode == 0, p.stdout + p.stderr
 
 
+NCI_SCRIPTS = Path(__file__).resolve().parents[3] / "core" / "protocols" / "network" / "nci" / "lean" / "scripts"
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_width_refusals_agree_with_the_codec(tmp_path):
+    """The NCI difftest's 335 descriptors whose references name leaves of other widths than their types give them, and
+    their well-typed neighbours (`desc_difftest_vectors.mistyped`): the Lean decoder, which C-Flock's verifier and
+    `NciCheck` share, refuses as `E_REINTERPRET` exactly those the codec does, with the codec's message (PROTOCOL.md §17.1
+    D22; `qword_program_agree.py --widths`)."""
+    spec = importlib.util.spec_from_file_location("desc_difftest_vectors", NCI_SCRIPTS / "desc_difftest_vectors.py")
+    V = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(V)
+    with open(tmp_path / "widths.jsonl", "w") as f:
+        for inst in V.mistyped():
+            desc = json.loads(inst["program"])
+            try:
+                V.reference.codec.decode_program(desc, V.reference.declared(desc))
+                why = None
+            except ValueError as e:
+                why = str(e)
+            f.write(json.dumps({"program": inst["program"], "codec": why}) + "\n")
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    p = subprocess.run(["python3", str(VERIFIER / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+                        "--out", str(tmp_path / "out"), "--widths", str(tmp_path / "widths.jsonl")],
+                       capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert json.loads(p.stdout.strip().splitlines()[-1])["widths"] == {"both_refuse": 210, "neither": 125}
+
+
 @pytest.mark.skipif(shutil.which("lake") is None or _format_vectors() is None, reason="no Lean toolchain or no Q_call vectors")
 def test_qcall_and_input_bindings_agree_with_the_reference(tmp_path):
     ir = _format_vectors()

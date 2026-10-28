@@ -1,9 +1,10 @@
 """Declarations whose references name leaves of other widths than their types give them (`E_REINTERPRET`,
-`verity/ml/circuits/PROTOCOL.md` §4.4), and their well-typed neighbours, for the NCI difftests.
+`verity/ml/circuits/PROTOCOL.md` §4.4), and their well-typed neighbours, for the NCI difftests and C-Flock's
+(`verity/ml/flock/tests/test_lean_verifier.py`).
 
-The Python codec refuses such a Program as it decodes it (`defs.Builder.finish`), which C-Flock's decoder doesn't look
-for, so `NciCheck` checks it after decoding (`NciCheck.Widths`). The descriptors here are written as JSON, since the
-Builder refuses to build them. `cases()` holds, as `NciCheck.Desc` reads an instance (θ and the owners per root node):
+The Python codec refuses such a Program as it decodes it (`defs.Builder.finish`), and so does C-Flock's decoder, which
+`NciCheck` decodes with (`Flock.Program.Widths`), with the codec's message. The descriptors here are written as JSON, since
+the Builder refuses to build them. `cases()` holds, as `NciCheck.Desc` reads an instance (θ and the owners per root node):
 
 * `shapes()`: the five shapes on which a draft of the liveness test gave `NciCheck` mistyped Programs
   (`swap`, `exit_xs`, `carry_read` with and without `xs`, `xs_part`, each with inputs of 8, 16, 32 and 64 bits a carry or a

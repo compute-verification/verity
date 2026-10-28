@@ -24,7 +24,7 @@ statements their agreement rests on, and the agreement itself. Code: it reads th
 decoder (`Flock.Program`) and imports nothing else but Lean core. It stays experimental until its agreement with the
 definition is proved.
 
-C-Flock's decoder doesn't check that a reference reads a leaf at the width it was committed with, which the
-Python codec refuses as it decodes (`E_REINTERPRET`), so every Program the check reads goes through
-`NciCheck.decodeProgram`, which refuses one that doesn't, with a message.
+C-Flock's decoder refuses a Program with a reference that reads a leaf at another width than it was committed with
+(`E_REINTERPRET`, `Flock.Program.Widths`) as the Python codec does, with the codec's message, which a `program` refusal
+carries (`NciCheck.refusalOf`).
 -/

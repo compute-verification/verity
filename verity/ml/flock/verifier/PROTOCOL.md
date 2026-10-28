@@ -1974,6 +1974,13 @@ expectation):
   (`Flock.RecordText.check_inj`). No vector exercises it: S0 is the Lean verifier's last check, and every set the
   agreement job mutates is refused ahead of it (D12's form refusal, and `NO_PROGRAM` without `--program`), so its
   sessions are compared as accepted. `Flock.Test.RecordText` runs the non-canonical forms on `RecordText.check`.
+- **D22:** the verifier's own program (`--program`) with a reference that names a leaf of another width than its type gives
+  that position (`E_REINTERPRET`, `verity/ml/circuits/PROTOCOL.md` §4.4). Upstream reads no program; the spec's decoder
+  (`Flock.Program.Widths`, which `NciCheck` decodes with too) refuses it at setup as the Python codec does, with the codec's
+  message. Every writer builds its program through `defs.Builder`, which refuses it. No vector exercises it (the corpus's
+  programs, sets 12 and 14 to 16, read every leaf at its width); `qword_program_agree.py --widths` runs NCI's mistyped
+  descriptors and their well-typed neighbours on the Lean decoder against the codec, refusal for refusal and message for
+  message (`verity/ml/flock/tests/test_lean_verifier.py`).
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).
