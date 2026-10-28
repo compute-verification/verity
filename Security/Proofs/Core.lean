@@ -37,6 +37,7 @@ import Proofs.Core.HongKung
 import Proofs.Core.Blocks
 import Proofs.Core.Site
 import Proofs.Core.DeviceFigures
+import Proofs.Core.CapacityWithinEstimate
 
 /-!
 # Proofs of core's guarantees

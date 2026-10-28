@@ -1,6 +1,7 @@
 import Definitions.Core
 import Definitions.Core.Accel
 import Definitions.Core.Assumptions.Accel
+import Definitions.Core.Assumptions.DeviceFigures
 import Definitions.Core.Blocks
 import Definitions.Core.Site
 import Definitions.Core.DeviceFigures
