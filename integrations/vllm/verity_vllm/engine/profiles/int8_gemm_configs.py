@@ -85,15 +85,14 @@ CONFIGS: dict[str, dict[tuple[int, int], list[tuple[int, str]]]] = {
 # `int8_fused.product`'s sm_90a GEMM (`engine.int8_wgmma`) per architecture and (N, K): (m_min, config) rows, the last whose
 # m_min <= M taken (`int8_wgmma.row`); a shape with no row runs CONFIGS' Triton plan.  A config is `int8_wgmma.WgCfg`'s
 # text: kernel, raster group, CTAs.  `benchmarks/hash/exactlin/wgbench.py`'s gated winners against the Triton plan, by MACs a
-# SM clock at a served step's clock (`--rest 1.0`) at M 8,192, 16,384 and 32,768 (r20261028-063549-1b46); below M 8,192 the
-# Triton plan is unmeasured against it.  WGMMA_ARCH is the target `int8_wgmma.cu` is built for (wgmma and setmaxnreg are
-# sm_90a's).
+# SM clock at M 8,192, 16,384 and 32,768 (r20261028-052145-1ccf); below M 8,192 the Triton plan is unmeasured against it.
+# WGMMA_ARCH is the target `int8_wgmma.cu` is built for (wgmma and setmaxnreg are sm_90a's).
 WGMMA_ARCH = "sm_90a"
 WGMMA: dict[str, dict[tuple[int, int], list[tuple[int, str]]]] = {
     "sm_90": {  # H200, Llama-3.2-1B
         (3072, 2048): [(8192, "pp_128x128:g8"), (32768, "ppm2_128x128:g8")],
         (2048, 2048): [(8192, "pp_128x128:g8")],
-        (16384, 2048): [(8192, "pp_128x128:g8")],
-        (2048, 8192): [(8192, "pp_128x128:g8"), (16384, "co_128x256:g8"), (32768, "ppm2_128x128:g8")],
+        (16384, 2048): [(8192, "ppm2_128x128:g8")],
+        (2048, 8192): [(8192, "pp_128x128:g8"), (16384, "ppm2_128x128:g8")],
     },
 }
