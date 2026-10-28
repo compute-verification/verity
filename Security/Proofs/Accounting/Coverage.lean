@@ -4,7 +4,7 @@ import Proofs.Core.Game.Prob
 /-! `Nci.SecurityProofs.CapabilityFloor : Nci.Guarantees.CapabilityFloor`: below `min Lc Tmax`, a computation in `𝒜`
 has no covered structure (each costs at least `Lc`), so its success there is among coverage's uncovered successes below
 `Tmax`. Its witnesses (`CapabilityFloorHonest`, `CapabilityFloorNontrivial`) are proved at the toy task
-`Accounting.Overhead.Toy`. -/
+`Accounting.Slowdown.Toy`. -/
 
 /-- **Covered success below the floor is rare** (`Nci.Guarantees.CapabilityFloor`). -/
 theorem Nci.SecurityProofs.CapabilityFloor : Nci.Guarantees.CapabilityFloor := by
@@ -17,13 +17,13 @@ theorem Nci.SecurityProofs.CapabilityFloor : Nci.Guarantees.CapabilityFloor := b
 /-- **`CapabilityFloor`'s premises hold together** (`Nci.Guarantees.CapabilityFloorHonest`). -/
 theorem Nci.SecurityProofs.CapabilityFloorHonest : Nci.Guarantees.CapabilityFloorHonest := by
   refine ⟨fun C pos => ?_, fun _ _ _ _ => le_rfl⟩
-  simp [Accounting.Overhead.Task.prob, Accounting.Overhead.Task.game, Verity.Game.prob,
-    Accounting.Overhead.Toy.covered]
+  simp [Accounting.Slowdown.Task.prob, Accounting.Slowdown.Task.game, Verity.Game.prob,
+    Accounting.Slowdown.Toy.covered]
 
 /-- **`CapabilityFloor`'s conclusion can fail** (`Nci.Guarantees.CapabilityFloorNontrivial`). -/
 theorem Nci.SecurityProofs.CapabilityFloorNontrivial : Nci.Guarantees.CapabilityFloorNontrivial := by
   unfold Nci.Guarantees.CapabilityFloorNontrivial
-  have hs : Accounting.Overhead.Succeeds Accounting.Overhead.Toy.run Accounting.Overhead.Toy.pos Set.univ :=
+  have hs : Accounting.Slowdown.Succeeds Accounting.Slowdown.Toy.run Accounting.Slowdown.Toy.pos Set.univ :=
     ⟨fun i => i.elim0, Set.mem_univ _, fun i => i.elim0⟩
-  simp [Accounting.Overhead.Task.prob, Accounting.Overhead.Task.game, Verity.Game.prob,
-    Accounting.Overhead.Toy.task, Accounting.Overhead.Toy.comp, Accounting.Overhead.Toy.free, hs]
+  simp [Accounting.Slowdown.Task.prob, Accounting.Slowdown.Task.game, Verity.Game.prob,
+    Accounting.Slowdown.Toy.task, Accounting.Slowdown.Toy.comp, Accounting.Slowdown.Toy.free, hs]
