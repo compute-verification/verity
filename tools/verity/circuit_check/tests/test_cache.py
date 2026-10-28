@@ -1060,8 +1060,9 @@ def test_a_run_of_imports_is_held_by_the_names_it_binds_not_their_order():
 
 def test_each_enumerator_only_imports_what_it_lists():
     """`cache._ENUMERATORS` (and `targets.load_registries`) are held by the modules a package lists rather than by its
-    listing, on a claim about their bodies: each name a ``pkgutil`` listing yields is only compared, imported
-    (``importlib.import_module``) or written into an error."""
+    listing, on a claim about their bodies: each name a ``pkgutil`` listing yields, and each name built from one, is only
+    compared, imported (``importlib.import_module``), written into an error, or queued on a work list (``todo``) whose
+    entries are popped and only imported."""
     import ast
     import importlib
     import inspect
@@ -1078,13 +1079,26 @@ def test_each_enumerator_only_imports_what_it_lists():
         assert loops, (mod, qual)
         for loop in loops:
             allowed: set[int] = set()
+            tracked = {loop.target.id}
             for n in ast.walk(loop):
-                if isinstance(n, ast.Call) and ast.unparse(n.func) in ("importlib.import_module", "errors.append"):
+                if (isinstance(n, ast.Assign) and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name)
+                        and any(isinstance(x, ast.Name) and x.id in tracked for x in ast.walk(n.value))):
+                    tracked.add(n.targets[0].id)
+                    allowed |= {id(x) for x in ast.walk(n.value)}
+            for n in ast.walk(loop):
+                if isinstance(n, ast.Call) and ast.unparse(n.func) in ("importlib.import_module", "errors.append", "todo.append"):
                     allowed |= {id(x) for a in n.args for x in ast.walk(a)}
                 elif isinstance(n, ast.Compare):
                     allowed |= {id(x) for x in ast.walk(n)}
-            uses = [n for s in loop.body for n in ast.walk(s) if isinstance(n, ast.Name) and n.id == loop.target.id]
+            uses = [n for s in loop.body for n in ast.walk(s)
+                    if isinstance(n, ast.Name) and n.id in tracked and isinstance(n.ctx, ast.Load)]
             assert uses and all(id(n) in allowed for n in uses), (mod, qual, ast.unparse(loop))
+        if "todo.append" in ast.unparse(tree):
+            pops = [n for n in ast.walk(tree) if isinstance(n, ast.Assign) and ast.unparse(n.value) == "todo.pop()"]
+            popped = {ast.unparse(t.elts[0] if isinstance(t, ast.Tuple) else t) for p in pops for t in p.targets}
+            imported = {ast.unparse(c.args[0]) for c in ast.walk(tree)
+                        if isinstance(c, ast.Call) and ast.unparse(c.func) == "importlib.import_module"}
+            assert pops and popped <= imported, (mod, qual, popped, imported)
 
 
 def test_the_task_list_is_reused_only_while_nothing_its_build_could_depend_on_changed(tmp_path):
