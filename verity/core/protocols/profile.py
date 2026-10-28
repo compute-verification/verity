@@ -644,5 +644,4 @@ class Work:
 Draw = Bernoulli | Subset | Stratified | Work
 
 
-__all__ = ["HARM_MARGIN", "MARGIN", "Bernoulli", "Draw", "IntegrityProfile", "Stratified", "Stratum", "Subset", "Work",
-           "WorkStratum", "work_k"]
+__all__ = ["HARM_MARGIN", "MARGIN", "Bernoulli", "Draw", "IntegrityProfile", "Stratified", "Stratum", "Subset"]
