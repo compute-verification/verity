@@ -1,8 +1,8 @@
 # dither-2s-licpw-redux-heavy-l32 credited at what the checks read. Its fold is plain LI-CP-W redux, as honest runs it
 # (dc100-licpw-redux-l32: ALU 544, IMAD 512, SHFL 24 a MMA) and PouwWarpCheck recomputes it (PouwLiAbsorb_v2: two half
 # steps a chain a set, no extra keyed round), so ♭ credits none of the heavy design's extra keyed rounds, which no
-# Definition reads (RT-LOGIC-12, RT-HB-HEAD-1). ♭ credits no tcgen05.ld either: honest still runs its 8
-# LDTM.32x32b.x128 a MMA, but the operands-free cheater (decision 89) never pays them. Each lowers the credit, which is
+# Definition reads. ♭ credits no tcgen05.ld either: honest still runs its 8
+# LDTM.32x32b.x128 a MMA, but the operands-free cheater never pays them. Each lowers the credit, which is
 # sound for any program. ♭ is 4.160 SMSP-cycles a 4096-MAC MMA on DC-100-ri, its checkpoint at the fold routes' cheapest
 # mix (4.223 at REDUX; the heavy design's ♭ 7.254), so the skippable work is a larger share of it: core 0.815% on
 # DC-100-ri, 0.698% on DS-100.

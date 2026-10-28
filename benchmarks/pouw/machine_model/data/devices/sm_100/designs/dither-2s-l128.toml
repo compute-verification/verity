@@ -42,7 +42,7 @@ p = 0.75
 checks = 48000
 source = "SPEC §5: Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41"
 
-[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε
 name = "dp4a"
 program = { IMAD = 32 }
 source = "dp4a at 32 IDP4A a word at L = 128, on IMAD's class as sm_120 prices it (no IDP4A kind in EPS1 DC's census); no LDS kind either, so its loads are unpriced"
