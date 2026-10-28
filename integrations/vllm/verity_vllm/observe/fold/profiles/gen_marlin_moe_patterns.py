@@ -43,7 +43,7 @@ from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns import (SCRATCH_INT_FILLS, SiluAndMulWithClamp, as_float, bound_args, find_descendants, is_row_major,
                                                op_name, target_of, triton_name, unsupported, vocab_kind)
 from verity_vllm.observe.fold.resolver import (Compute, Const, Gather, PerRow, Pieces, Resolution, Shared, StepContext, Unsupported, WeightField,
-                                               Witness, scratch_view)
+                                               WitnessParam, scratch_view)
 from verity_vllm.observe.fold.tree import TreeNode
 from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import K_ALIGN_KERNELS, K_SUM, _contig, _flat, _same
 from verity_vllm.observe.fold.profiles.gen_shared_moe_patterns import (K_DYN_MM, SHARED_OP, _weight_root, scope_gate, scope_group, scope_hidden,
@@ -265,7 +265,7 @@ class MoEMarlinSharedExperts:
             return unsupported(node, str(e))
         at = sc.align.id
         out: list[tuple[int, Any]] = [
-            (at, Compute(ranks, 1, (Shared(ids_flat), Witness(SCHEDULE, (req,)), Pieces((tuple(Const(32, p, "i32", shared=True) for p in range(P)),))),
+            (at, Compute(ranks, 1, (Shared(ids_flat), WitnessParam(SCHEDULE, (req,)), Pieces((tuple(Const(32, p, "i32", shared=True) for p in range(P)),))),
                          (Shared(rank), Shared(start)), (at,), hint=f"{hint}/moe_align_block_size/rank", kernels=K_ALIGN_KERNELS, pattern=self.name)),
             (at, Compute(blocks, 1, (Shared(ids_flat), Shared(rank), Shared(start)), (Shared(blk), Shared(par)), (at,),
                          hint=f"{hint}/moe_align_block_size", kernels=K_ALIGN_KERNELS, pattern=self.name))]
