@@ -15,7 +15,7 @@ import pytest
 
 HERE = Path(__file__).resolve().parent
 PUBLIC = HERE / "fixtures" / "bundle-window-public"
-E2E = HERE.parents[2] / "examples" / "h200" / "interfaces" / "tests" / "fixtures"
+E2E = HERE.parents[2] / "demos" / "h200" / "interfaces" / "tests" / "fixtures"
 sys.path.insert(0, str(HERE.parent))
 import prove_bundle as PB  # noqa: E402
 
