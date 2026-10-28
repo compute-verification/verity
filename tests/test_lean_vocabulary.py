@@ -594,12 +594,6 @@ KNOWN: dict[str, str] = {
     # Security/Properties/
     "Security/Properties/Attest.lean::MemoryChallenger.Attest.Properties.Device":
         "homonym, the memory challengers a property ranges over: rename (lean)",
-    "Security/Properties/Challenger.lean::Properties.Challenger.Device":
-        "homonym, the devices the challenger property ranges over: rename (soundness)",
-    "Security/Properties/Challenger.lean::Properties.Challenger.Session":
-        "homonym, the old word for a run, here the challenger property's: rename (soundness)",
-    "Security/Properties/Challenger.lean::Properties.Challenger.Witness":
-        "duplicate of `Verity.TC.Relation.Witness`: becomes it (soundness)",
     "Security/Properties/Pous/MemoryChallenger.lean::MemoryChallenger.Properties.Device":
         "homonym, the memory challengers a property ranges over: rename (lean)",
     "Security/Properties/Pous/WipeSigned.lean::MemoryChallenger.Properties.Challenger":
