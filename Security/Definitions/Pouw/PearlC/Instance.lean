@@ -4,7 +4,7 @@ import Definitions.Pouw.PearlC.PeelExact
 import Definitions.Pouw.PearlC.SaltDead
 
 /-!
-# Pearl-C's named protocol and error (trusted; the cheap-binding lane's file)
+# Pearl-C's named protocol and error (trusted)
 
 `pearlCProtocol sem` is the protocol of the named assumption. Its reference functions are the shared definitions:
 * the noisy quantize (`FormChain.quantA`, `quantB`) and the promoted ticket chain (`ctChain` at `Params.pi.G`), from
@@ -138,7 +138,7 @@ draws and the units gives `ε`, and it needs no independence between them. With 
   normal code. `E′ = 0` is therefore impossible, and the per-row probability is `0 ≤ 2^−128`.
 - Every draw also keeps at least 85% of its nominal `‖E′‖ = σα·√32/16`, so no draw can be recognized from `E′` alone as
   weak. The `2^−128` above is thus a conjecture about draws that all carry their noise.
-- The check is `internal/pouw/cheap-binding/pearlc-noise-loss.py` in the research store. At norm 256 the largest entry
+- The check is `pearlc-noise-loss.py`. At norm 256 the largest entry
   is at least `2^−8`, also nonzero; an earlier `2^−90` for norm 256 wrongly treated the 32 entries as independent. -/
 noncomputable def εPearlC (q N : ℕ) : ℝ := ((q + N : ℕ) : ℝ) / 2 ^ 128
 

@@ -1,0 +1,14 @@
+# The lifecycle example: the onsite and remote composites stepped through registration, operation, close, audit and
+# accounting on a tiny model, run by `verity example lifecycle`. Not a package: its tests run in the workspace environment,
+# and `run.py` puts this directory on its path.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+inputs = [
+    # the deployment runtime, circuits, commitments, LMS, sampled proofs' draw, PoUW's grid and the composition's
+    # reference (verity/core/protocols/composition/tests/reference.py), which the example runs
+    "verity",
+]

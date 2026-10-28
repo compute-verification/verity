@@ -293,7 +293,7 @@ class SingleRow(Row):
         for _, lf, _, _ in extra:
             rc2 = rc_of(lf) if rc_of(lf) != 0 else rc2
         rc2 = rc_x if rc_x != 0 else rc2
-        self.log(f"Build derives ran {jobs_n}-wide (SYS-06): step rc={rc1} request rc={rc2} shapes={len(extra) + 1} wall={int(time.time()) - t0}s")
+        self.log(f"Build derives ran {jobs_n}-wide: step rc={rc1} request rc={rc2} shapes={len(extra) + 1} wall={int(time.time()) - t0}s")
         return rc1, rc2
 
     def derived_dirs(self) -> list[str]:

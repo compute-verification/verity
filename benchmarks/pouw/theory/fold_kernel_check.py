@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
-"""Referee check of FOLD's depth-R binding (note:20261017T0320Z-draft-eps1-fold §8) over the whole word space.
+"""An independent check of the depth-R binding over the whole word space.
 
-FOLD's check (`benchmarks/pouw/edited_gemm/egemm_depthr_check.py`, PR #2215) tests a family of 5n + 2 perturbations of the
+The binding's own check (`benchmarks/pouw/edited_gemm/egemm_depthr_check.py`) tests a family of 5n + 2 perturbations of the
 committed word's four limbs. This one enumerates every one of the 2^(4n) words at width n (`fold_kernel.c`), so it finds
 the whole all-state kernel K_R of the same-word R-fold, R = 1..5, at each key pair it is given.
 
 What it establishes:
-  (1) The one-round kernel K_1 is never trivial: the P/X/N group FOLD §3 names (2^4 elements at S = 2 half-rounds) is in
-      K_R at every key and every R, so §8's criterion "no nonzero change leaves the R-fold fixed" is false as stated.
+  (1) The one-round kernel K_1 is never trivial: the P/X/N group (2^4 elements at S = 2 half-rounds) is in
+      K_R at every key and every R, so the depth-R criterion "no nonzero change leaves the R-fold fixed" is false as stated.
       Shown at 32 bits on the real rotations (13, 19) and key_ok_r11 keys too.
   (2) Whether repetition adds kernel elements: K_R == K_1 at each tested key and R, or the extra elements found.
-  (3) Whether every kernel element respects (G₃) (theorem-E referee IX.2.2, read at width n: each XOR limb's low three
+  (3) Whether every kernel element respects (G₃) (read at width n: each XOR limb's low three
       bits are kept or complemented, each add limb's bit 0 is kept).
 Cross-checks: K_1 at two keys equals exact_kit.search.meet_kernel's meet-in-the-middle answer, and every reported element
 is re-verified in numpy on every state.
@@ -87,7 +87,7 @@ def near_inverse(a0, a1, n):
 
 
 def key_ok_r11(a0, a1, n):
-    """FOLD's reduced key_ok_r11 (egemm_depthr_check.key_ok_r11)."""
+    """The reduced key_ok_r11 (egemm_depthr_check.key_ok_r11)."""
     return bool(a0 & 1 and a1 & 1 and not kj19_bad(a0, n) and not kj19_bad(a1, n) and not near_inverse(a0, a1, n))
 
 
@@ -226,7 +226,7 @@ def main() -> int:
                 r11keys = [k for k in ks if key_ok_r11(*k, n)]
                 size1_r11 = collections.Counter(len(res[k][1]) + 1 for k in r11keys)
                 g3bad_r11 = sum(not g3_ok(word, w2, n) for k in r11keys for r in range(1, rmax + 1) for w2 in res[k][r])
-                checks.check(f"n{n} {label} ({len(ks)} keys, {r11} key_ok_r11): |K_1| = 16 (FOLD §3's P/X/N group, 3S-2 = 4 "
+                checks.check(f"n{n} {label} ({len(ks)} keys, {r11} key_ok_r11): |K_1| = 16 (the P/X/N group, 3S-2 = 4 "
                              "involutions) at every key_ok_r11 key", set(size1_r11) <= {16},
                              f"|K_1| histogram, key_ok_r11 keys {dict(size1_r11)}, all keys {dict(size1)}")
                 odd_extra = sum(extra[r] for r in range(3, rmax + 1, 2))

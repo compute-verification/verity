@@ -25,9 +25,11 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   limit as `L` grows, which the theorems don't state. `subset_exec_escape_le` and `stratified_exec_escape_le` take
   uniform streams as their probability space, the same assumption. The recursive audit's sessions of V* need none of
   it: their law is the full draw, which draws every unit at every byte string (`execOS_subset_full_mem`,
-  `execOS_subset_full_escape`), so `RecursiveSound`, `RecursiveRanRegistered`, `PublicAudit` and `RecursiveAuditC3`
-  are proved from their forms with no A3 premise (`…NoA3`). Those are fork forms and state no bits; the recursion's
-  knowledge form, `Claims.Recursion.KS`, is at its level `Claims.Recursion.lam`, about 65 bits per SHA-512 call at the
+  `execOS_subset_full_escape`), so `RecursiveRanRegistered`, `PublicAudit` and `RecursiveAuditC3` are proved from
+  their forms with no A3 premise (`…NoA3`). `RecursiveSound` is proved the same way but is no longer a guarantee: its
+  form admits a possibilistic break, and the recursion's guarantee is `Flock.Guarantees.RecursiveKS`. Those are fork
+  forms and state no bits; the recursion's knowledge form, `Claims.Recursion.KS`, is at its level
+  `Claims.Recursion.lam`, about 65 bits per SHA-512 call at the
   deployed shape, below the 100-bit floor and the 2^-128 target under every weight. Route 2C's bound λ₂
   (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), but
   `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from a premise still
@@ -69,6 +71,6 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
     (the kernel logs `uninitialized urandom read`). The same nodes report `entropy_avail` 256 of 256: seeded.
   - A `seed-injection` build (the selftest's) expands the prover's values from an injected `ProverSeed` with ChaCha20:
     no record from such a build is evidence for a theorem that takes A3.
-- **Falsification.** No test runs: A3 is an assumption about the world, scoped by platform (8 Oct ruling), and the
+- **Falsification.** No test runs: A3 is an assumption about the world, scoped by platform, and the
   lock's `shape.conjectures`, the one place a falsification test is recorded, holds mathematical conjectures only. What
   checks it is the citation of `io.cpp` and `random.c`, re-read at every toolchain bump and on any platform but Linux.
