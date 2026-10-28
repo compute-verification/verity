@@ -45,7 +45,8 @@ def challengesOf (s : P2.Params) (doc : Json) (k : Nat) : Prop :=
 
 /-- Round `j`'s challenged index in an audit keyed by `source`. -/
 def challenged (s : P2.Params) (salt root source : ByteArray) (j : Nat) : Nat :=
-  (Challenge.index (Randomness.derive source TimedAudit.CHALLENGE_DOMAIN [("root", .bytes root), ("salt", .bytes salt)])
+  (Challenge.index
+    (FlockSoundness.Randomness.derive source TimedAudit.CHALLENGE_DOMAIN [("root", .bytes root), ("salt", .bytes salt)])
     s.blocks j).getD s.blocks
 
 /-- The inner nodes' inputs of `Merkle.mth leaves lo n`: what SHA-512 hashes for the tree beyond the leaves. -/

@@ -10,7 +10,7 @@ digest of every block of `C` (`memory_challenger.block_digest`), in block order:
 each round's `H(block)` against, the table a proof will replace (`answer_circuit.PousAnswerOpens_v1` opens `H(block)`
 against C's leaf).
 
-- **The limit** is `Δ + RTT_ALLOWANCE_CAP_NS` (spec v1.1's 354 µs cap, `Δ + RTT = 854 µs`), fixed before any load.  The
+- **The limit** is `Δ + RTT_ALLOWANCE_CAP_NS` (P2's 354 µs cap, `Δ + RTT = 854 µs`), fixed before any load.  The
   calibration (`--calibrate-only`) still measures the loopback round trip and records whether its p99.9 fits under the cap.
 - **A session** draws a fresh session id (the auditor's designation: here the harness is the auditor) and challenger
   secret and commits its coin tree, every session's before the first round of any; it runs `k` rounds (the certificate's
