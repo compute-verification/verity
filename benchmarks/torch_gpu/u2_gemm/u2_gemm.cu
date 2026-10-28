@@ -11,6 +11,7 @@
 //                    stage before it is released, so the CTA holds 128 NWG threads (ci1, ci2: at most 168 registers each,
 //                    which leaves an SM's registers for a 256-thread CTA of hash_k beside it; ci3 a 192 x 256 tile, the whole
 //                    register file)
+//   u2mm_ci<NWG>l_m<CL> the same with each refill one stage behind the release (LAG 1)
 // M must be a multiple of 64 NWG CL, N of 256 and K of 128 (bench.py checks): the filler picks its shape.  The epilogue
 // stores each accumulator pair as one 8-byte word.
 //
@@ -225,10 +226,13 @@ DEV void mainloop(int32_t* d, uint32_t base, uint32_t bars, int KB, int wg, int 
   if constexpr (ISSUE) refill();
 }
 
-template <int NWG, int PROD, int CL> DEV void body(const Params& p) {
+// LAG (consumer-issued only): the prologue loads STAGES - LAG stages, so each refill waits on the release of the stage one
+// before the one just released (LAG 1) and thread 0 does not hold its warpgroup on the slowest warp's release
+template <int NWG, int PROD, int CL, int LAG = 0> DEV void body(const Params& p) {
   using T = Tile<NWG, PROD>;
   constexpr int STAGES = T::STAGES, TM = T::TM;
   static_assert(CL == 1 || CL == 2, "a CTA or a pair");
+  static_assert(LAG == 0 || (!PROD && LAG == 1 && STAGES >= 3), "a lag of one stage, consumer-issued, with stages to spare");
   extern __shared__ __align__(1024) uint8_t smem[];
   unsigned long long t0 = 0, c0 = 0;
   stamp_start(p, t0, c0);
@@ -290,7 +294,7 @@ template <int NWG, int PROD, int CL> DEV void body(const Params& p) {
     if (tid == 0) {
       tma_prefetch(&p.a);
       tma_prefetch(&p.b);
-      for (int i = 0; i < STAGES; i++) refill();
+      for (int i = 0; i < STAGES - LAG; i++) refill();
     }
   }
 
@@ -314,6 +318,8 @@ template <int NWG, int PROD, int CL> DEV void body(const Params& p) {
 
 #define U2MM(NAME, NWG, PROD, CL, BOUNDS)                                                                           \
   extern "C" __global__ void BOUNDS NAME(const __grid_constant__ Params p) { body<NWG, PROD, CL>(p); }
+#define U2MML(NAME, NWG, CL, BOUNDS)                                                                                \
+  extern "C" __global__ void BOUNDS NAME(const __grid_constant__ Params p) { body<NWG, 0, CL, 1>(p); }
 #define LB(NT) __launch_bounds__(NT, 1)
 #define LBC(NT) __cluster_dims__(2, 1, 1) __launch_bounds__(NT, 1)
 // ci1 and ci2 at most 168 registers a thread: 128 NWG x 168 leaves a 256-thread hash_k CTA's 80 beside them
@@ -327,6 +333,9 @@ U2MM(u2mm_ci2_m1, 2, 0, 1, MR)
 U2MM(u2mm_ci2_m2, 2, 0, 2, MRC)
 U2MM(u2mm_ci3_m1, 3, 0, 1, LB(384))
 U2MM(u2mm_ci3_m2, 3, 0, 2, LBC(384))
+U2MML(u2mm_ci2l_m2, 2, 2, MRC)
+U2MML(u2mm_ci3l_m1, 3, 1, LB(384))
+U2MML(u2mm_ci3l_m2, 3, 2, LBC(384))
 
 // what bench.py takes from this build, checked when it loads the cubin: Params' size and offsets, then (threads, shared
 // memory, stages) of NWG 1, 2 and 3 without a producer and of 2 with one
@@ -368,6 +377,14 @@ extern "C" __global__ void wait_k(volatile unsigned* started, unsigned want) {
   }
 }
 
-extern "C" __global__ void stamp_k(Stamp* out) {
-  if (threadIdx.x == 0) out[blockIdx.x] = Stamp{gtimer(), 0, (unsigned long long)clock64(), 0, smid(), 0};
+// every CTA stamps once all have arrived, so the launch's CTAs are resident together, one an SM; after a millisecond without
+// them all it stamps sm = ~0 (bench.py refuses the segment)
+extern "C" __global__ void stamp_k(Stamp* out, unsigned* arrive) {
+  if (threadIdx.x != 0) return;
+  atomicAdd(arrive, 1u);
+  const unsigned long long t0 = gtimer();
+  bool all = true;
+  while (*(volatile unsigned*)arrive < gridDim.x)
+    if (gtimer() - t0 > 1000000) { all = false; break; }
+  out[blockIdx.x] = Stamp{gtimer(), 0, (unsigned long long)clock64(), 0, all ? smid() : ~0ull, 0};
 }

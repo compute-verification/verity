@@ -25,6 +25,7 @@ import json
 import math
 import os
 import statistics
+import struct
 import threading
 import time
 from pathlib import Path
@@ -73,6 +74,7 @@ KERNELS = {
     "ci1_m1": ("u2mm_ci1_m1", 1, 0, 1), "ci1_m2": ("u2mm_ci1_m2", 1, 0, 2),
     "ci2_m1": ("u2mm_ci2_m1", 2, 0, 1), "ci2_m2": ("u2mm_ci2_m2", 2, 0, 2),
     "ci3_m1": ("u2mm_ci3_m1", 3, 0, 1), "ci3_m2": ("u2mm_ci3_m2", 3, 0, 2),
+    "ci2l_m2": ("u2mm_ci2l_m2", 2, 0, 2), "ci3l_m1": ("u2mm_ci3l_m1", 3, 0, 1), "ci3l_m2": ("u2mm_ci3l_m2", 3, 0, 2),
 }
 #: operand classes: (low, high) of torch.randint, the bytes' range
 OPS = {"u2": (0, 4), "s2": (-2, 2), "r8": (-128, 128), "zero": (0, 1)}
@@ -243,7 +245,11 @@ class Nvml:
         inst = math.nan
         if self.nv.nvmlDeviceGetFieldValues(self.h, 1, C.byref(fv)) == 0 and fv.nvmlReturn == 0:
             raw = bytes(fv.value)
-            inst = int.from_bytes(raw[:4] if fv.valueType in (1, 5) else raw, "little") / 1e3
+            if fv.valueType == 0:  # double
+                inst = struct.unpack("<d", raw)[0] / 1e3
+            else:
+                inst = int.from_bytes(raw[:4] if fv.valueType in (1, 5) else raw[:2] if fv.valueType == 6 else raw,
+                                      "little", signed=fv.valueType in (4, 5)) / 1e3
         return (time.time_ns(), e.value / 1e3, p.value / 1e3, inst, mhz.value, why.value, temp.value)
 
     def _run(self) -> None:
@@ -282,11 +288,12 @@ class Run:
         self.hst = torch.zeros((4 * self.nsm, 6), dtype=torch.int64, device="cuda")
         self.hio = torch.zeros(4 * self.nsm * HASH_THREADS, dtype=torch.int64, device="cuda")
         self.started = torch.zeros(1, dtype=torch.int32, device="cuda")
+        self.arrive = torch.zeros(4096, dtype=torch.int32, device="cuda")  # stamp_k's arrivals, a counter a segment
         self.side = torch.cuda.Stream()
 
     def stamp(self, seg: int) -> None:
         self.lib.launch(self.lib.stamp_f, self.nsm, 32, self.lib.stamp_smem,
-                        [u64(self.stamps[seg].data_ptr())])
+                        [u64(self.stamps[seg].data_ptr()), u64(self.arrive[seg].data_ptr())])
 
     def hash(self, ctas: int, reps: int, stream: int, shared: int = 0) -> None:
         self.lib.launch(self.lib.hash_f, ctas, HASH_THREADS, shared,
@@ -298,7 +305,8 @@ class Run:
         out = []
         for s in range(nseg):
             a, b = st[s], st[s + 1]
-            if sorted(a[:, 4].tolist()) != sorted(b[:, 4].tolist()) or len(set(a[:, 4].tolist())) != self.nsm:
+            if (sorted(a[:, 4].tolist()) != sorted(b[:, 4].tolist()) or len(set(a[:, 4].tolist())) != self.nsm
+                    or not 0 <= int(a[:, 4].min()) <= int(a[:, 4].max()) < self.nsm):
                 raise RuntimeError(f"segment {s}: stamp_k's CTAs were not one on every SM")
             ia, ib = a[a[:, 4].argsort()], b[b[:, 4].argsort()]
             dt = (ib[:, 0] - ia[:, 0]).double()
@@ -318,6 +326,7 @@ class Run:
 
     def offset(self) -> int:
         """globaltimer - host time.time_ns(), to place NVML's samples on the GPU's spans."""
+        self.arrive[4095].zero_()
         torch.cuda.synchronize()
         h = time.time_ns()
         self.stamp(4095)
@@ -333,12 +342,13 @@ class Run:
             raise ValueError("too many segments")
         off = self.offset()
         calls = [per] * nseg
+        self.arrive[: nseg + 1].zero_()
+        self.started.zero_()
         torch.cuda.synchronize()
         h0 = time.time_ns()
         self.stamp(0)
         cstamp = u64(self.cta.data_ptr()).value if isinstance(op, Gemm) else 0
         if hash_ctas:
-            self.started.zero_()
             op.call(cstamp, self.started.data_ptr())
             want = op.grid
             self.lib.launch(self.lib.wait_f, 1, 32, 0, [u64(self.started.data_ptr()), u(want)], self.side.cuda_stream)
@@ -381,7 +391,9 @@ class Run:
             rec["hash"] = {"ctas": hash_ctas, "reps": hash_reps, "s": (w1 - w0) * 1e-9, "gcomp_s": comps / (w1 - w0),
                            "of_bar": comps / ((w1 - w0) * 1e-9) / BAR, "sm_mhz": hmhz,
                            "of_bar_per_smclk": comps / ((w1 - w0) * 1e-9) / (self.nsm * hmhz * 1e6) / BAR_PER_SMCLK,
-                           "sms": len(set(hs[:, 4].tolist())), "start_spread_us": (int(hs[:, 0].max()) - w0) * 1e-3,
+                           "sms": len(set(hs[:, 4].tolist())),
+                           "max_ctas_an_sm": max(hs[:, 4].tolist().count(v) for v in set(hs[:, 4].tolist())),
+                           "start_spread_us": (int(hs[:, 0].max()) - w0) * 1e-3,
                            "end_spread_us": (w1 - int(hs[:, 1].min())) * 1e-3,
                            "covered": segs[0]["gt0"] <= w0 and g_end >= w1, "host_end_s": (hmid - h0) * 1e-9}
             rec["beside"] = self.rates(inside, self.nsm)
@@ -430,7 +442,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--cubin", type=Path, default=Path(os.environ.get("U2_GEMM_CUBIN", Path(__file__).parent / "build" / "u2_gemm.cubin")))
-    ap.add_argument("--arms", default="lt,ws_m1,ws_m2,ci2_m1,ci2_m2,ci3_m1,ci3_m2,ci1_m2",
+    ap.add_argument("--arms", default="lt,ws_m1,ws_m2,ci2_m1,ci2_m2,ci2l_m2,ci3_m1,ci3_m2,ci3l_m1,ci3l_m2,ci1_m2",
                     help="comma-separated: lt (torch._int_mm) and KERNELS' arms; ARM+h1 / ARM+h2: beside 1 or 2 hash_k CTAs an SM")
     ap.add_argument("--shapes", default="25344x16384x32768", help="MxNxK, comma-separated (M a multiple of 384 fits every arm)")
     ap.add_argument("--ops", default="u2", help="operand classes, comma-separated: " + ", ".join(OPS))

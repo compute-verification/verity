@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# bench.py on one leased GPU of an sm_90 node, under `research run` with cwd the source tree's root. Outside the lease:
-# u2_gemm.cubin built with nvcc and held to sass_gate.py, and torch resolved by uv. Under one lease of at most MAX_MIN
-# (default 15) minutes: nvidia-smi sampled every 100 ms (smi.csv) beside bench.py, whose arguments are this script's.
-#   research run --on NODE --project verity --source . --cwd source --timeout 60m --env GPU_LEASE_WHO=LANE -- \
-#     bash benchmarks/torch_gpu/u2_gemm/run.sh --arms lt,ci2_m2,ci2_m2+h1 --secs 4
+# bench.py on one GPU of an sm_90 node whose GPUs gpu-lease hands out, with cwd the source tree's root and OUT the
+# directory to write. Outside the lease: u2_gemm.cubin built with nvcc and held to sass_gate.py, and torch resolved by uv.
+# Under one lease of at most MAX_MIN (default 15) minutes: nvidia-smi sampled every 100 ms (smi.csv) beside bench.py,
+# whose arguments are this script's.
+#   OUT=DIR bash benchmarks/torch_gpu/u2_gemm/run.sh --arms lt,ci2_m2,ci2_m2+h1 --secs 4
 # CUDA names the toolkit (default /usr/local/cuda-13.0).
 set -uo pipefail
 OUT=${OUT:?}

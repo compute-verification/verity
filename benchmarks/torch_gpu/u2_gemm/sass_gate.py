@@ -1,7 +1,8 @@
 """run.sh's gate on u2_gemm.cubin: ptxas's report and cuobjdump's SASS.  Refuses (exit 1, the reasons on stderr) on a ptxas
 warning or serialized wgmma, a stack frame, a spill or local memory in any kernel, on a GEMM kernel (u2mm_*) whose
 tensor-core instructions aren't the s8 atom alone, IGMMA.64x256x32 on s8 operands, in a multiple of 4 (a 128-deep stage),
-or that issues no TMA load, and on ci1 or ci2 over 168 registers or hash_k over 80 (so a hash_k CTA fits beside them).
+or that issues no TMA load, and on ci1 or ci2 (ci2l) over 168 registers or hash_k over 80 (so a hash_k CTA fits beside
+them).
 
   python3 sass_gate.py PTXAS_TXT SASS_TXT OUT_JSON
 """
@@ -13,8 +14,9 @@ import re
 import sys
 
 MMA = re.compile(r"\b([QHOIU]MMA|[QHI]GMMA|UTC\w*MMA)(\.[\w.]+)?")
-WANT = {f"u2mm_{s}_m{c}" for s in ("ws", "ci1", "ci2", "ci3") for c in (1, 2)} | {"hash_k", "stamp_k", "wait_k"}
-REG_CAP = {"u2mm_ci1_m1": 168, "u2mm_ci1_m2": 168, "u2mm_ci2_m1": 168, "u2mm_ci2_m2": 168, "hash_k": 80}
+WANT = ({f"u2mm_{s}_m{c}" for s in ("ws", "ci1", "ci2", "ci3") for c in (1, 2)}
+        | {"u2mm_ci2l_m2", "u2mm_ci3l_m1", "u2mm_ci3l_m2", "hash_k", "stamp_k", "wait_k"})
+REG_CAP = {"u2mm_ci1_m1": 168, "u2mm_ci1_m2": 168, "u2mm_ci2_m1": 168, "u2mm_ci2_m2": 168, "u2mm_ci2l_m2": 168, "hash_k": 80}
 
 
 def gate(ptxas: str, sass: str) -> tuple[dict, list[str]]:
