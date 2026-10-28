@@ -1,6 +1,6 @@
 """served-session: the session of record, the network certifier in front of a served model, as jobs on the nodes
 (nothing reaches a node otherwise). The gate's scan rehearsal (`vy-challenger-gate warden-rehearse --scan --prompts`,
-`benchmarks/live_challenger/auditor.py`) runs against the endpoint on the peer's loopback, by default `PEER`'s
+`benchmarks/live_challenger/auditor.py`) runs against the endpoint on the peer's loopback, by default vy-dc-h200-2's
 `verity-vllm serve-openai` on 127.0.0.1:18782, inside the scan's class (`scan_zk.W63`: at most KI = 1,024 prompt ids and
 KO = 64 ids out a request). The session's prompts are of `PROMPT_IDS` = 256 ids, since prompts of 1,024 reach the warden
 late against its D = 2.7 s (about 1.2 s of ingress and 1.2 to 4 s of committed prefill), and each is answered
@@ -13,7 +13,7 @@ requests. The network chain's run of record (`chain_record.sh`'s warden path) th
     python served_session.py chain --run RUN [--keep DIR] [--endpoint DIR|ART] [--eos-ids IDS] [--draw K]
         [--coins verifier | --coins gate --challenger-key RECORD [--coin-peer NAME] [--main FILE]] [CR_K=V ...]
 
-FLAGS: [--peer PEER] [--port 18782] [--prompts 64] [--requests 113] [--height 12] [--minutes M]
+FLAGS: [--peer vy-dc-h200-2] [--port 18782] [--prompts 64] [--requests 113] [--height 12] [--minutes M]
        [--prompt-ids 256] [--tokens 64] [--vocab 128000]
 
 ``--requests`` is by default `REQUESTS`, what h200-2's free disk seals by the endpoint's sizing; ``--tokens`` is each
@@ -28,7 +28,7 @@ request's max_tokens, at most KO.
   it sends nothing (exit 3). The prompts are ``--prompts`` prompts of ``--prompt-ids`` ids below ``--vocab`` (Llama 3's
   128,000 regular ids by default), drawn from a fresh secret seed this process alone holds: they are the prover's,
   which the gate writes to its run's ``witness/`` alone, so they are written nowhere here.
-  - ``--gate USER@HOST`` (the auditor's gate, `GATE`, under the lane's gate key ``--key``): the request with the
+  - ``--gate USER@HOST`` (vy-challenger-1's gate, `GATE`, under the lane's gate key ``--key``): the request with the
     prompts on its stdin (``start.json``), ``status`` every `POLL_S` seconds until the run ends (``status.json``), then
     ``fetch``.
   - ``--gate local``, the dry rehearsal: this tree's gate on a scratch host under KEEP, its rehearsal run in this
@@ -64,7 +64,7 @@ history, fetched from the tree's origin into KEEP/RUN by default as n2_advised_z
 deployment's challenger-key/v1 record (labelled ``challenger-key current``), sent with the run. CR_SCAN_ARGS and
 CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--challenger``, ``--peer``) themselves.
 
-**The endpoint.** It is started by hand on `PEER` (`HAND_START`) ahead of the session's ``--at``, and it
+**The endpoint.** It is started by hand on vy-dc-h200-2 (`HAND_START`) ahead of the session's ``--at``, and it
 listens within about 35 s. Its records art (``--endpoint ART``) is advice_trace.jsonl, windows.jsonl, serve.json and
 `USERS`, each engine request's id and its warden user (``{"engine_id", "user"}`` a line, in requests.jsonl's order).
 requests.jsonl, whose prompt ids are request values, stays in h200-2's serve dir: this runbook neither fetches
@@ -75,7 +75,7 @@ the run dir). chain_record.sh's copy of it is in its scratch, removed on exit, a
 against the warden's witness; the endpoint's trace is then checked against the certified I/O, not the prover's record
 of it. An endpoint that holds requests.jsonl (a dry rehearsal's stand-in's) is read as it is.
 
-The runs (the lane's gate key is on `AUDITOR`; KEEP is the lane's gate directory there):
+The runs (the lane's gate key is on vy-nebius-cpu-2; KEEP is the lane's gate directory there):
 
     research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting --cwd source --timeout 90m \\
       -- bash -lc 'python3 benchmarks/network_traces/served_session.py session --out "$OUT" --at 2026-10-28T12:00:00Z'
@@ -123,7 +123,7 @@ import auditor as A  # noqa: E402
 KI, KO = 1024, 64
 #: the session's prompt ids a request, which reach the warden in time (KI's don't)
 PROMPT_IDS = 256
-#: the session's requests: what the served node's free disk seals, within 72 GB even if every request runs all KO ids
+#: the session's requests: what vy-dc-h200-2's free disk seals, within 72 GB even if every request runs all KO ids
 #: (the endpoint's sizing: 636.5 MB a full-length request)
 REQUESTS = 113
 #: where the sessions run, kept as data (``site.json``): the served peer, the gate (USER@HOST) and the lane whose key it
