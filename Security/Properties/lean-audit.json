@@ -950,6 +950,12 @@
    "assumptions": [],
    "type_hash": "0654ba44ddb9ce5cd0016e31b85a2b00599c4b03a263febd27ff5faeb4681907"
   },
+  "Pous.Period.SecurityProofs.periodHeldCoins": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Period.SecurityProofs.periodHeldCoinsAt": {
+   "owner": "@memory-accounting"
+  },
   "Pous.Period.SecurityProofs.periodHeldDemo": {
    "owner": "@memory-accounting",
    "signature": ["Pous.Period.SecurityProofs.periodHeldDemo : Pous.Period.PeriodHeldDemo"],
@@ -973,6 +979,12 @@
    "signature": ["Pous.Period.SecurityProofs.periodHeldNontrivial : Pous.Period.PeriodHeldNontrivial"],
    "assumptions": [],
    "type_hash": "2cfa1eed4accb530e3f5570ec5d41e4f81c6a09f60324b20fc5d5da711a012e2"
+  },
+  "Pous.Period.SecurityProofs.periodHeldSha512": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Period.SecurityProofs.periodHeldSha512At": {
+   "owner": "@memory-accounting"
   },
   "PousCheck.Properties.SecurityProofs.acceptsDecodes": {
    "owner": "@memory-accounting",
@@ -3710,6 +3722,10 @@
    "Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecureWide": "frozen: endToEndRingAt with c from P2RingRoundSecureWide, at every N it covers (2^19 to 2^27); a bound on a game's probability in the ring model, not a property of one function, resting on the open conjecture P2RingRoundSecureWide, unchecked in N above 2^25",
    "Pous.EndToEnd.SecurityProofs.endToEndRingDemo": "frozen: endToEndRingOfRoundSecureWide at Demo B's store (1038*2^16 blocks, state bound 1,060,008,348,186 bits); a bound on a game's probability in the ring model, not a property of one function, resting on the open conjecture P2RingRoundSecureWide, unchecked in N above 2^25",
    "Pous.Period.SecurityProofs.periodHeldAt": "frozen (premise): periodHeld at every point of the composed check (Pous.EndToEnd.AcceptedAt: SetupProtocol.protocol.check at the point's parameters and PousCheck.Run.checkAt) and every block count N of the ring game from 2^19 to 2^27; stated over an abstract joint run of the device model and takes CoinCommitHides at N, the open conjecture P2RingRoundSecureWide and Pous.Period.RingDeviceAt (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run, read at N), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
+   "Pous.Period.SecurityProofs.periodHeldCoins": "frozen (premise): periodHeld in the shared coin game (Verity.Game.prCoin over the memory challenger's hm96 coins and uniform streams, at any primitive), where the session, the device record and the schedule don't read the primitive; it takes periodHeld's premises (CoinCommitHides, P2RingAuditSecure, the device model Pous.Period.DeviceModel, the instantiation Pous.Period.Instantiates and the certificate's fit in the ring game's state bound), none of them under shape.premises.",
+   "Pous.Period.SecurityProofs.periodHeldSha512": "frozen (premise): periodHeldCoins at the deployed memory challenger's streams (Pous.Period.challengerStreams: derive and stream, SHA-512 keyed by its 64-byte secret source), over the source and the hm96 coins, at bound δ + ε_max + ε(t, 1) + ε(t, 6720); it adds Hash.Assumptions.Sha512Prf (prf/sha-512, ASK-184) at the derivation's two tests, the coin key and the streams' 105 · 64 blocks, to periodHeld's premises, none of them under shape.premises.",
+   "Pous.Period.SecurityProofs.periodHeldCoinsAt": "frozen (premise): periodHeldAt in the shared coin game, as periodHeldCoins is periodHeld's, at every point and block count N from 2^19 to 2^27; it takes periodHeldAt's premises (CoinCommitHides at N, the open conjecture P2RingRoundSecureWide, Pous.Period.RingDeviceAt and the certificate's fit in the ring game's state bound), none of them under shape.premises.",
+   "Pous.Period.SecurityProofs.periodHeldSha512At": "frozen (premise): periodHeldCoinsAt at the deployed memory challenger's streams at N blocks, at bound δ + ε_max + ε(t, 1) + ε(t, 6720); it adds Hash.Assumptions.Sha512Prf (prf/sha-512, ASK-184) at the derivation's two tests to periodHeldAt's premises, none of them under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldDemo": "frozen (premise): periodHeldAt at Demo B's store, N = 1038*2^16 blocks, state bound 1,060,008,348,186 bits; its premises are periodHeldAt's.",
    "Pous.Period.SecurityProofs.periodHeldDeployed": "frozen (premise): periodHeld at the deployed ring budget (RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64), the one pous-ring-speed derives from Delta + RTT = 854,000 ns and the measured round floor ROUND_NS = 361.55 / 3.490 ns (art:23a323f3, r20260929-060834-0ec4): DEADLINE_ROUNDS = 8,243 <= RING_D, and RING_D + 1 rounds take 1.995 x the limit; outside both regions where P2RingAuditSecure is refuted (D >= 32,894; L >= 2^169 at k = 105). Its premises are periodHeld's at that budget (CoinCommitHides, P2RingAuditSecure, Pous.Period.DeviceModel, Pous.Period.Instantiates), none under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldHonest": "completeness: the honest lemma of periodHeld and periodHeldDeployed: at an honest period on one H200 holding all of C* (honestRun, 2^30 bits on chip, one PCIe Gen 5 x16 side channel of 437,248,000 bits a round) and the honest strategy that keeps all of C and answers by lookup (honestStrategy), the device model DeviceModel holds at the deployed budget and the instantiation Instantiates holds for every audit under a 32-byte session id, the certificate HONEST_S = 63,000,000 bits is positive and fits the state bound, and the budget is the deadline's at the measured floor (DEADLINE_ROUNDS <= RING_D, the 1.995x margin; art:23a323f3, r20260929-060834-0ec4)",
