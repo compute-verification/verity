@@ -192,6 +192,8 @@ load "$N" 1 main; lrc=$?
 say "MAIN $N requests (exit $lrc): $(tail -1 "$SCR/main.log" | cut -c1-200)"
 "$NSYS" stop --session="$SESS" > "$OUT/nsys_stop.txt" 2>&1
 say "CAPTURE stop (exit $?)"
+# the server's own stop drains its seals; nsys's shutdown signals the whole tree, the spawned sealer with it
+[ -n "$spid" ] && { kill -TERM "$spid"; reap; say "SERVE: its own stop $(grep -a 'SERVE-OPENAI stopping' "$SCR/serve.log" | tail -1 | cut -c1-120)"; }
 "$NSYS" shutdown --session="$SESS" --kill=sigterm > /dev/null 2>&1
 wait "$srv"; say "SERVE stopped (exit $?)"
 reap
