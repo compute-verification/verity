@@ -20,12 +20,14 @@ PYTHON = ROOT / "verity/ml/commitments/domains.py"
 #: `example : … Domains.NAME … := rfl` in its file (`TIE`).
 READERS: tuple[str, ...] = ("verity/core/protocols/pouw", "verity/core/protocols/pous", "verity/core/protocols/remote_bandwidth",
                              "verity/core/devices/memory_challenger")
-#: A literal a reader still writes, as (path, entry), because another change writes that line or rewrites the one beside
-#: it; it is read from the table once both have landed, and until then, wherever its file exists, its bytes are held to
-#: its entry (`test_deferred_literals_are_their_entries`).
+#: A literal a reader still writes, as (path, entry), because another change writes that line, rewrites the one beside it
+#: or deletes its file; it is read from the table once both have landed, and until then, wherever its file exists, its
+#: bytes are held to its entry (`test_deferred_literals_are_their_entries`).
 DEFERRED: frozenset[tuple[str, str]] = frozenset({
     ("verity/core/protocols/remote_bandwidth/period.py", "REMOTE_BANDWIDTH_PROTOCOL"),
     ("verity/core/protocols/remote_bandwidth/lean/RemoteAudit/P2Session.lean", "REMOTE_BANDWIDTH_P2"),
+    ("verity/core/protocols/pous/check/PousCheck/Randomness.lean", "RANDOMNESS_DERIVE"),
+    ("verity/core/protocols/pous/check/PousCheck/Randomness.lean", "RANDOMNESS_STREAM"),
 })
 SKIPPED_PARTS = {"tests", "scripts"}
 ABBREV = re.compile(r'abbrev ([A-Z][A-Z0-9_]*) : String :=\s*"([^"\\]*)"')

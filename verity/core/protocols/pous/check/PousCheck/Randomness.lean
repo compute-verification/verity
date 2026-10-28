@@ -1,6 +1,5 @@
 import Flock.Hash
 import Flock.Draw
-import Identity.Domains
 
 /-!
 # `verity.ml.randomness` v2
@@ -81,10 +80,5 @@ where
       match uniformOn n (stream key (.str "u" :: index) (64 * blocks)) with
       | some x => some x
       | none => go fuel (2 * blocks)
-
-/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
-written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
-example : DERIVE = Domains.RANDOMNESS_DERIVE.toUTF8.push 0 := rfl
-example : STREAM = Domains.RANDOMNESS_STREAM.toUTF8.push 0 := rfl
 
 end PousCheck.Randomness
