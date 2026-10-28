@@ -131,7 +131,8 @@ def test_onsites_subprotocols_answers_and_cases_reach_the_composite():
     assert line["components"] == dict.fromkeys(onsite, "accept") and line["verdict"] == "accept"
     assert line["product"] == "verity/onsite/v0"
     _, ids, _, digests = next(c for c in m.calls if c[0] == "product")
-    assert ids == [P.IDS[c] for c in onsite] and digests[CERT] == "cd" * 64
+    assert ids == [P.SUBPROTOCOLS["verity/onsite/v0"][c] for c in onsite] and digests[CERT] == "cd" * 64
+    assert "verity/pouw/period/v1" in ids and POUW not in ids
 
 
 def test_an_accepting_audit_of_another_registration_rejects():

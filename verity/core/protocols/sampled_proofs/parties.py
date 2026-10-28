@@ -26,9 +26,9 @@ name with that reason recorded (an audit's or a product's is that block's ``erro
 is a fault of the machine: it leaves the party, and the run fails by name (the runtime's ``party-died``).
 
 The run's parameters (`params_of`) are its sampling blocks (``blocks``), the configuration's listed subprotocols
-(``components``, `IDS`' names: exactly one composite's, `verity.core.deploy.config.COMPOSITES`) and what its coins are
-(``coins``: ``simulated`` when the challenger's host is a machine the prover's parties share, else ``development``, a
-key made for the session).
+(``components``: exactly one composite's, by name, `SUBPROTOCOLS`, `verity.core.deploy.config.COMPOSITES`) and what
+its coins are (``coins``: ``simulated`` when the challenger's host is a machine the prover's parties share, else
+``development``, a key made for the session).
 
 The verifier audits block ``i`` once its registration, the firewall's pin and the challenger's address are all in, in
 order of the blocks, so no coin is drawn for a block before its registration (live coins, after the commitment). It
@@ -68,9 +68,15 @@ from .one_stage import registration as R
 ID = R.PROTOCOL
 VERSION = 1
 CHALLENGER, FIREWALL, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"
-#: a configuration's subprotocol names and their protocol ids, the ones `Core.Onsite.components` holds
-IDS = {"bandwidth": "verity/remote-bandwidth/v0", "certifier": "verity/certifier/v0", "pous": "verity/pous/p2/v4/run",
-       "pouw": "verity/pouw/v1", "sampled-proofs": ID}
+#: each composite's subprotocols, by a configuration's names, and their protocol ids (`Core.Onsite.components`,
+#: `Core.Remote.components`): onsite's PoUW is its period check, remote's its window check
+SUBPROTOCOLS = {
+    "verity/onsite/v0": {"bandwidth": "verity/remote-bandwidth/v0", "certifier": "verity/certifier/v0",
+                         "pous": "verity/pous/p2/v4/run", "pouw": "verity/pouw/period/v1", "sampled-proofs": ID},
+    "verity/remote/v0": {"pouw": "verity/pouw/v1", "sampled-proofs": ID},
+}
+#: a configuration's subprotocol names and the protocol id each has outside a composite
+IDS = {**SUBPROTOCOLS["verity/onsite/v0"], "pouw": "verity/pouw/v1"}
 COMPONENT = "sampled-proofs"
 #: what a run's coins are (module docstring)
 COINS = ("simulated", "development")
@@ -94,13 +100,20 @@ MANIFEST = Manifest(
               Schema("Registration", 1, "commitment", {"block": Int(0, MAX_BLOCKS - 1)}, Body(max=MAX_REGISTRATION))))
 
 
+def ids_of(names: Sequence[str]) -> dict[str, str]:
+    """The protocol id of each of ``names`` in the composite they make (`SUBPROTOCOLS`), or a ValueError."""
+    for subs in SUBPROTOCOLS.values():
+        if sorted(names) == sorted(subs) and len(set(names)) == len(names):
+            return {n: subs[n] for n in names}
+    raise ValueError(f"components lists one composite's subprotocols, each once ({COMPOSITES}), not {list(names)}")
+
+
 def params_of(blocks: int, components: Sequence[str], coins: str) -> dict[str, Any]:
     """The run's parameters (module docstring), or a ValueError saying which is wrong."""
     if type(blocks) is not int or not 1 <= blocks <= MAX_BLOCKS:
         raise ValueError(f"blocks is an integer in [1, {MAX_BLOCKS}], not {blocks!r}")
     listed = list(components)
-    if len(set(listed)) != len(listed) or sorted(listed) not in [sorted(c) for c in COMPOSITES.values()]:
-        raise ValueError(f"components lists one composite's subprotocols, each once ({COMPOSITES}), not {listed}")
+    ids_of(listed)
     if coins not in COINS:
         raise ValueError(f"coins is one of {COINS}, not {coins!r}")
     return {"blocks": blocks, "components": listed, "coins": coins}
@@ -253,14 +266,15 @@ class Verifier:
             answer, case = {"verdict": "reject", "commitment": answer.get("commitment"),
                             "reason": "the audit's commitment is not the registration the workers sent"}, None
         status, cases, digests = {}, {}, {}
+        ids = ids_of(self.params["components"])
         for c in self.params["components"]:
             got = (answer, case) if c == COMPONENT else self.component(i, c)
             ans, cs = got if got is not None else (None, None)
             status[c] = ABSENT if ans is None else str(ans.get("verdict", "error"))
-            cases[IDS[c]] = cs or NO_CASE
-            digests[IDS[c]] = (ans or {}).get("commitment") or ""
+            cases[ids[c]] = cs or NO_CASE
+            digests[ids[c]] = (ans or {}).get("commitment") or ""
         try:
-            got = self.product([IDS[c] for c in self.params["components"]], cases, digests)
+            got = self.product([ids[c] for c in self.params["components"]], cases, digests)
             verdict = {"product": str(got["product"]), "verdict": str(got["verdict"]),
                        "reason": None if got.get("reason") is None else str(got["reason"])}
         except Unavailable as e:
@@ -280,5 +294,5 @@ PROTOCOLS = {ID: PROTOCOL}
 
 
 __all__ = ["ABSENT", "CHALLENGER", "COINS", "COMPONENT", "FIREWALL", "ID", "IDS", "MANIFEST", "NO_CASE", "PROTOCOL",
-           "PROTOCOLS", "VERIFIER", "VERSION", "WORKERS", "Challenger", "Firewall", "Unavailable", "Verifier", "Workers",
-           "params_of"]
+           "PROTOCOLS", "SUBPROTOCOLS", "VERIFIER", "VERSION", "WORKERS", "Challenger", "Firewall", "Unavailable",
+           "Verifier", "Workers", "ids_of", "params_of"]

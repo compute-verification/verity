@@ -56,8 +56,8 @@ private def onsiteIds : List String := Core.Onsite.components.map (·.id)
 private def remoteIds : List String := Core.Remote.components.map (·.id)
 
 #guard composites.map (·.1.id) == ["verity/onsite/v0", "verity/remote/v0"]
-#guard remoteIds.all onsiteIds.contains
-#guard known == onsiteIds
+#guard onsiteIds.all known.contains && remoteIds.all known.contains
+#guard known.length == (onsiteIds ++ remoteIds).eraseDups.length
 
 -- the composites by their subprotocols, in any order, and no other set
 #guard idOf onsiteIds == some "verity/onsite/v0"
@@ -70,6 +70,8 @@ private def remoteIds : List String := Core.Remote.components.map (·.id)
 #guard idOf (onsiteIds.drop 1) == none
 #guard idOf ["verity/wipe/v0"] == none
 #guard idOf ["verity/pouw/v1", "verity/pouw/v1", "verity/sampled-proofs/one-stage/v1"] == none
+#guard idOf (remoteIds ++ ["verity/pouw/period/v1"]) == none
+#guard idOf (onsiteIds ++ ["verity/pouw/v1"]) == none
 #guard contains (match ofIds ["verity/sampled-proofs/one-stage/v1"] with | .error e => e | .ok _ => "")
   "protocol soundness covers only those composites"
 

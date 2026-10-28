@@ -2,19 +2,22 @@
 IDS serve` over each one's subprotocols, the composite `verity run`'s verifier runs) against the Python reference
 (`reference.py`: the trial's composition rule with reject dominance, over the harness's framing of the core interface and
 the subprotocols' own Python). Hypothesis draws each subprotocol's case to accept, reject, be undecided or fail to decode
-(from its own difftest's generator: PoUW's `pouw_check_cases`, sampled proofs' `changed_audits`, the network
-certifier's period `build`; space's and bandwidth's from the small periods of their hooks, `periods.py`), then often
-breaks the composition's own inputs (a subprotocol dropped, unknown, repeated or out of order, a case under other
-params, a wrong or short commitment, non-canonical or malformed evidence) or the case itself (a field missing or not hex,
-not an object), and every field of the outcome but its reason must agree exactly: the subprotocols' certified quantities
-and profiles among them. `product IDS id` names remote and onsite for their subprotocols and refuses every other set:
-the same two composites a configuration may list (`verity.core.deploy.config.COMPOSITES`)."""
+(from its own difftest's generator: PoUW's `pouw_check_cases` and, made once, `pouw_period_cases`' periods, sampled
+proofs' `changed_audits`, the network certifier's period `build`; space's and bandwidth's from the small periods of their
+hooks, `periods.py`), then often breaks the composition's own inputs (a subprotocol dropped, unknown, repeated or out of
+order, a case under other params, a wrong or short commitment, non-canonical or malformed evidence) or the case itself (a
+field missing or not hex, not an object), and every field of the outcome but its reason must agree exactly: the
+subprotocols' certified quantities and profiles among them. `product IDS id` names remote and onsite for their
+subprotocols and refuses every other set: the same two composites a configuration may list
+(`verity.core.deploy.config.COMPOSITES`)."""
 
 from __future__ import annotations
 
 import collections
+import functools
 import itertools
 import json
+import random
 import shutil
 import subprocess
 from pathlib import Path
@@ -42,6 +45,17 @@ JSON = st.recursive(st.none() | st.booleans() | st.integers(-3, 3) | st.text(max
 #: composition's evidence can't carry).
 POUW_REFUSALS = [n for n in R.POUW_CASES.NAMES if not n.startswith("case-") and n != "answer-undecided"]
 
+
+@functools.cache
+def pouw_periods() -> dict[str, list[dict]]:
+    """PoUW's periods by the verdict they aim at, made once (a period of the auditor's ledger and its windows is slow to
+    make): a few honest ones, and one of each refusal of `credit.period_credit` and of each break of the protocol's
+    framing. A period is accepted or rejected, never undecided."""
+    PPC = R.POUW_PERIOD_CASES
+    return {R.ACCEPT: [PPC.instance(random.Random(f"honest/{s}")) for s in range(3)],
+            R.REJECT: [PPC.instance(random.Random(f"{n}/0"), n) for n in PPC.NAMES]}
+
+
 OS = R.ONE_STAGE
 #: Sampled proofs' audits by the verdict they aim at: an honest audit, one change to the verifiers' verdicts (undecided
 #: or a rejection), and one or two changes anywhere.
@@ -61,6 +75,8 @@ def kinds(C) -> list[str]:
     """The kinds of case `component_case` may aim `C` at when it is free to."""
     if isinstance(C, R.Recorded):
         return [k for k in KINDS if k in C.cases]
+    if C is R.POUW_PERIOD:
+        return [R.ACCEPT, R.REJECT]
     return [R.ACCEPT, R.REJECT, R.UNDECIDED]
 
 
@@ -75,6 +91,8 @@ def component_case(draw, C, kind: str | None) -> dict:
     elif C is R.POUW:
         name = {R.ACCEPT: "honest", R.UNDECIDED: "answer-undecided"}.get(kind) or draw(st.sampled_from(POUW_REFUSALS))
         case = R.POUW_CASES.instance(draw(st.randoms(use_true_random=False)), name)
+    elif C is R.POUW_PERIOD:
+        case = draw(st.sampled_from(pouw_periods()[kind]))
     elif C is R.CERTIFIER:
         case = NP.build(draw(st.sampled_from(PERIOD_CASES[kind])), draw(st.integers(0, 1 << 16)), small=True)
     else:
@@ -230,25 +248,28 @@ def test_onsite_agrees(onsite_server, recorded):
 
 def test_product_names_only_the_two_composites():
     """`product IDS id` is remote over remote's subprotocols and onsite over onsite's, in any order, exactly the
-    configuration's composites (`verity.core.deploy.config.COMPOSITES`), and refuses every other set (exit 64)."""
+    configuration's composites (`verity.core.deploy.config.COMPOSITES`, by the ids `SUBPROTOCOLS` gives their names),
+    and refuses every other set of their subprotocols and the wipe (exit 64)."""
     exe = D.build(PROTOCOLS / "onsite", "product")
-    by_name = {**SPP.IDS, "wipe": "verity/wipe/v0"}
 
-    def named(xs: list[str]) -> tuple[int, str]:
+    def named(xs) -> tuple[int, str]:
         p = subprocess.run([exe, ",".join(xs), "id"], capture_output=True, text=True)
         return p.returncode, p.stdout.strip()
 
-    assert {cid: sorted(by_name[n] for n in names) for cid, names in K.COMPOSITES.items()} == {
-        p.id: sorted(C.id for C in p.components) for p in (R.ONSITE, R.REMOTE)}
-    for cid, names in K.COMPOSITES.items():
-        assert named([by_name[n] for n in names]) == (0, cid)
-        assert named([by_name[n] for n in reversed(names)]) == (0, cid)
-    others = [s for k in range(len(by_name) + 1) for s in itertools.combinations(sorted(by_name), k)
-              if sorted(s) not in [sorted(v) for v in K.COMPOSITES.values()]]
-    assert len(others) == 2 ** len(by_name) - 2
+    want = {p.id: sorted(C.id for C in p.components) for p in (R.ONSITE, R.REMOTE)}
+    assert {cid: sorted(subs.values()) for cid, subs in SPP.SUBPROTOCOLS.items()} == want
+    assert {cid: sorted(names) for cid, names in K.COMPOSITES.items()} == {
+        cid: sorted(subs) for cid, subs in SPP.SUBPROTOCOLS.items()}
+    for cid, ids in want.items():
+        assert named(ids) == (0, cid)
+        assert named(ids[::-1]) == (0, cid)
+    every = sorted({i for ids in want.values() for i in ids} | {"verity/wipe/v0"})
+    others = [s for k in range(len(every) + 1) for s in itertools.combinations(every, k)
+              if sorted(s) not in want.values()]
+    assert len(others) == 2 ** len(every) - 2
     for s in others:
-        assert named([by_name[n] for n in s])[0] == 64, s
-    assert named([SPP.IDS["pouw"], SPP.IDS["pouw"], SPP.IDS["sampled-proofs"]])[0] == 64
+        assert named(s)[0] == 64, s
+    assert named([R.POUW.id, R.POUW.id, R.SAMPLED_PROOFS.id])[0] == 64
 
 
 @pytest.mark.slow

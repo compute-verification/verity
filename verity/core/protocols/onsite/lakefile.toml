@@ -1,6 +1,6 @@
-# Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (sampled proofs), work (PoUW),
-# space (PoUS's run check), bandwidth (the remote bandwidth session) and communication (the network certifier over the
-# period, `verity/certifier/v0`). Its executable is the core CLI (`onsite id | check | serve`), which the difftest
+# Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (sampled proofs), work (PoUW's
+# period credit, `verity/pouw/period/v1`), space (PoUS's run check), bandwidth (the remote bandwidth session) and
+# communication (the network certifier over the period, `verity/certifier/v0`). Its executable is the core CLI (`onsite id | check | serve`), which the difftest
 # drives. Code: no Mathlib.
 name = "core_onsite"
 defaultTargets = ["CoreOnsite", "onsite", "CoreComposites", "product"]
@@ -21,7 +21,8 @@ path = "../interface"
 name = "core_composition"
 path = "../composition"
 
-# The ported subprotocols: sampled proofs' one-stage audit (integrity) and PoUW's window check (work).
+# The ported subprotocols: sampled proofs' one-stage audit (integrity) and PoUW's period credit (work,
+# `PouwCheck.Period`).
 [[require]]
 name = "core_sampled_proofs"
 path = "../../service/sampled_proofs"

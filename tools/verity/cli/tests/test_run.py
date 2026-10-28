@@ -117,8 +117,10 @@ def test_the_composites_are_remote_and_onsite():
     assert {K.composite(p, REG.components) for p in (ONSITE, REMOTE, (*REMOTE, "wipe"))} == {
         "verity/onsite/v0", "verity/remote/v0"}
     assert K.composite(ONSITE[::-1], REG.components) == "verity/onsite/v0"
-    assert {cid: sorted(SP.IDS[n] for n in names) for cid, names in K.COMPOSITES.items()} == {
-        "verity/onsite/v0": sorted(SP.IDS.values()), "verity/remote/v0": sorted([SP.IDS["pouw"], SP.ID])}
+    assert {cid: sorted(names) for cid, names in K.COMPOSITES.items()} == {
+        cid: sorted(subs) for cid, subs in SP.SUBPROTOCOLS.items()}
+    assert SP.SUBPROTOCOLS["verity/remote/v0"] == {"pouw": "verity/pouw/v1", "sampled-proofs": SP.ID}
+    assert SP.SUBPROTOCOLS["verity/onsite/v0"]["pouw"] == "verity/pouw/period/v1"
 
 
 def test_a_workload_that_lacks_a_need_is_refused_by_name():
@@ -176,7 +178,7 @@ def test_config_check_and_hash_print_the_hash(capsys):
 def stand_in_product(tmp: Path) -> Path:
     """``product IDS id | check PARAMS COMMITMENT EVIDENCE``: the composite of IDS's subprotocols (64 for any other
     set), which accepts when every subprotocol's case evidence says so."""
-    composites = {cid: sorted(SP.IDS[n] for n in names) for cid, names in K.COMPOSITES.items()}
+    composites = {cid: sorted(subs.values()) for cid, subs in SP.SUBPROTOCOLS.items()}
     exe = tmp / "product"
     exe.write_text(f"#!{sys.executable}\n" + f"COMPOSITES = {composites!r}\n" + """import json, sys
 ids = sys.argv[1].split(",")
