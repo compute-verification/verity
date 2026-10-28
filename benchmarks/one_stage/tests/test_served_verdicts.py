@@ -159,7 +159,7 @@ def test_one_piece_runs_alone_or_all_but_it(tmp_path, capsys):
     """``only`` runs the named pieces alone and ``skip`` all but them, so the certifier's can run beside the others."""
     assert list(S.pieces(tmp_path, 1, tmp_path / "pieces", env={}, only=["certifier"])) == ["certifier"]
     assert "the network certifier" in capsys.readouterr().out
-    assert list(S.pieces(tmp_path, 1, tmp_path / "pieces", env={}, skip=["certifier"])) == ["pouw", "bandwidth", "pous"]
+    assert list(S.pieces(tmp_path, 1, tmp_path / "pieces", env={}, skip=["certifier"])) == ["pouw", "pous", "bandwidth"]
     assert "the network certifier" not in capsys.readouterr().out
 
 
@@ -186,10 +186,10 @@ def test_a_subprotocol_with_no_piece_is_named_missing_with_the_command_it_lacks(
     got = S.pieces(tmp_path, 1, tmp_path / "pieces", env={})
     lines = capsys.readouterr().out.splitlines()
     assert [g["verdict"] for g in got.values()] == ["missing"] * 4
-    assert [line.split(" (")[0] for line in lines] == ["MISSING PoUW", "MISSING the bandwidth audit", "MISSING PoUS",
+    assert [line.split(" (")[0] for line in lines] == ["MISSING PoUW", "MISSING PoUS", "MISSING the bandwidth audit",
                                                        "MISSING the network certifier"]
-    for line, (cmd, owner) in zip(lines, (("POUW_CMD", "compute-accounting"), ("BANDWIDTH_CMD", "memory-accounting"),
-                                          ("POUS_CMD", "memory-accounting"), ("CERTIFIER_CMD", "network-accounting"))):
+    for line, (cmd, owner) in zip(lines, (("POUW_CMD", "compute-accounting"), ("POUS_CMD", "memory-accounting"),
+                                          ("BANDWIDTH_CMD", "memory-accounting"), ("CERTIFIER_CMD", "network-accounting"))):
         assert f"({cmd} unset; {owner}): " in line
     assert not (tmp_path / "pieces").exists()
 
@@ -223,7 +223,7 @@ def test_a_piece_runs_within_its_limit_and_one_out_of_time_or_refused_says_so(tm
     env = {"PATH": f"{bin_}:{os.defpath}", "PIECE_TIMEOUT": "7m", "BANDWIDTH_TIMEOUT": "0", "BANDWIDTH_CMD": "true",
            "POUS_CMD": 'echo "PoUS REFUSED: the card has a compute process" > "$3/refused.txt"; exit 3'}
     got = S.pieces(tmp_path, 1, tmp_path / "pieces", env=env, node="n")
-    assert (tmp_path / "limits").read_text().split() == ["0", "7m"]
+    assert (tmp_path / "limits").read_text().split() == ["7m", "0"]
     assert got["bandwidth"] == {"verdict": "error", "rc": 124,
                                 "reason": "its piece ran (exit 124, out of time at 0) and wrote no answer; "
                                           "its log is bandwidth/piece.log"}
