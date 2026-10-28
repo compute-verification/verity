@@ -1280,14 +1280,14 @@ def test_a_session_counts_only_from_a_tree_the_hosts_pins_log_records_as_mains(t
         off = R.ledger_lines(_pinned_host(tmp_path / pin, pin).ledger.path)
         refused(off, later, f"session {RESERVED_SESSION} ran commit {pin}, which the host's pins log doesn't record "
                             "as a commit of main's history: repin the challenger host to a commit origin/main "
-                            "contains (vy-challenger-pin) and rerun the window there")
+                            "contains (with its pin command) and rerun the window there")
     refused(lines, None, C.NO_PINS)
     refused(lines, "\n".join(PINS), f"the host's pins log is malformed: {C.PINS_FORM}")
     for bad in (PINS[1].replace("c0", "C0"), PINS[1].replace(":", ": "), PINS[1][:-1] + ',"x":1}',
                 C.ledger_text({"commit": MAIN_PIN, "main": "e1" * 20, "pinned_utc": "2026-02-30T13:00:00Z"}), 5):
         refused(lines, [PINS[0], bad], f"the host's pins log line 1 is malformed: {C.PINS_FORM}")
     refused(lines, PINS[:1], f"the host's pins log has 1 lines, fewer than the 2 the open of session "
-                             f"{RESERVED_SESSION} sealed: take infra's newest published pins log")
+                             f"{RESERVED_SESSION} sealed: take the auditor host's operator's newest published pins log")
     edited = [PINS[0], C.pin_line(MAIN_PIN, "e2" * 20, "2026-10-21T13:00:00Z")]
     for log in (edited, PINS[::-1]):
         refused(lines, log, f"the host's pins log is not the one the open of session {RESERVED_SESSION} sealed: its "
@@ -1347,7 +1347,7 @@ def test_a_session_is_credited_only_from_a_logged_commit_on_mains_first_parent_l
                                "which is not on main's first-parent line in the verifier's copy (`git rev-list "
                                "--first-parent origin/main`): a branch commit merged into main is in main's history but "
                                "no tree main's check ran on; repin the challenger host to a commit on main's "
-                               "first-parent line (vy-challenger-pin) and rerun the window there")
+                               "first-parent line (with its pin command) and rerun the window there")
     for pin in BRANCH_PINS:
         assert "not on main's first-parent line" in C.first_parent_reason(RESERVED_SESSION, pin, MAIN)
     assert C.first_parent_reason(RESERVED_SESSION, PIN, MAIN) is None
@@ -1369,8 +1369,8 @@ def test_a_session_is_credited_only_from_a_logged_commit_on_mains_first_parent_l
     assert C.pins_reason(RESERVED_SESSION, opened, HOST_PINS) is None
     assert C.pins_reason(RESERVED_SESSION, {k: v for k, v in opened.items() if k != "pinned"}, HOST_PINS) == (
         f"session {RESERVED_SESSION} ran commit None, which the host's pins log doesn't record as a commit of main's "
-        "history: repin the challenger host to a commit origin/main contains (vy-challenger-pin) and rerun the window "
-        "there")
+        "history: repin the challenger host to a commit origin/main contains (with its pin command) and rerun the "
+        "window there")
 
 
 def test_the_ledger_is_the_longest_of_the_operators_heads_when_each_extends_the_others(tmp_path, signer):

@@ -17076,7 +17076,7 @@
    ]
   },
   "SampledProofs.ChallengerSession": {
-   "digest": "9fb8dba5a8002d0886e54518268324d7fc8d470ba0b29985a0f7f15172fa7df7",
+   "digest": "92d6b4042a2d53d55131d76161b7eb74a1c7b322f5f45f7cf56235036183f7bc",
    "definitions": {
     "SampledProofs.Challenger.Audited": "159b77cf065dee90e23af320bf78c6c962956fb8dafae7711c47bf9b416a91e0",
     "SampledProofs.Challenger.Audited.commitment": "468002e4d32fd36d92c016491502672fbffc8b638777f35e073eb3b379bd9b63",
@@ -17167,7 +17167,7 @@
     "SampledProofs.Challenger.closeMessage": "46b75ba121839ec4361e3e2a0df14a4d0c7e0d95c1b8967ac1ac8e8def086188",
     "SampledProofs.Challenger.event": "be4476225052930e5213d68e407b034ada60824989e7e0e50bc61ec006d3d50f",
     "SampledProofs.Challenger.event._sparseCasesOn_1": "ff42de9044ae37b1abdc1c7990a9e1e2b9149f6c371720dc27a0117ee23afb4c",
-    "SampledProofs.Challenger.firstParentReason": "e30b13960d305036dbd68730b4d19da3c76514dad76b0b269a7f50dc135834d0",
+    "SampledProofs.Challenger.firstParentReason": "cea2a489e41874ce915f8d7ed171537b288b40a5aca16567c8b1cb6ac5209884",
     "SampledProofs.Challenger.firstParentReason._sparseCasesOn_1": "5a14a26a8c1be5defbd604e7e2d658918d769ec354bbbdc24e60e0c20671704a",
     "SampledProofs.Challenger.instInhabitedLedgerEntry": "e80cd9d4742cb6b57326602cddb1b02b3802ff5ad8b61b81d00f01a23d8d71cf",
     "SampledProofs.Challenger.instInhabitedLedgerEntry.default": "3848285ea2ab9d7a4e425a5fee117e2d67980ed4dea9b413c5dda27b2c750c8b",
@@ -17193,7 +17193,7 @@
     "SampledProofs.Challenger.logDigest": "6d06248e8115e687377bb0f9515d3cdea1ad643c3426b7a06ab0754872b2fecf",
     "SampledProofs.Challenger.pinOf?": "0b7e120c32207eb91609929482f4b059bae247492352d0180a1494fd8163db66",
     "SampledProofs.Challenger.pinnedSession": "7f508d9b13dff0dd4f734a3b3a452b08345b2c8d1bdd9b1a463d07e8455682fc",
-    "SampledProofs.Challenger.pinsReason": "88428870e51def37ee5544d9031e80379c12375371099b186cd8a99d83c38363",
+    "SampledProofs.Challenger.pinsReason": "605f5428ebd132f9127b708f0280a0aa3596c834ddce1c5ab73b468e644f6922",
     "SampledProofs.Challenger.releasedRootsOf": "8601aa4f030541ba41775195e9f64476cde340b5605ab93126969953d0dc2a62",
     "SampledProofs.Challenger.sessionNamed": "8d51af66aadbeb45e5e0a727a2f6218fe0a9269cde9149b810092e25cb2d22a3",
     "SampledProofs.Challenger.sessionOf": "d1ef2639d2ed7131fb69e54208c3f3d1a2f6b04e9be1421f1b19db9b9b112249",
