@@ -22,8 +22,8 @@
                      interval the transfer gives; recorded only for a Definition that declares either
     redundant gates  a value computed twice inside one proof block: the gates `verity.ml.definitions.word.Graph` finds recomputed
                      (same primitive, same operands by value) that `word.units` puts in one proof block, and the ANDs of a
-                     Boolean proof block on identical operands; counted, with where (primitive @ activation, or the named
-                     subcircuit)
+                     Boolean proof block on identical operands, its commits apart (`redundant_ands`); counted, with where
+                     (primitive @ activation, or the named subcircuit)
     dead gates       gates no output depends on (`verity.ml.circuits.liveness.dead_gates`, transitive), by primitive @ activation
     partition        `Q_word_v1{X,W,R=no-recompute}` (`word.unit_rule` per Definition, `word.check_query` over a workload's
                      Program): every gate certified by exactly one proof block, reads across proof blocks only through
@@ -428,24 +428,33 @@ def word_view(t: Any, opts: Options, F: Findings) -> dict | None:
 
 # --- Boolean circuits -------------------------------------------------------------------------------------------------------
 
+def is_commit(C: Any, v: int) -> bool:
+    """Whether bit ``v`` of the `gf2.Circuit` ``C`` is a commit row (``A = form, B = 1``: `forms.Circuit.commit`,
+    `sha512.commit`), the copy of a form into one bit that a builder writes so a carried form stops growing: no product."""
+    return C.kind[v] == "and" and not C.data[v][1].s and bool(C.data[v][1].c)
+
+
 def redundant_ands(C: Any, owner: Callable[[int], str] | None = None) -> tuple[int, Counter]:
-    """Live ANDs of the `gf2.Circuit` ``C`` whose operands, with earlier duplicates replaced by their first copy, are those of an
-    earlier AND (in either order), are equal, or are constant: values computed again.  A commit (``A = form, B = 1``,
-    `forms.Circuit.commit`'s row, which keeps a carried form from growing) is a copy, not a product: it counts only when
-    its form, so replaced, is a constant or one bit (free as a form) or was committed before.  Returns (count, count by
-    ``owner(bit)``)."""
+    """Live ANDs of the `gf2.Circuit` ``C``, commits apart (`is_commit`), whose operands, each bit read as the form it stands
+    for, are those of an earlier AND (in either order), are equal, or are constant: values computed again.  A commit never
+    counts (the lowering check counts them as ``commits``), but reading one reads its form: a duplicate AND stands for its
+    first copy, a commit of a constant or of one bit for that form, and a commit of a form committed before for the first
+    commit.  Returns (count, count by ``owner(bit)``)."""
     live = C.live()
-    rep: dict[int, int] = {}
+    rep: dict[int, tuple] = {}
     seen: dict[tuple, int] = {}
-    copies: dict[tuple, int] = {}
+    copies: dict[tuple, tuple[int, int]] = {}
     by: Counter = Counter()
 
     def canon(f):
         par: dict[int, int] = {}
+        c = f.c
         for x in f.s:
-            y = rep.get(x, x)
-            par[y] = par.get(y, 0) ^ 1
-        return tuple(sorted(k for k, p in par.items() if p)), f.c
+            bits, k = rep.get(x, ((x,), 0))
+            c ^= k
+            for y in bits:
+                par[y] = par.get(y, 0) ^ 1
+        return tuple(sorted(y for y, p in par.items() if p)), c
 
     n = 0
     for v, kind in enumerate(C.kind):
@@ -453,16 +462,13 @@ def redundant_ands(C: Any, owner: Callable[[int], str] | None = None) -> tuple[i
             continue
         a, b = C.data[v]
         ka = canon(a)
-        if not b.s and b.c:
-            if len(ka[0]) > 1 and ka not in copies:
-                copies[ka] = v
-                continue
-            if ka in copies:
-                rep[v] = copies[ka]
-            elif len(ka[0]) == 1 and not ka[1]:
-                rep[v] = ka[0][0]
-            n += 1
-            by[owner(v) if owner else "circuit"] += 1
+        if is_commit(C, v):
+            if len(ka[0]) <= 1:
+                rep[v] = ka
+            else:
+                u, c = copies.setdefault(ka[0], (v, ka[1]))
+                if u != v:
+                    rep[v] = ((u,), c ^ ka[1])
             continue
         kb = canon(b)
         if not ka[0] or not kb[0] or ka[0] == kb[0]:
@@ -474,7 +480,7 @@ def redundant_ands(C: Any, owner: Callable[[int], str] | None = None) -> tuple[i
         if u is None:
             seen[key] = v
             continue
-        rep[v] = u
+        rep[v] = ((u,), 0)
         n += 1
         by[owner(v) if owner else "circuit"] += 1
     return n, by
@@ -689,7 +695,7 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
         from verity.ml.circuits.evaluation.bits import compile as compile_bits
 
         own = rec["definition_ands"] = compile_bits(t).counts["and"]
-        commits = rec["commits"] = sum(1 for v in C.live() if C.kind[v] == "and" and not C.data[v][1].s)
+        commits = rec["commits"] = sum(1 for v in C.live() if is_commit(C, v))
         if counts["ands"] - commits > own:
             F.fail("lowering", "ands-added", t.id, f"[c-flock]: {counts['ands'] - commits} ANDs (and {commits} commits) for the "
                    f"Definition's {own} And gates", via="c-flock:ir_lower", ands=counts["ands"], commits=commits, definition_ands=own)
@@ -1221,5 +1227,5 @@ def report(targets: list[dict], opts: Options) -> dict:
 
 
 __all__ = ["Findings", "Options", "SCHEMA", "check_definition", "check_row", "check_subcircuit", "correspondence", "dead_gates",
-           "load_pins", "partition", "redundant_ands", "redundant_gates", "report", "summarize", "target_equivalence", "template_lowering",
+           "is_commit", "load_pins", "partition", "redundant_ands", "redundant_gates", "report", "summarize", "target_equivalence", "template_lowering",
            "whole_lowering"]
