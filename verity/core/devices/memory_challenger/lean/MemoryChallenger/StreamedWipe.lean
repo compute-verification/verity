@@ -184,7 +184,6 @@ def verdict (schemes : Schemes) (trusted : List ByteArray) (s : Signed) (c : Com
     if !(0 ≤ r.elapsedNs && r.elapsedNs ≤ (p.limitNs : Int)) then
       reasons := reasons.push s!"batch {b} is past its deadline of {p.limitNs} ns"
     if b == 0 && r.sendNs < s.fillEndNs then reasons := reasons.push "the first batch was sent before the fill completed"
-  return (Findings.mk reasons (egressUnits s.egressBits),
-    if reasons.isEmpty then Core.Verdict.accept else Core.Verdict.reject)
+  return (Findings.mk reasons (egressUnits s.egressBits), acceptIf reasons.isEmpty)
 
 end MemoryChallenger.StreamedWipe

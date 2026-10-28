@@ -84,6 +84,9 @@ structure Findings where
 with its findings. Only the verdict is published (`public`). -/
 abbrev Verdict := Findings × Core.Verdict
 
+/-- `accept` when there is no reason (`b`), `reject` otherwise. -/
+def acceptIf (b : Bool) : Core.Verdict := if b then Core.Verdict.accept else Core.Verdict.reject
+
 def Verdict.accepted (v : Verdict) : Bool := v.2 == Core.Verdict.accept
 def Verdict.reasons (v : Verdict) : Array String := v.1.reasons
 def Verdict.late (v : Verdict) : Nat := v.1.late
@@ -121,6 +124,6 @@ def verdict (schemes : Schemes) (trusted : List ByteArray) (expected : Nat → O
     if !(0 ≤ r.elapsedNs && r.elapsedNs ≤ c.limitNs) then late := late + 1
   if wrong > 0 then reasons := reasons.push s!"{wrong} answers are not their blocks of C"
   if late > 0 then reasons := reasons.push s!"{late} answers are past Δ + RTT = {c.limitNs} ns"
-  return (Findings.mk reasons late wrong, if reasons.isEmpty then Core.Verdict.accept else Core.Verdict.reject)
+  return (Findings.mk reasons late wrong, acceptIf reasons.isEmpty)
 
 end MemoryChallenger
