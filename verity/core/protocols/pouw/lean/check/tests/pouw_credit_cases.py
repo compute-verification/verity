@@ -50,7 +50,7 @@ composed check present a round log the challenger never received (``never-receiv
 after its roots and its draw root over it, so only `core_check.rounds` refuses it), a round coin opened after another
 root, an A tree the round roots didn't commit, and no A value. Its mutations of the registration (`REGISTRATION_NAMES`) register the A values under another
 window's open root or another circuit, their trees under those domains so `_a_link` accepts them
-(``other-registration``), give one proof's session another registration's root for a value it opened
+(``other-registration``), or one z table under another circuit (``zy-other-domain``), give one proof's session another registration's root for a value it opened
 (``proof-other-registration``), change an opened B value's registered root (``entry-root``: the entry is not the root
 the sessions opened, which the weights step refuses before any proof is read) or register it twice, verify one proof
 against another circuit, drop a proof's A ports, its z port (``proof-no-zy``) or every proof's B ports (``proof-no-b``),
@@ -220,9 +220,11 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
     ``…/ids@<s>`` of as many slots, committed whole by round s, ids@0's domain binding the window's session `sid` in
     its open root's place (`credit.domain_of`); and at random a z value. ``other`` registers the A values and call
     tables under another window's open root and ids@0 under another session (``window``), another circuit
-    (``program``) or no window root nor session (``unbound``, main's h1_prove form). `off` (`AROW_NAMES`') registers an
+    (``program``) or no window root nor session (``unbound``, main's h1_prove form), each z table under its true
+    registration. `off` (`AROW_NAMES`') registers an
     A table, an ids table or a z table over other rows than its true ones, an A table one call short (its true rows too),
-    or no ids table of a round, and ``ids0-other-session`` binds ids@0's domain to another session. With `calls` and round 0's
+    or no ids table of a round, ``zy-other-domain`` one z table under another circuit, and ``ids0-other-session`` binds
+    ids@0's domain to another session. With `calls` and round 0's
     request table's root `requests`, it registers (at random, always under `REQ0_NAMES` or with `t`) the request table
     ``…/requests@0`` at that root, its domain binding the session as ids@0's does, which `REQ0_NAMES` break. With `t`
     (the period's T) its request table has T rows, and each round s registers its slot table ``…/slots@<s>`` (T leaves
@@ -245,14 +247,15 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
         target = rng.choice([v for v, _w, n, _s, _x in tables if n > 1])
     elif calls and off in ("ids-off", "ids-missing"):
         target = f"{prefix}ids@{rng.randrange(steps)}"
-    elif calls and off == "zy-off":
+    elif calls and off in ("zy-off", "zy-other-domain"):
         target = f"{prefix}zy@{rng.randrange(len(calls))}"
 
-    def a(v: str, words: int, leaves: int, rnd: int | None) -> None:
+    def a(v: str, words: int, leaves: int, rnd: int | None, under: tuple[str, str | None] | None = None) -> None:
         if v == target and off == "ids-missing":
             return
         first = Cr.ids_step(v) == 0
-        dom = G.domain(prog, v, words, leaves, window=None if first else own, session=session if first else None)
+        p, o = (prog, own) if under is None else under
+        dom = G.domain(p, v, words, leaves, window=None if first else o, session=session if first else None)
         # rows from one short draw: 64 drawn bytes a row made a window's smallest example too large for Hypothesis
         seed = rng.randbytes(8) + v.encode()
         rows = [hashlib.sha512(seed + i.to_bytes(4, "big")).digest() for i in range(leaves)]
@@ -262,7 +265,7 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
             rows = [hashlib.sha512(b"zero row" + i.to_bytes(4, "big")).digest() for i in range(leaves)]
         elif v == target and off == "a-call-off":
             rows = rows[m:] + rows[:m]
-        elif v == target and off != "a-call-missing":
+        elif v == target and off not in ("a-call-missing", "zy-other-domain"):
             i = rng.randrange(leaves)
             rows = rows[:i] + [rng.randbytes(64)] + rows[i + 1:]
         levels = tree_levels(dom, rows)
@@ -286,7 +289,9 @@ def _a_log(rng: random.Random, steps: int, ks: list[int], program: str, window: 
     for v, words, n, st, x in tables:
         a(v, words, (n - (v == target and off == "a-call-missing")) * m * x, st)
     for c, k in enumerate(calls or []):
-        a(f"{prefix}zy@{c}", ZY_WORDS, units[c], c // (len(calls) // steps))
+        v = f"{prefix}zy@{c}"
+        a(v, ZY_WORDS, units[c], c // (len(calls) // steps),
+          (_hex(rng), window) if v == target and off == "zy-other-domain" else (program, window))
     for s in range(1, steps if calls else 0):
         a(f"{prefix}ids@{s}", IDS_WORDS, leaves, s)
     if calls and t is not None:
@@ -1455,7 +1460,8 @@ def honest_window(rng: random.Random, name: str = "honest", sid: str = "s-1", le
     d, s = honest_credit(rng, name if name in [*CREDIT_NAMES, "never-received"] else "honest", rows=len(lay["calls"]),
                          sid=sid, leaf=leaf, ks=sorted(set(k_of.values())), program=program, other=other,
                          calls=[k_of[lin] for lin, _blk in lay["calls"]], prefix=prefix, weights=weights,
-                         off=name if name in [*AROW_NAMES, *IDS0_NAMES, *REQ0_NAMES, *LIVE_TABLE_NAMES] else None,
+                         off=name if name in [*AROW_NAMES, *IDS0_NAMES, *REQ0_NAMES, *LIVE_TABLE_NAMES, "zy-other-domain"]
+                         else None,
                          m=lay["m"], rounds=steps, t=t, units=[size for size, _w in Cr.call_work(lay)],
                          served=served_rows(rng, t, len(lay["calls"]), steps, name, length_rows(rng, length, steps, t)))
     d["length"] = {"max_tokens": length, "stop": Wd.STOP_FIXED}
@@ -1574,7 +1580,7 @@ def window_instance(rng: random.Random, name: str = "honest", lay: dict | None =
             e["root"] = _tree(rng, e["leaves"])[1][-1][0].hex()
         case "no-a":
             d["entries"] = [e for e in d["entries"] if not Cr.is_a(e["value"])]
-        case "other-registration" | "a-call-unbound":
+        case "other-registration" | "a-call-unbound" | "zy-other-domain":
             pass
         case "proof-other-registration":
             _other_root(rng, d["proofs"])
@@ -1660,7 +1666,7 @@ LENGTH_NAMES = ["length-none", "length-eos", "length-form", "length-past", "leng
 #: each way a window's entries or its drawn units' proofs are not its registration's
 REGISTRATION_NAMES = ["other-registration", "a-call-unbound", "proof-other-registration", "entry-root",
                       "proof-other-circuit", "proof-other-call", "proof-no-a", "proof-no-b", "proof-no-zy",
-                      "proof-unregistered", "entry-twice", "entry-form"]
+                      "proof-unregistered", "entry-twice", "entry-form", "zy-other-domain"]
 WINDOW_NAMES = ["manifest-count", "chosen", "failed", "missing", "descriptor-hex", *DESC_NAMES,
                 "credit-changed", "credit-no-draw", "credit-forged-ledger", "credit-branch-pin", "k-form", "k-past-units",
                 "never-received", "round-coin", "a-untied", "no-a", *REGISTRATION_NAMES, *WINDOW_WEIGHTS_NAMES,

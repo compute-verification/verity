@@ -465,7 +465,7 @@ def test_credit(pass_server):
                  "which only round # commits",
                  "window arow: round #'s request root (requests, the one the window's open root binds) is not",
                  "window registration: registered value ", "ids@#'s domain is not the one the window's registration",
-                 "requests@#'s domain is not the one the window's registration",
+                 "requests@#'s domain is not the one the window's registration", "zy@#'s domain is not the one the window's registration",
                  "window arow: the window's request table's root is not round #'s request_table",
                  "window arow: the window registers request table x/",
                  "or receipt table of the window", "'s receipt table, its round #'s, which only round # commits",
