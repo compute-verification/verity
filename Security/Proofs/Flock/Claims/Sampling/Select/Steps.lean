@@ -228,7 +228,7 @@ theorem slots_select_ok (rule : Select.Rule) (d : Program) (query : Json) (table
 theorem slotDesign_all (d : Program) (query : Json) (table : Option Json) (n : ℕ) (named : Json)
     (derived : Option Flock.Draw.Law) (hn : Partition.units d query = .ok n) (hnamed : Select.Rule.all.lawOver n = .ok named)
     (hd : Draw.deriveLaw d query named table = .ok derived) :
-    Properties.SampledProofs.slotDesign .all d query table = .ok ⟨[⟨.all, none⟩, ⟨.all, none⟩]⟩ := by
+    Properties.SampledProofs.slotDesign .all d query table = .ok ⟨[.all, .all]⟩ := by
   unfold Properties.SampledProofs.slotDesign
   rw [hn, bind_ok, hnamed, bind_ok, hd, bind_ok]
   rfl
@@ -239,7 +239,7 @@ theorem slotDesign_law (rule : Select.Rule) (d : Program) (query : Json) (table 
     (hn : Partition.units d query = .ok n) (hnamed : rule.lawOver n = .ok named)
     (hd : Draw.deriveLaw d query named table = .ok derived) (hp : Draw.flockLaw (lawObj named derived) n = .ok parsed) :
     Properties.SampledProofs.slotDesign rule d query table =
-      .ok ⟨[⟨Properties.SampledProofs.oneStageOf (derived.getD parsed), none⟩, ⟨.all, none⟩]⟩ := by
+      .ok ⟨[Properties.SampledProofs.oneStageOf (derived.getD parsed), .all]⟩ := by
   unfold Properties.SampledProofs.slotDesign
   rw [hn, bind_ok, hnamed, bind_ok, hd, bind_ok]
   split
