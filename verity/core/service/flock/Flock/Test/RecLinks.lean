@@ -1,7 +1,7 @@
 /-
 `RecLinks.check`: the prover's table of a chain of links whose rows agree passes at counts on and off the grid, and a row
 cut short, a link after a filler, a table off its grid, a link outside the shape, a link between rows of different widths,
-an input row linked twice and a link whose rows differ are refused, each with its code.
+an input row linked twice and a link whose rows differ are refused, each with its code; `--rec-links` is refused.
 -/
 import Flock.RecLinks
 
@@ -37,5 +37,17 @@ def code (rows : Array ByteArray) : String :=
 #guard code (table (chain 3 ++ [⟨5, 1, 4, 0⟩])) == "width"
 #guard code (table (chain 3 ++ [⟨2, 0, 1, 0⟩])) == "twice"
 #guard code (table (chain 3 ++ [⟨5, 0, 7, 0⟩])) == "unequal"
+
+/-! `--rec-links` is refused, with a value or bare, before any file is read. -/
+
+def refused (args : List String) : Option String :=
+  match refuseLinks args with
+  | .error e => some e
+  | .ok () => none
+
+#guard refused ["--rec-links", "links.json", "--rec-inner", "inner.json"] == some NO_LINKS
+#guard refused ["--rec-inner", "inner.json", "--rec-links"] == some NO_LINKS
+#guard refused ["--rec-inner", "inner.json", "--rec-part", "0"] == none
+#guard refused [] == none
 
 end Flock.Test.RecLinks

@@ -33,12 +33,14 @@ and the parser refuses a shape where that fails, as the verifier's setup does.
 namespace Flock.RecScope
 
 /-- **What the compiled verifier reads** of a recursion statement: the inner statement's bytes, the inner statement's
-files where it holds them, its own inner shape, and each V* session's record. -/
+files where it holds them, its own inner shape, each V* session's record, and the link table's root and row count
+where the statement carries them (`--rec-links`, which every V* session refuses, `RecLinks.refuseLinks`). -/
 structure Read where
   inner : Claims.Msg
   src : Option RecCoins.Source
   shape : RecVStar.Inner
   records : List String
+  links : Option (ByteArray × ℕ) := none
 
 /-- The inner statement as the verifier sets it up from its files (`RecCoins.Files.stmt`), where it holds them. -/
 def innerStmt : Option RecCoins.Source → Option Stmt
@@ -70,8 +72,8 @@ def recordDrawOf (record : String) : Option Claims.Recursion.Draw :=
     | .error _ => none
 
 /-- **The recursion's statement, readable**, from what the verifier reads: no circuit commitment (the compiled verifier
-has no private-circuit variant), the inner statement's dimensions as it sets it up, its inner shape as the form, and
-each V* session's draw. -/
+has no private-circuit variant), the inner statement's dimensions as it sets it up, its inner shape as the form,
+each V* session's draw, and the link table's root and row count. -/
 def toStmt (r : Read) : Claims.Recursion.Stmt where
   inner := r.inner
   innerDims := (innerStmt r.src).map fun st => (st.m, st.c.kLog, st.regions.size)
@@ -85,6 +87,7 @@ def toStmt (r : Read) : Claims.Recursion.Stmt where
         | some sp, some st => rangeOk sp st
         | _, _ => false }
   draws := r.records.map recordDrawOf
+  links := r.links.map fun l => (l.1.data.toList, l.2)
 
 /-- **The verifier's setup accepts the inner shape**: V*'s list at it (`RecVStar.statements`), candidate 3's checks
 on the inner statement (`RecCoins.checkAtC3`), the inner shape the inner statement's and the inner statement set up as

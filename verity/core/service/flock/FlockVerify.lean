@@ -704,7 +704,7 @@ shape `--rec-inner F` (under which `--statement` must be `verity/flock-circuit`,
 prints from 0: the levels, then the algebra's parts, then candidate 3's, then the level-0 cap) and its own bindings `--rec-bindings F` (from
 `verity_flock.rec_bindings`, which META's must equal; `RecVStar.checkStmt`), and a V* statement (a `rec-open/…` or `rec-residuals/…` unit) the inner
 statement and session its coefficients are checked against (`RecCoins.check`; `--rec-inner-coins` is refused,
-`RecCoins.refuseCoins`), and a statement reading a `rec-c<k>` the
+`RecCoins.refuseCoins`, and so is `--rec-links`, the inner population's link table, `RecLinks.refuseLinks`), and a statement reading a `rec-c<k>` the
 coin server's record of the inner session whose `c_k` its rows must be (`--rec-inner-transcript`,
 `RecVStar.checkPubRows`), and one of V*'s parts the verifier's record of V*'s shared rows, which its row ports must be
 (`--rec-rows`, `RecVStar.checkRows`). A V* statement whose check 5 reads the link points (a `rec-open/…`,
@@ -816,6 +816,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let identifier : Option (Lean.Json × String) ← match ← identifierInput args with
     | .ok i => pure i
     | .error e => IO.eprintln e; return 2
+  if let .error e := RecLinks.refuseLinks args then IO.eprintln e; return 2
   let recInner ← match ← recInnerInput args with
     | .ok i => pure i
     | .error e => IO.eprintln e; return 2
@@ -982,7 +983,8 @@ rows at what the inner transcript fixes are the `b ‖ c` the verifier holds (`R
 and its rows of the circuit table's tops the coin server's (`RecVStar.checkTopRows`, `RecVStar.innerLink`, which holds the
 record's link points to the coin server's).
 Its verifier-registered values are checked against the verifier's coins (`RecCoins.check`) when it holds what that check
-reads: the inner statement and session (`--rec-inner-public` and its three; `--rec-inner-coins` is refused), or for R's levels and
+reads: the inner statement and session (`--rec-inner-public` and its three; `--rec-inner-coins` is refused, and so is
+`--rec-links`, `RecLinks.refuseLinks`), or for R's levels and
 opening the inner transcript and the verifier's inner shape alone; with the inner statement and session, a statement
 whose check 5 reads the link points needs the inner transcript, and a circuit-table level's `out` reads the coin server's
 tops (`RecCoins.checkLink`). Each level's cap statement (`rec-cap/…`) is checked against its registered reads and
@@ -1018,6 +1020,7 @@ def statementCmd (args : List String) : IO UInt32 := do
   let identifier : Option (Lean.Json × String) ← match ← identifierInput args with
     | .ok i => pure i
     | .error e => IO.eprintln e; return 2
+  if let .error e := RecLinks.refuseLinks args then IO.eprintln e; return 2
   let recInner ← match ← recInnerInput args with
     | .ok i => pure i
     | .error e => IO.eprintln e; return 2
@@ -1566,10 +1569,11 @@ def qwordProgramCmd (args : List String) : IO UInt32 := do
 /-- `rec-compose --rec-inner F --rec-rows F [--archive DIR] LOG...`: a recursive statement's verdict from its V* parts'
 `verify` logs (`RecCompose.check`). The verifier's own inner shape (`--rec-inner`) gives V*'s statements, and
 `--rec-rows` is the one shared rows file the prover staged. It accepts exactly when there is one log per V* statement,
-each of whose `VERDICT`s accepts at its part and names that file's SHA-512. One `REC-COMPOSE` line; exit 0 when
-accepted, 1 when refused, 2 on its inputs. -/
+each of whose `VERDICT`s accepts at its part and names that file's SHA-512. `--rec-links` is refused
+(`RecLinks.refuseLinks`). One `REC-COMPOSE` line; exit 0 when accepted, 1 when refused, 2 on its inputs. -/
 def recComposeCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify rec-compose --rec-inner F --rec-rows F [--archive DIR] LOG..."
+  if let .error e := RecLinks.refuseLinks args then IO.eprintln e; return 2
   let i ← match ← recInnerInput args with
     | .ok (some i) => pure i
     | .ok none => IO.eprintln usage; return 2

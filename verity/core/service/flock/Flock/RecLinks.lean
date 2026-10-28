@@ -16,6 +16,9 @@ at least one link (`empty`) and `grid L` rows (`count`), then each link in order
 input row read twice (`twice`) and to its reader row's words being its writer row's (`unequal`). `check_sound`: whatever it
 accepts, its table is its links then fillers, and every link holds. No statement the verifier accepts reaches it: it is
 what V*'s link unit is held to, and `verity_flock.rec_links` mirrors it for the prover (`flock-rec-links`, the difftest).
+
+A recursive statement carries the table's root and row count as `--rec-links`, which `verify` and `statement` refuse
+(`refuseLinks`) until a guarantee covers it.
 -/
 
 namespace Flock
@@ -255,8 +258,17 @@ theorem check_sound {sh : Shape} {inRow outRow : Nat → Nat → Array Nat} {row
             refine ⟨xs.filterMap id, ?_, rfl, ?_, hc', h1, h2⟩
             · rw [← hlen, ← ordered_split ho]
             · cases hxs : xs.filterMap id with
-              | nil => simp [hxs] at he
+                | nil => simp [hxs] at he
               | cons _ _ => simp
+
+def NO_LINKS : String :=
+  "--rec-links is refused: no guarantee yet covers a recursive statement's link table (its root and row count)"
+
+/-- **`--rec-links` is refused**, given a value or not, before any file is read: a statement carrying the link table's
+root and row count claims that every link holds in the inner population, and no verdict may claim that before V*'s link
+statement and its binding are proved. -/
+def refuseLinks (args : List String) : Except String Unit :=
+  if args.contains "--rec-links" then .error NO_LINKS else .ok ()
 
 end RecLinks
 end Flock

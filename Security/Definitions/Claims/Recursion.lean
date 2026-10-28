@@ -334,14 +334,17 @@ def Draw.Full (d : Draw) : Prop :=
 
 /-- **The recursion's statement**: the inner statement's bytes, its `(m, k_log, regions)` as the verifier sets it up
 from its files (`none` where the verifier holds none), the commitment to the circuit (the private-circuit variant),
-the form, and each V* session's draw as its record holds it (`none` where it holds none the verifier reads; no draws
-where the records are run messages rather than the statement's). -/
+the form, each V* session's draw as its record holds it (`none` where it holds none the verifier reads; no draws
+where the records are run messages rather than the statement's), and the inner population's link table
+(`verity/rec-links/v1`) as its root `T` and row count `N`, where the statement carries one. Neither the relation nor
+the scope reads `links` yet: the compiled verifier refuses every statement that carries one. -/
 structure Stmt where
   inner : Msg
   innerDims : Option (ℕ × ℕ × ℕ)
   circ : Option Msg
   form : Form
   draws : List (Option Draw)
+  links : Option (Msg × ℕ) := none
 
 /-- RecSparse's `P_LOG` at `ℓ`: the bit length of `2ℓ + 1`. -/
 def pLog (ell : ℕ) : ℕ := Nat.log 2 (2 * ell + 1) + 1
