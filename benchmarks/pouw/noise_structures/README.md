@@ -13,10 +13,10 @@ uv run benchmarks/pouw/noise_structures/model.py --out DIR --wrap-cost alu   # t
 - `check.py`: Dither v3.2's segment split with U permuted per noise tile, per segment or not at all (and one word over the
   whole K); the merged factor's limbs and its high limb on 2:4 sparse s8; bit-plane routes for a word over fresh noise;
   synthetic wrap rates; the ANDs of an int8 MAC into a b-bit accumulator.
-- `model.py`: one row a structure × call × m at its best parameters (`rows[*].gd_model` carries GD-MODEL's `pouw` keys);
+- `model.py`: one row a structure × call × m at its best parameters (`rows[*].gd_model` carries GD-MODEL's `pouw` keys, `credit_on` the operands its word is a product of);
   a 16-layer Llama-3.2-1B step's overhead over its linears' stock time; and `tiles`, each structure's proof block by tile
   r×c at K 2048 and K 8192, its k_log against the 2^27 cap, proving GPU-s a window at 2,773 draws, and the optimum tile
-  for a window of S steps.
+  for a window of S steps; `j_pouw_8192`, PoUW's share of J at T 8,192 at the tile each structure assumes.
 
 The rates and their sources are the constants at the top of `model.py`. A floor is the cheapest cheater route found, so
 an upper bound on the true floor.

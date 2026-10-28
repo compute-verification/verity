@@ -146,6 +146,7 @@ class Row:
     block: str
     premise: str
     gd_model: dict = dataclasses.field(default_factory=dict)
+    credit_on: str = ""
     serial: float = 0.0
     overlap: float = 0.0
     objective: float = 0.0
@@ -228,6 +229,8 @@ def hyb(c: Call, name: str, perm: str, word_bits: int, amp_v: int = 80, amp_u: i
                         ("ARX fold unpredictable without its inputs (not SHA-512: a new named premise)" if fold else "SAK on noised operands"),
                     ).finish(c)
                     r.gd_model = gdm("dither", c.k, noise_key, r, lanes if fold else 1, seg, lp, word_bits)
+                    r.credit_on = ("A and B: each segment's word is the noised served product (A + d_A + V)(B + d_B + Uπ)ᵀ over it, "
+                                   "so a cheater computes the served product segment by segment, plus a 4L'/K peel")
                     rows.append(r)
     return rows
 
@@ -255,6 +258,24 @@ def two_gemm(c: Call, word_bits: int = 8, dither_bits: int = 1, lanes: int = 1) 
         + ("; the receipt fold, as J10-R" if fold else ""),
     ).finish(c)
     r.gd_model = gdm("two_gemm", c.k, "fresh", r, lanes, word_bits=word_bits)
+    r.credit_on = "A and R: (A + d_A)·Rᵀ, a product beside the served A·Bᵀ (smell-check Q1)"
+    return [r]
+
+
+def fresh_u(c: Call) -> list[Row]:
+    """X = A + d_A, W′ = wrap8(B + d_B + U) with U fresh int8 along K, drawn once a period and stored; one 8-bit word
+    T = X·W′ᵀ mod 2^8 a cell, and O by the plain GEMM. JR2's noise without its fold, or HYB at t = 1 with V = 0: the
+    nearest design to two-GEMM whose word is the served product's own operands, noised."""
+    r = Row(
+        "fresh-U per period, 8-bit word", c.name, c.m, c.n, c.k, {"word_bits": 8, "u_amp": 64},
+        1.0, "d_A·W′ᵀ mod 2^8: 8 b1 planes or s8 direct, 1.00 (check.planes)", 1.0,
+        1.0, 1.5 * OP / c.n, c.m * c.k / 8 * PRG_B / c.macs, 0.0,
+        HASH_B / c.k, 4 * HASH_B / c.k, 2.0, 1.0,
+        "1 word at 8 bits a cell, and O (32-bit); weight root + per-period W′ (n×K int8, +1× weight memory)",
+        "one cell's whole K", "SAK on noised operands, with U fixed for the period (one operand known ahead)",
+    ).finish(c)
+    r.gd_model = gdm("fresh_u", c.k, "fresh", r, 1)
+    r.credit_on = "A and B: (A + d_A)(B + d_B + U)ᵀ; the work forced beyond the served O is X·Uᵀ"
     return [r]
 
 
@@ -274,6 +295,8 @@ def jr2(c: Call, per_call: bool) -> list[Row]:
         "a whole tile (32×32 cells × K)", "the duo/fx1 receipt fold, as J10-R v1",
     ).finish(c)
     r.gd_model = gdm("jr2", c.k, "fresh", r, 1024, word_bits=32)
+    r.credit_on = ("A and B: X·(B + c + U)ᵀ; the work forced beyond O is X·Uᵀ. Assumes the receipts are computed at serve "
+                   "time for every tile; as J10-R serves today, no noised product runs at serve time and it earns 0")
     return [r]
 
 
@@ -288,6 +311,7 @@ def fresh_v(c: Call) -> list[Row]:
         "1 word at 8 bits a cell, and O (32-bit)", "one cell's whole K", "SAK on noised operands",
     ).finish(c)
     r.gd_model = gdm("fresh_v", c.k, "fresh", r, 1)
+    r.credit_on = "A and B: (A + d_A + V)(B + d_B)ᵀ; the work forced beyond the served O is V·W′ᵀ"
     return [r]
 
 
@@ -309,6 +333,7 @@ STRUCTS = {
     "JR2 fresh U per call (#6369)": lambda c, s: jr2(c, True),
     "JR2 fresh U per period": lambda c, s: jr2(c, False),
     "fresh-V per call, 8-bit word": lambda c, s: fresh_v(c),
+    "fresh-U per period, 8-bit word": lambda c, s: fresh_u(c),
 }
 
 
@@ -330,6 +355,7 @@ TILE_STRUCTS = {
     "fresh-R two-GEMM, 8-bit word": ("fresh-R two-GEMM, 8-bit word", "whole", True, 8, False),
     "fresh-R two-GEMM + lanes fold": ("fresh-R two-GEMM + fold of 32 cells", "whole", True, 8, True),
     "fresh-V, 8-bit word": ("fresh-V per call, 8-bit word", "whole", False, 8, False),
+    "fresh-U per period, 8-bit word": ("fresh-U per period, 8-bit word", "whole", False, 8, False),
     "TOP-138's model (J10-R lanes, 300 ANDs a MAC)": (None, "whole", False, 32, True),
 }
 SIDES = (1, 2, 4, 8, 16, 32)
@@ -424,6 +450,33 @@ def tiles(rows: list[dict], row_bytes: int | None = None) -> dict:
     return rep
 
 
+T_STOCK_8192 = 26.32e-3  # b57f's stock step at T 8,192, s (GD-MODEL's calibration of r20261028-080559-b57f)
+TILE_OF = {  # STRUCTS row: (TILE_STRUCTS row, the tile its serve row assumes)
+    "HYB per-segment π, 16-bit, U ±16, V 1 B": ("HYB per-segment π, 16-bit words", (1, 1)),
+    "HYB per-segment π, 8-bit, U ±16, V 1 B": ("HYB per-segment π, 8-bit words", (1, 1)),
+    "HYB per-segment π + ARX fold of 32 cells": ("HYB per-segment π + lanes fold", (1, 32)),
+    "fresh-R two-GEMM, 8-bit word": ("fresh-R two-GEMM, 8-bit word", (1, 1)),
+    "fresh-R two-GEMM + fold of 32 cells": ("fresh-R two-GEMM + lanes fold", (1, 32)),
+    "fresh-V per call, 8-bit word": ("fresh-V, 8-bit word", (1, 1)),
+    "fresh-U per period, 8-bit word": ("fresh-U per period, 8-bit word", (1, 1)),
+}
+
+
+def j_pouw(steps: dict, tl: dict) -> dict:
+    """PoUW's share of J at T 8,192 (GD-MODEL's J: serve overhead over t_stock + proving GPU-s over stock GPU-s a
+    window), for a window of S steps: the step's extra time over b57f's stock step, plus its PoUW blocks' proving."""
+    out = {}
+    for s, (tname, (r, c)) in TILE_OF.items():
+        if s not in steps.get(8192, {}) or tname not in tl:
+            continue
+        e = next(e for e in tl[tname]["sweep"] if (e["r"], e["c"]) == (r, c))
+        serve = steps[8192][s]["extra_ms_step"] / 1e3 / T_STOCK_8192
+        out[s] = {"tile": f"{r}×{c}", "k_log": e["k_log"], "over_cap": e["k_log"] > K_CAP, "serve_term": serve,
+                  "prove_gpu_s": e["prove_gpu_s"],
+                  **{f"J S {n:g}": serve + e["prove_gpu_s"] / (n * T_STOCK_8192) for n in (1, 1e3, 1e5)}}
+    return out
+
+
 def best(rows: list[Row], min_credit: float) -> Row | None:
     ok = [r for r in rows if r.credited >= min_credit - 1e-9]
     return min(ok, key=lambda r: (r.objective, -r.credited)) if ok else None
@@ -466,6 +519,7 @@ def main() -> int:
                      "draws": DRAWS, "costfit": {"o": O_AND, "f0": F0, "f1": F1, "m_max": M_MAX},
                      "fold_word_ands": FOLD_WORD_ANDS, "step_cells_token": STEP_CELLS}
     rep["tiles"] = {"exact rows": tiles(out), "16 KiB value rows": tiles(out, 16384)}
+    rep["j_pouw_8192"] = {rb: j_pouw(steps, tl) for rb, tl in rep["tiles"].items()}
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "structures.json").write_text(json.dumps(rep, indent=1, default=str))
     (a.out / "structures.md").write_text(render(rep))
@@ -494,6 +548,12 @@ def render(rep: dict) -> str:
     for m, d in rep["steps"].items():
         for s, v in sorted(d.items(), key=lambda kv: kv[1]["overhead_over_linear_stock"]):
             lines.append(f"| {m} | {s} | {v['overhead_over_linear_stock']:.2f} | {v['credited_share']:.3f} | {v['extra_ms_step']:.2f} |")
+    for rb, jd in rep.get("j_pouw_8192", {}).items():
+        lines += ["", f"## PoUW's share of J at T 8,192 ({rb}; serve term over b57f's 26.32 ms, proving over S steps' stock GPU-s)", "",
+                  "| structure | tile (k_log) | serve term | proving GPU-s a window | J, S 1 | J, S 1e3 | J, S 1e5 |", "|---|---|---|---|---|---|---|"]
+        for s, v in sorted(jd.items(), key=lambda kv: kv[1]["J S 1000"]):
+            lines.append(f"| {s} | {v['tile']} ({v['k_log']}{', over 2^27' if v['over_cap'] else ''}) | {v['serve_term']:.3f} | "
+                         f"{v['prove_gpu_s']:.0f} | {v['J S 1']:.0f} | {v['J S 1000']:.2f} | {v['J S 100000']:.3f} |")
     shown = {(1, 1), (1, 8), (1, 32), (4, 8), (8, 8), (16, 16), (32, 32)}
     for rb, tl in rep.get("tiles", {}).items():
         lines += ["", f"## Proof blocks by tile ({rb}; K 2048 and K 8192 populations, {DRAWS} draws each a window)", "",
