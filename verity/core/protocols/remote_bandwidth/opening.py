@@ -6,7 +6,7 @@ This module is the stand-in for the unit's proofs, not zero knowledge: `check` e
 prover's own arguments, so the block, its payload, its receipt leaf, the plan row and every salt and path are in the
 caller's hands.  Proved, the verifier would hold them only inside the unit's proof and read its verdict.  No served
 session proves its openings: `period` and `verifier_party` send them to the verifier party in the clear
-(`audit.Session.verify`), and only `benchmarks/one_stage/a8.py` proves one window's units in zero knowledge.
+(`audit.AuditRun.verify`), and only `benchmarks/one_stage/a8.py` proves one window's units in zero knowledge.
 
 For a draw (pass i of window t at step s, position p, block j = plan_i[p]) the prover stages one `BlockOpeningCheck`:
 the receipt leaf on its path to the pass's receipt root and the plan row holding j at p, the block decoding to its

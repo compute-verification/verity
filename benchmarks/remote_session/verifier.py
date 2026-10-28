@@ -88,8 +88,8 @@ machine and reached through `sampled_proofs.remote`'s client (`--challenger serv
 auditor host's challenger through its gate, a session reserved in the audit's period and opened at the session's
 window root (`--challenger gate`, `challengers.ChallengerGate`). Each coin is asked for after the root it follows, the
 Lean takes it with the event that released it, and once the session ends what the challenger signed holds the session's
-coins (`Session.released_reason`, and under the gate the auditor's ledger, `Session.trusted_reason`, which also holds the
-session's pin to the host's pins log and to `--challenger-main`, the auditor's first-parent list of main): a session
+coins (`AuditRun.released_reason`, and under the gate the auditor's ledger, `AuditRun.trusted_reason`, which also holds
+the session's pin to the host's pins log and to `--challenger-main`, the auditor's first-parent list of main): a session
 whose coins fail it is refused as `coins`, the reason in its `challenger`. Each session reserves W challenges, ⌈W/G⌉
 openings coins (`--groups-per-coin` G, 1 by default: each draw's G windows drawn together at its last window's close,
 at two windows in flight, as the Lean's `session` refuses one in flight at G > 1) and `--appends` append coins,
@@ -727,7 +727,7 @@ class Pair:
     events in order with their clock readings, so its answers are the ones it would give were each waited on. An
     event the books reject or refuse is waited on, behind every one before it."""
 
-    def __init__(self, v: Verifier, s: audit.Session, k: int, case: lv.DifftestCase | None = None) -> None:
+    def __init__(self, v: Verifier, s: audit.AuditRun, k: int, case: lv.DifftestCase | None = None) -> None:
         self.v, self.s, self.k, self.lean, self.case = v, s, k, v.lean, case
         self.node, self.disagreement, self.outcome_json = s.registration.node.hex(), None, None
         self.late: tuple | None = None

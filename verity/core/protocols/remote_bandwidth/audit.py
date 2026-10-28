@@ -16,7 +16,7 @@ many reads of a node's registered blocks the node made in each window, from rece
 2. Coins.  Before the session the proof system's challenger draws two live coins a window, its challenge `σ_t` and
    its openings coin, and a coin an append, and commits to them (`coins.SessionCoins`: session k's epoch of the one
    challenger, on its own host when it is remote).  Each coin opens once, after the root the verifier recorded for it,
-   which the challenger's signed log keeps (`Session.released_reason`), and the prover is sent its value and that root
+   which the challenger's signed log keeps (`AuditRun.released_reason`), and the prover is sent its value and that root
    (`coins.Released`).  The commitment, a function of every coin, reaches the prover only once the session has its
    outcome, with every released coin's opening (`AuditRun.disclose`), and the prover checks each coin it was sent
    against them then (`Prover.end`).
@@ -71,7 +71,7 @@ many reads of a node's registered blocks the node made in each window, from rece
    each γ term over the session's span and over each window's own (`WindowLedger`), μ_sample read per window and
    pooled over the session's horizon (`pooled`, `floors`).  It credits a receipt of a block appended after the seed
    only on the stacking property's verdict on the circuits that wrote it (`credit_post_seed`) and the session's schedule
-   check (`schedule`, `Session.scheduled`: every pass's plan the published schedule's at its step, the schedule within
+   check (`schedule`, `AuditRun.scheduled`: every pass's plan the published schedule's at its step, the schedule within
    the cap on its bits the session's parameters committed before its first coin, `Params.schedule_cap`,
    `schedule.py`), and then charges what their carriers may hold (μ_carrier); without both, those receipts are
    certified but not credited.  On the served
@@ -1458,7 +1458,7 @@ class Registry:
         g = params.groups_per_coin
         c = (coins.local(registration.digest, k, params.windows, entropy, per_coin=g) if challenger is None
              else coins.SessionCoins(challenger(k), registration.digest, k, params.windows, per_coin=g))
-        session = Session(params, registration, tiles, c, not_before_ns=not_before_ns, clock=clock)
+        session = AuditRun(params, registration, tiles, c, not_before_ns=not_before_ns, clock=clock)
         x.sessions.append(session)
         return session
 
@@ -1820,7 +1820,7 @@ def ledger(record: Record, *, capacity_bytes_per_s: float, chip_bytes: int, rebu
     `timing.sketch_failure` of the prover's SHA-512 compressions over the session (`PROTOCOL.md` §4).
     The record credits the receipts of registered blocks, and those of blocks appended after the codec seed only on
     `credit_post_seed`, the stacking property's verdict on the circuits that wrote them (None credits none, and a verdict
-    that fails is refused), and only with this session's schedule check (`schedule`, `Session.scheduled`): every
+    that fails is refused), and only with this session's schedule check (`schedule`, `AuditRun.scheduled`): every
     pass's plan the published schedule's at its step and the schedule within the cap on its bits the session committed
     before its coins, so the layout the appended blocks are read at is the verifier's function of the schedule, steered
     through at most the cap's bits on every coin (`GammaTerms.steering`, the cap; `SteeredLayout` at cap + 1).
