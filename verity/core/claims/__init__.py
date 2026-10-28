@@ -218,6 +218,25 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "The auditor's device runs its stated code, timing included, on a host the prover doesn't control, with its CPU "
           "isolated from other tenants and a monotonic clock; the host never restores its earlier state", "Trusted host",
           "standard"),
+    # The four per-party assumptions of `Accounting.Assumptions.Parties` (Security/Definitions/Accounting/Assumptions/
+    # Parties.lean), each about one auditor party p; the reason to believe them is that p runs on a machine the auditor
+    # owns, which is not itself an assumption.  The device-attest statements (`Properties.Attest`) read them
+    Entry("faithful", "assumption",
+          "Faithful p: the auditor party p runs its stated code on its true inputs, its own clock's readings and its own "
+          "coin source's draws among them, and its state persists: each step starts from the state the last one left, "
+          "never an earlier copy (NIST SP 800-208's no snapshot restore of a stateful hash-based key)", "Faithful party",
+          "standard"),
+    Entry("secret", "assumption",
+          "Secret p: the prover can neither read nor set the auditor party p's signing keys, its LMS leaf states or its "
+          "coins not yet released; what it learns of them is what p's outputs carry", "Secret party", "standard"),
+    Entry("confined", "assumption",
+          "Confined p: the auditor party p's only outputs are the messages of its declared channels (toward the auditor, "
+          "its manifest's public messages, such as one liveness record per sampling block): no other channel, timing "
+          "included, carries its state out", "Confined party", "standard"),
+    Entry("witness-path-private", "assumption",
+          "Witness path private: the path between an auditor party and the prover carries no observer but its two "
+          "endpoints, so the party's private messages (its signed roots and records, the prover's witness) reach nobody "
+          "else; they travel unencrypted for now", "Witness path private", "standard"),
     # `Accounting.Covered` (Security/Definitions/Accounting/Physical.lean) is its Lean form: every boundary link of the
     # location is certified (uncertifiedCapacity = 0). The auditor's placement in the onsite protocol; nothing proves it
     Entry("certifier-coverage", "assumption",
