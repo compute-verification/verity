@@ -59,12 +59,14 @@ from verity.ml.commitments.gates.hm96 import SALT as HM_SALT
 from verity.ml.commitments.gates.hm96 import Hm96Sha512Leaf, leaf_gadget
 from verity.ml.commitments.gates.sha512 import IV
 
+from . import ir_lower as IL
 from . import rec_links as RL
+from .class_statement import ClassDefinition
 from .rec_open import BLOCK, DIGEST, NODE_WORDS, RecSha512Compress, _sha, bytes_of, words_of
 from .sha512_circuit import word_bit
 
 __all__ = ["OUT_WORDS", "PORTS", "RecLink", "Tree", "aux_words", "definition", "depth", "expected", "index", "link_ref",
-           "port_words", "unit_circuit"]
+           "lowering", "port_words", "unit_circuit", "unit_name"]
 
 BIT = BL.BIT
 U16 = Array(16, BIT)
@@ -386,3 +388,20 @@ def unit_circuit(UB: int, PB: int):
 
 def definition(UB: int, PB: int):
     return bind(RecLink, UB=UB, PB=PB)
+
+
+def unit_name(UB: int, PB: int) -> str:
+    """The link table's statement's unit: ``rec-link/u<UB>-p<PB>`` (`VStar.linkName`)."""
+    return f"rec-link/u{UB}-p{PB}"
+
+
+def lowering(UB: int, PB: int) -> IL.Lowering:
+    """`unit_circuit` as M0's unit named `unit_name`: the ports `PORTS` (u16 words), ``rin`` and ``rout`` (one row each);
+    `VStar.linkUnit` in Lean."""
+    name = unit_name(UB, PB)
+    C, ins, outs = unit_circuit(UB, PB)
+    units = IL.Units(target=None, in_widths=[16] * len(ins), out_widths=[16] * len(outs),
+                     in_src=[[("leaf", p) for p in range(len(ins))]], out_src=[[("ret", p) for p in range(len(outs))]],
+                     signature=(name,), gates=[], arg_gates=[], ret_gates=[])
+    defn = ClassDefinition(name, port_words(UB, PB), len(outs), (OUT_WORDS, OUT_WORDS))
+    return IL.Lowering(name, defn, units, C, IL.layout(C, ins, outs))

@@ -1569,11 +1569,15 @@ def qwordProgramCmd (args : List String) : IO UInt32 := do
 /-- `rec-compose --rec-inner F --rec-rows F [--archive DIR] LOG...`: a recursive statement's verdict from its V* parts'
 `verify` logs (`RecCompose.check`). The verifier's own inner shape (`--rec-inner`) gives V*'s statements, and
 `--rec-rows` is the one shared rows file the prover staged. It accepts exactly when there is one log per V* statement,
-each of whose `VERDICT`s accepts at its part and names that file's SHA-512. `--rec-links` is refused
-(`RecLinks.refuseLinks`). One `REC-COMPOSE` line; exit 0 when accepted, 1 when refused, 2 on its inputs. -/
+each of whose `VERDICT`s accepts at its part and names that file's SHA-512. `--rec-links ROOT:N`, the link table's
+registered root and row count, is read (`RecLinkTree.linksArg`) and refused (`RecLinks.NO_LINKS`): no guarantee covers a
+table yet. One `REC-COMPOSE` line; exit 0 when accepted, 1 when refused, 2 on its inputs. -/
 def recComposeCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify rec-compose --rec-inner F --rec-rows F [--archive DIR] LOG..."
-  if let .error e := RecLinks.refuseLinks args then IO.eprintln e; return 2
+  match RecLinkTree.linksArg args with
+  | .error e => IO.eprintln e; return 2
+  | .ok (some (t, n)) => IO.eprintln s!"{RecLinks.NO_LINKS} (table root {hexOf t}, {n} rows)"; return 2
+  | .ok none => pure ()
   let i ← match ← recInnerInput args with
     | .ok (some i) => pure i
     | .ok none => IO.eprintln usage; return 2
