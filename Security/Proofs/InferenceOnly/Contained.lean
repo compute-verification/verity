@@ -390,12 +390,12 @@ theorem ContainedTraining : Guarantees.ContainedTraining := by
 
 theorem ContainedMatMulOn : Guarantees.ContainedMatMulOn := by
   intro c k K b_w b_a μ r d θv ch dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX hA hPS
-  exact ContainedMatMulOn_rate c (k / c) K b_w b_a μ r d θv ch dd emax M (by positivity) hK hw ha hdd hc
+  exact ContainedMatMulOn_rate c (k / c) K b_w b_a μ r d θv ch dd emax M (by positivity) hK hw ha hdd (by omega)
     (by rwa [rate_mul _ hc]) hμ₀ hμ₁ hd he (compliesRate_of_complies hP) hB hX hA hPS
 
 theorem ContainedTrainingOn : Guarantees.ContainedTrainingOn := by
   intro c k K b_w b_a μ κ r d θv ch dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX hA hPS hκ
-  exact ContainedTrainingOn_rate c (k / c) K b_w b_a μ κ r d θv ch dd emax M (by positivity) hK hw ha hdd hc
+  exact ContainedTrainingOn_rate c (k / c) K b_w b_a μ κ r d θv ch dd emax M (by positivity) hK hw ha hdd (by omega)
     (by rwa [rate_mul _ hc]) hμ₀ hμ₁ hd he (compliesRate_of_complies hP) hB hX hA hPS hκ
 
 end InferenceOnly.SecurityProofs

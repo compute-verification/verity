@@ -74,10 +74,13 @@ theorem ReadBound : Guarantees.ReadBound := by
 theorem Inference : Guarantees.Inference := by
   intro c k d B P prompt hB hcard hreads hprompt
   have hc : Complies c k d := by
-    refine ⟨B, P, ⟨hB, hcard, fun u => le_trans (Finset.card_le_card fun a ha => ?_) ?_⟩⟩
-    · rw [Declaration.unregistered, Finset.mem_sdiff] at ha
+    refine ⟨B, P, ⟨hB, hcard, fun u => ?_⟩⟩
+    have hsub : d.unregistered (P.gates u) ⊆ prompt u := fun a ha => by
+      rw [Declaration.unregistered, Finset.mem_sdiff] at ha
       exact (Finset.mem_union.1 (hreads u ha.1)).resolve_left ha.2
-    · simpa [Circuit.width, hB.one_bit] using hprompt u
+    have hw : d.D.width (prompt u) = (prompt u).card := by
+      simp [Circuit.width, hB.one_bit]
+    exact (Finset.card_le_card hsub).trans (hw.symm.le.trans (hprompt u))
   refine ⟨hc, le_trans (iInf₂_le d ⟨Verity.SecurityProofs.ContainsImplements d d (Containment.refl d.D)
     fun _ _ h => h, hc⟩) ENNReal.div_self_le_one⟩
 

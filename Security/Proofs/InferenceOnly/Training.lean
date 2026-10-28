@@ -243,13 +243,13 @@ theorem IncompressibleContainedTraining : Guarantees.IncompressibleContainedTrai
 
 theorem IncompressibleContainedMatMulOn : Guarantees.IncompressibleContainedMatMulOn := by
   intro c k K b_w b_a μ r d ch T dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX h
-  exact IncompressibleContainedMatMulOn_rate c (k / c) K b_w b_a μ r d ch T dd emax M (by positivity) hK hw ha hdd hc
-    (by rwa [rate_mul _ hc]) hμ₀ hμ₁ hd he (compliesRate_of_complies hP) hB hX h
+  exact IncompressibleContainedMatMulOn_rate c (k / c) K b_w b_a μ r d ch T dd emax M (by positivity) hK hw ha hdd
+    (by omega) (by rwa [rate_mul _ hc]) hμ₀ hμ₁ hd he (compliesRate_of_complies hP) hB hX h
 
 theorem IncompressibleContainedTrainingOn : Guarantees.IncompressibleContainedTrainingOn := by
   intro c k K b_w b_a μ κ r d ch T dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX h hκ
   exact IncompressibleContainedTrainingOn_rate c (k / c) K b_w b_a μ κ r d ch T dd emax M (by positivity) hK hw ha
-    hdd hc (by rwa [rate_mul _ hc]) hμ₀ hμ₁ hd he (compliesRate_of_complies hP) hB hX h hκ
+    hdd (by omega) (by rwa [rate_mul _ hc]) hμ₀ hμ₁ hd he (compliesRate_of_complies hP) hB hX h hκ
 
 /-- **Products done in the declaration are bounded by their fan-out**: the case `k = 1` of the packed bound, at `μ = 1`,
 where the dark gates' budget has weight `1 − μ = 0` and the partial sums are not needed. -/

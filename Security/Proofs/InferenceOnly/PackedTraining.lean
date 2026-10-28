@@ -198,12 +198,12 @@ theorem PackedIncompressibleContainedTrainingOn_rate :
 theorem PackedIncompressibleContainedMatMulOn : Guarantees.PackedIncompressibleContainedMatMulOn := by
   intro p c k K b_w b_a μ r d ch T dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX h
   exact PackedIncompressibleContainedMatMulOn_rate p c (k / c) K b_w b_a μ r d ch T dd emax M (by positivity) hK hw ha
-    hdd hc (by rwa [rate_mul _ hc]) hμ₀ hμ₁ hd he (compliesRate_of_complies hP) hB hX h
+    hdd (by omega) (by rwa [rate_mul _ hc]) hμ₀ hμ₁ hd he (compliesRate_of_complies hP) hB hX h
 
 theorem PackedIncompressibleContainedTrainingOn : Guarantees.PackedIncompressibleContainedTrainingOn := by
   intro p c k K b_w b_a μ κ r d ch T dd emax M hK hw ha hdd hc hkK hμ₀ hμ₁ hd he hP hB hX h hκ
   exact PackedIncompressibleContainedTrainingOn_rate p c (k / c) K b_w b_a μ κ r d ch T dd emax M (by positivity) hK
-    hw ha hdd hc (by rwa [rate_mul _ hc]) hμ₀ hμ₁ hd he (compliesRate_of_complies hP) hB hX h hκ
+    hw ha hdd (by omega) (by rwa [rate_mul _ hc]) hμ₀ hμ₁ hd he (compliesRate_of_complies hP) hB hX h hκ
 
 /-- At `k = 1` the packed training assumption is the per-product one. -/
 theorem packedTrainingIncompressible_toPacked {c : Declaration} {ch : Chain c.D} {T : Threading c} {Γ : ℕ}
