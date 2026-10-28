@@ -9,7 +9,7 @@
 # The builds run before the lease, niced; each build's tests and timing hold one GPU, about 10 minutes. GPU_LEASE_ON, if
 # set, is gpu-lease's --on: the GPUs it may take; LEASE_MIN its --max-min (20).
 #
-#   research run --on vy-nebius-2 --cwd source --source . [--env GPU_LEASE_ON=2,3] [--env BUILDS=hbc] \
+#   research run --on MACHINE --cwd source --source . [--env GPU_LEASE_ON=2,3] [--env BUILDS=hbc] \
 #     -- bash benchmarks/pouw/served_h1/producer_gpu.sh
 set -euo pipefail
 PY=${PY:-/workspace/jobs/venv312/bin/python}
