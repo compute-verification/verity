@@ -1446,15 +1446,15 @@ __global__ void __launch_bounds__(256) act_kernel(const int* __restrict__ D, con
   }
   __syncthreads();
   if (threadIdx.x) return;
-  uint16_t r[1 + ANAMED], *s = r + 1;
+  uint16_t r[1 + ANAMED], *sl = r + 1;
   r[0] = (uint16_t)mx;
   const u32 k = nn <= ANAMED ? nn : 0;
-  for (u32 a = 0; a < k; ++a) {
-    u32 b = a;
-    for (; b && s[b - 1] > nm[a]; --b) s[b] = s[b - 1];
-    s[b] = nm[a];
+  for (u32 e = 0; e < k; ++e) {
+    u32 b = e;
+    for (; b && sl[b - 1] > nm[e]; --b) sl[b] = sl[b - 1];
+    sl[b] = nm[e];
   }
-  for (u32 a = k; a < ANAMED; ++a) s[a] = 0xFFFFu;
+  for (u32 e = k; e < ANAMED; ++e) sl[e] = 0xFFFFu;
   if (nn > ANAMED) atomicAdd(over, 1u);
   uint4 v;
   memcpy(&v, r, AREC);
