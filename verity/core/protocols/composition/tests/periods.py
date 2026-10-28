@@ -31,8 +31,8 @@ BANDWIDTH = ROOT / "verity/core/protocols/remote_bandwidth"
 POUS_K = 8
 """Rounds of PoUS's audit: the composition reads only the component's answer, so its case is kept small (the hook's
 own point is `pous_check`'s difftest's)."""
-OTHER_POUS_STORE = hashlib.shake_256(b"another tiny MLP's weights").digest(500)
-"""Four blocks of P2's 126 payload bytes at the small point's width: a store PoUS sets up, never the committed `C*`."""
+OTHER_POUS_STORE = hashlib.shake_256(b"another tiny MLP's weights").digest(8 * 2054)
+"""Eight blocks of P2's 2,054 payload bytes, at the committed `C*`'s point: a store PoUS sets up, never that `C*`."""
 COINS = hashlib.sha512(b"the period's live coins").digest()
 OTHER_STORE = "other-store"
 """PoUS's honest run on `OTHER_POUS_STORE`, accepted: the one that meets PoUB-P2's case on two stores."""
@@ -99,7 +99,7 @@ def build(tmp: Path) -> None:
         mc.SessionLog.create(tmp / name)
         kw = {"signer": signer, "log": mc.SessionLog(tmp / name), "clock": M.Clock(10 ** 9), **kw}
         if run is not None:
-            return pous.run("n0", run, COINS, point=pous.point_for(len(run), pous.W, pous.C0, k=POUS_K), **kw)
+            return pous.run("n0", run, COINS, point=_held(store).point, **kw)
         return pous.audit("n0", _held(store), COINS, **kw)
 
     honest = space("honest")
@@ -109,7 +109,8 @@ def build(tmp: Path) -> None:
                          "other-setup": _with_setup(honest.case, other.setup_case, (signer.public_key,)),
                          OTHER_STORE: (other.case, other.answer)}
                         | _undecodable(R.POUS.id, honest.case, honest.answer["commitment"]))
-    assert R.POUS.cases["other-setup"][1]["reason"] == "the run's commitment is not what its setup published"
+    why = R.POUS.cases["other-setup"][1]["reason"]
+    assert why == "the run's commitment is not what its setup published", why
     def root(case: dict) -> bytes:
         return RUN.Setup.from_json(json.loads(bytes.fromhex(case["commitment"]))).root
 
