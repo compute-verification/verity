@@ -148,6 +148,32 @@ A.to_design = _design
 _compressions_per_row = M.compressions_per_row
 
 
+#: every value `flips` tries for each knob, one knob at a time from a design
+FLIPS = {
+    "fuse": ("all", "dedupe", "fuse", "e1", "e2"), "cbits": (8, 12, 16), "row": (512, 1024, 2048, 4096, 16384, 65536),
+    "seal": ("tree", "roots"), "host": ("today", "fixed"), "kernels": ("served", "bar"),
+    "overlap": ("none", "corun", "corun4"), "open": ("whole", "exact"), "scheme": ("dither", "jr2"),
+    "lp": (32, 64, 128, 256, 512), "t": (1, 2, 3, 4, 8), "noise": ("perm", "periodic", "fresh"),
+    "drow": (512, 1024, 2048, 4096, 16384, 32768), "credit": ("all4", "k2048"), "joint": ("separate", "joint"),
+    "form": ("tile", "lanes"), "ptile": ((1, 1), (1, 8), (4, 8), (8, 8), (32, 32)), "tile": ((1, 1), (1, 4), (4, 4)),
+    "akeys": (32, 64, 128), "kmax": (27, 28, 29, 30), "mmax": (35, 36, 37, 38, 39, 40), "reps": (1, 2),
+    "device": ("h200", "sm120"), "sampling": ("work", "stratified", "uniform"), "stmt": ("template", "universal"),
+    "hiding": ("hm96", "prf"), "steps": (1, 2, 4, 8, 16, 32, 64), "retain": ("device", "host"),
+    "period": (1, 10, 100, 1000, 10_000, 100_000),
+}
+
+
+def flips(d: dict, point: str, v: dict[str, float] | None = None) -> list[dict]:
+    """J at d, and at each other value of each knob with the rest held."""
+    out = []
+    for k, vals in FLIPS.items():
+        for x in vals:
+            r = evaluate({**d, k: x}, v, point)
+            out.append({"knob": k, "value": x, "at_d": x == d[k], "J": r["J"], "serve": r["serve"],
+                        "prove_ratio": r["prove_ratio"], "feasible": r["feasible"], "reasons": r["reasons"]})
+    return out
+
+
 def _prf_compressions_per_row(row_bytes: int) -> int:
     return math.ceil((row_bytes + 17) / 128) + 2
 
@@ -180,3 +206,26 @@ def evaluate(d: dict, v: dict[str, float] | None = None, point: str = "t8192") -
     finally:
         M.compressions_per_row = _compressions_per_row
         _extra.clear()
+
+
+def main(argv: list[str]) -> int:
+    """`gdm.py flips SEARCH_JSON GRID POINT [OUT]`: `flips` at the nominal best design of a reduced search.json."""
+    import json
+    if len(argv) < 4 or argv[0] != "flips":
+        print(main.__doc__)
+        return 2
+    _, path, grid_name, point = argv[:4]
+    best = json.loads(Path(path).read_text())["scenarios"][grid_name][point]["nominal"]["top"][0]
+    d = {k: tuple(x) if isinstance(x, list) else x for k, x in best["design"].items()}
+    rows = flips(d, point)
+    text = json.dumps({"point": point, "design": d, "key": key(d), "flips": rows}, indent=1, default=str)
+    if len(argv) > 4:
+        Path(argv[4]).write_text(text)
+    for r in rows:
+        print(f"{r['knob']:9} {str(r['value']):12} {'*' if r['at_d'] else ' '} J {r['J']:.6g} serve {r['serve']:.4g} "
+              f"{'' if r['feasible'] else '+'.join(r['reasons'])}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
