@@ -614,8 +614,7 @@ Audit wire vectors:
 ## 8. Conformance of the repository
 
 `benchmarks/pous/p2_v1/reference.py` is this specification (§§3–4 and the derivations), `wire.py` is
-`p2-audit-wire/v4` and its reference verifier, whose tree is the registered scheme's (`verity.core.protocols.pous.verifier`),
-and `memory_challenger.py` audits with v4's leaves and mode-0 derivation
+`p2-audit-wire/v4` and its reference verifier, and `memory_challenger.py` audits with v4's leaves and mode-0 derivation
 over the harness's own responder wire, not these frames. The registered scheme `p2-16448/v4`
 (`verity.core.protocols.pous.schemes.p2`) follows the maps, the values, the profile, the tweak rejection, k and
 the hash, and its keys are §4's streams, but it runs the generic protocol's setup, so four things differ:
