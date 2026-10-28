@@ -69,7 +69,7 @@ commits the attention interiors without retaining them, and each seal's manifest
 device pool until every subprotocol named has drawn the window, then keeps on host, and seals, only the leaves their drawn
 blocks open (`serve_release`; PoUW H1's, ``pouw``, from its arm in process once each window's draw coin is open,
 `serve_h1.H1Windows.drawn`, any other's through ``--draws-dir``). Each
-window's finalize, its readback and records run on a thread of their own (`serve_seal.Sealer`), then its seal on a second,
+window's finalize, its readback and records run on a thread of their own (`seal_stages.Sealer`), then its seal on a second,
 beside the next window's finalize, each in window order, while the engine serves on: the engine loop's part of a close only detaches the window from the
 committer (`NativeHostCommitter.detach`), and it waits only while the windows awaiting their finalize and seal hold
 ``--seal-hold-gb`` of committed values, in the committer's pinned pool, which

@@ -15,7 +15,7 @@ sent none). Each committed step gets a line of ``step_trace.jsonl`` at its windo
 its rows and the committer's trace. ``marks`` hears each window's open and close (the scheduler step trace's window records,
 `engine.step_trace.StepTrace.window`).
 With ``seal`` each closed window is also sealed as a deferred Commit's row dir (`serve_seal.seal_window`); with a ``sealer``
-(`serve_seal.Sealer`) off the engine loop. There the close itself runs off the loop too: the loop ends the window's last
+(`seal_stages.Sealer`) off the engine loop. There the close itself runs off the loop too: the loop ends the window's last
 step, detaches the window into a view of the committer (`NativeHostCommitter.detach`), takes the ledgers as they stand and
 opens the next window, and the window's finalize, its readback, its records and its requests' checks run on the sealer's
 first thread in window order (`CommitWindows._finish`), then its seal on its second, beside the next window's finalize; a

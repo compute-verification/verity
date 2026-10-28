@@ -1,4 +1,4 @@
-"""serve-openai's windows sealed off the engine loop (`serve_seal.Sealer` over `serve_seal.freeze`), bounded on disk
+"""serve-openai's windows sealed off the engine loop (`seal_stages.Sealer` over `serve_seal.freeze`), bounded on disk
 (`serve_guard.DiskFloor`), and its records copied into the run's ``$OUT`` (`serve_commit.Mirror`). CPU only."""
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from verity_vllm.commit.committer import pinned_pool as PP
 from verity_vllm.commit.served_record import served_rows
 from verity_vllm.config import UsageError
 from verity_vllm.pipeline import cli
+from verity_vllm.pipeline import seal_stages as st
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_guard as sg
 from verity_vllm.pipeline import serve_openai as so
@@ -112,7 +113,7 @@ def _sealed_after_the_next_window(d: Path, view_of: Any) -> tuple[dict[str, byte
     com.reset()
     _commit(com, B)
     got: dict[str, Any] = {}
-    sealer = ss.Sealer(1 << 40)
+    sealer = st.Sealer(1 << 40)
     sealer.submit(lambda _waited: got.update(s=ss.seal_window(view, rc, d, **kw, extras=extras)), 1)
     sealer.close()
     return on_loop, inline, got.get("s"), sealer.errors
@@ -180,7 +181,7 @@ def test_the_pool_is_warmed_before_serving_in_blocks_that_hold_any_one_take(monk
 
 def test_a_close_waits_for_room_only_while_the_windows_awaiting_their_seal_hold_the_bound():
     first, go, done = threading.Event(), threading.Event(), threading.Event()
-    sealer = ss.Sealer(15, clock=lambda: (go.set(), 0.0)[1] if first.is_set() else 0.0)
+    sealer = st.Sealer(15, clock=lambda: (go.set(), 0.0)[1] if first.is_set() else 0.0)
     held: list[int] = []
     sealer.submit(lambda _w: go.wait(), 10)
     first.set()
@@ -205,7 +206,7 @@ def test_a_failed_seal_is_its_windows_and_the_next_one_still_runs():
     def bad(_w: float) -> None:
         raise RuntimeError("disk")
 
-    sealer = ss.Sealer(1 << 20)
+    sealer = st.Sealer(1 << 20)
     sealer.submit(bad, 1)
     sealer.submit(lambda _w: ran.append(1), 1)
     sealer.close()
@@ -231,7 +232,7 @@ def test_a_windows_seal_runs_beside_the_next_windows_job_and_holds_its_bytes_unt
         job1.set()
         return lambda: order.append("seal 1")
 
-    sealer = ss.Sealer(1 << 20)
+    sealer = st.Sealer(1 << 20)
     sealer.submit(first, 10)
     sealer.submit(second, 10)
     job1.wait()
@@ -250,7 +251,7 @@ def test_a_failed_seal_is_its_windows_and_the_next_window_still_seals():
     def bad() -> None:
         raise RuntimeError("store")
 
-    sealer = ss.Sealer(1 << 20)
+    sealer = st.Sealer(1 << 20)
     sealer.submit(lambda _w: bad, 1)
     sealer.submit(lambda _w: lambda: ran.append(1), 1)
     sealer.close()
@@ -329,7 +330,7 @@ def test_the_engine_serves_the_next_windows_while_a_seal_is_held(tmp_path, monke
         return {"row_dir": str(d), "requests": [q["request_id"] for q in kw["reqs"]]}
 
     monkeypatch.setattr(sc, "seal_window", seal)
-    sealer = ss.Sealer(1 << 40)
+    sealer = st.Sealer(1 << 40)
     out = tmp_path / "serve"
     out.mkdir()
     mirror = sc.Mirror(out, tmp_path / "OUT")
@@ -360,7 +361,7 @@ def test_while_a_windows_finalize_blocks_the_loop_opens_the_next_window_and_serv
     wait for its finalize; once it returns, both windows land in order and every request passes."""
     monkeypatch.setattr(sc, "seal_window", lambda com, rc, d, **kw: {"row_dir": str(d)})
     gate, marks = threading.Event(), []
-    sealer = ss.Sealer(1 << 40)
+    sealer = st.Sealer(1 << 40)
     s = Sealed(tmp_path, sealer=sealer, com=lambda r: Detached(r, {0: gate}))
     s.windows.marks = lambda k, ev: marks.append((k, ev))
     with s:
@@ -398,7 +399,7 @@ def test_a_full_sealer_holds_the_loop_at_the_close_and_the_window_says_how_long(
             waiting.set()                       # window 1's close asks for room while window 0 holds the bound
         return 5.0 if calls[0] >= 4 else 0.0
 
-    sealer = ss.Sealer(1, clock=clock)
+    sealer = st.Sealer(1, clock=clock)
     s = Sealed(tmp_path, sealer=sealer, com=lambda r: Detached(r, {0: gate}))
     with s:
         for i in range(2):
@@ -428,7 +429,7 @@ def test_with_a_seal_process_each_execution_block_is_sealed_there_and_its_refusa
                 raise SealFailed("ValueError: the step-input port's positions aren't the ones the window's rows ran")
             return {"row_dir": str(d)}
 
-    sealer = ss.Sealer(1 << 40)
+    sealer = st.Sealer(1 << 40)
     sealer.process = Process()
     s = Sealed(tmp_path, sealer=sealer, com=Detached)
     with s:
@@ -458,7 +459,7 @@ def test_a_seal_process_seals_each_execution_block_only_after_its_draw_gated_rel
             written()
             return {"row_dir": str(d)}
 
-    sealer = ss.Sealer(1 << 40)
+    sealer = st.Sealer(1 << 40)
     sealer.process = Process()
     s = Sealed(tmp_path, sealer=sealer, com=Detached)
     s.windows.release = Release()
@@ -472,7 +473,7 @@ def test_a_seal_process_seals_each_execution_block_only_after_its_draw_gated_rel
 
 def test_serve_openais_seals_run_where_its_sealing_options_say():
     """`seal_process.sealer_of`: under ``--seal`` a `ProcessSealer`, whose summary names its process and, once closed, how it
-    ended; a `serve_seal.Sealer` sealing on its own thread with ``--no-seal-process``; none, the seals on the engine loop, with
+    ended; a `seal_stages.Sealer` sealing on its own thread with ``--no-seal-process``; none, the seals on the engine loop, with
     ``--no-seal-off-loop`` or without ``--seal``."""
     from verity_vllm.pipeline import seal_process as sp
 
@@ -481,7 +482,7 @@ def test_serve_openais_seals_run_where_its_sealing_options_say():
 
     assert sealer() is None and sealer("--seal", "--no-seal-off-loop") is None
     plain = sealer("--seal", "--no-seal-process")
-    assert type(plain) is ss.Sealer and plain.process is None and plain.hold_bytes == 2 * ss.GB
+    assert type(plain) is st.Sealer and plain.process is None and plain.hold_bytes == 2 * ss.GB
     plain.close()
     spawned = sealer("--seal")
     assert isinstance(spawned, sp.ProcessSealer) and spawned.summary()["process"] == {"pid": spawned.process.pid}
@@ -506,7 +507,7 @@ def test_a_window_closed_off_the_loop_writes_the_records_one_closed_on_it_writes
         out.mkdir()
         ids = iter(range(1 << 20))
         monkeypatch.setattr(so, "new_http_id", lambda: f"cmpl-{next(ids):04x}")
-        sealer = ss.Sealer(1 << 40)
+        sealer = st.Sealer(1 << 40)
         with Sealed(out, sealer=sealer, com=com, window_steps=2) as s:
             for i in range(3):
                 assert events(s.post("/v1/completions", _body(i, n=3 + i))[1])[-1] == "[DONE]"
@@ -686,7 +687,7 @@ def test_a_size_bound_crossed_inside_a_step_closes_its_window_at_the_step_bounda
 def test_below_the_disk_floor_a_window_is_not_sealed_and_the_server_stops_cleanly(tmp_path, monkeypatch):
     monkeypatch.setattr(sc, "seal_window", lambda *_a, **_k: pytest.fail("a window under the floor is sealed"))
     disk = sg.DiskFloor(tmp_path, 1000, usage=lambda _p: SimpleNamespace(free=1001))
-    sealer = ss.Sealer(1 << 40)
+    sealer = st.Sealer(1 << 40)
     s = Sealed(tmp_path, sealer=sealer, disk=disk)
     with s:
         status, raw = s.post("/v1/completions", _body(0))
