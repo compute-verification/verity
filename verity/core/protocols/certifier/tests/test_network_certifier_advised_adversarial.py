@@ -82,7 +82,7 @@ def test_an_output_released_before_its_requests_frames_is_refused_whatever_promp
     frames were in, is refused: the advice has no ingress end to state (only v0's fields, `received` and the tie), and
     the last request's end is the link's certified total whatever its prompt lengths say, so no split of the 4 frames
     between the two requests passes, even under a verdict on a record of the split's lengths. Which body an output answers is
-    IO-TIE's to tie: advice request j is the link's j-th."""
+    the I/O tie's to fix: advice request j is the link's j-th."""
     ingress, egress, received = CAUSAL
     assert [f.name for f in fields(AD.LinkAdvice)] == ["advice", "received"]
     assert _accepts(_advice((3, 5), 2), received, ingress, egress)

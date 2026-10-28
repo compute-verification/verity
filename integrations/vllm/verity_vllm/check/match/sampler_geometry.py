@@ -216,7 +216,7 @@ def sampler_geometry_check(gp: dict, B, engine_step_of: dict[int, int], steps: d
             hist[f"live={live}:S={x}"] += 1
         if None in Ss:
             problems.append(f"engine step {s}: a top-p TokenSelect carries no readable split count S (neither a Const32[S] splits operand -- the 6th "
-                            f"-- nor an S static of the R15 form)")
+                            f"-- nor an S static)")
         bad = sorted(x for x in Ss if x is not None and x != exp)
         if bad:
             mism.append({"step": s, "live": live, "registered_S": exp, "fold_S": bad})

@@ -8,10 +8,10 @@ the schedule, plus the fail-closed term log2(cells+1) a failed connection), and 
 
 Each case states the bits it bounds.
 
-- **the egress base (CLOSED).** At 316f3292b6 egress started at a + D, a the bucket the warden released the client's
+- **the egress base (CLOSED).** Formerly egress started at a + D, a the bucket the warden released the client's
   ingress END, which waited on the server's connect: the server shifted a by delaying its accept, ~log2(ingress_buckets)
   bit a connection. Egress now starts at s + D, s the admission bucket, and nothing the server does moves s.
-- **the fail reason (CLOSED).** At 316f3292b6 a FAIL cell carried a reason byte the client's shim read, so at one fail
+- **the fail reason (CLOSED).** Formerly a FAIL cell carried a reason byte the client's shim read, so at one fail
   cell the server still picked late vs upstream, ≥1 bit a fail beyond the fail-closed term. Every FAIL is now the same
   bytes; the reason is in the warden's `fails` record, witness.
 - **the fail cell (CHARGED).** The server picks which egress cell a connection fails at — the fail-closed term.
@@ -42,7 +42,7 @@ def _verdict(warden):
 
 
 def test_the_servers_connect_delay_doesnt_move_the_egress_base_from_the_admission_bucket():
-    """At 316f3292b6 the egress schedule started at a + D, a the bucket the warden released the client's END, and the
+    """Formerly the egress schedule started at a + D, a the bucket the warden released the client's END, and the
     warden released nothing until the server's connection was open: a server that connected at bucket 1 or 4 set a to
     1 or 4, and the client read it from the padding before the first live cell. Now egress starts at s + D (s = 0
     here) whatever the connect: a server that connects at 1 or 2 gives the client the same bytes in the same cells, and
@@ -96,7 +96,7 @@ def test_the_servers_connect_delay_doesnt_move_the_egress_base_from_the_admissio
 def test_regression_two_server_accept_delays_give_byte_identical_client_visible_cells():
     """The harness's server accepting its connection at once, a bucket late and two buckets late (each before the
     first egress cell's deadline at s + D): the client's cells are the same bytes in the same buckets, and so are both
-    wire records; the server gets the same request. On 316f3292b6 each delay moved the egress base."""
+    wire records; the server gets the same request. Formerly each delay moved the egress base."""
     req, resp = request(5), b"r" * (2 * P + 3)
     runs = [run(Server([[(0, resp), (0, EOF)]], hold=hold), {0: [cells(req, B)]}) for hold in ({}, {0: 1}, {0: 2})]
     (w0, (c0,), s0), *others = runs
@@ -112,7 +112,7 @@ def test_regression_two_server_accept_delays_give_byte_identical_client_visible_
 
 def test_at_one_fail_cell_the_reason_is_not_on_the_wire():
     """Two connections that both fail at egress cell 0: one whose server connects but never sends (late), one whose
-    server connection is refused (upstream). At 316f3292b6 the FAIL cell carried the reason byte and the shim read
+    server connection is refused (upstream). Formerly the FAIL cell carried the reason byte and the shim read
     "late" vs "upstream". Now the clients get the same bytes, a FAIL with no payload, and the reason is only in the
     warden's `fails` record, witness the client never sees; the audit reads it there."""
     late_w, (late_c,), _ = run([[]], {0: [cells(request(5), B)]})  # connects, never answers: late at cell 0

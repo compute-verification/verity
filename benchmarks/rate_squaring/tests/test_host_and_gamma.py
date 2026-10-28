@@ -1,5 +1,5 @@
 """`ifma.c`'s gate on this machine's CPU (skipped without gcc or AVX-512 IFMA), and `gamma.py`'s formula against rows of
-ra-rate-redteam's `node_gamma.py` table (its report's 18:00Z γ table), so the two price the same thing, and
+`benchmarks/rate_redteam/node_gamma.py`'s γ table, so the two price the same thing, and
 `cycle_fit.py`'s opcode classes and choice of form."""
 
 from __future__ import annotations
@@ -71,7 +71,7 @@ def test_measured_rates_are_clock_matched() -> None:
     assert round(gamma.X1 / gamma.GPU["FOLD 5, column-chained (measured best)"], 1) == 138.0
 
 
-# FOLD 5's loop body on node 2 (r20261012-185914-35f2's sass-mix.json).
+# FOLD 5's loop body on node 2 (a run's sass-mix.json).
 FOLD5_BODY = {"IMAD.WIDE.U32": 121, "IADD3.X": 110, "SHF.L.W.U32.HI": 31, "SEL": 30, "MOV": 28, "IMAD": 17,
               "IMAD.HI.U32": 16, "IMAD.WIDE.U32.X": 15, "IADD3": 4, "BRA": 3, "HFMA2": 2, "ISETP.GE.U32.AND": 2,
               "UIADD3": 1, "BSSY.RECONVERGENT": 1, "UISETP.NE.AND": 1, "BSYNC.RECONVERGENT": 1, "BRA.U": 1}

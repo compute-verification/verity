@@ -117,7 +117,7 @@ def _build_101(tmp_path) -> Path:
 
 
 def _rekey_sha512(d: Path) -> None:
-    """#101's Build recorded its Program digest under SHA-256, before the identities moved to SHA-512. The record must be the SHA-256
+    """Workload 101's Build recorded its Program digest under SHA-256, before the identities moved to SHA-512. The record must be the SHA-256
     digest of the descriptor the Build wrote; each file of the request dir then carries that same descriptor's SHA-512 digest in its
     place, so nothing but the digest changes."""
     desc = json.load(gzip.open(d / "descriptor.json.gz"))
@@ -134,7 +134,7 @@ def _run(code: str, *args: str) -> subprocess.CompletedProcess:
 
 @pytest.mark.slow
 def test_101s_request_program_composes_as_its_build_does(tmp_path):
-    """#101's request Program (V = 128256, S = 32, 23.26 x 10^9 word gates once composed) through GP-01 and a cold decode."""
+    """Workload 101's request Program (V = 128256, S = 32, 23.26 x 10^9 word gates once composed) through GP-01 and a cold decode."""
     build = _build_101(tmp_path)
     r = _compose(VLLM_DIR / "workloads" / f"{ROW_101}.json", build / "build_request", tmp_path / "build_workload", eos=128001)
     assert r["requests"] == 1 and r["gates"] == 23_256_312_239

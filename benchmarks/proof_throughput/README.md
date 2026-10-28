@@ -41,10 +41,9 @@ stratified law the Lean verifier's soundness covers:
    measurements and the Lean verifier's. It passes only when the live verifier accepted every session and the Lean
    verifier accepted every timed one.
 
-**Counted sessions.** A session counts toward throughput only if the Lean verifier accepts it (ruling on D12, 17 Oct). The
-sweep before the draw (verifier runs of 17 Oct 08:29–08:31Z) proved the whole staged set with no draw; every check passed
-and the verifier refused it under D12 (`verity/ml/flock/verifier/PROTOCOL.md` §16.15). Those runs are labelled "checks
-pass, refused under D12 (no draw)", a result of that kind fails with that label in its detail (`verify.lean_drawless`),
+**Counted sessions.** A session counts toward throughput only if the Lean verifier accepts it. A sweep that proves the
+whole staged set with no draw passes every check, and the verifier refuses it under D12
+(`verity/ml/flock/verifier/PROTOCOL.md` §16.15). Such runs are labelled "checks pass, refused under D12 (no draw)", a result of that kind fails with that label in its detail (`verify.lean_drawless`),
 and `table` and `baseline` read none of them.
 
 ## The result contract
@@ -122,7 +121,7 @@ proving cost doesn't depend on the values it carries. Regenerate with `instances
 
 Workers would prove the inner statement natively with ZK off and the outer proof's arithmetic unmasked; a ZK server
 (compiled Lean, CPU) would draw the masks and salts, check the outer relations and release; the auditor runs the Lean
-verifier (note:proofs/20261017T0724Z-draft-zk-server). That split doesn't exist. The ZK point measures today's stand-in,
+verifier. That split doesn't exist. The ZK point measures today's stand-in,
 labelled so in its result (`proof-throughput/zk-standin/v1`): `job.sh ZK=1` proves the same drawn sessions with
 `flock-circuit prove --zk --gpu` (M1's masked protocol) under the ZK server (`FC_FIREWALL=1`, PROTOCOL §10): `flock-circuit`'s
 checks on its host threads and the Lean (`verity/core/service/flock/Flock/Firewall`, the `flock-firewall` processes the

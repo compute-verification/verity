@@ -1,7 +1,7 @@
 [project]
 name = "verity-numerical"
 version = "0.1.0"
-description = "Numerical work shared by the proof backends: the bench spine (result contract, workloads, lowerings, tables), source-close and independent references for the first subcircuit, the reference checker, witness generators and range lemmas."
+description = "Numerical work shared by the proof backends: the bench spine (result contract, workloads, lowerings, cell checks), source-close and independent references for the first subcircuit, the reference checker, witness generators and range lemmas."
 requires-python = ">=3.12"
 dependencies = ["research", "verity", "verity-vllm", "z3-solver>=4.13", "matplotlib>=3.8"]
 
