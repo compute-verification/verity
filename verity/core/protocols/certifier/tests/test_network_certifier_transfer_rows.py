@@ -1,5 +1,5 @@
 """The network certifier's transfer rows (`transfer_rows`): a value committed as a registered value under the certifier's
-salts, its head signed for one link-window, and the verifier's read of its registration and of a unit's rows."""
+salts, its head signed for one link's sampling block, and the verifier's read of its registration and of a unit's rows."""
 
 from __future__ import annotations
 
