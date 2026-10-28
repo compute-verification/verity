@@ -45,15 +45,15 @@ F_FAULT_XA = 32     # h1u.cu's: xa of unit 0's row 0 at k = 0 flipped (kh_one_pe
 
 def install() -> None:
     """The window's step hook raises F_FAULT_XA on the fault_xa capture (dither_one's sets the other captures' flags)."""
-    before = DO.DitherState.before
+    before = DO.Window.before
 
-    def before_xa(self: DO.DitherState, m: int) -> None:
+    def before_xa(self: DO.Window, m: int) -> None:
         before(self, m)
         if self.cap == "fault_xa":
             self.flags |= F_FAULT_XA
             self.S.copy_(torch.tensor([0, m, 0, self.flags], dtype=torch.int32))
 
-    DO.DitherState.before = before_xa
+    DO.Window.before = before_xa
 
 
 def xa_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, roots: tuple[bytes, bytes]) -> list[int]:
@@ -107,7 +107,7 @@ def peel_cpu(z_v3: np.ndarray, a32: np.ndarray, b32: np.ndarray, salt: bytes, po
     return {"exact": exact, "literal": literal, "xa_entries": int(xa.sum())}
 
 
-def check(win: DO.DitherState, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
+def check(win: DO.Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
           cpu_calls: tuple = (0, 1, 2, 3, 126, 127)) -> dict:
     from verity_vllm.engine import int8_exact as E
     g = win.caps.get(which, {})

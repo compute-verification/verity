@@ -390,7 +390,7 @@ def warden_views(root: Path, name: str, w: dict) -> list[str]:
     request before it in that bucket in ordinal order, so that the order is the warden's (bucket, ordinal). The client's
     own send is in ``client_send_unix``, and ``chunks``, ``first_token_s`` and ``done_s`` are rebased on the new
     ``send_unix``, so that every output keeps its time. ``steps.jsonl``, ``meta.json`` and ``server.log`` are copies of
-    the trace's: a hard link stops the tar stream that fetches a run's outputs."""
+    the trace's: a hard link stops `research fetch`'s tar stream."""
     tau = w["params"]["bucket_ms"] / 1000
     base = math.floor(w["origin_unix"] / tau)
     reqs = read_jsonl(root / name / "requests.jsonl")

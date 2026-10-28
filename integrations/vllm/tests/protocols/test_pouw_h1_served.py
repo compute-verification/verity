@@ -126,21 +126,18 @@ def _period(ws, shapes=SHAPES, modules=MODULES, blocks=BLOCKS, defn=StandIn):
 
 def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=SHAPES, blocks=BLOCKS, steps=STEPS,
             served=1, changed=None, modules=MODULES, tile=TILE, rows=T, no_z=False, ws=None, weights=None, receipts=None,
-            order=None, defn=StandIn, device=None):
+            order=None, defn=StandIn):
     """A window: its first ``served`` steps serve 5 rows each, q and k on one input x, o on another, every step with the
     same weights ``ws`` (`_weights` of ``seed`` by default; step 1's q on ``changed`` when given), each call's z/y records
     `scaled_mm_zy`'s over its T slots, its linears called in ``order`` (module order by default); the later steps are
     empty. With ``weights`` (`_period`) its ``b/<K>`` are the period's. Its proof blocks are ``defn``'s (`StandInJ10R` for a
-    J10-R window). With ``device`` the arm's tensors are there (each weight moved once), so its records are too. Returns
-    the run, each linear's weight and scales, and each served call's (a, s_a, z, y) by its index on the host, z its exact
-    product and y its served y."""
+    J10-R window). Returns the run, each linear's weight and scales, and each served call's (a, s_a, z, y) by its index,
+    z its exact product and y its served y."""
     rng = np.random.default_rng(seed)
     run = PH.H1Run("t", SALT, modules, shapes, rows, steps, key=bytes([seed + 1]) * 32,
                    served=SV.Served(tile, _unit(tile, defn), blocks, window=served_key or key, weights=weights,
                                     receipts=receipts))
     ws = _weights(seed, shapes) if ws is None else ws
-    on = (lambda t: t) if device is None else (lambda t: t.to(device))
-    held, moved = [(on(c), on(s)) for c, s in ws], None if changed is None else on(changed)
     got = {}
     for s in range(served):
         xs = {}
@@ -148,15 +145,13 @@ def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=S
             xs[b] = xs[b] if b in xs else _codes(rng, SERVED, k)
         inputs = [xs[b] for b in blocks]
         for w in range(len(inputs)) if order is None else order:
-            a, (wt, _sw), (dw, ds) = inputs[w], ws[w], held[w]
-            if (s, w) == (1, 0) and changed is not None:
-                wt, dw = changed, moved
+            a, (wt, sw) = inputs[w], ws[w]
+            wt = changed if (s, w) == (1, 0) and changed is not None else wt
             n = wt.shape[0]
             s_a = torch.rand(SERVED) + 0.5
-            da, dsa = on(a), on(s_a)
-            y, zy = OPS.scaled_mm_zy(da, dsa, dw, ds, rows) if n % PH.TILE[1] == 0 else (None, None)
-            call = run.record(w, da, dsa, dw, ds, z=None if no_z else zy)
-            got[call.index] = (a, s_a, a.to(torch.int32) @ wt.to(torch.int32).T, None if y is None else y.cpu())
+            y, zy = OPS.scaled_mm_zy(a, s_a, wt, sw, rows) if n % PH.TILE[1] == 0 else (None, None)
+            call = run.record(w, a, s_a, wt, sw, z=None if no_z else zy)
+            got[call.index] = (a, s_a, a.to(torch.int32) @ wt.to(torch.int32).T, y)
     run.close()
     return run, ws, got
 
@@ -230,47 +225,6 @@ def test_each_call_registers_its_tables_as_it_is_recorded():
         assert {rz.value: rz.root.hex()}.items() <= run.tables[c.index]["registered"].items()
     for r, log in enumerate(run.round_log):
         assert RQ.step_digest(run.salt, r, run._rows([c for c in run.calls if c.step == r])).hex() == log["calls"]
-
-
-class _Hashing:
-    """A z table's hash still running, as `pouw_h1_registered_device.Hashing` is: never ready, so only a wait reads it."""
-
-    def __init__(self, value: str, events: list[tuple[str, str]]) -> None:
-        self.value, self.events = value, events
-
-    def ready(self) -> bool:
-        return False
-
-    def result(self) -> tuple:
-        self.events.append(("read", self.value))
-        return ()
-
-
-def test_a_z_table_hashing_on_the_gpu_is_read_at_its_rounds_close_and_registers_what_a_waited_one_does(monkeypatch):
-    """A z table whose hash is left running (`pouw_h1_registered.commit`'s ``later``, the GPU path) keeps its place in the
-    registration order and is read only when its round closes, after its step's later calls were recorded: the window's
-    trees, entries, digest, manifest roots and round roots are the ones it registers when each hash is waited for."""
-    torch.manual_seed(0)
-    waited, *_ = _window(W1)
-    events, commit = [], NR.commit
-
-    def later(*args, later=False, **kw):
-        reg = commit(*args, **kw)
-        if not later:
-            return reg
-        events.append(("hashing", reg.value))
-        return NR.Later(_Hashing(reg.value, events), lambda: reg)
-
-    monkeypatch.setattr(NR, "commit", later)
-    torch.manual_seed(0)
-    run, *_ = _window(W1)
-    zy = [SV.PREFIX + f"zy@{c}" for c in range(len(run.calls))]
-    assert events == [(e, zy[c]) for s in range(STEPS) for e in ("hashing", "read") for c in range(3 * s, 3 * s + 3)]
-    assert all(isinstance(r, G.Registered) for r in run.served.registered.values())
-    assert list(run.served.registered) == list(waited.served.registered)
-    assert run.served.roots() == waited.served.roots() and run.served.entries() == waited.served.entries()
-    assert (run.tables, run.round_log) == (waited.tables, waited.round_log)
-    assert (run.served.digest(), run.calls_root()) == (waited.served.digest(), waited.calls_root())
 
 
 @pytest.mark.parametrize("steps", [2, 3])

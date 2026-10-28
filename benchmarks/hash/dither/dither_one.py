@@ -16,9 +16,9 @@ forward's stream, is two launches: its A slot and table (`h1c_a_call`, the root 
 (each unit's seeds, receipt, z and y; DITHER_UNITS picks the form, `block` (`h1o_unitsb`, a unit a block, the default),
 `split` (`h1o_unitss`, a unit a block of six warps) or `warp` (`h1o_units`, a unit a warp)).  After step s's forward: its
 admit and z tables, the a-step,
-admit-step and z-step trees, the round over them, and the receipt trees (with `DitherState.tree_streams` set, the receipt
+admit-step and z-step trees, the round over them, and the receipt trees (with `Window.tree_streams` set, the receipt
 trees and the admit tables on streams of their own beside the rest), then the round root recorded
-(`sampled_proofs.challenger.LiveRecord`; its coin is not read: no seed waits on it).  With `DitherState.step_salt` set the
+(`sampled_proofs.challenger.LiveRecord`; its coin is not read: no seed waits on it).  With `Window.step_salt` set the
 salt is each step's instead: after step s's round is recorded, step s + 1's seeds read
 `h1tile.live_salt` of that round's opened coin and root, copied to the device between steps (in record_host_ms), so
 each step's noise comes from the round before it.  The rounds' coins are `dither_fused`'s switch (`coins.open_coins`):
@@ -61,9 +61,9 @@ F_FAULT_Y = 64      # dither_a's ycommit only: bit 0 of the served y[0, 0] flipp
 # roots (an arm's Side fills them in `before_mid`), "receipt-step" the calls' receipt-table roots, both
 # under the round recorded before the next coin
 ROUND_EXTRA: tuple = ()
-CAPTURES = ("gate", "control", "fault", "fault_wb")     # a peeled window's add "fault_xa" (`DitherState.captures`)
+CAPTURES = ("gate", "control", "fault", "fault_wb")     # a peeled window's add "fault_xa" (`Window.captures`)
 LIB_ENV = "DITHER_H1O"
-PHASE_RANGE = "verity/dither/phase/"    # `DitherState.phase`'s NVTX ranges, under DITHER_NSYS=prof only
+PHASE_RANGE = "verity/dither/phase/"    # `Window.phase`'s NVTX ranges, under DITHER_NSYS=prof only
 UNITS_ENV = "DITHER_UNITS"
 UNITS_FORMS = {"split": "h1o_unitss_launch", "block": "h1o_unitsb_launch", "warp": "h1o_units_launch",   # h1o.cu's forms of the same units
                "split2": "h1o_unitss2_launch", "block2": "h1o_unitsb2_launch"}   # those two at the maximum carveout (`h1o_init`)
@@ -85,7 +85,7 @@ A_CHUNKS_ENV = "DITHER_A_CHUNKS"
 LIB = "dither1"
 REG = DF.REG
 CFG: dict = {}
-WIN: "DitherState | None" = None
+WIN: "Window | None" = None
 M32 = (1 << 32) - 1
 
 
@@ -95,7 +95,7 @@ class _O(C.Structure):
                 ("k", C.c_int), ("units", C.c_int)]
 
 
-class DitherState:
+class Window:
     """A window's device state: per linear one A, scale and z slot (a step's tables are built before the next step's
     forward reads its slots); the h1c sets (B tables once; the A, admit and z tables, the step trees and the round); one
     call table for the seeds and receipts; the `h1o` table and step struct; the epoch salt."""
@@ -509,10 +509,10 @@ def round_leaves(kinds) -> str:
 
 # -- the op and the patch --------------------------------------------------------------------------------------------------
 
-def _window(dev) -> DitherState:
+def _window(dev) -> Window:
     global WIN
     if WIN is None:
-        WIN = DitherState(CFG["t"], CFG["key"], CFG["h1c"], CFG["h1o"], CFG["gate"], dev)
+        WIN = Window(CFG["t"], CFG["key"], CFG["h1c"], CFG["h1o"], CFG["gate"], dev)
     return WIN
 
 
@@ -611,7 +611,7 @@ def patch(t: int, h1c: str, h1o: str, key: bytes | None = None, gate: bool = Fal
     IV.Int8PlainLinearMethod.apply = apply
 
 
-def hook(llm) -> DitherState:
+def hook(llm) -> Window:
     from verity_vllm.engine import handle
     runner = handle.model_runner(llm)
     win = WIN if WIN is not None else _window(torch.device("cuda"))
@@ -733,7 +733,7 @@ def a_chunks(k: int) -> int:
     return 1 if settings.get(A_CHUNKS_ENV) == "0" else WT.chunks(k)
 
 
-def a_step_fields(win: DitherState, k: int, s: int) -> dict:
+def a_step_fields(win: Window, k: int, s: int) -> dict:
     """A_STEP_ENV's table a/<k>@<s>: its domain's fields (kind "a-table", count n len(linears) T at n = `a_chunks` (k),
     which the fields name past 1)."""
     n = a_chunks(k)
@@ -748,7 +748,7 @@ def a_step_rows(q: np.ndarray, sc: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return q.reshape(-1, q.shape[1] // n), np.repeat(np.asarray(sc).reshape(-1), n)
 
 
-def a_roots_cpu(win: DitherState, s: int, calls, q_of, sc_of) -> dict[int, bytes]:
+def a_roots_cpu(win: Window, s: int, calls, q_of, sc_of) -> dict[int, bytes]:
     """commit.py's A root of each call in `calls` at step s from its slot rows q_of(w) ([T, k] int8) and scales sc_of(w)
     ([T] float32): its own table a/<s>/<w>, or under a_step its K's a/<K>@<s> (the K's calls' rows in call order, as
     `a_step_rows` leaves)."""
@@ -810,7 +810,7 @@ def h1v3_itself(units: list[dict]) -> dict:
     return {"tree": tree, "sha": sha, **doc}
 
 
-def check(win: DitherState, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
+def check(win: Window, lib_h1o: str, which: str = "gate", n_cpu_units: int = 3,
           cpu_calls: tuple = (0, 1, 2, 3, 126, 127)) -> dict:
     """`which`'s capture against references other than the served kernel: every call's A, admit and z roots, the receipt
     roots of CPU_CALLS and the step's round = commit.py's; every receipt = h1r v1's (another unit implementation, gated
@@ -822,7 +822,7 @@ def check(win: DitherState, lib_h1o: str, which: str = "gate", n_cpu_units: int 
     (0, 0) of every call and nowhere else, that unit's receipt off h1r's and no other, and y = dequant of that z (the
     perturbed MMA word reached what serves).  "fault_wb" wants every receipt unmoved (wb is not receipted), z moved only in
     column 0 of unit 0, by `wb_fault_expected` on CPU_CALLS and by multiples of 256 elsewhere, and y = dequant of that z.
-    Peeled (`DitherState.peel`), z's reference is A B^T itself (a float64 product on the device, exact: every partial sum is
+    Peeled (`Window.peel`), z's reference is A B^T itself (a float64 product on the device, exact: every partial sum is
     an integer below 2^53), y must be today's served y (`int8_ops.scaled_mm`'s body) on every call, the CPU units' z the kernel's
     peel of their z, and each fault wants what it wants unpeeled against A B^T: so a z that reads no noised word (one
     computed beside the receipted MMAs) is refused at "fault".  "fault_xa" (peeled) wants every receipt unmoved, z moved

@@ -57,14 +57,17 @@ certifies beside what it did.
   harness, and the probe's. No table is stored.
 
 ~~~sh
-# on an RTX PRO 6000 node, from the tree's root (a clone where a PoUS or joint leg builds Lean), OUT or RESEARCH_RUN_DIR set
-GPU_LEASE_WHO=<id> SHAPES=o,qkv,gate_up,cube8192 bash benchmarks/resource_accounting/run.sh
-GPU_LEASE_WHO=<id> SHAPES=o BATCHES=1,128 ARMS=native-fp8,pearl-c POUS=1 POUS_AUDITS=100 VERIFY_AT=o:1 \
-  bash benchmarks/resource_accounting/run.sh
-GPU_LEASE_WHO=<id> SHAPES=o BATCHES=1,128 ARMS=native-bf16,native-fp8 JOINT=separate,inproc,joint \
-  bash benchmarks/resource_accounting/run.sh
-GPU_LEASE_WHO=<id> LEGS=A,B,C,F AT=<the booking's start, UTC> RELEASE='<the booking line>' \
-  bash benchmarks/resource_accounting/window.sh
+research run --on vy-nebius-2 --project verity --campaign resource-accounting --source . --cwd source \
+  --env GPU_LEASE_WHO=<id> --env SHAPES=o,qkv,gate_up,cube8192 -- bash benchmarks/resource_accounting/run.sh
+research run --on vy-nebius-2 --project verity --campaign resource-accounting --source . --cwd clone \
+  --env GPU_LEASE_WHO=<id> --env SHAPES=o --env BATCHES=1,128 --env ARMS=native-fp8,pearl-c --env POUS=1 \
+  --env POUS_AUDITS=100 --env VERIFY_AT=o:1 -- bash benchmarks/resource_accounting/run.sh
+research run --on vy-nebius-2 --project verity --campaign resource-accounting --source . --cwd clone \
+  --env GPU_LEASE_WHO=<id> --env SHAPES=o --env BATCHES=1,128 --env ARMS=native-bf16,native-fp8 \
+  --env JOINT=separate,inproc,joint -- bash benchmarks/resource_accounting/run.sh
+research run --on vy-nebius-2 --project verity --campaign resource-accounting --source . --cwd clone --no-sampler \
+  --env GPU_LEASE_WHO=<id> --env LEGS=A,B,C,F --env AT=<the booking's start, UTC> --env RELEASE='<the booking line>' \
+  -- bash benchmarks/resource_accounting/window.sh
 python benchmarks/resource_accounting/render.py art:<id>
 ~~~
 

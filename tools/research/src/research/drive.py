@@ -27,7 +27,7 @@ own.  While one runs, a Lean change above it, reviewed or not, gets a check stac
 its own; the lower one runs on.  Each Lean check launched or stacked stops at a cut point, just below the Lean
 change after the first ceil(n / f) of the n it would hold, f the Lean checks still free (`lean_cut`), lowest first: a failure
 holds only what's above it, and the lower ones land without waiting for the rest.  `next` is built non-Lean first (drive.toml's
-`nonlean_first`, `queue.Queue._nonlean_order`: what a sync adds), and while no Lean check of `next` runs or passed, the
+`nonlean_first`, `queue.Queue._nonlean_order`: what a sync merges anyway), and while no Lean check of `next` runs or passed, the
 sync moves the members with a land verdict below those waiting for one (`reviewed_first`), those that change no Lean first
 (`_lift`; never past a held member), where they land that tick, so a reviewed member seldom waits above an unreviewed member,
 or above a Lean change for its check.  A Lean check lost or failed by its
@@ -37,9 +37,7 @@ of a reviewed commit above it checked the tree that lands (`_past_failed`).  And
 landing leaves must compile (`py_compile`): the PR that last changed one that doesn't is ejected.  While any Lean check of a
 commit of `next` runs, drive's or a hand one of its run registry (`_running_lean`), the members up to it keep their place
 (`--first` goes above them), and so do they under a passed one of drive's whose every
-member up to it has its ready mark and a land verdict (`_landable`), until it lands.  Up to the highest commit of any of drive's
-Lean checks that runs or passed, `next` is kept (`queue.lean_hold`, `--first` above it too), though a member under a passed one
-alone that is pushed or loses its mark leaves, and `next` is rebuilt from it.  ci's hand Lean check goes through drive
+member up to it has its ready mark and a land verdict (`_landable`), until it lands.  ci's hand Lean check goes through drive
 (`/data/infra/drive.sh queue lean-check COMMIT`, `Driver.hand_lean`): recorded in drive's state at its launch, it holds `next`
 from its first second and counts, is followed and covers as drive's own.  Each landing awaits the after-landing run, one at a
 time of `main`'s tip (`train.sh MAIN MACHINES --deferred STEPS`) with every ci.toml job (`AFTER_LANDING`), `--no-cache
@@ -81,7 +79,7 @@ from pathlib import Path
 from typing import Callable
 
 from .queue import (IDENTITY, PR, Member, Queue, QueueError, StoreLabels,
-                    _git, _out, built_on, changed, hold, lean_change, lean_hold, unreviewed)
+                    _git, _out, built_on, changed, hold, lean_change, unreviewed)
 
 #: who hears what drive can't settle
 CI = "@ci"
@@ -1565,7 +1563,7 @@ class Driver:
 
     def _review(self, state: dict, drive: dict, dry_run: bool) -> str:
         """One tick of the review landing: sync `next` (held on its base while a Lean check of it runs, drive's or a hand one:
-        `_running_lean`, kept in place up to a passed one that lands: `_landable`, and kept up to any passed one: `lean_hold`), land its
+        `_running_lean`, and kept in place up to a passed one that lands: `_landable`), land its
         reviewed prefix (`land_reviewed`) once `main` has a baseline (`_unbaselined`), stacking a Lean check above a running one
         (`_stack_lean`), and launch the after-landing run, or the next run of a bisection (`_bisect_step`)."""
         q = self.q
@@ -1589,11 +1587,8 @@ class Driver:
             what.append(f"`{q.branch}` waits for the Lean check of {waits[:12]} to end before an ejection rebuilds it")
         else:
             chain = q.chain()
-            frozen = max(max((i + 1 for i, m in enumerate(chain) if m.commit in running), default=0), self._landable(drive, chain))
-            # a passed check whose prefix doesn't land yet holds `next` too, or a `--first` fix goes below it and its pass is lost;
-            # a member under it that is pushed or loses its mark still leaves, or it would wait at its old head for a verdict
-            q.hold = max(frozen, lean_hold({"drive": drive}, chain))
-            q.frozen = {m.pr for m in chain[:frozen]}
+            q.hold = max(max((i + 1 for i, m in enumerate(chain) if m.commit in running), default=0), self._landable(drive, chain))
+            q.frozen = {m.pr for m in chain[:q.hold]}
             q.lift = [] if q.hold or running else self._lift(drive, chain)
             entries = q.sync(dry_run)[1]
             state = {**q.load_state(), "drive": drive}

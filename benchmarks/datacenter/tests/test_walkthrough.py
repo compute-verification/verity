@@ -1,7 +1,7 @@
 """The walkthrough's code, section by section, so every snippet the guide shows runs as shown.
 
-The guide is "Accounting for a datacenter, from a circuit up"; each function here is one of its sections, in order,
-and `python tests/test_walkthrough.py` prints what the guide prints.
+The guide is the Notion page "Accounting for a datacenter, from a circuit up"; each function here is one of its sections,
+in order, and `python tests/test_walkthrough.py` prints what the guide prints.
 """
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple
 
-from datacenter import (FLEET_CLOSED, Accounts, Append, Assumption, Cadence, Carried, Challenge, Credit, Datacenter,
-                        Deviation, DeviceEntry, Fleet, Interval, LinkEntry, Maintenance, Plan, Port, ReadWindow,
-                        Refused, Release, StoreEntry, Wipe, Zone, account, ands, audit, commit, crossings,
-                        double_credit, evaluate, names, occupancy, place, read, register, run, values, work)
+from datacenter import (FLEET_CLOSED, Append, Assumption, Block, Cadence, Carried, Challenge, Credit, Datacenter,
+                        Deviation, Device, Fleet, Interval, Ledger, Link, Maintenance, Plan, Port, ReadWindow, Refused,
+                        Release, Store, Wipe, account, ands, audit, commit, crossings, double_credit, evaluate, names,
+                        occupancy, place, read, register, run, values, work)
 from datacenter.examples import GB
 from datacenter.models import WEIGHTS, X, words
 
@@ -62,28 +62,28 @@ def section_3(program):
 
 # §4 Hardware is a declaration
 def gpu(name):
-    return DeviceEntry(name, "gpu",
-                       rate={"mac:bf16": Assumption(f"{name}.bf16", 1e9, "MAC/s"),
-                             "cuda:gate": Assumption(f"{name}.gates", 1e10, "gate/s")},
-                       memory=Assumption(f"{name}.hbm", 96 * GB, "bits"),
-                       residual=Assumption(f"{name}.residual", 8e6, "bits", "measured"),
-                       write=Assumption(f"{name}.write", 4e14, "bit/s"))
+    return Device(name, "gpu",
+                  rate={"mac:bf16": Assumption(f"{name}.bf16", 1e9, "MAC/s"),
+                        "cuda:gate": Assumption(f"{name}.gates", 1e10, "gate/s")},
+                  memory=Assumption(f"{name}.hbm", 96 * GB, "bits"),
+                  residual=Assumption(f"{name}.residual", 8e6, "bits", "measured"),
+                  write=Assumption(f"{name}.write", 4e14, "bit/s"))
 
 
 def section_4():
     up = Assumption("uplink", 400e9, "bit/s", "declared")
     dc = Datacenter(
         "dc0",
-        blocks=[Zone("a", [gpu("a.gpu")]), Zone("b", [gpu("b.gpu")])],
-        fabric=[DeviceEntry("a.cert", "certifier"), DeviceEntry("b.cert", "certifier"), DeviceEntry("leaf", "switch"),
-                DeviceEntry("challenger", "challenger"), DeviceEntry("world", "outside")],
-        links=[LinkEntry("a.gpu", "a.cert", up), LinkEntry("a.cert", "leaf", up),
-               LinkEntry("b.gpu", "b.cert", up), LinkEntry("b.cert", "leaf", up),
-               LinkEntry("challenger", "leaf", up), LinkEntry("world", "leaf", up)],
+        blocks=[Block("a", [gpu("a.gpu")]), Block("b", [gpu("b.gpu")])],
+        fabric=[Device("a.cert", "certifier"), Device("b.cert", "certifier"), Device("leaf", "switch"),
+                Device("challenger", "challenger"), Device("world", "outside")],
+        links=[Link("a.gpu", "a.cert", up), Link("a.cert", "leaf", up),
+               Link("b.gpu", "b.cert", up), Link("b.cert", "leaf", up),
+               Link("challenger", "leaf", up), Link("world", "leaf", up)],
         cadence=Cadence(frame_bits=32, bucket_ticks=1, buckets=4, jitter_classes=128,
                         tick=Assumption("tick", 1e-3, "s", "declared")))
     print(dc.validate())
-    dc.links.append(LinkEntry("a.gpu", "leaf", up))
+    dc.links.append(Link("a.gpu", "leaf", up))
     print(dc.validate())
     dc.links.pop()
     print([d for d, device in dc.devices.items() if device.trusted])
@@ -149,18 +149,18 @@ def section_10(claims, profile):
 def section_11(program, registration):
     us = Assumption("hop", 1e-6, "s", "measured")
     net = Assumption("uplink", 400e9, "bit/s", "declared")
-    hbm = DeviceEntry("a.gpu", "gpu", memory=Assumption("a.gpu.hbm", 96 * GB, "bits"),
-                      bandwidth=Assumption("a.gpu.hbm_bw", 1.6e12 * 8, "bit/s"))
-    dram = DeviceEntry("a.dram", "dram", memory=Assumption("a.dram.size", 512 * GB, "bits"),
-                       bandwidth=Assumption("a.dram.bw", 200e9 * 8, "bit/s"))
-    node = Datacenter("dc1", [Zone("a", [hbm, dram])],
-                      [DeviceEntry("a.cert", "certifier"), DeviceEntry("challenger", "challenger"),
-                       DeviceEntry("leaf", "switch"), DeviceEntry("world", "outside")],
-                      [LinkEntry("a.gpu", "a.dram", Assumption("pcie5x16", 64e9 * 8, "bit/s"), kind="pcie"),
-                       LinkEntry("a.gpu", "a.cert", net, us), LinkEntry("a.cert", "leaf", net, us),
-                       LinkEntry("challenger", "leaf", net, us), LinkEntry("world", "leaf", net, us)],
+    hbm = Device("a.gpu", "gpu", memory=Assumption("a.gpu.hbm", 96 * GB, "bits"),
+                 bandwidth=Assumption("a.gpu.hbm_bw", 1.6e12 * 8, "bit/s"))
+    dram = Device("a.dram", "dram", memory=Assumption("a.dram.size", 512 * GB, "bits"),
+                  bandwidth=Assumption("a.dram.bw", 200e9 * 8, "bit/s"))
+    node = Datacenter("dc1", [Block("a", [hbm, dram])],
+                      [Device("a.cert", "certifier"), Device("challenger", "challenger"), Device("leaf", "switch"),
+                       Device("world", "outside")],
+                      [Link("a.gpu", "a.dram", Assumption("pcie5x16", 64e9 * 8, "bit/s"), kind="pcie"),
+                       Link("a.gpu", "a.cert", net, us), Link("a.cert", "leaf", net, us),
+                       Link("challenger", "leaf", net, us), Link("world", "leaf", net, us)],
                       Cadence(buckets=4, tick=Assumption("tick", 1e-4, "s", "declared")))
-    kv = StoreEntry("kv", 1 * GB, "a.gpu")
+    kv = Store("kv", 1 * GB, "a.gpu")
     q = place(program, node, "a.gpu", registration=registration, deliver="world", stores=(kv,), x="world")
     for deadline in (8, 300):
         plan = Plan(Interval(0, 1000), challenges=[Challenge("kv", at=0, deadline=deadline)])
@@ -213,7 +213,7 @@ def section_13():
 
 # §14 Many nights
 def section_14(program, registration, dc, p):
-    ledger = Accounts()
+    ledger = Ledger()
     for night in range(3):
         start = 16 * night
         tonight = place(program, dc, "a.gpu", registration=registration, deliver="world", x="world", h="a.gpu",
@@ -223,7 +223,7 @@ def section_14(program, registration, dc, p):
         ledger.add(account(audit(run(tonight, {"x": X}, plan), tonight.public(plan)), tonight.public(plan)))
     print(ledger)
     print(ledger.custody(sum(16 * len(w) for w in WEIGHTS.values())))
-    print(Accounts([ledger.epochs[1], ledger.epochs[1]]).joint())
+    print(Ledger([ledger.epochs[1], ledger.epochs[1]]).joint())
     serviced = Plan(Interval(0, 16), maintenance=[Maintenance("b", Interval(12, 16))])
     off = Deviation(down={(Port("b.cert", "egress"), 3), (Port("b.cert", "ingress"), 3)})
     acc = account(audit(run(p, {"x": X}, serviced, off), p.public(serviced)), p.public(serviced))
@@ -233,7 +233,7 @@ def section_14(program, registration, dc, p):
 
 # §15 Many datacenters
 def section_15(program, registration, dc):
-    wan = LinkEntry("east.leaf", "west.leaf", Assumption("wan", 100e9, "bit/s", "declared"), kind="wan")
+    wan = Link("east.leaf", "west.leaf", Assumption("wan", 100e9, "bit/s", "declared"), kind="wan")
     fleet = Fleet([dc.prefixed("east"), dc.prefixed("west")], [wan])
     print(fleet.validate())
     p = place(program, fleet.merged(), "west.a.gpu", registration=registration, deliver="world", x="world",

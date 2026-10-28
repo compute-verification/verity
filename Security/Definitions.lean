@@ -2,7 +2,6 @@ import Definitions.Core
 import Definitions.Core.Accel
 import Definitions.Core.Assumptions.Accel
 import Definitions.Core.Blocks
-import Definitions.Core.Period
 import Definitions.Nci
 import Definitions.Nci.Support
 import Definitions.Nci.Reads

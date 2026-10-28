@@ -2,7 +2,9 @@
 # The pass's τ on one GPU (`pass_bench.py`), under one gpu-lease 1 --wait: build session.cu, then time the read, the
 # plain pass and the pipelined pass at each chunk. Results go to $RESEARCH_RUN_DIR/out.
 #
-#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=ra-first-session taskset -c 48-63 bash benchmarks/remote_session/bench.sh
+#   research run --on vy-nebius-2 --project verity --source . --cwd source --mem-gb 32 \
+#     --campaign resource-accounting --declared-output 'out/*' --env GPU_LEASE_WHO=ra-first-session \
+#     -- taskset -c 48-63 bash benchmarks/remote_session/bench.sh
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 ENV_DIR=${ENV_DIR:-/workspace/pouw/fill-out/pous/work/pous-bench}

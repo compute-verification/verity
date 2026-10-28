@@ -1,18 +1,18 @@
 """The private placement of the circuit on the hardware, and the crossing edges it implies.
 
-`StepPlacement` has the shape of Lean's `Accounting.Requirement.Placement` and its Lean-code mirror
+`Placement` has the shape of Lean's `Accounting.Requirement.Placement` and its Lean-code mirror
 (`CircuitRequirement.Placement`): the values are the circuit's gates in canonical order (`Fin n`), each with its engine
 step (`step`) and the device leaf at which it is produced or, for an input, stored (`leaf`), and `ticks[x][s]` is the tick
-at which device x begins engine step s. A value's tick is `ticks[leaf v][step v]` (`StepPlacement.tick`), and `paced(X)`
-is `Placement.Paced`: each device of X begins its steps at strictly increasing ticks. As `Placement.placed` does, a
-value's cell is its index, so the placed circuit's `x`, `t` and `cell` are `leaf`, `tick` and the identity, and no two
-gates share a cell.
+at which device x begins engine step s. A value's tick is `ticks[leaf v][step v]` (`Placement.tick`), and `paced(X)` is
+`Placement.Paced`: each device of X begins its steps at strictly increasing ticks. As `Placement.placed` does, a value's
+cell is its index, so the placed circuit's `x`, `t` and `cell` are `leaf`, `tick` and the identity, and no two gates
+share a cell.
 
 `place` builds one from a plan that puts each root Call on a device at an engine step; the Call's gates go with it.
 Registered inputs (the weights) are stored at the device of their first reader (one no gate reads, such as a rotary-table
 row of a position the request never reaches, beside the registered input before it), and run inputs (the requests) at the
 client's leaf, outside every block. Step 0 is the inputs'; a Call runs at its model's step (`Model.step`: the MLP's
-request r's layer l at 1 + r + l), on one of the block's `DeviceGraph.devices`, and every device begins step s at tick
+request r's layer l at 1 + r + l), on one of the block's `Hardware.devices`, and every device begins step s at tick
 s · `step_ticks`.
 
 **Crossing edges** (`crossings`): a value v read by a gate whose leaf is in another unit, one edge per (v, reading unit),
@@ -34,7 +34,7 @@ from typing import Callable, Sequence
 
 from verity.ml.commitments import advice
 
-from .hardware import OUTSIDE, DeviceGraph
+from .hardware import OUTSIDE, Hardware
 from .model import CallInfo, Model
 
 BINDING = hashlib.sha512(b"verity/netsim/placement/v1").digest()
@@ -44,7 +44,7 @@ _ENTRY = struct.Struct("<HI")
 
 
 @dataclass(frozen=True)
-class StepPlacement:
+class Placement:
     step: tuple[int, ...]
     leaf: tuple[int, ...]
     ticks: tuple[tuple[int, ...], ...]
@@ -89,7 +89,7 @@ class StepPlacement:
         return rows
 
     @classmethod
-    def from_rows(cls, rows: Sequence[bytes]) -> "StepPlacement":
+    def from_rows(cls, rows: Sequence[bytes]) -> "Placement":
         width = ROW_BITS // 8
         if rows[0][:len(_MAGIC)] != _MAGIC:
             raise ValueError("not a placement's rows")
@@ -108,7 +108,7 @@ class StepPlacement:
 Plan = Callable[[CallInfo], tuple[int, int]]
 
 
-def pipeline(model: Model, hw: DeviceGraph) -> Plan:
+def pipeline(model: Model, hw: Hardware) -> Plan:
     """Layer l on block ⌊l·k/L⌋ of k blocks, its groups spread over the block's devices, at the model's step for the Call."""
     blocks = sorted(hw.units)
     layers = model.spec.layers
@@ -120,7 +120,7 @@ def pipeline(model: Model, hw: DeviceGraph) -> Plan:
     return plan
 
 
-def tensor(model: Model, hw: DeviceGraph) -> Plan:
+def tensor(model: Model, hw: Hardware) -> Plan:
     """Group g of every layer on block g mod k, on the block's device l mod its device count."""
     blocks = sorted(hw.units)
 
@@ -134,7 +134,7 @@ def tensor(model: Model, hw: DeviceGraph) -> Plan:
 PLANS = {"pipeline": pipeline, "tensor": tensor}
 
 
-def place(model: Model, hw: DeviceGraph, plan: Plan, step_ticks: int = 1) -> StepPlacement:
+def place(model: Model, hw: Hardware, plan: Plan, step_ticks: int = 1) -> Placement:
     """Every device begins step s at tick s · `step_ticks`."""
     n = model.n
     leaf = [-1] * n
@@ -164,7 +164,7 @@ def place(model: Model, hw: DeviceGraph, plan: Plan, step_ticks: int = 1) -> Ste
         raise ValueError(f"{len(unplaced)} values have no device, the first gate {unplaced[0]} ({kind[unplaced[0]]})")
     steps = max(step) + 2
     ticks = tuple(tuple(s * step_ticks for s in range(steps)) for _ in hw.leaves)
-    return StepPlacement(tuple(step), tuple(leaf), ticks)
+    return Placement(tuple(step), tuple(leaf), ticks)
 
 
 @dataclass(frozen=True, order=True)
@@ -182,7 +182,7 @@ class Edge:
     tick: int
 
 
-def crossings(model: Model, p: StepPlacement, hw: DeviceGraph) -> list[Edge]:
+def crossings(model: Model, p: Placement, hw: Hardware) -> list[Edge]:
     """The crossing edges, in canonical order: by read tick, source unit, destination unit and value."""
     kind, ops, ticks = model.kind, model.ops, p.tick_of
     unit = [hw.unit(x) for x in p.leaf]
@@ -205,7 +205,7 @@ def crossings(model: Model, p: StepPlacement, hw: DeviceGraph) -> list[Edge]:
     return sorted(edges)
 
 
-def causal(model: Model, p: StepPlacement, hw: DeviceGraph) -> list[tuple[int, int]]:
+def causal(model: Model, p: Placement, hw: Hardware) -> list[tuple[int, int]]:
     """The reads that break `Placed.Causal` at the hardware's latencies, as (reader, value); empty when causal."""
     bad = []
     ticks = p.tick_of

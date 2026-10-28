@@ -6,7 +6,7 @@
 # bound (eps_sched 0.44, h_l7qs's 0.78): 0.1090 ms here, and 1.4792 ms at 8,192 tokens at 45.3714 cycles a MMA.
 name = "fattn-hm-l7qs"
 status = "measured"
-source = "BC-KERNEL's hm_l7qs (benchmarks/pouw/edited_gemm/fattn.cu) at s = 2048, H = 32, rep = 4, causal, `eps_profile.py OUT --toml`, census VF3n-16's classes (receipts equal to h_l7qs's, P_prob, s_q, z_q, apv_fu's f and receipts equal to the unfused composition's, fattn_ref.py on the CPU)"
+source = "BC-KERNEL's hm_l7qs (benchmarks/pouw/edited_gemm/fattn.cu) at s = 2048, H = 32, rep = 4, causal, `eps_profile.py OUT --toml`, census VF3n-16's classes (r20261017-105152-84a2; receipts equal to h_l7qs's, P_prob, s_q, z_q, apv_fu's f and receipts equal to the unfused composition's, fattn_ref.py on the CPU)"
 L = 32
 
 [mma]
@@ -32,11 +32,11 @@ UTMA16K = 0.0101
 
 [measured]
 cycles_per_mma = 49.4548        # the hot median at its clock; ncu 47.5029; work bound 27.4769 on JI3n_0 (eps_sched 0.441)
-source = "hm_l7qs at s = 2048, H = 32, rep = 4, causal: hot 0.1090 ms; over every tile 0.1905 ms against h_l7qs's 0.4825 with S stored"
+source = "hm_l7qs at s = 2048, H = 32, rep = 4, causal (r20261017-105152-84a2): hot 0.1090 ms; over every tile 0.1905 ms against h_l7qs's 0.4825 with S stored"
 
 [operands]      # the least operand delivery a program pays a MMA when the design names none (`--operands floor`)
 floor = { LDSM_X4 = 0.2 }
-source = "SPEC §3.4: an IMMA.16832 needs A in 4 registers a lane and B in 2, no instruction writes more than 4, and a register tile with 4ab + 4a + 2b <= 240 delivers >= 1/b + 1/(2a), least 0.20 at (a, b) = (5, 10)"
+source = "SPEC §3.4: an IMMA.16832 needs A in 4 registers a lane and B in 2, no instruction writes more than 4, and a register tile with 4ab + 4a + 2b <= 240 delivers >= 1/b + 1/(2a), least 0.20 at (a, b) = (5, 10) (note:20261017T0324Z-draft-eps1-spec)"
 
 [fold]          # the fold inside per_mma, lane instructions a committed word (12 warp instructions a MMA at L = 32)
 name = "duo"    # u = y ^ d ^ k (LOP3); y = u*a + z (IMAD); z = rotl(u, r) + y (LEA.HI)

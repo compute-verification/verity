@@ -12,7 +12,7 @@ outer witness `w` brings at the V\* statement the run stages (`partAccepts_of_ru
 
 * `Flock.check` passes;
 * its recorded calls are true evaluations;
-* none of them collides with another or with the compiled verifier's own evaluations there (`vcallsAt`, the
+* none of them collides with another or with the compiled verifier's own evaluations there (`vcallsAt`, RECVCALLS'
   escape), a decidable equation about the run;
 * it agrees with `ms` at the rounds it holds whole and at its pieces, and on the shared rows it reads (`RowsRead`).
 

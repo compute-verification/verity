@@ -5,7 +5,7 @@
 # tried folds about as many, so it is the load-and-wait latency, not issue or the TMEM read port.
 name = "dc100-li-l32"
 status = "measured"
-source = "DC-DESIGN's tcliU_x128 (dc/probes/sm100_tcgen05.cu, SASS gated at LDTM.x128 = 1, LOP3.LUT = 64, IMAD = 64 a trip, exact by OP_UNTIL)"
+source = "DC-DESIGN's tcliU_x128 (dc/probes/sm100_tcgen05.cu on cursor/dc-design-ea24, SASS gated at LDTM.x128 = 1, LOP3.LUT = 64, IMAD = 64 a trip, exact by OP_UNTIL; note:20261017T0805Z-draft-dc-design §2)"
 L = 32
 
 [mma]
@@ -24,7 +24,7 @@ IMAD = 512
 
 [measured]
 cycles_per_mma = 1216.6         # 32768 words x 4 SMSPs / 107.74 words/SM/clk
-source = "DC-DESIGN, tcliU_x128 (LDTM.x128 at 0.02630 a SM-clock, tensor at 1.000)"
+source = "DC-DESIGN, tcliU_x128 (r20261017-085236-51a6, r20261017-104307-644b: LDTM.x128 at 0.02630 a SM-clock, tensor at 1.000)"
 
 [operands]      # the least operand delivery any program pays a MMA when the design names none
 floor = { LDTM_32X32B_X128 = 8 }

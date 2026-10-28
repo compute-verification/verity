@@ -2,6 +2,7 @@
 name = "VF3e"
 epoch = "VF3e"
 summary = "VF3d with every kind charged its measured displacement beside an MMA (RS-W′ round 4)."
+note = "note:20261016T0751Z-draft-rs-vf3e"
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",

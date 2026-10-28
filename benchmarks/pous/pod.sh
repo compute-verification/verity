@@ -43,7 +43,7 @@
 # KERNELS='<json>' (band-gpu) sets kernel switches over harness.KERNELS (bench.py --kernels): '{"chain_pairs": false}' runs the
 # run of record's kernels.
 #
-# GATE_ROLE=<role> runs the run as that party of the proof system (memory-challenger for the auditor's timed audit on a node):
+# GATE_ROLE=<role> runs the run as that party of the proof service (memory-challenger for the auditor's timed audit on a node):
 # before anything is built or timed, bench/placement.py's gate checks where it runs and records placement-gate.json, and a
 # refusal exits 4. GATE_CORES are the role's dedicated CPUs (the quiet slice's 124-127 on an RTX PRO 6000 node), GATE_PEERS its peers' probe
 # records, space-separated ROLE[:NAME]=FILE (a relative FILE is one of the run's inputs, --send), and GATE_ABSENT the peer

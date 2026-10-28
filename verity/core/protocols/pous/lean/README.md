@@ -148,9 +148,8 @@ graded proof moves into `Security/Proofs/Pous/` as a module, with its theorem ad
 `Security/Proofs/Pous.lean` and listed as a guarantee in `Security/lean-audit.json` (`check.py --update`,
 then review the records' diff).
 
-**Changing the trusted layer** means editing the files listed in `TRUSTED.sha256` or adding a `.lean` file under
-`Definitions/Pous`, regenerating it from this directory (`tools/verity/check/pins.py --regen` runs this command, and
-`--stale` fails while it would hash a file the list lacks), and running the audit (`bash check.sh`):
+**Changing the trusted layer** means editing the files listed in `TRUSTED.sha256`, regenerating it from this directory,
+and running the audit (`bash check.sh`):
 
 ~~~bash
 sha256sum lean-toolchain lakefile.toml lake-manifest.json grade.sh Grader/Registry.lean Grader/Main.lean \

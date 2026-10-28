@@ -354,18 +354,18 @@ def frontier(registry: Registry, scenario: str, x: str, xs: Sequence[float], y: 
 class Term:
     #: `dark` (the dark leaves), or one of g's terms: a block kind or an uncertified route (`Overhead.terms`)
     name: str
-    #: its part of the overhead's rate, `1 / overhead` before its floor at 1 (`Overhead.rates`), and its share of it
+    #: its part of the weight per gate `dark + (1 − ε_dark) g`, in multiples of the reference's, and its share of it
     part: float
     share: float
-    #: `1 / part`: the overhead can't exceed it while this term remains
+    #: `m / part`: the overhead can't exceed it while this term remains
     ceiling: float
 
 
 def attribution(r: Result, side: str = "bound") -> list[Term]:
-    """What sets the overhead, largest first: its rate (`Overhead.rates`) split into the dark leaves and g's terms, for
-    the family the adversary picks (the least `lo`; with `side="attack"`, its best known attack's)."""
+    """What sets the overhead, largest first: the weight per gate `dark + (1 − ε_dark) g` split into the dark leaves and
+    g's terms, for the family the adversary picks (the least `lo`; with `side="attack"`, its best known attack's)."""
     if side == "bound":
-        fam = min(r.families, key=lambda f: (f.lo, f.combined.padded), default=None)
+        fam = min(r.families, key=lambda f: f.lo, default=None)
         s = fam.combined.overhead if fam else None
     else:
         fam = min(r.families, key=lambda f: f.attack, default=None)
@@ -373,7 +373,7 @@ def attribution(r: Result, side: str = "bound") -> list[Term]:
         s = best.overhead if best else None
     if s is None:
         return []
-    parts = s.rates()
+    parts = {"dark": s.dark} | {t: (1 - s.eps_dark) * v for t, v in s.terms.items()}
     rate = math.fsum(parts.values())
-    return sorted((Term(t, v, v / rate, 1 / v) for t, v in parts.items() if v > 0),
+    return sorted((Term(t, v, v / rate, s.efficiency / v) for t, v in parts.items() if v > 0),
                   key=lambda t: -t.part)

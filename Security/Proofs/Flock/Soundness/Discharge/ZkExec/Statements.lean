@@ -18,7 +18,7 @@ Each statement is a `Prop` here; its theorem (`theorem … : G`) is in the file 
   code equal to `a + β·b` and the column's `hm96` leaf climbing to the pads' root.
 
 **Acceptance and the statement** (under tags without hidden outputs, `hh`, as `Exec`'s; with them `setupTables` calls
-`setupHidden`, `Discharge/HiddenExec`'s):
+`setupHidden`, [wave2-hidden-exec]'s):
 * `AcceptsZKSetupH`: every table is `setupH`'s statement under the `--zk` tags (`tagsAt (zkTags I) J j`) and the coin
   tree, at some draw (the record's, for one table), and passes `Zk.shapeOk`.
 * `AcceptsZKOne`: a one-table acceptance is one `setupH` statement's, with `Zk.verify` on `#[Setup.ofCircuit st]`.

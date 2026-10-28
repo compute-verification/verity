@@ -365,84 +365,6 @@ def test_a_full_sealer_holds_the_loop_at_the_close_and_the_window_says_how_long(
     assert [x["seal_wait_s"] for x in records(tmp_path, "seals.jsonl")] == [0.0, 5.0] and s.windows.summary()["passed"]
 
 
-def test_with_a_seal_process_each_execution_block_is_sealed_there_and_its_refusal_is_the_blocks_error(tmp_path, monkeypatch):
-    """A sealer with a ``process`` (`seal_process.ProcessSealer`) hands each execution block's seal to it, never to
-    `seal_window`, with ``written``, which gives the block's lent memory blocks back once its store's files are written; a seal
-    the process refused is the block's error by the name the process gave it, and the next block is still sealed there."""
-    from verity_vllm.pipeline.seal_process import SealFailed
-
-    monkeypatch.setattr(sc, "seal_window", lambda *_a, **_k: pytest.fail("sealed on the sealer's thread"))
-    got: list[tuple[int, bool]] = []
-
-    class Process:
-        def seal(self, com: Any, rc: Any, d: Path, *, written: Any = None, **kw: Any) -> dict[str, Any]:
-            got.append((kw["rec"]["window"], written is not None))
-            written()
-            if kw["rec"]["window"] == 0:
-                raise SealFailed("ValueError: the step-input port's positions aren't the ones the window's rows ran")
-            return {"row_dir": str(d)}
-
-    sealer = ss.Sealer(1 << 40)
-    sealer.process = Process()
-    s = Sealed(tmp_path, sealer=sealer, com=Detached)
-    with s:
-        for i in range(2):
-            assert events(s.post("/v1/completions", _body(i))[1])[-1] == "[DONE]"
-    sealer.close()
-    seals = records(tmp_path, "seals.jsonl")
-    assert got == [(0, True), (1, True)] and [x["window"] for x in seals] == [0, 1]
-    assert seals[0]["error"] == "ValueError: the step-input port's positions aren't the ones the window's rows ran"
-    assert "error" not in seals[1] and seals[1]["row_dir"] == str(tmp_path / "windows" / "w1")
-
-
-def test_a_seal_process_seals_each_execution_block_only_after_its_draw_gated_release(tmp_path, monkeypatch):
-    """With ``release`` (`serve_release.Draws`), the seal in the sealer's ``process`` follows the window's draw-gated release,
-    as `seal_window` does, so the store it writes holds only the drawn leaves; its line carries the release's record."""
-    monkeypatch.setattr(sc, "seal_window", lambda *_a, **_k: pytest.fail("sealed on the sealer's thread"))
-    order: list[tuple[str, int]] = []
-
-    class Release:
-        def release(self, window: int, com: Any, clock: Any) -> dict[str, Any]:
-            order.append(("release", window))
-            return {"window": window, "kept": 1}
-
-    class Process:
-        def seal(self, com: Any, rc: Any, d: Path, *, written: Any = None, **kw: Any) -> dict[str, Any]:
-            order.append(("seal", kw["rec"]["window"]))
-            written()
-            return {"row_dir": str(d)}
-
-    sealer = ss.Sealer(1 << 40)
-    sealer.process = Process()
-    s = Sealed(tmp_path, sealer=sealer, com=Detached)
-    s.windows.release = Release()
-    with s:
-        for i in range(2):
-            assert events(s.post("/v1/completions", _body(i))[1])[-1] == "[DONE]"
-    sealer.close()
-    assert order == [("release", 0), ("seal", 0), ("release", 1), ("seal", 1)]
-    assert [x["release"] for x in records(tmp_path, "seals.jsonl")] == [{"window": 0, "kept": 1}, {"window": 1, "kept": 1}]
-
-
-def test_serve_openais_seals_run_where_its_sealing_options_say():
-    """`seal_process.sealer_of`: under ``--seal`` a `ProcessSealer`, whose summary names its process and, once closed, how it
-    ended; a `serve_seal.Sealer` sealing on its own thread with ``--no-seal-process``; none, the seals on the engine loop, with
-    ``--no-seal-off-loop`` or without ``--seal``."""
-    from verity_vllm.pipeline import seal_process as sp
-
-    def sealer(*args: str) -> Any:
-        return sp.sealer_of(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--seal-hold-gb", "2", *args], environ={}))
-
-    assert sealer() is None and sealer("--seal", "--no-seal-off-loop") is None
-    plain = sealer("--seal", "--no-seal-process")
-    assert type(plain) is ss.Sealer and plain.process is None and plain.hold_bytes == 2 * ss.GB
-    plain.close()
-    spawned = sealer("--seal")
-    assert isinstance(spawned, sp.ProcessSealer) and spawned.summary()["process"] == {"pid": spawned.process.pid}
-    spawned.close()
-    assert spawned.summary()["process"] == {"pid": spawned.process.pid, "exitcode": 0} and not spawned.thread.is_alive()
-
-
 def test_a_window_closed_off_the_loop_writes_the_records_one_closed_on_it_writes(tmp_path, monkeypatch):
     """The same requests served twice, every window finalized on the loop (a committer that detaches none, frozen for its
     seal) and off it (detached): windows.jsonl, seals.jsonl, requests.jsonl and step_trace.jsonl hold the same lines in the
@@ -694,22 +616,6 @@ def test_the_records_mirror_copies_whole_lines_and_a_replaced_file_again(tmp_pat
     assert (dst / "requests.jsonl").read_bytes() == b'{"d": 4}\n' and not m.errors
     assert sc.records_mirror(src, str(src)) is None and sc.records_mirror(src, None) is None
     assert json.loads((dst / "serve.json").read_text()) == {} and not (dst / "windows.jsonl").exists()
-
-
-def test_the_records_mirror_drains_the_step_traces_writer_before_it_copies(tmp_path):
-    """serve-openai's step trace is written by a thread of its own (`advice_trace`): its lines so far reach the file only at a
-    `drain`, which the mirror calls first."""
-    src, dst = tmp_path / "serve", tmp_path / "OUT"
-    src.mkdir()
-    (src / "advice_trace.jsonl").write_bytes(b'{"kind": "header"}\n{"kind": "st')
-
-    def drain() -> None:
-        with open(src / "advice_trace.jsonl", "ab") as f:
-            f.write(b'ep"}\n')
-
-    m = sc.records_mirror(src, str(dst), before=drain)
-    m()
-    assert (dst / "advice_trace.jsonl").read_bytes() == b'{"kind": "header"}\n{"kind": "step"}\n' and not m.errors
 
 
 def test_a_seal_writes_its_binding_map_in_pieces_to_the_bytes_and_digest_one_dumps_writes(tmp_path, host_blocks, monkeypatch):

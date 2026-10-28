@@ -5,7 +5,7 @@ from verity.core.protocols.certifier.active import CANONICAL_STREAM, DATA, HEADE
 from workload import framing as F
 from workload import model as M
 from workload import placement as P
-from workload.hardware import OUTSIDE, DeviceGraph, mock
+from workload.hardware import OUTSIDE, Hardware, mock
 from workload.placement import Edge
 
 SPEC = M.Spec(d=2, layers=3, requests=2)
@@ -29,12 +29,12 @@ def test_the_mock_blocks_are_covered_and_routes_cross_both_uplinks():
     src, dst = hw.leaf("b0.gpu2"), hw.leaf("b1.gpu1")
     assert [hw.key(e, to) for e, to in hw.watched(src, dst)] == ["b0.uplink>b0.cert", "b1.uplink>b1.gpu0"]
     assert [hw.key(e, to) for e, to in hw.watched(hw.client, src)] == ["b0.uplink>b0.gpu0"]
-    assert DeviceGraph.from_json(hw.to_json()) == hw
+    assert Hardware.from_json(hw.to_json()) == hw
 
 
 def test_a_declaration_reads_as_blocks_of_gpus_behind_their_uplinks(datacenter):
     dc = datacenter()
-    hw = DeviceGraph.from_datacenter(dc)
+    hw = Hardware.from_datacenter(dc)
     assert hw.leaves[hw.client] == "ext0" and hw.bucket_ticks == 10
     assert {u: sorted(hw.leaves[x] for x in xs) for u, xs in hw.units.items()} == {
         b.name: sorted(d.name for d in b.devices) for b in dc.blocks}
@@ -46,7 +46,7 @@ def test_a_declaration_reads_as_blocks_of_gpus_behind_their_uplinks(datacenter):
     assert uplink.beta == 400e9 * 1e-6
     src, dst = hw.leaf("b0.gpu0"), hw.leaf("b1.gpu0")
     assert [hw.key(e, to) for e, to in hw.watched(src, dst)] == ["b0.nic0-b0.cert>b0.cert", "b1.nic0-b1.cert>b1.nic0"]
-    assert DeviceGraph.from_json(hw.to_json()) == hw
+    assert Hardware.from_json(hw.to_json()) == hw
 
 
 def test_a_declaration_with_no_outside_device_has_no_client(datacenter):
@@ -54,8 +54,8 @@ def test_a_declaration_with_no_outside_device_has_no_client(datacenter):
     dc.fabric = [d for d in dc.fabric if d.kind != "outside"]
     dc.links = [k for k in dc.links if "ext0" not in (k.a, k.b)]
     with pytest.raises(ValueError, match="outside"):
-        DeviceGraph.from_datacenter(dc)
-    hw = DeviceGraph.from_datacenter(dc, client="leaf0")
+        Hardware.from_datacenter(dc)
+    hw = Hardware.from_datacenter(dc, client="leaf0")
     assert hw.leaves[hw.client] == "leaf0"
 
 
@@ -63,7 +63,7 @@ def test_an_uncertified_boundary_is_not_covered():
     hw = mock(2)
     j = hw.to_json()
     j["cert"] = [hw.leaf("b0.cert")]
-    assert not DeviceGraph.from_json(j).covered("b1")
+    assert not Hardware.from_json(j).covered("b1")
 
 
 def test_values_round_trip_through_a_message_at_their_positions():

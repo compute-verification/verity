@@ -196,14 +196,6 @@ def test_flat_views_any_dtype():
         S.flat(torch.zeros(4, 4).t())
 
 
-def test_timed_runs_the_warmup_then_before_ahead_of_each_timed_run():
-    calls: list[str] = []
-    ts = S.timed(lambda: calls.append("fn"), 2, torch.device("cpu"), lambda: calls.append("before"), warmup=1)
-    assert calls == ["fn", "before", "fn", "before", "fn"] and len(ts) == 2
-    calls.clear()
-    assert len(S.timed(lambda: calls.append("fn"), 3, torch.device("cpu"))) == 3 and calls == ["fn"] * 3
-
-
 def deployment_vector():
     v = next(v for v in VECTORS["vectors"] if v["id"] == "p2-v4/w16448/0")
     prefix = L.R.expand_prefix(bytes.fromhex(v["setup_salt"]), L.SPEC, bytes.fromhex(v["model_commitment"]))
@@ -211,20 +203,23 @@ def deployment_vector():
     return prefix, j, bytes.fromhex(v["c"]), bytes.fromhex(v["m"])
 
 
-def test_check_blocks_holds_the_spec_vector():
+def test_decode_block_is_the_spec_vector():
     prefix, j, c, m = deployment_vector()
     assert m[:L.LEAD] == bytes(L.LEAD)
-    assert L.check_blocks(L.PARAMS, prefix, j, c, m[L.LEAD:]) == []
+    assert L.decode_block(L.SPEC, prefix, j, c) == m[L.LEAD:]
+    assert L.check_blocks(L.SPEC, prefix, j, c, m[L.LEAD:]) == []
 
 
-def test_check_blocks_refuses_what_the_store_refuses():
+def test_decode_block_refuses_what_the_store_refuses():
     prefix, j, c, m = deployment_vector()
-    [(at, why)] = L.check_blocks(L.PARAMS, prefix, j, S.P_BYTES, m[L.LEAD:])
-    assert at == j and "not below p" in why
-    bad = L.check_blocks(L.PARAMS, prefix, j + 1, c, m[L.LEAD:])
+    with pytest.raises(ValueError, match="not below p"):
+        L.decode_block(L.SPEC, prefix, j, S.P_BYTES)
+    with pytest.raises(ValueError, match="bytes, not"):
+        L.decode_block(L.SPEC, prefix, j, c[1:])
+    bad = L.check_blocks(L.SPEC, prefix, j + 1, c, m[L.LEAD:])
     assert len(bad) == 1 and bad[0][0] == j + 1
     flipped = bytes([c[0], c[1] ^ 1]) + c[2:]
-    assert len(L.check_blocks(L.PARAMS, prefix, j, flipped, m[L.LEAD:])) == 1
+    assert len(L.check_blocks(L.SPEC, prefix, j, flipped, m[L.LEAD:])) == 1
 
 
 def test_twin_is_the_definition():

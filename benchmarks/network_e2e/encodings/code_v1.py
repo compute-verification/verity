@@ -2,8 +2,7 @@
 
 Advice v1 (`derived.py`) charges nothing for what is certified (the warden's admission order, the request records, the
 release buckets), replayed (the scheduler replay, `replay.py`) or derived (`derived.py`'s rules), and sends only the
-residual, one `Window` (the certifier's `window_charge.Window`) per sampling block, each field's values in the
-order its reader asks for them:
+residual, one `Window` per certifier window, each field's values in the order its reader asks for them:
 - `arrived`: the replay's decisions, one per open step: whether the next request had arrived (`replay.Decision`);
 - `hits`: each admitting row's prefix-cache hit in hit units, from the step where the no-eviction bound fails
   (`derived.Residual.hits`);
@@ -61,8 +60,6 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from verity.core.protocols.certifier.window_charge import Window
-
 HERE = Path(__file__).resolve().parent
 
 
@@ -80,6 +77,24 @@ C = _load("code")
 
 
 # ------------------------------------------------------------------------------------------------------ the residual
+
+
+@dataclass(frozen=True)
+class Window:
+    """What one certifier window is charged (the module's docstring)."""
+
+    arrived: tuple[bool, ...] = ()
+    hits: tuple[int, ...] = ()
+    resumes: tuple[int, ...] = ()
+    order: tuple[tuple[int, tuple[int, ...]], ...] = ()
+    lag: tuple[bool, ...] = ()
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "arrived", tuple(bool(b) for b in self.arrived))
+        object.__setattr__(self, "hits", tuple(int(h) for h in self.hits))
+        object.__setattr__(self, "resumes", tuple(int(p) for p in self.resumes))
+        object.__setattr__(self, "order", tuple((int(s), tuple(int(i) for i in idx)) for s, idx in self.order))
+        object.__setattr__(self, "lag", tuple(bool(b) for b in self.lag))
 
 
 @dataclass(frozen=True)

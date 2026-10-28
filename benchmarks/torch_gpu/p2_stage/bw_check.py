@@ -33,7 +33,6 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "pous"))
 import layout as L  # noqa: E402
 import sketch as K  # noqa: E402
-import stage as S  # noqa: E402
 from p2_v1 import serve  # noqa: E402
 
 from verity.core.protocols.remote_bandwidth import p2  # noqa: E402
@@ -83,6 +82,7 @@ def fixture(args, dev: torch.device) -> dict:
         rec["y"] = same(hexes(P.y), p["receipts"])
         rec["root"] = root.hex() == p["root"]
         if lay is not None:
+            import stage as S
             D = K.Pass(seed, units, dev)
             st = S.Store(lay, rows, 0, args.lib)
             st.sketch = D
@@ -129,28 +129,36 @@ def random_check(units: int, sample: int, dev: torch.device) -> dict:
             "root": root == want, "ok": not bad_sigma and not bad_y and root == want}
 
 
-def fastest(fn, reps: int = 5) -> float:
-    return min(S.timed(fn, reps, torch.device("cuda")))
+def timed(fn, reps: int = 5) -> float:
+    ts = []
+    for _ in range(reps):
+        a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+        a.record()
+        fn()
+        b.record()
+        b.synchronize()
+        ts.append(a.elapsed_time(b) / 1e3)
+    return min(ts)
 
 
 def bench(dev: torch.device) -> dict:
     seed = hashlib.sha512(b"verity/p2-stage/bw-check/bench").digest()
     rows = torch.randint(0, 256, (CHUNK, L.ROW), dtype=torch.uint8, device=dev)
     P = K.Pass(seed, CHUNK // p2.UNIT_BLOCKS, dev)
-    unit_s = fastest(partial(P.read, rows, 0, 0, CHUNK))
-    block_s = fastest(partial(P.partials, 0, rows))
+    unit_s = timed(partial(P.read, rows, 0, 0, CHUNK))
+    block_s = timed(partial(P.partials, 0, rows))
     del rows, P
     sigma = torch.randint(-(1 << 20), 1 << 20, (STORE_UNITS, R.SKETCH_ROWS), dtype=torch.int32, device=dev)
     tree = K.Tree(STORE_UNITS, dev)
-    y_s = fastest(partial(K.receipts, seed, sigma, 0, tree.y))
+    y_s = timed(partial(K.receipts, seed, sigma, 0, tree.y))
     salts = tree.salts(torch.randint(0, 256, (tree.G * R.SALT_BYTES,), dtype=torch.uint8, device=dev))
-    root_s = fastest(partial(tree.root, seed, salts), 3)
+    root_s = timed(partial(tree.root, seed, salts), 3)
     E, did = tree.E, R.domain(seed, tree.plan).domain_id
     x, lt = E.row_digests(tree.table), tree.leaf_table(did)
     leaves = E.leaves(lt, x, salts).reshape(1, tree.G, 8)
-    parts = {"domain_s": fastest(partial(R.domain, seed, tree.plan), 3), "leaf_table_s": fastest(partial(tree.leaf_table, did), 3),
-             "row_digests_s": fastest(partial(E.row_digests, tree.table), 3), "leaves_s": fastest(partial(E.leaves, lt, x, salts), 3),
-             "tree_s": fastest(partial(E.root, leaves, [did]), 3)}
+    parts = {"domain_s": timed(partial(R.domain, seed, tree.plan), 3), "leaf_table_s": timed(partial(tree.leaf_table, did), 3),
+             "row_digests_s": timed(partial(E.row_digests, tree.table), 3), "leaves_s": timed(partial(E.leaves, lt, x, salts), 3),
+             "tree_s": timed(partial(E.root, leaves, [did]), 3)}
     del x, lt, leaves
     chunks = STORE_UNITS * p2.UNIT_BLOCKS / CHUNK
     step = unit_s * chunks + y_s + root_s

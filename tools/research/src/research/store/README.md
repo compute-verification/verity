@@ -370,7 +370,7 @@ algorithm: `remote-replicas/README.md`.
 ### 7.4 Retention on the remote — `research data gc` (`gc.py`)
 
 Blobs that only uncited artifacts past their kind's TTL hold leave the remote (the store grew ~840 GiB a day).
-TTLs are `gc.TTL_DAYS`, by the manifest's LastModified: run-record/v1, vllm-replay-bundle/v1 and vllm-replay-slim/v1 7 days, vllm-rowdir-tar/v1 3,
+TTLs are `gc.TTL_DAYS`, by the manifest's LastModified: run-record/v1 and vllm-replay-bundle/v1 7 days, vllm-rowdir-tar/v1 3,
 run-files/v1 and vllm-row-meta/v1 14, telemetry/v1 30; every other kind keeps no TTL. Kept: an artifact or run that a label
 (target, ref or value), a citing tree (`--cite`: the notes repository, a checkout of the code with its fixture registry), Linear
 (`--cite-linear`, required with `--apply`: issues and comments, projects, project updates, documents) or a cited artifact's `meta` names, every `art:` id a cited run's attempt names, whatever a kept manifest's `refs` name, young and
@@ -379,12 +379,6 @@ A blob is deleted only after it has been a candidate for `gc.GRACE_S` (24 h, the
 after a fresh listing of `manifests/` before each batch of `gc.BATCH` (1,000) deletes, so an upload that reused it meanwhile
 keeps it; a blob deleted under an upload that landed during its batch is reported `lost` (the pass exits 1). Cite what you need before its TTL: a
 label (`research data label ART note ...`) or a note naming its id. The control pod runs it (`infra/control/store_gc.sh`).
-
-An artifact that holds values which must never be shared leaves by `research data withdraw ART... --reason T --ref ISSUE`
-(`withdraw.py`), cited or not: its blobs are deleted at once and each artifact gets a `withdrawn` label saying why, the
-tombstone. Its manifest stays, so a citation still resolves and `fetch` reports the payload absent. A blob another artifact
-also holds is kept and named (it holds the same bytes, so withdraw that one too or decide otherwise). Read-only without
-`--apply`; it runs where the store's write keys are, the control pod.
 
 ## 8. Labels
 

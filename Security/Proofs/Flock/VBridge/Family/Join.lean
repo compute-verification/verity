@@ -314,8 +314,8 @@ variable (spec : SessionSpec) (st : Reg → L.Ω → Setup)
 /-- The verifier's shape counts the statement's claims: `2` and two per region. -/
 def ClaimsIs : Prop := ∀ R ω, F.sh.claims = 2 + 2 * ((F.x R ω).toStatement regs).regions.length
 
-/-- Obligation: discharged by the verifier's ClaimsAt check (`verity/rec-inner/v1`'s `regions`), with the setup's
-`regs.length = st.regions.size`.
+/-- Obligation: discharged by the verifier's ClaimsAt check (`verity/rec-inner/v1`'s `regions`,
+`cursor/rec-vstar-checks-741b`), with the setup's `regs.length = st.regions.size`.
 **V*'s shape counts the inner statement's claims** (the verifier's gap `vsh`, with `ShapeIs`): `vsh`'s claims are
 `2` and two per region of the inner session's `regs` (`rec_vstage.shape`'s claims). -/
 def ClaimsAt : Prop := F.vsh.claims = 2 + 2 * regs.length

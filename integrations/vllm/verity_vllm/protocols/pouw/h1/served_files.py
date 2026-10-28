@@ -1,7 +1,7 @@
-"""The served window's commitment data for its prover (`pouw_h1_served`'s, which re-exports these): its committed
-trees (`trees`), each call's verifier ``--registered`` file (`reads_file`), and the entries a window commitment record
-lists, held to the prover's earlier records (`register`, `WindowCommitmentEntries`), each file named `file_name`. It
-imports nothing of `pouw_h1_served`: a run's ``served`` is its `Served`, read once the window is closed."""
+"""The served window's registration for its prover (`pouw_h1_served`'s, which re-exports these): its registered trees
+(`trees`), each call's verifier ``--registered`` file (`reads_file`), and one record's ``registered`` entries held to the
+prover's earlier records (`register`), each file named `file_name`. It imports nothing of `pouw_h1_served`: a run's
+``served`` is its `Served`, read once the window is closed."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -53,11 +53,9 @@ def reads_file(run: Any, call: int, ports: Mapping[str, str] | None = None, tp: 
 
 
 @dataclass(frozen=True)
-class WindowCommitmentEntries:
-    """What `register` returns: the entries (every tree of the window, the record's ``registered`` field) and the open
-    root that the window's commitment record lists, and each call's ``--registered`` file. It is the prover's input to
-    that record and to its verifier calls, not the record: the record, its receipt and its digest are
-    `service.WindowCommitmentRecord`'s."""
+class Registration:
+    """What `register` returns: the record's ``registered`` entries (every tree of the window), the window's open root, and
+    each call's ``--registered`` file."""
 
     registered: list[dict[str, Any]]
     window_root: str
@@ -65,7 +63,7 @@ class WindowCommitmentEntries:
 
 
 def register(run: Any, calls: Sequence[int] | None = None, log: Sequence[Mapping[str, Any]] = (),
-             directory: str | Path | None = None, ports: Mapping[str, str] | None = None) -> WindowCommitmentEntries:
+             directory: str | Path | None = None, ports: Mapping[str, str] | None = None) -> Registration:
     """The window's trees as one record's ``registered`` entries, held to this prover's earlier records ``log`` (R7-held:
     a value an earlier record registered under the same domain with another root is refused), and the ``--registered``
     file of each of ``calls`` (default every call; `reads_file`), written as `file_name` in ``directory`` (default the
@@ -83,7 +81,7 @@ def register(run: Any, calls: Sequence[int] | None = None, log: Sequence[Mapping
         Path(d).mkdir(parents=True, exist_ok=True)
         for c, doc in files.items():
             (Path(d) / file_name(c)).write_bytes(canonical_json(doc))
-    return WindowCommitmentEntries([t.entry() for t in got], served.root, files)
+    return Registration([t.entry() for t in got], served.root, files)
 
 
-__all__ = ["FILE", "WindowCommitmentEntries", "file_name", "reads_file", "register", "trees"]
+__all__ = ["FILE", "Registration", "file_name", "reads_file", "register", "trees"]

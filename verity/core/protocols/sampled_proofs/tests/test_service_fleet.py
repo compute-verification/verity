@@ -1,6 +1,6 @@
 """The fleet's halt (R5-all, `service.Fleet`): at the failure that brings any stream of an operator to its budget, every
 stream of the operator halts, each of its outcomes not yet final ends as `halted`, never `accept`, outcomes already final
-stay, and nothing of the operator is registered or accepted again. Each decision is the verifier's (`Fleet.run`
+stay, and nothing of the operator is registered or accepted again. Each decision is the verifier of record's (`Fleet.run`
 and `Stream.run`'s `halt`)."""
 
 from __future__ import annotations

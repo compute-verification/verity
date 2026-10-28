@@ -2,7 +2,8 @@
 # The filler climb's job on one GPU (cwd = the source tree): builds `readers.cu` (and `fill.cu` once it exists) outside
 # the lease, then `fill.py CMD` under one gpu-lease 1 --wait. Results go to $RESEARCH_RUN_DIR/out.
 #
-#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=ra-fill-bandwidth CMD=read bash benchmarks/kv_filler/fill_run.sh
+#   research run --on vy-nebius-1 --project verity --source . --cwd source --campaign resource-accounting \
+#     --declared-output 'out/*' --env GPU_LEASE_WHO=ra-fill-bandwidth --env CMD=read -- bash benchmarks/kv_filler/fill_run.sh
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}; PY=$WORK/venv312/bin/python
@@ -18,7 +19,7 @@ if [ -f $KF/fill.cu ]; then
 fi
 if grep -E "[1-9][0-9]* bytes spill" "$O"/*.ptxas; then echo "REFUSED: a kernel spills"; exit 4; fi
 sha256sum $KF/*.cu "$B"/*.so >> "$O/build.txt"
-# Under a queue that leases the GPU around the whole job, QUEUED=1 skips gpu-lease.
+# Under `research run --queue --gpus 1` the queue leases the GPU around the whole job: QUEUED=1 skips gpu-lease.
 LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-20}" --)
 [ "${QUEUED:-0}" = 1 ] && LEASE=()
 # shellcheck disable=SC2086

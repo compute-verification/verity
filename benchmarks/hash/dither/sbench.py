@@ -85,8 +85,8 @@ Arms:
                  their own); -aom and -aoms are -ao and -aos on four such streams, call w's on stream w % 4 (no
                  call's A table reads another's); -aomn (-hbk, -hbr) is -aoms with each call's noise there as well, so
                  the side stream runs the units alone.  With -pt last, between steps the receipt trees and the admit tables run on streams of
-                 their own beside the z tables and the step trees (`DitherState.tree_streams`); with -ls after that, each step's
-                 seeds read the live salt of the round before it (`DitherState.step_salt`)
+                 their own beside the z tables and the step trees (`Window.tree_streams`); with -ls after that, each step's
+                 seeds read the live salt of the round before it (`Window.step_salt`)
     dither-a-so  dither-a-hbk-zy, dither-a-hbr-zy and dither-a-hbc-zy (-hbr's call from dither-a-hbc's builds,
                  HB_H1U_KC, DITHER_H1C_KC and DITHER_ZY1_KC) in the statement's order (`dither_so`): the
                  forward computes and commits a step's A, scales and z/y leaves, round s goes out before coin s, and step

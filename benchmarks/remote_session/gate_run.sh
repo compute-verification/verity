@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # A gate run of the remote memory audit from an agent's VM, one command (cwd = this repository): the prover's whole node
-# serving MODEL on PROVER_NODE, the verifier on the verifier host through its gate, the coins from the challenger host
-# under period PERIOD, and the line of record and the what-if beside it. Each step is a recorded job; their ids go
-# to ~/.research/gate-runs/PERIOD.env.
+# serving MODEL on PROVER_NODE, the verifier on vy-auditor-1 through its gate, the coins from vy-challenger-1 under
+# period PERIOD, and the line of record and the what-if beside it. Each step is a `research run`; their ids go to
+# ~/.research/gate-runs/PERIOD.env.
 #
 #   benchmarks/remote_session/gate_run.sh [--dry-run] PERIOD    # check, probe, launch the prover, fire
 #   benchmarks/remote_session/gate_run.sh probe PERIOD          # step 2 alone, for real: are the hosts pinned at COMMIT?
@@ -10,14 +10,14 @@
 #   benchmarks/remote_session/gate_run.sh whatif PERIOD         # once fire has ended: gate_whatif.sh over its records
 #
 #   1. checkpoint  checkpoint.sh with CHECK_ONLY=1 on PROVER_NODE: the pinned checkpoint's files against core's pin.
-#   2. probe       gate.sh probe on GATE_ON (the machine with GATE_KEY): the challenger host's key is PIN, PERIOD unused
-#                  and no period of the lane open, COMMIT on origin/main's first-parent line, the verifier host pinned at it
+#   2. probe       gate.sh probe on GATE_ON (the machine with GATE_KEY): vy-challenger-1's key is PIN, PERIOD unused and
+#                  no period of the lane open, COMMIT on origin/main's first-parent line, vy-auditor-1 pinned at it
 #                  and idle. Nothing is written to a gate.
 #   3. prover      run.sh on PROVER_NODE inside `gpu-lease ENGINES --wait` (32 GB of host memory an engine; not
 #                  preemptible: a gate run stopped midway spends its period; timed, GPU_LEASE_TIMED=1, since gpu-lease
 #                  refuses an untimed lease overlapping a window booked in its windows file, the gate run's own
 #                  included), ROLE=prover SERVE=node with PLAN at the
-#                  snapshot core's pin names, gate run 7's engine and node settings, VERIFIER_SSH to the verifier host's
+#                  snapshot core's pin names, gate run 7's engine and node settings, VERIFIER_SSH to vy-auditor-1's
 #                  tunnel account; once leased it waits up to TUNNEL_WAIT_S for the host's verifier to listen.
 #   4. fire        gate.sh fire on GATE_ON: once the prover holds its GPUs, probe again, period-open (circuit of
 #                  COMMIT's remote_bandwidth tree, MODEL), the host's run, period-close, auditor.sh (the line of record,
@@ -25,7 +25,7 @@
 #   whatif         gate_whatif.sh at origin/main's head on WHATIF_ON over the fire run's artifact (the host run in it,
 #                  its ledger and pins) and the prover's; RUN_ART, SUB, AUDITOR_ART and PROVER_ART name others.
 #
-# COMMIT is the commit the verifier host's verifier is pinned at (default PERIOD.env's, else origin/main's head; the probe
+# COMMIT is the commit vy-auditor-1's verifier is pinned at (default PERIOD.env's, else origin/main's head; the probe
 # refuses another, naming the host's pin when that is on main's first-parent line and asking for a repin when it isn't,
 # and refuses a COMMIT off that line; a COMMIT given here replaces the recorded one); the steps run from a
 # worktree of it, with this file's gate.sh and checkpoint.sh sent beside. GATE_KEY is the key's path on GATE_ON (default
@@ -42,7 +42,7 @@
 # (with DRY=1: no request reaches a gate, and GATE_KEY need not exist), prints step 3, and runs step 4 with DRY=1
 # against PROVER_RUN, any run id (default none), whose lease it reads.
 #
-# Steps 1 and 3 take a slot of PROVER_NODE's SLOTS (default the GPU node's GPU slots; empty: none), the one way that node
+# Steps 1 and 3 take a slot of PROVER_NODE's SLOTS (default vy-nebius-2's GPU slots; empty: none), the one way that node
 # takes a run (/etc/vy/runs-via-slot): `slot.py --by memory-accounting`, from the shipped tree. The slot pins the run to
 # its cores, and run.sh and node.sh pin the engines and the prover with taskset as before. Step 1 waits at most
 # CHECKPOINT_WAIT_S for one; the prover until a minute before LEASE_BY (with LEASE_BY), so a prover that only gets a

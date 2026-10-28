@@ -2,6 +2,7 @@
 name = "VF3"
 epoch = "VF3"
 summary = "VF2 with the uniform datapath off the issue row, priced by a uniform-pipe row of its own (§14)."
+note = "note:20261016T0439Z-draft-issue-uniform"
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",

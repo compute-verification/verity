@@ -35,7 +35,7 @@ theorem ksFlockLin_R_of_table (rd : Msg → Option FinalP) (wE : Msg → ℝ) (j
     (FlockDeploy.KS.plainR_conflictTied _ rd) htab decode hdec
 
 /-- **`KSFlockLin` at `DE` at the deployed reader's steps and trimmed columns** (U3), from the reader's bound wherever
-some run accepts (`PlainRdInR`) alone, through the table bound `plainR_tableBoundAbortLin_R`. -/
+some run accepts (`PlainRdInR`, STEPRTABA's) alone, through the table bound `plainR_tableBoundAbortLin_R`. -/
 theorem ksFlockLin_R (rd : Msg → Option FinalP) (wE : Msg → ℝ) (join : List Msg → Msg)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
     (hIn : ∀ x, ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.VR rd) x → FlockDeploy.KS.PlainRdInR rd x) :

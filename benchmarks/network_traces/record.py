@@ -1,6 +1,6 @@
 """Per-token timing traces of real vLLM serving, for the network certifier's calibration (`network-certifier-calibrate`).
 
-One job (`run.sh`, queued on one leased GPU) starts vLLM's OpenAI-compatible server on that GPU from
+One job (`run.sh`, under `research run --queue` on one leased GPU) starts vLLM's OpenAI-compatible server on that GPU from
 the node's local weights, replays recorded request mixes open-loop with a streaming client on the same host, and records
 on the monotonic clock when each request was sent and when each streamed chunk arrived. The client stands where a certifier
 in front of the server would: every streamed token is one egress frame, ready when its chunk arrives, and a request is

@@ -36,8 +36,7 @@ def run(args) -> int:
     print(f"{name} (epoch {v.epoch}, {len(v.rows)} rows, {len(v.credits)} credits): {v.summary}")
     if v.superseded_by:
         print(f"  superseded by {v.superseded_by}")
-    if v.note:
-        print(f"  {v.note}")
+    print(f"  {v.note}")
     print(f"  τ {r.tau:.4f}   τ at 600 W {r.tau_600w:.4f}   U/F_low {r.uf_low:.4f}   margin {r.margin:.3f}")
     if v.published:
         print("  published: " + "   ".join(f"{k} {x}" for k, x in v.published.items())

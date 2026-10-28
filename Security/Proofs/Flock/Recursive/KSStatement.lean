@@ -15,7 +15,7 @@ deployed circuit performs, recorded), the coin server's record
 It is stated at the deployment's parameters (the reader `rd`, V\*'s last message's reader `final`, the last part's
 pieces `rest`, the weights `wE` and `w`, the brings `b` and the record's `aux`, `nOf`, `hd` and `recRest`) so that the
 guarantee `RecursiveKS` is this at the deployed values: the reader `DeployedR.rdR`, V\*'s last message's reader
-`DeployedR.finalR`, the last part's pieces `OpenRows.elemR`, the weights `DeployedR.wER` and `DeployedR.wR` and
+`DeployedR.finalR`, the last part's pieces `OpenRows.elemR`, the weights `DeployedR.wER` and `DeployedR.wR` (ASK-72) and
 the brings' setup `deployedB` (the compiled verifier's own evaluations), for every other field of the brings and every
 record the coin server keeps (`aux`, `nOf`, `hd`, `recRest`).
 -/

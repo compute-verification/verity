@@ -1,4 +1,4 @@
 order = 140
 path = "`served_zk/`"
 runs_on = "CPU"
-what = "A served audit window committed in the ZK statement's format from a retained pass, and judged through the proof system (`served_commit.py`, `job.sh`)"
+what = "A served audit window committed in the ZK statement's format from a retained pass, and judged through the proof service (`served_commit.py`, `job.sh`)"

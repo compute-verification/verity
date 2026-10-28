@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 from .canonical import CanonicalError, dumps, sha256, value
 from .loader import ConfigError, from_mapping, load
-from .registry import Gpu, gpus
+from .registry import Gpu, Machine, gpus, machines
 
 
 @dataclass(frozen=True)
@@ -23,10 +23,12 @@ __all__ = [
     "CanonicalError",
     "ConfigError",
     "Gpu",
+    "Machine",
     "dumps",
     "from_mapping",
     "gpus",
     "load",
+    "machines",
     "sha256",
     "value",
 ]

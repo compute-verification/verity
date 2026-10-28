@@ -329,9 +329,11 @@ def lean_codec_rows() -> list[tuple[int, int, list[int], int, int, int, int, int
 
 
 def toy_key(n: int, c: int, cs: list[int], mask: int, tau: int) -> codec.Key:
-    """A masked key at the toy field `p = 2^n − c`: a `codec.Sloth`, which no `codec.Codec` is (those take p1024 and
-    p512 only)."""
-    return codec.Key(codec.Sloth(codec.Field(f"toy{n}", n, c), len(cs), True), tuple(cs), tau, mask)
+    """A masked key at the toy field `p = 2^n − c`, which `codec.Codec` refuses (it takes p1024 and p512 only)."""
+    toy = object.__new__(codec.Codec)
+    for name, v in (("field", codec.Field(f"toy{n}", n, c)), ("rounds", len(cs)), ("masked", True)):
+        object.__setattr__(toy, name, v)
+    return codec.Key(toy, tuple(cs), tau, mask)
 
 
 def test_encode_word_agrees_with_lean() -> None:

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# One chunk of per-token vLLM timing traces on one leased GPU (record.py's docstring), from the shipped tree's root, as
-# a job of at most 60 minutes on 8 CPUs and 48 GB whose outputs are out/*:
-#   [MODEL=...] [MIX=b16=3,b4=1,b64=10] [MODE=plaintext|commit|bi-eager] verity bench network_traces \
-#     [--server-arg=--enforce-eager ...]
-# MINUTES is the whole job, startup included, and must stay under the lease's limit. The node's vLLM venv (VENV) and
+# One chunk of per-token vLLM timing traces on one leased GPU (record.py's docstring), from the shipped tree's root:
+#   research run --queue --source <tree> --cwd source --project verity --gpus 1 --max-min 60 --cpus 8 --mem-gb 48 \
+#     --declared-output 'out/*' [--env MODEL=...] [--env MIX=b16=3,b4=1,b64=10] [--env MODE=plaintext|commit|bi-eager] -- \
+#     bash benchmarks/network_traces/run.sh [--server-arg=--enforce-eager ...]
+# MINUTES is the whole job, startup included, and must stay under the lease's --max-min. The node's vLLM venv (VENV) and
 # Hugging Face cache (HF_HOME, offline) are used as they are.
 set -euo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:?run this under research run}/out}

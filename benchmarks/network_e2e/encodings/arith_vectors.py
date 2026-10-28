@@ -157,10 +157,10 @@ def decisions(trace: Any, stops: Sequence[int], *, T: int, row_order: str = "bat
 
 def decision_charges(wins: Sequence[Any], book: Any, N: int, rng: random.Random) -> dict[str, Any]:
     """What `ChargeCount_v1` is held to: the book (`Book.to_json()`); each window's decisions alone
-    (`window_charge.Window(arrived=…)`), `code_v1`'s charge for them, and whether the window sends only decisions
-    (then that charge is v1's); and the run's decisions cut again into `code_v1` windows of at most N, each placed in
-    N slots in order with disabled slots between (`en`, a disabled slot's bit random), with `code_v1`'s charge for
-    each. The cut's sizes are 0, N and random, so its windows reach every bin."""
+    (`code_v1.Window(arrived=…)`), `code_v1`'s charge for them, and whether the window sends only decisions (then that
+    charge is v1's); and the run's decisions cut again into `code_v1` windows of at most N, each placed in N slots in
+    order with disabled slots between (`en`, a disabled slot's bit random), with `code_v1`'s charge for each. The cut's
+    sizes are 0, N and random, so its windows reach every bin."""
     alone = [CV.Window(arrived=w.arrived) for w in wins]
     flat = [b for w in wins for b in w.arrived]
     sizes, at = [], 0

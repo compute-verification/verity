@@ -1,5 +1,5 @@
-"""A statement's proof files, verified by C-Flock's Lean verifier (`flock-verify verify --zk`, the Lake package
-`verity/core/service/flock`, built with `lake` on first use): the proof system's own run of the verifier, so a protocol
+"""A statement's proof files, verified by C-Flock's Lean verifier of record (`flock-verify verify --zk`, the Lake package
+`verity/core/service/flock`, built with `lake` on first use): the proof service's own run of the verifier, so a protocol
 reads each session's verdict from that run, never from a verdict record the prover hands in.
 
 `verify` takes a statement's files as the prover delivered them (`Proof`: the circuit file, the public file and the
@@ -129,7 +129,7 @@ def proved_units(public: Path, session: Path) -> tuple[int, ...]:
 
 def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapping[str, Any],
            registered: Mapping[str, Any] | None = None) -> tuple[list[Finding] | None, tuple[str, str] | None]:
-    """Each of `proof`'s sessions verified by C-Flock's Lean verifier against the verifier's own `program` (its
+    """Each of `proof`'s sessions verified by the verifier of record against the verifier's own `program` (its
     descriptor's bytes), `partition` and `registered` file (None only for a program that reads no registered value, such
     as N2's, whose proof block opens the committed value inside its circuit), on the circuit file the auditor committed as
     `circuit_sha512`; the findings in session order and None, or None and the refusal (``registered``: `registered` is

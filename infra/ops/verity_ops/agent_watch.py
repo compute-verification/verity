@@ -1425,8 +1425,7 @@ class Watch:
                     s["no_step"] = True
                     changed = True
                     self.record("no_step", Run(agent, k["run"], k["name"]), since=iso(still), hours=int((t - still) // 3600),
-                                lane=k["lane"], **({"handle": k["handle"]} if k["handle"] else {}), owner="top",
-                                role="coordinator" if coord else "worker")
+                                lane=k["lane"], **({"handle": k["handle"]} if k["handle"] else {}), owner="top")
                 continue
             if t - last < (COORD_SILENT_S if coord else SILENT_S) * (n + 1):
                 continue

@@ -1,6 +1,6 @@
 """The word codec's benchmark on one GPU: `wc.cu`'s libraries (`--lib NAME=PATH`, one per squaring form) gated against
-`codec.py`, then timed. Writes `word-codec.json` and `bench.log` under `--out`, and, with
-`RESEARCH_RUN_DIR` set, its `result.json` there.
+`codec.py`, then timed. Writes `word-codec.json` and `bench.log` under `--out`, and in a `research run` its
+`result.json`.
 
 Nothing is timed before its gate passed, in this order:
 - `gate`: device encode equals `codec.encode_word` and device decode equals `codec.decode_word` on random and edge payloads

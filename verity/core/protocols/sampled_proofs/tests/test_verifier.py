@@ -1,4 +1,4 @@
-"""The one-stage audit's verifier (`one_stage.verifier`): the Lean and the Python run on every check, both
+"""The one-stage audit's verifier of record (`one_stage.verifier`): the Lean and the Python run on every check, both
 outcomes are recorded beside the one of record, a disagreement is refused naming both, Lean that can't run fails closed,
 and `RECORD_VERDICT` switches the record back to Python in one line."""
 
@@ -41,14 +41,14 @@ def _public(rec: dict) -> tuple:
 
 
 def _rule(spec: S.Spec, rec) -> tuple[Verdict, Verdict]:
-    """The public-items rule by the verifier, and the service's Python."""
+    """The public-items rule by the verifier of record, and the service's Python."""
     py = S.check_public(spec, rec)
     return V.check_public(py, rec, S.SCHEME, spec.check.query, [(v.name, v.registered) for v in spec.values],
                           [p.item for p in spec.public]), py
 
 
 def _held(verdicts: dict, outputs: tuple = ()) -> tuple[Verdict, Verdict]:
-    """The outcome's hold on the verdicts by the verifier, and the service's Python."""
+    """The outcome's hold on the verdicts by the verifier of record, and the service's Python."""
     py = S.check_verdicts(verdicts, [SESSION], outputs)
     return V.check_verdicts(py, verdicts, [SESSION], outputs), py
 
@@ -188,7 +188,7 @@ def test_the_runs_hello_is_checked_by_both(monkeypatch):
 
 
 def test_a_streams_coins_are_the_leans(monkeypatch):
-    """A stream's default coins are the Lean verifier's `IO.getRandomBytes` (A3): every byte its salt and its
+    """A stream's default coins are the Lean verifier of record's `IO.getRandomBytes` (A3): every byte its salt and its
     draw read is a `coins` answer, and the draw of record is the Lean's on exactly those bytes."""
     a, b = V.coins(64), V.coins(64)
     assert len(a) == len(b) == 64 and a != b and V.coins(0) == b""

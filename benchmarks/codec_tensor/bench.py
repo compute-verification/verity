@@ -1,6 +1,6 @@
 """The wide-word codec's benchmark on one GPU: `wt.cu`'s libraries (`--lib PATH`, one per field) gated against
-`wide.py`, then timed. Writes `codec-tensor.json` and `bench.log` under `--out`, and, with
-`RESEARCH_RUN_DIR` set, its `result.json` there.
+`wide.py`, then timed. Writes `codec-tensor.json` and `bench.log` under `--out`, and in a `research run` its
+`result.json`.
 
 Nothing is timed before its gate passed, in this order:
 - `gate`: per field and k, device encode equals `wide.encode_word` on random and edge payloads, and both decodes (CUDA
@@ -665,14 +665,14 @@ def sketch_bits(lib: Lib, seed: bytes, k: int, n: int) -> np.ndarray:
 
 def sketch_derive(lib: Lib, seed: bytes, n: int, rows: int = SR.ROWS) -> bytes:
     if lib.receipt:
-        return SKT.randomness().derive(seed, SR.rb.SIGN_DOMAIN, {"tag": SR.rb.SKETCH_SHA512, "k": rows, "n": n}).value
+        return SKT.randomness().derive(seed, SR.SIGN_DOMAIN, {"tag": SR.KIND, "k": rows, "n": n}).value
     return SKT.randomness().derive(seed, SKT.SIGN_DOMAIN, {"tag": SKT.NAME, "k": rows, "n": n}).value
 
 
 def receipt_mid(lib: Lib, seed: bytes) -> bytes:
     """sketch-sha512's prefix midstate at `seed` as the host computes it (wt_set_tag); leaves set_sketch_tag's."""
     k = ctypes.create_string_buffer(SKT.key(TAG_SEED))
-    pre = ctypes.create_string_buffer(SR.rb.sketch_prefix(seed))
+    pre = ctypes.create_string_buffer(SR.prefix(seed))
     lib.call("wt_set_tag", ctypes.addressof(k), ctypes.addressof(pre))
     mid = pass_state(lib)["mid"]
     set_sketch_tag(lib)
@@ -703,7 +703,7 @@ def gate_pass(lib: Lib, torch, sketch_t: int, log, trials: int = 4, rows: int = 
     """wt_pass (red team F29: pass j's receipt keyed by s_j = pass_seed(σ, j, root_(j−1))) against Python at random
     j and roots: s_j, K_S, the tag key, the signs (sign_fragments of sign_bits(s_j)) and, through wt_tag_leaves over
     random tags, the leaves' prefix (commit_gate at s_j); in a WT_RECEIPT build sketch-sha512's s_j, K_S, signs and
-    receipt prefix (its midstate against the host's of receipts.sketch_prefix(s_j)) at k_s = rows, the signs as
+    receipt prefix (its midstate against the host's of sketch_receipt.prefix(s_j)) at k_s = rows, the signs as
     sign_words and their A as sign_frags (16 rows) or sign_planes (64)."""
     n, m, st = set_pass(lib, sketch_t, rows=rows), SKT.steps(lib.sb), stream(torch)
     signs = torch.empty(128 * rows if lib.receipt else sketch_t * m * 32, dtype=torch.int32, device="cuda")
@@ -834,7 +834,7 @@ def set_sketch_tag(lib: Lib) -> None:
     """ro-sketch-blake3/v0's key and leaf prefix at TAG_SEED into the library (set_tag restores ro-blake3/v1's); a
     WT_RECEIPT build's sketch-sha512 prefix at RECEIPT_SEED."""
     k = ctypes.create_string_buffer(SKT.key(TAG_SEED))
-    pre = ctypes.create_string_buffer(SR.rb.sketch_prefix(RECEIPT_SEED) if lib.receipt else SKT.leaf_prefix(TAG_SEED))
+    pre = ctypes.create_string_buffer(SR.prefix(RECEIPT_SEED) if lib.receipt else SKT.leaf_prefix(TAG_SEED))
     lib.call("wt_set_tag", ctypes.addressof(k), ctypes.addressof(pre))
 
 

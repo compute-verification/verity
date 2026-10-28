@@ -5,7 +5,7 @@ from verity_machine_model.strassen.costs import Costs, inst
 from verity_machine_model.strassen.depth import STRASSEN, WINOGRAD, kappa
 
 
-def test_int8_only_reproduces_its_published_table():
+def test_int8_only_reproduces_the_coordinators_table():
     C = Costs(inst("int8-only"))
     assert C.closure == (256,)
     got = {r: kappa(C, STRASSEN, r, C.lower) for r in (1, 8, 16, 17)}

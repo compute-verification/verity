@@ -1,4 +1,4 @@
-"""The proof system: the Spec's types, the public-items rule, and a Stream's register, select, deliver and outcome over
+"""The proof service: the Spec's types, the public-items rule, and a Stream's register, select, deliver and outcome over
 the one-stage audit, with a stub verifier, injected coins and an injected clock."""
 
 from __future__ import annotations
@@ -101,7 +101,7 @@ def test_round_trip_register_select_deliver_outcome():
 def test_a_provers_stream_binds_each_registration_to_itself_and_the_prover():
     """A stream given the identity its challenger registered the prover under names it in its digest and binds every
     registration to the stream and the prover (`Stream.binding`, `registration.check`'s): a record whose window names
-    both runs round to an accepted outcome, by both verifiers, while the same record in another prover's
+    both runs round to an accepted outcome, by both verifiers of record, while the same record in another prover's
     stream, in the same window, is refused (`R6-stream`, `R6-prover`), as is one whose window names neither. A prover
     identity that is not lowercase hex bytes makes no stream."""
     def stream(prover):
@@ -622,7 +622,7 @@ def test_a_sampler_draws_instead_and_is_held_to_the_law():
 
 
 def test_each_outcome_is_the_lean_runs_from_the_receipt_through_the_verdict(monkeypatch):
-    """A one-stage outcome on a draw from the coins is the verifier's run (`verifier.run`, the Lean's `Run.run`)
+    """A one-stage outcome on a draw from the coins is the verifier of record's run (`verifier.run`, the Lean's `Run.run`)
     from the registration, the bytes the draw read, the sessions and the verdicts: one run per outcome, agreeing on an
     accepted and a rejected round. A run the Python doesn't make alike (here, a draw said to read one byte more) rejects
     the round, its audit record failing `run`; a sampler's draw isn't run."""

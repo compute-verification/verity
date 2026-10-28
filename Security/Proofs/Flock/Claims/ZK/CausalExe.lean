@@ -968,7 +968,7 @@ end FlockComplete.CutEq
 
 /-! ## The pads trees by tree position
 
-`Round1Pads` (`Claims/ZK/Round1Pads.lean`), here under `Cx`: a rep's pads leaf at tree position `p`
+ZKR1's `Round1Pads` (on `cursor/claims-zk-prover-faithful-c7a9`), here under `Cx`: a rep's pads leaf at tree position `p`
 commits a column that reads no coin (`Cx.digOf_pads`), and a cut's pads leaf at `q` is the leaf at `q`
 (`Cx.padLeafCut_cutAt`). `treeEquiv` is irreducible here: unfolding it decides its `∃ e, …` over the tree's size.
 -/

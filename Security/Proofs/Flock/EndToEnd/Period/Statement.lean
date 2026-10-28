@@ -2,7 +2,7 @@ import Proofs.Flock.EndToEndHidden.Statement
 import Proofs.Flock.EndToEnd.Period.Run
 
 /-!
-# The integrity audit over a period, per sampling block and pooled (trusted)
+# The integrity audit over a period, and over a horizon (trusted)
 
 A period's integrity audit is a sequence of sampling blocks, each one `--zk` session under hidden outputs with a fresh
 live subset draw, as in `EndToEndHidden` (a `SamplingBlock`: every binder of `EndToEndHidden` but the prover). One
@@ -228,9 +228,9 @@ def IntegrityPeriodLog : Prop :=
     value (fun l => ∃ r ∈ l, r.accepted ∧ (W r.idx).K₀ ≤ r.wrong) (Period.run W T s) ≤
       ∑ t ∈ Finset.range T, (ENNReal.ofReal δ + (W t).ks + (W t).link)
 
-/-- **The integrity audit over a period, pooled.** In `T` sampling blocks as in `IntegrityPeriod`, each sampling
-block's draw covering at least a fraction `q > 0` of its units (`q ≤ kd_t/n_t`), the probability that every sampling
-block is accepted and the wrong units total at least `ln(1/δ)/q` is at most
+/-- **The integrity audit over a horizon.** In `T` sampling blocks as in `IntegrityPeriod`, each sampling block's draw
+covering at least a fraction `q > 0` of its units (`q ≤ kd_t/n_t`), the probability that every sampling block is
+accepted and the wrong units total at least `ln(1/δ)/q` is at most
 $$\delta + \sum_t (\varepsilon_{ks,t} + \delta_{link,t}).$$
 Its named assumptions are `IntegrityPeriod`'s. -/
 def IntegrityHorizon : Prop :=

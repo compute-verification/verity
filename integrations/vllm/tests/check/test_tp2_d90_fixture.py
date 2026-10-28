@@ -875,10 +875,10 @@ def test_fold_match_entry_point_fails_by_name(tmp_path, monkeypatch):
     # the ranks received different bytes at one collective (recorder digests): the value leg names it
     rc, res, _ = _e2e(tmp_path, monkeypatch, recorder_mut=lambda x: dict(x, out_sha256=("x" if (x["step"], x["k"]) == (0, 2) else x["out_sha256"])))
     assert rc == 1 and res["cross_rank"]["failed"] == ["value"]
-    # no GM-01 stage (no --gprog/--workload): not a PASS, named
+    # no GM-01 leg (no --gprog/--workload): not a PASS, named
     rc, res, _ = _e2e(tmp_path, monkeypatch, gprog=False)
     assert rc == 1 and res["pass"] is False and res["legs"]["global_match_per_rank"] == {"0": None, "1": None}
-    assert any("GM-01 stage not run" in p for p in res["problems"]), res["problems"]
+    assert any("GM-01 leg not run" in p for p in res["problems"]), res["problems"]
     # --tp2-match from ANOTHER run (its recorder digests are not these rows'): the provenance leg names it
     rc, res, _ = _e2e(tmp_path, monkeypatch, provenance_of_other_run=True)
     assert rc == 1 and res["cross_rank"]["failed"] == ["provenance"]

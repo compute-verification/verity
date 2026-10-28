@@ -139,7 +139,7 @@ def lines(path: Path) -> list[str]:
     return [x for x in path.read_text().split("\n") if x]
 
 
-#: the proof system's rule for a client of a session the gate has just opened (`remote.connect_when_listening`)
+#: the proof service's rule for a client of a session the gate has just opened (`remote.connect_when_listening`)
 TUNNEL_WAIT_S, connect_when_listening = R.TUNNEL_WAIT_S, R.connect_when_listening
 
 

@@ -29,23 +29,23 @@ def test_every_named_vector_is_here():
 # τ, τ at 600 W, U/F_low and margin as the round notes published them, through VF3s-16. A later vector is held to its
 # own file's [published] (test_reproduces_its_published_numbers), so a new vector touches no test.
 PUBLISHED = {
-    "VF3h": (0.1246, 0.0975, 1.0938, 1.935),
-    "VF3i-strict": (0.0698, 0.0546, 1.0938, 1.935),   # on valid rows
+    "VF3h": (0.1246, 0.0975, 1.0938, 1.935),          # note:20261016T1538Z-draft-rs-vf3i-textures-uniform
+    "VF3i-strict": (0.0698, 0.0546, 1.0938, 1.935),   # note:20261016T1640Z-draft-rs-vf3j-strict-closure, on valid rows
     "VF3j": (0.0634, 0.0495, 1.0938, 1.935),
     "VF3j-16": (0.0610, 0.0477, 1.1563, 2.000),
-    "VF3k-16": (0.0603, 0.0472, 1.1563, 2.000),
-    "VF3l-16": (0.0603, 0.0472, 1.1563, 2.000),       # with its copy prices
+    "VF3k-16": (0.0603, 0.0472, 1.1563, 2.000),       # note:20261016T1912Z-draft-machine-model-vf3k
+    "VF3l-16": (0.0603, 0.0472, 1.1563, 2.000),       # note:20261016T2055Z-draft-machine-model-vf3l, with its copy prices
     "VF3l-16-copy16": (0.0525, 0.0410, 1.1563, 2.000),
     "VF3l-16-copy16-fan32": (0.0460, 0.0360, 1.1563, 2.000),
     "VF3l-16-copy32-fan16": (0.0600, 0.0469, 1.3125, 2.000),
     "VF3l-16-copy32": (0.0518, 0.0405, 1.3125, 2.000),
-    "VF3m-16": (0.0591, 0.0462, 1.1563, 2.000),
-    "VF3n-16": (0.0586, 0.0459, 1.1563, 2.000),
+    "VF3m-16": (0.0591, 0.0462, 1.1563, 2.000),       # note:20261017T0332Z-draft-eps1-datasheet
+    "VF3n-16": (0.0586, 0.0459, 1.1563, 2.000),       # note:20261017T0321Z-draft-eps1-tensor
     "VF3o-16": (0.0588, 0.0460, 1.1563, 2.000),
-    "VF3p-16": (0.0588, 0.0460, 1.1563, 2.000),
-    "VF3q-16": (0.0564, 0.0441, 1.1563, 2.000),
+    "VF3p-16": (0.0588, 0.0460, 1.1563, 2.000),       # note:20261017T0332Z-draft-eps1-datasheet
+    "VF3q-16": (0.0564, 0.0441, 1.1563, 2.000),       # note:20261017T0524Z-draft-eps1-facet-break
     "VF3r-16": (0.0556, 0.0435, 1.1563, 2.000),
-    "VF3s-16": (0.0556, 0.0435, 1.1563, 2.000),
+    "VF3s-16": (0.0556, 0.0435, 1.1563, 2.000),       # note:20261017T1930Z-draft-rt-facet
 }
 
 

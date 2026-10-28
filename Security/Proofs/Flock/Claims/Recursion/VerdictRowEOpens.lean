@@ -78,8 +78,8 @@ theorem accRow_site_eq {st : Stage} {x : Msg} {ms : List (Msg × Claims.Out)} {s
   cases ha'
   rw [hs, hs']
 
-/-- Two ports of one site open under one root: their leaf counts, domains, schemas and roots agree
-(`Registered.SameRoot`, which `bc_eq_of_setup` takes). -/
+/-- Two ports of one site open under one root: their leaf counts, domains, schemas and roots agree (RECVCALLS'
+`Registered.SameRoot`, which `bc_eq_of_setup` takes). -/
 theorem sameRoot_of_site {a b : Registered.Port}
     (h : FlockVBridge.Family.site a = FlockVBridge.Family.site b) :
     b.leaves = a.leaves ∧ b.domain = a.domain ∧ b.schema = a.schema ∧ b.root = a.root := by

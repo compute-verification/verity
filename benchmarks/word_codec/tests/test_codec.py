@@ -11,8 +11,6 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.remote_bandwidth.codec import Field, rho, rho_inv
-
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
@@ -40,19 +38,18 @@ def test_kernel_constants_match():
 
 @pytest.mark.parametrize("p", [7, 11, 19, 23, 31, 43, 127, 8191])
 def test_rho_is_a_permutation_with_the_parity_rule(p):
-    f = Field("t", p.bit_length(), (1 << p.bit_length()) - p)
-    images = [rho(a, f) for a in range(p)]
+    images = [C.rho(a, p) for a in range(p)]
     assert sorted(images) == list(range(p))
     for a, y in enumerate(images):
-        assert rho_inv(y, f) == a
+        assert C.rho_inv(y, p) == a
         assert (y % 2 == 0) == (pow(a, (p - 1) // 2, p) != p - 1)
 
 
 def test_rho_on_p61():
     rng = random.Random(1)
     for a in EDGES[:8] + [rng.randrange(C.P) for _ in range(200)]:
-        y = rho(a, C.FIELD)
-        assert rho_inv(y, C.FIELD) == a and rho(rho_inv(a, C.FIELD), C.FIELD) == a
+        y = C.rho(a)
+        assert C.rho_inv(y) == a and C.rho(C.rho_inv(a)) == a
         assert (y % 2 == 0) == (pow(a, (C.P - 1) // 2, C.P) != C.P - 1)
 
 
@@ -97,7 +94,7 @@ def test_tweak_separates_indices():
 
 def test_decode_rejects_a_non_payload():
     k = C.key(SEED, 1)
-    bad = next(y for y in range(1000, 2000) if (rho_inv(y, C.FIELD) - k.c[0] - k.tweak(0)) % C.P >> 56)
+    bad = next(y for y in range(1000, 2000) if (C.rho_inv(y) - k.c[0] - k.tweak(0)) % C.P >> 56)
     with pytest.raises(ValueError, match="decodes to no payload"):
         C.decode_word(bad, 0, k)
     with pytest.raises(ValueError, match="canonical"):
@@ -217,7 +214,7 @@ def test_twin_decode_and_encode_equal_the_reference(form):
         for y in EDGES[:8]:
             want = y
             for c in reversed(k.c):
-                want = (rho_inv(want, C.FIELD) - c - k.tweak(3)) % C.P
+                want = (C.rho_inv(want) - c - k.tweak(3)) % C.P
             assert T.decode_word(y, k.tweak(3), k.c, form) == want
 
 

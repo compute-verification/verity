@@ -1,6 +1,6 @@
 """Declarations of real hardware, with every number's source: the one place a datacenter is declared.
 
-`rtx_node` is one of our two RTX PRO 6000 nodes as both read with `nvidia-smi topo -m`, `lspci -tv` and `lsmem`:
+`rtx_node` is one of our nodes as vy-nebius-1 and -2 read with `nvidia-smi topo -m`, `lspci -tv` and `lsmem`:
 two sockets, each an Intel Xeon 6776P with its host DRAM and a PCIe root complex (a switch); eight RTX PRO 6000 GPUs,
 GPUs 0–3 on socket 0 and 4–7 on socket 1, each on a root port of its own; one NIC, on socket 1. Its device model is
 `Accounting.Device`'s one Python mirror, `verity.core.protocols.remote_bandwidth.timing`: a GPU's S_chip, read and write
@@ -23,7 +23,7 @@ import math
 
 from verity.core.protocols.remote_bandwidth import timing as T
 
-from .physical import Assumption, Cadence, Datacenter, DeviceEntry, Fleet, LinkEntry, Zone
+from .physical import Assumption, Block, Cadence, Datacenter, Device, Fleet, Link
 
 GB = 8e9
 INF = math.inf
@@ -61,21 +61,21 @@ def rtx_node(name: str = "node") -> Datacenter:
     measured: a delay of 0, the bound that claims nothing for a path's delay."""
     devices, links = [], []
     for s in range(2):
-        cpu = DeviceEntry(f"{name}.cpu{s}", "cpu", memory=HOST_DRAM, bandwidth=HOST_READ, on_chip=HOST_CHIP,
-                          residual=HOST_RESIDUAL, write=HOST_WRITE)
-        rc = DeviceEntry(f"{name}.pcie{s}", "switch")
+        cpu = Device(f"{name}.cpu{s}", "cpu", memory=HOST_DRAM, bandwidth=HOST_READ, on_chip=HOST_CHIP,
+                     residual=HOST_RESIDUAL, write=HOST_WRITE)
+        rc = Device(f"{name}.pcie{s}", "switch")
         devices += [cpu, rc]
-        links.append(LinkEntry(rc.name, cpu.name, PCIE_SOCKET, kind="pcie"))
+        links.append(Link(rc.name, cpu.name, PCIE_SOCKET, kind="pcie"))
         for k in range(4 * s, 4 * s + 4):
-            gpu = DeviceEntry(f"{name}.gpu{k}", "gpu", rate=dict(GPU_RATE), memory=GPU_MEMORY, bandwidth=GPU_READ,
-                              on_chip=S_CHIP, residual=GPU_RESIDUAL, write=GPU_WRITE)
+            gpu = Device(f"{name}.gpu{k}", "gpu", rate=dict(GPU_RATE), memory=GPU_MEMORY, bandwidth=GPU_READ,
+                         on_chip=S_CHIP, residual=GPU_RESIDUAL, write=GPU_WRITE)
             devices.append(gpu)
-            links.append(LinkEntry(gpu.name, rc.name, PCIE_GPU, kind="pcie"))
-    nic = DeviceEntry(f"{name}.nic0", "nic")
+            links.append(Link(gpu.name, rc.name, PCIE_GPU, kind="pcie"))
+    nic = Device(f"{name}.nic0", "nic")
     devices.append(nic)
-    links += [LinkEntry(nic.name, f"{name}.pcie1", PCIE_NIC, kind="pcie"),
-              LinkEntry(f"{name}.cpu0", f"{name}.cpu1", SOCKET_LINK, kind="upi")]
-    return Datacenter(name, [Zone(name, devices)], [], links)
+    links += [Link(nic.name, f"{name}.pcie1", PCIE_NIC, kind="pcie"),
+              Link(f"{name}.cpu0", f"{name}.cpu1", SOCKET_LINK, kind="upi")]
+    return Datacenter(name, [Block(name, devices)], [], links)
 
 
 def with_dpu(node: Datacenter) -> Datacenter:
@@ -85,15 +85,13 @@ def with_dpu(node: Datacenter) -> Datacenter:
     secure-firmware flash not at all. Each device's residual is what those leave."""
     (block,) = node.blocks
     n = block.name
-    dpu = DeviceEntry(f"{n}.dpu", "dpu", memory=Assumption(f"{n}.dpu.stores", (32 + 40 + 128) * GB, "bits"),
-                      residual=Assumption(f"{n}.dpu.unwiped", (0.15 * 32 + 0.01 * 40 + 0.01 * 128) * GB, "bits",
-                                          "measured"))
-    bmc = DeviceEntry(f"{n}.bmc", "bmc", memory=Assumption(f"{n}.bmc.stores", (1 + 0.256 + 0.064) * GB, "bits"),
-                      residual=Assumption(f"{n}.bmc.unwiped", (0.25 * 1 + 0.5 * 0.256 + 0.064) * GB, "bits",
-                                          "measured"))
-    links = [LinkEntry(f"{n}.nic0", dpu.name, Assumption("dpu_link", 400e9, "bit/s"), US, "pcie"),
-             LinkEntry(dpu.name, bmc.name, Assumption("bmc_link", 1e9, "bit/s"), US)]
-    return Datacenter(node.name, [Zone(n, [*block.devices, dpu, bmc])], list(node.fabric), node.links + links, node.cadence,
+    dpu = Device(f"{n}.dpu", "dpu", memory=Assumption(f"{n}.dpu.stores", (32 + 40 + 128) * GB, "bits"),
+                 residual=Assumption(f"{n}.dpu.unwiped", (0.15 * 32 + 0.01 * 40 + 0.01 * 128) * GB, "bits", "measured"))
+    bmc = Device(f"{n}.bmc", "bmc", memory=Assumption(f"{n}.bmc.stores", (1 + 0.256 + 0.064) * GB, "bits"),
+                 residual=Assumption(f"{n}.bmc.unwiped", (0.25 * 1 + 0.5 * 0.256 + 0.064) * GB, "bits", "measured"))
+    links = [Link(f"{n}.nic0", dpu.name, Assumption("dpu_link", 400e9, "bit/s"), US, "pcie"),
+             Link(dpu.name, bmc.name, Assumption("bmc_link", 1e9, "bit/s"), US)]
+    return Datacenter(node.name, [Block(n, [*block.devices, dpu, bmc])], list(node.fabric), node.links + links, node.cadence,
                       node.sealed)
 
 
@@ -115,23 +113,23 @@ def leaf_spine(blocks: int, *, leaves: int = 1, spines: int = 0, outside: tuple[
     hop = Assumption("fabric/hop-latency", fabric_latency, "s", "declared")
     wan = (hop, "ethernet") if outside_latency is None else (Assumption("fabric/wan-latency", outside_latency, "s",
                                                                         "declared"), "wan")
-    switches = [DeviceEntry(f"leaf{j}", "switch") for j in range(leaves)]
+    switches = [Device(f"leaf{j}", "switch") for j in range(leaves)]
     nodes, certs, links = [], [], []
     for i in range(blocks):
         n = f"{prefix}{i}"
         node = with_dpu(rtx_node(n)) if dpus else rtx_node(n)
-        cert = DeviceEntry(f"{n}.cert", "certifier")
+        cert = Device(f"{n}.cert", "certifier")
         nodes += node.blocks
         certs.append(cert)
         links += node.links
-        links += [LinkEntry(f"{n}.dpu" if dpus else f"{n}.nic0", cert.name, up, nic_hop, "ethernet"),
-                  LinkEntry(cert.name, switches[i % leaves].name, up, hop, "ethernet")]
-    tops = [DeviceEntry(f"spine{k}", "switch") for k in range(spines)]
-    links += [LinkEntry(sw.name, sp.name, trunk, hop, "ethernet") for sp in tops for sw in switches]
-    hosts = [DeviceEntry(x, "outside") for x in outside]
-    links += [LinkEntry(x.name, switches[c % leaves].name, up, *wan) for c, x in enumerate(hosts)]
-    checkers = [DeviceEntry(x, "challenger") for x in challengers]
-    links += [LinkEntry(x.name, switches[c % leaves].name, up, hop, "ethernet") for c, x in enumerate(checkers)]
+        links += [Link(f"{n}.dpu" if dpus else f"{n}.nic0", cert.name, up, nic_hop, "ethernet"),
+                  Link(cert.name, switches[i % leaves].name, up, hop, "ethernet")]
+    tops = [Device(f"spine{k}", "switch") for k in range(spines)]
+    links += [Link(sw.name, sp.name, trunk, hop, "ethernet") for sp in tops for sw in switches]
+    hosts = [Device(x, "outside") for x in outside]
+    links += [Link(x.name, switches[c % leaves].name, up, *wan) for c, x in enumerate(hosts)]
+    checkers = [Device(x, "challenger") for x in challengers]
+    links += [Link(x.name, switches[c % leaves].name, up, hop, "ethernet") for c, x in enumerate(checkers)]
     return Datacenter(name or f"leaf-spine-{blocks}", nodes, switches + certs + tops + hosts + checkers, links,
                       cadence or Cadence())
 
@@ -158,7 +156,7 @@ def two_sites(blocks: int = 2, *, leaves: int = 2, spines: int = 1, fabric_laten
     sites = [leaf_spine(blocks, leaves=leaves, spines=spines, outside=(outside,) if name == "west" else (),
                         fabric_latency=fabric_latency, cadence=cadence).prefixed(name, keep=frozenset({outside}))
              for name in ("east", "west")]
-    wan = LinkEntry(f"east.{top}", f"west.{top}",
-                    Assumption("wan/east-west", wan_gbps * 1_000_000_000, "bit/s", "declared"),
-                    Assumption("wan/east-west-latency", wan_latency, "s", "declared"), "wan")
+    wan = Link(f"east.{top}", f"west.{top}",
+               Assumption("wan/east-west", wan_gbps * 1_000_000_000, "bit/s", "declared"),
+               Assumption("wan/east-west-latency", wan_latency, "s", "declared"), "wan")
     return Fleet(sites, [wan])

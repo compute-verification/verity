@@ -6,7 +6,7 @@ the device, since each step below is one of the kernel's 32- or 64-bit operation
 
 from __future__ import annotations
 
-from kv import Field, chain, from_limbs, low_bits, to_limbs
+from kv import Field, from_limbs, to_limbs
 
 U32 = (1 << 32) - 1
 
@@ -140,7 +140,7 @@ def neg(s: list[int], f: Field) -> list[int]:
 
 def root(a: list[int], f: Field) -> tuple[list[int], int, int]:
     """a^((p+1)/4) lazily, with the squarings and multiplies it took."""
-    m, low = chain(f)
+    m, low = f.chain
     x = list(a)
     cur, sq, mu = 1, 0, 0
     for b in range(m.bit_length() - 2, -1, -1):
@@ -153,7 +153,7 @@ def root(a: list[int], f: Field) -> tuple[list[int], int, int]:
             x = mul(sqr(x, f), a, f)
             sq, mu, cur = sq + 1, mu + 1, cur + 1
     assert cur == m
-    for b in range(low_bits(f) - 1, -1, -1):
+    for b in range(f.low_bits - 1, -1, -1):
         x = sqr(x, f)
         sq += 1
         if (low >> b) & 1:

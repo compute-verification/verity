@@ -4,7 +4,7 @@ import VStar.Trace
 /-!
 # The trace assigner places the port inputs (`places_assign`)
 
-The builder `VStarBuild.vstarWit` runs an assigner `A` on a part's circuit at its port inputs. Here `A` is the
+VSTARWIT's builder (`VStarBuild.vstarWit`) runs an assigner `A` on a part's circuit at its port inputs. Here `A` is the
 trace the deployed C-Flock prover assigns (`VStar.Trace.assign`, difftested bit for bit against `flock-circuit`'s
 `Stmt::witness` by `verity/core/service/vstar/tests/test_vstar_trace_difftest.py`), the empty witness where the assigner
 refuses, and `places_assign` is the port lemma for it: under `TraceOk`, each port's row bits sit at their unit input
@@ -17,7 +17,7 @@ values a word (`width`), so its opening is the bytes `VStarBuild.rowMsg` lays af
 circuits' ranges are disjoint and each slot is its circuit's size, the unit's first input group is read as 16-bit leaves
 into self rows, no leaf cut feeds unit 0, the hm96 salt's columns are self rows, each port has one ref per instance, and
 each row has its port's words and a 192-byte salt. The parse checks most of these (`Net.ofRows_inputs`, `checkLayout`);
-`TraceOk` names them for the builder's proof to discharge or carry.
+`TraceOk` names them for VSTARWIT to discharge or carry.
 -/
 
 namespace RecDeploy.VStarTrace

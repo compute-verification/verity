@@ -1,7 +1,7 @@
 """The remote bandwidth audit's declared outputs (`PROTOCOL.md` §7, "Declared outputs") from an accepted session's
 record: γ against both R, per window and over the session, and the memory line, a session total in three forms, each
-with its ε and δ.  They are computed here, the memory line's charges and paced forms by `line`'s arithmetic in floats,
-and nowhere else: the benchmark and every other consumer reads them from `declared`.
+with its ε and δ.  They are computed here and nowhere else: the benchmark and every other consumer reads them from
+`declared`.
 
 The memory line's forms are the conclusions of `Accounting.Guarantees.Remote.Held` (the snapshot), `HeldOverTime`
 (time-held) and `HeldOverTimeLinks` (link-charged), `Security/Definitions/Accounting/Guarantees/RemoteHeld.lean`, read at
@@ -12,11 +12,12 @@ the record.  In the statements' terms, with b a block's bytes and every rate in 
 - X = s/E + β, what can bring a block back into node memory a ns: the node's squaring ceiling over the codec's
   squarings a block (`audit.Rebuild`), plus its disks' read ceiling, plus, link-charged, its boundary links' β_l;
 - B = B_r + B_d, what can come back at once beyond that rate, in blocks: one maximal rebuild batch and one maximal
-  disk read (plus, link-charged, one link window B_l), `Node`'s bursts (X and B: `line.charges_of`);
+  disk read (plus, link-charged, one link window B_l), `Node`'s bursts;
 - snapshot: `planned − W − (X·span + B) − P·S` blocks over the passes, `span` the record's;
-- paced, with each window a group g ≤ C and the credited span Σ = [e_0, s_C): time-held is
-  `Σ·(N − S) − 2L·(X·(Σ + 2L) + B) − fill` block-ns over Σ, the line's stretch held over time with the whole session
-  one stretch (`line.session_lost`: e_g, L and `fill` as `line` defines them).
+- paced, with each window a group g ≤ C, its challenge at s_g, its n_g passes, e_g = max(its last root's arrival,
+  s_(g+1)) (the closing window C's: its last arrival), L = max_g (e_g − s_g), and the credited span Σ = [e_0, s_C):
+  time-held is `Σ·(N − S) − 2L·(X·(Σ + 2L) + B) − fill` block-ns over Σ, where `fill` spreads W over the groups at
+  v_g = (s_(g+1) − s_g)/n_g (L/n_C in C), highest first, at most n_g·N in group g.
 
 The memory line counts registered blocks only.  δ is the horizon's (the record's δ and AuditRO's 2^-slack_log2 a
 pass) plus the coin commitment's hiding terms (`hiding`), the receipts' binding term (`binding`), under sketch-sha512
@@ -33,11 +34,10 @@ from types import MappingProxyType
 
 from verity.core.protocols.profile import IntegrityProfile
 
-from . import audit, coins, line, receipts, timing
+from . import audit, coins, receipts, timing
 
-SNAPSHOT = "snapshot"
-TIME_HELD, LINK_CHARGED = line.FORMS
-FORMS = (SNAPSHOT, *line.FORMS)
+SNAPSHOT, TIME_HELD, LINK_CHARGED = "snapshot", "time-held", "link-charged"
+FORMS = (SNAPSHOT, TIME_HELD, LINK_CHARGED)
 """The memory line's forms, in order: `Held`'s, `HeldOverTime`'s and `HeldOverTimeLinks`'s."""
 REJECTION_LOG2 = 64
 """The draw's rejection a draw, in bits: a draw below U reads a word of `bitlen(U) + 64` bits or more (`Key._uniform`,
@@ -420,27 +420,41 @@ def delta_parts(record: audit.Record, node: Node) -> dict[str, float]:
 
 
 def memory(record: audit.Record, node: Node) -> tuple[Line, Line, Line]:
-    """The memory line's three forms (`FORMS`): each form's charge `line.charges_of`'s and the paced forms
-    `line.session_lost`'s, in floats."""
+    """The memory line's three forms (`FORMS`)."""
     N, b, P = record.blocks, record.block_bytes, record.passes
     W = audit.pooled(record)[0]
     delta = (record.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + hiding(record) + binding(record, node)
              + sketch(record, node))
     S = -(-node.chip_bytes // b)
-    c = line.charges_of(node.rebuild(record.codec).squarings_per_s / record.codec.encode_squarings,
-                        node.disk_bytes_per_s, node.link_bytes_per_s, node.rebuild_burst_bytes, node.disk_burst_bytes,
-                        node.link_burst_bytes, b)
+    rebuild = node.rebuild(record.codec)
+    X = rebuild.squarings_per_s / record.codec.encode_squarings / 1e9 + node.disk_bytes_per_s / b / 1e9
+    X_link = X + node.link_bytes_per_s / b / 1e9
+    Br, Bd, Bl = node.rebuild_burst_bytes / b, node.disk_burst_bytes / b, node.link_burst_bytes / b
     planned = sum(sum(w.credited(False)) for w in record.windows)
     delta += rejection(record)
-    X, B = c[TIME_HELD].rate, c[TIME_HELD].burst
-    snapshot = Line(SNAPSHOT, N, b, delta, N - (planned - W - (X * record.span_ns + B) - P * S) / P)
+    snapshot = Line(SNAPSHOT, N, b, delta, N - (planned - W - (X * record.span_ns + (Br + Bd)) - P * S) / P)
     if (why := _paced(record)) is not None:
         return snapshot, Line(TIME_HELD, N, b, delta, refused=why), Line(LINK_CHARGED, N, b, delta, refused=why)
     ws = record.windows
-    times = [w.released_ns for w in ws], [w.arrived_ns[-1] for w in ws], [w.passes for w in ws]
-    return (snapshot, *(Line(f, N, b, delta, line.session_lost(*times, blocks=N, block_bytes=b,
-                                                               chip_bytes=node.chip_bytes, wrong=W, charge=c[f]))
-                        for f in line.FORMS))
+    C = len(ws) - 1
+    s = [w.released_ns for w in ws]
+    n = [w.passes for w in ws]
+    e = [max(w.arrived_ns[-1], s[g + 1]) if g < C else w.arrived_ns[-1] for g, w in enumerate(ws)]
+    L = max(eg - sg for eg, sg in zip(e, s))
+    span = s[C] - e[0]
+    v = [(s[g + 1] - s[g]) / n[g] if g < C else L / n[g] for g in range(C + 1)]
+    left, fill = W, 0.0
+    for g in sorted(range(C + 1), key=lambda g: v[g], reverse=True):
+        took = min(left, n[g] * N)
+        fill, left = fill + took * v[g], left - took
+        if left <= 0:
+            break
+
+    def lost(x: float, B: float) -> float:
+        return S + (2 * L * (x * (span + 2 * L) + B) + fill) / span
+
+    return (snapshot, Line(TIME_HELD, N, b, delta, lost(X, Br + Bd)),
+            Line(LINK_CHARGED, N, b, delta, lost(X_link, Br + Bd + Bl)))
 
 
 @dataclass(frozen=True, slots=True)

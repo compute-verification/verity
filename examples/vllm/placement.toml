@@ -1,50 +1,43 @@
-# The vLLM demo's placement: the workload it serves, the node each of its runs goes to, how `research run` starts it there,
-# and what that node holds. `run.sh` (`verity example vllm`) reads it and hands the run's script its node's paths as its environment, so
-# no script names a node or a path on one. A node's paths are the [node.NAME] table; a run's own variables are its env table.
+# The vLLM example's placement: the node each of its runs goes to, how `research run` starts it there, and what that node holds.
+# `run.sh` (`verity example vllm`) reads it and hands the run's script its node's paths as its environment, so no script names a
+# node or a path on one. A node's paths are the [node.NAME] table; a run's own variables are its env table.
 
-# the workload the demo serves, one of the integration's (integrations/vllm/workloads/<row>.json, fetched by its art id and
-# checked against that directory's SHA256SUMS): Llama-3.2-1B INT8 on one H200, batch 4, int8 linears (its engine's
-# quantization, verity_int8)
-row = "llama32-1b__int8__h200__tp1__b4__i256__o32__mixed__greedy__bi-eager"
-
-[node.vy-dc-h200]
-# the H200 node: vLLM's venv, CUDA for the collector's JIT build and the checkpoint's HF cache (served_verdicts.sh's defaults)
-VENV = "/workspace/cp/venv312"
-CUDA_HOME = "/usr/local/cuda-13.0"
+[node.vy-nebius-1]
+# the RTX PRO 6000 node: vLLM's venv, CUDA for the collector's JIT build and the checkpoint's HF cache
+VENV = "/workspace/jobs/venv312"
+CUDA_HOME = "/workspace/jobs/cuda-12.9"
 HF_HOME = "/workspace/hf"
-# the workload dirs, LLAMA_ROOT/<run>/<row>; COMMIT_RUN is the run whose workload dir the endpoint commits under: its Build's
-# manifest (ROW/manifest.json), and the taps built beside it
-LLAMA_ROOT = "/workspace/research/vllm-composed-h200int8"
-COMMIT_RUN = "r20261026-185144-3ccb"
-# no endpoint serves with less free on its serve dir's filesystem
-DISK_FLOOR_GB = "100"
+# commit.sh's workload dirs, LLAMA_ROOT/<commit run>/<workload>; COMMIT_RUN is the Commit of record the endpoint commits under
+LLAMA_ROOT = "/workspace/research/vllm-llama1b-commit"
+COMMIT_RUN = "r20261024-055630-5377"
+# no endpoint on n1 serves with less free on its serve dir's filesystem
+DISK_FLOOR_GB = "300"
 
-[node.vy-dc-h200.serving]
-# the endpoint's sm_90 taps, which only the runs that serve get
-HIDDEN_SO = "/workspace/research/vllm-composed-h200int8/fa2/build/fa3_matReqG/verity_fa3_matReqG.so"
-NORM_TAP_SO = "/workspace/research/vllm-composed-h200int8/norm_tap/build/verity_norm_tap.so"
+[node.vy-nebius-1.serving]
+# the endpoint's taps of record, which only the runs that serve get: a workload's Build, Match and Commit pick theirs (HIDDEN_SO would override that)
+HIDDEN_SO = "/workspace/cp/fa2/build/matReqG/verity_fa2_matReqG.so"
+NORM_TAP_SO = "/workspace/cp/norm_tap/build/verity_norm_tap.so"
 
 [run.window]
-# one sampling block of the served execution blocks through every subprotocol (served_verdicts.sh, which leases the GPU
-# itself); the prover and the Lean verifier run on the serving node after the lease ends. The endpoint serves PoUW's H1 with
-# each sampling block's coins from a session of its own on vy-challenger-1's gate (H1_GATE, the gate key of the node's
-# research user; H1_PEER the node); `--env MAIN_SHA=SHA` also holds the gate's pins to main's first-parent line from SHA.
-# The sampled proofs' coins are the Lean verifier's own unless PP_CHALLENGER names the live challenger
-# (`--env PP_CHALLENGER=gate:USER@HOST` with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY).
-node = "vy-dc-h200"
-research = ["--cwd", "clone", "--timeout", "6h"]
-env = { H1_GATE = "ssh -i ~/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84", H1_PEER = "vy-dc-h200" }
+# one served window through every subprotocol; the prover and the Lean verifier run on the serving node, after the lease ends.
+# The sampled proofs' coins are the verifier's own unless PP_CHALLENGER names the live challenger (vy-challenger-1 through
+# infra's gate: `--env PP_CHALLENGER=gate:USER@HOST` with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). CLASSES is V2's class,
+# whose window circuit the run needs; the class of record's is measured after it and gates nothing
+node = "vy-nebius-1"
+research = ["--cwd", "clone", "--timeout", "4h"]
+wrap = ["env", "CHECK_SLOTS=/workspace/research/locks/gpu/slots", "python3", "tools/verity/check/slot.py", "--by", "vllm", "--"]
+env = { LEASE_MEM_GB = "256", CLASSES = "4,32,4" }
 
 [run.commit]
-# once per workload: its Build, Match and Commit with the sealed replay bundle (a GPU leased only for the Match capture and the
-# Commit's engine), under LLAMA_ROOT
-node = "vy-dc-h200"
+# once per workload: its Build, Match and Commit of record (a GPU leased only for the Match capture and the Commit's engine)
+node = "vy-nebius-1"
 research = ["--cwd", "source", "--mem-gb", "192", "--timeout", "6h"]
 env = { GPU_LEASE_WHO = "vllm-llama1b-commit" }
 
 [run.serve]
-# the endpoint alone, serving until UNTIL, on the node's one GPU, its serve dirs beside served_verdicts.sh's
-node = "vy-dc-h200"
+# the endpoint alone, serving until UNTIL (network accounting's long windows), on one leased GPU
+node = "vy-nebius-1"
 research = ["--cwd", "source", "--timeout", "200m"]
-wrap = ["gpu-lease", "1", "--wait", "--mem-gb", "128", "--"]
-env = { PORT = "18190", SERVE_ROOT = "/workspace/research/vllm-served-verdicts" }
+wrap = ["env", "CHECK_SLOTS=/workspace/research/locks/gpu/slots", "python3", "tools/verity/check/slot.py", "--by", "vllm", "--",
+        "gpu-lease", "1", "--wait", "--mem-gb", "256", "--"]
+env = { PORT = "18084", UNTIL = "13:30", SERVE_ROOT = "/workspace/research/vllm-serve-seal" }

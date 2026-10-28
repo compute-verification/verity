@@ -35,7 +35,7 @@ replayed rows, which recomputes every start and n by vLLM's rules and checks the
 under the cumulative pool bound to the longest cached prefix, and gives `kind`, the canonical `sources`, and the request
 records (the tie: prompt and output lengths against the certified ids, `finish` by the stop rule).
 
-**Sent**, as `window_charge.Window`s (`residual`), and nothing else:
+**Sent**, as `code_v1.Window`s (`residual`), and nothing else:
 - `arrived`: the replay's decisions, one per open step: whether the next request had arrived.
 - `order`: the order's deviations from release order, as above.
 - `hits`: past the pool bound, every prefix-cache lookup the replay's scheduler reads (`_KV.hit`: each candidate its
@@ -472,9 +472,9 @@ def _charged(record: Record, reg: Registered, order: Sequence[int], rp: Any, W: 
 
 def _residual(record: Record, reg: Registered, engine: Any, order: Sequence[int], rp: Any,
               decisions: Sequence[Decision], looks: Sequence[Sequence[Lookup]], W: int) -> list[Any]:
-    """The windows v1 sends (`window_charge.Window`). A decision goes to the earlier of its arrival's ingress window
-    and the earliest window that shows its step's rows; an order entry to the earlier of its arrival's ingress window
-    and the earliest window that shows the rows of the first step that reads that arrival (a lookup, a decision or its
+    """The windows v1 sends (`code_v1.Window`). A decision goes to the earlier of its arrival's ingress window and the
+    earliest window that shows its step's rows; an order entry to the earlier of its arrival's ingress window and the
+    earliest window that shows the rows of the first step that reads that arrival (a lookup, a decision or its
     admission); and a sent hit's shortfall to the earliest window that shows its step's. Each is nondecreasing in the
     replay's order, so each field's values, window after window, are the replay's."""
     earliest, win = _charged(record, reg, order, rp, W)
@@ -638,8 +638,8 @@ def _residual_of(advice: I1.Advice, record: Record, reg: Registered) -> tuple[li
 
 
 def residual(advice: I1.Advice, record: Record, reg: Registered) -> list[Any]:
-    """The windows `encode` codes (`window_charge.Window`s: the decisions, the order's deviations and the sent hits):
-    what a codebook is fit on."""
+    """The windows `encode` codes (`code_v1.Window`s: the decisions, the order's deviations and the sent hits): what a
+    codebook is fit on."""
     return _total(lambda: _residual_of(advice, record, reg)[0])
 
 

@@ -1,7 +1,7 @@
-"""The proof system over a window of templates (a TP rank's served window): one `Stream` whose check is each template's
+"""The proof service over a window of templates (a TP rank's served window): one `Stream` whose check is each template's
 digest and `Q_template_instances` in the window's order, each registration's population the templates' mixed population
 at the challenger's own counts (`register(counts=)`), drawn once by `stratified:K`, a stratum per template each drawn at
-least once, and its whole run held to the Lean verifier's (`Run.run`) as one template's is."""
+least once, and its whole run held to the Lean verifier of record's (`Run.run`) as one template's is."""
 
 from __future__ import annotations
 
@@ -81,7 +81,7 @@ def test_a_windows_stream_takes_its_templates_digests_and_query_in_its_order():
 def test_a_two_template_window_runs_to_an_accepted_outcome_by_the_lean_run():
     """A window of PAIR x 1 and TRIPLE x 9 under `stratified:3`: registered at the challenger's own counts, drawn once
     from its coins with each stratum drawn its k (PAIR's by its floor of one), and run to an accepted outcome, the
-    verifier's whole run (`Run.run`, over the window's mixed population) agreeing."""
+    verifier of record's whole run (`Run.run`, over the window's mixed population) agreeing."""
     stream = _stream()
     rec = _record()
     reg = stream.register(rec, _ports(), counts=COUNTS)

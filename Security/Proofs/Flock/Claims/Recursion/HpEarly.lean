@@ -17,7 +17,7 @@ order (`InnerRec.P`, `commitThen`).
   its words' bits (`PlacesR.take_full`), under the port's `sha512/row/v1` prefix (`TraceOk.rows`).
 * **A round is its (part, segment) list** (`flatPieces`, `assembled_flat`): each piece read off its part's witness is
   its segments read off it, in order.
-* **The fitted rows** (`RowsFit`): round `i`'s `k`-th (part, segment) is the hm96 slot of a port of the
+* **The fitted rows** (`RowsFit`, HONESTIV's): round `i`'s `k`-th (part, segment) is the hm96 slot of a port of the
   part's circuit whose fitted row at that instance is round `i`'s `k`-th row (`roundRows`), as many as rows.
 * **`hpEarly`**: where the inner prover's round `i` message is its rows' commit strings, the round assembled off the
   outer witnesses is that message (`flatMap_fit`), so `hp_of_assembled` gives `hp` there.
@@ -53,7 +53,7 @@ def TraceAt (mask : ℕ → ℕ → Bool) (I : InnerRec) (x : Msg) (w : Claims.F
 def flatPieces (P : List (ℕ × List (Msg × List HmNets.Lin))) : List (ℕ × (Msg × List HmNets.Lin)) :=
   P.flatMap fun p => p.2.map (p.1, ·)
 
-/-- **The fitted rows at round `i`**: at the history `h`, round `i`'s (part, segment) list at `layR elemR`
+/-- **The fitted rows at round `i`** (HONESTIV's): at the history `h`, round `i`'s (part, segment) list at `layR elemR`
 (`flatPieces`) is as long as its rows (`roundRows`), and its `k`-th is the hm96 slot (`hmCommit c q n`) of port `nm`
 (index `q`) of the part's circuit, at an instance `n` whose fitted row there (`fitPin`) is round `i`'s `k`-th row. -/
 def RowsFit (I : InnerRec) (x : Msg) (w : Claims.Flock.Wit) (ρ : I.Tape) (h : List (Msg × Msg)) (i : ℕ) : Prop :=

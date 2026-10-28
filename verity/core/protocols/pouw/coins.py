@@ -124,7 +124,7 @@ class Challenger:
     them at construction, before the epoch starts; `open` releases one coin, once, after the verifier has recorded
     `after`.  `entropy` has no default, so nothing here reads the operating system: a served challenger's is the Lean
     verifier of record's read of it (`verifier.coins`, `IO.getRandomBytes`, A3).  `claim` is the claim instance naming
-    `entropy` (the proof system's `challenger.coin_claim`), None for an unnamed source, which a served challenger
+    `entropy` (the proof service's `challenger.coin_claim`), None for an unnamed source, which a served challenger
     refuses (`challenger.served_claim`)."""
 
     def __init__(self, epoch: int, entropy: Callable[[int], bytes]):

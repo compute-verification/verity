@@ -18,12 +18,12 @@ draw size is the block's `k s_T`, read from the block's draw, not chosen here.
   the law is `security_proofs`', which `security_properties` may not require); its size; its `t`-th unit in ascending
   order; and the tile stratum's coordinate of the block's draw at a permutation of the stratum, the units of its first
   `k s_T` images.
-* `TileStratumEscape`, proved (`Proofs.Pouw.PeriodJ10R.Stratum`): the tile coordinate at a uniform permutation misses
-  a set `B` of the sampling block's proof blocks with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)`,
-  which is how `Law.stratified σ k hk`'s coordinate `s_T` misses it (`FlockSoundness.Audit.Law.stratified_proj_escape`,
-  the per-stratum projection of the joint draw; `tileStratumEscape_eq_proj` joins the two). So the period's tile coin
-  is the block's draw restricted to the tile stratum, and the bound below, about the period's game, which draws its
-  permutation uniformly, needs no premise to be about that draw.
+* `TileStratumEscape`, a lemma to be proved: the tile coordinate at a uniform permutation misses a set `B` of the
+  block's units with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)`, the factor of stratum `s_T` in
+  `FlockSoundness.Audit.Law.stratified_escape`. With the per-stratum projection lean asked STRATJOINT to export (one
+  stratum's escape from the joint draw, `Law.stratified σ k hk`'s coordinate `s_T`, a lemma to be), it makes the
+  period's tile coin the block's draw restricted to the tile stratum. Neither is a premise here: the period's game
+  draws its permutation uniformly, and the bound below is about that game.
 * `Registered`, `Answered`, `WindowAccepts`, `CreditWindows`, `creditDrawn`: `Credit.window`'s 18 inputs, split into what
   the window registers before its draw coin and the rest; its verdict, an accept being some credited calls; each
   window's inputs as functions of the period's coins; and the units its draw demands proofs of, as `windowLayout`
@@ -36,7 +36,7 @@ draw size is the block's `k s_T`, read from the block's draw, not chosen here.
 * `TileDrawIsCoin`, `TileServiceSound`: on every accepted window, `creditDrawn` gives the units of the tile coordinate at
   the window's draw coin, `k s_T` of them; the service's soundness against `Credit.window`.
 * `RegisteredBeforeDraw`: each window's registration fixed before its draw coin, `Properties.Pouw.Period`'s form at
-  `Registered`. It keeps the window's round coins, so it doesn't order the anchors before the salt (its docstring).
+  `Registered`.
 * `saltOf`, `Place`, `pinnedAt`, `j10rAtCoin`, `SharedNoiseLucks`, `j10rRate`: each window's salt as
   `Credit.window` reads it; a unit's place (its position, its call's first unit, the call's slot and `K`, its tile and
   tile coordinates, its call's roots) and the noise and fold keys J10-R derives there; the unit's relation, its one
@@ -96,11 +96,7 @@ unit's call and blocks (`Credit.registeredFile`'s `j10r`).
   words, which `Play` leaves abstract (no definition from the committed values until the adaptive model), so no code
   can prove it. `Proofs.Pouw.PeriodJ10R.Honest`'s `j10r_meets` shows it, and every other premise, satisfiable.
 
-The proofs are in `Proofs.Pouw.PeriodJ10R`, as `Proofs.Pouw.Period`'s: `CircuitCreditPeriod` at `tileRun`. Its two
-lemmas: the honest one, `Proofs.Pouw.PeriodJ10R.Honest`'s `j10r_meets` (an honest period meets every premise, given
-three facts of `Credit.window` on honest windows that its compiled verifier's difftests evidence), and the nontrivial
-one, `Proofs.Pouw.PeriodJ10R.Nontrivial`'s `j10r_nontrivial` (the conclusion fails at the verifier that accepts every
-window, against the prover that fixes no word).
+The proofs are to be in `Proofs.Pouw.PeriodJ10R`, as `Proofs.Pouw.Period`'s: `CircuitCreditPeriod` at `tileRun`.
 -/
 
 namespace Properties.Pouw.PeriodJ10R
@@ -127,14 +123,12 @@ noncomputable def tileDraw {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB �
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (π : Equiv.Perm (Fin (tileCount σ sT))) : Finset (Fin nB) :=
   Finset.univ.image fun i : Fin (k sT) => tileAt σ sT (π (Fin.castLE (hk sT) i))
 
-/-- **The tile coordinate at a uniform permutation is the stratum's draw**: it misses a set `B` of the sampling
-block's proof blocks with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)` for `n_s` the stratum's size and
-`m_s` its proof blocks in `B`, the factor of `s_T` in `FlockSoundness.Audit.Law.stratified_escape`. Proved:
-`SecurityProofs.tileStratumEscape` (`Proofs.Pouw.PeriodJ10R.Stratum`). Its twin on the law's side is
-`Law.stratified_proj_escape`: `Law.stratified σ k hk`'s coordinate `s` misses `B` with the same factor,
-`prCoin (fun ω => Disjoint (ω s).1 B) = C(|stratum σ s| − |B.filter (σ · = s)|, k s) / C(|stratum σ s|, k s)`, and
-`SecurityProofs.tileStratumEscape_eq_proj` equates the two, so the period's tile coin is the block's draw at the tile
-stratum. -/
+/-- **The tile coordinate at a uniform permutation is the stratum's draw** (a lemma to be proved): it misses a set
+`B` of the block's units with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)` for `n_s` the stratum's
+units and `m_s` those of `B`, the factor of `s_T` in `FlockSoundness.Audit.Law.stratified_escape`. Its twin on the law's
+side, which lean asked STRATJOINT to export (a lemma to be): `Law.stratified σ k hk`'s coordinate `s` misses `B` with
+the same factor, `prCoin (fun ω => Disjoint (ω s).1 B) = C(|stratum σ s| − |B.filter (σ · = s)|, k s) /
+C(|stratum σ s|, k s)`. Together they make the period's tile coin the block's draw at the tile stratum. -/
 def TileStratumEscape : Prop :=
   ∀ {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
     (B : Finset (Fin nB)),
@@ -270,13 +264,7 @@ def TileServiceSound {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m nB mB n : ℕ} 
         ¬ rel x w t (opened x w (unitOf (tileAt σ sT t)))) ≤ δks
 
 /-- **Each window's registration is fixed before its draw coin**: `Properties.Pouw.Period.RegisteredBeforeDraw` at
-`Credit.window`'s registered inputs (`Registered`). It keeps window `w`'s round coins, the salt among them, so it carries
-the registration before the draw coin and not the order binding needs: H1's anchors (`x`, `sx`, the weight rows, `sw`;
-J10-R's root(`a/<K>@<s>`) and root(`b/<K>`), which `seed_c` hashes with the salt) committed before the window's salt
-coin, which is released against their root. The check holds a live window to that order: its salt opens on
-`anchoredEpochRoot W X k`, `X` the root of the activations the window committed (`windowAnchors`), and the loop commits
-the H1 tiles' A and B rows there, though not yet the served `x` and `sx`. No premise states the order yet (each
-anchor's root invariant under `spliceAt w 0`, the salt's coordinate). -/
+`Credit.window`'s registered inputs (`Registered`). -/
 def RegisteredBeforeDraw {C B : Type} {m n : ℕ} (ws : CreditWindows (Paths C m × B) n) : Prop :=
   ∀ (x z : Paths (Paths C m × B) n) (w : Fin n), ws.reg (spliceAt w.val m x z) w = ws.reg x w
 

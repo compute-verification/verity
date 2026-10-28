@@ -14,7 +14,7 @@ leaf of the unit when `compute` is empty).
 `b<b>.gpu0`, whose uplink goes to the block's certifier `b<b>.cert`; each certifier's wire and the client's go to one
 switch. Every route between two blocks therefore crosses the source block's uplink and the destination block's uplink.
 
-`DeviceGraph.from_datacenter` reads a declaration of `benchmarks/datacenter` (a `datacenter.Datacenter`, as
+`Hardware.from_datacenter` reads a declaration of `benchmarks/datacenter` (a `datacenter.Datacenter`, as
 `datacenter.examples` declares them and `mockdc.py` stands them up): its blocks are the units and its GPUs compute.
 """
 from __future__ import annotations
@@ -30,17 +30,17 @@ OUTSIDE = "outside"
 
 
 @dataclass(frozen=True)
-class LinkEntry:
+class Link:
     name: str
     ends: tuple[int, int]
     beta: float  # bits a tick each way; infinite while unmeasured
 
 
 @dataclass(frozen=True)
-class DeviceGraph:
+class Hardware:
     leaves: tuple[str, ...]
     units: dict[str, frozenset[int]]
-    links: tuple[LinkEntry, ...]
+    links: tuple[Link, ...]
     cert: frozenset[int]
     bucket_ticks: int = 1
     cross_latency: int = 1
@@ -160,13 +160,13 @@ class DeviceGraph:
                 "client": self.client, "compute": sorted(self.compute)}
 
     @classmethod
-    def from_json(cls, j: dict) -> "DeviceGraph":
+    def from_json(cls, j: dict) -> "Hardware":
         return cls(tuple(j["leaves"]), {u: frozenset(xs) for u, xs in j["units"].items()},
-                   tuple(LinkEntry(k["name"], tuple(k["ends"]), k["beta"]) for k in j["links"]), frozenset(j["cert"]),
+                   tuple(Link(k["name"], tuple(k["ends"]), k["beta"]) for k in j["links"]), frozenset(j["cert"]),
                    j["bucket_ticks"], j["cross_latency"], j["client"], frozenset(j.get("compute", ())))
 
     @classmethod
-    def from_datacenter(cls, dc, client: str | None = None) -> "DeviceGraph":
+    def from_datacenter(cls, dc, client: str | None = None) -> "Hardware":
         """A `datacenter.Datacenter`: its devices as the leaves (the blocks', then the fabric's), its blocks as the units,
         its GPUs as `compute`, its certifiers as `cert`, the client at `client` or its device of kind `outside`, and its
         cadence's `bucket_ticks`. Link `a-b` carries its capacity times the cadence's tick, and `cross_latency` is the
@@ -181,7 +181,7 @@ class DeviceGraph:
             if client is None:
                 raise ValueError(f"{dc.name} has no device of kind `outside` for the client")
         hw = cls(leaves, {b.name: frozenset(index[d.name] for d in b.devices) for b in dc.blocks},
-                 tuple(LinkEntry(f"{k.a}-{k.b}", (index[k.a], index[k.b]), float(k.capacity) * tick) for k in dc.links),
+                 tuple(Link(f"{k.a}-{k.b}", (index[k.a], index[k.b]), float(k.capacity) * tick) for k in dc.links),
                  frozenset(index[x] for x, d in devices.items() if d.kind == "certifier"), dc.cadence.bucket_ticks, 1,
                  index[client], frozenset(index[x] for x, d in devices.items() if d.kind == "gpu"))
         # The delays are floats in seconds, so a path of whole ticks can come out a hair under its count.
@@ -212,12 +212,12 @@ class DeviceGraph:
 
 
 def mock(blocks: int, devices: int = 1, *, nic_bits: int = 400_000, pcie_bits: int = 500_000,
-         bucket_ticks: int = 1) -> DeviceGraph:
+         bucket_ticks: int = 1) -> Hardware:
     if blocks < 1 or devices < 1:
         raise ValueError("a datacenter has at least one block of one device")
     leaves = ["client", "switch"]
     units: dict[str, set[int]] = {}
-    links: list[LinkEntry] = [LinkEntry("client.wire", (0, 1), nic_bits)]
+    links: list[Link] = [Link("client.wire", (0, 1), nic_bits)]
     cert = set()
     for b in range(blocks):
         gpus = []
@@ -228,7 +228,7 @@ def mock(blocks: int, devices: int = 1, *, nic_bits: int = 400_000, pcie_bits: i
         leaves.append(f"b{b}.cert")
         cert.add(c)
         units[f"b{b}"] = set(gpus)
-        links += [LinkEntry(f"b{b}.pcie{i}", (gpus[0], gpus[i]), pcie_bits) for i in range(1, devices)]
-        links += [LinkEntry(f"b{b}.uplink", (gpus[0], c), nic_bits), LinkEntry(f"b{b}.wire", (c, 1), nic_bits)]
-    return DeviceGraph(tuple(leaves), {u: frozenset(xs) for u, xs in units.items()}, tuple(links), frozenset(cert),
-                       bucket_ticks=bucket_ticks)
+        links += [Link(f"b{b}.pcie{i}", (gpus[0], gpus[i]), pcie_bits) for i in range(1, devices)]
+        links += [Link(f"b{b}.uplink", (gpus[0], c), nic_bits), Link(f"b{b}.wire", (c, 1), nic_bits)]
+    return Hardware(tuple(leaves), {u: frozenset(xs) for u, xs in units.items()}, tuple(links), frozenset(cert),
+                    bucket_ticks=bucket_ticks)

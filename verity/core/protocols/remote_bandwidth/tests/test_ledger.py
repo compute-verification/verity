@@ -13,7 +13,7 @@ import pytest
 
 from test_remote_bandwidth import A, N, SCHEDULE, Clock, Entropy, challenger, drive, finish, params, partial, store  # noqa: F401
 from verity.core import claims
-from verity.core.protocols.remote_bandwidth import audit, codec, ledger, line, receipts, timing
+from verity.core.protocols.remote_bandwidth import audit, codec, ledger, receipts, timing
 from verity.core.protocols.remote_bandwidth.audit import Pace, Session
 
 PASS_NS, DOWN_NS, UP_NS = 300, 20, 30
@@ -369,30 +369,6 @@ def test_wrong_receipts_fill_the_groups_at_their_rates(store) -> None:
     assert N < W < 2 * N
     fill = N * L + (W - N) * 349
     assert ledger.memory(r, node(chip_blocks=0))[1].lost_blocks == pytest.approx(fill / span, rel=1e-12)
-
-
-def test_the_paced_forms_are_the_lines_stretch_over_the_whole_session_in_floats(store) -> None:
-    """The paced forms are `line`'s stretch held over time with the whole session one stretch, in floats
-    (`line.session_lost`): within rounding of the exact line's stretch 0 at `per` = C once groups follow the closing
-    one, and pinned to the bit as the declared outputs publish them, with no receipt wrong and with some."""
-    n = node(chip_blocks=3, squarings=1.5e11, disk=4.32e9, link=5e10, bursts=(1, 2, 6))
-    pins = {N: (8.168255770738538, 32.39970707097953, 88.1677192237573),
-            7: (13.799709289395285, 50.24511225287638, 106.01312440565415)}
-    for samples, pinned in pins.items():
-        s, prover, passes, clock, _ = paced(store, params(windows=5, samples=samples, window_ns=1, pace=Pace(2, 1000)))
-        assert all(v.accepted for v in finish(s, prover, passes, clock))
-        r = s.record()
-        out = ledger.memory(r, n)
-        assert tuple(x.lost_blocks for x in out) == pinned
-        rates = line.Rates(1.5e11, r.codec.encode_squarings, 4.32e9, 5e10, B, 2 * B, 6 * B)
-        C, last = len(r.windows) - 1, r.windows[-1].arrived_ns[-1]
-        gs = [line.Group(w.released_ns, w.arrived_ns[-1], w.passes, N, 0, w.passes * N, 0) for w in r.windows]
-        gs += [line.Group(last, last, 1, N, 0, N, 0)] * C
-        for f, x in zip(line.FORMS, out[1:]):
-            exact = line.stretches(gs, per=C, blocks=N, block_bytes=B, chip_bytes=n.chip_bytes,
-                                   wrong=audit.pooled(r)[0], charge=line.charges(rates, B)[f])
-            assert [(y.lo, y.hi) for y in exact] == [(0, C)]
-            assert x.lost_blocks == pytest.approx(float(exact[0].time.lost_blocks), rel=1e-12)
 
 
 def test_a_pass_that_leaves_a_block_out_has_no_time_held_line(store) -> None:

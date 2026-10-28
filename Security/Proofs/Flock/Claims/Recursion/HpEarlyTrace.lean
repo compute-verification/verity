@@ -6,9 +6,9 @@ import Proofs.Flock.Claims.Recursion.SlotsOk
 `HpEarly.TraceAt` is `TraceOk` and `SlotsOk` at every part. `slotsOk_assign` gives `SlotsOk` from `TraceOk` and three
 facts of the part's circuit alone, so `TraceAt` is the conjunction of:
 
-* **`TraceOkAt`** (the discharge at the deployed V\*): `TraceOk` at each part's circuit and fitted port
+* **`TraceOkAt`** (CAPLOWER's discharge at the deployed V\*): `TraceOk` at each part's circuit and fitted port
   inputs (`fitPin`);
-* **`CircOkAt`** (at the deployed V\*): each part's circuit's row nets are the verifier's (`HmNets.check`), its
+* **`CircOkAt`** (RECDEC's at the deployed V\*): each part's circuit's row nets are the verifier's (`HmNets.check`), its
   blocks' columns fit 32 bits, and every port is a `sha512/row/v1` row of whole chunks.
 
 `traceAt_of` assembles `TraceAt` from them, and `hpEarly_deployed` is `hpEarly_run` with `TraceAt` so replaced.

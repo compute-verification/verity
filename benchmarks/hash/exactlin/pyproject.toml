@@ -1,4 +1,0 @@
-# The int8-exact linear's benches. Not a package: its kernels and benches run on GPU hosts, per their headers;
-# tensor_util.py's analysis of an nsys export runs here as a suite on a synthetic export.
-[tool.pytest.ini_options]
-testpaths = ["tests"]

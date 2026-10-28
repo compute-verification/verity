@@ -68,7 +68,7 @@ RC_MODES = ("fused", "side")
 LIB = "dither"
 REG: dict[int, tuple[str, torch.nn.Module]] = {}
 CFG: dict = {}
-WIN: "DitherState | None" = None
+WIN: "Window | None" = None
 
 
 def index_of(prefix: str) -> int:
@@ -82,7 +82,7 @@ class _F(C.Structure):
                 ("ydump", C.c_void_p), ("t", C.c_int), ("n", C.c_int), ("k", C.c_int), ("pad", C.c_int)]
 
 
-class DitherState:
+class Window:
     """A window's device state: per linear two parities of A, scale and z slots; the h1c sets (B tables once; per parity
     the A, admit and z tables, the step trees and the round); the receipts' call tables (one per parity, sharing one seeds
     and one receipts buffer) and the receipt trees; the `h1f` table and step struct; the live coins."""
@@ -384,10 +384,10 @@ class DitherState:
 
 # -- the op and the patch --------------------------------------------------------------------------------------------------
 
-def _window(dev) -> DitherState:
+def _window(dev) -> Window:
     global WIN
     if WIN is None:
-        WIN = DitherState(CFG["t"], CFG["key"], CFG["h1c"], CFG["h1f"], CFG["gate"], dev, CFG["rc"])
+        WIN = Window(CFG["t"], CFG["key"], CFG["h1c"], CFG["h1f"], CFG["gate"], dev, CFG["rc"])
     return WIN
 
 
@@ -433,7 +433,7 @@ def patch(t: int, h1c: str, h1f: str, key: bytes | None = None, gate: bool = Fal
     IV.Int8PlainLinearMethod.apply = apply
 
 
-def hook(llm) -> DitherState:
+def hook(llm) -> Window:
     """The step hook around the engine's runner (`execute_model`), and the window (built at the engine's first forward)."""
     from verity_vllm.engine import handle
     runner = handle.model_runner(llm)
@@ -471,9 +471,9 @@ def int8_checkpoint(pin: str, scratch: Path) -> Path:
 
 # -- the gate ----------------------------------------------------------------------------------------------------------------
 
-def check(win: DitherState, lib_h1r: str, which: str = "gate", n_ref_units: int = 3,
+def check(win: Window, lib_h1r: str, which: str = "gate", n_ref_units: int = 3,
           cpu_calls: tuple = (0, 1, 2, 3, 126, 127)) -> dict:
-    """Capture `which`'s checks (`DitherState.arm`), after the step after it ran (its receipts): per call z = torch._int_mm
+    """Capture `which`'s checks (`Window.arm`), after the step after it ran (its receipts): per call z = torch._int_mm
     (cuBLASLt) on the slots' rows < m and zero above, y (dumped) = int8_ops.scaled_mm's body on the same rows (today's served y),
     every receipt = h1r v1 (another unit implementation than the served v2's, gated against receipts.py) on the saved
     slots, a few units = h1tile.reference (z and receipt),

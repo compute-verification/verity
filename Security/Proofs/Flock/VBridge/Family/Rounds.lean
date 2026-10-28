@@ -275,7 +275,7 @@ def bc (cOf : Cm → List UInt8) (j : Fin F.stmts.size) (e : Cm) (_ : PosK (F.Vs
 
 theorem selRounds_sel : SelRounds F.sel := selRounds_selOf F.n₀ F.kc
 
-/-- Obligation: discharged by the verifier's check 7: the registered reads'
+/-- Obligation: discharged by the verifier's check 7 (`cursor/rec-vstar-checks-741b`): the registered reads'
 message-round ports are the statement's.
 **The verifier's reads files are V*'s**: at every history, the reads file the verifier reads for session `j`
 (`ZkOuter.own`, `registeredInput`, `FlockVerify.lean:228-242`) has `own j`'s message-round ports (`SameMsg`). V*'s

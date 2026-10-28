@@ -21,26 +21,17 @@ the horizon with only the inference cut. An attack is a construction, so it is e
 (what a protocol-abiding strategy gets), at the share `mfu` of the gates a construction uses, and the dark leaves at
 theirs.
 
-The padded size ratio is `|A| / T_0` for the actual circuit `A` that reaches the target, each serving block padded to
-its capacity: the bound's weight per gate of the inventory, against the reference's `w` per gate (its counted weight
-over its gates, `κ / 2G`), gives
+The overhead is `|A| / T_0` for the actual circuit `A` that reaches the target (a factor; the time to the target is
+below): the bound's weight per gate of the inventory, against the reference's `w` per gate (its counted weight over its
+gates, `κ / 2G`), gives
 
-    |A| / T_0 ≥ μ / ((u/w) ε_dark + (1 − ε_dark) g),   g = Σ_S n_S · share_S / Σ_S n_S
+    overhead ≥ μ / ((u/w) ε_dark + (1 − ε_dark) g),   g = Σ_S n_S · share_S / Σ_S n_S
 
 with `share_S` each serving block's local minimum over the reference's weight in it, `w c_S` (so at most `u/w`), and
 `μ` the gates the algorithm needs in multiples of the reference's. `u = w` is `s_×` at the reference's gates per
-counted product; a construction runs the reference's operations, so an attack is at `w` throughout.
-
-The **slowdown** is the hardware multiple over the reference training algorithm at its MFU, `MFU₀`: the adversary's
-GPU-hours over the reference's, `T_0 / (MFU₀ Φ)`, at least 1 (Lean's `hardwareMultiple`). A bound's is
-`multiple_bound(MFU₀, s, x)`, `max(1, 1/(s + a x))`, with the dark leaves `s` training like the reference and the
-monitored share `x` converted into the reference's work at `a`: 1 under reference efficiency (`GLOSSARY.md`'s task
-assumption: no run uses the hardware more efficiently than the reference, so free compute counts at `MFU₀`), and
-`1/MFU₀` without it, free compute at peak, which is Lean's `remoteDampener` (`Nci.Guarantees.DampenerRemote` states it
-for the remote composition). A construction's is its padded size ratio times `MFU₀`, since its circuit already carries
-the capacity it leaves idle (it trains at `MFU₀`, as the assumption has it).
-The time to the target, wall-clock, is then at least the overhead times `T_0 / (MFU₀ Φ_total)`
-(`scenario.Scenario.seconds`).
+counted product; a construction runs the reference's operations, so an attack is at `w` throughout. The time to the
+target, wall-clock, is then at least the overhead times `T_0 / Φ_total`, the idealized normalization (the reference at
+full capacity; `scenario.Scenario.seconds`).
 
 This module knows no GPU, protocol or training class: `envelopes` builds the serving blocks from the physical model,
 `classes` and `attacks` give the caps, and `families` the algorithm's profile.
@@ -177,29 +168,18 @@ def aggregate(partition: Partition, cap: Cap, w: float, u: float | None = None) 
 
 @dataclass(frozen=True)
 class Overhead:
-    """The overhead for one algorithm under one cap, `rho` (the hardware multiple at `mfu`), from the padded size ratio
-    `padded = efficiency / (dark + (1 − ε_dark) g)`, with each serving block's share and `g`'s terms summed over serving
-    blocks (each a share of the reference's weight in the monitored fleet at capacity). `dark` is the dark leaves'
-    weight over the reference's in the whole inventory: `(u/w) ε_dark` under a bound (`q_U(dark)`), and `ε_dark` times
-    what a construction uses of them under an attack."""
+    """The overhead for one algorithm under one cap: `rho = efficiency / (dark + (1 − ε_dark) g)`, with each serving
+    block's share and `g`'s terms summed over serving blocks (each a share of the reference's weight in the monitored
+    fleet at capacity). `dark` is the dark leaves' weight over the reference's in the whole inventory: `(u/w) ε_dark`
+    under a bound (`q_U(dark)`), and `ε_dark` times what a construction uses of them under an attack."""
 
-    padded: float
+    rho: float
     g: float
     eps_dark: float
     dark: float
     efficiency: float
     serving: Mapping[str, Share]
     terms: Mapping[str, float]
-    side: Side = "bound"
-    #: the reference training algorithm's MFU, `MFU₀`, which the overhead is against
-    mfu: float = 1.0
-    #: reference efficiency: a bound converts free compute into the reference's work at `a = 1`, not `1/MFU₀`
-    reference_efficiency: bool = True
-
-    @property
-    def rho(self) -> float:
-        """The overhead: the hardware multiple over the reference at `mfu` (`multiple`)."""
-        return self.multiple(self.mfu)
 
     @property
     def monitored(self) -> float:
@@ -208,34 +188,12 @@ class Overhead:
         rate = self.dark + (1 - self.eps_dark) * self.g
         return (1 - self.eps_dark) * self.g / rate if rate > 0 else 0.0
 
-    def multiple(self, mfu: float) -> float:
-        """The hardware multiple over the reference training algorithm at `mfu`. Under a bound, `multiple_bound`: the
-        dark leaves train like the reference, and the monitored share `(1 − ε_dark) g` counts at `a` (1 under
-        reference efficiency, so the multiple is `max(1, padded)`; `1/mfu` without it), each per the algorithm's
-        `efficiency`. A construction's is `max(1, mfu · padded)`: its padded circuit already holds the capacity it leaves
-        idle."""
-        if self.side == "attack":
-            return max(1.0, mfu * self.padded)
-        return multiple_bound(mfu, self.dark / self.efficiency, (1 - self.eps_dark) * self.g / self.efficiency,
-                              self.reference_efficiency)
-
-    def rates(self) -> dict[str, float]:
-        """The slowdown's rate, `1 / rho` before its floor at 1, by part: the dark leaves (`dark`) and `g`'s terms.
-        Under a bound the dark leaves count at 1 and the rest at `a` (`multiple_bound`'s `s + a x`); under an attack
-        every part counts at `1 / mfu`."""
-        attack = self.side == "attack"
-        scale = 1 / (self.efficiency * (self.mfu if attack or not self.reference_efficiency else 1.0))
-        dark = self.dark * (scale if attack else 1 / self.efficiency)
-        return {"dark": dark} | {t: (1 - self.eps_dark) * v * scale for t, v in self.terms.items()}
-
 
 def overhead(partition: Partition, cap: Cap, w: float, efficiency: float = 1.0, side: Side = "bound",
-             aggregate_only: bool = False, u: float | None = None, mfu: float = 1.0,
-             reference_efficiency: bool = True) -> Overhead:
+             aggregate_only: bool = False, u: float | None = None) -> Overhead:
     """The overhead from the serving-block bound: each serving block's local minimum (or, with `aggregate_only`, the
     minimum of the global sums), and the dark leaves. `w` is the reference's weight per gate, `u` the most a gate holds
-    under a bound (`q_U`'s, default `w`), `mfu` the reference training algorithm's MFU, and `reference_efficiency`
-    whether a bound counts free compute at it (`multiple_bound`)."""
+    under a bound (`q_U`'s, default `w`)."""
     u = w if u is None or side == "attack" else u
     weights = {b.name: b.count * b.gates for b in partition.serving}
     total = math.fsum(weights.values())
@@ -249,26 +207,15 @@ def overhead(partition: Partition, cap: Cap, w: float, efficiency: float = 1.0, 
             out[term] = out.get(term, 0.0) + weights[name] * v / total
     g = math.fsum(weights[n] * s.value for n, s in shares.items()) / total if total else 0.0
     dark = partition.eps_dark * (u / w if side == "bound" else partition.dark_mfu)
-    return Overhead(padded(dark, g, efficiency, partition.eps_dark), g, partition.eps_dark, dark, efficiency, shares,
-                    out, side, mfu, reference_efficiency)
+    return Overhead(rho(dark, g, efficiency, partition.eps_dark), g, partition.eps_dark, dark, efficiency, shares,
+                    out)
 
 
-def padded(dark: float, g: float, efficiency: float = 1.0, eps_dark: float | None = None) -> float:
-    """The padded size ratio `|A| / T_0` when the dark leaves hold `dark` of the inventory's weight at capacity and the
-    monitored `1 − ε_dark` hold `g` of theirs (`eps_dark` defaults to `dark`)."""
+def rho(dark: float, g: float, efficiency: float = 1.0, eps_dark: float | None = None) -> float:
+    """The overhead when the dark leaves hold `dark` of the inventory's weight at capacity and the monitored
+    `1 − ε_dark` hold `g` of theirs (`eps_dark` defaults to `dark`)."""
     rate = dark + (1 - (dark if eps_dark is None else eps_dark)) * g
     return efficiency / rate if rate > 0 else math.inf
-
-
-def multiple_bound(mfu: float, s: float, x: float, reference_efficiency: bool = True) -> float:
-    """`ρ = max(1, 1/(s + a x))`: the hardware multiple a developer needs over an unconstrained one at `MFU₀ = mfu`
-    (`hardwareMultiple`), when the unmonitored share `s` trains like it and the other terms `x`, shares of capacity,
-    convert into its work at `a`. Under reference efficiency (`GLOSSARY.md`: no run uses the hardware more efficiently
-    than the reference) free compute runs at `MFU₀` too, so `a = 1`; without it `x` counts at peak, `a = 1/MFU₀`, Lean's
-    `Nci.Dampener.remoteDampener mfu s x` (`Nci.Guarantees.DampenerRemote`, `DampenerRemotePeriod`). Below
-    `x = (1 − s)/a` it is 1: those terms alone outrun the unconstrained developer."""
-    rate = s + (x if reference_efficiency else x / mfu)
-    return max(1.0, 1 / rate) if rate > 0 else math.inf
 
 
 def least(*caps: Cap) -> Cap:

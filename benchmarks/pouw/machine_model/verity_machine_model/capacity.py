@@ -1,4 +1,4 @@
-"""Certified capacity in the tensor–scalar model (FILLER, decision 77).
+"""Certified capacity in the tensor–scalar model (FILLER, decision 77; note:20261017T0652Z-draft-filler).
 
 A window's certified work is a load on Π: n_k warp instructions of class k a SMSP-cycle, counted at the work's floor
 (every MMA it ran and the instructions its mandatory fold costs under FOLD-OPT, never honest's overhead). What it

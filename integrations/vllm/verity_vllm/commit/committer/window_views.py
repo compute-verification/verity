@@ -104,8 +104,6 @@ class WindowViews:
         if self._view is None:
             self._view = copy.copy(self)
             self._view.installed = True             # guard: never install()/uninstall() a view
-            for k in ("_device_pool_key", "released"):   # the window's own pool pieces and release (`device_pool`)
-                self._view.__dict__.pop(k, None)
         return self._view
 
     def detach(self) -> Any:

@@ -17,11 +17,10 @@ The probability over the product that some protocol fails is then at most the su
   event reading only its own coordinate.
 * `union_bound_past`: the adaptive form, coins drawn in sequence, each step's failure at most `δ t` conditionally on
   the coins before it.
-* `union_bound_monitoringPeriod`: over a monitoring period's periods, each period's protocols in
-  `union_bound_update`'s form: `∑_j ∑_a δ j a`. `union_bound_monitoringPeriod_with` adds one more event bounded over the
-  whole product, such as acceptance over a monitoring period (`FlockSoundness.Audit.Law.pooled_escape_log`, in
-  `Claims.Pr`, which is `pr`: `Pr_eq_pr`); `pr_restrict_le` carries a bound proved over a block of the coordinates to the
-  whole product.
+* `union_bound_horizon`: over a monitoring period's periods, each period's protocols in `union_bound_update`'s form:
+  `∑_j ∑_a δ j a`. `union_bound_horizon_with` adds one more event bounded over the whole product, such as acceptance
+  over a monitoring period (`FlockSoundness.Audit.Law.horizon_escape_log`, in `Claims.Pr`, which is `pr`: `Pr_eq_pr`);
+  `pr_restrict_le` carries a bound proved over a block of the coordinates to the whole product.
 -/
 
 namespace Pouw
@@ -98,7 +97,7 @@ theorem union_bound_product [∀ i, Nonempty (Ω i)] (Bad : (i : I) → Ω i →
 /-- **The union bound over a monitoring period's periods.** Period `j`'s protocol `a` draws coordinate `own j a` and
 fails with probability at most `δ j a` over it, at every value of the other coins (so a period may adapt to every other
 period's coins). Then some protocol of some period fails with probability at most `∑ j, ∑ a, δ j a`. -/
-theorem union_bound_monitoringPeriod {J A : Type} [Fintype J] [Fintype A] [∀ i, Nonempty (Ω i)] (own : J → A → I)
+theorem union_bound_horizon {J A : Type} [Fintype J] [Fintype A] [∀ i, Nonempty (Ω i)] (own : J → A → I)
     (Bad : J → A → ((i : I) → Ω i) → Prop) (δ : J → A → ℝ)
     (h : ∀ j a ξ, pr (fun x : Ω (own j a) => Bad j a (Function.update ξ (own j a) x)) ≤ δ j a) :
     pr (fun ξ => ∃ j a, Bad j a ξ) ≤ ∑ j, ∑ a, δ j a := by
@@ -108,14 +107,14 @@ theorem union_bound_monitoringPeriod {J A : Type} [Fintype J] [Fintype A] [∀ i
   exact (pr_mono fun _ ⟨j, a, hb⟩ => ⟨(j, a), hb⟩).trans this
 
 /-- **A monitoring period with one more event**, bounded over the whole product (`pr F ≤ η`), such as every period's
-draw accepting (`FlockSoundness.Audit.Law.pooled_escape_log`, carried over by `pr_restrict_le`): that event or some
+draw accepting (`FlockSoundness.Audit.Law.horizon_escape_log`, carried over by `pr_restrict_le`): that event or some
 protocol of some period failing has probability at most `η + ∑ j, ∑ a, δ j a`. -/
-theorem union_bound_monitoringPeriod_with {J A : Type} [Fintype J] [Fintype A] [∀ i, Nonempty (Ω i)]
+theorem union_bound_horizon_with {J A : Type} [Fintype J] [Fintype A] [∀ i, Nonempty (Ω i)]
     (F : ((i : I) → Ω i) → Prop) {η : ℝ} (hF : pr F ≤ η) (own : J → A → I)
     (Bad : J → A → ((i : I) → Ω i) → Prop) (δ : J → A → ℝ)
     (h : ∀ j a ξ, pr (fun x : Ω (own j a) => Bad j a (Function.update ξ (own j a) x)) ≤ δ j a) :
     pr (fun ξ => F ξ ∨ ∃ j a, Bad j a ξ) ≤ η + ∑ j, ∑ a, δ j a :=
-  (pr_or_le _ _).trans (add_le_add hF (union_bound_monitoringPeriod own Bad δ h))
+  (pr_or_le _ _).trans (add_le_add hF (union_bound_horizon own Bad δ h))
 
 /-- An event that reads only the coordinates in `S` has at most its probability over those coordinates. -/
 theorem pr_restrict_le (S : I → Prop) [DecidablePred S] (E : ((i : { i // S i }) → Ω i) → Prop) :

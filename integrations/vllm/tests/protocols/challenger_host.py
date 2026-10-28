@@ -1,4 +1,4 @@
-"""The proof system's challenger on its auditor host, in this process: a `LiveChallenger` its test hands in, its session
+"""The proof service's challenger on its auditor host, in this process: a `LiveChallenger` its test hands in, its session
 opened under an id with its record signed with an LMS key (`remote.open_session`), and `remote.serve` on one end of a socket
 pair, the serving side's `RemoteChallenger` on the other; the session's close is signed at the key's next leaf. The
 auditor's signed ledger (`Ledger`, infra's ``windows.jsonl``, v2) opens the session for its window before the first coin and
@@ -203,7 +203,7 @@ class Gate:
                     model: str | None = None, weights_root: str | None = None, length: dict | None = None,
                     **override) -> dict:
         """The period's open as the gate's ``period-open`` writes it, with its ``cap``, ``circuit``, ``draw_k`` (the
-        proof system's committed draw K, `credit.K_FIELD`), ``rows`` (the table rows T, `credit.ROWS_FIELD`) and
+        proof service's committed draw K, `credit.K_FIELD`), ``rows`` (the table rows T, `credit.ROWS_FIELD`) and
         ``length`` (``--length``, `credit.LENGTH_FIELD`) when
         given, and with ``model`` (``--model``) or
         ``weights_root`` (``--weights-root``) what the registry resolves them to (`Registry.opened`), Refused

@@ -1,4 +1,4 @@
-"""RT-DC's red-team audit: the binding and near facets of each headline design, decision 76's margin on
+"""RT-DC's red-team audit (campaign cmp-13): the binding and near facets of each headline design, decision 76's margin on
 their measured lane coefficients (the driver, and the least filler that holds it), and the uniform-datapath gap a device
 without a UNI class leaves open."""
 from __future__ import annotations
@@ -9,7 +9,7 @@ from verity_machine_model import eps as E
 from verity_machine_model import redteam as RT
 from verity_machine_model.model import device
 
-# device -> its headline design (decision 93 / JI89 / JIM): the rows these audits read must exist
+# device -> its headline design (decision 93 / #2322 / JI89 / JIM): the rows these audits read must exist
 HEAD = {"sm_90": "dither-2s-li-l32", "sm_100": "dither-2s-li-l32", "sm_89": "dither-2s-l16", "sm_80": "dither-2s-l16"}
 
 

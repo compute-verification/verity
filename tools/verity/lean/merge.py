@@ -17,9 +17,8 @@ What the build determines never refuses: the records `check.py --update` writes 
 (`--regenerate`) rewrites on the merged tree whenever they differ (`audit.RECORD_DIFFERENCE`, `audit.regenerated`). Those are
 a guarantee's record (signature, named assumptions, type hash: restated on both sides, the merged tree's statement decides
 it), each `reads` group (which guarantees read which definition, and each definition's hash) and an assumption's `digest`.
-Where the sides disagree the merge takes the union (a definition or a module one side stopped reading, unless that side
-moved the definition to another module, where alone it stays (`moved`); readers as sets less those the merged record no
-longer lists, a group left without readers or definitions dropped) or ours' value (a
+Where the sides disagree the merge takes the union (a definition or a module one side stopped reading, readers as sets
+less those the merged record no longer lists, a group left without readers or definitions dropped) or ours' value (a
 hash or a record both sides changed differently), and names each in one line on stderr. Whether a guarantee is listed is
 not the build's: one side's removal applies over the other's change to its record. What only a person writes still
 refuses when both sides changed it differently: an `owner`, a `shape` or `frozen` entry, a dependency's revision, a policy
@@ -233,35 +232,10 @@ def reads(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) -> di
         else:
             g = group(m, x or {}, y, z, why, candidate)
         if g is not None:
-            out[m] = {"definitions": dict(sorted(A.definitions(g).items())), "guarantees": sorted(g.get("guarantees", []))}
-    moved(o, a, b, out, candidate)
-    return {m: {"digest": A.module_digest(g["definitions"]), **g} for m, g in out.items()}
-
-
-def moved(o: dict, a: dict, b: dict, out: dict, candidate: list[str]) -> None:
-    """A Lean declaration lives in one module: a definition one side moved (it added it under another module of the merged
-    table and no longer lists it under this one) leaves the module the other side's group kept it in, and is no longer the
-    candidate `group` named.  Its hash is the mover's; when the other side changed it in the old module, or added
-    guarantees there that may read it in the new one, the new module's group is the candidate."""
-    def defs(s: dict, m: str) -> dict:
-        return A.definitions(s.get(m) or {})
-    where: dict[str, list[str]] = {}
-    for m, g in out.items():
-        for d in g["definitions"]:
-            where.setdefault(d, []).append(m)
-    for d, ms in where.items():
-        for m in ms:
-            to = next((n for n in ms if n != m and d in out[n]["definitions"] for s in (a, b)
-                       if d in defs(s, n) and d not in defs(o, n) and d not in defs(s, m)), None)
-            if to is None:
-                continue
-            del out[m]["definitions"][d]
-            if f"reads[{m}].definitions[{d}]" in candidate:
-                candidate.remove(f"reads[{m}].definitions[{d}]")
-            kept = a if d in defs(a, m) else b
-            new = set((kept.get(m) or {}).get("guarantees", [])) - set((o.get(m) or {}).get("guarantees", []))
-            if defs(kept, m).get(d) != defs(o, m).get(d) or new & set(out[m]["guarantees"]):
-                candidate.append(f"reads[{to}] (definitions moved from {m})")
+            defs = A.definitions(g)
+            out[m] = {"digest": A.module_digest(defs), "definitions": dict(sorted(defs.items())),
+                      "guarantees": sorted(g.get("guarantees", []))}
+    return out
 
 
 def items(o: list, a: list, b: list) -> list:

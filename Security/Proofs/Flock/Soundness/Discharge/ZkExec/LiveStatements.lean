@@ -4,7 +4,7 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
 /-!
 # `RunsZC` at the live `--zk` tables, from `TablesAtZKLive` (statement)
 
-`RunsZC` at `Discharge/ZkLink`'s live tables `tablesAtZK` (`ZkLink/TablesAt.lean`): on every live outcome flock-verify
+`RunsZC` at [wave2-zk-link]'s live tables `tablesAtZK` (`ZkLink/TablesAt.lean`): on every live outcome flock-verify
 `--zk` accepts, each rep has a `RepRun` on its rounds along `repShapeZ` and the compiled table accepts at the two runs'
 ends. Its pieces are proved or frozen apart: the per-rep runs (`zk_rep_plays`, `zk_rep_run`), the verdict
 (`ZkTableVerdict`) and the table being the executable's (`TablesAtZKLive`, taken here as a hypothesis).

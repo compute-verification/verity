@@ -20,9 +20,6 @@ from typing import Any
 from verity_vllm.commit import scheme, step_rows
 from verity_vllm.commit.merkle import fold_range, range_path_shape
 
-# A leaf a `--retain device` window's draw-gated release did not keep (`committer.device_pool`): refused, never replayed.
-DROPPED = "dropped at its window's draw-gated release (--retain device): a draw that names it is refused, never answered from a recomputation"
-
 
 @dataclass
 class RangeOpening:
@@ -174,8 +171,6 @@ class NativeRangeOpenings:
         elif step in self._gpu_blocks:
             blk = self._gpu_blocks[step][0]
             if not self._block_holds(blk, lo * C, hi * C):
-                if getattr(blk, "dropped", False):
-                    raise RuntimeError(f"open_range({step}, {lo}, {hi}): a leaf of the range was {DROPPED}")
                 return None
             if step not in self._gpu_levels:
                 raise RuntimeError(f"open_range({step}, {lo}, {hi}): this run kept no tree levels (retain_levels=False)")

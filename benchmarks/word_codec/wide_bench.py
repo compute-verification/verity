@@ -1,6 +1,6 @@
 """The wide word codecs' benchmark on one GPU: `wide.cu`'s libraries (`--lib NAME=PATH`, one per field and squaring
 form) gated against `wide.py`, then timed. Writes `wide.json`, `points.json` (the frontier's points, `frontier.py`'s
-schema) and `bench.log` under `--out`, and, with `RESEARCH_RUN_DIR` set, its `result.json`.
+schema) and `bench.log` under `--out`, and in a `research run` its `result.json`.
 
 Nothing is timed before its gate passed, in this order:
 - `layouts`: the store built on the device from FP8 weights equals `wide.store_bytes(wide.fragment_payloads(…))`;

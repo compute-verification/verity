@@ -1054,23 +1054,6 @@ def test_a_moved_suite_reuses_its_tests_passes_and_its_own_until_a_byte_changes(
     assert p.returncode == 0 and "cached  pkg" not in p.stdout and "5 passed" in p.stdout, p.stdout
 
 
-def test_a_failure_on_a_full_disk_is_not_kept_so_it_is_not_nondeterministic(tmp_path):
-    """A test that failed only because the machine's disk was full (ENOSPC) failed for the machine, not its inputs: its run
-    keeps no failure, so the pass beside it isn't flagged nondeterministic."""
-    import json
-
-    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
-    _per_test_workspace(root)
-    (tests / "test_sibling.py").write_text(
-        "import errno, os\n\ndef test_sibling():\n    if os.environ.get('PKG_BREAK'):\n"
-        "        raise OSError(errno.ENOSPC, 'No space left on device')\n")
-    assert _run_suite(root, tmp_path).returncode == 0
-    out = tmp_path / "suites.json"
-    p = _run_suite(root, tmp_path, "--fresh", "--json", str(out), extra={"PKG_BREAK": "1"})
-    assert p.returncode == 1 and "NONDETERMINISTIC" not in p.stdout, p.stdout
-    assert not json.loads(out.read_text())[0].get("nondeterministic")
-
-
 def test_a_fresh_run_that_fails_what_a_kept_pass_answers_for_says_so(tmp_path):
     """The nightly cold check's signal: a key that misses an input shows as a fresh failure a cached pass contradicts."""
     import json
@@ -1572,24 +1555,6 @@ def test_the_tracer_names_what_a_key_narrowed_to_the_tests_reads_must_hold(tmp_p
     assert r.trace("subprocess.Popen", (None, ["uname", "-p"], None, None)) == []       # a machine probe reads no repository file
     monkeypatch.delenv("VERITY_SUITE_MODULE")                  # outside a test module sitecustomize doesn't trace
     assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, None)) == [("X", sys.executable)]
-
-
-def test_a_dir_fd_relative_open_is_not_read_as_a_file_in_the_current_directory(tmp_path, monkeypatch):
-    """`shutil.rmtree` opens each entry by its bare name relative to a directory descriptor, which the `open` audit event
-    doesn't carry: a bare name missing from the current directory is no read of it, and one present there still is."""
-    spec = importlib.util.spec_from_file_location("reads_under_test", HERE / "guard" / "child" / "verity_suite_reads.py")
-    R = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(R)
-    (tmp_path / "present.txt").write_text("")
-    for k, v in {"VERITY_SUITE_ROOT": str(tmp_path), "VERITY_SUITE_READS": str(tmp_path / "reads"),
-                 "VERITY_SUITE_ALLOW": '["lib"]'}.items():
-        monkeypatch.setenv(k, v)
-    monkeypatch.chdir(tmp_path)
-    r = R.Reads()
-    r.seen("open", ("removed_piece", None, 0), "pkg/tests/test_x.py")
-    assert not (tmp_path / "reads").exists()
-    r.seen("open", ("present.txt", None, 0), "pkg/tests/test_x.py")
-    assert (tmp_path / "reads").read_text().splitlines() == ["O\tpkg/tests/test_x.py\tpresent.txt", "F\tpkg/tests/test_x.py\tpresent.txt"]
 
 
 def test_a_declared_build_output_is_traced_by_the_repository_paths_it_is_given(tmp_path, monkeypatch):

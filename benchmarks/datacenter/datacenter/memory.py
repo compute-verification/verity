@@ -1,8 +1,8 @@
 """Stores, challenges, read audits and wipes: how timed audits bind state to devices.
 
-A `StoreEntry` is registered state: `bits` bits the developer says a device holds. Its `content` says who chose them:
-the prover (a KV cache, which may itself hide state) or the verifier (`labels`: the challenger's labels, which hide
-nothing and so displace whatever else the device held).
+A `Store` is registered state: `bits` bits the developer says a device holds. Its `content` says who chose them: the
+prover (a KV cache, which may itself hide state) or the verifier (`labels`: the challenger's labels, which hide nothing
+and so displace whatever else the device held).
 
 The trusted challenger asks for a sample of a store at a tick and wants the answer by a deadline (`Challenge`, PoUS), or
 has the prover read a store through a window and counts the bits it read (`ReadWindow`, the bandwidth audits). A
@@ -28,7 +28,7 @@ from .time import Interval
 
 
 @dataclass(frozen=True)
-class StoreEntry:
+class Store:
     """Registered state: `bits` bits that `device` holds, by the registration. `content` says who chose them. `regen` is
     what rebuilding one bit costs, in the codec's squarings (`rate["square-1024"]`), for labels the prover can derive
     from a seed (0: it can't, as for its own data or labels the challenger streams in)."""
@@ -83,8 +83,8 @@ class Wipe:
     regen: float = 0.0
 
     @property
-    def store(self) -> StoreEntry:
-        return StoreEntry(f"labels@{self.device}", self.bits, self.device, "labels", self.regen)
+    def store(self) -> Store:
+        return Store(f"labels@{self.device}", self.bits, self.device, "labels", self.regen)
 
 
 BLOCK_BITS = BLOCK_BYTES * 8
@@ -153,7 +153,7 @@ def answer_time(dc: Datacenter, challenger: str, registered: str, actual: str, b
     return 2 * sum(l.delay for l in route(dc, challenger, registered)) + serve_time(dc, registered, actual, bits)
 
 
-def regen_time(dc: Datacenter, store: StoreEntry, bits: float) -> float:
+def regen_time(dc: Datacenter, store: Store, bits: float) -> float:
     """Seconds the prover needs to rebuild `bits` of `store` from its seed at its block's summed `rate["square-1024"]`,
     as `ledger.Node.rebuild` sums a node's; infinite for a store that can't be rebuilt."""
     block = dc.block_of(store.device)

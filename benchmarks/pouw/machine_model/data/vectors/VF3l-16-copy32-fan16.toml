@@ -2,6 +2,7 @@
 name = "VF3l-16-copy32-fan16"
 epoch = "VF3l-16"
 summary = "VF3l-16-copy16 with every landed word and MOV64 at ≥ 32 MACs a word (r11's copies at 32 a landed word), the UR fan-out at 16."
+note = "note:20261016T2055Z-draft-machine-model-vf3l"
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",

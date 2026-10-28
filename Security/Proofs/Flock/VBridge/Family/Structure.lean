@@ -510,7 +510,7 @@ theorem hOpenUnits_of (hne : Nonempty (Reg × L.Ω × Reg₂)) (hname : F.HOpenN
   exact ⟨upv_pos hc (F.Vs _).hscope, unitLog_le (F.Vs _).hscope, _,
     params_of_check (parse_facts hc).recNet (hname ⟨ℓ, hj⟩ _ _ _ _ hst)⟩
 
-/-- Obligation: discharged by the verifier's check 6, whose pass is `ps.size =
+/-- Obligation: discharged by the verifier's check 6 (`cursor/rec-vstar-checks-741b`), whose pass is `ps.size =
 gs.size`.
 **The verifier's part-count check passes** (the verifier's gap; lane hv's check): at the inner shape `vsh` (the `m`,
 `k_log` and claims of the parts' unit names, `RecResiduals.params`), the verifier evaluates V*'s parts,

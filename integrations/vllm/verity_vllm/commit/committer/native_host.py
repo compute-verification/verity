@@ -57,7 +57,7 @@ from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
 from verity_vllm.commit.committer import weights_rows
 from verity_vllm.commit.committer.topp_splits import SPLITS_IDENTITY
 from verity_vllm.commit.committer.window_views import WindowViews, _StepJob
-from verity_vllm.commit.native_ranges import DROPPED, NativeRangeOpenings, open_levels
+from verity_vllm.commit.native_ranges import NativeRangeOpenings, open_levels
 from verity_vllm.acquire.committer_api import Opening, RunCommitment, StepCommitment, declaration
 from verity_vllm.engine import hooks
 from verity_vllm.engine.profiles import layer_classes as LC
@@ -1477,7 +1477,6 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
     def _retained_device_bytes(self) -> int:
         n = sum(int(lv.nbytes) for lvls in self._gpu_levels.values() for lv in lvls if lv.is_cuda)
         n += sum(int(b.numel()) for b, _u in self._gpu_blocks.values() if b is not None and b.is_cuda)
-        n += sum(int(b.retained_bytes) for b, _u in self._gpu_blocks.values() if getattr(b, "on_device", False))
         return n
 
     def release_staging(self, *, levels_to_host: bool = True) -> dict[str, int]:
@@ -1996,8 +1995,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
                                     "gpu_tree_retained_bytes": self._retained_device_bytes(),
                                     "host_retained_bytes": sum(int(lv.nbytes) for lvls in self._gpu_levels.values() for lv in lvls if not lv.is_cuda)
                                     + sum(int(getattr(b, "retained_bytes", None) if getattr(b, "retained_bytes", None) is not None else b.numel())
-                                          for b, _u in self._gpu_blocks.values() if b is not None and not b.is_cuda
-                                          and not getattr(b, "on_device", False)),
+                                          for b, _u in self._gpu_blocks.values() if b is not None and not b.is_cuda),
                                     "retain": self.retain, "released_device_bytes": self.released_bytes,
                                     # per-step trace: root prefix, tensors, bytes, identity digest (names) and the first FA2 row
                                     # name -- when two paired runs disagree on the run root, this says whether the SCHEDULE (identities)
@@ -2326,8 +2324,6 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
                     blk, used = self._gpu_blocks[step]           # lazy D2H of the 256 B chunk (zero-padded past `used`) + level sibling path
                     lo = index * self.chunk
                     levels = self._gpu_levels.get(step)
-                    if getattr(blk, "dropped", False) and not self._block_holds(blk, lo, lo + self.chunk):
-                        raise RuntimeError(f"open({step}, {index}): leaf {index} of step {step} was {DROPPED}")
                     if not self._block_holds(blk, lo, lo + self.chunk) or (paths_from_replay and values_from is not None):
                         if values_from is None or step not in values_from._gpu_blocks:
                             raise RuntimeError(f"open({step}, {index}): raw bytes released / not retained (retain={self.retain}) and no replay source holds step {step}")

@@ -191,6 +191,25 @@ def ready(lay: L.StoreLayout, dev: DevStore, layer: int) -> list[str]:
             if e.start <= lay.tensor(layer, n).first_block and lay.tensor(layer, n).block_range.stop <= e.stop]
 
 
+def timed(fn, reps: int) -> list[float]:
+    fn()
+    sync()
+    times = []
+    for _ in range(reps):
+        if DEVICE.type == "cuda":
+            a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+            a.record()
+            fn()
+            b.record()
+            b.synchronize()
+            times.append(a.elapsed_time(b) / 1e3)
+        else:
+            t0 = time.perf_counter()
+            fn()
+            times.append(time.perf_counter() - t0)
+    return times
+
+
 def against_stream(lay, src: L.Weights, read: L.Read, layer: int, name: str, buf) -> dict:
     """Mismatching bytes and blocks of the staged matrix `buf` against the stream's bytes of it."""
     t = lay.tensor(layer, name)
@@ -243,7 +262,7 @@ def stage(args, lay, src, read: L.Read, dev, out: Out, layer: int) -> tuple[dict
         if cw is None and dw is None:
             raise SystemExit("nothing to hold the staged bytes to: give --w or a weights manifest with digests")
         ok &= (cw is None or cw["mismatched_bytes"] == 0) and (dw is None or all(dw.values()))
-        ts = S.timed(lambda: S.decode_matrix(store, layer, name, w), args.reps, DEVICE, warmup=1)
+        ts = timed(lambda: S.decode_matrix(store, layer, name, w), args.reps)
         out.record(step="stage", matrix=name, tensor=t.name, shape=[t.n, t.k], first_block=t.first_block, blocks=blocks,
                    weights=cw, manifest_sha256=dw, decode_s=[round(x, 6) for x in ts],
                    decode_gb_s=round(t.size / min(ts) / 1e9, 2), rows_gb_s=round(t.blocks * L.ROW / min(ts) / 1e9, 2),
@@ -258,7 +277,7 @@ def stage(args, lay, src, read: L.Read, dev, out: Out, layer: int) -> tuple[dict
             same &= torch.equal(buf[t.staging_offset:t.staging_offset + t.size], S.flat(staged[t.matrix][0]))
             gaps += int((buf[at:t.staging_offset] != 0).sum())
             at = t.staging_offset + t.size
-        ts = S.timed(lambda: S.decode_layer(store, layer, buf), args.reps, DEVICE, warmup=1)
+        ts = timed(lambda: S.decode_layer(store, layer, buf), args.reps)
         whole_s = min(ts)
         nbytes = sum(t.size for t in lay.layer(layer))
         out.record(step="stage", matrix="layer", call="decode_layer", bytes=nbytes, staging_bytes=buf.numel(),
@@ -390,8 +409,8 @@ def gemm(args, staged: dict, out: Out) -> tuple[dict[int, float], bool]:
             N, K = w.shape
             x, sx = activations(M, K, gen)
             y = IM.linear(x, sx, w, sw, "eager")
-            t_int = S.timed(lambda: torch._int_mm(x, w.t()), args.reps, DEVICE, warmup=1)
-            t_all = S.timed(lambda: IM.linear(x, sx, w, sw, "eager"), args.reps, DEVICE, warmup=1)
+            t_int = timed(lambda: torch._int_mm(x, w.t()), args.reps)
+            t_all = timed(lambda: IM.linear(x, sx, w, sw, "eager"), args.reps)
             res = G.twin(x, sx, w, sw, y)
             ok &= res["mismatches"] == 0
             sm = G.samples(x, sx, w, sw, y, args.samples, cpu)

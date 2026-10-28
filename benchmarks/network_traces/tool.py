@@ -1,8 +1,8 @@
-"""Store declarations for the network traces' harness (research.store README §6.1), each the ``--tool`` of a job:
+"""Store declarations for the network traces' harness (research.store README §6.1).
 
-    benchmarks.network_traces.tool:COVERT_SYNC, for
+    research run --on MACHINE ... --tool benchmarks.network_traces.tool:COVERT_SYNC -- \
       bash benchmarks/network_traces/covert.sh last cover-3-2 envelope
-    benchmarks.network_traces.tool:COVERT_STEADY, for
+    research run ... --tool benchmarks.network_traces.tool:COVERT_STEADY -- \
       python benchmarks/network_traces/covert.py --calibration C --out $D/steady.json --steady last --windows 3000
 
 Key params: the sync policies (and the windows, for the steady state). The traces and the calibration are inputs.

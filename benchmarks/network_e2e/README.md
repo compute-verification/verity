@@ -18,10 +18,10 @@ reuses the rehearsal and `n2_zk.py`'s driver and re-implements neither. `encodin
 
 ## The one command
 
-`verity bench network_e2e ARGS` runs `run.sh`, ARGS being `e2e.py`'s. Proving runs as a job on a CPU node, whose command
-and resources are in `run.sh`'s header: it builds C-Flock's `flock-circuit`, the Lean `flock-verify`, the Lean firewall
-and network-records (`benchmarks/pouw/hidden_zk/job.sh`'s `setup`, cached on the node), then runs `e2e.py` with the
-report in `$OUT`. `E2E_MEM_GB` is the proving runs' memory cap. Exit 0 means the report says OK. The job publishes the
+`verity bench network_e2e ARGS` runs `run.sh`, ARGS being `e2e.py`'s. Proving runs under `research run` on a CPU node,
+whose command is in `run.sh`'s header: it builds C-Flock's `flock-circuit`, the Lean `flock-verify`, the Lean firewall and
+network-records (`benchmarks/pouw/hidden_zk/job.sh`'s `setup`, cached on the node), then runs `e2e.py` with the report
+in `$OUT`. `E2E_MEM_GB` is the proving runs' memory cap. Exit 0 means the report says OK. `research run` publishes the
 report with the run's outputs in the evidence store, where results are read.
 
 N2 alone, without proofs, runs on any machine with `lake` on the PATH (the Lean audit's network-records is built on first
@@ -74,7 +74,7 @@ Each `--from` source is one of these, or a gzipped tar of one:
 
 - A rehearsal's directory (`certifier_serve.py rehearse --out`): `summary.json` and one run directory per strategy.
 - One strategy's run directory: its `certified.jsonl`, `plan.json`, `calibration.json` and `deployment.json`.
-- A gate run. On the auditor's machine the gate runs the rehearsal as the auditor's device:
+- A gate run. On vy-challenger-1 the gate runs the rehearsal as the auditor's device:
   `vy-challenger-gate certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra] [--profile planned|served]`.
   `vy-challenger-gate fetch RUN` returns the run as a gzipped tar (`request.json`, `out/`, `end.json`). One gate run is one
   strategy, so fetch the honest run and one run per tamper, and pass them all:

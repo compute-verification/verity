@@ -1,4 +1,4 @@
-"""served_zk's window through the proof system (`served_zk/served_commit.py` over P1, `sampled_proofs.service`): a
+"""served_zk's window through the proof service (`served_zk/served_commit.py` over P1, `sampled_proofs.service`): a
 window of served calls' side rows committed as C-Flock commits a unit's rows, its tiles padded with filler tiles to a
 grid level, registered with exactly PoUW's public items, received by a `Stream`, drawn once, each drawn tile's proof
 opened against the window root, delivered once, and the final outcome publishing exactly the public items."""

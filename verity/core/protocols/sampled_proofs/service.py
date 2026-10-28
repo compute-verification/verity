@@ -1,4 +1,4 @@
-"""The proof system, the challenger's side: a protocol's `Spec`, the public-items rule (`check_public`), and a `Stream` of
+"""The proof service, the challenger's side: a protocol's `Spec`, the public-items rule (`check_public`), and a `Stream` of
 registrations, draws and outcomes over the one-stage audit (`one_stage`).
 
 A protocol states what it commits (`Spec.values`), which proof blocks need proofs (`Spec.selection`, its selection rule),
@@ -32,13 +32,13 @@ order; its codes are `keys`, `roots`, `unsalted`, `query` and `undeclared`.
 provable family of its step): the check's program is each template's digest and its query `Q_template_instances`, in
 the window's order, and each registration's population program is the templates' mixed population at the challenger's
 own counts (`register(counts=)`), drawn once by the Spec's sampling design, `stratified:K` with one stratum per template. The
-verifier reads one program and one query either way, so a window's registration, draw and run are its
+verifier of record reads one program and one query either way, so a window's registration, draw and run are its
 `check`, `Select.select` and `Run.run` as they are for one template's.
 
 **The draw.** `register` logs the record and its receipt, whose `received` is the record's position in the stream's log.
 The challenger then draws once (`select`) from its coins as the Lean verifier's `Flock.Draw.drawWith` does
 (`coins.draw_first` over `coins.OwnRandomness`), with no hash and no derivation, or by the stream's `sampler`;
-either draw is held to `draw.check_draw`. The coins are the operating system's bytes as the Lean verifier
+either draw is held to `draw.check_draw`. The coins are the operating system's bytes as the Lean verifier of record
 reads them (`verifier.coins`: `IO.getRandomBytes`, assumption A3, `uniform/io-getrandombytes`); the Python never reads
 them from the OS itself. A work draw carries the challenger's closure map's closure (`select(closure=)`, a map over
 `[0, N)`, refused under another sampling design or out of range before any coin is read; `coins.closure_of`), which the proof
@@ -69,9 +69,9 @@ redraws. A proof delivered after `Check.proof_deadline` (seconds on the challeng
 and so is a draw whose proof is not delivered by then: a `Stream` refuses a check without a proof deadline, so every draw
 ends. Each failure is one visible symbol, `reject` or `late`, or a late registration's refusal, `late-registration`;
 an outcome the fleet's halt ends is `halted`.
-A second call of any of these is refused. An outcome is pending until every verifier has run, and each verdict
+A second call of any of these is refused. An outcome is pending until every verifier of record has run, and each verdict
 of record names the delivered sessions and reports the public outputs alike (`check_verdicts`: `pending`, `sessions`,
-`public`, by the verifier).
+`public`, by the verifier of record).
 
 **Sessions over several rounds.** A stream of `rounds` R (1 to `ROUNDS`) holds up to R registrations
 open at once, so one proof session can cover the draws of up to R consecutive registrations (rounds), each round's
@@ -80,7 +80,7 @@ registration its own tables of the session's statement. `Stream.session` opens i
 before its own draw, and so before every later round's. The first covered round's `Check.proof_deadline` spans the
 session. `deliver` delivers the session once, and every covered draw's outcome binds the same session records. Each
 draw's `outcome` runs its own audit record, on its own proof blocks and its own table's roots, and its record names the
-session's rounds (`session`). A late session is `late` for every round it covers. C-Flock's verifier refuses
+session's rounds (`session`). A late session is `late` for every round it covers. C-Flock's verifier of record refuses
 such a session (`verity/ml/flock/verifier/PROTOCOL.md` §16.12); `Stream.session` has its refusals.
 
 **The failure budget.** A stream counts its failures, and at the `budget`-th it stops and refuses further registrations.
@@ -92,12 +92,12 @@ its operator before its first registration. At the failure that brings any strea
 fleet halts the operator: every stream attached to it halts at once (`Stream.halted`), each of its registrations
 without a final outcome ends as `halted` (with no failure of its own; outcomes already final stay), and each refuses
 every call from then on (`halted`), so nothing of the operator is accepted or registered after its halt. A `late` counts
-toward the budget as a `reject` does. The fleet's rules (`_FleetControl`) decide by the verifier, the Lean's
+toward the budget as a `reject` does. The fleet's rules (`_FleetControl`) decide by their verifier of record, the Lean's
 `SampledProofs.Fleet`, and a halted stream's by `SampledProofs.Stream`'s `halt`.
 
 **The log's history.** A registration's checks get the log's last record (R6's `previous`), the records whose window may
 equal the registration's (R6's window) and each registered value's first registration (R7's held roots)
-(`Stream._earlier`), so both verifiers give the whole log's verdict and the work doesn't grow with the stream.
+(`Stream._earlier`), so both verifiers of record give the whole log's verdict and the work doesn't grow with the stream.
 The exceptions are windows that aren't plain JSON: a record whose window holds a float or a tuple is read by every check,
 and one whose own window does gets the whole log.
 
@@ -472,7 +472,7 @@ class Refused(Exception):
 
 
 class Pending(Exception):
-    """The outcome is not final yet: no proof has arrived and its deadline hasn't passed, or the verifier hasn't
+    """The outcome is not final yet: no proof has arrived and its deadline hasn't passed, or the verifier of record hasn't
     run."""
 
 
@@ -667,7 +667,7 @@ def _nat(x: Any) -> bool:
 
 
 def _float(x: Any, k: str) -> float:
-    """A reading as the verifier reads it: a JSON number, as the double nearest it."""
+    """A reading as the verifier of record reads it: a JSON number, as the double nearest it."""
     if isinstance(x, bool) or not isinstance(x, (int, float)):
         raise ValueError(f"{k} is a reading of the clock")
     try:
@@ -729,7 +729,7 @@ _EMPTY = {"size": 0, "opened": [], "failures": 0, "salted_at": None, "ended": No
 
 
 class _Control:
-    """A stream's own rules, the reference for the verifier's (`SampledProofs.Stream`, whose docstring has the
+    """A stream's own rules, the reference for the verifier of record's (`SampledProofs.Stream`, whose docstring has the
     state and the ops): the failure budget, the registrations open at once, the epoch's salt and registration deadline,
     and each registration's once-only orders (drawn, session, delivered, final) and proof deadline, on what
     they hold of the stream that one op reads (`_step`). A refusal's or a pending outcome's `detail` is the stream's
@@ -955,7 +955,7 @@ class _Control:
 
 def _step(params: Mapping[str, Any], state: Mapping[str, Any], op: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     """`op`'s decision on `state` by the stream's rules (`_Control`), and what they hold after it: `state` itself where
-    the op ends early, as the verifier's `Stream.run` gives them. A halted stream refuses every op."""
+    the op ends early, as the verifier of record's `Stream.run` gives them. A halted stream refuses every op."""
     name = op.get("op") if isinstance(op, Mapping) else None
     if name not in _OPS:
         raise ValueError("an op is one of " + ", ".join(_OPS))
@@ -975,7 +975,7 @@ _FLEET_EMPTY = {"size": 0, "streams": [], "halted": []}
 
 
 class _FleetControl:
-    """A fleet's own rules, the reference for the verifier's (`SampledProofs.Fleet`, whose docstring has the
+    """A fleet's own rules, the reference for the verifier of record's (`SampledProofs.Fleet`, whose docstring has the
     state and the ops): R5-all, each stream attached to its operator with its failure budget, and at the failure that
     brings one to its budget the operator's halt, which names every stream attached to it. A refusal's `detail` is the
     fleet's own, which the Lean doesn't write. `ValueError` is an op the Lean doesn't read."""
@@ -1025,7 +1025,7 @@ class _FleetControl:
 
 def _fleet_step(state: Mapping[str, Any], op: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     """`op`'s decision on `state` by the fleet's rules (`_FleetControl`), and what they hold after it: `state` itself
-    where the op ends early, as the verifier's `Fleet.run` gives them."""
+    where the op ends early, as the verifier of record's `Fleet.run` gives them."""
     name = op.get("op") if isinstance(op, Mapping) else None
     if name not in _FLEET_OPS:
         raise ValueError("an op is one of " + ", ".join(_FLEET_OPS))
@@ -1046,7 +1046,7 @@ class Fleet:
 
     Each registration the fleet admits has a fleet position, the number it admitted before; a halt's cause
     (`halted`) names the operator, the stream whose failure halted it (its index, in the order attached) and the fleet
-    position then. The fleet's rules decide each op by the verifier (`verifier.fleet`: the Lean's
+    position then. The fleet's rules decide each op by their verifier of record (`verifier.fleet`: the Lean's
     `SampledProofs.Fleet` against `_FleetControl`); where the two disagree the fleet stops, refusing every op after it
     (`disagree`)."""
 
@@ -1116,10 +1116,10 @@ class Stream:
     (the profile's) and `rounds` (R, the most registrations open at once, and so the most one `Session` covers) are
     public parameters of the stream. `coins` is
     the challenger's randomness (n bytes a call, read in order by `OwnRandomness`): by default the operating system's
-    bytes as the Lean verifier reads them (`verifier.coins`, `IO.getRandomBytes`, A3), never the Python's own
+    bytes as the Lean verifier of record reads them (`verifier.coins`, `IO.getRandomBytes`, A3), never the Python's own
     read of the OS. `clock` is its clock in seconds; tests inject both. Coins from the auditor's challenger are a
     `coins.ChallengerCoins`: the stream's `coin_source` is then `"challenger"` (else `"verifier"`, the verifier's own
-    coins or a test's stand-in for them), its digest names it, and every outcome's run by the verifier needs
+    coins or a test's stand-in for them), its digest names it, and every outcome's run by the verifier of record needs
     the coins' evidence (`outcome`'s `coins`), refusing a draw without it. `sampler`, when given, draws instead of the
     coins (`flock-verify draw` in a process of its own, say), never beside the challenger's: it takes the challenger's
     sampling design and N, and its draw is held to them like any other. `prover`, when given, is the identity the challenger registered the stream's prover under
@@ -1133,9 +1133,9 @@ class Stream:
     clock readings.
 
     The stream's own rules (the budget, the open registrations, the salt and both deadlines, and each registration's
-    once-only orders) decide each op by the verifier (`verifier.stream`: the Lean's `SampledProofs.Stream`
+    once-only orders) decide each op by their verifier of record (`verifier.stream`: the Lean's `SampledProofs.Stream`
     against `_Control`), the clock's readings as floats, on what they hold of the stream that the op reads (`_slice`: its
-    counts and the entries it names). What they hold is the verifier's state after each op, from the empty
+    counts and the entries it names). What they hold is the verifier of record's state after each op, from the empty
     stream, so an op is decided on a state of a bounded size whatever the stream's length. Where the two disagree the
     stream stops: that op and every one after it is refused (`disagree`). A stream attached to a `Fleet`
     (`Fleet.attach`) is admitted by it at each registration and reports each failure to it, and halts with its operator.
@@ -1355,7 +1355,7 @@ class Stream:
                  window_root: str | None = None, held: Sequence[str] | None = None,
                  counts: Mapping[str, int] | None = None) -> Registration:
         """Receive a registration: the public-items rule (`check_public`), then one-stage's R1-R7 (`registration.check`),
-        each by the verifier (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
+        each by its verifier of record (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
         the population program it builds from `unit` and the record's N (a window's: the mixed population of its
         templates, in its order, at `counts`, the challenger's own `{template's descriptor id: instances}` of the window,
         every template's at least one), the check's query, the selection rule's sampling design,
@@ -1447,7 +1447,7 @@ class Stream:
         return P.mixed_population_program([(t, counts[i]) for t, i in zip(self.templates, ids)])
 
     def _public(self, record: Mapping[str, Any]) -> Verdict:
-        """`check_public` by the verifier (`verifier.check_public`)."""
+        """`check_public` by the verifier of record (`verifier.check_public`)."""
         values = self.spec.values
         return V.check_public(check_public(self.spec, record, values), record, SCHEME, self.spec.check.query,
                               [(v.name, v.registered) for v in values], [p.item for p in self.spec.public])
@@ -1471,7 +1471,7 @@ class Stream:
     def _earlier(self, record: Mapping[str, Any], supplied: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
         """The records of the log that one-stage's R6 and R7 read for `record`, in log order: the last (R6's `previous`),
         every one whose window may equal `record`'s (R6's window: the same `_window_key`, or none), and each registered
-        value's first registration under each domain (R7's held roots, `registration.held_roots`). Both verifiers give the same
+        value's first registration under each domain (R7's held roots, `registration.held_roots`). Both verifiers of record give the same
         verdict on them as on the whole log. A record whose window has no key, or that has no window, gets the whole
         log, and so does one whose `supplied` values read a position, which follows every record of the log
         (`registered.log_base`)."""
@@ -1488,7 +1488,7 @@ class Stream:
         the selection rule's sampling design (`select_draw`; `All` draws every proof block and reads no coins). `closure` is the challenger's closure map
         (`{unit: [units proved with it]}` over [0, N), from its own layout), for a work sampling design only: the draw carries the
         drawn proof blocks' closure (`coins.closure_of`), which `draw.proved` and `draw.check_proved` count. The draw of
-        record is the verifier's (`verifier.select`: the Lean's `Select.select` on the bytes of the coins this
+        record is the verifier of record's (`verifier.select`: the Lean's `Select.select` on the bytes of the coins this
         draw read), unless a `sampler` draws. Raises `Refused` for a registration drawn before (nothing redraws), a
         closure map on another sampling design or outside [0, N) (before any coin is read), the two verifiers drawing differently
         (`disagree`), and a draw that isn't well formed under the sampling design (`draw.check_draw`, by `verifier.check_draw`)."""
@@ -1575,13 +1575,13 @@ class Stream:
                 session_roots: Mapping[str, str] | None = None, coins: Mapping[str, Any] | None = None) -> Outcome:
         """The draw's final outcome, once. With no proof delivered: a reject (`late`) once the deadline has passed, and
         `Pending` before. With one: `Pending` until every verdict of record has run (`accepted` not null); each verdict of
-        record names the delivered `sessions` and reports the public outputs alike (`check_verdicts`, by the verifier,
-        `verifier.check_verdicts`); then one-stage's audit record by the verifier
+        record names the delivered `sessions` and reports the public outputs alike (`check_verdicts`, by its verifier of
+        record, `verifier.check_verdicts`); then one-stage's audit record by its verifier of record
         (`verifier.audit_record`; `proved_units` and `instances` default to the draw's, `served` and `session_roots` are
         its, and the registered roots it reads are the verdicts' own) decides accept or reject. A draw a `Session` covers is decided alone, on the session's delivered records and its own
         audit record: its `proved_units`, `instances`, `served` and `session_roots` are its round's (its own tables'),
         never another round's. On a draw from the coins and an audit record its two verifiers agree on, the whole run is
-        held to the verifier's (`verifier.run`, the Lean's `Run.run` from the
+        held to the verifier of record's (`verifier.run`, the Lean's `Run.run` from the
         registration on): where they differ the outcome is a reject, its audit record failing `run`. The run takes the
         stream's `coin_source`, so on a stream drawing from the auditor's challenger (`coins.ChallengerCoins`) the
         Lean's run refuses every draw unless `coins` is its evidence (`coins.coins_reason`'s `{key, ledger, main, pins,
@@ -1635,8 +1635,8 @@ class Stream:
                proved_units: Sequence[int] | None, instances: int | None, served: Sequence[int] | None,
                session_roots: Mapping[str, str] | None, coins: Mapping[str, Any] | None = None
                ) -> tuple[dict[str, Any], dict[str, Any]]:
-        """`outcome`'s audit record, once the verdicts hold (failing `run` where the whole run isn't the verifier's),
-        and the public outputs."""
+        """`outcome`'s audit record, once the verdicts hold (failing `run` where the whole run isn't the verifier of
+        record's), and the public outputs."""
         assert e.sessions is not None
         outputs = self.spec.check.public_outputs
         of_record = sorted(k for k in verdicts if verdicts[k].get("of_record"))

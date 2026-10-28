@@ -5,8 +5,8 @@ import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
 /-!
 # The coin half of `DecodesZK` at the compiled `--zk` table
 
-`DecodesZK` (R11b at `--zk`) at `Discharge/ZkLink`'s compiled table, with each round's coin step `coinMsg true`
-(`one := fun _ _ _ => true`), from its message half alone. `Discharge/PlaysCoin`'s `decodesOfRunsAt` turns each rep's
+`DecodesZK` (R11b at `--zk`) at [wave2-zk-link]'s compiled table, with each round's coin step `coinMsg true`
+(`one := fun _ _ _ => true`), from its message half alone. [wave2-plays-coin]'s `decodesOfRunsAt` turns each rep's
 `RepRun` along a spine that holds where the run ends (`SpineAt`) into `Decodes`. At the compiled rep that spine is
 `repShapeZ` at every result whose Ligerito part is not a reject (`repZCAt_spineAt`), and a table that accepts has no
 such result (`accZ_lig`).

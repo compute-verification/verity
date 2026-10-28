@@ -1,10 +1,8 @@
 """Every number the Notion page "The compute dampener: claims, model and tiers" quotes from ``tiers.py``, ``exposure.py``,
 ``kappa.py`` and ``fit.py``, at the commit this runs on, grouped as the page is: the slide's questions, the symbols,
 section 4's terms, the ladder and the fit bound, years of growth, the regimes, section 6's thresholds and the known holes'
-cheating share. D is the overhead calculator's hardware multiple at MFU_0, ``rho.theorem.multiple_bound`` in Lean's
-form (``Nci.Dampener.remoteDampener``) on ``tiers.evaluate(p, TIERS[t], p["mfu"])``'s terms, the residual at MFU_0 under
-the reference-efficiency assumption; every scenario is a set of overrides on
-``tiers.DEFAULTS``. D by the fit bound (``fit_dampener``) is the same with the fit bound in place of the
+cheating share. D is ``tiers.evaluate(p, TIERS[t])["dampener"]``, the hardware multiple at MFU_0; every scenario is a set
+of overrides on ``tiers.DEFAULTS``. D by the fit bound (``fit_dampener``) is the same with the fit bound in place of the
 closed-form memory cap, which the page's memory rungs cite.
 
     python benchmarks/nci/statement.py           # Markdown
@@ -24,19 +22,17 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(1, str(HERE.parent / "rho"))
 
 import exposure as X  # noqa: E402
 import fit as F  # noqa: E402
 import kappa as K  # noqa: E402
 import tiers as T  # noqa: E402
-from rho.theorem import multiple_bound  # noqa: E402
 
 MB = 8e6
 TODAY = {"residual": 1.0}
-ATTESTED = {"residual": 0.213, "clock_share": 0.0}
+ATTESTED = {"residual": 0.213, "clock_share": 0.0, "host_share": 0.0021}
 #: the C7 dossier's eight conditions for a 1% residual include PoUW's deficit at most 0.25%
-BEST = {"residual": 0.01, "clock_share": 0.0, "eps_w": 0.0025}
+BEST = {"residual": 0.01, "host_share": 0.0021, "clock_share": 0.0, "eps_w": 0.0025}
 STREAMED = {"pous_rounds": 74000.0, "pous_floor": 0.0}
 
 
@@ -47,11 +43,11 @@ def streamed(gb: float, base: dict | None = None) -> dict:
     return over | {"unfilled_gb": gb - X.wipe_residual(T.DEFAULTS | over | {"unfilled_gb": 0.0}) / T.GB}
 
 
-FLOOR = streamed(4.0, BEST | {"residual": 0.0})
+FLOOR = streamed(4.0, BEST | {"residual": 0.0, "host_share": 0.0})
 RUNGS = {
     "Today": TODAY,
     "PoUW's floor credit": {},
-    "Floor credit and attested clock": ATTESTED,
+    "Floor credit, attested clock and EPYC hosts": ATTESTED,
     "Best plausible PoUW design": BEST,
     "Streamed-label wipes, 13 GB": streamed(13.0),
     "Streamed-label wipes, 6 GB": streamed(6.0),
@@ -98,7 +94,7 @@ def r_wipe_gb(p: dict, unfilled: float) -> float:
 
 #: section 6's parameters: the key searched, its overrides on the scenario, and each view of an edge
 THRESHOLD_ROWS: list[tuple[str, dict, list[tuple[str, Callable[[dict, float], float]]]]] = [
-    ("residual", {"clock_share": 0.0}, [("r̂ (the GPU residual, the clock at 0)", same)]),
+    ("residual", {"host_share": 0.0, "clock_share": 0.0}, [("r̂ (the GPU residual, host CPUs and clock at 0)", same)]),
     ("disk_gb", {}, [("unwiped disk, GB", same)]),
     ("intake_x", {}, [("declared intake, multiple of αF", same)]),
     ("sigma", {}, [("side channels σ, bit/s", same)]),
@@ -124,7 +120,7 @@ def num(x: float, digits: int = 3) -> str:
 
 
 def dampener(p: dict, tier: str) -> float:
-    return multiple_bound(p["mfu"], *T.remote_terms(p, T.evaluate(p, T.TIERS[tier], p["mfu"])), reference_efficiency=False)
+    return T.evaluate(p, T.TIERS[tier])["dampener"]
 
 
 def cheat(p: dict) -> float:
@@ -146,10 +142,9 @@ def fit_mu(gb: float) -> float:
 def capped(p: dict, tier: str, mu: float) -> float:
     """D at ``tier`` with ``mu`` as the memory cap in place of the closed form: ``tiers.evaluate`` without wipes or
     exhaustion, its monitored terms capped at ``m mu`` of C (the recipe multiplier scales the cap, as there)."""
-    r = T.evaluate(p, T.TIERS[tier] | {"wipes": False, "exhaust": False}, p["mfu"])
+    r = T.evaluate(p, T.TIERS[tier] | {"wipes": False, "exhaust": False})
     monitored = min(r["residual"] + r["declared"], p["g"] * (1 - min(p["unmonitored"], 0.999)) * p["m"] * mu)
-    return multiple_bound(p["mfu"], *T.remote_terms(p, r | {"residual": monitored, "declared": 0.0}),
-                          reference_efficiency=False)
+    return max(1.0, p["g"] / (r["unmonitored"] + (monitored + r["cheat"]) / p["mfu"]))
 
 
 def fit_dampener(p: dict, tier: str) -> float:
@@ -212,9 +207,10 @@ def symbols() -> list[dict]:
         ("MFU_0", "the unconstrained developer's model-FLOP utilization", p["mfu"]),
         ("m", "recipe multiplier, central", p["m"]),
         ("m", "recipe multiplier, adversarial", X.RANGES["m"][1]),
-        ("r̂", "under the floor credit: GPU + clock (hosts carry no compute)", r),
+        ("r̂", "under the floor credit: GPU + clock + host CPUs", r),
         ("r̂ GPU", "the GPUs' residual at the locked clock", p["residual"]),
         ("r̂ clock", "GPU capacity above the credited clock", p["clock_share"]),
+        ("r̂ host", "host CPUs at INT8 AMX peak", p["host_share"]),
         ("ε_W", "PoUW's deficit, a share of certified work (CircuitCredit)", p["eps_w"]),
         ("ε_W W_cert/C", "the deficit's share of capacity under the floor credit, ε_W (1 − r̂)", p["eps_w"] * (1 - r)),
         ("ε_W", "at the best plausible PoUW design", (p | BEST)["eps_w"]),
@@ -223,6 +219,7 @@ def symbols() -> list[dict]:
          T.residual_share(p)),
         ("GPU / r̂", "share of r̂", p["residual"] / r),
         ("clock / r̂", "share of r̂", p["clock_share"] / r),
+        ("host / r̂", "share of r̂", p["host_share"] / r),
         ("r̂", "at the best plausible PoUW design", T.audited_residual(p | BEST)),
         ("K", "novel bits per inference block", p["K"]),
         ("Γ", "gates per inference block", p["Gamma"]),
@@ -304,8 +301,8 @@ def floor() -> list[dict]:
     p = T.DEFAULTS
     eps_w = (p | FLOOR)["eps_w"]
     return rows([
-        ("1 / (ε_W + ε′ + ν / MFU_0), the floor's limit as the verdict lag goes to 0",
-         1 / (eps_w + p["eps_agg"] + X.nu(p) / p["mfu"])),
+        ("MFU_0 / (ν + ε_W + ε′), the floor's limit as the verdict lag goes to 0",
+         p["mfu"] / (X.nu(p) + eps_w + p["eps_agg"])),
         ("MFU_0 / ν, the same as ε_W and ε′ go to 0 too (δ_win / ε′ then needs δ_win → 0)", p["mfu"] / X.nu(p)),
         ("D at zero lag, ε_W and ε′, r̂ = 0, T3, if the partial-sum law held (its support premises are falsified)",
          dampener(p | FLOOR | {"lag_s": 0.0, "eps_w": 0.0, "eps_agg": 0.0, "kappa_chain": 0.0695}, "T3")),
@@ -322,7 +319,7 @@ def fit_bound() -> dict:
     for gb in FIT_WIPES:
         r = F.row(gb, N, L)
         p = F.params(gb)
-        t5 = T.evaluate(p, T.TIERS["T5"], p["mfu"])
+        t5 = T.evaluate(p, T.TIERS["T5"])
         out.append({"R_wipe_gb": gb, "periods": r["periods"], "D_closed": r["D_closed"], "D_fit": r["D_fit"],
                     "D_fit_T5": F.dampener(p, r["mu_fit"], t5["declared"], t5["cheat"]),
                     "D_fit_low": r["D_fit_low"], "D_fit_high": r["D_fit_high"], "D_fit_train": r["D_fit_train"]})
@@ -383,15 +380,11 @@ def thresholds(pool: ProcessPoolExecutor | None = None) -> dict:
 
 def fit_edges() -> dict[str, dict[float, float | None]]:
     """Section 6's memory edges by the fit bound: per tier, the wipe residual in GB below which it gives D at least each
-    level at the floor credit; None where no wipe residual does, ``inf`` where every one up to 1,000 GB does."""
+    level at the floor credit; None where no wipe residual does."""
     def below(tier: str, level: float) -> Callable[[float], bool]:
         return lambda gb: capped(T.DEFAULTS, tier, fit_mu(gb)) < level
-
-    def edge(tier: str, level: float) -> float | None:
-        f = below(tier, level)
-        return None if f(lo) else math.inf if not f(hi) else bisect(f, lo, hi, 40)
     lo, hi = 1e-3, 1e3
-    return {t: {lv: edge(t, lv) for lv in LEVELS} for t in FIT_TIERS}
+    return {t: {lv: None if below(t, lv)(lo) else bisect(below(t, lv), lo, hi, 40) for lv in LEVELS} for t in FIT_TIERS}
 
 
 def tornado(tier: str) -> tuple[str, float]:
@@ -488,8 +481,7 @@ def render(s: dict) -> str:
     dirty = " (with uncommitted changes in benchmarks/nci)" if s["uncommitted"] else ""
     out = ["# The compute dampener: the page's numbers", "",
            f"Rendered by `benchmarks/nci/statement.py` at commit `{s['commit']}`{dirty}. D is "
-           "`rho.theorem.multiple_bound` in Lean's form (`remoteDampener`) on `tiers.evaluate(p, TIERS[t], MFU_0)`'s "
-           "terms, the residual training at MFU_0 (the reference-efficiency assumption), the hardware multiple at MFU_0 = "
+           "`tiers.evaluate(p, TIERS[t])['dampener']`, the hardware multiple at MFU_0 = "
            f"{num(T.DEFAULTS['mfu'])}; every case is a set of overrides on `tiers.DEFAULTS`. D by the fit bound "
            "(`fit_dampener`) puts the fit bound at central w_e in place of the closed-form memory cap.", "",
            "## Slide forms: the hardest questions", "", *bullets(s["slide"]),

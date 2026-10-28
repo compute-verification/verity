@@ -647,10 +647,10 @@ def _layers(scheme: str, target: Target) -> tuple[Any, list[Any], dict[int, tupl
 def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     """The composition's first phase, with the model untouched and no coin opened: every linear layer's int7 weight rows
     committed (`verity.core.protocols.pouw.audit.commit_rows`), as ``{"weight_roots": {id: hex}, "shapes": {id: [n, k]}}``.
-    Under H1, the int8_exact arm's int8 weight rows as they are served, once a process (`pouw_h1_hooks.weight_roots`)."""
+    Under H1, the int8_exact arm's int8 weight rows as they are served (`pouw_h1.weight_root`)."""
     if scheme == PH.SCHEME:
         layers = PHK.layers(target.model, linear_types())
-        return {"weight_roots": {str(w): r.hex() for w, r in PHK.weight_roots(layers).items()},
+        return {"weight_roots": {str(w): PH.weight_root(w, PH.numpy_of(m.weight)).hex() for w, m in enumerate(layers)},
                 "shapes": {str(w): list(m.weight.shape) for w, m in enumerate(layers)}}
     _, layers, shapes = _layers(scheme, target)
     if scheme in PPD.SCHEMES:

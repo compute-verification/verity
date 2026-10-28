@@ -1,5 +1,5 @@
 """N2's advised counts (`advised`): the circuit held to its reference, and advised link-windows through the proof
-system on simulated vLLM serving written as I1's advice v0 (varied prompt, request and output lengths, chunked
+service on simulated vLLM serving written as I1's advice v0 (varied prompt, request and output lengths, chunked
 prefill, prefix-cache hits and their sources, a preemption and its resume, the async row past a finish, a step's rows
 out of request order, frames released after they're handed and responses spanning windows): honest traffic accepted
 in every window, salted or not, and an advice whose output length is one off, which misses a request or moves a
@@ -152,7 +152,7 @@ def test_the_simulated_sessions_are_varied():
 def test_honest_advised_traffic_is_accepted_in_every_window(tmp_path, own):
     """No egress profile and no FIXLEN: each window's egress counts are the advice's releases in its buckets, its
     ingress counts release every output's request in time, and every window of every session is accepted through the
-    proof system, salted (the certifier's own frame in each window) or not."""
+    proof service, salted (the certifier's own frame in each window) or not."""
     for seed in SEEDS:
         session = serve(seed, own)
         assert check(session, own=own) == [True] * WINDOWS

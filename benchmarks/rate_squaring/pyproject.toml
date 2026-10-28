@@ -1,5 +1,5 @@
 # p512 squaring rates and their tests. Not a package: the GPU forms (`sq.cu`, `sq.sh`) and the host's AVX-512 IFMA
-# (`ifma.c`, `ifma.sh`) run on a GPU node; their CPU twins, the host build's gate and `gamma.py` run
+# (`ifma.c`, `ifma.sh`) run on a node through `research run`; their CPU twins, the host build's gate and `gamma.py` run
 # here as a suite (`uv run tools/verity/check/suites.py benchmarks/rate_squaring`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]

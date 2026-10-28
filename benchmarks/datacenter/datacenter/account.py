@@ -40,7 +40,7 @@ time on each facet (kinds on one facet add up, kinds on different facets run at 
 the rest on the whole datacenter, since PoUW credits the prover system; a store's device the bits read from it and the
 bit-ticks it held over the interval the claim proves (a snapshot proves an instant, and carries none). `capacity` gives each unit's resources a tick by the
 declaration, and an account whose credits exceed them anywhere (`overcredited`, by `double_credit`, Horn's interval
-test) is unsound. `Accounts` joins the accounts of successive epochs or of overlapping audits, and applies the same rule
+test) is unsound. A `Ledger` joins accounts of successive epochs or of overlapping audits, and applies the same rule
 across them (`joint`): one device's time, bandwidth and memory are credited once. Its `custody` is the cumulative check
 on the registered weights: the share of them that the epochs' covert budgets, charged exports and a side
 channel of σ a server (`DEDICATED_RACKS`) could have carried out.
@@ -129,7 +129,7 @@ class Account:
     #: the links the declaration leaves uncovered (`Datacenter.uncovered_links`), by their ends
     uncovered: list[str] = field(default_factory=list)
     #: the epoch's real duration, in seconds, and its servers, counted as the blocks' GPU devices: what the side-channel
-    #: premise multiplies (`Accounts.custody`)
+    #: premise multiplies (`Ledger.custody`)
     seconds: float = 0.0
     servers: int = 0
     #: why nothing is credited (`Profile.uncounted`)
@@ -157,7 +157,7 @@ class Account:
         """No refused port-window and nothing overcredited: the AND over this model's own record check
         (`claims.check_records`), with no ε or share credit. The network verdict of record is the certifier's
         `LinkWindows.network_verdict` (`verity/core/protocols/certifier/service.py`), the same AND over a link's outcomes
-        of record; this model builds no proof-system streams, so it doesn't read it."""
+        of record; this model builds no proof-service streams, so it doesn't read it."""
         return not self.refused and not self.overcredited
 
     @property
@@ -331,8 +331,8 @@ def _credits(claims: list[Claim], profile: Profile, blocks: list[BlockAccount], 
 
 
 @dataclass
-class Accounts:
-    """The accounts of successive epochs (nights, say) or of audits that overlap, joined. Covert bits and
+class Ledger:
+    """The joint ledger: accounts of successive epochs (nights, say) or of audits that overlap, joined. Covert bits and
     failure probabilities add up, since an adversary with a long horizon can save them up and break out at the end, and
     so does what could have carried the registered weights out (`custody`); what each epoch could carry in is per epoch,
     and nightly wipes keep it down to the devices' residuals; and each unit's time, bandwidth and memory are credited
@@ -340,12 +340,12 @@ class Accounts:
 
     epochs: list[Account] = field(default_factory=list)
 
-    def add(self, acc: Account) -> Accounts:
+    def add(self, acc: Account) -> Ledger:
         self.epochs.append(acc)
         return self
 
     def joint(self) -> list[tuple[str, str, Interval, float, float]]:
-        """The joint rule across the accounts: every interval where they credit a unit's resource more than the
+        """The joint rule across the ledger's accounts: every interval where they credit a unit's resource more than the
         declaration says it can do. Two audits of one device in overlapping windows can't both have its whole time. And
         two PoUW windows (`compute` timed by its proved bound) that overlap on one block are refused outright: their
         bounds don't add, since an honest pair may have run on different facets at once, and the sound joint credit
@@ -377,7 +377,7 @@ class Accounts:
         return [sum(b.carried for b in a.blocks) for a in self.epochs]
 
     def custody(self, registered_bits: float, sigma: Assumption = DEDICATED_RACKS) -> Custody:
-        """The share of the registered weights, `registered_bits`, that could have left over the epochs: each
+        """The share of the registered weights, `registered_bits`, that could have left over the ledger's epochs: each
         epoch's covert budget, its export where it is charged, and σ (`sigma`) from each of its servers over its real
         duration. Weight custody over a horizon needs this share well below 1. The covert budget's inbound channels
         (inputs, ingress timing) count too, and the certifier protocol's free fields don't, since no record here has
@@ -394,7 +394,7 @@ class Accounts:
 
 @dataclass(frozen=True)
 class Custody:
-    """What of the registered weights could have left over the epochs (`Accounts.custody`): the covert budgets,
+    """What of the registered weights could have left over a ledger's epochs (`Ledger.custody`): the covert budgets,
     the export where it is charged and the side channel, against the `registered` bits."""
 
     registered: float

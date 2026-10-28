@@ -2,6 +2,7 @@
 name = "VF3j-16"
 epoch = "VF3j-8"
 summary = "VF3j with every register load at 16 MACs a word (PRICES-32 in full)."
+note = "note:20261016T1640Z-draft-rs-vf3j-strict-closure"
 superseded_by = "VF3k-16"
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",

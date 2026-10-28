@@ -35,7 +35,7 @@ from typing import Literal
 from .binding import Profile, traffic
 from .logical import REGISTRATION, commit, evaluate, parameters, profile_digest, register
 from .memory import Challenge, ReadWindow, Wipe
-from .observe import PortRecord, Trace, digest
+from .observe import Record, Trace, digest
 from .physical import Cadence, Port
 from .time import Interval
 
@@ -116,7 +116,7 @@ def _same(a, b) -> bool:
     return ([a] if isinstance(a, int) else list(a)) == ([b] if isinstance(b, int) else list(b))
 
 
-def check_records(records: list[PortRecord], declared: dict[tuple[Port, int], PortRecord], cadence: Cadence) -> list[Carried | Refused]:
+def check_records(records: list[Record], declared: dict[tuple[Port, int], Record], cadence: Cadence) -> list[Carried | Refused]:
     """The certifiers' records against the ones an honest run publishes (`declared`, by port and window): each declared
     port-window needs a record, with the declared counts and content digest, and is then carried with log2 of the
     jitter classes' number bits of timing advice. Records of other windows are other epochs' to check. The digest is
@@ -167,8 +167,8 @@ def audit(trace: Trace, profile: Profile) -> list[Claim]:
         for b, vs in row.items():
             content.setdefault((port, b // g.buckets), []).extend((x, reference[x]) for v in vs for x in p.gates(v))
     dc, per = profile.datacenter, g.window_ticks
-    declared = {(port, w): PortRecord(port, w, tuple(profile.occupancy.get(port, {}).get(w * g.buckets + t, 0)
-                                                     for t in range(g.buckets)), digest(content.get((port, w), [])))
+    declared = {(port, w): Record(port, w, tuple(profile.occupancy.get(port, {}).get(w * g.buckets + t, 0)
+                                                 for t in range(g.buckets)), digest(content.get((port, w), [])))
                 for port in dc.ports for w in profile.windows
                 if not plan.out(dc.watched(port).name, Interval(w * per, (w + 1) * per))}
     out += check_records(trace.records, declared, g)

@@ -4,12 +4,12 @@ protocol with 100% checking, every word and operand verified, has the core ε, C
     1 − ε_core = (1 − ε_skip − ε_mand − ε_machine − ε_luck) · (1 − ε_sched) · (1 − ε_clock)
 
 ε_luck in it: every check is one draw, so an accepted cheater spends Theorem S's budget with every block checked
-(LEDGER; JL is not assumed). The sampling compiler adds ε_sample = ε_adapt, a function of the proof block and its
-selection rule, 0 at 100% sampling. Each term is a fraction of honest time.
+(LEDGER; JL is not assumed). The sampling compiler adds ε_sample = ε_adapt, a function
+of the proof block and its selection rule, 0 at 100% sampling. Each term is a fraction of honest time.
 
 - **Π** is a named vector's rows at its epoch, as the price LP reads them: row r holds Σ_k c_kr·n_k SMSP-cycles for n_k warp
   instructions of class k, and a program takes at least its largest row.
-- **ε_machine** is one LP over Π (SPEC's §0.8). A program writes every committed
+- **ε_machine** is one LP over Π (SPEC's §0.8, note:20261017T0324Z-draft-eps1-spec). A program writes every committed
   word, folds every word and does the filler, and takes T ≥ every row. A word is written on one of four routes: `tensor`
   (on any MMA form of data/forms.toml, L/(depth·words) of that form's instructions with honest's operand delivery a
   word, folded on lanes; honest writes on its own form), `lanes` (q lane instructions a word in any mix of the
@@ -37,7 +37,7 @@ selection rule, 0 at 100% sampling. Each term is a fraction of honest time.
   restricted to honest's routes with the tensor route at φ_del and no overhead. Under ♭, ε_sched, ε_clock and honest's
   overhead above ♭ leave ε for γ, as the factor T_H/B_♭ · f_max/f_H (`credit_ratio`; f_max/f_H = 1/(1 − ε_clock)).
 - **ε_luck** is Theorem S inside the same LP: an accepted cheater writes (1 − d̄) of the words and folds them all, d̄ =
-  ln(1/δ)/((1 − p)·S) over S spot checks, each filler's blocks at their
+  ln(1/δ)/((1 − p)·S) over S spot checks (note:20261016T0005Z-draft-luck-loss-round4), each filler's blocks at their
   own p (`budget`), and ε_luck is what that saves it, d̄·w*/B(H) at π*. The terms add up to the LP exactly.
 - **ε_sched** is honest's measured time above its model time (`[measured]` in data/honest/), when the design runs the
   profile's fold at its L (with its fillers, the measured time plus their model cost). Unmeasured, it is 0: honest is
@@ -94,7 +94,7 @@ NOISE = {                                          # how a product is noised and
 }
 SUMS = {                                           # the kernel forming a peel's sums DG, S and X(0) (eps_budget prices it)
     "vsum": "BC-KERNEL r2's linear vsum, 35 per-thread instructions an entry",
-    "vfold": "D2S-KERNEL r3's vfold, the V producers in one pass: 0.69–0.73 warp instructions an entry",
+    "vfold": "D2S-KERNEL r3's vfold, the V producers in one pass (#2300): 0.69–0.73 warp instructions an entry",
 }
 OWN = ("name", "title", "summary")                 # what a design file states itself, never from its base
 

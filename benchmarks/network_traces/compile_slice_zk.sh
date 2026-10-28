@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # The compile slice in zero knowledge (compile_slice_zk.py) on a CPU machine, on hidden_zk's builds (its job.sh, sourced:
 # C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame and the sampled-proofs verifier built
-# in the tree. From a clone, in one of the network pool's pinned slots, as a job of at most 180 minutes:
-#   env CS_MEM_GB=64 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
+# in the tree. From a clone, in one of the network pool's pinned slots:
+#   research run --on vy-nebius-cpu-1 --source . --project verity --as LANE --cwd clone --timeout 180m \
+#     --env CS_MEM_GB=64 -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
 #     --by LANE -- bash benchmarks/network_traces/compile_slice_zk.sh
-#   (the slot's mem= reserves the run's memory, so the job reserves none beside it), or, while the pool is full,
-#   `bash benchmarks/network_traces/compile_slice_zk.sh` alone as a job of 16 CPUs and 64 GB.
+#   (the slot's mem= reserves the run's memory; a --mem-gb beside it would reserve it twice), or, while the pool is full,
+#   on node 2's share: research run --on auto --cpus 16 --mem-gb 64 --timeout 180m --cwd clone ... -- bash ...
 # env: CS_MEM_GB (what job.sh's stages may take, within the slot's)  CS_SLICE (compile_slice_zk.py's --slice, demo by
 #      default; several, comma-separated, are proved one after another)  CS_POINTS (its --points, 1 by default)
 #      CS_KINDS (its --kinds, every kind by default)  CS_G (its --g, the steps a served row holds, P by default)

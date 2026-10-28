@@ -63,28 +63,10 @@ ssh_pubkey() {
 render_user_data() {
   VY_PUBKEY=$1 VY_LEASE_EPOCH=$2 VY_USER=$SSH_USER VY_DEV=$DATA_DEVICE_ID VY_DEADLINE=$deadline_epoch VY_FS=${FS_ID:+vy-fs} \
     VY_CLOCKS=$([ "$PLATFORM_PREFIX" = gpu-rtx6000 ] && echo 1 || echo 0) python3 - "$here" "$src/research/pods/sh" <<'PY'
-import base64, gzip, os, re, sys
+import base64, gzip, os, sys
 nebius, sh = sys.argv[1], sys.argv[2]
-LIMIT = 32768  # Nebius refuses a longer spec.cloud_init_user_data
-def shipped(path):
-    """A shell script ships without its full-line comments (the shebang and heredoc bodies stay), so the document fits LIMIT."""
-    text = open(path, "rb").read()
-    if not path.endswith(".sh"):
-        return text
-    out, until = [], None
-    for i, line in enumerate(text.decode().split("\n")):
-        if until is not None:
-            out.append(line)
-            until = None if line.strip() == until else until
-            continue
-        m = re.search(r"<<-?\s*['\"]?(\w+)['\"]?", line.replace("<<<", ""))
-        until = m.group(1) if m else None
-        if i and re.match(r"\s*#", line):
-            continue
-        out.append(line)
-    return "\n".join(out).encode()
 def blob(path):
-    return base64.b64encode(gzip.compress(shipped(path), mtime=0)).decode()
+    return base64.b64encode(gzip.compress(open(path, "rb").read(), mtime=0)).decode()
 env = (f"VY_USER={os.environ['VY_USER']}\nVY_DATA_DEVICE_ID={os.environ['VY_DEV']}\nVY_BOOT_LEASE_S=7200\n"
        f"VY_LEASE_EPOCH={os.environ['VY_LEASE_EPOCH']}\nVY_DEADLINE_EPOCH={os.environ['VY_DEADLINE']}\n"
        f"VY_FS_TAG={os.environ['VY_FS']}\nVY_LOCK_CLOCKS={os.environ['VY_CLOCKS']}\n")
@@ -100,12 +82,7 @@ out = ["#cloud-config", "users:", f"  - name: {os.environ['VY_USER']}", "    sud
 for path, mode, data in files:
     out += [f"  - path: {path}", f"    permissions: '{mode}'", "    encoding: gz+b64", f"    content: {data}"]
 out += ["runcmd:", "  - [/usr/local/sbin/vy-setup]", ""]
-doc = "\n".join(out)
-if len(doc) > LIMIT:
-    sizes = ", ".join(f"{p} {len(d)}" for p, _, d in sorted(files, key=lambda f: -len(f[2]))[:3])
-    sys.exit(f"cloud-init is {len(doc)} characters, over Nebius's {LIMIT}: shrink an embedded file (largest: {sizes}) "
-             "or install it from the deploy instead of cloud-init")
-print(doc, end="")
+print("\n".join(out), end="")
 PY
 }
 

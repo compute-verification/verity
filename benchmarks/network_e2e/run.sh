@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # network-e2e's runner, `verity bench network_e2e ARGS`, ARGS e2e.py's (README.md has the commands). With --no-prove,
 # --proofs DIR or --traffic varied (whose advice profile n2_zk doesn't prove) it runs e2e.py alone (N2's network-records
-# is built on first use, with lake on the PATH). Otherwise it runs as a job on a CPU node: it builds what n2_zk.sh
-# builds (hidden_zk's job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify, then the firewall's Lean
-# frame, N2's network-records and the sampled-proofs verifier in the tree, so from a clone) and runs e2e.py with them,
-# the report in $OUT. From a clone, as a job of at most 5 hours whose input is RUNS.tgz:
-#   bash benchmarks/network_e2e/run.sh --from "$RESEARCH_RUN_DIR/inputs/RUNS.tgz"
+# is built on first use, with lake on the PATH). Otherwise it
+# runs under `research run` on a CPU node: it builds what n2_zk.sh builds (hidden_zk's job.sh, sourced: C-Flock's
+# flock-circuit and the Lean flock-verify, then the firewall's Lean frame, N2's network-records and the sampled-proofs
+# verifier in the tree, so --cwd clone) and runs e2e.py with them, the report in $OUT. From a clone:
+#   research run --pool research --as LANE --pool-wait 3600 --timeout 5h --source . --project verity --cwd clone \
+#     --send RUNS.tgz -- bash -c 'bash benchmarks/network_e2e/run.sh --from "$RESEARCH_RUN_DIR/inputs/RUNS.tgz"'
 # env: E2E_MEM_GB (what job.sh's stages may take, within the slot's; 32 by default)  E2E_CACHE (the build cache, kept
 #      across runs where writable; by default the node's /workspace/research/cache/pouw-hidden-zk)
 # Kept in $OUT: report.json, report.md, e2e.log, the builds' logs, and n2zk/, n2_zk's records and everything the

@@ -1,5 +1,5 @@
 """N2's verdict of record from zero-knowledge proofs of N2's registered unit, on a certifier-serve run: each link-window
-committed, registered on the link's own stream (`service.LinkWindows.stream`, the proof system's `Stream`), selected
+committed, registered on the link's own stream (`service.LinkWindows.stream`, the proof service's `Stream`), selected
 (Selection All: its one unit, no coins), its unit (`NetworkLinkWindow_v5`, both ends' head checks on their pinned gate
 ids) proved by C-Flock `prove --zk` behind the Lean firewall, delivered, and decided by `LinkWindows.outcome`: the
 verifier's own Lean `verify --zk` of the proof, the proof's public row opened to the verifier's own copy and its output

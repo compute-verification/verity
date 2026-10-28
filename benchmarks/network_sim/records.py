@@ -1,7 +1,7 @@
-"""The real certifier's published records as the accounting layer's `datacenter.observe.PortRecord`s.
+"""The real certifier's published records as the accounting layer's `datacenter.observe.Record`s.
 
 Each certifier record (`verity.core.protocols.certifier.grid.Record`: one link-window's grid and status) becomes a
-`PortRecord`: the port (the block's certifier, `egress` for what leaves the block and `ingress` for what enters it), the
+`Record`: the port (the block's certifier, `egress` for what leaves the block and `ingress` for what enters it), the
 window, the real frames in each bucket (the grid's occupancy) and a SHA-512 digest of the status and the real frames in
 order. `published` reads a block's from a lab run's directory. `declared` gives the ones the Program says an honest run
 publishes, by port and window: egress, the reference shaper on the Program's frames at the declared syncs; ingress, the
@@ -25,7 +25,7 @@ for _p in (str(HERE), str(HERE.parent / "network_traces")):
 
 import active_replay as ar  # noqa: E402
 import graph  # noqa: E402, F401  (puts `datacenter` on the path)
-from datacenter import Cadence, Datacenter, Interval, Plan, Port, PortRecord  # noqa: E402
+from datacenter import Cadence, Datacenter, Interval, Plan, Port, Record  # noqa: E402
 from verity.core.protocols.certifier import active  # noqa: E402
 from verity.core.protocols.certifier import grid as cgrid  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync, run_shaper  # noqa: E402
@@ -45,8 +45,8 @@ def digest(r: cgrid.Record) -> bytes:
     return h.digest()
 
 
-def to_record(r: cgrid.Record, port: Port) -> PortRecord:
-    return PortRecord(port, r.window, cgrid.occupancy(r.grid), digest(r))
+def to_record(r: cgrid.Record, port: Port) -> Record:
+    return Record(port, r.window, cgrid.occupancy(r.grid), digest(r))
 
 
 def cadence(setup: ar.Setup) -> Cadence:
@@ -78,7 +78,7 @@ def ports(dc: Datacenter, block: str, setup: ar.Setup) -> dict[str, Port]:
     return {setup.egress_link: dc.port(inside, cert), setup.ingress_link: dc.port(cert, inside)}
 
 
-def published(run: Path, setup: ar.Setup, dc: Datacenter, block: str) -> list[PortRecord]:
+def published(run: Path, setup: ar.Setup, dc: Datacenter, block: str) -> list[Record]:
     """The records a block's certifier published in a lab run, from its directory."""
     by = ports(dc, block, setup)
     out = []
@@ -90,7 +90,7 @@ def published(run: Path, setup: ar.Setup, dc: Datacenter, block: str) -> list[Po
 
 
 def declared(plan: dict, setup: ar.Setup, dc: Datacenter, block: str,
-             salts: dict[int, bytes] | None = None, verifier: Plan | None = None) -> dict[tuple[Port, int], PortRecord]:
+             salts: dict[int, bytes] | None = None, verifier: Plan | None = None) -> dict[tuple[Port, int], Record]:
     """The records an honest run of `plan` publishes, from the plan alone, by port and window. With `salts`, the salts
     `Proxy.reveal` gave, by window: the ingress certifier enqueues its salt frame, which carries the placeholder and
     never the salt, at the first bucket of each window it has a salt for, ahead of that bucket's arrivals: every window
@@ -104,7 +104,7 @@ def declared(plan: dict, setup: ar.Setup, dc: Datacenter, block: str,
 
 
 def _declared(plan: dict, setup: ar.Setup, dc: Datacenter, block: str,
-              salts: dict[int, bytes] | None) -> dict[tuple[Port, int], PortRecord]:
+              salts: dict[int, bytes] | None) -> dict[tuple[Port, int], Record]:
     by = ports(dc, block, setup)
     e, i = setup.egress_params, setup.ingress_params
     release = {int(k): v for k, v in plan["model_release"].items()}
@@ -128,6 +128,6 @@ def _declared(plan: dict, setup: ar.Setup, dc: Datacenter, block: str,
     return {(r.port, r.window): r for r in out}
 
 
-def to_json(r: PortRecord) -> dict:
+def to_json(r: Record) -> dict:
     return {"port": [r.port.certifier, r.port.direction], "window": r.window, "counts": list(r.counts),
             "digest": r.digest.hex()}

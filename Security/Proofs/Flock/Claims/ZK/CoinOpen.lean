@@ -20,8 +20,8 @@ verdict over a session is `Session.start` at the answer, then `Session.openAll` 
   exactly where `allOk` does, and so does the whole verdict for a session of at least one opening. A malformed answer
   ends the session before any opening, as it fails every opening's `parseD`.
 * `coinLayer_verdict`, `coinLayer_refuses`: the same at `CoinLayer.session nr T`'s check (`refP.chk`), at the nonce whose
-  bytes `Hello` carries. `coinLayer_refuses` is the Lean check's side of `LeanRelease.OpeningsRefused`
-  (`Claims/ZK/Refine.lean`) at SHA-512: where `allOk` of the openings fails, the Lean check refuses. The transport ends
+  bytes `Hello` carries. `coinLayer_refuses` is the Lean check's side of `LeanRelease.OpeningsRefused` (ZKS10's
+  `Claims/ZK/Refine.lean`) at SHA-512: where `allOk` of the openings fails, the Lean check refuses. The transport ends
   the session at that refusal (`coin_tree::Checked`), so the frame takes no coins past it.
 -/
 

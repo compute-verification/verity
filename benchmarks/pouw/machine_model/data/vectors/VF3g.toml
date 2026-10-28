@@ -2,6 +2,7 @@
 name = "VF3g"
 epoch = "VF3g"
 summary = "The ldmatrix/stmatrix variants the P4 census grouped under LDS.128 / STS.128, priced (RS-W′ round 6)."
+note = "note:20261016T1135Z-draft-rs-p4-ldmatrix"
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",

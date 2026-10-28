@@ -564,22 +564,6 @@ def test_the_honest_forgery_stand_in_is_credited():
     assert v["credit"], v
 
 
-@pytest.mark.parametrize("name", [None, *FORGERIES])
-def test_the_value_check_on_the_device_is_the_hosts(name):
-    """`pouw_h1_records.reason` of a call's records, scales and served y left on a CUDA device, as the arm leaves them, is
-    what it is of their host copies: None for honest records, and each forgery's own refusal."""
-    if not torch.cuda.is_available():
-        pytest.skip("needs CUDA")
-    w = Linear(64, 1, None)
-    xq, s_a = int8_ops.row_quant((torch.randn(3, K, generator=torch.Generator().manual_seed(9)) * 3).bfloat16())
-    y, zy = E.scaled_mm_zy(xq, s_a, w.weight, w.weight_scale, ROWS)
-    if name is not None:
-        y, zy = FORGERIES[name][0](y.clone(), zy.clone(), xq, s_a, w.weight, w.weight_scale)
-    host = ZR.reason(zy.numpy(), ROWS, 64, y, s_a, w.weight_scale)
-    assert host == (None if name is None else FORGERIES[name][1])
-    assert ZR.reason(zy.cuda(), ROWS, 64, y.cuda(), s_a.cuda(), w.weight_scale.cuda()) == host
-
-
 def test_a_z_written_outside_the_trace_is_refused_as_untraced():
     w = torch.randint(-127, 128, (32, K), dtype=torch.int8)
     xq = torch.randint(-127, 128, (3, K), dtype=torch.int8)

@@ -67,8 +67,16 @@ def test_a_record_answers_its_readers_as_its_metas_do_without_building_them():
     `scan()` (the layout digest, the step's sequences) get what the plan's `TensorMeta`s give, and the record builds none;
     iterating it builds them once, so every pass sees the same objects."""
     from verity_vllm.commit.committer.native_host import NativeHostCommitter as NH
+    from verity_vllm.commit.committer.plan_cache import PlanMetas
 
-    record, metas = _record(), list(_record())
+    names = ["model.embed_tokens/in", "fa2.m1/L0/acc", "model.layers.0.mlp.down_proj", "fa2.m1/L1/acc", "runner.sampler/sampled_token_ids"]
+    entries, off = [], 0
+    for i, (dtype, shape, nbytes) in enumerate([(torch.int32, (5,), 20), (torch.float32, (300, 4), 4800), (torch.bfloat16, (5, 24), 240),
+                                                (torch.float32, (200, 4), 3200), (torch.int32, (), 4)]):
+        gap = -off % 4
+        entries.append((i, dtype, shape, nbytes, off + gap, gap))
+        off += gap + nbytes
+    record, metas = PlanMetas.of_entries(entries, names, 256), list(PlanMetas.of_entries(entries, names, 256))
     ranges = P.NC._excluded_chunk_ranges(record, {"fa2_hidden_m1"}, 256)
     assert ranges == P.NC._excluded_chunk_ranges(metas, {"fa2_hidden_m1"}, 256) and len(ranges) == 2
     assert record.summary() == [[m.ordinal, m.name, m.dtype, list(m.shape), m.nbytes] for m in metas]
@@ -77,45 +85,6 @@ def test_a_record_answers_its_readers_as_its_metas_do_without_building_them():
     assert repr(NH._step_sequences(P.SimpleNamespace(), 0, record.scan())) == repr(NH._step_sequences(P.SimpleNamespace(), 0, metas))
     assert record._metas is None
     assert [id(m) for m in record] == [id(m) for m in record] and record[2] is record.scan()[2] and len(record) == len(metas)
-
-
-NAMES = ["model.embed_tokens/in", "fa2.m1/L0/acc", "model.layers.0.mlp.down_proj", "fa2.m1/L1/acc", "runner.sampler/sampled_token_ids"]
-
-
-def _record():
-    """A plan's record of five tensors, two of them attention interiors, as the collector exports it."""
-    from verity_vllm.commit.committer.plan_cache import PlanMetas
-
-    entries, off = [], 0
-    for i, (dtype, shape, nbytes) in enumerate([(torch.int32, (5,), 20), (torch.float32, (300, 4), 4800), (torch.bfloat16, (5, 24), 240),
-                                                (torch.float32, (200, 4), 3200), (torch.int32, (), 4)]):
-        gap = -off % 4
-        entries.append((i, dtype, shape, nbytes, off + gap, gap))
-        off += gap + nbytes
-    return PlanMetas.of_entries(entries, NAMES, 256)
-
-
-def test_a_records_columns_rebuild_it_and_a_committed_read_through_them_builds_no_metas():
-    """`PlanMetas.columns`, what the seal's process is sent for each step (`seal_process`), rebuild the record there with the same
-    metas, and `served_record.committed_raw` reads a committed tensor's bytes through the record's columns as `committed_ints`
-    read them through its metas, building none."""
-    import pickle
-
-    from verity_vllm.commit.committer.plan_cache import PlanMetas
-    from verity_vllm.commit.served_record import committed_ints, committed_raw
-
-    record = _record()
-    record.digest = b"\x07" * 32
-    again = PlanMetas.of_columns(pickle.loads(pickle.dumps(record.columns())))
-    assert record._metas is None and list(again) == list(record) and (again.nbytes, again.digest) == (record.nbytes, record.digest)
-    fresh = _record()
-    blk = (torch.arange(fresh.nbytes + 8, dtype=torch.int64) % 251).to(torch.uint8)
-    com = P.SimpleNamespace(_layouts={0: fresh}, _gpu_blocks={0: (blk, fresh.nbytes)})
-    built = P.SimpleNamespace(_layouts={0: list(_record())}, _gpu_blocks={0: (blk, fresh.nbytes)})
-    for name in NAMES:
-        assert committed_raw(com, 0, name) == committed_raw(built, 0, name) is not None
-    assert committed_ints(com, 0, NAMES[0]) == committed_ints(built, 0, NAMES[0])
-    assert committed_raw(com, 0, "model.norm") is None and committed_raw(com, 1, NAMES[0]) is None and fresh._metas is None
 
 
 @pytest.mark.parametrize("native_worker", [False, True], ids=["python-worker", "native-worker"])

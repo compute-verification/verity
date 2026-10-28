@@ -5,8 +5,9 @@
 # calls against `_KV` over whole traces; `arith_vectors.py`: the certifier's arithmetic
 # encoder against code.py, v1 and code_v1; `sched_trace.py`: step traces from vLLM's own scheduler, which the tests read
 # as fixtures (it needs vLLM). Those fixtures (`tests/fixtures/`) and the certifier's vectors these modules write are
-# fetched fixtures (`fixtures/artifacts.json`), which `suites.py` fetches before the suites that read them; one a module
-# rewrote is registered there again. Not a package: the modules load by path (the directory's name shadows the stdlib's
+# fetched fixtures (`fixtures/artifacts.json`): `research data fetch-fixtures benchmarks/network_e2e/encodings
+# verity/core/protocols/certifier` brings them, and `research data refresh-fixtures --preserve` re-registers one that a
+# module rewrote. Not a package: the modules load by path (the directory's name shadows the stdlib's
 # `encodings`), and they run here as a suite (`uv run tools/verity/check/suites.py benchmarks/network_e2e/encodings`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]

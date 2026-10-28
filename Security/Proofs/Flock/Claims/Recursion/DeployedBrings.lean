@@ -16,7 +16,7 @@ the oracle, which `DecompBV`'s and `JointV`'s escape (`setupCalls`) searches. Th
 
 `deployedSetup xO` is the two, and `deployedB b` is `b` with that setup. Both read `xO` alone (its recursive setup,
 `setupO xO`), never a decision, a witness or the prover's run, so whatever the prover sends, the setup at an accepted
-decision is these evaluations. With the staging round the shared rows are in each part's staged statement, so
+decision is these evaluations. With RECE's staging round the shared rows are in each part's staged statement, so
 `setupO xO` reads them there, and the definition is unchanged. `resSetup_deployedB` is `recursiveKSAt_of_leaves`' `hset`
 and `regSetup_deployedB` is `RegSetup`.
 -/

@@ -10,7 +10,7 @@ what the copy (`copyAtR`, instance `N = rep · q_l + query`) holds at `Family.ou
 RecCap's `top` commit string at `capIdx`. The instance is the copy's own, `N`:
 
 * `colsHold_out`: at a circuit `RecOpen.check` accepts at `rec-open/l<L>-h<H>`, `out` is output row 0 (`nIn = 5`, its
-  rows' names), at the copy's columns from `Family.outCol L H` (`colsHold_outRow` at row 0);
+  rows' names), at the copy's columns from `Family.outCol L H` (`colsHold_outRow` at row 0, RECE's);
 * `outBytes_staged`: at a staged level part, its output rows one port each (`staged_hidden`, `outRowPorts_hidden`),
   the copy's 64 bytes at `outCol` are the node of instance `m`'s `out` row (`bytesAt_node`, `bytesAt_of_cols`);
 * `outSlotTie_of`: `OutSlotTie` from the two facts the column read doesn't give, `OutIdxLt` (`N < n`) and

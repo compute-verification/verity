@@ -30,9 +30,9 @@ structure Disks where
   bytes : ℕ
   labels : ℕ
 
-/-- The deployed H200 node's disks as a whole-node session filled them: its two virtual disks whole (`vda`
-274,877,906,944 B and `vdc` 499,289,948,160 B), and the labels of the fill written on them, each filesystem's free space
-less 10 GiB (325,243,109,376 B). -/
+/-- vy-dc-h200-2's disks as a whole-node session filled them: its two virtual disks whole (`vda` 274,877,906,944 B
+and `vdc` 499,289,948,160 B), and the labels of the fill written on them, each filesystem's free space less 10 GiB
+(325,243,109,376 B). -/
 def h200Disks : Disks where
   bytes := 774167855104
   labels := 5081923584

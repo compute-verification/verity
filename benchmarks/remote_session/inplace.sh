@@ -4,9 +4,11 @@
 # with the contiguous one compare with a build of the base), then the gate and the timing. Results go to
 # $RESEARCH_RUN_DIR/out.
 #
-#   RESEARCH_RUN_DIR=DIR bash benchmarks/remote_session/inplace.sh
+#   research run --queue --gpus 1 --mem-gb 32 --max-min 30 --project verity --source . --cwd source \
+#     --campaign resource-accounting --declared-output 'out/*' --env QUEUED=1 \
+#     -- bash benchmarks/remote_session/inplace.sh
 #
-# Under a queue that leases the GPU around the whole job, QUEUED=1 skips gpu-lease. ARGS pass through to
+# Under the queue (QUEUED=1) the GPU is leased around the whole job and gpu-lease is skipped. ARGS pass through to
 # inplace_gate.py (--no-timing, --pages, --reps).
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"

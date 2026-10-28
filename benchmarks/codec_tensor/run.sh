@@ -3,7 +3,9 @@
 # under one gpu-lease 1 --wait --max-min MAXMIN (default 25), bench.py's gates and timings. Results go to
 # $RESEARCH_RUN_DIR/out.
 #
-#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=ra-codec-tensor taskset -c 48-95 bash benchmarks/codec_tensor/run.sh
+#   research run --on vy-nebius-2 --project verity --source . --cwd source --mem-gb 48 \
+#     --campaign resource-accounting --declared-output 'out/*' --env GPU_LEASE_WHO=ra-codec-tensor \
+#     -- taskset -c 48-95 bash benchmarks/codec_tensor/run.sh
 #
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). FIELDS (default "255 511 512 521 767 768 1023
 # 1279") names the builds; NVFLAGS adds nvcc flags (a variant's -D); DIAGS ("1 3 7") adds a WT_SK_DIAG build of each

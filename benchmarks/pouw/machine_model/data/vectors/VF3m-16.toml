@@ -1,7 +1,8 @@
-# VF3m-16: VF3l-16 on the EPS1 data sheet: UBLKRED 512 B and the peer-CTA DSMEM atomic refitted faster, SHFL measured at 8 SMSP-cycles, and cp.async 16 B, TMA bulk copy 4 KB and DSMEM v4 stores as their own classes at 32 MACs a word.
+# VF3m-16: VF3l-16 on the EPS1 data sheet (r20261017-034143-b1de, r20261017-035229-7c35, r20261017-034149-3f95, r20261017-035245-089f): UBLKRED 512 B and the peer-CTA DSMEM atomic refitted faster, SHFL measured at 8 SMSP-cycles, and cp.async 16 B, TMA bulk copy 4 KB and DSMEM v4 stores as their own classes at 32 MACs a word.
 name = "VF3m-16"
 epoch = "VF3m-16"
-summary = "VF3l-16 on the EPS1 data sheet: UBLKRED 512 B and the peer-CTA DSMEM atomic refitted faster, SHFL measured at 8 SMSP-cycles, and cp.async 16 B, TMA bulk copy 4 KB and DSMEM v4 stores as their own classes at 32 MACs a word."
+summary = "VF3l-16 on the EPS1 data sheet (r20261017-034143-b1de, r20261017-035229-7c35, r20261017-034149-3f95, r20261017-035245-089f): UBLKRED 512 B and the peer-CTA DSMEM atomic refitted faster, SHFL measured at 8 SMSP-cycles, and cp.async 16 B, TMA bulk copy 4 KB and DSMEM v4 stores as their own classes at 32 MACs a word."
+note = "note:20261017T0332Z-draft-eps1-datasheet"
 superseded_by = "VF3n-16"
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",

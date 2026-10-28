@@ -69,7 +69,7 @@ def signed(c: Proxy, p: int, record: bytes, sign=SIGN, context: bytes | None = N
 
 
 def registration(p: int, ctx: str | None = None, window: dict | None = None) -> Registration:
-    """PoUW's registration of window p as the proof system returns it: a record whose served window's context names p,
+    """PoUW's registration of window p as the proof service returns it: a record whose served window's context names p,
     with its receipt and digest."""
     w = {"kind": "served", "context": PS.context("served-zk/test", p, MANIFEST) if ctx is None else ctx, "public": {}}
     record = {"window": w if window is None else window}

@@ -5,7 +5,8 @@
 # it empty for none), its digests checked against the host's before it is timed. Timed and profiled in blocks of $TPB
 # threads (default 128, the most the kernels take); the gates use 128. Results in $RESEARCH_RUN_DIR/out.
 #
-#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=ra-squaring-ceiling taskset -c 48-95 bash benchmarks/rate_squaring/sq.sh
+#   research run --on vy-nebius-2 --project verity --source . --cwd source --campaign resource-accounting \
+#     --declared-output 'out/*' --env GPU_LEASE_WHO=ra-squaring-ceiling -- taskset -c 48-95 bash benchmarks/rate_squaring/sq.sh
 set -uxo pipefail
 export O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 export PATH=/usr/local/cuda-13.0/bin:$PATH

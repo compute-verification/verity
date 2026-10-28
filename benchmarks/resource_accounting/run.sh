@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# The matmul chain's recorded run on an RTX PRO 6000 node, from the run tree's root (OUT, or RESEARCH_RUN_DIR's out/):
-#   GPU_LEASE_WHO=<id> [SHAPES=o,qkv,gate_up,down BATCHES=... ARMS=... REPS=5 LEASE_MIN=30] \
+# The matmul chain's recorded run on node 2, from the run tree's root:
+#   research run --on vy-nebius-2 --project verity --campaign resource-accounting --source <tree> --cwd source \
+#     --env GPU_LEASE_WHO=<id> [--env SHAPES=o,qkv,gate_up,down BATCHES=... ARMS=... REPS=5 LEASE_MIN=30] -- \
 #     bash benchmarks/resource_accounting/run.sh
 # In order, the first failure ends the run:
 #  1. on the CPUs, outside the lease: GPU 1's ship (pearl_c_sm120/build.sh, its SASS gate) into scratch, unless ARMS has no

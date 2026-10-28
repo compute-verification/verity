@@ -1,13 +1,14 @@
-# The table route: a fresh word made by register-indexed lookups (QSTAR). Below 2.03 issue slots a word on sm_120 a word
-# must come from table loads, which at these sizes only L2 serves (fr16_c32: 1.906 measured). The LP prices such a word
-# at q lane instructions in any CUDA mix plus `bytes` of L2 reads, against an L2 facet at `l2` bytes a second; honest's
-# own L2 traffic is not charged, which gives the cheater all of L2. The values are SCALAR-ROUTE as restated
-# (`--lookup-bytes 6` for single-field tables); `l2` is the most L2 has read in any pattern measured (FACET-BREAK: 7.10
-# TB/s of coalesced L1-skipping reads, l2_g256cg_line_q16_w16), + 2%. A gather at fresh random rows is sector-bound at
-# 3.85 TB/s (DATASHEET r5; FACET-BREAK's sector gather 3.87), which would price the route only if its lookups never
-# share a sector.
+# The table route: a fresh word made by register-indexed lookups (QSTAR, note:20261017T0344Z-draft-eps1-qstar). Below
+# 2.03 issue slots a word on sm_120 a word must come from table loads, which at these sizes only L2 serves (fr16_c32:
+# 1.906 measured, r20261017-042939-efd9). The LP prices such a word at q lane instructions in any CUDA mix plus `bytes`
+# of L2 reads, against an L2 facet at `l2` bytes a second; honest's own L2 traffic is not charged, which gives the
+# cheater all of L2. The values are SCALAR-ROUTE as restated (`--lookup-bytes 6` for single-field tables); `l2` is the
+# most L2 has read in any pattern measured (FACET-BREAK, note:20261017T0524Z-draft-eps1-facet-break: 7.10 TB/s of
+# coalesced L1-skipping reads, l2_g256cg_line_q16_w16, r20261017-065855-c8a9), + 2%. A gather at fresh random rows is
+# sector-bound at 3.85 TB/s (DATASHEET r5, r20261017-071007-85c9; FACET-BREAK's sector gather 3.87), which would price
+# the route only if its lookups never share a sector.
 status = "named assumption"
-source = "SCALAR-ROUTE restated (a named assumption, resting on class P and ISA-CAP): a fresh word costs ≥ 2.03 issue slots, or ≥ 3.5 B of table loads and ≥ 1.22 slots (≥ 6.0 B for single-field tables); L2 at its measured 7.10 TB/s line + 2% (FACET-BREAK; QSTAR's 5–6 TB/s peak before), a random-row gather 3.85 TB/s (DATASHEET r5)"
+source = "SCALAR-ROUTE restated (coordinator 06:10Z, a named assumption for Daniel, resting on class P and ISA-CAP; note:20261017T0310Z-report-eps1-program): a fresh word costs ≥ 2.03 issue slots, or ≥ 3.5 B of table loads and ≥ 1.22 slots (≥ 6.0 B for single-field tables); L2 at its measured 7.10 TB/s line + 2% (FACET-BREAK, r20261017-065855-c8a9; QSTAR's 5–6 TB/s peak before), a random-row gather 3.85 TB/s (DATASHEET r5, r20261017-071007-85c9)"
 q = 1.22
 bytes = 3.5
 l2 = 7.244e12

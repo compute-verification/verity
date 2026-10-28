@@ -1,8 +1,8 @@
 """The CPU half of a staging run's check, run on the node after the GPU is released:
 
 - **decode**: every encoded block of the layer, from the development store or an encoded store's segment files (as
-  `layer.py` takes them), against P2's reference (`layout.check_blocks`: `p2_v1/store.py`'s `decode_block`, the spec's
-  `reference.decode` under `reference.keys_after` of the store's prefix, refusing rows not below p and non-codewords), each block's 2,054 bytes
+  `layer.py` takes them), against P2's reference (`layout.check_blocks`: the spec's `reference.decode` under
+  `reference.keys_after` of the store's prefix, refusing rows not below p and non-codewords), each block's 2,054 bytes
   against the store's W (`layout.payloads`: the stream's bytes, from `W` or else the seeded generator, zero past each
   tensor's end), in a process pool;
 - **gemm**: each `samples-<matrix>-m<M>.npz` that `layer.py` wrote, every sampled word against
@@ -53,7 +53,7 @@ def _rows(j0: int, n: int) -> bytes:
 def _blocks(r: tuple[int, int]) -> list[tuple[int, str]]:
     j0, j1 = r
     lay, n = _JOB["layout"], j1 - j0
-    return L.check_blocks(lay.params, lay.prefix, j0, _rows(j0, n), L.payloads(lay, _JOB["src"], _JOB["read"], j0, n))
+    return L.check_blocks(lay.spec, lay.prefix, j0, _rows(j0, n), L.payloads(lay, _JOB["src"], _JOB["read"], j0, n))
 
 
 def check_decode(args, lay: L.StoreLayout, src: L.Weights) -> dict:

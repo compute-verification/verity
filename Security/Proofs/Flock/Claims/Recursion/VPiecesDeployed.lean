@@ -13,7 +13,7 @@ This file fixes the pieces and the owners, and proves `hR`.
   (`OpenPiece`, `openHolds`) or a `rec-cap` node (`CapPiece`, `capHolds`), each kind's list and what each says as its
   lowering gives them (`vholdsD` at the deployed three).
 * **The owners** (`noB`, `keep`, `vown`): no part owns a base check (`hrest` holds them off any witnesses:
-  `BasesHold`); `dense` goes to part 0; each kind's piece to the owner its lowering gives it, kept to the
+  RESTVERDICT's `BasesHold`); `dense` goes to part 0; each kind's piece to the owner its lowering gives it, kept to the
   statement's parts (`keep`: an owner past `nS x` owns nothing).
 * **`hR`** (`ownP_lt`, `hR_vown`): the owners are the statement's parts, for every kind's owners, since `keep` keeps
   only those.

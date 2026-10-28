@@ -212,7 +212,7 @@ COLLABORATOR_MAY = "ask a lane for something and request work within its budgets
 COLLABORATOR_NEVER = "spend, access or keys, destructive changes or node changes"
 CHAT_PREFIX = "chat-"                                            # a collaborator's private channel, `chat open NAME`
 CHAT_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,74}$")          # Slack's channel names: 80 characters, lower case, no spaces
-CHAT_WATCHER = "top"                                             # rung for a chat post routed to no one
+CHAT_WATCHER = "top"                                             # subscribes to every chat channel; rings for a post routed to no one
 PEOPLE_DIR = "people.d"                                          # in the notes, beside routes.d: one `<NAME>.json` per chat's person
 PERSON_SCHEMA = "verity/slack-person/v1"
 EXPECTED = "expected"                                            # a people.d record's status before its person joins Slack
@@ -457,9 +457,9 @@ def entry(reg: dict, handle: str) -> dict:
 
 
 def chat_channels(reg: dict) -> dict[str, dict]:
-    """Each open chat (`chat open`, people.d) as a registry channel: its id and its `person`.  No handle subscribes: the Slack
-    events service hands each post to `deliver`, which rings the lanes it names, else CHAT_WATCHER."""
-    return {r["channel"]["key"]: {"id": r["channel"]["id"], "person": r, "subscribers": [],
+    """Each open chat (`chat open`, people.d) as a registry channel: its id and its `person`.  CHAT_WATCHER subscribes to its
+    top level and hands each post to `deliver`, until `research msg router` reads them."""
+    return {r["channel"]["key"]: {"id": r["channel"]["id"], "person": r, "subscribers": [CHAT_WATCHER],
                                   "purpose": f"{r['name']}'s questions to the lanes (private)"}
             for r in reg.get("chat_people", [])}
 

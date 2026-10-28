@@ -1,4 +1,4 @@
-"""The ingress tie through the proof system: each bucket row of an ingress link-window of the warden's cells proved as
+"""The ingress tie through the proof service: each bucket row of an ingress link-window of the warden's cells proved as
 `io_request.IoTieRequest`, and the verifier of record that builds `advised.IoTieVerdict`, the tie of an advised link's
 requests to its certified ingress, only from IoTieRequest proofs it verified on lanes it computed itself (PROTOCOL.md,
 "The ingress tie").

@@ -85,10 +85,7 @@ def test_emit_refuses_a_trace_of_another_program(tmp_path, field, match):
 @pytest.mark.slow
 def test_compare_names_each_program_and_is_equal_only_when_every_one_is(tmp_path, monkeypatch):
     d = tmp_path / "row"
-    for r in range(2):
-        (d / "build" / f"rank{r}" / "build_step").mkdir(parents=True)
-        (d / "build" / f"rank{r}" / "build_request_LP9_T2").mkdir()
-        (d / "build" / f"rank{r}" / "build_request_LP9_T2" / "result.json").write_text(json.dumps({"LP": 9, "T": 2}))
+    (d / "build" / "rank0" / "build_step").mkdir(parents=True)
     (d / "build_summary.json").write_text(json.dumps({"tp": {"world": 2}, "ranks": {
         f"rank{r}": {"build_step": {"program_digest": f"s{r}"}, "build_request_LP9_T2": {"program_digest": f"q{r}"},
                      "workload": {"workload_digest": f"w{r}"}} for r in range(2)}}))
@@ -113,7 +110,7 @@ def test_a_rank_composes_its_workload_from_each_requests_component_as_predicted(
     monkeypatch.setattr(A, "phi_at", lambda row, rank, config: phi)
     (tmp_path / "result.json").write_text(json.dumps({"M": 1, "pos0": 8}))
     names = [f"build_request_LP{lp}_T{t}" for lp, t in phi.request_shapes()]
-    got = A._predict_rank(("row", 0, "config.json", str(tmp_path), [(n, *s) for n, s in zip(names, phi.request_shapes())]))
+    got = A._predict_rank(("row", 0, "config.json", str(tmp_path), names))
     assert got["errors"] == {} and set(got["secs"]) == {"step", "workload", *names}
     assert got["requests"] == {n: build_program(phi, "request", LP=lp, T=t).digest for n, (lp, t) in zip(names, phi.request_shapes())}
     assert got["workload"] == S.predict_workload(phi)["digest"]

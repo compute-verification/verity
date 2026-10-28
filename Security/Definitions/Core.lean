@@ -1,7 +1,6 @@
 import Definitions.Core.Circuit
 import Definitions.Core.Digest
 import Definitions.Core.Partition
-import Definitions.Core.Annotation
 import Definitions.Core.Advice
 import Definitions.Core.PrivatePartition
 import Definitions.Core.Declaration

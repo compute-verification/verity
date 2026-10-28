@@ -184,27 +184,6 @@ def test_a_module_one_side_stops_reading_merges_as_the_union_and_one_left_unread
         "no guarantee of the merged record reads it: dropped"
 
 
-def test_a_definition_one_side_moved_to_another_module_leaves_the_module_the_other_side_changed():
-    """A side that moves definitions to a new module (`Definitions.Flock.Circuit`'s to `Definitions.Core.Boolean` in queue
-    merge 0aaf13f4f6) while the other changes the old module's readers: the union kept them under both modules, which no
-    build writes."""
-    base = record(t=thm([F, G]), s=thm([G], "P.g n = n", "00000000000000bb"))
-    ours = record(t=thm([F, G]))
-    moved_f = read("P.f", "P.More", "1" * 16)
-    theirs = record(t=thm([moved_f, G]), s=thm([G], "P.g n = n", "00000000000000bb"))
-    merged, why = M.merge(base, ours, theirs, candidate := [])
-    assert why == [] and candidate == []
-    assert A.text(merged) == A.text(record(t=thm([moved_f, G])))
-    assert list(merged["reads"]["P.Defs"]["definitions"]) == ["P.g"] and list(merged["reads"]["P.More"]["definitions"]) == ["P.f"]
-    assert merged["reads"]["P.Defs"]["digest"] == theirs["reads"]["P.Defs"]["digest"]
-
-    u = thm([G], "P.g n = 0 + n", "00000000000000cc")
-    merged, why = M.merge(base, record(t=thm([F, G]), s=thm([G], "P.g n = n", "00000000000000bb"), u=u), theirs, candidate := [])
-    assert why == [] and candidate == ["reads[P.More] (definitions moved from P.Defs)"], \
-        "ours' new reader of P.Defs may read P.f where it moved"
-    assert A.text(merged) == A.text(record(t=thm([moved_f, G]), s=thm([G], "P.g n = n", "00000000000000bb"), u=u))
-
-
 def test_an_assumption_s_digest_changed_two_ways_or_removed_against_changed_merges_and_regenerates():
     """LEAN-60 (#4656) records a digest for every premise, so two PRs that each change a premise's definition clash on it:
     ours' digest is the candidate, and an entry one side dropped while the other changed it stays until the merged build

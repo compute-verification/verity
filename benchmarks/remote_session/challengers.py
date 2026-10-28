@@ -1,4 +1,4 @@
-"""Where a session's coins come from (`verifier.py --challenger`), each an epoch of the proof system's one challenger
+"""Where a session's coins come from (`verifier.py --challenger`), each an epoch of the proof service's one challenger
 (`coins.Coins`, `sampled_proofs.challenger`):
 
 - `Local`: a `LiveChallenger` in the verifier's process, drawing from `secrets.token_bytes`.
@@ -8,7 +8,7 @@
   release log when the client closes the session. Not the auditor host: the verifier's machine is the audit's (never
   the prover's), but no ledger opens the session for its window, so the read is `challenger.session_of`'s, under the
   key the run wrote.
-- `Gate`: the auditor's challenger host, through its gate (`benchmarks/live_challenger/auditor.py`)
+- `Gate`: the auditor host's challenger (vy-challenger-1), through its gate (`benchmarks/live_challenger/auditor.py`)
   under the lane's own gate key, over ssh (`ssh_gate`). Each session is reserved for this machine (`--peer`), inside
   the audit's period, and opened at its window root R (`coins.window`; the ledger opens one session a root, ever); the
   host serves it from its pinned tree and reaches this machine's 127.0.0.1 at the open's port through this machine's
@@ -148,8 +148,8 @@ Call = Callable[[list[str]], tuple[int, bytes]]
 
 def ssh_gate(ssh: Sequence[str]) -> Call:
     """Gate requests over ssh: `ssh` is ssh's options and destination (the lane's gate key with `-i`, and the host's
-    line of /etc/vy/peers); the host's authorized_keys forces the key's command, the challenger's gate with LANE, which
-    reads the request's words from ssh's original command."""
+    line of /etc/vy/peers); the host's authorized_keys forces the key's command, `vy-challenger-gate LANE`, which reads
+    the request's words from ssh's original command."""
     def call(words: list[str]) -> tuple[int, bytes]:
         p = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", *ssh, shlex.join(words)],
                            capture_output=True, stdin=subprocess.DEVNULL)

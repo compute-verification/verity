@@ -25,7 +25,7 @@ writes a tampered copy, and each naming the check that refuses it by its refusal
 - ``commit``: the Commit record of the run's committed values (I3).
 
 **The checks and their codes** (`Negative.code`). A code is ``CHECK.PART``: the check that refuses it, and the part of
-it that fails. On the proof system's stream every refusal shows only ``reject`` (the violation's kind stays in the
+it that fails. On the proof service's stream every refusal shows only ``reject`` (the violation's kind stays in the
 verifier); the code is what the verifier of record establishes, which `n2` reads here in the clear for N2's checks:
 - ``NetworkHeadCheck_v2.{opening,fields,counts,signed}``: N2's head check of each end (`head_check.reference_parts`):
   the head opens under the registered root, its fields (link, end, window, grid, status complete), its counts the
@@ -76,7 +76,7 @@ what it brought), each window's arriving whole so their request cells are the ho
 on every bucket row on the verifier's lanes from its advice and the warden's release (`request_tie`), whose verdict is
 the tie source's for `N2_LINK` (`n2_advice`). Without a frame size, the tie is the stand-in on the prompt lengths.
 
-`Negative.waits` names the interfaces a negative waits on; one with none runs. `table` renders the registry.
+`Negative.waits` names the interfaces a negative waits on; one with none runs today. `table` renders the registry.
 """
 from __future__ import annotations
 
@@ -585,7 +585,7 @@ def commit_edit(edit: Callable) -> Callable[[Path, Path, Path], Path]:
 class Negative:
     """One tampering: its `family` (the goal's four: `io`, `advice`, `token`, `circuit`), what it `tampers` (`plan`,
     `certified`, `frames`, `advice` or `commit`), the `check` that must refuse it and its refusal `code` (`served`: the code on a
-    served link where it differs), the interfaces it `waits` on (each by what it is; none: it runs), and `make`,
+    served link where it differs), the interfaces it `waits` on (each by what it is; none: it runs today), and `make`,
     the pure function that writes the tampered copy."""
 
     name: str
@@ -676,7 +676,7 @@ def table(markdown: bool = True) -> str:
     for n in NEGATIVES.values():
         code = f"{q}{n.code}{q}" + (f" (served: {q}{n.served}{q})" if n.served else "")
         rows.append((f"{q}{n.name}{q}", n.family, n.tampers, n.check, code,
-                     f"pending: {', '.join(n.waits)}" if n.waits else "runs"))
+                     f"pending: {', '.join(n.waits)}" if n.waits else "runs today"))
     if not markdown:
         return "\n".join("\t".join(r) for r in rows)
     out = ["| " + " | ".join(rows[0]) + " |", "|" + "---|" * len(rows[0])]
@@ -1530,7 +1530,7 @@ def tie_runs(src: Path, ids: Path | None = None) -> dict:
 
 
 def n2(run: Path, clock=time.monotonic) -> dict:
-    """N2's verdict on every link-window of the run's `certified.jsonl`, through the proof system's stream as
+    """N2's verdict on every link-window of the run's `certified.jsonl`, through the proof service's stream as
     `certifier_serve.check` takes it (Selection All, the Lean audit, `unproved_outcome`: nothing is proved, so the
     verdict reads the opening) without asking the certifier's salts, and the link's network verdict; each refused
     link-window's codes (`codes`), and their union."""

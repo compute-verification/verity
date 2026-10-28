@@ -1273,7 +1273,7 @@ def test_chat_open_by_slack_id_makes_a_private_channel_pins_two_lines_and_publis
     reg = slack.load_registry(registry)
     assert reg["collaborators"] == [{"name": "Luke Example", "slack_user": LUKE, "note": "a visiting researcher (COMM-52)",
                                      "email": "luke@example.org"}]
-    assert slack.chat_channels(reg)["chat-luke"]["id"] == c["id"] and slack.subscribers(reg, "chat-luke") == []
+    assert slack.chat_channels(reg)["chat-luke"]["id"] == c["id"] and slack.subscribers(reg, "chat-luke") == ["top"]
 
     rc, out, _ = run(capsys, "chat", "open", "luke", "--user", LUKE)
     assert rc == 0 and f"#chat-luke {c['id']}: reused" in out and out.count(": already in") == 2
@@ -1516,9 +1516,9 @@ def test_a_chat_post_rings_its_leading_names_else_its_thread_s_lanes_else_top_an
     assert rc == 0 and "how do I read a PoUW receipt?" in out and "@proofs: it proves the sum" in out and "and the Lean side?" in out
     late = fake.add("CCHAT1", text="is anyone there?", user=LUKE)
     rc, _, err = run(capsys, "match", "--as", "top", "--event", json.dumps({"channel": "CCHAT1", **late}), "--why")
-    assert rc == 1                                    # no channel subscription: the post reaches top as a doorbell in its inbox
+    assert rc == 0 and "top-level post in #chat-luke, which @top subscribes to" in err
     out = run(capsys, "subscriptions", "--as", "top")[1]
-    assert "CCHAT1" not in out and "#chat-luke" not in out                    # a private chat the subscription tool can't join
+    assert 'subscribe_slack_channel(channelId="CCHAT1", topLevelOnly=true' in out and "# #chat-luke" in out
 
     published = tmp_path / slack.PEOPLE_DIR                                             # the routes' sibling
     assert slack.ChatPeople().base == f"file://{published}/"

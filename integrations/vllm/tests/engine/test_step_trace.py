@@ -2,7 +2,6 @@
 it found it."""
 from __future__ import annotations
 
-import threading
 from types import SimpleNamespace
 
 import pytest
@@ -14,80 +13,6 @@ from verity_vllm.engine import step_trace as ST
 def _req(rid: str, prompt: int, outputs: list[int], max_tokens: int, **kw) -> FakeRequest:
     return FakeRequest(rid, list(range(10, 10 + prompt)), outputs, max_tokens,
                        sampling_params=SimpleNamespace(temperature=0.0, max_tokens=max_tokens, ignore_eos=False, seed=None), **kw)
-
-
-class _Held:
-    """A trace file whose writes wait for ``gate`` (then raise ``fail``, if given), refused on the thread that made it: the
-    engine's, which must never write."""
-
-    def __init__(self, fh, gate: threading.Event, fail: OSError | None = None) -> None:
-        self.fh, self.gate, self.fail, self.engine = fh, gate, fail, threading.current_thread()
-
-    def _wait(self) -> None:
-        assert threading.current_thread() is not self.engine, "the engine thread wrote the step trace's file"
-        self.gate.wait()
-        if self.fail is not None:
-            raise self.fail
-
-    def write(self, s: str) -> int:
-        self._wait()
-        return self.fh.write(s)
-
-    def flush(self) -> None:
-        self._wait()
-        self.fh.flush()
-
-    def close(self) -> None:
-        self.fh.close()
-
-
-class _HeldPath:
-    def __init__(self, path, gate: threading.Event, fail: OSError | None = None) -> None:
-        self.path, self.parent, self.gate, self.fail = path, path.parent, gate, fail
-
-    def open(self, mode: str) -> _Held:
-        return _Held(self.path.open(mode), self.gate, self.fail)
-
-
-def _served(path, **kw) -> tuple[FakeScheduler, ST.StepTrace]:
-    trace = ST.StepTrace(path.path if isinstance(path, _HeldPath) else path, **kw)
-    if isinstance(path, _HeldPath):
-        trace.path = path
-    sched = FakeScheduler(budget=8, max_seqs=4)
-    return sched, trace.install(sched)
-
-
-def _plan() -> dict[int, list[FakeRequest]]:
-    return {0: [_req("a", 3, [5, 6, 2], 8)], 2: [_req("b", 12, [7, 7, 7], 3)]}
-
-
-def test_with_a_writer_thread_the_engine_never_writes_the_file_and_it_holds_the_same_bytes(tmp_path):
-    """serve-openai's trace (`serve_commit.advice_trace`): while a seal writes its store, an append to the serve dir's disk can
-    wait hundreds of ms, and the engine thread made it every step."""
-    sched, plain = _served(tmp_path / "plain.jsonl")
-    drive(sched, _plan())
-    plain.window(0, "close")
-    plain.uninstall()
-    gate = threading.Event()
-    sched, trace = _served(_HeldPath(tmp_path / "written.jsonl", gate), writer=True)
-    drive(sched, _plan())                       # the writer is held at the header's write: every record still returns
-    trace.window(0, "close")
-    assert (tmp_path / "written.jsonl").read_bytes() == b"" and trace.records == plain.records
-    gate.set()
-    trace.drain()
-    assert (tmp_path / "written.jsonl").read_bytes() == (tmp_path / "plain.jsonl").read_bytes()
-    trace.uninstall()
-    assert ST.steps(ST.load(tmp_path / "written.jsonl")) == ST.steps(plain.records)
-
-
-def test_a_failed_trace_write_is_raised_on_the_engine_thread_at_its_next_record(tmp_path):
-    gate = threading.Event()
-    gate.set()
-    _, trace = _served(_HeldPath(tmp_path / "t.jsonl", gate, fail=OSError(28, "No space left on device")), writer=True)
-    trace.drain()                               # the header's write failed: the writer still drains
-    with pytest.raises(OSError, match="No space left on device"):
-        trace.window(0, "open")
-    trace.uninstall()
 
 
 def test_a_chunked_prefill_beside_decodes_is_recorded_row_by_row_in_the_runners_order(tmp_path):

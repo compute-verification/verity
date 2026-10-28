@@ -43,7 +43,6 @@ import argparse
 import json
 import sys
 from dataclasses import asdict, dataclass, replace
-from fractions import Fraction
 from math import ceil, log, log2
 from pathlib import Path
 
@@ -51,27 +50,24 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from inputs import I, KEY, observations  # noqa: E402
 
-from verity.core.protocols.pous import wipe_monitoring
 from verity.core.protocols.profile import Stratified, Stratum  # noqa: E402
 from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, shape_of  # noqa: E402
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table  # noqa: E402
 from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
                                                            Plan, ReplayDomain, certify, density_bound, for_target,
-                                                           frontier, ln_upper, row_ands)
+                                                           frontier, row_ands)
 from verity.ml.circuits.codec import descriptor_id  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops import fp32 as F, gemm as G, prims as P  # noqa: E402
 
-#: core's reporting deltas (`wipe_monitoring`), as floats
-DELTAS = tuple(map(float, wipe_monitoring.DELTAS))
+DELTAS = (1e-2, 1e-6)
 #: the server-time block, assumed: the Phase 2 default, 20 minutes, which a `gpu-lease`'s 30-minute ceiling sets; no
 #: wipe has been timed, and the census has no block length
 BLOCK_S = 1200
 #: the datacenter, assumed: the census has no datacenter size
 SERVERS = 10_000
-#: core's monitoring periods (`wipe_monitoring`), seconds by name
-PERIODS = dict(wipe_monitoring.PERIODS)
+PERIODS = {"week": 7 * 86400, "month": 30 * 86400, "year": 365 * 86400}
 #: the target, a share of the block's ANDs certified at most wrong: a share of the work scales with the model where a
 #: count of units does not (a coarser cut has fewer units); 1e-3 is the small model's knee (halving it costs about 8%
 #: more, each halving past it over 10%), held fixed for every size
@@ -441,9 +437,8 @@ def pooled(plan: Plan, cands: list[Candidate], delta: float, blocks: float, *, a
 
 def horizon(plan: Plan, cands: list[Candidate], delta: float) -> float:
     """`IntegrityHorizon`'s bound on the faulty proof blocks over any number of windows, each a subcircuit's window of a block
-    (`windows`): ln(1/delta) / q at q the least share k_s / n_s any window draws, ln(1/delta) the planner's `ln_upper`."""
-    return float(ln_upper(delta) / min(Fraction(plan.sizes[c.template], c.units) for c in cands
-                                       if c.template in plan.sizes))
+    (`windows`): ln(1/delta) / q at q the least share k_s / n_s any window draws."""
+    return log(1 / delta) / min(plan.sizes[c.template] / c.units for c in cands if c.template in plan.sizes)
 
 
 def monitoring(plan: Plan, cands: list[Candidate], s: Serving, *, servers: int = SERVERS) -> list[dict]:

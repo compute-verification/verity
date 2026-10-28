@@ -2,19 +2,20 @@
 # MACs it replaces, at the vector's MAC price.
 
 # The vector `machine-model solve` re-solves by default: the adopted vector (decision 17; VF3l-16 by decision 62, then
-# VF3n-16 once the JI3e refit was approved; VF3o-16 its measured margin; VF3p-16 by decision 73, a uniform instruction
-# on the issue rows; VF3q-16, FACET-BREAK's refit of every row its programs beat, once its solve and check passed;
-# VF3r-16, FACET-BREAK's 2-3-accumulator refit on the per-form classes of decision 81).
+# VF3n-16 by the compute-accounting coordinator, 17 Oct, once the JI3e refit was approved; VF3o-16 its measured margin;
+# VF3p-16 by decision 73, a uniform instruction on the issue rows; VF3q-16 by the compute-accounting coordinator, 17 Oct,
+# FACET-BREAK's refit of every row its programs beat, once its solve and check passed; VF3r-16 by the
+# compute-accounting coordinator, 17 Oct, FACET-BREAK's 2-3-accumulator refit on the per-form classes of decision 81).
 current = "VF3r-16"
 # The design whose cheapest attack is a vector's margin.
 adopted = "U±64, F±1"
 
-# Each epoch is a state of the census and the attacks, named after the vector that introduced it, in order. A census
-# line or an attack holds from its `since` epoch (empty: the first) through its `until` epoch (empty: the last); a line
-# a later epoch refitted or dropped closes at the last epoch it held. VF3j-8 put the plain LDSM/STSM forms on the joint
-# issue rows (the register-load variants VF3j-8 and VF3j-16 read), and every epoch after it keeps them. DS-120, the
-# data-sheet vector, sits after VF with lines that close where they open, so it moves no other epoch's census or
-# attacks; `eps --vector DS-120` reads its DS_* lines alone, and its solve reads VF's attacks.
+# Each epoch is a state of the census and the attacks, named after the vector that introduced it, in order. A census line
+# or an attack holds from its `since` epoch (empty: the first) through its `until` epoch (empty: the last); a line a later
+# epoch refitted or dropped closes at the last epoch it held. VF3j-8 put the plain LDSM/STSM forms on the joint issue
+# rows (the register-load variants VF3j-8 and VF3j-16 read), and every epoch after it keeps them. DS-120, the data-sheet
+# vector (note:20261017T1818Z-draft-axioms), sits after VF with lines that close where they open, so it moves no other
+# epoch's census or attacks; `eps --vector DS-120` reads its DS_* lines alone, and its solve reads VF's attacks.
 epochs = ["VF", "DS-120", "VF2", "VF3", "VF3c", "VF3d", "VF3e", "VF3f", "VF3g", "VF3h", "VF3i", "VF3i-strict-r8",
           "VF3i-strict",
           "VF3j", "VF3j-8", "VF3k-16", "VF3l-16", "VF3m-16", "VF3n-16", "VF3o-16",

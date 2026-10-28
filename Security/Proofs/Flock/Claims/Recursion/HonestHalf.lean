@@ -38,10 +38,11 @@ the compiled verifier accepts the reference prover's run. V\*'s gate-level compl
 `HonestWitSatisfies`, and the inner prover's openings at the run are `IrShaped` (`Ir` is not fixed in Lean: the
 theorem holds for every inner prover `Ir` with `IrShaped` at the run, the facts of `Ir.rest`, which the deployed
 builder's `rec_vstage`, `rec_vstar` and `verifier_rows` build, that the stager's checks read). These three are
-witnessed outside Lean at the deployed builder, all on one run (`HonestFixture`): there the
-compiled `flock-verify` accepted every V\* part's session of the honest deployed recursive run, each part on its own,
-and the deployed V\* difftest's checks of `IrShaped` and `HonestWitSatisfies` passed on the run's outer tree. No
-collision among a part's recorded calls is `NoCollAt`, SHA-512's collision event, which passed on the same tree.
+witnessed outside Lean at the deployed builder, all on one run, r20261027-014625-06c6 (`HonestFixture`): there the
+compiled `flock-verify` accepted every V\* part's session of the honest deployed recursive run, each part on its own
+(outer tree art:886efa1d995543a70ba46e6ef713a2afe89a7022b7fc4988c9cc2dbd629a43a8), and CAPLOWER's checks of `IrShaped` and
+`HonestWitSatisfies` passed on that tree (r20261027-025051-8aa6). No collision among a part's recorded calls is
+`NoCollAt`, SHA-512's collision event, which passed on the same tree (r20261027-033500-eeb1).
 
 Discharged in Lean: each part's staging setting up (`stagedSetsUp_accepted`, from the run accepting), the stager's
 numbers (`numsFixed`), the stager accepting every part (`hok_honest`: the level tops and the caps from `hTops`, at the
@@ -105,10 +106,10 @@ verifier accepts the reference prover's run on tape `ω` and coins `r`. A concre
 session of the honest deployed recursive run is accepted by the compiled `flock-verify` (composed per part; no single
 compiled verdict exists).
 
-The witness is a run of `benchmarks/recursion_e2e --e2e --cpu` (K = 64, N = 16, under the firewall, at
-16a44e3b86). The compiled verifier printed `VERDICT {"accepted":true}` on each of the 10 V\* parts (L0–L3,
+The witness is run r20261027-014625-06c6 (`benchmarks/recursion_e2e --e2e --cpu`, K = 64, N = 16, under the firewall,
+at f1asm 16a44e3b86). The compiled verifier printed `VERDICT {"accepted":true}` on each of the 10 V\* parts (L0–L3,
 alg-p0, alg-p1, cap, cap-L1–L3), and the inner session was accepted. With a challenge or query coin flipped, the parts
-that read it refused.
+that read it refused. The outer tree is art:886efa1d995543a70ba46e6ef713a2afe89a7022b7fc4988c9cc2dbd629a43a8.
 
 Only Python joins the 10 per-part verdicts, so what the run witnesses is that every part's session accepted, not that
 one compiled verifier accepted the whole outer statement. -/
@@ -153,9 +154,10 @@ end Premises
 at the deployed brings at `x` under `deployedB` (`bringsAt_deployedB`), V\*'s layout of record `layR elemR` and the
 deployed bound record, where the compiled verifier accepts the reference prover's run (`HonestRunAccepted`), each part
 `s < nS x`'s circuit accepts. `HonestRunAccepted`, `IrShaped` and `HonestWitSatisfies` are witnessed outside Lean at the
-deployed builder, on one run (`HonestFixture`): each of its 10 V\* parts' sessions was
-accepted by the compiled `flock-verify`, and only Python joins those verdicts. `IrShaped`, `HonestWitSatisfies` and
-`NoCollAt` passed on that run's outer tree.
+deployed builder, on one run, r20261027-014625-06c6 (`HonestFixture`): each of its 10 V\* parts' sessions was
+accepted by the compiled `flock-verify`, and only Python joins those verdicts (outer tree
+art:886efa1d995543a70ba46e6ef713a2afe89a7022b7fc4988c9cc2dbd629a43a8). `IrShaped` passed on that tree in
+r20261027-025051-8aa6, and so did `HonestWitSatisfies`; `NoCollAt` passed there in r20261027-033500-eeb1.
 
 Besides those it takes no collision among each part's recorded calls (`NoCollAt`, SHA-512's collision event), the
 fitted rows (`RowsFit`) and the tape exception (`hTops`: the reps' tops differ at every level above 0). The stager

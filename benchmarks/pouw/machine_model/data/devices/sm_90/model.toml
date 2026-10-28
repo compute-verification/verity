@@ -1,10 +1,10 @@
-# The H200 (sm_90) as `eps` prices it (README "Devices"): the census of EPS1 DC, and no vector solved for prices, so the
-# constants only `solve` reads are left
-# out. Three epochs: DC-90; DS-90, the data-sheet vector, whose lines are
+# The H200 (sm_90) as `eps` prices it (README "Devices"): the census of EPS1 DC
+# (note:20261017T0452Z-draft-eps1-dc), and no vector solved for prices, so the constants only `solve` reads are left
+# out. Three epochs: DC-90; DS-90, the data-sheet vector (note:20261017T1818Z-draft-axioms), whose lines are
 # census/DS-90.csv and close where they open, so it moves no other epoch's census (benchmarks/pouw/dc/census.py
 # --write rewrites census.csv and keeps none of them); and DC-90-ri, which refits the uniform instruction's price on the
-# async-joint issue row (UNI,JI90_0) to its measured cost beside the saturated async tensor op (RT-ISA r2; the old
-# 0.965-of-an-issue-slot price, scaled from a scalar-saturated stream, was
+# async-joint issue row (UNI,JI90_0) to its measured cost beside the saturated async tensor op (RT-ISA r2,
+# note:20261017T1834Z-draft-rt-isa; the old 0.965-of-an-issue-slot price, scaled from a scalar-saturated stream, was
 # optimistic). `current` stays DC-90; the refit is the vector DC-90-ri (read it with `eps --vector DC-90-ri`).
 current = "DC-90"
 epochs = ["DC-90", "DS-90", "DC-90-ri"]

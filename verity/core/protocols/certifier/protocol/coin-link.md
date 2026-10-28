@@ -100,4 +100,4 @@ are D7's, under which each grid's timing charge is 600 bits a link-window:
 - `charge_bits`: each grid's timing, (ticks)·log2(r + 1), and its content, 8 bits a counted byte.
 
 Each bucket's occupancy and every frame's content stay witness. No audit reads the record yet. The charge reaches K
-once the certifier's records go through the proof system (`publish`).
+once the certifier's records go through the proof service (`publish`).

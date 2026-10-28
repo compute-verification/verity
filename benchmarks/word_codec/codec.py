@@ -16,9 +16,6 @@ decode     rounds k − 1 … 0 inverted: x ↦ ρ⁻¹(x) − c_j − t(i); a w
 b is 56 (seven bytes a word, the draft's packing) or 60 (fifteen bytes in two words): a byte stream is the
 little-endian integer S, and word i's payload is bits b·i … b·i + b − 1 of S.
 
-The field, ρ and the rounds are the store codec's (`verity.core.protocols.remote_bandwidth.codec`'s `Field`, `rho` and
-`encode_word` over an unmasked `Sloth`); the keys and the packing are this module's.
-
 The seed is drawn after the weights are registered. Encoding a word costs k roots (59k squarings and a square test
 each) and decoding it k squarings, whatever k is, and there is no keystream: the honest prover decodes at about
 one squaring per round and word, and a prover missing the word rebuilds it at about 59.
@@ -35,13 +32,10 @@ from __future__ import annotations
 
 import hashlib
 import struct
+from dataclasses import dataclass
 
-from verity.core.protocols.remote_bandwidth import codec as RB
-from verity.core.protocols.remote_bandwidth.codec import Key
-
-FIELD = RB.Field("m61", 61, 1)
-P = FIELD.p
-ROOT_EXP = FIELD.root_exp
+P = (1 << 61) - 1
+ROOT_EXP = (P + 1) // 4
 assert ROOT_EXP == 1 << 59
 PAYLOAD_BYTES = 7
 PAYLOAD_BITS = 8 * PAYLOAD_BYTES
@@ -74,27 +68,69 @@ LANE_WORDS = lane_words()
 TASK_WORDS = LANE_WORDS * LANES
 
 
+@dataclass(frozen=True, slots=True)
+class Key:
+    """The seed's constants: `c[j]` for every round and the tweak key `tau`."""
+
+    c: tuple[int, ...]
+    tau: int
+
+    @property
+    def rounds(self) -> int:
+        return len(self.c)
+
+    def tweak(self, i: int) -> int:
+        return self.tau * i % P
+
+
 def _field(seed: bytes, j: int) -> int:
     return int.from_bytes(hashlib.sha512(DOMAIN + seed + struct.pack(">I", j)).digest()[:8], "little") % P
 
 
 def key(seed: bytes, rounds: int) -> Key:
-    """The seed's constants: `c[j]` for every round and the tweak key `tau`."""
     if type(seed) is not bytes or len(seed) != SEED_BYTES:
         raise ValueError(f"a seed is {SEED_BYTES} bytes")
-    sloth = RB.Sloth(FIELD, rounds, False)
-    return Key(sloth, tuple(_field(seed, j) for j in range(rounds)), _field(seed, TWEAK_INDEX) or 1)
+    if not 1 <= rounds < TWEAK_INDEX:
+        raise ValueError("a word has at least one round")
+    return Key(tuple(_field(seed, j) for j in range(rounds)), _field(seed, TWEAK_INDEX) or 1)
+
+
+def rho(a: int, p: int = P) -> int:
+    """Sloth's square-root permutation of Z_p (any prime p = 3 mod 4; the codec's is `P`)."""
+    if not 0 <= a < p:
+        raise ValueError("ρ takes a canonical element")
+    s = pow(a, (p + 1) // 4, p)
+    square = s * s % p == a
+    if (s & 1) == (0 if square else 1):
+        return s
+    return p - s if s else 0
+
+
+def rho_inv(y: int, p: int = P) -> int:
+    if not 0 <= y < p:
+        raise ValueError("ρ⁻¹ takes a canonical element")
+    q = y * y % p
+    return q if y & 1 == 0 else (p - q) % p
 
 
 def encode_word(m: int, i: int, k: Key, bits: int = PAYLOAD_BITS) -> int:
     if not 0 <= m < 1 << _packing(bits):
         raise ValueError(f"a payload is {bits} bits")
-    return RB.encode_word(m, i, k)
+    t = k.tweak(i)
+    x = m
+    for c in k.c:
+        x = rho((x + c + t) % P)
+    return x
 
 
 def decode_word(y: int, i: int, k: Key, bits: int = PAYLOAD_BITS) -> int:
     """The payload of word `y` at index `i`; `ValueError` if `y` is not the encoding of one."""
-    x = RB.decode_word(y, i, k)
+    if not 0 <= y < P:
+        raise ValueError("a word is a canonical element")
+    t = k.tweak(i)
+    x = y
+    for c in reversed(k.c):
+        x = (rho_inv(x) - c - t) % P
     if x >> _packing(bits):
         raise ValueError(f"word {i} decodes to no payload")
     return x

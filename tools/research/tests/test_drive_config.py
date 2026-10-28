@@ -96,19 +96,14 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
         assert why in str(e.value)
 
 
-def test_drive_refuses_an_unknown_key_naming_the_keys_it_reads_and_the_one_it_likely_meant():
+def test_an_unknown_key_is_refused_naming_the_keys_drive_reads_and_the_one_it_likely_meant():
     with pytest.raises(QueueError) as e:
-        DriveFlags.parse("max_lean_check = 4\n", "d.toml", strict=True)
+        DriveFlags.parse("max_lean_check = 4\n", "d.toml")
     assert str(e.value) == ("d.toml: unknown key 'max_lean_check' (did you mean 'max_lean_checks'?): drive reads only on, "
                             "marked_after, regenerate_locks, first, land, after_landing_no_cache, landing_gates, max_lean_checks, "
-                            "nonlean_first, reviewed_first, stale_days, stale_close_days, stale_keep; rename or remove it, or "
-                            "update this research")
-
-
-def test_a_client_ignores_every_key_it_doesnt_read_a_near_miss_too_so_it_parses_a_newer_mains_flags(capsys):
-    assert DriveFlags.parse("max_running = 4\nmax_lean_slots = 2\nland = \"review\"\n", "d.toml").land == "review"
-    err = capsys.readouterr().err
-    assert "d.toml: ignoring key 'max_running'" in err and "d.toml: ignoring key 'max_lean_slots'" in err
+                            "nonlean_first, reviewed_first, stale_days, stale_close_days, stale_keep; rename or remove it")
+    with pytest.raises(QueueError, match=r"unknown key 'max_running': drive reads only on, "):
+        DriveFlags.parse("max_running = 4\n")
 
 
 def test_drive_reads_the_flags_at_main_in_its_clone_never_the_callers_tree_and_takes_a_new_main_without_a_restart(world, driven, monkeypatch, capsys):

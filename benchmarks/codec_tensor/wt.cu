@@ -2020,7 +2020,7 @@ __global__ void __launch_bounds__(128) tag_level_kernel(const u64 *__restrict__ 
 // wt_set_pass puts the messages' fixed bytes in kPass (zeros where s_j, j, the root, K_S and the row go); pass_kernel,
 // one CTA on the stream after the previous commit, fills them in, so the chain needs no host round trip.
 //
-// A WT_RECEIPT = 1 build's receipt is the remote bandwidth driver's sketch-sha512 instead (`receipts.SketchReceipter`):
+// A WT_RECEIPT = 1 build's receipt is sketch-sha512 instead (`sketch_receipt.py`, the remote bandwidth driver's kind):
 // s_j is the whole 64-byte SHA-512 (`receipts.seed`), K_S = derive(s_j, "verity/remote-bandwidth/sketch-signs/v0",
 // {"k": k_s, "n": 4096, "tag": "sketch-sha512"}) at the registration's k_s (16 or 64), a vector is the store's block,
 // its 4,096 bytes in store order (store-order/v0: task q's halves are blocks 2 q and 2 q + 1, receipt_warp), and
@@ -3541,7 +3541,7 @@ int wt_set_dbg(uint8_t *p) {
 
 // One window's tag (ro-blake3/v1 or ro-sketch-blake3/v0): K as BLAKE3's 8 little-endian key words, and the leaves'
 // prefix block Z(LEAF_DOMAIN ‖ frame(name) ‖ frame(σ)) (128 bytes), whose midstate the leaves start from. A
-// WT_RECEIPT build's sketch warps start from the same midstate: there leaf_prefix is receipts.sketch_prefix(seed).
+// WT_RECEIPT build's sketch warps start from the same midstate: there leaf_prefix is sketch_receipt.prefix(seed).
 int wt_set_tag(const u32 *key, const uint8_t *leaf_prefix) {
   u64 w[16];
   for (int i = 0; i < 16; ++i) {

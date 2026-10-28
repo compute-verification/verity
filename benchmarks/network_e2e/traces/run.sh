@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# The trace corpus (corpus.py's docstring) on one leased GPU of a node, from the shipped tree's root, as a job whose
-# input is the C4 shard benchmarks/ppl/datasets.json pins (c4-validation.00000-of-00008.json.gz), in a GPU slot:
-#   [CORPORA="llama32_1b/seeded;llama32_1b/async-greedy:heavy,smallkv"] [REQUESTS=1000] [MAX_MIN=45] [JOIN=0] \
-#     env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py --by LANE -- \
-#     bash benchmarks/network_e2e/traces/run.sh
+# The trace corpus (corpus.py's docstring) on one leased GPU of a node, from the shipped tree's root, with the C4 shard
+# benchmarks/ppl/datasets.json pins (`research data fetch` its id) sent along, in a slot of node 1's gpu pool:
+#   research run --on vy-nebius-1 --project verity --campaign glm-e2e-demo --source <tree> --cwd source \
+#     --send c4-validation.00000-of-00008.json.gz [--env "CORPORA=llama32_1b/seeded;llama32_1b/async-greedy:heavy,smallkv"] \
+#     [--env REQUESTS=1000] [--env MAX_MIN=45] [--env JOIN=0] -- env CHECK_SLOTS=/workspace/research/locks/gpu/slots \
+#     python3 tools/verity/check/slot.py --by LANE -- bash benchmarks/network_e2e/traces/run.sh
 # JOIN=0 leaves the summaries and the comparison to join.sh on a CPU node.
 # CORPORA's entries, apart by spaces or ";", are MODEL/VARIANT[:TRACE,...] (corpus.MODELS, corpus.VARIANTS, corpus.TRACES;
 # default llama32_1b/greedy, every trace). vLLM is the node's pinned venv (VENV, vLLM d9105ea80), as for
@@ -12,8 +13,8 @@
 # turn, into OUT/corpus/<model>-<variant>/, while more than a minute of it is left, and all stop 2 minutes before it ends.
 # After the lease each corpus is summarized, and OUT/compare/<sampling>/ compares the output ids of the corpora that sampled
 # alike (a variant and its async- twin).
-# The node has no store credentials: custody uploads OUT, and each OUT/corpus/<model>-<variant> goes into the store as
-# one vllm-trace-corpus/v1 tree from wherever the run's outputs were fetched.
+# The node has no store credentials: custody uploads OUT, and `research data put --kind vllm-trace-corpus/v1 --tree
+# OUT/corpus/<model>-<variant> --preserve` runs where `research fetch RUN --all` brought it.
 # The hostile-scheduler test serves corpus.HOSTILE's traces, honest first, synchronous and async, e.g.
 #   CORPORA="llama32_1b/greedy:honest,refuse-1,refuse-2,refuse-3,shortest-4;llama32_1b/async-greedy:honest,refuse-5,shortest-6"
 # and the same for seeded; its OUT (corpus/ and compare/) goes in whole as one vllm-adversarial-schedule/v1 tree.

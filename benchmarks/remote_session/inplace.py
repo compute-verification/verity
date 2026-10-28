@@ -32,7 +32,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from device import BLOCK, PACK16_WORDS, PER_LEAF, SALT_DOMAIN, Lib, digests, rb, store_salt, stream_head
+from device import BLOCK, PACK16_WORDS, PER_LEAF, SALT_DOMAIN, Lib, digests, rb, skr, store_salt, stream_head
 
 ROW = 64
 """rs_gather64's row: a chunk is BLOCK // ROW of them."""
@@ -195,7 +195,7 @@ class InPlace:
         n, leaves = plan.length, rb.leaves(plan.length)
         self.lib.set_tree(rb.prefix(seed), rb.DIGEST_BYTES * PER_LEAF, rb.DIGEST_BYTES * (n - PER_LEAF * (leaves - 1)),
                           rb.domain(seed, plan).domain_id, SALT_DOMAIN + self.key + seed, n)
-        self.lib.call("rb_sketch_set", rb.sketch_prefix(seed))
+        self.lib.call("rb_sketch_set", skr.prefix(seed))
         head = stream_head(seed)
         pk = self.torch.empty(PACK16_WORDS, dtype=self.torch.int32, device=self.device)
         self.lib.call("rs_signs16", head, len(head), pk.data_ptr())

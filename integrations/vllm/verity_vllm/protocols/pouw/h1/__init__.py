@@ -387,8 +387,6 @@ class H1Run:
     def tables(self) -> dict[int, dict[str, str | None]]:
         """Each call's table roots (hex; z None when the run has no exact Y for it), once the GPU has hashed them all."""
         TD.settle(self, wait=True)
-        if self.served is not None:
-            self.served.settle()
         return self._roots
 
     @property
@@ -607,23 +605,20 @@ class H1Run:
             z = int_mm(a, weight)
         call = self._call(self.step, w, a, s_a, weight, weight_scale, records, zy)
         if self.retain:
-            y = ZR.split(ZR.host(records), call.rows, call.n)[0][:m] if records is not None else numpy_of(z)
+            y = ZR.split(records, call.rows, call.n)[0][:m] if records is not None else numpy_of(z)
             self.retained.append((call.index, numpy_of(a), numpy_of(s_a), y))
-        self._recorded = (call, z, None if records is None else (records, s_a, weight_scale))
+        self._recorded = (call, z, None if records is None else (records, numpy_of(s_a), numpy_of(weight_scale)))
         return call
 
     def judge(self, trace: CG.Trace, y: Any) -> dict[str, Any] | None:
         """The credit gate on the call `record` made inside ``trace`` (None if it made none): y is what the linear handed
-        back to vLLM; a call the trace credits whose records don't hold is refused (`pouw_h1_records.refusal`), read on
-        the records' device first (`pouw_h1_records.holds_on`) and on the host's copy only when that doesn't hold."""
+        back to vLLM; a call the trace credits whose records don't hold is refused (`pouw_h1_records.refusal`)."""
         made, self._recorded = self._recorded, None
         if made is None:
             return None
         call, z, held = made
         v = CG.verdict(trace, y, z)
-        if v["credit"] and not (held is not None and ZR.holds_on(z, call.rows, call.n, y, held[1], held[2])) \
-                and (why := ZR.refusal(held and (held[0], numpy_of(held[1]), numpy_of(held[2])), call,
-                                       TD.row_words(y, call.m, "<i2"))):
+        if v["credit"] and (why := ZR.refusal(held, call, TD.row_words(y, call.m, "<i2"))):
             v = {**v, "credit": False, "reason": f"credit: {CG.RECORDS}: {trace.linear} {why}"}
         self.verdicts[call.index] = v
         return v

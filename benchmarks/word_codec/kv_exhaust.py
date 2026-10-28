@@ -1,7 +1,7 @@
 """The KV cache's read and write sides at an HBM-exhaustion shape (HBM holds the encoded weights, the KV cache and
 filler, and every step reads all of it), on one GPU: `kv.cu`'s libraries (`--lib NAME=PATH`, built with
-KV_QHEADS the model's query heads) gated, then timed. Writes `kv-exhaust.json` and `kv.log` under `--out`, and, with
-`RESEARCH_RUN_DIR` set, its `result.json`.
+KV_QHEADS the model's query heads) gated, then timed. Writes `kv-exhaust.json` and `kv.log` under `--out`, and in a
+`research run` its `result.json`.
 
 Nothing is timed before its gate passed:
 - `gate`: kv_bench's codec gate at every k of `--ks`;

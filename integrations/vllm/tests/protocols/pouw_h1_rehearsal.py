@@ -12,7 +12,7 @@ DIR``, DIR ``--checkpoint``); on the auditor host vy-admin makes that registrati
 circuit file with the auditor's lowering (`pouw_h1_circuits.build`: K's template lowered as ``h1_prove/stage.py``
 lowers it, bound to the Program and its partition), unless ``--circuits DIR`` names a built directory. Then it opens
 the lane's period (`period_open_argv`: ``period-open --name P --cap 1 --circuit DIGEST --draw-k K --model MODEL
---circuit-files FILES --length LENGTH``, which signs the registration's W, K the proof system's committed draw K, `declared_draw_k`, which core's credit reads as the
+--circuit-files FILES --length LENGTH``, which signs the registration's W, K the proof service's committed draw K, `declared_draw_k`, which core's credit reads as the
 open's ``draw_k``, FILES ``{"k<K>": SHA-512}``, each stratum's file's, which core's credit verifies statements
 against, `credit.committed_files`, and LENGTH `FILL`'s fixed length, `fill_length`, which core's credit holds the
 window's served rows to, `credit.committed_length`), reserves the window's challenge phase (``reserve --peer PEER --scheme S --families
@@ -168,7 +168,7 @@ def declaration(layers: int = 32) -> tuple[list[tuple[int, int]], dict[int, str]
 
 
 def declared_draw_k(layers: int = 32) -> int:
-    """The draw K the period's open commits (``--draw-k``, ``draw_k``) for the declared window: the proof system's
+    """The draw K the period's open commits (``--draw-k``, ``draw_k``) for the declared window: the proof service's
     selection, `pouw_h1_challenger.draw_k` over `pouw_h1_served.declared_layout`, which `credit.strata` reads."""
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import challenger as PHC

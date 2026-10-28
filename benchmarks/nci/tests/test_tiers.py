@@ -32,7 +32,7 @@ def test_the_gpus_read_the_accel_models_card_table():
     assert T.CREDITED_CLOCK_HZ == int(re.search(r"fmax_mhz=(\d+)", sm120).group(1)) * 1e6
     assert T.DEFAULTS["clock_share"] == 0.0
     assert T.DEFAULTS["node_flops"] == pytest.approx(7.4848666e15, rel=1e-8)
-    assert T.DEFAULTS["host_share"] == 0.0
+    assert T.DEFAULTS["host_share"] == pytest.approx(0.12608, rel=1e-4)
 
 
 def test_each_tier_gives_the_adversary_no_more_than_the_last():
@@ -151,7 +151,7 @@ def test_proof_of_space_rounds_set_the_slack():
 def test_unbounded_ingress_makes_wipes_cap_nothing():
     """Until the count check is in the ZK flow, declared ingress is bounded only by line rate,
     and then even a small wipe residual caps nothing."""
-    tight = T.DEFAULTS | {"residual": 0.9, "pous_rounds": 1e6, "pous_floor": 0.0, "unfilled_gb": 0.001}
+    tight = T.DEFAULTS | {"pous_rounds": 1e6, "pous_floor": 0.0, "unfilled_gb": 0.001}
     assert T.evaluate(tight, T.TIERS["T3"])["memory_caps_residual"]
     assert not T.evaluate(tight | {"intake_x": 1.3e6}, T.TIERS["T3"])["memory_caps_residual"]
 
@@ -241,6 +241,16 @@ def test_the_verdict_lag_adds_a_lag_of_skipped_work_per_identity():
     lag = T.evaluate(p | {"identities": 3.0}, T.TIERS["T1"])
     extra = 3 * p["lag_s"] / (p["years"] * T.YEAR)
     assert lag["residual"] - no_lag["residual"] == pytest.approx(extra, rel=1e-6)
+
+
+def test_the_dampener_is_a_hardware_multiple_against_the_unconstrained_run():
+    """Dark fragments of monitored capacity are counted at peak and unmonitored compute trains like the unconstrained
+    developer, so D = 1 / (s + rest / mfu) (against a real run at MFU 0.4, D at the defaults is 6.6)."""
+    p = T.DEFAULTS | {"unmonitored": 0.01, "residual": 0.01, "host_share": 0.05, "clock_share": 0.0}
+    r = T.evaluate(p, T.TIERS["T4"])
+    rest = r["residual"] + r["declared"] + r["cheat"]
+    assert r["dampener"] == pytest.approx(1 / (r["unmonitored"] + rest / p["mfu"]), rel=1e-9)
+    assert T.evaluate(T.DEFAULTS | {"residual": 1.0}, T.TIERS["T1"])["dampener"] == 1.0
 
 
 def test_the_recipe_multiplier_scales_only_the_constrained_terms():

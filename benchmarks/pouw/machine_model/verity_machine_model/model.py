@@ -151,16 +151,9 @@ def _runs(s: str) -> tuple[str, ...]:
     return tuple(s.split())
 
 
-def cites(s: str, named: dict[str, tuple[str, ...]]) -> tuple[str, ...]:
-    """A `runs` field's runs and notes, each `@NAME` the list `named` (`run_lists`) gives it."""
-    return tuple(x for c in _runs(s) for x in (named[c[1:]] if c.startswith("@") else (c,)))
-
-
 def rows(data: Path = DATA) -> dict[str, Row]:
-    named = run_lists(data)
     with open(data / "rows.csv", newline="") as f:
-        return {d["row"]: Row(d["row"], d["status"], cites(d["runs"], named), d["description"])
-                for d in csv.DictReader(f)}
+        return {d["row"]: Row(d["row"], d["status"], _runs(d["runs"]), d["description"]) for d in csv.DictReader(f)}
 
 
 def census_files(m: Model, data: Path = DATA) -> list[Path]:
@@ -172,22 +165,11 @@ def census_files(m: Model, data: Path = DATA) -> list[Path]:
     return out + [p for e in m.epochs if (p := data / "census" / f"{e}.csv").is_file()]
 
 
-def citations() -> dict[str, str]:
-    """`data/citations.toml`: the notes many lines cite, in `data/` and every device directory, each cited in a line's
-    `runs` as `@NAME`."""
-    return tomllib.loads((DATA / "citations.toml").read_text())
-
-
 def run_lists(data: Path = DATA) -> dict[str, tuple[str, ...]]:
     """`data/census/runs.toml`: the run lists many census lines share (a refit's every line cites every run its fit read),
-    each cited in a line's `runs` as `@NAME`; and `citations`, each a list of its one note."""
+    each cited in a line's `runs` as `@NAME`."""
     p = data / "census" / "runs.toml"
-    own = {k: tuple(v) for k, v in tomllib.loads(p.read_text()).items()} if p.is_file() else {}
-    shared = {k: (v,) for k, v in citations().items()}
-    if both := set(own) & set(shared):
-        raise SystemExit(f"{p}: {sorted(both)} also name a note in {DATA / 'citations.toml'}; give the run list its "
-                         f"own name")
-    return own | shared
+    return {k: tuple(v) for k, v in tomllib.loads(p.read_text()).items()} if p.is_file() else {}
 
 
 def kind_lists(data: Path = DATA) -> dict[str, tuple[str, ...]]:
@@ -208,8 +190,9 @@ def census_lines(m: Model, data: Path = DATA) -> list[dict[str, str]]:
 
 def entries(m: Model, data: Path = DATA) -> list[Entry]:
     named, kinds = run_lists(data), kind_lists(data)
+    cites = lambda s: tuple(x for c in _runs(s) for x in (named[c[1:]] if c.startswith("@") else (c,)))
     return [Entry(k, d["row"], u_of(m.cycle_u, d["rate"], d["noise"], d["cycles"], d["u"]), d["since"],
-                  d["until"], cites(d["runs"], named)) for d in census_lines(m, data)
+                  d["until"], cites(d["runs"])) for d in census_lines(m, data)
             for k in (kinds[d["kind"][1:]] if d["kind"].startswith("@") else (d["kind"],))]
 
 

@@ -3,7 +3,7 @@
 z/y records (`record_words`, `zy_words`)."""
 from __future__ import annotations
 
-from typing import Any, Sequence
+from typing import Sequence
 
 import numpy as np
 
@@ -69,21 +69,15 @@ def record_words(z: np.ndarray, y: np.ndarray, slots: int, tile: tuple[int, int]
     return np.concatenate([np.ascontiguousarray(cells(zf)).view("<u2"), cells(yf)], axis=1).astype(np.uint16)
 
 
-def zy_words(records: Any, rows: int, n: int, slots: int, tile: tuple[int, int]) -> Any:
+def zy_words(records: np.ndarray, rows: int, n: int, slots: int, tile: tuple[int, int]) -> np.ndarray:
     """`record_words` of a call's records (`pouw_h1_records`' [units, ZY_BYTES] over ``rows`` slots): where the Program's
     tile is the records' unit and they cover all ``slots``, the records' own bytes as u16 words, the same words without
-    taking them apart, and of records on a CUDA device a view of them there (`pouw_h1_registered.commit` hashes them in
-    place)."""
+    taking them apart."""
     if tuple(tile) == ZR.UNIT and rows == slots:
-        shape = ((rows // tile[0]) * (n // tile[1]), ZR.ZY_BYTES)
-        if getattr(records, "is_cuda", False) and str(records.dtype) == "torch.uint8" and tuple(records.shape) == shape:
-            import torch
-
-            return records.contiguous().view(torch.uint16)
-        r = ZR.host(records)
-        if r.dtype == np.uint8 and r.shape == shape:
-            return r.view("<u2")
-    return record_words(*ZR.split(ZR.host(records), rows, n), slots, tile)
+        r = np.asarray(records)
+        if r.dtype == np.uint8 and r.shape == ((rows // tile[0]) * (n // tile[1]), ZR.ZY_BYTES):
+            return np.ascontiguousarray(r).view("<u2")
+    return record_words(*ZR.split(records, rows, n), slots, tile)
 
 
 __all__ = ["EMPTY_ID", "chunk_words", "ids_words", "receipt_words", "record_words", "row_words", "zy_words"]

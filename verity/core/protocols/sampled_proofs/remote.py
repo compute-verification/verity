@@ -1,4 +1,4 @@
-"""The proof system's challenger as a service on its own host, and its client: `LiveChallenger` over one TCP stream.
+"""The proof service's challenger as a service on its own host, and its client: `LiveChallenger` over one TCP stream.
 
 The challenger is auditor-trusted (`trusted-host`): it runs on a machine the prover doesn't control, and the
 prover's process reaches it over the stream at its own 127.0.0.1:PORT.  For a session of the auditor host,

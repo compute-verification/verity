@@ -23,10 +23,7 @@ Commit record into the compiler's advice.
 """
 from __future__ import annotations
 
-import atexit
 import json
-import queue
-import threading
 from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
@@ -109,13 +106,10 @@ def step_geometry(so: Any) -> tuple[dict[str, int], list[str], list[str], dict[s
 
 class StepTrace:
     """The step trace of one in-process engine, installed with `install` and written as it happens to `path` (one line a record,
-    flushed at every step) and kept in `records`.  `uninstall` puts the scheduler back.  ``writer``: the file is written by a
-    thread of its own, in the same order and bytes, so the engine thread never waits on its disk (a sealer's writes can hold an
-    append there for hundreds of ms); `drain` waits until a reader of the file sees every record so far, and a failed write is
-    raised on the engine thread at its next record."""
+    flushed at every step) and kept in `records`.  `uninstall` puts the scheduler back."""
 
     def __init__(self, path: str | Path | None = None, *, request_id: Callable[[str], str] | None = None,
-                 clock: Callable[[], float] | None = None, writer: bool = False) -> None:
+                 clock: Callable[[], float] | None = None) -> None:
         self.path = Path(path) if path is not None else None
         self.request_id = request_id or (lambda rid: rid)
         self.clock = clock                      # when given, each arrive and step record carries its reading `t`
@@ -126,51 +120,15 @@ class StepTrace:
         self._pending: dict[int, int] = {}      # id(SchedulerOutput) -> its step
         self._fh = None
         self.sched: Any = None
-        self.writer = writer
-        self._lines: queue.SimpleQueue | None = None        # the writer thread's: (line, flush), a drain's Event, None to stop
-        self._thread: threading.Thread | None = None
-        self._failed: OSError | ValueError | None = None
 
     def _emit(self, rec: dict[str, Any]) -> None:
         if self.clock is not None and rec["kind"] in ("arrive", "step"):
             rec["t"] = self.clock()
         self.records.append(rec)
-        if self._fh is None:
-            return
-        line, flush = json.dumps(rec, separators=(",", ":")) + "\n", rec["kind"] in ("step", "header", "window")
-        if (lines := self._lines) is None:
-            self._fh.write(line)
-            if flush:
+        if self._fh is not None:
+            self._fh.write(json.dumps(rec, separators=(",", ":")) + "\n")
+            if rec["kind"] in ("step", "header", "window"):
                 self._fh.flush()
-            return
-        if self._failed is not None:
-            raise self._failed
-        lines.put((line, flush))
-
-    def _write(self) -> None:
-        """The writer thread: each line as `_emit` would write it, and a drain's event set once the lines before it are flushed.
-        After a failed write it writes nothing more, but still sets every drain's event."""
-        while (item := self._lines.get()) is not None:
-            line, flush = item if isinstance(item, tuple) else ("", True)
-            if self._failed is None:
-                try:
-                    self._fh.write(line)
-                    if flush:
-                        self._fh.flush()
-                except (OSError, ValueError) as e:
-                    self._failed = e
-            if isinstance(item, threading.Event):
-                item.set()
-
-    def drain(self) -> None:
-        """Every record so far in the file and flushed, for a reader of it (the writer's lines written first)."""
-        if self._lines is None:
-            if self._fh is not None:
-                self._fh.flush()
-            return
-        done = threading.Event()
-        self._lines.put(done)
-        done.wait()
 
     def window(self, window: int, event: str) -> None:
         """A Commit window's ``open`` or ``close`` (`pipeline.serve_commit.CommitWindows`): the steps it holds are those scheduled
@@ -182,11 +140,6 @@ class StepTrace:
         if self.path is not None:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             self._fh = self.path.open("a")
-            if self.writer:
-                self._lines = queue.SimpleQueue()
-                self._thread = threading.Thread(target=self._write, name="step-trace-writer", daemon=True)
-                self._thread.start()
-                atexit.register(self.drain)             # a server that exits without `uninstall`: its file still whole
         self._emit({"kind": "header", "schema": SCHEMA, "config": scheduler_config(sched)})
         me = self
 
@@ -263,11 +216,6 @@ class StepTrace:
 
     def uninstall(self) -> None:
         self.hooks.uninstall()
-        if self._lines is not None:
-            self._lines.put(None)
-            self._thread.join()
-            self._lines = self._thread = None
-            atexit.unregister(self.drain)
         if self._fh is not None:
             self._fh.close()
             self._fh = None

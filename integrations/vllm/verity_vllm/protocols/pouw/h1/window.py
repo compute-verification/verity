@@ -1,4 +1,4 @@
-"""H1's, ncp-v2's and Pearl-C's session on the proof system's challenger on its auditor host
+"""H1's, ncp-v2's and Pearl-C's session on the proof service's challenger on its auditor host
 (`verity.core.protocols.sampled_proofs.remote`), as the serving process opens and closes it; `pouw_h1_challenger` is
 the verifier's check of what it served.
 

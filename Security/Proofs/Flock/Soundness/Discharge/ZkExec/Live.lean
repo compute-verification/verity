@@ -7,7 +7,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Live
 The live audit is `Exec.auditLive` with the challenger's one table (`liveOf dg mPts N wr`: `liveTable`, every
 round's coins fresh and drawn after its bytes, written out by `wr`), as without `--zk`. Under `--zk` the coins come from
 the keyed coin tree committed before the prover's first message (C-Flock ZK), so this is the session with each round's
-coins fresh: the coin tree's step from that to C-Flock ZK's is `Discharge/ZkCoins`'s, an open guarantee here.
+coins fresh: the coin tree's step from that to C-Flock ZK's is [wave2-zk-coins]'s, an open guarantee here.
 
 The target is a compiled `--zk` table on one table, named by its pieces in `modelTable`'s shape (the challenger's
 simulation, `Refine/LiveSim.lean`, reads exactly these), at each draw `S` and registration `R`:
@@ -20,7 +20,7 @@ simulation, `Refine/LiveSim.lean`, reads exactly these), at each draw `S` and re
 
 `sessionZC G out acc S R` is that table's game, `(modelTable (G S R) (out S R)).map (acc S R)`. The compiled `--zk`
 session with salted commitments, its instance of these pieces and its bound against `ZkSession.sessionZK` are
-`Discharge/ZkLink`'s.
+[wave2-zk-link]'s.
 
 `DecodesZK` is R11b at `--zk` (`Exec.DecodesAll`'s form): on every live outcome flock-verify `--zk` accepts, each rep's
 game runs on the tape decoded from its stream and its proof file, and the table's verdict on those runs, with the cap

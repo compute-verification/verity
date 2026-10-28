@@ -51,7 +51,7 @@ def test_a_full_width_word_holds_any_bytes_but_a_top_0xff(bits):
 
 
 def small(p: int) -> W.Field:
-    return W.Field("t", p.bit_length(), (1 << p.bit_length()) - p)
+    return W.Field("t", p.bit_length(), p, 1, 3)
 
 
 @pytest.mark.parametrize("p", [7, 11, 19, 23, 127, 1019, 13, 29, 37, 53, 61, 101, 1013])

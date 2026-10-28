@@ -10,8 +10,8 @@ import Proofs.Flock.Claims.Recursion.SchedDense
 /-!
 # What each V\* part's circuit accepts on the honest outer run, at the layout of record (`DeployedR.layR`)
 
-`RecursiveKSAt`'s premise is `DecompB` at `PartAccepts`, over V\*'s layout of record `DeployedR.layR elem`.
- It is not vacuous only if `PartAccepts` holds where the honest recursive prover runs. Here the honest run is
+`RecursiveKSAt`'s premise is `DecompB` at `PartAccepts`, over V\*'s layout of record `DeployedR.layR elem` (RECINT's
+statement). It is not vacuous only if `PartAccepts` holds where the honest recursive prover runs. Here the honest run is
 the compiled record's own reference prover (`refP`, the record's `P`) at the deployed recursive record
 `recBound Readable.relation bR (layR elem) bdR.IVStar` (`bR` the brings whose transcript is the coin server's record,
 `recTr`), on a statement `x` in the recursion's relation at the inner witness `w`, and the part's outer witness is the

@@ -101,7 +101,7 @@ def test_cli(capsys):
     assert all(H.TERMS[k] in head for k in ("skip", "mand", "machine", "luck", "gamma", "threshold"))
     assert any(x.startswith("| H200 | dither-2s-licpw-redux-p1-l32 | DC-90-ri | 0.593% |") for x in out)
     assert any(x.startswith("- H200: the 1.22-slot issue floor") for x in out)
-    assert f"- {H.spec()['scope']}" in out and "ε is per node:" in H.spec()["scope"]
+    assert f"- {H.spec()['scope']}" in out and "per node (ASK-65 = A)" in H.spec()["scope"]
     assert main(["headline", "--json"]) == 0
     d = json.loads(capsys.readouterr().out)
     assert d["terms"] == H.TERMS and list(d["readings"]) == list(H.READINGS)

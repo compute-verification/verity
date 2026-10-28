@@ -11,8 +11,8 @@ Each run fits the codebook on the training traces (the step-time model, its phas
 steps, and the residual) under every code, decodes it back (a mismatch fails the run), and records each window's bits,
 with the static and conditional codes' bits per field. Where the advice module is installed it also builds each trace's
 advice there (which checks its meaning) and records the advice module's own layout and charge as a reference row. It
-writes `table.json` (per trace and window, and the summary) and `table.md`, which go into the store as one
-`advice-encoding/v1` tree.
+writes `table.json` (per trace and window, and the summary) and `table.md`, for
+`research data put --kind advice-encoding/v1`.
 
 The worst case of each code, per window, is reported two ways: at the window's public counts (its certified arrivals
 and replayed resumes, with every advice field at its registered cap), and at the caps (`arrivals_per_bucket · T`

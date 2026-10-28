@@ -44,13 +44,8 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import sys
-from pathlib import Path
 
 import tiers as T
-
-sys.path.insert(1, str(Path(__file__).resolve().parent.parent / "rho"))
-from rho.theorem import multiple_bound
 
 #: loss laws L(N, D) = E + A / N^alpha + B / D^beta in nats per token: Besiroglu et al.'s refit of Chinchilla's Approach 3
 #: (besiroglu-2024-chinchilla-replication/2) and Hoffmann et al.'s original Approach 3 fit, which the refit refutes and
@@ -198,24 +193,20 @@ def residual_with_lag(p: dict) -> float:
 
 
 def dampener(p: dict, mu: float, declared: float, cheat: float = 0.0) -> float:
-    """D under a memory cap ``mu``, with nothing unmonitored: ``multiple_bound`` in Lean's form at
-    x = min(MFU_0 r + declared, m mu) + cheat, the residual training at MFU_0 (reference efficiency) and the rest counted
-    multiplications."""
-    x = min(p["mfu"] * residual_with_lag(p) + declared, p["m"] * mu) + cheat
-    return multiple_bound(p["mfu"], 0.0, x, reference_efficiency=False)
+    """D under a memory cap ``mu``: 1/D = (min(r + declared, m mu) + cheat) / mfu, as in ``tiers.evaluate``."""
+    return max(1.0, p["mfu"] / (min(residual_with_lag(p) + declared, p["m"] * mu) + cheat))
 
 
 def attack_dampener(p: dict, efficiency: float) -> float:
     """D of a developer whose only route to the target is an attack of this efficiency; ``inf`` when it never gets there."""
-    return multiple_bound(p["mfu"], 0.0, efficiency, reference_efficiency=False)
+    return max(1.0, p["mfu"] / efficiency) if efficiency > 0 else math.inf
 
 
 def replica(p: dict, S: float, L: float, b_train: float, fit: str = "besiroglu", gain: float = 1.0,
             multiplier: float = DILOCO, b_sync: float = 4.0) -> dict:
     """The replica attack: each server trains the largest model it holds at ``b_train`` bits per weight (worth ``gain``
     dense weights each, for a path composition) and syncs a pseudo-gradient of ``b_sync`` bits per weight through
-    intake, its residual capacity at MFU_0 (reference efficiency). Between syncs a replica trains
-    MFU_0 r F b_sync / (6 lambda_in) tokens, whatever its size."""
+    intake. Between syncs a replica trains r F b_sync / (6 lambda_in) tokens, whatever its size."""
     N = S / b_train
     lam = intake(p)
     r = residual_with_lag(p)
@@ -223,8 +214,8 @@ def replica(p: dict, S: float, L: float, b_train: float, fit: str = "besiroglu",
     sync_s = N * b_sync / lam
     return {
         "params": N, "dense_params": gain * N, "tokens": tokens_to_reach(fit, gain * N, L), "m": m,
-        "sync_s": sync_s, "tokens_per_sync": p["mfu"] * r * p["node_flops"] * b_sync / (6 * lam),
-        "outer_steps": p["years"] * T.YEAR / sync_s if sync_s > 0 else math.inf, "efficiency": p["mfu"] * r * m,
+        "sync_s": sync_s, "tokens_per_sync": r * p["node_flops"] * b_sync / (6 * lam),
+        "outer_steps": p["years"] * T.YEAR / sync_s if sync_s > 0 else math.inf, "efficiency": r * m,
     }
 
 
@@ -235,7 +226,7 @@ def bite_gb(p: dict, N: float, b: float) -> float:
 
 def row(wipe_gb: float, N: float, L: float, fit: str = "besiroglu") -> dict:
     p = params(wipe_gb)
-    closed = T.evaluate(p, T.TIERS["T4"], p["mfu"])
+    closed = T.evaluate(p, T.TIERS["T4"])
     R = closed["wipe_state_bits"]
     S = state(p, R)
     declared = closed["declared"]
@@ -247,8 +238,7 @@ def row(wipe_gb: float, N: float, L: float, fit: str = "besiroglu") -> dict:
     path = replica(p, S, L, B_TRAIN["central"], fit, PATH_GAIN["smalltalk"], PATH_MULTIPLIER["smalltalk"], 0.0)
     return {
         "wipe_gb": wipe_gb, "state_gb": S / T.GB, "visits": visits(S, N, p["b_w"]), "periods": fits["central"][1],
-        "mu_closed": closed_form(p, R),
-        "D_closed": multiple_bound(p["mfu"], *T.remote_terms(p, closed), reference_efficiency=False),
+        "mu_closed": closed_form(p, R), "D_closed": closed["dampener"],
         "mu_fit": mu["central"], "D_fit": dampener(p, mu["central"], declared),
         "D_fit_low": dampener(p, mu["low"], declared), "D_fit_high": dampener(p, mu["high"], declared),
         "fit_over_closed": mu["central"] / closed_form(p, R),

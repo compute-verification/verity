@@ -18,8 +18,8 @@ recombination of the leaf sums is the sum of the products, `Σ_p K(a_p, b_p) = r
 is linear (`polyOf_reduceG`).
 
 The Python cited is `backends/flock/python/verity_flock/rec_residuals.py` (blob `6984e566`) and
-`catalog/verity_catalog/definitions/boolean/gf2k.py` (blob `52383dd2`); `C.AND` is `forms.Circuit.AND` without CSE
-(`Flock.HmNets.and`) and `commit` is
+`catalog/verity_catalog/definitions/boolean/gf2k.py` (blob `52383dd2`), as they are on `cursor/rec-step2-95d4` and
+`cursor/rec-step3-95d4`; `C.AND` is `forms.Circuit.AND` without CSE (`Flock.HmNets.and`) and `commit` is
 `sha512.commit` (`Flock.HmNets.commitW`).
 -/
 

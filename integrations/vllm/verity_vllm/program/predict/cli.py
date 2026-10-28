@@ -5,14 +5,12 @@
     verity-vllm predict node-registration --row ROW --config CONFIG_JSON --program NODE_DESCRIPTOR --commit-out OUT ...
     verity-vllm predict inventory --rows ROWS_ROOT --out inventory.json.gz
     verity-vllm predict score (--inventory inventory.json.gz | --rows ROWS_ROOT) --hf-home HF --out score.json [--md score.md]
-    verity-vllm predict compare ROW_DIR --row ROW --config CONFIG_JSON --out comparison.json [--workers N] [--predicted DIR]
+    verity-vllm predict compare ROW_DIR --row ROW --config CONFIG_JSON --out comparison.json [--workers N]
     verity-vllm predict emit --row ROW --rank R --config CONFIG_JSON --trace DIR --out DIR --wrapper ...   (`aot`)
-    verity-vllm predict row --row ROW --out DIR [--config CONFIG_JSON] [--jobs N]                (`aot`: a row's Build of record)
     verity-vllm predict compiled --role ROLE --device DEVICE --workload WL --out build.json      (`compiled`: the served Build)
 
 `node-registration` registers a node Program's θ from its TP Commit of record (`node_registration`, NCI's full check).
-`emit` writes into a traced Build row: a switched row's AOT Build (`aot`, `row_tp.TpRow.build`) runs it for each derive.
-`row` writes a single-GPU row's whole Build of record from its declared inputs, with no trace, into a dir of its own.
+`emit` is the one that writes into a Build row: a switched row's AOT Build (`aot`, `row_tp.TpRow.build`) runs it for each derive.
 `score` and `build` refuse an output path inside a rows root they read.
 """
 
@@ -72,7 +70,7 @@ class InventoryOptions:
 
 
 COMMANDS = {"build": BuildOptions, "node": NodeOptions, "node-registration": NR.Options, "inventory": InventoryOptions,
-            "score": S.Options, "compare": A.CompareOptions, "emit": A.EmitOptions, "row": A.RowOptions, **PC.COMMANDS}
+            "score": S.Options, "compare": A.CompareOptions, "emit": A.EmitOptions, **PC.COMMANDS}
 
 
 def node_main(a: NodeOptions) -> int:
@@ -104,7 +102,7 @@ def node_main(a: NodeOptions) -> int:
 def main(a) -> int:
     if isinstance(a, S.Options):
         return S.main(a)
-    if isinstance(a, (A.CompareOptions, A.EmitOptions, A.RowOptions)):
+    if isinstance(a, (A.CompareOptions, A.EmitOptions)):
         return A.main(a)
     if isinstance(a, (PC.Options, PC.PinOptions)):
         return PC.main(a)

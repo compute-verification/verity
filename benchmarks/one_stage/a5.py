@@ -95,7 +95,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   `verify --coins os --stratified K` holds it to the stratified law it derives from its own `--program` and `--partition`.
   C-Flock's firewall checks only a `--zk` statement's sends, so a plain prover isn't behind it (the summary's ``plain``).
 * **The draw from the auditor's challenger** (`--challenger local|gate:USER@HOST`, a TP Commit; `a5_coins`), on the proof
-  system's path of record: the step's one challenger session, opened on the TP run root once every rank has passed its
+  service's path of record: the step's one challenger session, opened on the TP run root once every rank has passed its
   checks before the draw and planned the coins its draw reads (`a5_coins.need`), and only under a reserve that covers
   them all (`a5_coins.reserve_reason`), and each rank's own `service.Stream` over its window's templates in their order (one stratified Spec over their mixed population, its law the
   partition file's rule, `stratified:K` among them), on the session's coins (`coins.ChallengerCoins` over

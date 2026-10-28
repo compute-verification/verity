@@ -158,7 +158,7 @@ def test_the_verdicts_log_and_records_are_the_whole_logs():
 
 def test_r7_reads_each_values_first_registration():
     """Registered values: a log of 24 records, two in three registering `W` under its first root and the rest v1. A
-    candidate's check gets the last record and the first registration, and the verifier gives it the verdict the
+    candidate's check gets the last record and the first registration, and the verifier of record gives it the verdict the
     whole log gives: the held root, a fresh root (R7-held), a window logged before, a wrong previous, a v1 record."""
     prog = _program()
     reg = _registered(prog)

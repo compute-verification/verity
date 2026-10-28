@@ -46,14 +46,14 @@ from verity.core.protocols.certifier.active import (
 from . import framing as F
 from . import model as M
 from . import placement as P
-from .hardware import OUTSIDE, DeviceGraph
+from .hardware import OUTSIDE, Hardware
 
 REQUEST = struct.Struct(">II")
 EGRESS, INGRESS = "responses", "requests"
 
 
 @dataclass(frozen=True)
-class Exchange:
+class Session:
     block: str
     index: int
     read_tick: int  # -1 for a start session, which reads nothing
@@ -74,7 +74,7 @@ class Lab:
     """The lab's Program for a placed workload: each block's sessions, its events in position order as (session index,
     message, chunk index), message None for a padding event, and its (F, F_in) (`fixlen`)."""
 
-    def __init__(self, model: M.Model, hw: DeviceGraph, placement: P.StepPlacement, messages: Sequence[F.Message],
+    def __init__(self, model: M.Model, hw: Hardware, placement: P.Placement, messages: Sequence[F.Message],
                  frame_bytes: int) -> None:
         self.model, self.hw, self.frame_bytes = model, hw, frame_bytes
         self.chunk = TOKEN_BYTES
@@ -102,7 +102,7 @@ class Lab:
         """The lab's Program of a run's `block.Context`."""
         return cls(ctx.model, ctx.hw, ctx.placement, ctx.phi.messages, frame_bytes)
 
-    def _sessions(self, block: str, tick: Sequence[int]) -> list[Exchange]:
+    def _sessions(self, block: str, tick: Sequence[int]) -> list[Session]:
         inbound: dict[int, list[F.Message]] = defaultdict(list)
         for m in self.messages.values():
             if m.dst == block:
@@ -123,7 +123,7 @@ class Lab:
         for g in sorted(self.held[block], key=lambda g: tick[g]):
             if kind[g] == "computed":
                 gates[session_of(tick[g])].append(g)
-        return [Exchange(block, j, t, tuple(inbound.get(t, ())), tuple(outbound[j]), tuple(gates[j]))
+        return [Session(block, j, t, tuple(inbound.get(t, ())), tuple(outbound[j]), tuple(gates[j]))
                 for j, t in enumerate(ticks)]
 
     def chunks(self, m: F.Message) -> int:
@@ -132,23 +132,23 @@ class Lab:
     def positions(self, block: str, session: int) -> range:
         return range(self._first[block][session], self._first[block][session + 1])
 
-    def request(self, s: Exchange, payloads: dict[int, bytes]) -> bytes:
+    def request(self, s: Session, payloads: dict[int, bytes]) -> bytes:
         """Session s's request, from its messages' bytes by stream."""
         body = bytes(self.request_pad(s)) + b"".join(payloads[m.stream] for m in s.inbound)
         return REQUEST.pack(s.index, len(body)) + body
 
-    def _length(self, s: Exchange) -> int:
+    def _length(self, s: Session) -> int:
         return REQUEST.size + sum((m.bits + 7) // 8 for m in s.inbound)
 
-    def request_pad(self, s: Exchange) -> int:
+    def request_pad(self, s: Session) -> int:
         """The zero bytes after session s's request head that make it its block's F_in frames."""
         n, room = self.fixlen[s.block][1], self.frame_bytes - HEADER.size
         return max(0, (n - 1) * room - LENGTH.size + 1 - self._length(s)) if n > 1 else 0
 
-    def request_length(self, s: Exchange) -> int:
+    def request_length(self, s: Session) -> int:
         return self._length(s) + self.request_pad(s)
 
-    def request_frames(self, s: Exchange) -> int:
+    def request_frames(self, s: Session) -> int:
         """The link frames session s's request takes (`active.request_frames`): its block's F_in."""
         return request_frame_count(self.request_length(s), self.frame_bytes)
 

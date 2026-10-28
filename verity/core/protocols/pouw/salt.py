@@ -2,7 +2,7 @@
 
 PoUW window p is k = `pouw_window` certifier windows p·k … p·k + k − 1, aligned at 0. The certifier draws p's 512-bit
 salt at p's first ingress tick, releases it into the block only, and gives it to the verifier by `reveal(p,
-registration)` once the proof system registered p (the receipt the registration's) and p's last ingress record is
+registration)` once the proof service registered p (the receipt the registration's) and p's last ingress record is
 published, once, and only until its reveal deadline on its own clock after p's end. PoUW doesn't import the certifier:
 `revealed` reads any object with that `reveal`.
 
@@ -267,7 +267,7 @@ def registered(registration: Registration) -> int | None:
 
 def revealed(certifier: Any, window: int, registration: Registration | None) -> bytes:
     """PoUW window `window`'s certifier salt, `certifier.reveal(window, registration)`, given the window's registration
-    as the proof system returned it. It fails closed (`Unrevealed`): unregistered (`registered` doesn't read `window`
+    as the proof service returned it. It fails closed (`Unrevealed`): unregistered (`registered` doesn't read `window`
     off the registration), refused by the certifier (its receipt isn't the registration's; early, before the window's
     last ingress record is published; late, past its reveal deadline; revealed already; missing, a salt never drawn or
     the salt off), or missing (what the certifier gave isn't a 64-byte salt)."""

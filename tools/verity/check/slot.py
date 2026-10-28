@@ -315,34 +315,13 @@ def _windows(slot: dict) -> list[tuple[str, datetime, int, str]]:
     return out
 
 
-#: no slot starts a check while DISK has fewer free inodes or GB than these: on 27 Oct cpu-2, -4, -5 and -6 ran out of inodes with
-#: bytes to spare, and checks that started there died mid-build with ENOSPC; waiting costs less than a check lost at its end
-DISK = Path("/workspace")
-DISK_MIN_INODES, DISK_MIN_GB = 400_000, 50
-
-
-def disk_short(path: Path | None = None) -> str | None:
-    """Why the disk holding `path` (DISK) can't take a check now, or None; a missing path is no refusal."""
-    if not (path or DISK).is_dir():
-        return None
-    s = os.statvfs(path or DISK)
-    gb = s.f_bavail * s.f_frsize / 1e9
-    if s.f_files and s.f_favail < DISK_MIN_INODES:
-        return f"{path or DISK} has {s.f_favail} inodes free, under {DISK_MIN_INODES}"
-    if gb < DISK_MIN_GB:
-        return f"{path or DISK} has {gb:.0f} GB free, under {DISK_MIN_GB}"
-    return None
-
-
 def blocked(slot: dict, now: datetime, priority: bool = False) -> str | None:
-    """Why `slot` can't start a check at `now` (a window open or within its lead, a disk short of space (`disk_short`), or less
-    memory free than its mem=), or None. A `priority` waiter's check, or any check of an only=trains slot (which only those
-    take), counts only other priority checks' reservations (`reserved_gb`)."""
+    """Why `slot` can't start a check at `now` (a window open or within its lead, or less memory free than its mem=), or None. A
+    `priority` waiter's check, or any check of an only=trains slot (which only those take), counts only other priority checks'
+    reservations (`reserved_gb`)."""
     for raw, start, minutes, _note in _windows(slot):
         if start - timedelta(minutes=slot["lead"]) < now < start + timedelta(minutes=minutes):
             return f"window {raw} ({minutes} min) is open or starts within {slot['lead']} min"
-    if short := disk_short():
-        return short
     train = priority or bool(slot.get("trains"))
     if slot.get("mem") and (free := memory_gb() - (held := reserved_gb(priority=train))) < slot["mem"]:
         whose = "live train checks" if train else "live runs"

@@ -3,11 +3,11 @@ import Proofs.Flock.Claims.Recursion.AccTies
 import Proofs.Flock.Claims.Recursion.OpenLevW
 
 /-!
-# `StepsW` at the part statements' side condition (`XsW` at `AccV`)
+# `StepsW` at the 22:25Z ruling's side condition (`XsW` at `AccV`)
 
 `stepsWG_of_commits` where the chain's commit strings are `accCommitV` (the brings list the registered reads,
 `RegSetup`), and at the deployed readers with the copy's outputs (`levelOutsW`) and openings (`openCopyW_deployed`)
-closed. What is left is the copy's coefficients (`CoefW`, `copyCoefTieRP_deployed`) and the next rows' owners
+closed. What is left is the copy's coefficients (`CoefW`, RECR's `copyCoefTieRP_deployed`) and the next rows' owners
 (`NextHeldW`). `accPorts_of_G` (`ResEndsW`) takes the result to P3.
 -/
 

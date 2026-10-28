@@ -11,13 +11,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .logical import Registration
-from .memory import BLOCK_BITS, Append, Challenge, ReadWindow, Rekey, Release, StoreEntry, Wipe
+from .memory import BLOCK_BITS, Append, Challenge, ReadWindow, Rekey, Release, Store, Wipe
 from .time import Interval
 
 
 @dataclass(frozen=True)
 class Maintenance:
-    """Zone `block` out of service during `during`: someone the auditor doesn't control has it in hand. Its certifiers'
+    """Block `block` out of service during `during`: someone the auditor doesn't control has it in hand. Its certifiers'
     records aren't required then, everything its devices hold may leave with whoever services it, and anything may come
     back in with them, so only a wipe after it bounds what the block holds when it rejoins."""
 
@@ -82,11 +82,11 @@ class Plan:
         return [(s, i, Interval(t, end.get((s, i), self.epoch.end))) for (s, i), t in sorted(start.items())
                 if t < end.get((s, i), self.epoch.end)]
 
-    def bits(self, store: StoreEntry, tick: int) -> float:
+    def bits(self, store: Store, tick: int) -> float:
         """The store's bits at `tick`: its registered bits and every appended block resident then."""
         return store.bits + BLOCK_BITS * sum(tick in span for s, _, span in self.resident() if s == store.name)
 
-    def held(self, store: StoreEntry, during: Interval) -> float:
+    def held(self, store: Store, during: Interval) -> float:
         """The store's bits on average over `during` (they change mid-window as blocks land and leave)."""
         if not during.length:
             return self.bits(store, during.start)

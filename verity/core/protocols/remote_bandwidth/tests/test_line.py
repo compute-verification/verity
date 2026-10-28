@@ -8,7 +8,7 @@ from fractions import Fraction
 
 import pytest
 
-from verity.core.protocols.remote_bandwidth import line, pooled
+from verity.core.protocols.remote_bandwidth import ledger, line, pooled
 
 N, B = 1000, 4096
 NONE_WRONG = dict(windows=[(1, 1)], delta=2.0 ** -40)
@@ -66,6 +66,7 @@ def test_each_form_charges_the_nodes_rates_and_bursts_in_blocks_a_ns():
     c = line.charges(rates, B)
     assert c[line.TIME_HELD] == line.Charge(Fraction(1) + Fraction(44, 10 * B), Fraction(3))
     assert c[line.LINK_CHARGED] == line.Charge(Fraction(1) + Fraction(544, 10 * B), Fraction(9))
+    assert line.FORMS == ledger.FORMS[1:]
 
 
 def test_the_line_is_each_readings_worst_stretch_the_first_on_a_tie_against_the_node():

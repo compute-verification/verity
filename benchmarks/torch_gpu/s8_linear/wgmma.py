@@ -7,13 +7,7 @@ is the same with y allocated, `int_mm.linear`'s signature. A config (`Cfg`, text
 "128x256:c0:g8") is the tile (TM x BN), the CTAs (c0: the fewest that keep the tiles' rounds over every SM, `Lib.grid`; cN: at
 most N, so the GEMM holds N SMs and leaves the rest) and the raster group (tile rows a group). The cubin is $S8_WGMMA_CUBIN,
 else build/s8_wgmma.cubin here; loading it checks its `s8mm_layout` (Params' layout, each tile's shared memory and stages)
-and `s8mr_layout` against this file's.
-
-`reduce_mm(xq, s_a, w, s_w, y, rk, z, cfg, flush)` is the same linear with the reduction of its s32 sums O in the epilogue
-(`s8mr_*`, `s8mrb_*`): z [M, r] int32 = O viewed as int8 [M, 4N] (each cell's four little-endian bytes) times R^T, R [r, 4N]
-int8 public, for r in RS, on FUSED_TILES at K unsplit; y as `scaled_mm` writes it. rk is R in the kernel's order
-(`kernel_order(R)`, once per R); z is zeroed by the call, in the same stream, then summed into across the tiles of each row
-("red": red.global.add per s32; "bulk": one bulk reduce-add a warpgroup through shared memory).
+against this file's.
 """
 from __future__ import annotations
 
@@ -58,54 +52,13 @@ CUDA = {
 
 
 class Params(C.Structure):
-    """s8_wgmma.cu's Params: the two tensor maps, s_a, s_w, y, M, N, K, the raster group, split K's workspace, the clock
-    record, padded to its 128-byte alignment."""
+    """s8_wgmma.cu's Params: the two tensor maps, s_a, s_w, y, M, N, K, the raster group, padded to its 128-byte alignment."""
     _fields_ = [("a", C.c_ubyte * 128), ("b", C.c_ubyte * 128), ("sa", u64), ("sw", u64), ("y", u64), ("M", C.c_int32),
                 ("N", C.c_int32), ("K", C.c_int32), ("group", C.c_int32), ("splits", C.c_int32), ("pad0", C.c_int32),
-                ("ws", u64), ("cnt", u64), ("clk", u64), ("pad", C.c_ubyte * 56)]
+                ("ws", u64), ("cnt", u64), ("pad", C.c_ubyte * 64)]
 
 
 assert C.sizeof(Params) == 384 and Params.sa.offset == 256 and Params.M.offset == 280 and Params.ws.offset == 304
-assert Params.clk.offset == 320
-
-#: the reduction's widths and tiles (s8_wgmma.cu's S8MR), and its flushes by kernel prefix
-RS = (8, 16, 32, 64, 128)
-FUSED_TILES = ((128, 256), (128, 128))
-FLUSHES = {"red": "s8mr", "bulk": "s8mrb"}
-#: (tile rows, tile columns, r, flush) with no kernel: ptxas would serialize their wgmma pipeline (s8_wgmma.cu's S8MR)
-UNBUILT = frozenset({(128, 256, 8, "red"), (128, 256, 16, "red")})
-
-
-def has_reduction(cfg: "Cfg", r: int, flush: str) -> bool:
-    """Whether a reduction kernel runs cfg's tile at width r with this flush."""
-    return ((cfg[0], cfg[1]) in FUSED_TILES and cfg[4] == 1 and r in RS and flush in FLUSHES
-            and (cfg[0], cfg[1], r, flush) not in UNBUILT)
-#: within each 32 bytes of R's depth, the kernel's byte kk is R's byte KERNEL_ORDER[kk]: the accumulator words of columns
-#: 2 t and 2 t + 1 of an 8-column group are the A fragment's bytes 4 t .. 4 t + 3 and 16 + 4 t .. 16 + 4 t + 3
-KERNEL_ORDER = tuple(4 * (2 * ((kk % 16) // 4) + kk // 16) + kk % 4 for kk in range(32))
-
-
-class RParams(C.Structure):
-    """s8_wgmma.cu's RParams: the GEMM's Params, R's tensor map and Z, padded to its 128-byte alignment."""
-    _fields_ = [("p", Params), ("r", C.c_ubyte * 128), ("z", u64), ("pad", C.c_ubyte * 120)]
-
-
-assert C.sizeof(RParams) == 640 and RParams.r.offset == 384 and RParams.z.offset == 512
-
-
-def red_geometry(tm: int, bn: int, r: int) -> tuple[int, int]:
-    """(chunks a stage, stages a tile) of R in the ring: a tile's 4 BN bytes of depth in 128-byte chunks of r rows."""
-    ch, stage = bn // 32, (tm + bn) * BK
-    q = min(stage // (r * 128), ch)
-    return q, cdiv(ch, q)
-
-
-def kernel_order(rmat: torch.Tensor) -> torch.Tensor:
-    """R [r, 4N] int8 (byte b of O's column j at 4 j + b) in the order s8mr reads it."""
-    r, k4 = rmat.shape
-    assert rmat.dtype == torch.int8 and k4 % 32 == 0, (rmat.dtype, rmat.shape)
-    idx = torch.tensor(KERNEL_ORDER, dtype=torch.long, device=rmat.device)
-    return rmat.reshape(r, k4 // 32, 32)[:, :, idx].contiguous().reshape(r, k4)
 
 
 def stages(tm: int, bn: int) -> int:
@@ -193,15 +146,6 @@ class Lib:
                 self.ck("cuFuncSetAttribute", f, MAX_DYN_SMEM, smem(tm, bn))
                 self.fns[(tm, bn, cl)] = f
             self.clusters[(tm, bn)] = self.max_clusters(self.fns[(tm, bn, 2)], 128 * (tm // 64 + 1), smem(tm, bn))
-        self.rfns = {}
-        for tm, bn in FUSED_TILES:
-            for r in RS:
-                for flush, prefix in FLUSHES.items():
-                    if (tm, bn, r, flush) in UNBUILT:
-                        continue
-                    f = self.fn(f"{prefix}_{tm}x{bn}_r{r}")
-                    self.ck("cuFuncSetAttribute", f, MAX_DYN_SMEM, smem(tm, bn))
-                    self.rfns[(tm, bn, r, flush)] = f
         self.maps: dict[tuple[int, int, int, int], bytes] = {}
         self.works: dict[tuple, tuple[torch.Tensor, torch.Tensor]] = {}
         self.layout = self._layout()
@@ -238,17 +182,7 @@ class Lib:
         want = [C.sizeof(Params), Params.sa.offset, Params.M.offset] + [v for tm, bn in TILES for v in (smem(tm, bn), stages(tm, bn))]
         if got[:len(want)] != want:
             raise RuntimeError(f"{self.path}'s s8mm_layout {got[:len(want)]} is not wgmma.py's {want}: rebuild or update")
-        out = torch.zeros(32, dtype=torch.int32, device="cuda")
-        self._launch(self.fn("s8mr_layout"), 1, 1, 0, u64(out.data_ptr()))
-        rgot = out.tolist()
-        rwant = [C.sizeof(RParams), RParams.r.offset, RParams.z.offset] + [
-            v for tm, bn in FUSED_TILES for r in RS for v in red_geometry(tm, bn, r)]
-        if rgot[:len(rwant)] != rwant:
-            raise RuntimeError(f"{self.path}'s s8mr_layout {rgot[:len(rwant)]} is not wgmma.py's {rwant}: rebuild or update")
-        return {"params_bytes": got[0], "tiles": {f"{tm}x{bn}": {"smem": smem(tm, bn), "stages": stages(tm, bn)} for tm, bn in TILES},
-                "rparams_bytes": rgot[0], "reduction": {f"{tm}x{bn}:r{r}": dict(zip(("chunks_a_stage", "stages_a_tile"),
-                                                                                       red_geometry(tm, bn, r)))
-                                                         for tm, bn in FUSED_TILES for r in RS}}
+        return {"params_bytes": got[0], "tiles": {f"{tm}x{bn}": {"smem": smem(tm, bn), "stages": stages(tm, bn)} for tm, bn in TILES}}
 
     def tmap(self, ptr: int, rows: int, depth: int, box_rows: int) -> bytes:
         """A CUtensorMap over a row-major (rows x depth) byte matrix as s8_wgmma.cu loads it: UINT8, rank 2, boxes of
@@ -283,8 +217,7 @@ class Lib:
                                torch.zeros(units * (tm // 64) * 4, dtype=torch.int32, device=dev))
         return self.works[key]
 
-    def _params(self, xq, s_a, w, s_w, y, cfg: Cfg, clk=None) -> tuple[Params, int, int]:
-        """The launch's Params, its units and its grid."""
+    def scaled_mm(self, xq, s_a, w, s_w, y, cfg: Cfg) -> dict:
         m, k = xq.shape
         n = w.shape[0]
         tm, bn, ctas, group, cl, splits = cfg
@@ -299,33 +232,8 @@ class Lib:
             ws, cnt = self.workspace(m, n, tm, units)
             p.ws, p.cnt = ws.data_ptr(), cnt.data_ptr()
         grid = self.grid(units * p.splits, ctas, self.clusters[(tm, bn)] if cl == 2 else None)
-        if clk is not None:
-            if clk.dtype != torch.int64 or not clk.is_contiguous() or clk.numel() < 4 * grid:
-                raise ValueError(f"clk takes 4 int64 words a CTA: {grid} CTAs, {clk.numel()} {clk.dtype} words")
-            p.clk = clk.data_ptr()
-        return p, units, grid
-
-    def scaled_mm(self, xq, s_a, w, s_w, y, cfg: Cfg, clk=None) -> dict:
-        tm, bn, _, _, cl, _ = cfg
-        p, units, grid = self._params(xq, s_a, w, s_w, y, cfg, clk)
         self._launch(self.fns[(tm, bn, cl)], grid, 128 * (tm // 64 + 1), smem(tm, bn), p)
         return {"grid": grid, "units": units, "cluster": cl, "splits": p.splits}
-
-    def reduce_mm(self, xq, s_a, w, s_w, y, rk, z, cfg: Cfg, flush: str, clk=None) -> dict:
-        tm, bn, _, _, cl, _ = cfg
-        r = rk.shape[0]
-        if not has_reduction(cfg, r, flush):
-            raise ValueError(f"no reduction kernel for {cfg} at r {r}, flush {flush}: tiles {FUSED_TILES}, one CTA, r in {RS}, "
-                             f"none of {sorted(UNBUILT)}")
-        q = RParams()
-        q.p, units, grid = self._params(xq, s_a, w, s_w, y, cfg, clk)
-        if q.p.splits != 1:
-            raise ValueError(f"{cfg} splits K {q.p.splits} ways at this shape; the reduction reads whole sums: no :k")
-        C.memmove(C.addressof(q) + RParams.r.offset, self.tmap(rk.data_ptr(), r, rk.shape[1], r), 128)
-        q.z = z.data_ptr()
-        z.zero_()
-        self._launch(self.rfns[(tm, bn, r, flush)], grid, 128 * (tm // 64 + 1), smem(tm, bn), q)
-        return {"grid": grid, "units": units, "r": r, "flush": flush}
 
     def identity(self) -> dict:
         """The cubin's hash and build.sh's SASS gate on it: ok only when the sass.json beside it has no problem and the
@@ -350,9 +258,8 @@ def lib() -> Lib:
 
 
 def scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
-              cfg: Cfg | None = None, clk: torch.Tensor | None = None) -> dict:
-    """xq [M, K] int8, s_a [M] f32, w [N, K] int8 (row-major), s_w [N] f32 -> y [M, N] bf16, in place. clk: None, or int64
-    [>= 4 x CTAs] that each CTA's clock record goes into (`sm_mhz`)."""
+              cfg: Cfg | None = None) -> dict:
+    """xq [M, K] int8, s_a [M] f32, w [N, K] int8 (row-major), s_w [N] f32 -> y [M, N] bf16, in place."""
     m, k = xq.shape
     n = w.shape[0]
     assert xq.dtype == torch.int8 and w.dtype == torch.int8 and w.shape[1] == k and xq.is_contiguous() and w.is_contiguous()
@@ -362,34 +269,7 @@ def scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.T
     assert m >= 1 and k % 16 == 0 and n % 2 == 0, (m, n, k)
     assert xq.data_ptr() % 16 == 0 and w.data_ptr() % 16 == 0 and s_w.data_ptr() % 8 == 0 and y.data_ptr() % 4 == 0
     lb = lib()
-    return lb.scaled_mm(xq, s_a, w, s_w, y, cfg or default_cfg(m, n, k, lb.sms), clk)
-
-
-def sm_mhz(clk: torch.Tensor) -> float | None:
-    """The median over CTAs of a launch's clock record (clk as `scaled_mm` filled it): each CTA's SM cycles over its own
-    nanoseconds, in MHz; None where no CTA wrote one (clk zero)."""
-    c = clk.view(-1, 4).cpu()
-    c = c[(c[:, 3] > c[:, 1]) & (c[:, 2] > c[:, 0])]
-    if not len(c):
-        return None
-    return float(((c[:, 2] - c[:, 0]).double() / (c[:, 3] - c[:, 1]).double()).median()) * 1e3
-
-
-def reduce_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor, rk: torch.Tensor,
-              z: torch.Tensor, cfg: Cfg, flush: str = "red", clk: torch.Tensor | None = None) -> dict:
-    """`scaled_mm`, and z [M, r] int32 = O's bytes [M, 4N] times R^T, rk = `kernel_order(R)` [r, 4N] int8, in place."""
-    m, k = xq.shape
-    n = w.shape[0]
-    r = rk.shape[0]
-    assert xq.dtype == torch.int8 and w.dtype == torch.int8 and w.shape[1] == k and xq.is_contiguous() and w.is_contiguous()
-    assert s_a.dtype == torch.float32 and s_a.numel() == m and s_a.is_contiguous()
-    assert s_w.dtype == torch.float32 and s_w.numel() == n and s_w.is_contiguous()
-    assert y.dtype == torch.bfloat16 and y.shape == (m, n) and y.is_contiguous()
-    assert rk.dtype == torch.int8 and rk.shape == (r, 4 * n) and rk.is_contiguous() and rk.data_ptr() % 16 == 0
-    assert z.dtype == torch.int32 and z.shape == (m, r) and z.is_contiguous() and z.data_ptr() % 16 == 0
-    assert m >= 1 and k % 16 == 0 and n % 8 == 0, (m, n, k)
-    assert xq.data_ptr() % 16 == 0 and w.data_ptr() % 16 == 0 and s_w.data_ptr() % 8 == 0 and y.data_ptr() % 4 == 0
-    return lib().reduce_mm(xq, s_a, w, s_w, y, rk, z, cfg, flush, clk)
+    return lb.scaled_mm(xq, s_a, w, s_w, y, cfg or default_cfg(m, n, k, lb.sms))
 
 
 def linear(x_s8: torch.Tensor, sx_f32: torch.Tensor, w_s8: torch.Tensor, sw_f32: torch.Tensor) -> torch.Tensor:

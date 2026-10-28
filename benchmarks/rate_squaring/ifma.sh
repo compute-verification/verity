@@ -5,7 +5,8 @@
 # Python's pow (384 words at K = 1, 777 and 1,000) before it is timed: on one thread, on one thread a physical core of
 # the mask, and on every CPU of the mask. Results in $RESEARCH_RUN_DIR/out.
 #
-#   RESEARCH_RUN_DIR=DIR taskset -c 48-95 bash benchmarks/rate_squaring/ifma.sh
+#   research run --on vy-nebius-2 --project verity --source . --cwd source --campaign resource-accounting \
+#     --declared-output 'out/*' -- taskset -c 48-95 bash benchmarks/rate_squaring/ifma.sh
 set -uxo pipefail
 O=${RESEARCH_RUN_DIR:?}/out; mkdir -p "$O"
 D=benchmarks/rate_squaring

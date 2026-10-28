@@ -142,7 +142,7 @@ def verdict(doc: dict) -> bool:
 
 
 def served(win, g: dict, salt: bytes, lib=None, per_call: int = 1, path=None, workers: int = 1) -> dict:
-    """On a served step's capture `g` (dither_one's DitherState `win`, the step's salt; `lib` the served h1u build for the
+    """On a served step's capture `g` (dither_one's Window `win`, the step's salt; `lib` the served h1u build for the
     gpu): every call's `per_call` live leaves and one dead leaf (when the step has a dead row block), group "real", with
     their committed receipts; then, on the step's own operands at m = 32 r + j (j in `PARTLY`,
     r = min(m // 32, t / 32 - 1)), one leaf of row block r on calls 0, 2, the first of the widest K and the last, group

@@ -111,7 +111,7 @@ import Proofs.Flock.Soundness.ComposeDag
 import Proofs.Flock.Soundness.Game.Prob
 import Proofs.Flock.Soundness.Audit.Law
 import Proofs.Flock.Soundness.Audit.Share
-import Proofs.Flock.Soundness.Audit.Pooled
+import Proofs.Flock.Soundness.Audit.Horizon
 import Proofs.Flock.Soundness.Audit.Circuit
 import Proofs.Flock.Soundness.Audit.OneStage
 import Proofs.Flock.Soundness.Audit.TwoStage

@@ -34,7 +34,7 @@ class Assumption:
 
 
 @dataclass(frozen=True)
-class DeviceEntry:
+class Device:
     """A device, by its limits: `rate` is work per second in each unit of work it can do (a unit is whatever the
     audits time: Boolean gates, tensor-core multiply-adds), `memory` its bits of state, `bandwidth` the bits a second it
     reads from that memory, `write` the bits a second a wipe can write into it (None: its links'), `on_chip` its bits
@@ -59,7 +59,7 @@ class DeviceEntry:
 
 
 @dataclass(frozen=True)
-class LinkEntry:
+class Link:
     """A link between two devices: its capacity in bits a second and its one-way latency, each an assumption."""
 
     a: str
@@ -107,11 +107,11 @@ class Cadence:
 
 
 @dataclass(frozen=True)
-class Zone:
+class Block:
     """Devices behind one boundary: the unit the account credits."""
 
     name: str
-    devices: tuple[DeviceEntry, ...]
+    devices: tuple[Device, ...]
 
     def __init__(self, name: str, devices):
         object.__setattr__(self, "name", name)
@@ -127,33 +127,33 @@ class Datacenter:
     the certifiers' cadence, and whether they seal their pair links."""
 
     name: str
-    blocks: list[Zone]
-    fabric: list[DeviceEntry] = field(default_factory=list)
-    links: list[LinkEntry] = field(default_factory=list)
+    blocks: list[Block]
+    fabric: list[Device] = field(default_factory=list)
+    links: list[Link] = field(default_factory=list)
     cadence: Cadence = field(default_factory=Cadence)
     #: every link between two blocks' certifiers is a sealed pair link (the certifier's `Proxy(pair=…)`, PROTOCOL.md
     #: "Sealed pair links"), so what crosses from one block to another is ciphertext off the two certifiers, and the
-    #: export is charged at the facility boundary only (`Placed._exported`). Off by default.
+    #: export is charged at the facility boundary only (`Placement._exported`). Off by default.
     sealed: bool = False
 
     @property
-    def devices(self) -> dict[str, DeviceEntry]:
+    def devices(self) -> dict[str, Device]:
         out = {d.name: d for b in self.blocks for d in b.devices}
         out.update({d.name: d for d in self.fabric})
         return out
 
-    def block_of(self, device: str) -> Zone | None:
+    def block_of(self, device: str) -> Block | None:
         return next((b for b in self.blocks if device in b), None)
 
-    def block(self, name: str) -> Zone:
+    def block(self, name: str) -> Block:
         return next(b for b in self.blocks if b.name == name)
 
     @property
-    def boundary(self) -> list[LinkEntry]:
+    def boundary(self) -> list[Link]:
         """The links with exactly one end in a block, or with ends in two blocks."""
         return [l for l in self.links if self.block_of(l.a) is not self.block_of(l.b)]
 
-    def uncovered_links(self) -> list[LinkEntry]:
+    def uncovered_links(self) -> list[Link]:
         """The links outside every block with no trusted device at either end (a switch-to-switch fabric link, an outside
         host's link to a switch), where two machines the auditor doesn't control meet with no certifier between them.
         The network certifiers cover every link when this is empty."""
@@ -182,15 +182,15 @@ class Datacenter:
                     out.append(p)
         return sorted(out, key=repr)
 
-    def link(self, a: str, b: str) -> LinkEntry:
+    def link(self, a: str, b: str) -> Link:
         return next(l for l in self.links if {l.a, l.b} == {a, b})
 
-    def uplink(self, certifier: str) -> LinkEntry:
+    def uplink(self, certifier: str) -> Link:
         """The link between a certifier and the block it watches."""
         return next(l for l in self.links if certifier in (l.a, l.b)
                     and self.block_of(l.b if l.a == certifier else l.a) is not None)
 
-    def watched(self, port: Port) -> Zone:
+    def watched(self, port: Port) -> Block:
         """The block whose boundary `port` watches."""
         l = self.uplink(port.certifier)
         return self.block_of(l.b if l.a == port.certifier else l.a)
@@ -225,7 +225,7 @@ class Datacenter:
         """The same datacenter with every device, block and the datacenter itself renamed `prefix.<name>` (but the
         devices in `keep`), so several can join a fleet."""
         r = lambda s: s if s in keep else f"{prefix}.{s}"  # noqa: E731
-        return Datacenter(prefix, [Zone(r(b.name), [replace(d, name=r(d.name)) for d in b.devices]) for b in self.blocks],
+        return Datacenter(prefix, [Block(r(b.name), [replace(d, name=r(d.name)) for d in b.devices]) for b in self.blocks],
                           [replace(d, name=r(d.name)) for d in self.fabric],
                           [replace(l, a=r(l.a), b=r(l.b)) for l in self.links], self.cadence, self.sealed)
 
@@ -238,7 +238,7 @@ class Fleet:
     everything off every block."""
 
     datacenters: list[Datacenter]
-    links: list[LinkEntry] = field(default_factory=list)
+    links: list[Link] = field(default_factory=list)
 
     def merged(self) -> Datacenter:
         """The fleet as one datacenter, so a circuit can be placed across sites with the same `place`. Devices shared by

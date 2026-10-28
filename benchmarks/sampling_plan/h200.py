@@ -46,7 +46,7 @@ from verity.ml.circuits.codec import descriptor_id  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops import fp32 as F, gemm as G  # noqa: E402
 
-DELTAS = X.DELTAS
+DELTAS = (1e-2, 1e-6)
 #: each subcircuit's sampling block certifies at most this share of its units wrong at delta = 1% (`transformer.TARGET_SHARE`)
 SHARE = X.TARGET_SHARE
 #: replaying the drawn requests, in blocks of the block's own run: stand-in, the drawn units touch nearly every request
