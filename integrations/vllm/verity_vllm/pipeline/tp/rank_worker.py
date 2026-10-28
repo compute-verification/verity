@@ -534,8 +534,8 @@ class TP2CaptureWorkerExtension:
         the rank's loaded weight SHARDS), attach the FA hidden source (none for MLA), size the arena from the workload envelope, register the rank's
         weights.  The rank's root binds its own values (its shards' roots, its partial GEMMs, its FA2 hidden stream for its heads); the
         driver (`pipeline/tp/commit.py`) combines the ranks' roots deterministically and fails closed on a missing rank.  ``commit_scheme``
-        (unset = rows-sha512) is the committer's (`NativeCollectCommitter`): tp-commit passes its ``--commit-scheme`` (rows-sha512 by default,
-        whose 64-byte roots the SHA-512 TP run root combines, `tp.run_root`)."""
+        (unset = rows-sha512) is the committer's (`NativeCollectCommitter`): tp-commit passes its ``--commit-scheme`` (rows-sha512, the only one
+        it takes, whose 64-byte roots the SHA-512 TP run root combines, `tp.run_root`)."""
         from types import SimpleNamespace
         from verity_vllm.pipeline.commit import baseline_state, make_committer
 
