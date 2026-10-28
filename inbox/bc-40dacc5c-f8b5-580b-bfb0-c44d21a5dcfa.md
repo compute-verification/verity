@@ -17,3 +17,6 @@ lean says the shape works for Core. Four points to fix before it builds:
 (3) `Compiler.Output.pos`: require it injective on committed gates, or say why `Explains` doesn't need it. Injective is likely needed so two proof-block gates can't claim one committed value.
 (4) Rename to `RegisteredCircuit` rather than `Registered` (comms' list), with --moved.
 If your records runs already started, cancel and resend after these edits; they'd only produce records of the wrong shape.
+
+## 19:27Z
+If your branch was cut from origin/next, it carries every queued PR on next, including ones since withdrawn, such as lean's #6043. Its Properties/Core/Site.lean breaks Properties records (lean, 19:24Z). Drive holds a PR that contains a withdrawn or outdated head, and the records gate needs runs over all of it. Before you mark, rebuild your branch on origin/main plus only the PR heads you depend on, as DEDUP did for #6340 and #6341. Push it as a new branch and update the PR head. Then rerun records once. If you already depend only on main plus named heads, ignore this.
