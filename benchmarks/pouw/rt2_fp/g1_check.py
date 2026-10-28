@@ -1,19 +1,20 @@
-"""RT2-FP: FP8-g1's and W4A8-g1's committed values against the int8 records' operand ranges, and the served identity.
+"""FP8-g1's and W4A8-g1's committed values against the int8 records' operand ranges, and the served identity.
 
-FPX-DESIGN (note:20261019T0817Z-report-fpx-design, #2710) credits g1 at the int8 record's ε because the one int8 GEMM
+fpx_design credits g1 at the int8 record's ε because the one int8 GEMM
 of R + b is the record's transcript. That needs every operand g1 commits or feeds the MMA to lie where the record's own
 operands do, and the served output to be that GEMM less its rank-one terms. This checks both, on each record's ranges
 as main's kernels state them:
 
 - Dither-2S (B200, H200): both MMA operands value plus a fair bit, in s8.
-- H1 = co32c-u16 (RTX PRO 6000, decision 82; `edited_gemm/cgemm.cu` "per-token scales, +-110 weights, the narrow U",
+- H1 = co32c-u16 (RTX PRO 6000; `edited_gemm/cgemm.cu` "per-token scales, +-110 weights, the narrow U",
   `cgemm_ref.py` `u_rows16`): activations X = V + b with V in [-126, 126]; weights W' = W + c + U, |W| <= 110,
   U in {-16..-1, 1..16}; W' in s8.
 - co32c, Dither-C's 7-bit form (`cgemm_ref.py`'s non-h1 branch, `u_rows`): U = -64 + beta . (1, 2, 4, 8, 16, 32, 65),
-  W' = W + c + U in s8. This is the form FPX-DESIGN's sm_120 arms read as H1.
+  W' = W + c + U in s8. This is the form fpx_design's sm_120 arms read as H1.
 
 For each, the largest E4M3 integer and the largest integer UE4M3 block scale whose g1 operands fit, and whether g1's
-grids are "all even above 16" (FPX-DESIGN's card-scope remark). Run: `python benchmarks/pouw/rt2_fp/g1_check.py [--json OUT]`.
+grids are "all even above 16" (fpx_design's card-scope remark).
+Run: `python benchmarks/pouw/rt2_fp/g1_check.py [--json OUT]`.
 """
 from __future__ import annotations
 
