@@ -30,7 +30,7 @@ The run:
   in the arm, each a retained pass on poisoned buffers, whose commitment must equal its timed pass's.  Then the negative
   control: one decode prompt as a retained pass writing none of the commitment (`CONTROL_OMITS`).  The three manifests go to
   `verify_run.py` after the window: the first two must be replay-verified (development shortcut; the protocol's check is
-  a ZK proof, PROTOCOL.md) and the control rejected (the panel's rule).
+  a ZK proof) and the control rejected (the panel's rule).
 - **The panel's shapes:** `SHAPES`, under ``pearl-c-sm120`` v1-h3; `panel_rows.py` writes the rows.
 
 ``--whole-step`` (with ``--graphs``) builds the arm engine with vLLM's FULL decode graphs (no compile, the decode batch's
@@ -661,7 +661,7 @@ def prompt_logprobs(llm, sampling_params, timed, windows: list[list[int]]) -> di
 
 class Coins:
     """The challenger's side of one epoch in the controller: its coins (`coins.Challenger`), committed before any engine
-    starts, drawn from `entropy` (by default the Lean verifier of record's, `pouw.verifier.coins`, `IO.getRandomBytes`),
+    starts, drawn from `entropy` (by default the Lean verifier's, `pouw.verifier.coins`, `IO.getRandomBytes`),
     which a claim instance must name (`challenger.served_claim`). A coin opens once; an engine started again in the same
     epoch (the ABAB blocks) asking for it after the same record gets the one opening again, and after any other record a
     refusal, so nothing redraws."""
@@ -841,7 +841,7 @@ def split(results: dict) -> dict:
 
 def state_entropy(path: str):
     """The challenger's entropy held in the file `path` (readable only by its owner; when absent, created from the Lean
-    verifier of record's coins, `pouw.verifier.coins`, before any engine starts): the same coins for the controller here
+    verifier's coins, `pouw.verifier.coins`, before any engine starts): the same coins for the controller here
     and for the challenger process that later draws the window's units (`served_commit.py challenger --state`), so named
     by the Lean's claim instance (`verifier.CLAIM`)."""
     from verity.core.protocols.pouw import verifier

@@ -1,5 +1,5 @@
 """C-Flock's generic IR lowering: the pieces against the IR primitives, the units read off each template's IR graph, the
-lowered templates against the IR evaluator on captured #101 slices and synthetic sets, the pins, and the negatives."""
+lowered templates against the IR evaluator on captured served slices and synthetic sets, the pins, and the negatives."""
 from __future__ import annotations
 
 import itertools

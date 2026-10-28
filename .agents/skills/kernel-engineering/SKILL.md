@@ -49,7 +49,8 @@ message, never an edit in their tree.
 
 - **Exact semantics:** `verity.ml.circuits.silicon`. A newly captured step lands there as a model with a sampled fixture
   and an `instructions` entry (`benchmarks/tc_probe`, `tc_probe_fp4`), never as a kernel directory's own copy.
-- **The scheme and its verifier:** `verity/core/protocols/pouw` (stdlib only; its `PROTOCOL.md`).
+- **The scheme and its verifier:** `verity/core/protocols/pouw` (stdlib only): the scheme's module docstring states
+  its steps, and the Lean verifier is `lean/` (its `README.md`).
 - **The kernel:** a directory under `benchmarks/pouw/` like `pearl_c_sm120/` (`run.py` with `Dev` and `Pipeline`,
   `fixture.py`, `build.sh`, its sources, a harness arm against `arm.py`'s contract). Where serving kernels finally live is
   compute-accounting's call; the loader keys on digests, so a later move is cheap.

@@ -1,6 +1,6 @@
 """Pearl-C4's reference replay of a device run's own transcript under the work law (`clear_work.audit`), with
 Pearl-C4's domain and debit (`schemes.pearl_c4`).  It opens rows and words and recomputes them in the clear, so its
-ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof, PROTOCOL.md), never the protocol's
+ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof), never the protocol's
 verdict.
 
 **The dump** (`write_dump`) is what a timed call emits, as the device holds it after the call: A's rows (BF16, row-major,
@@ -77,7 +77,7 @@ SHORTCUTS = (
     "the transcript tree over the tile leaves and the records (row_passes and R1 per row) are computed on the host after "
     "timing",
     "verify opens the drawn tiles' rows and words and recomputes them in the clear: its ACCEPT is replay-verified "
-    "(development shortcut; the protocol's check is a ZK proof, PROTOCOL.md)",
+    "(development shortcut; the protocol's check is a ZK proof)",
 )
 
 
