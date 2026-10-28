@@ -607,6 +607,9 @@ def test_the_class_of_record_is_measured_after_the_gating_classes_and_its_timeou
     assert lines[0].startswith("WINDOW-CIRCUIT class 4,32,4: registered 7 bits, free 3 bits of 10 input bits at the "
                                "weights registration's pins; ")
     assert lines[1:] == ["WINDOW-CIRCUIT class record (measurement) timed out after WC_RECORD_TIMEOUT=45m (exit 124): no count"]
+    published = json.loads((tmp_path / "out" / "window-circuit-4-32-4.json").read_text())
+    kept = json.loads((tmp_path / "serve" / "window-circuit-4-32-4.count.json").read_text())
+    assert "bits" not in published and '"bits"' not in lines[0] and kept["bits"] == 772 and published["count"] == kept["count"]
 
 
 @pytest.mark.parametrize("classes, answers, refused", [
