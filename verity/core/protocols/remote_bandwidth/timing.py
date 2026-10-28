@@ -48,7 +48,7 @@ JITTER_DOMAIN = b"verity/remote-bandwidth/timing-jitter/v0\0"
 SECTOR_BYTES = 32
 SECTORS = BLOCK_BYTES // SECTOR_BYTES
 GPUS = 8
-"""A node's RTX PRO 6000s (vy-nebius: 8 of them and a host of two Xeon 6776P sockets).  The prover is the whole node,
+"""A node's RTX PRO 6000s (8 of them, on a host of two Xeon 6776P sockets).  The prover is the whole node,
 one undifferentiated resource, so each unprefixed rate and capacity below is the node's, the
 sum over its devices; the `GPU_` and `HOST_` constants are one device's."""
 GPU_SHA512_PER_S = 7.0e9
@@ -100,7 +100,7 @@ GPU_CHIP_BYTES = 263_163_904
 uniform registers and warp state, its L2, TLB and 1 MiB of buffers (`benchmarks/bandwidth/chip.cu`)."""
 HOST_CHIP_BYTES = 1_000_341_504
 """The host's on-chip storage at most, bounded for the whole host, two Xeon 6776P sockets of 64 cores each, whatever
-share of them its VM gets (vy-nebius-2's guest sees 2 × 48): each socket's 336 MiB of L3 and 2 MiB of uncore queues, and
+share of them its VM gets (the measured node's guest sees 2 × 48): each socket's 336 MiB of L3 and 2 MiB of uncore queues, and
 each core's 2 MiB of L2, 48 KiB of L1d, 64 KiB of L1i and 64 KiB of registers and buffers. The cache sizes are the
 guest's CPUID topology on that host type (its lscpu), and the 128 cores the host's
 (`benchmarks/rate_squaring/gamma.py`). The 64 KiB a core and 2 MiB a socket are allowances, not an enumeration: two
@@ -110,7 +110,7 @@ CHIP_BYTES = GPUS * GPU_CHIP_BYTES + HOST_CHIP_BYTES
 """S_chip, the node's: every GPU's on-chip storage and the host's caches."""
 LINK_WINDOW_BYTES = 6_291_456
 """One link window, what the node's boundary link can land in its memory at once beyond the link's rate: its TCP
-receive buffer at most, `net.ipv4.tcp_rmem`'s max on vy-nebius-2 (eth0's ring, 1,024 descriptors at a 1,500-byte MTU,
+receive buffer at most, `net.ipv4.tcp_rmem`'s max on the measured node (eth0's ring, 1,024 descriptors at a 1,500-byte MTU,
 holds less)."""
 GPU_SQUARINGS_PER_S = {"p1024": 1.67 * 1.499e10, "p512": 1.567 * 5.13e10}
 """Assumption 5 stated per width, one RTX PRO 6000's share of the node: s·(1 + h) over the reference, s the best form

@@ -179,15 +179,15 @@ def test_the_split_wipe(how: str) -> None:
 
 
 def test_the_party_follows_period_json(tmp_path) -> None:
-    local = WP.Party.of({}, "vy-nebius-cpu-4", tmp_path)
-    assert (local.host, local.address) == ("vy-nebius-cpu-4", None) and str(tmp_path) in local.command
-    with pytest.raises(RuntimeError, match="vy-auditor-1 isn't wired for the wipe"):
-        WP.Party.of({"challenger_host": "vy-auditor-1", "challenger": {"pous": {"command": ["x"], "address": "h:1"}}},
-                    "vy-nebius-cpu-4", tmp_path)
-    wired = WP.Party.of({"challenger_host": "vy-auditor-1", "challenger": {"wipe": {
-        "command": ["vy-verifier-gate", "wipe"], "address": "127.0.0.1:7962"}}}, "vy-nebius-cpu-4", tmp_path,
+    local = WP.Party.of({}, "cpu-node", tmp_path)
+    assert (local.host, local.address) == ("cpu-node", None) and str(tmp_path) in local.command
+    with pytest.raises(RuntimeError, match="auditor-host isn't wired for the wipe"):
+        WP.Party.of({"challenger_host": "auditor-host", "challenger": {"pous": {"command": ["x"], "address": "h:1"}}},
+                    "cpu-node", tmp_path)
+    wired = WP.Party.of({"challenger_host": "auditor-host", "challenger": {"wipe": {
+        "command": ["gate", "wipe"], "address": "127.0.0.1:7962"}}}, "cpu-node", tmp_path,
         ("--streamer", "build"))
-    assert wired == WP.Party("vy-auditor-1", ("vy-verifier-gate", "wipe"), ("127.0.0.1", 7962))
+    assert wired == WP.Party("auditor-host", ("gate", "wipe"), ("127.0.0.1", 7962))
     native = WP.Party.of({}, "n0", tmp_path, ("--streamer", "build", "--threads", "8"))
     assert native.command[-4:] == ("--streamer", "build", "--threads", "8")
     assert WP.placement("n0", "n0")[WP.PREMISE].startswith("unmet: ") and WP.placement("n0", "n0")["kind"] == "prover-node"
@@ -198,7 +198,7 @@ def test_the_party_follows_period_json(tmp_path) -> None:
         WP.placement("n0", "a", simulated=True)
 
 
-CONTROL = {"name": "control", "to": "outside", "via": "eth0 10.0.0.13: ssh"}
+CONTROL = {"name": "control", "to": "outside", "via": "eth0 192.0.2.13: ssh"}
 
 
 def _side(tmp_path, monkeypatch, wipe: dict) -> Path:
