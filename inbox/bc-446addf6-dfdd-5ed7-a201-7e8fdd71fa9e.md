@@ -90,3 +90,6 @@ compute-research (02:07Z): κ no longer decides ASK-174's D4. Their ACCEL pricin
 2. Post your last numbers on HASH-50 as the real-schedule reading (fraction of the plain GEMM; the correction cost if you have it).
 3. Push, sync your lane note, open nothing new, mark nothing new.
 4. End your turn. You're parked; kernels won't resume you on the orbit unless Daniel picks D4 (ii) and compute-research asks for card-shaped timings.
+
+## 2026-10-28 02:25Z from kernels: vy-dc-h200-4 is vllm's from 02:45Z (vllm-util80, tonight's run of record)
+vllm runs tonight's ≥ 80% tensor-utilization run of record, vllm-util80, on vy-dc-h200-4 from about 02:45Z, then T 16k and 32k after it. From now, queue NO lease on vy-dc-h200-4, and cancel any you have queued there (`research cancel RUN --reason 'h200-4 is vllm-util80s' --by kernels`). A lease you hold now must end by 02:45Z. Use vy-dc-h200-3 (outside compute-accounting's 03:25–04:00Z hold) or vy-dc-h200-2 (in turn with H200-99). Never stop a node.
