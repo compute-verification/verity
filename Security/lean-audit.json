@@ -2077,6 +2077,14 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
+  },
+  "Verity.Wipe.OfRun.Preserves": {
+   "owner": "@lean",
+   "digest": "45c5ad1164100f090cc482a072e452e87b010ff9b680568679d026d17389be3a"
+  },
+  "Verity.Wipe.SurvivorBound": {
+   "owner": "@lean",
+   "digest": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9"
   }
  },
  "meaning": [
@@ -12974,7 +12982,7 @@
    "NetTiming.SecurityProofs.HorizonLeakAccepted": "frozen (obligation,no-function,world-unlisted): It is conditional on two per-window inputs taken as plain hypotheses over an abstract monitoring period of windows on a product of live coins (Fin m → Ω), each window's acceptance event and the faulty set W_i of its witness read only from earlier windows' coins: the conditional escape (hesc, Pr_x[acc_i] ≤ (1 − q)^|W_i| + e_i given the earlier coins, q the design's per-window detection probability, which Flock.Guarantees.SampledKSLive would give at each window's history) and the leak relation at that same faulty set (hleak, Pr[acc_i ∧ ¬LeakAt W_i] ≤ e'_i, which the live SampledLeakAccepted, P2, would give), neither discharged. With the network certifier's code (tapCode: wardenCode and the record of its cells, in any record format TapRecord whose cells read back on the schedules it holds, TapRecord.fits, which every schedule in Ss meets, hfit, tap_cells_read) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), it bounds Pr[every window accepts ∧ ¬HorizonGood] by δ + Σ e_i + Σ e'_i at Fmax ≥ ln(1/δ)/q and counts the secrets meeting HorizonGood at each draw of the coins by #Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \\ reg_i) · Dj^k_i; it is not a run of the sampled verifier, the challenger's draw or the network check's code, and it is not the deployed system's bound over a monitoring period until both inputs are discharged.",
    "Accounting.SecurityProofs.JointPeriodLive": "frozen (no-function): The union bound over a period played as a causal game (Verity.Game, R5): each audit's per-period guarantee, at an error that is a function of the strategy, is a hypothesis over an abstract live period of the device model whose verdicts, openings, extractor, finders, computed gates and world are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointHorizonLive": "frozen (no-function): Like JointPeriodLive, over a horizon of periods in one causal game: each period's per-period guarantees are hypotheses over an abstract live period of the device model whose verdicts, openings, extractor, finders, computed gates and world are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
-   "Accounting.SecurityProofs.JointHorizonBlocksLive": "frozen (no-function): Like JointHorizonLive, over a horizon of server-time blocks and the wipes that open them in one causal game: each block's per-period guarantees, each wipe's survivor bound and each block's PoUS memory term are hypotheses over an abstract live block of the device model whose verdicts, and each wipe's surviving foreign content, are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
+   "Accounting.SecurityProofs.JointHorizonBlocksLive": "frozen (no-function): Like JointHorizonLive, over a horizon of server-time blocks and the wipes that open them in one causal game: each block's per-period guarantees and each block's PoUS memory term are hypotheses over an abstract live block of the device model whose verdicts are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), each wipe is core's Verity.Wipe, with its survivor bound (Verity.Wipe.SurvivorBound) and a map of the run into the wipe's game at its boundary (Verity.Wipe.OfRun, whose measure preservation is a hypothesis) whose preimage of the survivor event is a disjunct, and it bounds a Verity.Game.prob event, which shape.events does not list.",
    "Nci.Ldl.SecurityProofs.BlockDescription": "frozen (no-function): It is about an arbitrary declaration, a registration of it (its registered values and a Verity.Partition into blocks) and a fixed decoder (Security/Definitions/Nci/Ldl.lean), under the named EvaluatesBlocks (Security/Definitions/Nci/Assumptions/Ldl.lean), not about the NCI check's code; a check of declared (c,k)-partitions joined to it is what would give it an acceptance.",
    "Nci.Ldl.SecurityProofs.Counting": "frozen (no-function): It is stated over an arbitrary circuit, a Verity.Partition of it into blocks of exactly c gates and counting weights on its operation gates (Security/Definitions/Nci/Ldl.lean), and is a counting fact, not a Lean function's acceptance.",
    "Nci.Ldl.SecurityProofs.FanOutBound": "frozen (no-function): It is about an arbitrary declaration, a (c,k)-partition of it, counted product occurrences with activation fan-out at most e and a fixed decoder (Security/Definitions/Nci/Ldl.lean), under the named EvaluatesBlocks and ActivationRate (Security/Definitions/Nci/Assumptions/Ldl.lean), not about the NCI check's code; a check of declared (c,k)-partitions joined to it is what would give it an acceptance.",
@@ -15014,9 +15022,9 @@
    "guarantees": ["Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted"]
   },
   "Definitions.Accounting.Guarantees.JointLive": {
-   "digest": "7cddd0c14aff96f543250e3b8073d2c9f552cd243bbe244b235c8357de859c5f",
+   "digest": "7e9093fc4255d8b0f059dde0fab0a9a09c8df14269e3e4072fe9d0caf27b15df",
    "definitions": {
-    "Accounting.Guarantees.JointHorizonBlocksLive": "72ed048a64095b769b51f541d86023e0b306a13e0b697be9899c405a82937fcc",
+    "Accounting.Guarantees.JointHorizonBlocksLive": "1d921827d4895f3018e9f92b67a09c48cbec34a4498a01d6cd8607108178303d",
     "Accounting.Guarantees.JointHorizonLive": "b91981326061077c0d1c58dc725d4b7bcd16bd9996fcc06f8cc02f2d9caf20f0",
     "Accounting.Guarantees.JointPeriodLive": "349e9f2514c163a4b839875e871bc5887c67c4925ed473dd8d37a2ef7bbc293a",
     "Accounting.Guarantees.JointPeriodLiveECR": "df843142414904d054f986bb9bc6441ffd1f20d2d7f851c18800eba66f153a2b",
@@ -16008,14 +16016,13 @@
    "guarantees": ["Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted"]
   },
   "Definitions.Accounting.JointLive": {
-   "digest": "35dbf07cc82cb3053fd65f2f245367e99bc1e00e6fe8762d9f5891da814c2cb7",
+   "digest": "5a4711736501981a811c86a271230279cc8176fdfe4ab7bef0d75516e3453fa2",
    "definitions": {
-    "Accounting.BlocksLive": "e93bf0771c51e62e9cc75e9b28498e756ae47b314c6dc610d0a380c93150bf15",
+    "Accounting.BlocksLive": "d09260362c0a7d14b719e2760e541820288c3e5f91d090d7c8caa5b06130ae49",
     "Accounting.BlocksLive.MemoryTerm": "bfba389278b5eb70e3293ae0db911b5a01ad632a4ec3a6c8ec7fbb29368f8ed0",
     "Accounting.BlocksLive.block": "98bece9e624e763e0ef652040cbdb8318feaff090ae90ad20227ccce8ca2bb02",
-    "Accounting.BlocksLive.chal": "803859f27d2972484ac1528549e4603faa0735e0ce1db8732d10da1aa57ac3f8",
-    "Accounting.BlocksLive.readDeadline": "c9c414f2865073ae4de623938b02f25415be570b89267be2472aa817e2e8410a",
-    "Accounting.BlocksLive.wipe": "0149a2099bbc80c6599f5c9ee99cdd8bd2985d227e1ffb4d9e441d28e6c54862",
+    "Accounting.BlocksLive.chal": "8b12a97fd055b17cf1577662c6600a07294c4ae5f4e6f5562f9ae5587ace876c",
+    "Accounting.BlocksLive.readDeadline": "98b0015798efe6a5811758437cddc6ccf0bce8f0ee79b2f2deaa3fb0a6b55596",
     "Accounting.IntegrityHolds": "a201f9ec16289619168cd277915c44748108b610265e21021f5f2693b943675c",
     "Accounting.PeriodLive": "73b259ba952edbfe601303536fbf70b596b47daebc9171d4cacc64c464525653",
     "Accounting.PeriodLive.Holds": "1c6fcbfeb79035563c34146f4badd8c6c63323e7e44cc6196d7730eb4825003d",
@@ -16035,11 +16042,6 @@
     "Accounting.PeriodWorld.commWithin": "53db6098e6924e462376429628d0be1a5b224b2934d4cd27f8de441beb35fb8e",
     "Accounting.PeriodWorld.schedule": "1baa242f7da9f374433a3c9bcf8460f3bc3addfe40598def7788bb252a47451b",
     "Accounting.PeriodWorld.win": "7570a391ef98a343b08f5d2ac9b803ba377a0b033af4a8fcf7e507ae46ff8da0",
-    "Accounting.WipeLive": "66516a6c29671d8cb22df4d8d0947220b04ebb321ab3f503f3dec4f416375262",
-    "Accounting.WipeLive.Survives": "0a2c1b5bba1f85d2cf2b2dfe6cb33764826c30179e054e12dcb7b843b1162ba3",
-    "Accounting.WipeLive.accepts": "dbc5f4bbb69089c5158d4454eb7c36b418d39983c1a1a9e21d60f13f7c393e43",
-    "Accounting.WipeLive.fill": "9d1c42124e58b889f4b950830771fb4a507ae91a642d86f6df3eec252e4327d6",
-    "Accounting.WipeLive.kept": "db716a28fdf8e99f61fda9cab33a36082db3058d6c268b74fbe752ee09c27fcb",
     "Accounting.unbound": "355edf5fc7181474887de2b337665592151fcb7be9d8f3b05fd817946f45596f"
    },
    "guarantees": [
@@ -19380,6 +19382,37 @@
     "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120"
    ]
   },
+  "Definitions.Core.Blocks": {
+   "digest": "69f002782ff74804c6c3e22d6b0b6edae9910c30843f3d7e24330817aecb1c30",
+   "definitions": {
+    "Verity.Block": "ac647c1b42deae35468cb0531bc2925fe228eb55c6a306078eaf695ede59f223",
+    "Verity.Block.gates": "69e3f9952544c184ee133a01985437ca45d8beb2c9ced5ee4cda402f0cc3e544",
+    "Verity.Block.win": "9778cf375c6d50856a9f3b4fa65aea57d26abdda51428d0ccfe91b7a0212200c",
+    "Verity.Blocks": "848f740a9b048237b545e275a6d372be1a8e59a1f643ef8f34b9e20ea515116f",
+    "Verity.Blocks.Carried": "dea6174829f1a6c9b36b0eb6ae568b5e68bdc13f4fbe7b9fa73c9ef79a4fca18",
+    "Verity.Blocks.before": "1f3f531b13ac0825b543b639b49061ff010ea9acd39d07328268c09c09255493",
+    "Verity.Blocks.block": "fa378c491e99bf60bc42dfb1dffe930214afd532ae672a5634f692511ac473b1",
+    "Verity.Blocks.carried": "1bd248ec320f7aa1c8902398b64ea1f0cd8e135b88887614302a34afba90cc24",
+    "Verity.Blocks.since": "0f5dc1f0e458820235d86229818f1e1b5ed18d0b956777173b0c882cb74a75bf",
+    "Verity.Device.State": "e8389d84bac78baa6d5ad2ea9a9e4666273452967a5aca4b40a11231b4ef2a52",
+    "Verity.Wipe": "cb9fe1d306caeda4371e7748356746baa950d3d298fcecea07855c145b674168",
+    "Verity.Wipe.OfRun": "0329033188b44ad722cf035e5ddeb2ba6b96a4249bda4d8ac0bfcbe4a50385b1",
+    "Verity.Wipe.OfRun.Kept": "6c33f78861c6009ef90fed6f5ddb80163f5f50bf82925ee4cc6c2ef56063157f",
+    "Verity.Wipe.OfRun.Preserves": "45c5ad1164100f090cc482a072e452e87b010ff9b680568679d026d17389be3a",
+    "Verity.Wipe.OfRun.S_φ": "639d252a4985507eda5bd4db6bc81cf7cae2ec84c2d22a027939631906b8f505",
+    "Verity.Wipe.OfRun.accepts": "6f771ac0c2268af43331e1aec48b917f0a5a2612845143fa6d2d5667bca9947c",
+    "Verity.Wipe.OfRun.hold": "ddad2881a737a58a6cf4a3da4e83ba4aa3ed69499d3a08da338956ee0483dfb1",
+    "Verity.Wipe.OfRun.keep": "c0088120a9b89a5eb24703d75014eea9078ad0e536a1a9d833efa6d77ae3fc4f",
+    "Verity.Wipe.OfRun.view": "a46b7734283f0d3f253addcf8797eed1db018f03c52aff93fbc05b279e49bc19",
+    "Verity.Wipe.SurvivorBound": "bf84cb5a0a2aeb6b7cfe821ead9bbe586c943fdc53e514d102efefe3793ff3e9",
+    "Verity.Wipe.accepts": "74d2f856513d0d753a9ae10e6589d7661a626348c5da50492f34e095892f592d",
+    "Verity.Wipe.egress": "ea0eedb7acd6f3fc2018bdeaec78608e8a7941a78d0095390dab2a5b79cac11d",
+    "Verity.Wipe.fill": "bb267893444f6332582b7b3f7e414967d6dd1929531511d38486a56228ab20fc",
+    "Verity.Wipe.filled": "a99766eb0f9a91f5e5febb78a02eab7eb0e4e6b7068a9c3b576877fe74054011",
+    "Verity.Wipe.unfilled": "daf71a907f36e462fa995de1414218f10027a151dd1294656b1389304a9e8ae7"
+   },
+   "guarantees": ["Accounting.SecurityProofs.JointHorizonBlocksLive"]
+  },
   "Definitions.Core.Boolean": {
    "digest": "bdca6f202be5ce821c537817148d69f8f173b88caf12b8a5fcade6c8ea044d2f",
    "definitions": {
@@ -19919,7 +19952,7 @@
    ]
   },
   "Definitions.Core.Game": {
-   "digest": "e82e8f4fa9a7105389cdde778f6bd77d31f2eab08e8d402637171a892a7e3eae",
+   "digest": "e923f3cfdfc42f2410aaeae4664cb3fd44e7c96a2ebf55819aa96913b4f3746f",
    "definitions": {
     "Verity.Game": "dbf3d91129d029b645b41c73b9f2a122f0c318d56e8a77991cca09d48a3fe45b",
     "Verity.Game.InducedAt": "0c3e058da3fbda23c861e5e706c916599bc4b893d399efbe4535390b4d0c448f",
@@ -19937,6 +19970,7 @@
     "Verity.Game.brecOn.go": "b26b92002b61ca899c176b5358f3905100497203a1e6a329d813643c08759cd4",
     "Verity.Game.casesOn": "d1338feec6ad7d2d0c77fc3d6cc4842abdd9db79d5d8d8e624582571b2b793ff",
     "Verity.Game.coin": "4540142afd525a891bba84d91a6d1f5f4bc0b78456e7cb7e5220db9c18febdaa",
+    "Verity.Game.draw": "2c73f92b3862e836756fb55a8f32bff15bf37734e51c53db599f1fb6a7671628",
     "Verity.Game.interleave": "8cc579f2e14080866cf44bdf92a1ad8006e6594e7f085ec58b2d64b67e3c5164",
     "Verity.Game.interleaveWith": "397c914cdff84b1aea6f1f1d28a609d6dc69b580a3d1564ffc6a7e0202beefd9",
     "Verity.Game.map": "6cd5468a1f484fdc57f7e452b1201fa4960f461c800d5cf222c0ccf5b1b9580a",
