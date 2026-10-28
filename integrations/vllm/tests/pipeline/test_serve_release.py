@@ -282,3 +282,5 @@ def test_serve_openai_gates_every_device_held_seal_on_named_draws(tmp_path):
     unsealed = opts()
     unsealed.seal = False
     assert "it needs --seal and the subprotocols" in SL.retention_refusal(unsealed)
+    from verity_vllm.pipeline import serve_openai as so
+    assert so.RL is SL, "serve-openai reaches its draw-gated release under its own alias, which no other module shadows"
