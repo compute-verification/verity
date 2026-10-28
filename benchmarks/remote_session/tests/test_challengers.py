@@ -154,7 +154,7 @@ def session(store, gate: challengers.Gate):
     """An honest session over `store` whose coins come from `gate`'s session for window 0: the session and verdicts."""
     p = params()
     client = gate.open(store.registration.digest, 0, p.windows, 8)
-    c = coins.Coins(client, store.registration.digest, 0, p.windows, clock=itertools.count().__next__)
+    c = coins.SessionCoins(client, store.registration.digest, 0, p.windows, clock=itertools.count().__next__)
     s, prover, passes, clock = drive(store, p, SCHEDULE, coins_=c)
     return s, finish(s, prover, passes, clock)
 
