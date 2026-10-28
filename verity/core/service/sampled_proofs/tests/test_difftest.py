@@ -584,7 +584,7 @@ def _registration(p: dict, rec) -> tuple[str, ...]:
 
 
 def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
-    """The outcome `OneStage.check` gives, from `one_stage`'s own checks: reject on R1-R7, the sample's checks, the record's
+    """The outcome `OneStage.check` gives, from `one_stage`'s own checks: reject on R1-R7, the draw's checks, the record's
     checks or a verdict that ran and did not accept; undecided when only the verifier of record is missing or has not run;
     accept exactly when `audit_record` accepts, with the drawn and proved units, the bounds and the profile."""
     rec, _ = c
@@ -3473,7 +3473,7 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
     other counts (`R2-program`) or the templates in the other order (`query`), and for a record whose law draws a
     stratum short of its floor (`R1-law`); at its select (`coins`) for each mutation of the coins that changes the
     segment or the bytes, coins opened after another digest, evidence for another window, none or empty, and evidence
-    on a sample from the verifier's own coins."""
+    on a draw from the verifier's own coins."""
     rule, s = service.Law("stratified:3"), SETUPS[3]
     a = _v1_audit("stratified", s)
     rec = a["record"]

@@ -24,7 +24,7 @@ staging receipts into the plan's, which the receipt trees commit, unless the ste
 and under F_FAULT flips bit FAULT_SHIFT of word 0 of unit 0's receipt of every call.  The side stream joins the serving
 stream at the forward's last call, and under piecewise graphs at every qkv call too (each piece's capture must join its
 forks, and a piece ends at an attention).  Between steps dither_one's Window builds the admit and z tables, the step
-trees, the round and the receipt trees, as dither-1s's: the A table before the call's units, z before the sample, the
+trees, the round and the receipt trees, as dither-1s's: the A table before the call's units, z before the draw, the
 step and receipt trees between steps, and nothing waits on the side stream but those.  With z="zy" (the arms' -zy) z
 is committed as the per-unit z/y leaves instead of the window's row z tables: the epilogue writes one record a 32 x 32 unit (its z,
 then its y = dequant(z); a slot past m is zero codes under s_a = +0, so its z is 0 and its y h1zy's dq(0, +0, s_w), as

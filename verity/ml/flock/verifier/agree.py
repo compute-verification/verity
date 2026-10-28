@@ -48,7 +48,7 @@ def groups(a):
 
 
 def drawn(s):
-    """The session's record carries a unit sample (PR #83 from eb90718f)."""
+    """The session's record carries a unit draw (PR #83 from eb90718f)."""
     try:
         return bool(json.loads((Path(s) / "session.json").read_text()).get("unit_draw"))
     except (OSError, ValueError):

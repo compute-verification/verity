@@ -11,7 +11,7 @@ store), takes σ, runs the tag pass on stream 0 in the tagger's own workspaces a
 in the L1/shared-memory split from the start (`prefer_l1`): the tag pass otherwise runs in the split torch's last kernel
 left, about 40% slower.  The verifier is in this
 process at the granted point (`certified.granted_params`: `s = 1,849`, `T = 1.2 ms`, no RTT, for it sees none), on a clock
-held at the root (`Held`), so the prover can resume its chain before the verifier samples the samples (7 to 9 ms of Python,
+held at the root (`Held`), so the prover can resume its chain before the verifier draws the samples (7 to 9 ms of Python,
 another machine's in a deployment).  A window is on time at T when it committed within `certified.window_params`' T
 (1,354 µs, the RTT at P2's cap inside the rebuild floor), and accepted when within the granted 1.2 ms with its openings.
 

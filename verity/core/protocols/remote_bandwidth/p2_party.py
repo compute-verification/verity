@@ -4,7 +4,7 @@ so they run on a host the prover doesn't control (`trusted-host`) while the prov
 The channel is a pair of byte streams carrying one JSON object of one key a line: the ssh session that starts this side
 (`--stdio`, as a gate's verb starts it) or a TCP connection (`--listen`). The session has no round-trip floor, so ssh's
 latency changes nothing in its verdict. The verifier holds its own registration (`--registration FILE`, the auditor's
-record of PoUS's setup, `registration_json`), never the prover's word for it, and flips its coins from its own host's OS.
+record of PoUS's setup, `registration_json`), never the prover's word for it, and draws its coins from its own host's OS.
 The record's `plan` is the units every pass reads (`plan_of`): the units holding a tensor's block, so not the store's
 padding past the last tensor, which is PoUS's and which the decode never reads; without one, every unit.
 
@@ -140,7 +140,7 @@ def params_of(reg: p2.Registration, request: Mapping[str, Any]) -> audit.Params:
 
 
 def answer(s: p2.Session, reason: str | None = None, plan: Plan | None = None) -> dict[str, Any]:
-    """The session's answer: `accept` with the credited reads, `reject` with the failure and the sample it failed at, or
+    """The session's answer: `accept` with the credited reads, `reject` with the failure and the draw it failed at, or
     `undecided`; `units` are the store's and `plan_units` those each pass reads."""
     reg = s.registration
     out: dict[str, Any] = {"protocol": PROTOCOL, "registration": reg.digest.hex(), "unit_bytes": p2.UNIT_BYTES,
@@ -177,7 +177,7 @@ def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, c
             sleep_until: Callable[[Callable[[], int], int], None] = P._sleep_until,
             log: Callable[[str], None] = lambda _m: None, host: str | None = None) -> dict[str, Any]:
     """The verifier's side of one session over the channel (`f_in`, `f_out`): the prover's request, the coin commitment,
-    each pass asked for in order under `plan` (every unit by default), each window's openings sampled once its roots are
+    each pass asked for in order under `plan` (every unit by default), each window's openings drawn once its roots are
     final and verified, and the answer, sent last and returned, naming the verifier's `host` (this one's name by
     default). A message out of form or a closed channel rejects the session (its answer says why)."""
     host = host or socket.gethostname()

@@ -5,7 +5,7 @@ of record, from whose coins each rank's registration draws once (`sampled_proofs
 * **The session.** ``local``: a development session on this machine, run by the auditor host's own service
   (`benchmarks/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no tunnel) on a scratch root under an
   LMS key made there at `LOCAL_PARAMS`, never under the run's out/: its ledger and the session's out/ are what vy-challenger-1
-  writes, and its key is this run's alone, so its samples show the path, not an auditor's coins. Its pins log pins main's
+  writes, and its key is this run's alone, so its draws show the path, not an auditor's coins. Its pins log pins main's
   first-parent commit this tree is built on (`on_main`), as pin.sh pins vy-challenger-1 only to such a commit; its code is this
   tree's. ``loopback:HOST:PORT``: the same development session on the challenger party's host
   (`challenger_party.py`, `Loopback`), asked for its open and finish over loopback TCP. ``gate:USER@HOST``: vy-challenger-1 through infra's gate with the lane's gate key: `reserve` with this machine as its

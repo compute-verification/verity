@@ -696,9 +696,9 @@ oprove)
   [[ " $MODES " != *" firewall "* ]] || [ -x $FC_FIREWALL_LEAN ] || lean_build > $O/build-lean.log 2>&1 \
     || { tail -20 $O/build-lean.log; exit 1; }
   mkdir -p $DD/v-sess $O/oprove
-  # Outer proofs through the ZK server are independent sessions (AGENTS.md, Daniel's provisional batch of 24 Oct): every
-  # staged statement is fixed before any session flips coins (statements.sha512, checked again once all have ended), gets
-  # exactly one session, with its own loopback verifier, live coins and ZK server pass, never a second one (no lease retry,
+  # Outer proofs through the firewall are independent sessions (AGENTS.md, Daniel's provisional batch of 24 Oct): every
+  # staged statement is fixed before any session draws coins (statements.sha512, checked again once all have ended), gets
+  # exactly one session, with its own loopback verifier, live coins and firewall pass, never a second one (no lease retry,
   # no preemption: a failed session is its statement's failure), and every statement's exit is recorded (exits.tsv), an
   # honest one's failure failing the step.
   if [[ " $MODES " == *" firewall "* ]]; then

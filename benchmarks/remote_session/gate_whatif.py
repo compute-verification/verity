@@ -7,7 +7,7 @@ and root's receipt on the challenger's come back to the nanosecond, and so the l
 
 The loop replayed is `verifier.py`'s at k = 1, as a session's record shows it, and a record of another form is refused:
 at root g the verifier asks the challenger for openings coin g and σ_(g+2) in one round trip (`coins.Coins.ahead`),
-sends window g's samples (its `draws_sent_ns` D_g), then σ_(g+2) (its `released_ns` R_(g+2)); σ_0 and σ_1 each go alone,
+sends window g's draws (its `draws_sent_ns` D_g), then σ_(g+2) (its `released_ns` R_(g+2)); σ_0 and σ_1 each go alone,
 stamped before they are asked (`audit.Session._release`), and the last two groups' openings coins go alone. Group g's
 root arrives at A_g. The prover's record (`prover.json`) has each pass from its coin's arrival to its root, ph_g, and
 from its root to its send, gp_g, and τ, half the verifier↔prover round trip (verifier.json's `rtt` median), puts them on

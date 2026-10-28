@@ -10,7 +10,7 @@ driver's docstring says what it runs, what it publishes and what its verifier re
 - `verity bench network_traces` runs `run.sh`: one chunk of per-token vLLM timing traces on a leased GPU
   (`record.py`), as a `research run` job whose command is in the script's header.
 - Every other `.sh` here is a `research run` job, its command in its header. The proving jobs build C-Flock's
-  `flock-circuit`, the Lean `flock-verify` and the Lean ZK server with `benchmarks/pouw/hidden_zk/job.sh`.
+  `flock-circuit`, the Lean `flock-verify` and the Lean firewall with `benchmarks/pouw/hidden_zk/job.sh`.
 - `research run` publishes every run, with its report and outputs, as an Attempt in the evidence store
   (`tools/research/src/research/store/README.md`). Results are read from there, never from this README.
 - The tests: `uv run tools/verity/check/suites.py verity-network-traces` (`.agents/skills/testing/SKILL.md` says where).
@@ -92,10 +92,10 @@ fetch, so the endpoint step checks the endpoint's trace against the certified I/
 `witness/`, stays in a 0700 directory outside the run dir, and `$OUT` gets only the bundle less `witness/` and the
 session's outcome. `chain` runs the chain's warden path on the kept fetch, and only from a tree with the record's leak
 guard. `session --gate local` is the dry rehearsal: this tree's gate on a scratch host, with `demo_stub.py serve` as
-the endpoint. `chain --coins gate` samples the scan's units on the gate's coins on the auditor's side, the node the chain
+the endpoint. `chain --coins gate` draws the scan's units on the gate's coins on the auditor's side, the node the chain
 runs on (vy-nebius-cpu-2), which the challenger's coin link reaches through that node's own line of
-`/etc/vy/coin-ports` (ports 7821-7830). It refuses the served node as the sample's peer, since the gate key and the
-warden run's witness never go on the prover's machine. Without the gate's coins the chain flips on the verifier's
+`/etc/vy/coin-ports` (ports 7821-7830). It refuses the served node as the draw's peer, since the gate key and the
+warden run's witness never go on the prover's machine. Without the gate's coins the chain draws on the verifier's
 (`--coins verifier`, the default).
 
 `certifier_piece.py` is the network certifier's piece of `benchmarks/one_stage/served_verdicts.sh`. Its `front`
@@ -115,7 +115,7 @@ The run of record takes the network chain end to end on the gate's machines:
 
 1. The network certifier signs every record with its LMS key, on an auditor machine (vy-challenger-1), never on the
    prover's node.
-2. It certifies each verification phase's records and signs each verification phase's clock sync (a clock certificate).
+2. It certifies each sampling block's records and signs each sampling period's clock sync (a clock certificate).
 3. The client receives the certificates and keeps them (`certificates.jsonl`, `clocks.jsonl`).
 4. The consistency proof blocks are proved by sampled C-Flock `--zk` and decided by the Lean verifier of record: N2's
    (each verification phase's head checks and counts), and the scan's ingress and egress proof blocks chained by registered
@@ -139,8 +139,8 @@ the (j mod n)-th; `--margin`: the plan's over the probes, 1 to 8, 2 otherwise). 
 | custody | each gate run's files against the SHA-512s in its `end.json` | none: a check of files | the files' digests |
 | certificates | each verification phase's two certified records and its clock certificate, at the client, under the certifier's key and attachment; with `CR_DEPLOYED=1`, a key that isn't LMS at H = 20 is refused | none: signatures | every LMS signature, and the host audit of the client's own heads |
 | endpoint | the endpoint's own advice bound to the run (each Commit window opened to its registered root, rebuilt from the certified I/O) and the I/O tie on the honest run (`e2e.py --no-prove`); required on the advice profile | none: in the clear | all of it |
-| N2 | each verification phase's N2 proof block, proved `--zk` and decided by N2's verifier of record: the advised proof block on the bound advice and the certifier's clock certificates on the advice profile (`n2_advised_zk.py --e2e`), the plain one on the others (`n2_zk.py`) | Selection All: no verification phase undrawn; a sampled sample of k of n verification phases hides at most b faulty ones except with probability δ (the report's `wrong_units_at_delta`) | the registration, the sample, the certificates' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
-| scan | the scan's ingress and egress proof blocks of a verification phase, one registration, `verify --zk --registered` | the audit's `wrong_units` at the sample's sampling design | each proof block's output bit; the I/O tie stays outside the proofs |
+| N2 | each sampling block's N2 proof block, proved `--zk` and decided by N2's verifier of record: the advised proof block on the bound advice and the certifier's clock certificates on the advice profile (`n2_advised_zk.py --e2e`), the plain one on the others (`n2_zk.py`) | Selection All: no sampling block undrawn; a sampled draw of k of n sampling blocks hides at most b faulty ones except with probability δ (the report's `wrong_units_at_delta`) | the registration, the draw, the certificates' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
+| scan | the scan's ingress and egress proof blocks of a sampling block, one registration, `verify --zk --registered` | the audit's `wrong_units` at the draw's sampling design | each proof block's output bit; the I/O tie stays outside the proofs |
 | Lean | every proof of both steps is the verifier's own `flock-verify verify --zk` run | per proof, ε_ks + ε_bind | nothing |
 
 The job's environment picks what it runs: N2's sample on the gate's coins is `CR_N2_CMD` (`n2_advised_zk.py prove
@@ -197,7 +197,7 @@ unit sampled and accepted. K uses:
   T = 32 buckets of 100 ms, and egress_cells = 65;
 - its traffic: 100 requests over 75 link-windows, 1.33 a link-window;
 - the scan's class: B = 512, r = 4, lanes = 4, C = 47, IDB = 17 and KO = 64;
-- every unit sampled.
+- every unit drawn.
 
 The terms, in the generator reading of the scan's statement (each unit's registered rows its boundary values):
 - log2 #S_s = 0.
@@ -261,7 +261,7 @@ K also rests on these conditions:
 - The scan proves link-window 0. A period's figures scale its per-link-window and per-request terms at the run's rate.
 - The jitter term is 0 at D_j = 1, assumed (J), not met until a run shows the paced warden's written buckets tell a
   receiver no more than an idle one.
-- At light traffic (40 requests over 43 link-windows, 0.93 a link-window, its scan's every unit sampled) the
+- At light traffic (40 requests over 43 link-windows, 0.93 a link-window, its scan's every unit drawn) the
   anchored table's machine-week is 1.01% of the weights and its machine-year 52.2%; as registered today it is 1.37×
   a machine-week either way.
 - The compute audit's free inputs don't enter K: its δ goes into JointPeriodLive's sum.

@@ -196,7 +196,7 @@ PLAIN_INTERIM: str = json.loads((HERE / "sources.json").read_text())["plain_inte
 @dataclass(frozen=True)
 class Capped:
     """A registered compiler with ℓ, the public cap on the advice's length in bits. Its digest names the inner compiler's and ℓ,
-    so the registration's ``compiler`` fixes ℓ before the sample as it fixes the code; `load` and ``transfer_gates`` are the inner
+    so the registration's ``compiler`` fixes ℓ before the draw as it fixes the code; `load` and ``transfer_gates`` are the inner
     compiler's."""
 
     inner: Any
@@ -236,7 +236,7 @@ class I2Compiler:
     `code_identity`, ``verity`` and ``verity_vllm`` as git lists them, so a node's ignored build outputs don't move it; a
     served window's, the server's registered compiler, `served_identity`), everything ``registered`` holds that I2 reads (φ:
     the model, its revision and config, the target and the execution; the default seed; ℓ; the served model name, where it
-    names one) and that list. So a served window's ``serve.json`` is bound before the sample with the code: one that differs
+    names one) and that list. So a served window's ``serve.json`` is bound before the draw with the code: one that differs
     from the one its advice was registered under names another compiler."""
 
     registered: Any

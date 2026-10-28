@@ -2,7 +2,7 @@
 
 `identity-difftest` (`Identity.Difftest.table`) serves streaming SHA-512 absorbed in pieces (against `hashlib.sha512`),
 `taggedSha512` (against `identity.tagged_sha512`) and `identityDigestSha512` (against `identity.identity_digest_sha512`).
-Tags are sampled from all of Unicode, the empty tag and non-strings among them, which Python refuses and so must Lean;
+Tags are drawn from all of Unicode, the empty tag and non-strings among them, which Python refuses and so must Lean;
 payloads cross the 128-byte block boundaries and the padding's 112-byte edge; manifests are any JSON with integers (Python
 writes no float into a request, so a float manifest is out of the harness's reach: `Flock.canon` refuses a non-integer
 number, as Python refuses a float).

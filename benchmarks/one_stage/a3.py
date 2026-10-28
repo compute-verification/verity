@@ -1,4 +1,4 @@
-"""One-stage audit, run A3: every unit type M0's statement proves in one #101 decoder layer, as one audit with one sample and
+"""One-stage audit, run A3: every unit type M0's statement proves in one #101 decoder layer, as one audit with one draw and
 one integrity profile.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\

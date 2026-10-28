@@ -1401,7 +1401,7 @@ def defer_rates(tp: int = 1, B: int | None = None, L: int | None = None, fit: di
         u = max(DEFER_OF_PEAK, defer_at(fit, "u", min(fit["tps"]), b, l))
         return {"s": s, "u": u, "d": u * (1 - s), "B": b, "L": l}
     return {"s": min(1.0, defer_at(fit_tp, "s", tp, b, l)), "d": defer_at(fit_tp, "d", tp, b, l), "B": b, "L": l}
-#: prefill's per-stage live coins over its GEMMs at 32K tokens a sample (commit then GEMM a stage: +13%,
+#: prefill's per-stage live coins over its GEMMs at 32K tokens a draw (commit then GEMM a stage: +13%,
 #: r20261016-101324-cab4, note:20261016T0846Z-draft-stage-cost; STAGE-OVL and STAGE-COST r2 may lower it): a parameter
 PREFILL_COINS = 0.13
 

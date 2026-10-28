@@ -152,7 +152,7 @@ def evaluate(act: Activation, words: Sequence[int]) -> dict[int, int]:
 
 
 def lanes(act: Activation, units: Sequence[UnitCircuit], key: Any, T: int) -> dict[tuple[str, int], tuple[list, list]]:
-    """Per unit of one flat Definition: its input and output words over T synthetic draws (per port, one word per sample)."""
+    """Per unit of one flat Definition: its input and output words over T synthetic draws (per port, one word per draw)."""
     widths = [act.width(-1 - p) for p in range(act.params)]
     runs = [evaluate(act, w) for w in synthetic_words(key, act.fn.id, widths, T)]
     return {(uc.definition, uc.unit): ([[r[x] for r in runs] for x in uc.inputs], [[r[j] for r in runs] for j in uc.outputs])

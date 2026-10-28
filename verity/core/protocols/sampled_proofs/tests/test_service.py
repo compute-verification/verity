@@ -622,10 +622,10 @@ def test_a_sampler_draws_instead_and_is_held_to_the_law():
 
 
 def test_each_outcome_is_the_lean_runs_from_the_receipt_through_the_verdict(monkeypatch):
-    """A one-stage outcome on a sample from the coins is the verifier of record's run (`verifier.run`, the Lean's `Run.run`)
-    from the registration, the bytes the sample read, the sessions and the verdicts: one run per outcome, agreeing on an
-    accepted and a rejected round. A run the Python doesn't make alike (here, a sample said to read one byte more) rejects
-    the round, its audit record failing `run`; a sampler's sample isn't run."""
+    """A one-stage outcome on a draw from the coins is the verifier of record's run (`verifier.run`, the Lean's `Run.run`)
+    from the registration, the bytes the draw read, the sessions and the verdicts: one run per outcome, agreeing on an
+    accepted and a rejected round. A run the Python doesn't make alike (here, a draw said to read one byte more) rejects
+    the round, its audit record failing `run`; a sampler's draw isn't run."""
     run, ran = S.V.run, []
 
     def spy(python, *a, **kw):

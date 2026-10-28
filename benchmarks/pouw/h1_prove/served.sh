@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The units a served H1 window's own sampling coin selects (served.py), read from the window's run on the node that holds it:
+# The units a served H1 window's own draw coin selects (served.py), read from the window's run on the node that holds it:
 #   research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source --mem-gb 16 \
 #     --declared-output 'out/*' --env H1_SERVED=/workspace/research/runs/RUN/out --env H1_PIN=SHA512 \
 #     --send PINS --send MAIN --env H1_PINS=inputs/PINS --env H1_MAIN=inputs/MAIN \

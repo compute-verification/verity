@@ -31,7 +31,7 @@ order; its codes are `keys`, `roots`, `unsalted`, `query` and `undeclared`.
 **A window of templates.** A `Stream` takes one template, or a window's several (a TP rank's served window, every
 provable family of its step): the check's program is each template's digest and its query `Q_template_instances`, in
 the window's order, and each registration's population program is the templates' mixed population at the challenger's
-own counts (`register(counts=)`), sampled once by the Spec's sampling design, `stratified:K` with one stratum per template. The
+own counts (`register(counts=)`), drawn once by the Spec's sampling design, `stratified:K` with one stratum per template. The
 verifier of record reads one program and one query either way, so a window's registration, draw and run are its
 `check`, `Select.select` and `Run.run` as they are for one template's.
 
@@ -56,7 +56,7 @@ never retried, and it ends the epoch: the stream receives no registration after 
 the salt (`salted`). It is the rule of `Pouw.AcceptsBy` (`Security/Definitions/Pouw/Game/Deadline.lean`), with `ts` =
 `salted_at`, `tr` = `received_at` and `td` = `ts` + the deadline. The readings are the challenger's own: the stream's
 epoch log (`Stream.epoch_log`) and each `Registration` carry them, and neither the receipt nor an outcome's record does.
-`salt(n=64)` is `n` bytes of the challenger's coins, read in order with the samples'. A level's stream created at its
+`salt(n=64)` is `n` bytes of the challenger's coins, read in order with the draws'. A level's stream created at its
 first registration still measures from the epoch's release. A salt that isn't non-empty bytes, or a release that isn't a
 finite number, raises `ValueError`, and after the epoch ends a salt of either kind is refused (`epoch-ended`). The epoch
 log holds `{"event": "salt", "salt", "salted_at"}` (with `"external": true` from `salt_released`), then each
@@ -79,7 +79,7 @@ registration its own tables of the session's statement. `Stream.session` opens i
 (no covered round is undrawn), over draws no other session covers and none delivered or final. Each round is committed
 before its own draw, and so before every later round's. The first covered round's `Check.proof_deadline` spans the
 session. `deliver` delivers the session once, and every covered draw's outcome binds the same session records. Each
-sample's `outcome` runs its own audit record, on its own proof blocks and its own table's roots, and its record names the
+draw's `outcome` runs its own audit record, on its own proof blocks and its own table's roots, and its record names the
 session's rounds (`session`). A late session is `late` for every round it covers. C-Flock's verifier of record refuses
 such a session (`verity/ml/flock/verifier/PROTOCOL.md` §16.12); `Stream.session` has its refusals.
 
@@ -112,7 +112,7 @@ its `draw` is null when the registration was not sampled. `Outcome.record` is it
 
 **Not built yet.** A stream refuses the `Sequential` rule, a window statement, a timed session and a
 check with no proof deadline. After R1 to R7, `register` refuses a sampling design whose drawn count varies (`shapes`: `bernoulli`
-at `0 < p < 1`); a work sample's closure varies too and is not refused (a planned design).
+at `0 < p < 1`); a work draw's closure varies too and is not refused (a planned design).
 """
 from __future__ import annotations
 
@@ -255,7 +255,7 @@ class Law:
 
 @dataclass(frozen=True)
 class Sequential:
-    """A timed session's sample, one index a round (PoUS's audit): `law` is `uniform:k`, over the public item named by
+    """A timed session's draw, one index a round (PoUS's audit): `law` is `uniform:k`, over the public item named by
     `population`. A `Stream` refuses it until the memory challenger's timed mode lands (§6 step 5)."""
 
     law: str
@@ -1120,7 +1120,7 @@ class Stream:
     read of the OS. `clock` is its clock in seconds; tests inject both. Coins from the auditor's challenger are a
     `coins.ChallengerCoins`: the stream's `coin_source` is then `"challenger"` (else `"verifier"`, the verifier's own
     coins or a test's stand-in for them), its digest names it, and every outcome's run by the verifier of record needs
-    the coins' evidence (`outcome`'s `coins`), refusing a sample without it. `sampler`, when given, draws instead of the
+    the coins' evidence (`outcome`'s `coins`), refusing a draw without it. `sampler`, when given, draws instead of the
     coins (`flock-verify draw` in a process of its own, say), never beside the challenger's: it takes the challenger's
     sampling design and N, and its sample is held to them like any other. `prover`, when given, is the identity the challenger registered the stream's prover under
     (lowercase hex): the stream's digest names it, and every registration is bound to the stream and the prover
@@ -1484,14 +1484,14 @@ class Stream:
         return [self._log[i] for i in sorted(at)]
 
     def select(self, registration: Registration, *, closure: Mapping[int, Sequence[int]] | None = None) -> Draw:
-        """The sample, once per registration, from the challenger's own randomness after the receipt: indices in [0, N) by
+        """The draw, once per registration, from the challenger's own randomness after the receipt: indices in [0, N) by
         the selection rule's sampling design (`select_draw`; `All` draws every proof block and reads no coins). `closure` is the challenger's closure map
-        (`{unit: [units proved with it]}` over [0, N), from its own layout), for a work sampling design only: the sample carries the
-        sampled proof blocks' closure (`coins.closure_of`), which `draw.proved` and `draw.check_proved` count. The sample of
+        (`{unit: [units proved with it]}` over [0, N), from its own layout), for a work sampling design only: the draw carries the
+        drawn proof blocks' closure (`coins.closure_of`), which `draw.proved` and `draw.check_proved` count. The draw of
         record is the verifier of record's (`verifier.select`: the Lean's `Select.select` on the bytes of the coins this
-        sample read), unless a `sampler` draws. Raises `Refused` for a registration sampled before (nothing resamples), a
-        closure map on another sampling design or outside [0, N) (before any coin is read), the two verifiers sampling differently
-        (`disagree`), and a sample that isn't well formed under the sampling design (`draw.check_draw`, by `verifier.check_draw`)."""
+        draw read), unless a `sampler` draws. Raises `Refused` for a registration drawn before (nothing redraws), a
+        closure map on another sampling design or outside [0, N) (before any coin is read), the two verifiers drawing differently
+        (`disagree`), and a draw that isn't well formed under the sampling design (`draw.check_draw`, by `verifier.check_draw`)."""
         op: dict[str, Any] = {"op": "select", "order": _order(registration),
                               "registration": _registration_token(registration)}
         got: dict[str, Any] = {}
@@ -1577,10 +1577,10 @@ class Stream:
         `Pending` before. With one: `Pending` until every verdict of record has run (`accepted` not null); each verdict of
         record names the delivered `sessions` and reports the public outputs alike (`check_verdicts`, by its verifier of
         record, `verifier.check_verdicts`); then one-stage's audit record by its verifier of record
-        (`verifier.audit_record`; `proved_units` and `instances` default to the sample's, `served` and `session_roots` are
-        its, and the registered roots it reads are the verdicts' own) decides accept or reject. A sample a `Session` covers is decided alone, on the session's delivered records and its own
+        (`verifier.audit_record`; `proved_units` and `instances` default to the draw's, `served` and `session_roots` are
+        its, and the registered roots it reads are the verdicts' own) decides accept or reject. A draw a `Session` covers is decided alone, on the session's delivered records and its own
         audit record: its `proved_units`, `instances`, `served` and `session_roots` are its round's (its own tables'),
-        never another round's. On a sample from the coins and an audit record its two verifiers agree on, the whole run is
+        never another round's. On a draw from the coins and an audit record its two verifiers agree on, the whole run is
         held to the verifier of record's (`verifier.run`, the Lean's `Run.run` from the
         registration on): where they differ the outcome is a reject, its audit record failing `run`. The run takes the
         stream's `coin_source`, so on a stream sampling from the auditor's challenger (`coins.ChallengerCoins`) the

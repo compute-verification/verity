@@ -168,7 +168,7 @@ on review, and the full check runs after landing (how a PR lands: the team skill
 - **One vocabulary.** A concept more than one guarantee reads (the circuit, commitments and hashes, coins and samples,
   probability, partitions and proof blocks, devices and signatures) has one definition, in `Core` or `Hash`, which every
   area and protocol reads; an area defines only its own, and no new Lean adds a second definition.
-- **Lean is code or security analysis.** Code stays with its subsystem and never requires `Security/`: C-Flock's
+- **Lean is code or security analysis.** Code stays with its component and never requires `Security/`: C-Flock's
   executable verifier and the ZK server (`verity/core/service/flock/`, with the release side in
   `verity/core/service/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
   PoUB's verifier, each in its protocol's `lean/` with a difftest. Under `FC_FIREWALL=1` every byte that leaves is

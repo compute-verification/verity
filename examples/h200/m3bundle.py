@@ -14,7 +14,7 @@ tree ``prove_bundle.py --step`` proves: ``blocks/<g>/window/`` (a one-member win
   written to ``summary.json``, and never resampled. A norm's gain (one registered word a row) is a port of
   `RegisteredRead`\\ s, the embedding's token past the prompt the argmax its sequence committed a step before, and a PV
   block's V row past n a row of no reads (all zero).
-* **weights** (where the weights registration's witness is): every registered row a sampled proof block reads (`window.Window.locate`'s
+* **weights** (where the weights registration's witness is): every registered row a drawn block reads (`window.Window.locate`'s
   `Registered` pieces), opened from the commit's state (`weights_commit.State`): its bytes, salt, string and path,
   each checked against the registered root (``REG.verify_read``).
 * **replay** (the card's part): the run again under the prover's salt secret with kv_reads' `KeepingDriver` for the sampled

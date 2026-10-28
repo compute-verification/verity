@@ -1,7 +1,7 @@
 """The remote bandwidth audit over a monitoring period: a week, a month and a year of every machine of a
 deployment, at δ = 1% and 10⁻⁶, the pooled total first and the per-window figure beside it, from one accepted session's
 answer as `RemoteAudit.Protocol.certify` publishes it: `q_bytes` certified, except with `eps` = δ₀ + S/2^64 (δ₀ the
-openings' pooled bound's δ, 2^-40, and S the session's samples).
+openings' pooled bound's δ, 2^-40, and S the session's draws).
 
 A deployment of `machines` machines, each running one session every `window_s` seconds audited as this one was, has
 T = machines·⌊period/window_s⌋ sessions in a period, each on its own live coins, against one adaptive prover.

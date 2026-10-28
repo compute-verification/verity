@@ -3,7 +3,7 @@
 chain, UE8M0 scales per 32, no certificate claims and not registered in `schemes.get`.
 
 The design is GPU 5's lane's.  It is Pearl-C (`pearl_c`) with the FP8 product replaced by the E2M1 one: the noise enters
-inside one atom per element, one noisy cast forms the operand, Pearl's tickets are sampled on C̃, the BF16 clean-up U is
+inside one atom per element, one noisy cast forms the operand, Pearl's tickets are drawn on C̃, the BF16 clean-up U is
 checked, and every C̃ and U word is hashed into the tile's leaf (`pearl_c.leaf`).  γ rests on TT_OUT-FP4, which the
 theory lane has stated and nobody has proved.
 

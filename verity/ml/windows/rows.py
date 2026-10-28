@@ -378,7 +378,7 @@ class RowTable:
 
 @dataclass(frozen=True)
 class Window:
-    """What the roots are bound to: the verifier's population program and query (the partition over them), the law it samples by, the
+    """What the roots are bound to: the verifier's population program and query (the partition over them), the law it draws by, the
     run (the record's run root, hex), and the members the population is made of, in the partition's order (refused otherwise); and
     its row tables, grouped by segment in rising order and in the integration's order within one, every rank of each the row of
     at least one linked member's ``x`` table, under ``context`` (hex, 64 bytes known before the first segment: the live coin

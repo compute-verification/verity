@@ -19,7 +19,7 @@ count, `Nat.clog 2 (args.length − 1)` index bits a range gather.
 **Two Lean-only holes, both closed.** (A) Under the earlier count a gather whose column is one constant word cost
 `Nat.clog 2 1 = 0` units and returns `c·[idx ≤ 0]`, a free comparison of any s32 value, so carries are free:
 `free_square` builds a whole squaring mod p1024 at **0 units** as that count reads, and `free_codec.py` the whole codec
-word (no budgeted gate, right on every sample). The current count charges it one unit, and `free_square` costs 6,014. (B) While `Gate.derive`
+word (no budgeted gate, right on every draw). The current count charges it one unit, and `free_square` costs 6,014. (B) While `Gate.derive`
 returned a gather's declared interval, a gather at a fixed index (wiring, 0 units) re-declared a free affine
 remainder `T_m − 256·⌊T_m/256⌋` into `[0, 255]`, and `holeb_square` squared at 128 units, one carry a limb. `Gate.derive`
 now derives the hull of the column's intervals and 0, and `Proven` refuses it: the gather's derived interval leaves its

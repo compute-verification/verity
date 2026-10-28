@@ -560,7 +560,7 @@ def verdicts(rows: list[dict], cfgs: list[Config]) -> dict:
 
 
 def limits(v: dict) -> list[str]:
-    """Per format, grid, scale and C0: the largest K through which every sample was exact, and the first K any draw rounded.
+    """Per format, grid, scale and C0: the largest K through which every draw was exact, and the first K any draw rounded.
     The max scale product is the largest scale a block times itself (both operands draw from the one set)."""
     out = ["| format/grid | scale | max scale product | C0 | exact for every draw through K | first inexact K (draws) |",
            "|---|---|---|---|---|---|"]

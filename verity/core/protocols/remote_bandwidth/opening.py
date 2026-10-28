@@ -1,6 +1,6 @@
-"""Check 3 under zero knowledge: each receipt the remote session samples goes through the remote bandwidth audit's opening
+"""Check 3 under zero knowledge: each receipt the remote session draws goes through the remote bandwidth audit's opening
 unit (`verity.ml.commitments.gates.block_check`, PROTOCOL.md §8's checks 1-3 and 5 as one unit) in place of its opening,
-so the verifier holds the sampled proof block, its payload, its receipt leaf, the step's plan row and every salt and path only
+so the verifier holds the drawn block, its payload, its receipt leaf, the step's plan row and every salt and path only
 inside the unit, and reads the unit's verdict.
 
 For a sample (pass i of window t at step s, position p, block j = plan_i[p]) the prover stages one `BlockOpeningCheck`:
@@ -14,7 +14,7 @@ and depths), and its verdict row; it holds the one witness row it doesn't open, 
 of step s by ``b || c`` (`plan_link`). No block, payload, receipt leaf or plan is opened.
 
 `Session` is `audit.Session` with check 3's outcome in place of `verify`'s openings (`drawn`, `decide`), and `Store` is
-`audit.Store` keeping the payloads it appends (the prover's witness, `witness`). `check` decides one sample by the unit's
+`audit.Store` keeping the payloads it appends (the prover's witness, `witness`). `check` decides one draw by the unit's
 reference on the prover's arguments and the plan link, and `reference` a session's windows by it: the stand-in for the
 units' proofs where a session isn't proved."""
 from __future__ import annotations
@@ -68,7 +68,7 @@ class Values:
 
 @dataclass(frozen=True)
 class Draw:
-    """What the verifier knows of one sample: window t, pass i at step s, position p, block j = plan_i[p], the pass's seed,
+    """What the verifier knows of one draw: window t, pass i at step s, position p, block j = plan_i[p], the pass's seed,
     plan and root, and the commitment block j's payload is a leaf of: the registration's payload tree (``coin`` None) or
     its append's, under the append's coin."""
 
@@ -94,7 +94,7 @@ class Draw:
 
 
 class Session(audit.Session):
-    """`audit.Session` with check 3 decided by proofs: `drawn` is what the verifier knows of window t's samples, and
+    """`audit.Session` with check 3 decided by proofs: `drawn` is what the verifier knows of window t's draws, and
     `decide` takes check 3's outcome on each in place of `verify`'s openings."""
 
     def drawn(self, t: int) -> tuple[Draw, ...]:
@@ -186,7 +186,7 @@ def plan_link(plan_bc: bytes, certified_bc: bytes) -> str | None:
 
 
 def check(d: Draw, args: dict, codec_seed: bytes, S, values: Values, plan_salt: bytes, certified_bc: bytes) -> str | None:
-    """Check 3 on one sample by the unit's reference (`BC.opening_check`) on the prover's arguments, its public rows the
+    """Check 3 on one draw by the unit's reference (`BC.opening_check`) on the prover's arguments, its public rows the
     verifier's own, then `plan_link` on the plan row's ``b || c`` under ``plan_salt``: None, or the failure (one of
     `audit.FAILURES`)."""
     if any(args[k] != v for k, v in public(d, codec_seed, S, values).items()):

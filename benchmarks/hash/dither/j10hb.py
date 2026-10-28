@@ -17,7 +17,7 @@ columns; the units read their rows from the leader's region), gated against cred
           F_FAULT, F_FAULT_WB and F_FAULT_XA conforming on unit 0, a band leader). The per-unit arm's receipts against
           served_h1/receipts.py on its picks. A banded arm's receipts and z: unit 0 and non-leaders (the first, the last, one
           drawn) against credit's banded_reference itself (without its tree the gate fails), every band leader's receipt
-          equal to the per-unit arm's (a leader's noise is its own) and every non-leader's different; its workspace with no 0xA5 block left in a leader's rows or in any unit's columns, and sampled proof blocks
+          equal to the per-unit arm's (a leader's noise is its own) and every non-leader's different; its workspace with no 0xA5 block left in a leader's rows or in any unit's columns, and drawn blocks
           against seeds.noise_block of their unit's seed_j.
     time  CUDA graphs replayed between events, the arms interleaved (h1zbench.bench's loop).
     tw    with --tw, at down_proj and --tw-ms: the tile-width price (`tw_arms`, `tw_price`; a price, not a served form).
@@ -96,7 +96,7 @@ def leaders(S: int, ncb: int, g: int) -> list[int]:
 
 def ws_check(lib: Z.OneLib, c: Call, g: int, rng: random.Random, draws: int = 24) -> dict:
     """The workspace of the last call: no 0xA5 block in a leader's rows or any unit's columns (non-leaders' rows are
-    never written), and sampled proof blocks equal to seeds.noise_block of their unit's seed_j."""
+    never written), and drawn blocks equal to seeds.noise_block of their unit's seed_j."""
     rows, n, k = c.a.shape[0], c.b.shape[0], c.a.shape[1]
     S, ncb, rb = c.units, n // 32, k // 512 + 1
     nb = 64 * rb
@@ -206,7 +206,7 @@ def tw_arms(c: Call, lib: Z.OneLib, noise: NoiseLib, gs: list[int], rng: random.
     its 4x units' positions, unit (ri, cj) at base + ri (N / 8) + cj) and its noise (kn_band at h1tile.Layout(32, 8, K)'s
     counts), per-unit and banded at each g, beside today's 32 x 32 tile's through the same kernel. Gated before timing:
     the kernel's counts are the Layout's; each arm's buffer 0xA5 first, then no 0xA5 block in any block a unit hashes, every
-    non-leader row tile still 0xA5, and sampled proof blocks against seeds.noise_block of the unit's seed_j; credit's
+    non-leader row tile still 0xA5, and drawn blocks against seeds.noise_block of the unit's seed_j; credit's
     banded_reference on two 32 x 8 tiles (a leader and a non-leader at the first g), which holds the shape to the
     Definition (h1tile.Layout's 4 | r, 8 | c; its fold over (r / 4)(c / 8) lanes)."""
     from verity.core.protocols.pouw.circuit import h1tile as HT

@@ -57,7 +57,7 @@ dither's) bits for those rows, the window's S + 1 absorbed prefix-word sets (wit
 the one-hot position of j in its window (its first S bits; JW = `jsel_bits`(S), the rest zero), and whether the window is
 the first. It computes T_j = T_(j-1) + A'_j B'_j^T entry by entry from p's set at j's position, folds the window, and returns 1 exactly when the fold is the leaf's word, T_j is p's next
 set, and in the first window the incoming set is 0. A statement holds ``a``, ``b`` and ``rc`` to the trees committed before
-and after the coin, recomputes ``u``, ``f``, ``st`` and the selections from the coin and the sample, and reads the result
+and after the coin, recomputes ``u``, ``f``, ``st`` and the selections from the coin and the draw, and reads the result
 through a row of known content: so a proof says the thread's committed window word is that of the committed operands'
 noised product, segment j included.
 

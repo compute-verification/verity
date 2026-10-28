@@ -7,7 +7,7 @@ set, `upper` a dual bound.  Also the closed form (`Bound.densityBound`, the `har
 
 `optimize.max_harm_check` and `optimize.fill` at `optimize.ln_upper`, on rationals, are the references, and must agree
 with the Lean exactly, invalid inputs included.  `certify` reports floats, so it is held on Demo A's plan of record at a
-one-week verification phase (`plan_of_record.json`, the sample PRF-166 posts, with what core certified for it) and on random
+one-week sampling block (`plan_of_record.json`, the draw PRF-166 posts, with what core certified for it) and on random
 draws: each exact field (core's `Stratified.harm_bound`) at least the supremum's `lower` and at most its `upper` within
 `SLACK`, the bracket itself within `WIDTH` units' harm, and `density` (`density_bound`) at least the closed form's value
 within `SLACK`.

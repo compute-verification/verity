@@ -17,7 +17,7 @@ run recorded.
 * **The public file.** A0's check of the verifier's own public file against the record (`matches_public`: the scheme,
   the roots, their domains and the instance count in the header of `stage/pub-<n>.bin`), the honest one and each
   recorded refusal, by the verifier of record's Lean (`one_stage.verifier.lean`) and today's Python.
-* **Negatives.** Each recorded refusal that is one of the protocol's checks (R1-R7, the sample's, the record's: proved,
+* **Negatives.** Each recorded refusal that is one of the protocol's checks (R1-R7, the draw's, the record's: proved,
   receipt, served, roots, registered; the verdicts'; the public file's) becomes the base case with the one change the
   run made; a refusal by a check the protocol does not make (`flock-verify`'s U1-U3 and roots, M0's selftests and
   bindings, a tampered set before the verifier of record) is listed as outside, with the reason, and where the protocol
@@ -134,7 +134,7 @@ def decode(desc: dict):
 
 def decode_opaque(desc: dict) -> tuple[Any, list[str]]:
     """`decode`, each primitive the descriptor names that today's registry lacks standing in by the descriptor's own
-    signature, never evaluated (the registration's checks and the sample read the program's shape only); and their ids."""
+    signature, never evaluated (the registration's checks and the draw read the program's shape only); and their ids."""
     from verity.ml.circuits.defs import REGISTRY, PrimitiveDefinition
     from verity.ml.circuits.types import type_from_json
 

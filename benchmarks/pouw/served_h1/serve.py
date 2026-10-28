@@ -42,7 +42,7 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   weights' root and the queue's root.  Step s's round root, over its A root and its admit root, is recorded before round
   s's coin opens (`sampled_proofs.challenger.LiveRecord`), and the step's units take the round's salt (`h1tile.live_salt`:
   `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise reads is committed before
-  that noise's coin.  The gate's units come from the sampling coin, opened after the window's receipts root (`receipts_root`).
+  that noise's coin.  The gate's units come from the draw coin, opened after the window's receipts root (`receipts_root`).
   This window has no gated session of its own (compute accounting, 21 Oct): the gated served window of record is vllm's
   H1 path, `integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py` (#3053), which holds the salt, round-0 request
   table, open root R, session S and requests_root rules (#2950, PRF-132), so ``--gate USER@HOST`` (or

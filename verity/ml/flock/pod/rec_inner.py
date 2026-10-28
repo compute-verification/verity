@@ -40,7 +40,7 @@ def stage(n: int, sets: Path, out: Path, plain_leaves: bool = False, sparse=None
           forge: str | None = None) -> dict:
     """The inner statement, bound to the `verity/partition/v1` object `Q_template_instance` v0 over `population_program` of
     the set's template at ``n`` (instance i is unit i), which every verifier of the inner statement holds (``--partition``,
-    ``--rec-inner-partition``), written beside it as ``partition.json`` with its program, ``program.json``, and the flip the
+    ``--rec-inner-partition``), written beside it as ``partition.json`` with its program, ``program.json``, and the draw the
     coin server answers ``Register`` with, every unit (`rec_live.full_draw`), ``draw.json``. ``stacked``
     (flock-circuit, with ``sparse``, the bucket's `rec_sparse.Shape`): the stacked table R registered with it here
     (`rec_session.stage_stacked`, ``forge`` ``cell`` its forgery), the circuit registration whose digest META binds."""

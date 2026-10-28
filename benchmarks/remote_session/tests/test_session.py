@@ -422,7 +422,7 @@ def test_a_session_reserves_append_coins_only_when_its_plan_appends_and_an_appen
 
 
 def test_a_window_with_no_draws_settles_malformed_whatever_its_batches():
-    """A window with no samples (none a session makes) settles `malformed` whatever its batches' results, as
+    """A window with no draws (none a session makes) settles `malformed` whatever its batches' results, as
     `Session.verify` and the Lean's settle give it."""
     from types import SimpleNamespace
 
@@ -817,7 +817,7 @@ def test_a_paced_session_puts_each_group_of_k_passes_under_a_live_coin_and_a_dro
 @pytest.mark.parametrize("k", [1, 3])
 def test_a_paced_group_is_drawn_as_its_k_th_root_arrives(k):
     """A paced window takes at most k roots, so its k-th makes them final once its boundary has left
-    (`audit.Session.close`), which the loop sends before that root: each group's samples go out as that root arrives, the
+    (`audit.Session.close`), which the loop sends before that root: each group's draws go out as that root arrives, the
     last group's too, so the openings coin's request on the challenger's log names the group's last root when it came,
     not one root or a deadline later."""
     (r,), _ = run("honest", paces=[verifier.pace_of(f"{k}:{4 * k}:40:2", 1.0)])
@@ -1240,7 +1240,7 @@ def test_the_lean_verifier_accepts_an_honest_session_and_rejects_a_dropping_one(
 
 def test_a_window_the_lean_rejects_is_rejected_on_the_books_at_its_draw(monkeypatch):
     """A window's verdict is the Lean's, set on `audit.Session` (`Checks.settle`): the Lean's accepting window 1 read
-    as a rejection at a sample rejects the session there, at that sample, with no disagreement."""
+    as a rejection at a draw rejects the session there, at that draw, with no disagreement."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     settle = verifier.Pair.settle
 

@@ -78,7 +78,7 @@ class V1:
     device: bytes | None = None
     """The GPU whose bandwidth salt the store is set up under (`V3.bind_device`), else None: PoUS's own salt."""
     setup_source = SETUP_SOURCE
-    """What the setup salt is sampled from, which a bandwidth verifier checks the store's salt against."""
+    """What the setup salt is drawn from, which a bandwidth verifier checks the store's salt against."""
 
     @property
     def c_of(self) -> str:

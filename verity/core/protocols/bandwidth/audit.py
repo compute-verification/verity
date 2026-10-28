@@ -7,7 +7,7 @@ The verifier (`Verifier`, `Window`, `ChallengerState`) is the auditor's hardware
 control; whatever runs on the GPU's node (`read_device`, the tagger's host) is the prover's, and every bound holds if it
 is adversarial, except that the device id it reads is the prover's word (`PROTOCOL.md` §2).
 
-1. The verifier samples a fresh nonce from its own randomness and records it in the store's challenger state, on disk
+1. The verifier draws a fresh nonce from its own randomness and records it in the store's challenger state, on disk
    (`Window.open`); then it derives the window's key from its own secret, bound to `vk`, the tag and the nonce, and
    sends the seed `σ` (`Window.start`, which starts its clock).
 2. Before `T = deadline_ns` (plus `rtt_allowance_ns`) the prover computes `y_j = Tag(σ, j, E_j)` for every block and
@@ -18,7 +18,7 @@ is adversarial, except that the device id it reads is the prover's word (`PROTOC
    committed root (`TagCommitment.open`).  The verifier checks both paths and recomputes the tag (`Window.verdict`).
    Openings are not timed: the commitment already binds every tag.
 
-A window is used once: a second start or commitment is refused, a nonce is never sampled twice, and nothing is resampled.
+A window is used once: a second start or commitment is refused, a nonce is never drawn twice, and nothing is redrawn.
 One window over a store is open at a time, from its record to its commitment or until `T + RTT` after its seed without
 one: the verifier refuses to open another before then, so no read serves two windows' ingress.  Both rules hold for every
 verifier of a store, whatever its tag, and across restarts, because all of them share the store's one
@@ -136,7 +136,7 @@ def read_device(gpu: str, *, smi: Callable[[Sequence[str]], str] | None = None) 
 
 
 def draw_salt(source: bytes, commitment: bytes, device: bytes) -> bytes:
-    """The salt of `device`'s store, which PoUS's setup (`pous.setup`) takes in place of its own `draw_salt`: sampled after
+    """The salt of `device`'s store, which PoUS's setup (`pous.setup`) takes in place of its own `draw_salt`: drawn after
     the commitment to `W` from the verifier's secret (or a later beacon round) as PoUS's is, with the device's 16-byte
     id bound in (`device_id`).  Devices holding one `W` then hold different stores, so their `vk`, seeds and tags
     differ."""
@@ -147,7 +147,7 @@ def draw_salt(source: bytes, commitment: bytes, device: bytes) -> bytes:
 
 def window_key(source: bytes, vk: VerifierKey, tag: str, nonce: bytes) -> Key:
     """The key of a window of `tag` over `vk`'s store.  `source` is the verifier's own secret: from a public one the
-    samples are known before the commitment, and a prover tags only the blocks they name.  `nonce` is sampled fresh for
+    samples are known before the commitment, and a prover tags only the blocks they name.  `nonce` is drawn fresh for
     the window from the verifier's own randomness, never counted: a key that a window number fixes repeats in every
     verifier, tag or restart that counts from the same place, and a window whose samples are known is passed by tagging
     only them."""
@@ -463,7 +463,7 @@ class Verifier:
     """The verifier of one tag's windows over one store `vk`, from its own secret `source`.  The store must be the one
     `device` holds: its salt is `draw_salt(salt_source, commitment, device)`, or the verifier refuses it, so a store set
     up under any other salt (PoUS's own, another device's) is never audited as this device's.  Every verifier of a store
-    takes the store's one `state`, which samples each window's nonce, records it before `σ` leaves, and keeps one window
+    takes the store's one `state`, which draws each window's nonce, records it before `σ` leaves, and keeps one window
     over the store open at a time, whichever verifier opens it."""
 
     def __init__(self, vk: VerifierKey, params: Params, source: bytes, state: ChallengerState, *, device: bytes,

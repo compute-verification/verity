@@ -9,8 +9,8 @@ Each session runs through the ZK server with `verity_flock.firewall_transcript` 
 ZK server's decision is whether the session ended with Finish, the contract's is `Flock.Firewall.Contract.run` on the
 transcript under the verifier's public input, the session's own schedule (`verdicts`, `decide`). `--cases` runs the built-in sessions (`cases`): honest ones (on live coins,
 as `rec_live serve`'s, and on coins the challenger committed to), the red team's six on #1270 (review-zk-gateway,
-c00b85b0c), challengers whose coins the ZK server must refuse (an opening of live coins; of committed ones, an opening that
-does not open, or none), and tamper controls, ZK servers that let out what the contract forbids, which the contract must refuse. `leaks` are review r6's transcripts on #1323 that leak a bit, each with its public input and the item the
+c00b85b0c), challengers whose coins the firewall must refuse (an opening of live coins; of committed ones, an opening that
+does not open, or none), and tamper controls, firewalls that let out what the contract forbids, which the contract must refuse. `leaks` are review r6's transcripts on #1323 that leak a bit, each with its public input and the item the
 contract must cut. `--sessions` replays
 recorded inner sessions (`rec_live serve`'s output directories: ``session/session.json``, ``public.json``, ``private.json``,
 ``coins.json`` when the challenger committed, and ``schedule.json`` beside them or in their parent, or ``--schedule``) with
@@ -209,7 +209,7 @@ def cases():
     out = [("honest", requests(), RL.Proxy, None, same(True)),
            ("honest-pings", requests(ping=True), RL.Proxy, None, same(True)),
            ("hello-keys-reordered", requests(hello={k: HELLO[k] for k in reversed(list(HELLO))}), RL.Proxy, None, same(True))]
-    # the red team's six on #1270 (c00b85b0c), on today's ZK server: each a stop, or the schedule's value sent in its place
+    # the red team's six on #1270 (c00b85b0c), on today's firewall: each a stop, or the schedule's value sent in its place
     out += [(f"gap1-y-{k}", requests(y=bytes(16 * k)), RL.Proxy, None, same(False, stop)) for k in (0, 1, 3, 1000)]
     out += [("gap2-hello-reps-float", requests(hello={**HELLO, "reps": 2.0}), RL.Proxy, None, same(False, stop))]
     out += [(f"gap3-open-{o}", requests(order=o), RL.Proxy, None, same(True)) for o in ("reversed", "after-link", "early")]
@@ -253,7 +253,7 @@ def run_case(name, reqs, proxy, fresh, schedule=SCHEDULE, rand=None, challenger=
 
 
 def replay(d: Path, schedule: dict | None = None) -> tuple[FT.Session, str | None]:
-    """A recorded inner session through today's ZK server again, with its own coins and salts and its requests in the prover's
+    """A recorded inner session through today's firewall again, with its own coins and salts and its requests in the prover's
     order; and why the replay differs from the record, if it does."""
     rec = json.loads((d / "session" / "session.json").read_text())
     pub = json.loads((d / "public.json").read_text())
@@ -336,7 +336,7 @@ def verdicts(lean: str, out: Path, sessions: list[tuple[str, FT.Session]]) -> li
 
 def leaks() -> list[tuple[str, dict, dict, dict]]:
     """Review r6's transcripts on #1323 (``note:review-zk-gateway/20261006T0934Z-finding-review-zk-gateway-r6``), each a
-    bit the ZK server could choose, built from the honest case's transcript: ``(name, transcript, public input,
+    bit the firewall could choose, built from the honest case's transcript: ``(name, transcript, public input,
     expectation)``, the expectation the contract's verdict (``accepted``), the items it releases (``released``: the cut is
     the next one) and a part of why. B1, the commitments' count and place: one more, one fewer, one moved. B2, a tape
     number naming another's value: a salt's bytes under two numbers, the workers seeing one under another number, the same

@@ -1,9 +1,9 @@
-"""The integration's one challenge module: every sample over committed values, on `verity.ml.randomness`.
+"""The integration's one challenge module: every draw over committed values, on `verity.ml.randomness`.
 
 Today's derivations hash the run root, the prover's own commitment (Fiat-Shamir), and their outputs are recorded in
 verdicts.  They stay byte-identical while `LEGACY` is true; decision 42 retires them at the re-baseline epoch.  The
 non-legacy forms draw through `verity.ml.randomness.derive` from a `source` that is an auditor key, with the run root
-and the sample's other bindings as context:
+and the draw's other bindings as context:
 
 * opening positions (`challenge_positions`): `verity/vllm-commit/opening-positions/v1`;
 * opening identities from the expected population (`identity_picker`): `verity/vllm-commit/opening-identities/v1`;

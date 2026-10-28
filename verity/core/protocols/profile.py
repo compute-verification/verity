@@ -96,7 +96,7 @@ class IntegrityProfile:
     is one statement.  `draws` names the drawn levels: at most one `Bernoulli`, and a `Subset` only at the checked
     level; undrawn levels only group.  A `Stratified` draw is the only draw, of the checked level, with its strata
     tiling that level's members; `accept`, `rho` and `worst_case` are the other laws', and it reads through `strata`.
-    `drawn` counts the members actually sampled at each level, all passed.
+    `drawn` counts the members actually drawn at each level, all passed.
 
     A profile of more than one level is valid only when its checked level is committed before the first draw
     (as serving commits every value, at serve time).  When the checked level is committed after
@@ -264,7 +264,7 @@ class IntegrityProfile:
     def strata(self) -> Stratified | None:
         """The law as independent uniform draws inside strata of the checked level: its `Stratified` draw, or, when a
         `Subset(k)` of the checked level is the only draw, one stratum of all its members, named after the level.  None
-        when a level is sampled `Bernoulli`."""
+        when a level is drawn `Bernoulli`."""
         checked = self.levels[-1].name
         law = self.draws[checked]
         if isinstance(law, Stratified):

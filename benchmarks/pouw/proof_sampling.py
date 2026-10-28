@@ -8,10 +8,10 @@ knows σ before it evaluates (SPEC §2.6) and picks, in each round:
   consumer's noised operand is 0, which makes every DP of the consumer group pass for free (SPEC's outlier trick).
 
 Proposition E2 with s draws bounds Σ_rounds [c_luck(s)·ρ(deficient) + s·ρ(wrong)] by L = ln(1/δ) off a δ event, so the
-cheater's best response to a sample is a fractional knapsack over these attacks with per-round supplies
+cheater's best response to a draw is a fractional knapsack over these attacks with per-round supplies
 (`best_response`). The verifier's minimax draw is a covering LP whose optimum is closed-form: a DP's weight is its MACs
 times max(1/c_luck(s), (1 + F)/s), F the largest fan-out of the levers its row carries (`optimal`); knowing σ (public
-before the sample), the verifier puts each row's lever excess only on the coordinates every lever needs (`aware`), which
+before the draw), the verifier puts each row's lever excess only on the coordinates every lever needs (`aware`), which
 attains `capped_optimum`, the exact minimax against the cheater with per-round supplies, solved as one LP. A
 closure, r producer DPs proved at random noise-active coordinates of each drawn consumer's operand row, detects a
 steered consumer as if it had failed (`closure`); at any coordinates of the row, it detects with the row's wrong
@@ -66,7 +66,7 @@ LLAMA_70B = Model("70B", 8192, 80, 64, 8, 128, 28672, 128256)
 
 @dataclass(frozen=True)
 class Design:
-    """What the sample sees of a design: Pr[R_i ≠ 0] of its activation-side noise and its QKᵀ MACs per model MAC."""
+    """What the draw sees of a design: Pr[R_i ≠ 0] of its activation-side noise and its QKᵀ MACs per model MAC."""
 
     name: str
     pi: float
@@ -253,7 +253,7 @@ def c_luck(s: int, p: float = P_PASS) -> float:
     """Luck's detection rate per unit of deficient ρ-mass a round with s draws sharing one σ.
 
     A round with deficient mass d passes with probability ≤ p + (1 − p)(1 − d)^s, so −ln of it is at least c·d with
-    c = inf over d of its ratio: 1 − p at one sample (the tangent at 0) and ln(1/p) once (s − 1)p ≥ 1 − p (the chord).
+    c = inf over d of its ratio: 1 − p at one draw (the tangent at 0) and ln(1/p) once (s − 1)p ≥ 1 − p (the chord).
     """
     if s == 1:
         return 1 - p
@@ -377,7 +377,7 @@ def capped_optimum(c: Cell, s: int) -> tuple[float, np.ndarray]:
 
 @dataclass
 class Response:
-    """The best response's ε and Λ (its saving in units of ln(1/δ)/S), its saving by attack, the sample, the closed
+    """The best response's ε and Λ (its saving in units of ln(1/δ)/S), its saving by attack, the draw, the closed
     levers, and the rows of each lever it steers over the window."""
 
     eps: float
@@ -394,8 +394,8 @@ def best_response(c: Cell, w: np.ndarray, s: int, closure_r: int = 0, caps: bool
 
     Each attack saves MACs and spends E2's detection budget L = ln(1/δ) over the window: c_luck(s)·ρ per deficient DP,
     s·ρ per wrong DP, and with a closure s·q·ρ(consumer group) for a steered consumer whose lever the closure covers. q is
-    1 for producers sampled at noise-active coordinates, and 1 − (1 − m/row)^r for `closure_any`'s producers sampled at
-    any coordinate of the row (a closure map that reads only the sampling coin and the Program, not σ).
+    1 for producers drawn at noise-active coordinates, and 1 − (1 − m/row)^r for `closure_any`'s producers drawn at
+    any coordinate of the row (a closure map that reads only the draw coin and the Program, not σ).
     With `caps` an attack is available once a round per row (or DP); without, its best ratio takes the whole budget.
     """
     rho = w / (c.count * w).sum()
@@ -532,7 +532,7 @@ def proof_cost(c: Cell, r: Response, s: int, closure_r: int = 0) -> Cost:
 
 
 def evaluate(c: Cell, strategy: str, s: int, closure_r: int = 0) -> tuple[Response, Cost]:
-    """`closure` and `closure_any` are the work sample with producers at noise-active or at any coordinates."""
+    """`closure` and `closure_any` are the work draw with producers at noise-active or at any coordinates."""
     closed = strategy.startswith("closure")
     w = work(c, s) if closed else STRATEGIES[strategy](c, s)
     r = best_response(c, w, s, closure_r=closure_r if closed else 0, closure_any=strategy == "closure_any")

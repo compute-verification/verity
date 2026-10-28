@@ -31,7 +31,7 @@ uv run tools/verity/check/suites.py verity/core/primitives/requirement # the dif
 ~~~
 
 `tests/test_requirement_difftest.py` holds it to `verity.ml.circuits.requirement` through `verity_difftest`, output for
-output and refusal for refusal: sampled wirings with executions that follow them and some that don't, under `pack`'s layout
+output and refusal for refusal: drawn wirings with executions that follow them and some that don't, under `pack`'s layout
 and store, a KV pool's (`paged`, whose blocks fill over several steps and credit nothing until complete), either with its
 coins back late (`deferred`, each block credited from its first encoded read, withdrawn when its values are dead by
 then), a mutation of `pack`'s or a random one, with run inputs, placed on a few devices with PoUW's windows over them (some bounding their

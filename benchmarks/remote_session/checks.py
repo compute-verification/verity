@@ -30,7 +30,7 @@ class Checks:
     @staticmethod
     def settle(session: audit.Session, t: int, results: list[dict], count: int) -> audit.Verdict:
         """Window t's verdict from its batches' results in draw order, as `Session.verify` would give it (`malformed`
-        on a window with no samples)."""
+        on a window with no draws)."""
         session._live()
         w = session.windows[t]
         if w.draws is None or w.verdict is not None:

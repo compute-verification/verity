@@ -6,7 +6,7 @@ v2 or a segmented row). The verifier writes its own `--registered` file from the
 (`served.json`), with `register_served` on its own program, and `flock-verify verify --zk --registered` accepts the session
 on it, its verdict naming that program's digest (the partition's), and refuses it on the same file with the tree's root changed, or a bit row's port with its words or width changed.
 `--zk` holds the files to the form `SampledKSLiveV3` covers (`Flock.PortRoots`), which all three sessions are in.
-A plain session of the row/v1 stage (`PLAIN`: no `--zk`, the verifier's own stratified sample) is accepted on that file too,
+A plain session of the row/v1 stage (`PLAIN`: no `--zk`, the verifier's own stratified draw) is accepted on that file too,
 and refused with the root changed and without `--registered`.
 Each verify sets up an m = 25 table (about 10 s), so the module is slow; it is the one test of `register_served`'s file on
 a proved session, which the Python round trip (`verity/core/protocols/sampled_proofs/tests/test_served.py`) can't

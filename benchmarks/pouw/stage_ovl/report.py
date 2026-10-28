@@ -9,7 +9,7 @@ For each chunk size M and depth k (k chunks of M tokens in flight, each its own 
   GEMMs on k streams);
   cost_sat: over the plain rate at saturation, the best plain tokens/s at that M over every k measured;
 - the protocol arms are the ones that commit and draw (eq, prio, hhi, hprio, rrW); best is the fastest of them;
-- lone TTFT: k = 1's eq over plain at k = 1; under load: each chunk's end (from the samples' stamps) over plain's makespan;
+- lone TTFT: k = 1's eq over plain at k = 1; under load: each chunk's end (from the draws' stamps) over plain's makespan;
 - memory a chunk in flight: the bench's activations (operands, A, the int32 outputs, a cuBLASLt workspace) and commitment
   state (stage.cu's Commit: digests, leaves, tree, the salt-only parts of all 32 layers), measured by cudaMemGetInfo;
 - beside.jsonl: plain's GEMMs against the same tokens' commitment compressions in small CTAs at the highest priority: its
@@ -322,7 +322,7 @@ def breakdown(dirs: list[Path]) -> list[dict]:
 
 
 # the edited arms' increments, each the arm minus the one before it (run.sh's eovl): the edited GEMMs over the fastest
-# plain, then X's commitments, the receipts' commitments, the samples. At k = 1 ovl.cu runs no arm with its own priority
+# plain, then X's commitments, the receipts' commitments, the draws. At k = 1 ovl.cu runs no arm with its own priority
 # streams, so the eq arms (one stream a chunk) stand in
 STEPS = (("edited GEMM", None, "E:chunked"), ("X commitments", "E:chunked", "E:cgprend-fp"),
          ("receipt commitments", "E:cgprend-fp", "ER:cgprend-fp"), ("draws", "ER:cgprend-fp", "ER:cgpre-fp"))
@@ -337,7 +337,7 @@ def step_arm(name: str | None, arms: dict) -> str | None:
 
 def edited(dirs: list[Path]) -> list[dict]:
     """run.sh's eovl: at each receipt stride S, the honest prefill (every linear EGEMM's edited GEMM, X and the receipts
-    committed, the samples) against the fastest plain int8 prefill of the same tokens, and its increments (STEPS); the
+    committed, the draws) against the fastest plain int8 prefill of the same tokens, and its increments (STEPS); the
     protocol arms are ER's and ERL's with draws (cgpre, cgprerrW, cgpreeq), best their fastest. With each linear's GEMM alone (eg_setup) against
     plain's, the gates (eg_gate), the receipts' roots (eg_roots), eref.jsonl and verify.jsonl."""
     out = []

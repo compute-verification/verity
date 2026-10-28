@@ -7,7 +7,7 @@
 #   1. hidden_zk/job.sh's builds (flock-circuit, the Lean flock-verify, a venv)
 #   2. per window under H1_LIVE (each directory holding a window.json): live.py prepare (the verifier's files, the
 #      openings checked, each round staged), one loopback --zk session per S line of its plan, each prover under the
-#      ZK server unless H1_FIREWALL=0, the Lean check of each C line, and live.py summarize: out/<window>/live-summary.json
+#      firewall unless H1_FIREWALL=0, the Lean check of each C line, and live.py summarize: out/<window>/live-summary.json
 # env: H1_LIVE (a dump DIR, or one window's, or a .tgz of either: --send it, then H1_LIVE=inputs/NAME.tgz; relative: the
 #      run dir's)  H1_MEM_GB (128, the job's --mem-gb)  H1_PAR (sessions and Lean checks at a
 #      time; H1_MEM_GB / 60)  H1_FIREWALL (1)  HZ_CACHE: hidden_zk's

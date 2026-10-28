@@ -285,7 +285,7 @@ def apply(s: Session, clock: Clock, e: tuple) -> dict:
 
 def summary(s: Session) -> dict:
     """`summaryJ`: what `Session.record` gives that the port computes, which is all of it but the coin commitment's
-    root, the block size and the registration's fields its digest binds, and of each window's profile its samples; and
+    root, the block size and the registration's fields its digest binds, and of each window's profile its draws; and
     `sessionFn`'s `groups_per_coin` when it isn't 1."""
     rec = s.record()
     shared = {} if rec.groups_per_coin == 1 else {"groups_per_coin": rec.groups_per_coin}

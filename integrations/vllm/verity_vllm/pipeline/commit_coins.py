@@ -9,7 +9,7 @@ and its served C2 replay challenge after each run's root of record.
   binding the challenge phase to the root before the challenger serves a coin, and refuses a second challenge phase for the root, ever.
   The Commit then reaches the challenger on its own 127.0.0.1 (this machine's certifier coin link), refuses one whose coin
   commitment isn't the gate's answer before its first coin (`pouw_h1_window.connect`), and for run i opens coin i of
-  each family in `FAMILIES` after run i's root (`Session.draw`); it closes the challenge phase after its last run. The samples
+  each family in `FAMILIES` after run i's root (`Session.draw`); it closes the challenge phase after its last run. The draws
   derive from the coins (`verity.ml.randomness.derive`): opening positions (`positions`) and population identities
   (`identities`) from `POSITIONS` and `IDENTITIES`, and the served C2 replay's challenge (`replay_challenge`) is the
   `REPLAY` coin.
@@ -194,7 +194,7 @@ _DRAWN = object()
 
 def positions(rc: Any, session: Any = _DRAWN) -> dict[str, Any]:
     """`challenge.challenge_positions`' keywords for run `rc`: off legacy, from its `POSITIONS` coin; given `session`
-    (None without a gate), the run's coins are flipped first (`draw`)."""
+    (None without a gate), the run's coins are drawn first (`draw`)."""
     if session is not _DRAWN:
         draw(session, rc)
     return {"legacy": False, "source": _key(rc, POSITIONS)}

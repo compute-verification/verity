@@ -127,7 +127,7 @@ PROMPT_IDS = 256
 #: (the endpoint's sizing: 636.5 MB a full-length request)
 REQUESTS = 113
 PEER, PORT, GATE, LANE = "vy-dc-h200-2", 18782, "research@204.12.178.84", "network-accounting"
-#: the auditor's side, where the chain runs and the gate's coins for its sample arrive
+#: the auditor's side, where the chain runs and the gate's coins for its draw arrive
 AUDITOR = "vy-nebius-cpu-2"
 KEY = Path.home() / ".ssh" / "vy-gate-network-accounting"
 KEEP = Path("/workspace/research/lanes/network-accounting/gate")

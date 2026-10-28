@@ -1,5 +1,5 @@
 # ε_adapt, SPEC's Theorem D under Daniel's one-σ order (05:07Z): the prover commits the circuit and its inputs, σ is
-# sampled once, then the prover evaluates, so every operand is fixed before σ but enforced only by the sampled proofs, and
+# drawn once, then the prover evaluates, so every operand is fixed before σ but enforced only by the sampled proofs, and
 # a cheater can steer instances in unproved regions. Its size depends on the proof block and its selection rule, the
 # sampling compiler's choice (note:20261017T0324Z-draft-eps1-spec, final 05:34Z). It is part of ε_sample, never of the
 # core ε (Daniel, 06:29Z). `eps --checking sampled` charges the design's own unit (`unit`, whole dot products since

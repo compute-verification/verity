@@ -607,8 +607,8 @@ def _live_draw(sk: lms.PrivateKey, coins: str, reg: str, stream: str, receipt: d
 
 def test_a_draw_record_the_prover_signed_over_its_own_coins_is_refused():
     """RT4-INT-5's witness, refused. A prover that runs a challenger on coins of its own and signs its record under a key
-    of its own sees each candidate registration's sample before it registers, and keeps one whose draw misses the unit it
-    can't prove (unit 0). The sample's check of record now verifies the record under the challenger key the window's
+    of its own sees each candidate registration's draw before it registers, and keeps one whose draw misses the unit it
+    can't prove (unit 0). The draw's check of record now verifies the record under the challenger key the window's
     parameters pin, not the key its coins name: the prover's record naming its own key is refused (``coin-key``), and
     naming the pinned key it doesn't verify under it (``coin``); with no key pinned, no live record is read
     (``coin-key``). The verifier's own challenger's record, signed under the pinned key, passes on the same draw."""

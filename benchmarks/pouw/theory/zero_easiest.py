@@ -1,7 +1,7 @@
-"""ZERO-EASIEST's exact check: how the cost of Dither's transcript depends on the instance (A, B) fixed before the sample.
+"""ZERO-EASIEST's exact check: how the cost of Dither's transcript depends on the instance (A, B) fixed before the draw.
 
 Dither: A is m×k, B is k×n, R ∈ {0,1}^{m×k} and U ∈ {±1..±64}^{n×L} are
-sampled after, S_{tj} = U_{j, t mod L} (S = ΠUᵀ, U shared by every segment), and the transcript is every L-step prefix
+drawn after, S_{tj} = U_{j, t mod L} (S = ΠUᵀ, U shared by every segment), and the transcript is every L-step prefix
 sum T_{A,B}[i, j, ℓ] = Σ_{t < L(ℓ+1)} (A+R)_{it} (B+S)_{tj} in Z/2³². U's bits are planes, U = −64 + Σ_p w_p β_p with
 w = (1, 2, 4, 8, 16, 32, 65). X♭ Y is the prefix-summed product, and A♯[i, ℓ, q] = Σ_{ℓ' ≤ ℓ} A[i, Lℓ' + q] the fold.
 
@@ -11,7 +11,7 @@ Parts:
 - B. Theorem Z. ℓ_{A,B} = T_{A,B} − T₀ is affine in R's bits and U's planes (Möbius, exhaustive). So C ↦ C + ℓ maps a
   circuit for T₀ to one for T_{A,B} with the same × gates, the same per-word product reads and the same error at every
   point. Checked on naive, Strassen and Strassen·(1 − δ) circuits, and backwards from a naive circuit for T_{A,B}.
-- C. The antipodal reduction. z̄ = (J − R, −U) is a measure-preserving involution of the sample, and
+- C. The antipodal reduction. z̄ = (J − R, −U) is a measure-preserving involution of the draw, and
   T_{A,B}(z) + T_{A,B}(z̄) = 2T₀(z) + ((2A+J)B)♭ − (JS)♭. Two calls give T₀ (recovered from 2T₀ mod 2³²), right
   wherever both calls are, so with probability ≥ 2δ − 1; tight. The one-sided flips give (A,0) and (0,B).
   The mask-sign family g_{f,c} = (R ⊕ 1⊗f̃, c·U∘σ) preserves the law; a combination Σ α_c T(g_c z) leaves the data
@@ -682,7 +682,7 @@ def part_d(ch: Checks, mut=None):
              best < zero and best / zero == Fraction(127, 128) and argl == [-1, 0] and 0 not in argr
              and len(argr) == 126, f"per (i,t,j): zero {zero}, minimum {best} = {best / zero}·zero, at A ∈ {argl} and "
              f"B ∈ [−63,63]∖{{0}} ({len(argr)} values)")
-    # exhaustive at a small shape: the skipping program's work over every sample
+    # exhaustive at a small shape: the skipping program's work over every draw
     m, k, n, L = 1, 2, 1, 2
     Rs = cube_points(m * k).reshape(-1, m, k).astype(np.int64)
     Us = np.array(np.meshgrid(*([alphabet] * (n * L)), indexing="ij")).reshape(n * L, -1).T.reshape(-1, n, L)

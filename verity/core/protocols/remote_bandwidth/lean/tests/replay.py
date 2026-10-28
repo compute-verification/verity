@@ -25,7 +25,7 @@ A record is one of two kinds:
   - one rejected for a failure the record keeps the cause of (`KEPT`: too few passes in a window) is rejected the same
     at the same window;
   - one rejected for any other failure is rejected nowhere in what is replayed, and draws as many receipts as recorded
-    in each window it sampled. Its cause is in what the record doesn't keep: its openings, plans, appends or steps, or
+    in each window it drew. Its cause is in what the record doesn't keep: its openings, plans, appends or steps, or
     the root it rejected, whose arrival the verifier records only once `Session.receive` takes it (so not a late one).
   Both verifiers also recompute the registration's digest from its fields, which must be the recorded one, unless the
   registration was recorded before it named its layout and rows (`LATER`), when the digest bound neither. A record

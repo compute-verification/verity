@@ -292,7 +292,7 @@ def output_refusal(a: argparse.Namespace, mine: CS.Window, drawn_law: dict) -> d
 
 
 def port_refusal(mine: CS.Window, draw: dict, port: int, ports: int | None) -> dict | None:
-    """Why the sample's sessions can't all listen inside the ``ports`` reserved from ``port``, or None (and None for
+    """Why the draw's sessions can't all listen inside the ``ports`` reserved from ``port``, or None (and None for
     ``ports`` None, the caller's own ports): each member with a proved unit (`draw.proved`, its closure included) listens
     on the next port from ``port``, so a session past the reservation could reach another audit's verifier."""
     if ports is None:
@@ -945,7 +945,7 @@ def plain(a: argparse.Namespace) -> bool:
 
 
 def plain_refusal(a: argparse.Namespace, mine: CS.Window, registered: dict | None) -> str | None:
-    """Why a plain audit (``a.plain``) of ``mine`` is outside `PLAIN_SCOPE`, refused before the sample; None inside it (and for
+    """Why a plain audit (``a.plain``) of ``mine`` is outside `PLAIN_SCOPE`, refused before the draw; None inside it (and for
     a `--zk` audit)."""
     if not plain(a):
         return None

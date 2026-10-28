@@ -17,7 +17,7 @@ after      σ_0 after R; σ_t (t ≥ 1) after the last root the verifier had rec
 The prover has the commitment before the first coin and checks every coin it is sent against it (`coin_reason`), so no
 coin is chosen after a root.  hm96 keeps every unopened coin statistically hidden, so the commitment says nothing of a
 window's seeds or draws before its coins are released.  Within a window the passes' seeds are Fiat–Shamir, chained from
-the coin through the prover's roots (`receipts.seed`); the openings are sampled from a coin of their own.  An append's coin
+the coin through the prover's roots (`receipts.seed`); the openings are drawn from a coin of their own.  An append's coin
 answers the append's root, a commitment the prover has already made: committed before the session like every coin, it
 opens after that root, once.
 
@@ -206,7 +206,7 @@ class Coins:
 
 def local(registration: bytes, session: int, windows: int, entropy: Callable[[int], bytes], *,
           appends: int = APPENDS, per_coin: int = 1, clock: Callable[[], float] = time.monotonic) -> Coins:
-    """Session `session`'s coins from a challenger in the verifier's process, sampling from `entropy`."""
+    """Session `session`'s coins from a challenger in the verifier's process, drawing from `entropy`."""
     return Coins(LiveChallenger(SCHEME, session, families(windows, appends, per_coin), entropy), registration, session,
                  windows, per_coin=per_coin, clock=clock)
 

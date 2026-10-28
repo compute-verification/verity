@@ -95,14 +95,14 @@ SampledProofs.OneStage.protocol]`. Its executable is `remote id | check PARAMS C
 
 ## The guarantee
 
-**In words.** Suppose the remote verdict accepts every verification phase of a monitoring period. Then, except with a
-failure probability set by the sample and by SHA-512, two things hold:
+**In words.** Suppose the remote verdict accepts every sampling period of a monitoring period. Then, except with a
+failure probability set by the draw and by SHA-512, two things hold:
 
-- the committed computation satisfies the registered circuit, except on at most the proof blocks a sample of that size
+- the committed computation satisfies the declared circuit, except on at most the proof blocks a draw of that size
   misses at δ;
 - the period's credited live work is at least (1 − ε) of the declared work.
 
-Everything is about the committed trace. That the registered circuit computes what the served model computes is
+Everything is about the committed trace. That the declared circuit computes what the served model computes is
 completeness, never a security claim.
 
 **The pieces.** "Proved" means its proof is in a lock on `main`. For a guarantee, that's `<Area>.SecurityProofs.G :
@@ -116,7 +116,7 @@ PoUW `--zk`), and a chain can be "none" while each piece is proved.
 |---|---|---|---|
 | The verdict rule | `Properties.Composition.AcceptMeans`, `AnswerAccepts` (`Security/Properties/Composition.lean`; proofs `acceptMeans`, `answerAccepts`) | **proved** | — |
 | Sampled proofs' accept rule | `Properties.SampledProofs.AcceptMeans` (`Security/Properties/SampledProofs.lean`; proof `acceptMeans`) | **proved** | — |
-| A C-Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ faulty proof blocks outside what the sample catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/Refused.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
+| A C-Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ faulty proof blocks outside what the draw catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/Refused.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
 | Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
 | The verifier's verdicts tied to those theorems | none: remote reads one-stage v1, which takes the verdicts as evidence; v2 (`verity/sampled-proofs/one-stage/v2`) runs `flock-verify verify --zk` itself, and remote doesn't read v2 yet | **open** | — |
 | PoUW's accept rule, and its accepted prefix tied to the period credit | `Properties.Pouw.Check.AcceptMeans`, and `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (`Security/Properties/Pouw/Period.lean`; proofs `Properties.Pouw.Check.acceptMeans`, `Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod` and `checkedCreditPeriod`, all in `Security/Properties/lean-audit.json`) | **proved**, under the PoUW assumptions below | — |
@@ -153,9 +153,9 @@ PoUW, as `H1CheckedCreditPeriod` takes them (the general `CheckedCreditPeriod` t
 - `Properties.Pouw.Period.ServiceSound`: the proof system is sound at δ_ks against PoUW's check, which is C-Flock's
   soundness at each sampled proof block (`Flock.Guarantees.EndToEndRegisteredRows` for one session). It is a named assumption: no
   theorem discharges it yet.
-- `Properties.Pouw.Period.DrawIsCoin`: the units the check publishes as sampled are the model's sample at the window's live
+- `Properties.Pouw.Period.DrawIsCoin`: the units the check publishes as drawn are the model's draw at the window's live
   coin. A protocol-code fact still to prove.
-- `Properties.Pouw.Period.RegisteredBeforeDraw`: each window's registration is fixed before its sampling coin. It states
+- `Properties.Pouw.Period.RegisteredBeforeDraw`: each window's registration is fixed before its draw coin. It states
   the order only, and the binding it is used for also needs the rows committed by the registration, which the deployed
   path doesn't do yet: its registered roots are tags, with no row committed (`anchors []`).
 - `Properties.Pouw.Period.SaltIsLiveCoin`: each window's salt is its round's live coin. The deployed path doesn't meet
@@ -202,7 +202,7 @@ uv run python benchmarks/rho/periods.py --scenario reference-remote-h200
 ```
 
 Each figure states which of its parameters are measured on one machine and which are scaled. The δ it reports is pooled
-over the monitoring period (`IntegrityHorizon`, `CircuitCreditPeriod`), not per verification phase.
+over the monitoring period (`IntegrityHorizon`, `CircuitCreditPeriod`), not per sampling period.
 
 ## The demo
 
@@ -222,7 +222,7 @@ and vllm each run remote's sampled-proofs half for real:
   none, and isn't placed: its Lean verifier ran beside the prover. On a CPU at a small shape, run
   `uv run python examples/h200/run.py --out /tmp/e2e` (`--tamper l1.wup` must exit 3).
 - `verity example vllm` (`examples/vllm/README.md`): Llama-3.2-1B in bf16 served by vLLM on one RTX PRO 6000 (its run
-  of record), its values committed while serving, and a verification phase's proof blocks sampled by live coins, proved by
+  of record), its values committed while serving, and a sampling period's proof blocks drawn by live coins, proved by
   C-Flock `--zk` and checked by the Lean verifier. It runs, at proof level none: no remote guarantee exists for those
   verdicts to reach (the open gap, above). The int8 served run on an H200 (`benchmarks/one_stage/served_verdicts.sh`'s
   default) is tonight's, Tue 27 Oct, 6 PM PDT.

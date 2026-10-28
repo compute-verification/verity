@@ -32,7 +32,7 @@ circuit file and its teardown, and Lean's session check) plus a part a lane. `RA
 **Node-days** are memory-packed: a node runs ⌊node GB / process GB⌋ provers (prover and session verifier) or Lean checks
 at once, and a window's node-seconds are its prove seconds over the prove slots plus its Lean seconds over the Lean
 slots. Process-days are the same seconds unpacked (INT-PERIOD's node-days). Windows certify in parallel on N nodes, but
-one stream serves the period (#2722: disjoint periods, one stream each), and a window's sample comes only once it is
+one stream serves the period (#2722: disjoint periods, one stream each), and a window's draw comes only once it is
 served, so the period takes max(serving, certifying its first n − 1 windows on N nodes) plus its last window's
 certification: its statements in parallel, but no sooner than one statement's prove and check.
 

@@ -71,8 +71,8 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   and with every deviation it lists refused. Nothing about it is proved.
 - `vllm/` (`run` `runs`, `proof` `none`): remote's sampled-proofs half on a real model. Llama-3.2-1B in bf16 served by
   vLLM on one RTX PRO 6000 through `verity_vllm`'s committing endpoint; `verity example vllm` serves a window, commits its
-  values, and audits it: live coins select proof blocks, C-Flock `--zk` proves them and the Lean verifier checks them, with a
-  verdict per verification phase. Its workload is in its own `workloads/`, its placement is `placement.toml`, which `run.sh`
+  values, and audits it: live coins draw proof blocks, C-Flock `--zk` proves them and the Lean verifier checks them, with a
+  verdict per sampling period. Its workload is in its own `workloads/`, its placement is `placement.toml`, which `run.sh`
   reads, and its scripts reach the integration by `PYTHONPATH`; it is not a package. It is not `placed`: its runs of record
   ran the Lean verifier on the GPU node with the endpoint and the prover. The int8 served run on an H200 is tonight's,
   Tue 27 Oct, 6 PM PDT.

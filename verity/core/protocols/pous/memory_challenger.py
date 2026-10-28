@@ -7,7 +7,7 @@ A session has four steps:
 
 1. **Commit.** The session id is the auditor's, designated for one audit, and the memory challenger runs at most one
    session under it: its `SessionLog` refuses an id already used and records the new one, fsynced, before the
-   session's first challenge.  Before the session the memory challenger samples its `k` indices from its own secret
+   session's first challenge.  Before the session the memory challenger draws its `k` indices from its own secret
    (`verity.ml.randomness`, `COIN_DOMAIN`) and commits to them in a coin tree.  It publishes the coin tree's
    root and hm96 key together with the session's id and parameters and the root the setup published for the `C*` it
    audits (`SessionCommitment`).

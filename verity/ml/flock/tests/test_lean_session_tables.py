@@ -1,5 +1,5 @@
 """Sessions of several tables (PROTOCOL.md §16.12, #306's `--session-tables J`, N4): the Lean verifier builds each table's
-statement from its part of the session's sample (without one, of the population's units), never from anything in the record.
+statement from its part of the session's draw (without one, of the population's units), never from anything in the record.
 The sessions are #306's live ones on RoPE, all accepted by its server, and none is `--zk`. Without `--plain-tables`, several
 tables without `--zk` are a form the one-table plain claim does not cover (§16.15), so the verifier refuses every session, for
 that once every check has passed: a drawn one for its subset sample without `--zk` at setup first, and a sample it sets no
@@ -21,7 +21,7 @@ from verity_flock.record_text import session_text
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
-#: RoPE d64 (8 instances) with #306's loopback sessions: J = 2 without a sample, J = 2 with `--draw subset:4` (two), J = 4
+#: RoPE d64 (8 instances) with #306's loopback sessions: J = 2 without a draw, J = 2 with `--draw subset:4` (two), J = 4
 FIXTURE = "art:425f6860"
 STATEMENT = "verity/flock-circuit@967b8d06+seed-injection"
 

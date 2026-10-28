@@ -46,9 +46,9 @@ behind the Lean ZK server, delivered, and decided by N2's verifier of record wit
   window's salted root and the advice's digest, the challenger then draws K of the windows on its coins
   (`LinkWindows.period_draw`), and only the drawn windows are registered, proved and decided; the network verdict is
   the sampled one, with ``wrong_units`` (at most ``bound`` wrong windows of the period's, ε = bound / n, at the
-  stream's δ, ``--delta``). Its sample of record is the Lean verifier of record's (``--lean``'s ``draw --population n
-  --k K --stream-file``, `service.lean_draw`) on the coins the period flip read, and it accepts only when the windows
-  proved are that sample's, refusing by name (``period-draw``) otherwise. The coins are the verifier's own by default;
+  stream's δ, ``--delta``). Its draw of record is the Lean verifier of record's (``--lean``'s ``draw --population n
+  --k K --stream-file``, `service.lean_draw`) on the coins the period draw read, and it accepts only when the windows
+  proved are that draw's, refusing by name (``period-draw``) otherwise. The coins are the verifier's own by default;
   ``--challenger local|gate:USER@HOST`` takes the auditor's challenger's instead (`Challenger`: one session, as
   `records_audit` takes it, whose evidence the coins each member's Lean drew on are held to, `coins.coins_reason`). The
   summary's ``draw`` and ``sampled`` report them, ``sampled`` per member in scan_zk's shape: ``draw`` {law, coins,

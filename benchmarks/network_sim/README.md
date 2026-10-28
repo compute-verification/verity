@@ -10,8 +10,8 @@ call a zone a block (`datacenter.physical.Block`, `--blocks`).
 - `graph.py`: the exports, which read any `Datacenter` that validates, a fleet's merged one included: the netns plan
   `mockdc.py` stands up, and Shadow's GML. `python graph.py --blocks 2 --netns` prints `leaf_spine(2)`'s plan, and
   `--fleet` `two_sites(2)`'s.
-- `records.py`: the certifier's published records as `datacenter.observe.Record`s (port, verification phase, counts,
-  digest), the records an honest run declares by port and verification phase, and the certifiers' parameters as the
+- `records.py`: the certifier's published records as `datacenter.observe.Record`s (port, sampling period, counts,
+  digest), the records an honest run declares by port and sampling period, and the certifiers' parameters as the
   declaration's `Cadence`; `datacenter.check_records` audits them.
 - `mockdc.py`: a declaration's netns plan stood up on one host, the certifier's proxy on each zone's uplink, both
   audits, and the account's charge for each zone.
@@ -69,8 +69,8 @@ random bit per request; `late`, which holds a request in verification phase 0 pa
 event at a position the Program doesn't have; or `maintenance`, honest with its certifier down for verification phase 1
 (below). Each zone is audited twice. The certifier's audit is `audit.Audit`'s `check_link` and `check_ingress_link`
 on its raw and committed records. The datacenter record check is `datacenter.check_records` on its records as `datacenter.observe.Record`s against the ones an honest run of the Program publishes: each port
-(`b0.cert:out` for what leaves the zone, `b0.cert:in` for what enters it) needs a record for each verification phase, with
-the declared counts and digest, and each carried verification phase leaves log2 of the sync set's size bits of timing
+(`b0.cert:out` for what leaves the zone, `b0.cert:in` for what enters it) needs a record for each sampling period, with
+the declared counts and digest, and each carried sampling period leaves log2 of the sync set's size bits of timing
 advice. The declaration's cadence is the certifiers' calibrated parameters: frames of 4,096 bytes, buckets of 100 ticks
 of 1 ms, verification phases of 60 buckets and 16 jitter classes (syncs). Each zone's wire is also compared with the
 honest zone's. `DIR/summary.json` has the verdicts and the timing, and `DIR/b0/` a zone's records (`records.json` as

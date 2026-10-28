@@ -10,7 +10,7 @@ Prefill, per chunk of M tokens (32 layers, 6 stages a layer, 192 commitments and
   stage's commitment and draw on the N-SM partition and its GEMM on the rest, against C x gemm;
 - in flight: pipe C / (C x gemm) - 1, C chunks each committing, waiting DRAW_US, then multiplying, stage by stage; pipe 1 is a
   lone request's time to first token over the clean forward;
-- the critical path a stage: (pipe1 - gemm) / 192, and the commitment's own latency (hash_latency / 32) plus the sample;
+- the critical path a stage: (pipe1 - gemm) / 192, and the commitment's own latency (hash_latency / 32) plus the draw;
   for the fast path (hash=fr) the salt-only part, which runs ahead off the critical path, apart (salt, salt_latency).
 Deferred, per T and composition: one layer's noised recompute, ms, share of the int8 peak at the read clock, and the stored
 operands a replica (32 layers). Beside: the decode step's slowdown, and whether the pass keeps up with the tokens decode

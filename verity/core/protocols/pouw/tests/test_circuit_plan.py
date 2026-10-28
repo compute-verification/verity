@@ -103,7 +103,7 @@ def test_a_plan_proves_each_drawn_tile_with_its_closure_once():
 def test_the_work_table_and_law_object_are_362s():
     """`work_table` is the verifier's `--work-table` (W_ref per tile, 0 elsewhere, and each template's floor f_s);
     `law_object` is the law `flock-verify draw --work K` derives from it (`Draw.deriveWork`, `Law.toJson`). A floor from the
-    verifier's table raises a zero-work stratum's samples to it (X-SPC-81)."""
+    verifier's table raises a zero-work stratum's draws to it (X-SPC-81)."""
     lay = PL.layout(ncp2.Shape(32, 64, 32))
     tile, deq = _by_role(lay)["tile"], _by_role(lay)["dequant"]
     table = PL.work_table(lay)
@@ -528,7 +528,7 @@ def test_the_window_key_is_derived_from_the_complete_receipt(monkeypatch):
 
 def test_a_caller_built_ledger_has_no_key():
     """The red team's first probe: a ledger built with a key from a caller-chosen source. `Ledger` takes no receipt, key
-    or source, and sets none afterwards, so only `Ledger.open` makes one that samples."""
+    or source, and sets none afterwards, so only `Ledger.open` makes one that draws."""
     import pytest
 
     import circuit_fixtures as F
@@ -553,7 +553,7 @@ def test_a_caller_built_ledger_has_no_key():
 
 def test_an_opened_ledger_s_key_cannot_be_reassigned():
     """The red team's second probe: an opened ledger whose key is reassigned. The key is set once, in `Ledger.open`, and
-    `Traced.draw` reads it from the ledger, so a caller's key never reaches a sample."""
+    `Traced.draw` reads it from the ledger, so a caller's key never reaches a draw."""
     import pytest
 
     import circuit_fixtures as F
@@ -572,7 +572,7 @@ def test_an_opened_ledger_s_key_cannot_be_reassigned():
 
 def test_an_opened_ledger_s_receipt_cannot_be_swapped():
     """The red team's third probe: an opened ledger whose receipt is swapped for a larger one after the key exists, so a
-    call committed after the key would be sampled under it. The receipt is set once, in `Ledger.open`, and the later call
+    call committed after the key would be drawn under it. The receipt is set once, in `Ledger.open`, and the later call
     is refused."""
     import hashlib
 
@@ -632,9 +632,9 @@ def test_openings_are_checked_against_the_receipt_s_commitment():
 
 
 def test_the_record_keeps_the_source_once_the_draw_is_sent():
-    """The red team's answer to question 2: the audit record keeps the window's source and receipt digest once its sample
-    is sent, so a third party re-derives the key (`replay_key`) and so the sample. Before it is sent the record is refused,
-    and after it the window samples nothing more. What the record can't show is that the source was fresh."""
+    """The red team's answer to question 2: the audit record keeps the window's source and receipt digest once its draw
+    is sent, so a third party re-derives the key (`replay_key`) and so the draw. Before it is sent the record is refused,
+    and after it the window draws nothing more. What the record can't show is that the source was fresh."""
     import pytest
 
     import circuit_fixtures as F

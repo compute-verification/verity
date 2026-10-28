@@ -6,7 +6,7 @@ The challenger listens and the prover connects. Each round is one frame each way
 time); `u64be 2^64 − 1` ends the session, after its last round or a late one. Before round 0 the challenger sends
 `WARMUPS` frames on `WARMUP_INDEX`, which no coin chose, and discards their answers: nothing times, records or signs them,
 so the first timed round doesn't pay for waking both processes and the prover's memory path after the session's setup.
-The challenger flips its coins on its own host, designates the session id from them, the node and the setup's root
+The challenger draws its coins on its own host, designates the session id from them, the node and the setup's root
 (`period.SESSION_DOMAIN`), signs under its own key and claims the id in its own session log. It reports `{"host",
 "public_key", "session", "session_id", "warmups"}`.
 
@@ -54,7 +54,7 @@ def _read(f: BinaryIO, n: int) -> bytes:
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog, coins: bytes,
           domain: str, clock: Callable[[], int] = time.perf_counter_ns,
           warmups: int = WARMUPS) -> tuple[bytes, R.Session]:
-    """The challenger's side of one session over the connection `f`: the coin tree sampled from `coins` under the id it
+    """The challenger's side of one session over the connection `f`: the coin tree drawn from `coins` under the id it
     designates from them, `request`'s node and binding (`domain`'s derivation), `warmups` untimed exchanges on
     `WARMUP_INDEX`, then each index sent and its block read on `clock`, the session signed by `signer`; its id and
     record."""

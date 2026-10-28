@@ -7,18 +7,18 @@ B is the verification overhead as a fraction of the plain workload's compute: GP
 family, with every other resource converted at its price. Its parts:
 
 - the PoUW transform, γ − 1 (honest over plain int8, the machine model's γ on the family's measured kernel);
-- commitment hashing, receipts and the noise's samples (COMMIT-GPU r5's fractions of plain prefill time);
-- sampling, B_s: proving, staging and verifying the sampled proof blocks under proofs' fitted C-Flock cost model (cost-model/v1),
+- commitment hashing, receipts and the noise's draws (COMMIT-GPU r5's fractions of plain prefill time);
+- sampling, B_s: proving, staging and verifying the drawn units under proofs' fitted C-Flock cost model (cost-model/v1),
   as OPT2's planner spends it. `budget_sampling.json` is its frontier at δ_s (`sampling_sweep`): the least ε_sample at
-  each spend over a GPU-week of one RTX PRO 6000, with the plan's samples and cut. The provers are RTX PRO 6000 workers,
+  each spend over a GPU-week of one RTX PRO 6000, with the plan's draws and cut. The provers are RTX PRO 6000 workers,
   so a family's B_s buys B_s·gpu_usd_h/PROVER_USD_H of that spend.
 
 ε is the headline's sum, core plus sampling (NOTATION's ε[Π], note:20261018T0206Z-draft-notation, with luck in the core
 by decision 92(a)). Core is ε_skip (less the share that checking P·V's served output removes) and ε_machine (route +
 cert), the machine model's under the floor credit at q* = 1.22 with operands free (decision 89), and ε_luck at the
-protocol's rule. Sampling is OPT2's ε_sample, the units a plan's samples leave unproved. With a seed a matmul (decision
+protocol's rule. Sampling is OPT2's ε_sample, the units a plan's draws leave unproved. With a seed a matmul (decision
 101) a drawn deficient unit is caught at 1 − p, so luck is ε_sample·σ_w/(1 − p): the machine model's full-checking
-ε_luck (one σ a round) times S over the samples. The cheater's best mix of wrong and deficient units gains
+ε_luck (one σ a round) times S over the draws. The cheater's best mix of wrong and deficient units gains
 ε_sample·max(σ_w/(1 − p), 1), which the sum bounds.
 
 The levers the optimum moves are verified filler (extra lane instructions a word, `FILL`; decision 90 divides every term
@@ -61,7 +61,7 @@ REGIMES = {"plain": (1.0, 1.0), "sessions/256": (1.0, 1 / 256), "prefix, session
 ALLOCATED = ("plain", "sessions/256")
 #: the sweep's spends B_s, a fraction of an RTX PRO 6000's week, 8 a decade
 SPEND_GRID = tuple(round(10 ** (e / 8), 6) for e in range(-28, 21))
-#: today's samples: 2 a round over a week (SAMPLING, note:20261017T0608Z-draft-eps1-sampling, after PRF-57)
+#: today's draws: 2 a round over a week (SAMPLING, note:20261017T0608Z-draft-eps1-sampling, after PRF-57)
 TODAY_DRAWS = 2 * ROUNDS
 #: a sampled proof block's proof grows with the filler it recomputes (p = 0 needs the check to recompute it): its ANDs by
 #: (1 + y/16) at y extra lane instructions a word, as if the receipt arm were a quarter of the proof at fx1's 4 a word

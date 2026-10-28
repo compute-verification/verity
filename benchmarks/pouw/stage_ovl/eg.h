@@ -23,7 +23,7 @@ size_t lin_rbytes(const Lin* L);
 void lin_kernel(Lin* L, int kern);   // 0 w_d (lag 3, the IMAD tie every fourth MMA), 1 w_d4q (e_l4q's lag 4, LOP3 tie every fourth)
 int lin_kernel_of(const Lin* L);
 void lin_flags(Lin* L, bool fuse, bool pf);
-// a call: X, P_A from x (dither) and W', P_B from W, under key; the GEMM under seed (the receipts' keys, the sample's)
+// a call: X, P_A from x (dither) and W', P_B from W, under key; the GEMM under seed (the receipts' keys, the draw's)
 void lin_qwe(Lin* L, const int8_t* W, uint32_t key, cudaStream_t st);
 void lin_gemm(Lin* L, uint32_t seed, cudaStream_t st);
 // plain serving's activation quantizer (quant<false>: round, no dither, no P_A) from x into a scratch operand of L's own

@@ -362,7 +362,7 @@ def main() -> int:
     ap.add_argument("--set", required=True)
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
-    ap.add_argument("--lean", required=True, help="flock-verify for the sample checks (PR #113)")
+    ap.add_argument("--lean", required=True, help="flock-verify for the draw checks (PR #113)")
     ap.add_argument("--lean-verify", default=None, help="flock-verify for the full verify (PR #118); default --lean")
     ap.add_argument("--out", required=True)
     ap.add_argument("--k", type=int, default=16)

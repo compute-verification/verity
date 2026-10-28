@@ -1,5 +1,5 @@
 // Is an FP8 or FP4 MMA chain exact integer arithmetic on sm_120? Each warp chains K / k_step MMAs of one format into
-// one m16n8 FP32 accumulator, from an initial word C0, with operands sampled from an exact grid (fp_exact.py's GRIDS) by a
+// one m16n8 FP32 accumulator, from an initial word C0, with operands drawn from an exact grid (fp_exact.py's GRIDS) by a
 // counter hash, and compares every output word with the exact sum, computed in int64 by the same lane in the grid's
 // units. The same tile runs in three accumulation orders (the K chunks of 8 permuted), so a value that comes out as two
 // words is counted. fp_exact.py writes the configs, rechecks sample tiles' references and words on the host, and

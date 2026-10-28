@@ -437,7 +437,7 @@ def pooled(plan: Plan, cands: list[Candidate], delta: float, blocks: float, *, a
 
 def horizon(plan: Plan, cands: list[Candidate], delta: float) -> float:
     """`IntegrityHorizon`'s bound on the faulty proof blocks over any number of windows, each a subcircuit's window of a block
-    (`windows`): ln(1/delta) / q at q the least share k_s / n_s any window samples."""
+    (`windows`): ln(1/delta) / q at q the least share k_s / n_s any window draws."""
     return log(1 / delta) / min(plan.sizes[c.template] / c.units for c in cands if c.template in plan.sizes)
 
 

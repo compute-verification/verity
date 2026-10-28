@@ -1,4 +1,4 @@
-"""Sampled proofs' parties on the deployment layer (`verity.core.deploy`): the challenger, the ZK server, the workers and the
+"""Sampled proofs' parties on the deployment layer (`verity.core.deploy`): the challenger, the firewall, the workers and the
 verifier, the roles `verity run CONFIG --party ROLE` runs, and their table (`PROTOCOL`; `PROTOCOLS` by id).
 
 ~~~text

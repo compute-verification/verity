@@ -47,7 +47,7 @@ from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops import fp32 as F, gemm as G  # noqa: E402
 
 DELTAS = (1e-2, 1e-6)
-#: each subcircuit's verification phase certifies at most this share of its units wrong at delta = 1% (`transformer.TARGET_SHARE`)
+#: each subcircuit's sampling block certifies at most this share of its units wrong at delta = 1% (`transformer.TARGET_SHARE`)
 SHARE = X.TARGET_SHARE
 #: replaying the drawn requests, in blocks of the block's own run: stand-in, the sampled proof blocks touch nearly every request
 #: and a step's cost is its weights' decode, not its batch, which is not yet priced

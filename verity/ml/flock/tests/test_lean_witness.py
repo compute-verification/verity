@@ -403,8 +403,8 @@ def test_f1_verify_refuses_the_session_only_for_its_undrawn_inner_session(built,
     session its coefficients are checked against, and the coin server's inner transcript (`inner/s1/public.json`), whose
     link points, level-3 tops and `root_B` the unit is held to (`RecVStar.checkTopRows`, `RecCoins.checkLink`), as
     `85-rec-reprice.sh`'s STEP=lean runs it, through every check and every refusal the verdict runs last (the form's, a
-    sample-less session's, and a V* session's short of every unit, `RecSetup.fullDraw`) but the one after them: the gate's
-    inner session ran before the coin server drew it (#2468), so its record holds no sample, and a session over it is refused
+    draw-less session's, and a V* session's short of every unit, `RecSetup.fullDraw`) but the one after them: the gate's
+    inner session ran before the coin server drew it (#2468), so its record holds no draw, and a session over it is refused
     (`RecSetup.innerDrawn`), with that reason alone, and not as a private circuit's. The checks above are the model's
     predicates; this is the shipped verdict, so a refusal added to it that an honest V* session meets fails here and nowhere
     else. About two minutes, beside the gate's witness runs."""

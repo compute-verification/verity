@@ -1,9 +1,9 @@
 //! Zero-knowledge readiness for `verity/flock-circuit` (lane flock-circuit, M0): the masking hooks the prover API
 //! carries now, as no-ops, and the prover's own randomness.
 //!
-//! Every random value the prover uses is the operating system's own bytes (`getrandom`), read where it is sampled and kept where it
+//! Every random value the prover uses is the operating system's own bytes (`getrandom`), read where it is drawn and kept where it
 //! is used again, so no premise on a stream generator is left on any of them (Daniel, 9 Oct, decision 4). Under the outer
-//! ZK server the Lean server reads them ([`set_os_source`]), and this process only carries them. A test harness (feature
+//! firewall the Lean server reads them ([`set_os_source`]), and this process only carries them. A test harness (feature
 //! `seed-injection`) can inject a [`ProverSeed`] instead, and then the prover is a deterministic function of (statement, witness,
 //! seed, verifier coins): no message byte depends on thread scheduling (every reduction is a GF(2^128) sum, order-free) or on
 //! unseeded device state; the selftest `prover_is_deterministic` checks proofs and transcript byte for byte.

@@ -223,7 +223,7 @@ audit makes public its verdict and nothing about a single round:
 - the verdict;
 - the salted roots of `W` and of the encoding `C`;
 - the salt;
-- the setup sample and its profile;
+- the setup draw and its profile;
 - the openings of the memory challenger's coin tree, once the session has closed.
 
 Everything else is witness. The per-round on-time bits stay in the memory challenger's signed record, so a server can't
@@ -949,7 +949,7 @@ Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
   guarantee states it alone (`unstated`).
 - `Pous.EndToEnd.EndToEndRing`, **in the ring model, with ω uniform**: a server holding at most `⌊ρ·|C|⌋` bits
   between setup, the session and its rounds, each answer `(D, Q, L)`-bounded (`Server S D Q L`), shown the session
-  commitment the code builds, with the memory challenger's coins flipped online by the code's own sampler and coin tree,
+  commitment the code builds, with the memory challenger's coins drawn online by the code's own sampler and coin tree,
   passes with probability at most `1% + 2^-128`. It is proved (`Pous.EndToEnd.SecurityProofs.endToEndRing`) from two
   named assumptions: `P2RingAuditSecure D Q L` (open), and `CoinCommitHides` at `2^-131` (`statistical-hiding`: the
   coin tree's root and hm96 key hide the indices; the leftover-hash argument is in its docstring, and Lean has no

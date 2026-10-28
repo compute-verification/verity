@@ -3,8 +3,8 @@ certifier-serve run's records, clock certificates and the client's kept copies (
 window's declared sync signed), refuses the window of a record whose signature is changed, every window from a clock
 certificate's, a kept certificate whose signature is changed, and a key under `lms.DEPLOYED`'s height with --deployed;
 the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
-several runs, and counts a negative that escaped a sampled draw within the sample's bound but never one whose faulty
-window was sampled; the sample's bound at δ is C(n − b − 1, k) / C(n, k)'s; leak counts the scan's widths and terms on a
+several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose faulty
+window was drawn; the draw's bound at δ is C(n − b − 1, k) / C(n, k)'s; leak counts the scan's widths and terms on a
 warden run's files, and refuses a sampled draw and a warden the scan's class doesn't serve; the job's copy of the
 gates' records into its output keeps no gate run's witness/. On the certifier-only path the report needs no scan,
 names what it stubs, and counts the rehearsal's refused runs and the I/O tie's verdict on each tampered run the check

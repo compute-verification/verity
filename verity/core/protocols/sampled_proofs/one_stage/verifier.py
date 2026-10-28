@@ -312,8 +312,8 @@ def hello(own: Mapping[str, Any], received: str, coin_tree: Any, seen: Sequence[
 def select(python: Mapping[str, Any], read: bytes, rule: Mapping[str, Any], program: Program, query: Mapping[str, Any],
            work_table: Mapping[str, Any] | None = None,
            closure: Mapping[int, Sequence[int]] | None = None) -> tuple[dict[str, Any], Verdict]:
-    """The challenger's sample by the verifier of record: the Lean's `Select.select` on `read`, the bytes of the challenger's
-    coins that the Python flip `python` (`service.select_draw`'s) read in order, under the Spec's selection rule (its
+    """The challenger's draw by the verifier of record: the Lean's `Select.select` on `read`, the bytes of the challenger's
+    coins that the Python draw `python` (`service.select_draw`'s) read in order, under the Spec's selection rule (its
     `to_json`) over the population `program` and the check's `query`, with the work table and the closure map. The two
     agree when the Lean draws the same object and reads exactly `read`; the sample of record is then `RECORD_VERDICT`'s. Where
     they disagree, or the Lean refuses, the verdict fails with `DISAGREE` alone (the sample returned is Python's, and the

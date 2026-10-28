@@ -10,8 +10,8 @@ open root and its circuit, `registered.domain`), and the sample: `credit.draw_ro
 challenger, then its sampling coin opened after it; the auditor's ledger opens and ends the session for the window, its
 open pinned to a commit the host's pins log (``pins``) records on the verifier's copy of main's first-parent history
 (``main``, `pouw_rounds_cases.PINS` and `MAIN`). Then one mutation (`CREDIT_NAMES`) aimed at one refusal: a credit bit
-flipped after the sampling coin with the sample root recomputed (``changed``, RT4-INT-32's withdrawn verdict), a row changed
-likewise, a missing or malformed bit, a credited row with no z root, the sample root left stale, no sampling coin, a coin of
+flipped after the draw coin with the draw root recomputed (``changed``, RT4-INT-32's withdrawn verdict), a row changed
+likewise, a missing or malformed bit, a credited row with no z root, the draw root left stale, no draw coin, a coin of
 another family, a session pinned to a commit the log doesn't record (``unpinned``) or to a logged one off main's
 first-parent line (``branch-pin``), and the forms.
 

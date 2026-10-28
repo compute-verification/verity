@@ -8,7 +8,7 @@ reads of them at public positions (`interface.Read`), so the window commits each
 Lean's registered reads open it against the value's root.
 
 The registration's window names them (`block`, its ``activations``: ``{program, values: {value: entry}}``), so they are
-fixed before the sample, and their root X (`root`) before the window's salt: the salt is released against X (RT-LEAN L22).
+fixed before the draw, and their root X (`root`) before the window's salt: the salt is released against X (RT-LEAN L22).
 The verifier holds each entry to the domain its program, value, rows and the window's context make (`held`), and reads
 the tiles' rows against those entries alone.
 

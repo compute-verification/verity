@@ -137,7 +137,7 @@ def registered() -> list[Registered]:
 
 def check(key: str, kernel: str, generator: Callable[[int], np.random.Generator], n: int = 6) -> list[str]:
     """Why kernel `kernel` of `key` is not its Definition, [] when it is: core `self_check` against the reference on `n` seeded
-    instances of each of its check specialisations (`check_targets`, sampled by the caller's ``generator`` over a seed of the
+    instances of each of its check specialisations (`check_targets`, drawn by the caller's ``generator`` over a seed of the
     pair), each of which it must claim, and not decline every instance of."""
     reg = _REGISTERED.get((key, kernel))
     if reg is None:

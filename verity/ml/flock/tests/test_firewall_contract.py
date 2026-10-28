@@ -1,7 +1,7 @@
 """The ZK server's contract (`Flock/Firewall/Contract.lean`, `flock-firewall contract`) against the inner phase's ZK server
 (`verity_flock.rec_live.Proxy`), on the transcripts `verity_flock.firewall_transcript` records (`firewall_agree.py`):
 honest sessions accepted by both, the red team's six sessions on #1270 refused by both or sent as the schedule has them,
-tamper controls (ZK servers that let out what the contract forbids) refused by the contract, review r6's leaks on #1323
+tamper controls (firewalls that let out what the contract forbids) refused by the contract, review r6's leaks on #1323
 each cut at its item, every session `test_firewall_agreement` holds the proxy to `Flock.Firewall.run` on, the inner
 session's live coins, coins that do not open a challenger's commitment refused by both, and no salt used twice."""
 from __future__ import annotations
@@ -139,7 +139,7 @@ def test_a_firewall_that_lets_out_what_the_contract_forbids_fails_the_check(lean
 
 
 def test_the_contract_cuts_every_leak_of_review_r6_at_its_item(lean, tmp_path):
-    """Review r6's leaks on #1323 (`firewall_agree.leaks`), each a bit the ZK server could choose and each accepted before:
+    """Review r6's leaks on #1323 (`firewall_agree.leaks`), each a bit the firewall could choose and each accepted before:
     the commitments' count and place (B1), a tape number naming another's value (B2), the public input taken from the
     transcript (B3) and a value of the ZK server's own under a name it chose (N1). Each is cut at its item for its reason;
     the honest transcript and a masked value checked against the verifier's relation are accepted."""

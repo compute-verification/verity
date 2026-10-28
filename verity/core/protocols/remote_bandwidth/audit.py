@@ -13,7 +13,7 @@ many reads of a node's registered blocks the node made in each window, from rece
    receipt kind, `bind`, the layout and the rows.  The verifier keeps one live registration a node (`Registry`): a
    second while one is live is refused and draws nothing, and a registration ends only when the verifier closes it,
    counting its sessions, an unended one as failed.
-2. Coins.  Before the session the proof system's challenger flips two live coins a window, its challenge `σ_t` and
+2. Coins.  Before the session the proof system's challenger draws two live coins a window, its challenge `σ_t` and
    its openings coin, and a coin an append, and commits to them (`coins.Coins`: session k's epoch of the one challenger,
    on its own host when it is remote).  The prover gets the commitment first (`Session.commitment`).  Each coin opens
    once, after the root the verifier recorded for it, which the challenger's signed log keeps
@@ -36,7 +36,7 @@ many reads of a node's registered blocks the node made in each window, from rece
    holds them, and so bound into its seed, at fresh store indices from N up, each encoded under its bound key and its
    append's coin `c_a`, which the verifier samples and sends in reply to the append (`codec.encode(..., bound=True,
    coin=c_a)`, `Store.encode`), so no choice the prover made before committing them depends on their encodings;
-   every coin is flipped once, and an append no root follows, or one sent again, rejects the session (`coin`);
+   every coin is drawn once, and an append no root follows, or one sent again, rejects the session (`coin`);
    a block released (`Session.release`) is in no later plan, and one the release names withdrawn (released before its
    encode landed, so never written) was in no earlier plan either; and an appended block is in no plan of a window L
    or more after the window it joined (`Params.lifetime`, the windows of T in 30 s, `lifetime_windows`): one kept
@@ -50,7 +50,7 @@ many reads of a node's registered blocks the node made in each window, from rece
    A window with fewer than `min_passes` roots is rejected.
 6. Openings.  Once window t's roots are final (the next window's first root has arrived, `D_t` has passed, or, in a
    paced session, the window holds its k roots and its boundary has left), the
-   challenger releases the window's openings coin, and the verifier samples `s = samples` distinct receipts uniformly from
+   challenger releases the window's openings coin, and the verifier draws `s = samples` distinct receipts uniformly from
    the window's `U_t = Σ_i L_i` with it (`Session.close`).  The prover opens each (`Prover.open`): the block, its receipt
    leaf with its salt and path to the pass's root, the payload's salt and path to the payload root, and, under a
    registration that binds z, PoUW's evidence for the tile before it; a block appended after the seed carries its
@@ -136,7 +136,7 @@ FAILURES = ("late", "order", "step", "plan", "lifetime", "append", "coin", "rele
             "receipt-path", "codec", "payload-path", "tile", "receipt")
 RECEIPT_LIMIT = 1 << 64
 """A window's receipts, its passes' lengths summed, stay below this: `Session.receive` rejects with `plan` a pass that
-would take them to it, so each sample's sampler word lies in its stream's first SHA-512 block (`Key._uniform` at
+would take them to it, so each draw's sampler word lies in its stream's first SHA-512 block (`Key._uniform` at
 `U < 2^448`)."""
 STEP_LIMIT = 1 << 64
 """A step is an integer below this, memory-map/v1's."""
@@ -225,7 +225,7 @@ class Params:
     groups_per_coin: int = 1
     """g (1 by default: an openings coin a window) draws the openings of g consecutive windows from one coin, released
     after the last root of the last of them: windows cg … min((c + 1)g, W) − 1 are draw c, whose `samples` receipts
-    are sampled uniformly over their receipts together (`Session.close`), and the pooled bound reads each sample as one
+    are drawn uniformly over their receipts together (`Session.close`), and the pooled bound reads each draw as one
     window (`pooled_windows`)."""
     schedule_cap: int | None = None
     """a, the most bits of the schedule the prover will publish (`schedule.check`), which it commits with the session's
@@ -1422,7 +1422,7 @@ class Registry:
                 index: int | None = None, challenger: Callable[[int], object] | None = None) -> Session:
         """The next session over the node's live registration, k its sessions so far (`index`, if given, must be k),
         kept to be counted at `close`.  Its coins are epoch k of `challenger(k)`, the one challenger's session for it
-        (`coins.Coins`), or without one a challenger in this process sampling from `entropy` (`coins.local`).  Refused
+        (`coins.Coins`), or without one a challenger in this process drawing from `entropy` (`coins.local`).  Refused
         for a registration that isn't its node's live one, drawn here."""
         x = self._live.get(getattr(registration, "node", None))
         if x is None or x.registration is None or x.registration != registration:
@@ -1697,7 +1697,7 @@ def pooled(record: Record) -> tuple[float, float]:
 
     Window t draws s_t distinct receipts of its U_t from its own openings coin, released after its roots, so they all
     land on correct ones with probability at most g_t^(s_t), g_t its correct share, however the prover adapted to the
-    windows before.  Over the session (`Accounting.Guarantees.HorizonSampling`, `RateSessionDraw`), every sample lands
+    windows before.  Over the session (`Accounting.Guarantees.HorizonSampling`, `RateSessionDraw`), every draw lands
     on a correct receipt while Σ_t s_t·g_t ≤ (1 − d̄)·S, S = Σ_t s_t, with probability at most (1 − d̄)^S = δ.  So
     except with δ the wrong shares f_t = 1 − g_t have Σ_t s_t·f_t < d̄·S, and each f_t ≤ 1 − s_t/U_t (its s_t draws
     found s_t correct receipts).  `wrong` is the most Σ_t f_t·U_t those allow, and `floor` the most any f_t is:

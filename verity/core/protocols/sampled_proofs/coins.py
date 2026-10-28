@@ -159,7 +159,7 @@ class ChallengerCoins:
     index, `after` and the openings), from which the verifier replays the bytes (`challenger_stream`, `read_reason`,
     and `coins_reason`, which the Lean verifier of record's run checks). It
     refuses a commitment whose coins are opened already, a read before any commitment, and every read after a coin
-    fails: a retry never resamples."""
+    fails: a retry never redraws."""
 
     def __init__(self, record: LiveRecord) -> None:
         self.record = record
@@ -280,9 +280,9 @@ def coins_reason(coins: Any, window: str, after: bytes, read: bytes, verify: Ver
     copy of main's first-parent line `main` (`trusted_session_of`, through `pinned_session`). `window` is the root the
     verifier reads from the challenger's signed open of the registration's window (`registration.check`'s
     `window_root`), never the record's or the evidence's. So a prover picks no window: coins another window's session
-    released after the same commitment are refused, and a prover with sessions in several windows gets one sample, not
+    released after the same commitment are refused, and a prover with sessions in several windows gets one draw, not
     the best of them. `service.Stream.outcome` hands the evidence to the Lean verifier of record, whose run refuses a
-    sample from the challenger without evidence that holds (`Run.run`'s `select`, code `coins`)."""
+    draw from the challenger without evidence that holds (`Run.run`'s `select`, code `coins`)."""
     if not isinstance(coins, Mapping) or sorted(coins) != ["key", "ledger", "main", "pins", "segment", "session"]:
         return COINS_FORM
     try:

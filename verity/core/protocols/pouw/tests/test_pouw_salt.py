@@ -6,7 +6,7 @@ one whole PoUW window aligned at 0 and nothing else; `Epoch.certified` applies `
 the stream and the prover, 64 bytes, which the seeds and the identifier take, with the challenger's sampling coin; two
 registrations of one window are salted apart; `core_check.pass_epoch` passes a certified window's pass only when its
 salt is that of the certifier's reveal and its weights, stream and prover those the prover recorded with the certifier,
-signed, before it sampled that salt (`Proxy.commit_weights`, read back by `committed`); `Registrations` admits a window
+signed, before it drew that salt (`Proxy.commit_weights`, read back by `committed`); `Registrations` admits a window
 once per stream and prover; a certified window credits only units that read its salt (`unit_reason`); and a live
 window's open root (`window_open_root`) is pinned. The prover salts its pass from the salt it receives in-band (`certifier`'s `drawn`), so the
 verifier's one reveal comes after the registration that names the pass."""

@@ -247,7 +247,7 @@ class Draw:
 
 
 def draw(record: audit.Record, node: Node) -> Draw:
-    """The record's sample terms on `node`."""
+    """The record's draw terms on `node`."""
     return Draw(rejection(record), hiding(record), binding(record, node))
 
 
@@ -266,7 +266,7 @@ class Gamma:
     """γ against one R, `capacity_bytes_per_s`: the session's terms (`audit.Ledger`, read per window at Wδ, `gamma`,
     and over the horizon at δ, `gamma_horizon`) and `windows`, the same over each span γ is declared over (`windows`:
     a paced session's fixed windows), each as a fraction of R over its own span.  `error` and `error_horizon` are the
-    ledger's with the sketch's term and the sample's (`draw`: `PooledDraw`'s rejection, hiding and binding terms, the
+    ledger's with the sketch's term and the draw's (`draw`: `PooledDraw`'s rejection, hiding and binding terms, the
     PRF advantages named) added: both readings read the record's openings, each window's or pooled."""
 
     capacity_bytes_per_s: float

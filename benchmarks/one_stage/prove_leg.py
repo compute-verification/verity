@@ -897,7 +897,7 @@ def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed
          lower_refused: bool = False, reads: str | None = None) -> dict:
     """Each served shape sized, and unless only sizing (``tools`` None), proved: one unit sampled by Lean, its member staged at
     `served_member`'s units (its table reads by ``reads``, else its template's own), through `prove_units` and, with ``negs``, `negatives` at that
-    sample. A shape whose rows alone pass C-Flock's block is recorded refused and not lowered (with ``lower_refused``: lowered,
+    draw. A shape whose rows alone pass C-Flock's block is recorded refused and not lowered (with ``lower_refused``: lowered,
     its blocker C-Flock's own refusal), nor one whose estimate passes ``max_ands``, nor an ``UNSTAGED`` unit."""
     summary: dict[str, dict] = {}
     for shape in shapes:

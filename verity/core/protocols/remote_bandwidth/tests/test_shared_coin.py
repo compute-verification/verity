@@ -28,8 +28,8 @@ def shared(store, g: int, windows: int = 8, **kw) -> tuple[audit.Params, coins.C
 
 
 def finish_draws(s: Session, prover: audit.Prover, passes, clock, open_=None) -> list[audit.Verdict]:
-    """`finish` a sample at a time: past the last deadline, each sample closed at its last window, then each of its windows
-    verified on its own share of the samples, in order, up to the first rejection; a window whose share is none keeps
+    """`finish` a draw at a time: past the last deadline, each draw closed at its last window, then each of its windows
+    verified on its own share of the draws, in order, up to the first rejection; a window whose share is none keeps
     the verdict its close gave it."""
     clock.now = max(clock.now, s.deadline(len(s.windows) - 1) + 1)
     out = []

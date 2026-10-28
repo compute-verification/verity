@@ -22,8 +22,8 @@
 //                                  priority
 //                         green N  the commitments on a green-context partition of N SMs, the GEMMs on the rest
 //                         pipe C   C chunks in flight, each on its own stream (chunk 0 highest priority): for every stage,
-//                                  commit its operands, wait DRAW_US for the sample, then the GEMM; C chunks' makespan
-//                                  against C x gemm. pipe1_draw: the samples without commitments; pipe1_hash: the
+//                                  commit its operands, wait DRAW_US for the draw, then the GEMM; C chunks' makespan
+//                                  against C x gemm. pipe1_draw: the draws without commitments; pipe1_hash: the
 //                                  commitments without draws
 //                         pipe_green C chunks in flight on a split: each stage's commitment and draw on an N-SM partition,
 //                                  its GEMM on the rest, ordered by events (host-launched), against C x gemm and against
@@ -40,8 +40,8 @@
 //                                  it (an emulated epilogue: what is left at the GEMM's end is the last slab's blocks, the
 //                                  leaves and the tree); gemm_c<k> alone
 //                         cpu<E>[p<P>] the tree stops at E nodes in pinned host memory, P host threads hash the top (a
-//                                  subtree each) and one waits the sample, the GEMM's stream waits on its mapped flag; _nd:
-//                                  no sample; _nopdl: fr_tree after its segment pass completes (every other arm launches it
+//                                  subtree each) and one waits the draw, the GEMM's stream waits on its mapped flag; _nd:
+//                                  no draw; _nopdl: fr_tree after its segment pass completes (every other arm launches it
 //                                  programmatically, g_pdl)
 //                       and the phase probe: one commitment's clocks a CTA (fr_tp)
 //   shalat              a compression's latency in a dependent chain on the GPU by rotation choice (FR_ROT's bits) and split
@@ -961,7 +961,7 @@ extern "C" __global__ void __launch_bounds__(128) fr_tree(Args a) {
   FR_TP(27);
 #undef FR_TP
 }
-// the GEMM's stream waits for the host to write v at f (the sample's coins are in): one thread polls the mapped word; after
+// the GEMM's stream waits for the host to write v at f (the draw's coins are in): one thread polls the mapped word; after
 // 5 s it gives up and records v in err, so a lost host thread fails the run instead of hanging it
 __global__ void host_wait(const uint32_t* f, uint32_t v, uint32_t* err) {
   unsigned long long t0, t;
@@ -1177,7 +1177,7 @@ __global__ void __launch_bounds__(64) sha_chain2(int n, uint64_t* out) {
     }
   }
 }
-// ---------------------------------------------------------------- the host's side: SHA-512, the top of a tree, the sample
+// ---------------------------------------------------------------- the host's side: SHA-512, the top of a tree, the draw
 static uint64_t g_hk[80];  // SHA512_K, read back from the device
 static void (*g_ossl)(void*, const unsigned char*) = nullptr;  // libcrypto's SHA512_Transform: SHA512_CTX's state is its h[8]
 static bool g_use_ossl = false;
@@ -1621,7 +1621,7 @@ static bool commit_gate(const Commit& m, int path, std::vector<uint8_t>* tree_ou
   return hl == c.hl && bc == c.bc && root == c.root;
 }
 
-// ---------------------------------------------------------------- the sample: one thread waits on the global timer
+// ---------------------------------------------------------------- the draw: one thread waits on the global timer
 __global__ void draw_wait(unsigned long long ns) {
   unsigned long long t0, t;
   asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(t0));
@@ -2271,11 +2271,11 @@ static int run_prefill(Dev& d, const std::string& dir, int M, int reps) {
     CK(cudaFree(tp));
     CK(cudaFree(tps));
   }
-  // the proved forward, lockstep: a stage's operands committed, the sample, then its GEMM, stage by stage. k > 1: every GEMM
+  // the proved forward, lockstep: a stage's operands committed, the draw, then its GEMM, stage by stage. k > 1: every GEMM
   // in k row slabs, the next stage's operands hashed slab by slab behind it on h (the producing kernel's epilogue, emulated:
   // cuBLASLt's can't be fused), so at its end only the last slab's leaves and the top are left; the first stage's operands
   // (the embedding's) whole. draw 0: none; 1: DRAW_US on the GPU; 2: the host's (the tree stops at E nodes for the host to
-  // hash the top, E = 1 the GPU's root; then the host waits its sample, dus, and raises the GEMM's flag). The salt-only parts
+  // hash the top, E = 1 the GPU's root; then the host waits its draw, dus, and raises the GEMM's flag). The salt-only parts
   // and first-block states ahead on a side stream.
   // P: the host's threads for the top (h_top's pool); col: the k slabs are column slabs, each GEMM slab followed by the
   // segment pass over the next operand's blocks it wrote (fr_segcols, in order on h), the leaves and tree after the last

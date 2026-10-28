@@ -94,12 +94,12 @@ The first `hab` pads mask sent values, and the last four are committed auxiliari
 `Layout::absorbed()`: the rows above in order, minus `fc` (the inner proof's, §5). The algebraic phase is masked between
 the zerocheck label and the opening's label. Level 0 is masked between `verity-flock-zk-l0-open-v0` and `-close-v0`.
 
-**Randomness.** Everything comes from `ProverRng`, and in a proving build every sample is the OS's own bytes (`getrandom`),
-read where it is sampled (Daniel, 9 Oct, decision 4). `f128s(stream, index, n)` reads `16n` fresh bytes, whatever its
-address, so each value below is sampled once and kept where it is used again: level 0's hiding for the table's session (the
-device's commit and the ZK server's recheck take the same), each rep's pads in the rep's state, and each block's mask words
-with the table's witness. Under the outer ZK server (§10.4) the Lean server reads all of them and the prover only carries
-them: each rep's frame in the Lean session loop samples the rep's `h`, `mu`, `pad_h`, `pad_mu`, `τ`'s salt and the pads tree's
+**Randomness.** Everything comes from `ProverRng`, and in a proving build every draw is the OS's own bytes (`getrandom`),
+read where it is drawn (Daniel, 9 Oct, decision 4). `f128s(stream, index, n)` reads `16n` fresh bytes, whatever its
+address, so each value below is drawn once and kept where it is used again: level 0's hiding for the table's session (the
+device's commit and the firewall's recheck take the same), each rep's pads in the rep's state, and each block's mask words
+with the table's witness. Under the outer firewall (§10.4) the Lean server reads all of them and the prover only carries
+them: each rep's frame in the Lean session loop draws the rep's `h`, `mu`, `pad_h`, `pad_mu`, `τ`'s salt and the pads tree's
 salts (`Flock.Firewall.Frame.Draws`, in the layout below with the same two products), and `flock-firewall tap` serves every
 other read (the mask slot's words, level 0's hiding, every other tree's salts: `zk_hooks::set_os_source`). The coin tree's
 nonce is the loop's, sampled with the `Hello` it sends (§10.4).
@@ -288,7 +288,7 @@ level-0 queries, levels 1+, and the inner proof. The prover's randomness is spen
 
 The other pair's entries in rep `r`'s rows are fixed the same way, by the other rep's identity. So for every witness the
 session's view is uniform subject to the public identities, which is how the simulator samples it (§8). Nothing is
-spent twice. A pair shared by the two reps would be: `(y_1'^0, ybar^0)` and `(y_1'^1, ybar^1)` would both use one
+spent twice. A pair shared by the two reps would be: `(y_1'^0, ybar^0)` and `(y_1'^1, ybar^1)` would both draw on one
 `(R, pad_R)`, and `N·(·)^0 + (·)^1` with `N = W^1 (W^0)^-1` eliminates it. That was red-team-m1-zk's finding, a witness
 functional at every level-0 position either rep opens and at the level-1 positions both open. With `k` extra lanes
 shared by both reps, joint uniformity needs the `4 × k` matrix `[W^0; W^1]` to have rank 4, so a pair per rep (4 lanes)
@@ -526,17 +526,17 @@ flipped unit bit stops after the batching coins: rep 0's stream ends with `[ρ, 
 goes out).
 
 **Still to do.**
-- **C1's level-0 root check** stays: both reps prove one witness, level 0's randomness is sampled once per session and
+- **C1's level-0 root check** stays: both reps prove one witness, level 0's randomness is drawn once per session and
   belongs to its one tree, and the pads trees take `next_id() ≥ 1`.
 - **GPU.** `--zk` is CPU-only. The mask slot fill, §7's padding and extra lanes, and `commit_zk` belong on the device,
   taking the host's OS reads as the hm96 salts are taken, tree by tree.
 - **Several tables per session** (the public-circuit ZK proof's §2.3 and gap 1) are on the CPU prover, `--session-tables J`:
-  - the sample's units split into J equal tables `circuit-00`, `circuit-01`, ... (`session_tables`), under Σ over every
+  - the draw's units split into J equal tables `circuit-00`, `circuit-01`, ... (`session_tables`), under Σ over every
     table's Σ. The server refuses at configuration a Bernoulli sampling design (its count is random), a count J does not
     divide, and tables `--zk` cannot prove. The session's sampling design is the record's `unit_draw`: each table's
-    header carries only its part as a subset sample;
+    header carries only its part as a subset draw;
   - randomness per table (§2) and a rank check per table (§6). Per table is the joint check here, because no claim or
-    message reads two tables' witnesses or masks. The tables' witnesses may be correlated: two sampled proof blocks in different
+    message reads two tables' witnesses or masks. The tables' witnesses may be correlated: two drawn units in different
     tables can read the same row;
   - one `Commit` carrying every table's level-0 root: a later table commits its root before any stream opens, and its reps
     stop unless they bind it;
@@ -828,10 +828,10 @@ table `TABLE`'s level 0 (`Session.level0`, §10.2) for the live session named `S
 the first four words of its `Hello`'s answer (`Level0.nameOf`, `firewall::level0_session`). It is answered `ok N R` and
 the `N` bytes of the extra lanes, the paddings and the salts the loop sampled, then its `R`-byte root, or `err WHY`. A
 session the loop isn't serving is refused, and so is a table the session lacks or a second request for a table: the loop
-samples each table's level 0 once (`Level0.Registry.draw`), so the prover can't sample again until a root suits it. The
-session's `Commit` leaves only when its roots are its tables', in order, root `i` the one the loop sampled for that
-session's table `i` at its statement's `m` (`Level0.commit`; a root sampled at a smaller `m` would pad too few positions).
-Every `Level0` sampled for a session, committed or not, is freed when it ends (`Level0.Registry.close`).
+draws each table's level 0 once (`Level0.Registry.draw`), so the prover can't draw again until a root suits it. The
+session's `Commit` leaves only when its roots are its tables', in order, root `i` the one the loop drew for that
+session's table `i` at its statement's `m` (`Level0.commit`; a root drawn at a smaller `m` would pad too few positions).
+Every `Level0` drawn for a session, committed or not, is freed when it ends (`Level0.Registry.close`).
 The proofs leave just before `Finish`, the loop's finish's file of each table's rep 0 and rep 1 on the level 0 the
 `Commit` bound (`Session.ownProofs`, kept once a rep, `Frames.Registry.file`), every rep's or none, and only once every
 rep's frame ended not stopped; where one stopped, `Finish`
@@ -991,14 +991,14 @@ server received) and `--what unsalted` (a record of clear tops), refused `FIREWA
 `85-rec-reprice.sh` runs both phases (`STEP=icheck`; `STEP=oprove MODES=firewall WARM=0 RUNS=1 CONTROLS=L6`, one
 session per staged statement, and `MODES=dev,host` in a job of its own for the ZK server's cost).
 
-**What it cost** with Rust's shadow opening and `commit_zk` recheck, before the Lean finish held them (node 1, one RTX PRO 6000, the prover's 16 cores shared with the ZK server; K = 4096, V*'s eight `--zk`
+**What it cost** with Rust's shadow opening and `commit_zk` recheck, before the Lean finish held them (node 1, one RTX PRO 6000, the prover's 16 cores shared with the firewall; K = 4096, V*'s eight `--zk`
 statements L0–L6 and the algebra, m = 28–32; medians of 3 sessions after 1 warm, summed over the eight): prove 46.8 s
-behind the ZK server against 7.4 s with the host witness outside it and 6.7 s with the device's witness; the proof bytes are the same. The
-ZK server's CPU is about 176 CPU seconds a session (the process behind it over the one outside). Of the 39 s the ZK server adds to
+firewalled against 7.4 s with the host witness unfirewalled and 6.7 s with the device's witness; the proof bytes are the same. The
+firewall's CPU is about 176 CPU seconds a session (the firewalled process's over the unfirewalled one's). Of the 39 s the firewall adds to
 prove, the level-0 recheck is 5.2 s (51 CPU seconds; L0's alone 1.8 s and 17.8), the device's wait for the shadow opening
-13.4 s, the ZK server's own comb fold 10.5 s, and the rest the device's host phases slowed by the ZK server's threads on the same
-cores. All of it is CPU work. Three changes not yet made would shorten it: the ZK server on cores of its own (the contention,
-about 10 s), the recheck a session ahead (it reads only the host witness and the ZK server's own salts and hiding), and the
+13.4 s, the firewall's own comb fold 10.5 s, and the rest the device's host phases slowed by the firewall's threads on the same
+cores. All of it is CPU work. Three changes not yet made would shorten it: the firewall on cores of its own (the contention,
+about 10 s), the recheck a session ahead (it reads only the host witness and the firewall's own salts and hiding), and the
 device skipping the opening the shadow replaces (freeing the device's share of the cores). The shadow's own opening (15.7 s
 over the eight, under contention) and the comb fold stay on the session's path.
 
@@ -1074,8 +1074,8 @@ decides them on the record, session by session, before anything leaves; the test
 and refuses a schedule.
 
 **Outer proofs as independent sessions.** AGENTS.md's rule (Daniel's provisional batch, 24 Oct): each staged statement
-is fixed before any session flips coins and gets exactly one session; each session flips its own live coins in its own
-ZK server pass; no statement reads another session's transcript or coins; every session is recorded and every verdict counts.
+is fixed before any session draws coins and gets exactly one session; each session draws its own live coins in its own
+firewall pass; no statement reads another session's transcript or coins; every session is recorded and every verdict counts.
 Sessions may therefore run at once (pod 85's `STEP=oprove`, `OPROVE_JOBS`, which enforces the rule). This relay is stricter:
 it has one slot across streams and protocols (`slot.lock` in its state directory, which every relay process of the ZK server
 shares). An outer session takes it at its first request other than `Ping` and holds it until the session is released or
@@ -1131,8 +1131,8 @@ session a release schedule, recorded at its open: `start_ms`, the time its conne
 a statement, in the order `--parts` fixes. Statement j's proofs and `Finish` leave at `start_ms + w0 + ... + wj`, never
 earlier (a session ready early waits) and never late (a session not ready by then is a stop, a missed time). The schedule is fixed
 before the session and depends on nothing secret: not on how long the inner session or any outer one took. Only the Rust
-ZK server keeps the times; the Python relay refuses a scheduled session rather than release it early. Windows from node 1's
-honest sessions at K = 4096 (`r20261006-065256-f517`, 10 timed sessions a statement, all accepted, the ZK server on the same
+firewall keeps the times; the Python relay refuses a scheduled session rather than release it early. Windows from node 1's
+honest sessions at K = 4096 (`r20261006-065256-f517`, 10 timed sessions a statement, all accepted, the firewall on the same
 cores as the prover): the release of part j follows part j − 1's verdict by its session's end to end, so
 `w_j = 1.5 × (max e2e_j + max gap_{j−1})` rounded up to a second, `gap` being a slot's hold beyond the session
 (`tp_s − e2e_s`, the verdict):
@@ -1154,7 +1154,7 @@ step 3, `r20261006-022005-409a`; the inner session's prove 0.98 s, `--zk` 5.41 s
 L0's session alone, and no run has yet timed a whole recursive session against its schedule. And the slot is shared: two
 recursive sessions whose outer phases overlap in time take turns at it, so the later one misses its times. That is a
 failure, never an early release, but an honest operator must space recursive sessions so their outer phases don't
-overlap, and nothing enforces that yet. Dedicated cores for the ZK server (infra's I1, a ZK server VM, priced, not created)
+overlap, and nothing enforces that yet. Dedicated cores for the firewall (infra's I1, a firewall VM, priced, not created)
 would take the recheck and serve's verify off the prover's cores. On node 1 the algebra's worst session is 1.5× its median
 (16.99 s against 11.33 s) and a contended `serve` has taken 15–44 s to verify L1 (`r20261006-024439-6203`), either of which
 turns an honest session into a missed time. With dedicated cores the margin could fall toward the measured spread, and

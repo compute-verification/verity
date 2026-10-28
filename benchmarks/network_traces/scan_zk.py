@@ -32,13 +32,13 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   serve and a response that isn't id-form.
 * **The group** (``--group G``, default 1; `link`'s ``start``, its first link-window, 0): G link-windows of each link,
   one registration, the scan's buckets 0 … G·T − 1 from the empty state, T a link-window's.
-* **The scan's rows**, committed by the prover before the sample as hiding rows (`verity.ml.commitments.advice`, each
+* **The scan's rows**, committed by the prover before the draw as hiding rows (`verity.ml.commitments.advice`, each
   tree's root in the registration), G·T leaves each: ``state``, leaf t S_t; ``prog``, leaf t the Programs' row t (each
   request's response ids at its anchor, standing in for the anchored Programs' outputs); and ``view``, leaf t S_t's
   egress view.
 * **The honest round, one registration**: one Program of three templates (`TEMPLATES`): the first unit
   (`IngressScanFirst`, bucket 0), G·T − 1 ingress units (buckets 1 … G·T − 1) and G·T egress units, its members split
-  a link-window (`members_of`: ``first``, ``ingress-w`` and ``egress-w``), every unit sampled by the verifier's Lean.
+  a link-window (`members_of`: ``first``, ``ingress-w`` and ``egress-w``), every unit drawn by the verifier's Lean.
   Ingress unit t reads ``row`` (the warden's ingress row t), ``sin`` (state leaf t − 1; the first unit none) and
   ``prog`` (leaf t), and outputs ``o0``, its ok bit, ``o1``, S_t, committed as state leaf t, and ``o2``, its view,
   committed as view leaf t. Egress unit t reads ``state`` (view leaf t) and outputs ``o0``, its render bit, and ``o1``,
@@ -80,9 +80,9 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   window) refused by `coins.coins_reason` and the Lean's run (`coins_outcome`). ``local`` is a development session on
   this machine (its own key; it shows the path, not an auditor's coins); ``gate:USER@HOST`` is vy-challenger-1's through
   its gate, its challenger on ``--peer``'s 127.0.0.1, under the deployment's key record ``--challenger-key``. The
-  gate opens a root once, ever: a run's group is sampled once (the synthetic run's registrations carry fresh salts, so
+  gate opens a root once, ever: a run's group is drawn once (the synthetic run's registrations carry fresh salts, so
   each synthetic run has a root of its own). The other rounds keep the verifier's Lean's own coins: one session serves
-  one sample, and their refusal is Lean's registered reads, whatever the coins.
+  one draw, and their refusal is Lean's registered reads, whatever the coins.
 * **What the verifier receives** is scanned for every piece of every unit's rows, inputs and outputs, and every salt
   but ``o0``'s, which the prover sends so the verifier opens each unit's output (`a8.received`), less the pieces public
   anyway (the circuits, zeros, the window's pads and `END` cells) and the sparse pieces (at most one nonzero byte); the
@@ -860,13 +860,13 @@ def warden_roots(members) -> list[dict]:
 def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: list[dict], trees: dict, out: Path,
           port: int, k: int | None = None, coins: SimpleNamespace | None = None) -> dict:
     """One round registered (its members' ports, the scan's registrations' roots, and the warden's row registrations
-    its warden ports read, `warden_roots`, before any coin), its units sampled by the verifier's Lean (`draw --stratified
+    its warden ports read, `warden_roots`, before any coin), its units drawn by the verifier's Lean (`draw --stratified
     k` on its own coins; every unit when `k` is None) or, given the challenger's ``coins``, by the round's
-    `service.Stream` on them (`spec_of`; `a5_coins.RankCoins`, rank 0), each member's sampled proof blocks proved --zk behind the
-    ZK server and held by Lean with the verifier's own registered reads; then each held unit's ``o0`` opened under the
+    `service.Stream` on them (`spec_of`; `a5_coins.RankCoins`, rank 0), each member's drawn units proved --zk behind the
+    firewall and held by Lean with the verifier's own registered reads; then each held unit's ``o0`` opened under the
     salt the prover sends. A member with no unit drawn runs no session. Writes what the verifier received under
-    ``out / "verifier"``. An accepted audit carries its charge terms (`charge_terms`) and each member's cost per sampled
-    proof block; on the challenger's coins, the outcome of record is the stream's
+    ``out / "verifier"``. An accepted audit carries its charge terms (`charge_terms`) and each member's cost per drawn
+    unit; on the challenger's coins, the outcome of record is the stream's
     (`coins_outcome`)."""
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
     out.mkdir(parents=True, exist_ok=True)

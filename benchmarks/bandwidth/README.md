@@ -14,7 +14,7 @@ constructions: `ro-blake3/v1` and `ro-sha512/v1`, the certified ones, and `gf31-
   (`window.open()`, whose record the verifier fsyncs), then always prepares (an untimed pass under a throwaway seed,
   then a 512 MiB read of another buffer, so L2 starts clean) before it asks for the seed (`window.start()`).
   `challenger_device(tagger, gpu)` is the id the challenger reads itself (`audit.read_device`: nvidia-smi's `GPU-…`
-  UUID for `gpu`, a MIG slice refused), for which the store's salt is sampled; it refuses a tagger whose CUDA device
+  UUID for `gpu`, a MIG slice refused), for which the store's salt is drawn; it refuses a tagger whose CUDA device
   (`Tagger.device()`, 16 bytes) has another UUID. `gpu.py windows --gpu` names the GPU (`run.sh`: the lease's).
 - A store has one challenger state and one prover, whatever the tag: `audit.ChallengerState.create(state_dir, vk)`
   once, in the challenger's state directory under the name the store gives it (`audit.state_name`), then one
@@ -37,7 +37,7 @@ constructions: `ro-blake3/v1` and `ro-sha512/v1`, the certified ones, and `gf31-
 The store is a generated test store (`reference.block`, the bandwidth vectors' blocks) under P2's geometry at its
 registered point: 2^19 blocks of 2,056 bytes. It is not a P2 encoding. The audit reads only the blocks and their tree
 under `vk`, so a generated store exercises the same work. Its salt is the device's, `audit.draw_salt(secret,
-reference.COMMITMENT, device)` for the device the challenger read, from a secret sampled fresh in each run and never
+reference.COMMITMENT, device)` for the device the challenger read, from a secret drawn fresh in each run and never
 written out, as the verifier requires (`audit.Verifier` refuses any other salt).
 
 ## The certified PCIe stream and the chip's stores

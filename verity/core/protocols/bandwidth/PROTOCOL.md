@@ -113,7 +113,7 @@ No guarantee assumes trusted prover hardware.
 
 - **The verifier** is the auditor's side, run on its memory challenger: the auditor's hardware, on a machine the
   prover doesn't control, never a process on the GPU's node (`audit.Verifier`, `Window`, `ChallengerState`). It holds
-  the secret `source`, samples each run's nonce, derives its key, sends `σ`, runs the clock, samples the samples, checks the
+  the secret `source`, draws each run's nonce, derives its key, sends `σ`, runs the clock, draws the samples, checks the
   openings and keeps the store's state (§5).
 - **The prover** is everything on the GPU's node: the GPU, and the code that reads its id and drives the tagger
   (`audit.read_device`, and `benchmarks/bandwidth`'s `gpu.challenger_device` and `gpu.Prover`), carrying `σ`, the root,
@@ -142,14 +142,14 @@ leaf under `vk.root`, and the verifier holds only `vk`. The leaf is PoUS's (`pou
 bytes, `0x00`, `salt ‖ u64(segment)` as 32 little-endian bytes, the label's index in its segment as 2 little-endian
 bytes, and the label's `sha512/row/v2` digest. The tree is RFC 6962's in SHA-512 (`pous.verifier.MerkleTree`).
 
-**One store per device.** The verifier samples each device's salt with the device's id bound in,
+**One store per device.** The verifier draws each device's salt with the device's id bound in,
 
 ~~~text
 salt = derive(source, "verity/bandwidth/salt/v2", {w: commitment, device: id}).stream("salt", 24)
 ~~~
 
 (`audit.draw_salt`), and PoUS's setup runs with it in place of `pous.setup.draw_salt`'s. PoUS's setup takes the salt as
-an input and needs only that it is sampled after the commitment to `W`, from the verifier's secret or a later beacon
+an input and needs only that it is drawn after the commitment to `W`, from the verifier's secret or a later beacon
 round, which this one is, so PoUS is unchanged. Devices that hold one `W` under one secret then hold different stores,
 so their `vk`, seeds and tags differ, and one device's commitment fails another's run
 (`test_one_devices_commitment_fails_anothers_window`). `audit.Verifier` takes the device's id, the commitment to `W` and
@@ -176,11 +176,11 @@ nothing (§2). The SKU the node reports is recorded beside the id, and is the no
 
 A run is one execution of the audit over one store (`Verifier.window()`, a `Window`):
 
-1. **Seed.** The verifier samples a fresh 32-byte nonce from its own randomness and records it in the store's state
+1. **Seed.** The verifier draws a fresh 32-byte nonce from its own randomness and records it in the store's state
    (`Window.open`, §5). It derives the run's key from its own secret,
    `key = derive(source, "verity/bandwidth/window/v2", {root: vk.root, salt: vk.salt, tag: name, nonce: nonce})`
    (`audit.window_key`, `verity.ml.randomness`), sends `σ = key.stream("seed", 32)` and starts its clock
-   (`Window.start`). The nonce is never a counter and never sampled twice for a store, so no two runs over a store share
+   (`Window.start`). The nonce is never a counter and never drawn twice for a store, so no two runs over a store share
    a key, whichever verifier, tag or restart opens them. A key fixed by a run number would repeat in every verifier
    counting from the same place: a fast-check run would reveal, after its commitment, the samples of the certified
    tag's run of the same number, and a restarted verifier would accept a root replayed from before the restart
@@ -189,14 +189,14 @@ A run is one execution of the audit over one store (`Verifier.window()`, a `Wind
 2. **Tags.** The prover computes `y_j = Tag(σ, j, E_j)` for every `j < N`, packs them into leaves and returns the
    leaves' RFC 6962 SHA-512 root (below). The verifier stops its clock on the root (`Window.commit`); the root is on
    time iff the elapsed time is at most `T + RTT` (`Params.limit_ns`).
-3. **Samples.** Only for an on-time root, the verifier samples `s` indices, `key.uniform(N, ("sample", t))` for `t < s`,
-   uniform with replacement, and sends them. A late or malformed root closes the run rejected and samples nothing.
+3. **Samples.** Only for an on-time root, the verifier draws `s` indices, `key.uniform(N, ("sample", t))` for `t < s`,
+   uniform with replacement, and sends them. A late or malformed root closes the run rejected and draws nothing.
 4. **Openings.** For each sample `i`, in order, the prover sends `E_i` with its path to `vk.root`, and the tags of
    `i`'s leaf with the leaf's path to the committed root (`TagCommitment.open`). The verifier checks both paths and
    recomputes `y_i` from `σ`, `i` and `E_i` (`Window.verdict`). Openings are not timed: the root binds every tag.
 
 The verifier accepts iff the root is on time and every opening checks. It refuses a second start or a second root, and
-never resamples. One run over a store is open at a time: from its record until its root arrives, or until `T + RTT` after
+never redraws. One run over a store is open at a time: from its record until its root arrives, or until `T + RTT` after
 `σ` without one, the verifier refuses to open another over the store, which stays closed and may open once the first has
 closed (`test_one_window_over_a_store_is_open_at_a_time`). Two runs open at once could both be answered from one read of
 each label, so their ingress wouldn't add.
@@ -320,10 +320,10 @@ assumption is needed for the two properties of runs that overlap in time:
   `commit(root) -> samples`, `verdict(openings) -> Verdict`; `window_key(source, vk, tag, nonce)`); `Params` (the tag,
   `s`, `T`, the `RTT` allowance and the rebuild floor); the operating point (`EPSILON`, `SAMPLES`, `QUERIES_LOG2`,
   `SLACK_LOG2`, `certified_blocks`, `samples_for`) and `bound`.
-- `openings.py`: the openings of the remote audit's chained passes, `P` passes over the store with one pooled sample of
-  `s` openings after the last root: the sample (`draw`), its sampling error alone and over a monitoring period's samples
+- `openings.py`: the openings of the remote audit's chained passes, `P` passes over the store with one pooled draw of
+  `s` openings after the last root: the draw (`draw`), its sampling error alone and over a monitoring period's draws
   (`window_error`, `horizon_error_log2`), `λ` in three forms (`slack_bits`: `crude`, this audit's `64·k + 41`; `exact`;
-  and `named`, a proposal with no Lean statement), and the expected bytes and verifier operations of a sample's openings
+  and `named`, a proposal with no Lean statement), and the expected bytes and verifier operations of a draw's openings
   sent as multiproofs (`opening_cost`, `retention`, `point`, `cheapest`, `achievable`).
 - `tests/test_bandwidth.py`: each tag against its formula, the seed-first property, the tag tree and its short last
   leaf, honest runs over a P2 store and at P2's width, every rejection (late, malformed, a wrong label or tag path,

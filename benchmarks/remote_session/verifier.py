@@ -20,7 +20,7 @@ One connection serves one registration and then `--sessions` sessions over it, e
    `Session.receive` stamped with the time its last byte was read (with the releases its message carries first, and
    the withdrawn blocks among them, its plan as a change when it carries one, and the step its pass covers:
    `Verifier.root`), each window closed
-   (`Session.close`) as soon as its roots are final and its samples sent; the prover's openings
+   (`Session.close`) as soon as its roots are final and its draws sent; the prover's openings
    checked by the Lean verifier on its threads as their frames arrive (`Pair.verify`), so a window's checks run while
    the next window's passes arrive; once every window is accepted the record (`Session.record`), its declared outputs
    (`ledger.declared`'s: γ at both R and the memory line, snapshot and, paced, time-held and link-charged), and as

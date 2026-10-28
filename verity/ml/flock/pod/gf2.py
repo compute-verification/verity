@@ -1,4 +1,4 @@
-"""A tiny GF(2) R1CS registered compiler in Flock's model.
+"""A tiny GF(2) R1CS circuit builder in Flock's model.
 
 Wires are GF(2) linear forms over committed bits (inputs, AND outputs, hints). XOR/NOT are free; every AND of two
 non-constant, non-trivially-related forms allocates one committed bit (one R1CS row A.z * B.z = z_i, C = I).

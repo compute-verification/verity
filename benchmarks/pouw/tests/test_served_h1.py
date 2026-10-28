@@ -15,7 +15,7 @@ session as the gate publishes it and the auditor's ledger alone, through core's 
 under the key its key.json holds, ``(checked)`` only against the key's deployment record, the window's root and its
 period, and refuses a record under another key, a ledger core refuses, a session the manifest doesn't name, outside the
 window's period or opened for another layout, a round root the challenger didn't receive, a salt that isn't its round's
-coin's, and a sample after another root; an address without its session id is refused, and with neither the coins are
+coin's, and a draw after another root; an address without its session id is refused, and with neither the coins are
 in-process and labelled not certified; serve.py refuses ``--gate``, naming vllm's H1 path as the gated served window of
 record."""
 from __future__ import annotations

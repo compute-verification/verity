@@ -24,7 +24,7 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
        --forge KINDS [--no-forge-after] --cpu --on MACHINE --cores 0-31 [--preemptible] --mem-gb G --cpus 32 --max-min M --env KEY=VALUE ...
 ~~~
 
-- **Where it runs.** A run with no GPU prove (behind the ZK server, on 85's CPU prover, the default; or `--cpu`) is a plain run on a
+- **Where it runs.** A run with no GPU prove (firewalled, on 85's CPU prover, the default; or `--cpu`) is a plain run on a
   CPU node (`CPU_NODE` in `run.py`): `job.sh` with `GPU=0 FLOCK_WORK=/workspace/cache/rec-bench`, pinned to `--cores`
   (`taskset -c 0-31`), under `--mem-gb` and a timeout of `--max-min`; `run --dry-run` prints the launch. `--on` picks
   another of the CPU nodes that take plain runs (`PLAIN_CPU_NODES`), and `--cores` its cores. The nodes that take runs
@@ -49,7 +49,7 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
 - **The CPU prover under the ZK server** (`--oprove-gpu auto`, which is 0 with `--modes firewall`). A lease pool stops a
   lease whose GPU computes nothing for about 10 minutes, and the GPU computes nothing while the Lean session loop works. So V*'s statements are
   proved by 85's CPU prover (`GPU=0`, built once beside the GPU one), and no lease is needed. The release's time is then
-  the ZK server's, plus a CPU prove where a GPU prove would take about a second. `--oprove-gpu 1` puts the GPU prover back
+  the firewall's, plus a CPU prove where a GPU prove would take about a second. `--oprove-gpu 1` puts the GPU prover back
   under `--lease-min`.
 - **`--e2e`**, the one-pass mode: build, inner, vstage, vcap, oprove, lean and negative once each, one
   run per prove and no warm one. With `--cpu` it is the CPU prover end to end (`GPU=0`, no lease), on a

@@ -201,7 +201,7 @@ def _same(v1, v2):
 @pytest.mark.slow
 def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
     """The v2 audit (`SampledProofs.OneStageZk`) runs `flock-verify verify --zk`'s one-stage path inside its own Lean, on
-    the files as blobs: on the honest session (accepted, proving the sampled proof blocks), a session whose proof bytes were
+    the files as blobs: on the honest session (accepted, proving the drawn proof blocks), a session whose proof bytes were
     tampered with (record kept or rehashed), and the honest session without the verifier's registered file, its finding
     is `verify`'s, reason and proof blocks included."""
     for session, own in ((fx / "session", True), (_tampered(fx, tmp_path / "kept", False), True),

@@ -5,7 +5,7 @@ the session's fetch (with witness/) 0700 under KEEP and publishes only the bundl
 a published file that holds a prompt's ids, and refuses a KEEP inside --out; --at waits on the injected clock and sends
 nothing when late; chain runs chain_record.sh's warden path on the kept fetch, and is refused without the leak guard;
 on the endpoint's records artifact it reads requests.jsonl rebuilt in KEEP from the artifact's users map and the
-certified I/O, and refuses an endpoint with neither or an I/O that doesn't read whole; its sample on the gate's coins
+certified I/O, and refuses an endpoint with neither or an I/O that doesn't read whole; its draw on the gate's coins
 names the auditor's node as the coin link's peer, and the served node is refused."""
 from __future__ import annotations
 

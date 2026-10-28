@@ -27,7 +27,7 @@ frame-v3-sha512 tree a call, domain ``CommitmentDomain(identity_digest_sha512(TA
 salts ``prf_salt(Ks, off + pos)`` (commit_gpu's PRF). A proof block (i, j, s) opens the rows of T_s and T_{s-1}
 (s > 1), and at s = S O's row too.
 
-The verifier opens q proof blocks sampled by the check coin (a cell uniformly, then s with probability its segment's share
+The verifier opens q proof blocks drawn by the check coin (a cell uniformly, then s with probability its segment's share
 of K: each proof block's share of the call's MACs), and runs the Program's checks in the clear on the opened rows, a stand-in
 for the C-Flock --zk proof (the Definition isn't written yet): the rows' leaves and paths against the root, T_s - T_{s-1}
 against the segment's X W'^T mod 2^16, and at s = S O against (A + d_A)(B + d_B)^T mod 2^32 and the binding identity
@@ -419,7 +419,7 @@ def params_file(sh: Shape, ks: bytes) -> bytes:
 # ------------------------------------------------------------------------------------------------- the stub challenger
 class StubChallenger:
     """Issues a call's coins in the protocol's order from a secret the prover never sees: the seeds only after the operand
-    roots, the selection and check coins only after the call's root. A live challenger samples them fresh; this one derives
+    roots, the selection and check coins only after the call's root. A live challenger draws them fresh; this one derives
     them from its secret and the transcript so far, so a run is reproducible from the secret."""
 
     def __init__(self, secret: bytes | None = None):

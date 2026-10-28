@@ -113,7 +113,7 @@ def stratum_k(k: int, size: int, population: int) -> int:
 
 
 def work_k(k: int, work: int, size: int, total: int, floor: int) -> int:
-    """A stratum's sample under the work rule (Lean `Flock.Draw.workK`): ceil(k * work * size / total), at least `floor` and
+    """A stratum's draw under the work rule (Lean `Flock.Draw.workK`): ceil(k * work * size / total), at least `floor` and
     at most `size`."""
     return min(size, max(floor, (k * work * size + total - 1) // total))
 

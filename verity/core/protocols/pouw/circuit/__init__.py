@@ -14,7 +14,7 @@
   the width rule with the separator port pinned by the protocol.
 * `anchors`: the anchored inputs' anchors, which the verifier builds (the tile checks' derived noise too, `TileAnchors`, with
   each unit's public input regions), and the window's refusal of a repeated call index.
-* `plan`: closure samples behind a sample-law seam (`CountLaw`, and `WorkLaw`, root's #362 law), and the tile checks' layout.
+* `plan`: closure draws behind a draw-law seam (`CountLaw`, and `WorkLaw`, root's #362 law), and the tile checks' layout.
 * `pc4`, `pc8`: Pearl-C4's and Pearl-C's (FP8, forming v1) tile checks as Programs, cut into row and tile units, and
   their hiding Programs (``Shape.hidden``), whose tiles return only their tile digest; the rows are C-Flock-committed
   ports and the anchored inputs public input regions (`PORTS`).  No scheme of theirs is in `SCHEMES` yet.
@@ -116,9 +116,9 @@ class Traced:
         """The verifier's plan for this call: `plan.draw` over its own layout (`layout`), never a given one (X-SPC-97), each
         stratum's subset keyed by the call's index (``anchors.call_index``) with its template (X-SPC-96), under the key of
         ``ledger``, the window's `anchors.Ledger` opened from its complete `Receipt` (`Ledger.open`): no key is taken from
-        the caller. The sample is refused for a ledger not opened from a receipt or whose draw was sent, and for a call the
-        receipt doesn't list or the window already holds, before anything is sampled. So every call's commitment precedes
-        the key (C1), and each call of a window samples under a context of its own: the product law root's window pin takes
+        the caller. The draw is refused for a ledger not opened from a receipt or whose draw was sent, and for a call the
+        receipt doesn't list or the window already holds, before anything is drawn. So every call's commitment precedes
+        the key (C1), and each call of a window draws under a context of its own: the product law root's window pin takes
         as M1."""
         from . import plan
         from .anchors import Ledger

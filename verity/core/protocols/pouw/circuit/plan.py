@@ -10,7 +10,7 @@ strip's path to D_A and the call's key unit, each proved once, and its Y strip's
 
 **The law is a seam** (`TileLaw`), so the plan switches laws without changing:
 * `CountLaw` is the law on `main` today, one_stage's and #167's stratified law: one stratum per template, a uniform k_s-subset
-  inside each, k_s = max(1, round(K·n_s/N)) (rounding half up), K the law's budget over the strata it samples.
+  inside each, k_s = max(1, round(K·n_s/N)) (rounding half up), K the law's budget over the strata it draws.
 * `WorkLaw` is Verity root's work law (#362 with #374's floors, `Flock/Draw.lean` `workK`):
   k_s = min(n_s, max(f_s, ⌈K·W_s/W⌉)), with K = `RECORD_K` = 27,713 at ε = 0.1% and δ = 2⁻⁴⁰ (`record_k`) and f_s the
   verifier's floor. `work_table` is the verifier's `--work-table` and `law_object` the law `verify` derives from it. K is
@@ -108,7 +108,7 @@ def check_work_strata(strata: Sequence[StratumSpec]) -> None:
 
 def record_k(epsilon: Fraction, delta: Fraction) -> int:
     """The smallest K with (1 − ε)^K ≤ δ, decided in exact integers: wrong units doing a fraction ε of the work escape the
-    work law's sample with at most (1 − ε)^K (#362's `work_escape_le`). At ε = 0.1% and δ = 2⁻⁴⁰ it is 27,713; 27,712 misses
+    work law's draw with at most (1 − ε)^K (#362's `work_escape_le`). At ε = 0.1% and δ = 2⁻⁴⁰ it is 27,713; 27,712 misses
     (#362's `record_sizing`, `record_sizing_one_fewer`). That ε at δ is the default point the profile reports at, not a
     policy parameter: PoUW has none."""
     eps, dlt = Fraction(epsilon), Fraction(delta)
@@ -136,7 +136,7 @@ RECORD_K = 27_713
 
 @dataclass(frozen=True)
 class WorkLaw:
-    """The work law (Verity root's #362, `Flock/Draw.lean` `workK`): each stratum samples
+    """The work law (Verity root's #362, `Flock/Draw.lean` `workK`): each stratum draws
     k_s = min(n_s, max(f_s, ⌈K·W_s/W⌉)), W_s its work, W the strata's total, 1 ≤ K ≤ N, and f_s ≥ 1 its floor from the
     verifier's own table (X-SPC-81; 1 for every template it doesn't name). The floor binds for the strata that do no work
     (every template but the tile's). ``k`` is the budget K (`record_k`)."""
@@ -181,7 +181,7 @@ def window_laws(layouts: Sequence["Layout"], k: int = RECORD_K, floors: tuple[tu
     The other zero-work templates keep their floors (1 unless ``floors`` names them, X-SPC-84). Per call these are pinned
     (`audit_work_floor`); over the window, the per-call split (X-SPC-83, 106) and B (X-SPC-105) are root's window pin
     `audit_window_split_of_record` (`FlockSoundness/Audit/Window.lean`, #418), which takes each call's work
-    in one stratum (`check_work_strata`) and each call's sample under its own key context (`Traced.draw`'s `Ledger`).
+    in one stratum (`check_work_strata`) and each call's draw under its own key context (`Traced.draw`'s `Ledger`).
     It also takes a window that does some work (0 < W, its `hW`) and has y cells (0 < N, its `hN`): a window with
     either empty is refused here, so none is ever drawn or accepted."""
     if not layouts:
@@ -333,7 +333,7 @@ def draw(key: Key, lay: Layout, law: TileLaw, call: Sequence[int] = ()) -> Plan:
     """The plan for one sample: a uniform k_s-subset of each stratum from ``key`` (the verifier's own randomness, derived under
     `DRAW_DOMAIN` after the receipt), then every drawn tile's closure.  ``call`` is the call's index (`anchors`'
     `call_index`), which keys each stratum's subset with its template: the strata are the call's own (one per template,
-    X-SPC-84), and the calls of a window drawn under one key draw independently (X-SPC-96).  The verifier samples through
+    X-SPC-84), and the calls of a window drawn under one key draw independently (X-SPC-96).  The verifier draws through
     `Traced.draw`, over its own layout."""
     lay.check()
     sizes = law.sizes(lay.strata)

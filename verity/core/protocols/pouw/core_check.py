@@ -929,7 +929,7 @@ COINS_RECORDED = "verity/pouw/epoch-coins/v2"
 #: a coin commitment's scheme: (the bytes of `tagged` its binding and the weights' root keep, the weights' root's tag)
 COIN_VERSIONS = {Co.SCHEME: (64, "verity/pouw/weights/v1"), COINS_RECORDED: (32, "verity/pouw/weights/v2")}
 #: the e2e-service's first coin commitments (r20261006-08…, -19… to -21…), named `coins.SCHEME` but on SHA-256 as core
-#: was then: bound by `tagged_sha256`, and the sample's key and stream `derive_v1`'s.  Only a replay of a recorded draw
+#: was then: bound by `tagged_sha256`, and the draw's key and stream `derive_v1`'s.  Only a replay of a recorded draw
 #: reads it, after the current binding (none of their passes was retained, so the pass's rule doesn't)
 COIN_EARLY = Co.SCHEME
 DRAW_DOMAIN = "verity/pouw/served-zk-draw/v1"
@@ -1306,7 +1306,7 @@ SIGNED_LIVE = ("a live window's coins are its challenger's signed record and the
                "(`challenger.trusted_commitment`), not a bare commitment")
 
 
-#: the refusal of a sample whose coins aren't the record of the challenger the window's parameters pin (RT4-INT-5)
+#: the refusal of a draw whose coins aren't the record of the challenger the window's parameters pin (RT4-INT-5)
 COIN_KEY = "coin-key"
 NO_PINNED_KEY = "the window's parameters pin no challenger key for its draw's record"
 OTHER_KEY = "the challenger record is signed under a key other than the challenger key the window's parameters pin"

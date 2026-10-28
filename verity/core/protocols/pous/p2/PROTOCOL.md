@@ -132,7 +132,7 @@ Setup order is load-bearing:
 
 1. Fix W and its exact model manifest. Commit to the bytes, payload bit length, model identifier, protocol version and prime identifier.
 2. Only after that commitment is immutable, obtain the first valid unpredictable and unbiasable verifier/beacon source. Bind it; neither party may grind alternatives.
-3. Sample one 256-bit setup salt through `verity.ml.randomness` v2 (Appendix A). The formula below shows the deployment prime id; at any reduced width it is replaced by that parameter set's `p2-p{w}-c{c0}`:
+3. Draw one 256-bit setup salt through `verity.ml.randomness` v2 (Appendix A). The formula below shows the deployment prime id; at any reduced width it is replaced by that parameter set's `p2-p{w}-c{c0}`:
 
 ```text
 setup_salt_256 =

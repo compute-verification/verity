@@ -61,7 +61,7 @@ judged through the proof system (`sampled_proofs.service`, P1: a `Stream`'s `reg
   registration before an opening may refuse only what the opening refuses (``prelude``); the stream's own state stays
   Python's.
 - **The coins** are the epoch's (`pouw.coins`): the challenger process that holds the Streams holds the epoch's coin
-  challenger.  When the process starts, before it reads a request, that challenger samples the epoch's salt and flip coins
+  challenger.  When the process starts, before it reads a request, that challenger draws the epoch's salt and draw coins
   and their hm96 salts from the Lean verifier of record (`pouw.verifier.coins`: `pouw-check-difftest`'s ``coins``,
   `IO.getRandomBytes`, A3) and commits to them, and the process publishes the commitment (``LOG/coins.json``) before
   any request; with ``--state`` the entropy is instead the file the serving controller wrote from the same Lean coins
@@ -89,7 +89,7 @@ judged through the proof system (`sampled_proofs.service`, P1: a `Stream`'s `reg
   failing closed (``certifier``), each through the certifier's client (`RemoteCertifier`: a signed request, a signed
   answer it verifies): the certifier gives p's salt once, within its reveal deadline on its own clock, so its
   parameters carry no ``registration_deadline``.  The window registers once per PoUW window, stream and prover
-  (`salt.Registrations`, ``reregistered``), and its sampling coin is a live epoch's ``pouw/draw`` coin 0, checked against
+  (`salt.Registrations`, ``reregistered``), and its draw coin is a live epoch's ``pouw/draw`` coin 0, checked against
   the commitment the challenger reads from its challenger's signed record (`challenger.trusted_commitment`), which the
   sample's check of record verifies again, both under the challenger key the window's deployment pins (`Deployment`,
   beside the certifier's key and run id; `Deployment.pinned` reads it from infra's published pin, `CHALLENGER_KEY_PIN`,
@@ -764,7 +764,7 @@ Sampler = Callable[[Mapping[str, Any], int, bytes], list[int]]
 
 
 def draw_key(coin: bytes, stream: S.Stream, reg: S.Registration) -> Key:
-    """The window sample's key: the epoch's sampling coin, under the stream and the registration and receipt it was opened after."""
+    """The window draw's key: the epoch's draw coin, under the stream and the registration and receipt it was opened after."""
     return derive(coin, DRAW_DOMAIN, CC.draw_key_context(stream.digest, reg.digest, dict(reg.receipt)))
 
 
@@ -851,7 +851,7 @@ class Challenger:
     (`challenger.write_record`), and `deployment` what the verifier pins of its deployment (`Deployment`): the network
     certifier's key and run id, which `certifier` must be the client for, and its challenger's key, under which the
     challenger reads its trusted commitment itself (`challenger.trusted_commitment`).  Every opening is checked against
-    it, and the sample's check of record verifies the record again under the key the deployment pins, not the one the
+    it, and the draw's check of record verifies the record again under the key the deployment pins, not the one the
     record's coins name (``coin-key``).  `registrations` is the deployment's `salt.Registrations`,
     shared by its challengers.  Each registered window's salt, the one its pass was checked against, is held
     (`salts`), and `check` opens its sampled proof blocks under it."""
@@ -1055,7 +1055,7 @@ class Challenger:
 
     def _certified(self, name: str, rec: Mapping[str, Any], stream: str, replay: str | None, manifest: bytes | None,
                    recorded: bool) -> S.Registration:
-        """A certified window's registration (`register`).  First the window's sampled proof block must read its salt
+        """A certified window's registration (`register`).  First the window's drawn unit must read its salt
         (`salt.unit_reason`, ``unsalted``), which this window's `Pc8TileSide` doesn't, so today every certified window is
         refused here, before its stream receives it and before the certifier is asked for anything.  Past that, the
         stream receives it (R1-R7 and the receipt), then the certifier gives what the prover recorded for PoUW window p

@@ -1,11 +1,11 @@
-"""Openings of a remote window of chained passes: the verifier's sample, what it certifies, and what it costs.
+"""Openings of a remote window of chained passes: the verifier's draw, what it certifies, and what it costs.
 
 A remote window runs `P` passes over the store in sequence, pass `j`'s seed bound to the root before it, and commits
-one root per pass and device.  After the window's last root the verifier samples `s` openings uniformly from every receipt
+one root per pass and device.  After the window's last root the verifier draws `s` openings uniformly from every receipt
 the window committed (`draw`): one pooled sample, not one per pass.  Each opening is a label with its path to the
 store's registration root, and its receipt leaf with its path to its pass's root.
 
-**What the sample needs.**  Only that it is uniform over the committed receipts and independent of them, which sampling it
+**What the draw needs.**  Only that it is uniform over the committed receipts and independent of them, which drawing it
 after the last root from the verifier's own source gives.  The passes need no coins of their own: the sampling term
 counts the window's receipts that the prover never computed correctly, whichever pass they are in, so
 `Pr[accept ∧ fewer than (1 − ε)·M correct of M] ≤ (1 − ε)^s` for the window as for one pass (`window_error`).  The
@@ -15,7 +15,7 @@ index `j` is in its input, whatever roots the prover picks.  Without `j`, a prov
 root repeats an earlier one replays that pass's seed, and the pass after it is the earlier pass's receipts again,
 correct and read once.
 
-**Across windows.**  With each window's sample sampled after that window's roots, the deficits `d_i` of `n` windows
+**Across windows.**  With each window's sample drawn after that window's roots, the deficits `d_i` of `n` windows
 satisfy `Pr[all accepted ∧ mean d ≥ d̄] ≤ (1 − d̄)^(s·n)` however the prover adapts (`horizon_error_log2`): by
 induction on `n`, `sup over d₁ of (1 − d₁)^s·(1 − (n·d̄ − d₁)/(n − 1))^(s·(n − 1))` is attained at `d₁ = d̄`.  So a
 time-averaged claim over a monitoring period needs `ln(1/δ)/d̄` openings in total, spread over its windows (in proportion to
@@ -34,11 +34,11 @@ queries hit the store.  `slack_bits` evaluates it three ways (`Slack`):
 
 **Bytes and compute.**  `Geometry` describes a window; `opening_cost` gives the expected bytes and the verifier's work
 per opening with every tree's openings sent as one multiproof (`verity.ml.commitments.multiproof`), from the exact
-expectation of the multiproof's size under the sample (`expected_siblings`).  The work is counted in operations: SHA-512
+expectation of the multiproof's size under the draw (`expected_siblings`).  The work is counted in operations: SHA-512
 compressions in the audit's framing (`pous.verifier`'s rows, leaves and nodes, `tags`' leaves), the codec's squarings
 to decode the label, and the sketch's multiply-adds.  `Rates` turns them into core-seconds, and `achievable` gives
 `μ_sample + λ` at the most openings a verifier's bandwidth and cores afford.  `retention` is the prover's side: the
-receipt trees it keeps until the sample, and the labels it reads again to serve it.
+receipt trees it keeps until the draw, and the labels it reads again to serve it.
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ def draw(key: Key, counts: Sequence[int], s: int) -> tuple[tuple[int, int], ...]
     """`s` openings, uniform with replacement over every receipt of the window: pass `p` committed `counts[p]`.
 
     Draw `t` is `key.uniform(Σ counts, ("opening", t))`, read pass-major as `(pass, index)`.  `key` must be derived
-    after the window's last root from the verifier's own source, so the sample is independent of what was committed."""
+    after the window's last root from the verifier's own source, so the draw is independent of what was committed."""
     if type(s) is not int or s < 0 or not counts or any(type(c) is not int or c <= 0 for c in counts):
         raise ValueError("a window draws s >= 0 openings over passes of positive receipt counts")
     ends = [0]
@@ -98,7 +98,7 @@ def samples_for(epsilon: float, error_log2: float, receipts: int | None = None) 
 
 def horizon_error_log2(s: int, windows: int, deficit: float) -> float:
     """`log₂ (1 − d̄)^(s·n)`: the chance that all `n` windows of `s` openings each are accepted while their mean deficit
-    is at least `d̄`, against a prover that adapts each window to the samples before it (the module's induction)."""
+    is at least `d̄`, against a prover that adapts each window to the draws before it (the module's induction)."""
     return s * windows * math.log2(1 - deficit)
 
 
@@ -170,7 +170,7 @@ class Geometry:
     """A window: `stores` registration trees (a device's or a tier's store) of `blocks` labels each, read `passes`
     times, each pass committing one receipt tree per store with `receipts_per_leaf` receipts a leaf.  A receipt is
     `H(σ_j, i, sketch(E_i), z)`: `sketch_rows` multiply-adds per label byte, and `z`'s digest.  `bound_bytes` is what an
-    opening carries of the matmul output its receipt binds (`z_(j−1)`), zero when PoUW's sample already opens it.  The
+    opening carries of the matmul output its receipt binds (`z_(j−1)`), zero when PoUW's draw already opens it.  The
     verifier decodes each opened label, `codec_rounds` squarings per `word_bytes`."""
 
     stores: int
@@ -234,7 +234,7 @@ class OpeningCost:
 def opening_cost(g: Geometry, s: int) -> OpeningCost:
     """Expected per-opening cost of `s >= 1` pooled openings, every tree's paths sent as one multiproof.
 
-    A label's registration leaf is sampled in every pass (weight `passes/M`), a receipt leaf in one (weight
+    A label's registration leaf is drawn in every pass (weight `passes/M`), a receipt leaf in one (weight
     `receipts_per_leaf/M`).  Distinct openings send their label and leaf once and the verifier hashes and decodes each
     once; repeats are free.  Every opening recomputes its receipt."""
     if type(s) is not int or s < 1:
@@ -268,8 +268,8 @@ def opening_cost(g: Geometry, s: int) -> OpeningCost:
 
 @dataclass(frozen=True, slots=True)
 class Retention:
-    """What serving a window's sample costs the prover: the bytes of receipt trees it keeps until the sample, and the
-    expected bytes of labels it reads again to rebuild the receipts under the nodes the sample opens."""
+    """What serving a window's draw costs the prover: the bytes of receipt trees it keeps until the draw, and the
+    expected bytes of labels it reads again to rebuild the receipts under the nodes the draw opens."""
 
     level: int
     kept: float
@@ -277,10 +277,10 @@ class Retention:
 
 
 def retention(g: Geometry, s: int, level: int) -> Retention:
-    """The prover keeps every receipt tree from `level` up until the window's `s` openings are sampled (level 0: every
+    """The prover keeps every receipt tree from `level` up until the window's `s` openings are drawn (level 0: every
     receipt), and for each opened node at `level` rebuilds the receipts under it, reading each one's label again.
     Rebuilding a receipt needs its label as it was in that pass and its `z`, so a label may not change, nor its `z`
-    become unrecoverable, before the window's sample."""
+    become unrecoverable, before the window's draw."""
     leaves = -(-g.blocks // g.receipts_per_leaf)
     depth = (leaves - 1).bit_length()
     if type(s) is not int or s < 1 or not 0 <= level <= depth:

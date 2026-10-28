@@ -71,7 +71,7 @@ def state_of(tmp_path):
 @dataclass(frozen=True)
 class _Setup:
     """A device's store and its `vk`, with what the verifier knows of its salt: the device's id, the commitment to `W`
-    and the source the salt was sampled from.  Unpacks as `(store, vk)`."""
+    and the source the salt was drawn from.  Unpacks as `(store, vk)`."""
 
     store: audit.Store
     vk: VerifierKey
@@ -251,7 +251,7 @@ def test_last_leaf_opens_short(big_store) -> None:
 
 
 def test_samples_come_after_the_commitment_from_the_window_key(big_store, state_of) -> None:
-    """The window's key binds its tag and the nonce the verifier sampled for it, and changes with either."""
+    """The window's key binds its tag and the nonce the verifier drew for it, and changes with either."""
     vk = big_store.vk
     params = _params("ro-sha512/v1")
     nonce = bytes(range(32))
@@ -689,7 +689,7 @@ def test_another_tags_window_reveals_no_samples(big_store, state_of) -> None:
 
 
 def test_a_restarted_challenger_repeats_no_window_and_refuses_a_replayed_root(big_store, tmp_path) -> None:
-    """After a restart the store's state holds every nonce sampled before it: a challenger whose randomness repeats one
+    """After a restart the store's state holds every nonce drawn before it: a challenger whose randomness repeats one
     opens no window, and a fresh window's seed and samples are new, so the root and openings of a window from before
     the restart, replayed without reading the store, are refused: the replayed leaves are bound to the old seed, and the
     old openings answer other samples."""

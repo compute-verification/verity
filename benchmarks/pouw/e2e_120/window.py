@@ -10,14 +10,14 @@ hgref.py pins it) behind the e2e slice's round (cursor/e2e-slice-ea24's challeng
     (d) the prover commits the call's receipts: a word a thread every S 32-steps (`segment_e2e`'s windowed layout,
         (tile, window, thread), RW words a leaf), the products W' X'^T with W' = W + U (U in ±1..±16, period 32 along k, H1's
         noise on the weights) and X' = X + d (decision 29's dither, d in {0, 1}), U, d and the fold's keys from sigma
-    (e) after (d), the sample with fresh coins: a 128 x 128 tile, one of its 512 threads and a 32-step j
+    (e) after (d), the draw with fresh coins: a 128 x 128 tile, one of its 512 threads and a 32-step j
     (f) the statement: the thread's W and X tile leaves at j and the receipt leaf holding its window's word, each a
         committed hm96-sha512/row/v2 row whose commit string b || c the public file carries; the public rows (asel, xu,
-        wsel, wf, st, rsel) recomputed from sigma and the sample under public salts; the output row o0 held to 1; the proof
+        wsel, wf, st, rsel) recomputed from sigma and the draw under public salts; the output row o0 held to 1; the proof
         verified (C-Flock --zk, the Lean verifier of record on the pod; here `ideal_proof`, the statement's public file
         computed from its rows)
 
-Nothing is retried or resampled: a round refused at any step is rejected (`Refused`). Real values plug in at `Window` (W
+Nothing is retried or redrawn: a round refused at any step is rejected (`Refused`). Real values plug in at `Window` (W
 and X: vLLM's int8 window, once it exists), `Coins` (H1's derivations of U, d and the receipt key from sigma: cgemm.cu's
 tags) and `Honest.receipts` (the H1 kernel's receipts, once it writes them in this layout).
 """
@@ -344,7 +344,7 @@ class Draw:
 
 
 def public_rows(shape: Shape, coins: Coins, draw: Draw, fold: str = "duo") -> dict[str, np.ndarray]:
-    """The rows the challenger recomputes from the coin and the sample."""
+    """The rows the challenger recomputes from the coin and the draw."""
     pl = draw.place(shape)
     st = np.array(SG.fold_keys(fold, coins.seed, draw.tile, draw.thread, pl["w"], shape.nw), "<u4")
     return {"asel": _bits(np.arange(16) == pl["ia"]), "xu": _u16(coins.u_rows(pl["a_rows"]).view(np.uint8)),
@@ -389,7 +389,7 @@ def ideal_proof(rows: dict[str, np.ndarray], salts: dict[str, bytes], sigma: byt
 
 @dataclass
 class Opened:
-    """What the prover sends after the sample: the statement's rows and their salts (to the prover's proof, never in the clear
+    """What the prover sends after the draw: the statement's rows and their salts (to the prover's proof, never in the clear
     to the challenger), the public file (`ideal_proof`'s, or pub.bin on the pod) and the committed rows' paths."""
 
     rows: dict[str, np.ndarray]
@@ -409,7 +409,7 @@ class Verdict:
 
 
 class Round:
-    """The challenger's side of one round: the order (b) .. (f), the coin and the sample from ``rng`` (the OS generator in a
+    """The challenger's side of one round: the order (b) .. (f), the coin and the draw from ``rng`` (the OS generator in a
     run; seeded in a test), and the judgement of the opened statement."""
 
     def __init__(self, shape: Shape, w_root: bytes, session: str, rnd: int, rng: random.Random, fold: str = "duo"):
@@ -427,7 +427,7 @@ class Round:
         return self.sigma
 
     def receipts(self, r_root: bytes) -> Draw:
-        """(d) then (e): the receipts' root, answered by the sample."""
+        """(d) then (e): the receipts' root, answered by the draw."""
         if self.sigma is None or self.r_root is not None:
             raise Refused("receipts: once a round, after its coin")
         self.r_root = r_root
@@ -465,7 +465,7 @@ class Round:
 
 class Honest:
     """The honest prover of one session: the registered weights' tree once, then per round the activations' tree, the
-    receipts under the coin and the statement at the sample. ``receipt_fold``: the fold its receipts use (the check's, duo,
+    receipts under the coin and the statement at the draw. ``receipt_fold``: the fold its receipts use (the check's, duo,
     by default; H1 + fx1's kernel folds fx1)."""
 
     def __init__(self, window: Window, shape: Shape, session: str = "e2e-120", salt_key: bytes = b"stand-in",

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The network chain's run of record (chain_record.py) on a CPU machine, from the gate's fetched tarballs, on hidden_zk's
 # builds (its job.sh, sourced: Flock's flock-circuit and the Lean flock-verify, the verifier of record) with the
-# ZK server's Lean frame, N2's network-records and the sampled-proofs verifier built in the tree. From a clone, in one of
+# firewall's Lean frame, N2's network-records and the sampled-proofs verifier built in the tree. From a clone, in one of
 # the network slots:
 #   research run --on vy-nebius-cpu-2 --source . --project verity --as LANE --cwd clone --timeout 240m \
 #     --send GATE.tgz -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \

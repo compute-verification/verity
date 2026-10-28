@@ -14,14 +14,14 @@ batch, and the periods replay that one prefill. Both operands are committed befo
 seeds both instead (v31.py's ``llm`` rows for B), for tests and shapes the checkpoint doesn't have.
 
 **A period** (`Period.proto`): the registration (the operand roots, the operands' source, the period's shape, W_reg) is
-the root of one challenger session with families ``seeds`` and ``check``, a coin each a block. Then its verification phases run
+the root of one challenger session with families ``seeds`` and ``check``, a coin each a block. Then its sampling blocks run
 in one sequence. Block b's operand-root receipt is H(registration, b, block b-1's value-root receipt), and its seeds coin
 opens after it. Call (s, layer)'s coin is ``derive(coin, "verity/pouw-accel/seeds/v1", ctx).stream(call)``, and its six
 seeds (pad dA dB U V P) are dither.call_seeds of that coin under the block's window salt, its operand-root receipt. Each
 call commits its words T_s = X W'^T mod 2^16 every L inner indices (no O, wraps or binding) under a frame-v3-sha512 root,
 its leaf pos salted prf_salt(Ks, off + pos) under the Prover's own Ks, off = c leaves for its c-th call (dither.salts);
 block b's value-root receipt is H(registration, b, its
-roots). Its check coin opens after that receipt, with block b+1's seeds coin in the same round trip. The coin selects
+roots). Its check coin opens after that receipt, with block b+1's seeds coin in the same round trip. The coin draws
 Q W_b / W_reg proof blocks of b (`picks`): a call by its MACs, a cell uniformly, a segment by its length, so each MAC is
 equally likely. Each pick's tree paths come off the host copy of its call's tree before the next block overwrites it.
 

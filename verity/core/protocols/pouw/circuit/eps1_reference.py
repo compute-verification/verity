@@ -156,7 +156,7 @@ def noise(the_seed: bytes, receipt: bytes, shape: Shape, tile: int, ctid: int) -
     """The public noise of one thread's H1 call: the dither bits `b`, the served coin bits `c`, the keyed word `U` and the
     digit coins `z` from `seed_j` (`the_seed`, decision 101), and the fx1 fold keys `st` (the chains' starts) from `σ_R`
     (`receipt`, decision 121), never from seed_j.  The verifier computes these and passes them as public inputs to
-    `PouwCallCheck_v1`; nothing here is a witness.  `tile`, `ctid` place the thread (the sample's, from the same seed)."""
+    `PouwCallCheck_v1`; nothing here is a witness.  `tile`, `ctid` place the thread (the draw's, from the same seed)."""
     ks, m = shape.ks, SG.n_digits(shape.ks)
     sb = _Stream(the_seed, b"b")
     sc = _Stream(the_seed, b"c")
@@ -204,7 +204,7 @@ def templates(shape: Shape) -> dict[str, Any]:
 
 
 def unit(shape: Shape):
-    """The sampled proof block: a thread's whole call under `PouwCallCheck_v1` (decision 101, a unit is a whole dot product)."""
+    """The drawn unit: a thread's whole call under `PouwCallCheck_v1` (decision 101, a unit is a whole dot product)."""
     shape.check()
     return check(shape.ks)
 

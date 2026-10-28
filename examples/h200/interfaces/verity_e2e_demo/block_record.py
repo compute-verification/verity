@@ -14,7 +14,7 @@ steps, every leg in one shape, the composed verdict with the JointHorizonLive er
   and ratio ``r``, ``r`` null in a wipe from before ``verity/wipe/v0`` published it); ``error`` the probability over the leg's
   own coins that it accepts while its claim fails, as the run established it, read from ``error_from``; ``at`` the
   certificate at δ = 1/100 and 1/10^6 (`DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
-  ``error`` holds except with δ), integrity's recomputed from its sample at δ (`integrity_bound`), else not established.
+  ``error`` holds except with δ), integrity's recomputed from its draw at δ (`integrity_bound`), else not established.
   A leg whose ``server`` is not the block's is carried but not composed.
 * ``composed``: ``verdict`` (`compose`: reject when a composed leg rejects or errs, accept when every leg ran on the block's
   server and accepted, else pending with what is ``missing``), the run's own composed answer (``onsite``) when it wrote

@@ -51,7 +51,7 @@ The commit itself (`relay`, which ``relay`` runs end to end with a key of its ow
   2^b rows (at most `CHUNK_BYTES`; a value smaller than a chunk is one, its pads included) go to ``workers`` processes as
   their bytes arrive. Each returns its chunk's subtree root, and the main process folds them as `tree_levels` does. A P2
   chunk takes the blocks its bytes fall in, so a block two chunks share is decoded twice.
-* **The salts** are the operating system's, 192 bytes a row, sampled by the worker that commits the row (`os_salts`):
+* **The salts** are the operating system's, 192 bytes a row, drawn by the worker that commits the row (`os_salts`):
   every hm96 salt is the operating system's (Daniel, 9 Oct, decisions 4(a) and 4(c); A3 in
   ``Security/Proofs/Flock/Soundness/Assumptions.lean``), so nothing rests on a stream generator. ``--witness`` is
   where they go, every value's in manifest order, its rows in order (each value's `Transfer.witness`): the prover's

@@ -14,7 +14,7 @@ rounded for display. `--line-by python` computes it in `line.py` alone, a readin
 
 Group g's coin σ_g left the challenger at its release log's `released_at` for challenge coin g, and window g's last
 root reached it at the first `received_at` of a request naming it by place (`auditor_seen`). Openings coin g's request
-names it (`audit.Session.close` asks for the coin after the window's last root), and a paced window is sampled at its
+names it (`audit.Session.close` asks for the coin after the window's last root), and a paced window is drawn at its
 k-th root (its boundary leaves before it), so that request leaves as the root arrives; for k = 1, σ_(g+2)'s request names the same root too. At
 one window in flight (`audit.Pace.in_flight` 1) σ_(g+1)'s request names it and openings coin g's leaves once σ_(g+1)
 is back, so this reading, which doesn't take f, ends L_g about a round trip to the challenger past s_(g+1). Drawn

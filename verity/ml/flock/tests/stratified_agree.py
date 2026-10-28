@@ -1,4 +1,4 @@
-"""The Lean verifier's stratified sample against core's (PR #164's `verity.core.protocols.sampled_proofs.one_stage.draw`, PR #161's `Stratified`).
+"""The Lean verifier's stratified draw against core's (PR #164's `verity.core.protocols.sampled_proofs.one_stage.draw`, PR #161's `Stratified`).
 
 For each program (A4 P6's six-template population, as #164's test builds it, and small and random programs):
 
