@@ -753,7 +753,7 @@ column storage, whole lower labels as separators, meet in the middle through `Pâ
   `chainBand` and `chainDense`), encode-after-decode on arbitrary `C`, negative controls, and the flag;
 - the two-labels-from-one-item attacks (`test_pous_two_for_one.py`), bit-exact on real labels: they succeed on the XOR
   sponge and on Miyaguchiâ€“Preneel over band rows, and fail on the overwrite chain. The designer's state game
-  (`pous_state_game.py`, from `internal/p3-instantiation/overwrite-state-game.py`) agrees on dense and band rows;
+  (`pous_state_game.py`) agrees on dense and band rows;
 - the continuous audit's memory challengers against the Lean model (`test_pous_continuous_difftest.py`).
   `pous_continuous_model.py` transcribes the memory challenger of
   `Security/Definitions/Pous/Model/Continuous.lean` definition by definition (a test finds each one word for word
