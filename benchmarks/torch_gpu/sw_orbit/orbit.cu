@@ -592,6 +592,7 @@ struct FusedParams {
   int64_t ldd;
   int mh, nh, kt;            // half grid rows and columns, k-tiles of 128 a product
   int tiles_m, tiles_n, group;
+  int skew;                  // clocks the second consumer warpgroup waits before its first tile
 };
 
 struct FusedSmem {
@@ -661,6 +662,13 @@ __global__ void __launch_bounds__(kFusedThreads, 1) orbit_fused_kernel(CUTLASS_G
     auto r2 = partition_fragment_C(tiled_mma, take<0, 2>(FusedTile{}));
     Tensor cD = make_identity_tensor(make_shape(Int<128>{}, Int<128>{}));
     Tensor tCcD = tiled_mma.get_thread_slice(mma_thread_idx).partition_C(cD);
+    // A skew puts the warpgroups' product boundaries apart, so one's drain and CUDA pass overlap the other's products
+    // (it can run ahead only by the pipeline's stages, as both release each stage).
+    if (warp_group == 2 && p.skew > 0) {
+      long long c0 = clock64();
+      while (clock64() - c0 < p.skew) {
+      }
+    }
     for (int t = blockIdx.x; t < tiles; t += gridDim.x) {
       int tm, tn;
       tile_coord(t, p, tm, tn);
@@ -737,7 +745,7 @@ int launch_forms(const int8_t* x, int8_t* wide, unsigned long long* counts, int8
 }
 
 int launch_fused(const int8_t* a_wide, const int8_t* b_wide, int32_t* d, int m, int n, int k, int group, int ctas,
-                 cudaStream_t st) {
+                 int skew, cudaStream_t st) {
   if (m % 2 || n % 2 || k % 256) return 301;
   int mh = m / 2, nh = n / 2, kh = k / 2;
   using StrideA = typename FusedMainloop::StrideA;
@@ -757,6 +765,7 @@ int launch_fused(const int8_t* a_wide, const int8_t* b_wide, int32_t* d, int m, 
   p.tiles_m = (mh + 127) / 128;
   p.tiles_n = (nh + 127) / 128;
   p.group = group > 0 ? group : 8;
+  p.skew = skew;
   int tiles = p.tiles_m * p.tiles_n;
   int grid = ctas > 0 ? ctas : sm_count();
   if (grid > tiles) grid = tiles;
@@ -911,10 +920,11 @@ int orbit_assemble(const int32_t* prod, int32_t* o, int m, int n, cudaStream_t s
   return cudaGetLastError() == cudaSuccess ? 0 : 402;
 }
 
-// O [m, n] s32 from the wide forms, fused; group: tile columns a raster group (0: 8); ctas: persistent CTAs (0: every SM)
+// O [m, n] s32 from the wide forms, fused; group: tile columns a raster group (0: 8); ctas: persistent CTAs (0: every SM);
+// skew: clocks the second consumer warpgroup starts late
 int orbit_fused(const int8_t* a_wide, const int8_t* b_wide, int32_t* o, int m, int n, int k, int group, int ctas,
-                cudaStream_t st) {
-  return launch_fused(a_wide, b_wide, o, m, n, k, group, ctas, st);
+                int skew, cudaStream_t st) {
+  return launch_fused(a_wide, b_wide, o, m, n, k, group, ctas, skew, st);
 }
 
 // D [m, n] s32 = A Bᵀ by CUTLASS: variant 0 128x256, 1 128x256 in clusters of 2 along M, 2 128x128
@@ -1051,7 +1061,7 @@ int v31_ext_gemm(void* hv, const int8_t* a, int32_t* d, cudaStream_t st) {
       cudaMemsetAsync(h->flag, 0, sizeof(int), st) != cudaSuccess)
     return 711;
   int rc = launch_forms(a, h->a_wide, h->counts, nullptr, h->alist, h->acount, h->m, h->k, 0, st);
-  if (!rc) rc = launch_fused(h->a_wide, h->b_wide, d, h->m, h->n, h->k, 8, 0, st);
+  if (!rc) rc = launch_fused(h->a_wide, h->b_wide, d, h->m, h->n, h->k, 8, 0, 0, st);
   if (!rc) rc = launch_corr(h->a_wide, h->bptr, h->bmid, h->bidx, h->alist, h->acount, h->ft, d, h->flag, h->m, h->n,
                             h->k, 1, st);
   if (rc) return rc;

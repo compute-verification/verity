@@ -21,7 +21,8 @@ Per shape (N x K at M rows; default 8B's qkv, o and gate-up at M = 16,384):
   corrections add at the measured carry rates and at `--rho-a`'s (8B's activations).
 
 Arms: `lt`, `int_mm`, `wgmma`, `cutlass_128x256`, `cutlass_128x256_c2`, `cutlass_128x128` (plain); `forms_a`, `forms_b`,
-`batched`, `assemble`, `fused` (the orbit's parts, forms prepared); `unfused` (forms_a + batched + assemble), `orbit`
+`batched`, `assemble`, `fused` (the orbit's parts, forms prepared; `fused_skew800` and `fused_skew2000` with the second
+consumer warpgroup started that many clocks late); `unfused` (forms_a + batched + assemble), `orbit`
 (forms_a + fused, uncorrected); `corr` (the honest corrections, full s32 updates of O), `corr_b` (B's carries only),
 `corr_nostore` and `corr_b_nostore` (the same, O untouched: their compute; `corr_b_nostore_r4` on corr_kernel's 4 rows
 a thread rather than corr16's 16), `corr4` (B's carries' corrections mod 4,
@@ -56,9 +57,10 @@ SHAPES = {"qkv": (6144, 4096), "o": (4096, 4096), "gate_up": (28672, 4096), "dow
 PEAK_MACS = 989.4e12
 MACS_PER_SM_CLK = 4096
 PLAIN = ("lt", "int_mm", "wgmma", "cutlass_128x256", "cutlass_128x256_c2", "cutlass_128x128")
-ORBIT_ARMS = ("forms_a", "forms_b", "batched", "assemble", "fused", "unfused", "orbit", "corr", "corr_b", "corr_nostore",
-              "corr_b_nostore", "corr_b_nostore_r4", "corr4", "rmw_o", "exact", "orbit_call")
+ORBIT_ARMS = ("forms_a", "forms_b", "batched", "assemble", "fused", "fused_skew800", "fused_skew2000", "unfused", "orbit",
+              "corr", "corr_b", "corr_nostore", "corr_b_nostore", "corr_b_nostore_r4", "corr4", "rmw_o", "exact", "orbit_call")
 RHO_A = "qkv=0.00026,o=0.00044,gate_up=0.00175,down=0.000056"
+GATED = ("fused", "fused_skew", "unfused")
 SLOTS = len(OR.ORDER)
 COPY_BYTES = 256 << 20
 
@@ -72,7 +74,7 @@ class Lib:
             "orbit_corr": [vp, vp, vp, vp, vp, vp, vp, vp, vp, i32, i32, i32, i32, vp],
             "orbit_corr4": [vp, vp, vp, vp, vp, i32, i32, i32, vp],
             "orbit_batched": [vp, vp, vp, i32, i32, i32, vp], "orbit_assemble": [vp, vp, i32, i32, vp],
-            "orbit_fused": [vp, vp, vp, i32, i32, i32, i32, i32, vp], "orbit_plain": [vp, vp, vp, i32, i32, i32, i32, vp],
+            "orbit_fused": [vp, vp, vp, i32, i32, i32, i32, i32, i32, vp], "orbit_plain": [vp, vp, vp, i32, i32, i32, i32, vp],
             "orbit_clock": [vp, i64, vp], "v31_ext_load": [vp, vp, vp], "v31_ext_gemm": [vp, vp, vp, vp]}
 
     def __init__(self, path: Path):
@@ -227,9 +229,9 @@ class Orbit:
     def forms_b(self, w, i: int) -> None:
         self.lib.forms(w, self.b_wides[i], self.b_cnts[i], None, 1)
 
-    def fused(self, o, i: int, group: int = 8) -> None:
+    def fused(self, o, i: int, group: int = 8, skew: int = 0) -> None:
         self.lib.call("orbit_fused", self.a_wide.data_ptr(), self.b_wides[i].data_ptr(), o.data_ptr(), self.m, self.n, self.k,
-                      group, 0)
+                      group, 0, skew)
 
     def corr(self, o, i: int, store: bool = True, a_side: bool = True, r4: bool = False) -> None:
         """O += the corrections; `a_side` False: B's carries' only; `store` False: computed, O untouched (timing); `r4`:
@@ -275,19 +277,20 @@ class Orbit:
 
 def gate(lib: Lib, m: int, n: int, k: int, x: torch.Tensor, w: torch.Tensor, corrected: bool) -> dict:
     """The orbit's O against torch._int_mm's on (x, w), bit for bit: fused and unfused, corrected by orbit_corr when
-    `corrected` (else the operands must not carry): the fused O by corr16 where it fits, the unfused by corr_kernel."""
+    `corrected` (else the operands must not carry): the fused O (and the fused with a skew of 2,000 clocks) by corr16 where
+    it fits, the unfused by corr_kernel."""
     ref = torch._int_mm(x, w.t())
     orb = Orbit(lib, m, n, k)
     orb.load([w])
     o = torch.empty(m, n, dtype=torch.int32, device="cuda")
     doc = {}
-    for arm in ("fused", "unfused"):
+    for arm in GATED:
         o.view(torch.uint8).fill_(0xA5)
         orb.a_cnt.zero_()
         orb.flag.zero_()
-        if arm == "fused":
+        if arm != "unfused":
             orb.forms_a(x)
-            orb.fused(o, 0)
+            orb.fused(o, 0, skew=2000 if arm == "fused_skew" else 0)
         else:
             orb.unfused(x, o, 0)
         if corrected:
@@ -442,6 +445,8 @@ class Shape:
             "batched": lambda i: orb.batched(i),
             "assemble": lambda i: orb.assemble(o),
             "fused": lambda i: orb.fused(o, i),
+            "fused_skew800": lambda i: orb.fused(o, i, skew=800),
+            "fused_skew2000": lambda i: orb.fused(o, i, skew=2000),
             "unfused": lambda i: orb.unfused(x, o, i),
             "orbit": lambda i: (orb.forms_a(x), orb.fused(o, i)),
             "corr": lambda i: orb.corr(o, i),
@@ -658,9 +663,9 @@ def main() -> int:
         if name in real:
             g["real_l0"] = gate(lib, a.m, n, k, gauss_rows(a.m, k, gen), real[name], corrected=True)
             g["real_l0_heavy"] = gate(lib, a.m, n, k, heavy_rows(a.m, k, gen), real[name], corrected=True)
-        ok = all(v[arm]["mismatches"] == 0 for v in g.values() for arm in ("fused", "unfused"))
+        ok = all(v[arm]["mismatches"] == 0 for v in g.values() for arm in GATED)
         ok = ok and all(v.get("corr4_mismatches", 0) == 0 for v in g.values())
-        ok = ok and not any(v[arm]["list_overflow"] for v in g.values() for arm in ("fused", "unfused"))
+        ok = ok and not any(v[arm]["list_overflow"] for v in g.values() for arm in GATED)
         g["small"]["no_carries"] = not any(g["small"]["fused"]["carries_a"]) and not any(g["small"]["fused"]["carries_b"])
         ok = ok and g["small"]["no_carries"]
         ext = {"gauss": ext_gate(lib, a.m, n, k, gauss_rows(a.m, k, gen), gauss_rows(n, k, gen)),
@@ -672,7 +677,7 @@ def main() -> int:
         g["ok"] = ok
         ok_all &= ok
         doc["gates"][name] = g
-        print(json.dumps({"gate": name, "ok": ok, **{kk: {arm: v[arm]["mismatches"] for arm in ("fused", "unfused")}
+        print(json.dumps({"gate": name, "ok": ok, **{kk: {arm: v[arm]["mismatches"] for arm in GATED}
                                                       for kk, v in g.items() if isinstance(v, dict) and "fused" in v},
                           "corr4": {kk: v.get("corr4_mismatches") for kk, v in g.items() if isinstance(v, dict) and "fused" in v},
                           "ext": {kk: v["mismatches"] for kk, v in ext.items()}}), flush=True)
