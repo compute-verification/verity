@@ -163,7 +163,10 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_compl
 from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
+
+if TYPE_CHECKING:
+    from verity_vllm.pipeline import advice_windows as AW
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -767,7 +770,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=sorted(served_units))
+                   served=sorted(served_units), v2=v2_proof(done, not plain(a)), partition=part)
     else:  # every verdict of record names the sessions delivered (`service.check_verdicts`)
         verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in verdicts.items()}
         given = {"proved_units": sorted(proved), "instances": instances, "served": sorted(served_units),
@@ -790,7 +793,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=given["served"])
+                   served=given["served"], v2=v2_proof(done, not plain(a)), partition=part)
     result["draw_counts"] = counts
     if row_verdicts:
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
@@ -903,22 +906,68 @@ def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.B
 
 def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_layer: str | None, delta: float,
                work_table: dict | None, rec: dict, record: dict, *, instances: int, sessions: list[str],
-               session_roots: dict, served: list[int]) -> None:
-    """The audit as `SampledProofs.OneStage`'s case, what onsite's evidence carries for sampled proofs
-    (`replay.Case.case`: the registration record, the evidence `audit_record` was handed and the verifier's params, δ the
-    audit's as an exact ratio), in ``out/case.json``, and the current Python on it (`replay.python`) in
-    ``out/case-python.json``."""
+               session_roots: dict, served: list[int], v2: dict | str | None = None,
+               partition: dict | None = None) -> None:
+    """The audit as `SampledProofs.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
+    `audit_record` was handed and the verifier's params, δ the audit's as an exact ratio, with ``partition`` the
+    verifier's own partition object, which v2 verifies the sessions against), in ``out/case.json``, and
+    the current Python on it (`replay.python`) in ``out/case-python.json``. With ``v2`` (`v2_proof`), the case onsite's
+    evidence carries for sampled proofs, `SampledProofs.OneStageZk`'s (`case_v2`), in ``out/case-v2.json``, or why there
+    is none in ``out/case-v2-error.txt``."""
     try:
         import replay as RP
 
         d = str(Fraction(delta).limit_denominator(10**12))
-        p = RP.params(program, query, law, ports, leaf_layer, d, work_table=work_table)
+        p = RP.params(program, query, law, ports, leaf_layer, d, work_table=work_table, partition=partition)
         e = RP.evidence(record, instances=instances, sessions=sessions, session_roots=session_roots, served=served)
         c = RP.Case("", "a5", rec["format"], "audit", "audit", program, p, rec, e, None)
         (out / "case.json").write_text(json.dumps(c.case(), sort_keys=True))
         (out / "case-python.json").write_text(json.dumps(RP.python(c), sort_keys=True, default=str))
-    except Exception as x:  # noqa: BLE001: the case is a copy of the audit for onsite; its failure leaves the audit's verdict
+    except Exception as x:  # noqa: BLE001 -- the case is a copy of the audit for onsite; its failure leaves the audit's verdict
         (out / "case-error.txt").write_text(f"{type(x).__name__}: {x}\n")
+        return
+    if v2 is None:
+        return
+    try:
+        if isinstance(v2, str):
+            raise ValueError(v2)
+        (out / "case-v2.json").write_text(json.dumps(case_v2(c.case(), sessions, **v2), sort_keys=True))
+    except Exception as x:  # noqa: BLE001 -- as the v1 case's
+        (out / "case-v2-error.txt").write_text(f"{type(x).__name__}: {x}\n")
+
+
+def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, registered: dict | None,
+            tables: Sequence[Path]) -> dict:
+    """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest and
+    the verifier's registered file), the evidence with its ``verdicts`` replaced by the proofs' files
+    (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``, the paths of the files those name and of the
+    pinned lookup tables, which onsite reads after the evidence (`compose.onsite_check`)."""
+    import replay as RP
+    from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+
+    pr, blobs = PF.evidence_v2(proof, sessions)
+    evidence = {k: v for k, v in json.loads(bytes.fromhex(case["evidence"])).items() if k != "verdicts"} | {"proofs": pr}
+    return {"blobs": [str(b) for b in (*blobs, *tables)], "commitment": case["commitment"],
+            "evidence": RP.DT.canonical(evidence).encode().hex(),
+            "params": {**case["params"], "proofs": {"circuit": circuit, "registered": registered}}}
+
+
+def v2_proof(done: Sequence[dict], zk: bool) -> dict | str:
+    """`case_v2`'s files from the drawn members' sessions (`member_checks`'s), or why the audit has no v2 case: v2 verifies
+    one table's `--zk` sessions on its circuit and public file."""
+    from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
+
+    if not zk:
+        return "v2 verifies --zk sessions; this audit's are plain"
+    if len(done) != 1:
+        return f"v2 verifies one table's sessions on its circuit and public file; this audit drew {len(done)} members"
+    mm, sdir = done[0]["mm"], done[0]["sdir"]
+    st, n = mm["st"], mm["m"].n
+    tables = sorted(f for f in (st["dir"] / "tables").glob("*") if f.is_file()) if (st["dir"] / "tables").is_dir() else []
+    reads = st.get("registered_file")
+    return {"proof": PF.Proof(st["dir"] / "circuit.txt", st["dir"] / f"pub-{n}.bin",
+                              tuple(f.parent for f in sorted((sdir / "sessions").glob("*/session.json")))),
+            "circuit": mm["pin"], "registered": json.loads(reads.read_text()) if reads else None, "tables": tables}
 
 
 def streamed(a: argparse.Namespace) -> bool:
