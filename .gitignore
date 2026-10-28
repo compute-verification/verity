@@ -116,6 +116,9 @@ integrations/vllm/tests/program/predict/fixtures/naming_traces.json
 integrations/vllm/tests/program/data/dsa_h200_logits.npz
 integrations/vllm/tests/program/data/dsa_glm53_kslots.npz
 integrations/vllm/docs/data/ref-prims
+integrations/vllm/manifests/semantic-profiles/qwen2-eager-batch-invariant-v1.json
+integrations/vllm/manifests/semantic-profiles/llama-eager-batch-invariant-v2.json
+integrations/vllm/manifests/semantic-profiles/llama-eager-batch-invariant-v1.json
 examples/vllm/workloads/llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager.json
 integrations/vllm/workloads/dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager.json
 integrations/vllm/workloads/dsv4-pro__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager.json

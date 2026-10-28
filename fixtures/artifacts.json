@@ -172,6 +172,9 @@
   "art:30385407aad29494f71640c127a59912b9839722000d856fd095b2034174e259": "integrations/vllm/tests/program/data/dsa_h200_logits.npz",
   "art:c1833dbbafe1d80f86f08e2b657b43607a506430d0b57827d8bc6d6ab4aa1bad": "integrations/vllm/tests/program/data/dsa_glm53_kslots.npz",
   "art:d794e952dec34ad637dad0526ce839b942849d4ed283a05380b3434fa96d9301": "integrations/vllm/docs/data/ref-prims",
+  "art:6280390312958541295df2bef7381f195768b5ecfe7e82667a4ec3d1b17aeba3": "integrations/vllm/manifests/semantic-profiles/qwen2-eager-batch-invariant-v1.json",
+  "art:958f39a2b56cc3c0c9df8c21b03f3133b2764cfc789bca09bb7438eca62d6bb5": "integrations/vllm/manifests/semantic-profiles/llama-eager-batch-invariant-v2.json",
+  "art:017ac8d962ec2628f98f3a61a69eb5ad3ff8f3ee51caabea88c0825b03ec55fb": "integrations/vllm/manifests/semantic-profiles/llama-eager-batch-invariant-v1.json",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
