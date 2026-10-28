@@ -4,7 +4,7 @@ boundaries at buckets 0 and 16 of a 32-bucket link-window), published as `warden
 and kept as the front keeps its fetch. Three requests admitted at bucket 0 are anchored at bucket 16 in lanes 0, 1 and
 2, so link-window 0's class Programs 1, 3 and 5 start them (slot nb·j + b), each one's row at its anchor its prompt; a
 fourth, admitted at bucket 5 and released in link-window 0, is anchored at 32, so link-window 1's Program 6 starts it.
-A window whose requests start in two link-windows, a request the warden didn't certify, a class whose window isn't the
+Each window's state rows are the scan's state tree's for its link-window. A window whose requests start in two link-windows, a request the warden didn't certify, a class whose window isn't the
 warden's link-window or whose scan doesn't serve the warden, and a prompt past the class's prompt cap are refused by
 name; a serve dir with no kept run gives None, and the unpacked fetch is removed. Reading the run leaves one_stage's
 ``replay`` (a5's) the process's, not network_traces' (`prove_path.network_traces`)."""
@@ -47,17 +47,23 @@ USERS = [f"user-{i}" for i in range(len(PROMPTS))]
 SESSION = bytes(range(32))
 
 
-@pytest.fixture(scope="module")
-def serve_dir(tmp_path_factory) -> Path:
-    """A serve dir whose certifier front kept the warden run of `PROMPTS`' warden-form id requests (``user-i``) arriving
-    at `ARRIVALS` and answered `RESPONSES`, over 2 link-windows at `CLASS`'s scan schedule."""
-    d, scan = tmp_path_factory.mktemp("kept"), CLASS.scan
+def _served() -> ST.Served:
+    """`PROMPTS`' warden-form id requests (``user-i``) arriving at `ARRIVALS` and answered `RESPONSES`, served through
+    the warden over 2 link-windows at `CLASS`'s scan schedule."""
+    scan = CLASS.scan
     params = W.WardenParams(cell_bytes=scan.B, slots=scan.r, bucket_ms=100, delay=scan.D, lanes=scan.lanes,
                             queue=scan.lanes, window=CLASS.buckets, ingress_cells=scan.C, ingress_buckets=scan.WITHIN,
                             egress_cells=scan.KO + 1, every=scan.EVERY)
     reqs = [id_request(model="org/m", user=u, prompt=list(p), max_tokens=4, seed=i, temperature=0.0, top_p=1.0,
                        frame_bytes=scan.B, offset=0) for i, (u, p) in enumerate(zip(USERS, PROMPTS))]
-    served = ST.serve(params, reqs, ARRIVALS, [1 << 20] * len(reqs), RESPONSES, 2)
+    return ST.serve(params, reqs, ARRIVALS, [1 << 20] * len(reqs), RESPONSES, 2)
+
+
+@pytest.fixture(scope="module")
+def serve_dir(tmp_path_factory) -> Path:
+    """A serve dir whose certifier front kept the warden run of `_served`."""
+    d, served = tmp_path_factory.mktemp("kept"), _served()
+    params = served.params
     run = d / "run"
     run.mkdir()
     signer = LmsSigner.create(lms.keygen(lms.Params(64, 1, 6), hashlib.sha512(b"kept-scan").digest()), d / "signer.json")
@@ -90,6 +96,18 @@ def test_a_windows_slots_are_the_requests_the_scan_starts_there(serve_dir):
     assert sorted(p.name for p in (serve_dir / CP.PRIVATE / "RUN").iterdir()) == ["fetch.tar.gz"]
     import replay
     assert Path(replay.__file__).parent.name == "one_stage" and str(ROOT / "benchmarks" / "network_traces") not in sys.path
+
+
+def test_a_windows_state_rows_are_the_rows_of_the_scans_state_tree(serve_dir):
+    """The rows window-commit registers as the window's `SCAN_STATE` are the ones the network certifier's scan puts in
+    its state tree for the link-window (`scan_traffic.chain` over the warden's own rows, then
+    `ingress_scan.window_state`, as scan_zk's `link` builds it), in link-window 0 and in link-window 1: what a period's
+    stateTied needs before it can hold the two at one root."""
+    served, T = _served(), CLASS.buckets
+    states = ST.chain(CLASS.scan, *served.rows(), served.outputs).states[1:]
+    for w, users in ((0, USERS[:3]), (1, USERS[3:])):
+        rows, _ = PP.kept_scan(serve_dir, CLASS, users)
+        assert [list(r) for r in rows] == IS.window_state(CLASS.scan, states, w * T, T)
 
 
 def test_a_window_the_kept_run_doesnt_give_is_refused_by_name(serve_dir, tmp_path):
