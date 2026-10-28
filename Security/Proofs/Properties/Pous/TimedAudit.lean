@@ -210,7 +210,7 @@ theorem forIn_push {α β ε : Type} (P : α → β → Prop) (f : α → Array 
 /-! ## One audit -/
 
 /-- Answer `j` of an audit keyed by `source`, as `audit` judged it `x`. -/
-def AnswerFacts (s : Certificate.Store) (salt root : ByteArray) (leaves : Array ByteArray) (limit : Nat)
+def AnswerFacts (s : P2.Params) (salt root : ByteArray) (leaves : Array ByteArray) (limit : Nat)
     (source : ByteArray) (answers : Array Json) (j : Nat) (x : Bool × Bool) : Prop :=
   ∃ (hj : j < answers.size) (block : ByteArray) (elapsed : Nat),
     NatAt answers[j] "index" (challenged s salt root source j) ∧ NatAt answers[j] "elapsed_ns" elapsed ∧
@@ -219,7 +219,7 @@ def AnswerFacts (s : Certificate.Store) (salt root : ByteArray) (leaves : Array 
       (challenged s salt root source j % s.blocksPerSegment) block == leaves[challenged s salt root source j]!,
       decide (elapsed ≤ limit))
 
-theorem audit_ok {s : Certificate.Store} {salt root : ByteArray} {leaves : Array ByteArray} {k limit : Nat} {rec : Json}
+theorem audit_ok {s : P2.Params} {salt root : ByteArray} {leaves : Array ByteArray} {k limit : Nat} {rec : Json}
     {out : Array (Bool × Bool)} (h : TimedAudit.audit s salt root leaves k limit rec = .ok out) :
     ∃ (source : ByteArray) (answers : Array Json), HexAt rec "source" source ∧ 0 < source.size ∧
       rec.getObjVal? "answers" = .ok (.arr answers) ∧ answers.size = k ∧
@@ -256,7 +256,7 @@ theorem audit_ok {s : Certificate.Store} {salt root : ByteArray} {leaves : Array
 
 /-- A store and deadlines the gate refuses nothing of: the certificate's point, `k` and deadlines within it, and no gap
 exactly when `W` has the certificate's 8 segments. -/
-theorem gate_refused_nil {s : Certificate.Store} {k delta rtt : Nat} (h : (Certificate.gate s k delta rtt).2.1 = []) :
+theorem gate_refused_nil {s : P2.Params} {k delta rtt : Nat} (h : (Certificate.gate s k delta rtt).2.1 = []) :
     (s.w, s.c0, s.blocksPerSegment) = Certificate.POINT ∧ Certificate.CERT_K ≤ k ∧
       delta = Certificate.DELTA_NS ∧ rtt ≤ Certificate.RTT_ALLOWANCE_CAP_NS ∧
       ((Certificate.gate s k delta rtt).2.1 ++ (Certificate.gate s k delta rtt).2.2 = [] ↔ s.segments = 8) := by
@@ -297,7 +297,7 @@ theorem verdict_ok {ready : Json} {leafBytes : ByteArray} {doc : Json} (h : Time
 /-- What an accepted `verdictOf` read and judged. -/
 theorem verdictOf_accepted {ready : Json} {leafBytes : ByteArray} {doc v : Json}
     (h : TimedAudit.verdictOf ready leafBytes doc = .ok v) (hv : v.getObjValD "accepted" = .bool true) :
-    ∃ (s : Certificate.Store) (salt root : ByteArray) (delta rtt k : Nat) (strict : Bool) (records : Array Json)
+    ∃ (s : P2.Params) (salt root : ByteArray) (delta rtt k : Nat) (strict : Bool) (records : Array Json)
       (audits : Array (Array (Bool × Bool))),
       TimedAudit.store ready = .ok (s, salt) ∧ leafBytes.size = s.blocks * Merkle.DIGEST ∧
       HexAt doc "root" root ∧ NatAt doc "deadline_ns" delta ∧ NatAt doc "rtt_allowance_ns" rtt ∧
