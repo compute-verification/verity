@@ -11,6 +11,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # interface (`RemoteAudit.Protocol`, which `test_protocol.py` holds to the period hook, `period.py`). The schedule check
 # (`schedule.py`) is a reference too.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/core/protocols/record.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/remote_bandwidth/__init__.py",
           "verity/core/protocols/remote_bandwidth/audit.py", "verity/core/protocols/remote_bandwidth/codec.py",
           "verity/core/protocols/remote_bandwidth/wire.py",
