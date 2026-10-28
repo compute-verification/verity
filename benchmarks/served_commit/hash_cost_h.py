@@ -61,8 +61,11 @@ def main() -> None:
         return window_mhz(cl, t0 + offset, t1 + offset) or f_default
 
     f_g = mhz("gemm_alone")
+    # gemm_alone is a ~50 ms window, mostly between two 200 ms samples: then f_g is the median of every loaded sample
+    g_src = "window" if "gemm_alone" in span and window_mhz(cl, *(t + offset for t in span["gemm_alone"])) else "median of loaded samples"
     out = {"run_out": str(run), "device": res["device"], "sms": sms, "T": res["T"], "clock_offset_s": offset, "gemm": {
-        **gemm, "mhz": f_g, "theta_at_clock": round(gemm["tmacs_per_s"] * 1e12 / (MACS_SM_CLK * sms * f_g * 1e6), 4)}, "rows": {}}
+        **gemm, "mhz": f_g, "mhz_source": g_src,
+        "theta_at_clock": round(gemm["tmacs_per_s"] * 1e12 / (MACS_SM_CLK * sms * f_g * 1e6), 4)}, "rows": {}}
     for form, fd in res["forms"].items():
         for rb, e in fd.get("sizes", {}).items():
             if "leaf_ms" not in e:

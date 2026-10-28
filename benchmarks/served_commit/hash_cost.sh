@@ -37,6 +37,16 @@ if [ "${ARMSET:-}" = lifetime ]; then
         p33_4k_t512:$D,T=512,ROWS=4096,VERITY_ROWS_PHASES=33,CAPS=2+8+16+33+66+132
         p64_16k_t512:$D,T=512,ROWS=16384,VERITY_ROWS_PHASES=64,CAPS=2+8+16+33+66+132"
 fi
+# ARMSET=best: the cheapest phases found (about 1-2 compressions a launch a thread at 4 and 16 KiB, 8 at 64 KiB, the clamp), finer caps
+if [ "${ARMSET:-}" = best ]; then
+  D=THREADS=256,TREE=0
+  ARMS="b4k:$D,ROWS=4096,VERITY_ROWS_PHASES=33,CAPS=33+66+99+132+198+264+396+0
+        b16k:$D,ROWS=16384,VERITY_ROWS_PHASES=64,CAPS=33+66+99+132+198+264+396+0
+        b64k:$D,ROWS=65536,VERITY_ROWS_PHASES=64,CAPS=8+16+24+33+66+132+264+0
+        b4k_t512:$D,T=512,ROWS=4096,VERITY_ROWS_PHASES=33,CAPS=1+2+4+8+16+33+66
+        b16k_t512:$D,T=512,ROWS=16384,VERITY_ROWS_PHASES=64,CAPS=1+2+4+8+16+33+66
+        b64k_t512:$D,T=512,ROWS=65536,VERITY_ROWS_PHASES=64,CAPS=1+2+4+8+16+33+66"
+fi
 say "leased CUDA_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES-unset}"
 nvidia-smi --query-gpu=name,uuid,clocks.sm,clocks.max.sm,power.limit,memory.used --format=csv | tee -a "$OUT/steps.txt"
 nvidia-smi --query-gpu=timestamp,clocks.sm,power.draw,utilization.gpu,temperature.gpu --format=csv -lms 200 \
