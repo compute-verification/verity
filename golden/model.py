@@ -30,11 +30,11 @@ The design dict (`design(**overrides)` builds one; `SCHEMA` lists every key, its
     partition units: [{name, per_token, work, extra_ands, open_rows, out_bits, blocks?}] or None for the preset of
               `commit.values`; a unit drawn as a group of proof blocks lists them, blocks: [{name, count, ands}];
               tile, kchunk, attn_keys, census (None | "b4" | "b4-buckets")
-    prover    device ("h200" | "sm120"), reps (1 | 2), o_per_and, staged_per_and, stmt_fixed, stmt_per_and, speed,
+    prover    device ("h200" | "sm120"), warm, reps (1 | 2), o_per_and, staged_per_and, stmt_fixed, stmt_per_and, speed,
               m_max, k_max, k_pad, shared, stmt ("template" | "universal")
     lowering  gates_per_and, s_per_gate, bytes_per_gate, per ("template" | "instance"), ram_gib
     verify    stmt_fixed, stmt_per_and
-    price     cpu_s_in_gpu_s, cpu_in_J, baseline ("same" | "fastest")
+    price     cpu_s_in_gpu_s, cpu_in_J, baseline ("main" | "same" | "fastest")
 
 Units: ms for serve time a step, GPU-s and CPU-s for proving and verification a window, bytes and ANDs as counted.
 """
@@ -61,6 +61,13 @@ LEVERS = "note:compute-research/20261028T1715Z-report-p1a-levers (art:bac7989851
 FLOOR = "note:compute-research/20261028T0523Z-finding-dither-noised-floor"
 ZK_RUN = "r20261018-060433-b55e (C-Flock --zk sessions of ScaledMmS8Coordinate_v1, sm_120; costfit over " \
          "benchmarks/sampling_plan/inputs.py)"
+#: ZK_RUN's fits count SHA-512 at 58,120 ANDs; a block's rows count it at 81,402 (sha512_ands). Its K 4,096 and
+#: 14,336 blocks, 88-93% openings, are 1.358 and 1.353 rows a fitted AND, so its per-AND terms are divided by this to
+#: price a row.
+ZK_ROWS = 1.355
+H200_RUN = "r20261028-191928-57a0 (GD-PROVER's zk_cost on vy-dc-h200-5, firewall on, 64 staged; K 1,024 / 4,096 / " \
+           "16,384 / 65,536 blocks of 2.66 / 6.97 / 24.2 / 93.2 M rows at k_log 22 / 24 / 25 / 27, 8 drawn, and K 1,024 " \
+           "at 64; fit T = a + b s + c s P in rows, /tmp/gd/h200fit.py, h200_fit.json in GD-MODEL's final art)"
 
 INPUTS: dict[str, tuple[float, str, str]] = {
     # the card
@@ -146,9 +153,9 @@ INPUTS: dict[str, tuple[float, str, str]] = {
     "b1_rate_vs_s8": (8.0, "M", f"{FLOOR}: the b1 product at 8x the s8 rate a clock; H200 mma.sync m16n8k256 "
                                 f".and.popc 21,845 against s8 m16n8k32 2,731 MACs an SM-clock, r20261028-090323-2c56 "
                                 f"(#6216, note:kernels-kfa3/20261028T0912Z-report-h200-b1-mma-rate)"),
-    "permuted_limbs": (2.54, "E", "GD-NOISE finding 1 (note:compute-research/20261028T1932Z-report-gd-noise): pi re-"
-                                  "drawn each tile, the merged factor's high limb (11.7% dense, 0.16% over 2:4 at "
-                                  "+-80, t 3) on 2:4 sparse s8 at half price: 1 + 0.5 + 0.05 + 1 limb-products a word"),
+    "permuted_limbs": (2.55, "E", "GD-NOISE final, finding 2 (note:compute-research/20261028T2016Z-report-gd-noise): pi "
+                                  "re-drawn each tile, the 2:4 route forces 0.975 G at t 3, so (0.975 - 1/8) x 3 "
+                                  "limb-products a word (the merged factor's high limb on 2:4 sparse s8 at half price)"),
     "jr2_noise_g": (1.32, "E", "GD-NOISE's table, JR2 per period at m 8,192 (qkv): the noised product 1.00 G, CUDA "
                                "0.18 and d_A's PRG 0.14; the lane receipts' hashing ~0 beside H1's"),
     "jr2_call_extra_g": (0.01, "E", "GD-NOISE's table, JR2 per call (#6369) over per period, without W-PRG: CUDA "
@@ -158,20 +165,29 @@ INPUTS: dict[str, tuple[float, str, str]] = {
     "noise_fused_keep": (0.1, "E", "X formed in the GEMM's operand load keeps 10% of GD-DENOISE's separate X arm"),
     # proving: C-Flock --zk, costfit over ZK_RUN. Measured on sm_120 at ~3-6 M ANDs a block; estimates for the H200
     # (and for larger blocks) until GD-PROVER's H200 fit lands.
-    "o_per_and": (1.0870e-8, "E", f"{ZK_RUN}: GPU-s a drawn proof block's AND (prove fit, sigma 0.149)"),
-    "staged_per_and": (1.0160e-10, "E", f"{ZK_RUN}: GPU-s a staged proof block's AND"),
-    "stmt_fixed": (3.029, "E", f"{ZK_RUN}: GPU-s a touched statement"),
-    "stmt_per_and": (3.5095e-6, "E", f"{ZK_RUN}: GPU-s a statement per AND of its proof block (its build)"),
+    # a block's "ANDs" below are its rows (SHA-512 at 81,402): ZK_RUN's per-AND terms are divided by ZK_ROWS
+    "o_per_and": (1.0870e-8 / ZK_ROWS, "E", f"{ZK_RUN}: sm_120 cold, GPU-s a padded drawn row (prove fit, sigma "
+                                            f"0.149)"),
+    "staged_per_and": (1.0160e-10 / ZK_ROWS, "E", f"{ZK_RUN}: GPU-s a staged proof block's row"),
+    "stmt_fixed": (3.029, "E", f"{ZK_RUN}: sm_120 cold, GPU-s a touched statement (a session)"),
+    "stmt_per_and": (3.5095e-6 / ZK_ROWS, "E", f"{ZK_RUN}: sm_120 cold, GPU-s a statement per row of its block"),
     "stage_fixed": (1.571, "E", f"{ZK_RUN}: CPU-s to stage a statement"),
-    "stage_per_and": (5.944e-7, "E", f"{ZK_RUN}: CPU-s a statement per AND of its proof block"),
-    "stage_per_and_staged": (2.855e-9, "E", f"{ZK_RUN}: CPU-s a staged proof block's AND"),
+    "stage_per_and": (5.944e-7 / ZK_ROWS, "E", f"{ZK_RUN}: CPU-s a statement per row of its proof block"),
+    "stage_per_and_staged": (2.855e-9 / ZK_ROWS, "E", f"{ZK_RUN}: CPU-s a staged proof block's row"),
     "verify_fixed": (12.436, "E", f"{ZK_RUN}: Lean verify --zk CPU-s a statement (sigma 0.108)"),
-    "verify_per_and": (6.710e-6, "E", f"{ZK_RUN}: Lean verify --zk CPU-s a statement per AND of its proof block"),
-    "o_per_and_h200": (3.18e-7, "M", "GD-PROVER on the H200 (r20261028-191928-57a0, firewall on, K 1,024 blocks of "
-                                     "1.94 M ANDs, warm sessions): 47.0 s at 64 drawn against 12.45 s at 8, so 34.5 s "
-                                     "for 56 padded draws; 29x the sm_120 fit (sm_90's GF(2^128) multiply possibly "
-                                     "emulated: GD-PROVER's unchecked cause). The statement term agrees with costfit's "
-                                     "(7.5 s against 9.8 s at that block)"),
+    "verify_per_and": (6.710e-6 / ZK_ROWS, "E", f"{ZK_RUN}: Lean verify --zk CPU-s a statement per row of its block"),
+    "sm120_warm_a": (2.05, "E", f"GD-PROVER's warm-session refit of {ZK_RUN} (note:compute-research/20261028T1955Z-"
+                                f"report-gd-prover): s a session, the prover process kept"),
+    "sm120_warm_b": (1.14e-6 / ZK_ROWS, "E", "the same refit: s a session per row of its block"),
+    "sm120_warm_c": (1.20e-8 / ZK_ROWS, "E", "the same refit: s a padded drawn row"),
+    "h200_warm_a": (5.07, "M", f"{H200_RUN}: warm sessions (2 timed after a warm-up), s a session; sigma 0.071"),
+    "h200_warm_b": (1.19e-6, "M", f"{H200_RUN}: warm, s a session per row of its block"),
+    "h200_warm_c": (2.27e-7, "M", f"{H200_RUN}: warm, s a padded drawn row, set by K 1,024's 8 and 64 drawn alone; "
+                                  f"26x sm_120's (sm_90's GF(2^128) multiply possibly emulated: GD-PROVER's unchecked "
+                                  f"cause)"),
+    "h200_cold_a": (8.74, "M", f"{H200_RUN}: a process a session, s a session; sigma 0.040"),
+    "h200_cold_b": (1.94e-6, "M", f"{H200_RUN}: cold, s a session per row of its block"),
+    "h200_cold_c": (2.24e-7, "M", f"{H200_RUN}: cold, s a padded drawn row"),
     "sm120_gpu_price": (0.5, "E", "an RTX PRO 6000 GPU-s priced in H200 GPU-s, when the prover runs on sm_120 "
                                   "(prover.device): a judgement, not a quote"),
     "rep_share": (0.27, "E", "the second rep's share of a two-rep proof's drawn-AND time: zerocheck 10.0 s and ring "
@@ -216,11 +232,10 @@ INPUTS: dict[str, tuple[float, str, str]] = {
                       "dominate (Gemm_v2{2048,16}: 16.9 M ANDs at k_log 27; AttnBlock_v5 9.3 M at 26; SiluMul 11.3 M "
                       "at 26). The struct worker's 'a lane fits 2^27 to K about 5,041' (~57 M ANDs) is 1; the "
                       "inbox's '2^27 ANDs' (top, 19:16Z) is 0"),
-    "k_pad_rows": (1, "M", "k_pad of a block whose row openings are at least half its ANDs: GD-PROVER's composed s8 "
-                           "blocks, 88-93% openings (note:compute-research/20261028T1955Z-report-gd-prover: K 1,024's "
-                           "1.94 M ANDs at k_log 22, K 65,536's 69.0 M at 27, counted at 58,120 a compression), need at "
-                           "most 0.66 and 0.53 bits past log2 of their ANDs counted at 81,402, which already holds most "
-                           "of SHA-512's 1.50 bits an AND"),
+    "k_pad_rows": (0.37, "M", f"k_pad of a block whose row openings are at least half its rows: {H200_RUN}'s four "
+                              f"composed s8 blocks (88-93% openings) sit at k_log 22, 24, 25 and 27, which a constant "
+                              f"pad reproduces only in (0.27, 0.47] bits past log2 of their rows (K 4,096 sets the "
+                              f"low end, K 16,384 the high); the midpoint"),
     "k_pad_h1_lane": (1, "E", "k_pad of an H1 lane or combine block: the struct worker's 'a lane fits 2^27 to K about "
                               "5,041' (h1unit.stager; note:top/20261028T1845Z-report-lowering-struct)"),
     "h1_ands_per_mac": (300, "E", "J10-R's H1 leaf, ANDs a MAC before its openings (inbox 19:32Z: 'about 300 ANDs a "
@@ -410,7 +425,7 @@ SCHEMA = {
         "L": (1024, "dither: segment, a 16-bit word a cell every L (L >= K: O alone, un-noised, credit 0)"),
         "L_prime": (None, "noise period (None: dither 128, PROTOCOL.md's static setting at L 1,024, t 8; J10-R 32)"),
         "noise": ("periodic", "periodic | fresh (along K) | permuted (v3.2: U's columns re-permuted each tile; "
-                              "GD-NOISE's 2:4 route forces 0.97 G at t 3) | segment (pi re-drawn each segment, "
+                              "GD-NOISE's 2:4 route forces 0.975 G at t 3) | segment (pi re-drawn each segment, "
                               "which closes that route)"),
         "u_draw": ("period", "jr2: U drawn once a period, W' and U stored (GD-NOISE's 'JR2 per period') | call "
                              "(#6369: U drawn every call, n K PRG bytes, SHA-bound at small m)"),
@@ -471,21 +486,24 @@ SCHEMA = {
                          "35 attention templates padded into the widest (the planner's pad:35)"),
     },
     "prover": {
-        "device": ("h200", "the prover's GPU: h200 (GD-PROVER's measured drawn-AND cost, o_per_and_h200) | sm120 (the "
-                           "RTX PRO 6000's costfit, its GPU-s at sm120_gpu_price)"),
+        "device": ("h200", "the prover's GPU: h200 (the fit of GD-PROVER's H200 sessions, h200_warm_* / h200_cold_*) | "
+                           "sm120 (the RTX PRO 6000's fits, sm120_warm_* / costfit's o_per_and and stmt_*, its GPU-s "
+                           "at sm120_gpu_price)"),
+        "warm": (True, "the prover process kept across sessions (GD-PROVER's warm sessions; a served prover is warm, "
+                       "GD-PLANNER) | False: a process a session"),
         "reps": (2, "C-Flock reps on one root: 2 (fast100x2, 195.5 bits) | 1 (Q a level up to clear the 100-bit "
                     "floor: rep_share less drawn-AND time, one_rep_query_cost more)"),
-        "o_per_and": (None, "GPU-s a padded drawn block's AND (None: the device's)"),
-        "staged_per_and": (None, "GPU-s a staged block's AND"),
-        "stmt_fixed": (None, "GPU-s a session (touched statement)"),
-        "stmt_per_and": (None, "GPU-s a session per AND of its block"),
+        "o_per_and": (None, "GPU-s a padded drawn block's row (None: the device's)"),
+        "staged_per_and": (None, "GPU-s a staged block's row"),
+        "stmt_fixed": (None, "GPU-s a session (touched statement) (None: the device's)"),
+        "stmt_per_and": (None, "GPU-s a session per row of its block (None: the device's)"),
         "speed": (None, "a further divisor on proving GPU-s (None: 1.0)"),
         "m_max": (35, "C-Flock's m = k_log + nbl cap (a block's k_log itself is refused above k_max)"),
         "k_max": (None, "the block cap's k_log (None: 27, compose's K_MAX; 28-30 with a fast100 schedule and an "
                         "extended Stmt.InRange, each bit past 27 at cap_cost_per_bit and prover memory 2^k_log x "
                         "prover_bytes_per_row against prover_mem_GB)"),
         "k_pad": (None, "bits past log2 ANDs a block's k_log takes, k_log = ceil(log2 ANDs + k_pad) (None: INPUTS "
-                        "k_pad_rows, 1, where openings are at least half the block, else k_pad, 2, from class_size's "
+                        "k_pad_rows, 0.37, where openings are at least half the block, else k_pad, 2, from class_size's "
                         "gate-dominated staged units; 0: the inbox's 2^27 ANDs a block)"),
         "shared": (True, "statements hold only the drawn blocks (IntegrityPeriod's hidden window)"),
         "stmt": ("template", "template (a statement a block class) | universal (private_circuits' universal unit: each "
@@ -691,7 +709,7 @@ def pouw_forced_frac(d: dict) -> float:
     best attack found. Un-noised calls earn 0 (the brief): J10-R as served adds no noise at serve time, and at L >= K a
     dither cell commits O alone. Dither, periodic or with pi re-drawn each segment: min(1, 1/8 + 3/t) (the floor note;
     GD-NOISE finding 2). Pi re-drawn each tile (v3.2): the merged factor's high limb runs on 2:4 sparse s8 at half
-    price, 2.54 limb-products a word, min(1, 1/8 + 2.54/t) (GD-NOISE finding 1, shown at t 3: 0.97 G). Noise fresh
+    price, 2.55 limb-products a word, min(1, 1/8 + 2.55/t) (GD-NOISE final, finding 2: 0.975 G at t 3). Noise fresh
     along K, or JR2: G, the one-word bound's second product (GD-NOISE finding 3; GD-BITS, if JR2's proof holds)."""
     w = d["pouw"]
     if w["scheme"] in ("off", "j10r"):
@@ -723,13 +741,15 @@ def dither_linears(d: dict):
 
 
 def pouw_credit(d: dict) -> dict:
-    """Guarantee 2's credit as a share of the four linears' int8 MACs: a dither call with L < K credits (K - L) / K of
-    its MACs (the floor note; S15 of note:compute-research/20261028T1900Z-report-gd-smell), and the work that credit
-    forces is the floor's share of it, at the best attack found (an upper bound on the floor, not a bound)."""
+    """Guarantee 2's credit as a share of the four linears' int8 MACs: a dither call with L < K commits T_s for
+    s = 1..S - 1 (S = ceil(K / L)) and O, and credits (S - 1) L / K of its MACs (GD-NOISE final, finding 4:
+    note:compute-research/20261028T2016Z-report-gd-noise), and the work that credit forces is the floor's share of it,
+    at the best attack found (an upper bound on the floor, not a bound)."""
     w = d["pouw"]
     total = sum(K * N for _, K, N in LINEARS)
     if w["scheme"] == "dither":
-        cred = sum(K * N * (K - w["L"]) / K for _, K, N in dither_linears(d) if w["L"] < K) / total
+        L = w["L"]
+        cred = sum(N * (math.ceil(K / L) - 1) * L for _, K, N in dither_linears(d) if L < K) / total
     elif w["scheme"] == "jr2":
         cred = sum(K * N for _, K, N in LINEARS if K == w["K"]) / total
     else:
@@ -1100,11 +1120,16 @@ def proving(d: dict, units: list, label: str) -> dict:
         raise ValueError(f"prover.device {pv['device']!r}")
     if pv["reps"] not in (1, 2):
         raise ValueError(f"prover.reps {pv['reps']!r}")
-    o = (pv["o_per_and"] if pv["o_per_and"] is not None else
-         I("o_per_and_h200" if pv["device"] == "h200" else "o_per_and"))
+    if pv["device"] == "h200":
+        a, b, c = (I(f"h200_{'warm' if pv['warm'] else 'cold'}_{x}") for x in "abc")
+    elif pv["warm"]:
+        a, b, c = (I(f"sm120_warm_{x}") for x in "abc")
+    else:
+        a, b, c = I("stmt_fixed"), I("stmt_per_and"), I("o_per_and")
+    o = pv["o_per_and"] if pv["o_per_and"] is not None else c
     so = (pv["staged_per_and"] if pv["staged_per_and"] is not None else I("staged_per_and"))
-    f0 = (pv["stmt_fixed"] if pv["stmt_fixed"] is not None else I("stmt_fixed"))
-    f1 = (pv["stmt_per_and"] if pv["stmt_per_and"] is not None else I("stmt_per_and"))
+    f0 = pv["stmt_fixed"] if pv["stmt_fixed"] is not None else a
+    f1 = pv["stmt_per_and"] if pv["stmt_per_and"] is not None else b
     speed = pv["speed"] if pv["speed"] is not None else 1.0
     price = 1.0 if pv["device"] == "h200" else I("sm120_gpu_price")
     rep = 1.0 if pv["reps"] == 2 else (1 - I("rep_share")) * (1 + I("one_rep_query_cost"))

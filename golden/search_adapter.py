@@ -8,10 +8,11 @@ knobs (benchmarks/golden_search/space.py) onto a `golden.model` design at the po
 t512: the demo's window, a prefill of 64 real tokens in T 512 and 3 decode steps), evaluates J under those input
 values, and returns GD-SEARCH's result keys. A knob GD-SEARCH leaves out keeps the model's default; the extra knobs
 `scheme`, `form`, `open`, `steps`, `ptile` (PoUW's tile, (R, C)), `kmax` (the block cap's k_log, 27 to 30), `mmax`
-(C-Flock's m cap, 35 to 40), `reps` (1 | 2), `device` ("h200" | "sm120"), `period` (windows certified together),
-`retain` ("device" | "host"), `akeys` (keys an attention block), `census` (None | "b4" | "b4-buckets", the t512
-point only) and `udraw` (JR2's U, "period" | "call") reach pouw.scheme, pouw.form, commit.open,
-point.steps_per_window, pouw.tile, prover.k_max, prover.m_max, prover.reps, prover.device, sampling.period,
+(C-Flock's m cap, 35 to 40), `reps` (1 | 2), `device` ("h200" | "sm120"), `warm` (the prover kept across sessions,
+default True), `period` (windows certified together), `retain` ("device" | "host"), `akeys` (keys an attention
+block), `census` (None | "b4" | "b4-buckets", the t512 point only, default "b4"; "b4-buckets" is GD-PLANNER's
+attention templates merged) and `udraw` (JR2's U, "period" | "call") reach pouw.scheme, pouw.form, commit.open,
+point.steps_per_window, pouw.tile, prover.k_max, prover.m_max, prover.reps, prover.device, prover.warm, sampling.period,
 sampling.retain, partition.attn_keys, partition.census and pouw.u_draw. `noise: segment` is pi re-drawn each
 segment. `kernels: bar` is the row kernel GD-HASH measured (0.92 of the bar), not the bar.
 
@@ -48,17 +49,19 @@ RANGES = {
     "jr2_noise_g": (1.0, 1.81),                          # the noised product alone to GD-NOISE's per-call row
     "jr2_wprg_g_m": (873.0, 3492.0),                     # one PRG byte an entry (GD-NOISE finding 5) to four
     "host_retain_GB": (100.0, 1600.0),                   # half an eighth of a node to the whole node's host memory
-    "o_per_and": (0.5e-8, 2.2e-8),
-    "staged_per_and": (0.5e-10, 2e-10),
+    # costfit's per-AND ranges, per row like the values (M.ZK_ROWS)
+    "o_per_and": (0.5e-8 / M.ZK_ROWS, 2.2e-8 / M.ZK_ROWS),
+    "staged_per_and": (0.5e-10 / M.ZK_ROWS, 2e-10 / M.ZK_ROWS),
     "stmt_fixed": (1.5, 6.0),
-    "stmt_per_and": (0.0, 7e-6),                         # 0: a template's preprocessing kept across windows
+    "stmt_per_and": (0.0, 7e-6 / M.ZK_ROWS),             # 0: a template's preprocessing kept across windows
     "stage_fixed": (0.8, 3.2),
-    "stage_per_and": (3e-7, 1.2e-6),
-    "stage_per_and_staged": (1.4e-9, 5.7e-9),
+    "stage_per_and": (3e-7 / M.ZK_ROWS, 1.2e-6 / M.ZK_ROWS),
+    "stage_per_and_staged": (1.4e-9 / M.ZK_ROWS, 5.7e-9 / M.ZK_ROWS),
     "verify_fixed": (6.0, 25.0),
-    "verify_per_and": (3.4e-6, 1.34e-5),
-    "o_per_and_h200": (1.2e-8, 3.5e-7),                 # sm_120's per-AND floor (if sm_90's emulated multiply is
-                                                         # fixed) to GD-PROVER's K 65,536 cold session
+    "verify_per_and": (3.4e-6 / M.ZK_ROWS, 1.34e-5 / M.ZK_ROWS),
+    "sm120_warm_a": (1.38, 2.72),                        # GD-PROVER's refit, +-1 sigma
+    "sm120_warm_b": (1.05e-6 / M.ZK_ROWS, 1.23e-6 / M.ZK_ROWS),
+    "sm120_warm_c": (1.09e-8 / M.ZK_ROWS, 1.31e-8 / M.ZK_ROWS),
     "sm120_gpu_price": (0.3, 1.0),
     "rep_share": (0.15, 0.5),
     "one_rep_query_cost": (0.0, 0.1),
@@ -127,7 +130,7 @@ def to_design(k: dict, point: str = "t8192") -> dict:
         s["partition"]["census"] = k["census"]
     if "udraw" in k:
         s["pouw"]["u_draw"] = k["udraw"]
-    for knob, key in (("kmax", "k_max"), ("mmax", "m_max"), ("reps", "reps"), ("device", "device")):
+    for knob, key in (("kmax", "k_max"), ("mmax", "m_max"), ("reps", "reps"), ("device", "device"), ("warm", "warm")):
         if knob in k:
             s["prover"][key] = k[knob]
     for knob, key in (("period", "period"), ("retain", "retain")):

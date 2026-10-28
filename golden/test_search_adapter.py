@@ -56,7 +56,9 @@ def test_a_floor_under_one_minus_eps_is_infeasible():
 def test_scenario_inputs_move_j_and_ranges_hold_the_value():
     base = A.evaluate(GOOD)["J"]
     v = {k: i.value for k, i in A.INPUTS.items()}
-    assert A.evaluate(GOOD, {**v, "o_per_and_h200": A.INPUTS["o_per_and_h200"].high})["J"] > base
+    assert A.evaluate({**GOOD, "device": "sm120"}, {**v, "sm120_warm_c": A.INPUTS["sm120_warm_c"].high})["J"] > \
+        A.evaluate({**GOOD, "device": "sm120"})["J"]
+    assert A.evaluate(GOOD)["J"] == base
     for k, i in A.INPUTS.items():
         assert min(i.low, i.high) <= i.value <= max(i.low, i.high), k
         assert i.uncertain == (model.INPUTS[k][1] == "E" and i.low != i.high), k

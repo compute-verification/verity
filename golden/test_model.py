@@ -138,11 +138,31 @@ def test_joint_moves_pouw_into_the_values_tiles():
 
 def test_inputs_override_is_scoped():
     base = model.J(model.design())["J"]
-    with model.inputs(o_per_and_h200=2 * model.I("o_per_and_h200")):
+    with model.inputs(h200_warm_c=2 * model.I("h200_warm_c")):
         assert model.J(model.design())["J"] > base
     assert model.J(model.design())["J"] == base
     with pytest.raises(KeyError):
         model.inputs(no_such_input=1)
+
+
+@pytest.mark.parametrize("rows,k_log", [(2.66e6, 22), (6.97e6, 24), (24.2e6, 25), (93.2e6, 27)])
+def test_k_pad_rows_puts_gd_provers_blocks_at_their_measured_k_log(rows, k_log):
+    assert math.ceil(math.log2(rows) + model.I("k_pad_rows")) == k_log
+
+
+def test_a_warm_prover_costs_less_than_a_process_a_session():
+    for device in ("h200", "sm120"):
+        warm, cold = (model.J(model.design(prover={"device": device, "warm": w}))["proving"]["total_gpu_s"]
+                      for w in (True, False))
+        assert warm < cold, device
+
+
+def test_v32_credits_s_minus_one_segments():
+    """L 384 at K 2,048: S 6, so 5 x 384 / 2,048 of the K 2,048 linears' MACs, not (K - L) / K."""
+    d = model.design(pouw={"L": 384, "L_prime": 128, "credit": "k2048"})
+    total = sum(K * N for _, K, N in model.LINEARS)
+    k2048 = sum(K * N for _, K, N in model.LINEARS if K == 2048)
+    assert model.pouw_credit(d)["credited_share_of_linear_macs"] == pytest.approx(k2048 / total * 5 * 384 / 2048)
 
 
 def test_credit_needs_one_minus_eps_of_g_forced():
@@ -154,9 +174,9 @@ def test_credit_needs_one_minus_eps_of_g_forced():
 
 
 def test_per_tile_pi_loses_the_floor_at_t3_and_per_segment_pi_keeps_it():
-    """GD-NOISE finding 1: pi re-drawn each tile has a 2:4 route to 0.97 G at t 3; re-drawn each segment closes it."""
+    """GD-NOISE final: pi re-drawn each tile has a 2:4 route to 0.975 G at t 3; re-drawn each segment closes it."""
     t3 = {"L": 384, "L_prime": 128}
-    assert model.pouw_forced_frac(model.design(pouw={**t3, "noise": "permuted"})) == pytest.approx(0.125 + 2.54 / 3)
+    assert model.pouw_forced_frac(model.design(pouw={**t3, "noise": "permuted"})) == pytest.approx(0.975)
     assert model.pouw_forced_frac(model.design(pouw={**t3, "noise": "segment"})) == 1.0
     assert model.pouw_forced_frac(model.design(pouw={"L": 256, "L_prime": 128, "noise": "permuted"})) == 1.0
 
