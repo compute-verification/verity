@@ -48,5 +48,13 @@ def test_the_int8_plan_offers_no_tile_past_the_block():
     assert caps["S8Coord{K=14336}"] == 256 and caps["S8Coord{K=4096}"] == 1024
 
 
+def test_a_unit_past_the_block_is_proved_as_its_least_parts():
+    """The H200 demo's stub norm row (153.8M ANDs over three 32 KiB rows) needs 2^29 bits whole: it is drawn whole and proved
+    as 3 parts of 2^27, 256 parts a statement, so 85 units."""
+    t = H.Template("stub:RmsNormRow_v1{N=16384}", 1, 153_800_784, (32768,) * 3, 262_144)
+    assert block_k_log(t.ands, t.rows) == K_MAX + 2 and cap(t.ands, t.rows) == 0
+    assert (t.parts, t.cap) == (3, 256 // 3)
+
+
 def test_every_plan_reads_the_one_cap():
     assert P.cap is X.cap is H.cap is cap

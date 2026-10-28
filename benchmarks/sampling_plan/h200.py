@@ -37,7 +37,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import transformer as X  # noqa: E402
-from inputs import K_MAX, I, block_k_log, cap  # noqa: E402
+from inputs import I, cap  # noqa: E402
 
 from verity.core.protocols.profile import Stratified, Stratum  # noqa: E402
 from verity.core.protocols.sampled_proofs.candidates import shape_of  # noqa: E402
@@ -106,13 +106,24 @@ class Template:
         """A drawn unit's ANDs with its rows' openings, the fit's feature."""
         return self.ands + sum(row_ands(r) for r in self.rows)
 
+    def _part(self, p: int) -> tuple[int, list[int]]:
+        return -(-self.ands // p), [-(-b // p) for b in self.rows]
+
+    @property
+    def parts(self) -> int:
+        """The least number of parts a unit proves in within C-Flock's block (`inputs.cap`), each its share of the ANDs and
+        of every row's bytes: a unit past the block is drawn whole and proved as its parts."""
+        if cap(0, [1] * len(self.rows)) < 1:
+            raise ValueError(f"{self.id}: its {len(self.rows)} rows alone fill a C-Flock block: cut its ports fewer ways")
+        p = 1
+        while cap(*self._part(p)) < 1:
+            p += 1
+        return p
+
     @property
     def cap(self) -> int:
-        """A statement's units (`inputs.cap`); a unit past C-Flock's block is refused, by name."""
-        if (c := cap(self.ands, self.rows)) < 1:
-            raise ValueError(f"{self.id}: a unit of {self.ands:,} ANDs opening {len(self.rows)} rows needs a C-Flock block "
-                             f"of 2^{block_k_log(self.ands, self.rows)} bits, past 2^{K_MAX}: cut it into smaller units")
-        return c
+        """A statement's units: its parts' `inputs.cap`, shared among a unit's `parts`."""
+        return max(1, cap(*self._part(self.parts)) // self.parts)
 
 
 def templates(m: Shape, pins: dict[str, int] | None = None, *, tiles: bool = False,
