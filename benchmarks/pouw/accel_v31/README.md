@@ -4,7 +4,7 @@ The GPU prover of one Dither call, the binding that runs it a call at a time, an
 that judge its output bit for bit. The call is `verity/core/protocols/pouw/circuit/dither.py`'s:
 
 - m rows of A against n rows of B, at contraction K;
-- HYB noise of noise period L′;
+- HYB noise in noise tiles of L′ inner indices;
 - the prefix sums T_s after each segment of L inner indices (S = ⌈K / L⌉ segments);
 - and, for a served call, its output O mod 2^32.
 
@@ -16,7 +16,7 @@ binding.
 ## Layout
 
 - `v31.cu`: the prover, one call on the GPU, in four steps:
-  - the call's coins, from its six seeds: d_A, d_B, U, V, the noise periods' permutations, and a filler call's pad;
+  - the call's coins, from its six seeds: d_A, d_B, U, V, the noise tiles' permutations, and a filler call's pad;
   - X and W′;
   - the protocol GEMM's prefix sums on the tensor cores, and a served call's O;
   - the commit, on `commit_gpu`'s persistent path, which runs beside the next call's compute.
@@ -25,7 +25,7 @@ binding.
 - `wg_proto.cuh`: the protocol GEMM on the H200's warpgroup MMAs (sm_90a, `-DV31_WG=1`).
 - `v31lib.py`: the ctypes binding over `libv31.so`, with one `Prover` per shape, and the GPU gate (`gate`).
 - `v31.py`: the reference and the verifier's checks, plus the tools that read `v31`'s output. It is a client of `dither.py`
-  and adds numpy versions of dither's coins and values.
+  and adds numpy versions of dither's noise and values.
 - `fill_dither.py`: checks the GPU's calls against `dither.py` itself, rather than against `v31.py`'s numpy versions.
 - `run.sh`: the builds, gates and benches under a GPU lease, through `research run`. Its header has the command and
   every knob.
@@ -39,10 +39,10 @@ The binding and the verifier, on one served call (run from the source tree's roo
 docstring describes the call order, the salts and the knobs; `fill_check`'s describes each check.
 
 ~~~python
-from v31 import Coins, Fill, fill_buffer, fill_commit, fill_picks, fill_values, fill_verdict, served_seeds
+from v31 import CallNoise, Fill, fill_buffer, fill_commit, fill_picks, fill_values, fill_verdict, served_seeds
 from v31lib import Prover, build_lib
 
-p = Prover(m, n, k, lp=256, L=2048, row=1024, served=True, lib=build_lib("libv31.so"))
+p = Prover(m, n, k, lp=256, L=2048, served=True, lib=build_lib("libv31.so"))
 p.set_weights(B)                               # n x k int8 (or p.point_weights(device_ptr))
 seeds = served_seeds(coin, receipt, call)      # dither.seeds; a filler's are call_seeds(salt, coin)
 c = p.prove(seeds, p.load_a(A))                # returns at once; a filler call passes no A and proves its pad
@@ -51,8 +51,8 @@ root = p.root(c)                               # the value root, once the call's
 picks = fill_picks(p.f, check_coin, q)         # q proof blocks (i, j, s)
 ok, fails, line = fill_verdict(p.f, seeds, root, picks, lambda i, j, s: {**p.answer(c, i, j, s), "A": A[i]}, "call")
 
-f = Fill(m, n, k, o=True)                      # dither.Shape at the prover's defaults: L′ 256, L 2,048, rows of 1 KiB
-T, O = fill_values(f, A, B, Coins.expand(f, seeds))
+f = Fill(m, n, k, o=True)                      # dither.Shape at the prover's defaults: L′ 256, L 2,048, rows of 16 KiB
+T, O = fill_values(f, A, B, CallNoise.expand(f, seeds))
 assert fill_commit(f, fill_buffer(f, T, O), p.ks, p.calls[c]["off"]).root == root
 ~~~
 
