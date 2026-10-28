@@ -20,18 +20,18 @@ namespace Nci.Ldl.Guarantees
 
 open Verity
 
-/-- **Lemma 1 (block description)**: let the registration `R` of `d` have at most `k` unregistered input bits per
-block, and let the run `X = eval inp` take the registered values. If the decoder evaluates blocks for the extraction
-rule `ext` within `t` at overhead `aBlk` (`EvaluatesBlocks`), every block's extraction `y_I = ext u X` has
-`LDL_{t,R}(y_I) ≤ k + ⌈log₂ B⌉ + aBlk`.
+/-- **Lemma 1 (block description)**: let the registration `R` (`Verity.Registration`) have at most `k` unregistered
+input bits per block, and let the run `X = eval inp` take the registered values. If the decoder evaluates blocks for
+the extraction rule `ext` within `t` at overhead `aBlk` (`EvaluatesBlocks`), every block's extraction `y_I = ext u X`
+has `LDL_{t,R}(y_I) ≤ k + ⌈log₂ B⌉ + aBlk`.
 
 The description is the block index and its unregistered input bits: evaluated from them, the block holds the run's
 values, since the run is the circuit's evaluation. The block size `c` is not used. -/
 def BlockDescription : Prop :=
-  ∀ (d : Declaration) (n k : ℕ) (R : Registration d n) (D : Decoder) (t : ℕ)
-    (ext : Fin n → d.D.Transcript → List Bool) (aBlk : ℕ) (inp : d.D.Transcript),
-    ReadCap d R.P k → R.Consistent (d.D.eval inp) → Assumptions.EvaluatesBlocks D t R ext aBlk →
-      ∀ u, LDL D t (ext u (d.D.eval inp)) ≤ (k + Nat.clog 2 n + aBlk : ℕ)
+  ∀ (R : Registration) (k : ℕ) (D : Decoder) (t : ℕ) (ext : Fin R.B → R.d.D.Transcript → List Bool) (aBlk : ℕ)
+    (inp : R.d.D.Transcript),
+    ReadCap R.d R.P k → R.Honest (R.d.D.eval inp) → Assumptions.EvaluatesBlocks D t R ext aBlk →
+      ∀ u, LDL D t (ext u (R.d.D.eval inp)) ≤ (k + Nat.clog 2 R.B + aBlk : ℕ)
 
 /-- **Theorem 3 (counting)**: let `P` have exactly `c` operation gates per block, and give each gate `v` of a set `V`
 of operation gates a counting weight `ω v`. If `q > 0` and every block's counted weight `Σ_{v ∈ V ∩ I} ω v` is at most
@@ -43,7 +43,7 @@ def Counting : Prop :=
     Exact P c → V ⊆ C.computed → 0 < q → 0 < T₀ → (∀ u, ∑ v ∈ V ∩ P.gates u, ω v ≤ q) →
       c / q * ∑ v ∈ V, ω v ≤ C.size C.computed ∧ c / (T₀ * q) * ∑ v ∈ V, ω v ≤ C.size C.computed / T₀
 
-/-- **Corollary 4b (activation-only fan-out bound)**: let `R` be a `(c,k)`-partition of `d`, with `B = n` blocks, and
+/-- **Corollary 4b (activation-only fan-out bound)**: let `R` be a `(c,k)`-partition of `R.d` into `B = R.B` blocks, and
 `M` counted product occurrences `J`, each assigned to the block of its representative gate, each activation occurrence
 read by at most `e` of them. Let the run `X = eval inp` take the registered values. If the decoder evaluates blocks for
 the activation tuples `a` within `t` at overhead `aBlk` (`EvaluatesBlocks`, Lemma 1's allowance) and they meet
@@ -55,11 +55,11 @@ weights on the representatives gives the bound. No weight-price premise is used,
 subcircuit lies whole in its block: that is what makes `ActivationRate` plausible, and the counting doesn't read it.
 When `e h ≤ 0` the bound is at most `0`. -/
 def FanOutBound : Prop :=
-  ∀ (d : Declaration) (n c k : ℕ) (R : Registration d n) {ι A : Type} [DecidableEq A] (M : Products d.D ι A)
-    (e : ℕ) (D : Decoder) (t aBlk : ℕ) (a : Fin n → d.D.Transcript → List Bool) (β Λ T₀ : ℝ)
-    (inp : d.D.Transcript),
-    CKPartition d R.P c k → R.Consistent (d.D.eval inp) → M.FanOut e → 0 < β → 0 < T₀ →
-    Assumptions.EvaluatesBlocks D t R a aBlk → Assumptions.ActivationRate β Λ t D R M a (d.D.eval inp) →
-      c * β * M.J.card / (T₀ * e * (k + Nat.clog 2 n + aBlk + Λ)) ≤ d.D.size d.D.computed / T₀
+  ∀ (R : Registration) (c k : ℕ) {ι A : Type} [DecidableEq A] (M : Products R.d.D ι A)
+    (e : ℕ) (D : Decoder) (t aBlk : ℕ) (a : Fin R.B → R.d.D.Transcript → List Bool) (β Λ T₀ : ℝ)
+    (inp : R.d.D.Transcript),
+    CKPartition R.d R.P c k → R.Honest (R.d.D.eval inp) → M.FanOut e → 0 < β → 0 < T₀ →
+    Assumptions.EvaluatesBlocks D t R a aBlk → Assumptions.ActivationRate β Λ t D R M a (R.d.D.eval inp) →
+      c * β * M.J.card / (T₀ * e * (k + Nat.clog 2 R.B + aBlk + Λ)) ≤ R.d.D.size R.d.D.computed / T₀
 
 end Nci.Ldl.Guarantees
