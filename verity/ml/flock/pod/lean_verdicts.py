@@ -19,7 +19,8 @@ forgery is refused.
 With ``--compose BIN`` (85's V* parts), the recursive statement's verdict is Lean's, not this script's:
 ``BIN rec-compose`` (`RecCompose.check`) over DIR's ``rec-inner.json``, its one shared rows file ``rows.json`` and the V*
 parts' logs (the honest parts 85 gave V*'s inputs, ``own-PART.txt``) accepts only when there is one part per V* statement,
-each accepted at the SHA-512 of that one rows file and of that ``rec-inner.json``, and the step fails unless it does. Each forgery of a V* part, put in
+each accepted at the SHA-512 of that one rows file and of that ``rec-inner.json``, and all at one inner session and
+transcript (85's ``$REC_INNER``), and the step fails unless it does. Each forgery of a V* part, put in
 that part's place, must be refused by it too. A run of some of V*'s parts (``LEVELS``) is not composed, and says so.
 
     python3 verity/ml/flock/pod/lean_verdicts.py [--compose BIN] DIR PART...
