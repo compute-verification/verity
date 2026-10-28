@@ -129,7 +129,7 @@ predicate.
       data flow; it is not machine-checked.  The evidence is enumeration at reduced widths and z3 per gadget at
       the real widths; there is no proof that ``TINY`` widths exhibit every case of the real widths.
   U2  The z3 query for one full group step with *symbolic* inputs (two hint copies, two outputs) returns UNKNOWN
-      at 60 s locally and at the 1800 s timeout of the recorded pod run r20260921-232849-093c; only the
+      at 60 s locally and at the 1800 s timeout of a recorded pod run; only the
       concrete-input instance is UNSAT (0.3 s).  Step-level soundness at the real widths therefore rests on the
       per-gadget queries and the induction of section 1, not on a step-level solver result.
   U3  ``signed_sum`` read over F_(2^31 - 1) returns UNKNOWN at 20 s locally and at 300 s on the pod run (the
