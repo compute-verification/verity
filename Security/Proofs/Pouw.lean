@@ -103,7 +103,6 @@ import Proofs.Pouw.PearlC.DeviceSm120CapRev1Gamma
 import Proofs.Pouw.PearlC.DeviceSm120Gamma
 import Proofs.Pouw.PearlC.DeviceSm120KernelGamma
 import Proofs.Pouw.PearlC.DeviceSm120LoopGamma
-import Proofs.Pouw.PearlC.DeviceSm120v2LoopEquiv
 import Proofs.Pouw.PearlC.EncChecks
 import Proofs.Pouw.PearlC.FlockTile
 import Proofs.Pouw.PearlC.Forming
