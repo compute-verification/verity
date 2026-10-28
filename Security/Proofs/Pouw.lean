@@ -25,6 +25,7 @@ import Proofs.Pouw.Dimension.H100MeasuredProofs
 import Proofs.Pouw.Dimension.H100PeakTcProofs
 import Proofs.Pouw.Dimension.H100Proofs
 import Proofs.Pouw.Dimension.H100WProofs
+import Proofs.Pouw.Dimension.Lifting
 import Proofs.Pouw.Dimension.MinRankProofs
 import Proofs.Pouw.Dimension.MixingProofs
 import Proofs.Pouw.Dimension.OpenPipeProofs
@@ -40,6 +41,7 @@ import Proofs.Pouw.Fp8Atom.Checks.C00
 import Proofs.Pouw.Fp8Atom.Checks.C01
 import Proofs.Pouw.Fp8Atom.Fp32Proofs
 import Proofs.Pouw.Fp8Atom.H1TAtomProofs
+import Proofs.Pouw.Fp8Atom.H1TBoundedStaging
 import Proofs.Pouw.Fp8Atom.H1TChecks
 import Proofs.Pouw.Fp8Atom.H1TCrossLateStaging
 import Proofs.Pouw.Fp8Atom.H1TFlipProofs
