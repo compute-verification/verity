@@ -26,7 +26,7 @@
   `periodLeak_le_sum`. ``--endpoint`` is network-e2e's ``--no-prove`` report on the run and the endpoint's
   records: the endpoint's advice bound to the run and the I/O tie, in the clear, required on the advice profile. N2's
   summary is `n2_advised_zk.py prove --e2e`'s on the advice profile and `n2_zk.py prove`'s on the others (Selection
-  All: every link-window's one unit proved) or a sampled draw's (``CR_N2_CMD``), read by the same fields. Scan's is
+  All: every sampling block's one unit proved) or a sampled draw's (``CR_N2_CMD``), read by the same fields. Scan's is
   `scan_zk.py prove`'s, a stand-in on its own synthetic warden run until its ``--warden-run`` takes the gate's warden
   rows, accepted only when every round's verdict is the one scan_zk expects and no witness piece reached the
   verifier (`scan_step`). A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a warden run) never makes
@@ -277,8 +277,8 @@ def endpoint_step(e: dict | None) -> dict:
     """network-e2e's ``--no-prove`` report on the run and the endpoint's records: the endpoint's own advice bound to the
     run's certified I/O and rebuilt from it (`chain.served_advice`), and the I/O tie's verdict on the honest run
     (`chain.tie`), both in the clear. The tie decides a tampered run only where the rehearsal's own check let it
-    through (no ``own_code`` in the report's ``negatives``: token), and must refuse it at exactly the link-windows its
-    changes fall in (``ok``); a run the check refused (late, extra) is the rehearsal's negative, not the tie's."""
+    through (no ``own_code`` in the report's ``negatives``: token), and must refuse it at exactly the sampling blocks
+    its changes fall in (``ok``); a run the check refused (late, extra) is the rehearsal's negative, not the tie's."""
     if e is None:
         return {"verdict": "not run", "why": "no endpoint records (CR_ENDPOINT)", "in_the_clear": CLEAR["endpoint"]}
     chain = e.get("chain") or {}
@@ -316,7 +316,7 @@ def warden_endpoint(run: Path, ep: Path, eos: list[int]) -> dict:
     """The endpoint's own advice for a warden run, as network-e2e's `endpoint_advice` makes it for a certifier
     rehearsal's: `verity-vllm advice` over the endpoint's records ``ep`` (network-e2e's ``chain.ENDPOINT``) into
     ``ep/advice`` at the warden's bucket unless an index is there, then ``chain.served_advice`` on the certified I/O
-    read off the warden's cells (`warden_chain.io`) over the warden's link-windows, with the model's EOS ids ``eos``
+    read off the warden's cells (`warden_chain.io`) over the warden's sampling blocks, with the model's EOS ids ``eos``
     (a warden run records none)."""
     import subprocess
     import warden_chain as WC
@@ -363,8 +363,8 @@ def warden_endpoint_step(e: dict | None) -> dict:
 
 
 def tie_step(t: dict | None, job: dict | None = None) -> dict:
-    """`n2_tie_zk.py prove --class warden`'s summary: accepted when its ``ok`` holds (every link-window's verdict its
-    reference's, the tie's on the link, no witness piece leaked), its honest member tied in every link-window it
+    """`n2_tie_zk.py prove --class warden`'s summary: accepted when its ``ok`` holds (every sampling block's verdict its
+    reference's, the tie's on the link, no witness piece leaked), its honest member tied in every sampling block it
     proved and its forged member refused in one or more."""
     job = job or {}
     rc, why = (job.get("rc") or {}).get("tie"), (job.get("why") or {}).get("tie")
@@ -643,8 +643,8 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
     v = (_json(run / "end.json") or {}).get("verdict") or {}
     if not dep or not v.get("windows") or not v.get("requests"):
         raise SystemExit(f"leak: {run} has no deployment.json, or no end.json verdict with its windows and requests")
-    params, cls = W.WardenParams(**dep["params"]), SZ.CLASS
-    cls.serves(params)
+    cls = SZ.CLASS
+    params = cls.schedule(W.WardenParams(**dep["params"]))
     T, units = params.window, 2 * params.window
     drawn = (scan or {}).get("draw", {}).get("honest") if isinstance((scan or {}).get("draw"), dict) else units
     if drawn != units:
@@ -772,9 +772,9 @@ def decide_period(case: dict) -> dict:
 
 def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], audits: list[dict]) -> str | None:
     """Why certifier/v0's period ``answer`` on ``case`` isn't this chain's, else None. The answer commits to its case's
-    commitment alone (`PERIOD_TAG`'s digest of each compute audit's and each link-window's one-stage registration, a
-    link-window's naming its index), so each link-window it registers must be one the chain certified (``cert``'s
-    rows) and N2 registered, under N2's own registration (``n2``: the honest member's digest by link-window), and its
+    commitment alone (`PERIOD_TAG`'s digest of each compute audit's and each sampling block's one-stage registration, a
+    sampling block's naming its index), so each sampling block it registers must be one the chain certified (``cert``'s
+    rows) and N2 registered, under N2's own registration (``n2``: the honest member's digest by sampling block), and its
     audits must be this report's ``--audit`` registrations (``audits``). The case's parameters and evidence are outside
     that digest: its link, certifier session and key must be ``cert``'s, and `block_entry` re-decides the case. The
     rows form's link-windows are the scan's registrations, which no step here holds, so that form is refused."""

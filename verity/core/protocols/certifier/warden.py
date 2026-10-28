@@ -22,10 +22,10 @@ it: ordinal 0 is no connection's. At most `lanes` connections are served at once
 taken waits in a FIFO queue of at most `queue`, else it gets one `REFUSED` cell, on ordinal 0, and is closed.
 The queue's head is admitted at the first bucket with a free lane, and holds that lane, r cells a bucket each way,
 until its last bucket. Nothing admitted is dropped or reordered. A refusal is traffic past what the window's Programs
-can hold (`every`: a timestep of `every` buckets has `program_slots` = `lanes` Program slots, the scan's
-`ingress_scan.Class`), so the warden certifies no record of a window in which it refused a connection: `withhold`
-gets that window's three records in place of `publish`, and the period check refuses a link-window missing any
-record's certificate.
+can hold (`every`: the scan class's slot stride, `ingress_scan.Class.EVERY`, with `program_slots` = `lanes` Program
+slots at each boundary; the schedule's digest binds it, and nothing on the wire reads it), so the warden certifies no
+record of a window in which it refused a connection: `withhold` gets that window's three records in place of
+`publish`, and the period check refuses a link-window missing any record's certificate.
 
 **The schedule.** Connection q, admitted at bucket s on the warden's own schedule, carries r = `slots` cells a bucket
 each way from s on:
@@ -122,7 +122,7 @@ class WardenParams:
     ingress_cells: int = 64
     ingress_buckets: int = 50
     egress_cells: int = 4096
-    every: int = 1  # a timestep's buckets: the Programs' boundaries are every `every` buckets of a window
+    every: int = 1  # the slot stride in buckets, the scan class's EVERY (`ingress_scan.Class.schedule` sets it)
 
     def __post_init__(self) -> None:
         for name, value in asdict(self).items():
@@ -131,16 +131,16 @@ class WardenParams:
         if self.cell_bytes <= HEADER.size + 1:
             raise ValueError(f"a cell holds its {HEADER.size}-byte header and a byte")
         if self.window % self.every:
-            raise ValueError(f"every ({self.every}) divides the window ({self.window}): a window is whole timesteps")
+            raise ValueError(f"every ({self.every}) divides the window ({self.window}): a window is whole slot strides")
 
     @property
     def program_slots(self) -> int:
-        """A timestep's Program slots, one a lane (`ingress_scan.Class.SLOTS`, for a class that serves the warden)."""
+        """The Program slots at a boundary, one a lane (`ingress_scan.Class.SLOTS`, for a class that serves the warden)."""
         return self.lanes
 
     @property
     def window_programs(self) -> int:
-        """A window's Program slots: `window / every` timesteps of `program_slots`."""
+        """A sampling block's Program slots: `window / every` slot strides of `program_slots`."""
         return self.window // self.every * self.program_slots
 
     @property

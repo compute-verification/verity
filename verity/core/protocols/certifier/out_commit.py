@@ -22,7 +22,7 @@ rows are what the server sent, which the prover holds.
       ‖ u16be len(schema) ‖ schema ‖ domain (64 bytes) ‖ root (64 bytes)
     out digest = tagged_sha512(OUT_TAG, H)
 
-Its certificate is `Issuer.sign`'s of the out digest for the egress link-window, in the certifier's session
+Its certificate is `Issuer.sign`'s of the out digest for the egress sampling block, in the certifier's session
 (`certificate.certificate_message`). D is the same in every window, so the certificate is what keeps one window's root
 out of another's: `check_out` takes the window it expects. A record's, a clock's and the warden cells' digests are
 under other tags, so none verifies as another.
@@ -220,8 +220,8 @@ def read_witness(blob: bytes) -> list[bytes]:
 def commit_out(rows: Sequence[Sequence[int]], *, shape: OutShape, key: Signer | Issuer, session: bytes, window: int,
                link: str = LINK, salts: Sequence[bytes] | None = None) -> CertifiedOut:
     """The output value the certifier relayed, committed at the registration's `shape` under the domain the verifier
-    derives for the reading program's pinned value, and its head signed for the egress link-window `(link, window)` in
-    certifier session `session`.
+    derives for the reading program's pinned value, and its head signed for the egress sampling block `(link, window)`
+    in certifier session `session`.
 
     `rows`: the value's rows, exactly `shape.rows` of `shape.words` leaves of `shape.word_bits` bits. `key`: the
     certifier's signer (which starts `session` at its first signature and refuses any other session), or its running
@@ -281,7 +281,7 @@ def _read(doc: Any) -> tuple[OutHead, Certificate, bytes]:
 
 def check_out(certificate: Any, key: PublicKey, session: bytes, shape: OutShape, *, window: int,
               link: str = LINK) -> str:
-    """The verifier's read of the out record `certificate` (`CertifiedOut.public`) for the egress link-window
+    """The verifier's read of the out record `certificate` (`CertifiedOut.public`) for the egress sampling block
     `(link, window)` it expects, under the network certifier's `key` in certifier session `session`: the root to pin
     (lowercase hex, `registration.check`'s `pinned` form), or `OutRefused` naming the first check that fails. `shape`
     is the verifier's own, from its registration of the reading program (module docstring, "The shape"), whose

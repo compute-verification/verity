@@ -720,7 +720,7 @@ def _refused(answer: dict, verdict: str) -> dict:
 
 #: The schedule's fields that leave its rows' shape (B, S, T) as it is: a change to one changes only its digest.
 SAME_SHAPE = ("bucket_ms", "delay", "egress_cells", "ingress_buckets", "ingress_cells", "queue")
-#: The orders of a link-window's three records' certificates other than their own.
+#: The orders of a sampling block's three records' certificates other than their own.
 SWAPS = ((0, 2, 1), (1, 0, 2), (1, 2, 0), (2, 0, 1), (2, 1, 0))
 
 
@@ -730,7 +730,7 @@ def schedule_json(s: WardenParams) -> dict:
 
 def _small_schedule(r: random.Random, small: bool) -> WardenParams:
     """A schedule of small rows: B just past a cell's header, S = lanes · slots at most 4, T at most 3 (2 if
-    `small`), and a timestep `every` that divides T."""
+    `small`), and a slot stride `every` that divides T."""
     T = r.randint(1, 2 if small else 3)
     return WardenParams(cell_bytes=r.choice([11, 12, 16]), slots=r.randint(1, 2), bucket_ms=r.randint(1, 200),
                         delay=r.randint(1, 4), lanes=r.randint(1, 2), queue=r.randint(1, 8), window=T,
@@ -861,7 +861,7 @@ def audit_descriptor(units: tuple[tuple[int, int], ...]) -> str:
 
 def build(m: str, seed: int, small: bool = False) -> dict:
     """A period's case with the change `m`, in the form `m` names (`form_of`), every choice drawn from `seed`; `small`:
-    the toy key, as few link-windows and audits as `m` needs."""
+    the toy key, as few sampling blocks and audits as `m` needs."""
     r = random.Random(f"network-period {m} {seed}")
     rows = form_of(m) == "rows"
     m = m.removeprefix("rows-")

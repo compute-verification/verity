@@ -1,6 +1,6 @@
 """The I/O tie on a compact rehearsal's token run under its own name (`chain.tie`, `chain.changed_windows`): its
 changed ids are placed on the compact records as `negatives.tie_run` places them (`active.compact_record_data`), so
-the run gets its verdict and the link-windows its changed ids fall in, where reading its 8-byte cells as id events
+the run gets its verdict and the sampling blocks its changed ids fall in, where reading its 8-byte cells as id events
 raised `struct.error` out of the report. A frame neither reading places gives the run no verdict, with the reason.
 The runs are the gate's own compact rehearsal (network_traces' `gate_compact`), with `io_tie`'s parts all holding
 (`HOLDS`, a stand-in), so the token run is refused by its finish alone.
@@ -61,7 +61,8 @@ def tied(gate_compact, tmp_path, monkeypatch):
 
 
 def _windows_of(run: Path, users: set[str]) -> list[int]:
-    """The egress link-windows that carry a compact record of a request of ``users``, read off the records directly."""
+    """The egress sampling blocks that carry a compact record of a request of ``users``, read off the records
+    directly."""
     plan, report = (json.loads((run / f).read_text()) for f in ("plan.json", "calibration.json"))
     setup = NG.ar.Setup(report)
     e, i = setup.egress_params, setup.ingress_params
@@ -74,7 +75,7 @@ def _windows_of(run: Path, users: set[str]) -> list[int]:
 
 def test_the_compact_token_run_under_its_own_name_gets_its_verdict_and_changed_windows(tied):
     """The token run under its own name: the tie gives it a verdict (refused by its finish, every `io_tie` part holding
-    here) and the link-windows its changed ids fall in, which are those of its tampered requests' records."""
+    here) and the sampling blocks its changed ids fall in, which are those of its tampered requests' records."""
     got, ids = tied
     run = got["token"]["dir"]
     changed = json.loads((run / "server.json").read_text())["tampered"]

@@ -31,7 +31,7 @@ def Status.reason? : Status → Option Reason
   | .complete => none
   | .notEstablished r => some r
 
-/-- `grid.Record` (W5): the network certificate of one link-window is exactly the grid and one status. -/
+/-- `grid.Record` (W5): the network certificate of one sampling block is exactly the grid and one status. -/
 structure Record where
   link : String
   window : Nat

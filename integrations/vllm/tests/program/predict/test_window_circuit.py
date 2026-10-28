@@ -140,6 +140,7 @@ def test_the_class_of_record_takes_both_windows_to_its_one_class_circuit(monkeyp
     up to 1,087 keys, is refused past a key block's 126: `test_past_126_keys_a_key_block_is_refused_by_name`)."""
     assert (CLASS_OF_RECORD.slots, CLASS_OF_RECORD.lanes, CLASS_OF_RECORD.every, CLASS_OF_RECORD.positions) == (8, 4, 16, 1087)
     assert (CLASS_OF_RECORD.boundaries, CLASS_OF_RECORD.buckets) == ((0, 16), 32)
+    assert CLASS_OF_RECORD.scan == SS.RECORD == IS.CLASS_OF_RECORD
     assert [(CLASS_OF_RECORD.anchor(k), CLASS_OF_RECORD.lane(k)) for k in range(8)] == [(16 * (k % 2), k // 2) for k in range(8)]
     calls = []
     monkeypatch.setattr(WC, "class_circuit", lambda *a: calls.append(a[1:]) or "the class circuit")

@@ -12,8 +12,8 @@ set_option maxRecDepth 20000
 
 Every egress record a closed run publishes is published by an egress tick (`egress_at`), so `CompleteRows` makes its
 grid the Program's grid of the frames the shaper handed under the syncs it declared (`grid_eq`). The assembly certifies
-each record (`certifyAll_ok`), and since a closed run publishes one record of each link-window, the commitment has one
-certificate of each, the honest one (`recordsOf_one`). `HonestAccepted` then accepts the unit.
+each record (`certifyAll_ok`), and since a closed run publishes one record of each sampling block, the commitment has
+one certificate of each, the honest one (`recordsOf_one`). `HonestAccepted` then accepts the unit.
 -/
 
 namespace Properties.CertifierNetwork.Proofs
@@ -95,7 +95,7 @@ theorem grid_eq {c : Config} {tr : List Event} (key : Lms.PrivateKey) (session :
       simp only [Array.getElem_map, List.getElem_toArray, List.getElem_ofFn, e, Option.map_map]
       simp [Function.comp_def, bytesOfBits_bitsOf]
 
-/-- **One certificate of each link-window**: if the records `rs` hold one record of each window `w < W` on link `l`,
+/-- **One certificate of each sampling block**: if the records `rs` hold one record of each window `w < W` on link `l`,
 each certified in direction `d`, the commitment of what the assembly issued for them has one record of `(d, l, w)`,
 the certificate of that record. -/
 theorem recordsOf_one {c : Config} {i : Issuer} {rs : List Record} {crs : List CertifiedRecord}

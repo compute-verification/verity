@@ -258,7 +258,7 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
 
 def test_the_bound_counts_what_it_says():
     """K's terms on a period worked by hand: 10 units, each committing 16 bits, drawn subset:3 at δ = 1/10 with at most
-    4 wrong, 7 cells on one connection and none on another, 2 syncs over 3 link-windows, jitter below 2 over 3 steps;
+    4 wrong, 7 cells on one connection and none on another, 2 syncs over 3 sampling blocks, jitter below 2 over 3 steps;
     the same audit with units committing 40 bits, its faulty bits 4 · 40; and eps over audits at δ = 1/10, 1/15 and
     1/6, and over none (Lean's `#guard`s)."""
     p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 0), 0, 2, "a", None, b"", "",

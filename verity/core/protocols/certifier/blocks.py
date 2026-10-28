@@ -22,9 +22,9 @@ port's row). An ``in`` transfer's gates are the circuit's registered reads of V 
 and tables over V), its leaves ``registered.params[V]``. Leaves are 16 bits, as the interface's; a value of L leaves read
 in rows of w words is L/w rows, the certifier's commitment. ``t`` is each row's protocol step in the server-time window
 (row r's ``base + Σ d[k]·step[k]``, d: r's digits in ``radix``), null for the load, which crosses once a server session,
-in the link-window ``window`` names; a request's, response's or wire's window is the server-time block's. A wire is one
-value V and two transfers, V's ``out`` on the sending server and V's ``in`` on the receiving one, each certified by its
-own uplink's network certifier; every other value is one transfer.
+in the sampling block ``window`` names; a request's, response's or wire's window is the server-time block's. A wire is
+one value V and two transfers, V's ``out`` on the sending server and V's ``in`` on the receiving one, each certified by
+its own uplink's network certifier; every other value is one transfer.
 
 **The check** (`check`), declaration by declaration, before any coin; the one count over rows is an out value's (a byte
 a row, the size of the commitment the certifier makes of it row by row), never over units:
@@ -159,7 +159,7 @@ class Server:
 
 @dataclass(frozen=True)
 class Transfer:
-    """One value crossing one server's boundary: its server and uplink, direction, kind, name and link-window, its
+    """One value crossing one server's boundary: its server and uplink, direction, kind, name and sampling block, its
     commitment's shape (``rows`` rows of ``words`` u16 words), each row's step (``t``) and its gates, the reads (``in``)
     or writes (``out``) of its rows."""
 

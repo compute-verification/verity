@@ -1,6 +1,6 @@
 """N2's period draw (`LinkWindows.period_draw`) and the sampled network verdict (`network_verdict(drawn=…)`): the
-period's salted roots committed before any coin is read, K of its link-windows drawn, only those registered and proved,
-the draw of record the Lean verifier's on the coins the draw read (`lean_draw`, stood in here by the sampler
+period's salted roots committed before any coin is read, K of its sampling blocks drawn, only those registered and
+proved, the draw of record the Lean verifier's on the coins the draw read (`lean_draw`, stood in here by the sampler
 `coins.OwnRandomness` that `test_coins` holds byte for byte to Lean's `Flock.Draw.drawOn`), and what the draw
 established stated as wrong units at δ."""
 from __future__ import annotations

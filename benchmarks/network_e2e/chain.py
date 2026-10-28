@@ -9,7 +9,7 @@ it stood on; `stubs` lists what is still a stand-in.
   `advice_windows.advice_of_workload` now writes it: no sources, each kept output released in its step's bucket. It is
   bound to the runs only on the advice profile, by the honest run's certified I/O (``io.json``): every advice request is
   a certified request (its ``user``), once.
-* **Bits per link-window** (`bits`), T the honest run's egress window in buckets (`window_buckets`): v0's (I1's
+* **Bits per sampling block** (`bits`), T the honest run's egress window in buckets (`window_buckets`): v0's (I1's
   `bits_by_window`) and, given the registered serving config (``--serving-config``: `derived.Config`'s fields, or a step
   trace's ``config``) and the certified I/O the advice is bound to, whose tokens the residual reads (canonical sources,
   derived hits), the residual's (`derived.residual`), unshaped (release sent) and shaped (release derived), charged by
@@ -22,7 +22,7 @@ it stood on; `stubs` lists what is still a stand-in.
   run's windows are bound to it (each window opened to its registered root, every certified request admitted in
   exactly one window, a window that carries requests in joined to the window before it, `window_chain.join`) and each
   chain of windows rebuilt from its certified I/O under the config read off the endpoint's records
-  (`endpoint_config`), its bits placed in the run's link-windows.
+  (`endpoint_config`), its bits placed in the run's sampling blocks.
 * **The prove path** (`prove_path`, ``--prove-path DIR|TGZ``): `prove_path.py audit`'s output adopted (`run.sh`'s ``$OUT``,
   each arm a directory with its ``summary.json``): an honest arm passes when every rank's audit accepted on the verifier's
   coins and every negative was refused; a forged arm when Lean refused the forged unit it drew. The advice the arm
@@ -42,11 +42,12 @@ it stood on; `stubs` lists what is still a stand-in.
 * **The I/O tie on the runs** (`tie`, on the advice profile, where the negatives registry doesn't run):
   `negatives.tie_run` on each run, `io_tie`'s reference in the clear on its stand-ins (each window's certified frames
   held to their head, the sampled ids as the Commit's port), with each run's ids from the endpoint's records
-  (`served_ids`, the requests that arrived in its link-windows) or ``--ids``, which must give each run's certified
+  (`served_ids`, the requests that arrived in its sampling blocks) or ``--ids``, which must give each run's certified
   requests an id for each output they served (`uncovered`). Honest owes acceptance, and token, whose certified ids
-  aren't the endpoint's, a refusal by content at exactly the link-windows its changed ids fall in (`changed_windows`).
-  The tie is required on the advice profile (`tie_gate`): the report isn't OK when it didn't run, gave the honest run no
-  verdict or didn't accept it, or when a part it must establish there (`TIE_REQUIRED`) didn't hold.
+  aren't the endpoint's, a refusal by content at exactly the sampling blocks its changed ids fall in
+  (`changed_windows`). The tie is required on the advice profile (`tie_gate`): the report isn't OK when it didn't run,
+  gave the honest run no verdict or didn't accept it, or when a part it must establish there (`TIE_REQUIRED`) didn't
+  hold.
 """
 from __future__ import annotations
 
@@ -239,7 +240,7 @@ def _first_steps(recs: list[dict]) -> dict[int, float]:
 def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: int, eos: list[int]) -> tuple[dict, dict]:
     """The endpoint's own advice for the honest run, as `advice` and `bits` report one: ``adv_dir`` is `verity-vllm
     advice`'s over the endpoint's records ``ep`` (`ENDPOINT`), one window advice (`window_advice`) a closed Commit
-    window. The run's windows are those whose first step falls in its link-windows (``deployment``'s origin and span,
+    window. The run's windows are those whose first step falls in its sampling blocks (``deployment``'s origin and span,
     `SLACK_S`). A window that carries requests in joins the window before it into a chain (``chain``), joined into one
     I1 v0 advice (`window_chain.join`): its carried requests and their state are the earlier window's, as that window's
     registered advice closed them, never its own string's, so each request and step is charged once. The advice is
@@ -249,8 +250,8 @@ def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: 
     the run holds, and no window is left owing a carry. Each chain's advice is rebuilt from its certified I/O under the
     config read off the endpoint (`endpoint_config`) by `bits`, charged per bucket (T 1) and placed at its first
     window's first step's bucket, each later window's release counted from its own first step's, so its bits land in
-    the link-windows of T buckets I1's rule puts them in, its release at its own width; a chain's bits are on its first
-    window's row."""
+    the sampling blocks of T buckets I1's rule puts them in, its release at its own width; a chain's bits are on its
+    first window's row."""
     recs = _jsonl(ep / "advice_trace.jsonl")
     serve = json.loads((ep / "serve.json").read_text())
     index = json.loads((adv_dir / "windows.json").read_text())
@@ -634,7 +635,7 @@ def negatives(runs: dict[str, Path], work: Path, adv, clock, ids: Path | None = 
 
 # --- the I/O tie on the runs ------------------------------------------------------------------------------------------
 
-#: the live tampers only the I/O tie refuses, each owed a refusal by content at exactly the link-windows it changed
+#: the live tampers only the I/O tie refuses, each owed a refusal by content at exactly the sampling blocks it changed
 TIE_OWED = ("token",)
 #: what the I/O tie must establish on the honest run beside its acceptance, for the report to be OK (`tie_gate`): each a
 #: key of `negatives.tie_run`'s row that must be true, with the report's reason when it isn't. The compact
@@ -652,7 +653,7 @@ def _read_json(path: Path):
 
 
 def served_rows(ep: Path, deployment: dict) -> dict[str, dict]:
-    """Each ``requests.jsonl`` row by its ``user``, of the requests that reached the endpoint in a run's link-windows
+    """Each ``requests.jsonl`` row by its ``user``, of the requests that reached the endpoint in a run's sampling blocks
     (``deployment``'s origin and span, `SLACK_S`): its scheduler trace's ``arrive`` records by engine id, and the rows
     by the same. Every strategy of a rehearsal sends the same users, so a run's rows are the ones that arrived in its
     own span; a user arriving twice in it is refused."""
@@ -690,7 +691,7 @@ def _output_stream(slot: bytes, compact: bool) -> int | None:
 
 
 def changed_windows(run: Path) -> list[int] | None:
-    """The link-windows a token run's changed ids fall in: each output its shim logged as changed (``server.json``'s
+    """The sampling blocks a token run's changed ids fall in: each output its shim logged as changed (``server.json``'s
     ``tampered``, (session, index)), placed as `negatives.tie_run` places the certified egress's id events, or on a
     compact plan its compact records (`_output_stream`), each its stream's next output and the stream's user the
     certified I/O's. None when the shim logged none. Raises ValueError for an egress frame it can't place."""
@@ -738,13 +739,13 @@ def uncovered(run: Path, ids: dict[str, list[int]]) -> str | None:
 def tie(runs: dict[str, Path], ep: Path | None, ids: Path | None, why: str | None = None) -> dict:
     """The I/O tie's verdict on each run (`negatives.tie_run`: `io_tie`'s reference in the clear, on
     `negatives.TIE_STAND_INS`), each run's sampled ids and client aborts ``ids``' (`negatives.read_ids` and
-    `negatives.read_aborted`, one map for every run) or else the endpoint's records' ``ep`` for its own link-windows
+    `negatives.read_aborted`, one map for every run) or else the endpoint's records' ``ep`` for its own sampling blocks
     (`served_rows`, `negatives.commit_aborted`), and whether it is the verdict the run owes
     (`negatives.tie_ok`): honest's accepted, a negative's it reads refused by its part, and token's (`TIE_OWED`) at
-    exactly the link-windows its changed ids fall in (`changed_windows`). A run has no verdict when its ids don't cover
-    its certified requests (`uncovered`), when it lacks what the tie opens, or when its tie raises; the row says why.
-    Not run without `io_tie` in the tree or without the ids (``why``: why the endpoint's records aren't here). On the
-    advice profile the tie is required: `tie_gate` says what keeps it from passing the report."""
+    exactly the sampling blocks its changed ids fall in (`changed_windows`). A run has no verdict when its ids don't
+    cover its certified requests (`uncovered`), when it lacks what the tie opens, or when its tie raises; the row says
+    why. Not run without `io_tie` in the tree or without the ids (``why``: why the endpoint's records aren't here). On
+    the advice profile the tie is required: `tie_gate` says what keeps it from passing the report."""
     if NG.io_tie_module() is None:
         return {"ran": False, "why": NG.TIE_MISSING["io-tie"]}
     if ids is None and ep is None:

@@ -6,7 +6,7 @@ record is ``circuit.json``, `verity/window-circuit/v1` (`verity.ml.windows.inter
 registration binds, so the layout is public and fixed before any coin.
 
 **The record's ``boundary``**, one template a side (and the ingress side's first bucket's), whose units are its
-link-windows' buckets:
+sampling blocks' buckets:
 
     {"format": "verity/boundary/v3",
      "egress":  {"template": "<id>", "frame": "<output>", "verdict": "<output>", "links": L, "buckets": T, "slots": R,

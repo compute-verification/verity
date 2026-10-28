@@ -5,19 +5,19 @@ import Flock.Canon
 import Identity.Tagged
 
 /-!
-# N2's link-window verdict of record
+# N2's sampling block verdict of record
 
-`verdict` decides one link-window of N2 (`verity/core/protocols/certifier/service.py`, `LinkWindows.verify`) from the
+`verdict` decides one sampling block of N2 (`verity/core/protocols/certifier/service.py`, `LinkWindows.verify`) from the
 proof as the verifier receives it and the link's public fields, and nothing else: it is accepted exactly when
 
 * the verifier's own run of C-Flock's Lean verifier (`proofs.verify`, whose findings `Case.findings` carries) refused
   nothing, every gate of the link's unit names a pinned circuit digest (`pinned`), one or more sessions each accepted
   and named the registered Program, and each proved exactly the drawn units;
 * the statement's public file holds, for the drawn unit, a ``pub`` row commitment that opens under the delivered salt to
-  the verifier's own public row (`pubRow`: the registered root, the link-window's served domain (`domainId`), the link,
-  the window, each end's declared grid and its profile's row, both certificates' signed digests, and on a served link the
-  window's declared sync, on an advised link the window's view of the advice) and an ``o0`` row commitment that opens to
-  the delivered output word, whose verdict and deadline bits are both 1 (`opened`);
+  the verifier's own public row (`pubRow`: the registered root, the sampling block's served domain (`domainId`), the
+  link, the window, each end's declared grid and its profile's row, both certificates' signed digests, and on a served
+  link the window's declared sync, on an advised link the window's view of the advice) and an ``o0`` row commitment that
+  opens to the delivered output word, whose verdict and deadline bits are both 1 (`opened`);
 * both certificates verify under the network certifier's LMS key in its session over their public fields, and name the
   link, their end (egress first) and the window (`certified`);
 * the window's declared sync is one of Σ_sync.
@@ -256,7 +256,7 @@ def frameHash (tag : String) (parts : List ByteArray) : ByteArray :=
 def uint (x : Nat) : ByteArray :=
   if x = 0 then ⟨#[0]⟩ else be ((Nat.log2 x) / 8 + 1) x
 
-/-- The link-window's served domain id (`LinkWindows.domain(window).domain_id`): one-stage's window domain over four
+/-- The sampling block's served domain id (`LinkWindows.domain(window).domain_id`): one-stage's window domain over four
 leaves, its binding the identity digest of the registered Program, the partition, the value, its schema and leaf count,
 and the run `<run>/<link>/<window>`; the boundary's owner, positions `RangeIndexedDomain(0, 4)`. -/
 def domainId (c : Case) : V ByteArray := do
@@ -464,12 +464,12 @@ def outputsOf (c : Case) (accepted : Bool) (word : Nat) : Json :=
     | .advised _ advice => [("advice", match advice with | some a => .str a | none => .null)]
     | _ => [])
 
-/-- Whether the link-window is accepted, from its checks: proved, its rows opened to the word 3 (both bits 1), both
+/-- Whether the sampling block is accepted, from its checks: proved, its rows opened to the word 3 (both bits 1), both
 certificates verifying, and the window's sync one of Σ_sync. -/
 def acceptedOf (p : Bool) (o : Option Nat) (cert sync : Bool) : Bool :=
   p && o == some 3 && cert && sync
 
-/-- The verdict of record on the link-window (the module docstring). -/
+/-- The verdict of record on the sampling block (the module docstring). -/
 def verdict (c : Case) : V Verdict := do
   let p := proved c
   let row ← pubRow c

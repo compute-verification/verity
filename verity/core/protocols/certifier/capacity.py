@@ -29,12 +29,12 @@ def available_patterns(buckets: int, frames: int) -> int:
 
 
 def envelope_bits(buckets: int, allocation: int) -> float:
-    """What occupancy carries per link-window when nothing pins it, `T·log2(r + 1)` (Proposition 2, tight)."""
+    """What occupancy carries per sampling block when nothing pins it, `T·log2(r + 1)` (Proposition 2, tight)."""
     return buckets * math.log2(allocation + 1)
 
 
 def unbound_bits(buckets: int, allocation: int, frame_bits: int) -> float:
-    """What a link-window carries if nothing checks its content: `T·log2 Σ_{n≤r} 2^(8·n·B)`, about `8·T·r·B`, with B
+    """What a sampling block carries if nothing checks its content: `T·log2 Σ_{n≤r} 2^(8·n·B)`, about `8·T·r·B`, with B
     the frame size in bytes and `frame_bits` = 8·B. This is what a rejected window may already have carried, on any
     run, accepted or not."""
     return buckets * (allocation * frame_bits + math.log2(sum(2.0 ** (-(allocation - n) * frame_bits)

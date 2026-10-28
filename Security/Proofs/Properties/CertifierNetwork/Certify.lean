@@ -56,7 +56,7 @@ theorem certify_ok {i : Issuer} (hk : ValidKey i.key) {salt : ByteArray} {r : Re
   simp only [bind, Except.bind, hs, pure, Except.pure]
 
 /-- **A refused start signs nothing.** `certifyWith` hands a start of the session that the signer's state refuses (one it
-has already started, `Core.World.start`) to `finish` as a refused reservation: no certificate, and the link-window is
+has already started, `Core.World.start`) to `finish` as a refused reservation: no certificate, and the sampling block is
 listed in `refused`. -/
 theorem finish_refused (i : Issuer) (salt : ByteArray) (e : String) (r : Record) (d : NetworkCheck.Direction)
     (prepared : NetworkCheck.RecordHead × ByteArray × ByteArray) :
@@ -65,8 +65,8 @@ theorem finish_refused (i : Issuer) (salt : ByteArray) (e : String) (r : Record)
   rfl
 
 /-- What the assembly issues for record `r`: a certificate of the head `record_head` makes of `r` under its grid's
-parameters digest, naming `r`'s link-window, of the key's identifier, signing the head's digest under the record's salt,
-and verifying under the key over its message. -/
+parameters digest, naming `r`'s sampling block, of the key's identifier, signing the head's digest under the record's
+salt, and verifying under the key over its message. -/
 structure Issued (c : Config) (i : Issuer) (r : Record) (cr : CertifiedRecord) : Prop where
   head : ∃ pd, parameters (gridOf c r) (syncSetOf c r) = .ok pd ∧
     NetworkCheck.recordHead r.link (directionOf c r) r.window r.grid none (gridOf c r) pd true = .ok cr.head
