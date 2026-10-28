@@ -128,9 +128,9 @@ export RUST_MIN_STACK=$((64 << 20))
 TIME=$([ -x /usr/bin/time ] && echo "/usr/bin/time -v")
 PP="$PY benchmarks/prove_path/prove_path.py"
 
-keep() {  # NAME: $W/NAME's records into $O/NAME
+keep() {  # NAME: $W/NAME's records into $O/NAME, among them the circuit each drawn member was proved on (window/m<k>/circuit.txt)
   mkdir -p $O/$1
-  (cd $W/$1 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' \
+  (cd $W/$1 && find . -type f \( ! -name circuit.txt -o -path './window/m*/circuit.txt' \) ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' \
     ! -path './builds/*' ! -path './proof-edits/*/sessions/*' ! -path './proof-edits/mutants/*/*' ! -path './proof-edits/*/member/*' -print0 \
     | xargs -0 -r -I{} cp --parents {} $O/$1/)
 }
