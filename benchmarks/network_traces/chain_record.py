@@ -16,10 +16,12 @@
 * **certs**: the client's kept files (``--client``, by default the certifier rehearsal's own directory ``--run``):
   ``certificates.jsonl`` and ``clocks.jsonl``, each certificate's public part (`certifier_serve.keep_certificates`),
   held again to the certifier's key and session in ``--run``'s ``deployment.json`` by the client's own
-  `check_certificates`. Each window's two certified records (``--run``'s ``certified.jsonl``, their heads and salts)
-  are held by the host audit (`certifier_serve._certified`, N2's audit without its head checks) under the syncs the
-  certifier signed (``--run``'s salted ``clocks.jsonl``, `advised.SignedClocks`), never the plan's, and their
-  certificates, and the clocks', must be exactly the client's. ``--deployed`` refuses a key that isn't LMS at
+  `check_certificates`, each refusal the Lean's (`client_certificates`: `NetworkCheck.LinkWindow.refusals`,
+  `audit.certificate_refusals` beside it as the reference, ``client_check``'s ``by``). Each window's two certified
+  records (``--run``'s ``certified.jsonl``, their heads and salts) are held by the Lean's audit (`certifier_serve._certified`: `NetworkCheck.Records`' ``verdicts-no-grid``, N2's
+  audit without its head checks, `audit.Audit` beside it as the reference, each row's ``by`` and ``reference``) under
+  the syncs the certifier signed (``--run``'s salted ``clocks.jsonl``, `advised.SignedClocks`), never the plan's, and
+  their certificates, and the clocks', must be exactly the client's. ``--deployed`` refuses a key that isn't LMS at
   `lms.DEPLOYED`.
 * **report**: one JSON and one Markdown report, per step its verdict, its run ids, its ε at δ and what it computed in
   the clear, and the period's terms for `NetTiming.Guarantees.PeriodLeakAccepted` summed by
@@ -83,9 +85,11 @@ CLEAR = {
                 "opened to its registered root and rebuilt from the certified I/O, and the I/O tie (IoTieRequest's "
                 "reference, network-e2e's stand-ins for the warden's rows and the Commit's port) on the honest run",
     "certificates": "at the client, on its kept certificates (their public parts): each certificate's and clock "
-                    "certificate's LMS signature under the certifier's key and session (check_certificates); and the "
-                    "host audit of the rehearsal's certified heads and salted clock openings (witness a rehearsal "
-                    "publishes), whose certificates must be exactly the client's",
+                    "certificate's LMS signature under the certifier's key and session, by the Lean "
+                    "(NetworkCheck.LinkWindow.refusals, audit.certificate_refusals its reference); and the Lean's "
+                    "audit (NetworkCheck.Records, audit.Audit its reference) of the rehearsal's certified heads "
+                    "under its salted clock openings (witness a rehearsal publishes), whose certificates must be "
+                    "exactly the client's",
     "n2": "at the verifier: the registration records, the draw, the certificates' public fields, the clock syncs, the "
           "proof's pub row opened to the verifier's own copy and the o0 output word; never a record, head, leaf "
           "salt, sibling or the certifier's salt (n2_zk's RECEIVED, scanned for every piece)",
@@ -246,7 +250,8 @@ def certs(run: Path, client: Path, deployed: bool = False) -> dict:
         elif w >= len(signed):
             rows.append({"window": w, "certified": False, "why": "no clock certificate verifies for the window"})
         else:
-            rows.append({"window": w, "certified": bool(cs._certified(lw, lw.commit(w, *pair), signed))})
+            v = cs._certified(lw, lw.commit(w, *pair), signed)
+            rows.append({"window": w, "certified": v["accepted"], "by": v["by"], "reference": v["reference"]})
     out |= {"clock_certificates": len(clocks), "clocks_signed": len(signed),
             "signed_are_declared": signed == declared[:len(signed)] and len(signed) == len(declared),
             "issuer_refused": refused, "certified_windows": sum(r["certified"] for r in rows), "rows": rows}
@@ -264,8 +269,11 @@ def certs(run: Path, client: Path, deployed: bool = False) -> dict:
 def client_certificates(dep: dict, windows: int, kept: Path, kept_clocks: Path) -> dict:
     """The client's kept files (`certifier_serve.keep_certificates`: each certificate's public part with its session,
     no head, sync or salt) held again to the deployment's key and session, window by window, by the client's own
-    `check_certificates` on the answer they make up."""
+    `check_certificates` on the answer they make up, each refusal the Lean's (`lean_audit.certificate_refusals`:
+    `NetworkCheck.LinkWindow.refusals`, ``by`` ``lean``, with `audit.certificate_refusals` beside it as the reference, a
+    window where the two differ refused whole)."""
     import certifier_serve as cs
+    from verity.core.protocols.certifier import lean_audit
 
     lines = lambda p: [json.loads(x) for x in p.read_text().splitlines() if x.strip()]
     certs, clocks = lines(kept), lines(kept_clocks)
@@ -277,14 +285,14 @@ def client_certificates(dep: dict, windows: int, kept: Path, kept_clocks: Path) 
                   "certificates": [strip(d) for d in certs if "unsigned" not in d and d["window"] == w],
                   "clocks": [strip(d) for d in clocks if d["window"] == w],
                   "unsigned": [d["unsigned"] for d in certs if "unsigned" in d and d["unsigned"][2] == w]}
-        got, synced, unsigned, no = cs.check_certificates(dep, w, answer, seen)
+        got, synced, unsigned, no = cs.check_certificates(dep, w, answer, seen, lean_audit.certificate_refusals)
         refused += no + [f"window {w}: the signer refused {u}" for u in unsigned]
         for c in got:
             by_window[(c.direction.value, c.window)] = json.dumps(cs.certificate_json(c), sort_keys=True)
         kept_clock += [json.dumps(cs.certificate_json(k), sort_keys=True) for k in synced]
     if sessions - {dep["session"]}:
         refused.append(f"certificates of another session: {sorted(sessions - {dep['session']})}")
-    return {"certificates": len(by_window), "clock_certificates": len(kept_clock), "refused": refused,
+    return {"certificates": len(by_window), "clock_certificates": len(kept_clock), "refused": refused, "by": "lean",
             "by_window": by_window, "clocks": kept_clock}
 
 
@@ -504,7 +512,7 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
     job = job or {}
     if s is None or (job.get("rc") or {}).get("scan") not in (None, "0"):
         return {"verdict": "not run" if s is None and not (job.get("rc") or {}).get("scan") else "failed",
-                "why": (job.get("why") or {}).get("scan"), "in_the_clear": CLEAR["scan"]}
+                "why": scan_exit(s, job), "in_the_clear": CLEAR["scan"]}
     rounds = {}
     for name, r in (s.get("rounds") or {}).items():
         a = r.get("audit") or {}
@@ -528,6 +536,19 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
             "warden_run": warden_run, "eps_at_delta": eps_at_delta(units, int(k or s.get("drawn") or units),
                                                                     f"stratified:{k}" if k else s.get("law") or "all"),
             "in_the_clear": CLEAR["scan"]}
+
+
+def scan_exit(s: dict | None, job: dict) -> str | None:
+    """Why the scan step didn't run or failed: the job's own line for it and, when `scan_zk.py prove` exited nonzero,
+    from its summary each round's witness pieces found at the verifier and its own ``ok``."""
+    rc, said = (job.get("rc") or {}).get("scan"), (job.get("why") or {}).get("scan")
+    if rc in (None, "0"):
+        return said
+    found = {n: ((r.get("audit") or {}).get("received") or {}).get("verifier_found")
+             for n, r in ((s or {}).get("rounds") or {}).items()}
+    return "; ".join([*([said] if said else []), f"scan_zk exited {rc}",
+                      *(f"{n}: witness pieces found at the verifier: {v}" for n, v in found.items() if v),
+                      *(["scan_zk's ok is not true"] if s is not None and s.get("ok") is not True else [])])
 
 
 def free_inputs(circuit: dict) -> int:
@@ -933,11 +954,14 @@ def report(a) -> dict:
     verdict = ("scan " if scan_only else "") + ("accepted" if accepted else "refused")
     runs = list(dict.fromkeys(r for r in (job.get("run"), *(g.get("gate_run") for g in cust.get("gate_runs") or []))
                               if r))
+    why = ({k: ": ".join(str(x) for x in (steps[k].get("verdict") or "no verdict", steps[k].get("why")) if x)
+            for k in required if steps[k].get("verdict") != "accepted"}
+           | {k: f"stand-in: {steps[k]['stand_in']}" for k in ("n2", "scan") if steps[k].get("stand_in")})
     return {"schema": SCHEMA, "job": job, "verdict": verdict, "path": job.get("path"),
             "scope": SCAN_ONLY if scan_only else None, "stubbed": stubbed(job, cust, endpoint),
             "negatives_refused": negatives, "steps": steps,
             "d1": d1_terms(cert, n2, scan, cust, endpoint, audits),
-            "block": period_block(a, verdict, runs, cert=cert, n2=merged, audit_dirs=audit_dirs)}
+            "block": period_block(a, verdict, runs, cert=cert, n2=merged, audit_dirs=audit_dirs), "why": why or None}
 
 
 def markdown(r: dict) -> str:

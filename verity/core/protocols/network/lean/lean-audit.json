@@ -4,7 +4,7 @@
   "NetworkCheck.DifftestMain": "the difftest against certificate.py, under `runs`: compiled evaluation of NetworkCheck.Difftest.main, audited under NetworkCheck, a test and not a proof",
   "NetworkCheck.Main": "the network-check executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Check.protocol, audited under NetworkCheck",
   "NetworkCheck.PeriodMain": "the network-period executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Period.protocol, audited under NetworkCheck",
-  "NetworkCheck.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkCheck.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid) and of N2's link-window verdict of record (link-window, NetworkCheck.LinkWindow.linkWindowFn), audited under NetworkCheck"
+  "NetworkCheck.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkCheck.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid) of N2's link-window verdict of record (link-window, NetworkCheck.LinkWindow.linkWindowFn) and of the client's check of a window's served certificates (certificates, NetworkCheck.LinkWindow.certificatesFn), audited under NetworkCheck"
  },
  "runs": {
   "NetworkCheck.DifftestMain": {
@@ -40,9 +40,9 @@
    "why": "the check over raw, committed and certified records is code: v2's check, and the difftest server's line protocol for its verdicts, no Mathlib and nothing of Security"
   },
   "NetworkCheck.LinkWindow": {
-   "imports": ["NetworkCheck.Certificate", "Lms.Verify", "Flock.Hm96", "Flock.Canon", "Identity.Tagged"],
+   "imports": ["NetworkCheck.Certificate", "Lms.Verify", "Flock.Hm96", "Flock.Canon", "Flock.FV3", "Identity.Tagged"],
    "except": [],
-   "why": "N2's link-window verdict of record is code: the certificate's encodings, the LMS verifier, C-Flock's hm96 row commitment and canonical JSON, and core's identity hash, no Mathlib and nothing of Security"
+   "why": "N2's link-window verdict of record is code: the certificate's encodings, the LMS verifier, C-Flock's hm96 row commitment, canonical JSON and frame-v3-sha512 domain, and core's identity hash, no Mathlib and nothing of Security"
   }
  },
  "reads_exempt": {

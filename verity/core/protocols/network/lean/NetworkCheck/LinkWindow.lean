@@ -2,6 +2,7 @@ import NetworkCheck.Certificate
 import Lms.Verify
 import Flock.Hm96
 import Flock.Canon
+import Flock.FV3
 import Identity.Tagged
 
 /-!
@@ -33,8 +34,11 @@ is an input here (`Case.view`), the Python's `advised.view`: that derivation is 
 of record stays the Python's (`service.OF_RECORD`).
 
 `linkWindowFn` is the `link-window` function of `network-records verdicts` (`Difftest.serve`), which `service.py` calls
-through `lean_audit.SERVER`. Code: it imports only Lean, C-Flock's verifier (`Flock.Hash`, `Flock.Bytes`, `Flock.Canon`,
-`Flock.Hm96`), the identity hash, the LMS port and the certificate's encodings.
+through `lean_audit.SERVER`. `certificatesFn` is its `certificates` function, the client's check of one window's
+certificates as a reveal endpoint served them (`refusals`), which `lean_audit.certificate_refusals` calls with
+`audit.certificate_refusals` as its reference. Code: it imports only Lean, C-Flock's verifier (`Flock.Hash`,
+`Flock.Bytes`, `Flock.Canon`, `Flock.Hm96`, `Flock.FV3`), the identity hash, the LMS port and the certificate's
+encodings.
 -/
 
 namespace NetworkCheck.LinkWindow
@@ -245,27 +249,15 @@ def le (width x : Nat) : ByteArray := ⟨(Array.range width).map fun i => (x >>>
 /-- `x` as `width` big-endian bytes, `x < 2^(8·width)`. -/
 def be (width x : Nat) : ByteArray := ⟨(Array.range width).map fun i => (x >>> (8 * (width - 1 - i))).toUInt8⟩
 
-/-- frame-v3's framed hash through SHA-512 (`verity.ml.commitments.merkle._message`): the frame tag, the tag, then each
-part length-prefixed. -/
-def frameHash (tag : String) (parts : List ByteArray) : ByteArray :=
-  let t := tag.toUTF8
-  Flock.Sha512.hash (parts.foldl (fun acc p => acc ++ Flock.be64 p.size.toUInt64 ++ p)
-    ("veritor/protocol/merkle/frame/v3".toUTF8.push 0 ++ Flock.be32 t.size.toUInt32 ++ t))
-
-/-- `merkle._uint`: the minimal big-endian bytes, one zero byte for 0. -/
-def uint (x : Nat) : ByteArray :=
-  if x = 0 then ⟨#[0]⟩ else be ((Nat.log2 x) / 8 + 1) x
-
 /-- The link-window's served domain id (`LinkWindows.domain(window).domain_id`): one-stage's window domain over four
 leaves, its binding the identity digest of the registered Program, the partition, the value, its schema and leaf count,
-and the run `<run>/<link>/<window>`; the boundary's owner, positions `RangeIndexedDomain(0, 4)`. -/
+and the run `<run>/<link>/<window>`; the boundary's owner, positions `RangeIndexedDomain(0, 4)`
+(`Flock.FV3.Sha512.Domain.make`). -/
 def domainId (c : Case) : V ByteArray := do
   let binding ← Identity.identityDigestSha512 windowDomainTag (Json.mkObj [
     ("program", .str c.program), ("partition", .str c.partition), ("port", .str value), ("schema", .str schema),
     ("leaves", toJson leaves), ("run", .str s!"{c.run}/{c.link}/{c.window}")])
-  let positions ← Identity.identityDigestSha512 "veritor/indexed-domain/range/v1"
-    (Json.mkObj [("start", toJson (0 : Nat)), ("step", toJson (1 : Nat)), ("stop", toJson leaves)])
-  return frameHash "domain" [binding, uint 1, positions, uint leaves]
+  return (Flock.FV3.Sha512.Domain.make binding (-1) 0 leaves).id
 
 /-- Σ_sync as `parameters_digest` reads it, each ρ in lowest terms. -/
 def manifestSet (c : Case) : NetworkCheck.SyncSet :=
@@ -489,5 +481,88 @@ def verdictJson (v : Verdict) : Json :=
 /-- `network-records verdicts`' `link-window`: the verdict on a case, or its refusal of a case it can't read. -/
 def linkWindowFn (j : Json) : Except String Json := do
   return verdictJson (← verdict (← caseOf j))
+
+/-! ## The client's certificates -/
+
+/-- One window's certificates and clock certificates as a reveal endpoint served them, which the client holds to the
+certifier's key in its session (`audit.certificate_refusals`): the LMS key and session, the link and window they must
+name, the certificates and the clock certificates in the answer's order, and the digests that earlier windows' kept
+clock certificates sign. -/
+structure Served where
+  lms : Lms.Params
+  key : ByteArray
+  session : ByteArray
+  link : String
+  window : Nat
+  certificates : Array Cert
+  clocks : Array Cert
+  seen : Array ByteArray
+
+section Served
+
+open Flock.J
+
+def servedOf (j : Json) : V Served := do
+  let l ← get j "lms" "served"
+  let lms ← Lms.Params.make (← nat l "N" "lms") (← nat l "W" "lms") (← nat l "H" "lms") (← bool l "toy" "lms")
+  let key ← bytesOf (← get j "key" "served") "key"
+  unless key.size = 16 + lms.N do throw s!"an LMS public key is {16 + lms.N} bytes, not {key.size}"
+  let certs (k : String) : V (Array Cert) := do
+    (← arr j k "served").mapM fun x => do
+      let some c ← certOf x | throw s!"served.{k}: a certificate, not null"
+      pure c
+  pure { lms, key, session := ← bytesOf (← get j "session" "served") "session", link := ← str j "link" "served",
+         window := ← nat j "window" "served", certificates := ← certs "certificates", clocks := ← certs "clocks",
+         seen := ← (← arr j "seen" "served").mapM (bytesOf · "served.seen") }
+
+end Served
+
+/-- `verifies` under a key and session given alone: the key's identifier, and the signature verifying over the
+certificate's message (`certificateMessage`); a message or signature that doesn't decode is false. -/
+def signs (lms : Lms.Params) (key session : ByteArray) (x : Cert) : Bool :=
+  x.keyId == key.extract 0 16 &&
+    match certificateMessage x.keyId session x.link x.direction x.window x.digest,
+        Lms.Signature.decode lms x.signature with
+    | .ok m, .ok sig => (Lms.verify lms key m sig).toOption == some true
+    | _, _ => false
+
+/-- Why the client refuses certificate `x`, in the order it checks, or none where it keeps it: another key's (`key`),
+another link-window's (`link-window`), a clock certificate that isn't egress (`clock`), a signature that doesn't verify
+under the key in the session (`signature`), a second of its direction among those `kept` (`second`), or a clock
+certificate signing a digest that one kept earlier signs (`signed`: `reused`). -/
+def refusal (s : Served) (clock : Bool) (kept : Array Direction) (signed : Array ByteArray) (x : Cert) :
+    Option String :=
+  if x.keyId != s.key.extract 0 16 then some "key"
+  else if x.link != s.link || x.window != s.window then some "link-window"
+  else if clock && x.direction != .egress then some "clock"
+  else if !signs s.lms s.key s.session x then some "signature"
+  else if kept.contains x.direction then some "second"
+  else if clock && signed.contains x.digest then some "reused"
+  else none
+
+/-- Each refusal of one pass over `xs`, each read against those kept before it, which start from none of either
+direction and from `signed`'s digests. -/
+def pass (s : Served) (clock : Bool) (signed : Array ByteArray) (xs : Array Cert) : Array (Option String) := Id.run do
+  let mut kept : Array Direction := #[]
+  let mut signed := signed
+  let mut out := #[]
+  for x in xs do
+    let why := refusal s clock kept signed x
+    out := out.push why
+    if why.isNone then
+      kept := kept.push x.direction
+      if clock then signed := signed.push x.digest
+  return out
+
+/-- The certificates' refusals, then the clock certificates', the clock certificates read against `seen`. -/
+def refusals (s : Served) : Array (Option String) × Array (Option String) :=
+  (pass s false #[] s.certificates, pass s true s.seen s.clocks)
+
+/-- `network-records verdicts`' `certificates`: each certificate's and each clock certificate's refusal (`refusals`),
+null where the client keeps it, or the refusal of an answer it can't read. -/
+def certificatesFn (j : Json) : Except String Json := do
+  let (certs, clocks) := refusals (← servedOf j)
+  let codes (xs : Array (Option String)) : Json := .arr (xs.map fun | some r => .str r | none => .null)
+  return Json.mkObj [("certificates", codes certs), ("clocks", codes clocks)]
 
 end NetworkCheck.LinkWindow
