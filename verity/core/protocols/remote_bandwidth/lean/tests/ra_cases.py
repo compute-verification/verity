@@ -529,8 +529,7 @@ class Run:
         self.not_before_ns = not_before_ns
         self.coins = coins.local(reg.digest, 0, windows, Entropy(b"coins"), per_coin=groups_per_coin)
         self.s = Session(self.params, reg, None, self.coins, not_before_ns=not_before_ns, clock=self.clock)
-        self.prover = audit.Prover(cheat(self.store) if cheat else self.store, None, self.s.commitment,
-                                   entropy=Entropy(b"receipt salts"))
+        self.prover = audit.Prover(cheat(self.store) if cheat else self.store, None, entropy=Entropy(b"receipt salts"))
         self.events: list[dict] = []
         self.append_coins: list[bytes] = []
         self.challenges: dict[int, coins.LiveOpening] = {}
