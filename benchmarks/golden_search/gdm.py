@@ -139,6 +139,9 @@ GRIDS: dict[str, dict[str, tuple]] = {
     },
 }
 GRIDS["smoke"] = {k: v[:2] for k, v in GRIDS["coarse"].items()}
+#: the coarse grid under Achievability's law alone (the kd-subset is refused wherever units' work differs, and its search
+#: is slow on the demo's small populations)
+GRIDS["coarse-ach"] = {**GRIDS["coarse"], "law": ("achievability",)}
 #: the coarse grid at the engineering levers every coarse optimum takes, for the sensitivity sweeps
 GRIDS["oat"] = {**GRIDS["coarse"], "seal": ("roots",), "host": ("fixed",), "kernels": ("bar",), "corun": (True,),
                 "law": ("achievability",), "vtile": ((1, 1), (1, 8))}
