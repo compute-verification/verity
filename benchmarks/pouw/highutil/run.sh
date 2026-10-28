@@ -90,10 +90,10 @@ export D PY TORCH_PY CKPT TEXT LIB BLOCKS STEPS Q PERIODS NEGATIVE COINS MAIN PL
 export GATE_ARGS="${GATE[*]}" CARD_ARGS="${CARDA[*]}"
 [ -f "$CARD" ] && cp "$CARD" "$O/card.toml"
 $LEASE bash -c '
-  nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.mem,power.limit --format=csv \
+  nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.mem --format=csv \
     ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/gpu.txt" 2>&1
   nvidia-smi -q -d PERFORMANCE,CLOCK ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/clocks-before.txt" 2>&1
-  nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.gr,clocks.mem,power.draw,utilization.gpu,temperature.gpu --format=csv -lms 500 \
+  nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.gr,clocks.mem,utilization.gpu,temperature.gpu --format=csv -lms 500 \
     ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$O/smi.csv" 2>&1 &
   smi=$!
   if [ "$CKPT" != seeded ]; then
@@ -150,7 +150,7 @@ echo "lease rc $?" >> "$O/rc.txt"
 # Each chunk writes fill-NNN/ (periods.jsonl, summary.json with the declared utilization); smi-fill.csv samples the card.
 if [ -n "${FILL_UNTIL:-}" ] && grep -q "^diag rc 0" "$O/rc.txt"; then
   END=$(date -u -d "$FILL_UNTIL" +%s)
-  nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.gr,power.draw,utilization.gpu --format=csv -lms 1000 > "$O/smi-fill.csv" 2>&1 &
+  nvidia-smi --query-gpu=timestamp,clocks.sm,clocks.gr,utilization.gpu --format=csv -lms 1000 > "$O/smi-fill.csv" 2>&1 &
   fsmi=$!
   n=0 bad=0
   while [ "$(date -u +%s)" -lt "$END" ] && [ $bad -lt 3 ]; do
