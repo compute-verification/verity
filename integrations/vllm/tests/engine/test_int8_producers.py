@@ -51,8 +51,7 @@ def _quant_ref(h: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
 
 
 def _silu_vllm(gu: torch.Tensor) -> torch.Tensor:
-    pytest.importorskip("vllm")
-    import vllm._custom_ops  # noqa: F401  (registers torch.ops._C)
+    pytest.importorskip("vllm._custom_ops")  # registers torch.ops._C
     h = torch.empty(gu.shape[0], gu.shape[1] // 2, dtype=torch.bfloat16, device="cuda")
     torch.ops._C.silu_and_mul(h, gu.cuda())
     return h
@@ -109,7 +108,7 @@ def test_silu_mul_quant_on_every_gate_and_up():
 
 REF = textwrap.dedent("""
     import sys, torch
-    import vllm._custom_ops  # noqa: F401  (registers torch.ops._C)
+    import vllm._custom_ops  # registers torch.ops._C
     out = []
     for x, r, w, eps in torch.load(sys.argv[1]):
         x, r = x.cuda(), r.cuda()
@@ -205,7 +204,7 @@ WIRING = textwrap.dedent('''
     import json, sys
     import torch
     import torch.nn as nn
-    import vllm._custom_ops  # noqa: F401  (registers torch.ops._C)
+    import vllm._custom_ops  # registers torch.ops._C
     from torch.utils._python_dispatch import TorchDispatchMode
     from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
     from vllm.model_executor.layers.activation import SiluAndMul

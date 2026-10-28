@@ -28,6 +28,7 @@ import os
 os.environ["VLLM_BATCH_INVARIANT"] = "1"  # read once a process by vLLM's C++ (the served stack's norm launch)
 
 import argparse
+import importlib
 import json
 import math
 import statistics
@@ -44,14 +45,18 @@ SILU_WARPS = (4, 8, 16, 32)
 
 
 def nvml():
+    """The leased GPU's SM clock in MHz, read through NVML, or None for every reading when NVML isn't there."""
     try:
         import pynvml
+    except ImportError:
+        return lambda: None
+    try:
         pynvml.nvmlInit()
         uuid = os.environ.get("GPU_LEASE_UUID")
         h = pynvml.nvmlDeviceGetHandleByUUID(uuid) if uuid else pynvml.nvmlDeviceGetHandleByIndex(torch.cuda.current_device())
-        return lambda: pynvml.nvmlDeviceGetClockInfo(h, pynvml.NVML_CLOCK_SM)
-    except Exception:  # noqa: BLE001
+    except pynvml.NVMLError:
         return lambda: None
+    return lambda: pynvml.nvmlDeviceGetClockInfo(h, pynvml.NVML_CLOCK_SM)
 
 
 def bits(t: torch.Tensor) -> torch.Tensor:
@@ -250,7 +255,7 @@ def main() -> int:
     H, I, LAYERS = (int(v) for v in a.shape.split(","))
     NORMS, SILUS = 2 * LAYERS - 1, LAYERS
     a.out.mkdir(parents=True, exist_ok=True)
-    import vllm._custom_ops  # noqa: F401  (registers torch.ops._C)
+    importlib.import_module("vllm._custom_ops")  # registers torch.ops._C
     from verity_vllm.engine import int8_fused as F
     clock = nvml()
     dev = torch.cuda.get_device_properties(0)
