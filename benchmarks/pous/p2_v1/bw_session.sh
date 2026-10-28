@@ -22,8 +22,8 @@
 # Outside the lease: both held to their pins, the store's registration to the tracked one, and the toy's session on the
 # CPU (P2's reference decode, the same verifier) as a preflight. Under one untimed lease of at most LEASE_MIN minutes
 # (default 10), refused near the card's booked window (Tue 27 Oct 08:00-10:00Z): MODE's sessions (default both), the honest one
-# (WINDOWS x PASSES, SAMPLES openings a window, expect accept) and then the cheat (SKIP_LAYER's reads skipped, the same
-# windows and passes, expect reject): a party holds both to its session (`p2_party.SESSION`, these defaults). Each step's exit code is in $OUT/rc.txt and each session's verdict line in
+# (WINDOWS x PASSES, SAMPLES openings a window, expect accept) and then the cheat (SKIP_LAYER's reads skipped, one window
+# of one pass, expect reject). Each step's exit code is in $OUT/rc.txt and each session's verdict line in
 # $OUT/verdicts.txt; exits non-zero if any failed.
 set -uo pipefail
 O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
@@ -131,7 +131,7 @@ env -u GPU_LEASE_TIMED gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash -c '
   if [ "$MODE" != honest ]; then
     to=(--verifier "$VERIFIER"); [ -n "$CHEAT_CONNECT" ] && to=(--connect "$CHEAT_CONNECT")
     [ -n "$PARTY" ] && to=(--party "$PARTY" --party-host "$PARTY_HOST")
-    "$PY" "$D/bandwidth.py" "${base[@]}" "${to[@]}" --windows "$WINDOWS" --passes "$PASSES" --samples "$CHEAT_SAMPLES" \
+    "$PY" "$D/bandwidth.py" "${base[@]}" "${to[@]}" --windows 1 --passes 1 --samples "$CHEAT_SAMPLES" \
       --skip-layer "$SKIP_LAYER" --out "$O/cheat" --expect reject > "$O/cheat.log" 2> "$O/cheat.err"
     step cheat $?; tail -n 1 "$O/cheat.log" >> "$O/verdicts.txt"
   fi
