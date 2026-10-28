@@ -41,7 +41,7 @@ The numbers come from the slowdown calculator (`benchmarks/rho`), not from this 
 
 ### Objects
 
-- **Time.** A **tick** is one step of the one clock (`OneClock`, a named premise). A **monitoring period** J is a span
+- **Time.** A **tick** is one step of the one clock (`OneClock`, a premise stated in prose, not yet in Lean). A **monitoring period** J is a span
   of consecutive ticks, |J| long; every other span is a block's.
 - **Hardware.** Leaves L are devices; a location X is a set of leaves. The **site** is the registered hardware, public;
   hardware outside it is unregistered. Φ_X is X's **capacity**, work a tick at its rated peak (the site entry: SKU,
@@ -334,11 +334,11 @@ None of these is assumed silently; each would restate the conclusion:
 |---|---|---|
 | The actual circuit | `Accounting.Placed`, `Accounting.Placed.region` | Defined |
 | Declared objects | `Verity.Circuit`, `Verity.Partition`, `Verity.Partition.IsCK`, `Verity.Declaration`, `Verity.Registration`; the site, B, a_j and loc_j not yet in Lean | Partly defined |
-| Coverage | `Nci.Assumptions.CoversEfficientMethods` | Stated; Core not yet read off a run's circuit; untested |
+| Coverage | `Nci.Assumptions.CoversEfficientMethods` | A named assumption in the lock; Core not yet read off a run's circuit; untested |
 | Lemma 1 | `Verity.Guarantees.BlockDescription` | Proved |
-| Information premises | `Nci.Assumptions.DescriptionHard`, `Nci.Assumptions.SourceHard`, `Nci.Assumptions.Recovers`, `Nci.Capability.Items` | Stated; no price measured at a decoder budget; several uniform activation rates refuted by exact decoders |
+| Information premises | `Nci.Assumptions.DescriptionHard`, `Nci.Assumptions.SourceHard`, `Nci.Assumptions.Recovers`, `Nci.Capability.Items` | Written, not yet named assumptions in the lock; no price measured at a decoder budget; several uniform activation rates refuted by exact decoders |
 | Structure | `Nci.Capability.Incidence`, `Nci.Capability.Upstream`, `Nci.Capability.OverlapWeights`, `Nci.Capability.UseRegions` | Defined; the certificate not yet checked on a named training circuit |
-| The repertoire | `Nci.Guarantees.HeldBudget`, `Nci.Guarantees.RecoveredBudget`, `Nci.Guarantees.IncidenceCap`, `Nci.Guarantees.OperandCapSeparate`, `Nci.Guarantees.OperandCapJoint`, `Nci.Guarantees.ImportOrRecompute`, `Nci.Guarantees.RecomputeByGates`, `Nci.Guarantees.RecomputeByState`, `Nci.Guarantees.WeightedProductCap` | Stated, not yet proved |
+| The repertoire | `Nci.Guarantees.HeldBudget`, `Nci.Guarantees.RecoveredBudget`, `Nci.Guarantees.IncidenceCap`, `Nci.Guarantees.OperandCapSeparate`, `Nci.Guarantees.OperandCapJoint`, `Nci.Guarantees.ImportOrRecompute`, `Nci.Guarantees.RecomputeByGates`, `Nci.Guarantees.RecomputeByState`, `Nci.Guarantees.WeightedProductCap` | Stated (`Nci.Guarantees.LocalBoundsStated`), not yet proved |
 | Theorem 3 | `Verity.Guarantees.Counting` | Proved |
 | The threaded refinement | `Nci.Threading.Threaded`, `Nci.Assumptions.WeightsIncompressible`, `Nci.Guarantees.ThreadedReads` | Proved for the circuit in hand under assumed read costs |
 | Device model | `Accounting.Placed.ComputeRate`, `Accounting.Placed.Links`, `Accounting.Placed.Memory`, `Accounting.Placed.Causal`, `Accounting.Overhead.physClass`; hosts carry no compute, `OneClock` and the inventory not yet in Lean | Defined; three premises unstated |
@@ -351,7 +351,7 @@ None of these is assumed silently; each would restate the conclusion:
 | Onsite's k_S | `Pous.Guarantees.StreamedWipe`, `NetTiming.Guarantees.PeriodLeakAccepted` | Proved per window; nothing composes them into k_S |
 | Accounting | the assignment of a run's counted multiplications not yet in Lean | Open |
 | Rate ceiling ζ̄ | the inline hypotheses of `Nci.Guarantees.DampenerRemote`; a named Prop not yet in Lean | Open |
-| The floor | `Nci.Guarantees.CapabilityFloor` | Stated, not yet proved |
+| The floor | `Nci.Guarantees.CapabilityFloor` | Stated (`Nci.Guarantees.CapabilityFloorStated`), not yet proved |
 | Slowdown | `Accounting.Overhead.overhead`, `Accounting.Overhead.threshold`, `Accounting.Overhead.cost` | Defined, with cost in server-time, not fleet-time; no theorem reads it |
 | The bounds | `Nci.Guarantees.DampenerRemote`, `Nci.Guarantees.DampenerThreaded` | Proved as arithmetic over inline hypotheses, not over the definition above |
 
