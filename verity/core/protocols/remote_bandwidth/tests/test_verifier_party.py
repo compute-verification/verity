@@ -128,7 +128,8 @@ def test_period_with_runs_the_session_against_its_side(monkeypatch) -> None:
                                               entropy=Entropy(b"salts"))
     assert period == _in_process() and side == {"host": "auditor", "passes": 2}
     with pytest.raises(RuntimeError, match="the side on auditor exited 3 before it listened"):
-        verifier_party.period_with(Side("auditor", (sys.executable, "-c", "import sys; sys.exit(3)")), request, STORE)
+        verifier_party.period_with(Side("auditor", (sys.executable, "-c", "import sys; sys.stdin.readline(); sys.exit(3)")),
+                                   request, STORE)
 
 
 def test_the_registration_round_trips() -> None:
