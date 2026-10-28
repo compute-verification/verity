@@ -59,17 +59,28 @@ from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, Sy
 
 Published = Record | CommittedRecord | CertifiedRecord
 
+#: `Core.Verdict`'s names (`Verdict.name`) that a sampling block's check takes: a missing record is a violation, so the
+#: audit never leaves one `undecided`
+ACCEPT, REJECT = "accept", "reject"
+
 
 @dataclass(frozen=True, slots=True)
-class Verdict:
+class SamplingBlockCheck:
+    """One link's sampling block as the audit checked it: the link and the block's index (`window`), with its
+    `Core.Verdict`, read off `violation`."""
+
     link: str
     window: int
     # None when accepted; otherwise "status:<reason>", "advice", "mismatch", "duplicate", "no-verdict" or "signature"
     violation: str | None
 
     @property
+    def verdict(self) -> str:
+        return ACCEPT if self.violation is None else REJECT
+
+    @property
     def accepted(self) -> bool:
-        return self.violation is None
+        return self.verdict == ACCEPT
 
 
 @dataclass
@@ -77,7 +88,7 @@ class Audit:
     """Every verdict of a run, in order, and the spatial unit's clock: each window's sync, set by the first egress link
     checked for that window. The run is accepted only if every link-window is."""
 
-    verdicts: list[Verdict] = field(default_factory=list)
+    verdicts: list[SamplingBlockCheck] = field(default_factory=list)
     syncs: dict[int, ClockSync] = field(default_factory=dict)
 
     def check_link(
@@ -91,7 +102,7 @@ class Audit:
         key: PublicKey | None = None,
         session: bytes | None = None,
         grid: bool = True,
-    ) -> list[Verdict]:
+    ) -> list[SamplingBlockCheck]:
         """Check one egress link's records for windows 0 … len(syncs) − 1 against the Program's grids under the
         declared syncs. A window whose declared sync differs from the unit's for it, set by an earlier link, is an
         `advice` violation. Certified records are checked against the certifier's `key` in its `session`. With `grid`
@@ -113,12 +124,12 @@ class Audit:
                     violation = "advice"
                 elif grid and _mismatch(found[0], link, w, expected[w], params, parameters):
                     violation = "mismatch"
-            out.append(Verdict(link, w, violation))
+            out.append(SamplingBlockCheck(link, w, violation))
         self.verdicts.extend(out)
         return out
 
     def check_ingress_link(self, link: str, records: Sequence[Published], windows: int, key: PublicKey | None = None,
-                           params: GridParams | None = None, session: bytes | None = None) -> list[Verdict]:
+                           params: GridParams | None = None, session: bytes | None = None) -> list[SamplingBlockCheck]:
         """Check one ingress link's records for windows 0 … windows − 1: one record each, with a complete status. No
         grid is compared. Certified records are checked against the certifier's `key` in its `session`, and their heads
         against `params`."""
@@ -135,7 +146,7 @@ class Audit:
                         != (params.buckets, params.allocation, params.frame_bytes, params.bucket_ms)
                         or h.parameters != parameters_digest(params)):
                     violation = "mismatch"
-            out.append(Verdict(link, w, violation))
+            out.append(SamplingBlockCheck(link, w, violation))
         self.verdicts.extend(out)
         return out
 
@@ -144,7 +155,7 @@ class Audit:
         return bool(self.verdicts) and all(v.accepted for v in self.verdicts)
 
     @property
-    def violations(self) -> list[Verdict]:
+    def violations(self) -> list[SamplingBlockCheck]:
         return [v for v in self.verdicts if not v.accepted]
 
 

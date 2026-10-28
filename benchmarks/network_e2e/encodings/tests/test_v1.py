@@ -314,7 +314,7 @@ def test_the_replay_chain_carries_what_a5_charges_early(name, n, early):
     assert sum(c < r for c, r in zip(charged, read)) == early
     steps = [sum(1 for w in window if w == v) for v in range(W)]
     S = RC.Shape(R=7, W=2, A=3, L=1024, NB=96, IW=4, Q=14, D=n, P=max(steps), K=14)
-    cur, last, ends = RC.empty(S), RC.Window(), []
+    cur, last, ends = RC.empty(S), RC.QueueRow(), []
     loads, advances, s = [], [], 0
     for v in range(W):
         loaded = RC.load(S, cur, last, (), [int(b) for b in wins[v].arrived], steps[v])

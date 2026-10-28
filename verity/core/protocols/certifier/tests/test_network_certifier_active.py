@@ -30,7 +30,7 @@ from verity.core.protocols.certifier.active import (
     Shaper,
     VirtualClock,
 )
-from verity.core.protocols.certifier.audit import Audit, Verdict
+from verity.core.protocols.certifier.audit import Audit, SamplingBlockCheck
 from verity.core.protocols.certifier.calibration import choose_syncs
 from verity.core.protocols.certifier.commitment import commit
 from verity.core.protocols.certifier.grid import GridParams, Reason, Record, Status, Certifier, occupancy, row_count
@@ -1311,7 +1311,7 @@ def test_the_salt_reaches_only_the_blocks_side_and_no_record_depends_on_it(hones
 
     a = Audit()
     assert active.check_salts(a, "requests", proxy.records, WINDOWS, drawn) == \
-        [Verdict("requests", w, None) for w in range(WINDOWS)] and a.accepted
+        [SamplingBlockCheck("requests", w, None) for w in range(WINDOWS)] and a.accepted
     short = drawn | {1: drawn[1][:32]}
     missing = {w: s for w, s in drawn.items() if w != 2}
     twice = dataclasses.replace(ingress[1], grid=((ingress[1].grid[0][0],) * 2, *ingress[1].grid[1:]))
@@ -1348,7 +1348,7 @@ def test_one_salt_per_pouw_window_of_its_width(honest_run):
                           for t in range(WINDOWS * T)]
     records = list(ingress.values())
     assert active.check_salts(Audit(), "requests", records, WINDOWS, drawn, pouw_window=2, salt_bits=256) == \
-        [Verdict("requests", 0, None), Verdict("requests", 2, None)]
+        [SamplingBlockCheck("requests", 0, None), SamplingBlockCheck("requests", 2, None)]
     assert [v.violation for v in active.check_salts(Audit(), "requests", records, WINDOWS, drawn, pouw_window=2)] == \
         ["salt", "salt"]
     assert [v.violation for v in active.check_salts(Audit(), "requests", records, WINDOWS, drawn, salt_bits=256)] == \

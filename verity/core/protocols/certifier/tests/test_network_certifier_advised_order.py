@@ -61,7 +61,7 @@ class CellsTie:
     window is refused when the release gives no lanes or isn't the link's `received` (`tie_service.window_cells`)."""
 
     tie: TS.IngressTie
-    served: Q.Link
+    served: Q.ServedIngress
 
     @classmethod
     def of(cls, prompt_lens, admitted):

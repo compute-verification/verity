@@ -117,8 +117,8 @@ def _u32(name: str, x: object) -> int:
 
 # --- the reference ---------------------------------------------------------------------------------------------------
 
-class Record(NamedTuple):
-    """A slot's record: its stream q (0 for a slot no connection holds), its request slot j, and e: `EMPTY` for a
+class Occupancy(NamedTuple):
+    """A slot's occupancy: its stream q (0 for a slot no connection holds), its request slot j, and e: `EMPTY` for a
     `PAD`, `END_ENTRY` for the `END`, or the output k for `DATA`."""
 
     q: int
@@ -127,7 +127,7 @@ class Record(NamedTuple):
 
 
 #: a lane no live request slot holds: B zero bytes, a `PAD` on stream 0
-UNHELD = Record(0, 0, EMPTY)
+UNHELD = Occupancy(0, 0, EMPTY)
 
 
 class Request(NamedTuple):
@@ -158,12 +158,13 @@ class State(NamedTuple):
 FREE = Slot(0, 0, 0, 0, ())
 
 
-def bucket_map(b: int, slots: Sequence[Request | None], R: int, r: int, D: int) -> tuple[tuple[Record, ...], bool]:
-    """Bucket b's records and whether it overflows: the live request slots at b, the j with a request admitted at or
-    before b and b ≤ admitted_j + D + ⌊n_j / r⌋, ranked by (q, j) as ρ. Slot ρ·r + i is (q_j, j, `EMPTY`) before
+def bucket_map(b: int, slots: Sequence[Request | None], R: int, r: int,
+               D: int) -> tuple[tuple[Occupancy, ...], bool]:
+    """Bucket b's slots' occupancy and whether it overflows: the live request slots at b, the j with a request admitted
+    at or before b and b ≤ admitted_j + D + ⌊n_j / r⌋, ranked by (q, j) as ρ. Slot ρ·r + i is (q_j, j, `EMPTY`) before
     admitted_j + D; else, with k = (b − admitted_j − D)·r + i, (q_j, j, k) for k < n_j, (q_j, j, `END_ENTRY`) for
     k = n_j and (q_j, j, `EMPTY`) past it. The slots past the live ones are `UNHELD`. It overflows when more than
-    R / r slots are live; the records are then the first R / r's."""
+    R / r slots are live; the occupancy is then the first R / r's."""
     if type(r) is not int or r < 1 or type(R) is not int or R % r or type(D) is not int or D < 0:
         raise ValueError(f"a bucket's R slots are lanes of r >= 1, and the delay D >= 0, not R={R!r}, r={r!r}, D={D!r}")
     live = sorted((s.q, j) for j, s in enumerate(slots)
@@ -174,7 +175,7 @@ def bucket_map(b: int, slots: Sequence[Request | None], R: int, r: int, D: int) 
         for i in range(r):
             k = (b - s.admitted - D) * r + i
             e = EMPTY if b < s.admitted + D or k > s.n else END_ENTRY if k == s.n else k
-            out[rho * r + i] = Record(q, j, e)
+            out[rho * r + i] = Occupancy(q, j, e)
     return tuple(out), len(live) * r > R
 
 
@@ -200,16 +201,16 @@ def _pick(ids: Sequence[int], k: int, K: int) -> int:
 
 
 def computed(sh: Shape, state: State) -> tuple[bytes, bool]:
-    """The row `EgressBucket` computes from the state and whether the state renders it: `bucket_map`'s records rendered
-    (a `PAD` on q for `EMPTY`, the `END` on q, the `DATA` cell of request slot j's output k). It renders the row unless
-    more slots are live than lanes (the row's lanes are then the first R / r live slots') or a `DATA` cell is of an
-    output k ≥ K (which holds `_pick`'s id)."""
+    """The row `EgressBucket` computes from the state and whether the state renders it: `bucket_map`'s occupancy
+    rendered (a `PAD` on q for `EMPTY`, the `END` on q, the `DATA` cell of request slot j's output k). It renders the
+    row unless more slots are live than lanes (the row's lanes are then the first R / r live slots') or a `DATA` cell
+    is of an output k ≥ K (which holds `_pick`'s id)."""
     slots = _slots(sh, state)
     live = [Request(s.q, s.admitted, s.n) if s.live & 1 else None for s in slots]
     b = _u32("b", state.b)
-    records, over = bucket_map(b, live, sh.R, sh.r, sh.D)
+    occupancy, over = bucket_map(b, live, sh.R, sh.r, sh.D)
     cells, renders = [], not over
-    for at, (q, j, e) in enumerate(records):
+    for at, (q, j, e) in enumerate(occupancy):
         if e == EMPTY:
             cells.append(pad_cell(sh.B, q))
             continue
@@ -413,6 +414,6 @@ EgressBucket = _part(
     "bit i of byte k")
 
 
-__all__ = ["ACCEPT", "ADMITTED", "EgressBucket", "FREE", "IDS", "LIVE", "N", "Q", "Record", "Request", "Shape",
+__all__ = ["ACCEPT", "ADMITTED", "EgressBucket", "FREE", "IDS", "LIVE", "N", "Q", "Occupancy", "Request", "Shape",
            "Slot", "State", "UNHELD", "bucket_arguments", "bucket_map", "computed", "output_bits", "outputs",
            "rendered", "state_bits", "state_words"]

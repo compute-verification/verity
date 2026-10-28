@@ -133,8 +133,8 @@ class Pool:
 
 
 @dataclass(frozen=True)
-class Op:
-    """One call's inputs beside the pool (the module's docstring)."""
+class Args:
+    """One call's arguments beside the pool (the module's docstring)."""
     slot: int = 0
     r: int = 0
     units: tuple[tuple[int, ...], ...] = ()
@@ -162,7 +162,7 @@ def empty(S) -> Pool:
     return Pool((None,) * S.N, (S.N,) * S.R, S.NB - 1, 0)
 
 
-def _in_class(S, pool: Pool, op: Op) -> None:
+def _in_class(S, pool: Pool, op: Args) -> None:
     Z = widths(S)
     if len(pool.table) != S.N or len(pool.spfx) != S.R or len(op.units) > Z.KU:
         raise ValueError("the pool or the window isn't the size class's")
@@ -170,7 +170,7 @@ def _in_class(S, pool: Pool, op: Op) -> None:
         raise ValueError(f"a valid entry has 1 to {S.D} copies")
 
 
-def reference(S, pool: Pool, op: Op) -> Out:
+def reference(S, pool: Pool, op: Args) -> Out:
     """One call's pass over the pool (the module's docstring); `Out(False)` refuses."""
     _in_class(S, pool, op)
     Z = widths(S)
@@ -590,7 +590,7 @@ def statics(N: int, unit_tokens: int, token_width: int, request_width: int, max_
 # --- arguments and evaluation ----------------------------------------------------------------------------------------------
 
 
-def arguments(S, pool: Pool, op: Op) -> list[list[int]]:
+def arguments(S, pool: Pool, op: Args) -> list[list[int]]:
     """The unit's arguments (each a flat list of bits, as `evaluate_bits` takes one instance)."""
     _in_class(S, pool, op)
     Z = widths(S)
@@ -638,7 +638,7 @@ def decode(S, flat: Sequence[int]) -> Out:
     return Out(True, Pool(tuple(table), tuple(spfx), hf, clock), tuple(trail))
 
 
-def evaluate(st_: dict, cases: Sequence[tuple[Pool, Op]]) -> list[Out]:
+def evaluate(st_: dict, cases: Sequence[tuple[Pool, Args]]) -> list[Out]:
     """The unit at statics `st_` on each (pool, op), in one evaluation."""
     S = SimpleNamespace(**st_)
     args = [list(rows) for rows in zip(*(arguments(S, p, o) for p, o in cases))]
@@ -664,6 +664,6 @@ def size(**st_) -> dict[str, int]:
             "ands": p["CachePoolEvict"] + Z.KU * p["CachePoolUnit"] + p["CachePoolFree"] + p["CachePoolEnd"]}
 
 
-__all__ = ["CachePoolEnd", "CachePoolEvict", "CachePoolFree", "CachePoolUnit", "CacheStep", "Copy", "Entry", "Op", "Out",
+__all__ = ["Args", "CachePoolEnd", "CachePoolEvict", "CachePoolFree", "CachePoolUnit", "CacheStep", "Copy", "Entry", "Out",
            "PARTS", "Pool", "STATICS", "arguments", "decode", "empty", "evaluate", "reference", "size", "sources",
            "statics", "unit", "widths"]

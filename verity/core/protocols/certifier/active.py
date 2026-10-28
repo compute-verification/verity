@@ -196,7 +196,7 @@ from dataclasses import dataclass, field, replace
 
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import aead
-from verity.core.protocols.certifier.audit import Audit, Verdict
+from verity.core.protocols.certifier.audit import Audit, SamplingBlockCheck
 from verity.core.protocols.certifier.certificate import PublicKey, Signer, SignerRefused
 from verity.core.protocols.certifier.grid import (
     GridParams,
@@ -1839,7 +1839,7 @@ class RemoteCertifier:
 
 
 def check_salts(audit: Audit, link: str, records: Sequence[Record], windows: int, salts: Mapping[int, bytes], *,
-                pouw_window: int = 1, salt_bits: int = SALT_BITS) -> list[Verdict]:
+                pouw_window: int = 1, salt_bits: int = SALT_BITS) -> list[SamplingBlockCheck]:
     """The audit's read of the salt on ingress link `link` for certifier windows 0 … windows − 1, given the salts
     `reveal` gave by PoUW window of `pouw_window` certifier windows: PoUW window p, at its first certifier window
     w = p·`pouw_window`, is accepted if w has exactly one raw record, which holds exactly one salt frame of p, carrying
@@ -1865,6 +1865,6 @@ def check_salts(audit: Audit, link: str, records: Sequence[Record], windows: int
                     if k == SALT and s == SALT_STREAM and x[:8] == prefix]
             first = decode_frame(grid[0][0]) if grid and row_count(grid[0]) else None
             accepted = held == [prefix + PLACEHOLDER] and first == (SALT, SALT_STREAM, prefix + PLACEHOLDER)
-        out.append(Verdict(link, w, None if accepted else "salt"))
+        out.append(SamplingBlockCheck(link, w, None if accepted else "salt"))
     audit.verdicts.extend(out)
     return out

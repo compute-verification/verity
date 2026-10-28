@@ -243,7 +243,8 @@ def test_a_disagreement_with_the_reference_rejects(lean, tmp_path, monkeypatch):
     real_egress, real_ingress = audit.Audit.check_link, audit.Audit.check_ingress_link
 
     def flip(vs, at):
-        return [audit.Verdict(v.link, v.window, "mismatch" if v.accepted else None) if v.window == at else v for v in vs]
+        return [audit.SamplingBlockCheck(v.link, v.window, "mismatch" if v.accepted else None) if v.window == at else v
+                for v in vs]
 
     monkeypatch.setattr(audit.Audit, "check_link", lambda self, *a, **k: flip(real_egress(self, *a, **k), 0))
     monkeypatch.setattr(service, "Audit", lambda: lean_audit.Audit(server=lean))
@@ -251,8 +252,9 @@ def test_a_disagreement_with_the_reference_rejects(lean, tmp_path, monkeypatch):
     a = lean_audit.Audit(server=lean)
     vs = a.check_link("responses", [opening.records[0]], SERVICE_FRAMES, syncs[:1], lw.sync_set, lw.params, key=lw.key,
                      session=lw.certifier_session)
-    assert vs == [audit.Verdict("responses", 0, "disagreement")] and not a.accepted and a.violations == vs
-    assert a.lean == [audit.Verdict("responses", 0, None)] and a.reference == [audit.Verdict("responses", 0, "mismatch")]
+    assert vs == [audit.SamplingBlockCheck("responses", 0, "disagreement")] and not a.accepted and a.violations == vs
+    assert a.lean == [audit.SamplingBlockCheck("responses", 0, None)]
+    assert a.reference == [audit.SamplingBlockCheck("responses", 0, "mismatch")]
     verdict = lw.clear(opening, draw, syncs)
     assert verdict["accepted"] is False and verdict["public"]["verdict"] == 0
     assert verdict["by"] == "lean" and verdict["reference"] == {"accepted": False}
@@ -261,8 +263,9 @@ def test_a_disagreement_with_the_reference_rejects(lean, tmp_path, monkeypatch):
     monkeypatch.setattr(audit.Audit, "check_link", real_egress)
     monkeypatch.setattr(audit.Audit, "check_ingress_link", lambda self, *a, **k: flip(real_ingress(self, *a, **k), 0))
     a = lean_audit.Audit(server=lean)
-    assert a.check_ingress_link("responses", [], 1) == [audit.Verdict("responses", 0, "disagreement")]
-    assert a.lean == [audit.Verdict("responses", 0, "no-verdict")] and a.reference == [audit.Verdict("responses", 0, None)]
+    assert a.check_ingress_link("responses", [], 1) == [audit.SamplingBlockCheck("responses", 0, "disagreement")]
+    assert a.lean == [audit.SamplingBlockCheck("responses", 0, "no-verdict")]
+    assert a.reference == [audit.SamplingBlockCheck("responses", 0, None)]
 
     def boom(self, *a, **k):
         raise ArithmeticError("reference")
@@ -293,7 +296,8 @@ def test_outside_the_domain_it_refuses(lean, tmp_path):
     a = lean_audit.Audit(server=lean)
     with pytest.raises(ValueError, match="not an LmsKey"):
         a.check_link("a", [certified], [], sync, ss, g, OtherKey(), SESSION)
-    assert a.check_link("b", [certified], [], sync, ss, g, OtherKey(), SESSION) == [audit.Verdict("b", 0, "no-verdict")]
+    assert a.check_link("b", [certified], [], sync, ss, g, OtherKey(), SESSION) == [
+        audit.SamplingBlockCheck("b", 0, "no-verdict")]
     with pytest.raises(ValueError, match="pass key"):
         a.check_link("a", [certified], [], sync, ss, g)
     key = LmsKey(V2._key(4).params, lms.public_key(V2._key(4)))
@@ -316,7 +320,7 @@ def test_outside_the_domain_it_refuses(lean, tmp_path):
         m.setenv("PATH", str(tmp_path))
         with pytest.raises(FileNotFoundError, match="lake is not on the PATH.*set VERITY_NETWORK_RECORDS_EXE"):
             lean_audit.Audit(server=lean_audit.Server()).check_link("a", [rec], [], sync, ss, g)
-    assert a.verdicts == [audit.Verdict("b", 0, "no-verdict")]
+    assert a.verdicts == [audit.SamplingBlockCheck("b", 0, "no-verdict")]
 
 
 def test_with_the_executable_named_it_needs_nothing_else(lean, tmp_path):
@@ -338,7 +342,7 @@ def test_with_the_executable_named_it_needs_nothing_else(lean, tmp_path):
     p = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True,
                        env={"PATH": str(tmp_path), "VERITY_NETWORK_RECORDS_EXE": str(lean.exe)})
     assert p.returncode == 0, p.stderr
-    assert p.stdout.splitlines() == ["[Verdict(link='a', window=0, violation=None)]", "closed True"]
+    assert p.stdout.splitlines() == ["[SamplingBlockCheck(link='a', window=0, violation=None)]", "closed True"]
 
 
 def test_a_forked_process_starts_its_own_executable(lean):
@@ -346,7 +350,7 @@ def test_a_forked_process_starts_its_own_executable(lean):
     keeps answering on its own pipe."""
     g, ss, s = GridParams(1, 1, 1), SyncSet((0,), (Fraction(1),)), [ClockSync(0, Fraction(1))]
     rec = run_shaper([], [], s, Certifier("a", g))
-    honest = [audit.Verdict("a", 0, None)]
+    honest = [audit.SamplingBlockCheck("a", 0, None)]
     assert lean_audit.Audit(server=lean).check_link("a", rec, [], s, ss, g) == honest
     parent = lean._proc.pid
     r, w = os.pipe()

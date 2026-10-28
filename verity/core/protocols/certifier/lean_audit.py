@@ -1,7 +1,8 @@
 """`audit.Audit` with every verdict computed by the Lean check, `verity/network-records/v3` (`NetworkCheck.Records`, the
 `network-records` executable of `verity/core/protocols/network/lean`), which `audit.py` is the reference for.
 
-`Audit` here has `audit.Audit`'s interface and returns its `Verdict`s, so a caller switches by its import line alone.
+`Audit` here has `audit.Audit`'s interface and returns its `SamplingBlockCheck`s, so a caller switches by its import
+line alone.
 `audit.Audit` keeps running beside the Lean check as its reference, on every call with the same arguments: the verdicts
 are the Lean's, the Python's are kept (`Audit.reference`), a link-window where the two differ is a `disagreement` violation,
 and a call that one answers and the other raises on raises. Each call is one unit of the Lean protocol, sent to one
@@ -45,7 +46,7 @@ from typing import Any
 
 from verity.ml.crypto import lms
 from verity.core.protocols.certifier import audit
-from verity.core.protocols.certifier.audit import Published, Verdict
+from verity.core.protocols.certifier.audit import Published, SamplingBlockCheck
 from verity.core.protocols.certifier.certificate import STATUS_CODES, CertifiedRecord, Direction, LmsKey, PublicKey
 from verity.core.protocols.certifier.commitment import CommittedRecord
 from verity.core.protocols.certifier.grid import GridParams, Record, Status
@@ -243,8 +244,8 @@ def _lean_key(records: Sequence[Published], key: PublicKey | None, session: byte
     return key, session
 
 
-def _verdicts(out: list[dict], direction: Direction, link: str, windows: int) -> list[Verdict]:
-    vs = [Verdict(link, v["window"], None if v["verdict"] == "accept" else v["verdict"]) for v in out
+def _verdicts(out: list[dict], direction: Direction, link: str, windows: int) -> list[SamplingBlockCheck]:
+    vs = [SamplingBlockCheck(link, v["window"], None if v["verdict"] == "accept" else v["verdict"]) for v in out
           if v["direction"] == direction.value and v["link"] == link]
     if [v.window for v in vs] != list(range(windows)):
         raise RuntimeError(f"the Lean check gave {link}'s windows {[v.window for v in vs]}, not 0 … {windows - 1}")
@@ -257,14 +258,15 @@ class Audit:
     reference: `lean` holds the Lean check's verdicts and `reference` the Python's, and a link-window where they differ is
     a `disagreement` violation in `verdicts`. A call where one raises and the other answers raises."""
 
-    verdicts: list[Verdict] = field(default_factory=list)
+    verdicts: list[SamplingBlockCheck] = field(default_factory=list)
     syncs: dict[int, ClockSync] = field(default_factory=dict)
     server: Server = field(default=SERVER, repr=False, compare=False)
     python: audit.Audit = field(default_factory=audit.Audit, repr=False, compare=False)
-    lean: list[Verdict] = field(default_factory=list, repr=False, compare=False)
-    reference: list[Verdict] = field(default_factory=list, repr=False, compare=False)
+    lean: list[SamplingBlockCheck] = field(default_factory=list, repr=False, compare=False)
+    reference: list[SamplingBlockCheck] = field(default_factory=list, repr=False, compare=False)
 
-    def _beside(self, lean: list[Verdict], reference: Callable[[], list[Verdict]]) -> list[Verdict]:
+    def _beside(self, lean: list[SamplingBlockCheck],
+                reference: Callable[[], list[SamplingBlockCheck]]) -> list[SamplingBlockCheck]:
         try:
             ref = reference()
         except Exception as e:
@@ -272,7 +274,7 @@ class Audit:
         if [(v.link, v.window) for v in ref] != [(v.link, v.window) for v in lean]:
             raise RuntimeError(f"the reference audit gave link-windows {[(v.link, v.window) for v in ref]}, "
                                f"the Lean check {[(v.link, v.window) for v in lean]}")
-        vs = [l if l == r else Verdict(l.link, l.window, DISAGREEMENT) for l, r in zip(lean, ref)]
+        vs = [l if l == r else SamplingBlockCheck(l.link, l.window, DISAGREEMENT) for l, r in zip(lean, ref)]
         self.lean.extend(lean)
         self.reference.extend(ref)
         self.verdicts.extend(vs)
@@ -280,7 +282,8 @@ class Audit:
 
     def check_link(self, link: str, records: Sequence[Published], frames: Sequence[LogicalFrame],
                    syncs: Sequence[ClockSync], sync_set: SyncSet, params: GridParams,
-                   key: PublicKey | None = None, session: bytes | None = None, grid: bool = True) -> list[Verdict]:
+                   key: PublicKey | None = None, session: bytes | None = None,
+                   grid: bool = True) -> list[SamplingBlockCheck]:
         """`audit.Audit.check_link`. With `grid` False it is the Lean's `verdicts-no-grid`, which computes no Program
         grid (N2 gives no `frames`); a raw or committed record of `link` then raises `ValueError` here, with or without
         windows, as `audit.Audit` raises and `verdicts-no-grid` refuses."""
@@ -304,7 +307,7 @@ class Audit:
         return vs
 
     def check_ingress_link(self, link: str, records: Sequence[Published], windows: int, key: PublicKey | None = None,
-                           params: GridParams | None = None, session: bytes | None = None) -> list[Verdict]:
+                           params: GridParams | None = None, session: bytes | None = None) -> list[SamplingBlockCheck]:
         _need_key(records, key, session)
         mine = _mine(link, records, Direction.INGRESS)
         if params is None and any(isinstance(r, CertifiedRecord) for r in mine):
@@ -323,5 +326,5 @@ class Audit:
         return bool(self.verdicts) and all(v.accepted for v in self.verdicts)
 
     @property
-    def violations(self) -> list[Verdict]:
+    def violations(self) -> list[SamplingBlockCheck]:
         return [v for v in self.verdicts if not v.accepted]
