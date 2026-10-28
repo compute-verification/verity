@@ -63,7 +63,7 @@ def honest (k : Fin n → ℕ) (κ : ℕ) (X : Type) (U : Fin n → Fin (m + 1))
 /-- The honest session is `Live`, `Refused` at any receipts with fallbacks `0`, `Counted` on a trace with no wrong
 receipt on an accepting outcome, and its distinguishers gain nothing. -/
 theorem honest_meets [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (T : Trace (Coins n κ X)) (R : Receipts n κ X) (hT : ∀ ω, T.accepts ω → T.wrong ω = 0) :
+    (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X) (hT : ∀ ω, T.accepts ω → T.wrong ω = 0) :
     Live (honest k κ X U) ∧ Refused (honest k κ X U) prf (fun _ _ _ => 0) T R ∧ Counted (honest k κ X U) T ∧
       ∀ δ t, Pous.StreamedWipe.prfAdvantage (prf t) ((honest k κ X U).distinguisher prf δ t) = 0 :=
   ⟨fun _ _ _ _ _ => ⟨rfl, rfl⟩,
@@ -73,7 +73,7 @@ theorem honest_meets [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n → Po
     fun δ t => Draw.prfAdvantage_honest (honest k κ X U) (fun _ _ => subset_rfl) prf δ t⟩
 
 /-- `Meets.burst` on a session's coins. -/
-abbrev burstOn (n κ : ℕ) (X : Type) (N D t₁ Br Bd Bl : ℕ) : Trace (Coins n κ X) := burst N D t₁ Br Bd Bl
+abbrev burstOn (n κ : ℕ) (X : Type) (N D t₁ Br Bd Bl : ℕ) : Trace (DrawCoins n κ X) := burst N D t₁ Br Bd Bl
 
 theorem burst_wrong {Ω : Type} {N D t₁ Br Bd Bl : ℕ} (ω : Ω) : (burst (Ω := Ω) N D t₁ Br Bd Bl).wrong ω = 0 := by
   show ∑ p ∈ range 2, ((univ : Finset (Fin N)) \ univ).card = 0
@@ -82,14 +82,14 @@ theorem burst_wrong {Ω : Type} {N D t₁ Br Bd Bl : ℕ} (ω : Ω) : (burst (Ω
 /-- **`PooledDraw`'s premises meet** at the honest session, on any trace with no wrong receipt on an accepting outcome,
 with no advantage. -/
 theorem pooledDraw_honest [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (T : Trace (Coins n κ X)) (R : Receipts n κ X) (hT : ∀ ω, T.accepts ω → T.wrong ω = 0) :
+    (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X) (hT : ∀ ω, T.accepts ω → T.wrong ω = 0) :
     Live (honest k κ X U) ∧ Refused (honest k κ X U) prf (fun _ _ _ => 0) T R ∧ Counted (honest k κ X U) T ∧
       ∀ δ t, Pous.StreamedWipe.prfAdvantage (prf t) ((honest k κ X U).distinguisher prf δ t) = 0 :=
   honest_meets U prf T R hT
 
 /-- **`LiveCoinsDrawn`'s premises meet** at the honest session, at `W` its pooled bound, which reads no coin. -/
 theorem liveCoinsDrawn_honest [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n → Pous.Bits κ → Blocks m)
-    (T : Trace (Coins n κ X)) (R : Receipts n κ X) (hT : ∀ ω, T.accepts ω → T.wrong ω = 0) (δ : ℝ) :
+    (T : Trace (DrawCoins n κ X)) (R : Receipts n κ X) (hT : ∀ ω, T.accepts ω → T.wrong ω = 0) (δ : ℝ) :
     Live (honest k κ X U) ∧ Refused (honest k κ X U) prf (fun _ _ _ => 0) T R ∧ Counted (honest k κ X U) T ∧
       ∀ ω, T.accepts ω →
         (honest k κ X U).pooled δ ω ≤ pooled n (fun t => (U t : ℕ)) (fun t => min (k t) (U t : ℕ)) δ :=
@@ -107,7 +107,7 @@ theorem heldDrawn_honest [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n �
       Refused (honest k κ X U) prf (fun _ _ _ => 0) (burstOn n κ X N D t₁ Br Bd 0) R ∧
       Counted (honest k κ X U) (burstOn n κ X N D t₁ Br Bd 0) := by
   obtain ⟨hI, hsq, hd, hS, hr, hc, hk, -⟩ :=
-    burst_meets_held (Ω := Coins n κ X) (N := N) (D := D) (t₁ := t₁) (Br := Br) (Bd := Bd) hs hE.le hβ S ht
+    burst_meets_held (Ω := DrawCoins n κ X) (N := N) (D := D) (t₁ := t₁) (Br := Br) (Bd := Bd) hs hE.le hβ S ht
   obtain ⟨hL, hR, hC, -⟩ :=
     honest_meets (k := k) U prf (burstOn n κ X N D t₁ Br Bd 0) R fun ω _ => burst_wrong ω
   exact ⟨hI, hsq, hd, hS, hr, hc, hk, hL, hR, hC⟩
@@ -124,7 +124,7 @@ theorem heldOverTimeDrawn_honest [Fintype X] (U : Fin n → Fin (m + 1)) (prf : 
       Live (honest k κ X U) ∧ Refused (honest k κ X U) prf (fun _ _ _ => 0) (burstOn n κ X N D t₁ Br Bd 0) R ∧
       Counted (honest k κ X U) (burstOn n κ X N D t₁ Br Bd 0) := by
   obtain ⟨-, -, hsq, hd, hS, hr, -, hp, hcov, hk, -⟩ :=
-    burst_meets (Ω := Coins n κ X) (N := N) (D := D) (t₁ := t₁) (Br := Br) (Bd := Bd) (Bl := 0) (βl := 0)
+    burst_meets (Ω := DrawCoins n κ X) (N := N) (D := D) (t₁ := t₁) (Br := Br) (Bd := Bd) (Bl := 0) (βl := 0)
       hs hE.le hβ le_rfl S ht
   obtain ⟨hL, hR, hC, -⟩ :=
     honest_meets (k := k) U prf (burstOn n κ X N D t₁ Br Bd 0) R fun ω _ => burst_wrong ω
@@ -142,7 +142,7 @@ theorem heldOverTimeLinksDrawn_honest [Fintype X] (U : Fin n → Fin (m + 1)) (p
       Live (honest k κ X U) ∧ Refused (honest k κ X U) prf (fun _ _ _ => 0) (burstOn n κ X N D t₁ Br Bd Bl) R ∧
       Counted (honest k κ X U) (burstOn n κ X N D t₁ Br Bd Bl) := by
   obtain ⟨-, hl, hsq, hd, hS, hr, -, hp, hcov, hk, -⟩ :=
-    burst_meets (Ω := Coins n κ X) (N := N) (D := D) (t₁ := t₁) (Br := Br) (Bd := Bd) (Bl := Bl)
+    burst_meets (Ω := DrawCoins n κ X) (N := N) (D := D) (t₁ := t₁) (Br := Br) (Bd := Bd) (Bl := Bl)
       hs hE.le hβ hβl S ht
   obtain ⟨hL, hR, hC, -⟩ :=
     honest_meets (k := k) U prf (burstOn n κ X N D t₁ Br Bd Bl) R fun ω _ => burst_wrong ω
@@ -156,7 +156,7 @@ def toy : Session 1 1 (fun _ => 1) 1 Unit where
   correct _ _ := ∅
 
 /-- An audit that accepts every outcome, its one pass's one block wrong and its node holding nothing. -/
-def acceptAll : Trace (Coins 1 1 Unit) where
+def acceptAll : Trace (DrawCoins 1 1 Unit) where
   blocks := 1
   passes := 1
   accepts _ := True
@@ -178,7 +178,7 @@ def unsalted : Receipts 1 1 Unit where
   opened _ _ _ := ⟨[], [], []⟩
 
 /-- Its credited span is `[0, 1)`, with no credited group. -/
-def toyPace : Pace (Coins 1 1 Unit) where
+def toyPace : Pace (DrawCoins 1 1 Unit) where
   credited := 0
   first _ _ := 0
   released _ _ := 1
@@ -186,19 +186,19 @@ def toyPace : Pace (Coins 1 1 Unit) where
 
 theorem toy_live : Live toy := fun _ _ _ _ _ => ⟨rfl, rfl⟩
 
-theorem acceptAll_wrong (ω : Coins 1 1 Unit) : acceptAll.wrong ω = 1 := by
+theorem acceptAll_wrong (ω : DrawCoins 1 1 Unit) : acceptAll.wrong ω = 1 := by
   show ∑ _p ∈ range 1, ((univ : Finset (Fin 1)) \ ∅).card = 1
   simp
 
-theorem acceptAll_planned (ω : Coins 1 1 Unit) : acceptAll.planned ω = 1 := by
+theorem acceptAll_planned (ω : DrawCoins 1 1 Unit) : acceptAll.planned ω = 1 := by
   show ∑ _p ∈ range 1, (univ : Finset (Fin 1)).card = 1
   simp
 
-theorem acceptAll_held (ω : Coins 1 1 Unit) : acceptAll.held ω = 0 := by
+theorem acceptAll_held (ω : DrawCoins 1 1 Unit) : acceptAll.held ω = 0 := by
   show ∑ _p ∈ range 1, (∅ : Finset (Fin 1)).card = 0
   simp
 
-theorem acceptAll_heldOver (ω : Coins 1 1 Unit) (u v : ℕ) : acceptAll.heldOver ω u v = 0 := by
+theorem acceptAll_heldOver (ω : DrawCoins 1 1 Unit) (u v : ℕ) : acceptAll.heldOver ω u v = 0 := by
   show ∑ _t ∈ Ico u v, (∅ : Finset (Fin 1)).card = 0
   simp
 
@@ -219,7 +219,7 @@ theorem acceptAll_inside :
   · show (((∅ : Finset (Fin 1)) ∪ ∅) \ (∅ ∪ ∅)).card ≤ 0 + 0 + 0
     simp
 
-theorem toy_good (t : Fin 1) (ω : Coins 1 1 Unit) : toy.good t ω = 0 := by
+theorem toy_good (t : Fin 1) (ω : DrawCoins 1 1 Unit) : toy.good t ω = 0 := by
   show ((range 1).filter (· ∈ (∅ : Finset ℕ))).card = 0
   simp
 
@@ -235,7 +235,7 @@ theorem pooled_one (δ : ℝ) : pooled 1 (fun _ => 1) (fun _ => 1) δ ≤ 0 := b
   norm_num at h
   simpa using h
 
-theorem toy_pooled (δ : ℝ) (ω : Coins 1 1 Unit) : toy.pooled δ ω ≤ 0 := pooled_one δ
+theorem toy_pooled (δ : ℝ) (ω : DrawCoins 1 1 Unit) : toy.pooled δ ω ≤ 0 := pooled_one δ
 
 theorem fill_nonpos {Ω : Type} (K : Pace Ω) (ω : Ω) (N : ℕ) {W : ℝ} (hW : W ≤ 0) : K.fill ω N W ≤ 0 := by
   refine Real.sSup_nonpos ?_
@@ -259,7 +259,7 @@ theorem accepted_one {m : ℕ} (b : Blocks m) : accepted 1 1 b := fun i hi => by
   exact wordIndex_one_isSome _
 
 /-- The toy's draw always opens its one receipt, which is wrong. -/
-theorem toy_lands (t : Fin 1) (ω : Coins 1 1 Unit) (b : Blocks 1) : ¬ toy.lands t ω b := fun h => by
+theorem toy_lands (t : Fin 1) (ω : DrawCoins 1 1 Unit) (b : Blocks 1) : ¬ toy.lands t ω b := fun h => by
   have h' : accepted 1 1 b → openings 1 1 b (fun _ => 0) ⊆ ∅ := h
   have hmem := h' (accepted_one b)
     (mem_image_of_mem (arrange (offsets 1 b fun _ => 0) 1) (mem_range.2 Nat.one_pos))
@@ -273,7 +273,7 @@ theorem toy_advantage (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (δ : ℝ) (t :
     (le_of_eq pr_false))) zero_le
 
 theorem unsalted_binding (D : Session 1 1 (fun _ => 1) 1 Unit) (prf : Fin 1 → Pous.Bits 1 → Blocks 1)
-    (rest : Coins 1 1 Unit → Fin 1 → ℕ → ℕ) : unsalted.binding D prf rest = 0 := by
+    (rest : DrawCoins 1 1 Unit → Fin 1 → ℕ → ℕ) : unsalted.binding D prf rest = 0 := by
   refine le_antisymm ((Bandwidth.pr_mono (Q := fun _ => False) fun ω hω => ?_).trans (le_of_eq pr_false)) zero_le
   obtain ⟨t, p, -, hmv⟩ := hω
   have h := hmv.1.2.1
@@ -281,14 +281,14 @@ theorem unsalted_binding (D : Session 1 1 (fun _ => 1) 1 Unit) (prf : Fin 1 → 
   rw [h0] at h
   exact absurd h (by simp [Hash.Hm96.SALT_BYTES])
 
-theorem toy_error (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest : Coins 1 1 Unit → Fin 1 → ℕ → ℕ) (δ : ℝ) :
+theorem toy_error (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest : DrawCoins 1 1 Unit → Fin 1 → ℕ → ℕ) (δ : ℝ) :
     δ + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (toy.distinguisher prf δ t)).toReal +
         (unsalted.binding toy prf rest).toReal = δ + 1 / 2 ^ 64 := by
   rw [unsalted_binding, sum_eq_zero fun t _ => toy_advantage prf δ t]
   simp
 
-theorem not_holds_acceptAll {ε : ℝ} (hε : ε < 1) {P : Coins 1 1 Unit → Prop} (hP : ∀ ω, ¬ P ω) :
+theorem not_holds_acceptAll {ε : ℝ} (hε : ε < 1) {P : DrawCoins 1 1 Unit → Prop} (hP : ∀ ω, ¬ P ω) :
     ¬ acceptAll.Holds ε P := fun h => by
   have h1 : Pouw.pr (fun ω => acceptAll.accepts ω ∧ ¬ P ω) = 1 := Pouw.pr_eq_one fun ω => ⟨trivial, hP ω⟩
   have h2 : Pouw.pr (fun ω => acceptAll.accepts ω ∧ ¬ P ω) ≤ ε := h
@@ -296,7 +296,7 @@ theorem not_holds_acceptAll {ε : ℝ} (hε : ε < 1) {P : Coins 1 1 Unit → Pr
 
 /-- **`PooledDraw`'s conclusion bites**: on the toy, `Live` and `Counted`, an audit that accepts everything has more
 wrong receipts than the pooled bound with probability `1`, above `PooledDraw`'s error whenever `δ + 2^-64 < 1`. -/
-theorem pooledDraw_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest : Coins 1 1 Unit → Fin 1 → ℕ → ℕ)
+theorem pooledDraw_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest : DrawCoins 1 1 Unit → Fin 1 → ℕ → ℕ)
     {δ : ℝ} (hδ : δ + 1 / 2 ^ 64 < 1) :
     (∀ ω, acceptAll.accepts ω) ∧ Live toy ∧ Counted toy acceptAll ∧
       ¬ acceptAll.Holds (δ + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 64 +
@@ -310,7 +310,7 @@ theorem pooledDraw_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest :
   exact absurd (h.trans (toy_pooled δ ω)) (by norm_num)
 
 /-- **`LiveCoinsDrawn`'s conclusion bites**: on the toy, at `W = 0`, the toy's pooled bound on every outcome. -/
-theorem liveCoinsDrawn_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest : Coins 1 1 Unit → Fin 1 → ℕ → ℕ)
+theorem liveCoinsDrawn_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest : DrawCoins 1 1 Unit → Fin 1 → ℕ → ℕ)
     {δ : ℝ} (hδ : δ + 1 / 2 ^ 64 < 1) :
     (∀ ω, acceptAll.accepts ω) ∧ Live toy ∧ Counted toy acceptAll ∧ (∀ ω, acceptAll.accepts ω → toy.pooled δ ω ≤ 0) ∧
       ¬ LiveCoins acceptAll 0 (δ + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 64 +
@@ -326,7 +326,7 @@ theorem liveCoinsDrawn_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (re
 /-- **`HeldDrawn`'s conclusion bites**: on the toy, `Live` and `Counted`, an audit that accepts everything, its node
 inside the device model at no rates, bursts or chip blocks (`acceptAll_inside`), credits over an instant a planned
 block its node never held, with probability `1`. -/
-theorem heldDrawn_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest : Coins 1 1 Unit → Fin 1 → ℕ → ℕ)
+theorem heldDrawn_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest : DrawCoins 1 1 Unit → Fin 1 → ℕ → ℕ)
     {δs δc : ℝ} (hδ : δs + (δc + 1 / 2 ^ 64) < 1) :
     (∀ ω, acceptAll.accepts ω) ∧ Identity acceptAll ∧ SquaringCeiling acceptAll 0 1 0 ∧ Disks acceptAll 0 0 ∧
       ChipCeiling acceptAll 0 ∧ Routed acceptAll ∧ Live toy ∧ Counted toy acceptAll ∧
@@ -347,7 +347,7 @@ theorem heldDrawn_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1) (rest : 
 /-- **`HeldOverTimeDrawn`'s conclusion bites**: as `heldDrawn_nontrivial`, over the span `[0, 1)` (`toyPace`), the
 audit credits a block-tick its node never held, with probability `1`. -/
 theorem heldOverTimeDrawn_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1)
-    (rest : Coins 1 1 Unit → Fin 1 → ℕ → ℕ) {δs δc : ℝ} (hδ : δs + (δc + 1 / 2 ^ 64) < 1) :
+    (rest : DrawCoins 1 1 Unit → Fin 1 → ℕ → ℕ) {δs δc : ℝ} (hδ : δs + (δc + 1 / 2 ^ 64) < 1) :
     (∀ ω, acceptAll.accepts ω) ∧ Identity acceptAll ∧ SquaringCeiling acceptAll 0 1 0 ∧ Disks acceptAll 0 0 ∧
       ChipCeiling acceptAll 0 ∧ Routed acceptAll ∧ Live toy ∧ Counted toy acceptAll ∧
       ¬ acceptAll.Holds (δs + (δc + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 64 +
@@ -373,7 +373,7 @@ theorem heldOverTimeDrawn_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1)
 /-- **`HeldOverTimeLinksDrawn`'s conclusion bites**: as `heldOverTimeDrawn_nontrivial`, with no link rate or burst
 either, which the audit's node meets too (`acceptAll_inside`). -/
 theorem heldOverTimeLinksDrawn_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blocks 1)
-    (rest : Coins 1 1 Unit → Fin 1 → ℕ → ℕ) {δs δc : ℝ} (hδ : δs + (δc + 1 / 2 ^ 64) < 1) :
+    (rest : DrawCoins 1 1 Unit → Fin 1 → ℕ → ℕ) {δs δc : ℝ} (hδ : δs + (δc + 1 / 2 ^ 64) < 1) :
     (∀ ω, acceptAll.accepts ω) ∧ Links acceptAll 0 0 ∧ SquaringCeiling acceptAll 0 1 0 ∧ Disks acceptAll 0 0 ∧
       ChipCeiling acceptAll 0 ∧ Routed acceptAll ∧ Live toy ∧ Counted toy acceptAll ∧
       ¬ acceptAll.Holds (δs + (δc + ((∑ _t : Fin 1, 1 : ℕ) : ℝ) / 2 ^ 64 +

@@ -175,12 +175,12 @@ draw `c`'s distinguisher at it with leaf `c` of the coin commitment committing z
 and `bind` the receipts' binding term at `R`, over the session's draws. -/
 def LineHeld : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax)
-    (rest : Coins node.draws κ X → Fin node.draws → ℕ → ℕ) (recs : Cm → Coins node.draws κ X → Record)
-    (correct : Cm → Fin node.draws → Coins node.draws κ X → Finset ℕ) (com : Coins node.draws κ X → Cm)
-    (T : Trace (Coins node.draws κ X)) (R : Receipts node.draws κ X) (δs δnet : ℝ),
+    (rest : DrawCoins node.draws κ X → Fin node.draws → ℕ → ℕ) (recs : Cm → DrawCoins node.draws κ X → Record)
+    (correct : Cm → Fin node.draws → DrawCoins node.draws κ X → Finset ℕ) (com : DrawCoins node.draws κ X → Cm)
+    (T : Trace (DrawCoins node.draws κ X)) (R : Receipts node.draws κ X) (δs δnet : ℝ),
     let r := played recs com
     let F := recordCommitted node recs correct
-    ∀ (O : Outside (ofRecord T node r)) (I : Ingress (Coins node.draws κ X)),
+    ∀ (O : Outside (ofRecord T node r)) (I : Ingress (DrawCoins node.draws κ X)),
     Paced (ofRecord T node r) (recordPace node r) → Covers (ofRecord T node r) →
     SketchBoundAt (ofRecord T node r) O δs → Covered (ofRecord T node r) O I →
     IngressCounted (ofRecord T node r) I δnet → (∀ c, Live (F.view c)) →
