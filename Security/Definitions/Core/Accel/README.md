@@ -56,6 +56,29 @@ its words, at no more units of each resource. The per-instruction evidence is th
 `benchmarks/pouw/machine_model/data/cover/rows.toml`. At a table, the premise also says the cards are that table's SKU
 and firmware.
 
+## Energy (`Accel.Power`)
+
+A card's energy floors against its SM clock, a variable of the run (the H200 holds 1830 MHz while its tensor pipe runs
+and 1980 MHz for ALU or hash work alone). Each floor is a table of rows `(f, e)`, a floor of `e` from the clock `f` up
+(`Rows.at`): the static power with the SMs resident and idle, a tensor unit's energy on any operands, a declared MAC's
+(an `s8` MAC on uniformly random operands) and a SHA-512 compression's. The H200's rows are `Accel.H200.power`, each
+resting on two or three readings in its card file.
+
+A window of a run is cut into phases, each a stretch of one card at one clock with its work and the energy it draws
+(`Phase`). The verifier accepts a window whose meter reading is within the energy budget, a power fixed before the
+period, over its length (`Window.Accepted`). Three premises, each falsified by its own measurement or attack:
+
+| Premise | Says | Whose |
+|---|---|---|
+| `MeterReads` | the meter on the machine's power feed logs at least what the window's phases draw | the auditor's device, signing what it logs |
+| `EnergyFloor` | a phase draws at least its declared MACs' part plus the card's floors at its clock | the card's device model |
+| `DeclaredEnergy` | a phase's declared MACs draw at least the declared operands' floor at its clock | the declared work's |
+
+`Guarantees.PowerBound` bounds the hidden tensor work by energy: in an accepted window, the tensor units beyond the
+declared MACs, each at its floor at its phase's clock, draw at most the budget over the window less the declared work's
+floor energy, or the verifier took a reading the meter didn't log. A bound in units needs the card's rate at each clock
+too, and is not stated yet.
+
 ## Proved
 
 - `WorkSoundAt`, `WorkSoundOnCard` and their instances on both tables (`WorkSoundH200`, `WorkSoundSm120`,
@@ -69,6 +92,8 @@ and firmware.
   (`Proofs/Core/Accel/Model.lean`).
 - The exact `s8` semantics (`s8Open`) meets (P1) and (P2) on both cards, so the headline's hypotheses on the semantics
   are not empty.
+- `PowerBound`, on every card's floors, and at the H200's (`PowerBoundH200`), from the three energy premises
+  (`Proofs/Core/Accel/Power.lean`).
 
 ## Open
 
@@ -93,3 +118,7 @@ and firmware.
   the H200 through L2 at its placeholder row. IDP.4A on `imad` does 4 MACs a lane. None of these is a public route, so
   `SAKMatmul` as written fails at a dual price that leaves their pipes cheap. The algorithmic premise that would carry
   them, `SAKResidual`, is not yet adopted.
+- **The energy floors.** The H200's rows were read on one card at 34 to 66 °C (a colder card leaks less), at the
+  clocks the rows name, and the tensor unit's only in `s8`: the other formats' floors are open. Hidden work on the
+  CUDA cores is not bounded by `PowerBound`, and the meter's placement (one feed for the machine, upstream of every
+  card) is not yet built.
