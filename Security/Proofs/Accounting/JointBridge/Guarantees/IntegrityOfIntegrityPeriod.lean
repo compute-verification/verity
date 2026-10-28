@@ -5,13 +5,13 @@ import Proofs.Flock.EndToEnd.Period.Statement
 # The integrity audit of a period is C-Flock's integrity audit over a monitoring period's sampling blocks (trusted)
 
 A period's sampled-proofs audit (`Audit.sampled`) is C-Flock's integrity audit over the period's sampling blocks
-(`Flock.Guarantees.IntegrityPooled`): `T` sampling blocks `W t`, each a `--zk` session under hidden outputs with a
+(`Flock.Guarantees.IntegrityHorizon`): `T` sampling blocks `W t`, each a `--zk` session under hidden outputs with a
 fresh live subset draw, against one adaptive prover. `RealizesIntegrityOfIntegrityPeriod` ties a `PeriodRun` to it: the
 sampled audit's own coins drive the period's game at the prover's strategy, its verdict is flock-verify's on every
 sampling block, and the claim's units and faulty proof blocks are the sampling blocks'. `IntegrityOfIntegrityPeriod` is
 then `PeriodRun.Sound` for the sampled audit at error `δ + Σ_t (ε_ks,t + δ_link,t)`, the monitoring period's.
 
-C-Flock's definitions are still in its proofs package, so, like `Flock.Guarantees.IntegrityPooled`, this module imports
+C-Flock's definitions are still in its proofs package, so, like `Flock.Guarantees.IntegrityHorizon`, this module imports
 them.
 -/
 
@@ -68,7 +68,7 @@ under A3 for every sampling block's draw bytes and `cr/sha-512` (`TableCRZ`) and
 strategy the node plays a sampling block with on some run (`Period.Plays`), at certificates whose share `ε` of the
 period's units is at least `ln(1/δ)/q`, the sampled audit has its per-period guarantee (`PeriodRun.Sound`) at error
 $$\delta + \sum_t (\varepsilon_{ks,t} + \delta_{link,t}),$$
-`Flock.Guarantees.IntegrityPooled`'s, when that is finite. -/
+`Flock.Guarantees.IntegrityHorizon`'s, when that is finite. -/
 def IntegrityOfIntegrityPeriod : Prop :=
   ∀ (ι : Type) (d : Device ι) (α : Type) [Fintype α] (C : Verity.Circuit) (I : Type) (Ω : I → Type)
     [DecidableEq I] [∀ i, Fintype (Ω i)] (r : PeriodRun d α C Ω) (W : ℕ → Flock.Guarantees.SamplingBlock) (T : ℕ)

@@ -241,7 +241,7 @@ theorem drawOkZKHJ_of_accepts (I : Inputs) (ht : I.tags.typed = false) {c : Floc
     rw [hn, ← DrawFileZK.size_execOS σs ks hks St hS Kd pop Lb src hdj ω u hu]
     exact hdu
 
-/-- **`DrawOkZKHJ` from `RecordCustodyZKJS`**, the custody `JointStratifiedMT` and `JointStratifiedPooledMT` take: at
+/-- **`DrawOkZKHJ` from `RecordCustodyZKJS`**, the custody `JointStratifiedMT` and `JointStratifiedHorizonMT` take: at
 a draw of the live stratified law `stratified Kd (Array.ofFn St)` that `verify --zk --session-tables J` accepts, at any
 `J`, several tables included (flock-verify takes one stratified draw over the sampling block there when `J` divides its
 units, and gives table `j` its `j`-th part), `DrawOkZKHJ` holds at `(Σ_s k_s) / nTab I` units a table:

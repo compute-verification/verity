@@ -23,7 +23,7 @@ registration (`XplurZC`), as `SamplingBlock`'s are.
   spend at most the one budget, `Σ_s k_s·x_s/n_s ≤ ln(1/δ)`, and their ANDs and their output bits are each at most the
   most any set in the confidence set holds (`StratifiedBlock.maxHarm`). Both harm bounds are read from the same draw,
   at the same `δ`.
-* `JointStratifiedPooled`, pooled: the same over a period of `T` sampling blocks played by one adaptive prover, with
+* `JointStratifiedHorizon`, pooled: the same over a period of `T` sampling blocks played by one adaptive prover, with
   one budget for the whole period: except with probability `δ + Σ_t (ε_ks,t + ε_bind,t)`, if flock-verify accepts every
   sampling block, the product of their escapes is at least `δ`, the wrong units of all of them spend at most
   `Σ_t Σ_s k_{t,s}·x_{t,s}/n_{t,s} ≤ ln(1/δ)`, and their ANDs and output bits in all are each at most the most any
@@ -37,7 +37,7 @@ statements hold at every pair of weights. `ε_ks` is the sampling block's knowle
 `live-verifier` (`StratifiedBlock.hCust`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512` (`LinkCRZC`) at the
 strategy each sampling block is played with (in a period, at every strategy it is played with on some run,
 `Stratified.Plays`), stated flat. Their proofs are `Flock.SecurityProofs.JointStratified` and
-`Flock.SecurityProofs.JointStratifiedPooled` (`Joint/Bound.lean`).
+`Flock.SecurityProofs.JointStratifiedHorizon` (`Joint/Bound.lean`).
 
 C-Flock's definitions are still in its proofs package, so, like `EndToEndHidden`, this module imports them.
 -/
@@ -274,7 +274,7 @@ sampling block, and their ANDs and output bits in all are at most the period's `
 however many sampling blocks the period has. Its named assumptions, at every sampling block: A3
 (`Assumptions.UniformRandomBytes`) for its draw's bytes, `live-verifier` (`StratifiedBlock.hCust`), and `cr/sha-512`
 (`TableCRZ`) and `ecr/sha-512` (`LinkCRZC`) at every strategy it is played with on some run (`Stratified.Plays`). -/
-def JointStratifiedPooled : Prop :=
+def JointStratifiedHorizon : Prop :=
   ∀ (W : ℕ → StratifiedBlock) (T : ℕ) (δ : ℝ) (ands bits : (t : ℕ) → Fin (W t).n → ℕ), 0 < δ →
     (∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
     ∀ s : Strategy (Stratified.game W T),

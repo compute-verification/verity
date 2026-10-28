@@ -4,15 +4,15 @@ import Proofs.Flock.EndToEnd.Period
 /-!
 # Proof of the integrity audit per server-time block, and pooled over a monitoring period's blocks
 
-* `Flock.SecurityProofs.integrity_on`: `IntegrityPooled` on a set `I` of the period's sampling blocks. The probability
+* `Flock.SecurityProofs.integrity_on`: `IntegrityHorizon` on a set `I` of the period's sampling blocks. The probability
   that every sampling block of `I` is accepted and `I`'s wrong units total at least `M` is at most
-  `(1 − q)^M + Σ_{t ∈ I} (ε_ks,t + δ_link,t)`. It is `IntegrityPooled`'s proof with every sampling block outside `I`
+  `(1 − q)^M + Σ_{t ∈ I} (ε_ks,t + δ_link,t)`. It is `IntegrityHorizon`'s proof with every sampling block outside `I`
   weighing nothing: `period_union` over the sampling blocks of `I` accepted with a drawn unit wrong, and
-  `period_pooled` with weight `|W_t|` at a sampling block of `I` and `0` elsewhere, where the sampling block's miss
+  `period_horizon` with weight `|W_t|` at a sampling block of `I` and `0` elsewhere, where the sampling block's miss
   probability `≤ 1 = (1 − q)^0`.
 * `IntegrityBlock`: `integrity_on` at block `b`'s sessions, with `M = ⌈ln(1/δ)/q⌉`.
 * `IntegrityBlocks`: the union bound over the blocks (`value_exists_finset_le`), each block's by `IntegrityBlock`.
-* `IntegrityPooledBlocks`: `IntegrityPooled` over the monitoring period's `start B` sessions, whose terms regroup by
+* `IntegrityHorizonBlocks`: `IntegrityHorizon` over the monitoring period's `start B` sessions, whose terms regroup by
   block (`sum_range_start`).
 -/
 
@@ -32,7 +32,7 @@ theorem sum_filter_wrong (I : Finset ℕ) (l : List WindowRec) :
       · simp [h, ih]
       · simp [h, ih]
 
-/-- **`IntegrityPooled` on a set `I` of the period's sampling blocks**, at `M` wrong units. -/
+/-- **`IntegrityHorizon` on a set `I` of the period's sampling blocks**, at `M` wrong units. -/
 theorem integrity_on (W : ℕ → SamplingBlock) (T : ℕ) (I : Finset ℕ) {q : ℝ} (hq : 0 < q)
     (hqt : ∀ t ∈ I, q ≤ ((W t).kd : ℝ) / (W t).n)
     (hA3 : ∀ t ∈ I, Assumptions.UniformRandomBytes (W t).Lb (W t).src)
@@ -53,7 +53,7 @@ theorem integrity_on (W : ℕ → SamplingBlock) (T : ℕ) (I : Finset ℕ) {q :
       · rw [ite_eq_right_of_eq_false _ _ (eq_false ht)]
         exact (prob_mono (q := fun _ => False) (fun o ho => ht ho.1) _ _).trans_eq (prob_false _ _)) T 0 s hs
   -- every draw of `I` misses, with at least `M` wrong units in `I`
-  have hB := period_pooled (fun t => (W t).game) (fun t => (W t).record t)
+  have hB := period_horizon (fun t => (W t).game) (fun t => (W t).record t)
     (fun r => r.idx ∈ I → ¬ r.drawnWrong) (fun r => if r.idx ∈ I then r.wrong else 0)
     (fun t τ => (W t).CR τ) x hx
     (fun t τ _ => by
@@ -117,9 +117,9 @@ theorem IntegrityBlocks : Flock.Guarantees.IntegrityBlocks := by
           (fun t ht => hA3 t (hin b (Finset.mem_range.1 hb) t ht)) s hT hL
 
 /-- **The integrity audit over a monitoring period of `B` server-time blocks, pooled.** -/
-theorem IntegrityPooledBlocks : Flock.Guarantees.IntegrityPooledBlocks := by
+theorem IntegrityHorizonBlocks : Flock.Guarantees.IntegrityHorizonBlocks := by
   intro S q δ hq hδ hqt hA3 s hT hL
-  refine (IntegrityPooled S.W S.T q δ hq hδ hqt hA3 s hT hL).trans_eq ?_
+  refine (IntegrityHorizon S.W S.T q δ hq hδ hqt hA3 s hT hL).trans_eq ?_
   congr 1
   exact sum_range_start S (fun t => (S.W t).ks + (S.W t).link) S.B
 

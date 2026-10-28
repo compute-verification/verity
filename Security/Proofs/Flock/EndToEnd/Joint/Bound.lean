@@ -10,7 +10,7 @@ import Proofs.Flock.Soundness.Game.Union
   Otherwise an accepted sampling block outside the budget has a drawn unit wrong, at most `ε_ks + ε_bind`
   (`StratifiedBlock.accepted_drawnWrong_le`), or its draw misses `B`, at most `B`'s escape `< δ` under A3
   (`StratifiedBlock.drawMiss_le`).
-* `Flock.SecurityProofs.JointStratifiedPooled`: a run in which every sampling block is accepted and the wrong units are
+* `Flock.SecurityProofs.JointStratifiedHorizon`: a run in which every sampling block is accepted and the wrong units are
   not within the period's budget either has a sampling block accepted with a drawn unit wrong, at most
   `Σ_t (ε_ks,t + ε_bind,t)` by `period_union`, or every draw misses with the product of the escapes below `δ` (else the
   wrong units would be within the budget, `Stratified.within_of_le`), at most `δ` by `period_prod`.
@@ -105,7 +105,7 @@ theorem JointStratified : Flock.Guarantees.JointStratified := by
       _ = ENNReal.ofReal δ + w.epsKs + w.link := (add_comm _ _).trans (add_assoc _ _ _).symm
 
 /-- **The joint stratified bound over a period, pooled.** -/
-theorem JointStratifiedPooled : Flock.Guarantees.JointStratifiedPooled := by
+theorem JointStratifiedHorizon : Flock.Guarantees.JointStratifiedHorizon := by
   intro W T δ ands bits hδ hA3 s hT hL
   classical
   let cr : (t : ℕ) → Strategy (W t).game → Prop := fun t τ => (∀ ω j,

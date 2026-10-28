@@ -11,18 +11,17 @@ sessions), adaptively, so a block's sessions may depend on everything the prover
 
 * `IntegrityBlock`: for block `b`, the probability that every session of block `b` is accepted and its wrong units total
   at least `ln(1/δ)/q` is at most `δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t)`, where each of block `b`'s draws covers at least a
-  fraction `q` of its session's units. The block's bound holds inside the monitoring period, against the prover that
-  played the blocks before it.
+  fraction `q` of its session's units. The block's bound holds inside the horizon, against the prover that played the
+  blocks before it.
 * `IntegrityBlocks`: the probability that some block is accepted with at least `ln(1/δ)/q` wrong units is at most
-  `Σ_b (δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t))`: the per-block form a joint bound over a monitoring period's blocks sums
-  with the other legs.
-* `IntegrityPooledBlocks`: the probability that every session of every block is accepted and the wrong units over the
-  monitoring period total at least `ln(1/δ)/q` is at most `δ + Σ_b Σ_{t ∈ b} (ε_ks,t + δ_link,t)`, the pooled reading.
+  `Σ_b (δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t))`: the per-block form a joint horizon over blocks sums with the other legs.
+* `IntegrityHorizonBlocks`: the probability that every session of every block is accepted and the wrong units over the
+  horizon total at least `ln(1/δ)/q` is at most `δ + Σ_b Σ_{t ∈ b} (ε_ks,t + δ_link,t)`, the pooled reading.
 
-The named assumptions are `IntegrityPooled`'s, at the sessions each statement reads: A3 (`uniform/io-getrandombytes`)
+The named assumptions are `IntegrityHorizon`'s, at the sessions each statement reads: A3 (`uniform/io-getrandombytes`)
 for each session's draw bytes, `live-verifier` (`SamplingBlock.hCust`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512`
 (`LinkCRZC`) at every strategy a session is played with on some run (`Period.Plays`). The proofs are
-`Flock.SecurityProofs.IntegrityBlock`, `IntegrityBlocks` and `IntegrityPooledBlocks`.
+`Flock.SecurityProofs.IntegrityBlock`, `IntegrityBlocks` and `IntegrityHorizonBlocks`.
 
 A wrong unit is counted in the session that holds it (`SamplingBlock.wrongSet`). The state a block carries across a wipe
 (the KV cache, committed before the wipe and read after it) is an input of the next block's sessions, and these
@@ -80,7 +79,7 @@ end ServerBlocks
 its session's units, the probability that every session of block `b` is accepted and its wrong units total at least
 `ln(1/δ)/q` is at most
 $$\delta + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}).$$
-Its named assumptions are `IntegrityPooled`'s, at block `b`'s sessions. -/
+Its named assumptions are `IntegrityHorizon`'s, at block `b`'s sessions. -/
 def IntegrityBlock : Prop :=
   ∀ (S : ServerBlocks) (b : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t ∈ S.sessions b, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
@@ -95,11 +94,10 @@ def IntegrityBlock : Prop :=
     value (S.BlockEscapes q δ b) (S.run s) ≤ ENNReal.ofReal δ + S.err b
 
 /-- **The integrity audit per server-time block, over a monitoring period of `B` blocks.** In a monitoring period as in
-`IntegrityBlock`
-whose draws each cover at least a fraction `q > 0` of their session's units, the probability that some block is
-accepted with at least `ln(1/δ)/q` wrong units is at most
+`IntegrityBlock` whose draws each cover at least a fraction `q > 0` of their session's units, the probability that some
+block is accepted with at least `ln(1/δ)/q` wrong units is at most
 $$\sum_{b < B} \Big(\delta + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t})\Big).$$
-Its named assumptions are `IntegrityPooled`'s. -/
+Its named assumptions are `IntegrityHorizon`'s. -/
 def IntegrityBlocks : Prop :=
   ∀ (S : ServerBlocks) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < S.T, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
@@ -116,11 +114,10 @@ def IntegrityBlocks : Prop :=
 
 /-- **The integrity audit over a monitoring period of `B` server-time blocks, pooled.** In a monitoring period as in
 `IntegrityBlocks`, the probability that every session of every block is accepted and the wrong units over the monitoring
-period total at least
-`ln(1/δ)/q` is at most
+period total at least `ln(1/δ)/q` is at most
 $$\delta + \sum_{b < B} \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}).$$
-Its named assumptions are `IntegrityPooled`'s. -/
-def IntegrityPooledBlocks : Prop :=
+Its named assumptions are `IntegrityHorizon`'s. -/
+def IntegrityHorizonBlocks : Prop :=
   ∀ (S : ServerBlocks) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < S.T, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
     (∀ t < S.T, Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src) →

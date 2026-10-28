@@ -5,13 +5,13 @@ import Proofs.Flock.Soundness.Game.Union
 /-!
 # Proof of the joint stratified bound over sampling blocks of `J` tables, per sampling block and pooled
 
-The proofs of `JointStratified` and `JointStratifiedPooled` (`Joint/Bound.lean`), at `StratifiedBlockMT`:
+The proofs of `JointStratified` and `JointStratifiedHorizon` (`Joint/Bound.lean`), at `StratifiedBlockMT`:
 
 * `Flock.SecurityProofs.JointStratifiedMT`: if the sampling block's wrong units `B` are in the confidence set, they are
   within the one budget (`StratifiedBlockMT.within_of_le`), so the event is empty. Otherwise an accepted sampling block
   outside the budget has a drawn unit wrong, at most `ε_ks + ε_bind` (`StratifiedBlockMT.accepted_drawnWrong_le`), or
   its draw misses `B`, at most `B`'s escape `< δ` under A3 (`StratifiedBlockMT.drawMiss_le`).
-* `Flock.SecurityProofs.JointStratifiedPooledMT`: a run in which every sampling block is accepted and the wrong units
+* `Flock.SecurityProofs.JointStratifiedHorizonMT`: a run in which every sampling block is accepted and the wrong units
   are not within the period's budget either has a sampling block accepted with a drawn unit wrong, at most
   `Σ_t (ε_ks,t + ε_bind,t)` by `period_union`, or every draw misses with the product of the escapes below `δ`, at most
   `δ` by `period_prod`.
@@ -105,7 +105,7 @@ theorem JointStratifiedMT : Flock.Guarantees.JointStratifiedMT := by
       _ = ENNReal.ofReal δ + w.epsKs + w.link := (add_comm _ _).trans (add_assoc _ _ _).symm
 
 /-- **The joint stratified bound over a period of sampling blocks of `J` tables, pooled.** -/
-theorem JointStratifiedPooledMT : Flock.Guarantees.JointStratifiedPooledMT := by
+theorem JointStratifiedHorizonMT : Flock.Guarantees.JointStratifiedHorizonMT := by
   intro W T δ ands bits hδ hA3 s hT hL
   classical
   let cr : (t : ℕ) → Strategy (W t).game → Prop := fun t τ => (∀ ω j,

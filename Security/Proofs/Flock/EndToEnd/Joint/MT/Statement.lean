@@ -7,7 +7,7 @@ import Flock.Desc
 /-!
 # The joint stratified bound over sampling blocks of several tables (trusted)
 
-`JointStratified` and `JointStratifiedPooled` (`Joint/Statement.lean`) at sampling blocks proved in `J` tables in
+`JointStratified` and `JointStratifiedHorizon` (`Joint/Statement.lean`) at sampling blocks proved in `J` tables in
 parallel. A sampling block is one hidden-output `--zk` session of `J` tables over `n` proof units, whose units the
 verifier draws by one live stratified draw (`Flock.Draw.drawOS` at `.stratified`, `Law.execOS`): stratum `s` holds
 `n_s` of the sampling block's units, `k_s` of them are drawn uniformly without replacement, independently across strata,
@@ -26,7 +26,7 @@ parts are proved and set up with the session's link points is flock-verify's own
   sampling block's wrong units `B` lie in the confidence set (`Law.stratified`'s escape of `B` is at least `δ`), so they
   spend at most the one budget, `Σ_s k_s·x_s/n_s ≤ ln(1/δ)` over every stratum of every table, and their ANDs and their
   output bits are each at most the most any set in the confidence set holds (`StratifiedBlockMT.maxHarm`).
-* `JointStratifiedPooledMT`, pooled: the same over a period of `T` such sampling blocks played by one adaptive prover,
+* `JointStratifiedHorizonMT`, pooled: the same over a period of `T` such sampling blocks played by one adaptive prover,
   with one budget for the whole period: except with probability `δ + Σ_t (ε_ks,t + ε_bind,t)`.
 
 `ε_ks` is the sampling block's knowledge term at the worst registration (`StratifiedBlockMT.epsKs`) and `ε_bind` its
@@ -34,7 +34,7 @@ binding term `δ_link` (`StratifiedBlockMT.link`). The named assumptions are A3 
 draw's bytes, `live-verifier` (`StratifiedBlockMT.hCust`, `RecordCustodyZKJS`), and `cr/sha-512` (`TableCRZ`) and
 `ecr/sha-512` (`LinkCRZC`) at the strategy each sampling block is played with (in a period, at every strategy it is
 played with on some run, `StratifiedMT.Plays`), stated flat. Their proofs are `Flock.SecurityProofs.JointStratifiedMT`
-and `Flock.SecurityProofs.JointStratifiedPooledMT` (`Joint/MT/Bound.lean`).
+and `Flock.SecurityProofs.JointStratifiedHorizonMT` (`Joint/MT/Bound.lean`).
 
 C-Flock's definitions are still in its proofs package, so, like `EndToEndHidden`, this module imports them.
 -/
@@ -282,7 +282,7 @@ sampling blocks and tables the period has. Its named assumptions, at every sampl
 (`Assumptions.UniformRandomBytes`) for its draw's bytes, `live-verifier` (`StratifiedBlockMT.hCust`,
 `RecordCustodyZKJS`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512` (`LinkCRZC`) at every strategy it is played with
 on some run (`StratifiedMT.Plays`). -/
-def JointStratifiedPooledMT : Prop :=
+def JointStratifiedHorizonMT : Prop :=
   ∀ (W : ℕ → StratifiedBlockMT) (T : ℕ) (δ : ℝ) (ands bits : (t : ℕ) → Fin (W t).n → ℕ), 0 < δ →
     (∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
     ∀ s : Strategy (StratifiedMT.game W T),

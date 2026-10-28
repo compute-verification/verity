@@ -436,7 +436,7 @@ def pooled(plan: Plan, cands: list[Candidate], delta: float, blocks: float, *, a
 
 
 def horizon(plan: Plan, cands: list[Candidate], delta: float) -> float:
-    """`IntegrityPooled`'s bound on the faulty proof blocks over any number of windows, each a subcircuit's window of a block
+    """`IntegrityHorizon`'s bound on the faulty proof blocks over any number of windows, each a subcircuit's window of a block
     (`windows`): ln(1/delta) / q at q the least share k_s / n_s any window draws."""
     return log(1 / delta) / min(plan.sizes[c.template] / c.units for c in cands if c.template in plan.sizes)
 
@@ -627,7 +627,7 @@ def render(out: dict) -> str:
         lines.append(f"| {r['delta']:g} | {r['ands']:.4g} | {r['ands'] / out['work']:.3g} | {r['units']:.4g} | "
                      f"{r.get('count_bound', '-')} | {r['certify']:.4g} |")
     h = out["horizon"]
-    lines += ["", f"pooled (`density_bound` over the period's blocks; `IntegrityPooled`'s ln(1/delta)/q_min, "
+    lines += ["", f"pooled (`density_bound` over the period's blocks; `IntegrityHorizon`'s ln(1/delta)/q_min, "
               f"{h['0.01']:.4g} units at 1% and {h['1e-06']:.4g} at 1e-6, holds over any period):", "",
               "| period | fleet | blocks | units at 1% | at 1e-6 | ANDs at 1% | at 1e-6 | each block, units at 1%/blocks | "
               "at 1e-6/blocks |", "|---|---|---|---|---|---|---|---|---|"]

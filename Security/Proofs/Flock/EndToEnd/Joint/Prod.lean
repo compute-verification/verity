@@ -5,7 +5,7 @@ import Proofs.Flock.EndToEnd.Period.Union
 
 `period_prod`: if at every strategy satisfying `good` a sampling block's records all carry one escape `e`, and the
 sampling block's "miss" event has probability at most `e`, then every sampling block misses with the product of their
-escapes below `c` with probability at most `c`. It is `period_pooled` with the escapes read off the records: sampling
+escapes below `c` with probability at most `c`. It is `period_horizon` with the escapes read off the records: sampling
 block `i`'s escape is fixed by the strategy that plays it, before its coins, so the rest of the period has to miss below
 `c / e`.
 -/

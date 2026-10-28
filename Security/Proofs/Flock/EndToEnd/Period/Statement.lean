@@ -16,7 +16,7 @@ and whether a drawn unit is one of them.
   flock-verify accepts every sampling block, every sampling block has fewer than its `K₀` units wrong.
 * `IntegrityPeriodLog`: `IntegrityPeriod` with each sampling block's threshold `K₀ ≥ ln(1/δ)/q`, where its draw covers a
   fraction `q` of its units, so each sampling block's sampling term is at most `δ`.
-* `IntegrityPooled`: over `T` sampling blocks whose draws each cover at least a fraction `q` of their units, the
+* `IntegrityHorizon`: over `T` sampling blocks whose draws each cover at least a fraction `q` of their units, the
   probability that every sampling block is accepted and the wrong units total at least `ln(1/δ)/q` is at most
   `δ + Σ_w (ε_ks,w + δ_link,w)`.
 
@@ -25,7 +25,7 @@ is the prover's; `miss_w` and `δ_link,w` are `EndToEndHidden`'s. The named assu
 sampling block: A3 (`uniform/io-getrandombytes`) for the sampling block's draw bytes, `live-verifier`
 (`SamplingBlock.hCust`), and `cr/sha-512` and `ecr/sha-512` (`TableCRZ` and `LinkCRZC`) at every strategy the period's
 prover plays the sampling block with on some run (`Period.Plays`), stated flat as `EndToEndHidden` states them. The
-proofs are `Flock.SecurityProofs.IntegrityPeriod`, `IntegrityPeriodLog` and `IntegrityPooled`.
+proofs are `Flock.SecurityProofs.IntegrityPeriod`, `IntegrityPeriodLog` and `IntegrityHorizon`.
 
 C-Flock's definitions are still in its proofs package, so, like `EndToEndHidden`, this module imports them.
 -/
@@ -233,7 +233,7 @@ block's draw covering at least a fraction `q > 0` of its units (`q ≤ kd_t/n_t`
 block is accepted and the wrong units total at least `ln(1/δ)/q` is at most
 $$\delta + \sum_t (\varepsilon_{ks,t} + \delta_{link,t}).$$
 Its named assumptions are `IntegrityPeriod`'s. -/
-def IntegrityPooled : Prop :=
+def IntegrityHorizon : Prop :=
   ∀ (W : ℕ → SamplingBlock) (T : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < T, q ≤ ((W t).kd : ℝ) / (W t).n) →
     (∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
