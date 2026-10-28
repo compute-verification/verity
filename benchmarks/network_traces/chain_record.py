@@ -65,6 +65,8 @@ import sys
 from fractions import Fraction
 from pathlib import Path
 
+from verity.core.protocols.pous import wipe_monitoring
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
@@ -620,10 +622,11 @@ def d1_terms(cert: dict, n2: dict, scan: dict, custody_doc: dict, endpoint: dict
 
 # --- leak: K per monitoring period, on the warden run ------------------------------------------------------------------
 
-#: monitoring periods in minutes, and the machines a period's count runs over (the census's convention)
-PERIODS = {"week": 10_080, "month": 43_200, "year": 525_600}
+#: core's monitoring periods, seconds by name, and its reporting deltas, as floats (`wipe_monitoring`)
+PERIODS = dict(wipe_monitoring.PERIODS)
+LEAK_DELTAS = tuple(map(float, wipe_monitoring.DELTAS))
+#: the machines a period's count runs over (the census's convention)
 MACHINES = (1, 1000)
-LEAK_DELTAS = (0.01, 1e-6)
 #: Llama-3.2-1B's parameters (128,256 × 2,048 tied embedding, 16 layers of 60,821,504, the final norm), BF16
 WEIGHTS_BITS = 1_235_814_400 * 16
 
@@ -666,9 +669,9 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
         return k + fmax * math.log2(link_windows * units + 1) + (NS + NV) * fmax
 
     rows = []
-    for period, minutes in PERIODS.items():
+    for period, seconds in PERIODS.items():
         for m in MACHINES:
-            lw = m * minutes * 60 / window_s
+            lw = m * seconds / window_s
             for reading in free:
                 pooled = {f"{d:g}": count(lw, d, reading) for d in LEAK_DELTAS}
                 per = count(lw, None, reading)
