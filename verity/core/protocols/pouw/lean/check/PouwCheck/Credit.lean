@@ -13,9 +13,10 @@ import PouwWindow.Rounds
 import SampledProofs.ChallengerSession
 import SampledProofs.PyJson
 import SampledProofs.Registered
+import Identity.Domains
 
 /-!
-# A served window's credited set, its drawn units and their outcome, its A rows and its period (`credit.py`; RT4-INT-32, -34 and -42)
+# A served window's credited set, its drawn units and their outcome, its A rows and its period (`credit.py`)
 
 The verifier of record of `verity/core/protocols/pouw/credit.py`, which the difftest (`tests/test_difftest.py`) holds to
 it, string for string:
@@ -89,7 +90,7 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   session's registered finding, each registered port's value and the root its reads were opened against). The entries
   are the window's registration's: each A value's domain, and each other value's a proof opened, is `domainOf` the
   committed descriptor's SHA-512 and, for every value but the weights' `…/b/<K>` (`isHeld`) and round 0's `…/ids@0`,
-  the window's open root (`SampledProofs.Registered.domainAt`, PRF-127), for `…/ids@0` the window's session; each
+  the window's open root (`SampledProofs.Registered.domainAt`), for `…/ids@0` the window's session; each
   proof was verified against that descriptor, opened only values
   the window registers once, each at its registered root, and opened its unit's K's A value, the window's `…/a/<K>` or
   its call's round's `…/a/<K>@<s>`, and its K's weights `<PREFIX>b/<K>`. So the A rows `Internal.aLink` ties to the round roots are the ones each drawn unit's
@@ -996,7 +997,7 @@ round 0's input-ids table (`…/ids@0`, `idsStep?` 0) and request table (`…/re
 window's open root contains (`requestsRoot`, `Internal.arow`), bind the window's session `session` in that root's place
 (`domainBound` at `"session"`); every
 other value's rows are the window's own, its A rows and its calls' A and z tables among them, and its domain binds the
-window's open root (PRF-127). -/
+window's open root. -/
 def domainOf (program window session : String) (e : Json) : R String := do
   let v := (str? (get e "value")).getD ""
   let (words, leaves, bits) := ((nat? (get e "words")).getD 0, (nat? (get e "leaves")).getD 0,
@@ -1138,7 +1139,7 @@ def shapeOf (descriptor : ByteArray) : Shape := Id.run do
     | _ => []
   return ⟨pre, tiles⟩
 
-def PARTITION_FORMAT : String := "verity/partition/v1"
+def PARTITION_FORMAT : String := Domains.PARTITION
 def QUERY_NAME : String := "Q_template_instances"
 def QUERY_VERSION : Nat := 0
 
@@ -1690,7 +1691,7 @@ def LENGTH_KEYS : List String := ["max_tokens", "stop"]
 def noFixedLength (name : String) : String :=
   s!"no-fixed-length: period {name}'s open commits no fixed length ({LENGTH_FIELD}, \{max_tokens, stop}), so " ++
   "its windows are not of record: a row of record serves each request's public max_tokens whatever it " ++
-  "samples (ignore_eos; Daniel, 19 Oct, ASK-39). Open the period with the row's max_tokens and stop " ++
+  "samples (ignore_eos). Open the period with the row's max_tokens and stop " ++
   STOP_FIXED
 
 def eosKeyedRow (name stop : String) : String :=
@@ -2189,8 +2190,7 @@ def mainIndex? (main : Json) (commit : String) : Option Nat :=
 `main`, is too old for the period: its pin more than the period's freshness floor of first-parent commits behind the
 commit the period's open recorded (`periodPin`, `committedPin`; `floor`, `committedFloor`, default 0 when the open pins
 but records no floor), measured from that pin and never from main's head; `none` when it is recent enough or the open
-records no pin. The per-window pin and circuit are `creditedSession`'s; this is the period-level hygiene on top
-(CMP74-FOLLOW). -/
+records no pin. The per-window pin and circuit are `creditedSession`'s; this is the period-level hygiene on top. -/
 def pinHygiene (name : String) (i : Nat) (main : Json) (pinned : String) (periodPin : Option String)
     (floor : Option Nat) : Option (String × String) :=
   match periodPin with
@@ -2268,5 +2268,17 @@ def periodCredit (key ledger pins main name windows : Json) : R PeriodCredit := 
     work := work ++ [creditedWork layout got rows]
     eps := eps ++ [established layout got rows bigK]
   pure ⟨out, work, bigK, DELTA, eps⟩
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : CALLS_TAG = Domains.POUW_H1_CALLS.toUTF8.push 0 := rfl
+example : DRAW_TAG = Domains.POUW_H1_SAMPLING := rfl
+example : ROUND_TAG = Domains.POUW_H1_ROUND_A := rfl
+example : COMMIT_TAG = Domains.POUW_H1_COMMIT.toUTF8.push 0 := rfl
+example : COMMIT_FORMAT = Domains.REGISTRATION := rfl
+example : SCHEMA = Domains.IR_DESCRIPTOR := rfl
+example : OK_SALT_TAG = Domains.POUW_H1_OK_ROW_SALT.toUTF8.push 0 := rfl
+example : REQUESTS_IDS_TAG = Domains.POUW_H1_REQUEST_IDS := rfl
+example : WEIGHTS_TAG = Domains.POUW_H1_WEIGHTS := rfl
 
 end PouwCheck.Credit

@@ -5,6 +5,7 @@ import PouwWindow.Public
 import PouwWindow.Length
 import PouwCheck.Inputs
 import PouwCheck.WindowSalt
+import Identity.Domains
 
 /-!
 # PoUW's rule (`core_check.py`, "the check")
@@ -75,7 +76,7 @@ def registered (p : Params) (c : Registration) : Except String Fixed :=
     .error s!"window: registered kind {win.kind} in context {win.context}, the verifier's served in {p.context}"
   else if ks ≠ registeredSorted then
     if ks = legacySorted then
-      .error "window-form: no-fixed-length: registered before the fixed-length rule (19 Oct), so not of record"
+      .error "window-form: no-fixed-length: registered before the fixed-length rule, so not of record"
     else .error s!"public-items: registered {", ".intercalate ks}, declared {", ".intercalate registeredSorted}"
   else match PouwWindow.lengthProblem (get win.items "length") p.maxTokens with
   | some r => .error r
@@ -175,5 +176,9 @@ def check (p : Params) (c : Registration) (e : Evidence) : Core.Outcome Public C
   match registered p c with
   | .error r => .reject r
   | .ok f => outcome p c f e
+
+/-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
+written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+example : oneStage = Domains.ONE_STAGE_PROTOCOL := rfl
 
 end PouwCheck
