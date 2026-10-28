@@ -919,8 +919,8 @@ def cmd_fill_sample(a: argparse.Namespace) -> int:
 def commit_labels(r: dict) -> str:
     """A fill-bench line's commit knobs off their defaults, as fill-table labels its rows after the call's knobs."""
     return ((f" m{r['lminb']}" if r.get("lminb", 5) not in (4, 5) else "")
-            + (f" sm{r['sminb']}" if r.get("sminb", 5) != 5 else "") + (" cf" if r.get("lfold") == 1 else "")
-            + (" nofull" if r.get("full") == 0 else ""))
+            + (f" sm{r['sminb']}" if r.get("sminb", 4) != 4 else "") + (" cf" if r.get("lfold") == 1 else "")
+            + (" nofull" if r.get("full") == 0 else "") + (f" mk{r['mask']}" if r.get("mask") else ""))
 
 
 def cmd_fill_table(a: argparse.Namespace) -> int:
@@ -970,10 +970,11 @@ def cmd_fill_table(a: argparse.Namespace) -> int:
         gcut, gcut_w = (r.get("gamma_ovl_cutlass"), r.get("gamma_ovl_w_cutlass")) if "cutlass" in ms else (None, None)
         parts = ", ".join(g(ms[x]["ms"]) if x in ms else "-" for x in ("coins", "coins_w", "pad", "form_a", "form_b", "gemm", "commit"))
         duty = r.get("gamma_ovl_w") if r.get("o") else r["gamma_ovl"]
-        print(f"| {r['shape']} | {r['m']} x {r['n']} x {r['k']} | {r['L']} | {r['S']} | {variant} | {g(ms['lt']['ms'])} | {cut} | "
-              f"{g(ms['ovl']['ms'])} | {g(r['gamma_ovl'])} | {g(gcut)} | {g(r.get('gamma_ovl_w'))} | {g(gcut_w)} | "
+        lt, ovl = (g(ms[x]["ms"]) if x in ms else "-" for x in ("lt", "ovl"))
+        print(f"| {r['shape']} | {r['m']} x {r['n']} x {r['k']} | {r['L']} | {r['S']} | {variant} | {lt} | {cut} | "
+              f"{ovl} | {g(r['gamma_ovl'])} | {g(gcut)} | {g(r.get('gamma_ovl_w'))} | {g(gcut_w)} | "
               f"{g(r.get('gamma_ovl_pad'))} | {g(r.get('gamma_ovl_nomem'))} | {g(r['gamma_call'])} | {g(r['gamma_gemm'])} | "
-              f"{100 / duty:.1f}% | {parts} | {g(ms['wgl']['ms']) if 'wgl' in ms else '-'} | {g(r.get('gamma_ovl_w_wgl'))} | "
+              f"{f'{100 / duty:.1f}%' if duty else '-'} | {parts} | {g(ms['wgl']['ms']) if 'wgl' in ms else '-'} | {g(r.get('gamma_ovl_w_wgl'))} | "
               f"{fused} |")
     parts = [(r, variant) for r, variant in named if "per_sm_cycle" in r]
     if not parts:
