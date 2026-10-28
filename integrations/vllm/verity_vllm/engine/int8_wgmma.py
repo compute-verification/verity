@@ -201,4 +201,5 @@ def fits(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor
     return (xq.is_contiguous() and w.is_contiguous() and s_a.is_contiguous() and s_w.is_contiguous() and y.is_contiguous()
             and m >= 1 and k % 16 == 0 and n % 2 == 0 and xq.data_ptr() % 16 == 0 and w.data_ptr() % 16 == 0
             and s_w.data_ptr() % 8 == 0 and y.data_ptr() % 4 == 0
-            and (zy is None or (zy.is_contiguous() and zy.data_ptr() % 16 == 0 and y.data_ptr() % 16 == 0)))
+            and (zy is None or (zy.is_contiguous() and zy.data_ptr() % 16 == 0 and y.data_ptr() % 16 == 0
+                                and zy.shape[0] * (ZY_BYTES // 64) < 1 << 31)))

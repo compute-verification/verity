@@ -49,6 +49,17 @@ def test_every_plan_row_is_a_config_and_rows_rise():
                 W.WgCfg.parse(text)
 
 
+def test_fits_refuses_records_past_the_record_maps_int_rows():
+    def meta(*shape, dtype=torch.int8):
+        return torch.empty(shape, dtype=dtype, device="meta")
+
+    ops = (meta(64, 64), meta(64, dtype=torch.float32), meta(64, 64), meta(64, dtype=torch.float32),
+           meta(64, 64, dtype=torch.bfloat16))
+    most = ((1 << 31) - 1) // (E.ZY_BYTES // 64)
+    assert W.fits(*ops) and W.fits(*ops, meta(most, E.ZY_BYTES, dtype=torch.uint8))
+    assert not W.fits(*ops, meta(most + 1, E.ZY_BYTES, dtype=torch.uint8))
+
+
 def test_the_row_is_the_last_whose_m_min_is_reached(monkeypatch):
     monkeypatch.setattr(W, "WGMMA", {"sm_90": {(256, 64): [(1024, "pp_128x128:g4"), (8192, "com2_128x256:g8")]}})
     assert W.row(1023, 256, 64, "sm_90") is None
