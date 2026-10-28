@@ -8,7 +8,7 @@ proofs themselves (`verity/sampled-proofs/one-stage/v2`) `one_stage_zk`: v2's fr
 (`verity/core/service/sampled_proofs/tests/test_difftest.py`), on the cases v2 decides without a proof, the wipe's
 (`verity/wipe/v0`) `wipe_protocol_case.answer`, for onsite's registration check NCI's protocol difftest's `reference`
 (`verity/nci/v1`, `nci_reference`'s `check_baseline`, `verity/core/protocols/network/tests/test_nci_protocol.py`), and for space (`verity/pous/p2/v4/run`) and bandwidth
-(`verity/remote-bandwidth/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
+(PoUB-P2, `verity/remote-bandwidth/p2/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
 `periods.py`). Each component's own difftest holds its Lean to that Python; this one holds the composition of them.
 
 The trial's rule, onsite's and remote's over their components' statements:
@@ -228,9 +228,9 @@ def _period_answer(case: str) -> str:
 POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(canonical(case))))
 #: Integrity: one-stage v2, the audit on the proofs themselves (`SampledProofs.OneStageZk`).
 SAMPLED_PROOFS = Ported(V2, one_stage_zk, blobs=True)
-#: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
+#: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.P2Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
-BANDWIDTH = Recorded("verity/remote-bandwidth/v0")
+BANDWIDTH = Recorded("verity/remote-bandwidth/p2/v0")
 #: The wipe, `MemoryChallenger.WipeProtocol.protocol`.
 WIPE = Ported("verity/wipe/v0", WIPE_CASES.answer)
 #: Onsite's registration check, `NciCheck.Protocol.protocol`: not a component.
@@ -393,28 +393,19 @@ class Same(Product):
 @dataclass(frozen=True)
 class Tie:
     """`Core.Composition.Tie`: the value ``what`` that each component of ``names`` reads off its commitment's bytes
-    with its function must be one value. A function that returns a string in place of bytes says why the component's
-    commitment names no value the tie can hold, and refuses the tie."""
+    with its function must be one value."""
 
     what: str
     names: tuple = ()
 
-    def values(self, answers: list[tuple[str, dict]], ev: list) -> list[tuple[str, bytes | str]] | None:
-        """What each component of the tie names, ``None`` unless each has a case and its commitment decodes. A
-        component's answer carries its digest exactly when its commitment decodes; where it doesn't, the component
-        rejects, and so does the composition."""
+    def strays(self, answers: list[tuple[str, dict]], ev: list) -> str | None:
+        """`Core.Composition.Tie.strays`. A component's answer carries its digest exactly when its commitment decodes,
+        and then its commitment holds what its function reads; where it doesn't, the component rejects, and so does the
+        composition."""
         digests, cases = dict(answers), {k[0]: k[2] for k in ev}
         if any(digests.get(s, {}).get("commitment") is None or s not in cases for s, _ in self.names):
             return None
-        return [(s, f(cases[s])) for s, f in self.names]
-
-    def strays(self, answers: list[tuple[str, dict]], ev: list) -> str | None:
-        """`Core.Composition.Tie.strays`: the first refusal, else the first value that isn't the first one's."""
-        if (xs := self.values(answers, ev)) is None:
-            return None
-        if refusal := next((f"{self.what}: {s} {v}" for s, v in xs if isinstance(v, str)), None):
-            return refusal
-        (s, d), *rest = xs
+        (s, d), *rest = [(s, f(cases[s])) for s, f in self.names]
         return next((f"{self.what}: {s} committed {d.hex()}, {t} committed {e.hex()}" for t, e in rest if e != d), None)
 
 
@@ -423,12 +414,9 @@ def _commitment_hex(key: str) -> Callable[[bytes], bytes]:
     return lambda b: bytes.fromhex(json.loads(b)[key])
 
 
-#: `Core.Onsite.store`: PoUS's setup's root of `C*`, against the bandwidth audit's; onsite's is the generic audit, whose
-#: payload root is its own tree's, so it refuses the tie.
+#: `Core.Onsite.store`: PoUS's setup's root of `C*` and the root PoUB-P2's registration names (`p2_case.store_root`).
 STORE = Tie("store", (("verity/pous/p2/v4/run", _commitment_hex("root")),
-                      ("verity/remote-bandwidth/v0",
-                       lambda b: "is the generic audit, whose payload root is its own tree's and not PoUS's store: "
-                                 "only verity/remote-bandwidth/p2/v0 registers PoUS's setup root")))
+                      ("verity/remote-bandwidth/p2/v0", _commitment_hex("root"))))
 
 
 @dataclass(frozen=True)
@@ -509,9 +497,9 @@ class Registered:
             return self.product.run(ps, ev, blobs)
         return fitted_verdicts(answers)
 
-    def tied(self, case: Any) -> list[tuple[str, str]]:
+    def tied(self, case: Any) -> list[tuple[str, bool]]:
         """On a case whose components fit the composition, each tie whose components' commitments all decode, by what
-        it ties, and how it went: ``one``, ``two`` or ``refused``."""
+        it ties, and whether they committed to one value."""
         ev: list = []
 
         def answers():
@@ -519,15 +507,14 @@ class Registered:
             _, ps = self.params(c["params"])
             ev[:] = self.evidence(P.unhex(c["evidence"]))[1]
             return self.product.run(ps, ev, blobs)
-        got = fitted_answers(answers)
-        return [(t.what, "refused" if any(isinstance(v, str) for _, v in xs) else
-                 "one" if len({v for _, v in xs}) == 1 else "two")
-                for t in self.ties if (xs := t.values(got, ev)) is not None]
+        digests, cases = dict(fitted_answers(answers)), {k[0]: k[2] for k in ev}
+        return [(t.what, len({f(cases[s]) for s, f in t.names}) == 1) for t in self.ties
+                if all(digests.get(s, {}).get("commitment") is not None and s in cases for s, _ in t.names)]
 
 
 #: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids: remote's two
 #: committing to one window record, onsite's after its registration check, NCI's, on the registration integrity
-#: (v2) commits to, with its store tie, which its generic bandwidth audit refuses.
+#: (v2) commits to, with PoUS and the bandwidth audit on one store.
 REMOTE = Same("verity/remote/v0", (POUW, SAMPLED_PROOFS), (POUW.id, SAMPLED_PROOFS.id))
 ONSITE = Registered("verity/onsite/v0", NCI_CHECK, SAMPLED_PROOFS.id,
                     Product("verity/onsite/v0", (CERTIFIER, POUS, POUW_PERIOD, BANDWIDTH, SAMPLED_PROOFS, WIPE)),

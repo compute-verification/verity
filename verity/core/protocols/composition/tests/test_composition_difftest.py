@@ -4,7 +4,8 @@ core interface and the components' own Python). Hypothesis draws each component'
 fail to decode (from its own difftest's generator: PoUW's `pouw_check_cases` and, made once, `pouw_period_cases`'
 periods, the network certifier's period `build`,
 sampled proofs' audits as v2's cases, `v2_case`, the wipe's signed wipes, `wipe_protocol_case.case`; space's and
-bandwidth's from the small periods of their hooks, `periods.py`), and onsite's registration case from NCI's declarations
+bandwidth's from the small periods of their hooks, `periods.py`, all on one committed `C*` but PoUS's run on another
+store, `periods.OTHER_STORE`), and onsite's registration case from NCI's declarations
 (on v2's own registration record and log, mostly, else on NCI's own, which onsite refuses: one registration digest in
 both), hands every component the same blobs (`BLOBS`, v2's circuit and public file), then often breaks the composition's
 own inputs (a component dropped, unknown, repeated or out of order, a case under other params, a wrong or short
@@ -122,7 +123,7 @@ PERIOD_CASES = {v: tuple(m for m, x in NP.EXPECT.items() if x == v and m != "cas
 NCI_CASES = {R.ACCEPT: ("honest",), R.REJECT: tuple(m for m in R.NCI.MUTATIONS if m != "honest")}
 
 #: A recorded component's kinds of case (`periods.build`), accepted ones first and thrice.
-KINDS = [R.ACCEPT] * 3 + [R.REJECT, R.UNDECIDED, "other-setup", "broken-params", "broken-evidence"]
+KINDS = [R.ACCEPT] * 3 + [R.REJECT, R.UNDECIDED, "other-setup", periods.OTHER_STORE, "broken-params", "broken-evidence"]
 
 
 def kinds(C) -> list[str]:
@@ -146,8 +147,8 @@ def component_case(draw, C, kind: str | None) -> dict:
     difftest's generator or its recorded cases, with its digest as its Python reads it on `BLOBS` (the case's own
     commitment when it doesn't decode, which a rejection never binds)."""
     kind = kind or draw(st.sampled_from(kinds(C)))
-    if C is R.BANDWIDTH and kind in (R.ACCEPT, R.UNDECIDED) and draw(st.integers(0, 3)) > 0:
-        kind = periods.SAME_STORE
+    if C is R.POUS and kind == R.ACCEPT and draw(st.integers(0, 3)) == 0:
+        kind = periods.OTHER_STORE
     if isinstance(C, R.Recorded):
         case = C.cases[kind][0]
     elif C is R.POUW:
@@ -204,13 +205,16 @@ def one_record(product: R.Same, cases: list[dict]) -> list[dict]:
     return [recommit(c) for c in cases]
 
 
+#: The generic remote bandwidth audit's id: not a component of onsite, whose bandwidth is PoUB-P2 (`generic-bandwidth`
+#: names PoUB-P2's case by it, its params and its entry, under a commitment that binds it).
+GENERIC_BANDWIDTH = "verity/remote-bandwidth/v0"
 #: The binding breaks come five times: with `commitment-size` they are the breaks that leave every component's case standing,
 #: and so the way to a rejection that no component's own explains.
 MUTATIONS = [None] * 20 + ["drop-param", "drop-case", "unknown-param", "unknown-case", "swap-params", "swap-cases",
                            "repeat-param", "repeat-case", "case-params", "commitment-size", "evidence-noncanonical",
                            "params-extra-key", "case-extra-key", "case-missing-key", "bad-hex", "garbage-evidence",
                            "garbage-params", "not-a-case", "no-blobs", "blobs-not-hex", "blobs-not-list",
-                           "blob-extra"] + ["binding", "binding-id"] * 5
+                           "blob-extra", "generic-bandwidth"] + ["binding", "binding-id"] * 5
 #: The breaks of the commitment alone, which leave every component's case standing.
 BINDING = ["binding", "binding-id", "commitment-size"]
 #: A registered composition's breaks of its registration (`Core.Composition.registered`): its entry or its case under
@@ -247,12 +251,18 @@ def composite(draw, product: R.Product | R.Registered) -> dict:
     if m in ("drop-param", "drop-case"):
         del which[i]
     elif m in ("unknown-param", "unknown-case"):
-        stranger = dict(which[i], id=draw(st.sampled_from(["verity/stub/nci/v0", "verity/example/v0", "", "a"])))
+        stranger = dict(which[i], id=draw(st.sampled_from([GENERIC_BANDWIDTH, "verity/stub/nci/v0", "verity/example/v0",
+                                                           "", "a"])))
         which.insert(draw(st.integers(0, len(which))), stranger)
     elif m in ("swap-params", "swap-cases"):
         which[0], which[-1] = which[-1], which[0]
     elif m in ("repeat-param", "repeat-case"):
         which.insert(i, dict(which[i]))
+    elif m == "generic-bandwidth":
+        for x in (*named, *entries):
+            x["id"] = GENERIC_BANDWIDTH if x["id"] == R.BANDWIDTH.id else x["id"]
+        commitment = R.bind(product.id, [(GENERIC_BANDWIDTH if c["id"] == R.BANDWIDTH.id else c["id"], c["digest"])
+                                         for c in cases])
     elif m == "case-params":
         entries[i]["params"] = {"k": draw(st.integers(4, 6))}
     elif m == "binding":
@@ -325,9 +335,13 @@ def reference(product: R.Product | R.Registered, seen: collections.Counter):
             seen["reject, no component rejected"] += 1
         if isinstance(product, R.Same) and (got := product.committed(case)) and None not in got:
             seen["two records" if len(set(got)) > 1 else "one record"] += 1
+        if isinstance(product, R.Registered) and isinstance(case, dict) and isinstance(case.get("evidence"), str) \
+                and GENERIC_BANDWIDTH.encode().hex() in case["evidence"]:
+            assert out["verdict"] == R.REJECT, out
+            seen["generic bandwidth"] += 1
         if isinstance(product, R.Registered):
-            for what, how in product.tied(case):
-                seen[f"{what} {how}"] += 1
+            for what, one in product.tied(case):
+                seen[f"one {what}" if one else f"two {what}s"] += 1
         return out
     return answer
 
@@ -431,18 +445,25 @@ def test_remote_refuses_two_records_and_else_keeps_the_products_verdict():
 
 @pytest.mark.slow
 def test_onsite_agrees(onsite_server, recorded):
-    """Onsite's verdicts, and its store tie refused by the generic bandwidth audit, often. Onsite is never undecided:
-    where PoUS's and the bandwidth audit's commitments decode, the tie refuses, and where one doesn't, it rejects."""
-    _agree(ONSITE, onsite_server, SEEN["onsite"], 1000, (R.REJECT, "reject, a component undecided",
-                                                       "reject, no component rejected", "store refused"))
-    assert SEEN["onsite"][R.UNDECIDED] == 0, dict(SEEN["onsite"])
+    """Onsite's verdicts, and PoUS and PoUB-P2 on one store (left to the components) and on two (refused), each
+    often; and PoUB-P2's case named as the generic bandwidth audit's, which is no component, refused."""
+    _agree(ONSITE, onsite_server, SEEN["onsite"], 1000, (R.REJECT, R.UNDECIDED, "reject, a component undecided",
+                                                       "reject, no component rejected", "one store", "two stores"))
+    assert SEEN["onsite"]["generic bandwidth"] > 0, dict(SEEN["onsite"])
+
+
+def test_onsites_bandwidth_is_p2():
+    """Onsite's bandwidth component is PoUB-P2, and the generic audit's id names none of its components."""
+    ids = [C.id for C in R.ONSITE.product.components]
+    assert R.BANDWIDTH.id == "verity/remote-bandwidth/p2/v0" and R.BANDWIDTH.id in ids and GENERIC_BANDWIDTH not in ids
+    assert [s for s, _ in R.STORE.names] == [R.POUS.id, R.BANDWIDTH.id]
 
 
 @pytest.mark.slow
-def test_onsite_refuses_the_generic_store_and_else_keeps_its_verdict(recorded):
-    """On drawn cases onsite's verdict is its verdict without the store tie (onsite before it), except where PoUS's and
-    the generic bandwidth audit's commitments decode, which the tie refuses, even on PoUS's own root (`OnStore`): the
-    tie changes no other verdict. Python only: the difftest holds the Lean to it."""
+def test_onsite_refuses_two_stores_and_else_keeps_its_verdict(recorded):
+    """On drawn cases onsite's verdict is its verdict without the store tie (onsite before it), except where PoUS and
+    PoUB-P2 committed to two stores (PoUS's run on another store, `periods.OTHER_STORE`), which it refuses: the tie
+    changes no other verdict. Python only: the difftest holds the Lean to it."""
     untied = dataclasses.replace(R.ONSITE, ties=())
     seen = collections.Counter()
 
@@ -450,14 +471,14 @@ def test_onsite_refuses_the_generic_store_and_else_keeps_its_verdict(recorded):
     @given(composite(R.ONSITE))
     def check(case):
         got, was = R.ONSITE.answer(case), untied.answer(case)
-        refused = (R.STORE.what, "refused") in R.ONSITE.tied(case)
-        if refused:
+        two = (R.STORE.what, False) in R.ONSITE.tied(case)
+        if two:
             assert got["verdict"] == R.REJECT, got
         else:
             assert {k: v for k, v in got.items() if k != "reason"} == {k: v for k, v in was.items() if k != "reason"}
-        seen[f"was {was['verdict']}, refused" if refused else "same"] += 1
+        seen[f"was {was['verdict']}, two" if two else "same"] += 1
     check()
-    assert sum(v for k, v in seen.items() if k != "same") > 20 and seen["was undecided, refused"] > 0, dict(seen)
+    assert seen["same"] > 20 and seen["was undecided, two"] > 0, dict(seen)
 
 
 class Trial(R.Product):

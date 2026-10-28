@@ -196,20 +196,4 @@ private def answerT (r : Stubbed) (xs : List Stubbed) (c : ByteArray := commitme
 #guard (answerT (accepts "r") [accepts "a", accepts "b", { accepts "c" with root := ByteArray.empty }]).reason ==
   some "c reject: commitment: a root is 32 bytes, not 0"
 
-private def apartToy : Protocol :=
-  registered "verity/toy/v4" (Stub.stub "r") "b" [Stub.stub "a", Stub.stub "b", Stub.stub "c"]
-    [⟨"store", (records ["a"] [Stub.stub "a", Stub.stub "b", Stub.stub "c"]).names ++
-      [("c", fun b => ((Stub.stub "c").commitment b).toOption.map fun _ =>
-        (.error "names a store of its own" : Except String ByteArray))]⟩]
-
-private def answerA (r : Stubbed) (xs : List Stubbed) (c : ByteArray := commitmentOf apartToy xs ++ r.root) : Answer :=
-  Cases.answerRegistered apartToy r.case (xs.map (·.case)) c
-
--- a component whose commitment names no value the tie can hold refuses it, on one root or two, with why
-#guard (answerA (accepts "r") [accepts "a", accepts "b", accepts "c"]).reason ==
-  some "store: c names a store of its own"
-#guard (answerA (accepts "r") [undecided "a", accepts "b", stray (accepts "c")]).verdict == .reject
-#guard (answerA (accepts "r") [accepts "a", accepts "b", { accepts "c" with root := ByteArray.empty }]).reason ==
-  some "c reject: commitment: a root is 32 bytes, not 0"
-
 end Core.Composition.Guards

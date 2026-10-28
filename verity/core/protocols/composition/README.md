@@ -11,7 +11,8 @@ subprotocols' packages, with no Mathlib:
   (`Registered.lean`); all three over blobs (`Blobs.lean`); the stub subprotocols (`Stubs.lean`); and the `#guard`s
   that pin the rules (`Guards.lean`).
 - `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): sampled proofs, PoUW, PoUS, proof of useful
-  bandwidth (PoUB), network certification and the memory challenger's wipe, after NCI's registration check.
+  bandwidth (PoUB-P2, on PoUS's store), network certification and the memory challenger's wipe, after NCI's
+  registration check.
 - `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): sampled proofs and PoUW, on one window
   record.
 
@@ -60,7 +61,7 @@ subprotocol accepts its own case, and the commitment is `bind` of the subprotoco
 | PoUW (its window check) | | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
 | sampled proofs (the one-stage audit on the proofs themselves, which it reads as blobs) | yes | yes | `SampledProofs.OneStageZk.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v2` |
 | PoUS (its check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
-| proof of useful bandwidth, PoUB (its session) | yes | | `RemoteAudit.Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/v0` |
+| proof of useful bandwidth, PoUB-P2 (its session over PoUS's store) | yes | | `RemoteAudit.P2Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/p2/v0` |
 | the wipe (the memory challenger's streamed-label wipe of the period) | yes | | `MemoryChallenger.WipeProtocol.protocol` (`core_memory_challenger`, `../../devices/memory_challenger/lean`) | `verity/wipe/v0` |
 
 Every subprotocol of both products is ported to its own `Core.Protocol`. NCI is a registration check, not a subprotocol
@@ -114,14 +115,12 @@ commitment, so they join the check when each window's record names the registrat
 
 A tie (`Tie`, `Registered.lean`) generalizes this: a value each named subprotocol reads off its own commitment's bytes
 with its own decoder, which must be one value once the cases fit (`Tie.strays`: `what: s committed D, t committed D'`),
-else the composition rejects whatever the subprotocols answer; a decoder may instead say why its commitment names no
-value the tie can hold (`what: s WHY`), which refuses the tie too; a subprotocol whose commitment doesn't decode rejects
-as itself. `same`'s check is the tie `records` of its subprotocols' digests, and `registered id R s components ties`
-checks its ties after the registration. Onsite has one, `Core.Onsite.store`: PoUS and the remote bandwidth audit on one
-store, the root of `C*` PoUS's setup published (its commitment's `root`) against the bandwidth audit's. Only the audit's
-P2 variant (`verity/remote-bandwidth/p2/v0`) registers PoUS's store; onsite's component is the generic audit, whose
-payload root is its own salted tree's, so the tie refuses it, and onsite answers no case undecided or accepted until P2
-is its component. Once the log exists, both read the store's hardware entry.
+else the composition rejects whatever the subprotocols answer; a subprotocol whose commitment doesn't decode rejects as
+itself. `same`'s check is the tie `records` of its subprotocols' digests, and `registered id R s components ties` checks
+its ties after the registration. Onsite has one, `Core.Onsite.store`: PoUS and PoUB-P2 on one store, the root of `C*`
+PoUS's setup published (its commitment's `root`) and the root PoUB-P2's registration names (its commitment's `root`,
+the case's `store_root`). The generic remote bandwidth audit (`verity/remote-bandwidth/v0`), whose payload root is its
+own salted tree's, is not a component. Once the log exists, both read the store's hardware entry.
 
 ## The difftest
 
@@ -137,10 +136,10 @@ Lean to:
 - network certification: its period difftest's `reference`, the Python mirror over the certifier's certificates and
   one-stage's answers, on small signed periods from its `build`;
 - the wipe: its mirror, `wipe_protocol_case.answer`, on signed wipes from its `case`;
-- PoUS and PoUB: their Python verifiers' answers on small periods of their hooks (`tests/periods.py`: `pous.period.run`
-  signed at its deployed parameters, honest and cheating, and `remote_bandwidth.period.run`, honest, cheating and
-  unverified), whose Lean their packages' difftests hold to those verifiers (`../pous/check/tests/test_run_protocol.py`,
-  `../remote_bandwidth/lean/tests/test_protocol.py`).
+- PoUS and PoUB-P2: their Python verifiers' answers on one committed `C*` (`tests/periods.py`: `pous.period.audit`
+  signed at its deployed parameters, honest and cheating, and an honest run on another store; PoUB-P2's sessions over
+  that `C*`, honest, cheating and unverified, as `p2_case` answers them), whose Lean their packages' difftests hold to
+  those verifiers (`../pous/check/tests/test_run_protocol.py`, `../remote_bandwidth/lean/tests/test_p2_case.py`).
 
 Hypothesis draws 1000 cases a product (seed 0): each subprotocol's case accepts, rejects, is undecided or fails to decode
 (one draw in six every one aimed at acceptance, one in six all but one, which is aimed at undecided), every case hands
@@ -151,10 +150,10 @@ product accepts in the difftest until a v2 case with a proof does. Remote's case
 subprotocols on PoUW's record, which the one-stage audit refuses (PoUW's window reads registered values, outside v2's
 mirror), and the rest mostly on two records, which remote refuses;
 `test_remote_refuses_two_records_and_else_keeps_the_products_verdict` shows that refusal changes no other verdict of
-the product's. Onsite's bandwidth cases aimed at acceptance or undecided are, three times in four, its session on PoUS's
-store (`periods.OnStore`: it registers the root of PoUS's honest setup and stops before any window is verified), and the
-rest are on its own store; onsite refuses both, as the generic audit's;
-`test_onsite_refuses_the_generic_store_and_else_keeps_its_verdict` shows that refusal changes no other verdict.
+the product's. Onsite's PoUS and PoUB-P2 cases are on one store, but for PoUS's honest run on another
+(`periods.OTHER_STORE`, a quarter of its cases aimed at acceptance), which onsite refuses beside PoUB-P2's;
+`test_onsite_refuses_two_stores_and_else_keeps_its_verdict` shows that refusal changes no other verdict. A case that
+names PoUB-P2's by the generic audit's id is refused, as no component.
 `test_a_reference_without_reject_dominance_is_caught`
 shows the difftest tells the rule above from one without reject dominance: such a reference disagrees with the Lean on a
 case where one subprotocol rejects and another is undecided.
