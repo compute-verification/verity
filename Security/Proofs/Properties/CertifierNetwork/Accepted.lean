@@ -10,7 +10,7 @@ set_option maxRecDepth 20000
 /-!
 # The device's output is accepted
 
-Every egress record a closed run publishes is published by an egress tick (`egress_at`), so `CompleteRows` makes its
+Every egress record a closed run publishes is an egress tick's (`egress_at`), so `completeRows_honest` makes its
 grid the Program's grid of the frames the shaper handed under the syncs it declared (`grid_eq`). The assembly certifies
 each record (`certifyAll_ok`), and since a closed run publishes one record of each link-window, the commitment has one
 certificate of each, the honest one (`recordsOf_one`). `HonestAccepted` then accepts the unit.
