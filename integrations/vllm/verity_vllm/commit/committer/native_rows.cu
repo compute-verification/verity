@@ -1,11 +1,11 @@
-// The rows-sha512 scheme's kernels (verity_vllm.commit.step_rows): COMMIT-GPU's leaf, pad and node (benchmarks/pouw/commit_gpu/
-// commit_gpu.cuh: frame_leaf_nb, pad_nb, node_ni, hash_after_block, salt_prf, salt_given, salt_digest, hm96_mask's nibble table and
-// leaf_from_digest), bit for bit core's hm96-sha512/row/v2 leaves in frame-v3-sha512 trees.  Two changes from COMMIT-GPU, neither in
-// what is hashed:
-//   * every per-step constant (the domain's frame templates and midstates, the salt key) is a kernel parameter (`LeafK`, `NodeK`,
-//     __grid_constant__) instead of __constant__ memory, so the worker's steps (one domain each) run back to back on its side stream
-//     with no symbol copy between them;
-//   * digests are stored in byte order (a [n, 64] uint8 tensor is the digests), each 8-byte word swapped on load and store.
+// The rows-sha512 scheme's kernels (verity_vllm.commit.step_rows): bit for bit core's hm96-sha512/row/v2 leaves in frame-v3-sha512
+// trees.  The frame leaf, pad and node, the hm96 leaf's mask, salt digest and value, and the constants' builders are the GPU's one row
+// commitment (verity/ml/kernels/row_commit.cuh, `rc`); what is the committer's own is its schedule:
+//   * every per-step constant (the domain's frame templates and midstates, the salt key) is a kernel parameter (`LeafK`, rc's FrameK
+//     and Hm96K with the row prefix's midstate and the salt key, and `NodeK`, rc's, __grid_constant__) instead of __constant__ memory,
+//     so the worker's steps (one domain each) run back to back on its side stream with no symbol copy between them;
+//   * digests are stored in byte order (a [n, 64] uint8 tensor is the digests), each 8-byte word swapped on load and store;
+//   * the row digest, the derived salts (salt_prf), and the per-GPU leaf forms below.
 // Kernel names contain rows_leaf (leaves and pads) or rows_level (nodes): benchmarks/served_commit/nsys_summary.py files GPU time by
 // those substrings, and any other name counts as the model's.
 // extern "C" launchers and the host builder for native_collect.cpp's StepHasher, which runs them with the GIL released.
@@ -22,9 +22,9 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <vector>
 
 #include "sha512.cuh"
+#include "row_commit.cuh"
 
 namespace {
 
@@ -32,8 +32,8 @@ using u64 = uint64_t;
 using u32 = uint32_t;
 #define DEV __device__ __forceinline__
 
-constexpr int MAX_NB = 4;            // positions and node indices below 2^32
-constexpr int LEVELS = 33;
+using rc::LEVELS;
+using rc::MAX_NB;
 constexpr int THREADS = 256;
 // The leaf kernel's __launch_bounds__ min blocks per SM: 2 caps it at 128 registers, the fastest form on H200 at 256-byte rows
 // (benchmarks/served_commit/rows_floor.py times 1, 2 and 3).
@@ -41,22 +41,14 @@ constexpr int THREADS = 256;
 #define VERITY_ROWS_MIN_BLOCKS 2
 #endif
 
-struct LeafK {
+// rc's frame leaf and pad templates (FrameK) and hm96's constants (Hm96K), with the committer's own
+struct LeafK : rc::FrameK, rc::Hm96K {
   u64 mid_P[8];                      // after P(l)
-  u64 mid_salt[8];                   // after the salt prefix
-  u64 mid_leaf[8];                   // after leaf_prefix(key)
   u64 ks[8];                         // the salt key
   u64 ks_m8[8];                      // state after rounds 0..7 of a salt block (its words 0..7 are the key)
-  u64 fl_m15[8];                     // state after rounds 0..14 of the frame leaf's first block (words 0..14 don't depend on pos)
-  u64 kw_leafpad[80];                // the hm96 leaf's padding block, scheduled
-  u64 fl_tpl[MAX_NB][32];            // the frame leaf's two blocks per nb = len(uint(pos)) (index nb - 1), pos and h zero
-  u64 pad_tpl[MAX_NB][16];           // a pad's first block per nb, rank zero
   u32 lb;                            // row bytes
 };
-struct NodeK {
-  u64 node_mid[LEVELS][8];           // per level: the chaining value after a node message's first block (it fixes only the level)
-  u64 node_tpl[MAX_NB][32];          // a node message's blocks 2 and 3 per ni = len(uint(index)), index and children zero
-};
+using rc::NodeK;
 struct Params {
   LeafK leaf;
   NodeK node;
@@ -64,13 +56,9 @@ struct Params {
 
 DEV u32 bswap32(u32 x) { return __byte_perm(x, 0, 0x0123); }
 DEV u64 be64(u32 lo, u32 hi) { return (u64)bswap32(lo) << 32 | bswap32(hi); }   // 8 bytes loaded as two LE u32
-DEV int nbytes(u64 x) { int n = 1; while (x >> (8 * n) && n < 8) ++n; return n; }
 DEV uint4 ldg16(const uint8_t* p) { return __ldg(reinterpret_cast<const uint4*>(p)); }
-
-DEV void cpy8(u64* d, const u64* s) {
-#pragma unroll
-  for (int i = 0; i < 8; ++i) d[i] = s[i];
-}
+using rc::cpy8;
+using rc::st_be;
 // n words from / to digest byte order
 DEV void ld_be(const uint8_t* p, u64* d, int n) {
 #pragma unroll
@@ -80,101 +68,6 @@ DEV void ld_be(const uint8_t* p, u64* d, int n) {
     d[2 * i + 1] = be64(v.z, v.w);
   }
 }
-DEV void st_be(uint8_t* p, const u64* d, int n) {
-  uint4* o = reinterpret_cast<uint4*>(p);
-#pragma unroll
-  for (int i = 0; i < n / 2; ++i)
-    o[i] = make_uint4(bswap32((u32)(d[2 * i] >> 32)), bswap32((u32)d[2 * i]), bswap32((u32)(d[2 * i + 1] >> 32)), bswap32((u32)d[2 * i + 1]));
-}
-
-// OR the low NB bytes of v, big-endian, into the message words W at byte offset OFF.
-template <int OFF, int NB>
-DEV void or_be(u64* W, u64 v) {
-  constexpr int END = OFF + NB, K = (END - 1) / 8, SH = 8 * (7 - (END - 1) % 8);
-  W[K] |= v << SH;
-  if constexpr (OFF < 8 * K) W[K - 1] |= v >> (64 - SH);
-}
-// OR a digest (8 words) into W at byte offset OFF.
-template <int OFF>
-DEV void or_digest(u64* W, const u64* d) {
-  constexpr int K0 = OFF / 8, S = 8 * (OFF % 8);
-#pragma unroll
-  for (int i = 0; i < 8; ++i) {
-    if constexpr (S == 0) {
-      W[K0 + i] |= d[i];
-    } else {
-      W[K0 + i] |= d[i] >> S;
-      W[K0 + i + 1] |= d[i] << (64 - S);
-    }
-  }
-}
-
-// --- the frame: leaf, pad, node ----------------------------------------------------------------------------------
-
-template <int NB>
-DEV void frame_leaf_nb(const LeafK& K, u64 pos, const u64* h, u64* out) {
-  u64 W[32];
-#pragma unroll
-  for (int i = 0; i < 32; ++i) W[i] = K.fl_tpl[NB - 1][i];
-  or_be<121, NB>(W, pos);
-  or_be<129 + NB, NB>(W, pos);
-  or_digest<163 + 2 * NB>(W, h);
-  sha::iv(out);
-  sha::compress_from<15>(out, K.fl_m15, W);
-  sha::compress(out, W + 16);
-}
-DEV void frame_leaf(const LeafK& K, u64 pos, const u64* h, u64* out) {
-  switch (nbytes(pos)) {
-    case 1: frame_leaf_nb<1>(K, pos, h, out); break;
-    case 2: frame_leaf_nb<2>(K, pos, h, out); break;
-    case 3: frame_leaf_nb<3>(K, pos, h, out); break;
-    default: frame_leaf_nb<4>(K, pos, h, out); break;
-  }
-}
-
-template <int NB>
-DEV void pad_nb(const LeafK& K, u64 rank, u64* out) {
-  u64 W[16];
-#pragma unroll
-  for (int i = 0; i < 16; ++i) W[i] = K.pad_tpl[NB - 1][i];
-  or_be<120, NB>(W, rank);
-  sha::iv(out);
-  sha::compress(out, W);
-#pragma unroll
-  for (int i = 0; i < 15; ++i) W[i] = 0;
-  W[15] = (120 + NB) * 8;
-  sha::compress(out, W);
-}
-DEV void pad(const LeafK& K, u64 rank, u64* out) {
-  switch (nbytes(rank)) {
-    case 1: pad_nb<1>(K, rank, out); break;
-    case 2: pad_nb<2>(K, rank, out); break;
-    case 3: pad_nb<3>(K, rank, out); break;
-    default: pad_nb<4>(K, rank, out); break;
-  }
-}
-
-template <int NI>
-DEV void node_ni(const NodeK& N, int level, u64 index, const u64* L, const u64* R, u64* out) {
-  u64 W[32];
-#pragma unroll
-  for (int i = 0; i < 32; ++i) W[i] = N.node_tpl[NI - 1][i];
-  or_be<2, NI>(W, index);
-  or_digest<10 + NI>(W, L);
-  or_digest<82 + NI>(W, R);
-  cpy8(out, N.node_mid[level]);
-  sha::compress(out, W);
-  sha::compress(out, W + 16);
-}
-DEV void node(const NodeK& N, int level, u64 index, const u64* L, const u64* R, u64* out) {
-  switch (nbytes(index)) {
-    case 1: node_ni<1>(N, level, index, L, R, out); break;
-    case 2: node_ni<2>(N, level, index, L, R, out); break;
-    case 3: node_ni<3>(N, level, index, L, R, out); break;
-    default: node_ni<4>(N, level, index, L, R, out); break;
-  }
-}
-
 // --- the leaf's parts ----------------------------------------------------------------------------------------------
 
 // SHA-512 of a 128-byte first block (its chaining value cv) and lb row bytes at p (16-byte aligned; the loads may run up to 15
@@ -229,52 +122,6 @@ DEV void salt_prf(const LeafK& K, u64 pos, u64* Y) {
   }
 }
 
-// c = SHA-512(salt_prefix || y)
-DEV void salt_digest(const LeafK& K, const u64* Y, u64* c) {
-  u64 w[16];
-  cpy8(c, K.mid_salt);
-#pragma unroll
-  for (int i = 0; i < 16; ++i) w[i] = Y[i];
-  sha::compress(c, w);
-#pragma unroll
-  for (int i = 0; i < 8; ++i) w[i] = Y[16 + i];
-  w[8] = 0x8000000000000000ull;
-#pragma unroll
-  for (int i = 9; i < 15; ++i) w[i] = 0;
-  w[15] = (128 + 192) * 8;
-  sha::compress(c, w);
-}
-
-// M_key y as 16 little-endian u32 (mask byte 4w + k is byte k of m[w]): for salt bytes p = 16 q + r, the 80 bytes [16 q, 16 q + 80)
-// of T_{y_p} are xored into A_r, and A_r shifted down r bytes into m.  T is the nibble table (step_rows.t_nibbles): T_v =
-// T_(v & 15) ^ T_(v & 0xF0), rows stored chunk-major (chunk c of row u at 256 c + 16 u, the high nibble's rows 4 KB on), 8 KB that
-// stays in L1.
-DEV void hm96_mask(const uint8_t* T, const u64* Y, u32* m) {
-#pragma unroll
-  for (int w = 0; w < 16; ++w) m[w] = 0;
-#pragma unroll
-  for (int r = 0; r < 16; ++r) {
-    u32 A[20];
-#pragma unroll
-    for (int i = 0; i < 20; ++i) A[i] = 0;
-#pragma unroll
-    for (int q = 0; q < 12; ++q) {
-      const int p = 16 * q + r;
-      const u32 v = (u32)(Y[p >> 3] >> (56 - 8 * (p & 7))) & 0xFFu;
-      const uint8_t* lo = T + 256 * q + 16 * (v & 15u);
-      const uint8_t* hi = T + 4096 + 256 * q + 16 * (v >> 4);
-#pragma unroll
-      for (int i = 0; i < 5; ++i) {
-        const uint4 u = ldg16(lo + 256 * i), w = ldg16(hi + 256 * i);
-        A[4 * i] ^= u.x ^ w.x; A[4 * i + 1] ^= u.y ^ w.y; A[4 * i + 2] ^= u.z ^ w.z; A[4 * i + 3] ^= u.w ^ w.w;
-      }
-    }
-    const int sw = r >> 2, s = 8 * (r & 3);
-#pragma unroll
-    for (int w = 0; w < 16; ++w) m[w] ^= s ? __funnelshift_r(A[w + sw], A[w + sw + 1], s) : A[w + sw];
-  }
-}
-
 // A thread a position first + i (i < m): the tree leaf when i < n_rows and pos < n_total (row i of `rows`), else the pad; b || c to
 // bc[i] and h to hs[i] for a leaf when they are given.  salts: row i's given salt at 192 i, or null for derived salts.
 __global__ void __launch_bounds__(THREADS, VERITY_ROWS_MIN_BLOCKS)
@@ -286,26 +133,25 @@ __global__ void __launch_bounds__(THREADS, VERITY_ROWS_MIN_BLOCKS)
   const u64 pos = first + i;
   u64 o[8];
   if (i < n_rows && pos < n_total) {
-    u64 x[8], Y[24], c[8], B[16], h[8];
+    u64 x[8], Y[24], c[8], my[8], B[16], h[8];
     u32 mk[16];
     hash_after_block(K.mid_P, rows + i * stride, K.lb, x);
     if (salts) ld_be(salts + 192 * i, Y, 24);
     else salt_prf(K, pos, Y);
-    hm96_mask(Tn, Y, mk);
-    salt_digest(K, Y, c);
+    rc::mask<false>(rc::NibTab<true>{Tn}, Y, mk);
+    rc::salt_digest(K, Y, c);
+    rc::mask_words(mk, my);
 #pragma unroll
     for (int w = 0; w < 8; ++w) {
-      B[w] = x[w] ^ ((u64)bswap32(mk[2 * w]) << 32 | bswap32(mk[2 * w + 1]));
+      B[w] = x[w] ^ my[w];
       B[8 + w] = c[w];
     }
     if (bc) st_be(bc + 128 * i, B, 16);
-    cpy8(h, K.mid_leaf);
-    sha::compress(h, B);
-    sha::compress_kw(h, K.kw_leafpad);
+    rc::hm96_value(K, B, h);
     if (hs) st_be(hs + 64 * i, h, 8);
-    frame_leaf(K, pos, h, o);
+    rc::frame_leaf<0>(K, pos, h, o);
   } else {
-    pad(K, pos, o);
+    rc::pad(K, pos, o);
   }
   st_be(out + 64 * i, o, 8);
 }
@@ -339,52 +185,6 @@ DEV void load_t8(const uint8_t* Tn, uint4* T8) {
   __syncthreads();
 }
 
-// hm96_mask's product with its loop over r rolled: A_r's shift down r bytes is a word shift of r >> 2 (two conditional static
-// shifts) and a funnel shift of 8 (r & 3).  BYTE: T is the byte table (5 loads a salt byte), else the nibble table (10).
-template <bool BYTE>
-DEV void mask_roll(const uint4* T, const u64* Y, u32* m) {
-#pragma unroll
-  for (int w = 0; w < 16; ++w) m[w] = 0;
-#pragma unroll 1
-  for (int r = 0; r < 16; ++r) {
-    u32 A[20];
-#pragma unroll
-    for (int i = 0; i < 20; ++i) A[i] = 0;
-    const int sh = 56 - 8 * (r & 7);
-#pragma unroll
-    for (int q = 0; q < 12; ++q) {
-      const u32 v = (u32)((r < 8 ? Y[2 * q] : Y[2 * q + 1]) >> sh) & 0xFFu;
-      if constexpr (BYTE) {
-        const uint4* p = T + 17 * v + q;
-#pragma unroll
-        for (int i = 0; i < 5; ++i) {
-          const uint4 u = p[i];
-          A[4 * i] ^= u.x; A[4 * i + 1] ^= u.y; A[4 * i + 2] ^= u.z; A[4 * i + 3] ^= u.w;
-        }
-      } else {
-        const uint4* lo = T + 16 * q + (v & 15u);
-        const uint4* hi = T + 256 + 16 * q + (v >> 4);
-#pragma unroll
-        for (int i = 0; i < 5; ++i) {
-          const uint4 u = lo[16 * i], w = hi[16 * i];
-          A[4 * i] ^= u.x ^ w.x; A[4 * i + 1] ^= u.y ^ w.y; A[4 * i + 2] ^= u.z ^ w.z; A[4 * i + 3] ^= u.w ^ w.w;
-        }
-      }
-    }
-    if (r & 4) {
-#pragma unroll
-      for (int k = 0; k < 19; ++k) A[k] = A[k + 1];
-    }
-    if (r & 8) {
-#pragma unroll
-      for (int k = 0; k < 18; ++k) A[k] = A[k + 2];
-    }
-    const u32 s = 8 * (r & 3);
-#pragma unroll
-    for (int w = 0; w < 16; ++w) m[w] ^= __funnelshift_r(A[w], A[w + 1], s);
-  }
-}
-
 // salt_prf with its loop over r rolled (one compression body for the three)
 DEV void salt_prf_rolled(const LeafK& K, u64 pos, u64* Y) {
 #pragma unroll 1
@@ -399,44 +199,6 @@ DEV void salt_prf_rolled(const LeafK& K, u64 pos, u64* Y) {
     sha::compress_from<8>(s, K.ks_m8, w);
 #pragma unroll
     for (int i = 0; i < 8; ++i) Y[8 * r + i] = s[i];
-  }
-}
-
-DEV u64 mask_word(const u32* mk, int w) { return (u64)bswap32(mk[2 * w]) << 32 | bswap32(mk[2 * w + 1]); }
-
-// The frame leaf in two halves: its first block (only pos varies) and then its second (pos and h).
-template <int NB>
-DEV void frame_first_nb(const LeafK& K, u64 pos, u64* f) {
-  u64 W[16];
-#pragma unroll
-  for (int i = 0; i < 16; ++i) W[i] = K.fl_tpl[NB - 1][i];
-  or_be<121, NB>(W, pos);
-  sha::iv(f);
-  sha::compress_from<15>(f, K.fl_m15, W);
-}
-template <int NB>
-DEV void frame_second_nb(const LeafK& K, u64 pos, const u64* h, u64* f) {
-  u64 W[32];                                     // words 16..31: or_be and or_digest below touch none under 16
-#pragma unroll
-  for (int i = 16; i < 32; ++i) W[i] = K.fl_tpl[NB - 1][i];
-  or_be<129 + NB, NB>(W, pos);
-  or_digest<163 + 2 * NB>(W, h);
-  sha::compress(f, W + 16);
-}
-DEV void frame_first(const LeafK& K, u64 pos, u64* f) {
-  switch (nbytes(pos)) {
-    case 1: frame_first_nb<1>(K, pos, f); break;
-    case 2: frame_first_nb<2>(K, pos, f); break;
-    case 3: frame_first_nb<3>(K, pos, f); break;
-    default: frame_first_nb<4>(K, pos, f); break;
-  }
-}
-DEV void frame_second(const LeafK& K, u64 pos, const u64* h, u64* f) {
-  switch (nbytes(pos)) {
-    case 1: frame_second_nb<1>(K, pos, h, f); break;
-    case 2: frame_second_nb<2>(K, pos, h, f); break;
-    case 3: frame_second_nb<3>(K, pos, h, f); break;
-    default: frame_second_nb<4>(K, pos, h, f); break;
   }
 }
 
@@ -467,28 +229,27 @@ __global__ void __launch_bounds__(THREADS, VERITY_ROWS_MIN_BLOCKS)
   const u64 pos = first + i;
   u64 o[8];
   if (i < n_rows && pos < n_total) {
-    u64 x[8], Y[24], c[8], B[16], h[8];
+    u64 x[8], Y[24], c[8], my[8], B[16], h[8];
     u32 mk[16];
     if (salts) ld_be(salts + 192 * i, Y, 24);
     else salt_prf_rolled(K, pos, Y);
-    mask_roll<false>(T, Y, mk);
-    salt_digest(K, Y, c);
+    rc::mask<true>(rc::NibTab<false>{reinterpret_cast<const uint8_t*>(T)}, Y, mk);
+    rc::salt_digest(K, Y, c);
     hash_after_block(K.mid_P, rows + i * stride, K.lb, x);
+    rc::mask_words(mk, my);
 #pragma unroll
     for (int w = 0; w < 8; ++w) {
-      B[w] = x[w] ^ mask_word(mk, w);
+      B[w] = x[w] ^ my[w];
       B[8 + w] = c[w];
     }
     if (bc) st_be(bc + 128 * i, B, 16);
-    cpy8(h, K.mid_leaf);
-    sha::compress(h, B);
-    sha::compress_kw(h, K.kw_leafpad);
+    rc::hm96_value(K, B, h);
     if (hs) st_be(hs + 64 * i, h, 8);
     if constexpr (H_ONLY) return;
-    frame_leaf(K, pos, h, o);
+    rc::frame_leaf<0>(K, pos, h, o);
   } else {
     if constexpr (H_ONLY) return;
-    pad(K, pos, o);
+    rc::pad(K, pos, o);
   }
   st_be(out + 64 * i, o, 8);
 }
@@ -509,19 +270,18 @@ __global__ void __launch_bounds__(THREADS, 2)
     u32 mk[16];
     if (salts) ld_be(salts + 192 * i, Y, 24);
     else salt_prf(K, pos, Y);
-    mask_roll<true>(T8, Y, mk);
-    salt_digest(K, Y, c);
-#pragma unroll
-    for (int w = 0; w < 8; ++w) my[w] = mask_word(mk, w);
+    rc::mask<true>(rc::ByteTab<17 * 16, false>{reinterpret_cast<const uint8_t*>(T8)}, Y, mk);
+    rc::salt_digest(K, Y, c);
+    rc::mask_words(mk, my);
     u64* s = reinterpret_cast<u64*>(sf + 192 * i);
     st_raw(s, my, 8);
     st_raw(s + 8, c, 8);
     if constexpr (H_ONLY) return;
-    frame_first(K, pos, f);
+    rc::frame_first(K, pos, f);
     st_raw(s + 16, f, 8);
   } else if constexpr (!H_ONLY) {
     u64 o[8];
-    pad(K, pos, o);
+    rc::pad(K, pos, o);
     st_be(out + 64 * i, o, 8);
   }
 }
@@ -551,13 +311,11 @@ __global__ void __launch_bounds__(THREADS, VERITY_ROWS_MIN_BLOCKS)
 #pragma unroll
   for (int w = 0; w < 8; ++w) B[w] ^= x[w];
   if (bc) st_be(bc + 128 * i, B, 16);
-  cpy8(h, K.mid_leaf);
-  sha::compress(h, B);
-  sha::compress_kw(h, K.kw_leafpad);
+  rc::hm96_value(K, B, h);
   if (hs) st_be(hs + 64 * i, h, 8);
   if constexpr (H_ONLY) return;
   ld_raw(s + 16, f, 8);
-  frame_second(K, first + i, h, f);
+  rc::frame_second<0>(K, first + i, h, f);
   st_be(out + 64 * i, f, 8);
 }
 
@@ -570,9 +328,9 @@ __global__ void __launch_bounds__(THREADS) rows_leaf_frame_kernel(const __grid_c
   if (i < nd) {
     u64 h[8];
     ld_be(hs + 64 * i, h, 8);
-    frame_leaf(K, first + i, h, o);
+    rc::frame_leaf<0>(K, first + i, h, o);
   } else {
-    pad(K, first + i, o);
+    rc::pad(K, first + i, o);
   }
   st_be(out + 64 * i, o, 8);
 }
@@ -585,7 +343,7 @@ __global__ void __launch_bounds__(THREADS) rows_level_kernel(const __grid_consta
   u64 L[8], R[8], o[8];
   ld_be(in + 128 * i, L, 8);
   ld_be(in + 128 * i + 64, R, 8);
-  node(N, level, first_index + i, L, R, o);
+  rc::node(N, level, first_index + i, L, R, o);
   st_be(out + 64 * i, o, 8);
 }
 
@@ -613,7 +371,7 @@ __global__ void __launch_bounds__(THREADS) rows_levels_kernel(const __grid_const
       u64 L[8], R[8], o[8];
       ld_be_written(in + 128 * i, L, 8);
       ld_be_written(in + 128 * i + 64, R, 8);
-      node(N, level + k, (base >> (k + 1)) + at + i, L, R, o);
+      rc::node(N, level + k, (base >> (k + 1)) + at + i, L, R, o);
       st_be(dst + 64 * i, o, 8);
     }
     __syncthreads();
@@ -625,40 +383,7 @@ __global__ void __launch_bounds__(THREADS) rows_levels_kernel(const __grid_const
 
 // --- host: the step's parameters ---------------------------------------------------------------------------------
 
-const char FRAME[] = "veritor/protocol/merkle/frame/v3";  // + its NUL: 33 bytes
-constexpr int SCHEMA_LEN = 18;                             // "hm96-sha512/row/v2": the leaf template's offsets assume its length
-
-// merkle._message: frame || u32be(len tag) || tag || (u64be(len part) || part)...
-std::vector<uint8_t> message(const char* tag, const std::vector<std::vector<uint8_t>>& parts) {
-  std::vector<uint8_t> m(FRAME, FRAME + sizeof FRAME);
-  const size_t tl = strlen(tag);
-  for (int i = 3; i >= 0; --i) m.push_back((uint8_t)(tl >> (8 * i)));
-  m.insert(m.end(), tag, tag + tl);
-  for (const auto& p : parts) {
-    for (int i = 7; i >= 0; --i) m.push_back((uint8_t)((u64)p.size() >> (8 * i)));
-    m.insert(m.end(), p.begin(), p.end());
-  }
-  return m;
-}
-// the padded message's words (len + 17 rounded up to blocks), the length in the last block
-std::vector<u64> padded_words(const std::vector<uint8_t>& msg) {
-  const size_t total = ((msg.size() + 17 + 127) / 128) * 128;
-  std::vector<uint8_t> b(total, 0);
-  memcpy(b.data(), msg.data(), msg.size());
-  b[msg.size()] = 0x80;
-  sha::put_be64(b.data() + total - 8, (u64)msg.size() * 8);
-  std::vector<u64> w(total / 8);
-  for (size_t i = 0; i < w.size(); ++i) w[i] = sha::be64(b.data() + 8 * i);
-  return w;
-}
-std::vector<uint8_t> zeros(int n) { return std::vector<uint8_t>(n, 0); }
-void words_of(const uint8_t* block, u64* w, int n) { for (int i = 0; i < n; ++i) w[i] = sha::be64(block + 8 * i); }
-void midstate(const uint8_t* block, u64* st) {
-  u64 w[16];
-  sha::iv(st);
-  words_of(block, w, 16);
-  sha::compress(st, w);
-}
+constexpr int SCHEMA_LEN = 18;   // "hm96-sha512/row/v2": the leaf template's offsets assume its length (rc's SX = 0)
 
 }  // namespace
 
@@ -671,50 +396,19 @@ extern "C" int verity_rows_build(const uint8_t* domain_id, const uint8_t* ks, co
   if (schema_len != SCHEMA_LEN) return -1;
   Params p{};
   LeafK& c = p.leaf;
-  NodeK& n = p.node;
   c.lb = lb;
-  midstate(row_prefix, c.mid_P);
-  midstate(salt_prefix, c.mid_salt);
-  midstate(leaf_prefix, c.mid_leaf);
-  {
-    u64 blk[16] = {0x8000000000000000ull};
-    blk[15] = 256 * 8;
-    sha::schedule_kw(blk, c.kw_leafpad);
-  }
-  words_of(ks, c.ks, 8);
+  rc::midstate(row_prefix, c.mid_P);
+  rc::midstate(salt_prefix, c.mid_salt);
+  rc::midstate(leaf_prefix, c.mid_leaf);
+  rc::pad_schedule(256, c.kw_leafpad);
+  for (int i = 0; i < 8; ++i) c.ks[i] = rc::be64_at(ks + 8 * i);
   {
     u64 blk[16] = {}, st[8];
     memcpy(blk, c.ks, 64);
     sha::iv(st);
     sha::rounds_prefix(st, blk, 8, c.ks_m8);
   }
-  const std::vector<uint8_t> did(domain_id, domain_id + 64);
-  const std::vector<uint8_t> sch(schema, schema + schema_len);
-  for (int nb = 1; nb <= MAX_NB; ++nb) {
-    const auto m = padded_words(message("leaf", {did, zeros(nb), zeros(nb), sch, zeros(64)}));
-    if (m.size() != 32) return -1;
-    std::copy(m.begin(), m.end(), c.fl_tpl[nb - 1]);
-    for (int i = 0; i < 15; ++i)
-      if (c.fl_tpl[nb - 1][i] != c.fl_tpl[0][i]) return -1;
-    const auto pm = padded_words(message("pad", {did, zeros(nb)}));
-    if (pm.size() != 32) return -1;
-    std::copy(pm.begin(), pm.begin() + 16, c.pad_tpl[nb - 1]);
-    const auto nm = padded_words(message("node", {did, std::vector<uint8_t>{0}, zeros(nb), zeros(64), zeros(64)}));
-    if (nm.size() != 48) return -1;
-    std::copy(nm.begin() + 16, nm.end(), n.node_tpl[nb - 1]);
-  }
-  {
-    u64 st[8];
-    sha::iv(st);
-    sha::rounds_prefix(st, c.fl_tpl[0], 15, c.fl_m15);
-  }
-  for (int level = 0; level < LEVELS; ++level) {
-    const auto m = padded_words(message("node", {did, std::vector<uint8_t>{(uint8_t)level}, zeros(1), zeros(64), zeros(64)}));
-    u64 blk[16];
-    std::copy(m.begin(), m.begin() + 16, blk);
-    sha::iv(n.node_mid[level]);
-    sha::compress(n.node_mid[level], blk);
-  }
+  if (rc::frame_plan(domain_id, reinterpret_cast<const uint8_t*>(schema), schema_len, c) || rc::node_plan(domain_id, p.node)) return -1;
   memcpy(out, &p, sizeof p);
   return 0;
 }

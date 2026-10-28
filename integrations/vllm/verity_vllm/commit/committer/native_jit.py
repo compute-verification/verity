@@ -27,12 +27,12 @@ import sys
 from collections.abc import Callable, Sequence
 from typing import Any
 
-from verity.ml.kernels import SHA512
+from verity.ml.kernels import ROW_COMMIT, SHA512
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SOURCES = ("native_collect.cpp", "native_gather.cu", "native_tree.cu", "native_rows.cu")
-#: headers a source includes by name from outside the sources' directory: the GPU's one SHA-512
-SHARED = {"sha512.cuh": str(SHA512)}
+#: headers a source includes by name from outside the sources' directory: the GPU's one SHA-512 and its one row commit
+SHARED = {"sha512.cuh": str(SHA512), "row_commit.cuh": str(ROW_COMMIT)}
 CFLAGS = ("-O3",)
 CUDA_CFLAGS = ("-O3", "--use_fast_math")
 
@@ -50,13 +50,15 @@ def source_paths(here: str = HERE) -> list[str]:
 def local_headers(sources: Sequence[str], shared: dict[str, str] = SHARED) -> list[tuple[str, str]]:
     """(path relative to the sources' directory, absolute path) of every header the sources include by a quoted path that exists beside
     the including file, transitively, sorted.  A name of `shared` that a file in the sources' directory includes and finds nowhere
-    beside it is that header, staged at that name.  Any other quoted include found nowhere beside it is the compiler's (-I) business
-    and is skipped.  Refused: sources with one basename twice, sources in different directories that include headers, and a header
-    outside the sources' directory -- a staged copy (`<build_dir>/src/`) could not hold either faithfully."""
+    beside it is that header, staged at that name; a shared header's quoted include of a shared name is that header too.  Any other
+    quoted include found nowhere beside it is the compiler's (-I) business and is skipped.  Refused: sources with one basename twice,
+    sources in different directories that include headers, a header outside the sources' directory, and a shared header's include of
+    an unshared header beside it -- a staged copy (`<build_dir>/src/`) could not hold any of them faithfully."""
     names = [os.path.basename(p) for p in sources]
     dup = sorted({n for n in names if names.count(n) > 1})
     if dup:
         raise ValueError(f"JIT sources share basenames {dup}: their staged copies in one src/ would overwrite each other")
+    staged = {os.path.abspath(v) for v in shared.values()}
     found: dict[str, str] = {}
     todo = [os.path.abspath(p) for p in sources]
     roots = {os.path.dirname(p) for p in todo}
@@ -72,7 +74,14 @@ def local_headers(sources: Sequence[str], shared: dict[str, str] = SHARED) -> li
             name = inc.decode()
             h = os.path.normpath(os.path.join(os.path.dirname(p), name))
             rel = None
-            if not os.path.isfile(h):
+            if p in staged:
+                if name in shared:
+                    rel, h = name, shared[name]
+                elif os.path.isfile(h):
+                    raise ValueError(f"shared header {p} includes {h}, which is not shared: its staged copy could not resolve it")
+                else:
+                    continue
+            elif not os.path.isfile(h):
                 if name not in shared or os.path.dirname(p) not in roots:
                     continue
                 rel, h = name, shared[name]
@@ -83,7 +92,7 @@ def local_headers(sources: Sequence[str], shared: dict[str, str] = SHARED) -> li
                 if rel.startswith(os.pardir + os.sep):
                     raise ValueError(f"JIT source {p} includes {h}, outside the sources' directory: its staged copy could not resolve it")
             found[rel] = h
-            todo.append(h)
+            todo.append(os.path.abspath(h))
     return sorted(found.items())
 
 
