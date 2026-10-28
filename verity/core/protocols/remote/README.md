@@ -179,11 +179,13 @@ lifecycle with a stand-in prover, and two run the sampled-proofs half for real:
   refused. At an 8-block draw, that allows at most 43.77% faulty proof blocks at δ = 1%. It runs, at proof level
   none, and isn't placed: its Lean verifier ran beside the prover. On a CPU at a small shape, run
   `uv run python examples/h200/run.py --out /tmp/e2e` (`--tamper l1.wup` must exit 3).
-- `verity example vllm` (`examples/vllm/README.md`): Llama-3.2-1B served by vLLM on one RTX PRO 6000, its values
-  committed while serving, and a sampling period's proof blocks drawn by live coins, proved by C-Flock `--zk` and
-  checked by the Lean verifier. It runs, at proof level none: no theorem yet ties those verdicts to a guarantee.
+- the vLLM demo, `verity example vllm` (`examples/vllm/README.md`): Llama-3.2-1B INT8 served by vLLM on one H200, its
+  values committed while serving, a sampling period's proof blocks sampled by live coins, proved by C-Flock `--zk` and
+  checked by the Lean verifier, and PoUW's H1 on the served model. PoUW's verdict there is a development run under the
+  challenger's development key and credits nothing, and an H1 window isn't yet a `verity/pouw/v1` case, so no run of
+  record of the remote verdict has passed: its run is moved, at proof level none.
 
-PoUW's half has no runner. `examples/dither_full_util/README.md` has no runner and no run of record. What of PoUW runs
+`examples/dither_full_util/README.md` has no runner and no run of record. What of PoUW's own check runs
 is its Lean check, through its difftest against the Python (`lake exe pouw-check`, the suite
 `verity-pouw-check-difftest`; `verity/core/protocols/pouw/lean/check/README.md`), and the composite's difftest
 (`verity/core/protocols/composition/tests`).
