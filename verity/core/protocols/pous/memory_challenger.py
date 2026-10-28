@@ -88,6 +88,7 @@ from verity.ml.commitments.rowleaf import sha512_row_v2_digest
 from verity.ml.crypto import lms
 from verity.ml.randomness import derive
 
+from .params import SALT_BITS
 from .protocol import PousEstablished, Scheme
 from .verifier import DIGEST_BYTES
 
@@ -100,6 +101,7 @@ COIN_BINDING = b"verity-pous/memory-challenger/coin-tree/v1\0"
 RECORD_BINDING = b"verity-pous/memory-challenger/round-records/v1\0"
 SESSION_TAG = b"verity-pous/memory-challenger/session/v1\0"
 SESSION_LOG = "verity-pous/memory-challenger/session-log/v1"
+SALT_LOG = "verity-pous/memory-challenger/salt-log/v1"
 COIN_SCHEMA = "pous/coin/hm96-sha512/v1"
 RECORD_SCHEMA = "pous/round-record/v2"
 TEST_PREFIX = "test/"
@@ -403,29 +405,10 @@ class SessionLog:
     @staticmethod
     def create(path: str | os.PathLike) -> None:
         """A new log, with no id used; refused when the file exists."""
-        p = Path(path)
-        try:
-            fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        except FileExistsError:
-            raise SessionLogError(f"{p} exists: a session log is never made again") from None
-        try:
-            os.write(fd, SESSION_LOG.encode() + b"\n")
-            os.fsync(fd)
-        finally:
-            os.close(fd)
-        d = os.open(p.parent, os.O_RDONLY)
-        try:
-            os.fsync(d)
-        finally:
-            os.close(d)
+        _create_log(Path(path), SESSION_LOG, "a session log")
 
     def _read(self) -> frozenset[bytes]:
-        try:
-            lines = self.path.read_bytes().split(b"\n")
-        except FileNotFoundError:
-            raise SessionLogError(f"{self.path}: missing") from None
-        except OSError as e:
-            raise SessionLogError(f"{self.path}: unreadable ({type(e).__name__})") from None
+        lines = _lines(self.path)
         ids = lines[1:-1]
         if (lines[0] != SESSION_LOG.encode() or lines[-1] != b""
                 or not all(_SESSION_ID.fullmatch(x) for x in ids) or len(set(ids)) != len(ids)):
@@ -439,23 +422,123 @@ class SessionLog:
         """Record `session` as used, fsynced, before this returns; refused when it is already used."""
         if len(session) != 32:
             raise ValueError("a session id is 32 bytes")
-        try:
-            fd = os.open(self.path, os.O_WRONLY | os.O_APPEND)
-        except FileNotFoundError:
-            raise SessionLogError(f"{self.path}: missing") from None
-        except OSError as e:
-            raise SessionLogError(f"{self.path}: unwritable ({type(e).__name__})") from None
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX)
+
+        def refuse() -> str | None:
             if session in self._read():
-                raise SessionLogError(f"session {session.hex()} is in {self.path}: the memory challenger runs one session "
-                                      "under an id")
-            line = session.hex().encode() + b"\n"
-            if os.write(fd, line) != len(line):
-                raise SessionLogError(f"{self.path}: a short write")
-            os.fsync(fd)
-        finally:
-            os.close(fd)
+                return f"session {session.hex()} is in {self.path}: the memory challenger runs one session under an id"
+            return None
+
+        _append(self.path, session.hex().encode() + b"\n", refuse)
+
+
+SALT_BYTES = SALT_BITS // 8
+_SALT_ENTRY = re.compile(rb"([0-9a-f]{128}) ([0-9a-f]{128}) ([0-9a-f]{%d})" % (2 * SALT_BYTES))
+
+
+class SaltLog:
+    """The setup salts a memory challenger has drawn, one an audit, in a file of its own beside its `SessionLog` that
+    fails closed as that log does. The file is `SALT_LOG`'s line, then one entry a line: the audit's 64-byte binding, the
+    64-byte commitment to `W` the salt was drawn after, and the salt, each in lowercase hex. `record` takes the file's
+    lock, reads it again, refuses an audit already in it and appends the entry, fsynced, before it returns, so an audit
+    has one salt and a retry never redraws one. On the deployed party an audit's session id is derived from its binding,
+    commitment and salt (`challenger_party.session_id`), so the `SessionLog` refuses its second session. It rests on
+    `trusted-host` as the session log does: its host never restores an earlier copy of it."""
+
+    def __init__(self, path: str | os.PathLike) -> None:
+        self.path = Path(path)
+        self._read()
+
+    @staticmethod
+    def create(path: str | os.PathLike) -> None:
+        """A new log, with no salt drawn; refused when the file exists."""
+        _create_log(Path(path), SALT_LOG, "a salt log")
+
+    def _read(self) -> dict[bytes, tuple[bytes, bytes]]:
+        lines = _lines(self.path)
+        entries = [_SALT_ENTRY.fullmatch(x) for x in lines[1:-1]]
+        if (lines[0] != SALT_LOG.encode() or lines[-1] != b"" or not all(entries)
+                or len({m[1] for m in entries}) != len(entries)):
+            raise SessionLogError(f"{self.path}: unreadable (not a {SALT_LOG} log of one entry an audit, each on a whole "
+                                  "line)")
+        return {bytes.fromhex(m[1].decode()): (bytes.fromhex(m[2].decode()), bytes.fromhex(m[3].decode()))
+                for m in entries}
+
+    def get(self, audit: bytes) -> tuple[bytes, bytes] | None:
+        """The commitment and salt logged under `audit`, or None."""
+        return self._read().get(audit)
+
+    def record(self, audit: bytes, commitment: bytes, salt: bytes) -> None:
+        """Log `salt`, drawn after `commitment` for `audit`, fsynced, before this returns; refused when the audit has one."""
+        if (len(audit), len(commitment), len(salt)) != (64, 64, SALT_BYTES):
+            raise ValueError(f"an audit's binding and a commitment to W are 64 bytes, a salt {SALT_BYTES}")
+
+        def refuse() -> str | None:
+            if audit in self._read():
+                return (f"audit {audit.hex()} has its salt in {self.path}: the memory challenger draws one salt an audit, "
+                        "and a retry never redraws it")
+            return None
+
+        _append(self.path, f"{audit.hex()} {commitment.hex()} {salt.hex()}\n".encode(), refuse)
+
+
+def _create_log(p: Path, header: str, what: str) -> None:
+    try:
+        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        raise SessionLogError(f"{p} exists: {what} is never made again") from None
+    try:
+        os.write(fd, header.encode() + b"\n")
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    d = os.open(p.parent, os.O_RDONLY)
+    try:
+        os.fsync(d)
+    finally:
+        os.close(d)
+
+
+def _lines(path: Path) -> list[bytes]:
+    try:
+        return path.read_bytes().split(b"\n")
+    except FileNotFoundError:
+        raise SessionLogError(f"{path}: missing") from None
+    except OSError as e:
+        raise SessionLogError(f"{path}: unreadable ({type(e).__name__})") from None
+
+
+def _append(path: Path, line: bytes, refuse: Callable[[], str | None]) -> None:
+    """`line` appended to the log at `path`, fsynced, under its lock, unless `refuse()` (read under the lock) says why not."""
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_APPEND)
+    except FileNotFoundError:
+        raise SessionLogError(f"{path}: missing") from None
+    except OSError as e:
+        raise SessionLogError(f"{path}: unwritable ({type(e).__name__})") from None
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        if (why := refuse()) is not None:
+            raise SessionLogError(why)
+        if os.write(fd, line) != len(line):
+            raise SessionLogError(f"{path}: a short write")
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def coin_key(raw: bytes) -> bytes:
+    """A coin tree's hiding key from `HM96.key_bytes` uniform bytes `raw`, the bits above `HM96.key_bits` cleared as
+    `HM96.fresh_key` clears them."""
+    out = bytearray(raw)
+    if out:
+        out[-1] &= (1 << (HM96.key_bits - 8 * (HM96.key_bytes - 1))) - 1
+    return HM96.check_key(bytes(out))
+
+
+def resolution_of(clock: Callable[[], int]) -> float:
+    """How finely `clock` ticks, in ns: the monotonic clock's resolution for `time.perf_counter_ns`, else 1 (an injected
+    clock's readings are taken as given)."""
+    return time.clock_getres(time.CLOCK_MONOTONIC) * 1e9 if clock is time.perf_counter_ns else 1
 
 
 class MemoryChallenger:
@@ -472,7 +555,7 @@ class MemoryChallenger:
         if len(binding) != DIGEST_BYTES:
             raise ValueError(f"a session's binding is the setup's {DIGEST_BYTES}-byte root of C*, not {len(binding)} bytes")
         if resolution_ns is None:
-            resolution_ns = time.clock_getres(time.CLOCK_MONOTONIC) * 1e9 if clock is time.perf_counter_ns else 1
+            resolution_ns = resolution_of(clock)
         if resolution_ns > CLOCK_RESOLUTION_NS:
             raise ValueError(f"the clock ticks every {resolution_ns} ns, coarser than {CLOCK_RESOLUTION_NS} ns")
         log.claim(coins.session)
@@ -620,8 +703,9 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
 
 
 __all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_SCHEMA", "COIN_TREE", "COMPLETE", "LATE", "LMS", "PROTOCOL",
-           "RECORDS_TREE", "RECORD_SCHEMA", "SCHEMES", "SESSION_LOG", "TEST_PREFIX", "CoinOpening", "CoinTree", "LmsSigner",
-           "MemoryChallenger", "Round", "SessionCommitment", "SessionLog", "SessionLogError", "SignedSession", "Signer",
-           "Verdict", "Verify", "block_digest", "coin_digest", "coin_leaf", "collector_paused", "covering_certificate",
-           "lms_verify", "message",
-           "records_root", "register", "verdict", "verify_coin"]
+           "RECORDS_TREE", "RECORD_SCHEMA", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "TEST_PREFIX", "CoinOpening",
+           "CoinTree", "LmsSigner", "MemoryChallenger", "Round", "SaltLog", "SessionCommitment", "SessionLog",
+           "SessionLogError", "SignedSession", "Signer",
+           "Verdict", "Verify", "block_digest", "coin_digest", "coin_key", "coin_leaf", "collector_paused",
+           "covering_certificate", "lms_verify", "message", "records_root", "register", "resolution_of", "verdict",
+           "verify_coin"]
