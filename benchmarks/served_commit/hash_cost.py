@@ -366,7 +366,7 @@ def main() -> None:
                     r = beside(R, P, data, rb, n_rows, lv, scratch, cap, G, n_fwd, hs, gs, reps)
                     if r["overlapped"]:
                         break
-                    n_fwd *= 2
+                    n_fwd = max(2 * n_fwd, math.ceil(1.5 * r["hash_ms"] / fwd_ms))   # beside, the hash can run 10x slower than alone
                 r["alone_gbps"] = entry["capped_alone"][cap]["gbps"]
                 entry["beside"].append(r)
                 print(f"t{threads} rows {rb} cap {cap}: alone {r['alone_gbps']} GB/s, beside {r['hash_gbps']} GB/s, kappa "

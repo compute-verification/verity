@@ -9,6 +9,7 @@ h is in MAC-times a committed byte (hash_cost_h.py). For each T and row size rb:
                floored at 0 (a point inside the noise) and capped at h_x (past that the bytes go exclusive); h_b_hi adds twice the
                A/A noise floor where an A-B-A run measured it
   h(rb, σ; B) = σ h_b(rb, σ B) + (1 - σ) h_x(rb), for B committed bytes a forward, σ of them hashed beside the GEMM
+  h_b median   the robust beside figure: the median h_beside of the A-B-A points at the phases whose median is least
 A point's phases and cap are its kernel configuration: VERITY_ROWS_PHASES (data launches a leaf batch) and CTAs a launch.
 """
 from __future__ import annotations
@@ -91,7 +92,18 @@ def model(by: dict) -> dict:
                 h_hi, _ = h_b(mb * 1e6, True)
                 env.append({"mb_per_fwd": mb, "h_b": round(h, 1), "h_b_hi": round(h_hi, 1),
                             "at": p and {k: p[k] for k in ("run", "arm", "phases", "cap", "beside_gbps", "kappa")}})
-            out.setdefault(T, {})[rb] = {"h_x": round(h_x, 1), "h_leaf": best["h_leaf"], "h_tree": trees.get(rb),
+            # the robust figure: every A-B-A point of the phases whose median is least (fallback: every point), median and quartiles
+            base = paired or pts
+            by_ph: dict = {}
+            for p in base:
+                by_ph.setdefault(p["phases"], []).append(p)
+            ph, sel = min(by_ph.items(), key=lambda kv: statistics.median(p["h_beside"] for p in kv[1])) if by_ph else (None, [])
+            hs = sorted(p["h_beside"] for p in sel)
+            robust = {"phases": ph, "n": len(hs), "paired": bool(paired), "h_b_median": round(statistics.median(hs), 1) if hs else None,
+                      "h_b_quartiles": [round(x, 1) for x in statistics.quantiles(hs, n=4)] if len(hs) >= 2 else None,
+                      "share_of_h_x": round(statistics.median(hs) / h_x, 3) if hs else None,
+                      "max_gbps": max((p["beside_gbps"] for p in sel), default=None)}
+            out.setdefault(T, {})[rb] = {"h_x": round(h_x, 1), "h_b": robust, "h_leaf": best["h_leaf"], "h_tree": trees.get(rb),
                                          "alone_at": best,
                                          "h_b_by_mb_per_fwd": env, "points": pts}
     return out
@@ -104,7 +116,10 @@ def main() -> None:
         for rb, m in sorted(rows.items(), key=lambda kv: int(kv[0])):
             env = "  ".join(f"{x['mb_per_fwd']}MB:{x['h_b']:.0f}" + (f"/{x['h_b_hi']:.0f}" if x["h_b_hi"] != x["h_b"] else "")
                             for x in m["h_b_by_mb_per_fwd"])
-            print(f"T {T:>5} rows {int(rb) // 1024:>2} KiB  h_x {m['h_x']:7.1f} (leaf {m['h_leaf']}, tree {m['h_tree']})  h_b: {env}")
+            r = m["h_b"]
+            print(f"T {T:>5} rows {int(rb) // 1024:>2} KiB  h_x {m['h_x']:7.1f} (leaf {m['h_leaf']}, tree {m['h_tree']})  h_b median "
+                  f"{r['h_b_median']} quartiles {r['h_b_quartiles']} ({r['share_of_h_x']} of h_x; phases {r['phases']}, {r['n']} points, "
+                  f"paired {r['paired']})\n      envelope: {env}")
 
 
 if __name__ == "__main__":
