@@ -1,4 +1,4 @@
-"""N2's advised unit proved in zero knowledge and decided on the proof: each link-window of an advised link
+"""N2's advised unit proved in zero knowledge and decided on the proof: each sampling block of an advised link
 (`service.LinkWindows(advised=…)`, its unit `NetworkAdvisedLinkWindow_v2`: both ends' head checks and the advised
 counts on the counts those heads hold) committed, registered on the link's own stream, proved by C-Flock `prove --zk`
 behind the Lean firewall, delivered, and decided by N2's verifier of record with the link's advice
@@ -69,7 +69,7 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   instance, and that the advised counts refuse in some window: the proof's verdict bit refuses it, with both head
   checks passing. Tampered's window 0 fails the egress head check's signed digest.
 * **The statement and the rounds** are `n2_zk`'s: one circuit, `LinkWindows.proof_unit` lowered once (each gate the
-  Definition its pinned digest names), and each link-window a statement of one instance on rows ``pub`` and ``wit``
+  Definition its pinned digest names), and each sampling block a statement of one instance on rows ``pub`` and ``wit``
   (`LinkWindows.layout`; ``pub`` ends with the window's view of the advice, `service.ADVICE`) and the output row
   ``o0``, the verdict and deadline bits. A round registers, selects, proves live behind the firewall, delivers, and
   decides on the proof: the verifier's own Lean run, the ``pub`` row opened only to its own copy (its own view of the
@@ -367,7 +367,7 @@ def every_count(lw: LinkWindows, w: int, pair):
 def e2e(run: Path, windows: int = 0, clock_stand_in: bool = False, advice_from_io: bool = False,
         wanted=E2E_MEMBERS) -> SimpleNamespace:
     """network-e2e's run `run` on the advice profile as an advised link (the module docstring, "A served run's link"),
-    its first `windows` link-windows (0: every one): the link and its members (`wanted`, of `E2E_MEMBERS`) on its
+    its first `windows` sampling blocks (0: every one): the link and its members (`wanted`, of `E2E_MEMBERS`) on its
     certified records, each (advice, [(egress, ingress)] per window, what was changed). `clock_stand_in`:
     `served_clocks`'s `stand_in`. `advice_from_io`: the advice is `from_io`'s, for a run with no endpoint advice and no
     report (a gate's rehearsal), labelled so in ``traffic``."""
@@ -442,7 +442,7 @@ def e2e(run: Path, windows: int = 0, clock_stand_in: bool = False, advice_from_i
 
 
 def link_windows(lw: LinkWindows, link: AD.LinkAdvice, pairs, syncs=AT.SYNCS) -> SimpleNamespace:
-    """Every link-window of the member as the prover holds it before it registers, as `n2_zk.link_windows` holds a
+    """Every sampling block of the member as the prover holds it before it registers, as `n2_zk.link_windows` holds a
     run's: its opening (fresh salts), the root it commits, the unit's arguments under that root on the advice
     (`LinkWindows.arguments`), each end's head check's failed parts and the advised counts' (``advised``,
     `advised_check`), the unit's output word by the gates' references (`LinkWindows.outputs`) and the certificates;

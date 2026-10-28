@@ -138,7 +138,7 @@ def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_l
         tmp_path, capsys):
     """`warden-rehearse --scan` runs `rehearse --ids` at `scan_zk.PARAMS` (the schedule `scan_zk.py prove
     --warden-run` refuses any other of), which the scan's class serves: EVERY 16 buckets, 4 Program slots a
-    boundary, 8 a link-window and D 2.7 s, the gate sessions' schedule. Its id traffic's prompts and outputs are
+    boundary, 8 a sampling block and D 2.7 s, the gate sessions' schedule. Its id traffic's prompts and outputs are
     within the scan's KI and KO, on the gate's arrivals at the gate's sampling; for every request count the gate takes,
     at its lowest height, `warden_minutes` covers the id traffic's last arrival, its tail, the rest of the window it
     ends in, the origin's delay and 30 s for the key and the check."""
@@ -205,7 +205,7 @@ def test_the_gates_warden_windows_are_at_least_every_request_counts_link_windows
 def test_the_gates_prompts_rehearsal_sends_its_prompts_a_group_a_span_of_windows_and_its_minutes_cover_them(tmp_path):
     """`warden-rehearse --scan --prompts --window-per-group` runs `rehearse --ids --prompts FILE --window-per-group` at
     the scan's schedule, on the gate's witness file: request j is the (j mod n)-th prompt with exactly the request's
-    tokens, group g's n requests together half a bucket into link-window g·G, G the gate's `scan_group_windows`
+    tokens, group g's n requests together half a bucket into sampling block g·G, G the gate's `scan_group_windows`
     (`group_windows` at the scan's schedule, for every token count the gate takes), and the run exactly its groups'
     windows (`groups`), which `warden_group_minutes` covers with the origin's delay and 30 s for the key and the
     check. Without `--window-per-group` the prompts go at the gate's arrivals."""
@@ -627,7 +627,7 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
 def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, process):
     """Five connections at once on two lanes and a queue of four: the fifth is refused, traffic past the window's
     Program slots, so window 0's three records are kept and its two rows committed but none is certified or signed,
-    each line naming the link-window under `refused`, withheld, inline and in `serve`'s publisher process; window 1
+    each line naming the sampling block under `refused`, withheld, inline and in `serve`'s publisher process; window 1
     is certified whole, and the check refuses the run on window 0 alone."""
     out = tmp_path / "run"
     out.mkdir()

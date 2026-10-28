@@ -44,7 +44,7 @@ nothing. -/
 def Allocated (w : Certifier L K S In Act Wire) (r : Fin L → ℕ) : Prop :=
   ∀ k xs as ℓ, (rowCount ((w.obs k xs as).rows ℓ) : ℕ) ≤ r ℓ
 
-/-- **W5, one untimed status per link-window.** Statuses are published only at the last step of each window
+/-- **W5, one untimed status per sampling block.** Statuses are published only at the last step of each window
 (`winEnd k = k`). At every other step they are the constant `complete`, so a status never shows when within the
 window something happened. -/
 def UntimedStatus (w : Certifier L K S In Act Wire) (winEnd : ℕ → ℕ) : Prop :=

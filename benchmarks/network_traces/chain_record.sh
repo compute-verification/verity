@@ -41,9 +41,10 @@
 #      CR_PATH=certifier-only (the records are the certifier rehearsal's alone, with no warden rows: the scan isn't run
 #      or required, and the report names what that path stubs, chain_record.STUBBED)
 #      CR_PATH=warden (above)  CR_EOS_IDS (the warden path's endpoint step: the model's EOS token ids, comma-separated,
-#      e.g. 128001 for Llama-3.2-1B; a warden run records none)  CR_TIE_WINDOWS (the tie's link-windows, the run's all
+#      e.g. 128001 for Llama-3.2-1B; a warden run records none)  CR_TIE_WINDOWS (the tie's sampling blocks, the run's
+# all
 #      by default)  CR_TIE_GPU=1 and CR_N2_GPU=1 (the tie's and N2's provers on the GPU)  CR_N2_DRAW (n2_zk.py's
-#      --draw K: N2's period sampled, K of the link-windows drawn on the verifier's coins; every one by default)
+#      --draw K: N2's period sampled, K of the sampling blocks drawn on the verifier's coins; every one by default)
 #      CR_AUDIT (the served units' compute audit windows, space-separated directories: the report's --audit, d1's K)
 #      CR_PERIOD_ANSWER (certifier/v0's network-period check answer on the period, X.answer.json with its case
 #      X.case.json beside it, a path or a name under inputs/) and CR_SERVER (the node the block ran on): network-period

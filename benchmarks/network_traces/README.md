@@ -100,14 +100,14 @@ warden run's witness never go on the prover's machine. Without the gate's coins 
 
 `certifier_piece.py` is the network certifier's piece of `benchmarks/one_stage/served_verdicts.sh`. Its `front`
 (`CERTIFIER_FRONT`) runs before that run's requests: the gate's scan rehearsal sends one group of the window circuit's
-class (4 prompts of 24 ids, 4 ids out, `--window-per-group`) to serve-openai, all of it in link-window 0, so the engine
-closes it into the run's earliest window, the one the run audits, and the gate's fetch is kept in the serve dir's
+class (4 prompts of 24 ids, 4 ids out, `--window-per-group`) to serve-openai, all of it in sampling block 0, so the
+engine closes it into the run's earliest window, the one the run audits, and the gate's fetch is kept in the serve dir's
 `private/certifier`. Its `piece` (`CERTIFIER_CMD`) runs the chain's warden path on that fetch with the serve dir's
 endpoint records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows
-form of the scan's link-window (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
-of the audited window is a certified one inside that link-window, and the Lean check accepts. Anything else is a reject,
-or undecided when a step couldn't run. With no fetch kept the piece refuses to run (`refused.txt`), which leaves the
-certifier missing.
+form of the scan's sampling block (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
+of the audited window is a certified one inside that sampling block, and the Lean check accepts. Anything else is a
+reject, or undecided when a step couldn't run. With no fetch kept the piece refuses to run (`refused.txt`), which leaves
+the certifier missing.
 
 ## The chain's run of record
 
@@ -195,7 +195,7 @@ report's `d1` lists, per sampling block, whether its certificates, N2 and the sc
 unit drawn and accepted. K uses:
 - the run's parameters (`deployment.json`), the same on every active-warden run: B = 512, lanes = 4, r = 4, D = 21,
   T = 32 buckets of 100 ms, and egress_cells = 65;
-- its traffic: 100 requests over 75 link-windows, 1.33 a link-window;
+- its traffic: 100 requests over 75 sampling blocks, 1.33 a sampling block;
 - the scan's class: B = 512, r = 4, lanes = 4, C = 47, IDB = 17 and KO = 64;
 - every unit drawn.
 
@@ -226,7 +226,7 @@ The scale:
 
 **`prog` as registered today (the record's K)**, bits, and the share of the weights (the jitter term 0, assumed (J)):
 
-| period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
+| period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a sampling block |
 |---|---|---|---|---|---|
 | week | 1 | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 143,368 |
 | week | 1,000 | 2.71·10^13 (1,370×) | 2.71·10^13 (1,370×) | 2.71·10^13 (1,370×) | 143,368 |
@@ -241,7 +241,7 @@ monitoring period.
 **`prog` only at its anchored entries (conditional on the generator-form lowering)**, bits, and the share of
 the weights (the jitter term 0, assumed (J)):
 
-| period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
+| period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a sampling block |
 |---|---|---|---|---|---|
 | week | 1 | 2.85·10^8 (1.44%) | 2.86·10^8 (1.45%) | 2.84·10^8 (1.44%) | 1,501 |
 | week | 1,000 | 2.84·10^11 (14.4×) | 2.84·10^11 (14.4×) | 2.84·10^11 (14.4×) | 1,501 |

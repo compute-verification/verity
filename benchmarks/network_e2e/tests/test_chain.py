@@ -1,11 +1,11 @@
 """The chain's stages (`chain.py`) on fakes: the advice read in each of its forms (I1 v0's JSON and bytes, and a prove-path
-stand-in's from before v0, upgraded with each kept output released in its step's bucket); its bits per link-window, v0's
-summing to I1's total and the residual's giving back every step from the config alone, and with the certified I/O the
-whole advice (bound), or nothing when the I/O certifies other requests; a prove path's output adopted, held to the given
-advice, with a forged arm that passes only when Lean refused its unit; and the report on certifier-serve's virtual runs with
-every stage (the negatives registry among them, with the I/O tie's verdict given the sampled ids), then on a varied
-rehearsal's advice profile, where N2 gives no verdict and the rehearsal's own check is the verdict, and the I/O tie on
-each run, required there, decides token and holds the honest run."""
+stand-in's from before v0, upgraded with each kept output released in its step's bucket); its bits per sampling block,
+v0's summing to I1's total and the residual's giving back every step from the config alone, and with the certified I/O
+the whole advice (bound), or nothing when the I/O certifies other requests; a prove path's output adopted, held to the
+given advice, with a forged arm that passes only when Lean refused its unit; and the report on certifier-serve's virtual
+runs with every stage (the negatives registry among them, with the I/O tie's verdict given the sampled ids), then on a
+varied rehearsal's advice profile, where N2 gives no verdict and the rehearsal's own check is the verdict, and the I/O
+tie on each run, required there, decides token and holds the honest run."""
 
 from __future__ import annotations
 
@@ -431,8 +431,8 @@ def test_the_endpoints_own_advice_is_the_runs_by_its_commit_windows_each_opened_
     """The own-advice endpoint's first three Commit windows (its served run's records, trimmed: its scheduler
     trace, its windows.jsonl and `verity-vllm advice`'s registrations and openings, as the endpoint committed them
     mid-serve) and the certified I/O of their nine requests: bound and rebuilt, each window opening its registered root;
-    not bound when a window falls outside the run's link-windows, holds a request the run didn't certify, opens another
-    root or names another Commit, or has no advice; not rebuilt when a certified output breaks the stop rule."""
+    not bound when a window falls outside the run's sampling blocks, holds a request the run didn't certify, opens
+    another root or names another Commit, or has no advice; not rebuilt when a certified output breaks the stop rule."""
     io = json.loads((EP / "io.json").read_text())["requests"]
     first = chain._first_steps(chain._jsonl(EP / "advice_trace.jsonl"))
     dep = {"origin_unix": first[0] - 0.05, "windows": 2, "window_s": 6.0}
@@ -793,7 +793,7 @@ def test_on_the_advice_profile_the_endpoints_own_advice_for_the_runs_commit_wind
 
 def test_each_runs_sampled_ids_are_the_endpoints_for_the_requests_that_arrived_in_its_link_windows(tmp_path):
     """Every strategy of a rehearsal sends the same users, so the I/O tie takes a run's sampled ids from the endpoint's
-    records for the requests that arrived in its own link-windows: each `arrive` of the scheduler trace in the run's
+    records for the requests that arrived in its own sampling blocks: each `arrive` of the scheduler trace in the run's
     span (from `SLACK_S` before its origin), matched to requests.jsonl by engine id. A request with no user is no
     run's, and a user arriving twice in one span is refused."""
     arrive = {r["request"]: r["t"] for r in chain._jsonl(EP / "advice_trace.jsonl") if r["kind"] == "arrive"}
@@ -815,7 +815,7 @@ def test_each_runs_sampled_ids_are_the_endpoints_for_the_requests_that_arrived_i
 def test_the_tie_takes_each_runs_client_aborts_from_the_same_record_as_its_ids(tmp_path, monkeypatch):
     """The endpoint writes a request its client aborted with ``finish`` null: the tie hands `negatives.tie_run` a run's
     aborts (`negatives.commit_aborted`) from the rows it takes the run's ids from, the endpoint's for the run's own
-    link-windows (`served_rows`) or the --ids file's (`negatives.read_aborted`)."""
+    sampling blocks (`served_rows`) or the --ids file's (`negatives.read_aborted`)."""
     ep = _endpoint(tmp_path)
     rows = [json.loads(x) for x in (ep / "requests.jsonl").read_text().splitlines()]
     (ep / "requests.jsonl").write_text("".join(json.dumps(r | {"finish": None} if r["user"] == "drive-1" else r) + "\n"
@@ -845,8 +845,8 @@ TOKEN = HERE / "tests" / "data" / "token"
 def test_a_token_runs_changed_ids_fall_in_the_link_windows_its_certified_egress_carries_them(tmp_path):
     """A token run (its ingress and egress records, plan, calibration and the shim's server.json,
     not its certified heads): the shim changed varied.00000's first three outputs and varied.00001's first twenty, which
-    its certified egress carries in link-windows 0 and 1, each output placed as the tie places it (its stream's next id
-    event). An output the egress doesn't carry falls in none, and a run whose shim logged no change has none."""
+    its certified egress carries in sampling blocks 0 and 1, each output placed as the tie places it (its stream's next
+    id event). An output the egress doesn't carry falls in none, and a run whose shim logged no change has none."""
     server = json.loads((TOKEN / "server.json").read_text())
     assert sorted({u for u, _ in server["tampered"]}) == ["varied.00000", "varied.00001"]
     assert len(server["tampered"]) == 23 and chain.changed_windows(TOKEN) == [0, 1]
@@ -862,7 +862,7 @@ def test_a_token_runs_changed_ids_fall_in_the_link_windows_its_certified_egress_
 
 def _ties(**edits) -> dict:
     """`negatives.tie_run`'s row on each run of `_varied`, as the tie gives it on 88c9's: honest accepted, token refused
-    by content at link-window 1, drop by content for the output it left out, late and extra accepted; ``edits`` by run."""
+    by content at sampling block 1, drop by content for the output it left out, late and extra accepted; ``edits`` by run."""
     rows = {"honest": {}, "late": {}, "extra": {}, "token": {"failing": {1: ["content"]}},
             "drop": {"failing": {-1: ["content"]}, "unplaced": 1}}
     out = {}
@@ -877,7 +877,7 @@ def _ties(**edits) -> dict:
 def test_on_the_advice_profile_the_ties_verdict_refuses_token_where_it_changed_ids_and_holds_the_honest_run(
         virtual, tmp_path, monkeypatch):
     """With `io_tie` in the tree and each request's sampled ids (here --ids), the I/O tie runs on every run of the
-    advice profile: token is a negative it alone refuses, by content at exactly the link-windows its changed ids fall
+    advice profile: token is a negative it alone refuses, by content at exactly the sampling blocks its changed ids fall
     in (refused elsewhere, it isn't); drop's refusal by content is listed beside its own code; the honest run must be
     accepted for the report to be OK. Without `io_tie` the report isn't OK and says why, and token isn't refused.
     `negatives.tie_run` is stubbed: `negatives.suite` runs it on certifier-serve's varied runs."""

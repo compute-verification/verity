@@ -13,6 +13,7 @@ no field: a slot's ``ids`` are its C cells' whatever the cap.
 """
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 from verity.core.protocols.certifier import ingress_scan as IS
@@ -21,15 +22,15 @@ from verity.ml.definitions.registry import boolean_io_shell as BIO
 
 #: the registered value whose rows are the scan's states, one a bucket of the window (`ingress_scan.window_state`'s)
 SCAN_STATE = IS.SCAN_STATE
-#: the network certifier's cells at the class of record (w63, `benchmarks/network_traces/scan_zk.W63`): B-byte cells, r a
-#: connection a bucket, C cells a request, ids of IDB bits, a request's ingress within WITHIN buckets
-B, R, C, IDB, WITHIN = 512, 4, 47, 17, 12
+#: the network certifier's scan class of record (w63's), whose cells, ids, ingress bound and slot stride a window class
+#: of record reads
+RECORD = IS.CLASS_OF_RECORD
 
 
 def scan_class(lanes: int, outputs: int, every: int) -> IS.Class:
-    """The scan's class at a window class's lanes, outputs (KO) and timestep, on the class of record's cells; its delay
-    the least it takes, WITHIN + EVERY − 1 (27 at EVERY 16, w63's)."""
-    return IS.Class(B=B, r=R, lanes=lanes, C=C, IDB=IDB, EVERY=every, WITHIN=WITHIN, D=WITHIN + every - 1, KO=outputs)
+    """The scan's class at a window class's lanes, outputs (KO) and slot stride, on the class of record's cells; its
+    delay the least it takes, WITHIN + EVERY − 1 (27 at EVERY 16, w63's)."""
+    return replace(RECORD, lanes=lanes, EVERY=every, D=RECORD.WITHIN + every - 1, KO=outputs)
 
 
 def words(cls: IS.Class) -> int:
@@ -46,4 +47,4 @@ def bridge(cls: IS.Class, prompt: int) -> Any:
                 MAX=at["max_tokens"], IDS=at["ids"])
 
 
-__all__ = ["SCAN_STATE", "bridge", "scan_class", "words"]
+__all__ = ["RECORD", "SCAN_STATE", "bridge", "scan_class", "words"]

@@ -4,7 +4,7 @@ import Proofs.Properties.NetworkRecords.Accept
 # An instance: a unit whose records are the Program's, which the check accepts
 
 One egress link `out` with no frames and one ingress link `in`, one window of one bucket of one slot, Σ_sync
-`{(0, 1)}`, and a complete raw record of each link-window, `out`'s holding the Program's grid, one empty row
+`{(0, 1)}`, and a complete raw record of each sampling block, `out`'s holding the Program's grid, one empty row
 (`program₀`). Its records are the Program's (`programRecords₀`) and the check accepts it (`accepted₀`), under the
 parameters' digests: `parametersDigest` reads `Flock.canon`, well-founded recursion the kernel does not evaluate, so
 they are taken as given.

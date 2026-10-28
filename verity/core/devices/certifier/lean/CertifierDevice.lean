@@ -15,7 +15,7 @@ import CertifierDevice.IssuerDifftest
 Executable Lean of `verity/core/protocols/certifier/active.py`'s proxy as a pure state machine
 (`CertifierDevice.step`, in `CertifierDevice.Device`), over the reference's certifiers (`Certifier`, `Shaper`, `Bucketer`),
 online prover (`Online`) and a served link's admission rule (`Served`), the driver that runs it in `core_world`'s `Core.World` (`Driver`, `run`), and the issuer
-that signs each closed link-window's record, hidden under a salt of the certifier's own coins, at a leaf the host
+that signs each closed sampling block's record, hidden under a salt of the certifier's own coins, at a leaf the host
 reserves, and each egress window's clock sync, hidden under a salt of its own, in a clock certificate (`Issuer`,
 `certificate.py`'s `Issuer`). It
 reuses `certifier_program` (`NetworkCertifier`: statuses, `ClockSync`, `SyncSet`, `eligible`), `network_check`

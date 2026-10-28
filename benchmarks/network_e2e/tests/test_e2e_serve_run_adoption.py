@@ -34,7 +34,7 @@ from test_chain import EP, I1, _apart, chain
 
 
 def _served(ep=EP):
-    """`served_advice` on the endpoint fixture (or a copy ``ep``) with the run's link-windows shifted so only Commit
+    """`served_advice` on the endpoint fixture (or a copy ``ep``) with the run's sampling blocks shifted so only Commit
     windows 1 and 2 fall in them (as w212 is one of the honest run's windows, registered apart): window 1 is of the
     honest run."""
     io = json.loads((ep / "io.json").read_text())["requests"]

@@ -196,7 +196,8 @@ def test_scan_traffic_ticks_the_warden_s_rows(run):
 
 
 def test_the_state_is_the_layout_neg_sized():
-    w63 = IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12)
+    w63 = IS.CLASS_OF_RECORD
+    assert w63 == IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=64, KI=1024)
     assert (w63.K0, w63.K, w63.D, w63.KO, w63.SLOTS, IS.state_bits(w63)) == (12, 45, 27, 64, 4, 149_648)
     assert (w63.KI, w63.prompt_room) == (1024, 2082) and replace(w63, KI=2082).KI == 2082
     assert (IS.prog_bits(w63), IS.view_bits(w63), w63.egress) == (4480, 4832, EG.Shape(512, 16, 4, 4, 64, 17, 27))
@@ -224,15 +225,19 @@ def test_the_state_is_the_layout_neg_sized():
         IS.Class(B=512, r=4, lanes=4, C=47, KI=2083)
     with pytest.raises(ValueError, match=re.escape("KI <= 147")):
         IS.Class(B=512, r=2, lanes=2, C=4, EVERY=2, WITHIN=3, D=5, KO=8)
-    served = WardenParams(cell_bytes=512, slots=4, lanes=4, delay=27, ingress_cells=47, ingress_buckets=12,
-                          egress_cells=65, window=32, every=16)
-    w63.serves(served)
-    assert (served.program_slots, served.window_programs) == (w63.SLOTS, 8)
+    served = w63.schedule(WardenParams(cell_bytes=512, slots=4, lanes=4, delay=27, ingress_cells=47,
+                                       ingress_buckets=12, egress_cells=65, window=32))
+    assert served.every == 16 and (served.program_slots, served.window_programs) == (w63.SLOTS, 8)
+    other = replace(served, every=8)
+    w63.serves(other)
+    assert w63.schedule(other) == served and other.digest != served.digest
     for bad, fix in (({"delay": 28}, "= D = 27"), ({"ingress_buckets": 13}, "<= WITHIN = 12"),
                      ({"ingress_cells": 48}, "<= C = 47"), ({"lanes": 5}, "= lanes = 4"),
-                     ({"egress_cells": 66}, "<= KO + 1 = 65"), ({"every": 8}, "= EVERY = 16")):
+                     ({"egress_cells": 66}, "<= KO + 1 = 65")):
         with pytest.raises(ValueError, match=re.escape(fix)):
-            w63.serves(replace(served, **bad))
+            w63.schedule(replace(served, **bad))
+    with pytest.raises(ValueError, match="divides the window"):
+        w63.schedule(replace(served, every=1, window=40))
 
 
 #: (row, sin, prog), the first bucket's sin the empty state's

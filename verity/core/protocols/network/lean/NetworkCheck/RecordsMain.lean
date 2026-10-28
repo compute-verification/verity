@@ -2,8 +2,8 @@ import NetworkCheck.Records
 import NetworkCheck.LinkWindow
 
 /-! The `network-records` executable: `Core.Protocol.main` of `NetworkCheck.Records.protocol`, and `network-records verdicts`,
-`Difftest.serve` of every link-window's verdict on a `serve` case, with the grid compared (`verdicts`) or not
-(`verdicts-no-grid`), and of N2's verdict of record on one link-window (`link-window`, `NetworkCheck.LinkWindow`). Audited
+`Difftest.serve` of every sampling block's verdict on a `serve` case, with the grid compared (`verdicts`) or not
+(`verdicts-no-grid`), and of N2's verdict of record on one sampling block (`link-window`, `NetworkCheck.LinkWindow`). Audited
 under `NetworkCheck`. -/
 
 def main (args : List String) : IO UInt32 := do

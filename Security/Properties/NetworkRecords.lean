@@ -6,7 +6,7 @@ import Properties.NetworkCertifier
 
 `verity/network-records/v3` is the network audit's verifier of record: `audit.py`'s `Audit` over raw, committed and
 certified records. `AcceptMeans` is what its acceptance establishes about the unit's records, stated over the check's
-inputs (the parameters, the published records, the evidence) and never over its internals: every link-window of the
+inputs (the parameters, the published records, the evidence) and never over its internals: every sampling block of the
 unit has exactly one record, complete, and it is the Program's (`ProgramRecords`). `AnswerAcceptMeans` is the same for
 the bytes `Core.Protocol.answer` decodes. The check keeps each payload as its bytes (`Records.ByteEvidence`), and the
 conclusion reads that evidence as `verity/network-certificate/v4` reads the same JSON (`ByteEvidence.toEvidence`, each
@@ -15,11 +15,11 @@ every unit whose records are the Program's (`programRecords_accepted`, completen
 
 Without the grid (`Records.evaluateNoGrid`, `check_link(grid=False)`, N2's, whose head check holds each certified
 head's grid), the check's verdicts are `evaluate`'s but for the egress grid comparison (`GridOnly`): `NoGridMeans` says
-that where it answers, `evaluate` answers too, and each link-window has the same verdict or an egress `mismatch` that it
-accepts; `NoGridAcceptsMore`, that where `evaluate` answers it answers so too, unless a raw or committed record names an
-egress link, which it refuses. So it accepts every link-window `evaluate` accepts.
+that where it answers, `evaluate` answers too, and each sampling block has the same verdict or an egress `mismatch` that
+it accepts; `NoGridAcceptsMore`, that where `evaluate` answers it answers so too, unless a raw or committed record names
+an egress link, which it refuses. So it accepts every sampling block `evaluate` accepts.
 
-The Program's grid of an egress link-window is `programGrid`, rows of `NetworkCertifier.expectedRow` under the syncs
+The Program's grid of an egress sampling block is `programGrid`, rows of `NetworkCertifier.expectedRow` under the syncs
 the link declares, which the check reads through `Records.expectedGridsOfBytes` (`RecordsBytes.expectedGridsOfBytes_eq`). Nothing is
 assumed of SHA-256, SHA-512 or LMS. A committed record's digest is the one `commitment.py` gives the Program's grid,
 and any grid of `B`-byte frames with that digest holds the Program's frames, or two distinct strings the two digests
@@ -35,10 +35,10 @@ open Properties.NetworkCertifier (EvidenceFits ParamsDigests Declares SyncAdmitt
 
 namespace Properties.NetworkRecords
 
-/-! ## A link-window's records -/
+/-! ## A sampling block's records -/
 
-/-- The published records naming link-window `(d, l, w)`, in the commitment's order: a raw or committed record of link
-`l` and window `w`, which carries no direction, and a certified record whose head names `(d, l, w)`. -/
+/-- The published records naming sampling block `(d, l, w)`, in the commitment's order: a raw or committed record of
+link `l` and window `w`, which carries no direction, and a certified record whose head names `(d, l, w)`. -/
 def recordsAt (c : Records.Commitment) (d : Direction) (l : String) (w : Nat) : List Records.Published :=
   c.records.toList.filter fun
     | .raw l' w' _ _ | .committed l' w' _ _ => decide (l' = l ∧ w' = w)
@@ -73,7 +73,7 @@ def rowInput (row : Array (Option ByteArray)) : ByteArray :=
   taggedInput "verity-network-warden/row/v1"
     ((row.filterMap id).foldl (· ++ ·) (Flock.be32 (row.filterMap id).size.toUInt32))
 
-/-- The canonical JSON header `record_digest` hashes for link-window `(l, w)` of a complete record under `g`. -/
+/-- The canonical JSON header `record_digest` hashes for sampling block `(l, w)` of a complete record under `g`. -/
 def header (l : String) (w : Nat) (g : Grid) : Flock.V String :=
   Flock.canon (Lean.Json.mkObj [
     ("link", .str l), ("window", Lean.toJson w), ("buckets", Lean.toJson g.buckets),
@@ -85,8 +85,8 @@ def recordInput (h : String) (grid : Records.RawGrid) : ByteArray :=
   taggedInput "verity-network-warden/record/v1"
     (grid.foldl (fun acc row => acc ++ Records.rowDigest row) (Flock.be32 h.toUTF8.size.toUInt32 ++ h.toUTF8))
 
-/-- The strings SHA-256 hashes for the record digest of `grid` at link-window `(l, w)` under `g`: each row's input and
-the record's. -/
+/-- The strings SHA-256 hashes for the record digest of `grid` at sampling block `(l, w)` under `g`: each row's input
+and the record's. -/
 def committedInputs (l : String) (w : Nat) (grid : Records.RawGrid) (g : Grid) : List ByteArray :=
   grid.toList.map rowInput ++ (header l w g).toOption.toList.map (recordInput · grid)
 
@@ -120,7 +120,7 @@ def CertifiesProgram (p : Params) (eg : ByteArray) (l : String) (w : Nat) (r : C
     (r.head = H ∨ ∃ x ∈ headStrings r.head ++ headStrings H, ∃ y ∈ headStrings r.head ++ headStrings H,
       x ≠ y ∧ Flock.Sha512.hash x = Flock.Sha512.hash y)
 
-/-- The record of egress link-window `(l, w)` is the Program's, whose grid there is `P`: a raw record's grid is `P`
+/-- The record of egress sampling block `(l, w)` is the Program's, whose grid there is `P`: a raw record's grid is `P`
 slot for slot, a committed record commits to `P`, a certified record certifies `P`. -/
 def ProgramRecord (p : Params) (eg : ByteArray) (l : String) (w : Nat) (P : Records.RawGrid) :
     Records.Published → Prop
@@ -128,7 +128,7 @@ def ProgramRecord (p : Params) (eg : ByteArray) (l : String) (w : Nat) (P : Reco
   | .committed _ _ _ dg => CommitsTo p l w dg P
   | .certified r => CertifiesProgram p eg l w r P
 
-/-- Egress link-window `(l, w)`, opened by `link`: exactly one record names it, its status is complete, the sync
+/-- Egress sampling block `(l, w)`, opened by `link`: exactly one record names it, its status is complete, the sync
 `link` declares for `w` is in Σ_sync and is the unit's (the first egress link's), and the record is the Program's
 under the declared syncs. -/
 def EgressRecord (p : Params) (c : Records.Commitment) (e : Evidence) (eg : ByteArray) (l : String) (link : Link)
@@ -144,15 +144,15 @@ def IngressHead (p : Params) (ig : ByteArray) (l : String) (w : Nat) : Records.P
       r.head.allocation = (p.ingressGrid.allocation : Int) ∧ r.head.frameBytes = (p.ingressGrid.frameBytes : Int) ∧
       r.head.bucketMs = (p.ingressGrid.bucketMs : Int) ∧ r.head.parameters = ig
 
-/-- Ingress link-window `(l, w)`: exactly one record names it, its status is complete, and a certified one's head is
+/-- Ingress sampling block `(l, w)`: exactly one record names it, its status is complete, and a certified one's head is
 of the ingress grid and its parameters digest. -/
 def IngressRecord (p : Params) (c : Records.Commitment) (ig : ByteArray) (l : String) (w : Nat) : Prop :=
   ∃ r, recordsAt c .ingress l w = [r] ∧ Complete r ∧ IngressHead p ig l w r
 
 /-- **The unit's records are the Program's.** The evidence fits the parameters (one opening per egress link, `W`
 declared syncs on each, every payload `8·B` bits); `eg` and `ig` are the parameters digests of the egress grid with
-Σ_sync and of the ingress grid; every egress link-window `w < W` of every egress link has its one complete record, the
-Program's (`EgressRecord`), and every ingress link-window its one complete record (`IngressRecord`). -/
+Σ_sync and of the ingress grid; every egress sampling block `w < W` of every egress link has its one complete record,
+the Program's (`EgressRecord`), and every ingress sampling block its one complete record (`IngressRecord`). -/
 def ProgramRecords (p : Params) (c : Records.Commitment) (e : Evidence) : Prop :=
   EvidenceFits p e ∧ ∃ eg ig, ParamsDigests p eg ig ∧
     (∀ l link, (l, link) ∈ p.egress.toList.zip e.links.toList → ∀ w < p.windows, EgressRecord p c e eg l link w) ∧
@@ -176,13 +176,13 @@ def AnswerAcceptMeans : Prop :=
 
 /-! ## Without the grid (`check_link(grid=False)`, N2's) -/
 
-/-- Link-window `v'` is `v` but for the egress grid comparison: the same link-window, with the same verdict, or `v` an
-egress `mismatch` that `v'` accepts. So `v'` accepts every link-window `v` accepts. -/
+/-- Sampling block `v'` is `v` but for the egress grid comparison: the same sampling block, with the same verdict, or
+`v` an egress `mismatch` that `v'` accepts. So `v'` accepts every sampling block `v` accepts. -/
 def GridOnly (v v' : LinkWindow) : Prop :=
   v'.direction = v.direction ∧ v'.link = v.link ∧ v'.window = v.window ∧
     (v'.violation = v.violation ∨ v.direction = .egress ∧ v.violation = some "mismatch" ∧ v'.violation = none)
 
-/-- `vs'` is `vs` but for the egress grid comparison: as many link-windows, each `GridOnly` the one at its place in
+/-- `vs'` is `vs` but for the egress grid comparison: as many sampling blocks, each `GridOnly` the one at its place in
 `vs`. -/
 def AllGridOnly (vs vs' : Array LinkWindow) : Prop :=
   vs.size = vs'.size ∧ ∀ x ∈ vs.toList.zip vs'.toList, GridOnly x.1 x.2
@@ -196,7 +196,7 @@ def UncertifiedEgress (p : Params) (c : Records.Commitment) : Prop :=
 
 /-- **What the check without the grid answers.** If `evaluateNoGrid` gives verdicts `vs'`, no raw or committed record
 names an egress link, and `evaluate`, the check with the grid compared, gives verdicts that `vs'` is but for the egress
-grid comparison: the same link-windows in order, each with the same verdict, or an egress `mismatch` accepted. -/
+grid comparison: the same sampling blocks in order, each with the same verdict, or an egress `mismatch` accepted. -/
 def NoGridMeans : Prop :=
   ∀ (p : Params) (c : Records.Commitment) (e : Records.ByteEvidence) (vs' : Array LinkWindow),
     Records.evaluateNoGrid p c e = .ok vs' →
@@ -204,7 +204,7 @@ def NoGridMeans : Prop :=
 
 /-- **The check without the grid accepts more.** If `evaluate` gives verdicts `vs`, `evaluateNoGrid` refuses the unit
 when a raw or committed record names an egress link, and otherwise gives verdicts that are `vs` but for the egress grid
-comparison, so it accepts every link-window `evaluate` accepts. -/
+comparison, so it accepts every sampling block `evaluate` accepts. -/
 def NoGridAcceptsMore : Prop :=
   ∀ (p : Params) (c : Records.Commitment) (e : Records.ByteEvidence) (vs : Array LinkWindow),
     Records.evaluate p c e = .ok vs →

@@ -37,11 +37,11 @@ verifier); the code is what the verifier of record establishes, which `n2` reads
   head's the request frames the advice needs; ``.view`` when the advice is malformed, doesn't cover the window or its
   requests aren't the certified ingress's (the tie, IoTieRequest's verdict, `advised.IoTieVerdict`, from the
   verifier's own tie source), which refuses every window), ``IoTieRequest`` (`io_request`'s ingress tie, a unit a bucket
-  row of the warden's ingress link-window at selection All, `io_request.reference`: each lane's cells, read from its
+  row of the warden's ingress sampling block at selection All, `io_request.reference`: each lane's cells, read from its
   carry-in, are its connection's pads and canonical id-request cells, leaving its carry-out, on the verifier's lanes
   from the advice's prompt lengths and the warden's release; its verdict on every window, under the advice's digest
   and with the release giving `received`, is the tie N2's advised view needs),
-  ``IoTieWindow.{cells_root,port,content}`` (the I/O tie, a unit at selection All over one egress link-window,
+  ``IoTieWindow.{cells_root,port,content}`` (the I/O tie, a unit at selection All over one egress sampling block,
   `io_tie.reference_parts`: the warden's cells open under their root, the Commit's port rows of sampled ids open at
   each bucket's steps under the Commit's root, and every cell is the verifier's map's, computed from advice v0 and
   the warden's admissions: a `PAD` or the `END` on its request's stream, B zero bytes in a slot no connection holds,
@@ -153,7 +153,7 @@ def copy_run(src: Path, dst: Path) -> Path:
 
 def write_certified(path: Path, records: dict[tuple[Direction, int], CertifiedRecord], refused: list) -> None:
     """`certified.jsonl` as `certifier_serve.CertifyingPublisher` writes it: one line per record, by window and end,
-    then the link-windows the signer refused."""
+    then the sampling blocks the signer refused."""
     lines = [cs.certified_json(records[k]) for k in sorted(records, key=lambda k: (k[1], k[0].code))]
     lines += [{"refused": r} for r in refused]
     path.write_text("".join(json.dumps(x) + "\n" for x in lines))
@@ -211,7 +211,7 @@ def cell_reads(WR, cells, k: int, row: bytes) -> bool:
 
 def warden_frame(run: Path, at: int | None = None) -> dict:
     """`frame` on a warden-serve run's own cells (`warden_rows`: `cells.jsonl`'s registrations and the
-    prover's `cells.salts`, the rows' salts and the wiring's): the first egress link-window with a data cell, its
+    prover's `cells.salts`, the rows' salts and the wiring's): the first egress sampling block with a data cell, its
     registration (v2) checked under the warden's key and the schedule, and its record's bucket rows and wiring
     committed under their salts to the registered head; then byte `at` of that cell (its first payload byte by
     default) changed in its bucket's row, and the row opened at its position. The honest row's read climbs to the
@@ -878,7 +878,7 @@ def _n2_view(AD, advised, window: int, T: int, R: int, syncs, sync_set, request_
 
 def advised_codes(advised, window: int, syncs, sync_set, request_frames, T: int, R: int, RIN: int, OWN: int, ingress,
                   egress) -> list[str]:
-    """The advised counts' code on one advised link-window with heads of counts `ingress` and `egress`, as
+    """The advised counts' code on one advised sampling block with heads of counts `ingress` and `egress`, as
     `LinkWindows.advised_check` decides it (`advised.view` under the declared `syncs`, Σ_sync and the link's framing,
     then `advised.reference`), on the advice as N2 reads it and its tie (`n2_advice`'s (link, tie)): ``.view`` when
     the advice is malformed, isn't tied or doesn't cover the window, the advised counts' when they refuse, else none.
@@ -1530,7 +1530,7 @@ def tie_runs(src: Path, ids: Path | None = None) -> dict:
 
 
 def n2(run: Path, clock=time.monotonic) -> dict:
-    """N2's verdict on every link-window of the run's `certified.jsonl`, through the proof service's stream as
+    """N2's verdict on every sampling block of the run's `certified.jsonl`, through the proof service's stream as
     `certifier_serve.check` takes it (Selection All, the Lean audit, `unproved_outcome`: nothing is proved, so the
     verdict reads the opening) without asking the certifier's salts, and the link's network verdict; each refused
     link-window's codes (`codes`), and their union."""
@@ -1562,7 +1562,7 @@ def n2(run: Path, clock=time.monotonic) -> dict:
 
 def judge(name: str, verdict: dict) -> dict:
     """Whether `verdict` (`n2`'s on the negative's run) refuses negative `name` by its code: the network verdict
-    rejects and a refused link-window's codes include the code the negative names on the run's profile."""
+    rejects and a refused sampling block's codes include the code the negative names on the run's profile."""
     n = NEGATIVES[name]
     code = n.code_on(verdict.get("profile"))
     return {"negative": name, "code": code, "refused": not verdict["accepted"],
@@ -1575,7 +1575,7 @@ def suite(runs: dict[str, Path], work: Path, *, advice: Path | None = None, comm
     """Every negative's row for the one command's report, from a rehearsal's runs by strategy (`runs`, which must hold
     honest): a shim negative is its own run (`rehearse --strategies`), any other is made from honest's under `work`.
     A row says what the negative tampers, the check and code it names and what it waits on; whether it ran, and if so
-    N2's verdict, its refused link-windows and their codes, and `ok`: refused by its code; for a shim negative whose
+    N2's verdict, its refused sampling blocks and their codes, and `ok`: refused by its code; for a shim negative whose
     check is pending (token), N2's accepting it, since only that check may refuse it; else None. An advice negative's
     verdict is `advice_run`'s, `advised`'s codes on the heads an honest run of `advice` certifies (`honest_codes`
     theirs on the honest advice), since the certified records don't change with it; `ok` needs the honest advice

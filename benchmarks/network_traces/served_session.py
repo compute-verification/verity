@@ -39,13 +39,13 @@ request's max_tokens, at most KO.
   The lane's own fetch, with ``witness/``, goes to KEEP/RUN/fetch.tar.gz (KEEP and KEEP/RUN 0700, refused inside the
   run dir: custody publishes all of ``--out``). ``--out`` gets ``bundle.tgz``, what ``fetch`` gives any other key (the
   bundle less ``witness/``), and ``session.json``, the public outcome: the gate run, its rc, the check's verdict and
-  counts, the link-windows, the origin and the session's span. Before it exits, every file of ``--out`` and member of
+  counts, the sampling blocks, the origin and the session's span. Before it exits, every file of ``--out`` and member of
   ``bundle.tgz`` is read for a prompt's ids, and one that holds them is removed (exit 4). Exit 0 when the gate's check
   accepted the run, its rc (or 1) when it didn't, 2 when the gate refused the request.
 * **chain** runs chain_record.sh's warden path on the kept fetch (CR_PATH=warden, CR_GATES=KEEP/RUN/fetch.tar.gz), with
   the endpoint's records (``--endpoint``; a dry rehearsal's KEEP/RUN/endpoint by default) and the model's EOS ids
   (``--eos-ids``: 128001 for the served model, the stand-in's ``--vocab`` for a dry rehearsal's), N2's period drawn
-  on the verifier's coins (CR_N2_DRAW 8) and the tie on 8 link-windows (CR_TIE_WINDOWS)
+  on the verifier's coins (CR_N2_DRAW 8) and the tie on 8 sampling blocks (CR_TIE_WINDOWS)
   at CR_MEM_GB 96, unless a CR_K=V says otherwise. The scan proves every unit, or ``--draw K`` of them, on the
   verifier's own coins (``--coins verifier``, the default and the fallback) or on the gate's (``--coins gate``). It is
   refused unless the tree has the record's leak guard (``leak_guard.py``), which chain_record.sh runs on its
