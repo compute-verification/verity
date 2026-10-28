@@ -17,7 +17,7 @@ from verity.core.protocols.pous.continuous import ContinuousMemoryChallenger
 
 
 def _wall_clock() -> int:
-    raise AssertionError("a memory challenger read its default wall clock: pass clock=, e.g. itertools.count(0, 1000).__next__")
+    raise AssertionError("a memory challenger read its default wall clock: pass clock=, e.g. pous_fakes.Clock(step=1_000)")
 
 
 @pytest.fixture(autouse=True)
