@@ -135,3 +135,10 @@ def test_steady_drops_a_step_past_one_and_a_half_medians(tmp_path):
 def test_a_forward_restarts_when_the_quantizer_grid_changes():
     q = lambda s, g: (s, s + 1, "exactlin_quant_rows", g, 0, 0)  # noqa: E731
     assert TU.forwards([q(0, 4), q(1, 4), q(2, 8), q(3, 8), q(4, 8), q(5, 8), q(6, 8)], layers=1) == [(2, 8)]
+
+
+def test_a_linear_of_several_rows_a_program_stays_in_its_forward():
+    q = lambda s, g: (s, s + 1, "exactlin_quant_rows", g, 0, 0)  # noqa: E731
+    layer = lambda at: [q(at, 8), q(at + 1, 8), q(at + 2, 8), q(at + 3, 4)]  # noqa: E731
+    assert TU.forwards(layer(0) + layer(4) + layer(8) + layer(12), layers=2) == [(0, 8), (8, 8)]
+    assert TU.forwards(layer(0) + [q(4, 8), q(5, 8), q(6, 8), q(7, 8)], layers=2) == []

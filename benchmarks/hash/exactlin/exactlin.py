@@ -145,8 +145,18 @@ def quant_warps(k: int) -> int:
     return 16
 
 
-def quant_plan(m: int, k: int) -> tuple[int, int]:
-    """(num_warps, rows a program) of the row quantizer at [m, k]."""
+# Per architecture and K: (M floor, num_warps, rows a program), ksweep.py --quant-only's gated winners over 16 warps a row
+QUANT_PLANS: dict[str, dict[int, tuple[tuple[int, int, int], ...]]] = {
+    "sm_90": {2048: ((2048, 4, 1), (1024, 8, 1)), 4096: ((1024, 8, 1),), 8192: ((1024, 8, 1),), 14336: ((256, 16, 2),)},
+}
+
+
+def quant_plan(m: int, k: int, sm: str | None = None) -> tuple[int, int]:
+    """(num_warps, rows a program) of the row quantizer at [m, k] on `sm` (default: the current device's): QUANT_PLANS'
+    first plan for k whose M floor m reaches, else one row a program at `quant_warps`."""
+    for floor, warps, rows in QUANT_PLANS.get(sm or arch(torch.cuda.current_device()), {}).get(k, ()):
+        if m >= floor:
+            return warps, rows
     return quant_warps(k), 1
 
 

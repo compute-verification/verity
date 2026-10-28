@@ -1,10 +1,11 @@
 """A served step's wall time by kernel class and its tensor utilization, from an Nsight Systems export of a served vLLM run
 (`nsys export --type sqlite`), and the losses ranked against a utilization target.
 
-Steps.  The int8 row quantizer launches one program a token (`exactlin_quant_rows`, stock vLLM's
-`dynamic_scaled_int8_quant`), so a forward is 4 L consecutive quantizer launches of one grid (qkv, o, gate_up and down in
-each of L layers) and its T is that grid.  Step i runs from forward i's first quantizer launch to forward i + 1's: a
-cyclic cut, so the step holds everything between them (its own layers, the LM head and sampler, the host's scheduling
+Steps.  The int8 row quantizer launches one program a token (stock vLLM's `dynamic_scaled_int8_quant`), or one a few
+tokens (`exactlin_quant_rows` at `int8_fused.quant_plan`'s plan), so a forward is 4 L consecutive quantizer launches
+(qkv, o, gate_up and down in each of L layers) whose grids repeat each layer, and its T is a layer's largest grid (a
+linear at one row a program).  Step i runs from forward i's first quantizer launch to forward i + 1's: a cyclic cut, so
+the step holds everything between them (its own layers, the LM head and sampler, the host's scheduling
 and the Commit's work, and the next forward's embedding and first norm).  Only steps of `--tokens` T whose next forward
 is also of that T count, so the warm-up and profile forwards, and a burst's last step, drop out.
 
@@ -128,14 +129,16 @@ def load(path: str) -> dict:
 
 
 def forwards(kern: list, layers: int) -> list[tuple[int, int]]:
-    """(start of its first quantizer launch, T) of each forward: 4 L consecutive quantizer launches of one grid."""
+    """(start of its first quantizer launch, T) of each forward: 4 L consecutive quantizer launches, each of its layer's
+    first launch's grid or less and of the previous layer's same linear's grid, and T a layer's largest grid."""
     out, run = [], []
     for s, _, name, grid, _, _ in sorted(k for k in kern if QUANT.search(k[2])):
-        if run and grid != run[0][1]:
+        n = len(run)
+        if n and (grid != run[n - 4][1] if n >= 4 else grid > run[0][1]):
             run = []
         run.append((s, grid))
         if len(run) == 4 * layers:
-            out.append(run[0])
+            out.append((run[0][0], max(g for _, g in run[:4])))
             run = []
     return out
 
