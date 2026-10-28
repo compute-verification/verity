@@ -46,9 +46,10 @@ itself ended (its baseline, verifying the steps it passed; `/data/infra/drive.sh
 by hand).  A red run runs on, so every red suite is named, and is cancelled only once its `TAIL` is all it has left (a cancel
 earlier in a ~4 h run leaves the rest unknown).  Each failed suite or step (`_red`, `postland["red"]`) gets a culprit
 among the landings since it last passed (`postland["green"]`, per suite or step, so a `main` never verified whole still names
-one): the landing whose own diff touches what the failure names (`suite_paths`: failing tests, its log's failures, the read
-guard's `outside`), else its declared inputs (`_input_rule`); several are bisected by landing, each step a run of one landing's
-commit judged by that suite alone, while landing goes on.  The ring (`_ring`) quotes the run, the first error line
+one): for ratchet-gate, the merge the gate's log says it fails; else the landing whose own diff touches what the failure
+names (`suite_paths`: failing tests, its log's failures, the read guard's `outside`), else its declared inputs
+(`_input_rule`); several are bisected by landing, each step a run of one landing's commit judged by that suite alone, while
+landing goes on.  The ring (`_ring`) quotes the run, the first error line
 (`first_error`) and what a cancel stopped (`not_run`, "not run"), to @ci, the suite's owner and the culprit's; the culprit is
 reverted `FIX_WINDOW_S` after it (`_red_clock`) unless a fix is marked (`_fix`).  While the oldest landing no run verified is
 `BEHIND_S` old, @ci and @top are rung every `BEHIND_EVERY_S` (`_behind`).  A run with no readable state `LOST_AFTER_S` after its
@@ -124,7 +125,13 @@ NOT_STARTED = 75
 TWO_DEMOS = "two demos"
 #: the steps of a check (`tools/verity/check/check.py`)
 CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-changed", "flock-circuit-build", "lean-build",
-               "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests")
+               "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests",
+               "ratchet-gate")
+#: the check step that runs the vLLM integration's ratchet gate on the merges above the check's base
+RATCHET_STEP = "ratchet-gate"
+#: the ratchet gate's line for a change it fails (`ratchet_gate.render`): its name (`#N`, or a range of commits), its top
+#: commit's first 12 digits, and why
+RATCHET_FAILED_RE = re.compile(r"^  (\S+) \(([0-9a-f]{12})\): failed: (.*)$", re.M)
 #: what a review landing's verdict says
 REVIEWED = "a land verdict at each head"
 #: the keys of drive's state that only train landing kept, dropped from a state that has them
@@ -537,6 +544,11 @@ def step_paths(run_dir: Path, st: dict) -> set[str] | None:
     if not (tests := FAILED_RE.findall(log)):
         return None
     return {os.path.normpath(t) for t in tests} | _named(log, "")
+
+
+def ratchet_failures(run_dir: Path, st: dict) -> list[tuple[str, str, str]]:
+    """(name, top commit's first 12 digits, why) of each change a ratchet-gate step's log says the gate failed."""
+    return RATCHET_FAILED_RE.findall(_step_log(run_dir, st))
 
 
 def suite_paths(run_dir: Path, s: dict) -> set[str] | None:
@@ -1081,7 +1093,8 @@ class Driver:
     def _name(self, drive: dict, pl: dict, run: dict, key: str, d: Path, rec: dict, stopped: list[str]) -> None:
         """Name the culprit of failed ``key`` among the PRs landed since it last passed (`_base_of`): the one whose change
         touches a file the failure points at (its failing tests, the files its log names, what the read guard caught it reading
-        and the test modules that read it), else the one that touches its declared inputs (`_input_rule`); several, a bisection
+        and the test modules that read it), else the one that touches its declared inputs (`_input_rule`); for ratchet-gate,
+        the oldest whose merge the gate's log says it fails (`ratchet_failures`) before either; several, a bisection
         by landing decides (`_start_bisect`).  Ring @ci, the suite's owner and the culprit's (`_ring`): drive reverts the
         culprit `FIX_WINDOW_S` after unless a fix is marked (`_red_clock`).  A key already named for this tip, or whose culprit
         is still on `main` unreverted, is left as it is."""
@@ -1095,7 +1108,11 @@ class Driver:
         r = {"tip": tip, "ids": run["ids"], "first": first_error(d, rec), "step": step, "culprit": None,
              "owner": self._path_owner(rec["suite"]) if rec.get("suite") else None, "not_run": stopped}
         red[key] = r
-        if (base := self._base_of(pl, key, step, tip)) is None:
+        gate = ratchet_failures(d, rec) if step == RATCHET_STEP else []
+        if gate:
+            r["first"] = f"`{gate[0][0]} ({gate[0][1]}): failed: {gate[0][2][:200]}`"
+        # the gate judges every merge above `main` and names the one it fails, wherever the step last passed
+        if (base := self._base_of(pl, key, step, tip) or (pl.get("verified") if gate else None)) is None:
             self._ring(drive, r, key, f"it never passed in an after-landing run since `main` {pl['verified'][:12]}, so no "
                                       "landing can be named. Reverted nothing")
             return
@@ -1105,6 +1122,8 @@ class Driver:
         hits = [x for x in members if touches(self._own(x), paths)] if paths else []
         why = f"its change touches {', '.join(sorted({f for x in hits for f in touches(self._own(x), paths)})[:4])}"
         r["paths"] = sorted(paths or ()) + sorted({f for x in hits for f in touches(self._own(x), paths)})
+        if gate and (named := [x for x in members if x.commit[:12] in {c for _, c, _ in gate}][:1]):
+            hits, why = named, "the ratchet gate fails its merge"
         if not hits and (rule := self._input_rule(key, d, rec, tip)):
             label, ok = rule
             hits, why = [x for x in members if any(ok(f) for f in self._own(x))], f"its change touches {label}"
