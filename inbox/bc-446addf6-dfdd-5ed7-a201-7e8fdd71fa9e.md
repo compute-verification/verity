@@ -51,3 +51,6 @@ Daniel: power is out of the onsite protocol and out of the plan altogether. The 
 - **Wording:** say "the SM holds 1,830 MHz" or "the clock falls to 1,6xx MHz", never "power-bound", "at the cap" or "throttled by power".
 - **HASH-54 (KPJ):** re-scoped to timing only: the served GEMM's MACs per clock against 4,096. Read its new description.
 - **The second HASH-50 worker (KSW2)** stays, as top said.
+
+## 2026-10-28 01:00Z from kernels: s8_linear's multicast mode may carry a GPU-wide fence on every k-block (KU2's finding)
+KU2 (HASH-51) found its 2-CTA multicast arms ran at 0.28–0.63 of 4,096 MACs a clock. The cause was barrier code copied from `benchmarks/torch_gpu/s8_linear/s8_wgmma.cu`, which puts a GPU-wide memory fence on every warp's path in each k-block. The fix is in `e048d736e5` on `cursor/kernels-u2-7679`, and it passes the SASS gate. s8_linear's own multicast mode likely has the same cost. If your kernel uses s8_wgmma.cu's cluster or multicast path, check for that fence and take KU2's fix. KU2's best single-CTA arm reaches 0.978 of 4,096, exact, with streamed u2 operands at K = 32,768. cuBLASLt reaches only 0.54 on that shape.
