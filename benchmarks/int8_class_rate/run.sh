@@ -8,16 +8,16 @@
 #     -- bash benchmarks/int8_class_rate/run.sh
 #
 # Env: CLASSES (default "s8 s2 u2 u4 zero"), ENCODINGS (wgmma's, default "s8s8 u8u8"; u8u8 runs on s8 and s2, the classes
-# an offset changes), KERNELS (default "wgmma lt"), RATIOS (default "0 1.70 2.3", 0 first), SECS (20), LT_SECS (10),
+# an offset changes), KERNELS (default "wgmma lt"), RATIOS (default "0 1.70 2.3", 0 first), SECS (15), LT_SECS (10),
 # ROUNDS (2), CLOCK (1830), LEASE_MIN (30). Writes $OUT/rates.jsonl (class_rate's lines, each with its round), card.json
 # and summary.txt (summarize.py's reading of this card).
 set -uo pipefail
 D=$(cd "$(dirname "$0")" && pwd)
 R=$(cd "$D/../.." && pwd)
 O=${OUT:?}
-export PATH=/usr/local/cuda/bin:$PATH
+export PATH=/usr/local/cuda/bin:$PATH CUDA_MODULE_LOADING=EAGER
 export CLASSES=${CLASSES:-s8 s2 u2 u4 zero} ENCODINGS=${ENCODINGS:-s8s8 u8u8} KERNELS=${KERNELS:-wgmma lt}
-export RATIOS=${RATIOS:-0 1.70 2.3} SECS=${SECS:-20} LT_SECS=${LT_SECS:-10} ROUNDS=${ROUNDS:-2} CLOCK=${CLOCK:-1830}
+export RATIOS=${RATIOS:-0 1.70 2.3} SECS=${SECS:-15} LT_SECS=${LT_SECS:-10} ROUNDS=${ROUNDS:-2} CLOCK=${CLOCK:-1830}
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 nvcc --version > "$O/nvcc.txt" 2>&1

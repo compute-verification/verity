@@ -302,6 +302,8 @@ static void run_wgmma(int cls, double secs, const std::vector<double>& ratios, c
     wg_k<ENC><<<nsm, 128, smem, st>>>(iters, cls, off, tsd, logd, sink, started);
     CK(cudaGetLastError());
   };
+  launch(1);
+  CK(cudaDeviceSynchronize());
   auto get = [&]() {
     std::vector<Stamp> s(nsm);
     std::vector<u64> L((size_t)nsm * LOGMAX);
@@ -478,10 +480,20 @@ int main(int argc, char** argv) {
   for (int c = 0; c < 5; ++c)
     if (cname == CLS_NAMES[c]) cls = c;
   if (cls < 0) { fprintf(stderr, "CLASS: s8, s2, u2, u4 or zero\n"); return 2; }
+  // a kernel's first launch under lazy loading waits for the running one, so a hash beside the tensor would run after it
+  setenv("CUDA_MODULE_LOADING", "EAGER", 1);
   cudaDeviceProp p;
   CK(cudaGetDeviceProperties(&p, 0));
   nsm = p.multiProcessorCount;
   streams();
+  {
+    CK(cudaMemset(started, 0, 4));
+    wait_k<<<1, 1, 0, sh>>>(started, 0);
+    Hash warm;
+    warm.init(nsm);
+    warm.launch(sh, HB, 1);
+    CK(cudaDeviceSynchronize());
+  }
   const int first = kernel == "wgmma" ? 5 : 4;
   const double secs = atof(argv[first - 1]);
   std::vector<double> ratios;
