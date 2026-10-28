@@ -13,6 +13,12 @@ with one SHA-512, or every part's recursive statement is `RecRaw.ofShared S` at 
 verifier's form, at its own Flock statement, an index below V*'s count and its own bindings, as `partRaw` builds them;
 one part per index, each accepted under `--zk` without an identifier, no two sessions on one coin key. Which
 statement `S` stages (`readX`, the staging message) is the run's, not the composition's.
+
+That the parts' sessions are one run of `RecDeploy.V` is the open condition C10 `OneRun`: one session per part, every
+session the coin server opened for the statement's parts recorded, and the staging before the first part's Hello.
+`rec-compose` sees only the sessions the prover hands it, so a part retried until it accepts passes. `OneRun` needs
+the service's interactive-run record, a later PR; until it holds, `composed_parts` gives one shared set and fresh
+keys, and the recursive verdict is not a claim a guarantee backs.
 -/
 
 namespace RecDeploy

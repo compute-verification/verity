@@ -16,6 +16,12 @@ part's `rec_shared` holds every input the compiled verifier's parts read, at the
 (`Shared.Complete`), and every part's is that one; and no two sessions share a coin key (`verify` refuses a key reused
 within one run, `CoinTree.checkFresh`, and this across runs). `Accepts` states it, and `check_accepts` proves it of
 `check`; `Proofs.Flock.Claims.Recursion.ComposeParts` carries it to the parts' statements.
+
+It doesn't check that the parts' sessions are one run of the compiled verifier, which is the open condition C10
+`OneRun`: one session per part, every session the coin server opened for the statement's parts recorded, and the
+staging before the first part's Hello. A prover can retry a part and hand over only the session that accepted, since
+`checkFresh` and this see only the keys they are handed. `OneRun` needs the service's interactive-run record, a later
+PR; until it holds, the recursive verdict is not a claim a guarantee backs.
 -/
 import Lean.Data.Json
 import Flock.Bytes

@@ -56,7 +56,11 @@ when there is one log per V* statement with one `VERDICT`, every part is accepte
 the one rows file the prover staged (`acc0`, the tops, the `rec-c<k>` rows) and the composition's own inner shape, every
 part read one set of the other shared inputs, in the compiled verifier's form, and no two sessions share a coin key
 (`RecCompose.Accepts`, `check_accepts`; `Proofs.Flock.Claims.Recursion.ComposeParts.composed_parts` reads it at the
-compiled verifier's parts). `verity_flock.rec_compose` is its Python mirror (`tests/test_lean_rec_compose.py`). The pod's Lean step (`85-rec-reprice.sh`, `lean_verdicts.py --compose`) gives every part that one file.
+compiled verifier's parts). It doesn't check that the parts' sessions are one run of the compiled verifier: that is
+the open condition C10 `OneRun` (one session per part, every session the coin server opened for the statement's parts
+recorded, the staging before the first part's Hello), which needs the service's interactive-run record, a later PR.
+Until it holds, a prover can retry a part and hand over only the accepted session, and the recursive verdict is not a
+claim a guarantee backs. `verity_flock.rec_compose` is its Python mirror (`tests/test_lean_rec_compose.py`). The pod's Lean step (`85-rec-reprice.sh`, `lean_verdicts.py --compose`) gives every part that one file.
 
 ## Build and run
 
