@@ -4678,7 +4678,7 @@
  },
  "reads": {
   "Attest.FrameV3Sha512": {
-   "digest": "64cd898fd4b23076f22a644547e6ffea2d1a3550aa4013e8f551494604e0538a",
+   "digest": "74273d55210e1aa102c68c02404434a001339d47d2bb671fc0be7a689f628b67",
    "definitions": {
     "FrameV3Sha512.Domain": "35ee9e6cb36d45a8a20ccbdb300f3e2ecba8aad38f771197b637664c1d4b9bdc",
     "FrameV3Sha512.Domain.count": "7fdf189973ba7e2e5d27b327a7b20c7a2fd429c6655c087fd508043e41e5569d",
@@ -4686,6 +4686,7 @@
     "FrameV3Sha512.Domain.id": "1e925de0e4e1b38bd6ff7c5552a9c2a941343c5cf36e7e534722a7a551e17d76",
     "FrameV3Sha512.Domain.leaf": "c0e1d9291b016a0e3fd4cfc1d64e4cde92d3191a760d6ed214e748110abd306f",
     "FrameV3Sha512.Domain.make": "3541fe15f6cf18fc8bedd3d33cbb44b795f4191931f08a9197d9a0baf5f08056",
+    "FrameV3Sha512.Domain.makeU64": "0cb02c96af8a1c5b2ceb33e3591ab680b4489fcbef12e009cabd4c2af0f54e93",
     "FrameV3Sha512.Domain.node": "4ab9f0d849abe4eb3dc3cc6e95f2a11800dde1598294f8262f3544f016a38327",
     "FrameV3Sha512.Domain.pad": "5095ec18c6fee365f97aa04dda3d028992d58cc53c2b85f920fe616a3a57d3a3",
     "FrameV3Sha512.TAGGED": "b3adbefa6c68d121a2f4f39f6295f7f0125990efc2fb4e820246926ba4f2c54d",
@@ -4731,7 +4732,7 @@
    ]
   },
   "Attest.Period": {
-   "digest": "22e01515a08c06cc94b7dda8ae504893d33c99582e5179d5211642d5a4106756",
+   "digest": "5fd839aab5cd7be296aa929c305cee00734f99c590625b18c9afe8949af0651c",
    "definitions": {
     "Attest.PERIOD_BINDING": "7145efd7f0f1920d4db47741ca0996a580f9523a6d991a13f37257c077895432",
     "Attest.PERIOD_SCHEMA": "480f41fbd5c09f9e18f5fe0d0afb210f813c274b84d458ade6ffca734b68c3c8",
@@ -4754,7 +4755,7 @@
     "Attest.check": "4b35cb6fb6a29dbba335df8d0779657054e396084b635ec7b3656ef064aaf0ca",
     "Attest.checkKey": "d78dbc1b08ea112850a0b2cb4f639987ee90c30a7154266dfe2924493683cdf3",
     "Attest.leaves": "9964e8ff73fb98d25f405f5c55734d3fa4635cd0323056e318eb99733baef8f3",
-    "Attest.periodDomain": "4ecc85a502bcdb5d1aae22b96160a611c446416c8f798c3155d127efed88885c",
+    "Attest.periodDomain": "ec9b8766fe82f2bb3730afc96fe16f9d726df6c4bf5aab9283c9c36eb77f3d0f",
     "Attest.root": "1d92416241c62ed61bce4d32145d5a17b49792809edf6e272c8ec75c8f8d509b"
    },
    "guarantees": [

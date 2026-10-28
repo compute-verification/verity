@@ -3,18 +3,24 @@ party's lower key signed (`verity.core.attest`, Lean's `Attest.check`) without r
 signature.
 
     AttestPeriod_v1{N, W, H, L}
-        (I: Array<2, Word>, lower: Value_N, context: Array<L, Byte>, count: Array<64, Value<1>>, root: Digest,
-         q: Array<H, Value<1>>, C: Value_N, y: Array<P, Value_N>, path: Array<H, Value_N>) -> Value<1>
+        (I: Array<2, Word>, lower: Value_N, context: Array<L, Byte>, count: Array<64, Value<1>>, domain: Digest,
+         root: Digest, q: Array<H, Value<1>>, C: Value_N, y: Array<P, Value_N>, path: Array<H, Value_N>) -> Value<1>
         Byte = Array<8, Value<1>>, Digest = Array<8, Word>; N, W, H and the rest as `gates.lms`' LmsVerify_v1
 
 1 iff ``u32(q) || C || y || path`` signs ``lms.period_root_message(I, ..., count, root)`` under the lower key
-``I || lower`` (`lms.verify`). ``I || lower`` is the party's lower key, public, as every liveness record shows it, and the
-verifier checks the identity's certificate of it in the clear (`Attest.checkKey`), so the proof runs one LMS verification.
-``context`` is the period's context as `lms.period_root_message` hashes it before the count (`context`): the deployment's
-hash, the party, the attachment id, the link and the period's index, each but the index length-prefixed, L bytes the
-verifier lays out from the public statement. ``count`` (u64, LSB first) and ``root`` (the period tree's root) are witness,
-as is the signature; they are the values the period's reads share, through the service's registration of them, to open
-its records.
+``I || lower`` (`lms.verify`), and ``domain`` is the id of the period tree's domain over ``count`` records,
+``CommitmentDomain(BINDING, -1, RangeU64Domain(0, count), "sha512")`` (`attest.domain_id`). ``I || lower`` is the party's
+lower key, public, as every liveness record shows it, and the verifier checks the identity's certificate of it in the
+clear (`Attest.checkKey`), so the proof runs one LMS verification. ``context`` is the period's context as
+`lms.period_root_message` hashes it before the count (`context`): the deployment's hash, the party, the attachment id, the
+link and the period's index, each but the index length-prefixed, L bytes the verifier lays out from the public statement.
+``count`` (u64, LSB first), ``domain`` and ``root`` (the period tree's root) are witness, as is the signature; they are the
+values the period's reads share, through the service's registration of them, to open its records: the domain binds the
+signed count to the tree the reads open in.
+
+**The domain id** is SHA-512 of `merkle.range_u64_domain_message(BINDING, -1, 0, count)`, 173 bytes whose first block is
+constant and whose count is the second block's bytes 37 to 44: one ``Sha512Compress_v1`` from the first block's midstate,
+then ``LmsEqual_v1{64}`` against ``domain``, ANDed into the result.
 
 **The message** is SHA-512 of ``u64(21) || "verity/period-root/v1" || I || u64(L + 8) || context || u64be(count) ||
 u64(64) || root`` (`lms._digest`), 133 + L bytes: three ``Sha512Compress_v1`` calls up to L = 234 (a memory challenger's
@@ -25,22 +31,29 @@ byte of ``context`` is 8 bits LSB first.
 """
 from __future__ import annotations
 
+import hashlib
+
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.types import Array
+from verity.ml.commitments.merkle import RANGE_U64_MESSAGE_BYTES, range_u64_domain_message
 from verity.ml.crypto import lms as R
 
-from .lms import DIGEST, IDENT, WORD, Sha512Compress, _bytes, _check, _group, _join, _value, _value_bits, _Wires, _words
+from .lms import DIGEST, IDENT, WORD, LmsEqual, Sha512Compress, _bytes, _check, _group, _join, _value, _value_bits, _Wires, _words
 from .lms import arguments as lms_arguments
 from .lms import verifier
-from .sha512 import IV, pad_tail
+from .sha512 import IV, midstate, pad_tail
 
-__all__ = ["AttestPeriod", "arguments", "context", "period"]
+__all__ = ["AttestPeriod", "BINDING", "arguments", "context", "period"]
 
 BIT = BL.BIT
 BYTE = Array(8, BIT)
 U64 = Array(64, BIT)
 TAG = R.ROLES["period-root"].encode()
+#: the period tree's binding (`verity.core.attest.BINDING`)
+BINDING = hashlib.sha512(b"verity/period-records/v1").digest()
+#: the domain message at count 0: its first block is the constant one, and its last 8 bytes are the count's
+_DOMAIN = range_u64_domain_message(BINDING, -1, 0, 0)
 
 
 def context(deployment: bytes, party: str, attachment: bytes, link: str, period: int) -> bytes:
@@ -57,41 +70,48 @@ def _signature(S):
     p = _check(S)
     _check_context(S.L)
     V = _value(S.N)
-    return ((("I", IDENT), ("lower", V), ("context", Array(S.L, BYTE)), ("count", U64), ("root", DIGEST),
-             ("q", Array(S.H, BIT)), ("C", V), ("y", Array(p.P, V)), ("path", Array(S.H, V))), BIT)
+    return ((("I", IDENT), ("lower", V), ("context", Array(S.L, BYTE)), ("count", U64), ("domain", DIGEST),
+             ("root", DIGEST), ("q", Array(S.H, BIT)), ("C", V), ("y", Array(p.P, V)), ("path", Array(S.H, V))), BIT)
 
 
-def _body(B, S, I, lower, ctx, count, root, q, Cv, y, path):
+def _body(B, S, I, lower, ctx, count, domain, root, q, Cv, y, path):
     X = _Wires(B)
     const = lambda data: [X.const(b, 8) for b in data]  # noqa: E731
+    digest = lambda v: X.coll(DIGEST, [b for w in v for b in X.const(w, 64)])  # noqa: E731
     data = (const(len(TAG).to_bytes(8, "big") + TAG) + _bytes(_group(X.refs(I), 64))
             + const((S.L + 8).to_bytes(8, "big")) + _group(X.refs(ctx), 8) + _bytes([X.refs(count)])
             + const((64).to_bytes(8, "big")) + _bytes(_group(X.refs(root), 64)))
     data += const(pad_tail(len(data)))
     words = _words(data)
-    cv = X.coll(DIGEST, [b for v in IV for b in X.const(v, 64)])
+    cv = digest(IV)
     for blk in range(0, len(words), 16):
         cv = B.call(Sha512Compress, cv, X.coll(Array(16, WORD), _join(*words[blk:blk + 16])))
-    return B.call(verifier(S.N, S.W, S.H), I, lower, cv, q, Cv, y, path)
+    signed = B.call(verifier(S.N, S.W, S.H), I, lower, cv, q, Cv, y, path)
+    tail = const(_DOMAIN[128:-8]) + _bytes([X.refs(count)]) + const(pad_tail(RANGE_U64_MESSAGE_BYTES))
+    did = B.call(Sha512Compress, digest(midstate(_DOMAIN[:128])), X.coll(Array(16, WORD), _join(*_words(tail))))
+    bound = B.call(bind(LmsEqual, N=64), did, domain)
+    return B.call(BL.AND, BL.operands(signed, bound))
 
 
 AttestPeriod = CompositeDefinition(
     "AttestPeriod", 1, ("N", "W", "H", "L"), _signature, _body, conformance="exact-model-tested",
     doc="1 iff u32(q) || C || y || path is an LMS signature (LmsVerify_v1{N, W, H}) under the party's lower key I || lower of "
         "lms.period_root_message: SHA-512 of the tag verity/period-root/v1, I, the period's context (L bytes) with u64be(count), "
-        "and root; sound under the claim euf-cma/lms-sha512-n64 at N = 64")
+        "and root; and domain is the period tree's range-u64 domain id over count records, SHA-512 of "
+        "range_u64_domain_message(SHA-512(verity/period-records/v1), -1, 0, count); sound under the claim "
+        "euf-cma/lms-sha512-n64 at N = 64")
 
 
 def period(N: int, W: int, H: int, L: int):
     return bind(AttestPeriod, N=N, W=W, H=H, L=L)
 
 
-def arguments(params: R.Params, lower: bytes, context_: bytes, count: int, root: bytes,
+def arguments(params: R.Params, lower: bytes, context_: bytes, count: int, domain: bytes, root: bytes,
               sig: R.Signature) -> tuple[list[int], ...]:
-    """``AttestPeriod_v1{N, W, H, len(context_)}``'s nine arguments, each a flat list of bits in leaf order."""
-    if isinstance(count, bool) or not isinstance(count, int) or not 0 <= count < 2 ** 64 or len(root) != 64:
-        raise ValueError("a period's count is a u64 and its root 64 bytes")
+    """``AttestPeriod_v1{N, W, H, len(context_)}``'s ten arguments, each a flat list of bits in leaf order."""
+    if isinstance(count, bool) or not isinstance(count, int) or not 0 <= count < 2 ** 64 or len(domain) != 64 or len(root) != 64:
+        raise ValueError("a period's count is a u64, and its domain id and root 64 bytes")
     _check_context(len(context_))
     I, top, _, q, C, y, path = lms_arguments(params, lower, bytes(64), sig)
     return (I, top, [(b >> j) & 1 for b in context_ for j in range(8)], [(count >> j) & 1 for j in range(64)],
-            _value_bits(root), q, C, y, path)
+            _value_bits(domain), _value_bits(root), q, C, y, path)
