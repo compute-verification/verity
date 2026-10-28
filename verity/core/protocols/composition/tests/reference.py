@@ -8,7 +8,8 @@ certificates and one-stage v2 on each link-window,
 proofs themselves (`verity/sampled-proofs/one-stage/v2`) `one_stage_zk_case.answer`: v2's framing over v1's `one_stage`
 and decoders (`verity/core/service/sampled_proofs/tests/`), on the cases v2 decides without a proof, the wipe's
 (`verity/wipe/v0`) `wipe_protocol_case.answer`, for onsite's registration check NCI's protocol difftest's `reference`
-(`verity/nci/v1`, `nci_reference`'s `check_baseline`, `verity/core/protocols/network/tests/test_nci_protocol.py`), and
+(`verity/inference-only/v0`, `nci_reference`'s `check_baseline`,
+`verity/core/protocols/network/tests/test_inference_only_protocol.py`), and
 for space (`verity/pous/p2/v4/run`) and bandwidth
 (`verity/remote-bandwidth/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
 `periods.py`). Each component's own difftest holds its Lean to that Python; this one holds the composition of them.
@@ -82,7 +83,7 @@ PERIOD = module("network_period_difftest", CORE / "protocols/network/tests/test_
 WIPE_CASES = module("wipe_protocol_case", CORE / "devices/memory_challenger/lean/tests/wipe_protocol_case.py")
 #: NCI's protocol difftest: `reference` is `check_baseline` behind the protocol's decoders, and `split` and `seeds` give
 #: its declarations.
-NCI = module("nci_protocol_difftest", CORE / "protocols/network/tests/test_nci_protocol.py")
+NCI = module("inference_only_protocol_difftest", CORE / "protocols/network/tests/test_inference_only_protocol.py")
 
 
 def trial_verdict(verdicts: list[str]) -> str:
@@ -160,7 +161,7 @@ BANDWIDTH = Recorded("verity/remote-bandwidth/v0")
 #: The wipe, `MemoryChallenger.WipeProtocol.protocol`.
 WIPE = Ported("verity/wipe/v0", WIPE_CASES.answer)
 #: Onsite's registration check, `NciCheck.Protocol.protocol`: not a component.
-NCI_CHECK = Ported("verity/nci/v1", NCI.reference)
+NCI_CHECK = Ported(NCI.ID, NCI.reference)
 
 
 def bind(id: str, digests: list[tuple[str, bytes]]) -> bytes:
