@@ -8312,6 +8312,27 @@
     "Properties.SampledProofs.bernoulliBounds"
    ]
   },
+  "Flock.WindowRecord": {
+   "digest": "69f9931b6730628a0d09f00216e437c7a979fc0fab350fa25a901e630884cd57",
+   "definitions": {
+    "Flock.WindowRecord.digestOf": "f2ca5f121a40eba3961471326e49ac71e2a344e89ea13b4ac87593675123347d"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
+    "Properties.Pouw.Check.acceptMeans",
+    "Properties.Pouw.Check.acceptedDraw",
+    "Properties.Pouw.Check.acceptedInRange",
+    "Properties.Pouw.Check.acceptedIsTheService's",
+    "Properties.Pouw.Check.commitmentKeepsBytes",
+    "Properties.Pouw.Check.digestIsOneStage's",
+    "Properties.Pouw.Check.neverNull",
+    "Properties.Pouw.Check.undecidedOnlyFromService",
+    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
+    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
+    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
+   ]
+  },
   "Identity.Sha512": {
    "digest": "f1d1300213f26823bdacd659be7cecb81b498cf4df45ca5ba65ef3b233d737a0",
    "definitions": {
@@ -10291,7 +10312,7 @@
    ]
   },
   "PouwCheck.Inputs": {
-   "digest": "b76658db7ef26d0cd917e763a9ed446a01c0ccd67f457b1245fa00f943059946",
+   "digest": "d799dd718b4d1cf73b3d8e7686fed8f3a187886d89d180d0ce709442258c7f18",
    "definitions": {
     "PouwCheck.CheckItem": "a8c3b6782e136e39d6ba8abc4ad388ca594f2ae5ed7f0e9a20bf108367f859ce",
     "PouwCheck.CheckItem.coins": "967fa4f2acda567918b67eb4dbe81db67c0ef1a754b208dc248f40874af1f926",
@@ -10330,7 +10351,7 @@
     "PouwCheck.Params.query": "6dce4e5cd974597d0bb7233fd0dd8aed2e9e0678277ee73c4266cb155e54b50f",
     "PouwCheck.Registration": "033283f2919d0350646a0302eefb1f2bb975611831ca749028abef5181b2c3c6",
     "PouwCheck.Registration.bytes": "baeff8fe91acf5297042e6c9221f1cfcbc8aa7d4af1b66929363679ccaa5e023",
-    "PouwCheck.Registration.digest": "e7bdab24b3c934c55af62291756caee362c454315e96cb431aba8ff33a6633a5",
+    "PouwCheck.Registration.digest": "d03388f5dc140200c477293df1832100c228e2084ef8e49435c034c2214f5907",
     "PouwCheck.Registration.format": "04247820bd84289e937d29fbb93bb2c6e21d5d65c776fa53ae3b7f2d46187264",
     "PouwCheck.Registration.law": "b9af16fd4ebcb6780e3fdc403569181671ffd3b97541f723d573d8c75c5d88c6",
     "PouwCheck.Registration.partition": "adab3c77b7021bd1ae4ca6c0eb0b704729075dc56ad2104364f35066402c9bcf",
