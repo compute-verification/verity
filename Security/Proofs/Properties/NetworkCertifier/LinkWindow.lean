@@ -48,7 +48,7 @@ the opened word, and its digest of them. -/
 theorem verdict_shape {c : Case} {v : Verdict} (hv : verdict c = .ok v) :
     ∃ row, pubRow c = .ok row ∧
       v.accepted = acceptedOf (proved c) (if proved c then opened c row else none) (certified c) (synced c) ∧
-      v.outputs = outputsOf c v.accepted ((if proved c then opened c row else none).getD 0) ∧
+      v.outputs = outputsOf v.accepted ((if proved c then opened c row else none).getD 0) ∧
       verdictDigest c v.accepted v.outputs = .ok v.digest := by
   unfold verdict at hv
   cases hr : pubRow c with
@@ -122,7 +122,7 @@ theorem certified_spec {c : Case} (h : certified c = true) : WindowCertified c :
 theorem synced_spec {c : Case} (h : synced c = true) : WindowSynced c := by
   cases hk : c.kind with
   | warden => simp only [WindowSynced, hk]
-  | plain | served | advised =>
+  | plain | served =>
     simp only [synced, hk] at h
     simp only [WindowSynced, hk]
     split at h
@@ -196,7 +196,7 @@ theorem certified_of {c : Case} (h : WindowCertified c) : certified c = true := 
 theorem synced_of {c : Case} (h : WindowSynced c) : synced c = true := by
   cases hk : c.kind with
   | warden => simp only [synced, hk]
-  | plain | served | advised =>
+  | plain | served =>
     simp only [WindowSynced, hk] at h
     obtain ⟨s, hs, hd, r, hr, he⟩ := h
     simp only [synced, hk, hs, Bool.and_eq_true, Array.contains_iff_mem, Array.any_eq_true', beq_iff_eq]
@@ -266,28 +266,18 @@ theorem canon_mkObj {l : List (String × Json)} (h : ∀ p ∈ l, ∃ t, Flock.c
   rw [hps]
   exact ⟨_, rfl⟩
 
-theorem acceptedOutputs_canon (c : Case) : ∃ t, Flock.canon (acceptedOutputs c) = .ok t := by
+theorem acceptedOutputs_canon : ∃ t, Flock.canon acceptedOutputs = .ok t := by
   unfold acceptedOutputs
   apply canon_mkObj
   intro p hp
-  cases hk : c.kind with
-  | advised view advice =>
-    simp only [hk, List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at hp
-    rcases hp with (rfl | rfl) | rfl
-    · exact canon_nat 1
-    · exact canon_nat 1
-    · cases advice with
-      | some a => exact canon_str a
-      | none => simp only [Flock.canon]; exact ⟨_, rfl⟩
-  | plain | served | warden =>
-    simp only [hk, List.append_nil, List.mem_cons, List.not_mem_nil, or_false] at hp
-    rcases hp with rfl | rfl
-    · exact canon_nat 1
-    · exact canon_nat 1
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at hp
+  rcases hp with rfl | rfl
+  · exact canon_nat 1
+  · exact canon_nat 1
 
-theorem verdictDigest_ok (c : Case) : ∃ d, verdictDigest c true (acceptedOutputs c) = .ok d := by
+theorem verdictDigest_ok (c : Case) : ∃ d, verdictDigest c true acceptedOutputs = .ok d := by
   obtain ⟨t, ht⟩ : ∃ t, Flock.canon (Json.mkObj [("format", .str verdictFormat), ("registration", .str c.registration),
-      ("sessions", .arr (c.sessions.map Json.str)), ("accepted", .bool true), ("public", acceptedOutputs c)]) =
+      ("sessions", .arr (c.sessions.map Json.str)), ("accepted", .bool true), ("public", acceptedOutputs)]) =
       .ok t := by
     apply canon_mkObj
     intro p hp
@@ -299,7 +289,7 @@ theorem verdictDigest_ok (c : Case) : ∃ d, verdictDigest c true (acceptedOutpu
         obtain ⟨s, -, rfl⟩ := Array.mem_map.1 hx
         exact canon_str s
     · exact canon_bool true
-    · exact acceptedOutputs_canon c
+    · exact acceptedOutputs_canon
   unfold verdictDigest
   simp only [ht, bind, Except.bind, pure, Except.pure]
   exact ⟨_, rfl⟩
@@ -311,8 +301,8 @@ theorem linkWindowAcceptMeans_honest :
   intro c ⟨hp, ho, hc, hs⟩
   obtain ⟨row, hr, hrow⟩ := opened_of ho
   obtain ⟨d, hd⟩ := verdictDigest_ok c
-  have hout : outputsOf c true 3 = acceptedOutputs c := rfl
-  have hv : verdict c = .ok ⟨true, acceptedOutputs c, d, true, some 3, true, true⟩ := by
+  have hout : outputsOf true 3 = acceptedOutputs := rfl
+  have hv : verdict c = .ok ⟨true, acceptedOutputs, d, true, some 3, true, true⟩ := by
     unfold verdict
     simp only [hr, proved_of hp, ↓reduceIte, hrow, certified_of hc, synced_of hs, acceptedOf, beq_self_eq_true,
       Bool.and_self, Option.getD_some, hout, hd, bind, Except.bind, pure, Except.pure]
