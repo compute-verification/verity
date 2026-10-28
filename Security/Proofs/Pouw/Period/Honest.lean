@@ -165,7 +165,7 @@ def stages : SplitStages Bool (Fin 144) 1 :=
   .stage (fun _ _ => .paid) (fun _ _ => True) (fun _ _ => True) fun _ => .done
 
 /-- The honest period of `n` windows: every tile live, each window's stages `stages`, whatever the past. -/
-def period : (n : ℕ) → Period Bool Ω1 (Fin 144) circuit.rounds n
+def period : (n : ℕ) → WindowPlay Bool Ω1 (Fin 144) circuit.rounds n
   | 0 => .done
   | n + 1 => .window (fun _ => true) stages fun _ => period n
 
