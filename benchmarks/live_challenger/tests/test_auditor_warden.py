@@ -320,6 +320,55 @@ def test_a_scan_rehearsal_is_recorded_only_when_asked_and_runs_id_requests_at_th
     assert "--ids" not in A.warden_command(plain, tmp_path, "u")
 
 
+def test_a_scan_rehearsals_tick_is_recorded_only_when_given_and_its_run_and_minutes_are_at_that_tick(host, tmp_path):
+    """`--bucket-ms` is recorded (``bucket_ms``) only when given, and the run is the scan's schedule with that tick in
+    place of its 100 ms, every other flag the scan's. The gate counts the minutes at it: a sampling block of 32 ticks
+    of 4 s is 128 s, past the minute `warden_minutes` counts for a shorter one, so 100 requests take a minute more, and
+    one group of 4 prompts of 4 ids out takes its one block, 6 minutes at height 10 where 100 ms takes 4."""
+    rc, out = gate(host, REQUEST + ["--scan", "--bucket-ms", "4000"], started=[])
+    assert rc == 0, out
+    req = json.loads((host.certifier / json.loads(out)["run"] / "request.json").read_text())
+    assert (req["scan"], req["bucket_ms"]) == (True, 4000)
+    argv = A.warden_command(req, tmp_path, "http://127.0.0.1:40001")
+    schedule = argv[argv.index("--ids") + 1:][:len(A.SCAN_SCHEDULE)]
+    assert schedule == list(A.scan_schedule(4000)) and schedule[schedule.index("--bucket-ms") + 1] == "4000"
+    assert [x for i, x in enumerate(schedule) if schedule[i - 1] != "--bucket-ms"] == \
+        [x for i, x in enumerate(A.SCAN_SCHEDULE) if A.SCAN_SCHEDULE[i - 1] != "--bucket-ms"]
+    assert A.scan_schedule() == A.scan_schedule(100) == A.SCAN_SCHEDULE
+
+    rc, out = gate(host, REQUEST + ["--scan", "--minutes", "11"], started=[], token="cd34")
+    assert rc == 0 and "bucket_ms" not in json.loads(out), out
+    rc, out = gate(host, REQUEST + ["--scan", "--bucket-ms", "4000", "--minutes", "11"], started=[], token="ef56")
+    assert rc == 3 and "--minutes 11: 100 requests take 12 minutes" in json.loads(out)["refused"]
+
+    group = SCAN + ["--window-per-group", "--tokens", "4"]
+    rc, out = gate(host, group + ["--minutes", "4"], stdin=b"[[1],[2],[3],[4]]", started=[], token="0a0b")
+    assert rc == 0, out
+    rc, out = gate(host, group + ["--bucket-ms", "4000", "--minutes", "5"], stdin=b"[[1],[2],[3],[4]]", started=[],
+                   token="0c0d")
+    assert rc == 3 and "--minutes 5: 1 groups take 6 minutes" in json.loads(out)["refused"]
+    rc, out = gate(host, group + ["--bucket-ms", "4000", "--minutes", "6"], stdin=b"[[1],[2],[3],[4]]", started=[],
+                   token="0e0f")
+    assert rc == 0, out
+    req = json.loads((host.certifier / json.loads(out)["run"] / "request.json").read_text())
+    assert (req["bucket_ms"], req["window_per_group"], req["requests"]) == (4000, True, 4)
+    argv = A.warden_command(req, tmp_path, "u")
+    assert argv[argv.index("--ids") + 1:][:len(A.SCAN_SCHEDULE)] == list(A.scan_schedule(4000))
+
+
+@pytest.mark.parametrize("argv, why", [
+    (["--bucket-ms", "2000"], "--bucket-ms: the scan's tick, with --scan"),
+    (["--scan", "--bucket-ms", "99"], "--bucket-ms '99': 100 to 4000"),
+    (["--scan", "--bucket-ms", "4001"], "--bucket-ms '4001': 100 to 4000"),
+    (["--scan", "--bucket-ms", "0400"], "--bucket-ms '0400': 100 to 4000"),
+    (["--scan", "--bucket-ms", "2.5"], "--bucket-ms '2.5': 100 to 4000"),
+])
+def test_the_gate_refuses_a_tick_without_the_scan_or_past_its_range_and_writes_nothing(host, argv, why):
+    rc, out = gate(host, REQUEST + argv, started=[])
+    assert rc == 3 and why in json.loads(out)["refused"]
+    assert not host.certifier.exists()
+
+
 def test_a_warden_rehearsals_sampling_is_recorded_and_passed_on_every_request(host, tmp_path):
     """The defaults, temperature 0 and top_p 1, and given values alike are recorded and passed on, so that every request
     of the traffic carries both (`warden_serve.varied_traffic`) and an endpoint's own generation config never applies;
