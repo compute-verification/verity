@@ -14,7 +14,7 @@ namespace Core
 /-- A protocol that reads no blobs, as a `BlobProtocol` whose check ignores them. -/
 def Protocol.withoutBlobs (P : Protocol) : BlobProtocol := { P with checkBlobs := fun p c e _ => P.check p c e }
 
-instance : Coe Protocol BlobProtocol := ⟨Protocol.withoutBlobs⟩
+instance instCoeProtocolBlobProtocol_coreComposition : Coe Protocol BlobProtocol := ⟨Protocol.withoutBlobs⟩
 
 /-- The protocol on the blobs `bs`: its check is `checkBlobs` on them. -/
 def BlobProtocol.onBlobs (P : BlobProtocol) (bs : Blobs) : Protocol :=
