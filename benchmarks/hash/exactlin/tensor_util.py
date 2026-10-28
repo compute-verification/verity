@@ -200,7 +200,9 @@ def overlap_with_tensor(iv: list[tuple], a: int, b: int) -> dict[str, int]:
     return dict(out)
 
 
-def analyse(path: str, tokens: int, prompt: int, config: dict, theta: float, target: float) -> dict:
+def analyse(path: str, tokens: int, prompt: int, config: dict, theta: float, target: float, steady: bool = False) -> dict:
+    """With `steady`, a step longer than 1.5 times the median step (a window's close or a learning pass) is dropped and
+    listed in the summary's `dropped`."""
     m = model(config)
     data = load(path)
     kern = data["kernels"]
@@ -211,6 +213,11 @@ def analyse(path: str, tokens: int, prompt: int, config: dict, theta: float, tar
     cls_of = {n: classify(n) for n in names}
     fw = forwards(kern, m["layers"])
     picked = [(fw[i][0], fw[i + 1][0]) for i in range(len(fw) - 1) if fw[i][1] == tokens and fw[i + 1][1] == tokens]
+    dropped = []
+    if steady and picked:
+        median = sorted(b - a for a, b in picked)[(len(picked) - 1) // 2]
+        dropped = [{"start_ns": a, "wall_ms": (b - a) / 1e6} for a, b in picked if b - a > 1.5 * median]
+        picked = [(a, b) for a, b in picked if b - a <= 1.5 * median]
     # (start, end, class, kernel name or None, bytes) of everything on the device, by start
     iv = sorted([(s, e, cls_of[n], n, 0) for s, e, n, *_ in kern] + [(s, e, c, None, nb) for s, e, c, nb, _ in ops])
     starts = [x[0] for x in iv]
@@ -298,7 +305,7 @@ def analyse(path: str, tokens: int, prompt: int, config: dict, theta: float, tar
             "steps": n, "wall_ms": wall / 1e6, "ideal_ms": ideal_all / 1e6, "util": ideal_all / wall,
             "wall_at_target_ms": ideal_all / target / 1e6, "over_target_ms": (wall - ideal_all / target) / 1e6,
             "tensor_idle_ms": idle / 1e6, "macs": macs, "tensor_active": mean("tensor_active", "step"),
-            "clock_mhz": mean("clock_mhz", "step"), "metric_period_us": period},
+            "clock_mhz": mean("clock_mhz", "step"), "metric_period_us": period, "dropped": dropped},
         "classes": sorted(rows, key=lambda r: -r["loss_ms"]),
         "unclassified": sorted(([short(k), v[0] / n / 1e6, v[1] / n] for k, v in per_name.items()
                                 if cls_of[k] == "other kernels"), key=lambda r: -r[1])[:15]}
@@ -339,6 +346,9 @@ def table(doc: dict) -> str:
             lines[-1] += (f" (sampled every {s['metric_period_us']:.0f} µs, so a class of shorter kernels reads its "
                           "neighbours' values too)")
         lines[-1] += "."
+    if s.get("dropped"):
+        lines[-1] += (f" Steady state: {len(s['dropped'])} longer step(s) dropped (" +
+                      ", ".join(f"{d['wall_ms']:.0f} ms" for d in s["dropped"]) + ").")
     lines += [
         "",
         "| class | wall ms/step (exclusive) | share of wall | kernel ms/step | under a tensor kernel, ms | launches/step "
@@ -365,6 +375,7 @@ def main() -> int:
     ap.add_argument("--config", default=str(CONFIG))
     ap.add_argument("--theta", type=float, default=THETA_INT8)
     ap.add_argument("--target", type=float, default=0.8)
+    ap.add_argument("--steady", action="store_true", help="drop steps longer than 1.5 times the median")
     ap.add_argument("--out")
     ap.add_argument("--table", metavar="JSON", help="print a written analysis's Markdown tables")
     a = ap.parse_args()
@@ -373,7 +384,7 @@ def main() -> int:
         return 0
     if not a.report or not a.tokens:
         ap.error("REPORT and --tokens are required")
-    doc = analyse(a.report, a.tokens, a.prompt, json.loads(Path(a.config).read_text()), a.theta, a.target)
+    doc = analyse(a.report, a.tokens, a.prompt, json.loads(Path(a.config).read_text()), a.theta, a.target, a.steady)
     if a.out:
         Path(a.out).write_text(json.dumps(doc, indent=1))
     print(table(doc))

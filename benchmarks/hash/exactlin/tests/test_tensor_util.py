@@ -20,7 +20,7 @@ THETA = 8 * 36864 * 1e3  # the step's int8 MACs in 1 ms
 MS = 1_000_000
 
 
-def _export(path: Path) -> None:
+def _export(path: Path, starts_ms: tuple[int, ...] = (0, 10, 20)) -> None:
     """Three forwards of T 8 every 10 ms after a T 4 warm-up, each: the four linears (quantizer 0.1 ms, GEMM 0.5 ms),
     attention, a 0.1 ms launch gap and the activation between them, the LM head, a hashing kernel from 2.5 to 4.0 ms
     (under the down GEMM and the LM head until 3.1), a 1 ms copy, then nothing until the next forward.  And another
@@ -53,8 +53,8 @@ def _export(path: Path) -> None:
         k(at, at + 2 * MS // 10, names[4])
 
     forward(-20 * MS, 4)
-    for i in range(3):
-        base = i * 10 * MS
+    for start in starts_ms:
+        base = start * MS
         forward(base, 8)
         k(base + 25 * MS // 10, base + 4 * MS, names[5])
         db.execute("INSERT INTO CUPTI_ACTIVITY_KIND_MEMCPY VALUES (?, ?, ?, 0, 2)", (base + 4 * MS, base + 5 * MS, 1 << 30))
@@ -67,7 +67,7 @@ def _export(path: Path) -> None:
     db.executemany("INSERT INTO TARGET_INFO_GPU_METRICS VALUES (?, ?)",
                    [(1, "Tensor Active [Throughput %]"), (2, "GPC Clock Frequency [MHz]"), (3, "DRAM Read Bandwidth")])
     gemm = [(r[0], r[1]) for r in rows if names[r[4]] == "exactlin_scaled_mm" and r[2] == 0]
-    for t in range(25_000, 30 * MS, 50_000):
+    for t in range(25_000, (starts_ms[-1] + 10) * MS, 50_000):
         db.execute("INSERT INTO GPU_METRICS VALUES (?, 1, ?)", (t, 60.0 if any(s <= t < e for s, e in gemm) else 0.0))
         db.execute("INSERT INTO GPU_METRICS VALUES (?, 2, 1900000000)", (t,))
     db.commit()
@@ -121,6 +121,15 @@ def test_utilization_and_losses(doc):
     assert by[TU.GAP_OUT]["util_if_zero"] == pytest.approx(ideal / 5)
     assert by[TU.GAP_IN]["loss_ms"] == pytest.approx(0.1)
     assert "**tensor utilization 11.0%**" in TU.table(doc)
+
+
+def test_steady_drops_a_step_past_one_and_a_half_medians(tmp_path):
+    p = tmp_path / "report.sqlite"
+    _export(p, starts_ms=(0, 10, 20, 50))
+    doc = TU.analyse(str(p), tokens=8, prompt=4, config=CONFIG, theta=THETA, target=0.8, steady=True)
+    assert [s["wall_ms"] for s in doc["steps"]] == [10.0, 10.0]
+    assert doc["summary"]["dropped"][0]["wall_ms"] == 30.0 and doc["summary"]["wall_ms"] == 10.0
+    assert "1 longer step(s) dropped (30 ms)" in TU.table(doc)
 
 
 def test_a_forward_restarts_when_the_quantizer_grid_changes():
