@@ -17,40 +17,33 @@ window: the window is pinned on the challenger session's id (its UTC second) and
 
     terms.py SUMMARY TIMELINE [--periods PERIODS.jsonl --smi SMI.csv]      prints one JSON object
 
-`terms.py served` reads a served step instead: one run of `benchmarks/one_stage/served_util.sh` (VLLM-33), over the window
-its `served_util.py` chose (`util.json`'s steady full steps, each from the previous step's end to its own, host gaps
-included), from the run's Nsight Systems export, step trace and serve record:
+`terms.py served` reads a served step instead, from kernels' breakdown of its profile: the JSON
+`benchmarks/hash/exactlin/tensor_util.py` writes for one run of `benchmarks/one_stage/served_util.sh` (VLLM-33), the one
+per-kernel source P1a's table reads. It adds only what that breakdown leaves out:
 
-- **u**, the tensor utilization: the window's tensor work, each format at its own peak (the int8 linears at θ_int8, the
-  bf16 attention and LM head at the H200's bf16 rate, half θ_int8), over the wall. It's given at each reading of the clock,
-  and at the window's measured GPC clock beside Tensor Active, Nsight's share of SM cycles with the tensor pipe active.
-  The MACs are counted from the trace's rows: the linears' m n k at m the step's tokens, attention's causal QK^T and PV of
-  each row (its offset o and length n: 2 D (n o + n (n + 1) / 2) a head and layer), and the LM head on each row that
-  emits a token.
-- **the accounted share**, the declared linears' MACs (QKV, O, gate-up and down; not the LM head, which H1 doesn't
-  declare) at θ_int8 over the wall, labelled as `--credit` says, with the certified MACs (`--certified-over-declared`
-  times the declared) beside it.
-- **the rest**, the wall split exclusively, summing to 1. Each instant goes to the first class in `KERNEL_CLASSES` of the
-  kernels running then. With no kernel, it goes to a copy or memset that is running. Failing both, it goes to the step
-  loop's host span, if one is open: a Commit window's close, which starts at the trace time of the last step before it
-  closed and lasts its recorded close seconds, and that close's seal wait. Otherwise it goes to a gap, by the gap's
-  length: launch (under 20 µs), host (20 µs to 2 ms), or idle (2 ms or more).
+- **the certified MACs** beside the declared: the declared plus the peels this route computes (2 m n L' a call), at the
+  L' `period.lp_of` gives each of the model's linears at the word interval L (`--L`). That models this route's honest
+  work on the served shapes; it measures nothing in the run, whose scheme may have no L' (H1 + fx1's noise is a keyed
+  per-row word).
+- **the step itemized to 1 in SM-cycles**: each class's exclusive time at the SM clock sampled under it (the class's
+  `clock_mhz`, else the steps'), over the step's cycles. The declared int8 linears' MACs at 4,096 a SM-cycle on each SM are
+  the accounted share, and the int8 GEMM's other cycles are its shortfall below θ.
 
-    terms.py served --sqlite PROF.sqlite --trace ADVICE_TRACE.jsonl --util UTIL.json --serve SERVE.json
-        --certified-over-declared R [--credit TEXT] [--key all] [--steps FIRST-LAST ...] [--text OUT.txt]
-                                  prints one JSON object (a list of them with --steps) and, with --text, a table each
+u (the int8 linears at θ_int8, the bf16 attention and LM head at half that) and the accounted share are given over the
+step's SM-cycles, the data sheet's 1,830 MHz beside them. `--credit` says what the accounted share credits and
+`--covers` what kind of run it is.
+
+    terms.py served [LABEL=]KERNELS.json ... [--L 16384] [--credit TEXT] [--covers TEXT] [--text OUT.txt]
+                                  prints a JSON list, one object a run, and, with --text, a table each
 """
 from __future__ import annotations
 
 import argparse
-import bisect
 import csv
 import json
 import re
-import sqlite3
 import statistics
 import sys
-from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -161,266 +154,111 @@ def clocks(periods: list[dict], smi: list) -> list[dict]:
     return out
 
 
-#: each served checkpoint's shapes, from its config.json: the linears PoUW declares as (K, N) a layer (H1's Σ N over them
-#: and the layers is its declaration's), attention's query heads and head dimension, and the LM head's hidden size and vocabulary
-SERVED_MODELS = {"verity-int8/Llama-3.2-1B-INT8": {
-    "layers": 16, "linears": {"qkv": (2048, 3072), "o": (2048, 2048), "gate_up": (2048, 16384), "down": (8192, 2048)},
-    "heads": 32, "head_dim": 64, "hidden": 2048, "vocab": 128256}}
 H200_SMS, INT8_PER_SM_CLOCK = 132, 4096
 #: the H200's dense bf16 tensor rate over its int8 rate (989.4 against 1,978.9 T/s at 1,830 MHz)
 BF16_OVER_INT8 = 0.5
+SHEET_MHZ = h200_step.CLOCKS_MHZ["tensor"]
 UNCREDITED = "uncredited: development key, credit not established"
-#: kernel classes, matched in order against a kernel's name (lower case); an instant with kernels of several classes running
-#: goes to the first, so nothing beside the tensor work hides it
-KERNEL_CLASSES = (
-    ("int8 GEMM (declared linears)", r"scaled_mm|igmma|imma|s8gemm|i8gemm"),
-    ("attention (bf16 FA3)", r"flashattn|flash_fwd|flash_attn|fmha|prepare_varlen_num_blocks"),
-    ("attention: KV-cache write", r"reshape_and_cache"),
-    ("bf16 GEMM (LM head)", r"matmul_kernel_persistent|gemv|nvjet|sm90_xmma|cublas|cutlass.*gemm|gemm"),
-    ("the Commit's hash and leaf kernels", r"sha512|sha_|hm96|merkle|frame|leaf|tree|digest|hash|levels?_kernel|top_kernel|commit"),
-    ("the Commit's taps", r"tap|collector|readback|snapshot|hidden|matreq|gather_copy"),
-    ("PoUW H1", r"(^|_)h1|pouw|noise|duo|wrap|bits_kernel|perm_kernel|salt_|fill_kernel|forge|open_kernel|pack_kernel|form_"),
-    ("quantize (int8 rows)", r"quant"),
-    ("norms", r"norm"),
-    ("sampling", r"sampl|gumbel|argmax|topk|top_k|top_p|logit|softmax|penalt"),
-    ("elementwise", r"act_and_mul|silu|gelu|rotary|rope|elementwise|vectorized|unrolled|add|mul|copy|cat|index|gather|"
-                    r"scatter|fill|contiguous|transpose|arange|reduce"),
-    ("other kernels", r""),
-)
-COPIES = {1: "H2D copy, no kernel running", 2: "D2H copy, no kernel running"}
-OTHER_COPY = "other copy or memset, no kernel running"
-#: the step loop's host spans, by priority: a window's seal wait, then the rest of its close (finalize, readback, record)
-HOSTS = ("the seal (the step loop waiting on it, GPU idle)", "the Commit's window close on the loop (GPU idle)")
-GAPS = ((20e3, "launch gaps (GPU idle under 20 µs)"), (2e6, "host gaps (GPU idle 20 µs to 2 ms)"),
-        (float("inf"), "idle (GPU idle 2 ms or more)"))
-#: short names that say nothing of the kernel (a template's entry point): such a kernel goes by its demangled name
-GENERIC = re.compile(r"^(device_kernel|kernel|Kernel\d*|cutlass_kernel|generic_kernel)$")
-#: the GPU metrics read: the tensor pipe's active share and the clock it ran at
-METRICS = ("Tensor Active", "GPC Clock Frequency")
+#: what a util80 run is (Daniel, 7:44 PM PDT on CMP-231: full-utilization prefill is a serving target, not a certification one)
+SERVED = ("a served run: no certifier in front, PoUW uncredited (development key); V3's certified run is a small declared "
+          "workload sized to the network certifier")
+#: period.py's defaults for its honest route: the least L', the longest, and the word interval L
+ROUTE_LP, ROUTE_LP_MAX, ROUTE_L = 512, 1024, 16384
+GEMM = "int8 GEMM"
+ACCOUNTED, BELOW = "accounted: the declared int8 linears at θ", "the int8 GEMM below θ"
 
 
-def kernel_class(name: str) -> int:
-    low = name.lower()
-    return next(i for i, (_, pat) in enumerate(KERNEL_CLASSES) if re.search(pat, low))
+def certified_ratio(linears: dict[str, list[int]], L: int = ROUTE_L) -> dict:
+    """#5724's certified over declared MACs on these linears ({name: [N, K]}): each call's L' by `period.lp_of` at L (a
+    linear no L' covers runs as `period.calls`' K-slices), its peels 2 m n L' over its m n K."""
+    import period as P
+    saved = P.LAYERS, P.M, P.NB, P.LP, P.L, P.LP_MAX
+    try:
+        P.configure({"layers": [[name, n, k] for name, (n, k) in linears.items()], "m": 1, "nb": 1, "lp": ROUTE_LP,
+                     "lp_max": ROUTE_LP_MAX, "L": L})
+        cs = P.calls(P.LAYERS)
+        lp = {c: P.lp_of(k) for c, _, k, _, _ in cs}
+    finally:
+        P.LAYERS, P.M, P.NB, P.LP, P.L, P.LP_MAX = saved
+    wl = {"m": 1, "lp": lp, "layers": [(c, n, k) for c, n, k, _, _ in cs], "step_macs": sum(n * k for _, n, k, _, _ in cs)}
+    return {"L": L, "lp": lp, "certified_over_declared": macs_per_step(wl)["certified_over_declared"]}
 
 
-def _has(db: sqlite3.Connection, table: str) -> bool:
-    return db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone() is not None
+def _mhz(v: float | None) -> float | None:
+    """A clock in MHz; one of kernels' exports (r20261028-023843-627b) holds nsys's Hz under the MHz key."""
+    return v / 1e6 if v and v > 1e5 else v
 
 
-def served_profile(db: sqlite3.Connection) -> dict:
-    """The export's timeline zero (UTC ns), kernels (start, end, name), copies and memsets (start, end, kind; memsets kind
-    0) and GPU metric series ({name: (timestamps, values)})."""
-    cols = {r[1] for r in db.execute("PRAGMA table_info(TARGET_INFO_SESSION_START_TIME)")}
-    zero = int(db.execute(f"SELECT {'utcEpochNs' if 'utcEpochNs' in cols else 'utcTime'} FROM TARGET_INFO_SESSION_START_TIME")
-               .fetchone()[0])
-    strings = dict(db.execute("SELECT id, value FROM StringIds"))
-    ks = []
-    for a, b, s, d in db.execute("SELECT start, end, shortName, demangledName FROM CUPTI_ACTIVITY_KIND_KERNEL ORDER BY start"):
-        name = str(strings.get(s, s))
-        ks.append((int(a), int(b), str(strings.get(d, d)) if GENERIC.match(name) else name))
-    cs = [(int(a), int(b), int(k)) for a, b, k in db.execute("SELECT start, end, copyKind FROM CUPTI_ACTIVITY_KIND_MEMCPY")] \
-        if _has(db, "CUPTI_ACTIVITY_KIND_MEMCPY") else []
-    if _has(db, "CUPTI_ACTIVITY_KIND_MEMSET"):
-        cs += [(int(a), int(b), 0) for a, b in db.execute("SELECT start, end FROM CUPTI_ACTIVITY_KIND_MEMSET")]
-    names = {int(i): str(n).split(" [")[0] for i, n in db.execute("SELECT DISTINCT metricId, metricName FROM TARGET_INFO_GPU_METRICS")
-             if str(n).startswith(METRICS)} if _has(db, "TARGET_INFO_GPU_METRICS") else {}
-    series: dict[str, tuple[list[int], list[float]]] = defaultdict(lambda: ([], []))
-    if names:
-        q = f"SELECT timestamp, metricId, value FROM GPU_METRICS WHERE metricId IN ({','.join(map(str, names))}) ORDER BY timestamp"
-        for ts, mid, v in db.execute(q):
-            s = series[names[int(mid)]]
-            s[0].append(int(ts))
-            s[1].append(float(v))
-    return {"zero": zero, "kernels": ks, "copies": sorted(cs), "metrics": dict(series)}
-
-
-def split_wall(kernels: list, copies: list, lo: int, hi: int, hosts: list | None = None) -> tuple[dict[str, float], dict[str, list]]:
-    """[lo, hi] split exclusively (ns by label, summing to hi - lo), and each kernel class's kernels by time in the window.
-    A kernel takes an instant first, then a copy, then a host span (start, end, index into HOSTS), then a gap."""
-    ev = []
-    for a, b, name in kernels:
-        if b > lo and a < hi:
-            ev += [(max(a, lo), 1, 0, kernel_class(name)), (min(b, hi), -1, 0, kernel_class(name))]
-    for a, b, kind in copies:
-        if b > lo and a < hi:
-            ev += [(max(a, lo), 1, 1, kind), (min(b, hi), -1, 1, kind)]
-    for a, b, h in hosts or []:
-        if b > lo and a < hi:
-            ev += [(max(a, lo), 1, 2, h), (min(b, hi), -1, 2, h)]
-    ev.sort(key=lambda e: (e[0], e[1]))
-    out: dict[str, float] = defaultdict(float)
-    kc, cc, hc = [0] * len(KERNEL_CLASSES), defaultdict(int), [0] * len(HOSTS)
-    t, gap = lo, 0
-
-    def close_gap() -> None:
-        nonlocal gap
-        if gap:
-            out[next(label for limit, label in GAPS if gap < limit)] += gap
-            gap = 0
-    for when, d, src, c in [*ev, (hi, 0, 0, 0)]:
-        if when > t:
-            dt = when - t
-            k = next((i for i, n in enumerate(kc) if n), None)
-            if k is not None:
-                close_gap()
-                out[KERNEL_CLASSES[k][0]] += dt
-            elif any(cc.values()):
-                close_gap()
-                kind = next((x for x in (2, 1) if cc[x]), None)
-                out[COPIES[kind] if kind else OTHER_COPY] += dt
-            elif any(hc):
-                close_gap()
-                out[HOSTS[next(i for i, n in enumerate(hc) if n)]] += dt
-            else:
-                gap += dt
-            t = when
-        [kc, cc, hc][src][c] += d
-    close_gap()
-    top: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
-    for a, b, name in kernels:
-        if b > lo and a < hi:
-            top[KERNEL_CLASSES[kernel_class(name)][0]][name[:100]] += min(b, hi) - max(a, lo)
-    return dict(out), {c: sorted(v.items(), key=lambda kv: -kv[1])[:4] for c, v in top.items()}
-
-
-def step_macs(step: dict, model: dict) -> dict[str, int]:
-    """One traced step's MACs: the declared linears (int8), attention's causal QK^T and PV and the LM head (bf16)."""
-    rows = [(int(o), int(n)) for _, o, n in step["rows"]]
-    tokens = sum(n for _, n in rows)
-    per_token = model["layers"] * sum(k * n for k, n in model["linears"].values())
-    attn = model["layers"] * model["heads"] * 2 * model["head_dim"] * sum(n * o + n * (n + 1) // 2 for o, n in rows)
-    emitting = len(step.get("emitted") or {})
-    return {"tokens": tokens, "declared": tokens * per_token, "attention": attn,
-            "lm_head": emitting * model["hidden"] * model["vocab"]}
-
-
-def _mean(series: tuple[list[int], list[float]] | None, lo: int, hi: int) -> float | None:
-    if not series:
-        return None
-    ts, vs = series
-    a, b = bisect.bisect_left(ts, lo), bisect.bisect_right(ts, hi)
-    return statistics.fmean(vs[a:b]) if b > a else None
-
-
-def host_spans(trace: list[dict], wins: list[dict], st: dict, at) -> list[tuple[int, int, int]]:
-    """Each closed window's close on the step loop, from the trace time of the last step before it closed: the whole close
-    as HOSTS[1], and its seal wait, the last of its on-loop phases, as HOSTS[0]."""
-    before = {r["window"]: r["before_step"] for r in trace if r.get("kind") == "window" and r.get("event") == "close"}
-    out = []
-    for w in wins:
-        b, s = before.get(w["window"]), w.get("seconds") or {}
-        if b is None or b - 1 not in st or not s.get("close"):
-            continue
-        t0 = at(st[b - 1]["t"])
-        out.append((t0, t0 + int(s["close"] * 1e9), 1))
-        if s.get("seal_wait"):
-            end = t0 + int(s.get("on_loop", s["seal_wait"]) * 1e9)
-            out.append((end - int(s["seal_wait"] * 1e9), end, 0))
-    return out
-
-
-def served(prof: dict, trace: list[dict], util: dict, serve: dict, ratio: float, credit: str, key: str = "all",
-           steps: tuple[int, int] | None = None) -> dict:
-    w = util.get(key) or {}
-    if not w.get("first_step") and not steps:
-        raise SystemExit(f"terms.py served: util.json has no window {key!r} of two or more full steps")
-    model = SERVED_MODELS.get(serve.get("model"))
-    if model is None:
-        raise SystemExit(f"terms.py served: no shapes for {serve.get('model')!r}: add its config to SERVED_MODELS")
-    st = {r["step"]: r for r in trace if r.get("kind") == "step" and "t" in r}
-    first, last = steps or (w["first_step"], w["last_step"])
-    if steps:
-        key, w = f"steps {first}-{last}", {}
-        if not all(s in st for s in range(first - 1, last + 1)):
-            raise SystemExit(f"terms.py served: --steps {first}-{last}: the trace lacks a step from {first - 1} to {last}")
-    at = lambda s: int(s * 1e9) - prof["zero"]          # noqa: E731  (a wall-clock second on the export's timeline)
-    lo, hi = at(st[first - 1]["t"]), at(st[last]["t"])
-    wall = (hi - lo) / 1e9
-    macs: dict[str, int] = defaultdict(int)
-    for s in range(first, last + 1):
-        for k, v in step_macs(st[s], model).items():
-            macs[k] += v
-    bf16 = macs["attention"] + macs["lm_head"]
-    ta = _mean(prof["metrics"].get("Tensor Active"), lo, hi)
-    gpc = _mean(prof["metrics"].get("GPC Clock Frequency"), lo, hi)
-    gpc_mhz = gpc / 1e6 if gpc and gpc > 1e5 else gpc
-    clocks = {**h200_step.CLOCKS_MHZ, **({"measured GPC": round(gpc_mhz, 1)} if gpc_mhz else {})}
-    readings_ = {}
-    for name, mhz in clocks.items():
-        rho = INT8_PER_SM_CLOCK * H200_SMS * mhz * 1e6
-        tensor_s = macs["declared"] / rho + bf16 / (BF16_OVER_INT8 * rho)
-        readings_[name] = {"clock_mhz": mhz, "theta_int8_macs_s": rho, "u": tensor_s / wall,
-                           "u_int8_linears": macs["declared"] / rho / wall, "u_bf16": bf16 / (BF16_OVER_INT8 * rho) / wall,
-                           "accounted": macs["declared"] / rho / wall, "certified_share": ratio * macs["declared"] / rho / wall}
-    sv = util.get("serve") or {}
-    wins = sv.get("windows") or []
-    split, top = split_wall(prof["kernels"], prof["copies"], lo, hi, host_spans(trace, wins, st, at))
-    shares = {k: v / (hi - lo) for k, v in sorted(split.items(), key=lambda kv: -kv[1])}
-    closes = {r["window"]: r["before_step"] for r in trace if r.get("kind") == "window" and r.get("event") == "close"}
-    measured = [r for r in wins if first < closes.get(r["window"], -1) <= last + 1]
+def served(doc: dict, label: str, L: int = ROUTE_L, credit: str = UNCREDITED, covers: str = SERVED) -> dict:
+    """One run from kernels' `tensor_util.py` JSON: u and the accounted share over the step's SM-cycles, the certified MACs
+    beside the declared, and the step's cycles by class, summing to 1."""
+    if "error" in doc or "summary" not in doc:
+        raise SystemExit(f"terms.py served: {label}: kernels' breakdown has no steps ({doc.get('error')})")
+    s, model = doc["summary"], doc["model"]
+    clock = _mhz(s.get("clock_mhz"))
+    if clock is None:
+        raise SystemExit(f"terms.py served: {label}: kernels' breakdown has no measured SM clock (GPU metrics)")
+    cycles, unsampled = {}, []
+    for r in doc["classes"]:
+        mhz = _mhz(r.get("clock_mhz"))
+        if mhz is None and r["exclusive_ms"]:
+            unsampled.append(r["class"])
+        cycles[r["class"]] = r["exclusive_ms"] * 1e3 * (mhz or clock)
+    total = sum(cycles.values())
+    per_cycle = INT8_PER_SM_CLOCK * H200_SMS
+    macs = s["macs"]
+    int8 = macs["int8"] / per_cycle
+    bf16 = (macs["attn"] + macs["head"]) / (BF16_OVER_INT8 * per_cycle)
+    sheet = per_cycle * SHEET_MHZ * 1e6 * s["wall_ms"] / 1e3
+    ratio = certified_ratio(model["linears"], L)
+    shares = {ACCOUNTED: int8 / total, BELOW: (cycles.pop(GEMM, 0.0) - int8) / total}
+    shares |= {c: v / total for c, v in sorted(cycles.items(), key=lambda kv: -kv[1])}
     return {
-        "arm": util.get("arm"), "T": util.get("T"), "model": serve.get("model"), "window": key, "steps": last - first + 1,
-        "first_step": first, "last_step": last, "wall_s": wall, "step_wall_ms": w.get("step_wall_ms"),
-        "credit": credit, "macs": dict(macs) | {"bf16": bf16, "certified": ratio * macs["declared"]},
-        "certified_over_declared": ratio,
-        "tensor_active": ta / 100 if ta is not None else None, "readings": readings_,
-        "shares": shares, "shares_sum": sum(shares.values()),
-        "top_kernels": {c: [{"name": n, "share": ns / (hi - lo)} for n, ns in v] for c, v in top.items()},
-        "windows": {"closed": len(wins), "passed": sum(1 for r in wins if r.get("passed")),
-                    "committed_GB": sum(r.get("committed_bytes") or 0 for r in wins) / 1e9,
-                    "seconds": sv.get("window_seconds"),
-                    "measured": {"windows": [r["window"] for r in measured],
-                                 "passed": sum(1 for r in measured if r.get("passed")),
-                                 "committed_GB": sum(r.get("committed_bytes") or 0 for r in measured if r.get("passed")) / 1e9}}
-        if wins else None,
-        "commit": serve.get("commit"), "protocols": serve.get("protocols"),
+        "run": label, "T": doc.get("tokens"), "steps": s["steps"], "dropped": s.get("dropped"), "step_wall_ms": s["wall_ms"],
+        "covers": covers, "credit": credit, "clock_mhz": clock, "sheet_mhz": SHEET_MHZ,
+        "sm_cycles": total, "sm_cycles_over_clock_wall": total / (clock * 1e3 * s["wall_ms"]),
+        "unsampled_classes": unsampled,
+        "u": (int8 + bf16) / total, "u_sheet": (int8 + bf16) * per_cycle / sheet,
+        "accounted": int8 / total, "accounted_sheet": macs["int8"] / sheet,
+        "macs": {"declared": macs["int8"], "certified": ratio["certified_over_declared"] * macs["int8"],
+                 "attention": macs["attn"], "lm_head": macs["head"]},
+        "certified": ratio | {"share": ratio["certified_over_declared"] * int8 / total,
+                              "of": "#5724's peels on the served shapes, a model: not what the run's scheme computes"},
+        "tensor_active": s.get("tensor_active"), "shares": shares, "shares_sum": sum(shares.values()),
     }
 
 
 def served_text(r: dict) -> str:
-    rd = r["readings"]
-    lines = [f"{r['arm']} T {r['T']} [{r['window']}]: {r['steps']} full steps {r['first_step']}–{r['last_step']}, wall {r['wall_s']:.4f} s "
-             f"({1e3 * r['wall_s'] / r['steps']:.2f} ms a step)",
-             "u (tensor work at peak over wall): " + ", ".join(f"{v['u']:.2%} at {v['clock_mhz']:,} MHz ({k})" for k, v in rd.items())
-             + (f"; Tensor Active {r['tensor_active']:.2%}" if r["tensor_active"] is not None else ""),
-             "accounted (declared MACs at θ_int8 over wall): " + ", ".join(f"{v['accounted']:.2%} ({k})" for k, v in rd.items())
-             + f" [{r['credit']}]",
-             "certified MACs at " + f"{r['certified_over_declared']:.3f}× declared: "
-             + ", ".join(f"{v['certified_share']:.2%} ({k})" for k, v in rd.items()),
-             f"MACs over the window: declared {r['macs']['declared']:.4g}, certified {r['macs']['certified']:.4g}, attention "
-             f"{r['macs']['attention']:.4g}, LM head {r['macs']['lm_head']:.4g}",
-             f"the wall, exclusively (sums to {r['shares_sum']:.4f}):"]
-    for k, v in r["shares"].items():
-        tops = "; ".join(f"{x['name'][:60]} {x['share']:.2%}" for x in r["top_kernels"].get(k, [])[:2])
-        lines.append(f"  {v:7.2%}  {k}" + (f"  ({tops})" if tops else ""))
-    if r["windows"]:
-        lines.append(f"windows: {r['windows']}")
+    c = r["certified"]
+    lines = [f"{r['run']}: T {r['T']:,}, {r['steps']} steps of {r['step_wall_ms']:.2f} ms at {r['clock_mhz']:,.0f} MHz "
+             f"measured ({r['covers']})",
+             f"u {r['u']:.2%} at the run's clock ({r['u_sheet']:.2%} at the data sheet's {r['sheet_mhz']:,} MHz); "
+             f"accounted {r['accounted']:.2%} ({r['accounted_sheet']:.2%}) [{r['credit']}]"
+             + (f"; Tensor Active {r['tensor_active']:.1f}%" if r.get("tensor_active") is not None else ""),
+             f"declared {r['macs']['declared']:.4g} MACs a step; certified {r['macs']['certified']:.4g} at "
+             f"{c['certified_over_declared']:.4f}× ({c['of']}; L' {c['lp']} at L {c['L']:,})",
+             f"the step in SM-cycles at the clock sampled under each class ({r['sm_cycles']:.4g} a step, "
+             f"{r['sm_cycles_over_clock_wall']:.4f} of the mean clock × wall; sums to {r['shares_sum']:.4f}):"]
+    lines += [f"  {v:7.2%}  {k}" for k, v in r["shares"].items() if abs(v) >= 5e-5]
+    if r["unsampled_classes"]:
+        lines.append(f"at the steps' clock (no sample under them): {', '.join(r['unsampled_classes'])}")
     return "\n".join(lines)
 
 
 def served_main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(prog="terms.py served", description="a served step's u, accounted share and the rest")
-    ap.add_argument("--sqlite", required=True, type=Path)
-    ap.add_argument("--trace", required=True, type=Path)
-    ap.add_argument("--util", required=True, type=Path)
-    ap.add_argument("--serve", required=True, type=Path)
-    ap.add_argument("--certified-over-declared", required=True, type=float)
+    ap = argparse.ArgumentParser(prog="terms.py served", description="a served step's certified MACs and its SM-cycles by "
+                                 "class, from kernels' tensor_util.py breakdown")
+    ap.add_argument("kernels", nargs="+", metavar="[LABEL=]KERNELS.json", help="tensor_util.py's JSON, one a run")
+    ap.add_argument("--L", type=int, default=ROUTE_L, help="the word interval the certified MACs' L' is taken at")
     ap.add_argument("--credit", default=UNCREDITED)
-    ap.add_argument("--key", default="all")
-    ap.add_argument("--steps", action="append", default=[], metavar="FIRST-LAST",
-                    help="also these steps (each from the previous step's end), past util.json's window (alone when "
-                         "util.json has none, as when async scheduling leaves no run of full steps); repeatable")
-    ap.add_argument("--text", type=Path, help="also write the table here")
+    ap.add_argument("--covers", default=SERVED)
+    ap.add_argument("--text", type=Path, help="also write the tables here")
     a = ap.parse_args(argv)
-    trace = [json.loads(x) for x in a.trace.read_text().splitlines() if x.strip()]
-    prof, util, serve = served_profile(sqlite3.connect(a.sqlite)), json.loads(a.util.read_text()), json.loads(a.serve.read_text())
-    has_window = bool((util.get(a.key) or {}).get("first_step"))
-    rs = [served(prof, trace, util, serve, a.certified_over_declared, a.credit, a.key)] if has_window or not a.steps else []
-    for s in a.steps:
-        lo, _, hi = s.partition("-")
-        rs.append(served(prof, trace, util, serve, a.certified_over_declared, a.credit, steps=(int(lo), int(hi or lo))))
-    print(json.dumps(rs[0] if len(rs) == 1 else rs, indent=1))
+    rs = []
+    for arg in a.kernels:
+        label, _, path = arg.rpartition("=") if "=" in arg else (arg, "", arg)
+        rs.append(served(json.loads(Path(path).read_text()), label, a.L, a.credit, a.covers))
+    print(json.dumps(rs, indent=1))
     if a.text:
         a.text.write_text("\n\n".join(served_text(r) for r in rs) + "\n")
     return 0
