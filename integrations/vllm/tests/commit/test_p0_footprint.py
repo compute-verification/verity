@@ -5,7 +5,7 @@
 * `_HostWindows`: the raw bytes of a step retained as pinned host windows quack like the contiguous `keep` tensor for openings
   (slices that span two windows, the tail, `numel()`, `is_cuda`).
 * the padded-length bookkeeping the windowed worker relies on (leaves per window sum to the step's leaves).
-* the declared leaf layout (`--layout`) reaches the collector as an argument and is refused where it is not implemented.
+* the collector commits rows-sha512 on the windowed worker only, and refuses every other scheme and path.
 
 The GPU end-to-end (roots of a windowed run == roots of the single-block run for the same manifest; B=2 green) is the pod acceptance
 run, re-run with VERITY_E2E_WORKLOAD/VERITY_E2E_CASE (see `test_e2e_windowed_roots`).
@@ -127,32 +127,32 @@ def test_window_leaf_count_bookkeeping():
             assert all(p % C == 0 for p in per) and sum(p // C for p in per) == padded // C
 
 
-def test_the_declared_layout_reaches_only_a_committer_that_implements_it(monkeypatch):
-    """The leaf layout is the collector's constructor argument (`commit_delta --layout`): an unknown value, or chunk-leaf-v2 off the
-    windowed path, is refused before the extension is built; a committer without v2 refuses a declared v2."""
+def test_the_collector_commits_rows_sha512_on_the_windowed_worker_only(monkeypatch):
+    """The collector's one scheme is rows-sha512, on the windowed worker (`--committer native_collect_v2b`, `--window-mb` > 0):
+    another scheme, or a collector off the windowed path, is refused before the extension is built, and the Commit names its
+    committers when it is asked for a retired one."""
     from verity_vllm.commit.committer import native_collect as NC
     from verity_vllm.pipeline import commit as CD
 
     monkeypatch.delenv("VERITY_WINDOW_MB", raising=False)
-    with pytest.raises(ValueError, match="unknown leaf layout"):
-        NC.NativeCollectCommitter(None, layout="chunk-leaf-v3")
-    with pytest.raises(ValueError, match="windowed path only"):
-        NC.NativeCollectCommitter(None, layout="chunk-leaf-v2")
+    with pytest.raises(ValueError, match="unknown commit scheme 'vllm-v1'"):
+        NC.NativeCollectCommitter(None, commit_scheme="vllm-v1")
+    with pytest.raises(ValueError, match="rows-sha512 is implemented on the windowed worker"):
+        NC.NativeCollectCommitter(None)
     with pytest.raises(ValueError, match="retain_levels=False is implemented on the windowed path only"):
         NC.NativeCollectCommitter(None, retain_levels=False)
-    args = argparse.Namespace(layout="chunk-leaf-v2", chunk=256, hash_threads=1, arena_mb=None)
-    for kind in ("native_host", "native_host_direct", "hooks_only"):
-        with pytest.raises(ValueError, match="native_collect committers only"):
+    args = argparse.Namespace(chunk=256, hash_threads=1, arena_mb=None)
+    for kind in ("native_host", "native_host_direct", "native_collect", "native_collect_v2"):
+        with pytest.raises(ValueError, match="the Commit's committers are native_collect_v2b"):
             CD.make_committer(kind, None, args, "run")
-    assert nh.NativeHostCommitter.layout == "chunk-leaf-v1"
 
 
 @pytest.mark.skipif(not (os.environ.get("VERITY_E2E_WORKLOAD") and os.environ.get("VERITY_E2E_CASE")), reason="GPU pod end-to-end only (needs vLLM + a workload)")
 def test_e2e_windowed_roots(tmp_path: Path):
     """Same manifest, single-block path vs windowed path (256 MiB windows, host retention): identical run roots, both fail-closed PASS."""
     wl, case = os.environ["VERITY_E2E_WORKLOAD"], os.environ["VERITY_E2E_CASE"]
-    base = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b", "--fast-copy",
-            "--gpu-tree", "--openings", "64", "--pairs", "1", "--warmup", "1", "--max-num-seqs", os.environ.get("VERITY_E2E_B", "1"),
+    base = [sys.executable, "-m", "verity_vllm.pipeline.cli", "commit", "--case", case, "--workload", wl, "--committer", "native_collect_v2b",
+            "--openings", "64", "--pairs", "1", "--warmup", "1", "--max-num-seqs", os.environ.get("VERITY_E2E_B", "1"),
             "--engine-arg", "gpu_memory_utilization=" + os.environ.get("VERITY_E2E_UTIL", "0.35"), "--retain", "host"]
     if os.environ.get("VERITY_E2E_HIDDEN_SO"):
         base += ["--hidden-so", os.environ["VERITY_E2E_HIDDEN_SO"]]
