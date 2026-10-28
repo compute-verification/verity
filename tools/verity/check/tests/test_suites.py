@@ -1557,6 +1557,24 @@ def test_the_tracer_names_what_a_key_narrowed_to_the_tests_reads_must_hold(tmp_p
     assert r.trace("subprocess.Popen", (None, [sys.executable, "-c", "pass"], None, None)) == [("X", sys.executable)]
 
 
+def test_a_dir_fd_relative_open_is_not_read_as_a_file_in_the_current_directory(tmp_path, monkeypatch):
+    """`shutil.rmtree` opens each entry by its bare name relative to a directory descriptor, which the `open` audit event
+    doesn't carry: a bare name missing from the current directory is no read of it, and one present there still is."""
+    spec = importlib.util.spec_from_file_location("reads_under_test", HERE / "guard" / "child" / "verity_suite_reads.py")
+    R = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(R)
+    (tmp_path / "present.txt").write_text("")
+    for k, v in {"VERITY_SUITE_ROOT": str(tmp_path), "VERITY_SUITE_READS": str(tmp_path / "reads"),
+                 "VERITY_SUITE_ALLOW": '["lib"]'}.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.chdir(tmp_path)
+    r = R.Reads()
+    r.seen("open", ("removed_piece", None, 0), "pkg/tests/test_x.py")
+    assert not (tmp_path / "reads").exists()
+    r.seen("open", ("present.txt", None, 0), "pkg/tests/test_x.py")
+    assert (tmp_path / "reads").read_text().splitlines() == ["O\tpkg/tests/test_x.py\tpresent.txt", "F\tpkg/tests/test_x.py\tpresent.txt"]
+
+
 def test_a_declared_build_output_is_traced_by_the_repository_paths_it_is_given(tmp_path, monkeypatch):
     """A Lean executable the suite declares under `artifacts` reads what its arguments name, so the tests that start it keep
     traced per-test keys: its run is the files it was given (a file with those beside it, a directory whole), outside the inputs
