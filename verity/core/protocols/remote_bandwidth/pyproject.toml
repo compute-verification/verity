@@ -12,6 +12,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/protocols/sampled_proofs/remote.py",
           "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments",
           "verity/ml/crypto", "verity/ml/randomness",
+          # the core's monitoring periods, which `monitoring` reads through PoUS's `wipe_monitoring`
+          "verity/core/periods",
           # PoUS's setup, P2 and vk, which a P2 store is under (`p2.py`)
           "verity/core/protocols/pous",
           # the circuit model's codec rows and the primitives' range rows, which test_encode_chain.py and
