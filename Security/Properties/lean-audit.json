@@ -10420,6 +10420,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
+    "NciCheck.Properties.SecurityProofs.BaselineProvenance",
+    "NciCheck.Properties.SecurityProofs.CheckedCoverTraining",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -11317,10 +11319,8 @@
    ]
   },
   "NciCheck.Baseline": {
-   "digest": "7cb5f4cf6c88d226bde6f81ca145861723e9b060d2ce38c17bf1ed1ac09fd340",
+   "digest": "4543a92cf37ea33581e0b21d3070a7eaca6c2f7111cd275f449c71fa19d910e9",
    "definitions": {
-    "NciCheck.Baseline.FORMAT": "db8349f01bd5c47f9184d4537291dcab05661eff5a91f153e7136dae66378470",
-    "NciCheck.Baseline.FORMAT_V2": "5ba177c582788daf6933a082bbbf2bac083829f2f2afc790e578803b567c8eac",
     "NciCheck.Baseline.Prov": "9c05bc64381f64d71a03fdb15061d7b426c73f2517c0ab79c696a23f9012ef43",
     "NciCheck.Baseline.Prov.registration": "00e1daf69a7bf77771e49e25fbe8c1f10155b37ff09ac348007478a9a6c3b0d4",
     "NciCheck.Baseline.Prov.root": "4791c64c0a20cc3ddc3b4a06c9e9dc41a2020fd19e144b1be6f11c674b76af73",
@@ -11333,7 +11333,7 @@
     "NciCheck.Baseline.Trusted.params": "b77f995d7d7a3dda732e90e70161d5a873b3e43ab94ff8054879fa68f4819afc",
     "NciCheck.Baseline.Trusted.run": "9f372e9542487655b1bf185b22167bf09342e62a462a923e891f9528359e7134",
     "NciCheck.Baseline.countsOf": "f511315f3029b94421db3fc34f49a1c5420f6d4f0394fe70394af37ff70039d0",
-    "NciCheck.Baseline.digest": "7948fa3e282c7d94b7c2a7e55a2e1de190a2edf7088aba7d16c2591ae8ce26b8",
+    "NciCheck.Baseline.digest": "2fb5b08693a056720c5d6c1051e0b0caae4bb7d0542c05d8a9dd1be17f28e0e8",
     "NciCheck.Baseline.dims": "c44ed3a691caa71eabef22d421517bb65e3033be2161f6a7107b7e7cf6b258a1",
     "NciCheck.Baseline.entryStep": "9687bf8cb7641a1dc19d24737570a7a8cd9f212d12246c5924996e15f88b2f5c",
     "NciCheck.Baseline.evaluate": "e63dac8fe5380fdd158af8b44e5bb1e04518682bbf4e979b3aaf0e2ca5f068f5",
