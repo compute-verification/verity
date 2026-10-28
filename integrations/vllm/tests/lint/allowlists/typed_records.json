@@ -262,7 +262,6 @@
     {"file": "verity_vllm/query/manifest/format.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/required-manifest/v1"},
     {"file": "verity_vllm/query/manifest/verify.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/manifest-verify/v1"},
     {"file": "verity_vllm/query/query_artifact.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-ir/query-use/v1"},
-    {"file": "verity_vllm/query/query_artifact.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-ir/query/v1"},
     {"file": "verity_vllm/settings.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/settings/v1"},
     {"file": "verity_vllm/target_family.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/target-family/v1"},
     {"file": "verity_vllm/check/match/resolve_decomp.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/resolve-decomp/v1"},
