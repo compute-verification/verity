@@ -1,14 +1,8 @@
-# Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (sampled proofs), work (PoUW's
-# period credit, `verity/pouw/period/v1`), space (PoUS's run check), bandwidth (the remote bandwidth session) and
-# communication (the network certifier over the period, `verity/certifier/v0`). Its executable is the core CLI (`onsite id | check | serve`), which the difftest
-# drives. Code: no Mathlib.
-=======
 # Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (sampled proofs), the
 # inference-only policy (`verity/inference-only/v0`), work (PoUW's period credit, `verity/pouw/period/v1`), space (PoUS's
 # run check), bandwidth (the remote bandwidth session), communication (the network certifier over the period,
 # `verity/certifier/v0`) and the wipe (`verity/wipe/v0`). Its executable is the core CLI (`onsite id | check | serve`),
 # which the difftest drives. Code: no Mathlib.
->>>>>>> theirs
 name = "core_onsite"
 defaultTargets = ["CoreOnsite", "onsite", "CoreProduct", "product"]
 

@@ -1,13 +1,5 @@
 /-
 Onsite Verity (`verity/onsite/v0`): remote Verity's accounting with the verifier's hardware at the site, so it also
-accounts for space, bandwidth and communication. Its components are integrity by sampled proofs' one-stage audit
-(`SampledProofs.OneStage.protocol`), work by proof of useful work over the period (`PouwCheck.Period.protocol`,
-`verity/pouw/period/v1`: the period's windows credited all or nothing), space by PoUS's check of a run
-(`PousCheck.RunProtocol.protocol`), bandwidth by the remote bandwidth audit's session (`RemoteAudit.Protocol.protocol`),
-and communication by the network certifier over the period (`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the
-period's link-windows certified and proved, and the bound `K` on what left the site). `Core.Composition.product` composes
-them: every component accepts or onsite doesn't, and any component's rejection rejects onsite whatever the others answer.
-=======
 accounts for space, bandwidth and communication. Its subprotocols are integrity by sampled proofs' one-stage audit on the
 proofs themselves (`SampledProofs.OneStageZk.protocol`, `verity/sampled-proofs/one-stage/v2`: flock-verify `--zk` run on
 each session's files, which the caller hands in as blobs), the inference-only policy (`NciCheck.Protocol.protocol`,
@@ -27,7 +19,6 @@ fresh-input bits) in the clear. Onsite composes it for the run of record of 28 O
 everything-zero-knowledge, by Daniel's ruling: "Let's run it in the clear tonight as a stated exception." v1's
 private form (the division committed under hiding leaves, compliance proved, a padded profile) replaces it after
 15:00Z on 28 Oct.
->>>>>>> theirs
 -/
 import CoreComposition.Blobs
 import CoreComposition.Cases
@@ -45,16 +36,11 @@ open Composition
 
 /-- Onsite's components, in the order of their ids. -/
 def components : List BlobProtocol :=
-def components : List Protocol :=
-  [NetworkCheck.Period.protocol, PousCheck.RunProtocol.protocol, PouwCheck.Period.protocol, RemoteAudit.Protocol.protocol,
-    SampledProofs.OneStage.protocol]
-=======
   [NetworkCheck.Period.protocol, NciCheck.Protocol.protocol, PousCheck.RunProtocol.protocol, PouwCheck.Period.protocol,
     RemoteAudit.Protocol.protocol, SampledProofs.OneStageZk.protocol, MemoryChallenger.WipeProtocol.protocol]
 
 /-- The components that must commit to one record: the policy and the one-stage audit. -/
 def tied : List String := [NciCheck.Protocol.protocolId, SampledProofs.OneStageZk.protocol.id]
->>>>>>> theirs
 
 def protocol : BlobProtocol := sameB "verity/onsite/v0" tied components
 
@@ -68,14 +54,9 @@ private def answer (xs : List Case) (blobs : Array ByteArray := #[]) : Answer :=
 private def contains (s pat : String) : Bool := (s.splitOn pat).length > 1
 
 #guard orderedB components
-#guard ordered components
-#guard components.map (·.id) == ["verity/certifier/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
-  "verity/remote-bandwidth/v0", "verity/sampled-proofs/one-stage/v1"]
-=======
 #guard components.map (·.id) == ["verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run",
   "verity/pouw/period/v1", "verity/remote-bandwidth/v0", "verity/sampled-proofs/one-stage/v2", "verity/wipe/v0"]
 #guard tied.all fun s => (components.map (·.id)).contains s
->>>>>>> theirs
 
 -- every component refuses its case: onsite rejects on each, with or without blobs, and makes nothing public
 private def allRefused : Answer := answer (components.map refused)
@@ -84,13 +65,9 @@ private def allRefused : Answer := answer (components.map refused)
 #guard allRefused.reason.map (·.startsWith "verity/certifier/v0 reject: params: ") == some true
 #guard components.all fun P => (allRefused.reason.map (contains · s!"{P.id} reject: params: ")).getD false
 #guard (answer (components.map refused) #["not a circuit file".toUTF8]).reason == allRefused.reason
--- a part of onsite's components is not onsite's
-#guard (answer [refused PouwCheck.Period.protocol, refused SampledProofs.OneStage.protocol]).reason ==
-=======
 -- a part of onsite's components is not onsite's, onsite has no policy-less or wipe-less form, and v1's audit is not
 -- onsite's integrity component
 #guard (answer [refused PouwCheck.Period.protocol, refused SampledProofs.OneStageZk.protocol]).reason ==
->>>>>>> theirs
   some "params: verity/certifier/v0 is missing"
 #guard (answer ((components.filter (·.id != NciCheck.Protocol.protocolId)).map refused)).reason ==
   some "params: verity/inference-only/v0 is missing"
