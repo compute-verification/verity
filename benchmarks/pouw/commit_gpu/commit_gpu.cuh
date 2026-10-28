@@ -122,7 +122,16 @@ DEV void frame_first(int dom, u64 pos, u64* out) { rc::frame_first(CD[dom], pos,
 template <int SX>
 DEV void frame_second(int dom, u64 pos, const u64* h, u64* out) { rc::frame_second<SX>(CD[dom], pos, h, out); }
 DEV void pad(int dom, u64 rank, u64* out) { rc::pad(CD[dom], rank, out); }
-DEV void node(int dom, int level, u64 index, const u64* L, const u64* R, u64* out) { rc::node(CD[dom], level, index, L, R, out); }
+// Each arm indexes CD itself: through rc::node's pointers the node kernel stages its constant-bank addresses in uniform
+// registers and grows.
+DEV void node(int dom, int level, u64 index, const u64* L, const u64* R, u64* out) {
+  switch (nbytes(index)) {
+    case 1: rc::node_nb_from<1>(CD[dom].node_tpl, CD[dom].node_mid[level], index, L, R, out); break;
+    case 2: rc::node_nb_from<2>(CD[dom].node_tpl, CD[dom].node_mid[level], index, L, R, out); break;
+    case 3: rc::node_nb_from<3>(CD[dom].node_tpl, CD[dom].node_mid[level], index, L, R, out); break;
+    default: rc::node_nb_from<4>(CD[dom].node_tpl, CD[dom].node_mid[level], index, L, R, out); break;
+  }
+}
 
 // --- the leaf's parts ----------------------------------------------------------------------------------------------
 
