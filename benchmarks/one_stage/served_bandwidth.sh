@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# The bandwidth audit's piece of `served_verdicts.sh`, run in the tree's root as `bash -c CMD _ SERVE_DIR WINDOW DIR`:
+# A bandwidth session over a store on the node's disk, run in the tree's root as `served_verdicts.sh` runs a piece,
+# `bash -c CMD _ SERVE_DIR WINDOW DIR`. The composed run's bandwidth piece is `served_bandwidth.py collect` instead, which
+# reads the session the PoUS piece runs over the store it holds (`benchmarks/pous/served_piece.py`); this one is
 #
 #   BANDWIDTH_CMD='bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'
 #

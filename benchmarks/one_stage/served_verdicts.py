@@ -13,10 +13,11 @@ circuit refuses a request carried across windows), at most ``--slots`` of them (
 earliest. ``--window K`` holds K to the same rules. Prints ``{window, requests, users, steps, refused}``, ``steps`` the
 window's ``[lo, hi)`` in the run's committed engine steps.
 
-``pieces``: each subprotocol after sampled proofs (`PIECES`: PoUW, the bandwidth audit, PoUS, the network certifier) runs
-its piece where one is named (``POUW_CMD``, ``BANDWIDTH_CMD``, ``POUS_CMD``, ``CERTIFIER_CMD``: a command run as
+``pieces``: each subprotocol after sampled proofs (`PIECES`: PoUW, PoUS, the bandwidth audit, the network certifier) runs
+its piece where one is named (``POUW_CMD``, ``POUS_CMD``, ``BANDWIDTH_CMD``, ``CERTIFIER_CMD``: a command run as
 ``bash -c CMD _ SERVE_DIR WINDOW DIR``, which writes its core answer to ``DIR/answer.json``), else prints a ``MISSING`` line
-naming it and its issue. A piece that ran but wrote no answer is its error; no verdict is made for a piece that didn't run.
+naming it and its issue. PoUS's piece runs before the bandwidth audit's: the bandwidth session is over the store PoUS's
+piece holds, and that piece writes its answer to the bandwidth piece's ``DIR``, which ``BANDWIDTH_CMD`` collects. A piece that ran but wrote no answer is its error; no verdict is made for a piece that didn't run.
 A development piece writes ``DIR/development.json`` (`DEVELOPMENT`) in place of a core answer: its verdict is printed as a
 development run's, and it credits nothing.
 
@@ -70,12 +71,12 @@ PIECES: dict[str, tuple[str, str, str, str, str]] = {
     "work": ("PoUW", "pouw", "vllm-serve-arms", "VLLM-33 G1",
              ("H1 on the served window: with H1_GATE its coins are vy-challenger-1's (--challenger-gate, a development run "
               "that credits nothing until the lane's Cursor secret, Daniel's call), else in-process")),
-    "bandwidth": ("the bandwidth audit", "bandwidth", "vllm-serve-arms", "VLLM-33 G2",
-                  ("the remote bandwidth audit of the served window, against the bandwidth verifier on vy-auditor-2 at "
-                   "10.96.0.36:7952 (INF-263, due Tue 27 Oct 18:00Z)")),
     "space": ("PoUS", "pous", "memory-accounting", "MEM-94",
               ("which weights PoUS covers for the served vLLM window, and a PoUS path over vLLM's weights (the vLLM "
                "adapter refuses int8 today)")),
+    "bandwidth": ("the bandwidth audit", "bandwidth", "vllm-serve-arms", "VLLM-33 G2",
+                  ("PoUB-P2's session over the store the PoUS piece holds, which that piece runs (POUS_CMD, "
+                   "benchmarks/pous/served_piece.py) and BANDWIDTH_CMD collects (served_bandwidth.py collect)")),
     "communication": ("the network certifier", "certifier", "network-accounting", "NET-83",
                       "the network certifier in front of serve-openai (Llama-3.2-1B int8, ASK-122's slots)"),
 }

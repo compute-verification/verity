@@ -64,9 +64,10 @@ recorder; `--dry-run` prints the command.
    Commit the endpoint commits under.
 2. `verity example vllm`: `served_verdicts.sh`, the endpoint committing under that Commit, its requests, every closed
    sampling period sealed, then the sampled proofs (C-Flock `--zk` behind the Lean firewall, and the Lean verifier's
-   verdict), with one record of every verdict in `$OUT/verdicts.txt`. The other subprotocols (PoUW, PoUB, PoUS, memory
-   wipes and network certification) run only when their commands are set (`POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD`,
-   `CERTIFIER_CMD`, `WIPE_CMD`); each one unset prints a `MISSING` line, and the record stays `pending`. The example's
+   verdict), with one record of every verdict in `$OUT/verdicts.txt`. The other subprotocols (PoUW, PoUS, PoUB, memory
+   wipes and network certification) run only when their commands are set (`POUW_CMD`, `POUS_CMD`, `BANDWIDTH_CMD`,
+   `CERTIFIER_CMD`, `WIPE_CMD`); each one unset prints a `MISSING` line, and the record stays `pending`. PoUB's session
+   runs inside PoUS's piece, over the store that piece holds, and `BANDWIDTH_CMD` collects its answer. The example's
    runs of record (`example.toml`'s `runs`) ran sampled proofs alone.
 3. `verity example vllm serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed sampling
    period in the serve dir, for an audit of one later (`benchmarks/prove_path/run.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and

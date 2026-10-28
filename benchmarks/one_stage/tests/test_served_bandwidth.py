@@ -3,7 +3,8 @@ P2 store on the CPU (P2's reference decode) against `p2_party --listen` on loopb
 the honest session's answer is a core accept that `piece_row` reads, with its credited reads, eps, δ and γ, and the
 scope beside the served window; a prover that serves later passes from its cache of the first's, reading nothing of
 the store, is rejected (`receipt`); and a session that left no record, asked about a window that wasn't served, is a
-reject that says both."""
+reject that says both. ``collect``, the composed run's piece, reads the answer the PoUS piece's session wrote, which
+`pieces` has run first; it names the audit missing where there is none, and refuses another window's or protocol's."""
 from __future__ import annotations
 
 import json
@@ -79,6 +80,57 @@ def test_the_honest_session_is_a_core_accept_and_the_cache_cheat_a_reject(tmp_pa
     assert got["bandwidth"]["verdict"] == row["verdict"] == "reject"
     assert "receipt at window 0, draw [1, " in row["reason"] and "beside the served window" in row["reason"]
     assert row["quantity"] is None and row["answer"]["public"] is None
+
+
+COLLECT = 'python benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window "$2" --out "$3"'
+HELD = {"commitment": "ab" * 64, "protocol": p2_party.PROTOCOL, "reason": None, "verdict": "accept",
+        "public": {"eps": "1/1099511627776", "gamma": "1/2", "q_bytes": 8224, "r_bytes_per_s": 1000, "span_ns": 16448},
+        "profile": {"delta": "1/1099511627776", "draws": [0], "receipts": 1, "wrong": 0, "units": 1,
+                    "scope": "beside the served window"}}
+
+
+def _held(tmp: Path, window: int, answer: dict = HELD) -> Path:
+    """What the PoUS piece's bandwidth session leaves in the bandwidth piece's directory (`held_bandwidth.session`)."""
+    d = tmp / "held"
+    d.mkdir(exist_ok=True)
+    (d / "answer.json").write_text(json.dumps(answer))
+    (d / "bandwidth.json").write_text(json.dumps({"window": window, "verdict": answer["verdict"]}))
+    return d
+
+
+def test_the_pous_piece_runs_first_and_the_bandwidth_piece_collects_what_its_session_wrote(tmp_path, monkeypatch):
+    """`pieces` starts PoUS's piece before the bandwidth audit's, so the answer PoUS's piece wrote to the bandwidth
+    piece's directory is there when ``collect`` reads it, and the record reads it as the bandwidth audit's."""
+    monkeypatch.chdir(ROOT)
+    serve, held = _serve_dir(tmp_path / "serve"), _held(tmp_path, 0)
+    env = dict(os.environ) | {"POUS_CMD": f'mkdir -p "$3/../bandwidth" && cp {held}/*.json "$3/../bandwidth/"',
+                              "BANDWIDTH_CMD": COLLECT.replace("python", sys.executable, 1)}
+    got = S.pieces(serve, 0, tmp_path / "pieces", env=env)
+    assert got["bandwidth"] == {"verdict": "accept", "reason": None, "rc": 0}
+    log = (tmp_path / "pieces" / "bandwidth" / "piece.log").read_text()
+    assert log.startswith("BANDWIDTH ") and json.loads(log.split(" ", 1)[1])["public"] == HELD["public"]
+    row = S.piece_row("bandwidth", tmp_path / "pieces")
+    assert row["verdict"] == "accept" and row["quantity"]["q_bytes"] == 8224
+    assert BR._quantity("bandwidth", row)[0] == {"symbol": "Q_cert", "value": 8224, "unit": "bytes"}
+
+
+def test_collect_names_the_audit_missing_where_the_pous_piece_wrote_nothing(tmp_path, capsys):
+    out = tmp_path / "pieces" / "bandwidth"
+    assert SB.main(["collect", "--serve-dir", str(tmp_path), "--window", "3", "--out", str(out)]) == 2
+    assert capsys.readouterr().out.startswith("MISSING the bandwidth audit: the PoUS piece wrote no bandwidth answer")
+    assert not (out / "answer.json").exists()
+    row = S.piece_row("bandwidth", tmp_path / "pieces")
+    assert row["verdict"] == "missing" and row["issue"] == S.PIECES["bandwidth"][3]
+
+
+def test_collect_replaces_another_windows_answer_and_errs_on_another_protocols(tmp_path, capsys):
+    out = _held(tmp_path, 2)
+    assert SB.main(["collect", "--serve-dir", str(tmp_path), "--window", "3", "--out", str(out)]) == 1
+    a = json.loads((out / "answer.json").read_text())
+    assert a["verdict"] == "undecided" and "is window 2's, not window 3's" in a["reason"] and S.check_answer(a)
+    out = _held(tmp_path, 3, HELD | {"protocol": "verity/pous/p2/v4/run"})
+    assert SB.main(["collect", "--serve-dir", str(tmp_path), "--window", "3", "--out", str(out)]) == 1
+    assert "not the remote bandwidth audit's" in capsys.readouterr().out.splitlines()[-1]
 
 
 def test_a_session_with_no_record_is_a_reject_that_says_its_window_was_not_served(tmp_path, monkeypatch) -> None:
