@@ -28,6 +28,10 @@ from verity.ml.circuits.partition import Hierarchy, Level
 #: (a few units in the last place), so the bound is never below the relaxation's exact optimum
 MARGIN = 2.0 ** -30
 
+#: the per-window δ, the one failure probability a window's ε is reported at: PoUW's credit and its grind premium, and
+#: the remote bandwidth audit's pooled bound
+WINDOW_DELTA = Fraction(1, 2 ** 40)
+
 
 def neg_log_ratio(a: int, d: int) -> float:
     """-ln(a / d) for integers 0 < a <= d, to a few units in the last place: log1p of the correctly rounded 1 - a/d while
@@ -644,5 +648,5 @@ class Work:
 SamplingDesign = Bernoulli | Subset | Stratified | Work
 
 
-__all__ = ["HARM_MARGIN", "MARGIN", "Bernoulli", "IntegrityProfile", "SamplingDesign", "Stratified", "Stratum", "Subset",
-           "neg_log_ratio"]
+__all__ = ["HARM_MARGIN", "MARGIN", "WINDOW_DELTA", "Bernoulli", "IntegrityProfile", "SamplingDesign", "Stratified",
+           "Stratum", "Subset", "neg_log_ratio"]
