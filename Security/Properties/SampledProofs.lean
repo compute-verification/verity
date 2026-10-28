@@ -9,10 +9,10 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 
 `AcceptMeans`: what the check accepts is a commitment and evidence for which
 
-* **the registration** keeps R1–R7 against the verifier's own copies (`Registered`): the record's format, protocol, law
-  and window (`R1`); its program, query, partition and population (`R2`); its scheme, ports, roots, leaves and domains
-  (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window and the window's stream and prover (`R6`); and
-  for a v2 record its registered values (`R7`);
+* **the registration** keeps R1–R7 against the verifier's own copies (`Registered`): the record's keys, ASCII
+  strings, format, protocol, law and window (`R1`); its program, query, partition and population (`R2`); its scheme,
+  ports, roots, leaves and domains (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window and the
+  window's stream and prover (`R6`); and for a v2 record its registered values (`R7`);
 * **the draw** is a draw of the registered law over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work law, its strata and closure;
 * **the units** were proved and served as drawn, under the registered roots, and the verifiers of record opened the
@@ -48,11 +48,13 @@ def ExpectsV2 (v : Registration.Verifier) : Prop := v.registered.isEmpty = false
 def partitionOf (v : Registration.Verifier) : Json :=
   v.partition.getD (Partition.build (Flock.hexOf v.program.sha512) v.query)
 
-/-- R1: the record has exactly a v1 record's keys, or a v2 record's when the verifier expects values registered; its format
-is the matching one and its protocol one-stage's; its law is `law`, the verifier's agreed law as `Draw.derive` expands it
-over the verifier's own program and query; and its window is an object of kind `served` or `stand-in`. -/
+/-- R1: the record has exactly a v1 record's keys, or a v2 record's when the verifier expects values registered; its
+strings are ASCII below DEL (`Registration.ascii`), where its two canonical forms agree; its format is the matching
+one and its protocol one-stage's; its law is `law`, the verifier's agreed law as `Draw.derive` expands it over the
+verifier's own program and query; and its window is an object of kind `served` or `stand-in`. -/
 def R1 (rec : Json) (v : Registration.Verifier) (law : Json) : Prop :=
   keys? rec = some (if v.registered.isEmpty then Registration.KEYS else Registration.KEYS_V2) ∧
+  Registration.ascii rec = true ∧
   jeq (getD rec "format") (.str (if v.registered.isEmpty then Registration.FORMAT else Registration.FORMAT_V2)) ∧
   jeq (getD rec "protocol") (.str Registration.PROTOCOL) ∧
   Draw.derive v.program v.query v.law v.workTable = .ok law ∧ jeq (getD rec "law") law ∧

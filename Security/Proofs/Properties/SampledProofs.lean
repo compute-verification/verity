@@ -946,29 +946,35 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
       · simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte]
         rw [h1r]
         exact ⟨fun ⟨a, b⟩ => ⟨a, ⟨law, rfl, hl⟩, b⟩, fun ⟨a, _, b⟩ => ⟨a, b⟩⟩
-  have top : ∀ (bk bf : Bool),
+  have top : ∀ (bk ba bf : Bool),
       (bk = false ↔ keys? rec = some (if v2 = true then Registration.KEYS_V2 else Registration.KEYS)) →
+      (ba = false ↔ Registration.ascii rec = true) →
       (bf = false ↔ jeq (get "format") (if v2 = true then Json.str Registration.FORMAT_V2 else Json.str Registration.FORMAT) = true ∧
         jeq (get "protocol") (Json.str Registration.PROTOCOL) = true) →
-      ((if bk = true then pure #["keys"] else if bf = true then j0 () c1 else j0 () c0 : Id (Array String)).run = #[] ↔
+      ((if bk = true then pure #["keys"] else if ba = true then pure #["ascii"] else
+          if bf = true then j0 () c1 else j0 () c0 : Id (Array String)).run = #[] ↔
         keys? rec = some (if v2 = true then Registration.KEYS_V2 else Registration.KEYS) ∧
+        Registration.ascii rec = true ∧
         (jeq (get "format") (if v2 = true then Json.str Registration.FORMAT_V2 else Json.str Registration.FORMAT) = true ∧
           jeq (get "protocol") (Json.str Registration.PROTOCOL) = true) ∧
         (∃ law, Draw.derive v.program v.query v.law v.workTable = .ok law ∧ jeq (get "law") law = true) ∧
         j1 () #[] = #[]) := by
-    intro bk bf hk hf
+    intro bk ba bf hk ha hf
     cases bk
-    · cases bf
-      · show j0 () c0 = #[] ↔ _
-        rw [h0]
-        exact ⟨fun ⟨_, a, b⟩ => ⟨hk.1 rfl, hf.1 rfl, a, b⟩, fun ⟨_, _, a, b⟩ => ⟨rfl, a, b⟩⟩
-      · show j0 () c1 = #[] ↔ _
-        rw [h0]
-        have hc1 : c1 ≠ #[] := addCode_ne_nil _ _
-        exact ⟨fun h => (hc1 h.1).elim, fun ⟨_, h, _⟩ => absurd (hf.2 h) (by decide)⟩
+    · cases ba
+      · cases bf
+        · show j0 () c0 = #[] ↔ _
+          rw [h0]
+          exact ⟨fun ⟨_, a, b⟩ => ⟨hk.1 rfl, ha.1 rfl, hf.1 rfl, a, b⟩, fun ⟨_, _, _, a, b⟩ => ⟨rfl, a, b⟩⟩
+        · show j0 () c1 = #[] ↔ _
+          rw [h0]
+          have hc1 : c1 ≠ #[] := addCode_ne_nil _ _
+          exact ⟨fun h => (hc1 h.1).elim, fun ⟨_, _, h, _⟩ => absurd (hf.2 h) (by decide)⟩
+      · show #["ascii"] = #[] ↔ _
+        exact ⟨fun h => by simp at h, fun ⟨_, h, _⟩ => absurd (ha.2 h) (by decide)⟩
     · show #["keys"] = #[] ↔ _
       exact ⟨fun h => by simp at h, fun ⟨h, _⟩ => absurd (hk.2 h) (by decide)⟩
-  refine (top _ _ bne_eq_false_iff_eq (not_and_false_iff _ _)).trans ?_
+  refine (top _ _ _ bne_eq_false_iff_eq (by cases Registration.ascii rec <;> decide) (not_and_false_iff _ _)).trans ?_
   rw [h1 #[], h5 #[]]
   have hv2 : v2 = !v.registered.isEmpty := rfl
   have ek : (keys? rec = some (if v2 = true then Registration.KEYS_V2 else Registration.KEYS)) ↔
@@ -983,14 +989,14 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
     unfold ExpectsV2; rw [hv2]; generalize v.registered.isEmpty = e; cases e <;> simp
   rw [ek, ef, e7]
   constructor
-  · rintro ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hsch, hroots, hports, h7',
+  · rintro ⟨hk, ha, ⟨hf, hp⟩, ⟨law, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hsch, hroots, hports, h7',
       h4', h5', h6a, h6b, h6c, h7r, _⟩
     have ⟨l1, l2, l3⟩ := (r2loop get _ _ _).1 hloop
-    exact ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop⟩,
+    exact ⟨law, ⟨hk, ha, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop⟩,
       ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5', ⟨h6a, h6b, h6c⟩, h7r⟩
-  · rintro ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop⟩,
+  · rintro ⟨law, ⟨hk, ha, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop⟩,
       ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b, h6c⟩, h7r⟩
-    refine ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, rfl, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩,
+    refine ⟨hk, ha, ⟨hf, hp⟩, ⟨law, hd, hl⟩, rfl, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩,
       (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7', h4', h5',
       h6a, h6b, h6c, h7r, trivial⟩
     have : some d' = some d := hd''.symm.trans hd'
@@ -1182,7 +1188,7 @@ theorem checkDraw_nil (draw pop law : Json) : Draw.checkDraw draw pop law = #[] 
     · rintro ⟨h, _⟩; cases h
 
 theorem registered_law {v : Registration.Verifier} {rec law : Json} (h : Registered v rec law) :
-    Draw.derive v.program v.query v.law v.workTable = .ok law := h.1.2.2.2.1
+    Draw.derive v.program v.query v.law v.workTable = .ok law := h.1.2.2.2.2.1
 
 /-- The check accepts exactly what `AcceptMeans` says it accepts. -/
 theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity) :

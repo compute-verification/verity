@@ -62,6 +62,15 @@ def KEYS : Array String := sortStrings #["format", "protocol", "program", "query
 def KEYS_V2 : Array String := sortStrings (KEYS.push "registered")
 def ROOT_KEYS : Array String := sortStrings #["port", "root", "leaves", "domain"]
 
+/-- `registration.ascii_only`: every string of the record, key or value, holds only characters below 0x7f, where
+Python's `canonical_json` and `Flock.canon` write a string alike (from DEL on, Python escapes what `canon` writes as it
+is). Read off the record's canonical JSON, whose escapes are themselves below 0x7f; a record `canon` refuses (a number
+that is not an integer) is left to the digest, which refuses it. -/
+def ascii (rec : Json) : Bool :=
+  match Flock.canon rec with
+  | .ok s => s.toList.all fun c => c.toNat < 0x7f
+  | .error _ => true
+
 /-- `registration.query_digest`: SHA-512 of the canonical query. -/
 def queryDigest (q : Json) : V String := canonSha512 q
 
@@ -289,10 +298,11 @@ def PortIndex.find (ix : PortIndex) (p : String) : Option Json :=
 
 def PortIndex.has (ix : PortIndex) (p : String) : Bool := (ix.find p).isSome
 
-/-- `registration.check`'s failure codes, R1–R7 in order: empty when the record holds. -/
+/-- `registration.check`'s failure codes, R1–R7 in order (`ascii` alone after `keys`): empty when the record holds. -/
 def check (rec : Json) (v : Verifier) : Array String := Id.run do
   let v2 := !v.registered.isEmpty
   if keys? rec != some (if v2 then KEYS_V2 else KEYS) then return #["keys"]
+  if !ascii rec then return #["ascii"]
   let get := getD rec
   let mut c : Array String := #[]
   -- R1
@@ -357,6 +367,7 @@ before it and every verifier port with every root. The reference `check` is prov
 def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
   let v2 := !v.registered.isEmpty
   if keys? rec != some (if v2 then KEYS_V2 else KEYS) then return #["keys"]
+  if !ascii rec then return #["ascii"]
   let get := getD rec
   let mut c : Array String := #[]
   -- R1
