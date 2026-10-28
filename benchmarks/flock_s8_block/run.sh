@@ -51,6 +51,7 @@ stage() {
   local k n r name; read -r k n r name <<< "$(spec $1)"
   local d=$FW/data/$name o=$O/stage/$name
   mkdir -p $d $o
+  [ -f $d/rec.json ] && [ -f $d/inst-$n.bin ] && { cp $d/rec.json $o/rec.json; return 0; }   # staged by an earlier run
   K=$k ROWS=$r N=$n FLOCK_STAGE_CACHE=$d/cache FLOCK_OWN_ROWS=1 FLOCK_PACK_WORDS=1 /usr/bin/time -v -o $o/time-stage.txt \
     $PY -m verity_flock.class_statement --program-module $REPO/benchmarks/flock_s8_block/program.py:program \
     --partition q-template-instance --out $o/out --stage-only --batch fixed --n $n --max-ands $((1 << 34)) \
