@@ -31,18 +31,19 @@ are committed as before, same leaves and roots, but not copied off the device, s
 manifest names them ``committed_not_retained``: no reader of a sealed window opens them (no Program of record reads an
 ``fa*.m1`` identity, and C2 and the oracle compare skip them), and a read of one is refused by name.
 
-A window is sealed off the engine loop (`Sealer`), over a view of the committer that holds the window's own per-step state,
+A window is sealed off the engine loop (`seal_stages.Sealer`), over a view of the committer that holds the window's own per-step state,
 with the pinned blocks its values sit in lent out of the committer's pool until the seal has read them (`thaw`): the view
-the window was detached into at its close (`NativeHostCommitter.detach`), finalized on the sealer's thread before its seal,
-or, for a committer that detaches no window, the committer frozen after a finalize at the close (`freeze`). The registered
-tensors' bytes (`extras_of`) are read once for each weights root, and `seal_window` runs over the view on the sealer's
-thread while the engine serves the next window; the bytes it writes are the ones an inline seal writes. `DiskFloor` keeps
-the serve dir's filesystem above a floor: a window whose seal would take it under is not sealed.
+the window was detached into at its close (`NativeHostCommitter.detach`), finalized on the sealer's first thread before its
+seal, or, for a committer that detaches no window, the committer frozen after a finalize at the close (`freeze`). The
+registered tensors' bytes (`extras_of`) are read once for each weights root, and `seal_window` runs over the view on the
+sealer's second thread, beside the next window's finalize, while the engine serves the window after; the bytes it writes are
+the ones an inline seal writes. `serve_guard.DiskFloor` keeps the serve dir's filesystem above a floor: a window whose seal
+would take it under is not sealed.
 
 A seal on the sealer's thread shares the engine's GIL, so it holds it only briefly: its binding map is encoded a chunk of
 entries at a time (`commit.json_chunks`), built with no cyclic collection running (`gc_paused`) and freed a chunk at a time
 (`drop`). By default its Python runs in a spawned process (`seal_process.ProcessSealer`), over a view it is handed (`SealView`,
-`seal_view`), the thread here writing only the store's files. `Watchdog` records what still stalls the process (``pauses.jsonl``),
+`seal_view`), the thread here writing only the store's files. `serve_guard.Watchdog` records what still stalls the process (``pauses.jsonl``),
 and each seal's line its phases.
 """
 from __future__ import annotations
@@ -52,10 +53,7 @@ import copy
 import functools
 import gc
 import json
-import shutil
-import threading
 import time
-from collections import deque
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -719,126 +717,3 @@ def committed_bytes(com: Any) -> int:
     steps: about what its seal writes (the retained values and their tree levels)."""
     return sum(int(s.n_bytes) for s in list((getattr(com, "_done", None) or {}).values()))
 
-
-class Sealer:
-    """Seals closed windows off the engine loop: one thread runs each window's job (its finalize and records when the close
-    detached it, then its seal and its line in seals.jsonl) in window order. `submit` returns at once while the windows awaiting their seal hold under ``hold_bytes`` of committed values
-    (the pinned host memory the double-buffered windows take), else it waits for room and says how long; `drain` waits for
-    every job. A job's own failure is its window's: the next one still runs."""
-    process: Any = None                                  # the `seal_process.SealProcess` its seals run in (`seal_process.ProcessSealer`)
-
-    def __init__(self, hold_bytes: int, clock: Callable[[], float] = time.perf_counter) -> None:
-        self.hold_bytes, self.clock = int(hold_bytes), clock
-        self.held = 0                                    # committed bytes of the windows queued or sealing
-        self.errors: list[str] = []
-        self._cv = threading.Condition()
-        self._jobs: deque = deque()
-        self.thread = threading.Thread(target=self._run, name="serve-seal", daemon=True)
-        self.thread.start()
-
-    def submit(self, job: Callable[[float], Any], nbytes: int = 0) -> float:
-        """Queue ``job``, which holds ``nbytes`` of a window's values until it returns and is called with the seconds the caller
-        waited for room; returns them too."""
-        t0 = self.clock()
-        with self._cv:
-            while nbytes and self.held and self.held + nbytes > self.hold_bytes:
-                self._cv.wait()
-            waited = self.clock() - t0
-            self.held += int(nbytes)
-            self._jobs.append((functools.partial(job, waited), int(nbytes)))
-            self._cv.notify_all()
-        return waited
-
-    def _run(self) -> None:
-        while True:
-            with self._cv:
-                while not self._jobs:
-                    self._cv.wait()
-                job, nbytes = self._jobs[0]
-            if job is not None:
-                try:
-                    job()
-                except Exception as e:  # noqa: BLE001
-                    self.errors.append(f"{type(e).__name__}: {e}"[:300])
-            with self._cv:
-                self._jobs.popleft()
-                self.held -= nbytes
-                self._cv.notify_all()
-            if job is None:
-                return
-
-    def drain(self) -> None:
-        with self._cv:
-            while self._jobs:
-                self._cv.wait()
-
-    def close(self) -> None:
-        """Every job run, then the thread ended."""
-        with self._cv:
-            self._jobs.append((None, 0))
-            self._cv.notify_all()
-        self.thread.join()
-
-    def summary(self) -> dict[str, Any]:
-        return {"hold_bytes": self.hold_bytes, "held": self.held, "errors": self.errors[:10], "errors_n": len(self.errors)}
-
-
-class DiskFloor:
-    """The serve dir's filesystem kept above ``floor`` bytes free: a closed window is sealed only when its committed bytes (about
-    its bundle's size) and the bytes the seals still pending will write leave the floor free (`short`)."""
-
-    def __init__(self, path: str | Path, floor: int, usage: Callable[[Any], Any] = shutil.disk_usage) -> None:
-        self.path, self.floor, self.usage = Path(path), int(floor), usage
-
-    def free(self) -> int:
-        return int(self.usage(self.path).free)
-
-    def short(self, nbytes: int, pending: int = 0) -> dict[str, Any] | None:
-        """None when a window of ``nbytes`` fits above the floor; else what was seen, for the window's record."""
-        free = self.free()
-        if free - int(pending) - int(nbytes) >= self.floor:
-            return None
-        return {"free_gb": round(free / GB, 1), "pending_gb": round(pending / GB, 1), "window_gb": round(nbytes / GB, 1),
-                "floor_gb": round(self.floor / GB, 1), "path": str(self.path)}
-
-    def refusal(self, window: int) -> str | None:
-        """Before serving: why the filesystem can't take one window of ``window`` bytes above the floor, else None."""
-        free = self.free()
-        if free >= self.floor + int(window):
-            return None
-        return (f"{self.path} has {free / GB:.0f} GB free, under the disk floor ({self.floor / GB:.0f} GB, --disk-floor-gb) plus one "
-                f"sealed window ({int(window) / GB:.0f} GB, --window-gb): free space there or lower them")
-
-
-class Watchdog:
-    """A thread that sleeps ``period_s`` at a time beside the engine: each wake ``min_s`` or more late is a pause, a line of
-    ``path`` (pauses.jsonl: when it ended, unix seconds as the step trace's ``t_end``, and how late). The engine's thread waits
-    as long for the GIL (or a core), so a pause is a stall of the step then running; the window's ``gc`` and the seals'
-    ``phases_s`` say what ran."""
-
-    def __init__(self, path: str | Path, *, period_s: float = 0.05, min_s: float = 0.2, clock: Callable[[], float] = time.perf_counter,
-                 sleep: Callable[[float], Any] = time.sleep, wall: Callable[[], float] = time.time) -> None:
-        self.path, self.period_s, self.min_s = Path(path), float(period_s), float(min_s)
-        self.clock, self.sleep, self.wall = clock, sleep, wall
-        self.late: list[float] = []
-        self.stopped = threading.Event()
-        self.thread = threading.Thread(target=self.run, name="serve-watchdog", daemon=True)
-
-    def run(self) -> None:
-        while not self.stopped.is_set():
-            t0 = self.clock()
-            self.sleep(self.period_s)
-            late = self.clock() - t0 - self.period_s
-            if late >= self.min_s:
-                self.late.append(late)
-                with open(self.path, "a") as fh:
-                    fh.write(json.dumps({"t_end": round(self.wall(), 3), "late_s": round(late, 3)}) + "\n")
-
-    def stop(self) -> None:
-        self.stopped.set()
-        if self.thread.is_alive():
-            self.thread.join()
-
-    def summary(self) -> dict[str, Any]:
-        return {"period_s": self.period_s, "min_s": self.min_s, "pauses": len(self.late),
-                "late_s": {"max": round(max(self.late, default=0.0), 3), "total": round(sum(self.late), 3)}}
