@@ -401,8 +401,12 @@ The audit record (`audit.audit_record`) is `{"format": "verity/one-stage/audit/v
   incomplete (`complete` is false).
 - The record is accepted only when there is a verifier whose verdict counts (`of_record`), every one of them ran and accepted, every
   other verdict that ran accepted, and every check passed. The profiles are present only then.
-- A session that proves one subcircuit's proof blocks is served that subcircuit's share as a `subset:k_s` draw over its `n_s` proof blocks,
-  in its own indices; the record keeps the union draw.
+- A zk session proves one member's proof blocks, the window's `[base, base + n)`, inside one subcircuit's stratum. It is
+  served the member's share of the proved blocks as a `subset:|share|` draw over its `n` proof blocks, in its own indices
+  (`sorted(u - base for u in proved(draw) if base <= u < base + n)`), and a member whose share is empty runs no session; a
+  plain session's one member is the whole window, served the draw itself. The record keeps the union draw. Under a
+  stratified draw a member's share has at most `k_s` units and, given its size, is the member's own uniform subset
+  (`Flock.Guarantees.WindowDraw`, `Security/Proofs/Flock/EndToEnd/WindowDraw/Statement.lean`).
 - `profile` is the profile's JSON, except that a stratified or work sampling design keeps the v0 form: its JSON with
   `delta` and the count drawn per subcircuit.
 - `wrong_units` is `{"delta", "of": population, "bound", "rule", ["per_template"]}`: `bound` is core's exact
