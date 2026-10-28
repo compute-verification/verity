@@ -11,9 +11,10 @@ Promoted from veritor ``protocol/merkle.py`` (eb865ce2) with the ``Commitment`` 
 ``protocol/messages.py``.  The frame ``veritor/protocol/merkle/frame/v3`` and every tag below are wire constants
 mirrored by the SP1 kernel (``frame.rs``); every recorded root depends on them.  Every hash the frame computes is
 `frame_hash`: SHA-512 (or SHA-256) of the frame, the tag and the length-framed parts.  Under SHA-512 the domain id, leaves,
-pads, nodes and roots are 64 bytes, and the domain id absorbs the positions' SHA-512 identity (``frame_v3/PROTOCOL.md`` §6).
-Under every frame a ``binding`` is 64 bytes, the caller's SHA-512 identity digest, or 32 bytes, a SHA-256 identity digest as
-recorded statements carry it; every part is length-framed, so the two cannot collide.
+pads, nodes and roots are 64 bytes, and the domain id absorbs the positions' SHA-512 identity (``frame_v3/PROTOCOL.md`` §6),
+or, for the ``range-u64`` kind, its start and count as u64be words under the tag ``domain/range-u64``.  Under every frame a
+``binding`` is 64 bytes, the caller's SHA-512 identity digest, or 32 bytes, a SHA-256 identity digest as recorded statements
+carry it; every part is length-framed, so the two cannot collide.
 
 A leaf, node or pad hashes its tag and domain id first, so each domain's three prefixes are hashed once (`_head`) and every
 leaf, node and pad of it continues from a copy: `CommitmentDomain`'s, `tree_levels`, `levels` and `root_from_subtrees` alike.
@@ -29,7 +30,7 @@ from typing import Any
 from verity.errors import ProtocolError
 
 from .identity import JSONValue
-from .indexed import IndexedDomain, iter_members
+from .indexed import U64_BOUND, IndexedDomain, RangeU64Domain, iter_members
 from .limits import VerificationLimits
 from .scheme import DIGEST_BYTES, sha
 
@@ -65,6 +66,30 @@ def domain_message(binding: bytes, owner: int, positions: bytes, count: int, has
     identity bytes: for a caller that hashes it with another implementation of the same hash."""
 
     return _message(b"domain", binding, _uint(owner + 2), positions, _uint(count))
+
+
+#: The ``range-u64`` domain message's tag and its length in bytes; the count is its last 8 bytes.
+RANGE_U64_TAG = b"domain/range-u64"
+RANGE_U64_MESSAGE_BYTES = 173
+
+
+def _u64(value: int, name: str) -> bytes:
+    if type(value) is not int or not 0 <= value < U64_BOUND:
+        raise ProtocolError(f"a range-u64 domain's {name} must be a u64")
+    return value.to_bytes(8, "big")
+
+
+def range_u64_domain_message(binding: bytes, owner: int, start: int, count: int) -> bytes:
+    """The framed message whose SHA-512 is a ``range-u64`` domain's id: the 64-byte binding, then ``owner + 2``, ``start`` and
+    ``count`` as u64be words, 173 bytes (``frame_v3/PROTOCOL.md`` §6)."""
+
+    if type(binding) is not bytes or len(binding) != 64:
+        raise ProtocolError("a range-u64 domain's binding must be 64 bytes")
+    if type(owner) is not int or owner < -2:
+        raise ProtocolError("owner must be -2 (weights), -1 (boundary) or a replay unit")
+    if type(start) is not int or type(count) is not int or start < 0 or count < 0 or start + count >= U64_BOUND:
+        raise ProtocolError("a range-u64 domain needs nonnegative start and count with start + count < 2^64")
+    return _message(RANGE_U64_TAG, binding, _u64(owner + 2, "owner + 2"), _u64(start, "start"), _u64(count, "count"))
 
 
 @lru_cache(maxsize=4096)
@@ -145,7 +170,8 @@ class CommitmentDomain:
     tag for a per-model weight root.  It is 64 bytes (a SHA-512 identity digest),
     or 32 (a SHA-256 one, as recorded statements carry it), under every frame.
     ``owner`` is ``-2`` for the weights, ``-1`` for the boundary, else a replay
-    unit index.
+    unit index.  Over a :class:`~verity.ml.commitments.indexed.RangeU64Domain` it is the ``range-u64`` kind: SHA-512 only,
+    a 64-byte binding, and the domain id is the SHA-512 of :func:`range_u64_domain_message`.
     """
 
     binding: bytes
@@ -162,6 +188,12 @@ class CommitmentDomain:
                 "owner must be -2 (weights), -1 (boundary) or a replay unit"
             )
         sha(self.hash)
+        if isinstance(self.positions, RangeU64Domain):
+            if self.hash != "sha512":
+                raise ProtocolError(f"a range-u64 domain hashes with SHA-512 only, not {self.hash!r}")
+            message = range_u64_domain_message(self.binding, self.owner, self.positions.start, self.positions.count)
+            object.__setattr__(self, "domain_id", sha("sha512")(message).digest())
+            return
         if self.hash == "sha256":
             positions = bytes.fromhex(self.positions.identity_digest)
         elif hasattr(self.positions, "identity_sha512"):

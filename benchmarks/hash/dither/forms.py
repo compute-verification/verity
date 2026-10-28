@@ -31,10 +31,10 @@ UNADOPTED_PARTS = {"ab": "-ab/-abn: every call's A table built once a step (h1ag
                                 "derive (its M is the window's slot, a power of two at least 32 rows, every row block "
                                 "computed; served_h1's producer refuses skip_dead)")}
 # a -so arm's parts a ruling has taken in, each named in its arm's basis
-ADOPTED_PARTS = {"j10r": ("DITHER_SO_UNITS=j10r: the units under J10-R's call-scale noise in RT-ALGO-16's verifier form "
-                          "(#3574: a J10-R unit's public row holds its call's first position and its blocks, which credit "
-                          "derives from the window's layout at its slot M; PouwH1Tile_v5's receipt, every row block "
-                          "computed)")}
+ADOPTED_PARTS = {"j10r": ("DITHER_SO_UNITS=j10r: the units under J10-R's call-scale noise in the verifier's form "
+                          "(`credit.SHARED_J10R`: a J10-R unit's public row holds its call's first position and its "
+                          "blocks, which credit derives from the window's layout at its slot M; PouwH1Tile_v5's receipt, "
+                          "every row block computed)")}
 # the arms of the other two families, which aren't `FORM_A`'s form at all
 FAMILIES = {"dither-1s": ("dither_one: the served product is H1V3's noised mainloop and z the window's row tables, its "
                           "noise from a coin drawn before its own A and z went under a round (outside the statement's "

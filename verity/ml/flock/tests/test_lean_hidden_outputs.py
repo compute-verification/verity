@@ -31,7 +31,6 @@ VERIFIER = Path(__file__).resolve().parents[1] / "verifier"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-verify"
 #: the four sets (`flat/` and `typed/`, each `rope-head/` and `gemm-coordinate/`: the statement's `stage/` files and CASES'
 #: `records-cpu/`), recorded by 60-circuit.sh MODE=selftest GPU=0 RECORD=1 SELF_N=4 (TYPED=1 for `typed/`) at 455a01049
-#: (`art:dae0b537`, the same bytes)
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "hidden-outputs"
 SETS = {("flat", "rope-head"): "verity/flock-circuit@f5df3bbc+seed-injection",
         ("flat", "gemm-coordinate"): "verity/flock-circuit@f5df3bbc+seed-injection",
@@ -65,7 +64,9 @@ def test_the_public_file_holds_no_output_word(store, form, name):
     assert set(head["frame_v3"]["schemas"].values()) == {"hm96-sha512/row/v1"} and len(body) == 4 * len(meta["ports"]) * 128
 
 
-@pytest.mark.parametrize("form,name", list(SETS))
+#: flat RoPE's sessions in the quick tier; the other sets' (22 to 60 s each) are `slow`
+@pytest.mark.parametrize("form,name", [(f, n) if (f, n) == ("flat", "rope-head") else pytest.param(f, n, marks=pytest.mark.slow)
+                                       for f, n in SETS])
 def test_it_gives_the_provers_sessions_their_verdicts(store, form, name, tmp_path):
     d = store / form / name
     subprocess.run([sys.executable, str(VERIFIER / "selftest_records.py"), str(d / "records-cpu"), str(tmp_path)], check=True,

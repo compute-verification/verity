@@ -1,6 +1,6 @@
 """The templated statement (``flock-circuit/tmpl``, `circuit.compose`'s ``layout``): the flat statement with its unit given as
 the unit's ``flock-ir-tmpl/v2`` template, META ``template`` its lines and ``layout`` the mode, and no ``CIRCUIT unit``
-section, which the Lean verifier reads with ``HmOut.parseTmpl`` (PRF-133).
+section, which the Lean verifier reads with ``HmOut.parseTmpl``.
 
 `tmpl.layout`, the mirror of ``Tmpl.layoutM`` that puts the unit's range at its committed slot, is held to
 ``Flock.Test.TmplLayout``'s vectors and to a Definition two call paths reach, which is where the modes differ. The Boolean
@@ -191,6 +191,7 @@ CS.UnitStager(d, "unit/tmpl-no-torch", [("ab", V2, 32, ["a", "b"]), ("w", V2, 20
 """
 
 
+@pytest.mark.slow
 def test_the_templated_statement_is_written_without_torch(tmp_path):
     """`UnitStager`'s templated statement, the file the auditor's lowering writes on a host with numpy and no torch, is
     written with torch (and the numerical benchmarks) unimportable, byte for byte the file it writes with them."""

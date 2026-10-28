@@ -332,10 +332,9 @@ def _commit(root: Path) -> dict:
 
 
 #: per verifier source, its mark, the flag a version nobody reviewed carries, and the git blob ids of the reviewed versions with
-#: the flags each still carries. The column-major fold as granted (d1775df80 = cde1c7ac1, art:90b53162093c43559020e115d72d500225d8af62466cbbcedb7e63aada983fd8)
-#: and the structured lincheck as granted (8db1cb550 = e71789ed7 = f7d1e297d, art:f865ea7822990772c557751642e3c0c17212b6703ec2f8f5292f5f63fe5dd1f1)
-#: carry none, alone or with ab5087cd4 (= 750e344fd = acca35385, C0 = I checked once per statement, granted as
-#: art:2aef6594e7d5510a22c7cb7e7afa54fd20d954ceabf3d910a7437567ba204686)
+#: the flags each still carries. The column-major fold as granted (d1775df80 = cde1c7ac1)
+#: and the structured lincheck as granted (8db1cb550 = e71789ed7 = f7d1e297d)
+#: carry none, alone or with ab5087cd4 (= 750e344fd = acca35385, C0 = I checked once per statement, as granted)
 VERIFIER_SOURCES = (
     ("circuit.rs", "CscCircuit", "verifier-fold-unreviewed",
      {"1528b2ea3ede6998491ad0254c1a7917cd953263": (),

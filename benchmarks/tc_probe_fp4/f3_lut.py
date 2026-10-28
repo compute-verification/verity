@@ -418,7 +418,7 @@ class F3Device:
 class FakeF3:
     """CPU stand-in for the dry run: the LUT arms emulate f3_lut.cu through the packed tables and scale words, the native arm is
     the vectorised pinned model on the packed codes.  Its rates are invented (lookups at 32 per SM per clock, exact at a third of
-    that, NVFP4 at 2,048 products per SM per clock); ``--fake-silicon`` never runs under a research run."""
+    that, NVFP4 at 2,048 products per SM per clock); ``--fake-silicon`` never runs with ``RESEARCH_RUN_ID`` set."""
 
     SMS, MHZ = 2, 2000.0
 
@@ -795,7 +795,7 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--tolerance", type=float, default=0.02)
     args = ap.parse_args(argv)
     if getattr(args, "fake_silicon", False) and SHARED.RESEARCH_RUN_ID:
-        ap.error("--fake-silicon is a dry run and never publishes: not under a research run")
+        ap.error("--fake-silicon is a dry run and never publishes: unset RESEARCH_RUN_ID")
     return {"build": build_cmd, "run": run_width, "collect": collect}[args.cmd](args)
 
 

@@ -34,7 +34,7 @@
   so the step digest, and with it round s's root, commits them before round s's coin, and slot i of round s's slot
   table names leaf i of those A tables. `tables_reason` refuses a window where it names leaves of an A table no round
   root commits: a call with no A table root, at a step no round closes, or off its round's step digest. Round s + 1's
-  root also commits round s's receipt roots (`receipts_digest`), and the draw coin opens after `draw_root`, over the
+  root also commits round s's receipt roots (`receipts_digest`), and the draw coin opens after `credit.draw_root`, over the
   manifest, the last round's receipts and every round's root and coin, so the draw follows every round coin by hash.
 * **The A rows under the round roots** (`credit.a_link`): the root round s's coin follows is over the round's
   ``inner`` root (all of the above, `round_root`) and its ``a`` segments: step s's A table ``a/<K>@<s>`` of each K, the
@@ -59,12 +59,14 @@ from typing import Any, Mapping, Sequence
 
 import numpy as np
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.audit import HM96, HM96_SALT, ROW_SCHEMA, rows_domain
+from verity.core.protocols.pouw.audit import HM96, HM96_KEY, HM96_SALT, ROW_SCHEMA, rows_domain
 from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw.credit import CREDIT
+from verity.core.protocols.pouw.credit import CREDIT, draw_root
 from verity.core.protocols.pouw.protocol import tagged
 from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveCommitment, LiveOpening, live_reason
-from verity.ml.commitments import Commitment, MerkleTree, Opening, VerificationLimits, verify_opening
+from verity.ml.commitments import Commitment, Opening, VerificationLimits, hm96, verify_opening
+from verity.ml.commitments.hm96 import batch
+from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, sha512_row_seg_digest
 
 
 @dataclass(frozen=True)
@@ -107,7 +109,6 @@ REQUESTS_TAG = "verity/pouw/h1/requests/v2"
 OPEN_REQUESTS_TAG = "verity/pouw/h1/requests/round-0/v1"
 SLOTS_TAG = "verity/pouw/h1/slots/v1"
 RECEIPTS_TAG = "verity/pouw/h1/receipts/v1"
-DRAW_TAG = "verity/pouw/h1/draw/v1"
 #: round 0's ``receipts``: no round precedes it
 NO_RECEIPTS = bytes(64)
 #: the pouw setting ``admission``: requests admitted in round 0 only (the default), or in every round
@@ -175,14 +176,51 @@ def table_leaves(rows: int, width: int, m: int, *parts: np.ndarray) -> list[byte
     return out + [bytes(width)] * (rows - m)
 
 
-def hiding_rows(binding: bytes, owner: int, values: Sequence[bytes], key: bytes, nonce: int) -> MerkleTree:
+class HidingTable:
+    """A hiding table as `MerkleTree` holds it (``domain``, ``commitment``, ``open``), its levels hashed by `hiding_rows`."""
+
+    __slots__ = ("domain", "_values", "_levels")
+
+    def __init__(self, domain: Any, values: Sequence[bytes], levels: tuple[tuple[bytes, ...], ...]) -> None:
+        self.domain, self._values, self._levels = domain, tuple(values), levels
+
+    @property
+    def commitment(self) -> Commitment:
+        return Commitment(self._levels[-1][0] if self._levels else self.domain.empty_root(), self.domain.count)
+
+    def open(self, position: int) -> Opening:
+        rank = self.domain.positions.rank(position)
+        path, cursor = [], rank
+        for level in self._levels[:-1]:
+            path.append(level[cursor ^ 1])
+            cursor >>= 1
+        return Opening(position, self._values[rank], tuple(path))
+
+
+def hiding_rows(binding: bytes, owner: int, values: Sequence[bytes], key: bytes, nonce: int) -> HidingTable:
     """``audit.commit_rows(binding, owner, values, hash=HM96, salt_key=key, nonce=nonce)``, its leaf salts computed as one
     keystream: leaf i's (`audit.hm96_salt`) is ChaCha20 blocks 3i..3i + 2 at a 64-bit counter and nonce
-    (`hm96.batch.salts`). The per-leaf block function costs about 0.2 ms a leaf, a z table's thousands of leaves a call."""
-    from verity.ml.commitments.hm96 import batch
-    y = batch.salts(key, nonce, np.arange(len(values)))
-    rows = {i: v + y[i * HM96_SALT:(i + 1) * HM96_SALT] for i, v in enumerate(values)}
-    return MerkleTree(rows_domain(binding, owner, len(values), HM96), rows, lambda _: ROW_SCHEMA)
+    (`hm96.batch.salts`).
+    The per-leaf block function costs about 0.2 ms a leaf, a z table's thousands of leaves a call. The leaves are
+    hashed as `pouw_h1_registered`'s NumPy path hashes a table's (`Hm96Domain.leaf`'s bytes): each distinct preimage's
+    ``row-seg`` digest once, every leaf's hm96 mask at once (`hm96.batch.tree_leaves`), and the frame's leaves and
+    nodes from their constant prefixes, since `MerkleTree`'s leaf by leaf took some 0.1 ms a leaf, a round's request
+    table each round."""
+    from verity_vllm.protocols.pouw.h1 import registered as NR
+    n = len(values)
+    y = batch.salts(key, nonce, np.arange(n))
+    domain = rows_domain(binding, owner, n, HM96)
+    rows = [v + y[i * HM96_SALT:(i + 1) * HM96_SALT] for i, v in enumerate(values)]
+    if not n:
+        return HidingTable(domain, rows, ())
+    xs: dict[bytes, bytes] = {}
+    for v in values:
+        if v not in xs:
+            xs[v] = sha512_row_seg_digest(v, 8 * len(v))
+    hl = batch.tree_leaves(hm96.SHA512, HM96_KEY, b"".join(xs[v] for v in values), y)
+    frame, schema = NR._Frame(domain.domain_id), NR._part(SCHEMA_HM96_SHA512_ROW_SEG.encode())
+    leaves = [frame._h(frame.leaf, (u := NR._uint(i)) + u + schema + NR._part(h)) for i, h in enumerate(hl)]
+    return HidingTable(domain, rows, frame.levels(leaves))
 
 
 def step_digest(salt: bytes, s: int, rows: Sequence[Mapping[str, Any]]) -> bytes:
@@ -266,13 +304,6 @@ def receipts_digest(salt: bytes, r: int, roots: Sequence[tuple[int, bytes | None
     """Round r's receipts: each of its calls' (index, receipt root), in call order, an empty root where none was handed
     over; committed under round r + 1's root, or for the last round in `draw_root`."""
     return tagged(RECEIPTS_TAG, salt, r, *(p for i, root in roots for p in (i, root or b"")))
-
-
-def draw_root(calls_root: bytes, receipts: bytes, log: Sequence[Mapping[str, Any]]) -> bytes:
-    """What the draw coin opens after: the window's manifest (``calls_root``), its last round's receipts and every round's
-    root and coin, so the draw follows every round coin by hash."""
-    return tagged(DRAW_TAG, calls_root, receipts,
-                  *(p for x in log for p in (bytes.fromhex(x["root"]), bytes.fromhex((x.get("coin") or {}).get("coin", "")))))
 
 
 @dataclass(frozen=True)
@@ -436,8 +467,8 @@ def batch_order(runner: Any, scheduler_output: Any) -> list[tuple[str, int]]:
     return [(str(r), int(tokens[r])) for r in sort(tokens, drafts, runner.decode_query_len)]
 
 
-__all__ = ["ADMISSIONS", "EMPTY_REQUEST", "EMPTY_SLOT", "HM96_SALT", "NO_RECEIPTS", "OPEN_REQUESTS_TAG", "PER_ROUND",
-           "REQUESTS_NONCE", "ROUND0", "RequestEntry", "RoundOpening", "SLOTS_NONCE", "TABLES_NONCE", "TABLE_NONCES",
+__all__ = ["ADMISSIONS", "EMPTY_REQUEST", "EMPTY_SLOT", "HM96_SALT", "HidingTable", "NO_RECEIPTS", "OPEN_REQUESTS_TAG",
+           "PER_ROUND", "REQUESTS_NONCE", "ROUND0", "RequestEntry", "RoundOpening", "SLOTS_NONCE", "TABLES_NONCE", "TABLE_NONCES",
            "TABLE_TAGS", "UNENTERED", "batch_order", "draw_root", "first_ids", "hiding_rows", "late_admission",
            "new_requests", "receipts_digest", "request_reason", "request_table", "requests_binding", "round_reason", "round_root",
            "round_row", "rounds_reason", "slot_leaf", "slot_owner", "slot_reason", "slot_table", "slots_binding",

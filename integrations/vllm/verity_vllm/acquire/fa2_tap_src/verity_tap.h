@@ -1,5 +1,5 @@
 /******************************************************************************
- * Verity R8 lane B-kernel: in-kernel tap for the FA2 split-KV forward.
+ * Verity: in-kernel tap for the FA2 split-KV forward.
  *
  *   VERITY_TAP          0 = compiled out (should be SASS-identical to pinned kernel
  *                           up to kernel-parameter offsets)
@@ -258,7 +258,7 @@ __device__ __forceinline__ void verity_p1_store(const Params &params, const uint
 }
 #endif
 
-// ================================================================ R9 lane cmt-hidden additions (v7)
+// ================================================================ v7 additions: the hidden classes
 //
 //   VERITY_TAP == 3  "M1" materialising tap: the hidden classes selected by VERITY_MAT_SRC are written, in canonical
 //                    (slab = bidb*h + bidh, row, col | block, lane | d) positions, to a preallocated flat u32 buffer
@@ -287,9 +287,9 @@ __device__ __forceinline__ void verity_p1_store(const Params &params, const uint
 
 struct Verity_mat_layout {
     // word offsets into the flat u32/f32 buffer; HB = b*h slabs, M = seqlen_q cap (rows), NB = key-block cap, N = NB*BN.
-    // R13 fa2 (v8): parametric in the kernel's key-block width BN (= Kernel_traits::kBlockN: 128 for hdim 64, 64 for hdim
+    // v8: parametric in the kernel's key-block width BN (= Kernel_traits::kBlockN: 128 for hdim 64, 64 for hdim
     // 96/128/256 on the num_splits==1 "align" kernel) and head dim D (= Kernel_traits::kHeadDim: the O plane row width).
-    // (BN, D) = (128, 64) reproduces the R9 v7 layout word for word.  Host mirror: hidden_stream.StreamLayout(HB, M, NB, BN, D).
+    // (BN, D) = (128, 64) reproduces the v7 layout word for word.  Host mirror: hidden_stream.StreamLayout(HB, M, NB, BN, D).
     long off_s, off_p, off_rp, off_row, off_o, off_fin, total;
 #if defined(VERITY_MAT_SRC) && (VERITY_MAT_SRC & 64)
     long off_ms;          // MS class (VERITY_MAT_SRC & 64): one word per (slab, row, key block), appended after FIN
@@ -315,7 +315,7 @@ struct Verity_mat_layout {
 #ifndef VERITY_MAT_SRC
 #define VERITY_MAT_SRC 63
 #endif
-// R13 fa2 (v8): the context is instantiated with the kernel's compile-time tile (kBlockM, kBlockN, kHeadDim); the launch template
+// v8: the context is instantiated with the kernel's compile-time tile (kBlockM, kBlockN, kHeadDim); the launch template
 // only arms the tap when the host declared exactly this (kBlockN, kHeadDim) pair (params.vt.BN / vt.D), so the layout the kernel
 // writes is the layout the host committed to -- a wrong declaration skips the launch (counted) instead of writing a different layout.
 // Fragment -> position mapping (SM80 16x8x16 C fragments, 4 warps along M, one 16-row MMA tile per warp since kBlockM == 64):
