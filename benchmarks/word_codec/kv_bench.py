@@ -64,7 +64,7 @@ ATTN_SPLIT_TILES = (1, 8)        # each split at least this many tiles (a split'
                                  # split hide more of a tile's decode latency at small batch)
 ATTN_RTOL = 1e-3
 ATTN_FORMS = {1: "phased", 2: "ws"}  # kv_attn's encoded forms: decode and attention in turn, or in their own warps
-NATIVE_70B_S = 0.0457  # bench.py's tuned FP8 linears step at 70B, batch 1 (r20261012-100856-7247): x's denominator
+NATIVE_70B_S = 0.0457  # bench.py's tuned FP8 linears step at 70B, batch 1: x's denominator
 CLOCK_LOCKED_MHZ, CLOCK_MAX_MHZ = 2092, 2430  # the nodes' locked SM clock (vy-clocks.service) and the card's max
 RATES_SCHEMA = "verity/codec-frontier-rates/v0"
 
