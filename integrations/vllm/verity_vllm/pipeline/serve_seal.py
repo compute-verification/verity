@@ -193,19 +193,15 @@ def target_of(model: Any = None, async_scheduling: bool = False) -> dict[str, An
     """What the compiler's φ reads of the serving device: its target profile (`TargetProfile.from_device`) with, given the served
     ``model``, the int8 scope its layers run read back from them (`kernel_readback.int8_exact_of`: ``linears`` under
     ``--precision verity_int8``, which predict's Build of an exact-int8 checkpoint requires; a mixed scope is refused), and the
-    execution, bi-eager where vLLM runs batch-invariant (`vllm.envs.VLLM_BATCH_INVARIANT`). Under ``async_scheduling``
-    (``--async-scheduling``) the profile declares it, so φ's LAG is 1 by declaration; without, the profile declares no
-    scheduler, as before the flag."""
+    execution, bi-eager where vLLM runs batch-invariant (`vllm.envs.VLLM_BATCH_INVARIANT`). The profile declares ``async_scheduling`` (LAG 1) only under it."""
     import vllm.envs as envs
 
     from verity_vllm.program.frontend.kernel_readback import int8_exact_of
     from verity_vllm.program.frontend.target_profile import TargetProfile
 
-    target = TargetProfile.from_device()
+    target = TargetProfile.from_device().with_overrides(**({"async_scheduling": True} if async_scheduling else {}))
     if model is not None:
         target = target.with_overrides(int8_exact=int8_exact_of(model))
-    if async_scheduling:
-        target = target.with_overrides(async_scheduling=True)
     return {"target": target.to_json(), "execution": "bi-eager" if envs.VLLM_BATCH_INVARIANT else "eager"}
 
 
