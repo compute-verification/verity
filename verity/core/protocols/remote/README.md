@@ -13,8 +13,8 @@ each session's files; nothing yet ties that check
 to the sampling theorem `SampledKSLiveV3`.
 
 This file is an outline with signposts. The Lean is the definition. The vocabulary is the Glossary's (`GLOSSARY.md`,
-and `ARCHITECTURE.md`'s Glossary). Code and Lean keep some older names until they are renamed: `Dampener*` means the
-overhead lower bound, `*Horizon` a monitoring period's pooled bound, `Session*` a run of a subprotocol, `Window*` and
+and `ARCHITECTURE.md`'s Glossary). Code and Lean keep some older names until they are renamed: `Dampener*` and
+`Overhead*` mean the slowdown, `*Horizon` a monitoring period's pooled bound, `Session*` a run of a subprotocol, `Window*` and
 `period` a verification phase, `Draw*` the sample, `declared` registered, `firewall` the ZK server, and `flock-verify`
 and `remote check` the commands `verity verify proof` and `verity verify remote` will be.
 
@@ -28,7 +28,7 @@ and `remote check` the commands `verity verify proof` and `verity verify remote`
   verifier;
 - `RemoteChallenger` (`verity/core/protocols/sampled_proofs/remote.py`), the client of a challenger on another host;
 - `RemoteCertifier` (`verity/core/protocols/certifier/active.py`), onsite's network certifier reached over the network;
-- the overhead bound's remote regime, `Nci.Guarantees.DampenerRemote` (the inference-only policy's Lean is still named
+- the slowdown bound's remote regime, `Nci.Guarantees.DampenerRemote` (the inference-only policy's Lean is still named
   `Nci`) and `benchmarks/rho`'s `regime.remote`: a bound over this protocol (part 6 of the security argument below),
   not a part of it;
 - "run remotely": a job run on a cluster node (`research run --on`), which has nothing to do with any protocol.
@@ -104,7 +104,7 @@ EVIDENCE | serve` (`RemoteMain.lean`). The Lake package `core_remote` is code: i
      work) to the monitoring period's running totals.
 4. **The monitoring period** is the stretch of time results are reported over. The accepted phases' bounds pool over
    it (`Flock.Guarantees.IntegrityHorizon` for sampled proofs, `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod`
-   for PoUW), and the overhead calculator turns them into overhead (see Results).
+   for PoUW), and the slowdown calculator turns them into a slowdown (see Results).
 
 ## The security argument, end to end
 
@@ -118,8 +118,8 @@ failure probability that, beyond the sample and SHA-512, rests on undischarged p
   gate, hence padded blocks of c = Γ gates and k = ⌊α_f·Γ⌋ fresh bits (the inference-only policy, part 4); the step
   from remote's verdict to this claim is open.
 
-Conditionally on the items under What's open below, a fourth claim follows: training a new frontier model costs more
-GPU-hours than it would without the protocol, by the overhead lower bound (part 6). That bound is the argument's one
+Conditionally on the items under What's open below, a fourth claim follows: training a new frontier model takes more
+fleet-time than it would without the protocol, by the slowdown bound (part 6). That bound is the argument's one
 endpoint, and part 6 gives its total failure probability over a monitoring period.
 
 The argument has seven parts. **Each part is proved, stated or open on its own: no Lean theorem yet chains one part's
@@ -159,7 +159,7 @@ else is a theorem or a named gap.
 For the counted uses with an upstream certificate, a block must import the specified context or perform the certified
 upstream computation. The certificate is a checkable wiring property of the training circuit: every gate a use requires
 reaches, inside that use's own upstream computation, the operand the use reads. It is named in the lock
-(`Nci.Capability.Consumers.Upstream`) until it is checked on a named circuit. The two learning rows are all the overhead lower bound assumes
+(`Nci.Capability.Consumers.Upstream`) until it is checked on a named circuit. The two learning rows are all the slowdown bound assumes
 about learning, and they are where its scientific content lies; the second is the least certain.
 
 ### 1. The proofs of the sampled proof blocks
@@ -248,7 +248,7 @@ fresh bits per gate, anything outside the registered information θ (`Nci.Compli
 information. A partition meeting that is, once padded, a (c, k)-partition with c = Γ and k = ⌊α_f·Γ⌋, or
 k = ⌊α_f·Γ·W⌋ for the bit-level expansion at Γ·W gates,
 (`Verity.Partition.IsCK`), the hypothesis part 6's local bounds take. With gates up to W bits wide, the bit-level
-expansion meets it at Γ·W gates. The Lean overhead bound `DampenerRemote` instead takes `Complies` as a hypothesis.
+expansion meets it at Γ·W gates. The Lean slowdown bound `DampenerRemote` instead takes `Complies` as a hypothesis.
 
 **How it is checked.**
 
@@ -310,14 +310,15 @@ total is 2⁻⁴⁰ + n·(δ_bind + δ_ks): for a year's total below 1%, δ_bind
 (sampled proofs) and `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod` (PoUW): **proved**. `JointHorizonLive`
 takes per-period guarantees as hypotheses; no theorem yet instantiates it with parts 2 and 3.
 
-### 6. The overhead lower bound
+### 6. The slowdown bound
 
-**Establishes, conditionally.** The overhead lower bound: training a new frontier model on the monitored fleet costs at
+**Establishes, conditionally.** The slowdown bound: training a new frontier model on the monitored fleet takes at
 least
 
-$$ \mathrm{overhead}(\mathcal G, \mathcal A, \eta) \;\ge\; \frac{\Omega_*}{C_{\mathrm{ref}}\,\big[\bar\zeta\,f + (q/c)\,(1 - f)\big]} $$
+$$ \rho(\mathcal G, \eta) \;\ge\; \frac{\Omega_*}{C_{\mathrm{ref}}\,\big[\bar\zeta\,f + (q/c)\,(1 - f)\big]} $$
 
-times the GPU-hours it costs unmonitored, up to probability η. **This is the argument's one endpoint.** No Lean
+times the fleet-time it takes unmonitored (elapsed time times the whole fleet's capacity, registered and
+unregistered), up to probability η. **This is the argument's one endpoint.** No Lean
 states it: it is derived in prose (`Security/README.md`, part 4) from the local bounds, `Verity.Guarantees.Counting`
 and `Nci.Guarantees.CapabilityFloor`. The Lean bound `DampenerRemote` is a different, older formula (below), and the
 Results table comes from a third route, the calculator's.
@@ -332,7 +333,7 @@ neither does the total. With e the per-phase sum, a week, a month and a year (n 
 verification phase an hour) give η + δ + 2⁻⁴⁰ + 168·e, + 730·e and + 8,766·e.
 
 - Ω_* is the weighted count of analysed computation any covered method needs.
-- C_ref is a demonstrated reference run's GPU-hours.
+- C_ref is a demonstrated reference run's fleet-time.
 - f is the share of capacity outside correct credited work of the registered circuit, and ζ̄ the rate at which work can be done there.
 - q/c is the most of that count one verified inference block of c gates can do, per gate. The canonical form keeps
   the sum of the blocks' caps; replacing it by (q/c)(1 − f) needs the accounting to tie each qualifying block to
@@ -391,7 +392,7 @@ the local bound (an activation price, a joint price, a recoverable source), each
 
 That the registered circuit computes what the served model computes is completeness: it says an honest developer's run is
 accepted. No security claim rests on it. A wrong circuit costs the developer acceptance; it never makes the auditor
-accept a false claim. Likewise the overhead's numbers depend on measured and assumed parameters (the reference run, the
+accept a false claim. Likewise the slowdown's numbers depend on measured and assumed parameters (the reference run, the
 unregistered share, the prices), each labelled with its source in the calculator.
 
 ### What's open
@@ -422,7 +423,7 @@ unregistered share, the prices), each labelled with its source in the calculator
   - The caps and the floor are proved, but their honest witnesses hold `DescriptionHard`, `SourceHard`, `Recovers` and
     coverage only degenerately (a decoder that compresses nothing, coverage of every computation): that the premises
     hold together at a decoder that compresses, and with coverage that excludes some computation, isn't shown yet.
-  - The displayed overhead bound has no Lean statement; `DampenerRemote` is the older threaded dampener.
+  - The displayed slowdown bound has no Lean statement; `DampenerRemote` is the older threaded dampener.
 
 ### Promising directions
 
@@ -449,7 +450,7 @@ unregistered share, the prices), each labelled with its source in the calculator
   gives is a linear program over the weights. Solving it on the training circuit replaces "every value is hard" with
   "enough priced, structurally supported work".
 - **Test coverage directly.** Compute to the target for compact-state methods (adapters, independent small experts,
-  distillation from served outputs) against full training, at matched targets. The ratio caps the overhead from above.
+  distillation from served outputs) against full training, at matched targets. The ratio caps the slowdown from above.
 
 ## Assumptions, by name
 
@@ -507,9 +508,9 @@ PoUW, as `H1CheckedCreditPeriod` takes them (the general `CheckedCreditPeriod` t
   `SheetWords`, `SheetSemantics`, `FoldOpt`, `FoldOptFoldedAt` and `FillOpt`: the GPU's clock, rates and semantics are
   the data sheet's, and the folds are optimal. The live-words credit over a monitoring period (`CircuitCreditPeriod`,
   `H1CheckedCreditPeriod`) doesn't read them. The time credit `Accounting.Guarantees.Compose.CircuitCredit` does, and it
-  is what backs the overhead bound's `PouwSound` (below), so the overhead over remote rests on the data sheet.
+  is what backs the slowdown bound's `PouwSound` (below), so the slowdown over remote rests on the data sheet.
 
-The overhead, `DampenerRemote`:
+The slowdown, `DampenerRemote`:
 
 - In `Security/Definitions/Nci/Assumptions/Remote.lean`, three:
   - `Nci.Assumptions.PouwSound`: each PoUW period's certificate is wrong with probability at most p. What backs p is
@@ -534,9 +535,9 @@ The local bounds (part 6):
 
 ## Results per monitoring period
 
-These figures come from a third route, neither part 6's displayed bound nor `DampenerRemote`: the overhead
+These figures come from a third route, neither part 6's displayed bound nor `DampenerRemote`: the slowdown
 calculator's partial-sum route. The calculator is `benchmarks/rho` (`verity bench rho`; it is being renamed to
-overhead). Its `periods.py` gives the overhead lower bound for monitoring periods of a week, a month and a year, over one datacenter
+the slowdown calculator). Its `periods.py` gives the slowdown bound for monitoring periods of a week, a month and a year, over one datacenter
 (`reference-h200`, 12,500 HGX nodes) and all compute (`world-h200`), at the remote scenario `reference-remote-h200`
 (`uv run python benchmarks/rho/periods.py --scenario reference-remote-h200`):
 
@@ -545,7 +546,7 @@ overhead). Its `periods.py` gives the overhead lower bound for monitoring period
 | one datacenter | 2.75 | 2.79 | 2.8 | 1 to 21.1 | 1 | 2.5 |
 | the world | 2.75 | 2.79 | 2.8 | 1 to 21.1 | 1 | 2.5 |
 
-- **What the figures mean.** Each figure is the overhead lower bound against the fleet's full capacity. On that scale a
+- **What the figures mean.** Each figure is the slowdown bound against the fleet's full capacity. On that scale a
   developer no protocol encumbers already scores 2.5 (1/MFU₀), so these figures barely exceed it.
 - **Their status.** They are draft and their premises contested. They come from the calculator's partial-sum route, not
   from part 6's local bounds.

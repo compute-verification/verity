@@ -393,7 +393,7 @@ None of these is assumed silently; each would restate the conclusion:
 | Accounting | the assignment of a run's counted multiplications not yet in Lean | Open |
 | Rate ceiling ζ̄ | the inline hypotheses of `Nci.Guarantees.DampenerRemote`; a named Prop not yet in Lean | Open |
 | The floor | `Nci.Guarantees.CapabilityFloor` | Proved, under coverage |
-| Slowdown | `Accounting.Overhead.overhead`, `Accounting.Overhead.threshold`, `Accounting.Overhead.cost` | Defined, with cost in server-time, not fleet-time; no theorem reads it |
+| Slowdown | `Accounting.Overhead.overhead`, `Accounting.Overhead.threshold`, `Accounting.Overhead.cost` (renamed `Accounting.Slowdown.*` on `next`) | Defined, with cost in server-time, not fleet-time; no theorem reads it |
 | The bounds | `Nci.Guarantees.DampenerRemote`, `Nci.Guarantees.DampenerThreaded` | Proved as arithmetic over inline hypotheses, not over the definition above |
 
 ## Three trees
