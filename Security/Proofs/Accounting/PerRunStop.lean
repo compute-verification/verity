@@ -37,7 +37,7 @@ def RealizesPearlCPriced.withStop {CM : PearlC.CostModel Q R S} {P : PearlC.Prot
 the machine doesn't stop it, its arithmetic (`final`'s `cost`) is within the compute charge `work` and `fetch` per word
 it first fetches (`w1Read`) within the bandwidth charge `pRead·bits`, and, if the machine stops it at budget `b`, `b` is
 within the two. -/
-theorem w1Stop_cost_le (dv : PearlC.W1.W1Device) (salt : S → List ℕ) (prog : PearlC.W1.Prog × Option ℝ) (H : Q → R)
+theorem w1Stop_cost_le (dv : PearlC.W1.W1Device) (salt : S → List ℕ) (prog : PearlC.W1.CodeImage × Option ℝ) (H : Q → R)
     (U : PearlC.Workload) (act : ℕ → PearlC.Codes) (σ : PearlC.State) (s : S) {work bits pRead : ℝ}
     (hrun : (∀ b, prog.2 = some b → (PearlC.W1.w1Priced dv salt : PearlC.CostModel Q R S).cost prog.1 H U act σ s ≤ b) →
       ((PearlC.W1.final dv (salt s) prog.1 U act σ).cost : ℝ) ≤ work ∧
