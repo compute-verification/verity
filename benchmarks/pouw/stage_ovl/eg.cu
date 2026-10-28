@@ -383,7 +383,7 @@ std::string lin_gate(Lin* L, const int8_t* W, uint32_t key, uint32_t seed, int s
     std::vector<cgr::u64> lv(8 * used);
     CK(cudaMemcpy(lv.data(), c.levels, lv.size() * 8, cudaMemcpyDeviceToHost));
     std::vector<uint8_t> lb(lv.size() * 8);
-    for (size_t i = 0; i < lv.size(); i++) cgr::sha::put_be64(lb.data() + 8 * i, lv[i]);
+    for (size_t i = 0; i < lv.size(); i++) sha::put_be64(lb.data() + 8 * i, lv[i]);
     cgr::writef(dir + "/levels.bin", lb.data(), lb.size());
     const std::vector<uint8_t> pf = cgr::readf(L->rparams);
     cgr::writef(dir + "/params.bin", pf.data(), pf.size());
