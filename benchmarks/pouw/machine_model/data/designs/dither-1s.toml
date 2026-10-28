@@ -1,5 +1,4 @@
-# Dither-1S, Dither as built: one-sided dither with the low-rank U, duo receipts on every committed word at L = 32
-# (decisions 36, 45, 51, 57-65; the name, decision 79).
+# Dither-1S, Dither as built: one-sided dither with the low-rank U, duo receipts on every committed word at L = 32.
 name = "dither-1s"
 title = "Dither-1S"
 aliases = ["dither-duo", "record", "adopted"]

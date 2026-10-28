@@ -1,7 +1,7 @@
-# VF3i: Filtered textures and uniform heads at 32 MACs a word written, inside the LP; round 8's adopted vector.
+# VF3i: Filtered textures and uniform heads at 32 MACs a word written, inside the LP; the vector adopted before the strict VF3i.
 name = "VF3i"
 epoch = "VF3i"
-summary = "Filtered textures and uniform heads at 32 MACs a word written, inside the LP; round 8's adopted vector."
+summary = "Filtered textures and uniform heads at 32 MACs a word written, inside the LP; the vector adopted before the strict VF3i."
 rows = [
     "issue", "M", "R1", "F", "VMNX", "H", "I", "A",
     "F2FS", "XU", "R6r", "LDSi", "R6w", "LDG", "L2red", "UP",

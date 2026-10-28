@@ -1,7 +1,7 @@
 # Dither-C, peel P·V (co-dither) at L = 16 on the RTX PRO 6000: IMMA.16816, where T1 is tight (TENSOR), on the unmeasured
 # e-l16-model. sm_120 gives IMMA.16816 a 16832's pipe time, so honest issues two MMAs a useful 16832's work (`work` 2),
 # and the plain reference is a 16816 GEMM at the same time a MMA (γ low by about 1.5%: 16.25 vs 16.50 SMSP-cycles
-# alone). Its ε_skip is its own, at its own ♭ (decision 90), with the base's vfold sums.
+# alone). Its ε_skip is its own, at its own ♭, with the base's vfold sums.
 base = "dither-c-peel"
 name = "co-dither-l16"
 title = "Dither-C, peel P·V, L = 16"
@@ -14,7 +14,7 @@ work = 2.0
 floor = { LDSM_X4 = 0.010638 }
 source = "SPEC §3.4's count for m16n8k16 (CALC, devices-sm89 dither-c-l16): CO-Dither's U is resident, so Dither's one-operand floor, least 1/94 at (a, b) = (1, 47)"
 
-[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε
 name = "dp4a"
 program = { IMAD = 4, LDS128 = 0.25 }   # lane instructions a word: 4 IDP4A at k = 16, operands for an 8x8 tile a lane
 source = "dp4a at 4 IDP4A a word at L = 16 (halved from 8 at k = 32); its loads 2(a + b)/(ab) LDS.128 a word at a = b = 8, halved"

@@ -1,6 +1,6 @@
-# The envelope ISA the coverage table (rows.toml) dominates every instruction by: MODEL-MIN's `Accel.Op`
+# The envelope ISA the coverage table (rows.toml) dominates every instruction by: `Accel.Op`
 # (Security/Definitions/Core/Accel/, as drafted when the table was built), its pipes, formats and each card's numbers,
-# plus the entries MODEL-COVER proposes, each marked `proposed` with the MODEL-MIN item that asks for it. `Card.use`
+# plus the entries the table proposes, each marked `proposed` with what it adds. `Card.use`
 # gives an op's units; the table reads them as rates a SM-clock. A row is dominated when its op simulates the card's
 # instruction and the card's rate of it, in the op's units, is at most the resource's ρ: the card pays no fewer units
 # than the envelope charges.
@@ -121,7 +121,7 @@ key = "collective"
 resource = "collective"
 proposed = "the `collective` op's unit"
 
-# MODEL-MIN's `Fmt`, and the formats the card's MMAs read that it lacks.
+# `Accel`'s `Fmt`, and the formats the card's MMAs read that it lacks.
 [[fmt]]
 key = "s8"
 [[fmt]]
