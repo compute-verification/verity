@@ -15,7 +15,8 @@ product, and each layer's int8 attention as two, its batch's KV quantization and
 The quantizer's results are a separate node's, read only by the product inside the linear's body, so a Program cuts them as
 values the linear's two Calls exchange (`call_boundaries`), never as a second return of the linear.  `linear` runs the two.
 On CUDA each of the two is one Triton kernel (`engine.int8_fused`) with int8_exact's values bit for bit; the torch bodies
-serve every other device and stay the reference.
+serve every other device and stay the reference.  When the kernel that wrote x also quantized it (`engine.int8_producers`),
+row_quant's CUDA body returns those codes and scales, the same values, and launches nothing.
     verity_int8::kv_quant_batch(Tensor key_cache, Tensor value_cache, Tensor block_table, int[] lens, Tensor k_scales)
             -> (Tensor kq, Tensor vq, Tensor sv, Tensor v0)
         every request r's first lens[r] tokens in the paged caches [num_blocks, block_size, G, d] under its block-table row, with
@@ -81,8 +82,8 @@ def _scaled_mm_fake(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: t
 
 @row_quant.register_kernel("cuda")
 def _row_quant_cuda(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-    from verity_vllm.engine import int8_fused
-    return int8_fused.row_quant(x)
+    from verity_vllm.engine import int8_fused, int8_producers
+    return int8_producers.take(x) or int8_fused.row_quant(x)
 
 
 @scaled_mm.register_kernel("cuda")
