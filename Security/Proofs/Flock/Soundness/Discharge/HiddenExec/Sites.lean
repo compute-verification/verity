@@ -48,7 +48,7 @@ noncomputable def acc : AcceptedH x.T.S where
   st := x.st
   ht := ht
   h := x.h
-  L := Hidden.hidden_layout ht x.h
+  L := Hidden.hidden_layout ht x.h (Hidden.setupHidden_unpinned ht x.h (by rw [x.c_eq hc]; exact hv1.1.1))
   hR := unitRowsFlat ht x.h (by rw [x.c_eq hc]; exact hv1.1)
   regs := x.regs
   hT := (Integrate.model_eq (parse_facts (parse_untyped ht (setupHidden_parseC x.h)).1) _
