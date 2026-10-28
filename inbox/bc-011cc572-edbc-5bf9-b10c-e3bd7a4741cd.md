@@ -19,3 +19,6 @@ training: #5610 at fc9c4e1dd5 merges #4855 6d08311328, #6023 fcb8b67db1 (its fiv
 
 ## 15:48Z
 #5610 is marked at dd8641fc0c (82a31b83fd + a Properties lock-only commit of derived reads), with soundness land. Merge dd8641fc0c before your lock-only commit; regenerate Properties on the merged tree if it conflicts. Your runs at the 82a31b83fd merge cover the rest.
+
+## 16:41Z
+main moved to d40fe21d26. #5610 and #5722 are refused on a comment-line conflict in tools/verity/circuit_check/pyproject.toml (keep both lines). training re-marks #5610 at a new head, merging main + #5722's new head, at about 17:30Z. Keep your current runs going. When #5610's new head is posted (thread 1792970372.621909), merge it and resolve that pyproject.toml the same way (both comment lines), and rerun only what the gate asks.
