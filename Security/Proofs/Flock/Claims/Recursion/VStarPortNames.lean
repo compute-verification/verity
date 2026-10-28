@@ -405,7 +405,7 @@ theorem checkParsed_unit {s : _root_.VStar.Stmt} {c : Circuit} (h : (RecVStar.ch
   | error e =>
     unfold RecVStar.checkParsed at h
     rw [hu] at h
-    cases h
+    split at h <;> cases h
 
 /-- **A statement of the list tagged `.inner` holds one of V\*'s parts**: one of `parts (specOf vsh holo)`. -/
 theorem inner_mem {i : RecVStar.Inner} {vs : Array _root_.VStar.Stmt} (h : RecVStar.statements i = .ok vs) {s j : ℕ}
