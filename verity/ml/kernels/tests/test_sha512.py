@@ -3,24 +3,21 @@
 each setting of its issue knobs. ``sha512_forms.cu`` runs them, built by the host's C++ compiler and, where nvcc and a GPU
 are present, on the device.
 
-The device builds are cached by their source, header, flags and nvcc's version under ``~/.cache/verity/kernels``, so a GPU
-job builds them before it leases a GPU (``cuda_lib`` for each of ``KNOBS``) and the leased test only runs them."""
+The device builds are cached (`cuda_build`), so a GPU job builds them before it leases a GPU (``cuda_lib`` for each of
+``KNOBS``) and the leased test only runs them."""
 from __future__ import annotations
 
 import ctypes
 import hashlib
-import os
-import shutil
-import subprocess
 from functools import cache
 from pathlib import Path
 
+import cuda_build
 import pytest
 
 from verity.ml.kernels import SHA512
 
 SOURCE = Path(__file__).resolve().with_name("sha512_forms.cu")
-CACHE = Path.home() / ".cache" / "verity" / "kernels"
 
 FIPS = {
     b"": "cf83e1357eefb8bdf1542850d66d8007d620e4050b5715dc83f4a921d36ce9ce"
@@ -35,15 +32,7 @@ MESSAGES = [*FIPS, *(bytes((131 * i + n) % 256 for i in range(n)) for n in range
 #: the defaults; every add as 32-bit pairs, every sigma on the FMA pipe, straight-line; sha::compress as one of sx's forms
 KNOBS = {"defaults": (), "pairs-fma-straight": ("-DSHA_ADD=1", "-DSHA_ROT=15", "-DSHA_ROLL=0"),
          "sx": ("-DSHA_SX", f"-DSX_V={0xe4}", "-DSX_ROLL=2")}
-HOST_FLAGS = ("-x", "c++", "-O1", "-std=c++17", "-fPIC", "-shared", "-Wall", "-Werror")
-CUDA_FLAGS = ("-x", "cu", "-O3", "-std=c++17", "-Xcompiler", "-fPIC", "-shared")
-
 vp, u64 = ctypes.c_void_p, ctypes.c_uint64
-
-
-def _compile(tool: str, flags: tuple[str, ...], out: Path) -> None:
-    r = subprocess.run([tool, *flags, "-o", str(out), str(SOURCE)], capture_output=True, text=True, check=False)
-    assert r.returncode == 0, f"{tool} failed:\n{r.stderr[-4000:]}"
 
 
 def _load(path: Path) -> ctypes.CDLL:
@@ -53,30 +42,9 @@ def _load(path: Path) -> ctypes.CDLL:
     return lib
 
 
-def _gpu_arch() -> str | None:
-    """The first GPU's compute capability as nvcc's sm number (``"90"``), or None without nvcc or a GPU."""
-    if shutil.which("nvcc") is None or shutil.which("nvidia-smi") is None:
-        return None
-    r = subprocess.run(["nvidia-smi", "--query-gpu=compute_cap", "--format=csv,noheader"], capture_output=True, text=True,
-                       check=False)
-    caps = r.stdout.split() if r.returncode == 0 else []
-    return caps[0].replace(".", "") if caps else None
-
-
 @cache
 def cuda_lib(knobs: str) -> ctypes.CDLL:
-    arch = _gpu_arch()
-    assert arch is not None, "no nvcc or no GPU"
-    flags = (*CUDA_FLAGS, f"-gencode=arch=compute_{arch},code=sm_{arch}", *KNOBS[knobs])
-    version = subprocess.run(["nvcc", "--version"], capture_output=True, text=True, check=True).stdout
-    key = hashlib.sha256(b"\0".join([SOURCE.read_bytes(), SHA512.read_bytes(), " ".join(flags).encode(), version.encode()]))
-    lib = CACHE / key.hexdigest()[:16] / "sha512_forms_cuda.so"
-    if not lib.exists():
-        lib.parent.mkdir(parents=True, exist_ok=True)
-        tmp = lib.with_suffix(f".{os.getpid()}.tmp")
-        _compile("nvcc", flags, tmp)
-        tmp.replace(lib)
-    dll = _load(lib)
+    dll = _load(cuda_build.device_lib(SOURCE, (SHA512,), KNOBS[knobs]))
     dll.sha512_digest_cuda.argtypes = [ctypes.c_int, ctypes.c_char_p, u64, vp, vp, ctypes.c_int, vp]
     dll.sha512_digest_cuda.restype = ctypes.c_int
     return dll
@@ -84,11 +52,7 @@ def cuda_lib(knobs: str) -> ctypes.CDLL:
 
 @pytest.fixture(scope="module", params=list(KNOBS))
 def host(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory) -> ctypes.CDLL:
-    cxx = next((c for c in ("g++", "c++", "clang++") if shutil.which(c)), None)
-    assert cxx is not None, "no C++ compiler on the path"
-    lib = tmp_path_factory.mktemp("host") / "sha512_forms.so"
-    _compile(cxx, (*HOST_FLAGS, *KNOBS[request.param]), lib)
-    return _load(lib)
+    return _load(cuda_build.host_lib(SOURCE, KNOBS[request.param], tmp_path_factory.mktemp("host") / "sha512_forms.so"))
 
 
 def _digest(lib: ctypes.CDLL, form: int, m: bytes) -> bytes:
@@ -118,7 +82,7 @@ def test_every_form_on_the_host_is_sha512(host: ctypes.CDLL) -> None:
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(_gpu_arch() is None, reason="no nvcc or no CUDA device")
+@pytest.mark.skipif(cuda_build.gpu_arch() is None, reason="no nvcc or no CUDA device")
 @pytest.mark.parametrize("knobs", list(KNOBS))
 def test_every_form_on_the_device_is_sha512(knobs: str) -> None:
     """Slow for its nvcc build of every form, where the cache has none: the device's pipe choices, which the host lacks."""
