@@ -480,14 +480,18 @@ def quant_rows(x: torch.Tensor, xq: torch.Tensor, s: torch.Tensor, num_warps: in
                                                      BLOCK_K=triton.next_power_of_2(k), num_warps=warps, **OPTS)
 
 
-#: num_warps of a fused producer called at a row width `PRODUCER_WARPS` doesn't list (the engine doesn't fuse there)
+#: num_warps of a fused producer called where `PRODUCER_WARPS` has no plan (the engine doesn't fuse there)
 FUSE_FALLBACK = {"norm": 1, "silu": 16}
 
 
-def producer_warps(kind: str, k: int, sm: str | None = None) -> int | None:
-    """num_warps of the fused producer `kind` ("norm", "silu") on rows of k on `sm` (default: the current device's), where
-    it is measured faster than vLLM's op and the quantizer apart (`PRODUCER_WARPS`), else None."""
-    return PRODUCER_WARPS.get(sm or arch(), {}).get(kind, {}).get(k)
+def producer_warps(kind: str, m: int, k: int, sm: str | None = None) -> int | None:
+    """num_warps of the fused producer `kind` ("norm", "silu") on m rows of k on `sm` (default: the current device's):
+    `PRODUCER_WARPS`' first plan for k whose M floor m reaches, where it is measured faster than vLLM's op and the
+    quantizer apart, else None."""
+    for floor, warps in PRODUCER_WARPS.get(sm or arch(), {}).get(kind, {}).get(k, ()):
+        if m >= floor:
+            return warps
+    return None
 
 
 def silu_mul_quant(gu: torch.Tensor, h: torch.Tensor, xq: torch.Tensor, s: torch.Tensor, num_warps: int | None = None):
@@ -497,7 +501,7 @@ def silu_mul_quant(gu: torch.Tensor, h: torch.Tensor, xq: torch.Tensor, s: torch
     assert gu.dtype == h.dtype == torch.bfloat16 and gu.shape == (m, 2 * i) and gu.stride(1) == 1 and h.stride(1) == 1
     assert xq.dtype == torch.int8 and xq.shape == h.shape and xq.stride(1) == 1
     assert s.dtype == torch.float32 and s.numel() == m and s.is_contiguous()
-    warps = num_warps or producer_warps("silu", i, arch(h.device.index)) or FUSE_FALLBACK["silu"]
+    warps = num_warps or producer_warps("silu", m, i, arch(h.device.index)) or FUSE_FALLBACK["silu"]
     bk = triton.next_power_of_2(i)
     return exactlin_silu_mul_quant[(m,)](gu, h, xq, s, m, i, gu.stride(0), h.stride(0), xq.stride(0), BLOCK_M=1,
                                          BLOCK_K=bk, EVEN=i == bk, num_warps=warps, **OPTS)
@@ -522,7 +526,7 @@ def add_norm_quant(x: torch.Tensor, residual: torch.Tensor, weight: torch.Tensor
     assert x.stride(1) == 1 and residual.stride(1) == 1 and weight.is_contiguous()
     assert xq.dtype == torch.int8 and xq.shape == x.shape and xq.stride(1) == 1
     assert s.dtype == torch.float32 and s.numel() == m and s.is_contiguous()
-    warps = num_warps or producer_warps("norm", h, arch(x.device.index)) or FUSE_FALLBACK["norm"]
+    warps = num_warps or producer_warps("norm", m, h, arch(x.device.index)) or FUSE_FALLBACK["norm"]
     return exactlin_add_norm_quant[(m,)](x, residual, weight, xq, s, h, eps, x.stride(0), residual.stride(0), xq.stride(0),
                                          NT=nt, R=triton.next_power_of_2(triton.cdiv(h, nt)), num_warps=warps, **OPTS)
 

@@ -9,10 +9,12 @@ QUANT_PLANS: dict[str, dict[int, tuple[tuple[int, int, int], ...]]] = {
     "sm_90": {2048: ((2048, 4, 1), (1024, 8, 1)), 4096: ((1024, 8, 1),), 8192: ((1024, 8, 1),)},
 }
 
-# The fused producers' num_warps (one row a program) per architecture, kernel and row width, `int8_producers_gpu.py`'s
-# fastest at every M it times (8,192 to 32,768), at the widths where that beats vLLM's op and the quantizer apart; the
-# engine fuses only there (`int8_producers`).  At 8 or 16 warps the add-norm is three times slower than the two apart, at
-# 1 warp twice as fast.  The silu at I 14,336 (Llama-3.1-8B) is slower fused at every warps tried, so it isn't listed.
-PRODUCER_WARPS: dict[str, dict[str, dict[int, int]]] = {
-    "sm_90": {"norm": {2048: 1, 4096: 1}, "silu": {8192: 8}},
+# The fused producers' plans (one row a program) per architecture, kernel and row width: (M floor, num_warps) rows, the
+# first whose floor M reaches, `int8_producers_gpu.py`'s fastest, at the widths where that beats vLLM's op and the
+# quantizer apart; the engine fuses only where a plan applies (`int8_fused.producer_warps`, `int8_producers`).  At 8 or 16
+# warps the add-norm is three times slower than the two apart, at 1 warp twice as fast.  The silu at I 8,192 is faster at
+# 16 warps up to M 640 and at 8 from M 768 on.  The silu at I 14,336 (Llama-3.1-8B, a masked 16,384-wide tile) is level
+# with the two apart at every warps tried, so it isn't listed.
+PRODUCER_WARPS: dict[str, dict[str, dict[int, tuple[tuple[int, int], ...]]]] = {
+    "sm_90": {"norm": {2048: ((0, 1),), 4096: ((0, 1),)}, "silu": {8192: ((768, 8), (0, 16))}},
 }
