@@ -32,6 +32,13 @@ import golden.model as gm  # noqa: E402
 
 BLOCK_CAP = 2 ** 27
 LOWER_WALL_S = 15 * 60
+DENOISE = "note:compute-research/20261028T1930Z-report-gd-denoise (run r20261028-190744-7676)"
+#: GD-DENOISE's served periodic-noise call at L 1,024, model sums over the plain GEMM, by m: V's coins at L' 32, 128 and
+#: 512, X, and O's recompute less the plain GEMM. Its fourth part, the noised GEMM over (S-1)L, is priced by L here.
+DENOISE_PARTS = {64: ((1.483, 1.479, 1.499), 0.161, 0.333), 512: ((0.759, 0.749, 0.782), 0.100, 0.258),
+                 8192: ((0.155, 0.205, 0.470), 0.075, 0.202)}
+#: GD-DENOISE's fresh-noise served call (O recomputed), over the plain GEMM, by m
+FRESH_CALL = {64: 3.2, 512: 3.3, 8192: 4.0}
 
 
 @dataclass(frozen=True)
@@ -76,6 +83,12 @@ INPUTS: dict[str, Input] = {
     "dither_ands_scale": Input(1.0, 0.7, 2.0, "estimate: Dither blocks' ANDs over GD-MODEL's count (work, noise "
                                               "expansion, row openings)"),
     "retain_GB": Input(100.0, 50.0, 120.0, "GD-MODEL sampling.retain_GB (estimate): GB a window may hold for its draw"),
+    "denoise_coins_scale": Input(1.0, 0.5, 2.0, f"x the served Dither call's coins and X, {DENOISE} (measured arms)"),
+    "denoise_main": Input(1.0, 0.5, 2.5,
+                          f"the noised GEMM over (S-1)L as a share of its plain mainloop: 1 at the protocol's in-kernel "
+                          f"T_s (estimate), 2.5 at {DENOISE}'s chunked cuBLASLt with T_s through DRAM (an upper bound)"),
+    "fresh_call_g": Input(1.0, 0.75, 1.5, f"x the served fresh-noise call, {DENOISE}: +3.2 (m 64) to +4.0 (m 8,192) G, "
+                                          f"measured without T_s and the weight side"),
 }
 
 
@@ -121,13 +134,14 @@ GRIDS: dict[str, dict[str, tuple]] = {
         "block": ((1, 1, "single"), (1, 32, "single"), (8, 8, "single"), (8, 8, "lanes"), (32, 32, "single"),
                   (32, 32, "lanes")),
         "law": ("achievability", "uniform"),
-        "steps": (1, 4),
+        "steps": (1, 4, 16),
         "vtile": ((1, 1), (1, 8), (8, 8)),
     },
 }
 GRIDS["smoke"] = {k: v[:2] for k, v in GRIDS["coarse"].items()}
 #: the coarse grid at the engineering levers every coarse optimum takes, for the sensitivity sweeps
-GRIDS["oat"] = {**GRIDS["coarse"], "seal": ("roots",), "host": ("fixed",), "kernels": ("bar",), "law": ("achievability",)}
+GRIDS["oat"] = {**GRIDS["coarse"], "seal": ("roots",), "host": ("fixed",), "kernels": ("bar",), "corun": (True,),
+                "law": ("achievability",), "vtile": ((1, 1), (1, 8))}
 GRIDS["fine"] = {**GRIDS["coarse"],
                  "bits": (16, 12, 10, 8),
                  "row": (1024, 2048, 4096, 8192, 16384),
@@ -137,7 +151,7 @@ GRIDS["fine"] = {**GRIDS["coarse"],
                  "block": ((1, 1, "single"), (1, 2, "single"), (2, 2, "single"), (1, 4, "single"), (1, 8, "single"),
                            (1, 32, "single"), (4, 4, "single"), (8, 8, "single"), (8, 8, "lanes"),
                            (16, 16, "lanes"), (32, 32, "single"), (32, 32, "lanes")),
-                 "steps": (1, 2, 4, 8),
+                 "steps": (1, 2, 4, 8, 16, 32),
                  "vtile": ((1, 1), (1, 2), (1, 4), (1, 8), (2, 2), (4, 4), (8, 8))}
 
 _DITHER_ONLY = ("L", "t", "noise", "drow")
@@ -178,6 +192,38 @@ def key(d: dict) -> str:
 POINTS = {"t8192": "throughput", "t512": "demo"}
 
 
+def served_call_g(gd: dict, v: dict[str, float]) -> float:
+    """The served noised call's cost over the plain GEMM (all four linears), from GD-DENOISE's parts at the step's m,
+    as GD-MODEL's `denoise_g_frac`: less the noise pass and the PRF, which GD-MODEL prices apart, plus writing the T_s
+    words (GD-MODEL hashes them, from HBM)."""
+    w, p = gd["pouw"], gd["point"]
+    tok = p["real_tokens"] or p["T"]
+    m = min(DENOISE_PARTS, key=lambda x: abs(math.log(x / tok)))
+    G_ms = gm.INT8_MACS_PER_TOKEN * tok / (gm.theta(gm.I("gemm_mhz")) * gm.I("gemm_eff_per_clock"))
+    act = gm.LAYERS * tok * (3 * gm.HIDDEN + gm.INTER)
+    noise_ms = 2 * (act + gm.WEIGHT_BYTES) / (gm.I("hbm_GBs") * 1e6) * (gm.I("noise_fused_keep") if w["noise_fused"] else 1)
+    prf_ms = gm.hash_ms((act + gm.WEIGHT_BYTES) / 8 / 64, 1.0, gm.I("hash_mhz")) * (1 - gm.I("corun_share"))
+    if w["scheme"] == "jr2":
+        return v["fresh_call_g"] * FRESH_CALL[m]
+    L = w["L"]
+    words = sum(gm.LAYERS * N * tok * (2 * (math.ceil(K / L) - 1) + 4) for _, K, N in gm.LINEARS if L < K)
+    ts_ms = words / (gm.I("hbm_GBs") * 1e6)
+    if w["noise"] == "fresh":
+        call = v["fresh_call_g"] * FRESH_CALL[m]
+    else:
+        coins, x, recompute = DENOISE_PARTS[m]
+        lp = min(max(gm.l_prime(w), 32), 512)
+        c = coins[1]
+        if lp < 128:
+            c = coins[0] + (coins[1] - coins[0]) * math.log(lp / 32) / math.log(4)
+        elif lp > 128:
+            c = coins[1] + (coins[2] - coins[1]) * math.log(lp / 128) / math.log(4)
+        macs = sum(K * N for _, K, N in gm.LINEARS)
+        main = sum(K * N * (K - L) / K for _, K, N in gm.LINEARS if L < K) / macs
+        call = v["denoise_coins_scale"] * (c + x) + v["denoise_main"] * main + recompute
+    return max(0.0, call + (ts_ms - noise_ms - prf_ms) / G_ms)
+
+
 def to_design(d: dict, point: str, v: dict[str, float]) -> dict:
     t = max(1, d["t"])
     pouw = {"scheme": d["scheme"]}
@@ -186,7 +232,7 @@ def to_design(d: dict, point: str, v: dict[str, float]) -> dict:
     else:
         pouw.update(h1_host="stack", kdhash=True, hash_at_bar=True, coin_off_loop=True)
     bar = d["kernels"] == "bar"
-    return gm.design(
+    gd = gm.design(
         POINTS[point],
         point={"steps_per_window": d["steps"]},
         commit={"values": d["values"], "bits_per_word": d["bits"], "row_bytes": d["row"], "seal": d["seal"],
@@ -195,6 +241,8 @@ def to_design(d: dict, point: str, v: dict[str, float]) -> dict:
         pouw=pouw,
         sampling={"law": d["law"], "retain_GB": v["retain_GB"]},
     )
+    gd["pouw"]["denoise_g_frac"] = served_call_g(gd, v)
+    return gd
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -246,9 +294,19 @@ def pouw_units(gd: dict, d: dict, v: dict[str, float]) -> list:
             if K != w["K"]:
                 continue
 
+            R = gd["commit"]["row_bytes"]
+
+            def opens(rr: int, row: int) -> float:
+                rows = _rows(K, row) * (rr + c) + _rows(w["record_bytes_per_cell"] * rr * c, row)
+                return sum(gm.row_ands(x) for x in rows)
+
+            # the inbox's calibration: a 32 x 32 tile at K 2,048 (row 4 KiB) is h1_ands_per_mac a MAC with its noise
+            # and openings; the in-block rate a MAC is that less the tile's openings, and a block's openings are its own
+            core = v["h1_ands_per_mac"] - opens(32, 4096) / (1024 * 2048)
+
             def ands(rr: int) -> float:
                 work = rr * c * gm.s8_coord_work(K)
-                return v["h1_ands_per_mac"] * rr * c * K, work
+                return core * rr * c * K + opens(rr, R), work
 
             n_per_token = gm.LAYERS * N / (r * c)
         else:
@@ -352,6 +410,9 @@ def evaluate(d: dict, v: dict[str, float] | None = None, point: str = "t8192") -
     floor = gm.pouw_forced_frac(gd)
     credit = gm.pouw_credit(gd)
     reasons = []
+    if d["law"] == "uniform" and any(len({u["work"] for u in us}) > 1 for us in (vunits, punits)):
+        # the kd-subset's eps counts units; with units of unequal work it bounds no share of the work
+        reasons.append("uniform")
     if not credit["earns_credit"]:
         reasons.append("no credit")
     elif floor < 1 - gd["sampling"]["eps"]:
