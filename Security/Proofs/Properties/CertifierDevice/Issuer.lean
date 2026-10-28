@@ -125,45 +125,6 @@ theorem verify_cert {i : Issuer} (hk : ValidKey i.key) {salt : ByteArray} {recor
   rw [hv, hpub, hl, hd, hw, ← hdg]
   simp [beq_self, Except.toOption]
 
-theorem issuerVerifies_valid {i i' : Issuer} {salt : ByteArray} {leaf : Except String Nat} {record : Record}
-    {direction : NetworkCheck.Direction} {params : Params} {parameters : ByteArray} {deadline : Bool}
-    {cr : CertifiedRecord} (hk : ValidKey i.key)
-    (h : i.certify salt leaf record direction params parameters deadline = .ok (i', some cr)) :
-    cr.verify i.key.params i.key.publicKey i.session = true := by
-  unfold Issuer.certify at h
-  simp only [bind, Except.bind] at h
-  split at h
-  · cases h
-  · rename_i prepared hprep
-    obtain ⟨head, digest, message⟩ := prepared
-    unfold Issuer.finish at h
-    cases leaf with
-    | error e => simp [pure, Except.pure] at h
-    | ok q =>
-      simp only [bind, Except.bind] at h
-      split at h
-      · cases h
-      · rename_i sig hs
-        simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq, Option.some.injEq] at h
-        obtain ⟨rfl, rfl⟩ := h
-        have hq : q < 2 ^ i.key.params.H := by
-          unfold Lms.signAt at hs
-          by_contra hq
-          simp [show q ≥ 2 ^ i.key.params.H by omega] at hs
-          cases hs
-        obtain ⟨sig', hs', hv⟩ := verify_cert hk hprep hq
-        rw [hs] at hs'
-        cases hs'
-        exact hv
-
-theorem issuerVerifies_proof : IssuerVerifies := by
-  intro N W H toy p I seed k session refused i' salt leaf record direction params parameters deadline cr hp hk h
-  obtain ⟨hpk, -⟩ := Lms.key_spec hk
-  have hv : ValidKey k := ⟨N, W, H, toy, I, seed, by rw [hpk]; exact hp, by rw [hpk]; exact hk⟩
-  have := issuerVerifies_valid (i := { key := k, session, refused }) hv h
-  rw [hpk] at this
-  exact this
-
 /-- **The issuer certifies at every leaf** (completeness, not a guarantee): with a key `ValidKey`, given a leaf below
 `2^H` and a record with a head and a 64-byte salt (`Issuer.prepare` succeeds), `Issuer.certify` returns a certificate,
 which verifies. -/

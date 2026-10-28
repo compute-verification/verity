@@ -922,6 +922,11 @@
    "assumptions": [],
    "type_hash": "e6864860dcc529afba634806f512b5d695318aac5fc33da7bcbd8452570ec5dd"
   },
+  "Properties.CertifierDevice.channelVerifies": {
+   "owner": "@network-accounting",
+   "signature": ["Properties.CertifierDevice.channelVerifies : Properties.CertifierDevice.ChannelVerifies"],
+   "assumptions": []
+  },
   "Properties.CertifierDevice.completeRows": {
    "owner": "@network-accounting",
    "signature": ["Properties.CertifierDevice.completeRows : Properties.CertifierDevice.CompleteRows"],
@@ -2508,6 +2513,10 @@
    "Proofs.NetworkCertifier.encardAcceptedObservationsLe": {
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "none"
+   },
+   "Properties.CertifierDevice.channelVerifies": {
+    "function": ["CertifierDevice.Issuer.signOn", "Lms.Params.make", "Lms.key"],
+    "outcome": "accept"
    },
    "Properties.CertifierDevice.completeRows": {
     "function": "CertifierDevice.step",

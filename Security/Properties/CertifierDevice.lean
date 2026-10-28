@@ -41,10 +41,19 @@ of the calls that made the key and of the one they are about. No statement takes
 releases nothing (it writes `r · B` zero bytes), and the window's record has status `notEstablished r` and padding in
 every row from the fault on. The certifier keeps the first fault of a window, so `r` is the first fault's reason.
 
-**(4) The issuer.** `IssuerVerifies`: for every key `Lms.key` derives under parameters `Lms.Params.make` admits,
-every certificate `Issuer.certify` returns with it, in a certifier session and under any salt, verifies (`CertifiedRecord.verify`) under the
-key's parameters and public key in that session. Its subject is such a key: the two calls' acceptances are its
-hypotheses, beside `certify`'s.
+**(4) The issuer.** The device certifies a channel of a kind (`Channel`); the link (`Channel.link`) is the network
+certifier's, and (1)–(3) are its link's. The signing step is one for every kind.
+
+* `ChannelVerifies`: for every key `Lms.key` derives under parameters `Lms.Params.make` admits, every certificate
+  `Issuer.signOn` returns with it, on a channel of any kind, for any window and signed digest, in a certifier session,
+  verifies (`ChannelCertificate.verify`) under the key's parameters and public key in that session.
+* `IssuerVerifies`, the link's: every certificate `Issuer.certify` returns with such a key, in a certifier session and
+  under any salt, verifies (`CertifiedRecord.verify`) under the key's parameters and public key in that session. It is
+  `ChannelVerifies` on the record's link with the record's opening: `certify`'s certificate is `signOn`'s on the link
+  (`Proofs.Channel.certify_signOn`), and `CertifiedRecord.verify` is the certificate's `ChannelCertificate.verify` with
+  the head's link-window and its digest under the salt (`Proofs.Channel.verify_eq`).
+
+Each one's subject is such a key: the two calls' acceptances are its hypotheses, beside the issuer's.
 
 That `signAt` and `certify` do return, at every leaf below `2^H` and for every record with a head, and that every
 signature `signAt` returns verifies, are completeness, not guarantees: `Proofs.CertifierDevice.Lms.lmsSigns`,
@@ -206,6 +215,18 @@ def ClosedAfterFault (c : Config) (tr : List Event) : Prop :=
 def FailClosed : Prop := ∀ (c : Config) (tr : List Event), ClosedAfterFault c tr
 
 /-! ## (4) The issuer -/
+
+/-- **Every certificate the device signs on a channel verifies**, for a channel of every kind. For a key `Lms.key`
+derives under parameters `Lms.Params.make` admits, every certificate `Issuer.signOn` returns with that key in certifier
+session `session`, on any channel, for any window and signed digest, verifies (`ChannelCertificate.verify`) under the
+parameters and the key's public key in that session. -/
+def ChannelVerifies : Prop :=
+  ∀ (N W H : Nat) (toy : Bool) (p : Lms.Params) (I seed : ByteArray) (k : Lms.PrivateKey) (session : ByteArray)
+    (refused : Array (String × NetworkCheck.Direction × Nat)) (ch : Channel) (leaf : Except String Nat) (window : Nat)
+    (digest : ByteArray) (c : ChannelCertificate),
+    Lms.Params.make N W H toy = .ok p → Lms.key p I seed = .ok k →
+    ({ key := k, session, refused } : Issuer).signOn ch leaf window digest = .ok (some c) →
+    c.verify p k.publicKey session = true
 
 /-- **Every certificate the issuer returns verifies.** For a key `Lms.key` derives under parameters `Lms.Params.make`
 admits, every certificate `Issuer.certify` returns with that key in certifier session `session`, under any salt,

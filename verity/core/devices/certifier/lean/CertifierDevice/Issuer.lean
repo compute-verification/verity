@@ -35,6 +35,11 @@ untaken, since nothing was signed under it. `ClockCertificate.verify` is `certif
 certificate of the key's whose digest the sync and the salt open, signed under the key in the session. A record
 certificate signs a record digest salted and a clock certificate a clock digest, each under its own tag, so one opens as
 the other only on a SHA-512 collision.
+
+**Channels** (`Channel`, `Issuer.signOn`, `ChannelCertificate.verify`): the device certifies a channel of a kind, as
+`certificate.py`'s `Channel`. The kind brings its record and its certificate message; the device's signing step and its
+signature check are one for every kind. The network certifier's channel is the link (`Channel.link`), whose message is
+`NetworkCheck.certificateMessage`, and its certificate is `Certificate` (`Certificate.onChannel`).
 -/
 
 namespace CertifierDevice
@@ -56,6 +61,40 @@ structure CertifiedRecord where
   head : RecordHead
   salt : ByteArray
   certificate : Certificate
+
+/-- `certificate.Channel`: what the certifier device certifies, a channel of a kind (`kind`), with its kind's certificate
+message (`message`) for the key's identifier, the certifier session, the channel's window and the 64-byte signed digest,
+under the kind's own tag, refused where it has no encoding. The device's signing step (`Issuer.signOn`) and its signature
+check (`ChannelCertificate.verify`) are one for every kind. -/
+structure Channel where
+  kind : String
+  message : (keyId session : ByteArray) → (window : Nat) → (digest : ByteArray) → Except String ByteArray
+
+/-- `certificate.Link`: the network certifier's channel, one direction of a boundary link, whose message is
+`NetworkCheck.certificateMessage`. -/
+def Channel.link (link : String) (direction : Direction) : Channel where
+  kind := "link"
+  message keyId session window digest := NetworkCheck.certificateMessage keyId session link direction window digest
+
+/-- `certificate.channel_message`: the message a certificate on `ch` signs, its kind's, refused unless the signed digest
+is 64 bytes. -/
+def channelMessage (ch : Channel) (keyId session : ByteArray) (window : Nat) (digest : ByteArray) :
+    Except String ByteArray :=
+  if digest.size ≠ NetworkCheck.digestBytes then .error "a signed digest is 64 bytes"
+  else ch.message keyId session window digest
+
+/-- `certificate.ChannelCertificate`: a certificate on a channel of any kind, the device's signature under key `keyId`
+over the channel's message for `window` and the signed digest. -/
+structure ChannelCertificate where
+  keyId : ByteArray
+  channel : Channel
+  window : Nat
+  digest : ByteArray
+  signature : ByteArray
+
+/-- `certificate.Certificate.channel`: a link certificate as the certificate on its link. -/
+def Certificate.onChannel (x : Certificate) : ChannelCertificate :=
+  ⟨x.keyId, .link x.link x.direction, x.window, x.digest, x.signature⟩
 
 /-- Σ_sync as `parameters_digest` reads it: its deltas, and each ρ as (numerator, denominator) in lowest terms, in the
 set's order. -/
@@ -169,6 +208,20 @@ def clock (i : Issuer) (clockSalts : Array ByteArray) (salt : ByteArray) (leaf :
     Except String (Issuer × Array ByteArray × Option ClockCertificate) := do
   i.finishClock clockSalts salt leaf link window sync (← i.prepareClock clockSalts salt link window sync)
 
+/-- **`Issuer.sign_on`**, the device's signing step for a channel of any kind, the signer's reservation given (a refused
+start of the session is a refused reservation): the certificate of `digest` on `ch` for `window`, signed at the reserved
+leaf, or none when the host refused the reservation; refused (an error) where the channel-window has no message
+(`channelMessage`), which comes first, as Python raises `ValueError` before it starts the session or spends a leaf. The
+kind's issuer lists a refused channel-window, as `finish` lists a link-window in `refused`. -/
+def signOn (i : Issuer) (ch : Channel) (leaf : Except String Nat) (window : Nat) (digest : ByteArray) :
+    Except String (Option ChannelCertificate) := do
+  let message ← channelMessage ch i.key.I i.session window digest
+  match leaf with
+  | .error _ => pure none
+  | .ok q =>
+    let signature ← Lms.signAt i.key q message
+    pure (some ⟨i.key.I, ch, window, digest, signature.encode⟩)
+
 end Issuer
 
 /-- `Issuer.certify` against the world: the salt from its coins, the head and the message, then the session's start
@@ -208,6 +261,13 @@ def CertifiedRecord.verify (c : CertifiedRecord) (params : Lms.Params) (publicKe
     x.keyId == publicKey.extract 0 16 && x.link == h.link && x.direction == h.direction && (x.window : Int) == h.window
       && x.digest == NetworkCheck.certificateDigest c.salt d && (Lms.verify params publicKey m sig).toOption == some true
   | _, _, _ => false
+
+/-- `ChannelCertificate.verify` under an `LmsKey` in certifier session `session`: the certificate is the key's and is
+signed by `publicKey` over its channel's message in that session (`channelMessage`). -/
+def ChannelCertificate.verify (c : ChannelCertificate) (params : Lms.Params) (publicKey session : ByteArray) : Bool :=
+  match channelMessage c.channel c.keyId session c.window c.digest, Lms.Signature.decode params c.signature with
+  | .ok m, .ok sig => c.keyId == publicKey.extract 0 16 && (Lms.verify params publicKey m sig).toOption == some true
+  | _, _ => false
 
 /-- `CertifiedClock.verify` under an `LmsKey` in certifier session `session`: the certificate is an egress one of the
 key's, the sync and the salt open the digest it signs (`clockCommitment`), and it is signed by `publicKey` over its
