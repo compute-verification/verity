@@ -29,9 +29,12 @@ scan (`bad_scans`), as is each check's negative of what `NetTiming.Layout.Fits` 
 the compute audits (in the rows form at least one, whose registrations' `roots` hold the scans' `prog`), each
 registered over its Program, a population of one or two stand-in templates whose units commit from 8 to 320 bits
 (`audit_descriptor`), and answered with a subset or stratified draw (a work law's) and its bound on wrong units, every
-unit drawn for an audit a scan's `prog` is tied to (`tied-undrawn`: one such audit drawn `subset:k`, k < N).
-`case(kind, seed, form)` is a small period of the form aimed at a verdict, or at a decoding failure (`KINDS`), and
-`cases(seed, form)` one of each with its answer, as a composition's difftest takes a real component's cases.
+unit drawn for an audit a scan's `prog` is tied to (`tied-undrawn`: one such audit drawn `subset:k`, k < N). The rows
+form refuses every period of a link-window, its honest one included, after every other check (`UNWIRED`: no check yet
+reads that each due, occupied slot's `prog` entry is a wire from a `SlotEntry_v1` unit), so its changes all aim at a
+rejection. `case(kind, seed, form)` is a small period of the form aimed at a verdict, or at a decoding failure
+(`KINDS`, those the form reaches: `kinds`), and `cases(seed, form)` one of each with its answer, as a composition's
+difftest takes a real component's cases.
 
 This is test-side Python (it imports `verity_difftest` and PoUW's `core_check`, which the certifier's package may not),
 so it lives beside the period's difftest (`test_network_period_protocol.py`), and other suites load it by path."""
@@ -764,6 +767,18 @@ def _audit_check(i: int, audit: Audit, reg: Registration, a: dict, tied: bool = 
     return f
 
 
+#: `unwired`'s refusal, Lean's word for word.
+UNWIRED = ("the rows form: the scan's prog entries aren't wired from SlotEntry_v1 units, so a due, occupied slot's read "
+           "bit is the prover's word (an entry with read 1 and no outputs passes for a request no Program reads): wire "
+           "each slot's prog entry from its Program's SlotEntry_v1 unit, and check that wiring here")
+
+
+def _unwired(p: Params) -> str | None:
+    """`unwired`: the rows form refuses a period of any link-window, as no check reads how the scan's `prog` entries
+    are wired from `SlotEntry_v1` units."""
+    return UNWIRED if p.schedule is not None and p.windows else None
+
+
 def clog2(x: int) -> int:
     """`⌈log2 x⌉`, 0 for x ≤ 1."""
     return 0 if x <= 1 else (x - 1).bit_length()
@@ -832,6 +847,8 @@ def check(p: Params, c: Commitment, e) -> tuple:
             facts.append(_audit_check(i, audit, reg, a, p.schedule is not None and _tied_in(c.audits, c.windows, i)))
         except Finding as f:
             findings.append(f)
+    if (u := _unwired(p)) is not None:
+        findings.append(Finding(REJECT, u))
     if rejected := next((f for f in findings if f.verdict == REJECT), None):
         return REJECT, rejected.reason
     if findings:
@@ -875,7 +892,7 @@ EXPECT = {
     "undecided-and-reject": REJECT, "form": REJECT,
     "first": REJECT, "count-windows": REJECT, "count-audits": REJECT, "evidence-count": REJECT,
     "params": REJECT, "commitment": REJECT, "evidence": REJECT, "case": REJECT,
-    "rows-honest": ACCEPT,
+    "rows-honest": REJECT,
     "rows-program": REJECT,
     "rows-cert-missing": REJECT, "rows-cert-swap": REJECT, "rows-cert-fails-link": REJECT,
     "rows-cert-direction": REJECT, "rows-cert-forged": REJECT, "rows-cert-window": REJECT, "rows-cert-session": REJECT,
@@ -884,10 +901,10 @@ EXPECT = {
     "rows-reg-link": REJECT, "rows-reg-session": REJECT, "rows-reg-key": REJECT, "rows-reg-field": REJECT,
     "rows-schedule": REJECT,
     "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT,
-    "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
+    "rows-answer-reject": REJECT, "rows-answer-undecided": REJECT, "rows-answer-profile": REJECT,
     "rows-answer-bound": REJECT, "rows-delta": REJECT, "rows-units": REJECT, "rows-prog-untied": REJECT,
     "rows-tied-undrawn": REJECT,
-    "rows-audit-other": REJECT, "rows-audit-reject": REJECT, "rows-audit-undecided": UNDECIDED,
+    "rows-audit-other": REJECT, "rows-audit-reject": REJECT, "rows-audit-undecided": REJECT,
     "rows-audit-profile": REJECT, "rows-audit-bound": REJECT, "rows-audit-program": REJECT, "rows-audit-units": REJECT,
     "rows-undecided-and-reject": REJECT, "rows-form": REJECT,
     "rows-first": REJECT, "rows-count-windows": REJECT, "rows-count-audits": REJECT, "rows-evidence-count": REJECT,
@@ -1679,10 +1696,11 @@ answer = reference
 #: What a case can be aimed at: each verdict, and a case that fails to decode (its params, commitment or evidence).
 KINDS = (ACCEPT, REJECT, UNDECIDED, "broken-params", "broken-commitment", "broken-evidence")
 #: Each form's changes (`build`'s `m`) by the kind they aim at: a rejection by the check itself, not by decoding, for
-#: `reject`; `case` breaks the line `serve` reads rather than the period, so no kind uses it.
+#: `reject`; `case` breaks the line `serve` reads rather than the period, so no kind uses it. The rows form aims at no
+#: acceptance and no undecided answer: it refuses every period of a link-window (`UNWIRED`).
 AIMS: dict[str, dict[str, tuple[str, ...]]] = {
     form: {
-        ACCEPT: tuple(m for m in ms if m.removeprefix("rows-") == "honest"),
+        ACCEPT: tuple(m for m in ms if EXPECT[m] == ACCEPT),
         REJECT: tuple(m for m in ms if EXPECT[m] == REJECT
                       and m.removeprefix("rows-") not in ("params", "commitment", "evidence", "case")),
         UNDECIDED: tuple(m for m in ms if EXPECT[m] == UNDECIDED),
@@ -1704,6 +1722,12 @@ def case(kind: str, seed: int = 0, form: str = "clock") -> dict:
     return build(ms[random.Random(f"network-period {kind} {seed}").randrange(len(ms))], seed, small=True)
 
 
+def kinds(form: str = "clock") -> tuple[str, ...]:
+    """The kinds a case of the form can be aimed at (`AIMS`)."""
+    return tuple(k for k in KINDS if AIMS[form][k])
+
+
 def cases(seed: int = 0, form: str = "clock") -> dict[str, tuple[dict, dict]]:
-    """One small period of the form of each kind with its answer, `{kind: (case, answer)}`."""
-    return {k: (c, answer(c)) for k in KINDS for c in [case(k, seed, form)]}
+    """One small period of the form of each kind it can be aimed at (`kinds`) with its answer,
+    `{kind: (case, answer)}`."""
+    return {k: (c, answer(c)) for k in kinds(form) for c in [case(k, seed, form)]}
