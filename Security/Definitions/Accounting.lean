@@ -28,7 +28,7 @@ import Definitions.Accounting.JointLive
 import Definitions.Accounting.Memory
 import Definitions.Accounting.PerRun
 import Definitions.Accounting.Physical
-import Definitions.Accounting.Overhead
+import Definitions.Accounting.Slowdown
 import Definitions.Accounting.Pouw
 import Definitions.Accounting.PouwWork
 import Definitions.Accounting.RateAudit

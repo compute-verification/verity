@@ -1,8 +1,10 @@
 """What compute efficiency eta (``tiers.py``) is most exposed to: a plausible range for every parameter, eta and 1/eta
 across it at each tier, elasticities d ln eta / d ln p in four scenarios, the values at which 1/eta falls below 100, 10
 and 2, and the closed forms of the memory cap mu, NCI's term nu and the cheating share chi checked against
-``tiers.evaluate``. 1/eta is not the compute dampener D (``tiers.evaluate()["dampener"]``): at s = 0 and g = 1,
-D = MFU_0 / eta wherever D > 1. ``statement.py`` gives the thresholds on D.
+``tiers.evaluate``. 1/eta is not the compute dampener D (``statement.dampener``, the overhead calculator's
+``rho.theorem.multiple_bound``): eta counts every term at peak, D the residual r at MFU_0 (reference efficiency), so at
+s = 0, g = 1 and no memory cap, D = 1 / (r + (eta - r) / MFU_0) wherever D > 1. ``statement.py`` gives the thresholds
+on D.
 
     python benchmarks/nci/exposure.py           # terms, tornado, elasticities, thresholds and closed-form checks
     python benchmarks/nci/exposure.py --json    # the same, for renderers
@@ -29,7 +31,7 @@ RANGES = {
     "unmonitored": (0.0, 0.1, "guess: none, to a tenth of the fleet's compute hidden"),
     "residual": (0.01, 1.0, "best plausible design 0.01 (eight conditions); floor credit 0.323 at the locked clock, 0.213 attested (C7 dossier, its eps left to eps_w); nothing credited today 1"),
     "eps_w": (6e-4, 0.00917, "best plausible design 0.06% (C7 dossier); the retired CircuitCredit's closed 0.744%, 0.681-0.917% over r = 1-4 (draft #2638)"),
-    "host_share": (0.0022, 0.14, "against the card table's FP8 peak: two EPYC 9015s without matrix units 0.22%; Xeon 6776P INT8 AMX 12.6%, 14.0% at fused maximum clocks"),
+    "host_share": (0.0, 0.14, "without the hosts assumption (hosts carry no compute sets it to 0), against the card table's FP8 peak: two EPYC 9015s without matrix units 0.22%; Xeon 6776P INT8 AMX 12.6%, 14.0% at fused maximum clocks"),
     "eps_agg": (1e-6, 1e-3, "1e-6 needs per-window failure about 3 x 2^-47 for the same delta; 1e-3 lets delta fall tenfold"),
     "clock_share": (0.0, 0.2, "0: PoUW credits the card table's 2,430 MHz, the SKU's maximum (CMP-165, run r20261027-032043-e2d1); 0.2 the C4 dossier's adversarial phi = 1.25, a card whose SKU or firmware reaches past its table (unattested)"),
     "pous_rounds": (20.0, 74000.0, "low a guess; deployed 111; 74,000 with streamed labels (C8 dossier)"),
@@ -111,7 +113,8 @@ KEYED = {"d": T.REFERENCE_THREADED[0]}
 #: share) and the regime; a regime that starts with "breaks" is one the closed form doesn't cover
 CHECKS = [
     ("defaults", {}, "T1", "eta", "the residual plus the thread bound"),
-    ("2 GB streamed-label wipes", WIPE_2GB | KEYED, "T4", "mu", "the floor credit's residual is above the cap"),
+    ("1 GB streamed-label wipes", WIPE_2GB | KEYED | {"unfilled_gb": 0.83}, "T4", "mu",
+     "the floor credit's residual is above the cap"),
     ("design", DESIGN, "T4", "eta", "memory caps nothing: mu > r"),
     ("host CPUs bounded", DESIGN | {"host_share": 0.0}, "T5", "eta", "r = 1%, chi on top"),
     ("unmonitored 0.1", DESIGN | {"unmonitored": 0.1}, "T4", "eta", "s of spent FLOP, the rest scaled by 1 - s"),
