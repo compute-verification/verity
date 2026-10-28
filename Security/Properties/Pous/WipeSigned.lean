@@ -7,10 +7,10 @@ import Definitions.Pous.Model.StreamedWipe
 
 `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`, the wipe's component) accepts a signed session whose
 signature verifies under a trusted memory challenger's key. `WipeSigned` says what that acceptance means, over a model
-of the memory challengers (`Challenger`): the session is a wipe the challenger holding the key ran itself, and that run
-is the streamed-label wipe's accepted session (`WipeRun.Accepted`): the challenger recorded an answer to each of its
-`k` reads, revealed one at a time after the fill, each answer its read's label and within the deadline, so every prover
-of the game of `Pous.StreamedWipe` that plays the run is accepted there (`Pous.StreamedWipe.Accepts`). Or the run
+of the memory challengers (`SignedWipeParty`): the session is a wipe the challenger holding the key ran itself, and
+that run is the streamed-label wipe's accepted session (`WipeRun.Accepted`): the challenger recorded an answer to each
+of its `k` reads, revealed one at a time after the fill, each answer its read's label and within the deadline, so every
+prover of the game of `Pous.StreamedWipe` that plays the run is accepted there (`Pous.StreamedWipe.Accepts`). Or the run
 carries a break (`WipeBreak`), an event of one of two adversaries built from it: the collision finder (`wipeFinder`)
 hashes the strings the run hashes and outputs two distinct ones with one SHA-512 digest (`cr/sha-512`), or the forger
 (`wipeForger`) outputs the prover's signature and the message it signs, which verifies under the trusted key and which
@@ -38,8 +38,8 @@ The wipe party reveals one index a batch (`wipe_party.params_of`): a wipe at ano
 the model. The model takes the challenger's clock readings and the answers it receives as they came, and assumes
 nothing of them. It does not model what refuses a session before it starts. The challenger may run any number of wipes
 under a key, each signed once, and the key signs PoUS's sessions too: `wipe_party.main` signs with
-`period.challenger`, the memory challenger's key, in PoUS's role (`memory-challenger-record`). So `Challenger.Signed`,
-all the model's key signs, holds both. A key also used for another role is outside the model, and the forgery disjunct
+`period.challenger`, the memory challenger's key, in PoUS's role (`memory-challenger-record`). So
+`SignedWipeParty.Signed`, all the model's key signs, holds both. A key also used for another role is outside the model, and the forgery disjunct
 is an EUF-CMA break only under that one-role reading, as for PoUS's sessions (`Device`).
 -/
 
@@ -114,13 +114,13 @@ def WipeRun.message (r : WipeRun) (ended : String) : E ByteArray :=
   StreamedWipe.message r.commitment ended r.fillStartNs r.fillEndNs r.recorded.batches r.egressBits
 
 /-- The memory challengers: the sessions the holder of each key runs under it, PoUS's (`Device`) and its wipes. -/
-structure Challenger where
+structure SignedWipeParty where
   device : Device
   wipes : ByteArray → List WipeRun
 
 /-- The messages the challenger signs under the key `pk`: its PoUS sessions' (`Signed`), and for each wipe it runs under
 `pk` and ends, `memoryChallengerMessage` of the key's identifier, the session id and the wipe's `message`. -/
-def Challenger.Signed (dev : Challenger) (pk m : ByteArray) : Prop :=
+def SignedWipeParty.Signed (dev : SignedWipeParty) (pk m : ByteArray) : Prop :=
   MemoryChallenger.Properties.Signed dev.device pk m ∨
     ∃ r ∈ dev.wipes pk, ∃ ended rec, r.recorded.ended = some ended ∧ r.message ended = .ok rec ∧
       memoryChallengerMessage (pk.extract 0 16) r.commitment.session rec = .ok m
@@ -163,7 +163,7 @@ def wipeSessionStrings (pk : ByteArray) (c : StreamedWipe.Commitment) (ended : S
 
 /-- The strings the run hashes: the signed wipe's, those of each wipe the challenger ends under its key, and those of
 each PoUS session it ends under the key (`sessionStrings`). -/
-def wipeRunStrings (s : StreamedWipe.Signed) (dev : Challenger) : List ByteArray :=
+def wipeRunStrings (s : StreamedWipe.Signed) (dev : SignedWipeParty) : List ByteArray :=
   wipeSessionStrings s.publicKey s.commitment s.ended s.fillStartNs s.fillEndNs s.batches s.egressBits ++
     (dev.wipes s.publicKey).flatMap (fun r => match r.recorded.ended with
       | some e => wipeSessionStrings s.publicKey r.commitment e r.fillStartNs r.fillEndNs r.recorded.batches r.egressBits
@@ -182,7 +182,7 @@ def collisionIn (H : ByteArray → ByteArray) (L : List ByteArray) : Option (Byt
 
 /-- **The collision finder `B`, built from the run**: `collisionIn` over the strings the run hashes (`wipeRunStrings`),
 under SHA-512. Its SHA-512 calls are the run's own, one for each of those strings, so it runs in about the run's time. -/
-def wipeFinder (s : StreamedWipe.Signed) (dev : Challenger) : Option (ByteArray × ByteArray) :=
+def wipeFinder (s : StreamedWipe.Signed) (dev : SignedWipeParty) : Option (ByteArray × ByteArray) :=
   collisionIn Sha512.hash (wipeRunStrings s dev)
 
 /-- **The forger `F`, built from the prover**: for the signed session `s` the prover hands the verifier, the message
@@ -194,7 +194,7 @@ def wipeForger (s : StreamedWipe.Signed) : Option (ByteArray × ByteArray) :=
 distinct strings the run hashes with one SHA-512 digest (`cr/sha-512`), or the forger (`wipeForger`) outputs a signature
 that verifies, under `s`'s key, trusted, and its scheme, accepted, over a message the challenger never signed under that
 key (`euf-cma/lms-sha512-n64`). -/
-def WipeBreak (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed) (dev : Challenger) : Prop :=
+def WipeBreak (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed) (dev : SignedWipeParty) : Prop :=
   (∃ x y, wipeFinder s dev = some (x, y) ∧ x ≠ y ∧ Sha512.hash x = Sha512.hash y) ∨
     ∃ m sig, wipeForger s = some (m, sig) ∧ ∃ p, schemes.lookup s.scheme = some p ∧ s.publicKey ∈ trusted ∧
       LmsVerifies p s.publicKey m sig ∧ ¬ dev.Signed s.publicKey m
@@ -237,7 +237,7 @@ def WipeRun.Accepted (r : WipeRun) : Prop :=
 evidence `e` carries a signed session `s` under one of `p`'s trusted keys, and either the challenger holding that key
 ran the wipe itself, a run `r` under the key whose commitment is `c`, whose fill readings, batch records and egress are
 `s`'s, and which is the streamed wipe's accepted session (`WipeRun.Accepted`), or the run carries a break (`WipeBreak`). -/
-def WipeRanAccepted (dev : Challenger) (p : WipeProtocol.Params) (c : StreamedWipe.Commitment)
+def WipeRanAccepted (dev : SignedWipeParty) (p : WipeProtocol.Params) (c : StreamedWipe.Commitment)
     (e : WipeProtocol.Evidence) : Prop :=
   ∃ s, e.signed = some s ∧ s.publicKey ∈ p.trusted.toList ∧
     ((∃ r ∈ dev.wipes s.publicKey, r.commitment = c ∧ r.fillStartNs = s.fillStartNs ∧
@@ -253,7 +253,7 @@ the challenger holding that key ran the wipe itself as the streamed wipe's accep
 the collision finder or the forger built from it succeeds (`WipeRanAccepted`). -/
 def WipeSigned : Prop :=
   ∀ (p : WipeProtocol.Params) (c : StreamedWipe.Commitment) (e : WipeProtocol.Evidence) (out : WipeProtocol.Public)
-    (prof : StreamedWipe.Params × Int) (dev : Challenger),
+    (prof : StreamedWipe.Params × Int) (dev : SignedWipeParty),
     WipeProtocol.protocol.check p c e = .accept out prof → WipeRanAccepted dev p c e
 
 /-! ## The honest wipe as measured, and a wipe that is no run
@@ -324,6 +324,6 @@ def unencoded : StreamedWipe.Signed :=
 def unencodedParams : WipeProtocol.Params := ⟨MEASURED_SERVER, MEASURED_SESSION, #[.empty]⟩
 
 /-- The memory challengers that ran nothing. -/
-def idleChallenger : Challenger := ⟨⟨fun _ => []⟩, fun _ => []⟩
+def idleChallenger : SignedWipeParty := ⟨⟨fun _ => []⟩, fun _ => []⟩
 
 end MemoryChallenger.Properties
