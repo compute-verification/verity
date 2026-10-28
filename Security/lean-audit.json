@@ -12995,7 +12995,7 @@
    "Pous.P2.Assumptions.P2RingRoundSecureWide": {
     "status": "open",
     "test": "verity/core/protocols/pous/tests/test_pous_p2_ring.py::test_p2_ring_round_secure_at_a_scaled_point",
-    "why": "P2RingRoundSecure's statement at every block count from 2^19 to 2^27, so that it reaches the demo's 1038*2^16 blocks; open and unchecked in N above 2^25 (the eps0 a proof would give against N is pending the memory-accounting lane's pous-chain analysis); it implies P2RingRoundSecure (Pous.SecurityProofs.roundSecure_of_wide), so every refutation of that one (PousP2Rounds.round_tight and round_trunc, Security/Proofs/Pous/P2/RoundTests.lean) refutes it, and its falsification test is that one's, whose scaled point doesn't depend on N."
+    "why": "P2RingRoundSecure's statement at every block count from 2^19 to 2^27, so that it reaches the demo's 1038*2^16 blocks; open and unchecked in N above 2^25 (nobody has checked the eps0 a proof would give against N there); it implies P2RingRoundSecure (Pous.SecurityProofs.roundSecure_of_wide), so every refutation of that one (PousP2Rounds.round_tight and round_trunc, Security/Proofs/Pous/P2/RoundTests.lean) refutes it, and its falsification test is that one's, whose scaled point doesn't depend on N."
    }
   },
   "events": ["FlockSoundness.Game.prob"]
