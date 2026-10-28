@@ -11,7 +11,8 @@
 // acc - tau: tau's low halves are kept (CM 0: packed in 64 registers a thread at BN 256; CM 1: in an L2-resident scratch
 // slot of the CTA's, read back at each segment end), so a tail costs (dz + dy) L' inner indices on the tensor cores and
 // no second accumulator. The tail's step order and events are a table in shared memory, built once a CTA.
-// RP, the register plan (below): 0 is wgmma.linear's, 3 leaves room for one of the commit's CTAs beside each GEMM CTA.
+// RP, the register plan (below): 0 is wgmma.linear's, 3 leaves room for one of the commit's CTAs beside each GEMM CTA, 4
+// and 5 hash the commit's rows in the GEMM's own CTA.
 //   mode 0  the plain product X W'^T to O (the bench's `plain` arm)
 //   mode 1  the protocol's GEMM (diag 1: no segment stores, 2: no tail, 4: no dO read; timing only)
 //   mode 2  wgmma.linear itself on A, B: bf16(RN(RN(f32(acc) s_a) s_w)) values, the `wgl` arm, gamma's baseline
@@ -43,13 +44,21 @@ constexpr int BK = 128, TM = 128, SMEM_BUDGET = 220 * 1024, MAX_STAGES = 8, TW =
 //         commit's compressions run on the ALU while the consumers wait on their MMAs. No back-pressure: when the
 //         consumers are done (static schedule, every gridDim.x-th tile) a hash warp stops between two chunks, keeping
 //         its rows' chaining values, and the leaf phase hashes on from there (H's flags)
+//   RP 5  RP 4 with a hash warpgroup of its own: 512 threads at 128, warps 9 to 15 hashing (two a sub-partition, one on
+//         sub-partition 0 beside the load warp), the producer and hash warpgroups at HR and the consumers at 256 - HR
+//         (2 HR + 2 (256 - HR) = 512 a sub-partition). A 128 x 256 tile's MMAs are two m64n128k32 a k32 atom, into
+//         accumulators 0 to 63 and 64 to 127 (m64n256's launch budget is 154). Mode 0, and mode 1 without a tail (a
+//         served call's prefix sums alone, whose hash warps hash its tiles' rows, the prefix-sum rows as they're posted).
 // (384 threads at 136 can't be built: wgmma n256 needs a launch budget of 154, ptxas C7602, whatever setmaxnreg raises it
 // to. 288 threads at 168, one producer warp, puts 3 warps and 16,128 registers on sub-partition 0, and the commit's CTAs
 // never land beside it.)
-template <int RP> __host__ __device__ constexpr int threads() { return RP == 3 ? 2 * 128 : 3 * 128; }
-// RP 4's hasher, H: lpt() O rows a 128 x 128 tile; h(ct, j, stop, budget) hashes on O row j of commit tile ct (tm N / 128
-// + tn) by at most budget SHA-512 chunks, until stop() holds, and says whether the row is hashed whole; chunk, a visit's
-// budget (0: a row whole at once)
+template <int RP> __host__ __device__ constexpr int threads() { return RP == 3 ? 2 * 128 : RP == 5 ? 4 * 128 : 3 * 128; }
+// RP 5's register splits (HR, the producer and hash warpgroups'), each a build of gemm_r5. At 104 the consumers' 152
+// can't keep a 128 x 256 tile's MMAs in flight (ptxas C7512 serializes them) and spill 1 KB; at 88 the hash spills.
+constexpr int R5_SPLITS[] = {96, 88};
+// RP 4's and 5's hasher, H: lpt() rows a 128 x 128 tile; h(ct, j, stop, budget) hashes on row j of commit tile ct (tm N /
+// 128 + tn) by at most budget SHA-512 chunks, until stop() holds, and says whether the row is hashed whole; chunk, a
+// visit's budget (0: a row whole at once)
 struct NoHash {
   static constexpr unsigned chunk = 0;
   WGD unsigned lpt() const { return 1; }
@@ -79,7 +88,8 @@ struct alignas(128) Args {
   unsigned* tctr;
   unsigned tbase;
   int M, N, K, L, S, lp, dz, dy, TT, group, mode, diag, KQ;
-  int hall;                   // RP 4: the hash warps hash every row, past the consumers' end (timing their own rate)
+  int hall;                   // RP 4, 5: 1, the hash warps hash every row, past the consumers' end (timing their own rate);
+                              // -1, none (timing the GEMM alone in the plan's CTA)
 };
 
 WGD uint32_t smem_at(const void* p) { return (uint32_t)__cvta_generic_to_shared(p); }
@@ -141,6 +151,16 @@ template <int N> WGD void imma(int32_t* d, uint64_t da, uint64_t db, uint32_t sd
     asm volatile("{\n .reg .pred p;\n setp.ne.b32 p, %66, 0;\n wgmma.mma_async.sync.aligned.m64n128k32.s32.s8.s8 " ACC64_S
                  ", %64, %65, p;\n}" : ACC64_R : "l"(da), "l"(db), "r"(sd));
 }
+// one k32 atom of the warpgroup's 64 x BN tile; SPLIT: a 128 x 256 tile's as two n128 halves (B's rows 128 on start
+// 128 BK bytes on), the same accumulator layout
+template <int BN, bool SPLIT> WGD void imma_atom(int32_t* d, uint32_t a, uint32_t b, uint32_t sd) {
+  if constexpr (SPLIT && BN == 256) {
+    imma<128>(d, desc_sw128(a), desc_sw128(b), sd);
+    imma<128>(d + 64, desc_sw128(a), desc_sw128(b + 128 * BK), sd);
+  } else {
+    imma<BN>(d, desc_sw128(a), desc_sw128(b), sd);
+  }
+}
 template <int NA> WGD void acc_fence(int32_t* d) {
 #pragma unroll
   for (int i = 0; i < NA; i++) asm volatile("" : "+r"(d[i])::"memory");
@@ -188,13 +208,14 @@ WGD void raster(int t, int tiles_m, int tiles_n, int group, int& tm, int& tn) {
 // with dO = w_X B~^T alone; T_s = lo16(acc - tau) are untouched.
 enum { TAIL_NONE = 0, TAIL_X128 = 1, TAIL_XM128 = 2, TAIL_CAPTURE = 3, TAIL_Q = 1 << 20 };
 
-// RP 4's hash warps (warps 9 to 11): warp w takes batches w, w + 3, ..: batch b is the CTA's O rows 32 b .. 32 b + 31 in
-// its tiles' order, Lg = (BN / 128) h.lpt() a tile, a row a lane, once the consumers have posted (8 warps a tile) every
-// tile the batch reads. h.chunk 0: each batch whole in turn; else passes over the batches posted so far, at most chunk
-// SHA-512 chunks of each a visit, so the rows the leaf phase takes on are left with chains of about one length. Without hall,
-// nothing starts once the consumers are done, and stop() ends the row's hash where it is.
-template <int BN, class H>
+// RP 4's and 5's hash warps (warps 9 to NHW + 8): warp w takes batches w, w + NHW, ..: batch b is the CTA's rows (H's)
+// 32 b .. 32 b + 31 in its tiles' order, Lg = (BN / 128) h.lpt() a tile, a row a lane, once the consumers have posted (8
+// warps a tile) every tile the batch reads. h.chunk 0: each batch whole in turn; else passes over the batches posted so far, at most
+// chunk SHA-512 chunks of each a visit, so the rows the leaf phase takes on are left with chains of about one length.
+// Without hall, nothing starts once the consumers are done, and stop() ends the row's hash where it is.
+template <int BN, int NHW, class H>
 WGD void hash_warps(const Args& p, const H& h, const uint32_t* posted, int tiles_m, int tiles_n, int ntile) {
+  if (p.hall < 0) return;
   const unsigned w = (threadIdx.x - (2 * 128 + 32)) / 32, lane = threadIdx.x % 32, lpo = h.lpt(), Lg = (BN / TW) * lpo,
                  nq = (unsigned)ntile * Lg, nb = (nq + 31) / 32, done = 8u * (unsigned)ntile;
   auto stop = [&]() { return !p.hall && ld_acq(posted) >= done; };
@@ -209,7 +230,7 @@ WGD void hash_warps(const Args& p, const H& h, const uint32_t* posted, int tiles
     return h((unsigned long long)tm * (p.N / TW) + (unsigned long long)tn * (BN / TW) + jj / lpo, jj % lpo, stop, budget);
   };
   if (!h.chunk) {
-    for (unsigned b = w; b < nb; b += 3) {
+    for (unsigned b = w; b < nb; b += NHW) {
       unsigned v = posts();
       if (!p.hall && v >= done) break;
       while (v < need(b)) {
@@ -227,23 +248,25 @@ WGD void hash_warps(const Args& p, const H& h, const uint32_t* posted, int tiles
       __nanosleep(256);
       continue;
     }
-    for (unsigned b = lo; b < nb && v >= need(b) && (p.hall || v < done); b += 3) {
-      if (__all_sync(~0u, visit(b, h.chunk)) && b == lo) lo += 3;
+    for (unsigned b = lo; b < nb && v >= need(b) && (p.hall || v < done); b += NHW) {
+      if (__all_sync(~0u, visit(b, h.chunk)) && b == lo) lo += NHW;
       v = posts();
     }
   }
 }
 
-template <int BN, int CM, int RP, class H = NoHash> __device__ void body(const Args& p, const H& h = H{}) {
+template <int BN, int CM, int RP, class H = NoHash, int HR = 0> __device__ void body(const Args& p, const H& h = H{}) {
   using T = Tile<BN>;
   constexpr int NWG = T::NWG, STAGES = T::STAGES, NA = T::NA;
+  constexpr bool HW = RP == 4 || RP == 5;   // hash warps beside the producer (static schedule, posted tiles)
+  static_assert(RP != 5 || (HR % 8 == 0 && HR >= 24 && HR <= 128), "setmaxnreg takes multiples of 8 from 24");
   extern __shared__ __align__(1024) uint8_t smem[];
   const uint32_t base = (smem_at(smem) + 1023) & ~1023u, bars = base + STAGES * T::STAGE;
   int* tab = reinterpret_cast<int*>(smem + (base - smem_at(smem)) + STAGES * T::STAGE + 16 * STAGES);
   int* const stile = tab + MAX_TT;   // the tile a stage starts (written with its first k-tile), or -1: no more tiles
-  uint32_t* const posted = reinterpret_cast<uint32_t*>(stile + STAGES);   // RP 4: consumer warps' stored tiles
+  uint32_t* const posted = reinterpret_cast<uint32_t*>(stile + STAGES);   // RP 4, 5: consumer warps' stored tiles
   const int M = p.M, N = p.N, KT = p.K / BK, tiles_m = M / TM, tiles_n = N / BN, tiles = tiles_m * tiles_n;
-  const bool proto = p.mode == 1;
+  const bool proto = RP != 5 && p.mode == 1;
   const int TT = proto ? p.TT + p.KQ : 0, steps = TT + KT;
   const int tid = threadIdx.x, wg = tid / 128;
   if (tid == 0) {
@@ -268,7 +291,7 @@ template <int BN, int CM, int RP, class H = NoHash> __device__ void body(const A
   __syncthreads();
 
   auto next = [&](int t) {
-    const unsigned q = RP != 4 && p.tctr ? gridDim.x + (atomicAdd(p.tctr, 1u) - p.tbase) : (unsigned)t + gridDim.x;
+    const unsigned q = !HW && p.tctr ? gridDim.x + (atomicAdd(p.tctr, 1u) - p.tbase) : (unsigned)t + gridDim.x;
     return q < (unsigned)tiles ? (int)q : tiles;
   };
   auto prefetch = [&]() {
@@ -295,13 +318,14 @@ template <int BN, int CM, int RP, class H = NoHash> __device__ void body(const A
     }
   };
 
-  if (RP != 3 && wg == NWG) {
+  if (RP != 3 && wg >= NWG) {
     if constexpr (RP == 0) regs_dec<40>();
     if constexpr (RP == 4) regs_dec<104>();
-    if constexpr (RP == 4)
+    if constexpr (RP == 5) regs_dec<HR>();
+    if constexpr (HW)
       if (tid >= NWG * 128 + 32) {
         const int ntile = (int)blockIdx.x < tiles ? (tiles - 1 - (int)blockIdx.x) / (int)gridDim.x + 1 : 0;
-        hash_warps<BN>(p, h, posted, tiles_m, tiles_n, ntile);
+        hash_warps<BN, threads<RP>() / 32 - 9>(p, h, posted, tiles_m, tiles_n, ntile);
       }
     if (tid == NWG * 128) {
       prefetch();
@@ -325,9 +349,10 @@ template <int BN, int CM, int RP, class H = NoHash> __device__ void body(const A
   }
   if constexpr (RP == 0) regs_inc<232>();
   if constexpr (RP == 4) regs_inc<200>();
-  // RP 4: the warp's stores of the tile are done (bar.warp.sync orders its lanes' stores before lane 0's release)
+  if constexpr (RP == 5) regs_inc<256 - HR>();
+  // RP 4, 5: the warp's stores of the tile are done (bar.warp.sync orders its lanes' stores before lane 0's release)
   auto post = [&]() {
-    if constexpr (RP == 4) {
+    if constexpr (HW) {
       __syncwarp();
       if (tid % 32 == 0) red_rel(posted, 1);
     }
@@ -378,7 +403,7 @@ template <int BN, int CM, int RP, class H = NoHash> __device__ void body(const A
   int32_t d[NA];
   uint32_t cp[CM == 0 ? NA / 2 : 1];
   uint32_t* const cs = CM == 1 ? p.cbuf + (size_t)blockIdx.x * (TM * BN / 2) + tid : nullptr;   // the thread's packed tau halves
-  const bool segs = proto && !(p.diag & 1);
+  const bool segs = (proto || (RP == 5 && p.mode == 1)) && !(p.diag & 1);
   const int kpl = p.L / BK;
   int cg = 0;   // the steps consumed (RP 3's producer's reference)
   for (;;) {
@@ -395,10 +420,10 @@ template <int BN, int CM, int RP, class H = NoHash> __device__ void body(const A
       mbar_wait_warp(bars + 8 * s, ph);
       const uint32_t a0 = base + s * T::STAGE + wg * 64 * BK, b0 = base + s * T::STAGE + T::A_BYTES;
       WGP_FENCE;
-      imma<BN>(d, desc_sw128(a0), desc_sw128(b0), i > 0);
-      imma<BN>(d, desc_sw128(a0 + 32), desc_sw128(b0 + 32), 1);
-      imma<BN>(d, desc_sw128(a0 + 64), desc_sw128(b0 + 64), 1);
-      imma<BN>(d, desc_sw128(a0 + 96), desc_sw128(b0 + 96), 1);
+      imma_atom<BN, RP == 5>(d, a0, b0, i > 0);
+      imma_atom<BN, RP == 5>(d, a0 + 32, b0 + 32, 1);
+      imma_atom<BN, RP == 5>(d, a0 + 64, b0 + 64, 1);
+      imma_atom<BN, RP == 5>(d, a0 + 96, b0 + 96, 1);
       WGP_COMMIT;
       WGP_WAIT(1);
       if (pend >= 0 && lane == 0) mbar_arrive(bars + 8 * (STAGES + pend));
@@ -471,7 +496,7 @@ template <int BN, int CM, int RP, class H = NoHash> __device__ void body(const A
 
     const int row = tm * TM + rloc, col0 = tn * BN + cq;
     // every address below is a base plus a constant (row and col0 are even)
-    if (p.mode == 2) {
+    if (RP != 5 && p.mode == 2) {
       const float r0 = p.sa[row], r1 = p.sa[row + 8];
       uint32_t* const y0 = reinterpret_cast<uint32_t*>(p.O) + ((size_t)row * N + col0) / 2;
       uint32_t* const y1 = y0 + (size_t)4 * N;
@@ -548,6 +573,14 @@ template <int BN, class H>
 __global__ void __launch_bounds__(threads<4>(), 1) gemm_r4(const __grid_constant__ Args p, const __grid_constant__ H h) {
 #if defined(__CUDA_ARCH_FEAT_SM90_ALL)
   body<BN, 1, 4, H>(p, h);
+#endif
+}
+// RP 5: the plain product or the prefix sums alone, with the commit's row hashes in a hash warpgroup and the producer's (HR
+// registers, one of R5_SPLITS)
+template <int BN, class H, int HR>
+__global__ void __launch_bounds__(threads<5>(), 1) gemm_r5(const __grid_constant__ Args p, const __grid_constant__ H h) {
+#if defined(__CUDA_ARCH_FEAT_SM90_ALL)
+  body<BN, 1, 5, H, HR>(p, h);
 #endif
 }
 
