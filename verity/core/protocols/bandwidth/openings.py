@@ -50,7 +50,6 @@ from dataclasses import dataclass
 from enum import Enum
 
 from verity.ml.randomness import Key
-
 from .tags import DIGEST_BYTES
 
 DOMAIN = "verity/bandwidth/openings/v1"
