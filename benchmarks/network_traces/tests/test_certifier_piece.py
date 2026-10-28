@@ -21,10 +21,13 @@ import shlex
 import sys
 import tarfile
 import threading
+from dataclasses import asdict
 from pathlib import Path
 
 import jsonschema
 import pytest
+
+from verity.core.protocols.certifier.ingress_scan import CLASS_OF_RECORD
 
 HERE = Path(__file__).resolve().parents[1]
 ROOT = HERE.parents[1]
@@ -92,7 +95,8 @@ def _serve_dir(d: Path, warden: dict, records: list[dict] | None = None, kept: b
 
 
 def _chain_out(d: Path, verdict: str, w: int) -> Path:
-    """What the chain leaves in its run dir's out/: its report and the scan's one sampling block."""
+    """What the chain leaves in its run dir's out/: its report and the scan's one sampling block, whose summary names
+    the scan's class (the period's case reads its advice bits)."""
     out = d / "out"
     (out / "report").mkdir(parents=True)
     (out / "scan" / "joint").mkdir(parents=True)
@@ -100,6 +104,7 @@ def _chain_out(d: Path, verdict: str, w: int) -> Path:
                                                             else {"n2": "a window refused"}}))
     (out / "scan" / "answers.json").write_text(json.dumps({"registration": {"program": "ab" * 64}, "windows": [
         {"window": w, "answer": {"verdict": "accept"}, "registrations": []}]}))
+    (out / "scan" / "summary.json").write_text(json.dumps({"class": asdict(CLASS_OF_RECORD)}))
     (out / "scan" / "joint" / "program.json").write_text("{}")
     return d
 
@@ -151,6 +156,8 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     assert json.loads((piece / "answer.json").read_text()) == accept
     assert json.loads((piece / "chain" / "report" / "report.json").read_text())["verdict"] == "accepted"
     assert sorted(p.name for p in (piece / "period").iterdir()) == ["commitment.bin", "evidence.json", "params.json"]
+    params = json.loads((piece / "period" / "params.json").read_text())
+    assert (params["advice"], params["group"]) == (CLASS_OF_RECORD.ADVICE, 1)
     assert {p.name for p in piece.iterdir()} - {"piece.json"} == {"answer.json", "chain", "period", "piece.log"}
     assert "leak guard (exit 0)" in (piece / "piece.log").read_text()
     keep = d / CP.PRIVATE / RUN
