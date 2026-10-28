@@ -7,9 +7,9 @@ import Proofs.Accounting.DeclaredCircuit.Tiles
 The pieces of `Accounting.SecurityProofs.DeclaredCircuitRequirement` that price `BadK`. Resampling the `K` unobtained
 positions of a run together leaves its queries and what it obtained unchanged, so each correct digest query pins its
 position to the digest's fiber, at most `fib` values, and a stream position to one value (`card_resample_planes`,
-`Device.card_badK_ground_le`). Summed over the candidates of a pass and their `K`-tuples of query indices, a shared
-budget of `qtot` queries pays `(fib·qtot/|X|)^K` (`Device.card_badK_family_le`), which on the sketch at rank `r` is
-`(qtot/2^(8r))^K` (`Device.pr_badK_family_le`).
+`Prover.card_badK_ground_le`). Summed over the candidates of a pass and their `K`-tuples of query indices, a shared
+budget of `qtot` queries pays `(fib·qtot/|X|)^K` (`Prover.card_badK_family_le`), which on the sketch at rank `r` is
+`(qtot/2^(8r))^K` (`Prover.pr_badK_family_le`).
 -/
 
 namespace Accounting.RateSketch

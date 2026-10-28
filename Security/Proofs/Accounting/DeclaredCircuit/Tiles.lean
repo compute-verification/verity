@@ -8,9 +8,9 @@ import Proofs.Accounting.RateAudit.DeployedSketchSum
 The pieces of `Accounting.SecurityProofs.DeclaredCircuitRequirement` that count one pass on a set `U` of its tiles. The
 positions a run read in `U`'s tiles and the stream are at most its distinct memory reads there, its link steps and its
 rebuilds there (`Chip.card_reads_tiles_le`), so what a device obtained there is at most its on-chip state, those reads,
-the link and those rebuilds (`Device.card_obtained_tiles`). A pass whose memory reads in `U` plus the slack fall short of
+the link and those rebuilds (`Prover.card_obtained_tiles`). A pass whose memory reads in `U` plus the slack fall short of
 `U`'s correct receipts by `k` tiles more than the slack pays has a correct tag it never queried, or `k + 1` positions it
-never obtained behind correct digest queries, at most one sector a tile (`Device.unpaid_tiles_split`, `BadK`): each
+never obtained behind correct digest queries, at most one sector a tile (`Prover.unpaid_tiles_split`, `BadK`): each
 tile short of a sector gives one, and each stream sector short gives one.
 -/
 

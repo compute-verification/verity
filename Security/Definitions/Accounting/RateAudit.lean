@@ -37,16 +37,16 @@ commitment before the deadline enforces. A program remembers every answer it has
 the window is unbounded: `S` bounds only what is on chip when the seed arrives.
 
 **Compute.** A tag costs `c_tag` and a rebuilt word `c_enc`, in one unit of work; a run's compute is its queries times
-`c_tag` plus its rebuilt words times `c_enc` (`Device.compute`). Rebuilding is the codec's inverse: the device knows
+`c_tag` plus its rebuilt words times `c_enc` (`Prover.compute`). Rebuilding is the codec's inverse: the device knows
 the weights the store encodes (the worst case, as with weights from a PRG), so it never needs to decode, and a word it
 neither holds nor reads it can still recompute at `c_enc`. The model has no other way to produce a word, which is the
 codec's work-hardness (claim `rate-codec-work`): the inverse costs `c_enc` per word, with no amortization across
 words. The honest device decodes each word it reads, at `c_dec`, but decoding is the useful work, charged to the compute
 account; the game does not charge it.
 
-**Residency and bandwidth.** A run's footprint (`Device.footprint`) is the number of distinct device-memory addresses
+**Residency and bandwidth.** A run's footprint (`Prover.footprint`) is the number of distinct device-memory addresses
 it read: device memory held at least that many bits, laid out before the seed, that the window depended on. Its
-ingress (`Device.ingress`) counts every read, so it is at least the footprint, and is the bits that crossed from device
+ingress (`Prover.ingress`) counts every read, so it is at least the footprint, and is the bits that crossed from device
 memory to the chip.
 
 **What is a parameter.** `S`, `L`, `q`, `c_tag`, `c_enc` and the compute budget are bounds the device class is drawn
