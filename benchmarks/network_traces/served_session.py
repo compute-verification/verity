@@ -1,9 +1,9 @@
-"""served-session: NET-83's session of record, the network certifier in front of a served model, as `research run` steps
+"""served-session: the session of record, the network certifier in front of a served model, as `research run` steps
 (nothing reaches a node otherwise). The gate's scan rehearsal (`vy-challenger-gate warden-rehearse --scan --prompts`,
 `benchmarks/live_challenger/auditor.py`) runs against the endpoint on the peer's loopback, by default vy-dc-h200-2's
 `verity-vllm serve-openai` on 127.0.0.1:18782, inside the scan's class (`scan_zk.W63`: at most KI = 1,024 prompt ids and
 KO = 64 ids out a request). The session's prompts are of `PROMPT_IDS` = 256 ids, since prompts of 1,024 reach the warden
-late against its D = 2.7 s (about 1.2 s of ingress and 1.2 to 4 s of committed prefill, NET-107), and each is answered
+late against its D = 2.7 s (about 1.2 s of ingress and 1.2 to 4 s of committed prefill), and each is answered
 greedily with at most 64 ids: the base Llama-3.2-1B ends at its one EOS id, 128001, after 1 to 5 ids in 15 to 27% of
 requests. The network chain's run of record (`chain_record.sh`'s warden path) then proves the session.
 
@@ -16,14 +16,14 @@ requests. The network chain's run of record (`chain_record.sh`'s warden path) th
 FLAGS: [--peer vy-dc-h200-2] [--port 18782] [--prompts 64] [--requests 113] [--height 12] [--minutes M]
        [--prompt-ids 256] [--tokens 64] [--vocab 128000]
 
-``--requests`` is by default `REQUESTS`, what h200-2's free disk seals by vllm's sizing; ``--tokens`` is each request's
-max_tokens, at most KO.
+``--requests`` is by default `REQUESTS`, what h200-2's free disk seals by the endpoint's sizing; ``--tokens`` is each
+request's max_tokens, at most KO.
 
 * **plan** prints the request's words, the minutes it takes (``--minutes`` by default `auditor.warden_minutes` of its
   requests and height plus `MARGIN`), the prompts' size, the endpoint's flags and each run's command. The request and
   its prompts are checked by this tree's gate first (`auditor.parse_warden` and `warden_prompts` on a scratch host), so
-  a request the gate would refuse is refused here, with the gate's reason. A gate pinned before #5160 takes 400 requests
-  at most.
+  a request the gate would refuse is refused here, with the gate's reason. A gate pinned at an older tree takes
+  400 requests at most.
 * **session** sends the request, waiting until ``--at`` (a UTC time) when given; launched more than `LATE_S` after it,
   it sends nothing (exit 3). The prompts are ``--prompts`` prompts of ``--prompt-ids`` ids below ``--vocab`` (Llama 3's
   128,000 regular ids by default), drawn from a fresh secret seed this process alone holds: they are the prover's,
@@ -48,26 +48,25 @@ max_tokens, at most KO.
   on the verifier's coins (CR_N2_DRAW 8) and the tie on 8 link-windows (CR_TIE_WINDOWS)
   at CR_MEM_GB 96, unless a CR_K=V says otherwise. The scan proves every unit, or ``--draw K`` of them, on the
   verifier's own coins (``--coins verifier``, the default and the fallback) or on the gate's (``--coins gate``). It is
-  refused unless the tree has the record's leak guard (``leak_guard.py``, #5218), which chain_record.sh runs on its
+  refused unless the tree has the record's leak guard (``leak_guard.py``), which chain_record.sh runs on its
   way out, whatever the exit.
 
 **The coin link.** A draw on the gate's coins (``--coins gate``: ``scan_zk.py prove --draw K --challenger gate:GATE
 --main FILE --peer P --challenger-key RECORD --gate-key KEY``, in CR_SCAN_ARGS) runs on the auditor's side: P
 (``--coin-peer``, `AUDITOR` by default) is the node the chain runs on, which holds the lane's gate key and the kept
-fetch. The challenger reserves one of P's ports in its /etc/vy/coin-ports and its coin link (#4946) carries the
+fetch. The challenger reserves one of P's ports in its /etc/vy/coin-ports and its coin link carries the
 session's coins over ssh to that port of P's loopback, where the draw's client connects. The gate key and the warden
 run's witness are the auditor's, so the draw never runs on the served node, which is the prover's: a ``--coin-peer``
 that is the kept run's peer (its request.json's) or `PEER` is refused. Only P's own line serves P, and a reserve for a
-node with no line is refused: `AUDITOR`'s line is ports 7821-7830 (since 27 Oct, with its /etc/vy/peers entry), and on
-a node without one the chain draws on the verifier's coins. ``--main`` is the verifier's
-copy of main's first-parent history, fetched from the tree's origin into KEEP/RUN by default as n2_advised_zk.sh does;
-``--challenger-key`` is infra's challenger-key/v1 record (labelled ``challenger-key current``), sent with the run.
-CR_SCAN_ARGS and CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--challenger``, ``--peer``) themselves.
+node with no line is refused: `AUDITOR`'s line is ports 7821-7830 (with its /etc/vy/peers entry), and on
+a node without one the chain draws on the verifier's coins. ``--main`` is the verifier's copy of main's first-parent
+history, fetched from the tree's origin into KEEP/RUN by default as n2_advised_zk.sh does; ``--challenger-key`` is the
+deployment's challenger-key/v1 record (labelled ``challenger-key current``), sent with the run. CR_SCAN_ARGS and
+CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--challenger``, ``--peer``) themselves.
 
-**The endpoint.** vllm starts it by hand on vy-dc-h200-2 (`HAND_START`) at 11:15Z on 28 Oct, ahead of the session's
-``--at``, and it listens within about 35 s. Its records art (``--endpoint ART``) is advice_trace.jsonl, windows.jsonl,
-serve.json and `USERS`, each engine request's id and its warden user (``{"engine_id", "user"}`` a line, in
-requests.jsonl's order, vllm's #5303).
+**The endpoint.** It is started by hand on vy-dc-h200-2 (`HAND_START`) ahead of the session's ``--at``, and it
+listens within about 35 s. Its records art (``--endpoint ART``) is advice_trace.jsonl, windows.jsonl, serve.json and
+`USERS`, each engine request's id and its warden user (``{"engine_id", "user"}`` a line, in requests.jsonl's order).
 requests.jsonl, whose prompt ids are request values, stays in h200-2's serve dir: this runbook neither fetches
 nor publishes it. The endpoint step's advice (`verity-vllm advice`) needs it, the Commit record, so ``chain`` rebuilds
 it (`endpoint_records`) from `USERS` and the kept warden run's certified I/O (`warden_chain.io`), each request's prompt
@@ -92,10 +91,10 @@ session; ``--coins verifier``, without ``--send`` and ``--challenger-key``, is t
 
 and the dry rehearsal, on `AUDITOR`, whose KEEP its dry chain reads:
 
-    research run --on vy-nebius-cpu-2 --pool network --source . --project verity --as network-accounting --cwd source \\
+    research run --on vy-nebius-cpu-2 --pool network --source . --project verity --as LANE --cwd source \\
       --timeout 45m -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run --no-sync python \\
       benchmarks/network_traces/served_session.py session --gate local --vocab 256 --prompts 16 --requests 16 \\
-      --height 10 --keep /workspace/research/lanes/network-accounting/dry --out "$OUT"'
+      --height 10 --keep DIR --out "$OUT"'
 """
 from __future__ import annotations
 
@@ -122,10 +121,10 @@ import auditor as A  # noqa: E402
 
 #: the scan's class (`scan_zk.W63`): at most KI prompt ids in, at most KO ids out a request
 KI, KO = 1024, 64
-#: the session's prompt ids a request, which reach the warden in time (KI's don't: NET-107)
+#: the session's prompt ids a request, which reach the warden in time (KI's don't)
 PROMPT_IDS = 256
 #: the session's requests: what vy-dc-h200-2's free disk seals, within 72 GB even if every request runs all KO ids
-#: (vllm's sizing, r20261027-125522-d460: 636.5 MB a full-length request)
+#: (the endpoint's sizing: 636.5 MB a full-length request)
 REQUESTS = 113
 PEER, PORT, GATE, LANE = "vy-dc-h200-2", 18782, "research@204.12.178.84", "network-accounting"
 #: the auditor's side, where the chain runs and the gate's coins for its draw arrive
@@ -138,14 +137,14 @@ VOCAB = 128_000
 MARGIN = 3
 LATE_S, POLL_S = 60, 15
 SSH = ("ssh", "-T", "-o", "BatchMode=yes", "-o", "IdentitiesOnly=yes", "-o", "ServerAliveInterval=15")
-#: the flags the endpoint (vllm's) serves the session with: the warden's id form, in its release order, each window sealed
+#: the flags the endpoint serves the session with: the warden's id form, in its release order, each window sealed
 #: without the attention interiors (about 1 GB a request at 256 ids)
 ENDPOINT = "verity-vllm serve-openai --host 127.0.0.1 --port {port} --protocol ids --id-payload 503 --admit release-order " \
            "--scheme rows-sha512 --seal --retain-exclude hidden_m1"
 #: serve-openai's default --max-model-len, which the endpoint's flags name only past it
 CONTEXT = 512
-#: vllm's record in its records art (#5303): each engine request's engine_id and its warden user (null for a body that
-#: sent none), a line in requests.jsonl's order: requests.jsonl less its values
+#: the endpoint's record in its records artifact: each engine request's engine_id and its warden user (null for a body
+#: that sent none), a line in requests.jsonl's order: requests.jsonl less its values
 USERS = "request_users.jsonl"
 HAND_START = ("serve-openai run directly, not examples/vllm/serve.sh: serve.sh's serve-openai line (--required-manifest "
               "ROW/manifest.json, the int8 B4 row's Build of record r20261026-182623-0d2a, with vy-dc-h200-2's own taps as "
@@ -176,7 +175,8 @@ def prompts(n: int, ids: int, vocab: int, seed: bytes) -> list[list[int]]:
 
 def words(a: argparse.Namespace) -> list[str]:
     return ["warden-rehearse", "--peer", a.peer, "--port", str(a.port), "--minutes", str(a.minutes),
-            "--requests", str(a.requests), "--height", str(a.height), "--scan", "--prompts", "--tokens", str(a.tokens)]
+            "--requests", str(a.requests), "--height", str(a.height), "--scan", "--prompts", "--tokens", str(a.tokens),
+            *(["--window-per-group"] if getattr(a, "window_per_group", False) else [])]
 
 
 def scratch_host(d: Path, peer: str) -> A.Host:
@@ -315,7 +315,8 @@ def pinned() -> str:
 
 
 def local(a: argparse.Namespace, data: bytes, keep: Path) -> bytes:
-    """The dry rehearsal: this tree's gate on a scratch host under `keep`, the stand-in as its tunnel."""
+    """The dry rehearsal: this tree's gate on a scratch host under `keep`, the stand-in as its tunnel, or ``a.tunnel``
+    (``(ssh, port) -> argv``, a process listening on ``port``) when given."""
     host = scratch_host(keep / "local-gate", a.peer)
     rc, start = A.gate(["--ssh", shlex.join(words(a)), "--key", LANE], host, now=datetime.now(UTC),
                        token=secrets.token_hex(2), own=lambda p: None, certifier_active=lambda r: False,
@@ -329,7 +330,7 @@ def local(a: argparse.Namespace, data: bytes, keep: Path) -> bytes:
     stub = [sys.executable, str(HERE / "demo_stub.py"), "serve", "--prompt-ids", str(a.prompt_ids), "--tokens",
             str(a.tokens), "--vocab", str(a.vocab), "--out", str(endpoint)]
     A.certifier_run(host, run, pinned=pinned(), now=lambda: datetime.now(UTC),
-                    tunnel_argv=lambda ssh, port: [*stub, "--port", str(port)])
+                    tunnel_argv=getattr(a, "tunnel", None) or (lambda ssh, port: [*stub, "--port", str(port)]))
     return A.certifier_fetch(run, host, witness=True)
 
 
@@ -406,7 +407,8 @@ def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
         raise Refused(f"--coin-peer {a.coin_peer} is the served node, the prover's: the gate key and the warden run's "
                       f"witness are the auditor's, so the draw runs where the chain does, {AUDITOR} by default")
     if a.challenger_key is None:
-        raise Refused("--coins gate needs --challenger-key, infra's challenger-key/v1 record (challenger-key current)")
+        raise Refused("--coins gate needs --challenger-key, the deployment's challenger-key/v1 record "
+                      "(challenger-key current)")
     if not a.key.is_file():
         raise Refused(f"no gate key {a.key}: the draw runs on the node that holds the lane's gate key, {AUDITOR}")
     key = input_file(a.challenger_key, "challenger key record")
@@ -457,7 +459,7 @@ def endpoint_records(src: str, dest: Path, fetch: Path, eos: list[int]) -> str:
     ep = next((p.parent for p in dest.rglob("advice_trace.jsonl")), None)
     if ep is None or not (ep / USERS).is_file():
         raise Refused(f"--endpoint {src}: no requests.jsonl, and no {USERS} beside an advice_trace.jsonl to rebuild it "
-                      "from: give vllm's records art")
+                      "from: give the endpoint's records artifact")
     io = certified_io(fetch)
     if not io["accepted"]:
         raise Refused(f"the kept warden run's I/O doesn't read whole off its cells: {io['violations'][:3]}")
@@ -477,7 +479,7 @@ def endpoint_records(src: str, dest: Path, fetch: Path, eos: list[int]) -> str:
 
 def chain(a: argparse.Namespace) -> int:
     if not (HERE / "leak_guard.py").is_file():
-        raise Refused("this tree has no record leak guard (leak_guard.py, #5218), which chain_record.sh runs on its "
+        raise Refused("this tree has no record leak guard (leak_guard.py), which chain_record.sh runs on its "
                       "way out: run the chain from a tree with it")
     fetch = a.keep / a.run / "fetch.tar.gz"
     if not fetch.is_file():
@@ -531,7 +533,7 @@ def parser() -> argparse.ArgumentParser:
     q = sub.add_parser("chain")
     q.add_argument("--run", required=True)
     q.add_argument("--keep", type=Path, default=KEEP)
-    q.add_argument("--endpoint", help=f"the endpoint's records: vllm's art (with {USERS}), a directory or a tarball")
+    q.add_argument("--endpoint", help=f"the endpoint's records: its artifact (with {USERS}), a directory or a tarball")
     q.add_argument("--eos-ids")
     q.add_argument("--draw", type=int, help="the scan's K drawn units (every unit by default)")
     q.add_argument("--coins", choices=("verifier", "gate"), default="verifier")
