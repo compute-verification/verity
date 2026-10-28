@@ -34,9 +34,10 @@ The verifier is the Lean, since the trusted base is the compiled Lean verifier, 
 untrusted provenance, and Python is never trusted: the process `remote-audit-verifier` (`p2_lean.py`,
 `RemoteAudit.P2Session`) holds the registration file's bytes, recomputes the registration's digest from its fields, and
 reads the prover's request and every root and openings line as the prover sent it, each opening's four blocks checked
-on the registered vk root, and its answer is the session's. The Python's books (`Books`, `p2.Session`) take every
-event beside it and can only veto (`Twin`): an event, a held store or an answer on which the two differ, or one the
-Lean answers with an error, rejects the session `disagreement` at that window, and no event follows it. What the
+on the registered vk root, and its answer is the session's. The Python's books (`Books`, `audit.AuditRun` over the
+P2 codec) take every event beside it and can only veto (`Twin`): an event, a held store or an answer on which the two
+differ, or one the Lean answers with an error, rejects the session `disagreement` at that window, and no event follows
+it. What the
 Lean takes as given is the clock's readings and the coins the challenger (`coins.local`, on this host) releases.
 
 `python -m verity.core.protocols.remote_bandwidth.p2_party --registration FILE (--stdio | --listen HOST:PORT [--sessions
@@ -233,7 +234,7 @@ def _done(v: audit.Verdict | None) -> dict[str, Any]:
     return {"ok": True} if v is None else verdict_json(v)
 
 
-def answer(s: p2.Session, reason: str | None = None, plan: Plan | None = None) -> dict[str, Any]:
+def answer(s: audit.AuditRun, reason: str | None = None, plan: Plan | None = None) -> dict[str, Any]:
     """The session's answer (`P2Session.answer`, with `reason`): `accept` with the credited reads, `reject` with the
     failure and the draw it failed at, or `undecided`; `units` are the store's and `plan_units` those each pass
     reads."""
@@ -309,16 +310,16 @@ _OUT = _Out()
 
 
 class Books:
-    """The Python's books of one P2 session, the veto beside the Lean (`Twin`): `p2.Session` on the clock each event
-    sets (`period._Held`), and each event's result as the Lean writes it (`Difftest.resultJ`), a call `p2.Session`
-    refuses `REFUSED`. A root or openings line is read as `P2Session` reads it: a line out of form rejects the session
-    `malformed` at the window filling (`fail`), and `why` says what was out of form. `released` is the coin the last
-    event released: a start's or a boundary's challenge, or a close's openings coin."""
+    """The Python's books of one P2 session, the veto beside the Lean (`Twin`): `audit.AuditRun` over the P2 codec on
+    the clock each event sets (`period._Held`), and each event's result as the Lean writes it (`Difftest.resultJ`), a
+    call the session refuses `REFUSED`. A root or openings line is read as `P2Session` reads it: a line out of form
+    rejects the session `malformed` at the window filling (`fail`), and `why` says what was out of form. `released` is
+    the coin the last event released: a start's or a boundary's challenge, or a close's openings coin."""
 
     def __init__(self, params: audit.Params, registration: p2.Registration, coins_: C.SessionCoins, plan: Plan,
                  not_before_ns: int) -> None:
         self.clock, self.plan = P._Held(), plan
-        self.s = p2.Session(params, registration, coins_, not_before_ns=not_before_ns, clock=self.clock)
+        self.s = audit.AuditRun(params, registration, None, coins_, not_before_ns=not_before_ns, clock=self.clock)
         self.released: C.LiveOpening | None = None
         self.why: str | None = None
 

@@ -1601,8 +1601,8 @@ squarings. The fixture kernels build against comes from the serving loop over th
 pinned there by its SHA-512):
 a pinned seed, the sign rows, every block's \(\pi\), every unit's \(\sigma\) and \(y\).
 
-**Openings** (`p2.Opening`, `p2.Session.verify`). An opening of unit \(g\) is its four blocks, each with its path to
-`vk`'s root, and the receipt leaf with its salt and path. The verifier checks the leaf on the pass's root, each block on
+**Openings** (`p2.Opening`, `audit.AuditRun.verify` over the P2 codec). An opening of unit \(g\) is its four
+blocks, each with its path to `vk`'s root, and the receipt leaf with its salt and path. The verifier checks the leaf on the pass's root, each block on
 `vk` under PoUS's leaf (`pous.verifier.leaf_hash`, `payload-path` if one fails; in the Lean, PoUS's own leaf and
 path check, `PousCheck.Merkle`), and \(y_g\) recomputed from the four blocks (`p2.check`). It decodes nothing: `vk`'s leaves are of the `C*` the verifier decoded to the committed `W`, so a block on its
 path is `C*`'s block, by SHA-512's collision resistance. A P2 store is fixed at setup, so a session over it appends
@@ -1612,8 +1612,8 @@ nothing (`append`).
 it holds the registration file's bytes (its digest recomputed from its fields, a stated `digest` refused unless it is
 theirs) and reads the prover's request and each root and openings line as sent, a line out of form rejecting the
 session `malformed` at the window filling. Its bookkeeping is §4–§6's over the U units, and its openings are checked
-as above, on the registered vk root. `p2.Session` runs beside it as a veto: where the two differ the session is
-rejected `disagreement`. The session's parameters (W, the passes a window, s, T and A) are the auditor's
+as above, on the registered vk root. `audit.AuditRun` over the P2 codec runs beside it as a veto: where the two
+differ the session is rejected `disagreement`. The session's parameters (W, the passes a window, s, T and A) are the auditor's
 (`p2_party.SESSION`), never the prover's: the request restates them, and the veto refuses one that carries other
 values, by name, before the first coin; the Lean reads them from the request.
 
@@ -1629,7 +1629,7 @@ values, by name, before the first coin; the Lean reads them from the request.
   blocks' 128 sectors). The memory line's `SketchBoundAt` follows from it by `SketchBoundLine`, which holds at every
   \(m\).
 - No property in `Security/Properties/RemoteAudit` states yet what the Lean accepts of a P2 session; the difftest
-  (`lean/tests/test_p2.py`'s `p2_session`) holds `p2.Session` to it.
+  (`lean/tests/test_p2.py`'s `p2_session`) holds `audit.AuditRun` over the P2 codec to it.
 - Not yet built: the registry's one live registration a node for P2, and the zero-knowledge opening unit of a P2 unit
   (§8).
 

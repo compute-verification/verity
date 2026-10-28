@@ -945,17 +945,20 @@ class AuditRun:
     registration for the store's first session, so that no read serves receipts of two sessions.  `tiles` is PoUW's
     check if the registration binds z, and None if it does not.  Blocks appended after the codec seed (`append`) are
     the session's: they take indices from N up, and a later session over the store starts again from N.  A window's
-    draws are decided by their openings (`verify`), or by check 3's outcome on each (`drawn`, `decide`).  A session
-    over PoUS's P2 store is `p2.Session`, whose blocks are units of `block_bytes` (`codecs`, the codec it takes)."""
+    draws are decided by their openings (`verify`), or by check 3's outcome on each (`drawn`, `decide`).
 
-    codecs: tuple[type, ...] = (Codec,)
-    block_bytes: int = BLOCK_BYTES
+    The session is one type over either codec.  Over PoUS's P2 store (a `P2Codec`, registered by `p2.register`) its
+    blocks are units of four of C*'s blocks (`block_bytes`, `p2.UNIT_BYTES`), its openings are `p2.Opening`s checked on
+    PoUS's vk (`p2.check`), its receipts bind no z, and it appends nothing: the store is fixed at PoUS's setup."""
 
     def __init__(self, params: Params, registration: Registration, tiles: Tiles | None, coins_: coins.SessionCoins, *,
                  not_before_ns: int, clock: Callable[[], int] = time.monotonic_ns) -> None:
-        if type(params.codec) not in self.codecs:
-            raise ValueError(f"a {type(self).__name__} is over a store under {[c.__name__ for c in self.codecs]}, not "
-                             f"{type(params.codec).__name__}: a P2 store's session is p2.Session")
+        self.block_bytes = BLOCK_BYTES
+        if type(params.codec) is P2Codec:
+            from . import p2
+            if type(registration) is not p2.Registration:
+                raise ValueError("a session over a P2 store is over a P2 Registration (p2.register)")
+            self.block_bytes = p2.UNIT_BYTES
         if (registration.blocks != params.blocks or registration.codec != params.codec
                 or registration.receipt != params.receipt or registration.bind != params.bind
                 or registration.layout != params.layout
@@ -1096,6 +1099,10 @@ class AuditRun:
         return max(soonest, w.released_ns + (k - 1) * self.params.deadline_ns, self.deadline(t - 1) if t else 0)
 
     @property
+    def _p2(self) -> bool:
+        return type(self.params.codec) is P2Codec
+
+    @property
     def _one_in_flight(self) -> bool:
         return self.params.pace is not None and self.params.pace.in_flight == 1
 
@@ -1108,8 +1115,11 @@ class AuditRun:
         under which the prover encodes the blocks (`Store.encode`) and an opening decodes them.  Its rejection, `append`,
         if it is malformed or would take the store past its codec's `max_blocks`; `coin`, releasing none, if its root was
         sent before (a retry never redraws), the last window's roots are final, so no root can follow it, or the session's
-        append coins are all released (or it reserved none: `coins.families`)."""
+        append coins are all released (or it reserved none: `coins.families`).  Over a P2 store, always `append`: the
+        store is fixed at PoUS's setup."""
         self._live()
+        if self._p2:
+            return self._fail(self.filling, "append")
         if (type(root) is not bytes or len(root) != DIGEST_BYTES or type(count) is not int or count < 1
                 or self.extent + count > self.params.codec.max_blocks):
             return self._fail(self.filling, "append")
@@ -1287,8 +1297,8 @@ class AuditRun:
         return chained(root, self.windows[t].heads[i])
 
     def verify(self, t: int, openings: Sequence[Opening]) -> Verdict:
-        """Window t's verdict on the prover's openings of its draws, in the order drawn: `malformed` on a window with
-        no draws, whatever its openings."""
+        """Window t's verdict on the prover's openings of its draws (`p2.Opening`s over a P2 store), in the order drawn:
+        `malformed` on a window with no draws, whatever its openings."""
         self._live()
         w = self.windows[t] if 0 <= t < len(self.windows) else None
         if w is None or w.draws is None or w.verdict is not None:
@@ -1304,6 +1314,13 @@ class AuditRun:
         return w.verdict
 
     def _check(self, t: int, i: int, p: int, o: Opening, key: codec.Key, receipters: dict) -> str | None:
+        if self._p2:
+            from . import p2
+            w = self.windows[t]
+            seed = receipts.seed(w.challenge, i, self._previous(t, i))
+            if i not in receipters:
+                receipters[i] = p2.Sketcher(seed, self.registration.rows)
+            return p2.check(self.registration, seed, w.plans[i], w.roots[i], i, p, o, receipters[i])
         N = self.params.blocks
         if (type(o) is not Opening or o.pass_index != i or o.position != p or type(o.block) is not bytes
                 or len(o.block) != BLOCK_BYTES or type(o.leaf) is not bytes or type(o.tile) is not bytes
@@ -1346,7 +1363,10 @@ class AuditRun:
 
     def drawn(self, t: int) -> tuple[PositionSample, ...]:
         """What the verifier knows of window t's draws, in the order drawn, for check 3 decided by proofs (`opening`)
-        in place of `verify`'s openings."""
+        in place of `verify`'s openings: over a store under a `Codec`, whose payloads the unit decodes."""
+        if self._p2:
+            raise SessionError("check 3's unit decodes a Codec store's blocks: a P2 store's openings are checked on "
+                               "PoUS's vk (verify)")
         w = self.windows[t] if 0 <= t < len(self.windows) else None
         if w is None or w.draws is None:
             raise SessionError(f"window {t} has no draws")
