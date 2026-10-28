@@ -4,9 +4,9 @@
 # (`remote_bandwidth.opening`), on hidden_zk's builds (its job.sh, sourced: C-Flock's flock-circuit and the Lean
 # flock-verify, cached under $A7_CACHE). From a clone, since the verifier of record builds the sampled-proofs Lean in the
 # tree:
-#   research run --on M --source . --pool proofs --as LANE --project verity --cwd clone --env A7_MEM_GB=96 -- \
-#     bash benchmarks/one_stage/a7.sh
-# (no --mem-gb: the pool's slot holds the memory, and --mem-gb beside it waits outside the slot line for free memory)
+#   A7_MEM_GB=96 bash benchmarks/one_stage/a7.sh
+#   (a job run from a clone of the tree)
+# (no memory request: the slot holds the memory, and a request beside it waits outside the slot line for free memory)
 # env: A7_MEM_GB (what job.sh's stages may take, within the slot's)  A7_K (a7.py's --k, every unit by default)  A7_STEPS (its --steps)
 #      A7_SAMPLES (its --samples, the remote session's draws a window)  A7_CACHE (the build cache)
 # Kept in $OUT/a7: a7's records and logs, the public files, the canonical commitments' b || c, the memory map and the sessions
