@@ -4,14 +4,16 @@ whose build installs the fused rope and KV-cache write (`engine.rope_cache`), ag
 One process writes `<out>/rope_cache_engine_gpu.json`:
 
   install   what `build_engine` installed (`eng.rope_cache`) and each decoder layer's attention impl.
+  kernels   the rope and cache kernels a short generation launches in each arm (the profiler's names): `rope_cache_kernel`
+            alone fused, vLLM's two unfused.
   equal     greedy generations in three passes, fused, unfused, fused again: PROMPTS batched, then a `--long`-token prompt
             alone.  Each pass's token ids, their logprobs and, by SHA-256, every layer's attention output (o_proj's input) at
             every call are the first pass's.
-  timed     a prefill of `--t` tokens as one step (max_tokens 1), the arms interleaved, `--reps` each: ms a request between
-            CUDA events on either side of `generate`.
+  timed     at each of `--ts`, a prefill of T tokens as one step (max_tokens 1), the arms interleaved, `--reps` each: ms a
+            request between CUDA events on either side of `generate`.
 
     cd integrations/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../tools/research/src
-    $PY tests/engine/rope_cache_engine_gpu.py --out DIR --at ISO_TIME --by LANE [--role R --base-role B --repo REPO]
+    $PY tests/engine/rope_cache_engine_gpu.py --out DIR --at ISO_TIME --by LANE [--role R --base-role B --repo REPO] [--ts 8192,32768]
 """
 from __future__ import annotations
 
@@ -62,6 +64,16 @@ def generate(llm: Any, prompts: list[Any], max_tokens: int) -> list[dict[str, An
              "logprobs": [float(lp[t].logprob) for t, lp in zip(o.outputs[0].token_ids, o.outputs[0].logprobs)]} for o in outs]
 
 
+def kernels(llm: Any, prompts: list[Any]) -> list[str]:
+    from torch.profiler import ProfilerActivity, profile
+    with profile(activities=[ProfilerActivity.CUDA]) as prof:
+        generate(llm, prompts, 2)
+        torch.cuda.synchronize()
+    return sorted({e.name.split("<")[0].split("(")[0].replace("void ", "") for e in prof.events()
+                   if e.device_type == torch.autograd.DeviceType.CUDA
+                   and ("rope" in e.name or "rotary" in e.name or "reshape_and_cache" in e.name)})
+
+
 def run(a: argparse.Namespace) -> dict[str, Any]:
     from vllm import SamplingParams
 
@@ -78,8 +90,9 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         doc["pin"] = {"repo": entry["repo"], "revision": entry["revision"], "source": how}
         print(f"[rope] pin {json.dumps(doc['pin'])}", flush=True)
         checkpoints = X.scratch_checkpoints(a.checkpoints, entry, Path(scratch))
+        ts = [int(t) for t in a.ts.split(",")]
         eng = build_engine(checkpoints, case=a.role, target=target, max_num_seqs=len(X.PROMPTS),
-                           engine_args={"max_num_batched_tokens": a.t, "max_model_len": a.t + 256})
+                           engine_args={"max_num_batched_tokens": max(ts), "max_model_len": max(ts) + 256})
     model = eng.model
     doc["install"] = {"rope_cache": eng.rope_cache, "layers": len(layers(model)),
                       "impls": sorted({type(m.self_attn.attn.impl).__name__ for _, m in layers(model)}),
@@ -89,8 +102,13 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
     g = torch.Generator().manual_seed(0)
     long_ids = torch.randint(100, 30000, (a.long,), generator=g).tolist()
-    timed_ids = torch.randint(100, 30000, (a.t,), generator=g).tolist()
     arms = {"fused": lambda: R.install(model), "unfused": R.uninstall}
+    doc["kernels"] = {}
+    for arm in ("fused", "unfused"):
+        R.uninstall()
+        arms[arm]()
+        doc["kernels"][arm] = kernels(eng.llm, X.PROMPTS)
+    print(f"[rope] kernels {json.dumps(doc['kernels'])}", flush=True)
     dig = Digests(model)
     passes = []
     for arm in ("fused", "unfused", "fused"):
@@ -114,30 +132,36 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         print(f"[rope] equal {json.dumps(e)}", flush=True)
 
     sp = SamplingParams(temperature=0.0, max_tokens=1, seed=0)
-    ms: dict[str, list[float]] = {"fused": [], "unfused": []}
-    for r in range(a.warmup + a.reps):
-        for arm in (("fused", "unfused") if r % 2 else ("unfused", "fused")):
-            R.uninstall()
-            arms[arm]()
-            start, end = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-            torch.cuda.synchronize()
-            start.record()
-            eng.llm.generate([{"prompt_token_ids": timed_ids}], sp, use_tqdm=False)
-            end.record()
-            torch.cuda.synchronize()
-            if r >= a.warmup:
-                ms[arm].append(start.elapsed_time(end))
+    doc["timed"] = []
+    for t in ts:
+        ids = torch.randint(100, 30000, (t,), generator=g).tolist()
+        ms: dict[str, list[float]] = {"fused": [], "unfused": []}
+        for r in range(a.warmup + a.reps):
+            for arm in (("fused", "unfused") if r % 2 else ("unfused", "fused")):
+                R.uninstall()
+                arms[arm]()
+                start, end = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
+                torch.cuda.synchronize()
+                start.record()
+                eng.llm.generate([{"prompt_token_ids": ids}], sp, use_tqdm=False)
+                end.record()
+                torch.cuda.synchronize()
+                if r >= a.warmup:
+                    ms[arm].append(start.elapsed_time(end))
+        row = {"t": t, "reps": a.reps, "ms": ms, "median_ms": {k: statistics.median(v) for k, v in ms.items()}}
+        row["saved_ms"] = row["median_ms"]["unfused"] - row["median_ms"]["fused"]
+        doc["timed"].append(row)
+        print(f"[rope] timed {json.dumps({k: v for k, v in row.items() if k != 'ms'})}", flush=True)
     R.uninstall()
     arms["fused"]()
-    doc["timed"] = {"t": a.t, "reps": a.reps, "ms": ms, "median_ms": {k: statistics.median(v) for k, v in ms.items()}}
-    doc["timed"]["saved_ms"] = doc["timed"]["median_ms"]["unfused"] - doc["timed"]["median_ms"]["fused"]
-    print(f"[rope] timed {json.dumps({k: v for k, v in doc['timed'].items() if k != 'ms'})}", flush=True)
 
     doc["ok"] = bool(installed and doc["install"]["impls"] == ["FlashAttentionImpl"]
+                     and doc["kernels"]["fused"] == ["rope_cache_kernel"]
+                     and doc["kernels"]["unfused"] == ["vllm::reshape_and_cache_flash_kernel", "vllm::rotary_embedding_kernel"]
                      and all(e["tokens"] and e["logprobs"] and e["attention"] and e["calls"] > 0 for e in doc["equal"]))
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
-    print(f"ROPE-CACHE-ENGINE-GPU {'OK' if doc['ok'] else 'FAIL'} layers={doc['install']['layers']} "
-          f"saved_ms={doc['timed']['saved_ms']:.3f} at T {a.t}", flush=True)
+    saved = " ".join(f"T{r['t']}={r['saved_ms']:.3f}" for r in doc["timed"])
+    print(f"ROPE-CACHE-ENGINE-GPU {'OK' if doc['ok'] else 'FAIL'} layers={doc['install']['layers']} saved_ms {saved}", flush=True)
     return doc
 
 
@@ -153,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--by", required=True, help="resolved_by of the pin entry")
     ap.add_argument("--max-tokens", type=int, default=16)
     ap.add_argument("--long", type=int, default=3000, help="tokens of the long prompt")
-    ap.add_argument("--t", type=int, default=8192, help="tokens of the timed prefill")
+    ap.add_argument("--ts", default="8192", help="tokens of each timed prefill, comma-separated")
     ap.add_argument("--reps", type=int, default=10)
     ap.add_argument("--warmup", type=int, default=2)
     return 0 if run(ap.parse_args(argv))["ok"] else 1
