@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# serve-openai --retain device --seal --release-after pouw on one H200, against --retain host of the same load (VLLM-157): Llama-3.2-1B
+# serve-openai --retain device --seal --release-after pouw on one H200, against --retain host of the same load: Llama-3.2-1B
 # int8 (the B4 row's manifest and taps of r20261026-185144-3ccb, as served_verdicts.sh), ROUNDS rounds of SLOTS fixed requests of
 # PROMPT tokens and WINDOW_STEPS steps at T (--max-num-batched-tokens, default 8192), each round one Commit window.
 #  1. host: --retain host --seal; every window sealed; then `retain_device_gpu.py reads` picks each window's draw by hand from
@@ -44,9 +44,9 @@ mkdir -p "$BASE" "$ROOT/cache"
 { id -un; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; nproc; free -g | head -2; nvidia-smi -L; df -h /workspace | tail -1
   echo "base $BASE CUDA_HOME $CUDA_HOME T $T SLOTS $SLOTS PROMPT $PROMPT WINDOW_STEPS $WINDOW_STEPS ROUNDS $ROUNDS"; } | tee "$OUT/machine.txt"
 { "$PY" -m research keep "$ROOT" --owner @compute-accounting --expires 7d --priority normal \
-    --why "VLLM-157: --retain device vs --retain host serve dirs (sealed bundles)" \
+    --why "retain_device_gpu.sh: --retain device vs --retain host serve dirs (sealed bundles)" \
   || research keep "$ROOT" --owner @compute-accounting --expires 7d --priority normal \
-    --why "VLLM-157: --retain device vs --retain host serve dirs (sealed bundles)"; } 2>&1 | tail -2
+    --why "retain_device_gpu.sh: --retain device vs --retain host serve dirs (sealed bundles)"; } 2>&1 | tail -2
 
 serve() {  # NAME RETAIN-ARGS...: one endpoint, ROUNDS rounds of the fixed load, every closed window sealed, then SIGTERM
   local name=$1; shift
