@@ -148,7 +148,8 @@ private def hex (b : Nat) : String := String.join (List.replicate 32 s!"0{b}")
 #guard (answerR (accepts "r") [accepts "a", accepts "b"]).published.map (·.compress) ==
   some "{\"a\":{\"passed\":2},\"b\":{\"passed\":2}}"
 
-private def sameToy : Protocol := same "verity/toy/v2" ["a", "c"] [Stub.stub "a", Stub.stub "b", Stub.stub "c"]
+private def sameToy : Protocol :=
+  same "verity/toy/v2" [("a", committed), ("c", committed)] [Stub.stub "a", Stub.stub "b", Stub.stub "c"]
 
 private def answerS (xs : List Stubbed) (c : ByteArray := commitmentOf sameToy xs) : Answer :=
   Cases.answer sameToy xs (c := c)
