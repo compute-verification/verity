@@ -238,7 +238,7 @@ theorem AcceptedH.row_bc (a : AcceptedH T) (hupv : 0 < a.st.c.upv)
   have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray := by
     rw [s.da, Hidden.hidden_delta_unpinned (Hidden.setupHidden_unpinned ht h hrf.1.1)]
   have hz0 := Hidden.Any.sat_flatF L L0 F0 hda hrf.1 hz
-  exact Hidden.Any.row_bc_tgtS L0 F0 rfl hupv hz0 o hg hp (hrf.kind hp)
+  exact Hidden.Any.row_bc_tgtS L0 F0 rfl hupv (hz0.ex _) o hg hp (hrf.kind hp)
 
 /-- **A row's `b ‖ c` at a drawn unit's site**: in a satisfying witness of an accepted statement with a unit per VU
 (`hupv`) and whose rows are each fit or `sha512/row-seg/v1` (`hrf`), at block `o`, template instance `g` and row `p`, the

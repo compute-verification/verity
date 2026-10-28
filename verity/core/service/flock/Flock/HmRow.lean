@@ -2117,6 +2117,30 @@ def checkOwn (pi : Ports) (pop : Public) (own : Option ByteArray) : V Unit := do
       let s := fun f => (pj.getObjValAs? String f).toOption.getD ""
       throw s!"public input {pi.ports[k]!.1}: word {w - starts[k]!} of instance {i} is not the verifier's own recomputation (seed {s "seed"}, derivation {s "derivation"})"
 
+/-- Public input `k`'s group `G` when the verifier derives its words itself: seed `instance`, derivation `mod:G` (`G` as
+`toString` writes it, `0 < G ≤ 2^16`), one word, instance `i`'s word `i mod G` (a shared read's position, `checkReads`). -/
+def derivedGroup (pi : Ports) (k : Nat) : Option Nat :=
+  let pj := (pi.json.getArrVal? k).toOption.getD Json.null
+  let s := fun f => (pj.getObjValAs? String f).toOption.getD ""
+  let d := s "derivation"
+  if s "seed" != "instance" || (pi.ports.getD k default).2 != 1 || !d.startsWith "mod:" then none
+  else ((d.drop 4).toString.toNat?).filter fun g => d == s!"mod:{g}" && 0 < g && g ≤ 2 ^ 16
+
+/-- The groups of a circuit with public inputs whose every port the verifier derives (`derivedGroup`), port `k`'s at `k`;
+none when a port's words are a recomputation the verifier is handed (`--public-inputs F`, `checkOwn`). -/
+def derivedGroups (pi : Ports) : Option (Array Nat) :=
+  if !pi.ports.isEmpty && (List.range pi.ports.size).all (derivedGroup pi · |>.isSome) then
+    some ((Array.range pi.ports.size).map fun k => (derivedGroup pi k).getD 0)
+  else none
+
+/-- The verifier's own derivation (`derivedGroups`, groups `gs`): every instance `i` of the population, its word of port `k`
+`i mod gs[k]`, one word a port. The public file's words must be these. -/
+def checkDerived (pi : Ports) (pop : Public) (gs : Array Nat) : V Unit := do
+  let (n, pw) := ((pop.population.map (·.1)).getD pop.n, pi.ports.size)
+  let words := (pop.population.map (·.2.2)).getD pop.outputs
+  if let some x := (List.range (n * pw)).find? (fun x => words.getD x 0 != x / pw % gs.getD (x % pw) 1) then
+    throw s!"public input {(pi.ports.getD (x % pw) default).1}: instance {x / pw}'s word is not its index mod {gs.getD (x % pw) 1} (the verifier's own derivation)"
+
 end HmIn
 
 /-! PROTOCOL.md §16.13 Linking: under a template query, with the verifier's own program, every cut wire between two units of
