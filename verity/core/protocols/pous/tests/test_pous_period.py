@@ -11,6 +11,7 @@ import os
 from fractions import Fraction
 
 import pytest
+from pous_fakes import Clock
 from pous_test_signer import SCHEMES, TestSigner, session_log
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import period
@@ -23,11 +24,6 @@ from verity.ml.circuits import requirement
 TEST_ID = mc.TEST_PREFIX + period.PROTOCOL
 SALT = hashlib.sha512(b"the setup's salt").digest()[:R.SALT_BYTES]
 EPS = Fraction(1, 100) + Fraction(1, 2 ** 128)
-
-
-class Clock:
-    def __call__(self) -> int:
-        return 10 ** 9
 
 
 def test_the_default_point_is_the_smallest_the_family_certifies():
@@ -95,7 +91,7 @@ def test_a_kept_store_is_audited_again(tmp_path):
     assert again == held and len(again.blocks) == held.point.params.blocks
     signer, log = TestSigner(b"period", 3), session_log()
     got = [period.audit("n0", again, hashlib.sha512(b"coins %d" % i).digest(), signer=signer, log=log, schemes=SCHEMES,
-                        protocol=TEST_ID, clock=Clock()) for i in range(2)]
+                        protocol=TEST_ID, clock=Clock(10 ** 9)) for i in range(2)]
     assert [p.verdict for p in got] == ["accept", "accept"] and got[0].case["params"] != got[1].case["params"]
     assert {p.public("s_bits") for p in got} == {0}
 
@@ -137,7 +133,7 @@ def test_an_audit_at_the_certified_point_checks_its_run():
     `1% + 2^-128`, with no gap, under `P2SlackFamilyUncond`. This `C*` is no setup's, so the answer is the tie's refusal;
     an accepted, certified audit through the tie is `check/tests/test_run_protocol.py`'s (slow: a 256-block encode)."""
     held, signer = _certified_store(), TestSigner(b"certified", 3)
-    kw = dict(signer=signer, log=session_log(), schemes=SCHEMES, protocol=TEST_ID, clock=Clock())
+    kw = dict(signer=signer, log=session_log(), schemes=SCHEMES, protocol=TEST_ID, clock=Clock(10 ** 9))
     honest = period.audit("n0", held, hashlib.sha512(b"coins").digest(), **kw)
     assert honest.verdict == "reject" and honest.answer["reason"].startswith("setup: "), honest.answer
     R.check_at(*_run_of(honest.case))
@@ -278,7 +274,7 @@ def test_pous_accepts_the_cut_records_as_it_does_the_whole(tmp_path):
     for name, store in (("whole", _whole(files)), ("cut", period.records(tmp_path))):
         got = period.run("n0", store, hashlib.sha512(b"coins " + name.encode()).digest(), signer=signer, log=log,
                          point=period.point_for(len(store), period.W, period.C0), schemes=SCHEMES, protocol=TEST_ID,
-                         clock=Clock())
+                         clock=Clock(10 ** 9))
         assert got.verdict == "accept", got.answer
         point[name] = period.point_of(got.case["params"]["point"]).params.blocks
     assert point["cut"] < point["whole"]
