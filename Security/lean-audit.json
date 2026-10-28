@@ -11381,6 +11381,12 @@
    "assumptions": [],
    "type_hash": "fbeb0ea5055c52bb842b296ef0dabce92330410439b1b39442b6125cfd409494"
   },
+  "Verity.SecurityProofs.SampleAfterRecorded_honest": {
+   "owner": "@soundness"
+  },
+  "Verity.SecurityProofs.SampleAfterRecorded_nontrivial": {
+   "owner": "@soundness"
+  },
   "Verity.SecurityProofs.ServingBlockSum": {
    "owner": "@lean",
    "signature": ["Verity.SecurityProofs.ServingBlockSum : Verity.Guarantees.ServingBlockSum"],
@@ -12565,7 +12571,9 @@
    "Verity.SecurityProofs.CreditSizeLe": "frozen (no-function): It is about an arbitrary lowering from declarations to circuits and an arbitrary declaration (Verity.creditSize, Security/Definitions/Core/Formalism.lean): the credit, the lowered circuit's AND count, is at most its size; not about a function's code.",
    "Verity.SecurityProofs.ExpandAndSize": "frozen (no-function): It is about an arbitrary declaration, a partition of it and their expansions (Verity.Circuit.andSize, Verity.Declaration.expand, Verity.Partition.expand): the expansion's AND count is at most the bits it expands; not about a function's code.",
    "Verity.SecurityProofs.ToCircuitAnd": "frozen (no-function): It is about an arbitrary C-Flock circuit of the Boolean profile and its toCircuit (FlockSoundness.Audit.Circuit, Security/Definitions/Core/Boolean.lean): which of its gates are AND gates (Verity.Circuit.IsAnd); not about a function's code.",
-   "Verity.SecurityProofs.SampleAfterRecorded": "frozen (no-function): It is stated over an arbitrary sample law, challenger log and verifier, and says what a coin read from a challenger's log, released after the commitments it samples were recorded, establishes about the sample drawn with it, rather than a Lean function's acceptance."
+   "Verity.SecurityProofs.SampleAfterRecorded": "frozen (no-function): It is stated over an arbitrary sample law, challenger log and verifier, and says what a coin read from a challenger's log, released after the commitments it samples were recorded, establishes about the sample drawn with it, rather than a Lean function's acceptance.",
+   "Verity.SecurityProofs.SampleAfterRecorded_honest": "completeness: SampleAfterRecorded's honest lemma (its witnesses entry): a challenger that releases a coin, records a commitment, then releases the coin that samples it meets all three premises, with the verifier reading both coins from its log, so the bound is not vacuous at a log that releases coins.",
+   "Verity.SecurityProofs.SampleAfterRecorded_nontrivial": "completeness: SampleAfterRecorded's nontrivial lemma (its witnesses entry): a challenger that flips its coin before recording the commitment it samples meets ChallengerLogsCoins and VerifierReadsLog but not FlipsAfterRecorded, and a block set chosen after the coin breaks the bound, a counterexample for another challenger, not a property of a deployed one."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -59610,6 +59618,10 @@
   "Flock.SecurityProofs.RecursiveKS": {
    "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
    "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
+  },
+  "Verity.SecurityProofs.SampleAfterRecorded": {
+   "honest": ["Verity.SecurityProofs.SampleAfterRecorded_honest"],
+   "nontrivial": "Verity.SecurityProofs.SampleAfterRecorded_nontrivial"
   }
  }
 }

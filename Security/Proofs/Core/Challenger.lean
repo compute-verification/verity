@@ -5,10 +5,13 @@ import Proofs.Core.Game.Prob
 /-!
 # The sample from a challenger's coin: proof
 
-`SampleAfterRecorded`. The verifier's coin `i` is the challenger's flip `i` (`coin_of_log`), and the set of units fixed
+`SampleAfterRecorded`. The verifier's coin `i` is the challenger's flip `i` (`coin_of_log`), and the set of blocks fixed
 before it reads only the flips before `i` (`FlipsAfterRecorded`), so resampling flip `i` leaves the set where it is
 while the average over the challenger's flips stays the same (`Game.avg_update`). For each fixed set of at least `K`
-units, a uniform coin's draw misses it with probability the law's `escape`, at most `miss K`.
+blocks, a uniform coin's draw misses it with probability the law's `escape`, at most `miss K`.
+
+Its witnesses: `SampleAfterRecorded_honest`, a log that releases coins around a recorded commitment and meets every
+premise, and `SampleAfterRecorded_nontrivial`, a log that flips before it records, where the bound fails.
 -/
 
 namespace Verity
@@ -116,6 +119,79 @@ theorem SampleAfterRecorded : Guarantees.SampleAfterRecorded := by
           rw [prCoin_false]
           exact bot_le
     _ = L.miss K := avg_const _
+
+/-- **`SampleAfterRecorded`'s honest lemma.** A challenger that releases coin 0, records a commitment the prover made
+after seeing it, then releases coin 1, meets all three premises, with the verifier reading both coins from its log; so
+for every law, every set of blocks fixed by the log before coin 1 and every `K`, the bound holds there. -/
+theorem SampleAfterRecorded_honest {U : Type} (L : Law U) (bad : Log L.Ω L.Ω → Finset U) (K : Nat) :
+    ChallengerLogsCoins (fun ω : Fin 2 → L.Ω => [Entry.released (ω 0), Entry.recorded (ω 0), Entry.released (ω 1)]) ∧
+      FlipsAfterRecorded
+        (fun ω : Fin 2 → L.Ω => [Entry.released (ω 0), Entry.recorded (ω 0), Entry.released (ω 1)]) ∧
+      VerifierReadsLog (fun ω : Fin 2 → L.Ω => [ω 0, ω 1])
+        (fun ω : Fin 2 → L.Ω => [Entry.released (ω 0), Entry.recorded (ω 0), Entry.released (ω 1)]) ∧
+      prCoin (fun ω : Fin 2 → L.Ω => ∃ c, [ω 0, ω 1][1]? = some c ∧
+        K ≤ (bad (Log.before [Entry.released (ω 0), Entry.recorded (ω 0), Entry.released (ω 1)] 1)).card ∧
+        Disjoint (L.draw c) (bad (Log.before [Entry.released (ω 0), Entry.recorded (ω 0), Entry.released (ω 1)] 1)))
+        ≤ L.miss K := by
+  have hlog : ChallengerLogsCoins
+      (fun ω : Fin 2 → L.Ω => [Entry.released (ω 0), Entry.recorded (ω 0), Entry.released (ω 1)]) := fun ω => by
+    simp [Log.coins, List.ofFn_succ]
+  have hflip : FlipsAfterRecorded
+      (fun ω : Fin 2 → L.Ω => [Entry.released (ω 0), Entry.recorded (ω 0), Entry.released (ω 1)]) := by
+    intro i ω ω' h
+    match i with
+    | 0 => rfl
+    | 1 => simp [Log.before, h 0 (by decide)]
+    | i + 2 =>
+      simp only [Log.before]
+      rw [h 0 (Nat.lt_of_lt_of_le (by decide) (Nat.le_add_left 2 i)),
+        h 1 (Nat.lt_of_lt_of_le (by decide) (Nat.le_add_left 2 i))]
+  have hread : VerifierReadsLog (fun ω : Fin 2 → L.Ω => [ω 0, ω 1])
+      (fun ω : Fin 2 → L.Ω => [Entry.released (ω 0), Entry.recorded (ω 0), Entry.released (ω 1)]) := fun ω => by
+    simp [Log.coins]
+  exact ⟨hlog, hflip, hread, SampleAfterRecorded L 2 _ _ 1 bad K hlog hflip hread⟩
+
+/-- The law of one fair bit that samples the bit it is. -/
+private def bitLaw : Law Bool where
+  Ω := Bool
+  draw c := {c}
+
+/-- **`SampleAfterRecorded`'s nontrivial lemma: without `FlipsAfterRecorded` the bound fails.** A challenger that flips
+its coin before it records the commitment the coin samples (a commitment that names the other bit) meets
+`ChallengerLogsCoins` and `VerifierReadsLog` but not `FlipsAfterRecorded`, and the block set that commitment fixes, chosen
+after the coin, escapes the sample of one fair bit always, while the law lets a set of one block escape half the time. -/
+theorem SampleAfterRecorded_nontrivial :
+    ∃ (L : Law Bool) (log : (Fin 1 → L.Ω) → Log Bool L.Ω) (vc : (Fin 1 → L.Ω) → List L.Ω)
+      (bad : Log Bool L.Ω → Finset Bool),
+      ChallengerLogsCoins log ∧ VerifierReadsLog vc log ∧ ¬ FlipsAfterRecorded log ∧
+        L.miss 1 < prCoin (fun ω => ∃ c, (vc ω)[0]? = some c ∧ 1 ≤ (bad ((log ω).before 0)).card ∧
+          Disjoint (L.draw c) (bad ((log ω).before 0))) := by
+  let log : (Fin 1 → Bool) → Log Bool Bool := fun ω => [Entry.recorded (!ω 0), Entry.released (ω 0)]
+  let bad : Log Bool Bool → Finset Bool := fun l => match l with
+    | [Entry.recorded b] => {b}
+    | _ => ∅
+  refine ⟨bitLaw, log, fun ω => [ω 0], bad, fun ω => by simp [log, Log.coins, List.ofFn_succ], fun ω => by
+    simp [log, Log.coins], fun h => ?_, ?_⟩
+  · have := h 0 (fun _ => true) (fun _ => false) fun j hj => absurd hj (Nat.not_lt_zero _)
+    simp [log, Log.before] at this
+  · have hall : ∀ ω : Fin 1 → Bool, ∃ c, [ω 0][0]? = some c ∧ 1 ≤ (bad ((log ω).before 0)).card ∧
+        Disjoint (bitLaw.draw c) (bad ((log ω).before 0)) := fun ω =>
+      ⟨ω 0, rfl, by simp [log, bad, Log.before], by
+        simp only [log, bad, Log.before, bitLaw]
+        generalize ω 0 = b
+        cases b <;> decide⟩
+    have h1 : prCoin (fun ω : Fin 1 → Bool => ∃ c, [ω 0][0]? = some c ∧ 1 ≤ (bad ((log ω).before 0)).card ∧
+        Disjoint (bitLaw.draw c) (bad ((log ω).before 0))) = 1 := by
+      unfold prCoin
+      simp only [hall, ite_true]
+      exact avg_const 1
+    have hmiss : bitLaw.miss 1 ≤ 2⁻¹ := by
+      refine iSup₂_le fun B hB => ?_
+      obtain ⟨b, hb⟩ := Finset.card_pos.mp hB
+      refine le_trans (prCoin_mono (q := fun c : Bool => c ≠ b) fun c hc hcb => ?_) ?_
+      · exact Finset.disjoint_left.mp hc (by simp [bitLaw, hcb]) hb
+      · cases b <;> simp [prCoin, avg]
+    exact lt_of_le_of_lt hmiss (lt_of_lt_of_eq (ENNReal.inv_lt_one.2 (by norm_num)) h1.symm)
 
 end SecurityProofs
 
