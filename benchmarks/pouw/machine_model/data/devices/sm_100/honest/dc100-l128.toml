@@ -4,7 +4,7 @@
 # before it is folded.
 name = "dc100-l128"
 status = "provisional"
-source = "CALC from EPS1 DC's census: duo is LOP3 + IMAD + LEA.HI a word on sm_100 (DC), 256 committed words a lane a MMA at L = 128"
+source = "from this device's census: duo is LOP3 + IMAD + LEA.HI a word on sm_100, 256 committed words a lane a MMA at L = 128"
 L = 128
 
 [mma]

@@ -64,7 +64,8 @@ def test_conditions_name_the_floor_the_fillers_credit_and_the_checked_fold():
     h = m["sm_90"]
     assert h.design == "dither-2s-licpw-redux-p1-l32" and h.p1 is None
     assert h.fillers == ("0.0703125 FFMA+IMAD a word uncredited, p = 1 (decision 99)",)
-    assert any("RT-LOGIC-12" in c for c in h.conditions) and any("RT-LOGIC-12" in c for c in m["sm_100"].conditions)
+    assert any("PouwWarpCheck" in c for c in h.conditions)
+    assert any("PouwLiAbsorb_v2" in c for c in m["sm_100"].conditions)
     s = {x.family: x for x in H.rows("sheet")}
     assert all(x.floor == "half" for x in s.values())
     assert any(c.startswith("A3 per SM clock") and "1830 MHz" in c and "f_max (1980 MHz" in c
