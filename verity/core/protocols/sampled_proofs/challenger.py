@@ -68,9 +68,9 @@ session its client closed; then the roots it received (`released_roots_of`).  A 
 **The auditor's ledger** names the one challenger session each window's coins come from (`audited_session`).  The
 auditor (`benchmarks/live_challenger/auditor.py` on the challenger's host, run by the host's operator) appends a signed
 entry, under the
-challenger's key, when a lane reserves a window (its request, start and expiry), when it opens the reserved session for
-the window's root, before its first coin, and when the session ends; a window gets one session.  A lane's period is two
-more entries, its `period-open` and `period-close`:
+challenger's key, when a prover reserves a window (its request, start and expiry), when it opens the reserved session for
+the window's root, before its first coin, and when the session ends; a window gets one session.  A prover's period is two
+more entries, its `period-open` and `period-close`, which name the prover in their body's `lane`:
 
     entry   = {body, kind, prev, schema, seq, session, sig}        seq from 0; prev: SHA-512 of the previous line (128
                                                                    zeros first); schema v1 or v2, no v1 after a v2
@@ -92,13 +92,14 @@ too): each
 entry chained and signed at strictly increasing leaves of the key (a ledger restored with its key's state forks at a
 reused leaf), a reserve first in its session and expiring its minutes after its start, one open a root and a session,
 binding its session's reserve and carrying its request after the first reserve, one end a session after its open, each
-record's leaf between its session's open and end and no entry's, and every period's close listing exactly its lane's
+record's leaf between its session's open and end and no entry's, and every period's close listing exactly its prover's
 windows, counted at their reserves.  The window's session must be
 opened under v2, ended and closed, its end naming its record's leaf and commitment and how many hellos it refused, and
 sealing the session's record, close, release log and refused hellos; then its record names the open's host and is
 signed at that leaf over that commitment, its signed close names the ledger's session id, and its release log and
 refused hellos are the ones the end sealed (`session_named`).  A ledger older than the window's end is refused, as is a
-window it opens no session for, so one session's coins pass for one window only.  Infra publishes the ledger's heads;
+window it opens no session for, so one session's coins pass for one window only.  The auditor host's operator publishes
+the ledger's heads;
 `ledger_head` checks each, refuses any two that don't extend one another, and takes the longest.  Every entry is under
 the one pinned key, so a ledger whose key changes is refused: no entry, signed under the old key, hands the ledger to a
 new one.  `ledger_line` writes an entry as the auditor does.
@@ -114,7 +115,7 @@ no period, in a period that committed no circuit, or whose descriptor hashes to 
 auditor writes it (`pin_line`):
 
     pin     = {commit, main, pinned_utc}        commit: the pin; main: the origin/main commit whose history held it
-                                                 when the pin command pinned it (each 40 lowercase hex)
+                                                 when the host was pinned to it (each 40 lowercase hex)
     open    = body {..., pinned, pins: {lines, sha512}}        the pins log as it stood when the gate admitted the open
 
 and each open seals the log as it stood (`pins_seal`), under the open's signature.  The session counts only when the
@@ -742,7 +743,8 @@ def leaf_of(sig: Any) -> int:
 
 
 def lane_of(e: dict) -> str:
-    """A reserve's or an open's prover: the lane an operator reserved or opened it for (`for`), else its requester (`by`)."""
+    """A reserve's or an open's prover: the one the auditor's operator reserved or opened it for (`for`), else its
+    requester (`by`)."""
     return e["body"].get("for") or e["body"]["by"]
 
 
@@ -801,8 +803,9 @@ def verify_ledger(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes],
 
 def verify_periods(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]) -> dict[str, dict]:
     """The ledger's periods once `verify_ledger` passes: period -> {"lane", "open", "close" (None while open), "windows":
-    [session, ...], "cap", "circuit"}. A period's name is used once; a lane has one period open at a time; its windows are
-    exactly the reserves (and one-step v2 opens) whose prover is its lane (`lane_of`) between its period-open and its
+    [session, ...], "cap", "circuit"}, "lane" being the period's prover. A period's name is used once; a prover has one
+    period open at a time; its windows are exactly the reserves (and one-step v2 opens) whose prover (`lane_of`) is the
+    period's, between its period-open and its
     period-close, counted at the reserve, so a reserve that expired unopened is one, at most its `cap` (a positive
     integer, with `circuit` committed beside it before window 0's first coin; both None only for a period opened before
     they were required, which a reader of the cap refuses), and the close lists each of them, in order, with its root

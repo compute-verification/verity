@@ -1036,7 +1036,7 @@ def _period_close(ledger: Ledger, windows: list, complete: bool, name: str = "p-
 def test_a_ledger_with_periods_is_read_and_a_close_that_misstates_its_windows_is_refused(tmp_path, signer):
     """The operator's signed `period-open` and `period-close` entries pass through the ledger's check
     (`verify_periods`): a
-    period's windows are the opens of its lane between them, and a close that lists other windows or outcomes is
+    period's windows are the opens of its prover between them, and a close that lists other windows or outcomes is
     refused, as is a period entry under another key or under v1."""
     ledger = Ledger(tmp_path / "windows.jsonl", signer)
     _period_open(ledger)
