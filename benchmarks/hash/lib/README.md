@@ -139,8 +139,7 @@ past 768 segments, keep the two launches.
   checks on reference-built records).
 
 ~~~text
-research run --on vy-dc-h200 --project verity --campaign hash-loop --source . --cwd source --env GPU_LEASE_WHO=LANE \
-  [--env BENCH=1] [--env QUICK=1] [--env LEASE_ARGS=--preemptible] -- bash benchmarks/hash/lib/gpu.sh
+OUT=DIR GPU_LEASE_WHO=WHO [BENCH=1] [QUICK=1] [LEASE_ARGS=--preemptible] bash benchmarks/hash/lib/gpu.sh   # each GPU
 uv run tools/verity/check/suites.py benchmarks/hash/lib      # the CPU suite
 ~~~
 

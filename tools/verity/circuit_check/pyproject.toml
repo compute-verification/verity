@@ -56,6 +56,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/ml/randomness", "verity/ml/definitions", "verity/ml/flock/python/verity_flock", "verity/ml/windows",
           "verity/core/protocols/pouw/__init__.py", "verity/core/protocols/pouw/audit.py", "verity/core/protocols/pouw/salt.py",
           "verity/core/protocols/pouw/protocol.py",
+          "verity/core/protocols/pouw/core_check.py", "verity/core/protocols/pouw/leaf_lanes.py",
           "verity/core/protocols/pouw/serving.py", "verity/core/protocols/pouw/registration.py", "verity/core/protocols/pouw/coins.py",
           "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/claims/__init__.py",
           "verity/core/protocols/pouw/grind.py", "verity/core/protocols/pouw/circuit", "verity/core/protocols/pouw/schemes",
