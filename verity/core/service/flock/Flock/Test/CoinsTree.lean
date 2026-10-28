@@ -50,7 +50,7 @@ def why (t : Tags) (c : Coins) : Option String :=
 
 def passes (t : Tags) (c : Coins) : Bool := (why t c).isNone
 
-#guard Tags.all.all fun t => !passes t .seed && passes t .os == t.liveOs && specs.all (passes t ∘ .tree)
+#guard Tags.all.all fun t => !passes t .seed && passes t .os == t.liveOs && specs.all fun s => passes t (.tree s)
 #guard Tags.templated.all fun t => !passes t .seed
 #guard [Tags.circuit, Tags.circuitPlainLeaves, Tags.circuitTypes].all fun t => passes t .os
 #guard [Tags.circuitSelftest, Tags.circuitTypesSelftest].all fun t => !passes t .os
