@@ -94,9 +94,6 @@ ALLOWED = {
     # N2 of the proof-service plan: a link-window's network certificates are registered through the proof service; they
     # are LMS signatures (`ml.crypto.lms`).
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.sampled_proofs"},
-    # The Site, the registered hardware: its locations, links and registration log, the check each entry passes and the
-    # views a protocol reads. Its digests are canonical JSON's, the wire's.
-    "core.site": {"core.wire"},
 }
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
 #: repository's own directories.
