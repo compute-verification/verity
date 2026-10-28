@@ -1,6 +1,6 @@
-"""One link-window's network certificates through the proof service (N2): the round trip to an accepted, exhaustive
+"""One sampling block's network certificates through the proof service (N2): the round trip to an accepted, exhaustive
 outcome, the public-items rule on the registration, the head check against the declared grid and the occupancy
-profile, and each way a link-window fails closed, on injected coins and an injected clock. Each round's verdict of
+profile, and each way a sampling block fails closed, on injected coins and an injected clock. Each round's verdict of
 record is decided on a stand-in proof of the unit (`standin`: the prover's rows and output word by the gates'
 references, the Lean run reading its session file), and held to the in-the-clear check on the opening, the debug
 comparison, and to the oracle (`LinkWindows.stand_in`), which compares the Program's egress grid: the same verdict,
@@ -352,7 +352,7 @@ def test_n2s_program_reads_no_registered_value(tmp_path):
 
 def test_the_verdict_of_record_is_the_proofs(tmp_path):
     """The verifier of record decides on the delivered proof and public inputs alone, and reads the opening only for
-    the debug comparison it is given. Each of these rejects an honest link-window's draw: the Lean run rejecting the
+    the debug comparison it is given. Each of these rejects an honest sampling block's draw: the Lean run rejecting the
     session, a circuit file other than the committed one, a public file whose instance is another unit, the public or
     the output row's salt not the one committed, a proof on a head whose counts are off the profile (its verdict bit
     0), with or without a forged output word, a forged signature, a certificate whose signed digest isn't the one the
@@ -532,7 +532,7 @@ def test_a_bad_signature_is_a_reject(tmp_path):
 
 
 def test_a_certificate_from_another_session_is_a_reject(tmp_path):
-    """The cross-session replay: the certifier's own key signed the link-window in an earlier session, and its
+    """The cross-session replay: the certifier's own key signed the sampling block in an earlier session, and its
     certificate signs another message than this session's, so it is rejected."""
     run = Run(tmp_path)
     earlier = LmsSigner(run.signer.key, run.signer.state)
@@ -736,7 +736,7 @@ def test_a_head_leaf_opens_from_the_head_alone(tmp_path):
 
 def test_a_head_leaf_that_isnt_its_records_head_is_a_reject(tmp_path):
     """A root whose egress head leaf holds another window's head: no opening of the records reproduces it, so the
-    link-window is rejected though both certificates verify."""
+    sampling block is rejected though both certificates verify."""
     run = Run(tmp_path)
     opening = run.honest(0)
     other = run.honest(1).records[0].head.encode()

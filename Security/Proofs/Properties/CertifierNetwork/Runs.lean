@@ -8,11 +8,11 @@ import Proofs.Properties.NetworkCertifier.Run
 
 Every certificate the device's code issues is of a record it published (`issued_spec`, `deviceCode_certificates`: it
 issues none where its signing state has started its session): the head `record_head` makes of the record under its
-grid's parameters digest, its digest, and the record's link-window. Unless a certificate of the commitment is an LMS
+grid's parameters digest, its digest, and the record's sampling block. Unless a certificate of the commitment is an LMS
 forgery, the message of each one the check accepts, in the run's session, is one the device signed in it; unless two
-distinct strings of the run have one SHA-512 digest, that message names the same link-window and signed digest
+distinct strings of the run have one SHA-512 digest, that message names the same sampling block and signed digest
 (`messageInput_inj`), the signed digest the same record digest whatever the two salts (`certificateDigest_inj`), and
-that the same head (`head_inj`) (`device_record`). The device publishes one record per link-window
+that the same head (`head_inj`) (`device_record`). The device publishes one record per sampling block
 (`unique`, from `Inv`), so each record it published on its links is the one the check accepted: complete, since the
 check's is settled, and on egress of the Program's grid (`recordHead_grid_inj`).
 -/
@@ -57,7 +57,7 @@ theorem certify_some {i i' : Issuer} {salt : ByteArray} {leaf : Except String Na
     exact ⟨hh, ⟨R, hR, hdg⟩, rfl, rfl, rfl⟩
 
 /-- Each certificate the code issues is of a record it was given: the head `record_head` makes of it under its grid's
-parameters digest, signing that head's digest under the certificate's salt and naming the record's link-window. -/
+parameters digest, signing that head's digest under the certificate's salt and naming the record's sampling block. -/
 theorem issued_spec {c : Config} : ∀ {i : Issuer} {next : Nat} {salts : Nat → ByteArray} {rs : List Record}
     {cr : CertifiedRecord},
     cr ∈ issued c i next salts rs → ∃ rec ∈ rs, ∃ pd, parameters (gridOf c rec) (syncSetOf c rec) = .ok pd ∧
@@ -101,7 +101,7 @@ theorem deviceCode_started {x : DeviceInput} (h : x.issuer.session ∈ x.session
   dsimp only
   exact ite_eq_left (List.any_eq_true.2 ⟨_, h, decide_eq_true rfl⟩)
 
-/-! ## One record per link-window -/
+/-! ## One record per sampling block -/
 
 theorem nodup_windows {l : String} {P : List Record} {n : Nat} (h : windowsOn l P = List.range n) {r r' : Record}
     (hr : r ∈ P) (hr' : r' ∈ P) (hl : r.link = l) (hl' : r'.link = l) (hw : r.window = r'.window) : r = r' := by
@@ -112,7 +112,7 @@ theorem nodup_windows {l : String} {P : List Record} {n : Nat} (h : windowsOn l 
   exact List.inj_on_of_nodup_map hnd (List.mem_filter.mpr ⟨hr, by simpa using hl⟩)
     (List.mem_filter.mpr ⟨hr', by simpa using hl'⟩) hw
 
-/-- With two links, the device publishes at most one record of each link-window on each. -/
+/-- With two links, the device publishes at most one record of each sampling block on each. -/
 theorem unique {c : Config} {tr : List Event} (hd : Distinct c) {r r' : Record} (hr : r ∈ published c tr)
     (hr' : r' ∈ published c tr) (hl : r.link = r'.link) (hlk : r.link ∈ [c.egressLink, c.ingressLink])
     (hw : r.window = r'.window) : r = r' := by
@@ -157,7 +157,7 @@ theorem mem_run_tree {x : DeviceInput} {out : DeviceOutput} {c : Commitment} {e 
 
 /-- Where the run's strings have no SHA-512 collision and every certificate of the commitment that verifies is of a
 message the device signed, each record the check finds signed is the head the device made of a record it published of
-that link-window, in that direction. -/
+that sampling block, in that direction. -/
 theorem device_record {x : DeviceInput} {c : Commitment} {e : Evidence}
     (hcr : CF fun y => y ∈ runStrings x (deviceCode x) c e)
     (hsig : ∀ r ∈ c.records.toList, ∀ m, certMessage x.issuer.session r = some m →
@@ -227,7 +227,7 @@ theorem acceptedRowsAreProgramRows : AcceptedRowsAreProgramRows := by
   have hpi : (deviceParams x).ingress = #[x.config.ingressLink] := rfl
   have hpw : (deviceParams x).windows = x.config.windows := rfl
   have hpg : (deviceParams x).grid = x.config.egress := rfl
-  -- every link-window has a settled record, the device's
+  -- every sampling block has a settled record, the device's
   have settled : ∀ l ∈ [x.config.egressLink, x.config.ingressLink], ∀ w < x.config.windows,
       ∃ d r dg, Settled (deviceParams x) c d l w r dg ∧ (l = x.config.egressLink → d = .egress) ∧
         (l ≠ x.config.egressLink → d = .ingress) := by
@@ -250,7 +250,7 @@ theorem acceptedRowsAreProgramRows : AcceptedRowsAreProgramRows := by
     obtain ⟨rec, -, hrl, -, hdir, -⟩ := dev hset.1
     simp only [directionOf, hrl.trans hdl.symm, ↓reduceIte] at hdir
     cases hdir
-  -- the device's record of a link-window is the settled one
+  -- the device's record of a sampling block is the settled one
   have mine : ∀ rec ∈ published x.config x.trace, rec.link ∈ [x.config.egressLink, x.config.ingressLink] →
       rec.window < x.config.windows → ∃ d r dg, Settled (deviceParams x) c d rec.link rec.window r dg ∧
         (rec.link = x.config.egressLink → d = .egress) ∧ ∃ pd, parameters (gridOf x.config rec) (syncSetOf x.config rec) = .ok pd ∧

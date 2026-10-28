@@ -4,7 +4,7 @@
 `Audit` here has `audit.Audit`'s interface and returns its `SamplingBlockCheck`s, so a caller switches by its import
 line alone.
 `audit.Audit` keeps running beside the Lean check as its reference, on every call with the same arguments: the verdicts
-are the Lean's, the Python's are kept (`Audit.reference`), a link-window where the two differ is a `disagreement` violation,
+are the Lean's, the Python's are kept (`Audit.reference`), a sampling block where the two differ is a `disagreement` violation,
 and a call that one answers and the other raises on raises. Each call is one unit of the Lean protocol, sent to one
 `network-records verdicts` process kept open across calls and audits:
 
@@ -25,7 +25,7 @@ a window or a grid field outside its integer width, a frame of other than B byte
 `VERITY_NETWORK_RECORDS_EXE` names the executable, and then nothing but `verity` and the stdlib is needed besides it; by
 default the first request runs `lake build network-records` in that package and starts what it builds. A process forked
 after a request starts its own executable at its first; `SERVER`'s is closed at exit. The same process answers
-`link-window` (`Server.call`), N2's verdict of record on one link-window's proof (`service.LinkWindows.verify`).
+`link-window` (`Server.call`), N2's verdict of record on one sampling block's proof (`service.LinkWindows.verify`).
 
 `encode` is the commitment's encoding of one published record (`NetworkCheck/Records.lean`'s module docstring).
 """
@@ -179,13 +179,13 @@ class Server:
             self._pid, self._proc, self._lock = os.getpid(), None, threading.Lock()
 
     def verdicts(self, case: dict, fn: str = "verdicts") -> list[dict]:
-        """Every link-window's verdict on `case` (`{"direction", "link", "verdict", "window"}`, in the audit's order) by
-        `fn`, `verdicts` or `verdicts-no-grid`; `ValueError` when the Lean check refuses the case."""
+        """Every sampling block's verdict on `case` (`{"direction", "link", "verdict", "window"}`, in the audit's order)
+        by `fn`, `verdicts` or `verdicts-no-grid`; `ValueError` when the Lean check refuses the case."""
         return self.call(fn, case)["link_windows"]
 
     def call(self, fn: str, case: dict) -> Any:
         """`fn`'s output on `case` (`verdicts`, `verdicts-no-grid`, or `link-window`: `NetworkCheck.LinkWindow`'s verdict
-        of record on one link-window); `ValueError` when the Lean refuses the case."""
+        of record on one sampling block); `ValueError` when the Lean refuses the case."""
         self._own()
         with self._lock:
             if self._proc is None or self._proc.poll() is not None:
@@ -255,7 +255,7 @@ def _verdicts(out: list[dict], direction: Direction, link: str, windows: int) ->
 @dataclass
 class Audit:
     """`audit.Audit`, each verdict the Lean check's, with `audit.Audit` (`python`) run beside it on every call as the
-    reference: `lean` holds the Lean check's verdicts and `reference` the Python's, and a link-window where they differ is
+    reference: `lean` holds the Lean check's verdicts and `reference` the Python's, and a sampling block where they differ is
     a `disagreement` violation in `verdicts`. A call where one raises and the other answers raises."""
 
     verdicts: list[SamplingBlockCheck] = field(default_factory=list)

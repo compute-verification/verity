@@ -10,9 +10,9 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
 * **front** runs before served_verdicts.sh's requests when ``CERTIFIER_FRONT`` names it: the gate's scan rehearsal
   (`served_session.session`, ``warden-rehearse --scan --prompts --window-per-group``) against serve-openai on PORT, one
   group of ``--prompts`` requests (at most the scan's 4 lanes) of ``--prompt-ids`` ids below ``--vocab``, each answered
-  with exactly ``--tokens`` ids, drawn from a fresh secret seed. A group is sent half a bucket into link-window 0 and
-  its cells are link-window 0's alone (``--tokens`` at most 4 keeps the group in one link-window), so the engine admits
-  the group together and closes it into one Commit window, the run's earliest: the window the run audits (with
+  with exactly ``--tokens`` ids, drawn from a fresh secret seed. A group is sent half a bucket into sampling block 0 and
+  its cells are sampling block 0's alone (``--tokens`` at most 4 keeps the group in one sampling block), so the engine
+  admits the group together and closes it into one Commit window, the run's earliest: the window the run audits (with
   ``REQUESTS=1`` the requests after it make a smaller window, which `served_verdicts.py window` passes over). The
   defaults are the window circuit's class 4,32,4 (4 slots, prompts of at most 32 ids, 4 outputs). The gate's fetch,
   ``witness/`` with it, is kept under SERVE_DIR/`PRIVATE`/RUN/fetch.tar.gz (0700, the serve dir stays on the node);
@@ -28,9 +28,9 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
   3. The chain (`served_session.py chain`: chain_record.sh's warden path, certs, endpoint, N2, tie and scan) on the
      kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
      dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
-     take every link-window of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on; any other is a
-     reject with its why.
-  4. The period's link-window is the scan's (``answers.json``'s one window): every window request's release and
+     take every sampling block of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on; any other is
+     a reject with its why.
+  4. The period's sampling block is the scan's (``answers.json``'s one window): every window request's release and
      streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
      (``--lean``, else built in verity/core/protocols/network/lean); its answer is the piece's.
@@ -227,7 +227,7 @@ def endpoint_copy(serve_dir: Path, dest: Path) -> Path:
 
 
 def sized(windows: int, sets: list[str]) -> list[str]:
-    """N2's draw and the tie's link-windows for a run of ``windows`` link-windows: every one when they are at most
+    """N2's draw and the tie's sampling blocks for a run of ``windows`` sampling blocks: every one when they are at most
     `served_session.chain`'s 8 (whose draw of 8 a shorter run refuses), unless a CR_K=V of ``sets`` names them."""
     given = {kv.partition("=")[0] for kv in sets}
     if windows > 8:
@@ -287,7 +287,7 @@ def publish(chain_out: Path, d: Path) -> None:
 def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str, Path, int], int],
            check: Callable[[dict, Path], dict], case: Callable[[Path, Path], dict] = case_of) -> tuple[dict, Path | None]:
     """Window ``window``'s answer (module docstring) and the unpacked fetch (for the leak guard), its files in ``d``;
-    ``chain`` is given KEEP, the run, the endpoint's records and the run's link-windows. `NotRun` when a step can't run."""
+    ``chain`` is given KEEP, the run, the endpoint's records and the run's sampling blocks. `NotRun` when a step can't run."""
     import warden_chain as WC
     keep = serve_dir / PRIVATE
     run = kept_run(serve_dir)

@@ -1,4 +1,4 @@
-"""Network certificates: the network certifier's signed record of each link-window, on SHA-512 (record v2).
+"""Network certificates: the network certifier's signed record of each sampling block, on SHA-512 (record v2).
 
 The network certifier is the auditor-trusted device on a node's uplink that shapes each link into the grid
 (`grid.Certifier`). Once per link-window it signs one **network certificate**: a signature over a hiding digest of the
@@ -38,7 +38,7 @@ certificate signs. So the signature check reads only the certificate's public fi
 link on the host too, over the opening (`CertifiedRecord.verify`).
 
 **The certificate** signs a 64-byte message that binds the signed digest to the key, the certifier session and the
-link-window, so a certificate can't be replayed onto another window, link, direction, key or session. It is LMS's
+sampling block, so a certificate can't be replayed onto another window, link, direction, key or session. It is LMS's
 network-certificate role digest (`verity.ml.crypto.lms.certificate_message`), each field but I and the window prefixed
 with its length as a u64be:
 
@@ -52,7 +52,7 @@ certificate's encoding don't carry it. The tag is the message's own, distinct fr
 
 **The clock certificate** (`CertifiedClock`, `Issuer.salted_clock`): beside each egress record the certifier signs the
 sync its shaper ran the window under (`schedule.ClockSync`, δ and ρ = p/q in lowest terms), hidden as a record digest
-is, under the same message, so it names the same key, session and link-window:
+is, under the same message, so it names the same key, session and sampling block:
 
     clock digest  = tagged_sha512("verity-network-certifier/clock/v1", u64be δ ‖ u64be p ‖ u64be q)   (`clock_digest`)
     signed digest = SHA-512( "verity/net-cert/v1" ‖ salt_c ‖ clock digest )                         (`clock_commitment`)
@@ -69,9 +69,9 @@ each under its own tag, so one opens as the other only on a SHA-512 collision. T
 The scheme is LMS over SHA-512 (`lms.DEPLOYED`: n = 64, w = 1, h = 20, the whole SHA-512 output, not truncated), whose
 unforgeability is ``euf-cma/lms-sha512-n64``. The certifier's signing step (`Issuer`) is handed it as a `Signer`
 (`LmsSigner`), and the audit as a `PublicKey` (`LmsKey`). A signer whose leaf state is missing, behind or held by another
-signer refuses (`SignerRefused`), and then the link-window has no certificate: it fails closed, as a `no-verdict`. So
+signer refuses (`SignerRefused`), and then the sampling block has no certificate: it fails closed, as a `no-verdict`. So
 does a signer asked to start a session its state has already started (`Signer.start`): the issuer starts its session
-before its first signature, and a refused start leaves every link-window of the run without a certificate.
+before its first signature, and a refused start leaves every sampling block of the run without a certificate.
 """
 
 from __future__ import annotations
@@ -434,8 +434,8 @@ class Certificate:
 
 @dataclass(frozen=True, slots=True)
 class CertifiedRecord:
-    """What the certifier hands over per link-window: the record head, the salt it drew for it (`salt_c`, witness like
-    the head) and the certificate, which signs the head's digest salted by it (`certificate_digest`)."""
+    """What the certifier hands over per sampling block: the record head, the salt it drew for it (`salt_c`, witness
+    like the head) and the certificate, which signs the head's digest salted by it (`certificate_digest`)."""
 
     head: RecordHead
     salt: bytes
@@ -462,8 +462,8 @@ class CertifiedRecord:
         return self.head.status
 
     def verify(self, key: PublicKey, session: bytes) -> bool:
-        """The certificate names the head's link-window, signs the head's digest under the record's salt, and verifies
-        under `key` in certifier session `session` (`Certificate.verify`)."""
+        """The certificate names the head's sampling block, signs the head's digest under the record's salt, and
+        verifies under `key` in certifier session `session` (`Certificate.verify`)."""
         c, h = self.certificate, self.head
         if (c.link, c.direction, c.window) != (h.link, h.direction, h.window):
             return False
@@ -476,9 +476,9 @@ class CertifiedRecord:
 
 @dataclass(frozen=True, slots=True)
 class CertifiedClock:
-    """What the certifier hands over per egress link-window beside its record: the sync its shaper ran the window under
-    and the salt it drew for it (`salt_c`), both witness as a head and its salt are, and the certificate, the one public
-    part, which signs the sync's clock digest salted by it (`clock_commitment`)."""
+    """What the certifier hands over per egress sampling block beside its record: the sync its shaper ran the window
+    under and the salt it drew for it (`salt_c`), both witness as a head and its salt are, and the certificate, the one
+    public part, which signs the sync's clock digest salted by it (`clock_commitment`)."""
 
     sync: ClockSync
     salt: bytes
@@ -547,7 +547,7 @@ class Issuer:
         return None if certificate is None else CertifiedRecord(head, salt, certificate)
 
     def salted_clock(self, link: str, window: int, sync: ClockSync) -> CertifiedClock | None:
-        """The clock certificate of the egress link-window, `sync` being the one the certifier's shaper ran it under:
+        """The clock certificate of the egress sampling block, `sync` being the one the certifier's shaper ran it under:
         the sync's clock digest salted by `SALT_BYTES` fresh bytes of `coins` (`clock_commitment`), or None when the
         signer refuses. Raises `ValueError` on coins of another length and on a salt they gave an earlier signed clock
         certificate of this issuer, under which two windows of one sync would sign one digest. A salt is taken once

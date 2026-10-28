@@ -1,7 +1,7 @@
-"""The ingress tie through the proof service: each bucket row of an ingress link-window of the warden's cells proved as
-`io_request.IoTieRequest`, and the verifier of record that builds `advised.IoTieVerdict`, the tie of an advised link's
-requests to its certified ingress, only from IoTieRequest proofs it verified on lanes it computed itself (PROTOCOL.md,
-"The ingress tie").
+"""The ingress tie through the proof service: each bucket row of an ingress sampling block of the warden's cells proved
+as `io_request.IoTieRequest`, and the verifier of record that builds `advised.IoTieVerdict`, the tie of an advised
+link's requests to its certified ingress, only from IoTieRequest proofs it verified on lanes it computed itself
+(PROTOCOL.md, "The ingress tie").
 
 **What is committed** is the warden's own (`warden_rows`): an ingress link-window's T bucket rows, row t bucket t's
 S = L·R slots of B bytes (a slot no connection holds B zero bytes), each an `hm96-sha512/row/v2` row under the
@@ -9,7 +9,7 @@ warden's fresh salt in its `frame-v3-sha512` tree under the warden's domain (`wa
 link, ingress and the window), whose root the warden's signed head names (`warden_rows.CellsHead`). The tie registers
 that root with the challenger (`IngressTie.registration`, on the head `warden_rows.check_registration` reads off the
 warden's signed registration); the rows and their salts are the prover's, which the warden hands it privately, and
-the challenger and the verifier see the root. A registration is one link-window, its `window` provenance
+the challenger and the verifier see the root. A registration is one sampling block, its `window` provenance
 `{"kind": "served", "window": w}` held to the registration's order (`IngressTie.register`), and T proof blocks, unit t
 bucket row t. Selection is `All`.
 
@@ -159,7 +159,7 @@ def prompt_lens(advice: AD.LinkAdvice) -> tuple[int, ...]:
 
 @dataclass(frozen=True)
 class Delivered:
-    """An ingress link-window's proof as the verifier receives it: the statement's proof files (`proofs.Proof`, its
+    """An ingress sampling block's proof as the verifier receives it: the statement's proof files (`proofs.Proof`, its
     circuit file the auditor's own lowering of the unit), and for each drawn unit, by its index, the salts of its public
     row and its output row (``pub``, ``o0``) and its output word, which the verifier opens against the public file's
     commitments to those rows. Never a witness row's salt: the warden's, which the registered read holds."""

@@ -60,7 +60,7 @@ PARAMS = W.WardenParams(cell_bytes=256, slots=2, delay=2, lanes=4, window=6)
 NR, K = 4, 16
 SHAPE = traffic.shape(PARAMS, NR, K)
 LINK, SESSION = "responses", bytes(range(32))
-#: the fake upstream: (seed, connections, longest response) of `egress_traffic.busy`, over `WINDOWS` link-windows
+#: the fake upstream: (seed, connections, longest response) of `egress_traffic.busy`, over `WINDOWS` sampling blocks
 SEED, CONNECTIONS, LONGEST, WINDOWS = 6, 14, 15, 6
 #: each member's outcome: accepted, or refused by Lean's registered reads
 MEMBERS = {"honest": "accepted", "lying": "does not open", "moved": "reads position"}
@@ -77,7 +77,7 @@ def _data(row: bytes) -> int:
 
 
 def link(out: Path) -> SimpleNamespace:
-    """The link-window to prove: the warden's opening and its signed registration, read back by the verifier (the
+    """The sampling block to prove: the warden's opening and its signed registration, read back by the verifier (the
     head and domain the port is built on), and each bucket's state (`egress_traffic.states`)."""
     served = traffic.busy(SEED, PARAMS, CONNECTIONS, LONGEST, WINDOWS)
     T = PARAMS.window

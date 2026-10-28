@@ -77,7 +77,7 @@ def _varied(d, virtual, verdicts, found=None):
 
 
 def _ties(**edits):
-    """`negatives.tie_run`'s row on each run: honest accepted, token refused by content at link-window 1, drop by content
+    """`negatives.tie_run`'s row on each run: honest accepted, token refused by content at sampling block 1, drop by content
     for the output it left out, late and extra accepted."""
     rows = {"honest": {}, "late": {}, "extra": {}, "token": {"failing": {1: ["content"]}},
             "drop": {"failing": {-1: ["content"]}, "unplaced": 1}}
@@ -105,7 +105,7 @@ def runs(virtual, tmp_path):
 
 @pytest.fixture
 def tied(monkeypatch):
-    """`io_tie` in the tree, `tie_run` stubbed to ``_ties``' rows and token's changed ids in link-window 1."""
+    """`io_tie` in the tree, `tie_run` stubbed to ``_ties``' rows and token's changed ids in sampling block 1."""
     monkeypatch.setattr(NG, "io_tie_module", lambda: object())
     monkeypatch.setattr(chain, "changed_windows", lambda run: [1] if run.name == "token" else None)
 
@@ -131,7 +131,8 @@ def test_the_tie_refusing_the_honest_run_fails_the_report(runs, tmp_path, tied):
 
 def test_an_honest_tie_that_raises_fails_the_report_and_token_keeps_its_refusal(runs, tmp_path, tied):
     """`io_tie` present and --ids given, but honest's tie raises: the honest run has no verdict, so the report is NOT OK
-    and says why. Token's tie ran and refused it at the link-window it changed: that stays its verdict, not pending."""
+    and says why. Token's tie ran and refused it at the sampling block it changed: that stays its verdict, not
+    pending."""
     ties = _ties()
 
     def tie_run(run, ids):

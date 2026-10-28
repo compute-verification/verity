@@ -1,7 +1,7 @@
-"""A stand-in for N2's proof of a link-window, and for the ingress tie's of an ingress link-window (`prove_tie`), for
-tests: what C-Flock's prover behind the firewall would deliver, and a stand-in for the verifier's own run of C-Flock's
-Lean verifier (`proofs.verify`), which reads each session's verdict from the session file the stand-in prover writes.
-The proof's output word is the unit's on the prover's opening by each gate's reference (`LinkWindows.outputs`,
+"""A stand-in for N2's proof of a sampling block, and for the ingress tie's of an ingress sampling block (`prove_tie`),
+for tests: what C-Flock's prover behind the firewall would deliver, and a stand-in for the verifier's own run of
+C-Flock's Lean verifier (`proofs.verify`), which reads each session's verdict from the session file the stand-in prover
+writes. The proof's output word is the unit's on the prover's opening by each gate's reference (`LinkWindows.outputs`,
 `IngressTie.outputs`), which the tests hold to the circuits: a Lean-accepted proof can't claim another. So the tests
 check everything the verifier of record does around the proof: its run's findings, the public row opened to the
 verifier's own copy, the output row, the certificates and the sync."""
@@ -156,7 +156,7 @@ def lean(proof: PF.Proof, *, circuit_sha512: str, program: bytes, partition: dic
 
 def decide(lw: SVC.LinkWindows, stream: S.Stream, draw: S.Draw, opening: SVC.Hidden, syncs: Sequence[Any], out: Path,
            *, certificates: Sequence[Any] | None = None, advice: Any = None, **kw: Any) -> S.Outcome:
-    """The drawn link-window proved on `opening` (`prove`, with `kw`, on an advised link of `advice`), delivered and
+    """The drawn sampling block proved on `opening` (`prove`, with `kw`, on an advised link of `advice`), delivered and
     decided by the verifier of record on the proof, the certificates (by default the opening's) and `advice`, with the
     opening's in-the-clear check beside it as the debug comparison, which must agree with the proof's verdict when
     nothing is forged."""

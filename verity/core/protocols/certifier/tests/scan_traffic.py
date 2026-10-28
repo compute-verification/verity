@@ -16,7 +16,7 @@ from verity.core.protocols.certifier.grid import Certifier, Record
 
 @dataclass(frozen=True)
 class Served:
-    """Both links served through the warden: the ingress and egress records its grids closed (one a link-window),
+    """Both links served through the warden: the ingress and egress records its grids closed (one a sampling block),
     each connection's admission bucket and response ids (ordinal q = k + 1), and the warden's `fails` frames and the
     `fails` records its grid closed."""
 

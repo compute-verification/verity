@@ -1,10 +1,10 @@
 """N2's check of one certified record head, zero-knowledge: the head committed at leaf 2 + direction of N2's root
-(`service.LinkWindows`) is the link-window's, complete, under the declared grid, and, where its end has an occupancy
+(`service.LinkWindows`) is the sampling block's, complete, under the declared grid, and, where its end has an occupancy
 profile, its counts are the profile's; and the certificate's signed digest is the head's record digest salted by the
 certifier. A Boolean Definition, the gated part of N2's proof block (`service`'s `NetworkLinkWindow` v5, one per end),
-which runs on every link-window; its one output is the ok bit. That unit's Program holds it as one gate that names its
-circuit digest (`gate`), pinned in this module's sidecar and held to the Definition by circuit-check; N2's verifier of
-record reads its output from the unit's proof, and the in-the-clear check (`LinkWindows.clear`) runs its `reference`,
+which runs on every sampling block; its one output is the ok bit. That unit's Program holds it as one gate that names
+its circuit digest (`gate`), pinned in this module's sidecar and held to the Definition by circuit-check; N2's verifier
+of record reads its output from the unit's proof, and the in-the-clear check (`LinkWindows.clear`) runs its `reference`,
 which the tests hold to the circuit.
 
     NetworkHeadCheck_v2{L, T, COUNTS}
@@ -18,7 +18,7 @@ which the tests hold to the circuit.
 the end has an occupancy profile (`LinkWindows.occupancy`), so `profile` is a parameter. All three are public: the
 link's name and its grids are, and so is whether an end has a profile.
 
-**Public inputs.** `record` is the root of N2's commitment to the link-window, `record_domain` its domain id
+**Public inputs.** `record` is the root of N2's commitment to the sampling block, `record_domain` its domain id
 (`LinkWindows.domain`), `link` the link's name, `direction` the end (0 egress, 1 ingress), `window` the window's index
 (u64, least significant bit first), `grid` the declared grid as the head encodes it (`grid_bytes`: T, r, B and τ_b as
 u32 big-endian, then the parameters digest), `profile` the profile's row for the window: T counts, each u32, least

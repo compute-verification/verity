@@ -3,11 +3,11 @@ the gate's fetch, witness and all, 0700 under the serve dir's private/certifier,
 and its outcome. The piece, on a serve dir whose window was the warden's synthetic run's certified requests (the run
 `test_warden_chain.gate_run` publishes in the gate's layout), runs as `served_verdicts.py pieces` runs it and writes
 `network-period`'s answer only when the chain accepted and the window's requests are certified ones in the scan's
-link-window: the period mirror's certifier/v0 accept (`period_case`) then goes through `served_verdicts.py record` into
-the block record's certifier leg, which `block_record.check` holds and its schema admits. A window request the warden
-didn't certify is rejected before any chain runs; a chain that refused, requests outside the scan's link-window and a
-period the check rejects are rejects; a step that can't run (no kept run, no report, no build, the time limit) refuses,
-which leaves the certifier missing. The leak guard reads the piece's DIR against the run's witness."""
+sampling block: the period mirror's certifier/v0 accept (`period_case`) then goes through `served_verdicts.py record`
+into the block record's certifier leg, which `block_record.check` holds and its schema admits. A window request the
+warden didn't certify is rejected before any chain runs; a chain that refused, requests outside the scan's sampling
+block and a period the check rejects are rejects; a step that can't run (no kept run, no report, no build, the time
+limit) refuses, which leaves the certifier missing. The leak guard reads the piece's DIR against the run's witness."""
 from __future__ import annotations
 
 import importlib.util
@@ -47,7 +47,7 @@ def period():
 
 @pytest.fixture(scope="module")
 def warden(tmp_path_factory):
-    """The synthetic warden run, its fetch, and the link-window holding the most whole certified requests."""
+    """The synthetic warden run, its fetch, and the sampling block holding the most whole certified requests."""
     d = tmp_path_factory.mktemp("warden")
     run = gate_run(d)
     io, T = WC.io(run), WC.deployment(run)[1].window
@@ -69,7 +69,7 @@ def _write(path: Path, rows: list[dict]) -> None:
 
 
 def _serve_dir(d: Path, warden: dict, records: list[dict] | None = None, kept: bool = True) -> Path:
-    """A serve dir whose window K served ``records`` (the warden's, by default those of its link-window) and whose
+    """A serve dir whose window K served ``records`` (the warden's, by default those of its sampling block) and whose
     gate fetch the front kept."""
     records = warden["records"] if records is None else records
     d.mkdir(parents=True)
@@ -87,7 +87,7 @@ def _serve_dir(d: Path, warden: dict, records: list[dict] | None = None, kept: b
 
 
 def _chain_out(d: Path, verdict: str, w: int) -> Path:
-    """What the chain leaves in its run dir's out/: its report and the scan's one link-window."""
+    """What the chain leaves in its run dir's out/: its report and the scan's one sampling block."""
     out = d / "out"
     (out / "report").mkdir(parents=True)
     (out / "scan" / "joint").mkdir(parents=True)

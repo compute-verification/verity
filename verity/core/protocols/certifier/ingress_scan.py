@@ -45,9 +45,9 @@ vLLM's `ScanSlots_v2`) reads `occ`, `fields` and the ids each at its bits in the
 zero-extended, copies with no gate, through a read of the whole state row (`state_bits`, 9,353 words at w63's class).
 An empty slot's `fields` and ids aren't zeroed, nor are the ids past `fields` (they can be a request's not
 anchored at b, or an earlier request's), so such a Program masks its outputs by `occ` and reads a slot's first
-`fields` ids only. A window circuit of the link-window from scan bucket t0 reads the window's rows as one value
+`fields` ids only. A window circuit of the sampling block from scan bucket t0 reads the window's rows as one value
 (vLLM's `SCAN_STATE`, row a for boundary a): `window_state`, the scan's rows t0 − 1 … t0 + buckets − 2, a constant
-offset t0 − 1, with row −1, the first link-window's, the empty state's, since no unit registers S_{−1}.
+offset t0 − 1, with row −1, the first sampling block's, the empty state's, since no unit registers S_{−1}.
 
 **The Programs' row** (`prog_encode`) at bucket t is NR entries, each n (u32) and KO output ids of IDB bits, then zeros
 to a whole word: entry j the outputs of the Program in slot j of the boundary t, all zero for an empty slot (`occ` 0
@@ -93,7 +93,7 @@ connection's `END` cell, at admitted + D + ⌊n / r⌋, the bucket the slot's ho
 A request the class can't hold is refused, never truncated: a prompt of more than KI ids (the warden bounds a
 request's cells, not its ids) at the cell that takes its `fields` past KI, and a Program that gives more than KO
 outputs (`SlotEntry_v1`'s n = KO + 1 for a request that doesn't fit its window circuit's class) at its anchor, so
-the link-window fails visibly at the scan's unit.
+the sampling block fails visibly at the scan's unit.
 
 **Structural Fits.** A unit reads only bucket t's row and S_{t−1}, so the scan's carried state is its only path from
 one bucket's ingress to a later bucket's gates: each step reads the state the step before wrote, whatever the arrivals
@@ -144,8 +144,8 @@ STATICS = ("B", "r", "lanes", "C", "IDB", "EVERY", "WITHIN", "D", "KO", "KI")
 @dataclass(frozen=True)
 class Class:
     """The scan's public class: B-byte cells, r a connection a bucket, `lanes` connections at once (as many request
-    slots), C cells a request at most, IDB bits a prompt or output id, a timestep of EVERY buckets (a boundary at each
-    bucket t ≡ 0 mod EVERY of the scan, with SLOTS = lanes Program slots) and WITHIN, the buckets a request's ingress
+    slots), C cells a request at most, IDB bits a prompt or output id, a slot stride of EVERY buckets (a boundary at
+    each bucket t ≡ 0 mod EVERY of the scan, with SLOTS = lanes Program slots) and WITHIN, the buckets a request's ingress
     may take (δ): a request admitted at s is anchored at the first boundary at or after s + WITHIN, whose Programs
     read the state before it; the warden's delay D, at least WITHIN + EVERY − 1 so that a request's anchor is at most
     admitted + D, KO outputs a request at most and KI prompt ids a request at most, at most the ids a slot holds."""
@@ -196,7 +196,7 @@ class Class:
 
     @property
     def SLOTS(self) -> int:
-        """The Program slots a timestep: the scan's slots, one a lane."""
+        """The Program slots each slot stride: the scan's slots, one a lane."""
         return self.lanes
 
     @property
@@ -557,10 +557,10 @@ SCAN_STATE = "verity/certifier/scan-state/v1"
 
 
 def window_state(cls: Class, rows: Sequence[Sequence[int]], t0: int, buckets: int) -> list[list[int]]:
-    """The state rows a window circuit of the link-window of `buckets` buckets from scan bucket t0 reads (the module
+    """The state rows a window circuit of the sampling block of `buckets` buckets from scan bucket t0 reads (the module
     docstring's token-id row), row a the state boundary a's Programs read: the scan's rows t0 − 1 … t0 + buckets − 2
     of `rows` (S_0, S_1, … as the units register them), row −1 the empty state's. ValueError, naming the fix, unless
-    the link-window is whole timesteps and `rows` reach its last."""
+    the sampling block is a whole number of slot strides and `rows` reach its last."""
     if t0 < 0 or buckets < 1 or t0 % cls.EVERY or buckets % cls.EVERY:
         raise ValueError(f"a link-window starts at a boundary and is whole timesteps: t0 >= 0 and buckets >= 1, each "
                          f"a multiple of EVERY = {cls.EVERY}, not t0 = {t0}, buckets = {buckets}")

@@ -1,5 +1,6 @@
-"""scan-period: `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) on a warden run's link-window and the scan's
-answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the period's Python mirror and its Lean.
+"""scan-period: `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) on a warden run's sampling block and the
+scan's answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the period's Python mirror and its
+Lean.
 
     python benchmarks/network_traces/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
         NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
@@ -56,7 +57,7 @@ def certificates(run: Path, w: int) -> list[dict]:
 
 
 def rows_case(run: Path, scan: Path, round_: str = "honest") -> dict:
-    """The rows form's case (module docstring) of the warden run ``run``'s link-window, as scan_zk.py proved it into
+    """The rows form's case (module docstring) of the warden run ``run``'s sampling block, as scan_zk.py proved it into
     ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a refused round
     (tampered, chain), that round's registration and its refusal."""
     dep = json.loads(SZ._found(run, "deployment.json").read_text())
