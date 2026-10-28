@@ -1,5 +1,5 @@
 {
-  "format": "verity/annotations/v0",
+  "format": "verity/metadata/v0",
   "entries": [
     {
       "key": "def:Gemm_v2",
