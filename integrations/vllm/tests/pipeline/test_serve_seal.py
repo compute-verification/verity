@@ -18,9 +18,9 @@ ROWS = {0: [("runner-a", 0, 3, 0, 3), ("runner-b", 3, 5, 0, 2), ("warmup", 5, 6,
 NAMES = {"runner-a": "alice", "runner-b": "cmpl-2"}
 
 
-def _ledgers() -> dict[str, sc.Ledger]:
-    return {"alice": sc.Ledger("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 4}}, "alice", streamed=[7, 9]),
-            "cmpl-2": sc.Ledger("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, None, streamed=[8])}
+def _ledgers() -> dict[str, sc.LiveRequest]:
+    return {"alice": sc.LiveRequest("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 4}}, "alice", streamed=[7, 9]),
+            "cmpl-2": sc.LiveRequest("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, None, streamed=[8])}
 
 
 def test_a_windows_requests_are_named_by_user_with_their_rows_and_first_step():
@@ -189,8 +189,8 @@ def _sealed_parts(tmp_path, with_manifest: bool, port=None, embed_ids=None, name
         com.sources[1].rows = SERVED_ROWS if kept is None else kept
     if with_manifest:
         com.required_manifest = {k: fx[k] for k in ("identities", "op_path_aliases", "program_digest", "populations")}
-    leds = {"b0-1": sc.Ledger("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
-            "b0-2": sc.Ledger("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}
+    leds = {"b0-1": sc.LiveRequest("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
+            "b0-2": sc.LiveRequest("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}
     reqs, rows = ss.window_requests(SERVED_ROWS, SERVED_NAMES.get, leds.get)
     d = tmp_path / (name or ("w5" if with_manifest else "w5-raw"))
     s = ss.seal_window(com, rc, d, rec={"window": 5, "run_id": "t/w5", "steps": len(rc.steps), "passed": True}, reqs=reqs,
@@ -404,8 +404,8 @@ def test_a_sealed_windows_context_carries_its_served_rows_and_the_port_its_strea
     com.sources = [StepInputPort(com, T), SamplerInputsSource(com)]
     com.sources[1].rows = SERVED_ROWS
     served = {"digest": "ab" * 64, "statics": {"R": 4, "P": 2}}
-    leds = {"b0-1": sc.Ledger("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
-            "b0-2": sc.Ledger("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}
+    leds = {"b0-1": sc.LiveRequest("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
+            "b0-2": sc.LiveRequest("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}
     reqs, rows = ss.window_requests(SERVED_ROWS, SERVED_NAMES.get, leds.get)
     d = tmp_path / "windows" / "w2"
     s = ss.seal_window(com, rc, d, rec={"window": 2, "run_id": "t/w2", "steps": 2, "passed": True, "served_rows": served}, reqs=reqs,
