@@ -8,7 +8,7 @@
 #   counts/*.json  `sass_count.py count` for each binary (every architecture it holds)
 #   census.json    `sass_count.py merge` of them all, a device family each; summary.txt its totals
 #
-#   research run --on vy-nebius-2 --cwd source -- bash benchmarks/pouw/sass_census/dump.sh [ROOT ...]
+#   research run --on MACHINE --cwd source -- bash benchmarks/pouw/sass_census/dump.sh [ROOT ...]
 # MAXBYTES skips binaries larger than it: a fast first pass that leaves out cuBLASLt (whose one cuobjdump pass is serial
 # and holds the merge until it ends), for a first count while the full dump runs.
 set -uo pipefail
