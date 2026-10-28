@@ -2,7 +2,7 @@
 
 Llama-3-8B's four linear layers (QKV 6144 x 4096, O 4096 x 4096, gate-and-up 28672 x 4096, down 4096 x 14336) at
 M = 16,384, s8 x s8 with int32 accumulation, called back to back on one RTX PRO 6000 (sm_120) or H200 (sm_90a). Each call goes through
-Dither's no-fold receipt (CMP-172; v31.py's `Fill`, its shapes and commit phase per `verity/core/protocols/pouw/dither/PROTOCOL.md` v3.2) on V31-GPU's prover, with a live
+Dither's no-fold receipt (v31.py's `Fill`, its shapes and commit phase per `verity/core/protocols/pouw/dither/PROTOCOL.md` v3.2) on V31-GPU's prover, with a live
 challenger session a period. The report is the certified share: credited MACs over θ's INT8 tensor peak times the wall
 time, and γ against plain cuBLASLt on the same calls, interleaved.
 
@@ -28,8 +28,8 @@ time, and γ against plain cuBLASLt on the same calls, interleaved.
 - `run.sh`: the build, the config and the periods under a GPU lease (`research run`; its header has the command), and
   with `NSYS=1` each arm's kernel timeline (`timeline.py`: GEMM share, busy share, idle gaps), with `NCU=1` each kernel's
   tensor-pipe active share and INT8 MACs from Nsight Compute (`pipes.py`), and `terms.py`: where θ x wall goes.
-- The prover is `benchmarks/pouw/accel_v31` (V31-GPU, with kernels' sm_90a port and no-fold fast path, #5118 and #5202):
+- The prover is `benchmarks/pouw/accel_v31` (V31-GPU, with kernels' sm_90a port and no-fold fast path):
   `period.py` imports its `v31` and `v31lib`, and `hu_lib.cu` includes its `v31.cu`; `run.sh` records their hashes. It
   builds for both cards: sm_120a, and sm_90a with `-DV31_WG=1` (run.sh's header), where `V31_SCHED 2`, `V31_LMINB 4`
-  and `V31_SAHEAD 1` are #5202's timed knobs that act on a filler call. Its RP 4, `V31_HCHUNK` and `V31_GEMM` (which
-  turns on the warpgroup GEMM for prefix sums, `V31_WGW`) are the served call's, which the period doesn't make.
+  and `V31_SAHEAD 1` are the fast path's timed knobs that act on a filler call. Its RP 4, `V31_HCHUNK` and `V31_GEMM`
+  (which turns on the warpgroup GEMM for prefix sums, `V31_WGW`) are the served call's, which the period doesn't make.

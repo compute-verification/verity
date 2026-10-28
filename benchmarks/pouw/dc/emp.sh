@@ -5,7 +5,7 @@
 #   research run --on auto --wait -- bash benchmarks/pouw/dc/emp.sh build SRC...
 #       builds each SRC for sm_90a, gates every probe's SASS (probe.py gate) and writes $OUT/bins.tgz, $OUT/sass/,
 #       gate-build.txt and gate-build.json. A source that fails to build is named and skipped; the rest still build.
-#   research run --on vy-dc-h200 --project verity --campaign pouw --source <tree> --cwd source --send bins.tgz \
+#   research run --on H200 --project verity --campaign pouw --source <tree> --cwd source --send bins.tgz \
 #     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/dc/emp.sh time [REPS]
 #       unpacks the build's bins.tgz (from $RESEARCH_RUN_DIR/inputs/), records the clocks (A1: nvidia-smi -q -d CLOCK
 #       before and after, clocks sampled every 200 ms under the lease) and runs probe.py run on every binary (gate, the
