@@ -527,13 +527,12 @@ def pouw_parts(d: dict, stock: dict) -> tuple[dict, dict]:
     w, p = d["pouw"], d["point"]
     if w["scheme"] == "off":
         return {}, {}
-    T = p["T"]
-    tok = p["real_tokens"] or T
+    tok = p["real_tokens"] or p["T"]
     G_ms = INT8_MACS_PER_TOKEN * tok / (theta(I("gemm_mhz")) * I("gemm_eff_per_clock"))
     k_share = sum(k * n for _, k, n in LINEARS if k == w["K"]) / sum(k * n for _, k, n in LINEARS)
     parts, info = {}, {"forced_frac_of_G": pouw_forced_frac(d), "credit": pouw_credit(d)}
     if w["scheme"] in ("j10r", "jr2"):
-        cells = H1_CELLS_PER_TOKEN * T
+        cells = H1_CELLS_PER_TOKEN * tok
         cells8k = H1_CELLS_PER_TOKEN * 8192
         rec_gb = cells * w["record_bytes_per_cell"] / 1e9
         dev = I("h1_device_ms_8k") * cells / cells8k * w["trees"] / 2
@@ -588,7 +587,7 @@ def pouw_parts(d: dict, stock: dict) -> tuple[dict, dict]:
     else:
         dg = min(1.0, 2 * Lp / w["K"] + I("wrap_g_frac"))
     parts["dither: de-noising O"] = dg * G_ms
-    calls = list(_dither_calls(T, L))
+    calls = list(_dither_calls(tok, L))
     cells = sum(c for c, _ in calls)
     words = sum(c * (2 * (s - 1) + 4) for c, s in calls)
     vt = tree_compressions(words, w["value_row_bytes"])
@@ -661,7 +660,7 @@ def proving(d: dict, units: list, label: str) -> dict:
     k_log), k_log = ceil(log2 ANDs) + 1). Lowering is per class (template) or per draw (instance)."""
     p, s = d["point"], d["sampling"]
     S = p["steps_per_window"]
-    T = p["T"]
+    T = p["real_tokens"] or p["T"]                             # units cover what the forward computes
     lam = math.log(1 / s["delta"])
     pv = d["prover"]
     o = (pv["o_per_and"] if pv["o_per_and"] is not None else I("o_per_and"))
