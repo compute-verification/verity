@@ -16,8 +16,8 @@
 # nvidia-smi samples the SM clock throughout (smi.csv). After the lease: fill-sample on each served call's sampled tiles,
 # and summarize.py's table (table.md, table.json).
 #
-# SHAPES (default 8B gate-up at M 16384), VARIANTS (default #5613's TMA-store GEMM, hash warps idle), LP (512), FILL_L
-# (4096; L = min(FILL_L, K) through fill-params' --L), REPS (3, fill-bench's timed reps), WINDOW_MS (2000),
+# SHAPES (default 8B gate-up at M 16384), VARIANTS (default the served TMA-store GEMM, tst=1, hash warps idle), LP (512),
+# FILL_L (4096; L = min(FILL_L, K) through fill-params' --L), REPS (3, fill-bench's timed reps), WINDOW_MS (2000),
 # WINDOW_LEAD_MS (500), WINDOW_REPS (3), WINDOW_ARMS, WGMMA_CFGS (none), GENCODE and NVFLAGS (the H200's), LEASE (default
 # gpu-lease 1 --wait --max-min 25 --; empty when already under one), PY (v31.py's), TORCH_PY (default
 # $VERITY_BENCH_VENV/bin/python, else uv with torch).
