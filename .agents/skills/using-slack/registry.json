@@ -644,7 +644,8 @@
       "linear": "TRN",
       "owns": [
         "benchmarks/rho/",
-        "benchmarks/circuit_properties/"
+        "benchmarks/circuit_properties/",
+        "benchmarks/update_price/"
       ],
       "branch_suffixes": [
         "4207"
