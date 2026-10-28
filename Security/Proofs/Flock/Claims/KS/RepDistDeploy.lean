@@ -43,7 +43,7 @@ theorem ligSlotDist_capRound (k0 : ℕ) (levs : List Accounting.Level) (hl : ∀
 /-- **A rep's level-`ℓ + 1` cap, at the plain fork round's count**: `capRound k0 (ℓ + 1)` coins into Ligerito after
 the zerocheck's, the lincheck's and the opening's, at every level of a schedule with four lanes after level 0 (past
 the last cap there is no such node). -/
-theorem dist_lockRep_capRound (A : Model.Arith F K) (r : ℕ) (hr : r < 2) (S : Model.Statement) (m k0 : ℕ)
+theorem dist_lockRep_capRound (A : Model.Arith F K) (r : ℕ) (hr : r < 2) (S : Model.BlockR1CS) (m k0 : ℕ)
     (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m)
     (C₀ : Model.Oracle F) (extra : List (Model.Claim F S.m)) (hl : ∀ lv ∈ l₁ :: rest, lv.lanes = 4) (ℓ : ℕ) :
     Lock.Dist (slotOf r (ℓ + 1))

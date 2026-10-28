@@ -85,7 +85,7 @@ theorem _root_.FlockSoundness.Discharge.ZkView.Coined.swContent_inl {K W Hi VL :
 
 /-- **The executable's level-0 leaves at the switched prover are the honest prover's.** -/
 theorem swExeOf_inl {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
-    (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (v : ∀ j, ((C j).T (cz j)).tab.Vals)
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m) (v : ∀ j, ((C j).T (cz j)).tab.Vals)
     (ω : ∀ j, ZkView.Base (C j).z (C j).Hi) (y : ZkView.Leaves (fun j => (C j).z) → ZkView.Salt) (j : Fin J)
     (p : Fin ((C j).z.nS + (C j).z.nU)) :
     swExeOf C cz wt v ω y ⟨j, .inl p⟩ = exeOf C cz wt ω y ⟨j, .inl p⟩ := by
@@ -98,7 +98,7 @@ namespace Masked
 /-- **A switched cut's level-0 leaf at tree position `q` is the leaf at `q`**, whatever the coins' tree
 (`leafAt_cutAt` at the switched prover). -/
 theorem leafAt_swCutAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
-    (wt : ∀ j, FlockSoundness.Model.Witness (tabC P x j).S.m) (v : ∀ j, ((tabC P x j).T (cz j)).tab.Vals)
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (tabC P x j).S.m) (v : ∀ j, ((tabC P x j).T (cz j)).tab.Vals)
     (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi)
     (lv : ZkView.Leaves (fun j => (tabC P x j).z) → ByteArray) (j : Fin (jOf x)) {q : ℕ}
     (hq : q < (tabC P x j).z.nS + (tabC P x j).z.nU) :

@@ -107,7 +107,7 @@ theorem capOfRoot_eq {c : Array ByteArray} {rootB : ByteArray} (hc : ∀ x ∈ c
 /-- **The accepted proof's cap is the one `root_B` concatenates, under `hm96-sha512/v1`** (S16). When `Flock.verify`
 accepts a one-table session on the hypotheses of `verify_refines_hm96`, rep 0's proof decodes, and its cap, read as
 `capDig`, is `capOfRoot` of the table's committed `root_B`. -/
-theorem verify_cap_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
+theorem verify_cap_hm96 (spec : SessionSpec) (st : Setup) (S : Model.BlockR1CS) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (hms : st.merkle = MerkleScheme.hm96Sha512) (extra : Session → List (Model.Claim FlockLevel3.GF128 S.m))
     (record : String) (proofs : Array ByteArray)

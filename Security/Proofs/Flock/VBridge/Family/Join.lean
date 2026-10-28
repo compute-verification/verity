@@ -64,7 +64,7 @@ theorem claim_eq {m : ℕ} {a b : Flock.Claim} {c : Model.Claim 𝔽 m} (ha : Cl
 
 /-- **Well-formed link point arrays give one set of extra claims**: both realize the model's claims at the link
 points, claim by claim (`claim_eq`). -/
-theorem extras_unique {st : Setup} {S : Model.Statement} {ptLocal mPts : ℕ} {pts : Fin 2 → Fin mPts → 𝔽}
+theorem extras_unique {st : Setup} {S : Model.BlockR1CS} {ptLocal mPts : ℕ} {pts : Fin 2 → Fin mPts → 𝔽}
     {P Q : Array (Array F128)} (hP : PointsOK st S ptLocal mPts pts P) (hQ : PointsOK st S ptLocal mPts pts Q) :
     st.extra P = st.extra Q := by
   obtain ⟨e, he, hre, -⟩ := hP

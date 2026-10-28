@@ -85,7 +85,7 @@ def Menu.Staged (M : Menu) : Prop := ∀ s ∈ M.shapes, ∃ vs, M.vstar s = .ok
 
 /-- The live verifier's range check (`Flock.checkInRange`, which `setupH` and `setupTables` make on every hm96 statement) on the inner
 session of a session of shape `s`, read off its inner shape: the block size `k_log`; the public regions, two claims each
-past the two every session opens (`Stmt.nClaims`); and a link point's coordinates, `PT_LOCAL` and the table's block bits
+past the two every session opens (`StmtShape.nClaims`); and a link point's coordinates, `PT_LOCAL` and the table's block bits
 `m − k_log`. -/
 def Menu.rangeCheck (M : Menu) (s : Shape) : Except String Unit :=
   Flock.checkInRange (M.inner s).kLog (((M.inner s).claims - 2) / 2) (Flock.PT_LOCAL + ((M.inner s).m - (M.inner s).kLog))

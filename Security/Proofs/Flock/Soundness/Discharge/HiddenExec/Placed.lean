@@ -30,7 +30,7 @@ open FlockSoundness.Discharge.Zero (ZeroIn)
 /-- **An accepted untyped hidden-output statement whose block R1CS is `T`**: `Stmt.setupHidden` accepted the circuit
 file `cf`, public file `pf`, coins, tables, draw, partition object and program, returning `st`; `L` is a layout of `st`,
 whose unit slots' rows are its flat twin's (`hR`), and `T` is `L.model` at regions `regs`. -/
-structure AcceptedH (T : Model.Statement) where
+structure AcceptedH (T : Model.BlockR1CS) where
   tags : Tags
   cf : ByteArray
   pf : ByteArray
@@ -49,7 +49,7 @@ structure AcceptedH (T : Model.Statement) where
 
 namespace AcceptedH
 
-variable {T : Model.Statement} (a : AcceptedH T)
+variable {T : Model.BlockR1CS} (a : AcceptedH T)
 
 /-- The flat twin's layout (`flat_layout`). -/
 theorem flatLayout : Layout (Hidden.flatTwin a.st) := flat_layout a.ht a.h
@@ -61,10 +61,10 @@ theorem unitFacts : Aliased.UnitFacts a.tags (Hidden.flatTwin a.st) := flat_unit
 noncomputable def rows : Rows := (unitRows a.st a.L.unit_built).stack a.st.c.upv
 
 theorem kLog_eq : 2 ^ (a.L.model a.regs).kLog = 2 ^ T.kLog :=
-  congrArg (fun S : Model.Statement => 2 ^ S.kLog) a.hT
+  congrArg (fun S : Model.BlockR1CS => 2 ^ S.kLog) a.hT
 
 theorem nbl_eq : 2 ^ (a.L.model a.regs).nbl = 2 ^ T.nbl :=
-  congrArg (fun S : Model.Statement => 2 ^ S.nbl) a.hT
+  congrArg (fun S : Model.BlockR1CS => 2 ^ S.nbl) a.hT
 
 /-- **Template instance `g`'s columns in the block**: `stackPlace` at the unit slots `ur.slot (g·upv + i)`, the shared
 constant at the pin. -/
@@ -95,7 +95,7 @@ theorem rows_eq {c : Flock.Circuit} (hp : HmRow.parse a.tags a.cf a.tables = .ok
 theorem aliased_of_layout {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R : Rows}
     (hR : R = a.rows) (inst : P.IsRowsUnit u R) (o : Fin (2 ^ T.nbl)) {g : ℕ} (hg : g < a.st.c.g)
     (hal : a.L.Aliased a.regs (hR ▸ inst) (Fin.cast a.nbl_eq.symm o) hg) :
-    ∀ c c', inst.wire c = inst.wire c' → c.val < R.nIn → c'.val < R.nIn → ∀ z : Model.Witness T.m, T.Satisfies z →
+    ∀ c c', inst.wire c = inst.wire c' → c.val < R.nIn → c'.val < R.nIn → ∀ z : Model.WitnessBits T.m, T.Satisfies z →
       T.block z o (a.col hg (Fin.cast (congrArg Rows.w hR) c)) =
         T.block z o (a.col hg (Fin.cast (congrArg Rows.w hR) c')) := by
   subst hR
@@ -119,7 +119,7 @@ theorem aliased_of_key {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {
 /-- **A template instance's stacked input that reads the zero carries 0**, at the template instance's columns, in every
 block of a satisfying witness (`stack_zero_blockH`). -/
 theorem zero_block {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w) (hx : x.val < a.rows.nIn)
-    (hz : ZeroIn a.st.c x.val) {z : Model.Witness T.m} (hsat : T.Satisfies z) (o : Fin (2 ^ T.nbl)) :
+    (hz : ZeroIn a.st.c x.val) {z : Model.WitnessBits T.m} (hsat : T.Satisfies z) (o : Fin (2 ^ T.nbl)) :
     T.block z o (a.col hg x) = 0 := by
   obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht, h, L, hR, regs, hT⟩ := a
   subst hT
@@ -147,10 +147,10 @@ variable {plan tab}
 
 /-- **W6 at the sites**: each drawn unit's rows in the program are the template instance rows its table's acceptance
 placed. -/
-def SitesH.RowsOf (si : SitesH plan tab) (p : Prog N n) : Prop :=
+def SitesH.RowsOf (si : SitesH plan tab) (p : ProgSpec N n) : Prop :=
   ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S), p.rows u = (si.acc S R u h).rows
 
-variable {p : Prog N n} (si : SitesH plan tab) (hrows : si.RowsOf p)
+variable {p : ProgSpec N n} (si : SitesH plan tab) (hrows : si.RowsOf p)
 
 /-- A drawn unit's columns in its table's block: its template instance's (`AcceptedH.col`). -/
 noncomputable def SitesH.col (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :

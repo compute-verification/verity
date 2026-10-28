@@ -72,7 +72,7 @@ theorem cells_of_close (A : Arith F K) (hA : A.Correct) (rsch : RegSchedule cls)
 
 omit [Fintype F] [DecidableEq F] in
 /-- **A registered claim reads only the cells**: two registered tables agreeing on them make the same claims hold. -/
-theorem holds_congr_cells {sh : SparseShape} (c : RegClaim F sh) (z z' : Witness sh.mReg)
+theorem holds_congr_cells {sh : SparseShape} (c : RegClaim F sh) (z z' : WitnessBits sh.mReg)
     (h : ∀ a : Fin (2 ^ sh.mReg), a.val < 2 ^ (sh.nu + sh.pLog + sh.tLog) → z a = z' a) :
     c.toClaim.Holds z ↔ c.toClaim.Holds z' := by
   have hp : ∀ (t : Fin (2 ^ sh.tLog)) (p : Fin (2 ^ sh.pLog)) (k : Fin (2 ^ sh.nu)),

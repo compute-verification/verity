@@ -5,7 +5,7 @@ import Proofs.Flock.Soundness.Refine.Regions
 /-!
 # The verifier's tables as the readable relation
 
-Each table of the verifier's statement is a block R1CS over GF(2), the model's `Statement` (`Layout.model`: `m`, `k_log`,
+Each table of the verifier's statement is a block R1CS over GF(2), the model's `BlockR1CS` (`Layout.model`: `m`, `k_log`,
 the pin, the level-0 matrices `placedA`, `placedB`, the regions `regionsOf`). `Tab` is that data without its proofs
 (`Tab.ofStmt`), `sysOf m kLog ts` the tables as one `Sys` in blocks of `2^kLog` bits, `2^(m − kLog)` of them, and
 `relation` the deployed relation's fields: `sysOf` at the first table's `m` and `k_log`, over every table.
@@ -73,7 +73,7 @@ instance instDecidableOk (t : Tab) : Decidable t.Ok := by unfold Ok; infer_insta
 instance instDecidableFits (t : Tab) (m kLog : ℕ) : Decidable (t.Fits m kLog) := by unfold Fits; infer_instance
 
 /-- **The model's statement** of a table that has what it needs. -/
-abbrev toModel (t : Tab) (h : t.Ok) : Model.Statement where
+abbrev toModel (t : Tab) (h : t.Ok) : Model.BlockR1CS where
   m := t.m
   kLog := t.kLog
   hk := h.2.1
@@ -108,7 +108,7 @@ theorem toZ_row (t : Tab) (M : Matrix (Fin (2 ^ t.kLog)) (Fin (2 ^ t.kLog)) (ZMo
   simp only [Matrix.mulVec, dotProduct, hs, toZ_ofZ, hx]
 
 /-- **A table holds exactly when its model statement is satisfied**, at a witness whose blocks are `x`'s. -/
-theorem tab_iff (t : Tab) (h : t.Ok) (z : Model.Witness t.m) (x : ℕ → ℕ → Bool)
+theorem tab_iff (t : Tab) (h : t.Ok) (z : Model.WitnessBits t.m) (x : ℕ → ℕ → Bool)
     (hx : ∀ (o : Fin (2 ^ (t.m - t.kLog))) (i : Fin (2 ^ t.kLog)), toZ (x o i) = (t.toModel h).block z o i) :
     t.Holds x ↔ (t.toModel h).Satisfies z := by
   have hrow : ∀ (o : Fin (2 ^ (t.m - t.kLog))) (i : Fin (2 ^ t.kLog)),
@@ -134,7 +134,7 @@ theorem tab_iff (t : Tab) (h : t.Ok) (z : Model.Witness t.m) (x : ℕ → ℕ �
       simp only [o.isLt, ↓reduceDIte]
       rw [← toZ_eq_iff]
       exact (hx o ⟨R.inBlock i, hb⟩).trans (hf R hR i hi hb)
-  unfold Holds Model.Statement.Satisfies
+  unfold Holds Model.BlockR1CS.Satisfies
   constructor
   · intro H
     refine ⟨fun o i => (hrow o i).2 ((H o o.isLt).1 i i.isLt), fun o => ?_, fun R hR o => (hfix o).1 (H o o.isLt).2.2 R hR⟩
@@ -159,7 +159,7 @@ end Tab
 
 /-- Table `c`'s share of the hidden values of `J` tables, interleaved (its bit `a` is hidden value `a·J + c`), as a model
 witness. -/
-def zOf (J : ℕ) (w : Claims.Flock.Wit) (c m : ℕ) : Model.Witness m := fun a => toZ (w.hid.getD (a.val * J + c) false)
+def zOf (J : ℕ) (w : Claims.Flock.Wit) (c m : ℕ) : Model.WitnessBits m := fun a => toZ (w.hid.getD (a.val * J + c) false)
 
 /-- A table's fixed bits in the system: its regions' when it fits the blocks, else bit 0 fixed to `0` (against the pin,
 which is bit 0 then: no witness satisfies it). -/
@@ -233,7 +233,7 @@ theorem sysOf_iff (m kLog : ℕ) (ts : List Tab) (w : Claims.Flock.Wit) :
     obtain ⟨hm, hk, hok⟩ := hf
     have key := Tab.tab_iff (ts.getD c default) hok (zOf ts.length w c (ts.getD c default).m)
       (fun o => (sysOf m kLog ts).bit w c o) (fun o i => by
-        simp only [Model.Statement.block, Model.Statement.addr, zOf, Sys.bit, sysOf, hk])
+        simp only [Model.BlockR1CS.block, Model.BlockR1CS.addr, zOf, Sys.bit, sysOf, hk])
     constructor
     · intro H
       exact ⟨⟨hm, hk, hok⟩, key.1 (by subst hm hk; exact H)⟩

@@ -22,7 +22,7 @@ variable {D Sl : Type}
 
 /-- **The salted table's locksteps for two level-0 tables are aligned.** -/
 theorem aligned_lockTableL [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level)
+    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level)
     (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (C₁ C₂ : Oracle F)
     (cap₀ : Cap D) :
     Lock.Aligned (lockTableL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts C₁ cap₀)
@@ -35,7 +35,7 @@ theorem aligned_lockTableL [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
 
 /-- `Adv_{r,ℓ}` computed through the salted lockstep for the level-0 table `T`. -/
 noncomputable def advRTL [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level)
+    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level)
     (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (T : Oracle F)
     (r ℓ : ℕ) (σ : Strategy (tableCL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts)) : ℝ :=
   Lock.forkE (plurCL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (slotOf r ℓ)
@@ -44,7 +44,7 @@ noncomputable def advRTL [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
     (lockTableL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts T σ.1) σ.2
 
 theorem advRTL_C0starL [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level)
+    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level)
     (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (r ℓ : ℕ)
     (σ : Strategy (tableCL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts)) :
     advRTL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts
@@ -56,7 +56,7 @@ open Classical in
 /-- **The salted bad runs, cap by cap, for any level-0 table `C₀`**, given a bound `x₀` on the level-0 rewinding
 term. -/
 theorem bad_le_genL [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
+    (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (C₀ : Oracle F)
     (σ : Strategy (Game.send (Cap D)
       (tableCmpL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts))) (x₀ : ℝ)
@@ -110,7 +110,7 @@ theorem bad_le_genL [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Me
 
 /-- **The reps' salted fork probabilities do not depend on the level-0 table.** -/
 theorem advRTL_eq [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
+    (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (T : Oracle F) (r ℓ : ℕ)
     (σ : Strategy (tableCL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts)) :
     advRTL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts T r ℓ σ =
@@ -122,7 +122,7 @@ open Classical in
 /-- **`ε_c⁻`** of a salted table: `tableError`, the reps' cap terms and the self-clash probability; the compiled
 error without its level-0 rewinding term. -/
 noncomputable def epsCminusL [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level)
+    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level)
     (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (σ : Strategy (tableCL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts)) : ℝ :=
   tableError ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (S.shape mPts) +
@@ -145,7 +145,7 @@ open Classical in
 run opens a level-0 position off `T`. -/
 theorem table_sound_compiled_of_tableL (A : Arith F K)
     (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
+    (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (hlay : S.LinkLayout ptLocal mPts) (T : Oracle F)

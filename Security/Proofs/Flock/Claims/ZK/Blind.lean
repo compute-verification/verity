@@ -223,20 +223,20 @@ theorem _root_.FlockSoundness.Discharge.ZkView.Coined.swExe_vals {K W Hi VL : Ty
   exact (T.hm96.toBase_viewR w ω ys).trans (ZkView.Coined.viewExe_eq T w ω ys).symm
 
 theorem swCutAt_vals {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
-    (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi)
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi)
     (lv : ZkView.Leaves (fun j => (C j).z) → ByteArray) :
     swCutAt C cz wt (fun j => ((C j).T (cz j)).tab.vals) ω lv = cutAt C cz wt ω lv := by
   funext j
   simp only [swCutAt, cutAt, ZkView.Coined.swPreWith_vals]
 
 theorem swDigOf_vals {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
-    (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi) :
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi) :
     swDigOf C cz wt (fun j => ((C j).T (cz j)).tab.vals) ω = digOf C cz wt ω := by
   funext l
   simp only [swDigOf, digOf, ZkView.Coined.swContent_vals]
 
 theorem swExeOf_vals {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
-    (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi)
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi)
     (y : ZkView.Leaves (fun j => (C j).z) → ZkView.Salt) :
     swExeOf C cz wt (fun j => ((C j).T (cz j)).tab.vals) ω y = exeOf C cz wt ω y := by
   funext l
@@ -297,19 +297,19 @@ abbrev SwVals (S : RefSession) : Type :=
 /-- **The switched prover's cut pre-final view at coins `c`**, on table witnesses `wt`, values `v` and tape `t`, every
 pre-final leaf the executable's under its own salt (`cutOf` at the honest prover). -/
 noncomputable def swCutOf (S : RefSession) (x : Msg) (c : Fin (refK x) → S.Coin)
-    (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m) (v : ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (S.C x j).S.m) (v : ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
     (t : S.Tape) : ∀ j, ((S.C x j).T (S.cz x c j)).tab.Cut :=
   swCutAt (S.C x) (S.cz x c) wt v (S.eP x t).1 (swExeOf (S.C x) (S.cz x c) wt v (S.eP x t).1 (S.eP x t).2)
 
 /-- The tables' switched views at coins `c` (`Coined.swExe`). -/
 noncomputable def swViewsAt (S : RefSession) (x : Msg) (c : Fin (refK x) → S.Coin)
-    (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m) (v : ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (S.C x j).S.m) (v : ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
     (t : S.Tape) : ∀ j, ((S.C x j).T (S.cz x c j)).tab.View :=
   fun j => ((S.C x j).T (S.cz x c j)).swExe (wt j) (v j) (S.randAt x c t j).1 (S.randAt x c t j).2
 
 open Classical in
 /-- **The switched prover's message after the coins `cs`** at the values `v`, as `msgAt` has the honest prover's. -/
-noncomputable def swMsgAt (S : RefSession) (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
+noncomputable def swMsgAt (S : RefSession) (x : Msg) (wt : ∀ j, FlockSoundness.Model.WitnessBits (S.C x j).S.m)
     (v : (c : Fin (refK x) → S.Coin) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (cs : List S.Coin) :
     Msg :=
   if cs.length < refK x then S.enc x (S.pad cs) cs.length (S.swCutOf x (S.pad cs) wt (v (S.pad cs)) t)
@@ -363,7 +363,7 @@ noncomputable def swCoinModel (S : RefSession) (vs : S.SwVals) (x : Msg) (c : Fi
 /-- **The switched real views' pre-final part, cut, is the cut view the switched round messages encode**
 (`viewPre_swExe`). -/
 theorem cutV_swViewsAt (S : RefSession) (x : Msg) (c : Fin (refK x) → S.Coin)
-    (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m) (v : ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (S.C x j).S.m) (v : ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals)
     (t : S.Tape) : S.cutV x c (S.swViewsAt x c wt v t) = S.swCutOf x c wt v t := by
   funext j
   simp only [cutV, swViewsAt, randAt, viewPre_swExe]
@@ -485,7 +485,7 @@ theorem swCoinModel_size (S : RefSession) (vs : S.SwVals) (x : Msg) (c : Fin (re
 noncomputable def honestVals (S : RefSession) : S.SwVals := fun x _ _ c j => ((S.C x j).T (S.cz x c j)).tab.vals
 
 theorem swMsgAt_vals (S : RefSession) (x : Msg) (w : Flock.Wit) (ν : S.Nonce)
-    (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m) (t : S.Tape) (cs : List S.Coin) :
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (S.C x j).S.m) (t : S.Tape) (cs : List S.Coin) :
     S.swMsgAt x wt (S.honestVals x w ν) t cs = S.msgAt x wt t cs := by
   have hc : ∀ c, S.swCutOf x c wt (S.honestVals x w ν c) t = S.cutOf x c wt t := fun c => by
     unfold swCutOf cutOf honestVals

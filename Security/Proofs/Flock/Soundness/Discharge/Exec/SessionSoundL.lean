@@ -26,14 +26,14 @@ variable {D Sl : Type}
 /-! ## The session after `Commit` -/
 
 /-- The oracle table's run after the link points, with the dummy last message. -/
-def tableOrcAfterL (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
+def tableOrcAfterL (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (C₀ : Oracle F) (pts : Fin 2 → Fin mPts → F) : Game (Bool × Oracle F) :=
   (interleave (rep A S sch hm C₀ (extraClaims S ptLocal mPts pts))
     (rep A S sch hm C₀ (extraClaims S ptLocal mPts pts))).bind
     fun acc => Game.send (Opens F D × Salts Sl) fun _ => Game.ret (acc.1 && acc.2, C₀)
 
 omit [Fintype K] in
-theorem tableOrcL_eq (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
+theorem tableOrcL_eq (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (C₀ : Oracle F) :
     tableOrcL (D := D) (Sl := Sl) A S sch hm ptLocal mPts C₀ =
       Game.coin (Fin 2 → Fin mPts → F) fun pts =>
@@ -43,7 +43,7 @@ theorem tableOrcL_eq (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 �
 /-- **A batched session after `Commit`** (PROTOCOL.md §5): one link-point draw, then the games
 `pre`, the table with level-0 cap `cap₀`, and the games `post`, concurrently. -/
 noncomputable def sessAfterL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
-    (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
+    (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl))) (cap₀ : Cap D) :
     Game (List (OutCL F D Sl)) :=
   Game.coin (Fin 2 → Fin mPts → F) fun pts =>
@@ -52,13 +52,13 @@ noncomputable def sessAfterL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.
 open Classical in
 /-- The oracle table's output as a compiled output: accepted when both reps accept and the table is
 not committed. -/
-noncomputable def orcOutL [Inhabited Sl] (A : Arith F K) (S : Statement) (sch : Schedule) (cap₀ : Cap D)
+noncomputable def orcOutL [Inhabited Sl] (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (cap₀ : Cap D)
     (a : Bool × Oracle F) : OutCL F D Sl :=
   ⟨a.1 && decide (¬ Committed A S sch a.2), cap₀, (PendL.reject, PendL.reject),
     fun _ _ _ => ([], []), fun _ _ _ => default⟩
 
 /-- The oracle session: the table's oracle run in its place. -/
-noncomputable def orcSessL [Inhabited Sl] (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
+noncomputable def orcSessL [Inhabited Sl] (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl)))
     (C₀ : Oracle F) (cap₀ : Cap D) : Game (List (OutCL F D Sl)) :=
   Game.coin (Fin 2 → Fin mPts → F) fun pts =>
@@ -68,13 +68,13 @@ noncomputable def orcSessL [Inhabited Sl] (A : Arith F K) (S : Statement) (sch :
 
 /-- The session's leaf relation: the table's, at its position. -/
 def SessRelL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
-    (S : Statement) (sch : Schedule) (C₀ : Oracle F) (cap₀ : Cap D) (n : ℕ)
+    (S : BlockR1CS) (sch : Schedule) (C₀ : Oracle F) (cap₀ : Cap D) (n : ℕ)
     (i : IRep F D × IRep F D) (a b : List (OutCL F D Sl)) : Prop :=
   ∃ x, a.getD n dfltOutL = orcOutL A S sch cap₀ x ∧ TopRelL H E Lf sch C₀ cap₀ i x (b.getD n dfltOutL)
 
 /-- The table's lockstep after the link points (`lockTable` below its coin). -/
 noncomputable def lockAfterL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
+    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
     (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (C₀ : Oracle F)
     (cap₀ : Cap D) (pts : Fin 2 → Fin mPts → F) :
     Lock (Oracle F) (Cap D) (Lock.getPair (getRep 0) (getRep 1))
@@ -96,7 +96,7 @@ noncomputable def lockAfterL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : L
       (lockRep A 1 (by norm_num) S m k0 l₀ l₁ rest ext hk0 hm C₀ (extraClaims S ptLocal mPts pts)))
 
 theorem aligned_lockAfterL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
+    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
     (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (C₁ C₂ : Oracle F)
     (cap₀ : Cap D) (pts : Fin 2 → Fin mPts → F) :
     Lock.Aligned (lockAfterL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts C₁ cap₀ pts)
@@ -110,7 +110,7 @@ theorem aligned_lockAfterL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : Lis
 /-- **The table in lockstep inside the session**: its lockstep at position `pre.length`, the same
 game on both sides everywhere else. -/
 noncomputable def lockSessL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
+    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
     (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl))) (C₀ : Oracle F) (cap₀ : Cap D) :
     Lock (Oracle F) (Cap D) (Lock.getPair (getRep 0) (getRep 1))
@@ -128,7 +128,7 @@ noncomputable def lockSessL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : Li
         (post.map (· pts)) (pre.map (· pts)))
 
 theorem aligned_lockSessL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
+    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
     (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl))) (C₁ C₂ : Oracle F)
     (cap₀ : Cap D) :
@@ -144,7 +144,7 @@ open Classical in
 /-- **The oracle session is bounded by the table.** Whatever the other games, the oracle table in
 the session accepts uncommitted with probability at most `tableError`, for an optimal prover. -/
 theorem orcSess_value_leL (A : Arith F K) (hA : A.Correct)
-    [Inhabited D] [Inhabited Sl] (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m)
+    [Inhabited D] [Inhabited Sl] (S : BlockR1CS) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)
     (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl))) (C₀ : Oracle F) (cap₀ : Cap D) :
     value (fun outs : List (OutCL F D Sl) => (outs.getD pre.length dfltOutL).accepted = true)
@@ -207,7 +207,7 @@ theorem plurS_pluralityL [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E 
 
 /-- **`Adv_{r,ℓ}` in the session**: the collision finder at the table's rep `r`'s level-`ℓ` cap. -/
 noncomputable def advRSL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
+    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
     (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl))) (cap₀ : Cap D) (r ℓ : ℕ)
     (σ : Strategy (sessAfterL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀)) :
@@ -221,7 +221,7 @@ noncomputable def advRSL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List 
 /-- **`Adv₀` in the session**: two runs after `Commit` open a level-0 position of the table to
 different rows. -/
 noncomputable def adv₀SL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
+    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl))) (cap₀ : Cap D)
     (σ : Strategy (sessAfterL A H E Lf S sch hm ptLocal mPts pre post cap₀)) : ℝ :=
   expect₂ (fun b b' => ind (fun x : List (OutCL F D Sl) × List (OutCL F D Sl) => ∃ p,
@@ -232,7 +232,7 @@ noncomputable def adv₀SL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : Lis
 open Classical in
 /-- **`ε_c⁻` in the session**: `tableError`, the table's rep caps' fork terms and its self-clash. -/
 noncomputable def epsSL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
+    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
     (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl))) (cap₀ : Cap D)
     (σ : Strategy (sessAfterL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀)) :
@@ -303,7 +303,7 @@ holds with `T` uncommitted with probability at most `ε_c⁻` plus the probabili
 in a run that opens a level-0 position off `T`. The coupling's bad event needs only the table's
 acceptance (`bad_pointwise_ofL`). -/
 theorem session_sound_of_table_accL (A : Arith F K)
-    (hA : A.Correct) [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
+    (hA : A.Correct) [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (hlay : S.LinkLayout ptLocal mPts)
@@ -410,7 +410,7 @@ open Classical in
 after `Commit` and every table `T`: the table accepts with `T` uncommitted with probability at most
 `ε_c⁻` plus the probability that a run opens a level-0 position of the table off `T`. -/
 theorem session_sound_of_tableL (A : Arith F K) (hA : A.Correct)
-    [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
+    [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (hlay : S.LinkLayout ptLocal mPts)
@@ -438,7 +438,7 @@ noncomputable def extractTableSL [Inhabited D] [Inhabited Sl] (H : List UInt8 �
       (fun _ _ => 0) bs)
 
 theorem epsS_nonnegL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
+    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
     (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl))) (cap₀ : Cap D)
     (σ : Strategy (sessAfterL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀)) :
@@ -461,7 +461,7 @@ the table accepts in a fresh run of the session after `Commit`, while the extrac
 independent reruns of everything after `Commit` fails, is at most `ε_c⁻ + K·adv₀ + N₀/(eK)`, with
 no condition on the acceptance probability. -/
 theorem session_knowledge_soundL (A : Arith F K) (hA : A.Correct)
-    [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
+    [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (hlay : S.LinkLayout ptLocal mPts)

@@ -235,7 +235,7 @@ def repSlotDist (m kLog nExtra k0 : ℕ) (levs : List Level) (ℓ : ℕ) : ℕ :
 
 /-- **A rep's caps' distances**: every path of rep `r` that meets its level-`ℓ + 1` cap's table node meets it after
 `repSlotDist` coins. -/
-theorem dist_lockRep (A : Arith F K) (r : ℕ) (hr : r < 2) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level)
+theorem dist_lockRep (A : Arith F K) (r : ℕ) (hr : r < 2) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level)
     (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) (ℓ : ℕ) :
     Lock.Dist (slotOf r (ℓ + 1)) (repSlotDist S.m S.kLog extra.length k0 (l₁ :: rest) ℓ)
@@ -349,7 +349,7 @@ theorem noSlot_lockLig_ge (A : Arith F K) (r : ℕ) (hr : r < 2) (m k0 : ℕ) (l
   · simp only [List.length_cons]; omega
 
 /-- **No cap past a rep's last level.** -/
-theorem noSlot_lockRep_ge (A : Arith F K) (r : ℕ) (hr : r < 2) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level)
+theorem noSlot_lockRep_ge (A : Arith F K) (r : ℕ) (hr : r < 2) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level)
     (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) (ℓ : ℕ) (hℓ : (l₀ :: l₁ :: rest).length ≤ ℓ + 1) :
     Lock.NoSlot (slotOf r (ℓ + 1)) (lockRep (D := D) A r hr S m k0 l₀ l₁ rest ext hk0 hm C₀ extra) := by

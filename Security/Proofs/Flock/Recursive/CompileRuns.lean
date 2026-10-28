@@ -74,7 +74,7 @@ theorem value_le_of_forall_prob {α : Type} {p : α → Prop} {ε : ℝ≥0∞} 
 
 /-- Every message the compiled table receives has an inhabited type. -/
 theorem allInh_tableCL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
+    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) : AllInh (tableCL A H E Lf S sch hm ptLocal mPts) := by
   unfold tableCL
   repeat' (first
@@ -87,7 +87,7 @@ theorem allInh_tableCL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UI
 /-- **The compiled table's value on a clash-free set of outcomes** is at most `tableError`: `table_prob_clashFree` for
 every prover. -/
 theorem table_value_clashFree (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl] (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule)
+    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (sch : Schedule)
     (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)
     (hno : ¬ ∃ z, S.Satisfies z) (W : OutCL F D Sl → Prop)
     (hW₀ : ∀ o, W o → ¬ SelfClashL H E Lf sch o)

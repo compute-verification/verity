@@ -19,7 +19,7 @@ open Model Audit
 /-- **The circuit's program on Δ's source keys with public inputs**: `n` units of the circuit's template instance rows,
 input `x` of each on the gate of its key (`Aliased.keyIdxP`), the zero's gate when it reads the zero. -/
 noncomputable abbrev keyProgP (c : Flock.Circuit) (pi : HmIn.Ports) (hU : Built c.unit) (n : ℕ) :
-    Prog (gates (inGates n (circuitRows c hU).nIn) (circuitRows c hU) n) n :=
+    ProgSpec (gates (inGates n (circuitRows c hU).nIn) (circuitRows c hU) n) n :=
   circuitProg c hU n (circuitRows c hU).nIn (Aliased.keyIdxP c pi (circuitRows c hU).nIn)
 
 /-- **Without a public leaf map, `keyProgP` is `keyProg`.** -/

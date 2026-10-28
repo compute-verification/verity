@@ -38,7 +38,7 @@ structure HoloLcOut (F : Type) (m n : ℕ) where
 
 /-- **The lincheck with hidden units** (§10 with L4′): `lincheck` on the public part `S`, with the prover's `h` after
 `z_partial` and the check `Σ_s (folded[s] + h[s])·z_partial[s] = claim`. -/
-def holoLincheck (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) :
+def holoLincheck (A : Arith F K) (S : BlockR1CS) (zc : ZcOut F S.m) :
     Game (Option (HoloLcOut F S.m (S.kLog - 6))) := do
   let α ← draw F                                         -- L1
   let β ← draw F                                         -- L2

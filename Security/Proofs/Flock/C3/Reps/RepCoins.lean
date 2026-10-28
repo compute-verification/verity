@@ -85,12 +85,12 @@ open Flock FlockSoundness FlockSoundness.Refine
 open FlockVBridge.Compiled (RepData)
 
 /-- Rep `v`'s rounds whose coins its steps take (`UnitWoven`'s): all from `v.t.k` to `v.t₄.k` but `z_partial`'s. -/
-def repIdx (S : FlockSoundness.Model.Statement) (v : UnitVals) : List ℕ :=
+def repIdx (S : FlockSoundness.Model.BlockR1CS) (v : UnitVals) : List ℕ :=
   List.range' v.t.k (v.t.k + 3 + (v.st.m - 6) + 2 + (S.kLog - 6) - v.t.k) ++
     List.range' (v.t.k + 3 + (v.st.m - 6) + 2 + (S.kLog - 6) + 1)
       (v.t₄.k - (v.t.k + 3 + (v.st.m - 6) + 2 + (S.kLog - 6) + 1))
 
-theorem unitCoins_eq (S : FlockSoundness.Model.Statement) (v : UnitVals) :
+theorem unitCoins_eq (S : FlockSoundness.Model.BlockR1CS) (v : UnitVals) :
     (consumed v.t.rounds v.t.k (v.t.k + 3 + (v.st.m - 6) + 2 + (S.kLog - 6)) ++
       consumed v.t.rounds (v.t.k + 3 + (v.st.m - 6) + 2 + (S.kLog - 6) + 1) v.t₄.k).map (coinArr fOf) =
     (repIdx S v).map (coinArr fOf ∘ fun q => (v.t.rounds[q]!).coins) := by
@@ -105,7 +105,7 @@ variable {r : ℕ} {CT : Fin r → Type}
 the rounds are the record's (`hd`, `hv`), and the history's round `j + p` draws the `p`-th of them (`hdr`), which
 custody holds. -/
 theorem coinsAt_rep {Cm : Type} {t : List (Cm × ((k : Fin r) → CT k))} {ts : List Step}
-    {S : FlockSoundness.Model.Statement} {v : UnitVals} {d : RepData}
+    {S : FlockSoundness.Model.BlockR1CS} {v : UnitVals} {d : RepData}
     {wr : List (Cm × ((k : Fin r) → CT k)) → Lean.Json × String}
     {held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits} {sparse : Option Flock.RecSparse.Shape}
     {m : InnerRecordMap Cm ((k : Fin r) → CT k)} {s : String} {ix : ℕ → ℕ} {j : ℕ}

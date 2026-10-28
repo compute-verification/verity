@@ -24,7 +24,7 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- **The lincheck's circuit fold is the model's** (§10): when `Zk.replay`'s `st.fold.folded α β (skipWeights z) ρ ts`
 returns `w`, on a fold realizing `S`, each of `w`'s 64 entries is the model's `foldAll` at the challenges `ts` of `comb` at
 `(z, α, β, ρ)`. -/
-theorem folded_comb (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S) (α β z : F128)
+theorem folded_comb (S : Model.BlockR1CS) (c : CircuitFold) (hc : FoldRealizes c S) (α β z : F128)
     (ρ ts w : Array F128) (hρ : ρ.size = S.kLog - 6) (hts : ts.size = S.kLog - 6)
     (h : c.folded α β (skipWeights z) ρ ts = .ok w) :
     ∀ i < 64, fOf w[i]! = Model.foldAll (ts.toList.map fOf) (2 ^ S.kLog)

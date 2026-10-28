@@ -11,7 +11,7 @@ and `ecr/sha-512`, each a hypothesis (below). The rest of this section and The h
 forms.
 
 **The end-to-end skeleton**: `flock_e2e_count` and `flock_e2e_drawn`, in `E2E.lean`, and
-`Prog.flock_e2e_count` and `Prog.flock_e2e_drawn` on the circuit of the statement's rows (`Prog.circuit`). They state the
+`ProgSpec.flock_e2e_count` and `ProgSpec.flock_e2e_drawn` on the circuit of the statement's rows (`ProgSpec.circuit`). They state the
 chain from the audit's acceptance to the integrity profile on the committed circuit. Each unfinished piece is a named
 hypothesis, and the headline's footprint (below) lists them with their kinds. The circuit is the one the statement's rows
 make, chosen on the untrusted side, and the lowering does no optimizing. So no hypothesis relates the
@@ -19,7 +19,7 @@ rows to another circuit: what a correct unit computes is its certificate's (The 
 hypothesis carries what the statement doesn't say yet: that the acceptance is the executable verifier's (`hExec`; in the
 `_hm96` forms, the serving roots' rewinding `tr`, which adds `δ_tree`).
 
-**The headline** is `Prog.flock_headline` (`Headline.lean`), the one statement the others specialize into
+**The headline** is `ProgSpec.flock_headline` (`Headline.lean`), the one statement the others specialize into
 (The headline, below).
 
 ## Soundness's assumptions (taken without proof)
@@ -208,7 +208,7 @@ budget `qR`).
 
 ## The headline
 
-`Prog.flock_headline` (`Headline.lean`) is the count curve with every choice made:
+`ProgSpec.flock_headline` (`Headline.lean`) is the count curve with every choice made:
 - **the circuit** is the statement's rows' (`p.circuit outs`), each drawn unit's place from its table's statement
   (`pp : ProgPlaces`);
 - **the hash** is SHA-512 (`Refine.H512`, `Refine.enc512`), for the session's leaves and nodes and for the rows' commit
@@ -373,7 +373,7 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
 
 ## Named hypotheses of the proof
 
-- **The circuit and the certificate** (no hypothesis). The end-to-end theorems are about `C = Prog.circuit`, the circuit
+- **The circuit and the certificate** (no hypothesis). The end-to-end theorems are about `C = ProgSpec.circuit`, the circuit
   the statement's rows make, each unit its template's rows; "faulty" is measured there. The headline bounds faulty proof blocks
   of the pinned rows circuit; "computes the Definition" additionally needs `RowsCert` per template and the Definition's
   Boolean semantics in Lean. That is a separate theorem, `IsRowsUnit.computes_of_cert`
@@ -387,7 +387,7 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
   lowers to a Boolean circuit over AND, XOR and NOT, a generic Boolean-semantics lemma replaces the
   per-template `RowsCert`.
 - **The statement's form** is no hypothesis: `verify` refuses forms the proof omits (PROTOCOL.md §16.15).
-- **The link points' layout** is a hypothesis (`Statement.LinkLayout`). Each region's free bits must be distinct and
+- **The link points' layout** is a hypothesis (`BlockR1CS.LinkLayout`). Each region's free bits must be distinct and
   read link coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …` must fit inside the point. The
   statements of PROTOCOL.md §16 satisfy it.
 - **The placement** (`BlockRows`; `lowering_sound`, `README.md` §1.5):
@@ -465,10 +465,10 @@ and the batched session's `flock_batched_knowledgeSoundE`), and the link theorem
 `linkBoundCR`: finite exactly at the provers whose link finders satisfy `SHA512CRExpected`. The end-to-end skeleton's `flock_e2e_count` and
 `flock_e2e_drawn` are pinned too; they take `SHA512CRExpected` for `σ`'s link finders as `hCR`. So are the four
 `flock_e2e_*_hm96`, which also take `SHA512CRStrict` for the knowledge term's finders (`hKS`) and `δ_tree`'s (`hT`).
-So are the headline, `Prog.flock_headline` (its footprint is The headline, above), and the theorems the footprints cite
+So are the headline, `ProgSpec.flock_headline` (its footprint is The headline, above), and the theorems the footprints cite
 as proved: the `StrictCR` terms (`table_sound_compiled_strict`, `ksBoundAccB_le_strict`, `ksAvgBE_le_strict`,
 `tree_le_strict`, `TreeRewind.le`, `TreeRewind.ofNever_bound`), `Teeth`'s four (`strict_of_injective`,
-`expected_of_injective`, `not_strict_const`, `not_expected_const`), `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn`,
+`expected_of_injective`, `not_strict_const`, `not_expected_const`), `ProgSpec.flock_e2e_count` and `ProgSpec.flock_e2e_drawn`,
 and the certificate's `IsRowsUnit.computes_of_cert`.
 The `cr/sha-512` restatements are pinned beside them (`FlockSoundness.CROnly`: `expected_of_strict`, `linkCR_of_strict`,
 `linkBoundE_at_cube`, each `flock_e2e_*`, `uprog_e2e_*`, `prog_e2e_*` and `flock_headline`), and so is zero knowledge's

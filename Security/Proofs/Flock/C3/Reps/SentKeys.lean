@@ -51,7 +51,7 @@ open FlockSoundness.Discharge.Exec (weave)
 open FlockSoundness.Discharge.PlaysCoin (coinArr)
 
 /-- `unitWeave`'s shape at `S`, `nX` extra claims and `sch₀`. -/
-def unitShape (S : Model.Statement) (sch₀ : Accounting.Schedule) (nX : ℕ) : List Discharge.Exec.Kind :=
+def unitShape (S : Model.BlockR1CS) (sch₀ : Accounting.Schedule) (nX : ℕ) : List Discharge.Exec.Kind :=
   holoRepShape 𝔽 𝕂 Dig S.m S.kLog nX sch₀
 
 /-- `unitWeave`'s messages at `nX` extra claims. -/
@@ -59,16 +59,16 @@ def unitMsgs (nX : ℕ) (sh : Flock.Shape) (d : FlockVBridge.Compiled.RepData) (
   holoRepMsgs v.st v.sch (2 + nX) v.p (hOfW sh d.w) capDig
 
 /-- `unitWeave`'s coins at `S`. -/
-def unitCoins (S : Model.Statement) (v : UnitVals) : List Game.Msg :=
+def unitCoins (S : Model.BlockR1CS) (v : UnitVals) : List Game.Msg :=
   (consumed v.t.rounds v.t.k (v.t.k + 3 + (v.st.m - 6) + 2 + (S.kLog - 6)) ++
     consumed v.t.rounds (v.t.k + 3 + (v.st.m - 6) + 2 + (S.kLog - 6) + 1) v.t₄.k).map (coinArr fOf)
 
-theorem unitWeave_eq (S : Model.Statement) (sch₀ : Accounting.Schedule) (nX : ℕ) (sh : Flock.Shape)
+theorem unitWeave_eq (S : Model.BlockR1CS) (sch₀ : Accounting.Schedule) (nX : ℕ) (sh : Flock.Shape)
     (d : FlockVBridge.Compiled.RepData) (v : UnitVals) :
     unitWeave S sch₀ nX sh d v = weave (unitShape S sch₀ nX) (unitMsgs nX sh d v) (unitCoins S v) := rfl
 
 /-- **A rep's extra claims are two per region, whatever the points.** -/
-theorem extraClaims_length (S : Model.Statement) (a b : ℕ) (pts pts' : Fin 2 → Fin b → 𝔽) :
+theorem extraClaims_length (S : Model.BlockR1CS) (a b : ℕ) (pts pts' : Fin 2 → Fin b → 𝔽) :
     (Model.extraClaims S a b pts).length = (Model.extraClaims S a b pts').length := by
   simp only [Model.extraClaims, List.length_flatMap, List.length_cons, List.length_nil]
 
@@ -100,7 +100,7 @@ theorem unitMsgs_length (nX : ℕ) {sh sh' : Flock.Shape} {d d' : FlockVBridge.C
     ligMsgs_length v.p.ligerito v'.p.ligerito capDig capDig v'.sch]
 
 /-- **A rep's coins' count** is its setup's and its transcripts' rounds'. -/
-theorem unitCoins_length (S : Model.Statement) {v v' : UnitVals} (hk : v.t.k = v'.t.k) (hst : v.st = v'.st)
+theorem unitCoins_length (S : Model.BlockR1CS) {v v' : UnitVals} (hk : v.t.k = v'.t.k) (hst : v.st = v'.st)
     (h₄ : v.t₄.k = v'.t₄.k) : (unitCoins S v).length = (unitCoins S v').length := by
   simp only [unitCoins, consumed, List.length_map, List.length_append, List.length_range', hk, hst, h₄]
 
@@ -113,7 +113,7 @@ theorem unitMsgs_length_of (nX : ℕ) {sh sh' : Flock.Shape} {d d' : FlockVBridg
     ligMsgs_length v.p.ligerito v'.p.ligerito capDig capDig v'.sch]
 
 /-- **A rep's coins' count** reads only its setup's `m` and its transcripts' rounds. -/
-theorem unitCoins_length_of (S : Model.Statement) {v v' : UnitVals} (hk : v.t.k = v'.t.k) (hm : v.st.m = v'.st.m)
+theorem unitCoins_length_of (S : Model.BlockR1CS) {v v' : UnitVals} (hk : v.t.k = v'.t.k) (hm : v.st.m = v'.st.m)
     (h₄ : v.t₄.k = v'.t₄.k) : (unitCoins S v).length = (unitCoins S v').length := by
   simp only [unitCoins, consumed, List.length_map, List.length_append, List.length_range', hk, hm, h₄]
 
@@ -1152,7 +1152,7 @@ theorem tsRead_repsOfVals (M : RepMaps stmt Vs sh Reg L.Ω (Cm × (ℐ).Coin)) {
 
 /-- **The reps' lengths at `ValsSrc.vals`** are `b₀`'s where `b`'s setup's `m` and `k_log`, schedule and closing round
 are `b₀`'s (the transcript starts at round 0 at either). -/
-theorem lengths_vals (nX : ℕ) (S₀ : Model.Statement) (b b₀ : ValsSrc) (d d₀ : RepData) (hm : b.st.m = b₀.st.m)
+theorem lengths_vals (nX : ℕ) (S₀ : Model.BlockR1CS) (b b₀ : ValsSrc) (d d₀ : RepData) (hm : b.st.m = b₀.st.m)
     (hk : b.st.kLog = b₀.st.kLog) (hs : b.sch = b₀.sch) (h₄ : b.t₄.k = b₀.t₄.k) :
     (unitMsgs nX sh d (b.vals sh d)).length = (unitMsgs nX sh d₀ (b₀.vals sh d₀)).length ∧
       (unitCoins S₀ (b.vals sh d)).length = (unitCoins S₀ (b₀.vals sh d₀)).length :=
@@ -1214,16 +1214,16 @@ theorem capTie_vals {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc} {c
       (Eq.symm (hcs R ω t R₂ τ o hA))
 
 /-- A rep's consumed rounds (`repIdx`) at `ValsSrc`'s values, which start at round 0: `b`'s alone. -/
-def repIdxB (S₀ : Model.Statement) (b : ValsSrc) : List ℕ :=
+def repIdxB (S₀ : Model.BlockR1CS) (b : ValsSrc) : List ℕ :=
   List.range' 0 (3 + (b.st.m - 6) + 2 + (S₀.kLog - 6)) ++
     List.range' (3 + (b.st.m - 6) + 2 + (S₀.kLog - 6) + 1) (b.t₄.k - (3 + (b.st.m - 6) + 2 + (S₀.kLog - 6) + 1))
 
-theorem repIdx_vals (S₀ : Model.Statement) (b : ValsSrc) (sh : Flock.Shape) (d : RepData) :
+theorem repIdx_vals (S₀ : Model.BlockR1CS) (b : ValsSrc) (sh : Flock.Shape) (d : RepData) :
     repIdx S₀ (b.vals sh d) = repIdxB S₀ b := rfl
 
 /-- **`RepsDrawn` on `b` alone**: at every layers, the history's round `repStart c₀ i + p` (`c₀` rep 0's consumed
 rounds) draws round `q` of stream `s i`, `q` the `p`-th of rep `i`'s (`repIdxB`), and those rounds are below `r`. -/
-def DrawnOf (S₀ : Model.Statement) (r : ℕ) (b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc)
+def DrawnOf (S₀ : Model.BlockR1CS) (r : ℕ) (b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc)
     (selC : ℕ → String → ℕ → Prop) (s : Fin 2 → String) : Prop :=
   ∀ Lb i, repStart (repIdxB S₀ (b Lb 0)).length i + (repIdxB S₀ (b Lb i)).length ≤ r ∧
     ∀ p q, (repIdxB S₀ (b Lb i))[p]? = some q → selC (repStart (repIdxB S₀ (b Lb 0)).length i + p) (s i) q

@@ -34,7 +34,7 @@ theorem byteOf_testBit (x : UInt8) : byteOf (fun t => x.toNat.testBit t.val) = x
   exact UInt8.ofNat_toNat
 
 /-- **The bytes a witness holds** at addresses where it holds the bits of `B`, byte `j`'s bit `t` at `a j t`. -/
-theorem bytesAt_eq {m N : ℕ} (z : Witness m) (a : Fin N → Fin 8 → Fin (2 ^ m)) (B : List UInt8) (hB : B.length = N)
+theorem bytesAt_eq {m N : ℕ} (z : WitnessBits m) (a : Fin N → Fin 8 → Fin (2 ^ m)) (B : List UInt8) (hB : B.length = N)
     (h : ∀ j t, bit (z (a j t)) = (B.get ⟨j.val, hB ▸ j.isLt⟩).toNat.testBit t.val) : bytesAt z a = B := by
   subst hB
   refine List.ext_get (by simp [bytesAt]) fun j h1 h2 => ?_

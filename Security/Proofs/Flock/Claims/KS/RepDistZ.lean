@@ -254,7 +254,7 @@ theorem dist_lockLigPadZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P 
 
 /-- **The rest of a masked rep: the caps' distances**, after the opening's coins. -/
 theorem dist_lockRestZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np)
-    (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₀ : Oracle F) (extra : List (Claim F S.m))
+    (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₀ : Oracle F) (extra : List (Claim F S.m))
     (zc : ZcZK F np S.m) (ab : ClaimZK F np S.m) (ℓ : ℕ) :
     Lock.Dist (slotOf r (ℓ + 1)) (ligPadSlotDist sch e ℓ + (extra.length + 2 + 1))
       (lockRestZ (D := D) A r hr P₀ PA S sch hm t c₀ C₀ extra zc ab) := by
@@ -277,7 +277,7 @@ def maskedSlotDist (m kLog nExtra : ℕ) (sch : Schedule) (e ℓ : ℕ) : ℕ :=
 
 /-- **The masked phase's caps' distances.** -/
 theorem dist_lockMaskedZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np)
-    (tr : Triple np) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₀ : Oracle F)
+    (tr : Triple np) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) (ℓ : ℕ) :
     Lock.Dist (slotOf r (ℓ + 1)) (maskedSlotDist S.m S.kLog extra.length sch e ℓ)
       (lockMaskedZ (D := D) A r hr P₀ PA tr S sch hm t c₀ C₀ extra) := by
@@ -436,7 +436,7 @@ theorem noSlot_lockLigPadZ_ge (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ
 
 /-- **No cap past the last level in the rest of a masked rep.** -/
 theorem noSlot_lockRestZ_ge (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np)
-    (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₀ : Oracle F) (extra : List (Claim F S.m))
+    (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₀ : Oracle F) (extra : List (Claim F S.m))
     (zc : ZcZK F np S.m) (ab : ClaimZK F np S.m) (ℓ : ℕ) (hℓ : sch.levels.length ≤ ℓ + 1) :
     Lock.NoSlot (slotOf r (ℓ + 1)) (lockRestZ (D := D) A r hr P₀ PA S sch hm t c₀ C₀ extra zc ab) := by
   refine Lock.NoSlot.bind ?_ (Lock.noSlot_same _)
@@ -452,7 +452,7 @@ theorem noSlot_lockRestZ_ge (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} 
 
 /-- **No cap past the last level in the masked phase.** -/
 theorem noSlot_lockMaskedZ_ge (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np)
-    (tr : Triple np) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₀ : Oracle F)
+    (tr : Triple np) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) (ℓ : ℕ) (hℓ : sch.levels.length ≤ ℓ + 1) :
     Lock.NoSlot (slotOf r (ℓ + 1)) (lockMaskedZ (D := D) A r hr P₀ PA tr S sch hm t c₀ C₀ extra) := by
   refine Lock.NoSlot.bind ?_ ?_

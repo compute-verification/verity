@@ -24,7 +24,7 @@ local notation "𝒖" => done.getD unit default
 
 /-- The pin carries 1, in every block of a satisfying witness of a typed template's statement. -/
 theorem pin_bitT {u : D} (T : TemplateLayout st tb words done u)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (T.model regs).m}
     (hz : (T.model regs).Satisfies z) (o : Fin (2 ^ (T.model regs).nbl)) :
     blockBit (T.model regs) z o st.pin = true := by
   rw [blockBit_of_lt _ z o T.pin_lt]
@@ -38,7 +38,7 @@ fills its slot), and no slot constant, flat Δ pair (those are in the rows' circ
 are at unit columns) is there. -/
 theorem zero_bitT (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖) (C : CheckFactsT st.c tb) (hg : 0 < st.c.g)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (T.model regs).m}
     (hz : (T.model regs).Satisfies z) (o : Fin (2 ^ (T.model regs).nbl)) :
     blockBit (T.model regs) z o (zeroCol st.c) = false := by
   obtain ⟨hm, hk, hc, hsl⟩ := T.range T.unitNet
@@ -107,7 +107,7 @@ theorem row_copies_of_sat {tags : Tags} {t : Typed.Template} (hd : deriveChecked
     (P : ParseFactsT tags t st.c) (C : CheckFactsT st.c tb)
     (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
     (hda : st.da = (HmRow.delta st.c st.pin).1) (hdb : st.db = (HmRow.delta st.c st.pin).2)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (T.model regs).m}
     (hz : (T.model regs).Satisfies z) (o : Fin (2 ^ (T.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) :
     (∀ t < 512, blockBit (T.model regs) z o (shaBase st.c g p 0 + shaIn st.c (2 * shaSub st.c p 0) + t) =
@@ -171,7 +171,7 @@ theorem row_bc_typed {tags : Tags} {t : Typed.Template} (hd : deriveChecked type
     (P : ParseFactsT tags t st.c) (C : CheckFactsT st.c tb)
     (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
     (hda : st.da = (HmRow.delta st.c st.pin).1) (hdb : st.db = (HmRow.delta st.c st.pin).2)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (T.model regs).m}
     (hz : (T.model regs).Satisfies z) (o : Fin (2 ^ (T.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) :
     bytesOf (blockBit (T.model regs) z o) 128 (bcCol st.c g p) = Binding.commitString
@@ -196,7 +196,7 @@ theorem row_bc_setupH_typed (ht : tags.typed = true)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) {k : Typed.Class} {t : Typed.Template}
     (hr : Typed.read tags cf tables = .ok (k, .inr t))
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))}
-    {z : Model.Witness ((setupH_templateLayout ht h hr).2.2.model regs).m}
+    {z : Model.WitnessBits ((setupH_templateLayout ht h hr).2.2.model regs).m}
     (hz : ((setupH_templateLayout ht h hr).2.2.model regs).Satisfies z)
     (o : Fin (2 ^ ((setupH_templateLayout ht h hr).2.2.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) :

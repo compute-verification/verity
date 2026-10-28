@@ -31,7 +31,7 @@ namespace Compose
 
 /-- **The block matrices realize the composed rows at `pos`**: `placement_of_realizes`'s hypotheses, with the positions in
 the block. -/
-structure Realizes (S : Model.Statement) (L : Logical) (pos : ℕ → ℕ) : Prop where
+structure Realizes (S : Model.BlockR1CS) (L : Logical) (pos : ℕ → ℕ) : Prop where
   lt : ∀ ℓ < L.order.length, pos (L.order.getD ℓ 0) < 2 ^ S.kLog
   rowA : ∀ k < L.order.length - L.nIn, ∀ p, L.row (L.order.getD (L.nIn + k) 0) = some p →
     ∀ r j : Fin (2 ^ S.kLog), r.val = pos (L.order.getD (L.nIn + k) 0) →
@@ -46,7 +46,7 @@ structure Realizes (S : Model.Statement) (L : Logical) (pos : ℕ → ℕ) : Pro
   pinA : ∀ j, S.A₀ S.pin j = if j = S.pin then 1 else 0
   pinB : ∀ j, S.B₀ S.pin j = if j = S.pin then 1 else 0
 
-theorem Realizes.placement {S : Model.Statement} {L : Logical} {pos : ℕ → ℕ} (hr : Realizes S L pos) (h : Ordered L) :
+theorem Realizes.placement {S : Model.BlockR1CS} {L : Logical} {pos : ℕ → ℕ} (hr : Realizes S L pos) (h : Ordered L) :
     BlockRows S (Rows.compose L h) (composePlace S L h pos hr.lt) :=
   placement_of_realizes hr.rowA hr.rowB hr.oneA hr.oneB hr.pinA hr.pinB
 
@@ -66,7 +66,7 @@ open Flock.DeriveAll Types.Dag
 /-- **1e's facts at one slot of a table** (the plan's flock-verifier item 2): at each non-input column `c` of the unit's
 order, the block matrices' rows at `pos c` read the unit's block row (`blockRow`: Δ's copy, else the row as the verifier
 folds it), each column at `pos` and `one` at the pin; and the pin's row reads the pin. -/
-structure BlockFacts (S : Model.Statement) (words : String → Option (Array ℕ)) (done : Array D) (u : D) (one : ℕ)
+structure BlockFacts (S : Model.BlockR1CS) (words : String → Option (Array ℕ)) (done : Array D) (u : D) (one : ℕ)
     (pos : ℕ → ℕ) : Prop where
   lt : ∀ c ∈ order done u, pos c < 2 ^ S.kLog
   rowA : ∀ c ∈ order done u, c ∉ u.inCols.toList → ∀ p, blockRow words u one c = some p →
@@ -87,7 +87,7 @@ theorem blockRow_ne_none {words : String → Option (Array ℕ)} {d : D} {one c 
   · simp
   · split <;> simp [hr]
 
-theorem count_pin {S : Model.Statement} (j : Fin (2 ^ S.kLog)) :
+theorem count_pin {S : Model.BlockR1CS} (j : Fin (2 ^ S.kLog)) :
     ((([S.pin.val].count j.val : ℕ) : ZMod 2)) = if j = S.pin then 1 else 0 := by
   by_cases hj : j = S.pin
   · subst hj; simp
@@ -98,7 +98,7 @@ theorem count_pin {S : Model.Statement} (j : Fin (2 ^ S.kLog)) :
 past every row of the unit, `BlockFacts` at `pos` is `Realizes` for the unit's composed rows (`ofBlock`) at `pos`. -/
 theorem BlockFacts.realizes {types : String → Option CircuitType} {ls : Array Flock.Layout} {info : String → Option TableInfo}
     {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
-    (hd : deriveChecked types ls info words unit = .ok done) {S : Model.Statement} {one : ℕ} {pos : ℕ → ℕ}
+    (hd : deriveChecked types ls info words unit = .ok done) {S : Model.BlockR1CS} {one : ℕ} {pos : ℕ → ℕ}
     (hone : (done.getD unit default).rows.size ≤ one) (hf : BlockFacts S words done (done.getD unit default) one pos) :
     Realizes S (ofBlock words done (done.getD unit default)) pos := by
   have h := ofBlock_ordered hd
@@ -167,7 +167,7 @@ theorem BlockFacts.realizes {types : String → Option CircuitType} {ls : Array 
 `composePlace`. -/
 theorem BlockFacts.placement {types : String → Option CircuitType} {ls : Array Flock.Layout}
     {info : String → Option TableInfo} {words : String → Option (Array ℕ)} {unit : ℕ} {done : Array D}
-    (hd : deriveChecked types ls info words unit = .ok done) {S : Model.Statement} {one : ℕ} {pos : ℕ → ℕ}
+    (hd : deriveChecked types ls info words unit = .ok done) {S : Model.BlockR1CS} {one : ℕ} {pos : ℕ → ℕ}
     (hone : (done.getD unit default).rows.size ≤ one) (hf : BlockFacts S words done (done.getD unit default) one pos) :
     BlockRows S (Rows.compose (ofBlock words done (done.getD unit default)) (ofBlock_ordered hd))
       (composePlace S _ (ofBlock_ordered hd) pos (hf.realizes hd hone).lt) :=

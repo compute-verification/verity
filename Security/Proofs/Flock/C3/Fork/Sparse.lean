@@ -28,12 +28,12 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 def skipBits (r : Fin 64) : Fin 6 → F := fun j => if r.val.testBit j.val then 1 else 0
 
 /-- Plane `p` of type `t` at entry `k` of the registered table `z`: bit `k + 2^ν·(p + 2^pLog·t)`, zero past the table. -/
-def planeAt (sh : SparseShape) (z : Witness sh.mReg) (t p k : ℕ) : F :=
+def planeAt (sh : SparseShape) (z : WitnessBits sh.mReg) (t p k : ℕ) : F :=
   if h : k + 2 ^ sh.nu * (p + 2 ^ sh.pLog * t) < 2 ^ sh.mReg then ((z ⟨_, h⟩).val : F) else 0
 
 /-- **The hidden fold the sparse phase checks** at the registered table `z`: row `s` of the skip. -/
 noncomputable def sparseFold (A : Arith F K) (sh : SparseShape) (pub : SparsePub F sh) (τ : Fin (2 ^ sh.sLog) → ℕ)
-    (z : Witness sh.mReg) (s : Fin 64) : F :=
+    (z : WitnessBits sh.mReg) (s : Fin 64) : F :=
   ∑ r : Fin 64, A.lagS pub.z r * ∑ σ : Fin (2 ^ sh.sLog), pub.U σ * ∑ k : Fin (2 ^ sh.nu),
     sparsePhi sh.ell pub.alpha (cat6 (skipBits r) pub.xRest) (cat6 (skipBits s) pub.yRest)
       (fun p => planeAt sh z (τ σ) p k.val)
@@ -49,16 +49,16 @@ namespace SparseCount
 omit [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K]
 
 /-- The planes of type `t` at a point `κ` of the entries. -/
-def planeExt (sh : SparseShape) (z : Witness sh.mReg) (t : ℕ) (κ : Fin sh.nu → F) (p : ℕ) : F :=
+def planeExt (sh : SparseShape) (z : WitnessBits sh.mReg) (t : ℕ) (κ : Fin sh.nu → F) (p : ℕ) : F :=
   ∑ k : Fin (2 ^ sh.nu), eqAt κ k.val * planeAt sh z t p k.val
 
 /-- The planes at the entries' point `rk` and the slots' point `ς`. -/
-def slotPlanes (sh : SparseShape) (τ : Fin (2 ^ sh.sLog) → ℕ) (z : Witness sh.mReg) (rk : Fin sh.nu → F)
+def slotPlanes (sh : SparseShape) (τ : Fin (2 ^ sh.sLog) → ℕ) (z : WitnessBits sh.mReg) (rk : Fin sh.nu → F)
     (ς : Fin sh.sLog → F) (p : ℕ) : F :=
   ∑ σ : Fin (2 ^ sh.sLog), eqAt ς σ.val * planeExt sh z (τ σ) rk p
 
 /-- Type `t`'s value at the entries' point `rk` and the planes' point `ζp`. -/
-def typeVal (sh : SparseShape) (z : Witness sh.mReg) (rk : Fin sh.nu → F) (ζp : Fin sh.pLog → F) (t : ℕ) : F :=
+def typeVal (sh : SparseShape) (z : WitnessBits sh.mReg) (rk : Fin sh.nu → F) (ζp : Fin sh.pLog → F) (t : ℕ) : F :=
   ∑ p : Fin (2 ^ sh.pLog), eqAt ζp p.val * planeExt sh z t rk p.val
 
 /-- The weight of type `t` at the slots' point `ς` (the verdict's `wt`). -/
@@ -70,7 +70,7 @@ def phiAt (sh : SparseShape) (pub : SparsePub F sh) (y x : Fin 6 → F) (q : ℕ
   sparsePhi sh.ell pub.alpha (cat6 x pub.xRest) (cat6 y pub.yRest) q
 
 /-- The fold at rows `x` and columns `y`, before the skip's weights. -/
-def psi (sh : SparseShape) (pub : SparsePub F sh) (τ : Fin (2 ^ sh.sLog) → ℕ) (z : Witness sh.mReg)
+def psi (sh : SparseShape) (pub : SparsePub F sh) (τ : Fin (2 ^ sh.sLog) → ℕ) (z : WitnessBits sh.mReg)
     (x y : Fin 6 → F) : F :=
   ∑ σ : Fin (2 ^ sh.sLog), pub.U σ * ∑ k : Fin (2 ^ sh.nu), phiAt sh pub y x fun p => planeAt sh z (τ σ) p k.val
 
@@ -83,17 +83,17 @@ def uAt {sh : SparseShape} (pub : SparsePub F sh) (ς : Fin sh.sLog → F) : F :
   ∑ σ : Fin (2 ^ sh.sLog), eqAt ς σ.val * pub.U σ
 
 /-- H2's polynomial, in the skip's rows. -/
-def g2 (A : Arith F K) (sh : SparseShape) (pub : SparsePub F sh) (τ : Fin (2 ^ sh.sLog) → ℕ) (z : Witness sh.mReg)
+def g2 (A : Arith F K) (sh : SparseShape) (pub : SparsePub F sh) (τ : Fin (2 ^ sh.sLog) → ℕ) (z : WitnessBits sh.mReg)
     (ζc x : Fin 6 → F) : F :=
   lagAt A pub x * psi sh pub τ z x ζc
 
 /-- H3's polynomial in the entries. -/
-def g3 (sh : SparseShape) (pub : SparsePub F sh) (τ : Fin (2 ^ sh.sLog) → ℕ) (z : Witness sh.mReg)
+def g3 (sh : SparseShape) (pub : SparsePub F sh) (τ : Fin (2 ^ sh.sLog) → ℕ) (z : WitnessBits sh.mReg)
     (ζc ζr : Fin 6 → F) (κ : Fin sh.nu → F) : F :=
   ∑ σ : Fin (2 ^ sh.sLog), pub.U σ * phiAt sh pub ζc ζr (planeExt sh z (τ σ) κ)
 
 /-- H3's polynomial in the slots. -/
-def g4 (sh : SparseShape) (pub : SparsePub F sh) (τ : Fin (2 ^ sh.sLog) → ℕ) (z : Witness sh.mReg)
+def g4 (sh : SparseShape) (pub : SparsePub F sh) (τ : Fin (2 ^ sh.sLog) → ℕ) (z : WitnessBits sh.mReg)
     (ζc ζr : Fin 6 → F) (rk : Fin sh.nu → F) (ς : Fin sh.sLog → F) : F :=
   uAt pub ς * phiAt sh pub ζc ζr (slotPlanes sh τ z rk ς)
 
@@ -101,7 +101,7 @@ def g4 (sh : SparseShape) (pub : SparsePub F sh) (τ : Fin (2 ^ sh.sLog) → ℕ
 
 section Degrees
 
-variable (sh : SparseShape) (pub : SparsePub F sh) (τ : Fin (2 ^ sh.sLog) → ℕ) (z : Witness sh.mReg)
+variable (sh : SparseShape) (pub : SparsePub F sh) (τ : Fin (2 ^ sh.sLog) → ℕ) (z : WitnessBits sh.mReg)
 
 theorem planeExt_polyLe (t : ℕ) (v : Fin sh.nu → F) (j : Fin sh.nu) (p : ℕ) :
     PolyLe 1 fun x => planeExt sh z t (Function.update v j x) p :=
@@ -157,7 +157,7 @@ end Degrees
 
 section Sums
 
-variable [CharP F 2] (sh : SparseShape) (pub : SparsePub F sh) (τ : Fin (2 ^ sh.sLog) → ℕ) (z : Witness sh.mReg)
+variable [CharP F 2] (sh : SparseShape) (pub : SparsePub F sh) (τ : Fin (2 ^ sh.sLog) → ℕ) (z : WitnessBits sh.mReg)
 
 omit pub τ in
 theorem planeExt_bitsOf (t : ℕ) (b : Fin (2 ^ sh.nu)) :
@@ -294,7 +294,7 @@ theorem sparseError_eq (A : Arith F K) (hA : A.Correct) (sh : SparseShape) :
 omit [DecidableEq K] in
 /-- `sparse_sound`'s count, coin by coin. -/
 theorem phase_le (A : Arith F K) (hA : A.Correct) (sh : SparseShape) (pub : SparsePub F sh)
-    (τ : Fin (2 ^ sh.sLog) → ℕ) (hτ : ∀ σ, τ σ < 2 ^ sh.tLog) (z : Witness sh.mReg) (h : Fin 64 → F)
+    (τ : Fin (2 ^ sh.sLog) → ℕ) (hτ : ∀ σ, τ σ < 2 ^ sh.tLog) (z : WitnessBits sh.mReg) (h : Fin 64 → F)
     (hne : h ≠ sparseFold A sh pub τ z) :
     value (fun o : Option (RegClaim F sh) => ∃ c, o = some c ∧ c.toClaim.Holds z) (sparsePhase A sh pub τ h) ≤
       ENNReal.ofReal (sparseError sh) := by
@@ -392,7 +392,7 @@ omit [DecidableEq K] in
 /-- **The sparse phase is sound**: at slots' types in range, a hidden fold `h` other than the registered table's
 (`sparseFold`) yields a registered claim that holds on the table with probability at most `sparseError`. -/
 theorem sparse_sound (A : Arith F K) (hA : A.Correct) (sh : SparseShape) (pub : SparsePub F sh)
-    (τ : Fin (2 ^ sh.sLog) → ℕ) (hτ : ∀ σ, τ σ < 2 ^ sh.tLog) (z : Witness sh.mReg) (h : Fin 64 → F)
+    (τ : Fin (2 ^ sh.sLog) → ℕ) (hτ : ∀ σ, τ σ < 2 ^ sh.tLog) (z : WitnessBits sh.mReg) (h : Fin 64 → F)
     (hne : h ≠ sparseFold A sh pub τ z) :
     value (fun o : Option (RegClaim F sh) => ∃ c, o = some c ∧ c.toClaim.Holds z) (sparsePhase A sh pub τ h) ≤
       ENNReal.ofReal (sparseError sh) :=

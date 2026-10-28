@@ -375,7 +375,7 @@ end Rows
 
 section Place
 
-variable (S : Model.Statement) (R : Rows) (k : ℕ) (base : ℕ → ℕ)
+variable (S : Model.BlockR1CS) (R : Rows) (k : ℕ) (base : ℕ → ℕ)
   (hb : ∀ u < k, base u + (R.nIn + R.nComp) < 2 ^ S.kLog)
 
 /-- Copy `u`'s column `c` in the block: `base u + c`. -/

@@ -511,7 +511,7 @@ theorem pad_filter (hpos : ∀ q < c.ports.size, 0 < c.ports[q]!.chunks)
 
 end RowRanges
 
-theorem blockBit_of_lt (S : Model.Statement) (z : Model.Witness S.m) (o : Fin (2 ^ S.nbl)) {y : ℕ}
+theorem blockBit_of_lt (S : Model.BlockR1CS) (z : Model.WitnessBits S.m) (o : Fin (2 ^ S.nbl)) {y : ℕ}
     (hy : y < 2 ^ S.kLog) : blockBit S z o y = FlockSoundness.bit (S.block z o ⟨y, hy⟩) := by
   unfold blockBit
   split
@@ -569,7 +569,7 @@ theorem inBit_rows {st : Stmt} (R : RowRanges st.c) {n s off x src : ℕ} (hn : 
 
 /-- A row `[src]` in A and in B (zero when `src` is past the block) holds what `src` holds, in every block of a
 satisfying witness. -/
-theorem block_of_rows {S : Model.Statement} {z : Model.Witness S.m} (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl))
+theorem block_of_rows {S : Model.BlockR1CS} {z : Model.WitnessBits S.m} (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl))
     {x src : ℕ} (hx : x < 2 ^ S.kLog)
     (h : ∀ j : Fin (2 ^ S.kLog), S.A₀ ⟨x, hx⟩ j = (if j.val = src then 1 else 0) ∧
       S.B₀ ⟨x, hx⟩ j = (if j.val = src then 1 else 0)) :
@@ -586,7 +586,7 @@ theorem block_of_rows {S : Model.Statement} {z : Model.Witness S.m} (hz : S.Sati
     unfold blockBit
     simp only [hsrc, dite_false]
 
-theorem blockBit_constSrc {S : Model.Statement} {z : Model.Witness S.m} {o : Fin (2 ^ S.nbl)} {c : Circuit}
+theorem blockBit_constSrc {S : Model.BlockR1CS} {z : Model.WitnessBits S.m} {o : Fin (2 ^ S.nbl)} {c : Circuit}
     {pin : ℕ} (ws : Array UInt64) (t : ℕ) (hpin : blockBit S z o pin = true)
     (hzero : blockBit S z o (zeroCol c) = false) : blockBit S z o (constSrc c pin ws t) = wordsBit ws t := by
   unfold constSrc
@@ -618,7 +618,7 @@ theorem inBit_copy {tags : Tags} {t : Typed.Template} (hd : deriveChecked types 
     (P : ParseFactsT tags t st.c) (C : CheckFactsT st.c tb)
     (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
     (hda : st.da = (HmRow.delta st.c st.pin).1) (hdb : st.db = (HmRow.delta st.c st.pin).2)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (T.model regs).m}
     (hz : (T.model regs).Satisfies z) (o : Fin (2 ^ (T.model regs).nbl)) {n s off x src : ℕ}
     (hn : n = st.c.shaNet ∨ n = st.c.hmNet) (hat : AtSlot st.c n s off x) {l : Flock.HmNets.Laid} {name : String}
     (hl : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (st.c.nets.getD n default).2)

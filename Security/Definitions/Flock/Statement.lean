@@ -22,7 +22,7 @@ satisfying the statement. This is the claim soundness certifies.
 namespace FlockSoundness.Model
 
 /-- A witness: `2^m` bits; bit `a` is at address `a = s + 64·t + 2^k_log·o` (§9). -/
-abbrev Witness (m : ℕ) := Fin (2 ^ m) → ZMod 2
+abbrev WitnessBits (m : ℕ) := Fin (2 ^ m) → ZMod 2
 
 /-- A public region (§16.2): the in-block addresses whose non-free bits equal `fixedBits`
 (`fixedBits j` is `mask_j ∧ fixed_j`), with the known value of each region bit in each block
@@ -38,7 +38,7 @@ def Region.inBlock {kLog nbl : ℕ} (R : Region kLog nbl) (i : ℕ) : ℕ :=
     + ∑ j : Fin kLog, if j ∉ R.free ∧ R.fixedBits j then 2 ^ j.val else 0
 
 /-- One block R1CS statement (§16.1–§16.2). -/
-structure Statement where
+structure BlockR1CS where
   m : ℕ
   kLog : ℕ
   hk : kLog ≤ m
@@ -49,9 +49,9 @@ structure Statement where
   B₀ : Matrix (Fin (2 ^ kLog)) (Fin (2 ^ kLog)) (ZMod 2)
   regions : List (Region kLog (m - kLog))
 
-namespace Statement
+namespace BlockR1CS
 
-variable (S : Statement)
+variable (S : BlockR1CS)
 
 /-- Blocks. -/
 abbrev nbl : ℕ := S.m - S.kLog
@@ -70,18 +70,18 @@ def addr (o : Fin (2 ^ S.nbl)) (i : Fin (2 ^ S.kLog)) : Fin (2 ^ S.m) :=
   ⟨o.val * 2 ^ S.kLog + i.val, S.addr_lt o i⟩
 
 /-- Block `o` of a witness. -/
-def block (z : Witness S.m) (o : Fin (2 ^ S.nbl)) : Fin (2 ^ S.kLog) → ZMod 2 :=
+def block (z : WitnessBits S.m) (o : Fin (2 ^ S.nbl)) : Fin (2 ^ S.kLog) → ZMod 2 :=
   fun i => z (S.addr o i)
 
 /-- **The statement.** Every block satisfies the R1CS, the pin is 1 in every block, and every
 region's bits equal their public values. -/
-def Satisfies (z : Witness S.m) : Prop :=
+def Satisfies (z : WitnessBits S.m) : Prop :=
   (∀ o i, (S.A₀.mulVec (S.block z o)) i * (S.B₀.mulVec (S.block z o)) i = S.block z o i)
     ∧ (∀ o, S.block z o S.pin = 1)
     ∧ ∀ R ∈ S.regions, ∀ (o : Fin (2 ^ S.nbl)) (i : ℕ) (_hi : i < 2 ^ R.free.length),
         ∀ h : R.inBlock i < 2 ^ S.kLog, S.block z o ⟨R.inBlock i, h⟩ = R.bits o i
 
-end Statement
+end BlockR1CS
 
 /-! ## Claims -/
 
@@ -96,12 +96,12 @@ structure Claim (F : Type) (m : ℕ) where
 /-- The value a claim asserts: `Σ_s skip[s]·Σ_{x'} eq(x, x')·z[s + 64·x']`, the evaluation of
 the witness's extension that is multilinear in address bits 6… and has the given weights on the
 64 skip positions (the quirky extension for `ab` and `c`, the multilinear one for regions). -/
-def Claim.eval {m : ℕ} (c : Claim F m) (z : Witness m) : F :=
+def Claim.eval {m : ℕ} (c : Claim F m) (z : WitnessBits m) : F :=
   ∑ a : Fin (2 ^ m), c.skip ⟨a.val % 64, Nat.mod_lt _ (by norm_num)⟩ * eqAt c.x (a.val / 64)
     * ((z a).val : F)
 
 /-- A claim holds for a witness. -/
-def Claim.Holds {m : ℕ} (c : Claim F m) (z : Witness m) : Prop := c.eval z = c.value
+def Claim.Holds {m : ℕ} (c : Claim F m) (z : WitnessBits m) : Prop := c.eval z = c.value
 
 /-! ## The committed values -/
 
@@ -125,7 +125,7 @@ def Close {lanes d : ℕ} (γ : ℝ) (C U : Table F lanes d) : Prop :=
 
 /-- The witness a level-0 message packs (§12.1, §13.1): table entry `t[c·2^k₀ + ℓ] = M[ℓ][c]` is
 the packed element `f(y) = Σ_v z[128y + v]·x^v`. -/
-def witnessOf (A : Arith F K) (m k₀ cols : ℕ) (M : Message F k₀ cols) : Witness m :=
+def witnessOf (A : Arith F K) (m k₀ cols : ℕ) (M : Message F k₀ cols) : WitnessBits m :=
   fun a =>
     let y := a.val / 128
     let ℓ := y % 2 ^ k₀
@@ -135,7 +135,7 @@ def witnessOf (A : Arith F K) (m k₀ cols : ℕ) (M : Message F k₀ cols) : Wi
 
 /-- **The committed values satisfy the statement:** some message whose encoding is `γ₀`-close
 to the committed level-0 table packs a witness that satisfies `S`. -/
-def CommittedSatisfies (A : Arith F K) (S : Statement) (k₀ cols₀ d₀ : ℕ) (γ₀ : ℝ)
+def CommittedSatisfies (A : Arith F K) (S : BlockR1CS) (k₀ cols₀ d₀ : ℕ) (γ₀ : ℝ)
     (C₀ : Table F k₀ d₀) : Prop :=
   ∃ M : Message F k₀ cols₀, Close γ₀ C₀ (encode A d₀ M) ∧ S.Satisfies (witnessOf A S.m k₀ cols₀ M)
 

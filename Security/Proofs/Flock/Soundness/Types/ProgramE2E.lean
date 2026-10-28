@@ -37,8 +37,8 @@ theorem _root_.FlockSoundness.UProg.toRows_unit_of_lt {k one : ℕ} (hk : one < 
   | _, .snoc p s src valid, g, hg => by
     have h' : g.val < p.rowsN := lt_of_lt_of_le hg p.k_le_rowsN
     have ih := FlockSoundness.UProg.toRows_unit_of_lt hk p ⟨g.val, h'⟩ hg
-    change (Prog.snoc (p.toRows hk) s.R (p.insOf s src valid) (p.oneOf hk) (p.insOf_ne hk s src valid)).unit g = none
-    simp only [Prog.unit, h', ↓reduceDIte, ih, Option.map_none]
+    change (ProgSpec.snoc (p.toRows hk) s.R (p.insOf s src valid) (p.oneOf hk) (p.insOf_ne hk s src valid)).unit g = none
+    simp only [ProgSpec.unit, h', ↓reduceDIte, ih, Option.map_none]
 
 namespace Partition
 

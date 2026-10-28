@@ -463,7 +463,7 @@ structure StmtWF (st : Stmt) : Prop where
 /-- **The model statement of an executable statement** (§16.1): its `m`, `k_log` and pin, the matrices its layout
 makes, and the given regions. -/
 def stmtOf (st : Stmt) (h : StmtWF st) (regions : List (Model.Region st.c.kLog (st.m - st.c.kLog))) :
-    Model.Statement where
+    Model.BlockR1CS where
   m := st.m
   kLog := st.c.kLog
   hk := h.hk

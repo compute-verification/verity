@@ -36,13 +36,13 @@ local notation "𝔽" => FlockLevel3.GF128
 /-! ## A unit's place along an equality of statements -/
 
 /-- A unit's place in `T`, as one in `T' = T`. -/
-def placeCast {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {T' T : Statement} {u : Fin n} (e : T' = T)
+def placeCast {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {T' T : BlockR1CS} {u : Fin n} (e : T' = T)
     (p : UnitPlace P T u) : UnitPlace P T' u := by
   subst e
   exact p
 
-theorem decode_placeCast {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {T' T : Statement} {u : Fin n}
-    (e : T' = T) (p : UnitPlace P T u) (z : Witness T'.m) : (placeCast e p).decode z = p.decode (witOf e z) := by
+theorem decode_placeCast {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {T' T : BlockR1CS} {u : Fin n}
+    (e : T' = T) (p : UnitPlace P T u) (z : WitnessBits T'.m) : (placeCast e p).decode z = p.decode (witOf e z) := by
   subst e
   rfl
 

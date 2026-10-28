@@ -32,7 +32,7 @@ theorem eqR_eq_eqAt (r : Array F128) (n x : ℕ) : eqR (coin r) 0 n x = Model.eq
 
 /-- **The honest `final_c` is the `c` claim's value**: `Σ_x eq(r, x)·ĉ(z, x)` over the witness `w` is the model's
 evaluation of the claim with skip weights `skipWeights z` at the point `r`. -/
-theorem finalC_eq_eval (m : ℕ) (hm : 6 ≤ m) (a b c : ℕ → 𝔽) (w : Model.Witness m)
+theorem finalC_eq_eval (m : ℕ) (hm : 6 ≤ m) (a b c : ℕ → 𝔽) (w : Model.WitnessBits m)
     (hc : ∀ i : Fin (2 ^ m), c i.val = ((w i).val : 𝔽)) (r rho : Array F128) (z : F128) :
     fOf (honest (m - 6) a b c r rho z).finalC =
       (⟨fOf 0, vecOf 64 (skipWeights z), vecOf (m - 6) r⟩ : Model.Claim 𝔽 m).eval w := by
@@ -62,7 +62,7 @@ theorem finalC_eq_eval (m : ℕ) (hm : 6 ≤ m) (a b c : ℕ → 𝔽) (w : Mode
 zerocheck at the replay's coins (`claimOf st.m rp.claims[1]!` unfolds to the claim on the right). -/
 theorem finalC_masked_eval (st : Setup) (lay : PadLayout) (p : Proof) (root : ByteArray) {t t' : Transcript}
     {rp : Replayed} (hm : 14 ≤ st.m) (hrun : Zk.replay st lay p root t = .ok (rp, t')) (h : Array F128) (n : ℕ)
-    (a b c : ℕ → 𝔽) (w : Model.Witness st.m) (hc : ∀ i : Fin (2 ^ st.m), c i.val = ((w i).val : 𝔽))
+    (a b c : ℕ → 𝔽) (w : Model.WitnessBits st.m) (hc : ∀ i : Fin (2 ^ st.m), c i.val = ((w i).val : 𝔽))
     (rho : Array F128) (hM : Masks lay h (honest (st.m - 6) a b c (pinned ++ rOuterAt t) rho (zAt t)) p.zerocheck n) :
     fOf p.zerocheck.finalC =
       (⟨fOf rp.claims[1]!.value, vecOf 64 rp.claims[1]!.skip, vecOf (st.m - 6) rp.claims[1]!.x⟩ :

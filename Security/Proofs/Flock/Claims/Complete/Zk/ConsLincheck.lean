@@ -133,9 +133,9 @@ theorem lcFinal_eval (lay : Zk.PadLayout) (h : Array F128) (lc lc' : LincheckPro
 returns, for a trace of a witness of a statement the circuit fold realizes (`Lc.lcAlgebra_of`'s hypotheses, verbatim):
 the replay's folded circuit `comb` returns, and the row on the masked zerocheck's `final_a`, `final_b` and the masked
 lincheck proof evaluates to `0`. -/
-theorem lcFinal_zero (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S)
+theorem lcFinal_zero (S : Model.BlockR1CS) (c : CircuitFold) (hc : FoldRealizes c S)
     (hfd : ∀ (α β : F128) (lw ρ ts v : Array F128), c.fold α lw ρ = .ok v → ∃ w, c.folded α β lw ρ ts = .ok w)
-    (m : ℕ) (hm : m = S.m) (w : Model.Witness S.m) (hpin : ∀ o, S.block w o S.pin = 1) (tr : Trace)
+    (m : ℕ) (hm : m = S.m) (w : Model.WitnessBits S.m) (hpin : ∀ o, S.block w o S.pin = 1) (tr : Trace)
     (hz : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽))
     (ha : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.az a.val = ((aVec S w a).val : 𝔽))
     (hb : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.bz a.val = ((bVec S w a).val : 𝔽))

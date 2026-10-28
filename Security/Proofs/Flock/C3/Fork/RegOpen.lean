@@ -126,7 +126,7 @@ theorem regOpen_sound (A : Arith F K) (hA : A.Correct) (sh : SparseShape) (rsch 
   have hfit : rsch.level₀.Fits := (levelGood_spec (levelsChained_head_good hshape.2.2.2)).2.1
   set S₀ := closeL A (udRadius rsch.level₀) rsch.k0 rsch.level₀.logCols rsch.level₀.logLen w with hS₀def
   have hS₀ : S₀.card ≤ 1 := card_closeL_ud_le A hA rsch.level₀ hfit rsch.k0 w
-  let S : Statement := ⟨sh.mReg, 6, by omega, le_rfl, ⟨0, Nat.two_pow_pos _⟩, 0, 0, []⟩
+  let S : BlockR1CS := ⟨sh.mReg, 6, by omega, le_rfl, ⟨0, Nat.two_pow_pos _⟩, 0, 0, []⟩
   let D : Option (OpenOut F) → Prop := fun o => ¬ ∃ M ∈ S₀, ∃ op : OpenOut F, o = some op ∧
     (∑ y ∈ Finset.range (2 ^ (rsch.m - 7)), flat M y * op.b y) = op.T
   have hopen : value (fun o => ¬ D o) (opening A hreg [c₁.toClaim, c₂.toClaim]) ≤

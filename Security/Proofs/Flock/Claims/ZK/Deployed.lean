@@ -105,26 +105,26 @@ theorem famRandAt_bijective {K : Type} [Field K] {J : ℕ} {Wf Hi VL : Fin J →
 /-- **The session's pre-final view at coins `cz`, cut where the session stops** (`famSent`), at table witnesses `wt`,
 bases `ω` and the pre-final leaves `lv` by position (`Coined.preWith`). -/
 noncomputable def cutAt {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
-    (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi)
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi)
     (lv : ZkView.Leaves (fun j => (C j).z) → ByteArray) : ∀ j, ((C j).T (cz j)).tab.Cut :=
   fun j => ((C j).T (cz j)).tab.cut (famSent (fun j => ((C j).T (cz j)).tab) (fun j => ((C j).T (cz j)).rep) j)
     (((C j).T (cz j)).preWith (wt j) (ω j) fun p => lv ⟨j, p⟩)
 
 /-- The digest each pre-final leaf commits, as bits (`ZkView.digAt`). -/
 noncomputable def digOf {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
-    (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi)
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi)
     (l : ZkView.Leaves (fun j => (C j).z)) : ZkView.Bits :=
   ZkView.bitsOf (((C l.1).T (cz l.1)).content (wt l.1) (ω l.1) l.2)
 
 /-- **The executable's pre-final leaves** (`Coined.exeLeaf`), each under its own salt. -/
 noncomputable def exeOf {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
-    (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi)
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi)
     (y : ZkView.Leaves (fun j => (C j).z) → ZkView.Salt) : ZkView.Leaves (fun j => (C j).z) → ByteArray :=
   fun l => ((C l.1).T (cz l.1)).exeLeaf (wt l.1) (ω l.1) l.2 (y l)
 
 /-- The executable's leaves are `H(dig ⊕ M·y, c(y))` (`ZkView.leafSplit`). -/
 theorem exeOf_eq {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
-    (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi)
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi)
     (y : ZkView.Leaves (fun j => (C j).z) → ZkView.Salt) :
     exeOf C cz wt ω y = fun l => ZkView.leafH (digOf C cz wt ω l + ZkView.My (y l), ZkView.saltHash (y l)) :=
   funext fun l => by
@@ -135,7 +135,7 @@ open Finset in
 /-- **World `W₀` at the session's tables**: at ideal leaves `H(U, c(y))`, any function of the cut view takes every value
 as often on two tuples of table witnesses carrying the public region data (`famCard_cut_eq`, `randOf` a bijection). -/
 theorem card_cutAt_ideal {J : ℕ} {V : Type} [DecidableEq V] (C : Fin J → Composed.CoinedSetup)
-    (cz : ∀ j, Composed.CoinsZK (C j).Rest) (wt wt' : ∀ j, FlockSoundness.Model.Witness (C j).S.m)
+    (cz : ∀ j, Composed.CoinsZK (C j).Rest) (wt wt' : ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m)
     (hreg : ∀ j, ((C j).T (cz j)).tab.sReg (wt j) = ((C j).T (cz j)).tab.pubReg)
     (hreg' : ∀ j, ((C j).T (cz j)).tab.sReg (wt' j) = ((C j).T (cz j)).tab.pubReg)
     (out : (∀ j, ((C j).T (cz j)).tab.Cut) → V) (σ : V) :
@@ -159,22 +159,22 @@ structure TPreModel {W : Type} (G : Proto W) (x : Msg) where
   C : Fin J → Composed.CoinedSetup
   cz : (Fin (G.K x + 1) → Out) → ∀ j, Composed.CoinsZK (C j).Rest
   out : ∀ a, (∀ j, ((C j).T (cz a j)).tab.Cut) → Fin (G.K x + 1) → Msg
-  wt : W → ∀ j, FlockSoundness.Model.Witness (C j).S.m
-  wt₀ : ∀ j, FlockSoundness.Model.Witness (C j).S.m
+  wt : W → ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m
+  wt₀ : ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m
   eR : G.Rand → (∀ j, ZkView.Base (C j).z (C j).Hi) × (ZkView.Leaves (fun j => (C j).z) → ZkView.Salt)
   kR : ℕ
 
 /-- The prover's messages before the last coin at the answers `a`, on table witnesses `wt`, bases `ω` and pre-final
 leaves `lv`. -/
 noncomputable def TPreModel.msgs {W : Type} {G : Proto W} {x : Msg} (M : G.TPreModel x)
-    (wt : ∀ j, FlockSoundness.Model.Witness (M.C j).S.m) (ω : ∀ j, ZkView.Base (M.C j).z (M.C j).Hi)
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (M.C j).S.m) (ω : ∀ j, ZkView.Base (M.C j).z (M.C j).Hi)
     (a : Fin (G.K x + 1) → Out) (lv : ZkView.Leaves (fun j => (M.C j).z) → ByteArray) : Fin (G.K x + 1) → Msg :=
   M.out a (cutAt M.C (M.cz a) wt ω lv)
 
 /-- **The round encoding reads the answers before each round only**, whatever each leaf's pair `(M·y, c(y))`
 (`ZkView.Causal`). -/
 def TPreModel.Causal {W : Type} {G : Proto W} {x : Msg} (M : G.TPreModel x) : Prop :=
-  ∀ (wt : ∀ j, FlockSoundness.Model.Witness (M.C j).S.m) (ω : ∀ j, ZkView.Base (M.C j).z (M.C j).Hi)
+  ∀ (wt : ∀ j, FlockSoundness.Model.WitnessBits (M.C j).S.m) (ω : ∀ j, ZkView.Base (M.C j).z (M.C j).Hi)
     (p : ZkView.Leaves (fun j => (M.C j).z) → ZkView.Bits × ByteArray) (a a' : Fin (G.K x + 1) → Out)
     (i : Fin (G.K x + 1)), (∀ j, j < i → a j = a' j) →
     M.msgs wt ω a (fun l => ZkView.leafH (digOf M.C (M.cz a) wt ω l + (p l).1, (p l).2)) i =
@@ -209,7 +209,7 @@ theorem TPreModel.runs_close {W : Type} {G : Proto W} {x : Msg} (M : G.TPreModel
       Pr (fun r : G.Rand => E (FlockSoundness.ZK.run (G.preStrat H x ν (G.dmsg x ν)) V r))|
       ≤ 2 * M.size * δ₁.toReal := by
   obtain ⟨hv, hreg₀, hc, heR, hlink, hlink₀⟩ := hL
-  let P : (∀ j, FlockSoundness.Model.Witness (M.C j).S.m) → FlockSoundness.ZK.Strategy
+  let P : (∀ j, FlockSoundness.Model.WitnessBits (M.C j).S.m) → FlockSoundness.ZK.Strategy
       ((∀ j, ZkView.Base (M.C j).z (M.C j).Hi) × (ZkView.Leaves (fun j => (M.C j).z) → ZkView.Bits × ByteArray))
       Msg Out (G.K x + 1) := fun wt =>
     { msg := fun q a => M.msgs wt q.1 a fun l => ZkView.leafH (digOf M.C (M.cz a) wt q.1 l + (q.2 l).1, (q.2 l).2)
@@ -238,8 +238,8 @@ structure TabModel {W : Type} (G : Proto W) (x : Msg) where
   J : ℕ
   C : Fin J → Composed.CoinedSetup
   cz : ∀ j, Composed.CoinsZK (C j).Rest
-  wt : W → ∀ j, FlockSoundness.Model.Witness (C j).S.m
-  wt₀ : ∀ j, FlockSoundness.Model.Witness (C j).S.m
+  wt : W → ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m
+  wt₀ : ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m
   lift : (∀ j, ((C j).T (cz j)).tab.View) → List Msg
   eR : G.Rand → ∀ j, ((C j).T (cz j)).tab.Rand × (((C j).T (cz j)).tab.Hid → ZkView.Salt)
   kR : ℕ
@@ -319,8 +319,8 @@ structure TOffModel {W : Type} (G : Proto W) (x : Msg) where
   C : Fin J → Composed.CoinedSetup
   cz : ∀ j, Composed.CoinsZK (C j).Rest
   out : (∀ j, ((C j).T (cz j)).tab.Cut) → List Msg
-  wt : W → ∀ j, FlockSoundness.Model.Witness (C j).S.m
-  wt₀ : ∀ j, FlockSoundness.Model.Witness (C j).S.m
+  wt : W → ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m
+  wt₀ : ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m
   eR : G.Rand → (∀ j, ZkView.Base (C j).z (C j).Hi) × (ZkView.Leaves (fun j => (C j).z) → ZkView.Salt)
   kR : ℕ
 

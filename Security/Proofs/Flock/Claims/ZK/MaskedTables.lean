@@ -350,10 +350,10 @@ theorem setupTable_tabC (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x)) : S
 
 open Classical in
 /-- **The dummy witness**: one holding the statement's regions (`RegionsHold`), where one exists. -/
-noncomputable def dummy (S : FlockSoundness.Model.Statement) : FlockSoundness.Model.Witness S.m :=
+noncomputable def dummy (S : FlockSoundness.Model.BlockR1CS) : FlockSoundness.Model.WitnessBits S.m :=
   if h : ∃ z, Composed.RegionsHold S z then h.choose else fun _ => 0
 
-theorem dummy_holds {S : FlockSoundness.Model.Statement} (h : ∃ z, Composed.RegionsHold S z) :
+theorem dummy_holds {S : FlockSoundness.Model.BlockR1CS} (h : ∃ z, Composed.RegionsHold S z) :
     Composed.RegionsHold S (dummy S) := by
   rw [dummy, dite_eq_left h]
   exact h.choose_spec
@@ -366,7 +366,7 @@ theorem dummyReg_tabC (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x)) (c : 
 
 /-- **The witness's table witnesses**: each table's share (`Readable.tableWit`) as its model witness (`Readable.zOf`). -/
 noncomputable def wtOf (P : Composed.LigProver) (x : Msg) (w : Claims.Flock.Wit) (j : Fin (jOf x)) :
-    FlockSoundness.Model.Witness (tabC P x j).S.m :=
+    FlockSoundness.Model.WitnessBits (tabC P x j).S.m :=
   _root_.Flock.Readable.zOf 1 (_root_.Flock.Readable.tableWit (stsOf x).size w j.val) 0 (tabC P x j).S.m
 
 /-- **The lowering's completeness at the masked session's tables**: at a statement with a witness in the deployed

@@ -110,7 +110,7 @@ def HoloSrc.vals (b : HoloSrc) (sh : Flock.Shape) (d : RepData) : UnitVals :=
 (`SetupRealizes`, `ShapeIs`), the rep's extras at well-formed link points at `pts` (`RepExtrasAt`), the comb port
 (`CombFolds`), the record's coin counts (`HoloCoinsShaped`, `TableSrc.Coins` at holo), the shapes the proof file's
 decode needs (`CapShaped`, `LigShaped`, fewer than `2^48` extras: `encodes_of`'s) and the openings (`OpenedAll`). -/
-structure HoloSrc.OK (b : HoloSrc) (S : FlockSoundness.Model.Statement) (ptLocal mPts : ℕ)
+structure HoloSrc.OK (b : HoloSrc) (S : FlockSoundness.Model.BlockR1CS) (ptLocal mPts : ℕ)
     (pts : Fin 2 → Fin mPts → 𝔽) (sh : Flock.Shape) (d : RepData) : Prop where
   realizes : SetupRealizes b.st S b.sch ptLocal mPts
   shape : ShapeIs sh b.st b.sch
@@ -126,7 +126,7 @@ structure HoloSrc.OK (b : HoloSrc) (S : FlockSoundness.Model.Statement) (ptLocal
 
 /-- **G's proof file decodes at the holo rep's shape** (`encodes_of` at the rep's `|extras|` extra claims, which the
 verifier's rows give V*'s shape: `verifierRows_claims`). -/
-theorem enc_holo {st : Flock.Setup} {S : FlockSoundness.Model.Statement} {sch : Flock.Schedule} {ptLocal mPts : ℕ}
+theorem enc_holo {st : Flock.Setup} {S : FlockSoundness.Model.BlockR1CS} {sch : Flock.Schedule} {ptLocal mPts : ℕ}
     {sh : Flock.Shape} {params : Flock.PcsParams} {cap : Array ByteArray} {lig : Flock.LigeritoProof} {d : RepData}
     {x} (hset : SetupRealizes st S sch ptLocal mPts) (hsh : ShapeIs sh st sch)
     (hrows : verifierRows sh d.rounds d.extras d.comb = .ok x) (hcap : CapShaped st sch cap)
@@ -154,7 +154,7 @@ theorem enc_holo {st : Flock.Setup} {S : FlockSoundness.Model.Statement} {sch : 
 /-- **`HoloFramed` at a holo rep unit's values**, from `HoloSrc.OK` and the verifier's rows accepting
 (`AlgebraHolds`): the record, its domain, the proof's messages, the claims and coins and the end are the
 construction's. -/
-theorem HoloSrc.framed {b : HoloSrc} {S : FlockSoundness.Model.Statement} {ptLocal mPts : ℕ}
+theorem HoloSrc.framed {b : HoloSrc} {S : FlockSoundness.Model.BlockR1CS} {ptLocal mPts : ℕ}
     {pts : Fin 2 → Fin mPts → 𝔽} {sh : Flock.Shape} {d : RepData} (h : b.OK S ptLocal mPts pts sh d)
     (halg : AlgebraHolds sh d) : HoloFramed sh d (b.vals sh d) b.dom := by
   obtain ⟨v, info, kappa, S', rs, hrows, hS, hw, hc, hres, hzero⟩ := halg

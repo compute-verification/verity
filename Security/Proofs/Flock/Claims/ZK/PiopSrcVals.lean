@@ -91,7 +91,7 @@ noncomputable abbrev layE (x : Msg) (j : Fin (jOf x)) : _root_.Flock.Zk.PadLayou
 
 /-- Table `j`'s witness as the cut's view reads it: `w`'s share with the tape's mask words (`Composed.zWith`). -/
 noncomputable abbrev zwE (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fin (jOf x)) :
-    FlockSoundness.Model.Witness (tabC PE x j).S.m :=
+    FlockSoundness.Model.WitnessBits (tabC PE x j).S.m :=
   Composed.zWith (stAt x j) (wtOf PE x w j) ((UE.tape x τ).1 j).1
 
 /-- Table `j`'s rep `r` zerocheck coins at the opened coins, from the rep's first round. -/
@@ -215,21 +215,21 @@ theorem trsE_bits {x : Msg} {w : Claims.Flock.Wit} (hw : RZk x w) (τ : UE.Tape)
   · rw [htr]
     unfold Composed.aT
     rw [dite_eq_left hi]
-    exact (ba ⟨i, hi⟩).trans (congrArg (fun z : FlockSoundness.Model.Witness (zkTab x j).table.S.m =>
+    exact (ba ⟨i, hi⟩).trans (congrArg (fun z : FlockSoundness.Model.WitnessBits (zkTab x j).table.S.m =>
       ((FlockSoundness.aVec (zkTab x j).table.S z ⟨i, hi⟩).val : 𝔽)) hzw)
   · unfold Composed.aT
     exact dite_eq_right hi
   · rw [htr]
     unfold Composed.bT
     rw [dite_eq_left hi]
-    exact (bb ⟨i, hi⟩).trans (congrArg (fun z : FlockSoundness.Model.Witness (zkTab x j).table.S.m =>
+    exact (bb ⟨i, hi⟩).trans (congrArg (fun z : FlockSoundness.Model.WitnessBits (zkTab x j).table.S.m =>
       ((FlockSoundness.bVec (zkTab x j).table.S z ⟨i, hi⟩).val : 𝔽)) hzw)
   · unfold Composed.bT
     exact dite_eq_right hi
   · rw [htr]
     unfold Composed.cT
     rw [dite_eq_left hi]
-    exact (bz ⟨i, hi⟩).trans (congrArg (fun z : FlockSoundness.Model.Witness (zkTab x j).table.S.m =>
+    exact (bz ⟨i, hi⟩).trans (congrArg (fun z : FlockSoundness.Model.WitnessBits (zkTab x j).table.S.m =>
       ((z ⟨i, hi⟩).val : 𝔽)) hzw)
   · unfold Composed.cT
     exact dite_eq_right hi

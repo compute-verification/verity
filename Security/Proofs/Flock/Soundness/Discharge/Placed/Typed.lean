@@ -31,7 +31,7 @@ def castInst {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n}
   e ▸ i
 
 /-- Aliasing moves along equal rows. -/
-theorem aliased_cast {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {St : Model.Statement}
+theorem aliased_cast {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {St : Model.BlockR1CS}
     {R₁ R₂ : Rows} (e : R₁ = R₂) (inst : P.IsRowsUnit u R₂) (a : RowsAt St R₂) (h : a.Aliased inst.wire) :
     (a.cast e.symm).Aliased (castInst e.symm inst).wire := by
   subst e; exact h
@@ -43,7 +43,7 @@ variable {N n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg �
 
 /-- **`ProgPlaces` from a place per drawn unit**: unit `u`'s instance `inst u`, and a block and columns at which its
 table's statement holds its rows (`pl`), carrying one value on its inputs that share a gate (`hal`). -/
-def ofRowsAt (q : Prog N n) (outs : Finset (Fin N)) (inst : ∀ u, (q.partition outs).IsRowsUnit u (q.rows u))
+def ofRowsAt (q : ProgSpec N n) (outs : Finset (Fin N)) (inst : ∀ u, (q.partition outs).IsRowsUnit u (q.rows u))
     (pl : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n), u ∈ S → RowsAt (Partition.tabOf plan tab S R u).S (q.rows u))
     (hal : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S), (pl S R u h).Aliased (inst u).wire) :
     ProgPlaces q outs plan tab where
@@ -68,9 +68,9 @@ theorem rows_toRows (hk : one < k) : ∀ {outs : List ℕ} (p : UProg k one outs
   | _, .snoc p s src valid, u => by
       refine Fin.lastCases ?_ (fun v => ?_) u
       · rw [UProg.rowsOf, UProg.spec_last]
-        simp [UProg.toRows, Prog.rows]
+        simp [UProg.toRows, ProgSpec.rows]
       · rw [UProg.rowsOf, UProg.spec_castSucc]
-        simp only [UProg.toRows, Prog.rows, Fin.val_castSucc, v.isLt, ↓reduceDIte]
+        simp only [UProg.toRows, ProgSpec.rows, Fin.val_castSucc, v.isLt, ↓reduceDIte]
         exact rows_toRows hk p v
 
 /-- Unit `u`'s instance in the rows circuit, at the rows circuit's unit rows. -/
@@ -104,7 +104,7 @@ end UProg
 
 /-- **An accepted typed flat-class statement whose model statement is `T`**: `Stmt.setupH` accepted, the circuit file's
 typed sections read to class `k` and flat unit net `net` (`Typed.read`), and `T` is the statement it places. -/
-structure TypedAccepted (T : Model.Statement) where
+structure TypedAccepted (T : Model.BlockR1CS) where
   tags : Tags
   cf : ByteArray
   pf : ByteArray
@@ -123,10 +123,10 @@ structure TypedAccepted (T : Model.Statement) where
   hT : (setupH_flatLayout ht h hr).2.2.model regs = T
 
 /-- A table class of an equal statement. -/
-def TableClass.cast {St St' : Model.Statement} (e : St = St') (c : TableClass St) : TableClass St' := e ▸ c
+def TableClass.cast {St St' : Model.BlockR1CS} (e : St = St') (c : TableClass St) : TableClass St' := e ▸ c
 
 /-- **The accepted statement's table class** (`setupH_flatTableClass`). -/
-noncomputable def TypedAccepted.cls {T : Model.Statement} (a : TypedAccepted T) : TableClass T :=
+noncomputable def TypedAccepted.cls {T : Model.BlockR1CS} (a : TypedAccepted T) : TableClass T :=
   TableClass.cast a.hT (setupH_flatTableClass a.ht a.h a.hr a.regs)
 
 namespace UProg

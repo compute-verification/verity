@@ -271,7 +271,7 @@ theorem lincheckRounds_productive : ∀ (n : ℕ) (c : F), Productive (lincheckR
       obtain ⟨_, _⟩ := x
       exact trivial
 
-theorem lincheck_productive (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) :
+theorem lincheck_productive (A : Arith F K) (S : BlockR1CS) (zc : ZcOut F S.m) :
     Productive (Model.lincheck A S zc) := by
   unfold Model.lincheck
   refine pb (productive_draw _) fun _ => pb (productive_draw _) fun _ =>
@@ -348,7 +348,7 @@ theorem ligeritoC_productive (A : Arith F K) (r : ℕ) (sch : Schedule) (T : F) 
       obtain ⟨_, _, _⟩ := y
       exact pb (queryAndBatchC_productive A _ _ _ _ _ _) fun _ => recursiveRoundsC_productive A _ _ _ _ _ _ _
 
-theorem repC_productive (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
+theorem repC_productive (A : Arith F K) (r : ℕ) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim F S.m)) : Productive (repC A r S sch hm extra : Game (PendL F D)) := by
   unfold repC
   refine pb (zerocheck_productive A _) fun x => ?_
@@ -421,7 +421,7 @@ theorem lincheckRounds_zero : ∀ (n : ℕ) (c : F), c = 0 → ∃ x, Reaches (l
       exact rx_pure hx
 
 /-- The zero run of the lincheck on zero claims: its `ab` claim has value `0`. -/
-theorem lincheck_zero (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) (ha : zc.va = 0) (hb : zc.vb = 0) :
+theorem lincheck_zero (A : Arith F K) (S : BlockR1CS) (zc : ZcOut F S.m) (ha : zc.va = 0) (hb : zc.vb = 0) :
     ∃ x, Reaches (Model.lincheck A S zc) x ∧ ∃ ab, x = some ab ∧ ab.value = 0 := by
   unfold Model.lincheck
   refine rx_draw 0 (rx_draw 0 (rx_bind (lincheckRounds_zero _ _ (by simp [ha, hb])) fun x hx => ?_))
@@ -482,7 +482,7 @@ theorem exists_prod_one (a : Fin 6 → F) (ha : ∀ j, a j = 0 ∨ a j = 1) :
   rw [hs j]
   rcases ha j with h | h <;> simp [h]
 
-theorem regionPoint_zero (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (j : Fin S.m) :
+theorem regionPoint_zero (S : BlockR1CS) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (j : Fin S.m) :
     regionPoint S R ptLocal mPts (0 : Fin mPts → F) j = 0 ∨ regionPoint S R ptLocal mPts (0 : Fin mPts → F) j = 1 := by
   unfold regionPoint
   dsimp only
@@ -509,7 +509,7 @@ theorem packedWeight_one {m : ℕ} (c : Claim F m) (hm : 7 ≤ m) (s : Fin 64) (
 
 /-- At the zero link point, a region claim's weight is `1` on some packed position: its point's coordinates are
 `0` or `1`, so one skip position and one half of the packed hypercube carry weight `1`. -/
-theorem regionClaim_weight (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (hm : 7 ≤ S.m) :
+theorem regionClaim_weight (S : BlockR1CS) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (hm : 7 ≤ S.m) :
     ∃ v, packedWeight (regionClaim S R ptLocal mPts (0 : Fin mPts → F)) hm v = 1 := by
   have h01 := regionPoint_zero (F := F) S R ptLocal mPts
   have ha : ∀ j : Fin 6, (if h : j.val < S.m then regionPoint S R ptLocal mPts (0 : Fin mPts → F) ⟨j.val, h⟩
@@ -578,7 +578,7 @@ theorem reaches_batch_head {α : Type} {P : α → Prop} (gs : List (Game α)) (
   exact ⟨a :: as, reaches_map_of (reaches_interleave g (batch gs') a as ha has) rfl, a, rfl, hpa⟩
 
 /-- A rep whose zerocheck sends `final_a_eval = final_b_eval = 1` rejects. -/
-theorem repC_reject (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
+theorem repC_reject (A : Arith F K) (r : ℕ) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim F S.m)) : Reaches (repC A r S sch hm extra : Game (PendL F D)) PendL.reject := by
   unfold repC
   exact reaches_bind _ none (zerocheck_reject A S.m) rfl
@@ -900,7 +900,7 @@ theorem ligeritoC_accept (A : Arith F K) (r : ℕ) (sch : Schedule) (T : F) (b :
 
 /-- **The zero run of a rep accepts**: zero PIOP messages and coins, the extra claims' ring-switch messages solved,
 then the zero run of Ligerito. -/
-theorem repC_accept (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
+theorem repC_accept (A : Arith F K) (r : ℕ) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim F S.m))
     (hextra : ∀ c ∈ extra, ∃ s : Fin 128 → F, ∑ v, packedWeight c (by omega) v * s v = c.value)
     {l₀ l₁ : Level} {rest : List Level} (hlev : sch.levels = l₀ :: l₁ :: rest)

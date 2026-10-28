@@ -271,7 +271,7 @@ def ClaimZK.at {np m : ℕ} (h : Fin np → F) (c : ClaimZK F np m) : Claim F m 
 /-- **The masked lincheck** (§1, §4): `Model.lincheck` on masked messages, from the masked zerocheck's forms. Its check
 becomes the row `running + Σ_i comb_i·(z_partial'_i + h_zp(i))` (§4's lincheck final), which it returns with the `ab`
 claim, whose value is a form. -/
-def lincheckZK (A : Arith F K) (S : Statement) {np : ℕ} (P : PadsA np) (zc : ZcZK F np S.m) :
+def lincheckZK (A : Arith F K) (S : BlockR1CS) {np : ℕ} (P : PadsA np) (zc : ZcZK F np S.m) :
     Game (ClaimZK F np S.m × LinF F np) := do
   let α ← draw F
   let β ← draw F
@@ -288,7 +288,7 @@ def lincheckZK (A : Arith F K) (S : Statement) {np : ℕ} (P : PadsA np) (zc : Z
 
 /-- **Lincheck couples**: the masked lincheck followed by any masked continuation that puts the row in front is bounded
 by the clear lincheck on the unmasked zerocheck outputs, followed by the clear continuation at the unmasked claim. -/
-theorem lincheckZK_couple [CharP F 2] (A : Arith F K) (S : Statement) {np : ℕ} (P : PadsA np) (zc : ZcZK F np S.m)
+theorem lincheckZK_couple [CharP F 2] (A : Arith F K) (S : BlockR1CS) {np : ℕ} (P : PadsA np) (zc : ZcZK F np S.m)
     (h : Fin np → F) {n : ℕ} (k : ClaimZK F np S.m → Game ((Fin n → Lin F np) × Bool))
     (k' : Option (Claim F S.m) → Game Bool)
     (hk : ∀ ab, value (Vanish h) (k ab) ≤ value (· = true) (k' (some (ab.at h)))) :
@@ -358,7 +358,7 @@ variable [Fintype K] [DecidableEq K]
 /-- **The rest of a masked rep**, after lincheck: the masked opening, level 0 masked (`ligeritoPadZK`), then
 `final_c'`, received before the inner proof. Returns §4's ring switch ab, zerocheck c_eval and ring switch c rows, and
 level 0's two lane-phase rows. -/
-noncomputable def restZK (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np) (S : Statement)
+noncomputable def restZK (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np) (S : BlockR1CS)
     (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (C₀ : Oracle F) (extra : List (Claim F S.m))
     (zc : ZcZK F np S.m) (ab : ClaimZK F np S.m) : Game ((Fin 5 → Lin F np) × Bool) := do
   let o ← openingZK A (by omega) ab.pub ⟨0, A.lagS zc.z, zc.r⟩ extra
@@ -373,7 +373,7 @@ noncomputable def restZK (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA : 
 /-- **The rest couples**: at every pad vector `h`, the rest of the masked rep ends with a true verdict and its rows
 vanishing at `h` with probability at most the clear opening's on the unmasked claims, followed by the clear level 0. -/
 theorem restZK_couple (A : Arith F K) (hA : A.Correct) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np)
-    (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (C₀ : Oracle F)
+    (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) (zc : ZcZK F np S.m) (ab : ClaimZK F np S.m) (h : Fin np → F)
     (hm7 : 7 ≤ S.m) (k' : Option (OpenOut F) → Game Bool)
     (hk' : ∀ op, k' (some op) = ligeritoPad A sch t c₀ e r op.T op.b C₀) :
@@ -424,7 +424,7 @@ theorem restZK_couple (A : Arith F K) (hA : A.Correct) {np e : ℕ} (P₀ : Pads
 /-! ## The masked rep -/
 
 /-- A masked rep after zerocheck: the masked lincheck, its row in front of the rest's. -/
-noncomputable def afterZcZK (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np) (S : Statement)
+noncomputable def afterZcZK (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np) (S : BlockR1CS)
     (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (C₀ : Oracle F) (extra : List (Claim F S.m))
     (zc : ZcZK F np S.m) : Game ((Fin 6 → Lin F np) × Bool) :=
   (lincheckZK A S PA zc).bind fun o => (restZK A P₀ PA S sch hm t c₀ r C₀ extra zc o.1).map (consRow o.2.toLin)
@@ -433,7 +433,7 @@ noncomputable def afterZcZK (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA
 level 0 (`ligeritoPadZK`) and `final_c'`. Returns its verdict and its seven rows, in order zerocheck final a·b, lincheck
 final, ring switch ab, zerocheck c_eval, ring switch c, and level 0's two lane-phase rows. -/
 noncomputable def repMaskedZK (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np) (tr : Triple np)
-    (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (C₀ : Oracle F)
+    (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) : Game ((Fin 7 → Lin F np) × Bool) :=
   (zerocheckZK A S.m PA tr).bind fun o =>
     (afterZcZK A P₀ PA S sch hm t c₀ r C₀ extra o.1).map (consRow o.2.toLin)
@@ -442,7 +442,7 @@ noncomputable def repMaskedZK (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (
 rep ends with a true verdict and its seven rows vanishing at `h` with probability at most the clear rep's
 (`Model.repPad`) acceptance probability. -/
 theorem repMaskedZK_couple (A : Arith F K) (hA : A.Correct) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np)
-    (tr : Triple np) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (C₀ : Oracle F)
+    (tr : Triple np) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) (h : Fin np → F) (htr : h tr.ab = h tr.fa * h tr.fb) :
     value (fun o => o.2 = true ∧ ∀ k, (o.1 k).eval h = 0) (repMaskedZK A P₀ PA tr S sch hm t c₀ r C₀ extra) ≤
       value (· = true) (repPad A S sch hm t c₀ e r C₀ extra) := by

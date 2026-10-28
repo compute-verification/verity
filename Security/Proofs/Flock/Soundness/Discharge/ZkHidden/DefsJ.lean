@@ -382,7 +382,7 @@ theorem tableShHJ_parse (S : Finset (Fin n)) (j : Fin (nTab I)) :
     exact (parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc
 
 /-- A hidden-output acceptance at `T`, as one at `T' = T`. -/
-def recastAccH {T T' : Model.Statement} (a : AcceptedH T) (e : T = T') : AcceptedH T' := { a with hT := a.hT.trans e }
+def recastAccH {T T' : Model.BlockR1CS} (a : AcceptedH T) (e : T = T') : AcceptedH T' := { a with hT := a.hT.trans e }
 
 variable (hscope : Layout.scopeOkH c = true)
 
@@ -408,7 +408,7 @@ variable (hU : Built c.unit) {pub : Public} (hpub : HmOut.loadPublic (zkTags I) 
   (hpt : pub.tables = none)
 
 omit ht in
-theorem bcSiteH_recast {T T' : Model.Statement} (a : AcceptedH T) (e : T = T') (pop : Public)
+theorem bcSiteH_recast {T T' : Model.BlockR1CS} (a : AcceptedH T) (e : T = T') (pop : Public)
     (o : Fin (2 ^ T.nbl)) (h' : 2 ^ T.nbl = 2 ^ T'.nbl) (g u : ℕ) (hs : BcSiteH a pop o g u) :
     BcSiteH (recastAccH a e) pop (Fin.cast h' o) g u :=
   hs

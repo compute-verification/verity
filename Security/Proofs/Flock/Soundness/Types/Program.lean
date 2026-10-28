@@ -499,7 +499,7 @@ theorem insOf_ne (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : Un
 
 /-- **The program's rows circuit**, a `Lowering.Prog`: each unit's composed rows, its input columns wired to their
 sources' gates and its constant to `one`. -/
-def toRows (hk : one < k) : {outs : List ℕ} → (p : UProg k one outs) → Prog p.rowsN p.n
+def toRows (hk : one < k) : {outs : List ℕ} → (p : UProg k one outs) → ProgSpec p.rowsN p.n
   | _, .inputs => .inputs k
   | _, .snoc p s src valid =>
     .snoc (p.toRows hk) s.R (p.insOf s src valid) (p.oneOf hk) (p.insOf_ne hk s src valid)
@@ -649,11 +649,11 @@ open Classical in
 noncomputable def outsC {outs : List ℕ} (p : UProg k one outs) : Finset (Fin p.rowsN) :=
   Finset.univ.filter fun g => ∃ v o, v < outs.length ∧ o < outs.getD v 0 ∧ g.val = p.outGate v o
 
-/-- **The program's rows circuit** (`Prog.circuit`), every unit output's row an output. -/
+/-- **The program's rows circuit** (`ProgSpec.circuit`), every unit output's row an output. -/
 noncomputable abbrev C (hk : one < k) {outs : List ℕ} (p : UProg k one outs) : Audit.Circuit :=
   ⟨p.rowsN, (p.toRows hk).op, (p.toRows hk).topo, p.outsC⟩
 
-/-- Its partition into the program's units (`Prog.partition`). -/
+/-- Its partition into the program's units (`ProgSpec.partition`). -/
 noncomputable abbrev P (hk : one < k) {outs : List ℕ} (p : UProg k one outs) : Partition (p.C hk) p.n :=
   ⟨(p.toRows hk).unit, (p.toRows hk).input_iff⟩
 
@@ -851,8 +851,8 @@ def gatesSnoc (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (s : UnitS
     obtain ⟨j, hj, hkj, hw⟩ := W.onto _ hv'
     exact ⟨j, hj, hkj, Fin.ext (by simp [hw])⟩
 
-/-- A `Prog`-level instance from the audit's. -/
-def rowsWireOf {N m : ℕ} {q : Prog N m} {os : Finset (Fin N)} {u : Fin m} {R : Rows}
+/-- A `ProgSpec`-level instance from the audit's. -/
+def rowsWireOf {N m : ℕ} {q : ProgSpec N m} {os : Finset (Fin N)} {u : Fin m} {R : Rows}
     (I : (q.partition os).IsRowsUnit u R) : q.RowsWire u R :=
   ⟨I.wire, I.shared, I.mem, I.op, I.outside, I.onto⟩
 
@@ -992,7 +992,7 @@ theorem committedC_old (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (
     change (((snoc p s src valid).toRows hk).op _).isInput = true
     change ((p.toRows hk).op g).isInput = true at hg
     simp only [toRows]
-    rw [Prog.op_castAdd, Audit.Op.isInput_lift]
+    rw [ProgSpec.op_castAdd, Audit.Op.isInput_lift]
     exact hg
   · refine Or.inr (Or.inl ?_)
     change _ ∈ outsC _ at hg
@@ -1006,12 +1006,12 @@ theorem committedC_old (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (
     · change _ ∈ (((snoc p s src valid).toRows hk).op _).args
       change g ∈ ((p.toRows hk).op h).args at hga
       simp only [toRows]
-      rw [Prog.op_castAdd, Audit.Op.args_lift]
+      rw [ProgSpec.op_castAdd, Audit.Op.args_lift]
       exact List.mem_map_of_mem hga
     · change ((snoc p s src valid).toRows hk).unit _ ≠ ((snoc p s src valid).toRows hk).unit _
       change (p.toRows hk).unit h ≠ (p.toRows hk).unit g at hne
       simp only [toRows]
-      rw [Prog.unit_castAdd, Prog.unit_castAdd]
+      rw [ProgSpec.unit_castAdd, ProgSpec.unit_castAdd]
       intro he
       exact hne (Option.map_injective (Fin.castSucc_injective _) he)
 
@@ -1033,7 +1033,7 @@ noncomputable def lastPair (hk : one < k) {outs : List ℕ} (p : UProg k one out
   t := s.t
   ht := s.ht
   ord := ofBlock_ordered s.hd
-  rows := (Prog.rowsWire_last (p.toRows hk) s.R _ _ _).toIsRowsUnit _
+  rows := (ProgSpec.rowsWire_last (p.toRows hk) s.R _ _ _).toIsRowsUnit _
   loOf := s.loOf
   F := s.F
   hF := s.hF
@@ -1044,10 +1044,10 @@ noncomputable def lastPair (hk : one < k) {outs : List ℕ} (p : UProg k one out
     have hw : (p.wireF hk s src c.val).val = p.srcB (src c.val) := by
       rw [p.wireF_val hk valid hcs]; simp [wireB, hc]
     have hlt : (p.wireF hk s src c.val).val < p.boolN := by rw [hw]; exact p.srcB_lt (valid _ hc)
-    change ((snoc p s src valid).mapG hk (p.wireF hk s src c.val)).val = (Prog.colWire s.R _ _ c).val
+    change ((snoc p s src valid).mapG hk (p.wireF hk s src c.val)).val = (ProgSpec.colWire s.R _ _ c).val
     simp only [mapG, hlt, dite_true, Fin.val_castAdd]
     rw [show (⟨(p.wireF hk s src c.val).val, hlt⟩ : Fin p.boolN) = ⟨p.srcB (src c.val), p.srcB_lt (valid _ hc)⟩ from
-      Fin.ext hw, p.mapG_srcB hk (valid _ hc), Prog.colWire_val, dite_eq_left (by rw [s.nIn_eq]; exact hc)]
+      Fin.ext hw, p.mapG_srcB hk (valid _ hc), ProgSpec.colWire_val, dite_eq_left (by rw [s.nIn_eq]; exact hc)]
     rfl
   one := by
     apply Fin.ext
@@ -1055,10 +1055,10 @@ noncomputable def lastPair (hk : one < k) {outs : List ℕ} (p : UProg k one out
     have hw : (p.wireF hk s src s.t.inBits).val = one := by
       rw [p.wireF_val hk valid (by have := s.gs_size; omega)]; simp [wireB]
     have hlt : (p.wireF hk s src s.t.inBits).val < p.boolN := by rw [hw]; have := p.k_le_boolN; omega
-    change ((snoc p s src valid).mapG hk (p.wireF hk s src s.t.inBits)).val = (Prog.colWire s.R _ _ s.R.one).val
+    change ((snoc p s src valid).mapG hk (p.wireF hk s src s.t.inBits)).val = (ProgSpec.colWire s.R _ _ s.R.one).val
     simp only [mapG, hlt, dite_true, Fin.val_castAdd]
     rw [show (⟨(p.wireF hk s src s.t.inBits).val, hlt⟩ : Fin p.boolN) = ⟨one, Nat.lt_of_lt_of_le hk p.k_le_boolN⟩ from Fin.ext hw,
-      p.mapG_input hk _ hk, Prog.colWire_val]
+      p.mapG_input hk _ hk, ProgSpec.colWire_val]
     simp [Rows.one, oneOf]
   out g hg hgu := by
     obtain ⟨o, ho, hgo⟩ := p.committedB_last hk s src valid hg hgu
@@ -1076,16 +1076,16 @@ noncomputable def lastPair (hk : one < k) {outs : List ℕ} (p : UProg k one out
       Fin.ext (by simp [copyGate, hgo])
     have hi : (⟨s.out o, hwl⟩ : Fin s.R.w) = s.R.comp ⟨s.out o - s.R.nIn, by rw [s.nIn_eq, hnc]; omega⟩ :=
       Fin.ext (by simp [Rows.comp, s.nIn_eq]; omega)
-    have hrow : (Prog.colWire s.R (p.insOf s src valid) (p.oneOf hk) ⟨s.out o, hwl⟩).val =
+    have hrow : (ProgSpec.colWire s.R (p.insOf s src valid) (p.oneOf hk) ⟨s.out o, hwl⟩).val =
         p.rowsN + (s.out o - s.t.inBits) := by
-      rw [hi, Prog.colWire_comp]
+      rw [hi, ProgSpec.colWire_comp]
       simp [s.nIn_eq]
     refine ⟨o, ho, Fin.ext ?_, ⟨s.out o, hwl⟩, rfl, Fin.ext ?_, ?_, ?_⟩
     · change g.val = (p.wireF hk s src (s.fsize + o)).val
       rw [p.wireF_val hk valid (by omega), hgo]
       unfold wireB
       rw [ite_eq_right (by omega), ite_eq_right (by omega)]
-    · change ((snoc p s src valid).mapG hk g).val = (Prog.colWire s.R _ _ ⟨s.out o, hwl⟩).val
+    · change ((snoc p s src valid).mapG hk g).val = (ProgSpec.colWire s.R _ _ ⟨s.out o, hwl⟩).val
       rw [hcg, (snoc p s src valid).mapG_copy hk hv ho', hrow]
       simp [outGate]
     · classical
@@ -1093,7 +1093,7 @@ noncomputable def lastPair (hk : one < k) {outs : List ℕ} (p : UProg k one out
       change _ ∈ outsC _
       rw [mem_outsC]
       refine ⟨p.n, o, hv, ho', ?_⟩
-      change (Prog.colWire s.R _ _ ⟨s.out o, hwl⟩).val = _
+      change (ProgSpec.colWire s.R _ _ ⟨s.out o, hwl⟩).val = _
       rw [hrow]
       simp [outGate]
     · rw [hi]
@@ -1116,7 +1116,7 @@ noncomputable def snocPair (hk : one < k) {outs : List ℕ} (p : UProg k one out
   t := U.t
   ht := U.ht
   ord := U.ord
-  rows := (Prog.rowsWire_snoc (p.toRows hk) s.R _ _ _ (rowsWireOf U.rows)).toIsRowsUnit _
+  rows := (ProgSpec.rowsWire_snoc (p.toRows hk) s.R _ _ _ (rowsWireOf U.rows)).toIsRowsUnit _
   loOf := U.loOf
   F := U.F
   hF := U.hF
@@ -1149,8 +1149,8 @@ noncomputable def snocPair (hk : one < k) {outs : List ℕ} (p : UProg k one out
       simp only [mapG, hlt, dite_true, Fin.val_castAdd]
       rw [hm]
     · exact p.committedC_old hk s src valid hcom
-    · change (Prog.snoc (p.toRows hk) s.R _ _ _).unit (Fin.castAdd _ (U.rows.wire ℓ)) = _
-      rw [Prog.unit_castAdd]
+    · change (ProgSpec.snoc (p.toRows hk) s.R _ _ _).unit (Fin.castAdd _ (U.rows.wire ℓ)) = _
+      rw [ProgSpec.unit_castAdd]
       change (p.P hk).unit (U.rows.wire ℓ) = some v at hℓu
       change (p.toRows hk).unit (U.rows.wire ℓ) = some v at hℓu
       rw [hℓu]
@@ -1173,8 +1173,8 @@ theorem pairs_oneGate (hk : one < k) : ∀ {outs : List ℕ} (p : UProg k one ou
     · have e : (snoc p s src valid).pairs hk (Fin.last p.n) = lastPair hk p s src valid := by
         unfold pairs; exact Fin.lastCases_last
       rw [e]
-      change (Prog.colWire s.R (p.insOf s src valid) (p.oneOf hk) s.R.one).val = one
-      rw [Prog.colWire_val]
+      change (ProgSpec.colWire s.R (p.insOf s src valid) (p.oneOf hk) s.R.one).val = one
+      rw [ProgSpec.colWire_val]
       simp [Rows.one, oneOf]
     · have e : (snoc p s src valid).pairs hk v.castSucc = snocPair hk p s src valid (p.pairs hk v) := by
         rw [pairs, Fin.lastCases_castSucc]

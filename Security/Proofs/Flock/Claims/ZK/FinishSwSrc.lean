@@ -32,7 +32,7 @@ open CoinLayer
 
 /-- The switched cut's masked values are `Table.swPre`'s at the base. -/
 theorem swCutAt_masked {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
-    (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (v : ∀ j, ((C j).T (cz j)).tab.Vals)
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m) (v : ∀ j, ((C j).T (cz j)).tab.Vals)
     (ω : ∀ j, ZkView.Base (C j).z (C j).Hi) (lv : ZkView.Leaves (fun j => (C j).z) → ByteArray) (j : Fin J) :
     (swCutAt C cz wt v ω lv j).masked =
       (((C j).T (cz j)).tab.swPre (wt j) (v j) (((C j).T (cz j)).randOf (ω j) 0)).masked := rfl

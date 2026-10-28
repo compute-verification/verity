@@ -23,7 +23,7 @@ open Flock FlockLevel3 FlockSoundness FlockSoundness.Refine
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **The prover's halved circuit after `j` rounds is the model's `lcU`** folded at the first `j` round coins. -/
-theorem combT_lcU (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S) (zc : ZcOut)
+theorem combT_lcU (S : Model.BlockR1CS) (c : CircuitFold) (hc : FoldRealizes c S) (zc : ZcOut)
     (hrho : zc.rho.size = S.m - 6) (cs : Coins) (full : Array F128) (hf : full.size = 2 ^ S.kLog)
     (hfold : c.fold (cs.ca 0) (skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6)) = .ok full) (j : ℕ) {k : ℕ}
     (hk : k < 2 ^ S.kLog / 2 ^ j) :
@@ -66,8 +66,8 @@ theorem combT_lcU (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S
 
 /-- **The prover's halved witness columns after `j` rounds are the model's `lcV`** folded at the first `j` round
 coins. -/
-theorem zrT_lcV (S : Model.Statement) (c : CircuitFold) (hK : c.kLog = S.kLog) (tr : Trace) (zc : ZcOut)
-    (hrho : zc.rho.size = S.m - 6) (w : Model.Witness S.m)
+theorem zrT_lcV (S : Model.BlockR1CS) (c : CircuitFold) (hK : c.kLog = S.kLog) (tr : Trace) (zc : ZcOut)
+    (hrho : zc.rho.size = S.m - 6) (w : Model.WitnessBits S.m)
     (hz : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (cs : Coins) (j : ℕ) {k : ℕ}
     (hk : k < 2 ^ S.kLog / 2 ^ j) :
     GF128.of (zrT c S.m tr zc cs j)[k]! = Model.foldAll ((pushes cs.τ j).toList.map fOf) (2 ^ S.kLog)
@@ -81,8 +81,8 @@ theorem zrT_lcV (S : Model.Statement) (c : CircuitFold) (hK : c.kLog = S.kLog) (
     (by rw [List.length_map, Array.length_toList, pushes_size]; exact hk)
 
 /-- **The prover's round-`j` lincheck message is the model's** (`lcMsg`) on `lcU`, `lcV` at its round coins. -/
-theorem msg_lcMsg (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S) (tr : Trace) (zc : ZcOut)
-    (hrho : zc.rho.size = S.m - 6) (w : Model.Witness S.m)
+theorem msg_lcMsg (S : Model.BlockR1CS) (c : CircuitFold) (hc : FoldRealizes c S) (tr : Trace) (zc : ZcOut)
+    (hrho : zc.rho.size = S.m - 6) (w : Model.WitnessBits S.m)
     (hz : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (cs : Coins) (full : Array F128)
     (hf : full.size = 2 ^ S.kLog)
     (hfold : c.fold (cs.ca 0) (skipWeights zc.z) (zc.rho.extract 0 (c.kLog - 6)) = .ok full) {j : ℕ}

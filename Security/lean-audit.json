@@ -946,7 +946,7 @@
    "owner": "@proofs",
    "digest": "78c6fa47f0dc063e9c9ab51977f4550acf9a218d2181c903eeaf26274823277a"
   },
-  "FlockSoundness.Accounting.Stmt.InRange": {
+  "FlockSoundness.Accounting.StmtShape.InRange": {
    "owner": "@proofs",
    "digest": "14f41f745abc478968ebae692fbb51b813f932a65294c6279434928b7d158968"
   },
@@ -1166,7 +1166,7 @@
    "owner": "@proofs",
    "digest": "1187cbda37d5f28fd3ef1d55597f3d5c43728b35ee6cfd1791a3bdf647cd1446"
   },
-  "FlockSoundness.Model.Statement.LinkLayout": {
+  "FlockSoundness.Model.BlockR1CS.LinkLayout": {
    "owner": "@proofs",
    "digest": "b37e44f0312955e52492256533b24acdc935490aeddd9708281231159bd4adce"
   },

@@ -112,7 +112,7 @@ def consRowC {np n : ℕ} {β : Type} (row : Lin F np) (o : (Fin n → Lin F np)
   (Fin.cons row o.1, o.2)
 
 /-- **The rest of a masked rep, compiled** (`restZK` with `ligeritoPadZC`). -/
-noncomputable def restZC (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np) (S : Statement)
+noncomputable def restZC (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np) (S : BlockR1CS)
     (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (extra : List (Claim F S.m))
     (zc : ZcZK F np S.m) (ab : ClaimZK F np S.m) : Game ((Fin 5 → Lin F np) × PendL F D) := do
   let o ← openingZK A (by omega) ab.pub ⟨0, A.lagS zc.z, zc.r⟩ extra
@@ -135,7 +135,7 @@ def rowOrder : Equiv.Perm (Fin 7) where
 /-- **A masked rep, compiled** (`repMaskedZK` with `restZC`): its seven rows, in flock-verify's batching order (`c_eval`
 first, then `a·b`, the lincheck final and `rs ab`), and its pending Ligerito verdict. -/
 noncomputable def repMaskedZC (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np) (tr : Triple np)
-    (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (extra : List (Claim F S.m)) :
+    (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (extra : List (Claim F S.m)) :
     Game ((Fin 7 → Lin F np) × PendL F D) :=
   ((zerocheckZK A S.m PA tr).bind fun o =>
     ((lincheckZK A S PA o.1).bind fun o' =>

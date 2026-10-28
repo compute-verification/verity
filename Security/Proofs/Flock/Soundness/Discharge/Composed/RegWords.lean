@@ -119,11 +119,11 @@ theorem zmod2_of_bit {a : ZMod 2} {b : Bool} (h : FlockSoundness.bit a = b) : a 
   subst h; revert a; decide
 
 /-- **The witness holds the statement's regions**: `Satisfies`' region conjunct alone. -/
-def RegionsHold (S : Statement) (z : Witness S.m) : Prop :=
+def RegionsHold (S : BlockR1CS) (z : WitnessBits S.m) : Prop :=
   ∀ R ∈ S.regions, ∀ (o : Fin (2 ^ S.nbl)) (i : ℕ) (_hi : i < 2 ^ R.free.length),
     ∀ h : R.inBlock i < 2 ^ S.kLog, S.block z o ⟨R.inBlock i, h⟩ = R.bits o i
 
-theorem RegionsHold.of_satisfies {S : Statement} {z : Witness S.m} (h : S.Satisfies z) : RegionsHold S z :=
+theorem RegionsHold.of_satisfies {S : BlockR1CS} {z : WitnessBits S.m} (h : S.Satisfies z) : RegionsHold S z :=
   h.2.2
 
 /-- **On a whole-word region, a witness holding the regions has the region's bit**: word `x`'s bit `v`, where `x` has
@@ -132,7 +132,7 @@ the region's fixed bits above the word, is bit `128·x + v` of the region's byte
 in-block address is the rest. -/
 theorem wordBit_eq_regionBit {st : Stmt} (hwf : StmtWF st) (hm : st.m = st.c.kLog + st.nbl)
     {reg : Flock.Region} (hreg : reg ∈ st.regions.toList) (hw : RegionWF st.c.kLog reg) (hW : WholeWord reg)
-    {z : Witness st.m} (hz : RegionsHold (stmtOf st hwf (regionsOf st)) z) {x v : ℕ} (hx : x < 2 ^ (st.m - 7))
+    {z : WitnessBits st.m} (hz : RegionsHold (stmtOf st hwf (regionsOf st)) z) {x v : ℕ} (hx : x < 2 ^ (st.m - 7))
     (hv : v < 128)
     (hfix : ∀ i, i + 7 < st.c.kLog → i + 7 ∉ reg.free.toList →
       x.testBit i = ((reg.mask >>> (i + 7)) % 2 == 1 && (reg.fixed >>> (i + 7)) % 2 == 1)) :
@@ -231,8 +231,8 @@ theorem eqWord_off (st : Stmt) (link : Fin 2 → Fin st.mPts → F128) (j : Fin 
 
 /-- **A region claim's message at a witness holding the regions is the public one**, word by word: on the region by
 `wordBit_eq_regionBit`, off it by `eqWord_off`. -/
-theorem sum_reg_of {S : Statement} {st : Stmt} (hwf : StmtWF st) (hS : S = stmtOf st hwf (regionsOf st))
-    (hr : RegionsWF st) (hW : WholeWords st) {z : Witness S.m} (hz : RegionsHold S z)
+theorem sum_reg_of {S : BlockR1CS} {st : Stmt} (hwf : StmtWF st) (hS : S = stmtOf st hwf (regionsOf st))
+    (hr : RegionsWF st) (hW : WholeWords st) {z : WitnessBits S.m} (hz : RegionsHold S z)
     (link : Fin 2 → Fin st.mPts → F128) (j : Fin (2 * st.regions.size)) (v : Fin 128) :
     ∑ x : Fin (2 ^ (S.m - 7)), fOf (eqWord (regionPtOf st link j) x.val) *
       ZK.Table.castF (F := 𝔽) (wordBit z x.val v.val) = pubRegOf st link j v := by
@@ -252,8 +252,8 @@ theorem sum_reg_of {S : Statement} {st : Stmt} (hwf : StmtWF st) (hS : S = stmtO
     rw [eqWord_off st link j hi (by have := hwf.hk; omega) hnf hne, fOf_zero, zero_mul, zero_mul]
 
 /-- **A region claim's message at a valid witness is the public one** (`sum_reg_of`). -/
-theorem sum_reg {S : Statement} {st : Stmt} (hwf : StmtWF st) (hS : S = stmtOf st hwf (regionsOf st))
-    (hr : RegionsWF st) (hW : WholeWords st) {z : Witness S.m} (hz : S.Satisfies z)
+theorem sum_reg {S : BlockR1CS} {st : Stmt} (hwf : StmtWF st) (hS : S = stmtOf st hwf (regionsOf st))
+    (hr : RegionsWF st) (hW : WholeWords st) {z : WitnessBits S.m} (hz : S.Satisfies z)
     (link : Fin 2 → Fin st.mPts → F128) (j : Fin (2 * st.regions.size)) (v : Fin 128) :
     ∑ x : Fin (2 ^ (S.m - 7)), fOf (eqWord (regionPtOf st link j) x.val) *
       ZK.Table.castF (F := 𝔽) (wordBit z x.val v.val) = pubRegOf st link j v :=

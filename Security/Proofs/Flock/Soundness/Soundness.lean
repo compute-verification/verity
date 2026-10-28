@@ -10,7 +10,7 @@ of the committed table packs a witness satisfying the statement, is at most
 `tableError (fast100 m) shape`.
 
 **`table_sound_fast100`, `table_sound_fast100_34_35`.** With the numbers: at most `2^-205` for
-`22 ≤ m ≤ 33` and `2^-205` for `m = 34, 35`, for every statement shape in `Stmt.InRange`.
+`22 ≤ m ≤ 33` and `2^-205` for `m = 34, 35`, for every statement shape in `StmtShape.InRange`.
 
 This is the interactive-oracle layer, a16z's security stage 1a (`DESIGN.md` §7): the
 committed tables are oracles. The Merkle layer (`Merkle`, stages 1b and 1c with live coins) adds
@@ -22,7 +22,7 @@ SHA-512's collision term for the compiled protocol (`table_sound_compiled`), und
 (the link points, `LinkSound`). Mutual correlated agreement up to the Johnson bound is proved
 (`mcaError_le_bchks25`, from DKT26), so there is no named assumption; `tools/verity/lean/check.py` audits every declaration's axioms.
 
-Both theorems assume the link points' layout (`Statement.LinkLayout`): each region's free bits
+Both theorems assume the link points' layout (`BlockR1CS.LinkLayout`): each region's free bits
 are distinct and read link coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …`
 fit inside the point, as the statements of PROTOCOL.md §16 have them.
 -/
@@ -37,7 +37,7 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 link points leave some rep start undoomed with probability at most `linkError`: Schwartz–Zippel
 on a failing region's difference, at two independent points, for every codeword near the
 committed table (`LinkSound`, `link_sound_of_card`, with `closeMsgs_card_le`). -/
-theorem link_sound (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
+theorem link_sound (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (sch : Schedule)
     (hsch : fast100 S.m = some sch) (ptLocal mPts : ℕ) (C : Oracle F)
     (hC : ¬ Committed A S sch C) (hlay : S.LinkLayout ptLocal mPts) :
     prCoin (fun pts : Fin 2 → Fin mPts → F =>
@@ -47,7 +47,7 @@ theorem link_sound (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Sched
   refine (link_sound_of_card A hA S sch ptLocal mPts C hC hlay _
     (closeMsgs_card_le A hA sch S.m hsch C)).trans (le_of_eq ?_)
   rw [hA.card_F, linkError]
-  simp only [Statement.shape]
+  simp only [BlockR1CS.shape]
   rw [ENNReal.ofReal_mul (by positivity), ENNReal.ofReal_mul (by positivity),
     ENNReal.ofReal_natCast, ENNReal.ofReal_natCast, ENNReal.ofReal_pow (by unfold qF; positivity),
     ofReal_nat_div_qF]
@@ -59,7 +59,7 @@ accepts both reps while the committed values do not satisfy the statement with p
 `tableError`. `table_sound` is its form for every prover strategy; this form composes with other
 tables through `Game.value_interleave_le`. -/
 theorem table_value_sound (A : Arith F K) (hA : A.Correct)
-    (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m)
+    (S : BlockR1CS) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts) :
     value (fun out => out.1 = true ∧ ¬ Committed A S sch out.2) (table A S sch hm ptLocal mPts)
       ≤ ENNReal.ofReal (tableError sch (S.shape mPts)) := by
@@ -106,7 +106,7 @@ theorem table_value_sound (A : Arith F K) (hA : A.Correct)
 verifier accepts both reps while the committed values do not satisfy the statement with
 probability at most `tableError`. -/
 theorem table_sound (A : Arith F K) (hA : A.Correct)
-    (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m)
+    (S : BlockR1CS) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)
     (σ : Strategy (table A S sch hm ptLocal mPts)) :
     prob (fun out => out.1 = true ∧ ¬ Committed A S sch out.2) (table A S sch hm ptLocal mPts) σ
@@ -116,7 +116,7 @@ theorem table_sound (A : Arith F K) (hA : A.Correct)
 /-- **The theorem with the numbers.** `fast100` run twice on one root with live coins: at most
 `2^-205` per table for `22 ≤ m ≤ 33`, for every statement shape in range. -/
 theorem table_sound_fast100 (A : Arith F K) (hA : A.Correct)
-    (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm1 : 22 ≤ S.m)
+    (S : BlockR1CS) (sch : Schedule) (hsch : fast100 S.m = some sch) (hm1 : 22 ≤ S.m)
     (hm2 : S.m ≤ 33) (ptLocal mPts : ℕ) (hshape : (S.shape mPts).InRange)
     (hlay : S.LinkLayout ptLocal mPts) (σ : Strategy (table A S sch (by omega) ptLocal mPts)) :
     prob (fun out => out.1 = true ∧ ¬ Committed A S sch out.2)
@@ -126,7 +126,7 @@ theorem table_sound_fast100 (A : Arith F K) (hA : A.Correct)
 
 /-- **The numbers, `m = 34, 35`.** -/
 theorem table_sound_fast100_34_35 (A : Arith F K)
-    (hA : A.Correct) (S : Statement) (sch : Schedule) (hsch : fast100 S.m = some sch)
+    (hA : A.Correct) (S : BlockR1CS) (sch : Schedule) (hsch : fast100 S.m = some sch)
     (hm1 : 34 ≤ S.m) (hm2 : S.m ≤ 35) (ptLocal mPts : ℕ) (hshape : (S.shape mPts).InRange)
     (hlay : S.LinkLayout ptLocal mPts) (σ : Strategy (table A S sch (by omega) ptLocal mPts)) :
     prob (fun out => out.1 = true ∧ ¬ Committed A S sch out.2)

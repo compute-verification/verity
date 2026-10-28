@@ -96,7 +96,7 @@ theorem drawnOf_holoMap {S : ℕ} {Vs : Fin S → VStmt} {st : Flock.Stmt} {hp :
     {ish : RecVStar.Inner} {tbl : String} {bc : Cm → String → ℕ → List UInt8} {rs : Array SchedRound}
     {L : List (HoloStream × Array SchedRound)}
     (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some ((.rep 0, rs) :: (.rep 1, rs) :: L))
-    {S₀ : Model.Statement} {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc}
+    {S₀ : Model.BlockR1CS} {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc}
     (hb : ∀ Lb i, repIdxB S₀ (b Lb i) = coinRounds rs) {r : ℕ} (hr : 1 + 2 * (coinRounds rs).length ≤ r) :
     DrawnOf S₀ r b (holoMap st hp Cm ish tbl bc).selC fun i => (HoloStream.rep i).name tbl := by
   intro Lb i
@@ -113,7 +113,7 @@ theorem drawnOf_holoMap_forms {S : ℕ} {Vs : Fin S → VStmt} {st : Flock.Stmt}
     {L : List (HoloStream × Array SchedRound)}
     (hS : holoStreams ish.m ish.kLog ish.claims ish.sparse ish.stacked = some L)
     (hrs : holoRounds ish.m ish.kLog ish.claims = some rs) (hc : 0 < ish.claims)
-    {S₀ : Model.Statement} {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc}
+    {S₀ : Model.BlockR1CS} {b : ((j : Fin S) → (Vs j).Bits) → Fin 2 → ValsSrc}
     (hb : ∀ Lb i, repIdxB S₀ (b Lb i) = coinRounds rs) {r : ℕ}
     (hr : 1 + 2 * (FlockC3.Compose.repForms ish.m ish.kLog ish.claims).length ≤ r) :
     DrawnOf S₀ r b (holoMap st hp Cm ish tbl bc).selC fun i => (HoloStream.rep i).name tbl := by

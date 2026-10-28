@@ -32,7 +32,7 @@ headline (`Discharge/Integrate`) are about `Stmt.setupH`'s statements (`hh : I.t
   `SetupHiddenPublic`, `SetupHiddenParse`, `SetupHiddenDrawn`).
 * `Tables`, `Accepted`: the one-table plan of a hidden-output session (`tableAtH`, `planAtH`, `tablesAtH`), and
   `tableAtH_of_accepts` (`TableAtHOfAccepts`).
-* `Headline`: `flock_headline_hidden`, `Prog.flock_headline_live_on` at the hidden tables.
+* `Headline`: `flock_headline_hidden`, `ProgSpec.flock_headline_live_on` at the hidden tables.
 * `Flat`, `Copies`, `Placed`, `Sites`: the copy, constant and zero facts at `keyProg`'s places in the hidden tables
   (`ppH`, `hConstH`, `hZeroH`, `sitesAtH`).
 * `CopiesP`: `Copies` at public inputs: kept rows read the flat twin's, a public leaf's bits its instance's public word.

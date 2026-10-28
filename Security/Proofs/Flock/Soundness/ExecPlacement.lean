@@ -587,7 +587,7 @@ end Layout
 /-- **The statement the verifier accepted**, as the model's block R1CS: the verifier's `m`, `k_log` and pin, the level-0
 matrices it folds (`placedA`, `placedB`), and public regions `regs`. -/
 def Layout.model {st : Stmt} (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) :
-    Model.Statement where
+    Model.BlockR1CS where
   m := st.m
   kLog := st.c.kLog
   hk := by rw [L.m]; omega
@@ -709,7 +709,7 @@ def Aliased (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {C : Audit
     {P : Audit.Partition C n} {u : Fin n} (inst : P.IsRowsUnit u ((unitRows st L.unit_built).stack st.c.upv))
     (o : Fin (2 ^ (L.model regs).nbl)) {g : ℕ} (hg : g < st.c.g) : Prop :=
   ∀ c c', inst.wire c = inst.wire c' → c.val < ((unitRows st L.unit_built).stack st.c.upv).nIn →
-    c'.val < ((unitRows st L.unit_built).stack st.c.upv).nIn → ∀ z : Model.Witness (L.model regs).m,
+    c'.val < ((unitRows st L.unit_built).stack st.c.upv).nIn → ∀ z : Model.WitnessBits (L.model regs).m,
       (L.model regs).Satisfies z →
       (L.model regs).block z o (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
         (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) c) =

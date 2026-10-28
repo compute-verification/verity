@@ -185,7 +185,7 @@ def lcShape (F : Type) (kLog : ℕ) : List Kind :=
   .coin F :: .coin F :: (pairRounds F (kLog - 6) ++ [.msg (Fin 64 → F), .coin F])
 
 omit [Fintype K] [DecidableEq K] in
-theorem lincheck_exact (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) :
+theorem lincheck_exact (A : Arith F K) (S : BlockR1CS) (zc : ZcOut F S.m) :
     Exact (lincheck A S zc) (lcShape F S.kLog) := by
   unfold lincheck lcShape
   refine Exact.draw_bind fun α => Exact.draw_bind fun β => ?_
@@ -328,7 +328,7 @@ def repShape (F K D : Type) (m kLog nExtra : ℕ) (sch : Schedule) : List Kind :
 omit [Fintype K] in
 /-- **A rep has a spine.** Every run of rep `r` takes its steps in the order of `repShape`, which reads only `m`,
 `k_log`, the number of extra claims and the schedule; it may stop early only on a reject. -/
-theorem repC_spine (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
+theorem repC_spine (A : Arith F K) (r : ℕ) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim F S.m)) :
     Spine (repC (D := D) A r S sch hm extra) (repShape F K D S.m S.kLog extra.length sch) := by
   unfold repC repShape
@@ -346,7 +346,7 @@ theorem repC_spine (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (h
 omit [Fintype K] in
 /-- **A rep's run follows `repShape`**: on any tape, a run of rep `r` takes steps whose kinds, in order, are a prefix
 of `repShape`. -/
-theorem repC_kinds (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
+theorem repC_kinds (A : Arith F K) (r : ℕ) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim F S.m)) {ts : List Step} {p : PendL F D} (h : PlaysT (repC A r S sch hm extra) ts p) :
     ts.map kindOf <+: repShape F K D S.m S.kLog extra.length sch :=
   Spine.prefix h (repC_spine A r S sch hm extra)
@@ -354,7 +354,7 @@ theorem repC_kinds (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (h
 omit [Fintype K] in
 /-- **A rep's tape is determined by its messages and coins.** Two runs of rep `r`, with the same messages and coin
 steps in order, are runs on the same tape: `repShape` places the coins among the messages. -/
-theorem repC_tape (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
+theorem repC_tape (A : Arith F K) (r : ℕ) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim F S.m)) {ts ts' : List Step} {p p' : PendL F D} (h : PlaysT (repC A r S sch hm extra) ts p)
     (h' : PlaysT (repC A r S sch hm extra) ts' p') (hms : ts.filterMap Sum.getLeft? = ts'.filterMap Sum.getLeft?)
     (hcs : ts.filterMap Sum.getRight? = ts'.filterMap Sum.getRight?) : ts = ts' := by

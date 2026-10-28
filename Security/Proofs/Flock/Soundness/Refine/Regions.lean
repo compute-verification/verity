@@ -314,7 +314,7 @@ theorem regionPoint_get (st : Stmt) (reg : Region) (r : Array F128) (hm : st.m =
     rw [foldl_set_hit (fun i => st.c.kLog + i) (fun i => r[PT_LOCAL + i]!) st.nbl
       (fun a _ b _ h => by omega) _ (j - st.c.kLog) (by omega) (by rw [foldl_set!_size, hsz0]; omega)]
 
-theorem model_regionPoint_lt (S : Model.Statement) (R : Model.Region S.kLog S.nbl) (ptLocal mPts : ℕ)
+theorem model_regionPoint_lt (S : Model.BlockR1CS) (R : Model.Region S.kLog S.nbl) (ptLocal mPts : ℕ)
     (rr : Fin mPts → 𝔽) (j : ℕ) (hj : j < S.m) (hjk : j < S.kLog) :
     Model.regionPoint S R ptLocal mPts rr ⟨j, hj⟩ =
       match R.free.idxOf? ⟨j, hjk⟩ with
@@ -322,7 +322,7 @@ theorem model_regionPoint_lt (S : Model.Statement) (R : Model.Region S.kLog S.nb
       | none => if R.fixedBits ⟨j, hjk⟩ then 1 else 0 := by
   unfold Model.regionPoint; rw [dite_eq_left hjk]; rfl
 
-theorem model_regionPoint_ge (S : Model.Statement) (R : Model.Region S.kLog S.nbl) (ptLocal mPts : ℕ)
+theorem model_regionPoint_ge (S : Model.BlockR1CS) (R : Model.Region S.kLog S.nbl) (ptLocal mPts : ℕ)
     (rr : Fin mPts → 𝔽) (j : ℕ) (hj : j < S.m) (hjk : ¬ j < S.kLog) :
     Model.regionPoint S R ptLocal mPts rr ⟨j, hj⟩ =
       if hi : ptLocal + (j - S.kLog) < mPts then rr ⟨ptLocal + (j - S.kLog), hi⟩ else 0 := by
@@ -368,13 +368,13 @@ theorem regionPoint_size (st : Stmt) (reg : Region) (r : Array F128) : (st.regio
 def regionClaimOf (st : Stmt) (reg : Region) (r : Array F128) (v : F128) : Flock.Claim :=
   ⟨v, eqTable ((st.regionPoint reg r).extract 0 6), (st.regionPoint reg r).extract 6 (st.regionPoint reg r).size⟩
 
-theorem model_regionClaim_skip (S : Model.Statement) (R : Model.Region S.kLog S.nbl) (ptLocal mPts : ℕ)
+theorem model_regionClaim_skip (S : Model.BlockR1CS) (R : Model.Region S.kLog S.nbl) (ptLocal mPts : ℕ)
     (rr : Fin mPts → 𝔽) (s : Fin 64) :
     (Model.regionClaim S R ptLocal mPts rr).skip s = ∏ j : Fin 6,
       (if s.val.testBit j then (if h : j.val < S.m then Model.regionPoint S R ptLocal mPts rr ⟨j.val, h⟩ else 0)
         else 1 + (if h : j.val < S.m then Model.regionPoint S R ptLocal mPts rr ⟨j.val, h⟩ else 0)) := rfl
 
-theorem model_regionClaim_x (S : Model.Statement) (R : Model.Region S.kLog S.nbl) (ptLocal mPts : ℕ)
+theorem model_regionClaim_x (S : Model.BlockR1CS) (R : Model.Region S.kLog S.nbl) (ptLocal mPts : ℕ)
     (rr : Fin mPts → 𝔽) (i : Fin (S.m - 6)) :
     (Model.regionClaim S R ptLocal mPts rr).x i =
       if h : i.val + 6 < S.m then Model.regionPoint S R ptLocal mPts rr ⟨i.val + 6, h⟩ else 0 := rfl

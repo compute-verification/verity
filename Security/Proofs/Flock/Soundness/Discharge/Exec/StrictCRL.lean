@@ -33,7 +33,7 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 
 /-- **`Adv₀`'s finder**: two continuations after the prover's level-0 cap, and a level-0 position they open to different
 rows. -/
-noncomputable def adv₀FinderL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
+noncomputable def adv₀FinderL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS)
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (σ : Strategy (tableCL A H E Lf S sch hm ptLocal mPts)) :
     Finder Pair :=
   twoRuns (tableCmpL A H E Lf S sch hm ptLocal mPts σ.1) σ.2
@@ -42,7 +42,7 @@ noncomputable def adv₀FinderL (A : Arith F K) (H : List UInt8 → D) (E : Merk
 /-- **`Adv_{r,ℓ}`'s finder**: along the run, at rep `r`'s level-`ℓ` cap, two continuations, and a level-`ℓ` position
 they open to different rows. -/
 noncomputable def advRFinderL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
-    (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
+    (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (r ℓ : ℕ)
     (σ : Strategy (tableCL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts)) : Finder Pair :=
   forkFinder (plurCL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (slotOf r ℓ)
@@ -52,7 +52,7 @@ noncomputable def advRFinderL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : 
       (C0starL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ.1 σ.2) σ.1) σ.2
 
 /-- **The self-clash finder**: one run, and a position it opens two ways. -/
-noncomputable def selfFinderL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
+noncomputable def selfFinderL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS)
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (σ : Strategy (tableCL A H E Lf S sch hm ptLocal mPts)) :
     Finder Pair :=
   oneRun (tableCL A H E Lf S sch hm ptLocal mPts) σ (onePick H (SelfClashL H E Lf sch) fun _ h => h.collision)
@@ -60,7 +60,7 @@ noncomputable def selfFinderL (A : Arith F K) (H : List UInt8 → D) (E : Merkle
 /-- **`SHA512CRStrict` for the compiled theorem's finders**: the rewinding finders at budget `qF`, the self-clash finder at
 budget `qS`. -/
 structure CompiledCRL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
-    (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
+    (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (σ : Strategy (tableCL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts)) (qF qS : ℝ) : Prop where
   fork : ∀ r ∈ Finset.range 2, ∀ ℓ ∈ Finset.Icc 1 (l₀ :: l₁ :: rest).length,
@@ -69,7 +69,7 @@ structure CompiledCRL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UIn
   self : (selfFinderL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ).CR H qS
 
 omit [Fintype K] in
-theorem adv₀_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
+theorem adv₀_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS)
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (σ : Strategy (tableCL A H E Lf S sch hm ptLocal mPts))
     {q : ℝ} (h : (adv₀FinderL A H E Lf S sch hm ptLocal mPts σ).CR H q) :
     adv₀L A H E Lf S sch hm ptLocal mPts σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
@@ -77,7 +77,7 @@ theorem adv₀_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc
     fun _ _ h => op₀L_conflict_collision h).trans h.le
 
 theorem advR_le_strictL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
-    (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
+    (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (r ℓ : ℕ)
     (σ : Strategy (tableCL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts)) {q : ℝ}
     (h : (advRFinderL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts r ℓ σ).CR H q) :
@@ -88,7 +88,7 @@ theorem advR_le_strictL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List U
       (C0starL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ.1 σ.2) σ.1) σ.2).trans h.le
 
 omit [Fintype K] in
-theorem self_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
+theorem self_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS)
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (σ : Strategy (tableCL A H E Lf S sch hm ptLocal mPts))
     {q : ℝ} (h : (selfFinderL A H E Lf S sch hm ptLocal mPts σ).CR H q) :
     expect (ind (SelfClashL H E Lf sch)) (tableCL A H E Lf S sch hm ptLocal mPts) σ ≤ q ^ 2 / 2 ^ (513 : ℝ) :=
@@ -100,7 +100,7 @@ each satisfy `SHA512CRStrict` at budget `qF` and the self-clash finder at `qS`, 
 $$\text{tableError}+\sqrt{2^{\log N_0}\cdot 2Q_0\cdot\frac{q_F^2}{2^{513}}}+\sum_{r<2}\sum_{\ell}
 \sqrt{2^{\log N_\ell}Q_\ell\cdot\frac{q_F^2}{2^{513}}}+\frac{q_S^2}{2^{513}}.$$ -/
 theorem table_sound_compiled_strictL (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl] (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
+    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (hlay : S.LinkLayout ptLocal mPts)
     (σ : Strategy (tableCL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts)) {qF qS : ℝ}
@@ -135,7 +135,7 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 
 /-- **`Adv_{r,ℓ}`'s finder in a session**: along the session, at the table's rep `r`'s level-`ℓ` cap, two continuations,
 and a level-`ℓ` position they open to different rows. -/
-noncomputable def advRSFinderL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
+noncomputable def advRSFinderL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl))) (cap₀ : Cap D) (r ℓ : ℕ)
     (σ : Strategy (sessAfterL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀)) :
@@ -148,7 +148,7 @@ noncomputable def advRSFinderL (A : Arith F K) (H : List UInt8 → D) (E : Merkl
 
 /-- **`Adv₀`'s finder in a session**: two runs after `Commit`, and a level-0 position of the table they open to different
 rows. -/
-noncomputable def adv₀SFinderL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
+noncomputable def adv₀SFinderL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS)
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl)))
     (cap₀ : Cap D) (σ : Strategy (sessAfterL A H E Lf S sch hm ptLocal mPts pre post cap₀)) : Finder Pair :=
   twoRuns (sessAfterL A H E Lf S sch hm ptLocal mPts pre post cap₀) σ
@@ -156,7 +156,7 @@ noncomputable def adv₀SFinderL (A : Arith F K) (H : List UInt8 → D) (E : Mer
       fun x _ h => op₀L_conflict_collision (x := (x.1.getD pre.length dfltOutL, x.2.getD pre.length dfltOutL)) h)
 
 /-- **The self-clash finder in a session**: one run after `Commit`, and a position of the table it opens two ways. -/
-noncomputable def selfSFinderL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
+noncomputable def selfSFinderL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS)
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl)))
     (cap₀ : Cap D) (σ : Strategy (sessAfterL A H E Lf S sch hm ptLocal mPts pre post cap₀)) : Finder Pair :=
   oneRun (sessAfterL A H E Lf S sch hm ptLocal mPts pre post cap₀) σ
@@ -165,7 +165,7 @@ noncomputable def selfSFinderL (A : Arith F K) (H : List UInt8 → D) (E : Merkl
 
 /-- **`SHA512CRStrict` for a table's finders in a session**: the rewinding finders at budget `qF`, the self-clash finder
 at budget `qS`. -/
-structure SessCRL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ)
+structure SessCRL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (m k0 : ℕ)
     (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl))) (cap₀ : Cap D)
     (σ : Strategy (sessAfterL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀))
@@ -175,7 +175,7 @@ structure SessCRL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F
   level0 : (adv₀SFinderL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀ σ).CR H qF
   self : (selfSFinderL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀ σ).CR H qS
 
-theorem advRS_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
+theorem advRS_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl))) (cap₀ : Cap D) (r ℓ : ℕ)
     (σ : Strategy (sessAfterL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀)) {q : ℝ}
@@ -187,7 +187,7 @@ theorem advRS_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
     (lockSessL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts pre post default cap₀) σ).trans h.le
 
 omit [Fintype K] in
-theorem adv₀S_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
+theorem adv₀S_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS)
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl)))
     (cap₀ : Cap D) (σ : Strategy (sessAfterL A H E Lf S sch hm ptLocal mPts pre post cap₀)) {q : ℝ}
     (h : (adv₀SFinderL A H E Lf S sch hm ptLocal mPts pre post cap₀ σ).CR H q) :
@@ -198,7 +198,7 @@ theorem adv₀S_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.En
     h.le
 
 omit [Fintype K] in
-theorem selfS_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
+theorem selfS_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS)
     (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl)))
     (cap₀ : Cap D) (σ : Strategy (sessAfterL A H E Lf S sch hm ptLocal mPts pre post cap₀)) {q : ℝ}
     (h : (selfSFinderL A H E Lf S sch hm ptLocal mPts pre post cap₀ σ).CR H q) :
@@ -208,7 +208,7 @@ theorem selfS_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
     fun _ h => h.collision).trans h.le
 
 /-- **`ε_c⁻` in the session under `SHA512CRStrict`.** -/
-theorem epsS_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
+theorem epsS_le_strictL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (pre post : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl))) (cap₀ : Cap D)
     (σ : Strategy (sessAfterL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts pre post cap₀)) {qF qS : ℝ}

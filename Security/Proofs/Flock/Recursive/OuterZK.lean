@@ -50,7 +50,7 @@ set_option synthInstance.maxHeartbeats 1000000
 
 /-- **Under the abort interface, the honest prover is `outExe`.** -/
 theorem honestOut_eq {prover : TableProver} (hP : SelfCheckSilent prover) {C : CoinedSetup}
-    (hC : CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C) (c : CoinsZK C.Rest) {w : Witness C.S.m}
+    (hC : CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C) (c : CoinsZK C.Rest) {w : WitnessBits C.S.m}
     (hv : C.Valid w) (hreg : ∀ c', (C.T c').tab.sReg w = (C.T c').tab.pubReg) (p : RandAt C c) :
     honestOut prover C c w p = outExe C c w p.1 p.2 := by
   unfold honestOut outExe
@@ -62,7 +62,7 @@ theorem honestOut_eq {prover : TableProver} (hP : SelfCheckSilent prover) {C : C
 `CoinedOK`'s inner relation holds at a valid witness with public registered values, so the self-check never stops
 (`Table.not_stops`). -/
 theorem selfCheckSilent_exe
-    (stopped : ∀ (C : CoinedSetup) (c : CoinsZK C.Rest), Witness C.S.m → RandAt C c → (C.T c).tab.Cut) :
+    (stopped : ∀ (C : CoinedSetup) (c : CoinsZK C.Rest), WitnessBits C.S.m → RandAt C c → (C.T c).tab.Cut) :
     SelfCheckSilent (proverExe stopped) := by
   intro C c w hC hA hv hreg p
   obtain ⟨-, -, -, hT⟩ := hC
@@ -76,7 +76,7 @@ simulator's randomness, the honest output and the simulator's are within `2·|Le
 `δ`. -/
 theorem table_close (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C)
     {δ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ)
-    (w w0 : Witness C.S.m) (hv : C.Valid w)
+    (w w0 : WitnessBits C.S.m) (hv : C.Valid w)
     (hreg : ∀ c, (C.T c).tab.sReg w = (C.T c).tab.pubReg) (c : CoinsZK C.Rest) {z : ZkView.Sizes} (hz : C.z = z)
     {Vw : Type} (enc : ∀ c' : CoinsZK C.Rest, OutAt C c' → Vw) {NR NS : ℕ} (eR : Fin NR ≃ RandAt C c)
     (eS : Fin NS ≃ SimAt C c) (E : Vw → Prop) :

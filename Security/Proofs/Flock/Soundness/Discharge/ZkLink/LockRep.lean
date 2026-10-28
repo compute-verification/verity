@@ -128,7 +128,7 @@ def MRelZ (r : ℕ) (C₀ : Oracle F) (w₀ : ℕ) (sch : Schedule) {n np : ℕ}
 
 /-- **The rest of a masked rep in lockstep** (`restZK` beside `restZC`). -/
 noncomputable def lockRestZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np)
-    (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₀ : Oracle F) (extra : List (Claim F S.m))
+    (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₀ : Oracle F) (extra : List (Claim F S.m))
     (zc : ZcZK F np S.m) (ab : ClaimZK F np S.m) :
     Lock (Oracle F) (Cap D) (getRep r) (MRelZ r C₀ (2 ^ sch.k0 + 2 * e) sch) (fun _ => none)
       (restZK A P₀ PA S sch hm t c₀ r C₀ extra zc ab) (restZC (D := D) A P₀ PA S sch hm t c₀ r extra zc ab) :=
@@ -145,7 +145,7 @@ noncomputable def lockRestZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} 
 
 /-- **A masked rep in lockstep** (`repMaskedZK`, its rows in flock-verify's order, beside `repMaskedZC`). -/
 noncomputable def lockMaskedZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np)
-    (tr : Triple np) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₀ : Oracle F)
+    (tr : Triple np) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) :
     Lock (Oracle F) (Cap D) (getRep r) (MRelZ r C₀ (2 ^ sch.k0 + 2 * e) sch) (fun _ => none)
       ((repMaskedZK A P₀ PA tr S sch hm t c₀ r C₀ extra).map fun o => (o.1 ∘ rowOrder, o.2))
@@ -321,7 +321,7 @@ noncomputable def lockSessZ [Inhabited D] [Inhabited Sl] (A : Arith F K) (Hs : H
 /-! ## Alignment across level-0 oracles -/
 
 theorem aligned_lockRestZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np)
-    (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₁ C₂ : Oracle F)
+    (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₁ C₂ : Oracle F)
     (extra : List (Claim F S.m)) (zc : ZcZK F np S.m) (ab : ClaimZK F np S.m) :
     Lock.Aligned (lockRestZ (D := D) A r hr P₀ PA S sch hm t c₀ C₁ extra zc ab)
       (lockRestZ (D := D) A r hr P₀ PA S sch hm t c₀ C₂ extra zc ab) := by
@@ -339,7 +339,7 @@ theorem aligned_lockRestZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P
     exact .send _ fun _ => .ret _ _
 
 theorem aligned_lockMaskedZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np)
-    (tr : Triple np) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₁ C₂ : Oracle F)
+    (tr : Triple np) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₁ C₂ : Oracle F)
     (extra : List (Claim F S.m)) :
     Lock.Aligned (lockMaskedZ (D := D) A r hr P₀ PA tr S sch hm t c₀ C₁ extra)
       (lockMaskedZ (D := D) A r hr P₀ PA tr S sch hm t c₀ C₂ extra) := by

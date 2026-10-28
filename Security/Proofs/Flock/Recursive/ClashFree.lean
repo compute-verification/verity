@@ -182,7 +182,7 @@ whatever tables `ch` chooses at the reps' caps, a salted compiled run ends accep
 probability at most `tableError` plus the probability of an accepted run in `W` that disagrees with the tables. -/
 theorem compiled_le_bad_on (A : Arith F K) (hA : A.Correct)
     [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
-    (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
+    (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (hlay : S.LinkLayout ptLocal mPts) (ch : Lock.Chooser (Oracle F) (Cap D) (OutCL F D Sl))
     (W : OutCL F D Sl → Prop) (C₀ : Oracle F) (cap₀ : Cap D)
@@ -241,7 +241,7 @@ every prover makes the compiled table end accepted in `W` with probability at mo
 sends `W`'s tables (`tab₀W` at the prover's cap, `tabRW` at each rep's), so `bad_zero_of_fixed` leaves
 `compiled_le_bad_on` no bad term. -/
 theorem table_prob_clashFree (A : Arith F K) (hA : A.Correct) [Inhabited D] (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule)
+    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (sch : Schedule)
     (hsch : fast100 S.m = some sch) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)
     (hno : ¬ ∃ z, S.Satisfies z) (W : OutCL F D Sl → Prop)
     (hW₀ : ∀ o, W o → ¬ SelfClashL H E Lf sch o)

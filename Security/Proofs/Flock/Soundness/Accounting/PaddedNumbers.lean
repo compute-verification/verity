@@ -180,7 +180,7 @@ def padLinkUp (s : Schedule) (t : ℕ) : ℚ :=
   (s.levels.headD default).padListBound t * 1024 * (64 / 2 ^ 128) ^ 2
 
 theorem padRepError_le (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (t e : ℕ)
-    (sbar : ℚ) (hp : PadNumOK l₀ t sbar) (hs : ∀ l ∈ l₁ :: rest, l.Ok) (st : Stmt)
+    (sbar : ℚ) (hp : PadNumOK l₀ t sbar) (hs : ∀ l ∈ l₁ :: rest, l.Ok) (st : StmtShape)
     (hst : st.InRange) :
     padRepError ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ st t e ≤
       (padRepUp ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ t e sbar : ℝ) := by
@@ -194,7 +194,7 @@ theorem padRepError_le (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext
   push_cast at h1
   linarith
 
-theorem padLinkError_le (s : Schedule) (st : Stmt) (t : ℕ) (hst : st.InRange) :
+theorem padLinkError_le (s : Schedule) (st : StmtShape) (t : ℕ) (hst : st.InRange) :
     padLinkError s st t ≤ (padLinkUp s t : ℝ) := by
   obtain ⟨_, hR, hp⟩ := hst
   unfold padLinkError padLinkUp qF
@@ -204,7 +204,7 @@ theorem padLinkError_le (s : Schedule) (st : Stmt) (t : ℕ) (hst : st.InRange) 
   gcongr
 
 theorem padTableError_le_up (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (t e : ℕ)
-    (sbar : ℚ) (hp : PadNumOK l₀ t sbar) (hs : ∀ l ∈ l₁ :: rest, l.Ok) (st : Stmt)
+    (sbar : ℚ) (hp : PadNumOK l₀ t sbar) (hs : ∀ l ∈ l₁ :: rest, l.Ok) (st : StmtShape)
     (hst : st.InRange) (h0 : 0 ≤ padRepError ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ st t e) :
     padTableError ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ st t e ≤
       ((padLinkUp ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ t +
@@ -331,7 +331,7 @@ theorem m1_levels_ok : ∀ m, 25 ≤ m → m ≤ 35 → ∀ l ∈ (m1Schedule m)
   (m1Facts_spec (m1Facts_all m h1 h2)).2.2.2.2
 
 theorem padRepError_nonneg (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (t e : ℕ)
-    (sbar : ℚ) (hp : PadNumOK l₀ t sbar) (hs : ∀ l ∈ l₁ :: rest, l.Ok) (st : Stmt) :
+    (sbar : ℚ) (hp : PadNumOK l₀ t sbar) (hs : ∀ l ∈ l₁ :: rest, l.Ok) (st : StmtShape) :
     0 ≤ padRepError ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ st t e := by
   show 0 ≤ piopError m st.kLog st.nClaims (l₀.padListBound t) + padMidLevelError l₀ l₁ t e +
       ligeritoError (l₁ :: rest)
@@ -364,7 +364,7 @@ theorem padRepError_nonneg (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) 
     linarith
   linarith
 
-theorem padRepError_nonneg_of (s : Schedule) (st : Stmt) (t e : ℕ) (sbar : ℚ) (h2 : 2 ≤ s.levels.length)
+theorem padRepError_nonneg_of (s : Schedule) (st : StmtShape) (t e : ℕ) (sbar : ℚ) (h2 : 2 ≤ s.levels.length)
     (hp : PadNumOK (s.levels.headD default) t sbar) (hok : ∀ l ∈ s.levels, l.Ok) :
     0 ≤ padRepError s st t e := by
   obtain ⟨m, k0, levels, ext⟩ := s
@@ -375,7 +375,7 @@ theorem padRepError_nonneg_of (s : Schedule) (st : Stmt) (t e : ℕ) (sbar : ℚ
       (fun l hl => hok l (List.mem_cons_of_mem _ hl)) st
 
 /-- A schedule's table with the padded level 0 is sound to `2^-205` once its rational check passes. -/
-theorem padTableError_le_of_check (s : Schedule) (st : Stmt) (hst : st.InRange) (t e : ℕ) (sbar : ℚ)
+theorem padTableError_le_of_check (s : Schedule) (st : StmtShape) (hst : st.InRange) (t e : ℕ) (sbar : ℚ)
     (h2 : 2 ≤ s.levels.length) (hp : PadNumOK (s.levels.headD default) t sbar) (hok : ∀ l ∈ s.levels, l.Ok)
     (hc : padLinkUp s t + padRepUp s t e sbar ^ 2 ≤ (1 / 2) ^ 205) :
     padTableError s st t e ≤ (2 : ℝ) ^ (-(205 : ℝ)) := by
@@ -389,7 +389,7 @@ theorem padTableError_le_of_check (s : Schedule) (st : Stmt) (hst : st.InRange) 
     have h := Rat.cast_le (K := ℝ) |>.2 hc
     refine h.trans (le_of_eq ?_); push_cast; ring
 
-theorem m1_rep_nonneg : ∀ m, 25 ≤ m → m ≤ 35 → ∀ st : Stmt,
+theorem m1_rep_nonneg : ∀ m, 25 ≤ m → m ≤ 35 → ∀ st : StmtShape,
     0 ≤ padRepError (m1Schedule m) st (m1Pad m) 2 := by
   intro m h1 h2 st
   have h := m1Facts_spec (m1Facts_all m h1 h2)
@@ -397,7 +397,7 @@ theorem m1_rep_nonneg : ∀ m, 25 ≤ m → m ≤ 35 → ∀ st : Stmt,
 
 /-- **The soundness number with C-Flock ZK's padded level 0**, `25 ≤ m ≤ 35`: at most `2^-205` per
 table, for every statement shape in range. -/
-theorem padTableError_le_m1 : ∀ m, 25 ≤ m → m ≤ 35 → ∀ st : Stmt, st.InRange →
+theorem padTableError_le_m1 : ∀ m, 25 ≤ m → m ≤ 35 → ∀ st : StmtShape, st.InRange →
     padTableError (m1Schedule m) st (m1Pad m) 2 ≤ (2 : ℝ) ^ (-(205 : ℝ)) := by
   intro m h1 h2 st hst
   have h := m1Facts_spec (m1Facts_all m h1 h2)

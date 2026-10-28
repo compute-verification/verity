@@ -59,14 +59,14 @@ theorem sum_fin_mul {M : Type} [AddCommMonoid M] {m n : ℕ} (f : Fin (m * n) �
   rw [← finProdFinEquiv.sum_comp, Fintype.sum_prod_type]
 
 /-- Addresses split into blocks: `a = o·2^k_log + i`. -/
-theorem sum_addr {M : Type} [AddCommMonoid M] (S : Statement) (f : Fin (2 ^ S.m) → M) :
+theorem sum_addr {M : Type} [AddCommMonoid M] (S : BlockR1CS) (f : Fin (2 ^ S.m) → M) :
     ∑ a, f a = ∑ o : Fin (2 ^ S.nbl), ∑ i : Fin (2 ^ S.kLog), f (S.addr o i) := by
   have h : 2 ^ S.nbl * 2 ^ S.kLog = 2 ^ S.m := by rw [← pow_add, Nat.sub_add_cancel S.hk]
   rw [← (finCongr h).sum_comp, sum_fin_mul]
   refine Finset.sum_congr rfl fun o _ => Finset.sum_congr rfl fun i _ => ?_
   congr 1
   ext
-  simp only [finCongr_apply, Fin.val_cast, finProdFinEquiv_apply_val, Statement.addr]
+  simp only [finCongr_apply, Fin.val_cast, finProdFinEquiv_apply_val, BlockR1CS.addr]
   ring
 
 /-- In-block indices split at the skip: `i = s + 64·w`. -/
@@ -213,23 +213,23 @@ theorem value_lincheckRounds_le [CharP F 2] : ∀ (n : ℕ) (u v : ℕ → F) (c
 /-! ## The witness through the lincheck's eyes -/
 
 /-- The witness's block-folded columns: `h[c] = Σ_o eq(ρ_out, o)·ω[o·2^k_log + c]`. -/
-def hcol (S : Statement) (ρOut : Fin S.nbl → F) (ω : Witness S.m) : ℕ → F := fun c =>
+def hcol (S : BlockR1CS) (ρOut : Fin S.nbl → F) (ω : WitnessBits S.m) : ℕ → F := fun c =>
   if hc : c < 2 ^ S.kLog then
     ∑ o : Fin (2 ^ S.nbl), eqAt ρOut o.val * ((ω (S.addr o ⟨c, hc⟩)).val : F)
   else 0
 
-theorem two_pow_kLog (S : Statement) : 2 ^ S.kLog = 2 ^ (S.kLog - 6) * 64 := by
+theorem two_pow_kLog (S : BlockR1CS) : 2 ^ S.kLog = 2 ^ (S.kLog - 6) * 64 := by
   rw [show (64 : ℕ) = 2 ^ 6 by norm_num, ← pow_add, Nat.sub_add_cancel S.hk6]
 
 /-- A claim at a point `p ‖ ρ_out` (inner bits, then the block bits) evaluates through the
 block-folded columns. -/
-theorem claim_eval_split (S : Statement) (c : Claim F S.m) (p : Fin (S.kLog - 6) → F)
+theorem claim_eval_split (S : BlockR1CS) (c : Claim F S.m) (p : Fin (S.kLog - 6) → F)
     (ρOut : Fin S.nbl → F)
     (hp : ∀ j : Fin (S.kLog - 6), c.x ⟨j.val, by have := S.hk; omega⟩ = p j)
     (hout : ∀ j : Fin S.nbl,
       c.x ⟨S.kLog - 6 + j.val, by
         have := S.hk; have := S.hk6; have hj : j.val < S.m - S.kLog := j.isLt; omega⟩ = ρOut j)
-    (ω : Witness S.m) :
+    (ω : WitnessBits S.m) :
     c.eval ω = ∑ i : Fin (2 ^ S.kLog), c.skip ⟨i.val % 64, Nat.mod_lt _ (by norm_num)⟩ *
       eqAt p (i.val / 64) * hcol S ρOut ω i.val := by
   have hk := S.hk
@@ -242,7 +242,7 @@ theorem claim_eval_split (S : Statement) (c : Claim F S.m) (p : Fin (S.kLog - 6)
   simp only [hcol, dif_pos i.isLt, Finset.mul_sum]
   refine Finset.sum_congr rfl fun o _ => ?_
   have hval : (S.addr o i).val = 64 * (2 ^ (S.kLog - 6) * o.val) + i.val := by
-    simp only [Statement.addr, hpow]; ring
+    simp only [BlockR1CS.addr, hpow]; ring
   have hmod : (S.addr o i).val % 64 = i.val % 64 := by
     rw [hval, Nat.mul_add_mod]
   have hdiv : (S.addr o i).val / 64 = i.val / 64 + 2 ^ (S.kLog - 6) * o.val := by
@@ -255,33 +255,33 @@ theorem claim_eval_split (S : Statement) (c : Claim F S.m) (p : Fin (S.kLog - 6)
   simp only [hp, hout]
   ring
 
-theorem addr_div (S : Statement) (o : Fin (2 ^ S.nbl)) (i : Fin (2 ^ S.kLog)) :
+theorem addr_div (S : BlockR1CS) (o : Fin (2 ^ S.nbl)) (i : Fin (2 ^ S.kLog)) :
     (S.addr o i).val / 2 ^ S.kLog = o.val := by
-  simp only [Statement.addr]
+  simp only [BlockR1CS.addr]
   rw [Nat.add_comm, Nat.add_mul_div_right _ _ (Nat.two_pow_pos _), Nat.div_eq_of_lt i.isLt,
     zero_add]
 
-theorem addr_mod (S : Statement) (o : Fin (2 ^ S.nbl)) (i : Fin (2 ^ S.kLog)) :
+theorem addr_mod (S : BlockR1CS) (o : Fin (2 ^ S.nbl)) (i : Fin (2 ^ S.kLog)) :
     (S.addr o i).val % 2 ^ S.kLog = i.val := by
-  simp only [Statement.addr]
+  simp only [BlockR1CS.addr]
   rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt i.isLt]
 
 /-- The A-side bit at in-block index `i` of block `o` is `(A₀·z_o)_i`. -/
-theorem aVec_addr (S : Statement) (z : Witness S.m) (o : Fin (2 ^ S.nbl)) (i : Fin (2 ^ S.kLog)) :
+theorem aVec_addr (S : BlockR1CS) (z : WitnessBits S.m) (o : Fin (2 ^ S.nbl)) (i : Fin (2 ^ S.kLog)) :
     aVec S z (S.addr o i) = (S.A₀.mulVec (S.block z o)) i := by
   simp only [aVec]
   congr 2
   all_goals first | exact Fin.ext (addr_div S o i) | exact addr_mod S o i
 
 /-- The B-side bit at in-block index `i` of block `o` is `(B₀·z_o)_i`. -/
-theorem bVec_addr (S : Statement) (z : Witness S.m) (o : Fin (2 ^ S.nbl)) (i : Fin (2 ^ S.kLog)) :
+theorem bVec_addr (S : BlockR1CS) (z : WitnessBits S.m) (o : Fin (2 ^ S.nbl)) (i : Fin (2 ^ S.kLog)) :
     bVec S z (S.addr o i) = (S.B₀.mulVec (S.block z o)) i := by
   simp only [bVec]
   congr 2
   all_goals first | exact Fin.ext (addr_div S o i) | exact addr_mod S o i
 
 /-- The A-side columns are `A₀` applied to the columns. -/
-theorem hcol_aVec [CharP F 2] (S : Statement) (ρOut : Fin S.nbl → F) (z : Witness S.m)
+theorem hcol_aVec [CharP F 2] (S : BlockR1CS) (ρOut : Fin S.nbl → F) (z : WitnessBits S.m)
     (i : Fin (2 ^ S.kLog)) :
     hcol S ρOut (aVec S z) i.val =
       ∑ c : Fin (2 ^ S.kLog), ((S.A₀ i c).val : F) * hcol S ρOut z c.val := by
@@ -290,11 +290,11 @@ theorem hcol_aVec [CharP F 2] (S : Statement) (ρOut : Fin S.nbl → F) (z : Wit
   simp only [← val_cast_eq, Finset.mul_sum]
   rw [Finset.sum_comm]
   refine Finset.sum_congr rfl fun c _ => Finset.sum_congr rfl fun o _ => ?_
-  simp only [Statement.block]
+  simp only [BlockR1CS.block]
   ring
 
 /-- The B-side columns are `B₀` applied to the columns. -/
-theorem hcol_bVec [CharP F 2] (S : Statement) (ρOut : Fin S.nbl → F) (z : Witness S.m)
+theorem hcol_bVec [CharP F 2] (S : BlockR1CS) (ρOut : Fin S.nbl → F) (z : WitnessBits S.m)
     (i : Fin (2 ^ S.kLog)) :
     hcol S ρOut (bVec S z) i.val =
       ∑ c : Fin (2 ^ S.kLog), ((S.B₀ i c).val : F) * hcol S ρOut z c.val := by
@@ -303,16 +303,16 @@ theorem hcol_bVec [CharP F 2] (S : Statement) (ρOut : Fin S.nbl → F) (z : Wit
   simp only [← val_cast_eq, Finset.mul_sum]
   rw [Finset.sum_comm]
   refine Finset.sum_congr rfl fun c _ => Finset.sum_congr rfl fun o _ => ?_
-  simp only [Statement.block]
+  simp only [BlockR1CS.block]
   ring
 
 /-- `ρ_in`: the zerocheck's challenges for the inner bits (as the lincheck reads them). -/
-def ρIn (S : Statement) (zc : ZcOut F S.m) : Fin (S.kLog - 6) → F :=
+def ρIn (S : BlockR1CS) (zc : ZcOut F S.m) : Fin (S.kLog - 6) → F :=
   fun j => zc.ρ ⟨j.val, by have := S.hk; omega⟩
 
 /-- The zerocheck's `a`, `b` claims at `(z, ρ)`: the point is `ρ_in ‖ ρ_out`. -/
-theorem zcClaim_eval (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) (v : F)
-    (ω : Witness S.m) :
+theorem zcClaim_eval (A : Arith F K) (S : BlockR1CS) (zc : ZcOut F S.m) (v : F)
+    (ω : WitnessBits S.m) :
     (⟨v, A.lagS zc.z, zc.ρ⟩ : Claim F S.m).eval ω =
       ∑ i : Fin (2 ^ S.kLog), A.lagS zc.z ⟨i.val % 64, Nat.mod_lt _ (by norm_num)⟩ *
         eqAt (ρIn S zc) (i.val / 64) * hcol S (zc.ρOut S) ω i.val := by
@@ -322,8 +322,8 @@ theorem zcClaim_eval (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) (v : F)
 
 /-- **The lincheck's sum** (§10): `Σ_c comb[c]·h[c] = α·a(z) + b(z) + β·pin(z)` for the true
 `a`, `b` claim values and the pin's extension at `ρ_out`. -/
-theorem combSum_eq [CharP F 2] (A : Arith F K) (S : Statement) (zc : ZcOut F S.m)
-    (z : Witness S.m) (α β : F) :
+theorem combSum_eq [CharP F 2] (A : Arith F K) (S : BlockR1CS) (zc : ZcOut F S.m)
+    (z : WitnessBits S.m) (α β : F) :
     ∑ c ∈ Finset.range (2 ^ S.kLog),
         comb A S zc.z α β (ρIn S zc) c * hcol S (zc.ρOut S) z c =
       α * (⟨zc.va, A.lagS zc.z, zc.ρ⟩ : Claim F S.m).eval (aVec S z)
@@ -333,7 +333,7 @@ theorem combSum_eq [CharP F 2] (A : Arith F K) (S : Statement) (zc : ZcOut F S.m
   simp only [hcol_aVec, hcol_bVec]
   rw [← Fin.sum_univ_eq_sum_range]
   have hpin : pinMLE S z (zc.ρOut S) = hcol S (zc.ρOut S) z S.pin.val := by
-    simp only [pinMLE, hcol, dif_pos S.pin.isLt, Statement.block]
+    simp only [pinMLE, hcol, dif_pos S.pin.isLt, BlockR1CS.block]
   rw [hpin]
   set hc : ℕ → F := hcol S (zc.ρOut S) z
   set e : Fin (2 ^ S.kLog) → F := fun i =>
@@ -398,13 +398,13 @@ theorem foldAll_eq_sum : ∀ (n : ℕ) (ts : Fin n → F) (v : ℕ → F) (s : �
       ring
 
 /-- The `ab` claim's point (L5): the rounds' coins reversed on the inner bits, then `ρ_out`. -/
-def abPoint (S : Statement) (zc : ZcOut F S.m) (ts : Fin (S.kLog - 6) → F) : Fin (S.m - 6) → F :=
+def abPoint (S : BlockR1CS) (zc : ZcOut F S.m) (ts : Fin (S.kLog - 6) → F) : Fin (S.m - 6) → F :=
   fun i => if h : i.val < S.kLog - 6 then ts ⟨S.kLog - 6 - 1 - i.val, by omega⟩ else zc.ρ i
 
 /-- **The `ab` claim's true value**: `Σ_s L_s(r')·h'[s]`, `h'` the columns folded by the rounds'
 coins. -/
-theorem abEval_eq (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) (ts : Fin (S.kLog - 6) → F)
-    (w r' : F) (z : Witness S.m) :
+theorem abEval_eq (A : Arith F K) (S : BlockR1CS) (zc : ZcOut F S.m) (ts : Fin (S.kLog - 6) → F)
+    (w r' : F) (z : WitnessBits S.m) :
     (⟨w, A.lagS r', abPoint S zc ts⟩ : Claim F S.m).eval z =
       ∑ s : Fin 64, A.lagS r' s *
         foldAll (List.ofFn ts) (2 ^ S.kLog) (hcol S (zc.ρOut S) z) s.val := by
@@ -428,13 +428,13 @@ theorem abEval_eq (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) (ts : Fin (
     rw [dif_pos]
 
 /-- The lincheck's verdict (L4, L5). -/
-def lcResult (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) (α β : F)
+def lcResult (A : Arith F K) (S : BlockR1CS) (zc : ZcOut F S.m) (α β : F)
     (ts : Fin (S.kLog - 6) → F) (claim : F) (zP : Fin 64 → F) (r' : F) : Option (Claim F S.m) :=
   if (∑ s : Fin 64, foldAll (List.ofFn ts) (2 ^ S.kLog) (comb A S zc.z α β (ρIn S zc)) s * zP s)
       = claim
   then some ⟨∑ s : Fin 64, A.lagS r' s * zP s, A.lagS r', abPoint S zc ts⟩ else none
 
-theorem lincheck_eq (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) :
+theorem lincheck_eq (A : Arith F K) (S : BlockR1CS) (zc : ZcOut F S.m) :
     lincheck A S zc = Game.coin F fun α => Game.coin F fun β =>
       (lincheckRounds (S.kLog - 6) (α * zc.va + zc.vb + β)).bind fun r =>
         Game.send (Fin 64 → F) fun zP => Game.coin F fun r' =>
@@ -443,8 +443,8 @@ theorem lincheck_eq (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) :
 /-- **The lincheck, one codeword** (§10). If the `a` claim, the `b` claim or the pin fails for the
 witness `z`, the lincheck ends with a true `ab` claim for `z` with probability at most
 `(2 + 2(k_log − 6) + 63)/|F|`. -/
-theorem value_lincheck_le (A : Arith F K) (hA : A.Correct) (S : Statement) (zc : ZcOut F S.m)
-    (z : Witness S.m)
+theorem value_lincheck_le (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (zc : ZcOut F S.m)
+    (z : WitnessBits S.m)
     (hbad : ¬ ((⟨zc.va, A.lagS zc.z, zc.ρ⟩ : Claim F S.m).Holds (aVec S z)
       ∧ (⟨zc.vb, A.lagS zc.z, zc.ρ⟩ : Claim F S.m).Holds (bVec S z)
       ∧ pinMLE S z (zc.ρOut S) = 1)) :
@@ -548,7 +548,7 @@ theorem value_lincheck_le (A : Arith F K) (hA : A.Correct) (S : Statement) (zc :
 open Classical in
 /-- **The lincheck phase** (§10), for a list `W` of at most `L` messages: from a doomed zerocheck, the
 lincheck ends undoomed with probability at most `L·(2 + 2(k_log − 6) + 63)/|F|`. -/
-theorem lincheck_phase_of_list (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
+theorem lincheck_phase_of_list (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (sch : Schedule)
     (W : Set (Message F sch.k0 sch.level₀.logCols)) (extra : List (Claim F S.m)) (zc : ZcOut F S.m)
     (hzc : DZcW A S sch W extra (some zc)) (L : ℕ)
     (hL : (Finset.univ.filter fun M => M ∈ W).card ≤ L) :
@@ -587,7 +587,7 @@ theorem lincheck_phase_of_list (A : Arith F K) (hA : A.Correct) (S : Statement) 
 open Classical in
 /-- **The lincheck phase** for the codewords near the committed table: `lincheck_phase_of_list` at
 `closeMsgs`. -/
-theorem lincheck_phase_of_card (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
+theorem lincheck_phase_of_card (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (sch : Schedule)
     (C : Oracle F) (extra : List (Claim F S.m)) (zc : ZcOut F S.m)
     (hzc : DZc A S sch C extra (some zc)) (L : ℕ)
     (hL : (Finset.univ.filter fun M => M ∈ closeMsgs A sch C).card ≤ L) :

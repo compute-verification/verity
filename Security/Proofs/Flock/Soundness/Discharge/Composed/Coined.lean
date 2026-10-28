@@ -39,12 +39,12 @@ open Classical in
 noncomputable def treeEquiv {a b : ℕ} (f : Fin a ⊕ Fin b → ℕ) : Fin a ⊕ Fin b ≃ Fin (a + b) :=
   if h : ∃ e : Fin a ⊕ Fin b ≃ Fin (a + b), ∀ x, (e x).val = f x then h.choose else finSumFinEquiv
 
-/-- **A `--zk` table as `ZkView`'s tables**: the statement (its witnesses `Witness S.m` are the tables' witnesses), the
+/-- **A `--zk` table as `ZkView`'s tables**: the statement (its witnesses `WitnessBits S.m` are the tables' witnesses), the
 hidden-value and value-list types, the type of the other coins, the sizes, the mask slot's word indices, the `Coined`
 table at each coin vector (its leaves the executable's: `Coined.tab`), and C-Flock ZK's level-0 padding data (the
 level-0 message's `cols` and, at each coin vector, the opened positions `pos`) that `padOnto_M1` reads. -/
 structure CoinedSetup where
-  S : Statement
+  S : BlockR1CS
   Hi : Type
   VL : Type
   [addHi : AddCommGroup Hi]
@@ -53,7 +53,7 @@ structure CoinedSetup where
   Rest : Type
   z : ZkView.Sizes
   maskWords : Fin z.nMask → ℕ
-  T : CoinsZK Rest → ZkView.Coined FlockLevel3.GF256 (Witness S.m) Hi VL z
+  T : CoinsZK Rest → ZkView.Coined FlockLevel3.GF256 (WitnessBits S.m) Hi VL z
   cols : ℕ
   pos : CoinsZK Rest → Fin z.nS → ℕ
   points : CoinsZK Rest → Fin z.nC → List F128
@@ -75,9 +75,9 @@ def CoinedSetup.Admits (C : CoinedSetup) (c : CoinsZK C.Rest) : Prop :=
   (∀ r, (c.beta r).isZero = false) ∧ MaskRankOk (C.points c) C.maskWords ∧ (∀ r, Zk.rhoIndependent (c.rho r) = true) ∧
     ∀ r, ∀ x ∈ C.rOuter c r, x ≠ 1
 
-/-- **The valid witnesses**: those satisfying the table's statement (`Statement.Satisfies`: the R1CS in every block, the
+/-- **The valid witnesses**: those satisfying the table's statement (`BlockR1CS.Satisfies`: the R1CS in every block, the
 pin, and the public regions' values). -/
-def CoinedSetup.Valid (C : CoinedSetup) (w : Witness C.S.m) : Prop := C.S.Satisfies w
+def CoinedSetup.Valid (C : CoinedSetup) (w : WitnessBits C.S.m) : Prop := C.S.Satisfies w
 
 /-- A `--zk` table's sizes with the rank check's `RANK_POINTS` claim points over `nMask` mask words, and `t` level-0
 padding columns and as many opened positions (the opened set padded to `t_pad`, `Sizes`), and each rep's `Q` pads
@@ -96,7 +96,7 @@ the coins other than `β`, `ρ` and the claim points (the query coins among them
 the level-0 positions each such coin queries (`coinedOf` opens them, padded by `padPos` to `t_pad` distinct positions),
 each rep's pads message length before its padding symbols (`lay.len`), pads code length `n` and the pads positions each
 such coin queries (`coinedOf` builds the tables). -/
-structure CoinedBody (S : Statement) (nMask t : ℕ) where
+structure CoinedBody (S : BlockR1CS) (nMask t : ℕ) where
   Hi : Type
   VL : Type
   [addHi : AddCommGroup Hi]
@@ -276,7 +276,7 @@ opening against that commitment before it uses the coin; the binding is collisio
 (`keyed-cr`). No statement here models that commitment yet. -/
 def ZkViewAt (C : CoinedSetup) (δ₁ : ℝ≥0∞) : Prop :=
   ∀ (c : CoinsZK C.Rest), C.Admits c → ∀ {Out : Type} (enc : (∀ _ : Fin 1, (C.T c).tab.View) → Out)
-    (w w0 : Fin 1 → Witness C.S.m), (∀ j, C.Valid (w j)) → ∀ (E : Out → Prop),
+    (w w0 : Fin 1 → WitnessBits C.S.m), (∀ j, C.Valid (w j)) → ∀ (E : Out → Prop),
     Game.prCoin (fun p : ∀ _ : Fin 1, (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt) =>
         E (enc fun j => (C.T c).viewExe (w j) (p j).1 (p j).2))
         ≤ Game.prCoin (fun p : ∀ _ : Fin 1, (C.T c).tab.SimRand × ((C.T c).tab.Hid → ZkView.Salt) =>
@@ -292,7 +292,7 @@ def ZkViewAt (C : CoinedSetup) (δ₁ : ℝ≥0∞) : Prop :=
 Lemma B reads; `zkViewAt_of_ok` discharges `H_reg` where it holds at every valid witness (`coinedOf_reg`). -/
 def ZkViewAtReg (C : CoinedSetup) (δ₁ : ℝ≥0∞) : Prop :=
   ∀ (c : CoinsZK C.Rest), C.Admits c → ∀ {Out : Type} (enc : (∀ _ : Fin 1, (C.T c).tab.View) → Out)
-    (w w0 : Fin 1 → Witness C.S.m), (∀ j, C.Valid (w j)) → ∀ (_hreg : ∀ j, (C.T c).tab.sReg (w j) = (C.T c).tab.pubReg)
+    (w w0 : Fin 1 → WitnessBits C.S.m), (∀ j, C.Valid (w j)) → ∀ (_hreg : ∀ j, (C.T c).tab.sReg (w j) = (C.T c).tab.pubReg)
     (E : Out → Prop),
     Game.prCoin (fun p : ∀ _ : Fin 1, (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt) =>
         E (enc fun j => (C.T c).viewExe (w j) (p j).1 (p j).2))

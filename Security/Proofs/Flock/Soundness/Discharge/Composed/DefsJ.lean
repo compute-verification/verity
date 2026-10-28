@@ -231,7 +231,7 @@ noncomputable def sitesZJ : SitesZ (planZJ (Reg := Reg) dj y₀) (tabZJ dj y₀)
   acc S R u _ := recastAcc (tableShJ dj y₀ ht S (partOf I (dj S) u.val)).acc (tableShJ_tabOfZ dj y₀ ht S R u)
   vu S _ u h := (tableShJ dj y₀ ht S (partOf I (dj S) u.val)).vu u (mem_partS h)
   hvu S _ u h := (tableShJ dj y₀ ht S (partOf I (dj S) u.val)).hvu u (mem_partS h)
-  o S R u h := Fin.cast (congrArg (fun T : Model.Statement => 2 ^ T.nbl) (tableShJ_tabOfZ dj y₀ ht S R u))
+  o S R u h := Fin.cast (congrArg (fun T : Model.BlockR1CS => 2 ^ T.nbl) (tableShJ_tabOfZ dj y₀ ht S R u))
     ((tableShJ dj y₀ ht S (partOf I (dj S) u.val)).o u (mem_partS h))
 
 variable {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c)
@@ -288,7 +288,7 @@ noncomputable abbrev layZJ :
     (decAgreeJ dj y₀ ht hc hU)
 
 omit ht in
-theorem bcSite_recast {T T' : Model.Statement} (a : Placed.Accepted T) (e : T = T') (pop : Public)
+theorem bcSite_recast {T T' : Model.BlockR1CS} (a : Placed.Accepted T) (e : T = T') (pop : Public)
     (o : Fin (2 ^ T.nbl)) (h' : 2 ^ T.nbl = 2 ^ T'.nbl) (g u : ℕ) (hs : Layout.BcSite a pop o g u) :
     Layout.BcSite (recastAcc a e) pop (Fin.cast h' o) g u :=
   hs

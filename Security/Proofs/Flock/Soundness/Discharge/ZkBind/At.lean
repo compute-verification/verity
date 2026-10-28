@@ -33,7 +33,7 @@ open scoped ENNReal
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- An acceptance whose statement is `T`, as one whose statement is `T' = T`. -/
-def recastAcc {T T' : Model.Statement} (a : Accepted T) (e : T = T') : Accepted T' := { a with hT := a.hT.trans e }
+def recastAcc {T T' : Model.BlockR1CS} (a : Accepted T) (e : T = T') : Accepted T' := { a with hT := a.hT.trans e }
 
 variable {n : ℕ} {I : Inputs} (ht : I.tags.typed = false) {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
   {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) {Reg : Type}
@@ -85,7 +85,7 @@ noncomputable def sitesZAt : SitesZ (planZAt (Reg := Reg) dj y₀) (tabZAt dj y�
   acc S R u _ := recastAcc (tableSh ht dj y₀ S).acc (planZAt_S ht dj y₀ S R u).symm
   vu S _ u h := (tableSh ht dj y₀ S).vu u h
   hvu S _ u h := (tableSh ht dj y₀ S).hvu u h
-  o S R u h := Fin.cast (congrArg (fun T : Model.Statement => 2 ^ T.nbl) (planZAt_S ht dj y₀ S R u).symm)
+  o S R u h := Fin.cast (congrArg (fun T : Model.BlockR1CS => 2 ^ T.nbl) (planZAt_S ht dj y₀ S R u).symm)
     ((tableSh ht dj y₀ S).o u h)
 
 variable {c : Flock.Circuit} (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c)

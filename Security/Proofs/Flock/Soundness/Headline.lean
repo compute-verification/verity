@@ -4,8 +4,8 @@ import Proofs.Flock.Soundness.ExecDrawOS
 /-!
 # The headline: the program's rows, SHA-512 throughout, the live draw
 
-`Prog.flock_headline` is the one end-to-end statement the others specialize into. It combines:
-* the circuit of the statement's rows (`p.circuit outs`, `Prog.circuit`), each drawn unit's place from its table's
+`ProgSpec.flock_headline` is the one end-to-end statement the others specialize into. It combines:
+* the circuit of the statement's rows (`p.circuit outs`, `ProgSpec.circuit`), each drawn unit's place from its table's
   statement (`ProgPlaces`);
 * SHA-512 (`Refine.H512`, `Refine.enc512`) as the session's hash and the rows' commit hash, with the rows' value binding
   (`flock_e2e_count_hm96`);
@@ -40,7 +40,7 @@ open scoped ENNReal
 /-- SHA-512's digests are inhabited, as the session's tables ask of their digests. -/
 instance digInhabited : Inhabited Dig := ⟨H512 []⟩
 
-variable {N n : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) {Reg : Type} {mPts : ℕ}
+variable {N n : ℕ} (p : FlockSoundness.ProgSpec N n) (outs : Finset (Fin N)) {Reg : Type} {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
@@ -55,7 +55,7 @@ values (1 on `ones`, 0 on `zeros`, the plurality of the prover's openings elsewh
   (`hKS`);
 * `δ_link = linkBoundE`, under `SHA512CRExpected` (`ecr/sha-512`) for the prover's link finders (`hCR`);
 * `δ_tree = TreeRewind.bound qT`, under `SHA512CRStrict` (`cr/sha-512`) for the serving roots' rewinding finder (`hT`). -/
-theorem _root_.FlockSoundness.Prog.flock_headline
+theorem _root_.FlockSoundness.ProgSpec.flock_headline
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)

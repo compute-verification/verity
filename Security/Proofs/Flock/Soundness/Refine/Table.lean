@@ -216,7 +216,7 @@ and its two proof files under the unsalted SHA-512 scheme, on a statement whose 
 the model's `S` and `extra`, the record and both proofs decode. Then at the proofs' openings, each rep's compiled game,
 played with its proof's messages and every coin of its stream, accepts, and both reps' paths verify against the one
 level-0 cap. -/
-theorem verify_refines (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
+theorem verify_refines (spec : SessionSpec) (st : Setup) (S : Model.BlockR1CS) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S) (msId : String)
     (hms : st.merkle = MerkleScheme.sha512 msId) (extra : Session → List (Model.Claim 𝔽 S.m))
     (record : String) (proofs : Array ByteArray)
@@ -269,7 +269,7 @@ model's `extraClaims` at link points `pts` read off the record, some message lis
 played on the two streams' coins, rep 0's then rep 1's, and its openings are the proofs'. The messages are existential
 and the schedule is rep 0 first, while the live server may interleave the streams: a bound on the live interaction
 lifts from `verify_refines`, which names each rep's messages and coins. -/
-theorem verify_tableAfter (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
+theorem verify_tableAfter (spec : SessionSpec) (st : Setup) (S : Model.BlockR1CS) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S) (msId : String)
     (hms : st.merkle = MerkleScheme.sha512 msId) (ptLocal mPts : ℕ) (pts : Session → Fin 2 → Fin mPts → 𝔽)
     (record : String) (proofs : Array ByteArray)

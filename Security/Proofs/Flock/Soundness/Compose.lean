@@ -149,7 +149,7 @@ end Rows
 
 section Place
 
-variable (S : Model.Statement) (L : Logical) (h : Ordered L) (pos : ℕ → ℕ)
+variable (S : Model.BlockR1CS) (L : Logical) (h : Ordered L) (pos : ℕ → ℕ)
   (hb : ∀ ℓ < L.order.length, pos (L.order.getD ℓ 0) < 2 ^ S.kLog)
 
 /-- **Where each logical column sits in the block**: its physical column's position `pos`, and `one` at the pin. -/

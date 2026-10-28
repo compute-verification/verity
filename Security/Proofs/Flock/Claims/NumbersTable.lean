@@ -7,7 +7,7 @@ import Proofs.Flock.Soundness.Discharge.ZkSession.Numbers
 `κ`'s first term is `4·ε_table`, the table's soundness error (`Claims.Flock.κ`). At the deployed parameters it is at
 most `2^{−205}` per table, at every statement in scope:
 
-* without `--zk`, at every `fast100` schedule (`22 ≤ m ≤ 35`) and every shape in `Stmt.InRangeWide`, the shapes of every
+* without `--zk`, at every `fast100` schedule (`22 ≤ m ≤ 35`) and every shape in `StmtShape.InRangeWide`, the shapes of every
   table flock-verify plans (`εtable_plain`, `tableError_le_205_wide`); the rational bound's worst case is `2^{−205.011}`,
   at `m = 34`;
 * with `--zk`, at C-Flock ZK's parameters (`TabZK.M1`: the padded level 0 of `m1Schedule m`, `25 ≤ m ≤ 35`, and the
@@ -26,7 +26,7 @@ open scoped ENNReal NNReal
 /-! ## Without `--zk` -/
 
 /-- **`ε_table ≤ 2^{−205}` without `--zk`**: at every `fast100` schedule and every shape of a planned table. -/
-theorem εtable_plain {m : ℕ} {s : Schedule} (hs : fast100 m = some s) (st : Stmt) (hst : st.InRangeWide) :
+theorem εtable_plain {m : ℕ} {s : Schedule} (hs : fast100 m = some s) (st : StmtShape) (hst : st.InRangeWide) :
     tableError s st ≤ (2 : ℝ) ^ (-(205 : ℝ)) :=
   tableError_le_205_wide hs st hst
 
@@ -89,7 +89,7 @@ theorem m1_check_zk (m : ℕ) (h1 : 25 ≤ m) (h2 : m ≤ 35) :
   · exact m1_check_zk_34_35 m (by omega) h2
 
 /-- `padRepError ≤ padRepUp` at any schedule of two levels or more. -/
-theorem padRepError_le_of (s : Schedule) (st : Stmt) (hst : st.InRange) (t e : ℕ) (sbar : ℚ)
+theorem padRepError_le_of (s : Schedule) (st : StmtShape) (hst : st.InRange) (t e : ℕ) (sbar : ℚ)
     (h2 : 2 ≤ s.levels.length) (hp : PadNumOK (s.levels.headD default) t sbar) (hok : ∀ l ∈ s.levels, l.Ok) :
     padRepError s st t e ≤ (padRepUp s t e sbar : ℝ) := by
   obtain ⟨m, k0, levels, ext⟩ := s

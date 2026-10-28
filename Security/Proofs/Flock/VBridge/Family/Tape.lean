@@ -48,7 +48,7 @@ theorem weave_of_prefix {ts : List Step} {σ : List Exec.Kind} (h : ts.map kindO
 
 /-- **Rep `r`'s tape from its files**: the proof file's messages (`repMsgs`) and the stream's coin arrays (`coinArr`)
 woven along the rep's spine (`repShape`), at the statement's dimensions, `n` extra claims and the schedule. -/
-def repSteps (st : Setup) (S : Model.Statement) (sch : Flock.Schedule) (n : ℕ) (p : Proof) (s : StreamRec) :
+def repSteps (st : Setup) (S : Model.BlockR1CS) (sch : Flock.Schedule) (n : ℕ) (p : Proof) (s : StreamRec) :
     List Step :=
   weave (repShape 𝔽 𝕂 Dig S.m S.kLog n (schedOf sch)) (repMsgs st sch (2 + n) p capDig)
     ((s.rounds.toList.map (·.coins)).map (coinArr fOf))
@@ -56,7 +56,7 @@ def repSteps (st : Setup) (S : Model.Statement) (sch : Flock.Schedule) (n : ℕ)
 /-- **A rep that plays its proof file's messages on its stream's coins has `repSteps` for its tape.** The run is one on
 a tape of those messages and coin steps (`toT_exact`), whose kinds are a prefix of the rep's spine (`repC_spine`), so
 the tape is their weave along the spine. -/
-theorem repTape_of_plays (r : ℕ) (st : Setup) (S : Model.Statement) (sch : Flock.Schedule) (hm : 13 ≤ S.m)
+theorem repTape_of_plays (r : ℕ) (st : Setup) (S : Model.BlockR1CS) (sch : Flock.Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim 𝔽 S.m)) (p : Proof) (s : StreamRec) {pend : PendL 𝔽 Dig}
     (h : Plays fOf (repC execArith r S (schedOf sch) hm extra) (repMsgs st sch (2 + extra.length) p capDig)
       (s.rounds.toList.map (·.coins)) pend) :
@@ -346,7 +346,7 @@ theorem reps_of_runs (G : TableFiles cls) (regs : List (Region cls.kLog (cls.m -
   exact ⟨hfind r hr, hdec r hr, hpar' r hr, hcap' r hr, hT⟩
 
 /-- On both reps' tapes, the table's coin steps are the link points, then rep 0's stream's coins, then rep 1's. -/
-theorem tableSteps_coins (G : TableFiles cls) (S : Model.Statement) (n : ℕ)
+theorem tableSteps_coins (G : TableFiles cls) (S : Model.BlockR1CS) (n : ℕ)
     (hT : ∀ r < 2, RepTape G.st S G.sch n (G.proof r) (G.stream r) (G.tape r)) :
     (tableSteps G).filterMap Sum.getRight? = ⟨Fin 2 → Fin cls.mPts → 𝔽, G.pts⟩ ::
       ((G.stream 0).rounds.toList.map (·.coins) ++ (G.stream 1).rounds.toList.map (·.coins)).map (coinArr fOf) := by

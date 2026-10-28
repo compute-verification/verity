@@ -13,8 +13,8 @@ law and population and the ideal miss that bounds its count curve under A3 (`Dra
 `Law.execOS_miss_le` at the stratified draw, at every assignment of units to strata that the strata describe, and
 `Tables.execOS_subset_miss_le` at the subset draw).
 
-* `Prog.flock_headline_live_onLX`: `Prog.flock_headline_live_onX` at any law `L`, its miss term `L.miss K`
-  (`flock_e2e_count_hm96LX`, carried to the live audit by `execRefines_on`, as `Prog.flock_headline_live_tables_subset`
+* `ProgSpec.flock_headline_live_onLX`: `ProgSpec.flock_headline_live_onX` at any law `L`, its miss term `L.miss K`
+  (`flock_e2e_count_hm96LX`, carried to the live audit by `execRefines_on`, as `ProgSpec.flock_headline_live_tables_subset`
   does at `J` tables);
 * `HiddenExec.flock_headline_hidden_design`: `flock_headline_hidden` at a design's live draw under A3, its miss term the
   design's ideal miss;
@@ -93,11 +93,11 @@ open scoped ENNReal
 
 local notation "𝔽" => FlockLevel3.GF128
 
-variable {N' n : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N')) {Reg : Type} {mPts : ℕ}
+variable {N' n : ℕ} (p : FlockSoundness.ProgSpec N' n) (outs : Finset (Fin N')) {Reg : Type} {mPts : ℕ}
 
 /-- **The headline at the executable, for one-table sessions of the challenger, at any law.**
-`Prog.flock_headline_live_onX` with the verifier's draw any law `L` and the miss term `L.miss K`. -/
-theorem _root_.FlockSoundness.Prog.flock_headline_live_onLX {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
+`ProgSpec.flock_headline_live_onX` with the verifier's draw any law `L` and the miss term `L.miss K`. -/
+theorem _root_.FlockSoundness.ProgSpec.flock_headline_live_onLX {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {L : Law n}
     (T : Finset (Fin n) → Reg → TabSpec mPts)
     (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin [T S R].length)
@@ -165,7 +165,7 @@ variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
 design's live draw on byte streams A3 makes uniform, whose count curve is at most the design's ideal miss
 (`DrawDesign.miss_le`). -/
 theorem flock_headline_hidden_design {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
-    {N' : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N'))
+    {N' : ℕ} (p : FlockSoundness.ProgSpec N' n) (outs : Finset (Fin N'))
     (D : DrawDesign n)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ) (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)

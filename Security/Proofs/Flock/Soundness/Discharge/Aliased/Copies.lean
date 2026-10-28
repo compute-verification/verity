@@ -61,7 +61,7 @@ def zeroPos {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) : Fin (2 ^ (L.mod
   ⟨st.c.unitRange.slot s₀ + st.c.unit.useful, L.unit_slot_lt hs₀ F.check.unit_zero⟩
 
 /-- **A unit slot's forced-zero row carries 0**, in every block of a satisfying witness. -/
-theorem zeroPos_block {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) {z : Model.Witness (L.model regs).m}
+theorem zeroPos_block {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) {z : Model.WitnessBits (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
     (L.model regs).block z o (zeroPos L regs F hs₀) = 0 := by
   have huse := (built_spec L.unit_built).2.1
@@ -88,7 +88,7 @@ def copyAt {s₀ : ℕ} (hs₀ : s₀ < st.c.unitRange.count) (off : ℕ) : Fin 
 
 /-- **A unit slot's input carries what its copy position carries**, in every block of a satisfying witness. -/
 theorem copyAt_block {s₀ off : ℕ} (hs₀ : s₀ < st.c.unitRange.count) (hoff : off < st.c.unit.inWords * WORD)
-    (r : Fin (2 ^ (L.model regs).kLog)) (hr : r.val = st.c.unitRange.slot s₀ + off) {z : Model.Witness (L.model regs).m}
+    (r : Fin (2 ^ (L.model regs).kLog)) (hr : r.val = st.c.unitRange.slot s₀ + off) {z : Model.WitnessBits (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
     (L.model regs).block z o r = (L.model regs).block z o (copyAt L regs F hs₀ off) := by
   unfold copyAt
@@ -141,7 +141,7 @@ def copyPos {g : ℕ} (hg : g < st.c.g) (x : ℕ) : Fin (2 ^ (L.model regs).kLog
 /-- **Each of template instance `g`'s stacked unit inputs carries what its copy position carries**, at its place
 (`stackPlace`, which `Layout.Aliased` reads), in every block of a satisfying witness. -/
 theorem copyPos_block {g : ℕ} (hg : g < st.c.g) (x : Fin ((unitRows st L.unit_built).stackW st.c.upv))
-    (hx : x.val < ((unitRows st L.unit_built).stack st.c.upv).nIn) {z : Model.Witness (L.model regs).m}
+    (hx : x.val < ((unitRows st L.unit_built).stack st.c.upv).nIn) {z : Model.WitnessBits (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
     (L.model regs).block z o (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
         (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) x) =

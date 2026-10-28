@@ -63,7 +63,7 @@ theorem instIdx_eq {c : Flock.Circuit} {n : ℕ} {x x' : Fin n} (h : instIdx c n
 /-- **The program of the whole template instance on Δ's source keys**: `n` units of the template instance's composite
 rows (`instRows`), composite input `x` of each on the gate of its key (`instIdx`), the zero's gate when it reads the
 zero. -/
-noncomputable abbrev instProg (c : Flock.Circuit) (n : ℕ) : Prog (gates (inGates n (instRows c).nIn) (instRows c) n) n :=
+noncomputable abbrev instProg (c : Flock.Circuit) (n : ℕ) : ProgSpec (gates (inGates n (instRows c).nIn) (instRows c) n) n :=
   uniform (inGates n (instRows c).nIn) (instRows c) (insOf n (instRows c).nIn (instIdx c (instRows c).nIn))
     (oneGate n _) (insOf_ne_one n _ _) n
 
@@ -98,7 +98,7 @@ variable {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout st) (F : Aliased.U
 /-- **A composite input carries what its stacked unit input's copy position carries** (`Aliased.copyPos`), in every
 block of a satisfying witness: composite input `x` is stacked input `(inX c)[x]` of template instance `g`. -/
 theorem inst_block {g : ℕ} (hg : g < st.c.g) (x : Fin (instRows st.c).w) (hx : x.val < (instRows st.c).nIn)
-    {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
+    {z : Model.WitnessBits (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
     (L.model regs).block z o
         (composePlace (L.model regs) (logical st.c) (logical_ordered st.c) (pos st.c g) (inst_hb L F regs hg) x) =
       (L.model regs).block z o (Aliased.copyPos L regs F hg ((inX st.c).getD x.val 0)) := by
@@ -125,9 +125,9 @@ end block
 
 /-- **Composite inputs with one key carry one value**, at template instance `g` of an accepted untyped statement, in every
 block of a satisfying witness. -/
-theorem Accepted.inst_aliased {T : Model.Statement} (a : Accepted T) {g : ℕ} (hg : g < a.st.c.g) (o : Fin (2 ^ T.nbl))
+theorem Accepted.inst_aliased {T : Model.BlockR1CS} (a : Accepted T) {g : ℕ} (hg : g < a.st.c.g) (o : Fin (2 ^ T.nbl))
     (x x' : Fin (instRows a.st.c).w) (hx : x.val < (instRows a.st.c).nIn) (hx' : x'.val < (instRows a.st.c).nIn)
-    (hk : keyOf a.st.c x.val = keyOf a.st.c x'.val) {z : Model.Witness T.m} (hz : T.Satisfies z) :
+    (hk : keyOf a.st.c x.val = keyOf a.st.c x'.val) {z : Model.WitnessBits T.m} (hz : T.Satisfies z) :
     T.block z o (Fin.cast a.kLog_eq (composePlace (a.layout.model a.regs) (logical a.st.c) (logical_ordered a.st.c)
         (pos a.st.c g) (inst_hb a.layout (Aliased.setupH_unitFacts a.ht a.h) a.regs hg) x)) =
       T.block z o (Fin.cast a.kLog_eq (composePlace (a.layout.model a.regs) (logical a.st.c) (logical_ordered a.st.c)

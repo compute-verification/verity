@@ -69,7 +69,7 @@ theorem spec_regions_le {tags : Tags} {cf pf : ByteArray} {coins : Coins} {table
 fewer than `2^48`. -/
 theorem regionsFit_of_setupH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {stH : Stmt}
-    (hH : Stmt.setupH tags cf pf coins tables draw partition program = .ok stH) {S : Model.Statement}
+    (hH : Stmt.setupH tags cf pf coins tables draw partition program = .ok stH) {S : Model.BlockR1CS}
     (hS : S.regions.length = stH.regions.size) : S.regions.length < 2 ^ 48 := by
   have := setupH_regions_le hH
   have h48 : (1024 : ℕ) < 2 ^ 48 := by norm_num
@@ -78,7 +78,7 @@ theorem regionsFit_of_setupH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {
 /-- **`RegionsFit` from the verifier's hidden setup** (`Stmt.setupHidden`'s `checkInRange`). -/
 theorem regionsFit_of_spec {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw : Option Lean.Json} {stH : Stmt} (h : FlockSoundness.Discharge.Hidden.Spec tags cf pf coins tables draw stH)
-    {S : Model.Statement} (hS : S.regions.length = stH.regions.size) : S.regions.length < 2 ^ 48 := by
+    {S : Model.BlockR1CS} (hS : S.regions.length = stH.regions.size) : S.regions.length < 2 ^ 48 := by
   have := spec_regions_le h
   have h48 : (1024 : ℕ) < 2 ^ 48 := by norm_num
   omega

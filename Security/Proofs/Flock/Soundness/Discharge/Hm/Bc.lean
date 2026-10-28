@@ -17,7 +17,7 @@ section Bc
 variable {tags : Tags} {st : Stmt} (L : Layout st) (F : Aliased.UnitFacts tags st)
 
 /-- The pin carries 1, in every block of a satisfying witness. -/
-theorem pin_bit {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+theorem pin_bit {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
     blockBit (L.model regs) z o st.pin = true := by
   rw [blockBit_of_lt _ z o L.pin_lt]
@@ -29,7 +29,7 @@ include F in
 /-- The unit range's first slot's forced-zero row carries 0, in every block of a satisfying witness, when the range has
 a slot. -/
 theorem zero_bit (hupv : 0 < st.c.upv) (hg : 0 < st.c.g) {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))}
-    {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
+    {z : Model.WitnessBits (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
     blockBit (L.model regs) z o (zeroCol st.c) = false := by
   have hs₀ : 0 < st.c.unitRange.count := by rw [L.unit_count]; exact Nat.mul_pos hg hupv
   have h0 := Aliased.zeroPos_block L regs F hs₀ hz o
@@ -45,7 +45,7 @@ compression's `cv` is the row prefix's midstate, each later compression's `cv` t
 slot's `cv` the last compression's output, and its `pad` the padding block. -/
 theorem row_copies_flat (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
     (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) :
     (∀ t < 512, blockBit (L.model regs) z o (shaBase st.c g p 0 + shaIn st.c (2 * shaSub st.c p 0) + t) =
@@ -105,7 +105,7 @@ include F in
 prefix and message its `sha512x3` slots read, and the salt its `hm96` slot reads, for `sha512/row/v1` rows (`hv1`). -/
 theorem row_bc_flat (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
     (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) :
     bytesOf (blockBit (L.model regs) z o) 128 (bcCol st.c g p) = Binding.commitString
@@ -142,7 +142,7 @@ theorem row_bc_setupH (ht : tags.typed = false)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
     (ho : st.c.outNet = st.c.unitNet)
     (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness ((setupH_layout ht h).model regs).m}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits ((setupH_layout ht h).model regs).m}
     (hz : ((setupH_layout ht h).model regs).Satisfies z)
     (o : Fin (2 ^ ((setupH_layout ht h).model regs).nbl)) {g p : ℕ} (hg : g < st.c.g) (hp : p < st.c.ports.size) :
     bytesOf (blockBit ((setupH_layout ht h).model regs) z o) 128 (bcCol st.c g p) = Binding.commitString

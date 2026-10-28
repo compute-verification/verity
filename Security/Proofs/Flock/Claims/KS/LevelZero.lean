@@ -642,7 +642,7 @@ theorem lincheck_moves (c : CircuitFold) (zc : Flock.ZcOut) (p : LincheckProof) 
 /-- **One rep refines the model's, level 0's request first** (§9–§14): `rep_refines`, and the result's first request
 is level 0's, at the positions of the coins of the stream's round after zerocheck's `3 + (m − 6)` rounds, lincheck's
 `3 + (kLog − 6)`, the ring switch's `claims + 1` and Ligerito's `k0 + 6`. -/
-theorem rep_refines_req0 {D : Type} (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
+theorem rep_refines_req0 {D : Type} (spec : SessionSpec) (st : Setup) (S : Model.BlockR1CS) (hm : 13 ≤ S.m)
     (h15 : 15 ≤ S.m) (sch : Flock.Schedule) (hmS : st.m = S.m) (hkS : st.kLog = S.kLog)
     (hfold : FoldRealizes st.fold S) (extra : List (Model.Claim 𝔽 S.m)) (sess : Session)
     (hext : ExtraRealizes st S sess.points extra) (hdim : DimSeam sch)

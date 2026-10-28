@@ -301,7 +301,7 @@ theorem εtable_one {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt
 `k_log` and regions. -/
 theorem shape_model {st : Stmt} (L : FlockSoundness.Layout st) (spec : SessionSpec) :
     (L.model (FlockSoundness.Refine.regionsOf st)).shape spec.mPts = acct spec st := by
-  simp only [FlockSoundness.Model.Statement.shape, FlockSoundness.Layout.model, FlockSoundness.Refine.regionsOf,
+  simp only [FlockSoundness.Model.BlockR1CS.shape, FlockSoundness.Layout.model, FlockSoundness.Refine.regionsOf,
     List.length_map, Array.length_toList, acct]
 
 /-- **The plain table error at one table**: the old `tableError` at table 0's model statement's shape and its
@@ -514,7 +514,7 @@ open FlockSoundness.Discharge.Exec in
 theorem advRSL_nonneg {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
     {D Sl : Type} [Inhabited D] [Inhabited Sl] (A : FlockSoundness.Model.Arith F K) (Hc : List UInt8 → D)
     (E : FlockSoundness.Merkle.Enc (List F) D) (Lf : FlockSoundness.Merkle.Leaf (List F) Sl D Hc)
-    (S : FlockSoundness.Model.Statement) (m k0 : ℕ) (l₀ l₁ : FlockSoundness.Accounting.Level)
+    (S : FlockSoundness.Model.BlockR1CS) (m k0 : ℕ) (l₀ l₁ : FlockSoundness.Accounting.Level)
     (rest : List FlockSoundness.Accounting.Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (pre post : List ((Fin 2 → Fin mPts → F) → FlockSoundness.Game (FlockSoundness.Model.OutCL F D Sl)))
     (cap₀ : FlockSoundness.Model.Cap D) (r ℓ : ℕ)

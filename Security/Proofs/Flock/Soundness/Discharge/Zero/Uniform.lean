@@ -54,7 +54,7 @@ include F in
 of a satisfying witness. -/
 theorem stack_zero_block {g : ℕ} (hg : g < st.c.g) (x : Fin ((unitRows st L.unit_built).stackW st.c.upv))
     (hx : x.val < ((unitRows st L.unit_built).stack st.c.upv).nIn) (hz : ZeroIn st.c x.val)
-    {z : Model.Witness (L.model regs).m} (hsat : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
+    {z : Model.WitnessBits (L.model regs).m} (hsat : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
     (L.model regs).block z o (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
         (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) x) = 0 := by
   have hx' : x.val < st.c.upv * (st.c.unit.inWords * WORD) := by
@@ -69,15 +69,15 @@ end copies
 
 /-- **At an accepted untyped statement, a template instance's stacked input that reads the zero carries 0**, at the
 template instance's columns (`Placed.Accepted.col`), in every block of a satisfying witness. -/
-theorem accepted_zero_block {T : Model.Statement} (a : Placed.Accepted T) {g : ℕ} (hg : g < a.st.c.g)
-    (x : Fin a.rows.w) (hx : x.val < a.rows.nIn) (hz : ZeroIn a.st.c x.val) {z : Model.Witness T.m}
+theorem accepted_zero_block {T : Model.BlockR1CS} (a : Placed.Accepted T) {g : ℕ} (hg : g < a.st.c.g)
+    (x : Fin a.rows.w) (hx : x.val < a.rows.nIn) (hz : ZeroIn a.st.c x.val) {z : Model.WitnessBits T.m}
     (hsat : T.Satisfies z) (o : Fin (2 ^ T.nbl)) : T.block z o (a.col hg x) = 0 := by
   obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht, h, regs, hT⟩ := a
   subst hT
   exact stack_zero_block (setupH_layout ht h) regs (Aliased.setupH_unitFacts ht h) hg x hx hz hsat o
 
 /-- An accepted untyped statement's circuit is the one its circuit file parses to. -/
-theorem accepted_c_eq {T : Model.Statement} (a : Placed.Accepted T) {c : Flock.Circuit}
+theorem accepted_c_eq {T : Model.BlockR1CS} (a : Placed.Accepted T) {c : Flock.Circuit}
     (hp : HmRow.parse a.tags a.cf a.tables = .ok c) : a.st.c = c := by
   have := (setupH_spec a.ht a.h).1
   rw [hp] at this
@@ -132,8 +132,8 @@ theorem unit_uniform : ∀ (n : ℕ) (g : Fin (Placed.gates k R n)), g.val < k �
   | 0, _, _ => rfl
   | n + 1, g, hg => by
     have h' : g.val < Placed.gates k R n := lt_of_lt_of_le hg (Placed.le_gates k R n)
-    change (Prog.snoc (Placed.uniform k R ins one hone n) R _ _ _).unit g = none
-    simp only [Prog.unit, h', ↓reduceDIte, unit_uniform n ⟨g.val, h'⟩ hg, Option.map_none]
+    change (ProgSpec.snoc (Placed.uniform k R ins one hone n) R _ _ _).unit g = none
+    simp only [ProgSpec.unit, h', ↓reduceDIte, unit_uniform n ⟨g.val, h'⟩ hg, Option.map_none]
 
 /-- `uniform` wires unit `u`'s input `i` to the input gate `ins u i`. -/
 theorem insAt_uniform : ∀ (n : ℕ) (u : Fin n) (i : ℕ) (hi : i < R.nIn),
@@ -142,11 +142,11 @@ theorem insAt_uniform : ∀ (n : ℕ) (u : Fin n) (i : ℕ) (hi : i < R.nIn),
   | n + 1, u, i, hi => by
     induction u using Fin.lastCases with
     | last =>
-      change (Const.Prog.insAt (Prog.snoc (Placed.uniform k R ins one hone n) R _ _ _) (Fin.last n) i).val = _
+      change (Const.Prog.insAt (ProgSpec.snoc (Placed.uniform k R ins one hone n) R _ _ _) (Fin.last n) i).val = _
       rw [Const.Prog.insAt_last _ _ _ _ _ i hi]
       simp
     | cast v =>
-      change (Const.Prog.insAt (Prog.snoc (Placed.uniform k R ins one hone n) R _ _ _) v.castSucc i).val = _
+      change (Const.Prog.insAt (ProgSpec.snoc (Placed.uniform k R ins one hone n) R _ _ _) v.castSucc i).val = _
       rw [Const.Prog.insAt_castSucc]
       simp [insAt_uniform n v i hi]
 
@@ -157,11 +157,11 @@ theorem oneAt_uniform : ∀ (n : ℕ) (u : Fin n),
   | n + 1, u => by
     induction u using Fin.lastCases with
     | last =>
-      change (Const.Prog.oneAt (Prog.snoc (Placed.uniform k R ins one hone n) R _ _ _) (Fin.last n)).val = _
+      change (Const.Prog.oneAt (ProgSpec.snoc (Placed.uniform k R ins one hone n) R _ _ _) (Fin.last n)).val = _
       rw [Const.Prog.oneAt_last]
       simp
     | cast v =>
-      change (Const.Prog.oneAt (Prog.snoc (Placed.uniform k R ins one hone n) R _ _ _) v.castSucc).val = _
+      change (Const.Prog.oneAt (ProgSpec.snoc (Placed.uniform k R ins one hone n) R _ _ _) v.castSucc).val = _
       rw [Const.Prog.oneAt_castSucc]
       simp [oneAt_uniform n v]
 

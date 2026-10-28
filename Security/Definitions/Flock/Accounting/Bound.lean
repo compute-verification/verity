@@ -38,7 +38,7 @@ Over the GF(2^256) fold field the MCA term stays far below the query terms at `1
 noncomputable def eta : ℝ := 1 / 200
 
 /-- The statement's shape: the parameters of §16 the bound depends on. -/
-structure Stmt where
+structure StmtShape where
   /-- `log2` of the witness bits per block (`k_log`). -/
   kLog : ℕ
   /-- Public regions; each gives one extra claim at each of the two link points (§16.2). -/
@@ -48,7 +48,7 @@ structure Stmt where
   deriving DecidableEq, Repr
 
 /-- Claims opened per rep: `ab`, `c` and two per region (§11). -/
-def Stmt.nClaims (st : Stmt) : ℕ := 2 + 2 * st.nRegions
+def StmtShape.nClaims (st : StmtShape) : ℕ := 2 + 2 * st.nRegions
 
 /-- `⌈log₂ n⌉` for `1 ≤ n ≤ 2^64`: the number of consistency-batching coins for `n` queries
 (§13.3 step 8, `sample_f128_vec(⌈log2 Q⌉)`). -/
@@ -144,19 +144,19 @@ def Schedule.listBound₀ (s : Schedule) : ℕ := (s.levels.head?.map Level.list
 
 /-- **One rep:** the probability that one rep of the table accepts although no codeword near
 the committed table satisfies the statement. -/
-noncomputable def repError (s : Schedule) (st : Stmt) : ℝ :=
+noncomputable def repError (s : Schedule) (st : StmtShape) : ℝ :=
   piopError s.m st.kLog st.nClaims s.listBound₀ + ligeritoError s.levels
 
 /-- The link points (§16, drawn once per session, before both reps): a region whose committed
 bits differ from the public bits has a nonzero multilinear difference in at most `m_pts`
 variables, which vanishes at both independent points with probability at most `(m_pts/2^128)^2`;
 over every region and every list element. -/
-noncomputable def linkError (s : Schedule) (st : Stmt) : ℝ :=
+noncomputable def linkError (s : Schedule) (st : StmtShape) : ℝ :=
   s.listBound₀ * st.nRegions * ((st.mPts : ℝ) / qF) ^ 2
 
 /-- **One table:** the link points once, then the two reps on independent live coins, which
 multiply (`Game.value_interleave_le`). -/
-noncomputable def tableError (s : Schedule) (st : Stmt) : ℝ :=
+noncomputable def tableError (s : Schedule) (st : StmtShape) : ℝ :=
   linkError s st + repError s st ^ 2
 
 end FlockSoundness.Accounting

@@ -40,7 +40,7 @@ abbrev Msg (S : Finset (Fin n)) (R : Reg) (u : Fin n) : Type :=
 
 /-- The witness a message of drawn unit `u`'s table packs. -/
 noncomputable abbrev wit (S : Finset (Fin n)) (R : Reg) (u : Fin n) (M : Msg plan tab S R u) :
-    Witness (Audit.Partition.tabOf plan tab S R u).S.m :=
+    WitnessBits (Audit.Partition.tabOf plan tab S R u).S.m :=
   witnessOf execArith (Audit.Partition.tabOf plan tab S R u).S.m (Audit.Partition.tabOf plan tab S R u).sch.k0
     (Audit.Partition.tabOf plan tab S R u).sch.level₀.logCols M
 
@@ -52,10 +52,10 @@ def Sat (S : Finset (Fin n)) (R : Reg) (u : Fin n) (M : Msg plan tab S R u) : Pr
 def byteOf (b : Fin 8 → Bool) : UInt8 := UInt8.ofNat (∑ t : Fin 8, if b t then 2 ^ t.val else 0)
 
 /-- The `N` bits a witness holds at the addresses `a`. -/
-def bitsAt {m N : ℕ} (z : Witness m) (a : Fin N → Fin (2 ^ m)) : Fin N → Bool := fun i => bit (z (a i))
+def bitsAt {m N : ℕ} (z : WitnessBits m) (a : Fin N → Fin (2 ^ m)) : Fin N → Bool := fun i => bit (z (a i))
 
 /-- The `N` bytes a witness holds at the addresses `a`: byte `j`'s bit `t` is the witness's bit at `a j t`. -/
-def bytesAt {m N : ℕ} (z : Witness m) (a : Fin N → Fin 8 → Fin (2 ^ m)) : List UInt8 :=
+def bytesAt {m N : ℕ} (z : WitnessBits m) (a : Fin N → Fin 8 → Fin (2 ^ m)) : List UInt8 :=
   List.ofFn fun j => byteOf (bitsAt z (a j))
 
 /-- **The layout of the drawn units' committed wires in registered leaves.** The commit strings (`Pos`, the leaves under

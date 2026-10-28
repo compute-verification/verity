@@ -83,7 +83,7 @@ def lincheckRounds : (n : ℕ) → F → Game ((Fin n → F) × F)
 
 /-- `comb[c] = Σ_i e[i]·(α·A₀[i,c] + B₀[i,c])` with `e[s + 64u] = L_s(z)·eq(ρ_in, u)`, and
 `comb[pin] += β` (§10). -/
-def comb (A : Arith F K) (S : Statement) (z α β : F) (ρIn : Fin (S.kLog - 6) → F) : ℕ → F :=
+def comb (A : Arith F K) (S : BlockR1CS) (z α β : F) (ρIn : Fin (S.kLog - 6) → F) : ℕ → F :=
   fun c =>
     if hc : c < 2 ^ S.kLog then
       (∑ i : Fin (2 ^ S.kLog),
@@ -99,7 +99,7 @@ def foldAll (t : List F) (len : ℕ) (v : ℕ → F) : ℕ → F :=
   | tj :: rest => foldAll rest (len / 2) (foldTop tj (len / 2) v)
 
 /-- **Lincheck** (§10, L1–L5): reduces `v_a`, `v_b` to the `ab` claim on the witness. -/
-def lincheck (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) : Game (Option (Claim F S.m)) := do
+def lincheck (A : Arith F K) (S : BlockR1CS) (zc : ZcOut F S.m) : Game (Option (Claim F S.m)) := do
   let α ← draw F                                         -- L1
   let β ← draw F                                         -- L2
   let n := S.kLog - 6

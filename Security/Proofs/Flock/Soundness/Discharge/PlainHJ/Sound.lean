@@ -20,7 +20,7 @@ it is drawn into (`sitesPHJI`, `tabPHJ`) and bound to the rows it commits, outpu
   (`hpr`), and `wiresAcyclic` passed (`hw`).
 
 Each is `PlainJ.plain_session_soundJ` with the hidden-output tables and rows in place of the public ones
-(`Prog.flock_headline_live_tables_subset_missX`). The tags, the record and the draws are `TagsOkZHJ` (hidden outputs,
+(`ProgSpec.flock_headline_live_tables_subset_missX`). The tags, the record and the draws are `TagsOkZHJ` (hidden outputs,
 retained rounds, `hm96-sha512/v1` leaves), `DecodeZLJ.RecordsLiveJ` and `DrawOkPHJ`, the coin server's draw setting each
 table up with setupHidden at its part.
 

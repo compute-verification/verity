@@ -45,12 +45,12 @@ abbrev OutAt (C : CoinedSetup) (c : CoinsZK C.Rest) : Type := (C.T c).tab.View �
 
 /-- **The honest prover's code at one table**: what it sends at a table, a coin vector, a witness and its randomness. -/
 abbrev TableProver : Type 1 :=
-  ∀ (C : CoinedSetup) (c : CoinsZK C.Rest), Witness C.S.m → RandAt C c → OutAt C c
+  ∀ (C : CoinedSetup) (c : CoinsZK C.Rest), WitnessBits C.S.m → RandAt C c → OutAt C c
 
 open Classical in
 /-- **The honest prover at one table**: where it refuses the coins (`CoinedSetup.Admits`, `refused_coins`), the prefix
 of its view `Table.abort` cuts; elsewhere its code `prover`. -/
-noncomputable def honestOut (prover : TableProver) (C : CoinedSetup) (c : CoinsZK C.Rest) (w : Witness C.S.m)
+noncomputable def honestOut (prover : TableProver) (C : CoinedSetup) (c : CoinsZK C.Rest) (w : WitnessBits C.S.m)
     (p : RandAt C c) : OutAt C c :=
   if C.Admits c then prover C c w p else Sum.inr ((C.T c).tab.abort (sentAt C c) ((C.T c).viewExe w p.1 p.2))
 
@@ -58,13 +58,13 @@ noncomputable def honestOut (prover : TableProver) (C : CoinedSetup) (c : CoinsZ
 witness whose registered values are the public ones, the prover's code, self-check included, sends its view
 (`Recursive/OuterAbort.lean`: the self-check never stops it there). -/
 def SelfCheckSilent (prover : TableProver) : Prop :=
-  ∀ (C : CoinedSetup) (c : CoinsZK C.Rest) (w : Witness C.S.m), CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C →
+  ∀ (C : CoinedSetup) (c : CoinsZK C.Rest) (w : WitnessBits C.S.m), CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C →
     C.Admits c → C.Valid w → (∀ c', (C.T c').tab.sReg w = (C.T c').tab.pubReg) →
       ∀ p : RandAt C c, prover C c w p = Sum.inl ((C.T c).viewExe w p.1 p.2)
 
 /-- **What a stopped run sends** at a table, a coin vector, a witness and its randomness: a prefix the table cuts. -/
 abbrev Stopped : Type 1 :=
-  ∀ (C : CoinedSetup) (c : CoinsZK C.Rest), Witness C.S.m → RandAt C c → (C.T c).tab.Cut
+  ∀ (C : CoinedSetup) (c : CoinsZK C.Rest), WitnessBits C.S.m → RandAt C c → (C.T c).tab.Cut
 
 open Classical in
 /-- **The honest prover's code at one table** (`zk_veil.rs`'s `prove_inner` under `SelfCheck::Stop`): what a stopped
@@ -112,10 +112,10 @@ structure Sessions (Ctx Pub : Type) : Type 1 where
   enc : (j : Fin S) → (pc : Pub) → (l : Fin n₂ → ZkView.Bits × ByteArray) → (c : CoinsZK (C j pc l).Rest) →
     OutAt (C j pc l) c → Vw j
   wit : (j : Fin S) → (x : Ctx) → (y₂ : Fin n₂ → ZkView.Salt) →
-    Witness (C j (pubOf x) (commitStrs (m₂ x) y₂)).S.m
+    WitnessBits (C j (pubOf x) (commitStrs (m₂ x) y₂)).S.m
 
 /-- The dummy witness, zero everywhere. -/
-def w0 (m : ℕ) : Witness m := fun _ => 0
+def w0 (m : ℕ) : WitnessBits m := fun _ => 0
 
 namespace Sessions
 

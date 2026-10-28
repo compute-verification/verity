@@ -15,7 +15,7 @@ here, and its theorem is below it.
 * `SessionBLModel`: the salted session on the tables `ts` is `modelSession`'s.
 * `ExecRefinesTables`: R11 for any plan, `ExecRefines … (LiveAccepts I) ⊥ (audit … (batchedSessionL … plan)) (simAuditJ …)`
   given `DecodesOnJ`.
-* `HeadlineTables`: `Prog.flock_headline_live_on` with `plan S R` of any length `J`, at the live stratified draw.
+* `HeadlineTables`: `ProgSpec.flock_headline_live_on` with `plan S R` of any length `J`, at the live stratified draw.
 * `HeadlineTablesSubset`: the same at the live subset draw, with count curve `C(n − K, kd) / C(n, kd)`; flock-verify
   takes no other draw at `J > 1`.
 * `AcceptsTables`: flock-verify's acceptance at `count > 1`: the record's draw, when there is one, is a subset draw;
@@ -82,7 +82,7 @@ theorem execRefines_tables_stmt : ExecRefinesTables :=
 
 /-- **The headline at the executable for sessions of `J` tables, at the live stratified draw.** -/
 def HeadlineTables : Prop :=
-  ∀ {N' n : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N')) {Reg : Type} {mPts : ℕ}
+  ∀ {N' n : ℕ} (p : FlockSoundness.ProgSpec N' n) (outs : Finset (Fin N')) {Reg : Type} {mPts : ℕ}
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (_hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
@@ -129,7 +129,7 @@ theorem headline_tables : HeadlineTables := by
 
 /-- **The headline at the executable for sessions of `J` tables, at the live subset draw.** -/
 def HeadlineTablesSubset : Prop :=
-  ∀ {N' n : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N')) {Reg : Type} {mPts : ℕ}
+  ∀ {N' n : ℕ} (p : FlockSoundness.ProgSpec N' n) (outs : Finset (Fin N')) {Reg : Type} {mPts : ℕ}
     (kd : ℕ) (_hkd : kd ≤ n)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
     (_hA3 : Assumptions.UniformRandomBytes Lb src)

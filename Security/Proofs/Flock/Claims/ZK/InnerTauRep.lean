@@ -120,7 +120,7 @@ theorem zp_eq {x : Msg} (c : Fin (refK x) → FlockDeploy.Coin) {w : Claims.Floc
 theorem addConst_a (l : _root_.Flock.Zk.Lin) (k : _root_.Flock.F128) : (l.addConst k).a = l.a := rfl
 
 /-- Two folds that realize one statement fold the same arguments to the same array. -/
-theorem folded_unique (S : FlockSoundness.Model.Statement) (cf cf' : _root_.Flock.CircuitFold)
+theorem folded_unique (S : FlockSoundness.Model.BlockR1CS) (cf cf' : _root_.Flock.CircuitFold)
     (hc : FlockSoundness.Refine.FoldRealizes cf S) (hc' : FlockSoundness.Refine.FoldRealizes cf' S)
     (α β : _root_.Flock.F128) (lw ρ ts w w' : Array _root_.Flock.F128) (hlw : lw.size = 64)
     (hρ : ρ.size = S.kLog - 6) (h : cf.folded α β lw ρ ts = .ok w) (h' : cf'.folded α β lw ρ ts = .ok w') :

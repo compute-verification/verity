@@ -166,7 +166,7 @@ theorem prod_rel {np : ℕ} (tr : ZkSession.Triple np) (lay : Zk.PadLayout) (hs 
 
 /-- **The circuit's 64 entries are the model's fold** (as in `lincheck_refines`): `CircuitFold.folded` at the
 lincheck's coins is `foldAll` of the model's `comb` at the rounds' challenges. -/
-theorem folded_rel (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S) (α β z : F128)
+theorem folded_rel (S : Model.BlockR1CS) (c : CircuitFold) (hc : FoldRealizes c S) (α β z : F128)
     (rho ts w : Array F128) (hrho : S.kLog - 6 ≤ rho.size)
     (hw : c.folded α β (skipWeights z) (rho.extract 0 (S.kLog - 6)) ts = .ok w)
     (ρM tsM : Fin (S.kLog - 6) → 𝔽) (hρ : ∀ j, ρM j = fOf rho[j.val]!) (hts : ts.size = S.kLog - 6)
@@ -253,7 +253,7 @@ end Init
 them, the replay's three constraints, its `ab` value and its `c` value are the forms the model's masked zerocheck and
 lincheck compute on the same messages and coins. -/
 theorem zk_replay_rows (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : ByteArray) (t t' : Flock.Transcript)
-    (rp : Zk.Replayed) (S : Model.Statement) (hm : st.m = S.m) (hk : st.kLog = S.kLog) (h15 : 15 ≤ S.m)
+    (rp : Zk.Replayed) (S : Model.BlockR1CS) (hm : st.m = S.m) (hk : st.kLog = S.kLog) (h15 : 15 ≤ S.m)
     (hwf : RoundsWF t.rounds) (hc : FoldRealizes st.fold S) (h : Zk.replay st lay p root t = .ok (rp, t'))
     {np : ℕ} (P : ZkSession.PadsA np) (tr : ZkSession.Triple np) (hlen : lay.len = np)
     (hr1ab : ∀ i : Fin 64, (P.r1ab i).val = lay.r1ab i.val) (hr1c : ∀ i : Fin 64, (P.r1c i).val = lay.r1c i.val)

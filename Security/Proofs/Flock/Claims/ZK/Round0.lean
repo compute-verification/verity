@@ -148,7 +148,7 @@ noncomputable def colAt {K W Hi VL : Type} [Field K] {z : ZkView.Sizes} (T : ZkV
 fit (`coinedOf_s0_val`): an opened position's rows and a hidden position's column are both the code at `ω_p`. -/
 theorem coinedOf_col0At (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (coinedOf P Tz st).Rest)
     (ht : Tz.t ≤ 2 ^ (Tz.sch.level₀.logCols + 1)) (hL : Tz.sch.level₀.logCols + 1 ≤ Tz.sch.level₀.logLen)
-    (w : Model.Witness (coinedOf P Tz st).S.m) (b : ZkView.Base (coinedOf P Tz st).z (coinedOf P Tz st).Hi)
+    (w : Model.WitnessBits (coinedOf P Tz st).S.m) (b : ZkView.Base (coinedOf P Tz st).z (coinedOf P Tz st).Hi)
     (p : Fin ((coinedOf P Tz st).z.nS + (coinedOf P Tz st).z.nU)) :
     ((coinedOf P Tz st).T c).col0At w b p = colAt ((coinedOf P Tz st).T c) Tz.sch.level₀.logCols w b p.val := by
   have hs0 := coinedOf_s0_val P Tz st c ht hL
@@ -275,7 +275,7 @@ theorem row0_eq_encodeRowsZk {nL L tp : ℕ} (lv : Level) (tPad : ℕ) (g : Arra
 
 /-- **The model's packed word is the executable's** (`Composed.wordOf`, `packed`): where the witness reads the trace's
 bits, its word `y` is `packed`'s entry `y`. -/
-theorem wordOf_packed (tr : Trace) {M : ℕ} (zw : Model.Witness M)
+theorem wordOf_packed (tr : Trace) {M : ℕ} (zw : Model.WitnessBits M)
     (hz : ∀ a : Fin (2 ^ M), zw a = Flock.Readable.toZ tr.z[a.val]!) {y : ℕ} (hy : y < 2 ^ (M - 7)) (hM : 7 ≤ M) :
     Composed.wordOf zw y = fOf (packed tr M)[y]! := by
   rw [Replay.Lg.fOf_packed tr M y hy, Composed.wordOf]
@@ -385,7 +385,7 @@ theorem tabSizes (x : Msg) (j : Fin (jOf x)) :
 
 /-- **Table `j`'s level-0 column at tree position `p`** is `colAt` at `ω_p`, at every coin vector. -/
 theorem col0At_tabC (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x)) (c : Composed.CoinsZK (tabC P x j).Rest)
-    (w : Model.Witness (tabC P x j).S.m) (b : ZkView.Base (tabC P x j).z (tabC P x j).Hi)
+    (w : Model.WitnessBits (tabC P x j).S.m) (b : ZkView.Base (tabC P x j).z (tabC P x j).Hi)
     (p : Fin ((tabC P x j).z.nS + (tabC P x j).z.nU)) :
     ((tabC P x j).T c).col0At w b p = Composed.colAt ((tabC P x j).T c) (lv0 x j).cols w b p.val := by
   obtain ⟨ht, hL, hc⟩ := tabSizes x j
@@ -443,7 +443,7 @@ noncomputable def enc0 (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.
 
 /-- **A cut's level-0 leaf at tree position `q` is the leaf at `q`**, whatever the coins' tree. -/
 theorem leafAt_cutAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
-    (wt : ∀ j, Model.Witness (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi)
+    (wt : ∀ j, Model.WitnessBits (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi)
     (lv : ZkView.Leaves (fun j => (tabC P x j).z) → ByteArray) (j : Fin (jOf x)) {q : ℕ}
     (hq : q < (tabC P x j).z.nS + (tabC P x j).z.nU) :
     leafAt P x cz (cutAt (tabC P x) cz wt ω lv) j q = lv ⟨j, .inl ⟨q, hq⟩⟩ := by
@@ -460,7 +460,7 @@ theorem leafAt_cutAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.Co
 
 /-- **A level-0 leaf's digest is the same at every coin vector** (`col0At_tabC`). -/
 theorem digOf_inl (P : Composed.LigProver) (x : Msg) (cz cz' : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
-    (wt : ∀ j, Model.Witness (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi) (j : Fin (jOf x))
+    (wt : ∀ j, Model.WitnessBits (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi) (j : Fin (jOf x))
     (p : Fin ((tabC P x j).z.nS + (tabC P x j).z.nU)) :
     digOf (tabC P x) cz wt ω ⟨j, .inl p⟩ = digOf (tabC P x) cz' wt ω ⟨j, .inl p⟩ := by
   have hl : ((tabC P x j).T (cz j)).lanes = ((tabC P x j).T (cz' j)).lanes :=
@@ -473,7 +473,7 @@ theorem digOf_inl (P : Composed.LigProver) (x : Msg) (cz cz' : ∀ j, Composed.C
 /-- **Round `0` reads no coin** (`RoundPlan.Causal` at round `0`): its encoding of the cut at any coins, at the
 simulator's leaves `H(dig ⊕ b, c)`, is the same at every coin vector. -/
 theorem enc0_causal (P : Composed.LigProver) (x : Msg) (cz cz' : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
-    (wt : ∀ j, Model.Witness (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi)
+    (wt : ∀ j, Model.WitnessBits (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi)
     (p : ZkView.Leaves (fun j => (tabC P x j).z) → ZkView.Bits × ByteArray) :
     enc0 P x cz (cutAt (tabC P x) cz wt ω fun l => ZkView.leafH (digOf (tabC P x) cz wt ω l + (p l).1, (p l).2)) =
       enc0 P x cz' (cutAt (tabC P x) cz' wt ω fun l =>

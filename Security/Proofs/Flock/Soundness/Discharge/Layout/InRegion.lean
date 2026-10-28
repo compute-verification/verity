@@ -223,7 +223,7 @@ theorem in_pinned {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     {pi : HmIn.Ports} {ri : Array Region} (hR : HmIn.regions st.c pi st.pub = .ok ri)
     (hri : ∀ r ∈ ri.toList, r ∈ st.regions.toList) (hne : pi.ports.isEmpty = false)
-    {z : Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
+    {z : WitnessBits (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
     {x w s k jj t : ℕ} (hx : x < (HmIn.inRegions st.c pi).size) (hws : (HmIn.inRegions st.c pi)[x]! = (w, s))
     (hcol : inCol st.c ≤ w) (hlo : w ≤ inCol st.c + jj / 8) (hhi : inCol st.c + jj / 8 < w + 2 ^ s)
     (hk : k < st.c.unitRange.count) (ht : t < 16) :

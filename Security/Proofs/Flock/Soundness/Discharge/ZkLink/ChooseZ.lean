@@ -228,7 +228,7 @@ theorem alignedT_lockLigPadZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ}
 /-! ## A rep, the table and the session -/
 
 theorem alignedT_lockRestZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np)
-    (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₁ C₂ : Oracle F)
+    (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₁ C₂ : Oracle F)
     (extra : List (Claim F S.m)) (zc : ZcZK F np S.m) (ab : ClaimZK F np S.m) :
     Lock.AlignedT (lockRestZ (D := D) A r hr P₀ PA S sch hm t c₀ C₁ extra zc ab)
       (lockRestZ (D := D) A r hr P₀ PA S sch hm t c₀ C₂ extra zc ab) := by
@@ -246,7 +246,7 @@ theorem alignedT_lockRestZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (
     exact .send _ fun _ => .ret _ _
 
 theorem alignedT_lockMaskedZ (A : Arith F K) (r : ℕ) (hr : r < 2) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np)
-    (tr : Triple np) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₁ C₂ : Oracle F)
+    (tr : Triple np) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (C₁ C₂ : Oracle F)
     (extra : List (Claim F S.m)) :
     Lock.AlignedT (lockMaskedZ (D := D) A r hr P₀ PA tr S sch hm t c₀ C₁ extra)
       (lockMaskedZ (D := D) A r hr P₀ PA tr S sch hm t c₀ C₂ extra) := by

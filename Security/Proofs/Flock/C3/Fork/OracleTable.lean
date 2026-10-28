@@ -38,7 +38,7 @@ theorem value_bind_bind_ret {α β γ : Type} (P : γ → Prop) (g : Game α) (f
 omit [Fintype K] in
 /-- **`regPhase` is both reps' sparse phases, then R's opening**: it accepts no more often than the two `stage`s
 followed by `openTail`. -/
-theorem regPhase_le (A : Arith F K) (S : Statement) (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ)
+theorem regPhase_le (A : Arith F K) (S : BlockR1CS) (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ)
     (τ : Fin (2 ^ sh.sLog) → ℕ) (rsch : Schedule) (w : Oracle F)
     (reps : Option (ZcOut F S.m × HoloLcOut F S.m (S.kLog - 6)) ×
       Option (ZcOut F S.m × HoloLcOut F S.m (S.kLog - 6))) :

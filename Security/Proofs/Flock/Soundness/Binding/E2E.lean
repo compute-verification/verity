@@ -20,7 +20,7 @@ of the finders built from the prover bounded (`hCR : LinkCR … (reg σ) (cont �
 
 **The two forms of SHA-512's collision resistance.** The link term `δ_link` is under `SHA512CRExpected` (`ecr/sha-512`,
 through `hCR`), of SHA-512 itself, since the rows' binding hashes with it. The knowledge term and `δ_tree` are under
-`SHA512CRStrict` (`cr/sha-512`, through `hKS` and `hT`), of the session's hash `H`, which `Prog.flock_headline` takes to
+`SHA512CRStrict` (`cr/sha-512`, through `hKS` and `hT`), of the session's hash `H`, which `ProgSpec.flock_headline` takes to
 be SHA-512; each at its finders' budgets:
 * the knowledge term is `ksAvgStrict` (`StrictCR.ksAvgBE_le_strict`), for tables whose rewinding finders satisfy
   `SHA512CRStrict` at budget `qF` and whose self-clash finders at `qS` (`hKS`);
@@ -36,7 +36,7 @@ skeleton's `hExec` (every accept is the model's) gives a cover with no positions
 **A3.** None of these forms takes A3 (`uniform/io-getrandombytes`). The generic forms hold at every law `L`, the live
 draw `Law.execOS` included, and read it only through their terms. The `_exec` forms are at `Law.execStratified`, whose
 outcomes are the byte tapes themselves, uniform by construction. The live verifier's bytes enter through `Law.execOS`, and
-A3 compares its count curve with `Law.stratified`'s (`Law.execOS_miss_le`): `Prog.flock_headline` composes the two.
+A3 compares its count curve with `Law.stratified`'s (`Law.execOS_miss_le`): `ProgSpec.flock_headline` composes the two.
 -/
 
 namespace FlockSoundness.Binding
@@ -68,7 +68,7 @@ If `execAccept` holds, the probability that at least `K` units of the committed 
 is at most `miss_L(K) + ε_ks + δ_link + δ_tree`: `ε_ks` and `δ_tree` under `SHA512CRStrict` of `H` (`cr/sha-512`,
 through `hKS` and `hT`), `δ_link` under `SHA512CRExpected` of SHA-512 (`ecr/sha-512`, through `hCR`). Beyond the
 skeleton's `dp`, `hConst` and `hZero`, it takes the rows' layout (`lay`, `rs`), `HmRowComputes` (`hHm`) and the serving
-roots' rewinding (`tr`). It takes no A3: `miss_L` is the law's own, and `Prog.flock_headline` bounds the live draw's by
+roots' rewinding (`tr`). It takes no A3: `miss_L` is the law's own, and `ProgSpec.flock_headline` bounds the live draw's by
 `Law.stratified`'s under A3. -/
 theorem flock_e2e_count_hm96
     {execAccept : Bool × Finset (Fin n) → Prop}
@@ -161,7 +161,7 @@ theorem flock_e2e_drawn_exec_hm96
 `vb := HmRows.binding rs hHm`, its count curve bounded by `Law.stratified`'s `miss`, at most
 `miss(K) + ε_ks + δ_link + δ_tree`, as in `flock_e2e_count_hm96` (`cr/sha-512` through `hKS` and `hT`, `ecr/sha-512`
 through `hCR`). `Law.execStratified`'s outcomes are uniform byte tapes, so it takes no A3; at the live verifier's bytes
-the same curve is `Prog.flock_headline`'s, under A3. -/
+the same curve is `ProgSpec.flock_headline`'s, under A3. -/
 theorem flock_e2e_count_exec_hm96 (σs : Fin n → Fin m) (ks : Fin m → ℕ)
     (hks : ∀ s, ks s ≤ (Law.stratum σs s).card) (hS : Law.ExecStrata σs ks St)
     {execAccept : Bool × Finset (Fin n) → Prop}

@@ -147,7 +147,7 @@ open Classical in
 /-- **Where the rule stops the coins, the session's switched message is the stop**, before the last coin and after
 it. -/
 theorem swMsgAt_withStops_stop (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
-    (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
+    (x : Msg) (wt : ∀ j, FlockSoundness.Model.WitnessBits (S.C x j).S.m)
     (v : (c : Fin (refK x) → S.Coin) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (cs : List S.Coin)
     (hR : Rf x (S.pad cs) (min cs.length (refK x)) = true) : (S.withStops Rf stop).swMsgAt x wt v t cs = stop := by
   by_cases h : cs.length < refK x
@@ -167,7 +167,7 @@ open Classical in
 /-- **Where the rule doesn't stop the coins, the session's switched message at the link and after the last coin is
 `S`'s.** -/
 theorem swMsgAt_withStops_go (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
-    (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
+    (x : Msg) (wt : ∀ j, FlockSoundness.Model.WitnessBits (S.C x j).S.m)
     (v : (c : Fin (refK x) → S.Coin) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (cs : List S.Coin)
     (hR : Rf x (S.pad cs) (min cs.length (refK x)) = false) (h0 : cs.length = 0 ∨ refK x ≤ cs.length) :
     (S.withStops Rf stop).swMsgAt x wt v t cs = S.swMsgAt x wt v t cs := by
@@ -195,7 +195,7 @@ open Classical in
 /-- **Where the rule doesn't stop the coins, the session's switched message at a frame round is `S`'s without its
 leading domain frame.** -/
 theorem swMsgAt_withStops_frame (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg)
-    (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
+    (x : Msg) (wt : ∀ j, FlockSoundness.Model.WitnessBits (S.C x j).S.m)
     (v : (c : Fin (refK x) → S.Coin) → ∀ j, ((S.C x j).T (S.cz x c j)).tab.Vals) (t : S.Tape) (cs : List S.Coin)
     (hR : Rf x (S.pad cs) cs.length = false) (h0 : 0 < cs.length) (h : cs.length < refK x) :
     (S.withStops Rf stop).swMsgAt x wt v t cs = dropDom (S.swMsgAt x wt v t cs) := by

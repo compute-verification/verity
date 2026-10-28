@@ -83,7 +83,7 @@ theorem verify_ok_tables {spec : SessionSpec} {tabs : Array Setup} {record : Str
 
 /-- **One table's accepted reps refine the compiled reps, for `hm96-sha512/v1`** (§9–§14): `verify_refines_hm96` at table
 `i` of a session, from both reps' checks accepting with one cap. -/
-theorem table_refines_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
+theorem table_refines_hm96 (spec : SessionSpec) (st : Setup) (S : Model.BlockR1CS) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (hms : st.merkle = MerkleScheme.hm96Sha512) (extra : List (Model.Claim 𝔽 S.m)) (sess : Session)
     (hext : ExtraRealizes st S sess.points extra) (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
@@ -130,7 +130,7 @@ theorem table_refines_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statemen
 
 /-- **One table's accepted reps refine the compiled reps, for `flock-leaf/sha512-unsalted`**: `table_refines_hm96` with
 the unsalted path checks (`opensOK_of`), which at `leafPlain` are its salted ones. -/
-theorem table_refines_plain (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
+theorem table_refines_plain (spec : SessionSpec) (st : Setup) (S : Model.BlockR1CS) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (hms : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (extra : List (Model.Claim 𝔽 S.m))
     (sess : Session) (hext : ExtraRealizes st S sess.points extra) (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
@@ -179,7 +179,7 @@ open Classical in
 /-- **One table's accepted reps are one accepting run of the salted table game** (§5): `table_refines_hm96`, with the
 statement's `extraClaims` at link points `pts`, as one run of `tableAfterL` at `Refine.leaf512`, played on the two streams'
 coins, rep 0's then rep 1's. Its openings and salts are the proofs'. -/
-theorem table_tableAfterL (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
+theorem table_tableAfterL (spec : SessionSpec) (st : Setup) (S : Model.BlockR1CS) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (hms : st.merkle = MerkleScheme.hm96Sha512) (ptLocal mPts : ℕ) (pts : Fin 2 → Fin mPts → 𝔽) (sess : Session)
     (hext : ExtraRealizes st S sess.points (Model.extraClaims S ptLocal mPts pts))

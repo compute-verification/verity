@@ -176,7 +176,7 @@ theorem famCard_swCut_eq {F K Salt Seed D : Type} [Field F] [Field K] [CharP F 2
 witnesses `wt`, the workers' values `v`, bases `ω` and the pre-final leaves `lv` by position (`Coined.swPreWith`), as
 `cutAt` has the honest prover's. -/
 noncomputable def swCutAt {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
-    (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (v : ∀ j, ((C j).T (cz j)).tab.Vals)
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m) (v : ∀ j, ((C j).T (cz j)).tab.Vals)
     (ω : ∀ j, ZkView.Base (C j).z (C j).Hi) (lv : ZkView.Leaves (fun j => (C j).z) → ByteArray) :
     ∀ j, ((C j).T (cz j)).tab.Cut :=
   fun j => ((C j).T (cz j)).tab.cut (famSent (fun j => ((C j).T (cz j)).tab) (fun j => ((C j).T (cz j)).rep) j)
@@ -184,21 +184,21 @@ noncomputable def swCutAt {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : �
 
 /-- The digest each of the switched prover's pre-final leaves commits, as bits (`Coined.swContent`). -/
 noncomputable def swDigOf {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
-    (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (v : ∀ j, ((C j).T (cz j)).tab.Vals)
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m) (v : ∀ j, ((C j).T (cz j)).tab.Vals)
     (ω : ∀ j, ZkView.Base (C j).z (C j).Hi) (l : ZkView.Leaves (fun j => (C j).z)) : ZkView.Bits :=
   ZkView.bitsOf (((C l.1).T (cz l.1)).swContent (wt l.1) (v l.1) (ω l.1) l.2)
 
 /-- **The executable's pre-final leaves at the switched prover**: `hm96-sha512/v1`'s leaf of each `Coined.swContent`
 under its own salt, as `exeOf` has the honest prover's. -/
 noncomputable def swExeOf {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
-    (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (v : ∀ j, ((C j).T (cz j)).tab.Vals)
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m) (v : ∀ j, ((C j).T (cz j)).tab.Vals)
     (ω : ∀ j, ZkView.Base (C j).z (C j).Hi) (y : ZkView.Leaves (fun j => (C j).z) → ZkView.Salt) :
     ZkView.Leaves (fun j => (C j).z) → ByteArray :=
   fun l => _root_.Flock.Hm96.Default512.leaf (((C l.1).T (cz l.1)).swContent (wt l.1) (v l.1) (ω l.1) l.2) (ZkView.saltBytes (y l))
 
 /-- The switched prover's leaves are `H(dig ⊕ M·y, c(y))` (`ZkView.leafSplit`). -/
 theorem swExeOf_eq {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
-    (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (v : ∀ j, ((C j).T (cz j)).tab.Vals)
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m) (v : ∀ j, ((C j).T (cz j)).tab.Vals)
     (ω : ∀ j, ZkView.Base (C j).z (C j).Hi) (y : ZkView.Leaves (fun j => (C j).z) → ZkView.Salt) :
     swExeOf C cz wt v ω y =
       fun l => ZkView.leafH (swDigOf C cz wt v ω l + ZkView.My (y l), ZkView.saltHash (y l)) :=
@@ -211,7 +211,7 @@ open Finset in
 cut view takes every value as often at the switched prover on `wt`, whatever values `v` the workers supply, as at the
 honest one on `wt₀`, both carrying the public region data (`famCard_swCut_eq`, `Coined.swPreWith_ideal`). -/
 theorem card_swCutAt_ideal {J : ℕ} {V : Type} [DecidableEq V] (C : Fin J → Composed.CoinedSetup)
-    (cz : ∀ j, Composed.CoinsZK (C j).Rest) (wt wt₀ : ∀ j, FlockSoundness.Model.Witness (C j).S.m)
+    (cz : ∀ j, Composed.CoinsZK (C j).Rest) (wt wt₀ : ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m)
     (v : ∀ j, ((C j).T (cz j)).tab.Vals) (hreg : ∀ j, ((C j).T (cz j)).tab.sReg (wt j) = ((C j).T (cz j)).tab.pubReg)
     (hreg₀ : ∀ j, ((C j).T (cz j)).tab.sReg (wt₀ j) = ((C j).T (cz j)).tab.pubReg)
     (out : (∀ j, ((C j).T (cz j)).tab.Cut) → V) (σ : V) :
@@ -241,7 +241,7 @@ theorem zkViewAtJ_sw {J : ℕ} (C : Fin J → CoinedSetup)
     (hreg : ∀ j c w, (C j).Valid w → ((C j).T c).tab.sReg w = ((C j).T c).tab.pubReg)
     {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (c : ∀ j, CoinsZK (C j).Rest)
     (hc : ∀ j, (C j).Admits (c j)) {Out : Type} (enc : (∀ j, ((C j).T (c j)).tab.View) → Out)
-    (w w0 : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (hv : ∀ j, (C j).Valid (w j))
+    (w w0 : ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m) (hv : ∀ j, (C j).Valid (w j))
     (v : ∀ j, ((C j).T (c j)).tab.Vals) (E : Out → Prop) :
     FlockSoundness.Game.prCoin (fun p : ∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt) =>
         E (enc fun j => ((C j).T (c j)).swExe (w j) (v j) (p j).1 (p j).2))
@@ -351,7 +351,7 @@ theorem TabModel.shvzk_sw {W : Type} {G : Proto W} {x : Msg} (M : G.TabModel x) 
 /-- The switched prover's messages before the last coin at the answers `a`, on table witnesses `wt` and the workers'
 values `vs a`, bases `ω` and pre-final leaves `lv`. -/
 noncomputable def TPreModel.swMsgs {W : Type} {G : Proto W} {x : Msg} (M : G.TPreModel x)
-    (wt : ∀ j, FlockSoundness.Model.Witness (M.C j).S.m) (vs : ∀ a j, ((M.C j).T (M.cz a j)).tab.Vals)
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (M.C j).S.m) (vs : ∀ a j, ((M.C j).T (M.cz a j)).tab.Vals)
     (ω : ∀ j, ZkView.Base (M.C j).z (M.C j).Hi) (a : Fin (G.K x + 1) → Out)
     (lv : ZkView.Leaves (fun j => (M.C j).z) → ByteArray) : Fin (G.K x + 1) → Msg :=
   M.out a (swCutAt M.C (M.cz a) wt (vs a) ω lv)
@@ -359,7 +359,7 @@ noncomputable def TPreModel.swMsgs {W : Type} {G : Proto W} {x : Msg} (M : G.TPr
 /-- **The switched prover's round encoding reads the answers before each round only**, whatever each leaf's pair
 `(M·y, c(y))`, as `TPreModel.Causal` has the honest prover's. -/
 def TPreModel.SwCausal {W : Type} {G : Proto W} {x : Msg} (M : G.TPreModel x)
-    (wt : ∀ j, FlockSoundness.Model.Witness (M.C j).S.m) (vs : ∀ a j, ((M.C j).T (M.cz a j)).tab.Vals) : Prop :=
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (M.C j).S.m) (vs : ∀ a j, ((M.C j).T (M.cz a j)).tab.Vals) : Prop :=
   ∀ (ω : ∀ j, ZkView.Base (M.C j).z (M.C j).Hi) (p : ZkView.Leaves (fun j => (M.C j).z) → ZkView.Bits × ByteArray)
     (a a' : Fin (G.K x + 1) → Out) (i : Fin (G.K x + 1)), (∀ j, j < i → a j = a' j) →
     M.swMsgs wt vs ω a (fun l => ZkView.leafH (swDigOf M.C (M.cz a) wt (vs a) ω l + (p l).1, (p l).2)) i =

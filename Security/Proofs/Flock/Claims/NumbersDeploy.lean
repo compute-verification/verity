@@ -6,7 +6,7 @@ import Proofs.Flock.Claims.DeployCode
 `Numbers`, `NumbersTable` and `NumbersGamma` bound `κ`, `ε_table`, `γ` and `λ` over any `Deploy`'s fields; here they
 are read at the deployed records `FlockDeploy.deployPlain` and `deployZk`, for a statement that sets up
 (`setupOf zk x = some (s, spec, sts)`) with `n = sts.size ≥ 1` tables, each at an `m` its verifier serves
-(`22 ≤ m ≤ 35`, or `25 ≤ m ≤ 35` with `--zk`), each of a planned table's shape (`Stmt.InRangeWide` / `InRange`:
+(`22 ≤ m ≤ 35`, or `25 ≤ m ≤ 35` with `--zk`), each of a planned table's shape (`StmtShape.InRangeWide` / `InRange`:
 `k_log ≤ 27`, at most `1026` / `1024` regions, `m_pts ≤ 64`), at two link points (`spec.points ≤ 2`, the setup's
 default); `PlainIn` and `ZkIn` collect these, with `n ≤ 200`:
 

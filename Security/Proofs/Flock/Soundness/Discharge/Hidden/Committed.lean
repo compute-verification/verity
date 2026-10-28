@@ -32,7 +32,7 @@ open Model Refine Binding FlockSoundness.Discharge.Layout
 `mkRegion` built as "digest p" pins (`Layout.bc_pinned`, for any such region rather than `HmRow.regions`'). -/
 theorem bc_pinned' {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
-    {z : Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
+    {z : WitnessBits (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
     {g p : ℕ} (hg : g < st.c.g) (hg2 : g < 2 ^ st.c.g.log2) {name : String} {r : Flock.Region}
     (hr : r ∈ st.regions.toList)
     (hmk : mkRegion st.c.kLog name (hmFree st.c) (hmFixed st.c p) (hmBytes st.c st.pub p) = .ok r)
@@ -81,7 +81,7 @@ open Hm Compose Flock.DeriveAll Types.Dag
 
 /-- The bytes at the address region "digest p" pins (`Layout.bcAddr`) are the block's at `bcCol`. -/
 theorem bytesAt_bc {st : Stmt} (L : FlockSoundness.Layout st) (R : RowRanges st.c)
-    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) (z : Model.Witness (L.model regs).m)
+    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) (z : Model.WitnessBits (L.model regs).m)
     (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g) (hp : p < st.c.ports.size) :
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) =>
         (L.model regs).addr o (Layout.inBlockOr st.c.kLog (Layout.bcAddr st.c g p j.val t.val))) =
@@ -113,7 +113,7 @@ theorem bc_drawnH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : Li
     (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population) (L : FlockSoundness.Layout st)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
-    {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
+    {z : Model.WitnessBits (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
     {g p : ℕ} (hg : g < st.c.g) (hg2 : g < 2 ^ st.c.g.log2) (hp : p < st.c.ports.size)
     (hr : o.val * st.c.g + g < D.proved.size) :
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) =>
@@ -157,7 +157,7 @@ include L L0 F0 hv1 hda hrows
 
 /-- **An output row's message bytes are the output words its template instance computes** (`outBytes`), in every block
 of a satisfying witness of the hidden statement whose forced-zero row carries 0. -/
-theorem msg_bytes {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+theorem msg_bytes {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
     (hzero : blockBit (L.model regs) z o (zeroCol st.c) = false) {g j : ℕ} (hg : g < st.c.g)
     (hj : j < st.c.outPorts.size) :

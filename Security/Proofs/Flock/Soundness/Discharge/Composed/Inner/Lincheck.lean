@@ -77,11 +77,11 @@ noncomputable def claimOf (m : ℕ) (c : Flock.Claim) (v : 𝔽) : Model.Claim �
 
 /-- The circuit's column vector at the coins (§10, `Model.comb`): `Σ_i L_{i mod 64}(ζ)·eq(ρ_in, ⌊i/64⌋)·(α·A₀[i,c] +
 B₀[i,c])`, plus `β` at the pin, with `ρ_in = ρ[.. k_log − 6]`. -/
-noncomputable def lcU (S : Statement) (ζ α β : F128) (rho : Array F128) : ℕ → 𝔽 :=
+noncomputable def lcU (S : BlockR1CS) (ζ α β : F128) (rho : Array F128) : ℕ → 𝔽 :=
   comb execArith S (fOf ζ) (fOf α) (fOf β) (fun j => fOf rho[j.val]!)
 
 /-- The witness's block-folded columns at `ρ_out = ρ[k_log − 6 ..]` (`hcol`). -/
-noncomputable def lcV (S : Statement) (rho : Array F128) (w : Witness S.m) : ℕ → 𝔽 :=
+noncomputable def lcV (S : BlockR1CS) (rho : Array F128) (w : WitnessBits S.m) : ℕ → 𝔽 :=
   hcol S (fun j => fOf rho[S.kLog - 6 + j.val]!) w
 
 /-- One round's honest message `(e(1), e(∞))` for `Σ_{i<2H} u_i·v_i`, where
@@ -303,7 +303,7 @@ the zerocheck's `(ζ, ρ)`, the unmasked round messages are the honest ones (`lc
 witness's `lcV`) and the unmasked `z_partial` is `lcV` folded at the round coins, then on the circuit's 64 folded
 entries `combv` the "lincheck final" constraint vanishes at `h`, and the `ab` claim, valued at `w`'s `linVal`, holds
 for `w`. -/
-theorem lincheck_complete (S : Statement) (c : CircuitFold) (hc : FoldRealizes c S) (w : Witness S.m)
+theorem lincheck_complete (S : BlockR1CS) (c : CircuitFold) (hc : FoldRealizes c S) (w : WitnessBits S.m)
     (hw : S.Satisfies w) (lay : Zk.PadLayout) (h : Fin lay.len → 𝔽) (ζ α β rPrime : F128) (rho ts : Array F128)
     (hrho : rho.size = S.m - 6) (hts : ts.size = S.kLog - 6) (fA fB : F128) (rounds : Array (F128 × F128))
     (zPartial combv : Array F128)

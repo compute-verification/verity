@@ -161,7 +161,7 @@ whose pads code has `Q ≤ n ≤ 2^63` positions (`coinedOf_sP_val`): an opened 
 there. -/
 private theorem coinedOf_colPAt (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (coinedOf P Tz st).Rest)
     (hQ : Zk.Q ≤ padNOf Tz st) (hN : padNOf Tz st ≤ 2 ^ 63)
-    (w : Model.Witness (coinedOf P Tz st).S.m) (b : ZkView.Base (coinedOf P Tz st).z (coinedOf P Tz st).Hi) (r : Fin 2)
+    (w : Model.WitnessBits (coinedOf P Tz st).S.m) (b : ZkView.Base (coinedOf P Tz st).z (coinedOf P Tz st).Hi) (r : Fin 2)
     (p : Fin ((coinedOf P Tz st).z.nQ + (coinedOf P Tz st).z.nPU)) :
     ((coinedOf P Tz st).T c).colPAt w b r p =
       padColAt (z := (coinedOf P Tz st).z)
@@ -299,7 +299,7 @@ private theorem padN_bounds (x : Msg) (j : Fin (jOf x)) :
 
 /-- **Table `j`'s rep `r` pads column at tree position `p`** is `padColAt` at `X = p + 1`, at every coin vector. -/
 private theorem colPAt_tabC (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x)) (c : Composed.CoinsZK (tabC P x j).Rest)
-    (w : Model.Witness (tabC P x j).S.m) (b : ZkView.Base (tabC P x j).z (tabC P x j).Hi) (r : Fin 2)
+    (w : Model.WitnessBits (tabC P x j).S.m) (b : ZkView.Base (tabC P x j).z (tabC P x j).Hi) (r : Fin 2)
     (p : Fin ((tabC P x j).z.nQ + (tabC P x j).z.nPU)) :
     ((tabC P x j).T c).colPAt w b r p =
       Composed.padColAt (z := (tabC P x j).z)
@@ -312,7 +312,7 @@ private theorem colPAt_tabC (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x))
 
 /-- **A cut's pads leaf at tree position `q` is the leaf at `q`** (`padLeafCut`), whatever the coins' tree. -/
 private theorem padLeafCut_cutAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
-    (wt : ∀ j, Model.Witness (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi)
+    (wt : ∀ j, Model.WitnessBits (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi)
     (lv : ZkView.Leaves (fun j => (tabC P x j).z) → ByteArray) (j : Fin (jOf x)) (r : Fin 2) {q : ℕ}
     (hq : q < (tabC P x j).z.nQ + (tabC P x j).z.nPU) :
     padLeafCut P x cz (cutAt (tabC P x) cz wt ω lv) j r q = lv ⟨j, .inr (.inl (r, ⟨q, hq⟩))⟩ := by

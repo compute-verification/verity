@@ -45,7 +45,7 @@ theorem opnOf_pair {st : Setup} {sch : Flock.Schedule} {n : ℕ} {b₀ b₁ : By
 verify with one cap, each rep's compiled game, played with its proof's messages and its stream's coins, ends in a pend,
 and the salted table's verdict on those pends, at the cap `capOfRoot` reads off the table's `root_B` and the openings
 and salts `opnOf` reads off the two proof files, accepts. -/
-theorem table_verdict_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
+theorem table_verdict_hm96 (spec : SessionSpec) (st : Setup) (S : Model.BlockR1CS) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (hms : st.merkle = MerkleScheme.hm96Sha512) (extra : List (Model.Claim 𝔽 S.m)) (sess : Session)
     (hext : ExtraRealizes st S sess.points extra) (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
@@ -83,7 +83,7 @@ theorem table_verdict_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statemen
 
 /-- **One table's verdict accepts, under plain SHA-512 leaves** (`flock-leaf/sha512-unsalted`): `table_verdict_hm96`
 with `table_refines_plain`, the verdict at `leafPlain`. -/
-theorem table_verdict_plain (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
+theorem table_verdict_plain (spec : SessionSpec) (st : Setup) (S : Model.BlockR1CS) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (hms : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (extra : List (Model.Claim 𝔽 S.m))
     (sess : Session) (hext : ExtraRealizes st S sess.points extra) (hwf : ∀ s ∈ sess.streams.toList, RoundsWF s.rounds)
@@ -121,7 +121,7 @@ theorem table_verdict_plain (spec : SessionSpec) (st : Setup) (S : Model.Stateme
 
 /-- **One table's verdict accepts at the model's leaf of its scheme** (`leafOfId`), under `hm96-sha512/v1` or plain
 SHA-512 leaves: `table_verdict_hm96` or `table_verdict_plain`. -/
-theorem table_verdict_leaf (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
+theorem table_verdict_leaf (spec : SessionSpec) (st : Setup) (S : Model.BlockR1CS) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S) {id : String}
     (hms : (id = "hm96-sha512/v1" ∧ st.merkle = MerkleScheme.hm96Sha512) ∨
       (id = "flock-leaf/sha512-unsalted" ∧ st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted"))

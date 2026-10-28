@@ -4,7 +4,7 @@ import Proofs.Flock.Soundness.Accounting.Fast100
 # The numbers
 
 `tableError` for `fast100` run twice on one root, with live coins, for every supported `m` and
-every statement shape in `Stmt.InRange`:
+every statement shape in `StmtShape.InRange`:
 
 * at most `2^-205` for every `22 ≤ m ≤ 35`, at the analysis slack `η = 1/200` (`Bound.eta`).
 
@@ -50,7 +50,7 @@ theorem half_pow_205_le : ((1 / 2 : ℝ) ^ 205) ≤ (2 : ℝ) ^ (-(205 : ℝ)) :
 /-- **The soundness number for `fast100` run twice on one root, `22 ≤ m ≤ 33`:** at most
 `2^-205` per table, for every statement shape in range. -/
 theorem tableError_le_of_le_33 {m : ℕ} (h1 : 22 ≤ m) (h2 : m ≤ 33) {s : Schedule}
-    (hs : fast100 m = some s) (st : Stmt) (hst : st.InRange) :
+    (hs : fast100 m = some s) (st : StmtShape) (hst : st.InRange) :
     tableError s st ≤ (2 : ℝ) ^ (-(205 : ℝ)) := by
   refine (tableError_le_up s (fast100_levels_ok m s hs) st hst).trans ?_
   refine le_trans ?_ half_pow_205_le
@@ -60,7 +60,7 @@ theorem tableError_le_of_le_33 {m : ℕ} (h1 : 22 ≤ m) (h2 : m ≤ 33) {s : Sc
 
 /-- **The soundness number for `m = 34, 35`:** at most `2^-205` per table. -/
 theorem tableError_le_of_34_35 {m : ℕ} (h1 : 34 ≤ m) (h2 : m ≤ 35) {s : Schedule}
-    (hs : fast100 m = some s) (st : Stmt) (hst : st.InRange) :
+    (hs : fast100 m = some s) (st : StmtShape) (hst : st.InRange) :
     tableError s st ≤ (2 : ℝ) ^ (-(205 : ℝ)) := by
   refine (tableError_le_up s (fast100_levels_ok m s hs) st hst).trans ?_
   refine le_trans ?_ half_pow_205_le

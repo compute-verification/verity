@@ -77,7 +77,7 @@ theorem mul_sum_assoc {K ι : Type} [CommSemiring K] (s : Finset ι) (a : K) (f 
 section Lane
 
 variable {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz st)) (r : Fin 2)
-  (zw : Witness Tz.S.m) {nE L : ℕ} (R : Fin 2 → Fin L → 𝔽) (hp : Fin (nE + 4) → 𝔽)
+  (zw : WitnessBits Tz.S.m) {nE L : ℕ} (R : Fin 2 → Fin L → 𝔽) (hp : Fin (nE + 4) → 𝔽)
 
 /-- **The honest masked values**: each exposed value's clear value (`honestAt`) plus its pad. -/
 noncomputable def honestMasked : Fin nE → 𝔽 := fun i => honestAt Tz st c r zw R i.val + hp (Fin.castAdd 4 i)

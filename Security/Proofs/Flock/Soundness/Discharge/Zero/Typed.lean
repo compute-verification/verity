@@ -36,7 +36,7 @@ theorem castInst_one {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u 
 
 /-- **At an accepted typed flat-class statement, an input that reads the zero copies a forced-zero row** of the
 statement's class (`Placed.TypedAccepted.cls`). -/
-theorem typedAccepted_copyPos_mem_zeros {T : Model.Statement} (a : Placed.TypedAccepted T) (g : Fin a.cls.slots)
+theorem typedAccepted_copyPos_mem_zeros {T : Model.BlockR1CS} (a : Placed.TypedAccepted T) (g : Fin a.cls.slots)
     (i : ℕ) (hz : ZeroAt a.st.c g.val ((a.k.done.getD a.k.unit default).inCols.getD i 0)) :
     a.cls.copyPos g i ∈ a.cls.zeros := by
   obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht, h, k, net, hr, regs, hT⟩ := a

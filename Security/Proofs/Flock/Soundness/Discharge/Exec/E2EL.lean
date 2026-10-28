@@ -10,8 +10,8 @@ circuit and values, 1 on the constants and 0 on the zero, which are public:
 * `flock_e2e_drawnL`: `Pr[accept ∧ a drawn unit wrong] ≤ ε_ks(σ) + δ_link`.
 
 "Wrong" is measured on the audit's circuit `C`, at the committed values: the circuit the statement's rows make, each unit
-its template's rows (`Prog.circuit`: the circuit is chosen on the untrusted side, and the lowering does
-no optimizing). `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn` state it there, with each drawn unit's place from its
+its template's rows (`ProgSpec.circuit`: the circuit is chosen on the untrusted side, and the lowering does
+no optimizing). `ProgSpec.flock_e2e_count` and `ProgSpec.flock_e2e_drawn` state it there, with each drawn unit's place from its
 table's statement (`ProgPlaces`). What a correct unit computes is the certificate's: rows that are `GateRows.rows` of a
 gate circuit `G` compute `G`, so a correct unit's committed values compute `G` (`IsRowsUnit.computes_of_cert`,
 `Certificate.lean`). The only cryptographic assumption is `SHA512CRExpected`, for the link finders built from the prover
@@ -24,8 +24,8 @@ the `_hm96` forms state (`Binding/E2E.lean`).
   as pinned, these are theorems about the protocol as Lean defines it. The executable's verdict, `flock-verify` on the
   run's transcript, is not an event on that outcome. It enters when `hExec` is discharged, and that changes the
   statement's shape.
-* "Rows derived by the verifier" is not in the generic statement: `unitRows` appears only in `dp`. In the `Prog` forms the
-  units' rows are the program's (`Prog.rows`), and `ProgPlaces.placed` says the table's statement holds them.
+* "Rows derived by the verifier" is not in the generic statement: `unitRows` appears only in `dp`. In the `ProgSpec` forms the
+  units' rows are the program's (`ProgSpec.rows`), and `ProgPlaces.placed` says the table's statement holds them.
 
 **The composition.** It composes `flock_batched_count_publicL` and `flock_batched_drawn_publicL`, which are the compiled
 audit, the link theorem and knowledge soundness, all on `main`. Each piece not yet proved is a named hypothesis. The
@@ -108,7 +108,7 @@ end
 
 /-! ## On the circuit of the statement's rows -/
 
-variable {N n : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) {Reg : Type} {mPts : ℕ}
+variable {N n : ℕ} (p : FlockSoundness.ProgSpec N n) (outs : Finset (Fin N)) {Reg : Type} {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
@@ -117,7 +117,7 @@ variable {D Sl : Type} [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E : 
 /-- **The end-to-end count curve on the circuit of the statement's rows.** `flock_e2e_countL` at `C = p.circuit outs`,
 each unit its template's rows, with each drawn unit's place from `ProgPlaces`: if `execAccept` holds, the probability
 that at least `K` units of the program are wrong at the committed values is at most `miss_L(K) + ε_ks(σ) + δ_link`. -/
-theorem _root_.FlockSoundness.Prog.flock_e2e_countL
+theorem _root_.FlockSoundness.ProgSpec.flock_e2e_countL
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     (pp : ProgPlaces p outs plan tab)
     (ones : Finset (Fin N)) (hConst : (p.partition outs).ConstCols plan tab pp.derived.place ones)
@@ -137,8 +137,8 @@ theorem _root_.FlockSoundness.Prog.flock_e2e_countL
   FlockSoundness.Discharge.Exec.flock_e2e_countL (p.partition outs) H E Lf plan tab hExec pp.derived ones hConst zeros hZero vb hk hRw hM hρ hr ht K σ hCR
 
 /-- **The end-to-end drawn-unit bound on the circuit of the statement's rows.** `flock_e2e_drawnL` at
-`C = p.circuit outs`, as in `Prog.flock_e2e_count`. -/
-theorem _root_.FlockSoundness.Prog.flock_e2e_drawnL
+`C = p.circuit outs`, as in `ProgSpec.flock_e2e_count`. -/
+theorem _root_.FlockSoundness.ProgSpec.flock_e2e_drawnL
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     (pp : ProgPlaces p outs plan tab)
     (ones : Finset (Fin N)) (hConst : (p.partition outs).ConstCols plan tab pp.derived.place ones)

@@ -188,7 +188,7 @@ open Game FlockLevel3 in
 and a zerocheck output that is the model's `zc'`, the model's lincheck, played with the proof's lincheck messages and
 the coins of rounds `t.k, …, t.k + 2 + (k_log − 6)`, returns the claim `lincheck_of_checks` hands on, as `ab`
 (`lincheck_refines`). -/
-theorem lincheck_plays_of_checks (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S)
+theorem lincheck_plays_of_checks (S : Model.BlockR1CS) (c : CircuitFold) (hc : FoldRealizes c S)
     (zc : Flock.ZcOut) (zc' : Model.ZcOut 𝔽 S.m) (hzc : ZcRel S.m zc zc') (p : LincheckProof) (t : Transcript)
     (hwf : RoundsWF t.rounds) (ha : LcAnswered t c.kLog p) {ts comb : Array F128}
     (hfold : (List.range' 0 (c.kLog - 6)).foldl (fun s j => lStep p.rounds j s (t.rounds[t.k + 2 + j]!).coins)

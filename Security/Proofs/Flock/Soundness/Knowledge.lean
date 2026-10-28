@@ -49,7 +49,7 @@ theorem off₀_extractTable (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (
   rw [rowT_tabOf]
 
 theorem epsCminus_nonneg [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
+    (E : Merkle.Enc (List F) D) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
     (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (σ : Strategy (tableC A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts)) :
     0 ≤ epsCminus A H E S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts σ := by
@@ -68,7 +68,7 @@ open Classical in
 /-- The fixed-table fact behind extraction: if the extractor's table is not committed, a fresh run
 opens a level-0 position off it with probability at least `ε − ε_c⁻`. -/
 theorem uncommitted_costs (A : Arith F K) (hA : A.Correct)
-    [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
+    [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : BlockR1CS)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (hlay : S.LinkLayout ptLocal mPts)
@@ -113,7 +113,7 @@ probability `ε > ε_c⁻`, the extractor's table from `K ≥ 1` reruns after th
 committed with probability at most `(K·adv₀ + N₀/(eK))/(ε − ε_c⁻)`, where `N₀ = 2^{d₀}` is the
 level-0 codeword length. -/
 theorem table_knowledge_sound (A : Arith F K) (hA : A.Correct)
-    [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
+    [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : BlockR1CS)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (hlay : S.LinkLayout ptLocal mPts)
@@ -158,7 +158,7 @@ open Classical in
 accepts while the extraction from `K ≥ 1` independent reruns after the level-0 cap fails is at
 most `ε_c⁻ + K·adv₀ + N₀/(eK)`, with no condition on `ε`. -/
 theorem table_knowledge_sound_joint_tight (A : Arith F K)
-    (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
+    (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : BlockR1CS)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (hlay : S.LinkLayout ptLocal mPts)
@@ -249,7 +249,7 @@ open Classical in
 /-- **The audit's form with `2ε_c⁻ + 2(K·adv₀ + N₀/(eK))`**, which
 `table_knowledge_sound_joint_tight` implies. -/
 theorem table_knowledge_sound_joint (A : Arith F K)
-    (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
+    (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : BlockR1CS)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (hlay : S.LinkLayout ptLocal mPts)

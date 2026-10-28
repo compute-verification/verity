@@ -26,7 +26,7 @@ variable {D : Type}
 
 /-- `Adv_{r,ℓ}` computed through the lockstep for the level-0 table `T`. -/
 noncomputable def advRT [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
+    (E : Merkle.Enc (List F) D) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
     (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (T : Oracle F) (r ℓ : ℕ)
     (σ : Strategy (tableC A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts)) : ℝ :=
   Lock.forkE (plurC H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (slotOf r ℓ)
@@ -35,7 +35,7 @@ noncomputable def advRT [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
     (lockTable A H E S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts T σ.1) σ.2
 
 theorem advRT_C0star [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
+    (E : Merkle.Enc (List F) D) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
     (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (r ℓ : ℕ)
     (σ : Strategy (tableC A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts)) :
     advRT A H E S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts
@@ -47,7 +47,7 @@ open Classical in
 /-- **The bad runs, cap by cap, for any level-0 table `C₀`**, given a bound `x₀` on the level-0
 rewinding term. -/
 theorem bad_le_gen [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
+    (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (C₀ : Oracle F)
     (σ : Strategy (Game.send (Cap D)
       (tableCmp A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts))) (x₀ : ℝ)
@@ -101,7 +101,7 @@ theorem bad_le_gen [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Mer
 
 /-- **The reps' fork probabilities do not depend on the level-0 table.** -/
 theorem advRT_eq [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
+    (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (T : Oracle F) (r ℓ : ℕ)
     (σ : Strategy (tableC A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts)) :
     advRT A H E S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts T r ℓ σ =
@@ -113,7 +113,7 @@ open Classical in
 /-- **`ε_c⁻`**: `tableError`, the reps' cap terms and the self-clash probability; the compiled
 error without its level-0 rewinding term. -/
 noncomputable def epsCminus [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
+    (E : Merkle.Enc (List F) D) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
     (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (σ : Strategy (tableC A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts)) : ℝ :=
   tableError ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (S.shape mPts) +
@@ -135,7 +135,7 @@ open Classical in
 `P*` and every table `T`: `Pr[accepted ∧ no codeword near T packs a satisfying witness]` is at most
 `ε_c⁻` plus the probability that a run opens a level-0 position off `T`. -/
 theorem table_sound_compiled_of_table (A : Arith F K)
-    (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
+    (hA : A.Correct) [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : BlockR1CS)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (hlay : S.LinkLayout ptLocal mPts) (T : Oracle F)

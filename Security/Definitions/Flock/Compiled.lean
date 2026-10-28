@@ -172,7 +172,7 @@ def ligeritoC (A : Arith F K) (r : ℕ) (sch : Schedule) (T : F) (b : ℕ → F)
             { st with level := 1, caps := [C₁], prevLevel := lv₁ }
 
 /-- One compiled rep (§9–§13): the PIOP as in `rep`, then compiled Ligerito. -/
-def repC (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
+def repC (A : Arith F K) (r : ℕ) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim F S.m)) : Game (PendL F D) := do
   match ← zerocheck A S.m with
   | none => pure PendL.reject
@@ -210,7 +210,7 @@ open Classical in
 /-- **One table's compiled session** (§5, §13–§14): the level-0 cap, the link points, both
 reps, then the openings; accepted iff both reps accept on the openings and every path verifies. -/
 noncomputable def tableC (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) : Game (OutC F D) := do
+    (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) : Game (OutC F D) := do
   let cap₀ ← recv (Cap D)
   let pts ← draw (Fin 2 → Fin mPts → F)
   let extra := extraClaims S ptLocal mPts pts
@@ -245,7 +245,7 @@ open Classical in
 /-- **One table's compiled session under a leaf scheme `Lf`**: `tableC`, with the salts in the openings' message (one
 final message, after the last coin), and every path verified from its row's leaf under its salt. -/
 noncomputable def tableCL {Sl : Type} (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) :
+    (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) :
     Game (OutCL F D Sl) := do
   let cap₀ ← recv (Cap D)
   let pts ← draw (Fin 2 → Fin mPts → F)

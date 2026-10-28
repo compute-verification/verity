@@ -552,7 +552,7 @@ If real concurrency is ever needed:
     probability, by independence), and ε_ks is the largest table's `joint_le_B'` bound averaged over the draw.
   - One table on its own (`FlockCompiled.lean`): `ks` is `table_knowledge_sound_joint_tight`'s left side.
   - The decoder is per drawn unit, since two drawn units that share a wire hold it in their own columns. The circuit
-    `C` stays abstract; for a program it is the rows the verifier parses (`Prog.circuit`), and
+    `C` stays abstract; for a program it is the rows the verifier parses (`ProgSpec.circuit`), and
     `loweringSoundB_of_place` discharges the lowering from each unit's `UnitPlace`. `unitPlace_of_setupH` gives
     the `UnitPlace` from the executable's accept step (`Stmt.setupH`), given the unit's instance in `C`.
   - The link event is the weakest one (every satisfying candidate disagrees). For the expected-time extractor's

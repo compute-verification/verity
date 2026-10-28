@@ -124,7 +124,7 @@ theorem unitProof_of_from {sh : Flock.Shape} {d : RepData} {v : UnitVals} (halg 
 /-- **G's setup facts at one rep's values**: the setup realizes `S` (`SetupRealizes`) at the values' schedule, which is
 V*'s shape's (`ShapeIs`) and models `sch₀`; the values' leaf is the plain one `SetupRealizes` names; and the extras are
 the setup's at every well-formed link point arrays at `pts` (G's `ExtrasAre`). -/
-structure SetupFrom (S : FlockSoundness.Model.Statement) (sch₀ : FlockSoundness.Accounting.Schedule)
+structure SetupFrom (S : FlockSoundness.Model.BlockR1CS) (sch₀ : FlockSoundness.Accounting.Schedule)
     (ptLocal mPts : ℕ) (pts : Fin 2 → Fin mPts → 𝔽) (sh : Flock.Shape) (v : UnitVals) : Prop where
   realizes : FlockVBridge.Family.SetupRealizes v.st S v.sch ptLocal mPts
   shape : FlockVBridge.Family.ShapeIs sh v.st v.sch
@@ -133,7 +133,7 @@ structure SetupFrom (S : FlockSoundness.Model.Statement) (sch₀ : FlockSoundnes
   extras : ∀ P, FlockVBridge.Family.PointsOK v.st S ptLocal mPts pts P → v.st.extra P = .ok v.extras
 
 /-- **The setup's and schedule's part of a rep unit, from G's setup facts.** -/
-theorem unitSetup_of_from {S : FlockSoundness.Model.Statement} {sch₀ : FlockSoundness.Accounting.Schedule}
+theorem unitSetup_of_from {S : FlockSoundness.Model.BlockR1CS} {sch₀ : FlockSoundness.Accounting.Schedule}
     {ptLocal mPts : ℕ} {pts : Fin 2 → Fin mPts → 𝔽} {sh : Flock.Shape} {v : UnitVals}
     (h : SetupFrom S sch₀ ptLocal mPts pts sh v) :
     UnitSetup S sch₀ (FlockSoundness.Model.extraClaims S ptLocal mPts pts) sh v := by
@@ -181,12 +181,12 @@ def ValsSrc.vals (b : ValsSrc) (sh : Flock.Shape) (d : RepData) : UnitVals :=
 
 /-- **The rep's extras are the setup's at some well-formed link point arrays at `pts`** (G's `rep_extras`, there by
 its rep decoder's construction). -/
-def RepExtrasAt (st : Flock.Setup) (S : FlockSoundness.Model.Statement) (ptLocal mPts : ℕ)
+def RepExtrasAt (st : Flock.Setup) (S : FlockSoundness.Model.BlockR1CS) (ptLocal mPts : ℕ)
     (pts : Fin 2 → Fin mPts → 𝔽) (d : RepData) : Prop :=
   ∃ P, FlockVBridge.Family.PointsOK st S ptLocal mPts pts P ∧ st.extra P = .ok d.extras
 
 /-- **`SetupFrom`'s `extras`** (G's `extrasAre_of`): every well-formed link point arrays give the rep's extras. -/
-theorem extras_of_at {st : Flock.Setup} {S : FlockSoundness.Model.Statement} {ptLocal mPts : ℕ}
+theorem extras_of_at {st : Flock.Setup} {S : FlockSoundness.Model.BlockR1CS} {ptLocal mPts : ℕ}
     {pts : Fin 2 → Fin mPts → 𝔽} {d : RepData} (h : RepExtrasAt st S ptLocal mPts pts d) :
     ∀ P, FlockVBridge.Family.PointsOK st S ptLocal mPts pts P → st.extra P = .ok d.extras := by
   obtain ⟨P₀, h₀, he⟩ := h
@@ -195,7 +195,7 @@ theorem extras_of_at {st : Flock.Setup} {S : FlockSoundness.Model.Statement} {pt
 
 /-- **`ProofFrom` at G's values**, from the setup's facts, the rep's extras at well-formed link points and the comb
 port. -/
-theorem ValsSrc.proofFrom (b : ValsSrc) {S : FlockSoundness.Model.Statement} {ptLocal mPts : ℕ}
+theorem ValsSrc.proofFrom (b : ValsSrc) {S : FlockSoundness.Model.BlockR1CS} {ptLocal mPts : ℕ}
     {pts : Fin 2 → Fin mPts → 𝔽} {sh : Flock.Shape} {d : RepData}
     (hset : FlockVBridge.Family.SetupRealizes b.st S b.sch ptLocal mPts)
     (hsh : FlockVBridge.Family.ShapeIs sh b.st b.sch) (hx : RepExtrasAt b.st S ptLocal mPts pts d)
@@ -220,7 +220,7 @@ theorem ValsSrc.proofFrom (b : ValsSrc) {S : FlockSoundness.Model.Statement} {pt
 
 /-- **`SetupFrom` at G's values**, from the setup's facts, its schedule's model and the rep's extras at well-formed
 link points. -/
-theorem ValsSrc.setupFrom (b : ValsSrc) {S : FlockSoundness.Model.Statement}
+theorem ValsSrc.setupFrom (b : ValsSrc) {S : FlockSoundness.Model.BlockR1CS}
     {sch₀ : FlockSoundness.Accounting.Schedule} {ptLocal mPts : ℕ} {pts : Fin 2 → Fin mPts → 𝔽} {sh : Flock.Shape}
     {d : RepData} (hset : FlockVBridge.Family.SetupRealizes b.st S b.sch ptLocal mPts)
     (hsh : FlockVBridge.Family.ShapeIs sh b.st b.sch) (hsched : schedOf b.sch = sch₀)

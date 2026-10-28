@@ -23,7 +23,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.Tables
 import Proofs.Flock.Soundness.Discharge.Layout.Scope
 
 /-!
-# `lay` and `rs` of `Prog.flock_headline`, discharged
+# `lay` and `rs` of `ProgSpec.flock_headline`, discharged
 
 The layout's facts (`Binding.Layout.decode_row`, `Binding.HmRows.bc_registered`, `Binding.HmRows.other_registered`)
 from the decoder's places and the executable's regions:

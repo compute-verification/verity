@@ -217,8 +217,8 @@ section Generic
 variable {F : Type} [Field F] [Fintype F] [DecidableEq F]
 
 /-- `abEval_eq` at any skip weights: a claim at the `ab` point evaluates through the folded columns. -/
-theorem eval_abPoint (S : Statement) (zc : ZcOut F S.m) (ts : Fin (S.kLog - 6) → F) (v : F) (sk : Fin 64 → F)
-    (z : Witness S.m) :
+theorem eval_abPoint (S : BlockR1CS) (zc : ZcOut F S.m) (ts : Fin (S.kLog - 6) → F) (v : F) (sk : Fin 64 → F)
+    (z : WitnessBits S.m) :
     (⟨v, sk, abPoint S zc ts⟩ : Model.Claim F S.m).eval z =
       ∑ s : Fin 64, sk s * foldAll (List.ofFn ts) (2 ^ S.kLog) (hcol S (zc.ρOut S) z) s.val := by
   have hk6 := S.hk6
@@ -248,7 +248,7 @@ def addrW {m : ℕ} (hm : 6 ≤ m) (u : Fin (2 ^ (m - 6))) (i : Fin 64) : Fin (2
 
 omit [Fintype F] [DecidableEq F] in
 /-- A claim's value is its skip weights' combination of the witness's skip positions at its point. -/
-theorem eval_skip {m : ℕ} (hm : 6 ≤ m) (c : Model.Claim F m) (z : Witness m) :
+theorem eval_skip {m : ℕ} (hm : 6 ≤ m) (c : Model.Claim F m) (z : WitnessBits m) :
     c.eval z =
       ∑ i : Fin 64, c.skip i * ∑ u : Fin (2 ^ (m - 6)), Model.eqAt c.x u.val * ((z (addrW hm u i)).val : F) := by
   classical
@@ -275,7 +275,7 @@ end Generic
 /-- **The honest `z_partial` is the witness at the `ab` claim's point** (§10): the block-folded columns `lcV` folded at
 the round coins are, at skip position `i`, `Σ_u eq(x, u)·w[64u + i]` for the `ab` claim's point `x` (the ring switch's
 `zPartialOf`). -/
-theorem foldAll_lcV (S : Statement) (w : Witness S.m) (rho ts : Array F128) (hrho : rho.size = S.m - 6)
+theorem foldAll_lcV (S : BlockR1CS) (w : WitnessBits S.m) (rho ts : Array F128) (hrho : rho.size = S.m - 6)
     (hts : ts.size = S.kLog - 6) (rPrime : F128) (i : Fin 64) :
     foldAll (ts.toList.map fOf) (2 ^ S.kLog) (lcV S rho w) i.val =
       ∑ u : Fin (2 ^ (S.m - 6)), Model.eqAt (vecOf (S.m - 6) (lcAbClaim S.m S.kLog rho ts rPrime).x) u.val *

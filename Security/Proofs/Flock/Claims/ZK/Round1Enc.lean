@@ -114,7 +114,7 @@ noncomputable def enc1 (P : Composed.LigProver) (x : Msg) (c : Fin (refK x) → 
 at the simulator's leaves `H(dig ⊕ b, c)`, is the same at coin vectors that agree at round `0`. -/
 theorem enc1_causal (P : Composed.LigProver) (x : Msg) (c c' : Fin (refK x) → FlockDeploy.Coin)
     (hcc : ∀ k : Fin (refK x), k.val < 1 → c k = c' k) (cz cz' : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
-    (wt : ∀ j, Model.Witness (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi)
+    (wt : ∀ j, Model.WitnessBits (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi)
     (p : ZkView.Leaves (fun j => (tabC P x j).z) → ZkView.Bits × ByteArray) :
     enc1 P x c cz (cutAt (tabC P x) cz wt ω fun l => ZkView.leafH (digOf (tabC P x) cz wt ω l + (p l).1, (p l).2)) =
       enc1 P x c' cz' (cutAt (tabC P x) cz' wt ω fun l =>

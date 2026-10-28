@@ -43,8 +43,8 @@ theorem unit_uniform_input : ∀ (n : ℕ) (g : Fin (Placed.gates k R n)), g.val
   | 0, _, _ => rfl
   | n + 1, g, hg => by
     have h' : g.val < Placed.gates k R n := lt_of_lt_of_le hg (Placed.le_gates k R n)
-    change (FlockSoundness.Prog.snoc (Placed.uniform k R ins one hone n) R _ _ _).unit g = none
-    simp only [FlockSoundness.Prog.unit, h', ↓reduceDIte, unit_uniform_input n ⟨g.val, h'⟩ hg, Option.map_none]
+    change (FlockSoundness.ProgSpec.snoc (Placed.uniform k R ins one hone n) R _ _ _).unit g = none
+    simp only [FlockSoundness.ProgSpec.unit, h', ↓reduceDIte, unit_uniform_input n ⟨g.val, h'⟩ hg, Option.map_none]
 
 /-- `uniform` wires every unit's constant to the input gate `one`. -/
 theorem oneAt_uniform_val : ∀ (n : ℕ) (u : Fin n),
@@ -53,12 +53,12 @@ theorem oneAt_uniform_val : ∀ (n : ℕ) (u : Fin n),
   | n + 1, u => by
     induction u using Fin.lastCases with
     | last =>
-      change (Const.Prog.oneAt (FlockSoundness.Prog.snoc (Placed.uniform k R ins one hone n) R _ _ _)
+      change (Const.Prog.oneAt (FlockSoundness.ProgSpec.snoc (Placed.uniform k R ins one hone n) R _ _ _)
         (Fin.last n)).val = _
       rw [Const.Prog.oneAt_last]
       simp
     | cast v =>
-      change (Const.Prog.oneAt (FlockSoundness.Prog.snoc (Placed.uniform k R ins one hone n) R _ _ _)
+      change (Const.Prog.oneAt (FlockSoundness.ProgSpec.snoc (Placed.uniform k R ins one hone n) R _ _ _)
         v.castSucc).val = _
       rw [Const.Prog.oneAt_castSucc]
       simp [oneAt_uniform_val n v]

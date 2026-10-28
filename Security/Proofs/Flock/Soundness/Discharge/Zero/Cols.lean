@@ -10,7 +10,7 @@ computed column is a gate of the unit itself (`IsRowsUnit.mem`).
 
 - `zeroCols_of_inputs`: `ZeroCols` from its input columns, at any drawn units' places.
 - `Prog.zeroCols_of_inputs`: the same at the places `ProgPlaces` gives the program's units, the `hZero` that
-  `Prog.flock_headline` takes.
+  `ProgSpec.flock_headline` takes.
 - `TableClass.block_eq_zero`: at a table class's slot, an input whose copy position is one of the class's forced-zero rows
   carries 0, in every block of a satisfying witness.
 -/
@@ -44,7 +44,7 @@ theorem zeroCols_of_inputs (place : ∀ S R u, u ∈ S → UnitPlace P (Partitio
     (zeros : Finset (Fin C.N)) (hzu : ∀ g ∈ zeros, P.unit g = none)
     (hone : ∀ S R u (h : u ∈ S), (place S R u h).inst.wire (place S R u h).R.one ∉ zeros)
     (hin : ∀ S R u (h : u ∈ S) (c : Fin (place S R u h).R.w), c.val < (place S R u h).R.nIn →
-      (place S R u h).inst.wire c ∈ zeros → ∀ z : Witness (Partition.tabOf plan tab S R u).S.m,
+      (place S R u h).inst.wire c ∈ zeros → ∀ z : WitnessBits (Partition.tabOf plan tab S R u).S.m,
         (Partition.tabOf plan tab S R u).S.Satisfies z →
         (Partition.tabOf plan tab S R u).S.block z (place S R u h).o ((place S R u h).col c) = 0) :
     P.ZeroCols plan tab place zeros := by
@@ -57,7 +57,7 @@ end Partition
 
 section Prog
 
-variable {N n : ℕ} {p : Prog N n} {outs : Finset (Fin N)} {Reg : Type} {mPts : ℕ}
+variable {N n : ℕ} {p : ProgSpec N n} {outs : Finset (Fin N)} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
 
@@ -66,7 +66,7 @@ unit's constant column sits on one, and each drawn unit's input column on one ca
 theorem Prog.zeroCols_of_inputs (pp : ProgPlaces p outs plan tab) (zeros : Finset (Fin N))
     (hzu : ∀ g ∈ zeros, p.unit g = none) (hone : ∀ u, (pp.inst u).wire (p.rows u).one ∉ zeros)
     (hin : ∀ S R u (h : u ∈ S) (c : Fin (p.rows u).w), c.val < (p.rows u).nIn → (pp.inst u).wire c ∈ zeros →
-      ∀ z : Witness (Partition.tabOf plan tab S R u).S.m, (Partition.tabOf plan tab S R u).S.Satisfies z →
+      ∀ z : WitnessBits (Partition.tabOf plan tab S R u).S.m, (Partition.tabOf plan tab S R u).S.Satisfies z →
         (Partition.tabOf plan tab S R u).S.block z (pp.o S R u h) (pp.col S R u h c) = 0) :
     (p.partition outs).ZeroCols plan tab pp.derived.place zeros :=
   Zero.zeroCols_of_inputs (p.partition outs) plan tab _ zeros hzu (fun _ _ u _ => hone u) hin
@@ -76,7 +76,7 @@ each drawn unit's input column on `zer` carries 0 in every satisfying witness. -
 theorem Prog.zeroCols_singleton (pp : ProgPlaces p outs plan tab) {zer one : Fin N} (hzu : p.unit zer = none)
     (hz1 : zer ≠ one) (hone : ∀ u, (pp.inst u).wire (p.rows u).one = one)
     (hin : ∀ S R u (h : u ∈ S) (c : Fin (p.rows u).w), c.val < (p.rows u).nIn → (pp.inst u).wire c = zer →
-      ∀ z : Witness (Partition.tabOf plan tab S R u).S.m, (Partition.tabOf plan tab S R u).S.Satisfies z →
+      ∀ z : WitnessBits (Partition.tabOf plan tab S R u).S.m, (Partition.tabOf plan tab S R u).S.Satisfies z →
         (Partition.tabOf plan tab S R u).S.block z (pp.o S R u h) (pp.col S R u h c) = 0) :
     (p.partition outs).ZeroCols plan tab pp.derived.place {zer} :=
   Prog.zeroCols_of_inputs pp {zer} (fun _ hg => (Finset.mem_singleton.1 hg) ▸ hzu)
@@ -87,8 +87,8 @@ end Prog
 
 /-- **An input copying a forced-zero row carries 0**: at slot `g` of a table class, an input whose copy position is one
 of the class's forced-zero rows carries 0 in every block of a satisfying witness. -/
-theorem TableClass.block_eq_zero {St : Statement} (cls : TableClass St) (g : Fin cls.slots) (c : Fin cls.rows.w)
-    (hc : c.val < cls.rows.nIn) (hz : cls.copyPos g c.val ∈ cls.zeros) {z : Witness St.m} (hsat : St.Satisfies z)
+theorem TableClass.block_eq_zero {St : BlockR1CS} (cls : TableClass St) (g : Fin cls.slots) (c : Fin cls.rows.w)
+    (hc : c.val < cls.rows.nIn) (hz : cls.copyPos g c.val ∈ cls.zeros) {z : WitnessBits St.m} (hsat : St.Satisfies z)
     (o : Fin (2 ^ St.nbl)) : St.block z o (cls.col g c) = 0 := by
   rw [cls.copy g c hc z hsat o]
   exact cls.zero _ hz z hsat o

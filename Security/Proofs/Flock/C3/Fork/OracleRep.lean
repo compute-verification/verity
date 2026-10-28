@@ -23,7 +23,7 @@ open scoped ENNReal
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
 /-- **One rep's sparse phase** on the rep's outputs, as `regPhase` runs it; no claim where the rep rejected. -/
-def stage (A : Arith F K) (S : Statement) (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ)
+def stage (A : Arith F K) (S : BlockR1CS) (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ)
     (τ : Fin (2 ^ sh.sLog) → ℕ) :
     Option (ZcOut F S.m × HoloLcOut F S.m (S.kLog - 6)) → Game (Option (RegClaim F sh))
   | none => pure none

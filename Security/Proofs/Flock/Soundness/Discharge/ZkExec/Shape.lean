@@ -127,7 +127,7 @@ theorem lincheckRoundsZK_exact {np : ℕ} (P : PadsA np) :
       exact Exact.bind (lincheckRoundsZK_exact P n _ _) fun _ => .ret _
 
 omit [DecidableEq F] [Fintype K] [DecidableEq K] in
-theorem lincheckZK_exact (A : Arith F K) (S : Statement) {np : ℕ} (P : PadsA np) (zc : ZcZK F np S.m) :
+theorem lincheckZK_exact (A : Arith F K) (S : BlockR1CS) {np : ℕ} (P : PadsA np) (zc : ZcZK F np S.m) :
     Exact (lincheckZK A S P zc) (lcShape F S.kLog) := by
   unfold lincheckZK lcShape
   refine Exact.draw_bind fun _ => Exact.draw_bind fun _ => ?_
@@ -260,7 +260,7 @@ theorem ligeritoPadZC_on (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (sch : Sc
     exact ExactOn.bind_ret (ligTailC_on A r sch t c₀ e b lv₀ rest _ _ _ _ _ _) fun _ h => h
 
 omit [Fintype K] in
-theorem restZC_on (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np) (S : Statement) (sch : Schedule)
+theorem restZC_on (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np) (S : BlockR1CS) (sch : Schedule)
     (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (extra : List (Claim F S.m)) (zc : ZcZK F np S.m)
     (ab : ClaimZK F np S.m) :
     ExactOn (ZkLink.restZC (D := D) A P₀ PA S sch hm t c₀ r extra zc ab)
@@ -279,7 +279,7 @@ theorem restZC_on (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA n
 
 omit [Fintype K] in
 theorem repMaskedZC_on (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np) (tr : Triple np)
-    (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (extra : List (Claim F S.m)) :
+    (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (extra : List (Claim F S.m)) :
     ExactOn (ZkLink.repMaskedZC (D := D) A P₀ PA tr S sch hm t c₀ r extra)
       (zcShape F S.m ++ (lcShape F S.kLog ++ (opShape F (extra.length + 2) ++ (ligPadShape F K D sch e t ++ [.msg F]))))
       (fun x => x.2 ≠ PendL.reject) := by

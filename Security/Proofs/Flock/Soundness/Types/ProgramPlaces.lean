@@ -26,32 +26,32 @@ namespace FlockSoundness
 open Audit Types.Dag Compose Model
 
 /-- A block, and the columns there at which statement `St` holds rows `R`. -/
-structure RowsAt (St : Statement) (R : Rows) where
+structure RowsAt (St : BlockR1CS) (R : Rows) where
   o : Fin (2 ^ St.nbl)
   col : Fin R.w → Fin (2 ^ St.kLog)
   placed : BlockRows St R col
 
 /-- The same place, for equal rows. -/
-def RowsAt.cast {St : Statement} {R R' : Rows} (e : R = R') (a : RowsAt St R) : RowsAt St R' := e ▸ a
+def RowsAt.cast {St : BlockR1CS} {R R' : Rows} (e : R = R') (a : RowsAt St R) : RowsAt St R' := e ▸ a
 
-theorem RowsAt.cast_o {St : Statement} {R R' : Rows} (e : R = R') (a : RowsAt St R) : (a.cast e).o = a.o := by
+theorem RowsAt.cast_o {St : BlockR1CS} {R R' : Rows} (e : R = R') (a : RowsAt St R) : (a.cast e).o = a.o := by
   subst e; rfl
 
-theorem RowsAt.cast_col {St : Statement} {R R' : Rows} (e : R = R') (a : RowsAt St R) (c : Fin R'.w) :
+theorem RowsAt.cast_col {St : BlockR1CS} {R R' : Rows} (e : R = R') (a : RowsAt St R) (c : Fin R'.w) :
     (a.cast e).col c = a.col (Fin.cast (congrArg Rows.w e).symm c) := by
   subst e; rfl
 
 /-- **The place carries one value on inputs that share a gate**: in every witness satisfying `St`, the input columns on
 one gate of `wire` hold one value. -/
-def RowsAt.Aliased {St : Statement} {R : Rows} {N : ℕ} (a : RowsAt St R) (wire : Fin R.w → Fin N) : Prop :=
-  ∀ c c', wire c = wire c' → c.val < R.nIn → c'.val < R.nIn → ∀ z : Witness St.m, St.Satisfies z →
+def RowsAt.Aliased {St : BlockR1CS} {R : Rows} {N : ℕ} (a : RowsAt St R) (wire : Fin R.w → Fin N) : Prop :=
+  ∀ c c', wire c = wire c' → c.val < R.nIn → c'.val < R.nIn → ∀ z : WitnessBits St.m, St.Satisfies z →
     St.block z a.o (a.col c) = St.block z a.o (a.col c')
 
 /-- **A table's unit class, placed at each slot**: the verifier's run of `deriveChecked` on the class's layouts, and
 statement `St`'s level-0 matrices holding the class's composed rows at each slot's columns. Every block of a satisfying
 witness carries, at each slot input, what it carries at the input's copy position (`copyPos`, from Δ), and 0 at each
 forced-zero row (`zeros`, whose `A₀` and `B₀` rows are 0). -/
-structure TableClass (St : Statement) where
+structure TableClass (St : BlockR1CS) where
   types : String → Option CircuitType
   ls : Array Layout
   info : String → Option TableInfo
@@ -66,13 +66,13 @@ structure TableClass (St : Statement) where
   copyPos : Fin slots → ℕ → Fin (2 ^ St.kLog)
   copy : ∀ g (c : Fin (Rows.compose (ofBlock words done (done.getD unit default)) (ofBlock_ordered hd)).w),
     c.val < (Rows.compose (ofBlock words done (done.getD unit default)) (ofBlock_ordered hd)).nIn →
-    ∀ z : Witness St.m, St.Satisfies z → ∀ o, St.block z o (col g c) = St.block z o (copyPos g c.val)
+    ∀ z : WitnessBits St.m, St.Satisfies z → ∀ o, St.block z o (col g c) = St.block z o (copyPos g c.val)
   zeros : Finset (Fin (2 ^ St.kLog))
-  zero : ∀ q ∈ zeros, ∀ z : Witness St.m, St.Satisfies z → ∀ o, St.block z o q = 0
+  zero : ∀ q ∈ zeros, ∀ z : WitnessBits St.m, St.Satisfies z → ∀ o, St.block z o q = 0
 
 namespace TableClass
 
-variable {St : Statement} (c : TableClass St)
+variable {St : BlockR1CS} (c : TableClass St)
 
 /-- The class's composed rows. -/
 abbrev rows : Rows := Rows.compose (ofBlock c.words c.done (c.done.getD c.unit default)) (ofBlock_ordered c.hd)
@@ -89,12 +89,12 @@ def Copies (g : Fin c.slots) (src : ℕ → Src) : Prop :=
 end TableClass
 
 /-- **A zero row carries 0**: a position whose `A₀` row is 0 is 0 in every block of a satisfying witness. -/
-theorem block_eq_zero_of_row {St : Statement} {q : Fin (2 ^ St.kLog)} (hq : St.A₀ q = 0) {z : Witness St.m}
+theorem block_eq_zero_of_row {St : BlockR1CS} {q : Fin (2 ^ St.kLog)} (hq : St.A₀ q = 0) {z : WitnessBits St.m}
     (hz : St.Satisfies z) (o : Fin (2 ^ St.nbl)) : St.block z o q = 0 := by
   simpa [Matrix.mulVec, dotProduct, hq] using (hz.1 o q).symm
 
 /-- A unit reads a table class's derivation inputs: its types, layouts, table info and words, and layout. -/
-def UnitSpec.Reads {St : Statement} (s : UnitSpec) (c : TableClass St) : Prop :=
+def UnitSpec.Reads {St : BlockR1CS} (s : UnitSpec) (c : TableClass St) : Prop :=
   s.types = c.types ∧ s.ls = c.ls ∧ s.info = c.info ∧ s.words = c.words ∧ s.idx = c.unit
 
 theorem compose_congr {L L' : Logical} (e : L = L') (h : Ordered L) (h' : Ordered L') :
@@ -102,7 +102,7 @@ theorem compose_congr {L L' : Logical} (e : L = L') (h : Ordered L) (h' : Ordere
   subst e; rfl
 
 /-- **A unit that reads a class's inputs has the class's rows**: `deriveChecked` is a function. -/
-theorem UnitSpec.R_eq_of_reads {St : Statement} {s : UnitSpec} {c : TableClass St} (h : s.Reads c) : s.R = c.rows := by
+theorem UnitSpec.R_eq_of_reads {St : BlockR1CS} {s : UnitSpec} {c : TableClass St} (h : s.Reads c) : s.R = c.rows := by
   obtain ⟨ht, hl, hi, hw, hu⟩ := h
   have hs := s.hd
   rw [ht, hl, hi, hw, hu, c.hd] at hs
@@ -204,9 +204,9 @@ theorem pairs_wire (hk : one < k) : ∀ {outs : List ℕ} (p : UProg k one outs)
       beta_reduce
       rw [srcOf_last, srcGate_snoc p s src valid (valid _ hc)]
       have key : ∀ c' : Fin s.R.w, c'.val < s.t.inBits →
-          (Prog.colWire s.R (p.insOf s src valid) (p.oneOf hk) c').val = p.srcGate (src c'.val) := by
+          (ProgSpec.colWire s.R (p.insOf s src valid) (p.oneOf hk) c').val = p.srcGate (src c'.val) := by
         intro c' hc'
-        rw [Prog.colWire_val, dite_eq_left (by rw [s.nIn_eq]; exact hc')]
+        rw [ProgSpec.colWire_val, dite_eq_left (by rw [s.nIn_eq]; exact hc')]
         rfl
       exact key c hc
     | cast v =>
@@ -239,7 +239,7 @@ noncomputable def derivedPlaces (hk : one < k) {outs : List ℕ} (p : UProg k on
 /-- **A slot's copies make its place aliased**: unit `u`, at slot `g` of block `o` of a class whose derivation inputs it
 reads, carries one value on its inputs that share a gate when the slot's inputs that read one of `u`'s sources copy one
 position, or forced-zero rows. Inputs on one gate read one source (`srcGate_inj`). -/
-theorem aliased_of_copies (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (u : Fin p.n) {St : Statement}
+theorem aliased_of_copies (hk : one < k) {outs : List ℕ} (p : UProg k one outs) (u : Fin p.n) {St : BlockR1CS}
     (cl : TableClass St) (g : Fin cl.slots) (o : Fin (2 ^ St.nbl)) (hr : (p.spec hk u).Reads cl)
     (hc : cl.Copies g (p.srcOf u)) :
     ((cl.atSlot g o).cast (UnitSpec.R_eq_of_reads hr).symm).Aliased (p.instOf hk u).wire := by

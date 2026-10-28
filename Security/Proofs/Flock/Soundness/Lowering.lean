@@ -150,7 +150,7 @@ theorem sum_count_mul {k : ℕ} (l : List (Fin k)) (v : Fin k → ZMod 2) :
         simp [this]
       · simp
 
-theorem mulVec_placed {S : Statement} (M : Matrix (Fin (2 ^ S.kLog)) (Fin (2 ^ S.kLog)) (ZMod 2))
+theorem mulVec_placed {S : BlockR1CS} (M : Matrix (Fin (2 ^ S.kLog)) (Fin (2 ^ S.kLog)) (ZMod 2))
     (r : Fin (2 ^ S.kLog)) {ι : Type} (l : List ι) (col : ι → Fin (2 ^ S.kLog))
     (h : ∀ j, M r j = ((l.map col).count j : ZMod 2)) (v : Fin (2 ^ S.kLog) → ZMod 2) :
     M.mulVec v r = (l.map fun c => v (col c)).sum := by
@@ -159,8 +159,8 @@ theorem mulVec_placed {S : Statement} (M : Matrix (Fin (2 ^ S.kLog)) (Fin (2 ^ S
   rfl
 
 /-- **A satisfied statement satisfies the placed rows**, in every block. -/
-theorem rowsSat_of_satisfies {S : Statement} {R : Rows} {col : Fin R.w → Fin (2 ^ S.kLog)}
-    (hpl : BlockRows S R col) {z : Witness S.m} (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl)) :
+theorem rowsSat_of_satisfies {S : BlockR1CS} {R : Rows} {col : Fin R.w → Fin (2 ^ S.kLog)}
+    (hpl : BlockRows S R col) {z : WitnessBits S.m} (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl)) :
     R.Sat fun c => bit (S.block z o (col c)) := by
   intro i
   have h := hz.1 o (col (R.comp i))
@@ -170,8 +170,8 @@ theorem rowsSat_of_satisfies {S : Statement} {R : Rows} {col : Fin R.w → Fin (
   exact hb.symm
 
 /-- **A placed unit's constant is 1** in every block of a satisfying witness. -/
-theorem BlockRows.one_eq {S : Statement} {R : Rows} {col : Fin R.w → Fin (2 ^ S.kLog)}
-    (hpl : BlockRows S R col) {z : Witness S.m} (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl)) :
+theorem BlockRows.one_eq {S : BlockR1CS} {R : Rows} {col : Fin R.w → Fin (2 ^ S.kLog)}
+    (hpl : BlockRows S R col) {z : WitnessBits S.m} (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl)) :
     S.block z o (col R.one) = 1 := by
   have h := hz.1 o (col R.one)
   simp only [Matrix.mulVec, dotProduct, hpl.hA₁, hpl.hB₁, ite_mul, one_mul, zero_mul,
@@ -182,28 +182,28 @@ theorem BlockRows.one_eq {S : Statement} {R : Rows} {col : Fin R.w → Fin (2 ^ 
 `u`'s rows are placed in block `o` at the columns `col`, and the unit's inputs on one gate carry one
 value there, the transcript decoded from that block makes `u` correct. -/
 theorem lowering_sound {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R : Rows}
-    (I : P.IsRowsUnit u R) {S : Statement} {col : Fin R.w → Fin (2 ^ S.kLog)}
-    (hpl : BlockRows S R col) (o : Fin (2 ^ S.nbl)) {z : Witness S.m} (hz : S.Satisfies z)
+    (I : P.IsRowsUnit u R) {S : BlockR1CS} {col : Fin R.w → Fin (2 ^ S.kLog)}
+    (hpl : BlockRows S R col) (o : Fin (2 ^ S.nbl)) {z : WitnessBits S.m} (hz : S.Satisfies z)
     (ha : I.Agree fun c => bit (S.block z o (col c))) :
     P.Correct (I.decode fun c => bit (S.block z o (col c))) u :=
   I.correct_decode (rowsSat_of_satisfies hpl hz o) ha
 
 namespace UnitPlace
 
-variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {S : Statement} {u : Fin n}
+variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {S : BlockR1CS} {u : Fin n}
 
-theorem agree (pl : UnitPlace P S u) {z : Witness S.m} (hz : S.Satisfies z) :
+theorem agree (pl : UnitPlace P S u) {z : WitnessBits S.m} (hz : S.Satisfies z) :
     pl.inst.Agree fun c => bit (S.block z pl.o (pl.col c)) :=
   fun c c' h hc hc' => congrArg bit (pl.aliased c c' h hc hc' z hz)
 
 /-- **The compiled lowering for a placed unit**: every witness satisfying the table's statement
 decodes to a transcript on which the unit is correct. -/
-theorem correct (pl : UnitPlace P S u) {z : Witness S.m} (hz : S.Satisfies z) :
+theorem correct (pl : UnitPlace P S u) {z : WitnessBits S.m} (hz : S.Satisfies z) :
     P.Correct (pl.decode z) u :=
   lowering_sound pl.inst pl.placed pl.o hz (pl.agree hz)
 
 /-- The decoded transcript carries `true` on the gate the unit's constant reads. -/
-theorem decode_one (pl : UnitPlace P S u) {z : Witness S.m} (hz : S.Satisfies z) :
+theorem decode_one (pl : UnitPlace P S u) {z : WitnessBits S.m} (hz : S.Satisfies z) :
     pl.decode z (pl.inst.wire pl.R.one) = true := by
   simp only [decode]
   rw [pl.inst.decode_wire (pl.agree hz), pl.placed.one_eq hz pl.o]
@@ -213,14 +213,14 @@ end UnitPlace
 
 /-! ## The circuit of a program: its units' rows -/
 
-namespace Prog
+namespace ProgSpec
 
-variable {N₀ n₀ : ℕ} (p : Prog N₀ n₀) (R : Rows) (ins : Fin R.nIn → Fin N₀) (one : Fin N₀)
+variable {N₀ n₀ : ℕ} (p : ProgSpec N₀ n₀) (R : Rows) (ins : Fin R.nIn → Fin N₀) (one : Fin N₀)
   (hone : ∀ c, ins c ≠ one)
 
 omit p R ins one hone in
 /-- **Every unit of a program is an instance of its template's rows** (program level). -/
-theorem rowsWire : ∀ {N n : ℕ} (p : Prog N n) (u : Fin n), Nonempty (p.RowsWire u (p.rows u))
+theorem rowsWire : ∀ {N n : ℕ} (p : ProgSpec N n) (u : Fin n), Nonempty (p.RowsWire u (p.rows u))
   | _, _, .inputs _, u => u.elim0
   | _, _, @snoc N₀ n₀ p R ins one hone, u => by
       refine Fin.lastCases ?_ (fun v => ?_) u
@@ -235,11 +235,11 @@ theorem rowsWire : ∀ {N n : ℕ} (p : Prog N n) (u : Fin n), Nonempty (p.RowsW
 
 omit p R ins one hone in
 /-- **Every unit of a program's circuit is an instance of its template's rows.** -/
-theorem isRowsUnit {N n : ℕ} (p : Prog N n) (outs : Finset (Fin N)) (u : Fin n) :
+theorem isRowsUnit {N n : ℕ} (p : ProgSpec N n) (outs : Finset (Fin N)) (u : Fin n) :
     Nonempty ((p.partition outs).IsRowsUnit u (p.rows u)) :=
   let ⟨W⟩ := p.rowsWire u
   ⟨W.toIsRowsUnit outs⟩
 
-end Prog
+end ProgSpec
 
 end FlockSoundness

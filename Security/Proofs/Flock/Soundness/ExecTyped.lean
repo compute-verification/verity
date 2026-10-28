@@ -25,14 +25,14 @@ namespace FlockSoundness
 
 section rows
 
-variable {S : Model.Statement}
+variable {S : Model.BlockR1CS}
 
 /-- **The block rows at `r` copy `src`**: in `A` and in `B` they read exactly `src`. -/
-def CopyRow (S : Model.Statement) (r src : Fin (2 ^ S.kLog)) : Prop :=
+def CopyRow (S : Model.BlockR1CS) (r src : Fin (2 ^ S.kLog)) : Prop :=
   (∀ j, S.A₀ r j = if j = src then 1 else 0) ∧ ∀ j, S.B₀ r j = if j = src then 1 else 0
 
 /-- **The block rows at `r` are zero**, in `A` and in `B`. -/
-def ZeroRow (S : Model.Statement) (r : Fin (2 ^ S.kLog)) : Prop :=
+def ZeroRow (S : Model.BlockR1CS) (r : Fin (2 ^ S.kLog)) : Prop :=
   (∀ j, S.A₀ r j = 0) ∧ ∀ j, S.B₀ r j = 0
 
 theorem mulVec_single (M : Matrix (Fin (2 ^ S.kLog)) (Fin (2 ^ S.kLog)) (ZMod 2)) {r src : Fin (2 ^ S.kLog)}
@@ -44,7 +44,7 @@ theorem mulVec_zero_row (M : Matrix (Fin (2 ^ S.kLog)) (Fin (2 ^ S.kLog)) (ZMod 
   simp [Matrix.mulVec, dotProduct, h]
 
 /-- **A copy row carries its source**, in every block of a satisfying witness. -/
-theorem CopyRow.block_eq {r src : Fin (2 ^ S.kLog)} (h : CopyRow S r src) {z : Model.Witness S.m}
+theorem CopyRow.block_eq {r src : Fin (2 ^ S.kLog)} (h : CopyRow S r src) {z : Model.WitnessBits S.m}
     (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl)) : S.block z o r = S.block z o src := by
   have hr := hz.1 o r
   rw [mulVec_single S.A₀ h.1, mulVec_single S.B₀ h.2] at hr
@@ -53,7 +53,7 @@ theorem CopyRow.block_eq {r src : Fin (2 ^ S.kLog)} (h : CopyRow S r src) {z : M
   fin_cases x <;> rfl
 
 /-- **A zero row carries 0**, in every block of a satisfying witness. -/
-theorem ZeroRow.block_eq {r : Fin (2 ^ S.kLog)} (h : ZeroRow S r) {z : Model.Witness S.m} (hz : S.Satisfies z)
+theorem ZeroRow.block_eq {r : Fin (2 ^ S.kLog)} (h : ZeroRow S r) {z : Model.WitnessBits S.m} (hz : S.Satisfies z)
     (o : Fin (2 ^ S.nbl)) : S.block z o r = 0 := by
   have hr := hz.1 o r
   rw [mulVec_zero_row S.A₀ h.1, mulVec_zero_row S.B₀ h.2, zero_mul] at hr

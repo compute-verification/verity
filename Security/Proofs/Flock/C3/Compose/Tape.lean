@@ -46,7 +46,7 @@ theorem playsT_dite_pos {α : Type} {c : Prop} {d : Decidable c} {t : c → Game
 each sparse phase plays to its registered claim, R's opening of the two claims plays to `o`, Ligerito on R plays to
 `pR`, and the openings accept every result and verify every path (the reps' against `cap₀`, R's against `capReg`). -/
 theorem holoTableCL_plays (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
+    (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ) (τ : Fin (2 ^ sh.sLog) → ℕ) (rsch : Schedule)
     (capReg cap₀ : Cap D) (pts : Fin 2 → Fin mPts → F) (ts₀ ts₁ sp₀ sp₁ op lg : List Step) (os : Opens F D × Salts Sl)
     (r₀ r₁ : ZcOut F S.m × HoloLcOut F S.m (S.kLog - 6)) (pd₀ pd₁ pR : PendL F D) (c₀ c₁ : RegClaim F sh)

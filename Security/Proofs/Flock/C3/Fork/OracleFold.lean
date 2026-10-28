@@ -352,7 +352,7 @@ theorem slot_term {kl sl : ℕ} (h6 : 6 ≤ sl) (hsk : sl ≤ kl) (lag : Fin 64 
 
 omit [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] in
 theorem sparseFold_slots (A : Arith F K) (sh : SparseShape) (pub : SparsePub F sh) (τ' : Fin (2 ^ sh.sLog) → ℕ)
-    (z : Witness sh.mReg) (s : Fin 64) :
+    (z : WitnessBits sh.mReg) (s : Fin 64) :
     sparseFold A sh pub τ' z s = ∑ σ : Fin (2 ^ sh.sLog), ∑ k : Fin (2 ^ sh.nu), ∑ r : Fin 64,
       A.lagS pub.z r * (pub.U σ * sparsePhi sh.ell pub.alpha (cat6 (skipBits r) pub.xRest)
         (cat6 (skipBits s) pub.yRest) (fun p => planeAt sh z (τ' σ) p k.val)) := by

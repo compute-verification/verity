@@ -22,7 +22,7 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 
 /-- The point of a region claim at link point `r` (§16.2): free bits from `r`, the other in-block
 bits fixed, the block bits from `r[PT_LOCAL …]`. -/
-def regionPoint (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (r : Fin mPts → F) :
+def regionPoint (S : BlockR1CS) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (r : Fin mPts → F) :
     Fin S.m → F :=
   fun j =>
     if hj : j.val < S.kLog then
@@ -35,7 +35,7 @@ def regionPoint (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (
 
 /-- The value of a region claim (§16.2):
 `Σ_b eq(r[PT_LOCAL …], b)·Σ_i eq(r[… |free|], i)·bit_i(bytes(region, b))`. -/
-def regionValue (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (r : Fin mPts → F) : F :=
+def regionValue (S : BlockR1CS) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (r : Fin mPts → F) : F :=
   ∑ b : Fin (2 ^ S.nbl), (∏ i : Fin S.nbl,
         let c := ptLocal + i.val
         let rc : F := if hc : c < mPts then r ⟨c, hc⟩ else 0
@@ -45,7 +45,7 @@ def regionValue (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (
         if i.testBit t then rt else 1 + rt) * ((R.bits b i).val : F)
 
 /-- The claim of region `R` at link point `r`: skip weights `eq(p[0…6], ·)`, `x = p[6 … m]`. -/
-def regionClaim (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (r : Fin mPts → F) :
+def regionClaim (S : BlockR1CS) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (r : Fin mPts → F) :
     Claim F S.m :=
   let p := regionPoint S R ptLocal mPts r
   ⟨regionValue S R ptLocal mPts r,
@@ -54,12 +54,12 @@ def regionClaim (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (
     fun i => if h : i.val + 6 < S.m then p ⟨i.val + 6, h⟩ else 0⟩
 
 /-- The extra claims (§11, §16.2): region-major, point 0 before point 1. -/
-def extraClaims (S : Statement) (ptLocal mPts : ℕ) (pts : Fin 2 → Fin mPts → F) : List (Claim F S.m) :=
+def extraClaims (S : BlockR1CS) (ptLocal mPts : ℕ) (pts : Fin 2 → Fin mPts → F) : List (Claim F S.m) :=
   S.regions.flatMap fun R => [regionClaim S R ptLocal mPts (pts 0), regionClaim S R ptLocal mPts (pts 1)]
 
 /-- **One rep** (§9–§13) on the committed level-0 table `C₀`, opening the region claims
 `extra` alongside `ab` and `c`. -/
-def rep (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (C₀ : Oracle F)
+def rep (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) : Game Bool := do
   match ← zerocheck A S.m with
   | none => pure false
@@ -72,7 +72,7 @@ def rep (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (C₀
       | some op => ligerito A sch op.T op.b C₀
 
 /-- **One table's session.** Returns whether both reps accepted, and the committed table. -/
-def table (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) :
+def table (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) :
     Game (Bool × Oracle F) := do
   let C₀ ← recv (Oracle F)                               -- Commit: the level-0 table (root_B)
   let pts ← draw (Fin 2 → Fin mPts → F)                  -- the link points

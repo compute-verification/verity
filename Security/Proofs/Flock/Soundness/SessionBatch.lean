@@ -35,7 +35,7 @@ variable {D : Type}
 /-- A table of a batched session: a statement, its `fast100` schedule by levels, and its link
 layout for the session's `m_pts`. -/
 structure TabSpec (mPts : ℕ) where
-  S : Statement
+  S : BlockR1CS
   m : ℕ
   k0 : ℕ
   l₀ : Level

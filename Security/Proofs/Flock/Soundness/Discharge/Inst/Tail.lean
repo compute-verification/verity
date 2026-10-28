@@ -434,7 +434,7 @@ returned-output group is bit `t` of output word `j` at the VU's instance (the pi
 theorem tail_pinned {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     (hR : HmRow.regions st.c st.pub = .ok st.regions) (ho : st.c.outNet ≠ st.c.unitNet) (hty : st.c.typed = none)
-    {z : Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
+    {z : WitnessBits (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
     {g j t : ℕ} (hA : 2 ^ tz (16 * st.c.outWords) = 16 * st.c.outWords) (hg : g < st.c.g)
     (hB : g < 2 ^ tz (st.c.rangeOf st.c.outNet).count) (hj : j < st.c.outWords) (ht : t < 16) :
     bit ((L.model regs).block z o (Layout.inBlockOr st.c.kLog ((st.c.rangeOf st.c.outNet).start +
@@ -592,7 +592,7 @@ bit `t` of output `j` of the slot's returned output words at the VU's instance (
 theorem out_pinnedT {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     (hR : HmRow.regions st.c st.pub = .ok st.regions) (hty : st.c.typed = none)
-    {z : Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
+    {z : WitnessBits (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
     {g i j t : ℕ} (hg : g < st.c.g) (hi : i < st.c.perVu.getD st.c.outNet 0) (hP : PinShape st.c)
     (hv : ∀ j < (outsOf st.c i).size, outValT st.c st.pub o.val g i j < 2 ^ 16)
     (hj : j < (outsOf st.c i).size) (ht : t < 16) :
@@ -660,7 +660,7 @@ theorem out_drawnT {tags : Tags} {circuitFile publicFile : ByteArray} {coins : C
     {D : Draw.UnitDraw} (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population)
     (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) (hty : st.c.typed = none)
-    {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
+    {z : Model.WitnessBits (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
     {g i j t : ℕ} (hg : g < st.c.g) (hr : o.val * st.c.g + g < D.proved.size)
     (hi : i < st.c.perVu.getD st.c.outNet 0) (hP : PinShape st.c) (hj : j < (outsOf st.c i).size) (ht : t < 16) :
     bit ((L.model regs).block z o (Layout.inBlockOr st.c.kLog (st.c.slotCol st.c.outNet g i + outColT st.c j t))) =
@@ -675,14 +675,14 @@ theorem out_drawnT {tags : Tags} {circuitFile publicFile : ByteArray} {coins : C
   rw [outValT_drawn hdr hD hsz hlt hr (hlo j' hj')]
   exact Layout.getD_lt_of_forall h16 (Nat.two_pow_pos _) _
 
-variable {T : Model.Statement}
+variable {T : Model.BlockR1CS}
 
 /-- **The returned outputs at a drawn unit's site are the population's**: in a satisfying witness of an accepted drawn
 statement of an untyped circuit, at a site (`BcSite`: block `o`, template instance `g`, proved unit `u`), the bit at
 column `16 j + t` of the returned-output group of the output net's slot `i` is bit `t` of the population's output word
 `(outsOf c i)[j]` of `u`, under `PinShape`. -/
 theorem out_siteT (a : Placed.Accepted T) {pop : Public} {o : Fin (2 ^ T.nbl)} {g u : ℕ}
-    (hs : Layout.BcSite a pop o g u) (hty : a.st.c.typed = none) {z : Witness T.m} (hz : T.Satisfies z) (hg : g < a.st.c.g) {i j t : ℕ}
+    (hs : Layout.BcSite a pop o g u) (hty : a.st.c.typed = none) {z : WitnessBits T.m} (hz : T.Satisfies z) (hg : g < a.st.c.g) {i j t : ℕ}
     (hi : i < a.st.c.perVu.getD a.st.c.outNet 0) (hP : PinShape a.st.c) (hj : j < (outsOf a.st.c i).size)
     (ht : t < 16) :
     bit (z (Layout.siteAddr a o (a.st.c.slotCol a.st.c.outNet g i + outColT a.st.c j t))) =

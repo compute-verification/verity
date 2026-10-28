@@ -229,7 +229,7 @@ whose `m`, `k_log`, circuit fold and extra claims are the model's `S` and `extra
 Then at the proofs' openings, each rep's compiled game, played with its proof's messages and every coin of its stream,
 accepts, and both reps' paths verify from their rows' salted leaves, under the proofs' salts, against the one level-0
 cap. -/
-theorem verify_refines_hm96 (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
+theorem verify_refines_hm96 (spec : SessionSpec) (st : Setup) (S : Model.BlockR1CS) (hm : 13 ≤ S.m)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (hms : st.merkle = MerkleScheme.hm96Sha512) (extra : Session → List (Model.Claim 𝔽 S.m))
     (record : String) (proofs : Array ByteArray)

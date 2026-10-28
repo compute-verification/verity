@@ -17,8 +17,8 @@ reading earlier columns and the constant. In the circuit it is one gate, `Op.row
 * `BlockRows`: unit `u`'s rows placed in block `o` of a statement (the block matrices' rows at the unit's computed
   columns read exactly its rows' columns, and its constant's rows read the pin). `UnitPlace` bundles a drawn unit's
   place in a table: its rows, its instance, its block and its columns.
-* `Prog`: a program of units, each a template's rows appended after the gates it reads, with its circuit
-  (`Prog.circuit`), partition and rows, and `Prog.RowsWire`, the wiring that makes each unit an `IsRowsUnit`
+* `ProgSpec`: a program of units, each a template's rows appended after the gates it reads, with its circuit
+  (`ProgSpec.circuit`), partition and rows, and `ProgSpec.RowsWire`, the wiring that makes each unit an `IsRowsUnit`
   (`rowsWire_snoc`, `rowsWire_last`). The lemmas these constructions carry as proofs (`topo`, `input_iff`, the
   `colWire`, `unit` and `op` equations) are here with them.
 
@@ -100,7 +100,7 @@ def bit (x : ZMod 2) : Bool := decide (x = 1)
 /-- **A unit's rows placed in a statement**, at the block columns `col`: the block matrices' rows at
 the unit's computed columns read exactly the placed columns of its rows, and the rows at its constant
 read the pin (every slot's constant is wired to the pin, PROTOCOL.md §16.1). -/
-structure BlockRows (S : Statement) (R : Rows) (col : Fin R.w → Fin (2 ^ S.kLog)) : Prop where
+structure BlockRows (S : BlockR1CS) (R : Rows) (col : Fin R.w → Fin (2 ^ S.kLog)) : Prop where
   hA : ∀ i j, S.A₀ (col (R.comp i)) j = (((R.a i).map col).count j : ZMod 2)
   hB : ∀ i j, S.B₀ (col (R.comp i)) j = (((R.b i).map col).count j : ZMod 2)
   hA₁ : ∀ j, S.A₀ (col R.one) j = if j = S.pin then 1 else 0
@@ -110,21 +110,21 @@ structure BlockRows (S : Statement) (R : Rows) (col : Fin R.w → Fin (2 ^ S.kLo
 block and columns where the table's statement holds its rows. The unit's input columns on one gate
 carry one value in every witness satisfying the statement (`aliased`): they copy one source's
 position, or forced-zero rows. -/
-structure UnitPlace {C : Circuit} {n : ℕ} (P : Audit.Partition C n) (S : Statement) (u : Fin n) where
+structure UnitPlace {C : Circuit} {n : ℕ} (P : Audit.Partition C n) (S : BlockR1CS) (u : Fin n) where
   R : Rows
   inst : P.IsRowsUnit u R
   o : Fin (2 ^ S.nbl)
   col : Fin R.w → Fin (2 ^ S.kLog)
   placed : BlockRows S R col
   aliased : ∀ c c', inst.wire c = inst.wire c' → c.val < R.nIn → c'.val < R.nIn →
-    ∀ z : Witness S.m, S.Satisfies z → S.block z o (col c) = S.block z o (col c')
+    ∀ z : WitnessBits S.m, S.Satisfies z → S.block z o (col c) = S.block z o (col c')
 
 namespace UnitPlace
 
-variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {S : Statement} {u : Fin n}
+variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {S : BlockR1CS} {u : Fin n}
 
 /-- The transcript a witness gives for a placed unit, read from its block. -/
-noncomputable def decode (pl : UnitPlace P S u) (z : Witness S.m) : Fin C.N → Bool :=
+noncomputable def decode (pl : UnitPlace P S u) (z : WitnessBits S.m) : Fin C.N → Bool :=
   pl.inst.decode fun c => bit (S.block z pl.o (pl.col c))
 
 end UnitPlace
@@ -154,12 +154,12 @@ end Audit.Op
 /-- **A program of template units**, unit by unit: `k` input gates, then each unit's computed rows.
 A unit's input columns are wired to earlier gates, several possibly to one, and its constant to an
 earlier gate none of them is wired to. -/
-inductive Prog : ℕ → ℕ → Type
-  | inputs (k : ℕ) : Prog k 0
-  | snoc {N n : ℕ} (p : Prog N n) (R : Rows) (ins : Fin R.nIn → Fin N) (one : Fin N)
-      (hone : ∀ c, ins c ≠ one) : Prog (N + R.nComp) (n + 1)
+inductive ProgSpec : ℕ → ℕ → Type
+  | inputs (k : ℕ) : ProgSpec k 0
+  | snoc {N n : ℕ} (p : ProgSpec N n) (R : Rows) (ins : Fin R.nIn → Fin N) (one : Fin N)
+      (hone : ∀ c, ins c ≠ one) : ProgSpec (N + R.nComp) (n + 1)
 
-namespace Prog
+namespace ProgSpec
 
 /-- A new unit's columns as gates: its inputs and constant where they are wired, its computed rows
 after the earlier gates. -/
@@ -187,14 +187,14 @@ theorem colWire_lt_of_not_comp {N : ℕ} (R : Rows) (ins : Fin R.nIn → Fin N) 
   · simp only [Fin.val_castAdd]; exact one.isLt
 
 /-- The gates' operations. -/
-def op : {N n : ℕ} → Prog N n → Fin N → Audit.Op N
+def op : {N n : ℕ} → ProgSpec N n → Fin N → Audit.Op N
   | _, _, .inputs _, _ => .input
   | _, _, @snoc N₀ _ p R ins one _, g =>
       if h : g.val < N₀ then (p.op ⟨g.val, h⟩).lift (Fin.castAdd R.nComp)
       else .row ((R.a ⟨g.val - N₀, by have := g.isLt; omega⟩).map (colWire R ins one))
         ((R.b ⟨g.val - N₀, by have := g.isLt; omega⟩).map (colWire R ins one))
 
-theorem topo : ∀ {N n : ℕ} (p : Prog N n) (g : Fin N), ∀ a ∈ (p.op g).args, a < g
+theorem topo : ∀ {N n : ℕ} (p : ProgSpec N n) (g : Fin N), ∀ a ∈ (p.op g).args, a < g
   | _, _, .inputs _, _, _, ha => by simp [op, Audit.Op.args] at ha
   | _, _, @snoc N₀ _ p R ins one _, g, a, ha => by
       by_cases h : g.val < N₀
@@ -223,12 +223,12 @@ theorem topo : ∀ {N n : ℕ} (p : Prog N n) (g : Fin N), ∀ a ∈ (p.op g).ar
         · exact key c (List.mem_append_right _ hc)
 
 /-- The gates' units: the input gates are the input unit, and each unit holds its computed rows. -/
-def unit : {N n : ℕ} → Prog N n → Fin N → Option (Fin n)
+def unit : {N n : ℕ} → ProgSpec N n → Fin N → Option (Fin n)
   | _, _, .inputs _, _ => none
   | _, _, @snoc N₀ n₀ p _ _ _ _, g =>
       if h : g.val < N₀ then (p.unit ⟨g.val, h⟩).map Fin.castSucc else some (Fin.last n₀)
 
-theorem input_iff : ∀ {N n : ℕ} (p : Prog N n) (g : Fin N),
+theorem input_iff : ∀ {N n : ℕ} (p : ProgSpec N n) (g : Fin N),
     p.unit g = none ↔ (p.op g).isInput = true
   | _, _, .inputs _, _ => by simp [unit, op, Audit.Op.isInput]
   | _, _, @snoc N₀ _ p _ _ _ _, g => by
@@ -238,15 +238,15 @@ theorem input_iff : ∀ {N n : ℕ} (p : Prog N n) (g : Fin N),
       · simp [unit, op, h, Audit.Op.isInput]
 
 /-- **The program's circuit**: its gates are its units' rows. -/
-def circuit {N n : ℕ} (p : Prog N n) (outs : Finset (Fin N)) : Audit.Circuit :=
+def circuit {N n : ℕ} (p : ProgSpec N n) (outs : Finset (Fin N)) : Audit.Circuit :=
   ⟨N, p.op, p.topo, outs⟩
 
 /-- The program's partition into its units. -/
-def partition {N n : ℕ} (p : Prog N n) (outs : Finset (Fin N)) : Audit.Partition (p.circuit outs) n :=
+def partition {N n : ℕ} (p : ProgSpec N n) (outs : Finset (Fin N)) : Audit.Partition (p.circuit outs) n :=
   ⟨p.unit, p.input_iff⟩
 
 /-- Each unit's template rows. -/
-def rows : {N n : ℕ} → Prog N n → Fin n → Rows
+def rows : {N n : ℕ} → ProgSpec N n → Fin n → Rows
   | _, _, .inputs _, u => u.elim0
   | _, _, @snoc _ n₀ p R _ _ _, u => if h : u.val < n₀ then p.rows ⟨u.val, h⟩ else R
 
@@ -282,7 +282,7 @@ theorem colWire_shared {N : ℕ} (R : Rows) (ins : Fin R.nIn → Fin N) (one : F
     have := one.isLt
     split_ifs at hv <;> exact Fin.ext (by omega)
 
-variable {N₀ n₀ : ℕ} (p : Prog N₀ n₀) (R : Rows) (ins : Fin R.nIn → Fin N₀) (one : Fin N₀)
+variable {N₀ n₀ : ℕ} (p : ProgSpec N₀ n₀) (R : Rows) (ins : Fin R.nIn → Fin N₀) (one : Fin N₀)
   (hone : ∀ c, ins c ≠ one)
 
 theorem unit_castAdd (g : Fin N₀) :
@@ -306,7 +306,7 @@ theorem op_new (i : Fin R.nComp) :
 
 /-- Unit `u` of a program is an instance of `R`: `Partition.IsRowsUnit` for the program's circuit
 and partition, stated with the program's gates. -/
-structure RowsWire {N n : ℕ} (p : Prog N n) (u : Fin n) (R : Rows) where
+structure RowsWire {N n : ℕ} (p : ProgSpec N n) (u : Fin n) (R : Rows) where
   wire : Fin R.w → Fin N
   shared : ∀ c c', wire c = wire c' → c = c' ∨ c.val < R.nIn ∧ c'.val < R.nIn
   mem : ∀ i, p.unit (wire (R.comp i)) = some u
@@ -315,7 +315,7 @@ structure RowsWire {N n : ℕ} (p : Prog N n) (u : Fin n) (R : Rows) where
   onto : ∀ g, p.unit g = some u → ∃ i, wire (R.comp i) = g
 
 /-- The program-level instance is the audit's. -/
-def RowsWire.toIsRowsUnit {N n : ℕ} {p : Prog N n} {u : Fin n} {R : Rows} (W : p.RowsWire u R)
+def RowsWire.toIsRowsUnit {N n : ℕ} {p : ProgSpec N n} {u : Fin n} {R : Rows} (W : p.RowsWire u R)
     (outs : Finset (Fin N)) : (p.partition outs).IsRowsUnit u R :=
   ⟨W.wire, W.shared, W.mem, W.op, W.outside, W.onto⟩
 
@@ -370,6 +370,6 @@ def rowsWire_last : (snoc p R ins one hone).RowsWire (Fin.last n₀) R where
       rw [colWire_comp]
       exact Fin.ext (by simp; omega)
 
-end Prog
+end ProgSpec
 
 end FlockSoundness

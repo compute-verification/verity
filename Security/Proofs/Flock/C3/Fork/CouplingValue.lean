@@ -23,7 +23,7 @@ theorem value_coin_mono {β γ C : Type} [Fintype C] [Nonempty C] {p : β → Pr
   value_bind_mono h (Game.coin C Game.ret)
 
 /-- `holoRep` is `holoRepO` handing on nothing where Ligerito rejects. -/
-theorem holoRep_eq_map (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (C₀ : Oracle F)
+theorem holoRep_eq_map (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) :
     holoRep A S sch hm C₀ extra = (holoRepO A S sch hm C₀ extra).map fun p => if p.2 then p.1 else none := by
   simp only [holoRep, holoRepO, Game.map, Game.bind_eq, Game.pure_eq, Game.bind_assoc]
@@ -45,7 +45,7 @@ theorem holoRep_eq_map (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13
 
 /-- **The coupling's oracle game against the oracle table**: at any level-0 table `C₀`, `holoOrcL` accepts no more
 often than `holoTable` does at the same registered word `w`. -/
-theorem holoOrcL_value_le {Sl : Type} (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
+theorem holoOrcL_value_le {Sl : Type} (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ) (τ : Fin (2 ^ sh.sLog) → ℕ)
     (rsch : Schedule) (w C₀ : Oracle F) :
     value (fun b : Bool => b = true)

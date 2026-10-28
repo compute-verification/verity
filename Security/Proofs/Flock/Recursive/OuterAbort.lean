@@ -91,7 +91,7 @@ open Classical in
 /-- **One table at one coin vector** (`coin_close`, the registered values public at `c` alone): the prover's output and
 the simulator's are within `2·|LeafPos|·2^-193`, both ways. -/
 theorem coin_close_at (C : CoinedSetup) (hC : CoinedOK execArith (Refine.fOf Flock.Zk.PAD_C) C)
-    (hKey : Assumptions.Zk.HashDerivedKeyHm96) (c : CoinsZK C.Rest) (w w0 : Witness C.S.m) (hv : C.Valid w)
+    (hKey : Assumptions.Zk.HashDerivedKeyHm96) (c : CoinsZK C.Rest) (w w0 : WitnessBits C.S.m) (hv : C.Valid w)
     (hreg : (C.T c).tab.sReg w = (C.T c).tab.pubReg) (E : (C.T c).tab.View ⊕ (C.T c).tab.Cut → Prop) :
     prCoin (fun p : (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt) => E (outExe C c w p.1 p.2))
         ≤ prCoin (fun p : (C.T c).tab.SimRand × ((C.T c).tab.Hid → ZkView.Salt) => E (simAll C c w0 p.1 p.2))
@@ -142,7 +142,7 @@ open Classical in
 /-- **What the session's honest prover sends** at `J` tables, coin vector `c`, witnesses `w` and prover randomness `p`:
 `stopped p` if some table's self-check stops, else the joint view `enc` encodes. -/
 noncomputable def sendsJ {J : ℕ} (C : Fin J → CoinedSetup) (c : ∀ j, CoinsZK (C j).Rest) {Out : Type}
-    (enc : (∀ j, ((C j).T (c j)).tab.View) → Out) (w : ∀ j, Witness (C j).S.m)
+    (enc : (∀ j, ((C j).T (c j)).tab.View) → Out) (w : ∀ j, WitnessBits (C j).S.m)
     (stopped : (∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt)) → Out)
     (p : ∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt)) : Out :=
   if ∃ j, ((C j).T (c j)).tab.Stops (w j) (p j).1 then stopped p
@@ -151,7 +151,7 @@ noncomputable def sendsJ {J : ℕ} (C : Fin J → CoinedSetup) (c : ∀ j, Coins
 /-- **The self-check never stops** at coins the prover doesn't refuse, valid witnesses and public registered values:
 `CoinedOK`'s inner relation. -/
 theorem stopsJ_never {J : ℕ} {C : Fin J → CoinedSetup} (hC : ∀ j, CoinedOK execArith (fOf Zk.PAD_C) (C j))
-    {c : ∀ j, CoinsZK (C j).Rest} (hc : ∀ j, (C j).Admits (c j)) {w : ∀ j, Witness (C j).S.m}
+    {c : ∀ j, CoinsZK (C j).Rest} (hc : ∀ j, (C j).Admits (c j)) {w : ∀ j, WitnessBits (C j).S.m}
     (hv : ∀ j, (C j).Valid (w j)) (hreg : ∀ j, ((C j).T (c j)).tab.sReg (w j) = ((C j).T (c j)).tab.pubReg)
     (p : ∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt)) :
     ¬ ∃ j, ((C j).T (c j)).tab.Stops (w j) (p j).1 := by
@@ -162,7 +162,7 @@ theorem stopsJ_never {J : ℕ} {C : Fin J → CoinedSetup} (hC : ∀ j, CoinedOK
 
 /-- The stop bit is false with probability one: the simulator outputs `false` at no cost. -/
 theorem prCoin_stopsJ {J : ℕ} {C : Fin J → CoinedSetup} (hC : ∀ j, CoinedOK execArith (fOf Zk.PAD_C) (C j))
-    {c : ∀ j, CoinsZK (C j).Rest} (hc : ∀ j, (C j).Admits (c j)) {w : ∀ j, Witness (C j).S.m}
+    {c : ∀ j, CoinsZK (C j).Rest} (hc : ∀ j, (C j).Admits (c j)) {w : ∀ j, WitnessBits (C j).S.m}
     (hv : ∀ j, (C j).Valid (w j)) (hreg : ∀ j, ((C j).T (c j)).tab.sReg (w j) = ((C j).T (c j)).tab.pubReg) :
     Game.prCoin (fun p : ∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt) =>
       ∃ j, ((C j).T (c j)).tab.Stops (w j) (p j).1) = 0 :=
@@ -172,7 +172,7 @@ theorem prCoin_stopsJ {J : ℕ} {C : Fin J → CoinedSetup} (hC : ∀ j, CoinedO
 /-- **The honest prover's transmission is the joint view** at coins it doesn't refuse, valid witnesses and public
 registered values. -/
 theorem sendsJ_honest {J : ℕ} {C : Fin J → CoinedSetup} (hC : ∀ j, CoinedOK execArith (fOf Zk.PAD_C) (C j))
-    {c : ∀ j, CoinsZK (C j).Rest} (hc : ∀ j, (C j).Admits (c j)) {w : ∀ j, Witness (C j).S.m}
+    {c : ∀ j, CoinsZK (C j).Rest} (hc : ∀ j, (C j).Admits (c j)) {w : ∀ j, WitnessBits (C j).S.m}
     (hv : ∀ j, (C j).Valid (w j)) (hreg : ∀ j, ((C j).T (c j)).tab.sReg (w j) = ((C j).T (c j)).tab.pubReg)
     {Out : Type} (enc : (∀ j, ((C j).T (c j)).tab.View) → Out)
     (stopped : (∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt)) → Out)
@@ -189,7 +189,7 @@ registered values are the public ones and the simulators' joint view at any `w0 
 ways. -/
 def ZkViewAtJS {J : ℕ} (C : Fin J → CoinedSetup) (δ₁ : ℝ≥0∞) : Prop :=
   ∀ (c : ∀ j, CoinsZK (C j).Rest), (∀ j, (C j).Admits (c j)) → ∀ {Out : Type}
-    (enc : (∀ j, ((C j).T (c j)).tab.View) → Out) (w w0 : ∀ j, Witness (C j).S.m), (∀ j, (C j).Valid (w j)) →
+    (enc : (∀ j, ((C j).T (c j)).tab.View) → Out) (w w0 : ∀ j, WitnessBits (C j).S.m), (∀ j, (C j).Valid (w j)) →
     ∀ (_hreg : ∀ j, ((C j).T (c j)).tab.sReg (w j) = ((C j).T (c j)).tab.pubReg)
       (stopped : (∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt)) → Out) (E : Out → Prop),
     Game.prCoin (fun p : ∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt) =>
@@ -224,7 +224,7 @@ fixed coins, of the tables' cuts up to there, each a function of the table's out
 add to what `enc` may read. A rep's self-check runs after its zerocheck opened its outer coins, where a `1` stops the
 session first (`refuse_outer`), so every rep whose self-check runs is one the guard ranges over. -/
 noncomputable def sendsAllJ {J : ℕ} (C : Fin J → CoinedSetup) (c : ∀ j, CoinsZK (C j).Rest) {Out : Type}
-    (enc : (∀ j, ((C j).T (c j)).tab.View ⊕ ((C j).T (c j)).tab.Cut) → Out) (w : ∀ j, Witness (C j).S.m)
+    (enc : (∀ j, ((C j).T (c j)).tab.View ⊕ ((C j).T (c j)).tab.Cut) → Out) (w : ∀ j, WitnessBits (C j).S.m)
     (stopped : (∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt)) → Out)
     (p : ∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt)) : Out :=
   if ∃ j r, (∀ x ∈ (C j).rOuter (c j) r, x ≠ 1) ∧ ((C j).T (c j)).tab.StopsAt (w j) (p j).1 r then stopped p
@@ -239,7 +239,7 @@ def SelfCheckAtReps (C : CoinedSetup) : Prop :=
 /-- **The self-check never stops at a rep whose outer coins aren't `1`**, at any coin vector, valid witnesses and public
 registered values. -/
 theorem stopsAllJ_never {J : ℕ} {C : Fin J → CoinedSetup} (hR : ∀ j, SelfCheckAtReps (C j))
-    {c : ∀ j, CoinsZK (C j).Rest} {w : ∀ j, Witness (C j).S.m} (hv : ∀ j, (C j).Valid (w j))
+    {c : ∀ j, CoinsZK (C j).Rest} {w : ∀ j, WitnessBits (C j).S.m} (hv : ∀ j, (C j).Valid (w j))
     (hreg : ∀ j, ((C j).T (c j)).tab.sReg (w j) = ((C j).T (c j)).tab.pubReg)
     (p : ∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt)) :
     ¬ ∃ j r, (∀ x ∈ (C j).rOuter (c j) r, x ≠ 1) ∧ ((C j).T (c j)).tab.StopsAt (w j) (p j).1 r := by
@@ -249,7 +249,7 @@ theorem stopsAllJ_never {J : ℕ} {C : Fin J → CoinedSetup} (hR : ∀ j, SelfC
 /-- **The honest prover's transmission is `enc` of the tables' outputs** at any coin vector, valid witnesses and public
 registered values. -/
 theorem sendsAllJ_honest {J : ℕ} {C : Fin J → CoinedSetup} (hR : ∀ j, SelfCheckAtReps (C j))
-    {c : ∀ j, CoinsZK (C j).Rest} {w : ∀ j, Witness (C j).S.m} (hv : ∀ j, (C j).Valid (w j))
+    {c : ∀ j, CoinsZK (C j).Rest} {w : ∀ j, WitnessBits (C j).S.m} (hv : ∀ j, (C j).Valid (w j))
     (hreg : ∀ j, ((C j).T (c j)).tab.sReg (w j) = ((C j).T (c j)).tab.pubReg) {Out : Type}
     (enc : (∀ j, ((C j).T (c j)).tab.View ⊕ ((C j).T (c j)).tab.Cut) → Out)
     (stopped : (∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt)) → Out)
@@ -268,7 +268,7 @@ independent, are within `Σ_j 2·|LeafPos_j|·δ₁`, both ways. The refusal rea
 exactly where the prover does. -/
 def ZkViewAllJ {J : ℕ} (C : Fin J → CoinedSetup) (δ₁ : ℝ≥0∞) : Prop :=
   ∀ (c : ∀ j, CoinsZK (C j).Rest) {Out : Type}
-    (enc : (∀ j, ((C j).T (c j)).tab.View ⊕ ((C j).T (c j)).tab.Cut) → Out) (w w0 : ∀ j, Witness (C j).S.m),
+    (enc : (∀ j, ((C j).T (c j)).tab.View ⊕ ((C j).T (c j)).tab.Cut) → Out) (w w0 : ∀ j, WitnessBits (C j).S.m),
     (∀ j, (C j).Valid (w j)) → ∀ (_hreg : ∀ j, ((C j).T (c j)).tab.sReg (w j) = ((C j).T (c j)).tab.pubReg)
       (stopped : (∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt)) → Out) (E : Out → Prop),
     Game.prCoin (fun p : ∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt) =>

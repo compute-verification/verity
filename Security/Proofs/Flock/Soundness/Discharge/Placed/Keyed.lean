@@ -29,7 +29,7 @@ theorem wire_cast {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : F
   subst e; rfl
 
 /-- An accepted statement's circuit is the one its circuit file parses to. -/
-theorem Accepted.c_eq {T : Model.Statement} (a : Accepted T) {c : Flock.Circuit}
+theorem Accepted.c_eq {T : Model.BlockR1CS} (a : Accepted T) {c : Flock.Circuit}
     (hp : HmRow.parse a.tags a.cf a.tables = .ok c) : a.st.c = c := by
   have := (setupH_spec a.ht a.h).1
   rw [hp] at this
@@ -43,18 +43,18 @@ theorem insAt_uniform {k : ℕ} {R : Rows} {ins : ℕ → Fin R.nIn → Fin k} {
   | n + 1, u, i, hi => by
     induction u using Fin.lastCases with
     | last =>
-      change (Const.Prog.insAt (Prog.snoc (uniform k R ins one hone n) R _ _ _) (Fin.last n) i).val = _
+      change (Const.Prog.insAt (ProgSpec.snoc (uniform k R ins one hone n) R _ _ _) (Fin.last n) i).val = _
       rw [Const.Prog.insAt_last _ _ _ _ _ i hi]
       simp
     | cast v =>
-      change (Const.Prog.insAt (Prog.snoc (uniform k R ins one hone n) R _ _ _) v.castSucc i).val = _
+      change (Const.Prog.insAt (ProgSpec.snoc (uniform k R ins one hone n) R _ _ _) v.castSucc i).val = _
       rw [Const.Prog.insAt_castSucc]
       simp [insAt_uniform n v i hi]
 
 /-- **The circuit's program on Δ's source keys**: `n` units of the circuit's template instance rows, input `x` of each
 on the gate of its key (`Aliased.keyIdx`), the zero's gate when it reads the zero. -/
 noncomputable abbrev keyProg (c : Flock.Circuit) (hU : Built c.unit) (n : ℕ) :
-    Prog (gates (inGates n (circuitRows c hU).nIn) (circuitRows c hU) n) n :=
+    ProgSpec (gates (inGates n (circuitRows c hU).nIn) (circuitRows c hU) n) n :=
   circuitProg c hU n (circuitRows c hU).nIn (Aliased.keyIdx c (circuitRows c hU).nIn)
 
 /-- **Two inputs of one unit of `keyProg` on one gate have one key** (`Aliased.srcKey`), in the program's own instance. -/

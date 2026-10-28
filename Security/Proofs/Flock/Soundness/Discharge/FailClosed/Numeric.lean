@@ -12,7 +12,7 @@ with that term replaced by `2^-205` (`ksStrict205`, `ksAvgStrict205`), and with 
 acceptance gives it.
 
 * `tableError_le_205_wide`: `tableError` of a `fast100` schedule is at most `2^-205` at every shape in
-  `Stmt.InRangeWide`, `Stmt.InRange` with two regions more (`tableError_le_of_le_33`'s kernel check at 1026 regions).
+  `StmtShape.InRangeWide`, `StmtShape.InRange` with two regions more (`tableError_le_of_le_33`'s kernel check at 1026 regions).
 * `ksAvgStrict_le_205`: with every plan table's shape in that range, `ksAvgStrict` is at most `ksAvgStrict205`.
 * `planAt_inRangeWide`, `planAtH_inRangeWide`: every table of the one-table plans is in that range. A draw flock-verify
   sets up has its statement's range, which `Stmt.setupH` and `Stmt.setupHidden` check (`checkInRange`:
@@ -29,7 +29,7 @@ Under `--zk` the per-table term is each table's `bound`, at most `2^-203` at C-F
 
 namespace FlockSoundness.Accounting
 
-/-- **The shapes of every plan table**: `Stmt.InRange` with two regions more, the two `contra` regions a refused draw's
+/-- **The shapes of every plan table**: `StmtShape.InRange` with two regions more, the two `contra` regions a refused draw's
 table adds to a reference setup's statement. -/
 def Stmt.InRangeWide (st : Stmt) : Prop := st.kLog ≤ 27 ∧ st.nRegions ≤ 1026 ∧ st.mPts ≤ 64
 
@@ -109,7 +109,7 @@ theorem fast100_range : ∀ m s, fast100 m = some s → 22 ≤ m ∧ m ≤ 35 :=
     split <;> simp_all
   exact hm m (by simp [h])
 
-/-- **The soundness number for `fast100` at every shape in `Stmt.InRangeWide`**: at most `2^-205` per table. -/
+/-- **The soundness number for `fast100` at every shape in `StmtShape.InRangeWide`**: at most `2^-205` per table. -/
 theorem tableError_le_205_wide {m : ℕ} {s : Schedule} (hs : fast100 m = some s) (st : Stmt) (hst : st.InRangeWide) :
     tableError s st ≤ (2 : ℝ) ^ (-(205 : ℝ)) := by
   obtain ⟨h1, h2⟩ := fast100_range m s hs
@@ -153,7 +153,7 @@ theorem ksStrict_le_205 (ts : List (TabSpec mPts)) (j : Fin ts.length) (hT : ((t
   gcongr
   exact tableError_le_205_wide (ts.get j).hsch _ hT
 
-/-- **The knowledge term's closed form at `fast100`'s numbers**: with every table of the plan in `Stmt.InRangeWide`,
+/-- **The knowledge term's closed form at `fast100`'s numbers**: with every table of the plan in `StmtShape.InRangeWide`,
 `ksAvgStrict` is at most `ksAvgStrict205`. -/
 theorem ksAvgStrict_le_205 {n : ℕ} {Reg : Type} (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
     (hR : ∀ S R (j : Fin (plan S R).length), (((plan S R).get j).S.shape mPts).InRangeWide) (L : Audit.Law n)

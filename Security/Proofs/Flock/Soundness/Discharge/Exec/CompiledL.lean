@@ -30,7 +30,7 @@ variable {D Sl : Type}
 
 /-- The oracle table's continuation after the level-0 table `C₀`, with the salted openings' message as its dummy last
 message. -/
-def tableOrcL (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
+def tableOrcL (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (C₀ : Oracle F) : Game (Bool × Oracle F) :=
   Game.coin (Fin 2 → Fin mPts → F) fun pts =>
     (interleave (rep A S sch hm C₀ (extraClaims S ptLocal mPts pts))
@@ -38,7 +38,7 @@ def tableOrcL (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
       fun acc => Game.send (Opens F D × Salts Sl) fun _ => Game.ret (acc.1 && acc.2, C₀)
 
 omit [Fintype K] in
-theorem withDummy_tableL (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
+theorem withDummy_tableL (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) :
     Lock.withDummy (Opens F D × Salts Sl) (table A S sch hm ptLocal mPts) =
       Game.send (Oracle F) (tableOrcL (D := D) (Sl := Sl) A S sch hm ptLocal mPts) := by
@@ -49,7 +49,7 @@ theorem withDummy_tableL (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 
 open Classical in
 /-- The salted compiled table's continuation after the level-0 cap. -/
 noncomputable def tableCmpL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
+    (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (cap₀ : Cap D) : Game (OutCL F D Sl) :=
   Game.coin (Fin 2 → Fin mPts → F) fun pts =>
     (interleave (repC A 0 S sch hm (extraClaims S ptLocal mPts pts))
@@ -61,7 +61,7 @@ noncomputable def tableCmpL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.E
 
 omit [Fintype K] in
 theorem tableCL_send (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) :
+    (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) :
     tableCL A H E Lf S sch hm ptLocal mPts = Game.send (Cap D) (tableCmpL A H E Lf S sch hm ptLocal mPts) :=
   rfl
 
@@ -78,7 +78,7 @@ def TopRelL (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf
 /-- **The salted table in lockstep** below the level-0 cap: the link points, both reps interleaved, the openings and
 their salts. -/
 noncomputable def lockTableL [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level)
+    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level)
     (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (C₀ : Oracle F)
     (cap₀ : Cap D) :
     Lock (Oracle F) (Cap D) (Lock.getPair (getRep 0) (getRep 1))
@@ -441,7 +441,7 @@ theorem plurCL_plurality (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf 
 open Classical in
 /-- **`T*(P*)`**: the plurality of the level-0 openings over the coins after the level-0 cap. -/
 noncomputable def C0starL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
+    (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (cap₀ : Cap D) (σ : Strategy (tableCmpL A H E Lf S sch hm ptLocal mPts cap₀)) : Oracle F :=
   tabOf (lvOf sch 0).lanes (lvOf sch 0).logLen
     (Classical.choose (Rewinding.exists_pluralityE (op₀L H E Lf sch cap₀) _ σ))
@@ -449,7 +449,7 @@ noncomputable def C0starL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc
 /-- **`Adv₀`**: the collision finder at the level-0 cap. Two continuations after `P*`'s level-0 cap open a level-0
 position to different rows. -/
 noncomputable def adv₀L (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
+    (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (σ : Strategy (tableCL A H E Lf S sch hm ptLocal mPts)) : ℝ :=
   expect₂ (fun b b' => ind (fun x : OutCL F D Sl × OutCL F D Sl =>
       ∃ p, Rewinding.ConflictAt (op₀L H E Lf sch σ.1) x p) (b, b'))
@@ -458,7 +458,7 @@ noncomputable def adv₀L (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc
 /-- **`Adv_{r,ℓ}`**: the collision finder at rep `r`'s level-`ℓ` cap. Along the run, at that cap, two continuations
 open a level-`ℓ` position to different rows. -/
 noncomputable def advRL [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
+    (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
     (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (r ℓ : ℕ)
     (σ : Strategy (tableCL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts)) : ℝ :=
   Lock.forkE (plurCL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (slotOf r ℓ)
@@ -473,7 +473,7 @@ noncomputable def advRL [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E 
 compiled run accepts with `C₀` uncommitted with probability at most `tableError` plus the probability of a bad run. -/
 theorem compiled_le_badL (A : Arith F K) (hA : A.Correct)
     [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
-    (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
+    (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (hlay : S.LinkLayout ptLocal mPts) (C₀ : Oracle F) (cap₀ : Cap D)
     (σ₁ : Strategy (tableCmpL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts cap₀)) :
@@ -588,7 +588,7 @@ open Classical in
 /-- **The bad runs, cap by cap**: rewinding at the level-0 cap (`expect_bad_le`) and at every rep's cap
 (`Lock.leafE_off_le`). -/
 theorem bad_leL [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
+    (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (σ : Strategy (Game.send (Cap D)
       (tableCmpL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts))) :
@@ -682,7 +682,7 @@ openings of one position to different rows under one cap, under any salts: a col
 `hm96-sha512/v1`'s. -/
 theorem table_sound_compiledL (A : Arith F K) (hA : A.Correct)
     [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H)
-    (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
+    (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (hlay : S.LinkLayout ptLocal mPts)
     (σ : Strategy (tableCL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts)) :

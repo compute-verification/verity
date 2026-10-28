@@ -109,7 +109,7 @@ theorem sparseKinds_ends (F : Type) (sh : SparseShape) : ∃ σ, FlockC3.Sparse.
   · obtain ⟨n, hn⟩ : ∃ n, sh.tLog = n + 1 := ⟨sh.tLog - 1, by omega⟩
     exact ends_append _ (ends_append _ (hn ▸ replicate_ends _ n))
 
-theorem extraClaims_length (S : Statement) (ptLocal mPts : ℕ) (pts : Fin 2 → Fin mPts → FlockLevel3.GF128) :
+theorem extraClaims_length (S : BlockR1CS) (ptLocal mPts : ℕ) (pts : Fin 2 → Fin mPts → FlockLevel3.GF128) :
     (extraClaims S ptLocal mPts pts).length = 2 * S.regions.length := by
   unfold extraClaims
   induction S.regions with
@@ -157,7 +157,7 @@ theorem ligeritoC_on (A : Arith F K) (r : ℕ) (sch : Schedule) (T : F) (b : ℕ
 
 omit [Fintype K] in
 /-- **A holo rep stops early only on a reject**: each early return is `PendL.reject`, whose verdict is false. -/
-theorem holoRepC_on (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
+theorem holoRepC_on (A : Arith F K) (r : ℕ) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim F S.m)) (os : Opens F D) :
     SpineOn (fun x : Option (ZcOut F S.m × HoloLcOut F S.m (S.kLog - 6)) × PendL F D => x.2.verdict os = true)
       (holoRepC (D := D) A r S sch hm extra) (holoRepShape F K D S.m S.kLog extra.length sch) := by

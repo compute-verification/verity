@@ -25,7 +25,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-- **Entry `v` of a claim's switched vector**, on a trace whose bits are the witness's, is the witness's `shat` at the
 claim. -/
-theorem switchVec_shat {m : ℕ} (hm : 7 ≤ m) (c : Claim) (hx : c.x.size = m - 6) (tr : Trace) (w : Model.Witness m)
+theorem switchVec_shat {m : ℕ} (hm : 7 ≤ m) (c : Claim) (hx : c.x.size = m - 6) (tr : Trace) (w : Model.WitnessBits m)
     (hz : ∀ a : Fin (2 ^ m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (v : Fin 128) :
     GF128.of (switchVec tr c)[v.val]! = shat hm (Discharge.Composed.RingSwitch.claimOf m c) w v := by
   have hsz : (c.x.extract 1 c.x.size).size = m - 7 := by

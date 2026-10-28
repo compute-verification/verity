@@ -36,7 +36,7 @@ abbrev MsgZ (S : Finset (Fin n)) (R : Reg) (u : Fin n) : Type :=
 
 /-- The witness a message of drawn unit `u`'s `--zk` table packs. -/
 abbrev witZ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (M : MsgZ planZ tab S R u) :
-    Witness (tabOfZ planZ tab S R u).S.m :=
+    WitnessBits (tabOfZ planZ tab S R u).S.m :=
   wit A (tabOfZ planZ tab S R u).S (tabOfZ planZ tab S R u).sch M
 
 /-- A message of drawn unit `u`'s `--zk` table packs a witness that satisfies the table's statement. -/

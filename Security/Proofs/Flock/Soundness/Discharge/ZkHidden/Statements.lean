@@ -66,7 +66,7 @@ def AcceptsZKAcceptedH : Prop :=
     ∃ st, Stmt.setupHidden (zkTags I) I.circuitFile I.publicFile (zkCoins I) I.tables (recordDraw t.record)
         I.partition I.program = .ok st ∧ Flock.Zk.shapeOk st = .ok () ∧
       ∀ regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)),
-        ∃ (T : Model.Statement) (a : AcceptedH T), a.st = st ∧ HEq a.regs regs ∧ a.tags = zkTags I ∧
+        ∃ (T : Model.BlockR1CS) (a : AcceptedH T), a.st = st ∧ HEq a.regs regs ∧ a.tags = zkTags I ∧
           a.cf = I.circuitFile ∧ a.pf = I.publicFile ∧ a.coins = zkCoins I ∧ a.tables = I.tables ∧
           a.draw = recordDraw t.record
 

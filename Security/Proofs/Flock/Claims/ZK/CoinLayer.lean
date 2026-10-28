@@ -272,8 +272,8 @@ structure TableData where
   J : Msg → ℕ
   C : (x : Msg) → Fin (J x) → Composed.CoinedSetup
   cz : (x : Msg) → (Fin (refK x) → FlockDeploy.Coin) → ∀ j, Composed.CoinsZK (C x j).Rest
-  wt : (x : Msg) → Flock.Wit → ∀ j, FlockSoundness.Model.Witness (C x j).S.m
-  wt₀ : (x : Msg) → ∀ j, FlockSoundness.Model.Witness (C x j).S.m
+  wt : (x : Msg) → Flock.Wit → ∀ j, FlockSoundness.Model.WitnessBits (C x j).S.m
+  wt₀ : (x : Msg) → ∀ j, FlockSoundness.Model.WitnessBits (C x j).S.m
   enc : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → ℕ → (∀ j, ((C x j).T (cz x c j)).tab.Cut) → Msg
   fin : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → (∀ j, ((C x j).T (cz x c j)).tab.View) → Msg
   off : (x : Msg) → (c : Fin (refK x) → FlockDeploy.Coin) → (∀ j, ((C x j).T (cz x c j)).tab.Cut) → Msg

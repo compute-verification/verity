@@ -6,7 +6,7 @@ import Proofs.Flock.Soundness.Audit.OneStage
 /-!
 # flock-verify's acceptance, as an event of the audit
 
-`Prog.flock_headline` bounds an event of the audit as Lean defines it, whose outcome is that audit's verdict and the
+`ProgSpec.flock_headline` bounds an event of the audit as Lean defines it, whose outcome is that audit's verdict and the
 draw. What the verifier of record decides is flock-verify's verdict on the session directory a run leaves: the record the coin
 server wrote (`session.json`) and the proof file it received for each table's rep. This file states that verdict as an
 event, on an audit whose outcome carries the transcript.

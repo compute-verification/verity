@@ -214,7 +214,7 @@ theorem ligeritoError_le : ∀ ls : List Level, (∀ l ∈ ls, l.Ok) →
 
 /-! ## The statement ranges -/
 
-theorem piopError_le (m L₀ : ℕ) (st : Stmt) (hst : st.InRange) :
+theorem piopError_le (m L₀ : ℕ) (st : StmtShape) (hst : st.InRange) :
     piopError m st.kLog st.nClaims L₀ ≤ ((piopNumMax m L₀ : ℚ) / 2 ^ 128 : ℚ) := by
   obtain ⟨hk, hR, _⟩ := hst
   unfold piopError qF
@@ -222,14 +222,14 @@ theorem piopError_le (m L₀ : ℕ) (st : Stmt) (hst : st.InRange) :
   gcongr
   have h1 : m - st.kLog ≤ m := Nat.sub_le _ _
   have h2 : st.kLog - 6 ≤ 21 := by omega
-  have h3 : st.nClaims ≤ 2050 := by unfold Stmt.nClaims; omega
+  have h3 : st.nClaims ≤ 2050 := by unfold StmtShape.nClaims; omega
   unfold piopNumMax
   exact_mod_cast (by gcongr : (L₀ + 1) * (m - 13) + L₀ * 127 + L₀ * (2 * (m - 6))
       + L₀ * (m - st.kLog) + L₀ * (2 + 2 * (st.kLog - 6) + 63) + L₀ * (7 * st.nClaims + 1) + L₀
       ≤ (L₀ + 1) * (m - 13) + L₀ * 127 + L₀ * (2 * (m - 6)) + L₀ * m
       + L₀ * (2 + 2 * 21 + 63) + L₀ * (7 * 2050 + 1) + L₀)
 
-theorem repError_le (s : Schedule) (hs : ∀ l ∈ s.levels, l.Ok) (st : Stmt) (hst : st.InRange) :
+theorem repError_le (s : Schedule) (hs : ∀ l ∈ s.levels, l.Ok) (st : StmtShape) (hst : st.InRange) :
     repError s st ≤ (repUp s : ℝ) := by
   unfold repError repUp
   push_cast
@@ -272,13 +272,13 @@ theorem ligeritoError_nonneg : ∀ ls : List Level, (∀ l ∈ ls, l.Ok) → 0 �
       have := ligeritoError_nonneg (l' :: rest) fun x hx => h x (List.mem_cons_of_mem _ hx)
       positivity
 
-theorem repError_nonneg (s : Schedule) (st : Stmt) (hs : ∀ l ∈ s.levels, l.Ok) :
+theorem repError_nonneg (s : Schedule) (st : StmtShape) (hs : ∀ l ∈ s.levels, l.Ok) :
     0 ≤ repError s st := by
   unfold repError piopError qF
   have := ligeritoError_nonneg s.levels hs
   positivity
 
-theorem linkError_le (s : Schedule) (st : Stmt) (hst : st.InRange) :
+theorem linkError_le (s : Schedule) (st : StmtShape) (hst : st.InRange) :
     linkError s st ≤ (linkUp s : ℝ) := by
   obtain ⟨_, hR, hp⟩ := hst
   unfold linkError linkUp qF
@@ -287,7 +287,7 @@ theorem linkError_le (s : Schedule) (st : Stmt) (hst : st.InRange) :
   have hp' : (st.mPts : ℝ) ≤ 64 := by exact_mod_cast hp
   gcongr
 
-theorem tableError_le_up (s : Schedule) (hs : ∀ l ∈ s.levels, l.Ok) (st : Stmt)
+theorem tableError_le_up (s : Schedule) (hs : ∀ l ∈ s.levels, l.Ok) (st : StmtShape)
     (hst : st.InRange) :
     tableError s st ≤ ((linkUp s + repUp s ^ 2 : ℚ) : ℝ) := by
   unfold tableError

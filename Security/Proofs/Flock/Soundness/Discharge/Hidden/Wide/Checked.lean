@@ -27,7 +27,7 @@ def OutputsCommittedTailChecked : Prop :=
     (∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks) →
     ∀ (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),
     (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
-    ∀ {z : Model.Witness (L.model regs).m}, (L.model regs).Satisfies z →
+    ∀ {z : Model.WitnessBits (L.model regs).m}, (L.model regs).Satisfies z →
     ∀ (o : Fin (2 ^ (L.model regs).nbl)) {g j : ℕ}, g < st.c.g → g < 2 ^ st.c.g.log2 → j < st.c.outPorts.size →
     ∀ (hr : o.val * st.c.g + g < D.proved.size),
     (pop.digest D.proved[o.val * st.c.g + g] (HmOut.nIn st.c + j) st.c.ports.size).data.toList =
@@ -50,8 +50,8 @@ def OutputsBindingTailChecked : Prop :=
     (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
     ∀ (L' : Layout st') (regs' : List (Model.Region st'.c.kLog (st'.m - st'.c.kLog))),
     (∀ r ∈ st'.regions.toList, Refine.regionOf st'.c.kLog (st'.m - st'.c.kLog) r ∈ regs') →
-    ∀ {z : Model.Witness (L.model regs).m}, (L.model regs).Satisfies z →
-    ∀ {z' : Model.Witness (L'.model regs').m}, (L'.model regs').Satisfies z' →
+    ∀ {z : Model.WitnessBits (L.model regs).m}, (L.model regs).Satisfies z →
+    ∀ {z' : Model.WitnessBits (L'.model regs').m}, (L'.model regs').Satisfies z' →
     ∀ (o : Fin (2 ^ (L.model regs).nbl)) (o' : Fin (2 ^ (L'.model regs').nbl)) {g g' j : ℕ},
     g < st.c.g → g < 2 ^ st.c.g.log2 → g' < st'.c.g → g' < 2 ^ st'.c.g.log2 → j < st.c.outPorts.size →
     ∀ (hr : o.val * st.c.g + g < D.proved.size) (hr' : o'.val * st'.c.g + g' < D'.proved.size),
@@ -79,7 +79,7 @@ def OutputsCommittedV2Checked : Prop :=
     (∀ j < st.c.outPorts.size, (st.c.ports.getD (HmOut.nIn st.c + j) default).words % 64 = 0) →
     ∀ (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),
     (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
-    ∀ {z : Model.Witness (L.model regs).m}, (L.model regs).Satisfies z →
+    ∀ {z : Model.WitnessBits (L.model regs).m}, (L.model regs).Satisfies z →
     ∀ (o : Fin (2 ^ (L.model regs).nbl)) {g j : ℕ}, g < st.c.g → g < 2 ^ st.c.g.log2 → j < st.c.outPorts.size →
     ∀ (hr : o.val * st.c.g + g < D.proved.size),
     (pop.digest D.proved[o.val * st.c.g + g] (HmOut.nIn st.c + j) st.c.ports.size).data.toList =
@@ -104,8 +104,8 @@ def OutputsBindingV2Checked : Prop :=
     (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
     ∀ (L' : Layout st') (regs' : List (Model.Region st'.c.kLog (st'.m - st'.c.kLog))),
     (∀ r ∈ st'.regions.toList, Refine.regionOf st'.c.kLog (st'.m - st'.c.kLog) r ∈ regs') →
-    ∀ {z : Model.Witness (L.model regs).m}, (L.model regs).Satisfies z →
-    ∀ {z' : Model.Witness (L'.model regs').m}, (L'.model regs').Satisfies z' →
+    ∀ {z : Model.WitnessBits (L.model regs).m}, (L.model regs).Satisfies z →
+    ∀ {z' : Model.WitnessBits (L'.model regs').m}, (L'.model regs').Satisfies z' →
     ∀ (o : Fin (2 ^ (L.model regs).nbl)) (o' : Fin (2 ^ (L'.model regs').nbl)) {g g' j : ℕ},
     g < st.c.g → g < 2 ^ st.c.g.log2 → g' < st'.c.g → g' < 2 ^ st'.c.g.log2 → j < st.c.outPorts.size →
     ∀ (hr : o.val * st.c.g + g < D.proved.size) (hr' : o'.val * st'.c.g + g' < D'.proved.size),
@@ -133,7 +133,7 @@ def OutputsCommittedWideChecked : Prop :=
     (∀ j < st.c.outPorts.size, (st.c.ports.getD (HmOut.nIn st.c + j) default).words % 64 = 0) →
     ∀ (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),
     (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
-    ∀ {z : Model.Witness (L.model regs).m}, (L.model regs).Satisfies z →
+    ∀ {z : Model.WitnessBits (L.model regs).m}, (L.model regs).Satisfies z →
     ∀ (o : Fin (2 ^ (L.model regs).nbl)) {g j : ℕ}, g < st.c.g → g < 2 ^ st.c.g.log2 → j < st.c.outPorts.size →
     ∀ (hr : o.val * st.c.g + g < D.proved.size),
     (pop.digest D.proved[o.val * st.c.g + g] (HmOut.nIn st.c + j) st.c.ports.size).data.toList =
@@ -158,8 +158,8 @@ def OutputsBindingWideChecked : Prop :=
     (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
     ∀ (L' : Layout st') (regs' : List (Model.Region st'.c.kLog (st'.m - st'.c.kLog))),
     (∀ r ∈ st'.regions.toList, Refine.regionOf st'.c.kLog (st'.m - st'.c.kLog) r ∈ regs') →
-    ∀ {z : Model.Witness (L.model regs).m}, (L.model regs).Satisfies z →
-    ∀ {z' : Model.Witness (L'.model regs').m}, (L'.model regs').Satisfies z' →
+    ∀ {z : Model.WitnessBits (L.model regs).m}, (L.model regs).Satisfies z →
+    ∀ {z' : Model.WitnessBits (L'.model regs').m}, (L'.model regs').Satisfies z' →
     ∀ (o : Fin (2 ^ (L.model regs).nbl)) (o' : Fin (2 ^ (L'.model regs').nbl)) {g g' j : ℕ},
     g < st.c.g → g < 2 ^ st.c.g.log2 → g' < st'.c.g → g' < 2 ^ st'.c.g.log2 → j < st.c.outPorts.size →
     ∀ (hr : o.val * st.c.g + g < D.proved.size) (hr' : o'.val * st'.c.g + g' < D'.proved.size),

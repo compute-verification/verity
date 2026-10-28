@@ -36,7 +36,7 @@ theorem acceptsZK_accepted {I : Inputs} {t : Exec.Transcript} (hh : I.tags.hidde
     ∃ spec sts, setupOf (zkInputs I) t.record = .ok (spec, sts) ∧
       ∀ (j : ℕ) (hj : j < sts.size), Flock.Zk.shapeOk sts[j] = .ok () ∧
         ∀ regs : List (Model.Region sts[j].c.kLog (sts[j].m - sts[j].c.kLog)),
-          ∃ (T : Model.Statement) (a : Accepted T), a.st = sts[j] ∧ HEq a.regs regs ∧
+          ∃ (T : Model.BlockR1CS) (a : Accepted T), a.st = sts[j] ∧ HEq a.regs regs ∧
             a.tags = tagsAt (zkTags I) I.count j ∧ a.cf = I.circuitFile ∧ a.tables = I.tables ∧
             (I.count ≤ 1 → a.draw = recordDraw t.record) := by
   obtain ⟨spec, sts, hs, -, -, hall⟩ := acceptsZK_setupH I t hh h
@@ -91,7 +91,7 @@ theorem SitesZ.placed_keyProg (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u 
 theorem SitesZ.aliased_keyProg (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     ∀ x x', (Const.Prog.instC (keyProg c hU n) outs u).wire x = (Const.Prog.instC (keyProg c hU n) outs u).wire x' →
       x.val < ((keyProg c hU n).rows u).nIn → x'.val < ((keyProg c hU n).rows u).nIn →
-      ∀ z : Model.Witness (tabOfZ planZ tab S R u).S.m, (tabOfZ planZ tab S R u).S.Satisfies z →
+      ∀ z : Model.WitnessBits (tabOfZ planZ tab S R u).S.m, (tabOfZ planZ tab S R u).S.Satisfies z →
         (tabOfZ planZ tab S R u).S.block z (si.o S R u h) (si.colKey hU hparse S R u h x) =
           (tabOfZ planZ tab S R u).S.block z (si.o S R u h) (si.colKey hU hparse S R u h x') := by
   refine (si.acc S R u h).aliased_of_layout (si.rowsOf_keyProg hU hparse S R u h)

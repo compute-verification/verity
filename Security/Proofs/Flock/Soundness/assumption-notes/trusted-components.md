@@ -22,7 +22,7 @@ These are not assumptions of the theorem, but the verdict still depends on them.
   (`../../EndToEnd/Statement.lean`), bounds the executable verifier's acceptance itself (`LiveAcceptsZK`, at
   `execArith` and Lean's `sha512`), so no model stands between it and `flock-verify verify --zk`. What remains trusted
   there is that the running binary is that Lean function (the compiler bullet above) and that its `sha512` is SHA-512
-  (test vectors). The older headline forms (`Prog.flock_headline`, `flock_e2e_*`) are stated over `Model` and carry
+  (test vectors). The older headline forms (`ProgSpec.flock_headline`, `flock_e2e_*`) are stated over `Model` and carry
   the executable's acceptance as the hypothesis `hExec` or `tr`.
 - **`Arith.Correct`.** These are facts about the concrete GHASH arithmetic: Lagrange weights on the skip nodes and the
   output coset, and the `Pcomb` weights on both (one `nodes` fact, so that all three use the same 128 points), the

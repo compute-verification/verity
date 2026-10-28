@@ -209,7 +209,7 @@ theorem keep_of_neg (hp : HmIn.parse st.c = .ok pi) (C : CheckFacts st.c) {g x :
 theorem copyPos_blockHP (hp : HmIn.parse st.c = .ok pi) (C : CheckFacts st.c) (hR : UnitRowsFlatP st pi) {g : ℕ}
     (hg : g < st.c.g) (x : Fin ((unitRows st L.unit_built).stackW st.c.upv))
     (hx : x.val < ((unitRows st L.unit_built).stack st.c.upv).nIn) (hneg : pubLeaf st.c pi x.val < 0)
-    {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
+    {z : Model.WitnessBits (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
     (L.model regs).block z o (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
         (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) x) =
       (L.model regs).block z o (Aliased.copyPos Lf regs F hg x.val) := by
@@ -234,7 +234,7 @@ theorem pub_block (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLo
     (hne : pi.ports.isEmpty = false) (C : CheckFacts st.c) {g : ℕ} (hg : g < st.c.g)
     (x : Fin ((unitRows st L.unit_built).stackW st.c.upv))
     (hx : x.val < ((unitRows st L.unit_built).stack st.c.upv).nIn) (hpub : 0 ≤ pubLeaf st.c pi x.val)
-    {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
+    {z : Model.WitnessBits (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
     ∃ p t, srcKeyP st.c pi x.val = .pub (pubLeaf st.c pi x.val).toNat t ∧
       (pi.leaves.getD (x.val / (st.c.unit.inWords * WORD)) #[]).getD p (-1) = pubLeaf st.c pi x.val ∧
       bit ((L.model regs).block z o (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv

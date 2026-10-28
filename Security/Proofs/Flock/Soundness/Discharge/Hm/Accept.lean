@@ -93,7 +93,7 @@ block holds at `bcCol` are the commit string of the `2 · words` row bytes at `T
 theorem row_bc_of_sat {tags : Tags} {t : Typed.Template} (hd : deriveChecked types ls info words unit = .ok done)
     (hul : unit < ls.size) (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖)
     (P : ParseFactsT tags t st.c) (C : CheckFactsT st.c tb)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (T.model regs).m}
     (hz : (T.model regs).Satisfies z) (o : Fin (2 ^ (T.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) (hs : st.c.ports[p]!.segs = none) (hn : 0 < st.c.ports[p]!.chunks)
     (hw : 2 * st.c.ports[p]!.words = 128 * st.c.ports[p]!.chunks)

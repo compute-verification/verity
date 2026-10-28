@@ -42,7 +42,7 @@ statement. -/
 theorem flat_zero_block (g : Fin st.c.unitRange.count) (c : Fin (setupH_flatTableClass ht h hr regs).rows.w)
     (hc : c.val < (setupH_flatTableClass ht h hr regs).rows.nIn)
     (hz : ZeroAt st.c g ((k.done.getD k.unit default).inCols.getD c.val 0))
-    {z : Model.Witness ((setupH_flatLayout ht h hr).2.2.model regs).m}
+    {z : Model.WitnessBits ((setupH_flatLayout ht h hr).2.2.model regs).m}
     (hsat : ((setupH_flatLayout ht h hr).2.2.model regs).Satisfies z)
     (o : Fin (2 ^ ((setupH_flatLayout ht h hr).2.2.model regs).nbl)) :
     ((setupH_flatLayout ht h hr).2.2.model regs).block z o ((setupH_flatTableClass ht h hr regs).col g c) = 0 := by

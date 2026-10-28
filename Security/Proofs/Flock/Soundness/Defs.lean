@@ -39,7 +39,7 @@ theorem Model.Arith.Correct.lagS_interp {A : Arith F K} (hA : A.Correct) :
   exact ⟨nS, hS, hlag⟩
 
 omit [Fintype F] [DecidableEq F] in
-theorem extraClaims_length (S : Statement) (ptLocal mPts : ℕ) (pts : Fin 2 → Fin mPts → F) :
+theorem extraClaims_length (S : BlockR1CS) (ptLocal mPts : ℕ) (pts : Fin 2 → Fin mPts → F) :
     (extraClaims S ptLocal mPts pts).length = 2 * S.regions.length := by
   unfold extraClaims
   induction S.regions with
@@ -59,21 +59,21 @@ membership and the list's size, so each is proved over any set `W` of messages (
 doomed states above are these at `W = closeMsgs A sch C` (`repDoomed_iff`, `dZc_eq`, `dLc_eq`,
 `dOp_eq`). The padded level 0 takes `W` to be its padded code's witnesses (`SoundnessPad`). -/
 
-theorem repDoomed_iff (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F)
+theorem repDoomed_iff (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (C : Oracle F)
     (extra : List (Claim F S.m)) :
     RepDoomed A S sch C extra ↔ RepDoomedW A S sch (closeMsgs A sch C) extra := Iff.rfl
 
-theorem dZc_eq (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F)
+theorem dZc_eq (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (C : Oracle F)
     (extra : List (Claim F S.m)) (o : Option (ZcOut F S.m)) :
     DZc A S sch C extra o = DZcW A S sch (closeMsgs A sch C) extra o := by
   cases o <;> rfl
 
-theorem dLc_eq (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F)
+theorem dLc_eq (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (C : Oracle F)
     (extra : List (Claim F S.m)) (zc : ZcOut F S.m) (o : Option (Claim F S.m)) :
     DLc A S sch C extra zc o = DLcW A S sch (closeMsgs A sch C) extra zc o := by
   cases o <;> rfl
 
-theorem dOp_eq (A : Arith F K) (S : Statement) (sch : Schedule) (C : Oracle F)
+theorem dOp_eq (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (C : Oracle F)
     (o : Option (OpenOut F)) : DOp A S sch C o = DOpW S sch (closeMsgs A sch C) o := by
   cases o <;> rfl
 

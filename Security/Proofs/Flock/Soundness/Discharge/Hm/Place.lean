@@ -17,7 +17,7 @@ namespace FlockSoundness.Discharge.Hm
 open Compose Flock.DeriveAll Types.Dag
 
 /-- The block's bit at column `y` of block `o` (0 past the block). -/
-def blockBit (S : Model.Statement) (z : Model.Witness S.m) (o : Fin (2 ^ S.nbl)) (y : ℕ) : Bool :=
+def blockBit (S : Model.BlockR1CS) (z : Model.WitnessBits S.m) (o : Fin (2 ^ S.nbl)) (y : ℕ) : Bool :=
   FlockSoundness.bit (if h : y < 2 ^ S.kLog then S.block z o ⟨y, h⟩ else 0)
 
 theorem sum_count_nat {k : ℕ} (L : List ℕ) (hL : ∀ y ∈ L, y < k) (v : Fin k → ZMod 2) :
@@ -143,7 +143,7 @@ theorem rowNet_entry (hd : deriveChecked types ls info words unit = .ok done) (h
 statement: each computed row past the input rows holds, and the slot's constant column is 1. -/
 theorem laidRows_of_sat (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (T.model regs).m}
     (hz : (T.model regs).Satisfies z) (o : Fin (2 ^ (T.model regs).nbl)) {n s : ℕ}
     (hn : n = st.c.shaNet ∨ n = st.c.hmNet) (hs : s < (st.c.rangeOf n).count) {l : Flock.HmNets.Laid}
     {name : String}
@@ -242,7 +242,7 @@ theorem slot_lt_count (T : TemplateLayout st tb words done 𝒖) {n g i : ℕ} (
 every block of a satisfying witness of the accepted template statement whose circuit passed `HmNets.check`. -/
 theorem shaSlot_of_sat (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (T.model regs).m}
     (hz : (T.model regs).Satisfies z) (o : Fin (2 ^ (T.model regs).nbl)) (hck : Flock.HmNets.check st.c = .ok ())
     {g i : ℕ} (hg : g < st.c.g) (hi : i < st.c.perVu.getD st.c.shaNet 0) :
     LaidRows (Flock.HmNets.shaLaid ()) 8192 fun j => blockBit (T.model regs) z o (st.c.slotCol st.c.shaNet g i + j) := by
@@ -253,7 +253,7 @@ theorem shaSlot_of_sat (hd : deriveChecked types ls info words unit = .ok done) 
 /-- **Template instance `g`'s `hm96` slot `i` holds the verifier's `hm96` rows**, past its 4096 input rows. -/
 theorem hmSlot_of_sat (hd : deriveChecked types ls info words unit = .ok done) (hul : unit < ls.size)
     (T : TemplateLayout st tb words done 𝒖) (U : UnitShape done 𝒖)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (T.model regs).m}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (T.model regs).m}
     (hz : (T.model regs).Satisfies z) (o : Fin (2 ^ (T.model regs).nbl)) (hck : Flock.HmNets.check st.c = .ok ())
     {g i : ℕ} (hg : g < st.c.g) (hi : i < st.c.perVu.getD st.c.hmNet 0) :
     LaidRows (Flock.HmNets.hmLaid ()) 4096 fun j => blockBit (T.model regs) z o (st.c.slotCol st.c.hmNet g i + j) := by

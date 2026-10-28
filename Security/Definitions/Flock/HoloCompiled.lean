@@ -22,7 +22,7 @@ variable {D : Type}
 /-- **One compiled rep with hidden units**, rep `r`: `holoRep`'s PIOP, then compiled Ligerito (`ligeritoC`). Hands on
 the zerocheck's and the lincheck's outputs, which the rep's sparse phase reads (none at a rejection before Ligerito),
 beside the rep's result pending the openings. -/
-def holoRepC (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
+def holoRepC (A : Arith F K) (r : ℕ) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim F S.m)) :
     Game (Option (ZcOut F S.m × HoloLcOut F S.m (S.kLog - 6)) × PendL F D) := do
   match ← zerocheck A S.m with
@@ -54,7 +54,7 @@ Ligerito at the registered schedule `rsch` (`regPhase`), then the openings with 
 the last coin). Accepted iff the reps' and R's results accept on the openings and every path verifies: the reps' level 0
 against `cap₀`, R's against the registered cap `capReg`. -/
 noncomputable def holoTableCL {Sl : Type} (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
+    (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ) (τ : Fin (2 ^ sh.sLog) → ℕ) (rsch : Schedule)
     (capReg : Cap D) : Game (OutHL F D Sl) := do
   let cap₀ ← recv (Cap D)

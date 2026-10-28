@@ -4,7 +4,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.Bytes
 /-!
 # What a region pins in a satisfying witness
 
-The model's statement pins each region's bits (`Statement.Satisfies`): at block `o`, region bit `i` sits at the
+The model's statement pins each region's bits (`BlockR1CS.Satisfies`): at block `o`, region bit `i` sits at the
 in-block address `Region.inBlock i` and equals `bits o i`. For a region of the executable's statement, read as the
 model's (`Refine.regionOf`), bit `k` of block `o` is bit `k % 8` of byte `k / 8` of the region's bytes there
 (`regionOf_bit`), so a satisfying witness holds those bits (`region_read`).
@@ -40,7 +40,7 @@ theorem regionOf_bit (kl nbl : ℕ) (reg : Flock.Region) (b : Fin (2 ^ nbl)) (k 
 
 /-- **What a satisfying witness holds at a region**: at block `o`, the bit at region bit `k`'s in-block address is bit
 `k % 8` of byte `k / 8` of the region's bytes there. -/
-theorem region_read {S : Statement} {z : Witness S.m} (hz : S.Satisfies z) {reg : Flock.Region}
+theorem region_read {S : BlockR1CS} {z : WitnessBits S.m} (hz : S.Satisfies z) {reg : Flock.Region}
     (hR : Refine.regionOf S.kLog (S.m - S.kLog) reg ∈ S.regions) (o : Fin (2 ^ S.nbl)) (k : ℕ)
     (hk : k < 2 ^ (Refine.regionOf S.kLog (S.m - S.kLog) reg).free.length)
     (ha : (Refine.regionOf S.kLog (S.m - S.kLog) reg).inBlock k < 2 ^ S.kLog) :

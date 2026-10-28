@@ -1031,7 +1031,7 @@ whose pads code has `Q ≤ n ≤ 2^63` positions (`coinedOf_sP_val`): an opened 
 there. -/
 theorem coinedOf_colPAt (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (coinedOf P Tz st).Rest)
     (hQ : Zk.Q ≤ padNOf Tz st) (hN : padNOf Tz st ≤ 2 ^ 63)
-    (w : Model.Witness (coinedOf P Tz st).S.m) (b : ZkView.Base (coinedOf P Tz st).z (coinedOf P Tz st).Hi) (r : Fin 2)
+    (w : Model.WitnessBits (coinedOf P Tz st).S.m) (b : ZkView.Base (coinedOf P Tz st).z (coinedOf P Tz st).Hi) (r : Fin 2)
     (p : Fin ((coinedOf P Tz st).z.nQ + (coinedOf P Tz st).z.nPU)) :
     ((coinedOf P Tz st).T c).colPAt w b r p =
       padColAt (z := (coinedOf P Tz st).z)
@@ -1123,7 +1123,7 @@ theorem padN_bounds (x : Msg) (j : Fin (jOf x)) :
 
 /-- **Table `j`'s rep `r` pads column at tree position `p`** is `padColAt` at `X = p + 1`, at every coin vector. -/
 theorem colPAt_tabC (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x)) (c : Composed.CoinsZK (tabC P x j).Rest)
-    (w : Model.Witness (tabC P x j).S.m) (b : ZkView.Base (tabC P x j).z (tabC P x j).Hi) (r : Fin 2)
+    (w : Model.WitnessBits (tabC P x j).S.m) (b : ZkView.Base (tabC P x j).z (tabC P x j).Hi) (r : Fin 2)
     (p : Fin ((tabC P x j).z.nQ + (tabC P x j).z.nPU)) :
     ((tabC P x j).T c).colPAt w b r p =
       Composed.Cx.padColAt (z := (tabC P x j).z)
@@ -1136,7 +1136,7 @@ theorem colPAt_tabC (P : Composed.LigProver) (x : Msg) (j : Fin (jOf x)) (c : Co
 
 /-- **A cut's pads leaf at tree position `q` is the leaf at `q`**, whatever the coins' tree. -/
 theorem padLeafCut_cutAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
-    (wt : ∀ j, Model.Witness (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi)
+    (wt : ∀ j, Model.WitnessBits (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi)
     (lv : ZkView.Leaves (fun j => (tabC P x j).z) → ByteArray) (j : Fin (jOf x)) (r : Fin 2) {q : ℕ}
     (hq : q < (tabC P x j).z.nQ + (tabC P x j).z.nPU) :
     padLeafCut P x cz (cutAt (tabC P x) cz wt ω lv) j r q = lv ⟨j, .inr (.inl (r, ⟨q, hq⟩))⟩ := by
@@ -1153,7 +1153,7 @@ theorem padLeafCut_cutAt (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Compose
 
 /-- **A pads leaf's digest is the same at every coin vector** (`colPAt_tabC`). -/
 theorem digOf_pads (P : Composed.LigProver) (x : Msg) (cz cz' : ∀ j, Composed.CoinsZK (tabC P x j).Rest)
-    (wt : ∀ j, Model.Witness (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi) (j : Fin (jOf x))
+    (wt : ∀ j, Model.WitnessBits (tabC P x j).S.m) (ω : ∀ j, ZkView.Base (tabC P x j).z (tabC P x j).Hi) (j : Fin (jOf x))
     (r : Fin 2) (p : Fin ((tabC P x j).z.nQ + (tabC P x j).z.nPU)) :
     digOf (tabC P x) cz wt ω ⟨j, .inr (.inl (r, p))⟩ = digOf (tabC P x) cz' wt ω ⟨j, .inr (.inl (r, p))⟩ := by
   unfold digOf
@@ -1197,7 +1197,7 @@ theorem range_map_get! {α : Type} [Inhabited α] (n i : ℕ) {g g' : ℕ → α
 section Honest
 
 variable {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c c' : CoinsZK (RestOf Tz st)) (r : Fin 2)
-  (zw : Witness Tz.S.m) {L : ℕ} (R : Fin 2 → Fin L → 𝔽)
+  (zw : WitnessBits Tz.S.m) {L : ℕ} (R : Fin 2 → Fin L → 𝔽)
 
 theorem zcH_r1 (hO : c.rest.rOuter r = c'.rest.rOuter r) :
     (zcH Tz st c r zw).round1ab = (zcH Tz st c' r zw).round1ab ∧
@@ -1693,7 +1693,7 @@ local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
 /-- **The cut at the coins `c`** on the simulator's leaves `H(dig ⊕ b, c)` (`RoundPlan.Causal`'s). -/
-noncomputable abbrev cutC (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m)
+noncomputable abbrev cutC (x : Msg) (wt : ∀ j, FlockSoundness.Model.WitnessBits (tabC PE x j).S.m)
     (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
     (p : ZkView.Leaves (fun j => (tabC PE x j).z) → ZkView.Bits × ByteArray) (c : Fin (refK x) → FlockDeploy.Coin) :
     ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Cut :=
@@ -1701,7 +1701,7 @@ noncomputable abbrev cutC (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (t
     ZkView.leafH (digOf (tabC PE x) (czExe PE x c) wt ω l + (p l).1, (p l).2)
 
 /-- What the session reads from `cutC`. -/
-noncomputable abbrev srcC (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m)
+noncomputable abbrev srcC (x : Msg) (wt : ∀ j, FlockSoundness.Model.WitnessBits (tabC PE x j).S.m)
     (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
     (p : ZkView.Leaves (fun j => (tabC PE x j).z) → ZkView.Bits × ByteArray) (c : Fin (refK x) → FlockDeploy.Coin) :
     ℕ → FlockComplete.TabSrc :=
@@ -1812,7 +1812,7 @@ end Proj
 
 section Agree
 
-variable (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m)
+variable (x : Msg) (wt : ∀ j, FlockSoundness.Model.WitnessBits (tabC PE x j).S.m)
   (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
   (p : ZkView.Leaves (fun j => (tabC PE x j).z) → ZkView.Bits × ByteArray)
 
@@ -1969,7 +1969,7 @@ def yArr {nE nPad : ℕ} (Y2 : Fin nPad → 𝔽) : Option (PadIdx nE → 𝔽) 
 section CutFields
 
 variable {J : ℕ} (C : Fin J → Composed.CoinedSetup) (cz : ∀ j, Composed.CoinsZK (C j).Rest)
-  (wt : ∀ j, FlockSoundness.Model.Witness (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi)
+  (wt : ∀ j, FlockSoundness.Model.WitnessBits (C j).S.m) (ω : ∀ j, ZkView.Base (C j).z (C j).Hi)
   (lv : ZkView.Leaves (fun j => (C j).z) → ByteArray) (j : Fin J) (r : Fin 2)
 
 theorem cutAt_masked (i) : (cutAt C cz wt ω lv j).masked r i =
@@ -2099,7 +2099,7 @@ end CutFields
 section Masked
 
 variable (x : Msg) (cz cz' : ∀ j, Composed.CoinsZK (tabC PE x j).Rest)
-  (wt : ∀ j, FlockSoundness.Model.Witness (tabC PE x j).S.m) (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
+  (wt : ∀ j, FlockSoundness.Model.WitnessBits (tabC PE x j).S.m) (ω : ∀ j, ZkView.Base (tabC PE x j).z (tabC PE x j).Hi)
   (lv lv' : ZkView.Leaves (fun j => (tabC PE x j).z) → ByteArray) (j : Fin (jOf x)) (r : Fin 2)
 
 theorem repSrcCut_masked (cut : ∀ j, ((tabC PE x j).T (cz j)).tab.Cut) (k : ℕ) :
@@ -2118,7 +2118,7 @@ theorem cutTab_masked (i) : (cutAt (tabC PE x) cz wt ω lv j).masked r i =
   (cutAt_masked _ _ _ _ _ _ _ _).trans (congrArg (· + _) (tabC_vals x j r _ _ _ _ _))
 
 theorem masked_congr (k : ℕ)
-    (h : ∀ (zw : FlockSoundness.Model.Witness (zkTab x j).table.S.m) (R : Fin 2 → Fin (tabC PE x j).z.L → 𝔽),
+    (h : ∀ (zw : FlockSoundness.Model.WitnessBits (zkTab x j).table.S.m) (R : Fin 2 → Fin (tabC PE x j).z.L → 𝔽),
       Composed.honestAt (zkTab x j).table (stAt x j) (cz j) r zw R k =
         Composed.honestAt (zkTab x j).table (stAt x j) (cz' j) r zw R k) :
     (repSrcCut PE x cz (cutAt (tabC PE x) cz wt ω lv) j r).masked k =

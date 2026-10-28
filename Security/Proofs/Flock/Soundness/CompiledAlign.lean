@@ -156,7 +156,7 @@ theorem aligned_lockLig (A : Arith F K) (r : ℕ) (hr : r < 2) (m k0 : ℕ) (l�
   subst i3₁ i3₂
   exact aligned_lockRec A r hr _ b _ ext C₁ C₂ _ (l₁ :: rest) _ _ _ _ _ _ _
 
-theorem aligned_lockRep (A : Arith F K) (r : ℕ) (hr : r < 2) (S : Statement) (m k0 : ℕ)
+theorem aligned_lockRep (A : Arith F K) (r : ℕ) (hr : r < 2) (S : BlockR1CS) (m k0 : ℕ)
     (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m)
     (C₁ C₂ : Oracle F) (extra : List (Claim F S.m)) :
     Lock.Aligned (lockRep (D := D) A r hr S m k0 l₀ l₁ rest ext hk0 hm C₁ extra)
@@ -188,7 +188,7 @@ theorem aligned_lockRep (A : Arith F K) (r : ℕ) (hr : r < 2) (S : Statement) (
 
 /-- **The table's locksteps for two level-0 tables are aligned.** -/
 theorem aligned_lockTable [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
+    (E : Merkle.Enc (List F) D) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
     (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (C₁ C₂ : Oracle F)
     (cap₀ : Cap D) :
     Lock.Aligned (lockTable A H E S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts C₁ cap₀)

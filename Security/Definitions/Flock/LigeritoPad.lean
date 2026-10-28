@@ -121,7 +121,7 @@ def ligeritoPad (A : Arith F K) (sch : Schedule) (t : ℕ) (c₀ : F) (e r : ℕ
           recursiveRounds A n b initial sch.ext rest { st with prev := C₁, prevLevel := lv₁ }
 
 /-- **One rep with the padded level 0.** -/
-def repPad (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F)
+def repPad (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F)
     (e r : ℕ) (C₀ : Oracle F) (extra : List (Claim F S.m)) : Game Bool := do
   match ← zerocheck A S.m with
   | none => pure false
@@ -135,7 +135,7 @@ def repPad (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t
 
 /-- **One table's session with the padded level 0**: rep `0` and rep `1`, each with its own `e`
 extra lanes. -/
-def tablePad (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F)
+def tablePad (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F)
     (e : ℕ) (ptLocal mPts : ℕ) : Game (Bool × Oracle F) := do
   let C₀ ← recv (Oracle F)
   let pts ← draw (Fin 2 → Fin mPts → F)

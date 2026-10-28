@@ -141,7 +141,7 @@ theorem complete (P : Composed.LigProver) (Q : RoundPlan (tabC P)) (U : TapePlan
 /-- **Round `i`'s encoding reads the coins before `i` only** (`RefSession.Causal` at the round plan), whatever each
 pre-final leaf's pair `(M·y, c(y))`. -/
 def RoundPlan.Causal {C : Tabs} (Q : RoundPlan C) : Prop :=
-  ∀ (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (C x j).S.m) (ω : ∀ j, ZkView.Base (C x j).z (C x j).Hi)
+  ∀ (x : Msg) (wt : ∀ j, FlockSoundness.Model.WitnessBits (C x j).S.m) (ω : ∀ j, ZkView.Base (C x j).z (C x j).Hi)
     (p : ZkView.Leaves (fun j => (C x j).z) → ZkView.Bits × ByteArray) (c c' : Fin (refK x) → FlockDeploy.Coin)
     (i : ℕ), (∀ j : Fin (refK x), j.val < i → c j = c' j) →
     Q.enc x c i (cutAt (C x) (Q.cz x c) wt ω fun l =>

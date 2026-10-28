@@ -20,7 +20,7 @@ of the finders built from the prover bounded (`hCR : LinkCRL … (reg σ) (cont 
 
 **The two forms of SHA-512's collision resistance.** The link term `δ_link` is under `SHA512CRExpected` (`ecr/sha-512`,
 through `hCR`), of SHA-512 itself, since the rows' binding hashes with it. The knowledge term and `δ_tree` are under
-`SHA512CRStrict` (`cr/sha-512`, through `hKS` and `hT`), of the session's hash `H`, which `Prog.flock_headline` takes to
+`SHA512CRStrict` (`cr/sha-512`, through `hKS` and `hT`), of the session's hash `H`, which `ProgSpec.flock_headline` takes to
 be SHA-512; each at its finders' budgets:
 * the knowledge term is `ksAvgStrict` (`ksAvgBE_le_strictL`), for tables whose rewinding finders satisfy
   `SHA512CRStrict` at budget `qF` and whose self-clash finders at `qS` (`hKS`);
@@ -37,7 +37,7 @@ positions, at `δ_tree = 0` (`TreeRewind.ofNever`).
 **A3.** None of these forms takes A3 (`uniform/io-getrandombytes`). The generic forms hold at every law `L`, the live
 draw `Law.execOS` included, and read it only through their terms. The `_exec` forms are at `Law.execStratified`, whose
 outcomes are the byte tapes themselves, uniform by construction. The live verifier's bytes enter through `Law.execOS`, and
-A3 compares its count curve with `Law.stratified`'s (`Law.execOS_miss_le`): `Prog.flock_headline` composes the two.
+A3 compares its count curve with `Law.stratified`'s (`Law.execOS_miss_le`): `ProgSpec.flock_headline` composes the two.
 -/
 
 namespace FlockSoundness.Discharge.Exec
@@ -59,7 +59,7 @@ If `execAccept` holds, the probability that at least `K` units of the committed 
 is at most `miss_L(K) + ε_ks + δ_link + δ_tree`: `ε_ks` and `δ_tree` under `SHA512CRStrict` of `H` (`cr/sha-512`,
 through `hKS` and `hT`), `δ_link` under `SHA512CRExpected` of SHA-512 (`ecr/sha-512`, through `hCR`). Beyond the
 skeleton's `dp`, `hConst` and `hZero`, it takes the rows' layout (`lay`, `rs`), `HmRowComputes` (`hHm`) and the serving
-roots' rewinding (`tr`). It takes no A3: `miss_L` is the law's own, and `Prog.flock_headline` bounds the live draw's by
+roots' rewinding (`tr`). It takes no A3: `miss_L` is the law's own, and `ProgSpec.flock_headline` bounds the live draw's by
 `Law.stratified`'s under A3. -/
 theorem flock_e2e_count_hm96L
     {execAccept : Bool × Finset (Fin n) → Prop}

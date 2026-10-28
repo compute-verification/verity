@@ -7,7 +7,7 @@ import Proofs.Flock.Soundness.Discharge.DrawWords.Prob
   the live acceptance as in `execRefines_on`. At a draw it refuses the live event `¬ good` has probability one.
 * `decodesWhere_of_on`: `DecodesOn` at the one-outcome law of a `good` draw.
 * `mPts_at_card`: `setupH_mPts_of_proved` at a draw file that proves exactly its draw's units.
-* `headline_card`: `Prog.flock_headline_execL` with `hRef := execRefines_where` at `good S := S.card = ∑ s, k s`. Its
+* `headline_card`: `ProgSpec.flock_headline_execL` with `hRef := execRefines_where` at `good S := S.card = ∑ s, k s`. Its
   `Pr[bad]` is the law's `Pr[(L.draw ω).card ≠ ∑ s, k s]` (`prob_auditLive_draw`), at most `(∑ s, k s) · 2^-64` under
   A3 (`draw_card_rare`).
 -/

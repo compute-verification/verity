@@ -22,7 +22,7 @@ namespace FlockSoundness.Discharge.Layout
 
 open Flock FlockLevel3 Model
 
-variable {T : Model.Statement}
+variable {T : Model.BlockR1CS}
 
 /-- **In-block column `x` of block `o`** of an accepted statement, as an address of its statement `T` (column 0 past
 the block). -/
@@ -37,7 +37,7 @@ theorem bc_site (a : Placed.Accepted T) {d : Lean.Json} (hd : a.draw = some d)
     (hregs : ∀ r ∈ a.st.regions.toList, Refine.regionOf a.st.c.kLog (a.st.m - a.st.c.kLog) r ∈ a.regs)
     {pop : Public} (hpop : HmRow.loadPublic a.tags a.st.c a.pf = .ok pop) (hpt : pop.tables = none)
     {D : Draw.UnitDraw} (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population)
-    {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p u : ℕ} (hg : g < a.st.c.g)
+    {z : WitnessBits T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p u : ℕ} (hg : g < a.st.c.g)
     (hg2 : g < 2 ^ a.st.c.g.log2) (hp : p < a.st.c.ports.size) (hu : D.proved[o.val * a.st.c.g + g]? = some u) :
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) => siteAddr a o (bcAddr a.st.c g p j.val t.val)) =
       (pop.digest u p a.st.c.ports.size).data.toList := by
@@ -53,7 +53,7 @@ theorem bc_siteS (a : Placed.Accepted T) {d : Lean.Json} (hd : a.draw = some d)
     (hregs : ∀ r ∈ a.st.regions.toList, Refine.regionOf a.st.c.kLog (a.st.m - a.st.c.kLog) r ∈ a.regs)
     {pop : Public} (hpop : HmRow.loadPublic a.tags a.st.c a.pf = .ok pop)
     {D : Draw.UnitDraw} (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population)
-    {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p u : ℕ} (hg : g < a.st.c.g)
+    {z : WitnessBits T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p u : ℕ} (hg : g < a.st.c.g)
     (hg2 : g < 2 ^ a.st.c.g.log2) (hp : p < a.st.c.ports.size) (hu : D.proved[o.val * a.st.c.g + g]? = some u) :
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) => siteAddr a o (bcAddr a.st.c g p j.val t.val)) =
       (pop.digest u p a.st.c.ports.size).data.toList := by
@@ -75,7 +75,7 @@ def BcSite (a : Placed.Accepted T) (pop : Public) (o : Fin (2 ^ T.nbl)) (g u : �
 
 /-- `bc_siteS` at a `BcSite`. -/
 theorem bc_site_of {a : Placed.Accepted T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g u : ℕ} (hs : BcSite a pop o g u)
-    {z : Witness T.m} (hz : T.Satisfies z) (hg : g < a.st.c.g) {p : ℕ} (hp : p < a.st.c.ports.size) :
+    {z : WitnessBits T.m} (hz : T.Satisfies z) (hg : g < a.st.c.g) {p : ℕ} (hp : p < a.st.c.ports.size) :
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) => siteAddr a o (bcAddr a.st.c g p j.val t.val)) =
       (pop.digest u p a.st.c.ports.size).data.toList := by
   obtain ⟨d, D, hd, hD, hlt, hregs, hpop, hg2, hu⟩ := hs
@@ -91,7 +91,7 @@ theorem regionsOf_mem (st : Stmt) :
 block `o` and template instance `g`, the template instance's stacked unit input `x` whose Δ key is message bit `bit` of
 byte `byte` of row port `q` holds the witness's bit at that message column (`Typed.msgCol`), when the column is in the
 block. -/
-theorem copy_site (a : Placed.Accepted T) {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g : ℕ}
+theorem copy_site (a : Placed.Accepted T) {z : WitnessBits T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g : ℕ}
     (hg : g < a.st.c.g) (x : Fin a.rows.w) (hx : x.val < a.rows.nIn) {q byte bit : ℕ}
     (hk : Aliased.srcKey a.st.c x.val = .msg q byte bit) (hin : Typed.msgCol a.st.c g q byte bit < 2 ^ a.st.c.kLog) :
     T.block z o (a.col hg x) = z (siteAddr a o (Typed.msgCol a.st.c g q byte bit)) := by

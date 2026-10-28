@@ -5,7 +5,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.SessionL
 /-!
 # A draft of the headline at the executable (R11)
 
-`Prog.flock_headline` bounds an event `execAccept` of the audit as Lean defines it, and carries the gap between that
+`ProgSpec.flock_headline` bounds an event `execAccept` of the audit as Lean defines it, and carries the gap between that
 audit and flock-verify as `tr`, a rewinding that covers `execAccept ∧ o.1 = false`. This file states the headline the
 other way round: on the live audit (`auditLive`, whose outcome carries the session directory), for flock-verify's
 verdict (`LiveAccepts I`), with the gap a named refinement `ExecRefines` (R11 at one strategy pair, `Event.lean`).
@@ -13,12 +13,12 @@ verdict (`LiveAccepts I`), with the gap a named refinement `ExecRefines` (R11 at
 * `exec_le_of_refines`: a bound on the audit as Lean defines it, for its acceptance conjoined with a fact `Q` fixed by
   its strategy, carries to the live event conjoined with `Q`, plus the refinement's live event `bad`.
 * `ofNever_finderCR`: `TreeRewind.ofNever`'s finder finds nothing, so `SHA512CRStrict` holds for it at every budget.
-* `Prog.flock_headline_exec`: `Prog.flock_headline` at `execAccept := (·.1 = true)`, `tr := TreeRewind.ofNever`
-  (`δ_tree = 0`), carried to the live audit by `exec_le_of_refines`. Its hypotheses are `Prog.flock_headline`'s, with
+* `ProgSpec.flock_headline_exec`: `ProgSpec.flock_headline` at `execAccept := (·.1 = true)`, `tr := TreeRewind.ofNever`
+  (`δ_tree = 0`), carried to the live audit by `exec_le_of_refines`. Its hypotheses are `ProgSpec.flock_headline`'s, with
   `pp`, `hConst`, `hZero`, `lay`, `rs` and `hHm` still open, and `hRef` in place of `tr` and `hT`.
 * `flock_headline_exec_L`: the same carry for the salted session `batchedSessionL`, from a bound on it.
 
-**What this does not close.** `Prog.flock_headline` is about `batchedSession`, which checks openings from the unsalted
+**What this does not close.** `ProgSpec.flock_headline` is about `batchedSession`, which checks openings from the unsalted
 leaf `H(encode row)`. Every `hm96Rows` statement commits its proof rows with `hm96-sha512/v1` leaves, so flock-verify
 accepts an honest session that `batchedSession` rejects, and `hRef` against `batchedSession` holds only with a `bad`
 as likely as acceptance itself. For those statements the refinement targets `batchedSessionL H512 enc512 leaf512 plan`
@@ -65,18 +65,18 @@ theorem ofNever_finderCR {D β : Type} (H : List UInt8 → D) {G : Game β} {S :
   rw [h0, ENNReal.toReal_zero]
   positivity
 
-variable {N : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) {Reg : Type} {mPts : ℕ}
+variable {N : ℕ} (p : FlockSoundness.ProgSpec N n) (outs : Finset (Fin N)) {Reg : Type} {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
-/-- **Draft: the headline at the executable.** Let the verifier draw the units as in `Prog.flock_headline` (`Lx`, the
+/-- **Draft: the headline at the executable.** Let the verifier draw the units as in `ProgSpec.flock_headline` (`Lx`, the
 live stratified draw under A3), and let the live audit `auditLive Lx Reg live`, played by the prover `τ`, refine the
 audit with `batchedSession` played by `σ`, up to the live event `bad` (`hRef`). If `σ`'s committed values have at least
 `K` wrong units, then flock-verify accepts with probability at most
 `miss(K) + ε_ks + δ_link + Pr[bad]`, the headline's bound at `δ_tree = 0` plus the refinement's event. `pp`, `hConst`,
-`hZero`, `lay`, `rs` and `hHm` are open as in `Prog.flock_headline`; `hRef` is R11. For `hm96Rows` statements `hRef`
+`hZero`, `lay`, `rs` and `hHm` are open as in `ProgSpec.flock_headline`; `hRef` is R11. For `hm96Rows` statements `hRef`
 needs the salted session in place of `batchedSession` (the module docstring, `flock_headline_exec_L`). -/
-theorem _root_.FlockSoundness.Prog.flock_headline_exec
+theorem _root_.FlockSoundness.ProgSpec.flock_headline_exec
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)

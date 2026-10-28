@@ -4,7 +4,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.Readers
 /-!
 # A layout and its rows from three pinning facts
 
-`Prog.flock_headline` takes the layout's facts as `lay : Binding.Layout` and `rs : Binding.HmRows lay`. This file builds
+`ProgSpec.flock_headline` takes the layout's facts as `lay : Binding.Layout` and `rs : Binding.HmRows lay`. This file builds
 both from fixed readers (`Readers`: each commit string's row, salt and `b ‖ c` addresses in a drawn unit's table, which
 commit strings are `hm96-sha512/row/v1` rows, and what the registration holds at each: the public `b ‖ c` of a row, the
 value of any other commit string) and three facts about every satisfying witness of a drawn unit's table:

@@ -33,7 +33,7 @@ def padWits (A : Arith F K) (sch : Schedule) (t : ℕ) (c₀ : F) (C : Oracle F)
 
 /-- **The committed values satisfy the statement, padded level 0**: some family of witness lanes
 within the padded radius of the committed table packs a witness that satisfies `S`. -/
-def CommittedPad (A : Arith F K) (S : Statement) (sch : Schedule) (t : ℕ) (c₀ : F)
+def CommittedPad (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (t : ℕ) (c₀ : F)
     (C : Oracle F) : Prop :=
   ∃ P ∈ padWits A sch t c₀ C, S.Satisfies (wit A S sch P)
 
@@ -80,16 +80,16 @@ theorem padWit_mem_padWits (A : Arith F K) (sch : Schedule) (t : ℕ) (c₀ : F)
 /-! ## One rep -/
 
 /-- Zerocheck and the pin, over a list of `L`. -/
-noncomputable def εZcP (s : Schedule) (st : Stmt) (L : ℕ) : ℝ :=
+noncomputable def εZcP (s : Schedule) (st : StmtShape) (L : ℕ) : ℝ :=
   (((L + 1) * (s.m - 13) + L * 127 + L * (2 * (s.m - 6)) + L * (s.m - st.kLog) : ℕ) : ℝ) / qF
 
 /-- Lincheck, over a list of `L`. -/
-noncomputable def εLcP (st : Stmt) (L : ℕ) : ℝ := ((L * (2 + 2 * (st.kLog - 6) + 63) : ℕ) : ℝ) / qF
+noncomputable def εLcP (st : StmtShape) (L : ℕ) : ℝ := ((L * (2 + 2 * (st.kLog - 6) + 63) : ℕ) : ℝ) / qF
 
 /-- Opening, over a list of `L`. -/
-noncomputable def εOpP (st : Stmt) (L : ℕ) : ℝ := ((L * (7 * st.nClaims + 1) : ℕ) : ℝ) / qF
+noncomputable def εOpP (st : StmtShape) (L : ℕ) : ℝ := ((L * (7 * st.nClaims + 1) : ℕ) : ℝ) / qF
 
-theorem padRepError_eq (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (st : Stmt)
+theorem padRepError_eq (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (st : StmtShape)
     (t e : ℕ) :
     padRepError ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ st t e =
       εZcP ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ st (l₀.padListBound t) + εLcP st (l₀.padListBound t) +
@@ -103,7 +103,7 @@ theorem padRepError_eq (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext
 /-- **One rep with the padded level 0 is sound**: from a doomed start over the padded witnesses,
 the rep accepts with probability at most `padRepError`. -/
 theorem rep_sound_pad (A : Arith F K) (hA : A.Correct)
-    (S : Statement) (sch : Schedule)
+    (S : BlockR1CS) (sch : Schedule)
     (hshape : 2 ≤ sch.levels.length ∧ (sch.levels.headD default).lanes = sch.k0 ∧
       sch.m - 7 = sch.k0 + (sch.levels.headD default).logCols ∧
         levelsChained sch.levels sch.ext = true)
@@ -189,7 +189,7 @@ theorem rep_sound_pad (A : Arith F K) (hA : A.Correct)
               push Not at hall
               exact ho₂ M hM ⟨hall ab (by simp), hall _ (by simp), fun e he => hall e (by simp [he])⟩
             have hlen : (ab :: cClaim A zc :: extra).length = (S.shape mPts).nClaims := by
-              simp [Stmt.nClaims, Statement.shape, hextra]; ring
+              simp [StmtShape.nClaims, BlockR1CS.shape, hextra]; ring
             refine (opening_phase_of_list A hA S sch (by omega) W _ hdoomO _ hWL).trans (le_of_eq ?_)
             rw [hlen, hA.card_F, εOpP, ofReal_nat_div_qF]
             push_cast
@@ -199,7 +199,7 @@ theorem rep_sound_pad (A : Arith F K) (hA : A.Correct)
         refine add_le_add (add_le_add ?_ le_rfl) le_rfl
         refine (lincheck_phase_of_list A hA S sch W extra zc ho _ hWL).trans (le_of_eq ?_)
         rw [hA.card_F, εLcP, ofReal_nat_div_qF]
-        simp only [Statement.shape]
+        simp only [BlockR1CS.shape]
         push_cast
         rw [mul_div_assoc]
         norm_num
@@ -212,7 +212,7 @@ theorem rep_sound_pad (A : Arith F K) (hA : A.Correct)
           refine add_le_add ?_ le_rfl
           refine (zerocheck_phase_of_list A hA S sch hm W extra hdoom _ hWL).trans (le_of_eq ?_)
           rw [hA.card_F, εZcP, ofReal_nat_div_qF]
-          simp only [Statement.shape]
+          simp only [BlockR1CS.shape]
           rw [show sch.m = S.m from hmS, ← mul_div_assoc, ENNReal.div_add_div_same]
           congr 1
           have key : S.m - 13 + L * (S.m - 13 + 127 + 2 * (S.m - 6) + (S.m - S.kLog)) =
@@ -227,7 +227,7 @@ theorem rep_sound_pad (A : Arith F K) (hA : A.Correct)
 
 /-- **The link points, padded level 0**: if the committed values do not satisfy the statement, the
 two link points leave some rep start undoomed with probability at most `padLinkError`. -/
-theorem link_sound_pad (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule) (t : ℕ)
+theorem link_sound_pad (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (sch : Schedule) (t : ℕ)
     (hpad : PadOK sch.level₀ t) (c₀ : F) (ptLocal mPts : ℕ) (C : Oracle F)
     (hC : ¬ CommittedPad A S sch t c₀ C) (hlay : S.LinkLayout ptLocal mPts) :
     prCoin (fun pts : Fin 2 → Fin mPts → F =>
@@ -237,7 +237,7 @@ theorem link_sound_pad (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : S
   refine (link_sound_of_list A hA S sch ptLocal mPts (padWits A sch t c₀ C) hC hlay _
     (padWits_card_le A hA sch t hpad c₀ C)).trans (le_of_eq ?_)
   rw [hA.card_F, padLinkError]
-  simp only [Statement.shape]
+  simp only [BlockR1CS.shape]
   rw [ENNReal.ofReal_mul (by positivity), ENNReal.ofReal_mul (by positivity),
     ENNReal.ofReal_natCast, ENNReal.ofReal_natCast, ENNReal.ofReal_pow (by unfold qF; positivity),
     ofReal_nat_div_qF]
@@ -249,7 +249,7 @@ theorem link_sound_pad (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : S
 strategy, the verifier accepts both reps while the committed values do not satisfy the statement
 with probability at most `padTableError`. -/
 theorem table_sound_pad (A : Arith F K) (hA : A.Correct)
-    (S : Statement) (sch : Schedule)
+    (S : BlockR1CS) (sch : Schedule)
     (hshape : 2 ≤ sch.levels.length ∧ (sch.levels.headD default).lanes = sch.k0 ∧
       sch.m - 7 = sch.k0 + (sch.levels.headD default).logCols ∧
         levelsChained sch.levels sch.ext = true)
@@ -317,7 +317,7 @@ the verifier serves, `25 ≤ m ≤ 35`, level-0 query counts `277, 242, 229` at 
 strategy, the verifier accepts a table while the committed values do not satisfy the statement with
 probability at most `2^-205`, for every statement shape in range. -/
 theorem table_sound_pad_m1 (A : Arith F K) (hA : A.Correct)
-    (S : Statement) (hm1 : 25 ≤ S.m) (hm2 : S.m ≤ 35) (c₀ : F) (ptLocal mPts : ℕ)
+    (S : BlockR1CS) (hm1 : 25 ≤ S.m) (hm2 : S.m ≤ 35) (c₀ : F) (ptLocal mPts : ℕ)
     (hshape : (S.shape mPts).InRange) (hlay : S.LinkLayout ptLocal mPts)
     (σ : Strategy (tablePad A S (m1Schedule S.m) (by omega) (m1Pad S.m) c₀ 2 ptLocal mPts)) :
     prob (fun out => out.1 = true ∧ ¬ CommittedPad A S (m1Schedule S.m) (m1Pad S.m) c₀ out.2)

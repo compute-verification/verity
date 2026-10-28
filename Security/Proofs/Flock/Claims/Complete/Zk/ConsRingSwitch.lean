@@ -89,7 +89,7 @@ theorem rsC_zero (lay : Zk.PadLayout) (h : Array F128) (m : ℕ) (zcs : Zc.Coins
 
 /-- **`ring switch ab` vanishes at the masked prover's pads and its honest `ŝ`**, for a statement's table, on a trace
 whose bits satisfy its statement (`claims_switch`'s hypotheses, verbatim). -/
-theorem rsAb_zero_of (st : Stmt) (hwf : StmtWF st) (hrw : RegionsWF st) (hm : 22 ≤ st.m) (w : Model.Witness st.m)
+theorem rsAb_zero_of (st : Stmt) (hwf : StmtWF st) (hrw : RegionsWF st) (hm : 22 ≤ st.m) (w : Model.WitnessBits st.m)
     (hsat : (stmtOf st hwf (regionsOf st)).Satisfies w) (tr : Trace)
     (hz : ∀ a : Fin (2 ^ st.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (zcs : Zc.Coins) (cs : Lc.Coins)
     (points : Array (Array F128)) (hpts : ∀ p ∈ points.toList, p.size = st.mPts)
@@ -106,7 +106,7 @@ theorem rsAb_zero_of (st : Stmt) (hwf : StmtWF st) (hrw : RegionsWF st) (hm : 22
 
 /-- **`ring switch c` vanishes at the masked prover's pads and its honest `ŝ`**, for a statement's table, on a trace
 whose bits satisfy its statement (`claims_switch`'s hypotheses, verbatim). -/
-theorem rsC_zero_of (st : Stmt) (hwf : StmtWF st) (hrw : RegionsWF st) (hm : 22 ≤ st.m) (w : Model.Witness st.m)
+theorem rsC_zero_of (st : Stmt) (hwf : StmtWF st) (hrw : RegionsWF st) (hm : 22 ≤ st.m) (w : Model.WitnessBits st.m)
     (hsat : (stmtOf st hwf (regionsOf st)).Satisfies w) (tr : Trace)
     (hz : ∀ a : Fin (2 ^ st.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽)) (zcs : Zc.Coins) (cs : Lc.Coins)
     (points : Array (Array F128)) (hpts : ∀ p ∈ points.toList, p.size = st.mPts)

@@ -58,7 +58,7 @@ variable (cls : HoloClass)
 def shape : SparseShape := ⟨cls.nu, cls.slotLog, cls.sLog, cls.tLog⟩
 
 /-- The statement the reps' lincheck runs on: the public parts of `A₀` and `B₀`, the pin and the regions `regs`. -/
-def pubStatement (regs : List (Region cls.kLog (cls.m - cls.kLog))) : Statement :=
+def pubStatement (regs : List (Region cls.kLog (cls.m - cls.kLog))) : BlockR1CS :=
   ⟨cls.m, cls.kLog, cls.hk, cls.hk6, cls.pin, cls.A₀pub, cls.B₀pub, regs⟩
 
 end HoloClass
@@ -98,7 +98,7 @@ def side (R : RegTable cls) (τ : Fin (2 ^ cls.sLog) → Fin (2 ^ cls.tLog)) (s 
 /-- **The hidden statement**: the block R1CS with the class's `m`, `k_log` and pin, `A₀` and `B₀` the public part plus
 the slots' templates at their unit slots, and the public regions `regs`. -/
 def toStatement (R : RegTable cls) (τ : Fin (2 ^ cls.sLog) → Fin (2 ^ cls.tLog))
-    (regs : List (Region cls.kLog (cls.m - cls.kLog))) : Statement :=
+    (regs : List (Region cls.kLog (cls.m - cls.kLog))) : BlockR1CS :=
   ⟨cls.m, cls.kLog, cls.hk, cls.hk6, cls.pin, R.side τ false, R.side τ true, regs⟩
 
 theorem type_lt {a : ℕ} (h : a < 2 ^ (cls.nu + cls.shape.pLog + cls.tLog)) :
@@ -108,7 +108,7 @@ theorem type_lt {a : ℕ} (h : a < 2 ^ (cls.nu + cls.shape.pLog + cls.tLog)) :
 
 /-- The stacked table the registered opening reads: bit `k + 2^ν·(p + 2^pLog·t)` is `R t p k`, and the padding's bits
 past the cells (`SparseShape.mReg`) are zero. -/
-def bits (R : RegTable cls) : Witness cls.shape.mReg := fun a =>
+def bits (R : RegTable cls) : WitnessBits cls.shape.mReg := fun a =>
   if h : a.val < 2 ^ (cls.nu + cls.shape.pLog + cls.tLog) then
     R ⟨a.val / 2 ^ (cls.nu + cls.shape.pLog), type_lt h⟩
       ⟨a.val / 2 ^ cls.nu % 2 ^ cls.shape.pLog, Nat.mod_lt _ (Nat.two_pow_pos _)⟩

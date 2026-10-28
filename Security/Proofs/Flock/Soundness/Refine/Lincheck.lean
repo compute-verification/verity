@@ -147,7 +147,7 @@ theorem cClaim_rel {m : ℕ} (zc : Flock.ZcOut) (zc' : Model.ZcOut 𝔽 m) (hzc 
 a circuit fold realizing `S` and on a zerocheck output that is the model's `zc'`, the model's lincheck on `zc'`, played
 with the proof's lincheck messages and the coins of the rounds consumed, returns the executable's `ab` claim, read in
 the model's field. -/
-theorem lincheck_refines (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S)
+theorem lincheck_refines (S : Model.BlockR1CS) (c : CircuitFold) (hc : FoldRealizes c S)
     (zc : Flock.ZcOut) (zc' : Model.ZcOut 𝔽 S.m) (hzc : ZcRel S.m zc zc') (p : LincheckProof)
     (t t' : Transcript) (lc : LcOut) (hwf : RoundsWF t.rounds)
     (h : Flock.lincheck c zc p t = .ok (lc, t')) :

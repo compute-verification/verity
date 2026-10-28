@@ -252,7 +252,7 @@ theorem filterMap_fin_nodup (kl : ℕ) (L : List ℕ) (h : L.Nodup) :
     split at hb <;> split at hb' <;> (try simp_all)
     exact congrArg Fin.val (hb.trans hb'.symm)) h
 
-/-- **The link layout** of `stmtOf st` (`Statement.LinkLayout`, which the table-soundness theorems take): each region's
+/-- **The link layout** of `stmtOf st` (`BlockR1CS.LinkLayout`, which the table-soundness theorems take): each region's
 free bits are distinct and at most `PT_LOCAL`, and the link points have room for the block bits. -/
 theorem stmtOf_linkLayout (st : Stmt) (hwf : StmtWF st) (hr : RegionsWF st) :
     (stmtOf st hwf (regionsOf st)).LinkLayout PT_LOCAL st.mPts := by

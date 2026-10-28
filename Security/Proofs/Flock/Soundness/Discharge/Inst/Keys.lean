@@ -363,7 +363,7 @@ theorem inst_single_gate (outs : Finset (Fin (instN c n))) (hkeys : InstKeysRow 
 statement, at block `o` and template instance `g`, the composite input `x` whose Δ key is message bit `bit` of byte
 `byte` of row port `q` holds the witness's bit at that message column (`Typed.msgCol`), when the column is in the block.
 `Layout.copy_site` at the template instance's rows. -/
-theorem copy_site_inst {T : Model.Statement} (a : Accepted T) {z : Witness T.m} (hz : T.Satisfies z)
+theorem copy_site_inst {T : Model.BlockR1CS} (a : Accepted T) {z : WitnessBits T.m} (hz : T.Satisfies z)
     (o : Fin (2 ^ T.nbl)) {g : ℕ} (hg : g < a.st.c.g) (x : Fin (instRows a.st.c).w) (hx : x.val < (instRows a.st.c).nIn)
     {q byte bit : ℕ} (hk : keyOf a.st.c x.val = .msg q byte bit)
     (hin : Typed.msgCol a.st.c g q byte bit < 2 ^ a.st.c.kLog) :

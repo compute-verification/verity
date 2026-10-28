@@ -350,7 +350,7 @@ def addr64 {m : ℕ} (hm : 6 ≤ m) (x : Fin (2 ^ (m - 6))) (s : Fin 64) : Fin (
     rw [← two_pow_six_mul hm]; have := x.isLt; have := s.isLt; omega⟩
 
 /-- A claim evaluates by skip index: `Σ_x eq(x_claim, x)·Σ_s skip[s]·ω[s + 64x]`. -/
-theorem claim_eval_skip {m : ℕ} (hm : 6 ≤ m) (c : Claim F m) (ω : Witness m) :
+theorem claim_eval_skip {m : ℕ} (hm : 6 ≤ m) (c : Claim F m) (ω : WitnessBits m) :
     c.eval ω = ∑ x : Fin (2 ^ (m - 6)), eqAt c.x x.val *
       ∑ s : Fin 64, c.skip s * ((ω (addr64 hm x s)).val : F) := by
   unfold Claim.eval
@@ -369,26 +369,26 @@ theorem claim_eval_skip {m : ℕ} (hm : 6 ≤ m) (c : Claim F m) (ω : Witness m
   ring
 
 /-- `ω̂_x(Y)`: the polynomial through the bits `ω[s + 64x]` on the skip nodes. -/
-noncomputable def hatP (A : Arith F K) (hA : A.Correct) {m : ℕ} (hm : 6 ≤ m) (ω : Witness m)
+noncomputable def hatP (A : Arith F K) (hA : A.Correct) {m : ℕ} (hm : 6 ≤ m) (ω : WitnessBits m)
     (x : Fin (2 ^ (m - 6))) : F[X] :=
   polyS A hA fun s => ((ω (addr64 hm x s)).val : F)
 
 /-- A claim with the skip weights `L_s(ζ)` evaluates to `Σ_x eq(x_claim, x)·ω̂_x(ζ)`. -/
 theorem claim_eval_hat (A : Arith F K) (hA : A.Correct) {m : ℕ} (hm : 6 ≤ m) (v ζ : F)
-    (x : Fin (m - 6) → F) (ω : Witness m) :
+    (x : Fin (m - 6) → F) (ω : WitnessBits m) :
     (⟨v, A.lagS ζ, x⟩ : Claim F m).eval ω =
       ∑ x' : Fin (2 ^ (m - 6)), eqAt x x'.val * (hatP A hA hm ω x').eval ζ := by
   rw [claim_eval_skip hm]
   simp only [hatP, polyS_eval]
 
 /-- The R1CS error bit at an address: `(Az)·(Bz) + z`, zero exactly where the constraint holds. -/
-def errBit (S : Statement) (w : Witness S.m) (a : Fin (2 ^ S.m)) : ZMod 2 :=
+def errBit (S : BlockR1CS) (w : WitnessBits S.m) (a : Fin (2 ^ S.m)) : ZMod 2 :=
   aVec S w a * bVec S w a + w a
 
 /-- The block R1CS fails at some address. -/
-def R1CSFails (S : Statement) (w : Witness S.m) : Prop := ∃ a, errBit S w a ≠ 0
+def R1CSFails (S : BlockR1CS) (w : WitnessBits S.m) : Prop := ∃ a, errBit S w a ≠ 0
 
-theorem r1cs_of_not_fails (S : Statement) (w : Witness S.m) (h : ¬ R1CSFails S w) :
+theorem r1cs_of_not_fails (S : BlockR1CS) (w : WitnessBits S.m) (h : ¬ R1CSFails S w) :
     ∀ o i, (S.A₀.mulVec (S.block w o)) i * (S.B₀.mulVec (S.block w o)) i = S.block w o i := by
   intro o i
   have h0 : errBit S w (S.addr o i) = 0 := by
@@ -400,25 +400,25 @@ theorem r1cs_of_not_fails (S : Statement) (w : Witness S.m) (h : ¬ R1CSFails S 
 /-! ## The true polynomials of the zerocheck -/
 
 /-- The true `P_c(Y) = Σ_x eq(r, x)·ẑ_x(Y)` (degree below 64). -/
-noncomputable def PcT (A : Arith F K) (hA : A.Correct) {m : ℕ} (hm : 6 ≤ m) (w : Witness m)
+noncomputable def PcT (A : Arith F K) (hA : A.Correct) {m : ℕ} (hm : 6 ≤ m) (w : WitnessBits m)
     (r : Fin (m - 6) → F) : F[X] :=
   ∑ x : Fin (2 ^ (m - 6)), C (eqAt r x.val) * hatP A hA hm w x
 
 /-- The true `P_ab(Y) = Σ_x eq(r, x)·Â_x(Y)·B̂_x(Y)` (degree at most 126). -/
-noncomputable def PabT (A : Arith F K) (hA : A.Correct) (S : Statement) (hm : 6 ≤ S.m)
-    (w : Witness S.m) (r : Fin (S.m - 6) → F) : F[X] :=
+noncomputable def PabT (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (hm : 6 ≤ S.m)
+    (w : WitnessBits S.m) (r : Fin (S.m - 6) → F) : F[X] :=
   ∑ x : Fin (2 ^ (S.m - 6)), C (eqAt r x.val) *
     (hatP A hA hm (aVec S w) x * hatP A hA hm (bVec S w) x)
 
-theorem PcT_natDegree (A : Arith F K) (hA : A.Correct) {m : ℕ} (hm : 6 ≤ m) (w : Witness m)
+theorem PcT_natDegree (A : Arith F K) (hA : A.Correct) {m : ℕ} (hm : 6 ≤ m) (w : WitnessBits m)
     (r : Fin (m - 6) → F) : (PcT A hA hm w r).natDegree ≤ 63 := by
   unfold PcT
   refine natDegree_sum_le_of_forall_le _ _ fun x _ => (natDegree_C_mul_le _ _).trans ?_
   have := polyS_natDegree A hA fun s => ((w (addr64 hm x s)).val : F)
   simp only [hatP]; omega
 
-theorem PabT_natDegree (A : Arith F K) (hA : A.Correct) (S : Statement) (hm : 6 ≤ S.m)
-    (w : Witness S.m) (r : Fin (S.m - 6) → F) : (PabT A hA S hm w r).natDegree ≤ 126 := by
+theorem PabT_natDegree (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (hm : 6 ≤ S.m)
+    (w : WitnessBits S.m) (r : Fin (S.m - 6) → F) : (PabT A hA S hm w r).natDegree ≤ 126 := by
   unfold PabT
   refine natDegree_sum_le_of_forall_le _ _ fun x _ => (natDegree_C_mul_le _ _).trans ?_
   refine natDegree_mul_le.trans ?_
@@ -426,20 +426,20 @@ theorem PabT_natDegree (A : Arith F K) (hA : A.Correct) (S : Statement) (hm : 6 
   have h2 := polyS_natDegree A hA fun s => ((bVec S w (addr64 hm x s)).val : F)
   simp only [hatP]; omega
 
-theorem PcT_eval (A : Arith F K) (hA : A.Correct) {m : ℕ} (hm : 6 ≤ m) (w : Witness m)
+theorem PcT_eval (A : Arith F K) (hA : A.Correct) {m : ℕ} (hm : 6 ≤ m) (w : WitnessBits m)
     (r : Fin (m - 6) → F) (ζ : F) :
     (PcT A hA hm w r).eval ζ = ∑ x : Fin (2 ^ (m - 6)), eqAt r x.val * (hatP A hA hm w x).eval ζ := by
   simp only [PcT, eval_finset_sum, eval_mul, eval_C]
 
-theorem PabT_eval (A : Arith F K) (hA : A.Correct) (S : Statement) (hm : 6 ≤ S.m)
-    (w : Witness S.m) (r : Fin (S.m - 6) → F) (ζ : F) :
+theorem PabT_eval (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (hm : 6 ≤ S.m)
+    (w : WitnessBits S.m) (r : Fin (S.m - 6) → F) (ζ : F) :
     (PabT A hA S hm w r).eval ζ = ∑ x : Fin (2 ^ (S.m - 6)), eqAt r x.val *
       (hatP A hA hm (aVec S w) x).eval ζ * (hatP A hA hm (bVec S w) x).eval ζ := by
   simp only [PabT, eval_finset_sum, eval_mul, eval_C, mul_assoc]
 
 /-- At a skip node, `P_ab + P_c` is the eq-reduction of the error bits there. -/
-theorem errSum_eq [CharP F 2] (A : Arith F K) (hA : A.Correct) (S : Statement) (hm : 6 ≤ S.m)
-    (w : Witness S.m) (r : Fin (S.m - 6) → F) (s : Fin 64) :
+theorem errSum_eq [CharP F 2] (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (hm : 6 ≤ S.m)
+    (w : WitnessBits S.m) (r : Fin (S.m - 6) → F) (s : Fin 64) :
     (PabT A hA S hm w r + PcT A hA hm w r).eval (nodeS A hA s) =
       ∑ x : Fin (2 ^ (S.m - 6)), eqAt r x.val * ((errBit S w (addr64 hm x s)).val : F) := by
   rw [eval_add, PabT_eval, PcT_eval, ← Finset.sum_add_distrib]
@@ -464,8 +464,8 @@ theorem sum_eqAt [CharP F 2] : ∀ (n : ℕ) (r : Fin n → F),
 /-- **Z3.** A nonzero error bit survives the eq-reduction over address bits 6… at some skip node,
 except with probability `(m − 13)/|F|`: the pinned coordinates' 128 weights are independent over
 GF(2), and what remains is a nonzero multilinear polynomial in `r[13…]`. -/
-theorem prCoin_zc3_le (A : Arith F K) (hA : A.Correct) (S : Statement) (hm : 13 ≤ S.m)
-    (w : Witness S.m) (hfail : R1CSFails S w) :
+theorem prCoin_zc3_le (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (hm : 13 ≤ S.m)
+    (w : WitnessBits S.m) (hfail : R1CSFails S w) :
     prCoin (fun rs : Fin (S.m - 13) → F => ∀ s : Fin 64,
       ∑ x : Fin (2 ^ (S.m - 6)), eqAt (zcVector A rs) x.val *
         ((errBit S w (addr64 (le_trans (by norm_num) hm) x s)).val : F) = 0) ≤
@@ -534,8 +534,8 @@ def claim0 (A : Arith F K) (msg : (Fin 64 → F) × (Fin 64 → F)) (z : F) : F 
 /-- **Z5, the skip point.** If the error does not vanish at some skip node, then at a live `z`
 either the prover's `P_c` is off the true one or its `P_ab = Pcomb + P_c` is, since `Pcomb`
 vanishes on the skip nodes by construction: probability at most `127/|F|` of neither. -/
-theorem prCoin_zc5_le (A : Arith F K) (hA : A.Correct) (S : Statement) (h6 : 6 ≤ S.m)
-    (w : Witness S.m) (r : Fin (S.m - 6) → F) (msg : (Fin 64 → F) × (Fin 64 → F)) (s₀ : Fin 64)
+theorem prCoin_zc5_le (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (h6 : 6 ≤ S.m)
+    (w : WitnessBits S.m) (r : Fin (S.m - 6) → F) (msg : (Fin 64 → F) × (Fin 64 → F)) (s₀ : Fin 64)
     (hE : ∑ x : Fin (2 ^ (S.m - 6)), eqAt r x.val * ((errBit S w (addr64 h6 x s₀)).val : F) ≠ 0) :
     prCoin (fun z : F => (PcT A hA h6 w r).eval z = pcOf A msg z ∧
       claim0 A msg z = (PabT A hA S h6 w r).eval z) ≤ 127 / Fintype.card F := by
@@ -569,12 +569,12 @@ theorem prCoin_zc5_le (A : Arith F K) (hA : A.Correct) (S : Statement) (h6 : 6 �
     · gcongr; norm_num
 
 /-- `ρ_out` from the residual challenges: address bits `k_log …` (as `ZcOut.ρOut` reads them). -/
-def ρOutOf (S : Statement) (ρ : Fin (S.m - 6) → F) : Fin S.nbl → F := fun j =>
+def ρOutOf (S : BlockR1CS) (ρ : Fin (S.m - 6) → F) : Fin S.nbl → F := fun j =>
   if h : S.kLog - 6 + j.val < S.m - 6 then ρ ⟨S.kLog - 6 + j.val, h⟩ else 0
 
 /-- **The pin.** A block whose pin bit is 0 makes the pin's extension at `ρ_out` differ from 1,
 except with probability `(m − k_log)/|F|` over the residual challenges. -/
-theorem prCoin_pin_le (A : Arith F K) (hA : A.Correct) (S : Statement) (w : Witness S.m)
+theorem prCoin_pin_le (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (w : WitnessBits S.m)
     (o₀ : Fin (2 ^ S.nbl)) (ho₀ : S.block w o₀ S.pin ≠ 1) :
     prCoin (fun ρ : Fin (S.m - 6) → F => pinMLE S w (ρOutOf S ρ) = 1) ≤
       ((S.nbl : ℕ) : ℝ≥0∞) / Fintype.card F := by
@@ -633,16 +633,16 @@ theorem zerocheck_eq (A : Arith F K) (m : ℕ) :
       zcRest A m rs := rfl
 
 /-- The `a`, `b` and `c` claims all hold for a witness at the zerocheck's output. -/
-def ZcHolds (A : Arith F K) (S : Statement) (w : Witness S.m) (zc : ZcOut F S.m) : Prop :=
+def ZcHolds (A : Arith F K) (S : BlockR1CS) (w : WitnessBits S.m) (zc : ZcOut F S.m) : Prop :=
   (⟨zc.va, A.lagS zc.z, zc.ρ⟩ : Claim F S.m).Holds (aVec S w) ∧
     (⟨zc.vb, A.lagS zc.z, zc.ρ⟩ : Claim F S.m).Holds (bVec S w) ∧ (cClaim A zc).Holds w
 
 /-- The values `ω̂_x(ζ)`, as a vector for the rounds. -/
-noncomputable def hatVals (A : Arith F K) (hA : A.Correct) {m : ℕ} (hm : 6 ≤ m) (ω : Witness m)
+noncomputable def hatVals (A : Arith F K) (hA : A.Correct) {m : ℕ} (hm : 6 ≤ m) (ω : WitnessBits m)
     (ζ : F) : ℕ → F := fun x =>
   if hx : x < 2 ^ (m - 6) then (hatP A hA hm ω ⟨x, hx⟩).eval ζ else 0
 
-theorem sum_hatVals {m : ℕ} (A : Arith F K) (hA : A.Correct) (hm : 6 ≤ m) (ω : Witness m)
+theorem sum_hatVals {m : ℕ} (A : Arith F K) (hA : A.Correct) (hm : 6 ≤ m) (ω : WitnessBits m)
     (ζ : F) (g : ℕ → F) :
     ∑ x ∈ Finset.range (2 ^ (m - 6)), g x * hatVals A hA hm ω ζ x =
       ∑ x : Fin (2 ^ (m - 6)), g x.val * (hatP A hA hm ω x).eval ζ := by
@@ -653,8 +653,8 @@ theorem sum_hatVals {m : ℕ} (A : Arith F K) (hA : A.Correct) (hm : 6 ≤ m) (�
 /-- **Z5–Z7, the R1CS path.** With the error visible at a skip node and every `r_eq ≠ 1`, the rest
 of the zerocheck ends with the `a`, `b` and `c` claims all true with probability at most
 `(127 + 2(m − 6))/|F|`. -/
-theorem value_zcRest_r1cs_le (A : Arith F K) (hA : A.Correct) (S : Statement) (hm : 13 ≤ S.m)
-    (w : Witness S.m) (rs : Fin (S.m - 13) → F) (hreq : ∀ j, zcVector A rs j ≠ 1) (s₀ : Fin 64)
+theorem value_zcRest_r1cs_le (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (hm : 13 ≤ S.m)
+    (w : WitnessBits S.m) (rs : Fin (S.m - 13) → F) (hreq : ∀ j, zcVector A rs j ≠ 1) (s₀ : Fin 64)
     (hE : ∑ x : Fin (2 ^ (S.m - 6)), eqAt (zcVector A rs) x.val *
       ((errBit S w (addr64 (le_trans (by norm_num) hm) x s₀)).val : F) ≠ 0) :
     value (fun o => ∃ zc, o = some zc ∧ ZcHolds A S w zc) (zcRest A S.m rs) ≤
@@ -731,7 +731,7 @@ theorem value_zcRest_r1cs_le (A : Arith F K) (hA : A.Correct) (S : Statement) (h
 
 /-- **The pin path.** A block whose pin bit is 0: the rest of the zerocheck ends with the pin's
 extension at `ρ_out` equal to 1 with probability at most `(m − k_log)/|F|`. -/
-theorem value_zcRest_pin_le (A : Arith F K) (hA : A.Correct) (S : Statement) (w : Witness S.m)
+theorem value_zcRest_pin_le (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (w : WitnessBits S.m)
     (rs : Fin (S.m - 13) → F) (o₀ : Fin (2 ^ S.nbl)) (ho₀ : S.block w o₀ S.pin ≠ 1) :
     value (fun o => ∃ zc, o = some zc ∧ pinMLE S w (zc.ρOut S) = 1) (zcRest A S.m rs) ≤
       ((S.nbl : ℕ) : ℝ≥0∞) / Fintype.card F := by
@@ -775,7 +775,7 @@ open Classical in
 /-- **The zerocheck phase** (§9.2), for a list `W` of at most `L` messages: from a doomed start over
 `W`, the zerocheck ends undoomed with probability at most
 `(m − 13)/|F| + L·(m − 13 + 127 + 2(m − 6) + (m − k_log))/|F|`. -/
-theorem zerocheck_phase_of_list (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
+theorem zerocheck_phase_of_list (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (sch : Schedule)
     (hm : 13 ≤ S.m) (W : Set (Message F sch.k0 sch.level₀.logCols)) (extra : List (Claim F S.m))
     (hdoom : RepDoomedW A S sch W extra) (L : ℕ)
     (hL : (Finset.univ.filter fun M => M ∈ W).card ≤ L) :
@@ -853,7 +853,7 @@ theorem zerocheck_phase_of_list (A : Arith F K) (hA : A.Correct) (S : Statement)
                   exact hdM ⟨r1cs_of_not_fails S _ hr, hno, hext⟩
                 refine (value_mono (fun o ⟨zc, ho, _, _, _, hp, _⟩ => ⟨zc, ho, hp⟩) _).trans
                   ((value_zcRest_pin_le A hA S _ rs o₀ ho₀).trans ?_)
-                exact ENNReal.div_le_div_right (by exact_mod_cast (by simp only [Statement.nbl]; omega :
+                exact ENNReal.div_le_div_right (by exact_mod_cast (by simp only [BlockR1CS.nbl]; omega :
                   S.nbl ≤ 127 + 2 * (S.m - 6) + (S.m - S.kLog))) _
             · calc value (E M) _ ≤ value (fun _ => False) _ :=
                   value_mono (fun o ⟨_, _, _, _, _, _, he⟩ => hext he) _
@@ -886,7 +886,7 @@ theorem zerocheck_phase_of_list (A : Arith F K) (hA : A.Correct) (S : Statement)
 open Classical in
 /-- **The zerocheck phase** for the codewords near the committed table: `zerocheck_phase_of_list`
 at `closeMsgs`. -/
-theorem zerocheck_phase_of_card (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
+theorem zerocheck_phase_of_card (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (sch : Schedule)
     (hm : 13 ≤ S.m) (C : Oracle F) (extra : List (Claim F S.m))
     (hdoom : RepDoomed A S sch C extra) (L : ℕ)
     (hL : (Finset.univ.filter fun M => M ∈ closeMsgs A sch C).card ≤ L) :

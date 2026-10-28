@@ -22,7 +22,7 @@ off `T` at level 0, plus, per rep and level, the mass of runs that open a positi
 cap. -/
 theorem session_sound_of_table_accL_raw {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K]
     [DecidableEq K] {D Sl : Type} (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl] (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
+    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (hlay : S.LinkLayout ptLocal mPts)
@@ -115,7 +115,7 @@ open Classical in
 prefixes; that is at most the mass off any other table there (`Lock.nodeOff_le_of_plurality`, `plurS_pluralityL`). -/
 theorem session_sound_of_table_accL_nodeOff {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K]
     [Fintype K] [DecidableEq K] {D Sl : Type} (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl]
-    (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement)
+    (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (hlay : S.LinkLayout ptLocal mPts)

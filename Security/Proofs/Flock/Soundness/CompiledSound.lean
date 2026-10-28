@@ -347,7 +347,7 @@ theorem opR_conflict_collision {H : List UInt8 → D} {E : Merkle.Enc (List F) D
 
 /-! ## The plurality prover and the collision finders -/
 
-theorem tableError_nonneg (s : Schedule) (st : Stmt) : 0 ≤ tableError s st := by
+theorem tableError_nonneg (s : Schedule) (st : StmtShape) : 0 ≤ tableError s st := by
   unfold tableError linkError; positivity
 
 theorem expect_cast {α : Type} (f : α → ℝ) : ∀ {g₁ g₂ : Game α} (h : g₁ = g₂) (s : Strategy g₂),
@@ -380,7 +380,7 @@ theorem plurC_plurality (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (sch 
 open Classical in
 /-- **`T*(P*)`**: the plurality of the level-0 openings over the coins after the level-0 cap. -/
 noncomputable def C0star (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Cap D)
+    (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Cap D)
     (σ : Strategy (tableCmp A H E S sch hm ptLocal mPts cap₀)) : Oracle F :=
   tabOf (lvOf sch 0).lanes (lvOf sch 0).logLen
     (Classical.choose (Rewinding.exists_pluralityE (op₀ H E sch cap₀) _ σ))
@@ -388,7 +388,7 @@ noncomputable def C0star (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
 /-- **`Adv₀`**: the collision finder at the level-0 cap. Two continuations after `P*`'s level-0
 cap open a level-0 position to different rows. -/
 noncomputable def adv₀ (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
+    (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (σ : Strategy (tableC A H E S sch hm ptLocal mPts)) : ℝ :=
   expect₂ (fun b b' => ind (fun x : OutC F D × OutC F D =>
       ∃ p, Rewinding.ConflictAt (op₀ H E sch σ.1) x p) (b, b'))
@@ -397,7 +397,7 @@ noncomputable def adv₀ (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
 /-- **`Adv_{r,ℓ}`**: the collision finder at rep `r`'s level-`ℓ` cap. Along the run, at that
 cap, two continuations open a level-`ℓ` position to different rows. -/
 noncomputable def advR [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
+    (E : Merkle.Enc (List F) D) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
     (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (r ℓ : ℕ)
     (σ : Strategy (tableC A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts)) : ℝ :=
   Lock.forkE (plurC H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (slotOf r ℓ)
@@ -417,7 +417,7 @@ theorem getPair_init_none (s : ℕ) :
 cap, a compiled run accepts with `C₀` uncommitted with probability at most `tableError` plus the
 probability of a bad run. -/
 theorem compiled_le_bad (A : Arith F K) (hA : A.Correct)
-    [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
+    [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : BlockR1CS)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (hlay : S.LinkLayout ptLocal mPts) (C₀ : Oracle F) (cap₀ : Cap D)
@@ -532,7 +532,7 @@ open Classical in
 /-- **The bad runs, cap by cap**: rewinding at the level-0 cap (`expect_bad_le`) and at every
 rep's cap (`Lock.leafE_off_le`). -/
 theorem bad_le [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
+    (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0)
     (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (σ : Strategy (Game.send (Cap D)
       (tableCmp A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts))) :
@@ -624,7 +624,7 @@ self-clash. Each `Adv` is the success probability of an explicit collision finde
 pair it counts, like every self-clash, is two verifying openings of one position to different
 rows under one cap: a SHA-512 collision (`Merkle.opening_binding`). -/
 theorem table_sound_compiled (A : Arith F K) (hA : A.Correct)
-    [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : Statement)
+    [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (S : BlockR1CS)
     (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ)
     (hsch : fast100 S.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (hlay : S.LinkLayout ptLocal mPts)

@@ -26,7 +26,7 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 commitment, masked phase and inner proof. Both reps place their pads by `P`, `PA` and `tr` (the same layout, §2, over
 each rep's own pads). -/
 noncomputable def tableAfterZK (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (PA : PadsA np) (tr : Triple np) {N : ℕ}
-    (dom : Fin N ↪ F) (nP q : ℕ) (pos : F → Fin N) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ)
+    (dom : Fin N ↪ F) (nP q : ℕ) (pos : F → Fin N) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ)
     (c₀ : F) (ptLocal mPts : ℕ) (C₀ : Oracle F) (pts : Fin 2 → Fin mPts → F) : Game (Bool × Oracle F) := do
   let extra := extraClaims S ptLocal mPts pts
   let accepts ← interleave (repZK dom np nP q pos tr (repMaskedZK A P PA tr S sch hm t c₀ 0 C₀ extra))
@@ -35,7 +35,7 @@ noncomputable def tableAfterZK (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (PA
 
 /-- **One `--zk` table**: the level-0 commitment, the link points, and both reps (`tableAfterZK`). -/
 noncomputable def tablePadZK (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (PA : PadsA np) (tr : Triple np) {N : ℕ}
-    (dom : Fin N ↪ F) (nP q : ℕ) (pos : F → Fin N) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ)
+    (dom : Fin N ↪ F) (nP q : ℕ) (pos : F → Fin N) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ)
     (c₀ : F) (ptLocal mPts : ℕ) : Game (Bool × Oracle F) := do
   let C₀ ← recv (Oracle F)
   let pts ← draw (Fin 2 → Fin mPts → F)
@@ -43,7 +43,7 @@ noncomputable def tablePadZK (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (PA :
 
 /-- **A `--zk` rep is sound**: from a doomed start over the padded witnesses, the rep (pads commitment, masked phase,
 inner proof) accepts with probability at most `padRepError + εInner`. -/
-theorem rep_sound_pad_zk (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
+theorem rep_sound_pad_zk (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (sch : Schedule)
     (hshape : 2 ≤ sch.levels.length ∧ (sch.levels.headD default).lanes = sch.k0 ∧
       sch.m - 7 = sch.k0 + (sch.levels.headD default).logCols ∧
         levelsChained sch.levels sch.ext = true)
@@ -66,7 +66,7 @@ theorem rep_sound_pad_zk (A : Arith F K) (hA : A.Correct) (S : Statement) (sch :
 (link points, both reps) accepts while `C` is not `CommittedPad` with probability at most
 `padLinkError + (padRepError + εInner)²`. -/
 theorem tableAfterZK_sound (A : Arith F K) (hA : A.Correct)
-    (S : Statement) (sch : Schedule)
+    (S : BlockR1CS) (sch : Schedule)
     (hshape : 2 ≤ sch.levels.length ∧ (sch.levels.headD default).lanes = sch.k0 ∧
       sch.m - 7 = sch.k0 + (sch.levels.headD default).logCols ∧
         levelsChained sch.levels sch.ext = true)
@@ -119,7 +119,7 @@ theorem tableAfterZK_sound (A : Arith F K) (hA : A.Correct)
 verifier accepts both reps while the committed values do not satisfy the statement with probability at most
 `padLinkError + (padRepError + εInner)²`. -/
 theorem table_sound_pad_zk (A : Arith F K) (hA : A.Correct)
-    (S : Statement) (sch : Schedule)
+    (S : BlockR1CS) (sch : Schedule)
     (hshape : 2 ≤ sch.levels.length ∧ (sch.levels.headD default).lanes = sch.k0 ∧
       sch.m - 7 = sch.k0 + (sch.levels.headD default).logCols ∧
         levelsChained sch.levels sch.ext = true)

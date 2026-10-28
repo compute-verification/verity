@@ -52,7 +52,7 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- A compiled table of the verifier's session: a statement, its `fast100` schedule written out by
 levels, and its link-point layout. -/
 structure FlockTableC where
-  S : Statement
+  S : BlockR1CS
   m : ℕ
   k0 : ℕ
   l₀ : Level

@@ -137,7 +137,7 @@ theorem holoSel_first {st : Flock.Stmt} {hp : FlockSoundness.Discharge.Recursion
 
 /-- **A rep's consumed rounds are the hidden-unit schedule's coin rounds** where its transcript, from round 0, has its
 `z_partial` round at the schedule's and consumed as many rounds as the schedule has. -/
-theorem repIdx_of_size {S₀ : FlockSoundness.Model.Statement} {v : UnitVals} {m kLog claims : ℕ}
+theorem repIdx_of_size {S₀ : FlockSoundness.Model.BlockR1CS} {v : UnitVals} {m kLog claims : ℕ}
     {rs : Array SchedRound} (hc : 0 < claims) (hrs : holoRepRounds m kLog claims = some rs) (hk0 : v.t.k = 0)
     (hz : v.t.k + 3 + (v.st.m - 6) + 2 + (S₀.kLog - 6) = zpRound m kLog) (hk : v.t₄.k = rs.size) :
     repIdx S₀ v = coinRounds rs := by
@@ -166,7 +166,7 @@ check holds to the inner shape's schedule, round for round. Every round of the p
 frames' `z_partial` round none, so at a plain shape no rep unit passes the check. At a holo shape the schedule's one
 round without coins is its `z_partial` round, so the frames' is at it, and the record is consumed whole, so the unit
 consumed the schedule's count. -/
-theorem repIdx_of_check {S₀ : FlockSoundness.Model.Statement} {sh : Flock.Shape}
+theorem repIdx_of_check {S₀ : FlockSoundness.Model.BlockR1CS} {sh : Flock.Shape}
     {d : FlockVBridge.Compiled.RepData} {v : UnitVals} {ish : RecVStar.Inner} {rs : Array SchedRound}
     {cs : InnerCommits} {s : String} {st : InnerStream}
     (hcl : 0 < ish.claims) (hrs : holoRepRounds ish.m ish.kLog ish.claims = some rs)

@@ -93,7 +93,7 @@ include hR in
 /-- **A composite input carries what its stacked unit input's copy position carries in the flat twin**
 (`Aliased.copyPos`), in every block of a satisfying witness of the hidden statement (`copyAt_blockH`). -/
 theorem inst_blockH (P : ParseFacts tags st.c) (C : CheckFacts st.c) {g : ℕ} (hg : g < st.c.g)
-    (x : Fin (instRows st.c).w) (hx : x.val < (instRows st.c).nIn) {z : Model.Witness (L.model regs).m}
+    (x : Fin (instRows st.c).w) (hx : x.val < (instRows st.c).nIn) {z : Model.WitnessBits (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) :
     (L.model regs).block z o
         (composePlace (L.model regs) (logical st.c) (logical_ordered st.c) (pos st.c g) (inst_hbOf L regs P C hg) x) =
@@ -121,7 +121,7 @@ end block
 
 namespace AcceptedH
 
-variable {T : Model.Statement} (a : AcceptedH T)
+variable {T : Model.BlockR1CS} (a : AcceptedH T)
 
 /-- The order's columns are in the block (`inst_hbOf`, from the flat twin's parse and check). -/
 theorem instHb {g : ℕ} (hg : g < a.st.c.g) :
@@ -153,7 +153,7 @@ theorem placement_inst (hrows : Hidden.Any.OutRowsS a.st.c) {g : ℕ} (hg : g < 
 witness. -/
 theorem inst_aliased {g : ℕ} (hg : g < a.st.c.g) (o : Fin (2 ^ T.nbl)) (x x' : Fin (instRows a.st.c).w)
     (hx : x.val < (instRows a.st.c).nIn) (hx' : x'.val < (instRows a.st.c).nIn)
-    (hk : keyOf a.st.c x.val = keyOf a.st.c x'.val) {z : Model.Witness T.m} (hz : T.Satisfies z) :
+    (hk : keyOf a.st.c x.val = keyOf a.st.c x'.val) {z : Model.WitnessBits T.m} (hz : T.Satisfies z) :
     T.block z o (a.instCol hg x) = T.block z o (a.instCol hg x') := by
   obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht, h, L, hR, regs, hT⟩ := a
   subst hT
@@ -169,7 +169,7 @@ theorem inst_aliased {g : ℕ} (hg : g < a.st.c.g) (o : Fin (2 ^ T.nbl)) (x x' :
 
 /-- **A zero-keyed composite input carries 0**, at template instance `g`, in every block of a satisfying witness. -/
 theorem inst_zero {g : ℕ} (hg : g < a.st.c.g) (x : Fin (instRows a.st.c).w) (hx : x.val < (instRows a.st.c).nIn)
-    (hk : keyOf a.st.c x.val = .zero) {z : Model.Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) :
+    (hk : keyOf a.st.c x.val = .zero) {z : Model.WitnessBits T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) :
     T.block z o (a.instCol hg x) = 0 := by
   obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht, h, L, hR, regs, hT⟩ := a
   subst hT
@@ -188,7 +188,7 @@ end AcceptedH
 hidden-output statement, at block `o` and template instance `g`, the composite input whose Δ key is message bit `bit` of
 byte `byte` of row `q` holds the witness's bit at that message column (`Typed.msgCol`), when the column is in the block.
 `copy_siteH` at the template instance's rows. -/
-theorem copy_site_instH {T : Model.Statement} (a : AcceptedH T) {z : Witness T.m} (hz : T.Satisfies z)
+theorem copy_site_instH {T : Model.BlockR1CS} (a : AcceptedH T) {z : WitnessBits T.m} (hz : T.Satisfies z)
     (o : Fin (2 ^ T.nbl)) {g : ℕ} (hg : g < a.st.c.g) (x : Fin (instRows a.st.c).w) (hx : x.val < (instRows a.st.c).nIn)
     {q byte bit : ℕ} (hk : keyOf a.st.c x.val = .msg q byte bit)
     (hin : Typed.msgCol a.st.c g q byte bit < 2 ^ a.st.c.kLog) :
@@ -544,8 +544,8 @@ end outs
 accepted statement on `c` whose rows are covered (`Hidden.Any.RowsFitS`), at block `o'` and template instance `g`, the
 composite column holding bit `t` of output word `o` (`OutColAtI`) holds the witness's bit at the message column of its
 output row's bit (`outBitRowO`): Δ copies the word's bit (`HmOut.outCol`) there (`Hidden.Any.msg_copyF`). -/
-theorem out_copy_instH {T : Model.Statement} {c : Flock.Circuit} {n : ℕ} (a : AcceptedH T) (hce : a.st.c = c)
-    (hrf : Hidden.Any.RowsFitS c) {z : Witness T.m} (hz : T.Satisfies z) (o' : Fin (2 ^ T.nbl)) {g : ℕ}
+theorem out_copy_instH {T : Model.BlockR1CS} {c : Flock.Circuit} {n : ℕ} (a : AcceptedH T) (hce : a.st.c = c)
+    (hrf : Hidden.Any.RowsFitS c) {z : WitnessBits T.m} (hz : T.Satisfies z) (o' : Fin (2 ^ T.nbl)) {g : ℕ}
     (hg : g < a.st.c.g) (x : Fin (instRows a.st.c).w) {o t : ℕ} (hoc : OutColAtI c x.val o t) {u v : Fin n}
     {q : Fin c.ports.size} {k : Fin (portRowW c q)} (hb : outBitRowO c u o t = some (v, ⟨q, k⟩)) :
     T.block z o' (a.instCol hg x) = z (siteAddrH a o' (Typed.msgCol a.st.c g q.val (k.val / 8) (k.val % 8))) := by

@@ -66,7 +66,7 @@ theorem allInh_lincheckRoundsZK {np : ℕ} (P : PadsA np) :
       all_goals exact allInh_lincheckRoundsZK P n _ _
 
 omit [DecidableEq F] [Fintype K] [DecidableEq K] in
-theorem allInh_lincheckZK (A : Arith F K) (S : Statement) {np : ℕ} (P : PadsA np) (zc : ZcZK F np S.m) :
+theorem allInh_lincheckZK (A : Arith F K) (S : BlockR1CS) {np : ℕ} (P : PadsA np) (zc : ZcZK F np S.m) :
     AllInh (lincheckZK A S P zc) := by
   unfold lincheckZK
   repeat' (first
@@ -137,7 +137,7 @@ theorem allInh_ligeritoPadZC (A : Arith F K) {np e : ℕ} (P : Pads0 np e) (sch 
     | exact allInh_recursiveRoundsC A _ _ _ _ _ _ _
 
 theorem allInh_repMaskedZC (A : Arith F K) {np e : ℕ} (P₀ : Pads0 np e) (PA : PadsA np) (tr : Triple np)
-    (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (extra : List (Claim F S.m)) :
+    (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (t : ℕ) (c₀ : F) (r : ℕ) (extra : List (Claim F S.m)) :
     AllInh (repMaskedZC (D := D) A P₀ PA tr S sch hm t c₀ r extra) := by
   unfold repMaskedZC
   refine AllInh.map _ (AllInh.bind (fun _ => AllInh.map _ (AllInh.bind (fun _ => AllInh.map _ ?_)

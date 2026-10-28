@@ -205,9 +205,9 @@ where its `fold` does, a witness `w` of `S`'s pin and a trace whose bits are `w`
 `bVec`: at the zerocheck's output on that trace, wherever the circuit fold at the lincheck's `α` returns `full`, the
 folded circuit is the prover's `combT` at the last round, of width 64, and the rounds' claim from `α·v_A + v_B + β`
 ends at `dot comb z_partial`. -/
-theorem lcAlgebra_of (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S)
+theorem lcAlgebra_of (S : Model.BlockR1CS) (c : CircuitFold) (hc : FoldRealizes c S)
     (hfd : ∀ (α β : F128) (lw ρ ts v : Array F128), c.fold α lw ρ = .ok v → ∃ w, c.folded α β lw ρ ts = .ok w)
-    (m : ℕ) (hm : m = S.m) (w : Model.Witness S.m) (hpin : ∀ o, S.block w o S.pin = 1) (tr : Trace)
+    (m : ℕ) (hm : m = S.m) (w : Model.WitnessBits S.m) (hpin : ∀ o, S.block w o S.pin = 1) (tr : Trace)
     (hz : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.z a.val = ((w a).val : 𝔽))
     (ha : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.az a.val = ((aVec S w a).val : 𝔽))
     (hb : ∀ a : Fin (2 ^ S.m), Zc.bitF tr.bz a.val = ((bVec S w a).val : 𝔽))
@@ -291,7 +291,7 @@ theorem lcAlgebra_of (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes 
     rw [dite_eq_left hk]
     refine Finset.sum_congr rfl fun o _ => ?_
     have hidx : k + 2 ^ c.kLog * o.val = (S.addr o ⟨k, hk⟩).val := by
-      simp only [Model.Statement.addr, hK]
+      simp only [Model.BlockR1CS.addr, hK]
       ring
     rw [← hz (S.addr o ⟨k, hk⟩), ← hE o, ← hidx]
     unfold Zc.bitF

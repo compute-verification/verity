@@ -80,7 +80,7 @@ theorem allInh_lincheckRounds [Field F] [Fintype F] : ∀ (n : ℕ) (claim : F),
         | dsimp only)
       all_goals exact allInh_lincheckRounds n _
 
-theorem allInh_lincheck [Field F] [Fintype F] [DecidableEq F] [Field K] (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) : AllInh (lincheck A S zc) := by
+theorem allInh_lincheck [Field F] [Fintype F] [DecidableEq F] [Field K] (A : Arith F K) (S : BlockR1CS) (zc : ZcOut F S.m) : AllInh (lincheck A S zc) := by
   unfold lincheck
   repeat' (first
     | exact AllInh.ret _
@@ -196,7 +196,7 @@ theorem allInh_ligeritoC [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintyp
     | exact allInh_recursiveRoundsC A _ _ _ _ _ _ _
 
 /-- **Every message a compiled rep receives has an inhabited type.** -/
-theorem allInh_repC [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] [Nonempty D] (A : Arith F K) (r : ℕ) (S : Statement) (sch : Accounting.Schedule) (hm : 13 ≤ S.m)
+theorem allInh_repC [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] [Nonempty D] (A : Arith F K) (r : ℕ) (S : BlockR1CS) (sch : Accounting.Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim F S.m)) : AllInh (repC (D := D) A r S sch hm extra) := by
   unfold repC
   refine AllInh.bind' (allInh_zerocheck A _) fun _ => ?_
@@ -236,7 +236,7 @@ noncomputable def tableOut {D : Type} (H : List UInt8 → D) (E : Merkle.Enc (Li
 session holds with probability at most `tableC`'s acceptance against the simulated prover, whenever the decoder is
 right on accepted sessions. -/
 theorem live_le_tableC {K D : Type} [Field K] [Fintype K] [DecidableEq K] [Nonempty D] (A : Model.Arith 𝔽 K)
-    (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (S : Model.Statement) (sch : Accounting.Schedule)
+    (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (S : Model.BlockR1CS) (sch : Accounting.Schedule)
     (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (pL : LiveOut mPts → Prop) (opn : Array ByteArray → Model.Opens 𝔽 D)
     (dg : ByteArray → ByteArray) (dec : ℕ → ByteArray → List Msg) (one : ℕ → Bool)
     (fin : Fin 2 → Array ByteArray → List Msg) (capOf : ByteArray → Model.Cap D) (N : ℕ)

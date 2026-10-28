@@ -448,7 +448,7 @@ theorem setupRealizes_ofCircuit (st : Stmt) (hwf : StmtWF st) (hr : RegionsWF st
 
 /-- **`RunsFrom`'s `foldKLog` and `kLog_le`** (`Runs.lean:312,314`), from a setup realizing the statement
 (`SetupRealizes`) at V*'s shape (`ShapeIs`). -/
-theorem kLogs_of_setup {st : Setup} {S : Model.Statement} {sch : Flock.Schedule} {ptLocal mPts : ℕ} {sh : Shape}
+theorem kLogs_of_setup {st : Setup} {S : Model.BlockR1CS} {sch : Flock.Schedule} {ptLocal mPts : ℕ} {sh : Shape}
     (hs : SetupRealizes st S sch ptLocal mPts) (hsh : ShapeIs sh st sch) : st.fold.kLog = sh.kLog ∧ st.kLog ≤ st.m := by
   obtain ⟨-, -, -, -, -, -, hle, hfk, -⟩ := hs
   exact ⟨hfk.trans hsh.2.1.symm, hle⟩

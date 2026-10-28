@@ -252,7 +252,7 @@ either branch, a witness satisfying the table's model (at the regions the soundn
 theorem bc_setupOne {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {d : Json} {partition : Option Json} {program : Option ByteArray} {st : Stmt}
     (h : HiddenExec.setupOne tags cf pf coins tables (some d) partition program = .ok st)
-    (L : FlockSoundness.Layout st) {z : FlockSoundness.Model.Witness (L.model (FlockSoundness.Refine.regionsOf st)).m}
+    (L : FlockSoundness.Layout st) {z : FlockSoundness.Model.WitnessBits (L.model (FlockSoundness.Refine.regionsOf st)).m}
     (hz : (L.model (FlockSoundness.Refine.regionsOf st)).Satisfies z)
     (o : Fin (2 ^ (L.model (FlockSoundness.Refine.regionsOf st)).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hg2 : g < 2 ^ st.c.g.log2) (hp : p < st.c.ports.size) (hr : o.val * st.c.g + g < st.pub.n) :
@@ -536,7 +536,7 @@ which proves its whole population, its public file the population's (`setupH_ful
 theorem bc_setupOne_full {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {partition : Option Json} {program : Option ByteArray} {st : Stmt}
     (h : HiddenExec.setupOne tags cf pf coins tables none partition program = .ok st)
-    (L : FlockSoundness.Layout st) {z : FlockSoundness.Model.Witness (L.model (FlockSoundness.Refine.regionsOf st)).m}
+    (L : FlockSoundness.Layout st) {z : FlockSoundness.Model.WitnessBits (L.model (FlockSoundness.Refine.regionsOf st)).m}
     (hz : (L.model (FlockSoundness.Refine.regionsOf st)).Satisfies z)
     (o : Fin (2 ^ (L.model (FlockSoundness.Refine.regionsOf st)).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hg2 : g < 2 ^ st.c.g.log2) (hp : p < st.c.ports.size) (hr : o.val * st.c.g + g < st.pub.n) :
@@ -569,7 +569,7 @@ open FlockSoundness.Discharge in
 theorem bc_setupOneAny {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program : Option ByteArray} {st : Stmt}
     (h : HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st)
-    (L : FlockSoundness.Layout st) {z : FlockSoundness.Model.Witness (L.model (FlockSoundness.Refine.regionsOf st)).m}
+    (L : FlockSoundness.Layout st) {z : FlockSoundness.Model.WitnessBits (L.model (FlockSoundness.Refine.regionsOf st)).m}
     (hz : (L.model (FlockSoundness.Refine.regionsOf st)).Satisfies z)
     (o : Fin (2 ^ (L.model (FlockSoundness.Refine.regionsOf st)).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hg2 : g < 2 ^ st.c.g.log2) (hp : p < st.c.ports.size) (hr : o.val * st.c.g + g < st.pub.n) :

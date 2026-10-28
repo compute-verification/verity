@@ -128,7 +128,7 @@ theorem flock_inner_sound_compiled_plain (A : Arith F K) (hA : A.Correct) [Inhab
 theorem flock_inner_sound_compiled_fast100 (A : Arith F K) (hA : A.Correct) [Inhabited D] [Inhabited Sl]
     (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass)
     (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Schedule) (hsch : fast100 cls.m = some sch)
-    (hm1 : 22 ≤ cls.m) (hm2 : cls.m ≤ 33) (hshape : (⟨cls.kLog, regs.length, cls.mPts⟩ : Accounting.Stmt).InRange)
+    (hm1 : 22 ≤ cls.m) (hm2 : cls.m ≤ 33) (hshape : (⟨cls.kLog, regs.length, cls.mPts⟩ : Accounting.StmtShape).InRange)
     (hlay : ∀ M : Hidden cls, (M.toStatement regs).LinkLayout cls.ptLocal cls.mPts) :
     InnerSoundForkOn H (flockInnerCL T CT A H E Lf cls regs sch) (clashPickCL T CT A H E Lf cls regs sch)
       (ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ)))) := fun M hno G s =>
@@ -266,7 +266,7 @@ theorem recursive_sound_compiled_fast100 (A : Arith F K) (hA : A.Correct) [Inhab
     (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass)
     (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Accounting.Schedule)
     (hsch : Accounting.fast100 cls.m = some sch) (hm1 : 22 ≤ cls.m) (hm2 : cls.m ≤ 33)
-    (hshape : (⟨cls.kLog, regs.length, cls.mPts⟩ : Accounting.Stmt).InRange)
+    (hshape : (⟨cls.kLog, regs.length, cls.mPts⟩ : Accounting.StmtShape).InRange)
     (hlay : ∀ M : Hidden cls, (M.toStatement regs).LinkLayout cls.ptLocal cls.mPts)
     (zs : Reg → L.Ω → List (Cm × (flockInnerCL T CT A H E Lf cls regs sch).Coin) → Reg₂ → (j : Fin S) →
       (Vs j).Outer Reg')

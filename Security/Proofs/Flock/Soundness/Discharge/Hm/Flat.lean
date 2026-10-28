@@ -182,7 +182,7 @@ theorem rowNet_entryL {n s off x : ℕ} (hn : n = st.c.shaNet ∨ n = st.c.hmNet
 
 /-- **A row net's slot holds its net's rows** in every block of a satisfying witness of the untyped statement: each
 computed row past the input rows holds, and the slot's constant column is 1. -/
-theorem laidRows_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+theorem laidRows_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {n s : ℕ}
     (hn : n = st.c.shaNet ∨ n = st.c.hmNet) (hs : s < (st.c.rangeOf n).count) {l : Flock.HmNets.Laid}
     {name : String}
@@ -266,7 +266,7 @@ theorem laidRows_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} 
 
 /-- **Template instance `g`'s `sha512x3` slot `i` holds the verifier's `sha512x3` rows**, past its 8192 input rows, in
 every block of a satisfying witness of the untyped statement. -/
-theorem shaSlot_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+theorem shaSlot_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g i : ℕ} (hg : g < st.c.g)
     (hi : i < st.c.perVu.getD st.c.shaNet 0) :
     LaidRows (Flock.HmNets.shaLaid ()) 8192 fun j => blockBit (L.model regs) z o (st.c.slotCol st.c.shaNet g i + j) := by
@@ -276,7 +276,7 @@ theorem shaSlot_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {
   exact h
 
 /-- **Template instance `g`'s `hm96` slot `i` holds the verifier's `hm96` rows**, past its 4096 input rows. -/
-theorem hmSlot_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+theorem hmSlot_flat {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g i : ℕ} (hg : g < st.c.g)
     (hi : i < st.c.perVu.getD st.c.hmNet 0) :
     LaidRows (Flock.HmNets.hmLaid ()) 4096 fun j => blockBit (L.model regs) z o (st.c.slotCol st.c.hmNet g i + j) := by
@@ -393,7 +393,7 @@ theorem flatPairs_countL (hrw : RowWires st.c) {n s off x src : ℕ} (hn : n = s
 `(x, src)`, every block of a satisfying witness holds at `x` what it holds at `src`. -/
 theorem inBit_copyL (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
     (hda : st.da = (HmRow.delta st.c st.pin).1) (hrw : RowWires st.c)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {n s off x src : ℕ}
     (hn : n = st.c.shaNet ∨ n = st.c.hmNet) (hat : AtSlot st.c n s off x) {l : Flock.HmNets.Laid} {name : String}
     (hl : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (st.c.nets.getD n default).2)

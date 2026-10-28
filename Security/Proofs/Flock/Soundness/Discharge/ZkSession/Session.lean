@@ -28,7 +28,7 @@ averaged over the draw (`ksAvgZK`). The lowering comes from each drawn unit's pl
 (`loweringSoundZK_of_place`, `UnitPlace`), as without `--zk`.
 
 **The count curve** (`zk_flock_count`, and `zk_flock_count_execOS` at the live draw under A3): in the shape of
-`Prog.flock_headline`,
+`ProgSpec.flock_headline`,
 `Pr[accept ∧ at least K wrong units] ≤ miss(K) + ε_ks^zk + δ_link`, with
 * `miss(K)`: `Law.stratified`'s count curve at the live draw, under A3 (`uniform/io-getrandombytes`);
 * `ε_ks^zk = ksAvgZK`: per table `padLinkError + (padRepError + εInner)²`, proved here;
@@ -64,7 +64,7 @@ open scoped ENNReal NNReal
 `pads`, the algebraic phase's `padsA`, the triple's `tr`), the pads code `RS[F, dom, np + nP]` read at `q` positions
 `pos`, and a radius `δ` within its unique-decoding radius. -/
 structure TabZK (F : Type) [Field F] [Fintype F] [DecidableEq F] (mPts : ℕ) where
-  S : Statement
+  S : BlockR1CS
   sch : Schedule
   hshape : 2 ≤ sch.levels.length ∧ (sch.levels.headD default).lanes = sch.k0 ∧
     sch.m - 7 = sch.k0 + (sch.levels.headD default).logCols ∧ levelsChained sch.levels sch.ext = true
@@ -301,7 +301,7 @@ theorem zk_flock_count (hA : A.Correct) (place : ∀ S R u, u ∈ S → UnitPlac
     (zk_knowledgeSound A P planZ tab hA _ Xc _) hlink K σ
 
 /-- **The `--zk` count curve at the live draw.** With the units drawn by `Flock.Draw.drawOS`'s stratified law on a
-byte source that A3 makes uniform (`hA3`), as in `Prog.flock_headline`:
+byte source that A3 makes uniform (`hA3`), as in `ProgSpec.flock_headline`:
 `Pr[accept ∧ at least K wrong units] ≤ miss(K) + ε_ks^zk + δ_link`, with `miss(K)` `Law.stratified`'s count curve. -/
 theorem zk_flock_count_execOS (hA : A.Correct)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)

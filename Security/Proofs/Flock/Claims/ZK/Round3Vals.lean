@@ -84,7 +84,7 @@ theorem sixtyFour_mul_pow {mPts : ℕ} (Tz : TabZK 𝔽 mPts) : 64 * 2 ^ (Tz.S.m
   rw [show (64 : ℕ) = 2 ^ 6 by norm_num, ← pow_add, Nat.add_sub_of_le (six_le Tz)]
 
 variable {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz st)) (r : Fin 2)
-  (zw : Witness Tz.S.m)
+  (zw : WitnessBits Tz.S.m)
 
 /-- **The draw's clear `round1_ab` is the executable's** on a trace whose `A·z`, `B·z` bits are the model's A- and
 B-side tables, at the draw's zerocheck vector. -/

@@ -4,7 +4,7 @@ import Proofs.Flock.Soundness.E2E
 /-!
 # `ProgPlaces` from `Stmt.setupH`'s accept
 
-`Prog.flock_headline` takes each drawn unit's place in its table's statement (`ProgPlaces`). This file builds it from the
+`ProgSpec.flock_headline` takes each drawn unit's place in its table's statement (`ProgPlaces`). This file builds it from the
 executable's accept step on the untyped path (`tags.typed = false`, the statement production the circuit prover runs):
 
 * `Accepted T`: a run of `Stmt.setupH` that accepted, whose statement (`Layout.model`, the level-0 matrices the verifier
@@ -43,7 +43,7 @@ theorem ofNet_eq {c c' : Flock.Circuit} (e : c = c') (h : Built c.unit) (h' : Bu
 /-- **An accepted untyped statement whose model statement is `T`**: `Stmt.setupH` accepted the circuit file `cf`, public
 file `pf`, coins, tables, draw, partition object and program, returning `st`, and `T` is the statement it places,
 `Layout.model` at regions `regs`. -/
-structure Accepted (T : Model.Statement) where
+structure Accepted (T : Model.BlockR1CS) where
   tags : Tags
   cf : ByteArray
   pf : ByteArray
@@ -60,7 +60,7 @@ structure Accepted (T : Model.Statement) where
 
 namespace Accepted
 
-variable {T : Model.Statement} (a : Accepted T)
+variable {T : Model.BlockR1CS} (a : Accepted T)
 
 /-- The accepted statement's layout (`setupH_layout`). -/
 theorem layout : Layout a.st := setupH_layout a.ht a.h
@@ -69,10 +69,10 @@ theorem layout : Layout a.st := setupH_layout a.ht a.h
 noncomputable def rows : Rows := (unitRows a.st a.layout.unit_built).stack a.st.c.upv
 
 theorem kLog_eq : 2 ^ ((setupH_layout a.ht a.h).model a.regs).kLog = 2 ^ T.kLog :=
-  congrArg (fun S : Model.Statement => 2 ^ S.kLog) a.hT
+  congrArg (fun S : Model.BlockR1CS => 2 ^ S.kLog) a.hT
 
 theorem nbl_eq : 2 ^ ((setupH_layout a.ht a.h).model a.regs).nbl = 2 ^ T.nbl :=
-  congrArg (fun S : Model.Statement => 2 ^ S.nbl) a.hT
+  congrArg (fun S : Model.BlockR1CS => 2 ^ S.nbl) a.hT
 
 /-- **Template instance `g`'s columns in the block**: `stackPlace` at the unit slots `ur.slot (g·upv + i)`, the shared
 constant at the pin. -/
@@ -82,9 +82,9 @@ noncomputable def col {g : ℕ} (hg : g < a.st.c.g) (c : Fin a.rows.w) : Fin (2 
       (fun u => a.st.c.unitRange.slot (g * a.st.c.upv + u)) ((setupH_layout a.ht a.h).hb hg) c)
 
 /-- A placement moves along an equal statement. -/
-theorem placement_cast {S S' : Model.Statement} (hS : S = S') {R : Rows} {col : Fin R.w → Fin (2 ^ S.kLog)}
+theorem placement_cast {S S' : Model.BlockR1CS} (hS : S = S') {R : Rows} {col : Fin R.w → Fin (2 ^ S.kLog)}
     (h : BlockRows S R col) :
-    BlockRows S' R (fun c => Fin.cast (congrArg (fun S : Model.Statement => 2 ^ S.kLog) hS) (col c)) := by
+    BlockRows S' R (fun c => Fin.cast (congrArg (fun S : Model.BlockR1CS => 2 ^ S.kLog) hS) (col c)) := by
   subst hS; exact h
 
 /-- **The accepted statement places its template instance rows at every template instance** (`placement_of_setupH`), in
@@ -108,7 +108,7 @@ rows `R` equal to the template instance rows, read at `col`. -/
 theorem aliased_of_layout {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {u : Fin n} {R : Rows}
     (hR : R = a.rows) (inst : P.IsRowsUnit u R) (o : Fin (2 ^ T.nbl)) {g : ℕ} (hg : g < a.st.c.g)
     (hal : a.layout.Aliased a.regs (hR ▸ inst) (Fin.cast a.nbl_eq.symm o) hg) :
-    ∀ c c', inst.wire c = inst.wire c' → c.val < R.nIn → c'.val < R.nIn → ∀ z : Model.Witness T.m, T.Satisfies z →
+    ∀ c c', inst.wire c = inst.wire c' → c.val < R.nIn → c'.val < R.nIn → ∀ z : Model.WitnessBits T.m, T.Satisfies z →
       T.block z o (a.col hg (Fin.cast (congrArg Rows.w hR) c)) =
         T.block z o (a.col hg (Fin.cast (congrArg Rows.w hR) c')) := by
   subst hR
@@ -121,7 +121,7 @@ end Accepted
 /-! ## Each drawn unit's place -/
 
 /-- A placement moves along equal rows. -/
-theorem placement_rows {S : Model.Statement} {R R' : Rows} (hR : R = R') {col : Fin R'.w → Fin (2 ^ S.kLog)}
+theorem placement_rows {S : Model.BlockR1CS} {R R' : Rows} (hR : R = R') {col : Fin R'.w → Fin (2 ^ S.kLog)}
     (h : BlockRows S R' col) : BlockRows S R (fun c => col (Fin.cast (congrArg Rows.w hR) c)) := by
   subst hR; exact h
 
@@ -142,10 +142,10 @@ variable {plan tab}
 
 /-- **W6 at the sites**: each drawn unit's rows in the program are the template instance rows its table's acceptance
 placed. -/
-def Sites.RowsOf (si : Sites plan tab) (p : Prog N n) : Prop :=
+def Sites.RowsOf (si : Sites plan tab) (p : ProgSpec N n) : Prop :=
   ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S), p.rows u = (si.acc S R u h).rows
 
-variable {p : Prog N n} (si : Sites plan tab) (hrows : si.RowsOf p)
+variable {p : ProgSpec N n} (si : Sites plan tab) (hrows : si.RowsOf p)
 
 /-- A drawn unit's columns in its table's block: its template instance's (`Accepted.col`). -/
 noncomputable def Sites.col (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
@@ -163,7 +163,7 @@ statement (`si`); `placed` holds given W6 (`hrows`). The unit's instance (`inst`
 are taken. -/
 noncomputable def progPlaces (outs : Finset (Fin N)) (inst : ∀ u, (p.partition outs).IsRowsUnit u (p.rows u))
     (hal : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S), ∀ c c', (inst u).wire c = (inst u).wire c' → c.val < (p.rows u).nIn →
-      c'.val < (p.rows u).nIn → ∀ z : Model.Witness (Partition.tabOf plan tab S R u).S.m,
+      c'.val < (p.rows u).nIn → ∀ z : Model.WitnessBits (Partition.tabOf plan tab S R u).S.m,
         (Partition.tabOf plan tab S R u).S.Satisfies z →
         (Partition.tabOf plan tab S R u).S.block z (si.o S R u h) (si.col hrows S R u h c) =
           (Partition.tabOf plan tab S R u).S.block z (si.o S R u h) (si.col hrows S R u h c')) :
@@ -200,7 +200,7 @@ theorem le_gates (k : ℕ) (R : Rows) : ∀ n, k ≤ gates k R n
 /-- **`n` units of rows `R` on `k` input gates**: unit `u`'s input columns read the input gates `ins u`, its constant the
 input gate `one`, which none of them reads. No unit reads another's gates. -/
 def uniform (k : ℕ) (R : Rows) (ins : ℕ → Fin R.nIn → Fin k) (one : Fin k) (hone : ∀ u c, ins u c ≠ one) :
-    (n : ℕ) → Prog (gates k R n) n
+    (n : ℕ) → ProgSpec (gates k R n) n
   | 0 => .inputs k
   | n + 1 => .snoc (uniform k R ins one hone n) R (fun c => Fin.castLE (le_gates k R n) (ins n c))
       (Fin.castLE (le_gates k R n) one) (fun c h => hone n c (Fin.castLE_injective _ h))
@@ -210,7 +210,7 @@ theorem rows_uniform (k : ℕ) (R : Rows) (ins : ℕ → Fin R.nIn → Fin k) (o
     ∀ n (u : Fin n), (uniform k R ins one hone n).rows u = R
   | 0, u => u.elim0
   | n + 1, u => by
-      simp only [uniform, Prog.rows]
+      simp only [uniform, ProgSpec.rows]
       split
       · exact rows_uniform k R ins one hone n _
       · rfl

@@ -556,7 +556,7 @@ def lockLig (A : Arith F K) (r : ℕ) (hr : r < 2) (m k0 : ℕ) (l₀ l₁ : Lev
       (lockFold A r (fun _ => none) (fun _ => True) k0 _ _ _ _ fun _ _ => ⟨rfl, rfl⟩)
 
 /-- **A rep in lockstep**: the PIOP phases are the same games; Ligerito is `lockLig`. -/
-def lockRep (A : Arith F K) (r : ℕ) (hr : r < 2) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level)
+def lockRep (A : Arith F K) (r : ℕ) (hr : r < 2) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level)
     (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) :
     Lock (Oracle F) (Cap D) (getRep r) (RecRel r C₀ ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (fun _ => none)
@@ -601,14 +601,14 @@ theorem disjoint_reps : Lock.Disjoint (getRep 0 : IRep F D → ℕ → Option (O
     · rw [if_neg hs] at h; simp at h
 
 /-- The oracle table's continuation after the level-0 table `C₀`, with the dummy last message. -/
-def tableOrc (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
+def tableOrc (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (C₀ : Oracle F) : Game (Bool × Oracle F) :=
   Game.coin (Fin 2 → Fin mPts → F) fun pts =>
     (interleave (rep A S sch hm C₀ (extraClaims S ptLocal mPts pts))
       (rep A S sch hm C₀ (extraClaims S ptLocal mPts pts))).bind
       fun acc => Game.send (Opens F D) fun _ => Game.ret (acc.1 && acc.2, C₀)
 
-theorem withDummy_table (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
+theorem withDummy_table (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) :
     Lock.withDummy (Opens F D) (table A S sch hm ptLocal mPts) =
       Game.send (Oracle F) (tableOrc (D := D) A S sch hm ptLocal mPts) := by
@@ -619,7 +619,7 @@ theorem withDummy_table (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 1
 open Classical in
 /-- The compiled table's continuation after the level-0 cap. -/
 noncomputable def tableCmp (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Cap D) :
+    (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Cap D) :
     Game (OutC F D) :=
   Game.coin (Fin 2 → Fin mPts → F) fun pts =>
     (interleave (repC A 0 S sch hm (extraClaims S ptLocal mPts pts))
@@ -629,7 +629,7 @@ noncomputable def tableCmp (A : Arith F K) (H : List UInt8 → D) (E : Merkle.En
           decide (OpensOK H E cap₀ 0 pend.1 o ∧ OpensOK H E cap₀ 1 pend.2 o), cap₀, pend, o⟩
 
 theorem tableC_eq (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) :
+    (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) :
     tableC A H E S sch hm ptLocal mPts = Game.send (Cap D) (tableCmp A H E S sch hm ptLocal mPts) :=
   rfl
 
@@ -648,7 +648,7 @@ instance instInhabitedOracle : Inhabited (Oracle F) := ⟨fun _ _ => 0⟩
 /-- **The table in lockstep** below the level-0 cap: the link points, both reps interleaved, the
 openings. -/
 noncomputable def lockTable [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
+    (E : Merkle.Enc (List F) D) (S : BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
     (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (C₀ : Oracle F)
     (cap₀ : Cap D) :
     Lock (Oracle F) (Cap D) (Lock.getPair (getRep 0) (getRep 1))

@@ -449,7 +449,7 @@ def tables (zk : Bool) (x : Claims.Msg) : List (SessionSpec × Stmt) :=
 end KS.Gen
 
 /-- A table's shape as the soundness analysis reads it: `k_log`, its public regions and the link points' coordinates. -/
-def acct (spec : SessionSpec) (st : Stmt) : Accounting.Stmt := ⟨st.c.kLog, st.regions.size, spec.mPts⟩
+def acct (spec : SessionSpec) (st : Stmt) : Accounting.StmtShape := ⟨st.c.kLog, st.regions.size, spec.mPts⟩
 
 /-- **A table's error**: `tableError` at its `fast100` schedule; under `--zk`, the padded table's
 `padLinkError + (padRepError + ε_inner)²` at `m1Schedule` and padding `m1Pad`, two reps, with the inner proof's error

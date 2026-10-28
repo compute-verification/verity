@@ -39,7 +39,7 @@ noncomputable def gateAt (S : Finset (Fin n)) (R : Reg) (u : Fin n) (g : Fin C.N
 /-- **Each column of a place holds what its gate's address holds**, in a satisfying witness: the columns an instance
 puts on one gate are one column, or input columns the place's aliasing makes equal. -/
 theorem block_gateAt {S : Finset (Fin n)} {R : Reg} {u : Fin n} (hu : u ∈ S)
-    {z : Witness (Partition.tabOf plan tab S R u).S.m} (hz : (Partition.tabOf plan tab S R u).S.Satisfies z)
+    {z : WitnessBits (Partition.tabOf plan tab S R u).S.m} (hz : (Partition.tabOf plan tab S R u).S.Satisfies z)
     (c : Fin (place S R u hu).R.w) :
     (Partition.tabOf plan tab S R u).S.block z (place S R u hu).o ((place S R u hu).col c) =
       z (gateAt place S R u ((place S R u hu).inst.wire c)) := by
@@ -53,7 +53,7 @@ theorem block_gateAt {S : Finset (Fin n)} {R : Reg} {u : Fin n} (hu : u ∈ S)
 /-- **A constant's gate holds 1**: at a committed wire of a drawn unit on a gate of `ones`, where only the constant's
 column sits (`ConstCols`), in a satisfying witness. -/
 theorem gateAt_one {ones : Finset (Fin C.N)} (hc : P.ConstCols plan tab place ones) {S : Finset (Fin n)} {R : Reg}
-    {u : Fin n} (hu : u ∈ S) {z : Witness (Partition.tabOf plan tab S R u).S.m}
+    {u : Fin n} (hu : u ∈ S) {z : WitnessBits (Partition.tabOf plan tab S R u).S.m}
     (hz : (Partition.tabOf plan tab S R u).S.Satisfies z) {g : Fin C.N} (hg : g ∈ P.io u) (h1 : g ∈ ones) :
     z (gateAt place S R u g) = 1 := by
   obtain ⟨c, rfl⟩ := exists_col_of_io (place S R u hu).inst hg
@@ -63,7 +63,7 @@ theorem gateAt_one {ones : Finset (Fin C.N)} (hc : P.ConstCols plan tab place on
 /-- **The zero's gate holds 0**: at a committed wire of a drawn unit on a gate of `zeros` (`ZeroCols`), in a satisfying
 witness. -/
 theorem gateAt_zero {zeros : Finset (Fin C.N)} (hZ : P.ZeroCols plan tab place zeros) {S : Finset (Fin n)} {R : Reg}
-    {u : Fin n} (hu : u ∈ S) {z : Witness (Partition.tabOf plan tab S R u).S.m}
+    {u : Fin n} (hu : u ∈ S) {z : WitnessBits (Partition.tabOf plan tab S R u).S.m}
     (hz : (Partition.tabOf plan tab S R u).S.Satisfies z) {g : Fin C.N} (hg : g ∈ P.io u) (h0 : g ∈ zeros) :
     z (gateAt place S R u g) = 0 := by
   obtain ⟨c, rfl⟩ := exists_col_of_io (place S R u hu).inst hg

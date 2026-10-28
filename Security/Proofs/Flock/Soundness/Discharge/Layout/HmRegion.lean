@@ -181,7 +181,7 @@ dummy past the population). It holds in the model's statement at setupH's layout
 theorem bc_pinned {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     (hR : HmRow.regions st.c st.pub = .ok st.regions)
-    {z : Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
+    {z : WitnessBits (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
     {g p : ℕ} (hg : g < st.c.g) (hg2 : g < 2 ^ st.c.g.log2) (hp : p < st.c.ports.size)
     (hsz : ∀ g' ≤ g, (bcChunk st.c st.pub o.val g' p).size = 128) :
     bytesAt z (fun (j : Fin 128) (t : Fin 8) =>

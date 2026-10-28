@@ -449,7 +449,7 @@ theorem public_pinned {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (M
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     {pi : HmIn.Ports} {ri : Array Region} (hR : HmIn.regions st.c pi st.pub = .ok ri)
     (hri : ∀ r ∈ ri.toList, r ∈ st.regions.toList) (hne : pi.ports.isEmpty = false)
-    {z : Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
+    {z : WitnessBits (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
     {k jj t i : ℕ} {q : ℤ} (hq : (pi.leaves.getD (k % st.c.upv) #[]).getD jj (-1) = q) (hq0 : 0 ≤ q)
     (hk : k < st.c.unitRange.count) (hi : st.c.instOf st.pub.n o.val (k / st.c.upv) = some i) (ht : t < 16) :
     bit ((L.model regs).block z o (inBlockOr st.c.kLog (inAddr st.c k jj t))) =

@@ -21,7 +21,7 @@ rounds, the one after the rounds (`z_partial`'s) issued no coins, and the model'
 the proof's lincheck messages and `h` and the coins of the other rounds, returns the executable's `ab` claim, read in
 the model's field, with `h` as the hidden part's fold, `α` round `t.k`'s first coin and the rounds' challenges rounds
 `t.k + 2 + j`'s. -/
-theorem holoLincheck_refines_coins (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S)
+theorem holoLincheck_refines_coins (S : Model.BlockR1CS) (c : CircuitFold) (hc : FoldRealizes c S)
     (zc : Flock.ZcOut) (zc' : Model.ZcOut 𝔽 S.m) (hzc : ZcRel S.m zc zc') (p : LincheckProof) (hpart : Array F128)
     (t t' : Transcript) (lc : LcOut) (hwf : RoundsWF t.rounds)
     (h : holoLincheckT c zc p hpart t = .ok (lc, t')) :
@@ -221,7 +221,7 @@ theorem holoLincheck_refines_coins (S : Model.Statement) (c : CircuitFold) (hc :
       simp [htsL, hC, hr₃, hk₃]
 
 /-- **The lincheck with hidden units refines the model's**: `holoLincheck_refines_coins` without the coins. -/
-theorem holoLincheck_refines (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S)
+theorem holoLincheck_refines (S : Model.BlockR1CS) (c : CircuitFold) (hc : FoldRealizes c S)
     (zc : Flock.ZcOut) (zc' : Model.ZcOut 𝔽 S.m) (hzc : ZcRel S.m zc zc') (p : LincheckProof) (hpart : Array F128)
     (t t' : Transcript) (lc : LcOut) (hwf : RoundsWF t.rounds)
     (h : holoLincheckT c zc p hpart t = .ok (lc, t')) :
@@ -244,7 +244,7 @@ model's `holoRepC`, played with the proof's messages and `h` (`holoRepMsgs`) and
 is true, whose caps are the proof's and whose requests passed the executable's Merkle checks. The zerocheck's `z`
 and `ρ` and the lincheck's `alpha` and `ts` are the coins of the rounds of `t` that draw them
 (`zerocheck_refines_coins`, `holoLincheck_refines_coins`). -/
-theorem holoRep_refines_coins {D : Type} (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m) (h15 : 15 ≤ S.m)
+theorem holoRep_refines_coins {D : Type} (st : Setup) (S : Model.BlockR1CS) (hm : 13 ≤ S.m) (h15 : 15 ≤ S.m)
     (sch : Flock.Schedule) (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (extra : List (Model.Claim 𝔽 S.m)) (extras : Array Claim) (hlenx : extras.size = extra.length)
     (hcx : ∀ (j : ℕ) (hj : j < extra.length), ClaimRel S.m extras[j]! extra[j])
@@ -332,7 +332,7 @@ theorem holoRep_refines_coins {D : Type} (st : Setup) (S : Model.Statement) (hm 
   · rw [hts j, hr₁, hk₁]
 
 /-- **One rep with hidden units refines the model's**: `holoRep_refines_coins` without the coins. -/
-theorem holoRep_refines {D : Type} (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m) (h15 : 15 ≤ S.m)
+theorem holoRep_refines {D : Type} (st : Setup) (S : Model.BlockR1CS) (hm : 13 ≤ S.m) (h15 : 15 ≤ S.m)
     (sch : Flock.Schedule) (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (extra : List (Model.Claim 𝔽 S.m)) (extras : Array Claim) (hlenx : extras.size = extra.length)
     (hcx : ∀ (j : ℕ) (hj : j < extra.length), ClaimRel S.m extras[j]! extra[j])

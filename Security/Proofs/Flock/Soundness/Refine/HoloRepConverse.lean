@@ -141,7 +141,7 @@ open Game FlockLevel3 in
 circuit fold realizing `S` and a zerocheck output that is the model's `zc'`, the model's `holoLincheck`, played with the
 proof's lincheck messages and `h` on the coins of the rounds up to `z_partial`'s and of `r'`'s, returns the claim
 `holoLincheck_of_checks` hands on, as `ab`, and `h` (`holoLincheck_refines`). -/
-theorem holoLincheck_plays_of_checks (S : Model.Statement) (c : CircuitFold) (hc : FoldRealizes c S)
+theorem holoLincheck_plays_of_checks (S : Model.BlockR1CS) (c : CircuitFold) (hc : FoldRealizes c S)
     (zc : Flock.ZcOut) (zc' : Model.ZcOut 𝔽 S.m) (hzc : ZcRel S.m zc zc') (p : LincheckProof) (hpart : Array F128)
     (t : Transcript) (hwf : RoundsWF t.rounds) (ha : HoloLcAnswered t c.kLog p hpart) {ts comb : Array F128}
     (hfold : (List.range' 0 (c.kLog - 6)).foldl (fun s j => lStep p.rounds j s (t.rounds[t.k + 2 + j]!).coins)

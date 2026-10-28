@@ -5,7 +5,7 @@ import Proofs.Flock.Soundness.Discharge.Placed
 /-!
 # The tables and sites of a one-table session
 
-`Prog.flock_headline_live` takes a table `T S R` at every draw `S` and each drawn unit's site in it (`Placed.Sites`).
+`ProgSpec.flock_headline_live` takes a table `T S R` at every draw `S` and each drawn unit's site in it (`Placed.Sites`).
 This file builds both from the session's inputs `I : Inputs` (the verify command's flags: one circuit file, one public
 file, one table), at the draw the challenger writes for `S` (`dj S`, the draw's JSON):
 
@@ -146,7 +146,7 @@ theorem contra_wf {kl nbl : ℕ} : ∀ R ∈ contra kl nbl, R.free.Nodup ∧ R.f
   rcases hR with rfl | rfl <;> exact ⟨List.nodup_nil, Nat.zero_le _⟩
 
 /-- No witness satisfies a statement with `contra`'s regions. -/
-theorem contra_unsat {S : Model.Statement} (hS : contra S.kLog S.nbl ⊆ S.regions) (z : Witness S.m) :
+theorem contra_unsat {S : Model.BlockR1CS} (hS : contra S.kLog S.nbl ⊆ S.regions) (z : WitnessBits S.m) :
     ¬ S.Satisfies z := by
   rintro ⟨-, -, hR⟩
   let r0 : Model.Region S.kLog S.nbl := ⟨[], fun _ => false, fun _ _ => 0⟩
@@ -182,7 +182,7 @@ noncomputable def refused (S' : Finset (Fin n)) : Table mPts S' where
   hvu _ _ := x.hg
   o _ _ := ⟨0, Nat.two_pow_pos _⟩
 
-theorem refused_unsat (S' : Finset (Fin n)) (z : Witness (x.refused ht S').T.S.m) :
+theorem refused_unsat (S' : Finset (Fin n)) (z : WitnessBits (x.refused ht S').T.S.m) :
     ¬ (x.refused ht S').T.S.Satisfies z :=
   contra_unsat (S := (x.refused ht S').T.S) (fun _ hR => List.mem_append_right _ hR) z
 
@@ -196,7 +196,7 @@ noncomputable def refusedC (S' : Finset (Fin n)) : Table mPts S' where
   hvu _ _ := x.hg
   o _ _ := ⟨0, Nat.two_pow_pos _⟩
 
-theorem refusedC_unsat (S' : Finset (Fin n)) (z : Witness (x.refusedC ht S').T.S.m) :
+theorem refusedC_unsat (S' : Finset (Fin n)) (z : WitnessBits (x.refusedC ht S').T.S.m) :
     ¬ (x.refusedC ht S').T.S.Satisfies z :=
   contra_unsat (S := (x.refusedC ht S').T.S) (fun _ hR => hR) z
 
@@ -227,7 +227,7 @@ theorem tableAt_cases (S : Finset (Fin n)) :
 
 /-- **A refused draw's table is unsatisfiable**: at a draw with no `DrawSetup`, no witness satisfies the table. -/
 theorem tableAt_unsat {S : Finset (Fin n)} (hS : ¬ Nonempty (DrawSetup I mPts S (dj S)))
-    (z : Witness (tableAt ht dj x₀ S).T.S.m) : ¬ (tableAt ht dj x₀ S).T.S.Satisfies z := by
+    (z : WitnessBits (tableAt ht dj x₀ S).T.S.m) : ¬ (tableAt ht dj x₀ S).T.S.Satisfies z := by
   revert z
   unfold tableAt
   rw [dite_eq_right_of_eq_false (eq_false hS)]

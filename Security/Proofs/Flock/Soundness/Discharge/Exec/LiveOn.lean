@@ -4,7 +4,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Live
 # R11 for one-table sessions, with the decoder right at the law's draws only
 
 `DecodesAll` asks `Decodes` at every draw `S` and registration. The audit plays only the law's draws `L.draw ω`, so
-`DecodesOn L` asks it there and nowhere else, and `execRefines_on` and `Prog.flock_headline_live_on` take it in place
+`DecodesOn L` asks it there and nowhere else, and `execRefines_on` and `ProgSpec.flock_headline_live_on` take it in place
 of `DecodesAll`, with the same bound. `DecodesAll` implies it (`decodesOn_of_all`), and at it the simulated prover is
 the same (`simAudit_eq_on`). At a draw the law never makes, the table `T S R` and the decoder are unconstrained; at a
 draw it makes, `T S R` must be the table flock-verify sets up there, `m_pts` included (`Pts.lean`).
@@ -82,17 +82,17 @@ theorem execRefines_on (hdec : DecodesOn H E Lf T I wr opn dec one fin capOf L)
 
 /-! ## The headline at the executable, for one-table sessions -/
 
-variable {N' : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N'))
+variable {N' : ℕ} (p : FlockSoundness.ProgSpec N' n) (outs : Finset (Fin N'))
 
 /-- **The headline at the executable, for one-table sessions of the challenger.** Let the verifier draw the units
-as in `Prog.flock_headline_L` (the live stratified draw under A3), let each draw's session be one table `T S R`, and let
+as in `ProgSpec.flock_headline_L` (the live stratified draw under A3), let each draw's session be one table `T S R`, and let
 the live session be `liveTable` (the challenger, its coins uniform per round and drawn after the round's retained
 bytes), written out as a session directory by `wr`. Against any live prover `τ`, flock-verify accepts with at least `K`
 wrong units of the committed values of the simulated prover (`simAuditOn … τ`) with probability at most
-`miss(K) + ε_ks + δ_link`: `Prog.flock_headline_execL` with `hRef` discharged by `execRefines_on`, so `Pr[bad] = 0`.
-Beyond `Prog.flock_headline_L`'s (`pp`, `hConst`, `hZero`, `lay`, `rs`, `hHm`, and the assumptions through `hA3`, `hKS`,
+`miss(K) + ε_ks + δ_link`: `ProgSpec.flock_headline_execL` with `hRef` discharged by `execRefines_on`, so `Pr[bad] = 0`.
+Beyond `ProgSpec.flock_headline_L`'s (`pp`, `hConst`, `hZero`, `lay`, `rs`, `hHm`, and the assumptions through `hA3`, `hKS`,
 `hCR`), it takes `hdec`: the decoder is right on the sessions flock-verify accepts, at the draws the law makes (R11b). -/
-theorem _root_.FlockSoundness.Prog.flock_headline_live_on {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
+theorem _root_.FlockSoundness.ProgSpec.flock_headline_live_on {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
@@ -141,8 +141,8 @@ theorem _root_.FlockSoundness.Prog.flock_headline_live_on {Lp : Merkle.Leaf (Lis
     (execRefines_on H512 enc512 Lp T I wr opn dg dec one fin capOf N hdec τ) hCR hKS
   rwa [prob_eq_zero_of_out (p := fun _ => False) (fun _ _ h => h) τ, add_zero] at h
 
-/-- `Prog.flock_headline_live_on` at rows each under its own encoding (`Binding.HmRowsX`). -/
-theorem _root_.FlockSoundness.Prog.flock_headline_live_onX {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
+/-- `ProgSpec.flock_headline_live_on` at rows each under its own encoding (`Binding.HmRowsX`). -/
+theorem _root_.FlockSoundness.ProgSpec.flock_headline_live_onX {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)

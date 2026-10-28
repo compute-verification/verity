@@ -72,7 +72,7 @@ noncomputable def padLigeritoError (s : Schedule) (t e : ℕ) : ℝ :=
 
 /-- **One rep with the padded level 0.** As `repError`, with the padded list bound before
 Ligerito (whose level-0 out-of-domain coin `piopError` counts) and the padded level 0 in it. -/
-noncomputable def padRepError (s : Schedule) (st : Stmt) (t e : ℕ) : ℝ :=
+noncomputable def padRepError (s : Schedule) (st : StmtShape) (t e : ℕ) : ℝ :=
   match s.levels with
   | l₀ :: l₁ :: rest =>
       piopError s.m st.kLog st.nClaims (l₀.padListBound t) + padMidLevelError l₀ l₁ t e
@@ -80,11 +80,11 @@ noncomputable def padRepError (s : Schedule) (st : Stmt) (t e : ℕ) : ℝ :=
   | _ => 1
 
 /-- The link points, over the padded list. -/
-noncomputable def padLinkError (s : Schedule) (st : Stmt) (t : ℕ) : ℝ :=
+noncomputable def padLinkError (s : Schedule) (st : StmtShape) (t : ℕ) : ℝ :=
   ((s.levels.headD default).padListBound t : ℝ) * st.nRegions * ((st.mPts : ℝ) / qF) ^ 2
 
 /-- **One table with the padded level 0**: the link points, then two reps on independent coins. -/
-noncomputable def padTableError (s : Schedule) (st : Stmt) (t e : ℕ) : ℝ :=
+noncomputable def padTableError (s : Schedule) (st : StmtShape) (t e : ℕ) : ℝ :=
   padLinkError s st t + padRepError s st t e ^ 2
 
 /-- The padded level 0's conditions: the padded code fits the novel basis at `d ≤ 40` bits, and

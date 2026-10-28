@@ -22,7 +22,7 @@ otherwise (`RecSetup.oneFull`). `ksLin2_deployed_full` and `bitsLin2_deployed_fu
 namespace RecDeploy
 
 /-- **A block's bit at the table share is the witness's hidden value** at the share's interleaved address. -/
-theorem blockBit_zOf (S : FlockSoundness.Model.Statement) (w : Claims.Flock.Wit) (J t : ℕ) (o : Fin (2 ^ S.nbl))
+theorem blockBit_zOf (S : FlockSoundness.Model.BlockR1CS) (w : Claims.Flock.Wit) (J t : ℕ) (o : Fin (2 ^ S.nbl))
     {y : ℕ} (hy : y < 2 ^ S.kLog) :
     FlockSoundness.Discharge.Hm.blockBit S (Flock.Readable.zOf J w t S.m) o y =
       w.hid.getD ((o.val * 2 ^ S.kLog + y) * J + t) false := by
@@ -30,7 +30,7 @@ theorem blockBit_zOf (S : FlockSoundness.Model.Statement) (w : Claims.Flock.Wit)
   exact Flock.Readable.bit_toZ _
 
 /-- At one table, the share's address is the block's own: `slotHid`'s form. -/
-theorem blockBit_zOf_one (S : FlockSoundness.Model.Statement) (w : Claims.Flock.Wit) (o : Fin (2 ^ S.nbl))
+theorem blockBit_zOf_one (S : FlockSoundness.Model.BlockR1CS) (w : Claims.Flock.Wit) (o : Fin (2 ^ S.nbl))
     {y : ℕ} (hy : y < 2 ^ S.kLog) :
     FlockSoundness.Discharge.Hm.blockBit S (Flock.Readable.zOf 1 w 0 S.m) o y =
       w.hid.getD (o.val * 2 ^ S.kLog + y) false := by
@@ -50,7 +50,7 @@ theorem hmIn_eq (c : Flock.Circuit) (k : ℕ) : FlockSoundness.Discharge.Hm.hmIn
 
 /-- **Port `q`'s `b ‖ c` at instance `n`, bit `t`**, as `Hm.row_bc_flat` reads it in block `n / g` (VU `n % g`), is
 the hidden value at the slot's out column `t` (`hmCommit`'s). -/
-theorem bc_bit (S : FlockSoundness.Model.Statement) (w : Claims.Flock.Wit) (c : Flock.Circuit) {q n t : ℕ}
+theorem bc_bit (S : FlockSoundness.Model.BlockR1CS) (w : Claims.Flock.Wit) (c : Flock.Circuit) {q n t : ℕ}
     (hk : 2 ^ S.kLog = 2 ^ c.kLog) (hb : n / c.g < 2 ^ S.nbl) (hy : hmBase c q n + (hmOutCol c + t) < 2 ^ c.kLog)
     (ht : t < 1024) :
     FlockSoundness.Discharge.Hm.bitL (FlockSoundness.Discharge.Hm.bytesOf
@@ -66,7 +66,7 @@ theorem bc_bit (S : FlockSoundness.Model.Statement) (w : Claims.Flock.Wit) (c : 
 
 /-- **Port `q`'s salt at instance `n`, bit `j`**, as `Hm.row_bc_flat` reads it in block `n / g`, is the hidden value
 at the slot's salt column `j` (`hmSalt`'s). -/
-theorem salt_bit (S : FlockSoundness.Model.Statement) (w : Claims.Flock.Wit) (c : Flock.Circuit) {q n j : ℕ}
+theorem salt_bit (S : FlockSoundness.Model.BlockR1CS) (w : Claims.Flock.Wit) (c : Flock.Circuit) {q n j : ℕ}
     (hk : 2 ^ S.kLog = 2 ^ c.kLog) (hb : n / c.g < 2 ^ S.nbl) (hy : hmBase c q n + (hmIn c 2 + j) < 2 ^ c.kLog)
     (hj : j < 1536) :
     FlockSoundness.Discharge.Hm.bitL (FlockSoundness.Discharge.Hm.bytesOf
@@ -156,7 +156,7 @@ theorem leaf_copy {N g q i : ℕ} (hl : st.c.leavesIn.getD 0 #[] = (Array.range 
     (hupv : 0 < st.c.upv) (hg : g < st.c.g) (hq : q < st.c.ports.size)
     (hbw : st.c.ports[q].bits = 16 * st.c.ports[q].words)
     (hN : 16 * (st.c.ports.extract 0 q).foldl (· + ·.words) 0 + st.c.ports[q].bits ≤ 16 * N)
-    (hi : i < st.c.ports[q].bits) {z : FlockSoundness.Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z)
+    (hi : i < st.c.ports[q].bits) {z : FlockSoundness.Model.WitnessBits (L.model regs).m} (hz : (L.model regs).Satisfies z)
     (o : Fin (2 ^ (L.model regs).nbl)) :
     st.c.unitRange.slot (g * st.c.upv) + ((st.c.unit.inGroups.getD 0 default).col * Flock.WORD +
       16 * (st.c.ports.extract 0 q).foldl (· + ·.words) 0 + i) < 2 ^ st.c.kLog ∧
@@ -247,7 +247,7 @@ theorem table_rows {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {tables :
     (hd : FlockSoundness.Discharge.HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st)
     (hupv : 0 < st.c.upv) (hv1 : ∀ p ∈ st.c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks)
     (L : FlockSoundness.Layout st) (regs : List (FlockSoundness.Model.Region st.c.kLog (st.m - st.c.kLog)))
-    {z : FlockSoundness.Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) :
+    {z : FlockSoundness.Model.WitnessBits (L.model regs).m} (hz : (L.model regs).Satisfies z) :
     FlockSoundness.Discharge.Hm.RowRanges st.c ∧ 0 < st.c.g ∧
       st.nbl = max 3 (Flock.log2ceil (max ((st.n + st.c.g - 1) / st.c.g) 1)) ∧
       (∀ (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ}, g < st.c.g → p < st.c.ports.size →

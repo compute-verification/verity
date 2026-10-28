@@ -127,7 +127,7 @@ end Coins
 
 /-- **The statement's circuit fold, in the model** (`FoldRealizes` by construction): column `col` of
 `α·A₀ᵀe + B₀ᵀe`, `e_i = lw[i mod 64]·eq(ρ, ⌊i/64⌋)`; `folded` adds `β` at the pin and halves at `ts`. -/
-def modelFold (S : Statement) : CircuitFold where
+def modelFold (S : BlockR1CS) : CircuitFold where
   kLog := S.kLog
   pin := S.pin.val
   fold α lw ρ := .ok ((Array.range (2 ^ S.kLog)).map fun col => if hc : col < 2 ^ S.kLog then
@@ -264,13 +264,13 @@ def thetaOf {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (z : Sizes) (c : Coi
 /-! ## The honest prover's clear values -/
 
 /-- **The prover's table `z = (w, u)`**: the witness with the mask slot's words replaced by `u`. -/
-def zWith (st : Stmt) {M nMask : ℕ} (w : Witness M) (u : Fin nMask → Fin 128 → ZMod 2) : Witness M := fun a =>
+def zWith (st : Stmt) {M nMask : ℕ} (w : WitnessBits M) (u : Fin nMask → Fin 128 → ZMod 2) : WitnessBits M := fun a =>
   match (List.finRange nMask).find? (fun x => (maskWordsOf st).getD x.val 0 = a.val / 128) with
   | some x => u x ⟨a.val % 128, Nat.mod_lt _ (by norm_num)⟩
   | none => w a
 
 /-- Packed word `y` of a table, `f(y) = Σ_v z[128y + v]·x^v` (`Arith.pack`). -/
-def wordOf {M : ℕ} (zw : Witness M) (y : ℕ) : 𝔽 :=
+def wordOf {M : ℕ} (zw : WitnessBits M) (y : ℕ) : 𝔽 :=
   execArith.pack fun v => if h : 128 * y + v.val < 2 ^ M then zw ⟨128 * y + v.val, h⟩ else 0
 
 theorem six_le {mPts : ℕ} (Tz : TabZK 𝔽 mPts) : 6 ≤ Tz.S.m := by have := Tz.hm; omega
@@ -304,7 +304,7 @@ def LigProver : Type :=
 section Honest
 
 variable {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz st)) (r : Fin 2)
-  (zw : Witness Tz.S.m)
+  (zw : WitnessBits Tz.S.m)
 
 /-- The zerocheck's tables at address `i`: the A-side, B-side and witness bits (`aVec`, `bVec`, `z`), `0` past `2^m`. -/
 def aT (i : ℕ) : 𝔽 := if h : i < 2 ^ Tz.S.m then ((aVec Tz.S zw ⟨i, h⟩).val : 𝔽) else 0
@@ -395,7 +395,7 @@ end Honest
 /-- **The draw's inner-proof fields** at the coin vector `c`: the lanes of `z = (w, u)`, the clear values by layout
 index, levels ≥ 1 from the restart `T' = Σ_c y₁'(c)·b̄(c)`, and the replay's batch. -/
 def innerOf (P : LigProver) {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (z : Sizes) (c : CoinsZK (RestOf Tz st)) :
-    InnerFields (Witness Tz.S.m) (HiOf Tz) VLOf z where
+    InnerFields (WitnessBits Tz.S.m) (HiOf Tz) VLOf z where
   lanes w u l col := wordOf (zWith st w u) (l.val + z.nL * col.val)
   vals r w u R i := honestAt Tz st c r (zWith st w u) (R r) i.val
   lig r y hi := (∑ col : Fin z.L, y col * bFold Tz st c r col.val, P Tz st c r z.L y hi)

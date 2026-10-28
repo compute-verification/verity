@@ -103,7 +103,7 @@ def side (M : Hidden cls) (s : Bool) : Matrix (Fin (2 ^ cls.kLog)) (Fin (2 ^ cls
 
 /-- **The hidden statement**: the block R1CS with the class's `m`, `k_log` and pin, `A₀` and `B₀` the public part plus
 the template at the unit slots, and the public regions `regs`. -/
-def toStatement (M : Hidden cls) (regs : List (Region cls.kLog (cls.m - cls.kLog))) : Statement :=
+def toStatement (M : Hidden cls) (regs : List (Region cls.kLog (cls.m - cls.kLog))) : BlockR1CS :=
   ⟨cls.m, cls.kLog, cls.hk, cls.hk6, cls.pin, M.side false, M.side true, regs⟩
 
 /-- **The canonical form**: the first `n` entries are the value-1 ones, strictly increasing in (side, column, row); the
@@ -133,7 +133,7 @@ def InnerAccepts (ι : W → F) (A : Arith F K) (H : List UInt8 → D) (E : Merk
 
 omit [Fintype F] [DecidableEq F] [Fintype K] [DecidableEq K] in
 /-- A level-0 table the statement's committed values satisfy has a witness. -/
-theorem satisfiable_of_committed {A : Arith F K} {S : Statement} {sch : Schedule} {C : Oracle F}
+theorem satisfiable_of_committed {A : Arith F K} {S : BlockR1CS} {sch : Schedule} {C : Oracle F}
     (h : Committed A S sch C) : ∃ z, S.Satisfies z :=
   let ⟨_, _, hs⟩ := h
   ⟨_, hs⟩
@@ -214,7 +214,7 @@ theorem flock_inner_sound (A : Arith F K) (hA : A.Correct) (cls : HClass)
 /-- **`flock_inner_sound` with the numbers**: at most `2^-205` for `22 ≤ m ≤ 33` and a shape in range. -/
 theorem flock_inner_sound_fast100 (A : Arith F K) (hA : A.Correct) (cls : HClass)
     (regs : List (Region cls.kLog (cls.m - cls.kLog))) (sch : Schedule) (hsch : fast100 cls.m = some sch)
-    (hm1 : 22 ≤ cls.m) (hm2 : cls.m ≤ 33) (hshape : (⟨cls.kLog, regs.length, cls.mPts⟩ : Accounting.Stmt).InRange)
+    (hm1 : 22 ≤ cls.m) (hm2 : cls.m ≤ 33) (hshape : (⟨cls.kLog, regs.length, cls.mPts⟩ : Accounting.StmtShape).InRange)
     (hlay : ∀ M : Hidden cls, (M.toStatement regs).LinkLayout cls.ptLocal cls.mPts) :
     InnerSound (flockInner T CT A cls regs sch) (ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ)))) := fun M hno s =>
   (flock_inner_sound T CT A hA cls regs sch hsch hlay M hno s).trans

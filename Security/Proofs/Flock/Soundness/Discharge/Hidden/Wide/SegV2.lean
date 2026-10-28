@@ -34,7 +34,7 @@ def OutputsCommittedSeg : Prop :=
     (∀ j < st.c.outPorts.size, (st.c.ports.getD (HmOut.nIn st.c + j) default).words % 64 = 0) →
     ∀ (L : Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))),
     (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
-    ∀ {z : Model.Witness (L.model regs).m}, (L.model regs).Satisfies z →
+    ∀ {z : Model.WitnessBits (L.model regs).m}, (L.model regs).Satisfies z →
     ∀ (o : Fin (2 ^ (L.model regs).nbl)) {g j : ℕ}, g < st.c.g → g < 2 ^ st.c.g.log2 → j < st.c.outPorts.size →
     ∀ (hr : o.val * st.c.g + g < D.proved.size),
     (pop.digest D.proved[o.val * st.c.g + g] (HmOut.nIn st.c + j) st.c.ports.size).data.toList =
@@ -60,8 +60,8 @@ def OutputsBindingSeg : Prop :=
     (∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs) →
     ∀ (L' : Layout st') (regs' : List (Model.Region st'.c.kLog (st'.m - st'.c.kLog))),
     (∀ r ∈ st'.regions.toList, Refine.regionOf st'.c.kLog (st'.m - st'.c.kLog) r ∈ regs') →
-    ∀ {z : Model.Witness (L.model regs).m}, (L.model regs).Satisfies z →
-    ∀ {z' : Model.Witness (L'.model regs').m}, (L'.model regs').Satisfies z' →
+    ∀ {z : Model.WitnessBits (L.model regs).m}, (L.model regs).Satisfies z →
+    ∀ {z' : Model.WitnessBits (L'.model regs').m}, (L'.model regs').Satisfies z' →
     ∀ (o : Fin (2 ^ (L.model regs).nbl)) (o' : Fin (2 ^ (L'.model regs').nbl)) {g g' j : ℕ},
     g < st.c.g → g < 2 ^ st.c.g.log2 → g' < st'.c.g → g' < 2 ^ st'.c.g.log2 → j < st.c.outPorts.size →
     ∀ (hr : o.val * st.c.g + g < D.proved.size) (hr' : o'.val * st'.c.g + g' < D'.proved.size),
@@ -306,7 +306,7 @@ include L L0 F0 hda hrows
 
 /-- **An output row's message bit holds its copy** in every block of a satisfying witness of the hidden statement, for
 any rows: at template instance `g`, output row `j`'s word `k`, bit `t`, what the witness holds at `outSrc`. -/
-theorem msg_copyAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+theorem msg_copyAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g j k t : ℕ} (hg : g < st.c.g)
     (hj : j < st.c.outPorts.size) (hk : k < (st.c.ports.getD (HmOut.nIn st.c + j) default).words) (ht : t < 16) :
     blockBit (L.model regs) z o (deltaMsgCol st.c g (HmOut.nIn st.c + j) (2 * k + t / 8) (t % 8)) =
@@ -334,7 +334,7 @@ theorem msg_copyAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z
 
 /-- **A satisfying witness of the hidden statement satisfies its flat twin**, for any rows: the rows agree past
 `outPairs`' message bits (`deltaEntry_append_out`), and there the twin's row is a self row (`flat_selfAll`). -/
-theorem sat_flatAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+theorem sat_flatAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (L.model regs).m}
     (hz : (L.model regs).Satisfies z) : (L0.model regs).Satisfies z := by
   have R : RowRanges st.c := RowRanges.ofL (st := flatTwin st) L0 F0.parse F0.check
   refine ⟨fun o i => ?_, hz.2.1, hz.2.2⟩
@@ -388,7 +388,7 @@ theorem sat_flatAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z
 
 /-- **An output row's message bytes are the output words its template instance computes** (`outBytes`), for any rows, in
 every block of a satisfying witness of the hidden statement whose forced-zero row carries 0. -/
-theorem msg_bytesAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+theorem msg_bytesAll {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
     (hzero : blockBit (L.model regs) z o (zeroCol st.c) = false) {g j : ℕ} (hg : g < st.c.g)
     (hj : j < st.c.outPorts.size) :

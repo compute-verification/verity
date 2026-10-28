@@ -450,7 +450,7 @@ old witness of `S` reads as a witness of table `j`'s statement. -/
 theorem good_of_committed_zkJ (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) (j : ℕ)
     (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x j = some s) (i : ZkIdx)
     (hN : wordLenJ true x j = 2 ^ zkLen i) (C : Fin (wordLenJ true x j) → List 𝔽)
-    (hw : ∀ q, (C q).length = 2 ^ zkLanes i) (S : Statement)
+    (hw : ∀ q, (C q).length = 2 ^ zkLanes i) (S : BlockR1CS)
     (hwit : ∀ P : Message 𝔽 (zkLanes i) (zkCols i),
       S.Satisfies (witnessOf execArith S.m (zkLanes i) (zkCols i) P) →
         Claims.Flock.RelS s (readTrace execArith i.m (zkLanes i) (zkCols i) P))
@@ -480,7 +480,7 @@ old witness of `S` reads as a witness of table `j`'s statement. -/
 theorem good_of_committed_zkJ (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) (j : ℕ)
     (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x j = some s) (i : ZkIdx)
     (hN : wordLenJ true x j = 2 ^ zkLen i) (C : Fin (wordLenJ true x j) → List 𝔽)
-    (hw : ∀ q, (C q).length = 2 ^ zkLanes i) (S : Statement)
+    (hw : ∀ q, (C q).length = 2 ^ zkLanes i) (S : BlockR1CS)
     (hwit : ∀ P : Message 𝔽 (zkLanes i) (zkCols i),
       S.Satisfies (witnessOf execArith S.m (zkLanes i) (zkCols i) P) →
         Claims.Flock.RelS s (readTrace execArith i.m (zkLanes i) (zkCols i) P))
@@ -497,7 +497,7 @@ variable [S : ZkSetup]
 theorem not_committed_zkJ (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) (j : ℕ)
     (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x j = some s) {spec : SessionSpec} {st : _root_.Flock.Stmt}
     (hst : (tables true x)[j]? = some (spec, st)) (i : ZkIdx) (hi : i.m = st.m)
-    (C : Fin (wordLenJ true x j) → List 𝔽) (hw : ∀ q, wideJ true x j (C q)) (S : Statement)
+    (C : Fin (wordLenJ true x j) → List 𝔽) (hw : ∀ q, wideJ true x j (C q)) (S : BlockR1CS)
     (hwit : ∀ P : Message 𝔽 (zkLanes i) (zkCols i),
       S.Satisfies (witnessOf execArith S.m (zkLanes i) (zkCols i) P) →
         Claims.Flock.RelS s (readTrace execArith i.m (zkLanes i) (zkCols i) P))
@@ -511,7 +511,7 @@ end Gen
 theorem not_committed_zkJ (rel : Readable.Parsed → Readable.Relation) (x : Claims.Msg) (j : ℕ)
     (s : Claims.Flock.Stmt) (hs : (deployZk rel).table x j = some s) {spec : SessionSpec} {st : _root_.Flock.Stmt}
     (hst : (tables true x)[j]? = some (spec, st)) (i : ZkIdx) (hi : i.m = st.m)
-    (C : Fin (wordLenJ true x j) → List 𝔽) (hw : ∀ q, wideJ true x j (C q)) (S : Statement)
+    (C : Fin (wordLenJ true x j) → List 𝔽) (hw : ∀ q, wideJ true x j (C q)) (S : BlockR1CS)
     (hwit : ∀ P : Message 𝔽 (zkLanes i) (zkCols i),
       S.Satisfies (witnessOf execArith S.m (zkLanes i) (zkCols i) P) →
         Claims.Flock.RelS s (readTrace execArith i.m (zkLanes i) (zkCols i) P))

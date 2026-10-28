@@ -350,7 +350,7 @@ include L F
 start's `cv` its midstate, every other `cv` the previous compression's output, and each message bit the constant or
 the digest bit `HmRow.msgBit` names. -/
 theorem seg_copies_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) {segs : Array (ℕ × ℕ)} (hs : st.c.ports[p]!.segs = some segs) :
     (∀ k ≤ st.c.ports[p]!.chunks, ∀ j, HmRow.chainStart st.c.ports[p]! k = some j → ∀ t < 512,
@@ -421,7 +421,7 @@ theorem seg_copies_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < s
 (`SegFits`), the commit string of `RowSeg.enc l` of the row's `(l + 7) / 8` bytes at `Typed.msgCol`, under the salt its
 `hm96` slot reads. -/
 theorem seg_bc_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g p l : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) (hs : st.c.ports[p]!.segs = some (HmRow.segShape l).1) (hbits : st.c.ports[p]!.bits = l)
     (hn : st.c.ports[p]!.chunks = firstOf (HmRow.segShape l).1 (count l) + outerComps l) (hfit : SegFits l) :

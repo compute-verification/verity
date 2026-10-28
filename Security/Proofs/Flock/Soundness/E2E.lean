@@ -9,8 +9,8 @@ circuit and values, 1 on the constants and 0 on the zero, which are public:
 * `flock_e2e_drawn`: `Pr[accept ∧ a drawn unit wrong] ≤ ε_ks(σ) + δ_link`.
 
 "Wrong" is measured on the audit's circuit `C`, at the committed values: the circuit the statement's rows make, each unit
-its template's rows (`Prog.circuit`: the circuit is chosen on the untrusted side, and the lowering does
-no optimizing). `Prog.flock_e2e_count` and `Prog.flock_e2e_drawn` state it there, with each drawn unit's place from its
+its template's rows (`ProgSpec.circuit`: the circuit is chosen on the untrusted side, and the lowering does
+no optimizing). `ProgSpec.flock_e2e_count` and `ProgSpec.flock_e2e_drawn` state it there, with each drawn unit's place from its
 table's statement (`ProgPlaces`). What a correct unit computes is the certificate's: rows that are `GateRows.rows` of a
 gate circuit `G` compute `G`, so a correct unit's committed values compute `G` (`IsRowsUnit.computes_of_cert`,
 `Certificate.lean`). The only cryptographic assumption is `SHA512CRExpected`, for the link finders built from the prover
@@ -22,8 +22,8 @@ the `_hm96` forms state (`Binding/E2E.lean`).
 * "Accept" is `execAccept`, any event on the audit's outcome that implies the model's acceptance (`hExec`). So as pinned,
   these are the model-level theorems. The executable's verdict, `flock-verify` on the run's transcript, is not an event
   on that outcome. It enters when `hExec` is discharged, and that changes the statement's shape.
-* "Rows derived by the verifier" is not in the generic statement: `unitRows` appears only in `dp`. In the `Prog` forms the
-  units' rows are the program's (`Prog.rows`), and `ProgPlaces.placed` says the table's statement holds them.
+* "Rows derived by the verifier" is not in the generic statement: `unitRows` appears only in `dp`. In the `ProgSpec` forms the
+  units' rows are the program's (`ProgSpec.rows`), and `ProgPlaces.placed` says the table's statement holds them.
 
 **The composition.** It composes `flock_batched_count_public` and `flock_batched_drawn_public`, which are the compiled
 audit, the link theorem and knowledge soundness. Each piece not yet proved is a named hypothesis (`ASSUMPTIONS.md`,
@@ -123,12 +123,12 @@ end Partition
 
 open Partition (batchedSession ksAvgBE)
 
-variable {N n : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) {Reg : Type} {mPts : ℕ}
+variable {N n : ℕ} (p : FlockSoundness.ProgSpec N n) (outs : Finset (Fin N)) {Reg : Type} {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
 /-- **Each drawn unit's place in its table, for the program's circuit** (named). Unit `u` is an instance of its rows
-`p.rows u` (`inst`; `Prog.isRowsUnit` gives one), and the statement of the table it is drawn into holds those rows in
+`p.rows u` (`inst`; `ProgSpec.isRowsUnit` gives one), and the statement of the table it is drawn into holds those rows in
 block `o` at the columns `col`:
 * `placed`: the statement's level-0 matrices hold `p.rows u` there. From the executable's accept step,
   `placement_of_setupH` gives it for the rows `Rows.ofNet` reads off setupH's net; that those rows are the program's
@@ -141,7 +141,7 @@ structure ProgPlaces where
   col : ∀ S R u, u ∈ S → Fin (p.rows u).w → Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog)
   placed : ∀ S R u (h : u ∈ S), BlockRows (Partition.tabOf plan tab S R u).S (p.rows u) (col S R u h)
   aliased : ∀ S R u (h : u ∈ S), ∀ c c', (inst u).wire c = (inst u).wire c' → c.val < (p.rows u).nIn →
-    c'.val < (p.rows u).nIn → ∀ z : Witness (Partition.tabOf plan tab S R u).S.m,
+    c'.val < (p.rows u).nIn → ∀ z : WitnessBits (Partition.tabOf plan tab S R u).S.m,
       (Partition.tabOf plan tab S R u).S.Satisfies z →
       (Partition.tabOf plan tab S R u).S.block z (o S R u h) (col S R u h c) =
         (Partition.tabOf plan tab S R u).S.block z (o S R u h) (col S R u h c')
@@ -158,7 +158,7 @@ variable (p outs plan tab) {D : Type} [Inhabited D] (H : List UInt8 → D) (E : 
 /-- **The end-to-end count curve on the circuit of the statement's rows.** `flock_e2e_count` at `C = p.circuit outs`,
 each unit its template's rows, with each drawn unit's place from `ProgPlaces`: if `execAccept` holds, the probability
 that at least `K` units of the program are wrong at the committed values is at most `miss_L(K) + ε_ks(σ) + δ_link`. -/
-theorem _root_.FlockSoundness.Prog.flock_e2e_count
+theorem _root_.FlockSoundness.ProgSpec.flock_e2e_count
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     (pp : ProgPlaces p outs plan tab)
     (ones : Finset (Fin N)) (hConst : (p.partition outs).ConstCols plan tab pp.derived.place ones)
@@ -178,8 +178,8 @@ theorem _root_.FlockSoundness.Prog.flock_e2e_count
   (p.partition outs).flock_e2e_count H E plan tab hExec pp.derived ones hConst zeros hZero vb hk hRw hM hρ hr ht K σ hCR
 
 /-- **The end-to-end drawn-unit bound on the circuit of the statement's rows.** `flock_e2e_drawn` at
-`C = p.circuit outs`, as in `Prog.flock_e2e_count`. -/
-theorem _root_.FlockSoundness.Prog.flock_e2e_drawn
+`C = p.circuit outs`, as in `ProgSpec.flock_e2e_count`. -/
+theorem _root_.FlockSoundness.ProgSpec.flock_e2e_drawn
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     (pp : ProgPlaces p outs plan tab)
     (ones : Finset (Fin N)) (hConst : (p.partition outs).ConstCols plan tab pp.derived.place ones)

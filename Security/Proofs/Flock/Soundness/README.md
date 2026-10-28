@@ -25,7 +25,7 @@ at most `tableError(fast100 m, shape)`:
   is at most **2^-205 for 22 ≤ m ≤ 35**, proved in `Accounting/Numbers.lean`.
 - **The statement shapes covered** have at most 2^27 witness bits per block, 1,024 public regions and 64 link-point
   coordinates. That is every statement of §16, with room to spare.
-- **The link points' layout** is a named hypothesis (`Statement.LinkLayout`, `ASSUMPTIONS.md`).
+- **The link points' layout** is a named hypothesis (`BlockR1CS.LinkLayout`, `ASSUMPTIONS.md`).
 - **At this layer committed tables are sent whole.** The theorem is statistical, so it holds against quantum provers
   too.
 - **For the executable's arithmetic** (`Instance.lean`), `table_sound_exec` and its two `fast100` corollaries take
@@ -124,7 +124,7 @@ link term per audit.
   give a SHA-512 collision of the outer hash, of the salt digest, or of the rows' own digests. What `ValueBinding`
   carried becomes `Assumptions.HmRowComputes` (the circuit's row hashing computes the commit string, phase 2i) and the
   layout's facts (`Layout`, `HmRows`). `flock_e2e_count_hm96`, `flock_e2e_drawn_hm96` and their `_exec_hm96` forms are
-  the end-to-end theorems with that binding. The headline, `Prog.flock_headline` (`Headline.lean`), is the count curve
+  the end-to-end theorems with that binding. The headline, `ProgSpec.flock_headline` (`Headline.lean`), is the count curve
   with that binding on the statement's rows' circuit at the live draw under A3 (`ASSUMPTIONS.md`, The headline). Each
   is proved under the assumptions its footprint lists, every hypothesis with its kind: hardness (`cr/sha-512`,
   `ecr/sha-512`), platform (A3, and A6, the coin server's OS randomness), model, intended to prove (`hHm`, the placements
@@ -183,22 +183,22 @@ link term per audit.
 | Zero knowledge of the masked model (§3): Lemma B per table and per session, Lemma A at every coin vector (the prover's refusals in the code's order), Lemma C against an adaptive verifier with its own tape | 1e | `table_shvzk_hm96`, `session_shvzk_hm96`, `session_prefinal_indep_cut`, `adaptive_prefinal_hm96_tape` (`ZK/`) | proved for the model `ZK/Table.lean`; Theorem GK over a model of the session's views, `gk_simulate_hm96` (`ZK/GK/`); the link to the code remains |
 | Sampled audits: the integrity profile over any partition and sampling design, two-stage and its relations, minimax, tightness and insecurity (`Audit/README.md`) | (composition) | `Audit/*` | proved; per-unit terms named |
 | The Flock audit at the oracle layer: the batched session's projection to one table, `2^-205` (the audit layer) | 1a, composition | `Audit/Flock.lean`, `flock_session_sound` | proved, given the lowering |
-| The compiled lowering: the audit's circuit is the rows the verifier parses, and a satisfied table makes every placed unit correct, for every template (§1.5) | 1a | `Lowering.lean`, `lowering_sound`, `Prog.isRowsUnit`; `placement_of_setupH` | proved; the placement from the executable's accept step |
+| The compiled lowering: the audit's circuit is the rows the verifier parses, and a satisfied table makes every placed unit correct, for every template (§1.5) | 1a | `Lowering.lean`, `lowering_sound`, `ProgSpec.isRowsUnit`; `placement_of_setupH` | proved; the placement from the executable's accept step |
 | The certificate: rows that are `GateRows.rows G` compute `G`, so a correct unit computes the definition `G` lowers (`ASSUMPTIONS.md`; no hypothesis, since the circuit is the statement's rows) | (meaning) | `IsRowsUnit.computes_of_cert` (`Certificate.lean`) | proved; the premises per template: the IR comparison tests on samples, and the typed layout's proof (`Types.Dag.layout_sound`, `TmplValue.defComputes_of_layout`) once a template's rows are a checked layout's (`assumption-notes/template-rows.md`) |
 
 The proved results depend only on Lean's three standard axioms (`propext`, `Classical.choice`, `Quot.sound`). Run
 `python tools/verity/lean/check.py Security/Proofs` to check every declaration (`lean-audit.json`).
 
-### 1.5 The compiled lowering (`lowering_sound`, `Prog.isRowsUnit`; `Lowering.lean`)
+### 1.5 The compiled lowering (`lowering_sound`, `ProgSpec.isRowsUnit`; `Lowering.lean`)
 
 - **The audit's circuit is the rows the verifier parses** (spec §16.5, `Flock/Net.lean`).
   - A template's unit is its input columns, its computed rows and its constant (`Rows`).
   - A computed row is `z_i = (⊕_{c∈a_i} z_c)·(⊕_{c∈b_i} z_c)`, reading earlier columns and the constant. It is one gate
     of the circuit (`Audit.Op.row`).
-  - A program's circuit (`Prog.circuit`) is its units' rows, with each unit's input columns and constant wired to
+  - A program's circuit (`ProgSpec.circuit`) is its units' rows, with each unit's input columns and constant wired to
     earlier gates. Several input columns may be wired to one gate (a unit reading one source on several inputs), and
     the constant to a gate no input column is wired to. Every unit is an instance of its template's rows
-    (`Prog.isRowsUnit`).
+    (`ProgSpec.isRowsUnit`).
   - **A pinned file read as `Rows`.**
     - Its inputs are its self rows (`A = B = [i]`).
     - Its padding columns (`A = B = 0` in the input region) are forced zero and read by no row, so they are not columns
@@ -254,7 +254,7 @@ The proved results depend only on Lean's three standard axioms (`propext`, `Clas
     `HmRow.pin` refuses a pin range with no slot. Otherwise an input port can cover a slot's constant column and Δ's
     copies rewrite that row, or the pin's row is empty or lands inside another range.
 - **What a correct unit computes** is its certificate's, not a hypothesis: the
-  end-to-end theorems are about the circuit of the statement's rows (`Prog.circuit`), and when a unit's rows are
+  end-to-end theorems are about the circuit of the statement's rows (`ProgSpec.circuit`), and when a unit's rows are
   `GateRows.rows G L` and `G` computes `D`, a unit that is not faulty computes `D` (`IsRowsUnit.computes_of_cert`,
   `Certificate.lean`). A template's rows are tested against its primitives on samples; a checked layout's rows are proved
   to compute its type (`Types.Dag.layout_sound`, `assumption-notes/template-rows.md`).

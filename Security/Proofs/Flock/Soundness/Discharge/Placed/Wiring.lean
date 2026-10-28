@@ -100,7 +100,7 @@ theorem insOf_eq_unit {u u' : ℕ} (hu : u < nU) (hu' : u' < nU) {x x' : Fin nIn
 /-- **The program of a circuit's units on source-indexed input gates**: `nU` units of the circuit's template instance rows, input column
 `x` of each on its source's gate (`insOf`), the constant on `oneGate`. -/
 noncomputable def circuitProg (c : Flock.Circuit) (hU : Built c.unit) (nU B : ℕ)
-    (src : Fin (circuitRows c hU).nIn → Option (Fin B)) : Prog (gates (inGates nU B) (circuitRows c hU) nU) nU :=
+    (src : Fin (circuitRows c hU).nIn → Option (Fin B)) : ProgSpec (gates (inGates nU B) (circuitRows c hU) nU) nU :=
   uniform (inGates nU B) (circuitRows c hU) (insOf nU B src) (oneGate nU B) (insOf_ne_one nU B src) nU
 
 /-- Every unit of the circuit's program has the circuit's template instance rows. -/

@@ -71,7 +71,7 @@ event `E`, the real joint view at valid witnesses `w j` and the simulators' at a
 randomness independent, are within `Σ_j 2·|Hid_j|·δ₁`, both ways. -/
 def ZkViewAtJ {J : ℕ} (C : Fin J → CoinedSetup) (δ₁ : ℝ≥0∞) : Prop :=
   ∀ (c : ∀ j, CoinsZK (C j).Rest), (∀ j, (C j).Admits (c j)) → ∀ {Out : Type}
-    (enc : (∀ j, ((C j).T (c j)).tab.View) → Out) (w w0 : ∀ j, Witness (C j).S.m), (∀ j, (C j).Valid (w j)) →
+    (enc : (∀ j, ((C j).T (c j)).tab.View) → Out) (w w0 : ∀ j, WitnessBits (C j).S.m), (∀ j, (C j).Valid (w j)) →
     ∀ (E : Out → Prop),
     Game.prCoin (fun p : ∀ j, ((C j).T (c j)).tab.Rand × (((C j).T (c j)).tab.Hid → ZkView.Salt) =>
         E (enc fun j => ((C j).T (c j)).viewExe (w j) (p j).1 (p j).2))

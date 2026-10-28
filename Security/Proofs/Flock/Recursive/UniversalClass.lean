@@ -471,7 +471,7 @@ theorem HClass.ofStmt_toStatement (st : Flock.Stmt) (hwf : Refine.StmtWF st) (hm
     M.toStatement regs = Refine.stmtOf st hwf regs := by
   obtain ⟨hA, hB⟩ := Hidden.side_of_nnz_zero rfl M
   show (⟨st.m, st.c.kLog, hwf.hk, hwf.hk6, ⟨st.pin, hwf.pin⟩, M.side false, M.side true, regs⟩ :
-    FlockSoundness.Model.Statement) = _
+    FlockSoundness.Model.BlockR1CS) = _
   rw [hA, hB]
   rfl
 

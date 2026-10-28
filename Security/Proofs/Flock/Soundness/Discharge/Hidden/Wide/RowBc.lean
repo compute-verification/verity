@@ -131,7 +131,7 @@ theorem flatAll_count (hrw : RowWires st.c) {n s off x : ℕ} (hn : n = st.c.sha
 `x` of a `sha512x3` or `hm96` slot below the net's input rows, where the rows' copies and wires write exactly one
 `(x, src)`, every block of a satisfying witness holds at `x` what it holds at `src`. -/
 theorem inBit_copyAll (hda : st.da = (HmRow.delta st.c st.pin).1) (hrw : RowWires st.c) (hu : ∀ p ∈ st.c.ports.toList, p.segs = none)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {n s off x src : ℕ}
     (hn : n = st.c.shaNet ∨ n = st.c.hmNet) (hat : AtSlot st.c n s off x) {l : Flock.HmNets.Laid} {name : String}
     (hl : Net.ofRows name l.useful l.constPos l.inGroups l.outGroups l.ra l.rb = .ok (st.c.nets.getD n default).2)
@@ -160,7 +160,7 @@ satisfying witness of the untyped statement: the first compression's `cv` is the
 compression's output. -/
 theorem row_copies_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
     (hu : ∀ p ∈ st.c.ports.toList, p.segs = none)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) (h0 : 0 < st.c.ports[p]!.chunks) :
     (∀ t < 512, blockBit (L.model regs) z o (shaBase st.c g p 0 + shaIn st.c (2 * shaSub st.c p 0) + t) =
@@ -202,7 +202,7 @@ theorem row_copies_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < s
 the untyped statement: the `hm96` slot's `cv` is the row prefix's midstate. -/
 theorem row_copies_tgt0 (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
     (hu : ∀ p ∈ st.c.ports.toList, p.segs = none)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) (h0 : st.c.ports[p]!.chunks = 0) :
     ∀ t < 512, blockBit (L.model regs) z o (st.c.slotCol st.c.hmNet g p + hmIn st.c 0 + t) =
@@ -222,7 +222,7 @@ theorem row_copies_tgt0 (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < 
 untyped statement: wherever `HmRow.constBit` gives the row's last block a constant, Δ's one copy holds it there. -/
 theorem pad_const_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
     (hu : ∀ p ∈ st.c.ports.toList, p.segs = none)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) :
     ∀ t < 1024, ∀ v, HmRow.constBit st.c.ports[p]! (HmRow.tailOf st.c.ports[p]!) st.c.ports[p]!.chunks t = some v →
@@ -250,7 +250,7 @@ rows: at a row of `16 · words` bits whose bytes fill its compressions' blocks a
 slot's block (`sha512/row/v1` or `sha512/row/v2`), the commit string of the row's prefix `HmRow.prefixOf` and the bytes
 `Typed.msgCol` reads, under the salt its `hm96` slot reads. -/
 theorem row_bc_tgt (hda : st.da = (HmRow.delta st.c st.pin).1) (hupv : 0 < st.c.upv)
-    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.Witness (L.model regs).m}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {z : Model.WitnessBits (L.model regs).m}
     (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl)) {g p : ℕ} (hg : g < st.c.g)
     (hp : p < st.c.ports.size) (hb : st.c.ports[p]!.bits = 16 * st.c.ports[p]!.words)
     (h1 : 128 * st.c.ports[p]!.chunks ≤ 2 * st.c.ports[p]!.words)

@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.Refine.Tapes
 /-!
 # How the executable's statement denotes a model statement
 
-The model's verifier is written for a `Model.Statement`: a block R1CS with matrices `A₀`, `B₀`, a pinned column and
+The model's verifier is written for a `Model.BlockR1CS`: a block R1CS with matrices `A₀`, `B₀`, a pinned column and
 public regions (PROTOCOL.md §16.1–§16.2). The executable's verifier never holds the matrices. The lincheck calls the
 statement's circuit fold, which computes `α·A₀ᵀe + B₀ᵀe` from the statement's sparse layout (`Stmt.fold`).
 
@@ -22,7 +22,7 @@ local notation "𝔽" => FlockLevel3.GF128
 64 skip weights `lw` and `k_log − 6` block coordinates `ρ`, a fold that succeeds has, at every column `c < 2^k_log`,
 `Σ_i e_i·(α·A₀[i, c] + B₀[i, c])` for `e_i = lw[i mod 64]·eq(ρ, ⌊i/64⌋)`. A `folded` that succeeds is such a fold, of
 `2^k_log` entries, with `β` added at the pin and halved at the challenges `ts` in turn. -/
-structure FoldRealizes (c : CircuitFold) (S : Model.Statement) : Prop where
+structure FoldRealizes (c : CircuitFold) (S : Model.BlockR1CS) : Prop where
   kLog : c.kLog = S.kLog
   pin : c.pin = S.pin.val
   fold : ∀ (α : F128) (lw ρ v : Array F128), lw.size = 64 → ρ.size = S.kLog - 6 → c.fold α lw ρ = .ok v →

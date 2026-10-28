@@ -8,7 +8,7 @@ Every `--zk` table `tableAtZK` builds meets `TabZK.M1`, from what `verify --zk` 
 
 * `Zk.schedule m`'s schedule is `m1Schedule m` and its `t_pad` is `m1Pad m`, at every `m` it accepts (`schedule_m1`,
   from `zkM1Facts_all`, checked by `decide +kernel` at each `m`);
-* setupH's `checkInRange` puts `k_log`, the statement's region count and `m_pts` in `Stmt.InRange` (`setupH_spec`);
+* setupH's `checkInRange` puts `k_log`, the statement's region count and `m_pts` in `StmtShape.InRange` (`setupH_spec`);
 * the inner code's length is `8·next_pow2(len + K_PAD)`, at most `2^13` (`innerN_pow`), so its radius is at least `7/16`
   (`relUDR_ge_m1`); 168 queries (`Zk.Q`).
 

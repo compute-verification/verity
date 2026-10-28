@@ -498,7 +498,7 @@ theorem admits_of_finCtx (L₀ : LeanRelease Flock.Wit Tp)
 /-- **Where every table admits the coins, the switched cut is the switched views'** with every guarded message sent
 (`cutV_swViewsAt`, `famGuard_admits`). -/
 theorem swCutOf_viewCut {x : Msg} {c : Fin (refK x) → finS.Coin} (hA : finS.Admits x c)
-    (wt : ∀ j, FlockSoundness.Model.Witness (finS.C x j).S.m) (v : ∀ j, ((finS.C x j).T (finS.cz x c j)).tab.Vals)
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (finS.C x j).S.m) (v : ∀ j, ((finS.C x j).T (finS.cz x c j)).tab.Vals)
     (t : finS.Tape) (j : Fin (finS.J x)) :
     finS.swCutOf x c wt v t j = Masked.viewCut (finS.swViewsAt x c wt v t j) := by
   rw [← RefSession.cutV_swViewsAt]

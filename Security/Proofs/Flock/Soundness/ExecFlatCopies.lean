@@ -950,7 +950,7 @@ def flatCopyPos (g : Fin st.c.unitRange.count) (i : ℕ) :
   else flatZeroPos ht h hr regs g
 
 /-- The rows at a unit slot's forced-zero row carry 0. -/
-theorem flatZero_block (g : Fin st.c.unitRange.count) {z : Model.Witness ((setupH_flatLayout ht h hr).2.2.model regs).m}
+theorem flatZero_block (g : Fin st.c.unitRange.count) {z : Model.WitnessBits ((setupH_flatLayout ht h hr).2.2.model regs).m}
     (hz : ((setupH_flatLayout ht h hr).2.2.model regs).Satisfies z) (o : Fin (2 ^ ((setupH_flatLayout ht h hr).2.2.model regs).nbl)) :
     ((setupH_flatLayout ht h hr).2.2.model regs).block z o (flatZeroPos ht h hr regs g) = 0 := by
   have hZ : ZeroRow ((setupH_flatLayout ht h hr).2.2.model regs) (flatZeroPos ht h hr regs g) :=
@@ -963,7 +963,7 @@ theorem setupH_flatCopy (g : Fin st.c.unitRange.count)
     (c : Fin (Rows.compose (ofBlock (Typed.wordsIn k.held) k.done (k.done.getD k.unit default)) (ofBlock_ordered k.hd)).w)
     (hc : c.val < (Rows.compose (ofBlock (Typed.wordsIn k.held) k.done (k.done.getD k.unit default))
       (ofBlock_ordered k.hd)).nIn)
-    {z : Model.Witness ((setupH_flatLayout ht h hr).2.2.model regs).m}
+    {z : Model.WitnessBits ((setupH_flatLayout ht h hr).2.2.model regs).m}
     (hz : ((setupH_flatLayout ht h hr).2.2.model regs).Satisfies z)
     (o : Fin (2 ^ ((setupH_flatLayout ht h hr).2.2.model regs).nbl)) :
     ((setupH_flatLayout ht h hr).2.2.model regs).block z o

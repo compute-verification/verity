@@ -24,18 +24,18 @@ local notation "𝔽" => FlockLevel3.GF128
 /-! ## Witnesses along an equality of statements -/
 
 /-- An address of `T`'s witness as one of `T'`'s, along `T' = T`. -/
-def adrOf {T' T : Statement} (e : T' = T) (a : Fin (2 ^ T.m)) : Fin (2 ^ T'.m) :=
-  Fin.cast (congrArg (fun S : Statement => 2 ^ S.m) e).symm a
+def adrOf {T' T : BlockR1CS} (e : T' = T) (a : Fin (2 ^ T.m)) : Fin (2 ^ T'.m) :=
+  Fin.cast (congrArg (fun S : BlockR1CS => 2 ^ S.m) e).symm a
 
 /-- A witness of `T'` as one of `T`, along `T' = T`. -/
-def witOf {T' T : Statement} (e : T' = T) (z : Witness T'.m) : Witness T.m := fun a => z (adrOf e a)
+def witOf {T' T : BlockR1CS} (e : T' = T) (z : WitnessBits T'.m) : WitnessBits T.m := fun a => z (adrOf e a)
 
-theorem sat_witOf {T' T : Statement} (e : T' = T) {z : Witness T'.m} (hz : T'.Satisfies z) :
+theorem sat_witOf {T' T : BlockR1CS} (e : T' = T) {z : WitnessBits T'.m} (hz : T'.Satisfies z) :
     T.Satisfies (witOf e z) := by
   subst e
   exact hz
 
-theorem block_witOf {T' T : Statement} (e : T' = T) (z : Witness T'.m) (o : Fin (2 ^ T'.nbl)) (c : Fin (2 ^ T'.kLog))
+theorem block_witOf {T' T : BlockR1CS} (e : T' = T) (z : WitnessBits T'.m) (o : Fin (2 ^ T'.nbl)) (c : Fin (2 ^ T'.kLog))
     (o' : Fin (2 ^ T.nbl)) (c' : Fin (2 ^ T.kLog)) (ho : o.val = o'.val) (hc : c.val = c'.val) :
     T'.block z o c = T.block (witOf e z) o' c' := by
   subst e
@@ -44,7 +44,7 @@ theorem block_witOf {T' T : Statement} (e : T' = T) (z : Witness T'.m) (o : Fin 
   rfl
 
 /-- **Every witness of a `fast100` table's statement is one a message packs.** -/
-theorem wit_surj {mPts : ℕ} (T : TabSpec mPts) (z : Witness T.S.m) :
+theorem wit_surj {mPts : ℕ} (T : TabSpec mPts) (z : WitnessBits T.S.m) :
     ∃ M : Message 𝔽 T.sch.k0 T.sch.level₀.logCols, witnessOf execArith T.S.m T.sch.k0 T.sch.level₀.logCols M = z := by
   obtain ⟨-, -, hcols, -⟩ := fast100_shape _ _ T.hsch
   have hmS := fast100_m _ _ T.hsch

@@ -400,7 +400,7 @@ that fit in them (`hfit`). It holds in the model's statement at setupH's layout 
 theorem out_pinned {st : Stmt} (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     (hR : HmRow.regions st.c st.pub = .ok st.regions) (ho : st.c.outNet = st.c.unitNet) (hty : st.c.typed = none)
-    {z : Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
+    {z : WitnessBits (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
     {k j t : ℕ} (hk : k < st.c.unitRange.count) (hk2 : k < 2 ^ st.c.unitRange.count.log2)
     (hw : (st.c.unit.outGroups.getD 0 default).words = 2 ^ (st.c.unit.outGroups.getD 0 default).words.log2)
     (hb : ∀ j < (st.c.leavesOut.getD (k % st.c.upv) #[]).size, outBits st.c j = 16)

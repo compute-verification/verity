@@ -74,7 +74,7 @@ theorem allInh_ligerito (A : Arith F K) (sch : Schedule) (T : F) (b : ℕ → F)
     | exact allInh_recursiveRounds A _ _ _ _ _ _
 
 omit [Fintype K] [DecidableEq K] in
-theorem allInh_holoLincheck (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) : AllInh (holoLincheck A S zc) := by
+theorem allInh_holoLincheck (A : Arith F K) (S : BlockR1CS) (zc : ZcOut F S.m) : AllInh (holoLincheck A S zc) := by
   unfold holoLincheck
   repeat' (first
     | exact AllInh.ret _ | exact AllInh.pure' _ | exact AllInh.recv' _ | exact AllInh.draw' _
@@ -106,7 +106,7 @@ theorem allInh_sparsePhase (A : Arith F K) (sh : SparseShape) (pub : SparsePub F
     | exact allInh_drawFin _ | exact allInh_degRounds _ _ _ | exact AllInh.ret _ | exact AllInh.pure' _
     | exact AllInh.recv' _ | exact AllInh.draw' _ | refine AllInh.bind' ?_ fun _ => ?_ | intro _ | split)
 
-theorem allInh_regPhase {α : Type} (A : Arith F K) (S : Statement) (sh : SparseShape)
+theorem allInh_regPhase {α : Type} (A : Arith F K) (S : BlockR1CS) (sh : SparseShape)
     (units : Fin (2 ^ sh.sLog) → Finset ℕ) (τ : Fin (2 ^ sh.sLog) → ℕ) (no : α) {fin : OpenOut F → Game α}
     (hfin : ∀ op, AllInh (fin op))
     (reps : Option (ZcOut F S.m × HoloLcOut F S.m (S.kLog - 6)) × Option (ZcOut F S.m × HoloLcOut F S.m (S.kLog - 6))) :
@@ -127,7 +127,7 @@ theorem allInh_regPhase {α : Type} (A : Arith F K) (S : Statement) (sh : Sparse
     · exact AllInh.pure' _
   · exact AllInh.pure' _
 
-theorem allInh_holoRep (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (C₀ : Oracle F)
+theorem allInh_holoRep (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) : AllInh (holoRep A S sch hm C₀ extra) := by
   unfold holoRep
   refine AllInh.bind' (allInh_zerocheck A _) fun _ => ?_
@@ -141,7 +141,7 @@ theorem allInh_holoRep (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13
   · exact AllInh.pure' _
   exact AllInh.bind' (allInh_ligerito A _ _ _ _) fun _ => AllInh.pure' _
 
-theorem allInh_holoRepC [Nonempty D] (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
+theorem allInh_holoRepC [Nonempty D] (A : Arith F K) (r : ℕ) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim F S.m)) : AllInh (holoRepC (D := D) A r S sch hm extra) := by
   unfold holoRepC
   refine AllInh.bind' (allInh_zerocheck A _) fun _ => ?_

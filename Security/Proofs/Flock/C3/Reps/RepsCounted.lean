@@ -54,7 +54,7 @@ theorem repRoundsCounted_of_rounds {cs : InnerCommits} {rep : Array SchedRound}
 
 /-- **A rep's consumed rounds are the reps' schedule's coin rounds** where its transcript consumed as many rounds as
 the hidden-unit schedule at the rep's `m` and `k_log` has, at a claim. -/
-theorem repIdxB_of_size {S₀ : Model.Statement} {b : ValsSrc} {m kLog claims : ℕ} {rs : Array SchedRound}
+theorem repIdxB_of_size {S₀ : Model.BlockR1CS} {b : ValsSrc} {m kLog claims : ℕ} {rs : Array SchedRound}
     (hc : 0 < claims) (hrs : holoRepRounds m kLog claims = some rs) (hm : b.st.m = m) (hkl : S₀.kLog = kLog)
     (hk : b.t₄.k = rs.size) : repIdxB S₀ b = coinRounds rs := by
   have h22 := HoloRepCoins.holoRepRounds_m hrs
@@ -82,7 +82,7 @@ theorem t₄k_of_counted {cs : InnerCommits} {rep : Array SchedRound} {s : Strin
 
 /-- **RepsDrawn (ii)'s count**: a rep's consumed rounds are the hidden-unit schedule's coin rounds where its record
 was consumed whole, its rounds are its held stream's, and the count check holds that stream to the schedule. -/
-theorem repIdxB_of_counted {S₀ : Model.Statement} {b : ValsSrc} {sh : Flock.Shape}
+theorem repIdxB_of_counted {S₀ : Model.BlockR1CS} {b : ValsSrc} {sh : Flock.Shape}
     {d : FlockVBridge.Compiled.RepData} {m kLog claims : ℕ} {rs : Array SchedRound} {cs : InnerCommits} {s : String}
     {st : InnerStream} (hcl : 0 < claims) (hrs : holoRepRounds m kLog claims = some rs) (hm : b.st.m = m)
     (hkl : S₀.kLog = kLog) (hc : RepRoundsCounted cs rs) (hs : cs.stream? s = some st)
@@ -104,7 +104,7 @@ theorem t₄k_of_coins {cs : InnerCommits} {rep : Array SchedRound} {s : String}
 /-- **RepsDrawn (ii)'s count at the verifier's round-for-round check** (H's, in `checkCommitRounds` on
 `cursor/c3-n19-bridge-95d4`: every held stream but the sparse phases' and R's holds the reps' schedule's rounds, round
 for round). -/
-theorem repIdxB_of_rounds {S₀ : Model.Statement} {b : ValsSrc} {sh : Flock.Shape}
+theorem repIdxB_of_rounds {S₀ : Model.BlockR1CS} {b : ValsSrc} {sh : Flock.Shape}
     {d : FlockVBridge.Compiled.RepData} {m kLog claims : ℕ} {rs : Array SchedRound} {cs : InnerCommits} {s : String}
     {st : InnerStream} (hcl : 0 < claims) (hrs : holoRepRounds m kLog claims = some rs) (hm : b.st.m = m)
     (hkl : S₀.kLog = kLog)

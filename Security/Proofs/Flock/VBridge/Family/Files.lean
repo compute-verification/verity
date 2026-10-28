@@ -202,7 +202,7 @@ def streamName (spec : SessionSpec) (r : ℕ) : String := toString spec.tables[0
 
 /-- The link points `P` of the verifier: arrays whose extra claims (§5) are well formed and realize the model's at
 `pts`. -/
-def PointsOK (st : Setup) (S : Model.Statement) (ptLocal mPts : ℕ) (pts : Fin 2 → Fin mPts → 𝔽)
+def PointsOK (st : Setup) (S : Model.BlockR1CS) (ptLocal mPts : ℕ) (pts : Fin 2 → Fin mPts → 𝔽)
     (P : Array (Array F128)) : Prop :=
   ∃ e, st.extra P = .ok e ∧ ExtraRealizes st S P (extraClaims S ptLocal mPts pts) ∧
     ∀ j < e.size, e[j]!.skip.size = 64 ∧ e[j]!.x.size = st.m - 6
@@ -214,7 +214,7 @@ structure TableSrc where
   st : Setup
   sch : Flock.Schedule
   sh : Shape
-  S : Model.Statement
+  S : Model.BlockR1CS
   cap : Array ByteArray
   lig : Fin 2 → LigeritoProof
   d : Fin 2 → RepData
@@ -275,7 +275,7 @@ variable {nT nR : ℕ} (T : Fin nT → Type) (CT : Fin nR → Type) {cls : HClas
 /-- **Both reps' tapes in the inner transcript `tr`** (`TableFiles.Valid`'s last two conjuncts): each a tape of its
 rep's spine with its proof file's messages and its stream's coins, and `tr`'s steps the level-0 cap, the link points,
 the tapes in `tableTape`'s order and the openings. -/
-def Steps (b : TableFiles cls) (S : Model.Statement) (tr : List (List (SMsg T) × ((k : Fin nR) → CT k)))
+def Steps (b : TableFiles cls) (S : Model.BlockR1CS) (tr : List (List (SMsg T) × ((k : Fin nR) → CT k)))
     (ts : List Game.Step × List Game.Step) : Prop :=
   RepTape b.st S b.sch (extraClaims S cls.ptLocal cls.mPts b.pts).length (b.proof 0) (b.stream 0) ts.1 ∧
     RepTape b.st S b.sch (extraClaims S cls.ptLocal cls.mPts b.pts).length (b.proof 1) (b.stream 1) ts.2 ∧
@@ -332,7 +332,7 @@ theorem proofOf_zc {sh : Shape} {params : PcsParams} {cap : Array ByteArray} {li
 `run_of_frames`' dimensions), and at all link points `pts` some point arrays are well formed and realize `S`'s extra
 claims at `pts` (§5). The verifier's setup of the inner circuit establishes it (`Setup.ofCircuit`, Verify.lean:29-32;
 `Refine.Regions`' `extraRealizes` gives the points' half at `ptsOf`'s arrays). -/
-def SetupRealizes (st : Setup) (S : Model.Statement) (sch : Flock.Schedule) (ptLocal mPts : ℕ) : Prop :=
+def SetupRealizes (st : Setup) (S : Model.BlockR1CS) (sch : Flock.Schedule) (ptLocal mPts : ℕ) : Prop :=
   st.m = S.m ∧ st.kLog = S.kLog ∧ FoldRealizes st.fold S ∧
     st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" ∧
     Flock.fast100 st.m = some sch ∧ 14 ≤ st.m ∧ st.kLog ≤ st.m ∧ st.fold.kLog = st.kLog ∧

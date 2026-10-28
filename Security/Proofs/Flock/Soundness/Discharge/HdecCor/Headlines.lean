@@ -178,7 +178,7 @@ open FlockSoundness.Discharge.Tables FlockSoundness.Discharge.DecodeZLJ FlockSou
 /-- **`headline_tables_subset` with `hdec` discharged**, at the tables flock-verify sets up (`planJ ht T₀ dj`, any
 fallback `T₀`), by `decodesOnJ_exec`. -/
 theorem headline_tables_subset_dec
-    {N' n : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N')) {Reg : Type} {mPts : ℕ}
+    {N' n : ℕ} (p : FlockSoundness.ProgSpec N' n) (outs : Finset (Fin N')) {Reg : Type} {mPts : ℕ}
     {I : Inputs} (ht : I.tags.typed = false) (T₀ : TabSpec mPts) (dj : Finset (Fin n) → Lean.Json) (hT : TagsOkJ I)
     (kd : ℕ) (hkd : kd ≤ n)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)

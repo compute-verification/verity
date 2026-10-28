@@ -3,7 +3,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 /-!
 # The headline over hidden-output sessions, with every open guarantee named
 
-`Prog.flock_headline_live_on` at the one-table plan of a hidden-output session's inputs (`planAtH`, `tablesAtH`): at a
+`ProgSpec.flock_headline_live_on` at the one-table plan of a hidden-output session's inputs (`planAtH`, `tablesAtH`): at a
 draw flock-verify sets up under hidden outputs, the table is `stmtOf` of the `Stmt.setupHidden` statement it accepted
 (`tableAtH_of_accepts`), and elsewhere no witness satisfies it (`tableAtH_unsat`).
 
@@ -37,7 +37,7 @@ Against any live prover `τ`, flock-verify accepts with at least `K` wrong units
 prover's committed values, with probability at most `miss(K) + ε_ks + δ_link`, given the program's places, constant
 and zero columns and binding at the hidden tables (`pp`, `hConst`, `hZero`, `lay`, `rs`, `hHm`) and `hdec`. -/
 theorem flock_headline_hidden {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
-    {N' : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N'))
+    {N' : ℕ} (p : FlockSoundness.ProgSpec N' n) (outs : Finset (Fin N'))
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)

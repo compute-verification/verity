@@ -25,7 +25,7 @@ open FlockVBridge.Runs (rhoOf tsOf map_range_get)
 open FlockC3.HoloValues (RepUnit rep_of_unit_coins holoRows_coins)
 
 /-- **`pubOf` is `holoPub`** where `c`'s points are the outputs' coordinate by coordinate. -/
-theorem pubOf_eq_holoPub {S : Model.Statement} {sh : SparseShape} (h6 : 6 ≤ sh.ell) (hell : sh.ell ≤ S.kLog)
+theorem pubOf_eq_holoPub {S : Model.BlockR1CS} {sh : SparseShape} (h6 : 6 ≤ sh.ell) (hell : sh.ell ≤ S.kLog)
     {units : Fin (2 ^ sh.sLog) → Finset ℕ} {zc : Model.ZcOut 𝔽 S.m} {lc : HoloLcOut 𝔽 S.m (S.kLog - 6)} {c : SCoins}
     (hz : fOf c.z = zc.z) (ha : fOf c.alpha = lc.alpha)
     (hx : ∀ j (hj : j < S.kLog - 6), fOf c.xRest[j]! = zc.ρ ⟨j, by have := S.hk; omega⟩)
@@ -103,7 +103,7 @@ theorem layoutFactors_U {sh : RecSparse.Shape} {xs ys U : Array Flock.F128} {rng
 
 section Unit
 
-variable {S : Model.Statement} {sch₀ : Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
+variable {S : Model.BlockR1CS} {sch₀ : Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
   {cap₀ : Model.Cap Refine.Dig} {os : Model.Opens 𝔽 Refine.Dig} {r : ℕ} {ts : List Game.Step}
 
 /-- **A rep's unit issues coins at every round below `z_partial`'s**: the zerocheck's (`n₀` … `nr`) and the

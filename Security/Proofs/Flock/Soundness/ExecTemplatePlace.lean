@@ -1034,7 +1034,7 @@ theorem pin_lt {u : D} (T : TemplateLayout st tb words done u) : st.pin < 2 ^ st
 /-- **The accepted template statement, as the model's block R1CS**: the verifier's `m`, `k_log` and pin, the level-0
 matrices it folds (`placedA`, `placedB`), and public regions `regs`. -/
 def model {u : D} (T : TemplateLayout st tb words done u) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) :
-    Model.Statement where
+    Model.BlockR1CS where
   m := st.m
   kLog := st.c.kLog
   hk := by rw [T.m]; omega

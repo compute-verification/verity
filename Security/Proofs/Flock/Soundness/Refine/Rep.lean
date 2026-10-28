@@ -29,7 +29,7 @@ def shapeOf (st : Setup) (sch : Flock.Schedule) (nExtra : ℕ) : Shape :=
     saltLen := if st.merkle.saltBytes = 0 && !st.openedSalts then none else some st.merkle.saltBytes }
 
 /-- The statement's extra claims at the link points `points` are the model's `extra`, claim by claim. -/
-def ExtraRealizes (st : Setup) (S : Model.Statement) (points : Array (Array F128))
+def ExtraRealizes (st : Setup) (S : Model.BlockR1CS) (points : Array (Array F128))
     (extra : List (Model.Claim 𝔽 S.m)) : Prop :=
   ∀ extras, st.extra points = .ok extras →
     extras.size = extra.length ∧ ∀ (j : ℕ) (hj : j < extra.length), ClaimRel S.m extras[j]! extra[j]
@@ -104,7 +104,7 @@ levels are the model's and whose levels' consistency coins are not one word, the
 the proof decodes. Then at the proof's openings `o`, the model's compiled rep, played with the proof's messages and the
 coins of every round of the stream, accepts. Its caps are the proof's, and its requests passed the executable's Merkle
 checks. -/
-theorem rep_refines {D : Type} (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m) (h15 : 15 ≤ S.m)
+theorem rep_refines {D : Type} (spec : SessionSpec) (st : Setup) (S : Model.BlockR1CS) (hm : 13 ≤ S.m) (h15 : 15 ≤ S.m)
     (sch : Flock.Schedule) (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (extra : List (Model.Claim 𝔽 S.m)) (sess : Session) (hext : ExtraRealizes st S sess.points extra)
     (hdim : DimSeam sch) (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))

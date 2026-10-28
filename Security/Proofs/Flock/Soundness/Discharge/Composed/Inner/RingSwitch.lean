@@ -53,7 +53,7 @@ def addr64 {m : ℕ} (hm : 6 ≤ m) (u : Fin (2 ^ (m - 6))) (i : Fin 64) : Fin (
 
 /-- **The honest lincheck's final message, unmasked** (§10): skip position `i` of the witness evaluated at the claim's
 point, `Σ_u eq(x, u)·z[64u + i]`. -/
-noncomputable def zPartialOf {m : ℕ} (hm : 6 ≤ m) (c : Model.Claim 𝔽 m) (z : Witness m) (i : Fin 64) : 𝔽 :=
+noncomputable def zPartialOf {m : ℕ} (hm : 6 ≤ m) (c : Model.Claim 𝔽 m) (z : WitnessBits m) (i : Fin 64) : 𝔽 :=
   ∑ u : Fin (2 ^ (m - 6)), eqAt c.x u.val * ((z (addr64 hm u i)).val : 𝔽)
 
 /-! ## Weights -/
@@ -102,7 +102,7 @@ theorem fOf_claimCheck {m : ℕ} (hm : 7 ≤ m) (c : Flock.Claim) (s : Array F12
   · rw [fOf_add, fOf_one]; rfl
 
 /-- **The honest lincheck message's skip combination is the claim's value** (§10). -/
-theorem sum_zPartialOf {m : ℕ} (hm : 6 ≤ m) (c : Model.Claim 𝔽 m) (z : Witness m) :
+theorem sum_zPartialOf {m : ℕ} (hm : 6 ≤ m) (c : Model.Claim 𝔽 m) (z : WitnessBits m) :
     ∑ i : Fin 64, c.skip i * zPartialOf hm c z i = c.eval z := by
   classical
   let e : Fin (2 ^ (m - 6)) × Fin 64 ≃ Fin (2 ^ m) :=
@@ -238,7 +238,7 @@ final message is the honest one under its pads, `final_c` is the `c` claim's val
 ring-switch messages is the honest `ŝ` at its claim, then `verifyRep`'s constraints "ring switch ab" and
 "ring switch c" hold at `h`. -/
 theorem ringSwitch_holds (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : ByteArray) {t t' : Flock.Transcript}
-    {rp : Zk.Replayed} (hrun : Zk.replay st lay p root t = .ok (rp, t')) (hm : 7 ≤ st.m) (z : Witness st.m)
+    {rp : Zk.Replayed} (hrun : Zk.replay st lay p root t = .ok (rp, t')) (hm : 7 ≤ st.m) (z : WitnessBits st.m)
     (h : Array F128)
     (hzp : ∀ i : Fin 64, fOf p.lincheck.zPartial[i.val]! =
       zPartialOf (by omega) (claimOf st.m rp.claims[0]!) z i + fOf h[lay.zp i.val]!)
@@ -292,7 +292,7 @@ of the switched claims (`OpenRel.b`'s form), at each claim's point beyond the pa
 theorem ringSwitch_target (m : ℕ) (hm : 7 ≤ m) (claims : Array Flock.Claim) (rs : Array (Array F128))
     {t t' : Flock.Transcript} {T : F128} {sws : Array Switched} (hwf : RoundsWF t.rounds)
     (hrun : ringSwitch m claims rs t = .ok ((T, sws), t')) (hx : ∀ k < claims.size, claims[k]!.x.size = m - 6)
-    (z : Witness m) (f : Fin (2 ^ (m - 7)) → 𝔽) (hz : ∀ y v, z (addr128 hm y v) = execArith.unpack (f y) v)
+    (z : WitnessBits m) (f : Fin (2 ^ (m - 7)) → 𝔽) (hz : ∀ y v, z (addr128 hm y v) = execArith.unpack (f y) v)
     (hs : ∀ k < claims.size, ∀ v : Fin 128, fOf (rs[k]!)[v.val]! = shat hm (claimOf m claims[k]!) z v) :
     sws.size = claims.size ∧
       (∀ k < claims.size, (sws[k]!).z = claims[k]!.x.extract 1 ∧ (sws[k]!).z.size = m - 7 ∧
@@ -364,7 +364,7 @@ theorem eqWord_eq_eqAt (p : List F128) (y : ℕ) :
 /-- **The honest `ŝ` at the rank check's point**: at a claim of `m − 6` coordinates, `ŝ[v]` is
 `Σ_y eqWord(p, y)·z[128y + v]` at the claim's point beyond the packed bits, `p = (c.x.extract 1).toList` (`Switched.z`),
 so its mask-slot words carry the rank check's weights `eqWord(p, x)`. -/
-theorem shat_eqWord {m : ℕ} (hm : 7 ≤ m) (c : Flock.Claim) (hx : c.x.size = m - 6) (z : Witness m) (v : Fin 128) :
+theorem shat_eqWord {m : ℕ} (hm : 7 ≤ m) (c : Flock.Claim) (hx : c.x.size = m - 6) (z : WitnessBits m) (v : Fin 128) :
     shat hm (claimOf m c) z v =
       ∑ y : Fin (2 ^ (m - 7)), fOf (eqWord (c.x.extract 1).toList y.val) * ((z (addr128 hm y v)).val : 𝔽) := by
   unfold shat

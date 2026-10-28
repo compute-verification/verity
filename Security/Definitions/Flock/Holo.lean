@@ -49,7 +49,7 @@ def RegClaim.toClaim {sh : SparseShape} (c : RegClaim F sh) : Claim F sh.mReg :=
 row point past the skip (`ρ_in`) and the column point past the skip in bit order (the column challenges reversed), and
 slot `σ`'s layout factor `U_σ = Σ_{u ∈ units σ} eq(x_hi, u)·eq(y_hi, u)`, where `x_hi`, `y_hi` are the points'
 coordinates past the template's `ℓ`. -/
-def holoPub (S : Statement) (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ) (zc : ZcOut F S.m)
+def holoPub (S : BlockR1CS) (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ) (zc : ZcOut F S.m)
     (lc : HoloLcOut F S.m (S.kLog - 6)) : SparsePub F sh :=
   let x : ℕ → F := fun j => if h : j < S.kLog - 6 then zc.ρ ⟨j, by have := S.hk; omega⟩ else 0
   let y : ℕ → F := fun j => if h : j < S.kLog - 6 then lc.ts ⟨S.kLog - 6 - 1 - j, by omega⟩ else 0
@@ -60,7 +60,7 @@ def holoPub (S : Statement) (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Fi
 /-- **One rep with hidden units** on the committed level-0 table `C₀`: the zerocheck, the lincheck on the public part
 with L4′'s `h`, then the opening of `ab`, `c` and `extra` and Ligerito, as in `rep`. Returns the zerocheck's and the
 lincheck's outputs, which the rep's sparse phase reads, when every check passes. -/
-def holoRep (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (C₀ : Oracle F)
+def holoRep (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (C₀ : Oracle F)
     (extra : List (Claim F S.m)) : Game (Option (ZcOut F S.m × HoloLcOut F S.m (S.kLog - 6))) := do
   match ← zerocheck A S.m with
   | none => pure none
@@ -78,7 +78,7 @@ def holoRep (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (
 1's, at the slots' types `τ`; if both hand on a registered claim, the two are opened together, once, and `fin` runs on
 the opening's output (Ligerito on the registered word). A registered table of fewer than the opening's 7 variables is
 refused. -/
-def regPhase {α : Type} (A : Arith F K) (S : Statement) (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ)
+def regPhase {α : Type} (A : Arith F K) (S : BlockR1CS) (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ)
     (τ : Fin (2 ^ sh.sLog) → ℕ) (no : α) (fin : OpenOut F → Game α)
     (reps : Option (ZcOut F S.m × HoloLcOut F S.m (S.kLog - 6)) ×
       Option (ZcOut F S.m × HoloLcOut F S.m (S.kLog - 6))) : Game α :=
@@ -102,7 +102,7 @@ verifier draws the link points, and the prover runs two reps with hidden units i
 sparse phases, rep 0's and then rep 1's, and the registered opening (`regPhase`), which Ligerito at the registered
 schedule `rsch` checks against the registered word `Creg`. Returns whether all of it accepted, and the committed
 table. -/
-def holoTable (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
+def holoTable (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ) (τ : Fin (2 ^ sh.sLog) → ℕ) (rsch : Schedule)
     (Creg : Oracle F) : Game (Bool × Oracle F) := do
   let C₀ ← recv (Oracle F)                               -- Commit: the level-0 table (root_B)

@@ -37,13 +37,13 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-- The fold of `S`'s matrices at `α`, the skip weights `lw` and the block point `ρ`: entry `c` is
 `Σ_i e_i·(α·A₀[i, c] + B₀[i, c])` for `e_i = lw[i mod 64]·eq(ρ, ⌊i/64⌋)` (§10, `FoldRealizes.fold`). -/
-noncomputable def modelFoldV (S : Model.Statement) (α : F128) (lw ρ : Array F128) : Array F128 :=
+noncomputable def modelFoldV (S : Model.BlockR1CS) (α : F128) (lw ρ : Array F128) : Array F128 :=
   Array.ofFn fun col : Fin (2 ^ S.kLog) => toF128 (∑ i : Fin (2 ^ S.kLog),
     fOf lw[i.val % 64]! * Model.eqAt (vecOf (S.kLog - 6) ρ) (i.val / 64) *
       (fOf α * ((S.A₀ i col).val : 𝔽) + ((S.B₀ i col).val : 𝔽)))
 
 /-- The model statement's fold: `modelFoldV`, and `folded` it with `β` at the pin, halved at `ts` in turn. -/
-noncomputable def modelFold (S : Model.Statement) : CircuitFold where
+noncomputable def modelFold (S : Model.BlockR1CS) : CircuitFold where
   kLog := S.kLog
   pin := S.pin.val
   fold α lw ρ := pure (modelFoldV S α lw ρ)
@@ -56,7 +56,7 @@ def claimOf {m : ℕ} (c : Model.Claim 𝔽 m) : Flock.Claim :=
 /-- **The model statement's setup**: `S`'s `m`, `k_log` and fold, its extra claims at the link points the model's
 (`Model.extraClaims`, read through `ptsOf`), its rows plain SHA-512's
 (`flock-leaf/sha512-unsalted`, the inner statement's leaf). -/
-noncomputable def modelSetup (S : Model.Statement) (ptLocal mPts : ℕ) : Setup where
+noncomputable def modelSetup (S : Model.BlockR1CS) (ptLocal mPts : ℕ) : Setup where
   m := S.m
   kLog := S.kLog
   digest := ByteArray.empty
@@ -67,7 +67,7 @@ noncomputable def modelSetup (S : Model.Statement) (ptLocal mPts : ℕ) : Setup 
   merkle := MerkleScheme.sha512 "flock-leaf/sha512-unsalted"
   openedSalts := true
 
-theorem modelFold_realizes (S : Model.Statement) : FoldRealizes (modelFold S) S where
+theorem modelFold_realizes (S : Model.BlockR1CS) : FoldRealizes (modelFold S) S where
   kLog := rfl
   pin := rfl
   fold := by
@@ -112,7 +112,7 @@ theorem ptsOf_pointsArr {mPts : ℕ} (pts : Fin 2 → Fin mPts → 𝔽) :
   rfl
 
 /-- **The model setup's extra claims realize the model's** at every link points, at their arrays `pointsArr`. -/
-theorem modelSetup_points (S : Model.Statement) (ptLocal mPts : ℕ) (pts : Fin 2 → Fin mPts → 𝔽) :
+theorem modelSetup_points (S : Model.BlockR1CS) (ptLocal mPts : ℕ) (pts : Fin 2 → Fin mPts → 𝔽) :
     PointsOK (modelSetup S ptLocal mPts) S ptLocal mPts pts (pointsArr pts) := by
   have he : (modelSetup S ptLocal mPts).extra (pointsArr pts) =
       .ok ((FlockSoundness.Model.extraClaims S ptLocal mPts pts).toArray.map claimOf) := by
@@ -129,7 +129,7 @@ theorem modelSetup_points (S : Model.Statement) (ptLocal mPts : ℕ) (pts : Fin 
 
 /-- **The model setup realizes its statement** (`SetupRealizes`) at a `fast100` schedule of its `m`, whose range gives
 `14 ≤ m`. -/
-theorem modelSetup_realizes (S : Model.Statement) (ptLocal mPts : ℕ) {sch : Flock.Schedule}
+theorem modelSetup_realizes (S : Model.BlockR1CS) (ptLocal mPts : ℕ) {sch : Flock.Schedule}
     (hf : Flock.fast100 S.m = some sch) : SetupRealizes (modelSetup S ptLocal mPts) S sch ptLocal mPts := by
   refine ⟨rfl, rfl, modelFold_realizes S, rfl, hf, ?_, S.hk, rfl, fun pts => ⟨_, modelSetup_points S ptLocal mPts pts⟩⟩
   show 14 ≤ S.m
@@ -148,7 +148,7 @@ theorem ts_size {sh : Shape} {src : Flock.RecAlgebra.Coins} {extras : Array Floc
 
 /-- **`FoldsOk` at the model setup**: its `folded` always returns, `2^k_log` entries halved at the `k_log − 6` round
 challenges `residualLins` draws (`ts_size`), so 64 of them. -/
-theorem foldsOk_modelSetup (S : Model.Statement) (ptLocal mPts : ℕ) {sh : Shape} (hk : sh.kLog = S.kLog) :
+theorem foldsOk_modelSetup (S : Model.BlockR1CS) (ptLocal mPts : ℕ) {sh : Shape} (hk : sh.kLog = S.kLog) :
     FoldsOk (modelSetup S ptLocal mPts) sh := by
   intro rounds extras lins info _ h
   refine ⟨info.lc.fold.ts.foldl (fun acc t => halve t acc)

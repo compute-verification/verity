@@ -21,7 +21,7 @@ open FlockSoundness.Discharge.PlaysCoin (coinArr toT_exact)
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D : Type}
 
 omit [Fintype K] [DecidableEq K] in
-theorem holoLincheck_exact (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) :
+theorem holoLincheck_exact (A : Arith F K) (S : BlockR1CS) (zc : ZcOut F S.m) :
     Exact (holoLincheck A S zc) (holoLcShape F S.kLog) := by
   unfold holoLincheck holoLcShape
   refine Exact.draw_bind fun α => Exact.draw_bind fun β => ?_
@@ -37,7 +37,7 @@ theorem spine_bind_pure {α β : Type} {g : Game α} {σ : List Kind} (hs : Spin
 
 omit [Fintype K] in
 /-- **A rep with hidden units has a spine**: every run of rep `r` takes its steps in the order of `holoRepShape`. -/
-theorem holoRepC_spine (A : Arith F K) (r : ℕ) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m)
+theorem holoRepC_spine (A : Arith F K) (r : ℕ) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim F S.m)) :
     Spine (holoRepC (D := D) A r S sch hm extra) (holoRepShape F K D S.m S.kLog extra.length sch) := by
   unfold holoRepC holoRepShape

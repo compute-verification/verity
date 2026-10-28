@@ -13,8 +13,8 @@ ZK's parameters, from what `verify --zk` checks at setup, so the knowledge term 
 most `ksAvgStrictZm1`, and at most one number that reads no table.
 
 A refused hidden-output table carries the reference setup's regions and `contra`'s two (`DrawSetupZHJ.refused`), up to
-1026 regions, where `TabZK.M1` reads `Stmt.InRange`'s 1024. So the tables meet `TabZK.M1W`, `M1` at
-`Stmt.InRangeWide`, and the padded table error is checked there:
+1026 regions, where `TabZK.M1` reads `StmtShape.InRange`'s 1024. So the tables meet `TabZK.M1W`, `M1` at
+`StmtShape.InRangeWide`, and the padded table error is checked there:
 
 * `padTableError_le_m1_wide`: at 1026 regions, `padLinkError + padRepError² ≤ 3/2^206` at `m1Schedule m`,
   `25 ≤ m ≤ 35` (`m1_check_wide`, one kernel check per `m`, beside `m1_check`'s `2^-205` at 1024).
@@ -35,7 +35,7 @@ A refused hidden-output table carries the reference setup's regions and `contra`
   `Σ_{u ∈ S} |io u|` over draws `S`, `io` the committed wires each unit reads or writes in the circuit's partition, so
   at most `k_d·r` at draws of `k_d` units with `|io u| ≤ r`.
 
-The file sits under `FailClosed/` because it reads `Stmt.InRangeWide` and `piopNumMaxWide` (`FailClosed/Numeric.lean`),
+The file sits under `FailClosed/` because it reads `StmtShape.InRangeWide` and `piopNumMaxWide` (`FailClosed/Numeric.lean`),
 which import the `ZkHidden` headlines.
 -/
 
@@ -52,7 +52,7 @@ def padRepUpWide (s : Schedule) (t e : ℕ) (sbar : ℚ) : ℚ :=
       (piopNumMaxWide s.m (l₀.padListBound t) : ℚ) / 2 ^ 128 + padMidUp l₀ l₁ t e sbar + ligUp (l₁ :: rest)
   | _ => 1
 
-theorem padLinkError_le_wide (s : Schedule) (st : Stmt) (t : ℕ) (hst : st.InRangeWide) :
+theorem padLinkError_le_wide (s : Schedule) (st : StmtShape) (t : ℕ) (hst : st.InRangeWide) :
     padLinkError s st t ≤ (padLinkUpWide s t : ℝ) := by
   obtain ⟨_, hR, hp⟩ := hst
   unfold padLinkError padLinkUpWide qF
@@ -62,7 +62,7 @@ theorem padLinkError_le_wide (s : Schedule) (st : Stmt) (t : ℕ) (hst : st.InRa
   gcongr
 
 theorem padRepError_le_wide (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (t e : ℕ)
-    (sbar : ℚ) (hp : PadNumOK l₀ t sbar) (hs : ∀ l ∈ l₁ :: rest, l.Ok) (st : Stmt) (hst : st.InRangeWide) :
+    (sbar : ℚ) (hp : PadNumOK l₀ t sbar) (hs : ∀ l ∈ l₁ :: rest, l.Ok) (st : StmtShape) (hst : st.InRangeWide) :
     padRepError ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ st t e ≤
       (padRepUpWide ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ t e sbar : ℝ) := by
   show piopError m st.kLog st.nClaims (l₀.padListBound t) + padMidLevelError l₀ l₁ t e +
@@ -76,7 +76,7 @@ theorem padRepError_le_wide (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
   linarith
 
 theorem padTableError_le_up_wide (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level) (ext : ℕ) (t e : ℕ)
-    (sbar : ℚ) (hp : PadNumOK l₀ t sbar) (hs : ∀ l ∈ l₁ :: rest, l.Ok) (st : Stmt)
+    (sbar : ℚ) (hp : PadNumOK l₀ t sbar) (hs : ∀ l ∈ l₁ :: rest, l.Ok) (st : StmtShape)
     (hst : st.InRangeWide) (h0 : 0 ≤ padRepError ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ st t e) :
     padTableError ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ st t e ≤
       ((padLinkUpWide ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ t +
@@ -88,7 +88,7 @@ theorem padTableError_le_up_wide (m k0 : ℕ) (l₀ l₁ : Level) (rest : List L
   nlinarith
 
 /-- A schedule's table with the padded level 0 is sound to `3/2^206` at 1026 regions once its rational check passes. -/
-theorem padTableError_le_of_check_wide (s : Schedule) (st : Stmt) (hst : st.InRangeWide) (t e : ℕ) (sbar : ℚ)
+theorem padTableError_le_of_check_wide (s : Schedule) (st : StmtShape) (hst : st.InRangeWide) (t e : ℕ) (sbar : ℚ)
     (h2 : 2 ≤ s.levels.length) (hp : PadNumOK (s.levels.headD default) t sbar) (hok : ∀ l ∈ s.levels, l.Ok)
     (hc : padLinkUpWide s t + padRepUpWide s t e sbar ^ 2 ≤ 3 / 2 ^ 206) :
     padTableError s st t e ≤ (3 : ℝ) / 2 ^ 206 := by
@@ -126,8 +126,8 @@ theorem m1_check_wide (m : ℕ) (h1 : 25 ≤ m) (h2 : m ≤ 35) :
   · exact m1_check_wide_34_35 m (by omega) h2
 
 /-- **The padded table error at C-Flock ZK's parameters over 1026 regions**: at most `3/2^206` per table, for every
-statement shape in `Stmt.InRangeWide`. -/
-theorem padTableError_le_m1_wide : ∀ m, 25 ≤ m → m ≤ 35 → ∀ st : Stmt, st.InRangeWide →
+statement shape in `StmtShape.InRangeWide`. -/
+theorem padTableError_le_m1_wide : ∀ m, 25 ≤ m → m ≤ 35 → ∀ st : StmtShape, st.InRangeWide →
     padTableError (m1Schedule m) st (m1Pad m) 2 ≤ (3 : ℝ) / 2 ^ 206 := by
   intro m h1 h2 st hst
   have h := m1Facts_spec (m1Facts_all m h1 h2)
@@ -201,7 +201,7 @@ open scoped ENNReal NNReal
 variable {F : Type} [Field F] [Fintype F] [DecidableEq F] {mPts : ℕ}
 
 /-- **A `--zk` table at C-Flock ZK's parameters over the plan's shapes**: `TabZK.M1` with the statement in
-`Stmt.InRangeWide` (up to 1026 regions, a refused table's), not `Stmt.InRange`. -/
+`StmtShape.InRangeWide` (up to 1026 regions, a refused table's), not `StmtShape.InRange`. -/
 def TabZK.M1W (T : TabZK F mPts) : Prop :=
   ∃ m, 25 ≤ m ∧ m ≤ 35 ∧ T.sch = m1Schedule m ∧ T.t = m1Pad m ∧ T.e = 2 ∧ (T.S.shape mPts).InRangeWide ∧
     T.N ≤ 2 ^ 13 ∧ T.q = 168 ∧ 7 / 16 ≤ T.δ

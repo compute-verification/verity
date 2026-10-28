@@ -96,7 +96,7 @@ end game
 /-! ## A rep's tape -/
 
 /-- A compiled rep starts with the zerocheck's first coin, so it never returns at once. -/
-theorem repC_ne_ret (r : ℕ) (S : Model.Statement) (sch : Accounting.Schedule) (hm : 13 ≤ S.m)
+theorem repC_ne_ret (r : ℕ) (S : Model.BlockR1CS) (sch : Accounting.Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim 𝔽 S.m)) (p : PendL 𝔽 Dig) : repC (D := Dig) execArith r S sch hm extra ≠ .ret p := by
   unfold repC
   exact exact_bind_ne_ret (zerocheck_exact execArith S.m) (by simp [zcShape]) _ _
@@ -104,7 +104,7 @@ theorem repC_ne_ret (r : ℕ) (S : Model.Statement) (sch : Accounting.Schedule) 
 /-- **Rep `r`'s tape in the inner transcript**: steps whose kinds, in order, are a prefix of the rep's spine
 (`repShape`, at the statement's dimensions, `n` extra claims and the schedule), whose messages are the proof file's
 (`repMsgs`) and whose coin steps are the stream's coin arrays, as `coinArr` reads them. -/
-def RepTape (st : Setup) (S : Model.Statement) (sch : Flock.Schedule) (n : ℕ) (p : Proof) (s : StreamRec)
+def RepTape (st : Setup) (S : Model.BlockR1CS) (sch : Flock.Schedule) (n : ℕ) (p : Proof) (s : StreamRec)
     (ts : List Game.Step) : Prop :=
   ts.map kindOf <+: repShape 𝔽 𝕂 Dig S.m S.kLog n (schedOf sch) ∧
     ts.filterMap Sum.getLeft? = repMsgs st sch (2 + n) p capDig ∧
@@ -112,7 +112,7 @@ def RepTape (st : Setup) (S : Model.Statement) (sch : Flock.Schedule) (n : ℕ) 
 
 /-- **A rep's run on its messages and coins is a run on one tape** that takes steps of its spine's kinds, with those
 messages and coin steps: `repShape` places the coins among the messages. -/
-theorem playsT_of_tape (r : ℕ) (S : Model.Statement) (sch : Accounting.Schedule) (hm : 13 ≤ S.m)
+theorem playsT_of_tape (r : ℕ) (S : Model.BlockR1CS) (sch : Accounting.Schedule) (hm : 13 ≤ S.m)
     (extra : List (Claim 𝔽 S.m)) {ms : List Game.Msg} {cs : List (Array F128)} {pend : PendL 𝔽 Dig}
     {ts : List Game.Step} (h : Plays fOf (repC execArith r S sch hm extra) ms cs pend)
     (hk : ts.map kindOf <+: repShape 𝔽 𝕂 Dig S.m S.kLog extra.length sch)
@@ -158,7 +158,7 @@ file, the link points `pts`, the reps' tapes (`RepTape`, at the proof files `p�
 read) in `tableTape`'s order, and the proof files' openings and salts, then `flockInnerCL` at the verifier's own
 definitions accepts `t`. -/
 theorem inner_accepts_of_reps (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog))) (M : Hidden cls)
-    (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hS : M.toStatement regs = S)
+    (spec : SessionSpec) (st : Setup) (S : Model.BlockR1CS) (hS : M.toStatement regs = S)
     (hmS : st.m = S.m) (hkS : st.kLog = S.kLog) (hfold : FoldRealizes st.fold S)
     (hms : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted") (pts : Fin 2 → Fin cls.mPts → 𝔽)
     (sess : Session)
@@ -233,7 +233,7 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 omit [Fintype K] in
 /-- Every run of `tableAfterL` ends with the openings' message. -/
 theorem tableAfterL_last (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (S : Model.Statement) (sch : Accounting.Schedule) (hm : 13 ≤ S.m)
+    (Lf : Merkle.Leaf (List F) Sl D H) (S : Model.BlockR1CS) (sch : Accounting.Schedule) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (cap₀ : Cap D) (pts : Fin 2 → Fin mPts → F) {ts : List Game.Step} {out : OutCL F D Sl}
     (h : PlaysT (tableAfterL A H E Lf S sch hm ptLocal mPts cap₀ pts) ts out) :
     ∃ l os, ts = l ++ [.inl ⟨Opens F D × Salts Sl, os⟩] := by

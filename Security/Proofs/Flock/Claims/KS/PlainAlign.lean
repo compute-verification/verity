@@ -39,7 +39,7 @@ has `d` as rep `r`'s recorded level-`ℓ + 1` cap, since the opening is a reques
 pairs with the entry's cap. -/
 theorem capAtL_of_sessRelL {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     {A : Model.Arith 𝔽 K} {Hc : List UInt8 → D} {E : Merkle.Enc (List 𝔽) D} {Lf : Merkle.Leaf (List 𝔽) Sl D Hc}
-    {S : Model.Statement} {sch : Accounting.Schedule} {C₀ : Model.Oracle 𝔽} {cap₀ : Model.Cap D}
+    {S : Model.BlockR1CS} {sch : Accounting.Schedule} {C₀ : Model.Oracle 𝔽} {cap₀ : Model.Cap D}
     {i : IRep 𝔽 D × IRep 𝔽 D} {a b : List (Model.OutCL 𝔽 D Sl)} {r : Fin 2} {ℓ : ℕ} {t : Model.Oracle 𝔽}
     {d : Model.Cap D} (hR : SessRelL A Hc E Lf S sch C₀ cap₀ 0 i a b)
     (hg : Lock.getPair (getRep 0) (getRep 1) i (slotOf r.val (ℓ + 1)) = some (t, d))
@@ -91,7 +91,7 @@ rep `r`'s level-`ℓ + 1` entry `(t, d)` and opening a position at `d` there to 
 both. -/
 theorem sessFork_le {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc)
-    (S : Model.Statement) (sch : Accounting.Schedule) (C₀ : Model.Oracle 𝔽) (cap₀ : Model.Cap D) (r : Fin 2)
+    (S : Model.BlockR1CS) (sch : Accounting.Schedule) (C₀ : Model.Oracle 𝔽) (cap₀ : Model.Cap D) (r : Fin 2)
     (ℓ : ℕ) (t : Model.Oracle 𝔽) (d : Model.Cap D) (i₁ : IRep 𝔽 D × IRep 𝔽 D) (a₁ b₁ : List (Model.OutCL 𝔽 D Sl))
     (i₂ : IRep 𝔽 D × IRep 𝔽 D) (a₂ b₂ : List (Model.OutCL 𝔽 D Sl))
     (h₁ : SessRelL A Hc E Lf S sch C₀ cap₀ 0 i₁ a₁ b₁) (h₂ : SessRelL A Hc E Lf S sch C₀ cap₀ 0 i₂ a₂ b₂)
@@ -109,7 +109,7 @@ theorem sessFork_le {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhab
 `Lock.SlotAt` at `advRSL`'s chooser, slot, fork event and lockstep. -/
 def SlotRSL {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc)
-    (S : Model.Statement) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
+    (S : Model.BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Model.Cap D) (r ℓ j : ℕ)
     (σ : Strategy (sessAfterL A Hc E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts [] [] cap₀)) : Prop :=
   Lock.SlotAt (plurSL Hc E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ 0) (slotOf r (ℓ + 1))
@@ -122,7 +122,7 @@ def SlotRSL {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] 
 `r`'s level-`ℓ + 1` table node after `j` coins. -/
 theorem advRSL_le_forkC {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc)
-    (S : Model.Statement) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
+    (S : Model.BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Model.Cap D) (r : Fin 2) (ℓ j : ℕ)
     (σ : Strategy (sessAfterL A Hc E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts [] [] cap₀))
     (h : SlotRSL A Hc E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts cap₀ r.val ℓ j σ) :
@@ -186,7 +186,7 @@ theorem outN_batch_one {Op A : Type} {nul : Op} {g : Game A} {outs : List A} (d 
 /-- **The session after `Commit`, answered with `nulOp`, reaches only empty rows.** -/
 theorem opens_of_outN_sessAfterL {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D]
     [Inhabited Sl] (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D)
-    (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (S : Model.Statement) (sch : Accounting.Schedule) (hm : 13 ≤ S.m)
+    (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (S : Model.BlockR1CS) (sch : Accounting.Schedule) (hm : 13 ≤ S.m)
     (ptLocal mPts : ℕ) (cap₀ : Model.Cap D) {outs : List (Model.OutCL 𝔽 D Sl)}
     (h : Claims.Bridge.OutN (nulOp (D := D) (Sl := Sl)) (sessAfterL A Hc E Lf S sch hm ptLocal mPts [] [] cap₀) outs)
     (r ℓ i : ℕ) : ((outs.getD 0 dfltOutL).opens r ℓ i).1 = [] := by
@@ -198,7 +198,7 @@ theorem opens_of_outN_sessAfterL {K D Sl : Type} [Field K] [Fintype K] [Decidabl
 
 theorem allInh_sessAfterL {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc)
-    (S : Model.Statement) (sch : Accounting.Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Model.Cap D) :
+    (S : Model.BlockR1CS) (sch : Accounting.Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Model.Cap D) :
     AllInh (sessAfterL A Hc E Lf S sch hm ptLocal mPts [] [] cap₀) := by
   unfold sessAfterL
   exact .coin fun _ => AllInh.map _ (AllInh.interleave
@@ -226,7 +226,7 @@ theorem slotAt_answerWith_nul {D Sl T I α : Type} [Inhabited D] [Inhabited Sl] 
 of coins. -/
 theorem slotRSL_answerWith_nul {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc)
-    (S : Model.Statement) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
+    (S : Model.BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Model.Cap D) (r ℓ j : ℕ)
     (σ : Strategy (sessAfterL A Hc E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts [] [] cap₀)) :
     SlotRSL A Hc E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts cap₀ r ℓ j

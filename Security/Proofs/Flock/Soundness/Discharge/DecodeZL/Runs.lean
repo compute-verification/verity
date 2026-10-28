@@ -100,7 +100,7 @@ theorem roundGroups_eq (W : List (List Wire)) (F : List Frame) (rds : Array Roun
     rw [Array.getElem_toList, bytes_of_retains hr]
     simp only [rdChunks, List.getElem_zipWith, decOf, List.getD_eq_getElem _ _ hkW]
 
-theorem extraClaims_length (S : Model.Statement) (pl mPts : ℕ) (pts : Fin 2 → Fin mPts → 𝔽) :
+theorem extraClaims_length (S : Model.BlockR1CS) (pl mPts : ℕ) (pts : Fin 2 → Fin mPts → 𝔽) :
     (Model.extraClaims S pl mPts pts).length = 2 * S.regions.length := by
   unfold Model.extraClaims
   generalize S.regions = rs

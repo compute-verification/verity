@@ -11,7 +11,7 @@ import Mathlib.Tactic.GCongr
 Each real term of the error is bounded by a rational one (`…Up`): `√(2^-r)` by a rational upper bound (`sqrtUp`), the
 queries (`queryUp`), the mutual-correlated-agreement numerator of BCHKS25 Theorem 4.6 by a crude closed form (`mcaUp`),
 and the folds, the level pairs and the last level; `ligUp`, `repUp` and `linkUp` sum them. `Level.Ok` and
-`Stmt.InRange` are the levels and statements the bound covers. The bounds themselves are proved in
+`StmtShape.InRange` are the levels and statements the bound covers. The bounds themselves are proved in
 `Proofs.Flock.Soundness.Accounting.Fast100`.
 -/
 
@@ -65,7 +65,7 @@ instance instDecidableOk (l : Level) : Decidable l.Ok := by unfold Level.Ok; inf
 
 /-- The statement shapes covered: at most `2^27` witness bits per block, 1024 public regions,
 64 coordinates per link point. -/
-def Stmt.InRange (st : Stmt) : Prop := st.kLog ≤ 27 ∧ st.nRegions ≤ 1024 ∧ st.mPts ≤ 64
+def StmtShape.InRange (st : StmtShape) : Prop := st.kLog ≤ 27 ∧ st.nRegions ≤ 1024 ∧ st.mPts ≤ 64
 
 /-- The worst-case numerator of `piopError` over the covered statements. -/
 def piopNumMax (m L₀ : ℕ) : ℕ :=

@@ -22,7 +22,7 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 /-- **The compiled holographic table on a clash-free set, against one prover**: accepted in `W` no more often than
 the oracle table's value at the registered word `x.w`. -/
 theorem holoTableCL_prob_le [Inhabited D] (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule) (hlen : 2 ≤ sch.levels.length)
+    (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (sch : Schedule) (hlen : 2 ≤ sch.levels.length)
     (hk0 : (sch.levels.headD default).lanes = sch.k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (sh : SparseShape)
     (units : Fin (2 ^ sh.sLog) → Finset ℕ) (τ : Fin (2 ^ sh.sLog) → ℕ) (rsch : Schedule)
     (hsh : rsch.levels = [] ∨ 2 ≤ rsch.levels.length ∧ (rsch.levels.headD default).lanes = rsch.k0)

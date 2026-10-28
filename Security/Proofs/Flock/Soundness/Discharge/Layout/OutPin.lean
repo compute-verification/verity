@@ -31,7 +31,7 @@ open Flock FlockLevel3 Model Audit Binding Placed
 /-! ## A stacked computed column's place -/
 
 /-- **Copy `u'`'s computed column `c0`, stacked and placed**, is `base u' + c0`. -/
-theorem stackPlace_val_comp (S : Model.Statement) (R : FlockSoundness.Rows) (k : ℕ) (base : ℕ → ℕ)
+theorem stackPlace_val_comp (S : Model.BlockR1CS) (R : FlockSoundness.Rows) (k : ℕ) (base : ℕ → ℕ)
     (hb : ∀ u < k, base u + (R.nIn + R.nComp) < 2 ^ S.kLog) {u' c0 : ℕ} (hu' : u' < k) (h1 : R.nIn ≤ c0)
     (h2 : c0 < R.nIn + R.nComp) (x : Fin (R.stackW k))
     (hx : x.val = k * R.nIn + (u' * (R.nComp + 1) + (1 + (c0 - R.nIn)))) :
@@ -46,7 +46,7 @@ theorem stackPlace_val_comp (S : Model.Statement) (R : FlockSoundness.Rows) (k :
 
 /-- **An accepted statement's template instance column of copy `u'`'s computed column `c0`** is column `c0` of the unit
 slot `vu · upv + u'`. -/
-theorem col_val_comp {T : Model.Statement} (a : Placed.Accepted T) {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w)
+theorem col_val_comp {T : Model.BlockR1CS} (a : Placed.Accepted T) {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w)
     {u' c0 : ℕ} (hu' : u' < a.st.c.upv) (h1 : (unitRows a.st a.layout.unit_built).nIn ≤ c0)
     (h2 : c0 < (unitRows a.st a.layout.unit_built).nIn + (unitRows a.st a.layout.unit_built).nComp)
     (hx : x.val = a.st.c.upv * (unitRows a.st a.layout.unit_built).nIn +

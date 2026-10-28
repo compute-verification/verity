@@ -40,7 +40,7 @@ run on the coins of the `m + (k_log − 6)` rounds consumed, split at some round
 the model's points: `ab`'s is the lincheck's claim's, `c`'s is `(L_s(z), r)` at the zerocheck's coins. -/
 def ZkReplayPlays : Prop :=
   ∀ (st : Setup) (lay : Zk.PadLayout) (p : Proof) (root : ByteArray) (t t' : Flock.Transcript) (rp : Zk.Replayed)
-    (S : Model.Statement), st.m = S.m → st.kLog = S.kLog → 15 ≤ S.m → RoundsWF t.rounds →
+    (S : Model.BlockR1CS), st.m = S.m → st.kLog = S.kLog → 15 ≤ S.m → RoundsWF t.rounds →
     Zk.replay st lay p root t = .ok (rp, t') →
     t'.rounds = t.rounds ∧ t'.k = t.k + (S.m + (S.kLog - 6)) ∧
       ∀ {np : ℕ} (P : ZkSession.PadsA np) (tr : ZkSession.Triple np), ∃ (k₁ : ℕ) (zc : ZkSession.ZcZK 𝔽 np S.m)

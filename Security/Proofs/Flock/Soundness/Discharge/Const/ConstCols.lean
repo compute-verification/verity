@@ -13,7 +13,7 @@ the verifier accepted enter. It holds at `ones = {one}` when every unit's instan
 * every unit's constant is on `one` (`Prog.OneGate p one`), which a program of units over circuit types has at its
   constant input (`UProg.toRows_oneGate`);
 * `pp`'s instances wire each unit's constant where the program does, which the program's own instance does
-  (`Prog.instC`, `Prog.instC_wire_one`). An instance chosen from `Prog.isRowsUnit` need not (`Inst.lean`).
+  (`Prog.instC`, `Prog.instC_wire_one`). An instance chosen from `ProgSpec.isRowsUnit` need not (`Inst.lean`).
 
 `constCols_of_instC` is the form the headline takes. `{one}` is exactly the set of gates the units' constants read
 (`image_oneWire`), as the certificate's `h1` needs at the committed values; a set holding another gate a unit's column
@@ -26,7 +26,7 @@ open FlockSoundness Audit
 
 section places
 
-variable {N n : ℕ} {p : FlockSoundness.Prog N n} {outs : Finset (Fin N)} {Reg : Type} {mPts : ℕ}
+variable {N n : ℕ} {p : FlockSoundness.ProgSpec N n} {outs : Finset (Fin N)} {Reg : Type} {mPts : ℕ}
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
 
@@ -75,12 +75,12 @@ theorem toRows_oneAt : ∀ {outs : List ℕ} (up : FlockSoundness.UProg k one ou
   | _, .snoc up s src valid, u => by
     induction u using Fin.lastCases with
     | last =>
-      change Prog.oneAt (FlockSoundness.Prog.snoc (up.toRows hk) s.R (up.insOf s src valid) (up.oneOf hk)
+      change Prog.oneAt (FlockSoundness.ProgSpec.snoc (up.toRows hk) s.R (up.insOf s src valid) (up.oneOf hk)
         (up.insOf_ne hk s src valid)) (Fin.last up.n) = _
       rw [Prog.oneAt_last]
       rfl
     | cast v =>
-      change Prog.oneAt (FlockSoundness.Prog.snoc (up.toRows hk) s.R (up.insOf s src valid) (up.oneOf hk)
+      change Prog.oneAt (FlockSoundness.ProgSpec.snoc (up.toRows hk) s.R (up.insOf s src valid) (up.oneOf hk)
         (up.insOf_ne hk s src valid)) v.castSucc = _
       rw [Prog.oneAt_castSucc, toRows_oneAt up v]
       rfl
@@ -96,13 +96,13 @@ theorem toRows_rows : ∀ {outs : List ℕ} (up : FlockSoundness.UProg k one out
   | _, .snoc up s src valid, u => by
     induction u using Fin.lastCases with
     | last =>
-      change (FlockSoundness.Prog.snoc (up.toRows hk) s.R (up.insOf s src valid) (up.oneOf hk)
+      change (FlockSoundness.ProgSpec.snoc (up.toRows hk) s.R (up.insOf s src valid) (up.oneOf hk)
         (up.insOf_ne hk s src valid)).rows (Fin.last up.n) = _
       rw [Prog.rows_last]
       show s.R = ((UProg.snoc up s src valid).spec hk (Fin.last up.n)).R
       rw [UProg.spec_last]
     | cast v =>
-      change (FlockSoundness.Prog.snoc (up.toRows hk) s.R (up.insOf s src valid) (up.oneOf hk)
+      change (FlockSoundness.ProgSpec.snoc (up.toRows hk) s.R (up.insOf s src valid) (up.oneOf hk)
         (up.insOf_ne hk s src valid)).rows v.castSucc = _
       rw [Prog.rows_castSucc, toRows_rows up v]
       show (up.spec hk v).R = ((UProg.snoc up s src valid).spec hk v.castSucc).R

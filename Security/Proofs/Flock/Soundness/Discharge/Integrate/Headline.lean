@@ -5,9 +5,9 @@ import Proofs.Flock.Soundness.Discharge.Layout.Scope
 /-!
 # The headline at the executable, with every open guarantee named
 
-`Prog.flock_headline` is about the unsalted batched session. At the production statements (`hm96-sha512/v1` leaves) an
+`ProgSpec.flock_headline` is about the unsalted batched session. At the production statements (`hm96-sha512/v1` leaves) an
 honest transcript fails its openings check, so the headline the executable instantiates is e2e-exec's salted, one-table
-form at flock-verify's verdict, `Prog.flock_headline_live_on`, whose hypotheses are `Prog.flock_headline`'s (`pp`,
+form at flock-verify's verdict, `ProgSpec.flock_headline_live_on`, whose hypotheses are `ProgSpec.flock_headline`'s (`pp`,
 `hConst`, `hZero`, `lay`, `rs`, `hHm`, A3, `hKS`, `hCR`) with R11 discharged up to R11b (`hdec`, the decoder right at
 the law's draws, `DecodesOn`).
 
@@ -64,7 +64,7 @@ theorem rsAt_computes : (rsAt hU ht hc dj x₀ hpub hpt hscope (Reg := Reg)).Com
     (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1 (Layout.scopeOk_ports hscope)
     (sitesAt_bcSite ht dj x₀ hc (Layout.scopeOk_spec hU hscope).2.1 hpub hpt)
 
-/-- The one-table plan's tables, as `Prog.flock_headline_live_on` takes them. -/
+/-- The one-table plan's tables, as `ProgSpec.flock_headline_live_on` takes them. -/
 noncomputable abbrev tablesAt : Finset (Fin n) → Reg → TabSpec mPts := fun S _ => (tableAt ht dj x₀ S).T
 
 /-- **The headline at the executable.** Let `I` be a verify command's inputs (one table) whose one circuit file parses

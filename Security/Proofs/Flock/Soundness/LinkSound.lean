@@ -14,7 +14,7 @@ public value, is a nonzero polynomial in the link point of degree at most `|free
 witness bit minus the public bit (`eval_regionPoly_bool`). Two independent points square the
 probability, and a union bound runs over the list and the regions.
 
-The layout of the point (`Statement.LinkLayout`): each region's free bits are distinct and read
+The layout of the point (`BlockR1CS.LinkLayout`): each region's free bits are distinct and read
 link coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …` fit inside the point.
 -/
 
@@ -27,7 +27,7 @@ variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K
 
 /-- The layout of the link points (§16.2): each region's free bits are distinct and read link
 coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …` fit inside the point. -/
-def Model.Statement.LinkLayout (S : Statement) (ptLocal mPts : ℕ) : Prop :=
+def Model.BlockR1CS.LinkLayout (S : BlockR1CS) (ptLocal mPts : ℕ) : Prop :=
   (∀ R ∈ S.regions, R.free.Nodup ∧ R.free.length ≤ ptLocal) ∧ ptLocal + S.nbl ≤ mPts
 
 /-! ## The bits of a region address -/
@@ -115,8 +115,8 @@ theorem testBit_inBlock_ge {kLog nbl : ℕ} (R : Region kLog nbl) (hR : R.free.N
 /-! ## A region claim as a polynomial in the link point -/
 
 /-- A region claim evaluates to `Σ_a eq(p, a)·z[a]` at its point `p`. -/
-theorem regionClaim_eval (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ)
-    (r : Fin mPts → F) (z : Witness S.m) :
+theorem regionClaim_eval (S : BlockR1CS) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ)
+    (r : Fin mPts → F) (z : WitnessBits S.m) :
     (regionClaim S R ptLocal mPts r).eval z =
       ∑ a : Fin (2 ^ S.m), eqAt (regionPoint S R ptLocal mPts r) a.val * ((z a).val : F) := by
   have h6 : 6 ≤ S.m := le_trans S.hk6 S.hk
@@ -143,7 +143,7 @@ theorem regionClaim_eval (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts
   rw [hsplit]
 
 /-- Coordinate `j` of a region's point as a polynomial in the link coordinates. -/
-noncomputable def pointPoly (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ)
+noncomputable def pointPoly (S : BlockR1CS) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ)
     (j : Fin S.m) : MvPolynomial (Fin mPts) F :=
   if hj : j.val < S.kLog then
     match R.free.idxOf? ⟨j.val, hj⟩ with
@@ -153,7 +153,7 @@ noncomputable def pointPoly (S : Statement) (R : Region S.kLog S.nbl) (ptLocal m
     if hi : ptLocal + (j.val - S.kLog) < mPts then
       MvPolynomial.X ⟨ptLocal + (j.val - S.kLog), hi⟩ else 0
 
-theorem eval_pointPoly (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ)
+theorem eval_pointPoly (S : BlockR1CS) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ)
     (r : Fin mPts → F) (j : Fin S.m) :
     MvPolynomial.eval r (pointPoly S R ptLocal mPts j) = regionPoint S R ptLocal mPts r j := by
   unfold pointPoly regionPoint
@@ -169,10 +169,10 @@ theorem eval_pointPoly (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts :
     split_ifs <;> simp
 
 /-- Whether coordinate `j` of the point reads a link coordinate. -/
-def pointVar (S : Statement) (R : Region S.kLog S.nbl) (j : Fin S.m) : ℕ :=
+def pointVar (S : BlockR1CS) (R : Region S.kLog S.nbl) (j : Fin S.m) : ℕ :=
   if hj : j.val < S.kLog then (if (⟨j.val, hj⟩ : Fin S.kLog) ∈ R.free then 1 else 0) else 1
 
-theorem totalDegree_pointFactor_le (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ)
+theorem totalDegree_pointFactor_le (S : BlockR1CS) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ)
     (b : Bool) (j : Fin S.m) :
     (if b then pointPoly (F := F) S R ptLocal mPts j else 1 + pointPoly S R ptLocal mPts j).totalDegree
       ≤ pointVar S R j := by
@@ -200,10 +200,10 @@ theorem totalDegree_pointFactor_le (S : Statement) (R : Region S.kLog S.nbl) (pt
     exact (MvPolynomial.totalDegree_add _ _).trans (max_le (by simp) hP)
   · simpa using hP
 
-theorem sum_pointVar_le (S : Statement) (R : Region S.kLog S.nbl) :
+theorem sum_pointVar_le (S : BlockR1CS) (R : Region S.kLog S.nbl) :
     ∑ j : Fin S.m, pointVar S R j ≤ R.free.length + S.nbl := by
   classical
-  have hm : S.kLog + S.nbl = S.m := by simp only [Statement.nbl]; have := S.hk; omega
+  have hm : S.kLog + S.nbl = S.m := by simp only [BlockR1CS.nbl]; have := S.hk; omega
   rw [← (finCongr hm).sum_comp, Fin.sum_univ_add]
   have h1 : ∑ j : Fin S.kLog, pointVar S R ((finCongr hm) (Fin.castAdd S.nbl j)) =
       (Finset.univ.filter fun j : Fin S.kLog => j ∈ R.free).card := by
@@ -242,8 +242,8 @@ theorem totalDegree_coordFactor_le (mPts c : ℕ) (b : Bool) :
   · exact (MvPolynomial.totalDegree_add _ _).trans (max_le (by simp) h)
 
 /-- A region claim minus its public value, as a polynomial in the link point. -/
-noncomputable def regionPoly (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ)
-    (z : Witness S.m) : MvPolynomial (Fin mPts) F :=
+noncomputable def regionPoly (S : BlockR1CS) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ)
+    (z : WitnessBits S.m) : MvPolynomial (Fin mPts) F :=
   (∑ a : Fin (2 ^ S.m), MvPolynomial.C ((z a).val : F) *
       ∏ j : Fin S.m, (if a.val.testBit j then pointPoly S R ptLocal mPts j
         else 1 + pointPoly S R ptLocal mPts j))
@@ -254,8 +254,8 @@ noncomputable def regionPoly (S : Statement) (R : Region S.kLog S.nbl) (ptLocal 
           (if i.testBit t then coordPoly mPts t.val else 1 + coordPoly mPts t.val))
         * MvPolynomial.C ((R.bits b i).val : F)
 
-theorem eval_regionPoly (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ)
-    (z : Witness S.m) (r : Fin mPts → F) :
+theorem eval_regionPoly (S : BlockR1CS) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ)
+    (z : WitnessBits S.m) (r : Fin mPts → F) :
     MvPolynomial.eval r (regionPoly S R ptLocal mPts z) =
       (regionClaim S R ptLocal mPts r).eval z - regionValue S R ptLocal mPts r := by
   rw [regionClaim_eval]
@@ -282,8 +282,8 @@ theorem eval_regionPoly (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts 
       · split_ifs <;> simp [eval_coordPoly, hc]
       · split_ifs <;> simp [eval_coordPoly, hc]
 
-theorem totalDegree_regionPoly_le (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ)
-    (z : Witness S.m) :
+theorem totalDegree_regionPoly_le (S : BlockR1CS) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ)
+    (z : WitnessBits S.m) :
     (regionPoly (F := F) S R ptLocal mPts z).totalDegree ≤ R.free.length + S.nbl := by
   unfold regionPoly
   refine (MvPolynomial.totalDegree_sub _ _).trans (max_le ?_ ?_)
@@ -320,16 +320,16 @@ theorem totalDegree_regionPoly_le (S : Statement) (R : Region S.kLog S.nbl) (ptL
 /-! ## At the Boolean point of a failing region bit -/
 
 /-- The Boolean link point of region bit `i₀` in block `o₀`. -/
-def boolPoint (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (o₀ : Fin (2 ^ S.nbl))
+def boolPoint (S : BlockR1CS) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (o₀ : Fin (2 ^ S.nbl))
     (i₀ : ℕ) : Fin mPts → F := fun c =>
   if c.val < R.free.length then (if i₀.testBit c.val then 1 else 0)
   else if ptLocal ≤ c.val ∧ c.val < ptLocal + S.nbl then
     (if o₀.val.testBit (c.val - ptLocal) then 1 else 0)
   else 0
 
-theorem eval_regionPoly_bool (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ)
+theorem eval_regionPoly_bool (S : BlockR1CS) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ)
     [CharP F 2] (hR : R.free.Nodup) (hfree : R.free.length ≤ ptLocal) (hpt : ptLocal + S.nbl ≤ mPts)
-    (z : Witness S.m) (o₀ : Fin (2 ^ S.nbl)) (i₀ : ℕ) (hi₀ : i₀ < 2 ^ R.free.length)
+    (z : WitnessBits S.m) (o₀ : Fin (2 ^ S.nbl)) (i₀ : ℕ) (hi₀ : i₀ < 2 ^ R.free.length)
     (h₀ : R.inBlock i₀ < 2 ^ S.kLog) :
     MvPolynomial.eval (boolPoint (F := F) S R ptLocal mPts o₀ i₀) (regionPoly S R ptLocal mPts z) =
       ((S.block z o₀ ⟨R.inBlock i₀, h₀⟩).val : F) - ((R.bits o₀ i₀).val : F) := by
@@ -339,7 +339,7 @@ theorem eval_regionPoly_bool (S : Statement) (R : Region S.kLog S.nbl) (ptLocal 
   have hnbl : S.nbl = S.m - S.kLog := rfl
   have hbit : ∀ n, a₀.val.testBit n =
       if n < S.kLog then (R.inBlock i₀).testBit n else o₀.val.testBit (n - S.kLog) := fun n => by
-    simp only [ha₀, Statement.addr]
+    simp only [ha₀, BlockR1CS.addr]
     rw [mul_comm, Nat.testBit_two_pow_mul_add _ h₀]
   -- the claim's point at `r` is the bits of `a₀`
   have hp : regionPoint S R ptLocal mPts r = fun j : Fin S.m => if a₀.val.testBit j then 1 else 0 := by
@@ -411,7 +411,7 @@ theorem eval_regionPoly_bool (S : Statement) (R : Region S.kLog S.nbl) (ptLocal 
 /-! ## The link points -/
 
 /-- A region fails for a witness: some region bit differs from its public value. -/
-def RegionFails (S : Statement) (R : Region S.kLog S.nbl) (z : Witness S.m) : Prop :=
+def RegionFails (S : BlockR1CS) (R : Region S.kLog S.nbl) (z : WitnessBits S.m) : Prop :=
   ∃ (o : Fin (2 ^ S.nbl)) (i : ℕ) (_hi : i < 2 ^ R.free.length) (h : R.inBlock i < 2 ^ S.kLog),
     S.block z o ⟨R.inBlock i, h⟩ ≠ R.bits o i
 
@@ -428,9 +428,9 @@ theorem val_sub_val_ne_zero (x y : ZMod 2) (hxy : x ≠ y) :
 
 /-- **One region, one point.** A failing region's claim holds at a uniform link point with
 probability at most `m_pts/|F|`. -/
-theorem prCoin_regionClaim_le (A : Arith F K) (hA : A.Correct) (S : Statement)
+theorem prCoin_regionClaim_le (A : Arith F K) (hA : A.Correct) (S : BlockR1CS)
     (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (hR : R.free.Nodup)
-    (hfree : R.free.length ≤ ptLocal) (hpt : ptLocal + S.nbl ≤ mPts) (z : Witness S.m)
+    (hfree : R.free.length ≤ ptLocal) (hpt : ptLocal + S.nbl ≤ mPts) (z : WitnessBits S.m)
     (hfail : RegionFails S R z) :
     prCoin (fun r : Fin mPts → F => (regionClaim S R ptLocal mPts r).Holds z) ≤
       (mPts : ℝ≥0∞) / Fintype.card F := by
@@ -471,14 +471,14 @@ theorem prCoin_pair_le {α : Type} [Fintype α] (P : α → Prop) :
 
 /-- The link event for one codeword and one region: the region fails, yet both link points'
 claims hold. -/
-def LinkBad (S : Statement) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (z : Witness S.m)
+def LinkBad (S : BlockR1CS) (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (z : WitnessBits S.m)
     (pts : Fin 2 → Fin mPts → F) : Prop :=
   RegionFails S R z ∧ (regionClaim S R ptLocal mPts (pts 0)).Holds z ∧
     (regionClaim S R ptLocal mPts (pts 1)).Holds z
 
-theorem prCoin_linkBad_le (A : Arith F K) (hA : A.Correct) (S : Statement)
+theorem prCoin_linkBad_le (A : Arith F K) (hA : A.Correct) (S : BlockR1CS)
     (R : Region S.kLog S.nbl) (ptLocal mPts : ℕ) (hlay : S.LinkLayout ptLocal mPts)
-    (hR : R ∈ S.regions) (z : Witness S.m) :
+    (hR : R ∈ S.regions) (z : WitnessBits S.m) :
     prCoin (LinkBad (F := F) S R ptLocal mPts z) ≤ ((mPts : ℝ≥0∞) / Fintype.card F) ^ 2 := by
   by_cases hf : RegionFails S R z
   · obtain ⟨hnd, hfr⟩ := hlay.1 R hR
@@ -503,7 +503,7 @@ open Classical in
 /-- **The link points** (§16.2), for a list `W` of at most `L` messages none of which packs a
 satisfying witness: the link points leave some rep start undoomed over `W` with probability at
 most `L·|regions|·(m_pts/|F|)²`. -/
-theorem link_sound_of_list (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
+theorem link_sound_of_list (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (sch : Schedule)
     (ptLocal mPts : ℕ) (W : Set (Message F sch.k0 sch.level₀.logCols))
     (hC : ¬ ∃ M ∈ W, S.Satisfies (wit A S sch M))
     (hlay : S.LinkLayout ptLocal mPts) (L : ℕ)
@@ -548,7 +548,7 @@ theorem link_sound_of_list (A : Arith F K) (hA : A.Correct) (S : Statement) (sch
 open Classical in
 /-- **The link points** for the codewords near the committed table: `link_sound_of_list` at
 `closeMsgs`. -/
-theorem link_sound_of_card (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
+theorem link_sound_of_card (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (sch : Schedule)
     (ptLocal mPts : ℕ) (C : Oracle F) (hC : ¬ Committed A S sch C)
     (hlay : S.LinkLayout ptLocal mPts) (L : ℕ)
     (hL : (Finset.univ.filter fun M => M ∈ closeMsgs A sch C).card ≤ L) :

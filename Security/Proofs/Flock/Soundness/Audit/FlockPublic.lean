@@ -217,7 +217,7 @@ satisfying the table's statement. These are the forced-zero rows, which the veri
 read the zero. -/
 def ZeroCols (place : ∀ S R u, u ∈ S → UnitPlace P (tabOf plan tab S R u).S u) (zeros : Finset (Fin C.N)) : Prop :=
   ∀ S R u (h : u ∈ S) (c : Fin (place S R u h).R.w), (place S R u h).inst.wire c ∈ zeros →
-    ∀ z : Witness (tabOf plan tab S R u).S.m, (tabOf plan tab S R u).S.Satisfies z →
+    ∀ z : WitnessBits (tabOf plan tab S R u).S.m, (tabOf plan tab S R u).S.Satisfies z →
       (tabOf plan tab S R u).S.block z (place S R u h).o ((place S R u h).col c) = 0
 
 /-- **The public wires decode to their values from the drawn units' places**: a committed wire of a drawn unit is one of

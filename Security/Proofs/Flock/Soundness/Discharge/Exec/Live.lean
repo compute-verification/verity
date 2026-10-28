@@ -17,7 +17,7 @@ those runs holds.
   session's acceptance against the simulated prover (`live_le` at `sessionBL_one`).
 * `simAudit`, `execRefines_one`: the audit strategy built from a live one (the registration it sends, and at each draw
   the simulated session strategy), and R11 at it, `ExecRefines … (LiveAccepts I) ⊥ (audit … (batchedSessionL …)) …`.
-* `Prog.flock_headline_live`: `Prog.flock_headline_execL` with `hRef` discharged by `execRefines_one`. For one-table
+* `ProgSpec.flock_headline_live`: `ProgSpec.flock_headline_execL` with `hRef` discharged by `execRefines_one`. For one-table
   plans and the live session `liveTable` written by `wr`, flock-verify accepts with at least `K` wrong units of the
   simulated prover's committed values with probability at most `miss(K) + ksAvgStrict + linkBoundE`, given `Decodes`.
 
@@ -222,17 +222,17 @@ theorem execRefines_one (hdec : DecodesAll H E Lf T I wr opn dec one fin capOf)
 
 /-! ## The headline at the executable, for one-table sessions -/
 
-variable {N' : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N'))
+variable {N' : ℕ} (p : FlockSoundness.ProgSpec N' n) (outs : Finset (Fin N'))
 
 /-- **The headline at the executable, for one-table sessions of the challenger.** Let the verifier draw the units
-as in `Prog.flock_headline_L` (the live stratified draw under A3), let each draw's session be one table `T S R`, and let
+as in `ProgSpec.flock_headline_L` (the live stratified draw under A3), let each draw's session be one table `T S R`, and let
 the live session be `liveTable` (the challenger, its coins uniform per round and drawn after the round's retained
 bytes), written out as a session directory by `wr`. Against any live prover `τ`, flock-verify accepts with at least `K`
 wrong units of the committed values of the simulated prover (`simAudit … τ`) with probability at most
-`miss(K) + ε_ks + δ_link`: `Prog.flock_headline_execL` with `hRef` discharged by `execRefines_one`, so `Pr[bad] = 0`.
-Beyond `Prog.flock_headline_L`'s (`pp`, `hConst`, `hZero`, `lay`, `rs`, `hHm`, and the assumptions through `hA3`, `hKS`,
+`miss(K) + ε_ks + δ_link`: `ProgSpec.flock_headline_execL` with `hRef` discharged by `execRefines_one`, so `Pr[bad] = 0`.
+Beyond `ProgSpec.flock_headline_L`'s (`pp`, `hConst`, `hZero`, `lay`, `rs`, `hHm`, and the assumptions through `hA3`, `hKS`,
 `hCR`), it takes `hdec`: the decoder is right on the sessions flock-verify accepts (R11b). -/
-theorem _root_.FlockSoundness.Prog.flock_headline_live
+theorem _root_.FlockSoundness.ProgSpec.flock_headline_live
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)

@@ -204,7 +204,7 @@ end Generic
 
 section Prog
 
-variable {N n : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) {Reg : Type} {mPts : ℕ}
+variable {N n : ℕ} (p : FlockSoundness.ProgSpec N n) (outs : Finset (Fin N)) {Reg : Type} {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
@@ -213,7 +213,7 @@ section Session
 variable {D : Type} [Inhabited D] (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {L : Law n}
 
 /-- **The end-to-end count curve on the circuit of the statement's rows, under `cr/sha-512` for the link finders**:
-`Prog.flock_e2e_count` with `LinkCRStrict` for `LinkCR`. -/
+`ProgSpec.flock_e2e_count` with `LinkCRStrict` for `LinkCR`. -/
 theorem prog_e2e_count
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     (pp : ProgPlaces p outs plan tab)
@@ -235,7 +235,7 @@ theorem prog_e2e_count
     K σ (linkCR_of_strict (p.partition outs) H E plan tab vb (reg σ) (cont σ) ht hq hCRs)
 
 /-- **The end-to-end drawn-unit bound on the circuit of the statement's rows, under `cr/sha-512` for the link
-finders**: `Prog.flock_e2e_drawn` with `LinkCRStrict` for `LinkCR`. -/
+finders**: `ProgSpec.flock_e2e_drawn` with `LinkCRStrict` for `LinkCR`. -/
 theorem prog_e2e_drawn
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     (pp : ProgPlaces p outs plan tab)
@@ -259,7 +259,7 @@ theorem prog_e2e_drawn
 end Session
 
 /-- **The headline under `cr/sha-512` alone: the count curve on the statement's rows, under SHA-512, at the live
-draw.** `Prog.flock_headline` with `LinkCRStrict` for `LinkCR`: every cryptographic hypothesis is an instance of
+draw.** `ProgSpec.flock_headline` with `LinkCRStrict` for `LinkCR`: every cryptographic hypothesis is an instance of
 `SHA512CRStrict` (`cr/sha-512`), for finders built from the prover bounded: the link finders stopped at `q` (`hCRs`),
 the tables' knowledge finders (`hKS`) and the serving roots' rewinding finder (`hT`). The other hypotheses are the
 headline's, A3 (`hA3`) among them. The bound is `miss(K) + ε_ks + δ_link + δ_tree`, with `δ_link = linkBoundE` at the

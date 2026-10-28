@@ -31,7 +31,7 @@ local notation "𝔽" => FlockLevel3.GF128
 /-- **The table's strategy after the link points `pts`**, read off a strategy of the session after `Commit` through
 its one batch position. -/
 noncomputable def afterOf {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] (A : Model.Arith 𝔽 K)
-    (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (S : Model.Statement)
+    (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (S : Model.BlockR1CS)
     (sch : Accounting.Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Model.Cap D)
     (σ : Strategy (sessAfterL A Hc E Lf S sch hm ptLocal mPts [] [] cap₀)) (pts : Fin 2 → Fin mPts → 𝔽) :
     Strategy (tableAfterL A Hc E Lf S sch hm ptLocal mPts cap₀ pts) :=
@@ -47,7 +47,7 @@ def NulOut {D Sl : Type} (o : Model.OutCL 𝔽 D Sl) : Prop :=
 interleaving it advances rep 0, which ends after exactly `n` coins, until rep 1 has ended, except below a part of the
 run every reached outcome of which opens only empty rows (`Lock.Lead`). -/
 def LeadsAfter {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] (A : Model.Arith 𝔽 K)
-    (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (S : Model.Statement)
+    (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc) (S : Model.BlockR1CS)
     (sch : Accounting.Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Model.Cap D) (n : ℕ)
     (σ : Strategy (sessAfterL A Hc E Lf S sch hm ptLocal mPts [] [] cap₀)) : Prop :=
   ∀ pts, Lock.Lead _ NulOut n (Model.repC A 0 S sch hm (Model.extraClaims S ptLocal mPts pts))

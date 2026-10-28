@@ -37,7 +37,7 @@ noncomputable def sentAt (C : CoinedSetup) (c : CoinsZK C.Rest) : (C.T c).tab.Se
 open Classical in
 /-- **The honest prover's output at coin vector `c`**, on witness `w`, randomness `ω` and hidden salts `ys`: its view where
 it doesn't refuse `c`, and otherwise the prefix of that view it sends before it stops. -/
-noncomputable def outExe (C : CoinedSetup) (c : CoinsZK C.Rest) (w : Witness C.S.m) (ω : (C.T c).tab.Rand)
+noncomputable def outExe (C : CoinedSetup) (c : CoinsZK C.Rest) (w : WitnessBits C.S.m) (ω : (C.T c).tab.Rand)
     (ys : (C.T c).tab.Hid → ZkView.Salt) : (C.T c).tab.View ⊕ (C.T c).tab.Cut :=
   if C.Admits c then .inl ((C.T c).viewExe w ω ys) else .inr ((C.T c).tab.abort (sentAt C c) ((C.T c).viewExe w ω ys))
 
@@ -45,7 +45,7 @@ open Classical in
 /-- **The simulator's output at coin vector `c`**, on the dummy witness `w0`, randomness `σ` and hidden salts `ys`:
 `S_shvzk` where the prover doesn't refuse `c`, and otherwise the honest prefix on `w0`, at `S_shvzk`'s dummy randomness,
 with the public region values. -/
-noncomputable def simAll (C : CoinedSetup) (c : CoinsZK C.Rest) (w0 : Witness C.S.m) (σ : (C.T c).tab.SimRand)
+noncomputable def simAll (C : CoinedSetup) (c : CoinsZK C.Rest) (w0 : WitnessBits C.S.m) (σ : (C.T c).tab.SimRand)
     (ys : (C.T c).tab.Hid → ZkView.Salt) : (C.T c).tab.View ⊕ (C.T c).tab.Cut :=
   if C.Admits c then .inl ((C.T c).simExe w0 σ ys)
   else .inr ((C.T c).tab.pubAbort (sentAt C c) ((C.T c).viewExe w0 ((C.T c).tab.dummyOf σ) ys))
@@ -57,7 +57,7 @@ under uniform coins and the simulator's (`simAll`) are within `2·|LeafPos|·δ�
 The coins are drawn independently of either party's randomness, so each probability is the average over `c` of the
 probability at `c`. -/
 def ZkViewAll (C : CoinedSetup) [Fintype (CoinsZK C.Rest)] (δ₁ : ℝ≥0∞) : Prop :=
-  ∀ (w w0 : Witness C.S.m), C.Valid w → (∀ c, (C.T c).tab.sReg w = (C.T c).tab.pubReg) →
+  ∀ (w w0 : WitnessBits C.S.m), C.Valid w → (∀ c, (C.T c).tab.sReg w = (C.T c).tab.pubReg) →
     ∀ E : ∀ c : CoinsZK C.Rest, (C.T c).tab.View ⊕ (C.T c).tab.Cut → Prop,
       avg (fun c => prCoin fun p : (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt) => E c (outExe C c w p.1 p.2))
           ≤ avg (fun c => prCoin fun p : (C.T c).tab.SimRand × ((C.T c).tab.Hid → ZkView.Salt) =>

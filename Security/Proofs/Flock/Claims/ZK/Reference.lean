@@ -133,8 +133,8 @@ structure RefSession where
   J : Msg → ℕ
   C : (x : Msg) → Fin (J x) → Composed.CoinedSetup
   cz : (x : Msg) → (Fin (refK x) → Coin) → ∀ j, Composed.CoinsZK (C x j).Rest
-  wt : (x : Msg) → Flock.Wit → ∀ j, FlockSoundness.Model.Witness (C x j).S.m
-  wt₀ : (x : Msg) → ∀ j, FlockSoundness.Model.Witness (C x j).S.m
+  wt : (x : Msg) → Flock.Wit → ∀ j, FlockSoundness.Model.WitnessBits (C x j).S.m
+  wt₀ : (x : Msg) → ∀ j, FlockSoundness.Model.WitnessBits (C x j).S.m
   enc : (x : Msg) → (c : Fin (refK x) → Coin) → ℕ → (∀ j, ((C x j).T (cz x c j)).tab.Cut) → Msg
   fin : (x : Msg) → (c : Fin (refK x) → Coin) → (∀ j, ((C x j).T (cz x c j)).tab.View) → Msg
   off : (x : Msg) → (c : Fin (refK x) → Coin) → (∀ j, ((C x j).T (cz x c j)).tab.Cut) → Msg
@@ -160,7 +160,7 @@ def eP (S : RefSession) (x : Msg) (t : S.Tape) :
 /-- **The session's cut pre-final view at coins `c`**, on table witnesses `wt` and tape `t`, every pre-final leaf the
 executable's under its own salt. -/
 noncomputable def cutOf (S : RefSession) (x : Msg) (c : Fin (refK x) → S.Coin)
-    (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m) (t : S.Tape) :
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (S.C x j).S.m) (t : S.Tape) :
     ∀ j, ((S.C x j).T (S.cz x c j)).tab.Cut :=
   cutAt (S.C x) (S.cz x c) wt (S.eP x t).1 (exeOf (S.C x) (S.cz x c) wt (S.eP x t).1 (S.eP x t).2)
 
@@ -174,7 +174,7 @@ noncomputable def randAt (S : RefSession) (x : Msg) (c : Fin (refK x) → S.Coin
 
 /-- The tables' real views at coins `c`. -/
 noncomputable def viewsAt (S : RefSession) (x : Msg) (c : Fin (refK x) → S.Coin)
-    (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m) (t : S.Tape) : ∀ j, ((S.C x j).T (S.cz x c j)).tab.View :=
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (S.C x j).S.m) (t : S.Tape) : ∀ j, ((S.C x j).T (S.cz x c j)).tab.View :=
   fun j => ((S.C x j).T (S.cz x c j)).viewExe (wt j) (S.randAt x c t j).1 (S.randAt x c t j).2
 
 /-- The cut of the tables' views' pre-final part, where the session stops. -/
@@ -191,7 +191,7 @@ open Classical in
 /-- **The reference prover's message after the coins `cs`**, on table witnesses `wt` and tape `t`: before the last coin
 the round encoding of the cut view at the padded coins; after it, `fin` of the tables' views where they admit the coins,
 else `off` of the cut view. -/
-noncomputable def msgAt (S : RefSession) (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
+noncomputable def msgAt (S : RefSession) (x : Msg) (wt : ∀ j, FlockSoundness.Model.WitnessBits (S.C x j).S.m)
     (t : S.Tape) (cs : List S.Coin) : Msg :=
   if cs.length < refK x then S.enc x (S.pad cs) cs.length (S.cutOf x (S.pad cs) wt t)
   else if S.Admits x (S.pad cs) then S.fin x (S.pad cs) (S.viewsAt x (S.pad cs) wt t)
@@ -271,7 +271,7 @@ def DummyReg (S : RefSession) : Prop :=
 
 /-- **Round `i`'s encoding reads the coins before `i` only**, whatever each pre-final leaf's pair `(M·y, c(y))`. -/
 def Causal (S : RefSession) : Prop :=
-  ∀ (x : Msg) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m) (ω : ∀ j, ZkView.Base (S.C x j).z (S.C x j).Hi)
+  ∀ (x : Msg) (wt : ∀ j, FlockSoundness.Model.WitnessBits (S.C x j).S.m) (ω : ∀ j, ZkView.Base (S.C x j).z (S.C x j).Hi)
     (p : ZkView.Leaves (fun j => (S.C x j).z) → ZkView.Bits × ByteArray) (c c' : Fin (refK x) → S.Coin) (i : ℕ),
     (∀ j : Fin (refK x), j.val < i → c j = c' j) →
     S.enc x c i (cutAt (S.C x) (S.cz x c) wt ω fun l =>
@@ -316,14 +316,14 @@ theorem pad_ofFn (S : RefSession) {K : ℕ} (c : Fin K → S.Coin) : S.pad ((Lis
 
 /-- **The real views' pre-final part, cut, is the cut view the round messages encode** (`viewPre_viewExe`). -/
 theorem cutV_viewsAt (S : RefSession) (x : Msg) (c : Fin (refK x) → S.Coin)
-    (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m) (t : S.Tape) :
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (S.C x j).S.m) (t : S.Tape) :
     S.cutV x c (S.viewsAt x c wt t) = S.cutOf x c wt t := by
   funext j
   simp only [cutV, viewsAt, randAt, viewPre_viewExe]
   rfl
 
 /-- **Round `i`'s encoding of the cut view reads the coins before `i` only** (`Causal` at the executable's leaves). -/
-theorem enc_cutOf (S : RefSession) (x : Msg) (hc : S.Causal) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
+theorem enc_cutOf (S : RefSession) (x : Msg) (hc : S.Causal) (wt : ∀ j, FlockSoundness.Model.WitnessBits (S.C x j).S.m)
     (t : S.Tape) (c c' : Fin (refK x) → S.Coin) (i : ℕ) (h : ∀ k : Fin (refK x), k.val < i → c k = c' k) :
     S.enc x c i (S.cutOf x c wt t) = S.enc x c' i (S.cutOf x c' wt t) := by
   have e := hc x wt (S.eP x t).1 (fun l => (ZkView.My ((S.eP x t).2 l), ZkView.saltHash ((S.eP x t).2 l))) c c' i h
@@ -334,7 +334,7 @@ theorem enc_cutOf (S : RefSession) (x : Msg) (hc : S.Causal) (wt : ∀ j, FlockS
 open Classical in
 /-- **The reference prover's messages at the prefixes of a coin vector** (`Causal`): round `j`'s encoding at `c` before
 the last coin, then the last message at `c`. -/
-theorem msgAt_take (S : RefSession) (x : Msg) (hc : S.Causal) (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
+theorem msgAt_take (S : RefSession) (x : Msg) (hc : S.Causal) (wt : ∀ j, FlockSoundness.Model.WitnessBits (S.C x j).S.m)
     (t : S.Tape) (c : Fin (refK x) → S.Coin) (j : ℕ) (hj : j < refK x + 1) :
     S.msgAt x wt t ((List.ofFn c).take j) =
       if j < refK x then S.enc x c j (S.cutOf x c wt t)
@@ -368,7 +368,7 @@ theorem pad_ansHist (S : RefSession) {K : ℕ} (a : Fin (K + 1) → Out) (i : Fi
 /-- **Before the last coin, the reference prover sends the round encoding at the coins the answers open**
 (`Causal`). -/
 theorem pre_msg (S : RefSession) (H : Msg → Msg) (x : Msg) (ν : S.Nonce) (hc : S.Causal)
-    (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m) (t : S.Tape) (a : Fin (refK x + 1) → Out)
+    (wt : ∀ j, FlockSoundness.Model.WitnessBits (S.C x j).S.m) (t : S.Tape) (a : Fin (refK x + 1) → Out)
     (i : Fin (refK x + 1)) :
     S.refP.pmG H x ν (fun cs => .ret (S.msgAt x wt t cs)) (ansHist a i) =
       S.refP.pmG H x ν (fun _ => .ret (S.enc x (S.coinsOf a) (i.val - 1) (S.cutOf x (S.coinsOf a) wt t)))

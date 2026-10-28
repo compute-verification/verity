@@ -96,7 +96,7 @@ theorem out_drawn {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Co
     (L : FlockSoundness.Layout st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
     (ho : st.c.outNet = st.c.unitNet) (hty : st.c.typed = none)
-    {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
+    {z : Model.WitnessBits (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
     {k j t : ℕ} (hk : k < st.c.unitRange.count) (hk2 : k < 2 ^ st.c.unitRange.count.log2)
     (hr : o.val * st.c.g + k / st.c.upv < D.proved.size)
     (hw : (st.c.unit.outGroups.getD 0 default).words = 2 ^ (st.c.unit.outGroups.getD 0 default).words.log2)
@@ -117,7 +117,7 @@ theorem out_drawn {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Co
   rw [outVal_drawn hdr hD hsz hlt hr (hlo j' hj')]
   exact getD_lt_of_forall h16 (Nat.two_pow_pos _) _
 
-variable {T : Model.Statement}
+variable {T : Model.BlockR1CS}
 
 /-- **The returned outputs at a drawn unit's site are the population's**: in a satisfying witness of an accepted drawn
 statement of an untyped circuit whose unit returns the outputs, at a site (`BcSite`: block `o`, template instance `g`, proved unit `u`),
@@ -125,7 +125,7 @@ the bit at column `16 j + t` of the returned-output group of the template instan
 population's output word `lo[j]` of `u`, for the copy's leaf's outputs `lo`, under `out_pinned`'s conditions. -/
 theorem out_site (a : Placed.Accepted T) {pop : Public} {o : Fin (2 ^ T.nbl)} {g u : ℕ} (hs : BcSite a pop o g u)
     (ho : a.st.c.outNet = a.st.c.unitNet) (hty : a.st.c.typed = none)
-    {z : Witness T.m} (hz : T.Satisfies z) {u' j t : ℕ} (hu' : u' < a.st.c.upv)
+    {z : WitnessBits T.m} (hz : T.Satisfies z) {u' j t : ℕ} (hu' : u' < a.st.c.upv)
     (hk : g * a.st.c.upv + u' < a.st.c.unitRange.count)
     (hk2 : g * a.st.c.upv + u' < 2 ^ a.st.c.unitRange.count.log2)
     (hw : (a.st.c.unit.outGroups.getD 0 default).words = 2 ^ (a.st.c.unit.outGroups.getD 0 default).words.log2)

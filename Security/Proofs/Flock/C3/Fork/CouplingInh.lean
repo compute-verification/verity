@@ -15,7 +15,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Model FlockSoundness.Acco
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {D Sl : Type}
 
-theorem allInh_holoTable (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
+theorem allInh_holoTable (A : Arith F K) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ) (τ : Fin (2 ^ sh.sLog) → ℕ) (rsch : Schedule)
     (Creg : Oracle F) : AllInh (holoTable A S sch hm ptLocal mPts sh units τ rsch Creg) := by
   unfold holoTable
@@ -28,7 +28,7 @@ theorem allInh_holoTable (A : Arith F K) (S : Statement) (sch : Schedule) (hm : 
     | refine AllInh.bind' ?_ fun _ => ?_)
 
 theorem allInh_holoTableCL [Inhabited D] [Inhabited Sl] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule)
+    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (sch : Schedule)
     (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (sh : SparseShape) (units : Fin (2 ^ sh.sLog) → Finset ℕ)
     (τ : Fin (2 ^ sh.sLog) → ℕ) (rsch : Schedule) (capReg : Cap D) :
     AllInh (holoTableCL A H E Lf S sch hm ptLocal mPts sh units τ rsch capReg) := by

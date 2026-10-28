@@ -33,7 +33,7 @@ open FlockSoundness.Discharge.Hm (blockBit blockBit_of_lt bytesOf bcCol saltCol 
 
 theorem bit_inj : ∀ x y : ZMod 2, FlockSoundness.bit x = FlockSoundness.bit y → x = y := by decide
 
-variable {T : Model.Statement}
+variable {T : Model.BlockR1CS}
 
 namespace AcceptedH
 
@@ -59,7 +59,7 @@ def siteAddrH (a : AcceptedH T) (o : Fin (2 ^ T.nbl)) (x : ℕ) : Fin (2 ^ T.m) 
   T.addr o (Fin.cast a.kLog_eq (Layout.inBlockOr a.st.c.kLog x))
 
 /-- **A site address reads the block's bit**: in-block column `y` of block `o`. -/
-theorem bit_siteAddrH (a : AcceptedH T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)) {y : ℕ}
+theorem bit_siteAddrH (a : AcceptedH T) (z : WitnessBits T.m) (o : Fin (2 ^ T.nbl)) {y : ℕ}
     (hy : y < 2 ^ a.st.c.kLog) : FlockSoundness.bit (z (siteAddrH a o y)) = blockBit T z o y := by
   have hy' : y < 2 ^ T.kLog := by rw [← a.kLog_eq]; exact hy
   have hin : Layout.inBlockOr a.st.c.kLog y = ⟨y, hy⟩ := by
@@ -70,7 +70,7 @@ theorem bit_siteAddrH (a : AcceptedH T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)) 
   rfl
 
 /-- Bytes read at in-block site addresses are the block's (`bytesOf`). -/
-theorem ofFn_siteH (a : AcceptedH T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)) (N : ℕ) (col : ℕ → ℕ → ℕ)
+theorem ofFn_siteH (a : AcceptedH T) (z : WitnessBits T.m) (o : Fin (2 ^ T.nbl)) (N : ℕ) (col : ℕ → ℕ → ℕ)
     (hcol : ∀ j < N, ∀ t < 8, col j t < 2 ^ a.st.c.kLog) :
     (List.ofFn fun j : Fin N => Binding.byteOf fun t => FlockSoundness.bit (z (siteAddrH a o (col j.val t.val)))) =
       bytesOf (blockBit T z o) N col := by
@@ -82,7 +82,7 @@ theorem ofFn_siteH (a : AcceptedH T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)) (N 
   exact bit_siteAddrH a z o (hcol j j.isLt t t.isLt)
 
 /-- `ofFn_siteH` as `Binding.bytesAt`. -/
-theorem bytesAt_siteH (a : AcceptedH T) (z : Witness T.m) (o : Fin (2 ^ T.nbl)) (N : ℕ) (col : ℕ → ℕ → ℕ)
+theorem bytesAt_siteH (a : AcceptedH T) (z : WitnessBits T.m) (o : Fin (2 ^ T.nbl)) (N : ℕ) (col : ℕ → ℕ → ℕ)
     (hcol : ∀ j < N, ∀ t < 8, col j t < 2 ^ a.st.c.kLog) :
     Binding.bytesAt z (fun (j : Fin N) (t : Fin 8) => siteAddrH a o (col j.val t.val)) =
       bytesOf (blockBit T z o) N col :=
@@ -103,7 +103,7 @@ def BcSiteH (a : AcceptedH T) (pop : Public) (o : Fin (2 ^ T.nbl)) (g u : ℕ) :
 /-- **The `b ‖ c` at a drawn unit's site is the population's** (`Hidden.bc_drawnW`), at a `BcSiteH`, for every row
 `p`. -/
 theorem bc_site_ofH {a : AcceptedH T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g u : ℕ} (hs : BcSiteH a pop o g u)
-    {z : Witness T.m} (hz : T.Satisfies z) (hg : g < a.st.c.g) {p : ℕ} (hp : p < a.st.c.ports.size) :
+    {z : WitnessBits T.m} (hz : T.Satisfies z) (hg : g < a.st.c.g) {p : ℕ} (hp : p < a.st.c.ports.size) :
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) => siteAddrH a o (Layout.bcAddr a.st.c g p j.val t.val)) =
       (pop.digest u p a.st.c.ports.size).data.toList := by
   obtain ⟨d, D, hd, hD, hlt, hregs, hpop, hg2, hu⟩ := hs
@@ -120,7 +120,7 @@ theorem bc_site_ofH {a : AcceptedH T} {pop : Public} {o : Fin (2 ^ T.nbl)} {g u 
 block `o` and template instance `g`, the template instance's stacked unit input `x` whose Δ key is message bit `bit` of
 byte `byte` of row `q` holds the witness's bit at that message column (`Typed.msgCol`), when the column is in the block.
 -/
-theorem copy_siteH (a : AcceptedH T) {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g : ℕ}
+theorem copy_siteH (a : AcceptedH T) {z : WitnessBits T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g : ℕ}
     (hg : g < a.st.c.g) (x : Fin a.rows.w) (hx : x.val < a.rows.nIn) {q byte bit : ℕ}
     (hk : Aliased.srcKey a.st.c x.val = .msg q byte bit) (hin : Typed.msgCol a.st.c g q byte bit < 2 ^ a.st.c.kLog) :
     T.block z o (a.col hg x) = z (siteAddrH a o (Typed.msgCol a.st.c g q byte bit)) := by
@@ -164,7 +164,7 @@ instance `g`, copy `u'`'s computed column `outCol j t` (its output `j`, bit `t`)
 copy's output word `lo[j]` is word `k` of output port `jo`. -/
 theorem out_copyH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
     (hrf : Hidden.Any.RowsFitS a.st.c)
-    {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w)
+    {z : WitnessBits T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w)
     {u' j t : ℕ} (hu' : u' < a.st.c.upv) (hj : j < (a.st.c.leavesOut.getD u' #[]).size) (ht : t < 16)
     (h1 : (unitRows a.st a.L.unit_built).nIn ≤ Layout.outCol a.st.c j t)
     (h2 : Layout.outCol a.st.c j t < (unitRows a.st a.L.unit_built).nIn + (unitRows a.st a.L.unit_built).nComp)
@@ -222,7 +222,7 @@ theorem out_copyH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
 /-- `Hidden.Any.row_bc_tgtS` in an accepted statement `T`, through its flat twin (`Hidden.Any.sat_flatF`). -/
 theorem AcceptedH.row_bc (a : AcceptedH T) (hupv : 0 < a.st.c.upv)
     (hrf : Hidden.Any.RowsFitS a.st.c)
-    {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
+    {z : WitnessBits T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
     (hp : p < a.st.c.ports.size) :
     bytesOf (blockBit T z o) 128 (bcCol a.st.c g p) = Binding.commitString
       (Hidden.Any.rowMsg a.st.c.ports[p]!
@@ -245,7 +245,7 @@ theorem AcceptedH.row_bc (a : AcceptedH T) (hupv : 0 < a.st.c.upv)
 bytes at its message columns (`Typed.msgCol`, `Hidden.Any.rowMsg`), under the 192 bytes at `saltCol`. -/
 theorem bc_site_colH (a : AcceptedH T) (hupv : 0 < a.st.c.upv)
     (hrf : Hidden.Any.RowsFitS a.st.c)
-    {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
+    {z : WitnessBits T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
     (hp : p < a.st.c.ports.size) :
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) => siteAddrH a o (bcCol a.st.c g p j.val t.val)) =
       Binding.commitString (Hidden.Any.rowMsg a.st.c.ports[p]!
@@ -262,7 +262,7 @@ theorem bc_site_colH (a : AcceptedH T) (hupv : 0 < a.st.c.upv)
 /-- `bc_site_colH` at the address the regions pin (`Layout.bcAddr`). -/
 theorem bc_site_commitH (a : AcceptedH T) (hupv : 0 < a.st.c.upv)
     (hrf : Hidden.Any.RowsFitS a.st.c)
-    {z : Witness T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
+    {z : WitnessBits T.m} (hz : T.Satisfies z) (o : Fin (2 ^ T.nbl)) {g p : ℕ} (hg : g < a.st.c.g)
     (hp : p < a.st.c.ports.size) :
     Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) => siteAddrH a o (Layout.bcAddr a.st.c g p j.val t.val)) =
       Binding.commitString (Hidden.Any.rowMsg a.st.c.ports[p]!

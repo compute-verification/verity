@@ -1153,7 +1153,7 @@ private noncomputable abbrev layL (x : Msg) (j : Fin (jOf x)) : _root_.Flock.Zk.
 
 /-- Table `j`'s witness as the cut's view reads it: `w`'s share with the tape's mask words (`Composed.zWith`). -/
 noncomputable abbrev zwL (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fin (jOf x)) :
-    FlockSoundness.Model.Witness (tabC PE x j).S.m :=
+    FlockSoundness.Model.WitnessBits (tabC PE x j).S.m :=
   Composed.zWith (stAt x j) (wtOf PE x w j) ((UE.tape x τ).1 j).1
 
 /-- **The deployed source's masked value at a sent index** `k < n_E` is the clear value the cut's view masks

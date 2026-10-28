@@ -170,7 +170,7 @@ def addr128 {m : ℕ} (hm : 7 ≤ m) (y : Fin (2 ^ (m - 7))) (v : Fin 128) : Fin
 
 /-- The honest ring-switching message for a claim on a witness (§12.2):
 `ŝ[v] = Σ_y eq(x', y)·z[128y + v]`. -/
-def shat {m : ℕ} (hm : 7 ≤ m) (c : Claim F m) (z : Witness m) : Fin 128 → F :=
+def shat {m : ℕ} (hm : 7 ≤ m) (c : Claim F m) (z : WitnessBits m) : Fin 128 → F :=
   fun v => ∑ y : Fin (2 ^ (m - 7)), eqAt (c.tail hm) y.val * ((z (addr128 hm y v)).val : F)
 
 omit [Fintype F] [DecidableEq F] in
@@ -195,7 +195,7 @@ theorem eqAt_split {m : ℕ} (hm : 7 ≤ m) (x : Fin (m - 6) → F) (y b : ℕ) 
     rw [htb]
 
 /-- **The claim's value from the honest message** (§12.2): `Σ_v w[v]·ŝ[v]`. -/
-theorem claim_eval_eq {m : ℕ} (hm : 7 ≤ m) (c : Claim F m) (z : Witness m) :
+theorem claim_eval_eq {m : ℕ} (hm : 7 ≤ m) (c : Claim F m) (z : WitnessBits m) :
     c.eval z = ∑ v : Fin 128, packedWeight c hm v * shat hm c z v := by
   classical
   let e : Fin (2 ^ (m - 7)) × Fin 128 ≃ Fin (2 ^ m) :=
@@ -275,7 +275,7 @@ end Packing
 element `y` is `f y` (bit `v` of `f y` is `z[128y + v]`), the verifier's recombination of the
 honest message is the inner product of `f` with `Φ_{r''}(eq(x', ·))`. -/
 theorem recombine_shat (A : Arith F K) (hA : A.Correct) {m : ℕ} (hm : 7 ≤ m) (c : Claim F m)
-    (z : Witness m) (f : Fin (2 ^ (m - 7)) → F)
+    (z : WitnessBits m) (f : Fin (2 ^ (m - 7)) → F)
     (hz : ∀ y v, z (addr128 hm y v) = A.unpack (f y) v) (r : Fin 7 → F) :
     recombine A (shat hm c z) r =
       ∑ y : Fin (2 ^ (m - 7)), f y * phi A r (eqAt (c.tail hm) y.val) := by
@@ -360,7 +360,7 @@ theorem opening_eq (A : Arith F K) {m : ℕ} (hm : 7 ≤ m) (claims : List (Clai
 /-! ## One codeword -/
 
 /-- The witness a message packs, at address `128y + v`, is bit `v` of the packed element `y`. -/
-theorem wit_addr128 (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule) (h7 : 7 ≤ S.m)
+theorem wit_addr128 (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (sch : Schedule) (h7 : 7 ≤ S.m)
     (M : Message F sch.k0 sch.level₀.logCols) (y : Fin (2 ^ (S.m - 7))) (v : Fin 128) :
     wit A S sch M (addr128 h7 y v) = A.unpack (packedAt sch M y.val) v := by
   have hdiv : (addr128 h7 y v).val / 128 = y.val := by simp only [addr128]; omega
@@ -371,13 +371,13 @@ theorem wit_addr128 (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Sche
   · rw [unpack_zero A hA]; rfl
 
 /-- The event that the opening ends outside the doomed set for the codeword `M`. -/
-def EM (S : Statement) (sch : Schedule) (M : Message F sch.k0 sch.level₀.logCols)
+def EM (S : BlockR1CS) (sch : Schedule) (M : Message F sch.k0 sch.level₀.logCols)
     (o : Option (OpenOut F)) : Prop :=
   ∃ op, o = some op ∧ (∑ y ∈ Finset.range (2 ^ (S.m - 7)), packedAt sch M y * op.b y) = op.T
 
 /-- **The opening, one codeword.** If some claim is false for `M`'s witness, the opening ends
 with `M` undoomed with probability at most `(7·n + 1)/|F|`. -/
-theorem value_EM_le (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule) (h7 : 7 ≤ S.m)
+theorem value_EM_le (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (sch : Schedule) (h7 : 7 ≤ S.m)
     (claims : List (Claim F S.m)) (M : Message F sch.k0 sch.level₀.logCols)
     (hM : ∃ c ∈ claims, ¬ c.Holds (wit A S sch M)) :
     value (EM S sch M) (opening A h7 claims) ≤
@@ -494,7 +494,7 @@ open Classical in
 /-- **The opening phase** (§12), for a list `W` of at most `L` messages: from a doomed start (every
 message of `W` falsifies some claim), the opening ends undoomed with probability at most
 `L · (7·n + 1)/|F|`. -/
-theorem opening_phase_of_list (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
+theorem opening_phase_of_list (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (sch : Schedule)
     (h7 : 7 ≤ S.m) (W : Set (Message F sch.k0 sch.level₀.logCols)) (claims : List (Claim F S.m))
     (hdoom : ∀ M ∈ W, ∃ c ∈ claims, ¬ c.Holds (wit A S sch M)) (L : ℕ)
     (hL : (Finset.univ.filter fun M => M ∈ W).card ≤ L) :
@@ -523,7 +523,7 @@ theorem opening_phase_of_list (A : Arith F K) (hA : A.Correct) (S : Statement) (
 open Classical in
 /-- **The opening phase** for the codewords near the committed table: `opening_phase_of_list` at
 `closeMsgs`. -/
-theorem opening_phase_of_card (A : Arith F K) (hA : A.Correct) (S : Statement) (sch : Schedule)
+theorem opening_phase_of_card (A : Arith F K) (hA : A.Correct) (S : BlockR1CS) (sch : Schedule)
     (h7 : 7 ≤ S.m) (C : Oracle F) (claims : List (Claim F S.m))
     (hdoom : ∀ M ∈ closeMsgs A sch C, ∃ c ∈ claims, ¬ c.Holds (wit A S sch M)) (L : ℕ)
     (hL : (Finset.univ.filter fun M => M ∈ closeMsgs A sch C).card ≤ L) :

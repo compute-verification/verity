@@ -19,7 +19,7 @@ read off its layout (`Refine.stmtOf`, which reads `Δ` and the regions `setupHid
   instance `r % c.g`. `DrawSetupH.refused`: at a draw with no `DrawSetupH`, the reference setup's statement with
   Integrate's `contra` regions, which no witness satisfies.
 * `tableAtH`, `planAtH`, `tabAtH`, `tablesAtH`: the draw's table, the one-table plan and its tables, as
-  `Prog.flock_headline_live_on` takes them.
+  `ProgSpec.flock_headline_live_on` takes them.
 
 `drawSetupH_of_accepts` and `tableAtH_of_accepts` (`Accepted.lean`): at a draw flock-verify accepts under hidden
 outputs, the table is `stmtOf` of the statement it accepted.
@@ -164,7 +164,7 @@ noncomputable def refused (S' : Finset (Fin n)) : TableH I mPts S' where
   hvu _ _ := x.hg
   o _ _ := ⟨0, Nat.two_pow_pos _⟩
 
-theorem refused_unsat (S' : Finset (Fin n)) (z : Witness (x.refused S').T.S.m) :
+theorem refused_unsat (S' : Finset (Fin n)) (z : WitnessBits (x.refused S').T.S.m) :
     ¬ (x.refused S').T.S.Satisfies z :=
   DrawSetup.contra_unsat (S := (x.refused S').T.S) (fun _ hR => List.mem_append_right _ hR) z
 
@@ -195,7 +195,7 @@ theorem tableAtH_cases (S : Finset (Fin n)) :
 
 /-- **A refused draw's table is unsatisfiable**: at a draw with no `DrawSetupH`, no witness satisfies the table. -/
 theorem tableAtH_unsat {S : Finset (Fin n)} (hS : ¬ Nonempty (DrawSetupH I mPts S (dj S)))
-    (z : Witness (tableAtH dj x₀ S).T.S.m) : ¬ (tableAtH dj x₀ S).T.S.Satisfies z := by
+    (z : WitnessBits (tableAtH dj x₀ S).T.S.m) : ¬ (tableAtH dj x₀ S).T.S.Satisfies z := by
   revert z
   unfold tableAtH
   rw [dite_eq_right_of_eq_false (eq_false hS)]
@@ -210,7 +210,7 @@ noncomputable abbrev planAtH : Finset (Fin n) → Reg → List (TabSpec mPts) :=
 abbrev tabAtH : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planAtH (Reg := Reg) dj x₀ S R).length :=
   fun _ _ _ => ⟨0, Nat.zero_lt_one⟩
 
-/-- The one-table plan's tables, as `Prog.flock_headline_live_on` takes them. -/
+/-- The one-table plan's tables, as `ProgSpec.flock_headline_live_on` takes them. -/
 noncomputable abbrev tablesAtH : Finset (Fin n) → Reg → TabSpec mPts := fun S _ => (tableAtH dj x₀ S).T
 
 end FlockSoundness.Discharge.HiddenExec

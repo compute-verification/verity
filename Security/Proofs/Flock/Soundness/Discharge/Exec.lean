@@ -72,14 +72,14 @@ since with hidden outputs flock-verify sets up its tables with `setupHidden`, ab
   (`flock_batched_linkSoundEL`), and with it the count curve and drawn-unit bound at the public transcript
   (`flock_batched_count_publicL`, `flock_batched_drawn_publicL`); the binding (`ValueBinding`), the value layer's
   bound (`linkBoundE`) and the public wires' facts are the unsalted ones;
-* `E2EL`, `BindingE2EL`: the end-to-end theorems over the salted session (`flock_e2e_countL`, `Prog.flock_e2e_countL`,
+* `E2EL`, `BindingE2EL`: the end-to-end theorems over the salted session (`flock_e2e_countL`, `ProgSpec.flock_e2e_countL`,
   `flock_e2e_count_hm96L`, `flock_e2e_drawn_hm96L`);
-* `Headline`: the headline carried to the live audit through `ExecRefines` (`Prog.flock_headline_exec`,
+* `Headline`: the headline carried to the live audit through `ExecRefines` (`ProgSpec.flock_headline_exec`,
   `flock_headline_exec_L`);
-* `HeadlineL`: the headline over the salted session (`Prog.flock_headline_L`, the bound of `Prog.flock_headline`), and
-  at the executable (`Prog.flock_headline_execL`), where only `hRef` stands for R11;
+* `HeadlineL`: the headline over the salted session (`ProgSpec.flock_headline_L`, the bound of `ProgSpec.flock_headline`), and
+  at the executable (`ProgSpec.flock_headline_execL`), where only `hRef` stands for R11;
 * `Live`: R11 for one-table sessions of the challenger, with `bad = ⊥`, given `Decodes` (`execRefines_one`), and
-  the headline at flock-verify's verdict with no `bad` term (`Prog.flock_headline_live`);
+  the headline at flock-verify's verdict with no `bad` term (`ProgSpec.flock_headline_live`);
 * `Decode`: two pieces of `DecodesAll`: a run on two lists is a run on one tape with those messages and coins
   (`Plays.toT`), and the accepted proof's cap is a function of `root_B` (`capOfRoot`, `verify_cap_hm96`);
 * `Emit`, `FramesLigerito`, `FramesRep`: the frames a run emits, round by round (`Emitted`, `chunks`), for each phase
@@ -97,7 +97,7 @@ since with hidden outputs flock-verify sets up its tables with `setupHidden`, ab
   for a drawn session the draw's proved units (`setupH_mPts_drawn`, `setupH_mPts_of_proved`), so equal at two draws
   that prove as many units (`setupH_mPts_eq`);
 * `LiveOn`: `Live`'s R11 and headline with the decoder right at the law's draws only (`DecodesOn`, `execRefines_on`,
-  `Prog.flock_headline_live_on`), which `DecodesAll` implies (`decodesOn_of_all`, `simAudit_eq_on`);
+  `ProgSpec.flock_headline_live_on`), which `DecodesAll` implies (`decodesOn_of_all`, `simAudit_eq_on`);
 * `LawDraw`: every draw of the live stratified law has `∑ s, k s` units, or is every unit where the run reads past the
   source's bytes (`execOS_draw_card`, `execOS_draw_card_or`), so a draw file with no closure sets up at
   `mPtsOf c.g (∑ s, k s)` or `mPtsOf c.g n` (`setupH_mPts_execOS`, `setupH_mPts_execOS_or`);

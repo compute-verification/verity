@@ -34,7 +34,7 @@ noncomputable def opCapL {D Sl : Type} [Inhabited D] [Inhabited Sl] (Hc : List U
 cap, at any level-0 table, where the strategy reaches rep `r`'s level-`ℓ + 1` table node after `j` coins. -/
 theorem slotOffRSL_le_offC {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [Inhabited Sl]
     (A : Model.Arith 𝔽 K) (Hc : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D Hc)
-    (S : Model.Statement) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
+    (S : Model.BlockR1CS) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (cap₀ : Model.Cap D) (T : Model.Oracle 𝔽)
     (r : Fin 2) (ℓ j : ℕ)
     (σ : Strategy (sessAfterL A Hc E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts [] [] cap₀))

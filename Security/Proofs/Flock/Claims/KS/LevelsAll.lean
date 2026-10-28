@@ -666,7 +666,7 @@ theorem ligerito_accepts_opening_reqs {D : Type} (ms : MerkleScheme) (sch : Floc
 /-- **One rep refines the model's, every level's request fixed** (§9–§14): `rep_refines_req0`, and the
 requests after level 0's are `LaterAt`, Ligerito starting after zerocheck's `3 + (m − 6)` rounds, lincheck's
 `3 + (kLog − 6)` and the ring switch's `claims + 1`. -/
-theorem rep_refines_reqs {D : Type} (spec : SessionSpec) (st : Setup) (S : Model.Statement) (hm : 13 ≤ S.m)
+theorem rep_refines_reqs {D : Type} (spec : SessionSpec) (st : Setup) (S : Model.BlockR1CS) (hm : 13 ≤ S.m)
     (h15 : 15 ≤ S.m) (sch : Flock.Schedule) (hmS : st.m = S.m) (hkS : st.kLog = S.kLog)
     (hfold : FoldRealizes st.fold S) (extra : List (Model.Claim 𝔽 S.m)) (sess : Session)
     (hext : ExtraRealizes st S sess.points extra) (hdim : DimSeam sch)

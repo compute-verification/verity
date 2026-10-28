@@ -217,7 +217,7 @@ theorem val_mul_cast (x y : ZMod 2) : (((x * y).val : ℕ) : 𝔽) = ((x.val : �
   exact ZMod.cast_mul (dvd_refl 2) x y
 
 /-- `modelFold` realizes the statement by construction. -/
-theorem modelFold_realizes (S : Statement) : FoldRealizes (modelFold S) S where
+theorem modelFold_realizes (S : BlockR1CS) : FoldRealizes (modelFold S) S where
   kLog := rfl
   pin := rfl
   fold α lw ρ v _ _ hv col := by
@@ -233,7 +233,7 @@ theorem modelFold_realizes (S : Statement) : FoldRealizes (modelFold S) S where
 section Rows
 
 variable {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : CoinsZK (RestOf Tz st)) (r : Fin 2)
-  (zw : Witness Tz.S.m) {nE L : ℕ} (R : Fin 2 → Fin L → 𝔽) (hp : Fin (nE + 4) → 𝔽)
+  (zw : WitnessBits Tz.S.m) {nE L : ℕ} (R : Fin 2 → Fin L → 𝔽) (hp : Fin (nE + 4) → 𝔽)
 
 theorem ix_eq (k : ℕ) (hk : k < nE + 4) : ix nE k = ⟨k, hk⟩ := Fin.ext (Nat.mod_eq_of_lt hk)
 
@@ -576,7 +576,7 @@ theorem foldN_eq_sum (ρ : ℕ → 𝔽) (n : ℕ) (u : ℕ → 𝔽) :
 /-- **The honest `final_a` (any of the honest zerocheck's folded tables) is the claim's value** at the skip coin and
 the residual coins: `Σ_x eq(ρ, x)·â(z, x)` is the model's evaluation of the claim `(·, L_s(z), ρ)` (`finalC_eq_eval` at
 the table `a` and the point `ρ`). -/
-theorem finalA_holds (m : ℕ) (hm : 6 ≤ m) (a b c : ℕ → 𝔽) (w : Model.Witness m)
+theorem finalA_holds (m : ℕ) (hm : 6 ≤ m) (a b c : ℕ → 𝔽) (w : Model.WitnessBits m)
     (ha : ∀ i : Fin (2 ^ m), a i.val = ((w i).val : 𝔽)) (r rho : Array F128) (z : F128) :
     (⟨fOf (Zerocheck.honest (m - 6) a b c r rho z).finalA, execArith.lagS (fOf z), vecOf (m - 6) rho⟩ :
       Model.Claim 𝔽 m).Holds w := by
@@ -585,7 +585,7 @@ theorem finalA_holds (m : ℕ) (hm : 6 ≤ m) (a b c : ℕ → 𝔽) (w : Model.
   rw [← h]
   exact (foldN_eq_sum _ _ _).symm
 
-theorem finalB_holds (m : ℕ) (hm : 6 ≤ m) (a b c : ℕ → 𝔽) (w : Model.Witness m)
+theorem finalB_holds (m : ℕ) (hm : 6 ≤ m) (a b c : ℕ → 𝔽) (w : Model.WitnessBits m)
     (hb : ∀ i : Fin (2 ^ m), b i.val = ((w i).val : 𝔽)) (r rho : Array F128) (z : F128) :
     (⟨fOf (Zerocheck.honest (m - 6) a b c r rho z).finalB, execArith.lagS (fOf z), vecOf (m - 6) rho⟩ :
       Model.Claim 𝔽 m).Holds w := by
@@ -602,7 +602,7 @@ theorem getD_mem_of_lt (l : List ℕ) {x : ℕ} (hx : x < l.length) : l.getD x 0
   rw [List.getD_eq_getElem _ _ hx]; exact List.getElem_mem hx
 
 /-- Off the mask slot, `z = (w, u)` is the witness. -/
-theorem zWith_off (st : Stmt) {M nMask : ℕ} (hm7 : 7 ≤ M) (w : Witness M) (hn : nMask = (maskWordsOf st).length)
+theorem zWith_off (st : Stmt) {M nMask : ℕ} (hm7 : 7 ≤ M) (w : WitnessBits M) (hn : nMask = (maskWordsOf st).length)
     (u : Fin nMask → Fin 128 → ZMod 2) (y : Fin (2 ^ (M - 7))) (v : Fin 128) (hy : y.val ∉ maskWordsOf st) :
     zWith st w u (addr128 hm7 y v) = w (addr128 hm7 y v) := by
   unfold zWith
@@ -616,7 +616,7 @@ theorem zWith_off (st : Stmt) {M nMask : ℕ} (hm7 : 7 ≤ M) (w : Witness M) (h
   · rfl
 
 /-- On mask word `x`, `z = (w, u)` is `u x`, the mask slot's words distinct. -/
-theorem zWith_on (st : Stmt) {M nMask : ℕ} (hm7 : 7 ≤ M) (w : Witness M) (hn : nMask = (maskWordsOf st).length)
+theorem zWith_on (st : Stmt) {M nMask : ℕ} (hm7 : 7 ≤ M) (w : WitnessBits M) (hn : nMask = (maskWordsOf st).length)
     (u : Fin nMask → Fin 128 → ZMod 2) (hnd : (maskWordsOf st).Nodup) (x : Fin nMask) (y : Fin (2 ^ (M - 7)))
     (v : Fin 128) (hy : (maskWordsOf st).getD x.val 0 = y.val) :
     zWith st w u (addr128 hm7 y v) = u x v := by
@@ -648,7 +648,7 @@ theorem castF_eq (b : ZMod 2) : ZK.Table.castF (F := 𝔽) b = ((b.val : ℕ) : 
 
 /-- **The masked claims' `ŝ` is `shat` at `z = (w, u)`**: the non-mask words' part `ν` plus the mask words' part
 (`maskHom`) is the sum over every word of `z = (w, u)`, the mask slot's words distinct and inside the witness. -/
-theorem sHat_shat (st : Stmt) {M nMask : ℕ} (hm7 : 7 ≤ M) (w : Witness M) (hn : nMask = (maskWordsOf st).length)
+theorem sHat_shat (st : Stmt) {M nMask : ℕ} (hm7 : 7 ≤ M) (w : WitnessBits M) (hn : nMask = (maskWordsOf st).length)
     (u : Fin nMask → Fin 128 → ZMod 2) (hnd : (maskWordsOf st).Nodup)
     (hlt : ∀ x ∈ maskWordsOf st, x < 2 ^ (M - 7)) (e : ℕ → 𝔽) (v : Fin 128) :
     (∑ x : Fin (2 ^ (M - 7)), if x.val ∈ maskWordsOf st then 0
@@ -679,7 +679,7 @@ theorem sHat_shat (st : Stmt) {M nMask : ℕ} (hm7 : 7 ≤ M) (w : Witness M) (h
   · intro x _
     rw [zWith_on st hm7 w hn u hnd x _ v rfl, castF_eq]
 
-theorem wordOf_bits {M : ℕ} (hm7 : 7 ≤ M) (zw : Witness M) (y : Fin (2 ^ (M - 7))) (v : Fin 128) :
+theorem wordOf_bits {M : ℕ} (hm7 : 7 ≤ M) (zw : WitnessBits M) (y : Fin (2 ^ (M - 7))) (v : Fin 128) :
     zw (addr128 hm7 y v) = execArith.unpack (wordOf zw y.val) v := by
   rw [wordOf, execArith_correct.unpack_pack]
   show _ = dite _ _ _
@@ -687,7 +687,7 @@ theorem wordOf_bits {M : ℕ} (hm7 : 7 ≤ M) (zw : Witness M) (y : Fin (2 ^ (M 
   rfl
 
 theorem recombine_sum {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
-    (A : Arith F K) (hA : A.Correct) {M : ℕ} (hm7 : 7 ≤ M) (z : Witness M) (f : Fin (2 ^ (M - 7)) → F)
+    (A : Arith F K) (hA : A.Correct) {M : ℕ} (hm7 : 7 ≤ M) (z : WitnessBits M) (f : Fin (2 ^ (M - 7)) → F)
     (hz : ∀ y v, z (addr128 hm7 y v) = A.unpack (f y) v) (e : ℕ → F) (s : Fin 128 → F)
     (hs : ∀ v, s v = ∑ y : Fin (2 ^ (M - 7)), e y.val * ((z (addr128 hm7 y v)).val : F)) (r : Fin 7 → F) :
     recombine A s r = ∑ y : Fin (2 ^ (M - 7)), f y * Model.phi A r (e y.val) := by
@@ -781,7 +781,7 @@ def MaskCol (st : Stmt) (i : ℕ) : Prop :=
 
 /-- **The mask slot is isolated** in a statement: its rows of `A₀`, `B₀` are identity rows, no other row reads a mask-slot
 column, and neither the pin nor a region bit is in it. -/
-structure MaskIsolated (st : Stmt) (S : Statement) : Prop where
+structure MaskIsolated (st : Stmt) (S : BlockR1CS) : Prop where
   row : ∀ i c : Fin (2 ^ S.kLog), MaskCol st i.val →
     S.A₀ i c = (if i = c then 1 else 0) ∧ S.B₀ i c = (if i = c then 1 else 0)
   col : ∀ i c : Fin (2 ^ S.kLog), ¬ MaskCol st i.val → MaskCol st c.val → S.A₀ i c = 0 ∧ S.B₀ i c = 0
@@ -845,7 +845,7 @@ theorem zmod2_mul_self (x : ZMod 2) : x * x = x := by
 theorem satisfies_zWith (st : Stmt) (hwf : StmtWF st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
     (hm : st.m = st.c.kLog + st.nbl)
     (hmask : ∀ r ∈ st.c.ranges.toList, r.kind = Kind.mask → 7 ≤ r.slotLog ∧ r.start + 2 ^ r.slotLog ≤ 2 ^ st.c.kLog)
-    (hI : MaskIsolated st (stmtOf st hwf regs)) (w : Witness st.m) (hw : (stmtOf st hwf regs).Satisfies w)
+    (hI : MaskIsolated st (stmtOf st hwf regs)) (w : WitnessBits st.m) (hw : (stmtOf st hwf regs).Satisfies w)
     {nMask : ℕ} (u : Fin nMask → Fin 128 → ZMod 2) (hn : nMask = (maskWordsOf st).length) :
     (stmtOf st hwf regs).Satisfies (zWith st w u) := by
   set S := stmtOf st hwf regs with hS
@@ -1253,7 +1253,7 @@ theorem innerOf_holds_rep_of (Tz : TabZK FlockLevel3.GF128 mPts) (st : Stmt) (hw
     omega
   -- the prover's table `z = (w, u)` satisfies the statement
   case hw =>
-    have key : ∀ (S' : Statement) (_ : S' = stmtOf st hwf (regionsOf st)) (w : Witness S'.m), S'.Satisfies w →
+    have key : ∀ (S' : BlockR1CS) (_ : S' = stmtOf st hwf (regionsOf st)) (w : WitnessBits S'.m), S'.Satisfies w →
         S'.Satisfies (zWith st w ω.1) := by
       intro S' hS' w hw
       subst hS'

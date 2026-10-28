@@ -27,7 +27,7 @@ open Classical in
 /-- **A table's run after the link points under the leaf scheme `Lf`**: both reps, then its openings with their
 salts; accepted iff both reps accept on the openings and every path verifies from its row's leaf under its salt. -/
 noncomputable def tableAfterL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
+    (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ)
     (cap₀ : Cap D) (pts : Fin 2 → Fin mPts → F) : Game (OutCL F D Sl) :=
   (interleave (repC A 0 S sch hm (extraClaims S ptLocal mPts pts))
     (repC A 1 S sch hm (extraClaims S ptLocal mPts pts))).bind
@@ -39,7 +39,7 @@ noncomputable def tableAfterL (A : Arith F K) (H : List UInt8 → D) (E : Merkle
 omit [Fintype K] in
 /-- One table's salted session is its level-0 cap, the link points, then `tableAfterL`. -/
 theorem tableCL_eq (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
-    (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) :
+    (Lf : Merkle.Leaf (List F) Sl D H) (S : BlockR1CS) (sch : Schedule) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) :
     tableCL A H E Lf S sch hm ptLocal mPts =
       Game.send (Cap D) fun cap₀ => Game.coin (Fin 2 → Fin mPts → F) fun pts =>
         tableAfterL A H E Lf S sch hm ptLocal mPts cap₀ pts :=

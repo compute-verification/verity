@@ -63,7 +63,7 @@ theorem value_batch_le {α : Type} (Q : α → Prop) :
 /-- A table of the verifier's session: a statement with its `fast100` schedule and link-point
 layout, at a size the numbers cover (`22 ≤ m ≤ 35`, shapes in range). -/
 structure FlockTable where
-  S : Statement
+  S : BlockR1CS
   sch : Schedule
   hsch : fast100 S.m = some sch
   hm1 : 22 ≤ S.m

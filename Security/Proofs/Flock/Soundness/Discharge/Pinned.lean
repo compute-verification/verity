@@ -18,11 +18,11 @@ to cover every output port).
 
 namespace FlockSoundness.Discharge.Pinned
 
-variable {S : Model.Statement}
+variable {S : Model.BlockR1CS}
 
 /-- **A pinned bit's block rows**: its net's linear form `a` in `A` and the constant in `B`, each with Δ's copy of the
 forced-zero row `zero` (`(r, r)` and `(r, zero)`) added. -/
-def PinnedRow (S : Model.Statement) (r zero : Fin (2 ^ S.kLog)) (a : Fin (2 ^ S.kLog) → ZMod 2) : Prop :=
+def PinnedRow (S : Model.BlockR1CS) (r zero : Fin (2 ^ S.kLog)) (a : Fin (2 ^ S.kLog) → ZMod 2) : Prop :=
   (∀ j, S.A₀ r j = a j + (if j = r then 1 else 0) + (if j = zero then 1 else 0)) ∧
     ∀ j, S.B₀ r j = (if j = S.pin then 1 else 0) + (if j = r then 1 else 0) + (if j = zero then 1 else 0)
 
@@ -40,7 +40,7 @@ theorem pinned_rule {x α : ZMod 2} (h : (α + x) * (1 + x) = x) : x = 0 ∧ α 
 /-- **A pinned bit carries 0, and so does its linear form**, in every block of a satisfying witness whose forced-zero
 row carries 0. -/
 theorem PinnedRow.block_eq {r zero : Fin (2 ^ S.kLog)} {a : Fin (2 ^ S.kLog) → ZMod 2} (h : PinnedRow S r zero a)
-    {z : Model.Witness S.m} (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl)) (hzero : S.block z o zero = 0) :
+    {z : Model.WitnessBits S.m} (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl)) (hzero : S.block z o zero = 0) :
     S.block z o r = 0 ∧ dotProduct a (S.block z o) = 0 := by
   have hr := hz.1 o r
   have hp : dotProduct (fun j => if j = S.pin then (1 : ZMod 2) else 0) (S.block z o) = 1 := by

@@ -22,7 +22,7 @@ bounds the second kind of run and pays for it in the headline, so that the decod
 * `DecodesWhereOfOn`: `DecodesWhere` from a `DecodesOn` that holds at every law whose draws are all `good`.
 * `MPtsAtCard`: setupH's `m_pts` at a draw file that proves exactly its draw's units (`hdj`) is `mPtsOf c.g` of the
   draw's size.
-* `HeadlineCard`: `Prog.flock_headline_live_on` with the decoder needed only at the draws of `∑ s, k s` units, its
+* `HeadlineCard`: `ProgSpec.flock_headline_live_on` with the decoder needed only at the draws of `∑ s, k s` units, its
   bound gaining exactly `(∑ s, k s) · 2^-64`.
 
 `hdj`, that the server's draw file proves exactly its draw's units, is a property of the file the challenger writes,
@@ -171,12 +171,12 @@ def MPtsAtCard : Prop :=
     st.mPts = mPtsOf c.g S.card
 
 /-- **The headline at the executable, for one-table sessions, with the decoder right only at the draws of
-`∑ s, k s` units.** `Prog.flock_headline_live_on`'s hypotheses, with `hdec` asked only at the law's draws of
+`∑ s, k s` units.** `ProgSpec.flock_headline_live_on`'s hypotheses, with `hdec` asked only at the law's draws of
 `∑ s, k s` units (`DecodesWhere`), and each stratum's stream holding at least the `need` bytes `onWith` reads first
-(`hLb`). Its bound is `Prog.flock_headline_live_on`'s plus exactly `(∑ s, k s) · 2^-64`: `Prog.flock_headline_execL`'s
+(`hLb`). Its bound is `ProgSpec.flock_headline_live_on`'s plus exactly `(∑ s, k s) · 2^-64`: `ProgSpec.flock_headline_execL`'s
 `Pr[bad]` at `bad o := o.2.1.card ≠ ∑ s, k s`, bounded by `DrawCardRare` under A3. -/
 def HeadlineCard : Prop :=
-  ∀ {N' n : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N')) {Reg : Type} {mPts : ℕ}
+  ∀ {N' n : ℕ} (p : FlockSoundness.ProgSpec N' n) (outs : Finset (Fin N')) {Reg : Type} {mPts : ℕ}
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (_hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
