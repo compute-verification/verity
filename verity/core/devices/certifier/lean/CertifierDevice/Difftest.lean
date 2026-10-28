@@ -121,7 +121,7 @@ def slotJson : Option ByteArray → Json
   | none => .null
   | some b => hexJson b
 
-def recordJson (r : Record) : Json :=
+def recordJson (r : BlockGrid) : Json :=
   Json.mkObj [("link", .str r.link), ("window", toJson r.window),
               ("grid", .arr (r.grid.map fun row => .arr (row.map slotJson))),
               ("status", match Status.reason? r.status with | none => .null | some x => .str (reasonValue x))]
@@ -136,8 +136,8 @@ def actionJson : Action → Json
 
 /-- An honest run's check: every record complete, and egress window w's row i is `expectedRow` at bucket w·T + i of the
 Program's frames under the syncs `step` declared. -/
-def honest (c : Config) (syncs : Array ClockSync) (program : Array (ByteArray × Nat × Nat)) (records : Array Record) :
-    Except String Unit := do
+def honest (c : Config) (syncs : Array ClockSync) (program : Array (ByteArray × Nat × Nat))
+    (records : Array BlockGrid) : Except String Unit := do
   for r in records do
     if let some x := Status.reason? r.status then throw s!"an honest run faulted: {r.link} window {r.window}: {reasonValue x}"
   let p := c.egress

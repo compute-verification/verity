@@ -16,26 +16,27 @@ open Properties.CertifierDevice (Packed horizon outputs after)
 open Properties.CertifierDevice.Proofs
 
 /-- A record of the egress grid on the egress link, or of the ingress grid on the ingress link: `T` packed rows. -/
-def OfGrid (c : Config) (r : Record) : Prop :=
+def OfGrid (c : Config) (r : BlockGrid) : Prop :=
   (r.link = c.egressLink ∧ r.grid.size = c.egress.buckets ∧ ∀ row ∈ r.grid, Packed c.egress row) ∨
     (r.link = c.ingressLink ∧ r.grid.size = c.ingress.buckets ∧ ∀ row ∈ r.grid, Packed c.ingress row)
 
 /-- The windows of the records of `P` on link `l`, in order. -/
-def windowsOn (l : String) (P : List Record) : List Nat := (P.filter fun r => decide (r.link = l)).map Record.window
+def windowsOn (l : String) (P : List BlockGrid) : List Nat :=
+  (P.filter fun r => decide (r.link = l)).map BlockGrid.window
 
-theorem windowsOn_append (l : String) (P Q : List Record) :
+theorem windowsOn_append (l : String) (P Q : List BlockGrid) :
     windowsOn l (P ++ Q) = windowsOn l P ++ windowsOn l Q := by
   simp [windowsOn, List.filter_append]
 
-theorem windowsOn_eq {l : String} {r : Record} (h : r.link = l) : windowsOn l [r] = [r.window] := by
+theorem windowsOn_eq {l : String} {r : BlockGrid} (h : r.link = l) : windowsOn l [r] = [r.window] := by
   simp [windowsOn, h]
 
-theorem windowsOn_ne {l : String} {r : Record} (h : r.link ≠ l) : windowsOn l [r] = [] := by
+theorem windowsOn_ne {l : String} {r : BlockGrid} (h : r.link ≠ l) : windowsOn l [r] = [] := by
   simp [windowsOn, h]
 
 /-- What a run's prefix is: the device's state, the bucketer of the ingress grid's shape, both counts within their
 horizons, and the records published so far, `P`, one per window each grid closed, in order, each of its grid. -/
-structure Inv (c : Config) (st : State) (P : List Record) : Prop where
+structure Inv (c : Config) (st : State) (P : List BlockGrid) : Prop where
   good : Good c st
   bu : BuGood c st.bucketer
   sh_le : st.shaper.t ≤ horizon c
@@ -51,7 +52,7 @@ theorem init_inv (c : Config) : Inv c (init c) [] := by
   · rw [init_t]; simp [windowsOn]
   · rw [hb]; simp [windowsOn]
 
-theorem publishes_egress (p q : Prop) [Decidable p] [Decidable q] (w : ByteArray) (r : Record) (g : Params) :
+theorem publishes_egress (p q : Prop) [Decidable p] [Decidable q] (w : ByteArray) (r : BlockGrid) (g : Params) :
     publishes ((if p then [Action.writeLink w] else []) ++ if q then [Action.publish r g] else []) =
       if q then [r] else [] := by
   by_cases hp : p <;> by_cases hq : q <;> simp [hp, hq, publishes]
@@ -60,7 +61,7 @@ theorem range_close {t T : Nat} (h : (t + 1) % T = 0) : List.range ((t + 1) / T)
   rw [succ_div_of_mod h, List.range_succ]
 
 /-- **One step keeps `Inv`**, the records it publishes appended. -/
-theorem step_inv {c : Config} (hd : Distinct c) {st : State} {P : List Record} (h : Inv c st P)
+theorem step_inv {c : Config} (hd : Distinct c) {st : State} {P : List BlockGrid} (h : Inv c st P)
     (ev : Event) : Inv c (step st ev).1 (P ++ publishes (step st ev).2) := by
   by_cases hl : ∃ now backlog, ev = .tick .egress now backlog ∧ st.shaper.t < horizon c
   · obtain ⟨now, backlog, rfl, ht⟩ := hl
@@ -74,7 +75,7 @@ theorem step_inv {c : Config} (hd : Distinct c) {st : State} {P : List Record} (
     · simp only [hm, ↓reduceIte]
       obtain ⟨hT0, hlast, -⟩ := mod_last hm
       generalize hrec : (⟨c.egressLink, st.shaper.t / c.egress.buckets, st.shaper.certifier.rows.push row, status⟩ :
-        Record) = rec
+        BlockGrid) = rec
       have hl : rec.link = c.egressLink := by rw [← hrec]
       have hw : rec.window = st.shaper.t / c.egress.buckets := by rw [← hrec]
       refine ⟨e1, h.bu.rel hb, by rw [e2]; exact ht, by rw [hb.2]; exact h.bu_le, ?_, ?_, ?_⟩
@@ -132,7 +133,7 @@ theorem step_inv {c : Config} (hd : Distinct c) {st : State} {P : List Record} (
         by rw [hb.2]; exact h.ig, h.grid⟩
 
 theorem inv_after {c : Config} (hd : Distinct c) :
-    ∀ (tr : List Event) (st : State) (P : List Record), Inv c st P →
+    ∀ (tr : List Event) (st : State) (P : List BlockGrid), Inv c st P →
       Inv c (after st tr) (P ++ (outputs st tr).flatMap publishes)
   | [], st, P, h => by simpa [after, outputs] using h
   | ev :: tr, st, P, h => by
@@ -170,7 +171,7 @@ theorem range_filter_eq {W w : Nat} (hw : w < W) : (List.range W).filter (fun x 
       simp
 
 /-- **One record of each window**: if the windows on `l` are `0, …, W − 1`, window `w < W` has exactly one. -/
-theorem filter_one {P : List Record} {l : String} {W w : Nat} (h : windowsOn l P = List.range W) (hw : w < W) :
+theorem filter_one {P : List BlockGrid} {l : String} {W w : Nat} (h : windowsOn l P = List.range W) (hw : w < W) :
     ∃ r, P.filter (fun r => decide (r.link = l ∧ r.window = w)) = [r] := by
   have e : P.filter (fun r => decide (r.link = l ∧ r.window = w)) =
       (P.filter fun r => decide (r.link = l)).filter fun r => decide (r.window = w) := by
@@ -179,10 +180,11 @@ theorem filter_one {P : List Record} {l : String} {W w : Nat} (h : windowsOn l P
     funext r
     simp [Bool.and_comm]
   rw [e]
-  have hm : ((P.filter fun r => decide (r.link = l)).filter fun r => decide (r.window = w)).map Record.window = [w] := by
-    have e2 := List.filter_map (f := Record.window) (p := fun x => decide (x = w))
+  have hm : ((P.filter fun r => decide (r.link = l)).filter fun r => decide (r.window = w)).map BlockGrid.window = [w] := by
+    have e2 := List.filter_map (f := BlockGrid.window) (p := fun x => decide (x = w))
       (l := P.filter fun r => decide (r.link = l))
-    rw [show ((fun x => decide (x = w)) ∘ Record.window) = (fun r : Record => decide (r.window = w)) from rfl] at e2
+    rw [show ((fun x => decide (x = w)) ∘ BlockGrid.window) = (fun r : BlockGrid => decide (r.window = w))
+      from rfl] at e2
     unfold windowsOn at h
     rw [← e2, h, range_filter_eq hw]
   obtain ⟨r, hr, -⟩ := List.map_eq_singleton_iff.1 hm
