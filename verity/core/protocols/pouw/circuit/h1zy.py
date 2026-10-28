@@ -1,5 +1,5 @@
-"""H1's z/y records checked in the tile unit (RT4-INT-33): the served `verity_int8::scaled_mm_zy` commits each R × C
-unit's record (#3053's z table, kernels' #3018), and `PouwH1TileZy` reads its unit's record as an input and checks both
+"""H1's z/y records checked in the tile unit: the served `verity_int8::scaled_mm_zy` commits each R × C
+unit's record (its call's z table, `h1window.TABLES`), and `PouwH1TileZy` reads its unit's record as an input and checks both
 halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by the unit, under Served's checked-record form
 (pending), rather than taken on the fused kernel's word.
 
@@ -18,7 +18,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   `PouwZyDequant_v2`, circuits' three Boolean pieces in that order (`S32ToF32Rn_v2`, two `F32Mul_v4`, `F2fpBf16_v2`, the
   epilogue of `ScaledMmS8Coordinate_v2`), its word view `PouwZyDequant_v1` on their words (`dequant`). Every NaN is 0x7FFF
   (``cvt.rn.bf16.f32``); torch's CPU cast gives 0x7FC0, the one encoding where the CPU oracle and the GPU differ.
-* **The scales.** A unit's A row is its K codes and then its f32 s_a, little-endian (#3053's A table leaf, `ROW`), and its
+* **The scales.** A unit's A row is its K codes and then its f32 s_a, little-endian (its A table leaf, `ROW`), and its
   B row the K weight codes and then their f32 s_w: each scale is committed with its row, so a unit reads the A row's scale
   at the A row's position and the weight row's at the weight row's (`Accounting.Served.DequantOf`: s_a with the A row, s_w
   registered).
@@ -33,21 +33,21 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
 * **ok** is a check word, no served value (no ``outZ``, ``outY`` or ``served`` role; Served's ``check`` class, pending), read
   through a row of known content: the verifier holds it to 1 under a public salt (h1_prove's `ok_salt`), so a proof the
   verifier accepts is one whose unit computed 1, and a record that is not the unit's product and its dequant has no
-  accepted proof. The ok rows are the verifier's own registered value ``ok`` (h1_prove's `register_ok`, #3124: row u the
+  accepted proof. The ok rows are the verifier's own registered value ``ok`` (h1_prove's `register_ok`: row u the
   word 1 under unit u's public salt), and each unit's ok port ``o1`` reads it at the unit's row through ``--registered``,
-  so Lean opens each ok row against that root rather than reading ok off the public file alone (proofs'
-  ``CheckedSessionSound``, #3108, binds ok only through a port of ``own``). A lane's and a combine's ok take the same
+  so Lean opens each ok row against that root rather than reading ok off the public file alone (``CheckedSessionSound``,
+  `Security/Proofs/Accounting/TS/CheckedSound.lean`, binds ok only through a port of ``own``). A lane's and a combine's ok take the same
   form: each statement's ok port (``o0``, its one output) reads the verifier's own ``ok``, one row of the word 1 a
   statement under its public salt, beside the ``partials`` ports.
 * **A leaf's lanes** (option A: the served path keeps one receipt a 32 × 32 leaf, and a drawn leaf is proved as its 32
-  lanes and their combine). Option A is a proof strategy, not a new Served form (RT4-LOGIC-30): a drawn leaf is one Cd
-  unit and meets Served as `PouwH1TileZy_v1` does, and BRIDGE2's linked realization carries the 33 statements to it.
+  lanes and their combine). Option A is a proof strategy, not a new Served form: a drawn leaf is one Cd
+  unit and meets Served as `PouwH1TileZy_v1` does, and `Accounting.Guarantees.TS.LeafLanesSound`'s linked realization carries the 33 statements to it.
   CP-W's receipt is the XOR over the leaf's lanes of their partials (`h1tile.fold`). The partials are proof-layer values,
   not Cd inputs: the prover commits them after the draw under hiding leaves, like a proof's own outputs, one row per lane
   (``partials``, row l lane l; proofs' service piece, `one_stage.produced`), and the 33 statements open that one
   commitment as registered ports of the verifier's own, lane l's ``partials`` at row l and the combine's ``p0`` .. ``p31``
-  at rows 0 .. 31 (#3116's `pouw.leaf_lanes.reads`; each statement's ok is its ``o0``), since a port ``own`` doesn't name
-  is free in #3108's relation (RT4-LOGIC-29(c)). A partial is 2 (KS + m) u32 (8,320 bits at K = 4096), so it is an
+  at rows 0 .. 31 (`pouw.leaf_lanes.reads`; each statement's ok is its ``o0``), since a port ``own`` doesn't name
+  is free in ``CheckedSessionSound``'s relation. A partial is 2 (KS + m) u32 (8,320 bits at K = 4096), so it is an
   input, never an output, and a row of 8 (KS + m) bytes. The combine reads only those rows and the receipt, and C-Flock
   proves a statement only with a row that compresses before its last block, so `combine` is staged only at K >= 384
   (`LEAST_K`: 112-byte rows, whose padding spills into a second block); `lane` takes any positive K. Both stage only a
@@ -56,7 +56,7 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
   by row slot, b: its 8 B rows by column slot, admit: the leaf's R admit bits, zy: the leaf's whole record, partials: its
   row, salt, position, roots, lane) -> {ok}``. Its noise is the leaf's seed_j stream at its rows' and columns' blocks
   (`h1tile.Layout`) and its keys block l of σ_R's, so its chain's words are the lane's partial as the served receipt XORs
-  them (kernels' ``lane_partials``, #3095), each masked by v4's gate, the admit bits' OR (`PouwOrBit`, `PouwMask32`): a
+  them (the kernels' ``lane_partials``), each masked by v4's gate, the admit bits' OR (`PouwOrBit`, `PouwMask32`): a
   dead leaf's partials are zero. ok is 1 exactly when its partials row is those words and its 32 cells of the record
   (`lane_cells`: by row slot, then column slot) pass `PouwZyCheck_v1{4, 8}` at its rows' z (TILE's v1 or v3 form) and
   scales, a dead leaf's cells too (z = 0, y = dq(0, +0, s_w)). The index l is a public input, one 16-bit word (`LANE`:
@@ -911,8 +911,8 @@ def window_unit(tile: Any) -> Any:
 
 # -- the statements' ports ------------------------------------------------------------------------------------------------------
 
-#: a lane's public row ``pub``: the leaf's salt, position and roots and the lane's index, in that order (#3116's
-#: `pouw.leaf_lanes.PUBLIC`)
+#: a lane's public row ``pub``: the leaf's salt, position and roots and the lane's index, in that order
+#: (`pouw.leaf_lanes.PUBLIC`)
 PUBLIC = ("salt", "position", "roots", "lane")
 #: a J10-R lane's (`PouwH1LaneZy_v2`, `PouwH1LaneZyChunk_v2`): the unit's call and blocks after its roots
 PUBLIC_J10R = ("salt", "position", "roots", "call", "blocks", "lane")
