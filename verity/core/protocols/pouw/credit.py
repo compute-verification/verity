@@ -2577,7 +2577,7 @@ def _uint(n: int) -> bytes:
 
 
 def _frame(tag: bytes, *parts: bytes) -> bytes:
-    """frame-v3's SHA-512 hash (`verity.ml.commitments.merkle`'s ``_hash`` under ``sha512``)."""
+    """frame-v3's SHA-512 hash (`verity.ml.commitments.merkle.frame_hash`)."""
     return hashlib.sha512(_FRAME + len(tag).to_bytes(4, "big") + tag
                           + b"".join(len(p).to_bytes(8, "big") + p for p in parts)).digest()
 

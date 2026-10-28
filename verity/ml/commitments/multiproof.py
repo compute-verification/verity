@@ -27,9 +27,8 @@ leaves, padding leaves past ``count``), so every known node has a sibling
 and a padding sibling is simply supplied by the proof like any other.  With
 one opened rank the multiproof is that rank's authentication path.
 
-Multiproofs are over the SHA frames only: ``frame-v3-sha512`` (``hash="sha512"``)
-and the SHA-256 frame the frozen SP1 backend reads.  A BLAKE3 domain
-(``frame-b3``, ``frame-b3s``) is refused.
+Multiproofs are over both frames: ``frame-v3-sha512`` (``hash="sha512"``)
+and the SHA-256 frame the frozen SP1 backend reads; any other hash is refused.
 """
 
 from __future__ import annotations
@@ -37,7 +36,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
-from verity.ml.commitments.merkle import _NODE, MerkleTree, _hash, _uint, merkle_depth
+from verity.ml.commitments.merkle import _NODE, MerkleTree, frame_hash, _uint, merkle_depth
 from verity.ml.commitments.scheme import sha
 from verity.errors import ProtocolError
 
@@ -61,7 +60,7 @@ def _node_of(domain_id: bytes, hash: str = "sha256") -> Node:
     sha(hash)
 
     def node(level: int, index: int, left: bytes, right: bytes) -> bytes:
-        return _hash(_NODE, domain_id, _uint(level), _uint(index), left, right, hash=hash)
+        return frame_hash(_NODE, domain_id, _uint(level), _uint(index), left, right, hash=hash)
 
     return node
 

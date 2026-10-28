@@ -237,7 +237,7 @@ def statement(name: str, x, w, accs, total: int | None = None, lo: int = 0, leaf
     schemas = {"a": SCHEMES[leaf], "b": SCHEMES[leaf], "y": ysch}
     bind = {t: binding_digest(dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=manifest,
                                        lo=lo, hi=lo + n, K=K, tree=t, schema=schemas[t]) for t in "aby"}
-    dom = {n: CommitmentDomain(bind[n], OWNER[n], RangeIndexedDomain(0, counts[n])) for n in "aby"}
+    dom = {n: CommitmentDomain(bind[n], OWNER[n], RangeIndexedDomain(0, counts[n]), hash="sha256") for n in "aby"}
     fv = FrameV3({"a": Port(dom["a"], RowLeaf(leaf, ROLE_X, word_bits, K)),
                   "b": Port(dom["b"], RowLeaf(leaf, ROLE_W, word_bits, K)), "y": Port(dom["y"], WordLeaf(ysch, ybytes))})
     if leaf == "sha256":
@@ -303,7 +303,7 @@ def _frame_v3(dataset: str, tier: str, manifest: str, lo: int, K_: int, schema_r
     schemas = {"a": schema_row, "b": schema_row, "y": ysch}
     bind = {t: binding_digest(dataset=dataset, tier=tier, manifest_sha256=manifest, lo=lo, hi=lo + n, K=K_, tree=t,
                                        schema=schemas[t]) for t in "aby"}
-    dom = {t: CommitmentDomain(bind[t], OWNER[t], RangeIndexedDomain(0, n)) for t in "aby"}
+    dom = {t: CommitmentDomain(bind[t], OWNER[t], RangeIndexedDomain(0, n), hash="sha256") for t in "aby"}
     fv = FrameV3({"y": Port(dom["y"], WordLeaf(ysch, ybytes))})
     leaves = {"a": [dom["a"].leaf(r, r, schema_row, d) for r, d in enumerate(digests_a)],
               "b": [dom["b"].leaf(r, r, schema_row, d) for r, d in enumerate(digests_b)],

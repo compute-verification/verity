@@ -43,7 +43,7 @@ def _rewrite(src: Path, dst: Path, relation: str, scheme: str, change: str) -> N
         from verity.ml.commitments.frame_v3 import FrameV3, Port, WordLeaf
         from verity.ml.commitments.indexed import RangeIndexedDomain
         from verity.ml.commitments.merkle import CommitmentDomain
-        dom = CommitmentDomain(bytes.fromhex(st["bindings"]["y"]), st["owners"]["y"], RangeIndexedDomain(0, n))
+        dom = CommitmentDomain(bytes.fromhex(st["bindings"]["y"]), st["owners"]["y"], RangeIndexedDomain(0, n), hash="sha256")
         fv = FrameV3({"y": Port(dom, WordLeaf(st["schemas"]["y"], st["y_bytes"]))})
         leaves = [fv.tree_leaf("y", r, fv.leaf_layout("y", r).digest(int(v).to_bytes(st["y_bytes"], "big"))) for r, v in enumerate(y)]
         h["roots"]["y"] = fv.root("y", leaves).hex()

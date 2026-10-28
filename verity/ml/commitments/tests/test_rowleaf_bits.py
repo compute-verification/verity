@@ -208,7 +208,7 @@ def test_a_hiding_bit_row_opens_from_its_root_with_core_alone(case: dict) -> Non
 
 
 def test_frame_v3_admits_bit_rows_under_sha512_only() -> None:
-    d256 = CommitmentDomain(hashlib.sha256(b"b").digest(), 0, RangeIndexedDomain(2))
+    d256 = CommitmentDomain(hashlib.sha256(b"b").digest(), 0, RangeIndexedDomain(2), hash="sha256")
     d512 = _sha512_domain(2, "b")
     for n_bits in (0, 13, 144, 9216):
         with pytest.raises(ValueError):

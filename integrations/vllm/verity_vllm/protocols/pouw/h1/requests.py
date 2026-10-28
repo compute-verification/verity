@@ -198,19 +198,17 @@ class HidingTable:
 
 
 def hiding_rows(binding: bytes, owner: int, values: Sequence[bytes], key: bytes, nonce: int) -> HidingTable:
-    """``audit.commit_rows(binding, owner, values, hash=HM96, salt_key=key, nonce=nonce)``, its leaf salts drawn as one
-    keystream: leaf i's (`audit.hm96_salt`) is ChaCha20 blocks 3i..3i + 2 at a 64-bit counter and nonce, which is RFC
-    8439's stream (`ml.windows.rows.chacha20`) with the counter's high word, 0 below 2^32 blocks, first in its nonce.
+    """``audit.commit_rows(binding, owner, values, hash=HM96, salt_key=key, nonce=nonce)``, its leaf salts computed as one
+    keystream: leaf i's (`audit.hm96_salt`) is ChaCha20 blocks 3i..3i + 2 at a 64-bit counter and nonce
+    (`hm96.batch.salts`).
     The per-leaf block function costs about 0.2 ms a leaf, a z table's thousands of leaves a call. The leaves are
     hashed as `pouw_h1_registered`'s NumPy path hashes a table's (`Hm96Domain.leaf`'s bytes): each distinct preimage's
     ``row-seg`` digest once, every leaf's hm96 mask at once (`hm96.batch.tree_leaves`), and the frame's leaves and
     nodes from their constant prefixes, since `MerkleTree`'s leaf by leaf took some 0.1 ms a leaf, a round's request
     table each round."""
-    from verity.ml.windows.rows import chacha20
-
     from verity_vllm.protocols.pouw.h1 import registered as NR
     n = len(values)
-    y = chacha20(key, bytes(4) + nonce.to_bytes(8, "little"), n * HM96_SALT)
+    y = batch.salts(key, nonce, np.arange(n))
     domain = rows_domain(binding, owner, n, HM96)
     rows = [v + y[i * HM96_SALT:(i + 1) * HM96_SALT] for i, v in enumerate(values)]
     if not n:

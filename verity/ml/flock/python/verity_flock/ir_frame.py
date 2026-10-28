@@ -249,7 +249,7 @@ def statement(pl: Plan, input_set, lo: int, hi: int, rows: dict[str, np.ndarray]
     for name in schemas:
         bind[name] = bytes.fromhex(identity_digest(BINDING_TAG, {"set": input_set.name, "content_digest": input_set.content_digest,
                                                                  "lo": int(lo), "hi": int(hi), "port": name, "schema": schemas[name]}))
-        doms[name] = CommitmentDomain(bind[name], OWNER, RangeIndexedDomain(0, counts[name]))
+        doms[name] = CommitmentDomain(bind[name], OWNER, RangeIndexedDomain(0, counts[name]), hash="sha256")
     fv = FrameV3({**{nm: Port(doms[nm], RowLeaf("blake3", ROLE_X, 16, w)) for nm, w in pl.in_ports},
                   **{nm: Port(doms[nm], WordLeaf("u16", 2)) for nm, w in pl.out_ports}})
     key = blake3_row_key(ROLE_X)
