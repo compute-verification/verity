@@ -51,6 +51,7 @@ RES_K = 4 * BK  # res: the depth of the block its slots hold
 
 u, i32, vp, u64, P = C.c_uint, C.c_int, C.c_void_p, C.c_uint64, C.POINTER
 TMAP_UINT8, TMAP_SWIZZLE_NONE, TMAP_SWIZZLE_128B, TMAP_L2_128B, MAX_DYN_SMEM, SM_COUNT = 0, 0, 3, 2, 8, 16
+CARVEOUT, CARVEOUT_MAX_SHARED = 9, 100  # CU_FUNC_ATTRIBUTE_PREFERRED_SHARED_MEMORY_CARVEOUT, CU_SHAREDMEM_CARVEOUT_MAX_SHARED
 CUDA = {
     "cuDeviceGet": [P(i32), i32], "cuDevicePrimaryCtxRetain": [P(vp), i32], "cuCtxSetCurrent": [vp],
     "cuModuleLoadData": [P(vp), C.c_char_p], "cuModuleGetFunction": [P(vp), vp, C.c_char_p],
@@ -146,6 +147,9 @@ class Lib:
         self.stamp_smem = 120 * 1024  # two of these never fit an SM, so stamp_k's CTAs fall one an SM
         self.ck("cuFuncSetAttribute", self.stamp_f, MAX_DYN_SMEM, self.stamp_smem)
         self.ck("cuFuncSetAttribute", self.hash_f, MAX_DYN_SMEM, self.stamp_smem)
+        # one L1 / shared memory split for every kernel: CTAs of kernels the driver configures differently don't share an SM
+        for f in (*self.fns.values(), self.hash_f, self.wait_f, self.stamp_f):
+            self.ck("cuFuncSetAttribute", f, CARVEOUT, CARVEOUT_MAX_SHARED)
 
     def ck(self, f: str, *a) -> None:
         r = getattr(self.cu, f)(*a)
@@ -321,22 +325,29 @@ class Run:
                 ctas += 1
         return {"window_s": (b - a) * 1e-9, "ctas_in_window": ctas, "gcomp_s": rate * 1e-9, "of_bar": rate / BAR}
 
-    def segments(self, nseg: int, calls: list[int], macs: int, g0: int) -> list[dict]:
-        """Each segment between stamps s and s + 1: its span (globaltimer), every SM's clocks, its MACs."""
+    def segments(self, nseg: int, calls: list[int], macs: int, g0: int) -> tuple[list[dict], list[dict]]:
+        """Each segment between stamps s and s + 1: its span (globaltimer), every SM's clocks, its MACs; and the stamps
+        whose CTAs were not one on every SM (a CTA that timed out waiting for the rest has sm -1), whose two segments are
+        left out."""
         st = self.stamps[: nseg + 1].cpu()
+        faults = []
+        for s in range(nseg + 1):
+            sm = st[s][:, 4].tolist()
+            if len(set(sm)) != self.nsm or not 0 <= min(sm) <= max(sm) < self.nsm:
+                faults.append({"stamp": s, "timed_out": sm.count(-1), "sms": len(set(sm) - {-1})})
+        bad = {f["stamp"] for f in faults}
         out = []
         for s in range(nseg):
+            if s in bad or s + 1 in bad:
+                continue
             a, b = st[s], st[s + 1]
-            if (sorted(a[:, 4].tolist()) != sorted(b[:, 4].tolist()) or len(set(a[:, 4].tolist())) != self.nsm
-                    or not 0 <= int(a[:, 4].min()) <= int(a[:, 4].max()) < self.nsm):
-                raise RuntimeError(f"segment {s}: stamp_k's CTAs were not one on every SM")
             ia, ib = a[a[:, 4].argsort()], b[b[:, 4].argsort()]
             dt = (ib[:, 0] - ia[:, 0]).double()
             dc = (ib[:, 2] - ia[:, 2]).double()
             out.append({"t0": int(ia[:, 0].min()) - g0, "t1": int(ib[:, 0].max()) - g0, "ns": float(dt.mean()),
                         "clocks": float(dc.sum()), "mhz": float(dc.sum() / dt.sum() * 1e3), "macs": calls[s] * macs,
                         "gt0": int(ia[:, 0].min()), "gt1": int(ib[:, 0].max())})
-        return out
+        return out, faults
 
     @staticmethod
     def rates(segs: list[dict], nsm: int) -> dict:
@@ -400,10 +411,11 @@ class Run:
         torch.cuda.synchronize()
         h1 = time.time_ns()
         g0 = int(self.stamps[0][:, 0].min())
-        segs = self.segments(nseg, calls, op.macs, g0)
-        g_end = segs[-1]["gt1"]
+        segs, faults = self.segments(nseg, calls, op.macs, g0)
+        g_end = int(self.stamps[nseg][:, 0].max())
         steady = [s for s in segs if s["gt0"] - g0 >= SETTLE_S * 1e9]
         rec = {"name": name, "secs": (g_end - g0) * 1e-9, "calls": sum(calls), "t_call": t_call, "mma": op.mma,
+               "segments": nseg, "stamp_faults": len(faults), "stamp_fault_first": faults[:3],
                "all": self.rates(segs, self.nsm), "steady": self.rates(steady, self.nsm),
                "last_half": self.rates([s for s in segs if s["gt0"] - g0 >= (g_end - g0) / 2], self.nsm),
                "board_steady": self.nvml.window(g0 + int(SETTLE_S * 1e9) - off, g_end - off),
@@ -414,6 +426,8 @@ class Run:
             rec["cta_mhz_last_call"] = float((cta[:, 3] - cta[:, 2]).double().sum() / dt.sum() * 1e3)
             rec["cta_tiles"] = sorted(set(cta[:, 5].tolist()))
             rec["cta_sms"] = len(set(cta[:, 4].tolist()))
+            # its CTAs start together when they all fit beside whatever else is resident, in waves when they don't
+            rec["cta_start_spread_us"] = (int(cta[:, 0].max()) - int(cta[:, 0].min())) * 1e-3
         if hash_warps:
             hs = self.hst.cpu()
             # the span every hash CTA ran through: the last start to the first end

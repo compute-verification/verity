@@ -82,6 +82,22 @@ def test_the_hash_log_and_beside_specs():
     assert B.HASH_LOG * B.HASH_CHUNK_S >= 2 * 2 * 4.0
 
 
+def test_a_stamp_not_one_an_sm_drops_its_two_segments_and_is_recorded():
+    run = B.Run.__new__(B.Run)
+    run.nsm = 4
+    st = torch.zeros((5, 4, 6), dtype=torch.int64)
+    for s in range(5):
+        st[s, :, 0] = 1000 * s + torch.arange(4)  # globaltimer
+        st[s, :, 2] = 2000 * s  # clock64
+        st[s, :, 4] = torch.tensor([3, 1, 0, 2])
+    st[2, 3, 4] = -1  # a CTA that timed out
+    run.stamps = st
+    segs, faults = run.segments(4, [1] * 4, 10, 0)
+    assert faults == [{"stamp": 2, "timed_out": 1, "sms": 3}]
+    assert [s["gt0"] for s in segs] == [0, 3000]
+    assert all(s["mhz"] == 2000.0 for s in segs)
+
+
 def test_a_beside_item_is_set_against_its_arm_alone_and_states_kappa():
     tag = "8x8x8:u2"
     alone = [{"name": "p2m", "tag": tag, "round": rnd, "mma": True, "steady": {"tmac_s": v, "of_4096": v / 1000}}
