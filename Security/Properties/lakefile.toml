@@ -77,6 +77,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Nci", "Properties.Nci.Threads", "Properties.CertifierDevice", "Properties.Pous",
   "Properties.Pous.TimedAudit", "Properties.Pous.MemoryChallenger", "Properties.Pous.EndToEnd",
   "Properties.Pous.Period", "Properties.Pous.EndToEndAt", "Properties.Pous.PeriodAt", "Properties.Pous.PeriodDeployed",
+  "Properties.Pous.PeriodGame",
   "Properties.Accounting.JointBridge.SpaceOfPeriodHeld", "Properties.Attest", "Properties.NetworkCertifier",
   "Properties.NetworkCertifier.LinkWindow", "Properties.CertifierNetwork",
   "Properties.CertifierNetwork.Runs", "Properties.Identity", "Properties.NciDesc", "Properties.NciDesc.Verdict",

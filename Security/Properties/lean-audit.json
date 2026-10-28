@@ -35,6 +35,7 @@
   "Properties.Pous.EndToEndAt",
   "Properties.Pous.PeriodAt",
   "Properties.Pous.PeriodDeployed",
+  "Properties.Pous.PeriodGame",
   "Properties.Pous.Obligation",
   "Properties.Accounting.JointBridge.SpaceOfPeriodHeld",
   "Properties.Attest",
@@ -419,7 +420,7 @@
     "Definitions.Pous.Assumptions",
     "Properties.Identity"
    ],
-   "except": ["Properties.Pous.Period"],
+   "except": ["Properties.Pous.Period", "Properties.Pous.PeriodGame"],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
   "Properties.Pous.Period": {
@@ -608,6 +609,21 @@
    ],
    "except": [],
    "why": "a party's signed periods are stated over the code that checks them (MemoryChallenger.Attest, Lms.Hss), the memory challenger's string framing, the claims' collision finders (Claims.Finder) and the party assumptions (Accounting.Assumptions.Parties), never over a proof"
+  },
+  "Properties.Pous.PeriodGame": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Pous",
+    "PousCheck",
+    "Properties.Pous",
+    "MemoryChallenger",
+    "Definitions.Pous.Assumptions",
+    "Properties.Identity",
+    "Definitions.Accounting",
+    "Definitions.Hash.Assumptions"
+   ],
+   "except": [],
+   "why": "a period's PoUS audit in the shared coin game is stated over the deployed check, the memory challenger's SHA-512 derivation (Randomness, through MemoryChallenger) and the hash area's named assumption (Definitions.Hash.Assumptions), never over a proof"
   }
  },
  "reads_exempt": {

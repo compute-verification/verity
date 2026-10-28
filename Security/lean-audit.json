@@ -2749,6 +2749,18 @@
    ],
    "except": [],
    "why": "the network certifier's bridge to the joint period reads the period run (Definitions.Accounting.JointPeriod), the network certifier's window good event (Definitions.NetworkCertifier.Period), and the deployed network certifier's code and record format (Definitions.NetworkCertifier.Tap) with its trust, trusted-host (Definitions.Core.Assumptions), which the run carries as a field; it imports no guarantee or proof"
+  },
+  "Definitions.Hash.Assumptions": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Core.Digest",
+    "Definitions.Core.Game",
+    "Definitions.Hash",
+    "Definitions.Hash.Assumptions"
+   ],
+   "except": [],
+   "why": "the hash area's named assumptions (Sha512Prf, prf/sha-512) are stated over its messages and digests and core's coin probability (Definitions.Core.Game's prCoin), never over a proof",
+   "sealed": true
   }
  },
  "reads_exempt": {
