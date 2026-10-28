@@ -4367,6 +4367,15 @@
    "assumptions": [],
    "type_hash": "35df2fcc55dd37402511f188176a776059b9c8e8cabacb798f5dceb4b3c5d8ff"
   },
+  "Accounting.SecurityProofs.TS.CheckProofSystemSound": {
+   "owner": "@soundness"
+  },
+  "Accounting.SecurityProofs.TS.CheckProofSystemSound_honest": {
+   "owner": "@soundness"
+  },
+  "Accounting.SecurityProofs.TS.CheckProofSystemSound_nontrivial": {
+   "owner": "@soundness"
+  },
   "Accounting.SecurityProofs.TS.CheckedSessionSound": {
    "owner": "@proofs",
    "signature": ["Accounting.SecurityProofs.TS.CheckedSessionSound : Accounting.Guarantees.TS.CheckedSessionSound"],
@@ -59859,6 +59868,10 @@
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
  },
  "witnesses": {
+  "Accounting.SecurityProofs.TS.CheckProofSystemSound": {
+   "honest": ["Accounting.SecurityProofs.TS.CheckProofSystemSound_honest"],
+   "nontrivial": "Accounting.SecurityProofs.TS.CheckProofSystemSound_nontrivial"
+  },
   "Flock.SecurityProofs.RecursiveKS": {
    "honest": ["RecDeploy.HonestHalfFixture.honest_half_fixture"],
    "nontrivial": "Flock.Guarantees.recursiveKS_nontrivial"
