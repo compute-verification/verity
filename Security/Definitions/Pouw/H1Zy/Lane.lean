@@ -4,7 +4,7 @@ import Mathlib.Algebra.BigOperators.Fin
 /-!
 # `PouwH1LaneZy_v1{TILE}` on words, at a 32 × 32 leaf over `PouwH1Tile_v1` (trusted)
 
-Lane `l` of a drawn H1 leaf (`verity/core/protocols/pouw/circuit/h1zy.py`, `PouwH1LaneZy`, `_lane_body`) reads its 4 A
+Lane `l` of a drawn H1 leaf (`verity/ml/protocols/pouw/circuit/h1zy.py`, `PouwH1LaneZy`, `_lane_body`) reads its 4 A
 rows by row slot and 8 B rows by column slot (`K` s8 codes and an f32 scale each), the leaf's 32 admit bits, the leaf's
 whole z/y record (cell `(i, j)` its s32 z and bf16 y), its committed partials row (`nw` u32 words), the leaf's salt,
 position and roots, and its index, a 16-bit word, and returns `ok`. On its primitives' word views:

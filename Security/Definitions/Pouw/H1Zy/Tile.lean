@@ -3,7 +3,7 @@ import Definitions.Pouw.H1Zy.Lane
 /-!
 # `PouwH1TileZy_v1{TILE}` on words, over `PouwH1Tile_v1` or `PouwH1Tile_v3` (trusted)
 
-The H1 tile unit with its z/y record checked (`verity/core/protocols/pouw/circuit/h1zy.py`, `PouwH1TileZy`, `_body`)
+The H1 tile unit with its z/y record checked (`verity/ml/protocols/pouw/circuit/h1zy.py`, `PouwH1TileZy`, `_body`)
 reads its `R` A rows and `C` B rows (`K` s8 codes and an f32 scale each), its `R × C` record (cell `(i, j)` its s32 z
 and bf16 y, row-major), its salt, position and roots, and returns `{receipt, ok}`. TILE on the rows' codes gives each
 cell's z (and the receipt, which `ok` doesn't read), and `ok` is `PouwZyCheck_v1{R, C}` (`zyCheck`) of the record
