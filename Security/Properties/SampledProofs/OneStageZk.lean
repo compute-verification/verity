@@ -50,7 +50,7 @@ def Names (d : String) (b : ByteArray) : Prop := Flock.hexOf (Flock.Sha512.hash 
 
 /-- One session as v2 verified it on `I`: its record is the bytes its `record` digest names, as the UTF-8 text `record`;
 flock-verify `--zk` accepts it with the proof files `proofs`; and it proved the units `units`. -/
-def SessionAccepted (I : Flock.Witness.Inputs) (s : Session) (record : String) (proofs : Array ByteArray)
+def SessionAccepted (I : Flock.Witness.Inputs) (s : RunFiles) (record : String) (proofs : Array ByteArray)
     (units : Array Nat) : Prop :=
   (∃ b, Names s.record b ∧ String.fromUTF8? b = some record) ∧ AcceptsZK I record proofs ∧
     provedUnits I.publicFile record = .ok units
