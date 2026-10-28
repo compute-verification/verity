@@ -27,7 +27,9 @@ import threading
 from pathlib import Path
 
 import torch
+from verity_config.settings import of
 
+S = of(__file__)
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 from summarize import span  # noqa: E402
@@ -43,10 +45,10 @@ class Nvml:
     """The leased GPU's NVML handle (GPU_LEASE_UUID, else CUDA device 0's UUID): its SM clock and clock event reasons."""
 
     def __init__(self) -> None:
-        self.lib = C.CDLL(os.environ.get("POUW_LIBNVML", "libnvidia-ml.so.1"))
+        self.lib = C.CDLL(S.POUW_LIBNVML)
         if self.lib.nvmlInit_v2() != 0:
             raise SystemExit("nvmlInit_v2 failed")
-        uuid = os.environ.get("GPU_LEASE_UUID") or f"GPU-{torch.cuda.get_device_properties(0).uuid}"
+        uuid = S.GPU_LEASE_UUID or f"GPU-{torch.cuda.get_device_properties(0).uuid}"
         self.h = vp()
         if self.lib.nvmlDeviceGetHandleByUUID(uuid.encode(), C.byref(self.h)) != 0:
             raise SystemExit(f"no NVML device {uuid}")
@@ -66,7 +68,7 @@ class Stamps:
     """stamp.cu's stamp_k from its cubin in torch's context, launched on torch's current stream: two stamps a window."""
 
     def __init__(self, cubin: Path) -> None:
-        self.cu = C.CDLL(os.environ.get("POUW_LIBCUDA", "libcuda.so.1"))
+        self.cu = C.CDLL(S.POUW_LIBCUDA)
         self.cu.cuLaunchKernel.argtypes = [vp, u, u, u, u, u, u, u, vp, C.POINTER(vp), C.POINTER(vp)]
         torch.cuda.init()
         dev, ctx, self.mod, self.f = C.c_int(), vp(), vp(), vp()
