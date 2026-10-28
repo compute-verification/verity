@@ -221,8 +221,8 @@ def test_the_server_here_refuses_a_bad_signature(s3):
 
 
 def test_a_transient_answer_is_retried_and_any_other_is_raised_at_once(monkeypatch):
-    """R2 answered one request of the first publish with a working key with an HTTP 500, and the publish ended (21 Oct).
-    A 500, 502, 503 or 504, or no connection, is retried after each of `RETRY_S`, signed anew; a 403 or 404 is not."""
+    """An HTTP 500 from R2 on one request must not end a publish. A 500, 502, 503 or 504, or no connection, is retried after
+    each of `RETRY_S`, signed anew; a 403 or 404 is not."""
     answers, waits, dates = [], [], []
 
     def urlopen(req, timeout):
@@ -472,7 +472,7 @@ def test_an_existing_blob_must_be_the_same_bytes(s3, tmp_path, conflict):
 
 
 def test_a_second_build_of_a_published_commit_keeps_the_first_record(s3, tmp_path):
-    """A rerun of one commit whose build isn't byte-identical (Security on vy-nebius-1, 21 Oct) neither replaces the
+    """A rerun of one commit whose build isn't byte-identical neither replaces the
     published record nor fails the publish: the first build stays, and the run says so."""
     b, url = s3
     r, rev = repo(tmp_path)
@@ -634,8 +634,8 @@ def _load(name: str, path: Path):
 
 @pytest.mark.skipif(LAKE is None, reason="no lake")
 def test_a_module_version_a_passing_audit_built_is_restored_on_another_tree(tmp_path, monkeypatch):
-    """A kept build holds one tree's modules per package per node: check r20261012-023815-e641 rebuilt 640 of
-    `Security/Proofs`' 1,096 modules (2,404 s of a 2,922 s check) because nebius-2's kept build came from an older tree. Lake,
+    """A kept build holds one tree's modules per package per node, so a check whose node's kept build came from an older tree
+    would rebuild over half of `Security/Proofs`' modules (most of the check's time). Lake,
     reading the cache in the build sandbox, restores each module version it holds instead of compiling it."""
     LC, LA = (_load(f"artifacts_{n}", HERE.parent / f"{n}.py") for n in ("check", "lean_audit"))
     pkg = tmp_path / "control"
