@@ -7,7 +7,8 @@ metric over the engine's steady state, the step wall time from the server's step
 The steady state is the longest run of consecutive full steps (T tokens scheduled) inside the capture; a step spans the
 previous step's end to its own (the trace's ``t``, taken once the engine has taken the step's output, so window opens and
 closes, seals waited on and every other host gap between steps fall in the step they delay). ``queued`` is the same over
-the steps that start once the last request has arrived. Tensor Active is the GPU's share of SM cycles with the tensor pipe
+the steps that start once the last request has arrived. ``<window>_body`` is a window without its last step, the load's
+last, which also waits on the drain of every response. Tensor Active is the GPU's share of SM cycles with the tensor pipe
 active, sampled every 1/f s, so its mean over the window is the tensor-busy share of the whole step, host gaps included.
 
 Each sample is attributed to the kernels running at its time (CUPTI's kernel records on the same timeline): idle (no
@@ -214,6 +215,8 @@ def analyse(sqlite: Path, trace: Path, T: int, sent_s: float | None = None, ref_
     picks = {"all": steady(st, T, *cap)}
     if sent_s is not None:
         picks["queued"] = steady(st, T, *cap, after_s=sent_s)
+    for key in [k for k, idx in picks.items() if len(idx) > 2]:
+        picks[f"{key}_body"] = picks[key][:-1]           # the load's last step waits on its drain, not on the step
     out: dict[str, Any] = {"capture_s": round(cap[1] - cap[0], 3), "metric_period_us": period / 1e3, "metrics": sorted(names),
                            "tensor_metric": next(n for n, i in names.items() if i == tensor), "steps_traced": len(st),
                            "full_steps_traced": sum(1 for r in st if r["T"] == T), "kernels": len(ks), "memcpys": len(cs)}
@@ -356,7 +359,7 @@ def main() -> int:
         why = next((r["pouw_h1_error"] for r in doc["serve"].get("windows", []) if r.get("pouw_h1_error")), None)
         print(f"H1 {h1.get('windows')} windows released, {h1.get('tied')} tied, untied {h1.get('untied')}, failed {h1.get('failed')}, "
               f"gate-passed rows {h1.get('gate_passed_rows')}" + (f"; first failure: {why}" if why else ""))
-    for key in ("queued", "all"):
+    for key in ("queued", "queued_body", "all", "all_body"):
         w = doc.get(key)
         if not isinstance(w, dict) or "tensor_active_pct" not in w:
             continue
