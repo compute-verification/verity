@@ -597,6 +597,16 @@ def test_a_declaration_rename_onto_a_name_the_base_spells_is_refused(tmp_path):
     assert {f["path"] for f in r["refusals"]} == {"P/S/Law.lean", "P/S/Use.lean", "P/lean-audit.json", "notes.md"}
 
 
+def test_a_new_name_a_lean_comment_already_uses_is_no_merge(tmp_path):
+    """A `.lean` file's prose may already say `acceptProb`: a comment names nothing, so the rename stays certified. The same
+    word in its code is a name the rename would merge with."""
+    for kind, line in [("comment", "-- the acceptProb is P_a\n"), ("code", "theorem v : acceptProb = acceptProb := rfl\n")]:
+        (tmp_path / kind).mkdir()
+        old, new = DECL_BASE["P/S/Use.lean"] + line, DECL_HEAD["P/S/Use.lean"] + line
+        r = _declared(tmp_path / kind, base_extra={"P/S/Use.lean": old}, **{"P/S/Use.lean": new})
+        assert r["certified"] == (kind == "comment"), r["refusals"]
+
+
 def test_a_scoped_word_renames_only_in_its_files(tmp_path):
     """`escape` is renamed only in the files its `[[words_in]]` entry names; a prose `escape` elsewhere stays."""
     [f] = _declared(tmp_path, **{"notes.md": "`SampleIsCoin` holds; an acceptProb is rare.\n"})["refusals"]

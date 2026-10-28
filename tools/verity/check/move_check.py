@@ -47,7 +47,8 @@ Every path git sees changed must be one of:
 - any of these after the move scripts' word maps (`tools/move/*.toml` with `[words]`, read at BASE) are applied, as
   `tools/move/rename.py` applies them, with only the words that rename what the range moved: a path the map moves to
   where the range moved it, or a Lean module likewise; or a Lean declaration of a `.lean` file the range edits, to a name
-  BASE never spells in a file the map rewrites, so that the rename merges no two names (a `[[words_in]]` entry's words
+  BASE never spells in a file the map rewrites (outside a `.lean` file's comments), so that the rename merges no two
+  names (a `[[words_in]]` entry's words
   in the files its globs match; `word_maps`). A text file the words alone rewrite into its new text is an edit of that
   kind, whatever the file, and so is one that also drops each list entry the words made a repeat of the one before it
   (`merged`).
@@ -874,7 +875,8 @@ def renaming(base: Tree, table: dict[str, str], declared: list[str], now: set[st
     """The entries of ``table`` (a map's words, or with ``whole`` a `[[words_in]]` entry's) that make a rename the range
     made: with them applied, a name of ``declared`` (the edited `.lean` files' at BASE) becomes one of ``now`` (theirs at
     HEAD), where it no longer stands. Each must rename to a name BASE never spells in a file the map rewrites
-    (``rewrites``), and no two to one, so that the rename merges no two names. A word of an earlier move that the range
+    (``rewrites``; a `.lean` file's comments only mention names, so prose there may already use the new word), and no
+    two to one, so that the rename merges no two names. A word of an earlier move that the range
     didn't make (a stale one, whose rename a later move undid) is never kept."""
     R = _rename()
 
@@ -896,6 +898,8 @@ def renaming(base: Tree, table: dict[str, str], declared: list[str], now: set[st
     for p in (p.decode("utf-8", "surrogateescape").partition(":")[2] for p in out.split(b"\0") if p):
         if not rewrites(p) or (text := base.text(p)) is None:
             continue
+        if p.endswith(".lean"):
+            text = LEAN_COMMENT.sub("", text)
         for o, n in list(hits.items()):
             if n in text and words({n: o}).sub(text, p) != text:
                 del hits[o]
