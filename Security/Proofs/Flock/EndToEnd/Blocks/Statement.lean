@@ -16,7 +16,8 @@ sessions), adaptively, so a block's sessions may depend on everything the prover
 * `IntegrityBlocks`: the probability that some block is accepted with at least `ln(1/δ)/q` wrong units is at most
   `Σ_b (δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t))`: the per-block form a joint horizon over blocks sums with the other legs.
 * `IntegrityHorizonBlocks`: the probability that every session of every block is accepted and the wrong units over the
-  horizon total at least `ln(1/δ)/q` is at most `δ + Σ_b Σ_{t ∈ b} (ε_ks,t + δ_link,t)`, the pooled reading.
+  horizon total at least `ln(1/δ)/q` is at most `δ + Σ_b Σ_{t ∈ b} (ε_ks,t + δ_link,t)`, the pooled reading. It is a
+  lemma: the listed guarantee of the pooled reading is `IntegrityHorizonCarried`, which also covers carried state.
 
 The named assumptions are `IntegrityHorizon`'s, at the sessions each statement reads: A3 (`uniform/io-getrandombytes`)
 for each session's draw bytes, `live-verifier` (`SamplingBlock.hCust`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512`
@@ -25,7 +26,8 @@ for each session's draw bytes, `live-verifier` (`SamplingBlock.hCust`), and `cr/
 
 A wrong unit is counted in the session that holds it (`SamplingBlock.wrongSet`). The state a block carries across a wipe
 (the KV cache, committed before the wipe and read after it) is an input of the next block's sessions, and these
-statements say nothing of whether the value a session reads there is the one the block before committed.
+statements say nothing of whether the value a session reads there is the one the block before committed;
+`IntegrityHorizonCarried` (`EndToEnd/Carry/Statement.lean`) does.
 -/
 
 namespace Flock.Guarantees
