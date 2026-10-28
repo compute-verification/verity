@@ -1,4 +1,4 @@
-"""RT-FP's B300 proxy for `overcredit.py`: are the C1 and FP-unit rows over-credited where int8 is slow?
+"""A B300 proxy for `overcredit.py`: are the C1 and FP-unit rows over-credited where int8 is slow?
 
 B300 has no sheet in the machine model. Its dense int8 is about 1/30 of its FP8 (NVIDIA's Blackwell Ultra datasheet),
 and sm_103a exposes no tcgen05 `kind::i8`. The proxy is B200's data sheet vector DS-100 with every UTCIMMA form's

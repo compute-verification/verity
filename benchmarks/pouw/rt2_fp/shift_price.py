@@ -1,9 +1,9 @@
-"""RT2-FP: the routes outside design A's ring-program scope, priced on the FP machine against design A's word.
+"""The routes outside design A's ring-program scope, priced on the FP machine against design A's word.
 
-FP-NATIVE's scope card (note:20261019T0525Z-draft-fp-native, "Card: the ring-program scope premise") quotes no ε for
-design A until the machine model prices the shift class (RT-ALGO-3, Proposition Q's class) on sm_120 and B200 at no less
+FP-NATIVE's scope card ("Card: the ring-program scope premise") quotes no ε for
+design A until the machine model prices the shift class (Proposition Q's class) on sm_120 and B200 at no less
 than the honest word, since an FP32 accumulator's rounding makes its shift free. This prices it, with the two other
-routes outside the scope (note:20261019T1100Z-draft-rt2-fp, target 2), against design A's honest row (FPX-DESIGN's
+routes outside the scope (target 2), against design A's honest row (fpx_design's
 `fpx-a1-e4m3i-fp`) and its credit row (`-x0`), on the data sheets (DS-120, DS-100) and the measured vectors
 (VF3r-16, DC-100-ri):
 
@@ -15,9 +15,9 @@ routes outside the scope (note:20261019T1100Z-draft-rt2-fp, target 2), against d
 
 A tensor route is priced at two operand layouts: `shared` (every accumulator of an instruction useful, the most a tile
 can do) and `per-cell` (an operand that depends on its cell serves one accumulator a k-slot in its row and one in its
-column, so at most min(M, N) useful products a k-slot: Proposition Q's layout fact, note:20261016T0208Z-draft-fullfloor-s-r4
-§1). Everything else is in the cheater's favour: operands free, the shift free, any one-sided product free, products
-on lanes one instruction each in the cheapest class that holds them, and the fold design A's own.
+column, so at most min(M, N) useful products a k-slot: Proposition Q's layout fact). Everything else is in the cheater's
+favour: operands free, the shift free, any one-sided product free, products on lanes one instruction each in the
+cheapest class that holds them, and the fold design A's own.
 
 Run from the repository root: `python benchmarks/pouw/rt2_fp/shift_price.py [--json OUT]`.
 """
@@ -45,7 +45,7 @@ from verity_machine_model.eps import machine  # noqa: E402
 L = 32
 LANES = 32
 
-# FPX-DESIGN's design-A rows (benchmarks/pouw/fpx_design/fpx_eps.py at d7d292f583, PR #2710): the base design and the
+# fpx_design's design-A rows (benchmarks/pouw/fpx_design/fpx_eps.py at d7d292f583): the base design and the
 # extraction it adds to the base's fold, lane instructions a word. The credit row (`-x0`) adds none.
 DEVICES = {
     "sm_120": dict(data=MM / "data", base="dither-c-peel-fx1", fold_add={"ALU": 1.0, "IMAD": 1.0},
@@ -114,7 +114,7 @@ def fits(kind: str, A: set[int], B: set[int], acc: int) -> bool:
 # --- the routes' operands -------------------------------------------------------------------------------------------
 
 def shift_operands(c_set: tuple[int, ...], M: int, v: int, data: tuple[int, ...] = (0,)) -> tuple[set, set]:
-    """RT-ALGO-3's shift class on two entries: s1 = d1 + β1 + q1 B1, s2 = d2 + β2 − q2 B2 with q = c·2^(v−1), β a
+    """The shift class on two entries: s1 = d1 + β1 + q1 B1, s2 = d2 + β2 − q2 B2 with q = c·2^(v−1), β a
     bit, B = b + b′, d a data offset; the operands are a = s1 − s2 and b = s1 + s2. Checks, on the bits, that
     ((N − affine) >> v) mod 2^M is the two entries' bilinear part c1 β1 B1 + c2 β2 B2 when d = 0."""
     A, Bs = set(), set()
@@ -182,7 +182,7 @@ def packing_max_s(kind: str) -> int:
 # --- the machine ----------------------------------------------------------------------------------------------------
 
 def honest_rows(dev: str, tmp: Path) -> dict:
-    """Design A's honest and credit rows on each vector, through the machine model's CLI, as FPX-DESIGN writes them."""
+    """Design A's honest and credit rows on each vector, through the machine model's CLI, as fpx_design writes them."""
     d = DEVICES[dev]
     data = tmp / dev
     shutil.copytree(d["data"], data, ignore=shutil.ignore_patterns("devices") if dev == "sm_120" else None)
