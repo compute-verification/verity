@@ -7,7 +7,7 @@ set -euo pipefail
 name=$1 grid=$2 n=$3 p=$4 scen=$5 model=${6:-stub} max=${7:-60}
 case ${WHERE:-auto} in
   auto) where=(--on auto) ;;
-  queue) where=(--queue --source "$(git rev-parse --show-toplevel)" --project verity --on vy-nebius-2 --cwd source) ;;
+  queue) where=(--queue --source "$(git rev-parse --show-toplevel)" --project verity --on vy-nebius-2 --preemptible --cwd source) ;;
   *) echo "WHERE is auto or queue" >&2; exit 2 ;;
 esac
 exec research run "${where[@]}" --cpus "$p" --mem-gb 16 --max-min "$max" -- bash -c "
