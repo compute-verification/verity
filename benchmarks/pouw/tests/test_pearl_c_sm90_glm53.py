@@ -400,6 +400,7 @@ def retained(tmp_path_factory):
     from clear_audit import Prover
     from verity_vllm.protocols.pouw import pearl_c as PPD
 
+    from verity.core.protocols.pouw import core_check as CC
     from verity.core.protocols.pouw.audit import (
         HM96_TRANSCRIPT,
         HM96_WEIGHTS,
@@ -470,7 +471,7 @@ def retained(tmp_path_factory):
     count = tr.commitment.count
     leaves = [prover.digest(t) for t in range(count)]
     dt = transcript_domain(epoch, count, s.commitment_hash)
-    head = {"schema": PPD.MANIFEST_SCHEMA, "run": "r20261023-120000-test", "entry": f"pouw:{scheme}", "scheme": scheme,
+    head = {"schema": CC.MANIFEST_SCHEMA, "run": "r20261023-120000-test", "entry": f"pouw:{scheme}", "scheme": scheme,
             "instance": {"k_min": 32, "tile": [16, 16]}, "coins": coins[0].to_json(), "salt_opening": coins[1].to_json(),
             "salt": epoch.salt.hex(), "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
             "commitment": {"root": tr.commitment.root.hex(), "count": count}, "leaves": PPD._write(d / "leaves", b"".join(leaves)),

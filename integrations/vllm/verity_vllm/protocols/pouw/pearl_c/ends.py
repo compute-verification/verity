@@ -11,12 +11,13 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.protocols.pouw.audit import Epoch, Workload, transcript_domain
+from verity.core.protocols.pouw.core_check import MANIFEST_SCHEMA
 from verity.core.protocols.pouw.protocol import Matmul
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity.core.protocols.pouw.serving import Schedule, SchemeId
 
 from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _linked, _put, _write, _zeros, write_manifest
-from verity_vllm.protocols.pouw.pearl_c.manifest import MANIFEST_SCHEMA, session_head
+from verity_vllm.protocols.pouw.pearl_c.manifest import session_head
 
 
 @dataclass
