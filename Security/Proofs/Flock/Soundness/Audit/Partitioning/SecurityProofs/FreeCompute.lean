@@ -203,6 +203,52 @@ theorem GranularityOptimum : Guarantees.GranularityOptimum := Unequal.granularit
 
 theorem GranularityChoice : Guarantees.GranularityChoice := Unequal.granularityChoice GranularityOptimum
 
+theorem ServedGranularityOptimum : Guarantees.ServedGranularityOptimum := by
+  intro n s C f o δ w β h hs hC hf ho hδ hδ1
+  obtain ⟨hlo, hhi⟩ := GranularityOptimum n s C f o δ hs hC hf ho hδ hδ1
+  refine ⟨fun L hL => by linarith [hlo L hL], fun ε hε => ?_⟩
+  obtain ⟨L, hL, hc⟩ := hhi ε hε
+  exact ⟨L, hL, by linarith⟩
+
+/-- `A·s + B/s` over `s > 0` is least at `t` with `t² = B/A`: the difference is `A (s − t)²/s`. -/
+theorem root_law_le {A t s : ℝ} (hA : 0 ≤ A) (ht : 0 < t) (hs : 0 < s) :
+    A * t + A * (t * t) / t ≤ A * s + A * (t * t) / s := by
+  have hs0 : s ≠ 0 := hs.ne'
+  have ht0 : t ≠ 0 := ht.ne'
+  have hd : A * s + A * (t * t) / s - (A * t + A * (t * t) / t) = A * ((s - t) ^ 2 / s) := by
+    first | (field_simp; ring) | field_simp
+  have : 0 ≤ A * ((s - t) ^ 2 / s) := mul_nonneg hA (div_nonneg (sq_nonneg _) hs.le)
+  linarith
+
+theorem ServedGranularityChoice : Guarantees.ServedGranularityChoice := by
+  intro F C f o δ w β h hF hC ho hδ hδ1 hw hβ hh s hs
+  unfold servedCost unitCost
+  have hΛ : 0 < Real.log δ⁻¹ := by rw [Real.log_inv]; linarith [Real.log_neg hδ hδ1]
+  have hB : 0 ≤ w * β * h := mul_nonneg (mul_nonneg hw hβ) hh
+  have hC0 : C ≠ 0 := hC.ne'
+  set Λ := Real.log δ⁻¹ with hΛdef
+  have hoΛ : 0 < o * Λ := mul_pos ho hΛ
+  have hoΛ0 : o * Λ ≠ 0 := hoΛ.ne'
+  have ho0 : o ≠ 0 := ho.ne'
+  have hΛ0 : Λ ≠ 0 := hΛ.ne'
+  set t := Real.sqrt (w * β * h * C / (o * Λ)) with htdef
+  have htt : t * t = w * β * h * C / (o * Λ) := Real.mul_self_sqrt (div_nonneg (mul_nonneg hB hC.le) hoΛ.le)
+  have hFC : 0 ≤ F / C := div_nonneg hF.le hC.le
+  have hA : 0 ≤ F / C * (o * Λ) := mul_nonneg hFC hoΛ.le
+  have hcommit : ∀ x : ℝ, x ≠ 0 → w * (F / x * β * h) = F / C * (o * Λ) * (t * t) / x := by
+    intro x hx
+    rw [htt]
+    first | (field_simp; ring) | field_simp
+  rw [hcommit s hs.ne']
+  rcases (Real.sqrt_nonneg _ : (0 : ℝ) ≤ t).eq_or_lt with h0 | h0
+  · rw [← h0]
+    have : 0 ≤ o * s * (F / C * Λ) := mul_nonneg (mul_nonneg ho.le hs.le) (mul_nonneg hFC hΛ.le)
+    simp only [mul_zero, zero_mul, div_zero, zero_div, add_zero]
+    nlinarith
+  · rw [hcommit t h0.ne']
+    have key := root_law_le hA h0 hs
+    nlinarith [key]
+
 theorem HeavyUnit : Guarantees.HeavyUnit := by
   intro n w C δ L hL u hu
   have h := hL {u} (by simpa using hu)

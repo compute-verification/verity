@@ -6678,6 +6678,12 @@
    "assumptions": [],
    "type_hash": "c4b6ffe60172f35c4d4e6cadfba6f2ff28af8d2b78c6a3f352a30e4f0aab684b"
   },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.ServedGranularityChoice": {
+   "owner": "@proofs"
+  },
+  "FlockSoundness.Audit.Partitioning.SecurityProofs.ServedGranularityOptimum": {
+   "owner": "@proofs"
+  },
   "FlockSoundness.Audit.Partitioning.SecurityProofs.UnequalCost": {
    "owner": "@proofs",
    "signature": [
