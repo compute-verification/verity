@@ -6,7 +6,7 @@ From honest runs on the target hardware it picks, per boundary link:
 - the ingress grid.
 
 It reports the honest miss rate, the costs and the capacity. The protocol fixes τ_b, the frame size and the security
-target. The ingress bucket τ_in is 100 ms, decided on 29 Sep 2026 from a calibration of honest traces; the grid stays
+target. The ingress bucket τ_in is 100 ms, chosen from a calibration of honest traces; the grid stays
 configurable, so other buckets can be compared.
 
 The trace is JSON, with one entry per configuration:

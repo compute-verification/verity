@@ -16,16 +16,18 @@ A server's life is cut into server-time blocks, each opened by a certified wipe 
   (`Pous.EraseMeets`, which `Pous.Guarantees.SecureErasureMeetsFamily` proves at `f = 1/19`, `ε = 2^-128`): at most
   `f · fill + 2λ` bits (`λ = 128`) survive, plus the state the fill leaves out (`BlockWipe.unfilled`, the on-chip
   state and the device memory the fill doesn't reach).
-* **The memory term of block `b`** (`BlocksRun.MemoryTerm`), PoUS over the weights alone at a share of `0.07`, as
-  ruled: at each of the block's PoUS challenge times, the block's undeclared memory, the bits of its `U`
-  bits of weights that the capacity account doesn't hold (`BlocksRun.undeclared`), is at most `0.07 · U + S_chip + c`,
-  where `c = ∑_i cap_i · T_read` is what the side channels bring in over the read deadline `T_read`. It is stated at
-  the challenge times only, until the continuous audit (`Pous.Guarantees.ContinuousAudit`) is tied in.
+* **The memory term of block `b` at share `σ`** (`BlocksRun.MemoryTerm`), what PoUS certifies: at each of the block's
+  PoUS challenge times, the block's undeclared memory, the bits of the device's memory `M` (`Device.mem`) that its
+  capacity account doesn't hold (`BlocksRun.undeclared`), is at most `σ · M + S_chip + c`, where
+  `c = ∑_i cap_i · T_read` is what the side channels bring in over a round, the read deadline `T_read`. The share is
+  the one PoUS's guarantee certifies for the block's store on that device, not a policy of the joint statements; at the
+  demo's store it is `0.1211` (`demoMemoryShare`, `Pous.Guarantees.ObligationDemo`'s). It is stated at the challenge
+  times only, until the continuous audit (`Pous.Guarantees.ContinuousAudit`) is tied in.
 
 There is one wipe per block, the one that opens it (so block 0 has one too, which bounds what survives from before the
-horizon), as in DEVICE-WIPE's `Verity.Blocks` and `Verity.Wipe`. Blocks and wipes are fields here until that core
-vocabulary lands; the wipe's verdict and `kept` are fields as the audits' verdicts are (`PeriodRun.accepts`), and a
-bridge from `Verity.Wipe.SurvivorBound` to the wipe's event is to give `kept` its meaning.
+horizon), as in `Verity.Blocks` and `Verity.Wipe`. Blocks and wipes are fields here, not read off that core
+vocabulary; the wipe's verdict and `kept` are fields as the audits' verdicts are (`PeriodRun.accepts`), and a bridge
+from `Verity.Wipe.SurvivorBound` to the wipe's event is to give `kept` its meaning.
 -/
 
 namespace Accounting
@@ -58,16 +60,14 @@ def Survives (f : ℝ) (ξ : (i : I) → Ω i) : Prop :=
 end BlockWipe
 
 /-- A horizon of `B` server-time blocks of a node's run on device `d` with accounts `α`, over the circuit `C`, on the
-coins `(i : I) → Ω i`: each block's period, the wipe that opens it, the bits of weights its PoUS store holds (`U`),
-its PoUS challenge times at each value of the coins, and the read deadline `T_read` in ticks. -/
+coins `(i : I) → Ω i`: each block's period, the wipe that opens it, its PoUS challenge times at each value of the
+coins, and the read deadline `T_read` in ticks. -/
 structure BlocksRun {ι : Type} (d : Device ι) (α : Type) [Fintype α] (C : Verity.Circuit) {I : Type}
     (Ω : I → Type) (B : ℕ) where
   /-- block `b`'s period, decided by the five audits -/
   block : Fin B → PeriodRun d α C Ω
   /-- the wipe that opens block `b` -/
   wipe : Fin B → BlockWipe d Ω
-  /-- the bits of weights block `b`'s PoUS store holds (U) -/
-  weights : Fin B → ℕ
   /-- block `b`'s PoUS challenge times, at the coins -/
   chal : Fin B → ((i : I) → Ω i) → Finset ℕ
   /-- the read deadline, in ticks (T_read) -/
@@ -78,19 +78,24 @@ namespace BlocksRun
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit} {I : Type} {Ω : I → Type} {B : ℕ}
   (s : BlocksRun d α C Ω B)
 
-/-- **Block `b`'s undeclared memory at tick `t`**: the bits of its weights that its capacity account doesn't hold in
-device memory at the end of the tick. -/
+/-- **Block `b`'s undeclared memory at tick `t`**: the bits of device memory its capacity account doesn't hold at the
+end of the tick, `M` less what it holds. -/
 def undeclared (b : Fin B) (ξ : (i : I) → Ω i) (t : ℕ) : ℝ :=
-  (s.weights b : ℝ) - ((s.block b).schedule ξ t).mem ((s.block b).acct .capacity)
+  (d.mem : ℝ) - ((s.block b).schedule ξ t).mem ((s.block b).acct .capacity)
 
-/-- What the side channels bring in over the read deadline (c): `∑_i cap_i · T_read` bits. -/
+/-- What the side channels bring in over a round, the read deadline (c): `∑_i cap_i · T_read` bits. -/
 def sideBits [Fintype ι] : ℕ := ∑ i, d.cap i * s.readDeadline
 
-/-- **Block `b`'s memory term** (PoUS over the weights at a share of `0.07`), at the coins `ξ`: at each of its
-PoUS challenge times, its undeclared memory is at most `0.07 · U + S_chip + c`. -/
-def MemoryTerm [Fintype ι] (b : Fin B) (ξ : (i : I) → Ω i) : Prop :=
-  ∀ t ∈ s.chal b ξ, s.undeclared b ξ t ≤ 7 / 100 * s.weights b + d.chip + s.sideBits
+/-- **Block `b`'s memory term at share `σ`** (what PoUS certifies), at the coins `ξ`: at each of its PoUS challenge
+times, its undeclared memory is at most `σ · M + S_chip + c`, `M` the device's memory. -/
+def MemoryTerm [Fintype ι] (σ : ℝ) (b : Fin B) (ξ : (i : I) → Ω i) : Prop :=
+  ∀ t ∈ s.chal b ξ, s.undeclared b ξ t ≤ σ * d.mem + d.chip + s.sideBits
 
 end BlocksRun
+
+/-- **The demo's memory share**, `0.1211`: at the demo's store, `Pous.Guarantees.ObligationDemo` bounds the bits of the
+device's memory `M` above the state bound `S₀` by `0.1211 · M`, so the demo's memory term is
+`BlocksRun.MemoryTerm demoMemoryShare`. -/
+noncomputable def demoMemoryShare : ℝ := 1211 / 10000
 
 end Accounting

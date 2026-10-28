@@ -1,4 +1,4 @@
-"""[GEN sampling] the torch-free Gumbel-max recomputation (`bench/gen_sampling_rng.py`) and the sampling workloads."""
+"""The torch-free Gumbel-max recomputation (`bench/gen_sampling_rng.py`) and the sampling workloads."""
 
 from __future__ import annotations
 

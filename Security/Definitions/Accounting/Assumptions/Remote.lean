@@ -18,8 +18,8 @@ named `Prop` on a run:
 * `ZCost` is PoUW's conjecture as the receipt binds it: `z_b` bits of a prior tile's noised output `z` cost `W_tile` at
   PoUW's pricing, wherever and for whatever weights they are computed, except with probability `δ`.
 
-WorkHardness, the codec's cost of a partial completion, is lane ra-partial-lean's (`Accounting.Assumptions.WorkHardness`
-on its branch); the route it gives here is `Run.Rebuild`.
+WorkHardness, the codec's cost of a partial completion, is `Accounting.Assumptions.WorkHardness`; the route it gives
+here is `Run.Rebuild`.
 -/
 
 namespace Accounting.Remote.Assumptions
