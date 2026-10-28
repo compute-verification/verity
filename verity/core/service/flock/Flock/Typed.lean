@@ -1,15 +1,15 @@
 /-
 Item 1e (Project doc `verified-lowering-design.md`): the typed statement `verity/flock-circuit/types`
-(`verity_flock.typed_statement`, #225), whose unit is a circuit type and a layout instead of rows. No statement carries the
+(`verity_flock.typed_statement`), whose unit is a circuit type and a layout instead of rows. No statement carries the
 unit's rows: the verifier derives them and places them as the old statement's `unit` slots. It folds rows only through
-`DeriveAll.deriveChecked` (#247): `deriveAll`'s rows, used once every layout's pass the item-by-item check and the unit's
+`DeriveAll.deriveChecked`: `deriveAll`'s rows, used once every layout's pass the item-by-item check and the unit's
 are in logical order. `flock-rows --part` prints unchecked rows, so nothing here reads them.
 
 `expand` checks META's new keys and returns the file with the derived rows as its `CIRCUIT unit` section, first, where the
 old statement had it. `HmRow.parseTyped` reads that as it reads any statement, and keeps the typed file's own digest and
 class. The keys:
-* `types`: `{digest: content}`, each the digest of its content and checked by `CircuitType.check` (#194);
-* `layouts`: #200's records, each its `sha512`'s record, checked by `Layout.check`;
+* `types`: `{digest: content}`, each the digest of its content and checked by `CircuitType.check`;
+* `layouts`: layout records, each its `sha512`'s record, checked by `Layout.check`;
 * `unit_layout`: the unit's layout, derived (`own` is `derive`);
 * `unit_type`: that layout's type;
 * `policy`: `calls/v1`;
@@ -147,7 +147,7 @@ def netOfD (d : DeriveAll.D) (name : String) : V Net :=
   Net.ofRows name d.size d.const (grp d.inGroups) (grp d.outGroups) (rowsA d) (rowsB d)
 
 /-- **The net holds the derived rows:** a net built from `d` has `d`'s rows as its A and B, at its slot size, and `d`'s
-size and constant; and #147's checks hold of it: the input rows end before the constant, each is a self row or empty,
+size and constant; and the net's checks hold of it: the input rows end before the constant, each is a self row or empty,
 the constant row is `[const]·[const]`, and the row order passed. -/
 theorem netOfD_ok {d : DeriveAll.D} {name : String} {n : Net} (h : netOfD d name = .ok n) :
     n.unitLog = max 7 (log2ceil d.size) ∧ Sparse.ofRows (rowsA d) (2 ^ n.unitLog) = .ok n.a ∧
@@ -171,7 +171,7 @@ def expandWith (tags : Tags) (lines : Array String) (name : String) (u : DeriveA
   let out := #[lines[0]!, lines[1]!, s!"{tags.blockKeyword} unit {rows.size}"] ++ rows ++ lines.extract 2 lines.size
   ("\n".intercalate out.toList ++ "\n").toUTF8
 
-/-- A template's block as its types derive it (#273's `Instance`), for `HmRow.parse`: the root net (the unit's own region,
+/-- A template's block as its types derive it (the typed statement's `Instance`), for `HmRow.parse`: the root net (the unit's own region,
 its entries at part columns left out, which are Δ's), each placed layout's net by digest, and the block's data in unit
 coordinates. -/
 structure Template where
