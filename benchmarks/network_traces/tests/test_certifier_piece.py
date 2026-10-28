@@ -4,12 +4,17 @@ and its outcome. The piece, on a serve dir whose window was the warden's synthet
 `test_warden_chain.gate_run` publishes in the gate's layout), runs as `served_verdicts.py pieces` runs it and writes
 `network-period`'s answer only when the chain accepted and the window's requests are certified ones in the scan's
 sampling block: the period mirror's certifier/v0 accept (`period_case`) then goes through `served_verdicts.py record`
-into the block record's certifier leg, which `block_record.check` holds and its schema admits. A window request the
-warden didn't certify is rejected before any chain runs; a chain that refused, requests outside the scan's sampling
-block and a period the check rejects are rejects; a step that can't run (no kept run, no report, no build, the time
-limit) refuses, which leaves the certifier missing. The leak guard reads the piece's DIR against the run's witness. The
-front's warm-ups go straight to the endpoint, one at a time, each recorded in a closed window of its own before the gate
-is asked, and the pick passes over those windows for the group's."""
+into the block record's certifier leg, which `block_record.check` holds and its schema admits, and its case.json is the
+three files `network-period` read, as `composite.py` reads a piece's case. A window request the warden didn't certify is
+rejected before any chain runs; a chain that refused, requests outside the scan's sampling block and a period the check
+rejects are rejects; a rehearsal the gate's check failed (each request late) and a step that can't run (no kept run, no
+report, no build, the time limit) refuse, which leaves the certifier missing. The leak guard reads the piece's DIR
+against the run's witness, and the case is written only from the period files it left. The front's
+warm-ups go straight to the endpoint, one at a time, each recorded in a closed window of its own before the gate is
+asked, and the pick passes over those windows for the group's. At a tick of 4000 ms the front's rehearsal reaches this
+tree's gate with the tick in its request and the minutes counted at it, and the warden runs the scan's schedule there;
+a tick the gate refuses (past its range, or on a request that isn't the scan rehearsal) refuses the front before the
+gate is asked."""
 from __future__ import annotations
 
 import argparse
@@ -34,11 +39,16 @@ import certifier_piece as CP  # noqa: E402
 import served_verdicts as S  # noqa: E402
 from test_served_session import RUN, STUB  # noqa: E402
 from test_warden_chain import WC, gate_run  # noqa: E402
+from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
 
 PERIOD_CASE = ROOT / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
 SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v1.schema.json").read_text())
 K = 3
+#: the gate's end of a rehearsal its check passed, and of one whose every request was late past the warden's D·τ
+PASSED = {"run": RUN, "rc": 0, "ended": "the rehearsal ended", "verdict": {"accepted": True, "problems": 0}}
+LATE = {"run": RUN, "rc": 1, "ended": "the rehearsal exited 1",
+        "verdict": {"accepted": False, "problems": 8, "requests": 4, "ended": 0, "failed": ["fail"]}}
 
 
 @pytest.fixture(scope="module")
@@ -52,7 +62,8 @@ def period():
 
 @pytest.fixture(scope="module")
 def warden(tmp_path_factory):
-    """The synthetic warden run, its fetch, and the sampling block holding the most whole certified requests."""
+    """The synthetic warden run, its fetch (``late``: the same run, its rehearsal failed late), and the sampling block
+    holding the most whole certified requests."""
     d = tmp_path_factory.mktemp("warden")
     run = gate_run(d)
     io, T = WC.io(run), WC.deployment(run)[1].window
@@ -62,10 +73,13 @@ def warden(tmp_path_factory):
         if len(ws) == 1:
             by.setdefault(ws.pop(), []).append(r)
     w = max(by, key=lambda x: (len(by[x]), -x))
-    fetch = d / "fetch.tar.gz"
-    with tarfile.open(fetch, "w:gz") as tar:
-        tar.add(run, arcname=RUN)
-    return {"fetch": fetch, "w": w, "records": by[w][:4], "others": [r for x, rs in by.items() if x != w for r in rs],
+    fetches = {}
+    for name, end in (("late", LATE), ("fetch", PASSED)):
+        (run / "end.json").write_text(json.dumps(end))
+        fetches[name] = d / f"{name}.tar.gz"
+        with tarfile.open(fetches[name], "w:gz") as tar:
+            tar.add(run, arcname=RUN)
+    return {**fetches, "w": w, "records": by[w][:4], "others": [r for x, rs in by.items() if x != w for r in rs],
             "windows": WC.deployment(run)[0]["windows"]}
 
 
@@ -73,9 +87,10 @@ def _write(path: Path, rows: list[dict]) -> None:
     path.write_text("".join(json.dumps(r) + "\n" for r in rows))
 
 
-def _serve_dir(d: Path, warden: dict, records: list[dict] | None = None, kept: bool = True) -> Path:
+def _serve_dir(d: Path, warden: dict, records: list[dict] | None = None, kept: bool = True,
+               fetch: str = "fetch") -> Path:
     """A serve dir whose window K served ``records`` (the warden's, by default those of its sampling block) and whose
-    gate fetch the front kept."""
+    gate fetch (``warden[fetch]``) the front kept."""
     records = warden["records"] if records is None else records
     d.mkdir(parents=True)
     reqs = [{"engine_id": f"e{i}", "user": r["user"], "prompt_ids": r["prompt"], "streamed_ids": r["output"],
@@ -87,7 +102,7 @@ def _serve_dir(d: Path, warden: dict, records: list[dict] | None = None, kept: b
     (d / "serve.json").write_text("{}")
     if kept:
         (d / CP.PRIVATE / RUN).mkdir(parents=True)
-        (d / CP.PRIVATE / RUN / "fetch.tar.gz").write_bytes(warden["fetch"].read_bytes())
+        (d / CP.PRIVATE / RUN / "fetch.tar.gz").write_bytes(warden[fetch].read_bytes())
     return d
 
 
@@ -105,10 +120,13 @@ def _chain_out(d: Path, verdict: str, w: int) -> Path:
 
 
 def _piece_cmd(tmp_path: Path, chain: Path, answer: dict, cmd: str | None = None, lean: Path | None = None) -> str:
+    """The piece's command, its `network-period` a stand-in that keeps the three files it reads in TMP/seen and
+    answers ``answer``."""
     if lean is None:
-        lean = tmp_path / "network-period"
+        lean, seen = tmp_path / "network-period", shlex.quote(str(tmp_path / "seen"))
         (tmp_path / "lean-answer.json").write_text(json.dumps(answer, sort_keys=True))
-        lean.write_text(f"#!/bin/sh\ncat {shlex.quote(str(tmp_path / 'lean-answer.json'))}\n")
+        lean.write_text(f"#!/bin/sh\nmkdir -p {seen} && cp \"$2\" \"$3\" \"$4\" {seen}/\n"
+                        f"cat {shlex.quote(str(tmp_path / 'lean-answer.json'))}\n")
         lean.chmod(0o755)
     cmd = cmd or f'mkdir -p "$RESEARCH_RUN_DIR" && cp -r {shlex.quote(str(chain / "out"))} "$RESEARCH_RUN_DIR/"'
     return (f"{shlex.quote(sys.executable)} {shlex.quote(str(HERE / 'certifier_piece.py'))} piece \"$@\" "
@@ -150,9 +168,15 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     assert "MISSING the network certifier" not in capsys.readouterr().out
     assert json.loads((piece / "answer.json").read_text()) == accept
     assert json.loads((piece / "chain" / "report" / "report.json").read_text())["verdict"] == "accepted"
-    assert sorted(p.name for p in (piece / "period").iterdir()) == ["commitment.bin", "evidence.json", "params.json"]
-    assert {p.name for p in piece.iterdir()} - {"piece.json"} == {"answer.json", "chain", "period", "piece.log"}
-    assert "leak guard (exit 0)" in (piece / "piece.log").read_text()
+    assert {p.name for p in piece.iterdir()} - {"piece.json"} == {"answer.json", CP.CASE, "chain", "piece.log"}
+    seen = {f.name: f.read_bytes() for f in (tmp_path / "seen").iterdir()}
+    raw = (piece / CP.CASE).read_bytes()
+    case = json.loads(raw)
+    assert sorted(case) == ["commitment", "evidence", "params"] and raw == canonical_json(case) + b"\n"
+    assert (bytes.fromhex(case["commitment"]), bytes.fromhex(case["evidence"]), canonical_json(case["params"])) == (
+        seen["commitment.bin"], seen["evidence.json"], seen["params.json"])
+    log = (piece / "piece.log").read_text()
+    assert "leak guard (exit 0)" in log and f"case: {CP.CASE}, {len(raw)} bytes" in log
     keep = d / CP.PRIVATE / RUN
     assert sorted(p.name for p in keep.iterdir()) == ["chain", "endpoint", "fetch.tar.gz"]
     assert [(keep / "endpoint" / f).stat().st_mode & 0o777 for f in CP.ENDPOINT] == [0o600] * 4
@@ -241,18 +265,70 @@ def test_a_step_that_cant_run_refuses_and_leaves_the_certifier_missing(case, tmp
     assert rec is not None and line["composed"] == "pending" and "the network certifier" in line["missing"]
 
 
+def test_a_rehearsal_the_gates_check_failed_late_leaves_the_certifier_missing_not_rejected(tmp_path, warden, capsys,
+                                                                                          monkeypatch):
+    """Each request late past the warden's D·τ: the gate's check fails the rehearsal, and the served answers, longer
+    than what the warden passed, don't bind to its certified ones. That is the endpoint's lateness, not the protocol
+    rejecting a served answer, so the piece refuses before any chain and the certifier is missing, as for a busy gate;
+    the same window on a rehearsal the check passed is a reject."""
+    served = [dict(r, output=[*r["output"], 7]) for r in warden["records"]]
+    d = _serve_dir(tmp_path / "serve", warden, served, fetch="late")
+    chain = _chain_out(tmp_path / "chain", "accepted", warden["w"])
+    S.pieces(d, K, tmp_path / "pieces", env=dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, chain, {})))
+    piece = tmp_path / "pieces" / "certifier"
+    why = (piece / CP.REFUSED).read_text()
+    assert why.startswith("the gate's rehearsal didn't pass, so it certified no served answer: exit 1, the rehearsal "
+                          "exited 1; its check accepted False with 8 problems"), why
+    assert {p.name for p in piece.iterdir()} - {"piece.json"} == {CP.REFUSED, "piece.log"}
+    assert not (d / CP.PRIVATE / RUN / "chain").exists() and not list((d / CP.PRIVATE / RUN).glob("unpacked-*"))
+    assert S.piece_row("communication", tmp_path / "pieces")["verdict"] == "missing"
+    rec, line = _record(monkeypatch, capsys, d, tmp_path / "pieces")
+    assert rec is not None and line["composed"] == "pending" and "the network certifier" in line["missing"]
+    a, _ = CP.decide(_serve_dir(tmp_path / "passed", warden, served), K, tmp_path / "out",
+                     chain=lambda *x: pytest.fail("no chain"), check=lambda *x: {})
+    assert a["verdict"] == "reject" and "streamed_ids aren't the certified output" in a["reason"]
+
+
+def test_the_case_is_written_only_from_period_files_the_leak_guard_left(tmp_path, warden):
+    """`composite.py` reads a case's commitment and evidence as hex, where the leak guard finds only a binary witness
+    file's pieces: so the case is written from DIR/period after the guard has read its files raw, and not at all when
+    the guard moved one of them (here the evidence, holding a witness file's text)."""
+    fetch = tmp_path / "fetch.tar.gz"
+    fetch.write_bytes(warden["fetch"].read_bytes())
+    unpacked, run = CP.unpack(fetch)
+    for name, evidence in (("clean", b'{"windows":[]}'), ("leaky", (run / "witness" / "certified.jsonl").read_bytes())):
+        d = tmp_path / name
+        (d / "period").mkdir(parents=True)
+        for f, b in (("params.json", b'{"k":1}'), ("commitment.bin", b"\1\2"), ("evidence.json", evidence)):
+            (d / "period" / f).write_bytes(b)
+        g = CP.guard(d, unpacked, tmp_path / f"{name}-quarantine")
+        CP.write_case(d)
+        if name == "clean":
+            assert g == 0 and not (d / "period").exists()
+            assert (d / CP.CASE).read_bytes() == b'{"commitment":"0102","evidence":"%s","params":{"k":1}}\n' % (
+                evidence.hex().encode())
+        else:
+            assert g == 3 and not (d / CP.CASE).exists()
+            assert sorted(p.name for p in (d / "period").iterdir()) == ["commitment.bin", "params.json"]
+
+
 def test_n2_and_the_tie_take_every_link_window_of_a_short_run_unless_named():
     assert CP.sized(1, []) == ["CR_N2_DRAW=", "CR_TIE_WINDOWS=1"]
     assert CP.sized(8, ["CR_N2_DRAW=4"]) == ["CR_TIE_WINDOWS=8", "CR_N2_DRAW=4"]
     assert CP.sized(9, ["CR_SCAN_ONLY=1"]) == ["CR_SCAN_ONLY=1"]
 
 
-def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve_dirs_private(tmp_path, monkeypatch):
+def _stub_gate(tmp_path: Path, monkeypatch) -> None:
+    """`test_served_session.STUB` as ssh: the gate it reaches writes its request to tmp_path/request."""
     (tmp_path / "bin").mkdir()
     (tmp_path / "bin" / "ssh").write_text(STUB)
     (tmp_path / "bin" / "ssh").chmod(0o755)
     monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}{os.pathsep}{os.defpath}")
     monkeypatch.setenv("STUB_DIR", str(tmp_path))
+
+
+def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve_dirs_private(tmp_path, monkeypatch):
+    _stub_gate(tmp_path, monkeypatch)
     serve, out = tmp_path / "serve", tmp_path / "out" / "certifier-front"
     assert CP.main(["front", "18190", str(serve), str(out), "--key", str(tmp_path / "key")]) == 0
     assert (tmp_path / "request").read_text() == (
@@ -266,6 +342,63 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert json.loads((out / "session.json").read_text())["keep"] == str(kept)
     assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "64"]) == 2
     assert "past one link-window" in json.loads((out / "session.json").read_text())["refused"]
+
+
+def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_scans_schedule_there(tmp_path,
+                                                                                                   monkeypatch):
+    """``--gate local``, this tree's gate in this process: the run's request records the tick and the minutes counted
+    at it, and the warden's command is the scan's schedule at it. The tunnel and the rehearsal are stand-ins, the
+    rehearsal's check accepting."""
+    real, ran, check = CP.SS.A.certifier_run, [], json.dumps({"accepted": True, "problems": []})
+
+    def command(req, work, url):
+        ran.append(CP.SS.A.warden_command(req, work, url))
+        return [sys.executable, "-c", "import sys; open(sys.argv[1], 'w').write(sys.argv[2])", str(work / "check.json"),
+                check]
+
+    def certifier_run(*args, **kw):
+        ran.append(kw["tunnel_argv"]([], 1))
+        return real(*args, **kw | {"tunnel_argv": lambda ssh, port: [sys.executable, "-c", ""]}, command=command,
+                    up=lambda tunnel, port: True)
+
+    monkeypatch.setattr(CP.SS.A, "certifier_run", certifier_run)
+    monkeypatch.setattr(CP.SS, "pinned", lambda: "unpinned")
+    serve, out = tmp_path / "serve", tmp_path / "out"
+    assert CP.main(["front", "18190", str(serve), str(out), "--gate", "local", "--bucket-ms", "4000"]) == 0
+    minutes = CP.SS.A.warden_group_minutes(1, CP.TOKENS, CP.HEIGHT, 4000) + CP.SS.MARGIN
+    assert minutes > CP.SS.A.warden_group_minutes(1, CP.TOKENS, CP.HEIGHT) + CP.SS.MARGIN
+    (req,) = [json.loads(p.read_text()) for p in (serve / CP.PRIVATE).rglob("request.json")]
+    assert {k: req.get(k) for k in ("bucket_ms", "scan", "prompts", "window_per_group", "minutes")} == {
+        "bucket_ms": 4000, "scan": True, "prompts": {"count": CP.PROMPTS, "ids": CP.PROMPTS * CP.PROMPT_IDS},
+        "window_per_group": True, "minutes": minutes}
+    relay, warden = ran
+    assert relay[-5:] == ["relay", "--listen", "1", "--to", "18190"]
+    at = warden.index("--ids")
+    assert warden[at:at + 1 + len(CP.SS.A.SCAN_SCHEDULE)] == ["--ids", *CP.SS.A.scan_schedule(4000)]
+    assert CP.SS.A.scan_schedule(4000) != CP.SS.A.SCAN_SCHEDULE
+    doc = json.loads((out / "session.json").read_text())
+    assert doc["request"] == (f"warden-rehearse --peer vy-dc-h200 --port 18190 --minutes {minutes} --requests 4 "
+                              "--height 10 --scan --bucket-ms 4000 --prompts --tokens 4 --window-per-group")
+    assert (doc["rc"], doc["verdict"]["accepted"]) == (0, True)
+
+
+@pytest.mark.parametrize("tick, scan, why", [
+    ("99", True, "--bucket-ms '99': 100 to 4000"),
+    ("4001", True, "--bucket-ms '4001': 100 to 4000"),
+    ("4000", False, "--bucket-ms: the scan's tick, with --scan"),
+])
+def test_a_tick_the_gate_refuses_refuses_the_front_before_the_gate_is_asked(tmp_path, monkeypatch, tick, scan, why):
+    """The front's check is this tree's gate's: a tick past the gate's range, or one on a request that isn't the scan
+    rehearsal (the front's always is: here its scan flags are dropped), is refused with the gate's reason."""
+    _stub_gate(tmp_path, monkeypatch)
+    if not scan:
+        words = CP.SS.words
+        monkeypatch.setattr(CP.SS, "words", lambda a: [w for w in words(a)
+                                                       if w not in ("--scan", "--prompts", "--window-per-group")])
+    serve, out = tmp_path / "serve", tmp_path / "out"
+    assert CP.main(["front", "18190", str(serve), str(out), "--key", str(tmp_path / "key"), "--bucket-ms", tick]) == 2
+    assert json.loads((out / "session.json").read_text())["refused"] == f"the gate refuses it: {why}"
+    assert not (tmp_path / "request").exists()
 
 
 def _serve_windows(d: Path, windows: list[list[str]]) -> Path:
@@ -322,11 +455,7 @@ class _Endpoint(http.server.BaseHTTPRequestHandler):
 
 @pytest.fixture
 def endpoint(tmp_path, monkeypatch):
-    (tmp_path / "bin").mkdir()
-    (tmp_path / "bin" / "ssh").write_text(STUB)
-    (tmp_path / "bin" / "ssh").chmod(0o755)
-    monkeypatch.setenv("PATH", f"{tmp_path / 'bin'}{os.pathsep}{os.defpath}")
-    monkeypatch.setenv("STUB_DIR", str(tmp_path))
+    _stub_gate(tmp_path, monkeypatch)
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Endpoint)
     srv.seen, srv.status, srv.record, srv.serve, srv.stub_dir = [], 200, True, tmp_path / "serve", tmp_path
     threading.Thread(target=srv.serve_forever, daemon=True).start()
