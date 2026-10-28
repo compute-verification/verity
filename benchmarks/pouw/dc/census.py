@@ -135,7 +135,7 @@ def smi_clocks(d: Path) -> dict:
             "f_min": min(busy, default=None)}
 
 
-class Device:
+class FamilyRuns:
     """Every run of one family, merged: a kind's fastest rate with its runs, and every joint point."""
 
     def __init__(self, family: str, outs: list[Path]):
@@ -275,7 +275,7 @@ def tight(f: dict) -> str:
     return " and ".join(t.split("@")[0] for t in f["tight"])
 
 
-def census(dev: Device, carried: frozenset[str] = frozenset()) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+def census(dev: FamilyRuns, carried: frozenset[str] = frozenset()) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
     """(census.csv lines, rows.csv lines) of one device; `carried`, kinds no run prices that the old census gave the
     joint issue rows' scalar coefficient (NOROW), get it on the new rows."""
     fam, sfx = dev.family, dev.family[2:]
@@ -368,7 +368,7 @@ def rows_csv(rows: list[dict[str, str]]) -> str:
     return out.getvalue()
 
 
-def tables(dev: Device) -> str:
+def tables(dev: FamilyRuns) -> str:
     fam = dev.family
     honest = HONEST[fam]
     rho, rho_form = dev.rho_T()
@@ -467,7 +467,7 @@ def old_lines(d: Path, name: str) -> list[dict[str, str]]:
         return list(csv.DictReader(f))
 
 
-def carried(d: Path, dev: Device) -> frozenset[str]:
+def carried(d: Path, dev: FamilyRuns) -> frozenset[str]:
     """The kinds of DIR's census.csv that no run prices but that carry the joint issue rows' scalar coefficient."""
     return frozenset(r["kind"] for r in old_lines(d, "census.csv")
                      if JI_ROW.fullmatch(r["row"]) and r["kind"] != "UNI" and r["kind"] not in dev.kinds)
@@ -505,7 +505,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("outs", type=Path, nargs="+")
     p.add_argument("--write", type=Path, help="the device directory (machine_model's data/devices/sm_90 or sm_100)")
     a = p.parse_args(argv)
-    dev = Device(a.family, a.outs)
+    dev = FamilyRuns(a.family, a.outs)
     lines, rows = census(dev, carried(a.write, dev) if a.write else frozenset())
     print(tables(dev))
     if a.write:

@@ -52,7 +52,7 @@ def slots_of(ks: dict[int, int]) -> tuple[dict[int, tuple[int, int]], dict[int, 
     return pos, count
 
 
-class Statement:
+class StatementBench:
     def __init__(self, run: Any, cubin: str | Path) -> None:
         import torch
         self.B, self.run = rows_bench(), run

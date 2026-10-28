@@ -209,7 +209,7 @@ def _serve_one(u: int, d_word: bool = False, xa_flip: bool = False) -> tuple[int
     roots_ = roots(_W["com"])
     a, b = [[int(x) & 0xFF for x in r] for r in a], [[int(x) & 0xFF for x in r] for r in b]
     v3 = U.tile() == "v3"
-    lay = H.Layout(len(a), len(b), len(a[0]))
+    lay = H.TileShape(len(a), len(b), len(a[0]))
     rows, cols = H.noise(SD.seed(_W["salt"], u, *roots_), lay) if v3 or d_word or xa_flip else (None, None)
     xa = [H.row_wrap(a[i], rows[i]) for i in range(lay.r)] if rows else [[0] * lay.k for _ in range(lay.r)]
     if xa_flip and not v3:

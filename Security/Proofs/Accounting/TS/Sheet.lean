@@ -27,13 +27,13 @@ theorem facetCeilings_of_sheet (S : Sheet K P) (Q : Run K) (hn : ∀ k, 0 ≤ Q.
   have hc : 0 ≤ Q.cycles := (sum_nonneg fun k _ => hn k).trans h2
   refine ⟨hn, hc, h1.1, h1.2, fun r => ⟨fun _ => ?_, fun h => by simp [Sheet.machine] at h⟩⟩
   cases r with
-  | issue => simpa [Machine.load, Sheet.machine, SheetDispatch] using h2
-  | tensor => simpa [Machine.load, Sheet.machine, SheetTensor] using h3
+  | issue => simpa [FacetCosts.load, Sheet.machine, SheetDispatch] using h2
+  | tensor => simpa [FacetCosts.load, Sheet.machine, SheetTensor] using h3
   | pipe p =>
     rcases lt_or_ge 0 (S.width p) with hwp | hwp
     · have key : S.machine.load Q.n (.pipe p) =
           4 / S.width p * ∑ k, (if S.pipe k = some p then (32 : ℝ) else 0) * Q.n k := by
-        simp only [Machine.load, Sheet.machine, mul_sum]
+        simp only [FacetCosts.load, Sheet.machine, mul_sum]
         refine sum_congr rfl fun k _ => ?_
         split_ifs <;> field_simp <;> ring
       rw [key]
@@ -43,7 +43,7 @@ theorem facetCeilings_of_sheet (S : Sheet K P) (Q : Run K) (hn : ∀ k, 0 ≤ Q.
             exact h4 p
         _ = Q.cycles := by field_simp
     · calc S.machine.load Q.n (.pipe p) ≤ 0 := by
-            simp only [Machine.load, Sheet.machine]
+            simp only [FacetCosts.load, Sheet.machine]
             refine sum_nonpos fun k _ => ?_
             split_ifs
             · exact mul_nonpos_of_nonpos_of_nonneg (div_nonpos_of_nonneg_of_nonpos (by norm_num) hwp) (hn k)
@@ -51,7 +51,7 @@ theorem facetCeilings_of_sheet (S : Sheet K P) (Q : Run K) (hn : ∀ k, 0 ≤ Q.
         _ ≤ Q.cycles := hc
   | smem =>
     have key : S.machine.load Q.n .smem = (∑ k, S.smem k * Q.n k) / 32 := by
-      simp only [Machine.load, Sheet.machine, sum_div]
+      simp only [FacetCosts.load, Sheet.machine, sum_div]
       refine sum_congr rfl fun k _ => ?_
       ring
     have h5' : ∑ k, S.smem k * Q.n k ≤ 32 * Q.cycles := h5

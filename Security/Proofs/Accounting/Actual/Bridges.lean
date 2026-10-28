@@ -194,7 +194,7 @@ theorem workIn_empty {L : Type*} (ρ : Actual.Run L) (π : Fin ρ.A.N → ℕ) (
 
 /-- `CM_A`'s programs reach the oracle only through counted queries, the hash's gates: a prover carries it. -/
 theorem costModel_queries (Q R S : Type) {L : Type} [LinearOrder L] [Fintype L] (𝓕 : Set (Actual.Run L))
-    (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Transcript)
+    (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.CommitLog)
     (hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)) (π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ) :
     (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π).Queries :=
   fun P U act σ s => P.queries U act σ s
@@ -233,7 +233,7 @@ theorem prover_cost_window {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L]
 /-- What an adversary's timed run spends from the salt's release to a deadline `td` at or after `t_d` is its cost at
 `CM_A`, the prover's work in `[tₛ + ℓ, t_d − ℓ)`. -/
 theorem timedRun_spentIn {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L] {𝓕 : Set (Actual.Run L)}
-    {V : Finset L} {tₛ t_d ℓ : ℕ} {read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Transcript}
+    {V : Finset L} {tₛ t_d ℓ : ℕ} {read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.CommitLog}
     {hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)} {π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ} (U : Pouw.Workload)
     (A : Pouw.Adversary (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π)) (H : Q → R) (s : S) {td : ℝ}
     (htd : (t_d : ℝ) ≤ td) :
@@ -251,7 +251,7 @@ theorem timedRun_spentIn {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L] {
 itself is the program `HonestClock` asks for, with equality: its cost, the prover's work in `[tₛ + ℓ, t_d − ℓ)`, is
 what the run spends in `(tₛ, td]` (`timedRun_spentIn`). -/
 theorem honestClock {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L] {𝓕 : Set (Actual.Run L)} {V : Finset L}
-    {tₛ t_d ℓ : ℕ} {read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Transcript}
+    {tₛ t_d ℓ : ℕ} {read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.CommitLog}
     {hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)} {π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ}
     (U : Pouw.Workload) (A : Pouw.Adversary (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π)) {td : ℝ}
     (htd : (t_d : ℝ) ≤ td) :

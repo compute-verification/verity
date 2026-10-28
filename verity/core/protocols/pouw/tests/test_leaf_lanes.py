@@ -20,7 +20,7 @@ SALT, POSITION, ROOTS = bytes(range(64)), 11, (b"\x01" * 64, b"\x02" * 64)
 
 @pytest.mark.parametrize("rc", [(32, 32), (8, 16), (16, 32), (4, 8)])
 def test_the_lane_geometry_is_the_tiles(rc):
-    lay = H.Layout(*rc, 64)
+    lay = H.TileShape(*rc, 64)
     assert LL.lanes(*rc) == lay.lanes
     for ln in range(lay.lanes):
         assert LL.lane_rows(*rc, ln) == tuple(lay.rows(ln))
@@ -44,7 +44,7 @@ def test_a_32_by_32_leafs_lane_is_4g_plus_q():
 def test_the_word_count_is_the_definitions():
     assert all(LL.n_digits(ks) == SG.n_digits(ks) for ks in range(1, 3000))
     for k in (64, 384, 4096, 14336):
-        assert LL.words(k) == 2 * H.Layout(32, 32, k).sets
+        assert LL.words(k) == 2 * H.TileShape(32, 32, k).sets
     assert LL.words(4096) == 260
     assert LL.word_order(64) == ["T0.y", "T0.z", "T1.y", "T1.z", "O'.y", "O'.z", "D1.y", "D1.z"]
     assert LL.word_order(4096)[-4:] == ["O'.y", "O'.z", "D1.y", "D1.z"]
@@ -53,7 +53,7 @@ def test_the_word_count_is_the_definitions():
 def test_a_lanes_partial_is_its_chains_halves_after_each_set_in_the_stated_order():
     rng = random.Random(7)
     rc, k = (8, 16), 64
-    lay = H.Layout(*rc, k)
+    lay = H.TileShape(*rc, k)
     a = [[rng.randrange(256) for _ in range(k)] for _ in range(rc[0])]
     b = [[rng.randrange(256) for _ in range(k)] for _ in range(rc[1])]
     rows, cols = H.noise(SD.seed(SALT, POSITION, *ROOTS), lay)
@@ -301,7 +301,7 @@ def test_a_j10r_chunks_rows_carries_and_partials():
         assert r.get("carry_out") == (None if ch == n - 1 else (LL.carry(ch), 7))
         assert (r.get(LL.ZY), r.get(LL.PARTIALS)) == (((LL.ZY, 0), (LL.PARTIALS, 7)) if ch == n - 1 else (None, None))
     for ch in range(n - 1):
-        assert 16 * LL.carry_words(k, n, ch) == sum(Z.CARRY(H.Layout(32, 32, k), n, ch).leaf_widths())
+        assert 16 * LL.carry_words(k, n, ch) == sum(Z.CARRY(H.TileShape(32, 32, k), n, ch).leaf_widths())
     assert LL.produced_values(32, 32, k, j10r=True) == {
         LL.PARTIALS: (32, 2 * LL.words(k)), "carry0": (32, LL.carry_words(k, n, 0)), "carry1": (32, LL.carry_words(k, n, 1)),
         LL.OKS: (96, 1)}

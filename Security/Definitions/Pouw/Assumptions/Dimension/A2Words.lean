@@ -20,14 +20,14 @@ namespace Pouw.Dimension.A2Words
 open Finset Pouw.NCP Pouw.NCP.Relation Pouw.Dimension Pouw.Dimension.Assumptions
 
 /-- A machine with extra outputs: each program also outputs the functions in `X`, at the same cost. -/
-def withExtra {G : Type} (M : Machine G) (X : Set (G → ℚ)) : Machine G where
+def withExtra {G : Type} (M : WordCostModel G) (X : Set (G → ℚ)) : WordCostModel G where
   Prog := M.Prog
   cost := M.cost
   outputs q := M.outputs q ∪ X
 
 /-- The quadratic closed-pipe machine at FP32 price `cs` whose every program also outputs every function of the noise
 outside `W`. -/
-def extraMachine (N m n k cs : ℕ) (W : Set (Noise N m n k → ℚ)) : Machine (Noise N m n k) :=
+def extraMachine (N m n k cs : ℕ) (W : Set (Noise N m n k → ℚ)) : WordCostModel (Noise N m n k) :=
   withExtra (quadMachine N m n k cs) Wᶜ
 
 /-! ## Pinned statements -/
@@ -35,7 +35,7 @@ def extraMachine (N m n k cs : ℕ) (W : Set (Noise N m n k → ℚ)) : Machine 
 /-- **Extra outputs do not matter**: if `M` satisfies `A2(γ₂)` into `Alg` for the target set `W`, then so does
 `M` with any extra outputs outside `W`. -/
 def A2ExtraOutputs : Prop :=
-  ∀ (N m n k : ℕ) (M : Machine (Noise N m n k)) (Alg : List (Instr (Noise N m n k)) → Prop)
+  ∀ (N m n k : ℕ) (M : WordCostModel (Noise N m n k)) (Alg : List (Instr (Noise N m n k)) → Prop)
     (W X : Set (Noise N m n k → ℚ)) (γ₂ : ℝ),
     Disjoint X W → A2_algebraicSufficiency γ₂ M Alg W → A2_algebraicSufficiency γ₂ (withExtra M X) Alg W
 

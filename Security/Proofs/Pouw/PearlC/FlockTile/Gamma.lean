@@ -28,7 +28,7 @@ variable {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
 
 /-- **The hidden audit's open obligation at C-Flock's hidden audit**, from T3 at the TileRead session and the binding:
 for every session `F`, `TileProofSoundAll` holds at `F.audit` and `ηzk`, given `0 ≤ ηzk`. -/
-theorem tileProofSoundAll_flock (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop)
+theorem tileProofSoundAll_flock (P : Protocol Q R S) (TR : TileRules Q R S) (D : UnitLayout → Prop)
     (F : TileReadSession Q R S) (ηzk : ℕ → ℝ) (h0 : ∀ q, 0 ≤ ηzk q) (hT3 : TileReadSound P D F ηzk)
     (hbind : TileReadBinds P TR D F) : TileProofSoundAll P TR D F.audit ηzk :=
   tileProofSoundAll_of_tileGame P TR D F.audit F.cls ηzk h0 (fun _ _ _ _ _ h => h)

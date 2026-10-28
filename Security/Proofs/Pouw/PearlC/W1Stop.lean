@@ -59,7 +59,7 @@ theorem withStop_budgetAbort (CM : CostModel Q R S)
         · rw [if_neg h, if_neg fun h' => h (h'.trans (min_le_right _ _))]
 
 /-- The priced W1 charges nothing negative at positive prices. -/
-theorem w1Priced_nonneg (dv : W1Device) (hdv : Positive dv) (salt : S → List ℕ) (p : Prog) (H : Q → R)
+theorem w1Priced_nonneg (dv : W1Device) (hdv : Positive dv) (salt : S → List ℕ) (p : Listing) (H : Q → R)
     (U : Workload) (act : ℕ → Codes) (σ : State) (s : S) : 0 ≤ (w1Priced dv salt).cost p H U act σ s := by
   have h0 : (0 : ℚ) ≤ (final dv (salt s) p U act σ).cost := (exec_mono dv hdv _ false _).1
   simp only [w1Priced]
@@ -83,7 +83,7 @@ theorem not_wins_blank (P : Protocol Q R S) (U : Workload) {γ T : ℝ} (hγ : �
 
 /-- **The γ-gap property over the stopping machine is the γ-gap property with the budget per coin.** -/
 theorem gγ_withStop_iff [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (D : Layout → Prop) {γ : ℝ} (hγ : γ ≤ 1) (η : ℕ → ℕ → ℝ) :
+    (P : Protocol Q R S) (D : UnitLayout → Prop) {γ : ℝ} (hγ : γ ≤ 1) (η : ℕ → ℕ → ℝ) :
     Gγ CM.withStop P D γ η ↔ GγPerCoin CM P D γ η := by
   constructor
   · intro h U hU T hT q hq A hA
@@ -123,7 +123,7 @@ theorem gγ_withStop_iff [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM
 
 /-- **The stopping machine's γ-gap property gives the model's**: a program with no budget runs as before. -/
 theorem gγ_of_withStop [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) (h : Gγ CM.withStop P D γ η) :
+    (P : Protocol Q R S) (D : UnitLayout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) (h : Gγ CM.withStop P D γ η) :
     Gγ CM P D γ η :=
   W1Priced.gγ_of_cost_le CM.withStop CM (fun p => (p, none)) (fun _ _ _ _ _ _ => rfl) (fun _ _ _ _ _ _ => le_rfl)
     (fun _ _ _ _ _ _ => le_rfl) P D γ η h

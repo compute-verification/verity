@@ -16,7 +16,7 @@ open Accounting.Guarantees
 /-- `TileUnpredictable` from a bound on the checked units' total credit, for nonnegative credits. -/
 theorem tileUnpredictable_of_total {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : Pouw.CostModel Q R S) (P : Pouw.Protocol Q R S) (credit : Pouw.Shape → ℝ) (hc : ∀ sh, 0 ≤ credit sh)
-    (D : Pouw.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ)
+    (D : Pouw.UnitLayout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ)
     (h : ∀ U : Pouw.Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Pouw.Adversary CM,
       A.Bounded U T q →
         Pouw.pr (fun x : (Q → R) × S =>

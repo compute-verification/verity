@@ -277,7 +277,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         import native as N
 
-        dev = N.Device()
+        dev = N.CudaDevice()
         gpu, expected = I.expected_for(args.gpu, args.expect_uuid,
                                        args.server_md.read_text() if args.server_md else None, dict(os.environ))
         ident = I.check(dict(os.environ), gpu, dev.device_count, dev.info["uuid"], expected, pod=args.pod)

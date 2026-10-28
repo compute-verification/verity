@@ -195,7 +195,7 @@ theorem Whole.gate_in (W : Whole) {g : ℕ} (hg : g < W.nIn) : W.gate g = ⟨W.i
   unfold Whole.gate
   rw [ite_eq_left hg]
 
-theorem Whole.inst_w (W : Whole) {L1 L2 : List Block} {B : Block} (hW : W.blocks = L1 ++ B :: L2) {q : ℕ}
+theorem Whole.inst_w (W : Whole) {L1 L2 : List UnitKind} {B : UnitKind} (hW : W.blocks = L1 ++ B :: L2) {q : ℕ}
     (hq : q < B.cnt) {a : ℕ} (ha1 : B.nIn ≤ a) (ha2 : a < B.S.N) :
     (W.gate (W.nIn + blocksLen L1 + q * B.len + (a - B.nIn))).w = (B.S.gate a).w := by
   rw [W.gate_inst hW hq ha1 ha2]
@@ -208,13 +208,13 @@ section Whole8
 variable (p : Pipeline) (M K N TM TN : ℕ)
 
 /-- `whole8`'s RowB block. -/
-def blockB8 : Block := ⟨(row8B p K).spec ops, rowIn K true, N, portB8 M N K⟩
+def blockB8 : UnitKind := ⟨(row8B p K).spec ops, rowIn K true, N, portB8 M N K⟩
 
 /-- `whole8`'s RowA block. -/
-def blockA8 : Block := ⟨(row8A p K).spec ops, rowIn K false, M, portA8 M N K⟩
+def blockA8 : UnitKind := ⟨(row8A p K).spec ops, rowIn K false, M, portA8 M N K⟩
 
 /-- `whole8`'s tile block. -/
-def blockT8 : Block := ⟨tileSpec p K TM TN, tileIn K TM TN, M / TM * (N / TN), portT8 p M N K TM TN⟩
+def blockT8 : UnitKind := ⟨tileSpec p K TM TN, tileIn K TM TN, M / TM * (N / TN), portT8 p M N K TM TN⟩
 
 theorem whole8_B : (whole8 ops p M K N TM TN).blocks =
     [] ++ blockB8 ops p M K N :: [blockA8 ops p M K N, blockT8 p M K N TM TN] := rfl
@@ -227,22 +227,22 @@ theorem whole8_T : (whole8 ops p M K N TM TN).blocks =
 
 theorem rowB8_eq (j a : ℕ) : rowB8 p M N K j a = (whole8 ops p M K N TM TN).nIn + blocksLen [] +
     j * (blockB8 ops p M K N).len + (a - (blockB8 ops p M K N).nIn) := by
-  simp only [rowB8, whole8, blocksLen, Block.len, blockB8, Rows.spec, add_zero]
+  simp only [rowB8, whole8, blocksLen, UnitKind.len, blockB8, Rows.spec, add_zero]
 
 theorem rowA8_eq (i a : ℕ) : rowA8 p M N K i a = (whole8 ops p M K N TM TN).nIn + blocksLen [blockB8 ops p M K N] +
     i * (blockA8 ops p M K N).len + (a - (blockA8 ops p M K N).nIn) := by
-  simp only [rowA8, whole8, blocksLen, Block.len, blockB8, blockA8, Rows.spec, add_zero]
+  simp only [rowA8, whole8, blocksLen, UnitKind.len, blockB8, blockA8, Rows.spec, add_zero]
 
 theorem tile8_eq (e a : ℕ) : tile8 p M N K TM TN e a = (whole8 ops p M K N TM TN).nIn +
     blocksLen [blockB8 ops p M K N, blockA8 ops p M K N] + e * (blockT8 p M K N TM TN).len +
       (a - (blockT8 p M K N TM TN).nIn) := by
-  simp only [tile8, blocksLen, Block.len, blockB8, blockA8, blockT8, whole8, add_zero, Nat.add_assoc]
+  simp only [tile8, blocksLen, UnitKind.len, blockB8, blockA8, blockT8, whole8, add_zero, Nat.add_assoc]
   rfl
 
 theorem whole8_N : (whole8 ops p M K N TM TN).spec.toCircuit.N = in8 M N K + N * ((row8B p K).N - rowIn K true) +
     M * ((row8A p K).N - rowIn K false) + M / TM * (N / TN) * (tileN K TM TN - tileIn K TM TN) := by
   show in8 M N K + blocksLen _ = _
-  simp only [blocksLen, Block.len, whole8, add_zero, Nat.add_assoc]
+  simp only [blocksLen, UnitKind.len, whole8, add_zero, Nat.add_assoc]
   rfl
 
 /-! ### Inputs -/

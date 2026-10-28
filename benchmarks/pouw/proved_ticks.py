@@ -138,7 +138,7 @@ class Tile:
         (`PouwSegDot_v2` and `PouwSegDot0_v2`), and on v1 `z`'s own (Lean's `h1Rows` dotMacs). v3 has none of its own:
         its z is recombined from the lanes' folded words, so its products are the segment dots' alone."""
         from verity.core.protocols.pouw.circuit import h1tile
-        lanes = self.r * self.c * (self.k + 32 * h1tile.Layout(self.r, self.c, self.k).m)
+        lanes = self.r * self.c * (self.k + 32 * h1tile.TileShape(self.r, self.c, self.k).m)
         return lanes + (self.linears if self.version == 1 else 0)
 
 

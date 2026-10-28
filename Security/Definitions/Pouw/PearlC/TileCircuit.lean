@@ -32,7 +32,7 @@ open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.PeelExact
 
 /-- One gate of a word circuit: its width, whether it is an input, the gates it reads in order, and its value from
 theirs as naturals. -/
-structure Gate where
+structure Cell where
   w : ℕ
   input : Bool
   rd : List ℕ
@@ -41,12 +41,12 @@ structure Gate where
 /-- A word circuit: `N` gates, each reading earlier gates only, inputs reading none. -/
 structure Spec where
   N : ℕ
-  gate : ℕ → Gate
+  gate : ℕ → Cell
   outs : Finset ℕ
   rd_lt : ∀ g < N, ∀ a ∈ (gate g).rd, a < g
   input_rd : ∀ g < N, (gate g).input = true → (gate g).rd = []
 
-/-- Gate `a`'s value in `v` as a natural (`0` past the last gate). -/
+/-- Cell `a`'s value in `v` as a natural (`0` past the last gate). -/
 def val {n : ℕ} {β : Fin n → ℕ} (v : (a : Fin n) → BitVec (β a)) (a : ℕ) : ℕ :=
   if h : a < n then (v ⟨a, h⟩).toNat else 0
 
@@ -117,7 +117,7 @@ def peelF (l : List ℕ) : ℕ := k16Step (l.headD 0) (fun i => l.getD (1 + i) 0
 /-- One gate of an entry's block, at position `r` of the block and gate `g`: the chain on the step `p` in windows of 4
 atoms over `A′_i`'s codes from gate `a` and `B̃_j`'s from gate `b` (per window four atoms and one promotion), then U's
 four K16 steps over the 64 BF16 words of `P_A,i` from gate `pa` and of `P_B,j` from gate `pb`. -/
-def entryGate (p : Pipeline) (K a b pa pb g r : ℕ) : Gate :=
+def entryGate (p : Pipeline) (K a b pa pb g r : ℕ) : Cell :=
   if r < 5 * (K / 128) then
     if r % 5 < 4 then
       ⟨32, false, (if r % 5 = 0 then [] else [g - 1]) ++ (List.range 32).map (a + 32 * (4 * (r / 5) + r % 5) + ·) ++
@@ -140,7 +140,7 @@ def entryBase (K TM TN i j : ℕ) : ℕ := tileIn K TM TN + (i * TN + j) * block
 /-- `Pc8Tile_v1{K, TM, TN}`'s gates on the step `p`: the codes of `A′_i` (gates `i·K, …`) and `B̃_j` (`TM·K + j·K, …`),
 the BF16 words of `P_A,i` (`(TM + TN)·K + 64·i, …`) and `P_B,j` (`(TM + TN)·K + 64·TM + 64·j, …`), then entry
 `(i, j)`'s block (`entryGate`) for each entry in row-major order. -/
-def tileGate (p : Pipeline) (K TM TN g : ℕ) : Gate :=
+def tileGate (p : Pipeline) (K TM TN g : ℕ) : Cell :=
   if g < (TM + TN) * K then ⟨8, true, [], fun _ => 0⟩
   else if g < tileIn K TM TN then ⟨16, true, [], fun _ => 0⟩
   else
@@ -159,7 +159,7 @@ def uGate (K TM TN i j : ℕ) : ℕ := entryBase K TM TN i j + blockLen K - 1
 
 theorem blockLen_pos (K : ℕ) : 0 < blockLen K := by unfold blockLen; omega
 
-/-- Gate `g` past the inputs lies in entry `e`'s block at position `r`, with `e < TM·TN` below the gate count. -/
+/-- Cell `g` past the inputs lies in entry `e`'s block at position `r`, with `e < TM·TN` below the gate count. -/
 theorem tile_block {K TM TN g : ℕ} (hg : g < tileN K TM TN) (h : tileIn K TM TN ≤ g) :
     g = tileIn K TM TN + (g - tileIn K TM TN) / blockLen K * blockLen K + (g - tileIn K TM TN) % blockLen K ∧
       (g - tileIn K TM TN) / blockLen K / TN < TM ∧ (g - tileIn K TM TN) / blockLen K % TN < TN ∧

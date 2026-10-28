@@ -71,7 +71,7 @@ def test_the_fixtures_are_the_definitions_and_a_changed_word_is_refused(tmp_path
     monkeypatch.setitem(S.LINEARS, "kv", (64, 512))
     doc = F.expected(tmp_path, ["kv"], [4096], 6, 1, 1)
     c = doc["calls"]["kv-4096"]
-    lay = HT.Layout(S.T, S.T, 512)
+    lay = HT.TileShape(S.T, S.T, 512)
     assert c["words"] == 2 * lay.sets == 2 * (512 // 32 + lay.m) and c["rows_sampled"] <= S.T * 6
     assert doc["v6_all_equal"] and c["samples"][0]["v6_receipt_equal"]
     got_doc, arrays = F.load(tmp_path)

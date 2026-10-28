@@ -41,7 +41,7 @@ theorem pr_of_isEmpty {α : Type} [Fintype α] [IsEmpty α] (P : α → Prop) : 
 /-! ## Empty workload -/
 
 theorem wins_empty (P : Protocol Q R S) (U : Workload) (hN : U.layout.N = 0) {γ T : ℝ} (hγ : γ < 1) (hT : 0 ≤ T)
-    (τ : Transcript) (H : Q → R) (s : S) : ¬ Wins P U γ T τ H s := by
+    (τ : CommitLog) (H : Q → R) (s : S) : ¬ Wins P U γ T τ H s := by
   unfold Wins
   have : correctSet P U H s τ = ∅ := by
     have h := correctSet_subset_range P U H s τ
@@ -51,7 +51,7 @@ theorem wins_empty (P : Protocol Q R S) (U : Workload) (hN : U.layout.N = 0) {γ
   exact div_nonneg hT (by linarith)
 
 theorem tt_event_empty (P : Protocol Q R S) (U : Workload) (hN : U.layout.N = 0) {γ₀ T : ℝ} (hγ₀ : γ₀ < 1)
-    (hT : 0 ≤ T) (τ : Transcript) (H : Q → R) (s : S) :
+    (hT : 0 ≤ T) (τ : CommitLog) (H : Q → R) (s : S) :
     ¬ T / (1 - γ₀) < ∑ u ∈ checkedSet P U H s τ, ((U.layout.shape u).Wmm : ℝ) := by
   have : checkedSet P U H s τ = ∅ := by
     refine Finset.subset_empty.1 fun u hu => ?_
@@ -70,7 +70,7 @@ theorem default_pos (sh : Shape) (h : sh.InDefaultDomain) : 0 < sh.m ∧ 0 < sh.
   exact ⟨hm, by omega, by omega⟩
 
 /-- Under the reduction's `Ω_max` bound a zero-work unit has `W_ref = 0`: it certifies nothing. -/
-theorem Wref_eq_zero_of_Wmm (P : Protocol Q R S) (L : Layout) (u : ℕ) (Ωmax : ℝ)
+theorem Wref_eq_zero_of_Wmm (P : Protocol Q R S) (L : UnitLayout) (u : ℕ) (Ωmax : ℝ)
     (hW : (P.Wref L u : ℝ) ≤ Ωmax * ((L.shape u).Wmm : ℝ)) (h0 : (L.shape u).Wmm = 0) : P.Wref L u = 0 := by
   rw [h0] at hW
   exact_mod_cast le_antisymm (by simpa using hW) (Nat.cast_nonneg _)
@@ -119,7 +119,7 @@ theorem Y_last (P : D1.Params Q R S) (hd : 0 < P.d) (H : Q → R) (s : S) (U : W
 
 /-- A cost model in which every constant transcript is a free program with no oracle calls. -/
 def FreeConstants (CM : CostModel Q R S) : Prop :=
-  ∀ τ : Transcript, ∃ p : CM.Prog, ∀ (H : Q → R) (U : Workload) (act : ℕ → Mat) (σ : State) (s : S),
+  ∀ τ : CommitLog, ∃ p : CM.Prog, ∀ (H : Q → R) (U : Workload) (act : ℕ → Mat) (σ : State) (s : S),
     CM.run p H U act σ s = τ ∧ CM.cost p H U act σ s ≤ 0 ∧ CM.calls p H U act σ s = 0
 
 theorem freeModel_freeConstants : FreeConstants (freeModel Q R S) :=
@@ -128,8 +128,8 @@ theorem freeModel_freeConstants : FreeConstants (freeModel Q R S) :=
 /-- If a constant transcript has every unit's checked values correct for every `H` and `s`, TT fails at `q = 0`
 in every model with free constants, on every workload with positive work. -/
 theorem tt_false_of_const [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] [Nonempty R] [Nonempty S]
-    (CM : CostModel Q R S) (hCM : FreeConstants CM) (P : Protocol Q R S) (D : Layout → Prop) (U : Workload)
-    (hU : U.InDomain D) (hpos : 0 < ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)) (τ : Transcript)
+    (CM : CostModel Q R S) (hCM : FreeConstants CM) (P : Protocol Q R S) (D : UnitLayout → Prop) (U : Workload)
+    (hU : U.InDomain D) (hpos : 0 < ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)) (τ : CommitLog)
     (hτ : ∀ H s, checkedSet P U H s τ = range U.layout.N) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ)
     (hTT : Assumptions.TT CM P D γ₀ ε) : 1 ≤ ε 0 U.layout.N := by
   obtain ⟨p, hp⟩ := hCM τ
@@ -143,7 +143,7 @@ theorem tt_false_of_const [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] [N
   exact hpos
 
 /-- The all-zero commitment on every unit. -/
-def zeroTranscript (U : Workload) : Transcript := fun u => if u < U.layout.N then some ⟨0, 0, 0⟩ else none
+def zeroTranscript (U : Workload) : CommitLog := fun u => if u < U.layout.N then some ⟨0, 0, 0⟩ else none
 
 theorem checkedSet_zeroTranscript (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S)
     (hY : ∀ u < U.layout.N, ∀ x ∈ P.checkIdx (U.layout.shape u), P.Y H s U u 0 x.1 x.2.1 x.2.2 = 0) :
@@ -159,7 +159,7 @@ theorem checkedSet_zeroTranscript (P : Protocol Q R S) (U : Workload) (H : Q →
 /-- **Zero noise**: with zero activation noise, the zero-input transcript is correct for free, so TT fails. -/
 theorem tt_false_zero_noise [Fintype Q] [DecidableEq Q] [Fintype R] [Nonempty R] (CM : CostModel Q R Salt)
     (hCM : FreeConstants CM) (P : D1.Params Q R Salt)
-    (hE : ∀ sh a b, mm P.r (P.expAct sh a b).1 (P.expAct sh a b).2 = 0) (D : Layout → Prop) (U : Workload)
+    (hE : ∀ sh a b, mm P.r (P.expAct sh a b).1 (P.expAct sh a b).2 = 0) (D : UnitLayout → Prop) (U : Workload)
     (hU : U.InDomain D) (hpos : 0 < ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)) (γ₀ : ℝ)
     (ε : ℕ → ℕ → ℝ) (hTT : Assumptions.TT CM P.toProtocol D γ₀ ε) : 1 ≤ ε 0 U.layout.N := by
   have := salt_nonempty
@@ -172,14 +172,14 @@ theorem tt_false_zero_noise [Fintype Q] [DecidableEq Q] [Fintype R] [Nonempty R]
 
 /-- **`r = 0`**: the noise vanishes and TT fails. -/
 theorem tt_false_rank_zero [Fintype Q] [DecidableEq Q] [Fintype R] [Nonempty R] (CM : CostModel Q R Salt)
-    (hCM : FreeConstants CM) (P : D1.Params Q R Salt) (hr : P.r = 0) (D : Layout → Prop) (U : Workload)
+    (hCM : FreeConstants CM) (P : D1.Params Q R Salt) (hr : P.r = 0) (D : UnitLayout → Prop) (U : Workload)
     (hU : U.InDomain D) (hpos : 0 < ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)) (γ₀ : ℝ)
     (ε : ℕ → ℕ → ℝ) (hTT : Assumptions.TT CM P.toProtocol D γ₀ ε) : 1 ≤ ε 0 U.layout.N :=
   tt_false_zero_noise CM hCM P (fun sh a b => by funext i l; simp [mm, hr]) D U hU hpos γ₀ ε hTT
 
 /-- **`d = 0`**: nothing is compared and TT fails. -/
 theorem tt_false_depth_zero [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] [Nonempty R] [Nonempty S]
-    (CM : CostModel Q R S) (hCM : FreeConstants CM) (P : D1.Params Q R S) (hd : P.d = 0) (D : Layout → Prop)
+    (CM : CostModel Q R S) (hCM : FreeConstants CM) (P : D1.Params Q R S) (hd : P.d = 0) (D : UnitLayout → Prop)
     (U : Workload) (hU : U.InDomain D) (hpos : 0 < ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)) (γ₀ : ℝ)
     (ε : ℕ → ℕ → ℝ) (hTT : Assumptions.TT CM P.toProtocol D γ₀ ε) : 1 ≤ ε 0 U.layout.N := by
   refine tt_false_of_const CM hCM P.toProtocol D U hU hpos (zeroTranscript U) (fun H s => ?_) γ₀ ε hTT
@@ -190,7 +190,7 @@ theorem tt_false_depth_zero [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] 
 
 /-! ## `T = 0` and `q = 0` -/
 
-theorem wins_T_zero_iff (P : Protocol Q R S) (U : Workload) (γ : ℝ) (τ : Transcript) (H : Q → R) (s : S) :
+theorem wins_T_zero_iff (P : Protocol Q R S) (U : Workload) (γ : ℝ) (τ : CommitLog) (H : Q → R) (s : S) :
     Wins P U γ 0 τ H s ↔ 0 < ∑ u ∈ correctSet P U H s τ, (P.Wref U.layout u : ℝ) := by
   unfold Wins; rw [zero_div]
 
@@ -230,7 +230,7 @@ theorem reductionGamma_lt_of_omega_lt_one {γ₀ Ωmax : ℝ} (hΩ : 0 < Ωmax) 
 
 /-! ## TT against the honest reference -/
 
-theorem honest_checkedSet (P : Protocol Q R S) (D : Layout → Prop) (U : Workload) (H : Q → R) (s : S)
+theorem honest_checkedSet (P : Protocol Q R S) (D : UnitLayout → Prop) (U : Workload) (H : Q → R) (s : S)
     (act : ℕ → Mat) (hP : P.Complete D) (hU : U.InDomain D) (hact : ∀ u < U.layout.N, ActOK (U.layout.shape u) (act u)) :
     checkedSet P U H s (honestTranscript P H s U act) = range U.layout.N := by
   refine le_antisymm (fun u hu => ?_) ?_
@@ -241,7 +241,7 @@ theorem honest_checkedSet (P : Protocol Q R S) (D : Layout → Prop) (U : Worklo
 /-- The honest reference is an adversary of TT's game: if TT holds with `ε(qref) < 1`, the model's `H_ref` costs at
 least `(1 − γ₀)·∑ W_mm`. -/
 theorem tt_admitsRef_bound [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] [Nonempty R] [Nonempty S]
-    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (qref : Workload → ℕ) (hP : P.Complete D)
+    (CM : CostModel Q R S) (P : Protocol Q R S) (D : UnitLayout → Prop) (qref : Workload → ℕ) (hP : P.Complete D)
     (hAdm : AdmitsRef CM P D qref) (U : Workload) (hU : U.InDomain D) (hq : qref U ≤ 2 ^ 64) (γ₀ : ℝ)
     (ε : ℕ → ℕ → ℝ) (hTT : Assumptions.TT CM P D γ₀ ε) (hε : ε (qref U) U.layout.N < 1) :
     ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ) ≤ totalWref P U.layout / (1 - γ₀) := by
@@ -263,7 +263,7 @@ theorem tt_admitsRef_bound [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] [
 
 /-- **`γ₀ ≥ 1`**: TT is unsatisfiable (error below 1) whenever `H_ref` runs in the model on a workload with work. -/
 theorem tt_false_of_gamma0_ge_one [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] [Nonempty R] [Nonempty S]
-    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (qref : Workload → ℕ) (hP : P.Complete D)
+    (CM : CostModel Q R S) (P : Protocol Q R S) (D : UnitLayout → Prop) (qref : Workload → ℕ) (hP : P.Complete D)
     (hAdm : AdmitsRef CM P D qref) (U : Workload) (hU : U.InDomain D) (hq : qref U ≤ 2 ^ 64)
     (hpos : 0 < ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)) (γ₀ : ℝ) (hγ₀ : 1 ≤ γ₀) (ε : ℕ → ℕ → ℝ)
     (hTT : Assumptions.TT CM P D γ₀ ε) : 1 ≤ ε (qref U) U.layout.N := by
@@ -277,7 +277,7 @@ theorem tt_false_of_gamma0_ge_one [Fintype Q] [DecidableEq Q] [Fintype R] [Finty
 /-- **`γ ≥ 1`**: every budget is beaten by one correct unit of positive work, so `G_γ` cannot hold with `η < 1`
 against the honest reference (the pinned statements assume `γ < 1` or `γ₀ < 1`). -/
 theorem wins_of_gamma_ge_one (P : Protocol Q R S) (U : Workload) {γ T : ℝ} (hγ : 1 ≤ γ) (hT : 0 ≤ T)
-    (τ : Transcript) (H : Q → R) (s : S) (hpos : 0 < ∑ u ∈ correctSet P U H s τ, (P.Wref U.layout u : ℝ)) :
+    (τ : CommitLog) (H : Q → R) (s : S) (hpos : 0 < ∑ u ∈ correctSet P U H s τ, (P.Wref U.layout u : ℝ)) :
     Wins P U γ T τ H s :=
   lt_of_le_of_lt (div_nonpos_of_nonneg_of_nonpos hT (by linarith)) hpos
 
@@ -322,7 +322,7 @@ theorem single_unit_not_inDomain :
 /-- **Full groups are in the milestone domain**: a layout of milestone shapes and 64-bit weight ids in which every
 unit's group `16·⌊u/16⌋ … 16·⌊u/16⌋ + 15` lies below `N` and on the unit's weight satisfies `m1Domain`'s rows
 condition (`16·2^12 = 2^16`). -/
-theorem fullGroups_inDomain (L : Layout) (hsh : ∀ u < L.N, D1.M1Shape (L.shape u) ∧ L.wid u < 2 ^ 64)
+theorem fullGroups_inDomain (L : UnitLayout) (hsh : ∀ u < L.N, D1.M1Shape (L.shape u) ∧ L.wid u < 2 ^ 64)
     (hfull : ∀ u < L.N, ∀ t < 16, 16 * (u / 16) + t < L.N ∧ L.wid (16 * (u / 16) + t) = L.wid u) :
     D1.m1Domain L := by
   intro u hu
@@ -391,8 +391,8 @@ theorem lone_unit_over_budget :
     rw [Finset.filter_true_of_mem fun u hu => ⟨by have : u < 1 := Finset.mem_range.1 hu; omega, rfl⟩,
       Finset.sum_range_one]
     rfl
-  have hr : Layout.rowsOf ⟨1, fun _ => milestoneShape, fun _ => 0⟩ 0 = 2 ^ 12 := by
-    unfold Layout.rowsOf
+  have hr : UnitLayout.rowsOf ⟨1, fun _ => milestoneShape, fun _ => 0⟩ 0 = 2 ^ 12 := by
+    unfold UnitLayout.rowsOf
     rw [Finset.filter_true_of_mem fun u _ => rfl, Finset.sum_range_one]
     rfl
   have hW : D1.m1Wref ⟨1, fun _ => milestoneShape, fun _ => 0⟩ 0 = 2 ^ 44 + 253 * 2 ^ 30 + 9792 * 2 ^ 12 := by
@@ -409,7 +409,7 @@ theorem lone_unit_over_budget :
 /-- **Deterministic adversaries suffice**: an adversary using coins `C` independent of `(H, s)`, within `(T, q)` for
 every coin value, wins with probability at most `η`. -/
 theorem randomized_of_deterministic [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) (hG : Gγ CM P D γ η) (U : Workload)
+    (P : Protocol Q R S) (D : UnitLayout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) (hG : Gγ CM P D γ η) (U : Workload)
     (hU : U.InDomain D) (T : ℝ) (hT : 0 ≤ T) (q : ℕ) (hq : q ≤ 2 ^ 64) (C : Type) [Fintype C] [Nonempty C]
     (A : C → Adversary CM) (hA : ∀ c, (A c).Bounded U T q) :
     pr (fun x : (Q → R) × S × C => Wins P U γ T ((A x.2.2).transcript U x.1 x.2.1) x.1 x.2.1) ≤ η q U.layout.N := by

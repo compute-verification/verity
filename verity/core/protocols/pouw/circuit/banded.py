@@ -6,10 +6,10 @@ band.
 A call's column tiles are cut into bands of g ≤ `BAND_MAX` column tiles from column tile 0 (`band_start`), the last band
 holding what remains. Tile (I, J), at unit position ``positions[I][J]``, reads:
 
-* its rows' noise (`h1tile.Layout.row`'s blocks: dither bits, digit coins) from `seeds.seed` at the position of its band's
+* its rows' noise (`h1tile.TileShape.row`'s blocks: dither bits, digit coins) from `seeds.seed` at the position of its band's
   first tile, (I, J - J mod g), so every tile of a band reads the same rows and other bands and row blocks read other
   seeds;
-* its columns' noise (`h1tile.Layout.col`'s blocks: coin bits, U) from `seeds.seed` at its own position;
+* its columns' noise (`h1tile.TileShape.col`'s blocks: coin bits, U) from `seeds.seed` at its own position;
 * its fold keys from `seeds.receipt_seed` at its own position (`h1tile.fold_keys`).
 
 At g = 1 every tile reads its own seed only: `h1tile.noise` and `h1tile.fold_keys`, and `banded_reference` is
@@ -36,7 +36,7 @@ def band_start(J: int, g: int) -> int:
     return J - J % g
 
 
-def row_noise(seed_j: bytes, lay: H.Layout) -> list:
+def row_noise(seed_j: bytes, lay: H.TileShape) -> list:
     """seed_j's row noise, `h1tile.noise`'s rows: per row of the tile, (dither bits, digit coins)."""
     k, m = lay.k, lay.m
     rows = []
@@ -46,7 +46,7 @@ def row_noise(seed_j: bytes, lay: H.Layout) -> list:
     return rows
 
 
-def col_noise(seed_j: bytes, lay: H.Layout) -> list:
+def col_noise(seed_j: bytes, lay: H.TileShape) -> list:
     """seed_j's column noise, `h1tile.noise`'s columns: per column of the tile, (coin bits, U's int8 encodings)."""
     k = lay.k
     cols = []
@@ -56,7 +56,7 @@ def col_noise(seed_j: bytes, lay: H.Layout) -> list:
     return cols
 
 
-def banded_noise(salt: bytes, positions: Sequence[Sequence[int]], roots: tuple[bytes, bytes], lay: H.Layout, I: int,
+def banded_noise(salt: bytes, positions: Sequence[Sequence[int]], roots: tuple[bytes, bytes], lay: H.TileShape, I: int,
                  J: int, g: int) -> tuple[list, list, list[list[int]]]:
     """Tile (I, J)'s (rows, cols, keys) banded at g: `row_noise` of its band's seed, `col_noise` of its own and
     `h1tile.fold_keys` of its own σ_R. `positions[I][J]` is tile (I, J)'s unit position (`compile.Compiled.positions`) and
@@ -75,7 +75,7 @@ def banded_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], sal
     """Tile (I, J)'s unit on words banded at g: `h1tile.reference`'s (z, receipt), its sets and fold the same, with its
     noise and keys from `banded_noise`. z is each cell's A Bᵀ, which no noise reaches."""
     SG = H.SG
-    lay = H.Layout(len(a), len(b), len(a[0]))
+    lay = H.TileShape(len(a), len(b), len(a[0]))
     rows, cols, keys = banded_noise(salt, positions, roots, lay, I, J, g)
     cp = [[0, 0] for _ in range(lay.sets)]
     for ln in range(lay.lanes):

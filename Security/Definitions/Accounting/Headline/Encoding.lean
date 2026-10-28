@@ -58,7 +58,7 @@ noncomputable def SheetData.sheet {P : Type} (D : SheetData P) (n : ℕ) : Sheet
   smem k := D.smem.getD k.val 0
 
 /-- **A machine from its rows**: row `r` the sparse coefficients `rows[r]` over `Fin n`, every facet SM-clocked. -/
-noncomputable def rowsMachine (n m : ℕ) (rows : List Sparse) (fmax : ℕ) : Machine (Fin n) (Fin m) where
+noncomputable def rowsMachine (n m : ℕ) (rows : List Sparse) (fmax : ℕ) : FacetCosts (Fin n) (Fin m) where
   a r k := (Sparse.coeff (rows.getD r.val []) k.val : ℝ)
   smClocked _ := true
   fmax := fmax
@@ -78,7 +78,7 @@ structure DesignData where
 /-- **The design's TS model on machine `G`**, over `n` classes, `nt` writer kinds and `nf` fold routes: no side unit,
 one table level at `b_T = 0`, the fold routes' demands their loads on `G`, no filler (its menu one route of demand
 `0`), and `μ_f = μ_x = 0`. -/
-noncomputable def DesignData.model {R : Type} (D : DesignData) (n nt nf : ℕ) [NeZero n] (G : Machine (Fin n) R) :
+noncomputable def DesignData.model {R : Type} (D : DesignData) (n nt nf : ℕ) [NeZero n] (G : FacetCosts (Fin n) R) :
     Model (Fin n) R (Fin nt) Unit Empty (Fin nf) Unit where
   G := G
   cls t := idx n (D.writers.getD t.val (0, 0)).1

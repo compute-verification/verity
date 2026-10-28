@@ -30,7 +30,7 @@ open Finset Pouw.Fp8Atom
 /-! ## Workloads, transcripts, cost models -/
 
 /-- The declared layout: `N` units `0, …, N − 1` (unit `u`'s index is `u`), their shapes and weight ids. -/
-structure Layout where
+structure UnitLayout where
   N : ℕ
   shape : ℕ → Shape
   wid : ℕ → ℕ
@@ -40,7 +40,7 @@ abbrev Codes : Type := ℕ → ℕ → ℕ
 
 /-- A declared workload: its layout and its weight codes, fixed before the salt. -/
 structure Workload where
-  layout : Layout
+  layout : UnitLayout
   weight : ℕ → Codes
 
 /-- The preprocessed state: any finite data. -/
@@ -53,19 +53,19 @@ structure Commit where
   useful : Codes
 
 /-- A committed transcript: unit `u`'s commitment, or a blank, which is never correct. -/
-abbrev Transcript : Type := ℕ → Option Commit
+abbrev CommitLog : Type := ℕ → Option Commit
 
 /-- An abstract cost model for the online phase (the named instance: W1 at the measured H100 prices, one unit = one dense
 FP8 multiply-accumulate). The model fixes `cost` and `calls`; an adversary only chooses a program. -/
 structure CostModel (Q R S : Type) where
   Prog : Type
-  run : Prog → (Q → R) → Workload → (ℕ → Codes) → State → S → Transcript
+  run : Prog → (Q → R) → Workload → (ℕ → Codes) → State → S → CommitLog
   cost : Prog → (Q → R) → Workload → (ℕ → Codes) → State → S → ℝ
   calls : Prog → (Q → R) → Workload → (ℕ → Codes) → State → S → ℕ
 
 /-- The model's programs reach `H` only through counted queries. -/
 def CostModel.Queries {Q R S : Type} (CM : CostModel Q R S) : Prop :=
-  ∀ (prog : CM.Prog) (U : Workload) (act : ℕ → Codes) (σ : State) (s : S), ∃ t : QTree Q R Transcript,
+  ∀ (prog : CM.Prog) (U : Workload) (act : ℕ → Codes) (σ : State) (s : S), ∃ t : QTree Q R CommitLog,
     ∀ H : Q → R, CM.run prog H U act σ s = t.eval H ∧ CM.calls prog H U act σ s = t.calls H
 
 /-- An output-ticket protocol: the FP32 values of its reference ticket and useful words (`none` for a non-finite word),
@@ -88,13 +88,13 @@ structure Protocol (Q R S : Type) where
   weightOK : Shape → Codes → ℕ → Prop
   credit : (Q → R) → S → Workload → ℕ → Codes → ℝ
   capOK : (Q → R) → S → Workload → ℕ → Codes → Prop
-  Wref : Layout → ℕ → ℝ
+  Wref : UnitLayout → ℕ → ℝ
 
 variable {Q R S : Type}
 
 /-- A workload is in the domain `D`: at most `2^64` units, and `D` holds of its layout. Its weights may fail the rules:
 a unit or tile that reads a failing weight row is neither correct nor good, so it earns nothing. -/
-def Workload.InDomain (_P : Protocol Q R S) (D : Layout → Prop) (U : Workload) : Prop :=
+def Workload.InDomain (_P : Protocol Q R S) (D : UnitLayout → Prop) (U : Workload) : Prop :=
   U.layout.N ≤ 2 ^ 64 ∧ D U.layout
 
 /-- Every row of the workload's weights passes the rules: the honest workload's admission, which completeness and
@@ -113,11 +113,11 @@ def Correct (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (u : ℕ) 
 
 open Classical in
 /-- `K`: the correct units of `τ`. -/
-noncomputable def correctSet (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) : Finset ℕ :=
+noncomputable def correctSet (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : CommitLog) : Finset ℕ :=
   (range U.layout.N).filter fun u => ∃ c, τ u = some c ∧ Correct P U H s u c
 
 /-- The activations unit `u` committed in `τ` (zero for a blank, which is never correct). -/
-def actOf (τ : Transcript) (u : ℕ) : Codes :=
+def actOf (τ : CommitLog) (u : ℕ) : Codes :=
   match τ u with
   | some c => c.act
   | none => fun _ _ => 0
@@ -128,7 +128,7 @@ noncomputable def wordOf (v : Option ℚ) : ℕ := if h : ∃ w, wordQ w = v the
 
 /-- The honest transcript on activations `act`. -/
 noncomputable def honestTranscript (P : Protocol Q R S) (H : Q → R) (s : S) (U : Workload) (act : ℕ → Codes) :
-    Transcript :=
+    CommitLog :=
   fun u => if u < U.layout.N then
     some ⟨act u, fun i j => wordOf (P.ticket H s U u (act u) i j), fun i j => wordOf (P.useful H s U u (act u) i j)⟩
   else none
@@ -136,7 +136,7 @@ noncomputable def honestTranscript (P : Protocol Q R S) (H : Q → R) (s : S) (U
 /-- The cost model runs the honest reference: one program outputs the honest transcript on every in-domain workload
 whose weights pass the rules and admissible activations, with no preprocessing, at cost at most `∑_u W_ref(u)` and at
 most `qref U` calls. -/
-def AdmitsRef (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (qref : Workload → ℕ) : Prop :=
+def AdmitsRef (CM : CostModel Q R S) (P : Protocol Q R S) (D : UnitLayout → Prop) (qref : Workload → ℕ) : Prop :=
   ∃ prog : CM.Prog, ∀ U : Workload, U.InDomain P D → U.WeightsOK P → ∀ act : ℕ → Codes,
     (∀ u < U.layout.N, P.actOK (U.layout.shape u) (act u)) → ∀ (H : Q → R) (s : S),
       CM.run prog H U act [] s = honestTranscript P H s U act ∧
@@ -150,7 +150,7 @@ structure Adversary (CM : CostModel Q R S) where
   act : ℕ → Codes
 
 /-- The transcript the adversary commits on oracle `H` and salt `s`. -/
-def Adversary.transcript {CM : CostModel Q R S} (A : Adversary CM) (U : Workload) (H : Q → R) (s : S) : Transcript :=
+def Adversary.transcript {CM : CostModel Q R S} (A : Adversary CM) (U : Workload) (H : Q → R) (s : S) : CommitLog :=
   CM.run A.online H U A.act (A.pre.eval H) s
 
 /-- The online phase costs at most `T`, and all oracle calls number at most `q`, for every oracle and salt. -/
@@ -159,12 +159,12 @@ def Adversary.Bounded {CM : CostModel Q R S} (A : Adversary CM) (U : Workload) (
     A.pre.calls H + CM.calls A.online H U A.act (A.pre.eval H) s ≤ q
 
 /-- The adversary wins: the honest work of its correct units exceeds `T / (1 − γ)`. -/
-def Wins (P : Protocol Q R S) (U : Workload) (γ T : ℝ) (τ : Transcript) (H : Q → R) (s : S) : Prop :=
+def Wins (P : Protocol Q R S) (U : Workload) (γ T : ℝ) (τ : CommitLog) (H : Q → R) (s : S) : Prop :=
   T / (1 - γ) < ∑ u ∈ correctSet P U H s τ, P.Wref U.layout u
 
 /-- **The γ-gap property** `G_γ` with error `η(q, N)`. -/
 def Gγ [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
+    (D : UnitLayout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     pr (fun x : (Q → R) × S => Wins P U γ T (A.transcript U x.1 x.2) x.1 x.2) ≤ η q U.layout.N
 
@@ -225,7 +225,7 @@ def gammaOf (γ₀ Ω : ℚ) : ℚ := 1 - (1 - γ₀) / Ω
 /-- `Π`'s costs are Pearl-C's accounting at `(p, c)` with cap `ρ`: `W_ref` is `wrefOf`, and a unit within the cap is
 credited at least `(1 − ρ)·creditOf`. -/
 def PearlCAccounting (P : Protocol Q R S) (p : Params) (c : Costs) (ρ : ℚ) : Prop :=
-  (∀ (L : Layout) (u : ℕ), P.Wref L u = (wrefOf p c (L.shape u) : ℝ)) ∧
+  (∀ (L : UnitLayout) (u : ℕ), P.Wref L u = (wrefOf p c (L.shape u) : ℝ)) ∧
     ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes), P.capOK H s U u act →
       (((1 - ρ) * creditOf p c (U.layout.shape u) : ℚ) : ℝ) ≤ P.credit H s U u act
 
@@ -254,12 +254,12 @@ noise law, the seeds and the chain live in the protocol's reference functions.
   row only lowers the prover's credit, so γ needs no check that the exclusion was forced. The per-tile statement
   (`Tile.lean`) credits a tile's passing rows; this unit-level game, whose `actOK` reads the whole unit, credits nothing of
   a unit with such a row. -/
-def pearlCDomain (p : Params) (L : Layout) : Prop :=
+def pearlCDomain (p : Params) (L : UnitLayout) : Prop :=
   ∀ u < L.N, 0 < (L.shape u).m ∧ 0 < (L.shape u).n ∧ 0 < (L.shape u).k ∧ Shape.Tiled p (L.shape u) ∧
     (L.shape u).k ≤ 2 ^ 16 ∧ p.G = 4
 
 /-- The domain restricted to one shape. -/
-def pearlCDomainAt (p : Params) (s : Shape) (L : Layout) : Prop := pearlCDomain p L ∧ ∀ u < L.N, L.shape u = s
+def pearlCDomainAt (p : Params) (s : Shape) (L : UnitLayout) : Prop := pearlCDomain p L ∧ ∀ u < L.N, L.shape u = s
 
 /-- The headline shapes (`m n k`). -/
 def sh8192 : Shape := ⟨8192, 8192, 8192⟩

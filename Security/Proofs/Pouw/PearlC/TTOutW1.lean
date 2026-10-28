@@ -24,12 +24,12 @@ theorem w1Priced_queries (dv : W1.W1Device) (salt : S → List ℕ) :
 
 variable [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
 
-theorem ttOutW1_iff (dv : W1.W1Device) (salt : S → List ℕ) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ : ℝ)
+theorem ttOutW1_iff (dv : W1.W1Device) (salt : S → List ℕ) (P : Protocol Q R S) (D : UnitLayout → Prop) (γ₀ : ℝ)
     (ε : ℕ → ℕ → ℝ) : TTOutW1 dv salt P D γ₀ ε ↔ TTOut (W1.w1Priced dv salt) P D γ₀ ε :=
   ⟨fun h => ⟨w1Priced_queries dv salt, h⟩, fun h => And.right h⟩
 
 theorem ttOutTileW1_iff (dv : W1.W1Device) (salt : S → List ℕ) (P : Protocol Q R S) (TR : TileRules Q R S)
-    (D : Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) :
+    (D : UnitLayout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) :
     TTOutTileW1 dv salt P TR D γ₀ ε ↔ TTOutTile (W1.w1Priced dv salt) P TR D γ₀ ε :=
   ⟨fun h => ⟨w1Priced_queries dv salt, h⟩, fun h => And.right h⟩
 

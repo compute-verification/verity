@@ -228,8 +228,8 @@ def fill (ops : RowOps) : List Arg → List ℕ → List ℕ
   | .c v :: as, l => v :: fill ops as l
   | .g _ w :: as, l => w.eval ops (l.headD 0) :: fill ops as l.tail
 
-/-- A computed gate as a `TileCircuit.Gate`. -/
-def RGate.toGate (ops : RowOps) (G : RGate) : Gate :=
+/-- A computed gate as a `TileCircuit.Cell`. -/
+def RGate.toGate (ops : RowOps) (G : RGate) : Cell :=
   ⟨G.prim.w, false, G.reads, fun l => G.prim.eval ops (fill ops G.args l)⟩
 
 /-! ## Tables of runs -/
@@ -253,7 +253,7 @@ def runsLen : List Run → ℕ
   | [] => 0
   | R :: L => R.n + runsLen L
 
-/-- Gate `g ≥ o` of runs laid out from gate `o`. -/
+/-- Cell `g ≥ o` of runs laid out from gate `o`. -/
 def runsAt : List Run → ℕ → ℕ → Option RGate
   | [], _, _ => none
   | R :: L, o, g => if g < o + R.n then some (R.gate (g - o)) else runsAt L (o + R.n) g
@@ -450,8 +450,8 @@ structure Rows where
 /-- The gate count. -/
 def Rows.N (T : Rows) : ℕ := T.nIn + runsLen T.runs
 
-/-- Gate `g` of the table, with `ops` for core's primitives. -/
-def Rows.gate (ops : RowOps) (T : Rows) (g : ℕ) : Gate :=
+/-- Cell `g` of the table, with `ops` for core's primitives. -/
+def Rows.gate (ops : RowOps) (T : Rows) (g : ℕ) : Cell :=
   if g < T.nIn then ⟨T.inW g, true, [], fun _ => 0⟩
   else match runsAt T.runs T.nIn g with
     | some G => G.toGate ops
@@ -566,7 +566,7 @@ def pre8Runs (p : Pipeline) (K b : ℕ) : List Run :=
   statsRuns .fabs .id K b ++ [alpha8Run K b, sq8Run K b, th8Run K b, dead8Run K b, ok8Run K b, ep8Run K b, ew8Run K b,
     code8Run p K b]
 
-/-- Gate `r < 5·(K/128)` of a chain on the step `p` at gate `gt`, the codes at `code t` and the other side at `col t`:
+/-- Cell `r < 5·(K/128)` of a chain on the step `p` at gate `gt`, the codes at `code t` and the other side at `col t`:
 per window of 4 atoms, four atoms from `+0` and the promotion into the total (`+0` first), as the tile's chain. -/
 def chain8 (p : Pipeline) (code col : ℕ → ℕ) (gt r : ℕ) : RGate :=
   if r % 5 < 4 then
@@ -702,7 +702,7 @@ def row8A (p : Pipeline) (K : ℕ) : Rows where
     simp [af8Run, Run.rep, bew8Run, post8At, code8At, ew8At, ep8At]
     omega
 
-/-- Gate `s` of RowB's block `q`, at gate `gt`: the 32 FMAs of `Σ_s ẽ_s·g_{s,q}` (from `+0`), the chain of `B̃`'s codes
+/-- Cell `s` of RowB's block `q`, at gate `gt`: the 32 FMAs of `Σ_s ẽ_s·g_{s,q}` (from `+0`), the chain of `B̃`'s codes
 against the chain basis' column `q`, its negation, the sum, and its BF16 cast, `P_B`'s word `q`. -/
 def mid8 (p : Pipeline) (K b q s gt : ℕ) : RGate :=
   if s < 32 then ⟨.fma, [.g (ew8At K b + s), .g (65 * K + 32 + 32 * s + q), if s = 0 then .c 0 else .g (gt - 1)]⟩

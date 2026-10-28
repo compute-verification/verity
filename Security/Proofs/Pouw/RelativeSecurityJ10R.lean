@@ -209,7 +209,7 @@ end J10ROverlapDesign
 
 /-- **The window's staged calls, one-sided operands of any form, under J10-R**, a named hypothesis: `RoundsHypKStP` on
 the call design, each stage a call (`JStage`), its target `jPrefix` and charging purity at `jFrame`. -/
-def RoundsHypJStP (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : ℝ) (n L B n' : ℕ)
+def RoundsHypJStP (Mc : AlgModel) (S : Service) (R St : ℕ) (Vmax δb δz κ : ℝ) (n L B n' : ℕ)
     (φ : ZMod (2 ^ 32) →+* ZMod 2) : Prop :=
   ∃ e : S.Seed ≃ Paths (JStage St n L B n') R, ∀ (Ω' : Type) [Fintype Ω']
     (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)), (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
@@ -287,7 +287,7 @@ theorem roundsSlice_of_stagedPJ {R St : ℕ} {Vmax κ : ℝ} {n L B n' : ℕ} {�
 
 /-- **Staged one-sided calls give the window's cost line** under J10-R: `roundsHyp_of_stagedP` on the call design,
 `RoundsHyp` at `p = 0.854` with `F₀ = St κ L n n' B` and no slack (`roundsSlice_of_stagedPJ`, slice by slice). -/
-theorem roundsHyp_of_stagedPJ {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n L B n' : ℕ}
+theorem roundsHyp_of_stagedPJ {Mc : AlgModel} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n L B n' : ℕ}
     {φ : ZMod (2 ^ 32) →+* ZMod 2} (h : RoundsHypJStP Mc S R St Vmax δb δz κ n L B n' φ) (hSt : 0 < St)
     (hκ : 0 ≤ κ) :
     RoundsHyp Mc S (JStage St n L B n') R (427 / 500) (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) 0 Vmax δb δz := by
@@ -301,7 +301,7 @@ theorem roundsHyp_of_stagedPJ {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δ
 
 /-- **The window's overlapped calls, one-sided operands of any form, under J10-R**, a named hypothesis:
 `RoundsHypKOvP` on the call design (`OJSpot`), its targets `jPrefix` and charging purity across calls at `jFrame`. -/
-def RoundsHypJOvP (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : ℝ) (n : Fin St → ℕ) (L : ℕ)
+def RoundsHypJOvP (Mc : AlgModel) (S : Service) (R St : ℕ) (Vmax δb δz κ : ℝ) (n : Fin St → ℕ) (L : ℕ)
     (B n' : Fin St → ℕ) (φ : ZMod (2 ^ 32) →+* ZMod 2) : Prop :=
   ∃ e : S.Seed ≃ Paths (OJSpot St n L B n') R, ∀ (Ω' : Type) [Fintype Ω']
     (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)), (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
@@ -391,7 +391,7 @@ theorem roundsSlice_of_overlapPJ {R St : ℕ} {Vmax κ : ℝ} {n B n' : Fin St �
 /-- **Overlapping one-sided calls give the window's cost line** under J10-R: `roundsHyp_of_overlapP` on the call
 design, `RoundsHyp` at `p = 0.854` with `F₀ = κ L C`, `C` the round's cell-blocks over all its calls
 (`roundsSlice_of_overlapPJ`, slice by slice). -/
-theorem roundsHyp_of_overlapPJ {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n B n' : Fin St → ℕ}
+theorem roundsHyp_of_overlapPJ {Mc : AlgModel} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n B n' : Fin St → ℕ}
     {L : ℕ} {φ : ZMod (2 ^ 32) →+* ZMod 2} (h : RoundsHypJOvP Mc S R St Vmax δb δz κ n L B n' φ) (hκ : 0 ≤ κ) :
     RoundsHyp Mc S (OJSpot St n L B n') R (427 / 500) (κ * L * (Fintype.card (OCells St n n' B) : ℝ)) 0 Vmax δb
       δz := by

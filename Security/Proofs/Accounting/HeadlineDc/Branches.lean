@@ -197,7 +197,7 @@ theorem fillOpt_of_zero {K R T L U F X : Type} [Fintype K] [Fintype R] [Fintype 
     unfold demandPrice
     simp [hfill]
   have hprice : 0 ≤ Z.G.price lam A.nfill := by
-    unfold Machine.price Machine.load
+    unfold FacetCosts.price FacetCosts.load
     exact Finset.sum_nonneg fun r _ => mul_nonneg (hlam.1 r)
       (Finset.sum_nonneg fun k _ => mul_nonneg (ha r k) (hA.2.2.1 k))
   rw [hμX, sub_zero, one_mul]

@@ -372,7 +372,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 385
+KNOWN_MAX = 327
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -388,8 +388,6 @@ KNOWN: dict[str, str] = {
         "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
     "Security/Definitions/Accounting/BoundReceipt.lean::Accounting.BoundReceipt.Node":
         "duplicate of the Site (`Verity.Site`, not yet in Core: LEAN-93): becomes a reading of it (memory-accounting)",
-    "Security/Definitions/Accounting/CoinFlow.lean::Accounting.CoinFlow.Program":
-        "homonym, a Program's dataflow over coins and values: rename (compute-accounting)",
     "Security/Definitions/Accounting/Compose.lean::Accounting.Compose.Certificate":
         "homonym, a credit certificate: rename (lean)",
     "Security/Definitions/Accounting/ComposePeriod.lean::Accounting.Compose.Period":
@@ -412,8 +410,6 @@ KNOWN: dict[str, str] = {
         "homonym, a gate's place in its Definition (renamed Gates.Place by an open PR): rename (memory-accounting)",
     "Security/Definitions/Accounting/Physical.lean::Accounting.Hardware":
         "duplicate of the Site (`Verity.Site`, not yet in Core: LEAN-93): becomes a reading of it: the Site plus the device model (lean)",
-    "Security/Definitions/Accounting/PouwWork.lean::Accounting.PouwWork.Verdict":
-        "duplicate of `Core.Verdict`: becomes a spec verdict over it, once the spec has one (compute-accounting)",
     "Security/Definitions/Accounting/RateAudit.lean::Accounting.Rate.Coins":
         "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
     "Security/Definitions/Accounting/RateAudit.lean::Accounting.Rate.Device":
@@ -450,10 +446,6 @@ KNOWN: dict[str, str] = {
         "duplicate of `CircuitRequirement.Store`, stated in Accounting: becomes Core's, moved into Security/Definitions/Core/ (memory-accounting)",
     "Security/Definitions/Accounting/Served.lean::Accounting.Served.Layout":
         "duplicate of the execution block (no canonical yet: LEAN-93): becomes a reading of it: an execution block's public shape (lean)",
-    "Security/Definitions/Accounting/TS/J10R.lean::Accounting.TS.J10R.Layout":
-        "homonym, a tile shape: rename (compute-accounting)",
-    "Security/Definitions/Accounting/TS/Machine.lean::Accounting.TS.Machine":
-        "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes a reading of it (compute-accounting)",
     "Security/Definitions/Accounting/Tag/PolyHash.lean::Accounting.Tag.Block":
         "homonym, a chunk of the store: rename (lean)",
     "Security/Definitions/Claims.lean::Claims.Circuit":
@@ -514,36 +506,6 @@ KNOWN: dict[str, str] = {
         "homonym, an audit's randomness: rename (memory-accounting)",
     "Security/Definitions/Pous/Model/StreamedWipeServer.lean::Pous.StreamedWipe.Verdict":
         "homonym, the wipe's acceptance rule over a prover's answers: rename (memory-accounting)",
-    "Security/Definitions/Pouw/Assumptions/Dimension/Assumptions.lean::Pouw.Dimension.Assumptions.Machine":
-        "homonym, a cost model of checked words: rename (compute-accounting)",
-    "Security/Definitions/Pouw/Assumptions/Dimension/Embed.lean::Pouw.Dimension.Embed.Op":
-        "homonym, an M4090 instruction: rename (compute-accounting)",
-    "Security/Definitions/Pouw/Dither.lean::Pouw.Dither.Period":
-        "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a monitoring period (compute-accounting)",
-    "Security/Definitions/Pouw/Dither.lean::Pouw.Dither.Verdict":
-        "duplicate of `Core.Verdict`: becomes a spec verdict over it, once the spec has one (compute-accounting)",
-    "Security/Definitions/Pouw/DitherInstance.lean::Pouw.Dither.Layout":
-        "homonym, where a round's words sit in memory: rename (compute-accounting)",
-    "Security/Definitions/Pouw/Eps1/M3.lean::Pouw.Eps1.Prog":
-        "homonym, an M3 program for Dither's words: rename (compute-accounting)",
-    "Security/Definitions/Pouw/Game/Defs.lean::Pouw.Layout":
-        "homonym, a declared tensor layout: rename (compute-accounting)",
-    "Security/Definitions/Pouw/Game/Defs.lean::Pouw.Transcript":
-        "homonym, PoUW's committed transcript of unit commitments: rename (compute-accounting)",
-    "Security/Definitions/Pouw/PearlC/Game.lean::Pouw.PearlC.Layout":
-        "duplicate of `Pouw.Layout`: becomes a reading of it (compute-accounting)",
-    "Security/Definitions/Pouw/PearlC/Game.lean::Pouw.PearlC.Transcript":
-        "homonym, Pearl-C's committed transcript, `Pouw.Transcript` again: rename (compute-accounting)",
-    "Security/Definitions/Pouw/PearlC/TileCircuit.lean::Pouw.PearlC.TileCircuit.Gate":
-        "homonym, one gate of Pearl-C's word circuit: rename (compute-accounting)",
-    "Security/Definitions/Pouw/PearlC/W1.lean::Pouw.PearlC.W1.Prog":
-        "homonym, Pearl-C's W1 constant bank and code tree: rename (compute-accounting)",
-    "Security/Definitions/Pouw/PearlC/WholeCircuit.lean::Pouw.PearlC.WholeCircuit.Block":
-        "homonym, a proof block kind of a table: rename (compute-accounting)",
-    "Security/Definitions/Pouw/RelativeSecurity.lean::Pouw.RelativeSecurity.Machine":
-        "homonym, a model of computation: rename (compute-accounting)",
-    "Security/Definitions/Pouw/TileBound/Defs.lean::Pouw.TileBound.Gate":
-        "homonym, one firing of the m16n8k64 tile: rename (compute-accounting)",
     # Security/Proofs/
     "Security/Proofs/Flock/Claims/Bridge/Committed.lean::Claims.Bridge.CoinTree":
         "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes it (a coin tree over k rounds) (proofs)",
@@ -584,10 +546,6 @@ KNOWN: dict[str, str] = {
         "duplicate of `Hash.Collision`: becomes it at SHA-512 (proofs)",
     "Security/Proofs/Flock/Verifier/Merkle.lean::Flock.MerkleScheme.Collision":
         "duplicate of `Hash.Collision`: becomes it at the scheme's hash (proofs)",
-    "Security/Proofs/Pouw/RelativeSecurity.lean::Pouw.RelativeSecurity.ModelB.Gate":
-        "homonym, relative security's proof-local gate: rename (compute-accounting)",
-    "Security/Proofs/Pouw/RelativeSecurity.lean::Pouw.RelativeSecurity.ModelB.Prog":
-        "homonym, relative security's proof-local program: rename (compute-accounting)",
     # Security/Properties/
     "Security/Properties/Pous/MemoryChallenger.lean::MemoryChallenger.Properties.Device":
         "homonym, the memory challengers a property ranges over: rename (lean)",
@@ -653,56 +611,10 @@ KNOWN: dict[str, str] = {
         "duplicate of `CircuitRequirement.Store`: becomes a client of it (memory-accounting)",
     "benchmarks/pouw/accel_v31/v31.py::Coins":
         "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/clear/clear_audit.py::Transcript":
-        "homonym, what a clear audit's prover publishes: rename (compute-accounting)",
-    "benchmarks/pouw/clear/clear_audit.py::Verdict":
-        "duplicate of `Core.Verdict`: becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/dc/census.py::Device": "homonym, a census family's merged runs: rename (compute-accounting)",
-    "benchmarks/pouw/e2e_120/window.py::Coins":
-        "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/e2e_120/window.py::Draw":
-        "duplicate of `service.Draw`: becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/e2e_120/window.py::Verdict":
-        "duplicate of `Core.Verdict`: becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/e2e_120/window.py::Window":
-        "duplicate of the execution block (no canonical yet: LEAN-93): becomes a client of it (compute-accounting)",
     "benchmarks/pouw/filler/arms.py::Placement": "homonym, a filler arm's placement: rename (compute-accounting)",
     "benchmarks/pouw/grind_price.py::Site": "homonym, one seed group: rename (compute-accounting)",
-    "benchmarks/pouw/harness/arm.py::Gate": "homonym, a kernel gate's verdict at one shape: rename (compute-accounting)",
-    "benchmarks/pouw/harness/chain.py::Link":
-        "homonym, one operand set's call in a kernel chain: rename (compute-accounting)",
-    "benchmarks/pouw/harness/native.py::Device": "homonym, one CUDA device handle: rename (compute-accounting)",
-    "benchmarks/pouw/harness/sass_gate.py::Gate": "homonym, a run's SASS gate: rename (compute-accounting)",
-    "benchmarks/pouw/highutil/period.py::Coins":
-        "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/highutil/period.py::Period":
-        "duplicate of the period (`Verity.Period`, not yet in Core): becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/machine_model/verity_machine_model/capacity.py::Window":
-        "homonym, a capacity model's window and node cell: rename (compute-accounting)",
-    "benchmarks/pouw/machine_model/verity_machine_model/eps.py::Machine":
-        "homonym, a machine model's Π: rename (compute-accounting)",
-    "benchmarks/pouw/pearl_c_vllm/e2e.py::Coins":
-        "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/rt2_hopper/li_window_sat.py::Program":
-        "homonym, a SAT model's instruction list: rename (compute-accounting)",
-    "benchmarks/pouw/served_h1/coins.py::Coins":
-        "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/served_h1/coins.py::Session":
-        "homonym, the old word for a run, here a gate session: rename (compute-accounting)",
-    "benchmarks/pouw/served_h1/partials.py::Window":
-        "duplicate of the execution block (no canonical yet: LEAN-93): becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/served_h1/serve.py::Record":
-        "homonym, a served request's benchmark row: rename (compute-accounting)",
-    "benchmarks/pouw/served_zk/of_record.py::Record":
-        "homonym, a check's two verdicts side by side: rename (compute-accounting)",
-    "benchmarks/pouw/served_zk/replay_window.py::Window":
-        "homonym, one replayed window's checks: rename (compute-accounting)",
     "benchmarks/pouw/served_zk/served_commit.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a client of it (compute-accounting)",
-    "benchmarks/pouw/served_zk/statement.py::Statement":
-        "homonym, a benchmark's statement bench: rename (compute-accounting)",
-    "benchmarks/pouw/theory/checked_strip.py::Block":
-        "homonym, a block of rows and columns of one design: rename (compute-accounting)",
     "benchmarks/pouw/theory/checked_strip.py::Ledger":
         "homonym, a strategy's priced products: rename (compute-accounting)",
     "benchmarks/pouw/theory/ksw_k.py::Layout":
@@ -916,30 +828,8 @@ KNOWN: dict[str, str] = {
         "duplicate of `parties.Challenger`: becomes a reading of it (memory-accounting)",
     "verity/core/protocols/pous/wipe_parties.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a reading of it (memory-accounting)",
-    "verity/core/protocols/pouw/circuit/anchors.py::Ledger":
-        "homonym, a window's admitted calls: rename (compute-accounting)",
-    "verity/core/protocols/pouw/circuit/compile.py::Site":
-        "homonym, a node of the served function and a kind of dot: rename (compute-accounting)",
-    "verity/core/protocols/pouw/circuit/h1device.py::Device":
-        "duplicate of the Site (`Verity.Site`, not yet in Core: LEAN-93): becomes a reading of it: the card by digest (compute-accounting)",
-    "verity/core/protocols/pouw/circuit/h1tile.py::Layout": "homonym, a tile shape: rename (compute-accounting)",
-    "verity/core/protocols/pouw/circuit/plan.py::Layout": "homonym, the units a plan reads: rename (compute-accounting)",
     "verity/core/protocols/pouw/coins.py::Challenger":
         "duplicate of `parties.Challenger`: becomes it (deleted) (compute-accounting)",
-    "verity/core/protocols/pouw/lean/check/PouwCheck/Inputs.lean::PouwCheck.Law":
-        "duplicate of `Flock.Draw.Law`: becomes it (deleted) (compute-accounting)",
-    "verity/core/protocols/pouw/lean/check/PouwCheck/Inputs.lean::PouwCheck.Window":
-        "duplicate of the execution block (no canonical yet: LEAN-93): becomes a reading of it: the execution block's record (compute-accounting)",
-    "verity/core/protocols/pouw/lean/check/PouwCheck/Pass.lean::PouwCheck.Coins":
-        "duplicate of the live coins (`Verity.Coins`; `SampledProofs.Challenger.LiveCommitment` in code): becomes a reading of it (compute-accounting)",
-    "verity/core/protocols/pouw/lean/commit/PouwCommit/Frame.lean::PouwCommit.Hash":
-        "homonym, a frame's hash kind: rename (compute-accounting)",
-    "verity/core/protocols/pouw/protocol.py::Certificate":
-        "homonym, what a scheme's guarantee rests on: rename (compute-accounting)",
-    "verity/core/protocols/pouw/schemes/pearl_c_device.py::Device":
-        "duplicate of the Site (`Verity.Site`, not yet in Core: LEAN-93): becomes a reading of it: the card by digest; prices stay the scheme's (compute-accounting)",
-    "verity/core/protocols/pouw/schemes/pearl_kw.py::Device":
-        "homonym, a code's parameters: rename (compute-accounting)",
     "verity/core/protocols/remote_bandwidth/audit.py::Ledger": "homonym, the γ cost terms: rename (memory-accounting)",
     "verity/core/protocols/remote_bandwidth/audit.py::Record":
         "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes a reading of it (memory-accounting)",

@@ -42,7 +42,7 @@ domain, if `W_ref(u) ≤ Ω_max·3·W_mm(u)` and `γ₀ ≥ d/(3k)` on the domai
 `G_γ` holds with `γ = 1 − (1 − γ₀)/Ω_max` and `η = ε`. -/
 def GammaFromTTNCP : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (P : Protocol Q R S) (d : ℕ) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
+    (CM : CostModel Q R S) (P : Protocol Q R S) (d : ℕ) (D : UnitLayout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
     γ₀ < 1 → 0 < Ωmax →
     (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N,
       (P.Wref U.layout u : ℝ) ≤ Ωmax * (3 * ((U.layout.shape u).Wmm : ℝ))) →
@@ -68,7 +68,7 @@ with `d > 0`, noise in `[−31, 32]` and signed-permutation `R` (so that its exa
 cheap point at cost `∑_u (3·m·k·n − m·d·n)` with no oracle calls, and for every `γ₀ < 1` with `γ₀·3k < d` on every unit
 (and at least one unit) the TT_NCP event at that cost holds for every oracle and salt. -/
 def OneSegment : Prop :=
-  ∀ (Q R S : Type) (P : Params Q R S) (Lay : Layout), 0 < P.d → P.NoiseRange → P.RSigned →
+  ∀ (Q R S : Type) (P : Params Q R S) (Lay : UnitLayout), 0 < P.d → P.NoiseRange → P.RSigned →
     (∀ u < Lay.N, P.d ∣ (Lay.shape u).k) →
     (⟨Lay, fun _ => 0⟩ : Workload).InDomain leadDomain →
     ∃ A : Adversary (Barrier.gemmModel P.nz),
@@ -88,7 +88,7 @@ zero weights with positive work, `W_ref = 3·W_mm ≥ m·(L·d)·n` on it, and t
 applies, with `1/L = 16/(3k)`. -/
 def SegmentLead : Prop :=
   ∀ (Q R S : Type) (e f : (Q → R) → S → Workload → ℕ → Mat → Mat) (k : ℕ), 2 ^ 10 ≤ k → k ≤ 2 ^ 16 → 64 ∣ k →
-    ∃ (Rm : Mat) (Lay : Layout), Admissible k 16 Rm ∧ 1 ≤ 3 * k / 16 ∧ 3 * k / 16 * 16 = 3 * k ∧
+    ∃ (Rm : Mat) (Lay : UnitLayout), Admissible k 16 Rm ∧ 1 ≤ 3 * k / 16 ∧ 3 * k / 16 * 16 = 3 * k ∧
       stackX k 0 0 0 = 0 ∧ stackY k 0 0 0 = 0 ∧
       (∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ), ∀ a < (U.layout.shape u).m, ∀ b < (U.layout.shape u).n,
         mm (3 * k / 16 * 16) (Barrier.stackNoise k Rm e f H s U u 0 0) (Barrier.stackNoise k Rm e f H s U u 0 1) a b
@@ -110,8 +110,8 @@ unit is in the domain at zero weights. So the hypotheses of `LeadComplete`, `TTN
 for `k ≥ 1024` with `16 ∣ k` (each step's image is disjoint from it and straddles two steps, and `R²` is the shift by
 48, not `±I`); it is a witness, not a proposal. -/
 def LeadWitness : Prop :=
-  ∃ (P : Params Unit Unit Salt) (Lay : Layout), P.IsLead ∧ P.RSigned ∧ P.QueryBound 0 ∧
-    (∀ (L : Layout) (u : ℕ), P.Wref L u = 3 * (L.shape u).Wmm) ∧
+  ∃ (P : Params Unit Unit Salt) (Lay : UnitLayout), P.IsLead ∧ P.RSigned ∧ P.QueryBound 0 ∧
+    (∀ (L : UnitLayout) (u : ℕ), P.Wref L u = 3 * (L.shape u).Wmm) ∧
     P.toProtocol.Complete leadDomain ∧
     AdmitsRef (outputPriced3 Unit Unit Salt) P.toProtocol leadDomain (fun _ => 0) ∧
     (∀ γ₀ : ℝ, 0 ≤ γ₀ → γ₀ < 1 →

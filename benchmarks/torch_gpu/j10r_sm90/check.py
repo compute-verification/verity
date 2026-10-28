@@ -121,7 +121,7 @@ def anchors(libs: dict, rng: random.Random) -> list[dict]:
         at, bt = torch.from_numpy(a).cuda(), torch.from_numpy(b).cuda()
         for name, lib in libs.items():
             got = run_build(lib, at, bt, salt, (ra, rb), base, us)
-            r = {"lib": name, "m": m, "n": n, "k": k, "digits": HT.Layout(S.T, S.T, k).m, "definition_s": round(ref_s, 2),
+            r = {"lib": name, "m": m, "n": n, "k": k, "digits": HT.TileShape(S.T, S.T, k).m, "definition_s": round(ref_s, 2),
                  **compare(got, wr, sc, sig, wz if name == "ref" else None)}
             res.append(r)
             print(json.dumps({"anchor": r}), flush=True)

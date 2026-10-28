@@ -49,7 +49,7 @@ premises, every adversary that commits first has its accepted runs charged below
 affine scope (`KScopeAffine`: affine operands, mixed included, row-pure). It is a sibling of the floor of record
 `StagedFloorKOneSided`, proved on its own scope, which isn't that floor's, at the sharper luck. -/
 def StagedFloorK : Prop :=
-  ∀ (Mc : Machine) (S : Service) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (DStage St n L 7 B n') R)
+  ∀ (Mc : AlgModel) (S : Service) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (DStage St n L 7 B n') R)
     (run : RunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (δb δz κ Vmax : ℝ),
     0 < St → 0 < κ → 0 < L * (n * n' * B) → 0 ≤ δb → 0 ≤ δz →
     ServiceSoundStaged Mc S run e δb δz → KScopeAffine Mc S run wRe → ChargeVF3j16 Mc S run e κ Vmax →
@@ -64,7 +64,7 @@ seed is `R` rounds of `St` stage draws on the re-encoded design (7 planes at `wR
 charged below `(R − 274 ln 2) · St · κ L n n' B − Vmax` with probability at most `2^{−40} + R (δb + δz)`
 (`0.146 · 274 ≥ 40`): `c = 1` on K's proved one-sided scope (`KScopeOneSided`, a sibling of the ledger's K1). -/
 def StagedFloorKOneSided : Prop :=
-  ∀ (Mc : Machine) (S : Service) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (DStage St n L 7 B n') R)
+  ∀ (Mc : AlgModel) (S : Service) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (DStage St n L 7 B n') R)
     (run : RunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (δb δz κ Vmax : ℝ),
     0 < St → 0 < κ → 0 < L * (n * n' * B) → 0 ≤ δb → 0 ≤ δz →
     ServiceSoundStaged Mc S run e δb δz → KScopeOneSided Mc S run wRe toF2 0 → ChargeVF3j16 Mc S run e κ Vmax →
@@ -92,7 +92,7 @@ below `(R − 160 ln 2) · κ L Σ_t n_t n'_t B_t − Vmax` with probability at 
 K∥'s proved affine scope (`KScopeOverlapAffine`). It is a sibling of the floor of record `OverlapFloorKOneSided`,
 proved on its own scope, which isn't that floor's, at the sharper luck. -/
 def OverlapFloorK : Prop :=
-  ∀ (Mc : Machine) (S : Service) (R St L : ℕ) (n B n' : Fin St → ℕ) (e : S.Seed ≃ Paths (OSpot St n L 7 B n') R)
+  ∀ (Mc : AlgModel) (S : Service) (R St L : ℕ) (n B n' : Fin St → ℕ) (e : S.Seed ≃ Paths (OSpot St n L 7 B n') R)
     (run : ORunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (δb δz κ Vmax : ℝ),
     0 < κ → 0 < L * ∑ t, n t * n' t * B t → 0 ≤ δb → 0 ≤ δz →
     ServiceSoundOverlap Mc S run e δb δz → KScopeOverlapAffine Mc S run wRe →
@@ -109,7 +109,7 @@ stage's (`ServiceSoundOverlap`'s deployment requirement), under the three premis
 first has its accepted runs charged below `(R − 274 ln 2) · κ L Σ_t n_t n'_t B_t − Vmax` with probability at most
 `2^{−40} + R (δb + δz)`: `c = 1` on K∥'s proved one-sided scope (`KScopeOverlapOneSided`). -/
 def OverlapFloorKOneSided : Prop :=
-  ∀ (Mc : Machine) (S : Service) (R St L : ℕ) (n B n' : Fin St → ℕ) (e : S.Seed ≃ Paths (OSpot St n L 7 B n') R)
+  ∀ (Mc : AlgModel) (S : Service) (R St L : ℕ) (n B n' : Fin St → ℕ) (e : S.Seed ≃ Paths (OSpot St n L 7 B n') R)
     (run : ORunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (δb δz κ Vmax : ℝ),
     0 < κ → 0 < L * ∑ t, n t * n' t * B t → 0 ≤ δb → 0 ≤ δz →
     ServiceSoundOverlap Mc S run e δb δz → KScopeOverlapOneSided Mc S run wRe toF2 0 →
@@ -136,7 +136,7 @@ and `StagedFloorK`'s other two premises, every adversary `M` that commits first 
 `(R − 160 ln 2) · St · κ L n n' B − Vmax` with probability at most
 `breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz Ω M`. -/
 def StagedFloorKPerProver : Prop :=
-  ∀ (Mc : Machine) (S : Service) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (DStage St n L 7 B n') R)
+  ∀ (Mc : AlgModel) (S : Service) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (DStage St n L 7 B n') R)
     (run : RunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
     (cb db cz dz δb βb δz βz κ Vmax : ℝ),
     0 < St → 0 < κ → 0 < L * (n * n' * B) → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →
@@ -152,7 +152,7 @@ analysis's finders `fb` and `fz` and `StagedFloorKOneSided`'s other two premises
 first has its accepted runs charged below `(R − 274 ln 2) · St · κ L n n' B − Vmax` with probability at most
 `breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz Ω M`. -/
 def StagedFloorKOneSidedPerProver : Prop :=
-  ∀ (Mc : Machine) (S : Service) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (DStage St n L 7 B n') R)
+  ∀ (Mc : AlgModel) (S : Service) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (DStage St n L 7 B n') R)
     (run : RunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
     (cb db cz dz δb βb δz βz κ Vmax : ℝ),
     0 < St → 0 < κ → 0 < L * (n * n' * B) → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →
@@ -168,7 +168,7 @@ finders `fb` and `fz` and `OverlapFloorK`'s other two premises, every adversary 
 accepted runs charged below `(R − 160 ln 2) · κ L Σ_t n_t n'_t B_t − Vmax` with probability at most
 `breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz Ω M`. -/
 def OverlapFloorKPerProver : Prop :=
-  ∀ (Mc : Machine) (S : Service) (R St L : ℕ) (n B n' : Fin St → ℕ) (e : S.Seed ≃ Paths (OSpot St n L 7 B n') R)
+  ∀ (Mc : AlgModel) (S : Service) (R St L : ℕ) (n B n' : Fin St → ℕ) (e : S.Seed ≃ Paths (OSpot St n L 7 B n') R)
     (run : ORunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
     (cb db cz dz δb βb δz βz κ Vmax : ℝ),
     0 < κ → 0 < L * ∑ t, n t * n' t * B t → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →
@@ -184,7 +184,7 @@ depth (as `OverlapFloorKOneSided`), under `ServiceSoundOverlapPerProver` at the 
 below `(R − 274 ln 2) · κ L Σ_t n_t n'_t B_t − Vmax` with probability at most
 `breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz Ω M`. -/
 def OverlapFloorKOneSidedPerProver : Prop :=
-  ∀ (Mc : Machine) (S : Service) (R St L : ℕ) (n B n' : Fin St → ℕ) (e : S.Seed ≃ Paths (OSpot St n L 7 B n') R)
+  ∀ (Mc : AlgModel) (S : Service) (R St L : ℕ) (n B n' : Fin St → ℕ) (e : S.Seed ≃ Paths (OSpot St n L 7 B n') R)
     (run : ORunMap Mc S R St n L 7 B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
     (cb db cz dz δb βb δz βz κ Vmax : ℝ),
     0 < κ → 0 < L * ∑ t, n t * n' t * B t → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →
@@ -211,7 +211,7 @@ under the three premises, every adversary that commits first has its accepted ru
 `(R − 274 ln 2) · St · κ L n n' B − Vmax` with probability at most `2^{−40} + R (δb + δz)`: `c = 1` on the call's
 one-sided scope (`KScopeOneSidedJ10R`). -/
 def StagedFloorKOneSidedJ10R : Prop :=
-  ∀ (Mc : Machine) (S : Service) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (JStage St n L B n') R)
+  ∀ (Mc : AlgModel) (S : Service) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (JStage St n L B n') R)
     (run : JRunMap Mc S R St n L B n' (ZMod (2 ^ 32))) (δb δz κ Vmax : ℝ),
     0 < St → 0 < κ → 0 < L * (n * n' * B) → 0 ≤ δb → 0 ≤ δz →
     ServiceSoundStagedJ10R Mc S run e δb δz → KScopeOneSidedJ10R Mc S run → ChargeVF3j16J10R Mc S run e κ Vmax →
@@ -225,7 +225,7 @@ overlapping at any depth, its check's cell-block drawn uniformly among every cal
 adversary that commits first has its accepted runs charged below `(R − 274 ln 2) · κ L Σ_t n_t n'_t B_t − Vmax` with
 probability at most `2^{−40} + R (δb + δz)`: `c = 1` on the calls' one-sided scope (`KScopeOverlapOneSidedJ10R`). -/
 def OverlapFloorKOneSidedJ10R : Prop :=
-  ∀ (Mc : Machine) (S : Service) (R St L : ℕ) (n B n' : Fin St → ℕ) (e : S.Seed ≃ Paths (OJSpot St n L B n') R)
+  ∀ (Mc : AlgModel) (S : Service) (R St L : ℕ) (n B n' : Fin St → ℕ) (e : S.Seed ≃ Paths (OJSpot St n L B n') R)
     (run : JORunMap Mc S R St n L B n' (ZMod (2 ^ 32))) (δb δz κ Vmax : ℝ),
     0 < κ → 0 < L * ∑ t, n t * n' t * B t → 0 ≤ δb → 0 ≤ δz →
     ServiceSoundOverlapJ10R Mc S run e δb δz → KScopeOverlapOneSidedJ10R Mc S run →
@@ -238,7 +238,7 @@ def OverlapFloorKOneSidedJ10R : Prop :=
 its accepted runs charged below `(R − 274 ln 2) · St · κ L n n' B − Vmax` with probability at most
 `breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz Ω M`. -/
 def StagedFloorKOneSidedJ10RPerProver : Prop :=
-  ∀ (Mc : Machine) (S : Service) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (JStage St n L B n') R)
+  ∀ (Mc : AlgModel) (S : Service) (R St n L B n' : ℕ) (e : S.Seed ≃ Paths (JStage St n L B n') R)
     (run : JRunMap Mc S R St n L B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
     (cb db cz dz δb βb δz βz κ Vmax : ℝ),
     0 < St → 0 < κ → 0 < L * (n * n' * B) → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →
@@ -252,7 +252,7 @@ def StagedFloorKOneSidedJ10RPerProver : Prop :=
 its accepted runs charged below `(R − 274 ln 2) · κ L Σ_t n_t n'_t B_t − Vmax` with probability at most
 `breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz Ω M`. -/
 def OverlapFloorKOneSidedJ10RPerProver : Prop :=
-  ∀ (Mc : Machine) (S : Service) (R St L : ℕ) (n B n' : Fin St → ℕ) (e : S.Seed ≃ Paths (OJSpot St n L B n') R)
+  ∀ (Mc : AlgModel) (S : Service) (R St L : ℕ) (n B n' : Fin St → ℕ) (e : S.Seed ≃ Paths (OJSpot St n L B n') R)
     (run : JORunMap Mc S R St n L B n' (ZMod (2 ^ 32))) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
     (cb db cz dz δb βb δz βz κ Vmax : ℝ),
     0 < κ → 0 < L * ∑ t, n t * n' t * B t → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →

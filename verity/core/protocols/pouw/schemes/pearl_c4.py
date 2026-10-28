@@ -117,7 +117,7 @@ from verity.errors import InvalidArtifact
 from verity.ml.circuits.silicon import fp32
 from verity.ml.circuits.silicon.models import BLACKWELL_SM120_MXF4, BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16, BlockScaledAlignAdd
 
-from ..protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
+from ..protocol import GuaranteeBasis, Context, DomainError, Matmul, Shape, Tile, grid_tiles
 from ..registration import (  # noqa: F401 - re-exported
     GAMMA_FOLD,
     HEAD_INTERLEAVE,
@@ -1124,7 +1124,7 @@ class PearlC4:
         self.last_debit: Debit | None = None
         self._encoded: tuple | None = None
         self._rows: tuple[C.Ops | None, RowF1 | None, RowTerms] = (None, None, {})
-        self.certificate = Certificate(
+        self.certificate = GuaranteeBasis(
             conjecture="tt-out/fp4-sm120",
             gamma0=None,
             omega=Fraction(1),
@@ -1154,7 +1154,7 @@ class PearlC4:
                         ("b_ovf", tuple((nb, str(b)) for nb, b in B_OVF)), *((("hashing", hashing),) if hashing != "h0" else ())),
         )
         if self.contrast:
-            self.certificate = Certificate(
+            self.certificate = GuaranteeBasis(
                 conjecture="none: a contrast line outside Pearl-C4's claimed domain (NVFP4 only)",
                 gamma0=None,
                 omega=Fraction(1),

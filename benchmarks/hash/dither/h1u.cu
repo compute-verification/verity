@@ -9,7 +9,7 @@
 //              column's block 32 RB + lane CB + c into shared memory (the rows' dither bits b and the columns' coin bits c
 //              of 16 segments), after one first pass over block K / 512 (the rows' digit coins, the columns' U bytes).
 //              A segment: X = A + b and W' = B + c + U (mod 2^8) built in registers as mma.sync m16n8k32 s8 fragments
-//              (2 m-tiles x 4 n-tiles: the lane's 32 entries are exactly h1tile.Layout's at segment.row_slot / col_slot),
+//              (2 m-tiles x 4 n-tiles: the lane's 32 entries are exactly h1tile.TileShape's at segment.row_slot / col_slot),
 //              T += X W'^T, and Y += X P (P the identity under the fragments' K order, so Y is the residue sums); then
 //              the set T_s folded: entry q times fx1_key(q), absorbed by duo chain q % 8 at key 2 (q / 8) + (q % 8 >= 4);
 //              each set's XOR over the lane's chains to a ring, reduced across lanes once a chunk. After the KS sets: the

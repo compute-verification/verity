@@ -150,21 +150,21 @@ such saving guesses about 96% of one row: 124 words at `n = 64` on the H100 (123
 Each guessed word then needs only about 1.04 bits of salt-dependent min-entropy at `n = 64`, and about 0.13 at
 `n = 512`, which TT_OUT already assumes. `64 ∣ n` matters as much as `64 ≤ n`: a `1 × (n mod 64)` edge tile is guessed
 whole. `m` stays free, so a one-row unit is in the domain (`pearlCDomainDev_split`). -/
-def pearlCDomainDev (d : PearlCDevice) (L : Layout) : Prop :=
+def pearlCDomainDev (d : PearlCDevice) (L : UnitLayout) : Prop :=
   ∀ u < L.N, 0 < (L.shape u).m ∧ (64 ≤ (L.shape u).n ∧ 64 ∣ (L.shape u).n) ∧ 0 < (L.shape u).k ∧
     128 ∣ (L.shape u).k ∧ (d.G = 0 ∨ 32 * d.G ∣ (L.shape u).k) ∧ (L.shape u).k ≤ 2 ^ 16
 
 /-- The domain restricted to one shape. -/
-def pearlCDomainDevAt (d : PearlCDevice) (s : Shape) (L : Layout) : Prop :=
+def pearlCDomainDevAt (d : PearlCDevice) (s : Shape) (L : UnitLayout) : Prop :=
   pearlCDomainDev d L ∧ ∀ u < L.N, L.shape u = s
 
 /-- The domain restricted to one linear, `n` and `k` fixed and `m` free: its units at any mix of batch sizes. -/
-def pearlCDomainDevNK (d : PearlCDevice) (n k : ℕ) (L : Layout) : Prop :=
+def pearlCDomainDevNK (d : PearlCDevice) (n k : ℕ) (L : UnitLayout) : Prop :=
   pearlCDomainDev d L ∧ ∀ u < L.N, (L.shape u).n = n ∧ (L.shape u).k = k
 
 /-- The domain restricted to a set of linears: every unit's `(n, k)` in `nks`, `m` free. A served step's layout holds
 every linear of its model at once, each at any mix of batch sizes. -/
-def pearlCDomainDevShapes (d : PearlCDevice) (nks : Finset (ℕ × ℕ)) (L : Layout) : Prop :=
+def pearlCDomainDevShapes (d : PearlCDevice) (nks : Finset (ℕ × ℕ)) (L : UnitLayout) : Prop :=
   pearlCDomainDev d L ∧ ∀ u < L.N, ((L.shape u).n, (L.shape u).k) ∈ nks
 
 /-- Llama-3.1-8B's linears `(n, k)`: qkv, o, gate_up, down. -/

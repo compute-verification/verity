@@ -53,7 +53,7 @@ noncomputable def Lmul {N m n k : ℕ} (V : Submodule ℚ (Noise N m n k → ℚ
 
 /-- AlgM_4090 as a machine: its programs are the `H4090 cs` programs on the noise coordinates, at their AlgM cost,
 outputting their slots. -/
-def alg4090Machine (N m n k cs : ℕ) : Machine (Noise N m n k) where
+def alg4090Machine (N m n k cs : ℕ) : WordCostModel (Noise N m n k) where
   Prog := {P : List (Instr (Noise N m n k)) // H4090 cs P}
   cost P := (cost P.1 : ℝ)
   outputs P := {φ | φ ∈ slots P.1 (coords N m n k)}
@@ -93,7 +93,7 @@ non-final checked words of the units in `U` for some `A = g(F₁)`, and `1 − �
 then TT_NCP's event fails for that program: not `cost/(1 − γ₀) < Σ_{u ∈ U} 3·m·k·n`. -/
 def TTNCPOfA1A2 : Prop :=
   ∀ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (M : Machine (Noise N m n k)) (q : M.Prog) (cs : ℕ) (c γ₀ γ₁ γ₂ : ℝ), 16 ∣ k → 0 < k →
+    (M : WordCostModel (Noise N m n k)) (q : M.Prog) (cs : ℕ) (c γ₀ γ₁ γ₂ : ℝ), 16 ∣ k → 0 < k →
     CheckpointIndependent k 16 R → U ⊆ range N →
     A2_algebraicSufficiency γ₂ M (H4090 cs) (wordSet (word k m n N R A B) U) →
     A1_multiplicative c γ₁ k R → 16 ≤ c * cs →
@@ -105,7 +105,7 @@ def TTNCPOfA1A2 : Prop :=
 stronger, probably false asymptotically; not used by the recommended chain (`TTNCPOfA1costA2`). -/
 def TTNCPOfA1A2W1 : Prop :=
   ∀ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (M : Machine (Noise N m n k)) (q : M.Prog) (γ₀ γ₁ γ₂ : ℝ), 16 ∣ k → 0 < k →
+    (M : WordCostModel (Noise N m n k)) (q : M.Prog) (γ₀ γ₁ γ₂ : ℝ), 16 ∣ k → 0 < k →
     CheckpointIndependent k 16 R → MinRank2 k R → U ⊆ range N →
     A2_algebraicSufficiency γ₂ M (H4090 8) (wordSet (word k m n N R A B) U) → A1_W1 γ₁ k R → (∀ u ∈ U, ∀ p < nonFinal k m n, word k m n N R A B u p ∈ M.outputs q) →
     0 ≤ γ₁ → γ₁ ≤ 1 → γ₂ < 1 → γ₀ < 1 → 1 - γ₀ ≤ (1 - γ₂) * (1 - γ₁) * (1 - 16 / (3 * k : ℝ)) →

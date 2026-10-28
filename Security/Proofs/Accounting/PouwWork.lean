@@ -44,7 +44,7 @@ pre-deadline inbox and the targets depend on `a` alone, and an accepted coin's d
 at `(1 − ε_s)^t` for every `Nmin` that leaves more than `ε_s · N` blocks wrong. -/
 theorem detection_of_sampling (hW : Pouw.Guarantees.WorkWeightedSampling) {α : Type} [Fintype α] {L : Type}
     {N t : ℕ} (S : α × (Fin t → Pouw.Ticket (fun _ => 1) N) → Actual.Run L)
-    (P : Verdict (α × (Fin t → Pouw.Ticket (fun _ => 1) N)) L) (hN : P.N = N)
+    (P : Verifier (α × (Fin t → Pouw.Ticket (fun _ => 1) N)) L) (hN : P.N = N)
     (hword : ∀ a c c', inbox S P (Set.Iio P.td) (a, c) = inbox S P (Set.Iio P.td) (a, c'))
     (htarget : ∀ a c c', P.target (a, c) = P.target (a, c'))
     (hacc : ∀ r, Accepts S P r → ∀ i, P.word (inbox S P (Set.Iio P.td) r) (r.2 i).1 = P.target r (r.2 i).1)

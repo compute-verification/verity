@@ -14,7 +14,7 @@ import pouw_regions_vectors as RV
 from verity.ml.crypto.blake3 import blake3, keyed
 from verity.core.protocols.pouw.circuit import ncp2, pc4, pc8, traced_as
 from verity.core.protocols.pouw.circuit import reference as R
-from verity.core.protocols.pouw.circuit.anchors import (ANCHORED, Anchors, Ledger, Receipt, SaltWindows, public_ports, region_bytes,
+from verity.core.protocols.pouw.circuit.anchors import (ANCHORED, Anchors, AdmittedCalls, Receipt, SaltWindows, public_ports, region_bytes,
                                                         region_words)
 from verity.core.protocols.pouw.protocol import DomainError
 
@@ -172,7 +172,7 @@ def test_the_public_inputs_file_is_in_parameter_leaf_order():
 def test_a_window_refuses_a_repeated_call_index():
     """(forward, position) names one call (A11, `UniqueCallIndices`): a second call with it is refused."""
     call = F.call(32, 64, 32)
-    ledger = Ledger()
+    ledger = AdmittedCalls()
     ledger.admit(_anchors(call), SHAPE)
     ledger.admit(Anchors(call.salt, call.forward + 1, call.layer, call.site, call.weight, tuple(call.rowids), tuple(call.colids)), SHAPE)
     with pytest.raises(DomainError):

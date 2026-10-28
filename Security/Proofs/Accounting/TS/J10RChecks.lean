@@ -18,24 +18,24 @@ namespace Accounting.TS.J10RChecks
 open Accounting.TS.J10R
 
 theorem unit_row_is_call_row (s : List ℕ) (M N k R C I J i : ℕ) :
-    rowAt s k ((unitBlocks M k R C I J).1 + i * rb k) = rowAt s k ((Layout.mk M N k).row (R * I + i)) := by
-  simp only [unitBlocks, Layout.row, Nat.add_mul]
+    rowAt s k ((unitBlocks M k R C I J).1 + i * rb k) = rowAt s k ((TileShape.mk M N k).row (R * I + i)) := by
+  simp only [unitBlocks, TileShape.row, Nat.add_mul]
 
 theorem unit_col_is_call_col (s : List ℕ) (M N k R C I J j : ℕ) :
-    colAt s k ((unitBlocks M k R C I J).2 + j * cb k) = colAt s k ((Layout.mk M N k).col (C * J + j)) := by
-  simp only [unitBlocks, Layout.col, Nat.add_mul, Nat.add_assoc]
+    colAt s k ((unitBlocks M k R C I J).2 + j * cb k) = colAt s k ((TileShape.mk M N k).col (C * J + j)) := by
+  simp only [unitBlocks, TileShape.col, Nat.add_mul, Nat.add_assoc]
 
 /-- A unit's rows under J10-R are the call-scale rows `R I .. R I + R - 1`. -/
 theorem j10r_rows (s : List ℕ) (M N k R C I J : ℕ) :
     (j10rNoise s ⟨R, C, k⟩ (unitBlocks M k R C I J)).1 =
-      (List.range R).map fun i => rowAt s k ((Layout.mk M N k).row (R * I + i)) := by
+      (List.range R).map fun i => rowAt s k ((TileShape.mk M N k).row (R * I + i)) := by
   unfold j10rNoise
   exact List.map_congr_left fun i _ => unit_row_is_call_row s M N k R C I J i
 
 /-- A unit's columns under J10-R are the call-scale columns `C J .. C J + C - 1`. -/
 theorem j10r_cols (s : List ℕ) (M N k R C I J : ℕ) :
     (j10rNoise s ⟨R, C, k⟩ (unitBlocks M k R C I J)).2 =
-      (List.range C).map fun j => colAt s k ((Layout.mk M N k).col (C * J + j)) := by
+      (List.range C).map fun j => colAt s k ((TileShape.mk M N k).col (C * J + j)) := by
   unfold j10rNoise
   exact List.map_congr_left fun j _ => unit_col_is_call_col s M N k R C I J j
 
@@ -68,7 +68,7 @@ theorem keys_vec : (unitKeys vSalt vRootA vRootB 46 ⟨4, 8, 64⟩).map (·.take
 
 /-! ## Compressions -/
 
-theorem layout_4096 : rb 4096 = 9 ∧ cb 4096 = 9 ∧ (Layout.mk 32 32 4096).blocks = 576 := by decide +kernel
+theorem layout_4096 : rb 4096 = 9 ∧ cb 4096 = 9 ∧ (TileShape.mk 32 32 4096).blocks = 576 := by decide +kernel
 
 theorem today_4096 : unitCompressions ⟨32, 32, 4096⟩ = 612 := by decide +kernel
 

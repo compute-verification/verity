@@ -10,7 +10,7 @@ follow them into the spec:
 
 * uniform probability (`prob`), `R` rounds of fresh coins (`Paths`), a prover's play (`RoundGame`, its acceptance
   and deficiency) and a round's stages (`StageGame`);
-* the machine model (`Machine`, a run's `charge`), the service (`Service`) and its adversary floor (`ServiceFloor`;
+* the machine model (`AlgModel`, a run's `charge`), the service (`Service`) and its adversary floor (`ServiceFloor`;
   adversary by adversary, `ServiceFloorPerProver`, at an adversary's error `breakBound`, read through the analysis's
   collision finders, `Finders` and `finderTerm`, and `ecr/sha-512`'s `Claims.ecrBound` at budgets computed from the
   adversary's time);
@@ -94,11 +94,11 @@ end StageGame
 
 end Stages
 
-section Machine
+section AlgModel
 
 /-- A machine model: algorithms from inputs `I` to outputs `O` (coins are part of the input), what they compute, and
 their cost. The axioms are the properties of `time` the reduction uses. -/
-structure Machine where
+structure AlgModel where
   /-- The algorithms from `I` to `O`. -/
   Alg : Type → Type → Type
   /-- What an algorithm computes. -/
@@ -140,17 +140,17 @@ structure Machine where
   time_fst : ∀ {I J : Type}, time (fst (I := I) (J := J)) = 0
   time_snd : ∀ {I J : Type}, time (snd (I := I) (J := J)) = 0
 
-namespace Machine
+namespace AlgModel
 
-variable (Mc : Machine)
+variable (Mc : AlgModel)
 
 /-- **A run's charge** (RS-DEF v2's `max(|M|, cost_M(σ, ρ))`, RS-RT's V1): the program's size and the run's cost.
 Charging the run alone lets a coin-indexed table of accepted answers pass at `O(λ)` per run. -/
 def charge {I O : Type} (f : Mc.Alg I O) (x : I) : ℝ := max (Mc.size f) (Mc.cost f x)
 
-end Machine
+end AlgModel
 
-end Machine
+end AlgModel
 
 section Service
 
@@ -172,7 +172,7 @@ attribute [instance] Service.instSeed Service.instCoins
 /-- **The service's adversary floor** in a machine: every adversary that commits first has its accepted runs charged
 (`max(|M|, cost)`) below `F` with probability at most `κ`. It reads only the service, so it is `AdvFloor` of every protocol over the service
 (`MatMachine.editFloor_iff`). -/
-def ServiceFloor (Mc : Machine) (S : Service) (F κ : ℝ) : Prop :=
+def ServiceFloor (Mc : AlgModel) (S : Service) (F κ : ℝ) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
     prob (fun ω : S.Seed × Ω => S.verify (Mc.eval M ω).1 ω.1 (Mc.eval M ω).2 = true ∧ Mc.charge M ω < F) ≤ κ
@@ -181,7 +181,7 @@ def ServiceFloor (Mc : Machine) (S : Service) (F κ : ℝ) : Prop :=
 runs charged below `F` with probability at most `κ Ω M`, a bound of its own, `⊤` where there is none. `ServiceFloor` is
 one bound for every adversary, which a service on SHA-512 commitments meets only at 1: an adversary that hard-codes a
 collision opens a leaf two ways. -/
-def ServiceFloorPerProver (Mc : Machine) (S : Service) (F : ℝ)
+def ServiceFloorPerProver (Mc : AlgModel) (S : Service) (F : ℝ)
     (κ : ∀ (Ω : Type) [Fintype Ω], Mc.Alg (S.Seed × Ω) (S.Com × S.Ans) → ENNReal) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)),
     (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) →
@@ -196,13 +196,13 @@ table the analysis fixes from a commitment. Like `RunMap`, it is the analysis's;
 for the binding breaks and one for the zero-knowledge breaks. The cost is declared, so the bounds never read it as a
 number: they read a budget computed from `M`'s time (`breakBound`), and a finder whose expected cost exceeds it gives
 no bound. -/
-abbrev Finders (Mc : Machine) (S : Service) (R : ℕ) : Type 1 :=
+abbrev Finders (Mc : AlgModel) (S : Service) (R : ℕ) : Type 1 :=
   ∀ (Ω' : Type) [Fintype Ω'], Mc.Alg (S.Seed × Ω') (S.Com × S.Ans) → Ω' → Fin R → Claims.Finder
 
 /-- **An adversary's finder term at one value of its coins, at the budget `q`**: the `ecr/sha-512` bounds of its
 finders for every round (`Claims.ecrBound` at the hash `sha` and the budget), summed: `R · q / 2^256` where every
 finder meets the assumption within `q` calls in expectation, `⊤` otherwise. -/
-noncomputable def finderTerm {Mc : Machine} {S : Service} {R : ℕ} (sha : Claims.Msg → Claims.Msg)
+noncomputable def finderTerm {Mc : AlgModel} {S : Service} {R : ℕ} (sha : Claims.Msg → Claims.Msg)
     (fd : Finders Mc S R) (q : ℝ) (Ω : Type) [Fintype Ω] (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)) (r : Ω) :
     ENNReal :=
   ∑ w, Claims.ecrBound sha (fd Ω M r w) q
@@ -216,10 +216,10 @@ its coins as a collision) from sending the whole bound to `⊤`: that value adds
 Each path's finders are read at a budget computed from the adversary: `cb · time M + db` SHA-512 calls for the
 binding finders and `cz · time M + dz` for the zero-knowledge ones, at constants the analysis states (its finders'
 reruns of `M` per unit of `M`'s time, and the calls they make besides). `M`'s time is the machine's worst case
-(`Machine.time`), which `M` can't set low, and the finders' declared costs only have to fit under the budgets. Where
+(`AlgModel.time`), which `M` can't set low, and the finders' declared costs only have to fit under the budgets. Where
 every finder fits and meets `ecr/sha-512`, the error is
 `ε + R (δb + δz) + R (βb (cb · time M + db) + βz (cz · time M + dz)) / 2^256`, capped at 1. -/
-noncomputable def breakBound {Mc : Machine} {S : Service} {R : ℕ} (sha : Claims.Msg → Claims.Msg)
+noncomputable def breakBound {Mc : AlgModel} {S : Service} {R : ℕ} (sha : Claims.Msg → Claims.Msg)
     (fb fz : Finders Mc S R) (cb db cz dz : ℝ) (ε δb βb δz βz : ℝ) (Ω : Type) [Fintype Ω]
     (M : Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)) : ENNReal :=
   ∑ r : Ω, (Fintype.card Ω : ENNReal)⁻¹ *
@@ -604,7 +604,7 @@ structure StagedRun (R St n L np B n' : ℕ) (Ar : Type) [CommRing Ar] where
 
 /-- **The analysis's map from adversaries to their window runs**: for each adversary `M` in `Mc` against the
 service `S` and each value `r` of its own coins, its run. -/
-abbrev RunMap (Mc : Machine) (S : Service) (R St n L np B n' : ℕ) (Ar : Type) [CommRing Ar] : Type 1 :=
+abbrev RunMap (Mc : AlgModel) (S : Service) (R St n L np B n' : ℕ) (Ar : Type) [CommRing Ar] : Type 1 :=
   ∀ (Ω' : Type) [Fintype Ω'], Mc.Alg (S.Seed × Ω') (S.Com × S.Ans) → Ω' → StagedRun R St n L np B n' Ar
 
 /-- **An adversary's window run with overlapping stages**, as the analysis reads it: its play over the round's draws
@@ -624,7 +624,7 @@ structure OverlapRun (R St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin 
   word : ∀ x w, OCells St n n' B → Fin (N x w)
 
 /-- **The analysis's map from adversaries to their window runs with overlapping stages**. -/
-abbrev ORunMap (Mc : Machine) (S : Service) (R St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ) (Ar : Type)
+abbrev ORunMap (Mc : AlgModel) (S : Service) (R St : ℕ) (n : Fin St → ℕ) (L np : ℕ) (B n' : Fin St → ℕ) (Ar : Type)
     [CommRing Ar] : Type 1 :=
   ∀ (Ω' : Type) [Fintype Ω'], Mc.Alg (S.Seed × Ω') (S.Com × S.Ans) → Ω' → OverlapRun R St n L np B n' Ar
 

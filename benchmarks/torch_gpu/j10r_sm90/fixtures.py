@@ -94,7 +94,7 @@ def expected(out: Path, linears: list[str], ms: list[int], count: int, v6: int, 
             arrays[f"{k}/sigma"] = np.stack([np.frombuffer(SD.receipt_seed(S.SALT, c["base"] + r["u"], ra, rb), np.uint8)
                                              for r in mine])
             ncb = c["n"] // S.T
-            c.update({"words": int(arrays[f"{k}/receipts"].shape[1]), "digits": HT.Layout(S.T, S.T, c["k"]).m,
+            c.update({"words": int(arrays[f"{k}/receipts"].shape[1]), "digits": HT.TileShape(S.T, S.T, c["k"]).m,
                       "row_blocks_sampled": len({r["u"] // ncb for r in mine}),
                       "rows_sampled": S.T * len({r["u"] // ncb for r in mine}),
                       "samples": [{"u": r["u"], "ri": r["u"] // ncb, "cj": r["u"] % ncb, "blocks": r["blocks"],

@@ -50,7 +50,7 @@ def length(sets: int) -> int:
 
 
 @dataclass
-class Link:
+class ChainCall:
     """One operand set's call in a chain: the call, the A (and A's block scales) it reads, the y it writes."""
 
     call: object
@@ -63,7 +63,7 @@ class Link:
 class Chain:
     """A chain's body, enqueued on a stream: `enqueue(stream, n)` is n calls (the graph captures it)."""
 
-    def __init__(self, dev, shape, links: list[Link], kind: str, variant: str):
+    def __init__(self, dev, shape, links: list[ChainCall], kind: str, variant: str):
         self.dev, self.shape, self.links, self.kind, self.variant = dev, shape, links, D.KINDS[kind], variant
         self.fork = [dev.event() for _ in links] if variant == "side" else []
         self.done = [dev.event() for _ in links] if variant == "side" else []
@@ -118,7 +118,7 @@ class Chain:
     # ---- the gate ----------------------------------------------------------------------------------------------------------
 
     def check(self, j: int, src: int | None = None) -> dict:
-        """Link j's A (and scales) against the twin's f of its source's y, as the device holds them now."""
+        """ChainCall j's A (and scales) against the twin's f of its source's y, as the device holds them now."""
         dev, sh = self.dev, self.shape
         s, d = self.links[(j - 1) % len(self.links) if src is None else src], self.links[j % len(self.links)]
         y = dev.read(s.y.ptr, sh.m * sh.n * Y_BYTES[s.y_src])
@@ -172,13 +172,13 @@ def stale_control(chain: Chain):
 # ---- building a shape's chains -----------------------------------------------------------------------------------------------
 
 
-def baseline_links(entry, fam: B.Family) -> list[Link]:
+def baseline_links(entry, fam: B.Family) -> list[ChainCall]:
     kind = D.KINDS[D.FAMILY_KIND[fam.name]]
-    return [Link(c, c.ops.a, c.ops.sa if kind.block > 1 else None, c.ops.d, "int32" if fam.out == "int32" else "bf16")
+    return [ChainCall(c, c.ops.a, c.ops.sa if kind.block > 1 else None, c.ops.d, "int32" if fam.out == "int32" else "bf16")
             for c in entry.calls]
 
 
-def arm_links(entry, arm, opsets: list[A.OperandSet], shape) -> tuple[list[Link] | None, str | None]:
+def arm_links(entry, arm, opsets: list[A.OperandSet], shape) -> tuple[list[ChainCall] | None, str | None]:
     """The arm entry's links, or why it can't be chained: its y (`outputs["y"]`, else `outputs["d"]`; `y_format` on the
     call, BF16 by default) must hold m x n words."""
     kind = D.KINDS[D.INPUT_KIND[arm.inputs]]
@@ -196,19 +196,19 @@ def arm_links(entry, arm, opsets: list[A.OperandSet], shape) -> tuple[list[Link]
             A.phase_parts(getattr(c, "phases", None))
         except A.ArmError as ex:
             return None, str(ex)
-        links.append(Link(c, o.a, o.a_scale if kind.block > 1 else None, y, fmt))
+        links.append(ChainCall(c, o.a, o.a_scale if kind.block > 1 else None, y, fmt))
     return links, None
 
 
-def has_phases(links: list[Link]) -> bool:
+def has_phases(links: list[ChainCall]) -> bool:
     return all(A.phase_parts(getattr(ln.call, "phases", None)) is not None for ln in links)
 
 
-def has_side(links: list[Link]) -> bool:
+def has_side(links: list[ChainCall]) -> bool:
     return all(A.side_split(getattr(ln.call, "phases", None)) is not None for ln in links)
 
 
-def split_groups(links: list[Link]) -> dict[str, list[str]] | str:
+def split_groups(links: list[ChainCall]) -> dict[str, list[str]] | str:
     """The step groups each of the split's times covers (`SPLIT_PARTS`), as link 0's call names them, and those the side
     stream took (``side_stream``)."""
     phases = links[0].call.phases

@@ -184,7 +184,7 @@ def full_pass(d: Path, coins, jobs: int, every: int, without_y: bool = False) ->
     import clear_work as CW
     import fast_tile as FT
     import numpy as np
-    from clear_audit import Transcript, Verifier
+    from clear_audit import Publication, Verifier
     from verity.ml.commitments import Commitment
     from verity_vllm.protocols.pouw import pearl_c as PD
 
@@ -202,7 +202,7 @@ def full_pass(d: Path, coins, jobs: int, every: int, without_y: bool = False) ->
         scheme = PD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
         epoch, _ = PD.manifest_epoch(man, coins, False)
         c = man["commitment"]
-        transcript = Transcript(tuple(bytes.fromhex(u["root_a"]) for u in man["matmuls"]), Commitment(bytes.fromhex(c["root"]), c["count"]),
+        transcript = Publication(tuple(bytes.fromhex(u["root_a"]) for u in man["matmuls"]), Commitment(bytes.fromhex(c["root"]), c["count"]),
                                 ())
         view = Seen(scheme)
         verifier = Verifier(view, epoch)

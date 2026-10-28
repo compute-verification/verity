@@ -17,7 +17,7 @@ namespace Accounting.PerRunNecessity
 open Pouw Finset
 
 /-- One unit of shape `1 × 1 × 1`. -/
-def layout : Layout := ⟨1, fun _ => ⟨1, 1, 1⟩, fun _ => 0⟩
+def layout : UnitLayout := ⟨1, fun _ => ⟨1, 1, 1⟩, fun _ => 0⟩
 
 /-- The workload: `layout` with zero weights. -/
 def U : Workload := ⟨layout, fun _ _ _ => 0⟩
@@ -41,7 +41,7 @@ def P : Protocol Unit Unit Bool where
   Wref _ _ := 1
 
 /-- Layouts whose units each have positive work, so `W_ref ≤ Ω_max · W_mm` at `Ω_max = 1`. -/
-def D (L : Layout) : Prop := ∀ u < L.N, 1 ≤ (L.shape u).Wmm
+def D (L : UnitLayout) : Prop := ∀ u < L.N, 1 ≤ (L.shape u).Wmm
 
 /-- The adversary with no preprocessing that runs the one program. -/
 def A : Adversary CM := ⟨.done [], (), fun _ _ => 0⟩

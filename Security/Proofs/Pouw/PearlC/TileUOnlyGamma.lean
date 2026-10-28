@@ -25,7 +25,7 @@ variable {Q R S : Type}
 
 open Classical in
 theorem goodTiles_subset_goodTilesU (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S)
-    (τ : Transcript) : goodTiles P TR U H s τ ⊆ goodTilesU P TR U H s τ := by
+    (τ : CommitLog) : goodTiles P TR U H s τ ⊆ goodTilesU P TR U H s τ := by
   intro g hg
   unfold goodTiles at hg
   unfold goodTilesU
@@ -34,7 +34,7 @@ theorem goodTiles_subset_goodTilesU (P : Protocol Q R S) (TR : TileRules Q R S) 
   exact ⟨hg, c, hc, hcap, hB, fun i hi hr j hj => (hw i hi hr j hj).2⟩
 
 theorem goodTilesU_subset (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S)
-    (τ : Transcript) : goodTilesU P TR U H s τ ⊆ range (TR.tiling U.layout).NT \ blankTiles TR U τ := by
+    (τ : CommitLog) : goodTilesU P TR U H s τ ⊆ range (TR.tiling U.layout).NT \ blankTiles TR U τ := by
   classical
   intro g hg
   unfold goodTilesU at hg
@@ -48,7 +48,7 @@ theorem goodTilesU_subset (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workl
 
 /-- `GγSampled` under U-only binding gives it under (C̃, U) binding. -/
 theorem gammaSampledU_implies_gammaSampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ)
+    (P : Protocol Q R S) (TR : TileRules Q R S) (D : UnitLayout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ)
     (h : GγSampledU CM P TR D γ η) : GγSampled CM P TR D γ η := by
   intro U hU T hT q hq A hA w κ hκ hw t εs hεs
   refine le_trans (Pouw.pr_mono ?_) (h U hU T hT q hq A hA w κ hκ hw t εs hεs)
@@ -59,7 +59,7 @@ theorem gammaSampledU_implies_gammaSampled [Fintype Q] [DecidableEq Q] [Fintype 
   exact this.imp (fun hg => goodTiles_subset_goodTilesU P TR U _ _ _ hg) id
 
 theorem gammaSampledU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (γ₀ Ω : ℝ) (ε : ℕ → ℕ → ℝ) (hγ₀ : γ₀ < 1)
+    (P : Protocol Q R S) (TR : TileRules Q R S) (D : UnitLayout → Prop) (γ₀ Ω : ℝ) (ε : ℕ → ℕ → ℝ) (hγ₀ : γ₀ < 1)
     (hΩ : 0 < Ω)
     (hW : ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s : S), ∀ g < (TR.tiling U.layout).NT, ∀ act : Codes,
       TR.capOK H s U g act → TR.Wcred U.layout g act ≤ Ω * TR.credit H s U g act)

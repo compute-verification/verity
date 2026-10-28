@@ -87,7 +87,7 @@ row, under `Pc8OpsAgree` and the named hypothesis at each entry of a credited ro
 theorem tileCheck8_computesWords {ops : RowOps} (hops : Pc8OpsAgree ops) (p : Pipeline) (pr : Prices) (ρ : ℚ)
     (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r)
-    (TR : TileRules Q R S) (D : Layout → Prop)
+    (TR : TileRules Q R S) (D : UnitLayout → Prop)
     (hsh : ∀ L, D L → ∀ g < (TR.tiling L).NT, Shape8 (L.shape ((TR.tiling L).unit g)))
     (hunit : ∀ L, ∀ g < (TR.tiling L).NT, (TR.tiling L).unit g < L.N)
     (hrows : ∀ L g, ∀ i ∈ (TR.tiling L).rows g, i < (L.shape ((TR.tiling L).unit g)).m)
@@ -127,7 +127,7 @@ whose every unit has a whole-tile shape, `tileCheck8_computesWords` with the gri
 theorem tileCheck8_computesWords_pearlC {ops : RowOps} (hops : Pc8OpsAgree ops) (p : Pipeline) (pr : Prices) (c : Costs)
     (ρ : ℚ) (noise : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Noise (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k Params.pi.r)
-    (D : Layout → Prop) (hsh : ∀ L, D L → ∀ u < L.N, Shape8 (L.shape u))
+    (D : UnitLayout → Prop) (hsh : ∀ L, D L → ∀ u < L.N, Shape8 (L.shape u))
     (hent : ∀ (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) (i : Fin (U.layout.shape u).m)
       (j : Fin (U.layout.shape u).n), D U.layout → u < U.layout.N → Noise8OK (noise H s U u act) →
         (pc8Sem ops p noise).RowOK (U.layout.shape u).m (U.layout.shape u).k act i →
@@ -178,7 +178,7 @@ every credited row, under `Pc4OpsAgree`. The peel's rows exist at each entry of 
 theorem tileCheck4_computesWords {ops : RowOps} (hops : Pc4OpsAgree ops) (ρ : ℚ)
     (lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k)
-    (TR : TileRules Q R S) (D : Layout → Prop)
+    (TR : TileRules Q R S) (D : UnitLayout → Prop)
     (hsh : ∀ L, D L → ∀ g < (TR.tiling L).NT, Shape4 (L.shape ((TR.tiling L).unit g)))
     (hk16 : ∀ L, D L → ∀ g < (TR.tiling L).NT, (L.shape ((TR.tiling L).unit g)).k ≤ 2 ^ 16)
     (hrows : ∀ L g, ∀ i ∈ (TR.tiling L).rows g, i < (L.shape ((TR.tiling L).unit g)).m)
@@ -218,7 +218,7 @@ their units. -/
 theorem tileCheck4_computesWords_pearlC {ops : RowOps} (hops : Pc4OpsAgree ops) (ρ : ℚ)
     (lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k)
-    (D : Layout → Prop) (hsh : ∀ L, D L → ∀ u < L.N, Shape4 (L.shape u))
+    (D : UnitLayout → Prop) (hsh : ∀ L, D L → ∀ u < L.N, Shape4 (L.shape u))
     (hk16 : ∀ L, D L → ∀ u < L.N, (L.shape u).k ≤ 2 ^ 16) :
     (tileCheck4 ops lines).ComputesWords (pearlCProtocolFp4 devFp4Sm120 (pc4Sem ops lines) ρ)
       (pearlCTilesFp4 devFp4Sm120 (pc4Sem ops lines) ρ) D :=

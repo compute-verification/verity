@@ -36,7 +36,7 @@ theorem creditDevRev1_le_wref_h100 (s : Shape) : creditDevRev1 devH100 s ≤ wre
   linarith
 
 /-- On a layout of nonempty units, rev1's audit tiles' `W_ref` adds up to the layout's `∑_u wrefDevRev1`. -/
-theorem pearlCTilesDevRev1_total {Q R S : Type} (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (L : Layout)
+theorem pearlCTilesDevRev1_total {Q R S : Type} (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (L : UnitLayout)
     (hpos : ∀ u < L.N, 0 < (L.shape u).m ∧ 0 < (L.shape u).n) :
     tileWrefTotal (pearlCTilesDevRev1 d sem ρ) L = ∑ u ∈ range L.N, (wrefDevRev1 d (L.shape u) : ℝ) := by
   let F : ℕ × ℕ × ℕ → ℝ := fun b => ((wrefDevRev1 d (L.shape b.1) * tileShare (L.shape b.1)

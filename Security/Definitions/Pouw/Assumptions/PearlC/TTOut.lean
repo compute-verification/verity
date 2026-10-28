@@ -20,7 +20,7 @@ are both correct and whose debit is within the cap, `Pr_{H,s}[ ∑_{u ∈ K} cre
 `credit(u)` is the reference's value on the unit's committed activations and the realized noise. The named instance is
 `TTOutPearlC`. -/
 def TTOut [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (D : Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
+    (D : UnitLayout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
   CM.Queries ∧
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     pr (fun x : (Q → R) × S =>
@@ -90,7 +90,7 @@ def TTOutPearlC [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostMo
 committed units (`goodTiles`: debit within the cap, and every ticket and useful word of the credited rows correct), and
 `Pr_{H,s}[ ∑_{g ∈ K} credit(g) > T / (1 − γ₀) ] ≤ ε(q, N)`. The named instance is `TTOutTilePearlC`. -/
 def TTOutTile [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (TR : TileRules Q R S) (D : Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
+    (TR : TileRules Q R S) (D : UnitLayout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
   CM.Queries ∧
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     pr (fun x : (Q → R) × S =>

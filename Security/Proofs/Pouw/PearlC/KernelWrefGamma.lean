@@ -19,14 +19,14 @@ open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom
 
 /-- TT_OUT does not read `W_ref`. -/
 theorem ttOut_wref {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S}
-    {P : Protocol Q R S} {D : Layout → Prop} {γ₀ : ℝ} {ε : ℕ → ℕ → ℝ} (W : Layout → ℕ → ℝ)
+    {P : Protocol Q R S} {D : UnitLayout → Prop} {γ₀ : ℝ} {ε : ℕ → ℕ → ℝ} (W : UnitLayout → ℕ → ℝ)
     (h : TTOut CM P D γ₀ ε) : TTOut CM { P with Wref := W } D γ₀ ε :=
   h
 
 /-- TT_OUT per tile reads neither `W_ref` nor the credited rows' `W_ref`. -/
 theorem ttOutTile_wref {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S}
-    {P : Protocol Q R S} {TR : TileRules Q R S} {D : Layout → Prop} {γ₀ : ℝ} {ε : ℕ → ℕ → ℝ}
-    (W : Layout → ℕ → ℝ) (W' : Layout → ℕ → ℝ) (Wc : Layout → ℕ → Codes → ℝ) (h : TTOutTile CM P TR D γ₀ ε) :
+    {P : Protocol Q R S} {TR : TileRules Q R S} {D : UnitLayout → Prop} {γ₀ : ℝ} {ε : ℕ → ℕ → ℝ}
+    (W : UnitLayout → ℕ → ℝ) (W' : UnitLayout → ℕ → ℝ) (Wc : UnitLayout → ℕ → Codes → ℝ) (h : TTOutTile CM P TR D γ₀ ε) :
     TTOutTile CM { P with Wref := W } { TR with Wref := W', Wcred := Wc } D γ₀ ε :=
   h
 

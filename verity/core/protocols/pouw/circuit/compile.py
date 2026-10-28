@@ -846,7 +846,7 @@ PouwCompiled = _composite(
 # -- the compiled Program ----------------------------------------------------------------------------------------------------
 
 @dataclass(frozen=True)
-class Site:
+class DotNode:
     """A node of the served function and a kind of dot. `a_rows`, `b_rows`: A's and B's distinct rows, as references into the
     served function's body (parameters ``p``, nodes ``n``), first use first; dot d multiplies A row ``pairs[d][0]`` by B row
     ``pairs[d][1]``. Its seed group (`Compiled.group_of`) is its slot of `pouw.roots`."""
@@ -937,11 +937,11 @@ def _check_salt(salt: bytes) -> None:
         raise ValueError(f"`{SALT}` is the epoch's 64-byte salt")
 
 
-def _sites(plan: _Plan) -> tuple[Site, ...]:
-    return tuple(Site(s, sp.node, sp.dot, sp.a_rows, sp.b_rows, sp.pairs) for s, sp in enumerate(plan.sites))
+def _sites(plan: _Plan) -> tuple[DotNode, ...]:
+    return tuple(DotNode(s, sp.node, sp.dot, sp.a_rows, sp.b_rows, sp.pairs) for s, sp in enumerate(plan.sites))
 
 
-def _group_of(plan: _Plan, groups: Callable[[Site], Any] | Sequence[Any] | None) -> tuple[int, ...]:
+def _group_of(plan: _Plan, groups: Callable[[DotNode], Any] | Sequence[Any] | None) -> tuple[int, ...]:
     """Each site's seed group, numbered in first appearance: `groups` is a key per site (sites of one key are committed
     together and share `pouw.roots`' slot), a function of the site to its key, or None for a group per site."""
     sites = _sites(plan)
@@ -1021,7 +1021,7 @@ class Compiled:
         return self.plan.boolean
 
     @cached_property
-    def sites(self) -> tuple[Site, ...]:
+    def sites(self) -> tuple[DotNode, ...]:
         return _sites(self.plan)
 
     @cached_property
@@ -1398,10 +1398,10 @@ def _check(c: Compiled) -> None:
 
 # -- the pass ----------------------------------------------------------------------------------------------------------------
 
-def compile(program: Program, scheme: str, groups: Callable[[Site], Any] | Sequence[Any] | None = None) -> Compiled:
+def compile(program: Program, scheme: str, groups: Callable[[DotNode], Any] | Sequence[Any] | None = None) -> Compiled:
     """`program` with every registered matmul's dots in `scheme`'s tile units (the module docstring), checked. `groups` names
     the calls committed together, each group one seed group (one slot of `pouw.roots`): a key per site, or a function of the
-    `Site` to its key; None is a group per site, one call."""
+    `DotNode` to its key; None is a group per site, one call."""
     sch = _scheme(scheme)
     why = _reads_coin(program)
     if why is not None:
@@ -1450,7 +1450,7 @@ def compile(program: Program, scheme: str, groups: Callable[[Site], Any] | Seque
 
 
 def rebuild(served: Program, scheme: str, descriptor: dict,
-            groups: Callable[[Site], Any] | Sequence[Any] | None = None) -> Compiled:
+            groups: Callable[[DotNode], Any] | Sequence[Any] | None = None) -> Compiled:
     """The verifier's compiled Program, from (served, scheme, groups), held to an offered descriptor."""
     c = compile(served, scheme, groups)
     c.check_descriptor(descriptor)
@@ -1459,4 +1459,4 @@ def rebuild(served: Program, scheme: str, descriptor: dict,
 
 __all__ = ["ANY", "BUILTIN", "CompileError", "Compiled", "Dot", "Floor", "GateCheck", "MATMULS", "Matmul", "POSITIONS",
            "PV_ROWS", "PouwCall", "PouwCompiled", "PouwRest", "QK_ROWS", "ROOTS", "ROWS", "RowNoise", "SALT", "SCHEMES", "STEP",
-           "Scheme", "Site", "Tile", "Unit", "Z", "compile", "rebuild", "register", "seed"]
+           "Scheme", "DotNode", "Tile", "Unit", "Z", "compile", "rebuild", "register", "seed"]

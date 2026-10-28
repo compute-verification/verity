@@ -54,7 +54,7 @@ def oneUnit (k : ℕ) (w : Codes) : Workload := ⟨⟨1, fun _ => ⟨1, 1, k⟩,
 
 /-- Constant word 0 to ticket word `(0, 0, 0)` and constant word 1 to useful word `(0, 0, 0)`: three nodes of text and two
 constants, within W1's bound. -/
-def guessProg (t y : ℕ) : W1.Prog :=
+def guessProg (t y : ℕ) : W1.Listing :=
   ⟨fun _ => [t, y], fun _ => .op (.mov (W1.ticketAt 0 0 0) (W1.constAt 0)) (.op (.mov (W1.usefulAt 0 0 0) (W1.constAt 1)) .done),
     fun _ => by norm_num [W1.Code.size]⟩
 
@@ -64,7 +64,7 @@ noncomputable def guessAdv (dv : W1.W1Device) (salt : S → List ℕ) (a : Codes
   ⟨.done [], guessProg t y, fun _ => a⟩
 
 /-- `pearlCDomainDev` as stated before the floor on `n`: `n` only positive. -/
-def pearlCDomainDevOld (d : PearlCDevice) (L : Layout) : Prop :=
+def pearlCDomainDevOld (d : PearlCDevice) (L : UnitLayout) : Prop :=
   ∀ u < L.N, 0 < (L.shape u).m ∧ 0 < (L.shape u).n ∧ 0 < (L.shape u).k ∧ 128 ∣ (L.shape u).k ∧
     (d.G = 0 ∨ 32 * d.G ∣ (L.shape u).k) ∧ (L.shape u).k ≤ 2 ^ 16
 
@@ -380,7 +380,7 @@ theorem exists_guess_gt_eps (dv : W1.W1Device) (salt : S → List ℕ) (P : Prot
 
 /-- **TT_OUT at W1 bounds the event**: on any domain containing the unit, `Pr[GuessEvent at 2·fetch/(1−γ₀)]` is at most
 `2^64·ε(0, 1)`. -/
-theorem pr_guessEvent_le {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q R S} {D : Layout → Prop} {γ₀ : ℝ}
+theorem pr_guessEvent_le {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q R S} {D : UnitLayout → Prop} {γ₀ : ℝ}
     {ε : ℕ → ℕ → ℝ} {k : ℕ} {w a : Codes} (hD : D (oneUnit k w).layout) (hf : 0 ≤ dv.prices.fetch)
     (ha : ∀ i l, a i l < 2 ^ 32) (h : TTOutW1 dv salt P D γ₀ ε) :
     pr (GuessEvent P k w a (2 * (dv.prices.fetch : ℝ) / (1 - γ₀))) ≤ 2 ^ 64 * ε 0 1 := by
@@ -404,7 +404,7 @@ theorem pr_guessEvent_le {dv : W1.W1Device} {salt : S → List ℕ} {P : Protoco
 
 /-- **The refutation, in general**: if the event has probability above `2^64·ε(0, 1)`, TT_OUT at W1 fails on any domain
 containing the unit. -/
-theorem not_ttOutW1_of_guess {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q R S} {D : Layout → Prop}
+theorem not_ttOutW1_of_guess {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q R S} {D : UnitLayout → Prop}
     {γ₀ : ℝ} {ε : ℕ → ℕ → ℝ} {k : ℕ} {w a : Codes} (hD : D (oneUnit k w).layout) (hf : 0 ≤ dv.prices.fetch)
     (ha : ∀ i l, a i l < 2 ^ 32) (hE : 2 ^ 64 * ε 0 1 < pr (GuessEvent P k w a (2 * (dv.prices.fetch : ℝ) / (1 - γ₀)))) :
     ¬ TTOutW1 dv salt P D γ₀ ε :=
@@ -551,13 +551,13 @@ theorem oneUnit_not_new (d : PearlCDevice) (k : ℕ) (w : Codes) : ¬ pearlCDoma
   have h64 : 64 ≤ 1 := (h 0 Nat.one_pos).2.1.1
   omega
 
-theorem pearlCDomainDevOld_of_new {d : PearlCDevice} {L : Layout} (h : pearlCDomainDev d L) : pearlCDomainDevOld d L :=
+theorem pearlCDomainDevOld_of_new {d : PearlCDevice} {L : UnitLayout} (h : pearlCDomainDev d L) : pearlCDomainDevOld d L :=
   fun u hu => by
     obtain ⟨h1, ⟨h2, -⟩, h3⟩ := h u hu
     exact ⟨h1, by omega, h3⟩
 
 theorem ttOutW1_mono_domain [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {dv : W1.W1Device}
-    {salt : S → List ℕ} {P : Protocol Q R S} {D D' : Layout → Prop} {γ₀ : ℝ} {ε : ℕ → ℕ → ℝ}
+    {salt : S → List ℕ} {P : Protocol Q R S} {D D' : UnitLayout → Prop} {γ₀ : ℝ} {ε : ℕ → ℕ → ℝ}
     (hD : ∀ L, D' L → D L) (h : TTOutW1 dv salt P D γ₀ ε) : TTOutW1 dv salt P D' γ₀ ε :=
   fun U hU => h U ⟨hU.1, hD _ hU.2⟩
 

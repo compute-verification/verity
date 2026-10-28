@@ -106,7 +106,7 @@ theorem pearlCSampledSm120v1LoopCast8p72Rev1RowSeedCap1000_8192
 
 /-- **The code-form seed (`-h3`) per audit tile at the cap 1/1,000, 8192³**, from rev1's TT_OUT per tile at the served
 record, C1, C1-h3, C3 and C5: `γ = 1648180439/446072750000` (0.36949%), with the error at the `8192·N` rows. -/
-theorem pearlCSampledSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192 {π : Layout → Q ≃ Q}
+theorem pearlCSampledSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192 {π : UnitLayout → Q ≃ Q}
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000)) (hN : RowSeedNoise sem sem')
     (hC : CodeSeedNoise sem' semC π) (hCM : CM.SplitClosed) (hCM' : CM.RelabelClosed) :
     GγSampled CM
@@ -145,7 +145,7 @@ theorem pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192 (HA : HiddenAudit
 /-- **The code-form seed (`-h3`) per audit tile at the cap 1/1,000, 8192³, under the hidden audit, conditional**, as
 `pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192` with C1-h3 and C5 added:
 `γ = 1648180439/446072750000` (0.36949%), with the error at the `8192·N` rows. Cite it only as conditional. -/
-theorem pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192 {π : Layout → Q ≃ Q} (HA : HiddenAudit Q R S)
+theorem pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192 {π : UnitLayout → Q ≃ Q} (HA : HiddenAudit Q R S)
     (ηzk : ℕ → ℝ) (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000))
     (hN : RowSeedNoise sem sem') (hC : CodeSeedNoise sem' semC π) (hCM : CM.SplitClosed) (hCM' : CM.RelabelClosed)
     (hzk : TileProofSoundAll

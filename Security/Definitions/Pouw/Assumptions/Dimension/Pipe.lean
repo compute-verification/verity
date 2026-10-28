@@ -36,14 +36,14 @@ def shift24 (k : ℕ) : Mat := fun i j => if j < k ∧ i = (if j + 24 < k then j
 
 /-- The closed-pipe AlgM_4090 as a machine: its programs are the `ClosedPipe cs` programs on the noise coordinates, at
 their AlgM cost, outputting their slots. -/
-def pipeMachine (N m n k cs : ℕ) : Machine (Noise N m n k) where
+def pipeMachine (N m n k cs : ℕ) : WordCostModel (Noise N m n k) where
   Prog := {P : List (Instr (Noise N m n k)) // ClosedPipe cs P}
   cost P := (cost P.1 : ℝ)
   outputs P := {φ | φ ∈ slots P.1 (coords N m n k)}
 
 /-- The quadratic closed-pipe AlgM_4090 as a machine: its programs are the `QuadPipe cs` programs on the noise
 coordinates, at their AlgM cost, outputting their slots. -/
-def quadMachine (N m n k cs : ℕ) : Machine (Noise N m n k) where
+def quadMachine (N m n k cs : ℕ) : WordCostModel (Noise N m n k) where
   Prog := {P : List (Instr (Noise N m n k)) // QuadPipe cs P}
   cost P := (cost P.1 : ℝ)
   outputs P := {φ | φ ∈ slots P.1 (coords N m n k)}
@@ -79,7 +79,7 @@ outputs the non-final checked words of the units in `U` for some `A = g(F₁)`, 
 `1 − γ₀ ≤ (1 − γ₂)·(1 − γ₁)·(1 − 16/(3k))`, then TT_NCP's event fails for that program. -/
 def TTNCPOfA1costA2 : Prop :=
   ∀ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (M : Machine (Noise N m n k)) (q : M.Prog) (γ₀ γ₁ γ₂ : ℝ), 16 ∣ k → 0 < k →
+    (M : WordCostModel (Noise N m n k)) (q : M.Prog) (γ₀ γ₁ γ₂ : ℝ), 16 ∣ k → 0 < k →
     CheckpointIndependent k 16 R → MinRankGe k R 5 → U ⊆ range N →
     A2_algebraicSufficiency γ₂ M (ClosedPipe 8) (wordSet (word k m n N R A B) U) → A1_cost 2 γ₁ k R →
     (∀ u ∈ U, ∀ p < nonFinal k m n, word k m n N R A B u p ∈ M.outputs q) →
@@ -90,7 +90,7 @@ def TTNCPOfA1costA2 : Prop :=
 (Theorem 1 gives it at `γ₁ = 0`). -/
 def TTNCPOfQuadA2 : Prop :=
   ∀ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (M : Machine (Noise N m n k)) (q : M.Prog) (γ₀ γ₁ γ₂ : ℝ), 16 ∣ k → 0 < k →
+    (M : WordCostModel (Noise N m n k)) (q : M.Prog) (γ₀ γ₁ γ₂ : ℝ), 16 ∣ k → 0 < k →
     CheckpointIndependent k 16 R → MinRankGe k R 5 → U ⊆ range N →
     A2_algebraicSufficiency γ₂ M (QuadPipe 8) (wordSet (word k m n N R A B) U) → A1_cost_quad 2 γ₁ k R →
     (∀ u ∈ U, ∀ p < nonFinal k m n, word k m n N R A B u p ∈ M.outputs q) →

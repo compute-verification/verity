@@ -54,7 +54,7 @@ def atom4F (first : Bool) (l : List ℕ) : ℕ :=
 /-- One gate of an entry's block, at position `r` of the block and gate `g`: the chain's `K/64` firings over `A′_i`'s
 codes from gate `a` and scale bytes from `sa` and `B̃_j`'s from `b` and `sb`, then U's four K16 steps over the 64 BF16
 words of `P_A,i` from gate `pa` and of `P_B,j` from gate `pb`. -/
-def entry4Gate (K a b sa sb pa pb g r : ℕ) : Gate :=
+def entry4Gate (K a b sa sb pa pb g r : ℕ) : Cell :=
   if r < K / 64 then
     ⟨32, false, (if r = 0 then [] else [g - 1]) ++ (List.range 64).map (a + 64 * r + ·) ++
         (List.range 64).map (b + 64 * r + ·) ++ (List.range 4).map (sa + 4 * r + ·) ++
@@ -78,7 +78,7 @@ def entry4Base (K TM TN i j : ℕ) : ℕ := tile4In K TM TN + (i * TN + j) * blo
 
 /-- `Pc4Tile_v1{K, TM, TN}`'s gates: the inputs (see the module docstring), then entry `(i, j)`'s block (`entry4Gate`)
 for each entry in row-major order. -/
-def tile4Gate (K TM TN g : ℕ) : Gate :=
+def tile4Gate (K TM TN g : ℕ) : Cell :=
   if g < TM * K then ⟨4, true, [], fun _ => 0⟩
   else if g < TM * row4 K then ⟨8, true, [], fun _ => 0⟩
   else if g < TM * row4 K + TN * K then ⟨4, true, [], fun _ => 0⟩
@@ -101,7 +101,7 @@ def u4Gate (K TM TN i j : ℕ) : ℕ := entry4Base K TM TN i j + block4Len K - 1
 
 theorem block4Len_pos (K : ℕ) : 0 < block4Len K := by unfold block4Len; omega
 
-/-- Gate `g` past the inputs lies in entry `e`'s block at position `r`, with `e < TM·TN` below the gate count. -/
+/-- Cell `g` past the inputs lies in entry `e`'s block at position `r`, with `e < TM·TN` below the gate count. -/
 theorem tile4_block {K TM TN g : ℕ} (hg : g < tile4N K TM TN) (h : tile4In K TM TN ≤ g) :
     g = tile4In K TM TN + (g - tile4In K TM TN) / block4Len K * block4Len K + (g - tile4In K TM TN) % block4Len K ∧
       (g - tile4In K TM TN) / block4Len K / TN < TM ∧ (g - tile4In K TM TN) / block4Len K % TN < TN ∧

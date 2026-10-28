@@ -35,7 +35,7 @@ theorem gγ_of_cost_le [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM�
       CM₁.calls (f p) H U act σ s ≤ CM₂.calls p H U act σ s)
     (hcost : ∀ (p : CM₂.Prog) (H : Q → R) (U : Workload) (act : ℕ → Codes) (σ : State) (s : S),
       CM₁.cost (f p) H U act σ s ≤ CM₂.cost p H U act σ s)
-    (P : Protocol Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) (h : Gγ CM₁ P D γ η) : Gγ CM₂ P D γ η := by
+    (P : Protocol Q R S) (D : UnitLayout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) (h : Gγ CM₁ P D γ η) : Gγ CM₂ P D γ η := by
   intro U hU T hT q hq A hA
   let A₁ : Adversary CM₁ := ⟨A.pre, f A.online, A.act⟩
   have hA₁ : A₁.Bounded U T q := fun H s =>
@@ -47,7 +47,7 @@ theorem gγ_of_cost_le [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM�
 
 /-- **W1 charges at most the priced sum**: its refund only waives first fetches. -/
 theorem w1_cost_le_priced (dv : W1Device) (hf : 0 ≤ dv.prices.fetch) (P : Protocol Q R S) (salt : S → List ℕ)
-    (pr : Prog) (H : Q → R) (U : Workload) (act : ℕ → Codes) (σ : State) (s : S) :
+    (pr : Listing) (H : Q → R) (U : Workload) (act : ℕ → Codes) (σ : State) (s : S) :
     (w1 dv P salt).cost pr H U act σ s ≤ (w1Priced dv salt).cost pr H U act σ s := by
   simp only [w1, w1Priced, w1Read]
   rw [Rat.cast_le]
@@ -56,13 +56,13 @@ theorem w1_cost_le_priced (dv : W1Device) (hf : 0 ≤ dv.prices.fetch) (P : Prot
 
 /-- **The γ-gap property over the priced sum** follows from W1's, at the same `γ` and `η`. -/
 theorem gγ_w1Priced [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1Device) (hf : 0 ≤ dv.prices.fetch)
-    (P : Protocol Q R S) (salt : S → List ℕ) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ)
+    (P : Protocol Q R S) (salt : S → List ℕ) (D : UnitLayout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ)
     (h : Gγ (w1 dv P salt) P D γ η) : Gγ (w1Priced dv salt) P D γ η :=
   gγ_of_cost_le (w1 dv P salt) (w1Priced dv salt) (fun p => p) (fun _ _ _ _ _ _ => rfl)
     (fun _ _ _ _ _ _ => le_rfl) (w1_cost_le_priced dv hf P salt) P D γ η h
 
 /-- **The priced cost splits between the accounts**: compute, plus `fetch` per word read. -/
-theorem w1Priced_cost (dv : W1Device) (salt : S → List ℕ) (pr : Prog) (H : Q → R) (U : Workload)
+theorem w1Priced_cost (dv : W1Device) (salt : S → List ℕ) (pr : Listing) (H : Q → R) (U : Workload)
     (act : ℕ → Codes) (σ : State) (s : S) :
     (w1Priced dv salt).cost pr H U act σ s =
       ((final dv (salt s) pr U act σ).cost : ℝ) + (dv.prices.fetch : ℝ) * (w1Read dv (salt s) pr U act σ : ℝ) := by

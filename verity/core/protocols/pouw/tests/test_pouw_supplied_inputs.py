@@ -96,7 +96,7 @@ def test_the_roots_witness_no_longer_cancels_the_noise():
     for its frame-v3 root), the noise is seeded from A's own commitment: X is not zero, and the receipt moves with B."""
     r, c_, k, pos = 4, 8, 64, 0
     salt = G.window_salt(bytes.fromhex(COIN), WINDOW, BINDING)
-    lay = H.Layout(r, c_, k)
+    lay = H.TileShape(r, c_, k)
     r0 = (b"\0" * 64, b"\0" * 64)
     rows, _ = H.noise(SD.seed(salt, pos, *r0), lay)
     a = [[(-(bit & 1)) & 0xFF for bit in rows[i][0]] for i in range(r)]

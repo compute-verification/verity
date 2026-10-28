@@ -248,7 +248,7 @@ def test_a_lanes_cells_are_kernels_lane_and_the_lanes_cover_the_leaf_once():
     """At the served 32 × 32 leaf, lane l = 4 g + q holds rows g + 8 s and columns 2 q + 8 (s >> 1) + (s & 1) (kernels'
     ``lane_partials``, #3095), its cells by row slot then column slot (`lane_cells`), and the lanes' cells are the leaf's once
     each; its index is the low 5 bits of a 16-bit word."""
-    lay = H.Layout(32, 32, 64)
+    lay = H.TileShape(32, 32, 64)
     for ln in range(32):
         g, q = ln >> 2, ln & 3
         assert Z.lane_cells(lay, ln) == [32 * (g + 8 * s) + 2 * q + 8 * (t >> 1) + (t & 1) for s in range(4) for t in range(8)]
@@ -264,7 +264,7 @@ def test_a_lane_on_words_checks_its_committed_partial_and_its_own_cells():
     ok 0. The combine is 1 exactly when the partials XOR to the receipt."""
     rng = random.Random(41)
     a, b, sa, sw = _unit_rows(rng, 8, 16)
-    lay, live = H.Layout(8, 16, 64), [1] * 8
+    lay, live = H.TileShape(8, 16, 64), [1] * 8
     zy = Z.records(a, b, sa, sw)
     parts = H.lane_partials(a, b, SALT, 5, ROOTS)
     for ln in range(lay.lanes):
@@ -342,7 +342,7 @@ def test_a_lane_is_staged_at_any_k_and_a_combine_from_the_k_whose_partials_compr
     416, 896 and 928, whose rows' padding spills into another block, are staged. The combine reads only those rows, and
     C-Flock needs a row of the statement that compresses before its last block, ceil((bytes + 17) / 128) - 1 >= 1, so
     112 bytes or more: K = 384 is the least, and K = 352's 104-byte rows are refused. A lane has such rows at every K."""
-    assert [8 * H.Layout(4, 8, k).sets for k in (352, 384, 416, 448, 896, 928)] == [104, 112, 120, 128, 240, 248]
+    assert [8 * H.TileShape(4, 8, k).sets for k in (352, 384, 416, 448, 896, 928)] == [104, 112, 120, 128, 240, 248]
     assert Z.LEAST_K == 384
     for k in (64, 352, 384, 416, 896, 928, 4096):
         assert Z.lane(_tile(r=16, c=16, k=k)) == bind(Z.PouwH1LaneZy, TILE=_tile(r=16, c=16, k=k))
@@ -383,7 +383,7 @@ def _word_bits(words):
 
 def test_the_combine_on_bits_is_1_exactly_when_the_partials_xor_to_the_receipt():
     rng = random.Random(42)
-    lay = H.Layout(8, 16, 64)
+    lay = H.TileShape(8, 16, 64)
     parts = [[rng.randrange(1 << 32) for _ in range(2 * lay.sets)] for _ in range(lay.lanes)]
     receipt = [0] * (2 * lay.sets)
     for p in parts:
@@ -413,7 +413,7 @@ def test_a_lane_on_bits_is_its_word_reference(defn):
     its noise at the leaf's offsets, and the admit gate on the partial it checks."""
     rng = random.Random(43)
     a, b, sa, sw = _unit_rows(rng, 8, 16)
-    lay, live = H.Layout(8, 16, 64), [1] * 8
+    lay, live = H.TileShape(8, 16, 64), [1] * 8
     zeros = [0] * (2 * lay.sets)
     zy = Z.records(a, b, sa, sw)
     parts = H.lane_partials(a, b, SALT, 5, ROOTS)
@@ -497,7 +497,7 @@ def test_a_lanes_chunks_on_words_chain_to_the_whole_lane():
     rng = random.Random(44)
     for r, c, k, n in ((8, 16, 64, 2), (8, 16, 96, 3), (32, 32, 1024, 4)):
         a, b, sa, sw = _unit_rows(rng, r, c, k)
-        lay, live, kc = H.Layout(r, c, k), [1] * r, k // n
+        lay, live, kc = H.TileShape(r, c, k), [1] * r, k // n
         zy = Z.records(a, b, sa, sw)
         parts = H.lane_partials(a, b, SALT, 5, ROOTS)
         noise = H.noise(SD.seed(SALT, 5, *ROOTS), lay)
@@ -546,7 +546,7 @@ def test_a_chunk_on_words_holds_its_carries_scales_partial_and_cells():
     carry in to the honest one is the chunk before's check of the same row as its carry out: the last chunk's digits
     read only a residue sum's low bits and whether its quotient is 127, so a carried sum off in bit 31 leaves it 1."""
     rng = random.Random(45)
-    n, lay = 3, H.Layout(8, 16, 96)
+    n, lay = 3, H.TileShape(8, 16, 96)
     a, b, sa, sw = _unit_rows(rng, 8, 16, 96)
     live, zy = [1] * 8, Z.records(a, b, sa, sw)
     ra, rb, ras, rbs = _lane_rows(lay, 1, a, b, sa, sw)
@@ -589,7 +589,7 @@ def test_a_chunk_reads_its_rows_carries_and_index_and_returns_ok(k, n):
     `lane_statements` is the whole lane up to K = 4096 and the n chunks past it."""
     t = _tile(H.PouwH1Tile, 32, 32, k)
     kc, ks = k // n, k // n // 32
-    lay = H.Layout(32, 32, k)
+    lay = H.TileShape(32, 32, k)
     tail = [(nm, tp.leaves) for nm, tp in t.signature()[0][2:]] + [("lane", 16)]
     assert Z.lane_statements(t) == [Z.lane_chunk(t, n, c) for c in range(n)]
     assert Z.lane_statements(_tile(H.PouwH1Tile, 32, 32, 4096)) == [Z.lane(_tile(H.PouwH1Tile, 32, 32, 4096))]
@@ -636,7 +636,7 @@ def test_a_lane_chunk_on_bits_is_its_word_reference():
     rng = random.Random(46)
     got, want = [], []
     for k, n, ch in ((64, 2, 0), (64, 2, 1), (96, 3, 1)):
-        lay, last = H.Layout(8, 16, k), ch == n - 1
+        lay, last = H.TileShape(8, 16, k), ch == n - 1
         a, b, sa, sw = _unit_rows(rng, 8, 16, k)
         live, zy = [1] * 8, Z.records(a, b, sa, sw)
         parts = H.lane_partials(a, b, SALT, 5, ROOTS)
@@ -925,7 +925,7 @@ def test_a_j10r_leafs_lanes_on_words_are_v5s_receipt_split_by_lane():
     rng = random.Random(52)
     for r, c, k, blocks in ((8, 16, 64, J10R_LEAF_BLOCKS), (8, 16, 64, J10R_CARRY_BLOCKS), (32, 32, 512, J10R_CARRY_BLOCKS)):
         a, b, sa, sw = _unit_rows(rng, r, c, k)
-        lay, live, j10r = H.Layout(r, c, k), [1] * r, (J10R_CALL, blocks)
+        lay, live, j10r = H.TileShape(r, c, k), [1] * r, (J10R_CALL, blocks)
         zy = Z.records(a, b, sa, sw)
         receipt = H.j10r_reference(a, b, SALT, J10R_AT, ROOTS, J10R_CALL, blocks)[1]
         parts = [Z.lane_partial(*_lane_rows(lay, ln, a, b, sa, sw)[:2], live, SALT, J10R_AT, ROOTS, ln, (r, c), j10r)
@@ -961,7 +961,7 @@ def test_a_j10r_leafs_lane_takes_the_call_and_blocks_before_the_index(k):
     assert [s.defn for s in stmts] == [Z.PouwH1LaneZy2] if n == 1 else [Z.PouwH1LaneZyChunk2] * n
     comb, comb1 = Z.combine(t), Z.combine(t1)
     assert comb == bind(Z.PouwH1Combine2, TILE=t) and comb1 == bind(Z.PouwH1Combine, TILE=t1)
-    assert Z.leaf_statements(H.Layout(32, 32, k)) == 32 * n
+    assert Z.leaf_statements(H.TileShape(32, 32, k)) == 32 * n
     assert dict(comb.signature()[0])["oks"] == Array(32 * n, Z.OK_WORD)
     assert Z.statement_rows(comb) == Z.statement_rows(comb1) + [(f"ok{i}", [f"oks[{i}]"]) for i in range(32 * n)]
     assert Z.statement_ports(comb)[-2:] == [(f"ok{32 * n - 1}", [(f"oks[{32 * n - 1}]", 0, 16)]), ("o0", [("ok", 0, 1)])]
@@ -1004,7 +1004,7 @@ def test_a_j10r_combine_on_bits_folds_the_statements_ok_rows_into_its_own():
     `combine_reference` with ``oks``: 1 on the honest partials, receipt and four ok rows of the word 1; 0 with one ok row
     0, with one the word 3 (a bit past the ok set), with every ok row 0, and with the receipt off by one bit."""
     rng = random.Random(55)
-    lay = H.Layout(8, 16, 64)
+    lay = H.TileShape(8, 16, 64)
     parts = [[rng.randrange(1 << 32) for _ in range(2 * lay.sets)] for _ in range(lay.lanes)]
     receipt = [0] * (2 * lay.sets)
     for p in parts:
@@ -1036,7 +1036,7 @@ def test_a_j10r_lane_on_bits_is_its_word_reference():
     PouwCallSeeds, each block's counter the picked offset plus the blocks input, and v1's chain and checks on them."""
     rng = random.Random(53)
     a, b, sa, sw = _unit_rows(rng, 8, 16)
-    lay, live = H.Layout(8, 16, 64), [1] * 8
+    lay, live = H.TileShape(8, 16, 64), [1] * 8
     zy = Z.records(a, b, sa, sw)
     d = bind(Z.PouwH1LaneZy2, TILE=_tile(H.PouwH1Tile5, 8, 16))
     names = [p for p, _t in d.signature()[0]]
@@ -1076,7 +1076,7 @@ def test_a_j10r_lane_chunk_on_bits_is_its_word_reference():
     U's, and chunk 0's keys from σ_R."""
     rng, n = random.Random(54), 2
     a, b, sa, sw = _unit_rows(rng, 8, 16)
-    lay, live = H.Layout(8, 16, 64), [1] * 8
+    lay, live = H.TileShape(8, 16, 64), [1] * 8
     zy = Z.records(a, b, sa, sw)
     other = H.j10r_blocks(16, 64, (8, 16), 0, 0)
     got, want = [], []

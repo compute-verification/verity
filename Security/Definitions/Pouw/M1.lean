@@ -71,7 +71,7 @@ def m1Queries : ℕ := 2 ^ 21 + 2 ^ 20 + 2 ^ 21
 
 /-- The named milestone instance, for a given `W_ref`: `E_L` (`m × 16`) and then `E_R` (`16 × k`) are read row by row
 from the activation answers, `F_L` (`k × 16`) and then `F_R` (`16 × n`) from the weight answers. -/
-def m1 (Wref : Layout → ℕ → ℕ) : Params M1Q M1R Salt where
+def m1 (Wref : UnitLayout → ℕ → ℕ) : Params M1Q M1R Salt where
   r := 16
   d := 16
   qAct s u A w := m1ELQ s u A w ++ m1ERQ s w (u / 16)
@@ -84,12 +84,12 @@ def m1 (Wref : Layout → ℕ → ℕ) : Params M1Q M1R Salt where
 def M1Shape (sh : Shape) : Prop := 2 ^ 12 ≤ sh.m ∧ sh.m ≤ 2 ^ 17 ∧ 16 ∣ sh.m ∧ sh.k = 2 ^ 16 ∧ sh.n = 2 ^ 16
 
 /-- The rows of `u`'s group `⌊u/16⌋` on its weight: `∑_{u' : ⌊u'/16⌋ = ⌊u/16⌋, w(u') = w(u)} m_{u'}`. -/
-def m1GroupRows (L : Layout) (u : ℕ) : ℕ :=
+def m1GroupRows (L : UnitLayout) (u : ℕ) : ℕ :=
   ∑ u' ∈ (range L.N).filter (fun u' => u' / 16 = u / 16 ∧ L.wid u' = L.wid u), (L.shape u').m
 
 /-- The milestone domain: milestone shapes, 64-bit weight ids, and at least `2^16` rows in each unit's group on its
 weight (hence on its weight). -/
-def m1Domain (L : Layout) : Prop :=
+def m1Domain (L : UnitLayout) : Prop :=
   ∀ u < L.N, M1Shape (L.shape u) ∧ L.wid u < 2 ^ 64 ∧ 2 ^ 16 ≤ m1GroupRows L u
 
 /-- A unit's share, by rows and rounded up, of `work` spread over `rows` rows: `⌈work·m_u/rows⌉` (`0` if `rows = 0`). -/
@@ -109,7 +109,7 @@ def rowShare (work mu rows : ℕ) : ℕ := (work * mu + rows - 1) / rows
   `G_g` (`576·n` per (epoch, weight, group)). Sub-word extraction is priced like PRMT.
 Per unit this is the count `mkn + 2mkr + 6mrn + 20mk + 32mn`, plus the limb split's `576·m`.
 Shares are rounded up, so the units of a group or of a weight together cover its work (`Sanity.rowShare_covers`). -/
-def m1Wref (L : Layout) (u : ℕ) : ℕ :=
+def m1Wref (L : UnitLayout) (u : ℕ) : ℕ :=
   let m := (L.shape u).m
   let k := (L.shape u).k
   let n := (L.shape u).n

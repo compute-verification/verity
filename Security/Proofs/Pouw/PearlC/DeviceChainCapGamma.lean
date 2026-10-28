@@ -63,7 +63,7 @@ variable {Q R S : Type}
 
 open Classical in
 theorem chainCap_credit_sum_le (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (hadd : 0 ≤ d.prices.add)
-    (hbf : 0 ≤ d.prices.bf16) (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) :
+    (hbf : 0 ≤ d.prices.bf16) (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) (U : Workload) (H : Q → R) (s : S) (τ : CommitLog) :
     ∑ u ∈ correctSet (pearlCProtocolDevChainCap d sem ρ) U H s τ,
         (pearlCProtocolDevChainCap d sem ρ).credit H s U u (actOf τ u) ≤
       ∑ u ∈ correctSet (pearlCProtocolDev d sem ρ) U H s τ, (pearlCProtocolDev d sem ρ).credit H s U u (actOf τ u) := by
@@ -100,7 +100,7 @@ theorem ttOutPearlCDevChainCap_of_cap [Fintype Q] [DecidableEq Q] [Fintype R] [F
 
 open Classical in
 theorem chainCap_tile_credit_sum_le (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (hadd : 0 ≤ d.prices.add)
-    (hbf : 0 ≤ d.prices.bf16) (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) :
+    (hbf : 0 ≤ d.prices.bf16) (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) (U : Workload) (H : Q → R) (s : S) (τ : CommitLog) :
     ∑ g ∈ goodTiles (pearlCProtocolDevChainCap d sem ρ) (pearlCTilesDevChainCap d sem ρ) U H s τ,
         (pearlCTilesDevChainCap d sem ρ).credit H s U g
           (actOf τ (((pearlCTilesDevChainCap d sem ρ).tiling U.layout).unit g)) ≤

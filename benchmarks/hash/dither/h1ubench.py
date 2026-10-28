@@ -246,7 +246,7 @@ def bench(libs: dict[str, Lib], nlibs: dict[str, NoiseLib], args, name: str, n: 
           clock: Clock, l2: int, sms: int, rng: random.Random) -> dict:
     """libs: arm name -> build, "h1u" (the main build) first; nlibs: arm name -> noise build ("floor" the main one). A
     build is timed only if its gate passed."""
-    lay = HT.Layout(32, 32, k)
+    lay = HT.TileShape(32, 32, k)
     mp = max(32, m)
     X = torch.from_numpy(Xh[:m]).to("cuda")
     a = X if m >= 32 else torch.cat([X, X.new_zeros(32 - m, k)])

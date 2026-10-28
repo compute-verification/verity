@@ -180,7 +180,7 @@ def noise_runner(noise: NoiseLib, *a):
 
 
 class NoiseLib:
-    """h1noise.cu's kn_band: an r x c tile layout's noise chunks (h1tile.Layout's order), per-unit (band 1) or J10 banded."""
+    """h1noise.cu's kn_band: an r x c tile layout's noise chunks (h1tile.TileShape's order), per-unit (band 1) or J10 banded."""
 
     def __init__(self, path: str):
         h = self.h = ctypes.CDLL(path)
@@ -203,16 +203,16 @@ TW_PEAK_TBS = {"H200": 4.8, "B200": 8.0, "RTX PRO 6000": 1.792}  # DRAM bandwidt
 
 def tw_arms(c: Call, lib: Z.OneLib, noise: NoiseLib, gs: list[int], rng: random.Random, workers: int) -> tuple[dict, dict]:
     """The tile-width price's arms at one down_proj shape (a price, not a served form). A 32 x 8 tile's seeds (kh_seeds at
-    its 4x units' positions, unit (ri, cj) at base + ri (N / 8) + cj) and its noise (kn_band at h1tile.Layout(32, 8, K)'s
+    its 4x units' positions, unit (ri, cj) at base + ri (N / 8) + cj) and its noise (kn_band at h1tile.TileShape(32, 8, K)'s
     counts), per-unit and banded at each g, beside today's 32 x 32 tile's through the same kernel. Gated before timing:
     the kernel's counts are the Layout's; each arm's buffer 0xA5 first, then no 0xA5 block in any block a unit hashes, every
     non-leader row tile still 0xA5, and drawn blocks against seeds.noise_block of the unit's seed_j; credit's
     banded_reference on two 32 x 8 tiles (a leader and a non-leader at the first g), which holds the shape to the
-    Definition (h1tile.Layout's 4 | r, 8 | c; its fold over (r / 4)(c / 8) lanes)."""
+    Definition (h1tile.TileShape's 4 | r, 8 | c; its fold over (r / 4)(c / 8) lanes)."""
     from verity.core.protocols.pouw.circuit import h1tile as HT
     rows, n, k = c.a.shape[0], c.b.shape[0], c.a.shape[1]
     nrb, sms = rows // 32, torch.cuda.get_device_properties(0).multi_processor_count
-    lays = {32: HT.Layout(32, 32, k), TW_C: HT.Layout(32, TW_C, k)}
+    lays = {32: HT.TileShape(32, 32, k), TW_C: HT.TileShape(32, TW_C, k)}
     doc: dict = {"label": f"a price, not a served form: down_proj tiles 32 x {TW_C} against 32 x 32", "c": {}}
     arms: dict = {}
     for cw, lay in lays.items():
@@ -285,7 +285,7 @@ def tw_ca(c, g0: int, workers: int) -> dict:
         "z_eq_ab": [bool((np.array(x["z"]) == a[:32] @ b[TW_C * j:TW_C * j + TW_C].T).all()) for x, j in zip(us, js)],
         "leader_positions": [x["leader_position"] for x in us],
         "receipt_eq_h1tile_own": [[w & 0xFFFFFFFF for w in x["receipt"]] == list(o) for x, o in zip(us, own)]})
-    words = 2 * HT.Layout(32, TW_C, k).sets
+    words = 2 * HT.TileShape(32, TW_C, k).sets
     doc["ok"] = (all(doc["z_eq_ab"]) and doc["receipt_words"] == [words] * 2
                  and doc["leader_positions"] == [c.base + g0] * 2 and doc["receipt_eq_h1tile_own"] == [True, False])
     return doc

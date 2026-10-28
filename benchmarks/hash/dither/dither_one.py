@@ -662,7 +662,7 @@ def h1v3_unit(a32: np.ndarray, b32: np.ndarray, salt: bytes, position: int, root
     from verity.core.protocols.pouw.circuit import segment as SG
     a = [[int(v) & 0xFF for v in row] for row in a32]
     b = [[int(v) & 0xFF for v in row] for row in b32]
-    lay = HT.Layout(32, 32, len(a[0]))
+    lay = HT.TileShape(32, 32, len(a[0]))
     rows, cols = HT.noise(SD.seed(salt, position, *roots), lay)
     keys = HT.fold_keys(SD.receipt_seed(salt, position, *roots), lay)
     ks, m = lay.ks, lay.m
@@ -711,7 +711,7 @@ def wb_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, 
     entry 0 flipped changes wb⁺ - wb⁻ there by 1 - 2 wb⁺, so z[i, 0] moves by 256 (1 - 2 wb⁺) X[i, 0]."""
     from verity.core.protocols.pouw.circuit import h1tile as HT
     from verity.core.protocols.pouw.circuit import seeds as SD
-    rows, cols = HT.noise(SD.seed(salt, position, *roots), HT.Layout(32, 32, a.shape[1]))
+    rows, cols = HT.noise(SD.seed(salt, position, *roots), HT.TileShape(32, 32, a.shape[1]))
     s = int(b[0, 0]) + int(cols[0][0][0]) + int(_sx(np.array(cols[0][1][0])))
     d = 1 - 2 * int(s > 127)
     return [(256 * d * int(_sx(np.array(int(a[i, 0]) + int(rows[i][0][0]))))) & M32 for i in range(32)]
@@ -722,7 +722,7 @@ def xa_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, 
     xa there by 1 - 2 xa, so z[0, j] moves by 256 (1 - 2 xa) B[j, 0]."""
     from verity.core.protocols.pouw.circuit import h1tile as HT
     from verity.core.protocols.pouw.circuit import seeds as SD
-    rows, _ = HT.noise(SD.seed(salt, position, *roots), HT.Layout(32, 32, a.shape[1]))
+    rows, _ = HT.noise(SD.seed(salt, position, *roots), HT.TileShape(32, 32, a.shape[1]))
     d = 1 - 2 * int(int(a[0, 0]) == 127 and int(rows[0][0][0]) == 1)
     return [(256 * d * int(b[j, 0])) & M32 for j in range(32)]
 

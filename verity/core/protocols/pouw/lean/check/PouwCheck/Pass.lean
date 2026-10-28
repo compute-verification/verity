@@ -70,14 +70,14 @@ def coinVersion (scheme : String) : Option (Nat × String) :=
   else if scheme == COINS_RECORDED then some (32, "verity/pouw/weights/v2")
   else none
 
-structure Coins where
+structure CoinBinding where
   scheme : String
   epoch : Nat
   root : ByteArray
   keep : Nat
   weightsTag : String
 
-def Coins.same (a b : Coins) : Bool := a.scheme == b.scheme && a.epoch == b.epoch && a.root == b.root
+def CoinBinding.same (a b : CoinBinding) : Bool := a.scheme == b.scheme && a.epoch == b.epoch && a.root == b.root
 
 /-- `_hex`: `bytes.fromhex` of a string. -/
 def hex? : Json → Option ByteArray
@@ -103,7 +103,7 @@ example : jsonStrIs (at? (Json.mkObj [("salt", .str "ab"), ("schema", .null)]) "
 example : jsonTrue (at? (Json.mkObj [("closed", .bool true), ("complete", .bool true)]) "complete") = true := by decide
 
 /-- `coins_of`. -/
-def coinsOf (j : Json) (recorded : Bool) : Except String Coins := do
+def coinsOf (j : Json) (recorded : Bool) : Except String CoinBinding := do
   let bad := s!"a coin commitment's scheme is {pyRepr PouwCommit.SCHEME}"
   let some (.str scheme) := PouwWindow.field? j "scheme" | throw bad
   unless scheme == PouwCommit.SCHEME || (recorded && scheme == COINS_RECORDED) do throw bad
@@ -144,7 +144,7 @@ def streamV1 (key : ByteArray) (index : List PouwCommit.Part) (n : Nat) : ByteAr
 /-- `core_check.coin_version`: `coins.coin_reason` under the commitment's scheme, and whether the coin opened under the
 binding of the e2e-service's first coin commitments (`COIN_EARLY`: `PouwCommit.SCHEME` bound by `taggedSha256`), which
 `early` also tries when the current one doesn't open. -/
-def coinVersionAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteArray) (early : Bool) :
+def coinVersionAt (c : CoinBinding) (o : CoinOpening) (label : String) (after : ByteArray) (early : Bool) :
     Except String (Option String × Bool) := do
   let rank := if label == "salt" then 0 else 1
   if o.epoch != c.epoch then return (some s!"coin is epoch {o.epoch}'s, not epoch {c.epoch}'s", false)
@@ -160,7 +160,7 @@ def coinVersionAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteAr
   return (none, old)
 
 /-- `core_check.coin_reason`: `coins.coin_reason` under the commitment's scheme. -/
-def coinReasonAt (c : Coins) (o : CoinOpening) (label : String) (after : ByteArray) : Except String (Option String) :=
+def coinReasonAt (c : CoinBinding) (o : CoinOpening) (label : String) (after : ByteArray) : Except String (Option String) :=
   (·.1) <$> coinVersionAt c o label after false
 
 /-- `tagged` of `tag` and each `(id, root)` by ascending id, its first `keep` bytes: `core_check.weights_root`
@@ -514,7 +514,7 @@ def drawCheck (coins : Json) (recorded : Bool) (opening stream registration rece
     | _ => false
   let live := (PouwWindow.field? coins "record").isSome || liveScheme
   let malformed := fun (e : String) => ("coin", s!"the verifier's coins are malformed: {e}")
-  let c : Coins ⊕ LiveCommitment ← if live then do
+  let c : CoinBinding ⊕ LiveCommitment ← if live then do
       unless SampledProofs.keys? coins == some #["key", "record"] do coin SIGNED_LIVE
       let want ← (SampledProofs.Challenger.ChallengerKey.ofJson key).mapError
         fun e => ("coin-key", s!"{NO_PINNED_KEY}: {e}")

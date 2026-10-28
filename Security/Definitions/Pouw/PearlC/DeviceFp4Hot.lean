@@ -41,14 +41,14 @@ def gammaFp4HotChainOnly (d : Fp4Device) (a ρ : ℚ) (s : Shape) : ℚ :=
 `K`: a unit within the cap has `W_ref = wrefFp4Hot` and is credited at least `K`. The forming-credited reading takes
 `K = (1 − ρ)·creditFp4Hot` and the chain-only one `K = creditFp4HotChainOnly − ρ·creditFp4Hot`. Either holds once the
 protocol's credit is that credit less the debit, with the cap `debit ≤ ρ·creditFp4Hot`. -/
-def Fp4HotUnitAccounting (P : Protocol Q R S) (D : Layout → Prop) (d : Fp4Device) (a K : ℚ) (s : Shape) : Prop :=
+def Fp4HotUnitAccounting (P : Protocol Q R S) (D : UnitLayout → Prop) (d : Fp4Device) (a K : ℚ) (s : Shape) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ (H : Q → R) (s' : S), ∀ u < U.layout.N, ∀ act : Codes,
     P.actOK (U.layout.shape u) act → P.capOK H s' U u act →
       P.Wref U.layout u = (wrefFp4Hot d a s : ℝ) ∧ (K : ℝ) ≤ P.credit H s' U u act
 
 /-- **The per-tile accounting a Pearl-C4 v2 protocol's audit tiles meet**, with the credited bound `K`: each tile has a
 share `t ≥ 0`, with `Wcred = wrefFp4Hot·t ≤ Wref`, and a tile within the cap is credited at least `K·t`. -/
-def Fp4HotTileAccounting (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (d : Fp4Device) (a K : ℚ)
+def Fp4HotTileAccounting (P : Protocol Q R S) (TR : TileRules Q R S) (D : UnitLayout → Prop) (d : Fp4Device) (a K : ℚ)
     (s : Shape) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ g < (TR.tiling U.layout).NT, ∀ act : Codes, ∃ t : ℚ, 0 ≤ t ∧
     TR.Wcred U.layout g act = ((wrefFp4Hot d a s * t : ℚ) : ℝ) ∧ TR.Wcred U.layout g act ≤ TR.Wref U.layout g ∧

@@ -13,7 +13,7 @@ batch, and the periods replay that one prefill. Both operands are committed befo
 (operand, layer, block), its rows hm96 rows (`OperandTree`), whose roots the registration carries. `prep --seeded`
 seeds both instead (v31.py's ``llm`` rows for B), for tests and shapes the checkpoint doesn't have.
 
-**A period** (`Period.proto`): the registration (the operand roots, the operands' source, the period's shape, W_reg) is
+**A period** (`PeriodRun.proto`): the registration (the operand roots, the operands' source, the period's shape, W_reg) is
 the root of one challenger session with families ``seeds`` and ``check``, a coin each a block. Then its sampling blocks run
 in one sequence. Block b's operand-root receipt is H(registration, b, block b-1's value-root receipt), and its seeds coin
 opens after it. Call (s, layer)'s coin is ``derive(coin, "verity/pouw-accel/seeds/v1", ctx).stream(call)``, and its six
@@ -394,7 +394,7 @@ def leaf_row(f: v31.Fill, afile: str, bfile: str, t: int, seeds: dict[str, bytes
     i0, j0 = tm * TILE + piece * nr, tn * TILE
     A = np.fromfile(afile, dtype=np.int8, count=nr * f.k, offset=(t * f.m + i0) * f.k).reshape(nr, f.k)
     B = np.fromfile(bfile, dtype=np.int8, count=TILE * f.k, offset=(t * f.n + j0) * f.k).reshape(TILE, f.k)
-    fm = v31.form(f, A, B, v31.Coins.rows(f, seeds, range(i0, i0 + nr), range(j0, j0 + TILE)))
+    fm = v31.form(f, A, B, v31.PeriodCoins.rows(f, seeds, range(i0, i0 + nr), range(j0, j0 + TILE)))
     X = fm.X
     if skip is not None:
         X = X.copy()
@@ -631,7 +631,7 @@ class RefDriver:
                 sd = v31.fill_seeds_from(rec[384 * (s * NL + li):384 * (s * NL + li + 1)])
                 skip = _cheated(kind) if kind != "none" and at in (None, li) else None
                 T = v31.fill_words(f, np.asarray(operand(self.cfg, "A", li, t)), np.asarray(operand(self.cfg, "B", li, t)),
-                                   v31.Coins.expand(f, sd), skip)
+                                   v31.PeriodCoins.expand(f, sd), skip)
                 key = (self.ks[li], self.calls[li] * f.leaves)
                 self.calls[li] += 1
                 cm = v31.fill_commit(f, v31.fill_buffer(f, T), *key)
@@ -655,7 +655,7 @@ class RefDriver:
 
 
 # --------------------------------------------------------------------------------------------------------- the period
-class Coins:
+class PeriodCoins:
     """One challenger session a period: a5_coins' Local (development, not of record) or Gate (vy-challenger-1)."""
 
     def __init__(self, how: str, main: Path, peer: str | None, key_record: str | None, gate_key: str | None) -> None:
@@ -707,8 +707,8 @@ class Plan:
     q: int        # proof blocks a period
 
 
-class Period:
-    def __init__(self, drv: GpuDriver | RefDriver, coins: Coins | None, trees: dict[tuple[str, int, int], OperandTree], cfg: Path, row: int,
+class PeriodRun:
+    def __init__(self, drv: GpuDriver | RefDriver, coins: PeriodCoins | None, trees: dict[tuple[str, int, int], OperandTree], cfg: Path, row: int,
                  source: dict, secret: bytes, work: Path, pool: ProcessPoolExecutor) -> None:
         self.drv, self.coins, self.trees, self.cfg, self.row = drv, coins, trees, cfg, row
         self.source, self.secret, self.work, self.pool = source, secret, work, pool
@@ -860,7 +860,7 @@ def cmd_run(a: argparse.Namespace) -> int:
     if missing:
         raise SystemExit(f"no activations: {missing} (capture.py writes them)")
     work = Path(tempfile.mkdtemp(prefix="highutil-", dir="/dev/shm" if Path("/dev/shm").is_dir() else None))
-    coins = Coins(a.coins, Path(a.main), a.peer, a.challenger_key, a.gate_key)
+    coins = PeriodCoins(a.coins, Path(a.main), a.peer, a.challenger_key, a.gate_key)
     results, drv = [], None
     workers = a.workers or max(1, len(os.sched_getaffinity(0)) - 4)
     try:
@@ -871,7 +871,7 @@ def cmd_run(a: argparse.Namespace) -> int:
                   + " ".join(f"{k}{li}.{tb} {x.root.hex()[:16]}" for (k, li, tb), x in trees.items() if tb == 0), flush=True)
             drv = RefDriver(cfg, row) if a.lib == "ref" else GpuDriver(a.lib, cfg, row, plan.steps)
             print("driver " + " ".join(drv.ready), flush=True)
-            per = Period(drv, coins, trees, cfg, row, source, secret, work, pool)
+            per = PeriodRun(drv, coins, trees, cfg, row, source, secret, work, pool)
             # warm-up: one plain block, so the clocks and caches settle before anything is timed
             bases = baselines(a.plain)
             drv.block(0, 0, min(plan.steps, 50), f"plain-{bases[0]}", "none", work / "none", work / "none")

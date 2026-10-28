@@ -33,16 +33,16 @@ def CorrectU (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (u : ℕ)
 
 open Classical in
 /-- `K′`: the units of `τ` correct under U-only binding. -/
-noncomputable def correctSetU (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) : Finset ℕ :=
+noncomputable def correctSetU (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : CommitLog) : Finset ℕ :=
   (range U.layout.N).filter fun u => ∃ c, τ u = some c ∧ CorrectU P U H s u c
 
 /-- The adversary wins under U-only binding: the honest work of its U-correct units exceeds `T / (1 − γ)`. -/
-def WinsU (P : Protocol Q R S) (U : Workload) (γ T : ℝ) (τ : Transcript) (H : Q → R) (s : S) : Prop :=
+def WinsU (P : Protocol Q R S) (U : Workload) (γ T : ℝ) (τ : CommitLog) (H : Q → R) (s : S) : Prop :=
   T / (1 - γ) < ∑ u ∈ correctSetU P U H s τ, P.Wref U.layout u
 
 /-- **The γ-gap property under U-only binding** `G_γ^U` with error `η(q, N)`. -/
 def GγU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
+    (D : UnitLayout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     pr (fun x : (Q → R) × S => WinsU P U γ T (A.transcript U x.1 x.2) x.1 x.2) ≤ η q U.layout.N
 
@@ -55,7 +55,7 @@ variable {Q R S : Type}
 /-- **TT_OUT(γ₀) over U alone**: `TTOut` with `K′ = correctSetU`, the units whose useful words are correct and whose
 debit is within the cap, whatever their ticket words. -/
 def TTOutU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (D : Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
+    (D : UnitLayout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
   CM.Queries ∧
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     pr (fun x : (Q → R) × S =>
@@ -88,7 +88,7 @@ def TTOutPearlCDevUOnly [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM 
 words are correct and whose debit is within the cap, no W1 program bounded by `T` makes
 `∑_{u ∈ K′} credit(u) > T / (1 − γ₀)` with probability over `(H, s)` more than `ε(q, N)`. -/
 def TTOutUW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device) (salt : S → List ℕ)
-    (P : Protocol Q R S) (D : Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
+    (P : Protocol Q R S) (D : UnitLayout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary (W1.w1Priced dv salt : CostModel Q R S), A.Bounded U T q →
     pr (fun x : (Q → R) × S =>

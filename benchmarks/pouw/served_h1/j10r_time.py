@@ -87,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
     for name, n, k in LLAMA:
         x, b = calls[name]
         u = (a.slot // 32) * (n // 32)
-        lay = HT.Layout(32, 32, k)
+        lay = HT.TileShape(32, 32, k)
         nb_v1, nb_j = lay.blocks, RC.stream_blocks(a.slot, n, k)
         call = RC.Call(x, b)
         seed_c = SD.call_seed(SALT, U0, RA, RB)

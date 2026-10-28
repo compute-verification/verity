@@ -244,10 +244,10 @@ def rowSlot (q : ℕ) : ℕ := 2 * (q / 4 / 4) + q % 4 / 2
 /-- Entry `q`'s column slot in its lane (`segment.col_slot`). -/
 def colSlot (q : ℕ) : ℕ := 2 * (q / 4 % 4) + q % 4 % 2
 
-/-- Lane `ln`'s row at row slot `s` of an `r × c` tile (`h1tile.Layout.rows`). -/
+/-- Lane `ln`'s row at row slot `s` of an `r × c` tile (`h1tile.TileShape.rows`). -/
 def laneRow (r c ln s : ℕ) : ℕ := ln / (c / 8) + r / 4 * s
 
-/-- Lane `ln`'s column at column slot `s` of a tile of `c` columns (`h1tile.Layout.cols`). -/
+/-- Lane `ln`'s column at column slot `s` of a tile of `c` columns (`h1tile.TileShape.cols`). -/
 def laneCol (c ln s : ℕ) : ℕ := 2 * (ln % (c / 8)) + 2 * (c / 8) * (s / 2) + s % 2
 
 /-- A budgeted gate of class `cls` and primitive `prim` reading `args`, at engine step 0. -/

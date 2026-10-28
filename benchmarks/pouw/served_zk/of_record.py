@@ -13,11 +13,11 @@ challenger's path runs its Lean and its Python reference on one input:
   `served_commit.check`'s reading of the registration before it, which may refuse only what the opening refuses;
 * ``answer``: PoUW's check over the stream's outcome (`pouw-check serve`, `core_check.case`).
 
-Lean's verdict is the record's, and Python's goes beside it in the witness (`Record.witness`, one entry per check). The
+Lean's verdict is the record's, and Python's goes beside it in the witness (`VerdictPair.witness`, one entry per check). The
 two agree when their outputs are the same canonical JSON (an `answer`'s reason included), or when both refuse the input.
 A disagreement raises `Disagree`, which the challenger turns into the refusal ``lean-python-disagree: <check>``; a failure
-is visible and nothing retries it. `Record()` takes the side of record from `verifier.RECORD_VERDICT`; with it ``"python"``,
-or with `Record(lean=False)`, the references run alone (the witness then holds no Lean verdict), which is how the switch is
+is visible and nothing retries it. `VerdictPair()` takes the side of record from `verifier.RECORD_VERDICT`; with it ``"python"``,
+or with `VerdictPair(lean=False)`, the references run alone (the witness then holds no Lean verdict), which is how the switch is
 undone.
 """
 from __future__ import annotations
@@ -140,7 +140,7 @@ def py_draw(x: dict) -> dict | None:
     return None if refused is None else {"refused": list(refused)}
 
 
-class Record:
+class VerdictPair:
     """Both verdicts of each check, Lean's of record. `lean` False runs the references alone; by default it is whether
     `verifier.RECORD_VERDICT` is ``"lean"``. The servers start at their first check and build their executables (`lake
     build`) then, unless `exes` names them (``pouw-check``, ``pouw-check-difftest``, ``sampled-proofs-difftest``)."""
@@ -228,5 +228,5 @@ class Record:
         return lean
 
 
-__all__ = ["CHECKS", "DISAGREE", "Disagree", "Record", "core_params", "hexed", "public_params", "registration_params",
+__all__ = ["CHECKS", "DISAGREE", "Disagree", "VerdictPair", "core_params", "hexed", "public_params", "registration_params",
            "service_answer"]

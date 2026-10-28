@@ -37,7 +37,7 @@ theorem ttOutTilePearlCDevChainCap_of_w1 {dv : W1.W1Device} {salt : S → List �
     TTOutTilePearlCDevChainCap (W1.w1Priced dv salt) d sem ρ :=
   ⟨w1Priced_queries dv salt, h⟩
 
-theorem ttOutUW1_iff (dv : W1.W1Device) (salt : S → List ℕ) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ : ℝ)
+theorem ttOutUW1_iff (dv : W1.W1Device) (salt : S → List ℕ) (P : Protocol Q R S) (D : UnitLayout → Prop) (γ₀ : ℝ)
     (ε : ℕ → ℕ → ℝ) : TTOutUW1 dv salt P D γ₀ ε ↔ TTOutU (W1.w1Priced dv salt) P D γ₀ ε :=
   ⟨fun h => ⟨w1Priced_queries dv salt, h⟩, fun h => And.right h⟩
 

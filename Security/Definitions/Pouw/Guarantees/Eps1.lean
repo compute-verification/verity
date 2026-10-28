@@ -26,14 +26,14 @@ open Pouw.Eps1
 /-- **Theorem B, zero instance.** A word-local M3 program that computes Dither's prefix words `T_ℓ[i,j]` at the zero
 instance has at least `4·L·m·n` instructions. -/
 def WordLocalZero : Prop :=
-  ∀ (m n Lseg : ℕ) (FR FU : Type) (G : ℕ) (P : Prog (Dither m Lseg) (Cols n) m n Lseg FR FU G)
+  ∀ (m n Lseg : ℕ) (FR FU : Type) (G : ℕ) (P : M3Words (Dither m Lseg) (Cols n) m n Lseg FR FU G)
     (blk : Fin G → Tau m n Lseg),
     P.Computes (fun _ U => ColsValid U) zeroOut → P.WordLocal blk → 4 * (Lseg * m * n) ≤ G
 
 /-- **Theorem B, general instance.** A word-local M3 program that computes the prefix words `T_ℓ[i,j]` of `Ã·B̃` on
 every int8 instance has at least `8·L·m·n` instructions. -/
 def WordLocalGeneral : Prop :=
-  ∀ (m n Lseg : ℕ) (FR FU : Type) (G : ℕ) (P : Prog (Rows m Lseg) (GCols n Lseg) m n Lseg FR FU G)
+  ∀ (m n Lseg : ℕ) (FR FU : Type) (G : ℕ) (P : M3Words (Rows m Lseg) (GCols n Lseg) m n Lseg FR FU G)
     (blk : Fin G → Tau m n Lseg),
     P.Computes (fun A B => (∀ i l p, Int8Valid (A i l p)) ∧ ∀ j l p, Int8Valid (B j l p)) genOut →
     P.WordLocal blk → 8 * (Lseg * m * n) ≤ G
@@ -44,7 +44,7 @@ most `d` words, a writer's slot writing nothing else, has `(32 − w)·L·m·n �
 most 65 incidences (two 32-entry fields and a one-entry field fill its `2^32` values), so a slot creates at most
 `κ = 65·d` and a word costs at least `1 + (32 − w)/κ` slots: `1 + 24/130 ≈ 1.185` at `w = 8`, `d = 2`. -/
 def ClassPSlots : Prop :=
-  ∀ (m n Lseg : ℕ) (FR FU : Type) (G : ℕ) (P : Prog (Dither m Lseg) (Cols n) m n Lseg FR FU G)
+  ∀ (m n Lseg : ℕ) (FR FU : Type) (G : ℕ) (P : M3Words (Dither m Lseg) (Cols n) m n Lseg FR FU G)
     (pk : Fin G → Option (Packing m n Lseg)) (w d S : ℕ) (slot : Fin G → Fin S),
     P.Computes (fun _ U => ColsValid U) zeroOut → ClassP P pk →
     (∀ τ, created P pk (P.out τ) ≤ w) →

@@ -32,7 +32,7 @@ from . import h1zy as Z
 
 
 @dataclass(frozen=True)
-class Device:
+class H1Arch:
     """One architecture's H1 record (module docstring)."""
 
     arch: str
@@ -72,7 +72,7 @@ class Device:
         return None
 
 
-SM120 = Device(
+SM120 = H1Arch(
     arch="sm_120", gpu="RTX PRO 6000 Blackwell Server Edition", step=BLACKWELL_SM120_S8_M16N8K32,
     instruction="sm120.mma.m16n8k32.s8", domain=None,
     sms=188, tensor_mhz=2430, fmax_mhz=2430, s8_macs=1024, sheet_s8_tops=None,
@@ -82,7 +82,7 @@ SM120 = Device(
            "6000 data sheet figure for INT8 is on file",
 )
 
-SM90 = Device(
+SM90 = H1Arch(
     arch="sm_90", gpu="H200 SXM (sm_90a)", step=HOPPER_SM90_S8_K32,
     instruction="sm90.mma.m16n8k32.s8", domain=(Z.LEAST_K, 512),
     sms=132, tensor_mhz=1830, fmax_mhz=1980, s8_macs=4096, sheet_s8_tops=1979,
@@ -98,7 +98,7 @@ SM90 = Device(
 DEVICES = {d.arch: d for d in (SM120, SM90)}
 
 
-def device(arch: str) -> Device:
+def device(arch: str) -> H1Arch:
     """The H1 record of architecture ``arch`` (`DEVICES`), else ValueError."""
     try:
         return DEVICES[arch]
@@ -106,4 +106,4 @@ def device(arch: str) -> Device:
         raise ValueError(f"H1 has no device record for {arch!r}: its records are {', '.join(DEVICES)}") from None
 
 
-__all__ = ["DEVICES", "Device", "SM120", "SM90", "device"]
+__all__ = ["DEVICES", "H1Arch", "SM120", "SM90", "device"]

@@ -266,7 +266,7 @@ theorem coreOps_bf16w : ∀ w < 2 ^ 16, coreOps.bf16ToF32 w = w <<< 16 := by
 
 /-! ## A block -/
 
-section Block
+section UnitKind
 
 variable {ops : RowOps}
 
@@ -394,7 +394,7 @@ theorem block4_sem (hA : Pc4OpsAgree ops) {d : ℕ → ℕ} (hd : ∀ s < 16, Ac
   rw [hs, code4W_sem hA (hd s hsl) hb1 hb2]
   simp [nvf4Block, hfold, List.getD_eq_getElem?_getD, hsl, (hd s hsl).2.1]
 
-end Block
+end UnitKind
 
 /-! ## A formed word -/
 

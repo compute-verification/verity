@@ -31,7 +31,7 @@ variable {Q R S : Type}
 open Classical in
 theorem rowCapAt_credit_sum_le (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρr : ℚ) (hadd : 0 ≤ d.prices.add)
     (hbf : 0 ≤ d.prices.bf16) (hρ : ρ ≤ 1) (hρr : ρr < 1) (U : Workload) (hD : pearlCDomainDev d U.layout)
-    (H : Q → R) (s : S) (τ : Transcript) :
+    (H : Q → R) (s : S) (τ : CommitLog) :
     ∑ g ∈ goodTiles (pearlCProtocolDevRev1RowCapAt d sem ρ ρr) (pearlCTilesDevRev1RowCapAt d sem ρ ρr) U H s τ,
         (pearlCTilesDevRev1RowCapAt d sem ρ ρr).credit H s U g
           (actOf τ (((pearlCTilesDevRev1RowCapAt d sem ρ ρr).tiling U.layout).unit g)) ≤
@@ -247,7 +247,7 @@ theorem pearlCSampledH100v1RowSeedRowCap100_6144x256 (m : ℕ)
 /-- **The code-form seed (`-h3`) of `pearlCSampledH100v1RowSeedRowCap100_6144x256`**, the served record
 `pearl-c-h100-v1-h3` at a census k, adding C1-h3 and C5: `γ = 32437/2521000` (1.28667%), with the error at the `m·N`
 rows. -/
-theorem pearlCSampledH100v1RowSeedCodeRowCap100_6144x256 {π : Layout → Q ≃ Q} (m : ℕ)
+theorem pearlCSampledH100v1RowSeedCodeRowCap100_6144x256 {π : UnitLayout → Q ≃ Q} (m : ℕ)
     (hTT : TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : RowSeedNoise sem sem') (hC : CodeSeedNoise sem' semC π)
     (hCM : CM.SplitClosed) (hCM' : CM.RelabelClosed) :
     GγSampled CM (pearlCProtocolDevRev1RowCapAt devH100 semC (1 / 400) (1 / 100))

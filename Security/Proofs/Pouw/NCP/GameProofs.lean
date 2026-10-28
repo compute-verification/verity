@@ -116,7 +116,7 @@ theorem leadComplete : GamePinned.LeadComplete := by
 
 /-! ## `G_γ` from TT_NCP -/
 
-theorem wins_imp_ttncp (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) {γ₀ Ωmax T : ℝ}
+theorem wins_imp_ttncp (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : CommitLog) {γ₀ Ωmax T : ℝ}
     (hΩ : 0 < Ωmax)
     (hW : ∀ u < U.layout.N, (P.Wref U.layout u : ℝ) ≤ Ωmax * (3 * ((U.layout.shape u).Wmm : ℝ)))
     (hwin : Wins P U (reductionGamma γ₀ Ωmax) T τ H s) :
@@ -166,7 +166,7 @@ def unitProg (U : Workload) (act : ℕ → Mat) (s : S) (u : ℕ) : QTree Q R Co
     (queryAll (P.qWt s (U.layout.wid u))).bind fun b => done (commitAns P U u (act u) a b)
 
 /-- NCP's honest reference as an oracle program. -/
-def honestProg (U : Workload) (act : ℕ → Mat) (s : S) : QTree Q R Transcript :=
+def honestProg (U : Workload) (act : ℕ → Mat) (s : S) : QTree Q R CommitLog :=
   upTo (unitProg P U act s) U.layout.N
 
 theorem eval_honestProg (H : Q → R) (U : Workload) (act : ℕ → Mat) (s : S) :
@@ -205,7 +205,7 @@ theorem checked_le_outputPriced3_cost (P : Protocol Q R S) (prog : (outputPriced
   exact ⟨hu, by rw [hc]; rfl⟩
 
 theorem ttncp_outputPriced3 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) (d : ℕ)
-    (D : Layout → Prop) {γ₀ : ℝ} (h0 : 0 ≤ γ₀) (h1 : γ₀ < 1) :
+    (D : UnitLayout → Prop) {γ₀ : ℝ} (h0 : 0 ≤ γ₀) (h1 : γ₀ < 1) :
     Assumptions.TTNCP (outputPriced3 Q R S) P d D γ₀ (fun _ _ => 0) := by
   refine fun _ => ⟨outputPriced3_queries, fun U _ T hT q _ A hA => le_of_eq (pr_eq_zero fun x hx => ?_)⟩
   have e1 := checked_le_outputPriced3_cost P A.online x.1 U A.act (A.pre.eval x.1) x.2
@@ -300,7 +300,7 @@ theorem zero_int32 {k τ : ℕ} {E1 F1 R : Mat} (hR : SignedPerm k R) {i j : ℕ
   constructor <;> linarith [h.1, h.2]
 
 /-- The stacked product at zero input is in int32 for NCP's noise on a default-domain shape. -/
-theorem nz_int32 (P : Params Q R S) (hN : P.NoiseRange) (hR : P.RSigned) (Lay : Layout) (H : Q → R) (s : S) (u : ℕ)
+theorem nz_int32 (P : Params Q R S) (hN : P.NoiseRange) (hR : P.RSigned) (Lay : UnitLayout) (H : Q → R) (s : S) (u : ℕ)
     (hsh : Shape.InDefaultDomain (Lay.shape u)) {τ : ℕ} (hτ : τ ≤ 3 * (Lay.shape u).k) {a b : ℕ}
     (ha : a < (Lay.shape u).m) (hb : b < (Lay.shape u).n) :
     InInt32 (mm τ (P.opX H s ⟨Lay, fun _ => 0⟩ u 0) (P.opY H s ⟨Lay, fun _ => 0⟩ u) a b) := by
@@ -331,7 +331,7 @@ theorem rangeLead : GamePinned.RangeLead := by
       have := abs_le.1 (f2_abs hR hF' (show l - 2 * k < k by omega))
       unfold InInt7 InNoise6 at *; constructor <;> linarith
 
-theorem onePlan_correct (P : Params Q R S) (hd : 0 < P.d) (Lay : Layout) (H : Q → R) (s : S) (u : ℕ)
+theorem onePlan_correct (P : Params Q R S) (hd : 0 < P.d) (Lay : UnitLayout) (H : Q → R) (s : S) (u : ℕ)
     (hk : 0 < (Lay.shape u).k)
     (hI : ∀ τ ≤ 3 * (Lay.shape u).k, ∀ a < (Lay.shape u).m, ∀ b < (Lay.shape u).n,
       InInt32 (mm τ (P.opX H s ⟨Lay, fun _ => 0⟩ u 0) (P.opY H s ⟨Lay, fun _ => 0⟩ u) a b)) :
@@ -552,13 +552,13 @@ def leadParams : Params Unit Unit Salt :=
     fun L u => 3 * (L.shape u).Wmm⟩
 
 /-- The witness layout: one unit of shape `(16, 1024, 1024)` on weight `0`. -/
-def leadLayout : Layout := ⟨1, fun _ => ⟨16, 1024, 1024⟩, fun _ => 0⟩
+def leadLayout : UnitLayout := ⟨1, fun _ => ⟨16, 1024, 1024⟩, fun _ => 0⟩
 
 theorem leadLayout_inDomain : (⟨leadLayout, fun _ => 0⟩ : Workload).InDomain leadDomain := by
   refine ⟨by norm_num [leadLayout], ⟨fun u _ => ?_, fun w => ?_⟩, fun _ _ _ _ _ _ => by unfold InInt7; norm_num⟩
   · simp only [leadLayout, Shape.InDefaultDomain]
     norm_num
-  · unfold Layout.rowsOf
+  · unfold UnitLayout.rowsOf
     refine le_trans (Finset.sum_le_sum_of_subset_of_nonneg (Finset.filter_subset _ _) fun _ _ _ => Nat.zero_le _) ?_
     simp [leadLayout]
 
@@ -599,7 +599,7 @@ theorem stackNoise_one (k : ℕ) (Rm : Mat) (e f : (Q → R) → S → Workload 
   simp [Barrier.stackNoise]
 
 /-- `SegmentLead`'s layout: one unit of shape `(16, k, 1024)` on weight `0`. -/
-def segLayout (k : ℕ) : Layout := ⟨1, fun _ => ⟨16, k, 1024⟩, fun _ => 0⟩
+def segLayout (k : ℕ) : UnitLayout := ⟨1, fun _ => ⟨16, k, 1024⟩, fun _ => 0⟩
 
 theorem segLayout_inDomain {k : ℕ} (hk1 : 2 ^ 10 ≤ k) (hk2 : k ≤ 2 ^ 16) (hk3 : 64 ∣ k) :
     (⟨segLayout k, fun _ => 0⟩ : Workload).InDomain
@@ -608,7 +608,7 @@ theorem segLayout_inDomain {k : ℕ} (hk1 : 2 ^ 10 ≤ k) (hk2 : k ≤ 2 ^ 16) (
     fun _ _ _ _ _ _ => by unfold InInt7; norm_num⟩
   · exact ⟨by norm_num [segLayout], by norm_num [segLayout], hk1, hk2, hk3, by norm_num [segLayout],
       by norm_num [segLayout], by norm_num [segLayout]⟩
-  · unfold Layout.rowsOf
+  · unfold UnitLayout.rowsOf
     refine le_trans (Finset.sum_le_sum_of_subset_of_nonneg (Finset.filter_subset _ _) fun _ _ _ => Nat.zero_le _) ?_
     simp [segLayout]
 

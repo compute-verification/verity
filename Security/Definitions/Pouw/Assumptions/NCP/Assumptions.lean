@@ -21,7 +21,7 @@ It is claimed only on a domain where `γ₀ ≥ d/(3k)` on every unit. The final
 degenerate input, and the one-segment adversary makes the event sure below it (`Pouw.NCP.GameProofs.oneSegment`), so
 without that premise the statement is false at the lead's `d = 16` on `leadDomain` for every `γ₀ < 16/3072`. -/
 def TTNCP [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S) (d : ℕ)
-    (D : Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
+    (D : UnitLayout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
   (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N, (d : ℝ) ≤ γ₀ * (3 * (U.layout.shape u).k)) →
   CM.Queries ∧
   ∀ U : Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →

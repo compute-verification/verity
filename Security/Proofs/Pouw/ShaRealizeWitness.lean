@@ -27,7 +27,7 @@ namespace Pouw.SecurityProofs.ShaRealize.Witness
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.MerkleExtract
 
 /-- Programs are functions with a cost, of size 0. -/
-abbrev toyMc : Machine where
+abbrev toyMc : AlgModel where
   Alg I O := (I → O) × ℕ
   eval f := f.1
   time f := f.2

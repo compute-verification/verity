@@ -61,7 +61,7 @@ theorem abortPearlC {CM : PearlC.CostModel Q R S} (hCM : BudgetAbortPearlC CM) (
 /-- A run whose correct units carry all but `ε_s` of the tickets' weight, at units whose `W_ref` is `κ·w`, and whose
 cost is below `(1 − γ)(1 − ε_s)·∑ W_ref`, wins Pearl-C's γ-gap game. -/
 theorem winsPearlC_of_accept (P : PearlC.Protocol Q R S) (U : PearlC.Workload) (H : Q → R) (s : S)
-    (τ : PearlC.Transcript) {w : ℕ → ℕ} {κ γ T εs : ℝ} (hκ : 0 ≤ κ)
+    (τ : PearlC.CommitLog) {w : ℕ → ℕ} {κ γ T εs : ℝ} (hκ : 0 ≤ κ)
     (hw : ∀ u < U.layout.N, P.Wref U.layout u = κ * w u) (hγ : γ < 1)
     (hT : T < (1 - γ) * (1 - εs) * ∑ u ∈ Finset.range U.layout.N, P.Wref U.layout u)
     (hbad : ∑ u ∈ Finset.range U.layout.N \ PearlC.correctSet P U H s τ, (w u : ℝ) ≤
@@ -93,7 +93,7 @@ theorem winsPearlC_of_accept (P : PearlC.Protocol Q R S) (U : PearlC.Workload) (
 /-- **Pearl-C's γ-gap property, audited by work-weighted tickets**: an adversary within a sure budget `T` is accepted
 with `T < (1 − γ)(1 − ε_s)·∑ W_ref` with probability at most `(1 − ε_s)^t + η(q, N)`. -/
 theorem pearlC_endToEnd [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : PearlC.CostModel Q R S}
-    {P : PearlC.Protocol Q R S} {D : PearlC.Layout → Prop} {γ : ℝ} {η : ℕ → ℕ → ℝ} (hγ : γ < 1)
+    {P : PearlC.Protocol Q R S} {D : PearlC.UnitLayout → Prop} {γ : ℝ} {η : ℕ → ℕ → ℝ} (hγ : γ < 1)
     (hG : PearlC.Gγ CM P D γ η) {U : PearlC.Workload} (hU : U.InDomain P D) {w : ℕ → ℕ} {κ : ℝ} (hκ : 0 ≤ κ)
     (hw : ∀ u < U.layout.N, P.Wref U.layout u = κ * w u) {T : ℝ} (hT : 0 ≤ T) {q : ℕ} (hq : q ≤ 2 ^ 64)
     {A : PearlC.Adversary CM} (hA : A.Bounded U T q) (t : ℕ) {εs : ℝ} (hεs : εs ≤ 1) :

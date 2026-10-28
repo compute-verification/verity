@@ -132,7 +132,7 @@ def TTNCPAlgU : Prop :=
 /-- **TT_NCP from A2 into AlgM_16 on route U** (`TTNCPOfA2` for a machine program that outputs route-U words). -/
 def TTNCPOfA2U : Prop :=
   ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (M : Machine (Noise N m n k)) (q : M.Prog) (γ₀ γ₂ : ℝ), 16 ∣ k → 0 < k → CheckpointIndependent k 16 R →
+    (M : WordCostModel (Noise N m n k)) (q : M.Prog) (γ₀ γ₂ : ℝ), 16 ∣ k → 0 < k → CheckpointIndependent k 16 R →
     U ⊆ range N → A2_algebraicSufficiency γ₂ M H16 (wordSet (wordU β k m n N R A B) U) →
     (∀ u ∈ U, ∀ p < nonFinal k m n, wordU β k m n N R A B u p ∈ M.outputs q) →
     γ₂ < 1 → γ₀ < 1 → 1 - γ₀ ≤ (1 - γ₂) * (1 - 16 / (3 * k : ℝ)) →
@@ -209,7 +209,7 @@ def AlgBound4090U : Prop :=
 /-- **`TT_NCP_of_A1_A2` on route U** (`TTNCPOfA1A2` for a machine program that outputs route-U words). -/
 def TTNCPOfA1A2U : Prop :=
   ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (M : Machine (Noise N m n k)) (q : M.Prog) (cs : ℕ) (c γ₀ γ₁ γ₂ : ℝ), 16 ∣ k → 0 < k →
+    (M : WordCostModel (Noise N m n k)) (q : M.Prog) (cs : ℕ) (c γ₀ γ₁ γ₂ : ℝ), 16 ∣ k → 0 < k →
     CheckpointIndependent k 16 R → U ⊆ range N →
     A2_algebraicSufficiency γ₂ M (H4090 cs) (wordSet (wordU β k m n N R A B) U) →
     A1_multiplicative c γ₁ k R → 16 ≤ c * cs →
@@ -221,7 +221,7 @@ def TTNCPOfA1A2U : Prop :=
 products at 8). -/
 def TTNCPOfA1A2W1U : Prop :=
   ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (M : Machine (Noise N m n k)) (q : M.Prog) (γ₀ γ₁ γ₂ : ℝ), 16 ∣ k → 0 < k →
+    (M : WordCostModel (Noise N m n k)) (q : M.Prog) (γ₀ γ₁ γ₂ : ℝ), 16 ∣ k → 0 < k →
     CheckpointIndependent k 16 R → MinRank2 k R → U ⊆ range N →
     A2_algebraicSufficiency γ₂ M (H4090 8) (wordSet (wordU β k m n N R A B) U) →
     A1_W1 γ₁ k R → (∀ u ∈ U, ∀ p < nonFinal k m n, wordU β k m n N R A B u p ∈ M.outputs q) →

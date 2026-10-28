@@ -165,7 +165,7 @@ class PerCall:
         if m % T or n % T or k % T:
             raise ValueError(f"{op}: a call of {m} x {n} x {k} is no whole 32 x 32 tiles")
         units = (m // T) * (n // T)
-        words = 2 * (k // T + HT.Layout(T, T, k).m)
+        words = 2 * (k // T + HT.TileShape(T, T, k).m)
         c = Call(op, lo, m, n, k, self.next, units, words)
         self.next += units
         ra = _h(b"e2e-h200/percall/root-a-tag", _u32(st.step), op.encode(), _u32(lo))

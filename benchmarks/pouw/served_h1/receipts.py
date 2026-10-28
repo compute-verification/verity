@@ -14,7 +14,7 @@ through the driver API when a cubin is given, else hashlib); then on the device
 * T_s, the prefix sums over segments of X_s W'_sᵀ (each segment's 32-term sum as a float32 matmul: |sum| <= 32 · 128² < 2^24,
   exact), mod 2^32; the residue sums' digits A_0 .. A_(m-1) (`segment.digit_words`); O' = T_last - A_0 Uᵀ and
   D_d = A_d Uᵀ, mod 2^32;
-* each lane's entries (`h1tile.Layout.rows` / `cols` at `segment.row_slot` / `col_slot`) times `segment.fx1_key`, folded
+* each lane's entries (`h1tile.TileShape.rows` / `cols` at `segment.row_slot` / `col_slot`) times `segment.fx1_key`, folded
   into the lane's 16 keys with duo (`segment._duo_absorb`, its two chain halves at once), and after each set the XOR over
   lanes and chains of y, then of z: the receipt's 2 (KS + m) u32 words.
 
@@ -22,7 +22,7 @@ z, the plain A Bᵀ cell, is the served y's integer product and no part of this 
 
 Under J10-R (``j10r``: `h1tile.PouwH1Tile_v5`, `h1tile.j10r_reference`) the call has one noise seed, seed_c =
 `seeds.call_seed` (salt, base, root(A), root(B)), ``base`` the call's first unit position (J10-R's ``call``), and one stream,
-blocks 0 .. M RB + N CB - 1 of seed_c's at call scale (`h1tile.Layout(M, N, K)`: call row i at i RB, call column j at
+blocks 0 .. M RB + N CB - 1 of seed_c's at call scale (`h1tile.TileShape(M, N, K)`: call row i at i RB, call column j at
 M RB + j CB), hashed once a call (`call_streams`: `noise.cu`'s `h1_noise_calls`, one launch for many calls, else
 hashlib). Unit (I, J) gathers call rows 32 I .. and columns 32 J .. from it (`j10r_counters`, `h1tile.j10r_unit_blocks`
 at `h1tile.j10r_blocks`), in seed_j's noise layout, so the unit's chain above is v1's; its fold keys stay σ_R's at its own
@@ -44,12 +44,12 @@ from verity.core.protocols.pouw.circuit import segment as SG
 
 M32 = (1 << 32) - 1
 R = C_ = 32
-LANES = HT.Layout(R, C_, 64).lanes
+LANES = HT.TileShape(R, C_, 64).lanes
 HERE = Path(__file__).resolve().parent
 
 
-def layout(k: int) -> HT.Layout:
-    return HT.Layout(R, C_, k)
+def layout(k: int) -> HT.TileShape:
+    return HT.TileShape(R, C_, k)
 
 
 def units(m: int, n: int) -> list[tuple[int, int]]:
@@ -143,8 +143,8 @@ def noise_blocks(seeds: list[bytes], n: int, device, cubin: Cubin | None) -> tor
 # -- J10-R's call streams ------------------------------------------------------------------------------------------------
 
 def stream_blocks(m: int, n: int, k: int) -> int:
-    """A call's J10-R stream length in blocks: its M rows' and N columns' at call scale, `h1tile.Layout(M, N, K).blocks`."""
-    return HT.Layout(m, n, k).blocks
+    """A call's J10-R stream length in blocks: its M rows' and N columns' at call scale, `h1tile.TileShape(M, N, K).blocks`."""
+    return HT.TileShape(m, n, k).blocks
 
 
 def call_streams(seeds: list[bytes], counts: list[int], device, cubin: Cubin | None) -> list[torch.Tensor]:

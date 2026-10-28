@@ -167,7 +167,7 @@ class WorkLaw:
         return {s.name: min(len(s.units), max(self.floor(s.name), -(-k * s.work // work))) for s in strata}
 
 
-def window_laws(layouts: Sequence["Layout"], k: int = RECORD_K, floors: tuple[tuple[str, int], ...] = (),
+def window_laws(layouts: Sequence["PlanUnits"], k: int = RECORD_K, floors: tuple[tuple[str, int], ...] = (),
                 k_y: int | None = None) -> list[WorkLaw]:
     """Each call's work law in a window of calls: its share K_c = ⌈K·W_c/W_window⌉ of the window's budget K (X-SPC-83), capped
     at its units, over its own strata. That is the law `verify` enforces when each call is its own statement, given its own
@@ -204,7 +204,7 @@ def window_laws(layouts: Sequence["Layout"], k: int = RECORD_K, floors: tuple[tu
 
 
 @dataclass(frozen=True)
-class Layout:
+class PlanUnits:
     """The units a plan reads: every unit, the tile and rest strata, and each tile's closure."""
 
     shape: Shape
@@ -228,7 +228,7 @@ class Layout:
 
     def check(self) -> None:
         """Refuse a layout whose tiles are not the partition's tile units, or whose closure of a tile doesn't hold the tile's
-        own unit first: the Layout theorems (`Layout.accountable_compute`) read τ = the tile's own unit, and a tile mapped to
+        own unit first: the PlanUnits theorems (`PlanUnits.accountable_compute`) read τ = the tile's own unit, and a tile mapped to
         its X strip is C1 again.  `draw` runs it; a verifier compares the whole layout with its own (`Traced.check_layout`)."""
         tiles = [u for st in self.strata if st.role == "tile" for u in st.units]
         if set(tiles) != set(self.closure):
@@ -238,7 +238,7 @@ class Layout:
                 raise DomainError(f"unit {t}: a tile is a tile unit, and its closure holds it first")
 
 
-def layout(shape: Shape, kind: str = "shift24") -> Layout:
+def layout(shape: Shape, kind: str = "shift24") -> PlanUnits:
     us = units(shape, kind)
     by_role: dict[str, list[Unit]] = {}
     for u in us:
@@ -265,10 +265,10 @@ def layout(shape: Shape, kind: str = "shift24") -> Layout:
         path = [nodes[j].index for j, (lo, hi) in enumerate(spans) if lo <= rs < hi]
         closure[t.index] = (t.index, form_x[rs], digest[rs], *path, key)
         y_strip[t.index] = cs
-    return Layout(shape, us, template_strata(us, Layout(shape, us, (), {}).tile_work()), closure, y_strip)
+    return PlanUnits(shape, us, template_strata(us, PlanUnits(shape, us, (), {}).tile_work()), closure, y_strip)
 
 
-def tile_layout(shape, w_ref: int) -> Layout:
+def tile_layout(shape, w_ref: int) -> PlanUnits:
     """A tile check's layout (`pc4.Shape` or `pc8.Shape`), from the shape alone: the call's units and strata, each tile's
     closure (itself, then its rows of A's units: TM, or a short last tile row's r; and under pc8's cap, on whole tiles
     only, its strip, its TM·TN word units row by row, its TM rows' digest and tally units and its tally, so every cap word
@@ -305,7 +305,7 @@ def tile_layout(shape, w_ref: int) -> Layout:
             raise DomainError(f"a short tile's W_ref is {r}/{tm} of a whole tile's, {w_ref}: not an integer")
         short = {u.template for u in us if u.role == "tile" and u.where[0] == shape.m // tm}
         strata = tuple(replace(s, work=w_ref * r // tm * len(s.units)) if s.name in short else s for s in strata)
-    return Layout(shape, us, strata, closure, None, b_rows, w_ref)
+    return PlanUnits(shape, us, strata, closure, None, b_rows, w_ref)
 
 
 def template_strata(us: Sequence[Unit], per_tile: int) -> tuple[StratumSpec, ...]:
@@ -329,7 +329,7 @@ class Plan:
     proved_b: tuple[int, ...] = ()           # a tile check's: the weight Program's row units the drawn tiles read, each once
 
 
-def draw(key: Key, lay: Layout, law: TileLaw, call: Sequence[int] = ()) -> Plan:
+def draw(key: Key, lay: PlanUnits, law: TileLaw, call: Sequence[int] = ()) -> Plan:
     """The plan for one draw: a uniform k_s-subset of each stratum from ``key`` (the verifier's own randomness, derived under
     `DRAW_DOMAIN` after the receipt), then every drawn tile's closure.  ``call`` is the call's index (`anchors`'
     `call_index`), which keys each stratum's subset with its template: the strata are the call's own (one per template,
@@ -350,7 +350,7 @@ def draw(key: Key, lay: Layout, law: TileLaw, call: Sequence[int] = ()) -> Plan:
                 tuple(sorted(bs)))
 
 
-def work_table(lay: Layout, law: WorkLaw = WorkLaw()) -> dict[str, dict[str, int]]:
+def work_table(lay: PlanUnits, law: WorkLaw = WorkLaw()) -> dict[str, dict[str, int]]:
     """The verifier's work table (#362's `--work-table`, `Draw.workTableOfJson`): every template of the call, with its W_ref
     per unit (0 for units that do no PoUW work) and its floor f_s (`law.floors`). It refuses a call whose work is in more
     than one stratum (`check_work_strata`, the window pin's `hone`)."""
@@ -358,7 +358,7 @@ def work_table(lay: Layout, law: WorkLaw = WorkLaw()) -> dict[str, dict[str, int
     return {s.name: {"work": s.work // len(s.units), "floor": law.floor(s.name)} for s in lay.strata}
 
 
-def law_object(lay: Layout, law: WorkLaw) -> dict:
+def law_object(lay: PlanUnits, law: WorkLaw) -> dict:
     """The law `flock-verify draw --program P --partition Q --work K --work-table F` derives for this call (#362's
     `Draw.deriveWork`, as `Law.toJson` writes it): each stratum `{template, units, work, floor, k}`, at the call's K
     (`WorkLaw.budget`)."""
@@ -367,7 +367,7 @@ def law_object(lay: Layout, law: WorkLaw) -> dict:
                                                "floor": table[s.name]["floor"], "k": sizes[s.name]} for s in lay.strata]}
 
 
-def openings(lay: Layout, proved, proved_y=()) -> tuple[tuple[str, int], ...]:
+def openings(lay: PlanUnits, proved, proved_y=()) -> tuple[tuple[str, int], ...]:
     """The leaves a plan opens: a digest or X unit's strip's 16 A rows, one leaf per row; a Y unit's (the weight Program's,
     by column strip) 16 weight rows; and at each such column strip, ("y", strip), the call's Y and c₀ input there and the
     weight Program's output there, which the verifier compares (`Traced.check_link`, X-SPC-95)."""
@@ -382,18 +382,18 @@ def openings(lay: Layout, proved, proved_y=()) -> tuple[tuple[str, int], ...]:
     return tuple(sorted(rows))
 
 
-def profile(lay: Layout, sizes: Mapping[str, int]) -> Stratified:
+def profile(lay: PlanUnits, sizes: Mapping[str, int]) -> Stratified:
     """Core's `Stratified` over the tile strata the plan drew."""
     return Stratified(tuple(Stratum(s.name, len(s.units), sizes[s.name]) for s in lay.strata if s.role == "tile"))
 
 
-def unsound_work_bound(lay: Layout, sizes: Mapping[str, int], delta: float) -> float:
+def unsound_work_bound(lay: PlanUnits, sizes: Mapping[str, int], delta: float) -> float:
     """`harm_bound` over the tile strata at harm W_ref per tile (its stratum's): except with probability δ (plus the
     proofs' error), an accepted plan leaves at most this much work in unsound tiles."""
     return profile(lay, sizes).harm_bound({s.name: s.work / len(s.units) for s in lay.strata if s.role == "tile"}, delta)
 
 
-__all__ = ["DRAW_DOMAIN", "RECORD_K", "CountLaw", "Layout", "Plan", "StratumSpec", "TileLaw", "WorkLaw", "check_work_strata",
+__all__ = ["DRAW_DOMAIN", "RECORD_K", "CountLaw", "PlanUnits", "Plan", "StratumSpec", "TileLaw", "WorkLaw", "check_work_strata",
            "draw", "law_object",
            "layout", "openings", "profile", "record_k", "template_strata", "tile_layout", "unsound_work_bound", "window_laws",
            "work_table"]

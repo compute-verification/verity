@@ -56,7 +56,7 @@ cost on that run is below `(1 − γ)(1 − ε_s)·W` with probability at most `
 `γ = 1 − (1 − γ₀)/Ω_max`. -/
 def PouwEndToEndPerRun : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
+    (CM : CostModel Q R S) (P : Protocol Q R S) (D : UnitLayout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
     γ₀ < 1 → 0 < Ωmax →
     (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N,
       (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →
@@ -75,7 +75,7 @@ certificate `(1 − γ)(1 − εs)·W` and error `(1 − εs)^t + ε(q, N)`, whe
 window's length. -/
 def ComputeOfPouwPerRun : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
+    (CM : CostModel Q R S) (P : Protocol Q R S) (D : UnitLayout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
     γ₀ < 1 → 0 < Ωmax →
     (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N,
       (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →
@@ -122,7 +122,7 @@ cost on that run is below `(1 − γ)(1 − ε_s)·∑_u W_ref(u)` with probabil
 fetches priced (`w1Priced`), the cost is the run's instruction prices plus its first fetches priced. -/
 def PearlCEndToEndPerRun : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : PearlC.CostModel Q R S) (P : PearlC.Protocol Q R S) (D : PearlC.Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ),
+    (CM : PearlC.CostModel Q R S) (P : PearlC.Protocol Q R S) (D : PearlC.UnitLayout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ),
     γ < 1 → PearlC.Gγ CM P D γ η → BudgetAbortPearlC CM →
     ∀ U : PearlC.Workload, U.InDomain P D → ∀ (w : ℕ → ℕ) (κ : ℝ), 0 ≤ κ →
     (∀ u < U.layout.N, P.Wref U.layout u = κ * w u) →
@@ -141,7 +141,7 @@ window at most `2^64`, the compute audit has its per-run guarantee on the priced
 compute window's length. Tables cite the work and the bits read separately; the certificate is on their priced sum. -/
 def ComputeOfPearlCPerRunPriced : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : PearlC.CostModel Q R S) (P : PearlC.Protocol Q R S) (D : PearlC.Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ),
+    (CM : PearlC.CostModel Q R S) (P : PearlC.Protocol Q R S) (D : PearlC.UnitLayout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ),
     γ < 1 → PearlC.Gγ CM P D γ η → BudgetAbortPearlC CM →
     ∀ U : PearlC.Workload, U.InDomain P D → ∀ (w : ℕ → ℕ) (κ : ℝ), 0 ≤ κ →
     (∀ u < U.layout.N, P.Wref U.layout u = κ * w u) → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
@@ -165,7 +165,7 @@ def PearlCStopEndToEndPerRun : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : PearlC.CostModel Q R S),
     (∀ (prog : CM.Prog) (H : Q → R) (U : PearlC.Workload) (act : ℕ → PearlC.Codes) (σ : PearlC.State) (s : S),
       0 ≤ CM.cost prog H U act σ s) →
-    ∀ (P : PearlC.Protocol Q R S) (D : PearlC.Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ),
+    ∀ (P : PearlC.Protocol Q R S) (D : PearlC.UnitLayout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ),
     γ < 1 → PearlC.GγPerCoin CM P D γ η →
     ∀ U : PearlC.Workload, U.InDomain P D → ∀ (w : ℕ → ℕ) (κ : ℝ), 0 ≤ κ →
     (∀ u < U.layout.N, P.Wref U.layout u = κ * w u) →
@@ -189,7 +189,7 @@ def ComputeOfPearlCStopPerRunPriced : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : PearlC.CostModel Q R S),
     (∀ (prog : CM.Prog) (H : Q → R) (U : PearlC.Workload) (act : ℕ → PearlC.Codes) (σ : PearlC.State) (s : S),
       0 ≤ CM.cost prog H U act σ s) →
-    ∀ (P : PearlC.Protocol Q R S) (D : PearlC.Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ),
+    ∀ (P : PearlC.Protocol Q R S) (D : PearlC.UnitLayout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ),
     γ < 1 → PearlC.GγPerCoin CM P D γ η →
     ∀ U : PearlC.Workload, U.InDomain P D → ∀ (w : ℕ → ℕ) (κ : ℝ), 0 ≤ κ →
     (∀ u < U.layout.N, P.Wref U.layout u = κ * w u) → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →

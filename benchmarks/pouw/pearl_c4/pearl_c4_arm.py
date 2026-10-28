@@ -49,7 +49,7 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from arm import Buffer, Gate, Shape, Work
+from arm import Buffer, GateResult, Shape, Work
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
@@ -354,7 +354,7 @@ class _PearlC4:
         want = {"root_a": ctx.root_a, "root_b": ctx.root_b, "seed_a": noise.seed_a, "seed_b": noise.seed_b}
         return {nm: got[nm] == want[nm] for nm in names} | {"root_a_hex": got["root_a"].hex()}
 
-    def gate(self, dev, call: _Call, shape: Shape, flags: frozenset[str]) -> Gate:
+    def gate(self, dev, call: _Call, shape: Shape, flags: frozenset[str]) -> GateResult:
         T, _, _ = _ref()
         d, mode, m, n = self.d, mode_of(flags), call.m_pad, shape.n
         twin = call._pipeline(_Ops(call), store_cu=False)
@@ -378,7 +378,7 @@ class _PearlC4:
         ok = all(relaunch.values()) and all(all(v for key, v in t.items() if key != "tile") for t in tiles)
         ok = ok and all(v for key, v in commit.items() if key != "root_a_hex")
         checked = {nm: "all" for nm in call.outputs}
-        return Gate(ok, checked, {"all": "byte-equal to a second pipeline on the same operands", "relaunch": relaunch,
+        return GateResult(ok, checked, {"all": "byte-equal to a second pipeline on the same operands", "relaunch": relaunch,
                                   "commitments": commit, "sampled": f"{len(tiles)} whole 64 x 64 tiles against the CPU twin",
                                   "tiles": tiles, "mode": call.mode})
 

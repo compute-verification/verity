@@ -14,7 +14,7 @@ open Accounting.TS
 theorem TimeBound : Accounting.Guarantees.TS.TimeBound := by
   intro K R _ _ _ G P h
   obtain ⟨-, hcyc, hclk, hfmax, hr⟩ := h
-  rw [div_le_iff₀ (hclk.trans_le hfmax), Machine.bound]
+  rw [div_le_iff₀ (hclk.trans_le hfmax), FacetCosts.bound]
   refine ciSup_le fun r => ?_
   cases hs : G.smClocked r
   · linarith [(hr r).2 hs]
@@ -24,9 +24,9 @@ theorem TimeBound : Accounting.Guarantees.TS.TimeBound := by
         exact mul_le_mul_of_nonneg_left hfmax hcyc
 
 /-- The certificate on one facet prices counts at that facet's load. -/
-theorem price_onFacet {K R : Type} [Fintype K] [Fintype R] [DecidableEq R] (G : Machine K R) (r : R)
+theorem price_onFacet {K R : Type} [Fintype K] [Fintype R] [DecidableEq R] (G : FacetCosts K R) (r : R)
     (n : K → ℝ) : G.price (onFacet r) n = G.load n r := by
-  simp [Machine.price, onFacet]
+  simp [FacetCosts.price, onFacet]
 
 /-- Corollary D1, one binding facet. -/
 theorem BindingFacetD1 : Accounting.Guarantees.TS.BindingFacetD1 := by

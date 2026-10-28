@@ -200,15 +200,15 @@ section Price
 
 variable {K R : Type} [Fintype K] [Fintype R]
 
-theorem price_eq_sum (G : Machine K R) (lam : R → ℝ) (n : K → ℝ) :
+theorem price_eq_sum (G : FacetCosts K R) (lam : R → ℝ) (n : K → ℝ) :
     G.price lam n = ∑ k, n k * ∑ r, lam r * G.a r k := by
-  unfold Machine.price Machine.load
+  unfold FacetCosts.price FacetCosts.load
   simp_rw [mul_sum]
   rw [sum_comm]
   exact sum_congr rfl fun k _ => sum_congr rfl fun r _ => by ring
 
 /-- `c ≤ Σ_k m_k n_k` merges, and `m_k·s ≤ π·a_k` a class: `c·s ≤ π·n`. -/
-theorem price_of_fanIn (G : Machine K R) (lam : R → ℝ) (m n : K → ℝ) (c s : ℝ) (hs : 0 ≤ s)
+theorem price_of_fanIn (G : FacetCosts K R) (lam : R → ℝ) (m n : K → ℝ) (c s : ℝ) (hs : 0 ≤ s)
     (hn : ∀ k, 0 ≤ n k) (hc : c ≤ ∑ k, m k * n k) (hk : ∀ k, m k * s ≤ ∑ r, lam r * G.a r k) :
     c * s ≤ G.price lam n := by
   rw [price_eq_sum]
@@ -240,7 +240,7 @@ theorem card_le_issued {K : Type} [Fintype K] [DecidableEq K] {ι W J : Type} [F
   linarith
 
 /-- A route at `a_k/m_k` a word prices `m_k·s ≤ π·a_k` for any `s` it bounds; `m_k = 0` needs only `a, λ ≥ 0`. -/
-theorem class_bound {K R : Type} [Fintype R] (G : Machine K R) (lam : R → ℝ) (hl : ∀ r, 0 ≤ lam r)
+theorem class_bound {K R : Type} [Fintype R] (G : FacetCosts K R) (lam : R → ℝ) (hl : ∀ r, 0 ≤ lam r)
     (ha : ∀ r k, 0 ≤ G.a r k) (m : K → ℝ) (hm : ∀ k, 0 ≤ m k) (s : ℝ)
     (hs : ∀ k, 0 < m k → s ≤ (∑ r, lam r * G.a r k) / m k) (k : K) : m k * s ≤ ∑ r, lam r * G.a r k := by
   rcases (hm k).lt_or_eq with hk | hk

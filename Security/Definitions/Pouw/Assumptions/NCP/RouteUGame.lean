@@ -23,9 +23,9 @@ its `H_ref` with no oracle calls, TT_NCP_U(γ₀) holds there with error 0 at ev
 unit has `n ≥ 2^10` (so `n₀ = 2^10`, `Ω_max = 1 + f/3072`), and a layout with at least one unit and `d ∣ k` on
 every unit is in the domain. -/
 def LeadUWitness : Prop :=
-  ∀ (β : ℤ) (f : ℕ), ∃ (P : Params Unit Unit Salt) (Lay : Layout), P.IsLead ∧ P.RSigned ∧
+  ∀ (β : ℤ) (f : ℕ), ∃ (P : Params Unit Unit Salt) (Lay : UnitLayout), P.IsLead ∧ P.RSigned ∧
     (∀ (sh : Shape) (b : List Unit), Shape.InDefaultDomain sh → Unsigned sh.k (P.expWt sh b).2) ∧ P.QueryBound 0 ∧
-    (∀ (L : Layout) (u : ℕ), P.Wref L u = wrefU f L u) ∧
+    (∀ (L : UnitLayout) (u : ℕ), P.Wref L u = wrefU f L u) ∧
     (P.toProtocolU β).Complete leadDomain ∧
     AdmitsRef (outputPriced3 Unit Unit Salt) (P.toProtocolU β) leadDomain (fun _ => 0) ∧
     (∀ γ₀ : ℝ, 0 ≤ γ₀ → γ₀ < 1 →

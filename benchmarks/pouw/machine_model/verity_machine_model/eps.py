@@ -468,7 +468,7 @@ def aliases(data: Path = DATA) -> dict[str, str]:
 
 
 @dataclass(frozen=True)
-class Machine:
+class IssueCosts:
     """Π: each class's SMSP-cycles a warp instruction on each of a vector's rows, at its epoch."""
     vector: str
     rows: tuple[str, ...]
@@ -488,7 +488,7 @@ class Machine:
         return {r: sum(v * self.c[k].get(r, 0.0) for k, v in n.items()) for r in self.rows}
 
 
-def machine(name: str = "", data: Path = DATA) -> Machine:
+def machine(name: str = "", data: Path = DATA) -> IssueCosts:
     """Π at a vector's epoch, each MMA form on the generic MMA's line wherever it has none of its own."""
     m = model(data)
     v = vector(name or m.current, data)
@@ -497,16 +497,16 @@ def machine(name: str = "", data: Path = DATA) -> Machine:
     for f in forms(data):
         c[f.kind] = {**c.get(MMA, {}), **c.get(f.kind, {})}
     cuda = tuple(k for k in m.cuda if k in c and any(c[k].values()))
-    return Machine(vector=v.name, rows=v.rows, c=c, cuda=cuda, uniform_forms=m.uniform_forms)
+    return IssueCosts(vector=v.name, rows=v.rows, c=c, cuda=cuda, uniform_forms=m.uniform_forms)
 
 
-def uniform_issue_charged(pi: Machine) -> bool:
+def uniform_issue_charged(pi: IssueCosts) -> bool:
     """Whether Π's census already charges a uniform instruction on an issue row (VF3p-16 on, decision 73; a DS vector's
     `DS_issue`, A2u)."""
     return any(v > 0 and (r == "issue" or r.endswith("_issue") or r.startswith("JI")) for r, v in pi.c.get("UNI", {}).items())
 
 
-def uniform_on_issue(pi: Machine, cycles: float) -> Machine:
+def uniform_on_issue(pi: IssueCosts, cycles: float) -> IssueCosts:
     """Π with each uniform class (UNI, UNI64) also on the issue rows at `cycles` times an ALU instruction's cost there:
     `issue`, and the joint row pricing every other vector-pipe instruction (JI3e_0, JI3n_0), where the census from VF3
     to VF3o-16 has it on UP alone. Π itself where its census charges it there already, so it is never charged twice."""
@@ -542,13 +542,13 @@ class Mix:
     forms: dict[str, float]           # the share of words on each MMA form's tensor route
     folds: dict[str, float] = field(default_factory=dict)   # the share of words folded by each of the fold's routes
 
-    def price(self, pi: Machine, n: dict[str, float]) -> float:
+    def price(self, pi: IssueCosts, n: dict[str, float]) -> float:
         """π·n: the certificate's price of n, in SMSP-cycles (n's L2 bytes are not counted: honest's aren't charged)."""
         load = pi.load(n)
         return sum(w * load.get(r, 0.0) for r, w in self.pi.items())
 
 
-def fastest(d: Design, h: Honest, pi: Machine, *, q: float | None, q_uniform: float | None, baseline: bool,
+def fastest(d: Design, h: Honest, pi: IssueCosts, *, q: float | None, q_uniform: float | None, baseline: bool,
             fillers: tuple[tuple[Filler, float], ...] = (), cheat: bool = False,
             tensor_mma: dict[str, float] | None = None, budget: float = 0.0, table: Table | None = None,
             forms: tuple[Form, ...] = (), fold_menu: bool = False) -> Mix:
@@ -724,7 +724,7 @@ class Setup:
     """A design on Π with its credited side solved: the cheater's LP at any q* reads it."""
     design: Design
     honest: Honest
-    machine: Machine
+    machine: IssueCosts
     operands: str
     credit: str                      # H (honest's kernel) or floor (the floor program ♭)
     fillers: tuple[tuple[Filler, float], ...]   # each filler with its lane instructions a word
@@ -753,7 +753,7 @@ class Setup:
         return self.machine_eps(0.0, lanes=False, uniform=False)
 
 
-def undominated(fs: list[Form], pi: Machine) -> tuple[Form, ...]:
+def undominated(fs: list[Form], pi: IssueCosts) -> tuple[Form, ...]:
     """The forms no other writes a word on as cheaply on every row of Π, the first of equals kept. The tensor routes
     differ only in their MMA, so dropping the rest leaves the LP's optimum where it is."""
     v = [[pi.c[f.kind].get(r, 0.0) / (f.depth * f.words) for r in pi.rows] for f in fs]
@@ -762,7 +762,7 @@ def undominated(fs: list[Form], pi: Machine) -> tuple[Form, ...]:
                             for j in range(len(fs))))
 
 
-def setup(d: Design, pi: Machine, data: Path = DATA, operands: str = "free", credit: str = "H",
+def setup(d: Design, pi: IssueCosts, data: Path = DATA, operands: str = "free", credit: str = "H",
           table: Table | None = None) -> Setup:
     """`credit` H and model compare the cheater with honest's kernel; floor with the floor program ♭ (SPEC §0.7a):
     the tensor route at the noise's φ_del, the fold at the cheapest mix of the design's fold and its built
@@ -857,7 +857,7 @@ class Eps:
                 "luck": self.luck, "adapt": self.adapt.eps if self.adapt else None, "clock": self.clock}
 
 
-def eps(d: Design, pi: Machine, q: float, data: Path = DATA, *, operands: str = "free", credit: str = "H",
+def eps(d: Design, pi: IssueCosts, q: float, data: Path = DATA, *, operands: str = "free", credit: str = "H",
         lanes: bool | None = None, uniform: bool | None = None, q_uniform: float | None = None,
         table: Table | None = None, adapt: Adapt | None = None) -> Eps:
     """Under the model and floor credits ε_sched and ε_clock leave ε (honest's time above the credit is in γ,

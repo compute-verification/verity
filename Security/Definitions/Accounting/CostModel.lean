@@ -37,14 +37,14 @@ that what the prover can tell at `tₛ + ℓ` (`history`) doesn't depend on the 
 the verifier receives before `t_d`, decoded by `read`, and the number of the hash's gates are an oracle program's
 output and queries. -/
 structure Actual.Prover (Q R S : Type) {L : Type} [LinearOrder L] [Fintype L] (𝓕 : Set (Actual.Run L))
-    (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Transcript)
+    (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.CommitLog)
     (hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)) where
   strategy : Actual.Inputs Q R S → Actual.Run L
   feasible : ∀ x, strategy x ∈ 𝓕
   causal : CausalFrom strategy
   fresh : ∀ H U act σ s s', (strategy (H, U, act, σ, s)).history Vᶜ (tₛ + ℓ) =
     (strategy (H, U, act, σ, s')).history Vᶜ (tₛ + ℓ)
-  queries : ∀ U act σ s, ∃ t : Pouw.QTree Q R Pouw.Transcript, ∀ H,
+  queries : ∀ U act σ s, ∃ t : Pouw.QTree Q R Pouw.CommitLog, ∀ H,
     read ((strategy (H, U, act, σ, s)).crossing (↑V)ᶜ ↑V (Set.Iio t_d)) = t.eval H ∧
       (hash (strategy (H, U, act, σ, s))).card = t.calls H
 
@@ -52,7 +52,7 @@ structure Actual.Prover (Q R S : Type) {L : Type} [LinearOrder L] [Fintype L] (�
 transcript the verifier decodes from what it receives before `t_d`, costs the prover's work at `π` in
 `[tₛ + ℓ, t_d − ℓ)` and makes as many oracle calls as its run has hash's gates. -/
 noncomputable def Actual.costModel (Q R S : Type) {L : Type} [LinearOrder L] [Fintype L] (𝓕 : Set (Actual.Run L))
-    (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Transcript)
+    (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.CommitLog)
     (hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)) (π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ) :
     Pouw.CostModel Q R S where
   Prog := Actual.Prover Q R S 𝓕 V tₛ t_d ℓ read hash
@@ -64,7 +64,7 @@ noncomputable def Actual.costModel (Q R S : Type) {L : Type} [LinearOrder L] [Fi
 received at `t_d` (it is what the verifier receives before then), and by each time `t` the prover has spent the cost
 window's work placed before `t`, its work at `π` in `[tₛ + ℓ, t_d − ℓ)` before `t`. -/
 noncomputable def Actual.timedRun {Q R S : Type} {L : Type} [LinearOrder L] [Fintype L] {𝓕 : Set (Actual.Run L)}
-    {V : Finset L} {tₛ t_d ℓ : ℕ} {read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Transcript}
+    {V : Finset L} {tₛ t_d ℓ : ℕ} {read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.CommitLog}
     {hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)} {π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ}
     (A : Pouw.Adversary (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π)) (U : Pouw.Workload) :
     Pouw.TimedRun Q R S where

@@ -112,7 +112,7 @@ theorem exec_frame (dv : W1.W1Device) :
       · exact exec_frame dv a true _ x (by omega)
 
 /-- A run leaves every ticket word at row `codeBound` or past it at 0. -/
-theorem final_ticket_zero (dv : W1.W1Device) (salt : List ℕ) (pr : W1.Prog) (U : Workload) (act : ℕ → Codes)
+theorem final_ticket_zero (dv : W1.W1Device) (salt : List ℕ) (pr : W1.Listing) (U : Workload) (act : ℕ → Codes)
     (σ : State) (u i j : ℕ) (hi : codeBound (pr.code U.layout) ≤ i) :
     (W1.final dv salt pr U act σ).mem (W1.ticketAt u i j) = 0 := by
   have hx : codeBound (pr.code U.layout) ≤ (W1.ticketAt u i j).2 :=
@@ -131,7 +131,7 @@ def zeroAct : ℕ → Codes := fun _ _ _ => 0
 
 /-- Unit 0's ticket word `(0, 0)` set to 1, the constant bank's one word: one free move, two nodes of text, within W1's
 bound. -/
-def ticketOne : W1.Prog := ⟨fun _ => [1], fun _ => .op (.mov (W1.ticketAt 0 0 0) (W1.constAt 0)) .done,
+def ticketOne : W1.Listing := ⟨fun _ => [1], fun _ => .op (.mov (W1.ticketAt 0 0 0) (W1.constAt 0)) .done,
   fun _ => by norm_num [W1.Code.size]⟩
 
 theorem ticketOne_ticket (dv : W1.W1Device) (salt : List ℕ) (U : Workload) (act : ℕ → Codes) (σ : State) :
@@ -159,7 +159,7 @@ theorem w1Priced_not_splitClosed (dv : W1.W1Device) (salt : S → List ℕ) (H :
     (L := oneU.layout) (u := 0) (i := 0) (by decide) (by decide)
   have h00 : rowIdx oneU.layout 0 0 = 0 := rfl
   rw [h00, ← hrun] at hsplit
-  obtain ⟨B, hB⟩ : ∃ B, codeBound (W1.Prog.code prog' (splitWorkload oneU).layout) ≤ B := ⟨_, le_rfl⟩
+  obtain ⟨B, hB⟩ : ∃ B, codeBound (W1.Listing.code prog' (splitWorkload oneU).layout) ≤ B := ⟨_, le_rfl⟩
   have hN' : 0 < (splitWorkload oneU).layout.N := by decide
   have hL := readout_ticket (splitWorkload oneU) act' (W1.final dv (salt s) prog' (splitWorkload oneU) act' []).mem
     hN' B 0

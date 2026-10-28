@@ -765,7 +765,7 @@ sampling design is a seam:
       `anchors.py:83`). This is the guarantee's M1.
     - *Every call's commitment precedes the window key* (root's C1). A window's `anchors.Receipt` lists every call with
       its anchors, shape and commitment, and is immutable (`anchors.py:130`); its digest binds each call's full
-      anchors (index, salt, weight id, rows and columns), shape and commitment. `Ledger.open` derives the key from it
+      anchors (index, salt, weight id, rows and columns), shape and commitment. `AdmittedCalls.open` derives the key from it
       alone, under `DRAW_DOMAIN` with {"receipt": digest} as its context, and admits only the calls it lists
       (`anchors.py:199`, `anchors.py:215`). It is the only place a ledger's receipt, key and source are set: a
       `Ledger` refuses every attribute assignment (`anchors.py:187`), and `Traced.draw` takes the key from the
@@ -773,7 +773,7 @@ sampling design is a seam:
       commitment as the receipt lists it, by call index (`Ledger.commitment`, `Traced.check_openings`,
       `__init__.py:101`), never one supplied with them. So W, N, each K_c and every commitment the openings answer
       to are fixed by the receipt before any draw.
-    - *Each window's source is fresh and used once* (root's C2). `Ledger.open` takes no source: it draws 32 bytes from
+    - *Each window's source is fresh and used once* (root's C2). `AdmittedCalls.open` takes no source: it draws 32 bytes from
       the operating system's CSPRNG (`secrets`, `anchors.py:165`) once the receipt is complete, for that window
       alone. So A4 (`prf/sha-512`) applies as stated, one fresh uniform source per derivation, with the source's
       uniformity its own claim, A5 (`uniform/python-secrets`). Once the window's draw is sent (`Ledger.sent`), it draws
@@ -791,7 +791,7 @@ sampling design is a seam:
 (forward, position), with the template: the strata are the call's own, one per template, and the calls of a window drawn
 under one key draw independently, so K split across them keeps the window's (1 − ε)^K. The verifier draws through
 `Traced.draw(law, anchors, ledger)`, which takes no layout and no key: it draws over `Traced.layout()` (X-SPC-97). The
-window's `anchors.Ledger` is opened from its complete `Receipt` (`Ledger.open`), which derives the window's key from a
+window's `anchors.AdmittedCalls` is opened from its complete `Receipt` (`AdmittedCalls.open`), which derives the window's key from a
 fresh source under the receipt's digest; `Traced.draw` draws only under that key, admits the call first, refusing one
 the receipt doesn't list or the window already holds before anything is drawn, and then keys each stratum's subset
 with ("call", forward, position, "stratum", template). So every call's commitment precedes the key, and each call of a
@@ -1621,7 +1621,7 @@ name not registered.
 - `eps1-sm120-h1fx1` (`circuit/h1tile.py`, where `circuit/segment.py` is on the tree): sm_120's H1 + fx1 on a warp's 32 × 32
   tile, for the s8 kinds on bits, under CP-W (decision 104, #2438's `PouwWarpCheck_v2` body). Each lane folds H1's sets over
   X = A + b and W' = B + c + U with fx1 from its keys, and receipt words 2 s and 2 s + 1 are the warp's XOR of y and of z
-  after set s: 2 (KS + m) words, 8,320 bits at K = 4096. Its noise is counter mode (`h1tile.Layout`): each row's and
+  after set s: 2 (KS + m) words, 8,320 bits at K = 4096. Its noise is counter mode (`h1tile.TileShape`): each row's and
   column's from blocks of seed_j's own, and each lane's fold keys, its chain's start, a block of σ_R's (`h1tile.fold_keys`).
   The edited GEMM kernel still starts its chains from the noise seed (`benchmarks/pouw/edited_gemm/cgemm.cu`'s
   ``ch[e].y = mix32(a.seed ^ …)``), which decision 121 retires: a kernel follow-up keys them from σ_R. Whether a tile is a

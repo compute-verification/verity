@@ -22,7 +22,7 @@ and they are what the unit's checks are proved through, not inputs it is credite
 This file states, on words, what the 33 statements check and what one unit's served checks are:
 
 * `rowOf`, `colOf`: lane `l = 4g + q`'s row slot `s` is row `g + 8s` and its column slot `t` column
-  `2q + 8⌊t/2⌋ + (t mod 2)` (`h1tile.Layout.rows`, `cols` at `R = C = 32`), so its cells are `h1zy.lane_cells`;
+  `2q + 8⌊t/2⌋ + (t mod 2)` (`h1tile.TileShape.rows`, `cols` at `R = C = 32`), so its cells are `h1zy.lane_cells`;
 * `LaneView`, `LaneOk`: what lane `l`'s statement reads, and its `ok = 1`: its partials row is the honest one
   (`part`, `h1zy.lane_partial`'s words, each u32, at its rows, the public inputs and `l`) and each of its 32 cells has
   `z = Σ_k a_k b_k` and `y = dq [z, s_a, s_w]` at its row's and column's scales (`PouwZyCheck_v1{4, 8}`);

@@ -84,7 +84,7 @@ def tile_census(r: int, c: int, k: int, v: int = 1) -> dict:
 @pytest.mark.parametrize("r,c,k,out", lean_rows("h1Rows"))
 def test_h1_census(r, c, k, out):
     """Slow on a process's first tile: building it traces its seeds' SHA-512 on bits (about 35 s), then about 1 s a row."""
-    lay = H.Layout(r, c, k)
+    lay = H.TileShape(r, c, k)
     doc = tile_census(r, c, k)
     dots = [(cl["family"], cl["instances"]) for cl in doc["classes"].values() if dot_k(cl["family"])]
     assert {f for f, _ in dots} == {"PouwSegDot_v2", "PouwSegDot0_v2", "BlackwellS8ImmaDot32_v2"}

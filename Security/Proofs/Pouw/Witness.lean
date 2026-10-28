@@ -43,7 +43,7 @@ def unitProg (U : Workload) (act : ℕ → Mat) (s : S) (u : ℕ) : QTree Q R Co
     (queryAll (P.qWt s u (U.layout.wid u))).bind fun b => done (commitAns P U u (act u) a b)
 
 /-- The honest reference: every unit's honest program, in order. -/
-def honestProg (U : Workload) (act : ℕ → Mat) (s : S) : QTree Q R Transcript :=
+def honestProg (U : Workload) (act : ℕ → Mat) (s : S) : QTree Q R CommitLog :=
   upTo (unitProg P U act s) U.layout.N
 
 theorem eval_honestProg (H : Q → R) (U : Workload) (act : ℕ → Mat) (s : S) :
@@ -89,7 +89,7 @@ theorem checked_le_outputPriced_cost (P : Protocol Q R S) (prog : (outputPriced 
 /-- In the witness model TT(0.5%) holds with error 0 for every protocol and domain: the checked units' work is at
 most the cost, which is at most the budget. -/
 theorem tt_outputPriced [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S)
-    (D : Layout → Prop) : Assumptions.TT (outputPriced Q R S) P D Params.γ0 (fun _ _ => 0) := by
+    (D : UnitLayout → Prop) : Assumptions.TT (outputPriced Q R S) P D Params.γ0 (fun _ _ => 0) := by
   refine ⟨outputPriced_queries, fun U _ T hT q _ A hA => le_of_eq (pr_eq_zero fun x hx => ?_)⟩
   have h1 := checked_le_outputPriced_cost P A.online x.1 U A.act (A.pre.eval x.1) x.2
   have h2 := (hA x.1 x.2).1
@@ -108,7 +108,7 @@ theorem ttWitness : Pinned.TTWitness := by
 
 /-! ## Honest completeness and a game that can be lost -/
 
-theorem honest_correctSet (P : Protocol Q R S) (D : Layout → Prop) (U : Workload) (H : Q → R) (s : S)
+theorem honest_correctSet (P : Protocol Q R S) (D : UnitLayout → Prop) (U : Workload) (H : Q → R) (s : S)
     (act : ℕ → Mat) (hP : P.Complete D) (hU : U.InDomain D) (hact : ∀ u < U.layout.N, ActOK (U.layout.shape u) (act u)) :
     correctSet P U H s (honestTranscript P H s U act) = range U.layout.N := by
   classical

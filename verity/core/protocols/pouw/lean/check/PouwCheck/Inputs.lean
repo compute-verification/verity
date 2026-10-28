@@ -143,7 +143,7 @@ def WINDOW_VALUES : List String := ["activations", "registered"]
 
 /-- The record's `window`: its kind, its context, the items it registers, and its groups of committed values
 (`WINDOW_VALUES`), each `some` exactly when the window has the key, whatever its value. -/
-structure Window where
+structure WindowFields where
   kind : String
   context : String
   items : Json
@@ -161,7 +161,7 @@ structure Registration where
   population : Nat
   law : Json
   roots : Array Root
-  window : Window
+  window : WindowFields
 
 def registrationOf (b : ByteArray) : V Registration := do
   let rec_ ← Core.canonicalJson b
@@ -181,7 +181,7 @@ def registrationOf (b : ByteArray) : V Registration := do
     | _ => none
   let some roots := roots | throw "roots is not a list of {domain, leaves, port, root}"
   let w := get rec_ "window"
-  let window : Option Window := do
+  let window : Option WindowFields := do
     guard ((keys w).map (·.filter (!WINDOW_VALUES.contains ·)) == some ["context", "kind", "public"])
     let items := get w "public"
     guard (keys items).isSome
@@ -209,7 +209,7 @@ structure DrawStratum where
 
 /-- The draw's law: `subset:k`, `bernoulli:p` (`p` as written), `stratified:k` or `work:k` with their strata, and a work
 draw's closure. -/
-inductive Law where
+inductive DrawRule where
   | subset (k : Nat)
   | bernoulli (p : String)
   | stratified (k : Nat) (strata : Array DrawStratum)
@@ -217,7 +217,7 @@ inductive Law where
   deriving DecidableEq, Repr
 
 /-- `parse_law`'s spelling. -/
-def Law.name : Law → String
+def DrawRule.name : DrawRule → String
   | .subset k => s!"subset:{k}"
   | .bernoulli p => s!"bernoulli:{p}"
   | .stratified k _ => s!"stratified:{k}"
@@ -225,7 +225,7 @@ def Law.name : Law → String
 
 /-- The verifier's draw: its law, over a population, and the units it drew. -/
 structure UnitDraw where
-  law : Law
+  law : DrawRule
   population : Nat
   units : Array Nat
   deriving DecidableEq, Repr

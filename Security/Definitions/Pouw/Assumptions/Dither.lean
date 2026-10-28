@@ -128,7 +128,7 @@ zero-knowledge proofs (sound and zero knowledge), on live coins drawn by the aud
 commitment (`trusted-host`). The verdict reads the transcript and the devices' readings, never the prover's
 code. It assumes nothing of the prover's algorithms. -/
 def ServiceSound (G : Accel) (P : RoundProto) (k : ℕ) (reg : Fin k → P.Inst) {Obs : Type}
-    (verdict : Verdict P k Obs) (dev : Readings G P k Obs) (κS : ℝ) : Prop :=
+    (verdict : Acceptance P k Obs) (dev : Readings G P k Obs) (κS : ℝ) : Prop :=
   ∀ A : Prover G P k, prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) =>
     A.Passes verdict dev ox.1 ox.2 ∧ ¬ A.Accepted reg ox.1 ox.2) ≤ κS
 
@@ -137,7 +137,7 @@ period exchanged at most `K` bits**: the network certifier sits on the period's 
 prover doesn't control, and signs the bits that cross them in either direction (its readings `dev`); the period's
 verdict reads its signed count and refuses a period past `K`. The certifier's own coin stream isn't counted.
 Open (O-IO): the per-period form from the certifier's counts with `n_max · E_out`. -/
-def ImportWithinCertifier (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Verdict P k Obs)
+def ImportWithinCertifier (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Acceptance P k Obs)
     (dev : Readings G P k Obs) (K : ℝ) : Prop :=
   ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk), A.Passes verdict dev o x → A.ext o x ≤ K
 

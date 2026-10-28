@@ -37,7 +37,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from checked_strip import W_RE, Block, cross_ranks  # noqa: E402
+from checked_strip import W_RE, DesignBlock, cross_ranks  # noqa: E402
 from exact_kit.checks import Checks  # noqa: E402
 from narrow_u import NarrowBlock, planes  # noqa: E402
 
@@ -50,7 +50,7 @@ PATCH_ROWS, PATCH_COLS = 4, 128
 SEED = 2
 
 
-def operands(B: Block, kind, rng):
+def operands(B: DesignBlock, kind, rng):
     """(P, V) of one block at instance `kind`; P in Lean coordinates, a probability row as P_prob − 64."""
     P = rng.integers(-63, 63, (B.n, B.k))
     V = rng.integers(-128, 127, (B.k, B.n2))
@@ -71,7 +71,7 @@ def operands(B: Block, kind, rng):
     raise ValueError(kind)
 
 
-def ranks(B: Block, rng):
+def ranks(B: DesignBlock, rng):
     return {kind: cross_ranks(B, *operands(B, kind, rng), mod=1) for kind in INSTANCES}
 
 
@@ -116,7 +116,7 @@ def main():
 
     # ------------------------------------------------------------ B
     k, L = 64, 32
-    pv_T, pv_TO = Block("dither", 1, k, 1, 32, L), Block("checked1", 1, k, 1, 32, L)
+    pv_T, pv_TO = DesignBlock("dither", 1, k, 1, 32, L), DesignBlock("checked1", 1, k, 1, 32, L)
     got_T, got_TO = ranks(pv_T, rng), ranks(pv_TO, rng)
     out["P·V adopted, T"] = {x: list(v[:2]) for x, v in got_T.items()}
     out["P·V adopted, T and O"] = {x: list(v[:2]) for x, v in got_TO.items()}
@@ -134,22 +134,22 @@ def main():
                      all(v[:2] == (kk, kk + rr) and v[2] == 0 for v in got.values()), str(out[f"QKᵀ cohalf k={kk}"]))
 
     # ------------------------------------------------------------ C
-    one = Block("checked1", 1, k, 1, 32, L, w=np.zeros(7, np.int64))
+    one = DesignBlock("checked1", 1, k, 1, 32, L, w=np.zeros(7, np.int64))
     got = ranks(one, rng)
-    bare = Block("dither", 1, k, 1, 32, L, w=np.zeros(7, np.int64))
+    bare = DesignBlock("dither", 1, k, 1, 32, L, w=np.zeros(7, np.int64))
     zw = bare.words(np.full((1, k), 64, np.int64), np.zeros((k, 1), np.int64), rng.integers(0, 2, (64, bare.nbits)))
     out["one-sided"] = {x: list(v[:2]) for x, v in got.items()}
     checks.check("C1 one-sided noise (U's weights 0, so U = −64, and b on V only): cross rank 0 at every instance, and "
                  "at P̃ = 0, V = 0 every T word is 0 at every coin point (B3's collapse)",
                  all(v[:2] == (0, 0) for v in got.values()) and not np.any(zw), str(out["one-sided"]))
-    row = Block("checked1", 1, k, 1, 1, L)
+    row = DesignBlock("checked1", 1, k, 1, 1, L)
     got = ranks(row, rng)
     out["row dither"] = {x: list(v[:2]) for x, v in got.items()}
     checks.check(f"C2 row dither (U of period 1 a row): cross rank k/L = {k // L}, one a word, at every instance "
                  f"(B3's rank-1 cross terms)", all(v[0] == k // L for v in got.values()), str(out["row dither"]))
     if checks.mutations:
-        for name, B in (("one-sided noise on adopted P·V", Block("dither", 1, k, 1, 32, L, w=np.zeros(7, np.int64))),
-                        ("row dither on adopted P·V", Block("dither", 1, k, 1, 1, L, w=W_RE))):
+        for name, B in (("one-sided noise on adopted P·V", DesignBlock("dither", 1, k, 1, 32, L, w=np.zeros(7, np.int64))),
+                        ("row dither on adopted P·V", DesignBlock("dither", 1, k, 1, 1, L, w=W_RE))):
             got = ranks(B, rng)
             with checks.mutant(name):
                 checks.check(f"M B1's check on {name}", all(v[0] == k for v in got.values()), str(got))

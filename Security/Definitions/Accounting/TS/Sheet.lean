@@ -53,7 +53,7 @@ variable {K P : Type} [DecidableEq P]
 
 /-- **The data-sheet machine** `Π_DS` of sheet `S`: issue, tensor, pipe and shared-memory rows as above, every facet
 SM-clocked, `f_max` the sheet's. -/
-noncomputable def Sheet.machine (S : Sheet K P) : Machine K (SheetRow P) where
+noncomputable def Sheet.machine (S : Sheet K P) : FacetCosts K (SheetRow P) where
   a r k := match r with
     | .issue => 1
     | .tensor => S.macs k / (S.peak k / 4)

@@ -13,7 +13,7 @@ open Finset
 variable {Q R S : Type}
 
 /-- Pointwise step of Theorem 1: an accepted run with little uncorrect work and `T < (1 − γ)(1 − ε_s)·W` wins. -/
-theorem wins_of_accept (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) {γ T εs : ℝ}
+theorem wins_of_accept (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : CommitLog) {γ T εs : ℝ}
     (hγ : γ < 1) (hT : T < (1 - γ) * (1 - εs) * totalWref P U.layout)
     (hbad : ∑ u ∈ range U.layout.N \ correctSet P U H s τ, (P.Wref U.layout u : ℝ) ≤ εs * totalWref P U.layout) :
     Wins P U γ T τ H s := by

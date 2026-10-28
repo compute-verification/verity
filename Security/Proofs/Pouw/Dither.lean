@@ -50,7 +50,7 @@ theorem FreedOfFloor : Pouw.Guarantees.Dither.FreedOfFloor := by
       ∑ r, μ r * (Pd.cap r - W * Pd.hon r) + (∑ r, μ r * (W * Pd.hon r) - ∑ r, μ r * X r) := by
     rw [← Finset.sum_sub_distrib, ← Finset.sum_add_distrib]
     exact Finset.sum_congr rfl fun r _ => by ring
-  unfold Period.value
+  unfold PeriodDevices.value
   nlinarith [h1, h3, hfloor, hslack]
 
 /-! ## Expectations over fresh coins -/
@@ -373,7 +373,7 @@ theorem floor_of_rounds {k : ℕ} (H pm ps cw ch cw' ch' ew eh D : Fin k → ℝ
 /-- **A run whose timed use fits makes at most `Q` oracle calls**: by (G3) the calls in the
 sampling blocks' work use at least `calls · callUse_r` of a resource `r` a call uses, which fits within its capacity
 `cap_r ≤ Q callUse_r`. -/
-theorem calls_le_of_fits {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k) (Pd : Period G) {Q : ℝ}
+theorem calls_le_of_fits {G : Accel} {P : RoundProto} {k : ℕ} (A : Prover G P k) (Pd : PeriodDevices G) {Q : ℝ}
     (hG3 : G.G3) (hneeds : ∀ j r, 0 ≤ Pd.needs j r) (hcap : ∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r)
     (o : P.Orc) (x : Fin k → P.Draw × P.Chk) {z : Pd.J → ℝ} (hfit : Pd.Fits (A.timedUse o x) z) :
     A.calls o x ≤ Q := by

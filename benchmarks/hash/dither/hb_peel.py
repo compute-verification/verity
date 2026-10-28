@@ -61,7 +61,7 @@ def xa_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, 
     (0, 0) flipped changes it by 1 - 2 xa, so z[0, j] moves by 256 (1 - 2 xa) B[j, 0], xa = [A = 127 and b = 1]."""
     from verity.core.protocols.pouw.circuit import h1tile as HT
     from verity.core.protocols.pouw.circuit import seeds as SD
-    rows, _ = HT.noise(SD.seed(salt, position, *roots), HT.Layout(32, 32, a.shape[1]))
+    rows, _ = HT.noise(SD.seed(salt, position, *roots), HT.TileShape(32, 32, a.shape[1]))
     d = -1 if int(a[0, 0]) == 127 and int(rows[0][0][0]) == 1 else 1
     return [(256 * d * int(b[j, 0])) & M32 for j in range(32)]
 
@@ -96,7 +96,7 @@ def peel_cpu(z_v3: np.ndarray, a32: np.ndarray, b32: np.ndarray, salt: bytes, po
     b = 1]."""
     from verity.core.protocols.pouw.circuit import h1tile as HT
     from verity.core.protocols.pouw.circuit import seeds as SD
-    rows, cols = HT.noise(SD.seed(salt, position, *roots), HT.Layout(32, 32, a32.shape[1]))
+    rows, cols = HT.noise(SD.seed(salt, position, *roots), HT.TileShape(32, 32, a32.shape[1]))
     bits_a = np.array([rows[i][0] for i in range(32)], dtype=np.int64)
     bits_b = np.array([cols[j][0] for j in range(32)], dtype=np.int64)
     a, b, z = a32.astype(np.int64), b32.astype(np.int64), z_v3.astype(np.int64)

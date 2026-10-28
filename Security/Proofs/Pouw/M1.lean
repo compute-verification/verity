@@ -43,7 +43,7 @@ namespace M1
 
 open D1
 
-variable (Wref : Layout → ℕ → ℕ)
+variable (Wref : UnitLayout → ℕ → ℕ)
 
 theorem entry_abs_le (f : M1R → ℤ) (c : ℤ) (hc : 0 ≤ c) (hf : ∀ x, |f x| ≤ c) (a : List M1R) (i : ℕ) :
     |m1Entry f a i| ≤ c := by
@@ -157,10 +157,10 @@ theorem rowShare_le (work mu rows c : ℕ) (hrows : 0 < rows) (h : work * mu ≤
   generalize rows * c = b at *
   omega
 
-theorem groupRows_le_rowsOf (L : Layout) (u : ℕ) : m1GroupRows L u ≤ L.rowsOf (L.wid u) :=
+theorem groupRows_le_rowsOf (L : UnitLayout) (u : ℕ) : m1GroupRows L u ≤ L.rowsOf (L.wid u) :=
   Finset.sum_le_sum_of_subset (Finset.monotone_filter_right _ fun _ _ h => h.2)
 
-theorem m1Wref_le (L : Layout) (hD : m1Domain L) (u : ℕ) (hu : u < L.N) :
+theorem m1Wref_le (L : UnitLayout) (hD : m1Domain L) (u : ℕ) (hu : u < L.N) :
     m1Wref L u ≤ (L.shape u).m * 2 ^ 32 + 233 * 2 ^ 16 * (L.shape u).m := by
   obtain ⟨⟨-, -, -, hk, hn⟩, -, hg⟩ := hD u hu
   have hw := (groupRows_le_rowsOf L u)
@@ -182,12 +182,12 @@ theorem m1Wref_le (L : Layout) (hD : m1Domain L) (u : ℕ) (hu : u < L.N) :
   rw [hk, hn] at *
   linarith
 
-theorem Wmm_le_m1Wref (L : Layout) (u : ℕ) : (L.shape u).Wmm ≤ m1Wref L u := by
+theorem Wmm_le_m1Wref (L : UnitLayout) (u : ℕ) : (L.shape u).Wmm ≤ m1Wref L u := by
   unfold Shape.Wmm
   dsimp only [m1Wref]
   omega
 
-theorem m1Wref_real (L : Layout) (hD : m1Domain L) (u : ℕ) (hu : u < L.N) :
+theorem m1Wref_real (L : UnitLayout) (hD : m1Domain L) (u : ℕ) (hu : u < L.N) :
     (m1Wref L u : ℝ) ≤ m1Omega * ((L.shape u).Wmm : ℝ) := by
   have h := m1Wref_le L hD u hu
   obtain ⟨-, -, -, hk, hn⟩ := (hD u hu).1

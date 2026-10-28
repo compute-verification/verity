@@ -35,7 +35,7 @@ PARTLY = (1, 3, 7)     # j of m = 32 r + j: 28, 20 and 4 of a leaf's 32 lanes ho
 
 
 def _job(a: list, b: list, admit: list, salt: bytes, position: int, roots: tuple[bytes, bytes]) -> tuple[list, list]:
-    lay = HT.Layout(R, R, len(a[0]))
+    lay = HT.TileShape(R, R, len(a[0]))
     tile = HT.lane_partials(a, b, salt, position, roots, gated=admit)
     lanes = [ZY.lane_partial([a[i] for i in lay.rows(ln)], [b[j] for j in lay.cols(ln)], admit, salt, position, roots,
                              ln, (R, R)) for ln in range(lay.lanes)]
@@ -97,7 +97,7 @@ def check(recs: list[dict], workers: int = 1) -> dict:
     bad = []
     for r, (tile, lanes) in zip(recs, refs):
         tile, lanes = np.array(tile, dtype=np.uint32), np.array(lanes, dtype=np.uint32)
-        lay = HT.Layout(R, R, r["k"])
+        lay = HT.TileShape(R, R, r["k"])
         empty = [ln for ln in range(lay.lanes) if not any(r["admit"][i] for i in lay.rows(ln))] if r["live"] else []
         gd = groups.setdefault(r["group"], {"leaves": 0, "live": 0, "dead": 0, "partly_admitted": 0,
                                             "lanes_without_an_admitted_row": 0, "by_k": {}, "backends": [],
@@ -152,7 +152,7 @@ def served(win, g: dict, salt: bytes, lib=None, per_call: int = 1, path=None, wo
     s, m, t, L = g["s"], g["m"], win.t, win.L
     kern = PT.Kernel(lib) if lib is not None else None
     step = PT.Step(list(g["a"]), list(g["a_roots"]), m, salt)
-    pw = PT.Window(list(win.wt), list(g["b_roots"]), list(win.offs), win.u_step, {s: step})
+    pw = PT.WindowCalls(list(win.wt), list(g["b_roots"]), list(win.offs), win.u_step, {s: step})
     rng = np.random.default_rng(s + 7)
     nrb, r = t // R, -(-min(m, t) // R)
     leaves, rcpt = [], {}
@@ -172,7 +172,7 @@ def served(win, g: dict, salt: bytes, lib=None, per_call: int = 1, path=None, wo
     wide = [w for w in range(L) if win.nk[w][1] == max(k for _, k in win.nk)][:1]
     for j in PARTLY:
         mj = R * rb + j
-        tw = PT.Window(pw.b, pw.b_roots, pw.offs, pw.u_step, {s: PT.Step(step.a, step.a_roots, mj, salt)})
+        tw = PT.WindowCalls(pw.b, pw.b_roots, pw.offs, pw.u_step, {s: PT.Step(step.a, step.a_roots, mj, salt)})
         ls = [PT.Leaf(s, w, int(rb * (win.nk[w][0] // R) + rng.integers(win.nk[w][0] // R)))
               for w in sorted({0, 2 % L, L - 1, *wide})]
         recs += records(tw, ls, kern, None, f"partly:{mj}")

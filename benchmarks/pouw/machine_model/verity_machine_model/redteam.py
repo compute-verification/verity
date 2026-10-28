@@ -85,7 +85,7 @@ class LeastFill:
 UNIFORM = ("UNI", "UNI64")       # the uniform-datapath classes: a measured coefficient of their own on a joint row
 
 
-def _lane_coef(pi: E.Machine, row: str) -> tuple[float, tuple[str, ...]]:
+def _lane_coef(pi: E.IssueCosts, row: str) -> tuple[float, tuple[str, ...]]:
     """The small (lane) coefficient a row shares and the classes it moves. Decision 76 moves this one: a joint facet's
     small coefficient is its vector lane cost (the CUDA lane classes, `pi.cuda`); the large one is the saturated tensor
     pipe, which silicon cannot cheapen, so it is left alone. A uniform class's coefficient on the row is measured on its
@@ -99,23 +99,23 @@ def _lane_coef(pi: E.Machine, row: str) -> tuple[float, tuple[str, ...]]:
     return small, hit + tuple(k for k in cols if k in UNIFORM and k not in hit)
 
 
-def _single(pi: E.Machine, row: str, f: float) -> E.Machine:
+def _single(pi: E.IssueCosts, row: str, f: float) -> E.IssueCosts:
     """Π with `row`'s lane coefficient (the classes at its minimum) scaled by f (f < 1: cheaper for the cheater)."""
     _, hit = _lane_coef(pi, row)
     return replace(pi, c={k: ({**v, row: v[row] * f} if k in hit else v) for k, v in pi.c.items()})
 
 
-def _joint(pi: E.Machine, cc: dict[str, dict[str, float]], row: str, hit: tuple[str, ...], f: float) -> E.Machine:
+def _joint(pi: E.IssueCosts, cc: dict[str, dict[str, float]], row: str, hit: tuple[str, ...], f: float) -> E.IssueCosts:
     """Π built from the accumulating census `cc`, with `row`'s lane coefficient moved by f off its original value."""
     return replace(pi, c={k: ({**v, row: pi.c[k][row] * f} if k in hit else v) for k, v in cc.items()})
 
 
-def _worst_single(core, pi: E.Machine, row: str, m: float) -> float:
+def _worst_single(core, pi: E.IssueCosts, row: str, m: float) -> float:
     """The higher core from moving `row`'s lane coefficient by (1 − m) or (1 + m): the cheater's favoured direction."""
     return max(core(_single(pi, row, 1 - m)), core(_single(pi, row, 1 + m)))
 
 
-def _joint_worst(core, pi: E.Machine, near: list[str], m: float) -> float:
+def _joint_worst(core, pi: E.IssueCosts, near: list[str], m: float) -> float:
     """Decision 76's joint worst core: every row in `near` moved m in the cheater's favour at once, each in the
     direction that raises the core (greedy)."""
     cc = {k: dict(v) for k, v in pi.c.items()}
@@ -127,13 +127,13 @@ def _joint_worst(core, pi: E.Machine, near: list[str], m: float) -> float:
     return core(replace(pi, c=cc))
 
 
-def _near_rows(pi: E.Machine, d: E.Design, data: Path, q: float, thr: float, operands: str, credit: str) -> list[str]:
+def _near_rows(pi: E.IssueCosts, d: E.Design, data: Path, q: float, thr: float, operands: str, credit: str) -> list[str]:
     c = E.setup(d, pi, data, operands, credit).cheat(q)
     load = pi.load(c.n)
     return [r for r in pi.rows if r != ISSUE_CEILING and c.T and load[r] / c.T >= thr]
 
 
-def _flip(d: E.Design, pi: E.Machine, data: Path, q: float, row: str, base: float, operands: str, credit: str,
+def _flip(d: E.Design, pi: E.IssueCosts, data: Path, q: float, row: str, base: float, operands: str, credit: str,
           step: float = 0.005, cap: float = 0.10) -> tuple[float | None, float | None]:
     m = 0.0
     core = lambda p: E.eps(d, p, q, data, operands=operands, credit=credit).core()

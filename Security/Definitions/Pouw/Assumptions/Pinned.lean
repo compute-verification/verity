@@ -21,7 +21,7 @@ built into the definitions (`Correct = CheckedOK ∧ OutOK`); no random-oracle t
 the same game. -/
 def GammaFromTT : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
+    (CM : CostModel Q R S) (P : Protocol Q R S) (D : UnitLayout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
     γ₀ < 1 → 0 < Ωmax →
     (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N,
       (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →
@@ -33,7 +33,7 @@ and any `W_ref`: if `W_ref ≤ Ω_max·W_mm` with `Ω_max ≤ 199/198`, the cost
 (`AdmitsRef`), and TT(0.5%) holds with error `ε`, then §3.3's requirement holds with `γ = 1 − (199/200)/Ω_max ≤ 1%`
 and `η = ε`. Whether the milestone meets `Ω_max ≤ 199/198` is a count of `H_ref`'s M_4090 schedule, not proved here. -/
 def MilestoneRequirement : Prop :=
-  ∀ (CM : CostModel D1.M1Q D1.M1R Salt) (Wref : Layout → ℕ → ℕ) (qref : Workload → ℕ) (Ωmax : ℝ)
+  ∀ (CM : CostModel D1.M1Q D1.M1R Salt) (Wref : UnitLayout → ℕ → ℕ) (qref : Workload → ℕ) (Ωmax : ℝ)
     (ε : ℕ → ℕ → ℝ),
     0 < Ωmax → Ωmax ≤ 199 / 198 →
     (∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N,
@@ -44,7 +44,7 @@ def MilestoneRequirement : Prop :=
 
 /-- **(d″) Milestone resource exhaustion**: (d) for `D1.m1` on its domain, at `γ = 1 − (199/200)/Ω_max`. -/
 def MilestoneExhaustion : Prop :=
-  ∀ (CM : CostModel D1.M1Q D1.M1R Salt) (Wref : Layout → ℕ → ℕ) (Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
+  ∀ (CM : CostModel D1.M1Q D1.M1R Salt) (Wref : UnitLayout → ℕ → ℕ) (Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
     0 < Ωmax →
     (∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N,
       (Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →
@@ -103,13 +103,13 @@ def Int32Decode : Prop :=
 /-- **(e5) D1's honest reference is complete** on the §3.2 default domain when the factor distribution keeps noise
 in `[−63, 63]`: its int32 checked values equal the exact transcript, and its int32 decode equals `A·B`. -/
 def D1Complete : Prop :=
-  ∀ (Q R S : Type) (P : D1.Params Q R S), P.NoiseRange → P.toProtocol.Complete (Layout.ShapesIn Shape.InDefaultDomain)
+  ∀ (Q R S : Type) (P : D1.Params Q R S), P.NoiseRange → P.toProtocol.Complete (UnitLayout.ShapesIn Shape.InDefaultDomain)
 
 /-- **Satisfiability witness for TT** at the chain's parameters: for `D1.m1` with any `W_ref ≥ W_mm`, in the
 output-priced model (a query model), TT(0.5%) holds with error 0, and one program runs `H_ref` at cost `≤ W_ref`
 with `N·m1Queries` oracle calls. -/
 def TTWitness : Prop :=
-  ∀ Wref : Layout → ℕ → ℕ,
+  ∀ Wref : UnitLayout → ℕ → ℕ,
     (∀ U : Workload, U.InDomain D1.m1Domain → ∀ u < U.layout.N, (U.layout.shape u).Wmm ≤ Wref U.layout u) →
     Assumptions.TT (outputPriced D1.M1Q D1.M1R Salt) (D1.m1 Wref).toProtocol D1.m1Domain Params.γ0 (fun _ _ => 0) ∧
     AdmitsRef (outputPriced D1.M1Q D1.M1R Salt) (D1.m1 Wref).toProtocol D1.m1Domain
@@ -120,7 +120,7 @@ weight noise shared per (epoch, weight) and `E_R` per (epoch, weight, group of 1
 `[−63, 63]`, `m1Queries` queries per unit, `E_L` queries that no other unit below `2^64` asks, and
 noise that is not identically zero on an in-domain workload. -/
 def MilestoneInstance : Prop :=
-  ∀ Wref : Layout → ℕ → ℕ,
+  ∀ Wref : UnitLayout → ℕ → ℕ,
     (D1.m1 Wref).IsMilestone ∧ (D1.m1 Wref).NoiseRange ∧ (D1.m1 Wref).QueryBound D1.m1Queries ∧
     (∀ (s s' : Salt) (u u' : ℕ) (A A' : Mat) (w w' : ℕ), u < 2 ^ 64 → u' < 2 ^ 64 →
       ∀ x ∈ D1.m1ELQ s u A w, x ∈ (D1.m1 Wref).qAct s' u' A' w' ++ (D1.m1 Wref).qWt s' u' w' → u = u') ∧
@@ -140,7 +140,7 @@ def MilestoneWref : Prop :=
 /-- **The honest reference is complete and does not win**: for a complete protocol, every unit of the honest
 transcript is correct, and at budget `T = W` the honest reference does not win for `0 ≤ γ < 1`. -/
 def HonestComplete : Prop :=
-  ∀ (Q R S : Type) (P : Protocol Q R S) (D : Layout → Prop) (U : Workload) (H : Q → R) (s : S) (act : ℕ → Mat),
+  ∀ (Q R S : Type) (P : Protocol Q R S) (D : UnitLayout → Prop) (U : Workload) (H : Q → R) (s : S) (act : ℕ → Mat),
     P.Complete D → U.InDomain D → (∀ u < U.layout.N, ActOK (U.layout.shape u) (act u)) →
     correctSet P U H s (honestTranscript P H s U act) = range U.layout.N ∧
     ∀ γ : ℝ, 0 ≤ γ → γ < 1 → ¬ Wins P U γ (totalWref P U.layout) (honestTranscript P H s U act) H s

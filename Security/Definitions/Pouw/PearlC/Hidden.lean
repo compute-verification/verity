@@ -43,9 +43,9 @@ prover and still make `TileProofSoundAll` hold at `ηzk = 0` with no proof syste
 structure HiddenAudit (Q R S : Type) where
   Root : Type
   Opening : Type
-  root : Workload → Transcript → Opening → Root
+  root : Workload → CommitLog → Opening → Root
   game : (Q → R) → S → Workload → Root → ℕ → Verity.Game Bool
-  Bounded : Transcript → Opening → (g : Verity.Game (List Bool)) → Verity.Game.Strategy g → ℕ → Prop
+  Bounded : CommitLog → Opening → (g : Verity.Game (List Bool)) → Verity.Game.Strategy g → ℕ → Prop
 
 /-- The proof phase after the draw `c`: the drawn tiles' proof games run side by side, the prover scheduling them
 (`Verity.Game.batch`), their verdicts in draw order. -/
@@ -57,14 +57,14 @@ def HiddenAudit.batch (HA : HiddenAudit Q R S) (H : Q → R) (s : S) (U : Worklo
 and the draw `x = (H, s, c)`, a strategy in the batch of `c`'s tiles' proof games on the commitment of `τ H s` under
 `op H s`. The opening is a function of `H` and `s` only, so it is fixed before the draw. -/
 abbrev HiddenAudit.Prover (HA : HiddenAudit Q R S) (TR : TileRules Q R S) (U : Workload)
-    (τ : (Q → R) → S → Transcript) (op : (Q → R) → S → HA.Opening) (w : ℕ → ℕ) (t : ℕ) : Type :=
+    (τ : (Q → R) → S → CommitLog) (op : (Q → R) → S → HA.Opening) (w : ℕ → ℕ) (t : ℕ) : Type :=
   (x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT)) →
     Verity.Game.Strategy (HA.batch x.1 x.2.1 U (HA.root U (τ x.1 x.2.1) (op x.1 x.2.1)) x.2.2)
 
 /-- `σ` is in the proof system's class at budget `q` after every draw, on the transcript and the opening it proves
 against. -/
 def HiddenAudit.ProverBounded (HA : HiddenAudit Q R S) {TR : TileRules Q R S} {U : Workload}
-    {τ : (Q → R) → S → Transcript} {op : (Q → R) → S → HA.Opening} {w : ℕ → ℕ} {t : ℕ}
+    {τ : (Q → R) → S → CommitLog} {op : (Q → R) → S → HA.Opening} {w : ℕ → ℕ} {t : ℕ}
     (σ : HA.Prover TR U τ op w t) (q : ℕ) : Prop :=
   ∀ x, HA.Bounded (τ x.1 x.2.1) (op x.1 x.2.1) _ (σ x) q
 
@@ -73,7 +73,7 @@ open Classical in
 hidden audit accepts (every verdict is accept) while `T` is below `1 − γ` of `τ`'s claimed work less `ε_s` of the
 layout's: `GγSampled`'s event, with the verdicts in place of the opened tiles. -/
 noncomputable def HiddenAudit.winProb [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (HA : HiddenAudit Q R S)
-    (TR : TileRules Q R S) (U : Workload) (τ : (Q → R) → S → Transcript) (op : (Q → R) → S → HA.Opening)
+    (TR : TileRules Q R S) (U : Workload) (τ : (Q → R) → S → CommitLog) (op : (Q → R) → S → HA.Opening)
     {w : ℕ → ℕ} {t : ℕ} (σ : HA.Prover TR U τ op w t) (γ T εs : ℝ) : ℝ :=
   ex fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
     if T < (1 - γ) * (claimedWref TR U (τ x.1 x.2.1) - εs * tileWrefTotal TR U.layout) then
@@ -95,7 +95,7 @@ The draw is `GγSampled`'s, the same random variable and not a fresh one: `x = (
 function of `H` and `s` only, so it is fixed before the draw. The proof games' coins are live coins, drawn inside each
 game after it. The prover sees the whole draw. -/
 def GγHidden [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (TR : TileRules Q R S) (D : Layout → Prop) (HA : HiddenAudit Q R S) (γ : ℝ) (η : ℕ → ℕ → ℝ) (ηzk : ℕ → ℝ) :
+    (TR : TileRules Q R S) (D : UnitLayout → Prop) (HA : HiddenAudit Q R S) (γ : ℝ) (η : ℕ → ℕ → ℝ) (ηzk : ℕ → ℝ) :
     Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ g < (TR.tiling U.layout).NT, (w g : ℝ) = κ * TR.Wref U.layout g) →

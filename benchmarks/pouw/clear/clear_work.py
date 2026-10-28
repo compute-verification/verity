@@ -62,7 +62,7 @@ from functools import partial
 from itertools import accumulate
 from math import lcm
 
-from clear_audit import Audit, Prover, TileOpening, Transcript, Verdict, Verifier, WorkProfile, commitment_hash, draw_coin
+from clear_audit import Audit, Prover, TileOpening, Publication, TileCheck, Verifier, WorkProfile, commitment_hash, draw_coin
 from verity.core.protocols.pouw.audit import Epoch, opened_value
 from verity.core.protocols.pouw.coins import Challenger
 from verity.core.protocols.pouw.protocol import Context, Shape, Tile, tagged
@@ -383,8 +383,8 @@ class WorkAudit:
     job: int
 
 
-def check_drawn(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records: Sequence[UnitRecord],
-                pick: tuple[int, Tile, TileOpening]) -> Verdict:
+def check_drawn(scheme: C.PearlC, epoch: Epoch, transcript: Publication, records: Sequence[UnitRecord],
+                pick: tuple[int, Tile, TileOpening]) -> TileCheck:
     """One opened tile, (record position, tile, opening): `Verifier.check_tile`, then `check_opened`."""
     pos, tile, opening = pick
     v = Verifier(_TileRuleView(scheme), epoch).check_tile(transcript, opening)
@@ -394,11 +394,11 @@ def check_drawn(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records:
         h = commitment_hash(scheme)
         a, b = [opened_value(h, o.value) for o in opening.a], [opened_value(h, o.value) for o in opening.b]
         reason = check_opened(scheme, records[pos], tile, a, b, scheme.encode(ctx, scheme.noise(ctx), a, b, tile))
-        v = v if reason is None else Verdict(v.tile, False, reason)
+        v = v if reason is None else TileCheck(v.tile, False, reason)
     return v
 
 
-def audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript, splits: Mapping[int, Split],
+def audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Publication, splits: Mapping[int, Split],
           records: Sequence[UnitRecord], challenger: Challenger, t: int,
           split_check: Callable[[int, Split], bool] | None = None, tile_map: Callable = map) -> WorkAudit:
     """Check the splits and the records, draw t tiles by the records' credit with the epoch's draw coin, open one tile
@@ -417,7 +417,7 @@ def audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript
     return _audit(scheme, epoch, prover, transcript, splits, records, t, split_check, tile_map, key_of)
 
 
-def audit_replay(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript, splits: Mapping[int, Split],
+def audit_replay(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Publication, splits: Mapping[int, Split],
                  records: Sequence[UnitRecord], committed_round: int, recorded: RecordedDraw, t: int,
                  split_check: Callable[[int, Split], bool] | None = None, tile_map: Callable = map) -> WorkAudit:
     """`audit` with a recorded run's unverified draw, for replays whose draws are Fiat–Shamir on the commitment
@@ -430,7 +430,7 @@ def audit_replay(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Tra
     return _audit(scheme, epoch, prover, transcript, splits, records, t, split_check, tile_map, key_of)
 
 
-def _audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcript, splits: Mapping[int, Split],
+def _audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Publication, splits: Mapping[int, Split],
            records: Sequence[UnitRecord], t: int, split_check: Callable[[int, Split], bool] | None, tile_map: Callable,
            key_of: Callable[[bytes], tuple[Key | None, str | None]]) -> WorkAudit:
     if getattr(scheme, "forming", "v1") != "v1":
@@ -442,7 +442,7 @@ def _audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcrip
     job = job_costs(scheme, records)
 
     def reject(reason: str) -> WorkAudit:
-        return WorkAudit(Audit(False, (), (Verdict(-1, False, reason),), None), w_ref, credit, job)
+        return WorkAudit(Audit(False, (), (TileCheck(-1, False, reason),), None), w_ref, credit, job)
 
     reason = check_records(epoch, splits, records)
     if reason is None and len(transcript.activation_roots) != len(records):
@@ -470,7 +470,7 @@ def _audit(scheme: C.PearlC, epoch: Epoch, prover: Prover, transcript: Transcrip
 
 def declare(scheme: C.PearlC, epoch: Epoch, activations: Mapping[int, Sequence[bytes]], weights: Mapping[int, Sequence[bytes]],
             splits: Mapping[int, Split], real_rows: Mapping[int, int] | None = None,
-            transcript: Transcript | None = None, voluntary_a: Mapping[int, Sequence[int]] | None = None,
+            transcript: Publication | None = None, voluntary_a: Mapping[int, Sequence[int]] | None = None,
             voluntary_b: Mapping[int, Sequence[int]] | None = None,
             padded_b: Mapping[int, Sequence[int]] | None = None) -> list[UnitRecord]:
     """An honest prover's records: each real row and each weight row checked by the per-row rules on the unit's words,
@@ -507,7 +507,7 @@ def declare(scheme: C.PearlC, epoch: Epoch, activations: Mapping[int, Sequence[b
     return out
 
 
-def volunteer(scheme: C.PearlC, epoch: Epoch, transcript: Transcript, records: Sequence[UnitRecord],
+def volunteer(scheme: C.PearlC, epoch: Epoch, transcript: Publication, records: Sequence[UnitRecord],
               activations: Mapping[int, Sequence[bytes]], weights: Mapping[int, Sequence[bytes]]
               ) -> tuple[dict[int, list[int]], dict[int, list[int]]]:
     """V-EX's honest remedy, before the draws: (voluntary A rows by matmul index, voluntary B rows by weight) such that

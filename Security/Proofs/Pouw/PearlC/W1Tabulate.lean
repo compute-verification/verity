@@ -6,7 +6,7 @@ import Proofs.Pouw.Prob
 # A cheap winning W1 program refutes TT_OUT at W1, and W1 charges only the branch a run takes
 
 `TTOutW1` (`Definitions.Pouw.Assumptions.PearlC.TTOutW1`), `Gγ` and `GγPerCoin` bound every adversary by its cost and
-its oracle calls. W1 itself bounds a program's text (`W1.Prog.bounded`: at every layout `2^64` code nodes and `2^64`
+its oracle calls. W1 itself bounds a program's text (`W1.Listing.bounded`: at every layout `2^64` code nodes and `2^64`
 constants), and nothing else bounds an adversary. These lemmas make that exact, as attack tools for
 the TT family restated at `W1.w1Priced`.
 
@@ -126,10 +126,10 @@ theorem size_tree (leaf : List Bool → W1.Code) : ∀ (n : ℕ) (path : List Bo
       omega
 
 /-- **No W1 program's code is a tree of `ite`s of depth above 64**, at any layout and whatever the tree's leaves: the
-tree has at least `2^n` nodes (`size_tree`), and W1's text bound (`Prog.bounded`) allows `2^64`. The table of one
+tree has at least `2^n` nodes (`size_tree`), and W1's text bound (`Listing.bounded`) allows `2^64`. The table of one
 leaf per salt, `tree leaf 256 []` on the salt's 256 bits, is one of them. -/
-theorem tree_not_code (leaf : List Bool → W1.Code) {n : ℕ} (hn : 64 < n) (path : List Bool) (pr : Prog)
-    (L : Layout) : pr.code L ≠ tree leaf n path := by
+theorem tree_not_code (leaf : List Bool → W1.Code) {n : ℕ} (hn : 64 < n) (path : List Bool) (pr : Listing)
+    (L : UnitLayout) : pr.code L ≠ tree leaf n path := by
   intro h
   have h1 := (pr.bounded L).1
   rw [h] at h1
@@ -141,7 +141,7 @@ theorem tree_not_code (leaf : List Bool → W1.Code) {n : ℕ} (hn : 64 < n) (pa
 /-- **TT_OUT at W1 fails at a winning adversary.** One adversary within `T` and `q ≤ 2^64` calls whose correct units'
 credit exceeds `T / (1 − γ₀)` with probability above `ε q N` refutes `TTOutW1`. -/
 theorem not_ttOutW1_of_win [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {dv : W1Device}
-    {salt : S → List ℕ} {P : Protocol Q R S} {D : Layout → Prop} {γ₀ : ℝ} {ε : ℕ → ℕ → ℝ}
+    {salt : S → List ℕ} {P : Protocol Q R S} {D : UnitLayout → Prop} {γ₀ : ℝ} {ε : ℕ → ℕ → ℝ}
     (U : Workload) (hU : U.InDomain P D) (T : ℝ) (hT : 0 ≤ T) (q : ℕ) (hq : q ≤ 2 ^ 64)
     (A : Adversary (W1.w1Priced dv salt : CostModel Q R S)) (hA : A.Bounded U T q)
     (hwin : ε q U.layout.N < pr (fun x : (Q → R) × S =>
@@ -152,7 +152,7 @@ theorem not_ttOutW1_of_win [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {
 
 /-- **The γ-gap property fails at a winning adversary**, over any cost model (`W1.w1Priced` among them). -/
 theorem not_gγ_of_win [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S}
-    {P : Protocol Q R S} {D : Layout → Prop} {γ : ℝ} {η : ℕ → ℕ → ℝ}
+    {P : Protocol Q R S} {D : UnitLayout → Prop} {γ : ℝ} {η : ℕ → ℕ → ℝ}
     (U : Workload) (hU : U.InDomain P D) (T : ℝ) (hT : 0 ≤ T) (q : ℕ) (hq : q ≤ 2 ^ 64)
     (A : Adversary CM) (hA : A.Bounded U T q)
     (hwin : η q U.layout.N < pr (fun x : (Q → R) × S => Wins P U γ T (A.transcript U x.1 x.2) x.1 x.2)) :
@@ -162,7 +162,7 @@ theorem not_gγ_of_win [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM :
 /-- **The γ-gap property per coin fails at a winning adversary**, over any cost model (the compute audit's
 `W1.w1Priced` among them). -/
 theorem not_gγPerCoin_of_win [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {CM : CostModel Q R S}
-    {P : Protocol Q R S} {D : Layout → Prop} {γ : ℝ} {η : ℕ → ℕ → ℝ}
+    {P : Protocol Q R S} {D : UnitLayout → Prop} {γ : ℝ} {η : ℕ → ℕ → ℝ}
     (U : Workload) (hU : U.InDomain P D) (T : ℝ) (hT : 0 ≤ T) (q : ℕ) (hq : q ≤ 2 ^ 64)
     (A : Adversary CM)
     (hcalls : ∀ (H : Q → R) (s : S), A.pre.calls H + CM.calls A.online H U A.act (A.pre.eval H) s ≤ q)
@@ -188,7 +188,7 @@ def tabP : Protocol Unit Unit Unit where
   Wref := fun _ _ => 1
 
 /-- The empty program: one node of text, within W1's bound. -/
-def emptyProg : Prog := ⟨fun _ => [], fun _ => .done, fun _ => by norm_num [W1.Code.size]⟩
+def emptyProg : Listing := ⟨fun _ => [], fun _ => .done, fun _ => by norm_num [W1.Code.size]⟩
 
 /-- The adversary that runs the empty program on zero activations, with no preprocessing. -/
 def emptyAdv (dv : W1Device) : Adversary (W1.w1Priced dv (fun _ : Unit => []) : CostModel Unit Unit Unit) :=

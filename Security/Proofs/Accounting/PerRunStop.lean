@@ -37,7 +37,7 @@ def RealizesPearlCPriced.withStop {CM : PearlC.CostModel Q R S} {P : PearlC.Prot
 the machine doesn't stop it, its arithmetic (`final`'s `cost`) is within the compute charge `work` and `fetch` per word
 it first fetches (`w1Read`) within the bandwidth charge `pRead·bits`, and, if the machine stops it at budget `b`, `b` is
 within the two. -/
-theorem w1Stop_cost_le (dv : PearlC.W1.W1Device) (salt : S → List ℕ) (prog : PearlC.W1.Prog × Option ℝ) (H : Q → R)
+theorem w1Stop_cost_le (dv : PearlC.W1.W1Device) (salt : S → List ℕ) (prog : PearlC.W1.Listing × Option ℝ) (H : Q → R)
     (U : PearlC.Workload) (act : ℕ → PearlC.Codes) (σ : PearlC.State) (s : S) {work bits pRead : ℝ}
     (hrun : (∀ b, prog.2 = some b → (PearlC.W1.w1Priced dv salt : PearlC.CostModel Q R S).cost prog.1 H U act σ s ≤ b) →
       ((PearlC.W1.final dv (salt s) prog.1 U act σ).cost : ℝ) ≤ work ∧
@@ -83,7 +83,7 @@ property per coin over `w1Priced`, for a run that realizes `W1.w1Stop` (one that
 `RealizesPearlCPriced.withStop`). -/
 theorem w1Stop_computeSoundPerRunPriced [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : PearlC.W1.W1Device)
     (hdv : PearlC.W1BudgetAbort.Positive dv) (salt : S → List ℕ) {P : PearlC.Protocol Q R S}
-    {D : PearlC.Layout → Prop} {γ : ℝ} {η : ℕ → ℕ → ℝ} (hγ : γ < 1)
+    {D : PearlC.UnitLayout → Prop} {γ : ℝ} {η : ℕ → ℕ → ℝ} (hγ : γ < 1)
     (hG : PearlC.GγPerCoin (PearlC.W1.w1Priced dv salt) P D γ η) {U : PearlC.Workload} (hU : U.InDomain P D)
     {w : ℕ → ℕ} {κ : ℝ} (hκ : 0 ≤ κ) (hw : ∀ u < U.layout.N, P.Wref U.layout u = κ * w u) {t : ℕ} {εs : ℝ}
     (hεs : εs ≤ 1) [Nonempty (PearlCCoins Q R S U w t)] {ι α ΩQ ΩS : Type} [Fintype α] [Fintype ΩQ] [Fintype ΩS]

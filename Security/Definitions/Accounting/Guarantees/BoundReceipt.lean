@@ -201,7 +201,7 @@ for those entries discharges it, compute accounting's to state (NCP's checkpoint
 Pearl-C's k-slice accumulators the same hypothesis in Pearl-C's game is `TileUnpredictablePearlC`).
 `TileUnpredictableMono` carries it to the full set and to every set containing `keep`. -/
 def TileUnpredictable {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.CostModel Q R S)
-    (P : Pouw.Protocol Q R S) (credit : Pouw.Shape → ℝ) (D : Pouw.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
+    (P : Pouw.Protocol Q R S) (credit : Pouw.Shape → ℝ) (D : Pouw.UnitLayout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Pouw.Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Pouw.Adversary CM,
     A.Bounded U T q → ∀ u : ℕ, T / (1 - γ₀) < credit (U.layout.shape u) →
       Pouw.pr (fun x : (Q → R) × S => u ∈ Pouw.checkedSet P U x.1 x.2 (A.transcript U x.1 x.2)) ≤ ε q U.layout.N
@@ -216,7 +216,7 @@ Frozen (conjecture, no-function, hash): it carries the named open conjecture TT,
 to one unit, about no Lean function of the protocol's code. -/
 def TileUnpredictableOfTT : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.CostModel Q R S)
-    (P : Pouw.Protocol Q R S) (D : Pouw.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ),
+    (P : Pouw.Protocol Q R S) (D : Pouw.UnitLayout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ),
     Pouw.Assumptions.TT CM P D γ₀ ε → TileUnpredictable CM P (fun sh => (sh.Wmm : ℝ)) D γ₀ ε
 
 /-- **NCP's `TT_NCP_U` gives `TileUnpredictable` on route U at the stacked product's work `3·m·k·n`.** For every bias
@@ -228,7 +228,7 @@ Proof: `Accounting.SecurityProofs.TileUnpredictableOfNCPU`.
 Frozen (conjecture, no-function, hash): as `TileUnpredictableOfTT`, for NCP's named conjecture on route U. -/
 def TileUnpredictableOfNCPU : Prop :=
   ∀ (β : ℤ) (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.CostModel Q R S)
-    (P : Pouw.NCP.Params Q R S) (D : Pouw.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ),
+    (P : Pouw.NCP.Params Q R S) (D : Pouw.UnitLayout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ),
     (∀ U : Pouw.Workload, U.InDomain D → ∀ u < U.layout.N, (P.d : ℝ) ≤ γ₀ * (3 * (U.layout.shape u).k)) →
     Pouw.NCP.Assumptions.TTNCP_U β CM P D γ₀ ε →
       TileUnpredictable CM (P.toProtocolU β) (fun sh => 3 * (sh.Wmm : ℝ)) D γ₀ ε
@@ -249,7 +249,7 @@ is, for a named assumption on those accumulators to discharge: `TileUnpredictabl
 one of `TT_OUT`'s shape at W1 at that protocol. -/
 def TileUnpredictablePearlC {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : Pouw.PearlC.CostModel Q R S) (P : Pouw.PearlC.Protocol Q R S) (credit : Pouw.PearlC.Shape → ℝ)
-    (D : Pouw.PearlC.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
+    (D : Pouw.PearlC.UnitLayout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Pouw.PearlC.Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Pouw.PearlC.Adversary CM, A.Bounded U T q → ∀ u : ℕ, T / (1 - γ₀) < credit (U.layout.shape u) →
       Pouw.pr (fun x : (Q → R) × S => u ∈ Pouw.PearlC.correctSet P U x.1 x.2 (A.transcript U x.1 x.2)) ≤
@@ -271,7 +271,7 @@ Pearl-C protocol. -/
 def TileUnpredictablePearlCOfTTOut : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : Pouw.PearlC.W1.W1Device)
     (salt : S → List ℕ) (P : Pouw.PearlC.Protocol Q R S) (credit : Pouw.PearlC.Shape → ℝ)
-    (D : Pouw.PearlC.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ),
+    (D : Pouw.PearlC.UnitLayout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ),
     (∀ (H : Q → R) (s : S) (U : Pouw.PearlC.Workload) (u : ℕ) (c : Pouw.PearlC.Commit),
       Pouw.PearlC.Correct P U H s u c → 0 ≤ P.credit H s U u c.act ∧ credit (U.layout.shape u) ≤ P.credit H s U u c.act) →
     Pouw.PearlC.Assumptions.TTOutW1 dv salt P D γ₀ ε →
@@ -289,7 +289,7 @@ Frozen (no-function, hash): an implication between hypotheses over PoUW's game w
 function of the protocol's code. -/
 def TileUnpredictableMono : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.CostModel Q R S)
-    (P P' : Pouw.Protocol Q R S) (credit credit' : Pouw.Shape → ℝ) (D : Pouw.Layout → Prop) (γ₀ : ℝ)
+    (P P' : Pouw.Protocol Q R S) (credit credit' : Pouw.Shape → ℝ) (D : Pouw.UnitLayout → Prop) (γ₀ : ℝ)
     (ε : ℕ → ℕ → ℝ),
     P'.Y = P.Y → (∀ sh, P.checkIdx sh ⊆ P'.checkIdx sh) → (∀ sh, credit' sh ≤ credit sh) →
       TileUnpredictable CM P credit D γ₀ ε → TileUnpredictable CM P' credit' D γ₀ ε

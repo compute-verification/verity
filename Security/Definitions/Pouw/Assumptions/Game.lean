@@ -24,7 +24,7 @@ are correct (`checkedSet`; the useful output is not required). Then
 It is stated in the same game as `Gγ`, so grinding and collisions over the `q` free oracle calls are inside
 `ε(q, N)`. TT is false when `γ₀ ≥ 1` or for zero noise in natural models (`Pouw.Sanity`). -/
 def TT [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (D : Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
+    (D : UnitLayout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
   CM.Queries ∧
   ∀ U : Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     pr (fun x : (Q → R) × S =>

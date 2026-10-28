@@ -38,7 +38,7 @@ INT8, and a slow but exact CUDA kernel to fall back on. The fast kernels are `be
   agree). Writes `DIR/expected.npz` (per call: proof blocks, receipts, z, seed_c, sigma) and `DIR/fixtures.json` (each call's
   public inputs, each sampled proof block's operand digests, each array's sha256, the Definition's source digests).
 - `j10r_ref.cu` (`j10r_ref.so`): the fallback kernel, slow but exact. One CTA a proof block and one thread a (lane, chain) of
-  `h1tile.Layout`. Integers only, no tensor cores, every value in the Definition's order. Each CTA hashes its proof block's
+  `h1tile.TileShape`. Integers only, no tensor cores, every value in the Definition's order. Each CTA hashes its proof block's
   noise chunks from seed_c and its fold keys from sigma_R. Exports `jr_seeds`, `jr_units` (receipts) and `jr_z` (z by
   `dp4a`).
 - `units.py`: ctypes adapters for an h1u build (`H1u`, `H1uCall`) and for the fallback (`Ref`, `RefCall`).

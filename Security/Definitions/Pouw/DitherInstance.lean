@@ -12,7 +12,7 @@ import Definitions.Core.Accel.Principles
   the pooled cards share their stores and resources, so the links between them are free), at `f` ticks a second, and
   the period's other devices (`Others`: the host CPUs and DPUs the cards reach without crossing a network certifier),
   each resource at its θ rate;
-* **where a round's coin and words sit in the cards' memory** (`Layout`);
+* **where a round's coin and words sit in the cards' memory** (`MemMap`);
 * **`G` is the devices at the open parameters `x`** (`OnCard`): `G`'s resources are the pooled cards' and the others',
   at θ's rates; its memory is theirs; its (P1) and (P2) are MODEL-SPEC's; and every words program the cards run is a
   program of `G` with the run's units as its use, its ticks and backlog as its wall time and no import;
@@ -94,7 +94,7 @@ def Devices.machine {c : Verity.Accel.Card} (D : Devices c) (x : Verity.Accel.Op
 /-- **Where a round's coin and words sit in the cards' memory**: the dither coin written into the memory a words
 program starts from (`putDraw`), and the words read from the memory it ends with (`getTr`), as the deployed kernel lays
 them out. A layout moves words; it computes nothing. The headline holds at every layout. -/
-structure Layout (m : Verity.Accel.Machine Empty) (P : RoundProto) where
+structure MemMap (m : Verity.Accel.Machine Empty) (P : RoundProto) where
   putDraw : P.Draw → m.Mem → m.Mem
   getTr : m.Mem → P.Tr
 
@@ -131,7 +131,7 @@ realization, open. A program of `G` cheaper than any of the card's makes
 `SAKMatmul` or `ShaSpeed` false at `G`, and the headline then says nothing at that `G`; the `G` the headline is read at
 has the card's programs and no others. -/
 def OnCard (G : Accel) (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devices c) (P : RoundProto)
-    (L : Layout (D.machine x) P) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) : Prop :=
+    (L : MemMap (D.machine x) P) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) : Prop :=
     (∀ r, G.rate (e.symm (.inl r)) = ((poolCard c D.n D.n_pos).ρ r : ℝ) * D.f) ∧
     (∀ h, G.rate (e.symm (.inr h)) = D.oth.rate h) ∧
     G.mem = (((D.machine x).chip + (D.machine x).mem : ℕ) : ℝ) + D.oth.mem ∧
@@ -305,8 +305,8 @@ certifier's signed counts of the bits into (`cin`) and out of (`cout`) the perio
 from the devices' readings, are within the caps `E_in` and `E_out`, fixed before the period at served traffic; a
 period past either is refused. The counts exclude the certifier's own coin stream: the dither coin is
 the round's `Draw`, an input of its programs, not an exchanged bit (`Accel.ext`). -/
-def Counted {P : RoundProto} {k : ℕ} {Obs : Type} (verdict : Verdict P k Obs) (cin cout : Obs → ℝ)
-    (Ein Eout : ℝ) : Verdict P k Obs :=
+def Counted {P : RoundProto} {k : ℕ} {Obs : Type} (verdict : Acceptance P k Obs) (cin cout : Obs → ℝ)
+    (Ein Eout : ℝ) : Acceptance P k Obs :=
   fun o x tr ob => verdict o x tr ob ∧ cin ob ≤ Ein ∧ cout ob ≤ Eout
 
 end Certifier
@@ -331,19 +331,19 @@ times, as the verdict reads them from the devices' readings `ob`.
 
 The number of sampling blocks and of selected ones is bounded by nothing here. The clocks are the auditor's devices,
 and nothing here reads a time the prover reports. -/
-def Timed {G : Accel} {P : RoundProto} {nsb : ℕ} {Obs : Type} (verdict : Verdict P nsb Obs) (Pd : Period G) (Δ : ℝ)
+def Timed {G : Accel} {P : RoundProto} {nsb : ℕ} {Obs : Type} (verdict : Acceptance P nsb Obs) (Pd : PeriodDevices G) (Δ : ℝ)
     (t arrive : Obs → Fin nsb → ℝ) (sel : P.Chk → Prop) (τans : ℝ) (tc ansAt : Obs → Fin nsb → ℝ) :
-    Verdict P nsb Obs :=
+    Acceptance P nsb Obs :=
   fun o x tr ob => verdict o x tr ob ∧ (∀ b, 0 ≤ t ob b ∧ t ob b + Δ ≤ Pd.T ∧ arrive ob b ≤ t ob b + Δ) ∧
     (∀ b b' : Fin nsb, (b : ℕ) + 1 = b' → arrive ob b ≤ t ob b') ∧ (∀ b, arrive ob b ≤ tc ob b) ∧
     ∀ b, sel (x b).2 → 0 ≤ tc ob b ∧ tc ob b + τans ≤ Pd.T ∧ ansAt ob b ≤ tc ob b + τans
 
 /-- **An accepted period's sampling blocks' work fits the period**: for every prover whose period the verdict accepts,
 its sampling blocks' timed use (`Prover.timedUse`: each block's work, from its dither coins to its commitment) is,
-resource by resource, at most the period's capacity `Period.cap`. This is what lets the headline count that use
+resource by resource, at most the period's capacity `PeriodDevices.cap`. This is what lets the headline count that use
 against the period's devices: it was done on them, inside the period. -/
-def TimedWorkFits (G : Accel) (P : RoundProto) (nsb : ℕ) {Obs : Type} (verdict : Verdict P nsb Obs)
-    (dev : Readings G P nsb Obs) (Pd : Period G) : Prop :=
+def TimedWorkFits (G : Accel) (P : RoundProto) (nsb : ℕ) {Obs : Type} (verdict : Acceptance P nsb Obs)
+    (dev : Readings G P nsb Obs) (Pd : PeriodDevices G) : Prop :=
   ∀ (A : Prover G P nsb) (o : P.Orc) (x : Fin nsb → P.Draw × P.Chk), A.Passes verdict dev o x →
     ∀ r, A.timedUse o x r ≤ Pd.cap r
 

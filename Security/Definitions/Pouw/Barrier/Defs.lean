@@ -30,7 +30,7 @@ activations `𝒜` commits, are the adversary's choice within int7), `c₀ ≥ 0
 of `U` is correct in `𝒜`'s transcript for every oracle and salt. A *degenerate input* is the special case where
 `𝒜`'s committed activations or `U`'s weights make the useful output a known constant (`A = 0` or `B = 0`), so that
 `c₀` is the cost of the checked values alone. -/
-def CheapPoint (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (U : Workload) (A : Adversary CM)
+def CheapPoint (CM : CostModel Q R S) (P : Protocol Q R S) (D : UnitLayout → Prop) (U : Workload) (A : Adversary CM)
     (c₀ : ℝ) (q : ℕ) : Prop :=
   U.InDomain D ∧ 0 ≤ c₀ ∧ q ≤ 2 ^ 64 ∧ A.Bounded U c₀ q ∧
     ∀ (H : Q → R) (s : S), correctSet P U H s (A.transcript U H s) = range U.layout.N
@@ -107,7 +107,7 @@ def Plan.commit (p : Plan) (N : NoiseSrc Q R S) (H : Q → R) (s : S) (U : Workl
 blank; its cost is the sum of its units' plan costs. Its oracle use is only through the noise atoms, and it makes no
 counted calls (hash calls are free in the game). -/
 def gemmModel (N : NoiseSrc Q R S) : CostModel Q R S where
-  Prog := Layout → ℕ → Option Plan
+  Prog := UnitLayout → ℕ → Option Plan
   run prog H U act _ s u := (prog U.layout u).map fun p => p.commit N H s U act u
   cost prog _ U _ _ _ := ∑ u ∈ range U.layout.N, ((((prog U.layout u).map Plan.cost).getD 0 : ℕ) : ℝ)
   calls _ _ _ _ _ _ := 0
@@ -124,7 +124,7 @@ def corner (m n : ℕ) (M : Mat) : Mat := fun i j => if i < m ∧ j < n then M i
 /-- **Class (a)**: one checked product, the noised product `(A + E)(B + F)` with `E`, `F` the noise matrices 0 and 1,
 compared on block 0's `m × n` entries; `H_ref`'s useful output is `A·B` by a decode outside the checked product, and
 `W_ref` is a parameter. -/
-def addProto (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) : Protocol Q R S where
+def addProto (N : NoiseSrc Q R S) (W : UnitLayout → ℕ → ℕ) : Protocol Q R S where
   Y H s U u A := fun _ => mm (U.layout.shape u).k (A + N H s U u A 0) (wtOf U u + N H s U u A 1)
   checkIdx sh := {0} ×ˢ (range sh.m ×ˢ range sh.n)
   refChecked H s U u A := fun t =>
@@ -139,7 +139,7 @@ def relProd (N : NoiseSrc Q R S) (H : Q → R) (s : S) (U : Workload) (u : ℕ) 
 
 /-- **Class (b)**: `t` checked products, each compared on its final `m × n` entries (block `i < t`); `H_ref`'s useful
 output is the known linear combination `∑_{i < t} c_i·P_i`, and `W_ref` is a parameter. -/
-def relProto (t : ℕ) (c : ℕ → ℤ) (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) : Protocol Q R S where
+def relProto (t : ℕ) (c : ℕ → ℤ) (N : NoiseSrc Q R S) (W : UnitLayout → ℕ → ℕ) : Protocol Q R S where
   Y H s U u A := relProd N H s U u A
   checkIdx sh := range t ×ˢ (range sh.m ×ˢ range sh.n)
   refChecked H s U u A := fun i =>
@@ -162,7 +162,7 @@ def RelNoise (t : ℕ) (c : ℕ → ℤ) (N : NoiseSrc Q R S) : Prop :=
 noise matrices 0 and 1, `α`, `β` the protocol's operand maps), whose checked values are its running sums after every
 depth-`d` step: block `t < L` is `∑_{l < (t + 1)·d} X_{il}·Y_{lj}` on the `m × n` entries. `H_ref`'s useful output is
 the last running sum; `W_ref` is a parameter. -/
-def segProto (L d : ℕ) (α β : Mat → Mat) (N : NoiseSrc Q R S) (W : Layout → ℕ → ℕ) : Protocol Q R S where
+def segProto (L d : ℕ) (α β : Mat → Mat) (N : NoiseSrc Q R S) (W : UnitLayout → ℕ → ℕ) : Protocol Q R S where
   Y H s U u A := fun t => mm ((t + 1) * d) (α A + N H s U u A 0) (β (wtOf U u) + N H s U u A 1)
   checkIdx sh := range L ×ˢ (range sh.m ×ˢ range sh.n)
   refChecked H s U u A := fun t =>

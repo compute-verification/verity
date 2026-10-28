@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 
 from scipy.optimize import linprog
 
-from verity_machine_model.eps import DATA, LANES, MMA, Machine, honest, profiles
+from verity_machine_model.eps import DATA, LANES, MMA, IssueCosts, honest, profiles
 
 TENSOR_CYCLES = 16.0  # every MMA kind holds the tensor pipe 16 SMSP-cycles (row M)
 
@@ -145,7 +145,7 @@ class Hidden:
         return max(self.load.values()) if self.load else 0.0
 
 
-def hidden(pi: Machine, w: Work, useful: dict[str, float] | None = None) -> Hidden:
+def hidden(pi: IssueCosts, w: Work, useful: dict[str, float] | None = None) -> Hidden:
     useful = {k: v for k, v in (useful or USEFUL).items() if k in pi.c}
     load = pi.load(w.n)
     over = tuple(r for r, x in load.items() if x > 1 + 1e-9)
@@ -174,7 +174,7 @@ def pool(groups: list[tuple[float, Work]] | tuple[tuple[float, Work], ...]) -> W
 
 
 @dataclass(frozen=True)
-class Window:
+class WindowCell:
     """A window and node cell: groups of (share of its SMSP-time, certified work), read on their pooled load."""
     groups: tuple[tuple[float, Work], ...]
     vector: str
@@ -209,11 +209,11 @@ class Window:
                            for (w, g), h in zip(self.groups, self.parts)]}
 
 
-def window(pi: Machine, groups: list[tuple[float, Work]] | tuple[tuple[float, Work], ...],
-           useful: dict[str, float] | None = None) -> Window:
+def window(pi: IssueCosts, groups: list[tuple[float, Work]] | tuple[tuple[float, Work], ...],
+           useful: dict[str, float] | None = None) -> WindowCell:
     tot = sum(w for w, _ in groups)
     if abs(tot - 1.0) > 1e-6:
         raise SystemExit(f"capacity: the groups' shares of SMSP-time sum to {tot:g}, not 1")
     empty = hidden(pi, Work("empty", {}), useful).hidden
-    return Window(tuple(groups), pi.vector, empty, hidden(pi, pool(groups), useful),
+    return WindowCell(tuple(groups), pi.vector, empty, hidden(pi, pool(groups), useful),
                   tuple(hidden(pi, g, useful) for _, g in groups))

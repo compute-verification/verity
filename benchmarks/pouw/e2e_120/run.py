@@ -9,8 +9,8 @@ pod, benchmarks/pouw/e2e_120/job.sh stages the same `PouwSegCheckDither_v2{S, du
 Lean verifier of record, so accept/reject there is the verifier's; `run.py --stage OUT` writes one honest statement's
 circuit.txt, inst.bin and pub.bin for it.
 
-Stand-in values until vLLM's int8 window exists: `window.Window.stand_in` (seeded int8 W and X). Real values plug in at
-`window.Window` (W the registered weights, X the served activations), `window.Coins` (U, the dither d and the receipt key
+Stand-in values until vLLM's int8 window exists: `window.ServedValues.stand_in` (seeded int8 W and X). Real values plug in at
+`window.ServedValues` (W the registered weights, X the served activations), `window.RoundCoins` (U, the dither d and the receipt key
 from the coin; H1's cgemm.cu tags) and `window.Honest.receipts` (the H1 kernel's receipts in this layout; today duo, under
 PIN's v3 fx1).
 """

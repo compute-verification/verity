@@ -24,7 +24,7 @@ U_ij          acc = C̃_ij;  acc = k16(acc, P_A,i[16s:16s+16], P_B,j[16s:16s+16]
 
 **The two tensor-core steps in integers** (`grouped`; ``verity.ml.circuits.silicon``'s ``HOPPER_E4M3_K32`` and ``HOPPER_BF16_WGMMA_K16``
 restated, and equal to them on every vector and the random sweep in the tests).  The device (`pearl_c_device`, the H100 by
-default) gives each step as Lean's `Pipeline` (`Device.pipelines`): its groups in k order, the width W and the floor F.  A
+default) gives each step as Lean's `Pipeline` (`DeviceProfile.pipelines`): its groups in k order, the width W and the floor F.  A
 step of several groups runs `grouped` once per group, the accumulator joining the first and each group's word the next
 (Ada's E4M3 atom: two groups of 16).  The table's W and F are the H100's:
 
@@ -49,7 +49,7 @@ from collections.abc import Sequence
 
 from verity.ml.circuits.silicon import fp32
 
-from .pearl_c_device import H100, Device
+from .pearl_c_device import H100, DeviceProfile
 
 STATUS = "cpu-pinned"
 R, WINDOW, SLICE, PEEL_K = 32, 128, 32, 64
@@ -127,12 +127,12 @@ def _pipeline(fmt: str, pipeline: tuple[tuple[int, ...], int, int], acc: int, x:
     return acc
 
 
-def atom(acc: int, a: Sequence[int], b: Sequence[int], device: Device = H100) -> int:
+def atom(acc: int, a: Sequence[int], b: Sequence[int], device: DeviceProfile = H100) -> int:
     """The device's k32 E4M3 atom into the accumulator (HOPPER_E4M3_K32 on the H100)."""
     return _pipeline("e4m3", device.pipelines["atom"], acc, a, b)
 
 
-def k16(acc: int, x: Sequence[int], y: Sequence[int], device: Device = H100) -> int:
+def k16(acc: int, x: Sequence[int], y: Sequence[int], device: DeviceProfile = H100) -> int:
     """The device's k16 BF16 step into the accumulator (HOPPER_BF16_WGMMA_K16 on the H100)."""
     return _pipeline("bf16", device.pipelines["peel"], acc, x, y)
 
@@ -153,7 +153,7 @@ def rn_bf16(word: int) -> int:
     return out
 
 
-def chain(a: Sequence[int], b: Sequence[int], trace: dict | None = None, device: Device = H100) -> int:
+def chain(a: Sequence[int], b: Sequence[int], trace: dict | None = None, device: DeviceProfile = H100) -> int:
     """C̃ (or A′·F_B, B̃·F_A, G): windows of 32·G products, G atoms from +0 each, promoted by one RN FP32 add.  `trace`
     collects each atom's local word ("atoms") and each promotion's total ("totals").  Unpromoted (G None): one window over
     the whole of k and no promotion, so the word is the last atom's."""
@@ -201,7 +201,7 @@ def pb_row(be: Sequence[int], bf: Sequence[int], g: Sequence[Sequence[int]], tra
     return mid + [x ^ 0x8000 for x in be]
 
 
-def u(c: int, pa: Sequence[int], pb: Sequence[int], trace: list | None = None, device: Device = H100) -> int:
+def u(c: int, pa: Sequence[int], pb: Sequence[int], trace: list | None = None, device: DeviceProfile = H100) -> int:
     """U_ij from C̃_ij: four k16 steps over P_A,i and P_B,j in slice order.  `trace` collects the word after each step."""
     acc = c
     for s in range(0, PEEL_K, 16):

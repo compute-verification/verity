@@ -13,7 +13,7 @@ position and roots, and its index, a 16-bit word, and returns `ok`. On its primi
   lane's candidates by a `PouwMuxBit` tree (`pick`, `h1zy._pick`); the OR of its 11 high bits (`PouwOrBit` tree) sends
   `ok` to `0` (`PouwMuxBit(high, checked, 0)`).
 * **The cells.** Cell `(s, t)` of the lane (row slot `s`, column slot `t`, row-major) is the leaf's cell
-  `(laneRow l s, laneCol l t)` (`h1tile.Layout.rows`, `cols` at `R = C = 32`; `h1zy.lane_cells`), picked from the 32
+  `(laneRow l s, laneCol l t)` (`h1tile.TileShape.rows`, `cols` at `R = C = 32`; `h1zy.lane_cells`), picked from the 32
   lanes' by `sel`. Its z is the tile's EXACT on the A row's and B row's codes, `GemmAccumulatorS8_v2{K, sm120}`'s word
   view (`gemmAccS8`: `K/32` steps of `BlackwellS8ImmaDot32_v1`, `immaS8`, from a zero accumulator).
   `PouwZyCheck_v1{4, 8}` (`zyCheck`) is `1` exactly when every cell's record z is that z and its record y is the
@@ -78,11 +78,11 @@ each pass muxing adjacent candidates; `d` for an empty list. -/
 def pick {α : Type} (d : α) (sel : List Bool) (cands : List α) : α :=
   (sel.foldl (fun cs s => pairs (mux s) cs) cands).headD d
 
-/-- Lane `l`'s row at row slot `s` (`h1tile.Layout.rows` at `R = C = 32`): `⌊l/4⌋ + 8 s`. -/
+/-- Lane `l`'s row at row slot `s` (`h1tile.TileShape.rows` at `R = C = 32`): `⌊l/4⌋ + 8 s`. -/
 def laneRow (l : Fin 32) (s : Fin 4) : Fin 32 :=
   ⟨l.val / 4 + 8 * s.val, by have := l.isLt; have := s.isLt; omega⟩
 
-/-- Lane `l`'s column at column slot `t` (`h1tile.Layout.cols` at `R = C = 32`): `2 (l mod 4) + 8 ⌊t/2⌋ + (t mod 2)`. -/
+/-- Lane `l`'s column at column slot `t` (`h1tile.TileShape.cols` at `R = C = 32`): `2 (l mod 4) + 8 ⌊t/2⌋ + (t mod 2)`. -/
 def laneCol (l : Fin 32) (t : Fin 8) : Fin 32 :=
   ⟨2 * (l.val % 4) + 8 * (t.val / 2) + t.val % 2, by have := t.isLt; omega⟩
 

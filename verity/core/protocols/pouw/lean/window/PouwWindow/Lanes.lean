@@ -6,7 +6,7 @@ index), and their combine `PouwH1Combine_v1{TILE}`, each a C-Flock statement of 
 and contraction (`Tile`), which port of each statement holds each of the Definition's inputs and its output, at which bits
 of the port's row (`Field`), and where the verifier opens that row (`Source`): the port of `h1zy.statement_ports`, with
 each port's row as #3116's `pouw.leaf_lanes` reads it (`reads`, `known`). `tests/test_lanes.py` holds it to the first and
-to `h1tile.Layout`'s rows and columns, at the served 32 × 32 leaf at K = 448, 4096 and 14336 and at the sidecar's 8 × 16
+to `h1tile.TileShape`'s rows and columns, at the served 32 × 32 leaf at K = 448, 4096 and 14336 and at the sidecar's 8 × 16
 leaf at K = 64.
 
 * **A port's row** is a bit row (`hm96-sha512/row/v2`) of 16-bit words, bit `t` of the row bit `t % 16` of word `t / 16`.
@@ -50,7 +50,7 @@ where
     | 0, m, _ => m
     | fuel + 1, m, p => if ks ≤ p then m else go fuel (m + 1) (128 * p)
 
-/-- A drawn leaf's tile: `r × c` cells at contraction `k` (`h1tile.Layout`), tiled by lanes of 4 rows and 8 columns. -/
+/-- A drawn leaf's tile: `r × c` cells at contraction `k` (`h1tile.TileShape`), tiled by lanes of 4 rows and 8 columns. -/
 structure Tile where
   r : Nat
   c : Nat
@@ -76,10 +76,10 @@ def q (T : Tile) : Nat := T.c / 8
 
 def lanes (T : Tile) : Nat := T.g * T.q
 
-/-- Lane `l`'s row at row slot `s < 4` (`h1tile.Layout.rows`): `⌊l / Q⌋ + G s`. -/
+/-- Lane `l`'s row at row slot `s < 4` (`h1tile.TileShape.rows`): `⌊l / Q⌋ + G s`. -/
 def rowOf (T : Tile) (l s : Nat) : Nat := l / T.q + T.g * s
 
-/-- Lane `l`'s column at column slot `t < 8` (`h1tile.Layout.cols`): `2 (l mod Q) + 2 Q ⌊t / 2⌋ + t mod 2`. -/
+/-- Lane `l`'s column at column slot `t < 8` (`h1tile.TileShape.cols`): `2 (l mod Q) + 2 Q ⌊t / 2⌋ + t mod 2`. -/
 def colOf (T : Tile) (l t : Nat) : Nat := 2 * (l % T.q) + 2 * T.q * (t / 2) + t % 2
 
 private def pow2 (n : Nat) : Bool := n != 0 && n &&& (n - 1) == 0

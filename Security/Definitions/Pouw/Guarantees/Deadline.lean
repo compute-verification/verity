@@ -39,7 +39,7 @@ That is, except with that probability, an accepted transcript means at least `(1
 the salt and the deadline. -/
 def WorkBetweenSaltAndDeadline : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
+    (CM : CostModel Q R S) (P : Protocol Q R S) (D : UnitLayout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
     γ₀ < 1 → 0 < Ωmax →
     (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N,
       (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →
@@ -59,7 +59,7 @@ accepted transcript received by `td` leaves `Y ≤ C·(td − ts) − (1 − γ)
 most the fleet's capacity less the work the audit certifies. -/
 def SpareCapacityAtDeadline : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
+    (CM : CostModel Q R S) (P : Protocol Q R S) (D : UnitLayout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
     γ₀ < 1 → 0 < Ωmax →
     (∀ U : Workload, U.InDomain D → ∀ u < U.layout.N,
       (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →
@@ -81,7 +81,7 @@ adversary, timed run and deadline `td`, every run spending at most `T` after the
 `T` is below `1 − γ` of the claimed work less `ε_s` of the layout's with probability at most `(1 − ε_s)^t + η(q, N)`. -/
 def PearlCSampledByDeadline : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : PearlC.CostModel Q R S)
-    (P : PearlC.Protocol Q R S) (TR : PearlC.TileRules Q R S) (D : PearlC.Layout → Prop) (γ : ℝ)
+    (P : PearlC.Protocol Q R S) (TR : PearlC.TileRules Q R S) (D : PearlC.UnitLayout → Prop) (γ : ℝ)
     (η : ℕ → ℕ → ℝ), PearlC.GγSampled CM P TR D γ η →
     ∀ U : PearlC.Workload, U.InDomain P D → ∀ (A : PearlC.Adversary CM) (run : TimedRun Q R S) (td : ℝ),
     PearlC.Assumptions.HonestClock CM U A run td →

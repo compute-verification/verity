@@ -3,7 +3,7 @@ import Definitions.Accounting.TS.Machine
 /-!
 # Routes, labelled programs and the terms (trusted)
 
-EPS1-SPEC §0.4–§0.7a and §1.3 over `Accounting.TS.Machine`:
+EPS1-SPEC §0.4–§0.7a and §1.3 over `Accounting.TS.FacetCosts`:
 
 * `Head`: what heads an owned right fixed committed word, which is also the word-route menu `𝒲`: `T_κ` for a writer
   kind (an MMA kind, or a uniform class), `S_V` for a gather-free vector word, a table route per memory level, a side
@@ -58,7 +58,7 @@ noncomputable instance instFintypeHead (T L U : Type) [Fintype T] [Fintype L] [F
 fold routes `F` and filler routes `X`. -/
 structure Model (K R T L U F X : Type) where
   /-- the machine `Π` (facets, clocks, `fmax`) -/
-  G : Machine K R
+  G : FacetCosts K R
   /-- the class of writer kind `t` -/
   cls : T → K
   /-- `ω_t`, the words one instruction of writer kind `t` writes at most (P12: 128 for every m16n8 MMA kind, 64 for

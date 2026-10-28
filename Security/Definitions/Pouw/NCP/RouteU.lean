@@ -60,7 +60,7 @@ def mmWU (β : ℤ) (k : ℕ) (A B E1 F1 R : Mat) (τ i j : ℕ) : ℤ :=
 
 /-- Route U's honest reference per unit: the stacked product, `3·m·k·n`, and `f` forming units per position of the
 left operand, `f·m·k` (the bias add and the u8 conversion). -/
-def wrefU (f : ℕ) (L : Layout) (u : ℕ) : ℕ := 3 * (L.shape u).Wmm + f * (L.shape u).m * (L.shape u).k
+def wrefU (f : ℕ) (L : UnitLayout) (u : ℕ) : ℕ := 3 * (L.shape u).Wmm + f * (L.shape u).m * (L.shape u).k
 
 /-- The bias `β` keeps `X + β` in u8 on the int7 domain for every `R` of the class `Rs`: every entry of `X_b` is in
 `[0, 255]` for int7 `A` and `E₁` in `[−31, 32]`. -/

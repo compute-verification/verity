@@ -52,7 +52,7 @@ from verity.core.protocols.pouw.schemes import pearl_kw as P  # noqa: E402
 from verity.core.protocols.pouw.schemes.pearl_c_device import (  # noqa: E402
     DEVICES,
     H100,
-    Device,
+    DeviceProfile,
 )
 
 VARIANTS = (H100,)
@@ -234,7 +234,7 @@ def widen_case(out: Out, rows: int, k: int) -> dict:
     return {"shape": [rows, k], "files": {key: out.files[name] for key, name in names.items()}}
 
 
-def chain(a: np.ndarray, b: np.ndarray, ii: np.ndarray, jj: np.ndarray, device: Device, block: int = 1 << 16) -> np.ndarray:
+def chain(a: np.ndarray, b: np.ndarray, ii: np.ndarray, jj: np.ndarray, device: DeviceProfile, block: int = 1 << 16) -> np.ndarray:
     """`pearl_c.chain` on `device` for the cells (ii, jj) of code matrices a and b: +0 per window of G atoms, one FP32 add
     per window; unpromoted, one accumulator over all of k."""
     out = np.empty(len(ii), np.uint32)
@@ -254,13 +254,13 @@ def chain(a: np.ndarray, b: np.ndarray, ii: np.ndarray, jj: np.ndarray, device: 
     return out
 
 
-def product(device: Device, a: np.ndarray, b: np.ndarray) -> np.ndarray:
+def product(device: DeviceProfile, a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """C.chain on `device` for every cell of codes a (rows x k) and b, batched."""
     ii, jj = grid(a.shape[0], b.shape[0])
     return chain(a, b, ii, jj, device).reshape(a.shape[0], b.shape[0])
 
 
-def peel_np(device: Device, c: np.ndarray, pa: np.ndarray, pb: np.ndarray) -> np.ndarray:
+def peel_np(device: DeviceProfile, c: np.ndarray, pa: np.ndarray, pb: np.ndarray) -> np.ndarray:
     ii, jj = grid(*c.shape)
     acc = c.ravel().copy()
     for s in range(0, C.PEEL_K, 16):
@@ -274,7 +274,7 @@ def _side(job):
     return s._side(rows, idx, side, seed_e, seed_b, k, e)
 
 
-def form(pool: Pool, device: Device, rows: list[bytes], side: int, seed_e: bytes, seed_b: bytes, k: int,
+def form(pool: Pool, device: DeviceProfile, rows: list[bytes], side: int, seed_e: bytes, seed_b: bytes, k: int,
          e: list[list[int]] | None = None, chunk: int = 16):
     """One side's forming in chunks of rows; `e` gives each row's E line (A's, each from its own seed), else seed_e's."""
     jobs = [(device.name, rows[i:i + chunk], list(range(i, min(i + chunk, len(rows)))), side, seed_e, seed_b, k,

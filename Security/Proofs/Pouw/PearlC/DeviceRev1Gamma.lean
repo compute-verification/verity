@@ -86,7 +86,7 @@ variable {Q R S : Type}
 open Classical in
 /-- Under rev1 the correct units' credit is at most the granted protocol's, on any transcript. -/
 theorem rev1_credit_sum_le (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (hadd : 0 ≤ d.prices.add)
-    (hbf : 0 ≤ d.prices.bf16) (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) :
+    (hbf : 0 ≤ d.prices.bf16) (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) (U : Workload) (H : Q → R) (s : S) (τ : CommitLog) :
     ∑ u ∈ correctSet (pearlCProtocolDevRev1 d sem ρ) U H s τ,
         (pearlCProtocolDevRev1 d sem ρ).credit H s U u (actOf τ u) ≤
       ∑ u ∈ correctSet (pearlCProtocolDev d sem ρ) U H s τ, (pearlCProtocolDev d sem ρ).credit H s U u (actOf τ u) := by
@@ -137,7 +137,7 @@ theorem ttOutPearlCDevRev1_of_granted [Fintype Q] [DecidableEq Q] [Fintype R] [F
 open Classical in
 /-- Under rev1 the good tiles' credit is at most the granted tiles', on any transcript. -/
 theorem rev1_tile_credit_sum_le (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) (hadd : 0 ≤ d.prices.add)
-    (hbf : 0 ≤ d.prices.bf16) (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) :
+    (hbf : 0 ≤ d.prices.bf16) (hρ0 : 0 ≤ ρ) (hρ1 : ρ ≤ 1) (U : Workload) (H : Q → R) (s : S) (τ : CommitLog) :
     ∑ g ∈ goodTiles (pearlCProtocolDevRev1 d sem ρ) (pearlCTilesDevRev1 d sem ρ) U H s τ,
         (pearlCTilesDevRev1 d sem ρ).credit H s U g
           (actOf τ (((pearlCTilesDevRev1 d sem ρ).tiling U.layout).unit g)) ≤

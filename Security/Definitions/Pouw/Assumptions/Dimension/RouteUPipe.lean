@@ -40,7 +40,7 @@ def AlgBoundQuadU : Prop :=
 /-- **`TT_NCP_of_A1cost_A2` on route U** (`TTNCPOfA1costA2` for route-U words, with `A1_cost_U`). -/
 def TTNCPOfA1costA2U : Prop :=
   ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (M : Machine (Noise N m n k)) (q : M.Prog) (γ₀ γ₁ γ₂ : ℝ), 16 ∣ k → 0 < k →
+    (M : WordCostModel (Noise N m n k)) (q : M.Prog) (γ₀ γ₁ γ₂ : ℝ), 16 ∣ k → 0 < k →
     CheckpointIndependent k 16 R → MinRankGe k R 5 → U ⊆ range N →
     A2_algebraicSufficiency γ₂ M (ClosedPipe 8) (wordSet (wordU β k m n N R A B) U) → A1_cost_U β 2 γ₁ k R →
     (∀ u ∈ U, ∀ p < nonFinal k m n, wordU β k m n N R A B u p ∈ M.outputs q) →
@@ -50,7 +50,7 @@ def TTNCPOfA1costA2U : Prop :=
 /-- **`TT_NCP_of_A1quad_A2` on route U** (`TTNCPOfQuadA2` for route-U words, with `A1_cost_quad_U`). -/
 def TTNCPOfQuadA2U : Prop :=
   ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (M : Machine (Noise N m n k)) (q : M.Prog) (γ₀ γ₁ γ₂ : ℝ), 16 ∣ k → 0 < k →
+    (M : WordCostModel (Noise N m n k)) (q : M.Prog) (γ₀ γ₁ γ₂ : ℝ), 16 ∣ k → 0 < k →
     CheckpointIndependent k 16 R → MinRankGe k R 5 → U ⊆ range N →
     A2_algebraicSufficiency γ₂ M (QuadPipe 8) (wordSet (wordU β k m n N R A B) U) → A1_cost_quad_U β 2 γ₁ k R →
     (∀ u ∈ U, ∀ p < nonFinal k m n, wordU β k m n N R A B u p ∈ M.outputs q) →
@@ -79,7 +79,7 @@ outputs the non-final route-U words of the units in `U`, and `1 − γ₀ ≤ (1
 fails for that program. -/
 def TTNCPQuadOfA2U : Prop :=
   ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (M : Machine (Noise N m n k)) (q : M.Prog) (γ₀ γ₂ : ℝ), 16 ∣ k → 0 < k →
+    (M : WordCostModel (Noise N m n k)) (q : M.Prog) (γ₀ γ₂ : ℝ), 16 ∣ k → 0 < k →
     CheckpointIndependent k 16 R → MinRankGe k R 5 → U ⊆ range N →
     A2_algebraicSufficiency γ₂ M (QuadPipe 8) (wordSet (wordU β k m n N R A B) U) →
     (∀ u ∈ U, ∀ p < nonFinal k m n, wordU β k m n N R A B u p ∈ M.outputs q) →

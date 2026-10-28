@@ -41,7 +41,7 @@ def OpenQuadPipe {N m n k : ℕ} (pb cs : ℕ) (P : List (Instr (Noise N m n k))
 
 /-- The open-pipe AlgM_4090 as a machine: its programs are the `OpenQuadPipe pb cs` programs on the noise
 coordinates, at their AlgM cost, outputting their slots. -/
-def openMachine (N m n k pb cs : ℕ) : Machine (Noise N m n k) where
+def openMachine (N m n k pb cs : ℕ) : WordCostModel (Noise N m n k) where
   Prog := {P : List (Instr (Noise N m n k)) // OpenQuadPipe pb cs P}
   cost P := (cost P.1 : ℝ)
   outputs P := {φ | φ ∈ slots P.1 (coords N m n k)}
@@ -57,7 +57,7 @@ def QuadToOpen : Prop :=
 `OpenQuadPipe 16 cs`, at the same `γ₂` and target set. On the checked words, under checkpoint independence and MinRank
 ≥ 5, the converse holds as well at `cs = 8` (`A2WordsIff`). -/
 def A2QuadToOpen : Prop :=
-  ∀ (N m n k cs : ℕ) (M : Machine (Noise N m n k)) (W : Set (Noise N m n k → ℚ)) (γ₂ : ℝ),
+  ∀ (N m n k cs : ℕ) (M : WordCostModel (Noise N m n k)) (W : Set (Noise N m n k → ℚ)) (γ₂ : ℝ),
     A2_algebraicSufficiency γ₂ M (QuadPipe cs) W → A2_algebraicSufficiency γ₂ M (OpenQuadPipe 16 cs) W
 
 /-- The open-pipe count for a word family: every `OpenQuadPipe pb cs` program on inputs in `V₀` whose slots include
@@ -97,7 +97,7 @@ machine's programs outputs those words, and `1 − γ₀ ≤ (1 − γ₂)·(1 �
 program. -/
 def TTNCPOpenQuadOfA2 : Prop :=
   ∀ (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)
-    (M : Machine (Noise N m n k)) (q : M.Prog) (γ₀ γ₂ : ℝ), 16 ∣ k → 0 < k →
+    (M : WordCostModel (Noise N m n k)) (q : M.Prog) (γ₀ γ₂ : ℝ), 16 ∣ k → 0 < k →
     CheckpointIndependent k 16 R → MinRankGe k R 5 → U ⊆ range N →
     A2_algebraicSufficiency γ₂ M (OpenQuadPipe 16 8) (wordSet (word k m n N R A B) U) →
     (∀ u ∈ U, ∀ p < nonFinal k m n, word k m n N R A B u p ∈ M.outputs q) →
@@ -118,7 +118,7 @@ def OpenQuadChainConsistent : Prop :=
 
 /-- **The per-word cost**: every program of `M` that outputs the values of a word family `w` at `S ⊆ U × [0,
 nonFinal)` costs at least `(1 − γ₂)·16·|S|`. -/
-def PerWordCost (γ₂ : ℝ) {N m n k : ℕ} (M : Machine (Noise N m n k)) (w : ℕ → ℕ → Noise N m n k → ℚ)
+def PerWordCost (γ₂ : ℝ) {N m n k : ℕ} (M : WordCostModel (Noise N m n k)) (w : ℕ → ℕ → Noise N m n k → ℚ)
     (U : Finset ℕ) : Prop :=
   ∀ q : M.Prog, ∀ S ⊆ U ×ˢ range (nonFinal k m n), (∀ x ∈ S, w x.1 x.2 ∈ M.outputs q) →
     (1 - γ₂) * (16 * S.card : ℝ) ≤ M.cost q

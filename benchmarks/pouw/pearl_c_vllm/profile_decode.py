@@ -206,7 +206,7 @@ def run(args) -> dict:
     llm = e2e.engine(args, "arm")
     model = find_model(llm)
     t0 = time.perf_counter()
-    run_, weights, stack = e2e.install(model, args, e2e.Coins(0))
+    run_, weights, stack = e2e.install(model, args, e2e.EpochCoins(0))
     install_s = time.perf_counter() - t0
     gate = e2e.gate(run_, weights)
 

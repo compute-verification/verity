@@ -4,7 +4,7 @@ Pearl-C, Pearl's FP8 product with its noisy clean-up checked, on the H100 and on
 The design is Pearl's H100 product and its output tickets, plus Pearl v4's noisy clean-up
 ("peel") pinned bit for bit, so that the useful output U is a checked value
 and no part of the clean-up can be skipped at a degenerate input.  γ rests on the named conjecture TT_OUT(ρ) at the device
-record's cap ρ (`Device.cap`: 1/400 on the H100, 1/1,000 on sm_120); nothing here is proved by counting.  Pearl's own pieces (noise lines, BF16 compute ops, norms, the noisy quantization, the H100
+record's cap ρ (`DeviceProfile.cap`: 1/400 on the H100, 1/1,000 on sm_120); nothing here is proved by counting.  Pearl's own pieces (noise lines, BF16 compute ops, norms, the noisy quantization, the H100
 reset-and-promote replay) are `pearl_kw`'s ports of pearl-research-labs/pearl's certificate-v4 code and its ``zk-pow``
 verifier.
 
@@ -63,7 +63,7 @@ the registered schemes, and `SM120_PRICES` (the device statement's `Prices.sm120
 operands the noise floor ρ·α ≥ 1 (the exact product of the FP32 words) and liveness `LiveRow 1 x Stat.every8`: with the
 exact ρ² = Σ_{p ≡ 0 (8)} x_p² / ⌈k/8⌉ over the words' values, at most k/64 entries have x_l² ≥ 64 ρ².
 
-**The device** (`pearl_c_device.Device`) is a scheme parameter: the atom, the peel's step, G and the W1 prices above are
+**The device** (`pearl_c_device.DeviceProfile`) is a scheme parameter: the atom, the peel's step, G and the W1 prices above are
 the record's, and the H100 names in this docstring are `pearl_c_device.H100`'s.  ``pearl-c-sm120-v1`` is v1 on
 `pearl_c_device.SM120`: the RTX PRO 6000's captured atom at `SM120_PRICES`, with the peel, G and the k bound as stand-ins
 (its `standins`); the promotion window is G atoms and the domain's whole groups are 32·G ∣ k.  An unpromoted record (G None,
@@ -85,11 +85,11 @@ from verity.ml.crypto.blake3 import blake3, keyed
 from verity.ml.crypto.turboshake import turboshake128
 from verity.ml.circuits.silicon import fp32
 
-from ..protocol import CALL_RANGE, Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
+from ..protocol import CALL_RANGE, GuaranteeBasis, Context, DomainError, Matmul, Shape, Tile, grid_tiles
 from ..registration import check_registration
 from ..serving import HASH_FORMATS
 from . import pearl_kw as P
-from .pearl_c_device import H100, H100_PRICES, PRICES, SM120_PRICES, Device, Prices  # noqa: F401 - re-exported
+from .pearl_c_device import H100, H100_PRICES, PRICES, SM120_PRICES, DeviceProfile, Prices  # noqa: F401 - re-exported
 
 NAME = "pearl-c-h100-v0"
 NAME_V1 = "pearl-c-h100-v1"
@@ -205,7 +205,7 @@ def _check_finite(word: int) -> int:
     return word
 
 
-def chain(a: Sequence[int], b: Sequence[int], device: Device = H100) -> int:
+def chain(a: Sequence[int], b: Sequence[int], device: DeviceProfile = H100) -> int:
     """The device's replay of ``a · b`` (E4M3 codes) as an FP32 word: per window of G atoms (128 products on the H100) a
     fresh +0 accumulator chains up to G of the device's atoms, then one FP32 nearest-even add promotes it into the total;
     a zero total is +0.  Unpromoted (G None), one accumulator from +0 chains every atom and is the word."""
@@ -226,7 +226,7 @@ def chain(a: Sequence[int], b: Sequence[int], device: Device = H100) -> int:
     return total
 
 
-def peel(c_word: int, pa: Sequence[int], pb: Sequence[int], device: Device = H100) -> int:
+def peel(c_word: int, pa: Sequence[int], pb: Sequence[int], device: DeviceProfile = H100) -> int:
     """U from C̃: four of the device's BF16 k16 steps over the 64 BF16 peel operands, k16 slices in order, into C̃'s word."""
     acc = c_word
     for s in range(0, PEEL_K, 16):
@@ -297,7 +297,7 @@ def _column(basis: tuple[tuple[int, ...], ...], p: int) -> list[int]:
 
 
 @lru_cache(maxsize=16, typed=True)
-def gram(seed_b: bytes, k: int, norm: float = P.NOISE_NORM, device: Device = H100) -> tuple[tuple[int, ...], ...]:
+def gram(seed_b: bytes, k: int, norm: float = P.NOISE_NORM, device: DeviceProfile = H100) -> tuple[tuple[int, ...], ...]:
     """G = F_Bᵀ·F_A (r x r) as FP32 words, G_pq = chain(F_B[:, p], F_A[:, q]); once per job."""
     fa, fb = _basis(seed_b, 0, k, norm), _basis(seed_b, 1, k, norm)
     fa_cols = [_column(fa, q) for q in range(R)]
@@ -312,7 +312,7 @@ def scaled_noise(side: P.Built | Formed, e_rows: Sequence[Sequence[int]]) -> lis
 
 
 def peel_factors_a(codes: Sequence[Sequence[int]], be_rows: Sequence[Sequence[int]], seed_b: bytes, k: int,
-                   norm: float = P.NOISE_NORM, device: Device = H100) -> list[list[int]]:
+                   norm: float = P.NOISE_NORM, device: DeviceProfile = H100) -> list[list[int]]:
     """P_A rows: [be ‖ RNE_bf16(A′·F_B)], the second half the 32 fused columns of the product."""
     fb = _basis(seed_b, 1, k, norm)
     fb_cols = [_column(fb, p) for p in range(R)]
@@ -320,7 +320,7 @@ def peel_factors_a(codes: Sequence[Sequence[int]], be_rows: Sequence[Sequence[in
 
 
 def peel_factors_b(codes: Sequence[Sequence[int]], be_rows: Sequence[Sequence[int]], seed_b: bytes, k: int,
-                   norm: float = P.NOISE_NORM, device: Device = H100) -> list[list[int]]:
+                   norm: float = P.NOISE_NORM, device: DeviceProfile = H100) -> list[list[int]]:
     """P_B rows: [RNE_bf16(be·G − B̃·F_A) ‖ −be], once per job.  be·G is the FP32 FMA chain from +0 in p order, and the
     difference one FP32 nearest-even add of the negated B̃·F_A."""
     fa = _basis(seed_b, 0, k, norm)
@@ -404,7 +404,7 @@ def eprime(beta: int, e_row: Sequence[int]) -> list[int]:
 
 
 def form_v1(x_rows: Sequence[Sequence[int]], e_rows: Sequence[Sequence[int]], f: Sequence[Sequence[int]],
-            device: Device = H100) -> Formed:
+            device: DeviceProfile = H100) -> Formed:
     """§5's forming: per element one of the device's atoms with α·x as its accumulator, then the cast."""
     out = Formed([], [], [], [], [], [], [])
     for x, e_row in zip(x_rows, e_rows):
@@ -462,7 +462,7 @@ class PearlC:
     device's own by default; another record marks the name ``…@<device>`` (the H100's atom at sm_120's prices is
     ``pearl-c-h100-v1@sm_120``)."""
 
-    def __init__(self, k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE), forming: str = "v0", device: Device = H100,
+    def __init__(self, k_min: int = 1024, tile: tuple[int, int] = (TILE, TILE), forming: str = "v0", device: DeviceProfile = H100,
                  hashing: str = "h0", prices: Prices | None = None):
         if forming not in ("v0", "v1"):
             raise ValueError(f"forming {forming!r}: v0 (#311's, as ported) or v1 (§5's)")
@@ -507,7 +507,7 @@ class PearlC:
             hardware += (f"at k in {', '.join(map(str, self.census_ks))} (the census's): TT_OUT per tile at "
                          f"ρr = {CENSUS_ROW_CAP * rho}, each credited row's debit within ρr of its cells' credit and the "
                          f"tile's within ρ (Lean `Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256`)",)
-        self.certificate = Certificate(
+        self.certificate = GuaranteeBasis(
             conjecture="tt-out",
             gamma0=None,
             omega=Fraction(1),

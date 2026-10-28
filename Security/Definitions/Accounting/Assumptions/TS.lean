@@ -83,7 +83,7 @@ the run's counts and cycles are `≥ 0` and its clock is in `(0, f_max]`, every 
 run's cycles (S_r), and every fixed-clock facet's load, priced at `f_max`, is at most `f_max` times the run's time. Rows
 take the best configuration measured plus a 2% margin; a joint row is a facet on the mixes measured, and beyond them it
 is untested. -/
-def FacetCeilings (G : Machine K R) (P : Run K) : Prop :=
+def FacetCeilings (G : FacetCosts K R) (P : Run K) : Prop :=
   (∀ k, 0 ≤ P.n k) ∧ 0 ≤ P.cycles ∧ 0 < P.clock ∧ P.clock ≤ G.fmax ∧
     ∀ r, (G.smClocked r = true → G.load P.n r ≤ P.cycles) ∧
       (G.smClocked r = false → G.load P.n r ≤ G.fmax * P.time)

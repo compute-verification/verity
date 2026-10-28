@@ -9,11 +9,11 @@ import Definitions.Pouw.PearlC.Fp4
 Every other multiplier runs at its measured price, and elementwise work and data movement are bounded. Outputs are
 bit-exact. A cheaper computation of an exact matrix product in this model is a program in the rewrite class below.
 
-* **The tile gate** (`Gate`): 16 × 64 codes and scales for `P`, 64 × 8 for `Q`, and 16 × 8 accumulator words. Output
+* **The tile gate** (`Firing`): 16 × 64 codes and scales for `P`, 64 × 8 for `Q`, and 16 × 8 accumulator words. Output
   `(i, j)` is one firing of `sm120Nvf4.step` on row `i` of `P` and column `j` of `Q`. It has `gateSlots = 8192` slots
   `(i, l, j)`, the product `P[i, l]·Q[l, j]`. The k-index `l` is shared by all 16 rows and all 8 columns.
   - **Per-slot pricing:** `price .fp4 = 1/2` FP8-MAC units per slot, so a firing costs 4,096 units, dense or not.
-  - **The exact regime** (`Gate.Exact`): every output word's value is the accumulator plus the exact sum of its 64 slot
+  - **The exact regime** (`Firing.Exact`): every output word's value is the accumulator plus the exact sum of its 64 slot
     values. That is the atom's behaviour on in-domain operands, where NVFP4 chains are exact. Its faithfulness is
     `tc-model/sm120-fp4`, measured and never proved.
 * **The rewrite class.**
@@ -230,7 +230,7 @@ def gatePrice : ℚ := gateSlots * price .fp4
 
 /-- One firing of the m16n8k64 tile gate: `P` (16 × 64 codes, 4 UE4M3 scale bytes per row), `Q` (64 × 8 codes, 4
 scale bytes per column) and the 16 × 8 accumulator words. -/
-structure Gate where
+structure Firing where
   p : Fin 16 → Fin 64 → Nib
   ps : Fin 16 → Fin 4 → Fin 256
   q : Fin 64 → Fin 8 → Nib
@@ -241,7 +241,7 @@ structure Gate where
 def scaleIdx (l : Fin 64) : Fin 4 := ⟨l.val / 16, by omega⟩
 
 /-- Output word `(i, j)`: one firing of `sm120Nvf4.step`, row `i` of `P` against column `j` of `Q`. -/
-def Gate.word (g : Gate) (i : Fin 16) (j : Fin 8) : Option ℕ :=
+def Firing.word (g : Firing) (i : Fin 16) (j : Fin 8) : Option ℕ :=
   sm120Nvf4.step (g.acc i j) (List.ofFn (g.p i)) (List.ofFn fun l => g.q l j) (List.ofFn (g.ps i)) (List.ofFn (g.qs j))
 
 /-- A code's exact value under its block's UE4M3 scale (an invalid scale byte reads 0; the domain excludes it). -/
@@ -251,12 +251,12 @@ def elemValue (c : Nib) (s : Fin 256) : ℚ := decode c * (scaleValue .ue4m3 s).
 def wordValue (w : ℕ) : Option ℚ := (fp32Value w).finite?.map Term.value
 
 /-- Slot `(i, l, j)`'s value: `P[i, l]·Q[l, j]` under both blocks' scales. -/
-def Gate.slotValue (g : Gate) (i : Fin 16) (l : Fin 64) (j : Fin 8) : ℚ :=
+def Firing.slotValue (g : Firing) (i : Fin 16) (l : Fin 64) (j : Fin 8) : ℚ :=
   elemValue (g.p i l) (g.ps i (scaleIdx l)) * elemValue (g.q l j) (g.qs j (scaleIdx l))
 
 /-- **The exact regime:** every one of the firing's 128 output words is the accumulator plus the exact sum of its 64
 slot values. It asks this of all 128 words, including words the program doesn't use. -/
-def Gate.Exact (g : Gate) : Prop :=
+def Firing.Exact (g : Firing) : Prop :=
   ∀ i j, (g.word i j).bind wordValue = some ((wordValue (g.acc i j)).getD 0 + ∑ l, g.slotValue i l j)
 
 /-! ## Tile programs: FP4 programs built from gate firings -/
@@ -286,19 +286,19 @@ byte takes finitely many values, so only finitely many inputs can be carried, an
 force the forms to vanish.
 
 Two consequences of this form:
-* **Unused words.** Every firing must be `Gate.Exact` on all 128 words, including those no `w g i j o` reads. A firing
+* **Unused words.** Every firing must be `Firing.Exact` on all 128 words, including those no `w g i j o` reads. A firing
   whose unused words overflow or aren't exact is therefore excluded, though its used words still behave bilinearly.
 * **Starting at `+0` loses nothing.** An exact firing adds its incoming accumulator exactly. So a program that chains
   firings through the accumulator has the same output, at the same cost, as the same firings started at `+0` with
   their partial sums added in `outAt`'s linear combination. -/
-def TileProg.RealizesAt {G : ℕ} (P : TileProg ℚ m k n G) (gs : Fin G → Gate) (X : Fin m × Fin k → ℚ)
+def TileProg.RealizesAt {G : ℕ} (P : TileProg ℚ m k n G) (gs : Fin G → Firing) (X : Fin m × Fin k → ℚ)
     (Y : Fin k × Fin n → ℚ) : Prop :=
   ∀ g, (gs g).Exact ∧ (∀ i j, (gs g).acc i j = 0) ∧
     (∀ i l, elemValue ((gs g).p i l) ((gs g).ps i (scaleIdx l)) = ∑ e, P.u g i l e * X e) ∧
     (∀ l j, elemValue ((gs g).q l j) ((gs g).qs j (scaleIdx l)) = ∑ e, P.v g l j e * Y e)
 
 /-- A tile program's output from the firings `gs`: their words, decoded exactly and combined linearly. -/
-def TileProg.outAt {G : ℕ} (P : TileProg ℚ m k n G) (gs : Fin G → Gate) (o : Fin m × Fin n) : ℚ :=
+def TileProg.outAt {G : ℕ} (P : TileProg ℚ m k n G) (gs : Fin G → Firing) (o : Fin m × Fin n) : ℚ :=
   ∑ g, ∑ i, ∑ j, P.w g i j o * (((gs g).word i j).bind wordValue).getD 0
 
 end Pouw.TileBound

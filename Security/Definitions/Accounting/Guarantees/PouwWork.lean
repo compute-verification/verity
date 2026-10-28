@@ -24,7 +24,7 @@ coin (A5 at 0), then the verifier accepts while the node's own gates outside `m`
 credits in the window with probability at most `δ_det + δ_luck + δ_skip`. It says the node computed; not which of its
 GPUs did. -/
 def PouwLocalOff : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (L : Type) (S : Ω → Actual.Run L) (P : Verdict Ω L) (X : Finset L)
+  ∀ (Ω : Type) [Fintype Ω] (L : Type) (S : Ω → Actual.Run L) (P : Verifier Ω L) (X : Finset L)
     (π : ∀ r, Fin (S r).A.N → ℕ) (m : ∀ r, Finset (Fin (S r).A.N)) (Wb Nmin ρ : ℕ) (δdet δluck δskip : ℝ),
     Assumptions.PouwDetection S P Nmin δdet → Assumptions.PouwLuck S P Nmin δluck →
     Assumptions.PouwFloorOff S P X π m Wb Nmin ρ δskip → Assumptions.PouwHelpBound S P X 0 →

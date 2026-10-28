@@ -1295,17 +1295,17 @@ end Accept8
 
 /-! ## The audit grid and `D_dev` -/
 
-theorem auditTiling_rows_lt (tm tn : ℕ) (L : Layout) (g : ℕ) :
+theorem auditTiling_rows_lt (tm tn : ℕ) (L : UnitLayout) (g : ℕ) :
     ∀ i ∈ (auditTiling tm tn L).rows g, i < (L.shape ((auditTiling tm tn L).unit g)).m := fun _ hi =>
   lt_of_lt_of_le (Finset.mem_Ico.1 hi).2 (min_le_right _ _)
 
-theorem auditTiling_cols_lt (tm tn : ℕ) (L : Layout) (g : ℕ) :
+theorem auditTiling_cols_lt (tm tn : ℕ) (L : UnitLayout) (g : ℕ) :
     ∀ j ∈ (auditTiling tm tn L).cols g, j < (L.shape ((auditTiling tm tn L).unit g)).n := fun _ hj =>
   lt_of_lt_of_le (Finset.mem_Ico.1 hj).2 (min_le_right _ _)
 
 /-- `D_dev`'s `k` is whole-tile for `pc8`, a positive multiple of 128. Its `m` is free and its `n` only a multiple of 64,
 so `Shape8` also needs the tile at the unit's shape to divide it. -/
-theorem shape8_of_pearlCDomainDev {d : PearlCDevice} {L : Layout} (h : pearlCDomainDev d L) {u : ℕ} (hu : u < L.N)
+theorem shape8_of_pearlCDomainDev {d : PearlCDevice} {L : UnitLayout} (h : pearlCDomainDev d L) {u : ℕ} (hu : u < L.N)
     (hm : tileSide (L.shape u).m ∣ (L.shape u).m) (hn : tileSide (L.shape u).n ∣ (L.shape u).n) :
     Shape8 (L.shape u) := by
   obtain ⟨-, -, hk0, ⟨c, hc⟩, -, -⟩ := h u hu

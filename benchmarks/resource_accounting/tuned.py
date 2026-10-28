@@ -84,7 +84,7 @@ def buffer(t: Any) -> Any:
 
 
 class Tuner:
-    """The harness's device (`native.Device`: device 0 of the process, its primary context) and every point's pick."""
+    """The harness's device (`native.CudaDevice`: device 0 of the process, its primary context) and every point's pick."""
 
     def __init__(self, lib: str | Path | None = None, *, uuid: str | None = None, want: int | None = None,
                  sched: bool = True, seed: int = SEED) -> None:

@@ -649,7 +649,7 @@ def core_params(params: dict) -> dict:
 
 
 def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, drawn: bool = True,
-          record: OR.Record | None = None, salt: bytes | None = None) -> str | None:
+          record: OR.VerdictPair | None = None, salt: bytes | None = None) -> str | None:
     """None if the proof's public file opens unit `unit`'s rows under the registered window root, else why not: PoUW's
     rule on the opening (`core_check.opening`, the unit drawn unless not `drawn`), of record (`record`, Lean's by
     default), beside this reading of the registration (its level the window's, its entries' domain the window's served
@@ -667,7 +667,7 @@ def check(params: dict, rec: dict, draw: dict, unit: int, pub: bytes, op: dict, 
             "the registered window domain is not the window's served domain"
     x = {"params": core_params(params), "commitment": OR.hexed(rec), "units": list(draw.get("units", ())) if drawn else None,
          "unit": unit, "pub": pub.hex(), "opening": op, **({} if salt is None else {"salt": salt.hex()})}
-    r = OR.Record() if record is None else record
+    r = OR.VerdictPair() if record is None else record
     try:
         out = r.opening(x)
         return r.prelude(pre, f"opening: {out['refused']}" if isinstance(out, dict) else out)
@@ -857,7 +857,7 @@ class Challenger:
     (`salts`), and `check` opens its drawn units under it."""
 
     def __init__(self, params: dict, coins: Any, sampler: Sampler = python_sampler, budget: int = BUDGET,
-                 clock: Callable[[], float] | None = None, record: OR.Record | None = None,
+                 clock: Callable[[], float] | None = None, record: OR.VerdictPair | None = None,
                  predates_deadline: bool = False, certifier: Any = None, prover: bytes | None = None,
                  coin_record: str | os.PathLike | None = None, deployment: Deployment | None = None,
                  registrations: PS.Registrations | None = None) -> None:
@@ -894,7 +894,7 @@ class Challenger:
         self.registrations = PS.Registrations() if registrations is None else registrations
         self.salts: dict[str, bytes] = {}
         self.params, self.coins, self.sampler, self.budget = params, coins, sampler, budget
-        self.record = OR.Record() if record is None else record
+        self.record = OR.VerdictPair() if record is None else record
         self.core = core_params(params)
         self.witness: dict[str, list[dict]] = {}
         self.recorded: dict[str, bool] = {}
@@ -1454,7 +1454,7 @@ def cmd_challenger(a) -> int:
     coins = Coins(a.epoch, entropy)
     (log / "coins.json").write_text(json.dumps(coins.commitment.to_json(), sort_keys=True))
     ch = Challenger(_json(a.params), coins, lean_sampler(a.lean, log / "draws.jsonl") if a.lean else python_sampler,
-                    record=OR.Record(lean=False if a.python_record else None))
+                    record=OR.VerdictPair(lean=False if a.python_record else None))
     for line in sys.stdin:
         if not line.strip():
             continue
@@ -1480,7 +1480,7 @@ def _files(p: Path) -> dict[str, bytes]:
     return {q.relative_to(p).as_posix(): q.read_bytes() for q in sorted(p.rglob("*")) if q.is_file()} if p.is_dir() else {}
 
 
-def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler, record: OR.Record | None = None
+def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler, record: OR.VerdictPair | None = None
            ) -> list[str]:
     """The challenger's requests again (LOG/requests.jsonl) from its records alone: the published commitment and the
     coins it opened (`Recorded`), each request's ``out`` under OUT.  Every difference from the record: a reply, or a file
@@ -1512,7 +1512,7 @@ def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler
 
 def cmd_replay(a) -> int:
     diffs = replay(_json(a.params), Path(a.log), Path(a.out), lean_sampler(a.lean) if a.lean else python_sampler,
-                   OR.Record(lean=False if a.python_record else None))
+                   OR.VerdictPair(lean=False if a.python_record else None))
     n = len((Path(a.log) / "requests.jsonl").read_text().splitlines())
     out = {"requests": n, "diffs": diffs[:8], **({"predates_deadline": True} if "registration_deadline" not in _json(a.params) else {})}
     print(f"{'SAME' if not diffs else 'DIFFERENT'} {json.dumps(out)}", flush=True)
@@ -1551,7 +1551,7 @@ def cmd_coin_variant(a) -> int:
 
 def cmd_check(a) -> int:
     params, reg, d = _json(a.params), _json(a.registration), _json(a.draw)
-    record = OR.Record(lean=False if a.python_record else None)
+    record = OR.VerdictPair(lean=False if a.python_record else None)
     why = check(params, reg, d, a.unit, Path(a.pub).read_bytes(), _json(a.opening), drawn=not a.undrawn, record=record)
     record.close()
     if a.out:

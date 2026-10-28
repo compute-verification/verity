@@ -161,8 +161,8 @@ def cases(d, k: int, n: int, c: int) -> list[tuple[str, int, list[int], int]]:
         spec.append(("carry-out-words", 0, cin, off(cout, "words", 2 * c, 17), zy, part, 0))
     else:
         own, other = (list(zy[0]), zy[1]), (list(zy[0]), zy[1])
-        own[0][Z.lane_cells(H.Layout(*RC, k), 0)[5]] ^= 8
-        other[0][Z.lane_cells(H.Layout(*RC, k), 1)[5]] ^= 8
+        own[0][Z.lane_cells(H.TileShape(*RC, k), 0)[5]] ^= 8
+        other[0][Z.lane_cells(H.TileShape(*RC, k), 1)[5]] ^= 8
         spec += [("partial-bit", 0, cin, cout, zy, [part[0] ^ 1 << 3, *part[1:]], 0), ("own-cell", 0, cin, cout, own, part, 0),
                  ("other-lanes-cell", 1, cin, cout, other, part, 0)]
     out = []

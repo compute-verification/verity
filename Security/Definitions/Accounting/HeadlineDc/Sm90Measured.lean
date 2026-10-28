@@ -134,7 +134,7 @@ def dc90ri : List Sparse := [
   [(41, 145027, 500)]]
 
 /-- The measured machine: DC-90-ri's rows over `Sm90.classes`. -/
-noncomputable def machine : Machine (Fin 50) (Fin 15) :=
+noncomputable def machine : FacetCosts (Fin 50) (Fin 15) :=
   rowsMachine 50 15 dc90ri 1980
 
 /-- `dither-2s-licpw-redux-p1-l32`'s design data on DC-90-ri: writer kinds as (class, ω), and `Sm90.d2s`'s routes. -/

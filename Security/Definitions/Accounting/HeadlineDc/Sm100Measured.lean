@@ -73,7 +73,7 @@ def dc100ri : List Sparse := [
   [(29, 9786457500000001, 5000000000000000)]]
 
 /-- The measured machine: DC-100-ri's rows over `Sm100.classes`. -/
-noncomputable def machine : Machine (Fin 52) (Fin 9) :=
+noncomputable def machine : FacetCosts (Fin 52) (Fin 9) :=
   rowsMachine 52 9 dc100ri 1965
 
 /-- `dither-2s-licpw-redux-ldtm0-l32`'s design data on DC-100-ri: writer kinds as (class, ω), and `Sm100.d2s`'s routes.

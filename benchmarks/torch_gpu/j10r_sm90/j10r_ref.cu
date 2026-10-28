@@ -3,7 +3,7 @@
 //
 //   jr_seeds   one thread a listed proof block: sigma_R = seeds.receipt_seed(salt, base + u, roots); one more thread seed_c =
 //              seeds.call_seed(salt, base, roots) (SHA-512 over 224 bytes, two compressions each)
-//   jr_units   one CTA a listed proof block, one thread a (lane, chain) of h1tile.Layout(32, 32, K): lane l = tid / 8 holds the
+//   jr_units   one CTA a listed proof block, one thread a (lane, chain) of h1tile.TileShape(32, 32, K): lane l = tid / 8 holds the
 //              tile's rows g + 8 s and columns 2 q + 8 (s >> 1) + (s & 1) (g = l / 4, q = l % 4), and chain c = tid % 8
 //              absorbs the lane's entries e' = 4 t + (c % 4) for t = c / 4, + 2, + 4, + 6 (segment.row_slot / col_slot of
 //              each), so the thread keeps those four entries' sums T_s (dp4a over each segment's 32 products) and its

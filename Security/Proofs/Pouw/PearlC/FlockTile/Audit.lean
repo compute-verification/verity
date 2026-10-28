@@ -40,13 +40,13 @@ Definition and its C-Flock soundness land.
 structure TileReadSession (Q R S : Type) where
   Root : Type
   Opening : Type
-  root : Workload → Transcript → Opening → Root
+  root : Workload → CommitLog → Opening → Root
   Out : Workload → Type
   game : (Q → R) → S → (U : Workload) → Root → ℕ → FlockSoundness.Game (Out U)
   verdict : {U : Workload} → Out U → Bool
-  Cls : (U : Workload) → (τ : Transcript) → (o : Opening) → (H : Q → R) → (s : S) → (g : ℕ) →
+  Cls : (U : Workload) → (τ : CommitLog) → (o : Opening) → (H : Q → R) → (s : S) → (g : ℕ) →
     FlockSoundness.Game.Strategy (game H s U (root U τ o) g) → ℕ → Prop
-  Bad : (U : Workload) → (τ : Transcript) → (o : Opening) → (H : Q → R) → (s : S) → (g : ℕ) →
+  Bad : (U : Workload) → (τ : CommitLog) → (o : Opening) → (H : Q → R) → (s : S) → (g : ℕ) →
     FlockSoundness.Game.Strategy (game H s U (root U τ o) g) → Out U → Prop
 
 namespace TileReadSession
@@ -66,7 +66,7 @@ def stratOf {H : Q → R} {s : S} {U : Workload} {r : F.Root} {g : ℕ}
 /-- **The hidden audit's single-game class.** A strategy `σ` of a game `G`, on the transcript `τ` committed under the
 opening `o`, is in the class at `q` when, at every tile whose proof game `G` is (for every workload, oracle and salt), the
 session's strategy that `σ` is meets the session's class `Cls` there. -/
-def cls (τ : Transcript) (o : F.Opening) (G : Verity.Game Bool) (σ : Verity.Game.Strategy G) (q : ℕ) : Prop :=
+def cls (τ : CommitLog) (o : F.Opening) (G : Verity.Game Bool) (σ : Verity.Game.Strategy G) (q : ℕ) : Prop :=
   ∀ (U : Workload) (H : Q → R) (s : S) (g : ℕ) (e : F.proofGame H s U (F.root U τ o) g = G),
     F.Cls U τ o H s g (F.stratOf (cast (congrArg Verity.Game.Strategy e.symm) σ)) q
 
@@ -87,8 +87,8 @@ workload, transcript `τ`, opening `o`, oracle, salt and tile `g`, and every str
 session's class at `q`: flock-verify accepts on a run in the event `Bad` with probability at most `ηzk q`. To be met by
 the restack plan's T3 (`Flock.Guarantees.EndToEndCanonicalP` at the drawn units, with its CR hypotheses as `Cls` and
 its event as `Bad`), at the TileRead statement. -/
-def TileReadSound (P : Protocol Q R S) (D : Layout → Prop) (F : TileReadSession Q R S) (ηzk : ℕ → ℝ) : Prop :=
-  ∀ U : Workload, U.InDomain P D → ∀ (τ : Transcript) (o : F.Opening) (H : Q → R) (s : S) (g : ℕ)
+def TileReadSound (P : Protocol Q R S) (D : UnitLayout → Prop) (F : TileReadSession Q R S) (ηzk : ℕ → ℝ) : Prop :=
+  ∀ U : Workload, U.InDomain P D → ∀ (τ : CommitLog) (o : F.Opening) (H : Q → R) (s : S) (g : ℕ)
     (σ : FlockSoundness.Game.Strategy (F.game H s U (F.root U τ o) g)) (q : ℕ), F.Cls U τ o H s g σ q →
     FlockSoundness.Game.prob (fun x => F.verdict x = true ∧ F.Bad U τ o H s g σ x) (F.game H s U (F.root U τ o) g) σ ≤
       ENNReal.ofReal (ηzk q)
@@ -99,9 +99,9 @@ good or blank in `τ`. To be met by TileRead's gates (an accepted instance at th
 rows at `tile_at(t_s)` and the tile's leaf matches), the registered reads binding those rows to the window root (L4),
 hm96-sha512's binding to `τ`'s rows under `o`, the tile check computing the good-tile predicate (L3) and the pinned
 anchors (L8). -/
-def TileReadBinds (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (F : TileReadSession Q R S) :
+def TileReadBinds (P : Protocol Q R S) (TR : TileRules Q R S) (D : UnitLayout → Prop) (F : TileReadSession Q R S) :
     Prop :=
-  ∀ U : Workload, U.InDomain P D → ∀ (τ : Transcript) (o : F.Opening) (H : Q → R) (s : S) (g : ℕ)
+  ∀ U : Workload, U.InDomain P D → ∀ (τ : CommitLog) (o : F.Opening) (H : Q → R) (s : S) (g : ℕ)
     (σ : FlockSoundness.Game.Strategy (F.game H s U (F.root U τ o) g)) (x : F.Out U),
     F.verdict x = true → ¬ F.Bad U τ o H s g σ x → g ∈ goodTiles P TR U H s τ ∪ blankTiles TR U τ
 
@@ -109,9 +109,9 @@ def TileReadBinds (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Pr
 (`game_eq` by definition); its `Bad` is the session's, read at the session's strategy; `bad_le` is `TileReadSound`
 through the bridge's `prob_ofVerity`; and `good_of_accept` is `TileReadBinds`. -/
 def TileReadSession.tileGame [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S)
-    (TR : TileRules Q R S) (D : Layout → Prop) (F : TileReadSession Q R S) (ηzk : ℕ → ℝ) (h0 : ∀ q, 0 ≤ ηzk q)
+    (TR : TileRules Q R S) (D : UnitLayout → Prop) (F : TileReadSession Q R S) (ηzk : ℕ → ℝ) (h0 : ∀ q, 0 ≤ ηzk q)
     (hT3 : TileReadSound P D F ηzk) (hbind : TileReadBinds P TR D F) (U : Workload) (hU : U.InDomain P D)
-    (τ : Transcript) (o : F.Opening) (H : Q → R) (s : S) (g : ℕ) :
+    (τ : CommitLog) (o : F.Opening) (H : Q → R) (s : S) (g : ℕ) :
     TileGame P TR F.audit F.cls ηzk U τ o H s g where
   Out := F.Out U
   G := toVerity (F.game H s U (F.root U τ o) g)
