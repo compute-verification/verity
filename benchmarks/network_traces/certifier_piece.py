@@ -107,8 +107,8 @@ HEIGHT = 10
 #: windows closed
 WARMUP_REQUEST_S, WARMUP_CLOSE_S = 600, 600
 #: how long a step's process group has after SIGTERM before SIGKILL: inside `timeout -k`'s minute and the research
-#: runner's grace, so the piece has ended its steps before anything ends the piece
-GRACE_S = 5
+#: runner's grace, so the piece has ended its steps before anything ends the piece; and how often it looks
+GRACE_S, POLL_S = 5, 0.05
 #: the SIGTERMs that came while a step ran (`run_group`), which `ended` holds until the step's group has ended
 _held: list[int] | None = None
 
@@ -315,54 +315,32 @@ def sized(windows: int, sets: list[str]) -> list[str]:
             *([f"CR_TIE_WINDOWS={windows}"] if "CR_TIE_WINDOWS" not in given else []), *sets]
 
 
+def live(pid: int, pgid: int | None = None) -> bool:
+    """Whether ``pid`` is a process (of process group ``pgid``, when given) that hasn't exited."""
+    try:
+        stat = Path("/proc", str(pid), "stat").read_bytes()
+    except OSError:
+        return False
+    state, _ppid, pgrp = stat[stat.rindex(b")") + 2:].split()[:3]
+    return state not in (b"Z", b"X") and pgid in (None, int(pgrp))
+
+
 def members(pgid: int) -> list[int]:
     """The processes of process group ``pgid`` that haven't exited."""
-    got = []
-    for e in os.scandir("/proc"):
-        if e.name.isdigit():
-            try:
-                stat = Path("/proc", e.name, "stat").read_bytes()
-            except OSError:
-                continue
-            state, _ppid, pgrp = stat[stat.rindex(b")") + 2:].split()[:3]
-            if int(pgrp) == pgid and state not in (b"Z", b"X"):
-                got.append(int(e.name))
-    return got
-
-
-def exited(pids: list[int], within: float | None) -> None:
-    """Once each of ``pids`` has exited (its pidfd readable), or after ``within`` seconds unless None."""
-    fds = []
-    for pid in pids:
-        try:
-            fds.append(os.pidfd_open(pid))
-        except ProcessLookupError:
-            pass
-    until = None if within is None else time.monotonic() + within
-    try:
-        while fds:
-            t = None if until is None else until - time.monotonic()
-            if t is not None and t <= 0:
-                break
-            for fd in select.select(fds, [], [], t)[0]:
-                fds.remove(fd)
-                os.close(fd)
-    finally:
-        for fd in fds:
-            os.close(fd)
+    return [int(e.name) for e in os.scandir("/proc") if e.name.isdigit() and live(int(e.name), pgid)]
 
 
 def end_group(p: subprocess.Popen) -> None:
     """SIGTERM to the step's process group, `GRACE_S` for its processes to exit, SIGKILL to the rest and their exit
-    awaited, and only then its leader reaped, so the group's id names no other group while this signals it."""
-    for sig, within in ((signal.SIGTERM, GRACE_S), (signal.SIGKILL, None)):
-        if not (left := members(p.pid)):
-            break
-        try:
-            os.killpg(p.pid, sig)
-        except ProcessLookupError:
-            break
-        exited(left, within)
+    awaited, and only then its leader reaped: until then the group has a member, its leader, so its id names no other
+    group while this signals it."""
+    until = time.monotonic() + GRACE_S
+    os.killpg(p.pid, signal.SIGTERM)
+    while members(p.pid) and time.monotonic() < until:
+        time.sleep(POLL_S)
+    os.killpg(p.pid, signal.SIGKILL)
+    while members(p.pid):
+        time.sleep(POLL_S)
     p.wait()
 
 

@@ -243,14 +243,7 @@ LOOP = "while :; do :; done"
 def _gone(pids) -> None:
     """Each of ``pids`` has exited (no process, or a zombie its reaper hasn't reaped); one that hasn't fails the test,
     killed first so it doesn't outlive it."""
-    alive = []
-    for pid in pids:
-        try:
-            stat = Path(f"/proc/{pid}/stat").read_bytes()
-        except FileNotFoundError:
-            continue
-        if stat[stat.rindex(b")") + 2:].split()[0] not in (b"Z", b"X"):
-            alive.append(pid)
+    alive = [pid for pid in pids if CP.live(pid)]
     for pid in alive:
         os.kill(pid, signal.SIGKILL)
     assert not alive, f"{alive} outlived the piece's step"
