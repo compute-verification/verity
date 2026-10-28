@@ -1,5 +1,5 @@
-"""Hashed seeds' grinding premium (GRIND, decision 112; `Accounting.Guarantees.TS.GrindPremiumAt`), where a row's noise is
-visible once its seed is drawn: the formula `circuit.compile`'s seed-group check (decision 122) and
+"""Hashed seeds' grinding premium (GRIND, `Accounting.Guarantees.TS.GrindPremiumAt`), where a row's noise is
+visible once its seed is drawn: the formula `circuit.compile`'s seed-group check and
 `benchmarks/pouw/grind_price.py`'s table share.
 
 A unit's seed is SHA-512(tag ‖ salt ‖ position ‖ root(A) ‖ root(B)) with a live salt, so a cheater with T hash queries in a

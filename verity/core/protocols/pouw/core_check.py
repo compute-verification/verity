@@ -733,9 +733,9 @@ def public_row_salt(context: str, position: int) -> bytes:
     return b"".join(hashlib.sha512(head + bytes([i])).digest() for i in range(SALT_BYTES // 64))
 
 
-#: the ok row the verifier accepts: a unit's one output bit, 1, in its one word (h1_prove's `OK`, #3124)
+#: the ok row the verifier accepts: a unit's one output bit, 1, in its one word (h1_prove's `OK`)
 OK_ROW = (1,)
-#: the ok row's hm96 salt tag (h1_prove's, #3124)
+#: the ok row's hm96 salt tag (h1_prove's)
 OK_SALT_TAG = b"verity/pouw/h1-prove/ok-row-salt/v0\0"
 
 
@@ -1306,7 +1306,7 @@ SIGNED_LIVE = ("a live window's coins are its challenger's signed record and the
                "(`challenger.trusted_commitment`), not a bare commitment")
 
 
-#: the refusal of a draw whose coins aren't the record of the challenger the window's parameters pin (RT4-INT-5)
+#: the refusal of a draw whose coins aren't the record of the challenger the window's parameters pin
 COIN_KEY = "coin-key"
 NO_PINNED_KEY = "the window's parameters pin no challenger key for its draw's record"
 OTHER_KEY = "the challenger record is signed under a key other than the challenger key the window's parameters pin"
@@ -1525,8 +1525,8 @@ def _salt_epoch(key: Any, ledger: Any, pins: Any, main: Any, session: Any, r: by
 def values_root(g: Any) -> bytes | None:
     """The root of a group of committed values the window names (`WINDOW_VALUES`), or None when `g` is not one: ``{program,
     values}``, ``program`` a string and ``values`` a non-empty object of entries by value name, each naming its value
-    (``value``) and its ``domain`` and ``root``, SHA-512 digests (core's ``registered`` entries: #4426's
-    `loop.activations` and its weights' pin's ``values``).  The root is SHA-512(`VALUES_TAG` ‖ u64be(len program) ‖
+    (``value``) and its ``domain`` and ``root``, SHA-512 digests (core's ``registered`` entries: the served
+    loop's `loop.activations` and its weights' pin's ``values``).  The root is SHA-512(`VALUES_TAG` ‖ u64be(len program) ‖
     program ‖ for each name in sorted order: u64be(len name) ‖ name ‖ domain ‖ root), strings as UTF-8, so it fixes
     every value's root under its domain.  An entry's other fields (its rows, words and width) are bound by its domain,
     which the records' audit holds to them (`records_audit.committed_activations`, `pinned`)."""
