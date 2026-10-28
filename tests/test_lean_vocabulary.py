@@ -372,7 +372,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 412
+KNOWN_MAX = 414
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -846,6 +846,8 @@ KNOWN: dict[str, str] = {
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (vllm)",
     "integrations/vllm/verity_vllm/query/units.py::Program": "homonym, what a query reads: rename (circuits)",
     # tools/
+    "integrations/vllm/verity_vllm/records/inference_blocks.py::Statement":
+        "homonym, an inference block's public statement in the served record: rename (vllm)",
     "tools/config/verity_config/registry.py::Machine": "homonym, a pod's machine type: rename (ci)",
     "tools/config/verity_config/settings.py::Registry":
         "homonym, one distribution's settings from the environment: rename (ci)",
@@ -1097,6 +1099,8 @@ KNOWN: dict[str, str] = {
         "duplicate of `Verity.Partition`: becomes its Python mirror, held by a difftest (proofs)",
     "verity/ml/circuits/requirement.py::Layout":
         "homonym, each value's place in the store: rename (`Accounting.Requirement.Layout`'s mirror) (proofs)",
+    "verity/ml/circuits/requirement.py::Store.Placement":
+        "homonym, each value's place in the store: rename (`Accounting.Requirement.Store.Placement`'s mirror) (proofs)",
     "verity/ml/circuits/stacking.py::Verdict": "homonym, whether a stacking property holds: rename (proofs)",
     "verity/ml/circuits/stacking.py::Window": "homonym, a stacking property's window: rename (proofs)",
     "verity/ml/circuits/types.py::Record": "homonym, a record type of the circuit type system: rename (proofs)",
