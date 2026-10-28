@@ -170,7 +170,7 @@ def share(p: dict, rate: float) -> float:
 def left_out(p: dict, periods: int) -> float:
     """What the fit bound leaves out, in ``share``'s unit: each server's first window of ``periods`` wipe periods, at mfu,
     over the horizon. That window builds its weights from a seed, so F1's weight half fails there, and
-    ``Nci.SecurityProofs.Fit.fitBoundSlots_init`` adds the counted multiplications inside it to the bound. The threads
+    ``InferenceOnly.SecurityProofs.Fit.fitBoundSlots_init`` adds the counted multiplications inside it to the bound. The threads
     it starts need no F3: their work in later windows is paid for by their entry fees there. F3 is asked, outside the
     first windows, of the threads started later, which do no work in a first window when every server starts with the
     run. A server that joins later, or a recipe that seeds weights after a server's first window (progressive growth),

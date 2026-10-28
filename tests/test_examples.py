@@ -74,7 +74,7 @@ def test_each_run_step_needs_its_evidence():
 
 
 def test_each_proof_step_needs_its_evidence():
-    _says(_ex("moved", "stated", guarantee="Nci.Guarantees.Nope"), "proof stated: guarantee 'Nci.Guarantees.Nope' is listed in no",
+    _says(_ex("moved", "stated", guarantee="InferenceOnly.Guarantees.Nope"), "proof stated: guarantee 'InferenceOnly.Guarantees.Nope' is listed in no",
           "add [evidence] honest", "add [evidence] nontrivial")
     _says(_ex("moved", "stated", guarantee=LISTED, honest="Nope.honestLemma", nontrivial=PROOF),
           "honest lemma 'Nope.honestLemma' is declared in no tracked .lean file")

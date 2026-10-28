@@ -4,7 +4,7 @@ A policy is a calibration: blocks of at most ``Gamma`` gates, each reading at mo
 parameters, so ``alpha = K / Gamma`` bits per gate. A row (one training method in one configuration) gives the inputs
 in ``INPUTS``, each a number or a parameter estimate (``catalog.resolve``).
 
-* ``lower``: the thread theorem, ``Nci.SecurityProofs.ThreadedTraining`` (``Security/Definitions/Nci/Guarantees/Threads.lean``):
+* ``lower``: the thread theorem, ``InferenceOnly.SecurityProofs.ThreadedTraining`` (``Security/Definitions/InferenceOnly/Guarantees/Threads.lean``):
   ``rho >= kappa * b_a / (2 alpha Lambda)`` with ``Lambda = max(e, c K / (4 d b_w))``, and ``rho >= 1`` since a
   containing circuit is no smaller. The weight rate is capped at ``U_bits / n_updated``: a block that uses ``p`` updated
   weights can always read the whole update instead, so no larger rate is a valid charge. A seed-described update
@@ -17,8 +17,8 @@ in ``INPUTS``, each a number or a parameter estimate (``catalog.resolve``).
   data and no decoding, kept as a check.
 * ``theta_cap``: a calibration without a cap on the committed parameters' size lets a row decode from a committed table
   (its ``decode_flops_table``) instead of regenerating it, as a seed-based method's noise.
-* ``chain``: the partial-sum law, ``Nci.SecurityProofs.ContainedTraining``
-  (``Security/Definitions/Nci/Guarantees/Contained.lean``): ``rho >= kappa_chain * f(K) / (2 alpha)``, with ``f`` the read
+* ``chain``: the partial-sum law, ``InferenceOnly.SecurityProofs.ContainedTraining``
+  (``Security/Definitions/InferenceOnly/Guarantees/Contained.lean``): ``rho >= kappa_chain * f(K) / (2 alpha)``, with ``f`` the read
   factor of ``b_w``, ``b_a`` and the chain's smallest inner dimension. Its assumptions are the support-form
   incompressibility of one chain of the reference circuit at ``b_w`` and ``b_a``, and nothing structural. A chain charges
   each weight once per layer of it, so it is one forward path: ``kappa_chain`` (a row's optional ``chain``) is that
@@ -60,8 +60,8 @@ CHAIN = {
     "path": "the multiplications the chain runs through, per layer",
 }
 
-THREAD_THEOREM = "Nci.SecurityProofs.ThreadedTraining"
-CHAIN_THEOREM = "Nci.SecurityProofs.ContainedTraining"
+THREAD_THEOREM = "InferenceOnly.SecurityProofs.ThreadedTraining"
+CHAIN_THEOREM = "InferenceOnly.SecurityProofs.ContainedTraining"
 
 
 def rates(i: dict, K: float, b_tok: float) -> tuple[float, float, float, float]:
@@ -89,7 +89,7 @@ def thread_lower(i: dict, K: float, Gamma: float, b_tok: float) -> float:
 
 def read_factor(K: float, b_w: float, b_a: float, d: float, steps: int = 4000) -> float:
     """The chain draft's ``f(K) = max_{0<mu<1} min{(1+sqrt mu)^2 b_w b_a d / K, sqrt2 (1+sqrt mu) sqrt(1-mu) b_a sqrt(b_w/K)}``
-    (``Nci.readFactor``), maximized on a grid of ``steps`` points."""
+    (``InferenceOnly.readFactor``), maximized on a grid of ``steps`` points."""
     best = 0.0
     for k in range(1, steps):
         mu = k / steps

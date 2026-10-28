@@ -1,6 +1,6 @@
 import Definitions.Accounting.Guarantees.Actual
 import Proofs.Accounting.Actual.Physical
-import Proofs.Nci.ReadsIn
+import Proofs.InferenceOnly.ReadsIn
 
 /-!
 # The capacity form: the windows divide the developer's region
@@ -13,12 +13,12 @@ cut is what it reads in `A`, and the split in `G` (`width_into_region_inter_le`)
 
 `Windows` is `WindowsAt` at the cuts `min(kω, t)` (`uniformCuts`) and `G = univ`: a window of them is
 `A[X i, [kω, (k + 1)ω) ∩ [0, t)]`, at most `ω` long, its novel reads are at most its reads
-(`Nci.SecurityProofs.novelReads_le_readsIn`), and memory bounds the state at its start by `M_{X i}`.
+(`InferenceOnly.SecurityProofs.novelReads_le_readsIn`), and memory bounds the state at its start by `M_{X i}`.
 -/
 
 namespace Accounting.SecurityProofs.Actual
 
-open Verity Nci Finset
+open Verity InferenceOnly Finset
 
 variable {L : Type*} (A : Placed L)
 
@@ -201,7 +201,7 @@ theorem Windows : Guarantees.Actual.Windows := by
   have e : min ((k : ℕ) * ω) t = k * ω := min_eq_left (mul_lt_of_lt_ceil hω k.2).le
   have hst : A.stateIn (X i) (k * ω) univ ≤ M (X i) :=
     stateIn_le_of_memoryAt A (memoryAt_of_memory A hM Set.univ) ⟨i, rfl⟩ (Set.mem_univ _) _
-  refine ⟨hgates.trans ?_, hsize.trans ?_, (Nci.SecurityProofs.novelReads_le_readsIn _ _).trans (hreads.trans ?_)⟩
+  refine ⟨hgates.trans ?_, hsize.trans ?_, (InferenceOnly.SecurityProofs.novelReads_le_readsIn _ _).trans (hreads.trans ?_)⟩
   · show A.region (X i) (Set.Ico (min ((k : ℕ) * ω) t) (min (((k : ℕ) + 1) * ω) t)) = _
     rw [e]
     exact (congrArg (A.region (X i)) Set.Ico_inter_Iio).symm

@@ -5,15 +5,15 @@
 
 The forms, each a lower bound rho >= (chained charge per gate) * s / (charge one inference block can cover):
 
-* ``one c`` (``Nci.Guarantees.CoveringBound``, on main): one cost ``c = r b`` for a weight and an activation, per block
+* ``one c`` (``InferenceOnly.Guarantees.CoveringBound``, on main): one cost ``c = r b`` for a weight and an activation, per block
   ``(k/c)^2 + k``. ``c`` is at most the cheapest updated weight's cost, since parameter-hardness holds for every block.
-* ``two c's`` (``Nci.Guarantees.CoveringBoundTwoCosts``, on main): ``c_w`` per weight (the cheapest class again),
+* ``two c's`` (``InferenceOnly.Guarantees.CoveringBoundTwoCosts``, on main): ``c_w`` per weight (the cheapest class again),
   ``c_a`` per activation, per block ``(k/c_w)(k/c_a) + k``.
 * ``priced`` (in progress): weight ``i`` costs ``p_i`` bits, ``sum_{i in theta'_S} p_i <= |in(S) \\ theta|``. A block
   covers chained products of price sum at most ``k * (k/c_a) + k * p_max``, so the numerator is the price sum over the
   chained products: the product-weighted mean price replaces the cheapest class's ``c_w``.
 * ``priced additive``: the priced form with the weights' bits paid outside the token computations (the conditional
-  premise of ``Nci.Cover.Guarantees.CoveringBoundAdditive``), per block ``k^2/(4 c_a) + k p_max``.
+  premise of ``InferenceOnly.Cover.Guarantees.CoveringBoundAdditive``), per block ``k^2/(4 c_a) + k p_max``.
 
 Chaining (``chainedBlocksAt``) is decided per product stage of one token's forward pass from the count ``n`` of distinct
 updated weights upstream inside the token's computation (``depth.py`` of the realism note: routed experts and the router

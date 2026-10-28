@@ -1516,6 +1516,20 @@
         "benchmarks/e2e_h200/": "examples/h200/",
         "benchmarks/e2e_demo/": "examples/h200/interfaces/"
       }
+    },
+    {
+      "paths": {
+        "Security/Definitions/Nci.lean": "Security/Definitions/InferenceOnly.lean",
+        "Security/Definitions/Nci/": "Security/Definitions/InferenceOnly/",
+        "Security/Proofs/Nci.lean": "Security/Proofs/InferenceOnly.lean",
+        "Security/Proofs/Nci/": "Security/Proofs/InferenceOnly/",
+        "Security/Proofs/Properties/Nci.lean": "Security/Proofs/Properties/InferenceOnly.lean",
+        "Security/Proofs/Properties/Nci/": "Security/Proofs/Properties/InferenceOnly/",
+        "Security/Properties/Nci.lean": "Security/Properties/InferenceOnly.lean",
+        "Security/Properties/Nci/": "Security/Properties/InferenceOnly/",
+        "Security/Properties/NciDesc.lean": "Security/Properties/InferenceOnlyDesc.lean",
+        "Security/Properties/NciDesc/": "Security/Properties/InferenceOnlyDesc/"
+      }
     }
   ]
 }
