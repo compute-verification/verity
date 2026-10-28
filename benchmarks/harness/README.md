@@ -10,8 +10,8 @@ those like any other caller. This file is the harness's contract: how a point is
 
 ~~~text
 verity-bench plan SPEC       # expand a spec; each point's identity and its passing run, if any
-verity-bench run SPEC        # one recorded `research run --queue` per point without a passing run
-                             # (--direct NODE: `research run --on NODE` through the node's GPU slots instead)
+verity-bench run SPEC        # one recorded run per point without a passing run, queued for any free GPU
+                             # (--direct NODE: on NODE itself, through its GPU slots, instead)
 verity-bench check SPEC      # exit 0 only when every point has a passing run, here or on the store's remote
 verity-bench compare A B     # accept two results only when their identities agree (--allow PATH to permit one)
 verity-bench table R1 R2...  # one table from one spec's per-point results, only when their identities agree
@@ -174,26 +174,26 @@ same way, allowing only `config.point_identity`.
 ## Dispatch and resume
 
 `verity-bench run` queues each missing point, as below. `verity-bench run SPEC --direct NODE` launches each missing point
-on NODE itself instead, for a node whose launcher takes a run only through a slot. Each point is `research run --on NODE` with the queued point's tool, identity and environment, so `plan` and `check`
+on NODE itself instead, for a node whose launcher takes a run only through a slot. Each point is a recorded run on NODE with the queued point's tool, identity and environment, so `plan` and `check`
 find it the same way, and its command takes one of the node's GPU slots (`/workspace/research/locks/gpu/slots`, one per GPU)
 through `tools/verity/check/slot.py`, then its GPUs from the node's `gpu-lease`, preemptible. The spec's admission
 `max_minutes` bounds the run, its slot and its lease, so `--direct` refuses a spec without it, and it refuses any node but the
-GPU nodes in `verity_bench.jobs.DIRECT_NODES` (vy-nebius-1, -2 and -3, and the single-GPU DC VMs vy-dc-h200, vy-dc-h200-2
-and vy-dc-b200, whose one GPU kernels' leases share). A preempted direct point is a failed run, which the
+GPU nodes in `verity_bench.jobs.DIRECT_NODES` (multi-GPU nodes, and single-GPU VMs whose one GPU kernels' leases
+share). A preempted direct point is a failed run, which the
 next `run --direct` launches again. Use the queue otherwise: it places each point on whichever node has a free GPU.
 
 `verity-bench run` launches each missing point as one queued, preemptible job of the kind registered for the spec's GPU
 count in `infra/cluster/kinds/benchmarks.toml` (`vllm-bench-1gpu`, the only one). The job runs
 `benchmarks/harness/run_point.sh`, which uses the node's pinned-vLLM environment (`benchmarks/harness/env.sh`, which a
 benchmark's own launcher sources too): `VERITY_BENCH_VENV`, which the dispatcher forwards, else the first that exists of
-`$WORK/venv312` (the integration's `pod_bootstrap.sh`), `$WORK/jobs/venv312` (vy-nebius-2's),
+`$WORK/venv312` (the integration's `pod_bootstrap.sh`), `$WORK/jobs/venv312` (a jobs node's),
 `$WORK/pouw/mvp-e2e/venv312` and `$WORK/cp/venv312` (the DC VMs'). `benchmarks` is on its path, so a spec names an experimental arm's module from there
 (`served_commit.prof_arm:SERVED_COMMIT_ROWS`). A point's identity hashes the resolved spec, the commit, `uv.lock`, the
 vLLM pin and the point. The tool declaration (`verity_bench.tool:VLLM_BENCH_POINT`) records it as the run's key param,
 and `plan`, `check` and `run` skip a point whose identity already has a passing run: validation passed, exit code 0 and a
-clean source tree. A requeued point first deletes its run's old `result.json`. The lookup is `research data lookup --tool
-verity_bench.tool:VLLM_BENCH_POINT --param identity=I --source-tree T` at the commit's tree (git must know the commit) on
-the machine's catalog, and when a point isn't there, the store's remote: once per commit it fetches and indexes the
+clean source tree. A requeued point first deletes its run's old `result.json`. The lookup asks the machine's catalog of
+the evidence store for an attempt of the tool `verity_bench.tool:VLLM_BENCH_POINT` with the point's `identity` param, at
+the commit's source tree (git must know the commit), and when a point isn't there, the store's remote: once per commit it fetches and indexes the
 attempts this store lacks among those started since a day before the commit's committer date (a point's runs can't start
 before its commit exists, and a run id begins with its UTC start), so a fresh machine finds the points other machines
 ran. Without a usable remote it refuses rather than report them missing; `--local-only` reads the catalog alone.

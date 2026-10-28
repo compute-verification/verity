@@ -36,18 +36,16 @@ and `session.sh` also runs it on another ship's modules (`units-old.tar`) in the
 ## Running
 
 ```text
-# on a CPU node with CUDA 13.0: both cubins, build_check.py, the harness SASS gate's verdicts, and the fixture (pools,
-# words, sweep digests)
-research run --on vy-nebius-cpu-1 --pool research --project verity --source . --cwd source --env PROCS=16 \
-  -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && bash benchmarks/torch_gpu/units/build.sh "$OUT/ship"'
-# on the H200: the sweeps, the check at B = 1, 7, 128, 4096, 16384 and 20480, then timing at 4096 and 16384 (with
-# units-old.tar, an earlier build's ship, timed beside it)
-tar -C BUILD_RUN/out/ship -cf /tmp/units-ship.tar .
-research run --on vy-dc-h200 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
-  --send /tmp/units-ship.tar [--send /tmp/units-old.tar] -- bash benchmarks/torch_gpu/units/session.sh
-# on the RTX PRO 6000 (vy-nebius-2): the sweeps alone, ops 0 to 10
-research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE --env SWEEP_ONLY=1 \
-  --send /tmp/units-ship.tar -- bash benchmarks/torch_gpu/units/session.sh
+# from the tree's root, on a CPU node with CUDA 13.0's nvcc: both cubins, build_check.py, the harness SASS gate's
+# verdicts, and the fixture (pools, words, sweep digests)
+uv sync --all-packages --extra torch-cpu
+PROCS=16 bash benchmarks/torch_gpu/units/build.sh /tmp/units-ship
+mkdir -p IN && tar -C /tmp/units-ship -cf IN/units-ship.tar .
+# on an H200 with CUDA torch and `gpu-lease`: the sweeps, the check at B = 1, 7, 128, 4096, 16384 and 20480, then timing
+# at 4096 and 16384 (with IN/units-old.tar, an earlier build's ship, timed beside it if present)
+OUT=DIR IN=IN bash benchmarks/torch_gpu/units/session.sh
+# on an RTX PRO 6000: the sweeps alone, ops 0 to 10
+SWEEP_ONLY=1 OUT=DIR IN=IN bash benchmarks/torch_gpu/units/session.sh
 ```
 
 The fixture holds every pool word of the twins to circuits' references and refuses to write on a disagreement:

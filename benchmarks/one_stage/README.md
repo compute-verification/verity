@@ -62,7 +62,7 @@ negatives.
   vy-glm53-eu2 --cwd source -- bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
   machine (`A5_ON`) and runs `a5_tp.sh` there in one research run.
-- `demos/vllm/commit.sh` (the vLLM demo's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
+- `demos/vllm/commit.sh` (the vLLM example's): the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
   bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the workload's Build and Match of record, a config-run Commit that seals
   `commit/replay_bundle_p0/` (a single-GPU workload defers only as a config run), its replay on CPU, and the row dir in the evidence
   store. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
@@ -151,6 +151,12 @@ negatives.
   same for each of its split units, and with `--also`/`--also-file` for Definitions a split main lacks would use.
   `m1_unit.py` builds one family's unit through M0's `UnitStager`, flat or `--structural`, and with `--bin`
   and `--lean` proves one round of it on stand-in bf16 values under `--zk` and verifies it with the Lean verifier.
+- `served_stock.sh` (with `served_overhead.py`): `served_verdicts.sh`'s stock control, the same endpoint, engine and load
+  served with `serve-openai --no-commit` and no protocol, once per fresh endpoint for `REPS` endpoints. `served_overhead.py
+  table` compares the composed run with it on two clocks, each the same code in both runs: the client's
+  (`serve_load.py --varied`'s timings files) and the engine's step trace (`advice_trace.jsonl`). It reports time per output
+  token, time to first token and tokens per second as composed over stock, the composed run's window open and close on
+  the engine loop, and `verity-bench served-table`'s single-protocol rows beside them.
 
 C-Flock's circuit prover (M0, `verity_flock.circuit`) is on `main`, but a run does not take it from its checkout:
 `pod.sh` takes `git archive`s of M0's tree and the Lean verifier's tree at pinned commits, and a captured input set, as

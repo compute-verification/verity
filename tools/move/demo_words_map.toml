@@ -61,6 +61,18 @@ files = ["ARCHITECTURE.md"]
 "(example, run, proof)" = "(demo, run, proof)"
 
 [[words_in]]
+files = ["README.md", "verity/core/protocols/remote/README.md"]
+[words_in.words]
+"the only example that" = "the only demo that"
+"The only example that" = "The only demo that"
+"No example runs" = "No demo runs"
+
+[[words_in]]
+files = ["benchmarks/README.md"]
+[words_in.words]
+"End-to-end examples" = "End-to-end demos"
+
+[[words_in]]
 files = ["tools/research/console/README.md"]
 [words_in.words]
 "examples name" = "demos name"
@@ -68,7 +80,7 @@ files = ["tools/research/console/README.md"]
 [[words_in]]
 files = ["integrations/vllm/pyproject.toml"]
 [words_in.words]
-"the example's stored row" = "the demo's stored row"
+"the example's stored" = "the demo's stored"
 
 [[words_in]]
 files = ["integrations/vllm/tests/pipeline/test_workload.py"]

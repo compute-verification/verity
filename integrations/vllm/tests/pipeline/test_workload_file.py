@@ -14,7 +14,7 @@ import pytest
 from verity_vllm import config as C
 from verity_vllm.pipeline import cli
 
-DEMO = C.REPO / "demos" / "vllm" / "workloads"
+EXAMPLE = C.REPO / "demos" / "vllm" / "workloads"
 
 
 def _stored(d: Path, docs: dict[str, dict]) -> dict[str, bytes]:
@@ -36,12 +36,12 @@ def test_every_workload_is_a_fixture_its_directory_lists_and_the_registry_holds(
     """The tree keeps a workload's name and digest (SHA256SUMS) and its art id (fixtures/artifacts.json), never its bytes
     (tests/test_repository.py holds the registered paths gitignored)."""
     reg = json.loads((C.REPO / "fixtures" / "artifacts.json").read_text())
-    dirs = {os.path.relpath(d, C.REPO) for d in (C.WORKLOADS, DEMO)}
+    dirs = {os.path.relpath(d, C.REPO) for d in (C.WORKLOADS, EXAMPLE)}
     registered = {v for k, v in reg.items() if k.startswith("art:") and isinstance(v, str) and os.path.dirname(v) in dirs}
-    listed = {os.path.relpath(d / n, C.REPO) for d in (C.WORKLOADS, DEMO) for n in C.stored_workloads(d)}
+    listed = {os.path.relpath(d / n, C.REPO) for d in (C.WORKLOADS, EXAMPLE) for n in C.stored_workloads(d)}
     assert registered == listed, (f"in fixtures/artifacts.json, not in a SHA256SUMS: {sorted(registered - listed)}; "
                                   f"in a SHA256SUMS, not registered: {sorted(listed - registered)}")
-    assert len(C.stored_workloads(DEMO)) == 1
+    assert len(C.stored_workloads(EXAMPLE)) == 1
     loose = sorted(p.name for p in C.WORKLOADS.glob("*.json") if p.name not in C.stored_workloads())
     assert not loose, (f"{loose}: workloads no SHA256SUMS lists. A workload is a fixture: `research data put --kind fixture/v1 --file "
                        "integrations/vllm/workloads/NAME --preserve`, its id and path in fixtures/artifacts.json, the path in .gitignore, "
