@@ -2223,7 +2223,6 @@ def main(argv: list[str]) -> int:
         stopped_by = TERMINATED[0] if TERMINATED else None
         TERMINATED.clear()
     ok = ok and not stopped_by
-    live.close("stopped" if stopped_by else "passed" if ok else "failed")
     bad, flaky = contradictions(out), contradictions(out, "nondeterministic")
     for c in bad:
         print(f"check: CACHE CONTRADICTED in {c['suite']}: {', '.join(c['contradicts'][:5])} failed fresh, and a cached pass answers for it",
@@ -2237,6 +2236,8 @@ def main(argv: list[str]) -> int:
             if (got := reused.close()) is not None:
                 verdicts["reused"] = {"file": REUSED_PACK, "entries": got}
         write_result(run_dir, ok, done, verdicts, bad, flaky, sharded, stopped_by)
+    # after the result: a cancel's SIGKILL follows its SIGTERM in seconds, and the publish may take that long
+    live.close("stopped" if stopped_by else "passed" if ok else "failed")
     print("\n".join(reuse_lines(reuse(out, done))), flush=True)
     if stopped_by:
         print(f"check: stopped by {stopped_by} in {time.monotonic() - t0:.1f} s"
