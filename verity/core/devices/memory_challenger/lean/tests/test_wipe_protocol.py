@@ -12,6 +12,7 @@ import json
 import shutil
 
 import pytest
+from hypothesis import assume
 from hypothesis import strategies as st
 
 import mc_cases as M
@@ -61,13 +62,19 @@ CASE_EDITS = [
 ]
 
 
+def _in_a_case(s: str) -> bool:
+    """Whether a case's canonical JSON (`codec.canonical_json`) can hold the string: ASCII without DEL."""
+    return s.isascii() and "\x7f" not in s
+
+
 @st.composite
 def drawn(draw) -> dict:
-    s = draw(WC.sessions())
+    s = draw(WC.sessions(names=WC.CASE_TIER_NAMES))
     x = draw(st.integers(0, 2 ** 16))
     how = draw(st.sampled_from(["as-is", "as-is", "mutated", "mutated", "unsigned", "json", "case", "other"]))
     if how == "mutated":
         s = draw(st.sampled_from(WC.MUTATIONS))(s, x)
+        assume(_in_a_case(s.signed.scheme) and _in_a_case(s.signed.ended))
     signed = None if how == "unsigned" else s.signed
     if how == "other":
         server, session = draw(st.sampled_from([(s.commitment.server + b"x", None), (None, M._flip(s.commitment.session, x))]))
