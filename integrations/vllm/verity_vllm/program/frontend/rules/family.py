@@ -26,7 +26,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable
 
-from verity.ml.circuits.codec import _spec_id
+from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import Body, CompositeDefinition, SpecializedDefinition
 from verity.ml.circuits.defs import bind as ir_bind
 from verity.ml.circuits.refs import Affine, Refs, concat
@@ -62,8 +62,8 @@ def _translate(refs: Refs, env: dict[tuple[str, int], Refs]) -> Refs:
 def node_leaf_id(node) -> str:
     """The matching id of a leaf node: the callee's descriptor id, and for `batch` nodes also the axes and the count."""
     if node.form == "batch":
-        return f"batch[{_spec_id(node.fn)}|axes={','.join('-' if a is None else str(a) for a in node.axes)}|n={node.n}]"
-    return _spec_id(node.fn)
+        return f"batch[{descriptor_id(node.fn)}|axes={','.join('-' if a is None else str(a) for a in node.axes)}|n={node.n}]"
+    return descriptor_id(node.fn)
 
 
 def expand_leaves(spec: SpecializedDefinition, leaf_bases: set[str]) -> tuple[list[_Leaf], Refs, tuple[tuple[str, Type], ...], Type]:
@@ -87,7 +87,7 @@ def expand_leaves(spec: SpecializedDefinition, leaf_bases: set[str]) -> tuple[li
                 leaves.append(_Leaf(node_leaf_id(node), targs, node.out.leaves, f"{path}/{node.name or k}"))
                 env[("n", k)] = Affine("x", j, 0, node.out.leaves)
             else:
-                raise _NoMatch(f"the family body has a {node.form} node of {_spec_id(fn)} above leaf granularity at {path}")
+                raise _NoMatch(f"the family body has a {node.form} node of {descriptor_id(fn)} above leaf granularity at {path}")
         return _translate(body.ret, env)
 
     root_args = [Affine("q", i, 0, t.leaves) for i, (_, t) in enumerate(params)]
@@ -229,7 +229,7 @@ def match_program(flat: Body, spec: SpecializedDefinition, *, flat_weights_param
             raise _NoMatch(f"return type differs: family {pret_t!r} vs derived {flat.ret_type!r}")
         if len(leaves) != len(flat.nodes) and not (allow_extra and len(flat.nodes) > len(leaves)):
             rep["family_leaf_ids"] = _histogram(l.id for l in leaves)
-            rep["flat_node_ids"] = _histogram(_spec_id(n.fn) for n in flat.nodes)
+            rep["flat_node_ids"] = _histogram(descriptor_id(n.fn) for n in flat.nodes)
             raise _NoMatch(f"leaf counts differ: family {len(leaves)} vs derived {len(flat.nodes)}")
 
         flat_runs = [[_runs(a.refs) for a in n.args] for n in flat.nodes]
