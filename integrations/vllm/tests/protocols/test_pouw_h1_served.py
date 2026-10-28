@@ -126,18 +126,21 @@ def _period(ws, shapes=SHAPES, modules=MODULES, blocks=BLOCKS, defn=StandIn):
 
 def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=SHAPES, blocks=BLOCKS, steps=STEPS,
             served=1, changed=None, modules=MODULES, tile=TILE, rows=T, no_z=False, ws=None, weights=None, receipts=None,
-            order=None, defn=StandIn):
+            order=None, defn=StandIn, device=None):
     """A window: its first ``served`` steps serve 5 rows each, q and k on one input x, o on another, every step with the
     same weights ``ws`` (`_weights` of ``seed`` by default; step 1's q on ``changed`` when given), each call's z/y records
     `scaled_mm_zy`'s over its T slots, its linears called in ``order`` (module order by default); the later steps are
     empty. With ``weights`` (`_period`) its ``b/<K>`` are the period's. Its proof blocks are ``defn``'s (`StandInJ10R` for a
-    J10-R window). Returns the run, each linear's weight and scales, and each served call's (a, s_a, z, y) by its index,
-    z its exact product and y its served y."""
+    J10-R window). With ``device`` the arm's tensors are there (each weight moved once), so its records are too. Returns
+    the run, each linear's weight and scales, and each served call's (a, s_a, z, y) by its index on the host, z its exact
+    product and y its served y."""
     rng = np.random.default_rng(seed)
     run = PH.H1Run("t", SALT, modules, shapes, rows, steps, key=bytes([seed + 1]) * 32,
                    served=SV.Served(tile, _unit(tile, defn), blocks, window=served_key or key, weights=weights,
                                     receipts=receipts))
     ws = _weights(seed, shapes) if ws is None else ws
+    on = (lambda t: t) if device is None else (lambda t: t.to(device))
+    held, moved = [(on(c), on(s)) for c, s in ws], None if changed is None else on(changed)
     got = {}
     for s in range(served):
         xs = {}
@@ -145,13 +148,15 @@ def _window(key: bytes, seed: int = 0, served_key: bytes | None = None, shapes=S
             xs[b] = xs[b] if b in xs else _codes(rng, SERVED, k)
         inputs = [xs[b] for b in blocks]
         for w in range(len(inputs)) if order is None else order:
-            a, (wt, sw) = inputs[w], ws[w]
-            wt = changed if (s, w) == (1, 0) and changed is not None else wt
+            a, (wt, _sw), (dw, ds) = inputs[w], ws[w], held[w]
+            if (s, w) == (1, 0) and changed is not None:
+                wt, dw = changed, moved
             n = wt.shape[0]
             s_a = torch.rand(SERVED) + 0.5
-            y, zy = OPS.scaled_mm_zy(a, s_a, wt, sw, rows) if n % PH.TILE[1] == 0 else (None, None)
-            call = run.record(w, a, s_a, wt, sw, z=None if no_z else zy)
-            got[call.index] = (a, s_a, a.to(torch.int32) @ wt.to(torch.int32).T, y)
+            da, dsa = on(a), on(s_a)
+            y, zy = OPS.scaled_mm_zy(da, dsa, dw, ds, rows) if n % PH.TILE[1] == 0 else (None, None)
+            call = run.record(w, da, dsa, dw, ds, z=None if no_z else zy)
+            got[call.index] = (a, s_a, a.to(torch.int32) @ wt.to(torch.int32).T, None if y is None else y.cpu())
     run.close()
     return run, ws, got
 
@@ -1010,6 +1015,29 @@ def test_a_chunked_llama_window_registers_chunk_leaves_and_core_credit_ties_it()
              for e in served.entries()]
     assert CR._weights(window, layout, whole, requests.hex(), session, served.program_digest, pre)[1] == (
         "weights", CR.other_weights_entry(pre + "b/14336", 14336, 32))
+
+
+#: one Llama-3.2-1B decoder layer's int8 linears (n, K): qkv, o and gate_up at the hidden size, down_proj at the
+#: intermediate size
+LLAMA_1B = {"qkv_proj": (3072, 2048), "o_proj": (2048, 2048), "gate_up_proj": (16384, 2048), "down_proj": (2048, 8192)}
+
+
+@pytest.mark.slow
+def test_the_pouw_setting_j10r_over_one_k_declares_the_form_a_periods_guarantee_covers():
+    """serve-openai's ``{"pouw": {"unit": "j10r", "ks": [2048]}}`` (`unit_of`, the linears at K = 2048): the Program it
+    declares over a Llama-3.2-1B layer at T 64, S 1 has its units at one K, each J10-R's, as credit reads the descriptor
+    (`credit.shape_of`): the form a PoUW period's guarantee covers. Unset (v1) its unit takes per-unit noise, and J10-R
+    with down_proj's K = 8192 beside it has units at two K's. Its three declarations are real (up to a minute together):
+    the stand-in tests hold the setting's plumbing, and only a real one gives the descriptor credit reads."""
+    def tiles(names, unit):
+        shapes = [LLAMA_1B[n] for n in names]
+        raw = SV.descriptor(SV.declared(shapes, dict(enumerate(names)), 64, 1, unit=SV.unit_of(unit)))
+        return {k: t["j10r"] for k, t in CR.shape_of(raw)["tiles"].items()}
+
+    one_k = [n for n, (_n, k) in LLAMA_1B.items() if k == 2048]
+    assert tiles(one_k, "j10r") == {2048: True}
+    assert tiles(one_k, None) == {2048: False}
+    assert tiles(list(LLAMA_1B), "j10r") == {2048: True, 8192: True}
 
 
 def _last_chunk_code(w):
