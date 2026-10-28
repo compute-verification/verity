@@ -15,7 +15,9 @@ process, `Local`), in the protocol's order:
 3. the verifier draws each window's openings, the prover opens them, and the verifier verifies them.
 
 Every call to the session is an event of the verifier's log with the clock reading it took, and the log, its coins and
-the registration are the core case (`case`) that `RemoteAudit.Protocol` replays. The answer (`answer`) is the session's
+the registration are the core case (`case`) that `RemoteAudit.Protocol` replays. The case names its store too
+(`store_root`: the registration's payload root, hex), which onsite holds to the root of `C*` PoUS's setup published
+(`same_store`), so that space and bandwidth are audited on one store. The answer (`answer`) is the session's
 own: accepted, its failure, or undecided while a window is unverified; on acceptance `certified`'s reads `q_bytes`, the
 receipts less the wrong ones the openings leave (`pooled`'s W, rounded up), a `BLOCK_BYTES` block each, at
 `eps = (2^24 + S)/2^64` for S the draws, as the Lean's `certify` computes them.
@@ -33,15 +35,17 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
 from typing import Any, Protocol
 
 from verity.core.protocols.pous.period import records
+from verity.core.protocols.pous.run import Setup
 from verity.ml.commitments.identity import canonical_json_bytes
 
 from . import audit, codec, pooled, receipts
@@ -275,8 +279,45 @@ def session(node: str, prover: Prover, coins: bytes, *, windows: int = 2, passes
          "windows": params.windows}
     evidence = {"append_coins": [], "coins": [c.hex() for c in committed], "events": events}
     case = {"commitment": canonical_json_bytes(registration_json(reg)).hex(),
-            "evidence": canonical_json_bytes(evidence).hex(), "params": {"not_before_ns": not_before, "params": p}}
+            "evidence": canonical_json_bytes(evidence).hex(), "params": {"not_before_ns": not_before, "params": p},
+            "store_root": reg.payload_root.hex()}
     return Period(answer(s), case)
+
+
+STORE_ROOT = re.compile(r"[0-9a-f]{128}")
+
+
+def store_root(case: Mapping[str, Any]) -> bytes:
+    """The store bandwidth's case names (`store_root`): its registration's payload root, 128 lowercase hex characters.
+    No digest binds the field, so it counts only as the payload root the case's commitment registers, which the
+    component's digest binds. ValueError when the case names no store, or one its commitment doesn't register."""
+    s = case.get("store_root")
+    if type(s) is not str or not STORE_ROOT.fullmatch(s):
+        raise ValueError("the case names no store: store_root is not 128 lowercase hex characters")
+    try:
+        registered = json.loads(bytes.fromhex(case["commitment"]))["payload_root"]
+    except (KeyError, TypeError, ValueError) as e:
+        raise ValueError(f"the case's commitment registers no payload root: {type(e).__name__}: {e}") from None
+    if registered != s:
+        raise ValueError("the case's store_root is not the payload root its commitment registers")
+    return bytes.fromhex(s)
+
+
+def same_store(case: Mapping[str, Any], pous_case: Mapping[str, Any]) -> str | None:
+    """Onsite's one store: None when bandwidth's case `case` names (`store_root`) the store PoUS's run case `pous_case`
+    is committed to, the root of `C*` its setup published (`pous.run.Setup.root`, in the run case's commitment), else
+    why not."""
+    try:
+        ours = store_root(case)
+    except ValueError as e:
+        return str(e)
+    try:
+        theirs = Setup.from_json(json.loads(bytes.fromhex(pous_case["commitment"]))).root
+    except (KeyError, TypeError, ValueError) as e:
+        return f"PoUS's case names no setup: {type(e).__name__}: {e}"
+    if ours != theirs:
+        return f"bandwidth's store {ours.hex()[:16]}… is not PoUS's {theirs.hex()[:16]}…"
+    return None
 
 
 def serve(exe: str | os.PathLike, cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -321,5 +362,5 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     return answer_
 
 
-__all__ = ["DELTA", "PROTOCOL", "Local", "Period", "Prover", "answer", "certified", "leg", "payloads", "records",
-           "registration_json", "registration_of", "run", "serve", "session"]
+__all__ = ["DELTA", "PROTOCOL", "STORE_ROOT", "Local", "Period", "Prover", "answer", "certified", "leg", "payloads",
+           "records", "registration_json", "registration_of", "run", "same_store", "serve", "session", "store_root"]
