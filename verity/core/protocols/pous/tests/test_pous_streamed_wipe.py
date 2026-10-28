@@ -12,6 +12,7 @@ import math
 import pytest
 
 import pous_test_signer as ts
+from pous_fakes import Clock
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.core.site import Loc, Registration, Site
@@ -22,23 +23,13 @@ SESSION = hashlib.sha512(b"wipe session").digest()[:32]
 N, K, LIMIT = 256, 40, 1_000_000
 
 
-class Clock:
-    """Time advances only when a responder spends it."""
-
-    def __init__(self) -> None:
-        self.now = 1_000_000
-
-    def __call__(self) -> int:
-        return self.now
-
-
 def params(batch: int = 1, limit: int = LIMIT) -> sw.WipeParams:
     return sw.WipeParams(N, K, batch, limit, (("gpu", 128 * sw.LABEL_BYTES), ("host-dram", 128 * sw.LABEL_BYTES)))
 
 
 def challenger(p: sw.WipeParams | None = None, *, clock=None, signer=None, log=None) -> sw.Challenger:
     return sw.Challenger(SECRET, SERVER, SESSION, p or params(), signer or ts.TestSigner(b"wipe challenger", height=2),
-                         log=log or ts.session_log(), clock=clock or Clock(), coin_secret=b"coins")
+                         log=log or ts.session_log(), clock=clock or Clock(1_000_000), coin_secret=b"coins")
 
 
 def run(c: sw.Challenger, respond=None, *, clock: Clock | None = None, spend=lambda b: 20_000) -> sw.SignedWipe:
@@ -81,7 +72,7 @@ def test_draws_are_uniform_indices_from_the_coin_secret():
 def test_honest_session_is_accepted_at_batch_1_and_refused_above(batch):
     """An honest session runs to completion at any batch size, but only the sequential reveal is accepted: the guarantee
     doesn't cover a larger batch, so the verdict refuses it by name."""
-    clock = Clock()
+    clock = Clock(1_000_000)
     signer = ts.TestSigner(b"wipe challenger", height=2)
     c = challenger(params(batch), clock=clock, signer=signer)
     signed = run(c, clock=clock)
@@ -96,7 +87,7 @@ def test_honest_session_is_accepted_at_batch_1_and_refused_above(batch):
 
 
 def test_wrong_answer_ends_the_session():
-    clock = Clock()
+    clock = Clock(1_000_000)
     signer = ts.TestSigner(b"wipe challenger", height=2)
     c = challenger(clock=clock, signer=signer)
     key = sw.wipe_key(SECRET, SERVER, SESSION)
@@ -115,7 +106,7 @@ def test_wrong_answer_ends_the_session():
 
 
 def test_late_batch_ends_the_session():
-    clock = Clock()
+    clock = Clock(1_000_000)
     signer = ts.TestSigner(b"wipe challenger", height=2)
     c = challenger(clock=clock, signer=signer)
     signed = run(c, clock=clock, spend=lambda b: LIMIT + 1 if b == 3 else 1000)
@@ -187,7 +178,7 @@ def test_the_declared_tiers_hold_the_fill():
 
 
 def test_verdict_fails_closed():
-    clock = Clock()
+    clock = Clock(1_000_000)
     signer = ts.TestSigner(b"wipe challenger", height=2)
     c = challenger(clock=clock, signer=signer)
     signed = run(c, clock=clock)

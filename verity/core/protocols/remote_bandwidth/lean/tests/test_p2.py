@@ -17,6 +17,7 @@ import pytest
 from hypothesis import strategies as st
 
 import ra_cases as M
+from ra_cases import Entropy
 import verity_difftest as D
 from verity.core.protocols.pous.verifier import MerkleTree, leaf_hash
 from verity.core.protocols.remote_bandwidth import p2, receipts
@@ -200,15 +201,6 @@ def opening(v) -> str | None:
 #: Stores' geometry (blocks_per_segment, segments): a unit, units with a tail of one, two and three blocks, and
 #: seventeen units, so that a plan has a second receipt leaf.
 GEOMETRIES = ((4, 1), (2, 3), (3, 3), (5, 3), (17, 4))
-
-
-class Entropy:
-    def __init__(self, label: bytes) -> None:
-        self.label, self.count = label, 0
-
-    def __call__(self, n: int) -> bytes:
-        self.count += 1
-        return expand(self.label + self.count.to_bytes(8, "big"), n)
 
 
 @functools.cache
