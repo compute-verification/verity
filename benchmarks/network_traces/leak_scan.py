@@ -10,7 +10,7 @@ It reads the format with C-Flock's own reader (``verity/ml/flock/verifier``: `re
 
 The pieces (`cut`, the one cutter every driver's `public_pieces` runs): each witness row cut into 16-byte pieces that
 cover it whole, its aligned ones and, past its last 16-byte boundary, its last 16 bytes and its last aligned chunk
-zero-padded (the row's last element, packed from an element boundary). The residual (REDTEAM phase 19): a row packed
+zero-padded (the row's last element, packed from an element boundary). The residual: a row packed
 from an element boundary whose last element pads its tail with anything but zeros matches neither, its last 16 bytes
 straddling two elements, so a leak in that tail is missed. A row shorter than a piece (a unit's carry rows, the served
 rows of a block of a few steps) is found whole (`find_whole`), raw or as the hex of whole bytes, and its finds are
@@ -30,15 +30,14 @@ The rule:
   and parameters, reads of at most 8 bytes, not its nonces, Ligerito's grinding nonces ``GRIND`` among them, but a ring
   switch's nonce that is 0, as the verifier requires) and a round message's headers, domain and labels. Otherwise the
   piece is ``leaked`` and fails its statement, whatever its row, its bytes or how few values they take: there is no
-  byte-count or witness-class exemption, so a switch row found in one field of one repetition fails (REDTEAM phase 16,
-  finding 1).
+  byte-count or witness-class exemption, so a switch row found in one field of one repetition fails.
 * The excuse is by value, so a low-entropy row equal to some reader-fixed field's bytes is excused wherever it lies. The
-  rule that excuses a find only inside a field the reader fixes (the lead's ruling on #4020) waits for a class of fields
+  rule that excuses a find only inside a field the reader fixes waits for a class of fields
   whose value is the same for every witness, decided by a differential proof with a different witness: without it an
   honest all-zero private row fails wherever an honest prover writes a zero element (861e's carry row ``cin 6``, inside
   the zero high limbs of Ligerito's intro messages, ``lig.msg``, which the reader doesn't check).
 
-A find across fields isn't a missed leak (REDTEAM phase 18): the reads tile a stream with no gaps and C-Flock's writer
+A find across fields isn't a missed leak: the reads tile a stream with no gaps and C-Flock's writer
 writes each field whole, so an honest writer's leak lands inside one field. A match across two fields is a coincidental
 alignment of their bytes, and a secret split across adjacent fields the prover picks freely (its salts) needs a modified
 prover, outside this scan's model. A differential against a proof of a different witness is evidence for a manual
