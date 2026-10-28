@@ -114,7 +114,7 @@ def threshold(pool: C2.Pool, new: int) -> int:
     return _queued(pool)[e - 1] if e else 0
 
 
-def _fits(S, op: C2.Op) -> bool:
+def _fits(S, op: C2.CallInputs) -> bool:
     """Whether each of the op's fields fits its width (a variant that doesn't has no arguments)."""
     Z = C2.widths(S)
     w = {"slot": Z.SL, "r": S.RW, "K": Z.LW, "tau": S.SW, **dict.fromkeys(("wh", "ev", "nins", "new", "held", "ret"), Z.HW)}
@@ -126,10 +126,10 @@ class Call:
     """One call as `drive` made it: its kind, its op, the request's tokens it reads (unit u0 on, `known` of them) and the
     refused variants beside it."""
     kind: str
-    op: C2.Op
+    op: C2.CallInputs
     u0: int
     known: int
-    refused: list[tuple[str, C2.Op]] = field(default_factory=list)
+    refused: list[tuple[str, C2.CallInputs]] = field(default_factory=list)
 
 
 class _Driver:
@@ -154,7 +154,7 @@ class _Driver:
             self.slots[i] = free[0]
         return self.slots[i]
 
-    def _call(self, kv, kind: str, op: C2.Op, u0: int, known: int, refused: list[tuple[str, C2.Op]]) -> C2.Out:
+    def _call(self, kv, kind: str, op: C2.CallInputs, u0: int, known: int, refused: list[tuple[str, C2.CallInputs]]) -> C2.Out:
         S = self.S
         if not _fits(S, op):
             raise AssertionError(f"call {len(self.calls)} ({kind}, {op}): a field past its width")
@@ -179,7 +179,7 @@ class _Driver:
         S = self.S
         cap = (r.num_tokens - 1) // S.U
         never = next((k for k, h in enumerate(r.block_hashes[:cap]) if h not in self.ever), min(cap, len(r.block_hashes)))
-        op = C2.Op(slot=self._slot(r.i) if take else self._free_slot(), r=r.i, admit=True, take=take, K=r.num_tokens,
+        op = C2.CallInputs(slot=self._slot(r.i) if take else self._free_slot(), r=r.i, admit=True, take=take, K=r.num_tokens,
                    wh=wh, ev=ev, units=window(r.io.tokens[:r.num_tokens], 0, S))
         refused = [("a hit one unit longer", replace(op, wh=wh + 1)), ("the evictable count plus one", replace(op, ev=ev + 1))]
         if wh:
@@ -201,7 +201,7 @@ class _Driver:
         e = max(new - self.pool.hf, 0)
         q = _queued(self.pool)
         tau = q[e - 1] if e else 0
-        op = C2.Op(slot=self._slot(r.i), r=r.i, nins=full - done, new=new, tau=tau,
+        op = C2.CallInputs(slot=self._slot(r.i), r=r.i, nins=full - done, new=new, tau=tau,
                    units=window(r.io.tokens[:r.num_tokens], done, S))
         refused = []
         if e:
@@ -229,7 +229,7 @@ class _Driver:
             if held:
                 raise AssertionError(f"request {r.i} frees {held} blocks it never allocated")
             return
-        op = C2.Op(slot=self.slots[r.i], free=True, held=held, ret=ret)
+        op = C2.CallInputs(slot=self.slots[r.i], free=True, held=held, ret=ret)
         refused = [("the returns plus one", replace(op, ret=ret + 1))] + ([("the returns less one", replace(op, ret=ret - 1))]
                                                                         if ret else [])
         self._call(kv, "free", op, 0, 0, refused)
@@ -405,7 +405,7 @@ def drive(inp: Input, st: dict, *, record: int | None = None) -> _Driver:
 _FIELDS = ("slot", "r", "admit", "take", "free", "K", "wh", "ev", "nins", "new", "tau", "held", "ret")
 
 
-def _op_row(op: C2.Op) -> list[int]:
+def _op_row(op: C2.CallInputs) -> list[int]:
     return [int(getattr(op, f)) for f in _FIELDS]
 
 
@@ -422,14 +422,14 @@ def slice_of(name: str, calls: int, L: int) -> dict[str, Any]:
             "calls": [[c.kind, _op_row(c.op), c.u0, c.known, [[w, _op_row(b)] for w, b in c.refused]] for c in drv.calls]}
 
 
-def ops_of(sl: dict[str, Any]) -> list[tuple[str, C2.Op, list[tuple[str, C2.Op]]]]:
+def ops_of(sl: dict[str, Any]) -> list[tuple[str, C2.CallInputs, list[tuple[str, C2.CallInputs]]]]:
     """A slice's calls as ops (the inverse of `slice_of`)."""
     S = SimpleNamespace(**sl["statics"])
     out = []
     for kind, row, u0, known, refused in sl["calls"]:
         f = dict(zip(_FIELDS, row))
         units = window(sl["tokens"][str(f["r"])][:known], u0, S) if known else ()
-        mk = lambda r: C2.Op(**{k: (bool(v) if k in ("admit", "take", "free") else v)  # noqa: E731
+        mk = lambda r: C2.CallInputs(**{k: (bool(v) if k in ("admit", "take", "free") else v)  # noqa: E731
                                 for k, v in zip(_FIELDS, r)}, units=units)
         out.append((kind, mk(row), [(w, mk(b)) for w, b in refused]))
     return out
