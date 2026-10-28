@@ -342,8 +342,13 @@ class Drawn:
     egress_target: tuple[str, int] | None
 
 
+#: the links a unit names, one past ASCII: a certified record writes its link as UTF-8
+LINKS = ("a", "b", "c", "dé")
+
+
 @st.composite
-def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = False) -> Drawn:
+def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = False,
+          links: tuple[str, ...] = LINKS) -> Drawn:
     m = draw(st.sampled_from(only))
     n = draw(st.integers(0, 1 << 16))
     carries = m in ("late", "frames")
@@ -355,7 +360,7 @@ def units(draw, only: tuple[str, ...] = tuple(MUTATIONS), need_egress: bool = Fa
     rhos = draw(st.lists(st.sampled_from([Fraction(1), Fraction(2), Fraction(1, 2), Fraction(3, 2)]), min_size=1,
                          max_size=3, unique=True))
     ss = SyncSet(tuple(deltas), tuple(rhos))
-    names = draw(st.permutations(["a", "b", "c", "dé"]))
+    names = draw(st.permutations(list(links)))
     ne = draw(st.integers(2 if m in ("advice-unit", "replay-link") else
                           1 if need_egress or m in ("late", "frames", "advice-outside", "replay-direction") else 0, 2))
     ni = draw(st.integers(1 if m in ("ingress-grid", "replay-direction") else 0, 2))
