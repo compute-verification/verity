@@ -62,10 +62,11 @@ from typing import TYPE_CHECKING, Iterator, Mapping, Protocol, Sequence
 
 from .codec import _split_record, descriptor_id
 from .defs import PrimitiveDefinition, SpecializedDefinition, _fmt_static
-from .intervals import Intervals, complement, full, norm, ref_intervals, restrict, total
+from .intervals import complement, norm, total
 from .layout import Scope
-from .liveness import Liveness, _members
 from .parts import Item, Part, n_members
+from .intervals import Intervals, full, ref_intervals, restrict
+from .liveness import Liveness, _members
 from .refs import Refs
 
 if TYPE_CHECKING:  # pragma: no cover
