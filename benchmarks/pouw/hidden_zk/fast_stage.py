@@ -6,7 +6,7 @@ the circuit back.
       and its collections were about 30% of the time at K=256, more at K=4096
     - the unit circuit is a `compact_stage.CompactCircuit`: its ANDs' operands go to a spool under ``scratch`` as int32, and
       `compact_stage.layout` lays it out from there (a circuit it does not take gets the library's lists back, and the
-      layout below)
+      layout below). `compact_stage.lower` lowers into it, dropping each IR wire after its last read
     - the unit's netlist (`ir_lower.netlist`'s text) is rendered once for its hash and once into circuit.txt: `compose`
       builds it as one string, which `Lowering.sha256_of` hashes with the LEAVES and CUT lines. `compose` gets in its
       place a string of as many newlines (and `sha256_of` the netlist's hash), and the circuit text it returns stands for
@@ -323,7 +323,7 @@ def install(scratch: Path) -> None:
         C._compact = True
         _lowering.append(C)
         try:
-            return lower(C, *a, **k)
+            return (CST.lower if isinstance(C, CST.CompactCircuit) else lower)(C, *a, **k)
         finally:
             _lowering.pop()
 

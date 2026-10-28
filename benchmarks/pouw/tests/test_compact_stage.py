@@ -98,6 +98,51 @@ def test_a_circuit_compact_stage_does_not_lay_out_reads_back_as_the_library_circ
     assert w.s == {len(want.kind)} and C.kind[-1] == "and" and len(C.data) == len(C.phase_of) == len(want.kind) + 1
 
 
+def _chain():
+    from verity.ml.circuits.boolean import BIT
+    from verity.ml.circuits.boolean.trace import definition
+    from verity.ml.circuits.defs import CompositeDefinition, bind
+    from verity.ml.circuits.types import Array
+
+    w, n = 12, 6
+    add = definition("CompactStageToyAdd", 1, lambda C, a, b: forms.add(C, a, b, width=w), (("a", Array(w, BIT)),
+                     ("b", Array(w, BIT))), Array(w, BIT), register=False)
+
+    def body(B, S, x):
+        y = kept = x[0]
+        for i in range(1, n):
+            y = B.call(add, y, x[i])
+            if i == 2:
+                kept = y
+        return B.call(add, B.call(add, y, kept), x[1])
+
+    sig = lambda S: ((("x", Array(n, Array(w, BIT))),), Array(w, BIT))  # noqa: E731
+    return bind(CompositeDefinition("CompactStageToyChain", 1, (), sig, body, register=False)), w * n
+
+
+def test_lower_drops_each_wire_after_its_last_read(monkeypatch):
+    """A chain of uncommitted adds, one partial sum and one input read twice: `compact_stage.lower` builds the gates
+    `ir_lower.lower` builds, in order, and holds only the returns once done."""
+    d, n_in = _chain()
+
+    def run(lower):
+        C = forms.Circuit()
+        bits = C.input("x", n_in)
+        return C, lower(C, d, [[b] for b in bits])
+
+    want_c, want = run(IL.lower)
+    held = []
+    lower_gates = IL.lower_gates
+    monkeypatch.setattr(IL, "lower_gates", lambda C, g, wires, *a, **k: held.append((g, wires)) or lower_gates(C, g, wires, *a, **k))
+    got_c, got = run(CST.lower)
+    key = lambda f: (frozenset(f.s), f.c)  # noqa: E731
+    assert [[key(f) for f in w] for w in got] == [[key(f) for f in w] for w in want]
+    assert got_c.kind == want_c.kind and got_c.kind.count("and") > 50
+    assert [tuple(key(f) for f in dd) for dd in got_c.data[n_in:]] == [tuple(key(f) for f in dd) for dd in want_c.data[n_in:]]
+    (call, wires), = held
+    assert set(wires) == set(call.returns) and not wires.left
+
+
 def test_render_is_decimal_text():
     rng = np.random.default_rng(3)
     tok = np.concatenate([[0, 9, 10, 99, 100, 999, 1000, (1 << 32) - 1, 4_000_000_000],

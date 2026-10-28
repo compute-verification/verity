@@ -9,6 +9,8 @@
       hashes it once when `compose` asks for the unit's sha256, and writes it once with the circuit, never to a scratch copy
     - `evaluate` on the all-zero instance (`compose`'s dummy) reads the values kept per gate; any other instance runs the rows
       block by block, as `ir_lower.evaluate_layout` does
+    - `lower` is `ir_lower.lower` dropping each wire at its last read: the same gates in the same order, holding only the
+      words still to be read
 
 A circuit with a gate other than inputs and ANDs, or an input after its first AND, is laid out by the library: its gates are
 read back from the spool as `_UnitCircuit` held them."""
@@ -28,6 +30,9 @@ from pathlib import Path
 import numpy as np
 
 from verity.ml.circuits.boolean import forms
+from verity.ml.circuits.defs import PrimitiveDefinition
+from verity.ml.circuits.evaluation.reference import resolve as resolve_target
+from verity.ml.circuits.layout import param_leaf, resolve
 from verity_flock import ir_lower as IL
 
 FLUSH = 1 << 21
@@ -55,6 +60,77 @@ def cleanup() -> None:
 
 
 atexit.register(cleanup)
+
+
+class _Wires(dict):
+    """`ir_lower.lower_gates`' wires, each word dropped at its last read: ``left`` holds a key's reads still to come, and a key it
+    doesn't hold is never dropped."""
+
+    __slots__ = ("left",)
+
+    def __getitem__(self, k):
+        w = dict.__getitem__(self, k)
+        n = self.left.get(k)
+        if n is not None:
+            if n == 1:
+                del self.left[k]
+                dict.__delitem__(self, k)
+            else:
+                self.left[k] = n - 1
+        return w
+
+
+def _reads(call, present: set) -> dict:
+    """Each wire's reads in `ir_lower.lower_gates` over ``call`` (a region) from the wires ``present``, walked as it walks: an
+    activation held whole when its gates are in the region and every parameter leaf is wired (reading each leaf once,
+    wiring the returns inside it), else each gate reading its operands."""
+    i, end, gate = call.lo, call.hi, call.circuit.gate
+    left: dict = {}
+    whole: dict = {}
+    while i < end:
+        g = gate(i)
+        act = IL._boolean_activation(g)
+        if act is not None:
+            s = act[0]
+            lo, hi = s.offset, s.offset + s.spec.gates
+            if lo not in whole:
+                whole[lo] = call.lo <= lo and hi <= call.hi
+            if whole[lo]:
+                params, _ = s.spec.signature()
+                leaves = [param_leaf(s, pi, j) for pi, (_, t) in enumerate(params) for j in range(t.leaves)]
+                whole[lo] = all(o in present for o in leaves)
+                if whole[lo]:
+                    for o in leaves:
+                        left[o] = left.get(o, 0) + 1
+                    for r in s.spec.body.ret:
+                        j = resolve(s, r)
+                        if lo <= j < hi:
+                            present.add(j)
+                    i += hi - lo
+                    continue
+        i += 1
+        if getattr(g.prim, "family", None) == "Input":
+            continue
+        for o in g.operands:
+            left[o] = left.get(o, 0) + 1
+        present.add(g.index)
+    return left
+
+
+def lower(C, target, inputs) -> list[list]:
+    """`ir_lower.lower`, each wire dropped once `lower_gates` has read it for the last time (`_reads`; a read past that is a
+    KeyError, never other gates). A row's chain of residue adds otherwise keeps every partial sum's forms to the end."""
+    t = resolve_target(target)
+    if isinstance(t, PrimitiveDefinition):
+        return [IL.lower_gates(C, [IL._PrimGate(t, len(inputs))], {-(i + 1): list(w) for i, w in enumerate(inputs)})[0]]
+    _prog, call = IL.standalone(t)
+    wires = _Wires(zip(call.args, inputs))
+    left = _reads(call, set(wires))
+    for r in call.returns:
+        left.pop(r, None)
+    wires.left = left
+    IL.lower_gates(C, call, wires)
+    return [dict.__getitem__(wires, r) for r in call.returns]
 
 
 class Spool:
