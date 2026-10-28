@@ -1,4 +1,4 @@
-"""A templated statement (`verity/flock-circuit/tmpl`, PRF-133) staged from a flat one: the fixture `pod/90-tmpl-unit.sh`
+"""A templated statement (`verity/flock-circuit/tmpl`) staged from a flat one: the fixture `pod/90-tmpl-unit.sh`
 proves and hands to the Lean verifier.
 
 ``template`` composes the flat hidden-output statement of ``N`` RoPE d64 instances (``flat.txt``) and writes its unit as a
