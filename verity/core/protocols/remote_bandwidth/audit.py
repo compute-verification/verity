@@ -194,10 +194,9 @@ class Pace:
 @dataclass(frozen=True, slots=True)
 class Params:
     """A session's parameters: the store's size `N`, the allowance `A` from a window's boundary message to its roots'
-    deadline, the windows `W`, the openings `s` per window at `delta` (33,273 at 2^-40 by default, 555 a second of the
-    stated window), the fewest passes a window may certify, the stated window `T` (`window_ns`, 60 s by default: no
-    boundary message leaves sooner after its window's challenge), the store's codec, receipt kind, whether its
-    receipts bind z, its block layout and its sketch rows (None for the kind's default, `receipts.sketch_rows`), the
+    deadline, the windows `W`, the openings `s` per window at `delta` (`SAMPLES` at `DELTA` by default), the fewest
+    passes a window may certify, the stated window `T` (`window_ns`, 60 s by default: no boundary message leaves sooner
+    after its window's challenge), the store's codec, receipt kind, whether its receipts bind z, its block layout and its sketch rows (None for the kind's default, `receipts.sketch_rows`), the
     registration's, the lifetime cap L on an appended block, in windows (None: `lifetime_windows` of the stated
     window, `LIFETIME_NS`), and whether the prover defers an
     appended block's residency to its encode (`deferred`, memory-map/v1's deferred residency), which needs L ≥ 2: a
