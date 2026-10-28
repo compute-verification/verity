@@ -764,6 +764,8 @@ class NativeCollectCommitter(NativeHostCommitter):
             memtrace("serving: step begin (block taken)", job.step)
             self._prof_s = 0.0
             self._nc.begin_step(self._plan_key, job.arena_ptr, int(job.arena.numel()), True)
+        if getattr(self, "step_launched_at", None) == "begin":
+            self.step_launched()
         if self.footprint is not None:
             _shape = getattr(self, "_plan_shape", (0, 0))
             self.footprint.event("begin_step", step=job.step, ntok=_shape[0], nreq=_shape[1], plan_key=int(self._plan_key), plan_key_mode=getattr(self, "_plan_key_mode", "counts"),
@@ -842,6 +844,8 @@ class NativeCollectCommitter(NativeHostCommitter):
             job.done_evt.set()                                                  # type: ignore[attr-defined]  (queued at step begin)
         else:
             self._q.put(job)
+        if getattr(self, "step_launched_at", None) == "end":
+            self.step_launched()
 
     # ------------------------------------------------------------------ worker side: metas from the plan (cached per plan version)
 

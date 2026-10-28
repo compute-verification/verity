@@ -339,6 +339,8 @@ class CommitWindows:
 
     def idle(self) -> None:
         """The engine has nothing to run: close the open window once it holds ``idle_close_steps`` steps."""
+        if self.sealer is not None:
+            self.sealer.gate.set()
         if self.is_open and int(self.com._step_index) >= self.idle_close_steps:
             self.close()
 
@@ -411,6 +413,10 @@ class CommitWindows:
 
     def stepped(self) -> None:
         """An engine step has returned: its committed steps ended now."""
+        if self.sealer is not None and self.sealer.gate_mode != "off":
+            self.sealer.gate.clear()
+            self.com.step_launched = self.sealer.gate.set
+            self.com.step_launched_at = self.sealer.gate_mode
         now = self.wall()
         for s in range(len(self.step_t), int(self.com._step_index)):
             self.step_t[s] = now
@@ -495,7 +501,10 @@ class CommitWindows:
         queued.wait()
         t0 = self.clock()
         laps = [("", t0)]
-        lap = functools.partial(_lap, laps, self.clock)
+
+        def lap(name: str) -> None:
+            _lap(laps, self.clock, name)
+            self.sealer.pace()
         job: Any = None
         waited, checking = 0.0, False
         try:

@@ -53,6 +53,7 @@ import copy
 import functools
 import gc
 import json
+import os
 import shutil
 import threading
 import time
@@ -737,6 +738,11 @@ class Sealer:
         self._cv = threading.Condition()
         self._jobs: deque = deque()
         self._seals: deque = deque()                     # (seal or None, the bytes its window holds, whether it is the last)
+        self.gate = threading.Event()                    # set: the engine loop needs no GIL now (its step's forward is launched, or it waits)
+        self.gate.set()
+        self.gate_mode = os.environ.get("VERITY_SEAL_GATE", "off")
+        self.pace_s = float(os.environ.get("VERITY_SEAL_PACE_S", "0.5"))
+        self.paced = [0, 0.0, 0]                         # paces that waited, their seconds, paces that ran out
         self.thread = threading.Thread(target=self._run, name="serve-seal", daemon=True)
         self.seal_thread = threading.Thread(target=self._run_seals, name="serve-seal-2", daemon=True)
         self.thread.start()
@@ -748,12 +754,22 @@ class Sealer:
         t0 = self.clock()
         with self._cv:
             while nbytes and self.held and self.held + nbytes > self.hold_bytes:
+                self.gate.set()
                 self._cv.wait()
             waited = self.clock() - t0
             self.held += int(nbytes)
             self._jobs.append((functools.partial(job, waited), int(nbytes)))
             self._cv.notify_all()
         return waited
+
+    def pace(self) -> None:
+        if self.gate.is_set():
+            return
+        t0 = time.perf_counter()
+        ok = self.gate.wait(self.pace_s)
+        self.paced[0] += 1
+        self.paced[1] += time.perf_counter() - t0
+        self.paced[2] += not ok
 
     def _call(self, f: Callable[[], Any]) -> Any:
         try:
@@ -768,6 +784,8 @@ class Sealer:
                 while not self._jobs:
                     self._cv.wait()
                 job, nbytes = self._jobs[0]
+            if job is not None:
+                self.pace()
             seal = self._call(job) if job is not None else None
             with self._cv:
                 self._jobs.popleft()
@@ -783,6 +801,7 @@ class Sealer:
                     self._cv.wait()
                 seal, nbytes, last = self._seals[0]
             if seal is not None:
+                self.pace()
                 self._call(seal)
             with self._cv:
                 self._seals.popleft()
@@ -792,12 +811,14 @@ class Sealer:
                 return
 
     def drain(self) -> None:
+        self.gate.set()
         with self._cv:
             while self._jobs or self._seals:
                 self._cv.wait()
 
     def close(self) -> None:
         """Every job and seal run, then both threads ended."""
+        self.gate.set()
         with self._cv:
             self._jobs.append((None, 0))
             self._cv.notify_all()
@@ -805,7 +826,9 @@ class Sealer:
         self.seal_thread.join()
 
     def summary(self) -> dict[str, Any]:
-        return {"hold_bytes": self.hold_bytes, "held": self.held, "errors": self.errors[:10], "errors_n": len(self.errors)}
+        return {"hold_bytes": self.hold_bytes, "held": self.held, "errors": self.errors[:10], "errors_n": len(self.errors),
+                "gate": {"mode": self.gate_mode, "pace_s": self.pace_s, "paced": self.paced[0], "paced_s": round(self.paced[1], 4),
+                         "ran_out": self.paced[2]}}
 
 
 class DiskFloor:
