@@ -293,7 +293,7 @@ def ChainExPostFacto : Prop :=
   ∀ (B ℓ c m s D Q k : ℕ) (dom : ℕ → Bits c) (Wb : Fin B → Bits ℓ),
     Function.Injective (fun i : Fin B => dom i) → ChainHard (Dense.completeDAG B) Finset.univ c ℓ s D k →
     ∀ (A₁ : Equiv.Perm (Bits (ℓ + (ℓ + c))) → Bits m)
-      (A₂ : Bits m → Fin B → Pous.Prog (idealPerm (ℓ + (ℓ + c))) (Bits ℓ)),
+      (A₂ : Bits m → Fin B → Pous.OracleAlgorithm (idealPerm (ℓ + (ℓ + c))) (Bits ℓ)),
       (∀ σ i, (A₂ σ i).Bounded D Q) →
       pr (fun π : Equiv.Perm (Bits (ℓ + (ℓ + c))) =>
           k ≤ (Finset.univ.filter fun i =>
@@ -16889,7 +16889,7 @@ def ChainExPostFactoG : Prop :=
   ∀ (B ℓ c m s D Q k : ℕ) (G : TopoDAG B) (dom : ℕ → Bits c) (Wb : Fin B → Bits ℓ),
     Function.Injective (fun i : Fin B => dom i) → ChainHard G Finset.univ c ℓ s D k →
     ∀ (A₁ : Equiv.Perm (Bits (ℓ + (ℓ + c))) → Bits m)
-      (A₂ : Bits m → Fin B → Pous.Prog (idealPerm (ℓ + (ℓ + c))) (Bits ℓ)),
+      (A₂ : Bits m → Fin B → Pous.OracleAlgorithm (idealPerm (ℓ + (ℓ + c))) (Bits ℓ)),
       (∀ σ i, (A₂ σ i).Bounded D Q) →
       pr (fun π : Equiv.Perm (Bits (ℓ + (ℓ + c))) =>
           k ≤ (Finset.univ.filter fun i =>
@@ -18883,7 +18883,7 @@ def ChainExPostFactoG' : Prop :=
   ∀ (B ℓ c m s D Q k : ℕ) (G : TopoDAG B) (dom : ℕ → Bits c) (Wb : Fin B → Bits ℓ),
     Function.Injective (fun i : Fin B => dom i) → ChainHard' G Finset.univ c ℓ s D k →
     ∀ (A₁ : Equiv.Perm (Bits (ℓ + (ℓ + c))) → Bits m)
-      (A₂ : Bits m → Fin B → Pous.Prog (idealPerm (ℓ + (ℓ + c))) (Bits ℓ)),
+      (A₂ : Bits m → Fin B → Pous.OracleAlgorithm (idealPerm (ℓ + (ℓ + c))) (Bits ℓ)),
       (∀ σ i, (A₂ σ i).Bounded D Q) →
       pr (fun π : Equiv.Perm (Bits (ℓ + (ℓ + c))) =>
           k ≤ (Finset.univ.filter fun i =>
