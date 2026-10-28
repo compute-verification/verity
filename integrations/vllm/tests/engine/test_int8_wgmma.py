@@ -178,11 +178,12 @@ def test_every_zy_variant_writes_exactlins_records_byte_for_byte(variant, m, n, 
     X.scaled_mm_zy(xq, sa, w, sw, yt, zt, rows, X.Cfg.parse("128x128x128:w4:s3:k1:t1"))
     assert torch.equal(yt.view(torch.int16), ref_y) and torch.equal(zt, ref_zy)
     for cfg in (f"{variant}:g8", f"{variant}:g1:c8"):
-        y, zy = _poisoned(m, n), _poisoned_zy(m, n, rows)
-        for _ in range(2):
-            W.scaled_mm_zy(xq, sa, w, sw, y, zy, rows, W.WgCfg.parse(cfg))
-            assert torch.equal(y.view(torch.int16), ref_y), cfg
-            assert torch.equal(zy, ref_zy), (cfg, int((zy != ref_zy).any(dim=1).sum()))
+        for flags in (0, 128):
+            y, zy = _poisoned(m, n), _poisoned_zy(m, n, rows)
+            for _ in range(2):
+                W.scaled_mm_zy(xq, sa, w, sw, y, zy, rows, W.WgCfg.parse(cfg), flags)
+                assert torch.equal(y.view(torch.int16), ref_y), (cfg, flags)
+                assert torch.equal(zy, ref_zy), (cfg, flags, int((zy != ref_zy).any(dim=1).sum()))
 
 
 @sm90

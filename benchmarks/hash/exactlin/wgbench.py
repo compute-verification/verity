@@ -229,10 +229,11 @@ def gate_zy(m, n, k, rows, variants, kinds=KINDS, seed=0) -> list[dict]:
         except Exception as e:  # noqa: BLE001  (as `gate`)
             row["triton_refused"] = repr(e)[:200]
         for v in variants:
+            text, _, flags = v.partition("#")
             for call in (0, 1):
                 y = poisoned(m, n)
                 zy.fill_(0xA5)
-                W.scaled_mm_zy(xq, sa, w, sw, y, zy, rows, W.WgCfg.parse(v))
+                W.scaled_mm_zy(xq, sa, w, sw, y, zy, rows, W.WgCfg.parse(text), int(flags or 0))
                 torch.cuda.synchronize()
                 row[f"{v}#{call}"] = bad(y, zy)
         row["ok"] = all(v == 0 for key, v in row.items() if key not in ("shape", "rows", "kind", "zy", "ok", "triton_refused"))
@@ -355,11 +356,14 @@ def main() -> int:
     ap.add_argument("--plan", action="store_true", help="time `int8_fused._plan`'s Triton config too (what serves today)")
     ap.add_argument("--rest", type=float, default=0.0,
                     help="the SMs asleep after each call for this many times its clocks at 0.7 of the rate (a served step's clock)")
-    ap.add_argument("--zy", action="store_true", help="gate the z/y-record kernels too and time them (probes CFG#FLAGS too)")
+    ap.add_argument("--zy-variants", default="", help="the zy kernels gated and timed, CFG#FLAGS (default --variants)")
+    ap.add_argument("--zy", action="store_true",
+                    help="gate the z/y-record kernels too and time them (probes CFG#FLAGS too, wg:CFG#FLAGS the plain kernel)")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     variants = [f"{v}:g8" for v in W.VARIANTS] if a.variants == "all" else a.variants.split(",")
+    zy_variants = a.zy_variants.split(",") if a.zy_variants else variants
     lib = W.lib()
     info = {"gpu": torch.cuda.get_device_name(0), "layout": W.layout(), "triton": TRITON, "variants": variants,
             "ptxas": (Path(lib._name).with_name("ptxas.txt")).read_text()}
@@ -373,10 +377,10 @@ def main() -> int:
         gates += gate(m, n, k, variants, seed=m)
     if a.zy:
         for m, n, k in () if a.no_edges else ZY_EDGES:
-            gates += gate_zy(m, n, k, zy_slots(m, True), variants)
+            gates += gate_zy(m, n, k, zy_slots(m, True), zy_variants)
             torch.cuda.empty_cache()
         for _, m, n, k in shapes:
-            gates += gate_zy(m, n, k, zy_slots(m, False), variants, seed=m)
+            gates += gate_zy(m, n, k, zy_slots(m, False), zy_variants, seed=m)
             torch.cuda.empty_cache()
     with (out / "gates.jsonl").open("w") as f:
         for g in gates:
@@ -391,8 +395,9 @@ def main() -> int:
     tmp = Path(tempfile.mkdtemp())
     clock, dmon = Clock(stamp_lib(tmp)), Dmon()
     if a.zy:
-        arms = (["triton-zy"] + (["plan-zy"] if a.plan else []) + [f"wgzy:{v}" for v in variants]
-                + [f"wgzy:{v}" for v in a.probes.split(",") if v] + ([] if a.no_lt else ["lt"]))
+        arms = (["triton-zy"] + (["plan-zy"] if a.plan else []) + [f"wgzy:{v}" for v in zy_variants]
+                + [v if v.startswith("wg:") else f"wgzy:{v}" for v in a.probes.split(",") if v]
+                + ([] if a.no_lt else ["lt"]))
     else:
         arms = (["triton"] + (["plan"] if a.plan else []) + [f"wg:{v}" for v in variants]
                 + [f"wg:{v}" for v in a.probes.split(",") if v] + ([] if a.no_lt else ["lt"]))
