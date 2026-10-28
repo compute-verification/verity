@@ -457,9 +457,9 @@ theorem receiptMax_lt : receiptMax < 2 ^ 448 := by
 below the W every line of the record reads (`LineCoversSession`): the line reads each draw's receipts and draws off
 the record and refuses any draws but `min(s, U_c)`, the draw's at the session's `samples`, and the receipts are the
 draw's sizes (`receipts_of_line`). -/
-theorem wrong_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (Coins node.draws κ X)}
-    {rec : Coins node.draws κ X → Record} {correct : Fin node.draws → Coins node.draws κ X → Finset ℕ}
-    {ω : Coins node.draws κ X} (hv : Verified node (rec ω))
+theorem wrong_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (DrawCoins node.draws κ X)}
+    {rec : DrawCoins node.draws κ X → Record} {correct : Fin node.draws → DrawCoins node.draws κ X → Finset ℕ}
+    {ω : DrawCoins node.draws κ X} (hv : Verified node (rec ω))
     (hw : (T.wrong ω : ℝ) ≤ (recordDraw node rec correct).pooled node.delta ω) :
     ∀ l, lineOf node (rec ω) = .ok l → (T.wrong ω : ℝ) ≤ l.wrong := fun l hline => by
   obtain ⟨sm, gs, ws, hsm, hs, -, hl⟩ := lineOf_ok hline
