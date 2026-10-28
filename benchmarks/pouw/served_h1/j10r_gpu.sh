@@ -22,7 +22,7 @@ if [ -z "${J10R_GPU_S:-}" ]; then
   nice -n 10 "$NVCC" -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GENCODE" -Xcompiler -fPIC \
     -shared -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 -o "$S/h1u_hbc.so" benchmarks/hash/dither/h1u.cu \
     > "$OUT/build-hbc.log" 2>&1 || { echo "j10r_gpu: NVCC_FAIL h1u.cu"; tail -30 "$OUT/build-hbc.log"; exit 11; }
-  nice -n 10 "$NVCC" -O3 -std=c++17 -gencode "$GENCODE" -I benchmarks/codec_tensor -cubin \
+  nice -n 10 "$NVCC" -O3 -std=c++17 -gencode "$GENCODE" -cubin \
     -o "$S/noise.cubin" benchmarks/pouw/served_h1/noise.cu > "$OUT/build-noise.log" 2>&1 \
     || { echo "j10r_gpu: NVCC_FAIL noise.cu"; tail -30 "$OUT/build-noise.log"; exit 11; }
   sha256sum "$S/h1u_hbc.so" "$S/noise.cubin" | tee "$OUT/builds.txt"

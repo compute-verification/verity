@@ -24,11 +24,14 @@ from pathlib import Path
 from typing import Any
 
 import torch
+from verity.ml.kernels import ROW_COMMIT
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer.native_jit import CUDA_CFLAGS
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "integrations/vllm/verity_vllm/commit/committer/native_rows.cu"
+#: the directory of the headers SRC includes by name (the JIT stages them beside it)
+KERNELS = ROW_COMMIT.parent
 COMMIT_GPU = ROOT / "benchmarks/pouw/commit_gpu/commit_gpu.cu"
 c_p, c_u64 = ctypes.c_void_p, ctypes.c_uint64
 
@@ -197,7 +200,7 @@ def main() -> None:
     for minb in forms:
         so = tmp / f"rows_minb{minb}.so"
         rc, log = nvcc([*CUDA_CFLAGS, "-std=c++17", "-shared", "-Xcompiler", "-fPIC", f"-gencode=arch=compute_{arch},code=sm_{arch}",
-                        "-Xptxas", "-v", f"-DVERITY_ROWS_MIN_BLOCKS={minb}", str(SRC), "-o", str(so)])
+                        "-Xptxas", "-v", f"-DVERITY_ROWS_MIN_BLOCKS={minb}", f"-I{KERNELS}", str(SRC), "-o", str(so)])
         form: dict[str, Any] = {"build_rc": rc, "ptxas": ptxas(log)}
         res["forms"][f"minb{minb}"] = form
         if rc:
