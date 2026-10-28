@@ -127,23 +127,32 @@ class Finder:
     """Needles (each 8 to 32 bytes) found at any offset of the bytes given: each 8-byte word of them, at every alignment,
     looked up among the needles' first 8 bytes (in numpy through a table of their low bits at most 1/8 full, so the cost
     is linear in the bytes whatever the needles' count), and each hit compared whole. `hits` and `stream` give the
-    indices of the needles found in `items`."""
+    indices of the needles found: of `items`, or of the rows of a needle matrix given as ``rows`` (each needle
+    zero-padded, ``lens`` its length), which holds the needles without a Python object each."""
 
-    def __init__(self, needles, budget: Budget | None = None):
-        self.items: list[bytes] = list(dict.fromkeys(needles))
+    def __init__(self, needles=(), budget: Budget | None = None, *, rows=None, lens=None):
         self.budget = budget or Budget()
-        self.span = max((len(nd) for nd in self.items), default=8)
-        if np is None or not self.items:
-            self.keys: dict[int, list[int]] = {}
-            for i, nd in enumerate(self.items):
-                self.keys.setdefault(int.from_bytes(nd[:8], "little"), []).append(i)
+        if rows is None:
+            self.items: list[bytes] | None = list(dict.fromkeys(needles))
+            self.span = max((len(nd) for nd in self.items), default=8)
+            self.size = len(self.items)
+            if np is None or not self.items:
+                self.keys: dict[int, list[int]] = {}
+                for i, nd in enumerate(self.items):
+                    self.keys.setdefault(int.from_bytes(nd[:8], "little"), []).append(i)
+                return
+            rows = np.frombuffer(b"".join(nd.ljust(self.span, b"\0") for nd in self.items), np.uint8)
+            rows = rows.reshape(len(self.items), self.span)
+            lens = np.fromiter((len(nd) for nd in self.items), np.int8, len(self.items))
+        else:
+            self.items, self.span = None, rows.shape[1]
+        self.size = n = len(rows)
+        if not n:
             return
-        n = len(self.items)
-        rows = np.frombuffer(b"".join(nd.ljust(self.span, b"\0") for nd in self.items), np.uint8).reshape(n, self.span)
-        keys = rows[:, :8].copy().view("<u8").ravel()
+        keys = np.ascontiguousarray(rows[:, :8]).view("<u8").ravel()
         self.order = np.argsort(keys, kind="stable")
-        self.sorted, self.rows = keys[self.order], rows[self.order]
-        self.lens = np.fromiter((len(nd) for nd in self.items), np.int64, n)[self.order]
+        self.base, self.sorted, self.lens = rows, keys[self.order], lens[self.order].astype(np.int64)
+        del keys
         bits = min(30, max(16, (n - 1).bit_length() + 3))
         self.mask = np.uint64((1 << bits) - 1)
         self.table = np.zeros(1 << bits, dtype=bool)
@@ -151,7 +160,7 @@ class Finder:
 
     def hits(self, data: bytes) -> set[int]:
         n = len(data)
-        if not self.items or n < 8:
+        if not self.size or n < 8:
             return set()
         if np is None:
             got = set()
@@ -180,7 +189,7 @@ class Finder:
             off, j = s + 8 * c[ok], j[ok]
             while off.size:
                 lens = self.lens[j]
-                same = ((pad[off[:, None] + span] == self.rows[j]) | (span >= lens[:, None])).all(axis=1)
+                same = ((pad[off[:, None] + span] == self.base[self.order[j]]) | (span >= lens[:, None])).all(axis=1)
                 found.append(j[same & (off + lens <= n)])
                 more = j < last
                 off, j = off[more], j[more] + 1
@@ -234,16 +243,95 @@ def forms(piece: bytes) -> list[bytes]:
     return [piece] + ([piece.hex().encode(), piece.hex().upper().encode()] if len(piece) == BINARY else [])
 
 
-def cut(b: bytes, n: int) -> list[int]:
-    """The offsets of `b`'s aligned `n`-byte pieces of at least `DISTINCT` distinct bytes."""
+def cut(b: bytes, n: int):
+    """The offsets of `b`'s aligned `n`-byte pieces of at least `DISTINCT` distinct bytes (an array in numpy)."""
     k = len(b) // n
     if np is None:
         return [o for o in range(0, k * n, n) if len(set(b[o:o + n])) >= DISTINCT]
-    rows, out = np.frombuffer(b, np.uint8, k * n).reshape(k, n), []
+    rows, out = np.frombuffer(b, np.uint8, k * n).reshape(k, n), [np.zeros(0, np.int64)]
     for i in range(0, k, 1 << 20):
         s = np.sort(rows[i:i + (1 << 20)], axis=1)
         out.append((i + np.flatnonzero(np.count_nonzero(np.diff(s, axis=1), axis=1) + 1 >= DISTINCT)) * n)
-    return np.concatenate(out).tolist() if out else []
+    return np.concatenate(out)
+
+
+def _hex(rows, upper: bool):
+    """Each row of bytes as its hex digits."""
+    digits = np.frombuffer(b"0123456789ABCDEF" if upper else b"0123456789abcdef", np.uint8)
+    out = np.empty((len(rows), 2 * rows.shape[1]), np.uint8)
+    out[:, 0::2], out[:, 1::2] = digits[rows >> 4], digits[rows & 15]
+    return out
+
+
+class Pieces:
+    """The gate runs' witness pieces as the needles they are searched as (`forms`), each with the witness file and offset
+    it is first cut from; in numpy one zero-padded row a needle, with no Python object a piece."""
+
+    SPAN = TEXT
+
+    def __init__(self):
+        self.labels: list[str] = []
+        self._parts: list[tuple] = []
+        self.count = 0
+
+    def add(self, label: str, b: bytes, n: int) -> None:
+        offs = cut(b, n)
+        if not len(offs):
+            return
+        src = len(self.labels)
+        self.labels.append(label)
+        if np is None:
+            self._parts.append((label, [(nd, src, o, f) for o in offs for f, nd in enumerate(forms(b[o:o + n]))]))
+            return
+        rows = np.frombuffer(b, np.uint8, len(b) // n * n).reshape(-1, n)[offs // n]
+        for f, r in enumerate([rows, _hex(rows, False), _hex(rows, True)] if n == BINARY else [rows]):
+            pad = np.zeros((len(r), self.SPAN), np.uint8)
+            pad[:, :r.shape[1]] = r
+            self._parts.append((pad, np.full(len(r), r.shape[1], np.int8), np.full(len(r), src, np.int32), offs,
+                                np.full(len(r), f, np.int8)))
+
+    def finish(self, budget: Budget) -> Finder:
+        """The needles, each once (its first cut kept), and their `Finder`."""
+        if np is None:
+            first: dict[bytes, tuple[int, int, int]] = {}
+            for _, part in self._parts:
+                for nd, src, o, f in part:
+                    first.setdefault(nd, (src, o, f))
+            self._parts = []
+            self.needles, self.meta = list(first), list(first.values())
+            self.count = sum(f == 0 for _, _, f in self.meta)
+            return Finder(self.needles, budget)
+        if not self._parts:
+            self.rows = np.zeros((0, self.SPAN), np.uint8)
+            self.lens = self.src = self.off = self.form = np.zeros(0, np.int64)
+            return Finder((), budget)
+        cols = [np.concatenate(c) for c in zip(*self._parts)]
+        self._parts = []
+        rows, lens, src, off, form = cols
+        budget.check("ordering the witness pieces")
+        w = rows.view("<u8")
+        order = np.lexsort((lens, w[:, 3], w[:, 2], w[:, 1], w[:, 0]))
+        sw, sl = w[order], lens[order]
+        first = np.ones(len(order), bool)
+        first[1:] = (sw[1:] != sw[:-1]).any(axis=1) | (sl[1:] != sl[:-1])
+        keep = np.sort(order[first])
+        del w, sw, sl, order, first
+        self.rows, self.lens, self.src, self.off, self.form = rows[keep], lens[keep], src[keep], off[keep], form[keep]
+        self.count = int(np.count_nonzero(self.form == 0))
+        return Finder(budget=budget, rows=self.rows, lens=self.lens)
+
+    def needle(self, i: int) -> bytes:
+        return self.needles[i] if np is None else self.rows[i, :self.lens[i]].tobytes()
+
+    def piece(self, i: int) -> bytes:
+        """The piece needle `i` is a form of."""
+        form = self.meta[i][2] if np is None else self.form[i]
+        nd = self.needle(i)
+        return nd if form == 0 else bytes.fromhex(nd.decode())
+
+    def origin(self, i: int) -> tuple[str, int]:
+        src, off = (self.meta[i][0], self.meta[i][1]) if np is None else (self.src[i], self.off[i])
+        return self.labels[int(src)], int(off)
 
 
 def _dicts(doc):
@@ -286,35 +374,37 @@ class Public:
         self.digests: set[str] = set()
         self.sizes: set[int] = set()
 
-    def add(self, b: bytes) -> str:
-        sha = hashlib.sha256(b).hexdigest()
-        self.digests.add(sha)
-        self.sizes.add(len(b))
-        return sha
+    def add_file(self, f) -> str:
+        h, size = hashlib.sha256(), 0
+        while chunk := f.read(CHUNK):
+            h.update(chunk)
+            size += len(chunk)
+        self.digests.add(h.hexdigest())
+        self.sizes.add(size)
+        return h.hexdigest()
 
     def holds(self, b: bytes) -> bool:
         return len(b) in self.sizes and hashlib.sha256(b).hexdigest() in self.digests
 
 
-def pieces(gates: list[Path], budget: Budget | None = None) -> tuple[dict[bytes, tuple[str, int]], Public, list[Path]]:
-    """The gate runs' witness pieces, each to the witness file (under its gate run's name) and offset it is first cut
+def pieces(gates: list[Path], budget: Budget | None = None) -> tuple[Pieces, Public, list[Path]]:
+    """The gate runs' witness pieces, each with the witness file (under its gate run's name) and offset it is first cut
     from; the public files' digests; and the public files."""
     budget = budget or Budget()
-    got: dict[bytes, tuple[str, int]] = {}
-    public, pub_files = Public(), []
+    got, public, pub_files = Pieces(), Public(), []
     for g in gates:
         pub = [p for p in _files(g) if "witness" not in p.relative_to(g).parts]
-        twins = {p.name: public.add(p.read_bytes()) for p in pub}
+        twins = {}
+        for p in pub:
+            with open(p, "rb") as f:
+                twins[p.name] = public.add_file(f)
         pub_files += pub
         for f in _files(g / "witness"):
             budget.check(f"cutting {g.name}'s witness")
             b = f.read_bytes()
             if twins.get(f.name) == hashlib.sha256(b).hexdigest():
                 continue
-            n = TEXT if _is_text(b) else BINARY
-            label = f"{g.name}/{f.relative_to(g).as_posix()}"
-            for o in cut(b, n):
-                got.setdefault(b[o:o + n], (label, o))
+            got.add(f"{g.name}/{f.relative_to(g).as_posix()}", b, TEXT if _is_text(b) else BINARY)
     return got, public, pub_files
 
 
@@ -421,7 +511,7 @@ def read(p: Path, finder: Finder, names: set[str], public: Public) -> dict:
             else:
                 found = finder.stream(f, head)
             for i in found:
-                hits.setdefault(finder.items[i], member)
+                hits.setdefault(i, member)
     except Unread as e:
         unread = str(e)
     except BROKEN as e:
@@ -482,8 +572,7 @@ def guard(run: Path, quarantine: Path, gates: list[Path], names: set[str], allow
     budget = budget or Budget()
     runs = gate_runs(gates)
     got, public, pub_files = pieces(runs, budget)
-    raw = {nd: x for x in got for nd in forms(x)}
-    finder = Finder(raw, budget)
+    finder = got.finish(budget)
     files = [(p.relative_to(run).as_posix(), p, False) for p in _files(run)]
     held = [(record_path(release / p.relative_to(hold), run, hold, p), p, True) for p in _files(hold)] if hold else []
     there = {rel for rel, _, _ in files}
@@ -495,23 +584,23 @@ def guard(run: Path, quarantine: Path, gates: list[Path], names: set[str], allow
         budget.check(f"at {rel}")
         read_.append((rel, p, is_held, {"named": None, "hits": {}, "unread": None, "public": 0, "path": True}
                       if _named(Path(rel).parts, names) else read(p, finder, names, public)))
-    dropped, counts = public_pieces({raw[nd] for *_, r in read_ for nd in r["hits"]}, pub_files, budget)
+    dropped, counts = public_pieces({got.piece(i) for *_, r in read_ for i in r["hits"]}, pub_files, budget)
     found, explained, used, skipped = [], [], {}, 0
     for rel, p, is_held, r in read_:
         skipped += r["public"]
         bad = []
-        for nd, member in r["hits"].items():
-            piece = raw[nd]
+        for i, member in r["hits"].items():
+            piece = got.piece(i)
             if piece in dropped:
                 continue
-            sha, where = hashlib.sha256(piece).hexdigest(), f"{rel}/{member}" if member else rel
-            if (i := next((i for i, e in enumerate(allow) if excused(e, sha, got[piece], where)), None)) is not None:
-                u = used.setdefault(i, (set(), set()))
+            sha, where, origin = hashlib.sha256(piece).hexdigest(), f"{rel}/{member}" if member else rel, got.origin(i)
+            if (k := next((k for k, e in enumerate(allow) if excused(e, sha, origin, where)), None)) is not None:
+                u = used.setdefault(k, (set(), set()))
                 u[0].add(piece)
                 u[1].add(where)
             else:
-                bad.append((nd, piece, member))
-        n = len({x for _, x, _ in bad})
+                bad.append((got.needle(i), piece, member, origin))
+        n = len({x for _, x, _, _ in bad})
         why = (["a witness path"] * bool(r.get("path")) + [f"a witness-named member, {r['named']}"] * bool(r["named"])
                + [r["unread"]] * bool(r["unread"]) + [f"{n} witness pieces"] * bool(n))
         if not why:
@@ -519,8 +608,8 @@ def guard(run: Path, quarantine: Path, gates: list[Path], names: set[str], allow
         doc = {"path": rel, "bytes": size[p], "why": why, "pieces": n, **({"held": True} if is_held else {})}
         found.append((doc, p))
         b = p.read_bytes() if bad and bad[0][2] is None else None
-        explained.append({**doc, "pieces_found": [explain(b if m is None else None, nd, x, got[x], m)
-                                                  for nd, x, m in bad[:EXPLAINED]]})
+        explained.append({**doc, "pieces_found": [explain(b if m is None else None, nd, x, o, m)
+                                                  for nd, x, m, o in bad[:EXPLAINED]]})
     released = 0
     if not dry:
         for doc, p in found:
@@ -543,7 +632,7 @@ def guard(run: Path, quarantine: Path, gates: list[Path], names: set[str], allow
             released += 1
     found = [doc for doc, _ in found]
     report = {"schema": SCHEMA, "run": str(run), "quarantine": str(quarantine), "gate_runs": [g.name for g in runs],
-              "pieces": len(got), "public_dropped": len(dropped), "public_unparsed": counts["unparsed"],
+              "pieces": got.count, "public_dropped": len(dropped), "public_unparsed": counts["unparsed"],
               "public_unreprinted": counts["unreprinted"], "files_scanned": len(files) + len(held),
               "bytes_scanned": sum(size.values()), "public_files": skipped,
               **({"hold": str(hold), "release": str(release), "held": len(held), "released": released}
