@@ -645,7 +645,8 @@ __global__ void __launch_bounds__(256) read_kernel(const uint4 *__restrict__ p, 
 // A pass's seed-dependent constants as rb_chain_set's templates, which chain_kernel completes from the pass's seed on
 // the device (wt.cu's g_pass.seed: s_j from root_(j−1)), so the receipt prefix, the tree's binding and domain and the
 // salts are s_j's, receipts.domain(s_j, plan) and Store.salt's: each message's 64 seed-derived bytes are zero in its
-// template, at its *_at. The domain id it makes fixes the rest: kC's node chaining values and kL's frame leaf and pad.
+// template, at its *_at.
+// The domain id it makes fixes the rest: kC's node chaining values and kL's frame leaf and pad.
 struct Chain {
   uint8_t receipt[128];   // prefix(seed)
   uint8_t binding[256];   // TREE_DOMAIN ‖ seed ‖ plan digest
