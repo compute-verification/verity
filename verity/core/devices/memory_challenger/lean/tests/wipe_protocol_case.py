@@ -45,7 +45,7 @@ TEST_ID = mc.TEST_PREFIX + ID
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 SERVER = b"server-4"
 REMOTE_READS = 5231
-"""The reads of `StreamedWipeMeets141GB5`, the H200's wipe at 5 GB (`r = 59`)."""
+"""The second segment's reads, `r = 59`: a `k` past `READS`, certified with memory declared past the fill."""
 
 # --- the mirror --------------------------------------------------------------------------------------------------------
 
