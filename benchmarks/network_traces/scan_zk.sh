@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # The step-indexed scan composed in zero knowledge (scan_zk.py, w63's class or SC_CLASS's) on a CPU machine, on hidden_zk's builds (its
 # job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame and the
-# sampled-proofs verifier built in the tree. From a clone, in one of the network slots:
-#   research run --on MACHINE --source . --project verity --as LANE --cwd clone --timeout 180m --env SC_MEM_GB=128 -- \
-#     env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by LANE -- \
-#     bash benchmarks/network_traces/scan_zk.sh
+# sampled-proofs verifier built in the tree. From a clone, in one of the network slots, as a job of at most 180 minutes:
+#   env SC_MEM_GB=128 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
+#     --by LANE -- bash benchmarks/network_traces/scan_zk.sh
 # env: SC_MEM_GB (what job.sh's stages may take, within the slot's)  SC_CACHE (the build cache, kept across runs where
 #      writable; hidden_zk's by default)  SC_DRY=1 (the run and the host's read of every round only)
 #      SC_CLASS=w63|test (`prove --class`: test is the certifier tests' class, a CPU window)  SC_GROUP=G (`prove
@@ -24,7 +23,8 @@
 #      pins the job to, so that runs in two slots of one machine never share a session's port)
 # Kept in $OUT/sczk: the driver's summary and logs and everything the verifier received; never a prover's file (inst-*)
 # nor a circuit (its pin is kept), nor a session's archive, nor a signer's state (the deployment's or the tamper's). A
-# rehearsal's public files go in $OUT/warden, its records and salts (the prover's) nowhere.
+# rehearsal's public files go in $OUT/warden; its records and salts (the prover's) and its request values (traffic.json's
+# requests, client.json's responses) nowhere.
 set -uo pipefail
 export HZ_CONFIGS=sczk HZ_MEM_GB=${SC_MEM_GB:?}
 SC_CACHE=${SC_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -66,7 +66,7 @@ if [ -n "${SC_REHEARSE:-}" ]; then
     | tee -a "$OUT/warden-rehearse.log" | cut -c1-4000
   log "sczk: rehearsal rc ${PIPESTATUS[0]}"
   mkdir -p "$OUT/warden"
-  for f in deployment.json cells.jsonl certified.jsonl check.json client.json warden.json serve.log traffic.json; do
+  for f in deployment.json cells.jsonl certified.jsonl check.json warden.json serve.log; do
     [ -f "$W/warden/$f" ] && cp "$W/warden/$f" "$OUT/warden/"
   done
   SC_WARDEN_RUN=$W/warden
