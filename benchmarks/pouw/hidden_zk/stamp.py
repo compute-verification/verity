@@ -47,12 +47,12 @@ class Template:
     B constant)`` over local bits (below ``m`` an operand's rank, else AND ``j`` at ``m + j``), its output forms, and ``vis``,
     the ANDs its outputs read: all a later call can read of it."""
 
-    __slots__ = ("id", "m", "n", "rows", "outs", "vis", "closures")
+    __slots__ = ("id", "label", "m", "n", "rows", "outs", "vis", "closures")
 
-    def __init__(self, tid: int, m: int, S: forms.Circuit, outs: list):
+    def __init__(self, tid: int, label: str, m: int, S: forms.Circuit, outs: list):
         if S.lookups or S.asserts or any(k != "and" for k in S.kind[m:]):
-            raise Unstampable(f"a template makes {sorted(set(S.kind[m:]) - {'and'}) or 'assertions or reads'}")
-        self.id, self.m, self.n = tid, m, len(S.kind) - m
+            raise Unstampable(f"{label}'s template makes {sorted(set(S.kind[m:]) - {'and'}) or 'assertions or reads'}")
+        self.id, self.label, self.m, self.n = tid, label, m, len(S.kind) - m
         self.rows = [(tuple(sorted(a.s)), a.c, tuple(sorted(b.s)), b.c) for a, b in S.data[m:]]
         self.outs = [(tuple(sorted(f.s)), f.c) for f in outs]
         self.vis = np.array(sorted({v - m for s, _ in self.outs for v in s if v >= m}), dtype=np.int64)
@@ -166,7 +166,8 @@ class Stamp:
             for r in range(len(V)):
                 S._new("in", r)
             loc = [[f if not f.s else forms.L(frozenset([rank[v] for v in f.s]), f.c) for f in g] for g in groups]
-            t = self.keys[key] = Template(len(self.templates), len(V), S, fn(S, *loc))
+            label = key0[1] if key0[0] == "piece" else getattr(key0[1], "id", str(key0[1]))
+            t = self.keys[key] = Template(len(self.templates), str(label), len(V), S, fn(S, *loc))
             self.templates.append(t)
         m, base = t.m, self.nv
         if t.n:
@@ -386,6 +387,7 @@ class StampLayout(IL.Layout):
 
     def netlist_pieces(self, name: str):
         """`ir_lower.netlist(self, name)`'s bytes, in order, the calls' rows rendered by worker processes."""
+        t0 = time.time()
         yield self.head(name).encode()
         rows = [f"1 {i} 1 {i}" for i in range(self.n_in)] + ["0 0"] * (self.first - self.n_in)
         for k in range(0, len(rows), 1 << 16):
@@ -406,6 +408,7 @@ class StampLayout(IL.Layout):
             finally:
                 _WORKER.clear()
         yield self._tail_text().encode()
+        print(f"STAMP-NETLIST {name}: procs={procs} tasks={len(tasks)} seconds={time.time() - t0:.1f}", file=sys.stderr, flush=True)
 
     # --- the rows, built only on request ----------------------------------------------------------------------------------
     def materialize(self) -> tuple[list, list]:
@@ -505,11 +508,12 @@ class StampLowering(IL.Lowering):
         flat_inputs = np.asarray(flat_inputs, dtype=np.uint64)
         if flat_inputs.shape[0] != 1 or flip is not None or self.units.cut:
             return super().evaluate(flat_inputs, cuts, flip)
-        lay = self.layout
+        t0, lay = time.time(), self.layout
         ports = self.unit_inputs(flat_inputs, cuts)
         bits = np.concatenate([(np.asarray(p, dtype=np.uint64)[0] >> np.arange(b, dtype=np.uint64)) & np.uint64(1)
                                for p, b in zip(ports, lay.in_bits)]).astype(np.uint8)
         outs = lay.evaluate1(bits)
+        print(f"STAMP-EVAL {self.name}: one lane, seconds={time.time() - t0:.1f}", file=sys.stderr, flush=True)
         words = [sum(b << i for i, b in enumerate(o)) for o in outs]
         res = np.zeros((1, len(words)), dtype=np.uint64)
         for j, w in enumerate(words):
@@ -547,4 +551,23 @@ def unit_lowering(definition, name: str, in_rows, public=(), structural: bool = 
     print(f"STAMP {name}: calls={st.calls} recorded={len(st.tids)} templates={len(st.templates)} closures={len(lay.closures)} "
           f"bits={st.nv} live_ands={lay.n_live} rows={lay.useful} walk_s={walk:.1f} live_cols_s={lay.seconds['live_cols']:.1f}",
           file=sys.stderr, flush=True)
+    print(f"STAMP-TOP {name}: {_top(st, lay)}", file=sys.stderr, flush=True)
     return StampLowering(name, unit, units, None, lay), out_words
+
+
+def _top(st: Stamp, lay: StampLayout, n: int = 12) -> str:
+    """The builders whose calls make the most live ANDs: each one's templates, recorded calls and live ANDs."""
+    if not st.tids:
+        return ""
+    counts = np.array([c.count for c in lay.closures], dtype=np.int64)[lay.cid]
+    tids = np.asarray(st.tids, dtype=np.int64)
+    by_t = np.bincount(tids, weights=counts, minlength=len(st.templates))
+    calls_t = np.bincount(tids, minlength=len(st.templates))
+    agg: dict[str, list[int]] = {}
+    for t in st.templates:
+        a = agg.setdefault(t.label, [0, 0, 0])
+        a[0] += 1
+        a[1] += int(calls_t[t.id])
+        a[2] += int(by_t[t.id])
+    rank = sorted(agg.items(), key=lambda kv: -kv[1][2])[:n]
+    return "; ".join(f"{lb} templates={a[0]} calls={a[1]} live={a[2]}" for lb, a in rank)
