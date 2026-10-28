@@ -165,7 +165,7 @@ def stand_in_product(tmp: Path) -> Path:
     exe.write_text(f"#!{sys.executable}\n" + """import json, sys
 ids = sys.argv[1].split(",")
 if sys.argv[2] == "id":
-    print("verity/onsite/v0" if len(ids) == 5 else "verity/product/v0")
+    print("verity/onsite/v0" if len(ids) == 6 else "verity/product/v0")
     raise SystemExit(0)
 bad = [c["id"] for c in json.loads(open(sys.argv[5]).read())["components"] if bytes.fromhex(c["evidence"]) != b"accept"]
 print(json.dumps({"verdict": "reject" if bad else "accept", "reason": f"refused {bad}" if bad else None}))

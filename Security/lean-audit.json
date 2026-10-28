@@ -22578,6 +22578,7 @@
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
+    "Flock.SecurityProofs.SampledKSLiveV5",
     "Flock.SecurityProofs.SamplingClaimsStated",
     "Flock.SoundAtBridge.soundAtBridge_nonvacuous",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
@@ -43607,10 +43608,10 @@
    ]
   },
   "Flock.Registered": {
-   "digest": "8bb424523564f3fed2ea57ff21c38d806dd62e2d8847665e82a7d2b6ef329644",
+   "digest": "f02d92fa42d371beac3978e16ddcbb7e1baa1906b26c864e506fc94f3c523236",
    "definitions": {
     "Flock.Registered.COMPLETE_KEY": "1e8b83345448089f0b9bbbaadd6b8f707757fe7ad2be919ac116f2c367d70951",
-    "Flock.Registered.FILE_KEYS": "6c5b75eeb14d2c79c435df97fa9b1355a95b53df7cfefad0c0fb9218f29bdf2d",
+    "Flock.Registered.FILE_KEYS": "f0c35dfcb8a6a4b2e574a62c121592a276b16512b53c37b2ff75025e63c2ae4e",
     "Flock.Registered.FORMAT": "fda4f60dfaea5d4458ee6f0696f8e183cfcd06e6f555178bf57f3c6e3ea83bd2",
     "Flock.Registered.FORMAT_V0": "a02a26231dce59059028ce6c558c2f565745e91e21315fc60525e82cb6c8aefc",
     "Flock.Registered.PORT_KEYS": "b75bbec26fce41808769e9244d849962ae1d1e4e756b510409a7c47491aaa983",
@@ -60688,9 +60689,9 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.ZkReg.Defs": {
-   "digest": "60b41f2b7ff3319033bbff52e39009a698ca00f82a47e4485ed54fc05bb2405e",
+   "digest": "c1082c6d0e9165ddc72fcc043fe5de1066742b17b8db51eeeff8ae5a4928c095",
    "definitions": {
-    "FlockSoundness.Discharge.ZkReg.AcceptsZKR": "413a2f07f95f33951926c91ea36ad6ad97ceb71ee0dae2f4663088c5d458dea5",
+    "FlockSoundness.Discharge.ZkReg.AcceptsZKR": "1c7ad6da1648d7210bc55256b2481da1c280773af2bc9763d3a259c51b666db0",
     "FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR": "c29b27d7b194c783ad2a91b68e032b214dd164a06bdab08e740dce2f9544d569"
    },
    "guarantees": [

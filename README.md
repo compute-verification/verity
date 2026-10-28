@@ -34,15 +34,16 @@ verifier still decides, a difftest holds it to the Lean until the Lean replaces 
 
 The subprotocols run composed, as one protocol with one verdict
 ([`verity/core/protocols/composition`](verity/core/protocols/composition/README.md)): a run is accepted only if
-every subprotocol accepts its own case, and the commitment binds all of theirs.
+every subprotocol accepts its own case, the commitment binds all of theirs, and the subprotocols whose commitment is
+the run's record (the inference-only policy and sampled proofs at both, PoUW too at remote) commit to one record.
 
 - **Onsite** (`verity/core/protocols/onsite`), for an auditor with devices at the datacenter: sampled proofs, PoUW,
-  PoUS, PoUB and network certification.
+  the inference-only policy, PoUS, PoUB, network certification and the memory wipe.
 - **Remote** ([`verity/core/protocols/remote/README.md`](verity/core/protocols/remote/README.md)), for an auditor with
-  no devices there: sampled proofs and PoUW. Start there for its lifecycle, guarantee, assumptions and demo.
+  no devices there: sampled proofs, PoUW and the inference-only policy. Start there for its lifecycle, guarantee,
+  assumptions and demo.
 
-The memory wipe and the bandwidth audit over PoUS's store are not subprotocols of either yet, and the inference-only
-policy is not yet a subprotocol of the composites.
+The bandwidth audit over PoUS's store is not a subprotocol of either yet.
 
 ## The vLLM integration
 
