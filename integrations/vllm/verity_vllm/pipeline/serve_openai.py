@@ -660,7 +660,7 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
 
 
 def build(opts: Options, session: SR.ServeSession | None = None, row: Mapping[str, Any] | None = None) -> tuple[Any, Any]:
-    """The engine (`verity_vllm.LLM`), scheduling as the bench ``row`` declares, and with the Commit on, its committer, sized
+    """The engine (`verity_vllm.LLM`), scheduling as ``--async-scheduling`` says (`serve_row`), and with the Commit on, its committer, sized
     from the engine's envelope, with a `served_record.SamplerInputsSource` attached; built under a remote ``session``."""
     from verity_vllm.engine import env as engine_env
 
