@@ -182,7 +182,7 @@ A spec-level reference for network accounting's timing channel:
   stays structural: a served window fits in the step-indexed scan's form, and a window in any other form is refused;
 - the transfer rows (`transfer_rows`): a host's load, each value of the weights it loads once a session (the one kind,
   ``load``, ingress), committed as a registered value under the network certifier's own salts at the reading port's
-  leaf width and row format, its root in a head the certifier signs for the session's first sampling block
+  leaf width and row format, its root in a head the certifier signs for the session's first execution phase
   (`TransferHead`, `registration`); every other row into the host is the scan's state, with no head of its own.
   `check_registration` is the verifier's read of it for the transfer it expects, and `port` the verifier's own
   `--registered` port of the value at the signed root (the load relayed and committed as it crosses,

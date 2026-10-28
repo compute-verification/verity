@@ -16,11 +16,11 @@ in segments, as `EmbeddingRead_v1` reads a token's embedding):
     leaf_r = row_leaf(D, r, hm96.SHA512.tree_leaf(default_key, b‖c_r), schema)
     root   = the frame-v3-sha512 root of the rows' leaves under D = registered.domain(program, value, words, rows, word_bits)
 
-D leaves the window out, as a value the verifier holds across windows does, so the root is the one
-`registration.check` holds a pinned value's entry to (`pinned`) and the one the verifier's `--registered` port opens;
-the head and its certificate bind the link and its sampling block. `program` is the circuit's program digest (``circuit.json``'s
-``program``), public. salt_r is 192 bytes the certifier draws from the operating system for row r and no other row.
-The salts are witness, which the certifier hands to the prover alone (`Transfer.witness`); the rows are what the host
+D leaves the window out, as a value the verifier holds across windows does, so the root is the one `registration.check`
+holds a pinned value's entry to (`pinned`) and the one the verifier's `--registered` port opens; the head and its
+certificate bind the link and the execution phase. `program` is the circuit's program digest (``circuit.json``'s
+``program``), public. salt_r is 192 bytes the certifier draws from the operating system for row r and no other row. The
+salts are witness, which the certifier hands to the prover alone (`Transfer.witness`); the rows are what the host
 received, which the prover holds.
 
 **The signed head** (`TransferHead`) is public, as a hiding root is:
@@ -30,10 +30,10 @@ received, which the prover holds.
       ‖ root (64 bytes)
     transfer digest = tagged_sha512(TRANSFER_TAG, H)
 
-and its certificate is `Issuer.sign`'s of the transfer digest: the certifier's message for the link's sampling block in
-its session (`certificate.certificate_message`), so it verifies for that link, direction and sampling block alone. The
-network certifier's cells digest and its record digest of a sampling block are under other tags, so none verifies as
-another.
+and its certificate is `Issuer.sign`'s of the transfer digest: the certifier's message for the link and execution phase
+in its session (`certificate.certificate_message`), so it verifies for that link, direction and execution phase alone.
+The network certifier's cells digest and its record digest of an execution phase's transfer blocks are under other tags,
+so none verifies as another.
 
 **The kind** (`KINDS`) is ``load``, ingress: the registered parameters' leaves the load connection carries, once a
 session. The head keeps its kind and direction fields, so a head signed for anything else never reads as a load's.
@@ -45,7 +45,8 @@ session. The head keeps its kind and direction fields, so a head signed for anyt
 
 `check_registration` is the verifier's read of it for the transfer it expects: every field the verifier's own, the
 domain the one it derives, and the certificate over the head's digest verifying under the certifier's key in its session
-for the link and sampling block it expects. `port` is the verifier's own `--registered` port of the value at the head's root.
+for the link and execution phase it expects. `port` is the verifier's own `--registered` port of the value at the head's
+root.
 """
 
 from __future__ import annotations
@@ -145,7 +146,7 @@ class TransferHead:
 @dataclass(frozen=True)
 class Transfer:
     """The certifier's opening of one transfer value, witness: the rows and their salts (`committed`), and the link,
-    sampling block and kind it crossed in."""
+    execution phase and kind it crossed in."""
 
     link: str
     direction: Direction
@@ -203,8 +204,8 @@ def read_witness(blob: bytes) -> list[bytes]:
 def attest(issuer: Issuer, link: str, direction: Direction, window: int, kind: str, program: str, value: str,
            rows: Sequence[Sequence[int]], salts: Sequence[bytes] | None = None, word_bits: int = WORD_BITS,
            schema: str = SCHEMA) -> tuple[Transfer, Certificate | None]:
-    """The value's rows committed and their head signed by `issuer` for the link and sampling block (None when its signer
-    refuses)."""
+    """The value's rows committed and their head signed by `issuer` for the link and execution phase (None when its
+    signer refuses)."""
     t = Transfer.commit(link, direction, window, kind, program, value, rows, salts, word_bits, schema)
     return t, issuer.sign(link, direction, window, t.head.digest())
 
@@ -221,9 +222,10 @@ def registration(head: TransferHead, certificate: Certificate) -> dict[str, Any]
 def check_registration(doc: Any, key: PublicKey, session: bytes, *, link: str, direction: Direction, window: int,
                        kind: str, value: str, program: str, words: int, rows: int, word_bits: int = WORD_BITS,
                        schema: str = SCHEMA) -> tuple[TransferHead, CommitmentDomain]:
-    """The verifier's read of a transfer registration for the transfer it expects (its link and sampling block, kind,
-    value, the circuit's program digest and the value's shape and row format, all from its own record), under the network
-    certifier's key and session: the head and the domain the verifier derived, or ValueError naming what fails."""
+    """The verifier's read of a transfer registration for the transfer it expects (its link and execution phase, kind,
+    value, the circuit's program digest and the value's shape and row format, all from its own record), under the
+    network certifier's key and session: the head and the domain the verifier derived, or ValueError naming what
+    fails."""
     _kind(kind, direction)
     _format(word_bits, schema)
     dom = domain(program, value, words, rows, word_bits)
