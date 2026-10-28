@@ -1406,7 +1406,6 @@
     {"file": "verity/core/protocols/certifier/tests/test_network_certifier_ingress_scan.py", "count": 1},
     {"file": "verity/core/protocols/certifier/tests/test_network_certifier_warden_adversarial.py", "count": 1},
     {"file": "verity/core/protocols/certifier/tests/test_network_certifier_warden_rows_phase11.py", "count": 3},
-    {"file": "verity/core/protocols/certifier/transfer_rows.py", "count": 4},
     {"file": "verity/core/protocols/composition/tests/reference.py", "count": 2},
     {"file": "verity/core/protocols/network/nci/lean/NciCheck.lean", "count": 1},
     {"file": "verity/core/protocols/network/nci/lean/NciCheck/Baseline.lean", "count": 3},

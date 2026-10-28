@@ -27,9 +27,9 @@ def rows(n: int, words: int, seed: int = 1) -> list[list[int]]:
 
 
 def attested(tmp_path, data=None):
-    """A response value of 4 one-word rows in window 3 on `LINK`, its certificate and the issuer that signed it."""
+    """A load value of 4 one-word rows in window 0 on `LINK`, its certificate and the issuer that signed it."""
     issuer = Issuer(signers.signer(tmp_path), signers.SESSION)
-    t, cert = TR.attest(issuer, LINK, Direction.EGRESS, 3, "response", PROGRAM, "response", data or rows(4, 1))
+    t, cert = TR.attest(issuer, LINK, Direction.INGRESS, 0, "load", PROGRAM, "bias", data or rows(4, 1))
     assert cert is not None
     return t, cert, issuer
 
@@ -48,8 +48,8 @@ def expect(t: TR.Transfer, **over):
 def test_commitment_is_a_registered_values_and_the_head_its_root(tmp_path):
     data = rows(4, 1)
     t, cert, _issuer = attested(tmp_path, data=data)
-    same = G.Registered.commit(PROGRAM, "response", data, t.salts, 16, G.SCHEMA_V2)
-    assert t.root == same.root and t.head.domain == G.domain(PROGRAM, "response", 1, 4).domain_id
+    same = G.Registered.commit(PROGRAM, "bias", data, t.salts, 16, G.SCHEMA_V2)
+    assert t.root == same.root and t.head.domain == G.domain(PROGRAM, "bias", 1, 4).domain_id
     assert (t.head.words, t.head.rows) == (1, 4) and cert.digest == t.head.digest()
     assert TR.read_witness(t.witness) == list(t.salts) and len(set(t.salts)) == 4
     doc = TR.registration(t.head, cert)
@@ -62,10 +62,10 @@ def test_a_units_row_opens_the_signed_root_and_a_forged_byte_does_not(tmp_path):
     t, _cert, _issuer = attested(tmp_path, data=data)
     reads = [2, 0, 3, 1]
     port = TR.port(t.head, reads, reads_from=5)
-    assert port["value"] == "response" and port["reads"] == reads and port[G.READS_FROM] == 5
+    assert port["value"] == "bias" and port["reads"] == reads and port[G.READS_FROM] == 5
     assert port["root"] == t.root.hex() and port["row_schema"] == G.SCHEMA_V2 and port["words"] == 1
     got, salts, entry = t.statement(reads)
-    dom = TR.domain(PROGRAM, "response", 1, 4)
+    dom = TR.domain(PROGRAM, "bias", 1, 4)
     bcs = [TR.bc(r, s) for r, s in zip(got, salts)]
     assert WR.refusal(port, dom, entry, bcs) is None
     forged = [list(r) for r in got]
@@ -106,8 +106,8 @@ def test_a_value_at_another_width_or_row_format_is_registered_so_and_its_head_bi
         TR.Transfer.commit(LINK, Direction.INGRESS, 0, "load", PROGRAM, "w", data, schema=G.SCHEMA)
 
 
-@pytest.mark.parametrize("field,value", [("link", "s1/uplink"), ("direction", "ingress"), ("window", 4), ("kind", "wire"),
-                                         ("value", "request"), ("program", "00" * 64), ("words", 2), ("rows", 2),
+@pytest.mark.parametrize("field,value", [("link", "s1/uplink"), ("direction", "egress"), ("window", 4), ("kind", "wire"),
+                                         ("value", "w"), ("program", "00" * 64), ("words", 2), ("rows", 2),
                                          ("word_bits", 32), ("row_schema", G.SCHEMA), ("domain", "00" * 64)])
 def test_check_registration_refuses_a_field_not_the_verifiers(tmp_path, field, value):
     t, cert, _issuer = attested(tmp_path)
@@ -119,8 +119,8 @@ def test_check_registration_refuses_a_field_not_the_verifiers(tmp_path, field, v
 @pytest.mark.parametrize("other", ["link", "window", "direction"])
 def test_check_registration_refuses_a_certificate_for_another_link_window_or_direction(tmp_path, other):
     t, _cert, issuer = attested(tmp_path)
-    at = {"link": LINK, "direction": Direction.EGRESS, "window": 3}
-    at[other] = {"link": "s1/uplink", "window": 2, "direction": Direction.INGRESS}[other]
+    at = {"link": LINK, "direction": Direction.INGRESS, "window": 0}
+    at[other] = {"link": "s1/uplink", "window": 2, "direction": Direction.EGRESS}[other]
     cert = issuer.sign(at["link"], at["direction"], at["window"], t.head.digest())
     with pytest.raises(ValueError, match="doesn't verify under the network certifier's key"):
         TR.check_registration(TR.registration(t.head, cert), public(), signers.SESSION, **expect(t))
@@ -133,7 +133,7 @@ def test_check_registration_refuses_another_key_session_root_or_signed_digest(tm
         TR.check_registration(doc, public(b"another certifier"), signers.SESSION, **expect(t))
     with pytest.raises(ValueError, match="doesn't verify"):
         TR.check_registration(doc, public(), signers.OTHER_SESSION, **expect(t))
-    own = TR.Transfer.commit(LINK, Direction.EGRESS, 3, "response", PROGRAM, "response", rows(4, 1, seed=2))
+    own = TR.Transfer.commit(LINK, Direction.INGRESS, 0, "load", PROGRAM, "bias", rows(4, 1, seed=2))
     with pytest.raises(ValueError, match="doesn't sign its head"):
         TR.check_registration(doc | {"root": own.root.hex()}, public(), signers.SESSION, **expect(t))
     with pytest.raises(ValueError, match="holds the keys"):
@@ -142,30 +142,11 @@ def test_check_registration_refuses_another_key_session_root_or_signed_digest(tm
         TR.check_registration(doc | {"root": "zz"}, public(), signers.SESSION, **expect(t))
 
 
-def test_a_kind_is_in_its_direction():
-    with pytest.raises(ValueError, match="a transfer is a"):
-        TR.Transfer.commit(LINK, Direction.EGRESS, 0, "load", PROGRAM, "w", rows(1, 2))
-    with pytest.raises(ValueError, match="a transfer is a"):
-        TR.Transfer.commit(LINK, Direction.INGRESS, 0, "response", PROGRAM, "w", rows(1, 2))
-    for d in (Direction.EGRESS, Direction.INGRESS):
-        TR.Transfer.commit(LINK, d, 0, "wire", PROGRAM, "h", rows(1, 2))
-
-
-def test_request_and_response_rows():
-    assert TR.request_rows([b"hi", b"ab"], 2, 2) == [[104, 0], [105, 0], [97, 0], [98, 0]]
-    assert TR.response_rows([b"\xff"], 1, 1) == [[255, 0]]
-    req, resp = [bytes(range(8)), b"\x80" * 8], [bytes(range(24)), bytes(range(255, 231, -1))]
-    rows = TR.request_rows(req, 2)
-    assert len(rows) == 2 * TR.PROMPT and rows[TR.PROMPT + 3] == [0x80, 0] and rows[5] == [5, 0]
-    rows = TR.response_rows(resp, 2)
-    assert len(rows) == 2 * TR.GENERATED and rows[TR.GENERATED] == [255, 0] and rows[23] == [23, 0]
-    with pytest.raises(ValueError, match="is 5 bytes, not the class's 4: its rows carry no length"):
-        TR.request_rows([b"hello"], 1, 4)
-    with pytest.raises(ValueError, match="is 3 bytes, not the class's 4"):
-        TR.request_rows([b"abc"], 1, 4)
-    with pytest.raises(ValueError, match="2 requests in a window of 1 slots"):
-        TR.request_rows([b"a", b"b"], 1, 1)
-    with pytest.raises(ValueError, match="1 responses in a window of 2 slots: .* no absent marker"):
-        TR.response_rows([b"a"], 2, 1)
-    with pytest.raises(ValueError, match="is 23 bytes, not the class's 24"):
-        TR.response_rows([bytes(23)], 1)
+@pytest.mark.parametrize("kind,direction", [("load", Direction.EGRESS), ("request", Direction.INGRESS),
+                                            ("response", Direction.EGRESS), ("wire", Direction.EGRESS),
+                                            ("wire", Direction.INGRESS)])
+def test_a_transfer_is_a_load_ingress(kind, direction):
+    """The load is the one value with a head: a request, a response or a value one host sends another is the scan's
+    state or its egress, never a transfer."""
+    with pytest.raises(ValueError, match="a transfer is a load ingress, not"):
+        TR.Transfer.commit(LINK, direction, 0, kind, PROGRAM, "w", rows(1, 2))
