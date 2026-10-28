@@ -242,7 +242,7 @@ def items_of(params: dict, ell: int, root_w: str | None, length: Mapping[str, An
 
 #: what one-stage's record shows besides the two salted roots, each declared to the service's rule with its reason
 LAYOUT = (
-    ("population", "structure", "N, the padded tile count g_(ℓ+1): the draw's range, a function of the registered level"),
+    ("population", "structure", "N, the padded tile count g_(ell+1): the draw's range, a function of the registered level"),
     ("window", "output", "PoUW's registered items, exactly `pouw.window.REGISTERED` (work, check, sampling, length, root_W), "
                          "each the verifier's own recomputation at the registered level, the length its fixed max_tokens "
                          "(`public_problem`)"),

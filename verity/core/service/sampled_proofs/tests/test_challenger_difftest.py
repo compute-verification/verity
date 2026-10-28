@@ -656,9 +656,9 @@ CIRCUITS = ["ab" * 64, "0" * 128, "c" * 128]
 STARTS = ["2026-10-20T12:00:00Z", "2024-02-28T23:59:59Z", "2100-02-28T12:00:00Z", "2026-12-31T23:30:00Z",
           "0001-01-01T00:00:00Z", "9999-12-31T11:00:00Z"]
 PEERS = ["10.0.0.7", "vy-nebius-1", "::1"]
-#: a body's note, each written as `ledger_text` escapes it (none past the Basic Multilingual Plane, which it writes as a
-#: surrogate pair)
-NOTES = ["\u00e9", "a\"b\\c\n", "\x7f\x01", "\u2026"]
+#: a body's note, each written as `ledger_text` escapes it: ASCII without DEL, as the entry's signed digest (canonical
+#: JSON, which refuses any other) holds
+NOTES = ["~", "a\"b\\c\n", "\x01", "\x1f "]
 #: a key `_body` removes
 DROP = object()
 #: an open's `reserve` that `Ledger.lines` resolves to its session's reserve's seq
@@ -996,13 +996,15 @@ def ledger_case(rng: random.Random, name: str) -> Any:
             lines = lg.lines()
             j["ledger"] = lines[:i] + [json.dumps(json.loads(lines[i]))] + lines[i + 1:]
         case "unicode":
-            if rng.random() < 0.5:
-                lines = lg.lines(edit=_body_edit(o, note=rng.choice(["\U0001f600", "\\ud800", "\\udfff"])))
-                j["ledger"] = lines
+            note = rng.choice(["\U0001f600", "\\ud800", "\\udfff", "\u00e9", "\u00e9"])
+            if note.isascii():
+                j["ledger"] = lg.lines(edit=_body_edit(o, note=note))
             else:
-                lines = lg.lines(edit=_body_edit(o, note="\u00e9"))
-                j["ledger"] = lines[:o] + [json.dumps(json.loads(lines[o]), sort_keys=True, separators=(",", ":"),
-                                                      ensure_ascii=False)] + lines[o + 1:]
+                # no entry's signed digest (canonical JSON) holds a string past ASCII, so the note goes into the signed
+                # line's text: the emoji as `ledger_text` escapes it (a surrogate pair), é as itself (not canonical)
+                lines = lg.lines(edit=_body_edit(o, note="?"))
+                text = json.dumps(note, ensure_ascii=note != "\u00e9")
+                j["ledger"] = lines[:o] + [lines[o].replace('"note":"?"', '"note":' + text, 1)] + lines[o + 1:]
         case "torn":
             lines = lg.lines()
             j["ledger"] = lines[:i] + [lines[i][:rng.randrange(1, len(lines[i]))]] + lines[i + 1:]
@@ -1166,7 +1168,7 @@ def ledger_case(rng: random.Random, name: str) -> Any:
             j["ledger"] = lg.lines(edit=_body_edit(p, cap=rng.choice([0, -1, Ch.CAP[1] + 1, "4", True, None, [4]])))
         case "circuit":
             j["ledger"] = lg.lines(edit=_body_edit(p, circuit=rng.choice(["AB" * 64, "aB" * 64, "", "-x", "a b", 5,
-                                                                           "x" * 257, None, "\u00e9"])))
+                                                                           "x" * 257, None, "~"])))
         case "no-cap":
             j["ledger"] = lg.lines(edit=_body_edit(p, **rng.choice([{"cap": DROP, "circuit": DROP},
                                                                      {"cap": None, "circuit": None}])))
