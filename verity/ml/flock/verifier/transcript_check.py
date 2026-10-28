@@ -6,7 +6,7 @@ with the session record. It checks only the transcript and the proof layout (§8
 
     python transcript_check.py session.json rep0.proof rep1.proof
 
-Vectors: vectors.json (fetch a session with `research data fetch <record> --path <path>`).
+Vectors: vectors.json (each session is fetched from the evidence store by its record and path).
 """
 import hashlib, json, math, struct, sys
 
