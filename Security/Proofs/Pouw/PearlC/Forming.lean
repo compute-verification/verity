@@ -395,7 +395,7 @@ private theorem bf16_chain_err {a n n0 η : ℚ} (hη : η ≤ |n0| / 256) (hn :
     abs_le.2 ⟨by norm_num at h1 h2 ⊢; linarith, by norm_num at h1 h2 ⊢; linarith⟩
   refine abs_le.2 ⟨?_, ?_⟩ <;> norm_num at h1 h2 h3 h4 ⊢ <;> linarith
 
-/-- **#311's chain has relative error `1/64` on a pair**, if the noise wgmma (its accumulation order is a parameter) is
+/-- **Pearl's chain has relative error `1/64` on a pair**, if the noise wgmma (its accumulation order is a parameter) is
 within `N/256` of `∓N` at the pair's two points. -/
 theorem bf16_pairErr {noise : (Fin r → ℚ) → (Fin r → ℚ) → ℚ} {α x β N η : ℚ}
     {p q : (Fin r → Code) × (Fin r → Code)} (hα : 0 ≤ α) (hN : 0 ≤ N) (hη : η ≤ N / 256)
@@ -411,7 +411,7 @@ theorem bf16_pairErr {noise : (Fin r → ℚ) → (Fin r → ℚ) → ℚ} {α x
     rw [hax, abs_of_nonneg hN] at h
     exact h
 
-/-- **(a) for `FormChain.bf16`** (#311's chain): with the wgmma within `N/256` of `∓N`, the element is salt-live when
+/-- **(a) for `FormChain.bf16`** (Pearl's chain): with the wgmma within `N/256` of `∓N`, the element is salt-live when
 `(81/64)·|x| < (943/64)·c·σ`, about `|x| < 11.6·c·σ`. -/
 theorem bf16Chain_saltLive {noise : (Fin r → ℚ) → (Fin r → ℚ) → ℚ} {S : Support r} {α x β σ c η : ℚ}
     {p q : (Fin r → Code) × (Fin r → Code)} (hpS : p ∈ S) (hqS : q ∈ S)
@@ -455,7 +455,7 @@ theorem SaltLive.value {v : ValueFn r} {S : Support r} {α x β : ℚ} (h : Salt
   Varies.of_comp e4m3 h.varies
 
 /-- At a salt-live element, every stage the value factors through varies: if `v α x β e f = g (h e f)`, then `h`'s
-output varies over the support (for the atom-mix, the atom's word; for #311's chain, the noise wgmma's output). -/
+output varies over the support (for the atom-mix, the atom's word; for Pearl's chain, the noise wgmma's output). -/
 theorem SaltLive.stage {v : ValueFn r} {S : Support r} {α x β : ℚ} {γ : Type*}
     (h : (Fin r → Code) → (Fin r → Code) → γ) (g : γ → ℚ) (hv : ∀ e f, v α x β e f = g (h e f))
     (hl : SaltLive v S α x β) : Varies S (fun p => h p.1 p.2) := by
@@ -465,7 +465,7 @@ theorem SaltLive.stage {v : ValueFn r} {S : Support r} {α x β : ℚ} {γ : Typ
   rw [heq] at hvar
   exact Varies.of_comp _ hvar
 
-/-- The forming steps credited at a salt-live element (H100 units): #311's BF16 chain (the noise wgmma 32, f32→bf16 32,
+/-- The forming steps credited at a salt-live element (H100 units): Pearl's BF16 chain (the noise wgmma 32, f32→bf16 32,
 the HFMA2 16, the cast 32). The row statistic reads `A` alone and is not credited. -/
 def bf16Steps : List ℕ := [32, 32, 16, 32]
 
@@ -651,7 +651,7 @@ theorem rhoD_atomMix_pi (fs : ℕ) (s : Shape) {S : Support Params.pi.r} {α β 
     (fs : ℚ) * s.m * s.k - rhoD * fs * s.m * s.k ≤ fs * (live FormChain.atomMix.value S α β X).card :=
   rhoD_rel_pi fs s hpS hqS herr hα hfloor hsat hc hc4 hε0 hε hlive
 
-/-- **ρ_D for #311's BF16 chain at Π's parameters**: per row, the wgmma within `N_i/256` of `∓N_i` at a flip pair of
+/-- **ρ_D for Pearl's BF16 chain at Π's parameters**: per row, the wgmma within `N_i/256` of `∓N_i` at a flip pair of
 noise `N_i = c_i·α_iρ_i` with `648/943 ≤ c_i ≤ 4`. -/
 theorem rhoD_bf16_pi (fs : ℕ) (s : Shape) {noise : (Fin Params.pi.r → ℚ) → (Fin Params.pi.r → ℚ) → ℚ}
     {S : Support Params.pi.r} {α β ρ c η : Fin s.m → ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ}
@@ -898,7 +898,7 @@ theorem formCredit_atomMix_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n) {S : Support
     (1 - rhoD) * fs * s.m * s.k ≤ formCredit fs FormChain.atomMix.value S α β X (noFlags : Flags s.m s.n) :=
   formCredit_rel_pi fs s hn hpS hqS herr hα hfloor hsat hc hc4 hε0 hε hlive
 
-/-- **(i) for #311's BF16 chain**, under `rhoD_bf16_pi`'s hypotheses. -/
+/-- **(i) for Pearl's BF16 chain**, under `rhoD_bf16_pi`'s hypotheses. -/
 theorem formCredit_bf16_pi (fs : ℕ) (s : Shape) (hn : 0 < s.n)
     {noise : (Fin Params.pi.r → ℚ) → (Fin Params.pi.r → ℚ) → ℚ} {S : Support Params.pi.r} {α β ρ c η : Fin s.m → ℚ}
     {X : Matrix (Fin s.m) (Fin s.k) ℚ} {p q : Fin s.m → (Fin Params.pi.r → Code) × (Fin Params.pi.r → Code)}
