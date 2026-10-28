@@ -1465,7 +1465,7 @@ class Driver:
         """Tell each PR marked ready that the sync left off `next` because it contains the head, or the commits at an older
         head, of an open PR that isn't admitted (`Queue.entries`), and that PR, once per pair of heads: else the marked one waits
         and no one hears.  Both owners are rung.  One unmarked at its head is asked for its mark; one ejected, held, without
-        an owner or waiting itself is named with why, and the fix: admit it, drop its commits, or ask @top to close it.  A PR that
+        an owner or waiting itself is named with why, and the fix: admit it, drop its commits, or have it closed.  A PR that
         isn't marked, or waits for a reason of its own (a hold, a warming check), tells no one; one left out because a PR it
         contains didn't merge is `_tell_out`'s."""
         q = self.q
@@ -1490,7 +1490,7 @@ class Driver:
                          f"clear what #{m} waits for" if marked and b.state == "waiting" else f"mark #{m} ready at {h[:8]}")
                 self.refuse(drive, f"contained:{n}@{e.pr.head}:{m}@{h}",
                             f"#{n} at {e.pr.head[:8]} is out of `{q.branch}`: it contains {e.contains(m)}, and #{m} at "
-                            f"{h[:8]} isn't admitted ({b.why}). Fix: {admit}, drop #{m}'s commits from #{n}, or ask @top to "
+                            f"{h[:8]} isn't admitted ({b.why}). Fix: {admit}, drop #{m}'s commits from #{n}, or ask {TOP} to "
                             f"close #{m}", q.handle(e.pr), q.handle(b.pr))
 
     def _tell_out(self, drive: dict, state: dict) -> None:
