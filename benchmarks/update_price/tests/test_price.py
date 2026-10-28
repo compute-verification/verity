@@ -58,9 +58,13 @@ def test_pricing_pipeline_on_a_toy_run(tmp_path):
                for n in (1, 3) for f in P.FMTS for nm in names]
     by = {(r["N"], r["fmt"], r["name"]): r for r in tensors}
     assert set(by[(3, "fp32", names[1])]["pred"]) == {"0", "1"} and set(by[(1, "fp32", names[1])]["pred"]) == {"0"}
+    assert set(by[(3, "fp32", names[1])]["lattice"]) == {"0", "1"}
     sels = [P.selection_task({"ckpt": str(ck), "N": 3, "fmt": f, "names": names, "seed": 0, "m_pred": 1, "eps": 1e-8,
-                              "coefs": {nm: by[(3, f, nm)]["pred"]["1"]["coef"] for nm in names}}) for f in P.FMTS]
+                              "coefs": {nm: by[(3, f, nm)]["pred"]["1"]["coef"] for nm in names},
+                              "lattices": {m: {nm: (by[(3, f, nm)]["lattice"][m]["coef"], by[(3, f, nm)]["lattice"][m]["step"])
+                                               for nm in names} for m in ("0", "1")}}) for f in P.FMTS]
     assert {"top0.01", "bottom0.1", "theta_top0.1", "random1000", "embed_unseen"} <= set(sels[0]["selections"])
+    assert {"ulp", "pred1", "lattice0", "lattice1"} <= set(sels[0]["selections"]["top0.01"])
     gps = [P.gp_task({"ckpt": str(ck), "N": 3, "fmt": "fp32", "layer": 0, "names": names[1:]})]
     res = P.aggregate(train, names, tensors, sels, gps, [1])
     v = res["versions"]["3/fp32"]

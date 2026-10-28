@@ -6,12 +6,14 @@ description it prices is decoded and compared with the target bit for bit before
 
 Methods, each a decoder given the registration R (θ; with or without the training data) and a budget t:
 
-- `ulp` (a): the slots' ulp distances from θ under the context coder (`codec.ulp_encode`); t: a decode, well under a step.
+- `ulp` (a): the slots' ulp distances from θ under the context coder (`codec.ulp_encode`); t: one decode, measured.
 - `lowrank` (b): per matrix, integer rank-r factors of the update plus the coded residual (`codec.lowrank_encode`); the
   rank and the factors' precision are the shortest found.
 - `pred0` (c, from θ alone): θ times a fitted scalar (weight decay) plus the coded residual.
 - `predM` (c, replaying the first M steps): the prediction θ + a·θ + b·(x_M − θ) + c·u_M, u_M the Adam direction at step M,
   coefficients fitted per tensor and sent as float32, plus the coded residual; t ≥ M training steps.
+- `lattice0`, `latticeM` (c): pred0's or predM's prediction plus a coded whole number of float32 steps per slot, then the
+  residual (`codec.lattice_encode`); the step is the shortest of a few multiples of the typical distance.
 - `replay` (d): the run record and the trainer, replayed for N steps (t ≥ N steps); without the data in R it also carries
   the tokens, coded prequentially by the model being trained (or by xz).
 
@@ -140,7 +142,7 @@ def tensor_task(job: dict) -> dict:
     out["lowrank"] = best
 
     theta64 = C.from_bits(r0, fmt).astype(np.float64)
-    out["pred"] = {}
+    out["pred"], out["lattice"] = {}, {}
     for m in [0, *[m for m in ms if m < n]]:
         bases = [theta64]
         if m:
@@ -157,6 +159,21 @@ def tensor_task(job: dict) -> dict:
         checked(t, back, f"{name} pred{m}")
         out["pred"][str(m)] = {"bits": 8 * len(enc), "dec_s": dec, "coef": coef.tolist(),
                                "kind": ("ls3", "direct", "ls2")[i] if m else "decay"}
+        fit = C.fit_lattice(t, r0, bases, coef, g, fmt)
+        if fit is None:
+            out["lattice"][str(m)] = {**out["pred"][str(m)], "step": None}
+            continue
+        lcoef, step = fit
+        enc = C.lattice_encode(t, r0, bases, lcoef, step, g, fmt)
+        back, dec = timed(C.lattice_decode, enc, r0, bases, g, fmt)
+        checked(t, back, f"{name} lattice{m}")
+        base = C.affine64(r0, bases, lcoef, fmt)
+        out["lattice"][str(m)] = {"bits": 8 * len(enc), "dec_s": dec, "coef": lcoef.tolist(), "step": step,
+                                  "q_nonzero": int(np.count_nonzero(C.lattice_steps(t, base, step, fmt)))}
+        if m == 0:
+            sb = C.lattice_slot_bits(t, r0, base, step, g, fmt)
+            out["theta_exp"]["bits_lattice0"] = np.bincount(e, weights=sb, minlength=256).tolist()
+    out["theta_exp"].setdefault("bits_lattice0", out["theta_exp"]["bits"])
     return out
 
 
@@ -175,7 +192,7 @@ def gather(ck: Ckpt, names: list[str], n: int, fmt: str):
 
 def selection_task(job: dict) -> dict:
     ck, n, fmt, names, seed = Ckpt(job["ckpt"]), job["N"], job["fmt"], job["names"], job["seed"]
-    coefs, m_pred, eps = job["coefs"], job["m_pred"], job["eps"]
+    coefs, lattices, m_pred, eps = job["coefs"], job["lattices"], job["m_pred"], job["eps"]
     t, r0, grp, th = gather(ck, names, n, fmt)
     total = t.size
     absd = np.abs(C.keys(t, fmt) - C.keys(r0, fmt))
@@ -204,16 +221,23 @@ def selection_task(job: dict) -> dict:
         sels["embed_unseen"] = (unseen, NAME_BITS)
         sels["embed_unseen_index"] = (unseen, log2_binom(len(seen), len(rows)))
 
-    pred = None
-    if m_pred:
-        parts = []
-        for i, name in enumerate(names):
+    # per slot: predM's prediction, and each lattice's float64 base (its tensor's affine prediction) and step
+    lat, pred = {}, []
+    for m in sorted({0, m_pred}):
+        b64, st = [], []
+        for name in names:
             x0 = np.asarray(ck.x(0, name), dtype=np.float32).reshape(-1)
-            bases = [C.from_bits(C.to_bits(x0, fmt), fmt).astype(np.float64),
-                     np.asarray(ck.x(m_pred, name), dtype=np.float64).reshape(-1) - x0.astype(np.float64),
-                     ck.adam_dir(m_pred, name, eps)]
-            parts.append(C.affine_predict(C.to_bits(x0, fmt), bases, np.asarray(coefs[name], np.float32), fmt))
-        pred = np.concatenate(parts)
+            r = C.to_bits(x0, fmt)
+            bases = [C.from_bits(r, fmt).astype(np.float64)]
+            if m:
+                bases += [np.asarray(ck.x(m, name), dtype=np.float64).reshape(-1) - x0.astype(np.float64),
+                          ck.adam_dir(m, name, eps)]
+                pred.append(C.affine_predict(r, bases, np.asarray(coefs[name], np.float32), fmt))
+            coef, step = lattices[str(m)][name]
+            b64.append(C.affine64(r, bases, np.asarray(coef, np.float32), fmt))
+            st.append(np.full(x0.size, step or 1.0, np.float32))
+        lat[m] = (np.concatenate(b64), np.concatenate(st))
+    pred = np.concatenate(pred) if m_pred else None
 
     out = {"N": n, "fmt": fmt, "total": int(total), "m_pred": m_pred, "selections": {}}
     for sname, (idx, index_bits) in sels.items():
@@ -221,16 +245,21 @@ def selection_task(job: dict) -> dict:
             continue
         row = {"n": int(len(idx)), "index_bits": float(index_bits)}
         g = grp[idx].astype(np.int64)
+        nc = len(np.unique(g))
         enc = C.ulp_encode(t[idx], r0[idx], g, fmt)
         back, dec = timed(C.ulp_decode, enc, r0[idx], g, fmt)
         checked(t[idx], back, f"{sname} ulp")
         row["ulp"] = {"bits": 8 * len(enc), "dec_s": dec}
         if pred is not None:
-            nc = len(np.unique(g))
             enc = C.ulp_encode(t[idx], pred[idx], g, fmt)
             back, dec = timed(C.ulp_decode, enc, pred[idx], g, fmt)
             checked(t[idx], back, f"{sname} pred{m_pred}")
             row[f"pred{m_pred}"] = {"bits": 8 * len(enc) + 3 * 32 * nc, "dec_s": dec}
+        for m, (b64, st) in lat.items():
+            enc = C.lattice_encode_base(t[idx], r0[idx], b64[idx], st[idx], g, fmt)
+            back, dec = timed(C.lattice_decode_base, enc, r0[idx], b64[idx], st[idx], g, fmt)
+            checked(t[idx], back, f"{sname} lattice{m}")
+            row[f"lattice{m}"] = {"bits": 8 * len(enc) + (4 if m else 2) * 32 * nc, "dec_s": dec}
         out["selections"][sname] = row
     return out
 
@@ -285,10 +314,17 @@ def regimes(n: int, ms: list[int]) -> list[tuple[str, int]]:
     return [("codec", 0), *[(f"replay{m}", m) for m in ms if m < n], ("replay", n)]
 
 
+def replayed(method: str) -> int:
+    """The training steps a method's decoder replays: M for predM and latticeM, none for the codecs."""
+    tail = method.removeprefix("pred").removeprefix("lattice")
+    return int(tail) if tail != method and tail.isdigit() else 0
+
+
 def tensor_best(row: dict, upto: int) -> tuple[float, float, str]:
     """The shortest per-tensor description among the codecs and the predictors that replay at most `upto` steps."""
     opts = [(row["ulp"]["bits"], row["ulp"]["dec_s"], "ulp"), (row["lowrank"]["bits"], row["lowrank"]["dec_s"], "lowrank")]
-    opts += [(v["bits"], v["dec_s"], f"pred{m}") for m, v in row["pred"].items() if int(m) <= upto]
+    opts += [(v["bits"], v["dec_s"], f"{kind}{m}") for kind in ("pred", "lattice") for m, v in row[kind].items()
+             if int(m) <= upto]
     return min(opts)
 
 
@@ -312,9 +348,10 @@ def aggregate(train: dict, names: list[str], tensors: list[dict], sels: list[dic
             for meth in ("ulp", "lowrank"):
                 gv["methods"][meth] = {"bits": frame + sum(rows[nm][meth]["bits"] for nm in members),
                                        "dec_s": sum(rows[nm][meth]["dec_s"] for nm in members)}
-            for m in rows[members[0]]["pred"]:
-                gv["methods"][f"pred{m}"] = {"bits": frame + sum(rows[nm]["pred"][m]["bits"] for nm in members),
-                                             "dec_s": sum(rows[nm]["pred"][m]["dec_s"] for nm in members)}
+            for kind in ("pred", "lattice"):
+                for m in rows[members[0]][kind]:
+                    gv["methods"][f"{kind}{m}"] = {"bits": frame + sum(rows[nm][kind][m]["bits"] for nm in members),
+                                                   "dec_s": sum(rows[nm][kind][m]["dec_s"] for nm in members)}
             for reg, upto in regimes(n, ms):
                 if reg == "replay":
                     prev = gv["best"][list(gv["best"])[-1]]
@@ -332,11 +369,15 @@ def aggregate(train: dict, names: list[str], tensors: list[dict], sels: list[dic
                 gv.setdefault("best", {})[reg] = {"bits": bits, "t_steps": upto + dec / mean_step,
                                                   "t_s": sum(step_s[:upto]) + dec, "via": via}
             v["groups"][gname] = gv
-        # θ-selectable selections: the slots whose |θ| is in the top binades, priced by the ulp coder's per-slot lengths
+        # θ-selectable selections: the slots whose |θ| is in the top binades, priced by the per-slot lengths of the ulp
+        # coder and of lattice0 (whose coefficient and step cost 64 bits a tensor)
         cnt = np.sum([rows[nm]["theta_exp"]["count"] for nm in names], axis=0)
-        bits = np.sum([rows[nm]["theta_exp"]["bits"] for nm in names], axis=0)
-        cc, cb = np.cumsum(cnt[::-1])[::-1], np.cumsum(bits[::-1])[::-1]
-        v["theta_binades"] = [{"exp_min": int(e) - 127, "n": int(cc[e]), "bits_per_weight": float(cb[e] / cc[e])}
+        cc = np.cumsum(cnt[::-1])[::-1]
+        cum = {k: np.cumsum(np.sum([rows[nm]["theta_exp"][key] for nm in names], axis=0)[::-1])[::-1]
+               for k, key in (("ulp", "bits"), ("lattice0", "bits_lattice0"))}
+        v["theta_binades"] = [{"exp_min": int(e) - 127, "n": int(cc[e]),
+                               "bits_per_weight": float(cum["ulp"][e] / cc[e]),
+                               "lattice0_bits_per_weight": float((cum["lattice0"][e] + 64 * len(names)) / cc[e])}
                               for e in range(256) if cnt[e] and cc[e] >= 1000]
         sel = next((s for s in sels if s["N"] == n and s["fmt"] == fmt), None)
         v["selections"] = sel["selections"] if sel else {}
@@ -346,16 +387,19 @@ def aggregate(train: dict, names: list[str], tensors: list[dict], sels: list[dic
         allg = v["groups"]["all"]
         for reg in allg["best"]:
             p = allg["best"][reg]["bits"] / allg["n"]
+            upto = 0 if reg == "codec" else n if reg.startswith("replay_") else int(reg.removeprefix("replay"))
             rep = rp[reg[len("replay_"):] + "_bits"] if reg.startswith("replay_") else math.inf
             cands = []
             for gname, gv in v["groups"].items():
                 b = gv["best"].get(reg) or gv["best"][list(gv["best"])[-1]]
                 cands.append((gv["n"], b["bits"], gname))
             for sname, row in v["selections"].items():
-                meths = [row["ulp"]["bits"]] + ([row[k]["bits"] for k in row if k.startswith("pred")] if reg != "codec" else [])
+                meths = [row[k]["bits"] for k in row
+                         if k == "ulp" or (k.startswith(("pred", "lattice")) and replayed(k) <= upto)]
                 cands.append((row["n"], min(min(meths), rep) + row["index_bits"], sname))
             for tb in v["theta_binades"]:
-                cands.append((tb["n"], min(tb["bits_per_weight"] * tb["n"], rep) + NAME_BITS, f"theta_exp>={tb['exp_min']}"))
+                tbits = min(tb["bits_per_weight"], tb["lattice0_bits_per_weight"]) * tb["n"]
+                cands.append((tb["n"], min(tbits, rep) + NAME_BITS, f"theta_exp>={tb['exp_min']}"))
             lam, where = max((p * size - bits, name) for size, bits, name in cands)
             floor = min(LARGE, max(size for size, _, _ in cands))
             pu, pu_at, pu_n = min((bits / size, name, size) for size, bits, name in cands if size >= floor)
@@ -383,8 +427,8 @@ def render(res: dict, train: dict) -> str:
     keys = sorted(res["versions"], key=lambda k: (k.split("/")[1], int(k.split("/")[0])))
     for fmt in FMTS:
         lines += [f"## All {fmt} slots: bits per weight by decoder budget", "",
-                  "| N | slots changed | ulp | lowrank | pred0 | best, t < 1 step | best with replay of M steps | replay (data in R) | replay (data not in R) | λ implied at the codec rate |",
-                  "|---|---|---|---|---|---|---|---|---|---|"]
+                  "| N | slots changed | ulp | lowrank | pred0 | lattice0 | best without replay | best with replay of M steps | replay (data in R) | replay (data not in R) | λ implied at the codec rate |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|"]
         for k in keys:
             n, f = k.split("/")
             if f != fmt:
@@ -396,13 +440,14 @@ def render(res: dict, train: dict) -> str:
             ch = v.get("changed", None)
             lines.append(f"| {n} | {ch if ch is not None else ''} | {fmt_bits(per(a['methods']['ulp']['bits']))} | "
                          f"{fmt_bits(per(a['methods']['lowrank']['bits']))} | {fmt_bits(per(a['methods']['pred0']['bits']))} | "
+                         f"{fmt_bits(per(a['methods']['lattice0']['bits']))} | "
                          f"{fmt_bits(per(a['best']['codec']['bits']))} | {'; '.join(reps) or '-'} | "
                          f"{fmt_bits(per(a['best']['replay_registered']['bits']))} (t = {n}) | "
                          f"{fmt_bits(per(a['best']['replay_unregistered']['bits']))} (t = {n}) | "
                          f"{v['regimes']['codec']['lambda_implied']:.3g} ({v['regimes']['codec']['lambda_at']}) |")
         lines.append("")
     for fmt in FMTS:
-        lines += [f"## Per class and layer, {fmt}: bits per weight, best at t < 1 step / with replay of the largest M < N", "",
+        lines += [f"## Per class and layer, {fmt}: bits per weight, best without replay / with replay of the largest M < N", "",
                   "| N | " + " | ".join(g for g in res["versions"][keys[0]]["groups"]) + " |",
                   "|---|" + "---|" * len(res["versions"][keys[0]]["groups"])]
         for k in keys:
@@ -419,16 +464,18 @@ def render(res: dict, train: dict) -> str:
         lines.append("")
     for fmt in FMTS:
         lines += [f"## Selections across tensors, {fmt}: bits per weight (description + index)", "",
-                  "| N | selection | slots | index bits | ulp | predM |", "|---|---|---|---|---|---|"]
+                  "| N | selection | slots | index bits | ulp | lattice0 | predM | latticeM |", "|---|---|---|---|---|---|---|---|"]
         for k in keys:
             n, f = k.split("/")
             if f != fmt:
                 continue
             for s, row in res["versions"][k]["selections"].items():
+                def cell(key):
+                    return fmt_bits((row[key]["bits"] + row["index_bits"]) / row["n"]) if key in row else "-"
                 pk = [x for x in row if x.startswith("pred")]
-                lines.append(f"| {n} | {s} | {row['n']} | {row['index_bits']:.4g} | "
-                             f"{fmt_bits((row['ulp']['bits'] + row['index_bits']) / row['n'])} | "
-                             f"{fmt_bits((row[pk[0]]['bits'] + row['index_bits']) / row['n']) + ' (' + pk[0] + ')' if pk else '-'} |")
+                mp = pk[0][4:] if pk else None
+                lines.append(f"| {n} | {s} | {row['n']} | {row['index_bits']:.4g} | {cell('ulp')} | {cell('lattice0')} | "
+                             f"{cell(pk[0]) + ' (M=' + mp + ')' if pk else '-'} | {cell('lattice' + mp) if mp else '-'} |")
         lines.append("")
     lines += ["## λ implied: the deficit a uniform price at the all-slots rate needs to survive every selection tried", "",
               "| N | fmt | decoder budget | t (steps) | all-slots rate (bits/weight) | λ implied (bits) | at selection | uniform price ≤ at λ = 0 | at selection (slots) |",
@@ -494,9 +541,12 @@ def main(argv=None) -> None:
     for n in ns:
         mp = max([m for m in ms if m < n], default=0)
         for f in FMTS:
-            coefs = {nm: by[(n, f)][nm]["pred"][str(mp)]["coef"] for nm in names} if mp else {}
+            rows = by[(n, f)]
+            coefs = {nm: rows[nm]["pred"][str(mp)]["coef"] for nm in names} if mp else {}
+            lattices = {str(m): {nm: (rows[nm]["lattice"][str(m)]["coef"], rows[nm]["lattice"][str(m)]["step"])
+                                 for nm in names} for m in {0, mp}}
             sjobs.append({"ckpt": str(a.ckpt), "N": n, "fmt": f, "names": names, "seed": a.seed, "coefs": coefs,
-                          "m_pred": mp, "eps": eps})
+                          "lattices": lattices, "m_pred": mp, "eps": eps})
             for lyr in LAYERS:
                 members = [nm for nm in names if layer(nm) == lyr]
                 if members:

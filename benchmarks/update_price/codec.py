@@ -14,6 +14,11 @@ operations per slot.
   in float64 and rounded to the format, and the residual through `ulp_encode`.
 - `affine_encode` / `affine_decode`: the reference plus a float32-coefficient combination of float64 bases the decoder
   computes (the registered value, a replayed prefix's change, its Adam direction), and the residual through `ulp_encode`.
+- `lattice_encode` / `lattice_decode`: that affine prediction plus a whole number of float32 steps per slot, the step
+  counts under the reference's contexts, and the residual through `ulp_encode`: an update that sits near a lattice
+  (AdamW's first step moves nearly every weight by ±lr) costs its step counts and not the low bits of each distance.
+  `lattice_encode_base` is the same on a base prediction and per-slot steps the decoder already holds (a selection
+  across tensors).
 
 numpy and the standard library only.
 """
@@ -425,11 +430,15 @@ def lowrank_decode(data: bytes, ref_bits: np.ndarray, fmt: str) -> np.ndarray:
 
 # --- affine predictors: float32 coefficients over float64 bases the decoder computes ------------------------------------
 
-def affine_predict(ref_bits: np.ndarray, bases: list[np.ndarray], coef: np.ndarray, fmt: str) -> np.ndarray:
+def affine64(ref_bits: np.ndarray, bases: list[np.ndarray], coef: np.ndarray, fmt: str) -> np.ndarray:
     x = from_bits(ref_bits, fmt).astype(np.float64)
     for c, b in zip(coef.astype(np.float32).astype(np.float64), bases):
         x = x + c * b
-    return round_to(x, fmt)
+    return x
+
+
+def affine_predict(ref_bits: np.ndarray, bases: list[np.ndarray], coef: np.ndarray, fmt: str) -> np.ndarray:
+    return round_to(affine64(ref_bits, bases, coef, fmt), fmt)
 
 
 def fit_affine(target_bits: np.ndarray, ref_bits: np.ndarray, bases: list[np.ndarray], fmt: str) -> np.ndarray:
@@ -455,6 +464,129 @@ def affine_decode(data: bytes, ref_bits: np.ndarray, bases: list[np.ndarray], gr
     if nc != len(bases):
         raise CodecError(f"{nc} coefficients for {len(bases)} bases")
     return ulp_decode(data[4 + 4 * nc:], affine_predict(ref_bits, bases, coef, fmt), group, fmt)
+
+
+# --- lattice predictors: a base prediction plus a whole number of float32 steps, then the residual ---------------------
+
+def _steps64(step, n: int) -> np.ndarray:
+    s = np.broadcast_to(np.asarray(step, dtype=np.float32), (n,)).astype(np.float64)
+    if s.size and not (np.all(s > 0) and np.all(np.isfinite(s))):
+        raise CodecError("a lattice step must be positive and finite")
+    return s
+
+
+def lattice_steps(target_bits: np.ndarray, base64: np.ndarray, step, fmt: str) -> np.ndarray:
+    """Per slot, the nearest whole number of its `step` (float32, a scalar or one per slot) from the float64 base
+    prediction to the target."""
+    q = np.rint((from_bits(target_bits, fmt).astype(np.float64) - base64) / _steps64(step, len(base64)))
+    if q.size and np.abs(q).max() >= 2.0 ** 33:
+        raise CodecError("a lattice step this small needs more than 33-bit step counts")
+    return q.astype(np.int64)
+
+
+def lattice_predict(base64: np.ndarray, step, q: np.ndarray, fmt: str) -> np.ndarray:
+    return round_to(base64 + _steps64(step, len(base64)) * q.astype(np.float64), fmt)
+
+
+def lattice_encode_base(target_bits: np.ndarray, ref_bits: np.ndarray, base64: np.ndarray, step, group: np.ndarray,
+                        fmt: str) -> bytes:
+    """The step counts under the reference's contexts, then the residual from the lattice point. The decoder computes
+    `base64` and holds `step` itself."""
+    q = lattice_steps(target_bits, base64, step, fmt)
+    ctx, n_ctx = contexts(ref_bits, group, fmt)
+    qs = encode_ints(q, ctx, n_ctx)
+    return struct.pack("<Q", len(qs)) + qs + ulp_encode(target_bits, lattice_predict(base64, step, q, fmt), group, fmt)
+
+
+def lattice_decode_base(data: bytes, ref_bits: np.ndarray, base64: np.ndarray, step, group: np.ndarray,
+                        fmt: str) -> np.ndarray:
+    (nq,) = struct.unpack_from("<Q", data, 0)
+    ctx, n_ctx = contexts(ref_bits, group, fmt)
+    q = decode_ints(data[8:8 + nq], ctx, n_ctx)
+    return ulp_decode(data[8 + nq:], lattice_predict(base64, step, q, fmt), group, fmt)
+
+
+def lattice_slot_bits(target_bits: np.ndarray, ref_bits: np.ndarray, base64: np.ndarray, step, group: np.ndarray,
+                      fmt: str) -> np.ndarray:
+    """Each slot's share of `lattice_ideal`: its step count's -log2 probability and raw bits, and its residual's."""
+    q = lattice_steps(target_bits, base64, step, fmt)
+    ctx, n_ctx = contexts(ref_bits, group, fmt)
+    sym, _, w = symbolize(q)
+    flat = ctx * ALPHABET + sym
+    counts = np.bincount(flat, minlength=n_ctx * ALPHABET).astype(np.float64)
+    tot = np.bincount(ctx, minlength=n_ctx).astype(np.float64)
+    pred = lattice_predict(base64, step, q, fmt)
+    return -np.log2(counts[flat] / tot[ctx]) + w + slot_bits(target_bits, pred, group, fmt)
+
+
+def lattice_ideal(target_bits: np.ndarray, ref_bits: np.ndarray, base64: np.ndarray, step, group: np.ndarray,
+                  fmt: str) -> float:
+    """`lattice_encode_base`'s length to within its headers and lane states, for choosing the step."""
+    q = lattice_steps(target_bits, base64, step, fmt)
+    ctx, n_ctx = contexts(ref_bits, group, fmt)
+    return ideal_ints(q, ctx, n_ctx) + ideal_bits(target_bits, lattice_predict(base64, step, q, fmt), group, fmt)
+
+
+def fit_lattice(target_bits: np.ndarray, ref_bits: np.ndarray, bases: list[np.ndarray], coef: np.ndarray,
+                group: np.ndarray, fmt: str, scales=(1.0, 0.5, 2.0, 0.25, 4.0),
+                sample: int = 1 << 22) -> tuple[np.ndarray, float] | None:
+    """Coefficients and a step for `lattice_encode`. Each candidate step is one of `scales` times the median distance from
+    the rounded affine prediction to the target where they differ; its step counts give a least-squares refit of the
+    coefficients and the step together (a weight decay fitted before the steps are known is swamped by them). The pair
+    with the shortest `lattice_ideal` on a strided sample of at most `sample` slots wins, the earlier on a tie. None
+    where the prediction is already exact on the sample."""
+    sl = slice(None, None, max(1, len(ref_bits) // sample))
+    t, r, g = target_bits[sl], ref_bits[sl], group[sl]
+    bs = [b[sl] for b in bases]
+    coef = np.asarray(coef, np.float32)
+    base = affine64(r, bs, coef, fmt)
+    tv = from_bits(t, fmt).astype(np.float64)
+    y = np.abs(tv - from_bits(round_to(base, fmt), fmt).astype(np.float64))
+    y = y[y > 0]
+    if not y.size:
+        return None
+    s0 = float(np.median(y))
+    dy = tv - from_bits(r, fmt).astype(np.float64)
+    best = None
+    for c in scales:
+        s = float(np.float32(s0 * c))
+        if not (s > 0 and np.isfinite(s)):
+            continue
+        try:
+            q = lattice_steps(t, base, s, fmt).astype(np.float64)
+        except CodecError:
+            continue
+        cols = [*bs, q]
+        gm = np.array([[float(np.dot(u, v)) for v in cols] for u in cols])
+        h = np.array([float(np.dot(u, dy)) for u in cols])
+        sol = np.nan_to_num(np.linalg.lstsq(gm, h, rcond=None)[0])
+        cands = [(coef, s)]
+        if np.float32(sol[-1]) > 0 and np.isfinite(np.float32(sol[-1])):
+            cands.append((sol[:-1].astype(np.float32), float(np.float32(sol[-1]))))
+        for cf, st in cands:
+            try:
+                bits = lattice_ideal(t, r, affine64(r, bs, cf, fmt), st, g, fmt)
+            except CodecError:
+                continue
+            if best is None or bits < best[0]:
+                best = (bits, cf, st)
+    return None if best is None else (best[1], best[2])
+
+
+def lattice_encode(target_bits: np.ndarray, ref_bits: np.ndarray, bases: list[np.ndarray], coef: np.ndarray,
+                   step: float, group: np.ndarray, fmt: str) -> bytes:
+    """One tensor: its affine coefficients and step (float32), then `lattice_encode_base` on the affine prediction."""
+    head = struct.pack("<I", len(coef)) + coef.astype("<f4").tobytes() + np.float32(step).astype("<f4").tobytes()
+    return head + lattice_encode_base(target_bits, ref_bits, affine64(ref_bits, bases, coef, fmt), step, group, fmt)
+
+
+def lattice_decode(data: bytes, ref_bits: np.ndarray, bases: list[np.ndarray], group: np.ndarray, fmt: str) -> np.ndarray:
+    (nc,) = struct.unpack_from("<I", data, 0)
+    if nc != len(bases):
+        raise CodecError(f"{nc} coefficients for {len(bases)} bases")
+    coef = np.frombuffer(data, dtype="<f4", count=nc, offset=4)
+    step = np.frombuffer(data, dtype="<f4", count=1, offset=4 + 4 * nc)[0]
+    return lattice_decode_base(data[8 + 4 * nc:], ref_bits, affine64(ref_bits, bases, coef, fmt), step, group, fmt)
 
 
 # --- general-purpose baselines -----------------------------------------------------------------------------------------

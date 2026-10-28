@@ -35,6 +35,11 @@ counts.
   residual coded by `ulp`. pred0 uses θ alone (weight decay's shrinkage). predM uses the first M steps replayed: θ,
   x_M − θ and the Adam direction m_M/(√v_M + ε) at step M. The coefficients are least squares per tensor, or x_M itself
   where that is cheaper.
+- **lattice0 and latticeM** (c): pred0's or predM's prediction plus a whole number of float32 steps per slot, the step
+  counts coded like the ulp symbols, and the residual coded by `ulp`. AdamW's first step moves nearly every weight by
+  ±lr, which the ulp coder pays for in the low bits of every distance and the lattice pays for once per slot as a step
+  count. The step is the cheapest of a few multiples of the typical distance, with the coefficients and step refit
+  together to the step counts.
 - **replay** (d): the run record (model and data revisions, seed, hyperparameters, N) and `train.py`, both xz-compressed,
   replayed for N steps. When R doesn't hold the data, the description also carries the tokens. They are coded either
   prequentially, by the model being trained at each step (the sum of the training losses in bits, the first token of
@@ -48,10 +53,11 @@ The selections (`price.py`) are:
 - seeded random subsets of 10^3, 10^5 and 10^7 slots;
 - the embedding rows of tokens absent from the first N steps' data, named by R when R holds the data and indexed
   otherwise;
-- θ's binades, priced from the ulp coder's per-slot code lengths.
+- θ's binades, priced from the per-slot code lengths of the ulp coder and of lattice0.
 
-The decoder budget t is counted in training steps of the run's machine, with seconds beside it. The codecs decode in a
-fraction of a step; predM needs M steps and replay needs N.
+The decoder budget t is counted in training steps of the run's machine, with seconds beside it. A codec's t is its
+measured decode time: this numpy decoder takes a few training steps' time for all 135M slots, which a native rANS
+decoder would cut to well under one. predM and latticeM need M steps, and replay needs N.
 
 `tables.md` reports:
 
@@ -66,7 +72,7 @@ fraction of a step; predM needs M steps and replay needs N.
 ## Run it
 
 ~~~sh
-research run --on auto --cpus 12 --mem-gb 32 --max-min 300 --cwd source -- bash benchmarks/update_price/run.sh
+research run --on auto --cpus 16 --mem-gb 64 --max-min 600 --cwd source -- bash benchmarks/update_price/run.sh
 ~~~
 
 `run.sh` passes its arguments to `train.py`, whose defaults are the run of record: 1000 steps of 16×512 tokens, saves at

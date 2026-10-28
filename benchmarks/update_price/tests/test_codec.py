@@ -155,6 +155,53 @@ def test_affine_codec_is_exact_and_checks_its_bases(fmt):
         C.affine_decode(enc, r0, bases[:1], g, fmt)
 
 
+def first_adam_step(n: int, seed: int, lr: float) -> tuple[np.ndarray, np.ndarray]:
+    """θ and θ after one AdamW step: every weight moves by ±lr (a few by nothing) after a weight decay of 1e-5·lr."""
+    x0, _ = weights(n, seed)
+    s = (lcg(n, seed + 1) % 7).astype(np.float64)
+    s = np.where(s == 0, 0.0, np.where(s % 2 == 1, 1.0, -1.0))
+    return x0, (x0.astype(np.float64) * (1 - 1e-5 * lr) - lr * s).astype(np.float32)
+
+
+@pytest.mark.parametrize("fmt", FMTS)
+def test_lattice_codec_is_exact_and_pays_for_the_steps_not_their_low_bits(fmt):
+    lr = 2e-6 if fmt == "fp32" else 1e-3
+    x0, xn = first_adam_step(30000, 23, lr)
+    r0, t = C.to_bits(x0, fmt), C.to_bits(xn, fmt)
+    g = (np.arange(t.size) // 10000).astype(np.int64)
+    bases = [C.from_bits(r0, fmt).astype(np.float64)]
+    fit = C.fit_lattice(t, r0, bases, C.fit_affine(t, r0, bases, fmt), g, fmt)
+    assert fit is not None
+    coef, step = fit
+    base = C.affine64(r0, bases, coef, fmt)
+    assert min(abs(step / (lr * c) - 1) for c in (0.25, 0.5, 1, 2, 4)) < 0.05
+    enc = C.lattice_encode(t, r0, bases, coef, step, g, fmt)
+    assert np.array_equal(C.lattice_decode(enc, r0, bases, g, fmt), t)
+    assert abs(8 * len(enc) - C.lattice_ideal(t, r0, base, step, g, fmt)) < 0.02 * 8 * len(enc) + 4000
+    assert abs(C.lattice_slot_bits(t, r0, base, step, g, fmt).sum() - C.lattice_ideal(t, r0, base, step, g, fmt)) < 4000
+    assert len(enc) < len(C.ulp_encode(t, r0, g, fmt)) / (3 if fmt == "fp32" else 1.5)
+    pins = {"fp32": "d2f15321", "bf16": "869e0d28"}
+    assert hashlib.sha256(enc).hexdigest()[:8] == pins[fmt]
+    with pytest.raises(C.CodecError, match="1 coefficients for 2 bases"):
+        C.lattice_decode(enc, r0, bases * 2, g, fmt)
+
+
+def test_lattice_base_codec_takes_a_step_per_slot_and_refuses_bad_ones():
+    x0, xn = first_adam_step(12000, 29, 2e-6)
+    r0, t = C.to_bits(x0, "fp32"), C.to_bits(xn, "fp32")
+    g = (np.arange(t.size) // 6000).astype(np.int64)
+    base = C.from_bits(r0, "fp32").astype(np.float64)
+    steps = np.where(g == 0, 2e-6, 1e-6).astype(np.float32)
+    enc = C.lattice_encode_base(t, r0, base, steps, g, "fp32")
+    assert np.array_equal(C.lattice_decode_base(enc, r0, base, steps, g, "fp32"), t)
+    assert C.fit_lattice(r0, r0, [base], np.zeros(1, np.float32), g, "fp32") is None
+    for bad in (0.0, -1e-6, np.inf):
+        with pytest.raises(C.CodecError, match="positive and finite"):
+            C.lattice_encode_base(t, r0, base, bad, g, "fp32")
+    with pytest.raises(C.CodecError, match="33-bit"):
+        C.lattice_steps(t, base - 1.0, 1e-12, "fp32")
+
+
 def test_general_purpose_baselines_round_trip():
     x0, xn = weights(4000, 6)
     r0, t = C.to_bits(x0, "fp32"), C.to_bits(xn, "fp32")
