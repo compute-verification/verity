@@ -444,7 +444,7 @@ ON_TWO = ("inference block (slot {slot}, step {step}): units of {a} on server {s
 
 
 def test_refuses_an_inference_block_on_two_servers():
-    """NET-92 (Daniel, 26 Oct): a server's ingress and egress carry only its inference blocks' declared inputs and outputs,
+    """A server's ingress and egress carry only its inference blocks' declared inputs and outputs,
     and an inference block runs on one server. Cut dot | cast with the cast in the dot's own inference blocks, every
     (slot, step) is on both servers, refused by name; with the cast in blocks of its own (`two_servers`) the same cut is
     accepted. Two servers over a record that states no inference block are refused, nothing then saying which server runs

@@ -84,11 +84,15 @@ the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpo
 vy-dc-h200-2's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (prompts
 of the class's 1,024 reach the relay late), each answered greedily with at most 64 ids, ending at the base model's EOS
 id 128001. It runs at a given UTC time when asked. The endpoint is started by hand (serve-openai directly with
-`examples/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors. Its records are
-published as an artifact without `requests.jsonl`, whose prompt ids stay on the served node, and with
-`request_users.jsonl`, each engine request's `engine_id` and its warden user in `requests.jsonl`'s order. `chain`
-rebuilds `requests.jsonl` from that map and the kept warden run's certified I/O in a 0700 directory beside the kept
-fetch, so the endpoint step checks the endpoint's trace against the certified I/O. The session's fetch, with
+`examples/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, with bounded
+staging at its default, which that exclusion needs. Its `requests.jsonl` and `advice_trace.jsonl` hold request values
+(prompt and streamed ids; prompt lengths, sampling, rows and emitted ids) and stay on the served node, so the chain's
+endpoint step runs there: `io` writes the kept warden run's certified I/O to a 0600 file in the kept fetch's directory,
+and `endpoint`, a run on the served node given that file over a private route, checks the endpoint's trace against it
+in a 0700 copy whose `requests.jsonl` is rebuilt from `request_users.jsonl` (each engine request's `engine_id` and its
+warden user) and the certified I/O. Its art is the step's report, `windows.jsonl` and `serve.json`; it writes nothing
+unless `serve.json` shows the endpoint's flags and no published file holds a prompt's ids, a trace's arrive, step or
+finish record, or a request-valued field. `chain` reads that report as the served node's. The session's fetch, with
 `witness/`, stays in a 0700 directory outside the run dir, and `$OUT` gets only the bundle less `witness/` and the
 session's outcome. `chain` runs the chain's warden path on the kept fetch, and only from a tree with the record's leak
 guard. `session --gate local` is the dry rehearsal: this tree's gate on a scratch host, with `demo_stub.py serve` as
@@ -102,12 +106,15 @@ warden run's witness never go on the prover's machine. Without the gate's coins 
 (`CERTIFIER_FRONT`) runs before that run's requests: the gate's scan rehearsal sends one group of the window circuit's
 class (4 prompts of 24 ids, 4 ids out, `--window-per-group`) to serve-openai, all of it in link-window 0, so the engine
 closes it into the run's earliest window, the one the run audits, and the gate's fetch is kept in the serve dir's
-`private/certifier`. Its `piece` (`CERTIFIER_CMD`) runs the chain's warden path on that fetch with the serve dir's
-endpoint records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows
-form of the scan's link-window (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
-of the audited window is a certified one inside that link-window, and the Lean check accepts. Anything else is a reject,
-or undecided when a step couldn't run. With no fetch kept the piece refuses to run (`refused.txt`), which leaves the
-certifier missing.
+`private/certifier`. A request's answer must be whole D·τ after its admission, 2.7 s at the scan's 100 ms tick; for a
+slower endpoint `--bucket-ms` runs the scan at a longer tick, up to 4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`)
+runs the chain's warden path on that fetch with the serve dir's endpoint records, run dir and quarantine private
+beside the fetch, and answers with `network-period check` on the rows form of the scan's
+link-window (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
+of the audited window is a certified one inside that link-window, and the Lean check accepts; beside that answer goes
+its case, `case.json`, as `composite.py` reads a piece's (inline, about 83 MB on a served window). Only the protocol
+rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
+late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing.
 
 ## The chain's run of record
 
@@ -255,7 +262,7 @@ It is not the record's number.
 
 K also rests on these conditions:
 - The generator reading of the scan's statement, in which each unit's registered rows are its boundary values. That
-  reading is a claim, with lean and Daniel.
+  reading is a claim, not yet a locked guarantee.
 - log2 #S_s = 0 only once the schedule's digest binds each connection's admission bucket and lane, and the server
   can't move an admission. Neither holds today.
 - The scan proves link-window 0. A period's figures scale its per-link-window and per-request terms at the run's rate.
