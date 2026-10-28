@@ -9,7 +9,7 @@ segment     a device reader's part of a pass: count = 16 · 2^h chunks of one re
 salts       the store's PRF, SHAKE256(D(store salt) ‖ key ‖ seed ‖ u64be leaf) (`Store.salt`), so none is kept
 ~~~
 
-sketch-sha512 receipts (`sketch_receipt.py`) run at k_s = 16 rows (dp4a) and at k_s = 64, a chunk's 2^−64 (int8 tensor
+sketch-sha512 receipts (`receipts.SketchReceipter`) run at k_s = 16 rows (dp4a) and at k_s = 64, a chunk's 2^−64 (int8 tensor
 cores, `pack64`'s signs): σ then hash as two kernels, or both in one (`rb_sketch64_receipts`), σ never leaving the SM.
 
     python reader.py --lib reader.so --out OUT [--gate-blocks 4096] [--gib 8]
@@ -30,6 +30,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))
 
+from benchmarks.word_codec import cuda_lib  # noqa: E402  (after the root's path entry, which it needs)
 from verity.core.protocols.remote_bandwidth import receipts as rb
 from verity.ml.commitments import merkle_depth
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -45,6 +46,26 @@ LOADS = ("ldg", "l2_256", "prefetch", "warp", "hot", "none")
 EXACT = LOADS[:4]
 SEGMENTS = (2, 4, 16)
 ROWS64, MTS = 64, (1, 2, 4)   # rb_sketch64's rows and its m-tiles a warp
+_v, _u64, _i, _b = ctypes.c_void_p, ctypes.c_uint64, ctypes.c_int, ctypes.c_char_p
+ABI = {   # reader.cu's functions (`cuda_lib.load`), which session.cu includes
+    "rb_set": [_b, _b, _b, _b, _b, _b, _b, _b, _i, _b, _i, _u64, _v],
+    "rb_receipts": [_v, _v, _u64, _u64, _v, _i, _v],
+    "rb_leaves": [_v, _u64, _u64, _v, _v, _v],
+    "rb_pads": [_u64, _u64, _v, _v],
+    "rb_level": [_v, _v, _i, _u64, _u64, _v],
+    "rb_tree": [_v, _u64, _u64, _v, _v],
+    "rb_read": [_v, _u64, _v, _i, _v],
+    "rb_sketch_set": [_b, _v],
+    "rb_sketch": [_v, _v, _u64, _v, _v, _i, _v],
+    "rb_sketch_hash": [_v, _u64, _u64, _v, _v],
+    "rb_sketch64": [_v, _v, _u64, _v, _v, _i, _i, _v],
+    "rb_sketch64_hash": [_v, _u64, _u64, _v, _v],
+    "rb_sketch64_receipts": [_v, _v, _u64, _u64, _v, _v, _v, _i, _v],
+    "rb_chain_set": [_b, _i, _b, _b, _b, _b, _b, _b, _i, _i, _b, _i, _i, _b, _i, _b, _i, _i, _u64, _v],
+    "rb_chain": [_v, _v],
+    "rb_consts": [_v, _u64],
+    "rb_consts_bytes": ([], _u64),
+}
 
 
 def pack64(bits: np.ndarray) -> np.ndarray:
@@ -90,26 +111,7 @@ class Reader:
     """One GPU's reader of the driver's receipt tree: `begin` a pass, receipt and commit its `segment`s, `open` them."""
 
     def __init__(self, path: str, torch, load: str = "warp") -> None:
-        self.torch, self.so, self.load = torch, ctypes.CDLL(path), load
-        v, u64, i = ctypes.c_void_p, ctypes.c_uint64, ctypes.c_int
-        b = ctypes.c_char_p
-        self.so.rb_set.argtypes = [b, b, b, b, b, b, b, b, i, b, i, u64, v]
-        self.so.rb_receipts.argtypes = [v, v, u64, u64, v, i, v]
-        self.so.rb_leaves.argtypes = [v, u64, u64, v, v, v]
-        self.so.rb_pads.argtypes = [u64, u64, v, v]
-        self.so.rb_level.argtypes = [v, v, i, u64, u64, v]
-        self.so.rb_tree.argtypes = [v, u64, u64, v, v]
-        self.so.rb_read.argtypes = [v, u64, v, i, v]
-        self.so.rb_sketch_set.argtypes = [b, v]
-        self.so.rb_sketch.argtypes = [v, v, u64, v, v, i, v]
-        self.so.rb_sketch_hash.argtypes = [v, u64, u64, v, v]
-        self.so.rb_sketch64.argtypes = [v, v, u64, v, v, i, i, v]
-        self.so.rb_sketch64_hash.argtypes = [v, u64, u64, v, v]
-        self.so.rb_sketch64_receipts.argtypes = [v, v, u64, u64, v, v, v, i, v]
-        self.so.rb_chain_set.argtypes = [b, i, b, b, b, b, b, b, i, i, b, i, i, b, i, b, i, i, u64, v]
-        self.so.rb_chain.argtypes = [v, v]
-        self.so.rb_consts.argtypes = [v, u64]
-        self.so.rb_consts_bytes.restype = u64
+        self.torch, self.so, self.load = torch, cuda_lib.load(path, ABI), load
         self.kept: dict[int, tuple[int, object, list]] = {}
 
     def call(self, fn: str, *args) -> None:
@@ -165,7 +167,7 @@ class Reader:
         midstate."""
         self.signs = self.torch.from_numpy(skr.signs(seed)).cuda()
         self.signs64 = self.torch.from_numpy(pack64(skr.sign_bits(seed, ROWS64)).view(np.int32)).cuda()
-        self.call("rb_sketch_set", skr.prefix(seed))
+        self.call("rb_sketch_set", rb.sketch_prefix(seed))
 
     def sketches64(self, data, n: int, sk, zs=None, mt: int = 2, ctas: int = 0) -> None:
         """σ at 64 rows of n chunks at `data` into sk (n x 64 int32), mt m-tiles a warp."""
@@ -347,7 +349,7 @@ def chain_gate(reader: Reader, torch, rng: np.random.Generator) -> dict:
 
 
 def sketch_gate(reader: Reader, torch, blocks: int, rng: np.random.Generator, rows: int = skr.ROWS) -> dict:
-    """sketch-sha512 at k_s = rows byte for byte against `sketch_receipt.SketchReceipter`, on every device path (16
+    """sketch-sha512 at k_s = rows byte for byte against `receipts.SketchReceipter`, on every device path (16
     rows: dp4a; 64: rb_sketch64 at each m-tile count then the hash, and the one kernel): a partial plan out of store
     order, every receipt bound to a z of its own length and to z's of zero bytes, their sketches, the device's leaves
     and root against `rb.tree` over the reference's receipts, and openings through the device's tree by
@@ -371,10 +373,10 @@ def sketch_gate(reader: Reader, torch, blocks: int, rng: np.random.Generator, ro
                  "one_kernel": reader.sketch64_receipts}
     else:
         raise ValueError(f"the device sketches 16 or 64 rows, not {rows}")
-    receipter = skr.SketchReceipter(seed, rows)
+    receipter = rb.SketchReceipter(seed, rows)
     blk = [host[j * BLOCK:(j + 1) * BLOCK].tobytes() for j in order]
-    ref_sk = [skr.sketch(receipter.signs, b, z) for b, z in zip(blk, zs)]
-    ref_ys = [skr.receipt_of(receipter.head, j, s) for j, s in zip(order, ref_sk)]
+    ref_sk = [receipter.sketch(b, z) for b, z in zip(blk, zs)]
+    ref_ys = [receipter.receipt(j, s) for j, s in zip(order, ref_sk)]
     ref_plain = [receipter(j, b, bytes(BLOCK)) for j, b in zip(order, blk)]
     by_path = {}
     for name, fn in paths.items():
@@ -401,7 +403,7 @@ def sketch_gate(reader: Reader, torch, blocks: int, rng: np.random.Generator, ro
         path = tuple(digest(levels[h][(c >> h) ^ 1]) for h in range(len(levels) - 1))
         opened.append(rb.verify_leaf(seed, plan, root, p, leaf, sl[c * rb.SALT_BYTES:(c + 1) * rb.SALT_BYTES], path))
     out = {
-        "kind": skr.KIND, "rows": rows, "positions": plan.length, "leaves": reader.leaves, "by_path": by_path,
+        "kind": rb.SKETCH_SHA512, "rows": rows, "positions": plan.length, "leaves": reader.leaves, "by_path": by_path,
         "sketches": all(v["sketches"] for v in by_path.values()),
         "receipts": all(v["receipts"] for v in by_path.values()) and got == ref_ys,
         "receipts_plain": all(v["receipts_plain"] for v in by_path.values()),
@@ -514,7 +516,7 @@ def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
     commit, read = ms["leaves"] + ms["tree"], ms["read"]
     sketch_z = ms["sketch_z_half"] * n / half
     sketch = {
-        "kind": skr.KIND, "sketch_gb_s": nbytes / ms["sketch"] / 1e6, "sketch_z_gb_s": nbytes / sketch_z / 1e6,
+        "kind": rb.SKETCH_SHA512, "sketch_gb_s": nbytes / ms["sketch"] / 1e6, "sketch_z_gb_s": nbytes / sketch_z / 1e6,
         "tau_per_pass": (ms["sketch"] + ms["sketch_hash"] + commit) / read,
         "tau_z_per_pass": (sketch_z + ms["sketch_hash"] + commit) / read,
         "tau_sketch": ms["sketch"] / read, "tau_sketch_z": sketch_z / read, "tau_hash": ms["sketch_hash"] / read,
@@ -530,7 +532,7 @@ def measure(reader: Reader, torch, gib: float, reps: int) -> dict:
     s64, s64_z = ms[f"sketch64/{mt64}"], ms[f"sketch64_z_half/{mt64_z}"] * n / half
     one, one_z = ms["sketch64_one_kernel"], ms["sketch64_one_kernel_z_half"] * n / half
     sketch64 = {
-        "kind": skr.KIND, "rows": ROWS64, "best_mt": mt64, "best_mt_z": mt64_z,
+        "kind": rb.SKETCH_SHA512, "rows": ROWS64, "best_mt": mt64, "best_mt_z": mt64_z,
         "sketch_gb_s": {mt: nbytes / ms[f"sketch64/{mt}"] / 1e6 for mt in MTS},
         "sketch_z_gb_s": {mt: nbytes / (ms[f"sketch64_z_half/{mt}"] * n / half) / 1e6 for mt in MTS},
         "tau_sketch": s64 / read, "tau_sketch_z": s64_z / read, "tau_hash": ms["sketch64_hash"] / read,

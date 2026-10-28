@@ -17,12 +17,12 @@
 #include <cstring>
 #include <cuda_runtime.h>
 
+#include "sha512.cuh"
+
 namespace rb {
 
 using u32 = uint32_t;
 using u64 = uint64_t;
-
-#include "sha512.cuh"
 
 constexpr int BLOCK = 4096, PER_LEAF = 16, SALT = 192, KEY_WORDS = 64;
 constexpr int HEAD_LEAF = 0, HEAD_NODE = 1, HEAD_PAD = 2;
@@ -183,7 +183,7 @@ void launch_receipts(int mode, const uint4 *data, const uint4 *zs, u64 j0, u64 n
   }
 }
 
-// --- sketch-sha512 receipts (`sketch_receipt.py`) ----------------------------------------------------------------
+// --- sketch-sha512 receipts (`receipts.SketchReceipter`) ---------------------------------------------------------
 //
 // sketch_kernel: a CTA of 256 threads a block at a time, SK_BATCH blocks a step, thread t holding bytes 16 t … 16 t + 15
 // of each and their 16 rows of signs (int8 ±1, 64 registers, loaded once); 64 dp4a a block, then the warp's 16 sums
@@ -547,7 +547,7 @@ __device__ __forceinline__ void sha512_finish(Msg<W> &m, u64 (&s)[8], int done) 
 template <int W>
 __device__ __forceinline__ void sha512_msg(Msg<W> &m, u64 (&s)[8]) {
 #pragma unroll
-  for (int i = 0; i < 8; ++i) s[i] = kSha512Iv[i];
+  for (int i = 0; i < 8; ++i) s[i] = sx::IV_DEV[i];
   sha512_finish(m, s, 0);
 }
 
@@ -703,7 +703,7 @@ __global__ void __launch_bounds__(128) leaves_kernel(const u64 *__restrict__ ys,
   u64 d[8];
   int done = 0;
 #pragma unroll
-  for (int i = 0; i < 8; ++i) d[i] = kSha512Iv[i];
+  for (int i = 0; i < 8; ++i) d[i] = sx::IV_DEV[i];
   put_head(msg, HEAD_LEAF);
   put_uint(msg, c);
   put_uint(msg, c);
@@ -818,7 +818,7 @@ __device__ void sha512_bytes(uint8_t *m, int n, u64 (&s)[8], uint8_t *out) {
     for (int k = 0; k < 8; ++k) m[128 * nb - 1 - k] = (uint8_t)((u64)n * 8 >> (8 * k));
   }
 #pragma unroll
-  for (int i = 0; i < 8; ++i) s[i] = kSha512Iv[i];
+  for (int i = 0; i < 8; ++i) s[i] = sx::IV_DEV[i];
   for (int b = 0; b < nb; ++b) {
     u64 w[16];
     be_load(m + 128 * b, w);
@@ -872,7 +872,7 @@ __global__ void __launch_bounds__(NODE_LEVELS) chain_kernel(const uint8_t *__res
   w[(NODE_HEAD + 7) / 8] |= 1ull << 8 * (7 - (NODE_HEAD + 7) % 8);
   w[(NODE_HEAD + 8) / 8] |= (u64)threadIdx.x << 8 * (7 - (NODE_HEAD + 8) % 8);
 #pragma unroll
-  for (int i = 0; i < 8; ++i) s[i] = kSha512Iv[i];
+  for (int i = 0; i < 8; ++i) s[i] = sx::IV_DEV[i];
   sha512_compress(s, w);
 #pragma unroll
   for (int i = 0; i < 8; ++i) sc.node_mid[threadIdx.x][i] = s[i];
@@ -887,7 +887,7 @@ void midstate(const uint8_t *block, u64 *out) {
     for (int b = 0; b < 8; ++b) v = (v << 8) | block[8 * i + b];
     w[i] = v;
   }
-  for (int i = 0; i < 8; ++i) out[i] = SHA512_IV_HOST[i];
+  sx::iv(out);
   sha512_compress(out, w);
 }
 
