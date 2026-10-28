@@ -71,6 +71,8 @@ theorem NoFaultOfAccepted : NetTiming.Guarantees.NoFaultOfAccepted := @NetTiming
 
 theorem RecordedRowEqFill : NetTiming.Guarantees.RecordedRowEqFill := @NetTiming.recorded_row_eq_fill
 theorem EncardAccSeqsLeAdvice : NetTiming.Guarantees.EncardAccSeqsLeAdvice := @NetTiming.encard_accSeqs_le_advice
+theorem EncardAccSeqsLeAdviceBits : NetTiming.Guarantees.EncardAccSeqsLeAdviceBits :=
+  @NetTiming.encard_accSeqs_le_adviceBits
 theorem EncardAccSeqsLeConstantRate : NetTiming.Guarantees.EncardAccSeqsLeConstantRate :=
   fun T g E k frames op n D _ => NetTiming.encard_accSeqs_le_constantRate_bits T g E k frames op n D
 theorem ExpectedRowCausal : NetTiming.Guarantees.ExpectedRowCausal :=

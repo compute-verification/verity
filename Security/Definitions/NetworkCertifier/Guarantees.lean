@@ -55,6 +55,18 @@ def EncardFifoGrids : Prop :=
   ∀ {F : Type} (T S : ℕ) (f : ℕ → F),
     (Set.range fun enq : ℕ → ℕ => fifoGrid T S f enq).encard = ((S + 1) ^ T : ℕ)
 
+/-! ## Theorem 3: the advice caps -/
+
+/-- **Theorem 3, the fixed advice budget.** This is the `2^A` cap with the advice type `Fin E → Fin k → Bool`: one
+string of exactly `k` bits for each of `E` execution blocks, padded to that length whatever is used. The accepted
+observation sequences of length `n` with jitter below `D` number at most `2^(E·k) · D^n`, that is `k` bits per
+execution block plus jitter. Every advice value has the same length, so the charge is `k` whatever an honest session
+used, and nothing used is counted: no cap per sampling block, no Kraft inequality and no `BitsCount`. -/
+def EncardAccSeqsLeAdviceBits : Prop :=
+  ∀ {L K S : ℕ} {In : Type} (E k : ℕ) (P : Program L S In (Fin E → Fin k → Bool))
+    (op : ℕ → List (Obs L K S) → In) (n D : ℕ),
+    (AccSeqs P op n D).encard ≤ ((2 ^ (E * k) * D ^ n : ℕ) : ℕ∞)
+
 /-! ## Theorem 3 for the shipped schedule: the constant-rate Program
 
 `constantRate T g E frames` (`Definitions.NetworkCertifier.Schedule`) is the Program of one link's monitoring period:
