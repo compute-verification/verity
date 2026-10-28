@@ -13,7 +13,7 @@ page 16, num_splits 1, softmax scale D^-0.5, causal as vLLM passes it):
   (d) it fails closed: a declaration that is not the launched kernel's (wrong kBlockN, wrong head_dim; FA2: the swapped geometry on an
       un-swapped windowed decode; FA3: an M cap below the packed rows) is skipped (counter + 1), writes nothing, and the output still
       equals the installed kernel's;
-  (e) a guarded-max build (`verity_tap_row3() == 1`, `query.guarded_max`) against a record of the default build (`baseline`): every stream
+  (e) a guarded-max build (`verity_tap_row3() == 1`, `hidden_source.TAP_ROW3`) against a record of the default build (`baseline`): every stream
       word of the six classes but ROW word 3 equals the default build's (`masked_digest`), and word 3 is the circuit's `GuardNegInfZero_v1` of
       the entry's row_max at every key block after a row's first (the guard's unit reads that committed word) and 0 at the first
       (`check_row3`; the reference evaluator on a sample, special values included, and its vectorised twin on every word);
