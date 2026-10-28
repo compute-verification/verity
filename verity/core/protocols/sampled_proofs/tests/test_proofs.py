@@ -1,7 +1,8 @@
 """The proof system's own run of C-Flock's Lean verifier (`one_stage.proofs`), on a pinned `--zk --registered`
-session: a RoPE d64 statement of 32 proof blocks, each reading its `cs` row from a registered served tree, proved by C-Flock in
-one loopback session under a subset draw of 16 (`verity/ml/flock/pod/89-served-registered.sh`'s row/v1 fixture). The
-verifier's own program, partition and `--registered` file are the fixture's `stage/`, the ones
+session: a RoPE d64 statement of 32 proof blocks, each reading its `cs` row from a registered served tree, its `x` row and
+output row registered too, proved by C-Flock in one loopback session under a subset draw of 16
+(`verity/ml/flock/pod/89-served-registered.sh`'s row/v1 fixture). The verifier's own program, partition and `--registered`
+file are the fixture's `stage/`, the ones
 `verity/ml/flock/tests/test_lean_served_registered.py` holds to `register_served`.
 
 Each verify sets up an m = 25 table (about 10 s), so the fixture's tests are slow. They are the one test that a protocol's

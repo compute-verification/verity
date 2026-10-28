@@ -1,4 +1,4 @@
-# The resource-accounting benchmarks: the matmul chain under the joint protocol. Not a package: chain.py runs on node 2 under a
+# The resource-accounting benchmarks: the matmul chain under the protocols. Not a package: chain.py runs on node 2 under a
 # GPU lease (torch, Pearl-C's device path); its plan, the certified columns and the renderer run here as a suite
 # (`uv run tools/verity/check/suites.py benchmarks/resource_accounting`).
 [tool.pytest.ini_options]
@@ -8,13 +8,11 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # certified.py looks γ up from the PoUW harness's price twins (price_twins.py, loaded by path, and its table) and prices the
 # credited cells with verity.core.protocols.pouw and its work law (benchmarks/pouw/clear, on sys.path), reads |C| from
-# verity.core.protocols.pous's registered schemes and S_chip from the bandwidth harness's summarize.py (loaded by path); joint.py runs the bandwidth audit's windows
-# (verity.core.protocols.bandwidth) through the bandwidth harness's prover (gpu.py, which imports reference.py beside it);
-# the rest of `verity` listed is what those packages import.
+# verity.core.protocols.pous's registered schemes; the rest of `verity` listed is what those packages import.
 inputs = ["benchmarks/pouw/harness/price_twins.py", "benchmarks/pouw/harness/price_twins.json", "benchmarks/pouw/clear",
-          "benchmarks/bandwidth/summarize.py", "benchmarks/bandwidth/gpu.py", "benchmarks/bandwidth/reference.py",
+          "verity/core/protocols/record.py",
           "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
-          "verity/core/protocols/profile.py", "verity/core/protocols/bandwidth", "verity/core/protocols/pouw",
+          "verity/core/protocols/profile.py", "verity/core/protocols/pouw",
           "verity/core/protocols/pous", "verity/core/claims",
           "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/sampled_proofs/challenger.py",
           "verity/ml/__init__.py", "verity/ml/circuits",

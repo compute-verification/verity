@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
-# The KV filler's benchmark on one GPU (cwd = the source tree): builds the top-up (topup.cu, which includes the
-# bandwidth audit's tagger) and the KV codec at p512 (../word_codec/kv.cu) outside the lease, runs the tests, then
+# The KV filler's benchmark on one GPU (cwd = the source tree): builds the top-up (topup.cu, which includes
+# ../bandwidth/tagger.cu) and the KV codec at p512 (../word_codec/kv.cu) outside the lease, runs the tests, then
 # SCRIPT (default bench.py) under one gpu-lease 1 --wait --max-min MAXMIN (default 25) with ARGS. Results go to
 # $RESEARCH_RUN_DIR/out.
 #
-#   research run --on vy-nebius-2 --project verity --source . --cwd source --mem-gb 48 \
-#     --campaign resource-accounting --declared-output 'out/*' --env GPU_LEASE_WHO=ra-kv-filler \
-#     -- taskset -c 48-95 bash benchmarks/kv_filler/run.sh
+#   RESEARCH_RUN_DIR=DIR GPU_LEASE_WHO=ra-kv-filler taskset -c 48-95 bash benchmarks/kv_filler/run.sh
 #
 # ENV_DIR holds the shared torch venv (benchmarks/pous/pod.sh's WORK). SCRIPT=serve.py and SCRIPT=step_profile.py run
 # in the e2e's vLLM venv (WORK, default /workspace/pouw/mvp-e2e); serve.py once for each pool sizing of POOLS (default
@@ -56,7 +54,7 @@ sha256sum $KF/topup.cu $KF/fill.cu $KF/readers.cu benchmarks/bandwidth/tagger.cu
 if [ -d $KF/tests ] && "$PY" -c 'import pytest' 2> /dev/null; then
   "$PY" -m pytest -q -p no:cacheprovider $KF/tests > "$O/tests.log" 2>&1 || { tail -30 "$O/tests.log"; exit 5; }
 fi
-# Under `research run --queue --gpus 1` the queue leases the GPU around the whole job: QUEUED=1 skips gpu-lease.
+# Under a queue that leases the GPU around the whole job, QUEUED=1 skips gpu-lease.
 LEASE=(gpu-lease 1 --wait ${GPU:+--on "$GPU"} --max-min "${MAXMIN:-25}" --)
 [ "${QUEUED:-0}" = 1 ] && LEASE=()
 if [ "$SCRIPT" = serve.py ]; then

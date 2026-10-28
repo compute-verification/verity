@@ -1,11 +1,11 @@
 /-!
 # A drawn H1 leaf's 33 statements, port by port (option A)
 
-Under option A (PRF-134) a drawn leaf is proved as its lanes, `h1zy`'s `PouwH1LaneZy_v1{TILE}` (lane `l` by its public
+Under option A a drawn leaf is proved as its lanes, `h1zy`'s `PouwH1LaneZy_v1{TILE}` (lane `l` by its public
 index), and their combine `PouwH1Combine_v1{TILE}`, each a C-Flock statement of one unit. This states, for a leaf's tile
 and contraction (`Tile`), which port of each statement holds each of the Definition's inputs and its output, at which bits
 of the port's row (`Field`), and where the verifier opens that row (`Source`): the port of `h1zy.statement_ports`, with
-each port's row as #3116's `pouw.leaf_lanes` reads it (`reads`, `known`). `tests/test_lanes.py` holds it to the first and
+each port's row as `pouw.leaf_lanes` reads it (`reads`, `known`). `tests/test_lanes.py` holds it to the first and
 to `h1tile.Layout`'s rows and columns, at the served 32 × 32 leaf at K = 448, 4096 and 14336 and at the sidecar's 8 × 16
 leaf at K = 64.
 
@@ -18,7 +18,7 @@ leaf at K = 64.
   * the leaf's record (`h1zy.RECORD`): `zy.z`, cell `u = i C + j`'s s32 at bits `[32u, 32u + 32)` of it, then `zy.y`,
     its bf16 at `[16u, 16u + 16)` of it;
   * a partial (`partials`, the combine's `partials[x]`) or the receipt: `Tile.nw` u32 words, word `w` at bits
-    `[32w, 32w + 32)` (16-bit words `2w` and `2w + 1`), in #3095's set order (`leaf_lanes.word_order`);
+    `[32w, 32w + 32)` (16-bit words `2w` and `2w + 1`), in the kernels' set order (`leaf_lanes.word_order`);
   * `admit`: the leaf's `R` admit bits, row `i`'s at bit `i`;
   * `salt`, `position` and `roots` (`seeds.types`): a digest's 16 and a position's 2 big-endian u32 halves, then `roots`'
     two digests, each half least significant bit first (`seeds.leaves`);

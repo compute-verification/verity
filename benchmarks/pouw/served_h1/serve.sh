@@ -24,7 +24,7 @@ ROOT=$PWD
 git rev-parse HEAD | tee "$OUT/tree.txt"
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 . "$ROOT/benchmarks/pouw/served_h1/arch.sh"
-"$CUDA/bin/nvcc" -O3 -std=c++17 -gencode "$GENCODE" -I benchmarks/codec_tensor -cubin \
+"$CUDA/bin/nvcc" -O3 -std=c++17 -gencode "$GENCODE" -cubin \
   -o "$S/noise.cubin" benchmarks/pouw/served_h1/noise.cu > "$OUT/nvcc.txt" 2>&1 \
   || { echo "served-h1: NVCC_FAIL"; tail -20 "$OUT/nvcc.txt"; exit 11; }
 # the challenger's coins are the Lean verifier of record's (pouw.verifier.coins): built before the lease, not inside it
