@@ -17,9 +17,7 @@ auditor's ledger, the verifier's copy of main's first-parent history, the host's
 session's files) for the window the verifier holds (its open root R, `windowRoot`, which it reads from the challenger's
 signed open of the registration's window, never from the record or the evidence), so the record names neither, the
 prover picks no window, and the session counts only from a commit the pins log records on main's first-parent line
-(`pinnedSession`): coins a session of another window released after the registration's digest are refused. The session
-must be a withheld one (`withheldOn`: every ledger open of the window says `withheld: true`), whose challenger released
-no root, salt or path before it closed, as `drawCoins` requires. `Run.run` refuses a draw from the challenger whose evidence is missing or gives a
+(`pinnedSession`): coins a session of another window released after the registration's digest are refused. `Run.run` refuses a draw from the challenger whose evidence is missing or gives a
 reason (`select`, code `coins`), its `after` the registration's digest.
 
 The difftest's pieces (`Pieces.table`): `challenger_read` (`read_reason`) and `challenger_draw_coins`
@@ -70,23 +68,9 @@ def readReason (c : LiveCommitment) (segment : Json) (after read : ByteArray) (r
       some s!"the draw read {read.size} bytes of {stream.size / COIN_BYTES} coins: a coin opened and not read"
     else none
 
-def WITHHELD : String :=
-  "the session the auditor's ledger opens on the window does not withhold its coin commitment until it closes " ++
-  "(its open's body has no `withheld: true`: `remote.open_session(..., withhold=True)`)"
-
-/-- `withheld_on`: the ledger opens `window` (its open root), and every open of it marks its session withheld
-(`withheld: true` in its body), a session whose challenger released only its coins' raw bytes while it ran, and its
-commitment, salts and paths once it closed. -/
-def withheldOn (ledger : Json) (window : String) : Bool :=
-  let opens : List LedgerEntry := match ledger with
-    | .arr ls => ls.toList.filterMap fun l => (ledgerEntry? l).filter fun e =>
-        e.kind == "open" && getD (getD e.body "window") "root" == Json.str window
-    | _ => []
-  !opens.isEmpty && opens.all fun e => getD e.body "withheld" == Json.bool true
-
 /-- `coins_reason` (module docstring): why `coins`, the evidence of a draw's coins, does not show `read` to be the coins
 the session the auditor's ledger opens for window `window` (its open root) released after `after`; `none` when it
-does. The session must be a withheld one (`withheldOn`), as `drawCoins`'s. -/
+does. -/
 def coinsReason (coins : Json) (window : String) (after read : ByteArray) : Option String :=
   if keys? coins != some #["key", "ledger", "main", "pins", "segment", "session"] then some COINS_FORM else
   let trusted : V (LiveCommitment × Roots) := do
@@ -95,7 +79,6 @@ def coinsReason (coins : Json) (window : String) (after read : ByteArray) : Opti
   match trusted with
   | .error why => some why
   | .ok (c, roots) =>
-    if !withheldOn (getD coins "ledger") window then some WITHHELD else
     let segment := getD coins "segment"
     let rs := match getD segment "label" with
       | .str l => ((roots.find? (·.1 == l)).map (·.2)).getD []

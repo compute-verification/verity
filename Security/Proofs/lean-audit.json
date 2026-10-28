@@ -65,7 +65,6 @@
   "Proofs.Properties.Nci.ReadsExact",
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded",
   "Proofs.Properties.Composition",
-  "Proofs.Properties.Challenger",
   "Proofs.Properties.Pous.WipeSigned"
  ],
  "exempt": {

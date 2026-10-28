@@ -485,8 +485,7 @@ is mandatory: `Stream.outcome(coins=...)` hands the evidence (`coins_reason`'s `
 session}`), and the run takes the commitment and the roots from the session the auditor's ledger opens for the
 registration's window (`register`'s `window_root`, never a window the evidence names), run from a commit the host's
 pins log records on the verifier's copy of main's first-parent line (`pinned_session`), and refuses the select step (code `coins`) unless the
-session is a withheld one (`withheld_on`: the ledger's open says `withheld: true`, so its challenger released no root,
-salt or path before it closed) and the bytes the draw read are those coins, after the registration's digest. Missing evidence and a registration without its
+bytes the draw read are those coins, after the registration's digest. Missing evidence and a registration without its
 window root are refused the same way, as is evidence for a draw from the verifier's own coins: the outcome is a reject
 failing `run`. Pinned by `tests/test_challenger_coins.py` and the difftest's `challenger_read`,
 `challenger_draw_coins` and `run`.

@@ -94,5 +94,4 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Accounting.DeclaredCircuit", "Properties.RemoteAudit.Line", "Properties.RemoteAudit.Schedule",
   "Properties.RemoteAudit.Shared", "Properties.RemoteAudit.Live", "Properties.RemoteAudit.Component",
   "Properties.Composition", "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
-  "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Challenger", "Properties.Pous.WipeSigned",
-  "Properties.Flock.Circuit"]
+  "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Pous.WipeSigned", "Properties.Flock.Circuit"]

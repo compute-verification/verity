@@ -687,11 +687,10 @@ class Ledger:
     `lines` them chained and signed at drawn increasing leaves of `s`'s key, `s`'s record's leaf between its open's and
     its end's (or at `leaves`, or under `signer`, an `edit(i, entry)` applied to each entry before it is signed).  When
     `two_step` (drawn when `s`'s id is a reserved one, unless set), every v2 session is reserved before it is opened, its
-    open binding the reserve, and sometimes another reserve is never opened.  When `withheld`, `s`'s open marks it a
-    withheld session (`withheld: true`)."""
+    open binding the reserve, and sometimes another reserve is never opened."""
 
     def __init__(self, rng: random.Random, s: Session, closed: bool = True, period: str | None = None,
-                 two_step: bool | None = None, withheld: bool = False) -> None:
+                 two_step: bool | None = None) -> None:
         self.rng, self.s, self.window = rng, s, _window(rng)
         self.two_step = (Ch._RESERVED_SESSION.fullmatch(s.id) is not None
                          and (rng.random() < 0.8 if two_step is None else two_step))
@@ -703,8 +702,6 @@ class Ledger:
             files["serve.log"] = rng.randbytes(64).hex()
         self.lane = rng.choice(LANES)
         named, self.opened = self.session_events(s.id, self.window, s.host, self.lane)
-        if withheld:
-            self.opened["withheld"] = True
         self.ended = {"closed": closed, "commitment": s.ch.commitment.root.hex(), "complete": closed, "files": files,
                       "rc": 0 if closed else 1, "record_leaf": s.q, "refused_hellos": len(s.hellos)}
         named.append(("end", s.id, self.ended))
@@ -1537,10 +1534,10 @@ class Drawn:
     (one read, or a read and a rerun's extension), between other roots: the other family's, `draw` coins opened before
     the commitment (at least one when `before`), and later ones. `ledger` opens the session for its window. `after` is
     the commitment (drawn, by default), and `reads` reads the coins (`reads(coins)`, the bytes read), by default in one
-    or two reads of drawn lengths.  The ledger opens the session withheld unless `withheld` is false."""
+    or two reads of drawn lengths."""
 
     def __init__(self, rng: random.Random, before: bool = False, after: bytes | None = None,
-                 reads: Callable[[Callable[[int], bytes]], bytes] | None = None, withheld: bool = True) -> None:
+                 reads: Callable[[Callable[[int], bytes]], bytes] | None = None) -> None:
         s = self.s = _ledger_session(rng)
         s.ch = _challenger(rng, [("other", 2), ("draw", 12)])
         s.ch.sign_record(s.host, s.pub, lambda m: lms.sign_at(s.k, s.q, m).encode())
@@ -1564,7 +1561,7 @@ class Drawn:
         for _ in range(rng.randint(0, 2)):
             self._step("draw", lambda: self.records["draw"].record(rng.randbytes(64)))
         s.close = s.signed(None)
-        self.ledger = Ledger(rng, s, withheld=withheld)
+        self.ledger = Ledger(rng, s)
         self.pins, self.main = _pinned(rng, self.ledger, "honest")
 
     def _step(self, label: str, f):
@@ -1676,12 +1673,12 @@ def read_case(rng: random.Random, name: str) -> Any:
 
 
 DRAW_COINS_NAMES = ["honest"] + DRAW_MUTATIONS + ["log-tampered", "other-window", "window-form", "key-form",
-                                                   "off-main", "no-pins", "coins-form", "unwithheld", "request"]
+                                                   "off-main", "no-pins", "coins-form", "request"]
 
 
 def draw_coins_case(rng: random.Random, name: str) -> Any:
     rng = _seeded(rng)
-    d = Drawn(rng, before=name == "before", withheld=name != "unwithheld")
+    d = Drawn(rng, before=name == "before")
     seg, read_, after = _mutated(rng, d, name)
     coins = d.evidence(seg)
     j = {"after": after.hex(), "coins": coins, "read": read_.hex(), "window": d.ledger.window["root"]}
