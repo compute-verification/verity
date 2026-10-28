@@ -1103,8 +1103,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         # diagnostics: dump every thread's Python stack to stderr every N seconds (hang isolation on pods without ptrace)
         import faulthandler
         faulthandler.dump_traceback_later(tracedump, repeat=True)
-    # source identity precheck BEFORE anything else runs: verity.ml.circuits, verity_vllm, vllm-poc
-    # (and the telemetry package) must all resolve from THIS tree (the one commit_delta.py lives in; $VERITY_TREE must agree).
+    # source identity precheck BEFORE anything else runs: verity.ml.circuits, verity_vllm, vllm-poc,
+    # hidden_gpu (and the telemetry package) must all resolve from THIS tree (the one commit_delta.py lives in; $VERITY_TREE must agree).
     # A mismatch exits 3 with PRECHECK_FAIL_SOURCE_IDENTITY on stderr -- no engine, no inference; the record is written beside the out dir.
     from verity_vllm.pipeline import source_identity as _sid
 
@@ -1116,6 +1116,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
         raise SystemExit(3) from None
     print(f"[delta] source identity OK: " + " ".join(f"{k}={(v.get('git_sha') or '-')[:9]}" for k, v in source_identity_doc["packages"].items())
           + f" tree={source_identity_doc['requested_root']}", flush=True)
+    if _sid_out is not None:   # native_host._gpu_ext_load writes its import-site document beside this one
+        settings.put("VERITY_SOURCE_IDENTITY_DIR", str(Path(args.out)))
     settings.put("VERITY_WEIGHTS_HASH", args.weights_hash)       # read by native_host.register_weights (this process and the forked replay)
     if _HOT is not None:
         _unsafe = hot_unsafe_reasons(args)

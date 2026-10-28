@@ -85,14 +85,14 @@ def test_an_explicit_retain_levels_wins(monkeypatch):
 
 @pytest.mark.parametrize("argv,want", [
     ([], ("none", 256, 8, True, True)),
-    (["--committer", "native_host", "--commit-scheme", "vllm-v1"], ("none", 0, None, False, True)),
+    (["--committer", "hooks_only"], ("none", 0, None, False, True)),
     (["--committer", "native_collect_v2b", "--retain", "host"], ("host", 256, 8, True, True)),
     (["--committer", "native_collect_v2b", "--retain", "device", "--no-open-after-release"], ("device", 0, None, False, False)),
     (["--committer", "native_collect_v2b", "--window-mb", "0"], ("none", 0, None, False, True)),
     (["--committer", "native_collect_v2b", "--no-bounded-staging"], ("none", 256, 8, False, True)),
     (["--committer", "native_collect_v2b", "--window-mb", "16", "--window-slots", "3", "--bounded-staging"], ("none", 16, 3, True, True)),
-    (["--arms", "native_collect_v2b,native_collect"], ("none", 0, None, False, True)),
-], ids=["v2b", "native_host", "v2b-host", "v2b-device", "window-off", "bounded-off", "explicit", "mixed-arms"])
+    (["--arms", "native_collect_v2b,hooks_only"], ("none", 0, None, False, True)),
+], ids=["v2b", "hooks-only", "v2b-host", "v2b-device", "window-off", "bounded-off", "explicit", "mixed-arms"])
 def test_the_commit_resolves_the_collector_s_defaults(argv, want):
     from verity_vllm.pipeline import commit as cd
 

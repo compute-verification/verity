@@ -140,7 +140,7 @@ def test_it_commits_under_serve_openais_rows_sha512_committer_and_needs_the_rows
         CA.preflight(parse("--required-manifest", str(man)), which=lambda _: None)
     CA.preflight(parse("--required-manifest", str(man)), which=lambda _: "/v/bin/ninja")
     opts = CA.committer_opts(parse("--required-manifest", str(man), "--hidden-so", "h.so", "--norm-tap-so", "n.so"))
-    assert (opts.scheme, opts.of_record, opts.commit, opts.seal, opts.gpu_tree) == (SS.ROWS, None, True, False, True)
+    assert (opts.scheme, opts.commit, opts.seal) == (SS.ROWS, True, False)
     assert SS.scheme_refusal(opts) is None
     args = SS.committer_args(opts)
     assert (args.commit_scheme, args.required_manifest, args.hidden_so, args.tap_sources.norm_tap_so) == (SS.ROWS, str(man), "h.so", "n.so")

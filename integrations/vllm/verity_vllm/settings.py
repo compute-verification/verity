@@ -182,6 +182,7 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_DUMP_STEP", str, None, DEBUG, "the Commit dumps this step's values"),
     S("VERITY_HOT_RESTART_REASON", str, None, WHERE, "why the hot worker restarted (it sets it for its child)"),
     S("VERITY_HOT_SUBMIT", one, False, WHERE, "1: the Commit submits itself to the pod's hot worker"),
+    S("VERITY_SOURCE_IDENTITY_DIR", str, None, WHERE, "where the source identity is written (the Commit sets it)"),
     S("VERITY_SWITCH", float, None, DEBUG, "the interpreter's switch interval in seconds (a GIL-interference experiment)"),
     S("VERITY_TRACEDUMP", float, None, DEBUG, "every so many seconds, dump every thread's traceback"),
     S("VERITY_VU_EXPORT_DIR", str, None, WHERE, "where pair 0's replay exports its VU sample (`commit --vu-export-dir`)"),

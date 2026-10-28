@@ -5,7 +5,7 @@
 * `_HostWindows`: the raw bytes of a step retained as pinned host windows quack like the contiguous `keep` tensor for openings
   (slices that span two windows, the tail, `numel()`, `is_cuda`).
 * the padded-length bookkeeping the windowed worker relies on (leaves per window sum to the step's leaves).
-* the collector commits rows-sha512 on the windowed worker only, and refuses every other scheme and path.
+* the collector refuses a layout or scheme off the path that implements it, and the Commit refuses its retired committers.
 
 The GPU end-to-end (roots of a windowed run == roots of the single-block run for the same manifest; B=2 green) is the pod acceptance
 run, re-run with VERITY_E2E_WORKLOAD/VERITY_E2E_CASE (see `test_e2e_windowed_roots`).
@@ -127,16 +127,20 @@ def test_window_leaf_count_bookkeeping():
             assert all(p % C == 0 for p in per) and sum(p // C for p in per) == padded // C
 
 
-def test_the_collector_commits_rows_sha512_on_the_windowed_worker_only(monkeypatch):
-    """The collector's one scheme is rows-sha512, on the windowed worker (`--committer native_collect_v2b`, `--window-mb` > 0):
-    another scheme, or a collector off the windowed path, is refused before the extension is built, and the Commit names its
-    committers when it is asked for a retired one."""
+def test_the_collector_refuses_what_it_does_not_implement_and_the_commit_its_retired_committers(monkeypatch):
+    """An unknown leaf layout, chunk-leaf-v2 or rows-sha512 off the windowed path, or another scheme, is refused before the
+    extension is built; the Commit builds the windowed worker (`--committer native_collect_v2b`) and names its committers when it
+    is asked for a retired one."""
     from verity_vllm.commit.committer import native_collect as NC
     from verity_vllm.pipeline import commit as CD
 
     monkeypatch.delenv("VERITY_WINDOW_MB", raising=False)
-    with pytest.raises(ValueError, match="unknown commit scheme 'vllm-v1'"):
-        NC.NativeCollectCommitter(None, commit_scheme="vllm-v1")
+    with pytest.raises(ValueError, match="unknown leaf layout"):
+        NC.NativeCollectCommitter(None, layout="chunk-leaf-v3")
+    with pytest.raises(ValueError, match="windowed path only"):
+        NC.NativeCollectCommitter(None, layout="chunk-leaf-v2")
+    with pytest.raises(ValueError, match="unknown commit scheme 'sha256'"):
+        NC.NativeCollectCommitter(None, commit_scheme="sha256")
     with pytest.raises(ValueError, match="rows-sha512 is implemented on the windowed worker"):
         NC.NativeCollectCommitter(None)
     with pytest.raises(ValueError, match="retain_levels=False is implemented on the windowed path only"):
