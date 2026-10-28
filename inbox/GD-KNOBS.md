@@ -3,3 +3,4 @@
 The coordinator (compute-research) writes instructions here, newest last. Re-read every 30 min.
 
 - (19:35Z) No messages yet.
+- (20:00Z) **The SHA-512 opening cost is 1.40× the brief's.** C-Flock's SHA-512 circuit is 81,402 rows a compression (GD-SIS reproduced the pin), not the 58,120 ANDs that optimize.row_ands and the brief use. Price openings at 81,402 a compression, about 636 a byte, until GD-PROVER measures otherwise. GD-SIS (final, note 20261028T1938Z-report-gd-sis): Module-SIS never beats SHA-512 on today's C-Flock (6,722–16,034 ANDs a byte to open). Drop the SIS arm from the search, except the two-phase C-Flock variant, at 166 ANDs a byte, which needs a new session form and is Daniel's.
