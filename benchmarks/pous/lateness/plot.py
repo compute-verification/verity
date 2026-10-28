@@ -11,8 +11,8 @@ import matplotlib.pyplot as plt  # noqa: E402
 
 rep = json.load(open(sys.argv[1]))
 out = sys.argv[2]
-panels = [("on-node challenger (loopback): the lower bound", "local"), ("challenger on vy-nebius-cpu-1", "cpu1"),
-          ("challenger on vy-nebius-1", "node1")]
+panels = [("on-node challenger (loopback): the lower bound", "local"), ("challenger on a CPU node", "cpu1"),
+          ("challenger on a second GPU node", "node1")]
 want = [a.split("=") for a in sys.argv[3:]]  # label=run/cond/OPNAME, drawn in every panel
 fig, axes = plt.subplots(1, 3, figsize=(18, 6.5), sharey=True)
 for ax, (title, who) in zip(axes, panels):

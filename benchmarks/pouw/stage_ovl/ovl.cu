@@ -108,7 +108,7 @@ using namespace sc;
 namespace cg {
 #include "../commit_gpu/commit_gpu.cuh"
 }
-#undef HD  // commit_gpu.cuh's qualifier macro; HD below is stage.cu's head dimension
+#undef HD  // sha512.cuh's qualifier macro; HD below is stage.cu's head dimension
 #include "eg.h"
 // commit_gpu's timing-only builds (-DCOMMIT_GPU_DIAG_*), named in ovl_setup's cg_diag
 static const char* const CG_DIAG = ""
@@ -618,7 +618,7 @@ static int run_ovl(Dev& d, const std::string& dir, int M, const std::vector<int>
         std::vector<cg::u64> lv(8 * used);
         CK(cudaMemcpy(lv.data(), m.levels, lv.size() * 8, cudaMemcpyDeviceToHost));
         std::vector<uint8_t> lb(lv.size() * 8);
-        for (size_t i = 0; i < lv.size(); i++) sha::put_be64(lb.data() + 8 * i, lv[i]);
+        for (size_t i = 0; i < lv.size(); i++) cg::sha::put_be64(lb.data() + 8 * i, lv[i]);
         const std::vector<uint8_t> pf =
             cg::readf(dir + "/cg-" + std::to_string(M) + "-" + std::to_string(CGR) + "-" + std::to_string(t) + ".bin");
         cg::writef(w + "/operand.bin", op.data(), op.size());
