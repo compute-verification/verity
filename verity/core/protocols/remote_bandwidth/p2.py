@@ -221,9 +221,8 @@ class Prover(audit.Prover):
     """The honest prover over a P2 store: each pass's receipts from its plan's units (`pass_under`), or from receipts
     the decode computed (`commit`), committed in the audit's tree."""
 
-    def __init__(self, store: Store, commitment: coins.LiveCommitment, *,
-                 entropy: Callable[[int], bytes] = os.urandom) -> None:
-        super().__init__(store, None, commitment, entropy=entropy)
+    def __init__(self, store: Store, *, entropy: Callable[[int], bytes] = os.urandom) -> None:
+        super().__init__(store, None, entropy=entropy)
 
     def pass_under(self, window: int, i: int, seed: bytes, plan: Plan | None = None) -> audit.Pass:
         plan = plan or Plan.whole(self.store.registration.blocks)
