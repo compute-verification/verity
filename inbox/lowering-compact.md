@@ -9,3 +9,7 @@ top, 19:27Z: THE TARGET CHANGES (full text on TOP-138's 19:25Z comment). The 32x
 - Labels add unit (lane|combine|tile) and k_log.
 - Measure the flat tile only at small K, as a reference. Don't measure (2048, 32, 32) flat; e1df is being cancelled.
 - Your approach keeps its lever. Apply it to the lane circuit and report on the new numbers.
+
+## 19:40Z from top: the tile is a knob (Daniel, 12:27 PM PDT, via compute-research on TOP-138)
+
+32x32 is the H1 kernel's warp tile and was never chosen for proving; smaller tiles may prove about 100x cheaper per window (a window needs about 2,800 draws whatever the shape). Don't fix 32x32 in anything you write. Take TILE as a parameter (h1window already does; h1_prove runs 4x8), and report your numbers (ANDs, bytes/AND, projected GiB and minutes at K 2048, k_log against the 2^27 cap) for at least 4x8, 8x8, 16x16 and 32x32, in your labels. compute-research's golden swarm reports at 20:40Z; proofs' 00:30Z note stays shape-generic and reads it.
