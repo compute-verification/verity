@@ -3,15 +3,16 @@
 
 References (the hypotheses under test; every mismatch is reported by input class, nothing is tuned):
 
-* ``cvt_e2m1x2_f32`` (``cvt.rn.satfinite.e2m1x2.f32``): round to nearest on the E2M1 grid {0, .5, 1, 1.5, 2, 3, 4, 6}, ties to
-  the even code, |x| > 6 saturates to 6, the sign kept (a negative that rounds to zero is code 0x8).  Gated: every finite input.
+* ``cvt_e2m1x2_f32`` (``cvt.rn.satfinite.e2m1x2.f32``, silicon's ``f32_to_e2m1_sat_word``): round to nearest on the E2M1 grid
+  {0, .5, 1, 1.5, 2, 3, 4, 6}, ties to the even code, |x| > 6 saturates to 6, the sign kept (a negative that rounds to zero is
+  code 0x8).  Gated: every finite input.
 * ``cvt_f16x2_e2m1x2``: the exact value of each nibble as FP16 (-0 kept).  Gated: all 256 bytes.
 * ``cvt_ue8m0x2_f32_rz`` / ``_rp``: 2^floor(log2 x) / 2^ceil(log2 x) as a UE8M0 code (2^(c-127)), saturating at 254 (2^127).
   Gated: positive normal inputs; zero, negatives, subnormals, inf and NaN are recorded with the reference's prediction.
 * ``cvt_bf16x2_ue8m0x2``: 2^(c-127) as BF16 (c = 0: the BF16 subnormal 2^-127).  Gated: codes 0..254 in both halves; 0xFF recorded.
-* ``cvt_e4m3x2_f32_ue4m3`` (``cvt.rn.satfinite.e4m3x2.f32``) on the UE4M3 domain the NVFP4 recipe feeds it (positive inputs):
-  round to nearest even on the E4M3 grid, saturating to 448.  Gated: positive finite inputs; the signed and special inputs are
-  GPU 0's cast (recorded here).
+* ``cvt_e4m3x2_f32_ue4m3`` (``cvt.rn.satfinite.e4m3x2.f32``, silicon's ``f32_to_e4m3_sat_word``) on the UE4M3 domain the NVFP4
+  recipe feeds it (positive inputs): round to nearest even on the E4M3 grid, saturating to 448.  Gated: positive finite inputs;
+  the signed and special inputs are GPU 0's cast (recorded here).
 
 The packing order (``a`` into the upper half) is part of what is checked: each output packs two inputs.
 """
@@ -27,6 +28,7 @@ import numpy as np
 
 import k32
 import probe as P
+from verity.ml.circuits.silicon.cast import f32_to_e2m1_sat_word, f32_to_e4m3_sat_word
 from verity_config.settings import SHARED
 
 HERE = Path(__file__).resolve().parent
@@ -45,20 +47,11 @@ E2M1_MIDS = (E2M1_GRID[1:] + E2M1_GRID[:-1]) / 2
 # --- references ------------------------------------------------------------------------------------------------------------------
 
 
-def _f64(words: np.ndarray) -> np.ndarray:
-    return np.asarray(words, np.uint32).view(np.float32).astype(np.float64)
-
-
 def ref_e2m1(words: np.ndarray) -> np.ndarray:
     """E2M1 codes of FP32 words (non-finite inputs: 0xFF marks "no reference")."""
-    x = _f64(words)
-    a = np.abs(x)
-    idx = np.searchsorted(E2M1_MIDS, a, side="left")          # number of midpoints below |x|
-    tie = (idx < len(E2M1_MIDS)) & (a == E2M1_MIDS[np.minimum(idx, len(E2M1_MIDS) - 1)])
-    idx = np.where(tie & (idx % 2 == 1), idx + 1, idx)         # a tie goes to the even code
-    idx = np.minimum(idx, 7)
-    code = idx.astype(np.uint32) | np.where(np.signbit(x), 8, 0).astype(np.uint32)
-    return np.where(np.isfinite(x), code, 0xFF).astype(np.uint32)
+    w = np.asarray(words, np.uint32)
+    code = np.array([f32_to_e2m1_sat_word(int(u)) for u in w.ravel()], np.uint32).reshape(w.shape)
+    return np.where((w & 0x7F800000) == 0x7F800000, 0xFF, code).astype(np.uint32)
 
 
 def ref_ue8m0(words: np.ndarray, mode: str) -> np.ndarray:
@@ -87,17 +80,12 @@ def _ue8m0_edges(words: np.ndarray, mode: str) -> np.ndarray:
 
 
 def ref_e4m3_pos(words: np.ndarray) -> np.ndarray:
-    """E4M3 bytes of positive finite FP32 inputs, round to nearest even, saturating at 448 (0x7E); 0xFFFF: no reference."""
-    x = _f64(words)
-    ok = np.isfinite(x) & (x > 0)
-    xs = np.where(ok, x, 1.0)
-    e = np.floor(np.log2(xs)).astype(np.int64)
-    q = np.exp2((np.maximum(e, -6) - 3).astype(np.float64))
-    v = np.rint(xs / q) * q                                    # exact: xs / q has at most 24 significant bits
-    v = np.minimum(v, 448.0)
-    lut = {float(k32.E4M3_VALUE[c]): c for c in range(0x7F) if c != 0x7F}
-    code = np.array([lut[float(t)] for t in v.ravel()], np.uint32).reshape(v.shape)
-    return np.where(ok, code, 0xFFFF).astype(np.uint32)
+    """E4M3 bytes of positive finite FP32 inputs (0xFFFF: no reference)."""
+    w = np.asarray(words, np.uint32)
+    ok = (w >> 31 == 0) & ((w & 0x7F800000) != 0x7F800000) & (w != 0)
+    out = np.full(w.shape, 0xFFFF, np.uint32)
+    out[ok] = [f32_to_e4m3_sat_word(int(u)) for u in w[ok]]
+    return out
 
 
 def _f16_bits(v: np.ndarray) -> np.ndarray:
