@@ -98,6 +98,7 @@ session() {
   touch $o/stop; wait $GS
   kill $SP; wait $SP 2>/dev/null
   grep -h panicked $o/prove.err | head -3
+  grep -q '"accepted":true' $o/prove.tsv
 }
 
 if has sanity; then
