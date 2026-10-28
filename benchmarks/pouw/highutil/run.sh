@@ -59,7 +59,7 @@ nvcc -O3 -std=c++17 -gencode "$GENCODE" -Xptxas -v -DSHA_ADD=0 -DSHA_ROT=0 -DSHA
   -Xcompiler -fPIC -shared -o "$LIB" $A/v31.cu -lcuda -lcublasLt > "$O/build.log" 2>&1
 echo "build rc $?" >> "$O/rc.txt"
 [ -s "$LIB" ] || { cat "$O/rc.txt"; tail -30 "$O/build.log"; exit 1; }
-sha256sum $A/v31.cu $A/wg_proto.cuh $A/v31.py $A/v31lib.py $D/period.py $D/capture.py $D/terms.py $D/breakdown.py $D/timeline.py $D/pipes.py > "$O/sources.sha256"
+sha256sum $A/v31.cu $A/wg_proto.cuh $A/v31.py $A/v31lib.py $D/period.py $D/capture.py $D/breakdown.py $D/timeline.py $D/pipes.py > "$O/sources.sha256"
 if [ "$CKPT" = seeded ]; then SRC=(--seeded); else SRC=(--checkpoint "$CKPT"); fi
 SERVEDA=()
 [ "${SERVED:-0}" = 1 ] && SERVEDA=(--served)
