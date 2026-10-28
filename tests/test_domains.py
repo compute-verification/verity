@@ -20,10 +20,12 @@ PYTHON = ROOT / "verity/ml/commitments/domains.py"
 #: `example : … Domains.NAME … := rfl` in its file (`TIE`).
 READERS: tuple[str, ...] = ("verity/core/protocols/pouw", "verity/core/protocols/pous", "verity/core/protocols/remote_bandwidth",
                              "verity/core/devices/memory_challenger")
-#: A literal a reader still writes, as (path, entry), because another change rewrites the line beside it; it is read from
-#: the table once both have landed, and until then its bytes are held to its entry (`test_deferred_literals_are_their_entries`).
+#: A literal a reader still writes, as (path, entry), because another change writes that line or rewrites the one beside
+#: it; it is read from the table once both have landed, and until then, wherever its file exists, its bytes are held to
+#: its entry (`test_deferred_literals_are_their_entries`).
 DEFERRED: frozenset[tuple[str, str]] = frozenset({
     ("verity/core/protocols/remote_bandwidth/period.py", "REMOTE_BANDWIDTH_PROTOCOL"),
+    ("verity/core/protocols/remote_bandwidth/lean/RemoteAudit/P2Session.lean", "REMOTE_BANDWIDTH_P2"),
 })
 SKIPPED_PARTS = {"tests", "scripts"}
 ABBREV = re.compile(r'abbrev ([A-Z][A-Z0-9_]*) : String :=\s*"([^"\\]*)"')
@@ -144,8 +146,8 @@ def test_readers_carry_no_literal_of_the_table():
 
 
 def test_deferred_literals_are_their_entries():
-    stale = [f"{rel}: `{name}`" for rel, name in sorted(DEFERRED)
-             if domains.TABLE[name] not in {v.rstrip("\0") for _, v in _literals(ROOT / rel)}]
+    stale = [f"{rel}: `{name}`" for rel, name in sorted(DEFERRED) if (ROOT / rel).exists()
+             and domains.TABLE[name] not in {v.rstrip("\0") for _, v in _literals(ROOT / rel)}]
     assert not stale, ("these files no longer write their entry's bytes: read it from the table and remove the site from "
                        "`DEFERRED`:\n" + "\n".join(stale))
 
