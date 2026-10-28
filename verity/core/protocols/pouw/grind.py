@@ -18,8 +18,10 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable
 
+from verity.core.protocols.profile import WINDOW_DELTA
+
 LN2 = math.log(2)
-DELTA_BITS = 40                      # δ = 2⁻⁴⁰, the grind's own failure probability (outside ε)
+DELTA_BITS = WINDOW_DELTA.denominator.bit_length() - 1  # δ = 2^-DELTA_BITS, the grind's own failure probability (outside ε)
 T_BITS = 128                         # the cheater's hash queries a salt's epoch, at which compile checks a seed group
 FLAG = 1e-3                          # a grind term over 0.1% is flagged, and compile refuses its seed group
 
