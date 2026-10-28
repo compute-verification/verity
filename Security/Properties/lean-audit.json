@@ -6796,21 +6796,26 @@
    ]
   },
   "Definitions.Accounting.TS.J10R": {
-   "digest": "8d957dc8df4e187aaa148702c20d0c1d7bd8d3214364242e8208dc3781326894",
+   "digest": "73417176b136efc1bab1215f1e2d0904e06176dba7c09c4a060bc2a659ab3e1c",
    "definitions": {
     "Accounting.TS.J10R.Layout": "04e9a174424b5233d855bf6c9a7fbc488307f484219046b02b6ec1a2265547a2",
     "Accounting.TS.J10R.Layout.c": "18388ba2256818511f5d261a874cdbed6c39fdb4c9fe200eb4920dc9d78ba575",
     "Accounting.TS.J10R.Layout.k": "1951ad4dec9adcf77a792142bd51bb2487b92c8f3e1ea334a55478290a360f7c",
     "Accounting.TS.J10R.Layout.lanes": "ae02e91613fc2ed311dbbd781e1e2c8fc188f69f6271c8c22687c69b1162802a",
     "Accounting.TS.J10R.Layout.r": "6f4e879d120b7449a7fcf5301a2e406dfd268f0bec3f3ff2427beaf09343f91f",
+    "Accounting.TS.J10R.NoiseLayout": "ecbcad714f5a779c7886f060d7bf82b4ab47c527e01945b2c7040018c2bed1e3",
+    "Accounting.TS.J10R.NoiseLayout.c": "eca5be28443bf360ffd73cd39a27acfdca7fd9f6b5337656124e161824255675",
+    "Accounting.TS.J10R.NoiseLayout.k": "b061979a5879f05eaec76c0b3f1b782efa95b57c9b81b62013979a9e49ad5e6f",
+    "Accounting.TS.J10R.NoiseLayout.lanes": "c9ac50fce17bb1e126fa51fb3406eeeebec6d62091b8bb633d9daec083c23147",
+    "Accounting.TS.J10R.NoiseLayout.r": "16f3439ab3e5d3d9cc4e46d04bc56dc6b42e3f43d916d0b114a3188240b26883",
     "Accounting.TS.J10R.bits": "cd106b543518a32a1d3384386474c6532bb91416ce1c8cb90d3a6b2c2196c948",
     "Accounting.TS.J10R.callSeed": "2df008edd922c98b5baabb42022a72f7ea40036c0c2e010041daabfa3a5aa16c",
     "Accounting.TS.J10R.callSeedTag": "f53d5ff47d6675a2655eb9443a48819d45eb5e7fd20cf956d1ed008937ecea40",
     "Accounting.TS.J10R.cb": "1cd092465646005881e09eee33397f669f9ed58b04fe63ce5327d967cdb163e2",
     "Accounting.TS.J10R.colAt": "9f46f28e62ff6e3251a840ba39fa221433cfb9847d16c908381939c28f111678",
     "Accounting.TS.J10R.colBits": "3f62bcb92f7381fb376aee9fb7ea05aa07dbe9191fe6b7405067f526ce81d7d6",
-    "Accounting.TS.J10R.foldKeys": "9d335314417a93913e85b4d8dcd9958f5b2ff740b49d59e69296ec58df1cbecd",
-    "Accounting.TS.J10R.j10rNoise": "b6b3a9ea01e60ee9aecec1e157ce163f9b8825b9a96101c7681aaa696df9b10a",
+    "Accounting.TS.J10R.foldKeys": "9b2ecdeb91a024b5b437d78aecebc2c58b2859fab84a6d4eadf93543d1ca06f4",
+    "Accounting.TS.J10R.j10rNoise": "b1291224fc25caff5f7cc4487cbb01e0f97d2eb3066b1712210e537d26828c51",
     "Accounting.TS.J10R.nDigits": "c89e27f2da288968a234047c67dfef739d56203f13ddafa91d859144d8ebdd24",
     "Accounting.TS.J10R.nDigitsFrom": "1d09b52aedaf68cc3b7bd00151a70ec67c70e80ce9a4b6ca4d6fb2bf9ee190d1",
     "Accounting.TS.J10R.noiseBlock": "f488005f21d44a445c78d7f4c9c08a61ec4d4561827be0a80bc0c4c7a30c14ea",
@@ -6825,8 +6830,8 @@
     "Accounting.TS.J10R.tagged": "bfbbe48780668389e4a5b4fd3bd4d892a6724082bf458727feb3e2fe6219d1d2",
     "Accounting.TS.J10R.u129": "9aeccc40133f4e75db10fa4bc8ac50d7a385122a0d506539f0d820e1156aeb30",
     "Accounting.TS.J10R.u64": "8e1c1b82cd95a40aa7ad08039a60d71605ab5b69564c857ab29446b3a71fc447",
-    "Accounting.TS.J10R.unitKeys": "cb82732b547578ba2983d9a113b676d94eee3f32a3b86982d5d105d340acc46a",
-    "Accounting.TS.J10R.unitNoise": "c8b6ea8e36d810d9e773ea2dd84717f8f360a291afd6594ebd0d0dc27f151c4b",
+    "Accounting.TS.J10R.unitKeys": "4cd9176bcfc7902e049eebb60839656e6ec111f5acd2f3168613d105b1163dec",
+    "Accounting.TS.J10R.unitNoise": "fe529df94479f29f693c7a572b95cffee8e1a2178ba1937f2728c75551400a2b",
     "Accounting.TS.J10R.value": "1fd214974f9bc3347ab34c4f54eaa503560aca0747787019765fce52174ac563"
    },
    "guarantees": [
@@ -15152,7 +15157,7 @@
    ]
   },
   "Properties.Pouw.PeriodJ10R": {
-   "digest": "bb5dd6054c420489cad293e61f75d8d44128d92d15cdd5ab2282c6bd845cbfaa",
+   "digest": "54c51c2d609c53ee093f76283260dd4e9ab567a19fe138e2afa90418ecbd3bf0",
    "definitions": {
     "Properties.Pouw.PeriodJ10R.Answered": "ad07d7dcb3b5ba1b02c1e159a9fa1fbc49fa3c68721667dba455072e3f7cfc7f",
     "Properties.Pouw.PeriodJ10R.Answered.draw": "34232c1aa04dce901132afc7c85bd9db84df44b652b39520da011c3cdcaf91c9",
@@ -15180,7 +15185,7 @@
     "Properties.Pouw.PeriodJ10R.Place.c": "af0a80ada97a1539fdf0934a2a8fc6b1db329143bb144c803960567606f513eb",
     "Properties.Pouw.PeriodJ10R.Place.call": "96f3b7fbf49e0e9d9cfacd8c539965bb44a173a92cdbdb8a310e893dba643024",
     "Properties.Pouw.PeriodJ10R.Place.keys": "84dd435c36ed28fef16c58b9614181bb887c874bb7ed188c32dc870bf819c9be",
-    "Properties.Pouw.PeriodJ10R.Place.layout": "bb0da05c794c8435a46d8c5b2671ef34fb980787c276da02cb081bef6cbdad5e",
+    "Properties.Pouw.PeriodJ10R.Place.layout": "10b7085dacc1a85f40f491d1f443065a291f6c19f5997241a87476e4dccfe0d2",
     "Properties.Pouw.PeriodJ10R.Place.m": "011829c8c707b074a69e55f6082255b9eae582dac401e7df41d4a25850df091d",
     "Properties.Pouw.PeriodJ10R.Place.noise": "aa26b184188b07ab0e27afacc21bc0a9d8060f032331fcf951fc06f4a5c5d1ce",
     "Properties.Pouw.PeriodJ10R.Place.pos": "7981ee81f70b1ee044ce99056301b183ff97714c286947f650cb47431089626f",
