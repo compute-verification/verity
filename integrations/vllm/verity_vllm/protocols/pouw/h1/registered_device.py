@@ -494,7 +494,7 @@ def _hash_both(torch: Any, d: Any, words: Any, rows: Any, t: Table, key: bytes, 
     return Hashing(done, got_bcs, got_levels, t.W, (words, rows, staged, plan, call, bcs, levels), got_root)
 
 
-def _public_salts(d: _Device, p: Pub) -> Any:
+def _public_salts(d: Any, p: Pub) -> Any:
     import torch
 
     out = torch.empty(24 * p.n, dtype=torch.int64, device=d.hm.device)
