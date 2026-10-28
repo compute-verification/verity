@@ -9,10 +9,13 @@ process, `Local`), in the protocol's order:
    verifier draws the codec seed after that root from its live `coins` (`audit.register`); the prover encodes its store
    (`audit.Store`);
 2. the verifier opens a session (`audit.Session`) on coins its challenger commits to before the first one, drawn from
-   `coins` (`coins.local`), and the prover runs `passes` passes a window over the whole store (`audit.Prover`), each root
-   sent before the window's boundary; the verifier waits each window out on its clock (`window_ns`) and each last deadline
+   `coins` (`coins.local`), and the prover runs `passes` passes a window over the whole store (`audit.Prover`) under
+   each window's challenge, sent as its value and the root it was opened after (`coins.Released`), each root sent
+   before the window's boundary; the verifier waits each window out on its clock (`window_ns`) and each last deadline
    (`deadline_ns`) before it closes the window;
-3. the verifier draws each window's openings, the prover opens them, and the verifier verifies them.
+3. the verifier draws each window's openings, the prover opens them, and the verifier verifies them;
+4. once the session has its outcome, the verifier sends the prover the coin commitment and every released coin's
+   opening (`audit.Session.disclose`), and the prover checks each challenge it was sent against them (`Prover.end`).
 
 Every call to the session is an event of the verifier's log with the clock reading it took, and the log, its coins and
 the registration are the core case (`case`) that `RemoteAudit.Protocol` replays. The answer (`answer`) is the session's
@@ -174,14 +177,18 @@ class Prover(Protocol):
     def register(self) -> tuple[int, bytes]:
         """The store's block count and its payload root, for the verifier to register."""
 
-    def hold(self, registration: audit.Registration, commitment: C.LiveCommitment) -> None:
-        """The registration and the session's coin commitment, before any challenge."""
+    def hold(self, registration: audit.Registration) -> None:
+        """The registration, before any challenge."""
 
-    def run(self, challenge: C.LiveOpening, t: int, i: int, previous: bytes) -> bytes:
+    def run(self, challenge: C.Released, t: int, i: int, previous: bytes) -> bytes:
         """Pass i of window t under `challenge`, after the root `previous`: its root."""
 
     def open(self, t: int, draws: Sequence[tuple[int, int]]) -> list[audit.Opening]:
         """Window t's drawn receipts `(pass, position)` opened."""
+
+    def end(self, commitment: C.LiveCommitment, openings: Sequence[C.LiveOpening]) -> None:
+        """The session's coin commitment and every released coin's opening, once it has its outcome: refused unless
+        every challenge the prover was sent opens against them (`audit.Prover.end`)."""
 
 
 class Local:
@@ -197,17 +204,20 @@ class Local:
     def register(self) -> tuple[int, bytes]:
         return len(self.blocks), audit.payload_tree(self.name, self.blocks, self.salts).commitment.root
 
-    def hold(self, registration: audit.Registration, commitment: C.LiveCommitment) -> None:
+    def hold(self, registration: audit.Registration) -> None:
         honest = audit.Store(registration, self.blocks, self.salts)
-        self.prover = audit.Prover(self.cheat(honest) if self.cheat else honest, None, commitment, entropy=self.entropy)
+        self.prover = audit.Prover(self.cheat(honest) if self.cheat else honest, None, entropy=self.entropy)
 
-    def run(self, challenge: C.LiveOpening, t: int, i: int, previous: bytes) -> bytes:
+    def run(self, challenge: C.Released, t: int, i: int, previous: bytes) -> bytes:
         ps = self.prover.run(challenge, i, previous)
         self.made[t, i] = ps
         return ps.root
 
     def open(self, t: int, draws: Sequence[tuple[int, int]]) -> list[audit.Opening]:
         return [self.prover.open(self.made[t, i], q) for i, q in draws]
+
+    def end(self, commitment: C.LiveCommitment, openings: Sequence[C.LiveOpening]) -> None:
+        self.prover.end(commitment, openings)
 
 
 def run(node: str, store: bytes, coins: bytes, *, windows: int = 2, passes: int = 1, samples: int = audit.SAMPLES,
@@ -238,7 +248,7 @@ def session(node: str, prover: Prover, coins: bytes, *, windows: int = 2, passes
     held, not_before = _Held(), clock()
     challenger = C.local(reg.digest, 0, windows, _Stream(coins, name), clock=lambda: held.now / 1e9)
     s = audit.Session(params, reg, None, challenger, not_before_ns=not_before, clock=held)
-    prover.hold(reg, s.commitment)
+    prover.hold(reg)
     events: list[dict[str, Any]] = []
 
     def call(event: dict[str, Any], fn: Callable[[], Any], at: int | None = None) -> Any:
@@ -252,7 +262,7 @@ def session(node: str, prover: Prover, coins: bytes, *, windows: int = 2, passes
     previous, step = reg.digest, -1
     for t in range(windows):
         for i in range(passes):
-            root = prover.run(challenge, t, i, previous)
+            root = prover.run(C.Released.of(challenge), t, i, previous)
             previous, step = root, step + 1
             call({"kind": "receive", "t": t, "i": i, "root": root.hex(), "runs": None, "change": None, "step": step},
                  lambda: s.receive(t, i, root, None, change=None, step=step))
@@ -266,6 +276,8 @@ def session(node: str, prover: Prover, coins: bytes, *, windows: int = 2, passes
         v = call({"kind": "verify", "t": t, "openings": [opening_json(o) for o in opened]}, lambda: s.verify(t, opened))
         if not v.accepted:
             break
+    if s.outcome is not None:
+        prover.end(*s.disclose())
     committed = []
     for label, n in ((C.CHALLENGE, params.windows), (C.OPENINGS, C.openings_coins(params.windows))):
         got = {o.index: o for o in challenger.opened(label)}
