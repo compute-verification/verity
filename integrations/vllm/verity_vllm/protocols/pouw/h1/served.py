@@ -186,7 +186,7 @@ def declared_layout(shapes: Sequence[tuple[int, int]], modules: Mapping[int, str
                     tile: tuple[int, int] = PH.TILE, blocks: Sequence[int] | None = None) -> dict[str, Any]:
     """`declared`'s arguments to `h1window.program` as the window's layout, ``{calls: [[linear, A block], ...],
     linears: [[name, K, n], ...], m, tile}``: what core's `credit.layout_of` reads from `declared`'s `descriptor`, built
-    without the Program (the proof service sizes the period's K from it, `pouw_h1_challenger.draw_k`)."""
+    without the Program (the proof system sizes the period's K from it, `pouw_h1_challenger.draw_k`)."""
     mods = [modules.get(w, str(w)) for w in range(len(shapes))]
     calls = [(s, w) for s in range(steps) for w in range(len(shapes))]
     return {"calls": [[mods[w], b] for (_s, w), b in zip(calls, layout(shapes, calls, blocks))],
