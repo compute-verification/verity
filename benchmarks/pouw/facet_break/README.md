@@ -14,9 +14,11 @@ any other probe's or tensor_kinds' records) on every facet.
 | `generate.py` | The seeded grid. `--family mix` (default): the targeted part (each lane class beside IMMA.16832 at the vertices of Π's (x_MMA, x_X) section and around them, two-lane pairs, warps a SMSP, each form alone, the JI3n family) and `--n` sampled programs. `--family mem`: each load alone, load pairs at 1:1, 3:1 and 1:3, each load beside IMMA.16832 (and HMMA.16816.F16) at 2-32 loads a 8 MMAs, and `--n` sampled. `--family fine`: a fine q grid of each lane beside IMMA.16832 where the joint rows were beaten or tight, and every form beside FFMA at 64-192 a 8 MMAs. `--family l2`: the L2 loads at 2-8 warps a SMSP and the 256-bit load from L1. `--emit` writes the probe source with each program's exact SASS counts, `--only` keeps the gate's passes |
 | `run.sh` | One batch under `research run`: generate, build, gate, drop the refusals by name, rebuild in chunks of 64, time under one `gpu-lease`, then `loads.py table` and `summary` into `$OUT` |
 
+NODE is an RTX PRO 6000 node:
+
 ~~~bash
-research run --on vy-nebius-2 --project verity --campaign pouw --source . --cwd source --custody-ttl 12h \
-  --env GPU_LEASE_WHO=facet-break -- bash benchmarks/pouw/facet_break/run.sh --seed 2 --n 300
+research run --on NODE --project verity --campaign pouw --source . --cwd source --custody-ttl 12h \
+  --env GPU_LEASE_WHO=<you> -- bash benchmarks/pouw/facet_break/run.sh --seed 2 --n 300
 python benchmarks/pouw/facet_break/loads.py summary ~/.research/runs/*/out/rows.jsonl ~/.research/runs/*/out/tensor_kinds.jsonl
 python benchmarks/pouw/facet_break/loads.py refit RUN/out/rows.jsonl --row R1
 python benchmarks/pouw/facet_break/loads.py family RUN/out/rows.jsonl --family R1 KFFMA0 --name EFFMA --kind FFMA --emit VF3q-16

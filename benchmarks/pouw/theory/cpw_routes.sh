@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # CP-W's checkpoint routes on the sm_120 unit (cpw_routes.cu), and mode 8's fold with its XOR in memory: each route's
 # SASS on sm_120a, its timed loop's opcodes counted (counts.json), then on the device: every route bit-exact against the
-# host's reference, and its rate at 1, 2, 4 warps a SMSP and full occupancy. From a pushed commit:
+# host's reference, and its rate at 1, 2, 4 warps a SMSP and full occupancy. From a pushed commit, on an RTX PRO 6000 node (NODE):
 #
-#   research run --on vy-nebius-2 --project verity --campaign eps1 --source <tree> --cwd source --mem-gb 4 \
+#   research run --on NODE --project verity --source <tree> --cwd source --mem-gb 4 \
 #     --timeout 40m --env GPU_LEASE_WHO=<you> -- bash benchmarks/pouw/theory/cpw_routes.sh
 #
 # The build and the count run outside the lease; the device part runs under one gpu-lease (device.txt, env/gpu.csv).
