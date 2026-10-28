@@ -122,7 +122,7 @@ def Domain.verify (d : Domain) (root : ByteArray) (rank : Nat) (value : ByteArra
 /-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
 written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
 example : ("veritor/tagged-sha256/v1" : String) = Domains.TAGGED_SHA256 := rfl
-example : FRAME = Domains.FRAME_V3.toUTF8.push 0 := rfl
+example : FV3.FRAME = Domains.FRAME_V3.toUTF8.push 0 := rfl
 example : ("veritor/indexed-domain/range/v1" : String) = Domains.INDEXED_RANGE := rfl
 
 end PouwCommit
