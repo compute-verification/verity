@@ -4,7 +4,7 @@ import Proofs.Properties.NetworkCertifier.Bytes
 /-!
 # The records tree binds its values
 
-`Flock.FV3.Sha512.Domain.levels` is the leaves padded to `nextPow2` of their count (`base`), then `log2ceil` levels
+`Flock.FV3.Domain.levels` is the leaves padded to `nextPow2` of their count (`base`), then `log2ceil` levels
 each of the nodes over the pairs below (`next`, `lev`, `levels_eq`). Every node and leaf is SHA-512 of a frame whose
 parts are length-prefixed, so under no collision among the strings two trees hash (`treeStrings`, `CF`) one root gives
 one level below it, down to the leaves, and one leaf one value (`tree_bind`).
@@ -46,7 +46,7 @@ theorem fold_eq (d : Domain) (leaves : Array ByteArray) : ∀ (k s : Nat),
 
 theorem levels_eq (d : Domain) (leaves : Array ByteArray) (h : leaves.isEmpty = false) :
     d.levels leaves = ((List.range (log2ceil leaves.size + 1)).map (lev d leaves)).toArray := by
-  unfold Domain.levels
+  unfold FV3.Domain.levels
   simp only [Id.run, h, Std.Legacy.Range.forIn_eq_forIn_range', List.forIn_pure_yield_eq_foldl]
   have hs : [:log2ceil leaves.size].size = log2ceil leaves.size := by simp [Std.Legacy.Range.size]
   rw [hs]
@@ -106,7 +106,7 @@ theorem levels_get (d : Domain) (leaves : Array ByteArray) (h : leaves.isEmpty =
 
 theorem root_eq (d : Domain) (leaves : Array ByteArray) (h : leaves.isEmpty = false) :
     d.root leaves = (lev d leaves (log2ceil leaves.size))[0]! := by
-  unfold Domain.root
+  unfold FV3.Domain.root
   rw [levels_eq d leaves h, List.back?_toArray, List.getLast?_map, List.getLast?_range]
   simp
 
