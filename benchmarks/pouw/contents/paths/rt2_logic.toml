@@ -1,4 +1,0 @@
-order = 94
-path = "`rt2_logic/`"
-runs_on = "any NVIDIA node (read-only NVML and nvidia-smi queries)"
-what = "RT2-LOGIC-7's probe (note:20261019T1140Z-draft-rt2-logic): `clock_offsets.py`, the SM clocks the driver reports and the clock offsets it allows, read-only, written to `$OUT/clock.json`"
