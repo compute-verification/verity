@@ -246,7 +246,16 @@ def outRowsV2Identity (id : Json) : Json :=
       "the circuit; the public file has no output word"))
   else id
 
-/-- `verity/flock-circuit` (the circuit prover from `eb90718f`): serving rows are `hm96-sha512/row/v1` leaves proved in the circuit,
+/-- A hidden-output statement with pinned outputs (META `pinned_outputs`): `outputs` names them, as the
+prover's does; a statement without them keeps its identity. -/
+def pinnedIdentity (id : Json) : Json :=
+  if (id.getObjVal? "outputs").toOption.isSome then
+    id.setObjVal! "outputs" (s ("hidden: each output port an hm96-sha512/row/v2 row (each run of output ports in META " ++
+      "out_row_ports one bit row of their words), hashed in the circuit, but the last output ports, META pinned_outputs, " ++
+      "which have no row: each of their bits a copy of a forced-zero row; the public file has no output word"))
+  else id
+
+/-- `verity/flock-circuit` (PR #83 from `eb90718f`): serving rows are `hm96-sha512/row/v1` leaves proved in the circuit,
 every identity and binding digest is SHA-512, the proof's Merkle leaves are `hm96-sha512/v1`, and the unit draw is live. -/
 def circuitEb90718f : Tags :=
   { circuit631567f7 with
@@ -257,7 +266,7 @@ def circuitEb90718f : Tags :=
 def circuitEb90718fSelftest : Tags :=
   { circuitEb90718f with name := "verity/flock-circuit@eb90718f+seed-injection", identity := identityHm96 true }
 
-/-- `verity/flock-circuit` (PR #83 from `e51e2b86`): `eb90718f`'s statement with the e2e bindings: META `program_sha512` and a
+/-- `verity/flock-circuit` (the circuit prover from `e51e2b86`): `eb90718f`'s statement with the e2e bindings: META `program_sha512` and a
 partition (a `verity/partition/v1` digest the verifier checks against its own copy of the partition object), and each
 instance's class in the public header. -/
 def circuitE51e2b86 : Tags :=

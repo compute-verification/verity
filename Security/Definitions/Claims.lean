@@ -618,7 +618,8 @@ registered reads and `hm96-sha512/v1` leaves (with or without `--zk`); a unit of
 with hidden outputs, the general instance form: the unit repeated, reading any number of committed input groups, and
 any number of stages the verifier evaluates, reading wires from earlier outputs, with an order of the wires that
 computes every slot from the leaves (`wiresAcyclic`); every row a `sha512/row/v1` row, or, with hidden outputs, every
-row a `sha512/row/v2` or `sha512/row-seg/v1` row. -/
+row a `sha512/row/v2` or `sha512/row-seg/v1` row; and no output port pinned (META `pinned_outputs`), which both row forms
+(`rowsV1`, `rowsV2OrSeg`) read. -/
 def InScope (zk : Bool) (s : Stmt) : Prop :=
   (if zk then 25 else 22) ≤ s.m ∧ s.m ≤ 35 ∧ 6 ≤ s.kLog ∧ s.kLog ≤ min s.m 27 ∧
     s.form.hm96Rows ∧ ¬ s.form.typed ∧ s.form.retainedRounds ∧

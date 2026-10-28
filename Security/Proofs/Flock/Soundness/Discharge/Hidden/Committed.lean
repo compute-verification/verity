@@ -206,7 +206,8 @@ theorem outputs_committed' : OutputsCommitted := by
   have L0 : FlockSoundness.Layout (flatTwin st) := layout_of (st := flatTwin st) P s.pin rfl rfl s.m s.kLog
   have F0 : Aliased.UnitFacts tags (flatTwin st) := unitFacts_of_parse (st := flatTwin st) hp rfl
   have R : RowRanges st.c := RowRanges.ofL (st := flatTwin st) L0 F0.parse F0.check
-  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray := by rw [s.da, hidden_delta']
+  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray := by
+    rw [s.da, hidden_delta_unpinned (unpinned_of_v1 hcr fun p hp => (hv1 p hp).1)]
   have hrows : OutRows st.c := out_rows_v1 hp hcr fun p hp => (hv1 p hp).1
   have hz0 := sat_flat L L0 F0 hv1 hda hrows hz
   have hupv := upv_pos F0.check ho
