@@ -38,7 +38,7 @@ from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity.ml.randomness import derive
 
 from .coins import CoinCommitment, CoinOpening, coin_reason
-from .protocol import DomainError, Matmul, PoUWScheme, Tile, tagged
+from .protocol import DomainError, Matmul, PoUWScheme, Tile, fold_roots, tagged
 
 SALT_DOMAIN = domains.POUW_UNVERIFIED_SALT
 EPOCH_SALT_DOMAIN = domains.POUW_EPOCH_SALT
@@ -137,7 +137,7 @@ def commit_rows(binding: bytes, owner: int, rows: Sequence[bytes], hash: str = "
 
 
 def weights_root(weight_roots: Mapping[int, bytes]) -> bytes:
-    return tagged(domains.POUW_WEIGHTS_ROOT, *(p for w in sorted(weight_roots) for p in (w, weight_roots[w])))
+    return fold_roots(domains.POUW_WEIGHTS_ROOT, weight_roots)
 
 
 @dataclass(frozen=True, slots=True)
