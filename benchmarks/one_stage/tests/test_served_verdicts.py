@@ -9,18 +9,21 @@ development piece checks the window's gate session and credits nothing, and the 
 open. The period the served windows join opens, through infra's own gate, on the Program serve-openai declared and
 the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
 `served_verdicts.sh`'s window circuits gate on every class of CLASSES, and the class of record's count after them
-gates nothing; its endpoint gets one token budget, T, with or without H1. Its load, `serve_load.py --varied`, writes
-each request's send, first-token and done times beside its
-record, on an injected clock and a stand-in endpoint."""
+gates nothing; its endpoint gets one token budget, T, with or without H1. Its preflight refuses a flag the tree's certifier
+front doesn't take, a front whose endpoint isn't on the warden's id form, and a front load with no front; its composite
+step publishes each case's and each product's verdict lines and nothing else. Its load, `serve_load.py --varied`, writes
+each request's send, first-token and done times beside its record, on an injected clock and a stand-in endpoint."""
 from __future__ import annotations
 
 import argparse
+import contextlib
 import importlib.util
 import io
 import itertools
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 import tarfile
@@ -61,6 +64,103 @@ def test_the_window_is_the_fullest_one_with_no_request_carried(tmp_path):
     got = S.pick(_serve_dir(tmp_path), slots=4)
     assert (got["window"], got["requests"], got["users"], got["steps"]) == (1, 3, ["b", "c", "d"], [5, 11])
     assert set(got["refused"]) == {"2", "3"} and "carried" in got["refused"]["3"]
+
+
+def test_the_published_window_counts_none_of_its_requests(tmp_path):
+    """What the run says of its window: its engine steps and whether its requests filled the class's slots, and the
+    refused windows by number, with no count, list or user of any window's requests."""
+    got = S.pick(_serve_dir(tmp_path), slots=4)
+    assert S.public_pick(got, 4) == {"window": 1, "steps": [5, 11], "engine_steps": 6, "slots": 4, "every_slot": False,
+                                     "refused": [2, 3]}
+    assert S.public_pick(got, 3)["every_slot"] is True
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        assert S.main(["window", str(tmp_path), "--slots", "4"]) == 0
+    assert json.loads(out.getvalue()) == S.public_pick(got, 4)
+
+
+REGISTRATION = {"schema": "verity-vllm/advice-registration/v1", "row_bits": 256, "rows": 2, "T": 600,
+                "binding": {"compiler": {"name": "c", "digest": "d"}, "advice": {"root": "ab" * 64, "bits": 392}},
+                "compiler": {"name": "c", "digest": "d", "cap_bits": 8388608}, "bits_by_window": {"0": 392, "1": 7},
+                "registered_roots": {"weights/w@16": "cd" * 64}, "requests": 3, "refused": {"q0": "2 of its 3 tokens"}}
+
+
+def test_the_published_registration_pads_the_advices_length_to_the_cap(tmp_path, capsys):
+    """The advice registration's public form states no length of the advice but its compiler's cap, counts and refuses
+    none of its requests, and keeps its roots, compiler and binding's root."""
+    got = S.public_registration(REGISTRATION)
+    assert got["binding"]["advice"] == {"root": "ab" * 64, "bits": 8388608} and got["rows"] == 32768
+    assert got["bits_by_window"] == {"0": 8388608, "1": 8388608} and got["padded"] == list(S.PADDED)
+    assert not {"requests", "compiled", "refused"} & set(got) and "392" not in json.dumps(got)
+    assert {k: got[k] for k in ("registered_roots", "compiler", "T", "schema")} == {
+        k: REGISTRATION[k] for k in ("registered_roots", "compiler", "T", "schema")}
+    (tmp_path / "r.json").write_text(json.dumps(REGISTRATION))
+    assert S.main(["public-registration", str(tmp_path / "r.json")]) == 0
+    assert json.loads(capsys.readouterr().out) == got
+
+
+def test_the_sampled_proofs_line_names_the_partition_and_its_draw_and_no_advice_length_or_population(tmp_path, capsys):
+    row = {"ok": True, "accepted": True, "draw": [0, 2], "population": 37,
+           "leak": {"advice_bits": 832, "bound": "vacuous", "other_inputs": 786432, "registered": 0}}
+    part = {"templates": ["SiluMul_v2{I=8192}"], "law": "subset:2",
+            "scope": {"op_path_prefix": "model.layers.0.mlp.", "steps": [0, 1]}}
+    line = S.sampled_line(row, part)
+    head, _, rec = line.partition(": RECORDS ")
+    assert head == "over SiluMul_v2{I=8192} at model.layers.0.mlp. steps [0, 1] (law subset:2), drawn members [0, 2]"
+    assert json.loads(rec)["leak"] == {"bound": "vacuous", "other_inputs": 786432, "registered": 0} and "832" not in line
+    assert "population" not in line and "37" not in line and row["population"] == 37
+    (tmp_path / "log").write_text("+ set -x\nRECORDS " + json.dumps(row) + "\n")
+    (tmp_path / "p.json").write_text(json.dumps(part))
+    assert S.main(["sampled-line", str(tmp_path / "log"), "--partition", str(tmp_path / "p.json")]) == 0
+    assert capsys.readouterr().out == line + "\n"
+    (tmp_path / "log").write_text("refused\n")
+    assert S.main(["sampled-line", str(tmp_path / "log")]) == 1
+
+
+def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):
+    """The CERTIFIER-FRONT line carries `FRONT_PUBLIC` of the front's session and none of its prompts, request, kept
+    fetch, gate or verdict's cells; a refused front's line names no reason, and a missing session says so."""
+    session = {"rc": 0, "run": "c1", "prompts": {"count": 4, "ids": 64}, "request": "warden-rehearse --requests 4",
+               "keep": "/serve/private/fetch.tar.gz", "gate": {"run": "g"}, "ended": "the rehearsal ended",
+               "ended_utc": "t", "session_s": 128.0, "pinned": "ab" * 20, "leaked_removed": [], "origin_unix": 1,
+               "verdict": {"cells": [7] * 3, "requests": 4, "wire_bits": 9}}
+    (tmp_path / "session.json").write_text(json.dumps(session))
+    assert S.main(["front-line", str(tmp_path / "session.json")]) == 0
+    said = json.loads(capsys.readouterr().out)
+    assert list(said) == list(S.FRONT_PUBLIC) and said == {k: session[k] for k in S.FRONT_PUBLIC}
+    (tmp_path / "session.json").write_text(json.dumps({"refused": "4 prompts of 64 ids: past one link-window"}))
+    assert S.main(["front-line", str(tmp_path / "session.json")]) == 0
+    assert "64" not in capsys.readouterr().out
+    assert S.main(["front-line", str(tmp_path / "absent.json")]) == 1
+    assert capsys.readouterr().out == "no session (FileNotFoundError)\n"
+
+
+def test_the_certifiers_chain_files_that_count_requests_move_to_the_serve_dirs_private_after_the_record(tmp_path):
+    """`served_verdicts.sh private-pieces` moves CERTIFIER_PRIVATE out of $OUT/pieces/certifier into the serve dir's
+    private/, 0700, and leaves the piece's answer, case and verdict where the record and its reader find them."""
+    piece, d = tmp_path / "out" / "pieces" / "certifier", tmp_path / "serve"
+    moved = ["chain/certs.json", "chain/report/report.json", "chain/tie/summary.json", "chain/n2/summary.json", "piece.log"]
+    kept = ["answer.json", "case.json", "chain/scan/answers.json"]
+    for f in moved + kept:
+        (piece / f).parent.mkdir(parents=True, exist_ok=True)
+        (piece / f).write_text(f)
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "D": str(d), "OUT": str(tmp_path / "out")}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "private-pieces"], cwd=tmp_path, env=env,
+                        check=False).returncode
+    assert rc == 0
+    assert sorted(str(p.relative_to(piece)) for p in piece.rglob("*") if p.is_file()) == sorted(kept)
+    private = d / "private" / "pieces" / "certifier"
+    assert sorted(str(p.relative_to(private)) for p in private.rglob("*") if p.is_file()) == sorted(moved)
+    assert (private / "chain/tie/summary.json").read_text() == "chain/tie/summary.json"
+    assert all((d / p).stat().st_mode & 0o777 == 0o700 for p in ("private", "private/pieces", "private/pieces/certifier"))
+
+
+def test_one_piece_runs_alone_or_all_but_it(tmp_path, capsys):
+    """``only`` runs the named pieces alone and ``skip`` all but them, so the certifier's can run beside the others."""
+    assert list(S.pieces(tmp_path, 1, tmp_path / "pieces", env={}, only=["certifier"])) == ["certifier"]
+    assert "the network certifier" in capsys.readouterr().out
+    assert list(S.pieces(tmp_path, 1, tmp_path / "pieces", env={}, skip=["certifier"])) == ["pouw", "bandwidth", "pous"]
+    assert "the network certifier" not in capsys.readouterr().out
 
 
 def test_a_window_past_the_slots_or_named_and_refused_is_refused(tmp_path):
@@ -195,6 +295,23 @@ def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and
                              "it except with 1/100 + 2^-128)")
     assert line["reason"] == report["composed"]["reason"] == rec["composed"]["onsite"]["reason"]
     assert line["reason"].startswith("sampled proofs: accept; ")
+
+
+def test_an_accepted_certifier_answer_says_what_its_trusted_host_premise_rests_on(tmp_path):
+    """The network certifier's answer as its piece writes it when the warden ran on the gate's host and its checks, draws
+    and coins on the served node: its accept's clause says the premise is assumed and why, so the ``RECORD`` line's
+    accept isn't read as the auditor's devices having placed it."""
+    premise = ("assumed, the auditor's devices not placed: the network certifier ran on 204.12.178.84, not the prover's "
+               "vy-dc-h200, but the chain's checks and draws, the period check and their proofs' coins ran on vy-dc-h200")
+    (d := tmp_path / "certifier").mkdir()
+    (d / "answer.json").write_text(json.dumps({
+        "protocol": "verity/certifier/v0", "verdict": "accept", "reason": None, "commitment": "cd" * 64,
+        "public": {"K": 15764, "eps": "1/100", "windows": 1},
+        "profile": {"placement": {"kind": "not-placed", "trusted-host": premise}}}))
+    (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
+    _report, _rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
+                                   servers={k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]})
+    assert line["reason"].split("; the network certifier: ", 1)[1].startswith(f"accept (trusted-host {premise}; ")
 
 
 def test_an_audit_that_wrote_nothing_composes_to_reject_with_no_block_record(tmp_path):
@@ -525,10 +642,13 @@ def _circuits(tmp_path: Path, classes: str, answers: dict) -> tuple[int, list[st
 
 def test_the_class_of_record_is_measured_after_the_gating_classes_and_its_timeout_fails_nothing(tmp_path):
     rc, lines, limits = _circuits(tmp_path, "4,32,4", {"4,32,4": "count", "record": "expire"})
-    assert rc == 0 and limits == ["30m", "20m"], (rc, lines)
+    assert rc == 0 and limits == ["30m", "45m"], (rc, lines)
     assert lines[0].startswith("WINDOW-CIRCUIT class 4,32,4: registered 7 bits, free 3 bits of 10 input bits at the "
                                "weights registration's pins; ")
-    assert lines[1:] == ["WINDOW-CIRCUIT class record (measurement) timed out after WC_RECORD_TIMEOUT=20m (exit 124): no count"]
+    assert lines[1:] == ["WINDOW-CIRCUIT class record (measurement) timed out after WC_RECORD_TIMEOUT=45m (exit 124): no count"]
+    published = json.loads((tmp_path / "out" / "window-circuit-4-32-4.json").read_text())
+    kept = json.loads((tmp_path / "serve" / "window-circuit-4-32-4.count.json").read_text())
+    assert "bits" not in published and '"bits"' not in lines[0] and kept["bits"] == 772 and published["count"] == kept["count"]
 
 
 @pytest.mark.parametrize("classes, answers, refused", [
@@ -543,7 +663,123 @@ def test_any_class_of_classes_that_does_not_count_fails_the_run(tmp_path, classe
     assert rc != 0 and sum(line.startswith(refused) for line in lines) == 1, lines
     assert any("prove_path.py window-circuit: refused at" in line for line in lines) == (answers.get("8,64,4") == "refuse")
     measured = [line for line in lines if line.startswith("WINDOW-CIRCUIT class record (measurement)")]
-    assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "20m")
+    assert len(measured) == (classes != "record") and limits[-1] == ("30m" if classes == "record" else "45m")
+
+
+def _script(path: Path, body: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"#!/bin/sh\n{body}\n")
+    path.chmod(0o755)
+
+
+FRONT = '"$PY" benchmarks/network_traces/certifier_piece.py front "$1" "$2" "$3" --bucket-ms 4000 --warmup 0'
+
+
+IDS = "--protocol ids --id-payload 503"
+
+
+@pytest.mark.parametrize("load, front, takes, serve_args, line", [
+    ("varied", FRONT, "--gate --warmup --bucket-ms", IDS, None),
+    ("front", FRONT, "--gate --warmup --bucket-ms", IDS, None),
+    ("varied", "", "", "", None),
+    ("varied", FRONT, "--gate --warmup --bucket-ms-x", IDS, "PREFLIGHT: CERTIFIER_FRONT passes --bucket-ms, which this "
+                                                             "tree's certifier front doesn't take"),
+    ("front", "", "", "", "PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"),
+    ("front", FRONT, "--gate --warmup --bucket-ms", "--seal-hold-gb 8", "PREFLIGHT: the certifier front's warden sends "
+     "id-form requests, which serve-openai answers only under SERVE_ARGS='--protocol ids --id-payload 503'"),
+])
+def test_the_preflight_refuses_a_front_flag_the_trees_front_does_not_take_and_a_front_load_with_no_front(
+        tmp_path, load, front, takes, serve_args, line):
+    tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
+    (tree / "benchmarks" / "network_traces").mkdir(parents=True)
+    (tree / "benchmarks" / "network_traces" / "certifier_piece.py").write_text(
+        f"import sys\nassert sys.argv[1:] == ['front', '--help']\nprint('usage: certifier_piece.py front PORT [{takes}]')\n")
+    _script(venv / "python", f'exec {sys.executable} "$@"')
+    env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "OUT": str(tmp_path / "out"),
+           "LOAD": load, "CERTIFIER_FRONT": front, "SERVE_ARGS": serve_args}
+    rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "front-flags"], cwd=tree, env=env,
+                        check=False).returncode
+    said = (tmp_path / "out" / "verdicts.txt").read_text().splitlines() if (tmp_path / "out" / "verdicts.txt").exists() else []
+    assert (rc, said) == ((3, [line]) if line else (0, []))
+
+
+FAKE_COMPOSITE = '''import json, sys
+from pathlib import Path
+COMPONENTS = {"onsite": ("verity/pous/p2/v4/run", "verity/wipe/v0"),
+              "remote": ("verity/pouw/v1", "verity/sampled-proofs/one-stage/v2")}
+if __name__ == "__main__":
+    a = sys.argv[1:]
+    Path(a[a.index("--private-out") + 1]).mkdir(parents=True)
+    Path(a[a.index("--public-out") + 1]).mkdir(parents=True)
+    Path(a[a.index("--public-out") + 1], "composite.json").write_text(json.dumps({"product": a[0]}))
+    cases = [a[i + 1] for i, x in enumerate(a) if x == "--cases"]
+    Path(a[a.index("--private-out") + 1], "argv.json").write_text(json.dumps(cases))
+    print("PIECE verity/pous/p2/v4/run accept 0123456789abcdef0123")
+    print("NOT_ESTABLISHED missing verity/wipe/v0")
+    print(f"VERDICT verity/{a[0]}/v0 reject components")
+    sys.exit(1)
+'''
+
+
+def test_the_composite_step_publishes_only_each_cases_verdict_and_each_products_lean_verdict(tmp_path):
+    """served_composite.sh with a stand-in lake, served_case.sh, served_cases.py and composite.py: PoUS's case is written
+    under the serve dir's private dir with both Lean answers built and passed, and served_cases.py's under it, given no α
+    or Γ while ALPHA and GAMMA are unset; each product gets the cases of its own subprotocols; OUT/verdicts.txt gets each
+    CASE line's protocol and verdict, each case not written by its protocol, and each product's NOT_ESTABLISHED and
+    VERDICT lines, never a PIECE line, a reason, a log or a path; each product's public output is OUT/composite/PRODUCT;
+    and without composite.py in the tree it says so and fails, since no Lean answered."""
+    tree, bin_, d, out = tmp_path / "tree", tmp_path / "bin", tmp_path / "serve", tmp_path / "out"
+    out.mkdir()
+    _script(bin_ / "lake", 'mkdir -p .lake/build/bin && touch ".lake/build/bin/$2"')
+    _script(bin_ / "systemd-run", "exit 1")
+    _script(tree / "benchmarks" / "pous" / "served_case.sh", f'''set -e
+[ -x "$POUS_EXE" ] && [ -x "$WIPE_EXE" ] && [ "$1" = {out}/pieces ] && [ "$MEM_GB" = 170 ]
+for w in pous/w0 other; do mkdir -p {d}/private/$w; echo '{{"evidence": "beef"}}' > {d}/private/$w/case.json; done
+echo '{{"protocol": "verity/pous/p2/v4/run", "verdict": "accept"}}' > {d}/private/pous/w0/answer.json
+echo '{{"protocol": "verity/certifier/v9", "verdict": "accept"}}' > {d}/private/other/answer.json
+echo "CASE: evidence beef"
+echo 'CASE {{"piece": "{d}/private/pous/w0", "protocol": "verity/pous/p2/v4/run", "verdict": "accept"}}' ''')
+    for pkg in ("protocols/pous/check", "devices/memory_challenger/lean", "protocols/remote", "protocols/onsite"):
+        (tree / "verity" / "core" / pkg).mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage").mkdir(parents=True)
+    (tree / "benchmarks" / "one_stage" / "composite.py").write_text(FAKE_COMPOSITE)
+    v2 = d / "private" / "sampled-proofs-v2"
+    (tree / "benchmarks" / "one_stage" / "served_cases.py").write_text(f'''import json, sys
+from pathlib import Path
+assert sys.argv[1:] == ["--serve-dir", "{d}", "--private", "{d}/private", "--from-division"], sys.argv
+Path("{v2}").mkdir(parents=True)
+Path("{v2}", "case.json").write_text(json.dumps({{"evidence": "beef"}}))
+Path("{v2}", "answer.json").write_text(json.dumps({{"protocol": "verity/sampled-proofs/one-stage/v2", "verdict": "accept"}}))
+print("CASE " + json.dumps({{"protocol": "verity/sampled-proofs/one-stage/v2", "verdict": "accept", "dir": "{v2}"}}))
+print("CASE " + json.dumps({{"protocol": "verity/registration/v0", "verdict": "accept", "dir": "{d}/private/reg", "alpha_gamma": "235330880/1544757928"}}))
+print("NOT_WRITTEN " + json.dumps({{"protocol": "verity/inference-only/v0", "reason": "no alpha 0123456789abcdef"}}))
+sys.exit(1)
+''')
+    env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable}
+    run = lambda: subprocess.run(["bash", str(HERE.parent / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,  # noqa: E731
+                                 check=False, capture_output=True, text=True)
+    r = run()
+    assert r.returncode == 0, r.stderr
+    assert (out / "verdicts.txt").read_text().splitlines() == [
+        "COMPOSITE CASE verity/pous/p2/v4/run accept", "COMPOSITE CASES: served_case.sh exit 0",
+        "COMPOSITE CASE verity/sampled-proofs/one-stage/v2 accept",
+        "COMPOSITE CASE verity/registration/v0 accept",
+        "COMPOSITE NOT_WRITTEN verity/inference-only/v0",
+        "COMPOSITE CASES: served_cases.py exit 1, its log on the node",
+        "COMPOSITE remote: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE remote: VERDICT verity/remote/v0 reject components",
+        "COMPOSITE onsite: NOT_ESTABLISHED missing verity/wipe/v0", "COMPOSITE onsite: VERDICT verity/onsite/v0 reject components"]
+    p = d / "private" / "composite"
+    assert json.loads((p / "remote" / "private" / "argv.json").read_text()) == [str(v2)]
+    assert json.loads((p / "onsite" / "private" / "argv.json").read_text()) == [str(d / "private" / "pous" / "w0")]
+    assert oct((d / "private").stat().st_mode & 0o777) == "0o700"
+    assert sorted(out.iterdir()) == [out / "composite", out / "verdicts.txt"]
+    assert sorted(f.relative_to(out).as_posix() for f in (out / "composite").rglob("*") if f.is_file()) == [
+        "composite/onsite/composite.json", "composite/remote/composite.json"]
+    (tree / "benchmarks" / "one_stage" / "composite.py").unlink()
+    (out / "verdicts.txt").unlink()
+    shutil.rmtree(out / "composite")
+    assert run().returncode == 1
+    assert (out / "verdicts.txt").read_text() == "COMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py\n"
 
 
 DIGEST = "5e" * 64
