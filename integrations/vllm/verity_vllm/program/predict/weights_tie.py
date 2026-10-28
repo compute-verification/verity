@@ -3,7 +3,7 @@ committed under each registered weight root (`window_weights.weights_registratio
 salts, a hiding commitment) are checkpoint X's, which the verifier checks before it pins those roots (`checked_pins`). It
 never commits a weight: what it computes from X is X's public digests.
 
-The tie is a window of the one proof service (`interface.Window`), one SHA-512 chain per safetensors shard of X in the
+The tie is a window of the one proof service (`interface.ExecutionBlockBuilder`), one SHA-512 chain per safetensors shard of X in the
 shard's byte order (`gates.sha512_stream`). The shard's header is public, so the chain starts at the verifier's own state
 after it (a supplied value: its chaining value and its pending bytes). Each tensor after it is rows of one registered weight
 parameter, and each row is a `Sha512StreamRow_v1` unit whose ``data`` port is a registered read of that row (opened against
@@ -185,13 +185,14 @@ class Tie:
         return IF.Circuit(NAME, tuple(templates), wires=tuple(IF.coalesce(wires)),
                           registered=IF.Registered(params, tables, reads=tuple(IF.coalesce(reads))))
 
-    def window(self, law: dict[str, Any], cap: int, values: dict[str, G.Registered] | None = None) -> IF.Window:
+    def window(self, law: dict[str, Any], cap: int,
+               values: dict[str, G.Registered] | None = None) -> IF.ExecutionBlockBuilder:
         """The tie's window under ``law`` in members of at most ``cap`` units, ``values`` the committed weights (the
         committer's; none for the verifier's empty window), and its supplied values (`supplied_values`). Under a ``work``
         law every template is credited alike (work 1)."""
         c = self.circuit()
         table = {tid: 1 for tid in c.ids} if law.get("law") == "work" else None
-        win = IF.Window(c, self.run, law, cap, registered=values, work_table=table)
+        win = IF.ExecutionBlockBuilder(c, self.run, law, cap, registered=values, work_table=table)
         win.registered = {**(values or {}), **self.supplied_values(win.window.partition_digest)}
         return win
 
@@ -212,7 +213,7 @@ class Tie:
         """The output class the audit proves whole: every unit, since a unit left unproved breaks its chain."""
         return [[0, self.units()]]
 
-    def record(self, win: IF.Window, rows: dict[str, np.ndarray], forge_digest: bool = False) -> None:
+    def record(self, win: IF.ExecutionBlockBuilder, rows: dict[str, np.ndarray], forge_digest: bool = False) -> None:
         """Record every unit into ``win``, each row unit's data its parameter's row of ``rows`` (by parameter, ``(leaves,
         words)`` u16) and its states as `sha512_stream` computes them, each template's units at once. ``forge_digest``: each
         last unit's digest the chain's, whatever its rows hash to (a forger's, which that unit's proof refuses)."""
@@ -315,7 +316,8 @@ def tie(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None =
 
 def commit(registered: Any, key: bytes, checkpoint_dir: str, checkpoints_manifest: str | None = None, *, law: dict[str, Any],
            cap: int, run_id: str = "", served: dict[str, np.ndarray] | None = None, grain: Grain = _GRAIN,
-           kv_cache_dtype: str = "auto", forge_digest: bool = False) -> tuple[dict[str, Any], Tie, IF.Window]:
+           kv_cache_dtype: str = "auto",
+           forge_digest: bool = False) -> tuple[dict[str, Any], Tie, IF.ExecutionBlockBuilder]:
     """The committer's weights registration of X under its 32-byte ``key`` (`records.weights_registration`: each rooted
     weight parameter's `window_weights.weight_value`, the roots `weights_registration` registers) and its tie window of X,
     every unit recorded: -> (the registration, the tie, the window, to close and write). ``served``: the words it serves

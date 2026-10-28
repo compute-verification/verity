@@ -237,10 +237,10 @@ def test_a_boolean_templates_units_are_recorded_as_words_and_checked_as_bits():
     o0 = np.array([w[0] for w in want], dtype=np.uint64)
     o1 = np.array([SS.carry_words(w[1]) for w in want], dtype=np.uint16)
     assert np.array_equal(o0, cv) and o1.shape == (4, 5) and not (o1[:, -1] >> 8).any()
-    win = I.Window(I.Circuit("stream", ((row, 4),)), RUN, LAW, 4)
+    win = I.ExecutionBlockBuilder(I.Circuit("stream", ((row, 4),)), RUN, LAW, 4)
     win.record(row, [cv, carry, data], [o0, o1])
     assert win.mismatches() == {}
-    bad = I.Window(I.Circuit("stream", ((row, 4),)), RUN, LAW, 4)
+    bad = I.ExecutionBlockBuilder(I.Circuit("stream", ((row, 4),)), RUN, LAW, 4)
     wrong = o1.copy()
     wrong[2, 0] ^= 1
     bad.record(row, [cv, carry, data], [o0, wrong])
@@ -804,7 +804,7 @@ def test_a_port_reading_a_tables_parameter_is_a_row_seg_row():
     table = I.Table("w", "w", 0, K // 2, 6)
     circuit = I.Circuit("seg", ((COORD, 12),), registered=I.Registered({"w": 6 * K // 2}, (table,), reads=(READ,)))
     assert I.seg_ports(circuit.registered) == {TID: {"wrow"}}
-    win = I.Window(circuit, RUN, LAW, 4)
+    win = I.ExecutionBlockBuilder(circuit, RUN, LAW, 4)
     assert {s for m in win.window.members for p, s in m.schemas if p == "wrow"} == {SEG}
     assert {s for m in win.window.members for p, s in m.schemas if p != "wrow"} == {V2}
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
