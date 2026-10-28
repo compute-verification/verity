@@ -34,8 +34,9 @@ import space  # noqa: E402
 
 
 def load_model(spec: str):
-    """`stub` (stub_model) or a module path exposing INPUTS (name -> value, low, high, uncertain) and evaluate(design,
-    inputs, point) -> {J, serve, prove_ratio, feasible, reasons, ...}."""
+    """`stub` (stub_model), `gdm` (GD-MODEL's J, gdm.py) or a module path exposing INPUTS (name -> value, low, high,
+    uncertain) and evaluate(design, inputs, point) -> {J, serve, prove_ratio, feasible, reasons, ...}. A model with its
+    own KNOBS, GRIDS, shard and key is searched over those; otherwise over `space`'s."""
     if spec == "stub":
         return importlib.import_module("stub_model")
     if ":" in spec:
@@ -43,6 +44,10 @@ def load_model(spec: str):
         sys.path.insert(0, path)
         return importlib.import_module(name)
     return importlib.import_module(spec)
+
+
+def space_of(model):
+    return model if hasattr(model, "KNOBS") else space
 
 
 def scenario_inputs(model, name: str) -> dict[str, float]:
@@ -100,13 +105,14 @@ class Front:
 
 
 def summary(r: dict) -> dict:
-    keep = ("J", "serve", "prove_ratio", "prove_gpu_s", "verify_cpu_s", "t_remote_ms", "t_stock_ms", "parts_ms",
-            "prove_parts", "commit_gb", "words_gb", "floor_min", "max_ands", "gates", "lower_gib", "lower_min",
-            "draws_values", "draws_compute", "reasons")
+    keep = ("J", "serve", "prove_ratio", "prove_gpu_s", "verify_cpu_s", "t_remote_ms", "t_stock_ms", "t_window_ms",
+            "parts_ms", "prove_parts", "commit_gb", "words_gb", "retained_gb", "floor_min", "credited", "max_ands",
+            "gates", "lower_gib", "lower_gib_today", "lower_min", "draws_values", "draws_compute", "reasons")
     return {k: r[k] for k in keep if k in r}
 
 
 def run_one(model, grid: str, i: int, n: int, point: str, scen: str, top: int) -> dict:
+    sp = space_of(model)
     v = scenario_inputs(model, scen)
     t0 = time.time()
     heap: list[tuple[float, int, dict, dict]] = []
@@ -115,7 +121,7 @@ def run_one(model, grid: str, i: int, n: int, point: str, scen: str, top: int) -
     reasons: dict[str, int] = defaultdict(int)
     best_infeasible: dict[str, tuple[float, int, dict, dict]] = {}
     count = feasible = 0
-    for idx, d in space.shard(grid, i, n):
+    for idx, d in sp.shard(grid, i, n):
         count += 1
         r = model.evaluate(d, v, point)
         if not r["feasible"]:
@@ -136,7 +142,7 @@ def run_one(model, grid: str, i: int, n: int, point: str, scen: str, top: int) -
             else:
                 heapq.heapreplace(heap, item)
         front.add(r["serve"], r["prove_ratio"], idx, {"design": d, **(rec or summary(r))})
-        for k in space.KNOBS:
+        for k in sp.KNOBS:
             kv = json.dumps(d[k])
             cur = knob_best[k].get(kv)
             if cur is None or J < cur[0]:
@@ -144,11 +150,11 @@ def run_one(model, grid: str, i: int, n: int, point: str, scen: str, top: int) -
     best = sorted(((-j, -ix, d, rec) for j, ix, d, rec in heap), key=lambda x: (x[0], x[1]))
     return {"grid": grid, "shard": [i, n], "point": point, "scenario": scen, "inputs": v, "evaluated": count,
             "feasible": feasible, "seconds": time.time() - t0, "reasons": dict(reasons),
-            "best": [{"J": j, "index": ix, "key": space.key(d), "design": d, **rec} for j, ix, d, rec in best],
-            "front": [{"serve": s, "prove_ratio": p, "index": ix, "key": space.key(r["design"]), **r}
+            "best": [{"J": j, "index": ix, "key": sp.key(d), "design": d, **rec} for j, ix, d, rec in best],
+            "front": [{"serve": s, "prove_ratio": p, "index": ix, "key": sp.key(r["design"]), **r}
                       for s, p, ix, r in front.points()],
             "knob_best": {k: {kv: {"J": j, "index": ix} for kv, (j, ix) in vals.items()} for k, vals in knob_best.items()},
-            "best_infeasible": {why: {"J": j, "index": ix, "key": space.key(d), "design": d, **rec}
+            "best_infeasible": {why: {"J": j, "index": ix, "key": sp.key(d), "design": d, **rec}
                                 for why, (j, ix, d, rec) in best_infeasible.items()}}
 
 
@@ -204,7 +210,7 @@ def merge(parts: list[dict], top: int = 10) -> dict:
 
 
 def changed(a: dict, b: dict) -> list[str]:
-    return [k for k in space.KNOBS if a[k] != b[k]]
+    return [k for k in a if a[k] != b.get(k)]
 
 
 def cmd_reduce(a) -> None:
@@ -240,9 +246,9 @@ def cmd_reduce(a) -> None:
             mcs = [m for s, m in by.items() if s.startswith("mc:") and m["top"]]
             if mcs:
                 js = sorted(m["top"][0]["J"] for m in mcs)
-                knobs = {k: defaultdict(int) for k in space.KNOBS}
+                knobs = {k: defaultdict(int) for k in d0}
                 for m in mcs:
-                    for k in space.KNOBS:
+                    for k in d0:
                         knobs[k][json.dumps(m["top"][0]["design"][k])] += 1
                 report["mc"].setdefault(grid, {})[point] = {
                     "draws": len(mcs), "J_p05": js[len(js) // 20], "J_p50": js[len(js) // 2],
