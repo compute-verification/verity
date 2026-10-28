@@ -3,7 +3,7 @@ record -- `binding.coverage_check` over `load_required_manifest`'s population (r
 `manifest.bind.coverage_check` (`commit.coverage`, what `tests/regression/checks/coverage.py` recomputes) -- reported 0 missing.
 
 * The hidden attention stream (`fa2.m1/L<k>`, `fa3.m1/L<k>`).  A batch-level hidden row was required op-level: any member of the op, no
-  size.  X-03 (`fa2_plane_classes.check_step`, a Commit rule) holds the plane NAMES to the declared class but never reads a tensor's
+  size.  The plane-class check (`fa2_plane_classes.check_step`, a Commit rule) holds the plane NAMES to the declared class but never reads a tensor's
   size, and the replay leaves the stream value-unchecked (check/replay/coverage.py `QUERY_FAMILY_MECHANISM`: "C1 / C3"), so coverage is
   the one check that the stream was committed in full.  Both checks now hold the op's tensors at the step to the launch's whole stream:
   each tensor at least the words its name's geometry declares, one plane set per executing sequence with its declared rows
@@ -105,7 +105,7 @@ def _manifest(tmp_path, lp: dict[str, int], *, hidden: bool = True, moe: bool = 
 
 
 def _check(tmp_path, lp: dict[str, int], step: list[tuple], **man_kw) -> dict:
-    """Both coverage checks of record on one committed step, plus the X-03 per-layer plane verdict (Build declarations present)."""
+    """Both coverage checks of record on one committed step, plus the plane-class check's per-layer verdict (Build declarations present)."""
     c = NativeHostCommitter(None, run_id="run", chunk=CHUNK, hash_threads=1, program_digest=bytes.fromhex(PD))
     run = c.commit_offline([step])
     rows = {0: _rows(lp)} if len(lp) > 1 else None
