@@ -315,7 +315,7 @@ class Books:
     `malformed` at the window filling (`fail`), and `why` says what was out of form. `released` is the coin the last
     event released: a start's or a boundary's challenge, or a close's openings coin."""
 
-    def __init__(self, params: audit.Params, registration: p2.Public, coins_: C.Coins, plan: Plan,
+    def __init__(self, params: audit.Params, registration: p2.Public, coins_: C.SessionCoins, plan: Plan,
                  not_before_ns: int) -> None:
         self.clock, self.plan = P._Held(), plan
         self.s = p2.Session(params, registration, coins_, not_before_ns=not_before_ns, clock=self.clock)
