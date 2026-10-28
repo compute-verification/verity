@@ -191,25 +191,6 @@ def ready(lay: L.StoreLayout, dev: DevStore, layer: int) -> list[str]:
             if e.start <= lay.tensor(layer, n).first_block and lay.tensor(layer, n).block_range.stop <= e.stop]
 
 
-def timed(fn, reps: int) -> list[float]:
-    fn()
-    sync()
-    times = []
-    for _ in range(reps):
-        if DEVICE.type == "cuda":
-            a, b = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-            a.record()
-            fn()
-            b.record()
-            b.synchronize()
-            times.append(a.elapsed_time(b) / 1e3)
-        else:
-            t0 = time.perf_counter()
-            fn()
-            times.append(time.perf_counter() - t0)
-    return times
-
-
 def against_stream(lay, src: L.Weights, read: L.Read, layer: int, name: str, buf) -> dict:
     """Mismatching bytes and blocks of the staged matrix `buf` against the stream's bytes of it."""
     t = lay.tensor(layer, name)
@@ -248,7 +229,7 @@ def stage(args, lay, src, read: L.Read, dev, out: Out, layer: int) -> tuple[dict
     out.record(step="stage", ready=names, encoded=[dev.encoded.start, dev.encoded.stop])
     if not names:
         return staged, whole_s, True
-    store = S.Store(lay, dev.rows(dev.encoded), dev.encoded.start, args.lib, chunk=args.chunk)
+    store = S.EncodedRows(lay, dev.rows(dev.encoded), dev.encoded.start, args.lib, chunk=args.chunk)
     for name in names:
         t = lay.tensor(layer, name)
         w = torch.empty(t.n, t.k, dtype=torch.int8, device=DEVICE)
@@ -262,7 +243,7 @@ def stage(args, lay, src, read: L.Read, dev, out: Out, layer: int) -> tuple[dict
         if cw is None and dw is None:
             raise SystemExit("nothing to hold the staged bytes to: give --w or a weights manifest with digests")
         ok &= (cw is None or cw["mismatched_bytes"] == 0) and (dw is None or all(dw.values()))
-        ts = timed(lambda: S.decode_matrix(store, layer, name, w), args.reps)
+        ts = S.timed(lambda: S.decode_matrix(store, layer, name, w), args.reps, DEVICE, warmup=1)
         out.record(step="stage", matrix=name, tensor=t.name, shape=[t.n, t.k], first_block=t.first_block, blocks=blocks,
                    weights=cw, manifest_sha256=dw, decode_s=[round(x, 6) for x in ts],
                    decode_gb_s=round(t.size / min(ts) / 1e9, 2), rows_gb_s=round(t.blocks * L.ROW / min(ts) / 1e9, 2),
@@ -277,7 +258,7 @@ def stage(args, lay, src, read: L.Read, dev, out: Out, layer: int) -> tuple[dict
             same &= torch.equal(buf[t.staging_offset:t.staging_offset + t.size], S.flat(staged[t.matrix][0]))
             gaps += int((buf[at:t.staging_offset] != 0).sum())
             at = t.staging_offset + t.size
-        ts = timed(lambda: S.decode_layer(store, layer, buf), args.reps)
+        ts = S.timed(lambda: S.decode_layer(store, layer, buf), args.reps, DEVICE, warmup=1)
         whole_s = min(ts)
         nbytes = sum(t.size for t in lay.layer(layer))
         out.record(step="stage", matrix="layer", call="decode_layer", bytes=nbytes, staging_bytes=buf.numel(),
@@ -290,7 +271,7 @@ def stage(args, lay, src, read: L.Read, dev, out: Out, layer: int) -> tuple[dict
     return staged, whole_s, ok
 
 
-def run_window(st: S.Store, offset: int, size: int) -> tuple[int, str | None]:
+def run_window(st: S.EncodedRows, offset: int, size: int) -> tuple[int, str | None]:
     """The flags `st` refuses W bytes [offset, offset + size), a tensor's last bytes, with (0 when it decodes)."""
     st.decode_into(offset, size, torch.empty(size, dtype=torch.uint8, device=st.rows.device), end=True)
     try:
@@ -300,7 +281,7 @@ def run_window(st: S.Store, offset: int, size: int) -> tuple[int, str | None]:
     return 0, None
 
 
-def controls(args, lay, src, read: L.Read, store: S.Store, out: Out, layer: int, name: str) -> bool:
+def controls(args, lay, src, read: L.Read, store: S.EncodedRows, out: Out, layer: int, name: str) -> bool:
     """Other keys, a corrupted row, a row at p and a last block nonzero past the matrix's end, each among the last 64
     blocks of `name`: each refused with its flag bit among those it raises (other keys' garbage is nonzero past the end
     too), and the honest blocks passed."""
@@ -324,7 +305,7 @@ def controls(args, lay, src, read: L.Read, store: S.Store, out: Out, layer: int,
         cases["padding"] = (lay, padded, S.PADDING)
     res = {}
     for label, (lo, rs, want) in cases.items():
-        flags, why = run_window(S.Store(lo, rs, j0, args.lib), j0 * L.PAYLOAD, t.offset + t.size - j0 * L.PAYLOAD)
+        flags, why = run_window(S.EncodedRows(lo, rs, j0, args.lib), j0 * L.PAYLOAD, t.offset + t.size - j0 * L.PAYLOAD)
         res[label] = {"flags": flags, "want": want, "why": why}
     ok = all(v["flags"] & v["want"] if v["want"] else not v["flags"] for v in res.values())
     out.record(step="controls", matrix=name, blocks=[j0, last + 1], last_block_used=used, results=res, ok=ok)
@@ -356,7 +337,7 @@ def toy(args, out: Out) -> bool:
     def staging(lo: L.StoreLayout, rs: torch.Tensor, layer: int) -> tuple[str | None, int]:
         buf = torch.full((lo.staging_bytes(layer),), 0xA5, dtype=torch.uint8, device=DEVICE)
         try:
-            S.decode_layer(S.Store(lo, rs, 0, args.lib), layer, buf)
+            S.decode_layer(S.EncodedRows(lo, rs, 0, args.lib), layer, buf)
         except S.StoreError as e:
             return None, e.flags
         return sha512(buf), 0
@@ -376,7 +357,7 @@ def toy(args, out: Out) -> bool:
     spots = []
     srows = to_device(spot_c).view(-1, L.ROW)
     for j, v in enumerate(spot["vectors"]):
-        st = S.Store(real, srows[j:j + 1].clone(), v["i"], args.lib)
+        st = S.EncodedRows(real, srows[j:j + 1].clone(), v["i"], args.lib)
         m = st.decode_rows(v["i"], v["i"] + 1)
         try:
             st.check()
@@ -409,8 +390,8 @@ def gemm(args, staged: dict, out: Out) -> tuple[dict[int, float], bool]:
             N, K = w.shape
             x, sx = activations(M, K, gen)
             y = IM.linear(x, sx, w, sw, "eager")
-            t_int = timed(lambda: torch._int_mm(x, w.t()), args.reps)
-            t_all = timed(lambda: IM.linear(x, sx, w, sw, "eager"), args.reps)
+            t_int = S.timed(lambda: torch._int_mm(x, w.t()), args.reps, DEVICE, warmup=1)
+            t_all = S.timed(lambda: IM.linear(x, sx, w, sw, "eager"), args.reps, DEVICE, warmup=1)
             res = G.twin(x, sx, w, sw, y)
             ok &= res["mismatches"] == 0
             sm = G.samples(x, sx, w, sw, y, args.samples, cpu)

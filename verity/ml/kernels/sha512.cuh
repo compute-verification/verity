@@ -1,22 +1,26 @@
-// FIPS 180-4 SHA-512's compression for the serve-time commit (engine.py), on the device and the host, every word a
-// big-endian u64. `compress<V, ROLL>(st, w)` has `sha::compress`'s contract (benchmarks/pouw/commit_gpu/sha512.cuh): it
-// advances the chaining value st by the chunk w, and the schedule overwrites w.
+// FIPS 180-4 SHA-512 on the device and the host, every word a big-endian u64: the round constants, the IV and the
+// compression in the forms the kernels use. Every form is the same function, and each `compress(st, w)` advances the
+// chaining value st by the chunk w while the schedule overwrites w. A host compiler without CUDA builds it too, and there
+// every form is the plain function.
 //
-// The rounds are p2keys4.cuh's (benchmarks/pous/p2_v1/p2keys4.cuh, `chunk`; copied, not included: the names a .. h rotate
-// through the round macro instead of moving, Ch is g ^ (e & (f ^ g)), the schedule runs in place over 16 words), with a
-// whole message schedule instead of P2's mostly zero counter chunk.
+// `sx::compress<V, ROLL>`: the names a .. h rotate through the round macro instead of moving, Ch is g ^ (e & (f ^ g)), and
+// the schedule runs in place over 16 words.
 //
 // V picks the pipe of each sigma's shifts, two bits each (S0 | S1 << 2 | s0 << 4 | s1 << 6): 0 funnel shifts on the integer
 // ALU, 1 the high half of each rotation and shift as mul.hi / mad.lo by 2^k on the FMA pipe and the low half a funnel shift,
 // 2 both halves on the FMA pipe, 3 four FMA-pipe instructions a rotation and three a shift, none on the ALU (rotr3). On sm_90
 // IMAD issues to the FMA pipe, beside the ALU's SHF, LOP3 and IADD3, so a balanced V issues more than one integer pipe's worth
-// a cycle. The multiply form is commit_gpu's rotr_fma; the power of two comes from constant memory so ptxas can't fold the
-// multiply back into a shift. On the host every V is the plain function.
+// a cycle. The power of two comes from constant memory so ptxas can't fold the multiply back into a shift.
 //
 // ROLL = 1 runs rounds 16..79 as a loop of 16-round bodies (a quarter of the code: a lone warp otherwise waits on
-// instruction fetch), 0 straight-line, 2 all 80 rounds as codec_tensor/sha512.cuh's sha512_compress, statement for
-// statement: two thirds of ROLL 1's SASS, faster than it in dither's h1c and h1r, slower in its h1u.
+// instruction fetch), 0 straight-line, 2 all 80 rounds as five passes of one 16-round body with the schedule in place, the
+// form the codec's and the bandwidth tagger's kernels hold, statement for statement: two thirds of ROLL 1's SASS, faster
+// than it in dither's h1c and h1r, slower in its h1u.
+//
+// `sha::` holds the committer's forms over the same constants: `compress_from<R0>` from a midstate, `compress_kw` over a
+// precomputed schedule, and the issue knobs SHA_ADD, SHA_ROT and SHA_ROLL (below), with the helpers that build their inputs.
 #pragma once
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 
@@ -65,6 +69,7 @@ using u32 = uint32_t;
 __constant__ u64 K_DEV[80] = {SX_K_LIST};
 static const u64 K_HOST[80] = {SX_K_LIST};
 
+// The table is declared in the host pass too: the registration stub names every __constant__.
 __constant__ u32 POW2[33] = {1u, 2u, 4u, 8u, 16u, 32u, 64u, 128u, 256u, 512u, 1u << 10, 1u << 11, 1u << 12, 1u << 13,
                              1u << 14, 1u << 15, 1u << 16, 1u << 17, 1u << 18, 1u << 19, 1u << 20, 1u << 21, 1u << 22,
                              1u << 23, 1u << 24, 1u << 25, 1u << 26, 1u << 27, 1u << 28, 1u << 29, 1u << 30, 1u << 31, 0u};
@@ -336,3 +341,242 @@ SX_HD void kw_of(const u64* w, u64* kw) {
 }
 
 }  // namespace sx
+
+// --- the committer's forms ------------------------------------------------------------------------------------------
+//
+// Four forms of one compression, all the same function: `compress` (a block of 16 words, the schedule in place),
+// `compress_from<R0>` (rounds R0..79 from a state advanced through rounds 0..R0-1 of a block whose words 0..R0-1 are fixed,
+// `rounds_prefix`, the feed-forward still adding the chaining value), `compress_kw` (a fixed block, whose schedule plus
+// round constants are precomputed, `schedule_kw`: no schedule on the device) and `compress_compact` (one round body).
+//
+// SHA_ADD selects how the 64-bit adds are issued: 0 lets ptxas emit IADD.64, 1 issues them as 32-bit pairs (add.cc / addc:
+// IADD3 and IADD3.X). On sm_120 every integer instruction issues at the same rate, so the one-instruction IADD.64 is faster
+// (7105 against 7776 cycles a warp-compression).
+#ifndef SHA_ADD
+#define SHA_ADD 0
+#endif
+// SHA_ROT: which of the four sigma functions rotate on the FMA pipe (bit 0 S0, 1 S1, 2 s0, 3 s1), sx's mode 2; the rest use
+// funnel shifts. Every integer ALU instruction (SHF, LOP3, IADD3) costs the sub-partition 2 cycles, so this moves work to a
+// pipe the compression otherwise leaves idle.
+#ifndef SHA_ROT
+#define SHA_ROT 0
+#endif
+// SHA_ROLL=1: rounds 16..79 as a loop of four 16-round bodies (and compress_kw's 80 as five) instead of straight-line code,
+// for 2.5x less code a compression: a warp alone on its sub-partition (a tree's top, few big leaves) otherwise waits on
+// instruction fetches. 0 is the straight-line form, slower both alone and in bulk.
+#ifndef SHA_ROLL
+#define SHA_ROLL 1
+#endif
+// SHA_SX: `sha::compress` is sx::compress<SX_V, SX_ROLL> (by default 0 and 1) in place of compress_from<0>, so a committer
+// built on these forms runs one of sx's variants on every path through sha::compress; compress_from, compress_kw and digest
+// stay these.
+#ifdef SHA_SX
+#ifndef SX_V
+#define SX_V 0
+#endif
+#ifndef SX_ROLL
+#define SX_ROLL 1
+#endif
+#endif
+
+#ifdef __CUDA_ARCH__
+#define SHA_K_TABLE K_DEV
+#define SHA_UNROLL _Pragma("unroll")
+#define SHA_UNROLL1 _Pragma("unroll 1")
+#if SHA_ROLL
+#define SHA_ROLL_PRAGMA _Pragma("unroll 1")
+#else
+#define SHA_ROLL_PRAGMA _Pragma("unroll")
+#endif
+#else
+#define SHA_K_TABLE K_HOST
+#define SHA_UNROLL
+#define SHA_UNROLL1
+#define SHA_ROLL_PRAGMA
+#endif
+
+namespace sha {
+
+using sx::iv;
+using sx::K_DEV;
+using sx::K_HOST;
+using sx::maj;
+
+// The same function as sx::ch, written as the committer's rates were measured with it: ptxas schedules the two forms'
+// LOP3s differently.
+SX_HD uint64_t ch(uint64_t e, uint64_t f, uint64_t g) { return (e & f) ^ (~e & g); }
+
+SX_HD uint64_t add(uint64_t a, uint64_t b) {
+#if SHA_ADD == 1 && defined(__CUDA_ARCH__)
+  uint64_t r;
+  asm("{.reg .u32 al, ah, bl, bh, rl, rh;\n\t"
+      "mov.b64 {al, ah}, %1;\n\tmov.b64 {bl, bh}, %2;\n\t"
+      "add.cc.u32 rl, al, bl;\n\taddc.u32 rh, ah, bh;\n\t"
+      "mov.b64 %0, {rl, rh};}"
+      : "=l"(r) : "l"(a), "l"(b));
+  return r;
+#else
+  return a + b;
+#endif
+}
+
+SX_HD uint64_t add3(uint64_t a, uint64_t b, uint64_t c) {
+#if SHA_ADD == 1 && defined(__CUDA_ARCH__)
+  uint64_t r;
+  asm("{.reg .u32 al, ah, bl, bh, cl, ch, rl, rh;\n\t"
+      "mov.b64 {al, ah}, %1;\n\tmov.b64 {bl, bh}, %2;\n\tmov.b64 {cl, ch}, %3;\n\t"
+      "add.cc.u32 rl, al, bl;\n\taddc.u32 rh, ah, bh;\n\t"
+      "add.cc.u32 rl, rl, cl;\n\taddc.u32 rh, rh, ch;\n\t"
+      "mov.b64 %0, {rl, rh};}"
+      : "=l"(r) : "l"(a), "l"(b), "l"(c));
+  return r;
+#else
+  return a + b + c;
+#endif
+}
+
+// The same functions as sx's sigmas, written as the committer's rates were measured with them: ptxas schedules sm_90's
+// shifts differently from sx's forms.
+SX_HD uint64_t rotr(uint64_t x, int n) { return (x >> n) | (x << (64 - n)); }
+#ifdef __CUDA_ARCH__
+#define SHA_R(mask, x, n) ((SHA_ROT & (mask)) ? sx::rotr<2, n>(x) : rotr(x, n))
+#define SHA_SHR(mask, x, n) ((SHA_ROT & (mask)) ? sx::shr<2, n>(x) : (x) >> (n))
+#else
+#define SHA_R(mask, x, n) rotr(x, n)
+#define SHA_SHR(mask, x, n) ((x) >> (n))
+#endif
+SX_HD uint64_t S0(uint64_t a) { return SHA_R(1, a, 28) ^ SHA_R(1, a, 34) ^ SHA_R(1, a, 39); }
+SX_HD uint64_t S1(uint64_t e) { return SHA_R(2, e, 14) ^ SHA_R(2, e, 18) ^ SHA_R(2, e, 41); }
+SX_HD uint64_t s0(uint64_t w) { return SHA_R(4, w, 1) ^ SHA_R(4, w, 8) ^ SHA_SHR(4, w, 7); }
+SX_HD uint64_t s1(uint64_t w) { return SHA_R(8, w, 19) ^ SHA_R(8, w, 61) ^ SHA_SHR(8, w, 6); }
+#undef SHA_R
+#undef SHA_SHR
+
+// Rounds R0..79 of the block w (all 16 words given; the schedule overwrites w), from round-R0 state m, feeding forward cv.
+template <int R0>
+SX_HD void compress_from(uint64_t* cv, const uint64_t* m, uint64_t* w) {
+  uint64_t a = m[0], b = m[1], c = m[2], d = m[3], e = m[4], f = m[5], g = m[6], h = m[7];
+  SHA_UNROLL
+  for (int i = R0; i < 16; ++i) {
+    const uint64_t kw = add(SHA_K_TABLE[i], w[i]);
+    const uint64_t t1 = add3(h, S1(e), ch(e, f, g));
+    const uint64_t t1b = add(t1, kw);
+    const uint64_t mj = maj(a, b, c);
+    h = g; g = f; f = e; e = add(d, t1b);
+    d = c; c = b; b = a; a = add3(t1b, S0(b), mj);
+  }
+  SHA_ROLL_PRAGMA
+  for (int j = 16; j < 80; j += 16) {
+    SHA_UNROLL
+    for (int i = 0; i < 16; ++i) {
+      const uint64_t wi = add3(add(s1(w[(i - 2) & 15]), w[(i - 7) & 15]), s0(w[(i - 15) & 15]), w[i]);
+      w[i] = wi;
+      const uint64_t t1 = add3(h, S1(e), ch(e, f, g));
+      const uint64_t t1b = add3(t1, SHA_K_TABLE[j + i], wi);
+      const uint64_t mj = maj(a, b, c);
+      h = g; g = f; f = e; e = add(d, t1b);
+      d = c; c = b; b = a; a = add3(t1b, S0(b), mj);
+    }
+  }
+  cv[0] = add(cv[0], a); cv[1] = add(cv[1], b); cv[2] = add(cv[2], c); cv[3] = add(cv[3], d);
+  cv[4] = add(cv[4], e); cv[5] = add(cv[5], f); cv[6] = add(cv[6], g); cv[7] = add(cv[7], h);
+}
+
+#ifdef SHA_SX
+SX_HD void compress(uint64_t* st, uint64_t* w) { sx::compress<SX_V, SX_ROLL>(st, w); }
+#else
+SX_HD void compress(uint64_t* st, uint64_t* w) { compress_from<0>(st, st, w); }
+#endif
+
+// A fixed block: kw[i] = K[i] + W[i] for the block's whole schedule, precomputed (`schedule_kw`).
+SX_HD void compress_kw(uint64_t* st, const uint64_t* kw) {
+  uint64_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
+  SHA_ROLL_PRAGMA
+  for (int j = 0; j < 80; j += 16) {
+    SHA_UNROLL
+    for (int i = 0; i < 16; ++i) {
+      const uint64_t t1 = add3(h, S1(e), ch(e, f, g));
+      const uint64_t t1b = add(t1, kw[j + i]);
+      const uint64_t mj = maj(a, b, c);
+      h = g; g = f; f = e; e = add(d, t1b);
+      d = c; c = b; b = a; a = add3(t1b, S0(b), mj);
+    }
+  }
+  st[0] = add(st[0], a); st[1] = add(st[1], b); st[2] = add(st[2], c); st[3] = add(st[3], d);
+  st[4] = add(st[4], e); st[5] = add(st[5], f); st[6] = add(st[6], g); st[7] = add(st[7], h);
+}
+
+// One 16-round body for all 80 rounds (rounds 0..15 take the block's word where later rounds take the schedule's), so a
+// fold whose CTA has mostly idle warps waits on instruction fetch less. The block m is not changed.
+SX_HD void compress_compact(uint64_t* st, const uint64_t* m) {
+  uint64_t w[16];
+  SHA_UNROLL
+  for (int i = 0; i < 16; ++i) w[i] = m[i];
+  uint64_t a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
+  SHA_UNROLL1
+  for (int j = 0; j < 80; j += 16) {
+    SHA_UNROLL
+    for (int i = 0; i < 16; ++i) {
+      const uint64_t sch = add3(add(s1(w[(i - 2) & 15]), w[(i - 7) & 15]), s0(w[(i - 15) & 15]), w[i]);
+      const uint64_t wi = j ? sch : w[i];
+      w[i] = wi;
+      const uint64_t t1 = add3(h, S1(e), ch(e, f, g));
+      const uint64_t t1b = add3(t1, SHA_K_TABLE[j + i], wi);
+      const uint64_t mj = maj(a, b, c);
+      h = g; g = f; f = e; e = add(d, t1b);
+      d = c; c = b; b = a; a = add3(t1b, S0(b), mj);
+    }
+  }
+  st[0] = add(st[0], a); st[1] = add(st[1], b); st[2] = add(st[2], c); st[3] = add(st[3], d);
+  st[4] = add(st[4], e); st[5] = add(st[5], f); st[6] = add(st[6], g); st[7] = add(st[7], h);
+}
+
+// --- the inputs of those forms, on the host or the device -----------------------------------------------------------
+
+// compress_kw's kw for the block (16 words): K[i] + W[i] over its whole schedule
+SX_HD void schedule_kw(const uint64_t* block, uint64_t* kw) {
+  uint64_t w[80];
+  for (int i = 0; i < 16; ++i) w[i] = block[i];
+  for (int i = 16; i < 80; ++i) w[i] = s1(w[i - 2]) + w[i - 7] + s0(w[i - 15]) + w[i - 16];
+  for (int i = 0; i < 80; ++i) kw[i] = SHA_K_TABLE[i] + w[i];
+}
+
+// The state after rounds 0..r-1 of block (from chaining value cv): the m that compress_from<r> starts from.
+SX_HD void rounds_prefix(const uint64_t* cv, const uint64_t* block, int r, uint64_t* m) {
+  uint64_t a = cv[0], b = cv[1], c = cv[2], d = cv[3], e = cv[4], f = cv[5], g = cv[6], h = cv[7];
+  for (int i = 0; i < r; ++i) {
+    const uint64_t t1 = h + S1(e) + ch(e, f, g) + SHA_K_TABLE[i] + block[i];
+    const uint64_t t2 = S0(a) + maj(a, b, c);
+    h = g; g = f; f = e; e = d + t1; d = c; c = b; b = a; a = t1 + t2;
+  }
+  m[0] = a; m[1] = b; m[2] = c; m[3] = d; m[4] = e; m[5] = f; m[6] = g; m[7] = h;
+}
+
+SX_HD uint64_t be64(const uint8_t* p) {
+  uint64_t v = 0;
+  for (int i = 0; i < 8; ++i) v = v << 8 | p[i];
+  return v;
+}
+SX_HD void put_be64(uint8_t* p, uint64_t v) {
+  for (int i = 7; i >= 0; --i) { p[i] = (uint8_t)v; v >>= 8; }
+}
+
+// SHA-512 of a whole message on the host (for the constants the device starts from, and the self-test).
+inline void digest(const uint8_t* msg, size_t len, uint8_t* out) {
+  uint64_t st[8], w[16];
+  iv(st);
+  const size_t total = ((len + 17 + 127) / 128) * 128;
+  for (size_t off = 0; off < total; off += 128) {
+    uint8_t blk[128];
+    for (int i = 0; i < 128; ++i) {
+      const size_t j = off + i;
+      blk[i] = j < len ? msg[j] : j == len ? 0x80 : 0;
+    }
+    if (off + 128 == total) put_be64(blk + 120, (uint64_t)len * 8);
+    for (int i = 0; i < 16; ++i) w[i] = be64(blk + 8 * i);
+    compress_from<0>(st, st, w);
+  }
+  for (int i = 0; i < 8; ++i) put_be64(out + 8 * i, st[i]);
+}
+
+}  // namespace sha
