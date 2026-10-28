@@ -16,10 +16,10 @@ inputs = ["benchmarks/word_codec/kv.py", "benchmarks/word_codec/kv_bench.py", "b
           "benchmarks/word_codec/cuda_lib.py",  # the loader step.py's kernels open through (bench.py, kv_bench.py)
           "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/bandwidth/__init__.py", "verity/core/protocols/bandwidth/tags.py",
-          "verity/core/protocols/remote_bandwidth", "verity/core/protocols/sampled_proofs/__init__.py",
+          "verity/core/protocols/remote_bandwidth",
+          "verity/core/protocols/profile.py",  # with verity/ml/circuits, what store.store_salt's audit import reads
+          "verity/core/protocols/sampled_proofs/__init__.py",
           "verity/core/claims/__init__.py",
           "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/protocols/sampled_proofs/remote.py",
           "verity/ml/__init__.py", "verity/ml/crypto",
-          "verity/ml/commitments", "verity/ml/randomness",
-          # reader.py's salts are the driver's store.store_salt, whose module imports audit (profile.py, ml.circuits)
-          "verity/core/protocols/profile.py", "verity/ml/circuits"]
+          "verity/ml/circuits", "verity/ml/commitments", "verity/ml/randomness"]
