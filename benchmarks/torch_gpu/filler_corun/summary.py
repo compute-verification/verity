@@ -104,7 +104,3 @@ def gap(theta_share: float, bar: float) -> dict:
     """The gap to the target: the peak share short of 0.985 and the hash short of 0.414 of the bar (negative: past it)."""
     return {"peak_short": TARGET_THETA - theta_share, "bar_short": TARGET_BAR - bar,
             "met": theta_share >= TARGET_THETA and bar >= TARGET_BAR}
-
-
-def pj_per_mac(joules: float, macs: int) -> float:
-    return joules / macs * 1e12

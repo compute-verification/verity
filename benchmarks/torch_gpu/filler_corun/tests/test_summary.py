@@ -75,4 +75,3 @@ def test_gap():
     assert not g["met"]
     assert g["peak_short"] == pytest.approx(0.035)
     assert g["bar_short"] == pytest.approx(0.014)
-    assert S.pj_per_mac(700.0, 700 * 10**12) == pytest.approx(1.0)

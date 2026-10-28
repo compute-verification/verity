@@ -13,8 +13,8 @@ poisoned first. Then timed items of about `--item-s` seconds each, interleaved o
 - int_mm: torch._int_mm on the same operands, calls back to back, the cuBLASLt baseline (no clock64: NVML's clock).
 
 Each item records every CTA's stamps, the placement (an item counts only with one GEMM CTA and the stated hash CTAs on
-every SM), NVML's energy counter around the item (mean watts, pJ a MAC) and its instantaneous power, SM clock and clock
-event reasons every 10 ms (max watts). After the items: O against the reference again, and the co-run's digests.
+every SM) and NVML's SM clock and clock event reasons every 10 ms. After the items: O against the reference again, and the
+co-run's digests.
 Rates are summary.py's. Writes items.jsonl and table.md into --out; exit 1 if a gate failed.
 """
 from __future__ import annotations
@@ -133,9 +133,8 @@ class Lib:
         return C.string_at(at, 128)
 
 
-class Power:
-    """NVML on the leased GPU (GPU_LEASE_UUID, else device 0): the energy counter, and a 10 ms sampler of instantaneous
-    power, the SM clock and the clock event reasons."""
+class Clocks:
+    """NVML on the leased GPU (GPU_LEASE_UUID, else device 0): the SM clock and the clock event reasons every 10 ms."""
 
     def __init__(self):
         import pynvml as N
@@ -143,52 +142,32 @@ class Power:
         N.nvmlInit()
         uuid = os.environ.get("GPU_LEASE_UUID")
         self.h = N.nvmlDeviceGetHandleByUUID(uuid) if uuid else N.nvmlDeviceGetHandleByIndex(0)
-        self.samples: list[tuple[float, float, int, int]] = []
+        self.samples: list[tuple[int, int]] = []
         self._stop = threading.Event()
-
-    def energy_j(self) -> float:
-        return self.N.nvmlDeviceGetTotalEnergyConsumption(self.h) * 1e-3
-
-    def watts(self) -> float:
-        try:
-            v = self.N.nvmlDeviceGetFieldValues(self.h, [getattr(self.N, "NVML_FI_DEV_POWER_INSTANT", 186)])[0]
-            if v.nvmlReturn == 0:
-                return v.value.uiVal * 1e-3
-        except Exception:  # noqa: BLE001  (an older driver or binding: the averaged reading)
-            pass
-        return self.N.nvmlDeviceGetPowerUsage(self.h) * 1e-3
 
     def _run(self) -> None:
         N = self.N
         reasons = getattr(N, "nvmlDeviceGetCurrentClocksEventReasons", None) or N.nvmlDeviceGetCurrentClocksThrottleReasons
         while not self._stop.wait(0.01):
-            self.samples.append((time.monotonic(), self.watts(), N.nvmlDeviceGetClockInfo(self.h, N.NVML_CLOCK_SM),
-                                 reasons(self.h)))
+            self.samples.append((N.nvmlDeviceGetClockInfo(self.h, N.NVML_CLOCK_SM), reasons(self.h)))
 
     def __enter__(self):
         self.samples, self._stop = [], threading.Event()
-        self.e0, self.t0 = self.energy_j(), time.monotonic()
         self._th = threading.Thread(target=self._run, daemon=True)
         self._th.start()
         return self
 
     def __exit__(self, *exc):
-        self.e1, self.t1 = self.energy_j(), time.monotonic()
         self._stop.set()
         self._th.join()
 
-    def record(self, macs: int | None) -> dict:
-        j, s = self.e1 - self.e0, self.t1 - self.t0
-        w = [x[1] for x in self.samples]
+    def record(self) -> dict:
+        mhz = [x[0] for x in self.samples]
         reasons = 0
         for x in self.samples:
-            reasons |= x[3]
-        doc = {"joules": j, "host_s": s, "watts_mean": j / s, "watts_max": max(w) if w else None,
-               "watts_p50": statistics.median(w) if w else None, "smi_mhz_p50": statistics.median(x[2] for x in self.samples) if w else None,
-               "clock_reasons": f"0x{reasons:x}", "samples": len(w)}
-        if macs:
-            doc["pj_per_mac"] = S.pj_per_mac(j, macs)
-        return doc
+            reasons |= x[1]
+        return {"smi_mhz_p50": statistics.median(mhz) if mhz else None, "smi_mhz_min": min(mhz) if mhz else None,
+                "clock_reasons": f"0x{reasons:x}", "samples": len(mhz)}
 
 
 def stamps_of(t: torch.Tensor) -> list[S.Stamp]:
@@ -304,7 +283,7 @@ class Bench:
         per_cta = passes * self.tiles // self.lib.sms
         return max(1, -(-per_cta // (LOGMAX - 8)))
 
-    def item_gemm(self, pw: Power, cl: int, passes: int) -> dict:
+    def item_gemm(self, pw: Clocks, cl: int, passes: int) -> dict:
         self.reset()
         le = self.log_every(passes)
         with pw:
@@ -313,18 +292,18 @@ class Bench:
         g = stamps_of(self.gstamps)
         r = S.gemm_rate(g, self.macs_per_tile)
         return {"arm": f"gemm_{cl}", "passes": passes, "placement": S.placement(g, self.lib.sms), **r,
-                "power": pw.record(r["macs"])}
+                "nvml": pw.record()}
 
-    def item_hash(self, pw: Power, kind: str, threads: int, per_sm: int, item_s: float) -> dict:
+    def item_hash(self, pw: Clocks, kind: str, threads: int, per_sm: int, item_s: float) -> dict:
         self.reset()
         with pw:
             self.hash(kind, threads, per_sm, self.hash_args(item_s, False), alone=True)
             torch.cuda.synchronize()
         h = stamps_of(self.hstamps[: self.lib.sms * per_sm])
         return {"arm": f"{kind}:{threads // 32}w:{per_sm}", "placement": S.placement(h, self.lib.sms), **S.hash_rate(h, self.lib.sms),
-                "power": pw.record(None)}
+                "nvml": pw.record()}
 
-    def item_corun(self, pw: Power, cl: int, passes: int, kind: str) -> dict:
+    def item_corun(self, pw: Clocks, cl: int, passes: int, kind: str) -> dict:
         self.reset()
         le = self.log_every(passes)
         args = self.hash_args(3600.0, True)
@@ -343,9 +322,9 @@ class Bench:
         return {"arm": f"gemm_{cl}+{kind}", "passes": passes, "gemm_placement": S.placement(g, self.lib.sms),
                 "hash_placement": S.placement(h, self.lib.sms), "covers": S.covers(g, h), "gemm": r, "hash": hr,
                 "gemm_in_hash_window": inside, "gap": S.gap(inside["peak_share"], hr["bar"]),
-                "power": pw.record(r["macs"])}
+                "nvml": pw.record()}
 
-    def item_int_mm(self, pw: Power, item_s: float) -> dict:
+    def item_int_mm(self, pw: Clocks, item_s: float) -> dict:
         torch._int_mm(self.a, self.b.t())
         torch.cuda.synchronize()
         t = time.monotonic()
@@ -362,48 +341,45 @@ class Bench:
             torch.cuda.synchronize()
         s = ev[0].elapsed_time(ev[1]) * 1e-3
         macs = calls * self.m * self.n * self.k
-        pr = pw.record(macs)
+        pr = pw.record()
         mhz = pr["smi_mhz_p50"] or S.BAR_MHZ
         per_clock = macs / s / (self.lib.sms * mhz * 1e6)
         return {"arm": "int_mm", "calls": calls, "s": s, "macs": macs, "theta": macs / s / S.THETA_MACS_PER_S,
-                "smi_mhz": mhz, "macs_per_clock_at_smi": per_clock, "power": pr}
+                "smi_mhz": mhz, "macs_per_clock_at_smi": per_clock, "nvml": pr}
 
 
 def table(rows: list[dict]) -> str:
-    """The median of each arm's items, one line an arm."""
+    """The median of each arm's items, one line an arm. κ: a co-run's GEMM rate over its GEMM's alone."""
     by: dict[str, list[dict]] = {}
     for r in rows:
         if "arm" in r:
             by.setdefault(r["arm"], []).append(r)
     med = statistics.median
-    out = ["| arm | items | MACs/clk (of 4,096) | θ | SM MHz | hash (of the bar) | hash G/s | W mean | W max | pJ/MAC | gap to 0.985 | gap to 0.414 |",
-           "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    alone = {arm: med(x["macs_per_clock"] for x in xs) for arm, xs in by.items() if arm.startswith("gemm_") and "+" not in arm}
+    out = ["| arm | items | MACs/clk (of 4,096) | θ | κ | SM MHz | hash (of the bar) | hash G/s | gap to 0.985 | gap to 0.414 |",
+           "|---|---|---|---|---|---|---|---|---|---|"]
     for arm, xs in by.items():
-        pw = [x["power"] for x in xs]
-        wm, wx = med(p["watts_mean"] for p in pw), max(p["watts_max"] or 0 for p in pw)
-        pj = med(p["pj_per_mac"] for p in pw) if "pj_per_mac" in pw[0] else None
-        pj_s = f"{pj:.3f}" if pj is not None else "-"
         if arm.startswith("gemm_") and "+" in arm:
             g = [x["gemm_in_hash_window"] for x in xs]
             h = [x["hash"] for x in xs]
-            share, theta = med(x["peak_share"] for x in g), med(x["theta"] for x in g)
+            share, theta, mpc = med(x["peak_share"] for x in g), med(x["theta"] for x in g), med(x["macs_per_clock"] for x in g)
+            base = alone.get(arm.split("+")[0])
+            kappa = f"{mpc / base:.4f}" if base else "-"
             bar = med(x["bar"] for x in h)
-            out.append(f"| {arm} | {len(xs)} | {med(x['macs_per_clock'] for x in g):.0f} ({share:.4f}) | {theta:.4f} | "
-                       f"{med(x['mhz'] for x in h):.0f} | {bar:.3f} | {med(x['g_per_s'] for x in h):.3f} | {wm:.0f} | {wx:.0f} | "
-                       f"{pj_s} | {S.TARGET_THETA - share:+.4f} | {S.TARGET_BAR - bar:+.3f} |")
+            out.append(f"| {arm} | {len(xs)} | {mpc:.0f} ({share:.4f}) | {theta:.4f} | {kappa} | {med(x['mhz'] for x in h):.0f} | "
+                       f"{bar:.3f} | {med(x['g_per_s'] for x in h):.3f} | {S.TARGET_THETA - share:+.4f} | {S.TARGET_BAR - bar:+.3f} |")
         elif arm.startswith("gemm_"):
             share = med(x["peak_share"] for x in xs)
             out.append(f"| {arm} | {len(xs)} | {med(x['macs_per_clock'] for x in xs):.0f} ({share:.4f}) | "
-                       f"{med(x['theta'] for x in xs):.4f} | {med(x['mhz'] for x in xs):.0f} | - | - | {wm:.0f} | {wx:.0f} | "
-                       f"{pj_s} | {S.TARGET_THETA - share:+.4f} | - |")
+                       f"{med(x['theta'] for x in xs):.4f} | 1 | {med(x['mhz'] for x in xs):.0f} | - | - | "
+                       f"{S.TARGET_THETA - share:+.4f} | - |")
         elif arm == "int_mm":
             out.append(f"| {arm} | {len(xs)} | {med(x['macs_per_clock_at_smi'] for x in xs):.0f} at NVML's clock | "
-                       f"{med(x['theta'] for x in xs):.4f} | {med(x['smi_mhz'] for x in xs):.0f} (NVML) | - | - | {wm:.0f} | {wx:.0f} | "
-                       f"{pj_s} | - | - |")
+                       f"{med(x['theta'] for x in xs):.4f} | - | {med(x['smi_mhz'] for x in xs):.0f} (NVML) | - | - | - | - |")
         else:
             bar = med(x["bar"] for x in xs)
-            out.append(f"| {arm} | {len(xs)} | - | - | {med(x['mhz'] for x in xs):.0f} | {bar:.3f} | "
-                       f"{med(x['g_per_s'] for x in xs):.3f} | {wm:.0f} | {wx:.0f} | - | - | {S.TARGET_BAR - bar:+.3f} |")
+            out.append(f"| {arm} | {len(xs)} | - | - | - | {med(x['mhz'] for x in xs):.0f} | {bar:.3f} | "
+                       f"{med(x['g_per_s'] for x in xs):.3f} | - | {S.TARGET_BAR - bar:+.3f} |")
     return "\n".join(out) + "\n"
 
 
@@ -446,7 +422,7 @@ def main(argv: list[str] | None = None) -> int:
     if not ok:
         emit({"verdict": "a gate failed: nothing timed"})
         return 1
-    pw = Power()
+    pw = Clocks()
     arms = set(a.arms.split(","))
     passes = {cl: b.calibrate(cl, a.item_s) for cl in cls}
     emit({"calibrated_passes": passes})

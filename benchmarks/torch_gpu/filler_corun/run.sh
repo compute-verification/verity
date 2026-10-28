@@ -71,9 +71,9 @@ export OUT PY S HERE
 # shellcheck disable=SC2016
 gpu-lease 1 --wait --max-min "${LEASE_MIN:-15}" -- bash -c '
   echo "run.sh: leased $GPU_LEASE_UUID at $(date -u +%H:%M:%SZ)"
-  q=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.mem,power.draw,power.limit,temperature.gpu
+  q=index,uuid,name,driver_version,clocks.sm,clocks.max.sm,clocks.mem,temperature.gpu
   nvidia-smi --query-gpu=$q --format=csv ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$OUT/gpu.txt" 2>&1
-  nvidia-smi --query-gpu=timestamp,clocks.sm,power.draw,temperature.gpu,clocks_event_reasons.active --format=csv -lms 200 \
+  nvidia-smi --query-gpu=timestamp,clocks.sm,temperature.gpu,clocks_event_reasons.active --format=csv -lms 200 \
     ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} > "$OUT/smi.csv" 2>&1 &
   smi=$!
   r=0

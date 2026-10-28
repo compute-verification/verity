@@ -51,12 +51,13 @@ Clocks come from clock64 over `%globaltimer` in each CTA. The other numbers are:
 - MACs an SM-clock against 4,096;
 - θ against 989.4 T MAC/s;
 - the hash's compressions an SM-clock against the bar (0.01803: 4.355 G/s at 1,830 MHz on 132 SMs);
-- mean watts from NVML's energy counter, max watts from 10 ms instantaneous samples, and pJ a MAC.
+- κ, a co-run's GEMM rate over the same GEMM's alone;
+- NVML's SM clock and clock event reasons every 10 ms, beside the stamps' clock.
 
 `summary.py` holds the arithmetic, and `tests/` holds it on synthetic stamps.
 
 `run.sh` builds and gates the cubin on an H200 node and runs `corun.py` under one GPU lease, from the tree's root:
-`bash benchmarks/torch_gpu/filler_corun/run.sh [--k 16384] [--rounds 3]`.
+`CORUN_KS="8192 32768" bash benchmarks/torch_gpu/filler_corun/run.sh [--rounds 3]`, one corun.py process a K.
 
 | file | what |
 |---|---|
