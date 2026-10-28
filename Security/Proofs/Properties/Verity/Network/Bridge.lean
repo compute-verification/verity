@@ -23,7 +23,8 @@ from the play, not what the code checks, so they hold by construction at a reali
   an accepted play decoding to an inadmissible one, which names a root the network certifier didn't sign for the
   window or opens one root two ways, plus the square root of two independent own coins' accepted plays decoding to
   different admissible statements (`stmtOf_break`, from `stmtOf_collision` and `coinMode_collision`): two preimages of
-  one binding digest. The coupling's break answers for all three.
+  one binding digest. Over all the coins it is at most those two terms at one value of the other coordinates, which a
+  finder may fix (`stmtOf_break_exists`). The coupling's break answers for all three.
 * **S6's `wit`**: a witness in the leak relation wherever the statement has one (`witOf`, `couples_wit`).
 * **S6's `windows`, from `θ`**: what the prover sent carries the game's parameters `θ`, fixed before every coin
   (`Vocab.Coupling.sent_params`). Onsite's network component is its first and no other has its id
@@ -269,6 +270,27 @@ theorem stmtOf_break :
     _ ≤ _ := add_le_add le_rfl hroot
 
 end Stmt
+
+/-- **The break `stmtOf` leaves, over all the coins**: at some value `ξ₀` of the coordinates other than `o`, the
+probability over every coin that an accepted play decodes to a statement other than `stmtOf`'s is at most
+`stmtOf_break`'s two terms at `ξ₀`. A finder may fix `ξ₀` and draw only `o`, twice. -/
+theorem stmtOf_break_exists [Fintype I] [∀ i, Nonempty (Ω i)] (P : Msg → Prop) (s₀ : Msg) (o : I)
+    (acc : ((i : I) → Ω i) → Prop) (dec : ((i : I) → Ω i) → Msg) :
+    ∃ ξ₀ : (i : I) → Ω i, Pouw.pr (fun ξ => acc ξ ∧ dec ξ ≠ stmtOf P s₀ o acc dec ξ) ≤
+      Pouw.pr (fun x : Ω o => acc (Function.update ξ₀ o x) ∧ ¬ P (dec (Function.update ξ₀ o x))) +
+        Real.sqrt (Pouw.pr (fun z : Ω o × Ω o =>
+          ((acc (Function.update ξ₀ o z.1) ∧ P (dec (Function.update ξ₀ o z.1))) ∧
+            (acc (Function.update ξ₀ o z.2) ∧ P (dec (Function.update ξ₀ o z.2)))) ∧
+          dec (Function.update ξ₀ o z.1) ≠ dec (Function.update ξ₀ o z.2))) := by
+  obtain ⟨ξ₀, hξ₀⟩ := Finite.exists_max fun ξ : (i : I) → Ω i =>
+    Pouw.pr (fun x : Ω o => acc (Function.update ξ o x) ∧ ¬ P (dec (Function.update ξ o x))) +
+      Real.sqrt (Pouw.pr (fun z : Ω o × Ω o =>
+        ((acc (Function.update ξ o z.1) ∧ P (dec (Function.update ξ o z.1))) ∧
+          (acc (Function.update ξ o z.2) ∧ P (dec (Function.update ξ o z.2)))) ∧
+        dec (Function.update ξ o z.1) ≠ dec (Function.update ξ o z.2)))
+  refine ⟨ξ₀, Pouw.pr_le_of_update o _ fun ξ => le_trans ?_ (hξ₀ ξ)⟩
+  simp only [stmtOf_update]
+  exact stmtOf_break P s₀ o acc dec ξ
 
 /-- **A statement whose registration opens to `ρ`**: at its parse, the registration's openings `rops` pass under the
 statement's roots at every registered input (`RegOpens`), to the values `ρ`. -/
