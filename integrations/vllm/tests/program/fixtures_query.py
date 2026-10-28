@@ -1,7 +1,7 @@
 """Small-statics Program fixtures and explicit-oracle helpers for the query track.
 
 Shared by the boundary / query-API / partition test suites (import as `tests.program.fixtures_query`).  Every
-constructor returns a `Program` small enough for the explicit oracle (`layout.GateSelection.in_` / `.out` on the expanded
+constructor returns a `Program` small enough for the explicit oracle (`query_ast.oracle_in` / `oracle_out` on the expanded
 circuit); `FIXTURES` maps a short name to a memoised constructor so suites can parametrise over every family.
 
 Families (the query design's §5 table + the counterexample shapes of the query-interface freeze):
@@ -34,7 +34,7 @@ Families (the query design's §5 table + the counterexample shapes of the query-
     scan_carry_only      scan whose ys are dead: only the carry escapes each iteration
 
 Oracle helpers (`oracle_out`, `oracle_in`, `oracle_w_out`) accept a `Part`, anything with `.intervals()` (a GateSet) or an
-iterable of root gate indices, and evaluate `GateSelection` on the expanded circuit -- the definitional answer the compact
+iterable of root gate indices, and evaluate `query_ast.oracle_in` / `oracle_out` on the expanded circuit -- the definitional answer the compact
 modules are tested against.
 """
 from __future__ import annotations
@@ -43,7 +43,8 @@ from functools import lru_cache
 from typing import Callable, Iterable
 
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.layout import Scope, GateSelection
+from verity.ml.circuits import query_ast as QA
+from verity.ml.circuits.layout import Scope
 from verity.ml.circuits.parts import Item, Part, n_members
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import array_of, tuple_of
@@ -425,7 +426,7 @@ def first_composite_child(scope: Scope, callee: str, m: int = 0) -> Scope:
 
 
 # ---------------------------------------------------------------------------------------------------------
-# explicit oracle (GateSelection on the expanded circuit)
+# explicit oracle (query_ast's on the expanded circuit)
 # ---------------------------------------------------------------------------------------------------------
 
 
@@ -457,7 +458,7 @@ def oracle_out(program: Program, gates) -> frozenset[int]:
     gs = gates_of(gates)
     if not gs:
         return frozenset()
-    return frozenset(GateSelection(program.circuit, gs).out)
+    return frozenset(QA.oracle_out(program.circuit, QA.oracle_gateset(program.circuit, gs)))
 
 
 def oracle_in(program: Program, gates) -> frozenset[int]:
@@ -465,7 +466,7 @@ def oracle_in(program: Program, gates) -> frozenset[int]:
     gs = gates_of(gates)
     if not gs:
         return frozenset()
-    return frozenset(GateSelection(program.circuit, gs).in_)
+    return frozenset(QA.oracle_in(program.circuit, QA.oracle_gateset(program.circuit, gs)))
 
 
 def oracle_w_out(program: Program, gates) -> int:

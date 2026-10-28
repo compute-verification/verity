@@ -8,7 +8,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.layout import GateSelection
+from verity.ml.circuits.query_ast import oracle_gateset, oracle_out
 from verity.ml.circuits.cut import call_scope
 from verity.ml.definitions import word as W
 
@@ -65,7 +65,7 @@ def test_widths_are_the_irs_out_where_no_wiring_sits_between_units(fam, statics)
     c, call = call_scope(fn)
     for u in range(len(R["kinds"])):
         gates = (G.keep[np.flatnonzero(R["owner"] == u)] + call.offset).tolist()
-        out = GateSelection(c, gates).out
+        out = oracle_out(c, oracle_gateset(c, gates))
         assert sum(c.gate(g).prim.ret.w for g in out) == R["out_bits"][u] and len(out) == R["out_gates"][u]
 
 
