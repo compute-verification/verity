@@ -791,17 +791,18 @@ def session(a: argparse.Namespace) -> int:
             log(json.dumps({"prover_error": traceback.format_exc()}))
             answer = {"verdict": "prover-error", "reason": f"{type(e).__name__}: {e}"}
         wall = time.perf_counter() - t1
+        case = None
+        if a.case_dir is not None and prover.kept is not None and answer.get("verdict") in ("accept", "reject",
+                                                                                           "undecided"):
+            judged = p2_case.judged(prover.kept, answer, a.case_exe)
+            p2_case.write(a.case_dir, prover.kept, judged)
+            case = {"dir": str(a.case_dir), "commitment": judged["commitment"], "store_root": prover.kept["store_root"],
+                    "verdict": judged["verdict"], "judge": "lean" if a.case_exe else "python"}
+            log(json.dumps({"case": case}))
     if pool is not None:
         pool.shutdown()
     if a.party is not None and record is None and answer.get("verdict") != "prover-error":
         record = {"verdict": "missing", "reason": "the party's stdout held no answer"}
-    case = None
-    if a.case_dir is not None and prover.kept is not None and answer.get("verdict") in ("accept", "reject", "undecided"):
-        judged = p2_case.judged(prover.kept, answer, a.case_exe)
-        p2_case.write(a.case_dir, prover.kept, judged)
-        case = {"dir": str(a.case_dir), "commitment": judged["commitment"], "store_root": prover.kept["store_root"],
-                "verdict": judged["verdict"], "judge": "lean" if a.case_exe else "python"}
-        log(json.dumps({"case": case}))
     line = verdict_line(answer, a.expect, record)
     verifier = (f"party {a.party} at {a.party_host}" if a.party else a.verifier or f"tcp {a.connect}")
     doc = {"answer": answer, "request": request, "registration": p2_party.registration_json(reg, engine.plan),
