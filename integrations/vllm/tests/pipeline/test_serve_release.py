@@ -193,6 +193,7 @@ def test_a_window_that_reaches_no_release_frees_its_pool_and_is_refused_by_name(
     reads = [(2, "model.layers.0.mlp.down_proj", 0, 1)]
     assert len(draws.refused(0, reads, dev)) == 1 and DROPPED in draws.refused(0, reads, dev)[0]
     assert draws.summary()["discarded"] == {0: draws.discarded[0]}
+    assert draws.summary()["device_pool"]["waits"] == 1 and draws.summary()["device_pool"]["peak_bytes"] == cap
     assert draws.discard(0, dev, "again") is None
 
 

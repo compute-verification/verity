@@ -210,7 +210,8 @@ class Draws:
         return {"protocols": list(self.protocols), "released": len(self.releases),
                 "kept_bytes": sum(r.get("kept_bytes", 0) for r in self.releases),
                 "dropped_bytes": sum(r.get("dropped_bytes", 0) for r in self.releases),
-                "drawn_not_released": pending, "refused": refused, "discarded": dict(self.discarded), "failure": self.failure}
+                "drawn_not_released": pending, "refused": refused, "discarded": dict(self.discarded), "failure": self.failure,
+                "device_pool": self.pool.record() if self.pool is not None else None}
 
 
 class DrawDir:
