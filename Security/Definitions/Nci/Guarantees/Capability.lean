@@ -2,23 +2,27 @@ import Definitions.Nci.Assumptions.Capability
 import Definitions.Core.Guarantees.Formalism
 
 /-!
-# The capability argument: what each local set gives
+# Local bounds: the repertoire
 
-Each local assumption set (`Definitions.Nci.Assumptions.Capability`) caps the counted products a proof block of a
-`(c, k)`-partition computes whole, `|𝒥_I| ≤ q`; Theorem 3 (`Verity.Guarantees.Counting`) then gives `|C| ≥ c |𝒥| / q`.
-Write `k' = k + ⌈log₂ B⌉ + a_blk`, Lemma 1's bound.
+The statements a local bound is assembled from, in the order an argument uses them. Write `k' = k + ⌈log₂ B⌉ + a_blk`,
+Lemma 1's bound (`Verity.Guarantees.BlockDescription`).
 
-* From Lemma 1 and a description lower bound, what a block holds: `UpdatedStatePerBlock` (slots priced at most
-  `k' + Λw`), `HeldOperandsPerBlock` (at most `(k' + Λx)/βx` operands), `JointOperandsPerBlock` (both within one budget),
-  `RecoverableCap` (Set 4: `βv |𝒥_I| ≤ k' + δ`).
-* The counting each set adds, one price `βw` per slot:
-  * Set 1, `UpstreamCap`: with the upstream certificate at demand `dm` and `βw · dm > k' + Λw`, each use a block serves
-    costs it a handed gate of that use's own upstream computation, so `|𝒥_I| ≤ k (k' + Λw)/βw`;
-  * Set 2, `OperandPairsCap`: `|𝒥_I| ≤ (k' + Λw)(k' + Λx)/(βw βx)`, and with one joint budget `JointOperandsCap`:
-    `|𝒥_I| ≤ (k' + Λ)²/(4 βw βx)`;
-  * Set 3, `FanOutCap`: `|𝒥_I| ≤ a_out (k' + Λx)/βx`.
-* Coverage (Set 5), `CapabilityFloor`: with a floor `L` on covered computations (the smallest over the sets whose
-  premises hold for the same blocks), reaching the target below `min(L, Tmax)` has probability at most `η`.
+1. **Budgets, from information.** `HeldBudget`: Lemma 1 with description hardness, every proof block holds a selection
+   priced at most `k' + Λ`. `RecoveredBudget`: with a recoverable hard source, a block's eligible outputs number at most
+   `(k' + δ + amb)/βv`.
+2. **Caps, from structure.**
+   * Incidence: `IncidenceCap`, at most `min(r |U| |V|, a_out |V|)` products from `|U|` slots and `|V|` operands;
+     `OperandCapSeparate` and `OperandCapJoint` bound them over the budgets' feasible region.
+   * Dependency: `ImportOrRecompute`, each served use either spends an imported gate of its region or contains its
+     required gates; `RecomputeByGates` caps the second route by the block's gates, `RecomputeByState` rules it out when
+     recomputing needs more updated state than the budget; `WeightedProductCap` turns served weight into a cap on
+     price-weighted products.
+3. **Counting.** Theorem 3 (`Verity.Guarantees.Counting`, `Verity.Guarantees.CountingSum`) turns a per-block cap on
+   weighted products into `|C| ≥ c Ω / q`.
+4. **Coverage.** `CapabilityFloor`: below the resulting floor, success is rare.
+
+Improving the structure (a finer incidence graph, better weights) never strengthens an information premise; a stronger
+premise is a new hypothesis, named as one.
 -/
 
 namespace Nci.Guarantees
@@ -26,102 +30,108 @@ namespace Nci.Guarantees
 open Verity Finset Nci.Capability
 open scoped ENNReal
 
-/-- **A block holds little updated state** (Lemma 1 with local update hardness). In a `(c, k)`-partition whose proof
-blocks a fixed evaluator `e` of at most `aBlk` bits can extract within `t` (for each choice of held slots, the tuple of
-their versions), local update hardness at deficit `Λw` bounds the updated state every proof block holds:
-`Σ_{i ∈ U} p_i ≤ k + ⌈log₂ B⌉ + aBlk + Λw`. -/
-def UpdatedStatePerBlock : Prop :=
+/-- **The held budget** (Lemma 1 with description hardness). In a `(c, k)`-partition whose proof blocks a fixed
+evaluator `e` of at most `aBlk` bits can extract within `t` (for each selection of `X`'s items held per block, the
+values of their cells), description hardness at deficit `Λ` bounds what every proof block holds:
+`Σ_{i ∈ U} price_i ≤ k + ⌈log₂ B⌉ + aBlk + Λ`, whether the block loads the values, decompresses them or computes them. -/
+def HeldBudget : Prop :=
   ∀ (R : Registration) (c k : ℕ), R.P.IsCK R.d c k →
-    ∀ (B : Nci.Covering.MulBlocks R.d) (W : UpdatedState B) (ρ : Type) (M : Decoder ρ) (r : ρ) (t aBlk : ℕ)
-      (Λw : ℝ) (e : List Bool), e.length ≤ aBlk →
-      (∀ (U : Fin R.B → Finset (Fin B.nw)) (σ : Fin B.nw → Fin R.d.D.N),
-        (∀ u, ∀ i ∈ U u, σ i ∈ W.ver i ∧ σ i ∈ R.P.gates u ∪ R.d.D.into (R.P.gates u)) →
-        Evaluates M r t R e fun u X => R.d.D.bits X (((U u).image σ).sort (· ≤ ·))) →
-      Assumptions.LocalUpdateHardness R B W M r t Λw →
-      HeldStateAtMost R W ((k + Nat.clog 2 R.B + aBlk : ℕ) + Λw)
+    ∀ {ι : Type} (X : Items R.d.D ι) (ρ : Type) (M : Decoder ρ) (r : ρ) (t aBlk : ℕ) (Λ : ℝ) (e : List Bool),
+      e.length ≤ aBlk →
+      (∀ (U : Fin R.B → Finset ι) (σ : ι → Finset (Fin R.d.D.N)),
+        (∀ u, Selects X (U u) σ ∧ ∀ i ∈ U u, σ i ⊆ holds R.d.D (R.P.gates u)) →
+        Evaluates M r t R e fun u T => R.d.D.bits T (((U u).biUnion σ).sort (· ≤ ·))) →
+      Assumptions.DescriptionHard R X M r t Λ →
+      HeldPriceAtMost R X ((k + Nat.clog 2 R.B + aBlk : ℕ) + Λ)
 
-/-- **A block holds few operands** (Lemma 1 with activation hardness at rate `βx > 0`): in a `(c, k)`-partition whose
-proof blocks `e` can extract within `t` (for each choice of held uses, their operands' values), every proof block holds
-at most `(k + ⌈log₂ B⌉ + aBlk + Λx)/βx` operands. -/
-def HeldOperandsPerBlock : Prop :=
-  ∀ (R : Registration) (c k : ℕ), R.P.IsCK R.d c k →
-    ∀ (B : Nci.Covering.MulBlocks R.d) (O : Operands B) (ρ : Type) (M : Decoder ρ) (r : ρ) (t aBlk : ℕ)
-      (βx Λx : ℝ) (e : List Bool), 0 < βx → e.length ≤ aBlk →
-      (∀ V : Fin R.B → Finset (Fin O.no), (∀ u, ∀ o ∈ V u, O.act o ⊆ R.P.gates u ∪ R.d.D.into (R.P.gates u)) →
-        Evaluates M r t R e fun u X => R.d.D.bits X (((V u).biUnion O.act).sort (· ≤ ·))) →
-      Assumptions.ActivationHardness R O M r t βx Λx →
-      HeldOperandsAtMost R O (((k + Nat.clog 2 R.B + aBlk : ℕ) + Λx) / βx)
-
-/-- **A block holds little of both families together** (Lemma 1 with joint operand hardness): every proof block's held
-slots `U` and operands `V` satisfy `Σ_{i ∈ U} p_i + βx |V| ≤ k + ⌈log₂ B⌉ + aBlk + Λ`. -/
-def JointOperandsPerBlock : Prop :=
-  ∀ (R : Registration) (c k : ℕ), R.P.IsCK R.d c k →
-    ∀ (B : Nci.Covering.MulBlocks R.d) (W : UpdatedState B) (O : Operands B) (ρ : Type) (M : Decoder ρ) (r : ρ)
-      (t aBlk : ℕ) (βx Λ : ℝ) (e : List Bool), e.length ≤ aBlk →
-      (∀ (U : Fin R.B → Finset (Fin B.nw)) (σ : Fin B.nw → Fin R.d.D.N) (V : Fin R.B → Finset (Fin O.no)),
-        (∀ u, ∀ i ∈ U u, σ i ∈ W.ver i ∧ σ i ∈ R.P.gates u ∪ R.d.D.into (R.P.gates u)) →
-        (∀ u, ∀ o ∈ V u, O.act o ⊆ R.P.gates u ∪ R.d.D.into (R.P.gates u)) →
-        Evaluates M r t R e fun u X => R.d.D.bits X (((U u).image σ ∪ (V u).biUnion O.act).sort (· ≤ ·))) →
-      Assumptions.JointOperandHardness R W O M r t βx Λ →
-      ∀ (u : Fin R.B) (U : Finset (Fin B.nw)) (σ : Fin B.nw → Fin R.d.D.N) (V : Finset (Fin O.no)),
-        (∀ i ∈ U, σ i ∈ W.ver i ∧ σ i ∈ R.P.gates u ∪ R.d.D.into (R.P.gates u)) →
-        (∀ o ∈ V, O.act o ⊆ R.P.gates u ∪ R.d.D.into (R.P.gates u)) →
-        ∑ i ∈ U, W.p i + βx * V.card ≤ (k + Nat.clog 2 R.B + aBlk : ℕ) + Λ
-
-/-- **Set 1: updated state and upstream dependencies.** One price `βw > 0` per slot; every proof block holds updated
-state priced at most `kb` (`UpdatedStatePerBlock`, `kb = k' + Λw`); the upstream certificate holds at demand `dm` with
-`βw · dm > kb`. Then a block that computes a counted product of use `j` whole is handed a gate of `j`'s upstream
-computation (else it contains all of `j`'s upstream products, over `dm` slots), these gates are distinct across uses
-and unregistered, and so each proof block of a `(c, k)`-partition computes at most `k · kb / βw` counted products whole.
-No operand is priced. -/
-def UpstreamCap : Prop :=
-  ∀ (R : Registration) (c k : ℕ), R.P.IsCK R.d c k →
-    ∀ (B : Nci.Covering.MulBlocks R.d) (W : UpdatedState B) (βw kb : ℝ) (dm : ℕ), 0 < βw → (∀ i, W.p i = βw) →
-      HeldStateAtMost R W kb → UpstreamCert B dm → kb < βw * dm →
-      ∀ u, ((completed R B u).card : ℝ) ≤ k * (kb / βw)
-
-/-- **Set 2: two operand families, separate bounds.** One price `βw > 0` per slot; every proof block holds updated
-state priced at most `kbw` and at most `nx` operands. Each counted product is one slot-operand pair, so each proof block
-computes at most `(kbw / βw) · nx` counted products whole. -/
-def OperandPairsCap : Prop :=
-  ∀ (R : Registration) (B : Nci.Covering.MulBlocks R.d) (W : UpdatedState B) (O : Operands B) (βw kbw nx : ℝ),
-    0 < βw → (∀ i, W.p i = βw) → HeldStateAtMost R W kbw → HeldOperandsAtMost R O nx →
-    ∀ u, ((completed R B u).card : ℝ) ≤ kbw / βw * nx
-
-/-- **Set 2: two operand families, one joint budget.** One price `βw > 0` per slot and `βx > 0` per operand; every
-proof block's held slots `U` and operands `V` satisfy `βw |U| + βx |V| ≤ kb` (`JointOperandsPerBlock`). Then each proof
-block computes at most `kb² / (4 βw βx)` counted products whole. -/
-def JointOperandsCap : Prop :=
-  ∀ (R : Registration) (B : Nci.Covering.MulBlocks R.d) (W : UpdatedState B) (O : Operands B) (βw βx kb : ℝ),
-    0 < βw → 0 < βx → (∀ i, W.p i = βw) →
-    (∀ (u : Fin R.B) (U : Finset (Fin B.nw)) (σ : Fin B.nw → Fin R.d.D.N) (V : Finset (Fin O.no)),
-      (∀ i ∈ U, σ i ∈ W.ver i ∧ σ i ∈ R.P.gates u ∪ R.d.D.into (R.P.gates u)) →
-      (∀ o ∈ V, O.act o ⊆ R.P.gates u ∪ R.d.D.into (R.P.gates u)) →
-      βw * U.card + βx * V.card ≤ kb) →
-    ∀ u, ((completed R B u).card : ℝ) ≤ kb ^ 2 / (4 * βw * βx)
-
-/-- **Set 3: hard operands and bounded fan-out.** Every proof block holds at most `nx` operands, and each operand
-occurrence feeds at most `aout` counted products. Then each proof block computes at most `aout · nx` counted products
-whole. No slot is priced. -/
-def FanOutCap : Prop :=
-  ∀ (R : Registration) (B : Nci.Covering.MulBlocks R.d) (O : Operands B) (aout nx : ℝ),
-    (∀ o, ((B.P.filter fun q => O.occ q = o).card : ℝ) ≤ aout) → HeldOperandsAtMost R O nx →
-    ∀ u, ((completed R B u).card : ℝ) ≤ aout * nx
-
-/-- **Set 4: a hard source recoverable from the block's outputs.** In a `(c, k)`-partition, with an evaluator `e` of at
-most `aBlk` bits, source hardness at deficiency `δ` and recovery at `βv` bits per eligible output give, for every proof
-block, `βv · J u ≤ k + ⌈log₂ B⌉ + aBlk + δ`. -/
-def RecoverableCap : Prop :=
+/-- **The recovered budget** (Lemma 1 with a recoverable hard source). In a `(c, k)`-partition with an evaluator `e` of at
+most `aBlk` bits, source hardness at deficiency `δ` and recovery at `βv` bits per eligible output with `amb` bits of
+ambiguity give, for every proof block, `βv · J u ≤ k + ⌈log₂ B⌉ + aBlk + δ + amb`. When the ambiguity grows with the
+outputs, `amb ≤ ε · J u` with `ε < βv`, this is `(βv − ε) · J u ≤ k' + δ`: ambiguity lowers the information per output. -/
+def RecoveredBudget : Prop :=
   ∀ (R : Registration) (c k : ℕ), R.P.IsCK R.d c k →
     ∀ (ρ : Type) (M : Decoder ρ) (r : ρ) (τ aBlk : ℕ) (e : List Bool) (z : R.d.D.Transcript → List Bool)
-      (ℓz δ βv : ℝ) (J : Fin R.B → ℕ), e.length ≤ aBlk →
-      Assumptions.SourceHardness R M r τ z ℓz δ → Assumptions.Recovers R M r τ e z ℓz βv J →
-      ∀ u, βv * J u ≤ (k + Nat.clog 2 R.B + aBlk : ℕ) + δ
+      (ℓz δ βv amb : ℝ) (J : Fin R.B → ℕ), e.length ≤ aBlk →
+      Assumptions.SourceHard R M r τ z ℓz δ → Assumptions.Recovers R M r τ e z ℓz βv amb J →
+      ∀ u, βv * J u ≤ (k + Nat.clog 2 R.B + aBlk : ℕ) + δ + amb
 
-/-- **Set 5: covered success below the floor is rare.** Under coverage of efficient methods at cost range `Tmax` and
-error `η`, if every covered computation in the class `𝒜` costs at least `Lc` (the smallest floor over the local sets
-whose premises hold, each from its cap and Theorem 3), then for every computation the probability of lying in `𝒜`,
-reaching the target, and costing below `min Lc Tmax` is at most `η`. -/
+/-- **The incidence cap.** With at most `r` counted products per slot-operand pair and at most `aout` per operand, any
+gates `S` compute at most `min(r |U| |V|, aout |V|)` counted products whole, `U` and `V` the slots and operands those
+products use. The rectangle `U × V` overcounts pairs that never meet in a product; a finer count of the incidence graph is
+a structural improvement, not a new premise. -/
+def IncidenceCap : Prop :=
+  ∀ (d : Declaration) (B : Nci.Covering.MulBlocks d) {κ : Type} [DecidableEq κ] (W : Items d.D (Fin B.nw))
+    (O : Items d.D κ) (I : Incidence B W O) (r aout : ℝ),
+    (∀ i o, ((B.P.filter fun q => q.1 = i ∧ I.occ q = o).card : ℝ) ≤ r) →
+    (∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ aout) →
+    ∀ S : Finset (Fin d.D.N),
+      ((completedIn B S).card : ℝ) ≤
+        min (r * ((completedIn B S).image Prod.fst).card * ((completedIn B S).image I.occ).card)
+          (aout * ((completedIn B S).image I.occ).card)
+
+/-- **The operand cap, separate budgets.** One price `βw > 0` per slot and `βx > 0` per operand; every proof block holds
+slots priced at most `hw` and operands priced at most `hx`. If `Q` bounds `min(r x y, aout y)` wherever `βw x ≤ hw` and
+`βx y ≤ hx`, each proof block computes at most `Q` counted products whole. -/
+def OperandCapSeparate : Prop :=
+  ∀ (R : Registration) (B : Nci.Covering.MulBlocks R.d) {κ : Type} [DecidableEq κ] (W : Items R.d.D (Fin B.nw))
+    (O : Items R.d.D κ) (I : Incidence B W O) (r aout βw βx hw hx Q : ℝ),
+    0 < βw → 0 < βx → (∀ i, W.price i = βw) → (∀ o, O.price o = βx) →
+    (∀ i o, ((B.P.filter fun q => q.1 = i ∧ I.occ q = o).card : ℝ) ≤ r) →
+    (∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ aout) →
+    HeldPriceAtMost R W hw → HeldPriceAtMost R O hx →
+    (∀ x y : ℝ, 0 ≤ x → 0 ≤ y → βw * x ≤ hw → βx * y ≤ hx → min (r * x * y) (aout * y) ≤ Q) →
+    ∀ u, ((completedIn B (R.P.gates u)).card : ℝ) ≤ Q
+
+/-- **The operand cap, one joint budget.** As `OperandCapSeparate`, with every proof block holding slots and operands
+priced at most `h` together (description hardness of `W.sum O`), and `Q` bounding `min(r x y, aout y)` wherever
+`βw x + βx y ≤ h`. The bound's maximum is `r h² / (4 βw βx)` when `r h ≤ 2 βw aout` (the block can't obtain enough slots:
+pairs limit it) and `aout (h − βw aout / r) / βx` otherwise (operand supply and fan-out limit it). -/
+def OperandCapJoint : Prop :=
+  ∀ (R : Registration) (B : Nci.Covering.MulBlocks R.d) {κ : Type} [DecidableEq κ] (W : Items R.d.D (Fin B.nw))
+    (O : Items R.d.D κ) (I : Incidence B W O) (r aout βw βx h Q : ℝ),
+    0 < βw → 0 < βx → (∀ i, W.price i = βw) → (∀ o, O.price o = βx) →
+    (∀ i o, ((B.P.filter fun q => q.1 = i ∧ I.occ q = o).card : ℝ) ≤ r) →
+    (∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ aout) →
+    HeldPriceAtMost R (W.sum O) h →
+    (∀ x y : ℝ, 0 ≤ x → 0 ≤ y → βw * x + βx * y ≤ h → min (r * x * y) (aout * y) ≤ Q) →
+    ∀ u, ((completedIn B (R.P.gates u)).card : ℝ) ≤ Q
+
+/-- **Import or recompute.** Under the upstream certificate and overlap weights `ω`, the weight of the uses a proof block
+serves is at most its unregistered input bits plus the weight of the uses whose required gates it contains: each served
+use either spends an imported gate of its region, a gate whose weight over all regions is at most 1, or computes all of
+its required gates. -/
+def ImportOrRecompute : Prop :=
+  ∀ (R : Registration) (B : Nci.Covering.MulBlocks R.d) (Rg : UseRegions R.d B.nt) (ω : Fin B.nt → ℝ),
+    Upstream B Rg → OverlapWeights Rg ω →
+    ∀ u, ∑ j ∈ served B (R.P.gates u), ω j ≤
+      (R.d.unregistered (R.P.gates u)).card +
+        ∑ j ∈ (served B (R.P.gates u)).filter (fun j => Rg.G j ⊆ R.P.gates u), ω j
+
+/-- **Recomputing costs gates.** With overlap weights `ω` and at least `g` required gates per use, the weight of the uses
+whose required gates lie within any gates `S` is at most `|S| / g`: in a `(c, k)`-partition, `c / g` a block. -/
+def RecomputeByGates : Prop :=
+  ∀ (d : Declaration) (nt : ℕ) (Rg : UseRegions d nt) (ω : Fin nt → ℝ) (g : ℝ), OverlapWeights Rg ω →
+    (∀ j, g ≤ (Rg.G j).card) → ∀ (J : Finset (Fin nt)) (S : Finset (Fin d.D.N)),
+      g * ∑ j ∈ J.filter (fun j => Rg.G j ⊆ S), ω j ≤ S.card
+
+/-- **Recomputing costs updated state.** If every proof block holds updated state priced at most `h` and recomputing any
+use needs more, no proof block contains a use's required gates: every served use is imported. -/
+def RecomputeByState : Prop :=
+  ∀ (R : Registration) {ι : Type} (W : Items R.d.D ι) (nt : ℕ) (Rg : UseRegions R.d nt) (h : ℝ),
+    HeldPriceAtMost R W h → RequiresState Rg W h → ∀ (u : Fin R.B) (j : Fin nt), ¬ Rg.G j ⊆ R.P.gates u
+
+/-- **The weighted product cap.** Weight each counted product `(i, j)` by its slot's price times its use's weight. If every
+proof block holds slots priced at most `h`, a proof block's weighted products are at most `h` times the weight of the uses
+it serves. With `ImportOrRecompute` and `RecomputeByGates` that is `h (k + c/g)`; with `RecomputeByState`, `h k`. -/
+def WeightedProductCap : Prop :=
+  ∀ (R : Registration) (B : Nci.Covering.MulBlocks R.d) (W : Items R.d.D (Fin B.nw)) (ω : Fin B.nt → ℝ) (h : ℝ),
+    SlotsRead B W → (∀ j, 0 ≤ ω j) → HeldPriceAtMost R W h →
+    ∀ u, ∑ q ∈ completedIn B (R.P.gates u), W.price q.1 * ω q.2 ≤ h * ∑ j ∈ served B (R.P.gates u), ω j
+
+/-- **Covered success below the floor is rare.** Under coverage of efficient methods at cost range `Tmax` and error `η`,
+if every covered computation in the class `𝒜` costs at least `Lc` (the smallest floor over the local arguments whose
+premises hold, each from its cap and Theorem 3), then for every computation the probability of lying in `𝒜`, reaching
+the target, and costing below `min Lc Tmax` is at most `η`. -/
 def CapabilityFloor : Prop :=
   ∀ {In L : Type} {m : ℕ} (G : Accounting.Overhead.Task In (Fin m → List Bool)) (𝒜 : Accounting.Overhead.Class In L)
     (Core : (In → Accounting.Actual.Run L) → In → Prop) (cost : Accounting.Actual.Run L → ℕ) (Tmax Lc : ℕ)

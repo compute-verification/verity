@@ -2,81 +2,111 @@ import Definitions.Core.Formalism
 import Definitions.Nci.Covering
 
 /-!
-# The capability argument: the vocabulary
+# Local bounds: the vocabulary
 
-The objects the local assumption sets and coverage (`Definitions.Nci.Assumptions.Capability`) and their consequences
-(`Definitions.Nci.Guarantees.Capability`) are stated over, on core's circuit, registration and local description length
-(`Definitions.Core.Formalism`) and the covering's multiplication blocks (`Nci.Covering.MulBlocks`). A counted product
-`(i, j)` multiplies a version of the updated parameter slot `i` by an operand of the use `j` (one token's input to one
-layer at one training step), computed inside the use's upstream computation `T j`. Indexing products by the pair allows
-one product per slot and use.
+The objects every local bound is stated over, on core's circuit, registration and local description length
+(`Definitions.Core.Formalism`) and the covering's multiplication blocks (`Nci.Covering.MulBlocks`, whose counted product
+`(i, j)` pairs an updated parameter slot `i` with a use `j`, one token's input to one layer at one training step).
 
-* `UpdatedState`: the slots' eligible versions and their prices;
-* `Operands`: the operand occurrence each product reads, and the gates holding it;
-* `HeldStateAtMost`, `HeldOperandsAtMost`: what every proof block of a registration holds, the form the local description
-  bounds give;
-* `UpstreamCert`: Set 1's graph certificate, checkable on a named circuit;
-* `completed`: the counted products a proof block computes whole.
+A block can **import** information (spending its `k` unregistered input bits) or **reconstruct** it (spending its `c`
+gates). The vocabulary names what it holds, what its values cost, and the wiring that decides which route a use needs:
+
+* information: `Items` (things a block may hold, each with eligible cells and a price), `Items.sum` (two families
+  priced jointly), `Selects`, `holds`, `HeldPriceAtMost` (the budget form every information bound takes);
+* products: `completedIn`, `served`, `SlotsRead`, `Incidence` (which slot and which operand each product reads);
+* dependency: `UseRegions` (each use's upstream region and the gates it requires), `Upstream` (the certificate, checkable
+  on a named circuit), `OverlapWeights` (how much regions may overlap), `RequiresState` (what recomputing a use costs in
+  updated state).
 -/
 
 namespace Nci.Capability
 
 open Verity Finset
 
-/-- **Updated state** of the multiplication blocks `B`: for each updated parameter slot `i` the gates `ver i` holding its
-eligible versions (a slot has one version per optimizer step that writes it), and its price `p i`, the bits a joint
-description of it costs, at least 0. Each counted product reads a version of its slot, among its own gates or what it
-reads. -/
-structure UpdatedState {d : Declaration} (B : Nci.Covering.MulBlocks d) where
-  /-- The gates holding slot `i`'s eligible versions. -/
-  ver : Fin B.nw → Finset (Fin d.D.N)
-  /-- Slot `i`'s price, in bits. -/
-  p : Fin B.nw → ℝ
-  p_nonneg : ∀ i, 0 ≤ p i
-  /-- Each counted product reads a version of its slot. -/
-  reads : ∀ q ∈ B.P, ∃ g ∈ ver q.1, g ∈ B.m q ∪ d.D.into (B.m q)
+/-- **Items** of the circuit `C`, indexed by `ι`: things whose values a block may hold. Item `i` has eligible **cells**
+`cells i`, each the gates holding one version of its value (a parameter slot has one version per optimizer step that
+writes it, each a multi-bit value; an activation occurrence has one), and a **price** `price i ≥ 0`, the bits its value
+costs in a joint description. -/
+structure Items (C : Circuit) (ι : Type) where
+  /-- The eligible cells of each item. -/
+  cells : ι → Finset (Finset (Fin C.N))
+  /-- Each item's price, in bits. -/
+  price : ι → ℝ
+  price_nonneg : ∀ i, 0 ≤ price i
 
-/-- **The operands** of the multiplication blocks `B`, at the granularity a block can select: each counted product `q`
-reads one operand occurrence `occ q` (one scalar of one token's activation, say), held by the gates `act (occ q)` among
-its own gates or what it reads, and no two counted products share both their slot and their operand. A use of Set 1
-(one token's input to one layer) holds many occurrences; a block may hold some of them without the rest. -/
-structure Operands {d : Declaration} (B : Nci.Covering.MulBlocks d) where
-  /-- The number of operand occurrences. -/
-  no : ℕ
-  /-- The operand each product reads. -/
-  occ : Fin B.nw × Fin B.nt → Fin no
-  /-- The gates holding each occurrence. -/
-  act : Fin no → Finset (Fin d.D.N)
-  /-- Each counted product reads its operand. -/
-  reads : ∀ q ∈ B.P, act (occ q) ⊆ B.m q ∪ d.D.into (B.m q)
-  /-- One counted product per slot and operand. -/
-  pair : ∀ q ∈ B.P, ∀ q' ∈ B.P, q.1 = q'.1 → occ q = occ q' → q = q'
+/-- **The joint family** of `X` and `Y`: their items side by side, each with its own cells and price. Pricing a selection
+from both in one budget is what a joint premise asserts; it is not implied by two separate ones. -/
+def Items.sum {C : Circuit} {ι κ : Type} (X : Items C ι) (Y : Items C κ) : Items C (ι ⊕ κ) where
+  cells := Sum.elim X.cells Y.cells
+  price := Sum.elim X.price Y.price
+  price_nonneg := by
+    intro i
+    cases i with
+    | inl i => exact X.price_nonneg i
+    | inr i => exact Y.price_nonneg i
 
-/-- **The counted products proof block `u` computes whole.** -/
-def completed (R : Registration) (B : Nci.Covering.MulBlocks R.d) (u : Fin R.B) : Finset (Fin B.nw × Fin B.nt) :=
-  B.P.filter fun q => B.m q ⊆ R.P.gates u
+/-- **What the gates `S` hold**: their own gates and the gates they read, `S ∪ in(S)`. -/
+def holds (C : Circuit) (S : Finset (Fin C.N)) : Finset (Fin C.N) := S ∪ C.into S
 
-/-- **Each proof block holds updated state priced at most `kb`**: for every proof block `u` of the registration, every set
-`U` of slots and every choice `σ` of eligible versions among the block's gates and what it reads, `Σ_{i ∈ U} p_i ≤ kb`. -/
-def HeldStateAtMost (R : Registration) {B : Nci.Covering.MulBlocks R.d} (W : UpdatedState B) (kb : ℝ) : Prop :=
-  ∀ (u : Fin R.B) (U : Finset (Fin B.nw)) (σ : Fin B.nw → Fin R.d.D.N),
-    (∀ i ∈ U, σ i ∈ W.ver i ∧ σ i ∈ R.P.gates u ∪ R.d.D.into (R.P.gates u)) → ∑ i ∈ U, W.p i ≤ kb
+/-- **A selection** of the items `U` of `X`, with an eligible cell `σ i` for each. -/
+def Selects {C : Circuit} {ι : Type} (X : Items C ι) (U : Finset ι) (σ : ι → Finset (Fin C.N)) : Prop :=
+  ∀ i ∈ U, σ i ∈ X.cells i
 
-/-- **Each proof block holds at most `n` operands**: for every proof block `u` and every set `V` of operand occurrences
-lying among the block's gates and what it reads, `|V| ≤ n`. -/
-def HeldOperandsAtMost (R : Registration) {B : Nci.Covering.MulBlocks R.d} (O : Operands B) (n : ℝ) : Prop :=
-  ∀ (u : Fin R.B) (V : Finset (Fin O.no)),
-    (∀ o ∈ V, O.act o ⊆ R.P.gates u ∪ R.d.D.into (R.P.gates u)) → (V.card : ℝ) ≤ n
+/-- **Each proof block holds `X`-state priced at most `h`**: every selection whose cells lie among what a proof block of
+the registration holds costs at most `h`. Every information bound reaches the counting in this form. -/
+def HeldPriceAtMost (R : Registration) {ι : Type} (X : Items R.d.D ι) (h : ℝ) : Prop :=
+  ∀ (u : Fin R.B) (U : Finset ι) (σ : ι → Finset (Fin R.d.D.N)), Selects X U σ →
+    (∀ i ∈ U, σ i ⊆ holds R.d.D (R.P.gates u)) → ∑ i ∈ U, X.price i ≤ h
 
-/-- **Set 1's upstream certificate** at demand `dm`, a property of the wiring: the uses' upstream computations `T j`
-are disjoint and hold no registered gate (`Nci.Covering.MulBlocks.T_disjoint`, `T_θ`), and each use `j` of a counted
-product has upstream products `Up`, all of whose gates lie in `T j`, over at least `dm` distinct slots, every gate of
-which reaches, inside `T j`, a gate that each counted product of `j` reads. A block that computes a counted product of
-`j` without being handed a gate of `T j` therefore contains all of `Up`. It is the covering's form of
-`Nci.Cover.MulBlocks.Upstream`. -/
-def UpstreamCert {d : Declaration} (B : Nci.Covering.MulBlocks d) (dm : ℕ) : Prop :=
-  ∀ q ∈ B.P, ∃ Up ⊆ B.P, (∀ q' ∈ Up, B.m q' ⊆ B.T q.2) ∧ dm ≤ (Up.image Prod.fst).card ∧
-    ∀ q' ∈ Up, ∀ g ∈ B.m q', ∀ p ∈ B.P, p.2 = q.2 →
-      ∃ a ∈ d.D.into (B.m p) ∩ B.T q.2, Nci.Covering.FeedsWithin d.D (B.T q.2) g a
+/-- **The counted products the gates `S` compute whole.** -/
+def completedIn {d : Declaration} (B : Nci.Covering.MulBlocks d) (S : Finset (Fin d.D.N)) :
+    Finset (Fin B.nw × Fin B.nt) :=
+  B.P.filter fun q => B.m q ⊆ S
+
+/-- **The uses the gates `S` serve**: those of a counted product they compute whole. -/
+def served {d : Declaration} (B : Nci.Covering.MulBlocks d) (S : Finset (Fin d.D.N)) : Finset (Fin B.nt) :=
+  (completedIn B S).image Prod.snd
+
+/-- **Each counted product reads a cell of its slot**, among its gates and what they read. -/
+def SlotsRead {d : Declaration} (B : Nci.Covering.MulBlocks d) (W : Items d.D (Fin B.nw)) : Prop :=
+  ∀ q ∈ B.P, ∃ c ∈ W.cells q.1, c ⊆ holds d.D (B.m q)
+
+/-- **The incidence** of the counted products with the slot items `W` and the operand items `O`: each product `q` reads
+a cell of its slot and a cell of its operand occurrence `occ q`, at the granularity a block can select (one scalar of
+one token's activation, say: a block may hold some of a token's activation without the rest). -/
+structure Incidence {d : Declaration} (B : Nci.Covering.MulBlocks d) {κ : Type} (W : Items d.D (Fin B.nw))
+    (O : Items d.D κ) where
+  /-- The operand occurrence each product reads. -/
+  occ : Fin B.nw × Fin B.nt → κ
+  slots : SlotsRead B W
+  operands : ∀ q ∈ B.P, ∃ c ∈ O.cells (occ q), c ⊆ holds d.D (B.m q)
+
+/-- **Use regions**: for each use `j`, its upstream region `A j`, which holds no registered gate, and the gates `G j ⊆ A j`
+a block must compute to serve `j` without importing from `A j`. -/
+structure UseRegions (d : Declaration) (nt : ℕ) where
+  /-- Each use's upstream region. -/
+  A : Fin nt → Finset (Fin d.D.N)
+  /-- The gates each use requires. -/
+  G : Fin nt → Finset (Fin d.D.N)
+  G_sub : ∀ j, G j ⊆ A j
+  A_θ : ∀ j, Disjoint (A j) d.θ
+
+/-- **The upstream certificate**, a property of the wiring, checkable on a named circuit: every required gate of a counted
+product's use reaches, inside that use's region, a gate the product reads. So a block that computes the product whole and
+is handed no gate of the region contains every required gate (`Nci.Guarantees.ImportOrRecompute`). It is the analysed
+implementation's; an algebraic rewrite needs its own. -/
+def Upstream {d : Declaration} (B : Nci.Covering.MulBlocks d) (Rg : UseRegions d B.nt) : Prop :=
+  ∀ p ∈ B.P, ∀ g ∈ Rg.G p.2, ∃ a ∈ d.D.into (B.m p) ∩ Rg.A p.2, Nci.Covering.FeedsWithin d.D (Rg.A p.2) g a
+
+/-- **Overlap weights** on the uses: nonnegative, summing to at most 1 over the regions that hold any one gate. Disjoint
+regions take weight 1 each; regions sharing gates take less. -/
+def OverlapWeights {d : Declaration} {nt : ℕ} (Rg : UseRegions d nt) (ω : Fin nt → ℝ) : Prop :=
+  (∀ j, 0 ≤ ω j) ∧ ∀ x : Fin d.D.N, ∑ j ∈ univ.filter (fun j => x ∈ Rg.A j), ω j ≤ 1
+
+/-- **Recomputing any use needs updated state priced above `h`**: each use's required gates hold, among themselves and
+what they read, a selection of `W` priced above `h`. -/
+def RequiresState {d : Declaration} {nt : ℕ} (Rg : UseRegions d nt) {ι : Type} (W : Items d.D ι) (h : ℝ) : Prop :=
+  ∀ j, ∃ (U : Finset ι) (σ : ι → Finset (Fin d.D.N)), Selects W U σ ∧ (∀ i ∈ U, σ i ⊆ holds d.D (Rg.G j)) ∧
+    h < ∑ i ∈ U, W.price i
 
 end Nci.Capability
