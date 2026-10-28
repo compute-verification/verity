@@ -3,16 +3,20 @@
 //
 //   forms        A's or B's seven wrapped forms in ORDER, side by side along K (wide [R/2, 7 K/2] s8), each byte the form
 //                mod 256, and per slot the number of carries (bytes whose exact form left [−128, 127]); a carry plane
-//                [7, R/2, K/2] s8 (c in {−1, 0, 1}) when asked
+//                [7, R/2, K/2] s8 (c in {−1, 0, 1}) when asked, and for A its carries as a list a row
 //   batched      CUTLASS's cooperative TMA GEMM over L = 7: the products P [7, M/2, N/2] s32 (the unfused orbit)
 //   assemble     O's four quadrants from P (the unfused orbit's last pass)
 //   fused        the products one after another through one CUTLASS TMA pipeline, as one GEMM of shape (M/2, N/2, 7 K/2)
 //                over the wide forms; the consumers hold three 128 x 128 accumulators, switch them every K/2 and store
 //                each quadrant of O straight from registers once its last product is in
+//   corr         the carries' corrections added into O on the CUDA cores (B's from lists made at load, A's from
+//                forms' lists), which makes the orbit exact
+//   corr4        B's carries' corrections mod 4 only, bit-sliced 32 rows a word: what a prover needs for O's bit 9 alone
+//                (timing only)
 //   plain        CUTLASS's cooperative TMA GEMM on A and B, the baseline
 //
 // The products are on wrapped forms: O is A Bᵀ exactly when no form carried (|a|, |b| ≤ 63 everywhere, say); otherwise
-// each carry's 256 c column is still to add (orbit.py's `products`). ext_gemm.h's entry refuses a call whose forms carried.
+// each carry's 256 c column is still to add (orbit.py's `products`), which corr does.
 #include <cstdint>
 #include <cstdio>
 #include <cuda_runtime.h>
@@ -45,15 +49,34 @@ __host__ __device__ constexpr Form form_of(int which, int s) {
   return which ? b[s] : a[s];
 }
 
-// One thread a 16-byte column chunk of one row of the half grid: the four blocks' chunks in, the seven forms' out.
-// x [R, K] s8 row-major; wide [R/2, 7 Kh] s8; counts[7] u64 (added to); carry [7, R/2, Kh] s8 or null.
+// A's carries as lists: per half-grid row r, up to kAcap entries at alist[r · kAcap], each (s << 16) | (neg << 15) | k,
+// their number in acount[r] (which may pass kAcap: the call is then refused and its rows uncorrected).
+constexpr int kAcap = 1024;
+constexpr int kFormsThreads = 128;
+
+__device__ __forceinline__ unsigned acarry_entry(int s, int k, bool neg) {
+  return (unsigned(s) << 16) | (neg ? 0x8000u : 0u) | unsigned(k);
+}
+
+// One thread a 16-byte column chunk of one row of the half grid: the four blocks' chunks in, the seven forms' out. Block
+// (blockIdx.x, blockIdx.y) covers chunks [128 blockIdx.x, +128) of row blockIdx.y.
+// x [R, K] s8 row-major; wide [R/2, 7 Kh] s8; counts[7] u64 (added to); carry [7, R/2, Kh] s8 or null; alist/acount
+// (A's lists) or null.
 template <int Which>
-__global__ void forms_kernel(const int8_t* __restrict__ x, int8_t* __restrict__ wide, unsigned long long* counts,
-                             int8_t* __restrict__ carry, int rh, int kh) {
+__global__ void __launch_bounds__(kFormsThreads) forms_kernel(const int8_t* __restrict__ x, int8_t* __restrict__ wide,
+                                                              unsigned long long* counts, int8_t* __restrict__ carry,
+                                                              unsigned* __restrict__ alist, int* __restrict__ acount,
+                                                              int rh, int kh) {
+  __shared__ unsigned bcnt[kSlots];
+  __shared__ unsigned blist[512];
+  __shared__ unsigned bn, bbase;
+  if (threadIdx.x < kSlots) bcnt[threadIdx.x] = 0;
+  if (threadIdx.x == 0) bn = 0;
+  __syncthreads();
   int chunks = kh / 16;
-  long long idx = (long long)blockIdx.x * blockDim.x + threadIdx.x;
-  bool live = idx < (long long)rh * chunks;
-  int r = live ? int(idx / chunks) : 0, c = live ? int(idx % chunks) * 16 : 0;
+  int r = blockIdx.y, ci = blockIdx.x * kFormsThreads + threadIdx.x;
+  bool live = ci < chunks;
+  int c = live ? ci * 16 : 0;
   int64_t k = 2LL * kh;
   uint4 blk[2][2] = {};
   if (live) {
@@ -95,6 +118,16 @@ __global__ void forms_kernel(const int8_t* __restrict__ x, int8_t* __restrict__ 
         for (int q = 0; q < 4; ++q) pc[q] = po[q] & (__vcmplts4(pa[q], 0u) | 0x01010101u);
         *reinterpret_cast<uint4*>(carry + ((int64_t)s * rh + r) * kh + c) = cv;
       }
+      if (alist && n) {
+        const unsigned* pa = &a.x;
+        const unsigned* po = &ov.x;
+        for (int q = 0; q < 4; ++q)
+          for (int b = 0; b < 4; ++b)
+            if ((po[q] >> (8 * b)) & 0xffu) {
+              unsigned at = atomicAdd(&bn, 1u);
+              if (at < 512) blist[at] = acarry_entry(s, c + 4 * q + b, (pa[q] >> (8 * b + 7)) & 1u);
+            }
+      }
     }
   }
 #pragma unroll
@@ -102,7 +135,17 @@ __global__ void forms_kernel(const int8_t* __restrict__ x, int8_t* __restrict__ 
     unsigned v = cnt[s];
 #pragma unroll
     for (int o = 16; o; o >>= 1) v += __shfl_xor_sync(0xffffffffu, v, o);
-    if ((threadIdx.x & 31) == 0 && v) atomicAdd(counts + s, (unsigned long long)v);
+    if ((threadIdx.x & 31) == 0 && v) atomicAdd(&bcnt[s], v);
+  }
+  __syncthreads();
+  if (threadIdx.x < kSlots && bcnt[threadIdx.x]) atomicAdd(counts + threadIdx.x, (unsigned long long)bcnt[threadIdx.x]);
+  if (alist) {
+    unsigned total = bn;
+    if (threadIdx.x == 0 && total) bbase = unsigned(atomicAdd(acount + r, int(total > 512 ? kAcap + 1 : total)));
+    __syncthreads();
+    if (total && total <= 512)
+      for (unsigned i = threadIdx.x; i < total; i += kFormsThreads)
+        if (bbase + i < kAcap) alist[(int64_t)r * kAcap + bbase + i] = blist[i];
   }
 }
 
@@ -135,6 +178,215 @@ __global__ void assemble_kernel(const int* __restrict__ p, int* __restrict__ o, 
   *reinterpret_cast<int4*>(o + (int64_t)r * n + nh + c) = q01;
   *reinterpret_cast<int4*>(o + (int64_t)(mh + r) * n + c) = q10;
   *reinterpret_cast<int4*>(o + (int64_t)(mh + r) * n + nh + c) = q11;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The carries' corrections, exact: O_q += 256 · Σ_s σ(q, s) · (wA_s · cB_sᵀ + cA_s · F_B,sᵀ) over O's quadrants q, with F_B
+// B's exact forms (wB + 256 cB).
+//   B's side: per slot s and half-grid column n, B's carries as k's, bidx[bptr[s][n] .. bmid[s][n]) the +1 ones and
+//   [bmid[s][n] .. bptr[s][n + 1]) the −1 ones (built from B at load). A's forms of slots 1..5 (those whose B form is a
+//   sum) are staged in shared memory transposed, 4 rows' bytes a word biased by 128, so one 32-bit add sums two rows in
+//   16-bit lanes; the bias comes off once a column.
+//   A's side: per row the list forms_a wrote, each entry adding ±F_B,s[n, k] (ft [7][Kh][Nh] s16, from B at load) at
+//   every n.
+// A CTA owns 4G rows of the half grid and walks all Nh columns, G lanes a column (4 rows each), so each element of O is
+// read and written once, by one thread. A row whose list overflowed sets *flag (its corrections are then incomplete).
+constexpr int kCorrThreads = 512;
+constexpr int kCorrSlots = 5;  // slots 1..5
+constexpr int kCorrPad = 8;
+
+// σ(q, s) + 1 in 2 bits a slot, for q = 00, 01, 10, 11 (O00 = M1 + M4 − M5 + M7, O01 = M3 + M5, O10 = M2 + M4,
+// O11 = M1 − M2 + M3 + M6; slots in ORDER: M2 M4 M1 M6 M7 M3 M5)
+__host__ __device__ constexpr int sigma(int q, int s) {
+  return q == 0   ? (s == 1 || s == 2 || s == 4 ? 1 : s == 6 ? -1 : 0)
+         : q == 1 ? (s == 5 || s == 6 ? 1 : 0)
+         : q == 2 ? (s == 0 || s == 1 ? 1 : 0)
+                  : (s == 2 || s == 3 || s == 5 ? 1 : s == 0 ? -1 : 0);
+}
+__host__ __device__ constexpr unsigned sigma_packed(int q) {
+  unsigned v = 0;
+  for (int s = 0; s < kSlots; ++s) v |= unsigned(sigma(q, s) + 1) << (2 * s);
+  return v;
+}
+__device__ __forceinline__ int sigma_rt(unsigned packed, int s) { return int((packed >> (2 * s)) & 3u) - 1; }
+
+// Store false (timing only): the corrections are computed but O isn't touched; each thread's xor of them goes to
+// o[its global index], so nothing is elided.
+template <int G, bool Store>
+__global__ void __launch_bounds__(kCorrThreads, 1)
+    corr_kernel(const int8_t* __restrict__ wide_a, const int* __restrict__ bptr, const int* __restrict__ bmid,
+                const uint16_t* __restrict__ bidx, const unsigned* __restrict__ alist, const int* __restrict__ acount,
+                const int16_t* __restrict__ ft, int32_t* __restrict__ o, int* flag, int mh, int nh, int kh) {
+  constexpr int R = 4 * G, CW = 32 / G;
+  extern __shared__ uint4 sm4[];
+  unsigned* sm = reinterpret_cast<unsigned*>(sm4);
+  const int ld = kh + kCorrPad;
+  const int m0 = blockIdx.x * R;
+  const int64_t wld = (int64_t)kSlots * kh;
+  for (int t = 0; t < kCorrSlots; ++t) {
+    const int s = t + 1, k4s = kh / 4;
+    for (int idx = threadIdx.x; idx < k4s * G; idx += kCorrThreads) {
+      int k4 = idx % k4s, q = idx / k4s;
+      unsigned r[4];
+#pragma unroll
+      for (int i = 0; i < 4; ++i)
+        r[i] = *reinterpret_cast<const unsigned*>(wide_a + (int64_t)(m0 + 4 * q + i) * wld + (int64_t)s * kh + 4 * k4);
+      unsigned t0 = __byte_perm(r[0], r[1], 0x5140), t1 = __byte_perm(r[2], r[3], 0x5140);
+      unsigned t2 = __byte_perm(r[0], r[1], 0x7362), t3 = __byte_perm(r[2], r[3], 0x7362);
+      uint4 w = make_uint4(__byte_perm(t0, t1, 0x5410) ^ 0x80808080u, __byte_perm(t0, t1, 0x7632) ^ 0x80808080u,
+                           __byte_perm(t2, t3, 0x5410) ^ 0x80808080u, __byte_perm(t2, t3, 0x7632) ^ 0x80808080u);
+      *reinterpret_cast<uint4*>(sm + (t * G + q) * ld + 4 * k4) = w;
+    }
+  }
+  __syncthreads();
+  const int warp = threadIdx.x / 32, lane = threadIdx.x % 32, g = lane / G, q = lane % G;
+  constexpr unsigned kSig0 = sigma_packed(0), kSig1 = sigma_packed(1), kSig2 = sigma_packed(2), kSig3 = sigma_packed(3);
+  int na[4];
+  bool over = false;
+#pragma unroll
+  for (int i = 0; i < 4; ++i) {
+    int c = acount[m0 + 4 * q + i];
+    over |= c > kAcap;
+    na[i] = min(c, kAcap);
+  }
+  if (over) atomicOr(flag, 1);
+  unsigned chk = 0;
+  for (int n = warp * CW + g; n < nh; n += (kCorrThreads / 32) * CW) {
+    int acc[4][4] = {};
+#pragma unroll
+    for (int t = 0; t < kCorrSlots; ++t) {
+      const int s = t + 1;
+      const unsigned* row = sm + (t * G + q) * ld;
+      const int beg = bptr[s * (nh + 1) + n], mid = bmid[s * nh + n], end = bptr[s * (nh + 1) + n + 1];
+      int p[4] = {};
+      for (int side = 0; side < 2; ++side) {
+        const int e0 = side ? mid : beg, e1 = side ? end : mid;
+        for (int c0 = e0; c0 < e1; c0 += 128) {
+          const int c1 = min(c0 + 128, e1);
+          unsigned lo = 0, hi = 0;
+          int e = c0;
+          for (; e + 1 < c1; e += 2) {
+            unsigned x0 = row[bidx[e]], x1 = row[bidx[e + 1]];
+            lo += (x0 & 0x00ff00ffu) + (x1 & 0x00ff00ffu);
+            hi += ((x0 >> 8) & 0x00ff00ffu) + ((x1 >> 8) & 0x00ff00ffu);
+          }
+          if (e < c1) {
+            unsigned x0 = row[bidx[e]];
+            lo += x0 & 0x00ff00ffu;
+            hi += (x0 >> 8) & 0x00ff00ffu;
+          }
+          // at most 128 biased bytes a lane: no lane passes 2^15, so the lanes separate exactly
+          const int l0 = int(lo & 0xffffu), l2 = int(lo >> 16), l1 = int(hi & 0xffffu), l3 = int(hi >> 16);
+          if (side) {
+            p[0] -= l0, p[1] -= l1, p[2] -= l2, p[3] -= l3;
+          } else {
+            p[0] += l0, p[1] += l1, p[2] += l2, p[3] += l3;
+          }
+        }
+      }
+      const int bias = 128 * ((mid - beg) - (end - mid));
+#pragma unroll
+      for (int i = 0; i < 4; ++i) {
+        const int v = p[i] - bias;
+#pragma unroll
+        for (int qq = 0; qq < 4; ++qq) {
+          if (sigma(qq, s) > 0) acc[qq][i] += v;
+          if (sigma(qq, s) < 0) acc[qq][i] -= v;
+        }
+      }
+    }
+#pragma unroll
+    for (int i = 0; i < 4; ++i) {
+      const unsigned* L = alist + (int64_t)(m0 + 4 * q + i) * kAcap;
+      for (int e = 0; e < na[i]; ++e) {
+        const unsigned v = L[e];
+        const int s = int(v >> 16), k = int(v & 0x7fffu);
+        int f = ft[((int64_t)s * kh + k) * nh + n];
+        if (v & 0x8000u) f = -f;
+        acc[0][i] += sigma_rt(kSig0, s) * f;
+        acc[1][i] += sigma_rt(kSig1, s) * f;
+        acc[2][i] += sigma_rt(kSig2, s) * f;
+        acc[3][i] += sigma_rt(kSig3, s) * f;
+      }
+    }
+#pragma unroll
+    for (int qq = 0; qq < 4; ++qq)
+#pragma unroll
+      for (int i = 0; i < 4; ++i)
+        if (Store) {
+          if (acc[qq][i]) {
+            int32_t* at = o + (int64_t)((qq >> 1) * mh + m0 + 4 * q + i) * (2LL * nh) + (qq & 1) * nh + n;
+            *at = int(unsigned(*at) + (unsigned(acc[qq][i]) << 8));
+          }
+        } else {
+          chk = (chk ^ unsigned(acc[qq][i])) * 0x9e3779b1u;
+        }
+  }
+  if (!Store) o[(int64_t)blockIdx.x * kCorrThreads + threadIdx.x] = int(chk);
+}
+
+// The attacker's correction (timing only): bit 9 of O needs only O mod 2^10, so of B's carries' corrections only their
+// value mod 4. A's forms of slots 1..5 are staged as two bit planes (bits 0 and 1), 32 rows a word, and each carry adds
+// (or subtracts) its k's planes mod 4 with three logic ops. out [4][2][mh/32][nh] u32: per quadrant the two planes.
+constexpr int kC4Threads = 512;
+
+__device__ __forceinline__ void add4(unsigned& s0, unsigned& s1, unsigned x0, unsigned x1) {
+  unsigned c = s0 & x0;
+  s0 ^= x0;
+  s1 ^= x1 ^ c;
+}
+__device__ __forceinline__ void sub4(unsigned& s0, unsigned& s1, unsigned x0, unsigned x1) {
+  unsigned b = ~s0 & x0;
+  s0 ^= x0;
+  s1 ^= x1 ^ b;
+}
+
+__global__ void __launch_bounds__(kC4Threads, 1)
+    corr4_kernel(const int8_t* __restrict__ wide_a, const int* __restrict__ bptr, const int* __restrict__ bmid,
+                 const uint16_t* __restrict__ bidx, unsigned* __restrict__ out, int mh, int nh, int kh) {
+  extern __shared__ uint4 sm4[];
+  uint2* sm = reinterpret_cast<uint2*>(sm4);  // [5][kh]: (bit 0, bit 1) of 32 rows
+  const int m0 = blockIdx.x * 32, warp = threadIdx.x / 32, lane = threadIdx.x % 32, k4s = kh / 4;
+  const int64_t wld = (int64_t)kSlots * kh;
+  for (int j = warp; j < kCorrSlots * k4s; j += kC4Threads / 32) {
+    const int t = j / k4s, k4 = j % k4s;
+    const unsigned v = *reinterpret_cast<const unsigned*>(wide_a + (int64_t)(m0 + lane) * wld + (int64_t)(t + 1) * kh + 4 * k4);
+#pragma unroll
+    for (int b = 0; b < 4; ++b) {
+      unsigned p0 = __ballot_sync(0xffffffffu, (v >> (8 * b)) & 1u), p1 = __ballot_sync(0xffffffffu, (v >> (8 * b)) & 2u);
+      if (lane == b) sm[t * kh + 4 * k4 + b] = make_uint2(p0, p1);
+    }
+  }
+  __syncthreads();
+  const int rows32 = mh / 32;
+  for (int n = threadIdx.x; n < nh; n += kC4Threads) {
+    unsigned q0[4] = {}, q1[4] = {};
+#pragma unroll
+    for (int t = 0; t < kCorrSlots; ++t) {
+      const int s = t + 1;
+      const uint2* row = sm + t * kh;
+      const int beg = bptr[s * (nh + 1) + n], mid = bmid[s * nh + n], end = bptr[s * (nh + 1) + n + 1];
+      unsigned a0 = 0, a1 = 0;
+      for (int e = beg; e < mid; ++e) {
+        const uint2 x = row[bidx[e]];
+        add4(a0, a1, x.x, x.y);
+      }
+      for (int e = mid; e < end; ++e) {
+        const uint2 x = row[bidx[e]];
+        sub4(a0, a1, x.x, x.y);
+      }
+#pragma unroll
+      for (int qq = 0; qq < 4; ++qq) {
+        if (sigma(qq, s) > 0) add4(q0[qq], q1[qq], a0, a1);
+        if (sigma(qq, s) < 0) sub4(q0[qq], q1[qq], a0, a1);
+      }
+    }
+#pragma unroll
+    for (int qq = 0; qq < 4; ++qq) {
+      out[((int64_t)(qq * 2) * rows32 + blockIdx.x) * nh + n] = q0[qq];
+      out[((int64_t)(qq * 2 + 1) * rows32 + blockIdx.x) * nh + n] = q1[qq];
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -352,16 +604,16 @@ int sm_count() {
   return n;
 }
 
-int launch_forms(const int8_t* x, int8_t* wide, unsigned long long* counts, int8_t* carry, int r, int k, int which,
-                 cudaStream_t st) {
-  if (r % 2 || k % 32) return 201;
+int launch_forms(const int8_t* x, int8_t* wide, unsigned long long* counts, int8_t* carry, unsigned* alist, int* acount,
+                 int r, int k, int which, cudaStream_t st) {
+  if (r % 2 || k % 32 || k / 2 >= 32768 || r / 2 > 65535) return 201;
   int rh = r / 2, kh = k / 2;
-  long long threads = (long long)rh * (kh / 16);
-  unsigned blocks = unsigned((threads + 255) / 256);
+  dim3 grid(unsigned((kh / 16 + kFormsThreads - 1) / kFormsThreads), unsigned(rh));
+  if (acount && cudaMemsetAsync(acount, 0, sizeof(int) * rh, st) != cudaSuccess) return 203;
   if (which)
-    forms_kernel<1><<<blocks, 256, 0, st>>>(x, wide, counts, carry, rh, kh);
+    forms_kernel<1><<<grid, kFormsThreads, 0, st>>>(x, wide, counts, carry, nullptr, nullptr, rh, kh);
   else
-    forms_kernel<0><<<blocks, 256, 0, st>>>(x, wide, counts, carry, rh, kh);
+    forms_kernel<0><<<grid, kFormsThreads, 0, st>>>(x, wide, counts, carry, alist, acount, rh, kh);
   return cudaGetLastError() == cudaSuccess ? 0 : 202;
 }
 
@@ -400,6 +652,55 @@ int launch_fused(const int8_t* a_wide, const int8_t* b_wide, int32_t* d, int m, 
   return cudaGetLastError() == cudaSuccess ? 0 : 304;
 }
 
+template <int G, bool Store>
+int launch_corr_g(const int8_t* wide_a, const int* bptr, const int* bmid, const uint16_t* bidx, const unsigned* alist,
+                  const int* acount, const int16_t* ft, int32_t* o, int* flag, int mh, int nh, int kh, cudaStream_t st) {
+  if (mh % (4 * G)) return 802;
+  int smem = int(sizeof(unsigned)) * kCorrSlots * G * (kh + kCorrPad);
+  static int attr = 0;
+  if (attr < smem) {
+    if (cudaFuncSetAttribute(corr_kernel<G, Store>, cudaFuncAttributeMaxDynamicSharedMemorySize, smem) != cudaSuccess)
+      return 803;
+    attr = smem;
+  }
+  corr_kernel<G, Store><<<mh / (4 * G), kCorrThreads, smem, st>>>(wide_a, bptr, bmid, bidx, alist, acount, ft, o, flag,
+                                                                   mh, nh, kh);
+  return cudaGetLastError() == cudaSuccess ? 0 : 804;
+}
+
+template <bool Store>
+int launch_corr_s(const int8_t* wide_a, const int* bptr, const int* bmid, const uint16_t* bidx, const unsigned* alist,
+                  const int* acount, const int16_t* ft, int32_t* o, int* flag, int mh, int nh, int kh, cudaStream_t st) {
+  if (kh <= 2048) return launch_corr_g<4, Store>(wide_a, bptr, bmid, bidx, alist, acount, ft, o, flag, mh, nh, kh, st);
+  if (kh <= 4096) return launch_corr_g<2, Store>(wide_a, bptr, bmid, bidx, alist, acount, ft, o, flag, mh, nh, kh, st);
+  if (kh <= 8192) return launch_corr_g<1, Store>(wide_a, bptr, bmid, bidx, alist, acount, ft, o, flag, mh, nh, kh, st);
+  return 801;
+}
+
+int launch_corr(const int8_t* wide_a, const int* bptr, const int* bmid, const uint16_t* bidx, const unsigned* alist,
+                const int* acount, const int16_t* ft, int32_t* o, int* flag, int m, int n, int k, bool store,
+                cudaStream_t st) {
+  int mh = m / 2, nh = n / 2, kh = k / 2;
+  if (kh % 4) return 801;
+  return store ? launch_corr_s<true>(wide_a, bptr, bmid, bidx, alist, acount, ft, o, flag, mh, nh, kh, st)
+               : launch_corr_s<false>(wide_a, bptr, bmid, bidx, alist, acount, ft, o, flag, mh, nh, kh, st);
+}
+
+int launch_corr4(const int8_t* wide_a, const int* bptr, const int* bmid, const uint16_t* bidx, unsigned* out, int m,
+                 int n, int k, cudaStream_t st) {
+  int mh = m / 2, nh = n / 2, kh = k / 2;
+  if (mh % 32 || kh % 4) return 811;
+  int smem = int(sizeof(uint2)) * kCorrSlots * kh;
+  if (smem > 227 * 1024) return 812;
+  static int attr = 0;
+  if (attr < smem) {
+    if (cudaFuncSetAttribute(corr4_kernel, cudaFuncAttributeMaxDynamicSharedMemorySize, smem) != cudaSuccess) return 813;
+    attr = smem;
+  }
+  corr4_kernel<<<mh / 32, kC4Threads, smem, st>>>(wide_a, bptr, bmid, bidx, out, mh, nh, kh);
+  return cudaGetLastError() == cudaSuccess ? 0 : 814;
+}
+
 Plain256& plain256() {
   static Plain256 g;
   return g;
@@ -433,10 +734,26 @@ int orbit_info(int* out) {
   return 0;
 }
 
-// x [r, k] s8 -> wide [r/2, 7 k/2] s8, counts[7] u64 added to, carry [7, r/2, k/2] s8 when not null; which 0: A, 1: B
-int orbit_forms(const int8_t* x, int8_t* wide, unsigned long long* counts, int8_t* carry, int r, int k, int which,
-                cudaStream_t st) {
-  return launch_forms(x, wide, counts, carry, r, k, which, st);
+// x [r, k] s8 -> wide [r/2, 7 k/2] s8, counts[7] u64 added to, carry [7, r/2, k/2] s8 when not null; which 0: A, 1: B.
+// For A, alist [r/2, 1024] u32 and acount [r/2] s32 (zeroed here) when not null: A's carries a row, as corr reads them.
+int orbit_forms(const int8_t* x, int8_t* wide, unsigned long long* counts, int8_t* carry, unsigned* alist, int* acount,
+                int r, int k, int which, cudaStream_t st) {
+  return launch_forms(x, wide, counts, carry, alist, acount, r, k, which, st);
+}
+
+// O [m, n] s32 += the carries' corrections (see corr_kernel): B's lists bptr [7, n/2 + 1], bmid [7, n/2] s32, bidx u16;
+// A's alist/acount from orbit_forms; ft [7, k/2, n/2] s16 B's exact forms. *flag set if a row's list overflowed.
+// store 0 (timing only): computed, O not updated.
+int orbit_corr(const int8_t* a_wide, const int* bptr, const int* bmid, const uint16_t* bidx, const unsigned* alist,
+               const int* acount, const int16_t* ft, int32_t* o, int* flag, int m, int n, int k, int store,
+               cudaStream_t st) {
+  return launch_corr(a_wide, bptr, bmid, bidx, alist, acount, ft, o, flag, m, n, k, store != 0, st);
+}
+
+// out [4][2][m/64][n/2] u32 = B's carries' corrections mod 4 as bit planes (corr4_kernel; timing only)
+int orbit_corr4(const int8_t* a_wide, const int* bptr, const int* bmid, const uint16_t* bidx, unsigned* out, int m, int n,
+                int k, cudaStream_t st) {
+  return launch_corr4(a_wide, bptr, bmid, bidx, out, m, n, k, st);
 }
 
 // P [7, m/2, n/2] s32 = the seven products of the wide forms, CUTLASS batched (L = 7)
@@ -478,23 +795,54 @@ int orbit_clock(unsigned long long* out, long long spin, cudaStream_t st) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// ext_gemm.h's entry (benchmarks/pouw/accel_v31): D = A Bᵀ through the fused orbit. B's forms are made at each load; a
-// call whose forms carried is refused (the carry corrections aren't in the kernel yet), so every D it returns is exact.
+// ext_gemm.h's entry (benchmarks/pouw/accel_v31): D = A Bᵀ exactly, through the fused orbit and the carries'
+// corrections. B's forms, their carry lists and exact forms are made at each load (on the host, from the device's carry
+// plane); a call whose A lists overflowed (more than 1024 carries in a half-grid row) is recomputed by the plain CUTLASS
+// GEMM, so every D it returns is exact.
 struct ExtCtx {
   int m, n, k;
-  int8_t* a_wide;
-  int8_t* b_wide;
-  unsigned long long* counts;  // [2][7]: A's, B's
+  int8_t* a_wide = nullptr;
+  int8_t* b_wide = nullptr;
+  unsigned long long* counts = nullptr;  // [2][7]: A's, B's
+  unsigned* alist = nullptr;
+  int* acount = nullptr;
+  int* flag = nullptr;
+  int* bptr = nullptr;
+  int* bmid = nullptr;
+  uint16_t* bidx = nullptr;
+  int16_t* ft = nullptr;
+  int8_t* b = nullptr;  // B itself, for a call the orbit refuses
 };
 
+void ext_release(ExtCtx* h) {
+  cudaFree(h->a_wide);
+  cudaFree(h->b_wide);
+  cudaFree(h->counts);
+  cudaFree(h->alist);
+  cudaFree(h->acount);
+  cudaFree(h->flag);
+  cudaFree(h->bptr);
+  cudaFree(h->bmid);
+  cudaFree(h->bidx);
+  cudaFree(h->ft);
+  cudaFree(h->b);
+}
+
 void* v31_ext_init(int m, int n, int k) {
-  if (m < 2 || m % 2 || n % 256 || k % 256 || k >= (1 << 17)) return nullptr;
-  ExtCtx* h = new ExtCtx{m, n, k, nullptr, nullptr, nullptr};
-  size_t aw = (size_t)(m / 2) * kSlots * (k / 2), bw = (size_t)(n / 2) * kSlots * (k / 2);
-  if (cudaMalloc(&h->a_wide, aw) != cudaSuccess || cudaMalloc(&h->b_wide, bw) != cudaSuccess ||
-      cudaMalloc(&h->counts, 2 * kSlots * sizeof(unsigned long long)) != cudaSuccess) {
-    cudaFree(h->a_wide);
-    cudaFree(h->b_wide);
+  if (m < 2 || m % 32 || n % 256 || k % 256 || k / 2 > 8192) return nullptr;
+  ExtCtx* h = new ExtCtx{m, n, k};
+  size_t mh = m / 2, nh = n / 2, kh = k / 2;
+  bool ok = cudaMalloc(&h->a_wide, mh * kSlots * kh) == cudaSuccess &&
+            cudaMalloc(&h->b_wide, nh * kSlots * kh) == cudaSuccess &&
+            cudaMalloc(&h->counts, 2 * kSlots * sizeof(unsigned long long)) == cudaSuccess &&
+            cudaMalloc(&h->alist, mh * kAcap * sizeof(unsigned)) == cudaSuccess &&
+            cudaMalloc(&h->acount, mh * sizeof(int)) == cudaSuccess && cudaMalloc(&h->flag, sizeof(int)) == cudaSuccess &&
+            cudaMalloc(&h->bptr, kSlots * (nh + 1) * sizeof(int)) == cudaSuccess &&
+            cudaMalloc(&h->bmid, kSlots * nh * sizeof(int)) == cudaSuccess &&
+            cudaMalloc(&h->ft, (size_t)kSlots * kh * nh * sizeof(int16_t)) == cudaSuccess &&
+            cudaMalloc(&h->b, (size_t)n * k) == cudaSuccess;
+  if (!ok) {
+    ext_release(h);
     delete h;
     return nullptr;
   }
@@ -503,31 +851,85 @@ void* v31_ext_init(int m, int n, int k) {
 
 int v31_ext_load(void* hv, const int8_t* b, cudaStream_t st) {
   ExtCtx* h = static_cast<ExtCtx*>(hv);
-  if (cudaMemsetAsync(h->counts + kSlots, 0, kSlots * sizeof(unsigned long long), st) != cudaSuccess) return 701;
-  return launch_forms(b, h->b_wide, h->counts + kSlots, nullptr, h->n, h->k, 1, st);
+  size_t nh = h->n / 2, kh = h->k / 2, plane = nh * kh;
+  int8_t* carry = nullptr;
+  if (cudaMalloc(&carry, kSlots * plane) != cudaSuccess) return 701;
+  int rc = cudaMemsetAsync(h->counts + kSlots, 0, kSlots * sizeof(unsigned long long), st) == cudaSuccess &&
+                   cudaMemcpyAsync(h->b, b, (size_t)h->n * h->k, cudaMemcpyDeviceToDevice, st) == cudaSuccess
+               ? 0
+               : 702;
+  if (!rc) rc = launch_forms(b, h->b_wide, h->counts + kSlots, carry, nullptr, nullptr, h->n, h->k, 1, st);
+  int8_t* hw = rc ? nullptr : new int8_t[kSlots * plane];
+  int8_t* hc = rc ? nullptr : new int8_t[kSlots * plane];
+  if (!rc && (cudaMemcpyAsync(hw, h->b_wide, kSlots * plane, cudaMemcpyDeviceToHost, st) != cudaSuccess ||
+              cudaMemcpyAsync(hc, carry, kSlots * plane, cudaMemcpyDeviceToHost, st) != cudaSuccess ||
+              cudaStreamSynchronize(st) != cudaSuccess))
+    rc = 703;
+  cudaFree(carry);
+  if (!rc) {
+    // B's lists: per slot and column, the +1 carries' k's, then the −1 ones'
+    int* ptr = new int[kSlots * (nh + 1)];
+    int* mid = new int[kSlots * nh];
+    size_t total = 0;
+    for (size_t i = 0; i < kSlots * plane; ++i) total += hc[i] != 0;
+    uint16_t* idx = new uint16_t[total ? total : 1];
+    int16_t* ft = new int16_t[kSlots * plane];
+    size_t at = 0;
+    for (int s = 0; s < kSlots; ++s)
+      for (size_t c = 0; c < nh; ++c) {
+        const int8_t* cr = hc + (size_t)s * plane + c * kh;
+        const int8_t* wr = hw + c * kSlots * kh + (size_t)s * kh;
+        ptr[s * (nh + 1) + c] = int(at);
+        for (size_t j = 0; j < kh; ++j)
+          if (cr[j] > 0) idx[at++] = uint16_t(j);
+        mid[s * nh + c] = int(at);
+        for (size_t j = 0; j < kh; ++j)
+          if (cr[j] < 0) idx[at++] = uint16_t(j);
+        if (c + 1 == nh) ptr[s * (nh + 1) + nh] = int(at);
+        for (size_t j = 0; j < kh; ++j) ft[((size_t)s * kh + j) * nh + c] = int16_t(wr[j] + 256 * cr[j]);
+      }
+    cudaFree(h->bidx);
+    h->bidx = nullptr;
+    if (cudaMalloc(&h->bidx, (total ? total : 1) * sizeof(uint16_t)) != cudaSuccess ||
+        cudaMemcpy(h->bidx, idx, total * sizeof(uint16_t), cudaMemcpyHostToDevice) != cudaSuccess ||
+        cudaMemcpy(h->bptr, ptr, kSlots * (nh + 1) * sizeof(int), cudaMemcpyHostToDevice) != cudaSuccess ||
+        cudaMemcpy(h->bmid, mid, kSlots * nh * sizeof(int), cudaMemcpyHostToDevice) != cudaSuccess ||
+        cudaMemcpy(h->ft, ft, kSlots * plane * sizeof(int16_t), cudaMemcpyHostToDevice) != cudaSuccess)
+      rc = 704;
+    delete[] ptr;
+    delete[] mid;
+    delete[] idx;
+    delete[] ft;
+  }
+  delete[] hw;
+  delete[] hc;
+  return rc;
 }
 
 int v31_ext_gemm(void* hv, const int8_t* a, int32_t* d, cudaStream_t st) {
   ExtCtx* h = static_cast<ExtCtx*>(hv);
-  if (cudaMemsetAsync(h->counts, 0, kSlots * sizeof(unsigned long long), st) != cudaSuccess) return 711;
-  int rc = launch_forms(a, h->a_wide, h->counts, nullptr, h->m, h->k, 0, st);
+  if (cudaMemsetAsync(h->counts, 0, kSlots * sizeof(unsigned long long), st) != cudaSuccess ||
+      cudaMemsetAsync(h->flag, 0, sizeof(int), st) != cudaSuccess)
+    return 711;
+  int rc = launch_forms(a, h->a_wide, h->counts, nullptr, h->alist, h->acount, h->m, h->k, 0, st);
+  if (!rc) rc = launch_fused(h->a_wide, h->b_wide, d, h->m, h->n, h->k, 8, 0, st);
+  if (!rc) rc = launch_corr(h->a_wide, h->bptr, h->bmid, h->bidx, h->alist, h->acount, h->ft, d, h->flag, h->m, h->n,
+                            h->k, true, st);
   if (rc) return rc;
-  rc = launch_fused(h->a_wide, h->b_wide, d, h->m, h->n, h->k, 8, 0, st);
-  if (rc) return rc;
-  unsigned long long c[2 * kSlots];
-  if (cudaMemcpyAsync(c, h->counts, sizeof c, cudaMemcpyDeviceToHost, st) != cudaSuccess) return 712;
-  if (cudaStreamSynchronize(st) != cudaSuccess) return 713;
-  for (unsigned long long v : c)
-    if (v) return 714;
+  int flag = 0;
+  if (cudaMemcpyAsync(&flag, h->flag, sizeof flag, cudaMemcpyDeviceToHost, st) != cudaSuccess ||
+      cudaStreamSynchronize(st) != cudaSuccess)
+    return 712;
+  if (flag && plain256().run(h->m, h->n, h->k, 1, a, h->k, (int64_t)h->m * h->k, h->b, h->k, (int64_t)h->n * h->k, d,
+                             h->n, (int64_t)h->m * h->n, st))
+    return 715;
   return 0;
 }
 
 void v31_ext_free(void* hv) {
   ExtCtx* h = static_cast<ExtCtx*>(hv);
   if (!h) return;
-  cudaFree(h->a_wide);
-  cudaFree(h->b_wide);
-  cudaFree(h->counts);
+  ext_release(h);
   delete h;
 }
 

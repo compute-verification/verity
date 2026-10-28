@@ -3,7 +3,8 @@
 # 8B's layer-0 int8 weights fetched into scratch (weights.py; SW_REAL=0 skips them, and a failed fetch only drops the
 # real-weight gate); then bench.py with this script's arguments under one gpu-lease of at most SW_MAX_MIN (20) minutes,
 # writing into $OUT/bench. VERITY_BENCH_VENV names the Python with torch (else the node's first known venv, else one made
-# under /workspace/cache/kernels-sw-orbit); CUDA the toolkit (build.sh's default).
+# under /workspace/cache/kernels-sw-orbit); CUDA the toolkit (build.sh's default); SW_BUILD_ONLY=1 stops after the build,
+# taking no lease.
 #   research run --on vy-dc-h200-3 --project verity --campaign hash --source . --cwd source --timeout 60m \
 #     --env GPU_LEASE_WHO=NAME -- bash benchmarks/torch_gpu/sw_orbit/run.sh [bench.py flags]
 set -uo pipefail
@@ -28,6 +29,7 @@ if [ ! -x "${PY:-}" ]; then
 fi
 echo "sw_orbit: build at $(date -u +%H:%M:%SZ)"
 bash "$HERE/build.sh" "$OUT/ship" > "$OUT/build.log" 2>&1 || { tail -40 "$OUT/build.log" >&2; exit 2; }
+if [ "${SW_BUILD_ONLY:-0}" = 1 ]; then grep -iE "warning|error" "$OUT/build.log" | head -40; echo "sw_orbit: built"; exit 0; fi
 "$PY" -c 'import torch; print(torch.__version__, torch.version.cuda)' > "$OUT/python.txt" 2>&1
 W=$(mktemp -d); trap 'rm -rf "$W"' EXIT
 REAL=()
