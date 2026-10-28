@@ -66,7 +66,7 @@ def byteStrings (i : Json) (k : String) (K n : Nat) : V (List ByteArray) := do
 
 def eval (i : Json) : V Json := do
   let (K, M, LIMIT) ← statics i
-  let os := List.zipWith (fun r e => Opening.mk (bitsOf r) (bitsOf e)) (← byteStrings i "records" K 92)
+  let os := List.zipWith (fun r e => RoundOpening.mk (bitsOf r) (bitsOf e)) (← byteStrings i "records" K 92)
     (← byteStrings i "expected" K 64)
   let vs := verdicts LIMIT os
   return Json.mkObj [("out", .arr (((prog K M LIMIT).eval (encode os)).toArray.map (num ·.toNat))),

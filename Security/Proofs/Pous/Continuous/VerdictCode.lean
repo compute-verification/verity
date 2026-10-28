@@ -221,7 +221,7 @@ theorem eval_eq (C : PousCheck.Verdict.Prog) (x : List Bool) : (toProg C).eval x
 /-! ## The openings and their verdicts -/
 
 /-- An opening of the code as the analysis's. -/
-def toO (o : PousCheck.Verdict.Opening) : RoundOpening := ⟨o.row, o.expected⟩
+def toO (o : PousCheck.Verdict.RoundOpening) : RoundOpening := ⟨o.row, o.expected⟩
 
 /-- A verdict of the code as the analysis's. -/
 def toCV : PousCheck.Verdict.RoundVerdict → ContVerdict
@@ -236,35 +236,35 @@ theorem bitsVal_eq : PousCheck.Verdict.bitsVal = bitsVal := by
   | nil => rfl
   | cons b l ih => simp only [PousCheck.Verdict.bitsVal, bitsVal, ih]
 
-theorem j_eq (o : PousCheck.Verdict.Opening) : o.j = (toO o).j := by
-  simp only [PousCheck.Verdict.Opening.j, RoundOpening.j, PousCheck.Verdict.beField, beField, bitsVal_eq,
+theorem j_eq (o : PousCheck.Verdict.RoundOpening) : o.j = (toO o).j := by
+  simp only [PousCheck.Verdict.RoundOpening.j, RoundOpening.j, PousCheck.Verdict.beField, beField, bitsVal_eq,
     beWires_eq, toO]
 
-theorem send_eq (o : PousCheck.Verdict.Opening) : o.send = (toO o).send := by
-  simp only [PousCheck.Verdict.Opening.send, RoundOpening.send, PousCheck.Verdict.beField, beField, bitsVal_eq,
+theorem send_eq (o : PousCheck.Verdict.RoundOpening) : o.send = (toO o).send := by
+  simp only [PousCheck.Verdict.RoundOpening.send, RoundOpening.send, PousCheck.Verdict.beField, beField, bitsVal_eq,
     beWires_eq, toO]
 
-theorem receipt_eq (o : PousCheck.Verdict.Opening) : o.receipt = (toO o).receipt := by
-  simp only [PousCheck.Verdict.Opening.receipt, RoundOpening.receipt, PousCheck.Verdict.beField, beField, bitsVal_eq,
-    beWires_eq, toO]
+theorem receipt_eq (o : PousCheck.Verdict.RoundOpening) : o.receipt = (toO o).receipt := by
+  simp only [PousCheck.Verdict.RoundOpening.receipt, RoundOpening.receipt, PousCheck.Verdict.beField, beField,
+    bitsVal_eq, beWires_eq, toO]
 
-theorem digest_eq (o : PousCheck.Verdict.Opening) : o.digest = (toO o).digest := rfl
+theorem digest_eq (o : PousCheck.Verdict.RoundOpening) : o.digest = (toO o).digest := rfl
 
-theorem expected_eq (o : PousCheck.Verdict.Opening) : o.expected = (toO o).expected := rfl
+theorem expected_eq (o : PousCheck.Verdict.RoundOpening) : o.expected = (toO o).expected := rfl
 
-theorem roundVerdict_eq (LIMIT j : ℕ) (o : PousCheck.Verdict.Opening) :
+theorem roundVerdict_eq (LIMIT j : ℕ) (o : PousCheck.Verdict.RoundOpening) :
     toCV (PousCheck.Verdict.roundVerdict LIMIT j o) = roundVerdict LIMIT j (toO o) := by
   rw [PousCheck.Verdict.roundVerdict, roundVerdict, j_eq, send_eq, receipt_eq, digest_eq, expected_eq]
   split_ifs <;> rfl
 
 /-- **The code's verdicts are the analysis's.** -/
-theorem verdicts_eq (LIMIT : ℕ) (os : List PousCheck.Verdict.Opening) :
+theorem verdicts_eq (LIMIT : ℕ) (os : List PousCheck.Verdict.RoundOpening) :
     (PousCheck.Verdict.verdicts LIMIT os).map toCV = verdicts LIMIT (os.map toO) := by
   apply List.ext_getElem (by simp only [PousCheck.Verdict.verdicts, List.length_map, List.length_mapIdx, verdicts])
   intro i h1 h2
   simp only [PousCheck.Verdict.verdicts, List.getElem_map, List.getElem_mapIdx, roundVerdict_eq, verdicts]
 
-theorem encode_eq (os : List PousCheck.Verdict.Opening) : PousCheck.Verdict.encode os = encode (os.map toO) := by
+theorem encode_eq (os : List PousCheck.Verdict.RoundOpening) : PousCheck.Verdict.encode os = encode (os.map toO) := by
   simp only [PousCheck.Verdict.encode, encode, List.flatMap_map, toO]
 
 theorem misses_eq (vs : List PousCheck.Verdict.RoundVerdict) :
@@ -283,7 +283,7 @@ theorem accepts_iff {M : ℕ} {vs : List PousCheck.Verdict.RoundVerdict} {rs : L
   rw [contAccepts, records_filter, hrs, misses_eq, PousCheck.Verdict.accepts, decide_eq_true_iff]
   exact Nat.cast_le.symm
 
-theorem fits_map {os : List PousCheck.Verdict.Opening}
+theorem fits_map {os : List PousCheck.Verdict.RoundOpening}
     (hfit : ∀ o ∈ os, o.row.length = recordBits ∧ o.expected.length = digestBits) :
     ∀ o ∈ os.map toO, o.Fits := by
   intro o ho
@@ -292,7 +292,7 @@ theorem fits_map {os : List PousCheck.Verdict.Opening}
 
 /-- **The code's verdict unit outputs what the code accepts**: on the openings of `K ≤ 2³²` rounds of the unit's
 widths, `prog`'s output, run by the code, is `accepts M` of the code's verdicts. -/
-theorem prog_eval {K M LIMIT : ℕ} {os : List PousCheck.Verdict.Opening} (hK : os.length = K) (hK32 : K ≤ 2 ^ 32)
+theorem prog_eval {K M LIMIT : ℕ} {os : List PousCheck.Verdict.RoundOpening} (hK : os.length = K) (hK32 : K ≤ 2 ^ 32)
     (hfit : ∀ o ∈ os, o.row.length = recordBits ∧ o.expected.length = digestBits) :
     (PousCheck.Verdict.prog K M LIMIT).eval (PousCheck.Verdict.encode os) =
       [PousCheck.Verdict.accepts M (PousCheck.Verdict.verdicts LIMIT os)] := by
@@ -302,7 +302,7 @@ theorem prog_eval {K M LIMIT : ℕ} {os : List PousCheck.Verdict.Opening} (hK : 
 /-- **The code's verdict unit decides `contAccepts`**: on the openings of `K ≤ 2³²` rounds of the unit's widths, its
 output, run by the code, is `1` iff the memory challenger with tolerance `M` accepts the records the code's verdicts
 are. -/
-theorem prog_accepts {K M LIMIT : ℕ} {os : List PousCheck.Verdict.Opening} (hK : os.length = K) (hK32 : K ≤ 2 ^ 32)
+theorem prog_accepts {K M LIMIT : ℕ} {os : List PousCheck.Verdict.RoundOpening} (hK : os.length = K) (hK32 : K ≤ 2 ^ 32)
     (hfit : ∀ o ∈ os, o.row.length = recordBits ∧ o.expected.length = digestBits) {rs : List ContRecord}
     (hrs : rs.map (·.verdict) = (PousCheck.Verdict.verdicts LIMIT os).map toCV) :
     (PousCheck.Verdict.prog K M LIMIT).eval (PousCheck.Verdict.encode os) = [true] ↔ contAccepts (M : ℝ) rs := by

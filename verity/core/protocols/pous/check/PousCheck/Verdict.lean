@@ -158,18 +158,21 @@ def bitsVal : List Bool → Nat
 /-- The big-endian integer at bytes `pos … pos + nbytes − 1` of `row`. -/
 def beField (row : List Bool) (pos nbytes : Nat) : Nat := bitsVal ((beWires 0 pos nbytes).map fun i => row.getD i false)
 
-/-- Round `j`'s opening: its record as the memory challenger writes it (`memory_challenger.Round.value`), and the expected
-digest of the block it challenged. A byte string is bits in byte order, bit `t` being bit `t mod 8` of byte `t / 8`. -/
-structure Opening where
+/-- Round `j`'s opening, the verdict unit's inputs for it (the analysis's `PousVerdict.RoundOpening`): its record as the
+memory challenger writes it (`memory_challenger.Round.value`), and the expected digest of the block it challenged. No
+tree path: the unit reads the values, not their commitment. A byte string is bits in byte order, bit `t` being bit
+`t mod 8` of byte `t / 8`. -/
+structure RoundOpening where
   row : List Bool
   expected : List Bool
 
-def Opening.j (o : Opening) : Nat := beField o.row 0 4
-def Opening.send (o : Opening) : Nat := beField o.row 12 8
-def Opening.receipt (o : Opening) : Nat := beField o.row 20 8
+def RoundOpening.j (o : RoundOpening) : Nat := beField o.row 0 4
+def RoundOpening.send (o : RoundOpening) : Nat := beField o.row 12 8
+def RoundOpening.receipt (o : RoundOpening) : Nat := beField o.row 20 8
 
 /-- The record's `H(block)`. -/
-def Opening.digest (o : Opening) : List Bool := (List.range digestBits).map fun t => o.row.getD (224 + t) false
+def RoundOpening.digest (o : RoundOpening) : List Bool :=
+  (List.range digestBits).map fun t => o.row.getD (224 + t) false
 
 /-- The memory challenger's verdict on one round. -/
 inductive RoundVerdict where
@@ -181,13 +184,13 @@ inductive RoundVerdict where
 
 /-- **Round `j`'s verdict** (`verdict_circuit.round_verdict`): rejected when its record names another round or its receipt
 is before its send, late past `LIMIT`, wrong when its `H(block)` is not the expected digest, else a hit. -/
-def roundVerdict (LIMIT j : Nat) (o : Opening) : RoundVerdict :=
+def roundVerdict (LIMIT j : Nat) (o : RoundOpening) : RoundVerdict :=
   if o.j = j ∧ o.send ≤ o.receipt then
     if o.receipt - o.send ≤ LIMIT then (if o.digest = o.expected then .hit else .wrong) else .late
   else .reject
 
 /-- The rounds' verdicts, round `j` the `j`-th opening's. -/
-def verdicts (LIMIT : Nat) (os : List Opening) : List RoundVerdict := os.mapIdx fun j o => roundVerdict LIMIT j o
+def verdicts (LIMIT : Nat) (os : List RoundOpening) : List RoundVerdict := os.mapIdx fun j o => roundVerdict LIMIT j o
 
 /-- The rounds that are not hits. -/
 def misses (vs : List RoundVerdict) : Nat := (vs.filter (· ≠ .hit)).length
@@ -196,6 +199,6 @@ def misses (vs : List RoundVerdict) : Nat := (vs.filter (· ≠ .hit)).length
 def accepts (M : Nat) (vs : List RoundVerdict) : Bool := decide (misses vs ≤ M)
 
 /-- The unit's inputs in leaf order: every record, then every expected digest. -/
-def encode (os : List Opening) : List Bool := os.flatMap (·.row) ++ os.flatMap (·.expected)
+def encode (os : List RoundOpening) : List Bool := os.flatMap (·.row) ++ os.flatMap (·.expected)
 
 end PousCheck.Verdict
