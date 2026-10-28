@@ -29,6 +29,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import coll_concat
 from verity.ml.circuits.types import Array, Value
+from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import lms
 
 from test_challenger import HOST, entropy, lms_key, lms_verify
@@ -780,6 +781,26 @@ LEDGERS = {
         json.dumps({**json.loads(lines[1]), "body": {**json.loads(lines[1])["body"], "ended": "closed\u2026"}},
                    sort_keys=True, separators=(",", ":"), ensure_ascii=False)]), "ledger entry 1 is malformed"),
 }
+
+
+def test_the_verifier_reads_an_entry_whose_text_past_ascii_the_auditor_escaped(tmp_path, signer):
+    """An auditor's string past ASCII is in its line escaped (`ledger_text`), while its signature is over the entry's
+    canonical JSON in UTF-8, as the challenger signs it: such an entry reads and verifies, and is refused only unescaped
+    (`LEDGERS`)."""
+    class Escaping(Ledger):
+        def end(self, session, directory, closed, **changes):
+            super().end(session, directory, closed, ended="closed by the client \u2026", **changes)
+
+    host = Host(tmp_path, signer, ledger=Escaping(tmp_path / "windows.jsonl", signer))
+    honest(host)
+    assert '"ended":"closed by the client \\u2026"' in R.ledger_lines(host.ledger.path)[-1]
+    host.trusted()
+    entry = {"body": {"ended": "\u2026"}, "kind": "end", "prev": "0" * 128, "schema": C.LEDGER_SCHEMA, "seq": 1,
+             "session": "s"}
+    utf8 = json.dumps(entry, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    assert C.ledger_message(bytes(16), entry) == hashlib.sha512(
+        C._field(C.LEDGER_ROLE.encode()) + bytes(16)
+        + C._field(tagged_sha512(C.LEDGER_TAGS[C.LEDGER_SCHEMA], utf8))).digest()
 
 
 @pytest.mark.parametrize("case", sorted(LEDGERS))
