@@ -59,7 +59,9 @@ H1's tables are tied to the window's Commit, its coins are the session the ledge
 is one manifest under them; core's credit refuses the window and is shown beside it (`DEV_WHY`). Credit reads the
 declared Program serve-openai wrote (``h1/window-program.json.gz``), the period ``period open`` opened, and, when given,
 the drawn calls' statements (``--statements``) and the window's live evidence (``--live-evidence``,
-``h1_prove/live.py evidence``'s), so it reaches each check those reach (`credit_inputs`).
+``h1_prove/live.py evidence``'s), so it reaches each check those reach (`credit_inputs`). The verdict says whether the
+window meets the two premises of `Security`'s that no check here discharges, ``AcceptedLive`` and ``SaltIsLiveCoin``
+(`premises`): each ``{met, why}``, met only where this run's checks show it.
 
 ``record``: sampled proofs' answer from the records audit `prove_path/run.sh` (``PP_RECORDS=1``) kept under
 ``--sampled-proofs`` (its ``NAME`` dir: ``summary.json``, ``window/audit.json``, ``windows/rank0/registration.json``), read
@@ -251,7 +253,8 @@ def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
     return {"verdict": doc.get("verdict"), "development": True, "credited": False, "reasons": doc.get("reasons"),
             "coin_source": doc.get("coin_source"), "session": (doc.get("session") or {}).get("session"),
             "tied": doc.get("tied"), "coins": check.get("reason", "unchecked"), "manifest": check.get("manifest", "unchecked"),
-            "gate_passed": doc.get("gate_passed"), "credit": credit.get("window")}
+            "gate_passed": doc.get("gate_passed"), "credit": credit.get("window"),
+            **{p: doc.get(p) for p in PREMISES}}
 
 
 def _gate_out(gate: str, *words: str) -> bytes:
@@ -415,6 +418,43 @@ def check_challenger(calls: Path, tree: Path, ledger: Path, pins: Path, main: Pa
 
 Check = Callable[[Path, Path, Path, Path, "Path | None", str, Path, Mapping[str, str]], Mapping[str, Any]]
 
+#: the premises the pouw piece's verdict says whether the window meets (`premises`)
+PREMISES = ("AcceptedLive", "SaltIsLiveCoin")
+#: why a window meets ``AcceptedLive`` (`Accounting.TS.Session`'s, ``accounting-ts-accepted-live``)
+LIVE_MET = ("credit accepted the window, and it credits a drawn unit or a live round only where the verifier of record "
+            "accepted its session (flock-verify verify --zk with the --registered file credit builds)")
+#: why a window meets ``SaltIsLiveCoin`` (`Properties.Pouw.Period`'s)
+SALT_MET = ("core_check.salt accepted the window's salt as its live salt coin, opened after the window's open root and read "
+            "through the session the auditor's ledger opened for it, under the host's pins log and main, and the record's "
+            "Program salt is that coin's (manifest_reason)")
+
+
+def premises(doc: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    """Whether the window of `pouw`'s document `doc` meets ``AcceptedLive`` and ``SaltIsLiveCoin``, each ``{met, why}``:
+    ``AcceptedLive`` only when core's credit accepted the window (a window credit refuses credits no proof, so it
+    doesn't), ``SaltIsLiveCoin`` only when the challenger check accepted the window's coins, its salt among them, and its
+    record as one manifest under them."""
+    check, credit = doc.get("check"), doc.get("credit")
+    reasons = list(doc.get("reasons") or ())
+    unchecked = next((r for r in reasons if r.startswith("coins: ")), "; ".join(reasons) or "no challenger check")
+    if check is None:
+        salt = False, f"the challenger check didn't run on the window: {unchecked}"
+    elif check.get("reason") is not None:
+        salt = False, f"the challenger check refused the window's coins, its salt among them: {check['reason']}"
+    elif check.get("manifest") is not None:
+        salt = False, f"the window's record isn't one manifest under its salt coin: {check['manifest']}"
+    else:
+        salt = True, SALT_MET
+    if credit is None:
+        live = False, f"credit didn't run on the window, so it credited no proof: {unchecked}"
+    elif credit.get("credit") is None:
+        why = credit.get("window") or credit.get("manifest") or "no credited calls"
+        why = f"{why[0]}: {why[1]}" if isinstance(why, (list, tuple)) else str(why)
+        live = False, f"credit refused the window ({why}), so it credited no proof"
+    else:
+        live = True, LIVE_MET
+    return {name: {"met": met, "why": why[:600]} for name, (met, why) in zip(PREMISES, (live, salt), strict=True)}
+
 
 def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str | None, main: Path | None,
          check: Check, statements: Path | None = None, live: Path | None = None) -> dict[str, Any]:
@@ -456,6 +496,7 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
             doc["credit"] = {k: (got.get("credit") or {}).get(k) for k in ("window", "manifest", "k", "drawn", "eps", "calls", "credit")}
             reasons += [f"{k}: {got[r]}" for k, r in (("coins", "reason"), ("manifest", "manifest")) if got.get(r)]
     doc.update(verdict="reject" if reasons else "accept", reasons=reasons)
+    doc.update(premises(doc))
     (out / DEVELOPMENT).write_text(json.dumps(doc, indent=1, sort_keys=True, default=str) + "\n")
     return doc
 
