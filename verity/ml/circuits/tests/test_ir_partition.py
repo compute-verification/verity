@@ -1,7 +1,7 @@
 """`verity.ml.circuits.partition`: the fast path (per-body induction over `Family.tiling()`) against the interval sweep on the
 same materialised sets; the sweep on synthetic interval families and on Parts of real Programs; `validate_width`
 (bound-only certification vs exact, budget, Unsupported) against an oracle boundary and against `verity.ml.circuits.boundary`;
-readiness on Programs with 64-bit gates; the `VuVerdict` composition; `query_ast` families end to end.
+readiness on Programs with 64-bit gates; the `BlockVerdict` composition; `query_ast` families end to end.
 
 Stand-ins, built from explicit `Part`s so the validator is checked independently of `query_ast`:
 
@@ -24,8 +24,8 @@ from verity.ml.circuits import boundary, partition, query_ast as G
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.layout import Scope, GateSelection
 from verity.ml.circuits.parts import Limits, Part, Unsupported, n_members
-from verity.ml.circuits.partition import (PartitionVerdict, ReadinessReport, VuVerdict, WidthVerdict, gate_width_readiness, readiness_32bit,
-                                 validate_partition, validate_vu_family, validate_vu_partition, validate_width, vu_status)
+from verity.ml.circuits.partition import (PartitionVerdict, ReadinessReport, BlockVerdict, WidthVerdict, gate_width_readiness, readiness_32bit,
+                                 validate_partition, validate_block_family, validate_block_partition, validate_width, block_status)
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
@@ -814,8 +814,8 @@ def test_readiness_counts_instances_by_multiplicity(gemm):
 
 def test_vu_verdict_ok(gemm, oracle):
     oracle()
-    v = validate_vu_family(gemm, family_of(gemm, gemm_vu_tiling(gemm)), 32)
-    assert isinstance(v, VuVerdict) and v.status == "ok" and v.count == 230
+    v = validate_block_family(gemm, family_of(gemm, gemm_vu_tiling(gemm)), 32)
+    assert isinstance(v, BlockVerdict) and v.status == "ok" and v.count == 230
     assert v.partition.status == "exact" and v.width.status == "ok" and v.readiness_32.ok
     j = v.to_json()
     assert j["status"] == "ok" and j["count"] == 230 and j["partition"]["status"] == "exact"
@@ -826,21 +826,21 @@ def test_vu_verdict_ok(gemm, oracle):
 def test_vu_verdict_fail_and_not_ready_and_unsupported(gemm, oracle):
     oracle()
     t = tiling(whole_body(gemm.root, {0: members_k(), 1: members_k()}))
-    assert validate_vu_family(gemm, family_of(gemm, t), 32).status == "fail"           # width violation
+    assert validate_block_family(gemm, family_of(gemm, t), 32).status == "fail"           # width violation
     t = tiling(body_tiling(gemm.root, {0: members_k(), 2: members_k()}))
-    assert validate_vu_family(gemm, family_of(gemm, t), 32).status == "fail"           # gap
+    assert validate_block_family(gemm, family_of(gemm, t), 32).status == "fail"           # gap
     W = wide_program()
     oracle(program=W)
-    v = validate_vu_family(W, family_of(W, tiling(whole_body(W.root))), 64)
+    v = validate_block_family(W, family_of(W, tiling(whole_body(W.root))), 64)
     assert v.status == "ok" and v.count == 5                                            # a 64-bit protocol
-    v = validate_vu_family(W, family_of(W, tiling(whole_body(W.root))), 32)
+    v = validate_block_family(W, family_of(W, tiling(whole_body(W.root))), 32)
     assert v.status == "fail" and not v.readiness_32.ok                                 # the returned 64-bit gate escapes
     # the same Program where the 64-bit gates do not escape any set: readiness alone objects
     fam = StubFamily([StubGateSet((Part(W.circuit.root_scope, frozenset({(0, 0), (1, 0)})),)),
                       StubGateSet((Part(W.circuit.root_scope, frozenset({(2, 0), (3, 0), (4, 0)})),))])
-    v = validate_vu_family(W, fam, 64)
+    v = validate_block_family(W, fam, 64)
     assert v.status == "ok"
-    v = validate_vu_family(W, fam, 96)
+    v = validate_block_family(W, fam, 96)
     assert v.status == "ok"
     assert not gate_width_readiness(W, 32).ok
 
@@ -848,11 +848,11 @@ def test_vu_verdict_fail_and_not_ready_and_unsupported(gemm, oracle):
         max_intervals = 2
 
     oracle()
-    v = validate_vu_family(gemm, family_of(gemm, gemm_vu_tiling(gemm), with_tiling=False), 32, L())
+    v = validate_block_family(gemm, family_of(gemm, gemm_vu_tiling(gemm), with_tiling=False), 32, L())
     assert v.status == "unsupported" and v.partition.status == "unsupported"
 
 
-def test_vu_status_precedence():
+def test_block_status_precedence():
     ok_p = PartitionVerdict("exact", (), {})
     gap_p = PartitionVerdict("gap", (), {})
     un_p = PartitionVerdict("unsupported", (), {})
@@ -861,13 +861,13 @@ def test_vu_status_precedence():
     un_w = WidthVerdict(32, None, (), (0,), "unsupported")
     ready = ReadinessReport(32, True, (), 32, 1, 0)
     unready = ReadinessReport(32, False, (), 64, 1, 1)
-    assert vu_status(ok_p, ok_w, ready) == "ok"
-    assert vu_status(gap_p, ok_w, ready) == "fail"
-    assert vu_status(ok_p, bad_w, unready) == "fail"
-    assert vu_status(ok_p, ok_w, unready) == "not-ready"
-    assert vu_status(un_p, ok_w, unready) == "not-ready"
-    assert vu_status(un_p, ok_w, ready) == "unsupported"
-    assert vu_status(ok_p, un_w, ready) == "unsupported"
+    assert block_status(ok_p, ok_w, ready) == "ok"
+    assert block_status(gap_p, ok_w, ready) == "fail"
+    assert block_status(ok_p, bad_w, unready) == "fail"
+    assert block_status(ok_p, ok_w, unready) == "not-ready"
+    assert block_status(un_p, ok_w, unready) == "not-ready"
+    assert block_status(un_p, ok_w, ready) == "unsupported"
+    assert block_status(ok_p, un_w, ready) == "unsupported"
 
 
 # -- the interval sweep (tier B) ---------------------------------------------------------------------------
@@ -1048,7 +1048,7 @@ def test_width_with_the_real_boundary_agrees_with_the_oracle(gemm, synth, monkey
 def test_query_ast_default_family_is_a_valid_vu_partition(gemm):
     fam = G.evaluate(gemm, G.default(32))
     assert fam.count() == 32 + 192 + 6
-    v = validate_vu_partition(gemm, G.default(32))
+    v = validate_block_partition(gemm, G.default(32))
     assert v.status == "ok" and v.count == 230
     assert v.partition.status == "exact" and v.partition.detail["path"] == "tiling"
     assert v.width.status == "ok" and v.width.max_seen == 16
@@ -1083,7 +1083,7 @@ def test_within_partitions_a_subset_of_gates(gemm):
     assert out.detail["outside"] == [{"gates": [0, 224]}] and out.detail["outside_count"] == 1
     both = validate_partition(gemm, StubFamily(coords + coords[:1]), within=[(224, 248)])
     assert both.status == "overlap"
-    assert vu_status(out, WidthVerdict(32, 16, (), (), "ok"), gate_width_readiness(gemm, 32)) == "fail"
+    assert block_status(out, WidthVerdict(32, 16, (), (), "ok"), gate_width_readiness(gemm, 32)) == "fail"
     with pytest.raises(ValueError):
         validate_partition(gemm, StubFamily(coords), within=[(224, 249)])
 
