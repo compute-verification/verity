@@ -142,8 +142,10 @@ multiplications a block computes whole, and Theorem 3 (`Verity.Guarantees.Counti
 |C| ≥ c·|𝒥|/q. The sets are alternatives, not a conjunction: they differ in where the hard information lives. A cap
 counts only when its set's premises hold for the same blocks, and a refuted premise contributes nothing. Rates and
 deficits belong to the decoder budget t, R, the arithmetic and the computation evaluated; none is a universal
-bits-per-value constant. A counted multiplication pairs an updated slot i with a use j, one activation occurrence, so
-each pair has at most one.
+bits-per-value constant. A counted multiplication pairs an updated slot with an operand. Set 1 counts **uses** at the
+granularity of its disjoint regions, one token's input to one layer at one step; Sets 2 and 3 count **operands** at the
+granularity a block can select, one scalar each, since a block may hold part of a token's activation without the
+rest.
 
 **Set 1, updated state and upstream dependencies**, the primary hypothesis.
 
@@ -174,7 +176,7 @@ well above k²/β_w.
 
 **Set 2, two operand families.** Local update hardness and *activation hardness*
 (`Nci.Assumptions.ActivationHardness`), LDL_{t,R}(a_V) ≥ β_x·|V| − λ_x for every set V of operands, each with Lemma 1
-(`Nci.Guarantees.HeldUsesPerBlock`), give (`Nci.Guarantees.OperandPairsCap`)
+(`Nci.Guarantees.HeldOperandsPerBlock`), give (`Nci.Guarantees.OperandPairsCap`)
 
 $$ q_I \;\le\; \frac{(k' + \lambda_w)(k' + \lambda_x)}{\beta_w\,\beta_x}. $$
 
@@ -292,7 +294,7 @@ None of these is assumed silently; each would restate the conclusion:
 | Lemma 1 | `Verity.Guarantees.BlockDescription` | Proved |
 | Set 1 | `Nci.Assumptions.LocalUpdateHardness`, `Nci.Capability.UpstreamCert`, `Nci.Covering.MulBlocks` | Stated; no prices measured at a decoder budget; the certificate not yet checked on a named training circuit |
 | Sets 2 to 4 | `Nci.Assumptions.ActivationHardness`, `Nci.Assumptions.JointOperandHardness`, `Nci.Assumptions.SourceHardness`, `Nci.Assumptions.Recovers` | Stated; several uniform activation rates refuted by exact decoders |
-| The local caps | `Nci.Guarantees.UpdatedStatePerBlock`, `Nci.Guarantees.HeldUsesPerBlock`, `Nci.Guarantees.JointOperandsPerBlock`, `Nci.Guarantees.UpstreamCap`, `Nci.Guarantees.OperandPairsCap`, `Nci.Guarantees.JointOperandsCap`, `Nci.Guarantees.FanOutCap`, `Nci.Guarantees.RecoverableCap` | Stated, not yet proved |
+| The local caps | `Nci.Guarantees.UpdatedStatePerBlock`, `Nci.Guarantees.HeldOperandsPerBlock`, `Nci.Guarantees.JointOperandsPerBlock`, `Nci.Guarantees.UpstreamCap`, `Nci.Guarantees.OperandPairsCap`, `Nci.Guarantees.JointOperandsCap`, `Nci.Guarantees.FanOutCap`, `Nci.Guarantees.RecoverableCap` | Stated, not yet proved |
 | Theorem 3 | `Verity.Guarantees.Counting` | Proved |
 | The threaded refinement | `Nci.Threading.Threaded`, `Nci.Assumptions.WeightsIncompressible`, `Nci.Guarantees.ThreadedReads` | Proved for the circuit in hand under assumed read costs |
 | Device model | `Accounting.Placed.ComputeRate`, `Accounting.Placed.Links`, `Accounting.Placed.Memory`, `Accounting.Placed.Causal`, `Accounting.Overhead.physClass`; hosts carry no compute, `OneClock` and the inventory not yet in Lean | Defined; three premises unstated |

@@ -61,7 +61,7 @@ def LocalUpdateHardness (R : Registration) (B : Nci.Covering.MulBlocks R.d) (W :
       (LDL M t r (R.d.D.bits (R.d.D.eval a) ((U.image σ).sort (· ≤ ·))) : ℝ≥0∞)
 
 /-- NEW PREMISE. **Activation hardness** ([ACTIVATION-HARDNESS]) at rate `βx` with deficit `Λx`, within `t` steps: in
-every honest run, for every set `V` of uses, the values of their operands' gates have local description length at least
+every honest run, for every set `V` of operand occurrences, their gates' values have local description length at least
 `βx · |V| − Λx`: `LDL_{t,r}(a_V) ≥ βx |V| − Λx`.
 
 It covers operands a block produces itself, from registered weights and a few imported values, and mixtures of layers
@@ -71,12 +71,13 @@ found for several uniform rates; a code rate measured for one tensor is not such
 `Nci.Ldl.Assumptions.ActivationRate` on core's registration. -/
 def ActivationHardness (R : Registration) {B : Nci.Covering.MulBlocks R.d} (O : Operands B)
     {ρ : Type} (M : Decoder ρ) (r : ρ) (t : ℕ) (βx Λx : ℝ) : Prop :=
-  ∀ a, R.Honest a → ∀ V : Finset (Fin B.nt),
+  ∀ a, R.Honest a → ∀ V : Finset (Fin O.no),
     ENNReal.ofReal (βx * V.card - Λx) ≤
       (LDL M t r (R.d.D.bits (R.d.D.eval a) ((V.biUnion O.act).sort (· ≤ ·))) : ℝ≥0∞)
 
 /-- NEW PREMISE. **Joint operand hardness** ([JOINT-OPERAND-HARDNESS]) with deficit `Λ`, within `t` steps: in every
-honest run, for every set `U` of slots with versions `σ` and every set `V` of uses, their values together have local
+honest run, for every set `U` of slots with versions `σ` and every set `V` of operand occurrences, their values together
+have local
 description length at least `Σ_{i ∈ U} p_i + βx · |V| − Λ`.
 
 It is stronger than `LocalUpdateHardness` and `ActivationHardness` together: it says the two families don't share
@@ -84,7 +85,7 @@ description, when the same imported bits can help rebuild both (an operand compu
 from held operands). It is what the joint cap's factor 4 rests on. -/
 def JointOperandHardness (R : Registration) {B : Nci.Covering.MulBlocks R.d} (W : UpdatedState B) (O : Operands B)
     {ρ : Type} (M : Decoder ρ) (r : ρ) (t : ℕ) (βx Λ : ℝ) : Prop :=
-  ∀ a, R.Honest a → ∀ (U : Finset (Fin B.nw)) (σ : Fin B.nw → Fin R.d.D.N) (V : Finset (Fin B.nt)),
+  ∀ a, R.Honest a → ∀ (U : Finset (Fin B.nw)) (σ : Fin B.nw → Fin R.d.D.N) (V : Finset (Fin O.no)),
     (∀ i ∈ U, σ i ∈ W.ver i) →
     ENNReal.ofReal (∑ i ∈ U, W.p i + βx * V.card - Λ) ≤
       (LDL M t r (R.d.D.bits (R.d.D.eval a) ((U.image σ ∪ V.biUnion O.act).sort (· ≤ ·))) : ℝ≥0∞)

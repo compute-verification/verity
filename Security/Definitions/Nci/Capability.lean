@@ -7,13 +7,13 @@ import Definitions.Nci.Covering
 The objects the local assumption sets and coverage (`Definitions.Nci.Assumptions.Capability`) and their consequences
 (`Definitions.Nci.Guarantees.Capability`) are stated over, on core's circuit, registration and local description length
 (`Definitions.Core.Formalism`) and the covering's multiplication blocks (`Nci.Covering.MulBlocks`). A counted product
-`(i, j)` multiplies a version of the updated parameter slot `i` by the operand of the use `j`, one activation
-occurrence (one coordinate of one token's input to one layer at one training step), computed inside the use's upstream
-computation `T j`. Indexing products by the pair allows one product per slot and use.
+`(i, j)` multiplies a version of the updated parameter slot `i` by an operand of the use `j` (one token's input to one
+layer at one training step), computed inside the use's upstream computation `T j`. Indexing products by the pair allows
+one product per slot and use.
 
 * `UpdatedState`: the slots' eligible versions and their prices;
-* `Operands`: the gates holding each use's operand;
-* `HeldStateAtMost`, `HeldUsesAtMost`: what every proof block of a registration holds, the form the local description
+* `Operands`: the operand occurrence each product reads, and the gates holding it;
+* `HeldStateAtMost`, `HeldOperandsAtMost`: what every proof block of a registration holds, the form the local description
   bounds give;
 * `UpstreamCert`: Set 1's graph certificate, checkable on a named circuit;
 * `completed`: the counted products a proof block computes whole.
@@ -36,13 +36,21 @@ structure UpdatedState {d : Declaration} (B : Nci.Covering.MulBlocks d) where
   /-- Each counted product reads a version of its slot. -/
   reads : ∀ q ∈ B.P, ∃ g ∈ ver q.1, g ∈ B.m q ∪ d.D.into (B.m q)
 
-/-- **The operands** of the multiplication blocks `B`: for each use `j` the gates `act j` holding its operand, which
-every counted product of `j` reads, among its own gates or what it reads. -/
+/-- **The operands** of the multiplication blocks `B`, at the granularity a block can select: each counted product `q`
+reads one operand occurrence `occ q` (one scalar of one token's activation, say), held by the gates `act (occ q)` among
+its own gates or what it reads, and no two counted products share both their slot and their operand. A use of Set 1
+(one token's input to one layer) holds many occurrences; a block may hold some of them without the rest. -/
 structure Operands {d : Declaration} (B : Nci.Covering.MulBlocks d) where
-  /-- The gates holding use `j`'s operand. -/
-  act : Fin B.nt → Finset (Fin d.D.N)
-  /-- Each counted product reads its use's operand. -/
-  reads : ∀ q ∈ B.P, act q.2 ⊆ B.m q ∪ d.D.into (B.m q)
+  /-- The number of operand occurrences. -/
+  no : ℕ
+  /-- The operand each product reads. -/
+  occ : Fin B.nw × Fin B.nt → Fin no
+  /-- The gates holding each occurrence. -/
+  act : Fin no → Finset (Fin d.D.N)
+  /-- Each counted product reads its operand. -/
+  reads : ∀ q ∈ B.P, act (occ q) ⊆ B.m q ∪ d.D.into (B.m q)
+  /-- One counted product per slot and operand. -/
+  pair : ∀ q ∈ B.P, ∀ q' ∈ B.P, q.1 = q'.1 → occ q = occ q' → q = q'
 
 /-- **The counted products proof block `u` computes whole.** -/
 def completed (R : Registration) (B : Nci.Covering.MulBlocks R.d) (u : Fin R.B) : Finset (Fin B.nw × Fin B.nt) :=
@@ -54,11 +62,11 @@ def HeldStateAtMost (R : Registration) {B : Nci.Covering.MulBlocks R.d} (W : Upd
   ∀ (u : Fin R.B) (U : Finset (Fin B.nw)) (σ : Fin B.nw → Fin R.d.D.N),
     (∀ i ∈ U, σ i ∈ W.ver i ∧ σ i ∈ R.P.gates u ∪ R.d.D.into (R.P.gates u)) → ∑ i ∈ U, W.p i ≤ kb
 
-/-- **Each proof block holds at most `n` operands**: for every proof block `u` and every set `V` of uses whose operands
-lie among the block's gates and what it reads, `|V| ≤ n`. -/
-def HeldUsesAtMost (R : Registration) {B : Nci.Covering.MulBlocks R.d} (O : Operands B) (n : ℝ) : Prop :=
-  ∀ (u : Fin R.B) (V : Finset (Fin B.nt)),
-    (∀ j ∈ V, O.act j ⊆ R.P.gates u ∪ R.d.D.into (R.P.gates u)) → (V.card : ℝ) ≤ n
+/-- **Each proof block holds at most `n` operands**: for every proof block `u` and every set `V` of operand occurrences
+lying among the block's gates and what it reads, `|V| ≤ n`. -/
+def HeldOperandsAtMost (R : Registration) {B : Nci.Covering.MulBlocks R.d} (O : Operands B) (n : ℝ) : Prop :=
+  ∀ (u : Fin R.B) (V : Finset (Fin O.no)),
+    (∀ o ∈ V, O.act o ⊆ R.P.gates u ∪ R.d.D.into (R.P.gates u)) → (V.card : ℝ) ≤ n
 
 /-- **Set 1's upstream certificate** at demand `dm`, a property of the wiring: the uses' upstream computations `T j`
 are disjoint and hold no registered gate (`Nci.Covering.MulBlocks.T_disjoint`, `T_θ`), and each use `j` of a counted
