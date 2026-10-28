@@ -5,7 +5,7 @@ chunk of it, one decode token a step, a recompute from position 0 after a preemp
 under async scheduling, a row past the token that finished it (an EOS, a stop token or string the scheduler hadn't seen
 yet). None of that is a rule here; each is a fact the record states. A `NativeHostCommitter` with a `SamplerInputsSource`
 attached keeps each step's rows (`Row`: the runner's request id, its token rows [lo, hi) of the step, its first position and
-its prefill length) and binds, beside the sampled ids, the seed and the position each row's draw read (`SAMPLER_INPUTS`). `Record.absorb`
+its prefill length) and binds, beside the sampled ids, the seed and the position each row's draw read (`SAMPLER_INPUTS`). `BlockValues.absorb`
 reads a finished window back from the committed bytes into one `RequestRecord` per request:
 
 - ``inputs``: position p -> the committed input id at p (the step-input port's ``step.input/ids``, else ``c00.input/ids`` on
@@ -26,7 +26,7 @@ prefix can be its first turn's prompt and its previous turn's suffix). Rows past
 committed sample. Given the request's finish, the stream must also end where it says (`finish_problems`), so a stream
 cut short can't pass with its missing ids taken for an overrun; a client's abort ends it anywhere short of ``max_tokens``,
 and then at most one committed sample runs past it (the step in flight when the abort was applied, under async scheduling).
-A request aborted before it was ever scheduled streamed nothing and has no committed row, and `Record.check` passes it.
+A request aborted before it was ever scheduled streamed nothing and has no committed row, and `BlockValues.check` passes it.
 
 Stdlib only, but `committed_ints`, which reads a committer's retained bytes with numpy (and torch for a GPU block).
 """
@@ -379,9 +379,10 @@ class RequestRecord:
                 "discarded": [[p, v] for p, v in sorted(self.discarded.items())], "seeds": sorted(self.seeds)}
 
 
-class Record:
-    """Every request's `RequestRecord` over the windows of one committing engine. ``known`` maps a request id to anything
-    (the admitted requests); a runner id is matched to it by `base_id`."""
+class BlockValues:
+    """The committed values of one committing engine's execution blocks (its windows), by request: each request's
+    `RequestRecord`. ``known`` maps a request id to anything (the admitted requests); a runner id is matched to it by
+    `base_id`."""
 
     def __init__(self, known: Mapping[str, Any] | None = None) -> None:
         self.known = known

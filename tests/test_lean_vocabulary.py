@@ -783,8 +783,6 @@ KNOWN: dict[str, str] = {
     "integrations/vllm/verity_vllm/check/verdict.py::Verdict":
         "homonym, a check run's results and outcome: rename (vllm)",
     "integrations/vllm/verity_vllm/commit/memory_map.py::Layout": "homonym, the engine's KV pool map: rename (circuits)",
-    "integrations/vllm/verity_vllm/commit/served_record.py::Record":
-        "duplicate of the execution block (no canonical yet: LEAN-93): becomes an execution block's committed values (circuits)",
     "integrations/vllm/verity_vllm/observe/fold/resolver.py::Witness":
         "homonym, a request's witness leaves a row consumes: rename (vllm)",
     "integrations/vllm/verity_vllm/pipeline/c2_replay.py::Site": "homonym, what one C2 replay reads: rename (vllm)",
