@@ -2140,6 +2140,7 @@
   "Lms",
   "PousCheck",
   "MemoryChallenger",
+  "Attest",
   "PouwCommit.Tagged",
   "PouwCommit.Frame",
   "PouwCommit.Rows",
@@ -27476,19 +27477,19 @@
    ]
   },
   "Definitions.Pous.Claims.StreamedWipeDisk": {
-   "digest": "d9e45f5bfa19ab2e87da2aed77b092b8378e674f3879ccd1a553f541a0ed20a9",
+   "digest": "2c0c4be7900ca1d5d3ad8071155de5ace17829a9c5908f0029c10f0ca20bd2ee",
    "definitions": {
-    "Pous.Claims.StreamedWipeMeetsDisk": "2d005ca2e86ad23bd81dbdd9f1d026ef1a601f5f58321001f062fbd49c579d05"
+    "Pous.Claims.StreamedWipeMeetsDisk": "59bc972dd2aefc1203603babfc408d1f8c7b5ba6f1fb9e696307991c6af5b265"
    },
    "guarantees": ["Pous.Claims.StreamedWipeMeetsDisk_fails", "Pous.SecurityProofs.StreamedWipeMeetsDisk"]
   },
   "Definitions.Pous.Claims.StreamedWipeServer": {
-   "digest": "e97ff87e58babd6b667a63953722c323216ae99c32daf4c8ecd05a85d71d3683",
+   "digest": "833f95a5c4d737ce7128531b3126c9f1b3039e6aa4983c75691c6b16d7199943",
    "definitions": {
-    "Pous.Claims.StreamedWipeMeetsReadsTight": "c4d031e27c9190b02543fe38362514599241e7800b45d353d6a940011098ccb8",
-    "Pous.Claims.StreamedWipeMeetsServer": "4ae61ad62d6d67e7820c103de43a9e287e2ef9f1992b9268fea1281ffc7506b3",
-    "Pous.Claims.StreamedWipeMeetsServer5GB": "ed578a21dd85d4bd601021e9361da251b5fdddb913192c6924303b8089b487dd",
-    "Pous.Claims.StreamedWipeMeetsServerH200": "09f651e3681643b4e107b7b9582c1df094e92b6b0abc6291e4919bc54a813492"
+    "Pous.Claims.StreamedWipeMeetsReadsTight": "aa8c9ac0e54faadf16803c0b24b36ba911acaa269f943fb640c49a390ca44ab5",
+    "Pous.Claims.StreamedWipeMeetsServer": "93ef3b308749c1108a6c3e78906785d99b30dbc3cfd1babe8f0a0c7978fa7933",
+    "Pous.Claims.StreamedWipeMeetsServer5GB": "b0c073973a6ffd3a70101ad4c903741dcdee89927c19171a04a25e33e5968d37",
+    "Pous.Claims.StreamedWipeMeetsServerH200": "14892aaf286f3c2ddb1bbf0a138d1dc673ed0720d68da27c6d5ee4744e9662dc"
    },
    "guarantees": [
     "Pous.Claims.StreamedWipeMeetsReadsTight_fails",
@@ -28651,8 +28652,9 @@
    "guarantees": ["Pous.Claims.StreamedWipeMeetsDisk_meets"]
   },
   "Definitions.Pous.Model.StreamedWipeServer": {
-   "digest": "59f9209fb81725e45ff96c305c51c5fc5812520550a421cb1ce9bfc7e621f311",
+   "digest": "60330ff28ab577b099f965aeb850e50f6ef7c123ce6e98d7296b698b9cb66e16",
    "definitions": {
+    "Pous.StreamedWipe.Acceptance": "7e34048d349bffa807b84302d9ca8c803c8e6af38b0e3e35d3d81090b69160b6",
     "Pous.StreamedWipe.Deployment": "5d412723bd6d0d70a56608338f400aab6d9200f46688d828c3e5ac669b81cee4",
     "Pous.StreamedWipe.Deployment.Ms": "bcb77d02962b7d0dcfcad54de9596ec9d07cd5a23eb770ffed5cc3bbf17dd57e",
     "Pous.StreamedWipe.Deployment.R": "51a9677b6d3c813c1fc6707616f2d766fd93b796853d5bbc0edbf6f77e8e7ed4",
@@ -28660,15 +28662,14 @@
     "Pous.StreamedWipe.Deployment.n": "01e1be3dbd7e9775184e1fb5d1eff862b189025bfd4da49d4cae065480a043ab",
     "Pous.StreamedWipe.Deployment.r": "488fc12ecbebd0c71f3df731618e09c5fb9aaef914d51e1cc64feb68de69ee24",
     "Pous.StreamedWipe.OperatingPoint": "dd0cf3e8e25b901bad8ccee319cabf7102fb4191dddef1781fc13d38ebbe4ce4",
-    "Pous.StreamedWipe.Verdict": "ca133829d8610b7f2cd6f27cbacaf17f299b85cdca046393be197257f72fc24f",
-    "Pous.StreamedWipe.acceptAll": "ef5e42ad8ae66fd2a3d830d11034ba8b4e1e55de274266d9c01add18a6004805",
+    "Pous.StreamedWipe.acceptAll": "11da4792b6485f9d4752c4e6b3d4fa27accb8e63c6e6c0a4d7335445691ec886",
     "Pous.StreamedWipe.countBits": "37916adbb7e5a29aab4c4a4e39f0d0e7f8725620817262dd5b69b6f1ec756234",
     "Pous.StreamedWipe.fillShare": "8af9f44f2a1e81ad30e8b9e866a47b08ba982e4ba681b28f246945fb65b03add",
     "Pous.StreamedWipe.h200": "f8d15ef74cce2449df7bf4751edf0adefeb040c5c8c44742442496ccf5970a15",
     "Pous.StreamedWipe.missing": "44ac814668da6b9c87a5de104ba5081e074c1c6a5e220ac7380a46fb0b1a2192",
     "Pous.StreamedWipe.serverBound": "c1800b00cf5c4a242b5878257bb087b3e4a10f135b9a0985ebef700931f16b54",
-    "Pous.StreamedWipe.winRealBy": "22f2be332267e7756123896f73e2ab1f471aecccc7b8543c63007fa1242f4b13",
-    "Pous.StreamedWipe.wipeDistinguisherBy": "673e39724f39fc7597beccd58408989ba86a12a7a99932e087c66f85be848bc5"
+    "Pous.StreamedWipe.winRealBy": "d58210f8ca5102774f6e68d2e2087ab24c18806bd29077073918edec4e8b19ff",
+    "Pous.StreamedWipe.wipeDistinguisherBy": "2002ed1cf9ecbfb3614d5f534198f9a9a245545049494c2d15da583edfa2a213"
    },
    "guarantees": [
     "Pous.Claims.StreamedWipeMeetsDisk_fails",
