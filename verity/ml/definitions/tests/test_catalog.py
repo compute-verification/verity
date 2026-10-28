@@ -30,6 +30,8 @@ COUNT += 1  # `torch_train`'s RmsNormTorchWeightGrad_v1
 
 COUNT += 1  # `cublas_bf16`'s CublasSplitKGemmBf16PartialsAligned_v1
 
+COUNT += 3  # the key block's steps: `fa2_check_inf`'s AttnBlockSoftmax_v1 and AttnBlockPv_v1, `fa3_check_inf`'s AttnBlockSoftmax_v2
+
 
 def test_the_catalog_loads_every_definition_and_no_other():
     registry, errors = catalog.load()
