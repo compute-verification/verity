@@ -79,7 +79,7 @@ def test_step_program_equals_the_traced_build(model, digest):
 
 @pytest.mark.slow
 def test_request_and_workload_programs_equal_the_traced_build():
-    """SmolLM2-135M B1 256/32 greedy (cov-k01-10): the request Program (LP 256, T 31) and GP-01's workload Program over it.
+    """SmolLM2-135M B1 256/32 greedy: the request Program (LP 256, T 31) and GP-01's workload Program over it.
     About 20 s: the only test that composes a workload, which the step pins cannot reach."""
     phi = _phi(json.loads((FIX / "smollm2-135m.config.json").read_text()),
                [{"request_id": "u0", "index": 0, "prompt_len": 256, "max_tokens": 32, "arrive_step": 0}])
