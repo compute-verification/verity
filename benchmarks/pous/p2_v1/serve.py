@@ -271,7 +271,7 @@ def fixture(passes: int = 2) -> dict:
         previous = root
     return {
         "schema": FIXTURE_SCHEMA,
-        "interface": "verity/core/protocols/poub/PROTOCOL.md §11",
+        "interface": "verity/core/protocols/remote_bandwidth/PROTOCOL.md §11",
         "store": {"toy": "toy.json", "c_star_sha512": doc["c_star_sha512"], "blocks": store.params.blocks,
                   "units": units, "unaudited": list(range(p2.UNIT_BLOCKS * units, store.params.blocks))},
         "registration": {"node": NODE.hex(), "rows": reg.rows, "digest": reg.digest.hex()},

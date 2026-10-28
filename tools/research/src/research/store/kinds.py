@@ -68,6 +68,10 @@ KINDS: dict[str, str] = {
                                     "Boolean export per census subcircuit (subcircuits/<id>.boolean.json); meta {schema, census, entries: "
                                     "[{id, display, template, params, descriptor_id, default_statics, program_digests, export, counts, "
                                     "missing?}]}; refs.circuit_check = the circuit-check-report/v1 its counts cite",
+    "verity/status/v0": "the docs site's status document (tools/research/console/status_export.py): payload file status.json, "
+                        "canonical JSON of that schema (every lock guarantee proved, resting on named assumptions or unknown, the "
+                        "locks' assumptions, the results of record); meta {commit}; refs.facts = the run record whose Lean audit "
+                        "facts it read",
     "kernel-attempt/v1": "one PoUW kernel attempt at one shape (benchmarks/pouw/harness/ledger.py, written by verify.py): meta = the "
                          "variant id, parent, tier, harness commit and gate version, metrics and step times, gamma at both FP32 prices, "
                          "the verifier's lines, the hypothesis; refs.parent = the attempt it changes; labels kernel_outcome, kernel_reason",

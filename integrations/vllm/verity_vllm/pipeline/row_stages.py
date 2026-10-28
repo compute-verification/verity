@@ -398,7 +398,7 @@ class SingleRow(Row):
                     if not (gm_rc == 4 and p == 1):
                         break
                     self.derive_missing(derived, "X-09 (inside GM-01)")
-                open(f"{d}/match_compare.log", "w").write("$ (shared, R17-28 P1) X-09 document written by cb_a.global_match --decomp-out; see global_match.log\n")
+                open(f"{d}/match_compare.log", "w").write("$ (shared) X-09 document written by cb_a.global_match --decomp-out; see global_match.log\n")
                 return R.decomp_rc(d), gm_rc, True
             rcc = 3
             for p in (1, 2):

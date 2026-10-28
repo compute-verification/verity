@@ -28,7 +28,7 @@ prove the drawn blocks (C-Flock) -------------->   check the proofs (the Lean ve
                                                    record the integrity profile
 ~~~
 
-The auditor never runs the computation; it only checks proofs. The integrity profile it records bounds how many proof blocks are faulty, given the committed values.
+The auditor never runs the computation; it only checks proofs. The integrity profile it records bounds how many proof blocks are faulty, given the committed trace.
 
 ## Architecture
 
@@ -58,7 +58,7 @@ A partition divides a circuit's computed gates into proof blocks, the result of 
 
 ### Commitments
 
-`verity.ml.commitments` defines the commitment schemes: leaf rules, Merkle trees and openings, each with a specification and conformance vectors that fast committers match byte for byte; integrations never define their own. A commitment shows that the values a proof uses are the values bound earlier, and the proof shows how they are related: for a dot product, the commitment establishes that x, w and y are the committed values, and the proof that y = ExactDot(x, w). A proof system's internal commitments stay inside it.
+`verity.ml.commitments` defines the commitment schemes: leaf rules, Merkle trees and openings, each with a specification and conformance vectors that fast committers match byte for byte; integrations never define their own. A commitment shows that the values a proof uses are the values bound earlier, and the proof shows how they are related: for a dot product, the commitment establishes that x, w and y are the values in the committed trace, and the proof that y = ExactDot(x, w). A proof system's internal commitments stay inside it.
 
 ### Proofs and protocols
 
@@ -71,7 +71,7 @@ The logical layer is the cryptography: PoUW, PoUS and the bandwidth audits prove
 
 - **Compute.** PoUW credits the noised products' size S, at least (1 − ε)·S of its AND gates right (Glossary, "Credit"). Traffic alone attributes nothing: a zone is credited only through an anchor, fresh trusted data it must consume (bounded by its egress), or the named premise that the fleet is closed.
 - **Memory.** The bandwidth audits prove bits read, and PoUS bits held, at no location. Attribution places them in tiers, less what boundary links carry in.
-- **Network.** Certifiers prove ports carried only committed values, timing aside; gaps cost line rate.
+- **Network.** Certifiers prove ports carried only values in the committed trace, timing aside; gaps cost line rate.
 
 The joint ledger charges each device's time once. Without attribution, it subtracts only from the whole fleet's capacity, if no undeclared hardware helped.
 
@@ -81,7 +81,7 @@ C-Flock (`verity/ml/flock`) is the proof system: it proves statements over arbit
 
 ### Integrations
 
-An integration makes Verity work end to end with a real system, and to Verity it is only a frontend: it hands over a circuit partitioned into proof blocks, the advice a registered compiler compiles, the committed values and, on a draw, the drawn blocks' openings (`AGENTS.md`, "Integrations are frontends"). The proof service does the rest. Any serving stack plugs in without changing `verity/`, and nothing under `verity/` imports an integration (`tests/test_integration_boundaries.py` lists the sites that still do). The vLLM integration (`integrations/vllm/`), the only one so far, builds each served workload's circuit with an embedded Torch-to-circuit frontend, supplies its silicon-specific bindings, and commits runtime values while serving.
+An integration makes Verity work end to end with a real system, and to Verity it is only a frontend: it hands over a circuit partitioned into proof blocks, the advice a registered compiler compiles, the committed trace and, on a draw, the drawn blocks' openings (`AGENTS.md`, "Integrations are frontends"). The proof service does the rest. Any serving stack plugs in without changing `verity/`, and nothing under `verity/` imports an integration (`tests/test_integration_boundaries.py` lists the sites that still do). The vLLM integration (`integrations/vllm/`), the only one so far, builds each served workload's circuit with an embedded Torch-to-circuit frontend, supplies its silicon-specific bindings, and commits the trace while serving.
 
 ## Documentation
 
@@ -123,7 +123,7 @@ Code, docs, CLI help and output fields use these terms. When a term changes, thi
 - **Sampling block**: the proof blocks one draw covers, all committed and registered before that draw. Like every block, it is a set of the circuit's gates; the serving time it spans is its sampling period. Its draw is stratified by subcircuit, each stratum being one subcircuit's proof blocks in the block, and its guarantee is one joint harm bound over every stratum, pooled across the sampling blocks of a monitoring period. It replaces "window" in this sense, and a device's time window (`Accounting.Window`) is not a sampling block.
 - **Acceptance probability** P_a(B): the probability, under the sampling design, that the sample holds no proof block of a set B, so that faulty proof blocks B go unproved and the audit can still accept. Retired two-stage sampling's effective form was P̄_a (the Lean's `effEscape`).
 - **Confidence set** M_δ, for error δ: every set B of proof blocks with P_a(B) > δ. Except with probability δ + ε_ks + ε_bind, an audit rejects or the committed trace's faulty proof blocks are a set in M_δ. A consumer's upper confidence bound on a total is the largest sum of its per-proof-block quantity y_u over a set of M_δ; exfiltration counts every output value some set of M_δ could deliver (the Lean's `influenceSet`).
-- **Commit-and-prove argument**: what proves the sample: the developer commits the trace, the verifier draws, and the argument proves each drawn proof block computes its committed outputs from its committed inputs. Its errors are knowledge soundness ε_ks, binding ε_bind (an accepted extraction disagreeing with the committed values; the Lean's `LinkSound` and `δlink`) and zero knowledge ε_zk. C-Flock instantiates it.
+- **Commit-and-prove argument**: what proves the sample: the developer commits the trace, the verifier draws, and the argument proves each drawn proof block computes its committed outputs from its committed inputs. Its errors are knowledge soundness ε_ks, binding ε_bind (an accepted extraction disagreeing with the committed trace; the Lean's `LinkSound` and `δlink`) and zero knowledge ε_zk. C-Flock instantiates it.
 - **Proof service**: the one service behind PoUW, PoUS and network accounting: the developer's workers behind the firewall, and the auditor's challenger and verifier. A protocol states only a `Spec` (`verity.core.protocols.sampled_proofs.service`): what it commits, its selection rule, its check as a public Program and its public items, each with its reason. The service handles commitments, coins, proving and verifying, and the auditor learns nothing about the weights or data beyond each protocol's stated public outputs.
 - **Workers**: the developer's servers and GPUs. They run the computation and nearly all proving, with zero knowledge off, trusted by neither party, and reach the auditor only through the firewall.
 - **Firewall**: the developer-trusted only path from the workers to the auditor. It commits every outbound message under a fresh salt, masks and checks or fixes everything else, and releases outer proofs, which are zero-knowledge, one per statement, each its own *release*, on a fixed schedule; only outer proofs reach the auditor. The prover is the workers behind it (P = F ∘ W).

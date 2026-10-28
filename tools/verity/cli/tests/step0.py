@@ -21,7 +21,7 @@ from typing import Any
 
 from verity.core.deploy import runtime
 from verity.core.deploy.config import Channel, Component, Refused, Workload
-from verity.core.protocols.network_certifier.cell_certifier import CellCertifierParams
+from verity.core.protocols.network_certifier.cell_certifier import CellCertifierParams, CellCertifierParams as WardenParams
 from verity.core.protocols.sampled_proofs import parties as SP
 from verity.core.protocols.sampled_proofs.one_stage.draw import parse_law
 from verity.ml.circuits.codec import canonical_json
@@ -103,7 +103,7 @@ MANIFESTS: dict[str, Component] = {c.name: c for c in (
                         Channel("network-certifier", "verifier", ("out-record",))),
               needs=frozenset({"windows", "ingress-relay"}), requires=("sampled-proofs",),
               colocated=(("challenger", "network-certifier"),), params=_warden,
-              default_params={**asdict(CellCertifierParams()), "tie": True}, law=_work_law, default_law="work:64"),
+              default_params={**asdict(WardenParams()), "tie": True}, law=_work_law, default_law="work:64"),
     Component("wipe", "verity/wipe/v0", parties=_VERIFIER, messages={}, product=False),
 )}
 TOY = Workload("toy", frozenset({"windows", "ingress-relay"}), {"workers": "developer"}, _toy,

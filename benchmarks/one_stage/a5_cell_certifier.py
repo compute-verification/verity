@@ -261,7 +261,7 @@ def commit(out: Path, mine: CS.Window, at: dict[str, SimpleNamespace], altered: 
 
 
 def reads(mine: CS.Window, at: dict[str, SimpleNamespace]) -> dict[str, dict]:
-    """The verifier's own ``--registered`` file of each chunk: its registered port at the root the cell certifier signed, named by the
+    """The verifier's own ``--registered`` file of each chunk: its registered port at the root the warden signed, named by the
     Program's units' value, each unit (from the chunk's first) opening the row of its read (q, k), placed by the wiring the
     cell certifier signed."""
     return {m.key: WR.reads_file({LINKS[name][1]: WR.port(x.head, x.opening.wiring, x.params, x.units, m.base)})
@@ -269,7 +269,7 @@ def reads(mine: CS.Window, at: dict[str, SimpleNamespace]) -> dict[str, dict]:
 
 
 def source_of(mine: CS.Window, at: dict[str, SimpleNamespace]):
-    """The verifier's check of the registration's window: a stand-in of its run naming the cell certifier's cells as it read them."""
+    """The verifier's check of the registration's window: a stand-in of its run naming the warden's cells as it read them."""
     want = provenance(at)
 
     def source(w: dict) -> dict:

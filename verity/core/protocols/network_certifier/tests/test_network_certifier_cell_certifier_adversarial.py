@@ -1,7 +1,5 @@
-"""Adversarial cases against the active warden (`warden`, the byte-only relay), for the v3 red team (REDTEAM-ADVICE of
-network-accounting, `note:network-accounting/20261024T0558Z-finding-redteam-v3`), first aimed at the byte-cell warden at
-316f3292b6, where the egress base and the fail reason were open; the warden now closes both, and the first two cases and
-the regression after them pin that.
+"""Adversarial cases against the cell certifier (`cell_certifier`, the byte-only relay). The cell certifier closes the egress base and
+the fail reason as channels, and the first two cases and the regression after them pin that.
 
 The cell certifier's own tests show the honest path: the egress cells, their sizes and buckets are a function of (admission s,
 the egress length, the fail cell) and the public parameters, and the server's timing never reaches the wire. These show
@@ -10,7 +8,7 @@ the schedule, plus the fail-closed term log2(cells+1) a failed connection), and 
 
 Each case states the bits it bounds.
 
-- **the egress base (CLOSED).** At 316f3292b6 egress started at a + D, a the bucket the cell certifier released the client's
+- **the egress base (CLOSED).** At 316f3292b6 egress started at a + D, a the bucket the warden released the client's
   ingress END, which waited on the server's connect: the server shifted a by delaying its accept, ~log2(ingress_buckets)
   bit a connection. Egress now starts at s + D, s the admission bucket, and nothing the server does moves s.
 - **the fail reason (CLOSED).** At 316f3292b6 a FAIL cell carried a reason byte the client's shim read, so at one fail
@@ -44,8 +42,8 @@ def _verdict(warden):
 
 
 def test_the_servers_connect_delay_doesnt_move_the_egress_base_from_the_admission_bucket():
-    """At 316f3292b6 the egress schedule started at a + D, a the bucket the cell certifier released the client's END, and the
-    cell certifier released nothing until the server's connection was open: a server that connected at bucket 1 or 4 set a to
+    """At 316f3292b6 the egress schedule started at a + D, a the bucket the warden released the client's END, and the
+    warden released nothing until the server's connection was open: a server that connected at bucket 1 or 4 set a to
     1 or 4, and the client read it from the padding before the first live cell. Now egress starts at s + D (s = 0
     here) whatever the connect: a server that connects at 1 or 2 gives the client the same bytes in the same cells, and
     one that connects at 4, past its first cell's deadline, fails there (the charged fail term), still at s + D."""

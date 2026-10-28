@@ -121,7 +121,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   registered value's (a warden link-window's cells, `certifier.cell_certifier_rows`), committed under that value's salts
   (`ml.windows.rows.commit`'s ``salts_of``), is verified with the verifier's own reads of it (``--registered``, the port at
   the root the warden signed, which the caller read under the warden's key), the same reads, record and negatives as a row
-  table's (below). `a5_cell_certifier.py` is their stand-in.
+  table's (below). `a5_warden.py` is their stand-in.
 * **Row tables** (`ml.windows.rows.Window.row_tables`): a window whose `ScaledMmS8Coordinate` chunks read their ``x``
   rows from one row table per engine step and linear (`pipeline.serving_rows.with_row_tables`) registers one port more,
   ``row-table``, the tree over its steps' roots, which the Spec declares a tree over roots of row-seg leaves

@@ -16,7 +16,9 @@ hold every tracked ``*.py`` file outside ``integrations/vllm/`` (which has its o
 file, all one kind: ``test_repo_env_reads.py`` its direct environment reads (``allowlists/repo_env_reads.json``, beside the
 settings registries it marks, ``{"file", "registry": true}``, a declaration rather than an exception, so a mark is never
 counted) and ``test_repo_silent_excepts.py`` its except handlers that swallow what they catch
-(``allowlists/repo_silent_excepts.json``); its slugs stay apart from the integration's.  A change is judged when it touches a
+(``allowlists/repo_silent_excepts.json``); ``test_repo_lane_text.py`` holds the prose of every file its ``holds`` takes
+(comments, docstrings, Lean comments and Markdown, the integration's too, outside ``archive/``) to a count per file of its
+lane text (``allowlists/repo_lane_text.json``); its slugs stay apart from the integration's.  A change is judged when it touches a
 ratchet, a ``*.py`` file under ``integrations/vllm/tests/lint/`` or ``tests/lint/`` (the lints' code) or a ruff lint's config:
 ``integrations/vllm/ruff.toml``, the root ``ruff.toml`` (both ruff lints') and the ruff the root ``dev`` group pins.  It passes
 when:
@@ -71,6 +73,10 @@ A rename must move the file's entry (``python3 tests/lint/test_<slug>.py --move 
 Only the top change is linted: a PR's own commits at the preflight, its merge onto `next` at the sync, where the members below
 were linted at their own merges.
 
+A counted lint with ``holds`` reads each file its ``holds`` takes, of any kind, rather than each ``*.py`` file, and counts it
+by its path too: the repository's lane text, in the prose of code, Lean and Markdown, whose fix says where the text goes (history
+to git, work to Linear, rulings to Notion, results to the store).
+
 Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR title starts ``Revert``) and a pure move that
 BASE's ``tools/verity/check/move_check.py`` certifies.
 
@@ -112,6 +118,7 @@ import tokenize
 import tomllib
 import types
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
@@ -134,9 +141,11 @@ REPO_RUFF_MODULE = f"{REPO_LINT}/test_{REPO_RUFF_LINT}.py"
 REPO_RUFF_LIST = f"{REPO_LINT}/allowlists/{REPO_RUFF_LINT}.json"
 #: the repository's counted lints, each a module ``tests/lint/test_<slug>.py`` and a list ``tests/lint/allowlists/<slug>.json``
 #: of per-file counts, whose ``LEFT_OUT``, ``FIX``, ``parse`` and count the source check reads from the base's copy: (slug, the
-#: module's function that lists a source's sites, what it counts).  One with ``is_registry`` exempts the files it marks.
+#: module's function that lists a source's sites, what it counts).  One with ``is_registry`` exempts the files it marks; one
+#: with ``holds`` chooses the files it reads, any kind, and its sites function takes the file's path after its text.
 COUNTED = (("repo_env_reads", "reads", "direct environment read"),          # S1: configuration in one place
-           ("repo_silent_excepts", "handlers", "silent except handler"))    # S4: recorded outcomes
+           ("repo_silent_excepts", "handlers", "silent except handler"),    # S4: recorded outcomes
+           ("repo_lane_text", "sites", "lane-text site"))                   # S5: what is true now
 #: the repository's lists whose keys may rise to what the change's base holds (``held``)
 CATCH_UP = (REPO_RUFF_LINT, *(s for s, *_ in COUNTED))
 #: a git tree entry's modes that are a file ruff reads (a symlink or a submodule isn't)
@@ -544,16 +553,22 @@ def left_out(rev: str) -> tuple[str, ...] | None:
                    f"files its ruff lint holds")
 
 
-def changed_sources(lo: str, hi: str, left: tuple[str, ...]) -> list[tuple[str, str | None, str | None, str]]:
-    """(path, its path before, its blob before, its blob after; None before for a new file) of each ``*.py`` and ``*.pyi`` file
-    ``lo..hi`` adds or modifies outside ``left``.  A renamed file's before is its old path's, so a move keeps its findings."""
+def python(path: str) -> bool:
+    return path.endswith((".py", ".pyi"))
+
+
+def changed_sources(lo: str, hi: str, left: tuple[str, ...], holds: Callable[[str], bool] = python
+                    ) -> list[tuple[str, str | None, str | None, str]]:
+    """(path, its path before, its blob before, its blob after; None before for a new file) of each file ``holds`` takes (a
+    ``*.py`` or ``*.pyi`` file) that ``lo..hi`` adds or modifies outside ``left``.  A renamed file's before is its old path's,
+    so a move keeps its findings."""
     fields = git("diff", "--raw", "-z", "-M", "--no-abbrev", lo, hi).split("\0")
     out, i = [], 0
     while i + 1 < len(fields):
         old_mode, new_mode, old, new, status = fields[i].lstrip(":").split()
         n = 2 if status[0] in "RC" else 1
         was, path, i = fields[i + 1], fields[i + n], i + 1 + n
-        if new_mode in FILE_MODES and path.endswith((".py", ".pyi")) and not path.startswith(left):
+        if new_mode in FILE_MODES and holds(path) and not path.startswith(left):
             kept = old_mode in FILE_MODES and status[0] != "C"
             out.append((path, was if kept else None, old if kept else None, new))
     return out
@@ -684,6 +699,15 @@ def counted_lint_at(rev: str, slug: str, sites: str, noun: str) -> types.ModuleT
     return lint
 
 
+def counter(lint: types.ModuleType, sites: str) -> tuple[Callable[[str], bool], Callable[[str, str], list]]:
+    """(which files counted lint ``lint`` reads, its sites in one, ``(text, path)``): its ``holds`` and its sites function as
+    they are, else the ``*.py`` files and its sites function on the text alone."""
+    count = getattr(lint, sites)
+    if hasattr(lint, "holds"):
+        return lint.holds, count
+    return (lambda path: path.endswith(".py")), (lambda text, path: count(text))
+
+
 def counted_list(lint: types.ModuleType, slug: str, rev: str) -> tuple[Counter, frozenset[str]]:
     """(each file's allowed count, the files it marks exempt) in counted lint ``slug``'s list at ``rev`` (none when it has no
     readable list: the ratchet judges that)."""
@@ -707,9 +731,9 @@ def counted_lint(c: Change, base: str, slug: str, sites: str, noun: str) -> dict
     if lint is None:
         return None
     module, listed_at = counted_paths(slug)
-    count = getattr(lint, sites)
+    holds, count = counter(lint, sites)
     exempt = getattr(lint, "is_registry", lambda path, marks: False)
-    sources = [s for s in changed_sources(c.lo, c.hi, tuple(lint.LEFT_OUT)) if s[0].endswith(".py")]
+    sources = changed_sources(c.lo, c.hi, tuple(lint.LEFT_OUT), holds)
     out: dict[str, list[str]] = {"read": [path for path, *_ in sources], "new": [], "grown": [], "unmoved": []}
     if not sources:
         return out
@@ -719,8 +743,8 @@ def counted_lint(c: Change, base: str, slug: str, sites: str, noun: str) -> dict
     for f, o, lo, hi in sources:
         if exempt(f, marked_before):
             continue
-        was = count(data[lo].decode("utf-8", errors="replace")) if lo else []
-        now = count(data[hi].decode("utf-8", errors="replace"))
+        was = count(data[lo].decode("utf-8", errors="replace"), o) if lo else []
+        now = count(data[hi].decode("utf-8", errors="replace"), f)
         if len(now) > len(was):
             fresh = added_rows(c.lo, c.hi, f)
             found = sorted((line not in fresh, line, what) for line, what in now)
@@ -767,8 +791,9 @@ def findings_at(rev: str, s: str, files: set[str]) -> Counter:
     _, sites, noun = next(c for c in COUNTED if c[0] == s)
     if (lint := counted_lint_at(rev, s, sites, noun)) is None:
         return Counter()
-    data = tree_files(rev, {f for f in files if not f.startswith(tuple(lint.LEFT_OUT))})
-    return Counter({key({"file": f}): len(getattr(lint, sites)(b.decode("utf-8", errors="replace"))) for f, b in data.items()})
+    holds, count = counter(lint, sites)
+    data = tree_files(rev, {f for f in files if holds(f) and not f.startswith(tuple(lint.LEFT_OUT))})
+    return Counter({key({"file": f}): len(count(b.decode("utf-8", errors="replace"), f)) for f, b in data.items()})
 
 
 def held(c: Change, before: dict[str, list], after: dict[str, list]) -> dict[str, Counter]:
@@ -1013,9 +1038,13 @@ def lint_top(c: Change, base: str) -> None:
         c.ruff_new, new = [], []
         for *_, v in counted:
             v["new"] = []
+    def reads(slug: str, sites: str, noun: str) -> str:
+        return "files" if hasattr(counted_lint_at(base, slug, sites, noun), "holds") else "Python"
+
     if not (new or unmoved):
         notes = ([f"ruff finds nothing new in the {len(c.linted)} Python file(s) it changes"] if c.linted else []) + [
-            f"no {noun} is new in the {len(v['read'])} Python file(s) it changes" for _, _, noun, v in counted if v["read"]]
+            f"no {noun} is new in the {len(v['read'])} {'Python ' * (reads(slug, sites, noun) == 'Python')}file(s) it "
+            f"changes" for slug, sites, noun, v in counted if v["read"]]
         c.why = "; ".join(notes if c.verdict == "untouched" else [c.why, *notes])
         c.verdict = "passed"
         return
@@ -1027,15 +1056,17 @@ def lint_top(c: Change, base: str) -> None:
     for slug, sites, noun, v in counted:
         if v["new"]:
             lint = counted_lint_at(base, slug, sites, noun)
-            why.append(f"adds {len(v['new'])} {noun}(s) to the Python it changes, as the base's {counted_paths(slug)[0]} "
+            why.append(f"adds {len(v['new'])} {noun}(s) to the {reads(slug, sites, noun)} it changes, as the base's "
+                       f"{counted_paths(slug)[0]} "
                        f"counts them ({'; '.join(v['grown'])}): {lint.FIX}"
                        + (" (a mark counts from the change's base, so a new one lands before what it exempts)"
                           if hasattr(lint, "is_registry") else ""))
-    for moved, names, listed, module in ((c.ruff_unmoved, "findings", REPO_RUFF_LIST, REPO_RUFF_MODULE),
-                                         *((v["unmoved"], f"{noun}s", counted_paths(slug)[1], counted_paths(slug)[0])
-                                           for slug, _, noun, v in counted)):
+    for moved, files, names, listed, module in (
+            (c.ruff_unmoved, "Python", "findings", REPO_RUFF_LIST, REPO_RUFF_MODULE),
+            *((v["unmoved"], reads(slug, sites, noun), f"{noun}s", counted_paths(slug)[1], counted_paths(slug)[0])
+              for slug, sites, noun, v in counted if v["unmoved"])):
         if moved:
-            why.append(f"renames Python whose {names} {listed} allows at the old path, and leaves {len(moved)} "
+            why.append(f"renames {files} whose {names} {listed} allows at the old path, and leaves {len(moved)} "
                        f"entr{'y' if len(moved) == 1 else 'ies'} behind: {module} counts a file's {names} under its path, "
                        f"so it would fail after landing; move each entry with its file in the same change")
     c.verdict, c.why = "failed", "; and ".join(why)
