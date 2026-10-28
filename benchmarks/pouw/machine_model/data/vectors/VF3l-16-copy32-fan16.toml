@@ -39,8 +39,7 @@ credits = [
     ["MOV64", 2048], ["LDS128", 4096], ["LDG128", 4096], ["LDC64", 2048], ["LDCUNI", 1024], ["UNI", 512], ["UNI64", 1024],
 ]
 
-[published]  # as `machine-model solve VF3l-16-copy32-fan16` printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+[published]  # as `machine-model solve VF3l-16-copy32-fan16` printed them: τ and U/F_low to 4 places, the margin to 3
 tau = 0.0600
-tau_600w = 0.0469
 uf_low = 1.3125
 margin = 2.0

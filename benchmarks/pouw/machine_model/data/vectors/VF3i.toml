@@ -28,9 +28,8 @@ credits = [
     ["UNI", 32], ["UNI64", 64], ["CVT64", 2048],
 ]
 
-[published]  # as the legacy scripts printed them: τ, τ at 600 W and U/F_low to 4 places, the margin to 3
+[published]  # as the legacy scripts printed them: τ and U/F_low to 4 places, the margin to 3
 tau = 0.1129
-tau_600w = 0.0883
 uf_low = 1.0938
 margin = 1.935
 

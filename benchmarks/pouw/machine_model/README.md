@@ -4,7 +4,7 @@ PoUW's price vectors for sm_120 (rs-machine-model §8): the LP that prices every
 of the machine's rows, its inputs as data, the attack families, and `machine-model`, which re-solves a named vector and
 checks every attack against it. The reading it reports is a design's core ε (`machine-model eps`, "ε in the
 tensor–scalar model" below). Each named vector (`machine-model list`) re-solves here to the record it was published with
-(τ, τ at 600 W, U/F_low and margin), at the vertex the legacy scripts landed on (`tests/test_vectors.py`), and `solve`
+(τ, U/F_low and margin), at the vertex the legacy scripts landed on (`tests/test_vectors.py`), and `solve`
 says whether (π₃₂), PRICES-32's load half and π_c ≥ 16 hold at its prices (`data/floors.csv`), and lists every copy
 route's price a word beside its measured cost.
 
@@ -18,7 +18,7 @@ uv run machine-model                      # every command's usage, each from its
 uv run machine-model list                 # the named vectors
 uv run machine-model render               # every table of data/ as Markdown
 uv run machine-model render vectors designs   # some of them; --device sm_90 render: a device's
-uv run machine-model solve VECTOR         # the vector's record (τ, τ at 600 W, U/F_low, margin), θ, the cheapest attacks, the check, the claims
+uv run machine-model solve VECTOR         # the vector's record (τ, U/F_low, margin), θ, the cheapest attacks, the check, the claims
 uv run machine-model solve                # model.toml's `current`, the vector of record
 uv run machine-model census VECTOR --kind ATOMS64
 uv run machine-model attacks VECTOR -n 3  # the cheapest attacks of every design
@@ -51,7 +51,7 @@ uv run machine-model cover --holes           # the coverage table's counts by ma
 
 The data, each kind of thing a file or a line of its own:
 
-- `data/model.toml`: the constants (R*, the honest kernel's u a MAC, at 600 W too), the LP's ρ, tie and x_min, the honest
+- `data/model.toml`: the constants (R*, the honest kernel's u a MAC), the LP's ρ, tie and x_min, the honest
   GEMM, the CUDA kinds, the adopted design, the epochs in order and the `current` vector.
 - `data/rows.csv`: one line per row of the machine (a pipe, a port, a ceiling or a joint vertex): its status
   (`measured`, `ASSUMED`, `provisional`, `joint`, `datasheet`), the runs or notes it rests on, and what it is.
@@ -209,7 +209,7 @@ A new measurement is lines of data and a vector file, not a script:
 3. **The epoch**: append the new vector's name to `epochs` in `data/model.toml`.
 4. **The vector**: copy the vector it builds on to `data/vectors/NAME.toml`, set `name` and `epoch`, add the row to `rows`
    (and any credit to `credits`), and drop `[published]` and `[legacy]`.
-5. `uv run machine-model solve NAME`: it prints τ, τ at 600 W, U/F_low and the margin, and checks every price, credit and
+5. `uv run machine-model solve NAME`: it prints τ, U/F_low and the margin, and checks every price, credit and
    attack. Record the printed numbers under `[published]` once you publish them; the tests then hold the vector to them.
 
 A new attack family is a new `data/attacks/FAMILY.jsonl` (`since` the epoch it joins); the check prices every attack of
@@ -493,7 +493,7 @@ instruction at each C of an issue slot, A2u's sweep, which `eps --uni-issue` doe
 The L40S (`data/devices/sm_89/`) prices Dither-1S, Dither-2S and Dither-C at L = 16
 (IMMA.16816, where T1 is tight) and at L = 32 (IMMA.16832, half the tensor pipe's words), on ADA's measured honest step:
 duo's fold, 19.07 and 22.93 SMSP-cycles a MMA. Its clock is f_max = 2,520 MHz, with honest at 1,680 MHz at L = 16 and
-1,585 MHz at L = 32 under the enforced 325 W cap. Its operand floors are SPEC §3.4's register count applied to each
+1,585 MHz at L = 32. Its operand floors are SPEC §3.4's register count applied to each
 form: 1/94 and 7/72 a MMA for m16n8k16, 1/39 and 0.20 for m16n8k32. ε_skip at L = 16 scales L = 32's strips by their
 widths. `eps --table` prints γ_f, γ with the clock gap f_max/f_H.
 

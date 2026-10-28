@@ -1,4 +1,4 @@
-"""machine-model solve [NAME] [--json]       re-solve NAME (default: model.toml's `current`): τ, τ at 600 W, U/F_low and
+"""machine-model solve [NAME] [--json]       re-solve NAME (default: model.toml's `current`): τ, U/F_low and
                                           margin against what was published, θ, the cheapest attacks, the check,
                                           then whether (π₃₂), its load half and π_c ≥ 16 hold
                                           (data/floors.csv), and every copy route's price and measured cost a word"""
@@ -38,7 +38,7 @@ def run(args) -> int:
         print(f"  superseded by {v.superseded_by}")
     if v.note:
         print(f"  {v.note}")
-    print(f"  τ {r.tau:.4f}   τ at 600 W {r.tau_600w:.4f}   U/F_low {r.uf_low:.4f}   margin {r.margin:.3f}")
+    print(f"  τ {r.tau:.4f}   U/F_low {r.uf_low:.4f}   margin {r.margin:.3f}")
     if v.published:
         print("  published: " + "   ".join(f"{k} {x}" for k, x in v.published.items())
               + ("   (reproduced)" if not bad else ""))
