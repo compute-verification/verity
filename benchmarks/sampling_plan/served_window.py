@@ -9,17 +9,19 @@ A model, not a measurement: each input carries its status (M measured, D derived
 
 - `chunk L`, `coord`, `tile RxC`: the int8 linears (qkv, o_proj, gate_up, down) as K-chunks of L MACs that commit their
   32-bit running sums, as output coordinates (the served draw's `ScaledMmS8Coordinate`), or as tiles of R tokens by C
-  output channels, opening each operand row once; attention (a query head's row) and the row ops (one unit an output
-  coordinate) stay at today's units.  The window commits what it commits today (every Call's outputs, `Q_word_v1`), plus
-  the chunks' sums.
+  output channels, opening each operand row once; the row ops stay at today's units (one an output coordinate), and
+  attention is a query head's row in key blocks, the most keys a power of two whose block C-Flock holds, each block
+  opening the running softmax state (its f32 output row, max and sum) and committing it, the last its output row.  The
+  window commits what it commits today (every Call's outputs, `Q_word_v1`), plus the chunks' sums and attention's states.
 - `attn|mlp token`, `layer token`, `4 layers token`: fused proof blocks that commit only their boundary, the residual
   stream and the K and V a later token reads (COMMIT-BYTES' lever 13): every interior value stays inside a proof block.
 
 A proof block costs its ANDs (int8 MACs at `BlackwellS8ImmaDot32_v1`'s 4,190 per 32, bf16 MACs at `F32Fma_v2`'s 4,498, the row
 ops at their pieces, and every row it opens at hm96's `row_ands`) at the cost model fitted from C-Flock's zero-knowledge
 sessions (`inputs.observations`, GPU-seconds of an RTX PRO 6000), with its statement's share when statements are full.
-`fits` is false for a rung whose proof blocks exceed C-Flock's statement (m = k_log + nbl <= 35, `circuit.rs` `M_MAX`: at most
-2^34 ANDs a proof block) or the widest size class (`UNIT_CLASS_MAX` bits): it prices what lifting the limit would buy.
+`fits` is false for a rung with a proof block C-Flock's block can't hold (`inputs.cap`: its ANDs and rows at the composer's
+occupancy past 2^`K_MAX`) or wider than the widest size class (`UNIT_CLASS_MAX` bits); such a rung is priced one proof
+block a statement, what lifting the limit would buy.
 
 **Two views.**  `lean`: each rung as n equal proof blocks of its mean size (`optimize.Grain`), its proving cost weighted by
 work (free compute) or by width (exfiltration), through `grain_costs`, the laws of `Achievability` and
@@ -43,7 +45,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from inputs import EPILOGUE, I, KEY, S8_STEP, observations
+from inputs import EPILOGUE, I, K_MAX, KEY, S8_STEP, block_k_log, cap, observations
 
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit
 from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
@@ -55,8 +57,6 @@ DELTA = 2.0 ** -40
 LAMBDA = log(1 / DELTA)
 EPS = 0.01
 LEAK_BITS = 2.0 ** 30
-#: C-Flock's largest statement, m = k_log + nbl <= 35 (`verity/ml/flock/live/src/circuit.rs` `M_MAX`)
-M_MAX = 35
 #: the pieces' ANDs (their circuit-check pins: `verity/ml/circuits/ops/*.circuit-check.json`)
 F32_FMA, F32_MUL, F32_ADD, F32_MAX, EX2, RCP, F2BF16, F32_DIV, S8_CLAMP = 4498, 2406, 823, 283, 688, 197, 77, 2493, 71
 F32_RINT = 275
@@ -94,7 +94,8 @@ WEEK_S = 7 * 86400
 @dataclass(frozen=True)
 class Part:
     """One stratum of a rung: `units` proof blocks a window of `work` MACs each, `out_bits` wide, committing `commit_bytes`
-    at serve time, of `ands` ANDs, the rows they open included."""
+    at serve time, of `ands` ANDs, the rows they open included; `gates` and `rows` are its widest proof block's own ANDs
+    and the rows it opens (bytes each), what C-Flock's block holds."""
 
     name: str
     units: int
@@ -102,19 +103,26 @@ class Part:
     out_bits: float
     commit_bytes: float
     ands: float
+    gates: float
+    rows: tuple[int, ...]
+
+    @property
+    def k_log(self) -> int:
+        return block_k_log(round(self.gates), self.rows)
 
     @property
     def fits(self) -> bool:
-        return k_log(self.ands) <= M_MAX and self.out_bits <= UNIT_CLASS_MAX
+        return cap(round(self.gates), self.rows) > 0 and self.out_bits <= UNIT_CLASS_MAX
+
+    @property
+    def per_statement(self) -> int:
+        """A statement's proof blocks (`inputs.cap`), one for a block C-Flock can't hold."""
+        return cap(round(self.gates), self.rows) or 1
 
 
-def k_log(ands: float) -> int:
-    return ceil(log2(max(ands, 2))) + 1
-
-
-def cap(ands: float) -> int:
-    """A statement's proof blocks under m <= 35 (`int8_llama.cap`), at least 1."""
-    return 1 << max(0, M_MAX - k_log(ands))
+def opened(gates: float, rows: tuple[float, ...]) -> float:
+    """A proof block's ANDs with its rows' openings at hm96's `row_ands`."""
+    return gates + sum(row_ands(round(r)) for r in rows)
 
 
 def token_layers() -> int:
@@ -145,17 +153,51 @@ def row_op_bytes() -> float:
 
 
 #: one row-op proof block (a norm, quantizer, SiLU or RoPE coordinate): about 6,000 ANDs of f32 pieces and three one-block rows
-ROW_OP_ANDS = 2 * F32_MUL + F32_DIV + F32_RINT + S8_CLAMP + F2BF16 + 3 * row_ands(4)
+ROW_OP_GATES = 2 * F32_MUL + F32_DIV + F32_RINT + S8_CLAMP + F2BF16
+ROW_OP_ROWS = (4, 4, 4)
+ROW_OP_ANDS = opened(ROW_OP_GATES, ROW_OP_ROWS)
+
+
+def attention_block(keys: float, last: bool) -> tuple[float, tuple[float, ...]]:
+    """A query head's key block of `keys` keys: its ANDs (QK^T and PV, softmax a key, and rescaling the running output row
+    and sum by 2^(m - m') to add its own; the last the reciprocal) and its rows: q, its K and V, the state in, and the
+    state out (the f32 output row, max and sum) or, the last, the output row."""
+    hd = LLAMA_1B["head_dim"]
+    state = 4 * (hd + 2)
+    gates = keys * (2 * hd * F32_FMA + EX2 + F32_ADD + F32_MUL + F2BF16 + F32_MAX) + (hd + 1) * F32_FMA + EX2 + F32_ADD \
+        + (RCP if last else 0)
+    return gates, (2 * hd, 2 * hd * keys, 2 * hd * keys, state, 2 * hd if last else state)
+
+
+def attention_keys() -> int:
+    """A key block's keys: the most, a power of two, whose block C-Flock holds."""
+    positions = round(IN["tokens"].value / IN["sequences"].value)
+    return next(kb for kb in (positions >> i for i in range(positions.bit_length()))
+                if all(cap(round(g), rows) for g, rows in (attention_block(kb, last) for last in (False, True))))
+
+
+def attention_parts() -> list[Part]:
+    """Attention as key blocks of `attention_keys` keys, a query head's row at position p in ceil(p/kb) of them: the
+    blocks before its last, and its last at the mean keys it covers (its widest at kb)."""
+    tl, hd, heads, kb = token_layers(), LLAMA_1B["head_dim"], LLAMA_1B["heads"], attention_keys()
+    positions = round(IN["tokens"].value / IN["sequences"].value)
+    before = sum(-(-p // kb) - 1 for p in range(1, positions + 1)) / positions
+    tail = sum(p - (-(-p // kb) - 1) * kb for p in range(1, positions + 1)) / positions
+    state = 4 * (hd + 2)
+    g, rows = attention_block(kb, False)
+    g_tail, rows_tail = attention_block(tail, True)
+    g_last, rows_last = attention_block(kb, True)
+    return [Part("attention", round(tl * heads * before), 2 * hd * kb, 8 * state, state, opened(g, rows), g,
+                 tuple(map(round, rows))),
+            Part("attention last", tl * heads, 2 * hd * tail, 16 * hd, 2 * hd, opened(g_tail, rows_tail), g_last,
+                 tuple(map(round, rows_last)))]
 
 
 def rest_parts() -> list[Part]:
-    """Attention (a query head's row) and the row ops (one 16-bit coordinate each), at today's units."""
+    """Attention (`attention_parts`) and the row ops (one 16-bit coordinate each, at today's units)."""
     tl = token_layers()
-    macs, ands = attention_row()
-    heads = LLAMA_1B["heads"]
     rows = row_op_bytes() / 2
-    return [Part("attention", tl * heads, macs, 16 * LLAMA_1B["head_dim"], 2 * LLAMA_1B["head_dim"], ands),
-            Part("row ops", round(tl * rows), 0.0, 16, 2, ROW_OP_ANDS)]
+    return attention_parts() + [Part("row ops", round(tl * rows), 0.0, 16, 2, ROW_OP_ANDS, ROW_OP_GATES, ROW_OP_ROWS)]
 
 
 def coord_ands(k: int) -> float:
@@ -166,29 +208,29 @@ def linear_parts(rung: str) -> list[Part]:
     tl, out = token_layers(), []
     for op, (k, n) in LINEARS.items():
         if rung == "coord":
-            out.append(Part(op, tl * n, k, 16, 2, coord_ands(k)))
+            out.append(Part(op, tl * n, k, 16, 2, coord_ands(k), k // 32 * S8_STEP + EPILOGUE, (k, k, 4, 4, 2)))
         elif rung.startswith("chunk"):
             c = min(int(rung.split()[1]), k)
             last = c / k
             bits = 32 * (1 - last) + 16 * last
             ands = c // 32 * S8_STEP + 2 * row_ands(c) + 2 * row_ands(4) \
                 + last * (EPILOGUE + 2 * row_ands(4) + row_ands(2))
-            out.append(Part(op, tl * n * (k // c), c, bits, bits / 8, ands))
+            out.append(Part(op, tl * n * (k // c), c, bits, bits / 8, ands, c // 32 * S8_STEP + EPILOGUE,
+                            (c, c, 4, 4, 4, 4, 2)))
         else:
             r, c = map(int, rung.split()[1].split("x"))
             cells = r * c
-            ands = cells * (k // 32 * S8_STEP + EPILOGUE) + (r + c) * row_ands(k) + row_ands(4 * r) + row_ands(4 * c) \
-                + row_ands(2 * cells)
-            out.append(Part(op, tl * n // cells, cells * k, 16 * cells, 2 * cells, ands))
+            gates, rows = cells * (k // 32 * S8_STEP + EPILOGUE), (k,) * (r + c) + (4 * r, 4 * c, 2 * cells)
+            out.append(Part(op, tl * n // cells, cells * k, 16 * cells, 2 * cells, opened(gates, rows), gates, rows))
     return out
 
 
-def _fused(name: str, units: int, int8: float, bf16: float, opened: float, out_bytes: float, row_ops: float) -> Part:
-    """A fused proof block: its int8 and bf16 MACs, its row ops' pieces, and the bytes it opens (weights and their scales,
-    the K and V it reads, its input and output) at hm96's per-byte rate."""
+def _fused(name: str, units: int, int8: float, bf16: float, nbytes: float, out_bytes: float, row_ops: float) -> Part:
+    """A fused proof block: its int8 and bf16 MACs, its row ops' pieces, and the `nbytes` it opens (weights and their
+    scales, the K and V it reads, its input and output) at hm96's per-byte rate."""
     per_byte = (row_ands(1 << 20) - row_ands(0)) / (1 << 20)
-    ands = int8 * S8_STEP / 32 + bf16 * F32_FMA + row_ops + opened * per_byte
-    return Part(name, units, int8 + bf16, 8 * out_bytes, out_bytes, ands)
+    gates = int8 * S8_STEP / 32 + bf16 * F32_FMA + row_ops
+    return Part(name, units, int8 + bf16, 8 * out_bytes, out_bytes, gates + nbytes * per_byte, gates, (round(nbytes),))
 
 
 def fused_parts(rung: str) -> list[Part]:
@@ -200,7 +242,7 @@ def fused_parts(rung: str) -> list[Part]:
     bf16 = heads * macs
     softmax = heads * (attn_ands - macs * F32_FMA - 2 * row_ands(round(macs)) - 2 * row_ands(2 * LLAMA_1B["head_dim"]))
     row_bytes = row_op_bytes()
-    row_ops = row_bytes / 2 * (ROW_OP_ANDS - 3 * row_ands(4))
+    row_ops = row_bytes / 2 * ROW_OP_GATES
     attn_w = sum(k * n for op, (k, n) in LINEARS.items() if op in ("qkv", "o_proj"))
     mlp_w = sum(k * n for op, (k, n) in LINEARS.items() if op in ("gate_up", "down"))
     scales = 4 * sum(n for _, n in LINEARS.values())
@@ -233,12 +275,13 @@ def fitted() -> Fitted:
                   fit(obs, "stage", ["one", "ands", "ands*staged"]), I["cpu"].value, KEY)
 
 
-def unit_cost(m: CostModel, ands: float, marginal: bool = False) -> float:
-    """A drawn proof block's GPU-seconds in a full statement: proved and staged, and 1/cap of the statement.  The fit's
-    per-statement term grows with the subcircuit's ANDs (3.6 us an AND, fitted on 5M- and 15M-AND subcircuits), which a
-    statement of one 2^34-AND proof block pays whole; `marginal` leaves it out, the reading where that term is fixed."""
+def unit_cost(m: CostModel, ands: float, per: int, marginal: bool = False) -> float:
+    """A drawn proof block's GPU-seconds in a full statement of `per` of them: proved and staged, and 1/per of the
+    statement.  The fit's per-statement term grows with the subcircuit's ANDs (3.6 us an AND, fitted on 5M- and 15M-AND
+    subcircuits), which a statement of one proof block pays whole; `marginal` leaves it out, the reading where that term
+    is fixed."""
     statement = m.statement_fixed + (0.0 if marginal else m.statement_per_and * ands)
-    return ands * (m.per_and + m.staged_per_and) + statement / cap(ands)
+    return ands * (m.per_and + m.staged_per_and) + statement / per
 
 
 def scale(parts: list[Part], windows: float) -> list[Part]:
@@ -251,14 +294,14 @@ def grain(name: str, parts: list[Part], m: CostModel, by: str, marginal: bool = 
     n = sum(p.units for p in parts)
     weight = {p.name: p.units * (p.work if by == "work" else p.out_bits) for p in parts}
     total = sum(weight.values())
-    prove = sum(weight[p.name] * unit_cost(m, p.ands, marginal) for p in parts) / total
+    prove = sum(weight[p.name] * unit_cost(m, p.ands, p.per_statement, marginal) for p in parts) / total
     return Grain(name, n, sum(p.units * p.work for p in parts) / n, sum(p.units * p.out_bits for p in parts) / n,
                  sum(p.units * p.commit_bytes for p in parts) / n, prove)
 
 
 def candidates(rung: str, parts: list[Part]) -> list[Candidate]:
     return [Candidate(p.name, f"{rung}:{p.name}", p.units, round(p.work), round(p.out_bits), ands=round(p.ands),
-                      commit_bits=round(8 * p.commit_bytes), cap=cap(p.ands)) for p in parts]
+                      commit_bits=round(8 * p.commit_bytes), cap=p.per_statement) for p in parts]
 
 
 def planner(rung: str, parts: list[Part], m: CostModel, *, h: float, weight: float, work: float | None = None,
@@ -301,8 +344,8 @@ def run(weight: float = 1.0, *, plan: bool = True) -> dict:
                      "statement_per_and": m.statement_per_and},
            "h_mac_times": {k: h * IN["peak_macs"].value for k, h in readings().items()},
            "rungs": {name: {"fits": all(p.fits for p in parts),
-                            "parts": [{**p.__dict__, "k_log": k_log(p.ands), "unit_s": unit_cost(m, p.ands)}
-                                      for p in parts],
+                            "parts": [{**p.__dict__, "k_log": p.k_log, "fits": p.fits, "per_statement": p.per_statement,
+                                       "unit_s": unit_cost(m, p.ands, p.per_statement)} for p in parts],
                             "units": sum(p.units for p in parts),
                             "committed": sum(p.units * p.commit_bytes for p in parts),
                             "unit_work": unit_work(parts)}
@@ -345,16 +388,17 @@ def sqrt_law(m: CostModel, weight: float) -> list[dict]:
     √(w β h C / (o Λ)), o the chunks' proving cost a MAC, as C grows by pooling windows."""
     tl = token_layers()
     work = tl * sum(k * n for k, n in LINEARS.values())
-    o = (unit_cost(m, 2048 // 32 * S8_STEP + 2 * row_ands(2048)) - unit_cost(m, 1024 // 32 * S8_STEP + 2 * row_ands(1024))) \
-        / 1024
+
+    def chunk(c: int) -> float:
+        gates, rows = c // 32 * S8_STEP, (c, c, 4, 4)
+        return unit_cost(m, opened(gates, rows), cap(gates, rows))
+
+    o = (chunk(2048) - chunk(1024)) / 1024
     rows = []
     for hname, h in readings().items():
         for windows in (1, 16, 256, 4096, 65536):
             target = EPS * work * windows
-            ladder = []
-            for c in range(32, 8192 + 1, 32):
-                ands = c // 32 * S8_STEP + 2 * row_ands(c) + 2 * row_ands(4)
-                ladder.append(Grain(f"L={c}", round(work * windows / c), c, 32, 4.0, unit_cost(m, ands)))
+            ladder = [Grain(f"L={c}", round(work * windows / c), c, 32, 4.0, chunk(c)) for c in range(32, 8192 + 1, 32)]
             costs = grain_costs(ladder, DELTA, h=h, weight=weight, work=target)
             best = min(costs, key=lambda r: r["total"])
             rows.append({"h": hname, "windows": windows, "C": target, "o": o, "best_L": best["work"],
@@ -372,8 +416,9 @@ def render(out: dict) -> str:
     lines = [f"# Served window, Llama-3.2-1B int8 T 8,192: proof-block size in two modes (δ = 2^-40, ε = {EPS:.0%}, "
              f"ℓ = 2^{log2(LEAK_BITS):.0f} bits a window)", ""]
     lines.append("GPU-seconds (proving: RTX PRO 6000 ZK fit, modelled for these units; commitment: H200 SHA-512 at h). "
-                 "'x serve' divides by the scope's stock serving time. s* is the cheapest rung that fits C-Flock "
-                 "(m <= 35, size classes); 'any' includes the fused rungs that don't.")
+                 "'x serve' divides by the scope's stock serving time. s* is the cheapest rung every proof block of which "
+                 f"C-Flock's block holds (k_log <= {K_MAX} at the composer's occupancy, `inputs.cap`; attention in key blocks "
+                 f"of {attention_keys()}) and the size classes; 'any' includes the rungs that don't.")
     lines += ["", "| scope | target | h | mode | s* (lean) | s* (MACs a gate_up block) | total | prove | commit | x serve | "
               "s* (planner) | planner total | s* any, as fitted | s* any, marginal |",
               "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
@@ -388,15 +433,17 @@ def render(out: dict) -> str:
                      f"{r['best_marginal_any']} |")
     keys = [(s, "work") for s in scopes()] + [("window", "leak")]
     lines += ["", "Each rung's total, GPU-seconds (lean view, h 398 GB/s, proving + w x commit), as fitted / marginal:", "",
-              "| rung | fits | proof blocks a window | committed GB a window | "
-              + " | ".join(f"{s} {t}" for s, t in keys) + " |", "|---|---|---|---|" + "---|" * len(keys)]
+              "| rung | fits | widest block's k_log | proof blocks a window | committed GB a window | "
+              + " | ".join(f"{s} {t}" for s, t in keys) + " |", "|---|---|---|---|---|" + "---|" * len(keys)]
     pick = {(r["scope"], r["target"]): r for r in out["results"] if r["h"] == "h 398 GB/s" and r["weight"] > 0}
     for name, info in out["rungs"].items():
         cells = []
         for key in keys:
             row = next(x for x in pick[key]["rows"] if x["rung"] == name)
             cells.append(f"{_g(row['lean']['total'])} / {_g(row['lean_marginal']['total'])}")
-        lines.append(f"| {name} | {'yes' if info['fits'] else 'no'} | {info['units']:,} | "
+        widest = max(info["parts"], key=lambda p: p["k_log"])
+        lines.append(f"| {name} | {'yes' if info['fits'] else 'no'} | {widest['k_log']} ({widest['name']}) | "
+                     f"{info['units']:,} | "
                      f"{info['committed'] / 1e9:.3g} | " + " | ".join(cells) + " |")
     lines += ["", "The work target on the chunk family alone: the cheapest L against √(w β h C/(o Λ)), β = 4 B:", "",
               "| h | windows pooled | C (MACs) | best L | √ law L | proving only L |", "|---|---|---|---|---|---|"]

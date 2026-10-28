@@ -1,5 +1,5 @@
-"""The served window's two modes (`served_window.py`): every rung covers the window's work, the fused rungs exceed
-C-Flock's statement, proving alone picks the finest rung, the commitment moves the work optimum coarser as the pooled
+"""The served window's two modes (`served_window.py`): every rung covers the window's work, the fused rungs and wide tiles
+exceed C-Flock's block and no fitting rung has a proof block past it, proving alone picks the finest rung, the commitment moves the work optimum coarser as the pooled
 period grows and along √(w β h C/(o Λ)), and leaves the exfiltration optimum where it was."""
 
 from __future__ import annotations
@@ -7,6 +7,7 @@ from __future__ import annotations
 import pytest
 
 import served_window as S
+from inputs import K_MAX, block_k_log, cap
 
 
 @pytest.fixture(scope="module")
@@ -25,10 +26,31 @@ def test_every_rung_covers_the_windows_work(out):
         assert sum(p["units"] * p["work"] for p in rung["parts"]) == pytest.approx(out["work_window"], rel=1e-9), name
 
 
-def test_the_fused_rungs_exceed_the_statement_and_the_dot_level_rungs_fit(out):
+def test_the_fused_rungs_and_wide_tiles_exceed_c_flocks_block_and_the_dot_level_rungs_fit(out):
     fits = {name: rung["fits"] for name, rung in out["rungs"].items()}
-    assert not any(fits[n] for n in ("attn|mlp token", "layer token", "4 layers token", "tile 128x128"))
-    assert all(fits[n] for n in fits if n.startswith("chunk") or n in ("coord", "tile 2x2", "tile 64x64"))
+    assert not any(fits[n] for n in ("attn|mlp token", "layer token", "4 layers token", "tile 16x16", "tile 64x64"))
+    assert all(fits[n] for n in fits if n.startswith("chunk") or n in ("coord", "tile 2x2", "tile 4x4"))
+
+
+def test_no_fitting_rung_has_a_proof_block_past_c_flocks_block(out):
+    """Every proof block of a fitting rung sits in a C-Flock block of k_log <= `K_MAX` at the composer's occupancy
+    (`inputs.cap`), its statement's share that cap; a query head's whole row doesn't, so attention is key blocks, the most
+    keys that fit."""
+    for name, rung in out["rungs"].items():
+        if rung["fits"]:
+            for p in rung["parts"]:
+                assert p["k_log"] <= K_MAX, (name, p["name"])
+                assert cap(round(p["gates"]), p["rows"]) == p["per_statement"] > 0, (name, p["name"])
+    kb = S.attention_keys()
+    positions = round(S.IN["tokens"].value / S.IN["sequences"].value)
+    assert block_k_log(*_rounded(S.attention_block(positions, True))) > K_MAX
+    assert block_k_log(*_rounded(S.attention_block(2 * kb, False))) > K_MAX >= block_k_log(
+        *_rounded(S.attention_block(kb, False)))
+
+
+def _rounded(block: tuple[float, tuple[float, ...]]) -> tuple[int, tuple[int, ...]]:
+    gates, rows = block
+    return round(gates), tuple(map(round, rows))
 
 
 def test_proving_only_picks_the_finest_rung_at_every_scope(out):

@@ -69,7 +69,8 @@ zero-work subcircuits at their floor.
 
 - `served_window.py`: the served window (Llama-3.2-1B int8, T 8,192 on the H200, one step a window) cut at each rung of
   a ladder (K-chunks of the int8 linears, output coordinates, tiles, and fused attention/MLP, layer and 4-layer proof
-  blocks that commit only the residual and K, V), for the free-compute target (a window, a week, a year pooled) and
+  blocks that commit only the residual and K, V; attention in key blocks), a rung fitting only when C-Flock's block holds
+  every proof block of it (`inputs.cap`), for the free-compute target (a window, a week, a year pooled) and
   the exfiltration target, in the planner's two modes (proving only, and proving plus w times the serve-time
   commitment) at two readings of a hashed byte's cost, through `grain_costs` and `for_target`; then the chunk family's
   optimum against √(wβhC/(oΛ)). It writes `served_window.json` and `served_window.md`.
