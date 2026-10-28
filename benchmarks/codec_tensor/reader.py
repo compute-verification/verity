@@ -6,7 +6,7 @@ the same bytes.
 segment     a device reader's part of a pass: count = 16 · 2^h chunks of one region, read in order from position
             p = a multiple of count (`verity_vllm.protocols.remote_bandwidth.registry.aligned`); its root is the node (h + 4 levels above
             the chunks) end_pass takes by segment number, and `open` serves an opening's leaf receipts and leaf path
-salts       the store's PRF, SHAKE256(D(store salt) ‖ key ‖ seed ‖ u64be leaf) (`Store.salt`), so none is kept
+salts       the store's PRF, `remote_bandwidth.store.store_salt(key, seed, leaf)` (`Store.salt`), so none is kept
 ~~~
 
 sketch-sha512 receipts (`sketch_receipt.py`) run at k_s = 16 rows (dp4a) and at k_s = 64, a chunk's 2^−64 (int8 tensor
@@ -19,9 +19,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import functools
-import hashlib
 import json
-import struct
 import sys
 from pathlib import Path
 
@@ -31,6 +29,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))
 
 from verity.core.protocols.remote_bandwidth import receipts as rb
+from verity.core.protocols.remote_bandwidth.store import SALT_DOMAIN, store_salt
 from verity.ml.commitments import merkle_depth
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import domain_message
@@ -39,7 +38,6 @@ from verity.ml.commitments.rowleaf import sha512_row_v2_prefix
 import sketch_receipt as skr
 
 BLOCK = 4096
-SALT_DOMAIN = b"verity/store/salt/v0\0"
 # reader.cu's LOAD_* modes: the first four compute receipts, the last two are ceilings that read other bytes or none.
 LOADS = ("ldg", "l2_256", "prefetch", "warp", "hot", "none")
 EXACT = LOADS[:4]
@@ -54,10 +52,6 @@ def pack64(bits: np.ndarray) -> np.ndarray:
     x = np.unpackbits(np.asarray(bits, np.uint8).reshape(ROWS64, BLOCK // 8), axis=1, bitorder="little")
     x = x.reshape(4, 2, 8, 64, 4, 2, 2, 4).transpose(3, 2, 4, 0, 7, 1, 5, 6)   # p, g, t, w, i, n mod 2, s, b
     return np.packbits(x.reshape(64, 32, 4, 32), axis=-1, bitorder="little").view("<u4").reshape(64, 32, 4).copy()
-
-
-def store_salt(key: bytes, seed: bytes, leaf: int) -> bytes:
-    return hashlib.shake_256(SALT_DOMAIN + key + seed + struct.pack(">Q", leaf)).digest(rb.SALT_BYTES)
 
 
 def chain_messages(plan: rb.Plan, key: bytes) -> dict[str, tuple[bytes, int]]:

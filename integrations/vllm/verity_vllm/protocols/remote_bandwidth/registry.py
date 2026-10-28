@@ -47,7 +47,8 @@ from typing import Any
 import numpy as np
 
 from verity.core.protocols.remote_bandwidth import receipts as rb
-from verity.core.protocols.remote_bandwidth.receipts import PER_LEAF, SALT_BYTES, Plan
+from verity.core.protocols.remote_bandwidth.receipts import PER_LEAF, Plan
+from verity.core.protocols.remote_bandwidth.store import store_salt
 from verity.ml.commitments import merkle_depth
 from verity_vllm.protocols.remote_bandwidth.interface import (KINDS, TIERS, Append, Backing, Codec, Counters, Layout, Opening, PageLayout,
                                          PassCommitment, Receipt, Registration, RegionInfo, Segment, Source, Stale,
@@ -57,7 +58,6 @@ from verity_vllm.protocols.remote_bandwidth import memory_map as mm
 CHALLENGE_BYTES = 32
 SEED_BYTES = 64
 REGISTRATION_DOMAIN = b"verity/store/registration/v0\0"
-SALT_DOMAIN = b"verity/store/salt/v0\0"
 
 FillerPlan = Callable[["Store", int], Sequence[tuple[str, Sequence[int]]]]
 
@@ -657,8 +657,8 @@ class Store:
         return canonical(np.concatenate(parts)) if parts else np.zeros((0, 2), np.int64)
 
     def salt(self, seed: bytes, leaf: int) -> bytes:
-        """Leaf ``leaf``'s salt in the pass seeded ``seed``: ``SHAKE256(D ‖ key ‖ seed ‖ u64be leaf)``, 192 bytes."""
-        return hashlib.shake_256(SALT_DOMAIN + self._salt_key + seed + struct.pack(">Q", leaf)).digest(SALT_BYTES)
+        """Leaf ``leaf``'s salt in the pass seeded ``seed``: `store.store_salt` under the store's key, 192 bytes."""
+        return store_salt(self._salt_key, seed, leaf)
 
     def receipts_at(self, ps: _Pass, lo: int, hi: int, z: Callable[[str, int], bytes | None] | None = None) -> list[bytes]:
         """The receipts of positions ``[lo, hi)``, the reference reader's (`receipts`) for the segments they fall in."""

@@ -5,7 +5,8 @@
 //
 //   y_p      SHA512(Z(D(receipt) ‖ frame(seed)) ‖ u64be j ‖ (E_j ⊕ spread(z_j))): a thread a block, 33 compressions
 //            from the first block's midstate (the seed's)
-//   salt_c   SHAKE256(D(store salt) ‖ key ‖ seed ‖ u64be c), 192 bytes: the store's PRF (`Store.salt`)
+//   salt_c   XOF(D(store salt) ‖ key ‖ seed ‖ u64be c)[0 : 192], XOF(m) = SHA512(m ‖ u32be 0) ‖ SHA512(m ‖ u32be 1) ‖ …:
+//            the store's PRF (`Store.salt`, `store.store_salt`)
 //   leaf c   x = SHA512(P(512 m) ‖ y_(16c) ‖ … ‖ y_(16c+m−1)) (sha512/row/v2 of its m receipts), b = x ⊕ M_key·salt (the
 //            Hankel matrix of hm96-sha512's key), c' = SHA512(salt prefix ‖ salt), value = SHA512(leaf prefix ‖ b ‖ c'),
 //            digest = frame-v3-sha512 leaf(c, c, "hm96-sha512/row/v2", value): a thread a leaf
@@ -35,7 +36,8 @@ struct Consts {
   u64 head[3][16];           // frame-v3 FRAME ‖ u32be |tag| ‖ tag ‖ u64be 64 ‖ domain id, for leaf, node and pad, as
                              // big-endian words, zero past head_len
   u64 schema[4];             // the leaf schema, the same
-  u64 salt_block[17];        // SHAKE256's block of salt_in ‖ u64be 0, padded, as little-endian lanes (`salt_of`)
+  u64 salt_block[32];        // salt_in ‖ u64be 0 ‖ u32be 0, padded to SHA-512's one or two blocks, as big-endian
+                             // words (`salt_of`)
   int head_len[3], schema_len, salt_in_len;
   int zero;                  // no padding: two passes' constants compare as bytes (rb_consts)
   u64 positions;             // the pass's positions L: ⌈L / 16⌉ leaves, the last of L − 16 (leaves − 1) receipts
@@ -553,55 +555,37 @@ __device__ __forceinline__ void sha512_msg(Msg<W> &m, u64 (&s)[8]) {
 
 // --- leaves ------------------------------------------------------------------------------------------------------
 
-__constant__ u64 kKeccakRC[24] = {
-    0x0000000000000001ULL, 0x0000000000008082ULL, 0x800000000000808AULL, 0x8000000080008000ULL, 0x000000000000808BULL,
-    0x0000000080000001ULL, 0x8000000080008081ULL, 0x8000000000008009ULL, 0x000000000000008AULL, 0x0000000000000088ULL,
-    0x0000000080008009ULL, 0x000000008000000AULL, 0x000000008000808BULL, 0x800000000000008BULL, 0x8000000000008089ULL,
-    0x8000000000008003ULL, 0x8000000000008002ULL, 0x8000000000000080ULL, 0x000000000000800AULL, 0x800000008000000AULL,
-    0x8000000080008081ULL, 0x8000000000008080ULL, 0x0000000080000001ULL, 0x8000000080008008ULL};
-__constant__ int kKeccakRot[25] = {0,  1,  62, 28, 27, 36, 44, 6,  55, 20, 3,  10, 43,
-                                   25, 39, 41, 45, 15, 21, 8,  18, 2,  61, 56, 14};
-
-__device__ __forceinline__ u64 rotl64(u64 x, int n) { return n ? (x << n) | (x >> (64 - n)) : x; }
-
-__device__ void keccak_f(u64 (&A)[25]) {
+// salt_c as 24 little-endian lanes: SHA512(salt_in ‖ u64be c ‖ u32be k) for k = 0, 1, 2 over kC.salt_block, k in the
+// counter's last byte (its others are zero). When that byte is in the second block, the first is every output's,
+// compressed once.
+__device__ void salt_of(u64 c, u64 (&S)[24]) {
+  const int L = kC.salt_in_len, q = L >> 3, r = 8 * (L & 7);
+  const int nb = (L + 12 + 17 + 127) / 128, kw = (L + 11) >> 3, ks = 8 * (7 - ((L + 11) & 7)), kb = kw >> 4;
+  u64 m[32];
+#pragma unroll
+  for (int i = 0; i < 32; ++i) m[i] = kC.salt_block[i] | (i == q ? c >> r : r && i == q + 1 ? c << (64 - r) : 0);
+  u64 mid[8], w[16];
+#pragma unroll
+  for (int i = 0; i < 8; ++i) mid[i] = kSha512Iv[i];
+  if (kb) {
+#pragma unroll
+    for (int i = 0; i < 16; ++i) w[i] = m[i];
+    sha512_compress(mid, w);
+  }
+#pragma unroll
+  for (int k = 0; k < 3; ++k) {
+    u64 s[8];
+#pragma unroll
+    for (int i = 0; i < 8; ++i) s[i] = mid[i];
 #pragma unroll 1
-  for (int r = 0; r < 24; ++r) {
-    u64 C[5], B[25];
+    for (int b = kb; b < nb; ++b) {
 #pragma unroll
-    for (int x = 0; x < 5; ++x) C[x] = A[x] ^ A[x + 5] ^ A[x + 10] ^ A[x + 15] ^ A[x + 20];
-#pragma unroll
-    for (int x = 0; x < 5; ++x) {
-      const u64 D = C[(x + 4) % 5] ^ rotl64(C[(x + 1) % 5], 1);
-#pragma unroll
-      for (int y = 0; y < 5; ++y) A[x + 5 * y] ^= D;
+      for (int i = 0; i < 16; ++i) w[i] = (b ? m[16 + i] : m[i]) | (16 * b + i == kw ? (u64)k << ks : 0);
+      sha512_compress(s, w);
     }
 #pragma unroll
-    for (int x = 0; x < 5; ++x)
-#pragma unroll
-      for (int y = 0; y < 5; ++y) B[y + 5 * ((2 * x + 3 * y) % 5)] = rotl64(A[x + 5 * y], kKeccakRot[x + 5 * y]);
-#pragma unroll
-    for (int x = 0; x < 5; ++x)
-#pragma unroll
-      for (int y = 0; y < 5; ++y) A[x + 5 * y] = B[x + 5 * y] ^ (~B[(x + 1) % 5 + 5 * y] & B[(x + 2) % 5 + 5 * y]);
-    A[0] ^= kKeccakRC[r];
+    for (int i = 0; i < 8; ++i) S[8 * k + i] = bswap64(s[i]);
   }
-}
-
-// salt_c as 24 little-endian lanes: SHAKE256 of kC.salt_in ‖ u64be c (one block at rate 136), squeezed to 192 bytes.
-__device__ void salt_of(u64 c, u64 (&S)[24]) {
-  const int q = kC.salt_in_len >> 3, r = 8 * (kC.salt_in_len & 7);
-  const u64 x = bswap64(c);   // u64be c's bytes as a little-endian lane
-  const u64 lo = x << r, hi = r ? x >> (64 - r) : 0;
-  u64 A[25];
-#pragma unroll
-  for (int i = 0; i < 25; ++i) A[i] = i < 17 ? kC.salt_block[i] ^ (i == q ? lo : i == q + 1 ? hi : 0) : 0;
-  keccak_f(A);
-#pragma unroll
-  for (int i = 0; i < 17; ++i) S[i] = A[i];
-  keccak_f(A);
-#pragma unroll
-  for (int i = 17; i < 24; ++i) S[i] = A[i - 17];
 }
 
 // Thread tid's digest d to out + 8 tid, tid < n. A thread's own eight 8-byte stores, 64 bytes apart across the warp,
@@ -795,7 +779,7 @@ struct Chain {
   uint8_t binding[256];   // TREE_DOMAIN ‖ seed ‖ plan digest
   uint8_t domain[256];    // domain_message(binding, …)
   uint8_t heads[3][128];  // head(t, domain id), the domain id at head_len[t] − 64
-  u64 salt_block[17];     // salt_in ‖ u64be 0's SHAKE256 block, the seed's bytes at salt_at
+  u64 salt_block[32];     // Consts::salt_block, the seed's bytes at salt_at zero
   int receipt_at, binding_at, binding_len, domain_at, domain_len, salt_at;
 };
 __device__ Chain g_chain;
@@ -859,10 +843,10 @@ __global__ void __launch_bounds__(NODE_LEVELS) chain_kernel(const uint8_t *__res
       for (int i = 0; i < 64; ++i) m[sc.head_len[t] - 64 + i] = d[i];
       be_load(m, sc.head[t]);
     }
-    for (int i = 0; i < 17; ++i) sc.salt_block[i] = c.salt_block[i];
+    for (int i = 0; i < 32; ++i) sc.salt_block[i] = c.salt_block[i];
     for (int i = 0; i < 64; ++i) {
       const int p = c.salt_at + i;
-      sc.salt_block[p / 8] |= (u64)seed[i] << 8 * (p % 8);
+      sc.salt_block[p / 8] |= (u64)seed[i] << 8 * (7 - p % 8);
     }
   }
   __syncthreads();
@@ -921,13 +905,14 @@ extern "C" {
 
 // One pass's constants. The 128-byte blocks are the reference's own: prefix(seed), sha512_row_v2_prefix(8192) and
 // (8 · 64 m) for the pass's last leaf of m receipts, hm96's salt_prefix and leaf_prefix(key); key is hm96-sha512's
-// 256-byte key; salt_in is D(store salt) ‖ the store's key ‖ seed.
+// 256-byte key; salt_in is D(store salt) ‖ the store's key ‖ seed, at most 227 bytes so that it, u64be c, u32be k and
+// SHA-512's padding fill at most two blocks.
 static const char *const TAGS[3] = {"leaf", "node", "pad"};
 
 static int build(Consts &c, const uint8_t *receipt_prefix, const uint8_t *row_prefix, const uint8_t *row_prefix_last,
                  const uint8_t *salt_prefix, const uint8_t *leaf_prefix, const uint8_t *key, const uint8_t *domain_id,
                  const uint8_t *schema, int schema_len, const uint8_t *salt_in, int salt_in_len, uint64_t positions) {
-  if (schema_len < 1 || schema_len > 32 || salt_in_len < 1 || salt_in_len + 9 > 136 || positions < 1) return 1;
+  if (schema_len < 1 || schema_len > 32 || salt_in_len < 1 || salt_in_len + 12 + 17 > 256 || positions < 1) return 1;
   midstate(receipt_prefix, c.receipt_mid);
   midstate(row_prefix, c.row_mid);
   midstate(row_prefix_last, c.row_mid_last);
@@ -951,15 +936,12 @@ static int build(Consts &c, const uint8_t *receipt_prefix, const uint8_t *row_pr
   memcpy(sch, schema, schema_len);
   be_words(sch, 32, c.schema);
   c.schema_len = schema_len;
-  uint8_t blk[136] = {};
+  uint8_t blk[256] = {};
   memcpy(blk, salt_in, salt_in_len);
-  blk[salt_in_len + 8] ^= 0x1F;
-  blk[135] ^= 0x80;
-  for (int i = 0; i < 17; ++i) {
-    u64 v = 0;
-    for (int b = 7; b >= 0; --b) v = (v << 8) | blk[8 * i + b];
-    c.salt_block[i] = v;
-  }
+  blk[salt_in_len + 12] = 0x80;
+  const int nb = (salt_in_len + 12 + 17 + 127) / 128;
+  for (int b = 0; b < 8; ++b) blk[128 * nb - 1 - b] = (uint8_t)((u64)(salt_in_len + 12) * 8 >> (8 * b));
+  be_words(blk, 256, c.salt_block);
   c.salt_in_len = salt_in_len;
   c.zero = 0;
   c.positions = positions;
