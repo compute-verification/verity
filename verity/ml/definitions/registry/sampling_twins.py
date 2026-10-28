@@ -30,7 +30,7 @@ def add_rz_ftz_v1_model(a: int, b: int) -> int:
     r = _u(s)
     rf = _f(r)
     if abs(rf) > abs(s):
-        r = _u(math.nextafter(rf, 0.0))          # dead: a double ulp below rf rounds back to rf (F-stoch-r17-01)
+        r = _u(math.nextafter(rf, 0.0))          # dead: a double ulp below rf rounds back to rf
     elif rf == s and e != 0.0 and (e < 0) == (s > 0):
         r = _u(math.nextafter(rf, 0.0))          # dead, the same way
     return _ftz(r)
