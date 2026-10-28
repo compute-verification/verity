@@ -5,15 +5,23 @@
 value element: widen BF16 exactly, divide by the per-tensor FP32 key or value
 scale with ``div.rn.f32``, then convert with
 ``cvt.rn.satfinite.e4m3x2.f32``.  Cache addressing is wiring, not arithmetic.
+The store ids its conformance cites are ``EVIDENCE_IDS`` (``kv_cache_evidence.json``), keyed by Definition id and then
+by role, which the conformance names in backticks.
 """
 from __future__ import annotations
+
+import json
+from pathlib import Path
 
 from verity.ml.circuits.defs import composite
 
 from . import fp32 as F
 from . import prims as P
 
-__all__ = ["KvCacheAppendE4m3", "kv_cache_append_e4m3_word"]
+__all__ = ["EVIDENCE_IDS", "KvCacheAppendE4m3", "kv_cache_append_e4m3_word"]
+
+#: Definition id -> role -> the run id its conformance names by that role.
+EVIDENCE_IDS: dict[str, dict] = json.loads(Path(__file__).with_name("kv_cache_evidence.json").read_text())
 
 
 def kv_cache_append_e4m3_word(x: int, scale: int) -> int:
@@ -34,7 +42,7 @@ def kv_cache_append_e4m3_word(x: int, scale: int) -> int:
     [],
     lambda _S: ((("x", P.BF16), ("scale", P.F32)), P.E4M3),
     conformance="exact-model-tested; vLLM d9105ea80 FlashInfer reshape_and_cache_flash on the RTX PRO 6000 "
-                "(run r20261014-060040-6de8): 43,008/43,008 cache bytes bit-exact over one prefill and three decode appends",
+                "(run `run`): 43,008/43,008 cache bytes bit-exact over one prefill and three decode appends",
 )
 def KvCacheAppendE4m3(B, _S, x, scale):
     """One BF16 key/value element appended to vLLM's per-tensor E4M3 KV cache.
