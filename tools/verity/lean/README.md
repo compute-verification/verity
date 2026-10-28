@@ -83,7 +83,8 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   `0 ≤ x`, `x ≤ 1`, `x ≤ y`, `∀ i, 0 ≤ f i`, each side a bound variable or a numeral, under casts). Anything else fails
   `guarantees.inline-hypothesis`: name it as a `Prop` in an `Assumptions` module and list it, or state it as a listed
   guarantee's conclusion. `shape.inline` (below) holds the ones that were inline when the rule came. A property
-  `shape.properties` holds is the shape rule's, which is stricter;
+  `shape.properties` holds is the shape rule's, which is stricter, and a witness `claims.witnesses` or `witnesses` names
+  is that rule's;
 - every instance has a name in its source. Lean names an anonymous one from its type, and adds the project's root
   (`_proofs`) when nothing in the type is the project's own, so a move into another root or a split renames it, and every
   record whose definitions use it changes. `--name-instances` writes each current name into its declaration;

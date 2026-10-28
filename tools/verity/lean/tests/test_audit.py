@@ -1990,7 +1990,8 @@ def test_a_grandfathered_inline_hypothesis_passes_and_the_list_only_shrinks():
     pass, a new one fails, and `--update` drops each entry whose premise no longer offends (all of a guarantee's, its key
     with them, and the map once empty), keeps those of a guarantee the lock doesn't list yet, and adds none; `--moved`
     carries an entry to its guarantee's new name. A property `shape.properties` holds is the shape rule's; a frozen one
-    is judged here. An entry with no reason fails."""
+    is judged here. A witness `witnesses` or `claims.witnesses` names is that rule's, and `--update` drops its entries.
+    An entry with no reason fails."""
     why = "inline when the rule came"
     pol, f = inlined(premise("P.f n\n    = 3", "Eq"), premise("P.g n = 4", "Eq"))
     allow = {"P.t": {"P.f n = 3": why, "P.g n = 4": why, "P.h n = 5": why}, "P.ahead": {"x = y": why}}
@@ -2014,6 +2015,9 @@ def test_a_grandfathered_inline_hypothesis_passes_and_the_list_only_shrinks():
                                                   {"P.t": ["P.f n = 3", "P.k n = 6"]})
     assert A.renamed_witnesses({"shape": held["shape"]}, {"P.t": "P.SecurityProofs.T"}) == {"shape": {
         "premises": ["P.Assumptions"], "inline": {"P.SecurityProofs.T": allow["P.t"], "P.ahead": allow["P.ahead"]}}}
+    for named in ({"witnesses": {"P.SecurityProofs.u": {"honest": ["P.t"], "nontrivial": "P.n"}}},
+                  {"claims": {"modules": ["P.Claims"], "witnesses": {"P.C": {"fails": "P.n", "meets": ["P.t"]}}}}):
+        assert A.inline_failures(held | named, grown) == ([], {"P.ahead": {"x = y": why}}, {})
     prop = {"function": "P.f", "outcome": "none"}
     assert inline_codes(pol | {"shape": {"properties": {"P.t": prop}}}, grown) == []
     assert inline_codes(pol | {"shape": {"properties": {"P.t": prop}, "frozen": {"P.t": "frozen: open"}}}, grown) == \

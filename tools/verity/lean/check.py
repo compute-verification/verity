@@ -1987,7 +1987,9 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
 
     Anything else fails (`guarantees.inline-hypothesis`) unless `shape.inline` ({guarantee: {premise as printed: why}},
     the offenders when the rule came) lists it. A property `shape.properties` holds (not under `shape.frozen`) is left to
-    the shape rule, which holds each hypothesis it takes to its acceptance, a premise or a shared field. A closed
+    the shape rule, which holds each hypothesis it takes to its acceptance, a premise or a shared field, and a witness
+    `claims.witnesses` or `witnesses` names (`claim_witnesses`) to that rule's form: what it takes is the deployment's
+    facts, not what a guarantee rests on, and `--update` drops its entries. A closed
     hypothesis of the statement as written is the hypotheses rule's. `--update` keeps an entry only while its premise
     still offends, and that of a guarantee the lock doesn't list yet (one a PR ahead on `next` brings), and adds none, so
     the map only shrinks; its size is the formalization debt the AUDIT line prints. `--moved` carries an entry to its
@@ -2000,18 +2002,18 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
                         "inline}}, each reason one sentence")], {}, {}
     guarantees, assumed = policy.get("guarantees") or {}, policy.get("assumptions") or {}
     assumed = assumed if isinstance(assumed, dict) else {}
-    held = set(spec.get("properties") or {}) - set(spec.get("frozen") or {})
+    held = set(spec.get("properties") or {}) - set(spec.get("frozen") or {}) | claim_witnesses(policy)
     own = set(facts["own_modules"]) if "own_modules" in facts else own_modules(facts)
     lifts = {g: (facts["pins"].get(g) or {}).get("lift") or {} for g in guarantees}
     statements = {v["head"]: g for g, v in lifts.items() if v.get("head") and spec_module(v.get("module") or "")}
     fails, kept, offenders = [], {g: v for g, v in allow.items() if g not in guarantees}, {}
     for g in sorted(guarantees):
         pin, old = facts["pins"].get(g) or {}, allow.get(g) or {}
+        if g in held:
+            continue
         if pin.get("kind") != "theorem" or "inline" not in pin:
             if old:
                 kept[g] = old
-            continue
-        if g in held:
             continue
         if pin["inline"] is None:
             fails.append(Failure("guarantees.inline-unread", g, f"guarantees: {g}'s inline hypotheses could not be read "
