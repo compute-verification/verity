@@ -3,7 +3,7 @@
 # lease, at each M, stage.cu's gate and then ovl over KS. An M whose gate fails is not timed (the run exits 5). Clocks are
 # read, never set. Results in $OUT/*.jsonl; `python3 benchmarks/pouw/stage_ovl/report.py $OUT` renders them.
 #
-#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=STAGE-OVL \
+#   research run --on vy-nebius-2 --project verity --campaign cmp-13 --source . --cwd source --env GPU_LEASE_WHO=LANE \
 #     -- bash benchmarks/pouw/stage_ovl/run.sh
 # env: MS (512 1024 2048), KS (1 2 4 8 16 32), ARMS (ovl.cu's default), REPS (5), DRAW_US (300), PLAIN_RB (8192),
 # MAXMIN (25), CUDA_DEVICE_MAX_CONNECTIONS (32: a hardware queue per chunk), FR_ROT (0: stage.cu's bits, the commitment's

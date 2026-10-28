@@ -1,5 +1,5 @@
-// Atomics and reductions, uncontended (each lane its own word): RS-W′'s atom.cu (round 7, pi_32,
-// note:20261016T1500Z-draft-rs-pi32-atomics) on probe.cuh, its mode 0 forms that lower to one instruction. One
+// Atomics and reductions, uncontended (each lane its own word): RS-W′'s atom.cu (round 7, pi_32) on
+// probe.cuh, its mode 0 forms that lower to one instruction. One
 // 1024-thread block an SM (a global form: on 16 SMs for its row, on every SM for L2red), 8 an iteration on 8 words a
 // lane (shared: lane-consecutive words, no bank conflict). CAS is made to succeed: each lane compares against what it
 // last saw. A returning form XORs its result into the sink; a reduction's side effect is its sink.
