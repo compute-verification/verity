@@ -426,7 +426,8 @@ class StampLayout(IL.Layout):
             finally:
                 _WORKER.clear()
         yield self._tail_text().encode()
-        print(f"STAMP-NETLIST {name}: procs={procs} tasks={len(tasks)} seconds={time.time() - t0:.1f}", file=sys.stderr, flush=True)
+        print(f"STAMP-NETLIST {name}: procs={procs} tasks={len(tasks)} seconds={time.time() - t0:.1f} {_mem()}", file=sys.stderr,
+              flush=True)
 
     # --- the rows, built only on request ----------------------------------------------------------------------------------
     def materialize(self) -> tuple[list, list]:
@@ -531,7 +532,7 @@ class StampLowering(IL.Lowering):
         bits = np.concatenate([(np.asarray(p, dtype=np.uint64)[0] >> np.arange(b, dtype=np.uint64)) & np.uint64(1)
                                for p, b in zip(ports, lay.in_bits)]).astype(np.uint8)
         outs = lay.evaluate1(bits)
-        print(f"STAMP-EVAL {self.name}: one lane, seconds={time.time() - t0:.1f}", file=sys.stderr, flush=True)
+        print(f"STAMP-EVAL {self.name}: one lane, seconds={time.time() - t0:.1f} {_mem()}", file=sys.stderr, flush=True)
         words = [sum(b << i for i, b in enumerate(o)) for o in outs]
         res = np.zeros((1, len(words)), dtype=np.uint64)
         for j, w in enumerate(words):
@@ -547,7 +548,7 @@ def applies(definition, name, in_rows, public=(), structural=False, reads="inlin
 def unit_lowering(definition, name: str, in_rows, public=(), structural: bool = False, reads: str = "inline",
                   stage_ands="auto") -> tuple[IL.Lowering, list[int]]:
     """`class_statement.unit_lowering` of a flat unit with inline reads, stamped; `Unstampable` where it can't be."""
-    t0 = time.time()
+    t0, start_mem = time.time(), _mem()
     ports, out_words, row_words = CS.unit_ports(definition, name, in_rows, public)
     n_words, n_out = len(ports.ins), len(ports.outs)
     units = IL.Units(target=None, in_widths=[16] * n_words, out_widths=[16] * n_out, in_src=[[("leaf", p) for p in range(n_words)]],
@@ -563,14 +564,21 @@ def unit_lowering(definition, name: str, in_rows, public=(), structural: bool = 
     for j, w in enumerate(ports.outs):
         st.output(f"out{j}", bits[at:at + w])
         at += w
-    walk = time.time() - t0
+    walk, walk_mem = time.time() - t0, _mem()
     lay = StampLayout(st, [f"in{j}" for j in range(n_words)], [f"out{o}" for o in range(n_out)])
     lay.seconds["walk"] = walk
     print(f"STAMP {name}: calls={st.calls} recorded={len(st.tids)} templates={len(st.templates)} closures={len(lay.closures)} "
-          f"bits={st.nv} live_ands={lay.n_live} rows={lay.useful} walk_s={walk:.1f} live_cols_s={lay.seconds['live_cols']:.1f}",
-          file=sys.stderr, flush=True)
+          f"bits={st.nv} live_ands={lay.n_live} rows={lay.useful} walk_s={walk:.1f} live_cols_s={lay.seconds['live_cols']:.1f} "
+          f"at start {start_mem}, after walk {walk_mem}, after layout {_mem()}", file=sys.stderr, flush=True)
     print(f"STAMP-TOP {name}: {_top(st, lay)}", file=sys.stderr, flush=True)
     return StampLowering(name, unit, units, None, lay), out_words
+
+
+def _mem() -> str:
+    import resource
+    with open("/proc/self/statm") as f:
+        rss = int(f.read().split()[1]) * os.sysconf("SC_PAGE_SIZE")
+    return f"rss_gib={rss / 2 ** 30:.2f} peak_gib={resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2 ** 20:.2f}"
 
 
 def _top(st: Stamp, lay: StampLayout, n: int = 12) -> str:
