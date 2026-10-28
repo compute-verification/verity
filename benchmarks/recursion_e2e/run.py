@@ -2,14 +2,14 @@
 
     plan   [POINT]                 the steps, each statement's lease, and the job's launch command
     run    [POINT] [--e2e] [--dry-run] [--here]
-                                   one research run of job.sh: a firewalled run (85's CPU prover) or --cpu a plain run on
-                                   vy-nebius-cpu-2 pinned to --cores, a GPU run vy-nebius-1's queue (--here: job.sh in this
+                                   one recorded run of job.sh: a firewalled run (85's CPU prover) or --cpu a plain run on
+                                   a CPU node pinned to --cores, a GPU run a GPU node's queue (--here: job.sh in this
                                    shell, e.g. inside a run); --e2e: one pass, every step once, no warm run
     result --dir OUT [--out FILE] [--md FILE]
                                    the result from a job's out/ (the job runs it last, into out/recursion_e2e.json)
     table  RESULT... [--merge] [--json]
                                    the table from results: a recursion_e2e.json or a run id (its records fetched and read)
-    store  RESULT... [--merge]     the results and their table as one art (research data put); prints its art: id
+    store  RESULT... [--merge]     the results and their table as one art in the evidence store; prints its art: id
 
 POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 --lease-min M --neg challenge,query
        --forge KINDS (85's forgeries; with coef, dirs or message the forge-after step too, unless --no-forge-after)
@@ -59,14 +59,14 @@ FORGED = {"message": "alg", "sum": "L0,L3,alg", "comb": "alg", "top": "L3", "top
           "filler": "alg"}
 
 # Where a run goes. 85's CPU prover needs no GPU, so a firewalled run (and --cpu) goes straight to a CPU node that takes
-# plain runs, pinned to CORES; vy-nebius-1/2/3 and vy-nebius-cpu-1 take runs only through slots.
+# plain runs, pinned to CORES; the SLOT_ONLY nodes take runs only through slots.
 CPU_NODE, PLAIN_CPU_NODES = "vy-nebius-cpu-2", ("vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5")
 SLOT_ONLY = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-nebius-cpu-1")
 CPU_WORK = "/workspace/cache/rec-bench"
 
 STAGES = {
     "build": "the CUDA prover (60-circuit.sh), flock-verify (lake build), the inner statement staged with plain and hm96 leaves",
-    "inner": "M0 (ZK off) against the rec_live proxy, WARM + RUNS runs; today's M0 and --zk on loopback beside it",
+    "inner": "M0 (ZK off) against the rec_live proxy, WARM + RUNS runs; the non-recursive M0 and --zk on loopback beside it",
     "icheck": "upstream's replay of the inner run and V*'s hashing reference (rec_vstar)",
     "vstage": "V*'s fold points, InnerFold.lean, and each statement staged (RecOpen per level, InnerRepCheck parts)",
     "vcap": "RecCap over each level's committed tops",
@@ -120,7 +120,7 @@ def cpu_run(a) -> bool:
 
 
 def on(a) -> str:
-    """The machine: --on, else a plain CPU node for a CPU run and vy-nebius-1's queue for a GPU one."""
+    """The machine: --on, else a plain CPU node for a CPU run and the GPU node's queue for a GPU one."""
     m = a.on or (CPU_NODE if cpu_run(a) else NODE)
     if m in PLAIN_CPU_NODES and not cpu_run(a):
         raise SystemExit(f"--on {m}: a CPU node has no GPU; --oprove-gpu 1 and GPU modes need a GPU node")
@@ -342,7 +342,7 @@ def main(argv: list[str] | None = None) -> int:
                             f"else {NODE}'s queue")
         p.add_argument("--cores", default="0-31", help="a plain run's cores on its CPU node (taskset -c; default 0-31)")
         p.add_argument("--preemptible", action="store_true",
-                       help="queue the run preemptible (a guest on another lane's node, vy-nebius-2's rule)")
+                       help="queue the run preemptible (a guest on a node that admits guests only so)")
         p.add_argument("--mem-gb", type=int, default=0, help="the run's memory (default mem_gb: 128 with a firewalled oprove, else 64)")
         p.add_argument("--cpus", type=int, default=32)
         p.add_argument("--max-min", type=int, default=0, help="the run's limit (default from the lease model: max_min)")
@@ -355,7 +355,7 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("run")
     point(p)
     p.add_argument("--dry-run", action="store_true")
-    p.add_argument("--here", action="store_true", help="job.sh in this shell (inside a run), not a new research run")
+    p.add_argument("--here", action="store_true", help="job.sh in this shell (inside a run), not a new recorded run")
     p = sub.add_parser("result")
     p.add_argument("--dir", required=True)
     p.add_argument("--out")

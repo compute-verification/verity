@@ -6,8 +6,8 @@ import Properties.Pouw.Period
 /-!
 # The joint period's PoUW guarantee from H1's checked credit over the torch loop
 
-`Accounting.Guarantees.JointPeriod` takes each audit's per-period guarantee (`Accounting.PeriodRun.Sound`) as a
-hypothesis. `WorkOfH1CheckedCreditPeriodAt p macs u b_unit` gives PoUW's, at the work certificate `W` and price `p`,
+Each audit's per-period guarantee in the coins model is `Accounting.PeriodRun.Sound`, which the one theorem's targets
+couple into the causal game (`Accounting.PeriodLive`). `WorkOfH1CheckedCreditPeriodAt p macs u b_unit` gives PoUW's, at the work certificate `W` and price `p`,
 for a period whose PoUW audit credits H1's checked words (`Accounting.RealizesCreditedWords` at the play's acceptance
 and the check's credit over the accepted prefix, `m = Accounting.Compose.minWordMacs Sc Cd macs` multiply-adds a word,
 `u` a unit and `b_unit` bits a unit), from `Properties.Pouw.Period.H1CheckedCreditPeriod` and its premises, with its

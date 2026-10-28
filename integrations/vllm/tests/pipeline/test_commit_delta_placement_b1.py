@@ -1,4 +1,4 @@
-"""the not-executed(R17-1) placement of the layouts-only MANIFEST COVERAGE runs at B=1.
+"""the not-executed placement of the layouts-only MANIFEST COVERAGE runs at B=1.
 
 commit_delta.main() places the population over the executed prefix of record in three sites: the binding-map coverage (alpha), the
 layouts-only manifest coverage (beta) and the sampled replay (gamma).  Gated `if len(reqs) > 1 and ...` (B >= 2 only), (beta)

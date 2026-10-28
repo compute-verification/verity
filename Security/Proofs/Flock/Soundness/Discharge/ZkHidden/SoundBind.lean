@@ -21,7 +21,8 @@ lp-zkbind's `sitesZAt`, `layZAt`, `rsZAt` and `rsZAt_computes` (`ZkBind/At.lean`
   decoders read one witness alike.
 * `layZH`, `rsZH`, `rsZH_computes`: the public layout and rows moved to the `--zk` tables (`LayoutZ.ofShadow`,
   `HmRowsZX.ofShadow`).
-* `zk_flock_countC_execOS_atH`: #874's count curve at `planAtZKH` (`zk_flock_countC_execOS_crH`) with those.
+* `zk_flock_countC_execOS_atH`: the compiled `--zk` count curve at `planAtZKH` (`zk_flock_countC_execOS_crH`) with
+  those.
 -/
 
 namespace FlockSoundness.Discharge.ZkHidden

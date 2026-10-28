@@ -5,7 +5,7 @@ invocation die with `argparse.ArgumentError: conflicting option string: --checkp
 build that parser (main() constructs it inline and the module imports vllm/torch lazily but heavily).
 
 This test builds the parser from the SOURCE, torch-free: it extracts every `option(...)` field of the Commit's `Options` with `ast`, replays
-them on a fresh argparse.ArgumentParser and asserts that (a) it builds, (b) no option string is declared twice, (c) the MAN-09 flags and the
+them on a fresh argparse.ArgumentParser and asserts that (a) it builds, (b) no option string is declared twice, (c) the weights-pin flags and the
 pre-existing --checkpoints are all present exactly once.  Constant-only arguments are replayed verbatim; keyword values that reference
 names (type=int, default=SOME_CONST, ...) are replaced by placeholders -- only the option strings and their multiplicity are under test.
 """

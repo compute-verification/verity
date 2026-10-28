@@ -1,8 +1,8 @@
 """Where a cell's prover and verifier ran: machine identity, and whether the two are separate machines on a routed link.
 
 A container hostname says nothing about the machine: RunPod places several pods on one host, and two such pods share its
-kernel, CPUs and public IP and can talk over a host-private bridge (red-team-flock's ruling, coordinator 2026-09-26 12:00Z: a
-co-resident verifier is not a separate verifier).  An identity is a dict with any of
+kernel, CPUs and public IP and can talk over a host-private bridge (a co-resident verifier is not a separate
+verifier).  An identity is a dict with any of
 
     machine_id     the RunPod machine id (the pod API's ``machineId``)
     public_ip      the pod's public IP (the API's ``publicIp``, or ``$RUNPOD_PUBLIC_IP`` on the pod)
@@ -254,7 +254,7 @@ def is_hypervisor_vendor(vendor: str | None) -> bool:
 
 
 def _nat_exception(prover: Mapping[str, Any], verifier: Mapping[str, Any], link: Mapping[str, Any]) -> tuple[list[str], dict[str, Any]]:
-    """Why a pair sharing a public IP does not earn the NAT exception (coordinator 22:00Z; red-team-flock-3 S1-S5, 22:05Z), and its
+    """Why a pair sharing a public IP does not earn the NAT exception (red-team-flock-3 S1-S5), and its
     evidence: the machine id and boot id recorded and different, and the DMI uuid too unless both pods are bare metal (where it
     is compared only if read, and the evidence says :data:`UNREADABLE` where it was not); both pods bare metal (no ``hypervisor`` CPU flag, a DMI
     ``sys_vendor`` that is no hypervisor's); the link ``<verifier pod id>.runpod.internal`` resolving into 10/8; the TCP-connect RTT
@@ -270,8 +270,8 @@ def _nat_exception(prover: Mapping[str, Any], verifier: Mapping[str, Any], link:
             metal = False
             out.append(f"{pre}: the {role} pod is a virtual machine (hypervisor flag {x['hypervisor']}, sys_vendor {x['sys_vendor']!r}): "
                        "two VMs of one host would pass the id checks")
-    # Bare-metal containers share their host's kernel, so boot_id names the host; RunPod containers cannot read the DMI uuid
-    # (coordinator 22:40Z).  A uuid that is read is still compared (``assess`` refuses a shared one).
+    # Bare-metal containers share their host's kernel, so boot_id names the host; RunPod containers cannot read the DMI uuid.
+    # A uuid that is read is still compared (``assess`` refuses a shared one).
     need = [k for k in NAT_IDS if k != "product_uuid" or not metal]
     missing = [k for k in need if not (prover.get(k) and verifier.get(k))]
     if missing:
@@ -342,7 +342,7 @@ def separation(prover: Mapping[str, Any], verifier: Mapping[str, Any], link: Map
     return assess(prover, verifier, link)["problems"]
 
 
-#: The deployment gate's rule per role (the proof-service architecture of 6 Oct 2026): the peer roles it must share a machine
+#: The deployment gate's rule per role (the proof-service architecture): the peer roles it must share a machine
 #: with (exactly one: the node it guards, inside whose isolation boundary it runs), those it must be separate from (every one,
 #: at least one each unless absent), whether it must be a VM guest, and whether it runs on dedicated cores.
 GATE_RULES: dict[str, dict[str, Any]] = {

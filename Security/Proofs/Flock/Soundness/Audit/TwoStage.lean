@@ -253,12 +253,12 @@ each coarse unit, the effective escape is the first stage's escape. -/
 theorem effEscape_full (parent : Fin nf → Fin nc) (hfull : ∀ u ω v, parent v = u → v ∈ (L₂ u).draw ω)
     (B : Finset (Fin nc)) : effEscape L₁ L₂ parent B = L₁.escape B := by
   classical
-  unfold effEscape Law.escape
+  unfold effEscape Verity.Law.escape
   rw [← avg_ite_eq_prCoin]
   refine congrArg avg (funext fun ω₁ => ?_)
   have hzero : ∀ u, (⨆ (v : Fin nf) (_ : parent v = u), (1 - (L₂ u).incl v)) = 0 := fun u =>
     le_antisymm (iSup₂_le fun v hv => by
-      rw [Law.incl, prCoin_eq_one_of fun ω => hfull u ω v hv, tsub_self]) (zero_le)
+      rw [Verity.Law.incl, prCoin_eq_one_of fun ω => hfull u ω v hv, tsub_self]) (zero_le)
   simp only [hzero]
   by_cases hd : Disjoint (L₁.draw ω₁) B
   · simp only [hd, ite_true]

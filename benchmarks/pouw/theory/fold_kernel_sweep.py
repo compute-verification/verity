@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A wider sample for FOLD §8's corrected criterion: K_R = K_1 (the P/X/N group) at random key_ok_r11 keys and random words.
+"""A wider sample for the corrected depth-R criterion: K_R = K_1 (the P/X/N group) at random key_ok_r11 keys and random words.
 
 `fold_kernel_check.py` enumerates the whole all-state kernel of the same-word R-fold at width 8 on 56 structured keys, of
 which 19 pass key_ok_r11. This runs the same enumerator (`fold_kernel.c`) on N random key_ok_r11 keys, each with its own
