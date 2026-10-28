@@ -2380,6 +2380,7 @@
    }
   },
   "not": {
+   "Claims.Json.Ascii": "a helper the claims read: a JSON value whose strings and keys are ASCII without DEL, the values `Flock.canon` prints, which completeness reads",
    "Claims.Collision": "a helper the claims read: two inputs with one output",
    "Claims.ERepCost": "proved at every deployment (`Claims.ERep_cost`); Flock's `Efficient` reads it",
    "Claims.ExtractRunsExpLe": "a helper the claims read: an extractor's expected reruns, at most a bound, which every `Efficient` reads",
