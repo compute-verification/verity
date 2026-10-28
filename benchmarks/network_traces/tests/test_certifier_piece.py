@@ -32,7 +32,7 @@ from test_warden_chain import WC, gate_run  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
 
 PERIOD_CASE = ROOT / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
-SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v1.schema.json").read_text())
+SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v2.schema.json").read_text())
 K = 3
 
 
