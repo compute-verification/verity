@@ -34,11 +34,11 @@ def step_tensors(count: int):
     return tensors
 
 
-def counted(monkeypatch, native_worker: bool, count: int) -> dict[str, list[int]]:
+def counted(monkeypatch, count: int) -> dict[str, list[int]]:
     """Over RUNS runs whose every step learns a new plan, after a collection: the objects the layouts keep tracked at the end
     of each run's steps, and those the layouts and the cache (both generations) keep after its `finalize`."""
     monkeypatch.setattr(P, "step_tensors", step_tensors(count))
-    com = P.committer(monkeypatch, native_worker=native_worker)
+    com = P.committer(monkeypatch)
     modules = sorted({com._module_of(n) for n, _t in P.step_tensors((40, 45))} - {"fa2.m1"})
     com.expected_manifest = lambda: {"modules": modules, "attention_layers": [], "fa2_hidden_per_layer": 0, "sampler_ids": 1}
     seen: dict[str, list[int]] = {"cache": [], "steps": [], "finalized": [], "plans": []}
@@ -87,12 +87,11 @@ def test_a_record_answers_its_readers_as_its_metas_do_without_building_them():
     assert [id(m) for m in record] == [id(m) for m in record] and record[2] is record.scan()[2] and len(record) == len(metas)
 
 
-@pytest.mark.parametrize("native_worker", [False, True], ids=["python-worker", "native-worker"])
-def test_a_cached_plan_keeps_one_object_tracked_whatever_its_tensor_count(monkeypatch, native_worker):
+def test_a_cached_plan_keeps_one_object_tracked_whatever_its_tensor_count(monkeypatch):
     """At 9 and at 200 tensors per step, the cache keeps one tracked object per plan (its record) beside at most four of its
     own (the list `retained` walks, the cache and its two generations), each step's layout entry is its plan's record beside
     the layouts' dict, and `finalize` builds no `TensorMeta` that stays."""
-    small, large = counted(monkeypatch, native_worker, 9), counted(monkeypatch, native_worker, 200)
+    small, large = counted(monkeypatch, 9), counted(monkeypatch, 200)
     for seen in (small, large):
         assert seen["plans"] == [P.STEPS, 2 * P.STEPS, 2 * P.STEPS]
         assert all(kept - plans <= 4 for kept, plans in zip(seen["cache"], seen["plans"])), seen
