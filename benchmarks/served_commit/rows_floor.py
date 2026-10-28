@@ -1,7 +1,7 @@
 """The rows-sha512 floor on one GPU: the windowed worker's kernels (native_rows.cu, built here with nvcc and the JIT's CUDA flags into
 one shared library per leaf-kernel __launch_bounds__ form) over one window of rows (the leaves and the window's whole tree), alone and
 beside a busy stream (bf16 GEMM loops, a square one and decode's skinny one, a device copy loop; at default and at the highest stream
-priority, and in launches capped at a number of CTAs), and COMMIT-GPU's raw SHA-512 compression rate on the same device.  Each form's
+priority, and in launches capped at a number of CTAs), and commit_gpu's raw SHA-512 compression rate on the same device.  Each form's
 root of a small padded domain is checked against step_rows before it is timed.  Measurement only; JSON to $OUT/rows_floor.json.
 
     bash benchmarks/served_commit/rows_floor.sh     (ROWS: row bytes, default 256 1024 4096; WINDOW_MB, default 256; REPS, default 9;
@@ -148,7 +148,7 @@ def beside(hash_fn: Callable, busy_fn: Callable, n_busy: int, hs: torch.cuda.Str
 
 
 def raw_rate(tmp: Path, arch: str) -> dict:
-    """COMMIT-GPU's `sha` mode (each thread chains compressions) built for this device."""
+    """`commit_gpu.cu`'s `sha` mode (each thread chains compressions) built for this device."""
     exe = tmp / "commit_gpu"
     stubs = [f"-L{os.environ['CUDA_HOME']}/lib64/stubs"] if os.environ.get("CUDA_HOME") else []
     rc, log = nvcc(["-O3", "-std=c++17", f"-gencode=arch=compute_{arch},code=sm_{arch}", "-o", str(exe), str(COMMIT_GPU), *stubs,
