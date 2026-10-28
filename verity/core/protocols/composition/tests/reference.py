@@ -99,14 +99,18 @@ class Recorded:
     """A component on the cases recorded for it: `cases` holds each kind's case and the answer its Python verifier gave
     it (`periods.build` fills it), and `answer` is that answer. The composition hands a component the case it was drawn,
     or one whose commitment is no longer JSON (`bad-hex` under a `0`), which both recorded components refuse with no
-    digest, as they do params that don't decode; any other case is a difference."""
+    digest, as they do params that don't decode; any other case is a difference. A case is matched on what `serve` reads
+    of it, its params, commitment and evidence, which is all a product's evidence carries (not bandwidth's
+    `store_root`)."""
 
     id: str
     cases: dict[str, tuple[dict, dict]] = field(default_factory=dict, compare=False, hash=False)
 
     def answer(self, case: Any) -> dict:
+        def served(x: Any) -> Any:
+            return {k: x[k] for k in ("commitment", "evidence", "params") if k in x} if isinstance(x, dict) else x
         for c, a in self.cases.values():
-            if canonical(c) == canonical(case):
+            if canonical(served(c)) == canonical(served(case)):
                 return a
         try:
             P.canonical_json(P.unhex(case["commitment"]))
