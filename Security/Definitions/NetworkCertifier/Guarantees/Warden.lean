@@ -13,11 +13,11 @@ schedule, so the client's view of the server side is a function of the schedule,
 and the data in the cells (`WardenViewEqClientView`). Everything else the server does, its accept time, its send timing,
 its ACKs and flow control, reaches the client only through the fail cells. A connection with `n` cells has at most
 `n + 1` fail choices, so the client's views number at most `#schedules · ∏_c (cells_c + 1) · #data`
-(`EncardWardenViewsLe`). With the data from an advice string within the caps (`BitsCount`, the leak bound's) and a
+(`EncardWardenViewsLe`). With the data from an advice string within the caps (`BitsCount`, #3533's bound) and a
 content term, a covert sender in the server moves at most
 `log2 #schedules + Σ_c log2 (cells_c + 1) + Σ_w b w + k` bits to the client (`EncardWardenDecodableLe`).
 
-The leak bound counts runs the compiled Program accepts exactly, which the all-frames egress tie gives only when no step
+#3533's bound counts runs the compiled Program accepts exactly, which the all-frames egress tie gives only when no step
 unit can be faulty: every step unit drawn `all`, or a sampled audit at `δ ≥ miss(1)`. At a smaller `δ` an accepted
 sampled audit gives `Accepted` by the circuit's Program only with the faulty units' committed gates held as advice
 (`SampledAuditAccepted`), and the composed charge is `SampledLeakAccepted`, with `SampledAuditAccepted` as its

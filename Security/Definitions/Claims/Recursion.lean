@@ -66,7 +66,7 @@ eight items:
    (`Bound.bridge_of_dec`), the deployed one among them, so the deployment's ∀-form holds from its premises
    (`RecDeploy.ksBoundRoute`). `Bound.WeightCovers`' constant is what the bridge's proof pays: `N_I · √(k_I/32)` over
    `√C_DE`, for a loss of `N_I · k_I · √Pr[B]`. The deployed bound record takes `γ`'s weight at `IVStar` at that floor,
-   `coverW` of the deployed plain record's weight (`RecDeploy.bdCover`), where (P3) holds
+   `coverW` of the deployed plain record's weight (`RecDeploy.bdCover`, ASK-72), where (P3) holds
    (`RecDeploy.ksBoundRoute_cover`). **The recursion's security level** there (`lam`) is about 65 bits per SHA-512
    call at the deployed shape (one inner table at `m = 35`; 69.4 at `C_DE`'s weight), below the 100-bit floor and the
    `2^-128` target under every weight: its KS is stated and proved at that level, not at the floor. `BitsLin2`'s
@@ -1202,10 +1202,10 @@ spec. `E*`'s inner views are what the compiled verifier reads off the outer witn
 round before the last, the inner session's commit strings, and at the last, their openings with `DE`'s last message.
 `IVStar` is the verifier that accepts them, and `KS` reads its acceptance there (`RecAt.runs`). At the deployment `D` is
 `deployRec · ivScope b` at V*'s bound layout and the guarantee is `RecDeploy.KSBoundDeployed`, in its ∀-form
-`RecDeploy.KSBoundRoute`, at the deployed bound record `RecDeploy.bdCover` (`γ`'s weight at `IVStar` at `coverW`),
-where (P3) holds (`RecDeploy.ksBoundRoute_cover`). Its level (`lam`) is about 65 bits per SHA-512 call at the
-deployed shape (one inner table at `m = 35`), below the 100-bit floor and the `2^-128` target under every weight.
-`BitsLin2`'s level λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
+`RecDeploy.KSBoundRoute`, at the deployed bound record `RecDeploy.bdCover` (`γ`'s weight at `IVStar` at `coverW`,
+ASK-72), where (P3) holds (`RecDeploy.ksBoundRoute_cover`). Its level (`lam`) is about 65 bits per SHA-512 call at the
+deployed shape (one inner table at `m = 35`), below the 100-bit floor and the `2^-128` target under every weight
+(ASK-73). `BitsLin2`'s level λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
 `RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements having
 a model of their own, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). `KSFlock` at the

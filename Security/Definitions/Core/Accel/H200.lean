@@ -5,7 +5,7 @@ import Definitions.Core.Accel.Card
 
 The H200 SXM (GH100, sm_90a) at its data sheet's numbers, a tick one SM clock at f_max = 1980 MHz (H100 whitepaper
 V1.04 Table 3, H100 SXM5: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non Tensor Core Ops: 1980 MHz',
-footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous'; the driver's maximum on the deployed H200;
+footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous'; the driver's maximum on vy-dc-h200;
 `Accounting.TS.Sheets.H200.fmaxMHz`). Every per-SM figure is over the 132 SMs (whitepaper Table 3, H100 SXM5).
 These are data-sheet placeholders until the card's calibration runs measure them.
 

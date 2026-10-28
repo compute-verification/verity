@@ -12,7 +12,7 @@ lean = "Security/Definitions/Accounting/Sheets/H200.lean"
 [fmax]
 mhz = 1980
 grade = "whitepaper (H100 SXM5), and measured"
-source = "H100 Tensor Core GPU Architecture whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non Tensor Core Ops: 1980 MHz', footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous'; the H200 data sheet states no clock; the driver's maximum on the deployed H200 is 1980 MHz (EPS1 DC)"
+source = "H100 Tensor Core GPU Architecture whitepaper V1.04, Table 3, H100 SXM5: 'GPU Boost Clock for FP64 Tensor Core Ops, FP32 and FP64 non Tensor Core Ops: 1980 MHz', footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous'; the H200 data sheet states no clock; the driver's maximum on vy-dc-h200 is 1980 MHz (EPS1 DC)"
 
 [sms]
 value = 132
