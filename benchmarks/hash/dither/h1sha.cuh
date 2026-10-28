@@ -19,8 +19,8 @@ __device__ __forceinline__ u64 rotr(u64 x, int n) { return (x >> n) | (x << (64 
 // rotations, on the FMA pipe (rotr_f) instead of two funnel shifts on the ALU pipe: sm_90's ALU pipe (SHF, LOP3, IADD3)
 // is 16 lanes a sub-partition and its IMAD pipe another 16, and a unit's hashing is nearly all ALU-pipe work, so moving
 // some of it can raise the units' throughput where the ALU pipe binds. Both 0 is the funnel
-// shifts' code as before. Served on the H200, R = 6 is slower than 0: Dither's T 64 step +20% with today's units, +6%
-// with J10-R's. rotr_f<N>: with lo and hi x's halves (swapped for N > 32), n = N mod 32 and m = 2^(32 - n)
+// shifts' code as before, and the default: served on the H200, R = 6 makes Dither's T 64 step slower with both today's
+// units and J10-R's. rotr_f<N>: with lo and hi x's halves (swapped for N > 32), n = N mod 32 and m = 2^(32 - n)
 // read from constant memory (so ptxas can't fold it back into shifts), c = {lo >> n, lo << 32 - n} = {mul.hi(lo, m),
 // mul.lo(lo, m')} and the rotation is hi m + c (one mad.wide.u32): its words (hi << 32 - n) | (lo >> n) and
 // (hi >> n) | (lo << 32 - n) are sums of disjoint bits. m' is m from a second table, so ptxas can't merge the two

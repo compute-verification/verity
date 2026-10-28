@@ -384,8 +384,8 @@ def mm_cfg() -> None:
 
 # ARM-mmq's $DITHER_MM_CFG by the units' "Q/D" ($DITHER_SO_UNITS_SMQ's): dmmsweep.py --block Q/D's best.json
 # dither_mm_cfg, the m=64 entries the 11/16 sweep's.  The forward's GEMMs run on the SMs the units leave them, so a config
-# holds at the SMQ it was tuned at alone (at 47/64, 11/16's configs cost 1.7 ms a step).  45/64 takes 47/64's: dmmsweep
-# --block 45/64's own best, timed with the units beside it, slowed both the forward and the units (18.25 ms, not 16.8)
+# holds at the SMQ it was tuned at alone (11/16's configs make a 47/64 step slower).  45/64 takes 47/64's: dmmsweep
+# --block 45/64's own best, timed with the units beside it, slowed both the forward and the units
 MM_CFGS = {"47/64": "6144,4096,32=32x32x128:w4:s3:k1+4096,4096,32=32x32x256:w4:s3:k1:t1+28672,4096,32=32x64x128:w4:s2:k1"
                     "+4096,14336,32=32x32x256:w4:s3:k1+4096,4096,64=32x64x256:w8:s4:k3+4096,14336,64=32x64x512:w8:s3:k3"}
 MM_CFGS["45/64"] = MM_CFGS["47/64"]
