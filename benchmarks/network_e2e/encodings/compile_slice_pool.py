@@ -26,7 +26,7 @@ import cache_pool_vectors as CPV  # noqa: E402
 import replay as RP  # noqa: E402
 import replay_vectors as RV  # noqa: E402
 
-from verity.core.protocols.certifier import compile_slice_v2 as V2
+from verity.ml.protocols.certifier import compile_slice_v2 as V2
 from verity.core.protocols.certifier import replay_step as RS
 
 

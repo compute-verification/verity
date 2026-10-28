@@ -11,7 +11,7 @@ import pytest
 from verity.ml.circuits import Program
 from verity.ml.circuits.codec import program_digest
 
-pc4 = pytest.importorskip("verity.core.protocols.pouw.circuit.pc4", reason="the Program is `verity.core.protocols.pouw.circuit.pc4`'s")
+pc4 = pytest.importorskip("verity.ml.protocols.pouw.circuit.pc4", reason="the Program is `verity.ml.protocols.pouw.circuit.pc4`'s")
 
 from test_circuit_whole_lean import check_whole, row_in  # noqa: E402
 

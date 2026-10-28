@@ -11,7 +11,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.core.protocols.pouw.circuit import segment as SG
+from verity.ml.protocols.pouw.circuit import segment as SG
 
 POUW = Path(__file__).resolve().parents[1]
 

@@ -22,7 +22,7 @@ torch = pytest.importorskip("torch")
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.circuit import live as L
+from verity.ml.protocols.pouw.circuit import live as L
 from verity.core.protocols.pouw.coins import Challenger
 from verity.core.protocols.sampled_proofs import challenger as LC
 from verity.core.protocols.sampled_proofs import remote as R

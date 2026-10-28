@@ -43,7 +43,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.certifier import ingress_scan as IS
+from verity.ml.protocols.certifier import ingress_scan as IS
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.evaluation import evaluate_batch

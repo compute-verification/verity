@@ -10,7 +10,8 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Sequence
 
-from verity.core.protocols.certifier import egress as EG, io_tie as IT, warden as W, warden_rows as WR
+from verity.ml.protocols.certifier import egress as EG
+from verity.core.protocols.certifier import io_tie as IT, warden as W, warden_rows as WR
 from verity.core.protocols.certifier.grid import Certifier, BlockGrid
 
 #: the token ids' range (GLM's vocabulary), and the bits an id takes

@@ -18,7 +18,7 @@ import json
 import os
 import sys
 
-from verity.core.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import h1tile as HT
 
 
 def main() -> int:

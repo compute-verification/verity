@@ -17,7 +17,7 @@ calls as one window under the work law at a budget of K = ``--draws``:
 - **tampered**: the same calls, except that credited word 7 of every tile of the first call is flipped by its prover,
   committed and opened that way (`check.replay.pouw_circuit.tamper_tiles`), with the calls root recomputed over it.
 
-Each replay's window draws under a fresh source (`verity.core.protocols.pouw.circuit.anchors.Ledger.open`), which its report records.
+Each replay's window draws under a fresh source (`verity.ml.protocols.pouw.circuit.anchors.Ledger.open`), which its report records.
 
 The command writes ``pouw_serve.json`` under ``--out`` (default ``$RESEARCH_RUN_DIR``), and ``result.json`` beside it
 under a research run (``$RESEARCH_RUN_ID``). They hold

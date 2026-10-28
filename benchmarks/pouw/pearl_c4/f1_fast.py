@@ -24,8 +24,8 @@ from collections.abc import Sequence
 from fractions import Fraction
 
 import numpy as np
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 
 MAGS = (1, 2, 3, 4, 6, 8, 12)                      # |2·value| of the nonzero E2M1 magnitudes
 SLACK = F.F1_EPS

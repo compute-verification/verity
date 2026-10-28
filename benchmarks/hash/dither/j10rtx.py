@@ -53,8 +53,8 @@ import h1ogate as HG  # noqa: E402
 import j10b_ref as JB  # noqa: E402
 from h1r import H1R  # noqa: E402
 
-from verity.core.protocols.pouw.circuit import h1tile as HT  # noqa: E402
-from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1tile as HT  # noqa: E402
+from verity.ml.protocols.pouw.circuit import seeds as SD  # noqa: E402
 from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)

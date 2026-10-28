@@ -501,7 +501,7 @@ def _serve_window(cs, sv, calls: list[dict], root: bytes) -> dict:
     """A served window's coin path on `cs`: the salt coin after the window's root, round s's coin after step s's round
     root and the step's units under its live salt, then the draw coin after the receipts root; the manifest, its window
     `WINDOW`."""
-    from verity.core.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
     salt = cs.salt(root)
     log = []
     for s in sorted({c["step"] for c in calls}):

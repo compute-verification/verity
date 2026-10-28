@@ -21,7 +21,7 @@ import torch
 sys.path.append(str(Path(__file__).resolve().parents[2] / "hash" / "dither"))
 import j10r_ws as JWS
 
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import seeds as SD
 
 T = 32
 WS_TAIL, WS_SENTINEL = 1 << 20, 0x5C

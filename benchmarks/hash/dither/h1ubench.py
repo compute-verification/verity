@@ -47,8 +47,8 @@ from h1bench import Lib as NoiseLib
 from h1bench import gate as noise_gate
 from hb_kbench import LINEARS, MS, POISON, Clock, capture, inputs, one_call_ms, w_seed, x_seed
 
-from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import seeds as SD
 
 SEED_WORDS = 4  # compressions a unit spends on seed_j and sigma_R
 

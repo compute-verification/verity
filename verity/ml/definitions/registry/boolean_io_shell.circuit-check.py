@@ -7,7 +7,7 @@ from typing import Any, Callable
 
 def _scan_slots(ns: int, firsts: tuple[int, int, int, int], stride: int, lanes: int, np_: int) -> Any:
     """`ScanSlots_v2` over the network certifier's scan state row at the scan's cells of record
-    (`verity.core.protocols.certifier.ingress_scan.layout`): its ``ns`` words, lane 0's occupancy, prompt length, max_tokens
+    (`verity.ml.protocols.certifier.ingress_scan.layout`): its ``ns`` words, lane 0's occupancy, prompt length, max_tokens
     and ids bit offsets (``firsts``), the lane ``stride``, at ``lanes`` lanes of ``np_`` prompt ids."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_io_shell as BX

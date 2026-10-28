@@ -12,7 +12,8 @@ import pytest
 from egress_traffic import IB, busy, rows, serve, shape, states
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.core.protocols.certifier import egress as EG, head_check as HC, io_tie as IT, warden as W, warden_rows as WR
+from verity.ml.protocols.certifier import egress as EG
+from verity.core.protocols.certifier import head_check as HC, io_tie as IT, warden as W, warden_rows as WR
 from verity.core.protocols.certifier.active import DATA, PAD
 from verity.core.protocols.certifier.certificate import Direction
 

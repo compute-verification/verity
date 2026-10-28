@@ -9,7 +9,8 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Sequence
 
-from verity.core.protocols.certifier import egress as EG, ingress_scan as IS, io_tie as IT, warden as W
+from verity.ml.protocols.certifier import egress as EG, ingress_scan as IS
+from verity.core.protocols.certifier import io_tie as IT, warden as W
 from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.grid import Certifier, BlockGrid
 

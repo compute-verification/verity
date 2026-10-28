@@ -1,4 +1,4 @@
-"""Dither's no-fold call (verity/core/protocols/pouw/circuit/dither.py) on the CPU: the reference prover's committed
+"""Dither's no-fold call (verity/ml/protocols/pouw/circuit/dither.py) on the CPU: the reference prover's committed
 values and tree, and the verifier's checks, so the GPU prover's output (v31.cu's Fill, bound per call by v31lib.py) is
 judged bit for bit and a call is accepted or refused by the checks its proof blocks' Programs make.
 
@@ -59,7 +59,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "commit_gpu"))
 import reference as cref
 
-from verity.core.protocols.pouw.circuit import dither
+from verity.ml.protocols.pouw.circuit import dither
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.limits import VerificationLimits

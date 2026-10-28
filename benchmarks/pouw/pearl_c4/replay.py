@@ -54,9 +54,9 @@ from verity.ml.commitments import Commitment, MerkleTree, Opening
 
 from verity.core.protocols.pouw import audit as au
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, tagged
-from verity.core.protocols.pouw.schemes import get
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
-from verity.core.protocols.pouw.schemes import pearl_c_work as W
+from verity.ml.protocols.pouw.schemes import get
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F
+from verity.ml.protocols.pouw.schemes import pearl_c_work as W
 from verity_config.settings import of
 
 # the work law and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name

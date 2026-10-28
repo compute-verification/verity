@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import pytest
 
-from verity.core.protocols.pouw import circuit
-from verity.core.protocols.pouw.circuit import eps1_reference as EPS
+from verity.ml.protocols.pouw import circuit
+from verity.ml.protocols.pouw.circuit import eps1_reference as EPS
 from verity.core.protocols.pouw.protocol import DomainError
 
 SHAPE = EPS.Shape(16, 128, 16)       # KS = 4

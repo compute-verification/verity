@@ -17,7 +17,7 @@ import pytest
 pytest.importorskip("torch")
 
 from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import h1window as HW
 from verity.ml.circuits import partition_object as PO
 from verity_vllm.protocols.pouw.h1 import served as SV
 
@@ -163,7 +163,7 @@ def test_past_the_piece_rows_the_live_file_is_bound_to_the_pieced_live_program()
     """At T past `live.PIECE_ROWS` (a V3 prefill round's T 8,192) the live Program is cut by rows: ``--live T,S`` binds
     the live file to `live.program_rows` of T / 64 pieces a round and its `live.query_rows` partition, and up to it to
     v2's."""
-    from verity.core.protocols.pouw.circuit import live as L
+    from verity.ml.protocols.pouw.circuit import live as L
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
 
     for t, (program, query) in ((8192, (L.program_rows(8192, 1, "h1/"), L.query_rows(8192))),
@@ -189,7 +189,7 @@ def test_a_j10r_program_builds_its_live_file_and_refuses_to_lower_its_strata(tmp
     template the declared J10-R one (`h1tile.PouwH1Tile5`'s, here the served tests' stand-in): with ``--strata none``
     its live file and manifest are built, the files a period opens on; a stratum it would lower is refused, since
     `h1unit.Shape`'s statement is v1's or v3's."""
-    from verity.core.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
 
     from tests.protocols.test_pouw_h1_served import StandInJ10R
     j10r = _unit(defn=StandInJ10R)

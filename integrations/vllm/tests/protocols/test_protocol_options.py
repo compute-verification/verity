@@ -454,10 +454,10 @@ def _commit(*enabled):
 
 
 def test_beside_sampled_proofs_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
-    """`verity.core.protocols.pouw.circuit` has circuits for `ncp-v2` and `ncp-v2-shift24`, and the adapter executes `ncp-v2` alone:
+    """`verity.ml.protocols.pouw.circuit` has circuits for `ncp-v2` and `ncp-v2-shift24`, and the adapter executes `ncp-v2` alone:
     that scheme is admitted beside sampled proofs, and every other one keeps its refusal, word for word.  Without sampled
     proofs nothing changes."""
-    from verity.core.protocols.pouw import circuit
+    from verity.ml.protocols.pouw import circuit
     assert set(circuit.SCHEMES) == {"ncp-v2", "ncp-v2-shift24"} and PO.CIRCUITS["pouw"] == circuit.__name__
     pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=POUW_SCHEMES)
     pouw.EXECUTES = (APPLY,)
