@@ -387,6 +387,8 @@ class H1Run:
     def tables(self) -> dict[int, dict[str, str | None]]:
         """Each call's table roots (hex; z None when the run has no exact Y for it), once the GPU has hashed them all."""
         TD.settle(self, wait=True)
+        if self.served is not None:
+            self.served.settle()
         return self._roots
 
     @property
