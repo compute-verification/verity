@@ -70,8 +70,8 @@ end Partition
 /-- `r` registers `root` under `Q`: its partition meets `Q`, and the advice tree over the partition's rows (`A`) under
 `r`'s salts, framed by `F` and hashed by `H`, has root `root`. The registration's statement is that some `r` does; the
 verifier holds `Q` and `root`, never `r`. -/
-def Registered {C : Circuit} (H : List UInt8 → Advice.Digest) (F : Advice.Framing) (A : Advice.Rows C) (Q : Predicates)
-    (r : Advice.Registration C) (root : Advice.Digest) : Prop :=
+def Registered {C : Circuit} (H : List UInt8 → Digest) (F : Advice.Framing) (A : Advice.Rows C) (Q : Predicates)
+    (r : Advice.Registration C) (root : Digest) : Prop :=
   r.P.Meets Q ∧ r.root H F A = root
 
 /-- The circuit's computed gates grouped into its root Calls `0, …, m − 1`, with the gates the Calls return. A value read

@@ -26,9 +26,9 @@
   `periodLeak_le_sum`. ``--endpoint`` is network-e2e's ``--no-prove`` report on the run and the endpoint's
   records: the endpoint's advice bound to the run and the I/O tie, in the clear, required on the advice profile. N2's
   summary is `n2_advised_zk.py prove --e2e`'s on the advice profile and `n2_zk.py prove`'s on the others (Selection
-  All: every link-window's one unit proved) or, once it lands, N2-ZK's sampled draw's, read by the same fields. Scan's
-  is `scan_zk.py prove`'s, a stand-in on its own synthetic warden run until IO-TIE's ``--warden-run`` takes the gate's
-  warden rows, accepted only when every round's verdict is the one scan_zk expects and no witness piece reached the
+  All: every link-window's one unit proved) or a sampled draw's (``CR_N2_CMD``), read by the same fields. Scan's is
+  `scan_zk.py prove`'s, a stand-in on its own synthetic warden run until its ``--warden-run`` takes the gate's warden
+  rows, accepted only when every round's verdict is the one scan_zk expects and no witness piece reached the
   verifier (`scan_step`). A step on a stand-in (N2 on ``--job``'s ``stand_in``, scan without a warden run) never makes
   the report accepted. Without ``--n2`` the report is the scan's part of the record alone (`SCAN_ONLY`, its
   ``scope``), and its verdict is ``scan accepted`` or ``scan refused``: N2 isn't required, and the rest is held as
@@ -501,7 +501,7 @@ def scan_step(s: dict | None, warden_run: str | None, job: dict | None = None) -
             "why": "; ".join(wrong) or (job.get("why") or {}).get("scan"), "ok": s.get("ok"), "rounds": rounds,
             "negatives": {k: not v.get("window_accepted") for k, v in rounds.items() if k != "honest"},
             "stand_in": None if warden_run else "scan_zk's own synthetic warden run (scan_traffic), not the gate's "
-                                                "rows: IO-TIE's --warden-run takes those",
+                                                "rows: its --warden-run takes those",
             "warden_run": warden_run, "eps_at_delta": eps_at_delta(units, int(k or s.get("drawn") or units),
                                                                     f"stratified:{k}" if k else s.get("law") or "all"),
             "in_the_clear": CLEAR["scan"]}
@@ -700,7 +700,7 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
                 "buckets tell a receiver no more than an idle one",
                 "the scan proves link-window 0 of the warden run; the period's terms are its per-link-window and "
                 "per-request terms at the run's request rate",
-                "the loop's (compute audit's) free inputs don't enter K: its δ goes into JointPeriod's sum"]}
+                "the loop's (compute audit's) free inputs don't enter K: its δ goes into JointPeriodLive's sum"]}
 
 
 #: each reading of the scan's free inputs, as the report labels it
