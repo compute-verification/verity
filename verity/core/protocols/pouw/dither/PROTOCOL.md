@@ -11,8 +11,8 @@ exclusion"). This document still states the protocol at pub(μ°) until it is re
 
 The protocol is experimental. Its guarantee is `Pouw.Guarantees.Dither.WorkSound` and its card instances
 `Pouw.Guarantees.DitherInstance.WorkSoundAt`, over the ACCEL model `Accel`, with the clocks of `Timed`. The change whose
-Lean covers this document deletes it. The numbers are D6 v1.1's, and the segment and noise periods NOFOLD-OPT's (see
-"The segment and the noise period").
+Lean covers this document deletes it. The numbers are D6 v1.1's, and the segment and noise tile NOFOLD-OPT's (see
+"The segment and the noise tile").
 
 **Names.** Dither is the protocol, PoUW's no-fold design, and the ACCEL model is the physical model 𝓜 it is proved over
 (the Lean's `Accel`).
@@ -75,10 +75,10 @@ premise is SAK for SHA, `SAKSha` (the Lean's `ShaSpeed`), and the proof service'
 weights (for PV, A is P and B is the value cache).
 
 **Noise.** The live coins give each call its dithers d_A ∈ {0,1}^{m×K} and d_B ∈ {0,1}^{N×K}, and HYB noise:
-- U is N×L′ and V is m×L′, both uniform on ±80, periodic along K with period L′.
+- U is N×L′ and V is m×L′, both uniform on ±80, repeated along K in every noise tile of L′ inner indices.
 - U's columns are permuted afresh (π_τ) in every noise tile τ.
 - A segment is t noise tiles, so L = t·L′. L, the word interval (one 16-bit word a cell every L inner indices), and L′,
-  the noise period, are separate parameters (see "The segment and the noise period").
+  a noise tile's length, are separate parameters (see "The segment and the noise tile").
 
 **The tensor operands** are X = wrap8(A + d_A + V) and W′ = wrap8(B + d_B + U π_τ), tile by tile, with wrap indicators
 w_X and w_W.
@@ -143,7 +143,7 @@ check passes, and O = −V·Y_Wᵀ costs L′/K + 1/m of the call's MACs. That f
 **What is credited.** Static matmuls and attention's PV, with O bound and a fresh dither bit on P. QKᵀ and V4's
 indexer are served plain and uncredited.
 
-**The segment and the noise period** per class of sampling block follow one rule. The pair (L, L′) maximizes
+**The segment and the noise tile** per class of sampling block follow one rule. The pair (L, L′) maximizes
 credited value per honest second, pub_μ°/T_honest, subject to γ ≤ 10 for that class. A class with no pair at γ ≤ 10 is
 credited at its least-γ pair only where that adds credited value per honest second; otherwise it is served plain.
 NOFOLD-OPT's picks, all with T_S implied by O and
@@ -380,7 +380,7 @@ k_exfil. Dither needs these of the challenger and the certifier:
 
 - **Coins stay confidential until they cross the boundary** (`CoinsConfidential`, under `trusted-host`). No machine
   outside the replica's boundary may hold a coin before the coin enters the boundary, and afterwards only through bits
-  the certifier counts. Both it and its placement premise are prose only (no `.lean` file defines either): the premise
+  the certifier counts. In the Lean, `CoinsConfidential` is Dither's premise, and the placement premise
   `WitnessPathPrivate` discharges it: private messages (the devices' signed records and salts, the prover's witness, a
   server's coins) travel only on private links, and the certifier sits on the server's own uplink.
   - **The MVP: the certifier's device is the challenger.** The device that runs the
@@ -436,7 +436,7 @@ k_exfil. Dither needs these of the challenger and the certifier:
   coin before its run's challenge phase. A replica's answers are a stream of one-statement batches, run concurrently
   beside its later sampling blocks and never serialized. τ_ans includes the wait for the firewall's release slot.
 - **No q(Δ + τ_ans) ≤ T.** `Timed` covers any number of sampling blocks, with answers beside later ones: their
-  sampling periods telescope to T. Selections arrive about every 43.8 s a replica (T/q).
+  sampling blocks' spans telescope to T. Selections arrive about every 43.8 s a replica (T/q).
 - **τ_ans isn't set.** v3.1's 10 s on an "8 s latency floor" rested on no measured Dither proof block. τ_ans is to be
   set from a passing `--zk` run of the proof block with live coins, the release slot included, with a wide margin.
   - One late answer refuses the week. An honest week fails 76.3% of the time if 1e-4 of answers are late and 1.43% at
@@ -477,7 +477,7 @@ Notes on the headline:
   took it (1 − 2.8e-5), ε_skip would be 0.225–0.282%.
 - Coverage counts V4's 48.85e9 static MACs a token at their own shapes. With mHC's F32 GEMMs uncredited, V4's coverage
   is 96.4% on the H200 and 95.7% on the RTX PRO 6000.
-- The γ column is D6 v1.1's. At NOFOLD-OPT's picks (see "The segment and the noise period"), the static calls' γ is
+- The γ column is D6 v1.1's. At NOFOLD-OPT's picks (see "The segment and the noise tile"), the static calls' γ is
   1.05–1.15 on the RTX PRO 6000 with B pinned and 1.40–2.15 on the H200; the headline isn't restated at them yet.
 - What v3.2 changes and D6 v1.1 doesn't price:
   - E with the answers' proofs raises ε_net by at most 0.0006%.
