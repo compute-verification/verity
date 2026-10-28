@@ -1,4 +1,4 @@
-# V*'s `vstar` command and its difftest port (lane rec-v0's outer statement). The library `VStar` (each Ligerito level's
+# V*'s `vstar` command and its difftest port (the recursive audit's outer statement). The library `VStar` (each Ligerito level's
 # `RecOpen{LANES, H}` statement and each `InnerRepCheck{S}` part of the algebra, emitted as the `flock-circuit` file
 # `Flock.Circuit` parses) is in C-Flock's verifier's package, whose `Flock.RecVStar` holds a V* statement's circuit file to it.
 name = "core_vstar"

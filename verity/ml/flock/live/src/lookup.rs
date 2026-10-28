@@ -1,4 +1,4 @@
-//! A table-lookup slot of `verity/flock-circuit` (lane flock-circuit): `value = table[index]` for a pinned MUFU table
+//! A table-lookup slot of `verity/flock-circuit`: `value = table[index]` for a pinned MUFU table
 //! (`ir_tail::TABLE_SHA256`), built here from the table itself, the same on the prover's and the verifier's side, as an
 //! ordinary unit's expanded circuit (`IrUnitNet`): so the fold, Δ and the regions treat it like any other slot type.
 //!
