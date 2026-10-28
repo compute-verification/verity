@@ -1,5 +1,5 @@
 """Why the matmul chain ran 9–14% faster beside the PoUS harness in a process of its own (the ``separate`` round, during the
-audit and after it) than inside it or alone in the sweep (runs r20261012-003617-f349 and r20261012-005734-9db8, at one SM
+audit and after it) than inside it or alone in the sweep (two runs, at one SM
 clock and one affinity mask): the shape's native chains at its smallest batch, every condition of a phase in turn rep by
 rep, each item timed on the host (`chain.Native.item`), on the device by events, and from its start to its last launch on
 the host, with the CPU its thread ended on and that CPU's frequency.
@@ -18,7 +18,7 @@ the host, with the CPU its thread ended on and that CPU's frequency.
   responder spin;
 * ``after``: as ``alone`` once they have exited.
 
-Run r20261012-023723-e009 found every ``beside`` phase fast and ``after`` fast for its first 3–4 reps only, at one SM and
+A run found every ``beside`` phase fast and ``after`` fast for its first 3–4 reps only, at one SM and
 memory clock; the ``course`` then times the native chains back to back on the default stream around one co-tenant at a
 time (`COURSE`: a process that sleeps, `SPINNERS` that spin, one holding an idle CUDA context), `COURSE_S` seconds before it
 starts, after it is ready and after it exits, so the onset and the offset of the fast state are seen and each kind of
@@ -176,8 +176,8 @@ def course(natives: dict, chains: dict[str, int], script: str, args: list[str], 
 
 
 class Sidecar:
-    """An idle CUDA context in a process of its own (`SECOND` idle) while the ``with`` lasts.  The course of run
-    r20261012-031720-786d found every native chain faster from the moment one is ready (3.5% BF16, 11.5% FP8 at o, B = 1)
+    """An idle CUDA context in a process of its own (`SECOND` idle) while the ``with`` lasts.  The course of a
+    run found every native chain faster from the moment one is ready (3.5% BF16, 11.5% FP8 at o, B = 1)
     and still faster 10 s after it exits, at one SM and memory clock: an arm measured beside it runs at that speed."""
 
     def __enter__(self) -> dict:

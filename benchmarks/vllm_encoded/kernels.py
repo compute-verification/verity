@@ -11,8 +11,8 @@ Kernels are pluggable: a `Lib` is any build of `ve.cu` (packing, k range), and a
 another `Lib` whose `ve_gemm` takes the same arguments.  `WideLinear` runs the wide codec's fused GEMM instead
 (`benchmarks/word_codec/wide.cu`, a `WideLib` a field: Sloth over p = 2^127 − 1, 2^255 − 19, 2^521 − 1, 2^256 − 189 or
 2^512 − 569); its chunk sums have the same layout, so `ve_reduce` turns them into the same BF16.  `TensorLinear` runs
-the tensor codec's (`benchmarks/codec_tensor/wt.cu`, a `TensorLib` a field: decoder warps decoding in shared memory ahead
-of one MMA warp), with the same chunk sums.
+the tensor-core codec's (`benchmarks/codec_tensor/wt.cu`, a `TensorLib` a field: decoder warps decoding in shared
+memory ahead of one MMA warp), with the same chunk sums.
 """
 from __future__ import annotations
 
@@ -145,7 +145,7 @@ class WideLib:
 
 
 class TensorLib:
-    """One build of the tensor codec's `wt.cu` (one field, `WT_FIELD`): its key and each launch's tweak steps."""
+    """One build of the tensor-core codec's `wt.cu` (one field, `WT_FIELD`): its key and each launch's tweak steps."""
 
     def __init__(self, path: str | Path) -> None:
         v, i, q = ctypes.c_void_p, ctypes.c_int, ctypes.c_uint64
@@ -417,7 +417,7 @@ class WideLinear(Linear):
 
 
 class TensorLinear(Linear):
-    """Only `wt.cu`'s words (ra-codec-tensor's fused decode GEMM): `store` (S bytes a word, held as int16 so no uint8
+    """Only `wt.cu`'s words (the tensor-core codec's fused decode GEMM): `store` (S bytes a word, held as int16 so no uint8
     tensor of a linear's size is in the process: `bytes` is its uint8 view) holds W's payloads (`layout.tensor_limbs`)
     encoded k >= 1 rounds under the tensor lib's key at word indices base, base + 1, ...  `lib` (a `ve.cu` build) only
     reduces the chunk sums."""

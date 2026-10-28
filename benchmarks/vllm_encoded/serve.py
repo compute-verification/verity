@@ -6,9 +6,9 @@ Arms:
   plain     every linear through `ve.cu`'s fused GEMM over plain FP8 fragments (k = 0): the native kernel of this harness
   enc       every linear through the fused GEMM over codec words only (k rounds of Sloth at p = 2^61 - 1); the plaintext
             weight is freed before vLLM profiles memory, so decode runs with no plaintext copy of any linear in HBM
-  wide      the same with ra-codec-wide's fused GEMM (`wide.cu`, ``--wide-lib``: Sloth over p = 2^127 - 1, 2^255 - 19,
+  wide      the same with the wide codec's fused GEMM (`wide.cu`, ``--wide-lib``: Sloth over p = 2^127 - 1, 2^255 - 19,
             2^521 - 1, 2^256 - 189 or 2^512 - 569, k rounds, k = 0 its plain payloads)
-  tensor    the same with ra-codec-tensor's fused GEMM (`wt.cu`, ``--tensor-lib``: Sloth over its field, decoder warps
+  tensor    the same with the tensor-core codec's fused GEMM (`wt.cu`, ``--tensor-lib``: Sloth over its field, decoder warps
             decoding in shared memory ahead of one MMA warp, k >= 1 rounds)
   pstack    the remote bandwidth audit's own kernels in their plain forms (`stack.py`): wt.cu's GEMM over plain fragments,
             the BF16 lm_head as it is, paged.cu's attention and KV append over vLLM's own cache; stack's denominator
