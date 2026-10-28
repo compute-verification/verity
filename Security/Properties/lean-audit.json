@@ -8262,6 +8262,7 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
@@ -10073,7 +10074,7 @@
    ]
   },
   "PouwCheck.Credit": {
-   "digest": "69449ff98f32738ed984a00b474987896fe2cbdf79570f5acffe7ef4711df38a",
+   "digest": "13a8470e9700769a306a06e949dfe0879e3790ffa635fdbac76e40cb1be90164",
    "definitions": {
     "PouwCheck.Credit.BODY": "071fefb97f3971bcd352e1c3b07d11024a6f9c774c6fb6c3b46931a10dfb376c",
     "PouwCheck.Credit.CALLS_FORM": "d6bf6cb3768f79c8900ee97cb118d0b475d4456410e4d0a86afbe35047c0da92",
@@ -10277,7 +10278,6 @@
     "PouwCheck.Credit.tileK": "e4ad183d940b4dda0d3fb50dd2bf0180ab46dc9b2405024859549925720afb59",
     "PouwCheck.Credit.tileOf": "ef888a2a964b35057888c226dbe84eaba8f51698704b4e58977db1b50ce25ffb",
     "PouwCheck.Credit.tileOf._sparseCasesOn_1": "abca97894aa5722346397160457c251915279b9013ba1976af3a05cecc562871",
-    "PouwCheck.Credit.tileOf._sparseCasesOn_7": "78239315ebcb5d9480bca09597c7a6d7a33e58fa9009337d79979ffc7484fc6b",
     "PouwCheck.Credit.treeAt": "1eff78f60fa733c562db3ceed944136346192685f89d767420c77eb2c4c33c82",
     "PouwCheck.Credit.treeRoot": "a6bb8f3a8a58b3166ed9ade9510247e8956599715e5016a640a9131140b8c17c",
     "PouwCheck.Credit.unpinnedModel": "95d773802cfe2bff29dede79e9cb709b91106fb18209d33851579cfd161b8942",
