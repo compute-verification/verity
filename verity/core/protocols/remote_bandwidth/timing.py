@@ -322,7 +322,7 @@ def spanning(gpu_bytes: int) -> int:
     return GPUS * gpu_bytes + math.floor(gpu_bytes * HOST_READ_BYTES_PER_S / GPU_READ_BYTES_PER_S)
 
 
-def stated(store_bytes: int, window_ns: int, windows: int, *, rtt_ns: int, samples: int, delta: float = 2.0 ** -40,
+def stated(store_bytes: int, window_ns: int, windows: int, *, rtt_ns: int, samples: int, delta: float = audit.DELTA,
            gap_ns: int = 50 * US, jitter_ns: int = 50 * US, read_bytes_per_s: float = READ_BYTES_PER_S,
            capacity_bytes_per_s: float = READ_BYTES_PER_S) -> audit.Ledger:
     """The ledger of the honest prover's session over a store of `store_bytes` on one node of `capacity_bytes_per_s`
