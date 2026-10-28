@@ -4,11 +4,12 @@ and its outcome. The piece, on a serve dir whose window was the warden's synthet
 `test_warden_chain.gate_run` publishes in the gate's layout), runs as `served_verdicts.py pieces` runs it and writes
 `network-period`'s answer only when the chain accepted and the window's requests are certified ones in the scan's
 link-window: the period mirror's certifier/v0 accept (`period_case`) then goes through `served_verdicts.py record` into
-the block record's certifier leg, which `block_record.check` holds and its schema admits. A window request the warden
-didn't certify is rejected before any chain runs; a chain that refused, requests outside the scan's link-window and a
-period the check rejects are rejects; a rehearsal the gate's check failed (each request late) and a step that can't run
-(no kept run, no report, no build, the time limit) refuse, which leaves the certifier missing. The leak guard reads the
-piece's DIR against the run's witness. The front's
+the block record's certifier leg, which `block_record.check` holds and its schema admits, and its case.json is the three
+files `network-period` read, as `composite.py` reads a piece's case. A window request the warden didn't certify is
+rejected before any chain runs; a chain that refused, requests outside the scan's link-window and a period the check
+rejects are rejects; a rehearsal the gate's check failed (each request late) and a step that can't run (no kept run, no
+report, no build, the time limit) refuse, which leaves the certifier missing. The leak guard reads the piece's DIR
+against the run's witness, and the case is written only from the period files it left. The front's
 warm-ups go straight to the endpoint, one at a time, each recorded in a closed window of its own before the gate is
 asked, and the pick passes over those windows for the group's."""
 from __future__ import annotations
@@ -35,6 +36,7 @@ import certifier_piece as CP  # noqa: E402
 import served_verdicts as S  # noqa: E402
 from test_served_session import RUN, STUB  # noqa: E402
 from test_warden_chain import WC, gate_run  # noqa: E402
+from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity_e2e_demo import block_record as BR  # noqa: E402
 
 PERIOD_CASE = ROOT / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
@@ -115,10 +117,13 @@ def _chain_out(d: Path, verdict: str, w: int) -> Path:
 
 
 def _piece_cmd(tmp_path: Path, chain: Path, answer: dict, cmd: str | None = None, lean: Path | None = None) -> str:
+    """The piece's command, its `network-period` a stand-in that keeps the three files it reads in TMP/seen and
+    answers ``answer``."""
     if lean is None:
-        lean = tmp_path / "network-period"
+        lean, seen = tmp_path / "network-period", shlex.quote(str(tmp_path / "seen"))
         (tmp_path / "lean-answer.json").write_text(json.dumps(answer, sort_keys=True))
-        lean.write_text(f"#!/bin/sh\ncat {shlex.quote(str(tmp_path / 'lean-answer.json'))}\n")
+        lean.write_text(f"#!/bin/sh\nmkdir -p {seen} && cp \"$2\" \"$3\" \"$4\" {seen}/\n"
+                        f"cat {shlex.quote(str(tmp_path / 'lean-answer.json'))}\n")
         lean.chmod(0o755)
     cmd = cmd or f'mkdir -p "$RESEARCH_RUN_DIR" && cp -r {shlex.quote(str(chain / "out"))} "$RESEARCH_RUN_DIR/"'
     return (f"{shlex.quote(sys.executable)} {shlex.quote(str(HERE / 'certifier_piece.py'))} piece \"$@\" "
@@ -160,9 +165,15 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     assert "MISSING the network certifier" not in capsys.readouterr().out
     assert json.loads((piece / "answer.json").read_text()) == accept
     assert json.loads((piece / "chain" / "report" / "report.json").read_text())["verdict"] == "accepted"
-    assert sorted(p.name for p in (piece / "period").iterdir()) == ["commitment.bin", "evidence.json", "params.json"]
-    assert {p.name for p in piece.iterdir()} - {"piece.json"} == {"answer.json", "chain", "period", "piece.log"}
-    assert "leak guard (exit 0)" in (piece / "piece.log").read_text()
+    assert {p.name for p in piece.iterdir()} - {"piece.json"} == {"answer.json", CP.CASE, "chain", "piece.log"}
+    seen = {f.name: f.read_bytes() for f in (tmp_path / "seen").iterdir()}
+    raw = (piece / CP.CASE).read_bytes()
+    case = json.loads(raw)
+    assert sorted(case) == ["commitment", "evidence", "params"] and raw == canonical_json(case) + b"\n"
+    assert (bytes.fromhex(case["commitment"]), bytes.fromhex(case["evidence"]), canonical_json(case["params"])) == (
+        seen["commitment.bin"], seen["evidence.json"], seen["params.json"])
+    log = (piece / "piece.log").read_text()
+    assert "leak guard (exit 0)" in log and f"case: {CP.CASE}, {len(raw)} bytes" in log
     keep = d / CP.PRIVATE / RUN
     assert sorted(p.name for p in keep.iterdir()) == ["chain", "endpoint", "fetch.tar.gz"]
     assert [(keep / "endpoint" / f).stat().st_mode & 0o777 for f in CP.ENDPOINT] == [0o600] * 4
@@ -273,6 +284,29 @@ def test_a_rehearsal_the_gates_check_failed_late_leaves_the_certifier_missing_no
     a, _ = CP.decide(_serve_dir(tmp_path / "passed", warden, served), K, tmp_path / "out",
                      chain=lambda *x: pytest.fail("no chain"), check=lambda *x: {})
     assert a["verdict"] == "reject" and "streamed_ids aren't the certified output" in a["reason"]
+
+
+def test_the_case_is_written_only_from_period_files_the_leak_guard_left(tmp_path, warden):
+    """`composite.py` reads a case's commitment and evidence as hex, where the leak guard finds only a binary witness
+    file's pieces: so the case is written from DIR/period after the guard has read its files raw, and not at all when
+    the guard moved one of them (here the evidence, holding a witness file's text)."""
+    fetch = tmp_path / "fetch.tar.gz"
+    fetch.write_bytes(warden["fetch"].read_bytes())
+    unpacked, run = CP.unpack(fetch)
+    for name, evidence in (("clean", b'{"windows":[]}'), ("leaky", (run / "witness" / "certified.jsonl").read_bytes())):
+        d = tmp_path / name
+        (d / "period").mkdir(parents=True)
+        for f, b in (("params.json", b'{"k":1}'), ("commitment.bin", b"\1\2"), ("evidence.json", evidence)):
+            (d / "period" / f).write_bytes(b)
+        g = CP.guard(d, unpacked, tmp_path / f"{name}-quarantine")
+        CP.write_case(d)
+        if name == "clean":
+            assert g == 0 and not (d / "period").exists()
+            assert (d / CP.CASE).read_bytes() == b'{"commitment":"0102","evidence":"%s","params":{"k":1}}\n' % (
+                evidence.hex().encode())
+        else:
+            assert g == 3 and not (d / CP.CASE).exists()
+            assert sorted(p.name for p in (d / "period").iterdir()) == ["commitment.bin", "params.json"]
 
 
 def test_n2_and_the_tie_take_every_link_window_of_a_short_run_unless_named():
