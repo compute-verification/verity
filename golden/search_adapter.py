@@ -58,7 +58,7 @@ RANGES = {
     "lower_bytes_per_gate": (M.I("lower_bytes_per_gate"), M.I("lower_bytes_per_and_today") / M.I("gates_per_and")),
     "lower_s_per_gate": (M.I("lower_s_per_gate"), M.I("lower_s_per_and_today") / M.I("gates_per_and")),
     "gates_per_and": (1.0, 2.1),
-    "k_pad": (0, 1),
+    "k_pad": (0, 3),                                     # 0: the inbox's 2^27 ANDs; class_size's units 1 to 3
     "h1_ands_per_mac": (250.0, 500.0),
     "retain_GB": (50.0, 1000.0),                         # device retention's margin to a host cgroup's pinned memory
 }

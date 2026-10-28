@@ -144,9 +144,13 @@ INPUTS: dict[str, tuple[float, str, str]] = {
     "hm96_ands": (116_240, "M", "optimize.HM96_ANDS: the hiding part of an hm96-sha512 row in circuit"),
     "s8_step_ands": (4_190, "M", "benchmarks/sampling_plan/inputs.py S8_STEP: ANDs of 32 s8 MACs (#2391's pin)"),
     "s8_epilogue_ands": (5_000, "M", "benchmarks/sampling_plan/inputs.py EPILOGUE"),
-    "ew_ands_per_elem": (2_000, "E", "an elementwise op's ANDs an element (norm, SiLU, RoPE, quantize, bf16 ops): "
-                                     "estimate pending GD-PARTITION"),
-    "attn_ands_per_mac": (600, "E", "bf16 attention's ANDs a MAC in circuit: estimate pending GD-PARTITION"),
+    "ew_ands_per_elem": (1_660, "E", "an elementwise op's ANDs an element, weighted over a layer's elements: "
+                                     "benchmarks/prove_path/class_size.py MEASURED where measured (RMSNorm 4.6-5.1 K, "
+                                     "SiluMul 1.38 K, RoPE 3.0 K an element), the quantizer 1,000 and the residual add "
+                                     "500 (estimates); GD-PARTITION's units replace it"),
+    "attn_ands_per_mac": (566, "E", "class_size.MEASURED's AttnBlock_v5{D=64,NVIS=128,BN=128}, 9.28 M ANDs, over a "
+                                    "query's 128 keys x 64 x 2 MACs (taking the block as one query's key block)"),
+    "attn_keys_per_block": (128, "M", "class_size.MEASURED's AttnBlock_v5 BN: keys an attention proof block"),
     "h1_tile_gates": (1.0e9, "M", "the brief: the K 2,048 32x32 H1 tile is about 1e9 gates, OOM at 600 GiB (TOP-138)"),
     # lowering (TOP-138) and prices
     "lower_bytes_per_gate": (16 * 2 ** 30 / 1.0e9, "E", "TOP-138's target: the 1e9-gate H1 tile in 16 GiB (17.2 B a "
@@ -161,10 +165,14 @@ INPUTS: dict[str, tuple[float, str, str]] = {
                                                "(note:top/20261028T1845Z-report-lowering-struct): 1.36"),
     "k_max": (27, "M", "circuit.compose's K_MAX and the prover's IN_RANGE_K_LOG (live/src/circuit.rs:120): a block with "
                        "k_log > 27 is refused (note:top/20261028T1845Z-report-lowering-struct)"),
-    "k_pad": (1, "E", "bits past ceil(log2 ANDs) a block's k_log takes: compose pads each range (gates, hm96 slots, "
-                      "sha512x3 slots, mask) to a power of two and lays them side by side (circuit._ranges), so a block "
-                      "of 2^26 ANDs is a 2^27 block. The struct worker's 'a lane fits 2^27 to K about 5,041' (~57 M "
-                      "ANDs at 350 a MAC) agrees; the inbox's '2^27 ANDs' (top, 19:16Z) is k_pad 0"),
+    "k_pad": (2, "E", "bits past ceil(log2 ANDs) a block's k_log takes: compose pads each range (gates, hm96 slots, "
+                      "sha512x3 slots, mask) to a power of two and lays them side by side (circuit._ranges). "
+                      "class_size.MEASURED's staged units at Llama-3.2-1B give 1 to 3, median 2, for units whose gates "
+                      "dominate (Gemm_v2{2048,16}: 16.9 M ANDs at k_log 27; AttnBlock_v5 9.3 M at 26; SiluMul 11.3 M "
+                      "at 26). The struct worker's 'a lane fits 2^27 to K about 5,041' (~57 M ANDs) is 1; the "
+                      "inbox's '2^27 ANDs' (top, 19:16Z) is 0"),
+    "k_pad_h1_lane": (1, "E", "k_pad of an H1 lane or combine block: the struct worker's 'a lane fits 2^27 to K about "
+                              "5,041' (h1unit.stager; note:top/20261028T1845Z-report-lowering-struct)"),
     "h1_ands_per_mac": (350, "E", "J10-R's H1 leaf, ANDs a MAC with its noise and openings: the coordinator's "
                                   "calibration point (inbox 19:16Z: the 32x32 K 2,048 tile ~736 M ANDs, 32 lanes of "
                                   "~23 M; TOP-138 19:25Z: a lane ~92 M at K 8,192, ~161 M at K 14,336) until GD-PROVER"),
@@ -375,8 +383,8 @@ SCHEMA = {
         "stmt_per_and": (None, "GPU-s a statement per AND of its block"),
         "speed": (None, "prover speed on the H200 over sm_120's (None: 1.0, estimate)"),
         "m_max": (35, "C-Flock's m = k_log + nbl cap (a block's k_log itself is refused above INPUTS k_max, 27)"),
-        "k_pad": (None, "bits past ceil(log2 ANDs) a block's k_log takes (None: 1, compose's range padding; 0: the "
-                        "inbox's 2^27 ANDs a block)"),
+        "k_pad": (None, "bits past ceil(log2 ANDs) a block's k_log takes (None: INPUTS k_pad, 2 from class_size's "
+                        "staged units; 0: the inbox's 2^27 ANDs a block)"),
         "shared": (True, "statements hold only the drawn blocks (IntegrityPeriod's hidden window)"),
         "stmt": ("template", "template (a statement a block class) | universal (private_circuits' universal unit: each "
                              "block at its power-of-two size class, statements shared by a size class; no universal "
@@ -759,9 +767,13 @@ def preset_units(d: dict) -> list:
             extra, vrows = dither_check(d, K, Kc, r * c)
             u.update({"extra_ands": extra, "open_rows": rows + vrows, "credit_work": r * c * Kc})
         units.append(u)
-    attn_work = I("attn_ands_per_mac") * 2 * HD * seq_len / 2
-    units.append({"name": "attention (head, query)", "per_token": LAYERS * QH, "work": attn_work, "extra_ands": 0.0,
-                  "open_rows": [R, R, R], "out_bits": 16 * HD})
+    bn = I("attn_keys_per_block")
+    blocks = max(1.0, seq_len / 2 / bn)                        # a query's causal keys, on average, in key blocks
+    kb = min(bn, seq_len / 2)
+    attn_rows = opened(2 * HD, R, mode) + 2 * opened(kb * HD * 2, R, mode) + 2 * opened(4 * (HD + 2), R, mode)
+    units.append({"name": f"attention (head, query, {bn:.0f}-key block)", "per_token": LAYERS * QH * blocks,
+                  "work": I("attn_ands_per_mac") * 2 * HD * kb, "extra_ands": 0.0,
+                  "open_rows": attn_rows, "out_bits": 32 * (HD + 2)})
     ew = (LAYERS * (2 * HIDDEN + 2 * HIDDEN + INTER + (QH + KVH) * HD + 3 * HIDDEN + INTER))
     units.append({"name": "elementwise element", "per_token": ew, "work": I("ew_ands_per_elem"), "extra_ands": 0.0,
                   "open_rows": [R], "out_bits": 16})
@@ -789,9 +801,10 @@ def pouw_units(d: dict) -> list:
             partial = 4 * I("partial_words_per_ks") * (ks + h1_digits(ks))
             carry = [partial] * (2 if n > 1 else 0)            # a middle chunk reads carry_in and writes carry_out
             combine = lanes * row_ands(partial) + row_ands(16) + (lanes * n * row_ands(2) if n > 1 else 0)
+            kp = I("k_pad_h1_lane")
             unit["blocks"] = [{"name": "lane chunk" if n > 1 else "lane", "count": lanes * n,
-                               "ands": ands / (lanes * n) + sum(row_ands(b) for b in carry)},
-                              {"name": "combine", "count": 1, "ands": combine}]
+                               "ands": ands / (lanes * n) + sum(row_ands(b) for b in carry), "k_pad": kp},
+                              {"name": "combine", "count": 1, "ands": combine, "k_pad": kp}]
         elif w["form"] != "tile":
             raise ValueError(f"pouw.form {w['form']!r}")
         return [unit]
@@ -912,7 +925,7 @@ def proving(d: dict, units: list, label: str) -> dict:
             ands = b["ands"]
             if universal:
                 ands = 2.0 ** math.ceil(math.log2(max(ands, 2)))
-            k_log = math.ceil(math.log2(max(ands, 2))) + k_pad
+            k_log = math.ceil(math.log2(max(ands, 2))) + (round(b["k_pad"]) if "k_pad" in b else k_pad)
             blocks.append({**b, "ands": ands, "k_log": k_log, "cap": 1 << max(0, pv["m_max"] - k_log),
                            "nb": n * q * b["count"]})
         plan.append((u, n, q, own, blocks))
