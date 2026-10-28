@@ -27,7 +27,8 @@
 # PYHZ, 1000, for the host gaps; its sqlite export keeps none of the Python frames), PYSPY=1 (py-spy 0.4.2, installed under
 # UTIL_ROOT/tools/pyspy, launches the server under the session, since the node's ptrace_scope 1 lets it read only its own
 # children, and records it and its subprocesses at PYSPY_HZ, 20, as a Chrome trace in the scratch, which `pyspy_steps.py`
-# cuts to the full steps into pyspy_steps.json), SEQS (--max-num-seqs and --window-requests, T/1024, 2·T/1024 for graphs and async; the
+# cuts to the full steps into pyspy_steps.json), SEAL_SHM=1 (the serve dir's windows/ on /dev/shm, so a seal writes to memory
+# rather than the node's network disk: what the step is when the disk doesn't bound the seal), SEQS (--max-num-seqs and --window-requests, T/1024, 2·T/1024 for graphs and async; the
 # window's request cap also bounds the requests in flight), HEADS (the merged heads, written to heads.txt with the tree's
 # commit and parents), RELEASE_AFTER (a Commit arm's values held on the device, --retain device --retain-device-gb
 # RETAIN_DEVICE_GB (32) --release-after RELEASE_AFTER), STANDIN_DRAWS (protocols of RELEASE_AFTER no drawer serves yet: the
@@ -92,7 +93,9 @@ if [ "${1:-}" != leased ]; then
     say "PYSPY ANALYSIS rc=$?"; cat "$OUT/pyspy_steps.txt"
   fi
   if [ -d "$D/windows" ]; then
-    say "SEALED $(du -sh "$D/windows" | cut -f1), deleted"; rm -rf "$D/windows"
+    say "SEALED $(du -sh "$D/windows/" | cut -f1)$([ -L "$D/windows" ] && echo ' on /dev/shm'), deleted"
+    [ -L "$D/windows" ] && rm -rf "$(readlink -f "$D/windows")"
+    rm -rf "$D/windows"
   fi
   exit "$rc"
 fi
@@ -132,6 +135,9 @@ print("UTIL engine options overridden (not the served stack):", json.dumps(over)
 sys.exit(cli.main())' serve-openai)
     say "ENGINE $UTIL_ENGINE_JSON" ;;
 esac
+if [ "${SEAL_SHM:-0}" = 1 ]; then
+  mkdir -p "/dev/shm/vllm-util80/${RESEARCH_RUN_ID:-local}" && rm -rf "$D/windows" && ln -sfn "/dev/shm/vllm-util80/${RESEARCH_RUN_ID:-local}" "$D/windows"
+fi
 if [ "${PYSPY:-0}" = 1 ]; then
   serve=("$ROOT/tools/pyspy/bin/py-spy" record --rate "${PYSPY_HZ:-20}" --idle --threads --subprocesses --nolineno
          --format chrometrace -o "$SCR/pyspy.json" -- "${serve[@]}")
