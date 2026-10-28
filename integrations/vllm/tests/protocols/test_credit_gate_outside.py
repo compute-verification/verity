@@ -2,6 +2,7 @@
 outside the trace with the same verdicts, tables and records as inside it, while a call without z stays in it."""
 from __future__ import annotations
 
+import importlib
 import json
 from contextlib import nullcontext
 from types import SimpleNamespace
@@ -10,15 +11,13 @@ import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
-
-from torch.utils._python_dispatch import TorchDispatchMode  # noqa: E402
-from verity_vllm.engine import int8_ops as OPS  # noqa: E402
-from verity_vllm.protocols.pouw import credit_gate as CG  # noqa: E402
-from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import hooks as PHK  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import served as SV  # noqa: E402
-
-from tests.protocols import test_pouw_h1_served as T  # noqa: E402
+TorchDispatchMode = importlib.import_module("torch.utils._python_dispatch").TorchDispatchMode
+OPS = importlib.import_module("verity_vllm.engine.int8_ops")
+CG = importlib.import_module("verity_vllm.protocols.pouw.credit_gate")
+PH = importlib.import_module("verity_vllm.protocols.pouw.h1")
+PHK = importlib.import_module("verity_vllm.protocols.pouw.h1.hooks")
+SV = importlib.import_module("verity_vllm.protocols.pouw.h1.served")
+T = importlib.import_module("tests.protocols.test_pouw_h1_served")
 
 
 def test_ops_outside_the_trace_are_not_its():
