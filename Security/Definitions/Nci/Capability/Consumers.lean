@@ -23,7 +23,7 @@ open Verity Finset
 /-- **Consumers** of the declaration `d`, indexed by `κ`. Consumer `c` is finished by computing one of the gate sets
 `fins c` whole; its upstream region `A c` holds no registered gate, and `G c ⊆ A c` are the gates a block must compute to
 finish `c` without importing from `A c`. -/
-structure Consumers (d : Registered) (κ : Type) where
+structure Consumers (d : RegisteredCircuit) (κ : Type) where
   /-- The ways to finish each consumer: a block finishes `c` when it computes one of these sets whole. -/
   fins : κ → Finset (Finset (Fin d.D.N))
   /-- Each consumer's upstream region. -/
@@ -35,7 +35,7 @@ structure Consumers (d : Registered) (κ : Type) where
 
 namespace Consumers
 
-variable {d : Registered} {κ : Type}
+variable {d : RegisteredCircuit} {κ : Type}
 
 open Classical in
 /-- **The consumers the gates `S` finish.** -/

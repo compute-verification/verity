@@ -1,4 +1,4 @@
-import Definitions.Core.Registered
+import Definitions.Core.RegisteredCircuit
 
 /-!
 # Coverings by inference blocks, and multiplication blocks
@@ -28,7 +28,7 @@ namespace Nci.Covering
 
 open Verity Finset
 
-/-- `in(C)`: the gates with no predecessors. A registered parameter is one of them (`Registered.θ_input`). -/
+/-- `in(C)`: the gates with no predecessors. A registered parameter is one of them (`RegisteredCircuit.θ_input`). -/
 def sources (C : Circuit) : Finset (Fin C.N) := univ.filter fun g => C.reads g = ∅
 
 /-- `g` reaches `t` inside `R`: a path of wires from `g` to `t` all of whose gates, its ends included, lie in `R`. -/
@@ -50,18 +50,18 @@ def Subcircuit.inner {C : Circuit} (S : Subcircuit C) : Finset (Fin C.N) := S.ga
 
 /-- An **`(s, k)`-inference block** of `d`: a subcircuit of at most `s` gates with at most `k` inputs outside the
 registered parameters, `|S| ≤ s` and `|in(S) \ θ| ≤ k`. -/
-def InferenceBlock (d : Registered) (s k : ℕ) (S : Subcircuit d.D) : Prop :=
+def InferenceBlock (d : RegisteredCircuit) (s k : ℕ) (S : Subcircuit d.D) : Prop :=
   S.gates.card ≤ s ∧ (S.ins \ d.θ).card ≤ k
 
 /-- An **`(s, k)`-covering** of `d` by `n` blocks: each is an `(s, k)`-inference block, and together they compute
 `C \ in(C)`, every gate with a predecessor lying in `S \ in(S)` for some block `S`. -/
-def Covers (d : Registered) (s k : ℕ) {n : ℕ} (I : Fin n → Subcircuit d.D) : Prop :=
+def Covers (d : RegisteredCircuit) (s k : ℕ) {n : ℕ} (I : Fin n → Subcircuit d.D) : Prop :=
   (∀ u, InferenceBlock d s k (I u)) ∧ ∀ g, g ∉ sources d.D → ∃ u, g ∈ (I u).inner
 
 /-- **Multiplication blocks and token computations** of `d`: weights `Fin nw` (the updated parameters `θ'`) and tokens
 `Fin nt` (`J`); for `(i, j) ∈ P` a multiplication block `m (i, j)` with output gate `o (i, j)`; for each token `j` its
 computation `T j`. -/
-structure MulBlocks (d : Registered) where
+structure MulBlocks (d : RegisteredCircuit) where
   nw : ℕ
   nt : ℕ
   P : Finset (Fin nw × Fin nt)
@@ -79,7 +79,7 @@ structure MulBlocks (d : Registered) where
 
 namespace MulBlocks
 
-variable {d : Registered} (B : MulBlocks d)
+variable {d : RegisteredCircuit} (B : MulBlocks d)
 
 /-- `S` **completes** the multiplication block `m p`: `m p ⊆ S \ in(S)`. -/
 def Completes (S : Subcircuit d.D) (p : Fin B.nw × Fin B.nt) : Prop := B.m p ⊆ S.inner

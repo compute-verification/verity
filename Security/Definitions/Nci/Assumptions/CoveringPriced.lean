@@ -31,7 +31,7 @@ barely moved since `θ`, a copy of a registered weight or of another updated one
 compute — break it at any price above that cost. Price them at what they cost, zero if need be: the covering bound
 (`Nci.Guarantees.CoveringBoundPriced`) asks only that any `D` weights together cost more than `k`, not that every price
 be large. -/
-def ParameterHardPricedAt (d : Registered) (B : MulBlocks d) (s : ℕ) (p : Fin B.nw → ℝ) : Prop :=
+def ParameterHardPricedAt (d : RegisteredCircuit) (B : MulBlocks d) (s : ℕ) (p : Fin B.nw → ℝ) : Prop :=
   ∀ S : Subcircuit d.D, S.gates.card ≤ s → ∑ i ∈ B.weightsCompleted S, p i ≤ (S.ins \ d.θ).card
 
 end Nci.Assumptions

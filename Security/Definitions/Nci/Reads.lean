@@ -22,6 +22,6 @@ noncomputable def readFactor (K b_w b_a d : ℝ) : ℝ :=
     min ((1 + √(μ : ℝ)) ^ 2 * b_w * b_a * d / K) (√2 * (1 + √(μ : ℝ)) * √(1 - μ) * b_a * √(b_w / K))
 
 /-- **The reads of `R` in `G`**: the width of the gates of `G` outside `R` that `R` reads, baseline included. -/
-def readsIn (d : Registered) (R G : Finset (Fin d.D.N)) : ℕ := d.D.width (d.D.into R ∩ G)
+def readsIn (d : RegisteredCircuit) (R G : Finset (Fin d.D.N)) : ℕ := d.D.width (d.D.into R ∩ G)
 
 end Nci

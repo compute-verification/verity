@@ -39,7 +39,7 @@ reference training circuit `c` and complies at `(Γ, α)`, with its θ registere
 under `UpdateHardness` at the block size `s ≥ w₀ Γ + α Γ + width(θ)` (no gate of `c` wider than `w₀`) and the upstream
 certificate at depth `D` with `α Γ < b D`. -/
 def CoverTraining : Prop :=
-  ∀ (Γ : ℕ) (α b α₀ : ℝ) (c d : Verity.Registered) (M : Verity.Containment c.D d.D)
+  ∀ (Γ : ℕ) (α b α₀ : ℝ) (c d : Verity.RegisteredCircuit) (M : Verity.Containment c.D d.D)
     {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl c) J L)
     (A : J → Finset (Fin (Circuit.ofDecl c).N)) (s D w₀ : ℕ),
     0 < b → 0 ≤ α → Nci.Complies Γ α d →
@@ -54,7 +54,7 @@ each use's activation region the bits of a set `Aw j` of `c`'s gates (`wordBits`
 `α₀ b f size(c) ≤ (α² Γ + b f α) size(d)`, under `UpdateHardness` alone. A block of whole words handed a bit of a region
 of whole words is handed all of that word's bits, so each use of its whole products costs it `f` bits of its region. -/
 def CoverTrainingAligned : Prop :=
-  ∀ (Γ : ℕ) (α b α₀ : ℝ) (c d : Verity.Registered) (M : Verity.Containment c.D d.D)
+  ∀ (Γ : ℕ) (α b α₀ : ℝ) (c d : Verity.RegisteredCircuit) (M : Verity.Containment c.D d.D)
     {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl c) J L)
     (Aw : J → Finset (Fin c.D.N)) (s D w₀ f : ℕ),
     0 < b → 0 ≤ α → Nci.Complies Γ α d →

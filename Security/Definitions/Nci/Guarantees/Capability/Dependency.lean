@@ -34,7 +34,7 @@ def ImportOrRecompute : Prop :=
 /-- **Recomputing costs gates.** With overlap weights `ω` and at least `g` required gates per consumer, the weight of the
 consumers whose required gates lie within any gates `S` is at most `|S| / g`: in a `(c, k)`-partition, `c / g` a block. -/
 def RecomputeByGates : Prop :=
-  ∀ (d : Registered) {κ : Type} [Fintype κ] (K : Consumers d κ) (ω : κ → ℝ) (g : ℝ), K.OverlapWeights ω →
+  ∀ (d : RegisteredCircuit) {κ : Type} [Fintype κ] (K : Consumers d κ) (ω : κ → ℝ) (g : ℝ), K.OverlapWeights ω →
     (∀ c, g ≤ (K.G c).card) → ∀ (J : Finset κ) (S : Finset (Fin d.D.N)),
       g * ∑ c ∈ J.filter (fun c => K.G c ⊆ S), ω c ≤ S.card
 

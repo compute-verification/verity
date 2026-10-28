@@ -72,7 +72,7 @@ SampledProofs.OneStage.protocol]`. Its executable is `remote id | check PARAMS C
 ## Lifecycle
 
 1. **Registration**, once, before any coin. The developer registers R = (θ, D, 𝓘): the registered inputs θ, the declared
-   circuit D, and D's (c, k)-partition 𝓘 into inference blocks (`GLOSSARY.md`, `Verity.Registered`; read by the
+   circuit D, and D's (c, k)-partition 𝓘 into inference blocks (`GLOSSARY.md`, `Verity.RegisteredCircuit`; read by the
    inference-only policy once it joins). It also registers
    each subprotocol's public Program and parameters, by digest.
 2. **Declarations**, one or more per declaration period (a span of one or more sampling periods). A declaration is one

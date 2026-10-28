@@ -60,7 +60,7 @@ end Counted
 
 /-- An operation assigned to `R` but not computed wholly inside it has a gate in `in(R) \ θ`: of its gates outside `R`
 take the last; it is not the representative, so another gate of the operation reads it, a later one, which is in `R`. -/
-theorem exists_crossing {d : Registered} {J : Counted d.D} (hB : OperationBodies d J) {R : Finset (Fin d.D.N)}
+theorem exists_crossing {d : RegisteredCircuit} {J : Counted d.D} (hB : OperationBodies d J) {R : Finset (Fin d.D.N)}
     {v : Fin d.D.N} (hv : v ∈ J.V) (hvR : v ∈ R) (hout : ¬ J.body v ⊆ R) :
     ∃ a ∈ d.unregistered R, a ∈ J.body v := by
   classical
@@ -80,7 +80,7 @@ theorem exists_crossing {d : Registered} {J : Counted d.D} (hB : OperationBodies
 
 /-- **The boundary charge**: the weight assigned to `R` that is not computed wholly inside `R` is at most
 `ω_max μ |in(R) \ θ|`, each such operation charged to one of its gates in `in(R) \ θ`, each in at most `μ` of them. -/
-theorem boundary_le (d : Registered) (J : Counted d.D) (R : Finset (Fin d.D.N)) (ωmax : ℝ) (μ : ℕ)
+theorem boundary_le (d : RegisteredCircuit) (J : Counted d.D) (R : Finset (Fin d.D.N)) (ωmax : ℝ) (μ : ℕ)
     (hB : OperationBodies d J) (hμ : Overlap J μ) (hω0 : 0 ≤ ωmax) (hω : ∀ v ∈ J.V, J.ω v ≤ ωmax) :
     J.outside R (fun _ : Unit => R) ≤ ωmax * μ * (d.unregistered R).card := by
   classical
@@ -109,7 +109,7 @@ theorem boundary_le (d : Registered) (J : Counted d.D) (R : Finset (Fin d.D.N)) 
 
 /-- **The serving cap** of a block `R` of at most `c` gates reading at most `k` unregistered input bits:
 `Ω_R ≤ q(c, k) + ω_max μ k`, Theorem 3 on the one block with the boundary charge. -/
-theorem assigned_le_serving (d : Registered) (J : Counted d.D) (q : ℕ → ℕ → ℝ) (c k : ℕ) (R : Finset (Fin d.D.N))
+theorem assigned_le_serving (d : RegisteredCircuit) (J : Counted d.D) (q : ℕ → ℕ → ℝ) (c k : ℕ) (R : Finset (Fin d.D.N))
     (ωmax : ℝ) (μ : ℕ) (hq : PerBlockCap d J q c k) (hR : R ⊆ d.D.computed) (hc : R.card ≤ c)
     (hk : (d.unregistered R).card ≤ k) (hB : OperationBodies d J) (hμ : Overlap J μ) (hω0 : 0 ≤ ωmax)
     (hω : ∀ v ∈ J.V, J.ω v ≤ ωmax) :
@@ -121,7 +121,7 @@ theorem assigned_le_serving (d : Registered) (J : Counted d.D) (q : ℕ → ℕ 
 /-- **The inference cap** of a unit `u` of `P` with the `(c, k)`-partition `Pf` refining `P`:
 `Ω_u ≤ n_u q(c, k) + (what the inference blocks inside u leave of u)`, `Verity.SecurityProofs.InferenceCap` with `U` the
 operations computed wholly inside no inference block. -/
-theorem assigned_le_inference (d : Registered) (J : Counted d.D) (q : ℕ → ℕ → ℝ) (c k : ℕ) {B nf : ℕ}
+theorem assigned_le_inference (d : RegisteredCircuit) (J : Counted d.D) (q : ℕ → ℕ → ℝ) (c k : ℕ) {B nf : ℕ}
     (P : Partition d.D B) (Pf : Partition d.D nf) (r : Pf.Refines P) (hCK : Pf.IsCK d c k)
     (hq : PerBlockCap d J q c k) (u : Fin B) :
     ∑ v ∈ J.V ∩ P.gates u, J.ω v ≤ ((univ.filter fun i => r.parent i = u).card : ℝ) * q c k +

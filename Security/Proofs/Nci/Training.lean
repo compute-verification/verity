@@ -70,7 +70,7 @@ end Charges
 
 section Training
 
-variable {c : Registered} {ch : Chain c.D} {T : Threading c} {Γ : ℕ} {K b_w b_a : ℝ}
+variable {c : RegisteredCircuit} {ch : Chain c.D} {T : Threading c} {Γ : ℕ} {K b_w b_a : ℝ}
 
 open Classical in
 /-- The law on one small IU: divide `c` into it and the rest. -/

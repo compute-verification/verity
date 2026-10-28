@@ -185,12 +185,12 @@ theorem DampenerWindows : Guarantees.DampenerWindows := by
     (windows_cap hκ (Nat.cast_nonneg n) hH hL hR hα hreuse hd hbw hba hnC hRL he hcap)
 
 /-- `Lambda` is `Threading.bound` with real arguments. -/
-theorem bound_eq_Lambda {c : Registered} (T : Threading c) (S b_w : ℝ) (d e : ℕ) :
+theorem bound_eq_Lambda {c : RegisteredCircuit} (T : Threading c) (S b_w : ℝ) (d e : ℕ) :
     T.bound S b_w d e = Lambda T.reuse e d b_w S := rfl
 
 /-- **The declared computation at NCI's thread bound, per parameter slot**: `ThreadedThrottledSlots`'s
 `b_a |M| ≤ α Λ size(d)`, with `size(d) ≤ C`, is the dampener's `M_d ≤ C/ρ_T`. -/
-theorem declared_le_slots {Γ : ℕ} {α b_w b_a C : ℝ} {c d : Registered} {T : Threading c} {σ : T.Slots} {dd e : ℕ}
+theorem declared_le_slots {Γ : ℕ} {α b_w b_a C : ℝ} {c d : RegisteredCircuit} {T : Threading c} {σ : T.Slots} {dd e : ℕ}
     {Mc : Containment c.D d.D} (hα : 0 ≤ α) (hbw : 0 < b_w) (hba : 0 < b_a) (hdd : 0 < dd) (hcomp : Complies Γ α d)
     (hB : Assumptions.ThetaRegistered c d (PartialContainment.ofContainment Mc))
     (hT : T.Threaded Γ (α * Γ) dd e) (hW : Assumptions.WeightsIncompressibleSlots c T σ Γ (α * Γ) b_w b_a)
@@ -206,7 +206,7 @@ theorem declared_le_slots {Γ : ℕ} {α b_w b_a C : ℝ} {c d : Registered} {T 
     _ = C * (α * T.bound (α * Γ) b_w dd e) := mul_comm _ _
 
 /-- **The declared computation at NCI's thread bound**: `declared_le_slots` at one slot per weight gate. -/
-theorem declared_le {Γ : ℕ} {α b_w b_a C : ℝ} {c d : Registered} {T : Threading c} {dd e : ℕ}
+theorem declared_le {Γ : ℕ} {α b_w b_a C : ℝ} {c d : RegisteredCircuit} {T : Threading c} {dd e : ℕ}
     {Mc : Containment c.D d.D} (hα : 0 ≤ α) (hbw : 0 < b_w) (hba : 0 < b_a) (hdd : 0 < dd) (hcomp : Complies Γ α d)
     (hB : Assumptions.ThetaRegistered c d (PartialContainment.ofContainment Mc)) (hT : T.Threaded Γ (α * Γ) dd e) (hW : Assumptions.WeightsIncompressible c T Γ (α * Γ) b_w b_a)
     (hsize : (d.D.size d.D.computed : ℝ) ≤ C) :

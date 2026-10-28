@@ -5,15 +5,15 @@ import Definitions.Core.Partition
 /-!
 # The registered compiler and its execution blocks
 
-Setup fixes the public parameters, among them the advice cap `ℓa`, and the registered compiler `B` (registration's
-builder entry names it by digest). In execution phase `j` the hardware runs and the developer commits every value it
-computes: the committed trace. At the start of verification phase `j`, before any of its coins, the developer reports
-its advice `a_j`, at most `ℓa` bits that Verity never interprets, committed, and `B` runs on it. Its output is that
-phase's **execution block** `E_j`, the gates it appends to the registered circuit so far, partitioned into inference
-blocks, each partitioned into proof blocks, with each committed gate's position in the committed trace. The registered
-circuit after `n` phases is `B.init ‖ E_1 ‖ … ‖ E_n`, and its partitions are the blocks' side by side (`Compiler.run`).
-`B.init` is `B`'s output at setup, before any advice: the gates of the registered information `θ`, whose values were
-committed beforehand.
+Setup fixes the public parameters, among them the advice cap `ℓa`, and registers θ and the registered compiler `B`
+(the registration's information entry, `Registration.Item`). In execution phase `j` the hardware runs, the developer
+commits every value it computes (the committed trace) and reports its advice `a_j`, at most `ℓa` bits that Verity never
+interprets, committed with the trace. At the start of verification phase `j`, before any of its coins, `B` runs on
+`a_j`. Its output is that phase's **execution block** `E_j`, the gates it appends to the registered circuit so far,
+partitioned into inference blocks, each partitioned into proof blocks, with each committed gate's position in the
+committed trace. The registered circuit after `n` phases is `B.init θ ‖ E_1 ‖ … ‖ E_n`, and its partitions are the
+blocks' side by side (`Compiler.run`). `B.init θ` is `B`'s output at setup on the registered information `θ`, before any
+advice: the gates holding θ's values, which were committed beforehand.
 
 * **An execution block over `C`** (`Circuit.Extension`): `n` gates after `C`'s, gate `i` of the block being gate
   `C.N + i` of the appended circuit, each reading earlier gates of `C` or of the block (the KV cache a later phase reads,
@@ -23,11 +23,12 @@ committed beforehand.
   prove, nested in `𝓘` (`Partition.Refines`), and each gate's position in the committed trace (`pos`).
 * **One phase's output** (`Compiler.Phase o`): the execution block over `o`'s circuit, its proof blocks, each proof
   block's inference block, and its gates' positions, numbered after `o`'s (`Compiler.Output.append`).
-* **The compiler** (`Compiler`): its advice cap, its output at setup, and its output on each phase's advice over the
-  circuit so far.
+* **The compiler** (`Compiler`): its advice cap, its output at setup on θ, and its output on each phase's advice over
+  the circuit so far. It is what the registration's builder item holds (`Registration.Builder`).
 
-The compiler's output is the one description of the registered circuit: `Verity.Registered` reads `D`, `θ`, `𝓘` and
-`P` from it, and nothing restates them. That the output explains the committed trace is `Verity.Committed.Explains`.
+The compiler's output is the one description of the registered circuit: `Verity.RegisteredCircuit` reads `B` and θ from
+the registration and `D`, `θ`, `𝓘` and `P` from `B`'s output, and nothing restates them. That the output explains the
+committed trace is `Verity.Committed.Explains`.
 -/
 
 namespace Verity
@@ -198,27 +199,35 @@ def Output.append (o : Output) (b : Phase o) : Output where
 
 end Compiler
 
+/-- **A registered value of θ** (weights, initial state, tables), as the registration's information entry registers
+it: its name and its committed root. -/
+structure Registration.Theta where
+  value : String
+  root : String
+  deriving DecidableEq
+
 /-- **The registered compiler** `B`, fixed at setup: the most bits of advice it reads in one phase (`ℓa`, a public
-parameter), its output `init` before any advice, the gates of `θ`, and on each execution phase's advice the phase it
-appends to its output so far. -/
+parameter), its output `init θ` on the registered values `θ` before any advice, whose registered gates hold them, and on
+each phase's advice, reported in the execution phase, the phase it appends to its output so far. -/
 structure Compiler where
   ℓa : ℕ
-  init : Compiler.Output
+  init : List Registration.Theta → Compiler.Output
   step : (o : Compiler.Output) → List Bool → Compiler.Phase o
 
 namespace Compiler
 
-/-- **The compiler's output on the advice `a_1, …, a_n`**: `init ‖ B(a_1) ‖ … ‖ B(a_n)`, each phase compiled over the
-output before it. -/
+/-- **The compiler's output on the advice `a_1, …, a_n`** from the output `o`: `o ‖ B(a_1) ‖ … ‖ B(a_n)`, each phase
+compiled over the output before it. -/
 @[reducible] def runFrom (B : Compiler) : List (List Bool) → Output → Output
   | [], o => o
   | x :: a, o => B.runFrom a (o.append (B.step o x))
 
-/-- The compiler's output on the advice list, from its output at setup. -/
-@[reducible] def run (B : Compiler) (a : List (List Bool)) : Output := B.runFrom a B.init
+/-- The compiler's output on the advice list, from its output at setup on the registered values `θ`. -/
+@[reducible] def run (B : Compiler) (θ : List Registration.Theta) (a : List (List Bool)) : Output :=
+  B.runFrom a (B.init θ)
 
-/-- **The one-block compiler of `o`**: `o` at setup, no advice, and nothing appended in any phase. -/
-@[reducible] def const (o : Output) : Compiler := ⟨0, o, fun o _ => .empty o⟩
+/-- **The one-block compiler of `o`**: `o` at setup on any θ, no advice, and nothing appended in any phase. -/
+@[reducible] def const (o : Output) : Compiler := ⟨0, fun _ => o, fun o _ => .empty o⟩
 
 end Compiler
 

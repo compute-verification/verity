@@ -19,8 +19,8 @@ open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assum
 
 /-- **The blocks' sizes sum to at most the credit** of the registered declaration under its pinned lowering: the
 blocks are disjoint, so their AND gates outside the ledger are among `lower D`'s AND gates. -/
-theorem sum_size_le_creditSize {ι : Type} {Cd : Declared ι} {Np : ℕ} {lower : Verity.Registered → Verity.Circuit}
-    {D : Verity.Registered} (M : BlockMap Cd Np lower D) (ledger : Finset (Fin (lower D).N)) :
+theorem sum_size_le_creditSize {ι : Type} {Cd : Declared ι} {Np : ℕ} {lower : Verity.RegisteredCircuit → Verity.Circuit}
+    {D : Verity.RegisteredCircuit} (M : BlockMap Cd Np lower D) (ledger : Finset (Fin (lower D).N)) :
     ∑ t, M.size ledger t ≤ Verity.creditSize lower D := by
   classical
   unfold BlockMap.size Verity.creditSize Verity.Circuit.andSize

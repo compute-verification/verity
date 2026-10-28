@@ -1,5 +1,5 @@
 import Definitions.Core.Advice
-import Definitions.Core.Registered
+import Definitions.Core.RegisteredCircuit
 
 /-!
 # Private partitions with public predicates
@@ -68,12 +68,13 @@ def Meets (Q : Predicates) : Prop :=
 
 end Partition
 
-/-- `r` commits to `root` under `Q`: the proof blocks the registered compiler `B` outputs on `r`'s advice meet `Q`, and the
-advice tree over the advice's rows (`A`) under `r`'s salts, framed by `F` and hashed by `H`, has root `root`. The
-commitment's statement is that some `r` does; the verifier holds `B`, `Q` and `root`, never `r`. -/
-def Commits (B : Compiler) (H : List UInt8 → Digest) (F : Advice.Framing) (A : Advice.Rows) (Q : Predicates)
-    (r : Advice.Committed) (root : Digest) : Prop :=
-  (B.run r.a).P.Meets Q ∧ r.root H F A = root
+/-- `r` commits to `root` under `Q`: the proof blocks the registered compiler `B` outputs on the registered values `θ`
+and `r`'s advice meet `Q`, and the advice tree over the advice's rows (`A`) under `r`'s salts, framed by `F` and hashed
+by `H`, has root `root`. The commitment's statement is that some `r` does; the verifier holds `B`, `θ`, `Q` and `root`,
+never `r`. -/
+def Commits (B : Compiler) (θ : List Registration.Theta) (H : List UInt8 → Digest) (F : Advice.Framing)
+    (A : Advice.Rows) (Q : Predicates) (r : Advice.Committed) (root : Digest) : Prop :=
+  (B.run θ r.a).P.Meets Q ∧ r.root H F A = root
 
 /-- The circuit's computed gates grouped into its root Calls `0, …, m − 1`, with the gates the Calls return. A value read
 across Calls, and every output of the circuit, is an input or a returned gate. -/

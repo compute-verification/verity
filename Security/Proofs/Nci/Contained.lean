@@ -29,7 +29,7 @@ namespace Nci.SecurityProofs
 open Verity Finset
 
 /-- **Support form gives partial-sum incompressibility**: an IU's gates take at most `2^novelReads` values. -/
-theorem partialSumsIncompressible_of_support {D : Registered} {θv : D.D.Transcript} {c : Chain D.D} {Γ : ℕ}
+theorem partialSumsIncompressible_of_support {D : RegisteredCircuit} {θv : D.D.Transcript} {c : Chain D.D} {Γ : ℕ}
     {K b_w b_a : ℝ} (h : Assumptions.PartialSumsSupport D θv c Γ K b_w b_a) :
     Assumptions.PartialSumsIncompressible D c Γ K b_w b_a := by
   intro n P hP
@@ -42,7 +42,7 @@ theorem partialSumsIncompressible_of_support {D : Registered} {θv : D.D.Transcr
 
 /-- The partial-sum law on a reference circuit, in reads: `UpdatedMatMul` with its assumptions on the contained
 circuit `c`. -/
-theorem containedMatMul_of_reads (Γ : ℕ) (α b_w b_a : ℝ) (c d : Registered) (ch : Chain c.D) (dd : ℕ)
+theorem containedMatMul_of_reads (Γ : ℕ) (α b_w b_a : ℝ) (c d : RegisteredCircuit) (ch : Chain c.D) (dd : ℕ)
     (M : Containment c.D d.D) (hα : 0 < α) (hw : 0 < b_w) (ha : 0 < b_a) (hd : ∀ ℓ, dd ≤ ch.d ℓ) (hP : Complies Γ α d)
     (hB : Assumptions.ThetaRegistered c d (PartialContainment.ofContainment M))
     (hA : Assumptions.ActivationsIncompressible c ch Γ (α * Γ) b_w b_a)
@@ -84,7 +84,7 @@ theorem ContainedTraining : Guarantees.ContainedTraining := by
     _ ≤ d.D.size d.D.computed := hF
 
 /-- Support form bounds a set's charge by its novel reads: its values are functions of what it reads. -/
-theorem le_novelReads_of_support {D : Registered} {θv : D.D.Transcript} {R : Finset (Fin D.D.N)} {x : ℝ}
+theorem le_novelReads_of_support {D : RegisteredCircuit} {θv : D.D.Transcript} {R : Finset (Fin D.D.N)} {x : ℝ}
     (hR : R ⊆ D.D.computed) (h : (2 : ℝ) ^ x ≤ support D θv R) : x ≤ novelReads D R := by
   have hc : (support D θv R : ℝ) ≤ (2 : ℝ) ^ (novelReads D R : ℝ) := by
     rw [Real.rpow_natCast]
@@ -92,7 +92,7 @@ theorem le_novelReads_of_support {D : Registered} {θv : D.D.Transcript} {R : Fi
   exact (Real.rpow_le_rpow_left_iff (by norm_num : (1 : ℝ) < 2)).mp (h.trans hc)
 
 /-- Support form bounds a set's charge by its width: it holds no more values than its bits. -/
-theorem le_width_of_support {D : Registered} {θv : D.D.Transcript} {R : Finset (Fin D.D.N)} {x : ℝ}
+theorem le_width_of_support {D : RegisteredCircuit} {θv : D.D.Transcript} {R : Finset (Fin D.D.N)} {x : ℝ}
     (h : (2 : ℝ) ^ x ≤ support D θv R) : x ≤ D.D.width R := by
   have hc : (support D θv R : ℝ) ≤ (2 : ℝ) ^ (D.D.width R : ℝ) := by
     rw [Real.rpow_natCast]
@@ -101,7 +101,7 @@ theorem le_width_of_support {D : Registered} {θv : D.D.Transcript} {R : Finset 
 
 section Dark
 
-variable {c d : Registered} (M : PartialContainment c d) {n : ℕ} (P : Partition d.D n)
+variable {c d : RegisteredCircuit} (M : PartialContainment c d) {n : ℕ} (P : Partition d.D n)
 
 /-- The part of `c`'s gate `g` when each dark gate joins the pieces of `P` as a part of its own. -/
 def darkUnit (g : Fin c.D.N) : Option (Fin n ⊕ {v // v ∈ M.dark}) :=
@@ -183,7 +183,7 @@ end Dark
 
 /-- A piece of a compliant division is within the reference circuit's caps: it has no more gates than its IU and reads
 no more novel information. -/
-theorem piece_caps {Γ : ℕ} {α K : ℝ} {c d : Registered} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n}
+theorem piece_caps {Γ : ℕ} {α K : ℝ} {c d : RegisteredCircuit} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n}
     (hα : 0 ≤ α) (hαK : α * Γ ≤ K)
     (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
     (hB : Assumptions.ThetaRegistered c d M) (u : Fin n) :
@@ -192,7 +192,7 @@ theorem piece_caps {Γ : ℕ} {α K : ℝ} {c d : Registered} {M : PartialContai
     ((mul_le_mul_of_nonneg_left (by exact_mod_cast (hP u).1) hα).trans hαK)⟩
 
 /-- The pieces with the dark gates are within the caps, when each dark gate reads at most `K` itself. -/
-theorem withDark_caps {Γ : ℕ} {α K : ℝ} {c d : Registered} {M : PartialContainment c d} {n : ℕ}
+theorem withDark_caps {Γ : ℕ} {α K : ℝ} {c d : RegisteredCircuit} {M : PartialContainment c d} {n : ℕ}
     {P : Partition d.D n} (hα : 0 ≤ α) (hαK : α * Γ ≤ K) (hΓ : 1 ≤ Γ)
     (hP : ∀ u, d.D.size (P.gates u) ≤ Γ ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u))
     (hB : Assumptions.ThetaRegistered c d M) (hX : ∀ v ∈ M.dark, (novelReads c {v} : ℝ) ≤ K)
@@ -209,7 +209,7 @@ open Classical in
 /-- **The partial sums, counted over the pieces**: partial sums charged `s` over the pieces with the dark gates, each
 piece's charge within its IU's reads, leave the split entries' contributions within the IUs' reads and the dark gates'
 charges. -/
-theorem partialSums_count {c d : Registered} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n}
+theorem partialSums_count {c d : RegisteredCircuit} {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n}
     {ch : Chain c.D} {b_w b_a : ℝ} (ha : 0 ≤ b_a) {s : Fin (Fintype.card (Fin n ⊕ {v // v ∈ M.dark})) → ℕ}
     (hsum : ∑ x : (ℓ : Fin ch.L) × Fin ch.N × Fin (ch.e ℓ), (ch.spread (withDark M P) x.1 x.2.1 x.2.2 - 1) ≤ ∑ i, s i)
     (hsP : ∀ u, b_w * ((ch.weightsUsed (piece M P u)).card : ℝ) +
@@ -245,7 +245,7 @@ open Classical in
 split-entry contributions are within the IUs' reads and `B`, then
 `max (min c₁ c₂) (μ b_a / Λ) · G_S ≤ α size(d) + (1 − μ) B`. Each piece is within its IU's reads by
 `ActivationsIncompressible` on the reference circuit. -/
-theorem matMulOn_of_counts {Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : Registered} {ch : Chain c.D} {dd emax : ℕ}
+theorem matMulOn_of_counts {Γ : ℕ} {α K b_w b_a μ B : ℝ} {c d : RegisteredCircuit} {ch : Chain c.D} {dd emax : ℕ}
     {M : PartialContainment c d} {n : ℕ} {P : Partition d.D n} (hα : 0 ≤ α) (hK : 0 < K) (hw : 0 < b_w)
     (ha : 0 < b_a) (hdd : 0 < dd) (hαK : α * Γ ≤ K) (hμ₀ : 0 ≤ μ) (hμ₁ : μ ≤ 1) (hd : ∀ ℓ, dd ≤ ch.d ℓ)
     (he : ∀ ℓ, ch.e ℓ ≤ emax)

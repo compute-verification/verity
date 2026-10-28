@@ -33,7 +33,7 @@ gate when its primitive is an input node, reading the gates its operands name). 
 widths, input gates and reads, which is all `size` and `Nci.novelReads` read, and leaves its operations and outputs free.
 
 * `Decodes`: on every instance with a verdict, the Program lays out a circuit (`Verity.Circuit`, its gates in
-  topological order and its input gates reading nothing), `theta` names a baseline of it (`Verity.Registered`), and the
+  topological order and its input gates reading nothing), `theta` names a baseline of it (`Verity.RegisteredCircuit`), and the
   owners are a partition of its computed gates into IUs `0 … n - 1`, none empty (`Verity.Partition`, `Divides`).
 * `Reports`: for every registered circuit `d` laid out by the Program with the baseline `theta` names, whose
   inference blocks `d.𝓘` (the registered compiler's) the owners are, the verdict's `gates` is `d`'s number of gates, its `ius` lists per IU `u` its `size` and
@@ -213,7 +213,7 @@ def Divides {D : Verity.Circuit} {n : ℕ} (owner : Array Json) (U : Verity.Part
     ∀ u, (U.gates u).Nonempty
 
 /-- IU `u` of `U` has at most `Γ` gates and NCI at most `α`, the policy's two bounds as `Nci.Complies` states them. -/
-def Meets (d : Verity.Registered) {n : ℕ} (U : Verity.Partition d.D n) (Γ : ℕ) (α : ℝ) (u : Fin n) : Prop :=
+def Meets (d : Verity.RegisteredCircuit) {n : ℕ} (U : Verity.Partition d.D n) (Γ : ℕ) (α : ℝ) (u : Fin n) : Prop :=
   d.D.size (U.gates u) ≤ Γ ∧ (Nci.novelReads d (U.gates u) : ℝ) ≤ α * d.D.size (U.gates u)
 
 /-- **What a verdict is about.** On every instance with a verdict, the Program lays out a circuit of the definition's,
@@ -230,7 +230,7 @@ def Decodes : Prop :=
 exactly when every IU meets both bounds; and `failure` is `null` when every IU does, and otherwise the first IU `u` that
 doesn't, with `size` when it has more than `Γ` gates and else `nci`. -/
 def Reported (j out : Json) : Prop :=
-  ∀ (i : Instance) (P : Prog) (d : Verity.Registered),
+  ∀ (i : Instance) (P : Prog) (d : Verity.RegisteredCircuit),
     Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →
     Divides i.owner d.𝓘 →
     let α : ℝ := (i.num : ℝ) / i.den
@@ -255,7 +255,7 @@ def Reports : Prop :=
 baseline `theta` names complies with `Nci.Complies Γ (num / den)`, and when the owners are `d`'s inference blocks
 `d.𝓘`, the registered compiler's, every one of them has at most `Γ` gates and NCI at most `num / den` (`Meets`). -/
 def Witnessed (j out : Json) : Prop :=
-  ∀ (i : Instance) (P : Prog) (d : Verity.Registered),
+  ∀ (i : Instance) (P : Prog) (d : Verity.RegisteredCircuit),
     Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →
     out.getObjVal? "complies" = .ok (.bool true) →
       Nci.Complies i.gamma ((i.num : ℝ) / i.den) d ∧

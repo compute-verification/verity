@@ -58,7 +58,7 @@ theorem depth_of_lt_mul {ι : Type*} (p : ι → ℝ) (k : ℝ) (D : ℕ) (hk : 
     by_contra hle
     nlinarith [not_lt.1 hle]
 
-variable {d : Registered} (B : MulBlocks d)
+variable {d : RegisteredCircuit} (B : MulBlocks d)
 
 /-- At one price `c_w` for every weight, parameter-hardness at prices is `ParameterHardAt` at `c_w`. -/
 theorem parameterHardPricedAt_const_iff (s : ℕ) (cw : ℝ) :

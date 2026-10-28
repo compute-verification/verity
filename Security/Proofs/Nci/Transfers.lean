@@ -145,9 +145,9 @@ theorem width_eq_card {C : Circuit} (hw : ∀ g, C.w g = 1) (S : Finset (Fin C.N
 /-- A Boolean circuit's gates are one bit wide: the hypothesis of the Boolean forms below. -/
 theorem boolean_w (B : FlockSoundness.Audit.Circuit) (g : Fin B.toCircuit.N) : B.toCircuit.w g = 1 := rfl
 
-section Registered
+section RegisteredCircuit
 
-variable (d : Registered) {n : ℕ} (P : Partition d.D n)
+variable (d : RegisteredCircuit) {n : ℕ} (P : Partition d.D n)
 
 /-- Nothing on the wire is baseline: a transfer gate is computed. -/
 theorem disjoint_transfersInto_θ (b : Fin n) : Disjoint (transfersInto P b) d.θ := by
@@ -209,6 +209,6 @@ theorem complies_of_counts (Γ : ℕ) (α : ℝ) (hw : ∀ g, d.D.w g = 1)
     Complies Γ α d :=
   ⟨n, P, fun b => (iu_iff_counts d P Γ α hw b).2 (h b)⟩
 
-end Registered
+end RegisteredCircuit
 
 end Nci.SecurityProofs.Transfers

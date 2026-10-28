@@ -37,7 +37,7 @@ def FitRate : Prop :=
   ∀ {L E : Type*} [Fintype E] [DecidableEq L] (A : Placed L) (ℓ : L → L → ℕ)
     (ends : E → L × L) (β : E → ℕ) (link : Fin A.N → Fin A.N → E) (n : ℕ) (X : Fin n → Finset L)
     (θ : Finset (Fin A.N)) (hθ : ∀ a ∈ θ, A.isInput a = true) (t : ℕ) (κ : Cuts t) (ω : ℕ) (R r : ℝ)
-    (c : Registered) (M : Containment c.D (A.declaration (univ.biUnion X) t θ hθ).D) (T : Threading c)
+    (c : RegisteredCircuit) (M : Containment c.D (A.declaration (univ.biUnion X) t θ hθ).D) (T : Threading c)
     (start : Fin T.m → Fin (n * κ.J)) (Nstar : ℕ) (b_w w_e : ℝ),
     (∀ i j, i ≠ j → Disjoint (X i) (X j)) → A.Causal ℓ → A.Links ends β link →
     (∀ j : Fin κ.J, κ.τ j.succ - κ.τ j.castSucc ≤ ω) → (∀ i, (linkCapacity ends β (X i) : ℝ) ≤ r) →

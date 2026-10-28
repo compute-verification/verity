@@ -6,7 +6,7 @@ import Mathlib.Data.Nat.Log
 # Local description length on a `(c,k)`-partition: the vocabulary
 
 The working draft's model ("Distinguishing inference from frontier training", §3–§5.1), on core's circuit and its one
-partition. The registered inputs `θ` are a declaration's baseline (`Verity.Registered`), the blocks are a
+partition. The registered inputs `θ` are a declaration's baseline (`Verity.RegisteredCircuit`), the blocks are a
 `Verity.Partition` of the operation gates, and a block's unregistered input bits `|in(I) \ θ|` are its novel reads
 (`Nci.novelReads`, which on a Boolean circuit, one bit per gate, is the number of those gates). Blocks carry no order:
 each inherits the circuit's topological order.
@@ -47,11 +47,11 @@ def Exact {C : Circuit} {n : ℕ} (P : Partition C n) (c : ℕ) : Prop :=
   ∀ u, C.size (P.gates u) = c
 
 /-- **At most `k` unregistered input bits into every block**: `|in(I) \ θ| ≤ k`, in bits. -/
-def ReadCap (d : Registered) {n : ℕ} (P : Partition d.D n) (k : ℕ) : Prop :=
+def ReadCap (d : RegisteredCircuit) {n : ℕ} (P : Partition d.D n) (k : ℕ) : Prop :=
   ∀ u, novelReads d (P.gates u) ≤ k
 
 /-- **A `(c,k)`-partition**: exactly `c` operation gates and at most `k` unregistered input bits per block. -/
-def CKPartition (d : Registered) {n : ℕ} (P : Partition d.D n) (c k : ℕ) : Prop :=
+def CKPartition (d : RegisteredCircuit) {n : ℕ} (P : Partition d.D n) (c k : ℕ) : Prop :=
   Exact P c ∧ ReadCap d P k
 
 /-- **Counted product occurrences** (§5.1): the occurrences `J`, `M = #J` of them, each with a distinct representative

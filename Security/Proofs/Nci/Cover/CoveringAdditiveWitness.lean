@@ -44,7 +44,7 @@ theorem tc_conditional (s : ℕ) : Assumptions.ConditionalParameterHardAt tcDecl
 /-- **The additive covering bound is not vacuous**: one declaration, its multiplication blocks and a covering satisfy
 every hypothesis of `CoveringBoundAdditive` at `c_w = 1/2`, `c_a = 1`, with a chained multiplication block. -/
 theorem coveringBoundAdditive_nonvacuous :
-    ∃ (d : Verity.Registered) (B : Nci.Covering.MulBlocks d) (s k D : ℕ) (cw ca : ℝ) (n : ℕ)
+    ∃ (d : Verity.RegisteredCircuit) (B : Nci.Covering.MulBlocks d) (s k D : ℕ) (cw ca : ℝ) (n : ℕ)
       (I : Fin n → Nci.Covering.Subcircuit d.D),
       (k : ℝ) < cw * D ∧ 0 < ca ∧ Assumptions.ConditionalParameterHardAt d B s cw ∧ Nci.Covering.Covers d s k I ∧
       (Nci.Assumptions.chainedBlocksAt d B D ca).Nonempty :=

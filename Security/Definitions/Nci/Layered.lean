@@ -39,7 +39,7 @@ each root has at least `d` legs whose key paths are disjoint; at most `e` counte
 whose key path reaches any one value, and at most `eLk` one that reaches any one lookup; each lookup reads an input of
 its thread and a column of novel inputs at least `b` bits wide, disjoint from the columns of its thread's other lookups;
 and no thread value is baseline. -/
-structure Layered {c : Registered} (T : Threading c) (d e eLk b : ℕ) where
+structure Layered {c : RegisteredCircuit} (T : Threading c) (d e eLk b : ℕ) where
   /-- The key of a value: one of its reads, in its thread. -/
   key : Fin c.D.N → Option (Fin c.D.N)
   key_reads : ∀ g k, key g = some k → k ∈ c.D.reads g

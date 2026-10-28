@@ -18,7 +18,7 @@ gates `S` compute at most `min(r |U| |V|, aout |V|)` counted products whole, `U`
 products use. The rectangle `U × V` overcounts pairs that never meet in a product; a finer count of the incidence graph is
 a structural improvement, not a new premise. -/
 def IncidenceCap : Prop :=
-  ∀ (d : Registered) (B : Nci.Covering.MulBlocks d) {κ : Type} [DecidableEq κ] (W : Items d.D (Fin B.nw))
+  ∀ (d : RegisteredCircuit) (B : Nci.Covering.MulBlocks d) {κ : Type} [DecidableEq κ] (W : Items d.D (Fin B.nw))
     (O : Items d.D κ) (I : Incidence B W O) (r aout : ℝ),
     (∀ i o, ((B.P.filter fun q => q.1 = i ∧ I.occ q = o).card : ℝ) ≤ r) →
     (∀ o, ((B.P.filter fun q => I.occ q = o).card : ℝ) ≤ aout) →

@@ -20,7 +20,7 @@ IUs of at most `Γ` gates, each reading at most `K` bits of novel information, u
 `(Γ, K)`, the IUs together read at least `G · f(K)` bits of novel information, for a chain of `G` products that `D`
 runs. `b_w` and `b_a` are the widths of a weight entry and an activation entry, and `d` the smallest inner dimension. -/
 def UpdatedMatMulReads : Prop :=
-  ∀ (Γ : ℕ) (K b_w b_a : ℝ) (D : Registered) (c : Chain D.D) (d n : ℕ) (P : Partition D.D n),
+  ∀ (Γ : ℕ) (K b_w b_a : ℝ) (D : RegisteredCircuit) (c : Chain D.D) (d n : ℕ) (P : Partition D.D n),
     0 < b_w → 0 < b_a → (∀ ℓ, d ≤ c.d ℓ) →
     (∀ u, D.D.size (P.gates u) ≤ Γ ∧ (novelReads D (P.gates u) : ℝ) ≤ K) →
     Assumptions.ActivationsIncompressible D c Γ K b_w b_a →

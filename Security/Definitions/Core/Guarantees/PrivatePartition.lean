@@ -27,12 +27,12 @@ many strings the two commitments hash, so for an `H` injective on them there is 
 The premises are format facts, not properties of `H`: the frame-v3 messages are separated (`Advice.Framing.Separated`),
 and the rows decode to their advice (`Advice.Rows.Decodes`). -/
 def CommittedMeets : Prop :=
-  ∀ (B : Compiler) (H : List UInt8 → Digest) (F : Advice.Framing), F.Separated →
+  ∀ (B : Compiler) (θ : List Registration.Theta) (H : List UInt8 → Digest) (F : Advice.Framing), F.Separated →
     ∀ (A : Advice.Rows), A.Decodes →
-      ∀ (Q : Predicates) (root : Digest) (r₀ : Advice.Committed), Commits B H F A Q r₀ root →
+      ∀ (Q : Predicates) (root : Digest) (r₀ : Advice.Committed), Commits B θ H F A Q r₀ root →
         ∀ r : Advice.Committed, r.root H F A = root →
-          ((B.run r.a).m ≤ Q.units ∧ (B.run r.a).P.Fits Q.X ∧
-            ∀ T : Finset (Fin (B.run r.a).m), ∑ u ∈ T, (B.run r.a).P.outBits u ≤ T.card * Q.X) ∨
+          ((B.run θ r.a).m ≤ Q.units ∧ (B.run θ r.a).P.Fits Q.X ∧
+            ∀ T : Finset (Fin (B.run θ r.a).m), ∑ u ∈ T, (B.run θ r.a).P.outBits u ≤ T.card * Q.X) ∨
             ∃ x ∈ r₀.hashInputs H F A, ∃ y ∈ r.hashInputs H F A, x ≠ y ∧ H x = H y  -- a collision of `H`
 
 end Verity.Guarantees

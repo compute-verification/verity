@@ -34,7 +34,7 @@ public, and not computed off the books before its registration (gradients, parti
 hardware), and that the auditor knows which log is the deployment's. So this is a premise of every guarantee through a
 containment: a partial one, or a total one `M : Containment c.D d.D` as the partial containment with no dark gates,
 `PartialContainment.ofContainment M`, for which it says that no novel input of `c` that `c` reads is in `d`'s `θ`. -/
-def ThetaRegistered (c d : Registered) (M : PartialContainment c d) : Prop :=
+def ThetaRegistered (c d : RegisteredCircuit) (M : PartialContainment c d) : Prop :=
   ∀ a ∈ c.D.into M.S, M.emb a ∈ d.θ → a ∈ c.θ
 
 end Nci.Assumptions

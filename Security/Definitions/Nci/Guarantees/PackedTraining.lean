@@ -17,7 +17,7 @@ open Verity
 `PackedChain`): `max (min c₁ c₂) (μ b_a / Λ) · G_S ≤ α size(d) + (1 − μ) ∑_{v dark} novelReads(v)` for each
 `μ ∈ [0, 1]`, with `G_S` the chain's products whose gates are in `S`, whatever `k`. -/
 def PackedIncompressibleContainedMatMulOn : Prop :=
-  ∀ (k Γ : ℕ) (α K b_w b_a μ : ℝ) (c d : Registered) (ch : PackedChain c.D k) (T : Threading c) (dd emax : ℕ)
+  ∀ (k Γ : ℕ) (α K b_w b_a μ : ℝ) (c d : RegisteredCircuit) (ch : PackedChain c.D k) (T : Threading c) (dd emax : ℕ)
     (M : PartialContainment c d),
     0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
     (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies Γ α d → Assumptions.ThetaRegistered c d M →
@@ -34,7 +34,7 @@ def PackedIncompressibleContainedMatMulOn : Prop :=
 of the reference circuit's size, the products off the books lie in dark gates, at most `k` to a gate, so
 `max (min c₁ c₂) (μ b_a / Λ) · (κ size(c) − 2 k #dark) ≤ 2 (α size(d) + (1 − μ) ∑_{v dark} novelReads(v))`. -/
 def PackedIncompressibleContainedTrainingOn : Prop :=
-  ∀ (k Γ : ℕ) (α K b_w b_a μ κ : ℝ) (c d : Registered) (ch : PackedChain c.D k) (T : Threading c) (dd emax : ℕ)
+  ∀ (k Γ : ℕ) (α K b_w b_a μ κ : ℝ) (c d : RegisteredCircuit) (ch : PackedChain c.D k) (T : Threading c) (dd emax : ℕ)
     (M : PartialContainment c d),
     0 ≤ α → 0 < K → 0 < b_w → 0 < b_a → 0 < dd → 1 ≤ Γ → α * Γ ≤ K → 0 ≤ μ → μ ≤ 1 →
     (∀ ℓ, dd ≤ ch.d ℓ) → (∀ ℓ, ch.e ℓ ≤ emax) → Complies Γ α d → Assumptions.ThetaRegistered c d M →

@@ -22,7 +22,7 @@ namespace Nci.SecurityProofs.Fit
 
 open Verity Finset
 
-variable {c : Registered}
+variable {c : RegisteredCircuit}
 
 /-- `T` with its counted multiplications cut to the gates in `s`. -/
 abbrev keep (T : Threading c) (s : Finset (Fin c.D.N)) : Threading c where

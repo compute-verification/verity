@@ -101,9 +101,11 @@ def ofLink (k : Verity.Site.Link) : Core.Site.Link := ⟨k.id, k.ends, k.β, k.l
 def ofEntry (e : Verity.Site.Entry) : Core.Site.Entry :=
   ⟨e.sheets.map ofSheet, e.locs.map ofLoc, e.links.map ofLink⟩
 
-/-- The code's entry of the registration of a spec entry. -/
+/-- The code's entry of the registration of a spec entry. The code's log has no information entry, so an information
+entry is the code's site entry of what it adds to the Site, which is nothing. -/
 def ofRegEntry : Verity.Registration.Entry → Core.Site.Registration.Entry
   | .site p e => .site p (ofEntry e)
+  | .information p _ => .site p (ofEntry {})
 
 /-- The spec's composite of a code composite. -/
 def composite : Core.Site.Registration.Composite → Verity.Registration.Composite

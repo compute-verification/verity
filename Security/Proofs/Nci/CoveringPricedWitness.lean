@@ -49,7 +49,7 @@ abbrev pcCircuit : Circuit where
   outputs := {14}
 
 /-- The witness declaration: the token input `x` registered. -/
-abbrev pcDecl : Registered := .ofCircuit pcCircuit {4} (by decide)
+abbrev pcDecl : RegisteredCircuit := .ofCircuit pcCircuit {4} (by decide)
 
 /-- The product gate of weight `i`. -/
 def pcProd : Fin 6 → Fin 15 := ![5, 6, 7, 8, 9, 14]
@@ -244,7 +244,7 @@ multiplication blocks and a covering satisfy every hypothesis of `CoveringBoundP
 and a chained multiplication block; the two-cost bound's hypotheses hold at some uniform `c_w`, and at every such `c_w`
 its slowdown bound is strictly below the priced one at the price ceiling `t = 1`. -/
 theorem coveringBoundPriced_nonvacuous :
-    ∃ (d : Registered) (B : MulBlocks d) (s k D : ℕ) (p : Fin B.nw → ℝ) (ca t : ℝ) (n : ℕ)
+    ∃ (d : RegisteredCircuit) (B : MulBlocks d) (s k D : ℕ) (p : Fin B.nw → ℝ) (ca t : ℝ) (n : ℕ)
       (I : Fin n → Subcircuit d.D),
       (∃ i j, p i < p j) ∧ (∀ i, 0 ≤ p i) ∧ (∀ W : Finset (Fin B.nw), D ≤ W.card → (k : ℝ) < ∑ i ∈ W, p i) ∧
       0 < ca ∧ Assumptions.ParameterHardPricedAt d B s p ∧ Covers d s k I ∧

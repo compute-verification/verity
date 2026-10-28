@@ -7,7 +7,7 @@ import Definitions.Core.Site
 * `Registration.Entry.refusal_eq_none_iff`: an entry is refused exactly when it is invalid, so a refusal names a check
   the entry fails, the first in `Entry.Valid`'s order (a site entry's: `Site.Entry.refusal_eq_none_iff`).
 * `Registration.valid_append_singleton`: a log with one more entry is valid exactly when the log is and the entry is
-  valid against it, so a log is checked one entry at a time; and every prefix of a valid log is valid
+  valid against it and registers no item it registers, so a log is checked one entry at a time; and every prefix of a valid log is valid
   (`Registration.Valid.of_prefix`).
 * `Site.ofLog_prefix`: the Site grows along the log, a prefix's sheets, locations and links being a prefix of every
   extension's; and what an id names in a prefix's Site it names in every extension's (`Site.loc?_ofLog_prefix`,
@@ -35,6 +35,9 @@ theorem ofLog_append (l l' : Registration) :
 
 theorem ofLog_concat (l : Registration) (e : Registration.Entry) : ofLog (l ++ [e]) = (ofLog l).add e.added := by
   simp [ofLog, add]
+
+@[simp] theorem add_empty (S : Site) : S.add {} = S := by
+  cases S; simp [add]
 
 /-- **The Site grows along the log**: a prefix's sheets, locations and links are a prefix of every extension's. -/
 theorem ofLog_prefix {l₁ l₂ : Registration} (h : l₁ <+: l₂) :
@@ -107,6 +110,9 @@ theorem Entry.refusal_eq_none_iff {S : Site} {head : String} {e : Entry} :
   | site _ s =>
     unfold Entry.refusal Entry.Valid Entry.kindRefusal Entry.Checks
     split_ifs <;> simp_all [Site.Entry.refusal_eq_none_iff]
+  | information _ _ =>
+    unfold Entry.refusal Entry.Valid Entry.kindRefusal Entry.Checks
+    split_ifs <;> simp_all
 
 @[simp] theorem head_nil : head D c [] = D.genesis c := rfl
 
@@ -117,9 +123,9 @@ theorem Entry.refusal_eq_none_iff {S : Site} {head : String} {e : Entry} :
   simp [Valid]
 
 /-- **A log is checked one entry at a time**: with one more entry it is valid exactly when it was, and the entry is
-valid against it. -/
+valid against it and registers no item it registers. -/
 theorem valid_append_singleton {l : Registration} {e : Entry} :
-    Valid D A c (l ++ [e]) ↔ Valid D A c l ∧ e.Valid D A c (Site.ofLog l) (head D c l) := by
+    Valid D A c (l ++ [e]) ↔ Valid D A c l ∧ e.Valid D A c (Site.ofLog l) (head D c l) ∧ e.Once l := by
   unfold Valid
   constructor
   · intro h
@@ -144,12 +150,14 @@ theorem Valid.of_prefix {l₁ l₂ : Registration} (h : l₁ <+: l₂) (hv : Val
 
 /-- **A valid log registers each id once**, the outside's among them. -/
 theorem Valid.ids_nodup {l : Registration} (h : Valid D A c l) : (Site.ofLog l).ids.Nodup := by
-  rcases List.eq_nil_or_concat' l with rfl | ⟨l', e, rfl⟩
-  · simp [Site.ids]
-  · rw [Site.ofLog_concat]
-    obtain ⟨-, -, he⟩ := valid_append_singleton.mp h
+  induction l using List.reverseRecOn with
+  | nil => simp [Site.ids]
+  | append_singleton l e ih =>
+    rw [Site.ofLog_concat]
+    obtain ⟨hl, ⟨-, he⟩, -⟩ := valid_append_singleton.mp h
     cases e with
     | site _ s => exact he.1.1
+    | information _ _ => simpa [Entry.added] using ih hl
 
 /-- **A valid log's Site is a tree**: each location's parent is registered, and of a kind the location's own allows. -/
 theorem Valid.parents {l : Registration} (h : Valid D A c l) :
@@ -158,8 +166,10 @@ theorem Valid.parents {l : Registration} (h : Valid D A c l) :
   induction l using List.reverseRecOn with
   | nil => simp
   | append_singleton l e ih =>
-    obtain ⟨hl, -, he⟩ := valid_append_singleton.mp h
-    cases e with | site _ s => ?_
+    obtain ⟨hl, ⟨-, he⟩, -⟩ := valid_append_singleton.mp h
+    cases e with
+    | information _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
+    | site _ s => ?_
     have hpre : (Site.ofLog l).locs <+: ((Site.ofLog l).add s).locs := by simp [Site.add, List.prefix_append]
     rw [Site.ofLog_concat, Entry.added]
     intro x hx

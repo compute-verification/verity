@@ -18,7 +18,7 @@ open Verity Finset
 
 section Work
 
-variable {c : Registered} (T : Threading c)
+variable {c : RegisteredCircuit} (T : Threading c)
 
 theorem work_nonneg (d e : ℕ) (R : Finset (Fin c.D.N)) (t : Fin T.m) : 0 ≤ T.work d e R t := by
   unfold Threading.work
@@ -51,7 +51,7 @@ end Work
 
 /-- **The new premise is weaker than the old pair**: `WeightsSupport` at rate `log₂ n − μ` and `(d, e)`-threading by
 information give `WeightsSupportFmt`. -/
-theorem weightsSupportFmt_of_weightsSupport {c : Registered} {θv : c.D.Transcript} {T : Threading c} {Γ : ℕ}
+theorem weightsSupportFmt_of_weightsSupport {c : RegisteredCircuit} {θv : c.D.Transcript} {T : Threading c} {Γ : ℕ}
     {S b_w : ℝ} {d e n : ℕ} {μ : ℝ} (he : 0 < e) (hr : 0 ≤ Real.logb 2 n - μ) (hT : T.ThreadedInfo θv Γ S d e)
     (hW : Assumptions.WeightsSupport c θv T Γ S b_w (Real.logb 2 n - μ)) :
     Assumptions.WeightsSupportFmt c θv T Γ S b_w d e n μ := by
@@ -65,7 +65,7 @@ theorem weightsSupportFmt_of_weightsSupport {c : Registered} {θv : c.D.Transcri
   nlinarith [mul_le_mul_of_nonneg_left hle hr, mul_le_mul_of_nonneg_left hle' hr]
 
 /-- **Theorem 1 with reads counted by information, each thread charged by its work.** -/
-theorem threaded_reads_info_fmt (c : Registered) (θv : c.D.Transcript) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ)
+theorem threaded_reads_info_fmt (c : RegisteredCircuit) (θv : c.D.Transcript) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ)
     (d e n : ℕ) (μ : ℝ) (hbw : 0 < b_w) (hba : 0 < b_a) (hd : 0 < d) (he : 0 < e)
     (hrate : b_a ≤ Real.logb 2 n - μ) (hW : Assumptions.WeightsSupportFmt c θv T Γ S b_w d e n μ)
     (R : Finset (Fin c.D.N)) (hR : SmallInfo c θv Γ S R) :
@@ -79,7 +79,7 @@ theorem threaded_reads_info_fmt (c : Registered) (θv : c.D.Transcript) (T : Thr
 theorem ThreadedReadsInfoFmt : Guarantees.ThreadedReadsInfoFmt := threaded_reads_info_fmt
 
 /-- The piece of `c` inside a set `W` of `d`'s computed gates is small by information when `W` is. -/
-theorem smallInfo_piece {c d : Registered} (M : Containment c.D d.D)
+theorem smallInfo_piece {c d : RegisteredCircuit} (M : Containment c.D d.D)
     (hθ : ∀ g, c.D.isInput g = true → M.emb g ∈ d.θ → g ∈ c.θ) {θc : c.D.Transcript} {θv : d.D.Transcript}
     (hv : ∀ g ∈ c.θ, M.emb g ∈ d.θ → (θv (M.emb g)).cast (M.emb_w g) = θc g) {Γ : ℕ} {K : ℝ}
     {W : Finset (Fin d.D.N)} (hWc : W ⊆ d.D.computed) (hΓ : d.D.size W ≤ Γ) (hK : novelInfo d θv W ≤ K) :

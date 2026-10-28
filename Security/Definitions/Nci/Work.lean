@@ -19,7 +19,7 @@ namespace Nci.Threading
 
 open Verity
 
-variable {c : Registered} (T : Threading c)
+variable {c : RegisteredCircuit} (T : Threading c)
 
 /-- **The work on a thread, in thread values**: `R`'s counted multiplications of thread `t` at `e` per value, capped at
 `d` values, `min(d, #threadMults R t / e)`: the fewest of thread `t`'s values that `(d, e)`-threading asks a subcircuit

@@ -18,7 +18,7 @@ open Finset
 
 /-- **The size of a `(c, k)`-partitioned circuit** (§3): `|C| = c · B`. -/
 def CKSize : Prop :=
-  ∀ (d : Registered) (B c k : ℕ) (P : Partition d.D B), P.IsCK d c k → d.D.size d.D.computed = c * B
+  ∀ (d : RegisteredCircuit) (B c k : ℕ) (P : Partition d.D B), P.IsCK d c k → d.D.size d.D.computed = c * B
 
 /-- **ANDs are operation gates**: among any gates `S`, the AND gates number at most the operation gates, and so at most
 `size S`. -/
@@ -28,7 +28,7 @@ def AndSizeLe : Prop :=
 /-- **Credit is at most the lowered circuit's size**: under any pinned lowering, a declaration's credit is at most the
 number of operation gates of its lowered circuit. -/
 def CreditSizeLe : Prop :=
-  ∀ (lower : Registered → Circuit) (d : Registered), creditSize lower d ≤ (lower d).size (lower d).computed
+  ∀ (lower : RegisteredCircuit → Circuit) (d : RegisteredCircuit), creditSize lower d ≤ (lower d).size (lower d).computed
 
 /-- **C-Flock's AND gates are `IsAnd`.** On a C-Flock circuit, an AND gate of `toCircuit` is an `and` or a row (its XOR,
 NOT and input gates are not AND gates); `and a b` with `a ≠ b` is one; and so is a row `(⊕ a) ∧ (⊕ b)` with a gate `x`
@@ -61,7 +61,7 @@ def CountingSum : Prop :=
 bounds every inference block's counted weight: `|C| ≥ (c / q) Σ_{v ∈ V} ω_v`, and relative to any reference of size `T₀ > 0`,
 `ρ ≥ (c / (T₀ q)) Σ_{v ∈ V} ω_v`. -/
 def Counting : Prop :=
-  ∀ (d : Registered) (B c k : ℕ) (P : Partition d.D B), P.IsCK d c k →
+  ∀ (d : RegisteredCircuit) (B c k : ℕ) (P : Partition d.D B), P.IsCK d c k →
     ∀ (V : Finset (Fin d.D.N)) (ω : Fin d.D.N → ℝ) (q : ℝ), V ⊆ d.D.computed → 0 < q →
       (∀ u, ∑ v ∈ V ∩ P.gates u, ω v ≤ q) →
       (c : ℝ) / q * ∑ v ∈ V, ω v ≤ d.D.size d.D.computed ∧
@@ -73,9 +73,9 @@ every inference block reads as many unregistered input bits as before. With `S` 
 the padded partition is a `(c, k)`-partition. The serving blocks are `S` at `c_S`, each reading at most `k_S`: each server's region between two
 consecutive wipes, padded to exactly `c_S` gates, beside the dark remainder. -/
 def Padding : Prop :=
-  ∀ (d : Registered) (B c : ℕ) (P : Partition d.D B) (S : Finset (Fin B)), d.D.Boolean →
+  ∀ (d : RegisteredCircuit) (B c : ℕ) (P : Partition d.D B) (S : Finset (Fin B)), d.D.Boolean →
     (∀ u ∈ S, (P.gates u).card ≤ c) →
-    ∃ (d' : Registered) (P' : Partition d'.D B), Nonempty (Pad d P d' P') ∧ d'.D.Boolean ∧
+    ∃ (d' : RegisteredCircuit) (P' : Partition d'.D B), Nonempty (Pad d P d' P') ∧ d'.D.Boolean ∧
       (∀ u, (u ∈ S → (P'.gates u).card = c) ∧ (u ∉ S → (P'.gates u).card = (P.gates u).card)) ∧
       ∀ u, (d'.unregistered (P'.gates u)).card = (d.unregistered (P.gates u)).card
 

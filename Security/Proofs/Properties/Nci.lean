@@ -121,7 +121,7 @@ theorem failStep_fst (gamma num den : ℕ) (r : Array (ℕ × ℕ)) (u v : ℕ) 
 
 namespace Setting
 
-variable {P : Prog} {theta owner : Array Json} {c : GateTable} {dv : Division} {d : Verity.Registered} {n : ℕ}
+variable {P : Prog} {theta owner : Array Json} {c : GateTable} {dv : Division} {d : Verity.RegisteredCircuit} {n : ℕ}
   {U : Verity.Partition d.D n} (S : Setting P theta owner c dv d n U)
 include S
 
