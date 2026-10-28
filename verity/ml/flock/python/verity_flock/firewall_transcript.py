@@ -5,7 +5,7 @@ decides the same transcript, held to the verifier's public input (``verity/firew
 anything the transcript says of itself; `firewall_agree.py` compares the two.
 
 The recorder watches the firewall from outside: a coin server that keeps every call made to it (`RecordingCoins`), a salt
-source that keeps every salt it hands out (`Tape`), and every answer the firewall gives the workers (`Session.handle`). It
+source that keeps every salt it hands out (`Tape`), and every answer the firewall gives the workers (`InnerProof.handle`). It
 splits each call into what the schedule fixes (its shape: ``fixed`` items) and the commitments it carries (``commit``
 items, one a node of a salted top or a message row, each with the message the firewall's own records say it commits to;
 a round's copies of a level-0 top carry none, Commit committed them), and each coin answer into
@@ -103,12 +103,12 @@ class RecordingCoins(RL.CoinServer):
         return c["coins"]
 
 
-class Session:
-    """One inner session through a firewall: ``handle`` answers the workers' requests as the firewall does and keeps what
-    the transcript needs. ``proxy`` is the firewall under test (`rec_live.Proxy` or a subclass). The challenger's coins are
-    live, as `rec_live.serve`'s are, unless ``commit``: then it commits to them before the session
-    (`rec_live.CoinServer.commit_coins`, each commitment under a salt from ``coin_salt``, the challenger's own, never the
-    firewall's tape). ``coins`` is the challenger under test (`RecordingCoins` or a subclass)."""
+class InnerProof:
+    """One inner proof through a firewall, its session: ``handle`` answers the workers' requests as the firewall does and
+    keeps what the transcript needs. ``proxy`` is the firewall under test (`rec_live.Proxy` or a subclass). The
+    challenger's coins are live, as `rec_live.serve`'s are, unless ``commit``: then it commits to them before the
+    session (`rec_live.CoinServer.commit_coins`, each commitment under a salt from ``coin_salt``, the challenger's own,
+    never the firewall's tape). ``coins`` is the challenger under test (`RecordingCoins` or a subclass)."""
 
     def __init__(self, schedule: dict, rand=None, fresh: Callable[[], bytes] = INST.fresh_salt, proxy=RL.Proxy,
                  coin_salt: Callable[[], bytes] = INST.fresh_salt, commit: bool = False, coins=None):

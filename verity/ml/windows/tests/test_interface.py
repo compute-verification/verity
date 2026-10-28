@@ -56,8 +56,8 @@ def values(n: int, seed: int = 0) -> tuple[list[np.ndarray], list[np.ndarray]]:
     return ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)]
 
 
-def window(n: int = 10, cap: int = 4) -> tuple[I.Window, list[np.ndarray], list[np.ndarray]]:
-    win = I.Window(I.Circuit("test", ((COORD, n),)), RUN, LAW, cap)
+def window(n: int = 10, cap: int = 4) -> tuple[I.ExecutionBlockBuilder, list[np.ndarray], list[np.ndarray]]:
+    win = I.ExecutionBlockBuilder(I.Circuit("test", ((COORD, n),)), RUN, LAW, cap)
     ins, outs = values(n)
     win.record(COORD, [a[:6] for a in ins], [a[:6] for a in outs], {"run": 0})
     win.record(COORD, [a[6:] for a in ins], [a[6:] for a in outs], {"run": 1})
@@ -145,7 +145,7 @@ def test_close_concatenates_each_templates_words_once(monkeypatch):
 
 
 def test_a_window_closes_over_every_unit():
-    win = I.Window(I.Circuit("test", ((COORD, 10),)), RUN, LAW, 4)
+    win = I.ExecutionBlockBuilder(I.Circuit("test", ((COORD, 10),)), RUN, LAW, 4)
     ins, outs = values(10)
     win.record(COORD, [a[:6] for a in ins], [a[:6] for a in outs])
     with pytest.raises(ValueError, match="closes over all"):
@@ -157,7 +157,7 @@ def test_labels_are_opaque_runs_of_each_members_units():
     assert [m["labels"] for m in win.labels()["members"]] == [[[0, 4, {"run": 0}]], [[4, 6, {"run": 0}], [6, 8, {"run": 1}]],
                                                              [[8, 10, {"run": 1}]]]
     with pytest.raises(TypeError):
-        I.Window(I.Circuit("test", ((COORD, 10),)), RUN, LAW, 4).record(COORD, ins, outs, object())
+        I.ExecutionBlockBuilder(I.Circuit("test", ((COORD, 10),)), RUN, LAW, 4).record(COORD, ins, outs, object())
 
 
 #: twelve coordinates at 3 steps of 2 slots, two units an inference block: [0, 2) slot 0 step 0, [2, 4) slot 1 step 0,
@@ -168,9 +168,9 @@ FORMS = ("node", "evaluated")
 HONEST = [(2, {"step": t, "slot": s, "form": FORMS[t % 2]}) for t in range(3) for s in range(2)]
 
 
-def labelled(runs: list[tuple[int, object]], forms: tuple[str, ...] = FORMS) -> I.Window:
+def labelled(runs: list[tuple[int, object]], forms: tuple[str, ...] = FORMS) -> I.ExecutionBlockBuilder:
     """A window of `STEPS_SLOTS`' twelve coordinates in members of 4, each run ``(units, label)`` recorded in turn."""
-    win = I.Window(I.Circuit("test", ((COORD, 12),), blocks=STEPS_SLOTS), RUN, LAW, 4, forms=forms)
+    win = I.ExecutionBlockBuilder(I.Circuit("test", ((COORD, 12),), blocks=STEPS_SLOTS), RUN, LAW, 4, forms=forms)
     (ins, outs), at = values(12), 0
     for n, label in runs:
         win.record(COORD, [a[at:at + n] for a in ins], [a[at:at + n] for a in outs], label)
@@ -215,7 +215,7 @@ def test_a_label_that_is_not_its_runs_class_structure_is_refused(runs, forms, wh
 def test_mismatches_are_the_units_whose_outputs_are_not_the_definitions():
     win, ins, outs = window()
     assert win.mismatches() == {}
-    bad = I.Window(I.Circuit("test", ((COORD, 10),)), RUN, LAW, 4)
+    bad = I.ExecutionBlockBuilder(I.Circuit("test", ((COORD, 10),)), RUN, LAW, 4)
     wrong = outs[0].copy()
     wrong[7] ^= 1
     bad.record(COORD, ins, [wrong])
@@ -238,13 +238,13 @@ def rounded(n: int = 6) -> tuple[I.Circuit, np.ndarray, np.ndarray, np.ndarray]:
 
 @pytest.mark.parametrize("given", [True, False], ids=["in-full", "by-reference"])
 def test_a_boolean_profile_ports_rows_are_read_bit_by_bit(given):
-    """`Window.mismatches` on Boolean-profile templates: the Definition reads each port's rows bit by bit, the widening's
+    """`ExecutionBlockBuilder.mismatches` on Boolean-profile templates: the Definition reads each port's rows bit by bit, the widening's
     ``a`` recorded in full or read through its wire, so honest values have no mismatch, and one bit flipped in a rounding's
     output (which its widening reads), an f32's sign or a widened word is that unit's mismatch."""
     circuit, f32, bf16, wide = rounded()
 
     def mismatches(f: np.ndarray, b: np.ndarray, w: np.ndarray) -> dict[str, list[int]]:
-        win = I.Window(circuit, RUN, LAW, 4)
+        win = I.ExecutionBlockBuilder(circuit, RUN, LAW, 4)
         win.record(ROUND, [f], [b])
         win.record(WIDEN, [b if given else None], [w])
         return win.mismatches()
@@ -262,14 +262,14 @@ def test_a_boolean_profile_ports_rows_are_read_bit_by_bit(given):
 
 def test_several_templates_are_one_population():
     w = I.Circuit("two", ((COORD, 3), (ACC, 2)))
-    win = I.Window(w, RUN, LAW, 2)
+    win = I.ExecutionBlockBuilder(w, RUN, LAW, 2)
     assert [(m.template, m.base, m.n) for m in win.window.members] == [(TID, 0, 2), (TID, 2, 1), (AID, 3, 2)]
     assert I.layout(ACC).outs == (("o0", 2),)
 
 
 @pytest.mark.parametrize("templates", [((COORD, 10),), ((COORD, 3), (ACC, 2))])
 def test_the_verifiers_window_is_the_circuit_records(templates):
-    win = I.Window(I.Circuit("rec", templates), RUN, LAW, 4)
+    win = I.ExecutionBlockBuilder(I.Circuit("rec", templates), RUN, LAW, 4)
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
     mine = I.window_of_record(doc, LAW, BY_ID.__getitem__)
     same = ("query", "law", "run", "members", "row_tables", "context", "work_table", "partition", "partition_digest")
@@ -280,7 +280,7 @@ def test_the_verifiers_window_is_the_circuit_records(templates):
 
 
 def test_a_circuit_record_its_templates_dont_make_is_refused():
-    win = I.Window(I.Circuit("rec", ((COORD, 10),)), RUN, LAW, 4)
+    win = I.ExecutionBlockBuilder(I.Circuit("rec", ((COORD, 10),)), RUN, LAW, 4)
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
     listed = json.loads(I.circuit_bytes(I.circuit_record(win.window, "rec", [(TID, 10)])))
     with pytest.raises(ValueError, match="not the partition's units"):
@@ -336,7 +336,7 @@ def test_a_wire_pattern_wires_whole_members_unit_by_unit_under_their_writers_sal
     """Each member's wired port reads, unit by unit, the writer the pattern gives it; the committed rows' public strings are
     the writers' (a5's wiring check), a wire moved to other writers is refused there (on the drawn units alone, the units
     it draws), and a reader row that isn't its writer's output doesn't commit."""
-    win = I.Window(chain(), RUN, LAW, 2)
+    win = I.ExecutionBlockBuilder(chain(), RUN, LAW, 2)
     assert [(m.base, m.n, m.wired) for m in win.window.members] == [
         (0, 2, ()), (2, 2, (("x", "o0", (4, 5)),)), (4, 2, (("x", "o0", (0, 1)),)), (6, 2, (("x", "o0", (2, 3)),))]
     ins, outs = chain_values()
@@ -354,7 +354,7 @@ def test_a_wire_pattern_wires_whole_members_unit_by_unit_under_their_writers_sal
     assert list(WI.check_drawn(moved, publics, [3])) == [moved[1].key]
     lacking = [replace(m, wired=(("x", "o1", m.wired[0][2]),)) if m.wired else m for m in win.window.members]
     assert list(WI.check_drawn(lacking, publics, [3])) == [moved[1].key]
-    bad = I.Window(chain(), RUN, LAW, 2)
+    bad = I.ExecutionBlockBuilder(chain(), RUN, LAW, 2)
     x = ins[0].copy()
     x[2, 0] ^= 1
     bad.record(GEMM, [x, ins[1]], outs)
@@ -363,7 +363,7 @@ def test_a_wire_pattern_wires_whole_members_unit_by_unit_under_their_writers_sal
 
 
 def test_the_record_states_members_by_cap_and_wires_and_the_verifier_derives_them():
-    win = I.Window(chain(), RUN, LAW, 2)
+    win = I.ExecutionBlockBuilder(chain(), RUN, LAW, 2)
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
     by_id = {GID: GEMM}.__getitem__
     assert "members" not in doc and doc["cap"] == 2 and tuple(I.Wire.of(w) for w in doc["wires"]) == chain().wires
@@ -522,7 +522,7 @@ def test_a_window_commits_a_cut_ports_rows_each_under_its_writers_salt():
     states the cut rows, and a cut row that isn't its writer's output doesn't commit."""
     c = sliced()
     ins8, outs8, ins, outs = sliced_values()
-    win = I.Window(c, RUN, LAW, 2)
+    win = I.ExecutionBlockBuilder(c, RUN, LAW, 2)
     win.record(G8, ins8, outs8)
     win.record(GEMM, ins, outs)
     assert win.mismatches() == {}
@@ -536,7 +536,7 @@ def test_a_window_commits_a_cut_ports_rows_each_under_its_writers_salt():
     assert I.window_of_record(doc, LAW, {GID: GEMM, G8ID: G8}.__getitem__).members == ms
     x = ins[0].copy()
     x[1, 8] ^= 1
-    bad = I.Window(c, RUN, LAW, 2)
+    bad = I.ExecutionBlockBuilder(c, RUN, LAW, 2)
     bad.record(G8, ins8, outs8)
     bad.record(GEMM, [x, ins[1]], [np.asarray(evaluate_batch(GEMM, x, ins[1], kernel="reference"), dtype=np.uint16).reshape(3, 16)])
     with pytest.raises(ValueError, match="x#1 row is not the o0 row"):
@@ -660,10 +660,10 @@ REG = type("REG", (), {"WORD_BITS": 16, "SCHEMA_KEY": "row_schema", "READS_FROM"
 READ = I.Read(TID, "wrow", "w", 0, (6, 2), 0, (K // 2, 0))
 
 
-def registered(n: int = 12, cap: int = 4) -> tuple[I.Window, Held]:
+def registered(n: int = 12, cap: int = 4) -> tuple[I.ExecutionBlockBuilder, Held]:
     w = Held("w", np.random.default_rng(1).integers(0, 1 << 16, (6, K // 2), dtype=np.uint16))
     circuit = I.Circuit("reads", ((COORD, n),), registered=I.Registered({"w": 6 * K // 2}, reads=(READ,)))
-    win = I.Window(circuit, RUN, LAW, cap, registered={"w": w})
+    win = I.ExecutionBlockBuilder(circuit, RUN, LAW, cap, registered={"w": w})
     ins, _ = values(n)
     ins[2] = w.rows[np.arange(n) // 2].view(np.uint8)
     win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
@@ -725,15 +725,15 @@ def test_a_read_covers_whole_members_and_reads_whole_rows():
     """Members are cut where a read's units begin or end, as where a wire's do, so a read covers whole members: units 2..11
     read the weight's rows as tables and units 0 and 1 hold their own rows."""
     reg = lambda r: I.Registered({"w": 6 * K // 2}, reads=(r,))  # noqa: E731
-    win = I.Window(I.Circuit("part", ((COORD, 12),), registered=reg(I.Read(TID, "wrow", "w", 2, (5, 2), 0, (K // 2, 0)))),
+    win = I.ExecutionBlockBuilder(I.Circuit("part", ((COORD, 12),), registered=reg(I.Read(TID, "wrow", "w", 2, (5, 2), 0, (K // 2, 0)))),
                    RUN, LAW, 4)
     assert [(m.base, m.n, bool(m.tables)) for m in win.window.members] == [(0, 2, False), (2, 4, True), (6, 4, True),
                                                                            (10, 2, True)]
     with pytest.raises(ValueError, match="whole registered rows"):
-        I.Window(I.Circuit("half", ((COORD, 12),), registered=reg(I.Read(TID, "wrow", "w", 0, (12,), 0, (K // 8,)))),
+        I.ExecutionBlockBuilder(I.Circuit("half", ((COORD, 12),), registered=reg(I.Read(TID, "wrow", "w", 0, (12,), 0, (K // 8,)))),
                  RUN, LAW, 4)
     with pytest.raises(ValueError, match="uncut registered reads"):
-        I.Window(I.Circuit("cut", ((COORD, 12),), cuts={TID: {"x": 2}},
+        I.ExecutionBlockBuilder(I.Circuit("cut", ((COORD, 12),), cuts={TID: {"x": 2}},
                            registered=reg(I.Read(TID, "x", "w", 0, (12, 2), 0, (0, K // 4), cut=(0, 2)))), RUN, LAW, 4)
 
 
@@ -762,7 +762,7 @@ def test_the_window_commits_each_read_port_as_a_table_of_the_registered_rows_und
         I.registered_reads(doc, mine, {}, registered=REG)
     with pytest.raises(ValueError, match="not the port's"):
         I.registered_reads(doc, mine, {"w": {**pin["w"], "words": 2}}, registered=REG)
-    unread = I.Window(win.circuit, RUN, LAW, 4)
+    unread = I.ExecutionBlockBuilder(win.circuit, RUN, LAW, 4)
     unread._recorded = win._recorded
     with pytest.raises(ValueError, match="give its committed value"):
         unread.close()
@@ -781,7 +781,7 @@ def test_a_wired_member_reading_a_registered_row_is_checked_through_its_refs():
     w = Held("w", ins[1][::layer].reshape(LAYERS, 256))
     read = I.Read(GID, "w", "w", at=0, radix=(LAYERS, layer), base=0, step=(256, 0))
     circuit = replace(chain(), registered=I.Registered({"w": LAYERS * 256}, reads=(read,)))
-    win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
+    win = I.ExecutionBlockBuilder(circuit, RUN, LAW, 2, registered={"w": w})
     ms = win.window.members
     assert [(m.base, m.tables, m.wired) for m in ms] == [
         (0, (("x", 2), ("w", 1)), ()), (2, (("x", 2), ("w", 1)), (("x", "o0", (4, 5)),)),
@@ -813,7 +813,7 @@ class Bound(Held):
                     for r, s in zip(rows, self.salts)]
 
 
-def _same_commit(full: I.Window, refd: I.Window, tmp_path) -> None:
+def _same_commit(full: I.ExecutionBlockBuilder, refd: I.ExecutionBlockBuilder, tmp_path) -> None:
     """``refd`` (some inputs recorded by reference) commits what ``full`` does: every root, string, salt and row, the files
     `write` writes byte for byte, and each member's prover body as the files make it (`rows.read_private`), where ``refd``'s
     leave a registered value's rows and salts out of the member's own file (``value_rows``); both leave a wired port's
@@ -907,7 +907,7 @@ def _long_chain(layers: int, d: Path) -> None:
     reads = tuple(I.Read(GID, "w", "w", at=2 * j, radix=(2,), base=256 * j, step=(0,)) for j in range(layers))
     circuit = I.Circuit("long", ((SRC, 2), (GEMM, 2 * layers)), external=(f"{SID}/x", f"{SID}/w"), wires=tuple(wires),
                         registered=I.Registered({"w": 256 * layers}, reads=reads))
-    win = I.Window(circuit, RUN, LAW, 1, registered={"w": Bound("w", w.reshape(layers, 256))})
+    win = I.ExecutionBlockBuilder(circuit, RUN, LAW, 1, registered={"w": Bound("w", w.reshape(layers, 256))})
     win.record(SRC, [sx, sw], ys[:1])
     win.record(GEMM, [None, None], [np.concatenate(ys[1:])])
     c = win.close(salt_key=bytes(32))
@@ -935,9 +935,9 @@ def test_a_windows_commit_is_linear_in_its_members(tmp_path):
 def test_wired_and_registered_rows_recorded_by_reference_commit_as_their_rows_given_in_full(tmp_path):
     """`fed_chain`'s units recorded with no inputs at all: a wired ``x`` row is its writer's output row and a ``w`` the
     value's, so the commitment, the rows and every file are the full record's, and the mismatch check gathers the inputs it
-    evaluates on (`Window.input_words`)."""
+    evaluates on (`ExecutionBlockBuilder.input_words`)."""
     circuit, w, (sx, sw), feed, ins, outs = fed_chain()
-    full, refd = (I.Window(circuit, RUN, LAW, 2, registered={"w": w}) for _ in range(2))
+    full, refd = (I.ExecutionBlockBuilder(circuit, RUN, LAW, 2, registered={"w": w}) for _ in range(2))
     for win, given in ((full, ins), (refd, [None, None])):
         win.record(SRC, [sx, sw], feed)
         win.record(GEMM, given, outs)
@@ -945,7 +945,7 @@ def test_wired_and_registered_rows_recorded_by_reference_commit_as_their_rows_gi
     assert refd.mismatches() == full.mismatches() == {}
     _same_commit(full, refd, tmp_path)
     with pytest.raises(ValueError, match="no wire or registered read fills it"):
-        free = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
+        free = I.ExecutionBlockBuilder(circuit, RUN, LAW, 2, registered={"w": w})
         free.record(SRC, [None, sw], feed)
         free.record(GEMM, ins, outs)
         free.close(salt_key=bytes(32))
@@ -969,7 +969,7 @@ def test_a_windows_registered_rows_are_each_drawn_once(monkeypatch, tmp_path):
     circuit, w, feed_ins, feed, _ins, outs = fed_chain()
     w.salts = _Counted(w.salts)
     monkeypatch.setattr(Bound, "statement", lambda *_: pytest.fail("a statement of the reads drew their salts again"))
-    win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
+    win = I.ExecutionBlockBuilder(circuit, RUN, LAW, 2, registered={"w": w})
     win.record(SRC, feed_ins, feed)
     win.record(GEMM, [None, None], outs)
     c = win.close(salt_key=bytes(32))
@@ -992,7 +992,7 @@ def test_a_windows_value_rows_and_paths_are_written_once_and_a_drawn_members_bod
     given two paths, a wire to a writer that is no member or not of the port's words and a row of a value committed under
     two salts are refused."""
     circuit, w, feed_ins, feed, _ins, outs = fed_chain()
-    win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
+    win = I.ExecutionBlockBuilder(circuit, RUN, LAW, 2, registered={"w": w})
     win.record(SRC, feed_ins, feed)
     win.record(GEMM, [None, None], outs)
     c = win.close(salt_key=bytes(32))
@@ -1069,14 +1069,14 @@ def test_a_cut_ports_rows_recorded_by_reference_are_each_its_writers_output_row(
     none."""
     c = sliced()
     ins8, outs8, ins, outs = sliced_values()
-    full, refd = (I.Window(c, RUN, LAW, 2) for _ in range(2))
+    full, refd = (I.ExecutionBlockBuilder(c, RUN, LAW, 2) for _ in range(2))
     for win, x in ((full, ins[0]), (refd, None)):
         win.record(G8, ins8, outs8)
         win.record(GEMM, [x, ins[1]], outs)
     assert np.array_equal(refd.input_words(GID, 1, 2)[0], ins[0][1:])
     assert refd.mismatches() == {}
     _same_commit(full, refd, tmp_path)
-    mixed = I.Window(c, RUN, LAW, 2)
+    mixed = I.ExecutionBlockBuilder(c, RUN, LAW, 2)
     mixed.record(G8, ins8, outs8)
     mixed.record(GEMM, [None, ins[1][:1]], [outs[0][:1]])
     mixed.record(GEMM, [ins[0][1:], ins[1][1:]], [outs[0][1:]])
@@ -1085,10 +1085,10 @@ def test_a_cut_ports_rows_recorded_by_reference_are_each_its_writers_output_row(
 
 
 def given_by_reference(monkeypatch) -> tuple[CS.Window, list[dict], Bound]:
-    """`fed_chain` with every chain input recorded by reference: the window and each member's rows as `Window.close` hands
+    """`fed_chain` with every chain input recorded by reference: the window and each member's rows as `ExecutionBlockBuilder.close` hands
     them to `rows.commit` (each wired ``x`` `rows.WIRED`, each ``w`` a `rows.ValueRows` of the registered value)."""
     circuit, w, feed_ins, feed, _ins, outs = fed_chain()
-    win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
+    win = I.ExecutionBlockBuilder(circuit, RUN, LAW, 2, registered={"w": w})
     win.record(SRC, feed_ins, feed)
     win.record(GEMM, [None, None], outs)
     given = []
@@ -1111,7 +1111,7 @@ def _like(value: Bound, **fields) -> Bound:
 
 def _value_rows(value=None, positions=None, salts=None):
     """An edit giving the first chain member's ``w`` as ``positions`` of ``value(registered value)`` under ``salts(the salts
-    `Window.close` drew)``, each as given when None (the salts drawn again by `rows.commit` when the positions change)."""
+    `ExecutionBlockBuilder.close` drew)``, each as given when None (the salts drawn again by `rows.commit` when the positions change)."""
     def edit(window: CS.Window, data: list[dict]) -> CS.Window:
         k = _first(window, GID)
         src = data[k]["rows"]["w"]
@@ -1162,7 +1162,7 @@ def test_rows_given_by_reference_are_refused_unless_their_source_is_the_ports(mo
     leaf width, at a position outside the value (a negative one included, which indexing would wrap) or of another count
     than the port's rows, or salts given that aren't one a row; `rows.WIRED` rows on a port no wire writes; and a port by
     reference in a window with row tables,
-    whose linked members' rows are read off their ``x`` tables. The rows as `Window.close` gives them commit; each one edit
+    whose linked members' rows are read off their ``x`` tables. The rows as `ExecutionBlockBuilder.close` gives them commit; each one edit
     is refused."""
     window, data, _w = given_by_reference(monkeypatch)
     CS.commit(window, data, salt_key=bytes(32))
@@ -1197,11 +1197,11 @@ def embedding(**edit) -> I.Circuit:
     return I.Circuit("embedding", ((EMB, 3),), **{"registered": reg, **edit})
 
 
-def embedding_window() -> tuple[I.Window, Table]:
+def embedding_window() -> tuple[I.ExecutionBlockBuilder, Table]:
     """`embedding`'s window in members of at most 2 units, its units' values `gates.embedding`'s reference on tokens
     (3, 3, 1)."""
     table = Table()
-    win = I.Window(embedding(), RUN, LAW, 2, registered={"embed": table})
+    win = I.ExecutionBlockBuilder(embedding(), RUN, LAW, 2, registered={"embed": table})
     toks = [3, 3, 1]
     got = [E.reference(4, t, table.tree.root, table.dom.domain_id, table.rows[t].tolist(), table.salts[t], table.path(t))
            for t in toks]
@@ -1233,9 +1233,9 @@ def test_a_tables_reads_and_verdicts_take_its_supplied_values():
     words = I.digest_words(bytes(range(64)))
     assert len(words) == 32 and words[:4] == [0x0607, 0x0405, 0x0203, 0x0001]
     with pytest.raises(ValueError, match="a registered parameter of its own"):
-        I.Window(embedding(registered=replace(c.registered, params={"embed": 80})), RUN, LAW, 3)
+        I.ExecutionBlockBuilder(embedding(registered=replace(c.registered, params={"embed": 80})), RUN, LAW, 3)
     with pytest.raises(ValueError, match="ingress are recorded by their description"):
-        I.Window(embedding(ingress=(I.Ingress(EID, "tok", 0, 2, 0),)), RUN, LAW, 3)
+        I.ExecutionBlockBuilder(embedding(ingress=(I.Ingress(EID, "tok", 0, 2, 0),)), RUN, LAW, 3)
 
 
 @pytest.mark.slow
@@ -1246,7 +1246,7 @@ def test_a_window_commits_its_table_reads_and_verdicts_as_registered_reads():
     for the two population Programs of `EmbeddingRead_v1` it builds, the prover's and the verifier's, its Merkle path
     traced in each; the cheap check of the reads themselves is `test_a_tables_reads_and_verdicts_take_its_supplied_values`."""
     win, table = embedding_window()
-    with pytest.raises(ValueError, match="Window.supply"):
+    with pytest.raises(ValueError, match="ExecutionBlockBuilder.supply"):
         win.close(salt_key=bytes(32))
     win.supply(REG)
     c = win.close(salt_key=bytes(32))
@@ -1280,9 +1280,9 @@ def test_a_window_commits_its_table_reads_and_verdicts_as_registered_reads():
 
 def test_the_boundary_is_carried_as_given():
     b = {"format": "verity/boundary/v1", "egress": {"template": GID}}
-    win = I.Window(I.Circuit("b", ((GEMM, 2),), boundary=b), RUN, LAW, 2)
+    win = I.ExecutionBlockBuilder(I.Circuit("b", ((GEMM, 2),), boundary=b), RUN, LAW, 2)
     assert json.loads(I.circuit_bytes(win.circuit_record()))["boundary"] == b
-    assert "boundary" not in I.Window(I.Circuit("b", ((GEMM, 2),)), RUN, LAW, 2).circuit_record()
+    assert "boundary" not in I.ExecutionBlockBuilder(I.Circuit("b", ((GEMM, 2),)), RUN, LAW, 2).circuit_record()
     with pytest.raises(ValueError, match="JSON object"):
         I.Circuit("b", ((GEMM, 2),), boundary=["egress"])
 

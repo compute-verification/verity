@@ -1,5 +1,5 @@
 """A window's rows: every unit of a class circuit (`window_circuit.lower`) given its output rows from a served window's
-values, ready for `interface.Window.record`.
+values, ready for `interface.ExecutionBlockBuilder.record`.
 
 A node of a slot's class Program has one value, its return fields: the served value where the engine computed it (its
 request's tapped words in the sealed record, `Served`), else the class Program's own, its family's row kernel
@@ -26,11 +26,11 @@ function of the window's values:
   Definition on the node's operands (`evaluate_batch`): the head's query, its KV group's keys and values in the Call's
   range, and the earlier Calls' running state.
 
-`Rows.record` gives a `Window` each template's units in runs of one step, one slot and one form (`FORMS`: a node's value,
+`Rows.record` gives an `ExecutionBlockBuilder` each template's units in runs of one step, one slot and one form (`FORMS`: a node's value,
 or its Definition's function of the window's values), every input by reference but an opening's ports. The lowering
 fixes all three, so a label is class structure and never a value: which slots are occupied, at what lengths, and where a
 node's value came from (`SOURCES`) are the scan state's and the rows' own, committed hiding, and the labels show none of
-them. The window takes `FORMS` as its ``forms`` (`interface.Window.record`).
+them. The window takes `FORMS` as its ``forms`` (`interface.ExecutionBlockBuilder.record`).
 """
 from __future__ import annotations
 
@@ -524,7 +524,7 @@ class Rows:
         """Each unit of ``tid``'s slot (its lowering's), -1 for a unit of no slot's."""
         return self._span(tid, 2)
 
-    def record(self, win: IF.Window) -> None:
+    def record(self, win: IF.ExecutionBlockBuilder) -> None:
         """Every unit into ``win``, template by template in unit order, in runs of one step, one slot and one form, each
         labelled ``{"step", "slot", "form"}`` (module docstring): each input by reference but an opening's ports, each port
         in its element width."""

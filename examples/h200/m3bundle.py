@@ -349,7 +349,7 @@ def bundle_block(blk: dict, st: dict, com: RB.Commitment, win: Window, weights: 
 
     circuit = IF.Circuit(f"{LOOP}/{fam}", ((fn, 1),))
     run_root = hashlib.sha512(f"{LOOP}/{reg['run']}/{blk['g']}".encode()).hexdigest()
-    iw = IF.Window(circuit, run_root, D.parse_law("subset:1"), 1)
+    iw = IF.ExecutionBlockBuilder(circuit, run_root, D.parse_law("subset:1"), 1)
     tid = circuit.ids[0]
     iw._recorded[tid] = [IF._Recorded([], [], [*data["rows"].values(), *data["outs"].values()], c, 1, 0)]
     (m,) = iw.window.members

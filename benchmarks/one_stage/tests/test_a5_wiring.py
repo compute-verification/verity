@@ -34,8 +34,8 @@ def gemm(fn, x: np.ndarray, w: np.ndarray) -> np.ndarray:
     return np.asarray(evaluate_batch(fn, x, w, kernel="reference"), dtype=np.uint16).reshape(len(x), -1)
 
 
-def negatives(circuit: I.Circuit, cap: int, records) -> tuple[I.Window, dict[str, dict]]:
-    win = I.Window(circuit, "ab" * 64, {"law": "stratified", "k": 2}, cap)
+def negatives(circuit: I.Circuit, cap: int, records) -> tuple[I.ExecutionBlockBuilder, dict[str, dict]]:
+    win = I.ExecutionBlockBuilder(circuit, "ab" * 64, {"law": "stratified", "k": 2}, cap)
     for fn, x, w in records:
         win.record(fn, [x, w], [gemm(fn, x, w)])
     c = win.close(salt_key=bytes(32))

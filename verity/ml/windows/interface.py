@@ -12,10 +12,10 @@ at a time, in four records:
    public cap on the advice's length; `compiler_digest`, over its code) with the commit that code is at, and the advice's
    hiding commitment (`verity.ml.commitments.advice`): its root and its length in bits, which is charged. Verity never
    reads the advice.
-3. **The values** (:class:`Window`): each unit's values as computed (`Window.record`: one array per parameter and one per
+3. **The values** (:class:`ExecutionBlockBuilder`): each unit's values as computed (`ExecutionBlockBuilder.record`: one array per parameter and one per
    return field, a leading unit axis, each element its bits as an unsigned integer, `evaluation.evaluate_batch`'s
    convention), committed as ``hm96-sha512/row/v2`` rows in ``frame-v3-sha512`` trees, one tree per port under the
-   window-domain rule (`verity.ml.commitments.window`; `Window.close`, `rows.commit`), and registered before any coin (`Window.write`: `rows.write`'s files,
+   window-domain rule (`verity.ml.commitments.window`; `ExecutionBlockBuilder.close`, `rows.commit`), and registered before any coin (`ExecutionBlockBuilder.write`: `rows.write`'s files,
    the registration core's record made by the ``registrar`` the caller passes, core's ``one_stage.registration``).
 4. **On a draw, the openings**: a drawn member's private rows and salts as C-Flock's prover reads them
    (`flock_inputs.flock_input_files`), for the prover behind the firewall.
@@ -23,7 +23,7 @@ at a time, in four records:
 An integration may label each run of units it records (``label``): the window's ``index.json``, whose SHA-512 the
 registration binds. A label is class structure, never a value. In a circuit with blocks, a labelled run starts and ends
 where its template's units change inference block (their (slot, step), the inference entries'), and its label names at
-most the run's ``step`` and ``slot`` and its ``form``, one of the window's ``forms`` (`LABEL_KEYS`, `Window.record`); the
+most the run's ``step`` and ``slot`` and its ``form``, one of the window's ``forms`` (`LABEL_KEYS`, `ExecutionBlockBuilder.record`); the
 index writes an unlabelled stretch of runs as one run, so every bound it shows is such a change, a member's or a
 template's. A circuit without blocks states no inference blocks, and its labels are opaque JSON. Verity reads a label
 only to refuse it.
@@ -49,8 +49,8 @@ public positions (`Read`), a registered table's root or domain id (`TableRead`),
 (`Opening`), and the system's ingress at its step (`Ingress`). Every input row is wired, one of these, or free, and no row
 is two of them (`check_inputs`); `input_count` counts the free rows' bits from the record alone, at the size of its
 description, a registered row free unless the verifier pinned that parameter's own root before the run and the window's
-registration records the same root for it (``registered_roots``, `Window.write`; `held_params`). The window commits
-the first three as registered reads at public positions (`Window`'s ``registered``, `committed_reads`): a member whose
+registration records the same root for it (``registered_roots``, `ExecutionBlockBuilder.write`; `held_params`). The window commits
+the first three as registered reads at public positions (`ExecutionBlockBuilder`'s ``registered``, `committed_reads`): a member whose
 units read a registered value is a shared-row member, each read port a table of the registered rows its units read,
 committed under the registered value's salts (core's ``one_stage.registered``), so each row's public string is the
 registered one, and its header names each row's position and path to the value's root; the verifier's ``--registered``
@@ -72,7 +72,7 @@ members read only the servers' unit ranges: a template's units are cut where a s
 units sit on one server. Blocks name units, ports, steps and row patterns, never a value.
 
 That the circuit computes what the integration ran is completeness, never proved: the verifier accepts a window exactly
-when its drawn units' committed outputs are their Definitions' outputs on their committed inputs (`Window.mismatches` is
+when its drawn units' committed outputs are their Definitions' outputs on their committed inputs (`ExecutionBlockBuilder.mismatches` is
 the integration's own check before it commits).
 """
 from __future__ import annotations
@@ -107,7 +107,7 @@ from . import rows as CS
 PACKED = (8, 16, 32, 64)
 CIRCUIT = "verity/window-circuit/v1"
 LABELS = "verity/window-labels/v1"
-#: what a label in a circuit with blocks may name: its run's step and slot, and its form (`Window.record`)
+#: what a label in a circuit with blocks may name: its run's step and slot, and its form (`ExecutionBlockBuilder.record`)
 LABEL_KEYS = ("step", "slot", "form")
 BLOCKS = "verity/blocks/v1"
 #: what an inference entry's digit is: the unit's slot, its step past the entry's ``step``, or neither
@@ -762,7 +762,7 @@ def supplied_param(table: Table, of: str) -> str:
 
 
 def committed_reads(registered: Registered | None) -> tuple[Read, ...]:
-    """Every registered read a window commits (`Window.close`) and its verifier opens (`registered_reads`): the circuit's
+    """Every registered read a window commits (`ExecutionBlockBuilder.close`) and its verifier opens (`registered_reads`): the circuit's
     reads (`Read`); each table read, of its table's supplied root or domain id; and each opening's verdict, of its table's
     supplied 1 (an output row, so a verdict of 0 opens no root: `gates.embedding`'s ``ok``). A table read or verdict reads
     one row for all its units; an opening's other ports are its units' own rows, which its verdict holds to the table's
@@ -1172,7 +1172,7 @@ def _reads_of(tid: str, lo: int, n: int, reads: _ReadIndex, rows: Mapping[str, i
 
 
 class _Drawn:
-    """A window's registered reads as `Window.close` commits them, each (value, position) the window reads drawn once: by
+    """A window's registered reads as `ExecutionBlockBuilder.close` commits them, each (value, position) the window reads drawn once: by
     parameter, the positions its members read (sorted), their salts (`rows.value_salts`, one pass where the value's salts
     draw many) and their paths' hex. Each member's salts and header entry are core's ``Registered.statement``'s for its
     positions, which draws each position's salt again in pure Python and makes its row's ints for every member that reads
@@ -1435,7 +1435,7 @@ def declarations(doc: Mapping[str, Any]) -> tuple[tuple[Wire, ...], dict[str, di
 def held_params(pins: Mapping[str, str] | str | None, roots: Mapping[str, str] | None) -> frozenset[str]:
     """The registered parameters whose window root is the verifier's pin of that parameter, a pin naming its parameter
     alone: ``pins`` the roots the verifier fixed before the run and ``roots`` the window's, as its registration records
-    them (`Window.write`), each ``{param: root}`` with a root hex digits, compared without case; a bare string ``pins`` is
+    them (`ExecutionBlockBuilder.write`), each ``{param: root}`` with a root hex digits, compared without case; a bare string ``pins`` is
     none. Refused (ValueError) in any other form, so a set of names never passes for pins."""
     if isinstance(pins, str):
         return frozenset()
@@ -1449,7 +1449,7 @@ def held_params(pins: Mapping[str, str] | str | None, roots: Mapping[str, str] |
 
 
 def registered_roots(window: Mapping[str, Any]) -> dict[str, str]:
-    """The roots a window's registration records for its registered parameters (its ``registered_roots``, `Window.write`:
+    """The roots a window's registration records for its registered parameters (its ``registered_roots``, `ExecutionBlockBuilder.write`:
     core's registration's window, or an integration's own window registration), by parameter; none where it records
     none. Refused (ValueError) unless each is a root of hex digits."""
     roots = window.get("registered_roots") or {}
@@ -1466,7 +1466,7 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
     table reads and openings of a held parameter (``registered``) and its ingress (``ingress``); ``free`` the rest, which
     only the prover chose. ``pins`` are the verifier's own, never the record's: the roots it fixed before the run, by the
     names the record gives the registered parameters (``{param: root}``); ``roots`` the window's, as its registration
-    records them (`Window.write`). A parameter is held where the window's root for it is the verifier's pin of it
+    records them (`ExecutionBlockBuilder.write`). A parameter is held where the window's root for it is the verifier's pin of it
     (`held_params`), and a pin names its parameter alone: a pin ``P`` holds no ``P/…`` (one of a registration of several
     parameters, a model's weights one a weight and row width), whose committed root nothing ties to ``P``'s. A read of
     any other parameter, or a table read or opening of a table over one, is free, since a root the prover commits after
@@ -1603,7 +1603,7 @@ def of_records(window_dir: str | Path, law: Mapping[str, Any], resolve: Callable
 
 @dataclass(frozen=True)
 class _Recorded:
-    inputs: list[np.ndarray | None]   # None: by reference (`Window.record`)
+    inputs: list[np.ndarray | None]   # None: by reference (`ExecutionBlockBuilder.record`)
     outputs: list[np.ndarray]
     words: list[np.ndarray | None]    # every port's (n, words) u16, parameters then return fields
     label: Any
@@ -1612,15 +1612,16 @@ class _Recorded:
 
 
 @dataclass
-class Window:
-    """One window of an integration's values: ``circuit``'s units under ``run`` (the record's run root, hex) and ``law`` (the
-    proof service's law of the window, as its draw parses it), in members of at most ``cap`` units, with ``advice`` its
-    compiler and advice (`advice_binding`) when the circuit depends on run-time choices, and ``registered`` the values its
-    registered reads read (`committed_reads`), by parameter: each committed once, before the run, as core's
-    ``one_stage.registered.Registered`` (rows of the reading port's words, its salts the prover's; a table's in its
-    opening's row format), which the verifier pinned by its entry, and its tables' supplied values (`supply`); ``forms``,
-    the forms of unit the integration's lowering has, which a label's ``form`` names (`record`). Each template's units are
-    `record`ed in order, then `close` commits them and `write` writes and registers the window."""
+class ExecutionBlockBuilder:
+    """The builder of one execution block's values, the window an integration records: ``circuit``'s units under ``run``
+    (the record's run root, hex) and ``law`` (the proof service's law of the window, as its draw parses it), in members
+    of at most ``cap`` units, with ``advice`` its compiler and advice (`advice_binding`) when the circuit depends on
+    run-time choices, and ``registered`` the values its registered reads read (`committed_reads`), by parameter: each
+    committed once, before the run, as core's ``one_stage.registered.Registered`` (rows of the reading port's words, its
+    salts the prover's; a table's in its opening's row format), which the verifier pinned by its entry, and its tables'
+    supplied values (`supply`); ``forms``, the forms of unit the integration's lowering has, which a label's ``form``
+    names (`record`). Each template's units are `record`ed in order, then `close` commits them and `write` writes and
+    registers the window."""
     circuit: Circuit
     run: str
     law: Mapping[str, Any]
@@ -1753,7 +1754,7 @@ class Window:
             for p, (param, positions, _refs) in reads.items():
                 if (v := values.get(param)) is None:
                     raise ValueError(f"{m.key} {p} reads registered parameter {param!r}: give its committed value"
-                                     + (" (`Window.supply`)" if param.rsplit("/", 1)[-1] in SUPPLIED else ""))
+                                     + (" (`ExecutionBlockBuilder.supply`)" if param.rsplit("/", 1)[-1] in SUPPLIED else ""))
                 if v.words != words[p]:
                     raise ValueError(f"{m.key} {p} reads {param!r}, committed as rows of {v.words} words, not the port's "
                                      f"{words[p]}")
@@ -1923,9 +1924,9 @@ class Window:
 
 
 class Integration(Protocol):
-    """What an integration provides: its circuit, and a run that records every unit of it into a window (`Window.record`)
+    """What an integration provides: its circuit, and a run that records every unit of it into a window (`ExecutionBlockBuilder.record`)
     before the window closes."""
 
     def circuit(self) -> Circuit: ...
 
-    def run(self, window: Window) -> None: ...
+    def run(self, window: ExecutionBlockBuilder) -> None: ...
