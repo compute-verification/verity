@@ -53,7 +53,7 @@ from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.certifier.warden import WardenParams
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.sampled_proofs.one_stage.draw import stratum_k
-from verity.ml.circuits import boolean as BL, codec, population
+from verity.ml.circuits import annotations as AN, boolean as BL, codec, population
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
@@ -94,6 +94,13 @@ EGRESS_PARAMS = ("state",)
 BOOL_BYTE, BOOL_U16 = ["Array", 8, ["Value", 1]], ["Array", OUT_BITS, ["Value", 1]]
 #: the checker form's, which took the rows its units compared as inputs
 CHECKER_PARAMS = (("row", "sin", "prog", "sout", "view"), ("state", "row"))
+#: the closure digests (`slot_entry_digest`) of `io_shell.SlotEntry_v1` at its circuit-check rows,
+#: `SlotEntry_v1{KO=2,IDB=17,NP=4,STOP=[]}` and `SlotEntry_v1{KO=64,IDB=17,NP=1024,STOP=[128001]}`, in that order, which
+#: `test_slot_entry_pins.py` recomputes from `io_shell`
+SLOT_ENTRY_PINS = ("0763102b5fd38583279471486ff8ce51b9caae1bc5dece3d7712ddcec456f1bb"
+                   "4e543343ed1399c0665043402d7100173a270cb6a8cc541b60bcdd29b37d7d0a",
+                   "662360bfd2b31949f09447a32dec775c3e2e26e2d9132af8898609475e75a753"
+                   "4cb522ce4f794bc5fcce71a7f09ec5a2170e0b2406339cc4d9268ea8487e3361")
 
 # --- the mirror --------------------------------------------------------------------------------------------------------
 
@@ -235,6 +242,19 @@ def program_sha512(desc: dict) -> str:
 def _members(x: dict) -> int:
     """`Node.members`: a batch's members or a scan's iterations, else one."""
     return x["n"] if x["form"] in ("batch", "scan") else 1
+
+
+def slot_entry_digest(j: dict, key: str) -> str:
+    """The SHA-512, in hex, of the canonical JSON object that maps each Definition `key` reaches (itself, its nodes'
+    callees, theirs, …) to its `annotations.definition_digest`: the template's whole body."""
+    defs, callees, seen, todo = j["definitions"], j["callees"], {}, [key]
+    while todo:
+        k = todo.pop()
+        if k not in seen:
+            seen[k] = AN.definition_digest(j, k)
+            if defs[k]["form"] == "composite":
+                todo += [callees[x["fn"]] for x in defs[k]["body"]["nodes"]]
+    return hashlib.sha512(codec.canonical_json(seen)).hexdigest()
 
 
 def _audit(a, ctx: str) -> Audit:
