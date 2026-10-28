@@ -7,3 +7,6 @@
 
 ## 03:20Z: P3 yields check capacity until 09:00Z
 Capacity on cpu-7/8/9 goes to P1 and P2 until the 09:00Z last mark (TOP-128: P3 is not part of 15:00Z). Your PR is P3 landing work. Keep runs that already hold a slot. I cancelled your queued, unstarted runs: ONE9P's nine on cpu-8; ONE9's f922 and 5618; PRF213's af1f, 9f9a, 18fb and c347. Queue nothing new before 09:00Z. I resume you after 09:00Z to resend. ONETHM: the same for #5324's fix runs. Finish the Lean fix and try it if a try slot is free, but resend the records after 09:00Z.
+
+## 11:12Z: decision on onsite's NCI check in #5233
+Onsite drops the registration-check form. Tonight's settled form is #5610: `verity/inference-only/v0` as a component of both composites, under the stated exception for Daniel's 9:39 PM ruling (a KNOWN entry in #6023's guard test). The 26 Oct "NCI as registration check" ruling is superseded. Don't settle it in #5233 yourself: training is merging #6023 into #5610 now. When #5610's resolved head is posted (thread 1792970372.621909), merge it into #5233 and take its onsite, NCI and guard-test files exactly. Rerun whatever the gate asks then; your current nine runs may need partial reruns, which is fine. #5233 is P3, so post the new ETA on PRF-282.
