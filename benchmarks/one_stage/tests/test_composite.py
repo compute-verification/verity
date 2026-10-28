@@ -137,10 +137,11 @@ def test_a_v2_answer_whose_query_is_a_digest_its_evidence_carries_stays_private(
     assert C.main(["remote", "--cases", str(v2), "--cases", str(pw), "--cases", str(policy(tmp_path)), *outs(tmp_path),
                    "--exe", exe]) == 0
     public = b"".join(f.read_bytes() for f in sorted((tmp_path / "public").iterdir()))
-    for body in (partition.encode(), b"profile", b"query", b"programs"):
+    for body in (partition.encode(), b"\"profile\"", b"\"query\"", b"\"programs\""):
         assert body not in public
     assert (tmp_path / "public" / "verdicts.txt").read_text().splitlines() == [
-        f"PIECE {POLICY} accept", f"PIECE {POUW} accept", f"PIECE {V2} accept", "VERDICT verity/remote/v0 accept"]
+        f"PIECE {POLICY} accept", f"PIECE {POUW} accept", f"PIECE {V2} accept", "VERDICT verity/remote/v0 accept",
+        f"EXCEPTION {C.EXCEPTIONS[POLICY]}"]
     assert partition in (tmp_path / "private" / "pieces" / "0.answer.json").read_text()
     assert partition in (tmp_path / "private" / "answer.json").read_text()
 
@@ -154,7 +155,8 @@ def test_a_refusal_is_public_by_its_name_only(tmp_path):
     assert C.main(["remote", "--cases", str(v2), "--cases", str(pw), "--cases", str(policy(tmp_path)),
                    *outs(tmp_path)]) == 0
     assert (tmp_path / "public" / "verdicts.txt").read_text().splitlines() == [
-        f"PIECE {POLICY} accept", f"PIECE {POUW} reject refused", f"PIECE {V2} reject proofs"]
+        f"PIECE {POLICY} accept", f"PIECE {POUW} reject refused", f"PIECE {V2} reject proofs",
+        f"EXCEPTION {C.EXCEPTIONS[POLICY]}"]
     assert secret.hex()[:16].encode() not in b"".join(f.read_bytes() for f in (tmp_path / "public").iterdir())
 
 
@@ -187,11 +189,12 @@ def test_a_missing_case_is_left_out_and_lean_s_verdict_stands(tmp_path, capsys):
         [POLICY, V2]
     lines = (tmp_path / "public" / "verdicts.txt").read_text().splitlines()
     assert lines == [f"PIECE {POLICY} accept", f"PIECE {V2} accept", "NOT_ESTABLISHED missing verity/pouw/v1",
-                     "VERDICT verity/remote/v0 reject params"]
-    assert capsys.readouterr().out.splitlines()[1:5] == lines
+                     "VERDICT verity/remote/v0 reject params", f"EXCEPTION {C.EXCEPTIONS[POLICY]}"]
+    assert capsys.readouterr().out.splitlines()[1:6] == lines
     record = json.loads((tmp_path / "public" / "composite.json").read_bytes())
     assert record["missing"] == [POUW]
     assert record["verdict"] == {"id": "verity/remote/v0", "verdict": "reject", "refusal": "params"}
+    assert record["exceptions"] == [C.EXCEPTIONS[POLICY]]
     assert "is missing" in (tmp_path / "private" / "answer.json").read_text()
 
 

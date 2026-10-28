@@ -19,8 +19,9 @@ composition README's formats), the blobs' paths
 query, digests, profile and reason are private too (a partition's digest is the query), so ``--public-out`` gets only
 ``composite.json``: the product, the composite's commitment, each case's id, params digest (SHA-512 of its canonical
 params) and commitment, what is missing, and each piece's and Lean's outcome (`outcome`: the id, the verdict and the
-refusal's name); and ``verdicts.txt``, its ``PIECE ID VERDICT [NAME]``, ``NOT_ESTABLISHED`` and ``VERDICT ID VERDICT
-[NAME]`` lines, which it also prints. Before writing them it refuses (exit 65) public bytes that share 64 bytes or more
+refusal's name) and its stated exceptions (`EXCEPTIONS`: the policy's v0, composed in the clear for one run of record
+only, by Daniel's ruling); and ``verdicts.txt``, its ``PIECE ID VERDICT [NAME]``, ``NOT_ESTABLISHED``, ``VERDICT
+ID VERDICT [NAME]`` and ``EXCEPTION LINE`` lines, which it also prints. Before writing them it refuses (exit 65) public bytes that share 64 bytes or more
 with any case's evidence, raw or hex, the cases' commitments and digests aside. The public directory may not be or
 contain the private one.
 
@@ -49,6 +50,15 @@ COMPONENTS = {
     "onsite": ("verity/certifier/v0", "verity/inference-only/v0", "verity/pous/p2/v4/run", "verity/pouw/period/v1",
                "verity/remote-bandwidth/v0", "verity/sampled-proofs/one-stage/v2", "verity/wipe/v0"),
     "remote": ("verity/inference-only/v0", "verity/pouw/v1", "verity/sampled-proofs/one-stage/v2"),
+}
+#: The subprotocols a product composes in the clear, as a stated exception to everything-zero-knowledge, each with the
+#: line its record carries (`Core.Remote`'s and `Core.Onsite`'s docstrings say the same).
+EXCEPTIONS = {
+    "verity/inference-only/v0": (
+        "stated exception: verity/inference-only/v0 publishes the declared division and each inference block's profile "
+        "in the clear, composed for the run of record of 28 Oct only (Daniel's ruling, 27 Oct, 9:39 PM PDT: \"Let's run "
+        "it in the clear tonight as a stated exception.\"); v1's private form (division committed under hiding leaves, "
+        "compliance proved, padded profile) replaces it after 15:00Z on 28 Oct"),
 }
 USAGE = 64
 LEAK = 65
@@ -148,10 +158,16 @@ def line(kind: str, o: dict[str, str]) -> str:
     return " ".join([kind, o["id"], o["verdict"], *([o["refusal"]] if "refusal" in o else [])])
 
 
+def exceptions(product: str) -> list[str]:
+    """The `EXCEPTIONS` lines of the product's subprotocols, in the order of their ids."""
+    return [EXCEPTIONS[i] for i in COMPONENTS[product] if i in EXCEPTIONS]
+
+
 def public_record(product: str, commitment: bytes, cases: Sequence[dict[str, Any]], gone: Sequence[str],
                   verdict: dict[str, str] | None) -> dict[str, Any]:
     """What ``--public-out`` may hold: no evidence, no params bodies and no answer bodies."""
     return {"product": PRODUCTS[product], "commitment": commitment.hex(), "missing": list(gone), "verdict": verdict,
+            "exceptions": exceptions(product),
             "cases": [{"params_sha512": hashlib.sha512(canonical(p["params"])).hexdigest(),
                        "commitment": p["commitment"].hex()} | outcome(p["id"], p["answer"]) for p in cases]}
 
@@ -209,6 +225,7 @@ def run(a: argparse.Namespace) -> int:
         verdict = outcome(PRODUCTS[a.product], answer)
         lines.append(line("VERDICT", verdict) + ("" if answer else f" (exit {p.returncode}; its stderr is in --private-out)"))
         rc = p.returncode
+    lines += [f"EXCEPTION {x}" for x in exceptions(a.product)]
     record = canonical(public_record(a.product, commitment, cases, gone, verdict))
     text = "".join(f"{ln}\n" for ln in lines).encode()
     try:
