@@ -60,8 +60,8 @@ of one whose are `row`, `sin` and `prog` (`IngressScanBucket`; none when T = 1),
 bytes) and both returning the same, then T of one whose parameter is `state` and which returns a u16 and the
 schedule's row (`EgressBucket`), in the Boolean profile's types (a byte 8 bits, a u16 16), and its every input gate is
 a template's parameter. An egress template that takes its row as an input, the checker form, is refused by name: no
-egress gate is an input (`NetTiming.Layout.Fits`), so `K` counts only what a Program that computes its egress rows
-leaves free. The rest of what `NetTiming.Layout.Fits` asks is read off the description (`scanOf`): the Program laid out
+egress gate is an input (`NetTiming.BoundaryGates.Fits`), so `K` counts only what a Program that computes its egress rows
+leaves free. The rest of what `NetTiming.BoundaryGates.Fits` asks is read off the description (`scanOf`): the Program laid out
 as the decoder lays one out and within its resolution's walk (`NciCheck.Desc`), every egress leaf returned by the root
 and computed by the egress template, and every template's argument one input node's leaves, no egress template's an
 ingress row's. In the rows form a compute audit's free inputs are in the term of each link-window whose scan's `prog`
@@ -598,10 +598,10 @@ instance of bucket 0's template, `T - 1` of the later ingress buckets' (no such 
 the same and each one's `row` the schedule's row (`S · B` bytes), then `T` of the egress template, which returns a u16
 and the schedule's row, and every input gate is a template's parameter. The types are the Boolean profile's, as the
 scan's Definitions have them: a byte 8 bits, a u16 16. An egress template with a row among its parameters, the checker
-form, is refused first, by name: there the egress row is an input gate, which `NetTiming.Layout.Fits` refuses, and `K`
+form, is refused first, by name: there the egress row is an input gate, which `NetTiming.BoundaryGates.Fits` refuses, and `K`
 would count the free inputs of a Program that only compares its egress rows.
 
-Then what `NetTiming.Layout.Fits` asks of the layout the templates give (`Properties.NetworkScan.scanLayout`), read off
+Then what `NetTiming.BoundaryGates.Fits` asks of the layout the templates give (`Properties.NetworkScan.scanLayout`), read off
 the description, at the cost of its nodes and returns: the Program is laid out as C-Flock's decoder lays one out and
 within what its resolution walks (`NciCheck.Desc`'s `rootLaidOut`, `inputsAtRoot` and `walkable`); the root returns
 every egress leaf (one affine run from the egress node's first leaf over all `T` instances'); the egress template
@@ -624,7 +624,7 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   let row : Flock.Program.Ty := .array (s.allocation * s.cellBytes) (.array 8 (.value 1))
   let (xe, de) ← needSome templates.back? "scan: no template"
   need (!de.params.any (fun p => p.1 == "row" || p.2 == row)) "scan: the egress template takes its row as an input \
-    (the checker form): no egress gate is an input (NetTiming.Layout.Fits)"
+    (the checker form): no egress gate is an input (NetTiming.BoundaryGates.Fits)"
   let ((xf, df), later) ← ingressTemplates templates.pop.toList
   need (df.params.map (·.1) == firstParams s.lanes && later.all (·.2.params.map (·.1) == ingressParams s.lanes) &&
       de.params.map (·.1) == egressParams)
@@ -658,20 +658,20 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
       | .affine false k 0 c => k == ke && T * de.outLeaves ≤ c
       | _ => false)
     "scan: the root doesn't return every egress leaf, so an egress gate would be one the Program doesn't return \
-      (NetTiming.Layout.Fits)"
+      (NetTiming.BoundaryGates.Fits)"
   need ((ownReturns prog)[xe.fn]!) "scan: the egress template returns a leaf it doesn't compute (a parameter's, passed \
-    through), so an egress gate would be an input (NetTiming.Layout.Fits)"
+    through), so an egress gate would be an input (NetTiming.BoundaryGates.Fits)"
   let ingress := #[xf] ++ (later.map (#[·.1])).getD #[]
   let rows := ingress.map fun x => x.args[0]?.bind (inputArg prog)
   need (rows.all (·.isSome)) "scan: an ingress template's row is not one input node's leaves, so an ingress gate \
-    would be no input (NetTiming.Layout.Fits)"
+    would be no input (NetTiming.BoundaryGates.Fits)"
   need (xf.args.size == 1 + s.lanes && (later.all fun (x, _) => x.args.size == 2 + s.lanes) &&
       (xf.args.extract 0 1).all (fun a => (inputArg prog a).isSome) &&
       (later.all fun (x, _) => (x.args.extract 0 2).all fun a => (inputArg prog a).isSome) &&
       xe.args.all fun a => (inputArg prog a).isSome)
     "scan: a template's row, state or egress argument is not one input node's leaves"
   need (xe.args.all fun a => !rows.contains (inputArg prog a)) "scan: an egress template's argument is an ingress \
-    row's input node, so an egress gate would depend on the ingress (NetTiming.Layout.Fits)"
+    row's input node, so an egress gate would depend on the ingress (NetTiming.BoundaryGates.Fits)"
   let a0 ← needSome xf.args[1]? "scan: bucket 0 has no entry port"
   let pk := (a0.memberRef 0 0).i
   need (!(a0.memberRef 0 0).p && !rows.contains (some pk) && match root.body.nodes[pk]? with
