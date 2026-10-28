@@ -520,7 +520,8 @@ def test_a_replayed_windows_values_are_refused_through_their_window_bound_domain
     digest = one.served.program_digest
     for v, r in one.served.registered.items():
         theirs = two.served.registered[v]
-        under_two = G.domain(digest, v, r.words, r.leaves, window=None if CR.is_held(v) else W2.hex())
+        under_two = (Wt.domain(v, r.words, r.leaves) if CR.is_held(v)
+                     else G.domain(digest, v, r.words, r.leaves, window=W2.hex()))
         assert under_two.domain_id == theirs.domain.domain_id
         if CR.is_held(v):
             assert under_two.domain_id == r.domain.domain_id and theirs.root == r.root
@@ -539,7 +540,7 @@ def test_a_replayed_windows_values_are_refused_through_their_window_bound_domain
 
 def test_the_periods_weights_are_registered_once_and_every_window_registers_them():
     """Each K's ``b/<K>`` is K's linears' rows in order, each its K codes then its f32 s_w, registered once under
-    the period's declared Program with no window and salts from the period's key; `Weights.root` is
+    θ's domain (`weights.THETA`, not the period's declared Program) with no window and salts from the period's key; `Weights.root` is
     `credit.weights_root` of their roots, and every window of the period registers those same entries, its open root
     over that root."""
     ws = _weights()
@@ -547,7 +548,7 @@ def test_the_periods_weights_are_registered_once_and_every_window_registers_them
     assert sorted(period.registered) == list(KS)
     for k, r in period.registered.items():
         assert (r.value, r.words) == (SV.PREFIX + f"b/{k}", Wt.leaf_words(k))
-        assert r.domain.domain_id == G.domain(period.circuit, r.value, r.words, r.leaves).domain_id
+        assert r.domain.domain_id == Wt.domain(r.value, r.words, r.leaves).domain_id
     rows = [w[j].numpy().tobytes() + np.float32(s[j, 0]).tobytes() for w, s in ws[:2] for j in range(len(w))]
     assert period.registered[16].root.hex() == _tree(period.registered[16], rows, WKEY, SV.B_NONCE)
     assert period.root() == CR.weights_root({k: r.root for k, r in period.registered.items()})
@@ -907,18 +908,18 @@ def test_chunk_words_are_the_specs_leaf_bytes(k, n):
 
 def test_k_up_to_4096_roots_are_unchanged():
     """SPLITK leaves every K <= 4096 as it was: the mixed-K window's A tables and ``b/<K>`` (K = 16 and 32), served
-    from a seeded torch, have the roots they had before chunk rows."""
+    from a seeded torch, have the roots they had before chunk rows (the ``b/<K>`` under θ's domain, `weights.THETA`)."""
     with torch.random.fork_rng():
         torch.manual_seed(0)
         ws = _weights()
         period = _period(ws)
         run, _ws, _got = _window(W1, weights=period)
     got = {v: r.root.hex()[:32] for v, r in run.served.registered.items() if "/a/" in v or "/b/" in v}
-    assert period.root().hex()[:32] == "b13d326fd1047f67c7981396b4b65156"
+    assert period.root().hex()[:32] == "fca5b5059f232fca9b253acd6a425087"
     assert got == {SV.PREFIX + v: h for v, h in {
         "a/16@0": "5f173d832fee3e3bd52ff128b2c32023", "a/16@1": "f1e0c408b7c261e2bdfdba32dfe500d6",
         "a/32@0": "fc273f9145df0611d6daf4d4633ed36e", "a/32@1": "8b0fc9c2aaefbf95fcd4ebe001d312c1",
-        "b/16": "743121b755ff9a0b55d5a101e86a0f1a", "b/32": "46ce3580838d89e8869932d15afc0ac2"}.items()}
+        "b/16": "b80ba3179e86632eb1c234319b9272f9", "b/32": "6447efe8062ae62235355123016d40bf"}.items()}
 
 
 #: kernels' SPLITK vectors (``tests/vectors/splitk_rows.json``, `splitk_rows_vectors`): their
@@ -930,8 +931,8 @@ VECTORS = [
      "8acce5e4bf00be8d31e84814e2b349dd5e0906103d55748662898e15e1501c93a50a993b29b5add3c21e89a8e984942ec4a943b0ee4df17e5ea4e239bee20e56",
      "b2e05799b4fad2b3795b165d5e262d2b35e8776ef3d41eabc132aa160a0fbed537e53927727063f844054ddcce12cb1a5e0e941e4442a4ba50231f7ab72cc369"),
     ("b-6144", "b/6144", 6144, 64, Wt.B_NONCE, False, 128, 1538,
-     "ee06cb8014a9ea97fa6e3c319a61ac9094dfa6727b6a8bca92c9c6daf8098080499f505edeb236c03264fb695e79f2f2c9985ae9250712ae33de36591fbf5358",
-     "f93f07478d0900b061ffc2a6d6b24aa342a7b0247380bd95b2aa3f80fffc8567bed58d4be497b41321d288a33bdd910062e394dbf70444582a7e8f014b49e7ad"),
+     "cf8644b82da6fc9f66fd0caab27e4281850655b7b7aed519395ab9ccdfca05990e653f51d9522012a99067f7eb6b1628727699226fcc5fd419e764bd03520707",
+     "a3fd22475f8bcb1e6eaa8d514498d984690a61444bdc8a2d0f1f022a4623909aa3593b9ab0a33d8bec60e6b6adfdcc575d7c65c01a67bd2e3d7d90148f2dc1a6"),
 ]
 
 

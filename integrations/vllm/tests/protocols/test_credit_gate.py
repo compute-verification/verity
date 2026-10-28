@@ -21,6 +21,7 @@ torch = pytest.importorskip("torch")
 
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as CR
+from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import live as L
 from verity.core.protocols.pouw.coins import Challenger
@@ -980,8 +981,8 @@ def test_a_window_is_credited_only_from_its_statements_proof_files_verified_by_c
     root, digest = auditor.window["root"], _circuit()
     for port, e in got["registered"]["ports"].items():
         held = CR.is_held(e["value"])
-        assert e["domain"] == G.domain(digest, e["value"], e["words"], e["leaves"], window=None if held else root
-                                       ).domain_id.hex(), port
+        assert e["domain"] == (Wt.domain(e["value"], e["words"], e["leaves"]) if held else
+                               G.domain(digest, e["value"], e["words"], e["leaves"], window=root)).domain_id.hex(), port
     failed = _credit(auditor, rec, st, run=_verifier(drawn, reject=drawn[-1:]))
     assert failed["window"][0] == "failed" and failed["credit"] is None
     other = _descriptor(((64, K), (32, K)), ("q", "k"))

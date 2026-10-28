@@ -11,7 +11,8 @@ the r-th K + 4 of them, its K int8 codes and then its f32 scale little-endian, w
 descriptor's SHA-512), the window's open root and the 32-byte salt key are SHAKE256(`LABEL`, NUL, ``program`` /
 ``window`` / ``key``), 64, 64 and 32 bytes. Leaf j's salt is `audit.hm96_salt(key, nonce, j)` at the case's nonce:
 the served A table of call 0's (vllm's ``pouw_h1_served.nonce(0, "a")``, `A_NONCE`), which binds the window, and the
-weights' ``b/<K>`` at `weights.B_NONCE` (K the window's only K), which binds none. Each case pins every leaf's SHA-512 of
+weights' ``b/<K>`` at `weights.B_NONCE` (K the window's only K), which binds none and is θ's, under `weights.THETA` in
+the program's place. Each case pins every leaf's SHA-512 of
 its words' bytes, its ``sha512/row/v2`` digest and its frame-v3 leaf, and the value's domain id and root, all as
 `registered.Registered.commit` gives them under ``hm96-sha512/row/v2``."""
 
@@ -68,7 +69,7 @@ def commit(case: tuple) -> tuple[list[list[int]], G.Registered]:
     name, value, k, count, nonce, windowed = case
     words = Z.chunk_words(rows(name, k, count), k)
     salts = [audit.hm96_salt(key(), nonce, j) for j in range(len(words))]
-    return words, G.Registered.commit(program(), value, words, salts, schema=G.SCHEMA_V2,
+    return words, G.Registered.commit(program() if windowed else Wt.THETA, value, words, salts, schema=G.SCHEMA_V2,
                                       window=window() if windowed else None)
 
 
