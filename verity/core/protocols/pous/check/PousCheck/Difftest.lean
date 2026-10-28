@@ -205,7 +205,7 @@ def storage (inst : Json) : V Json := do
   let n k := J.nat inst k "storage"
   let q : Wire.Params := ⟨← n "w", ← n "c0", ← n "blocks_per_segment", ← n "segments", "", 0⟩
   let (k, delta, rtt) := (← n "k", ← n "delta", ← n "rtt")
-  pure <| match Certificate.Store.ofParams q with
+  pure <| match Certificate.params q with
     | none => .null
     | some s => Json.mkObj [("covered", .bool (Certificate.gate s k delta rtt).2.1.isEmpty),
       ("profile", Certificate.profileJson s k delta rtt)]
