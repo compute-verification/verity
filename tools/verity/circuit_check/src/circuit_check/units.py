@@ -106,9 +106,11 @@ def _calls(fn: Any) -> list[str]:
     return out[::-1]
 
 
-def _reach(roots: list[Any], described: bool = True) -> tuple[dict[str, dict], dict[str, Any]]:
+def _reach(roots: list[Any], described: bool = True, pinned: frozenset[str] | None = None) \
+        -> tuple[dict[str, dict], dict[str, Any]]:
     """What ``roots`` reach (`targets.reachable`, building every body), each as a record holds it, and the objects; without
-    ``described``, no descriptor, name or descriptor id (a sixth of the build, which only a record checks against)."""
+    ``described``, no descriptor, name or descriptor id (a sixth of the build, which only a record checks against).  Described:
+    each one `targets.select` could keep, the ``pinned`` ids (default `targets.pinned`) among them."""
     from verity.ml.circuits import boolean as BL
     from verity.ml.circuits import codec as C
 
@@ -125,6 +127,7 @@ def _reach(roots: list[Any], described: bool = True) -> tuple[dict[str, dict], d
         nodes[fid] = info
     if not described:
         return nodes, objs
+    pinned = TG.pinned() if pinned is None else pinned
     least: dict[str, int] = {}
     bits: dict[str, int] = {}
     for info in nodes.values():
@@ -136,7 +139,7 @@ def _reach(roots: list[Any], described: bool = True) -> tuple[dict[str, dict], d
     tops = {fn.id for fn in roots if _kind(fn) is not None}
     for fid, info in nodes.items():
         g, f = info["g"], info["f"]
-        if fid in tops or g <= TG.MAX_GATES or g == least[f] or (info["b"] and g == bits.get(f)):
+        if fid in tops or fid in pinned or g <= TG.MAX_GATES or g == least[f] or (info["b"] and g == bits.get(f)):
             fn = objs[fid]
             info["d"] = CC.descriptor(fn)
             if info["k"] != "R":
@@ -146,7 +149,7 @@ def _reach(roots: list[Any], described: bool = True) -> tuple[dict[str, dict], d
     return nodes, objs
 
 
-def _select(reached: dict[str, dict]) -> set[str]:
+def _select(reached: dict[str, dict], pinned: frozenset[str] = frozenset()) -> set[str]:
     """`targets.select` over records."""
     by: dict[str, list[tuple[str, dict]]] = {}
     out: set[str] = set()
@@ -162,6 +165,7 @@ def _select(reached: dict[str, dict]) -> set[str]:
             if not keep[0][1]["b"] and (bits := [f for f in fns if f[1]["b"]]):
                 keep.append(min(bits, key=lambda f: f[1]["g"]))
         out.update(fid for fid, _ in keep)
+        out.update(fid for fid, _ in fns if fid in pinned)
     return out
 
 
@@ -175,12 +179,13 @@ class Derived:
     via: dict[str, Entry] = field(default_factory=dict)
 
 
-def derive(entries: list[Entry], described: bool = True) -> Derived:
+def derive(entries: list[Entry], described: bool = True, pinned: frozenset[str] | None = None) -> Derived:
     """`targets.suite` and its `targets.BINDINGS` over records: what the catalog's roots (each entry's, in catalog order)
-    reach, in `targets.reachable`'s order, `select`'s, PoUW's roots whole.  Each id is the record's of the binding it is first
-    reached through, as `reachable` keeps the object it pops first, and each binding's units go to what its own record
-    reaches, as `targets.suite` gives each binding what its own roots reach.  ``described``: each suite id's record holds its
-    descriptor, as a stored one does."""
+    reach, in `targets.reachable`'s order, `select`'s (the ``pinned`` ids kept, default `targets.pinned`), PoUW's roots whole.
+    Each id is the record's of the binding it is first reached through, as `reachable` keeps the object it pops first, and each
+    binding's units go to what its own record reaches, as `targets.suite` gives each binding what its own roots reach.
+    ``described``: each suite id's record holds its descriptor, as a stored one does (one stored before its pin has none:
+    `Stale`)."""
     stack = [(fid, e) for e in entries for fid in e.root_ids]
     nodes: dict[str, dict] = {}
     via: dict[str, Entry] = {}
@@ -192,7 +197,7 @@ def derive(entries: list[Entry], described: bool = True) -> Derived:
             raise Stale(f"{fid}: {e.name}'s record doesn't hold what its roots reach")
         nodes[fid], via[fid] = e.nodes[fid], e
         stack.extend((c, e) for c in e.nodes[fid].get("c", ()))
-    out = _select(nodes)
+    out = _select(nodes, TG.pinned() if pinned is None else pinned)
     for e in entries:
         if e.kind == "_pouw_roots":
             out.update(e.root_ids)
@@ -367,13 +372,14 @@ def plan(cache: Path, repo: Path, log: Callable[[str], None] | None = None) -> P
         entries[0].nodes, entries[0].reused = rec["nodes"], True
     if not any(e.reused for e in entries):
         return None
+    pinned = TG.pinned()
     made: list[dict[str, Any]] = []
     for e in entries:
         made.append({fn.id: fn for fn in e.roots if _kind(fn) is not None})
         if not e.reused:
-            e.nodes, objs = _reach(e.roots)
+            e.nodes, objs = _reach(e.roots, pinned=pinned)
             made[-1].update(objs)
-    d = derive(entries)
+    d = derive(entries, pinned=pinned)
     # an object built now stands for an id when its binding's record holds the descriptor of the one `derive` took
     objects: dict[str, Any] = {}
     for e, objs in zip(entries, made):
@@ -626,8 +632,9 @@ def built_entries() -> list[Entry] | None:
     for units, kind, label, roots in made:
         n, seen[units] = seen[units], seen[units] + 1
         entries.append(Entry(units, kind, label, key(units, n), roots))
+    pinned = TG.pinned()
     for e in entries:
-        e.nodes, _ = _reach(e.roots)
+        e.nodes, _ = _reach(e.roots, pinned=pinned)
     return entries
 
 
