@@ -9,8 +9,6 @@ rounds the record's). `StageHeld` names that of a stage, and `coinsAt_stageHeld`
 `linkPoints_of_custody`: the link points are the history's first coin, from custody's third conjunct (the session
 record's points are the map's at the first coin) where the map's points are the first coin's coordinate
 (`PointsEncoded`) and the run's points are the record's.
-`laterCoins_of_held` (`LaterHeldW.lean`, beside the word-level `StageHeldW` its sparse phases take): `LaterCoins` from
-those.
 `stageHeld_repsOfVals`: the reps' stages are `StageHeld` at `repsOfVals`, rep 0's from round 1 and rep 1's after it,
 from their rounds' custody (`RepRoundsHeld`) and draws (`RepsDrawn`).
 -/
