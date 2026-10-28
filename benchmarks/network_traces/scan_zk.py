@@ -1,6 +1,6 @@
 """scan-zk: the network certifier's step-indexed scan composed in zero knowledge, in the generator form. Ingress bucket t
 (`ingress_scan.IngressScanBucket`; bucket 0's `IngressScanFirst`, from the empty state) reads the warden's ingress row
-t, the scan's state S_{t−1} and the Programs' row t, and computes S_t and its egress view; egress bucket t
+t, the scan's state S_{t−1} and its boundary's slot entries, and computes S_t and its egress view; egress bucket t
 (`egress.EgressBucket`) reads that view and computes the warden's egress row t. A group of link-windows is one
 registration, every row of every unit, input or output, a registered read, proved by C-Flock `prove --zk` behind the
 Lean firewall and held by Lean `verify --zk --registered`. Standalone: in no Spec, except the honest round on the
@@ -33,38 +33,54 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
 * **The group** (``--group G``, default 1; `link`'s ``start``, its first link-window, 0): G link-windows of each link,
   one registration, the scan's buckets 0 … G·T − 1 from the empty state, T a link-window's.
 * **The scan's rows**, committed by the prover before the draw as hiding rows (`verity.ml.commitments.advice`, each
-  tree's root in the registration), G·T leaves each: ``state``, leaf t S_t; ``prog``, leaf t the Programs' row t (each
-  request's entry at its anchor, read and its response ids), the block round's o1 rows; and ``view``, leaf t S_t's
-  egress view.
-* **The block round** (`BLOCK`): the toy block (`ProgBlock{N}`, N = NP: o0 the u16 1, o1 its N-bit input ``x``
-  through two NOTs; ``x`` a row-seg/v1 row, `ROW_SCHEMAS`), one unit a bucket of the group, unit b's ``x`` the
-  Programs' row b, its free input, and its o1 a registered read of ``prog`` leaf b, standing in for the anchored
-  Programs, whose outputs the Programs' row is. The
-  ``prog`` tree is committed under the binding of the block's o1 frame domain (`block_binding`, over the block's
-  statement's input set `block_set`, bound to the session and the group's ingress heads), so its root is the o1 frame
-  root C-Flock commits under the same salts, and `stage` refuses a block whose o1 frame root and domain aren't the
-  tree's: the registration's ``block/o1`` and the honest round's ``scan/prog`` are one root and domain, the tie
-  `NetworkCheck.Period`'s rows form checks (`progTied`). Proved first; accepted, every o0 opens to 1.
-* **The honest round, one registration**: one Program of three templates (`TEMPLATES`): the first unit
-  (`IngressScanFirst`, bucket 0), G·T − 1 ingress units (buckets 1 … G·T − 1) and G·T egress units, its members split
-  a link-window (`members_of`: ``first``, ``ingress-w`` and ``egress-w``), every unit drawn by the verifier's Lean.
-  Ingress unit t reads ``row`` (the warden's ingress row t), ``sin`` (state leaf t − 1; the first unit none) and
-  ``prog`` (leaf t), and outputs ``o0``, its ok bit, ``o1``, S_t, committed as state leaf t, and ``o2``, its view,
-  committed as view leaf t. Egress unit t reads ``state`` (view leaf t) and outputs ``o0``, its render bit, and ``o1``,
-  the row it computes, committed as the warden's egress row t. Each output row but o0 is a registered read of the row
-  it is committed as (`Registered.checkPort` holds a hidden-output statement's output rows, the verifier's PROTOCOL.md
-  §16.13), so S_t is the one leaf unit t computes and unit t + 1 reads, the view the one leaf ingress t computes and
-  egress t reads, and the egress row the one the warden signed: the chains are wires through the registered roots, not
-  the prover's word. Accepted: every o0 opens to 1. The registration's roots also name, as
-  ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each warden row registration a member's warden
-  port reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
+  tree's root in the registration): ``state``, G·T leaves, leaf t S_{t−1} and leaf 0 the empty state, the rows a
+  window circuit of the group reads as its `SCAN_STATE` (`ingress_scan.window_state` from bucket 0), so S_{G·T−1},
+  which no bucket of the group reads, has no leaf; ``prog``, the slot entries (`slot_entries`),
+  NR·nb leaves for the group's nb = G·T / EVERY boundaries, leaf j·nb + b slot j's entry at boundary b (the outputs of
+  the Program anchored there, read and its response ids, as `SlotEntry_v1` writes them once it carries the read bit),
+  the block round's o0 rows; and ``view``, G·T leaves, leaf t S_t's egress view.
+* **The block round** (`BLOCK`): the slot entries' stand-in (`SlotEntry{KO, IDB}`, whose Definition id,
+  ``SlotEntry_v1``, is the one `NetworkCheck.Period`'s `wired` reads: o0 its `entry_bits` input ``x`` through two
+  NOTs, a committed row the verifier never opens; ``x`` a row-seg/v1 row, `ROW_SCHEMAS`), one unit a slot entry of the
+  group, unit k's ``x`` slot entry k, its free input, and its o0 a registered read of ``prog`` leaf k, standing in for
+  the anchored Programs' `SlotEntry_v1` units, whose outputs the slot entries are. Its entries, read bit included, are
+  the prover's: the stand-in copies its input. The ``prog`` tree is committed under the binding of the block's o0
+  frame domain (`block_binding`, over the block's statement's input set `block_set`, bound to the session and the
+  group's ingress heads), so its root is the o0 frame root C-Flock commits under the same salts, and `stage` refuses a
+  block whose o0 frame root and domain aren't the tree's: the registration's ``SlotEntry_v1{…}/c0/o0`` (its ports
+  named as one-stage names a template's first chunk's, `entries_port`) and the honest round's ``scan/prog`` are one
+  root and domain, the tie `NetworkCheck.Period`'s rows form checks (`progTied`, `wired`). Its registration also names
+  the scan's ``state`` tree as ``scan/state``, as an anchored Program's names the `SCAN_STATE` it reads, the tie the
+  rows form checks next (`stateTied`); the stand-in reads no state, so here that tie is its registration's alone.
+  Proved first; accepted, with no output opened.
+* **The honest round, one registration**: one Program of three templates (`TEMPLATES`) in the generator form
+  (`scan_root`, the form `NetworkCheck.Period`'s `scanOf` reads): the first unit (`IngressScanFirst`, bucket 0), G·T − 1
+  ingress units (buckets 1 … G·T − 1) and G·T egress units, each template one batch with its row, state and egress
+  parameters inputs of its own and every ingress unit's ``prog<j>`` a row of one input of the slot entries, its members
+  split a link-window (`members_of`: ``first``, ``ingress-w`` and ``egress-w``, and ``last``, the group's last ingress
+  unit, whose o1 has no leaf to open), every unit drawn by the verifier's Lean. `program` refuses a Program whose
+  one-stage partition or reads (`registered.reads`) aren't the members'. Ingress unit t reads ``row`` (the warden's
+  ingress row t), ``sin`` (state leaf t, S_{t−1}; the first unit none) and each slot j's ``prog<j>`` (``prog`` leaf
+  j·nb + ⌊t / EVERY⌋, its boundary's entry of the slot, one table row a boundary, `NetworkCheck.Period`'s
+  `readsEntries`), and outputs ``o0``, its ok bit, ``o1``, S_t, committed as state leaf t + 1, and ``o2``, its view,
+  committed as view leaf t. Egress unit t reads ``state`` (view leaf t) and outputs ``o0``, its render bit, and
+  ``o1``, the row it computes, committed as the warden's egress row t. Each output row but o0 is a registered read of
+  the row it is committed as (`Registered.checkPort` holds a hidden-output statement's output rows, the verifier's
+  PROTOCOL.md §16.13), so S_t is the one leaf unit t computes and unit t + 1 reads, the view the one leaf ingress t
+  computes and egress t reads, and the egress row the one the warden signed: the chains are wires through the
+  registered roots, not the prover's word. `Registered.checkPort` holds every instance of a registered port, so the
+  last unit's o1, S_{G·T−1}, is a member's own unregistered output, committed and never opened. Leaf 0 is opened by
+  no unit, and the entries boundary 0's Programs write on it are read by none: bucket 0 reads the empty state, in
+  which no slot is live, so none is due. Accepted: every o0 opens to 1. The registration's roots also name, as
+  ``rows/<direction>/<w>`` (`warden_roots`), the root and domain of each warden row registration a member's warden port
+  reads (ingress's ``row``, egress's ``o1``), so a period check holds the answer to them.
 * **The answers** (``answers.json``, `answers`): the honest round's registration and, for each link-window W of the
   group, the warden's two row registrations of W and the scan's one-stage answer (`window_answer`), the same for every
   W, which `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records'
   certificates: accepted, one-stage's profile and bound at ``--delta`` (every unit drawn, the bound 0); refused, a
-  reject naming the members Lean refused. Beside them, ``audits``: the block round's, the compute audit whose o1 is the
-  scan's ``prog`` (its registration and answer, its Program's descriptor, its free inputs G·T·NP, which the rows
-  form's K charges to each link-window tied to it, and no steps).
+  reject naming the members Lean refused. Beside them, ``audits``: the block round's, the compute audit whose o0 is the
+  scan's ``prog`` (its registration and answer, its Program's descriptor, its free inputs NR·nb·NE, every bit of every
+  slot entry, which the rows form's K charges to each link-window tied to it, and no steps).
 * **A void run** (a warden run whose warden failed a connection closed, its `FAIL` in the egress row it signed, its
   reason in the ``fails`` record): the scan renders the connection's end where the warden wrote `FAIL`, and that bucket
   alone differs from the warden's row. Its block round and its honest round are proved, the honest one expected
@@ -72,17 +88,18 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   `targets`), every other member held, and its answer is that refusal, so the period check rejects the link-windows by
   name.
 * **Negatives**, chain's and tampered's refused by Lean's registered reads ("does not open"), unread's by its unit's ok
-  bit. ``chain``: the same Program on a state tree with S_A and S_{A+1} swapped (leaves A and A + 1): ingress unit A's
-  o1, the S_A it computes, doesn't open leaf A. ``tampered``: an egress-only Program of G·T units, one egress row's
-  `DATA` id changed and its link-window re-signed (a warden that saw a byte the scan doesn't render; a warden run's
+  bit. ``chain``: the same Program on a state tree with S_A and S_{A+1} swapped (leaves A + 1 and A + 2): ingress unit
+  A's o1, the S_A it computes, doesn't open leaf A + 1, nor units A + 1's and A + 2's theirs. ``tampered``: an
+  egress-only Program of G·T units, one egress row's `DATA` id changed and its link-window re-signed (a warden that
+  saw a byte the scan doesn't render; a warden run's
   re-signed by the driver's own key, under which the verifier reads it): egress unit t's o1, the row its view renders,
   doesn't open the signed row t. ``unread`` (`_unread`): a Program of one ingress unit, at the first bucket U ≥ 1 where
-  a request's Program starts (its slot's `occ` 1), its ``prog`` tree the honest one but for row U's entry of that
-  slot, its read bit cleared (no Program reads the request): every registered read holds, since the read bit enters
-  the unit's ok bit alone and its S_U and view are the honest ones, and Lean holds its proof, but its o0 opens to 0, so
-  the link-window is refused. Every unit (the one) is drawn. A prover that sets the bit with n 0 and no outputs
-  passes: until the entry is a wire from its Program's `SlotEntry_v1` unit the read bit is the prover's word, and the
-  period check refuses every rows-form period (`NetworkCheck.Period`'s `unwired`).
+  a request's Program starts (its slot's `occ` 1), its ``prog`` tree the honest one but for that slot's entry at U's
+  boundary, its read bit cleared (no Program reads the request): every registered read holds, since the read bit
+  enters the unit's ok bit alone and its S_U and view are the honest ones, and Lean holds its proof, but its o0 opens
+  to 0, so the link-window is refused. Every unit (the one) is drawn. A prover that sets the bit with n 0 and no
+  outputs passes here, since the stand-in's entries are the prover's; an anchored Program's entry is its outputs on the
+  `SCAN_STATE` it reads, which the period check holds to the scan's state tree (`stateTied`).
 * **A sampled draw** (``--draw K``): Lean ``draw --stratified K`` on the verifier's own coins (its OS randomness, the
   rehearsal's live coins), each template's stratum its share and at least one unit; only the drawn units are proved
   and opened, and an accepted audit carries ε at δ (``wrong_units``: at most ``bound`` of ``of`` units wrong, except
@@ -103,7 +120,8 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   each synthetic run has a root of its own). The other rounds keep the verifier's Lean's own coins: one session serves
   one draw, and their refusal is Lean's registered reads, whatever the coins.
 * **What the verifier receives** is scanned for every piece of every unit's rows, inputs and outputs, and every salt
-  but ``o0``'s, which the prover sends so the verifier opens each unit's output (`a8.received`), less the pieces public
+  but a public ``o0``'s, which the prover sends so the verifier opens each unit's output (`a8.received`; the slot
+  entries' o0 is a committed row, `ROWS_O0`, whose salts it never sends), less the pieces public
   anyway (the circuits, zeros, the window's pads and `END` cells) and the sparse pieces (at most one nonzero byte); the
   prover's instance file, which holds them all, is the control. The instance holds each row's u16 words followed by
   the next row's, so a row's zero-padded last chunk isn't one the control holds; its last 16 bytes, which cover the
@@ -136,7 +154,7 @@ from verity.ml.circuits.boolean import trace as TR  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity.ml.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.ml.circuits.program import Program  # noqa: E402
-from verity.ml.circuits.refs import Coll  # noqa: E402
+from verity.ml.circuits.refs import Coll, array_of, coll_concat  # noqa: E402
 from verity.ml.circuits.types import Array, Tuple  # noqa: E402
 from verity.ml.commitments import advice as ADV  # noqa: E402
 from verity.ml.commitments.frame_v3 import BitRowLeaf  # noqa: E402
@@ -202,20 +220,25 @@ SESSION = bytes(range(32))
 TEMPLATES = ("first", "ingress", "egress")
 #: the unread round's: one ingress unit
 UNREAD = ("ingress",)
-#: the block round's: the toy block (`ProgBlock`), one unit a bucket, whose o1 rows are the scan's Programs' rows
+#: the block round's: the slot entries' stand-in (`SlotEntry`), one unit a slot entry, whose o0 rows are the scan's
+#: slot entries
 BLOCK = ("block",)
+#: the templates whose o0 is a committed row the verifier never opens (the slot entries'), every other's its public word
+ROWS_O0 = frozenset(BLOCK)
 #: an input row's schema where it isn't hm96-sha512/row/v2: the block's ``x`` is a row-seg/v1 row, which takes a
 #: compression before its last block at any length, as C-Flock's statement needs of one row (`verity_flock.circuit.
-#: compose`); at the test class every block row is shorter than a block (NP = 352 bits)
+#: compose`); at the test class every block row is shorter than a block (NE = 176 bits)
 ROW_SCHEMAS = {("block", "x"): SCHEMA_HM96_SHA512_ROW_SEG}
+#: each scan template's parameters before its entry ports (`scan_root`'s inputs of its own): row (and sin), or state
+FIXED = {"first": 1, "ingress": 2, "egress": 1}
 #: each round's templates, and its outcome: accepted, refused by Lean's registered reads, or proved with every read
 #: held and its unit's ok bit 0; the block first, since the scan reads its outputs
 ROUNDS = {"block": (BLOCK, "accepted"), "honest": (TEMPLATES, "accepted"), "chain": (TEMPLATES, "does not open"),
           "tampered": (("egress",), "does not open"), "unread": (UNREAD, "ok 0")}
 #: each round Program's directory, by its templates
 PROGRAMS = {TEMPLATES: "joint", ("egress",): "solo", UNREAD: "unread", BLOCK: "block"}
-#: C-Flock's tag of a frame domain's binding (`verity_flock.circuit.BINDING_TAG`), under which the block's o1 rows are
-#: committed and so the scan's `prog` tree (`block_binding`; `stage` refuses a block whose o1 root isn't the tree's)
+#: C-Flock's tag of a frame domain's binding (`verity_flock.circuit.BINDING_TAG`), under which the block's o0 rows are
+#: committed and so the scan's `prog` tree (`block_binding`; `stage` refuses a block whose o0 root isn't the tree's)
 FRAME_BINDING = "verity/flock-circuit/binding/v2"
 VALUES = {k: f"verity/certifier/scan-{k}/v1" for k in ("state", "prog", "view")}
 TIMING = ("e2e_s", "wait_s", "witness_s", "prove_total_s", "proof_bytes", "wire_sent", "wire_recv", "k_log", "nbl",
@@ -250,33 +273,59 @@ def _bytes(x) -> bytes:
 
 
 def ports_of(cls: IS.Class) -> dict[str, tuple[tuple[tuple[str, int], ...], tuple[tuple[str, int], ...]]]:
-    """Each template's input rows and its output rows past o0, (port, bits) in its signature's order."""
-    NP = IS.prog_bits(cls)
-    row, prog = ("row", 8 * cls.S * cls.B), ("prog", NP)
+    """Each template's input rows and its output rows past o0 (the slot entries', `ROWS_O0`, from o0), (port, bits) in
+    its signature's order."""
+    NE = IS.entry_bits(cls)
+    row, progs = ("row", 8 * cls.S * cls.B), tuple((f"prog{j}", NE) for j in range(cls.NR))
     outs = (("o1", IS.state_bits(cls)), ("o2", IS.view_bits(cls)))
-    return {"first": ((row, prog), outs), "ingress": ((row, ("sin", IS.state_bits(cls)), prog), outs),
+    return {"first": ((row, *progs), outs), "ingress": ((row, ("sin", IS.state_bits(cls)), *progs), outs),
             "egress": ((("state", IS.view_bits(cls)),), (("o1", 8 * cls.egress.R * cls.B),)),
-            "block": ((("x", NP),), (("o1", NP),))}
+            "block": ((("x", NE),), (("o0", NE),))}
 
 
-def members_of(templates: tuple[str, ...], G: int, T: int, bucket: int = 1) -> list[SimpleNamespace]:
+def entries_of(cls: IS.Class, G: int, T: int) -> int:
+    """The slot entries of a group of G link-windows of T buckets: NR a boundary, G·T / EVERY boundaries."""
+    return cls.NR * (G * T // cls.EVERY)
+
+
+def entry_at(cls: IS.Class, nb: int, j: int, t: int) -> int:
+    """The slot entry bucket t's ``prog<j>`` reads (`NetworkCheck.Period`'s `readsEntries`): slot j's at t's boundary,
+    row j·nb + ⌊t / EVERY⌋ of a group's nb boundaries."""
+    return j * nb + t // cls.EVERY
+
+
+def slot_entries(cls: IS.Class, progs: list[list[int]]) -> list[list[int]]:
+    """The slot entries of the scan's Programs' rows `progs` (one a bucket, `scan_traffic.chain`'s), the ``prog`` tree's
+    leaves: leaf `entry_at` (j, b·EVERY) slot j's entry of the Programs' row at boundary b (`ingress_scan.prog_rows`),
+    the Programs anchored there. A bucket between boundaries has no due slot, so its row reads none of its entries."""
+    nb = len(progs) // cls.EVERY
+    return [IS.prog_rows(cls, progs[b * cls.EVERY])[j] for j in range(cls.NR) for b in range(nb)]
+
+
+def members_of(templates: tuple[str, ...], G: int, T: int, bucket: int = 1, entries: int = 0) -> list[SimpleNamespace]:
     """A round's members in its Program's order, one a template and link-window w of the group: its name, its first
     unit (``base``) and the scan's buckets its units compute, unit ``base + k`` bucket ``buckets[k]``. The first unit
-    computes bucket 0, the ingress template buckets 1 … G·T − 1 (with no first unit, 0 …), the egress template
-    0 … G·T − 1; the unread round's one unit (`UNREAD`) bucket ``bucket``; the block round's one member (`BLOCK`) every
-    bucket, since the `prog` tree its o1 rows are is one tree over the group."""
+    computes bucket 0, the ingress template buckets 1 … G·T − 1 (with no first unit, 0 …), bucket G·T − 1 a member of
+    its own (``last``: its S_t has no state leaf, and a registered port holds every instance's row), the egress
+    template 0 … G·T − 1; the unread round's one unit (`UNREAD`) bucket ``bucket``; the block round's one member
+    (`BLOCK`) the group's ``entries`` slot entries (`entries_of`), unit k slot entry k, since the `prog` tree its o0
+    rows are is one tree over the group."""
     if templates == UNREAD:
         return [SimpleNamespace(template="ingress", window=bucket // T, name=f"ingress-{bucket // T}", base=0,
                                 buckets=range(bucket, bucket + 1))]
     if templates == BLOCK:
-        return [SimpleNamespace(template="block", window=0, name="block", base=0, buckets=range(G * T))]
+        if entries < 1:
+            raise ValueError("the block round's member is the group's slot entries: give entries (entries_of)")
+        return [SimpleNamespace(template="block", window=0, name="block", base=0, buckets=range(entries))]
     out, at = [], 0
     for tp in templates:
         lo = 1 if tp == "ingress" and "first" in templates else 0
         for w in range(1 if tp == "first" else G):
             bs = range(1) if tp == "first" else range(max(lo, w * T), (w + 1) * T)
-            out.append(SimpleNamespace(template=tp, window=w, name="first" if tp == "first" else f"{tp}-{w}",
-                                       base=at + bs.start - lo, buckets=bs))
+            parts = ((bs[:-1], f"{tp}-{w}"), (bs[-1:], "last")) if tp == "ingress" and w == G - 1 else \
+                ((bs, "first" if tp == "first" else f"{tp}-{w}"),)
+            out += [SimpleNamespace(template=tp, window=w, name=name, base=at + part.start - lo, buckets=part)
+                    for part, name in parts if part]
         at += counts_of(out)[tp]
     return out
 
@@ -303,17 +352,17 @@ def block_set(heads: list, session: bytes) -> str:
 
 
 def block_binding(set_name: str, n: int) -> bytes:
-    """The binding of the block's o1 frame domain over its ``n`` units (`verity_flock.circuit.statement`'s, at
-    instances 0 … n of input set ``set_name``): an advice tree under it has the leaves, so the root, of the o1 rows
+    """The binding of the block's o0 frame domain over its ``n`` units (`verity_flock.circuit.statement`'s, at
+    instances 0 … n of input set ``set_name``): an advice tree under it has the leaves, so the root, of the o0 rows
     committed under the same salts, since both are ``hm96-sha512/row/v2`` leaves of owner −1 over ranks 0 … n."""
-    return identity_digest_sha512(FRAME_BINDING, {"set": set_name, "lo": 0, "hi": int(n), "port": "o1",
+    return identity_digest_sha512(FRAME_BINDING, {"set": set_name, "lo": 0, "hi": int(n), "port": "o0",
                                                   "schema": BitRowLeaf.hiding_schema})
 
 
 def tree(kind: str, rows: list[list[int]], heads: list, session: bytes) -> ADV.Registration:
     """`kind`'s rows (bit rows of whole u16 words) committed as hiding rows, bound to the session and the group's
-    ingress link-windows' heads: `prog`'s under the block's o1 frame binding (`block_binding`), so the tree is the
-    block's o1, the others' by their value (`VALUES`)."""
+    ingress link-windows' heads: `prog`'s under the block's o0 frame binding (`block_binding`), so the tree is the
+    block's o0, the others' by their value (`VALUES`)."""
     n = len(rows)
     binding = block_binding(block_set(heads, session), n) if kind == "prog" else _bound(kind, heads, session)
     return ADV.register([bit_row((_words(r), 16))[0] for r in rows], len(rows[0]), binding)
@@ -339,23 +388,30 @@ def tree_entry(kind: str, reg: ADV.Registration, positions) -> dict:
             "paths": [b"".join(reg.open(p).path).hex() for p in positions]}
 
 
-def tree_refusal(port: dict, reg: ADV.Registration, entry: dict, bcs: list[bytes | None]) -> str | None:
+def tree_refusal(port: dict, reg: ADV.Registration, entry: dict, bcs: list[bytes | None],
+                 refs: list[int] | None = None) -> str | None:
     """The host's read of a statement's entry on a scan registration, as Lean's registered reads make it (in
-    `warden_rows.refusal`'s order): None when it holds. A b‖c of None is a row the host can't name (an output the
-    reference gives none of), which opens no leaf."""
+    `warden_rows.refusal`'s order): None when it holds. ``bcs`` is each instance's b‖c and ``refs`` its table row (its
+    own by default; a shared row's, `registered.table`, the one its instances read). A b‖c of None is a row the host
+    can't name (an output the reference gives none of), which opens no leaf."""
+    refs = list(range(len(bcs))) if refs is None else list(refs)
     if entry["value"] != port["value"]:
         return f"registered reads: the port reads {port['value']}, not another value ({entry['value']})"
     n, root = len(reg.rows), bytes.fromhex(port["root"])
     d, scheme = ADV.domain(reg.binding, n), ADV._scheme(reg.binding, n, reg.n_bits)
-    for r, (p, bc, path) in enumerate(zip(entry["positions"], bcs, entry["paths"], strict=True)):
-        nodes = tuple(bytes.fromhex(path[i:i + 128]) for i in range(0, len(path), 128))
+    table: dict[int, bytes | None] = {}
+    for i, r in enumerate(refs):
+        table.setdefault(r, bcs[i])
+    for r, (p, path) in enumerate(zip(entry["positions"], entry["paths"], strict=True)):
+        nodes, bc = tuple(bytes.fromhex(path[i:i + 128]) for i in range(0, len(path), 128)), table.get(r)
         if bc is None or not scheme.verify_path(ADV.PORT, root, n, p, row_leaf(
                 d, p, ADV.INST.tree_leaf(reg.key, bc), BitRowLeaf(reg.n_bits).hiding_schema), nodes):
             return f"registered reads: table row {r} does not open the registered root at position {p}"
     base = int(port.get(REG.READS_FROM, 0))
-    for i, (p, want) in enumerate(zip(entry["positions"], port["reads"], strict=True)):
-        if p != want:
-            return f"registered reads: unit {base + i} reads position {p}, and the verifier's program reads {want}"
+    for i, (r, want) in enumerate(zip(refs, port["reads"], strict=True)):
+        if entry["positions"][r] != want:
+            return (f"registered reads: unit {base + i} reads position {entry['positions'][r]}, and the verifier's "
+                    f"program reads {want}")
     return None
 
 
@@ -409,7 +465,7 @@ def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> Simple
     the deployment's schedule (its digest, and the class serving it) and public key; each link's registration of each
     link-window in ``cells.jsonl`` verified under that key and session (`warden_rows.check_registration`: the warden's
     signature over the head of the rows' root); and the records' rows under ``cells.salts`` (`warden_rows.Cells.of`)
-    that head. The units read those rows. The Programs' outputs (the ``prog`` row's stand-in) are each connection's ids
+    that head. The units read those rows. The Programs' outputs (the slot entries' ids) are each connection's ids
     as its egress record carries them (`io_tie.parse_cell`), every egress cell an id-form one or a `FAIL` (a void run:
     ``failed`` the reasons its ``fails`` record has in the link-windows, ``fail_buckets`` the buckets they're in, and
     ``failed_why`` the run's ``check.json`` problems that name a connection failed closed). The tampered round's
@@ -510,25 +566,28 @@ def _tamper(got: SimpleNamespace, egress: list[bytes], T: int, B: int, R: int) -
 
 def _unread(cls: IS.Class, ch, heads: list, session: bytes) -> SimpleNamespace | None:
     """The unread round's unit: the first ingress bucket b ≥ 1 at which a slot's Program starts (a request's anchor,
-    the slot due and its `occ` 1), the first such slot j, and the Programs' rows committed with row b's entry j absent,
-    its read bit cleared and its outputs kept; None when no request is anchored in the group past bucket 0."""
+    the slot due and its `occ` 1), the first such slot j, and the slot entries committed with slot j's at b's boundary
+    (leaf ``entry``) absent, its read bit cleared and its outputs kept; None when no request is anchored in the group
+    past bucket 0."""
     for b in range(1, len(ch.progs)):
         reads = [d and s.occ & 1 for d, s in zip(IS.due(cls, ch.scan[b]), ch.scan[b].slots)]
         if any(reads):
             j = reads.index(True)
             entries = IS.prog_decode(cls, ch.progs[b])
             entries[j] = (0, *entries[j][1:])
-            progs = list(ch.progs)
-            progs[b] = IS.prog_encode(cls, entries)
-            return SimpleNamespace(bucket=b, slot=j, q=ch.scan[b].slots[j].q, tree=tree("prog", progs, heads, session))
+            rows, k = slot_entries(cls, ch.progs), entry_at(cls, len(ch.progs) // cls.EVERY, j, b)
+            rows[k] = IS.prog_rows(cls, IS.prog_encode(cls, entries))[j]
+            return SimpleNamespace(bucket=b, slot=j, entry=k, q=ch.scan[b].slots[j].q,
+                                   tree=tree("prog", rows, heads, session))
     return None
 
 
 def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1, start: int = 0) -> SimpleNamespace:
     """The run (`synthetic`, or `warden_run`'s of a warden_serve run), link-windows start … start + group − 1 of each
     link registered by the warden and read back by the verifier, the scan's chain over their rows from the empty state
-    (`scan_traffic.chain`), the prover's three registrations, the chain round's state tree, the unread round's unit
-    and Programs' tree (`_unread`) and the tampered round's egress link-window (`_tamper`)."""
+    (`scan_traffic.chain`), the prover's three registrations (the state tree the group's `ingress_scan.window_state`),
+    the chain round's state tree, the unread round's unit and slot entries' tree (`_unread`) and the tampered round's
+    egress link-window (`_tamper`)."""
     t0 = time.time()
     if group < 1 or start < 0:
         raise SystemExit(f"a group is 1 or more link-windows from link-window 0 on, not {group} from {start}")
@@ -550,14 +609,16 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
         raise SystemExit(f"egress buckets {void} hold a FAIL and the warden's fails record has a reason in buckets "
                          f"{got.fail_buckets}, not the same: a failed connection's reason is in its FAIL's bucket"
                          + (f" ({'; '.join(got.failed_why)})" if got.failed_why else ""))
-    if not 1 <= setup.A < setup.A + 1 < group * T:
-        raise SystemExit(f"the chain round swaps S_A and S_(A+1) of ingress units, 1 <= A < {group * T - 1}")
+    if not 1 <= setup.A < setup.A + 2 < group * T:
+        raise SystemExit(f"the chain round swaps S_A and S_(A+1), state leaves A + 1 and A + 2, 1 <= A < "
+                         f"{group * T - 2}")
     heads = [w.head for w in got.sides["ingress"]]
-    states = ch.states[1:]
-    trees = {k: tree(k, rows, heads, got.session) for k, rows in (("state", states), ("prog", ch.progs),
+    states = IS.window_state(cls, ch.states[1:], 0, group * T)
+    trees = {k: tree(k, rows, heads, got.session) for k, rows in (("state", states),
+                                                                 ("prog", slot_entries(cls, ch.progs)),
                                                                  ("view", ch.views))}
     swapped = list(states)
-    swapped[setup.A], swapped[setup.A + 1] = swapped[setup.A + 1], swapped[setup.A]
+    swapped[setup.A + 1], swapped[setup.A + 2] = swapped[setup.A + 2], swapped[setup.A + 1]
     admitted: dict[int, int] = {}
     for st in ch.scan:
         for s in st.slots:
@@ -600,17 +661,21 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
     verifier's own ports, the host's read of them (`warden_rows.refusal`, `tree_refusal`: the ports in its signature's
     order, inputs then outputs), each unit's o0 word and its output rows as the references compute them (``made``,
     None where the ingress reference gives none), and the warden's row registration each warden port reads
-    (``warden``). The block's unit b reads ``x``, the Programs' row b, its free input and no registered read, and its
-    o1, that row, is a registered read of `prog`'s leaf b; its statement's input set is ``set_name`` (`block_set`)."""
+    (``warden``). An ingress unit's ``prog<j>`` is one table row a slot entry it reads (``refs``, `registered.table`),
+    since a timestep's units read their boundary's; its ``sin`` reads state leaf t and its o1 opens leaf t + 1, the
+    group's last unit's none (its o1 a fresh salt's, `stage`). The block's unit k reads ``x``, slot entry k, its free
+    input and no registered read, and its o0, that entry, is a registered read of `prog`'s leaf k, no public word
+    (``outputs`` None); its statement's input set is ``set_name`` (`block_set`)."""
     ch, T, cls = at.chain, at.T, at.setup.cls
     tp, w, bs = mb.template, mb.window, list(mb.buckets)
     rows = [b - w * T for b in bs]
     state, view = (at.swapped if name == "chain" else at.trees["state"]), at.trees["view"]
     prog = at.unread.tree if name == "unread" else at.trees["prog"]
+    nb = len(ch.progs) // cls.EVERY
     ins, outs = ports_of(cls)[tp]
     if tp == "block":
-        reads, warden = {"o1": ("prog", prog, bs)}, {}
-        outputs, made = [1] * len(bs), {"o1": [_bits(prog, b) for b in bs]}
+        reads, warden = {"o0": ("prog", prog, bs)}, {}
+        outputs, made = None, {"o0": [_bits(prog, b) for b in bs]}
     elif tp == "egress":
         side = at.tampered if name == "tampered" and at.tampered.window == w else at.sides["egress"][w]
         reads = {"state": ("view", view, bs)}
@@ -620,35 +685,44 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
         got = [EG.outputs(cls.egress, ch.view(b)) for b in bs]
         outputs, made = [o for o, _ in got], {"o1": [r for _, r in got]}
     else:
-        reads = {**({"sin": ("state", state, [b - 1 for b in bs])} if tp == "ingress" else {}),
-                 "prog": ("prog", prog, bs), "o1": ("state", state, bs), "o2": ("view", view, bs)}
+        lanes = {f"prog{j}": [entry_at(cls, nb, j, b) for b in bs] for j in range(cls.NR)}
+        o1 = [b + 1 for b in bs]
+        if o1[0] < len(state.rows) <= o1[-1]:
+            raise SystemExit(f"{mb.name}: bucket {len(state.rows) - 1}'s S_t has no state leaf, and its other units' "
+                             "have: a registered port holds every instance's row, so it is a member of its own "
+                             "(members_of's last)")
+        reads = {**({"sin": ("state", state, bs)} if tp == "ingress" else {}),
+                 **{p: ("prog", prog, ps) for p, ps in lanes.items()},
+                 **({"o1": ("state", state, o1)} if o1[-1] < len(state.rows) else {}), "o2": ("view", view, bs)}
         warden = {"row": at.sides["ingress"][w]}
-        got = [IS.reference(cls, ch.ingress[b], _bits(state, b - 1) if tp == "ingress" else None, _bits(prog, b))
-               for b in bs]
+        got = [IS.reference(cls, ch.ingress[b], _bits(state, b) if tp == "ingress" else None,
+                            [x for ps in lanes.values() for x in _bits(prog, ps[k])]) for k, b in enumerate(bs)]
         outputs = [o for o, _s, _v in got]
         if name == "unread":  # the read bit enters ok alone: the unit computes the honest S_t and view
             got = [(o, *ch.outputs(b)) for o, b in zip(outputs, bs)]
         made = {"o1": [s for _o, s, _v in got], "o2": [v for _o, _s, v in got]}
-    units = [tuple(ch.ingress[b] if r == "row" else made["o1"][k] if r == "x" else _bits(reads[r][1], reads[r][2][k])
+    units = [tuple(ch.ingress[b] if r == "row" else made["o0"][k] if r == "x" else _bits(reads[r][1], reads[r][2][k])
                    for r, _b in ins) for k, b in enumerate(bs)]
-    salts, entries, ports, bcs = {}, {}, {}, {}
+    salts, entries, ports, bcs, refs = {}, {}, {}, {}, {}
     for p, side in warden.items():
         _w, salts[p], entries[p] = side.cells.statement(rows)
         ports[p] = {**WR.bucket_port(side.head, at.params, mb.base), "reads": rows}
         bcs[p] = [WR.bc(made[p][k] if p in made else side.cells.rows[r], side.cells.salts[r]) for k, r in enumerate(rows)]
     for p, (kind, reg, ps) in reads.items():
-        salts[p], entries[p] = [reg.salts[i] for i in ps], tree_entry(kind, reg, ps)
+        table, refs[p] = REG.table(ps) if p.startswith("prog") else (ps, list(range(len(ps))))
+        salts[p], entries[p] = [reg.salts[i] for i in table], tree_entry(kind, reg, table)
         ports[p] = tree_port(kind, reg, ps, mb.base)
         bcs[p] = [None if p in made and made[p][k] is None else tree_bc(reg, i, made[p][k] if p in made else None)
                   for k, i in enumerate(ps)]
     refused = header_refusal(ports, entries)
-    for p in [r for r, _b in ins if r in ports] + [o for o, _b in outs]:
+    for p in [r for r, _b in ins if r in ports] + [o for o, _b in outs if o in ports]:
         refused = refused or (WR.refusal(ports[p], warden[p].dom, entries[p], bcs[p]) if p in warden else
-                              tree_refusal(ports[p], reads[p][1], entries[p], bcs[p]))
+                              tree_refusal(ports[p], reads[p][1], entries[p], bcs[p], refs[p]))
     changed = at.tampered.bucket if name == "tampered" and tp == "egress" and at.tampered.window == w else None
     return SimpleNamespace(round=name, template=tp, window=w, name=mb.name, base=mb.base, n=len(bs), buckets=bs,
                            units=units, made=made, salts=salts, entries=entries, ports=ports, bcs=bcs, refused=refused,
-                           outputs=outputs, changed=changed, warden={p: s.registration for p, s in warden.items()},
+                           refs={p: r for p, r in refs.items() if r != list(range(len(bs)))}, outputs=outputs,
+                           changed=changed, warden={p: s.registration for p, s in warden.items()},
                            set_name=at.block_set if tp == "block" else None)
 
 
@@ -663,11 +737,13 @@ def rounds_of(at: SimpleNamespace) -> dict[str, tuple[tuple[str, ...], str]]:
 
 
 def targets(at: SimpleNamespace, name: str) -> list[str]:
-    """The members a refused round's refusal names: chain's, the ingress member of unit A; tampered's, the egress
-    member of the re-signed link-window; unread's, its one ingress unit's; a void run's honest round, the egress member
-    of each FAIL's link-window."""
+    """The members a refused round's refusal names: chain's, those of ingress units A, A + 1 and A + 2 whose o1 opens a
+    state leaf (the group's last unit's opens none); tampered's, the egress member of the re-signed link-window;
+    unread's, its one ingress unit's; a void run's honest round, the egress member of each FAIL's link-window."""
     if name == "chain":
-        return [f"ingress-{at.setup.A // at.T}"]
+        A, n = at.setup.A, at.G * at.T
+        return sorted({mb.name for mb in members_of(TEMPLATES, at.G, at.T) if mb.template != "egress"
+                       for b in mb.buckets if A <= b <= A + 2 and b + 1 < n})
     if name == "tampered":
         return [f"egress-{at.tampered.window}"]
     if name == "unread":
@@ -676,12 +752,12 @@ def targets(at: SimpleNamespace, name: str) -> list[str]:
 
 
 def predicted(at: SimpleNamespace, name: str, members: list[SimpleNamespace]) -> bool:
-    """The host's read of a round before any proof, as the round's: accepted, every read held and every output 1;
-    unread's, every read held and its one unit's output 0; refused, its target members' reads refused ("does not
-    open") and every other member's held."""
+    """The host's read of a round before any proof, as the round's: accepted, every read held and every output 1 (the
+    slot entries' none: their o0 is no public word); unread's, every read held and its one unit's output 0; refused,
+    its target members' reads refused ("does not open") and every other member's held."""
     outcome = rounds_of(at)[name][1]
     if outcome == "accepted":
-        return all(m.refused is None and set(m.outputs) == {1} for m in members)
+        return all(m.refused is None and (m.outputs is None or set(m.outputs) == {1}) for m in members)
     if outcome == "ok 0":
         return [(m.name, m.refused, m.outputs) for m in members] == [(targets(at, name)[0], None, [0])]
     t = targets(at, name)
@@ -691,16 +767,17 @@ def predicted(at: SimpleNamespace, name: str, members: list[SimpleNamespace]) ->
 def wired(members) -> list[str]:
     """Where a round's chains don't hold, on its members' b‖c (`member`'s ``bcs``, port to each unit's): bucket b's
     o1 is bucket b + 1's ``sin`` and its o2 egress bucket b's ``state``, the one leaf of the registered roots both
-    commit to. Empty when they hold."""
+    commit to (the group's last bucket's o1 none). Empty when they hold."""
     o1, o2, sin, state = {}, {}, {}, {}
     for m in members:
         for k, b in enumerate(m.buckets):
             if m.template == "egress":
                 state[b] = m.bcs["state"][k]
             else:
-                o1[b], o2[b] = m.bcs["o1"][k], m.bcs["o2"][k]
-                if "sin" in m.bcs:
-                    sin[b] = m.bcs["sin"][k]
+                o2[b] = m.bcs["o2"][k]
+                for p, at in (("o1", o1), ("sin", sin)):
+                    if p in m.bcs:
+                        at[b] = m.bcs[p][k]
     return [f"S_{b - 1}" for b in sorted(sin) if o1.get(b - 1) != sin[b]] + \
         [f"view {b}" for b in sorted(state) if o2 and o2.get(b) != state[b]]
 
@@ -714,7 +791,8 @@ def host(out: Path, run: Path | None = None, draw: int | None = None, setup: Set
     got = {}
     for name, (templates, outcome) in rounds_of(at).items():
         got[name] = [member(at, name, mb) for mb in members_of(templates, group, at.T,
-                                                               at.unread.bucket if at.unread else 1)]
+                                                               at.unread.bucket if at.unread else 1,
+                                                               len(at.trees["prog"].rows))]
         if not predicted(at, name, got[name]) or (name == "honest" and wired(got[name])):
             raise SystemExit(f"{name}: the host's read of the round isn't {outcome}: "
                              f"{[(m.name, m.refused, m.outputs) for m in got[name]]}, chains {wired(got[name])}")
@@ -723,20 +801,20 @@ def host(out: Path, run: Path | None = None, draw: int | None = None, setup: Set
 
 # --- the statements ---------------------------------------------------------------------------------------------------
 
-def _block_signature(S):
-    return (("x", Array(S.N, BL.BIT)),), Tuple(Array(16, BL.BIT), Array(S.N, BL.BIT))
+def _entry_signature(S):
+    return (("x", Array(IS.entry_bits(S), BL.BIT)),), Tuple(Array(IS.entry_bits(S), BL.BIT))
 
 
-def _block_body(B, S, x):
-    one, zero = B.call(BL.constant(1)).refs[0], B.call(BL.constant(0)).refs[0]
+def _entry_body(B, S, x):
     y = B.batch(BL.NOT, B.batch(BL.NOT, x, axes=(0,)), axes=(0,))
-    return Coll(_block_signature(S)[1], TR._refs([one, *[zero] * 15, *(y.refs[k] for k in range(S.N))]))
+    return Coll(_entry_signature(S)[1], TR._refs([y.refs[k] for k in range(IS.entry_bits(S))]))
 
 
-ProgBlock = CompositeDefinition(
-    "ProgBlock", 1, ("N",), _block_signature, _block_body, conformance="exact-model-tested", register=False,
-    doc="ProgBlock{N}: the toy block whose outputs stand for the Programs' at a bucket: o0 the u16 1 and o1 its N-bit "
-        "input through two NOTs, so its o1 rows are any rows the prover gives it (scan_zk.py)")
+SlotEntry = CompositeDefinition(
+    "SlotEntry", 1, ("KO", "IDB"), _entry_signature, _entry_body, conformance="exact-model-tested", register=False,
+    doc="SlotEntry{KO, IDB}: the stand-in of a slot's Program's entry (io_shell's SlotEntry_v1, as the period check "
+        "names it): o0 its input x, an entry row of `ingress_scan.entry_bits`, through two NOTs, so its o0 rows are "
+        "any entries the prover gives it, read bit included (scan_zk.py)")
 
 
 def _defs(cls: IS.Class) -> dict[str, object]:
@@ -744,17 +822,72 @@ def _defs(cls: IS.Class) -> dict[str, object]:
     sh = cls.egress
     return {"first": bind(IS.IngressScanFirst, **st), "ingress": bind(IS.IngressScanBucket, **st),
             "egress": bind(EG.EgressBucket, B=sh.B, R=sh.R, r=sh.r, NR=sh.NR, K=sh.K, IB=sh.IB, D=sh.D),
-            "block": bind(ProgBlock, N=IS.prog_bits(cls))}
+            "block": bind(SlotEntry, KO=cls.KO, IDB=cls.IDB)}
+
+
+def scan_root(members: list[tuple[object, int, int]], nb: int, every: int) -> Program:
+    """The scan's root in the generator form (`NetworkCheck.Period`'s `scanOf`): each `(template, n, fixed)` of
+    `members` one batch over its n units, in order, its first `fixed` parameters inputs of its own (``<i>.<name>``),
+    and each later one, lane j's ``prog<j>``, at bucket t (the first template's first unit bucket 0, each next unit the
+    next bucket) row j·nb + ⌊t / every⌋ (`entry_at`) of one input, ``prog``, the slot entries of nb boundaries."""
+    sigs = [t.signature() for t, _, _ in members]
+    lanes = [len(ps) - fixed for (ps, _), (_, _, fixed) in zip(sigs, members)]
+    entry = next(ps[fixed][1] for (ps, _), (_, _, fixed), L in zip(sigs, members, lanes) if L)
+    rows = max(lanes) * nb
+
+    def signature(S):
+        params = tuple((f"{i}.{name}", Array(n, ty)) for i, ((ps, _), (_, n, fixed)) in enumerate(zip(sigs, members))
+                       for name, ty in ps[:fixed])
+        return (*params, ("prog", Array(rows, entry))), Tuple(*(Array(n, ret) for (_, ret), (_, n, _) in
+                                                               zip(sigs, members)))
+
+    def body(B, S, *args):
+        entries, outs, at, start = args[-1], [], 0, 0
+        for (t, n, fixed), (ps, _) in zip(members, sigs):
+            gathered = [array_of([entries[j * nb + (start + m) // every] for m in range(n)])
+                        for j in range(len(ps) - fixed)]
+            outs.append(B.batch(t, *args[at:at + fixed], *gathered, axes=(0,) * len(ps)))
+            at, start = at + fixed, start + n
+        return coll_concat(signature(S)[1], outs)
+
+    defn = CompositeDefinition("ScanZkRoot", 1, ("templates", "counts", "nb", "every"), signature, body,
+                               register=False)
+    return Program(bind(defn, templates=tuple(PA.template_id(t) for t, _, _ in members),
+                        counts=tuple(n for _, n, _ in members), nb=nb, every=every))
+
+
+def entry_reads(prog: Program, query: dict, members: list[SimpleNamespace], cls: IS.Class, nb: int) -> dict:
+    """One-stage's reads of the slot entries off the round's Program (`registered.reads`, ``prog`` a registered value
+    of `entry_bits` bit rows), each unit's ``prog<j>`` row: SystemExit unless they are the members' (`entry_at`), so the
+    verifier's own Program reads at one root what the statements open."""
+    try:
+        got = {p: r["rows"] for p, r in REG.reads(prog, query, {"prog": IS.entry_bits(cls) // 16},
+                                                  {"prog": BitRowLeaf.hiding_schema}).items()}
+    except ValueError as e:
+        raise SystemExit(f"one-stage's reads refuse the scan's Program: {e}") from e
+    want = {f"prog{j}": [None] * sum(len(m.buckets) for m in members) for j in range(cls.NR)}
+    for m in members:
+        for k, b in enumerate(m.buckets if m.template != "egress" else ()):
+            for j in range(cls.NR):
+                want[f"prog{j}"][m.base + k] = entry_at(cls, nb, j, b)
+    if got != want:
+        raise SystemExit(f"one-stage's reads of the scan's Program aren't each unit's slot entries: {got} != {want}")
+    return got
 
 
 def program(M, cls: IS.Class, templates: tuple[str, ...], G: int, T: int, out: Path) -> SimpleNamespace:
     """A round's Program and partition (`members_of`'s templates and counts) and each template's stager, every output
-    its own row."""
-    defs, members = _defs(cls), members_of(templates, G, T)
+    its own row. The scan's three templates' (`TEMPLATES`) is the generator form (`scan_root`), its one-stage reads
+    of the slot entries each unit's (`entry_reads`); every other round's a population of its templates."""
+    defs, members = _defs(cls), members_of(templates, G, T, entries=entries_of(cls, G, T))
     counts = counts_of(members)
-    prog = M.P.mixed_population_program([(defs[tp], counts[tp]) for tp in templates])
+    nb = G * T // cls.EVERY
+    prog = scan_root([(defs[tp], counts[tp], FIXED[tp]) for tp in templates], nb, cls.EVERY) \
+        if templates == TEMPLATES else M.P.mixed_population_program([(defs[tp], counts[tp]) for tp in templates])
     query = M.P.template_instances_query([defs[tp] for tp in templates])
     part = M.P.partition(prog, query)
+    if templates == TEMPLATES:
+        entry_reads(prog, query, members, cls, nb)
     out.mkdir(parents=True, exist_ok=True)
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(M.canonical_json(M.encode_program(prog)))
@@ -767,8 +900,9 @@ def program(M, cls: IS.Class, templates: tuple[str, ...], G: int, T: int, out: P
         ins, outs = ports_of(cls)[tp]
         sdir = out / tp
         sdir.mkdir(exist_ok=True)
+        n_outs = len(outs) + (tp not in ROWS_O0)
         st = M.CS.UnitStager(defs[tp], f"unit/scan-{tp}", [(r, ROW_SCHEMAS.get((tp, r), M.V2), b, [r]) for r, b in ins],
-                             [(M.V2, (j,)) for j in range(1 + len(outs))], circuit=sdir / "circuit.txt", bind=bound)
+                             [(M.V2, (j,)) for j in range(n_outs)], circuit=sdir / "circuit.txt", bind=bound)
         st.pin
         stagers[tp] = SimpleNamespace(defn=defs[tp], st=st, base=base, n=cnt, out=sdir, ins=ins, outs=outs,
                                       lower_s=round(time.time() - t, 1))
@@ -777,12 +911,20 @@ def program(M, cls: IS.Class, templates: tuple[str, ...], G: int, T: int, out: P
                            program_file=out / "program.json")
 
 
+def port_prefix(defn, mr: SimpleNamespace) -> str:
+    """Member mr's ports' prefix in its round's registration: its name, the slot entries' (`ROWS_O0`) their template's
+    first chunk's, ``<descriptor id>/c0``, so its o0 is the port `NetworkCheck.Period`'s `wired` reads
+    (`entries_port`)."""
+    return f"{PA.template_id(defn)}/c0" if mr.template in ROWS_O0 else mr.name
+
+
 def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
-    """Member mr's statement: each unit's input rows in a shared-row file (each instance its own table row), every row
-    but o0, input or output, under the salts and paths of its registered entry, ``o0`` under a fresh salt; and the
-    verifier's own `--registered` file. Its outputs are the references' (o0 every unit's, each output row where the
-    reference gives one), and each row's b‖c the one the host read. The block's o1 frame root and domain must be the
-    `prog` tree's: the scan reads the block's outputs only where they are one tree."""
+    """Member mr's statement: each unit's input rows in a shared-row file (each instance its own table row, a slot
+    entry's one a boundary, ``mr.refs``), every row but a public o0, input or output, under the salts and paths of its
+    registered entry, a public ``o0`` under a fresh salt; and the verifier's own `--registered` file. Its outputs are
+    the references' (o0 every unit's where it is public, each output row where the reference gives one), and each
+    row's b‖c the one the host read. The block's o0 frame root and domain must be the `prog` tree's: the scan reads
+    the slot entries only where they are one tree. Its ports in the registration are ``at``'s (`port_prefix`)."""
     t0 = time.time()
     sg = pg.stagers[mr.template]
     st, n = sg.st, mr.n
@@ -791,11 +933,13 @@ def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
         raise SystemExit(f"{mr.name}: m = {st.meta['k_log']} + {nbl} is outside 25 .. {M.a7.M_MAX}")
     words = {r: M.np.asarray([WR.words(u[k]) if isinstance(u[k], bytes) else _words(u[k]) for u in mr.units],
                              dtype=M.np.uint16) for k, (r, _b) in enumerate(sg.ins)}
+    refs = {r: mr.refs.get(r, list(range(n))) for r in words}
+    tables = {r: x[[refs[r].index(i) for i in range(max(refs[r]) + 1)]] for r, x in words.items()}
     set_name = mr.set_name or f"{st.iset.name}-{mr.round}-{mr.window}"
-    salts = {**mr.salts, "o0": [os.urandom(WR.SALT_BYTES) for _ in range(n)]}
+    salts = {"o0": [os.urandom(WR.SALT_BYTES) for _ in range(n)], **mr.salts}
     got = st.stage(words, out, os.urandom(32), salts=salts, indices=range(mr.base, mr.base + n), set_name=set_name,
-                   tables=words, refs={r: list(range(n)) for r in words}, registered=mr.entries)
-    o0 = [int(x[0]) for x in M.np.asarray(got["outs"]["o0"])]
+                   tables=tables, refs=refs, registered=mr.entries)
+    o0 = None if mr.outputs is None else [int(x[0]) for x in M.np.asarray(got["outs"]["o0"])]
     if o0 != mr.outputs:
         raise SystemExit(f"{mr.round}/{mr.name}: the units' outputs {o0} are not the reference's {mr.outputs}")
     made = {p: [M.np.asarray(x, dtype="<u2").tobytes() for x in M.np.asarray(got["outs"][p])] for p, _b in sg.outs}
@@ -808,8 +952,9 @@ def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
     (out / "tables").mkdir(exist_ok=True)
     os.link(sg.out / "circuit.txt", out / "circuit.txt")
     (out / "registered.json").write_text(json.dumps(registered_file(mr), sort_keys=True))
-    m = {"tag": f"{mr.round}-{mr.name}", "name": mr.name, "template": mr.template, "window": mr.window,
-         "buckets": mr.buckets, "dir": out, "meta": st.meta, "pin": st.pin, "class": st.class_sha512, "set": set_name,
+    m = {"tag": f"{mr.round}-{mr.name}", "name": mr.name, "at": port_prefix(sg.defn, mr), "template": mr.template,
+         "window": mr.window, "buckets": mr.buckets, "dir": out, "meta": st.meta, "pin": st.pin,
+         "class": st.class_sha512, "set": set_name, "tables": {r: len(x) for r, x in tables.items()},
          "n": n, "base": mr.base, "defn": sg.defn, "ands": got["ands"], "unit_nnz": got["unit_nnz"],
          "salts": got["salts"], "ports": st.ports, "outputs": o0, "units": mr.units, "ins": sg.ins, "made": made,
          "partition_file": pg.partition_file, "program_file": pg.program_file,
@@ -817,15 +962,15 @@ def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
          "stage_s": round(time.time() - t0, 1)}
     m["header"] = M.a0.public_header(out, n)
     fv = m["header"]["frame_v3"]
-    if mr.template == "block" and (fv["roots"]["o1"], fv["domain_ids"]["o1"]) != (mr.ports["o1"]["root"],
-                                                                                 mr.ports["o1"]["domain"]):
-        raise SystemExit(f"{mr.round}/{mr.name}: its o1's frame root and domain are not the prog tree's: the tree's "
-                         f"binding is not the o1 domain's (block_binding, FRAME_BINDING)")
+    if mr.template == "block" and (fv["roots"]["o0"], fv["domain_ids"]["o0"]) != (mr.ports["o0"]["root"],
+                                                                                 mr.ports["o0"]["domain"]):
+        raise SystemExit(f"{mr.round}/{mr.name}: its o0's frame root and domain are not the prog tree's: the tree's "
+                         f"binding is not the o0 domain's (block_binding, FRAME_BINDING)")
     m["bcs"] = shared_bcs(out / f"pub-{n}.bin", st.ports)
     if any(bc is not None and m["bcs"][i][p] != bc for p, col in mr.bcs.items() for i, bc in enumerate(col)):
         raise SystemExit(f"{mr.round}/{mr.name}: a staged row's b‖c isn't the one the host read")
     if not all(M.a7.opens(next(p for p in st.ports if p.name == "o0"), [w], salts["o0"][i], m["bcs"][i]["o0"])
-               for i, w in enumerate(o0)):
+               for i, w in enumerate(o0 or ())):
         raise SystemExit(f"{mr.round}/{mr.name}: a unit's output doesn't open against its public o0 commitment")
     return m
 
@@ -997,25 +1142,27 @@ def _free_port() -> int:
 
 def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: list[dict], trees: dict, out: Path,
           port: int, k: int | None = None, coins: SimpleNamespace | None = None) -> dict:
-    """One round registered (its members' ports, the scan's registrations' roots, and the warden's row registrations
-    its warden ports read, `warden_roots`, before any coin), its units drawn by the verifier's Lean (`draw --stratified
-    k` on its own coins; every unit when `k` is None) or, given the challenger's ``coins``, by the round's
-    `service.Stream` on them (`spec_of`; `a5_coins.RankCoins`, rank 0), each member's drawn units proved --zk behind the
-    firewall and held by Lean with the verifier's own registered reads; then each held unit's ``o0`` opened under the
-    salt the prover sends. A member with no unit drawn runs no session. Member j's session listens on ``port + j``, or
-    with ``port`` 0 on a port the OS picks free. Writes what the verifier received under ``out / "verifier"``. An
-    accepted audit carries its charge terms (`charge_terms`) and each member's cost per drawn unit; on the challenger's
-    coins, the outcome of record is the stream's (`coins_outcome`)."""
+    """One round registered (its members' ports under their prefix, `port_prefix`, each a frame domain of a leaf an
+    instance or a shared port's table row; the scan's registrations' roots; and the warden's row registrations its
+    warden ports read, `warden_roots`, before any coin), its units drawn by the verifier's Lean (`draw --stratified k`
+    on its own coins; every unit when `k` is None) or, given the challenger's ``coins``, by the round's `service.Stream`
+    on them (`spec_of`; `a5_coins.RankCoins`, rank 0), each member's drawn units proved --zk behind the firewall and
+    held by Lean with the verifier's own registered reads; then each held unit's public ``o0`` (none of the slot
+    entries', `ROWS_O0`) opened under the salt the prover sends. A member with no unit drawn runs no session. Member j's
+    session listens on ``port + j``, or with ``port`` 0 on a port the OS picks free. Writes what the verifier received
+    under ``out / "verifier"``. An accepted audit carries its charge terms (`charge_terms`) and each member's cost per
+    drawn unit; on the challenger's coins, the outcome of record is the stream's (`coins_outcome`)."""
+    from prove_leg import frame_ports  # one-stage's (`WZ._one_stage` puts it on the path)
+
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
     out.mkdir(parents=True, exist_ok=True)
     want, roots, publics, schemas = {}, [], {}, {}
     for m in members:
         fv = m["header"]["frame_v3"]
-        for p_, w in a7.frame_ports(m["set"], m["meta"], m["n"]).items():
-            want[f"{m['name']}/{p_}"] = w
-            schemas[f"{m['name']}/{p_}"] = fv["schemas"][p_]
-            roots.append({"port": f"{m['name']}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"],
-                          "domain": fv["domain_ids"][p_]})
+        for p_, w in frame_ports(m["set"], m["meta"], m["n"], {p: range(k) for p, k in m["tables"].items()}).items():
+            q = f"{m['at']}/{p_}"
+            want[q], schemas[q] = w, fv["schemas"][p_]
+            roots.append({"port": q, "root": fv["roots"][p_], "leaves": w["leaves"], "domain": fv["domain_ids"][p_]})
         publics[m["name"]] = a0.sha512_file(m["dir"] / f"pub-{m['n']}.bin")
     for kind, reg in trees.items():
         d = ADV.domain(reg.binding, len(reg.rows)).domain_id.hex()
@@ -1040,7 +1187,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, pg.program, pg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
     for m in members:
-        checks[f"statement/{m['name']}"] = a7.statement_checks(m, rec, want)
+        checks[f"statement/{m['name']}"] = a7.statement_checks({**m, "name": m["at"]}, rec, want)
     receipt = R.receipt(rec, "one-stage-e2e verifier (scan_zk.py)")
     res: dict = {"checks_before_draw": {c: v["ok"] for c, v in checks.items()}}
     vdir = out / "verifier"
@@ -1103,7 +1250,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
         proved += a0.proved_units(m["header"], live or {})
         served += [m["base"] + u for u in draw_t.get("units", [])]
         n_inst += (live or {}).get("instances", 0)
-        session_roots.update({f"{m['name']}/{p_}": r for p_, r in ((live or {}).get("roots") or {}).items()})
+        session_roots.update({f"{m['at']}/{p_}": r for p_, r in ((live or {}).get("roots") or {}).items()})
         timing = {x: (live or {}).get(x) for x in TIMING}
         statement[m["name"]] = {"session_s": proc["wall_s"], "timing": timing, "process": proc,
                                 "lean_verify_s": lv.get("verify_s"), "drawn": len(local),
@@ -1128,8 +1275,9 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
         result = result or {"accepted": False, "outcome": told["outcome"]}
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
     held = set(proved) if result.get("accepted") else set()
+    public = {m["base"] + i for m in members if m["outputs"] is not None for i in range(m["n"])}
     opened, sent = {}, []
-    for m in members:
+    for m in [m for m in members if m["outputs"] is not None]:
         o0 = next(p for p in m["ports"] if p.name == "o0")
         opened[m["name"]] = [w if (m["base"] + i) in held and M.a7.opens(o0, [w], m["salts"]["o0"][i], m["bcs"][i]["o0"])
                              else None for i, w in enumerate(m["outputs"])]
@@ -1154,7 +1302,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
             if f.is_file():
                 os.link(f, vdir / f"{m['name']}-session-{f.parent.name}-{f.name}")
     got = [w for col in opened.values() for w in col if w is not None]
-    window_ok = bool(result.get("accepted")) and len(got) == len(held) and all(w == 1 for w in got)
+    window_ok = bool(result.get("accepted")) and len(got) == len(held & public) and all(w == 1 for w in got)
     source = "the verifier's Lean's own (flock-verify draw, OS randomness)" if stream is None else \
         f"the auditor's challenger's ({coins.challenger}: a5_coins, the round's service.Stream)"
     return {**res, "accepted": bool(result.get("accepted")), "window_accepted": window_ok, "opened": opened,
@@ -1239,14 +1387,14 @@ def answers(at: SimpleNamespace, out: Path, res: dict, delta: Fraction, block: d
     row registrations of W, the rows form's evidence of W but its certificates. The answer is the group's for every W
     (`window_answer`: accepted where the round's outputs all open to 1), since its registration holds each W's rows
     (`warden_roots`). A refused round's (a void run's) names the members Lean refused. With the block round's audit
-    (``block``), the compute audit whose o1 is the scan's `prog` (``audits``): its registration and answer, and the
-    terms a period's parameters give it, its Program's descriptor, its free inputs (every bit of every unit's ``x``:
-    the toy block copies its input) and no steps."""
+    (``block``), the compute audit whose o0 is the scan's `prog` (``audits``): its registration and answer, and the
+    terms a period's parameters give it, its Program's descriptor, its free inputs (every bit of every slot entry, the
+    stand-in's ``x``: it copies its input) and no steps."""
     reg, answer = _answer(out, "honest", res, delta, f"the scan's audit of link-windows {at.windows}")
     audits = []
     if block is not None:
         breg, banswer = _answer(out, "block", block, delta, "the block's audit")
-        audits.append({"answer": banswer, "free": at.G * at.T * IS.prog_bits(at.setup.cls),
+        audits.append({"answer": banswer, "free": entries_of(at.setup.cls, at.G, at.T) * IS.entry_bits(at.setup.cls),
                        "program": json.loads((out / PROGRAMS[BLOCK] / "program.json").read_text()),
                        "registration": breg, "steps": 0})
     doc = {"format": ANSWERS, "delta": str(delta), "registration": reg, "audits": audits,
@@ -1277,15 +1425,15 @@ def expected(at: SimpleNamespace, name: str, res: dict) -> bool:
 
 
 def blobs_of(members: list[dict]) -> tuple[dict[str, bytes], set[str]]:
-    """The witness pieces the verifier must not receive: every unit's rows, inputs and outputs but o0, and every salt
-    but ``o0``'s."""
+    """The witness pieces the verifier must not receive: every unit's rows, inputs and outputs but a public o0, and
+    every salt but a public ``o0``'s (the slot entries' o0, `ROWS_O0`, is a committed row, salts and all)."""
     blobs = {}
     for m in members:
         for i, u in enumerate(m["units"]):
             blobs.update({f"{m['name']} {r} {i}": _bytes(x) for (r, _b), x in zip(m["ins"], u)})
         blobs.update({f"{m['name']} {p} {i}": x for p, col in m["made"].items() for i, x in enumerate(col)})
-        blobs.update({f"{m['name']} salt {p} {i}": s for p, ss in m["salts"].items() if p != "o0"
-                      for i, s in enumerate(ss)})
+        blobs.update({f"{m['name']} salt {p} {i}": s for p, ss in m["salts"].items()
+                      if p != "o0" or m["template"] in ROWS_O0 for i, s in enumerate(ss)})
     return blobs, set(blobs)
 
 
@@ -1374,7 +1522,7 @@ def prove(a) -> int:
             av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta)
             trees = {**at.trees, **({"state": at.swapped} if name == "chain" else {}),
                      **({"prog": at.unread.tree} if name == "unread" else {})}
-            reads = {("egress",): ("view",), BLOCK: ("prog",)}.get(pg.templates)
+            reads = {("egress",): ("view",), BLOCK: ("prog", "state")}.get(pg.templates)
             trees = {k: v for k, v in trees.items() if reads is None or k in reads}
             res = audit(M, av, at, pg, name, members, trees, out / name, a.port and a.port + (2 * G + 2) * j, ks[name],
                         coins if name == "honest" else None)
