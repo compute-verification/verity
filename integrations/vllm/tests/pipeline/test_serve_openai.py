@@ -532,7 +532,7 @@ def test_under_ids_the_wardens_id_request_streams_raw_id_events_then_done(tmp_pa
 
 
 def test_under_ids_the_network_certifiers_clients_get_vllms_http_and_json(tmp_path):
-    """The same endpoint under ``--protocol ids`` for the network certifier's leg (certifier_serve, straight to the
+    """The same endpoint under ``--protocol ids`` for the network certifier (certifier_serve, straight to the
     endpoint): ``/v1/models`` and ``/tokenize`` as ever, its shim's streamed POST (the id request's fields with
     ``return_token_ids``) an HTTP response, chunked, of vLLM's JSON chunks carrying the token ids, and its probe's
     (urllib) the same."""

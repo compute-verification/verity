@@ -1,22 +1,23 @@
-"""Lane DERIVE-3 — real `transformers` 5.16.1 classes after the G-RH-14 (embedding `padding_idx`) and G-RH-7 (bf16 `inv_freq`
-buffer) closures, ZERO transformers patches, reference mode, sdpa; REAL-HF's harness machinery (`test_derive_realhf`: wrappers,
-evaluation against torch CPU, JSONL rows) and DERIVE-2's held-out model makers (`test_derive_hf5_heldout`) reused unchanged.
+"""Real `transformers` 5.16.1 classes with the embedding `padding_idx` and the bf16 `inv_freq` buffer supported, ZERO transformers
+patches, reference mode, sdpa; the harness machinery of `test_derive_realhf` (wrappers, evaluation against torch CPU, JSONL rows) and
+the held-out model makers of `test_derive_hf5_heldout` reused unchanged.
 
 Groups (`GROUP` in the JSONL row):
-  * `grh14`   — `OlmoForCausalLM` (pad 1), `GemmaForCausalLM` (pad 0), f32: the G-RH-14 targets;
-  * `grh7`    — `LlamaForCausalLM`, `Qwen2ForCausalLM`, `Qwen3ForCausalLM` in bf16: the G-RH-7 targets;
-  * `reconf`  — Llama / Qwen2 / GPT-2 (`gelu_pytorch_tanh`) / Qwen3 f32 greedy: the digests DERIVE-2 reported must not move;
+  * `grh14`   — `OlmoForCausalLM` (pad 1), `GemmaForCausalLM` (pad 0), f32: the `padding_idx` targets;
+  * `grh7`    — `LlamaForCausalLM`, `Qwen2ForCausalLM`, `Qwen3ForCausalLM` in bf16: the bf16 `inv_freq` targets;
+  * `reconf`  — Llama / Qwen2 / GPT-2 (`gelu_pytorch_tanh`) / Qwen3 f32 greedy: the digests `test_derive_realhf` and
+                `test_derive_hf5_heldout` report must not move;
   * `heldout` — `Phi3ForCausalLM` (primary), `GPTNeoXForCausalLM`, `StableLmForCausalLM` (secondary), f32: classes nobody used to
-                find G-RH-14 / G-RH-7, run once as-is; a refusal is a valid result (filed as G-RH-16+), never patched here;
-    * `open`    — the still-open gaps G-RH-3 / -12 / -13 / -15: must still refuse with their (stable part of the) strings;
-    * `heldout4` — DERIVE-4: `Starcoder2ForCausalLM` (primary), `GraniteForCausalLM`, `CohereForCausalLM` (secondary), f32: classes nobody
-                used to find G-RH-16 / G-RH-17 (the `grh14` rows are DERIVE-4's targets), run once as-is; refusals filed as G-RH-18+.
+                build the `padding_idx` / `inv_freq` support, run once as-is; a refusal is a valid result, never patched here;
+    * `open`    — the open gaps (below): must still refuse with their (stable part of the) strings;
+    * `heldout4` — `Starcoder2ForCausalLM` (primary), `GraniteForCausalLM`, `CohereForCausalLM` (secondary), f32: classes nobody
+                used to build any support here (the `grh14` rows are its targets), run once as-is; refusals are never patched here.
 
 Run (pod, `/workspace/venv-realhf`):
     REALHF_OUT=/workspace/derive3-realhf/hf5b.jsonl /workspace/venv-realhf/bin/python -m pytest \
         tests/program/test_derive_hf5b_realhf.py -q -p no:cacheprovider -s
 Knobs as in test_derive_realhf (REALHF_EVAL, REALHF_STEPS, REALHF_ONLY, REALHF_OUT, REALHF_HEAD); REALHF_GROUP=<group> selects a group.
-bf16 equality criterion (REAL-HF's `evaluate`, unchanged): logits — `allclose(rtol=1/64, atol=1/32)` is the pass/fail `match`, and the
+bf16 equality criterion (`test_derive_realhf`'s `evaluate`, unchanged): logits — `allclose(rtol=1/64, atol=1/32)` is the pass/fail `match`, and the
 row ALSO carries `exact_words` (bit-exact count) and `max_abs`; greedy tokens — bit-equal or not (`match_mode: exact tokens`)."""
 from __future__ import annotations
 
@@ -38,12 +39,12 @@ HEAD_DIM = H // NH
 GROUP = os.environ.get("REALHF_GROUP", "")
 
 CLASS = {**RH.MODEL_CLASS, **HO.HELDOUT_CLASS, "phi3": "Phi3ForCausalLM", "gpt_neox": "GPTNeoXForCausalLM", "stablelm": "StableLmForCausalLM",
-         # DERIVE-4 held-out (not used to find G-RH-16 / -17): LayerNorm + bias + gelu_pytorch_tanh; residual / logit multipliers; parallel attn+MLP
+         # `heldout4`: LayerNorm + bias + gelu_pytorch_tanh; residual / logit multipliers; parallel attn+MLP
          "starcoder2": "Starcoder2ForCausalLM", "granite": "GraniteForCausalLM", "cohere": "CohereForCausalLM"}
 
 
 def make_config(arch: str, impl: str = "sdpa", tie: bool = True, **over):
-    """Tiny random configs for the DERIVE-3 held-out classes (the others come from RH / HO). `pad_token_id` is set explicitly where the
+    """Tiny random configs for this file's held-out classes (the others come from RH / HO). `pad_token_id` is set explicitly where the
     class default would fall outside the tiny vocabulary (Phi3: 32000) — a config value, not a patch."""
     common = dict(tie_word_embeddings=tie, attn_implementation=impl, use_cache=False)
     if arch == "phi3":
@@ -112,24 +113,24 @@ for arch in ("phi3", "gpt_neox", "stablelm"):
     for what in ("forward", "greedy"):
         CASES.append((f"{arch}-sdpa-f32-tie1-{'fwd' if what == 'forward' else 'greedy'}", "heldout", arch, "sdpa", "f32", what, {}, ()))
 CASES.append(("phi3-sdpa-f32-tie1-fwd-partial_rotary_0.5", "heldout", "phi3", "sdpa", "f32", "forward", {"partial_rotary_factor": 0.5}, ()))
-# DERIVE-4: `heldout4` — Starcoder2 (primary), Granite, Cohere (secondary); run once as-is, refusals filed as G-RH-18+, never patched here
+# `heldout4` — Starcoder2 (primary), Granite, Cohere (secondary); run once as-is, refusals never patched here
 for arch in ("starcoder2", "granite", "cohere"):
     for what in ("forward", "greedy"):
         CASES.append((f"{arch}-sdpa-f32-tie1-{'fwd' if what == 'forward' else 'greedy'}", "heldout4", arch, "sdpa", "f32", what, {}, ()))
 CASES += [
-    ("llama-eager-f32-tie1-fwd", "open", "llama", "eager", "f32", "forward", {}, ("hidden_state", "lift_fresh_copy")),            # G-RH-3
+    ("llama-eager-f32-tie1-fwd", "open", "llama", "eager", "f32", "forward", {}, ("hidden_state", "lift_fresh_copy")),
     ("gpt2-eager-f32-tie1-fwd-gelu_pytorch_tanh", "open", "gpt2", "eager", "f32", "forward", {"activation_function": "gelu_pytorch_tanh"},
-     ("hidden_state", "lift_fresh_copy")),                                                                                        # G-RH-12 (behind G-RH-3)
-    ("gpt2-sdpa-f32-tie1-fwd", "open", "gpt2", "sdpa", "f32", "forward", {}, ("numerics_unregistered", "a Python scalar operand needs a constant kind")),  # G-RH-13
+     ("hidden_state", "lift_fresh_copy")),                                                                                        # the same refusal as the eager llama case
+    ("gpt2-sdpa-f32-tie1-fwd", "open", "gpt2", "sdpa", "f32", "forward", {}, ("numerics_unregistered", "a Python scalar operand needs a constant kind")),
     ("mistral-sdpa-f32-tie1-fwd-sw4", "open", "mistral", "sdpa", "f32", "forward", {"sliding_window": 4},
-     ("decomposition", "the static attn_mask is not the causal pattern")),                                                        # G-RH-15
+     ("decomposition", "the static attn_mask is not the causal pattern")),
 ]
 if GROUP:
     CASES = [c for c in CASES if c[1] == GROUP]
 if RH.ONLY:
     CASES = [c for c in CASES if RH.ONLY in c[0]]
 
-# DERIVE-2's reported digests: the re-confirmation rows must reproduce them exactly
+# the digests the earlier harnesses report: the re-confirmation rows must reproduce them exactly
 EXPECT_DIGEST_PREFIX = {"llama-sdpa-f32-tie1-greedy": "538319a3770a", "qwen2-sdpa-f32-tie1-greedy": "e9d32625a99b",
                         "gpt2-sdpa-f32-tie1-greedy-gelu_pytorch_tanh": "03925eb18841", "qwen3-sdpa-f32-tie1-greedy": "46ed593f82a3"}
 
@@ -138,9 +139,9 @@ def _derive_identity(case_id: str, group: str, dims: dict, dtype: str, impl: str
     """The `name` / `config` handed to `derive_report`. Both are part of the program's identity: the root specialization id is
     `Derived[<name>]_v1{SRC={class, config_sha256, inputs, mode, profile}}` and `program_digest` hashes the root id, so the SAME gates
     under another name or config are another digest. The re-confirmation rows therefore use exactly the identity of the harness
-    that reported the digest — REAL-HF's `RealHF[<id>]` with `{dims (no head_dim), dtype, impl, tie}` for Llama / Qwen2 / GPT-2
-    (`test_derive_realhf.py`), DERIVE-2's `HeldOut[<id>]` with `{dims + head_dim, …}` for Qwen3 (`test_derive_hf5_heldout.py`).
-    Every other case is `HF5b[<id>]` with the full dims and the config overrides (its digests are new, not comparable to §5 / §6)."""
+    that reported the digest — `RealHF[<id>]` with `{dims (no head_dim), dtype, impl, tie}` for Llama / Qwen2 / GPT-2
+    (`test_derive_realhf.py`), `HeldOut[<id>]` with `{dims + head_dim, …}` for Qwen3 (`test_derive_hf5_heldout.py`).
+    Every other case is `HF5b[<id>]` with the full dims and the config overrides (its digests are new, not comparable to theirs)."""
     if group == "reconf" and case_id.startswith("qwen3"):
         return f"HeldOut[{case_id}]", {**dims, "dtype": dtype, "impl": impl, "tie": True}
     if group == "reconf":

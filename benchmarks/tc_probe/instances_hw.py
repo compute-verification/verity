@@ -41,7 +41,7 @@ are ``out of domain``.  Positive tiers must have none; the negative tier's ``rej
 have ``hardware != claimed`` and ``hardware == correct``).
 
 Outputs under ``--out``: ``probe_results.json``, ``capture_<tier>.npz`` (the hardware accumulator of every instance at every step,
-the final words, the ids), ``sass_<kernel>_<arch>.txt`` with ``--sass-check``, and under ``research run`` a ``result.json`` of kind
+the final words, the ids), ``sass_<kernel>_<arch>.txt`` with ``--sass-check``, and in a recorded run (``RESEARCH_RUN_ID`` set) a ``result.json`` of kind
 ``tc-evidence/v1`` whose ``tc_evidence`` is the meta contract: ``{instruction, target, instances_dataset, instances_tier, range,
 manifest_sha256, elements, mismatches, first_mismatch | null, per_step_checked, sass, device, driver, cuda, model_agrees, ...}``.
 ``mismatches`` counts hardware words that differ from the reference words: the tier's expected (model-recorded) words, and on the

@@ -6,6 +6,7 @@
   "Properties.Pouw.LiveSalt",
   "Properties.Pouw.Period",
   "Properties.Pouw.PeriodJ10R",
+  "Properties.Pouw.ServedValues",
   "Properties.Pouw.Strata",
   "Properties.Pouw.Credit",
   "Properties.Nci",
@@ -337,7 +338,12 @@
  "layers": {
   "Properties.Pouw": {
    "imports": ["PouwWindow", "PouwCheck", "PouwCommit"],
-   "except": ["Properties.Pouw.Credit", "Properties.Pouw.Period", "Properties.Pouw.PeriodJ10R"],
+   "except": [
+    "Properties.Pouw.Credit",
+    "Properties.Pouw.Period",
+    "Properties.Pouw.PeriodJ10R",
+    "Properties.Pouw.ServedValues"
+   ],
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Pouw.Commit": {
@@ -564,6 +570,11 @@
    "imports": ["RemoteAudit", "Properties.RemoteAudit.Line"],
    "except": [],
    "why": "the bandwidth component's refinement is stated against its own check (`RemoteAudit.Protocol`) and the memory line of record (`Properties.RemoteAudit.Line`), whose model vocabulary it reads through that module; never a proof"
+  },
+  "Properties.Pouw.ServedValues": {
+   "imports": ["Definitions.Core.Formalism", "Properties.Pouw.PeriodJ10R"],
+   "except": [],
+   "why": "the served period's values in AND gates are stated against served H1's period and premises (`Properties.Pouw.PeriodJ10R`) and the AND count (`Definitions.Core.Formalism`), never a proof"
   }
  },
  "reads_exempt": {
@@ -1835,6 +1846,12 @@
    ],
    "assumptions": [],
    "type_hash": "4271b69b424ca1a5e9ef6c4d6854c39ebe1a149b1d6d22f08374a1ca2f7a443f"
+  },
+  "Properties.Pouw.ServedValues.SecurityProofs.rightValues": {
+   "owner": "@compute-research",
+   "signature": ["Properties.Pouw.ServedValues.SecurityProofs.rightValues : Properties.Pouw.ServedValues.RightValues"],
+   "assumptions": [],
+   "type_hash": "7d4c471713d37a6d31db1e6c5edf681d9307b72177d18ecd4e657b9726c9f0cb"
   },
   "Properties.Pouw.Strata.strataTile": {
    "owner": "@compute-accounting",
@@ -3584,7 +3601,8 @@
    "Pous.Period.SecurityProofs.periodHeldDemo": "frozen (premise): periodHeldAt at Demo B's store, N = 1038*2^16 blocks, state bound 1,060,008,348,186 bits; its premises are periodHeldAt's.",
    "Pous.Period.SecurityProofs.periodHeldDeployed": "frozen (premise): periodHeld at the deployed ring budget (RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64), the one pous-ring-speed derives from Delta + RTT = 854,000 ns and the measured round floor ROUND_NS = 361.55 / 3.490 ns (art:23a323f3, r20260929-060834-0ec4): DEADLINE_ROUNDS = 8,243 <= RING_D, and RING_D + 1 rounds take 1.995 x the limit; outside both regions where P2RingAuditSecure is refuted (D >= 32,894; L >= 2^169 at k = 105). Its premises are periodHeld's at that budget (CoinCommitHides, P2RingAuditSecure, Pous.Period.RingDevice), none under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldHonest": "completeness: the honest lemma of periodHeld and periodHeldDeployed: at an honest period on one H200 holding all of C* (honestRun, 2^30 bits on chip, one PCIe Gen 5 x16 side channel of 437,248,000 bits a round), RingDevice holds at the deployed budget for every audit, the certificate HONEST_S = 63,000,000 bits is positive and fits the state bound, and the budget is the deadline's at the measured floor (DEADLINE_ROUNDS <= RING_D, the 1.995x margin)",
-   "Pous.Period.SecurityProofs.periodHeldNontrivial": "completeness: the nontrivial lemma of periodHeld and periodHeldDeployed: at a period whose capacity account holds nothing, an accept-all verdict fails their conclusion wherever the period's data holds no break (a concrete audit with no break needs SHA-512 on each of the table's 2^20 strings, so that is a hypothesis), and their event is false at the honest period"
+   "Pous.Period.SecurityProofs.periodHeldNontrivial": "completeness: the nontrivial lemma of periodHeld and periodHeldDeployed: at a period whose capacity account holds nothing, an accept-all verdict fails their conclusion wherever the period's data holds no break (a concrete audit with no break needs SHA-512 on each of the table's 2^20 strings, so that is a hypothesis), and their event is false at the honest period",
+   "Properties.Pouw.ServedValues.SecurityProofs.rightValues": "frozen (no-function,world-unlisted): H1J10RCheckedCreditPeriod's period and premises, less UnitFixed and the play's folded words, with its bound in AND gates of the registered declaration D under the lowering pinned at registration (Verity.creditSize, Definitions.Core.Formalism): except with probability delta_s + n(delta_bind + delta_ks), delta_coin plus delta_crypto, an accepted period's right blocks (DrawnLayer.Good under periodMode) have total AND count at least (1 - eps_skip)_+ S, S the credited size of the windows before the first refusal, eps_skip = sigma eps(j) N_live / S, and each block's AND count taken outside the ledger of gates another protocol credits; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. A values guarantee, not a compute claim: right values aren't work. Right is the accounting model's DrawnLayer.Good, not yet tied to the committed values Credit.window checks. No premise beyond H1's: TileDrawIsCoin, TileServiceSound, RegisteredBeforeDraw, SaltIsLiveCoin and SharedNoiseLucks, the one computational premise. Proved from H1J10RCheckedCreditPeriod at a play whose fixed words are the right blocks' (Proofs.Pouw.ServedValues), with an honest and a nontrivial witness (Proofs.Pouw.ServedValues.Honest)."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -4343,7 +4361,7 @@
     "Properties.SampledProofs.bernoulliBounds"
    ]
   },
-  "Definitions.Accounting.Actual.WipeDraw": {
+  "Definitions.Accounting.Actual.Sampler": {
    "digest": "e93a07d613ef24d8ce4fed26d4b9caf7e4c26bc0726e85305ada1a4f371bc77a",
    "definitions": {
     "Accounting.Actual.wordIndex": "d33dadd3418335eec0660359ccf6e2bc823b564c2bb7bd6cd5318f174a710aa5"
@@ -4365,7 +4383,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "Definitions.Accounting.Assumptions.CreditedWords": {
@@ -4464,7 +4483,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "Definitions.Accounting.Carrier": {
@@ -4618,7 +4638,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "Definitions.Accounting.ComposePeriod": {
@@ -4662,7 +4683,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "Definitions.Accounting.Device": {
@@ -4919,7 +4941,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "Definitions.Accounting.HMu": {
@@ -4939,7 +4962,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "Definitions.Accounting.Joint": {
@@ -5350,6 +5374,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
@@ -5389,7 +5414,10 @@
     "Accounting.TS.J10R.unitNoise": "c8b6ea8e36d810d9e773ea2dd84717f8f360a291afd6594ebd0d0dc27f151c4b",
     "Accounting.TS.J10R.value": "1fd214974f9bc3347ab34c4f54eaa503560aca0747787019765fce52174ac563"
    },
-   "guarantees": ["Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"]
+   "guarantees": [
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
+   ]
   },
   "Definitions.Accounting.TS.Machine": {
    "digest": "2279040738c1521c54f6a556c516019dc0610aedc92e30143707cc28cdbae52a",
@@ -5402,7 +5430,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "Definitions.Accounting.TS.Play": {
@@ -5420,7 +5449,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "Definitions.Accounting.TS.ProofLayer": {
@@ -5434,7 +5464,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "Definitions.Accounting.TS.Receipt": {
@@ -5457,7 +5488,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "Definitions.Accounting.TS.ReceiptHMu": {
@@ -5471,7 +5503,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "Definitions.Accounting.TS.Routes": {
@@ -5492,7 +5525,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "Definitions.Accounting.Tag.Sketch": {
@@ -5553,12 +5587,13 @@
    ]
   },
   "Definitions.Core.Circuit": {
-   "digest": "54b055a835f6c061dfcc3e44fc40bc16dbb199f51147eb053c3bbccc5798e7d6",
+   "digest": "110dc415d28c00a3caace224e87585aca0e95d756176805e2089792bbe9374b2",
    "definitions": {
     "Verity.Circuit": "c86ddd734da68edae1a4e99343f0dfc3e717418d0f7bc8a55a8a33af0f471a17",
     "Verity.Circuit.N": "41024293e7ed9a8b1848ff13d93bc8ddd2e8afa1f9ef29855dca860b83bd8022",
     "Verity.Circuit.Transcript": "143a8f7857fb47ed184789c9def351742e213359fb13b44d565fce324fbf8853",
     "Verity.Circuit.computed": "bfe4079fbbb9d2e78b9758d517ec8e9f9df876d8bbfb7a0d9c71531da5ebc9ef",
+    "Verity.Circuit.exits": "2a5d20416f1d70094895291568660b80757e0ff023589ec9af448f26de4b0cdb",
     "Verity.Circuit.into": "3aa2233c88538a9df262b86079d2755e8d2aab73ede32959405d8df3937da797",
     "Verity.Circuit.isInput": "afd969b1411d8262286149c0c2b784a934deee04648709a0a08fd6c9dabe544c",
     "Verity.Circuit.op": "52c6b3809c85fa1ecc4a24cdb391a9d07d94cf708e48cf598179a0b7b9631b03",
@@ -5589,7 +5624,8 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesDark",
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
-    "NciCheck.Properties.SecurityProofs.Witnesses"
+    "NciCheck.Properties.SecurityProofs.Witnesses",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "Definitions.Core.Declaration": {
@@ -5612,7 +5648,8 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesDark",
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
-    "NciCheck.Properties.SecurityProofs.Witnesses"
+    "NciCheck.Properties.SecurityProofs.Witnesses",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "Definitions.Core.Digest": {
@@ -5626,6 +5663,16 @@
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity"
    ]
+  },
+  "Definitions.Core.Formalism": {
+   "digest": "b9c218a1f0522606c2492525556955626454d51f5079c4636c6d0fb5aa44bbc4",
+   "definitions": {
+    "Verity.Circuit.Affine": "07c5e2cd229c4e65ff7121784d37106a206f5bbe952384f97c0004fb1723a144",
+    "Verity.Circuit.IsAnd": "cde2e6a8622514f4f062846ba8ed7eb96f4d3ce2ad0c1c095dbe1f376dd4d10a",
+    "Verity.Circuit.andSize": "3b849ed3179d9c2b65811c48d03e2adcf55b4ef7d51aebf4132aa3f03824141a",
+    "Verity.Circuit.bitZ": "6e6df84b2a57ea4f505984ed58d1b5ddda2506cde0e6494be29dc3db1b6189da"
+   },
+   "guarantees": ["Properties.Pouw.ServedValues.SecurityProofs.rightValues"]
   },
   "Definitions.Core.Fp32": {
    "digest": "41c8061ea8f55a86ca47a2f556c3adae1584e166307523434642dbeb121699a0",
@@ -6692,7 +6739,10 @@
     "Pouw.PearlC.Sha512.ssig0": "0bf48aa35b6f2c55c3c0ff981d8c614c8325442bbd60d88299dcb36ba0baafce",
     "Pouw.PearlC.Sha512.ssig1": "83559e2ac05eda653e1c0059e5939d92fb58105db8b7676f36c02405157f2226"
    },
-   "guarantees": ["Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"]
+   "guarantees": [
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
+   ]
   },
   "Definitions.Pouw.PearlC.W1": {
    "digest": "2103ebd0e10fdadc34bfdb52870a92ed82c1cd280321532c7c37806bd27b4397",
@@ -6745,7 +6795,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "Definitions.Pouw.Window": {
@@ -6759,7 +6810,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "Evaluate.Casts": {
@@ -7162,6 +7214,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.acceptIsVerified",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
@@ -7286,6 +7339,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.acceptIsVerified",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
@@ -7354,6 +7408,7 @@
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.Pouw.Strata.strataTile",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
@@ -7508,6 +7563,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.acceptIsVerified",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
@@ -7625,6 +7681,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent",
     "Properties.RemoteAudit.Component.acceptIsVerified",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
@@ -7696,6 +7753,7 @@
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
@@ -7715,6 +7773,7 @@
    },
    "guarantees": [
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
    ]
@@ -7744,6 +7803,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
    ]
@@ -7980,6 +8040,7 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
@@ -8036,6 +8097,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
    ]
@@ -8131,7 +8193,10 @@
     "Flock.Registered.knownPayload": "95c0f843bbe9566de2422e1406f3d155ee6bad1c6b6b210f8019b330838a6cf4",
     "Flock.Registered.rowBytesV2": "affced86a8e5d0b9ad7afc24bef4a37c01a20bf1001100e3ea46cba35528988c"
    },
-   "guarantees": ["Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"]
+   "guarantees": [
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
+   ]
   },
   "Flock.Registered": {
    "digest": "98b1cae99f498cd66a018d69b4ffb86ae84da886d723695ae115b45e30dc1c46",
@@ -8164,6 +8229,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
    ]
@@ -8459,7 +8525,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "MemoryChallenger.FrameV3": {
@@ -9999,7 +10066,10 @@
     "PouwCheck.Chunks.CHUNK_MAX": "397a27ae76db15159d05208e3ab551123c96e4d4d1e875a54a6e02b1e85e0e01",
     "PouwCheck.Chunks.chunks": "d092d50cf46303721c19e9adb39fdfd95286658ea8de16b888b6177db14ed148"
    },
-   "guarantees": ["Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"]
+   "guarantees": [
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
+   ]
   },
   "PouwCheck.Credit": {
    "digest": "fe1123a42c2f67481f23c939a205ccb2e0fa51c2d675bafd7486bd5ab2a7cca9",
@@ -10219,6 +10289,7 @@
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.Pouw.Strata.strataTile"
    ]
   },
@@ -10339,7 +10410,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "PouwCheck.Json": {
@@ -10371,6 +10443,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.Pouw.Strata.strataTile"
    ]
   },
@@ -10381,7 +10454,10 @@
     "PouwCheck.publicRowSalt": "b035b784cb8accd761a09d0d3e0ae27eb099adbfce3561e0d7a5cdf7ea2939d9",
     "PouwCheck.saltBytes": "7b89eb468ce1f177dc3fcaf8d6555a7d36bc14fc8e43ae46b5a71c6242c4c0da"
    },
-   "guarantees": ["Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"]
+   "guarantees": [
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
+   ]
   },
   "PouwCheck.Pass": {
    "digest": "2226beee1bf478122eb20cfab5e9b1128fbc560c895bc188138a59336a836df9",
@@ -10466,6 +10542,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.Pouw.Strata.strataTile"
    ]
   },
@@ -10618,7 +10695,8 @@
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "PouwCommit.Frame": {
@@ -10663,7 +10741,8 @@
     "Properties.Pouw.Commit.frameInjective",
     "Properties.Pouw.Commit.frameSizes",
     "Properties.Pouw.Commit.leafRefusals",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "PouwCommit.Py": {
@@ -10699,7 +10778,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "PouwCommit.Rows": {
@@ -10730,7 +10810,8 @@
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.onePair",
     "Properties.Pouw.LiveSalt.oneRoot",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "PouwWindow.Draw": {
@@ -10885,6 +10966,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.Pouw.Strata.strataTile"
    ]
   },
@@ -12138,7 +12220,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "Properties.Pouw.PeriodJ10R": {
@@ -12204,7 +12287,26 @@
     "Properties.Pouw.PeriodJ10R.tileLayer": "414abffad6ce996ac797d9e02ef17e9b3e5382e07d8861f61e411e2763c447e8",
     "Properties.Pouw.PeriodJ10R.tileRun": "cec0665a41dda106f97939c5975a7ebf6cd1733f2d6211297445ffcc0673a4ca"
    },
-   "guarantees": ["Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"]
+   "guarantees": [
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
+   ]
+  },
+  "Properties.Pouw.ServedValues": {
+   "digest": "39ec9139d1e90ee1860120ea43442b2d059bd69ce07e809ee892deccbcf1d96d",
+   "definitions": {
+    "Properties.Pouw.ServedValues.BlockMap": "453fdf8ea5d48c239d05c438631101d762a55b2f5843a695cbe40b5eb80dff31",
+    "Properties.Pouw.ServedValues.BlockMap.gates": "675c1c4b7386c9078e60f26df03c231f64744e3268ce0f6393182fa31d07fb50",
+    "Properties.Pouw.ServedValues.BlockMap.size": "fcc894f7cb16e5e984c4abb744d73a40e55783f7635bd134d5cc6b2562946a67",
+    "Properties.Pouw.ServedValues.RightValues": "f63e7414ab19becf2006d7d53da53b6c5c3ad2d5051777028c1bf133aa4c3e6d",
+    "Properties.Pouw.ServedValues.creditFloor": "ffff1c82d19708c5b5c820a9c621aa7b693faf1f75717b7a5661d0b447ca13ee",
+    "Properties.Pouw.ServedValues.creditedSize": "f3171da484d5a89cd6af1d3f03b9a2be8e2f86ddfb29bf588ab766b65eeffce4",
+    "Properties.Pouw.ServedValues.epsSkip": "bfef0dcd964fcd5edd0ff33051be4991d36e6c45f1e9d6fcc8cdf7152eb72e5b",
+    "Properties.Pouw.ServedValues.liveSize": "b09df032b09da04f61f9709655600aeb2b8921fd5dc19b8a3740635bebd87a3e",
+    "Properties.Pouw.ServedValues.rightSize": "9744e65973999cbc519074fc29f2ef40f158ddeabdacbd2272f21b209a04bfb9",
+    "Properties.Pouw.ServedValues.sizePerWord": "5696bb0b975868ec6bcd678a7e5fc3d2615a1166b136b9d18b3e0b73ce98a0e0"
+   },
+   "guarantees": ["Properties.Pouw.ServedValues.SecurityProofs.rightValues"]
   },
   "Properties.Pouw.Strata": {
    "digest": "8e088b868f61790cb1bfeec1de99b9ea0f019e2b66932ee2ac5eeeedf34876dd",
@@ -13443,7 +13545,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "SampledProofs.ChallengerRecord": {
@@ -13490,7 +13593,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "SampledProofs.ChallengerSession": {
@@ -13653,7 +13757,8 @@
     "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod"
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
   "SampledProofs.Draw": {
@@ -13769,6 +13874,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
@@ -13907,6 +14013,7 @@
     "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.SampledProofs.haltEndsOpen",
     "Properties.SampledProofs.haltIsFinal",
     "Properties.SampledProofs.noAcceptAfterHalt"
@@ -13968,6 +14075,7 @@
    },
    "guarantees": [
     "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds"
    ]

@@ -297,7 +297,7 @@ class ProgramIndex:
             # `part_rank<r>` (tp_rank_partials, TP-04/TP-06: the all-reduce input) AND the MOE-01 plane `moe/L<k>/sum` (moe_block_stream,
             # staged by MoeBlockSource on the rank exactly as at TP1).  The manifest requires both (TP-06); the
             # replay addressed the row at the partial only, so the reconciliation read every `moe/L<k>/sum` identity as
-            # `identities_without_rows` (OLMoE TP2 B8 int-6: 6,944 per rank, COMMIT FAIL).  `copies` = the plane address of the same
+            # `identities_without_rows` (OLMoE TP2 B8: 6,944 per rank, COMMIT FAIL).  `copies` = the plane address of the same
             # output: recorded in the population under the plane identity AND read back and compared against the same evaluated words
             # (two committed copies, one relation, both checked).  The plane mapping is the checked one (_describe_plane: geometry,
             # ordinal, dataflow); a mapping failure is NAMED here and the plane identity stays without rows -- fail closed, never aliased.
@@ -307,14 +307,14 @@ class ProgramIndex:
                 d["copy_error"] = pd.get("plane_error") or "sum plane has no member"
             else:
                 pm = pd["members"][0]
-                why = "F-r19-int-24: the MoeSum output = the MoE module's returned tensor (a boundary Value) = its moe_block_stream sum plane"
+                why = "the MoeSum output = the MoE module's returned tensor (a boundary Value) = its moe_block_stream sum plane"
                 d["copies"] = [{"op_path": pd["op_path"], "member": pm[0], "width": int(pm[1]), "dtype": str(pm[2]), "row": int(pd["row"]),
                                 "of": d["members"][0][0], "why": why}]
         self._desc[i] = d
         return d
 
     def _describe_plane(self, i: int, fam: str, st: dict[str, Any], mod: str, hint: str, name_row: int | None, kind: str) -> dict:
-        """[MAN-06f v3] a fused-MoE block row -> its `moe_block_stream` PLANE address: op_path `moe/L<layer>`, members = the plane(s) the row
+        """A fused-MoE block row -> its `moe_block_stream` PLANE address: op_path `moe/L<layer>`, members = the plane(s) the row
         produces (router: `router_w` f32[TOPK] + `router_ids` i32[TOPK] per token; up: `up` bf16[N_up] per pair; act (the SiluMul under the
         MoE runner): `act` bf16[I] per pair; in_quant: `in_q` e4m3[H] + `in_scale` f32[H/G] per token; act_quant: `act_q` e4m3[I] +
         `act_scale` f32[I/G] per pair; down: `down` bf16[H] per pair; sum: `sum` bf16[H] per token), row = the row's token / pair

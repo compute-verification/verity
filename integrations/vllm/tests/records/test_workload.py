@@ -1,4 +1,4 @@
-"""`records.workload`: every row file and what each writer writes load as the typed workload and dump back to the same JSON; the
+"""`records.workload`: every workload file and what each writer writes load as the typed workload and dump back to the same JSON; the
 older v1 layout a pod's runs still hold loads too; a missing or unknown field is refused by name."""
 from __future__ import annotations
 

@@ -280,7 +280,7 @@ def _circuits_def(attr: str, **statics: Any) -> Callable[[], Any]:
     return get
 
 
-PLAN = "CMP-92 circuits' plan (af6de1f1), section 1b"
+PLAN = "circuits' plan (af6de1f1), section 1b"
 
 
 # -- RMSNorm
@@ -324,7 +324,7 @@ def rms_norm_out() -> Template:
                     f"{PLAN}: h = bf16(RN(x rs)), out = bf16(RN(w h))", _circuits_def("RmsNormOut"))
 
 
-# -- the quantizer (CIR-100, #4433)
+# -- the quantizer (`ops.quant`)
 
 def relu16(x: np.ndarray, on: bool) -> np.ndarray:
     """``x < 0 ? +0 : x`` on bf16 words (-0 and NaNs are themselves)."""
@@ -342,11 +342,11 @@ def row_abs_max(x: np.ndarray, relu: bool) -> np.ndarray:
 @_template("RowAbsMax_v1")
 def row_abs_max_t(N: int, RELU: bool) -> Template:
     return Template("RowAbsMax_v1", (("N", N), ("RELU", RELU)), (("x", 16, N),), (16, 1), lambda x: row_abs_max(x, RELU),
-                    "CIR-100, #4433's ops.quant.RowAbsMax_v1", _quant_def("RowAbsMax", N=N, RELU=RELU))
+                    "ops.quant.RowAbsMax_v1", _quant_def("RowAbsMax", N=N, RELU=RELU))
 
 
 def quant_scale(amax: np.ndarray) -> np.ndarray:
-    """RN(amax / 127) when 1 <= f32(amax) <= +inf as signed words, else 1.0 (#4433's ``_scale``)."""
+    """RN(amax / 127) when 1 <= f32(amax) <= +inf as signed words, else 1.0 (`ops.quant`'s ``_scale``)."""
     a = widen(amax)
     pos = (a.view(np.int32) >= 1) & (a.view(np.int32) <= 0x7F800000)
     return np.where(pos, div(a, np.uint32(F32_127)), np.uint32(F32_ONE)).astype(np.uint32)
@@ -364,13 +364,13 @@ def quant_s8_pair(RELU: bool) -> Template:
     def fn(x, amax):
         return to_s8_rni_sat(div(widen(relu16(x, RELU)), quant_scale(amax)[:, None]))
     return Template("QuantS8Pair_v1", (("RELU", RELU),), (("x", 16, 2), ("amax", 16, 0)), (8, 2), fn,
-                    "CIR-100, #4433's ops.quant.QuantS8Pair_v1", _quant_def("QuantS8Pair", RELU=RELU))
+                    "ops.quant.QuantS8Pair_v1", _quant_def("QuantS8Pair", RELU=RELU))
 
 
 @_template("QuantS8Scale_v1")
 def quant_s8_scale(HALF: int) -> Template:
     return Template("QuantS8Scale_v1", (("HALF", HALF),), (("amax", 16, 0),), (16, 1), lambda a: half(quant_scale(a), HALF),
-                    "CIR-100, #4433's ops.quant.QuantS8Scale_v1", _quant_def("QuantS8Scale", HALF=HALF))
+                    "ops.quant.QuantS8Scale_v1", _quant_def("QuantS8Scale", HALF=HALF))
 
 
 # -- the static matmuls, K-split
@@ -634,7 +634,7 @@ IFACE_B = "verity/drawn-unit-bundle/v1"
 
 
 def key_at(definition: str, binding: Mapping[str, Any]) -> str:
-    """The key of ``definition`` at an IFACE-B binding (statics as JSON, a DOT as ``{"fn": id}``)."""
+    """The key of ``definition`` at a drawn-unit bundle's binding (statics as JSON, a DOT as ``{"fn": id}``)."""
     if definition not in _REGISTRY:
         raise KeyError(f"no replay for template {definition!r}: one of {sorted(_REGISTRY)}")
     statics = {k: _DOTS[v["fn"]] if isinstance(v, Mapping) else v for k, v in binding.items()}
@@ -646,9 +646,9 @@ def _unpack(row: bytes, width: int) -> list[int]:
 
 
 def units_of(bundle: Mapping[str, Any], payload: bytes | None = None) -> list[dict[str, Any]]:
-    """A bundle's units in `replay`'s form: ``{"units": [...]}`` already in it, or IFACE-B's drawn-unit bundle
+    """A bundle's units in `replay`'s form: ``{"units": [...]}`` already in it, or a drawn-unit bundle
     (``verity/drawn-unit-bundle/v1``) with its ``payload``: each port's row, u16 words little-endian, read as words of its
-    parameter's width, the output rows joined in port order. Openings are IFACE-B's `check`, not this."""
+    parameter's width, the output rows joined in port order. Openings are `replay_bundle.check`'s, not this."""
     if bundle.get("format") != IFACE_B:
         if "units" not in bundle:
             raise ValueError("not a replay bundle: no 'units'")
