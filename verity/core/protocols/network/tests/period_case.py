@@ -806,7 +806,7 @@ def _checker_egress_sig(S):
 
 
 #: Stand-ins of the checker form's templates, which take the rows they compare as inputs (its egress row an input gate,
-#: which `NetTiming.Layout.Fits` refuses).
+#: which `NetTiming.BoundaryGates.Fits` refuses).
 CHECKER_INGRESS = CompositeDefinition(
     "NetworkPeriodScanIngress", 0, _STATICS, _checker_ingress_sig,
     lambda B, S, row, sin, prog, sout, view: B.call(BL.XOR, BL.operands(sin[0], sout[0])), register=False)

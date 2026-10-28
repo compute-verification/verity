@@ -35,7 +35,7 @@ its witness given. -/
 def PartAcceptsP (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) (s : ℕ) (x : Msg)
     (c : ℕ → Coin) (w : Flock.Wit) (ms : List Msg) : Prop :=
-  (∃ st : Stmt, D.parse x = some st ∧ shape st.form) ∧
+  (∃ st : CompiledStatement, D.parse x = some st ∧ shape st.form) ∧
     ∃ xO : Msg, Flock.check DO.parse xO w = true ∧ (∀ e ∈ L.calls x s w, H e.1 = e.2) ∧
       (findColl (L.calls x s w ++ vcallsAt H D xO)).isSome = false ∧ shows s x xO c ∧
       (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) ∧
@@ -47,7 +47,7 @@ check holds at `ws[s]` and the parts' own messages, for every part, and the reco
 parts' messages or two recorded calls collide. -/
 def DecompBP (H : Msg → Msg) (D : Deploy Coin) (IV : Verifier Coin) (L : LayoutB) (shape : Form → Prop)
     (chk : ℕ → Msg → (ℕ → Coin) → Flock.Wit → List Msg → Prop) : Prop :=
-  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ws : List Flock.Wit),
+  ∀ (x : Msg) (st : CompiledStatement), D.parse x = some st → shape st.form → ∀ (c : ℕ → Coin) (ws : List Flock.Wit),
     ws.length = D.nS x → (∀ e ∈ L.allCalls x ws, H e.1 = e.2) →
     (∀ s (hs : s < ws.length), chk s x c ws[s] (L.msgs x ws)) →
       (run H (replay (L.msgs x ws)) IV (xI D x) () fun i => c i.val).out = .acc ∨
@@ -99,7 +99,7 @@ part's `chkP` at its own witness gives every part's `chk` at the parts' own mess
 theorem decompBP_of_jointP {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {IV : Claims.Verifier Coin}
     {L : LayoutB} {shape : Claims.Recursion.Form → Prop} {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
     {chkP : ℕ → Msg → (ℕ → Coin) → Claims.Flock.Wit → List Msg → Prop}
-    (hle : ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
+    (hle : ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), D.parse x = some st → shape st.form →
       ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit), JointP H D L chkP x c ws →
         ∀ s < D.nS x, chk s x c (L.msgs x ws))
     (hD : DecompB H D IV L shape chk) : DecompBP H D IV L shape chkP := by

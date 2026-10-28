@@ -141,13 +141,13 @@ theorem recursiveKSAt_of_leaves (wE w : Msg → ℝ)
       (recL DeployedR.rdR b aux nOf hd recRest wE DeployedR.finalR w (DeployedR.layR OpenRows.elemR))
       Claims.Recursion.Form.Dense recRead (bB b aux nOf hd recRest) (cmtTr recRead) (Rows.rowDPieces key)
       (fun _ => rfl) (fun _ h => h) (fun _ => rfl) (OpenLower.piecesInRangeR_rowDPieces key))
-  have hI : ∀ s x c (st0 : Claims.Recursion.Stmt), RecDeploy.parse x = some st0 → Claims.Recursion.Form.Dense st0.form →
+  have hI : ∀ s x c (st0 : Claims.Recursion.CompiledStatement), RecDeploy.parse x = some st0 → Claims.Recursion.Form.Dense st0.form →
       OpenDirs.InnerMR recRead (bB b aux nOf hd recRest) s x c :=
     fun s x c _ hst hdn xO hsh i hins f unit inn hf hload => by
       obtain ⟨v, hv, hm, -⟩ := OpenLower.staged_innerAt (b := bB b aux nOf hd recRest)
         (Bk := (FlockDeploy.V false).k) (s := s) (c := c) hst hdn le_rfl xO hsh i hins f unit inn hf hload
       exact ⟨v, hv, hm⟩
-  have hpos : ∀ s x c (st0 : Claims.Recursion.Stmt), RecDeploy.parse x = some st0 → Claims.Recursion.Form.Dense st0.form →
+  have hpos : ∀ s x c (st0 : Claims.Recursion.CompiledStatement), RecDeploy.parse x = some st0 → Claims.Recursion.Form.Dense st0.form →
       OpenDirs.DirsCoinR recRead (bB b aux nOf hd recRest) (Rows.rowDPieces key) Rows.posAt
         (bdR DeployedR.rdR wE DeployedR.finalR w).DE.V.k s x c :=
     fun s x c _ hst hdn => OpenLower.posTieR_dense (b := bB b aux nOf hd recRest)

@@ -410,7 +410,7 @@ theorem innerLevels_eq {sh : Shape} {LANES H l l' : ℕ}
 /-- **Check 5's `dirs` rows are the statement's instances**: where check 5's inner session is at the inner statement's
 `m` (`InnerAt`'s first conjunct), its schedule is table 0's (`schAt`), whose level `s` is the statement's
 (`levelMatch`) and the one `openRows` finds (`innerLevels_eq`), of `2 q` rows. -/
-theorem drSize_staged {x : Msg} {st0 : Claims.Recursion.Stmt} (hst : parse x = some st0)
+theorem drSize_staged {x : Msg} {st0 : Claims.Recursion.CompiledStatement} (hst : parse x = some st0)
     (hd : Claims.Recursion.Form.Dense st0.form) {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt}
     (hss : RecVStar.statements r.shape = .ok ss) {s lv LANES HH n : ℕ}
     (hsv : ss[s]? = some (.recOpen lv LANES HH n)) (hlev : s < (OpenLower.schAt (xIOf x) 0).levels.size)

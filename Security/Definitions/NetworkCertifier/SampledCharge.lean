@@ -28,14 +28,14 @@ noncomputable def faultySets (d : Design) (P : Partition) (δ : ℝ) : Finset (F
 /-- **Accepted with the faulty set `F`**: some declared advice `(a, free)` makes the first `k` steps `Accepted` by the
 circuit's Program, with `a`, the inputs other than the ingress, among `As`, and `free` holding values only at the
 committed gates of `F`'s units (`FaultyGate`). -/
-def AcceptedFaulty {L K S : ℕ} (C : Prog) (P : Partition) (lay : Layout L S) (k : ℕ) (As : Set (ℕ → Bool))
+def AcceptedFaulty {L K S : ℕ} (C : Prog) (P : Partition) (lay : BoundaryGates L S) (k : ℕ) (As : Set (ℕ → Bool))
     (F : Finset ℕ) (op : ℕ → List (Obs L K S) → List Bool) (o : List (Obs L K S)) : Prop :=
   ∃ a ∈ As, ∃ free : ℕ → Option Bool, (∀ g b, free g = some b → FaultyGate C P F g) ∧
     Accepted (circuitProgram C lay k) op k o (a, free)
 
 /-- **The sequences a sampled audit accepts at `δ`**: the observation sequences of length `n`, with jitter below `D`,
 accepted with some possible faulty set at `δ` (`AcceptedFaulty`). -/
-def AccSeqsSampled {L K S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay : Layout L S) (n : ℕ)
+def AccSeqsSampled {L K S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay : BoundaryGates L S) (n : ℕ)
     (As : Set (ℕ → Bool)) (δ : ℝ) (op : ℕ → List (Obs L K S) → List Bool) (D : ℕ) : Set (List (Obs L K S)) :=
   {o | o.length = n ∧ (∀ x ∈ o, x.jitter < D) ∧ ∃ F ∈ faultySets d P δ, AcceptedFaulty C P lay n As F op o}
 
@@ -49,20 +49,20 @@ the values the registration commits. -/
 
 /-- **Inputs among `As` suffice** at `δ` for the inputs `ρ`: a sequence accepted with a possible faulty set and the
 inputs `ρ` besides the ingress is accepted with that set and inputs among `As`. -/
-def AdviceIn {L S : ℕ} (K : ℕ) (C : Prog) (P : Partition) (d : Design) (lay : Layout L S) (k : ℕ) (ρ : ℕ → Bool)
+def AdviceIn {L S : ℕ} (K : ℕ) (C : Prog) (P : Partition) (d : Design) (lay : BoundaryGates L S) (k : ℕ) (ρ : ℕ → Bool)
     (As : Set (ℕ → Bool)) (δ : ℝ) : Prop :=
   ∀ F ∈ faultySets d P δ, ∀ (op : ℕ → List (Obs L K S) → List Bool) (o : List (Obs L K S)),
     AcceptedFaulty C P lay k {ρ} F op o → AcceptedFaulty C P lay k As F op o
 
 /-- **The free inputs** of `C` over the horizon `k`: its input gates that are no step's ingress before `k`, the inputs
-the circuit's Program reads from the advice (`Layout.inputOf`). -/
-def freeInputs {L S : ℕ} (C : Prog) (lay : Layout L S) (k : ℕ) : Finset ℕ :=
+the circuit's Program reads from the advice (`BoundaryGates.inputOf`). -/
+def freeInputs {L S : ℕ} (C : Prog) (lay : BoundaryGates L S) (k : ℕ) : Finset ℕ :=
   (Finset.range C.gates.length).filter fun g =>
     C.gates[g]? = some .input ∧ (List.range k).any (fun i => (lay.ingress i).contains g) = false
 
 /-- **The inputs pinned at `R`**: `ρ`'s values at the free inputs in `R`, any value at the other free inputs, and
 `false` off the free inputs: `2^#(freeInputs \ R)` of them. -/
-def AsReg {L S : ℕ} (C : Prog) (lay : Layout L S) (k : ℕ) (R : Finset ℕ) (ρ : ℕ → Bool) : Set (ℕ → Bool) :=
+def AsReg {L S : ℕ} (C : Prog) (lay : BoundaryGates L S) (k : ℕ) (R : Finset ℕ) (ρ : ℕ → Bool) : Set (ℕ → Bool) :=
   {a | (∀ g ∈ R, g ∈ freeInputs C lay k → a g = ρ g) ∧ ∀ g, g ∉ freeInputs C lay k → a g = false}
 
 /-- **The leak relation** at `δ`, on the statement's bytes: the statement parses and has a partition, and every
@@ -70,8 +70,8 @@ observation sequence of length `k` with jitter below `Dj` that the trace's trans
 status complete (`Covered`) is among the sequences `AccSeqsSampled` counts at the inputs `As s ρ`, `ρ` the trace's
 committed values (`traceVal`): a set that the statement, `δ`, `As`, the operator, `Dj` and the trace's values where
 `As` reads them fix. At `AsReg` those are the registered inputs' values, which the registration commits. -/
-def RLeak (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt) (partition : Stmt → Option Partition)
-    (L K S : ℕ) (lay : Stmt → Layout L S) (k : Stmt → ℕ) (δ : ℝ) (As : Stmt → (ℕ → Bool) → Set (ℕ → Bool)) (Dj : ℕ) :
+def RLeak (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option AuditStatement) (partition : AuditStatement → Option Partition)
+    (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (As : AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)) (Dj : ℕ) :
     Rel Wit :=
   fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧
     ∀ (op : ℕ → List (Obs L K S) → List Bool) (o : List (Obs L K S)),
