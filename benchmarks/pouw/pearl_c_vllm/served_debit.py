@@ -24,7 +24,7 @@ N seeded inputs of each (k, n), an input being one matmul of the pass, each meas
 and otherwise by ``--draws`` work-weighted draws, never pooled.  ``<out>/inputs.json`` holds each input's failures, ``W``,
 ``w_max`` and its upper limit at 95% simultaneous over the m inputs (`input_bound`), and the cited maximum.  With
 ``--fresh-draws N`` the same inputs are measured instead by N trials each: a work-weighted tile under a salt of its own,
-derived from ``--fresh-source`` (recorded OS randomness sampled after the pass, fixed in the command), so that the trials
+derived from ``--fresh-source`` (recorded OS randomness taken after the pass, fixed in the command), so that the trials
 are independent draws of the input's rate itself (`HonestTileCapRate`'s oracle, salt and draw, the activations fixed) and
 Clopper–Pearson bounds it, 1 − δ^(1/N) at no failure whatever the input's tile count (`HonestCap.lean`'s
 fourth case; lines in ``<label>.fresh-tiles.jsonl``).  The cited limit uses every trial run for an input.
@@ -492,7 +492,7 @@ def pick_inputs(job: dict, per_linear: int, census_max: int, draws: int, seed: i
 
 def fresh_trials(job: dict, row: dict, draws: int, source: bytes) -> list[tuple[int, int, int, bytes]]:
     """An input's fresh trials, (tile id, matmul, draw, salt): `draws` work-weighted draws of its tiles with replacement,
-    each under a salt of its own, both derived from `source` (recorded OS randomness sampled after the pass, so independent
+    each under a salt of its own, both derived from `source` (recorded OS randomness taken after the pass, so independent
     of its activations) under a domain naming the table and a context naming the input.  Draw d is `key.uniform(W, d)`
     over the tiles' cumulative credited cells, as `clear_work.draw` maps it: within one input every cell weighs the
     same `W_ref`, so the sample is exactly proportional to `TR.Wref`, as `HonestTileCapRate`'s tickets are."""
@@ -655,7 +655,7 @@ def main(argv: list[str] | None = None) -> int:
                    help="per-input mode: measure each input by N work-weighted draws, each under a fresh salt of its own "
                         "(independent trials of its rate, bounded by Clopper–Pearson) instead of its census or draws")
     p.add_argument("--fresh-source", default=None, metavar="HEX",
-                   help="the 32-byte source the fresh samples and salts derive from: recorded OS randomness sampled after the "
+                   help="the 32-byte source the fresh samples and salts derive from: recorded OS randomness taken after the "
                         "pass, fixed in the command before the run (required with --fresh-draws)")
     p.add_argument("--jobs", type=int, default=len(os.sched_getaffinity(0)))
     p.add_argument("--coins", type=Path, help="the epoch's coin commitment as its challenger published it (a pass with a salt coin)")

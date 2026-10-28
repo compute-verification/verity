@@ -1134,7 +1134,7 @@ class Options:
     compiled_taps: str = option("--compiled-taps", choices=["off", "on", "kernels", "served"], default="off", help="served = the "
                                 "served-compiled row: every value of every engine step at vLLM's defaults (ServedCompiledSource), the served Build "
                                 "(--required-manifest, verity-vllm served-match) checked word for word on the committed values (served_check) with a "
-                                "seed sampled after commitment, the Build rederived in this process (build_rebuilt.json); control: --compiled-taps off "
+                                "seed chosen after commitment, the Build rederived in this process (build_rebuilt.json); control: --compiled-taps off "
                                 "--only-arm control (verity_vllm/ops/served_commit.sh).  kernels = P_compiled: acquire every non-weight buffer of every Inductor kernel launch through Inductor's " "wrapper-level hook seam (kernels/fusion untouched; captured pieces copy into preallocated slots at graph capture, drained per step; " "verity_vllm/acquire/sources/compiled_kernel_source.py); requires --required-manifest from compiled_manifest.py. " "on = [withdrawn as the workload's path] record ops compiled INTO the graphs (graph-replay-safe " "staging ring; verity_vllm/acquire/sources/compiled_source.py) for Execution=compiled rows (enforce_eager=false). " "The op nodes live in the graphs for the whole process, so the paired control must be a separate process with " "`--compiled-taps off --only-arm control` and the same engine args (verity_vllm/ops/compiled_commit.sh)")
     compiled_ring_rows: int = option("--compiled-ring-rows", type=int, default=0, help="rows per staging slot; 0 = auto: the engine's largest CUDA graph capture size (larger, uncaptured steps use the direct path)")
     only_arm: str | None = option("--only-arm", choices=["control", "instrumented"], default=None, help="run only this arm (`--pairs` runs of it); the paired summary is produced by compiled_commit.sh from both processes")
@@ -1832,7 +1832,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 if fault.startswith("retained_flip"):
                     row["fault_retained_flip"] = com.fault_retained_flip(fault)
                     print(f"[delta] VERITY_FAULT retained_flip (negative test): {row['fault_retained_flip']}", flush=True)
-                # the run's coins, sampled once its root of record is fixed (the auditor host's session; without one, this process's own)
+                # the run's coins, flipped once its root of record is fixed (the auditor host's session; without one, this process's own)
                 from verity_vllm.commit.challenge import challenge_positions, run_root_of
                 sample = challenge_positions(run_root_of(rc), [s.n_leaves for s in rc.steps], args.openings, salt=str(pair).encode(), **CC.positions(rc, coins))
                 TL.start("validate.openings", pair=pair)
@@ -2122,7 +2122,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 if served is not None:
                     row["commit"]["compiled_source"], row["commit"]["compilation"] = served.src.summary(), versions["compilation"]
                     _chal, _chal_rec = CC.replay_challenge(rc, args.replay_challenge)
-                    _sc2 = served.c2(com, rc, reqs, _chal, args.replay_seed)   # the challenge sampled after the run root
+                    _sc2 = served.c2(com, rc, reqs, _chal, args.replay_seed)   # the challenge chosen after the run root
                     components.update(_sc2["components"])
                     components["replay_challenge"] = _chal_rec
                     vc_methods.insert(0, "sampled-exact-replay (the served Build's Program on the committed values; served_check.py) + boundary linkage")

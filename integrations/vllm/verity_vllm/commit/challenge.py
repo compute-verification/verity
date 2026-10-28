@@ -142,7 +142,7 @@ def stratum_picks(pools: Sequence[Sequence[T]], per_stratum: int, seed: int | No
 
 
 def root_seed(run_root: bytes) -> int:
-    """The legacy seed with no verifier challenge, sampled after commitment: the run root's first 8 bytes, big-endian."""
+    """The legacy seed with no verifier challenge, chosen after commitment: the run root's first 8 bytes, big-endian."""
     return int.from_bytes(bytes(run_root)[:8], "big")
 
 

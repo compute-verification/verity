@@ -1717,7 +1717,7 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--reveal", required=True, type=_address, help="HOST:PORT of the reveal endpoint")
     s.add_argument("--key", required=True, type=Path, help="the certifier's key directory (keys)")
     s.add_argument("--challenger-key", required=True, type=Path, help="the challenger's public.json")
-    s.add_argument("--session", required=True, help="the certifier session, 32 bytes in hex, the challenger's sample")
+    s.add_argument("--session", required=True, help="the certifier session, 32 bytes in hex, the challenger's coins")
     s.add_argument("--n2-link", default=N2_LINK)
     s.add_argument("--reveal-deadline", type=float, help="seconds past a window's end (default: the run's + 300)")
     for q in (s, r):

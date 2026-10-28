@@ -2,7 +2,7 @@
 # The Commit of a served-compiled workload: vLLM at its serving defaults (the workload's execution label `compiled`: torch.compile
 # with vLLM's own CUDA-graph mode, no batch invariance, no compilation_config of ours), every value of every engine step committed
 # (acquire/sources/served_compiled_source.py), the served Build of record (`verity-vllm served-match`'s build.json) as the required manifest,
-# and the Build's Program checked word for word on the committed values (check/replay/served_check.py) with a seed sampled after commitment.
+# and the Build's Program checked word for word on the committed values (check/replay/served_check.py) with a seed chosen after commitment.
 #
 # Two processes with identical engine args, each with its own Inductor and vLLM compile dirs and the compile caches off (the Build reads the
 # compile artifact of the process that serves; versions.json `compilation` records each process's generated kernels, compiled_merge refuses

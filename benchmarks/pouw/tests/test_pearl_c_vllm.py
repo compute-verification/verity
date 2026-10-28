@@ -1307,7 +1307,7 @@ def test_served_debit_fresh_draws_measure_each_input_under_salts_of_its_own(hone
 def test_fresh_trials_draw_exactly_by_work_from_a_source_fixed_in_the_command(tmp_path):
     """Lean's conditions on the fresh-trial ε: draw d is `key.uniform(W, d)` over the input's cumulative credited cells
     (exactly proportional to `TR.Wref` within the input), under a domain naming the table and a context naming the input,
-    and the source is given in the command, never sampled inside the run."""
+    and the source is given in the command, never taken inside the run."""
     from verity.ml.randomness import derive
 
     src, job, row = bytes(range(32)), {"sha256": "ab" * 32}, {"matmul": 7, "area": {40: 64 * 64, 41: 64 * 64, 42: 32 * 64}}

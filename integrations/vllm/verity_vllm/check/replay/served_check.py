@@ -21,7 +21,7 @@ The step's batch must be the plan's (its requests with their token counts), its 
 of its width.  A check that cannot evaluate a value (no twin for its Definition, an operand missing) fails by name; an attention
 row or an expert pair whose dot read a non-finite operand is never claimed exact.
 
-With a seed (the Commit's, sampled after the values are committed) a request's sampled rows at each step are a uniform draw of
+With a seed (the Commit's, chosen after the values are committed) a request's sampled rows at each step are a uniform draw of
 `ROWS` from that seed's generator, one sample a request a step shared by its GEMMs and its attention ops, and the report carries
 the seed and every sample; without one they are the fixed spread `sample`.
 

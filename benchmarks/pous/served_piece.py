@@ -131,7 +131,7 @@ def _linear_types() -> tuple[type, ...]:
 
 
 def _salt_source(commitment: bytes) -> bytes:
-    """The salt's source, sampled from this node's OS once the commitment exists."""
+    """The salt's source, taken from this node's OS once the commitment exists."""
     return secrets.token_bytes(32)
 
 

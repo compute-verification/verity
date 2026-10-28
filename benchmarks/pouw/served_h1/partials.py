@@ -69,7 +69,7 @@ class Step:
     @classmethod
     def from_coin(cls, a: list[torch.Tensor], a_roots: list[bytes], m: int, commitment: bytes, coin: bytes, index: int,
                   round_root: bytes) -> "Step":
-        """The step whose units' salt is `h1tile.live_salt` of its coin (the challenger's opening at `index`, sampled after
+        """The step whose units' salt is `h1tile.live_salt` of its coin (the challenger's opening at `index`, flipped after
         `round_root`)."""
         return cls(a, a_roots, m, HT.live_salt(commitment, coin, index, round_root))
 

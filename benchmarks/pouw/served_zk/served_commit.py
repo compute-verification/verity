@@ -1632,7 +1632,7 @@ def main(argv=None) -> int:
                    help="the max_tokens the verifier's request set, each row served to it under ignore_eos")
     p.add_argument("--registration-deadline", type=float, default=REGISTRATION_DEADLINE,
                    help="td: seconds on the challenger's clock from the salt coin's release, when the challenger's `salt` "
-                        "request opens it after the weights' root; the coin itself was sampled when the challenger process "
+                        "request opens it after the weights' root; the coin itself was flipped when the challenger process "
                         "started, from the Lean verifier's coins (pouw.verifier.coins) or --state (default: "
                         "REGISTRATION_DEADLINE)")
     p = sub.add_parser("commit")

@@ -57,7 +57,7 @@ PRIVATE, KEY = CH.challenger_key(3, H=5)
 
 
 def salt_only(seed: int) -> LC.LiveChallenger:
-    """A Pearl-C challenge phase's challenger: the salt coin alone, sampled from `seed`."""
+    """A Pearl-C challenge phase's challenger: the salt coin alone, derived from `seed`."""
     return LC.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, CH.entropy(seed))
 
 

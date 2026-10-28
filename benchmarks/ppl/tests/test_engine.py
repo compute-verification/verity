@@ -219,7 +219,7 @@ def test_hf_parity(llama, qwen, ids):
 
 def test_row_chunks_change_no_bit(llama, ids, calib, monkeypatch):
     """At 32K the s x s attention work and the loss run in chunks of query rows; the chunks change no bit, since every
-    coin and scale is sampled per row or for the whole window, and the products are exact."""
+    coin and scale is chosen per row or for the whole window, and the products are exact."""
     arms = ["adopted", "int8-all"]
     whole = evaluate(llama, ids[:4], arms, calib=calib)
     monkeypatch.setattr(M, "ROWS_WHOLE", 0)

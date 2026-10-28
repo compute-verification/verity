@@ -18,7 +18,7 @@ establishes with no hardware of its own at the prover's site. It composes two pr
   coins open.
 
 Remote accepts only when both accept over one commitment that binds both; either one's rejection rejects it, whatever the
-other answers. It rests on live coins (sampled after the commitment, never resampled) and on what each subprotocol's own
+other answers. It rests on live coins (flipped after the commitment, never flipped again) and on what each subprotocol's own
 guarantee assumes; each subprotocol states its guarantee in `Security/`, and the composite states none of its own in Lean
 yet, so no example's `proof` is past `none`. Its verifier, `remote check`, has no run of record yet; its first is due
 Wed 28 Oct, 11 AM PDT. `lifecycle/` is the only example that steps through the whole remote composite, on CPU with a

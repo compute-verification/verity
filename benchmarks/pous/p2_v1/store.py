@@ -1197,7 +1197,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                            help="w,c0,blocks_per_segment (default the registered point; others only in tests)")
         p.add_argument("--p2-lib", default="", help="libp2v1.so's directory (v4 keys); without it, the scheme's CPU codec")
     e = sub.choices["encode"]
-    e.add_argument("--source", type=_bytes_arg, help="the auditor's coin, sampled after the commitment (hex:..., hexfile:PATH)")
+    e.add_argument("--source", type=_bytes_arg, help="the auditor's coin, flipped after the commitment (hex:..., hexfile:PATH)")
     e.add_argument("--gpus", type=int, default=None)
     e.add_argument("--cpu-encoders", type=int, default=1)
     e.add_argument("--registration", default=None, help="the weights' registration digest, hex")

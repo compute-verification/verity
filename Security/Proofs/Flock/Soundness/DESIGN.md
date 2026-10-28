@@ -259,7 +259,7 @@ strict time.
 
 | Id | Change | How the model and bound cover it |
 |---|---|---|
-| A1 | 6 zerocheck coins squeezed, never read | Sampled and ignored in the model; no term |
+| A1 | 6 zerocheck coins squeezed, never read | Flipped and ignored in the model; no term |
 | A2 | Last Ligerito batching coin | Charged like every batching coin |
 | A3 | Vanishing on S imposed by interpolation; degree 127 | Skip term `127/|F|` (the paper has 126) |
 | A4 | `final_c_eval` sent, must equal `Pc(z)` | Forced, so it is not a prover message in the model |
