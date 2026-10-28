@@ -1628,6 +1628,8 @@
     {"file": "verity/ml/flock/verifier/qword_agree.py", "count": 3},
     {"file": "verity/ml/flock/verifier/qword_program_agree.py", "count": 6},
     {"file": "verity/ml/flock/verifier/template_query_agree.py", "count": 1},
-    {"file": "integrations/vllm/tools/migrate/superseded_quarantine.py", "count": 1}
+    {"file": "integrations/vllm/tools/migrate/superseded_quarantine.py", "count": 1},
+    {"file": "integrations/vllm/tests/acquire/test_compiled_manifest.py", "count": 6},
+    {"file": "integrations/vllm/tests/pipeline/test_compiled_merge_identity.py", "count": 7}
   ]
 }
