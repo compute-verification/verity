@@ -27,8 +27,9 @@
     "Flock.Hash",
     "PouwCheck.Json",
     "PouwCheck.Tile",
-    "PouwWindow.Length"
-   , "Flock.Draw"],
+    "PouwWindow.Length",
+    "Flock.Draw"
+   ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
