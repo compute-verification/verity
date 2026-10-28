@@ -106,27 +106,31 @@ REMOTE_CONCLUSION = "remoteDampener mfu (unmonitoredShare C U)"
 
 
 def test_the_remote_overhead_is_lean_remote_dampener_at_the_references_mfu():
-    """The remote slowdown is `DampenerRemote`'s `ρ`, `remoteDampener MFU₀ s x ≤ hardwareMultiple MFU₀`, at the
-    reference training algorithm's MFU (0.4), not at `MFU₀ = 1`. Hosts carry no compute, so tiers' server and the H200
-    give the same `x = 0.33` and `ρ = 1.22`, as `benchmarks/nci`'s compute dampener reads it, where the padded size
-    ratio, the same bound against the reference at capacity, is 3.04. Without the hosts assumption tiers' server
-    (host CPUs 12.6% of the GPUs) has `x = 0.45`, which outruns that developer, so `ρ = 1`; the H200 (2.9%) has 1.12."""
+    """Without reference efficiency the remote slowdown is `DampenerRemote`'s `ρ`, `remoteDampener MFU₀ s x ≤
+    hardwareMultiple MFU₀`, at the reference training algorithm's MFU (0.4): free compute counts at peak. Under it free
+    compute counts at `MFU₀`, so `ρ = max(1, 1/(s + x))`, the padded size ratio. Hosts carry no compute, so tiers'
+    server and the H200 give the same `x = 0.33`, and `ρ = 3.04` (1.22 without reference efficiency), as
+    `benchmarks/nci`'s compute dampener reads it. Without both assumptions tiers' server (host CPUs 12.6% of the GPUs)
+    has `x = 0.45`, which outruns that developer, so `ρ = 1`; the H200 (2.9%) has 1.12."""
     lean_dir = ROOT / "Security" / "Definitions" / "Nci"
     assert REMOTE_DAMPENER in (lean_dir / "Remote.lean").read_text()
     assert REMOTE_CONCLUSION in (lean_dir / "Guarantees" / "Remote.lean").read_text()
     for mfu, s, x in ((0.4, 0.001, 0.45), (1.0, 0.0, 0.2), (0.4, 0.0, 0.0), (0.5, 0.2, 0.01)):
         rate = s + x / mfu
-        assert multiple_bound(mfu, s, x) == (max(1.0, 1 / rate) if rate > 0 else math.inf)
+        assert multiple_bound(mfu, s, x, reference_efficiency=False) == (max(1.0, 1 / rate) if rate > 0 else math.inf)
+        assert multiple_bound(mfu, s, x) == multiple_bound(1.0, s, x, reference_efficiency=False)
 
     ctx = tiers_context()
     t1 = T.evaluate(tiers_params(ctx), T.TIERS["T1"])
     x = t1["residual"] + t1["declared"] + t1["cheat"]
     assert x / T.DEFAULTS["mfu"] < 1
+    peak = REG.override({"task.reference_efficiency": False})
     # tiers counts no dark share (s = 0) where rho's fleet has 0.1%
-    lo = evaluate_named(REG, "remote-tiers-kimi").lo
-    assert lo == pytest.approx(multiple_bound(T.DEFAULTS["mfu"], t1["unmonitored"], x), rel=5e-3)
-    assert lo == pytest.approx(1.218, abs=1e-3)
-    hosts = REG.override({"regime.remote.host": 1.0})
+    for reg, ref, want in ((REG, True, 3.040), (peak, False, 1.218)):
+        lo = evaluate_named(reg, "remote-tiers-kimi").lo
+        assert lo == pytest.approx(multiple_bound(T.DEFAULTS["mfu"], t1["unmonitored"], x, ref), rel=5e-3)
+        assert lo == pytest.approx(want, abs=1e-3)
+    hosts = peak.override({"regime.remote.host": 1.0})
     assert evaluate_named(hosts, "remote-tiers-kimi").lo == 1.0
     assert evaluate_named(hosts, "remote-h200-kimi").lo == pytest.approx(1.120, abs=1e-3)
 
@@ -134,9 +138,10 @@ def test_the_remote_overhead_is_lean_remote_dampener_at_the_references_mfu():
     ctx, remote = r.scenario.context, r.scenario.regime
     s, u = ctx.fleet.eps_dark, remote.uncertified(ctx)
     assert r.scenario.mfu == ctx.fleet.mfu_train == 0.4
-    assert r.lo == pytest.approx(multiple_bound(0.4, s, (1 - s) * u), rel=1e-4) == pytest.approx(1.218, abs=1e-3)
-    assert r.families[0].combined.padded == pytest.approx(multiple_bound(1.0, s, (1 - s) * u), rel=1e-4) \
-        == pytest.approx(3.040, abs=1e-3)
+    assert r.lo == pytest.approx(multiple_bound(0.4, s, (1 - s) * u), rel=1e-4) == pytest.approx(3.040, abs=1e-3)
+    assert r.families[0].combined.padded == pytest.approx(r.lo, rel=1e-12)
+    assert evaluate_named(peak, "remote-h200-kimi").lo == pytest.approx(
+        multiple_bound(0.4, s, (1 - s) * u, reference_efficiency=False), rel=1e-4) == pytest.approx(1.218, abs=1e-3)
 
 
 def test_the_inference_blocks_are_the_certified_work_that_ran():
@@ -336,7 +341,7 @@ def test_pouw_as_deployed_on_the_h200_certifies_so_little_that_rho_stays_near_on
                                host=p.host) == p
     loc = context("reference-h200").location
     assert p.host == 0 and p.audited(loc) == p.residual == pytest.approx(0.958, abs=5e-4)
-    assert evaluate_named(REG, "reference-remote-h200-pouw").lo < 1.02
+    assert evaluate_named(REG, "reference-remote-h200-pouw").lo < 1.05
 
 
 def test_at_5_gb_a_server_no_location_takes_kimi_k2s_state_in_a_day_and_per_device_an_nvl72_rack_does():

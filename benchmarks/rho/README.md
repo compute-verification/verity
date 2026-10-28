@@ -6,8 +6,9 @@ divided by the reference training algorithm's GPU-hours, on the datacenter the a
 `hardwareMultiple`: the hardware multiple over the reference at its MFU, `MFU₀`, at least 1, so no protocol gives 1.
 Beside it is the **time to the target** it implies, at least the slowdown times `T_0 / (MFU₀ Φ_total)`, wall-clock.
 Hosts carry no compute (`GLOSSARY.md`, the device model): a server's compute is its accelerators', so every regime's
-`host` is 0, and `periods.py` gives the bound without the hosts assumption (the host CPUs at their datasheet peak)
-only as a sensitivity beside it.
+`host` is 0. No run uses the hardware more efficiently than the reference (`GLOSSARY.md`, reference efficiency;
+`exclusion.toml`'s `task.reference_efficiency`), so a bound counts free compute at `MFU₀`, not at peak. `periods.py`
+gives the bound without each assumption, and without both, only as sensitivities beside it.
 Every number it reads is a parameter with a public source and a status, so a bound is always at some choice of every
 parameter, and the package shows how the bound moves with each one.
 
@@ -16,9 +17,10 @@ NCI registration policy, a monitoring period (the horizon), a run (the target an
 adversary may use, and the bounds and attacks applied. For each one the package reports:
 
 - **the slowdown's lower bound** (`Result.lo`): every bound met at once, at the family the adversary picks. Under a
-  bound it is `max(1, 1/(s + x/MFU₀))` (`theorem.multiple_bound`, Lean's `Nci.Dampener.remoteDampener`), with the dark
-  share `s` training like the reference and the bound's other terms `x` counted at capacity; for a remote regime it is
-  `Nci.Guarantees.DampenerRemote`'s `ρ`, and `benchmarks/nci` reads its compute dampener `D` from `multiple_bound`. It
+  bound it is `max(1, 1/(s + a x))` (`theorem.multiple_bound`), with the dark share `s` training like the reference and
+  the bound's other terms `x`, free compute, at `a = 1` under reference efficiency, so that it is the padded size ratio;
+  at `a = 1/MFU₀` (peak) without it, Lean's `Nci.Dampener.remoteDampener` and, for a remote regime,
+  `Nci.Guarantees.DampenerRemote`'s `ρ`. `benchmarks/nci` reads its compute dampener `D` from `multiple_bound`. It
   comes with its status, where its named premises stand, the δ that the envelopes fail (`δ_coin + δ_crypto`, plus a
   named `Pr[Break]`), the monitored share (the part of the adversary's counted weight on monitored gates), and the
   time it implies;

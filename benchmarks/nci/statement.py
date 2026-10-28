@@ -1,8 +1,9 @@
 """Every number the Notion page "The compute dampener: claims, model and tiers" quotes from ``tiers.py``, ``exposure.py``,
 ``kappa.py`` and ``fit.py``, at the commit this runs on, grouped as the page is: the slide's questions, the symbols,
 section 4's terms, the ladder and the fit bound, years of growth, the regimes, section 6's thresholds and the known holes'
-cheating share. D is the overhead calculator's hardware multiple at MFU_0, ``rho.theorem.multiple_bound`` (Lean's
-``Nci.Dampener.remoteDampener``) on ``tiers.evaluate(p, TIERS[t])``'s terms; every scenario is a set of overrides on
+cheating share. D is the overhead calculator's hardware multiple at MFU_0, ``rho.theorem.multiple_bound`` in Lean's
+form (``Nci.Dampener.remoteDampener``) on ``tiers.evaluate(p, TIERS[t], p["mfu"])``'s terms, the residual at MFU_0 under
+the reference-efficiency assumption; every scenario is a set of overrides on
 ``tiers.DEFAULTS``. D by the fit bound (``fit_dampener``) is the same with the fit bound in place of the
 closed-form memory cap, which the page's memory rungs cite.
 
@@ -123,7 +124,7 @@ def num(x: float, digits: int = 3) -> str:
 
 
 def dampener(p: dict, tier: str) -> float:
-    return multiple_bound(p["mfu"], *T.remote_terms(p, T.evaluate(p, T.TIERS[tier])))
+    return multiple_bound(p["mfu"], *T.remote_terms(p, T.evaluate(p, T.TIERS[tier], p["mfu"])), reference_efficiency=False)
 
 
 def cheat(p: dict) -> float:
@@ -145,9 +146,10 @@ def fit_mu(gb: float) -> float:
 def capped(p: dict, tier: str, mu: float) -> float:
     """D at ``tier`` with ``mu`` as the memory cap in place of the closed form: ``tiers.evaluate`` without wipes or
     exhaustion, its monitored terms capped at ``m mu`` of C (the recipe multiplier scales the cap, as there)."""
-    r = T.evaluate(p, T.TIERS[tier] | {"wipes": False, "exhaust": False})
+    r = T.evaluate(p, T.TIERS[tier] | {"wipes": False, "exhaust": False}, p["mfu"])
     monitored = min(r["residual"] + r["declared"], p["g"] * (1 - min(p["unmonitored"], 0.999)) * p["m"] * mu)
-    return multiple_bound(p["mfu"], *T.remote_terms(p, r | {"residual": monitored, "declared": 0.0}))
+    return multiple_bound(p["mfu"], *T.remote_terms(p, r | {"residual": monitored, "declared": 0.0}),
+                          reference_efficiency=False)
 
 
 def fit_dampener(p: dict, tier: str) -> float:
@@ -302,8 +304,8 @@ def floor() -> list[dict]:
     p = T.DEFAULTS
     eps_w = (p | FLOOR)["eps_w"]
     return rows([
-        ("MFU_0 / (ν + ε_W + ε′), the floor's limit as the verdict lag goes to 0",
-         p["mfu"] / (X.nu(p) + eps_w + p["eps_agg"])),
+        ("1 / (ε_W + ε′ + ν / MFU_0), the floor's limit as the verdict lag goes to 0",
+         1 / (eps_w + p["eps_agg"] + X.nu(p) / p["mfu"])),
         ("MFU_0 / ν, the same as ε_W and ε′ go to 0 too (δ_win / ε′ then needs δ_win → 0)", p["mfu"] / X.nu(p)),
         ("D at zero lag, ε_W and ε′, r̂ = 0, T3, if the partial-sum law held (its support premises are falsified)",
          dampener(p | FLOOR | {"lag_s": 0.0, "eps_w": 0.0, "eps_agg": 0.0, "kappa_chain": 0.0695}, "T3")),
@@ -320,7 +322,7 @@ def fit_bound() -> dict:
     for gb in FIT_WIPES:
         r = F.row(gb, N, L)
         p = F.params(gb)
-        t5 = T.evaluate(p, T.TIERS["T5"])
+        t5 = T.evaluate(p, T.TIERS["T5"], p["mfu"])
         out.append({"R_wipe_gb": gb, "periods": r["periods"], "D_closed": r["D_closed"], "D_fit": r["D_fit"],
                     "D_fit_T5": F.dampener(p, r["mu_fit"], t5["declared"], t5["cheat"]),
                     "D_fit_low": r["D_fit_low"], "D_fit_high": r["D_fit_high"], "D_fit_train": r["D_fit_train"]})
@@ -381,11 +383,15 @@ def thresholds(pool: ProcessPoolExecutor | None = None) -> dict:
 
 def fit_edges() -> dict[str, dict[float, float | None]]:
     """Section 6's memory edges by the fit bound: per tier, the wipe residual in GB below which it gives D at least each
-    level at the floor credit; None where no wipe residual does."""
+    level at the floor credit; None where no wipe residual does, ``inf`` where every one up to 1,000 GB does."""
     def below(tier: str, level: float) -> Callable[[float], bool]:
         return lambda gb: capped(T.DEFAULTS, tier, fit_mu(gb)) < level
+
+    def edge(tier: str, level: float) -> float | None:
+        f = below(tier, level)
+        return None if f(lo) else math.inf if not f(hi) else bisect(f, lo, hi, 40)
     lo, hi = 1e-3, 1e3
-    return {t: {lv: None if below(t, lv)(lo) else bisect(below(t, lv), lo, hi, 40) for lv in LEVELS} for t in FIT_TIERS}
+    return {t: {lv: edge(t, lv) for lv in LEVELS} for t in FIT_TIERS}
 
 
 def tornado(tier: str) -> tuple[str, float]:
@@ -482,8 +488,8 @@ def render(s: dict) -> str:
     dirty = " (with uncommitted changes in benchmarks/nci)" if s["uncommitted"] else ""
     out = ["# The compute dampener: the page's numbers", "",
            f"Rendered by `benchmarks/nci/statement.py` at commit `{s['commit']}`{dirty}. D is "
-           "`rho.theorem.multiple_bound` (Lean's `remoteDampener`) on `tiers.evaluate(p, TIERS[t])`'s terms, the "
-           "hardware multiple at MFU_0 = "
+           "`rho.theorem.multiple_bound` in Lean's form (`remoteDampener`) on `tiers.evaluate(p, TIERS[t], MFU_0)`'s "
+           "terms, the residual training at MFU_0 (the reference-efficiency assumption), the hardware multiple at MFU_0 = "
            f"{num(T.DEFAULTS['mfu'])}; every case is a set of overrides on `tiers.DEFAULTS`. D by the fit bound "
            "(`fit_dampener`) puts the fit bound at central w_e in place of the closed-form memory cap.", "",
            "## Slide forms: the hardest questions", "", *bullets(s["slide"]),

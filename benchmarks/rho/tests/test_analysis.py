@@ -181,8 +181,8 @@ def test_run_writes_markdown_json_and_figures_into_out(tmp_path, monkeypatch, ca
 
 def test_run_prints_one_overhead_with_its_padded_size_ratio_and_the_attack_in_a_table_of_its_own(tmp_path, monkeypatch,
                                                                                                capsys):
-    """One number a scenario, the lower bound: the hardware multiple over the reference at its MFU (1.22 remotely at
-    the H200), with the padded size ratio it comes from (3.04) and the inference overhead beside it (not modeled); the
+    """One number a scenario, the lower bound: the hardware multiple over the reference at its MFU (3.04 remotely at
+    the H200, its padded size ratio under reference efficiency, a hair under the best attack's 3.042) and the inference overhead beside it (not modeled); the
     best known attack only in the attacks table, never as an interval's end. No comparator: no protocol gives 1."""
     monkeypatch.setattr(sys, "path", list(sys.path))
     import run
@@ -195,14 +195,14 @@ def test_run_prints_one_overhead_with_its_padded_size_ratio_and_the_attack_in_a_
     summary, rest = text.split("## Attacks", 1)
     attacks = rest.split("\n## ", 1)[0]
     row = next(line for line in summary.splitlines() if line.startswith("| reference-remote-h200 |"))
-    assert "| **1.22** |" in row and "| 3.04 | not modeled |" in row and "[" not in row
+    assert "| **3.04** |" in row and "| 3.04 | not modeled |" in row and "[" not in row
     record = json.loads((tmp_path / "rho.json").read_text())["scenarios"]["reference-remote-h200"]
     attack = record["attack"]
     assert f"| reference-remote-h200 | {attack['argument']} | {attack['family']} | {attack['status']} | " in attacks
-    assert run.fmt(attack["rho"]) not in row.split("|")[2]
+    assert attack["argument"] not in row
     assert "Lean's `hardwareMultiple`, at least 1, so no protocol gives 1" in text and "vacuous" not in text
     assert record["mfu"] == pytest.approx(0.4) and record["padded"] == pytest.approx(3.04, abs=0.01)
-    assert record["slowdown"] == pytest.approx(1.22, abs=5e-3) and record["slowdown"] <= attack["rho"]
+    assert record["slowdown"] == pytest.approx(3.04, abs=5e-3) and record["slowdown"] <= attack["rho"]
     assert attack["rho"] == pytest.approx(max(1.0, 0.4 * attack["padded"]))
     assert not {"unmonitored", "vacuous", "multiple"} & set(record)
     assert record["inference_overhead"]["value"] is None and record["inference_overhead"]["source"].startswith(

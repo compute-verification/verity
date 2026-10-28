@@ -66,6 +66,8 @@ class Scenario:
     structure: Structure
     #: `data/premises.toml` by cited name (`classes.premises`), read from the scenario's registry
     premises: Mapping[str, Mapping] = field(default_factory=dict)
+    #: reference efficiency (`task.reference_efficiency`): a bound counts free compute at `MFU₀`, not at peak
+    reference_efficiency: bool = True
 
     def __post_init__(self) -> None:
         self.structure.check(self.context.units)
@@ -107,7 +109,8 @@ def build(registry: Registry, name: str) -> Scenario:
         tuple(family(registry, n) for n in registry[f"{t}.families"]),
         tuple(CLASSES[n] for n in registry.get(f"{t}.bounds", list(CLASSES))),
         tuple(ATTACKS[n] for n in registry.get(f"{t}.attacks", list(ATTACKS))),
-        structure(registry, registry.get(f"{t}.structure", registry["structure.default"])), premises(registry))
+        structure(registry, registry.get(f"{t}.structure", registry["structure.default"])), premises(registry),
+        bool(registry["task.reference_efficiency"]))
 
 
 @dataclass(frozen=True)
@@ -225,13 +228,13 @@ def _rated(name: str, side: str, cites: tuple[str, ...], s: Overhead, partition:
 
 
 def _estimate(arg: Argument, p: Profile, ctx: Context, partition: Partition, block: Budget,
-              table: Mapping[str, Mapping], st: Structure, mfu: float) -> tuple[Estimate, Cap | None]:
+              table: Mapping[str, Mapping], st: Structure, mfu: float, ref: bool) -> tuple[Estimate, Cap | None]:
     try:
         cap = per_block(arg.allowance(p), ctx.units)
     except Outside as e:
         return Estimate(arg.name, arg.side, "outside", None, str(e)), None
     w = weight_per_gate(p, ctx.units)
-    s = overhead(partition, cap, w, p.efficiency, arg.side, u=st.weight(w), mfu=mfu)
+    s = overhead(partition, cap, w, p.efficiency, arg.side, u=st.weight(w), mfu=mfu, reference_efficiency=ref)
     return _rated(arg.name, arg.side, arg.cites, s, partition, _declared(cap, w, block), table, st), cap
 
 
@@ -250,14 +253,15 @@ def _admitted(cap: Cap, cites: tuple[str, ...], table: Mapping[str, Mapping]) ->
 
 
 def _combine(args: tuple[Argument, ...], bounds: list[tuple[Estimate, Cap | None]], p: Profile, ctx: Context,
-             partition: Partition, block: Budget, table: Mapping[str, Mapping], st: Structure, mfu: float) -> Estimate:
+             partition: Partition, block: Budget, table: Mapping[str, Mapping], st: Structure, mfu: float,
+             ref: bool) -> Estimate:
     """Every bound met at once, the lower bound: each block gets the least of the caps whose premises aren't refuted at
     its bits (a bound refuted there doesn't bound it, and is still reported alone, tagged refuted), under the union of
     the citations of the bounds admitted at a block that binds. `excluded` names the bounds refuted at one."""
     met = [(a, cap) for a, (_, cap) in zip(args, bounds, strict=True) if cap is not None]
     cap = least(*(_admitted(c, a.cites, table) for a, c in met))
     w = weight_per_gate(p, ctx.units)
-    s = overhead(partition, cap, w, p.efficiency, u=st.weight(w), mfu=mfu)
+    s = overhead(partition, cap, w, p.efficiency, u=st.weight(w), mfu=mfu, reference_efficiency=ref)
     ks = _binding_ks(partition, s) or (0.0,)
     refuted = {a.name: [_refuted(a.cites, k, table) for k in ks] for a, _ in met}
     used = [a for a, _ in met if not all(refuted[a.name])]
@@ -273,10 +277,11 @@ def evaluate(s: Scenario) -> Result:
     out = []
     for fam in s.families:
         p = fam.profile(s.model, s.run)
-        bounds = [_estimate(b, p, ctx, partition, block, s.premises, st, s.mfu) for b in s.bounds]
-        combined = _combine(s.bounds, bounds, p, ctx, partition, block, s.premises, st, s.mfu)
+        ref = s.reference_efficiency
+        bounds = [_estimate(b, p, ctx, partition, block, s.premises, st, s.mfu, ref) for b in s.bounds]
+        combined = _combine(s.bounds, bounds, p, ctx, partition, block, s.premises, st, s.mfu, ref)
         out.append(FamilyResult(fam.name, p, tuple(e for e, _ in bounds), combined,
-                                tuple(_estimate(a, p, ctx, partition, block, s.premises, st, s.mfu)[0]
+                                tuple(_estimate(a, p, ctx, partition, block, s.premises, st, s.mfu, ref)[0]
                                       for a in s.attacks)))
     return Result(s, tuple(out))
 

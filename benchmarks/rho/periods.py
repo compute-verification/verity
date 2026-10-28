@@ -8,8 +8,9 @@ scenario's own `fleet` and `horizon` choices overridden (`scenario.<name>.fleet`
 * **the slowdown's lower bound** and its range: each ranged parameter alone at either end of its plausible range, the
   rest at reference (`analysis.tornado`), and the corner, all of them at their worse ends at once (`analysis.corner`);
   and the padded size ratio `|A| / T_0` it comes from;
-* **without the hosts assumption**: the lower bound with every regime's host CPUs at their datasheet peak, a
-  sensitivity beside the headline, which assumes hosts carry no compute (`without_hosts`);
+* **without the ruled assumptions**: the lower bound with every regime's host CPUs at their datasheet peak (without
+  hosts carry no compute), with free compute at peak (without reference efficiency), and without both, sensitivities
+  beside the headline (`sensitivities`);
 * **its parts**: the citations of the bound that sets it, by kind (`KINDS`), each named premise with its standing at
   the block that binds;
 * **what is scaled**: a serving block's local minimum is a per-server-window bound (one server between two wipes,
@@ -60,6 +61,17 @@ def choices(name: str, fleet: str, period: str) -> dict[str, str]:
 def without_hosts(reg: Registry) -> dict[str, float]:
     """Every regime's host CPUs at their datasheet peak: the registry without hosts carry no compute (`GLOSSARY.md`)."""
     return {f"regime.{r}.host": 1.0 for r in reg.names("regime") if f"regime.{r}.host" in reg}
+
+
+#: the overrides without the reference-efficiency assumption (`GLOSSARY.md`): a bound counts free compute at peak
+WITHOUT_REFERENCE_EFFICIENCY = {"task.reference_efficiency": False}
+
+
+def sensitivities(reg: Registry, name: str) -> dict[str, float]:
+    """The lower bound without each ruled assumption the headline takes, and without both."""
+    return {"without_hosts": analysis.at(reg.override(without_hosts(reg)), name),
+            "without_reference_efficiency": analysis.at(reg.override(WITHOUT_REFERENCE_EFFICIENCY), name),
+            "without_both": analysis.at(reg.override(without_hosts(reg) | WITHOUT_REFERENCE_EFFICIENCY), name)}
 
 
 def parts(r: Result, reg: Registry) -> dict:
@@ -133,8 +145,7 @@ def evaluate(reg: Registry, names=SCENARIOS, fleets=FLEETS, periods=PERIODS) -> 
                 rows.append({
                     "scenario": name, "fleet": fleet, "where": label, "period": period,
                     "servers": r.scenario.context.fleet.count, "period_s": r.scenario.context.horizon.seconds,
-                    "slowdown": r.lo, "without_hosts": analysis.at(at.override(without_hosts(at)), name),
-                    "padded": run.padded(r), "mfu": r.scenario.mfu,
+                    "slowdown": r.lo, **sensitivities(at, name), "padded": run.padded(r), "mfu": r.scenario.mfu,
                     "range": [min(ends), max(ends)], "corner": corner.rho, "seconds": r.scenario.seconds(r.lo),
                     "family": f.family if f else None, "parts": parts(r, at), "scaled": scaled(r),
                     "attribution": [{"name": t.name, "share": t.share} for t in analysis.attribution(r)],
@@ -199,13 +210,16 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
                    f" | {fmt(x['range'][0])} to {fmt(x['range'][1])} | {fmt(x['corner'])} | {fmt(x['padded'])}"
                    f" | {p.get('status', '—')}, {p.get('premise') or '—'} | {p.get('setter') or '—'} | {sets} | "
                    f"{operating.human(x['seconds'])}{beyond} |")
-    out += ["", "## Without the hosts assumption", "",
-            ("The lower bound assumes hosts carry no compute (`GLOSSARY.md`, the device model): a server's compute is "
-             "its accelerators'. A sensitivity, not a headline: each regime's host CPUs counted at their INT8 datasheet "
-             "peak (`regime.<name>.host` = 1, `Location.host_phi`)."), "",
-            "| scenario | over | period | slowdown ≥ | without the hosts assumption |", "|---|---|---|---|---|"]
-    out += [f"| {x['scenario']} | {x['where']} | {x['period']} | {fmt(x['slowdown'])} | {fmt(x['without_hosts'])} |"
-            for x in rows]
+    out += ["", "## Without the ruled assumptions", "",
+            ("The lower bound assumes hosts carry no compute (`GLOSSARY.md`, the device model: a server's compute is "
+             "its accelerators') and reference efficiency (`GLOSSARY.md`, a task assumption: no run uses the hardware "
+             "more efficiently than the reference, so free compute counts at MFU₀). Sensitivities, not headlines: "
+             "without the first, each regime's host CPUs count at their INT8 datasheet peak (`regime.<name>.host` = 1); "
+             "without the second, free compute counts at peak (`task.reference_efficiency` = false)."), "",
+            ("| scenario | over | period | slowdown ≥ | without the hosts assumption | without the reference-efficiency "
+             "assumption | without both |"), "|---|---|---|---|---|---|---|"]
+    out += [f"| {x['scenario']} | {x['where']} | {x['period']} | {fmt(x['slowdown'])} | {fmt(x['without_hosts'])} | "
+            f"{fmt(x['without_reference_efficiency'])} | {fmt(x['without_both'])} |" for x in rows]
     out += ["", "## Its parts", ""]
     seen: dict[str, list[dict]] = {}
     for x in rows:

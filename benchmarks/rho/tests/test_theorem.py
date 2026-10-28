@@ -77,9 +77,10 @@ def test_the_padded_size_ratio_is_the_dark_leaves_plus_the_monitored_weight():
 
 
 def test_the_overhead_is_the_hardware_multiple_at_the_references_mfu_floored_at_1():
-    """Under a bound the dark leaves train like the reference and the monitored share counts at capacity, each over
-    `MFU₀` (`multiple_bound`); a construction's padded circuit already holds the capacity it leaves idle, so its
-    overhead is `MFU₀` times its padded size ratio. `rates` splits `1 / overhead` before the floor."""
+    """Under a bound the dark leaves train like the reference and the monitored share converts at `a`
+    (`multiple_bound`): 1 under reference efficiency, so the slowdown is the padded size ratio; `1/MFU₀` without it.
+    A construction's padded circuit already holds the capacity it leaves idle, so its slowdown is `MFU₀` times its
+    padded size ratio. `rates` splits `1 / slowdown` before the floor."""
     part = Partition((block(Cut("c", (Blocks("x", Budget(1000, 5), 1),)), mfu=0.4),), 0.01, dark_mfu=0.55)
     def cap(b):
         return b.inputs
@@ -87,14 +88,19 @@ def test_the_overhead_is_the_hardware_multiple_at_the_references_mfu_floored_at_
     bound = overhead(part, cap, W, efficiency=2.0, mfu=0.4)
     s, x = 0.01 / 2.0, 0.99 * 0.01 / 2.0
     assert bound.g == pytest.approx(0.01) and bound.rho == pytest.approx(multiple_bound(0.4, s, x))
-    assert bound.rho == pytest.approx(1 / (s + x / 0.4)) and bound.rho < bound.padded
+    assert bound.rho == pytest.approx(1 / (s + x)) == pytest.approx(bound.padded)
     assert sum(bound.rates().values()) == pytest.approx(1 / bound.rho)
-    assert overhead(part, cap, W, efficiency=2.0).rho == pytest.approx(bound.padded)
+    peak = overhead(part, cap, W, efficiency=2.0, mfu=0.4, reference_efficiency=False)
+    assert peak.rho == pytest.approx(multiple_bound(0.4, s, x, reference_efficiency=False))
+    assert peak.rho == pytest.approx(1 / (s + x / 0.4)) and peak.rho < peak.padded
+    assert sum(peak.rates().values()) == pytest.approx(1 / peak.rho)
+    assert overhead(part, cap, W, efficiency=2.0, reference_efficiency=False).rho == pytest.approx(bound.padded)
     attack = overhead(part, lambda b: 0.0, W, side="attack", mfu=0.5)
     assert attack.rho == pytest.approx(0.5 * attack.padded) and sum(attack.rates().values()) == pytest.approx(
         1 / attack.rho)
     assert overhead(part, lambda b: math.inf, W, mfu=0.4).rho == 1.0
-    assert multiple_bound(0.4, 0.0, 0.5) == 1.0 and multiple_bound(0.4, 0.0, 0.0) == math.inf
+    assert multiple_bound(0.4, 0.0, 1.0) == 1.0 and multiple_bound(0.4, 0.0, 0.0) == math.inf
+    assert multiple_bound(0.4, 0.0, 0.5) == 2.0 and multiple_bound(0.4, 0.0, 0.5, reference_efficiency=False) == 1.0
 
 
 def test_the_bound_counts_the_dark_leaves_at_capacity_and_an_attack_at_its_mfu():

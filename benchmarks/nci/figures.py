@@ -1,5 +1,5 @@
 """Figures for the compute dampener D, the hardware multiple at MFU_0 (``statement.dampener``: the overhead calculator's
-``rho.theorem.multiple_bound`` on ``tiers.evaluate``'s terms), with the
+``rho.theorem.multiple_bound`` on ``tiers.evaluate``'s terms, the residual at MFU_0), with the
 ladder, its scenarios and its numbers from ``statement.py``: D per rung by status, the (r̂, R_wipe) phase diagram,
 exposure tornados at the best PoUW design and at 6 GB streamed-label wipes, the memory cap by the fit bound and the
 closed form, the cheating share against proving cost, years of delay, and the leaks and their plugs. Generated output:
@@ -95,7 +95,8 @@ EDGE_GB = F.bite_gb(P, N_STAR, P["b_w"])
 SHA, DIRTY = S.commit()
 COMMIT = f"{SHA[:10]}{' with uncommitted changes' if DIRTY else ''}"
 num = S.num
-BASE = (f"D is the hardware multiple at MFU_0 = {num(P['mfu'])} (rho.theorem.multiple_bound on tiers.evaluate's terms), at m = {num(P['m'])}, "
+BASE = (f"D is the hardware multiple at MFU_0 = {num(P['mfu'])} (rho.theorem.multiple_bound on tiers.evaluate's terms, "
+        f"the residual training at MFU_0 under the reference-efficiency assumption), at m = {num(P['m'])}, "
         f"kappa = {num(P['kappa'])}, the structural entry fee d = {num(P['d'])} (a run that trains its embedding reads "
         "Layered's lookup columns as updated weights; the Dot16 conjecture's (d, e) = "
         f"({num(CONJECTURE['d'])}, {num(CONJECTURE['e'])}) is conditional), e = {num(P['e'])}, a one-hour verdict lag "
@@ -140,7 +141,7 @@ def fit_mu(p: dict, N: float = N_STAR, w_e: float = W_E, b: float | None = None)
 def parts(p: dict, tier: str, mu: float = math.inf) -> tuple[float, dict[str, float]]:
     """D at ``tier`` with ``mu`` as the memory cap, as ``statement.capped``, and the terms of 1/D: the monitored one as
     r = r̂ + eps' and nu, or as the cap."""
-    r = T.evaluate(p, T.TIERS[tier] | {"wipes": False, "exhaust": False})
+    r = T.evaluate(p, T.TIERS[tier] | {"wipes": False, "exhaust": False}, p["mfu"])
     free = r["residual"] + r["declared"]
     cap = p["m"] * p["g"] * (1 - min(p["unmonitored"], 0.999)) * mu
     k = p["g"] * p["mfu"]
@@ -308,7 +309,7 @@ def phase(out: Path) -> dict:
     D_lo, D_hi = D[:len(lo)], D[len(lo):]
     p0 = at_wipe(6.0, residual=0.0, host_share=0.0, clock_share=0.0)
     free = {x: sum(v for k, v in parts(p0 | {"residual": x}, "T4")[1].items() if k in ("residual", "declared"))
-            * P["mfu"] - x for x in (0.01, 0.1)}
+            * P["mfu"] - P["mfu"] * x for x in (0.01, 0.1)}
     assert math.isclose(free[0.01], free[0.1], rel_tol=1e-6)
     offset = free[0.01]
     fig, ax = plt.subplots()
@@ -328,11 +329,11 @@ def phase(out: Path) -> dict:
     cb.set_label(r"$\mathcal{D}$", rotation=0, labelpad=16)
     cb.outline.set_visible(False)
     edge = np.geomspace(0.5, EDGE_GB * (1 - 1e-6), 300)
-    x_edge = np.array([fit_mu(at_wipe(R)) - offset for R in edge])
+    x_edge = np.array([(fit_mu(at_wipe(R)) - offset) / P["mfu"] for R in edge])
     keep = x_edge >= rs[0]
     ax.plot(x_edge[keep], edge[keep], color="white", lw=2.6, ls=(0, (5, 3)), zorder=2)
     edge_hi = np.geomspace(EDGE_GB * (1 + 1e-6), 200, 100)
-    ax.plot([closed_mu(at_wipe(R)) - offset for R in edge_hi], edge_hi, color="white", lw=2.6, ls=(0, (5, 3)),
+    ax.plot([(closed_mu(at_wipe(R)) - offset) / P["mfu"] for R in edge_hi], edge_hi, color="white", lw=2.6, ls=(0, (5, 3)),
             zorder=2)
     ax.axhline(EDGE_GB, color="k", lw=2.2, ls=(0, (2, 2)), zorder=3)
     ax.text(1.12e-3, EDGE_GB * 1.06, f"{EDGE_GB:.0f} GB: closed form above (needs window-scale threading)",
@@ -378,8 +379,8 @@ def phase(out: Path) -> dict:
         f"{EDGE_GB:.1f} GB the memory cap is the fit bound at central w_e ({TARGET.upper()}-class target), where it "
         "holds; above it the closed form, which needs (d, e)-threading at window scale (false today), so read the top "
         "band as the closed form's claim. Just under the edge a one-period window nearly holds N* weights and the fit "
-        "bound weakens, so D dips there. The dashed white line is where the memory cap equals r̂ plus eps', the "
-        f"verdict lag and nu ({num(offset)} together): left of it D is set by r̂ (vertical contours), right of it by "
+        "bound weakens, so D dips there. The dashed white line is where the memory cap equals r̂ plus eps' and the "
+        f"verdict lag at MFU_0, plus nu ({num(offset)} at r̂ = 0): left of it D is set by r̂ (vertical contours), right of it by "
         "memory (horizontal). "
         "Markers are the ladder's rungs: "
         + "; ".join(f"{name} (r̂ = {num(x)}, R_wipe = {num(y)} GB): D = {num(d)}" for name, (x, y, d, _, _) in
@@ -518,8 +519,8 @@ def exposure(out: Path, rung: str, name: str) -> dict:
 
 
 def free_share(p: dict) -> float:
-    """What memory has to cap at T3: r = r̂ + eps', the verdict lag and nu, as a share of compute."""
-    r = T.evaluate(p, T.TIERS["T3"] | {"wipes": False, "exhaust": False})
+    """What memory has to cap at T3: r = r̂ + eps' and the verdict lag at MFU_0, and nu, as a share of compute."""
+    r = T.evaluate(p, T.TIERS["T3"] | {"wipes": False, "exhaust": False}, p["mfu"])
     return r["residual"] + r["declared"]
 
 

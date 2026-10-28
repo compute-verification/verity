@@ -15,9 +15,12 @@ Nothing in `verity` reads this directory. The theorems it cites are in `Security
 
 The slowdown lower bound's numbers come from [`benchmarks/rho`](../rho/README.md), the one slowdown calculator.
 `tiers.py` gives the remote composition's terms per tier (`remote_terms`), and the slowdown on them is rho's
-`rho.theorem.multiple_bound`, Lean's `Nci.Dampener.remoteDampener` at the reference's MFU, which `statement.py`, `fit.py`
-and `figures.py` read. Hosts carry no compute (`GLOSSARY.md`), so `host_share` is 0: at `tiers.py`'s defaults it is
-1.21, and rho's remote scenario at the H200 gives 1.22 (1 and 1.12 without the hosts assumption). The code and its outputs keep the older names (`slowdown.py`, and `tiers.py`'s `efficiency` and `residual`;
+`rho.theorem.multiple_bound` in Lean's form (`Nci.Dampener.remoteDampener` at the reference's MFU), which `statement.py`,
+`fit.py` and `figures.py` read. Hosts carry no compute and no run beats the reference's efficiency (`GLOSSARY.md`), so
+`host_share` is 0 and the residual trains at MFU₀ (`tiers.evaluate`'s `residual_mfu`), while the counted
+multiplications (NCI's term, χ, the memory cap) stay at peak: at `tiers.py`'s defaults the slowdown is 3.02, and rho's
+remote scenario at the H200 gives 3.04. Without the reference-efficiency assumption they are 1.21 and 1.22, without the
+hosts assumption 2.19 and 2.80, and without both 1 and 1.12. The code and its outputs keep the older names (`slowdown.py`, and `tiers.py`'s `efficiency` and `residual`;
 `GLOSSARY.md`, Older names).
 
 ## Files

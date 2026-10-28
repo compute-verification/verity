@@ -171,15 +171,20 @@ def test_s_times_defaults_to_the_reference_average_under_the_straddling_premise(
 
 
 def test_no_protocol_gives_1_and_the_overhead_is_against_the_reference_at_its_mfu():
-    """The overhead is a hardware multiple over the reference training algorithm at `MFU₀` (0.4), at least 1, so the
-    adversary no protocol encumbers is at 1, as is remote under PoUW as deployed on the H200; remote with the floor
-    credit at the card table's clock is above it (its padded size ratio, 3.04 at capacity, over 2.5), and onsite far
-    above, where the dark leaves don't shrink by 2.5 as the monitored terms do."""
+    """The slowdown is a hardware multiple over the reference training algorithm at `MFU₀` (0.4), at least 1, so the
+    adversary no protocol encumbers is at 1, and remote under PoUW as deployed on the H200 about 1.04; remote with the
+    floor credit at the card table's clock is above it, and onsite far above. Under reference efficiency free compute
+    counts at `MFU₀`, so each is its padded size ratio (3.04 remote); without it the monitored terms shrink by 2.5 and
+    the dark leaves don't (1.22 remote, onsite still above 10)."""
     u = evaluate_named(REG, "unmonitored-h200-kimi")
     assert u.lo == u.attack == 1.0
     remote, onsite = evaluate_named(REG, "reference-remote-h200"), evaluate_named(REG, "reference-onsite-h200")
     deployed = evaluate_named(REG, "reference-remote-h200-pouw")
-    assert remote.scenario.mfu == onsite.scenario.mfu == pytest.approx(0.4) and deployed.lo == 1.0
+    assert remote.scenario.mfu == onsite.scenario.mfu == pytest.approx(0.4) and deployed.lo == pytest.approx(1.04, abs=5e-3)
+    assert remote.lo == pytest.approx(3.04, abs=5e-3) == remote.families[0].combined.padded
+    assert onsite.lo == pytest.approx(onsite.families[0].combined.padded) and onsite.lo > 10
+    peak = REG.override({"task.reference_efficiency": False})
+    remote, onsite = evaluate_named(peak, "reference-remote-h200"), evaluate_named(peak, "reference-onsite-h200")
     assert remote.lo == pytest.approx(1.22, abs=5e-3) and remote.families[0].combined.padded == pytest.approx(3.04, abs=0.01)
     assert onsite.lo > 10 and onsite.lo < onsite.families[0].combined.padded
 

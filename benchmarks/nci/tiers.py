@@ -10,7 +10,8 @@ proved.
 * r, the monitored compute residual: r-hat, the share of monitored capacity outside the compute certificate
   (1 - W_cert/C), plus PoUW's deficit on the certified work, eps_W W_cert/C, plus the aggregation slack eps'. r-hat is
   idle and uncredited GPU time, plus host CPUs, which PoUW neither credits nor bounds and which count at their datasheet
-  peak. It trains at full efficiency unless the memory cap binds. A
+  peak. It trains at full efficiency unless the memory cap binds: at peak in eta, at MFU_0 in D (``evaluate``'s
+  ``residual_mfu``, the reference-efficiency assumption: free compute runs no better than the reference). A
   spatial unit's window reads its starting state plus its novel intake, K_w = state + lambda_in L, and contains at most
   K_w Lambda(K_w) / b_a counted multiplications (``ThreadedRuntime``, reads counted by width; counting them by
   information, which a wipe would bound, is open: ``ThreadedOfState`` rests on the falsified WeightsSupport,
@@ -43,8 +44,8 @@ multiplications per unit of loss is a compute amplifier, multiplying eta by g; i
 against off. A recipe better at working under the mechanisms, m times more progress per counted multiplication, scales
 only the constrained terms (nu, mu and chi), not the residual or unmonitored compute. The compute dampener D, the
 hardware multiple over an unconstrained developer with the same recipe on the same hardware at model-FLOP utilization
-mfu, isn't computed here: it is the overhead calculator's ``rho.theorem.multiple_bound`` (Lean's
-``Nci.Dampener.remoteDampener``) on these terms (``remote_terms``).
+mfu, isn't computed here: it is the overhead calculator's ``rho.theorem.multiple_bound`` in Lean's form
+(``Nci.Dampener.remoteDampener``) on these terms (``remote_terms``) with the residual at MFU_0.
 
 The canvas "Compute efficiency under the verification stack" renders this model.
 
@@ -325,7 +326,9 @@ def state_threshold(p: dict, mech: dict) -> float:
     return residual_share(p) * p["node_flops"] * p["kappa"] * p["d"] * p["b_w"] * p["b_a"] / (4 * ingress(p, mech))
 
 
-def evaluate(p: dict, mech: dict) -> dict:
+def evaluate(p: dict, mech: dict, residual_mfu: float = 1.0) -> dict:
+    """The terms of eta at ``mech``, each in counted multiplications over the FLOP spent, the residual's capacity
+    training at ``residual_mfu`` of peak: 1 for eta, MFU_0 for D under the reference-efficiency assumption."""
     gpm = 2 / p["kappa"]
     H = p["years"] * YEAR
     C = p["nodes"] * p["node_flops"] * H
@@ -377,7 +380,7 @@ def evaluate(p: dict, mech: dict) -> dict:
         declared = declared_at(B)
         relay = B / (2 * p["b_p"])
         relay_res = min(res_ops, relay)
-        res_mults = (res_ops - relay_res) / gpm
+        res_mults = residual_mfu * (res_ops - relay_res) / gpm
         unmon = max(0.0, U - (relay - relay_res)) / gpm
         return min(p["m"] * declared + res_mults, p["m"] * region) + unmon, declared, res_mults, unmon
 
@@ -417,8 +420,9 @@ def evaluate(p: dict, mech: dict) -> dict:
 
 def remote_terms(p: dict, r: dict) -> tuple[float, float]:
     """``evaluate``'s terms as the ``s`` and ``x`` of ``Nci.Dampener.remoteDampener mfu s x``: the unmonitored share,
-    which trains like the unconstrained developer, and the rest, counted at peak, each per the compute amplifier g
-    (which cancels against the unconstrained developer's)."""
+    which trains like the unconstrained developer, and the rest in counted multiplications (so at a = 1/MFU_0,
+    ``multiple_bound``'s ``reference_efficiency=False``; the assumption is in ``r``'s residual, ``evaluate`` at
+    ``residual_mfu`` = MFU_0), each per the compute amplifier g (which cancels against the unconstrained developer's)."""
     return r["unmonitored"] / p["g"], (r["residual"] + r["declared"] + r["cheat"]) / p["g"]
 
 
