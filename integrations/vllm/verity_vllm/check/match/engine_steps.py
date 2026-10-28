@@ -178,7 +178,7 @@ def within_step_order(run: MatchRun, att: Attribution, reqs: RequestFacts, by_st
 
 def _segmentation(c: NamedCheck, res: dict, proj: dict, per_req: dict[str, list[int]], engine_step_of: dict[int, int]) -> None:
     """A request's local steps, segmented at its TokenSelects, against the engine steps its fold rows record."""
-    # a request's local steps are segmented at ITS TokenSelects (compare.Prog._segment, the rc3 rule); the fold rows
+    # a request's local steps are segmented at ITS TokenSelects (compare.RootView._segment, the rc3 rule); the fold rows
     # carry the engine step of every instance.  The two must agree: a local step lies inside ONE engine step, and one engine step holds
     # at most one TokenSelect-terminated local step of the request (its sampler is the last of its instances there), in increasing
     # engine-step order.  A mis-emitted sampler is named here (it would otherwise re-segment the request and surface as unrelated counts).
@@ -207,6 +207,6 @@ def _segmentation(c: NamedCheck, res: dict, proj: dict, per_req: dict[str, list[
     if seg_bad:
         c.fail(f"{len(seg_bad)} request-local step(s) whose TokenSelect segmentation disagrees with the fold rows' engine steps "
                f"(first: {seg_bad[0]}) -- a mis-emitted sampler, not a layout")
-    c.info["segmentation"] = {"rule": "request-local steps = the request's instances segmented at its TokenSelects (compare.Prog._segment); "
+    c.info["segmentation"] = {"rule": "request-local steps = the request's instances segmented at its TokenSelects (compare.RootView._segment); "
                                       "cross-checked against the engine step the fold rows record for every instance",
                               "disagreements": seg_bad[:6]}
