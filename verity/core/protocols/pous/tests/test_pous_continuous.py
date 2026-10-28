@@ -137,6 +137,28 @@ def test_each_challenge_is_a_signed_session(world):
         assert a.on_time and not a.correct and not strict.accepted and len(strict.signed) == 1
 
 
+def test_a_session_id_is_used_once(world):
+    """Each challenge needs its own session id, and the log refuses one already used when its challenge is revealed:
+    that challenge reveals no index, and the stream records nothing for it."""
+    blocks, vk = world
+    signer, log = ts.TestSigner(b"audit", height=1), ts.session_log()
+
+    def stream(sessions):
+        return ContinuousMemoryChallenger(PARAMS, b"audit", sessions, signer, log=log,
+                                          digests=[mc.block_digest(b) for b in blocks], binding=vk.root,
+                                          late_deadline_ns=LATE, clock=Clock(), schemes=ts.SCHEMES)
+
+    with pytest.raises(ValueError, match="its own 32-byte session id"):
+        stream([_session(0), _session(0)])
+    log.claim(_session(1))
+    v = stream([_session(0), _session(1)])
+    j, i = v.challenge()
+    assert v.respond(j, blocks[i]).correct
+    with pytest.raises(mc.SessionLogError, match="is in"):
+        v.challenge()
+    assert v.pending is None and len(v.answers) == len(v.rounds) == 1 and not v.done
+
+
 # Liveness: the driver closes every challenge by the memory challenger's clock.
 
 def test_a_silent_responder_cannot_hang_the_stream(world):
