@@ -54,7 +54,8 @@ Definitions/Pous/Guarantees/Obligation.lean
                                     `P2RingRoundSecure` (`ObligationOfRoundSecure`) and from its widening to `2^27`
                                     blocks, `P2RingRoundSecureWide` (`ObligationOfRoundSecureWide`), and the demo's
                                     memory term at `1038·2^16` blocks (`ObligationDemo`, `ObligationDemoWide`),
-                                    proved in `Proofs/Pous/Obligation.lean`
+                                    and a 320-read window at `2^-20` from `2^19` to `2^27` blocks
+                                    (`ObligationWide320`), proved in `Proofs/Pous/Obligation.lean`
 Proofs/Pous/Statements.lean         trusted, the lemmas' statements (math, not claims): 40 lemmas, the
                                     completeness theorem `ContinuousComplete` and `InvExPostFactoTwoLayer`, which
                                     `N10Refuted` negates; it imports no proof, and grade.sh grades `KFloor`, `Theorem1ii` and the open
