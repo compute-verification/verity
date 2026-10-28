@@ -31,6 +31,8 @@ NOT_PATHS = {
     ("tools/research/README.md", ".cursor/mcp.json"): "the Cursor config the reader writes in their own checkout",
     (".agents/skills/kernel-engineering/SKILL.md", "panel.py"): "the kernel panel, kept in an agent store",
     ("benchmarks/pouw/harness/README.md", "panel.py"): "the kernel panel, kept in an agent store",
+    ("benchmarks/network_traces/README.md", "composite.py"): "the one-stage composite, not in the tree yet",
+    ("benchmarks/pouw/commit_gpu/README.md", "ovl.cu"): "the stage-overlap probe, deleted; its owner's to drop",
     ("Security/Proofs/Flock/Soundness/assumption-notes/a3-uniform-bytes.md", "io.cpp"): "the Lean runtime's source",
     ("Security/Proofs/Flock/Soundness/assumption-notes/a3-uniform-bytes.md", "random.c"): "the Lean runtime's source",
     ("benchmarks/numerical/README.md", "tc.rs"): "SP1's guest, deleted with the archive",
@@ -49,12 +51,6 @@ NOT_PATHS = {
     ("verity/core/protocols/pous/PROTOCOL.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",
     ("verity/core/protocols/pous/PROTOCOL.md", "BandEncDec.lean"): "the band chain's Lean, outside this tree",
     ("verity/core/protocols/pous/PROTOCOL.md", "regate.py"): "the timing red team's script",
-    ("verity/core/protocols/pous/p2/PROTOCOL.md", "regate.py"): "the timing red team's script",
-    ("verity/core/protocols/pous/p2/PROTOCOL.md", "decode.py"): "the timing red team's script",
-    ("verity/core/protocols/pous/p2/PROTOCOL.md", "find_primes.py"): "the timing red team's script",
-    ("verity/core/protocols/pous/p2/PROTOCOL.md", "ecpp_verify.py"): "the primality campaign's verifier",
-    ("verity/core/protocols/pous/p2/PROTOCOL.md", "test_isolation_harness.py"): "the bounty kit's test",
-    ("verity/core/protocols/pouw/PROTOCOL.md", "beta_final.py"): "a source inside the evidence artifact the line cites",
 }
 
 _TOKEN = re.compile(r"`([^`\s]+)`|\]\(([^)\s]+)\)")
