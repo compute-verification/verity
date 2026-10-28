@@ -26,4 +26,4 @@ inputs = ["integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity
           "integrations/vllm/verity_vllm/pipeline/__init__.py", "integrations/vllm/verity_vllm/engine/spec.py",
           "integrations/vllm/verity_vllm/engine/__init__.py", "integrations/vllm/verity_vllm/records",
           "integrations/vllm/manifests/checkpoints.json", "integrations/vllm/manifests/checkpoints-int8.json",
-          "tools/config/verity_config"]
+          "tools/config/verity_config", "benchmarks/specs/README.md"]
