@@ -17,12 +17,12 @@ REFRAME (22:25Z; Daniel 3:16 PM PDT, after his 3-pager, https://app.notion.com/p
   - Report all three factors and A for every design. Main's headline "ε_skip ≤ 1%" is one factor, not A (GD-SMELL MODEL-2).
 - **Period, for the proving term (coordinator's pick, 22:35Z):** one prover's deployment-year of 1,000 GPUs (3.2×10^10 GPU-s). Each prover is certified on its own draws, so the smallest deployment certified sets proving's share, not the world. At ε_S = 1% (about 2,800 draws) and today's ~1.26 GPU-s a draw (GD-PLANNER; estimate), proving is about 10^-7 of that period. A budget of 1% would allow about 10^5 GPU-s a draw.
 - **Objective:** J = (t_remote/t_stock − 1) + w·(proving + replay GPU-s)/(stock GPU-s of that period), w = 1. The second term is about 10^-7, so J is serve-time overhead, subject to A ≥ 0.99. Expect the optimizer to commit as little as possible while serving.
-- **TERMS (Daniel, 4:13 PM PDT); use them in every note:** a **dot product** is one output element of a matmul. Don't call it a cell, an output cell or a dot product. A **proof block** is a region of the circuit's partition that C-Flock proves. It's a policy parameter, so don't coin protocol-specific names: never "block" alone or "proof block of noised dot products". A proof block that holds noised dot products is still just a proof block.
+- **TERMS (Daniel, 4:13 PM PDT); use them in every note:** a **dot product** is one output element of a matmul. Don't call it a cell or an output cell. A **proof block** is a region of the circuit's partition that C-Flock proves. It's a policy parameter, so don't coin protocol-specific names: never "block" alone or "proof block of noised dot products". A proof block that holds noised dot products is still just a proof block.
 - **DECIDED (Daniel, 4:11 PM PDT): the coin expansion rests on SHA-512's speed premise** (ShaSpeed read on the coin expansion as well as the commitment). Count the coins inside pub_sha, not as unforced work. GD-SPEC: state the premise's new reading. Fresh-U's winner is the golden demo's base design; H1 and J10-R as served earn 0 and aren't the demo's PoUW.
 - **Only proof blocks' inputs and outputs are committed, never interior values (Daniel, 3:57 PM PDT).**
   - A credited matmul's work counts only if its noised result is a block output. The floor is pub_mm(the block outputs)/G.
-  - Widening a proof block of noised dot products across output cells (R×C at full K) changes nothing. Lengthening it along K, or fusing past the call, makes the noised words interior and lowers the floor; with only served outputs it is 0.
-  - So a proof block of noised dot products is a set of whole dot products (full K), outputting each cell's noised word. Fresh-U's winner is already this shape. Dither's prefix sums need one block a segment.
+  - Widening a proof block of noised dot products across more dot products (R×C of them, each at full K) changes nothing. Lengthening it along K, or fusing past the call, makes the noised words interior and lowers the floor; with only served outputs it is 0.
+  - So a proof block of noised dot products is a set of whole dot products (full K), outputting each dot product's noised word. Fresh-U's winner is already this shape. Dither's prefix sums need one proof block a segment.
   - A block's inputs must be committed before its call's coins (Dither PROTOCOL: every operand a credited call reads is bound first; otherwise A = −V − d_A frees 24–63%). So every credited matmul's activation input is committed at serve time.
   - That makes the lazy arm invalid for credited inputs. On Llama-3.2-1B the inputs are about 0.23 MB a token, J_hash +0.13 at T 8,192, beside the receipts' 0.47 MB and +0.27 (estimates; GD-HASH's rule). These inputs are also the values commitment at matmul inputs, so commit them once.
 - **Lower bounding is the core deliverable.** `WorkSound` and `WorkSoundNoFold` are proved on main (Security/Proofs/Pouw/Dither.lean), resting on SAK(matmul) at the public best and on premises outside this brief's list (GD-SPEC: G1–G3, P1, P2, ShaSpeed, OutsourceWithinEgress, CertifierSeesImports, RootAfterCoin). For the chosen design, give the instance its proof needs, the attack search the public best rests on, and every premise by name.
@@ -70,8 +70,8 @@ KNOWN NUMBERS (cite them; re-measure only if your task says so):
 - **Dither** (verity/core/protocols/pouw/dither/PROTOCOL.md on main):
   - noise ±80 with period L′; 16-bit prefix sums committed every L = t·L′;
   - floor min(1, 1/8 + 3/t)·G (note:compute-research/20261028T0523Z-finding-dither-noised-floor);
-  - at L ≥ K a cell commits O alone, which is un-noised and earns 0.
-- **J10-R as served:** one value a cell, U with period 32, 9/64 G. compute-accounting's JR2 (J10-R v2, U fresh along K) is in flight.
+  - at L ≥ K a dot product commits O alone, which is un-noised and earns 0.
+- **J10-R as served:** one value a dot product, U with period 32, 9/64 G. compute-accounting's JR2 (J10-R v2, U fresh along K) is in flight.
 - **Sampling, in Lean** (Security/Proofs/Flock/Soundness/Audit/Partitioning/Guarantees.lean):
   - Achievability: q_u = min(1, Λ w_u / C), so draws ≈ Λ F/C, with Λ = ln(1/δ).
   - GranularityOptimum prices proving only (c(s) = f + o·s) and omits the serve-time commitment.
