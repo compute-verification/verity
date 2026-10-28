@@ -752,7 +752,7 @@ def test_qcall_and_input_bindings_agree_with_the_reference(tmp_path):
 def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
     """`MerkleScheme.Collision` is a collision of the hash, not of how its input is split: one byte string split two ways
     (`[0] ‖ []` against `[] ‖ [0]`) gives one node, and must not count, since the children are not of the digest's width
-    (PR #146's red-team review). The same witness for `Sha256.Collision` needs two different inputs, which it does not have."""
+    (a red-team review's case). The same witness for `Sha256.Collision` needs two different inputs, which it does not have."""
     build_proofs_verifier()
     for goal, witness in [
         ('(MerkleScheme.sha256 "flock-leaf/sha256-unsalted").Collision',
@@ -771,7 +771,7 @@ def test_merkle_collision_is_not_met_by_a_split_string(tmp_path):
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_region_refuses_a_repeated_free_bit(tmp_path):
     """`mkRegion` refuses a region whose free bits repeat, since the pinned table-soundness theorems assume them distinct
-    (`Statement.LinkLayout`); a repeat would pass the other checks and be covered by none (PR #278's red-team review).
+    (`Statement.LinkLayout`); a repeat would pass the other checks and be covered by none (a red-team review's case).
     Two ranges of free bits that overlap in one bit, as `bits 0 w ++ bits slotLog c` do when `slotLog < w`, are refused."""
     subprocess.run(["lake", "build", "Flock"], cwd=LEAN, check=True, capture_output=True)
     f = tmp_path / "Region.lean"
@@ -1510,7 +1510,7 @@ def collides : MerklePair → Bool
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_merkle_extractor_computes_a_collision(tmp_path):
     """`merkle_binding` is stated over `merklePair`, a computable extractor, since a collision of a fixed hash exists by
-    counting (PR #146's red-team delta check). On a toy scheme with 1-byte digests, two accepted checks with different rows
+    counting (a red-team delta check). On a toy scheme with 1-byte digests, two accepted checks with different rows
     give its pair: two children pairs under one node, or two rows with one leaf, and each collides."""
     build_proofs_verifier()
     f = tmp_path / "Toy.lean"
@@ -1528,8 +1528,8 @@ def _net(rows, ins="1 0 1 1 2", outs="1 1 1 1 1"):
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_net_parser_refuses_rows_out_of_order(tmp_path):
-    """`Net.parse` holds every computed row to the order the soundness package's `Rows.topo` names (#144's
-    `test_pinned_rows_read_earlier_columns`): it reads only earlier columns that are not input padding, or the constant. Port
+    """`Net.parse` holds every computed row to the order the soundness package's `Rows.topo` names (as
+    `test_pinned_rows_read_earlier_columns` holds the pinned rows to it): it reads only earlier columns that are not input padding, or the constant. Port
     groups must fit their words, and input groups the input rows."""
     base = ["1 0 1 0", "1 1 1 1"] + ["0 0"] * 126 + ["1 0 1 1", "2 128 1 1 130", "1 130 1 130"]
 
