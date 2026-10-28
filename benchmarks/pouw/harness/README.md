@@ -4,7 +4,7 @@ One harness for every PoUW prover arm on the RTX PRO 6000 Blackwell (sm_120), FP
 plain GEMM baseline is gated at the exact shape and flag set it is timed at, then everything is timed the same way,
 interleaved, and reported over the fastest plain GEMM of the arm's precision on the same card and shape.
 
-It is independent of the NCP stack: stdlib, numpy and ctypes (no torch), with a small native library for the device side.
+It is independent of the serving stack: stdlib, numpy and ctypes (no torch), with a small native library for the device side.
 Its timing discipline: bursts over distinct operand sets past twice the L2, a read-only L2 flush, per-item sensors,
 versions, the consistency gate. It uses the CUDA primary context through ctypes, so driver-API arms plug in.
 

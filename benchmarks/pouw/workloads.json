@@ -2,7 +2,7 @@
  "schema": "verity-pouw/workloads/v1",
  "model": {
   "id": "Qwen/Qwen2.5-3B-Instruct",
-  "why": "every linear has k in {2048, 11008} and n >= 2048: inside both schemes' domains, with NCP's gamma <= 0.89%",
+  "why": "every linear has k in {2048, 11008} and n >= 2048",
   "hidden": 2048,
   "layers": 36,
   "vocab": 151936,
