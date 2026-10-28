@@ -1,5 +1,5 @@
 /-
-A window circuit's wires, checked at the size of their description (`verity.ml.windows.interface.Wire`, V3a).
+A window circuit's wires, checked at the size of their description (`verity.ml.windows.interface.Wire`).
 
 A window's circuit is a population of template instances (`TemplatePopulations_v1`), whose inputs are all Input gates: the
 program holds no dataflow between units. The wires are that dataflow. A wire states, once for many units, that reader
@@ -13,8 +13,8 @@ template `reader`'s units read rows of their parameter `port` whole as row `out`
 * **Its writers.** Reader index `i`'s writer is unit `base + Σ_k d_k · step_k` of `writer`, `d` the digits of `i` in mixed
   radix `radix` (the first digit the slowest); a step of 0 is a fan-out. Each index counts its own template's units.
 
-`check` decides a circuit's wires in work proportional to its templates and wires, never to the units they cover (the
-verifier-cost rule, AGENTS.md "Design rules"): each wire's writers lie in `span`, the least and greatest writer in closed
+`check` decides a circuit's wires in work proportional to its templates and wires, never to the units they cover (AGENTS.md
+"Design rules"): each wire's writers lie in `span`, the least and greatest writer in closed
 form; and two wires wire no reader row twice exactly when they read different ports or their rectangles (reader units ×
 rows) are disjoint, compared pair by pair (#wires² comparisons, each of a few fields). Its summary gives each reader row's writer (`Summary.writerOf`, by the
 wires alone) and the wired rows and bits multiplied through (`wiredRows`, `wiredBits`), the wired term of the count of a

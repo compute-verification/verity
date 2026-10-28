@@ -69,7 +69,7 @@ def retiredTwoStage : String :=
 
 /-- A rule as `to_json` writes it, exactly its keys: `{rule: all}` or `{rule: law, law}`, its law text a rate law or one
 `parseLaw` reads, as `service.Law` refuses any other when it is made. A stream refuses a sequential rule, and a two-stage
-rule with `retiredTwoStage`: two-stage sampling is retired, as everything is committed at serve time. -/
+rule with `retiredTwoStage`: two-stage sampling is retired. -/
 def Rule.ofJson (j : Json) : V Rule := do
   match getD j "rule" with
   | .str "all" => if keys? j == some #["rule"] then return .all
