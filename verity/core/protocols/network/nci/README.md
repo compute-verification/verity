@@ -30,7 +30,9 @@ scenarios register a policy as if it were a subprotocol.
 
 - **The definition**, `Security/Definitions/Nci.lean`. `Nci.Complies Γ α` states an older form: D divides into blocks
   of at most Γ gates, each reading at most α bits of fresh input per gate it holds (`Nci.novelReads`), so at most αΓ
-  bits a block. The (c, k) form, with an exact gate budget, is not yet in Lean.
+  bits a block. Its link to the (c, k) form is proved: `Nci.Guarantees.CompliesCK` pads a complying partition into a
+  (Γ, ⌊αΓ⌋)-partition (`Verity.Partition.IsCK`), and `Nci.Guarantees.ExpandComplies` carries compliance through the
+  bit-level expansion at Γ·W for gates up to W bits wide.
 - **The guarantees**, `Security/Definitions/Nci/Guarantees/`, each proved in `Security/Proofs/Nci/` as
   `Nci.SecurityProofs.G`. `ReadBound` turns a lower bound on fresh input into a lower bound on size, `Inference` shows
   honest inference complies, and the covering, training and threading statements are pricing arguments.
@@ -56,7 +58,10 @@ nothing else but Lean core and the core interface (`core_protocol`).
   `../tests/test_inference_only_protocol.py` holds `inference-only serve` to that reference behind the protocol's
   decoders.
 
-The check stays experimental until its agreement with `Nci.Complies` is proved. `benchmarks/nci` holds the
+The check's agreement with `Nci.Complies` is proved: its verdict is the definition's (`DescReports`), and a
+  compliance verdict witnesses the policy (`DescWitnesses`). What is open is the step from the protocol's accept to
+  that verdict as a property (`baseline_desc` is a proof lemma) and from remote's verdict to the policy's accept
+  (remote's rule `checkSame` has no property yet). `benchmarks/nci` holds the
 literature index and the training algorithms' traits.
 
 ## Names

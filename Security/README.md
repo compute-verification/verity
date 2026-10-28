@@ -59,7 +59,9 @@ The numbers come from the slowdown calculator (`benchmarks/rho`), not from this 
   anything else the hardware does are gates of A.
 - **Initial information**: the registered information θ, input gates whose values are committed before J (models, code,
   data). Nothing else is carried into J.
-- **Registration**, once and append-only: the site, θ and the circuit builder B, a public program.
+- **Registration**, once and append-only, in the setup phase: the site, θ and the registered compiler B, a public
+  program. Today's Lean models the registration as R = (θ, D, 𝓘), the registered circuit and its inference partition
+  (`Verity.Registration`), which B's execution blocks extend.
 - **Execution.** For each declared advice a_j (a string of at most ℓ_a bits, private and committed, ℓ_a public), B
   outputs B(a_j) = (E_j, 𝒫_j, 𝓘_j, loc_j):
   - E_j, the execution block: a Boolean circuit whose inputs are θ, earlier blocks' outputs and fresh input;
@@ -340,11 +342,11 @@ at most η (`Nci.Guarantees.CapabilityFloor`). Let Ω_ref be the reference's cou
 $$ \rho \;\ge\; \frac{1}{\alpha\,\big[(\bar\zeta/\zeta_{\mathrm{ref}})\,f + y\big]}, \qquad
    y = \frac{q}{c\,\zeta_{\mathrm{ref}}}\,(1 - f), $$
 
-y the declared yield as a share. The ratio ζ̄/ζ_ref keeps the reference's achieved rate apart from the ceiling on every
+y the yield of correct credited work, as a share of the reference's rate. The ratio ζ̄/ζ_ref keeps the reference's achieved rate apart from the ceiling on every
 residual computation; only reference efficiency (ζ̄ = ζ_ref) reduces the bound to 1/(α·[f + y]). The unregistered share
 s ≤ f limits what this bound can certify, to at most 1/(α·(ζ̄/ζ_ref)·s); without a matching construction it says
 nothing about the actual slowdown. Without part 2, q/c could reach ζ̄ and
-the bound falls to Ω_*/(ζ̄·C_ref), no slowdown at all: part 2 is what keeps declared work from being training.
+the bound falls to Ω_*/(ζ̄·C_ref), no slowdown at all: part 2 is what keeps the registered circuit's credited work from being training.
 
 **Onsite.** As remote, except that each registered server's remainder is capped per server block: a server block of at
 most c_S gates whose effective fresh input k_S is within the assembly's range does at most q_S of the weighted count,
@@ -381,7 +383,7 @@ None of these is assumed silently; each would restate the conclusion:
 | Theorem 3 | `Verity.Guarantees.Counting` | Proved |
 | The threaded refinement | `Nci.Threading.Threaded`, `Nci.Assumptions.WeightsIncompressible`, `Nci.Guarantees.ThreadedReads` | Proved for the circuit in hand under assumed read costs |
 | Device model | `Accounting.Placed.ComputeRate`, `Accounting.Placed.Links`, `Accounting.Placed.Memory`, `Accounting.Placed.Causal`, `Accounting.Overhead.physClass`; hosts carry no compute, `OneClock` and the inventory not yet in Lean | Defined; three premises unstated |
-| The composites | `Core.Remote.protocol`, `Core.Onsite.protocol`, `Properties.Composition.AcceptMeans` | Proved; the policy is not yet a subprotocol of either, and neither checks one registration |
+| The composites | `Core.Remote.protocol`, `Core.Onsite.protocol`, `Properties.Composition.AcceptMeans` | Proved for the product rule `check`; the policy is a subprotocol of both (v0, in the clear); remote's rule `checkSame`, with its one-registration tie, has no property yet |
 | The utilization policy | not yet in Lean | Not a policy yet |
 | Protocol soundness | `Accounting.Overhead.restricted`; `Verity.Soundness` not yet in Lean | Open |
 | Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, `Claims.Sampling.RelS` | Proved; the step from F ∈ M_δ to the credit-weighted φ is open |
@@ -469,7 +471,8 @@ commitment binds them (`Properties.Composition`, proved), and only when all thre
 - **Assumptions:** those rows' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `TableCRZAt`, `LinkCRZC`,
   `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`,
   `ReceiptLuckAt` and `GuessLuckAt`. Trust model: nothing the prover runs or hosts is trusted, and every coin is live,
-  with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor hosts. The challenger, which
+  with no retries. Interaction is preferred to Fiat–Shamir; randomness derived from a challenger's coin by hashing is
+  used only in named cases, PoUW's per-multiplication noise seeds among them. The challenger and the verifier both run on auditor hosts. The challenger, which
   draws each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
   (`trusted-host`); the verifier is the auditor's own check. Two premises about where the challenger runs,
   `CoinsConfidential` and `OneClock`, are prose only (`verity/core/protocols/sampled_proofs/README.md`): no `.lean`
