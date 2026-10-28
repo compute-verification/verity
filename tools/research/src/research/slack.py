@@ -1847,7 +1847,7 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                          "--worker NAME for a lane's worker, which holds no handle")
     if ns.worker and not WORKER_RE.fullmatch(ns.worker):
         raise SlackError(f"--worker {ns.worker!r}: a name of letters, digits, `.`, `_` and `-`, at most 40 (e.g. LINTOOLS)")
-    if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit", "state", "place", "comment"):
+    if ns.dry_run and ns.verb not in ("check", "list", "audit", "edit", "state", "place", "comment", "create"):
         raise SlackError(f"linear {ns.verb} has no --dry-run (it would write): leave it off, or try `edit`, `state`, "
                          "`place` or `comment`, which have one")
     try:
@@ -1895,6 +1895,20 @@ def cmd_linear(ns: argparse.Namespace, reg: dict) -> int:
                 raise SlackError(f"linear milestone {ns.target}: give PROJECT (a prefix of its name, one word or quoted) and NAME")
             else:
                 print(lin.milestone(ns.value[0], " ".join(ns.value[1:]), ns.date, brief, ns.rename, create=ns.target == "create"))
+            return 0
+        if ns.verb == "create":
+            h = acting_as(ns, reg, need(ns.handle, "--as HANDLE, the issue's filer"))
+            team = ns.team[0] if ns.team else need(h.get("linear"), f"--team KEY (@{h['handle']} has no Linear team)")
+            title, body = need(ns.title, "--title, the deliverable"), need(brief, "--file BRIEF.md, the issue's brief")
+            if ns.dry_run:
+                print(f"dry-run: would file {title!r} in {team} as {h['handle']}" + (f" under {ns.parent}" if ns.parent else "")
+                      + (f", due {ns.due}" if ns.due else ""))
+                return 0
+            made = lin.file(team, h["handle"], body, parent=ns.parent, title=title)
+            if ns.due:
+                lin.edit(made["identifier"], due=ns.due)
+            board = " / ".join(x["name"] for x in (made.get("project"), made.get("projectMilestone")) if x)
+            print(f"{made['identifier']} {made['url']}" + (f" on {board}" if board else ""))
             return 0
         issue = need(ns.target, "the ISSUE (e.g. INF-12)")
         if ns.verb == "relate":
@@ -3963,9 +3977,10 @@ def main(argv: list[str], prog: str = "research msg") -> int:
                       "duplicate OTHER` (Linear moves a duplicate to its Duplicate status), `unrelate ISSUE OTHER`, `update "
                       "PROJECT --health onTrack|atRisk|offTrack --body-file F` (a project update), `project create NAME --team "
                       "KEY... [--lead USER] [--target YYYY-MM-DD] [--description-file F]`, `milestone create|edit PROJECT NAME "
-                      "[--date YYYY-MM-DD] [--description-file F] [--rename NEW]`; none sends a state")
+                      "[--date YYYY-MM-DD] [--description-file F] [--rename NEW]`, `create --as HANDLE --title T --file BRIEF.md [--team KEY] "
+                      "[--due YYYY-MM-DD] [--parent ID]` (an issue in your own team, or KEY's); none sends a state")
     p.add_argument("verb", choices=("check", "state", "comment", "list", "audit", "place", "edit", "relate", "unrelate", "update",
-                                    "project", "milestone"))
+                                    "project", "milestone", "create"))
     p.add_argument("target", nargs="?", help="state, comment, place, edit, relate, unrelate: the issue (INF-12); list, audit: the "
                                              "team (a handle or its key); update: the project; project, milestone: create or edit")
     p.add_argument("value", nargs="*", help="state: the state's name; comment: the text; place: the project; audit: more teams; "
