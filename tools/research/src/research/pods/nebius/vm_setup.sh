@@ -30,7 +30,8 @@ for _ in $(seq 60); do [ -e "$DEV" ] && break; sleep 2; done
 [ -e "$DEV" ] || { log "no data disk at $DEV"; exit 1; }
 if [ -z "$(blkid -o value -s TYPE "$DEV" || true)" ]; then
   log "formatting $DEV (it holds no filesystem)"
-  mkfs.ext4 -q -L vy-data -m 0 -i 262144 -E lazy_itable_init=1,lazy_journal_init=1 "$DEV"
+  # one inode per 64 KiB: at 256 KiB a 2 TB disk ran out of inodes with 46% of its bytes used, a Lean build tree being 0.5-1M inodes
+  mkfs.ext4 -q -L vy-data -m 0 -i 65536 -E lazy_itable_init=1,lazy_journal_init=1 "$DEV"
 fi
 mkdir -p /workspace
 grep -q ' /workspace ' /etc/fstab || echo "LABEL=vy-data /workspace ext4 defaults,noatime,nofail,x-systemd.device-timeout=120 0 2" >> /etc/fstab
