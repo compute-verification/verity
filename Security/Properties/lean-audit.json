@@ -2030,6 +2030,12 @@
    "assumptions": [],
    "type_hash": "4271b69b424ca1a5e9ef6c4d6854c39ebe1a149b1d6d22f08374a1ca2f7a443f"
   },
+  "Properties.Pouw.ServedValues.SecurityProofs.HonestValues.right_values_honest": {
+   "owner": "@compute-research"
+  },
+  "Properties.Pouw.ServedValues.SecurityProofs.HonestValues.right_values_nontrivial": {
+   "owner": "@compute-research"
+  },
   "Properties.Pouw.ServedValues.SecurityProofs.rightValues": {
    "owner": "@compute-research",
    "signature": ["Properties.Pouw.ServedValues.SecurityProofs.rightValues : Properties.Pouw.ServedValues.RightValues"],

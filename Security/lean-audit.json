@@ -13892,53 +13892,6 @@
     "∀ (e : Prod (Bandwidth.Store N b) (Pous.Bits n)) (O O' : Bandwidth.Oracle N b h) (u : Nat), Eq (Accounting.portSignals S link sidePorts { fst := e, snd := O } u) (Accounting.portSignals S link sidePorts { fst := e, snd := O' } u)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (E : Bandwidth.Store N b) (z : Pous.Bits n) (O : Bandwidth.Oracle N b h), Eq (ζ ((S { fst := { fst := E, snd := z }, snd := O }).content X t₀) (List.map (fun i => (S { fst := { fst := E, snd := z }, snd := O }).crossing (Set.instCompl.compl (Finset.instSetLike.coe X)) (Finset.instSetLike.coe X) (Set.instSingletonSet.singleton (instHAdd.hAdd t₀ i))) (List.range T))) z": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
-   "Claims.Bits_fails": {
-    "∀ (w : W), Not (R x w)": "a negation, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Claims.Complete_fails": {
-    "Scope x": "Scope taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "R x w": "R taken inline, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Claims.Flock.Complete_meets_plain": {
-    "Eq (FlockComplete.ready H x) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Claims.Flock.Complete_meets_zk": {
-    "Eq (FlockComplete.readyZk H x) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Claims.Flock.decoder_meets_plain": {
-    "Real.instLE.le (instHMul.hMul (instHSub.hSub 1 ((FlockDeploy.deployPlain rel).θ M)) ((FlockDeploy.deployPlain rel).len M).cast) (Finset.filter (fun i => Eq ((FlockDeploy.deployPlain rel).enc M i.val) (Claims.Flock.fill ((FlockDeploy.deployPlain rel).len M) os i)) Finset.univ).card.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Claims.Flock.decoder_meets_zk": {
-    "Real.instLE.le (instHMul.hMul (instHSub.hSub 1 ((FlockDeploy.deployZk rel).θ M)) ((FlockDeploy.deployZk rel).len M).cast) (Finset.filter (fun i => Eq ((FlockDeploy.deployZk rel).enc M i.val) (Claims.Flock.fill ((FlockDeploy.deployZk rel).len M) os i)) Finset.univ).card.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Claims.KSLin_fails": {
-    "∀ (w : W), Not (R x w)": "a negation, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Claims.KS_fails": {
-    "∀ (w : W), Not (R x w)": "a negation, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Claims.Sampling.Binding_meets_one": {
-    "Eq (c.at_ roots o.pos) (Option.some { fst := root, snd := 0 })": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (c.π o) List.nil": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Claims.Sampling.bytes root) (Flock.Registered.climb dom (Flock.Registered.rowLeaf dom 0 (Claims.Sampling.bytes (FlockSoundness.Binding.digBytes (FlockSoundness.Refine.H512 (FlockSoundness.Binding.hm96Input (SamplingDeploy.row c.place c.bits o) (c.salt o)))))) 0 0 (Claims.Sampling.bytes List.nil))": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq c.own (List.cons { name := \"\", value := \"\", root := Claims.Sampling.bytes root, leaves := 1, words := Option.none, wordBits := 16, domain := dom, readsRel := List.nil.toArray } List.nil).toArray": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Claims.Sampling.decoder_meets_plain": {
-    "Eq D.flock (FlockDeploy.deployPlain rel)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHMul.hMul (instHSub.hSub 1 (D.flock.θ M)) (D.flock.len M).cast) (Finset.filter (fun i => Eq (D.flock.enc M i.val) (Claims.Flock.fill (D.flock.len M) os i)) Finset.univ).card.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Claims.Sampling.decoder_meets_zk": {
-    "Eq D.flock (FlockDeploy.deployZk rel)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHMul.hMul (instHSub.hSub 1 (D.flock.θ M)) (D.flock.len M).cast) (Finset.filter (fun i => Eq (D.flock.enc M i.val) (Claims.Flock.fill (D.flock.len M) os i)) Finset.univ).card.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Claims.Sampling.masked_meets_zk": {
-    "Eq D.flock (FlockDeploy.deployZk rel)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Claims.Witness.Recursion.Complete_meets_deployed": {
-    "Eq (RecDeploy.readyRec b.st H x) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (j : Nat), instLTNat.lt j (RecDeploy.nS x) → ∀ (s' : RecDeploy.RecIns) (spec' : Flock.SessionSpec) (sts' : Array Flock.Stmt), Eq (RecDeploy.setupO (RecDeploy.staged b.st x (RecDeploy.pick b.st x j) j)) (Option.some { fst := s', snd := { fst := spec', snd := sts' } }) → ∀ (t : Flock.Stmt), List.instMembership.mem sts'.toList t → instLENat.le t.m 35": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (RecDeploy.nS x) (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
    "Flock.SecurityProofs.EndToEnd": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.HmRow.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok c)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
