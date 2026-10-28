@@ -36,8 +36,10 @@ from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
 from verity.core.protocols.sampled_proofs import challenger as Ch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import served_commit as SC  # noqa: E402
 import of_record as OR  # noqa: E402
+from of_record_references import References
 
 _CASES = Path(CC.__file__).resolve().parent / "lean/check/tests"
 for _name in ("pouw_rounds_cases", "pouw_pass_cases", "pouw_check_cases", "pouw_opening_cases"):
@@ -134,7 +136,7 @@ def _challenger(params, c, prover, path: Path, ledger: PS.Registrations) -> SC.C
     live = Wd.live_challenger(0, 1, random.Random(str(path)).randbytes)
     Ch.write_record(path, live.sign_record("auditor-host", lms.public_key(k), lambda m: lms.sign_at(k, 0, m).encode()))
     deployment = SC.Deployment(c.certifier_key, c.run_id, Ch.ChallengerKey(4, 2, lms.public_key(k)))
-    return SC.Challenger(params, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=c, prover=prover,
+    return SC.Challenger(params, live, clock=lambda: 0.0, record=References(), certifier=c, prover=prover,
                          coin_record=path, deployment=deployment, registrations=ledger)
 
 

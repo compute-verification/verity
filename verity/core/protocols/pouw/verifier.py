@@ -7,14 +7,12 @@ window's statements are judged here too: `credit.window` and `credit.period_cred
 `lean("credit-verified", …)` (`PouwCheck.Verified`), with `credit._verified` the reference, and each round's live
 outcome from `lean("credit-live-verified", …)` (`PouwCheck.LiveVerified`), with `credit._live_verified` the reference,
 on the circuit files its period's open committed, `lean("credit-committed-files", …)` (`PouwCheck.CommittedFiles`),
-with `credit.committed_files` the reference.
-
-`RECORD_VERDICT` is the switch, and setting it to ``"python"`` is the one line that undoes it.
+with `credit.committed_files` the reference. Lean's verdict is the record's; there is no switch back to the Python.
 
 `coins` is the challenger's entropy: bytes the Lean verifier of record reads from the operating system (`pouw-check-difftest`'s
 ``coins``, `IO.getRandomBytes`, A3's `uniform/io-getrandombytes`), which a served `coins.Challenger` and
-`window.live_challenger` draw every coin and hm96 salt from. Python never reads them from the operating system itself, and
-`RECORD_VERDICT` doesn't switch them. Building takes the lock `verity_difftest.build` takes (its `BUILD_LOCK`): Lake builds
+`window.live_challenger` draw every coin and hm96 salt from. Python never reads them from the operating system itself.
+Building takes the lock `verity_difftest.build` takes (its `BUILD_LOCK`): Lake builds
 the path requires in place, and two builds at once would rewrite one module's C under each other.
 
 This module imports only the standard library, so what decides a window never depends on `verity.ml`."""
@@ -29,8 +27,6 @@ import tempfile
 import threading
 from pathlib import Path
 from typing import Any
-
-RECORD_VERDICT = "lean"
 
 PACKAGE = Path(__file__).resolve().parent / "lean" / "check"
 EXE = "pouw-check-difftest"

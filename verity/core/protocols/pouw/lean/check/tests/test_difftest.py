@@ -64,7 +64,6 @@ import pouw_pass_cases as passes
 import pouw_rounds_cases as rounds_cases
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
-from verity.core.protocols.pouw import verifier as V
 from verity.core.protocols.pouw import weights as W
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -92,7 +91,7 @@ def reference(case) -> dict:
     return a
 
 
-PORT = ExactPort("pouw-check", reference, inputs=INPUTS, package=LEAN, of_record=V.RECORD_VERDICT)
+PORT = ExactPort("pouw-check", reference, inputs=INPUTS, package=LEAN, of_record="lean")
 server = D.server_fixture(PORT)
 
 
@@ -150,7 +149,7 @@ def opening(case: dict) -> str | None:
 
 OPENING_NAMES = ["honest"] * (len(openings.NAMES) // 6) + openings.NAMES
 OPENING = D.Port("pouw-check-difftest", "opening", opening, package=LEAN, rejects=(CC.Refused,),
-                 of_record=V.RECORD_VERDICT,
+                 of_record="lean",
                  inputs=st.builds(openings.instance, st.randoms(use_true_random=False), st.sampled_from(OPENING_NAMES)))
 opening_server = D.server_fixture(OPENING)
 
@@ -183,7 +182,7 @@ def registered(x: dict) -> dict:
 
 
 REGISTERED = D.Port("pouw-check-difftest", "registered", registered, package=LEAN, rejects=(ValueError,),
-                    of_record=V.RECORD_VERDICT,
+                    of_record="lean",
                     inputs=st.builds(lambda r, n: registered_input(cases.instance(r, n)), st.randoms(use_true_random=False),
                                      st.sampled_from([n for n in NAMES if not n.startswith("answer")])))
 registered_server = D.server_fixture(REGISTERED)
@@ -217,10 +216,10 @@ def draw(case: dict) -> dict | None:
     return None if refused is None else {"refused": list(refused)}
 
 
-PASS = D.Port("pouw-check-difftest", "pass", pass_epoch, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
+PASS = D.Port("pouw-check-difftest", "pass", pass_epoch, package=LEAN, need_rejects=False, of_record="lean",
               inputs=st.builds(passes.pass_instance, st.randoms(use_true_random=False),
                                st.sampled_from(["honest"] * (len(passes.PASS_NAMES) // 6) + passes.PASS_NAMES)))
-DRAW = D.Port("pouw-check-difftest", "draw", draw, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
+DRAW = D.Port("pouw-check-difftest", "draw", draw, package=LEAN, need_rejects=False, of_record="lean",
               inputs=st.builds(passes.draw_instance, st.randoms(use_true_random=False),
                                st.sampled_from(["honest"] * (len(passes.DRAW_NAMES) // 4) + passes.DRAW_NAMES)))
 pass_server = D.server_fixture(PASS)
@@ -331,7 +330,7 @@ def registered_file(case: dict) -> dict:
 
 
 def _port(name: str, fn, instance, names: list[str]) -> D.Port:
-    return D.Port("pouw-check-difftest", name, fn, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
+    return D.Port("pouw-check-difftest", name, fn, package=LEAN, need_rejects=False, of_record="lean",
                   inputs=st.builds(instance, st.randoms(use_true_random=False),
                                    st.sampled_from(["honest"] * (len(names) // 4) + names)))
 
@@ -510,7 +509,7 @@ def leaf_words(case: dict) -> dict:
 
 
 LEAF_WORDS = D.Port("pouw-check-difftest", "leaf-words", leaf_words, package=LEAN, need_rejects=False,
-                    of_record=V.RECORD_VERDICT, inputs=st.builds(lambda k: {"k": k}, st.integers(-2, 1 << 20)))
+                    of_record="lean", inputs=st.builds(lambda k: {"k": k}, st.integers(-2, 1 << 20)))
 
 
 def test_leaf_words(pass_server):
@@ -533,7 +532,7 @@ def chunks(k) -> dict:
         return {"refused": str(e)}
 
 
-CHUNKS = D.Port("pouw-check-difftest", "chunks", chunks, package=LEAN, of_record=V.RECORD_VERDICT,
+CHUNKS = D.Port("pouw-check-difftest", "chunks", chunks, package=LEAN, of_record="lean",
                 inputs=st.one_of(st.integers(-64, 1 << 18), st.booleans(), st.text(max_size=2), st.none()))
 
 
@@ -563,7 +562,7 @@ def rounds(case: dict) -> dict | None:
     return None if refused is None else {"refused": list(refused)}
 
 
-ROUNDS = D.Port("pouw-check-difftest", "rounds", rounds, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
+ROUNDS = D.Port("pouw-check-difftest", "rounds", rounds, package=LEAN, need_rejects=False, of_record="lean",
                 inputs=st.builds(rounds_cases.rounds_instance, st.randoms(use_true_random=False),
                                  st.sampled_from(["honest"] * (len(rounds_cases.ROUNDS_NAMES) // 4)
                                                  + rounds_cases.ROUNDS_NAMES)))
@@ -604,7 +603,7 @@ def salt(case: dict) -> dict | None:
     return None if refused is None else {"refused": list(refused)}
 
 
-SALT = D.Port("pouw-check-difftest", "salt", salt, package=LEAN, need_rejects=False, of_record=V.RECORD_VERDICT,
+SALT = D.Port("pouw-check-difftest", "salt", salt, package=LEAN, need_rejects=False, of_record="lean",
               inputs=st.builds(rounds_cases.salt_instance, st.randoms(use_true_random=False),
                                st.sampled_from(["honest"] * (len(rounds_cases.SALT_NAMES) // 4) + rounds_cases.SALT_NAMES)))
 
@@ -640,7 +639,7 @@ def live_salt(case: dict) -> dict:
 
 
 LIVE_SALT = D.Port("pouw-check-difftest", "live-salt", live_salt, package=LEAN, need_rejects=False,
-                   of_record=V.RECORD_VERDICT,
+                   of_record="lean",
                    inputs=st.builds(passes.live_salt_instance, st.randoms(use_true_random=False),
                                     st.sampled_from(["honest"] * (len(passes.LIVE_SALT_NAMES) // 4)
                                                     + passes.LIVE_SALT_NAMES)))

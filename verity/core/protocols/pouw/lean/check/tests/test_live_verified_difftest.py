@@ -19,7 +19,6 @@ from hypothesis import strategies as st
 import pouw_live_verified_cases as cases
 from pouw_verified_cases import replay
 from verity.core.protocols.pouw import credit as Cr
-from verity.core.protocols.pouw import verifier as V
 
 if shutil.which("lake") is None:
     pytest.skip("lake is not on the PATH", allow_module_level=True)
@@ -63,7 +62,7 @@ def live_verified(case: dict) -> dict:
 
 
 LIVE_PORT = D.Port("pouw-check-difftest", "credit-live-verified", live_verified, package=LEAN, need_rejects=False,
-                   of_record=V.RECORD_VERDICT,
+                   of_record="lean",
                    inputs=st.builds(cases.live_verified_instance, st.randoms(use_true_random=False),
                                     st.sampled_from(["honest"] * (len(cases.NAMES) // 3) + cases.NAMES)))
 server = D.server_fixture(LIVE_PORT)
@@ -96,7 +95,7 @@ def committed_files(case: dict) -> dict:
 
 
 FILES_PORT = D.Port("pouw-check-difftest", "credit-committed-files", committed_files, package=LEAN,
-                    need_rejects=False, of_record=V.RECORD_VERDICT,
+                    need_rejects=False, of_record="lean",
                     inputs=st.builds(cases.files_instance, st.randoms(use_true_random=False),
                                      st.sampled_from(cases.FILES_NAMES)))
 

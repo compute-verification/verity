@@ -16,9 +16,7 @@ challenger's path runs its Lean and its Python reference on one input:
 Lean's verdict is the record's, and Python's goes beside it in the witness (`Record.witness`, one entry per check). The
 two agree when their outputs are the same canonical JSON (an `answer`'s reason included), or when both refuse the input.
 A disagreement raises `Disagree`, which the challenger turns into the refusal ``lean-python-disagree: <check>``; a failure
-is visible and nothing retries it. `Record()` takes the side of record from `verifier.RECORD_VERDICT`; with it ``"python"``,
-or with `Record(lean=False)`, the references run alone (the witness then holds no Lean verdict), which is how the switch is
-undone.
+is visible and nothing retries it. There is no switch back to the references.
 """
 from __future__ import annotations
 
@@ -31,7 +29,6 @@ from typing import Any, Callable, Mapping
 import verity_difftest as D
 
 from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import verifier as V
 from verity.ml.circuits import codec
 
 REPO = Path(__file__).resolve().parents[3]
@@ -141,12 +138,10 @@ def py_draw(x: dict) -> dict | None:
 
 
 class Record:
-    """Both verdicts of each check, Lean's of record. `lean` False runs the references alone; by default it is whether
-    `verifier.RECORD_VERDICT` is ``"lean"``. The servers start at their first check and build their executables (`lake
-    build`) then, unless `exes` names them (``pouw-check``, ``pouw-check-difftest``, ``sampled-proofs-difftest``)."""
+    """Both verdicts of each check, Lean's of record. The servers start at their first check and build their executables
+    (`lake build`) then, unless `exes` names them (``pouw-check``, ``pouw-check-difftest``, ``sampled-proofs-difftest``)."""
 
-    def __init__(self, lean: bool | None = None, exes: Mapping[str, str | Path] | None = None) -> None:
-        self.lean = V.RECORD_VERDICT == "lean" if lean is None else lean
+    def __init__(self, exes: Mapping[str, str | Path] | None = None) -> None:
         self.exes = dict(exes or {})
         self.witness: list[dict] = []
         self._servers: dict[str, D.Server] = {}
@@ -163,15 +158,11 @@ class Record:
         self._servers.clear()
 
     def _note(self, check: str, py: Any, lean: Any, same: bool | None) -> None:
-        self.witness.append({"check": check, "python": py, "lean": lean, "same": same, "of_record": "lean" if self.lean
-                             else "python"})
+        self.witness.append({"check": check, "python": py, "lean": lean, "same": same})
 
     def _piece(self, check: str, exe: str, package: Path, fn: str, x: Any, reference: Callable[[Any], Any]) -> Any:
         """Lean's output on `x` (`{"refused": why}` for an input it refuses), once Python's agrees."""
         py = _python(reference, x)
-        if not self.lean:
-            self._note(check, _value(py), None, None)
-            return _value(py)
         lean = self._server(exe, package).call(fn, x)
         same = _same(lean, py)
         self._note(check, _value(py), _value(lean), same)
@@ -200,10 +191,10 @@ class Record:
         domain itself, as PoUW's rule read the level at receipt.  They disagree only when the reading refuses an opening
         Lean accepts; the reason of record is `lean`'s."""
         same = python is None or lean is not None
-        self._note("prelude", {"reason": python}, {"reason": lean} if self.lean else None, same if self.lean else None)
-        if self.lean and not same:
+        self._note("prelude", {"reason": python}, {"reason": lean}, same)
+        if not same:
             raise Disagree("prelude", {"reason": lean}, {"reason": python})
-        return lean if self.lean else python or lean
+        return lean
 
     def pass_epoch(self, x: dict) -> dict:
         return self._piece("pass", "pouw-check-difftest", POUW, "pass", x, py_pass)
@@ -217,9 +208,6 @@ class Record:
     def answer(self, case: dict) -> dict:
         """PoUW's outcome (`Core.Answer`) of a `serve` case, the whole outcome compared, reason included."""
         py = CC.case(copy.deepcopy(case))
-        if not self.lean:
-            self._note("answer", py, None, None)
-            return py
         lean = self._server("pouw-check", POUW, "serve").exchange(case)
         same = D.canonical(lean) == D.canonical(py)
         self._note("answer", py, lean, same)

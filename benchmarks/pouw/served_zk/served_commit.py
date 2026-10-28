@@ -10,7 +10,6 @@ judged through the proof service (`sampled_proofs.service`, P1: a `Stream`'s `re
   python served_commit.py challenger PARAMS LOG [--lean F --epoch E --state S] the challenger: one JSON request a line on stdin
                                                                               (`handle`), one reply a line on stdout
   python served_commit.py replay PARAMS LOG OUT [--lean F]                    its requests again, from its recorded coins
-  (challenger, replay and check take --python-record: PoUW's checks by their Python references alone)
   python served_commit.py coin-variant MANIFEST COINS OPENING OUT CASE        a control's pass, its salt coin CASE
   python served_commit.py check PARAMS REGISTRATION DRAW UNIT PUB OPENING     the verifier: the proof's rows are the unit's
   python served_commit.py shape DIR DIR                                       two staged units' proofs have one shape
@@ -1454,7 +1453,7 @@ def cmd_challenger(a) -> int:
     coins = Coins(a.epoch, entropy)
     (log / "coins.json").write_text(json.dumps(coins.commitment.to_json(), sort_keys=True))
     ch = Challenger(_json(a.params), coins, lean_sampler(a.lean, log / "draws.jsonl") if a.lean else python_sampler,
-                    record=OR.Record(lean=False if a.python_record else None))
+                    record=OR.Record())
     for line in sys.stdin:
         if not line.strip():
             continue
@@ -1512,7 +1511,7 @@ def replay(params: dict, log: Path, out: Path, sampler: Sampler = python_sampler
 
 def cmd_replay(a) -> int:
     diffs = replay(_json(a.params), Path(a.log), Path(a.out), lean_sampler(a.lean) if a.lean else python_sampler,
-                   OR.Record(lean=False if a.python_record else None))
+                   OR.Record())
     n = len((Path(a.log) / "requests.jsonl").read_text().splitlines())
     out = {"requests": n, "diffs": diffs[:8], **({"predates_deadline": True} if "registration_deadline" not in _json(a.params) else {})}
     print(f"{'SAME' if not diffs else 'DIFFERENT'} {json.dumps(out)}", flush=True)
@@ -1551,7 +1550,7 @@ def cmd_coin_variant(a) -> int:
 
 def cmd_check(a) -> int:
     params, reg, d = _json(a.params), _json(a.registration), _json(a.draw)
-    record = OR.Record(lean=False if a.python_record else None)
+    record = OR.Record()
     why = check(params, reg, d, a.unit, Path(a.pub).read_bytes(), _json(a.opening), drawn=not a.undrawn, record=record)
     record.close()
     if a.out:
@@ -1615,10 +1614,6 @@ def cmd_shape(a) -> int:
     return 0 if v["same"] else 1
 
 
-PYTHON_RECORD = ("PoUW's checks by their Python references alone, undoing the switch to Lean's verdict of record "
-                 "(`of_record`)")
-
-
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1659,12 +1654,10 @@ def main(argv=None) -> int:
                                    "from (serve.sh's $WORK/coin-state/<run id>, written from the Lean verifier's coins "
                                    "before serving); default: fresh from the Lean verifier of record when this process "
                                    "starts (pouw.verifier.coins, IO.getRandomBytes), before it publishes LOG/coins.json")
-    p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     p = sub.add_parser("replay")
     for x in ("params", "log", "out"):
         p.add_argument(x)
     p.add_argument("--lean", help="Lean flock-verify, the draw's sampler (default: its Python twin)")
-    p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     p = sub.add_parser("coin-variant")
     for x in ("manifest", "coins", "opening", "out"):
         p.add_argument(x)
@@ -1678,7 +1671,6 @@ def main(argv=None) -> int:
     p.add_argument("--out", help="the opening check's verdict, for the outcome")
     p.add_argument("--undrawn", action="store_true", help="a control: open a unit the draw did not draw")
     p.add_argument("--expect-reject", action="store_true")
-    p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     p = sub.add_parser("shape")
     p.add_argument("a")
     p.add_argument("b")
