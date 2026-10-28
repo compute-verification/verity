@@ -9,6 +9,10 @@ from the document's directory or one of its ancestors (a package README's `tests
 tracked file, a directory holding one, or a fixture `fixtures/artifacts.json` registers for fetching (or a path inside
 one). Under `verity/`, a token whose second segment is no entry of `verity/` is an identifier (`verity/partition/v1`),
 not a path; any other token that reads as a repository path but isn't one is in `NOT_PATHS` with its reason.
+
+A backticked bare file name of source code (`probe.py`, `run.sh`, `hash.c`: an extension in `_NAME`) is checked too.
+Prose names a file by its bare name wherever it lives (a README names its own directory's files and its neighbours'),
+so the name exists when some tracked file has it; a script that was deleted, or never landed, has none.
 """
 from __future__ import annotations
 
@@ -25,12 +29,35 @@ RETIRED = frozenset({"packages", "protocols", "pods", "census", "security_proofs
 NOT_PATHS = {
     ("verity/ml/circuits/ops/tests/fixtures/README.md", "tests/veritor/core/golden/"): "veritor's path, where the captures were copied from",
     ("tools/research/README.md", ".cursor/mcp.json"): "the Cursor config the reader writes in their own checkout",
+    (".agents/skills/kernel-engineering/SKILL.md", "panel.py"): "the kernel panel, kept in an agent store",
+    ("benchmarks/pouw/harness/README.md", "panel.py"): "the kernel panel, kept in an agent store",
+    ("benchmarks/network_traces/README.md", "composite.py"): "the one-stage composite, not in the tree yet",
+    ("benchmarks/pouw/commit_gpu/README.md", "ovl.cu"): "the stage-overlap probe, deleted; its owner's to drop",
+    ("Security/Proofs/Flock/Soundness/assumption-notes/a3-uniform-bytes.md", "io.cpp"): "the Lean runtime's source",
+    ("Security/Proofs/Flock/Soundness/assumption-notes/a3-uniform-bytes.md", "random.c"): "the Lean runtime's source",
+    ("benchmarks/numerical/README.md", "tc.rs"): "SP1's guest, deleted with the archive",
+    ("benchmarks/numerical/README.md", "TCB.lean"): "the archived tables' Lean, outside this tree",
+    ("benchmarks/numerical/README.md", "TCTotal.lean"): "the archived tables' Lean, outside this tree",
+    ("benchmarks/numerical/README.md", "utils.cpp::bfloat16_to_gfloat_tensor"): "the GPU simulator's source",
+    ("benchmarks/pous/README.md", "gmp.h"): "the system's GMP header",
+    ("benchmarks/pouw/machine_model/README.md", "rs-price-99.py"): "the legacy chain's script, in the notes",
+    ("benchmarks/pouw/machine_model/README.md", "machine-model-export.py"): "the legacy chain's script, in the notes",
+    ("benchmarks/pouw/machine_model/README.md", "machine-model-convert.py"): "the legacy chain's script, in the notes",
+    ("benchmarks/ppl/README.md", "linears_layerwise.py"): "a harness the bench replaced",
+    ("fixtures/proof-format-v3/README.md", "test_format3_equivalence.py::test_write_vectors"): "veritor's test",
+    ("fixtures/proof-format-v3/README.md", "format3_equivalence.rs"): "D-SP1's guest, deleted with the archive",
+    ("tools/verity/lean/README.md", "lakefile.lean"): "the file the package deliberately lacks",
+    ("verity/core/protocols/pous/DISCREPANCIES.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",
+    ("verity/core/protocols/pous/PROTOCOL.md", "BandPubEncoder.lean"): "the band chain's Lean, outside this tree",
+    ("verity/core/protocols/pous/PROTOCOL.md", "BandEncDec.lean"): "the band chain's Lean, outside this tree",
+    ("verity/core/protocols/pous/PROTOCOL.md", "regate.py"): "the timing red team's script",
 }
 
 _TOKEN = re.compile(r"`([^`\s]+)`|\]\(([^)\s]+)\)")
 _SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+-]*:")
 _SKIP = re.compile(r"[*<>{}$|@\\]")
 _LINE = re.compile(r":\d+(-\d+)?$")
+_NAME = re.compile(r"^[\w.+-]+\.(py|sh|c|h|cc|cpp|cu|cuh|rs|lean)$")
 
 
 @functools.cache
@@ -48,15 +75,22 @@ def documents(files: frozenset[str]) -> list[str]:
 
 
 def mentions(line: str) -> list[tuple[str, str, bool]]:
-    """(token as written, the path it reads as, whether it is a link target) for each path-shaped token of ``line``."""
+    """(token as written, the path it reads as, whether it is a link target) for each path-shaped token of ``line``: a
+    link target, a backticked path, or a backticked bare source file name."""
     out = []
     for m in _TOKEN.finditer(line):
         raw, link = m[1] or m[2], m[2] is not None
-        if (not link and "/" not in raw) or "://" in raw or _SCHEME.match(raw) or _SKIP.search(raw):
+        if "://" in raw or _SCHEME.match(raw) or _SKIP.search(raw):
             continue
-        if path := _LINE.sub("", raw.split("#")[0].split("::")[0].rstrip(".,:;)")):
+        path = _LINE.sub("", raw.split("#")[0].split("::")[0].rstrip(".,:;)"))
+        if path and (link or "/" in path or _NAME.match(path)):
             out.append((raw, path, link))
     return out
+
+
+@functools.cache
+def _names(files: frozenset[str]) -> frozenset[str]:
+    return frozenset(posixpath.basename(f) for f in files)
 
 
 def _exists(rel: str, tree) -> bool:
@@ -69,6 +103,8 @@ def _exists(rel: str, tree) -> bool:
 def dead(doc: str, path: str, link: bool, tree) -> bool:
     """Whether ``path``, named in ``doc``, reads as a repository path that ``tree`` (see `_tree`) lacks."""
     here = posixpath.dirname(doc)
+    if not link and "/" not in path:
+        return path not in _names(tree[0])
     if link:
         path = posixpath.normpath(path.lstrip("/") if path.startswith("/") else posixpath.join(here, path))
         if path.startswith("../"):
@@ -119,11 +155,12 @@ def test_the_scan_reads_each_form_and_catches_a_dead_path():
                       "`tools/gone.py`. [a](tools/x/README.md#top) [b](tools/x/gone.md) [c](https://x.org/tools/y) "
                       "`tools/*.py` `pods/nebius/` `verity/primitives/gone.py` `art:abc/def` [d](#anchor) `notatop/x`"),
         "tools/x/README.md": ("`tests/test_a.py` `tests/test_b.py` [e](tests/test_a.py) [f](../../README.md) [g](gone.md) "
-                              "`tools/x/tests/fixtures/big/a.bin`"),
+                              "`tools/x/tests/fixtures/big/a.bin` `test_a.py:3` `b.py::f` `gone.sh`, `out.json` `x`"),
         "tools/x/CHANGELOG.md": "`tools/gone.py`",
     }
     assert documents(files) == ["README.md", "tools/x/README.md"]
     assert dead_paths(tree, read=docs.__getitem__) == [
         ("README.md", 1, "tools/gone.py"), ("README.md", 1, "tools/x/gone.md"), ("README.md", 1, "pods/nebius/"),
         ("README.md", 1, "verity/primitives/gone.py"), ("tools/x/README.md", 1, "tests/test_b.py"),
-        ("tools/x/README.md", 1, "gone.md")]
+        ("tools/x/README.md", 1, "gone.md"),
+        ("tools/x/README.md", 1, "gone.sh")]
