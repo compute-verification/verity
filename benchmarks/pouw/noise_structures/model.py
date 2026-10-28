@@ -44,6 +44,7 @@ HBM = 4.26e12  # bytes a second, measured (theta hbm)
 WRAP_8B = {"p_W": 0.0119, "p_X": 0.0016}  # Llama-3.1-8B real weights and activations at ±80 (note 20261026T0225Z-draft-accel-bet-hybrid-2)
 WRAP_G = {"alu": ADD, "measured": 3.5 / 0.01}  # G a unit wrap rate: an IADD3-bound sparse add, or v31's wrap2 at m 8192 (r20261028-190744-7676)
 WRAP_COST = ["measured"]  # model.py --wrap-cost
+ROUTES = ["peel", "recompute"]  # model.py --route: HYB's honest routes for O
 HASH_CORUN_BPS = 66.5e9  # SHA-512 beside the GEMM (the co-run share; GD-MODEL's corun_share, an estimate)
 
 # Proof blocks (C-Flock): ANDs a block, the cap, and the prover's price
@@ -220,7 +221,7 @@ def hyb(c: Call, name: str, perm: str, word_bits: int, amp_v: int = 80, amp_u: i
                 wpc = (c.n * c.k * dither_bits / 8 + 4 * c.n * lp) * PRG_B / c.macs if weight_per_call else 0.0
                 extra = (2 * OP / c.m if weight_per_call else 0) + (w * 3 * OP / c.k if fold else 0)
                 wb = receipt_bits / 8 / lanes if fold else w * word_bits / 8
-                for how in ("peel", "recompute"):
+                for how in ROUTES:
                     if how == "peel":
                         tensor = 4 * lp / c.k + (SP24 if wrap > SP24 else 0)
                         cuda = base + (0 if wrap > SP24 else wrap) + extra
@@ -524,9 +525,12 @@ def main() -> int:
     p.add_argument("--min-credit", type=float, default=0.75)
     p.add_argument("--wrap-cost", choices=sorted(WRAP_G), default="measured")
     p.add_argument("--r-b", type=float, default=R_B, help="b1 MAC-time in s8 G (1/8, or 0.1875 against wgmma)")
+    p.add_argument("--route", choices=("peel", "recompute"), help="pin HYB's honest route (peel: O from the credited GEMM)")
     a = p.parse_args()
     WRAP_COST[0] = a.wrap_cost
     globals()["R_B"] = a.r_b
+    if a.route:
+        ROUTES[:] = [a.route]
     out = []
     for name, (n, k) in CALLS.items():
         for m in MS:
@@ -552,7 +556,7 @@ def main() -> int:
                      "wrap_anchor_8B": WRAP_8B},
            "wrap_rates": {amp: wrap_rates(amp) for amp in (16, 32, 48, 64, 80, 127)},
            "hi_limb": {f"{k[0]} t{k[1]} a{k[2]}": v for k, v in _HI.items()},
-           "min_credit": a.min_credit, "wrap_cost": a.wrap_cost, "rows": out, "steps": steps}
+           "min_credit": a.min_credit, "wrap_cost": a.wrap_cost, "hyb_routes": list(ROUTES), "rows": out, "steps": steps}
     rep["blocks"] = {"and_mac": {b: mac_and(b) for b in (8, 16, 32)}, "open_b": OPEN_B, "row1": ROW1, "k_cap": K_CAP,
                      "k_floor": K_FLOOR, "bits_per_and": BITS_AND, "draws": DRAWS,
                      "session_gd_prover": dict(zip("abc", SESSION)),

@@ -9,6 +9,7 @@ uv run benchmarks/pouw/noise_structures/check.py --out DIR   # exact integer che
 uv run benchmarks/pouw/noise_structures/model.py --out DIR   # DIR/structures.json and DIR/structures.md
 uv run benchmarks/pouw/noise_structures/model.py --out DIR --wrap-cost alu   # the wrap correction at the IADD3 bound instead
 uv run benchmarks/pouw/noise_structures/model.py --out DIR --r-b 0.1875      # b1 at its measured rate against wgmma s8, not 1/8
+uv run benchmarks/pouw/noise_structures/model.py --out DIR --route peel      # HYB with O peeled from the credited GEMM only
 ~~~
 
 - `check.py`: Dither v3.2's segment split with U permuted per noise tile, per segment or not at all (and one word over the
