@@ -371,7 +371,7 @@ def slots(s: Scan) -> set[str]:
 
 
 #: The most lines ``KNOWN`` may hold. Raising it, for a new line, needs lean's review; `--prune` lowers it to the count.
-KNOWN_MAX = 384
+KNOWN_MAX = 383
 
 #: Every hit that is not a canonical, a mirror, a reading of the canonical or a protocol's slot, with its reason and owner.
 #: For new code, read the canonical or rename; `--prune` deletes the lines whose declarations went.
@@ -462,8 +462,6 @@ KNOWN: dict[str, str] = {
         "duplicate of `Verity.Circuit`'s gate: becomes it (the AND/XOR gate) (lean)",
     "Security/Definitions/Claims/Recursion.lean::Claims.Recursion.Draw":
         "duplicate of `Verity.Draw`: becomes it, as a V* session's record holds it (lean)",
-    "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Netlist":
-        "duplicate of `universal.Netlist`, stated in Claims: becomes Core's, moved into Security/Definitions/Core/ (lean)",
     "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a reading of it (lean)",
     "Security/Definitions/Claims/Sampling.lean::Claims.Sampling.Partition":
