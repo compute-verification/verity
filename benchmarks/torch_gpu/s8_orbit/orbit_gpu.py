@@ -6,15 +6,22 @@ launches `s8orbit_<BN>` on torch's current stream: x [M, K] int8 against those f
 y [M, N] bf16 with s_a [M] and s_w [N] (the exact linear's words). The kernel makes no carry corrections: its output is
 X·Wᵀ exactly when no form carries (`Lib.flags` counts A's carry bits since `Lib.reset`, `b_forms` returns B's), and
 X·Wᵀ mod 2^8 always. `corrections(x, w)` is the rest, 256·(c_A·w_Bᵀ + w_A·c_Bᵀ) + 65536·c_A·c_Bᵀ assembled, in torch.
+
+The plain int8 GEMM entry: `p = prepare(w)` once at load (w [N, K] int8), then `int_mm(x, p, out=None)` -> x·wᵀ int32
+[M, N], exact, with the cubin at $S8_ORBIT_CUBIN (else build/s8_orbit.cubin here).
 """
 from __future__ import annotations
 
 import ctypes as C
+import functools
 import hashlib
+import os
+from dataclasses import dataclass
 from pathlib import Path
 
 import torch
 
+HERE = Path(__file__).resolve().parent
 TILES = (96, 80, 64)
 BK, TM, XCH, MAX_STAGES, SMEM_LIMIT, NT = 32, 64, 8, 8, 232448, 256
 #: CUtensorMapDataType UINT8, CUtensorMapSwizzle 32B, CUtensorMapL2promotion 128B; CUfunction_attribute
@@ -99,24 +106,33 @@ def _int_mm(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     return torch._int_mm(a.contiguous(), b.contiguous().t())
 
 
+def _exact_mm(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """a·bᵀ int64 of int8 a [R, K], b [S, K]: cuBLASLt where its shapes allow (R > 16, K and S multiples of 8), else float64,
+    exact below 2^53."""
+    if a.shape[0] > 16 and a.shape[1] % 8 == 0 and b.shape[0] % 8 == 0:
+        return _int_mm(a, b).long()
+    return (a.double() @ b.double().t()).long()
+
+
 def assemble(p: list[torch.Tensor]) -> torch.Tensor:
     q = {name: sum(s * p[j] for j, s in terms) for name, terms in C_SUMS.items()}
     return torch.cat([torch.cat([q["11"], q["12"]], 1), torch.cat([q["21"], q["22"]], 1)], 0)
 
 
-def corrections(x: torch.Tensor, w: torch.Tensor) -> torch.Tensor:
-    """What the kernel leaves out, [M, N] int64: O - (the wrapped forms' orbit), from both sides' carries."""
+def corrections(x: torch.Tensor, w: torch.Tensor, b: tuple[torch.Tensor, torch.Tensor] | None = None) -> torch.Tensor:
+    """What the kernel leaves out, [M, N] int64: O - (the wrapped forms' orbit), from both sides' carries; `b` is B's
+    wrapped forms and carries (`forms(w, B_FORMS, False)`) when they're made already."""
     wa, ca = forms(x, A_FORMS, True)
-    wb, cb = forms(w, B_FORMS, False)
+    wb, cb = b if b is not None else forms(w, B_FORMS, False)
     p = []
     for j in range(7):
-        acc = torch.zeros((x.shape[0] // 2, w.shape[0] // 2), dtype=torch.int64, device=x.device)
+        acc = torch.zeros((x.shape[0] // 2, wb.shape[1]), dtype=torch.int64, device=x.device)
         if ca[j].any():
-            acc += 256 * _int_mm(ca[j], wb[j]).long()
+            acc += 256 * _exact_mm(ca[j], wb[j])
         if cb[j].any():
-            acc += 256 * _int_mm(wa[j], cb[j]).long()
+            acc += 256 * _exact_mm(wa[j], cb[j])
         if ca[j].any() and cb[j].any():
-            acc += 65536 * _int_mm(ca[j], cb[j]).long()
+            acc += 65536 * _exact_mm(ca[j], cb[j])
         p.append(acc)
     return assemble(p)
 
@@ -238,3 +254,42 @@ class Lib:
             p.clk = clk.data_ptr()
         self._launch(self.fns[bn], grid, NT, smem(bn), p)
         return {"grid": grid, "tiles": tiles, "bn": bn, "stages": stages(bn)}
+
+
+@functools.cache
+def lib() -> Lib:
+    return Lib(Path(os.environ.get("S8_ORBIT_CUBIN") or HERE / "build" / "s8_orbit.cubin"))
+
+
+@dataclass
+class Prepared:
+    """A weight w [N, K] int8 made ready for `int_mm` once, at load: B's seven wrapped forms as the kernel reads them
+    ([7, N/2, K/2] int8) and their carries (int8, -1/0/1), with each form's count."""
+
+    n: int
+    k: int
+    wb: torch.Tensor
+    cb: torch.Tensor
+    carries: list[int]
+
+
+def prepare(w: torch.Tensor) -> Prepared:
+    """w [N, K] int8 (N a multiple of 4, K of 64), at load."""
+    check_shape(2, w.shape[0], w.shape[1])
+    assert w.dtype == torch.int8 and w.is_cuda
+    wb, cb = forms(w, B_FORMS, False)
+    return Prepared(w.shape[0], w.shape[1], wb, cb, [int(torch.count_nonzero(cb[j])) for j in range(7)])
+
+
+def int_mm(x: torch.Tensor, p: Prepared, out: torch.Tensor | None = None, bn: int = 96) -> torch.Tensor:
+    """x [M, K] int8 against a prepared w: x·wᵀ, int32 [M, N] (into `out` if given), exact. An odd M runs with one zero row
+    more. The corrections for both sides' carries are torch's (`corrections`)."""
+    m, k = x.shape
+    assert x.dtype == torch.int8 and k == p.k, (x.dtype, k, p.k)
+    xe = (x if m % 2 == 0 else torch.cat([x, x.new_zeros(1, k)])).contiguous()
+    y = torch.empty((xe.shape[0], p.n), dtype=torch.int32, device=x.device)
+    lib().mm(xe, p.wb, y32=y, bn=bn)
+    o = (y.long() + corrections(xe, None, (p.wb, p.cb)) + (1 << 31)) % (1 << 32) - (1 << 31)
+    out = torch.empty((m, p.n), dtype=torch.int32, device=x.device) if out is None else out
+    out.copy_(o[:m])
+    return out

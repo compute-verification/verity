@@ -4,6 +4,7 @@
           linear's epilogue on X·Wᵀ (cvt.rn.f32, mul.rn s_a, mul.rn s_w, cvt.rn.bf16), at shapes with tails in every dim
   full    int8 X on ±127 against a checkpoint's linears (or W on ±127): y32 plus `orbit_gpu.corrections` equal to X·Wᵀ
           mod 2^32, with carry bits counted
+  entry   `orbit_gpu.int_mm`, the plain int8 GEMM entry with its corrections, equal to X·Wᵀ at M 1, 7, 34 and 2,048
 
     python gate.py --cubin C --out OUT [--snapshot DIR --layer 0] [--m 2048]
 
@@ -13,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -23,6 +25,7 @@ import orbit_gpu as G  # noqa: E402
 from cpu_check import LINEARS, Shards  # noqa: E402
 
 SMALL = ((256, 384, 512), (130, 200, 192), (2, 4, 64), (16384, 6144, 4096))
+ENTRY_M = (1, 7, 34, 2048)
 
 
 def epilogue(o: torch.Tensor, sa: torch.Tensor, sw: torch.Tensor) -> torch.Tensor:
@@ -78,6 +81,21 @@ def full(lib: G.Lib, gen: torch.Generator, weights: dict[str, torch.Tensor], m: 
     return recs
 
 
+def entry(gen: torch.Generator, weights: dict[str, torch.Tensor]) -> list[dict]:
+    """`orbit_gpu.int_mm` (the plain int8 GEMM entry, corrections included) equal to X·Wᵀ, odd and small M too."""
+    recs = []
+    for name, w in weights.items():
+        p = G.prepare(w)
+        for m in ENTRY_M:
+            x = torch.randint(-127, 128, (m, w.shape[1]), generator=gen, dtype=torch.int8, device="cuda")
+            want = (x.double() @ w.double().t()).long() if m < 17 else torch._int_mm(x, w.t()).long()
+            bad = int((G.int_mm(x, p).long() != want).sum())
+            recs.append({"case": "entry", "linear": name, "m": m, "n": w.shape[0], "k": w.shape[1], "mismatches": bad,
+                         "b_carries": sum(p.carries), "ok": bad == 0})
+            print(json.dumps(recs[-1]), flush=True)
+    return recs
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--cubin", required=True)
@@ -97,7 +115,8 @@ def main() -> int:
             [sh.get(f"model.layers.{a.layer}.{p}.weight") for p in parts])).cuda() for lin, parts in LINEARS.items()}
     else:
         weights = {"random": torch.randint(-127, 128, (1024, 1024), generator=gen, dtype=torch.int8, device="cuda")}
-    recs = small(lib, gen) + full(lib, gen, weights, a.m)
+    os.environ["S8_ORBIT_CUBIN"] = a.cubin
+    recs = small(lib, gen) + full(lib, gen, weights, a.m) + entry(gen, weights)
     doc = {"cubin_sha256": lib.sha256, "layout": lib.layout, "sms": lib.sms, "ok": all(r["ok"] for r in recs), "records": recs}
     (out / "gate.json").write_text(json.dumps(doc, indent=1) + "\n")
     print(json.dumps({"ok": doc["ok"], "n": len(recs), "failed": [r for r in recs if not r["ok"]][:5]}), flush=True)
