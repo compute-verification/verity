@@ -461,7 +461,7 @@ def _pieces(at: Any) -> list[Read | Position | RegisteredRead] | None:
 
 
 class WindowLocate:
-    """`build`'s ``locate`` and ``reads`` from the H200 window writer's ``Locator.locate(step, slot, family, index, port)``
+    """`build`'s ``locate`` and ``reads`` from the H200 window writer's ``Window.locate(step, slot, family, index, port)``
     (circuits' interface, ``examples/h200/e2e_h200/window.py``), whose pieces are the port's bytes in
     order: ``Segment(step, slot, row, offset, nbytes)`` (bytes of a committed row, ``row`` its index in the slot: a `Read`),
     ``Absent(nbytes)`` (zero bytes, a key at or past n), ``Run(name)`` (``n``, the position + 1, one word: a `Position`) and
