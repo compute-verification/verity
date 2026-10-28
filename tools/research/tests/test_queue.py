@@ -16,6 +16,7 @@ import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Callable
 
 import pytest
 
@@ -2136,10 +2137,11 @@ def _lock(**entries: str) -> str:
 
 
 def _published(world: World, commit: str, *, pkg: str = "pkg", passed: bool = True, path: str = "slot",
-               files: dict[str, str] | None = None, steps: list | None = None, at: float | None = None) -> str:
+               files: dict[str, str] | None = None, steps: list | None = None, at: float | None = None,
+               argv: list[str] | None = None) -> str:
     """A run of ``commit`` that another machine published to the store's remote, as `research run` does: a records run
     (`lean_changed.py --records PKG`, result `lean-fast/v1`) with ``files`` as its run files, or with ``steps`` a check; ``at``
-    its start (its id's time), else now."""
+    its start (its id's time), else now; ``argv`` its command, else the records run's."""
     from research.runs import new_run_id
 
     node = LocalStore(world.tmp / "node", config_path=world.tmp / "store.toml")
@@ -2156,7 +2158,7 @@ def _published(world: World, commit: str, *, pkg: str = "pkg", passed: bool = Tr
     outputs["result"] = node.put_artifact(kind, meta)
     node.put_attempt({
         "schema": "research/attempt/v0.1", "id": rid, "tool": {"name": "python3", "version": None}, "derivation": "drv:" + "0" * 64,
-        "reuse_key": None, "argv": ["python3", "tools/verity/lean/lean_changed.py", "--records", pkg, "--update"], "params": {},
+        "reuse_key": None, "argv": argv or ["python3", "tools/verity/lean/lean_changed.py", "--records", pkg, "--update"], "params": {},
         "key_params": [], "inputs": {}, "conditions": {}, "key_conditions": [], "source": {"commit": commit, "dirty": False},
         "closure": None, "execution": {}, "cost": None, "status": {"state": "done" if passed else "failed", "rc": 0 if passed else 1},
         "outputs": outputs, "telemetry": None})
@@ -2173,18 +2175,18 @@ def _audit(pkg: str = "pkg", failure: str | None = None) -> str:
                        "packages": [{"package": at, "failures": [failure] if failure else []}]})
 
 
-def _gate(world: World, store=None):
+def _gate(world: World, store=None, now: Callable[[], float] | None = None):
     from research.queue import RecordsGate
 
     return RecordsGate(world.dev, str(world.origin), store or world.store, log=world.logs.append,
-                       lock_merge=world.tmp / "lock_merge.py")
+                       lock_merge=world.tmp / "lock_merge.py", **({"now": now} if now else {}))
 
 
-def _mark(world: World, n: int, head: str, store=None) -> int:
+def _mark(world: World, n: int, head: str, store=None, now: Callable[[], float] | None = None) -> int:
     from research.queue import MarkOnly, ready
 
     world.gh.put(n, head, ready=False)
-    return ready(world.gh, store or world.store, n, f"lane-{n}", MarkOnly(), records=_gate(world, store))
+    return ready(world.gh, store or world.store, n, f"lane-{n}", MarkOnly(), records=_gate(world, store, now))
 
 
 def test_a_head_that_changes_a_lock_is_marked_only_on_a_records_run_of_it_that_passed_and_a_refusal_names_the_run(world, capsys):
@@ -2351,6 +2353,43 @@ def test_the_same_inputs_search_reads_every_candidate_to_its_bound_newest_first_
     h = world.change({LOCK: _lock(A="2")})
     capsys.readouterr()
     assert RECORDS_FETCH > 72 and _mark(world, 1, h) == 0
+    assert f"a records run of {c[:12]} ({rid}) with identical inputs" in world.logs[-1]
+
+
+def test_the_same_inputs_search_reads_a_fixed_age_of_runs_and_bounds_only_those_that_may_vouch_for_the_package(
+        world, monkeypatch, capsys):
+    """A window that started an hour before the head's 9th commit back dropped same-input runs from earlier the same night on a
+    branch with many merges (CI-274), and the store holds thousands of runs a day, most of which are neither a records run
+    nor a Lean check.  The search reads every run of the last `RECORDS_LOOKBACK_S`, whatever the head's history, and applies its
+    bound only to runs that may hold a pass of the package, so newer runs past that bound don't hide the one that vouches."""
+    from research import queue as Q
+
+    world.with_store_remote()
+    monkeypatch.setattr(Q, "RECORDS_FETCH", 3)
+    other = world.tmp / "other"
+    _git(world.tmp, "clone", "-q", str(world.origin), str(other))
+    (other / LOCK).write_text(_lock(A="2"))
+    _git(other, "commit", "-q", "-am", "the carried change")
+    c = _git(other, "rev-parse", "HEAD")
+    t = int(_git(other, "log", "-1", "--format=%ct", c))
+
+    def now() -> float:
+        return t + 60
+
+    for i in range(6):                         # newer runs on the same inputs that can't pass pkg: another package's, a suite's
+        (other / "c.txt").write_text(f"{i}\n")
+        _git(other, "commit", "-q", "-am", f"another run {i}")
+        _published(world, _git(other, "rev-parse", "HEAD"), pkg="lib",
+                   argv=["python3", "tools/verity/check/suites.py", "--quick"] if i % 2 else None)
+    _git(other, "push", "-q", "origin", "HEAD:refs/dev/other")
+    _published(world, c, files={"lean-audit/audit.json": _audit()}, at=t - 4 * 86400)   # past the lookback
+    h = world.change({LOCK: _lock(A="2")})
+    capsys.readouterr()
+    assert _mark(world, 1, h, now=now) == 1
+    assert "--records pkg --update" in capsys.readouterr().err
+
+    rid = _published(world, c, files={"lean-audit/audit.json": _audit()}, at=t - 2 * 86400)
+    assert _mark(world, 1, h, now=now) == 0
     assert f"a records run of {c[:12]} ({rid}) with identical inputs" in world.logs[-1]
 
 
