@@ -56,12 +56,30 @@ def test_every_arm_is_a_kernel_of_the_build_and_the_gate_wants_it():
         assert layouts[lay][1:] == (str(su), str(sp))
 
 
-def test_every_layout_fits_beside_a_hash_cta():
+def test_every_layout_fits_beside_one_hash_cta_and_not_two():
+    assert B.SM_SMEM == SM90_SM_SMEM
     for load, su, sp in (("I8", 4, 0), ("P2", 3, 6), ("RES", 4, 1)):
         s = smem(su, sp, load)
         assert s <= SM90_CTA_SMEM
-        assert s + 1024 + 1024 <= SM90_SM_SMEM  # each CTA's reserved kilobyte, hash_k's no dynamic shared memory
-    assert 256 * 168 + B.HASH_THREADS * SG.REG_CAP["hash_k"] <= SM90_REGS
+        h = B.hash_smem(s)
+        assert h % 128 == 0
+        # each CTA reserves a kilobyte
+        assert s + 1024 + (h + 1024) <= SM90_SM_SMEM < s + 1024 + 2 * (h + 1024)
+    # the widest hash CTA beside a GEMM CTA's registers
+    assert 256 * 168 + 32 * (B.HASH_MAX_WARPS // 2) * SG.REG_CAP["hash_k"] <= SM90_REGS
+
+
+def test_the_hash_log_and_beside_specs():
+    assert int(re.search(r"constexpr int HASH_LOG = (\d+);", SRC).group(1)) == B.HASH_LOG
+    assert [B.hash_warps(f"w{n}") for n in (1, 2, 4, 8)] == [1, 2, 4, 8]
+    for bad in ("h1", "w0", "w16", "w", "x4"):
+        try:
+            B.hash_warps(bad)
+        except ValueError:
+            continue
+        raise AssertionError(bad)
+    # a log chunk of HASH_CHUNK_S covers twice the default beside item (2 x 4 s) at the hash's rate alone
+    assert B.HASH_LOG * B.HASH_CHUNK_S >= 2 * 2 * 4.0
 
 
 def test_pack_and_unpack_are_inverse_and_the_format_is_the_documented_one():

@@ -31,8 +31,8 @@
 //   p2x, p2ux, p2mx  p2's, p2u's and p2m's loads and unpacking with no MMAs: the unpacking's own time
 // M must be a multiple of 128, N of 256 and K of 128 (512 for res) (bench.py checks): the filler picks its shape.
 //
-// hash_k: SHA-512 compressions (sha512_rows' sx::compress, V 0, rolled), each thread chaining its own state, for the rate
-// beside the GEMM.  stamp_k: each SM's %clock64 and %globaltimer, one CTA an SM (its shared memory keeps a second off), so
+// hash_k: SHA-512 compressions (sha512_rows' sx::compress, V 0, rolled), each thread chaining its own state, in CTAs of
+// any size, logging its progress and stopping on a flag, for the rate beside the GEMM over the GEMM's own window.  stamp_k: each SM's %clock64 and %globaltimer, one CTA an SM (its shared memory keeps a second off), so
 // the SM clock over a span of launches is the difference of two stamps.  wait_k: holds a stream until a launch's CTAs have
 // all started.
 #include <cstddef>
@@ -349,28 +349,39 @@ extern "C" __global__ void pk_layout(int* out) {
 }
 
 // ---------------------------------------------------------------- beside the GEMM
-// `reps` compressions a thread, each over a block whose first eight words are xored with the chaining value; io is written
-// only for a state no input reaches, so the compressions stay live
-extern "C" __global__ void __maxnreg__(80) hash_k(unsigned long long* io, int reps, Stamp* out) {
+constexpr int HASH_LOG = 8192;  // log entries a CTA (bench.py's HASH_LOG)
+
+// at most `reps` compressions a thread, each over a block whose first eight words are xored with the chaining value, in
+// chunks of `every`; after chunk c thread 0 logs %globaltimer at log[blockIdx.x * HASH_LOG + c] (c < HASH_LOG, entry 0 the
+// start), and the CTA stops once *stop is nonzero, so the hash's rate over any window is read off the log.  io is written
+// only for a state no input reaches, so the compressions stay live; the stamp's `tiles` is the compressions a thread did
+extern "C" __global__ void __maxnreg__(80)
+    hash_k(unsigned long long* io, int reps, Stamp* out, unsigned long long* log, int every, const volatile int* stop) {
   unsigned long long t0 = 0, c0 = 0;
   if (threadIdx.x == 0) {
     t0 = gtimer();
     c0 = clock64();
+    log[(size_t)blockIdx.x * HASH_LOG] = t0;
   }
   const unsigned long long t = (unsigned long long)blockIdx.x * blockDim.x + threadIdx.x;
   unsigned long long st[8], w[16];
   sx::iv(st);
 #pragma unroll
   for (int i = 0; i < 16; ++i) w[i] = t * 16 + i;
-  for (int r = 0; r < reps; ++r) {
+  int r = 0;
+  for (int c = 1; r < reps; ++c) {
+    for (const int end = min(reps, r + every); r < end; ++r) {
 #pragma unroll
-    for (int i = 0; i < 8; ++i) w[i] ^= st[i];
-    sx::compress<0, 1>(st, w);
+      for (int i = 0; i < 8; ++i) w[i] ^= st[i];
+      sx::compress<0, 1>(st, w);
+    }
+    if (threadIdx.x == 0 && c < HASH_LOG) log[(size_t)blockIdx.x * HASH_LOG + c] = gtimer();
+    if (__syncthreads_or(threadIdx.x == 0 && *stop)) break;
   }
   if (st[0] == 0x0123456789abcdefull) io[t] = st[1];
   __syncthreads();
   if (threadIdx.x == 0)
-    out[blockIdx.x] = Stamp{t0, gtimer(), c0, (unsigned long long)clock64(), smid(), (unsigned long long)reps};
+    out[blockIdx.x] = Stamp{t0, gtimer(), c0, (unsigned long long)clock64(), smid(), (unsigned long long)r};
 }
 
 // waits until `want` CTAs of a launch have started (Params.started), so a kernel launched after it on another stream finds

@@ -3,7 +3,7 @@
 # directory to write. Outside the lease: packed.cubin built with nvcc and held to sass_gate.py, and torch resolved by uv.
 # Under one lease of at most MAX_MIN (default 15) minutes: nvidia-smi sampled every 100 ms (smi.csv) beside bench.py,
 # whose arguments are this script's. BUILD_ONLY=1 stops after the gate.
-#   OUT=DIR bash benchmarks/torch_gpu/u2_packed/run.sh --arms lt,i8,p2,p2+h1 --secs 4
+#   OUT=DIR bash benchmarks/torch_gpu/u2_packed/run.sh --arms lt,i8,p2,p2+w4 --secs 4
 # CUDA names the toolkit (default /usr/local/cuda-13.0).
 set -uo pipefail
 OUT=${OUT:?}

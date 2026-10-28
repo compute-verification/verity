@@ -38,7 +38,13 @@ named barrier per k-block orders the two. The arms:
 `run.sh` builds the cubin with nvcc, holds it to `sass_gate.py` (no spills, the right MMA atom, the register caps), and runs
 `bench.py` under one gpu-lease. Each arm is first gated bit for bit against `torch._int_mm` on the same operands, with O
 poisoned beforehand, and then timed in items of about 4 s (8 s with the hash beside), with clocks from `%clock64`, watts
-from NVML's energy counter and the hash's compressions against 4.355 G/s:
+from NVML's energy counter and the hash's compressions against 4.355 G/s.
+
+`ARM+wN` runs one `hash_k` CTA of N warps on each SM beside the GEMM. The hash's width is how the split between the two is
+set: SM warp schedulers give a free-running hash most of the issue slots, so a CTA of eight warps takes nearly the whole
+bar and leaves the GEMM a fraction of its rate. The hash starts once the GEMM's first call is resident, logs its progress
+every couple of milliseconds, and stops on a flag after the GEMM's last call. Both rates are taken over the same window:
+the GEMM's segments inside the hash's span.
 
 ~~~bash
 research run --on NODE --project verity --source . --cwd source -- bash benchmarks/torch_gpu/u2_packed/run.sh

@@ -4,7 +4,8 @@ H200's power cap, alone and beside SHA-512, against the same schedule on int8-st
 Each arm is gated before it is timed, in the same run: O, poisoned with 0xA5 first, must equal `torch._int_mm(A, W.t())`
 bit for bit at the timed shape (res: (K / 512) times one block's product in every tile; the unpack-only arms: O left
 poisoned), and that reference agrees with int64 dot products on sampled cells.  A first call that hasn't ended in
-HANG_S ends the run (exit 3).  Then an item runs the arm back to back for `--secs` and reports:
+HANG_S ends the run (exit 3).  Then an item runs the arm back to back for `--secs` of host time, at most two segments
+queued ahead, and reports:
 
 - tensor: MACs a SM clock against 4,096 (the SM clocks are %clock64 differences of `stamp_k` stamps, one on every SM,
   between segments of about a quarter second, so they count every cycle between launches too), and the rate against
@@ -12,9 +13,11 @@ HANG_S ends the run (exit 3).  Then an item runs the arm back to back for `--sec
   feed, so 1 / of_4096 is the unpacking's share of a k-block's MMA time;
 - the board: mean watts from NVML's energy counter, the largest instantaneous sample, NVML's SM clock and throttle reasons,
   and pJ a MAC (mean watts over the MAC rate);
-- beside the hash (`hash_k` CTAs on the GEMM's own SMs, launched once the GEMM's first call is resident): the hash's
-  compressions a second over its span against the bar, 4.355 G/s (BAR_PER_SMCLK x 132 x 1.83 GHz), and the tensor rate
-  and watts over the segments that span covers.
+- beside the hash (`ARM+wN`: one `hash_k` CTA of N warps on each of the GEMM's SMs, launched once the GEMM's first call
+  is resident, and stopped by a flag once its last call has ended): the tensor rate and watts over the segments inside
+  the hash's span, and the hash's compressions a second over that same window, read off its log, against the bar,
+  4.355 G/s (BAR_PER_SMCLK x 132 x 1.83 GHz).  Its dynamic shared memory leaves room for one hash CTA beside the GEMM's
+  and not two, and the item records how many CTAs an SM got.
 
 Every item's figures are its steady part: the segments that start at least SETTLE_S after it began.  Items interleave
 arms round by round (`--rounds`).  Writes items.jsonl, gates.jsonl and summary.md under --out; the cubin is $U2_PACKED_CUBIN
@@ -41,6 +44,9 @@ BAR = BAR_PER_SMCLK * 132 * 1.83e9
 SETTLE_S = 1.0
 SEG_S = 0.25
 HANG_S = 20.0
+HASH_LOG = 8192  # packed.cu's log entries a hash CTA
+HASH_CHUNK_S = 2e-3  # the hash's log interval, at its rate alone
+SM_SMEM = 233472  # an sm_90 SM's shared memory; each CTA reserves 1,024 bytes of it
 POISON = -1515870811  # 0xA5A5A5A5 as an int32
 TM, BN, BK = 128, 256, 128
 RES_K = 4 * BK  # res: the depth of the block its slots hold
@@ -81,7 +87,7 @@ KERNELS = {
     "p2ux": ("pk_p2ux", "p2", 1, False),
     "p2mx": ("pk_p2mx", "p2m", 1, False),
 }
-HASH_THREADS = 256
+HASH_MAX_WARPS = 16  # hash_k at 80 registers: 512 threads beside nothing, 8 warps beside a GEMM CTA at 168
 
 
 def cdiv(a: int, b: int) -> int:
@@ -308,19 +314,40 @@ class Run:
         self.nsm = lib.sms
         self.stamps = torch.zeros((4096, self.nsm, 6), dtype=torch.int64, device="cuda")
         self.cta = torch.zeros((65536, 6), dtype=torch.int64, device="cuda")  # GEMM CTAs' own stamps, the last call's
-        self.hst = torch.zeros((4 * self.nsm, 6), dtype=torch.int64, device="cuda")
-        self.hio = torch.zeros(4 * self.nsm * HASH_THREADS, dtype=torch.int64, device="cuda")
+        self.hst = torch.zeros((self.nsm, 6), dtype=torch.int64, device="cuda")
+        self.hio = torch.zeros(self.nsm * 32 * HASH_MAX_WARPS, dtype=torch.int64, device="cuda")
+        self.hlog = torch.zeros((self.nsm, HASH_LOG), dtype=torch.int64, device="cuda")
+        self.hstop = torch.zeros(1, dtype=torch.int32, device="cuda")
+        self.one = torch.ones(1, dtype=torch.int32).pin_memory()
         self.started = torch.zeros(1, dtype=torch.int32, device="cuda")
         self.arrive = torch.zeros(4096, dtype=torch.int32, device="cuda")  # stamp_k's arrivals, a counter a segment
-        self.side = torch.cuda.Stream()
+        self.side, self.flag = torch.cuda.Stream(), torch.cuda.Stream()
 
     def stamp(self, seg: int) -> None:
         self.lib.launch(self.lib.stamp_f, self.nsm, 32, self.lib.stamp_smem,
                         [u64(self.stamps[seg].data_ptr()), u64(self.arrive[seg].data_ptr())])
 
-    def hash(self, ctas: int, reps: int, stream: int, shared: int = 0) -> None:
-        self.lib.launch(self.lib.hash_f, ctas, HASH_THREADS, shared,
-                        [u64(self.hio.data_ptr()), i32(reps), u64(self.hst.data_ptr())], stream)
+    def hash(self, warps: int, reps: int, every: int, stream: int, shared: int) -> None:
+        """hash_k on one CTA of `warps` warps an SM (shared: its dynamic shared memory, which keeps two off an SM)."""
+        if not 1 <= warps <= HASH_MAX_WARPS:
+            raise ValueError(f"hash warps {warps} not in 1..{HASH_MAX_WARPS}")
+        self.lib.launch(self.lib.hash_f, self.nsm, 32 * warps, shared,
+                        [u64(self.hio.data_ptr()), i32(reps), u64(self.hst.data_ptr()), u64(self.hlog.data_ptr()),
+                         i32(every), u64(self.hstop.data_ptr())], stream)
+
+    def hash_window(self, warps: int, every: int, a: int, b: int) -> dict:
+        """The hash's compressions a second over globaltimer [a, b], from each CTA's log: the chunks it finished between
+        its first and last entries inside the window, over the time between them, summed over the CTAs."""
+        hs, log = self.hst.cpu(), self.hlog.cpu()
+        rate, ctas = 0.0, 0
+        for c in range(self.nsm):
+            t = log[c, : min(int(hs[c, 5]) // every + 1, HASH_LOG)]
+            sel = ((t >= a) & (t <= b)).nonzero().flatten()
+            if len(sel) >= 2 and int(t[sel[-1]]) > int(t[sel[0]]):
+                i, j = int(sel[0]), int(sel[-1])
+                rate += (j - i) * every * 32 * warps / ((int(t[j]) - int(t[i])) * 1e-9)
+                ctas += 1
+        return {"window_s": (b - a) * 1e-9, "ctas_in_window": ctas, "gcomp_s": rate * 1e-9, "of_bar": rate / BAR}
 
     def segments(self, nseg: int, calls: list[int], macs: int, g0: int) -> list[dict]:
         """Each segment between stamps s and s + 1: its span (globaltimer), every SM's clocks, its MACs."""
@@ -357,35 +384,46 @@ class Run:
         g = int(self.stamps[4095][:, 0].min())
         return g - h
 
-    def item(self, name: str, op, secs: float, t_call: float, hash_ctas: int = 0, hash_reps: int = 0) -> dict:
-        """`op` back to back for about secs, stamps every SEG_S; with hash_ctas, hash_k beside it from its first call."""
-        per = max(1, round(SEG_S / t_call))
-        nseg = max(2, round(secs / (per * t_call)))
-        if nseg + 1 > 4095:
-            raise ValueError("too many segments")
+    def item(self, name: str, op, secs: float, t_call: float, hash_warps: int = 0, hash_every: int = 1,
+             hash_smem: int = 0) -> dict:
+        """`op` back to back for secs of host time, a stamp every SEG_S of its calls alone (a quarter of that beside the
+        hash, which may slow them), never more than two segments queued; with hash_warps, hash_k beside it from its first
+        call until a flag its last segment raises."""
+        per = max(1, round(SEG_S / t_call / (4 if hash_warps else 1)))
         off = self.offset()
-        calls = [per] * nseg
-        self.arrive[: nseg + 1].zero_()
+        self.arrive.zero_()
         self.started.zero_()
+        self.hstop.zero_()
         torch.cuda.synchronize()
         h0 = time.time_ns()
         self.stamp(0)
         cstamp = u64(self.cta.data_ptr()).value if isinstance(op, Gemm) else 0
-        if hash_ctas:
+        first = 0
+        if hash_warps:
             op.call(cstamp, self.started.data_ptr())
             self.lib.launch(self.lib.wait_f, 1, 32, 0, [u64(self.started.data_ptr()), u(op.grid)], self.side.cuda_stream)
-            self.hash(hash_ctas, hash_reps, self.side.cuda_stream)
+            self.hash(hash_warps, 2 ** 31 - 1, hash_every, self.side.cuda_stream, hash_smem)
             first = 1
-        else:
-            first = 0
-        for s in range(nseg):
-            for _ in range(first if s == 0 else 0, per):
+        evs: list[torch.cuda.Event] = []
+        t0 = time.monotonic()
+        while len(evs) < 4094 and (len(evs) < 2 or time.monotonic() - t0 < secs):
+            for _ in range(first if not evs else 0, per):
                 op.call(cstamp)
-            self.stamp(s + 1)
+            self.stamp(len(evs) + 1)
+            evs.append(torch.cuda.Event())
+            evs[-1].record()
+            if len(evs) >= 3:
+                evs[-3].synchronize()
+        nseg, calls = len(evs), [per] * len(evs)
         hmid = None
-        if hash_ctas:
-            while not self.side.query():
-                time.sleep(0.002)
+        if hash_warps:
+            self.flag.wait_event(evs[-1])
+            with torch.cuda.stream(self.flag):
+                self.hstop.copy_(self.one, non_blocking=True)
+            done = torch.cuda.Event()
+            done.record(self.side)
+            finish(evs[-1], f"{name} last segment")
+            finish(done, f"{name} hash stop")
             hmid = time.time_ns()
         torch.cuda.synchronize()
         h1 = time.time_ns()
@@ -404,54 +442,71 @@ class Run:
             rec["cta_mhz_last_call"] = float((cta[:, 3] - cta[:, 2]).double().sum() / dt.sum() * 1e3)
             rec["cta_tiles"] = sorted(set(cta[:, 5].tolist()))
             rec["cta_sms"] = len(set(cta[:, 4].tolist()))
-        if hash_ctas:
-            hs = self.hst[:hash_ctas].cpu()
-            w0, w1 = int(hs[:, 0].min()), int(hs[:, 1].max())
-            comps = hash_ctas * HASH_THREADS * hash_reps
-            hdt = (hs[:, 1] - hs[:, 0]).double()
-            hmhz = float((hs[:, 3] - hs[:, 2]).double().sum() / hdt.sum() * 1e3)
+        if hash_warps:
+            hs = self.hst.cpu()
+            # the span every hash CTA ran through: the last start to the first end
+            w0, w1 = int(hs[:, 0].max()), int(hs[:, 1].min())
             inside = [s for s in segs if s["gt0"] >= w0 + SETTLE_S * 1e9 and s["gt1"] <= w1]
-            rec["hash"] = {"ctas": hash_ctas, "reps": hash_reps, "s": (w1 - w0) * 1e-9, "gcomp_s": comps / (w1 - w0),
-                           "of_bar": comps / ((w1 - w0) * 1e-9) / BAR, "sm_mhz": hmhz,
-                           "of_bar_per_smclk": comps / ((w1 - w0) * 1e-9) / (self.nsm * hmhz * 1e6) / BAR_PER_SMCLK,
-                           "sms": len(set(hs[:, 4].tolist())),
-                           "max_ctas_an_sm": max(hs[:, 4].tolist().count(v) for v in set(hs[:, 4].tolist())),
-                           "start_spread_us": (int(hs[:, 0].max()) - w0) * 1e-3,
-                           "end_spread_us": (w1 - int(hs[:, 1].min())) * 1e-3,
-                           "covered": segs[0]["gt0"] <= w0 and g_end >= w1, "host_end_s": (hmid - h0) * 1e-9}
+            sms = hs[:, 4].tolist()
+            rec["hash"] = {"warps": hash_warps, "every": hash_every, "smem": hash_smem, "s": (w1 - w0) * 1e-9,
+                           "comps": int(hs[:, 5].sum()) * 32 * hash_warps, "sms": len(set(sms)),
+                           "max_ctas_an_sm": max(sms.count(v) for v in set(sms)),
+                           "start_spread_us": (w0 - int(hs[:, 0].min())) * 1e-3,
+                           "end_spread_us": (int(hs[:, 1].max()) - w1) * 1e-3,
+                           "segments_inside": len(inside), "host_end_s": (hmid - h0) * 1e-9}
             rec["beside"] = self.rates(inside, self.nsm)
-            rec["power_beside"] = self.nvml.window(w0 + int(SETTLE_S * 1e9) - off, w1 - off) if inside else {}
-        p = rec["power_beside"] if hash_ctas and rec.get("power_beside") else rec["power_steady"]
-        r = rec["beside"] if hash_ctas and rec.get("beside") else rec["steady"]
+            if inside:
+                a, b = inside[0]["gt0"], inside[-1]["gt1"]
+                rec["hash"].update(self.hash_window(hash_warps, hash_every, a, b))
+                rec["hash"]["of_bar_per_smclk"] = (rec["hash"]["gcomp_s"] * 1e9 / (self.nsm * rec["beside"]["sm_mhz"] * 1e6)
+                                                   / BAR_PER_SMCLK)
+                rec["power_beside"] = self.nvml.window(a - off, b - off)
+            else:
+                rec["power_beside"] = {}
+        p = rec["power_beside"] if hash_warps and rec.get("power_beside") else rec["power_steady"]
+        r = rec["beside"] if hash_warps and rec.get("beside") else rec["steady"]
         if op.mma and r and p.get("mean_w"):
             rec["pj_per_mac"] = p["mean_w"] / (r["tmac_s"] * 1e12) * 1e12
         return rec
 
-    def hash_alone(self, ctas_per_sm: int, secs: float) -> dict:
-        """hash_k alone at ctas_per_sm CTAs an SM (the shared memory request keeps at most that many on one SM)."""
-        ctas = ctas_per_sm * self.nsm
-        shared = 100 * 1024 if ctas_per_sm == 2 else self.lib.stamp_smem
-        self.hash(ctas, 64, torch.cuda.current_stream().cuda_stream, shared)
+    def hash_alone(self, warps: int, secs: float) -> dict:
+        """hash_k alone, one CTA of `warps` warps an SM (its shared memory request keeps two off an SM), for about secs."""
+        s = torch.cuda.current_stream().cuda_stream
+        self.hstop.zero_()
+        self.hash(warps, 64, 64, s, self.lib.stamp_smem)
         torch.cuda.synchronize()
         t = time.perf_counter()
-        self.hash(ctas, 2048, torch.cuda.current_stream().cuda_stream, shared)
+        self.hash(warps, 2048, 2048, s, self.lib.stamp_smem)
         torch.cuda.synchronize()
         rep = (time.perf_counter() - t) / 2048
         reps = int(secs / rep)
         off = self.offset()
         h0 = time.time_ns()
-        self.hash(ctas, reps, torch.cuda.current_stream().cuda_stream, shared)
+        self.hash(warps, reps, reps, s, self.lib.stamp_smem)
         torch.cuda.synchronize()
         h1 = time.time_ns()
-        hs = self.hst[:ctas].cpu()
+        hs = self.hst.cpu()
         w0, w1 = int(hs[:, 0].min()), int(hs[:, 1].max())
-        comps = ctas * HASH_THREADS * reps
+        comps = int(hs[:, 5].sum()) * 32 * warps
         mhz = float((hs[:, 3] - hs[:, 2]).double().sum() / (hs[:, 1] - hs[:, 0]).double().sum() * 1e3)
-        return {"name": f"hash x{ctas_per_sm}", "ctas": ctas, "reps": reps, "s": (w1 - w0) * 1e-9,
+        return {"name": f"hash w{warps}", "warps": warps, "reps": reps, "s": (w1 - w0) * 1e-9,
                 "sms": len(set(hs[:, 4].tolist())), "gcomp_s": comps / (w1 - w0), "of_bar": comps / ((w1 - w0) * 1e-9) / BAR,
                 "sm_mhz": mhz, "of_bar_per_smclk": comps / ((w1 - w0) * 1e-9) / (self.nsm * mhz * 1e6) / BAR_PER_SMCLK,
                 "rep_s": rep, "power_steady": self.nvml.window(w0 + int(SETTLE_S * 1e9) - off, w1 - off),
                 "power_all": self.nvml.window(h0, h1)}
+
+
+def hash_warps(spec: str) -> int:
+    """`wN` (an arm's `+wN`): one hash CTA of N warps an SM."""
+    if not (spec[:1] == "w" and spec[1:].isdigit() and 1 <= int(spec[1:]) <= HASH_MAX_WARPS // 2):
+        raise ValueError(f"beside spec {spec!r}: want wN, N of 1 to {HASH_MAX_WARPS // 2} warps")
+    return int(spec[1:])
+
+
+def hash_smem(gemm_smem: int) -> int:
+    """The hash CTA's dynamic shared memory beside a GEMM CTA of gemm_smem bytes: one fits on the SM and two don't."""
+    free = SM_SMEM - (gemm_smem + 1024)
+    return max(0, (free - 2048) // 128 * 128)
 
 
 def parse_shape(text: str) -> tuple[int, int, int]:
@@ -507,12 +562,13 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--cubin", type=Path, default=Path(os.environ.get("U2_PACKED_CUBIN", Path(__file__).parent / "build" / "packed.cubin")))
-    ap.add_argument("--arms", default="lt,i8,p2,p2u,p2m,res,p2x,p2ux,p2mx,i8+h1,p2+h1,p2u+h1,p2m+h1,res+h1",
-                    help="comma-separated: lt (torch._int_mm) and KERNELS' arms; ARM+h1 / ARM+h2: beside 1 or 2 hash_k CTAs an SM")
+    ap.add_argument("--arms", default="lt,i8,p2,p2u,p2m,res,p2x,p2ux,p2mx,i8+w2,i8+w4,i8+w8,p2+w4,p2m+w2,p2m+w4,p2m+w8,"
+                    "res+w2,res+w4,res+w8",
+                    help="comma-separated: lt (torch._int_mm) and KERNELS' arms; ARM+wN: beside one hash_k CTA of N warps an SM")
     ap.add_argument("--shapes", default="25344x16384x32768,25344x16384x8192", help="MxNxK, comma-separated")
     ap.add_argument("--secs", type=float, default=4.0)
     ap.add_argument("--rounds", type=int, default=2)
-    ap.add_argument("--hash-alone", default="1,2", help="hash_k alone at these CTAs an SM (empty: none)")
+    ap.add_argument("--hash-alone", default="2,4,8,16", help="hash_k alone, one CTA of these warps an SM (empty: none)")
     ap.add_argument("--group", type=int, default=8)
     ap.add_argument("--seed", type=int, default=20261028)
     args = ap.parse_args()
@@ -529,6 +585,10 @@ def main() -> int:
     gates = open(args.out / "gates.jsonl", "a")
     items = open(args.out / "items.jsonl", "a")
     arms = [a.strip() for a in args.arms.split(",") if a.strip()]
+    for spec in arms:
+        arm, _, hs = spec.partition("+")
+        if arm != "lt" and arm not in KERNELS or hs and (arm not in KERNELS or hash_warps(hs) < 1):
+            raise SystemExit(f"--arms: {spec!r} is not an arm, or a kernel's arm +wN")
     results = []
     for shape in map(parse_shape, args.shapes.split(",")):
         m, n, k = shape
@@ -585,13 +645,11 @@ def main() -> int:
                     continue
                 op, t_call = runnable[arm]
                 if hs:
-                    # the hash at about half its alone rate spans about secs; the GEMM runs 2 secs, so the span stays
-                    # inside it down to a quarter of that rate
-                    per_sm = int(hs[1:])
-                    alone = [r for r in results if r.get("name") == f"hash x{per_sm}" and r.get("tag") == tag]
-                    rep = alone[0]["rep_s"] if alone else 15e-6
-                    reps = int(0.5 * args.secs / rep)
-                    rec = run.item(spec, op, 2 * args.secs, t_call, per_sm * lib.sms, reps)
+                    warps = hash_warps(hs)
+                    alone = [r for r in results if r.get("name") == f"hash w{warps}" and r.get("tag") == tag]
+                    rep = alone[0]["rep_s"] if alone else 8e-6
+                    rec = run.item(spec, op, 2 * args.secs, t_call, warps, max(1, round(HASH_CHUNK_S / rep)),
+                                   hash_smem(op.smem if isinstance(op, Gemm) else 0))
                 else:
                     rec = run.item(spec, op, args.secs, t_call)
                 rec.update(tag=tag, round=rnd, arm=arm)
@@ -601,7 +659,7 @@ def main() -> int:
                 items.write(json.dumps(rec) + "\n")
                 items.flush()
                 results.append(rec)
-        del ops, ref, res_ref, o, runnable
+        ops = ref = res_ref = o = runnable = None
         torch.cuda.empty_cache()
     nvml.stop()
     (args.out / "summary.md").write_text(summary(results))
@@ -615,7 +673,7 @@ def summary(results: list[dict]) -> str:
     for r in results:
         if "hash" in r:
             t, p = r.get("beside") or {}, r.get("power_beside") or {}
-            hb = f"{r['hash']['of_bar']:.3f}"
+            hb = f"{r['hash']['of_bar']:.3f}" if "of_bar" in r["hash"] else "-"
         elif r.get("name", "").startswith("hash"):
             t, p = {}, r.get("power_steady") or {}
             hb = f"{r['of_bar']:.3f}"
