@@ -283,6 +283,7 @@ def main() -> None:
             f = arms.call(a.removesuffix("-eager"), s)
             emit({"kind": "prepare", "prompt": prompt, "arm": a})
             it = ar.prepare(emit, a, "bf16", macs, f, not a.endswith("-eager"), {"prompt": prompt, "t": s.t, "form": "whole"})
+            it["call"] = f  # its out buffer, which the graph writes: torch.cuda.graph's empty_cache would free it otherwise
             for _ in range(3):
                 it["fn"]()
             intact(f"{a} prepare")
