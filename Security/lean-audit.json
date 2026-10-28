@@ -2725,6 +2725,7 @@
   "Pous.SecurityProofs.StreamedWipeMeets141GB5": "1bd390853519827186390dd19f174a1a431546919678b8db3c48dfcb0cf5b91c",
   "Pous.SecurityProofs.StreamedWipeMeets2600GB": "a3671a8a99f4c7b653b5751bd24cb714a5764f731e9563fa3b20b1072228a5e2",
   "Pous.SecurityProofs.StreamedWipeMeets96GiB": "610f906d2a73a8612b035d1cfe33141715f61fda55f081c36162e0dc9afda003",
+  "Pous.SecurityProofs.StreamedWipeMeetsDisk": "430273ee4c652edc6128c0c26ade5e47ce423ab8791e58847ba3e6aa0b8621d9",
   "Pous.SecurityProofs.StreamedWipeMeetsFamily": "c26c23adbc15ab18912cbd9a9ff20ad52027001e35dd08dc661c67472b511255",
   "Pous.SecurityProofs.StreamedWipeMeetsInfoStated": "413276f220ff5f0da10702f8a3fc55ad0586acaee0ec41098be683abe4f02df7",
   "Pous.SecurityProofs.StreamedWipeMeetsReads": "a2f5444f8d5e25a0cfbb34ecce8550e64849fff88fd423a419993391aa377856",
@@ -2861,7 +2862,8 @@
    "Accounting.BlocksRun",
    "Accounting.BlocksRun.MemoryTerm",
    "Accounting.BlocksRun.sideBits",
-   "Accounting.BlocksRun.undeclared"
+   "Accounting.BlocksRun.undeclared",
+   "Accounting.demoMemoryShare"
   ],
   "Definitions.Accounting.JointBridge.CreditedWords": [
    "Accounting.Certificates.helpUnits",
@@ -2896,6 +2898,7 @@
    "Accounting.Hardware",
    "Accounting.Hardware.SpatialUnit",
    "Accounting.Placed.IsPath",
+   "Accounting.Placed.LatencyAtMost",
    "Accounting.Placed.MemoryAt",
    "Accounting.Placed.SequentialSpeed"
   ],
@@ -3172,6 +3175,7 @@
   "Definitions.Core.Circuit": ["Verity.Contains", "Verity.Implements"],
   "Definitions.Core.Decisive": ["Verity.Game.Decisive", "Verity.Game.Productive", "Verity.Game.Reaches", "Verity.Game.Unambiguous"],
   "Definitions.Core.Draw": ["Verity.Coins", "Verity.Draw", "Verity.Draw.law"],
+  "Definitions.Core.Formalism": ["Verity.Circuit.FanIn"],
   "Definitions.Core.Fp32": [
    "Verity.Fp32.BF16_NAN_F2FP",
    "Verity.Fp32.BF16_NAN_TORCH",
