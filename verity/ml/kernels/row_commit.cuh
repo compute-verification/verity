@@ -29,6 +29,7 @@
 #pragma once
 #include <cstdint>
 #include <cstring>
+#include <utility>
 
 #include "sha512.cuh"
 
@@ -599,26 +600,41 @@ template <class S>
 RC_HD void put_be(S& s, u64 v, int k) {
   for (int i = k - 1; i >= 0; --i) s.put((u32)(v >> (8 * i)) & 0xFFu);
 }
+// A sink streams when it takes a whole word (s.put8): it hashes as it fills, so any of its puts may end a block and
+// compress it, and the forms below keep its puts few and in loops rather than unrolled.
+template <class S, class = void>
+struct Streams {
+  static constexpr bool value = false;
+};
 template <class S>
-RC_HD auto put_word_(S& s, u64 v, int) -> decltype(s.put8(v), void()) {
-  s.put8(v);
-}
-template <class S>
-RC_HD void put_word_(S& s, u64 v, long) {
-  put_be(s, v, 8);
-}
-// v's 8 bytes, big-endian: through s.put8 where the sink has it
+struct Streams<S, decltype((void)std::declval<S&>().put8(u64{}))> {
+  static constexpr bool value = true;
+};
+// v's 8 bytes, big-endian: through s.put8 where the sink streams
 template <class S>
 RC_HD void put_word(S& s, u64 v) {
-  put_word_(s, v, 0);
+  if constexpr (Streams<S>::value) s.put8(v);
+  else put_be(s, v, 8);
 }
 constexpr int FRAME_LEN = 33;   // merkle._FRAME, with its NUL
-// frame-v3's message (merkle._message) up to its parts: FRAME || u32be(len tag) || tag
+// frame-v3's message (merkle._message) up to its parts: FRAME || u32be(len tag) || tag; into a sink that streams, the
+// frame's 32 characters a word at a time, then its NUL
 template <class S>
 RC_HD void put_tag(S& s, const char* tag) {
   const char* frame = "veritor/protocol/merkle/frame/v3";
-  RC_UNROLL
-  for (int i = 0; i < FRAME_LEN; ++i) s.put((uint8_t)frame[i]);
+  if constexpr (Streams<S>::value) {
+    RC_UNROLL
+    for (int w = 0; w < (FRAME_LEN - 1) / 8; ++w) {
+      u64 v = 0;
+      RC_UNROLL
+      for (int i = 0; i < 8; ++i) v = v << 8 | (uint8_t)frame[8 * w + i];
+      s.put8(v);
+    }
+    s.put(0);
+  } else {
+    RC_UNROLL
+    for (int i = 0; i < FRAME_LEN; ++i) s.put((uint8_t)frame[i]);
+  }
   int tl = 0;
   while (tag[tl]) ++tl;
   put_be(s, (u64)tl, 4);
@@ -639,7 +655,6 @@ template <class S, class W>
 RC_HD void put_part64(S& s, const W* d) {
   static_assert(sizeof(W) == 8, "a 64-byte part's words are 64-bit (put_words takes little-endian u32)");
   put_be(s, 64, 8);
-  RC_UNROLL
   for (int k = 0; k < 8; ++k) put_word(s, (u64)d[k]);
 }
 // every frame message's head: the tag, then the domain id's part
