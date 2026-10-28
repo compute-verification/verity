@@ -1304,15 +1304,15 @@ def pins_reason(session: str, opened: dict, pins: Any) -> str | None:
     n = seal["lines"]
     if len(pins) < n:
         return (f"the host's pins log has {len(pins)} lines, fewer than the {n} the open of session {session} sealed: "
-                "take infra's newest published pins log")
+                "take the auditor host's operator's newest published pins log")
     if log_digest(pins[:n]) != seal["sha512"]:
         return (f"the host's pins log is not the one the open of session {session} sealed: its first {n} lines were "
                 "edited or rewritten")
     pinned = opened.get("pinned")
     if pinned not in commits[:n]:
         return (f"session {session} ran commit {pinned}, which the host's pins log doesn't record as a commit of main's "
-                "history: repin the challenger host to a commit origin/main contains (vy-challenger-pin) and rerun the "
-                "window there")
+                "history: repin the challenger host to a commit origin/main contains (with its pin command) and "
+                "rerun the window there")
     return None
 
 
@@ -1329,7 +1329,7 @@ def first_parent_reason(session: str, pinned: Any, main: Any) -> str | None:
         return (f"session {session} ran commit {pinned}, which the host's pins log records but which is not on main's "
                 "first-parent line in the verifier's copy (`git rev-list --first-parent origin/main`): a branch commit "
                 "merged into main is in main's history but no tree main's check ran on; repin the challenger host to a "
-                "commit on main's first-parent line (vy-challenger-pin) and rerun the window there")
+                "commit on main's first-parent line (with its pin command) and rerun the window there")
     return None
 
 
