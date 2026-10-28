@@ -407,8 +407,6 @@ KNOWN: dict[str, str] = {
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it (lean)",
     "Security/Definitions/Accounting/Device.lean::Accounting.Device":
         "duplicate of the device model (`Accounting.Device`, not yet in Core): becomes `Verity.Device`, moved into Security/Definitions/Core/ (lean)",
-    "Security/Definitions/Accounting/Device.lean::Accounting.Op":
-        "homonym, the op classes a step charges: rename (`OpClass`) (lean)",
     "Security/Definitions/Accounting/Device.lean::Accounting.Window":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes `Verity.Period`, moved into Security/Definitions/Core/ (lean)",
     "Security/Definitions/Accounting/Gates/Codec.lean::Accounting.Gates.Draw":
