@@ -26,8 +26,14 @@ overflow recovery. `--lazy-max checked` is safe for every input: each exp2 is bi
 the bf16 path leaves at 0; it divides out of the output, and lse adds it back), so a kept block's P stays below 1, as
 FA3's, exactly when every biased exponent is negative. Three-input ANDs of the sign bits (half an instruction a score)
 test that before any exp2, and a warp that fails takes the exact step on the exponents themselves (`lazy_exp2`). The
-bias costs range only below 2^-94 of the kept max, which FA3 also loses to bf16 at 2^-126. Without either flag
-softmax.h is untouched.
+bias costs range only below 2^-94 of the kept max, which FA3 also loses to bf16 at 2^-126. Every exp2 then waits on
+that warp's vote. `thresh` (FlashAttention-4's rule) still computes each block's max, keeps the old one where a row
+rose by at most 8 in log2 units (P up to 2^8), and skips the output's rescale when a warp kept every row. `held` runs a
+kept block's exp2 unchecked, tests each row's block sum after it (below 2^16, so every P is; inf and NaN fail), and
+reduces that over the warpgroup with one bar.red.or where its warps meet anyway; on a failure the warpgroup recomputes
+S from K, which the mainloop then releases only after that test, and redoes the block exactly from the state saved
+before it (`redo_softmax`). `held-redo` fails every kept block's test, so its bytes must equal FA3's: the check of the
+redo path, which random inputs never take. Without either flag softmax.h is untouched.
 """
 from __future__ import annotations
 
@@ -168,6 +174,93 @@ CHECKED_PATCHES = (
 SOFTMAX_PINNED = "flash::Softmax<!LargeHeadDimV ? 2 * (2 * kBlockM / NumMmaThreads) : 2, /*Max_offset=*/!Is_FP8 ? 0 : 8> softmax(softmax_scale_log2);"
 
 
+THRESH_TAU = 8
+THRESH_KEEP = f"""            bool kept = true;
+            #pragma unroll
+            for (int mi = 0; mi < size(row_max); ++mi) {{
+                // [lazy max, thresh] A row whose max rose by at most {THRESH_TAU} in log2 units keeps the old one (P up to
+                // 2^{THRESH_TAU}); false for -inf on both sides (NaN) and for a first finite max, which take FA3's step.
+                if ((row_max(mi) - scores_max_prev(mi)) * softmax_scale_log2 <= {THRESH_TAU}.f) {{
+                    row_max(mi) = scores_max_prev(mi);
+                    scores_scale(mi) = 1.f;
+                    continue;
+                }}
+                kept = false;
+"""
+THRESH_PATCHES = (
+    ("    float const softmax_scale_log2;\n", "    float const softmax_scale_log2;\n    bool skip_rescale = false;\n"),
+    ("            flash::template reduce_max</*zero_init=*/false>(scores, row_max);\n            #pragma unroll\n"
+     "            for (int mi = 0; mi < size(row_max); ++mi) {\n",
+     "            flash::template reduce_max</*zero_init=*/false>(scores, row_max);\n" + THRESH_KEEP),
+    ("                row_sum(mi) *= scores_scale(mi);\n            }\n        }\n        return scores_scale;\n",
+     "                row_sum(mi) *= scores_scale(mi);\n            }\n            skip_rescale = __all_sync(0xffffffffu, kept);\n"
+     "        }\n        return scores_scale;\n"),
+) + LAZY_PATCHES[3:]
+
+
+HELD_LIMIT = 65536
+HELD_FNS = f"""    // [lazy max, held] A kept block's exp2 run against the kept max unchecked; each thread then tests its rows' block
+    // sums (below {HELD_LIMIT}, so every P is, and inf or NaN fails), and one bar.red.or a warpgroup (hardware barriers
+    // 2-4, which FA3's forward leaves free) says whether any failed. Then the warpgroup recomputes S from K, which the
+    // mainloop holds until here, and every warp redoes the block exactly from the state it had before it.
+    __forceinline__ __device__ bool lazy_redo(int barrier_id) {{
+        int r;
+        asm volatile("{{\\n .reg .pred p, q;\\n setp.ne.b32 p, %1, 0;\\n bar.red.or.pred q, %2, 128, p;\\n selp.s32 %0, 1, 0, q;\\n}}\\n"
+                     : "=r"(r) : "r"(int(lazy_bad)), "r"(barrier_id));
+        return r != 0;
+    }}
+
+    template<typename Tensor0>
+    __forceinline__ __device__ void redo_softmax(Tensor0 &acc_s) {{
+        Tensor scores = make_tensor(acc_s.data(), flash::convert_layout_acc_rowcol(acc_s.layout()));
+        cute::copy(saved_max, row_max);
+        cute::copy(saved_sum, row_sum);
+        flash::template reduce_max</*zero_init=*/false>(scores, row_max);
+        #pragma unroll
+        for (int mi = 0; mi < size(row_max); ++mi) {{
+            float const cur = row_max(mi) == -INFINITY ? 0.f : row_max(mi);
+            lazy_scale(mi) = exp2f((saved_max(mi) - cur) * softmax_scale_log2);
+            row_sum(mi) *= lazy_scale(mi);
+        }}
+        flash::template scale_apply_exp2</*Scale_max=*/true, /*Check_inf=*/true, Max_offset>(scores, row_max, softmax_scale_log2);
+        flash::reduce_sum</*zero_init=*/false, /*warp_reduce=*/false>(scores, row_sum);
+        skip_rescale = true;
+        lazy_pending = true;
+        lazy_bad = false;
+    }}
+
+"""
+HELD_PATCHES = (
+    ("    bool skip_rescale = false;\n",
+     "    bool skip_rescale = false;\n    bool lazy_pending = false;\n    bool lazy_bad = false;\n    TensorT lazy_scale, saved_max, saved_sum;\n"),
+    ("            cute::fill(scores_scale, 1.f);\n            skip_rescale = true;\n",
+     "            cute::fill(scores_scale, 1.f);\n            skip_rescale = true;\n            lazy_pending = false;\n"),
+    ("    __forceinline__ __device__ TensorT max_get_scale(Tensor0 &acc_s) {\n",
+     "    __forceinline__ __device__ TensorT max_get_scale(Tensor0 &acc_s) {\n        cute::copy(row_max, saved_max);\n"
+     "        cute::copy(row_sum, saved_sum);\n"),
+    ("    template<bool Is_first, bool Check_inf=false, typename Tensor0>\n    __forceinline__ __device__ void online_softmax(Tensor0 &acc_s) {\n",
+     HELD_FNS + "    template<bool Is_first, bool Check_inf=false, typename Tensor0>\n    __forceinline__ __device__ void online_softmax(Tensor0 &acc_s) {\n"),
+    ("        flash::reduce_sum</*zero_init=*/Is_first, /*warp_reduce=*/false>(scores, row_sum);\n    };\n",
+     "        flash::reduce_sum</*zero_init=*/Is_first, /*warp_reduce=*/false>(scores, row_sum);\n        lazy_bad = false;\n"
+     "        if (!Is_first && skip_rescale) {\n            #pragma unroll\n"
+     f"            for (int mi = 0; mi < size(row_sum); ++mi) {{ lazy_bad |= !(row_sum(mi) - saved_sum(mi) < {HELD_LIMIT}.f); }}\n"
+     "        }\n    };\n"),
+) + CHECKED_PATCHES[4:]
+HELD_MAINLOOP = (
+    ("                warpgroup_wait<1>();\n                pipeline_k.consumer_release(smem_pipe_read);  // release K\n"
+     "                if constexpr (HasQv) {\n",
+     "                warpgroup_wait<1>();\n                if constexpr (HasQv) {\n"),
+    ("                    pipeline_v.consumer_release(smem_pipe_read_v);  // release V\n                }\n"
+     "                VERITY_FA3_O(tOrO, n_block + 1)",
+     "                    pipeline_v.consumer_release(smem_pipe_read_v);  // release V\n                }\n"
+     "                if (softmax.lazy_redo(2 + warp_group_idx)) {\n"
+     "                    flash::gemm</*zero_init=*/true, /*wg_wait=*/0>(tiled_mma_qk, tSrQ, tSrK(_, _, _, smem_pipe_read.index()), tSrS);\n"
+     "                    scoremod_premask_fn(tSrS);\n                    mask_fn(tSrS, n_block);\n                    softmax.redo_softmax(tSrS);\n"
+     "                }\n                pipeline_k.consumer_release(smem_pipe_read);  // release K\n"
+     "                VERITY_FA3_O(tOrO, n_block + 1)"),
+)
+
+
 def patch_once(path: Path, s: str, patches) -> str:
     for old, new in patches:
         if s.count(old) != 1:
@@ -176,8 +269,18 @@ def patch_once(path: Path, s: str, patches) -> str:
     return s
 
 
-def lazy_max(softmax_h: Path, checked: bool = False) -> None:
+def lazy_max(softmax_h: Path, checked: bool = False, thresh: bool = False, held: bool = False, redo: bool = False) -> None:
+    """`redo` (with `held`) fails every kept block's test, so each is recomputed and redone exactly: FA3's bytes."""
+    if thresh:
+        softmax_h.write_text(patch_once(softmax_h, softmax_h.read_text(), THRESH_PATCHES))
+        return
     s = patch_once(softmax_h, softmax_h.read_text(), LAZY_PATCHES)
+    if held:
+        mainloop_h = softmax_h.parent / "mainloop_fwd_sm90_tma_gmma_ws.hpp"
+        mainloop_h.write_text(patch_once(mainloop_h, mainloop_h.read_text(), HELD_MAINLOOP))
+        s = patch_once(softmax_h, s, HELD_PATCHES)
+        softmax_h.write_text(s.replace(f"< {HELD_LIMIT}.f", "< -1.f") if redo else s)
+        return
     if checked:
         s = patch_once(softmax_h, s, CHECKED_PATCHES)
         if s.count(SUM_SCALE) != 2:
@@ -200,8 +303,10 @@ def main() -> None:
     ap.add_argument("--tile-m", type=int)
     ap.add_argument("--exp2-emu", help="NUM/DEN: that share of each thread's score columns' exp2 on the FMA pipe")
     ap.add_argument("--exp2-deg", type=int, default=3, help="the FMA exp2's polynomial degree (3 or 4)")
-    ap.add_argument("--lazy-max", nargs="?", const="screen", choices=("screen", "checked"),
-                    help="keep a warp's running max after the first key block (checked: biased exp2, sign-tested)")
+    ap.add_argument("--lazy-max", nargs="?", const="screen", choices=("screen", "checked", "thresh", "held", "held-redo"),
+                    help="keep a warp's running max after the first key block (checked: biased exp2, sign-tested; "
+                         "thresh: the max computed, kept while it rises by at most 8 in log2 units; held: block sums "
+                         "tested after exp2, K held for a recompute; held-redo: every kept block recomputed, a test)")
     ap.add_argument("--jobs", default="8")
     ap.add_argument("--cuda", type=Path, default=Path("/usr/local/cuda"), help="the CUDA toolkit whose libcuda stub links")
     args = ap.parse_args()
@@ -214,7 +319,8 @@ def main() -> None:
         emulate_exp2(hop / "softmax.h", num, den, args.exp2_deg)
         emu = {"num": num, "den": den, "deg": args.exp2_deg, "max_rel": {3: 4.6e-4, 4: 1.2e-5}[args.exp2_deg]}
     if args.lazy_max:
-        lazy_max(hop / "softmax.h", checked=args.lazy_max == "checked")
+        lazy_max(hop / "softmax.h", checked=args.lazy_max == "checked", thresh=args.lazy_max == "thresh",
+                 held=args.lazy_max.startswith("held"), redo=args.lazy_max == "held-redo")
     os.environ["TORCH_CUDA_ARCH_LIST"] = "9.0a"
     os.environ["MAX_JOBS"] = args.jobs
     from torch.utils.cpp_extension import load
