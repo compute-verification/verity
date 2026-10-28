@@ -158,7 +158,7 @@ def join_trace(d: Path, plan: dict[int, dict]) -> dict:
 
 def engine_order(steps: list[dict]) -> list[str]:
     """The order the engine first scheduled its requests in (a resumed request's scheduling isn't its first), which is
-    the order ENC-REPLAY's replay takes as the engine's (`read_corpus_trace`)."""
+    the order the scheduler replay takes as the engine's (`read_corpus_trace`)."""
     order, seen = [], set()
     for s in steps:
         if not s["total_num_scheduled_tokens"]:
@@ -379,12 +379,12 @@ def client_loop(w: Path) -> dict | None:
             "max_lag_ms": c.get("max_lag_ms"), "lags": c["lags"][:20], "gc_counts": c.get("gc_counts")}
 
 
-#: a warden trace's views for ENC-REPLAY, each with the warden's order as the certified ingress: view -> its record's field
+#: a warden trace's views for the replay, each with the warden's order as the certified ingress: view -> its record's field
 VIEWS = {"admitted": "admitted", "released": "released"}
 
 
 def warden_views(root: Path, name: str, w: dict) -> list[str]:
-    """For a warden trace, a directory per `VIEWS` entry, <name>.<view>, that ENC-REPLAY's `read_corpus_trace` reads as a
+    """For a warden trace, a directory per `VIEWS` entry, <name>.<view>, that `replay.read_corpus_trace` reads as a
     trace whose certified ingress is the warden's: each request's ``send_unix`` is the middle of the unix bucket of the
     warden's tick for it (admission s, or release a: the bucket of the request's last ingress cell), plus 10 µs per
     request before it in that bucket in ordinal order, so that the order is the warden's (bucket, ordinal). The client's
@@ -921,12 +921,12 @@ def readme(s: dict) -> str:
     if ordered:
         lines += ["", "## Arrival order", "",
                   "The order requests arrived in at each place along the wire (`summary.arrival_order`), against the order "
-                  "the engine first scheduled them in (ENC-REPLAY's engine order) and against the place before: the pairs "
+                  "the engine first scheduled them in (the replay's engine order) and against the place before: the pairs "
                   "of requests put the other way round (inversions), and the seconds from the client's send to the arrival "
                   "there. The warden orders by (bucket, ordinal): its admission s, and its release a, the bucket of the "
                   "request's last ingress cell, after which the server has the whole request. A warden trace's "
                   "`<trace>.admitted` and `<trace>.released` are the trace with that order as its certified ingress "
-                  "(`summary.warden_views`), for ENC-REPLAY's `read_corpus_trace`.", ""]
+                  "(`summary.warden_views`), for `replay.read_corpus_trace`.", ""]
         for name, o in ordered.items():
             lines += [f"**{name}** ({o['pairs']} pairs):", "",
                       "| place | requests | inversions against the engine's order | against the place before | seconds "
