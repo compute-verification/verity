@@ -347,7 +347,7 @@ def test_it_names_one_package_and_one_run_holds_a_tree(repo, tmp_path, capsys, m
 
 def test_a_run_waits_for_the_one_that_holds_its_tree_and_then_runs(repo, tmp_path, monkeypatch, capsys):
     """A node without SLOTS gives every `--records` run the one `local` tree; a second run waits for the first instead of
-    refusing in 0 s (vy-nebius-cpu-2, 19 Oct), and then runs, naming itself as the holder."""
+    refusing in 0 s, and then runs, naming itself as the holder."""
     tree, deps = tmp_path / "cache" / "lean-records" / "tree", tmp_path / "deps"
     tree.mkdir(parents=True)
     held = open(tree / ".lock", "w")

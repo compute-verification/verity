@@ -19,9 +19,9 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # The tests read the verifier's pin, replayable sets and agreement scripts (the agreement step's inputs), check.py's
 # shipped-tree commit record, the flock-circuit build step's script and the patches its Rust tests cover, the repository
-# lints the preflight names, and the Lean audit's tool directory: Lean's jobs (`lean_audit.py`, `lean_changed.py`, the pin
-# `lean-deps.json`), the sandbox lean_changed builds in, and the audit whose judgment of the guarantees it runs (a
-# directory, since loading `check.py` reads and writes its `__pycache__`), the security proofs' manifest and record (a
+# lints the preflight names, and the Lean check's tool directory: Lean's jobs (`lean_audit.py`, the pin
+# `lean-deps.json`) and the Lean check that the Lean slot runs (a directory, since loading its `check.py` reads and
+# writes its `__pycache__`), the security proofs' manifest and record (a
 # shard's package), the Slack registry, whose handles are the owners `ci.toml` may name, and what of research the fixture
 # fetch and the run tooling import beyond its `exports` (with `research run --pool`'s placement, which `--record --pool`
 # reuses), and the move script whose word maps move_check applies.
