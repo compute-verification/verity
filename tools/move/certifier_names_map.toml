@@ -1,0 +1,101 @@
+# The network certifier's names off the held concepts (`tests/test_lean_vocabulary.py`): what `tools/move/rename.py --map
+# tools/move/certifier_names_map.toml` renames. Each [[words_in]] holds one declaration's words for the files that read it,
+# renamed as whole words, so the concept's other declarations keep their names. `rename.py --moves` prints the lock
+# records' renames, from [words].
+
+[words]
+# the spec's egress prediction, as the code Lean names it (`NetworkCertifier.EgressPrediction`)
+"NetTiming.Program" = "NetTiming.EgressPrediction"
+
+[[words_in]]
+files = ["Security/Definitions/NetworkCertifier/*", "Security/Proofs/NetworkCertifier/*"]
+[words_in.words]
+"structure Program" = "structure EgressPrediction"
+"Program L S" = "EgressPrediction L S"
+"Program 1 2" = "EgressPrediction 1 2"
+"a `Program` whose" = "an `EgressPrediction` whose"
+"`Program`" = "`EgressPrediction`"
+
+[[words_in]]
+files = ["verity/core/protocols/certifier/lean/NetworkCertifier/Run.lean"]
+[words_in.words]
+"`NetworkCertifier` but `EgressPrediction` (the reference's `Program`), written as there." = "`NetworkCertifier`, written as there."
+
+# io_request: an id request's first cell, and a link's ingress served through the network certifier
+[[words_in]]
+files = ["verity/core/protocols/certifier/io_request.py"]
+[words_in.words]
+"Layout" = "FirstCell"
+"Link" = "ServedIngress"
+
+[[words_in]]
+files = ["verity/core/protocols/certifier/ingress_scan.py"]
+[words_in.words]
+"Q.Layout" = "Q.FirstCell"
+
+[[words_in]]
+files = ["benchmarks/network_traces/n2_tie_zk.py", "verity/core/protocols/certifier/tests/test_network_certifier_advised_order.py"]
+[words_in.words]
+"Q.Link" = "Q.ServedIngress"
+
+# egress: a slot's record
+[[words_in]]
+files = ["verity/core/protocols/certifier/egress.py"]
+[words_in.words]
+"Record" = "SlotRecord"
+
+[[words_in]]
+files = ["verity/core/protocols/certifier/tests/test_network_certifier_egress.py"]
+[words_in.words]
+"EG.Record" = "EG.SlotRecord"
+
+# service: the witness of one link-window's commitment
+[[words_in]]
+files = ["verity/core/protocols/certifier/service.py"]
+[words_in.words]
+"Opening" = "LinkWindowWitness"
+
+[[words_in]]
+files = ["verity/core/protocols/certifier/tests/standin.py"]
+[words_in.words]
+"SVC.Opening" = "SVC.LinkWindowWitness"
+
+[[words_in]]
+files = ["verity/core/protocols/certifier/PROTOCOL.md"]
+[words_in.words]
+"(`Opening`)" = "(`LinkWindowWitness`)"
+
+# audit: one link-window's verdict, the Python of `NetworkCheck.Check.LinkWindow`
+[[words_in]]
+files = ["verity/core/protocols/certifier/audit.py", "verity/core/protocols/certifier/active.py",
+         "verity/core/protocols/certifier/lean_audit.py",
+         "verity/core/protocols/certifier/tests/test_network_certifier_active.py"]
+[words_in.words]
+"Verdict" = "LinkWindowVerdict"
+
+[[words_in]]
+files = ["verity/core/protocols/network/tests/test_lean_audit.py"]
+[words_in.words]
+"audit.Verdict" = "audit.LinkWindowVerdict"
+
+# replay_chain: a window row, beside the state row (`Row`)
+[[words_in]]
+files = ["verity/core/protocols/certifier/replay_chain.py"]
+[words_in.words]
+"Window" = "WindowRow"
+
+[[words_in]]
+files = ["verity/core/protocols/certifier/compile_slice.py", "verity/core/protocols/certifier/compile_slice_v2.py",
+         "verity/core/protocols/certifier/compile_slice_v3.py",
+         "verity/core/protocols/certifier/tests/test_network_certifier_replay_chain.py",
+         "benchmarks/network_e2e/encodings/tests/test_v1.py"]
+[words_in.words]
+"RC.Window" = "RC.WindowRow"
+
+[keep]
+# prose that starts a sentence with the window itself
+patterns = ['\*\*The carry\.\*\* Window']
+
+[rewrite]
+# the vocabulary guard's lines are lean's to prune, and the moves' own maps are records
+exclude = ["tools/move/**", "tests/test_lean_vocabulary.py"]
