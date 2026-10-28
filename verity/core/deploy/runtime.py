@@ -1,5 +1,4 @@
-"""The runtime: it runs parties over channels and keeps their transcripts, and knows no protocol
-(`note:memory-accounting/20261026T2305Z-draft-deployment-api-v3` §4, and its addenda of 23:50Z and 00:08Z).
+"""The runtime: it runs parties over channels and keeps their transcripts, and knows no protocol.
 
 `run(config, parties_here, mode, state_dir, protocols=...)` is what `verity run CONFIG` calls. `config` is the deployment
 configuration as data; the runtime reads its protocol (`protocol`, or the one entry of `protocols`), `params`, its

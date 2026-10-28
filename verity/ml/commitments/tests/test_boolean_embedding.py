@@ -141,7 +141,7 @@ def test_reads_open_a_registered_table_and_refuse_every_wrong_read() -> None:
 @pytest.mark.slow
 def test_the_read_costs_the_pinned_gates() -> None:
     """Several minutes of tracing the deployed parts (a full row-seg segment, the outer hashes, the hm96 leaf and the read's
-    nodes): the sizes a unit holding the read is cut to at Llama-3.2-1B's and Llama-3.1-8B's embedding (CIR-96)."""
+    nodes): the sizes a unit holding the read is cut to at Llama-3.2-1B's and Llama-3.1-8B's embedding."""
     for (V, H), counts in SELECT.items():
         assert E.EmbeddingReadSelect.traced(V, H).counts == dict(zip(("and", "xor", "not"), counts)), (V, H)
     for (V, H), gates in READS.items():
