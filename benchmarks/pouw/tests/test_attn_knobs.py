@@ -91,3 +91,17 @@ def test_retile_rewrites_only_the_causal_hdim64_tile(tmp_path):
     assert "return {is_causal ? 128 : 192, is_causal ? 128 : is_local || paged_kv_non_TMA ? 160 : 192," in h.read_text()
     with pytest.raises(SystemExit, match="exactly once"):
         tb.retile(h, 128)
+
+
+def test_checked_lazy_max_biases_exp2_and_tests_signs_before_it(tmp_path):
+    made = {new for _, new in tb.LAZY_PATCHES}
+    own = [old for old, _ in tb.CHECKED_PATCHES if not any(old in new for new in made)]
+    h = tmp_path / "softmax.h"
+    h.write_text("".join(old for old, _ in tb.LAZY_PATCHES) + "".join(own) + 2 * f"    {tb.SUM_SCALE}\n")
+    (tmp_path / "flash_fwd_kernel_sm90.h").write_text(f"    {tb.SOFTMAX_PINNED}\n")
+    tb.lazy_max(h, checked=True)
+    s = h.read_text()
+    assert "lazy_exp2(scores);" in s and "neg >> 31" in s and "float(1ull << -Max_offset)" in s
+    assert f"!Is_FP8 ? -{tb.LAZY_BIAS} : 8" in (tmp_path / "flash_fwd_kernel_sm90.h").read_text()
+    with pytest.raises(SystemExit, match="exactly once"):
+        tb.lazy_max(h, checked=True)

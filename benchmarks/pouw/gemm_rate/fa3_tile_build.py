@@ -2,7 +2,7 @@
 causal tile optionally changed, so attn_knobs.py can time it beside the served wheel's `_vllm_fa3_C`.
 
     python fa3_tile_build.py --tree TREE --name NS --build-dir DIR [--tile-m 128] [--exp2-emu NUM/DEN --exp2-deg 3]
-                              [--lazy-max]
+                              [--lazy-max [checked]]
 
 TREE is a copy of the pinned tree with `integrations/vllm/verity_vllm/acquire/fa3_tap_src/apply_fa3_tap.py` applied (its
 `fa3_torch_lib_verity.cpp`), built here with VERITY_TAP=0, which is the pinned kernel. The flags are that builder's
@@ -21,8 +21,13 @@ most the polynomial's relative error (`COEFFS`), under bf16's half-ulp, before P
 
 --lazy-max keeps each warp's running max after a tile's first key block, so a later block skips the max's FMNMX per
 score, its shuffles and the output's rescale (`lazy_max_keeps`), which are a fifth of the hdim-64 mainloop's issued
-instructions; P may then exceed 1, and the sum and lse use the kept max. A measurement screen only: it has no overflow
-recovery. Without either flag softmax.h is untouched.
+instructions; P may then exceed 1, and the sum and lse use the kept max. Bare, it is a measurement screen: it has no
+overflow recovery. `--lazy-max checked` is safe for every input: each exp2 is biased by 2^-32 (FA3's Max_offset, which
+the bf16 path leaves at 0; it divides out of the output, and lse adds it back), so a kept block's P stays below 1, as
+FA3's, exactly when every biased exponent is negative. Three-input ANDs of the sign bits (half an instruction a score)
+test that before any exp2, and a warp that fails takes the exact step on the exponents themselves (`lazy_exp2`). The
+bias costs range only below 2^-94 of the kept max, which FA3 also loses to bf16 at 2^-126. Without either flag
+softmax.h is untouched.
 """
 from __future__ import annotations
 
@@ -108,12 +113,82 @@ LAZY_PATCHES = (
 )
 
 
-def lazy_max(softmax_h: Path) -> None:
-    s = softmax_h.read_text()
-    for old, new in LAZY_PATCHES:
+LAZY_BIAS = 32
+CHECKED_EXP2 = """    // [lazy max, checked] Every exp2 is biased by 2^Max_offset (Max_offset < 0), so a kept block is as safe as FA3's
+    // exact one exactly when each x = s * scale - (max * scale - Max_offset) is negative, i.e. P < 1. The sign bits,
+    // three-input ANDs over the scores, decide that before any exp2; a warp with a nonnegative x takes the exact step
+    // on x itself, so no recovery needs S again.
+    template<typename Tensor0>
+    __forceinline__ __device__ void lazy_exp2(Tensor0 &scores) {
+        uint32_t neg = 0xffffffffu;
+        #pragma unroll
+        for (int mi = 0; mi < size<0>(scores); ++mi) {
+            float const max_scaled = row_max(mi) * softmax_scale_log2 - float(Max_offset);
+            #pragma unroll
+            for (int ni = 0; ni < size<1>(scores); ni += 2) {
+                scores(mi, ni) = scores(mi, ni) * softmax_scale_log2 - max_scaled;
+                scores(mi, ni + 1) = scores(mi, ni + 1) * softmax_scale_log2 - max_scaled;
+                neg &= __float_as_uint(scores(mi, ni)) & __float_as_uint(scores(mi, ni + 1));
+            }
+        }
+        lazy_pending = !__all_sync(0xffffffffu, neg >> 31);
+        if (!lazy_pending) {
+            #pragma unroll
+            for (int i = 0; i < size(scores); ++i) { scores(i) = exp2f(scores(i)); }
+            return;
+        }
+        TensorT x_max;
+        flash::template reduce_max</*zero_init=*/true>(scores, x_max);
+        #pragma unroll
+        for (int mi = 0; mi < size<0>(scores); ++mi) {
+            float const d = fmaxf(x_max(mi) - float(Max_offset), 0.f);
+            lazy_scale(mi) = exp2f(-d);
+            row_max(mi) += d / softmax_scale_log2;
+            row_sum(mi) *= lazy_scale(mi);
+            #pragma unroll
+            for (int ni = 0; ni < size<1>(scores); ++ni) { scores(mi, ni) = exp2f(scores(mi, ni) - d); }
+        }
+    }
+
+"""
+SUM_SCALE = "static constexpr float sum_scale = 1.f / float(1 << Max_offset);"
+CHECKED_PATCHES = (
+    ("    bool skip_rescale = false;\n", "    bool skip_rescale = false;\n    bool lazy_pending = false;\n    TensorT lazy_scale;\n"),
+    ("            cute::fill(scores_scale, 1.f);\n            skip_rescale = true;\n",
+     "            cute::fill(scores_scale, 1.f);\n            skip_rescale = true;\n            lazy_pending = false;\n"),
+    ("    template<bool Is_first, bool Check_inf=false, typename Tensor0>\n    __forceinline__ __device__ void online_softmax(Tensor0 &acc_s) {\n",
+     CHECKED_EXP2 + "    template<bool Is_first, bool Check_inf=false, typename Tensor0>\n    __forceinline__ __device__ void online_softmax(Tensor0 &acc_s) {\n"),
+    ("        flash::template scale_apply_exp2</*Scale_max=*/true, Check_inf, Max_offset>(scores, row_max, softmax_scale_log2);\n",
+     "        if (!Is_first && skip_rescale) {\n            lazy_exp2(scores);\n        } else {\n"
+     "            flash::template scale_apply_exp2</*Scale_max=*/true, Check_inf, Max_offset>(scores, row_max, softmax_scale_log2);\n        }\n"),
+    ("        if (skip_rescale) { return; }\n", "        if (skip_rescale && !lazy_pending) { return; }\n"),
+    ("            for (int ni = 0; ni < size<1>(acc_o_rowcol); ++ni) { acc_o_rowcol(mi, ni) *= scores_scale(mi); }\n",
+     "            for (int ni = 0; ni < size<1>(acc_o_rowcol); ++ni) { acc_o_rowcol(mi, ni) *= skip_rescale ? lazy_scale(mi) : scores_scale(mi); }\n"),
+)
+SOFTMAX_PINNED = "flash::Softmax<!LargeHeadDimV ? 2 * (2 * kBlockM / NumMmaThreads) : 2, /*Max_offset=*/!Is_FP8 ? 0 : 8> softmax(softmax_scale_log2);"
+
+
+def patch_once(path: Path, s: str, patches) -> str:
+    for old, new in patches:
         if s.count(old) != 1:
-            raise SystemExit(f"{softmax_h}: the lazy-max anchor {old.strip()[:60]!r} is not there exactly once")
+            raise SystemExit(f"{path}: the lazy-max anchor {old.strip()[:60]!r} is not there exactly once")
         s = s.replace(old, new)
+    return s
+
+
+def lazy_max(softmax_h: Path, checked: bool = False) -> None:
+    s = patch_once(softmax_h, softmax_h.read_text(), LAZY_PATCHES)
+    if checked:
+        s = patch_once(softmax_h, s, CHECKED_PATCHES)
+        if s.count(SUM_SCALE) != 2:
+            raise SystemExit(f"{softmax_h}: finalize's and finalize_aux's sum_scale lines are not there twice")
+        s = s.replace(SUM_SCALE, "static constexpr float sum_scale = Max_offset > 0 ? 1.f / float(1 << Max_offset) "
+                                 ": float(1ull << -Max_offset);")
+        kernel_h = softmax_h.parent / "flash_fwd_kernel_sm90.h"
+        k = kernel_h.read_text()
+        if k.count(SOFTMAX_PINNED) != 1:
+            raise SystemExit(f"{kernel_h}: the pinned Softmax instantiation is not there exactly once")
+        kernel_h.write_text(k.replace(SOFTMAX_PINNED, SOFTMAX_PINNED.replace("!Is_FP8 ? 0 : 8", f"!Is_FP8 ? -{LAZY_BIAS} : 8")))
     softmax_h.write_text(s)
 
 
@@ -125,7 +200,8 @@ def main() -> None:
     ap.add_argument("--tile-m", type=int)
     ap.add_argument("--exp2-emu", help="NUM/DEN: that share of each thread's score columns' exp2 on the FMA pipe")
     ap.add_argument("--exp2-deg", type=int, default=3, help="the FMA exp2's polynomial degree (3 or 4)")
-    ap.add_argument("--lazy-max", action="store_true", help="keep a warp's running max after the first key block")
+    ap.add_argument("--lazy-max", nargs="?", const="screen", choices=("screen", "checked"),
+                    help="keep a warp's running max after the first key block (checked: biased exp2, sign-tested)")
     ap.add_argument("--jobs", default="8")
     ap.add_argument("--cuda", type=Path, default=Path("/usr/local/cuda"), help="the CUDA toolkit whose libcuda stub links")
     args = ap.parse_args()
@@ -138,7 +214,7 @@ def main() -> None:
         emulate_exp2(hop / "softmax.h", num, den, args.exp2_deg)
         emu = {"num": num, "den": den, "deg": args.exp2_deg, "max_rel": {3: 4.6e-4, 4: 1.2e-5}[args.exp2_deg]}
     if args.lazy_max:
-        lazy_max(hop / "softmax.h")
+        lazy_max(hop / "softmax.h", checked=args.lazy_max == "checked")
     os.environ["TORCH_CUDA_ARCH_LIST"] = "9.0a"
     os.environ["MAX_JOBS"] = args.jobs
     from torch.utils.cpp_extension import load

@@ -6,12 +6,12 @@
 #     [--env VARIANTS="base:0 m128:128"] [--env VENV=DIR] -- bash benchmarks/pouw/gemm_rate/fa3_tile.sh
 #
 # A variant is NAME:M[:EMU[:DEG[:LAZY]]], M the hdim-64 causal tile's kBlockM (0: the pinned 192), EMU a NUM/DEN share of
-# the score columns' exp2 on the FMA pipe (0: none), DEG its polynomial's degree, and LAZY 1 for a kept running max
-# (fa3_tile_build.py's --exp2-emu, --exp2-deg and --lazy-max).
+# the score columns' exp2 on the FMA pipe (0: none), DEG its polynomial's degree, and LAZY 1 for a kept running max, 2
+# for it checked (fa3_tile_build.py's --exp2-emu, --exp2-deg, --lazy-max and --lazy-max checked).
 # KFA3_CACHE (kept outside the run dir) holds vllm-flash-attn at 506341a1 with cutlass, a tree a variant with
 # apply_fa3_tap.py applied (built with VERITY_TAP=0), and its build: KFA3_CACHE/build/NAME/kfa3_NAME.so. VENV is a Python
-# with torch (attn_knobs.sh's). $OUT gets each build's log, build_info.json and sass-NAME.txt (each kernel's MUFU.EX2 and
-# FFMA count), and rc.txt.
+# with torch (attn_knobs.sh's). $OUT gets each build's log, build_info.json and sass-NAME.txt (each kernel's MUFU.EX2,
+# FFMA, FMNMX, SHFL, LOP3 and VOTE counts), and rc.txt.
 set -uo pipefail
 O=${OUT:?}
 TREE=$PWD
@@ -53,12 +53,14 @@ for v in $VARIANTS; do
   tm=(); [ "${m:-0}" != 0 ] && tm=(--tile-m "$m")
   [ -n "${emu:-}" ] && [ "$emu" != 0 ] && tm+=(--exp2-emu "$emu" --exp2-deg "${deg:-3}")
   [ "${lazy:-0}" = 1 ] && tm+=(--lazy-max)
+  [ "${lazy:-0}" = 2 ] && tm+=(--lazy-max checked)
   ( "$VENV/bin/python" "$TREE/benchmarks/pouw/gemm_rate/fa3_tile_build.py" --tree "$t" --name "kfa3_$name" \
       --build-dir "$C/build/$name" "${tm[@]}" --jobs "$JOBS" --cuda "$CUDA_HOME" > "$O/build-$name.log" 2>&1
     echo "build $name rc $?" >> "$O/rc.txt"
     cp "$C/build/$name/build_info.json" "$O/build_info-$name.json" 2> /dev/null
     cuobjdump -sass "$C/build/$name/kfa3_$name.so" 2> /dev/null \
-      | awk '/Function :/ { f = $3 } /MUFU\.EX2/ { e[f]++ } /FFMA/ { a[f]++ } END { for (k in e) print k, "MUFU.EX2", e[k], "FFMA", a[k] }' \
+      | awk '/Function :/ { f = $3 } /MUFU\.EX2/ { e[f]++ } /FFMA/ { a[f]++ } /FMNMX/ { x[f]++ } /SHFL/ { h[f]++ } /LOP3/ { l[f]++ }
+             /VOTE/ { o[f]++ } END { for (k in e) print k, "MUFU.EX2", e[k], "FFMA", a[k], "FMNMX", x[k]+0, "SHFL", h[k]+0, "LOP3", l[k]+0, "VOTE", o[k]+0 }' \
       | sort > "$O/sass-$name.txt" ) &
   pids+=($!)
 done
