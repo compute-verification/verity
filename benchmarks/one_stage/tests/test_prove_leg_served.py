@@ -4,6 +4,7 @@ fewest units whose statement `stage` admits under --zk. Nothing is lowered or pr
 
 from __future__ import annotations
 
+import hashlib
 import sys
 from pathlib import Path
 
@@ -29,7 +30,7 @@ def test_units_for_is_the_fewest_units_stage_admits(k_log, per_block):
     assert n == 1 or k_log + nbl(n - 1, per_block) < L.M_MIN
 
 
-@pytest.mark.parametrize("shape,want", [
+SERVED = [
     ("gemm:1b", f"Gemm_v2{{K=2048,N=1,{DOT}}}"),
     ("gemm:8b:4096", f"Gemm_v2{{K=4096,N=1,{DOT}}}"),
     ("attention:1b:129", f'Attention_v5{{T=129,NH=32,KVH=8,D=64,BN=128,{DOT},INV={{"fn":"Fa2InvSum_v1"}},MASKED_FROM=1}}'),
@@ -49,7 +50,13 @@ def test_units_for_is_the_fewest_units_stage_admits(k_log, per_block):
     ("attention-v20:1b:384:block", f"AttnBlock_v4{{D=64,NVIS=192,FIRST=false,BN=192,{DOT},CHECK=false}}"),
     ("attention-v20:8b:256:block", f"AttnBlock_v4{{D=128,NVIS=128,FIRST=false,BN=128,{DOT},CHECK=false}}"),
     ("attention-v20:1b:384:end", 'AttnHeadEnd_v1{D=64,INV={"fn":"Fa3InvSum_v1"}}'),
-])
+]
+#: SHA-512 of every served member's rows, output rows and recorded rows, as `prove_leg.py` on main built them itself
+ROWS = ("4c4c22b639378c9002541c62fb178fa6e87380cc45f35ddb9041ace9b879b201"
+        "85267aab6465305bb71a1c8ef69a0c75d0da74f1b2d0991f08a6f54de2117942")
+
+
+@pytest.mark.parametrize("shape,want", SERVED)
 def test_a_served_shape_binds_a_served_template_with_values_for_every_parameter(shape, want):
     from verity.ml.circuits.codec import descriptor_id
     from verity_vllm.pipeline import serving_rows as SRW
@@ -61,6 +68,15 @@ def test_a_served_shape_binds_a_served_template_with_values_for_every_parameter(
     params, _ret = fn.signature()
     assert {nm: v.shape for nm, v in values.items()} == {nm: (2, sum(t.leaf_widths()) // 16) for nm, t in params}
     assert all(v.dtype == np.uint16 for v in values.values())
+
+
+def test_the_served_members_rows_are_the_bytes_prove_legs_own_rows_gave():
+    rows = []
+    for shape in [s for s, _ in SERVED] + ["embedding-read:1b:300"]:
+        m, info = L.served_member(shape, 0)
+        rows.append((shape, m.rows, m.out_rows, info["rows"]))
+    got = hashlib.sha512(repr(rows).encode()).hexdigest()
+    assert got == "".join(ROWS), got
 
 
 def test_the_combines_partials_are_its_logits_rows_chunks():
