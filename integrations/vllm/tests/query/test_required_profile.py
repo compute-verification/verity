@@ -1,5 +1,6 @@
-"""The attention hidden family a request manifest requires follows the FA version its attention layers ran; a resolution that did not
-record it falls back to the declared capability's FA version (`TargetProfile.effective_flash_attn_version`): FA3 only on cc 9.x."""
+"""A request manifest's profile follows the FA version its attention layers ran; a resolution that did not record it falls back to the
+declared capability's FA version (`TargetProfile.effective_flash_attn_version`): FA3 only on cc 9.x.  No attention, FlashAttention or
+MLA, puts a hidden-stream row in the manifest: the M1 stream is no Value of the Program."""
 from __future__ import annotations
 
 import pytest
@@ -70,22 +71,18 @@ def _hopper_manifest(attention: str, impl: dict):
     return request_manifest(P, Correspondence(P), res, request_id="r0").manifest
 
 
-def test_mla_sparse_attention_requires_no_hidden_family_on_hopper():
-    """GLM-5.3 on H200: MLA + the DSA indexer launch no FlashAttention `varlen_fwd`, so the manifest has no hidden rows and its header
-    requires no hidden family, though the profile is hopper."""
-    man = _hopper_manifest("SparseMla_v1", {"kind": "mla", "impl": "vllm.v1.attention.backends.mla.flashattn_mla_sparse.FlashAttnMLASparseImpl",
-                                            "num_heads": 2})
+@pytest.mark.parametrize("attention, impl", [
+    ("SparseMla_v1", {"kind": "mla", "impl": "vllm.v1.attention.backends.mla.flashattn_mla_sparse.FlashAttnMLASparseImpl", "num_heads": 2}),
+    ("Attention_v3", {"vllm_flash_attn_version": 3})])
+def test_no_attention_requires_a_hidden_stream(attention, impl):
+    """GLM-5.3's MLA + DSA indexer on H200 launches no `varlen_fwd`; a FlashAttention launch's M1 stream (scores, probabilities, each
+    key block's running state) is read by no unit.  Neither manifest has a hidden row, and the attention Call's output is required."""
+    man = _hopper_manifest(attention, impl)
     q = man["query"]
-    assert q["profile"] == "hopper" and q["attention_hidden_family"] is None
-    assert not {"fa2_hidden_m1_stream", "fa3_hidden_m1_stream"} & set(q["required_families"])
-    assert "hidden = none" in q["query_text"]
-    assert not [r for r in man["identities"] if r["family"].endswith("_hidden_m1_stream")]
-    assert man["populations"]["attention_layers"] == 0
-
-
-def test_flash_attention_launch_keeps_the_fa3_hidden_family():
-    man = _hopper_manifest("Attention_v3", {"vllm_flash_attn_version": 3})
-    q = man["query"]
-    assert q["attention_hidden_family"] == "fa3_hidden_m1_stream" and "fa3_hidden_m1_stream" in q["required_families"]
-    assert "hidden = fa3_hidden_m1_stream" in q["query_text"]
-    assert [r["op_path"] for r in man["identities"] if r["family"] == "fa3_hidden_m1_stream"] == ["fa3.m1/L0", "fa3.m1/L0"]
+    assert q["profile"] == "hopper" and "attention_hidden_family" not in q
+    assert q["required_families"] == ["input_token_ids", "instance_outputs", "sampled_token_ids", "weights"]
+    assert "hidden =" not in q["query_text"] and q["query_text"].endswith("; profile = hopper")
+    assert not [r for r in man["identities"] if r["family"].endswith("_hidden_m1_stream") or r["op_path"].startswith(("fa2.m1", "fa3.m1"))]
+    assert "attention_layers" not in man["populations"]
+    out = "model.model.layers.0.self_attn.attn" if attention == "Attention_v3" else "model.model.layers.0.self_attn"
+    assert any(r["family"] == "instance_outputs" and r["op_path"].startswith(out) for r in man["identities"])
