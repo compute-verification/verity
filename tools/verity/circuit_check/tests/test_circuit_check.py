@@ -538,6 +538,21 @@ def test_a_value_computed_in_two_units_is_a_recompute_failure():
     assert [w["count"] for w in inner["warnings"] if w["check"] == "redundant-gates" and w["code"] == "ir"] == [1]
 
 
+def test_a_definition_over_the_partition_budget_is_an_unchecked_warning():
+    """Over ``partition_max_gates`` the partition is not run: a ``partition/unchecked`` warning names the Definition and the
+    summary counts it, so its entry does not read as a pass."""
+    from verity.ml.circuits.types import Value
+    from verity.ml.definitions.registry import prims as P
+
+    fn = _composite("CircuitCheckOverBudget", (_f32x2(), Value(32)),
+                    lambda B, S, x: B.call(P.F32Mul, B.call(P.F32Add, x[0], x[1]), x[1]))
+    e = CK.check_definition(fn, dataclasses.replace(OPTS, partition_max_gates=1), as_call=True)
+    assert e["partition"]["checked"] is False and not e["failures"]
+    (w,) = [w for w in e["warnings"] if w["check"] == "partition"]
+    assert w["code"] == "unchecked" and w["definition"] == fn.id and w["name"].endswith("over the partition budget 1")
+    assert CK.summarize([e])["unchecked"] == {"items": len(e["warnings"]), "definitions": 1}
+
+
 #: a Boolean Call family (`RoPEHead_v1`'s Boolean version) whose cut computes 1,120 values in two proof blocks
 BOOL_RECOMPUTE = "RoPEHead_v2{D=8}"
 
