@@ -29,10 +29,11 @@ def cs(request):
     return request.param
 
 
-def committed(cs):
-    """Steps committed as --retain host keeps them (their blocks, ``host``), then moved into a device pool as --retain device holds them."""
+def committed(cs, values=None):
+    """Steps committed as --retain host keeps them (their blocks, ``host``), then moved into a device pool as --retain device holds them:
+    ``values`` (`commit_steps`' form), else `steps`'."""
     k = (R.ROW_BYTES if cs else GPU_CHUNK_BYTES) // 256
-    dev, rc = commit_steps(steps(k), commit_scheme=cs)
+    dev, rc = commit_steps(values or steps(k), commit_scheme=cs)
     host = {s: bytes(blk.numpy()) for s, (blk, _u) in dev._gpu_blocks.items()}
     dev.device_pool = DP.DevicePool(sum(len(b) for b in host.values()) + 4096 * len(host), device="cpu")
     for s, (blk, used) in list(dev._gpu_blocks.items()):
