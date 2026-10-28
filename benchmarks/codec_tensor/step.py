@@ -1,9 +1,9 @@
 """One decode step at HBM exhaustion on one GPU, from the existing kernels: a Llama-3.1 model's FP8 linears (`--model`)
-held as words of one field (`wt.cu`: the fused decode, ro-sketch-blake3/v0 or sketch-sha512 at k_s = 16 (or a
-WT_RECEIPT build's `--rows` 64) and the FP8 MMA, then the step's leaves and tree), and a bf16 KV cache that fills the
+held as words of one field (`wt.cu` built at -DWT_RECEIPT=1: the fused decode, sketch-sha512 at k_s = 16 or 64
+(`--rows`) and the FP8 MMA, then the step's receipt tree, `reader.cu`'s), and a bf16 KV cache that fills the
 rest of the GPU's memory at `--batch` sequences,
 held as words of the same field and decoded inside attention (`benchmarks/word_codec/kv.cu`'s `kv_attn`); the step's new tokens' KV is encoded (`step.cu`'s
-`kv_append`, all layers in one launch on a second stream, beside the step). With sketch-sha512 (a WT_RECEIPT build)
+`kv_append`, all layers in one launch on a second stream, beside the step). Where kv.cu runs form 13
 the KV carries the same receipts: each token-layer is one of the store's registered 4 KiB chunks (store-order/v0),
 attention is `kv_attn`'s form 13, which sketches the words it decodes under the pass's signs (`kv_rc_pass`, from
 `wt_pass`'s signs and receipt midstate), and after each layer `kv_rc_receipts` hashes the layer's chunks' sketches
@@ -18,19 +18,19 @@ Nothing is timed before its gate passed:
 - the codecs: wt.cu's encode and decode against `wide.py` at each k (`bench.gate_codec`) and its plain fragment layout
   (`bench.gate_layout`); kv.cu's against `kv.py` (`kv_bench.gate`);
 - each linear of the model at M = batch (`bench.gemm_case`): the fused kernel's partial sums equal the plain kernel's
-  bit for bit at every k and config, the plain kernel's within FP32 rounding of torch's, and every sketch vector, tag,
-  leaf and root; its per-linear timings pick the configs the step runs;
+  bit for bit at every k and config, the plain kernel's within FP32 rounding of torch's, and every sketch vector,
+  receipt and root; its per-linear timings pick the configs the step runs;
 - attention at the step's batch × context (two layers): `kv_attn` over the encoded cache, in each encoded form (the
   CUDA-core forms 1 and 2, the tensor-core forms 4 and 5, and with the KV's receipts form 13) and at every split count
   tried, equals its plain form (0 or 3) bit for bit at each k, and each plain form is within RTOL of float64 attention
   (on a few sequences); form 13's per-head shares equal S · e over each head's words of each token-layer and its
   receipts `sketch_receipt`'s of the chunks, every one, at each k and split count;
 - the append: encoded, the cache's bytes equal `kv_encode` of the same words at each slot's index; plain, the words;
-- the per-pass key (red team F29, `bench.gate_pass`): each sketched step starts with `wt_pass`, which derives pass j's
-  seed pass_seed(σ, j, root_(j−1)), signs, key and leaves' prefix on the device from the previous step's root (the
-  first from a registration root), and with sketch-sha512 `rb_chain` the receipt tree's binding, domain and salts at
-  that seed; `gate_chain` checks two consecutive steps' link: the second pass's tree constants and root are those
-  `reader.begin` sets at its seed, and with the KV's receipts its first KV receipts are at that seed.
+- the per-pass seed (red team F29, `bench.gate_pass`): each sketched step starts with `wt_pass`, which derives pass j's
+  seed pass_seed(σ, j, root_(j−1)), signs and receipt prefix on the device from the previous step's root (the first
+  from a registration root), and `rb_chain` the receipt tree's binding, domain and salts at that seed; `gate_chain`
+  checks two consecutive steps' link: the second pass's tree constants and root are those `reader.begin` sets at its
+  seed, and with the KV's receipts its first KV receipts are at that seed.
 
 The step itself runs on random stored words (the decode, the sketch and the MMAs take the same time on any words), so
 the weights and the cache fill the memory once. Arms, interleaved over `--reps`, each queued behind a spin:
@@ -62,7 +62,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import bench as BW  # noqa: E402  (before kv_bench, which puts word_codec, whose bench.py is another, first on the path)
+import bench as BW  # noqa: E402
 import sketch_receipt as SR  # noqa: E402
 import sketching as SKT  # noqa: E402
 
@@ -140,10 +140,10 @@ def split_cands(sh: dict, b: int, ctx: int, sms: int, rc: bool = False) -> dict[
     return {fm: (mma if fm >= 3 else fma) for fm in sum(forms_of(sh, rc), [])}
 
 
-def kv_receipts(wt, kv, sh: dict) -> bool:
-    """The KV's receipts go in the pass's commit beside the weights' where both are sketch-sha512's (a WT_RECEIPT
-    build) and kv.cu runs form 13 (the tensor-core forms at 128-byte words)."""
-    return bool(wt.receipt and sh["mma"] and KE.rc_shape(kv)["forms"] & 4)
+def kv_receipts(kv, sh: dict) -> bool:
+    """The KV's receipts go in the pass's commit beside the weights' where kv.cu runs form 13 (the tensor-core forms at
+    128-byte words)."""
+    return bool(sh["mma"] and KE.rc_shape(kv)["forms"] & 4)
 
 
 # wt.cu's WT_FOLD6 (kv.cu's KV_FOLD6: the first two)
@@ -432,8 +432,7 @@ class Step:
         self.signs = torch.from_numpy(BW.pass_signs(wt, bits, self.T).view(np.int32)).cuda()
         self.frags = BW.sign_frags(wt, torch, self.signs, self.T, st)   # the sketch warps' fragments of the signs
         self.pass_ptrs = (ctypes.c_void_p * 2)()     # g_pass's seed and receipt midstate on the device
-        if wt.receipt:
-            wt.call("wt_pass_ptrs", ctypes.addressof(self.pass_ptrs))
+        wt.call("wt_pass_ptrs", ctypes.addressof(self.pass_ptrs))
         self.pass_j = 0
         self.root0 = BW.to_dev(torch, BW.root_words(hashlib.sha512(b"verity/codec-tensor/step/registration").digest()))
         self.root_ptr = self.root0.data_ptr()       # root_(j−1): the registration's, then each commit's
@@ -457,20 +456,18 @@ class Step:
                 self.tag_off[(k, l, name)] = tot
                 tot += self.prm[(name, k, "sketch")][3]
                 # store-order/v0: a linear's receipts are its own store chunks, so the pass's plan is the store's
-                if wt.receipt and self.tag_off[(k, l, name)] * BW.SR.BLOCK != self.off[(l, name)]:
+                if self.tag_off[(k, l, name)] * BW.SR.BLOCK != self.off[(l, name)]:
                     raise RuntimeError(f"{name} layer {l}: receipts from {self.tag_off[(k, l, name)]}, not its store's "
                                        f"block {self.off[(l, name)] // BW.SR.BLOCK}")
-            if wt.receipt and tot * BW.SR.BLOCK != self.w_bytes:
+            if tot * BW.SR.BLOCK != self.w_bytes:
                 raise RuntimeError(f"k={k}: {tot} weight receipts for {self.w_bytes // BW.SR.BLOCK} store blocks")
             self.nvec[k] = tot
         top = max(self.nvec.values()) + self.nkv
         self.tags = torch.empty(top * wt.tag_bytes, dtype=torch.uint8, device="cuda")
-        nleaves = -(-top // BW.TG.PER_LEAF)
-        self.nodes = torch.zeros((2 * nleaves + 64) * 64, dtype=torch.uint8, device="cuda")
-        if wt.receipt:   # the driver's tree over the pass's receipts: its leaves padded to a power of two, then nodes
-            width = 1 << max(0, (nleaves - 1).bit_length())
-            self.dig = torch.zeros((width, 8), dtype=torch.int64, device="cuda")
-            self.up = torch.zeros((max(width - 1, 1), 8), dtype=torch.int64, device="cuda")
+        # the driver's tree over the pass's receipts: its leaves padded to a power of two, then nodes
+        width = 1 << max(0, (-(-top // SR.rb.PER_LEAF) - 1).bit_length())
+        self.dig = torch.zeros((width, 8), dtype=torch.int64, device="cuda")
+        self.up = torch.zeros((max(width - 1, 1), 8), dtype=torch.int64, device="cuda")
         self.plain_prm = {}
         for name, (n, kd) in self.shapes.items():
             nat = self.picks[name]["native"]
@@ -484,8 +481,8 @@ class Step:
     def set_keys(self, k: int) -> None:
         BW.set_key(self.wt, self.torch, self.keys[k])
         KB.set_key(self.kv, KB.lib_key(self.kv, k))
-        if self.wt.receipt:   # the tree's plan and salt key; its binding, domain and salts are each pass's (begin_pass)
-            BW.READER.chain_begin(self.plan(k), BW.STORE_KEY)
+        # the tree's plan and salt key; its binding, domain and salts are each pass's (begin_pass)
+        BW.READER.chain_begin(self.plan(k), BW.STORE_KEY)
 
     def plan(self, k: int):
         """The pass's plan: every chunk of the store, the weights' then the KV's token-layers, in store order."""
@@ -521,31 +518,19 @@ class Step:
             raise RuntimeError(f"wt_fused_sketch {name} k={k}: error {rc}")
 
     def begin_pass(self) -> None:
-        """Pass j's signs (and their B fragments), key and leaves' prefix from root_(j−1) (wt_pass, on the stream
-        behind the last commit); in a WT_RECEIPT build the receipt tree's constants from s_j (reader.cu's rb_chain),
-        and with the KV's receipts the same signs and receipt midstate for kv_attn form 13."""
+        """Pass j's signs (and their B fragments) and receipt prefix from root_(j−1) (wt_pass, on the stream behind the
+        last commit), the receipt tree's constants from s_j (reader.cu's rb_chain), and with the KV's receipts the same
+        signs and receipt midstate for kv_attn form 13."""
         st = BW.stream(self.torch)
         self.wt.call("wt_pass", self.pass_j, self.root_ptr, self.signs.data_ptr(), self.T, st)
         self.wt.call("wt_sign_frags", self.signs.data_ptr(), self.frags.data_ptr(), self.T, st)
-        if self.wt.receipt:
-            BW.READER.chain(self.pass_ptrs[0])
+        BW.READER.chain(self.pass_ptrs[0])
         if self.rc:
             self.kv.call("kv_rc_pass", self.signs.data_ptr(), self.pass_ptrs[1], st)
 
     def commit(self, k: int) -> None:
-        st = BW.stream(self.torch)
-        n = self.nvec[k] + self.nkv
-        if self.wt.receipt:
-            self.commit_receipts(n, st)
-            return
-        self.wt.call("wt_tag_leaves", self.tags.data_ptr(), n, self.nodes.data_ptr(), st)
-        ri = ctypes.c_ulonglong(0)
-        self.wt.call("wt_tag_tree", self.nodes.data_ptr(), -(-n // BW.TG.PER_LEAF), ctypes.addressof(ri), st)
-        self.root_ptr, self.pass_j = self.nodes.data_ptr() + 64 * ri.value, self.pass_j + 1
-
-    def commit_receipts(self, n: int, st: int) -> None:
-        """sketch-sha512's commit of the pass's n receipts (`commit_tree`); its root is the next pass's root_(j−1)."""
-        self.root_ptr = self.commit_tree(n, st)
+        """sketch-sha512's commit of the pass's receipts (`commit_tree`); its root is the next pass's root_(j−1)."""
+        self.root_ptr = self.commit_tree(self.nvec[k] + self.nkv, BW.stream(self.torch))
         self.pass_j += 1
 
     def commit_tree(self, n: int, st: int) -> int:
@@ -566,9 +551,10 @@ class Step:
         t = self.up if 0 <= p - self.up.data_ptr() < self.up.numel() * 8 else self.dig
         return BW.digests(BW.host_bytes(t[(p - t.data_ptr()) // 64]))[0]
 
-    def gate_chain_receipts(self, k: int, log) -> dict:
-        """sketch-sha512's chain over two sketched passes: pass j + 1's seed, K_S, signs and receipt prefix on the device
-        are receipts.seed(σ, j + 1, root_j) of pass j's root as committed (reader.cu's tree), its tree's constants
+    def gate_chain(self, k: int, log) -> dict:
+        """sketch-sha512's chain over two sketched passes (the linears and the commit): pass j + 1's seed, K_S, signs and
+        receipt prefix on the device are receipts.seed(σ, j + 1, root_j) of pass j's root as committed (reader.cu's
+        tree), its tree's constants
         (rb_chain's, from that seed on the device) are those `reader.begin` sets at it and its root that tree's of its
         receipts, and its first linear's first receipts are `sketch_receipt`'s of that linear's first blocks
         (`gemm_blocks`) at that seed; with the KV's receipts, layer 0's attention after it (form 13 under the signs and
@@ -615,33 +601,6 @@ class Step:
                           for u in range(few))
             rows = self.tags.view(-1, wt.tag_bytes)[nv:nv + few * self.layers:self.layers]
             out["kv_receipts"] = BW.host_bytes(rows) == ys
-        out["ok"] = all(v for a, v in out.items() if a != "j")
-        log(f"chain gate (sketch-sha512) k={k}: {out}")
-        return out
-
-    def gate_chain(self, k: int, log) -> dict:
-        """Two sketched passes (the linears and the commit): pass j + 1's seed, key and signs on the device are
-        pass_seed(σ, j + 1, root_j) of pass j's root as committed, and its first leaves are at that seed."""
-        if self.wt.receipt:
-            return self.gate_chain_receipts(k, log)
-        torch, wt = self.torch, self.wt
-        self.set_keys(k)
-        self.step(k, "none", "W")
-        torch.cuda.synchronize()
-        off = self.root_ptr - self.nodes.data_ptr()
-        root = BW.digests(BW.host_bytes(self.nodes[off:off + 64]))[0]
-        j = self.pass_j
-        self.step(k, "none", "W")
-        torch.cuda.synchronize()
-        got = BW.pass_state(wt)
-        seed = SKT.pass_seed(BW.TAG_SEED, j, root)
-        n = SKT.vector_bytes(wt.sb, self.T)
-        want = SKT.sign_fragments(SKT.sign_bits(seed, 16, n), SKT.steps(wt.sb), self.T)
-        ys = BW.host_bytes(self.tags[:64 * 32])
-        leaves = SKT.leaves(seed, [ys[32 * i:32 * i + 32] for i in range(64)])
-        out = {"j": j, "seed": got["seed"] == seed, "key": got["key"] == SKT.key(seed),
-               "signs": bool(np.array_equal(self.signs.cpu().numpy().view(np.uint32), want)),
-               "leaves": BW.digests(BW.host_bytes(self.nodes[:4 * 64])) == leaves}
         out["ok"] = all(v for a, v in out.items() if a != "j")
         log(f"chain gate k={k}: {out}")
         return out
@@ -848,7 +807,7 @@ def step_points(res: dict, run_id: str | None) -> dict:
                     "k": int(k), "word_bits": res.get("word_bits", 512), "mask": res.get("mask", False),
                     "squaring": res.get("squaring", "columns"), "k_s": res.get("k_s", 16),
                     "kv_k_s": res.get("kv_k_s"),
-                    "receipt": res.get("receipt", "ro-sketch-blake3/v0") + ", re-keyed every pass",
+                    "receipt": res["receipt"] + ", re-keyed every pass",
                     "kv_receipt": res.get("kv_receipt"),
                     "attention_receipt": r["attention_receipt"],
                     "f_kv": res["f_kv"], "f_w": res["f_w"], "stored_bytes": res["stored_bytes"],
@@ -883,7 +842,7 @@ def write_result(res: dict, out_dir: Path, libs) -> None:
                                              for p in libs},
                                     "model": res["model_name"], "batch": res["batch"], "ctx": res.get("ctx")},
            "validation": {"status": "passed" if res["ok"] else "failed", "checker": "hbm step gates",
-                          "detail": "codecs = wide.py and kv.py; fused partial sums = plain, sketch tags and root; "
+                          "detail": "codecs = wide.py and kv.py; fused partial sums = plain, sketch receipts and root; "
                                     "encoded attention = plain; KV head shares = S · e and their sketch-sha512 "
                                     "receipts = sketch_receipt's; "
                                     "append = kv_encode", "evidence": files},
@@ -895,9 +854,10 @@ def write_result(res: dict, out_dir: Path, libs) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--wt-lib", required=True, help="wt.cu built at a full-slot field (-DWT_FIELD=512 or 1024)")
+    ap.add_argument("--wt-lib", required=True,
+                    help="wt.cu built at a full-slot field (-DWT_FIELD=512 or 1024) and -DWT_RECEIPT=1")
     ap.add_argument("--kv-lib", required=True, help="step.cu built at the same field and mask (-DKV_FIELD, -DKV_MASK)")
-    ap.add_argument("--reader-lib", default="", help="reader.cu, the commit of a wt.cu built at -DWT_RECEIPT=1")
+    ap.add_argument("--reader-lib", required=True, help="reader.cu, the commit of the receipts")
     ap.add_argument("--out", required=True)
     ap.add_argument("--model", default="8b", choices=["8b", "70b", "tiny"])
     ap.add_argument("--batch", type=int, default=32)
@@ -915,9 +875,8 @@ def main() -> int:
     ap.add_argument("--gate-reps", type=int, default=1, help="runs of each fused config in the GEMM gate")
     ap.add_argument("--gate-ctx", type=int, default=0, help="the attention gate's context (0: the step's)")
     ap.add_argument("--rows", type=int, default=SR.ROWS, choices=SR.rb.ROWS,
-                    help="sketch-sha512's k_s, the registration's (a WT_RECEIPT build's; 64 sketches the weights at 64 "
-                         "rows, and the KV's form 13, which sketches 16, at S's first 16 rows: its cost, not a 64-row "
-                         "receipt)")
+                    help="sketch-sha512's k_s, the registration's (64 sketches the weights at 64 rows, and the KV's "
+                         "form 13, which sketches 16, at S's first 16 rows: its cost, not a 64-row receipt)")
     a = ap.parse_args()
     out_dir = Path(a.out)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -945,23 +904,20 @@ def main() -> int:
     ash = KB.attn_shape(kv)
     if HEADS.get(a.model, ash["heads"]) != ash["heads"]:
         raise SystemExit(f"{a.kv_lib} has {ash['heads']} query heads, {a.model} {HEADS[a.model]}: build KV_QHEADS")
-    if a.rows != SR.ROWS and not wt.receipt:
-        raise SystemExit(f"ro-sketch-blake3/v0 sketches {SR.ROWS} rows; --rows {a.rows} wants a WT_RECEIPT build")
-    if wt.receipt:
-        if not a.reader_lib or a.sketch_t != 8:
-            raise SystemExit("a WT_RECEIPT build commits with reader.cu (--reader-lib) and sketches 4 KiB vectors (T 8)")
-        import reader as RD
-        BW.READER = RD.Reader(a.reader_lib, torch)
-    BW.set_tag(wt)
+    if not wt.receipt or a.sketch_t != 8:
+        raise SystemExit("the step sketches with a WT_RECEIPT build and sketches 4 KiB vectors (T 8)")
+    import reader as RD
+    BW.READER = RD.Reader(a.reader_lib, torch)
+    BW.set_sketch_tag(wt)
     props = torch.cuda.get_device_properties(0)
     sms = props.multi_processor_count
     layers, shapes, lm = model_shapes(a.model)
     all_shapes = {**shapes, "lm_head": lm}
-    rc = kv_receipts(wt, kv, ash)
+    rc = kv_receipts(kv, ash)
     res = {"device": props.name, "sms": sms, "total_memory": props.total_memory, "model_name": a.model,
            "batch": a.batch, "gemm_m": m, "ks": ks, "args": vars(a), "ok": True, "gate": {}, "word_bits": wt.n,
            "mask": wt.mask, "squaring": SQUARINGS[wt.fold6], "kv_squaring": SQUARINGS[kv.so.kv_fold6()],
-           "receipt": "sketch-sha512" if wt.receipt else "ro-sketch-blake3/v0", "k_s": a.rows,
+           "receipt": "sketch-sha512", "k_s": a.rows,
            "kv_receipt": f"sketch-sha512 of each token-layer (a store block, store-order/v0) in "
                          f"{FORMS[RECEIPT_FORM]}, under each pass's signs, in the pass's commit"
                          + (f" (at 16 rows, S's first: the cost of the KV's receipts, the registration's {a.rows})"
@@ -981,7 +937,7 @@ def main() -> int:
     res["gate"]["kv_codec"] = KB.gate(kv, torch, ks, 48, a.gate_words, log)
     res["gate"]["append"] = gate_append(kv, torch, ks, log)
     res["gate"]["pass"] = BW.gate_pass(wt, torch, a.sketch_t, log, rows=a.rows)
-    BW.set_tag(wt)
+    BW.set_sketch_tag(wt)
     res["ok"] = (res["gate"]["layout"]["ok"] and res["gate"]["wt_prims"]["ok"]
                  and all(g["ok"] for g in res["gate"]["wt_codec"].values())
                  and all(g["ok"] for g in res["gate"]["kv_codec"].values()) and res["gate"]["append"]["ok"]

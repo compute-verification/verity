@@ -329,7 +329,6 @@
         "benchmarks/word_codec/",
         "integrations/vllm/verity_vllm/protocols/pous.py",
         "verity/core/devices/memory_challenger/",
-        "verity/core/protocols/bandwidth/",
         "verity/core/protocols/pous/",
         "verity/core/protocols/remote_bandwidth/",
         "verity/core/primitives/requirement/",

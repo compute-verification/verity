@@ -7,18 +7,9 @@ Arms:
   enc       every linear through the fused GEMM over codec words only (k rounds of Sloth at p = 2^61 - 1); the plaintext
             weight is freed before vLLM profiles memory, so decode runs with no plaintext copy of any linear in HBM
   wide      the same with the wide codec's fused GEMM (`wide.cu`, ``--wide-lib``: Sloth over p = 2^127 - 1, 2^255 - 19,
-            2^521 - 1, 2^256 - 189 or 2^512 - 569, k rounds, k = 0 its plain payloads), with ``--tag`` also tagging every
-            block of words it reads (ro-blake3/v1, the bandwidth audit's tag) as decode runs, or with ``--sketch 16``
-            sketching the encoded words its CTAs hold and hashing the sketches (ro-sketch-blake3/v0, `wide_sketch`), and
-            with ``--commit`` also committing each decode step as it goes: each linear's tags in one slot of a two-slot
-            ring that L2 holds, their leaves hashed (and folded) beside the next linear's GEMM, the tree after the last
+            2^521 - 1, 2^256 - 189 or 2^512 - 569, k rounds, k = 0 its plain payloads)
   tensor    the same with the tensor-core codec's fused GEMM (`wt.cu`, ``--tensor-lib``: Sloth over its field, decoder warps
-            decoding in shared memory ahead of one MMA warp, k >= 1 rounds), with ``--tag`` its tag warps tagging the
-            store's 4,088-byte blocks (ro-blake3/v1) as decode runs, or with ``--sketch K_S`` (k = 1) its decoder warps
-            sketching the stored words they decode on the tensor cores and its MMA warp tagging the sketches
-            (ro-sketch-blake3/v0), and with
-            ``--commit`` also each decode step's commit: the step's tags in one buffer, their leaves and the tree's
-            root, after the step's last linear
+            decoding in shared memory ahead of one MMA warp, k >= 1 rounds)
   pstack    the remote bandwidth audit's own kernels in their plain forms (`stack.py`): wt.cu's GEMM over plain fragments,
             the BF16 lm_head as it is, paged.cu's attention and KV append over vLLM's own cache; stack's denominator
   stack     the same kernels over codec words only (`stack.py`, ``--wt-lib`` a WT_RECEIPT build at a full-slot field,
@@ -36,9 +27,7 @@ The plain and encoded arms install at the end of the model runner's `load_model`
 graph capture), through `verity_vllm.engine.hooks`.  Before anything is timed, each linear passes its gates: every GEMM form
 gives the same partial sums bit for bit (encoded against plain at every capture size), the plain sums agree with a float
 product, the encoded store decodes to the payloads on the device and in `codec.py` (`wide.py`, `codec_tensor/wide.py`),
-sampled tags equal the bandwidth audit's reference (`verity.core.protocols.bandwidth.tags`), a committed arm's step at
-each capture size gives the reference's leaves and root over its tags, and (encoded arms) no FP8 or
-plain fragment tensor of a linear's size is left anywhere in the process.  Each arm then generates fixed prompts greedily
+and (encoded arms) no FP8 or plain fragment tensor of a linear's size is left anywhere in the process.  Each arm then generates fixed prompts greedily
 (`gate`), which `compare.py` requires to be bit-identical between plain and encoded arms (token ids and log-probs).
 
 A decode step's time is the interval between two consecutive scheduler updates that both scheduled exactly B decode tokens
@@ -65,15 +54,12 @@ sys.path.insert(0, str(HERE))
 
 import kernels as K
 import layout
-import numpy as np
 import torch
 
 CAPTURE = [1, 4, 8, 16, 32]
 ENCODED = ("enc", "wide", "tensor")
 STACK = ("pstack", "stack")
 SEED = hashlib.sha512(b"ra-vllm-encoded/key/v0").digest()[:32]
-TAG_SEED = hashlib.sha256(b"ra-vllm-encoded/tag-seed/v0").digest()
-TAG = "ro-blake3/v1"
 GATE_PROMPTS = [
     "The capital of France is",
     "Write a haiku about memory bandwidth.",
@@ -139,39 +125,19 @@ class Install:
         k = args.k if args.arm in ENCODED else 0
         wlib = K.WideLib(args.wide_lib) if wide else None
         tlib = K.TensorLib(args.tensor_lib) if tensor else None
-        if args.sketch and not ((tensor and k == 1) or (wide and k >= 1 and args.sketch == 16)):
-            raise ValueError("--sketch is the tensor arm's at k = 1, or the wide arm's at k_s = 16")
-        if args.commit and not args.sketch:
-            raise ValueError("--commit commits the sketch tags (--sketch)")
         if tensor:
             tlib.set_key(SEED, k)
-            if args.sketch:
-                tlib.set_sketch(TAG_SEED, args.sketch, args.sketch_t)
-            elif args.tag:
-                tlib.set_tag(TAG_SEED)
-            if args.sketch or args.tag:
-                tlib.tag_buffer(max(tlib.tag_vectors(m.output_size_per_partition, m.input_size_per_partition)
-                                    for _, m in layers))
         if wide:
             if k:
                 wlib.set_key(SEED, k)
-            if args.sketch:
-                wlib.set_sketch(TAG_SEED)
-                wlib.tag_buffer(max(wlib.vectors(m.output_size_per_partition, m.input_size_per_partition)
-                                    for _, m in layers))
-            elif args.tag:
-                wlib.set_tag(TAG_SEED)
-                wlib.tag_buffer(max(layout.wide_store_words(m.output_size_per_partition, m.input_size_per_partition,
-                                                            wlib.payload) // wlib.lane_words for _, m in layers))
         elif k:
             lib.set_key(SEED, k)
         torch.cuda.synchronize()
         alloc0 = torch.cuda.memory_allocated()
         gen = torch.Generator(device="cuda")
         cands: dict[tuple, list[K.Config]] = {}
-        gates = {"layers": 0, "configs_checked": 0, "reps": args.gate_reps, "python_words": 0, "tags_checked": 0,
-                 "max_rel_err": 0.0}
-        base, tag_base, plain_bytes, store_bytes, encode_s = 0, 0, 0, 0, 0.0
+        gates = {"layers": 0, "configs_checked": 0, "reps": args.gate_reps, "python_words": 0, "max_rel_err": 0.0}
+        base, plain_bytes, store_bytes, encode_s = 0, 0, 0, 0.0
         self.hooks = Hooks(tag="ra-vllm-encoded")
         for idx, (name, layer) in enumerate(layers):
             w = layer.weight.t()
@@ -186,9 +152,9 @@ class Install:
                 torch.cuda.synchronize()
                 te = time.perf_counter()
                 if tensor:
-                    lin = K.TensorLinear(lib, tlib, w, ws, k, base, tag_base)
+                    lin = K.TensorLinear(lib, tlib, w, ws, k, base)
                 elif wide:
-                    lin = K.WideLinear(lib, wlib, w, ws, k, base, tag_base=tag_base if args.sketch else None)
+                    lin = K.WideLinear(lib, wlib, w, ws, k, base)
                 else:
                     lin = K.EncodedLinear(lib, w, ws, k, base)
                 torch.cuda.synchronize()
@@ -217,10 +183,6 @@ class Install:
             if bad:
                 raise RuntimeError(f"gate: {name} k={lin.k} (word base {lin.base}): partial sums differ from plain simple: "
                                    + json.dumps(bad))
-            if args.sketch:
-                gates["tags_checked"] += (check_wide_sketch if wide else check_sketch)(lin, name, args.python_tags)
-            elif args.tag:
-                gates["tags_checked"] += check_tags(lin, name, args.python_tags)
             if k or wide:
                 if not torch.equal(lin.decoded(), lin.payloads):
                     raise RuntimeError(f"gate: {name}: the store does not decode to its payloads")
@@ -231,7 +193,6 @@ class Install:
                     gates["python_words"] += args.python_words
                 lin.drop_payloads()
                 base += lin.words if wide or tensor else lin.store.numel()
-                tag_base += lin.blocks if tensor or (wide and args.sketch) else 0
                 del plain
             elif not torch.equal(lin.dense().view(torch.uint8), w.view(torch.uint8)):
                 raise RuntimeError(f"gate: {name}: the plain fragments are not the weight")
@@ -251,51 +212,19 @@ class Install:
         torch.cuda.empty_cache()
         alloc1 = torch.cuda.memory_allocated()
         selection = self.select()
-        if args.commit:
-            lins = [lin for _, lin in self.linears]
-            lins[0].first = lins[-1].last = True
-            if wide:
-                for name, lin in self.linears:
-                    lin.seal = name.endswith("qkv_proj")  # the last linear before attention, where a piece ends
-                if not any(lin.seal for lin in lins):
-                    raise RuntimeError("the wide commit joins its folds before attention, and no linear is qkv_proj")
-                wlib.commit_every_step([lin.blocks for lin in lins])
-                gates["commit"] = check_wide_commit(self.linears, 1)
-            else:
-                tlib.commit_every_step(max(sum(tlib.vectors(lin.n, lin.kd,
-                                                            tlib.steps(m, lin.n, lin.kd, lin.configs[m])[0])
-                                               for lin in lins) for m in CAPTURE))
-                gates["commit"] = {m: check_commit(self.linears, m, 1) for m in CAPTURE}
         scan = plaintext_scan(min(lin.n * lin.kd for _, lin in self.linears))
         if k and (scan["fp8"] or scan["uint8"]):
             raise RuntimeError(f"gate: plaintext left in the process: {scan}")
         if tensor:
             codec = {"field": tlib.field.name, "word_bits": tlib.bits, "payload_bits": 8 * tlib.payload_bytes,
                      "limbs": tlib.limbs, "word_bytes": tlib.word_bytes, "task_words": tlib.task_words,
-                     "tensor_lib": Path(args.tensor_lib).name, "kmax": tlib.kmax, "tag_blocks": tag_base,
-                     "tag": tlib.sketch["name"] if tlib.sketch else TAG if tlib.tag_seed is not None else None}
-            if tlib.sketch:
-                vecs = {m: sum(tlib.so.wt_sketch_vectors(lin.n, lin.kd, tlib.steps(m, lin.n, lin.kd, lin.configs[m])[0],
-                                                         tlib.sketch["t"]) for _, lin in self.linears) for m in CAPTURE}
-                codec |= {"sketch_k": tlib.sketch["k"], "sketch_t": tlib.sketch["t"], "tag_blocks": vecs[1],
-                          "tag_vectors": vecs, "tag_index_space": tag_base, "commit": bool(args.commit)}
-                if tlib.step:
-                    codec["commit_buffer_bytes"] = sum(x.numel() * x.element_size()
-                                                       for x in (tlib.step["tags"], tlib.step["nodes"]))
+                     "tensor_lib": Path(args.tensor_lib).name, "kmax": tlib.kmax}
         elif wide:
             codec = {"field": wlib.field.name, "word_bits": wlib.bits, "payload_bits": wlib.payload, "limbs": wlib.limbs,
                      "lane_words": wlib.lane_words, "wide_lib": Path(args.wide_lib).name, "kmax": wlib.kmax,
-                     "constants": wlib.constants, "tag": TAG if wlib.tag_seed is not None else None}
-            if wlib.sketch:
-                codec |= {"tag": wlib.sketch["name"], "sketch_k": wlib.sketch["k"], "sketch_t": None,
-                          "sketch_tile_row_blocks": wlib.sketch["t"], "sketch_vector_bytes": wlib.sketch["n"],
-                          "tag_blocks": tag_base, "commit": bool(args.commit), "commit_ring": bool(args.commit)}
-                if wlib.step:
-                    codec |= {"commit_fold": wlib.step["fold"], "commit_fold_levels": wlib.sub,
-                              "commit_buffer_bytes": sum(x.numel() * x.element_size()
-                                                         for x in (wlib.step["nodes"], *wlib.step["ring"]))}
+                     "constants": wlib.constants}
         else:
-            codec = {"field": "p61", "word_bits": 61, "payload_bits": lib.bits, "tag": None}
+            codec = {"field": "p61", "word_bits": 61, "payload_bits": lib.bits}
         self.record = {
             "arm": args.arm, "k": k, "lib": Path(args.lib).name, "bits": codec["payload_bits"], "kmax": lib.kmax,
             "codec": codec, "layers": len(layers),
@@ -347,7 +276,7 @@ def diagnose(lin: K.Linear, x8: torch.Tensor, cfg: K.Config, ref: torch.Tensor, 
     if getattr(lin, "payloads", None) is not None:
         out["decodes"] = torch.equal(lin.decoded(), lin.payloads)
     if isinstance(lin, K.TensorLinear):
-        z = K.TensorLinear(lin.lib, lin.tlib, w, ws, lin.k, 0, lin.tag_base)
+        z = K.TensorLinear(lin.lib, lin.tlib, w, ws, lin.k, 0)
         out["at_base_0"] = bits_equal(z.gemm(x8, cfg), ref)
         del z
     return out
@@ -375,201 +304,6 @@ def check_words(lin: K.Linear, name: str, idx: int, n: int) -> None:
     for j in [rng.randrange(store.numel()) for _ in range(n)]:
         if codec.decode_word(int(store[j]), lin.base + j, lin.lib.key, lin.lib.bits) != int(lin.payloads[j]):
             raise RuntimeError(f"gate: {name}: codec.py decodes word {lin.base + j} otherwise")
-
-
-def check_tags(lin: K.WideLinear | K.TensorLinear, name: str, n: int) -> int:
-    """The last GEMM's tags of ``n`` sampled blocks and the last block equal the bandwidth audit's ro-blake3/v1 of the
-    block's encoded words at its index (a wide lane's L words, or 4,088 bytes of a tensor store, the last block short)."""
-    from verity.core.protocols.bandwidth import tags
-    tensor = isinstance(lin, K.TensorLinear)
-    w = lin.tlib if tensor else lin.wlib
-    torch.cuda.synchronize()
-    keyed = tags.get(TAG).keyed(w.tag_seed)
-    rng = random.Random(lin.base)
-    js = sorted({lin.blocks - 1, *(rng.randrange(lin.blocks) for _ in range(n))})
-    got = w.tags[:8 * lin.blocks].view(-1, 8)[js].cpu().numpy()
-    first = lin.tag_base if tensor else lin.tag_block_base
-    for j, t in zip(js, got):
-        if tensor:
-            block = lin.bytes[w.tag_block * j:w.tag_block * (j + 1)].cpu().numpy().tobytes()
-        else:
-            block = layout.wide_block(lin.store, j, w.lane_words, w.limbs)
-        if t.tobytes() != keyed(first + j, block):
-            raise RuntimeError(f"gate: {name}: block {first + j}'s tag is not {TAG}'s")
-    return len(js)
-
-
-def check_sketch(lin: K.TensorLinear, name: str, n: int, at: int | None = None) -> int:
-    """The last GEMM's tags of ``n`` sampled vectors and the last vector equal ro-sketch-blake3/v0's: each vector's
-    sketch exactly (`sketching.sketch`, float64 over its stored bytes as `sketching.vectors` lays them out at the launch's
-    CTA groups), then its keyed BLAKE3 at index tag_base + v (`tags.py`); with ``at``, the GEMM ran inside a committed
-    step, its vector v at index at + v of the step's tags."""
-    skt, t = K._sketching(), lin.tlib
-    torch.cuda.synchronize()
-    nvec = t.vectors(lin.n, lin.kd, lin.groups)
-    if not 0 < nvec <= lin.blocks:
-        raise RuntimeError(f"gate: {name}: {nvec} sketch vectors at {lin.groups} groups, not within (0, {lin.blocks}]")
-    rng = random.Random(lin.base)
-    vs = sorted({nvec - 1, *(rng.randrange(nvec) for _ in range(n))})
-    words = skt.sketch_words(skt.sketch(lin.sketch_vectors(vs, lin.groups), t.sketch["bits"]))
-    if at is None:
-        first, got = lin.tag_base, t.tags[:8 * nvec]
-    else:
-        first, got = at, t.step["tags"][8 * at:8 * (at + nvec)]
-    got = got.view(-1, 8)[vs].cpu().numpy()
-    keyed = skt.tag().keyed(t.tag_seed)
-    for v, w, g in zip(vs, words, got):
-        if g.tobytes() != keyed(first + v, w.tobytes()):
-            raise RuntimeError(f"gate: {name}: vector {first + v}'s tag is not {t.sketch['name']}'s")
-    return len(vs)
-
-
-def check_commit(linears: list[tuple[str, K.TensorLinear]], m: int, n: int) -> dict:
-    """One decode step's linears at ``m`` rows through the committed forward, as the step's CUDA graph runs them: ``n``
-    sampled tags of each and its last at their step indices (`check_sketch`), then every leaf and the root equal
-    `tags.py`'s leaves over the step's tags and RFC 6962's tree over them (`codec_tensor/tagging.py`)."""
-    skt, t = K._sketching(), linears[0][1].tlib
-    tg = skt.TG.tags_module()
-    if tg.tags_per_leaf(skt.tag()) != 16:
-        raise RuntimeError(f"{t.sketch['name']}'s leaves are not wt_tag_leaves' 16 tags")
-    gen = torch.Generator(device="cuda")
-    gen.manual_seed(2000 + m)
-    xs = torch.ones(1, dtype=torch.float32, device="cuda")
-    for _, lin in linears:
-        lin.forward(rand_fp8(m, lin.kd, gen), xs)
-    torch.cuda.synchronize()
-    nvec, ri = t.step["roots"][m]
-    at, checked = 0, 0
-    for name, lin in linears:
-        checked += check_sketch(lin, name, n, at)
-        at += t.vectors(lin.n, lin.kd, lin.groups)
-    if at != nvec:
-        raise RuntimeError(f"gate: the step at m = {m} committed {nvec} tags, its linears wrote {at}")
-    tags = t.step["tags"][:8 * nvec].cpu().numpy().tobytes()
-    head, nleaves = tg.leaf_head(skt.tag(), t.tag_seed), -(-nvec // 16)
-    want = [tg.leaf_hash(head, c, [tags[512 * c:512 * (c + 1)]]) for c in range(nleaves)]
-    nodes = t.step["nodes"].cpu().numpy().astype(">i8")  # SHA-512's state words, the digest's bytes big-endian
-    got = nodes[:8 * nleaves].tobytes()
-    if got != b"".join(want):
-        bad = next(c for c in range(nleaves) if got[64 * c:64 * (c + 1)] != want[c])
-        raise RuntimeError(f"gate: the step at m = {m}: leaf {bad} of {nleaves} is not tags.py's")
-    root = nodes[8 * ri:8 * ri + 8].tobytes()
-    if root != skt.TG.root(want):
-        raise RuntimeError(f"gate: the step at m = {m}: the device's root is not RFC 6962's over the leaves")
-    log(f"commit gate m={m}: {nvec} tags, {nleaves} leaves, {checked} tags checked, root {root.hex()[:16]}")
-    return {"tags": nvec, "leaves": nleaves, "tags_checked": checked, "root": root.hex()}
-
-
-def wide_vectors(lin: K.WideLinear, vs: list[int]) -> np.ndarray:
-    """Vectors ``vs`` of a sketched wide GEMM (vector 16 (G·chunks + kc) + r: row r of tile (G, kc)), each laid out by
-    `wide_sketch.vectors` from its tile's T records (row blocks T·G … T·G + T − 1 at chunk kc) of the device store."""
-    ws, w = K._wide_sketch(), lin.wlib
-    t, rec, nbs = w.sketch["t"], w.lane_words * w.limbs * layout.LANES, lin.n // 16
-    out = np.zeros((len(vs), w.sketch["n"]), np.int8)
-    for o, v in enumerate(vs):
-        q, r = divmod(v, 16)
-        g, kc = divmod(q, lin.nchunks)
-        recs = [lin.store[(nb * lin.nchunks + kc) * rec:(nb * lin.nchunks + kc + 1) * rec].cpu().numpy() if nb < nbs
-                else np.zeros(rec, np.int32) for nb in range(t * g, t * g + t)]
-        out[o] = ws.vectors(np.concatenate(recs).astype("<i4").tobytes(), 16 * t, layout.TASK_COLS, w.field)[r]
-    return out
-
-
-def check_wide_sketch(lin: K.WideLinear, name: str, n: int, got: torch.Tensor | None = None,
-                      first: int | None = None) -> int:
-    """The last GEMM's tags of ``n`` sampled vectors and the last vector equal ro-sketch-blake3/v0's over the wide store
-    (`wide_sketch`): each vector's sketch exactly, then its keyed BLAKE3 at index tag_base + v; with ``got`` (the
-    linear's tags, 8 int32 each) and ``first``, the same at a step's indices first + v."""
-    ws, w = K._wide_sketch(), lin.wlib
-    torch.cuda.synchronize()
-    rng = random.Random(lin.base)
-    vs = sorted({lin.blocks - 1, *(rng.randrange(lin.blocks) for _ in range(n))})
-    if got is None:
-        got, first = w.tags[:8 * lin.blocks], lin.tag_base
-    got = got.view(-1, 8)[vs].cpu().numpy()
-    sk = ws.sketch(wide_vectors(lin, vs), w.sign_matrix)
-    if np.abs(sk).max(initial=0) >= 1 << 31:
-        raise RuntimeError(f"gate: {name}: a sketch word is past an int32")
-    keyed = ws.tag_scheme().keyed(w.tag_seed)
-    for v, s, g in zip(vs, sk.astype("<i4"), got):
-        if g.tobytes() != keyed(first + v, s.tobytes()):
-            raise RuntimeError(f"gate: {name}: vector {first + v}'s tag is not {w.sketch['name']}'s")
-    return len(vs)
-
-
-def check_wide_commit(linears: list[tuple[str, K.WideLinear]], n: int) -> dict:
-    """The wide kernel's commit of a decode step.  First a reference step: each linear's GEMM writes its tags at its step
-    indices into one commit workspace and `ww_sketch_commit` commits them; ``n`` sampled tags of each linear and its last
-    equal `wide_sketch`'s (`check_wide_sketch`), every leaf equals `tags.py`'s over the step's tags, and the root is
-    RFC 6962's over the leaves (PoUS's tree).  Then at each capture size, the committed forward as the step's CUDA graph
-    runs it (the ring, each linear's leaves beside the next GEMM, the fold, the tree after the last) leaves the same
-    leaves and root on the device."""
-    import ctypes
-
-    from verity.core.protocols.bandwidth import tags as tg
-    from verity.core.protocols.pous.verifier import MerkleTree
-    ws_mod, w = K._wide_sketch(), linears[0][1].wlib
-    st, scheme = w.step, ws_mod.tag_scheme()
-    total, nleaves = st["vectors"], -(-st["vectors"] // 16)
-    if tg.tags_per_leaf(scheme) != 16:
-        raise RuntimeError(f"{w.sketch['name']}'s leaves are not ww_sketch_leaves' 16 tags")
-    wsp = torch.empty(w.so.ww_workspace_bytes(total), dtype=torch.uint8, device="cuda")
-    tags0, area = w.so.ww_workspace_tags(wsp.data_ptr(), total), -(-32 * total // 256) * 256
-    if tags0 != wsp.data_ptr():
-        raise RuntimeError("the commit workspace's tags are not at its start")
-    gen = torch.Generator(device="cuda")
-    gen.manual_seed(2000)
-    at = 0
-    for _, lin in linears:
-        x8 = rand_fp8(1, lin.kd, gen)
-        part = torch.empty((lin.nchunks, 1, lin.n), dtype=torch.float32, device="cuda")
-        lin.sketched(x8, part, True, lin.config(1), tags0 + 32 * at, at)
-        at += lin.blocks
-    if at != total:
-        raise RuntimeError(f"gate: the step's linears write {at} tags, its commit holds {total}")
-    torch.cuda.synchronize()
-    tags_i32 = wsp[:32 * total].view(torch.int32)
-    at, checked = 0, 0
-    for name, lin in linears:
-        checked += check_wide_sketch(lin, name, n, tags_i32[8 * at:8 * (at + lin.blocks)], at)
-        at += lin.blocks
-    ref = ctypes.create_string_buffer(64)
-    w.call("ww_sketch_commit", wsp.data_ptr(), total, w._seed, ref, K.stream())
-    torch.cuda.synchronize()
-    raw = wsp[:32 * total].cpu().numpy().tobytes()
-    head = tg.leaf_head(scheme, w.tag_seed)
-    want = [tg.leaf_hash(head, c, [raw[512 * c:512 * (c + 1)]]) for c in range(nleaves)]
-    del raw
-    leaves = wsp[area:area + 64 * nleaves].view(torch.int64)
-    got = leaves.cpu().numpy().astype(">i8").tobytes()
-    if got != b"".join(want):
-        bad = next(c for c in range(nleaves) if got[64 * c:64 * (c + 1)] != want[c])
-        raise RuntimeError(f"gate: the reference step's leaf {bad} of {nleaves} is not tags.py's")
-    root = MerkleTree(want).root
-    if root != ref.raw:
-        raise RuntimeError("gate: the reference step's root is not RFC 6962's over its leaves")
-    ref_leaves = leaves.clone()
-    del want, leaves, tags_i32, wsp
-    torch.cuda.empty_cache()
-    xs = torch.ones(1, dtype=torch.float32, device="cuda")
-    for m in CAPTURE:
-        st["nodes"].zero_()
-        st["roots"].pop(m, None)
-        for _, lin in linears:
-            lin.forward(rand_fp8(m, lin.kd, gen), xs)
-        torch.cuda.synchronize()
-        if st["roots"].get(m) != total:
-            raise RuntimeError(f"gate: the committed step at m = {m} committed {st['roots'].get(m)} tags, not {total}")
-        if not torch.equal(st["nodes"][:8 * nleaves], ref_leaves):
-            raise RuntimeError(f"gate: the committed step at m = {m} left other leaves than the reference step's")
-        if w.step_root() != root:
-            raise RuntimeError(f"gate: the committed step at m = {m} left another root than the reference step's")
-    del ref_leaves
-    torch.cuda.empty_cache()
-    log(f"commit gate (wide): {total} tags, {nleaves} leaves, {checked} tags checked, root {root.hex()[:16]}, the same "
-        f"at m = {CAPTURE}, fold {st['fold']}")
-    return {"tags": total, "leaves": nleaves, "tags_checked": checked, "root": root.hex(), "sizes": CAPTURE,
-            "fold": st["fold"]}
 
 
 def apply(idx: int, quant):
@@ -819,16 +553,6 @@ def main() -> None:
     ap.add_argument("--paged-lib", help="pstack and stack arms: a build of paged.cu at wt.cu's field")
     ap.add_argument("--kv-receipts", choices=("on", "off"), default="off",
                     help="stack arm: form, compact and commit paged-KV receipts (default off; weight receipts remain)")
-    ap.add_argument("--tag", action="store_true",
-                    help="wide and tensor arms: tag every block of the store the GEMMs read (ro-blake3/v1)")
-    ap.add_argument("--sketch", type=int, default=0, choices=(0, 16, 64),
-                    help="tensor arm at k = 1 (k_s 16 or 64) or wide arm (k_s 16): tag the store under ro-sketch-blake3/v0 "
-                         "at this k_s instead")
-    ap.add_argument("--sketch-t", type=int, default=8, help="tasks a sketch vector (codec_tensor's --sketch-t)")
-    ap.add_argument("--commit", action="store_true",
-                    help="with --sketch: commit each decode step's tags (leaves and root): the tensor arm's after its "
-                         "last linear, the wide arm's as the step goes")
-    ap.add_argument("--python-tags", type=int, default=3, help="sampled tags a layer checked against the reference")
     ap.add_argument("--gate-reps", type=int, default=1,
                     help="launches of each of the arm's GEMM configs a capture size in the gates, each bit for bit")
     ap.add_argument("--model", required=True)
@@ -883,16 +607,14 @@ def main() -> None:
     if args.arm in STACK:
         if not (args.wt_lib and args.reader_lib and args.paged_lib):
             ap.error("the pstack and stack arms take --wt-lib, --reader-lib and --paged-lib")
-        if args.kv_cache_dtype != "auto" or args.compiled or args.tag or args.sketch or args.commit or args.store:
+        if args.kv_cache_dtype != "auto" or args.compiled or args.store:
             ap.error("the pstack and stack arms run mode 0 over a bf16 cache, receipting as they go (no --compiled, "
-                     "--kv-cache-dtype, --tag, --sketch, --commit or --store)")
+                     "--kv-cache-dtype or --store)")
         hook_runner(hooks, install)
     elif args.arm != "stock":
         if not args.lib or (args.arm == "wide") != bool(args.wide_lib) or (args.arm == "tensor") != bool(args.tensor_lib):
             ap.error("--lib is required for every arm but stock, --wide-lib for the wide arm only and --tensor-lib for the "
                      "tensor arm only")
-        if args.tag and args.arm not in ("wide", "tensor"):
-            ap.error("--tag is the wide and tensor arms'")
         hook_runner(hooks, install)
     binder = None
     if args.store:
@@ -940,7 +662,7 @@ def main() -> None:
     result = {
         "arm": args.arm, "compiled": args.compiled, "autotune": args.compiled and not args.no_autotune,
         "k": args.k if args.arm in (*ENCODED, "stack") else 0,
-        "codec_tag": TAG if args.tag else None, "model": args.model,
+        "model": args.model,
         "revision": args.revision,
         "vllm": vllm.__version__, "torch": torch.__version__, "cuda": torch.version.cuda, "gpu": props.name,
         "sms": props.multi_processor_count, "startup_s": startup_s, "kv_tokens": kv_tokens,

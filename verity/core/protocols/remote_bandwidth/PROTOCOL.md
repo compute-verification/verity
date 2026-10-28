@@ -1319,7 +1319,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   registered KV block under the registration's block layout, committed in the pass's one tree and listed in its one
   plan with the weights'. A KV block is a registered block like any other: 4,096 bytes of the encoded store, 32 whole
   codec words, \(j = \text{slot} \cdot \text{LAYERS} + \text{layer}\) (§3), and its kernel's vectors pass `plan_of`
-  (§4). The device's KV receipt as it stands (word_codec's `kv_receipt.py` and `kv.cu`'s `rc_sha8_kernel`)
+  (§4). The device's KV receipt as it stands (word_codec's `kv.cu`, its `rc_sha8_kernel`)
   is a third kind:
   its own SHA-512 domain (`verity/word-codec/kv-receipt/sha512/v0`), ro-sketch-blake3 signs, and half-block vectors
   that take their 4,096 bytes from 16 tokens' head shares, zero-padded to whole blocks. The verifier can open

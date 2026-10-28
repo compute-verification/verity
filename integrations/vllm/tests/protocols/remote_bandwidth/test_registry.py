@@ -444,4 +444,4 @@ def test_identity_codec_and_the_drivers_receipt_kinds_of_the_block_alone(kind):
 
 def test_a_receipt_kind_the_driver_does_not_name_is_refused():
     with pytest.raises(ValueError, match="a receipt kind is one of"):
-        KindReceipt("ro-blake3/v1")
+        KindReceipt("sha512")
