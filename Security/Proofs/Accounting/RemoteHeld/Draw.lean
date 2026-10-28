@@ -1,6 +1,6 @@
 import Definitions.Accounting.Guarantees.RemoteDraw
 import Proofs.Accounting.RemoteHeld.OverTime
-import Proofs.Accounting.RateAudit.Horizon
+import Proofs.Accounting.RateAudit.Pooled
 import Proofs.Accounting.Prob
 import Proofs.Accounting.Actual.Sampler
 import Proofs.Hash.RowBinding
@@ -62,7 +62,7 @@ passes, and C3 bounds no such distinguisher.
 
 namespace Accounting.SecurityProofs.Remote
 
-open Finset Accounting.Rate Accounting.Rate.Horizon
+open Finset Accounting.Rate Accounting.Rate.Pooled
 open Pous (pr)
 open scoped ENNReal
 open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
