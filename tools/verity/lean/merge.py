@@ -203,9 +203,9 @@ def group(m: str, x: dict, y: dict, z: dict, why: list[str], candidate: list[str
     side no longer reads while the other still reads it stays, with the other side's hash: the record does not say which
     guarantees read it, so the union is the candidate (``candidate``), and the train's Lean check regenerates the group.  But
     when the dropping side's `gone` (``dropped``, by "ours" and "theirs") says it renamed or deleted it, and the other side kept
-    its hash, the removal applies: the union would bring back a read of a definition the merged tree no longer has (#5977's
-    `J10R.Layout`, renamed `NoiseLayout`, came back beside the new name on `next`).  A hash both sides changed differently is
-    ours' (`derived`)."""
+    its hash, the removal applies: the union would bring back a read of a definition the merged tree no longer has (a
+    `J10R.Layout` renamed `NoiseLayout` would stay beside the new name).  A hash both sides changed differently is ours'
+    (`derived`)."""
     xd, yd, zd = A.definitions(x), A.definitions(y), A.definitions(z)
     defs = {}
     for d in sorted(set(xd) | set(yd) | set(zd)):

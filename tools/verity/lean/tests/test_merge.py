@@ -241,9 +241,9 @@ FIXTURES = HERE / "fixtures" / "merge"
 def test_4406_onto_next_merges_its_reads_as_a_candidate(tmp_path, capsys):
     """#4406 (cursor/lean-vocab-hash-fc8d at 172198e129) onto `next` at aa5d70a9f1, base main's b6b9338dcb (26 Oct): #4406
     takes `Hash.Digest` out of `Definitions.Hash.Basic` while `next` adds readers there, and the driver refused the train.
-    The fixture is that group on each side with the records of its readers (a sample of #4406's new ones).  #4406's readers
-    of the module are the base's, unrestated, and its record reads `Hash.Digest` nowhere, so the removal applies: `main`'s
-    record since reads it nowhere either."""
+    The fixture is that group on each side with the records of its readers (a sample of the new ones).  On the side that takes
+    it out, the module's readers are the base's, unrestated, and the record reads `Hash.Digest` nowhere, so the removal
+    applies: `main`'s record since reads it nowhere either."""
     sides = json.loads((FIXTURES / "hash-basic-4406-onto-next.json").read_text())
     for n in ("base", "ours", "theirs"):
         (tmp_path / n).write_text(A.text(sides[n]))
@@ -260,11 +260,10 @@ def test_4406_onto_next_merges_its_reads_as_a_candidate(tmp_path, capsys):
 
 
 def test_5977_onto_next_leaves_no_read_of_the_name_it_renamed(tmp_path, capsys):
-    """#5977 (fcfc2901b9, `J10R.Layout` renamed `NoiseLayout`) onto `next` at e50948ba0c, base 5f41e99513, as drive merged it
-    (9a58b81858, 28 Oct): `next` added readers of `Definitions.Accounting.TS.J10R`, and the union kept `Layout` and its four
-    fields beside the new names, so `next`'s after-landing Lean check failed on the record (CI-270; #6044's
-    `PouwCheck.Window`, #5926's `RemoteAudit.Schedule.Block` and #5933's `Compose.PeriodRun` alike).  The fixture is that group
-    on each side with the records of its readers."""
+    """A branch that renames `J10R.Layout` to `NoiseLayout` (fcfc2901b9) merged onto `next` (e50948ba0c, base 5f41e99513) as
+    drive merged it (9a58b81858): `next` added readers of `Definitions.Accounting.TS.J10R`, and the union kept `Layout` and its
+    four fields beside the new names, which `next`'s after-landing Lean check, with no regenerate, fails on.  The fixture is
+    that group on each side with the records of its readers."""
     sides = json.loads((FIXTURES / "j10r-5977-onto-next.json").read_text())
     m = "Definitions.Accounting.TS.J10R"
     old = [d for d in sides["base"]["reads"][m]["definitions"] if ".Layout" in d]
