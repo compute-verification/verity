@@ -12,7 +12,7 @@ function of its accumulator and its pairs' products. The card premise says the c
 | Field | What it is |
 |---|---|
 | `size s` | the words of each store: registers (predicates and uniform registers are register words), shared memory with L1, L2, device memory |
-| `ρ r` | each resource's units a second at the clock's ceiling: SMs × a SM's units a clock × the clock |
+| `ρ r` | each resource's units a second at its clock's ceiling: SMs × a SM's units a clock × the clock (the tensor's own clock for `tensor`) |
 | `weight f` | the tensor units a MAC of operand format `f` uses (`s8` is 1) |
 | `exact` | (P1)'s range: an integer MMA is exact while `|C| + Σ|a·b| < 2^exact` |
 | `text` | code space, instructions (device memory at 16 bytes an instruction) |
@@ -20,13 +20,14 @@ function of its accumulator and its pairs' products. The card premise says the c
 Resources: `tensor` (s8 MACs), `issue` (warp instructions), the `alu`, `imad`, `shfl`, `f64` and `sfu` lanes, `smem`
 (bank words), `l2` (words read or written) and `dram` (words). Each table is a SKU's at its firmware's maximum:
 
-| Table | SKU | SM clock | Device memory |
-|---|---|---|---|
-| `Accel.H200.card` | H200 SXM 141 GB, 132 SMs | 1980 MHz | HBM3e at 3201 MHz on 6144 bits, 4.917 TB/s |
-| `Accel.Sm120.card` | RTX PRO 6000 Blackwell Server Edition, 188 SMs | 2430 MHz | GDDR7 at 12481 MHz on 512 bits, 1597.6 GB/s |
+| Table | SKU | SM clock | Tensor clock | Device memory |
+|---|---|---|---|---|
+| `Accel.H200.card` | H200 SXM 141 GB, 132 SMs | 1980 MHz | 1830 MHz | HBM3e at 3201 MHz on 6144 bits, 4.917 TB/s |
+| `Accel.Sm120.card` | RTX PRO 6000 Blackwell Server Edition, 188 SMs | 2430 MHz | 2430 MHz | GDDR7 at 12481 MHz on 512 bits, 1597.6 GB/s |
 
 Both cards' firmware refuses or clamps every clock above these, and both report SM and memory clock offset ranges of
-[0, 0]. The table also gives the device model's limits (`Card.toDevice`, `Accounting.Device`). A run that fits the
+[0, 0]. The H200's SMs read 1830 MHz with the tensor pipe full while the driver reports 1980, so its tensor rate is
+taken at 1830 MHz (`Accel.H200.tensorClock`), the clock its data sheet quotes the tensor peaks at. The table also gives the device model's limits (`Card.toDevice`, `Accounting.Device`). A run that fits the
 model stays within them summed over a window (`fits_toDevice`), and no per-tick `Accounting.Schedule` is built from a
 run.
 

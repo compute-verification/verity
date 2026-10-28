@@ -60,8 +60,9 @@ def test_the_quoted_numbers() -> None:
     """The firmware ceilings, host peaks and bandwidths already quoted outside this package, pinned so that a change to
     one is deliberate."""
     server, h200 = load("rtx-pro-6000-server"), load("h200-sxm-141gb")
-    assert [value(server, k) for k in ("clock.sm", "clock.memory", "power.limit")] == [2430, 12481, 600]
-    assert [value(h200, k) for k in ("clock.sm", "clock.memory", "power.limit")] == [1980, 3201, 700]
+    clocks = ("clock.sm", "clock.tensor", "clock.memory", "power.limit")
+    assert [value(server, k) for k in clocks] == [2430, 2430, 12481, 600]
+    assert [value(h200, k) for k in clocks] == [1980, 1830, 3201, 700]
     assert round(float(value(server, "host.ops")), -11) == 1.0453e15
     assert round(float(value(h200, "host.ops")), -11) == 7.471e14
     assert value(server, "memory.bandwidth") == 1597568 * 10 ** 6

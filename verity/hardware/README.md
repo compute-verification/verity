@@ -12,7 +12,8 @@ One TOML file per SKU in `cards/`, the one source of that card's numbers. Each n
 | RTX PRO 6000 Blackwell Server Edition (board 900-2G153-0000-000) | `cards/rtx-pro-6000-server.toml` | `Security/Definitions/Core/Accel/Sm120.lean` |
 | H200 SXM 141 GB (board 692-2G520-0280-001) | `cards/h200-sxm-141gb.toml` | `Security/Definitions/Core/Accel/H200.lean` |
 
-Every card has the same sections: `sm`, `clock`, `power`, `store`, `rate` (each resource's units a SM-clock),
+Every card has the same sections: `sm`, `clock` (`tensor` the tensor's, `sm` every other resource's, `memory` device
+memory's), `power`, `store`, `rate` (each resource's units a SM-clock),
 `memory` (device memory's bus, transfers and bandwidth), `weight` (the tensor units a MAC of each format uses),
 `model` (`Accel.Card`'s `exact` and code space) and `host` (the node's CPUs).
 
