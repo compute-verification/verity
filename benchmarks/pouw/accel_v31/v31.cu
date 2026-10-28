@@ -3564,12 +3564,14 @@ static int cmd_fill_bench(int reps, const std::string& out, const std::string& p
         CK(cudaEventCreate(&e0));
         CK(cudaEventCreate(&e1));
         const int calls = std::max(1, (int)std::ceil(pms / per));
+        const auto start = std::chrono::steady_clock::now();
         const double h0 = host_s();
         const unsigned long long j0 = nv.energy_mj();
         CK(cudaEventRecord(e0, f.s0));
         arms[a].enqueue(f.s0, calls);
         CK(cudaEventRecord(e1, f.s0));
-        std::this_thread::sleep_for(std::chrono::duration<double, std::milli>(0.5 * pms));
+        // halfway from the window's start (a full launch queue can hold the enqueue past it)
+        std::this_thread::sleep_until(start + std::chrono::duration<double, std::milli>(0.5 * pms));
         const gk::Sample mid = nv.sample();
         CK(cudaEventSynchronize(e1));
         const unsigned long long j1 = nv.energy_mj();
