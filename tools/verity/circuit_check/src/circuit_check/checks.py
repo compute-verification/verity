@@ -32,8 +32,8 @@
                      in its entry and the summary, and every other code fails as under v1.  `Q_call` v1 {X = 32} is recorded
                      beside it (`q_call`: proof blocks, committed bits, values computed in two proof blocks; or why it refuses,
                      a warning).
-                     Both resolve every parameter leaf, so a Definition over ``partition_max_leaves`` is not partitioned (a
-                     warning, ``partition/unchecked``)
+                     Both resolve every parameter leaf, so a Definition over ``partition_max_leaves`` is not partitioned,
+                     nor is one over ``partition_max_gates`` gates (each a warning, ``partition/unchecked``)
     lowering pins    a lowering's AND/XOR/NOT counts and its circuit's digest (``type``, `lowering_type`) against its pin, which
                      must hold both (a piece's, a Boolean Definition's whole lowering's,
                      a template proof block's, in the sidecar of the module that defines it or its file in ``pins/``,
@@ -45,7 +45,8 @@
 
 Correctness and invariant violations are failures, each with a name (``"<check>/<code> <definition> ..."``); redundant and dead
 gates are warnings with counts (they become failures with the re-baseline's common-subexpression pass).  An unpinned lowering,
-and a pin without its lowering's ``type``, is a warning.
+and a pin without its lowering's ``type``, is a warning.  A warning never fails (unless ``--fail-on-warnings``): it is a
+property left unchecked, and the report prints it under ``unchecked``, apart from what passed.
 """
 from __future__ import annotations
 
@@ -792,6 +793,7 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
         elif v["class"] == "too-large":
             rec["checked"] = False
             rec["reason"] = f"{v['gates']} gates: over the partition budget {v['limit']}"
+            P.warn("partition", "unchecked", d, 1, rec["reason"])
         else:
             P.fail("partition", "width", d, f"{v['class']}: |out(S)| = {v['out_bits']} b over {v['out_gates']} gate(s), limit "
                    f"{v['limit'][0]} b or one gate of {v['limit'][1]} b", unit_class=v["class"], units=v.get("units"))
@@ -1150,7 +1152,8 @@ def check_row(path: str | Path, opts: Options = Options(), *, memo: dict | None 
 def summarize(entries: Iterable[dict]) -> dict:
     """Totals over entries: failures by name, new (`ok` is no new failure) and known (`circuit_check.known`, with the cause),
     warnings' counts by check and by Definition (a finding two entries share, such as a template's Definition checked on its own
-    too, once), ``recomputed_across``: each Boolean Call (`Q_word` v2) that computes a value in two proof blocks, with its count, and
+    too, once), ``unchecked``: how many warnings (each a property no check enforces: it never fails) on how many Definitions,
+    ``recomputed_across``: each Boolean Call (`Q_word` v2) that computes a value in two proof blocks, with its count, and
     ``q_call_refused``: each Definition `Q_call` v1 does not apply to, with why; ``by_calls``: each root checked by its calls
     (`circuit_check.by_calls`), not lowered whole, with the targets its callees rely on."""
     from .known import known
@@ -1182,6 +1185,7 @@ def summarize(entries: Iterable[dict]) -> dict:
             "recomputed_across": dict(sorted(across.items())), "q_call_refused": dict(sorted(refused.items())),
             "by_calls": dict(sorted(by_calls.items())),
             "known_failures": {f["name"]: known(f) for f in fails if known(f) is not None},
+            "unchecked": {"items": len(warns), "definitions": len({w["definition"] for w in warns})},
             "warnings": {k: {"total": v, "definitions": len(by_def[k]), "by_definition": dict(by_def[k].most_common())}
                          for k, v in by_check.most_common()}}
 
