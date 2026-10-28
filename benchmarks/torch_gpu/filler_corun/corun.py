@@ -28,6 +28,7 @@ import statistics
 import sys
 import threading
 import time
+from collections import Counter
 from pathlib import Path
 
 import torch
@@ -54,12 +55,12 @@ class Params(C.Structure):
     """corun.cu's Params."""
     _fields_ = [("a", C.c_ubyte * 128), ("b", C.c_ubyte * 128), ("o", u64), ("M", i32), ("N", i32), ("K", i32),
                 ("group", i32), ("passes", i32), ("log_every", i32), ("log", u64), ("stamps", u64), ("started", u64),
-                ("done", u64), ("stop", u64), ("pad", C.c_ubyte * 56)]
+                ("done", u64), ("stop", u64), ("wids", u64), ("pad", C.c_ubyte * 48)]
 
 
 class HashArgs(C.Structure):
     _fields_ = [("msg", u64), ("dig", u64), ("stop", u64), ("stamps", u64), ("nmsg", u64), ("dur_ns", u64),
-                ("most", u64), ("nap_ns", u), ("pad", u)]
+                ("most", u64), ("nap_ns", u), ("mask", u), ("wids", u64)]
 
 
 assert C.sizeof(Params) == 384 and Params.o.offset == 256 and Params.M.offset == 264 and Params.log.offset == 288
@@ -199,6 +200,8 @@ class Bench:
         self.gstamps = torch.zeros((lib.sms, STAMP_WORDS), dtype=torch.int64, device="cuda")
         self.glog = torch.zeros((lib.sms, LOGMAX), dtype=torch.int64, device="cuda")
         self.hstamps = torch.zeros((2 * lib.sms, STAMP_WORDS), dtype=torch.int64, device="cuda")
+        self.gwids = torch.full((lib.sms, 32), -1, dtype=torch.int32, device="cuda")
+        self.hwids = torch.full((2 * lib.sms, 32), -1, dtype=torch.int32, device="cuda")
         self.sg, self.sh = torch.cuda.Stream(), torch.cuda.Stream()
         self.ref_digests: torch.Tensor | None = None
 
@@ -212,19 +215,34 @@ class Bench:
         p.stamps = self.gstamps.data_ptr()
         base = self.ctr.data_ptr()
         p.started, p.done, p.stop = base, base + 4, base + 8
+        p.wids = self.gwids.data_ptr()
         return p
 
-    def hash_args(self, dur_s: float, stop: bool, most: int = 0, nap_ns: int = 0) -> HashArgs:
+    def hash_args(self, dur_s: float, stop: bool, most: int = 0, nap_ns: int = 0, mask: int = 0) -> HashArgs:
         base = self.ctr.data_ptr()
         return HashArgs(self.o.data_ptr(), self.dig.data_ptr(), base + 8 if stop else base + 12,
-                        self.hstamps.data_ptr(), self.nmsg, int(dur_s * 1e9), most, nap_ns, 0)
+                        self.hstamps.data_ptr(), self.nmsg, int(dur_s * 1e9), most, nap_ns, mask, self.hwids.data_ptr())
 
     def reset(self) -> None:
         self.ctr.zero_()
         self.gstamps.zero_()
         self.glog.zero_()
         self.hstamps.zero_()
+        self.gwids.fill_(-1)
+        self.hwids.fill_(-1)
         torch.cuda.synchronize()
+
+    def layout(self, g: list[S.Stamp], h: list[S.Stamp], mask: int) -> list[dict]:
+        """Each SM's GEMM warps and hashing warps by sub-partition (%warpid mod 4), the patterns and their SM counts."""
+        sms: dict[int, tuple[list[int], list[int]]] = {}
+        for rows, stamps, side in ((self.gwids.cpu().tolist(), g, 0), (self.hwids.cpu().tolist(), h, 1)):
+            for row, s in zip(rows, stamps):
+                c = sms.setdefault(s.sm, ([0] * 4, [0] * 4))[side]
+                for w in row:
+                    if w >= 0 and (side == 0 or mask == 0 or (mask >> (w % 4)) & 1):
+                        c[w % 4] += 1
+        pats = Counter((tuple(x), tuple(y)) for x, y in sms.values())
+        return [{"gemm": list(x), "hash": list(y), "sms": n} for (x, y), n in pats.most_common()]
 
     def gemm(self, cl: int, passes: int, log_every: int = 0, stream=None) -> Params:
         p = self.gemm_params(cl, passes, log_every)
@@ -297,19 +315,20 @@ class Bench:
         return {"arm": f"gemm_{cl}", "passes": passes, "placement": S.placement(g, self.lib.sms), **r,
                 "nvml": pw.record()}
 
-    def item_hash(self, pw: Clocks, kind: str, warps: int, per_sm: int, nap_ns: int, item_s: float) -> dict:
+    def item_hash(self, pw: Clocks, kind: str, warps: int, per_sm: int, nap_ns: int, mask: int, item_s: float) -> dict:
         self.reset()
         with pw:
-            self.hash(kind, 32 * warps, per_sm, self.hash_args(item_s, False, nap_ns=nap_ns), alone=True)
+            self.hash(kind, 32 * warps, per_sm, self.hash_args(item_s, False, nap_ns=nap_ns, mask=mask), alone=True)
             torch.cuda.synchronize()
         h = stamps_of(self.hstamps[: self.lib.sms * per_sm])
-        return {"arm": f"{kind}:{warps}w:{per_sm}" + (f":nap{nap_ns}" if nap_ns else ""), "per_sm": per_sm,
-                "placement": S.placement(h, self.lib.sms), **S.hash_rate(h, self.lib.sms), "nvml": pw.record()}
+        arm = f"{kind}:{warps}w:{per_sm}" + (f":nap{nap_ns}" if nap_ns else "") + (f":m{mask:x}" if mask else "")
+        return {"arm": arm, "per_sm": per_sm, "placement": S.placement(h, self.lib.sms), **S.hash_rate(h, self.lib.sms),
+                "layout": self.layout([], h, mask), "nvml": pw.record()}
 
-    def item_corun(self, pw: Clocks, cl: int, passes: int, kind: str, warps: int, nap_ns: int) -> dict:
+    def item_corun(self, pw: Clocks, cl: int, passes: int, kind: str, warps: int, nap_ns: int, mask: int) -> dict:
         self.reset()
         le = self.log_every(passes)
-        args = self.hash_args(3600.0, True, nap_ns=nap_ns)
+        args = self.hash_args(3600.0, True, nap_ns=nap_ns, mask=mask)
         started = C.c_uint64(self.ctr.data_ptr())
         with pw:
             self.gemm(cl, passes, le, self.sg)
@@ -322,11 +341,12 @@ class Bench:
         logs = [[x for x in row if x] for row in self.glog.cpu().tolist()]
         w0, w1 = S.window(h)
         inside = S.gemm_rate_in(logs, le, self.macs_per_tile, w0, w1, hr["mhz"])
-        arm = f"gemm_{cl}+{kind}" + (f":{warps}w" if warps != HASH_THREADS // 32 else "") + (f":nap{nap_ns}" if nap_ns else "")
+        arm = (f"gemm_{cl}+{kind}" + (f":{warps}w" if warps != HASH_THREADS // 32 else "")
+               + (f":nap{nap_ns}" if nap_ns else "") + (f":m{mask:x}" if mask else ""))
         return {"arm": arm, "passes": passes, "gemm_placement": S.placement(g, self.lib.sms),
                 "hash_placement": S.placement(h, self.lib.sms), "covers": S.covers(g, h), "gemm": r, "hash": hr,
                 "gemm_in_hash_window": inside, "gap": S.gap(inside["peak_share"], hr["bar"]),
-                "nvml": pw.record()}
+                "layout": self.layout(g, h, mask), "nvml": pw.record()}
 
     def item_int_mm(self, pw: Clocks, item_s: float) -> dict:
         torch._int_mm(self.a, self.b.t())
@@ -400,8 +420,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--arms", default="gemm,hash,corun,int_mm")
     ap.add_argument("--gemms", default="1,2", help="the GEMMs timed: cluster sizes")
-    ap.add_argument("--hashes", default=HASHES, help="hash items alone: KIND:WARPS:CTAS_AN_SM:NAP_NS, comma-separated")
-    ap.add_argument("--coruns", default=CORUNS, help="hash sides of the co-runs, beside each GEMM: KIND:WARPS:NAP_NS")
+    ap.add_argument("--hashes", default=HASHES,
+                    help="hash items alone: KIND:WARPS:CTAS_AN_SM:NAP_NS[:MASK], comma-separated; MASK: the sub-partitions "
+                         "(bits of %%warpid mod 4) whose warps hash, 0 or absent: all")
+    ap.add_argument("--coruns", default=CORUNS, help="hash sides of the co-runs, beside each GEMM: KIND:WARPS:NAP_NS[:MASK]")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     lib = Lib(a.cubin)
@@ -442,13 +464,15 @@ def main(argv: list[str] | None = None) -> int:
             items += [lambda cl=cl: b.item_gemm(pw, cl, passes[cl]) for cl in cls]
         if "hash" in arms:
             for spec in a.hashes.split(","):
-                k, w, per, nap = spec.split(":")
-                items.append(lambda k=k, w=int(w), per=int(per), nap=int(nap): b.item_hash(pw, k, w, per, nap, a.item_s))
+                k, w, per, nap, *m = spec.split(":")
+                items.append(lambda k=k, w=int(w), per=int(per), nap=int(nap), m=int(m[0], 0) if m else 0:
+                             b.item_hash(pw, k, w, per, nap, m, a.item_s))
         if "corun" in arms:
             for cl in cls:
                 for spec in a.coruns.split(","):
-                    k, w, nap = spec.split(":")
-                    items.append(lambda cl=cl, k=k, w=int(w), nap=int(nap): b.item_corun(pw, cl, passes[cl], k, w, nap))
+                    k, w, nap, *m = spec.split(":")
+                    items.append(lambda cl=cl, k=k, w=int(w), nap=int(nap), m=int(m[0], 0) if m else 0:
+                                 b.item_corun(pw, cl, passes[cl], k, w, nap, m))
         if "int_mm" in arms:
             items += [lambda: b.item_int_mm(pw, a.item_s)]
         for it in items:

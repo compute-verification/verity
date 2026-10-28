@@ -22,7 +22,8 @@
 // [1024 i, 1024 i + 1024) of `msg` (the GEMM's O), its digest SHA-512 of those bytes (nine compressions), written to
 // dig[8 i ..] as big-endian words. Thread t takes messages t, t + T, ... (mod nmsg) until `stop` is set or its CTA has
 // run `dur_ns`. hash_rows_l1 is hash_rows with its loads cached in L1. hash_chain: the bar's own form, each thread
-// chaining compressions in registers. `nap_ns` holds either below its rate; idle_k only sleeps beside the GEMM.
+// chaining compressions in registers. `nap_ns` holds either below its rate, and `mask` keeps it to some sub-partitions;
+// idle_k only sleeps beside the GEMM.
 //
 // Every CTA stamps %globaltimer and clock64 at its start and end and its %smid; GEMM CTAs log %globaltimer every
 // `log_every` tiles. gate_k holds the hash stream until every GEMM CTA has started, so hash CTAs take only what the GEMM
@@ -68,6 +69,7 @@ struct alignas(128) Params {
   int* started;      // CTAs started
   int* done;         // CTAs finished
   int* stop;         // set by the last CTA to finish
+  u32* wids;         // [gridDim.x][32]: each warp's %warpid, or null
 };
 static_assert(offsetof(Params, o) == 256 && offsetof(Params, M) == 264 && offsetof(Params, log) == 288 &&
                   sizeof(Params) == 384,
@@ -82,6 +84,12 @@ DEV u32 smid() {
   u32 s;
   asm volatile("mov.u32 %0, %%smid;" : "=r"(s));
   return s;
+}
+// the warp's slot on its SM; slot mod 4 is its sub-partition
+DEV u32 warpslot() {
+  u32 w;
+  asm volatile("mov.u32 %0, %%warpid;" : "=r"(w));
+  return w;
 }
 
 // ---------------------------------------------------------------- mbarriers, TMA, wgmma (s8_wgmma.cu's)
@@ -219,6 +227,7 @@ template <int CL> DEV void gemm_body(const Params& p) {
     p.stamps[blockIdx.x].t0 = gtimer();
     p.stamps[blockIdx.x].c0 = clock64();
   }
+  if (p.wids && lane == 0) p.wids[blockIdx.x * 32 + warp] = warpslot();
   if constexpr (CL == 1)
     __syncthreads();
   else
@@ -306,10 +315,21 @@ struct HashArgs {
   u64 nmsg, dur_ns;
   u64 most;          // messages (hash_rows) or 16-compression rounds (hash_chain) a thread at most; 0: no limit
   u32 nap_ns;        // __nanosleep after each message or round: the hash held below its rate; 0: none
-  u32 pad;
+  u32 mask;          // the sub-partitions (bits of %warpid mod 4) whose warps hash, the rest asleep; 0: all
+  u32* wids;         // [gridDim.x][32]: each warp's %warpid, or null
 };
 
 DEV u64 be64(u32 lo, u32 hi) { return sx::be64(lo, hi); }
+
+// whether the warp hashes (its sub-partition is in `mask`); a warp that doesn't sleeps until stop, then returns false
+DEV bool hashes(const HashArgs& a, u64 t0) {
+  const u32 slot = warpslot();
+  if (a.wids && threadIdx.x % 32 == 0) a.wids[blockIdx.x * 32 + threadIdx.x / 32] = slot;
+  if (a.mask == 0 || (a.mask >> (slot % 4)) & 1) return true;
+  const volatile int* stop = a.stop;
+  while (!*stop && gtimer() - t0 < a.dur_ns) __nanosleep(100000);
+  return false;
+}
 
 DEV void block_stamp(Stamp* stamps, u64 t0, u64 c0, u32 n, u64 work) {
   __shared__ u64 tot_n, tot_w;
@@ -342,7 +362,8 @@ template <bool L1> DEV void rows_body(const HashArgs& a) {
   u32 i = blockIdx.x * blockDim.x + threadIdx.x;
   const volatile int* stop = a.stop;
   u32 n = 0;
-  while (i < nmsg && (a.most == 0 || n < a.most)) {
+  const bool on = hashes(a, start[0]);
+  while (on && i < nmsg && (a.most == 0 || n < a.most)) {
     if (*stop || gtimer() - *t0p >= a.dur_ns) break;
     const uint4* m = a.msg + (u64)i * 64;
     u64 st[8], w[16];
@@ -390,7 +411,8 @@ extern "C" __global__ void __maxnreg__(HASH_REGS) hash_chain(const HashArgs a) {
 #pragma unroll
   for (int q = 0; q < 16; q++) w[q] = t * 16 + q;
   u32 n = 0;
-  while (a.most == 0 || n < a.most) {
+  const bool on = hashes(a, t0);
+  while (on && (a.most == 0 || n < a.most)) {
     if (*stop || gtimer() - t0 >= a.dur_ns) break;
 #pragma unroll 1
     for (int r = 0; r < 16; r++) {
