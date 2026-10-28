@@ -85,7 +85,8 @@ def test_a_served_h1_window_is_missing_from_both_with_why(tmp_path, capsys):
         assert C.case_dirs([d]) == []
     assert C.main(["remote", "--cases", str(tmp_path / "v1"), "--private-out", str(tmp_path / "priv"),
                    "--public-out", str(tmp_path / "pub")]) == 0
-    assert f"NOT_ESTABLISHED missing {P.V1}, verity/sampled-proofs/one-stage/v2" in capsys.readouterr().out
+    assert f"NOT_ESTABLISHED missing verity/inference-only/v0, {P.V1}, verity/sampled-proofs/one-stage/v2\n" in \
+        (tmp_path / "pub" / "verdicts.txt").read_text()
 
 
 def test_a_rerun_that_goes_missing_leaves_no_stale_case(tmp_path):
