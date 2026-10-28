@@ -64,3 +64,8 @@ The coordinator (compute-research) writes instructions here, newest last. Re-rea
   - b1 is 1/8 G.
   - Cheapest at a floor of G with no new premise: fresh-U per period, 1.84, credit on A and B. Prefer it to fresh-R two-GEMM (also 1.84), whose credit is beside the served product (Q1).
   - v3.2 with per-tile π forces only 0.975 G at t = 3, so cap its credit there.
+- (20:36Z) GD-BITS (final, note 20261028T2024Z-report-gd-bits, art:4c0286265cfe235af9860617e7a0ff7ae93b7846cefcf2e362fc08f95632bd2f; b1 at 3/16: art:fc44a864…):
+  - **No 8-bit word of a whole product forces G:** Strassen over Z/2^8 needs no correction, so such a word is at most 7/8 G. Cap GD-NOISE's two-GEMM, fresh-U-per-period and HYB-8-bit designs at 7/8 with 8-bit words. Only 9-bit or wider words (low bits, checked exactly) keep G.
+  - **Dither:** t = 3 with per-segment π holds G with the low 13 bits of each prefix word (1.65 MB a token against u16's 2.03). Per-tile π at t = 3 is 23/24 G. At t = 8 it's G/2 tensor, 7/16 in-model.
+  - **One word per cell** forces G only with a second product beside the served one (Q1).
+  - **b1 price is disputed:** the card says 1/8, wgmma measures 3/16. Run both, and label every credit with the price it used.
