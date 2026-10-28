@@ -9,12 +9,12 @@ writes its codes and scales, so the quantizer never reads x again:
 
 Each producer's forward (the instance's `CustomOp._forward_method`, patched through `engine.hooks`) writes the tensors vLLM's
 op writes, bit for bit (`tests/engine/test_int8_producers.py`), and hands its codes and scales to the next
-``verity_int8::row_quant`` (`take`), whose CUDA body returns them instead of quantizing when its x is the producer's output:
-the same storage, shape, strides and dtype.  The hand-off holds that output, so no other tensor takes its memory, and the
-next ``row_quant`` of the device takes the hand-off either way.  Nothing writes a producer's output before its linear
-quantizes it (those forwards pass it on directly, and a forward hook only reads it), so its bytes are the ones the codes
-were made from.  ``row_quant`` is still called: the int8 source, a capture and ``observe`` see the same calls with the
-same values.
+``verity_int8::row_quant`` (`int8_ops.hand_off`), whose CUDA body returns them instead of quantizing when its x is the
+producer's output: the same storage, shape, strides and dtype.  The hand-off holds that output, so no other tensor takes
+its memory, and the next ``row_quant`` of the device takes the hand-off either way.  Nothing writes a producer's output
+before its linear quantizes it (those forwards pass it on directly, and a forward hook only reads it), so its bytes are
+the ones the codes were made from.  ``row_quant`` is still called: the int8 source, a capture and ``observe`` see the same
+calls with the same values.
 
 A producer runs vLLM's own op instead when its call isn't the served one it reproduces: a dispatch mode or a compile is
 active, a CUDA graph is capturing, the norm has no residual, vLLM's op is patched (the norm-scale tap replaces
@@ -36,21 +36,6 @@ from verity_vllm.engine import hooks
 ENV = "VERITY_INT8_FUSED_PRODUCERS"
 TAG = "int8_producers"
 
-_HANDOFF: dict[torch.device, tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = {}
-
-
-def take(x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor] | None:
-    """The codes and scales a producer handed off for x (its output, or a view of it of the same layout), else None; the
-    device's hand-off is gone after this call either way."""
-    got = _HANDOFF.pop(x.device, None)
-    if got is None:
-        return None
-    src, xq, s = got
-    if x.data_ptr() == src.data_ptr() and x.shape == src.shape and x.stride() == src.stride() and x.dtype == src.dtype:
-        return xq, s
-    return None
-
-
 def _served(*ts: torch.Tensor) -> bool:
     return (torch._C._len_torch_dispatch_stack() == 0 and not torch.compiler.is_compiling()
             and not torch.cuda.is_current_stream_capturing()
@@ -59,6 +44,7 @@ def _served(*ts: torch.Tensor) -> bool:
 
 def _norm(norm: Any, original: Any) -> Any:
     from verity_vllm.engine import int8_fused as F
+    from verity_vllm.engine import int8_ops
 
     def forward(x: torch.Tensor, residual: torch.Tensor | None = None):
         w = norm.weight.data
@@ -71,13 +57,14 @@ def _norm(norm: Any, original: Any) -> Any:
         s = torch.empty(x.shape[0], dtype=torch.float32, device=x.device)
         if x.shape[0]:
             F.add_norm_quant(x, residual, w, norm.variance_epsilon, xq, s)
-        _HANDOFF[x.device] = (x, xq, s)
+        int8_ops.hand_off(x, xq, s)
         return x, residual
     return forward
 
 
 def _act(act: Any, original: Any) -> Any:
     from verity_vllm.engine import int8_fused as F
+    from verity_vllm.engine import int8_ops
 
     def forward(x: torch.Tensor):
         if (not _served(x) or not x.is_contiguous() or x.shape[1] % 2
@@ -91,7 +78,7 @@ def _act(act: Any, original: Any) -> Any:
         s = torch.empty(m, dtype=torch.float32, device=x.device)
         if m:
             F.silu_mul_quant(x, h, xq, s)
-        _HANDOFF[h.device] = (h, xq, s)
+        int8_ops.hand_off(h, xq, s)
         return h
     return forward
 
@@ -137,9 +124,10 @@ def uninstall() -> None:
     """Put every producer's forward back and drop the hand-offs."""
     while _INSTALLED:
         _INSTALLED.pop().uninstall()
-    _HANDOFF.clear()
+    from verity_vllm.engine import int8_ops
+    int8_ops.drop_hand_offs()
 
 
 _INSTALLED: list[hooks.Hooks] = []
 
-__all__ = ["ENV", "TAG", "install", "take", "uninstall"]
+__all__ = ["ENV", "TAG", "install", "uninstall"]
