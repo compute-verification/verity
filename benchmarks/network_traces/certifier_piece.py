@@ -2,7 +2,7 @@
 the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
 
     python certifier_piece.py front PORT SERVE_DIR OUT [--gate USER@HOST | --gate local] [--key KEY] [--peer NAME]
-        [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--height 10] [--minutes M]
+        [--prompts 4] [--prompt-ids 24] [--tokens 4] [--vocab 128000] [--height 10] [--minutes M] [--warmup N]
     python certifier_piece.py piece SERVE_DIR WINDOW DIR [--eos-ids IDS] [--lean EXE] [--draw K] [--chain-cmd CMD]
         [CR_K=V ...]
     python certifier_piece.py relay --listen PORT --to PORT
@@ -14,7 +14,15 @@ the active warden in front of serve-openai there (its ``CERTIFIER_FRONT``).
   its cells are link-window 0's alone (``--tokens`` at most 4 keeps the group in one link-window), so the engine admits
   the group together and closes it into one Commit window, the run's earliest: the window the run audits (with
   ``REQUESTS=1`` the requests after it make a smaller window, which `served_verdicts.py window` passes over). The
-  defaults are the window circuit's class 4,32,4 (4 slots, prompts of at most 32 ids, 4 outputs). The gate's fetch,
+  defaults are the window circuit's class 4,32,4 (4 slots, prompts of at most 32 ids, 4 outputs). ``--warmup N``
+  first sends N plain completions straight to PORT (`warmup`: no warden, no release header), one at a time, each of
+  the group's shape and awaited, so the endpoint's first window (H1's first reservation, the kernels' first compile)
+  is behind it; it then waits until serve-openai records each in `served_session.USERS`, which it does only once the
+  request's window has closed. So each warm-up is a window of one request, closed before the gate is asked, which the
+  pick passes over for the group's whenever the group's window holds two or more; one that fails or isn't recorded
+  within `WARMUP_CLOSE_S` refuses the front. A warm-up doesn't make a slow endpoint pass: the scan's schedule gives a
+  request D·τ = 2.7 s from its admission to its first egress cell, by which a short answer must be whole, and an
+  endpoint slower than that fails each request late. The gate's fetch,
   ``witness/`` with it, is kept under SERVE_DIR/`PRIVATE`/RUN/fetch.tar.gz (0700, the serve dir stays on the node);
   OUT gets ``session.json`` and ``bundle.tgz``, the public outcome. ``--gate local`` is the dry run's (this tree's gate in this process, a
   `relay` to PORT its tunnel): a warden on the prover's node is no auditor's device, so it never stands for the gate.
@@ -58,7 +66,9 @@ import sys
 import tarfile
 import tempfile
 import threading
+import time
 import traceback
+import urllib.request
 from collections.abc import Callable
 from pathlib import Path
 
@@ -78,6 +88,9 @@ LEAN_DIR = TREE / "verity" / "core" / "protocols" / "network" / "lean"
 #: the window circuit's class (4 slots, prompts of at most 32 ids, 4 outputs) and the scan's lanes
 PROMPTS, PROMPT_IDS, TOKENS = 4, 24, 4
 HEIGHT = 10
+#: how long a warm-up request may take, and how long the front waits for serve-openai to record the warm-ups'
+#: windows closed
+WARMUP_REQUEST_S, WARMUP_CLOSE_S = 600, 600
 
 
 def answer(verdict: str, reason: str) -> dict:
@@ -111,14 +124,46 @@ def front(a: argparse.Namespace) -> int:
             raise SS.Refused(f"--prompts {a.prompts}: one group, at most the scan's {SS.A.SCAN['--lanes']} lanes")
         if SS.A.scan_group_windows(a.tokens) != 1:
             raise SS.Refused(f"--tokens {a.tokens}: a group past one link-window, which the period's rows form refuses")
+        if a.warmup < 0:
+            raise SS.Refused(f"--warmup {a.warmup}: a count of requests, 0 for none")
         ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, secrets.token_bytes(32))
         data = json.dumps(ps, separators=(",", ":")).encode()
         SS.check(a, data)
+        if a.warmup:
+            warm = warmup(a, serve_dir)
+            (out / "warmup.json").write_text(json.dumps({"requests": warm}, indent=1) + "\n")
         return SS.session(a, data, ps)
     except SS.Refused as e:
         (out / "session.json").write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
         print(f"refused: {e}", file=sys.stderr)
         return e.code
+
+
+def warmup(a: argparse.Namespace, serve_dir: Path, *, clock: Callable[[], float] = time.monotonic,
+           sleep: Callable[[float], object] = time.sleep) -> list[dict]:
+    """``--warmup``'s requests (the module docstring), each its user, finish and seconds; `served_session.Refused`
+    when one fails or serve-openai hasn't recorded every one's window closed within `WARMUP_CLOSE_S`."""
+    tag, done = secrets.token_hex(4), []
+    for i, p in enumerate(SS.prompts(a.warmup, a.prompt_ids, a.vocab, secrets.token_bytes(32))):
+        body = {"user": f"warmup-{tag}-{i}", "prompt": p, "max_tokens": a.tokens, "temperature": 0.0, "top_p": 1.0}
+        req = urllib.request.Request(f"http://127.0.0.1:{a.port}/v1/completions", json.dumps(body).encode(),
+                                     {"content-type": "application/json"})
+        t = clock()
+        try:
+            with urllib.request.urlopen(req, timeout=WARMUP_REQUEST_S) as r:  # noqa: S310
+                got = json.loads(r.read())
+        except (OSError, ValueError) as e:
+            raise SS.Refused(f"--warmup: request {i}: {type(e).__name__}: {e}") from None
+        done.append({"user": body["user"], "finish_reason": ((got.get("choices") or [{}])[0]).get("finish_reason"),
+                     "seconds": round(clock() - t, 3)})
+        print(f"warm-up {i + 1}/{a.warmup}: {done[-1]}", flush=True)
+    users, until = {d["user"] for d in done}, clock() + WARMUP_CLOSE_S
+    while left := users - {r.get("user") for r in _lines(serve_dir / SS.USERS)}:
+        if clock() > until:
+            raise SS.Refused(f"--warmup: serve-openai recorded no closed window of {sorted(left)} in "
+                             f"{serve_dir / SS.USERS} within {WARMUP_CLOSE_S} s")
+        sleep(1)
+    return done
 
 
 def relay(listen: int, to: int, *, ready: Callable[[], None] = lambda: None) -> None:
@@ -409,6 +454,8 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("--vocab", type=int, default=SS.VOCAB)
     f.add_argument("--height", type=int, default=HEIGHT)
     f.add_argument("--minutes", type=int)
+    f.add_argument("--warmup", type=int, default=0, metavar="N",
+                   help="plain requests of the group's shape straight to PORT first, each in a window of its own")
     q = sub.add_parser("piece")
     q.add_argument("serve_dir", type=Path)
     q.add_argument("window", type=int)
