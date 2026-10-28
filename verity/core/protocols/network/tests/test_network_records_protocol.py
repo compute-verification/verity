@@ -182,7 +182,9 @@ def _bad_records(c: bytes, n: int) -> list[bytes]:
 def record_cases(draw, kinds: tuple[str, ...] = KINDS, only: tuple[str, ...] | None = None) -> dict:
     kind = draw(st.sampled_from(kinds))
     m = draw(st.sampled_from([x for x in EXPECT[kind] if only is None or x in only]))
-    d = draw(V2.units((m if m in V2.EXPECT else "honest",), need_egress=m in EGRESS_ONLY))
+    # a committed record's digest binds its link in canonical JSON, whose strings are ASCII without DEL
+    links = V2.LINKS if kind in ("raw", "certified") else ("a", "b", "c", "d-e")
+    d = draw(V2.units((m if m in V2.EXPECT else "honest",), need_egress=m in EGRESS_ONLY, links=links))
     aim = ("egress", *d.egress_target) if m in EGRESS_ONLY and d.egress_target else d.target
     lws = [(r.direction.value, r.link, r.window) for r in d.records]
     # in a mixed unit every record of the changed link-window, either direction, has the kind the change needs: a raw or

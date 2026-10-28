@@ -10,7 +10,7 @@ Rules (AST, no import of the checked modules):
   - no `global` / `nonlocal` statements; no module-level mutable state mutated in functions (best effort: assignments to
     module names inside functions);
   - every module that defines a definition (`CompositeDefinition(`, `@composite(`, `@primitive(`, `PrimitiveDefinition(`)
-    has a module-level `SEMANTIC_ID = "<lane>/<Name>@v<k>"` and every definition's version argument is an int >= 1;
+    has a module-level `SEMANTIC_ID = "<area>/<Name>@v<k>"` and every definition's version argument is an int >= 1;
   - `*_difftest.py` adapters are exempt from the import rule for `torch` INSIDE functions only (module-level torch import
     is still an error) and need `SEMANTIC_ID` too.
 """
@@ -74,9 +74,9 @@ def lint_file(path: Path) -> dict[str, Any]:
                 semantic_id = node.value.value
     if n_defs or is_adapter:
         if semantic_id is None:
-            problems.append("no module-level SEMANTIC_ID = \"<lane>/<Name>@v<k>\"")
+            problems.append("no module-level SEMANTIC_ID = \"<area>/<Name>@v<k>\"")
         elif not SEMANTIC_ID_RE.match(semantic_id):
-            problems.append(f"SEMANTIC_ID {semantic_id!r} does not match <lane>/<Name>@v<k>")
+            problems.append(f"SEMANTIC_ID {semantic_id!r} does not match <area>/<Name>@v<k>")
     # module-level names assigned inside functions (mutable module state)
     for fn in [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
         for n in ast.walk(fn):

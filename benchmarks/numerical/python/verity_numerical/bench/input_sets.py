@@ -1,7 +1,7 @@
 """Input sets: one file layout for a subcircuit's captured and synthetic inputs, each input with its exact output.
 
 A set is a directory ``<name>/`` (the exporter writes it under ``<out>/sets/``), exactly the layout of the vLLM VU exporter's
-``vllm-vu-set/v1`` (``verity_vllm.pipeline.vu_export``, PR #42), which this module reads and writes:
+``vllm-vu-set/v1`` (``verity_vllm.pipeline.vu_export``), which this module reads and writes:
 
   ``<port>.<u8|u16|u32|u64>``  flat little-endian words, instance-major; a port whose width varies across instances also has
                                ``<port>.offsets.u64`` (n + 1 word offsets)

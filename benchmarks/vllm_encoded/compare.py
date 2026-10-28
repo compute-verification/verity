@@ -11,7 +11,7 @@ shapes, the context and the arm's store, not a counter reading: per decode step,
 HBM and the chip if nothing is reused from L2 (the encoded weights; the KV cache read and written; the activations; the
 fused kernel's chunk partial sums, written and read once; the BF16 LM head, which no arm encodes).
 
-Writes OUT/frontier.json too: the same points in the rate audit's shared schema (`verity/codec-frontier-point/v0`, ra-codec-wide's
+Writes OUT/frontier.json too: the same points in the rate audit's shared schema (`verity/codec-frontier-point/v0`,
 `benchmarks/word_codec/frontier.py`), with ``end_to_end: true``, the context and the model: y over stock vLLM compiled (the
 decode headline's baseline) of the compiled arms, as vLLM serves (-c) or without autotuning (-d, the step its gate ran; a
 little slower than -c, so its y errs high), split by the run's own arms in the same mode into base (the arm's kernel on plain payloads: `plain`, or the wide
@@ -19,8 +19,8 @@ kernel at k = 0), decode (over base), tag (the tagged arm over the same arm unta
 serve.py --commit, over the same arm uncommitted; 0 when the step runs no commit).  x, Δ (and τ for a tagged arm) are the
 codec lanes' measurements for the same field, k and packing (`CODEC`;
 `TENSOR_CODEC` for the tensor kernel's fields, by name: its m521 and the wide kernel's p521 are one prime); a sketched
-tensor arm's τ is 0, as ra-codec-tensor's points.py has it (the sketch's MMAs share the decode's CTA), and a sketched wide
-arm's is ra-codec-wide's τ_sketch at p512 (`WIDE_SKETCH_TAU`).
+tensor arm's τ is 0, as `benchmarks/codec_tensor/points.py` has it (the sketch's MMAs share the decode's CTA), and a sketched wide
+arm's is the wide codec's τ_sketch at p512 (`WIDE_SKETCH_TAU`).
 Each point also carries d, the step's time in native passes of the weights (the encoded arm's step over the stock arms'
 `native_pass`: every FP8 linear once through vLLM's own kernel, in one CUDA graph), which is μ_rebuild's numerator
 (d − τ)/x end to end, with x* = (d − τ)/0.5%; frontier.py's default d is y_total, which is a kernel-level point's d only.
@@ -35,10 +35,10 @@ from pathlib import Path
 
 TASK_COLS = 512
 FRONTIER = "verity/codec-frontier-point/v0"
-WORD_CODEC_POINTS = "art:615ddafdbdca40c9a79359dcd942422100b8b2d3e8d82b1e36073acdaedcb1de"  # ra-word-codec, r20261012-072836-5a84
+WORD_CODEC_POINTS = "art:615ddafdbdca40c9a79359dcd942422100b8b2d3e8d82b1e36073acdaedcb1de"
 MU_BUDGET = 0.005  # μ_rebuild's share of γ = 1% (the overnight brief's budget)
-WIDE_POINTS = "art:96b9bcd36ce70e8e5f06a2da0faddc9a6aff4242ccc7c16f6c4faa0080fd9d53"  # ra-codec-wide, r20261012-074744-2f82
-WIDE512_POINTS = "art:abd163bfa9df2289377d531e64caded21af9264c60f2a7439eb438f9820b11b8"  # ra-codec-wide, r20261012-112605-e146
+WIDE_POINTS = "art:96b9bcd36ce70e8e5f06a2da0faddc9a6aff4242ccc7c16f6c4faa0080fd9d53"
+WIDE512_POINTS = "art:abd163bfa9df2289377d531e64caded21af9264c60f2a7439eb438f9820b11b8"
 #: (word bits, payload bits, k) -> the encode time of one pass's words in native passes (x), the decode's share of a pass's
 #: compute (Δ) and the ro-blake3/v1 tag's (τ), as the codec lanes measured them on the same GPU
 CODEC = {
@@ -53,10 +53,10 @@ CODEC = {
     (512, 512, 1): (326.151527648199, 0.691243128520072, 0.8264958893738357, WIDE512_POINTS),
     (512, 512, 2): (652.303055296398, 1.3306932724844047, 0.8264958893738357, WIDE512_POINTS),
 }
-#: the wide kernel's sketch-then-hash τ at p512 (the sketch's MMAs and hash in its CTA, as ra-codec-wide prices it)
+#: the wide kernel's sketch-then-hash τ at p512 (the sketch's MMAs and hash in its CTA, as the wide codec prices it)
 WIDE_SKETCH_TAU = 0.04132479446869178
-#: ra-codec-tensor's (its 08:55Z report: x with its tensor cores and the 1.16× clock, from r20261012-080525-4dcf's
-#: squaring rates; τ = 0.48 a stored pass, r20261012-083520-f31c), by (field, k)
+#: the tensor-core codec's (x with its tensor cores and the 1.16× clock, from its measured squaring rates; τ = 0.48 a
+#: stored pass), by (field, k)
 TENSOR_POINTS = ("art:a4a86704b3bb90121b67ecc1655443e133523e321700ba4fe153c751ce421a4b "
                  "art:6ef8f6d802c7fab5d042dea5d362ca938e436b4a2eff445a323bb268ebb14214")
 TENSOR_CODEC = {
@@ -68,10 +68,10 @@ TENSOR_CODEC = {
     ("p1023", 1): (531.0, 1.15, 0.48, TENSOR_POINTS),
     ("m1279", 1): (794.0, 1.29, 0.48, TENSOR_POINTS),
 }
-#: the full-slot fields at the x, Δ and τ measured for the field of their width (16 and 24 limbs), as ra-codec-theory
-#: prices 2^768 − 825 at p767's costs: no rates of their own yet
+#: the full-slot fields at the x, Δ and τ measured for the field of their width (16 and 24 limbs), as the codec's
+#: cost model prices 2^768 − 825 at p767's costs: no rates of their own yet
 TENSOR_CODEC |= {("p512", 1): TENSOR_CODEC[("p511", 1)], ("p768", 1): TENSOR_CODEC[("p767", 1)]}
-#: the 1,536- and 2,048-bit full-slot fields at their own k = 1 rates (r20261012-115146-b886: the CUDA-core root, their
+#: the 1,536- and 2,048-bit full-slot fields at their own k = 1 rates (the CUDA-core root, their
 #: words being wider than the tensor-core squaring's 5 chunks; x over the same 1.16× clock), τ the tag's as above
 TENSOR_1536_POINTS = "art:a5459c87668c5c3c38329f057890e0529d308e391537369dd2fc752f085bdfca"
 TENSOR_CODEC |= {("p1536", 1): (1507.3083428871978 / 1.16, 1.0855995545095118, 0.48, TENSOR_1536_POINTS),
@@ -129,7 +129,7 @@ def mode(a: dict) -> str:
 
 
 #: the modes whose gate is bit for bit: vLLM's default compile picks inductor kernels by timing in each process, so two of
-#: its plain arms can differ in the last bits of a log-prob (r20261012-083225-9bee); its gates are reported, not required
+#: its plain arms can differ in the last bits of a log-prob; its gates are reported, not required
 DETERMINISTIC = ("", "-d")
 
 
@@ -290,11 +290,11 @@ def main() -> int:
                 "gpu": a["gpu"],
                 "codec": {"field": cod["field"], "word_bits": cod["word_bits"], "rounds": a["k"],
                           "payload_bits": cod["payload_bits"], "tag": cod.get("tag")},
-                "kernel": ("benchmarks/word_codec/wide.cu ww_gemm_sketch (ra-codec-wide's fused decode + sketch-then-hash "
+                "kernel": ("benchmarks/word_codec/wide.cu ww_gemm_sketch (the wide codec's fused decode + sketch-then-hash "
                            "GEMM" + (", each step committing as it goes from an L2 ring of tags" if cod.get("commit")
                                      else "") + ")" if wide and cod.get("tag") == SKETCH else
-                           "benchmarks/word_codec/wide.cu ww_gemm (ra-codec-wide's fused decode + tag GEMM)" if wide else
-                           "benchmarks/codec_tensor/wt.cu wt_fused_sketch (ra-codec-tensor's decoder, MMA and tag "
+                           "benchmarks/word_codec/wide.cu ww_gemm (the wide codec's fused decode + tag GEMM)" if wide else
+                           "benchmarks/codec_tensor/wt.cu wt_fused_sketch (the tensor-core codec's decoder, MMA and tag "
                            "warps; sketched, the decoders sketch and the MMA warp tags), warps chosen per shape and "
                            "batch" if tensor else
                            "benchmarks/vllm_encoded/ve.cu (word_codec wc.cu fused GEMM), form chosen per shape and batch"),

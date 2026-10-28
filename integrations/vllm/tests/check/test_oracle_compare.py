@@ -308,7 +308,7 @@ def test_verdict_b2_requires_a_live_oracle_compare():
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
             "value_correspondence": {"method": "root-compare-vs-independent-run", "result": True}}
     # the C2 of record is the sampled replay + boundary linkage at EVERY B; a row record without it is
-    # FAIL named (at B=1 too: a root-compare alone was F-cb-02's unsound PASS), and a complete oracle attribution no longer substitutes
+    # FAIL named (at B=1 too: a root-compare alone was an unsound PASS), and a complete oracle attribution no longer substitutes
     ok, why = commit_verdict({**base, "binding": _bnd(2)}, True, min_openings=64)
     assert not ok and why.startswith("C2 of record not established") and "no --program-dir" in why
     ok, why = commit_verdict({**base, "binding": _bnd(1)}, True, min_openings=64)
@@ -321,7 +321,7 @@ def test_verdict_b2_requires_a_live_oracle_compare():
     assert not ok and why.startswith("C2 of record not established")
     # with the C2 of record present the oracle stays a diagnostic: PASS at B2 without any Match record
     c2 = {"sampled_replay": {"result": True, "grade": "complete"}, "boundary_linkage": {"result": True, "pairs": 6, "linked": 6},
-          "weights_pin": {"result": True, "compared": 98}}                                   # [MAN-09] the checkpoint pin is part of the record
+          "weights_pin": {"result": True, "compared": 98}}                                   # the checkpoint pin is part of the record
     ok_, why_ = commit_verdict({**base, **c2, "binding": _bnd(2)}, True, min_openings=64)
     assert ok_ is True and why_.startswith("PASS (B=2: per-(step,request) attribution not verified on this record"), why_   # PASS, gap named
 
@@ -431,8 +431,8 @@ def _biased_linear_match(tmp: str):
 
 def test_biased_linear_member_is_read_at_the_bias_add_producer_not_the_gemm(tmp_path):
     """The manifest's producer for a biased linear's member "0" must be the BiasAdd row.  Required at the Gemm (the
-    pre-int-5 rule) the oracle reads the PRE-bias GEMM output and every row of every (step, request) differs from the committed post-bias
-    tensor -- exactly exec's Qwen2.5 finding (28 layers x 130 pairs, qkv_proj/0 only) -- a false FAIL that would be a false PASS had the
+    earlier rule) the oracle reads the PRE-bias GEMM output and every row of every (step, request) differs from the committed post-bias
+    tensor -- exactly the Qwen2.5 finding (28 layers x 130 pairs, qkv_proj/0 only) -- a false FAIL that would be a false PASS had the
     collector bound the GEMM alloc; at the BiasAdd it is the same tensor and the compare is a check (swapped committed bytes still fail)."""
     d, bmap, committed, op, pre = _biased_linear_match(str(tmp_path))
     res_gemm = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed), producers={(op, "0"): {"spec": "Gemm_v1", "ordinal": None, "operand": None}})
@@ -453,7 +453,7 @@ def test_exploded_module_is_read_at_the_manifest_producer_with_ordinal(tmp_path)
     prod = {(op, "0"): {"spec": "NarrowF32ToBf16_v1", "ordinal": 1}, (op, "1"): {"spec": "NarrowF32ToBf16_v1", "ordinal": 0}}
     res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed), producers=prod)
     assert res["compared"] == 4 and res["equal"] == 4 and res["mismatch_n"] == 0, res
-    # the same members with the residual/normed bytes exchanged under their names (F-cb-03 on a fused norm): named, not re-guessed
+    # the same members with the residual/normed bytes exchanged under their names (on a fused norm): named, not re-guessed
     committed[(0, f"{op}/0")], committed[(0, f"{op}/1")] = committed[(0, f"{op}/1")], committed[(0, f"{op}/0")]
     res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed), producers=prod)
     assert res["result"] is False and res["mismatch_n"] == 4 and {m["identity"]["output_member"] for m in res["mismatch"]} == {"0", "1"}
@@ -554,7 +554,7 @@ def test_verdict_names_the_failing_component_not_the_oracle_partial_note():
           "why": "root_compare: run root 0123456789abcdef != expected root fedcba9876543210 (--expect-root)",
           "oracle_compare": {"result": None, "why": partial_note, "grade": "attribution-complete", "compared": 848, "mismatch_n": 0},
           "components": {"root_compare": {"result": False, "why": "run root 0123456789abcdef != expected root fedcba9876543210 (--expect-root)",
-                                          "reference": "--expect-root (caller-pinned root; independent only if produced by another tree/pod, COORD M-0286)"},
+                                          "reference": "--expect-root (caller-pinned root; independent only if produced by another tree/pod)"},
                          "oracle_compare": {"result": None, "why": partial_note, "grade": "attribution-complete", "reference": "live Match oracle of this attempt (--match-dir)"}}}
     commit = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "binding": _bnd(1),
               "value_correspondence": vc, "oracle_compare": {"result": None, "why": partial_note, "compared": 848, "attribution": {"complete": True}}}
@@ -607,7 +607,7 @@ def test_an_unreadable_run_header_is_named_in_the_tie_facts_not_passed_off_as_an
     assert "run_header_unreadable" not in OC.oracle_tie_facts(str(tmp_path / "nowhere"))
 
 
-# ---- [reqval F-moe-r17-06, the ORACLE side] a shared module's invocation k is compared at ITS Program op ---------------------------------
+# ---- the ORACLE side: a shared module's invocation k is compared at ITS Program op -------------------------------------------------------
 ROT = "model.layers.0.self_attn.rotary_emb"
 
 
@@ -670,13 +670,13 @@ def test_f_moe_r17_06_shared_invocations_compare_at_their_program_op(tmp_path):
 
 
 def test_f_moe_r17_06_without_the_alias_table_the_exact_bytes_would_be_a_false_mismatch_so_they_are_not_compared_by_name(tmp_path):
-    """The reader (24df89c50) gives invocation k its OWN bytes; read at the canonical op they would MISMATCH layer 0's oracle value for every
+    """The fixed reader gives invocation k its OWN bytes; read at the canonical op they would MISMATCH layer 0's oracle value for every
     k >= 1 -- a false alarm.  Without the table they are NOT COMPARED, named; invocation 0 compares at its own op."""
     d, vals = _shared_rotary_match(str(tmp_path))
     bmap, rd, aliases = _shared_rotary_bmap(vals)
     res = OC.oracle_compare(OC.MatchOracle(d), bmap, rd)
     assert res["compared"] == 1 and res["equal"] == 1 and res["mismatch_n"] == 0 and res["complete"] is False
-    assert any("no Program path in the alias table" in k and "F-moe-r17-06" in k for k in res["not_compared"]), res["not_compared"]
+    assert any("no Program path in the alias table" in k and "not compared" in k for k in res["not_compared"]), res["not_compared"]
 
 
 def test_f_moe_r17_06_the_collapse_is_a_named_mismatch_at_the_invocation_not_a_vacuous_equal(tmp_path):
@@ -729,7 +729,7 @@ def test_revb_n_2_14_1_no_oracle_families_are_said_per_query_family_in_identitie
 
 
 def test_a_padded_records_bot_by_enablement_entries_are_stated_apart_never_unverified_attribution_nor_missing_range(tmp_path):
-    """The first #3 pod run (1be14d8e5) graded the oracle compare 'partial: request attribution unverified
+    """The first pod run of workload 3 graded the oracle compare 'partial: request attribution unverified
     at 21 (step, request) pairs ... identity without a byte range x7665' -- every one of them a PADDING entry (r0's steps 11..31, lifted dtype,
     no execution to compare against).  A bot-by-enablement entry is counted apart per Q(P) family, its (step, request) is not an attribution
     pair, its step is not 'not snapshotted'; the verdict reads the EXECUTED entries alone -- here complete."""
@@ -780,7 +780,7 @@ def test_a_padded_records_bot_by_enablement_entries_are_stated_apart_never_unver
     # no oracle on the record: the map/stratum half still runs, the oracle half says absent
     absent = PS.padding_vs_oracle(pp, None, bmap)
     assert absent["ok"] and absent["oracle"].startswith("absent") and absent["map_padding_entries"] == 6 and absent["map_pairs"] == 2
-    # the same map WITHOUT the activity stamp (a pre-B9.1 map) reads as before: partial, the range and the pairs named
+    # the same map WITHOUT the activity stamp (an older map) reads as before: partial, the range and the pairs named
     for e in bmap["entries"]:
         e.pop("activity", None)
     res0 = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed))
