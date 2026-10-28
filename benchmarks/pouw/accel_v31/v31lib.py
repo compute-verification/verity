@@ -80,7 +80,7 @@ class Lib:
             "v31_create": ([i, i, i, i, i, i, i, i, i, ctypes.c_char_p, i], vp),
             "v31_info": ([vp, u64p], i),
             "v31_set_act": ([vp, vp, vp, vp], i),
-            "v31_act": ([vp, u64, vp, vp], i),
+            "v31_act": ([vp, u64, vp, vp, vp], i),
             "v31_act_ptr": ([vp, u64, ctypes.POINTER(vp)], i),
             "v31_set_b": ([vp, vp], i),
             "v31_point_b": ([vp, vp], i),
@@ -161,11 +161,13 @@ class Prover:
         self.lib.check(self.lib.set_act(self.h, sa.ctypes.data_as(ctypes.c_void_p), sw.ctypes.data_as(ctypes.c_void_p), t))
         self.sa, self.sw = sa, sw
 
-    def act(self, c: int) -> tuple[np.ndarray, np.ndarray]:
-        """Call c's A′ (m x I int8) and its rows' amax (m bf16 words)."""
-        a, am = np.zeros((self.f.m, self.f.I), np.int8), np.zeros(self.f.m, "<u2")
-        self.lib.check(self.lib.act(self.h, c, a.ctypes.data_as(ctypes.c_void_p), am.ctypes.data_as(ctypes.c_void_p)))
-        return a, am
+    def act(self, c: int) -> tuple[np.ndarray, np.ndarray, int]:
+        """Call c's A′ (m x I int8), its rows' records (m x dither.REC bytes, `dither.ActRecord.pack`) and how many of its
+        rows have more columns at ±127 than a record's slots (rows the layout can't commit)."""
+        a, rec, over = np.zeros((self.f.m, self.f.I), np.int8), np.zeros((self.f.m, 16), np.uint8), ctypes.c_uint32()
+        self.lib.check(self.lib.act(self.h, c, a.ctypes.data_as(ctypes.c_void_p), rec.ctypes.data_as(ctypes.c_void_p),
+                                    ctypes.byref(over)))
+        return a, rec, int(over.value)
 
     def act_ptr(self, c: int) -> int:
         """Call c's A′ on the device (m x I int8), a consumer's A for `prove` (valid until the call two after c)."""

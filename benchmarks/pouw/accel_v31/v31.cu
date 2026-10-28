@@ -1373,25 +1373,33 @@ DEV u32 silu_mul_w(u32 g, u32 u, const uint16_t* __restrict__ lut) {
   const float s = __uint_as_float((u32)__ldg(lut + g) << 16), uf = __fadd_rn(__uint_as_float(u << 16), 0.0f);
   return bf16_rn(__fmul_rn(s, uf));
 }
-// dither.requant's code at its row's scale: cvt.rni.sat.s8.f32 of RN(h / scale), NaN 0, as a byte
+// dither.requant's code at its row's scale (Int8QuantElement_v1): rint of RN(h / scale) clamped to -127 .. 127 by fmaxf
+// and fminf (a NaN quotient -127), ties to even, as a byte
 DEV u32 requant_w(u32 h, float scale) {
-  const float q = __fdiv_rn(__uint_as_float(h << 16), scale);
-  if (isnan(q)) return 0;
-  return (u32)min(127, max(-128, __float2int_rn(q))) & 0xFFu;
+  const float q = fminf(fmaxf(__fdiv_rn(__uint_as_float(h << 16), scale), -127.0f), 127.0f);
+  return (u32)__float2int_rn(q) & 0xFFu;
 }
+// a code byte at +-127 (dither.named_of)
+DEV bool named_w(u32 c) { return c == 0x7Fu || c == 0x81u; }
 DEV uint4 ld4u(const int* p) { return __ldg(reinterpret_cast<const uint4*>(p)); }
+// dither.REC and NAMED: an A′ row's record, amax then S_i in 7 u16 slots (0xFFFF past the last)
+constexpr int AREC = 16, ANAMED = 7;
 // A′ of a gate-up call ([gate | up], I = N / 2), a CTA a row i: h_j = silu_mul(dequant(O_ij), dequant(O_i,j+I)) for j < I
-// into shared memory (2 I bytes) with the row's amax = max |h_j| (dither.abs_max), then A′_ij = requant(h_j, amax) into
-// act (m x I) and amax into amax[i]. O = D + tau_j ra_i + sigma_i rb_j mod 2^32 (ServedSrc's); xa: s_a, a row's, xw: s_w, a
-// column's (f32).
+// into shared memory (2 I bytes) with the row's amax = max |h_j|, NaN skipped (dither.abs_max), then A′_ij = requant(h_j,
+// amax) into act (m x I) and the row's record (dither.ActRecord.pack: amax, then S_i = {j : |A′_ij| = 127} ascending) into
+// rec (m x AREC). A row with more than ANAMED columns at +-127, which the layout can't commit, gets its slots all 0xFFFF
+// and counts in *over. O = D + tau_j ra_i + sigma_i rb_j mod 2^32 (ServedSrc's); xa: s_a, a row's, xw: s_w, a column's
+// (f32).
 __global__ void __launch_bounds__(256) act_kernel(const int* __restrict__ D, const int* __restrict__ ra, const int* __restrict__ sa,
                                                   const int* __restrict__ rb, const int* __restrict__ sb, int N, int I,
                                                   const float* __restrict__ xa, const float* __restrict__ xw,
                                                   const uint16_t* __restrict__ lut, int8_t* __restrict__ act,
-                                                  uint16_t* __restrict__ amax) {
+                                                  uint8_t* __restrict__ rec, u32* __restrict__ over) {
   extern __shared__ uint16_t hs[];
-  __shared__ u32 red[8];
+  __shared__ u32 red[8], nn;
+  __shared__ uint16_t nm[ANAMED + 1];
   const u64 i = blockIdx.x;
+  if (!threadIdx.x) nn = 0;
   const int* d = D + i * (u64)N;
   const u32 a = (u32)__ldg(ra + i), s = (u32)__ldg(sa + i);
   const float x = __ldg(xa + i);
@@ -1407,7 +1415,7 @@ __global__ void __launch_bounds__(256) act_kernel(const int* __restrict__ D, con
 #pragma unroll
     for (int e = 0; e < 4; ++e) {
       h[e] = silu_mul_w(dequant_w(g[e], x, fg[e]), dequant_w(u[e], x, fu[e]), lut);
-      mx = max(mx, h[e] & 0x7FFFu);
+      if ((h[e] & 0x7FFFu) <= 0x7F80u) mx = max(mx, h[e] & 0x7FFFu);
     }
     *reinterpret_cast<uint2*>(hs + j0) = make_uint2(h[0] | h[1] << 16, h[2] | h[3] << 16);
   }
@@ -1416,19 +1424,41 @@ __global__ void __launch_bounds__(256) act_kernel(const int* __restrict__ D, con
   __syncthreads();
   mx = red[0];
   for (int w = 1; w < (int)(blockDim.x >> 5); ++w) mx = max(mx, red[w]);
-  const u32 ab = mx << 16;
-  const float scale = ab != 0 && ab <= 0x7F800000u ? __fdiv_rn(__uint_as_float(ab), 127.0f) : 1.0f;
+  // dither.act_scale (Int8RowScale_v1): RN(fmaxf(f32(amax), RN(1e-30)) / 127)
+  const float scale = __fdiv_rn(fmaxf(__uint_as_float(mx << 16), __uint_as_float(0x0DA24260u)), 127.0f);
   for (int j0 = 16 * threadIdx.x; j0 < I; j0 += 16 * blockDim.x) {
     const uint4 p = *reinterpret_cast<const uint4*>(hs + j0), q = *reinterpret_cast<const uint4*>(hs + j0 + 8);
     const u32 w[8] = {p.x, p.y, p.z, p.w, q.x, q.y, q.z, q.w};
     u32 o[4];
 #pragma unroll
-    for (int e = 0; e < 4; ++e)
-      o[e] = requant_w(w[2 * e] & 0xFFFFu, scale) | requant_w(w[2 * e] >> 16, scale) << 8 |
-             requant_w(w[2 * e + 1] & 0xFFFFu, scale) << 16 | requant_w(w[2 * e + 1] >> 16, scale) << 24;
+    for (int e = 0; e < 4; ++e) {
+      const u32 c[4] = {requant_w(w[2 * e] & 0xFFFFu, scale), requant_w(w[2 * e] >> 16, scale),
+                        requant_w(w[2 * e + 1] & 0xFFFFu, scale), requant_w(w[2 * e + 1] >> 16, scale)};
+      o[e] = c[0] | c[1] << 8 | c[2] << 16 | c[3] << 24;
+#pragma unroll
+      for (int y = 0; y < 4; ++y)
+        if (named_w(c[y])) {
+          const u32 at = atomicAdd(&nn, 1u);
+          if (at <= ANAMED) nm[at] = (uint16_t)(j0 + 4 * e + y);
+        }
+    }
     *reinterpret_cast<uint4*>(act + i * (u64)I + j0) = make_uint4(o[0], o[1], o[2], o[3]);
   }
-  if (!threadIdx.x) amax[i] = (uint16_t)mx;
+  __syncthreads();
+  if (threadIdx.x) return;
+  uint16_t r[1 + ANAMED], *s = r + 1;
+  r[0] = (uint16_t)mx;
+  const u32 k = nn <= ANAMED ? nn : 0;
+  for (u32 a = 0; a < k; ++a) {
+    u32 b = a;
+    for (; b && s[b - 1] > nm[a]; --b) s[b] = s[b - 1];
+    s[b] = nm[a];
+  }
+  for (u32 a = k; a < ANAMED; ++a) s[a] = 0xFFFFu;
+  if (nn > ANAMED) atomicAdd(over, 1u);
+  uint4 v;
+  memcpy(&v, r, AREC);
+  *reinterpret_cast<uint4*>(rec + i * (u64)AREC) = v;
 }
 
 // ---------------------------------------------------------------- the committed rows
@@ -1547,17 +1577,21 @@ template <bool LIVE = false> struct ServedSrcT {
   }
 };
 using ServedSrc = ServedSrcT<>;
-// A′'s bytes of a leaf (a gate-up call's, dither.Shape.act): lb bytes of one row of the m x I int8 buffer, 16-byte aligned;
+// A′'s bytes of a leaf (a gate-up call's, dither.Shape.act): lc bytes of one row of the m x I int8 buffer, 16-byte
+// aligned, then, on the row's last chunk, the row's AREC-byte record (lb = lc + AREC; rec null on the others, lb = lc);
 // zero past lb (an opening's short row)
 struct ActSrc {
-  const uint8_t* p;
-  u32 lb, pfm;
-  DEV uint4 ld16(u32 off) const { return off < lb ? ldg16(p + off) : make_uint4(0, 0, 0, 0); }
-  DEV void pf(u32 off) const { pf_to(p + off, pfm); }
+  const uint8_t *p, *rec;
+  u32 lc, lb, pfm;
+  DEV uint4 ld16(u32 off) const {
+    return off < lc ? ldg16(p + off) : off < lb ? ldg16(rec + (off - lc)) : make_uint4(0, 0, 0, 0);
+  }
+  DEV void pf(u32 off) const { pf_to(off < lc ? p + off : rec, pfm); }
 };
-// The leaves: per tile-row tm its tiles_n tiles' lpt leaves each, then (apr > 0: a gate-up call's A′) its 128 rows' A′,
-// apr leaves a row, row bytes each but the row's last, which holds the rest of its I bytes (dither.Shape.stride, leaf_span).
-// The last chunk hashes under its own P(8 alen) (mida, its chaining value) when it is short.
+// The leaves: per tile-row tm its tiles_n tiles' lpt leaves each, then (apr > 0: a gate-up call's A′) its 128 rows of A′,
+// each its I codes and its record (arow = I + AREC bytes), apr leaves a row, row bytes each but the row's last, which holds
+// the rest (dither.Shape.stride, leaf_span). The last chunk hashes under its own P(8 alen) (mida, its chaining value) when
+// it is short.
 struct ServedRow {
   const uint8_t* words;
   const int *D, *ra, *sa, *rb, *sb;
@@ -1567,6 +1601,8 @@ struct ServedRow {
   u64 I = 0;
   const int8_t* act = nullptr;
   const u64* mida = nullptr;
+  const uint8_t* rec = nullptr;
+  DEV u64 arow() const { return I + AREC; }
   DEV u64 stride() const { return tiles_n * lpt + (u64)TILE * apr; }
   DEV u64 base(u64 t) const { return apr ? (t / tiles_n) * stride() + (t % tiles_n) * lpt : t * lpt; }
   template <bool LIVE = false> DEV ServedSrcT<LIVE> src(u64 pos) const {
@@ -1578,9 +1614,10 @@ struct ServedRow {
   }
   // leaf pos's A′ chunk (a = its index among its tile-row's A′ leaves), its length and chaining value after P
   DEV ActSrc act_src(u64 tm, u64 a) const {
-    const u64 r = a / apr, c = a % apr;
-    return ActSrc{reinterpret_cast<const uint8_t*>(act) + (tm * TILE + r) * I + c * row,
-                  c + 1 < apr ? row : (u32)(I - (apr - 1) * (u64)row), pf};
+    const u64 r = a / apr, c = a % apr, i = tm * TILE + r;
+    if (c + 1 < apr) return ActSrc{reinterpret_cast<const uint8_t*>(act) + i * I + c * row, nullptr, row, row, pf};
+    const u32 lc = (u32)(I - c * (u64)row);
+    return ActSrc{reinterpret_cast<const uint8_t*>(act) + i * I + c * row, rec + i * AREC, lc, lc + AREC, pf};
   }
   DEV const u64* act_cv(const ActSrc& s) const { return s.lb == row ? C.mid_P : mida; }
   // whether leaf pos is an A′ row: (tm, a) set
@@ -1609,11 +1646,11 @@ struct ServedRow {
   }
   // (byte offset in dither.values_buffer, length) of leaf pos's row
   DEV void span(u64 pos, u64& off, u32& len) const {
-    const u64 st = stride(), tm = pos / st, q = pos % st, tl = tiles_n * lpt, start = tm * (tl * row + (apr ? TILE * I : 0));
+    const u64 st = stride(), tm = pos / st, q = pos % st, tl = tiles_n * lpt, start = tm * (tl * row + (apr ? TILE * arow() : 0));
     if (q < tl) { off = start + q * row; len = row; return; }
     const u64 r = (q - tl) / apr, c = (q - tl) % apr;
-    off = start + tl * row + r * I + c * row;
-    len = c + 1 < apr ? row : (u32)(I - (apr - 1) * (u64)row);
+    off = start + tl * row + r * arow() + c * row;
+    len = c + 1 < apr ? row : (u32)(arow() - (apr - 1) * (u64)row);
   }
 };
 
@@ -2546,7 +2583,8 @@ struct Fill {
   int I = 0, apr = 0, row_o = 0;      // A′'s cells a row (n / 2), its leaves a row, and O's leaves a tile
   u64 stride = 0, nbytes = 0;         // leaves a tile-row, and the call's value bytes (dither.Shape.stride, nbytes)
   int8_t* actb[2] = {};               // A′ (m x I int8), a copy each
-  uint16_t* amaxb[2] = {};            // its rows' amax (bf16), a copy each
+  uint8_t* recb[2] = {};              // its rows' records (m x AREC: amax, then S_i), a copy each
+  u32* aover = nullptr;               // aover[copy]: its rows past ANAMED columns at +-127 (uncommittable)
   float *xs = nullptr, *xw = nullptr; // the map's s_a (m) and s_w (n), f32 (set_act)
   uint16_t* lut = nullptr;            // bf16(silu_f32(f32(g))) of every bf16 word g (set_act)
   u64* mida = nullptr;                // the chaining value after P(8 alen), an A′ row's last chunk's (alen bytes)
@@ -2604,9 +2642,10 @@ struct Fill {
     if (k >= (1 << 17)) return "K " + std::to_string(k) + ": below 2^17 (dither.K_LIMIT)";
     if (ow != 32 && ow != 16) return "O is committed at 32 or 16 bits, not " + std::to_string(ow);
     if ((ow != 32 || act) && !o) return "O16 and A′ are a served call's (V31_SERVED=1)";
-    if (act && (n % (2 * TILE) || n > 200 * 1024)) return "A′: n a multiple of 256 (gate tiles pair with up tiles), at most 204800";
+    if (act && (n % (2 * TILE) || n / 2 >= 0xFFFF))
+      return "A′: n a multiple of 256 (gate tiles pair with up tiles), n / 2 below 65535 (S_i's u16 columns)";
     const u64 S = (k + L - 1) / L, lpt = (o ? S - 1 : S) * (32768 / row) + (o ? (u64)ow / 8 * 16384 / row : 0),
-              apr = act ? ((u64)n / 2 + row - 1) / row : 0, lv = (u64)(m / TILE) * ((n / TILE) * lpt + TILE * apr);
+              apr = act ? ((u64)n / 2 + AREC + row - 1) / row : 0, lv = (u64)(m / TILE) * ((n / TILE) * lpt + TILE * apr);
     if (lv > (1ull << 32)) return "more than 2^32 leaves";
     return "";
   }
@@ -2621,10 +2660,10 @@ struct Fill {
     row_o = o ? ow / 8 * 16384 / row : 0;
     lpt = Wn * (32768 / row) + row_o;
     I = act ? n / 2 : 0;
-    apr = act ? (I + row - 1) / row : 0;
+    apr = act ? (I + AREC + row - 1) / row : 0;
     stride = (u64)tiles_n * lpt + (u64)TILE * apr;
     leaves = (u64)(m / TILE) * stride;
-    nbytes = (u64)tiles * lpt * row + (u64)m * I;
+    nbytes = (u64)tiles * lpt * row + (u64)m * (act ? I + AREC : 0);
     CK(cudaDeviceGetAttribute(&nsm, cudaDevAttrMultiProcessorCount, 0));
     pair = gemm_pair(tiles_n);
     items = tiles >> pair;
@@ -2693,8 +2732,8 @@ struct Fill {
                     (void*)pl.claim, (void*)opos, (void*)obuf, (void*)Ap, (void*)Bp, (void*)ra[0], (void*)sa[0], (void*)rb[0],
                     (void*)sb[0], (void*)ra[1], (void*)sa[1], (void*)rb[1], (void*)sb[1], (void*)bad, (void*)xd[0],
                     (void*)xd[1], (void*)xf[0], (void*)xf[1], (void*)wsa, (void*)wsw, (void*)pls.ctl, (void*)pls.claim,
-                    (void*)actb[0], (void*)actb[1], (void*)amaxb[0], (void*)amaxb[1], (void*)xs, (void*)xw, (void*)lut,
-                    (void*)mida})
+                    (void*)actb[0], (void*)actb[1], (void*)recb[0], (void*)recb[1], (void*)aover, (void*)xs, (void*)xw,
+                    (void*)lut, (void*)mida})
       cudaFree(p);
     if (ltw || o) lt_free(lt);
     for (int b = 0; b < 2; b++) {
@@ -2721,7 +2760,9 @@ struct Fill {
   // A′'s buffers, the map's default scalars (s_a and s_w in [1, 2) / 127 from a hash of the index; set_act replaces them
   // and gives the SiLU table) and mida: P(8 alen) from the IV, P the params' P(8 ROW) with its length rewritten
   void act_setup(const Params& params) {
-    for (int b = 0; b < 2; b++) { actb[b] = dalloc<int8_t>((size_t)m * I); amaxb[b] = dalloc<uint16_t>(m); }
+    for (int b = 0; b < 2; b++) { actb[b] = dalloc<int8_t>((size_t)m * I); recb[b] = dalloc<uint8_t>((size_t)m * AREC); }
+    aover = dalloc<u32>(2);
+    CK(cudaMemset(aover, 0, 8));
     xs = dalloc<float>(m); xw = dalloc<float>(n); lut = dalloc<uint16_t>(65536); mida = dalloc<u64>(8);
     CK(cudaMemset(lut, 0, 2 * 65536));
     std::vector<float> hs(m), hw(n);
@@ -2733,7 +2774,7 @@ struct Fill {
     memcpy(P, params.P, 128);
     const size_t at = strnlen(reinterpret_cast<const char*>(P), 112) + 1;
     if (sha::be64(P + at) != 8ull * row) { fprintf(stderr, "A′: the params' P isn't P(8 ROW), ROW %d\n", row); exit(2); }
-    sha::put_be64(P + at, 8ull * ((u64)I - (u64)(apr - 1) * row));
+    sha::put_be64(P + at, 8ull * ((u64)I + AREC - (u64)(apr - 1) * row));
     u64 w[16], st[8];
     sha::iv(st);
     words_of(P, w, 16);
@@ -2748,12 +2789,15 @@ struct Fill {
     if (sw_) CK(cudaMemcpy(xw, sw_, 4 * (size_t)n, cudaMemcpyHostToDevice));
     if (lut_) CK(cudaMemcpy(lut, lut_, 2 * 65536, cudaMemcpyHostToDevice));
   }
-  // copy b's A′ and amax from its D (O's 32-bit words, its sums and shifts)
+  // copy b's A′ and its rows' records from its D (O's 32-bit words, its sums and shifts)
   void act_run(cudaStream_t st, int b) {
-    act_kernel<<<m, 256, 2 * I, st>>>(D[b], ra[b], sa[b], rb[b], sb[b], n, I, xs, xw, lut, actb[b], amaxb[b]);
+    CK(cudaMemsetAsync(aover + b, 0, 4, st));
+    act_kernel<<<m, 256, 2 * I, st>>>(D[b], ra[b], sa[b], rb[b], sb[b], n, I, xs, xw, lut, actb[b], recb[b], aover + b);
   }
   // tile t's first byte in the values (dither.values_buffer) and its first leaf
-  u64 tile_byte(int t) const { return (u64)(t / tiles_n) * ((u64)tiles_n * lpt * row + (u64)TILE * I) + (u64)(t % tiles_n) * lpt * row; }
+  u64 tile_byte(int t) const {
+    return (u64)(t / tiles_n) * ((u64)tiles_n * lpt * row + (u64)TILE * (act ? I + AREC : 0)) + (u64)(t % tiles_n) * lpt * row;
+  }
   u64 tile_leaf(int t) const { return (u64)(t / tiles_n) * stride + (u64)(t % tiles_n) * lpt; }
   void coins(cudaStream_t st, bool pad, bool wside) {
     if (pad) {
@@ -2946,7 +2990,7 @@ struct Fill {
   ServedRow servedrow(int b) const {
     return ServedRow{reinterpret_cast<const uint8_t*>(words[b]), D[b], ra[b], sa[b], rb[b], sb[b], (u64)lpt,
                      (u64)Wn * (32768 / row), (u64)n, (u64)tiles_n, (u32)row, (u32)Wn, (u32)kn.pf, ow == 16 ? 1u : 0u,
-                     (u32)apr, (u64)I, actb[b], mida};
+                     (u32)apr, (u64)I, actb[b], mida, recb[b]};
   }
   void leaves_nodes(int b, cudaStream_t st) {
     if (nomem) pl.leaves_nodes(cm[b], NoMemRow{(u32)row}, kn.ccta, st);
@@ -2959,7 +3003,7 @@ struct Fill {
   void poison(int b, cudaStream_t st) {
     if (D[b]) gk::poison(D[b], (size_t)m * n * 4, st);
     if (words[b]) gk::poison(words[b], (size_t)tiles * Wn * 32768, st);
-    if (actb[b]) { gk::poison(actb[b], (size_t)m * I, st); gk::poison(amaxb[b], 2 * (size_t)m, st); }
+    if (actb[b]) { gk::poison(actb[b], (size_t)m * I, st); gk::poison(recb[b], (size_t)m * AREC, st); }
   }
   // copy b's committed values (testing): leaves x ROW bytes, leaf pos's row at pos ROW (dither.values_buffer); words[b]
   // itself, or the rows gathered into vbuf
@@ -3542,7 +3586,7 @@ static int cmd_fill_once(const std::string& pdir, int lp, int Lspec, int row, co
 
 // Two sampled tiles of a call (copy b), for `v31.py fill-sample`: the seeds (dither order), the params (Ks with them),
 // whether it's served (O's bits, A′) and its salt offset, A's and B's rows of each tile, its values (the tile's leaf rows)
-// and its leaves (level 0). With A′: the map's s_w (xw), and per tile its tile-row's A′ rows, their amax, s_a and leaves,
+// and its leaves (level 0). With A′: the map's s_w (xw), and per tile its tile-row's A′ rows, their records, s_a and leaves,
 // B's rows of the gate tile and its up tile (the sampled tile's pair), and four whole rows of D with their sums and shifts
 // (rb, sb: O's whole rows, which amax is over)
 static void fill_samples(Fill& f, int b, const std::string& dir, const std::string& pfile, const std::vector<uint8_t>& sd,
@@ -3571,6 +3615,7 @@ static void fill_samples(Fill& f, int b, const std::string& dir, const std::stri
   const size_t tb = (size_t)f.lpt * f.row;
   if (f.act) {
     d.bytes("xw", f.xw, 4 * (size_t)f.n, f.s0);
+    d.bytes("aover", f.aover + b, 4, f.s0);
     d.bytes("rb", f.rb[b], 4 * (size_t)f.n, f.s0);
     d.bytes("sb", f.sb[b], 4 * (size_t)f.n, f.s0);
   }
@@ -3584,7 +3629,7 @@ static void fill_samples(Fill& f, int b, const std::string& dir, const std::stri
     if (!f.act) continue;
     const int tg = tn % (f.tiles_n / 2), tu = tg + f.tiles_n / 2;
     d.bytes(s + "act", f.actb[b] + (size_t)tm * TILE * f.I, (size_t)TILE * f.I, f.s0);
-    d.bytes(s + "amax", f.amaxb[b] + (size_t)tm * TILE, 2 * (size_t)TILE, f.s0);
+    d.bytes(s + "rec", f.recb[b] + (size_t)tm * TILE * AREC, (size_t)TILE * AREC, f.s0);
     d.bytes(s + "xs", f.xs + (size_t)tm * TILE, 4 * (size_t)TILE, f.s0);
     d.digests(s + "aleaves", f.cm[b].levels + 8 * ((u64)tm * f.stride + (u64)f.tiles_n * f.lpt), (size_t)TILE * f.apr, f.s0);
     d.bytes(s + "Bg", f.B + (size_t)tg * TILE * f.k, (size_t)TILE * f.k, f.s0);
@@ -3911,14 +3956,16 @@ int v31_set_act(void* h, const uint32_t* sa, const uint32_t* sw, const uint16_t*
   f.set_act(sa, sw, lut);
   return 0;
 }
-// Call c's A′ (m x I int8) and its rows' amax (m bf16 words), into host memory (either null: skipped)
-int v31_act(void* h, uint64_t c, int8_t* act, uint16_t* amax) {
+// Call c's A′ (m x I int8), its rows' records (m x 16 bytes, dither.ActRecord.pack) and the count of its rows past the
+// record's 7 slots (a u32), into host memory (any null: skipped)
+int v31_act(void* h, uint64_t c, int8_t* act, uint8_t* rec, uint32_t* over) {
   V31_FILL(h);
   if (!f.act) return fail("this context commits no A′");
   const int b = f.ready(c);
   if (b < 0) return fail("call " + std::to_string(c) + " isn't one of the last two calls");
   if (act) CK(cudaMemcpy(act, f.actb[b], (size_t)f.m * f.I, cudaMemcpyDeviceToHost));
-  if (amax) CK(cudaMemcpy(amax, f.amaxb[b], 2 * (size_t)f.m, cudaMemcpyDeviceToHost));
+  if (rec) CK(cudaMemcpy(rec, f.recb[b], (size_t)f.m * AREC, cudaMemcpyDeviceToHost));
+  if (over) CK(cudaMemcpy(over, f.aover + b, 4, cudaMemcpyDeviceToHost));
   return 0;
 }
 // Call c's A′ on the device (m x I int8, valid until the call two after it is issued): a consumer's A, no copy
