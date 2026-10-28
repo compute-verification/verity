@@ -22,7 +22,7 @@ a test, not a proof.
   root of a private setup and its held `W`): its `FINAL` frame, the fault's code when there is none, or the refusal.
   An accepted `FINAL` also gives the session's `Certificate.assess`: its verdict, coverage and StorageProfile.
 * `storage`: the certificate gate and StorageProfile (`PousCheck.Certificate`) at a store, `k` and `Δ + RTT`.
-* `sha512`: the SHA-512 of labelled bytes, against the pins the spec's §7 states for them.
+* `sha512`: the SHA-512 of labelled bytes, against the pins `reference.py` and `audit-vectors.json` hold for them.
 
 `transcript` is not a kind of the run: `pous-audit-difftest serve` answers it for `interop.py`, which holds it to
 `wire.py` on the spec's transcripts.
@@ -209,7 +209,7 @@ def storage (inst : Json) : V Json := do
     | some s => Json.mkObj [("covered", .bool (Certificate.gate s k delta rtt).2.1.isEmpty),
       ("profile", Certificate.profileJson s k delta rtt)]
 
-/-- A `sha512` instance's answer: the SHA-512 of each item's bytes, by its label (the spec's §7 pins). -/
+/-- A `sha512` instance's answer: the SHA-512 of each item's bytes, by its label (the vectors' pins). -/
 def sha512 (inst : Json) : V Json := do
   let items ← (← J.arr inst "items" "sha512").mapM fun i => do
     let #[label, b] := (← J.asArr i "item") | throw "sha512: an item is [label, bytes]"
