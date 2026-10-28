@@ -14,8 +14,8 @@ For x [M, K] bf16, W [N, K] int8 and s_w [N] float32 (`engine.int8_exact`'s stat
 Triton's `/` on float32 is div.full.f32 (approximate) and its libdevice calls are flush-to-zero by default, so the kernels
 use tl.div_rn, an inline cvt.rni, enable_reflect_ftz=False and enable_fp_fusion=False; `ptx_check` reads the compiled PTX
 for exactly these instructions.  The GEMM is vLLM's `triton_scaled_mm` (the stock arm's kernel) on the pointer path, without
-bias, with the same epilogue order (activation scale first); its config per architecture, shape and M is `CONFIGS`
-(ksweep.py's gated winners), else vLLM's tiles.  A split-K config adds int32 partials (exact in any order) into a
+bias, with the same epilogue order (activation scale first); its config per architecture, shape and M is `CONFIGS`, the
+served table (`verity_vllm.engine.int8_fused`'s: ksweep.py's gated winners), else vLLM's tiles.  A split-K config adds int32 partials (exact in any order) into a
 self-zeroing `Workspace`, and the last split applies the epilogue.  A TMA config runs `exactlin_scaled_mm_tma`, the same
 product and epilogue with X and W read through host tensor descriptors (kernel parameters, so a graph captures them;
 out-of-bounds boxes read zeros), optionally warp-specialized.  The product needs no row
@@ -29,6 +29,7 @@ import functools
 import torch
 import triton
 import triton.language as tl
+from verity_vllm.engine.int8_fused import CONFIGS
 
 OPTS = {"enable_fp_fusion": False, "enable_reflect_ftz": False}
 
@@ -194,71 +195,6 @@ class Cfg(tuple):
 
 def default_cfg(m: int, n: int, k: int) -> Cfg:
     return Cfg(*tiles(m, n))
-
-
-# Per architecture and (N, K): (m_max, config) rows, ksweep.py's winners where they beat vLLM's tiles (best.json).
-CONFIGS: dict[str, dict[tuple[int, int], list[tuple[int, str]]]] = {
-    "sm_120": {  # RTX PRO 6000: swept at M <= 64, then M 256 to 8192 (pointer and TMA)
-        (6144, 4096): [(1, "16x64x128:w4:s5:k1"), (16, "16x32x128:w4:s4:k1"), (32, "32x32x128:w4:s4:k1"),
-                       (64, "32x64x128:w4:s4:k1"), (256, "128x64x128:w4:s3:k1:t1"), (2048, "128x128x64:w4:s3:k1:t1"),
-                       (8192, "128x128x64:w4:s3:k1:t1")],
-        (4096, 4096): [(1, "16x32x256:w4:s5:k1"), (16, "16x16x256:w4:s3:k1"), (32, "32x32x256:w4:s4:k1"),
-                       (64, "32x64x256:w8:s4:k1"), (256, "128x64x128:w4:s4:k1"), (2048, "128x128x64:w4:s3:k1:t1"),
-                       (8192, "128x128x64:w4:s3:k1:t1")],
-        (28672, 4096): [(1, "16x32x128:w4:s4:k1"), (16, "16x32x128:w4:s4:k1"), (32, "32x32x256:w4:s2:k1"),
-                        (64, "64x64x128:w4:s3:k1"), (256, "128x64x64:w4:s3:k1:t1"), (2048, "128x128x64:w4:s4:k1:t1"),
-                        (8192, "128x128x64:w4:s3:k1:t1")],
-        (4096, 14336): [(1, "16x32x512:w4:s4:k1"), (16, "16x32x512:w4:s4:k1"), (32, "32x32x512:w8:s4:k1"),
-                        (64, "32x64x512:w8:s3:k1"), (256, "128x64x128:w4:s5:k1"), (2048, "128x128x64:w4:s3:k1:t1"),
-                        (8192, "128x128x64:w4:s3:k1:t1")],
-        (24576, 4096): [(1, "16x32x128:w4:s4:k1"), (16, "16x32x128:w4:s3:k1"), (32, "32x32x256:w4:s2:k1"),
-                        (64, "32x64x128:w8:s2:k1"), (256, "128x128x64:w4:s4:k1:t1"), (2048, "128x128x64:w4:s3:k1:t1"),
-                        (8192, "128x128x64:w4:s3:k1:t1")],
-        (4096, 12288): [(1, "16x32x512:w4:s5:k1"), (16, "16x32x512:w4:s4:k1"), (32, "32x32x512:w4:s4:k1"),
-                        (64, "32x64x512:w8:s3:k1"), (256, "128x64x128:w4:s5:k1"), (2048, "128x128x64:w4:s3:k1:t1"),
-                        (8192, "128x128x64:w4:s3:k1:t1")],
-    },
-    "sm_90": {  # H200: swept at M <= 32, then M 64 to 8192 (pointer and TMA)
-        (6144, 4096): [(1, "16x64x512:w4:s4:k1"), (16, "16x64x512:w4:s4:k1"), (32, "32x32x512:w4:s3:k1"),
-                       (64, "64x32x256:w4:s4:k1:t1"), (256, "128x128x256:w4:s3:k1:t1"),
-                       (2048, "128x128x128:w4:s3:k1:t1"), (8192, "128x128x128:w4:s3:k1:t1")],
-        (4096, 4096): [(1, "16x32x512:w4:s4:k1"), (16, "16x32x512:w4:s4:k1"), (32, "32x32x256:w4:s5:k1"),
-                       (64, "64x16x256:w4:s5:k1:t1"), (256, "128x64x256:w4:s4:k1:t1"),
-                       (2048, "128x128x128:w4:s3:k1:t1"), (8192, "128x128x128:w4:s3:k1:t1")],
-        (28672, 4096): [(1, "16x32x256:w4:s3:k1"), (16, "16x32x128:w4:s3:k1"), (32, "32x128x256:w4:s3:k1"),
-                        (64, "64x128x128:w8:s4:k1:t1"), (256, "128x128x128:w4:s3:k1:t1"),
-                        (2048, "128x128x128:w4:s3:k1:t1"), (8192, "128x128x128:w4:s3:k1:t1")],
-        (4096, 14336): [(1, "16x64x256:w4:s3:k4"), (16, "16x32x512:w4:s3:k2"), (32, "32x32x512:w4:s5:k1"),
-                        (64, "64x32x256:w4:s5:k1:t2"), (256, "128x64x256:w4:s4:k1:t1"),
-                        (2048, "128x128x128:w4:s3:k1:t1"), (8192, "128x128x128:w4:s3:k1:t1")],
-        (24576, 4096): [(1, "16x64x256:w4:s3:k1"), (16, "16x64x256:w4:s3:k1"), (32, "32x64x256:w4:s3:k1"),
-                        (64, "64x64x128:w4:s4:k1:t1"), (256, "128x64x128:w4:s3:k1:t1"),
-                        (2048, "128x128x128:w4:s3:k1:t1"), (8192, "128x128x128:w4:s3:k1:t1")],
-        (4096, 12288): [(1, "16x32x256:w4:s3:k4"), (16, "16x32x512:w4:s4:k2"), (32, "32x32x512:w4:s5:k1"),
-                        (64, "64x32x256:w4:s5:k1:t2"), (256, "64x128x256:w8:s4:k1:t2"),
-                        (2048, "128x128x128:w8:s3:k1:t1"), (8192, "128x128x128:w8:s3:k1:t1")],
-    },
-    "sm_100": {  # B200: swept at M <= 64, then M 256 to 8192 (pointer and TMA)
-        (6144, 4096): [(1, "16x64x512:w4:s4:k1"), (16, "16x64x512:w4:s4:k1"), (32, "32x16x256:w4:s4:k1"),
-                       (64, "64x64x512:w4:s4:k1"), (256, "64x64x256:w4:s3:k1:t1"), (2048, "128x64x128:w4:s3:k1:t1"),
-                       (8192, "128x64x128:w4:s3:k1:t1")],
-        (4096, 4096): [(1, "16x32x512:w4:s4:k1"), (16, "16x32x512:w4:s4:k1"), (32, "32x32x512:w4:s4:k1"),
-                       (64, "64x32x512:w4:s4:k1"), (256, "64x64x256:w4:s3:k1:t1"), (2048, "128x64x128:w4:s3:k1:t1"),
-                       (8192, "128x128x128:w4:s3:k1:t1")],
-        (28672, 4096): [(1, "16x64x256:w4:s3:k1"), (16, "16x64x256:w4:s3:k1"), (32, "32x128x256:w4:s3:k1"),
-                        (64, "64x128x256:w4:s3:k1"), (256, "128x64x128:w4:s4:k1:t1"), (2048, "128x64x128:w4:s3:k1:t1"),
-                        (8192, "128x128x128:w4:s4:k1:t1")],
-        (4096, 14336): [(1, "16x64x256:w4:s5:k4"), (16, "16x64x512:w4:s3:k4"), (32, "32x64x256:w4:s4:k4"),
-                        (64, "64x64x512:w4:s4:k2"), (256, "64x64x256:w4:s4:k1:t1"), (2048, "128x64x128:w4:s3:k1:t1"),
-                        (8192, "128x128x128:w4:s4:k1:t1")],
-        (24576, 4096): [(1, "16x64x256:w4:s4:k1"), (16, "16x64x256:w4:s4:k1"), (32, "32x64x256:w4:s3:k1"),
-                        (64, "64x64x256:w4:s3:k1"), (256, "64x128x128:w4:s4:k1:t1"), (2048, "128x64x128:w4:s3:k1:t1"),
-                        (8192, "128x128x128:w4:s3:k1:t1")],
-        (4096, 12288): [(1, "16x64x256:w4:s5:k4"), (16, "16x64x512:w4:s3:k4"), (32, "32x64x256:w4:s5:k4"),
-                        (64, "64x32x512:w4:s4:k1"), (256, "64x64x256:w4:s3:k1:t1"), (2048, "128x64x128:w4:s3:k1:t1"),
-                        (8192, "128x128x128:w4:s3:k1:t1")],
-    },
-}
 
 
 @functools.cache
