@@ -23,6 +23,7 @@ from typing import Any
 import numpy as np
 
 from verity_vllm.commit import row_tables_device as RTD
+from verity_vllm.protocols.pouw.h1.nodes import Nodes
 
 __all__ = ["CHUNK_BYTES", "Pub", "Table", "available", "device_commit", "device_lib", "device_public_salts", "host_commit",
            "host_lib", "host_public_salts", "nvcc", "pub", "table"]
@@ -130,21 +131,21 @@ def _salts(row_salts: bytes, n: int) -> np.ndarray:
     return np.frombuffer(row_salts, np.uint8).copy()
 
 
-def _out(bcs: np.ndarray, levels: np.ndarray, W: int) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
-    """The device's big-endian words as `Registered`'s ``bcs`` and ``levels``."""
-    nodes = levels.byteswap().view("V64").tolist()
+def _out(bcs: np.ndarray, levels: np.ndarray, W: int) -> tuple[Nodes, tuple[Nodes, ...]]:
+    """The device's big-endian words as `Registered`'s ``bcs`` and ``levels``, each node's bytes made on read."""
+    nodes = levels.byteswap().view(np.uint8)
     out, off, w = [], 0, W
     while True:
-        out.append(tuple(nodes[off:off + w]))
+        out.append(Nodes(nodes[64 * off:64 * (off + w)], 64))
         off += w
         if w == 1:
             break
         w //= 2
-    return tuple(bcs.byteswap().view("V128").tolist()), tuple(out)
+    return Nodes(bcs.byteswap().view(np.uint8), 128), tuple(out)
 
 
 def host_commit(words: np.ndarray, key: bytes, nonce: int, row_salts: bytes | None,
-                domain_id: bytes) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
+                domain_id: bytes) -> tuple[Nodes, tuple[Nodes, ...]]:
     """The ``b || c`` strings and tree levels of ``words`` ``(n, W)`` u16 by the kernels' functions on the CPU: the device
     path's twin."""
     rows = _rows(words)
