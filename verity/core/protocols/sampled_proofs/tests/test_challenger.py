@@ -1,4 +1,4 @@
-"""The proof service's challenger (`challenger`): it commits to every coin of a layout before the epoch and opens each
+"""The proof system's challenger (`challenger`): it commits to every coin of a layout before the epoch and opens each
 once, after the root the verifier recorded for it; the verifier refuses a coin opened twice, one opened before its root
 was recorded, a foreign epoch's or another challenger's, a coin that isn't the one asked for, and a recorded root whose
 coin was never opened.  The layouts are any client's: named by no protocol.  The verifier trusts only the commitment in
