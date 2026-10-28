@@ -20,7 +20,8 @@
 # served-*), gemm (0; 1 in a -DV31_WG build: a served call's D from wg_proto.cuh's GEMM, and the bench adds
 # wgmma.linear's arm, wgl), wgbn (256), wgg (16), rp (0; 4: the O rows hashed in the GEMM's producer warpgroup; 5: and in
 # a hash warpgroup of its own, r5h its registers, the prefix-sum rows too in the GEMM of the prefix sums unless r5w=0),
-# r5h (96), r5w (1), hall (0), hchunk (0), wgw (1), lminb (5), sahead (0), full (1), sminb (4), lfold (0) and mask (0);
+# r5h (96), r5w (1), tst (0; 1: RP 5's O and prefix-sum stores through shared memory with TMA), hall (0), hchunk (0),
+# wgw (1), lminb (5), sahead (0), full (1), sminb (4), lfold (0) and mask (0);
 # and nreg (the GEMM's register cap, V31_MAXNREG or under V31_WG V31_WG_NREG, a build of its own; default v31.cu's).
 # Default "row=1024,cprio=hi,sched=1 row=8192,cprio=hi,sched=1".
 # FILL_LS: the segment lengths L (default "768 2048", t 3 and 8 at LP 256; 0: L = K; each with min(L, K) at most 8 LP,
@@ -66,7 +67,7 @@ knob_env() {
     "V31_PF=$(knob "$1" pf 0) V31_SCHED=$(knob "$1" sched 0) V31_LTW=$(knob "$1" ltw 0) V31_SERVED=$(knob "$1" served 0)" \
     "V31_GEMM=$(knob "$1" gemm 0) V31_WGBN=$(knob "$1" wgbn 256) V31_WGG=$(knob "$1" wgg 16)" \
     "V31_RP=$(knob "$1" rp 0) V31_R5H=$(knob "$1" r5h 96) V31_HALL=$(knob "$1" hall 0) V31_HCHUNK=$(knob "$1" hchunk 0)" \
-    "V31_WGW=$(knob "$1" wgw 1) V31_R5W=$(knob "$1" r5w 1)" \
+    "V31_WGW=$(knob "$1" wgw 1) V31_R5W=$(knob "$1" r5w 1) V31_TST=$(knob "$1" tst 0)" \
     "V31_LMINB=$(knob "$1" lminb 5) V31_SAHEAD=$(knob "$1" sahead 0)"
 }
 export -f knob knob_env
