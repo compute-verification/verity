@@ -20,6 +20,7 @@ import pytest
 from hypothesis import strategies as st
 
 import ra_cases as M
+from ra_cases import Entropy
 import verity_difftest as D
 from verity.core.protocols.pous.verifier import MerkleTree, leaf_hash
 from verity.core.protocols.remote_bandwidth import coins, p2, p2_party, receipts
@@ -205,15 +206,6 @@ def opening(v) -> str | None:
 GEOMETRIES = ((4, 1), (2, 3), (3, 3), (5, 3), (17, 4))
 
 
-class Entropy:
-    def __init__(self, label: bytes) -> None:
-        self.label, self.count = label, 0
-
-    def __call__(self, n: int) -> bytes:
-        self.count += 1
-        return expand(self.label + self.count.to_bytes(8, "big"), n)
-
-
 @functools.cache
 def drawn_store(k: int, rows: int) -> p2.Store:
     """A store of drawn blocks (P2's check never decodes, so they needn't be codewords) under geometry `k`, with
@@ -341,8 +333,9 @@ def p2_apply(b: p2_party.Books, e: tuple) -> dict:
 
 def p2_session(v) -> dict:
     """`p2SessionFn`: the registration file's bytes and the prover's request line read as `p2_party` reads them
-    (`registration_of`, `plan_of`, `message`, `params_of`), and the events through `p2_party.Books` on a challenger
-    replaying the case's 2W coins: the held store, every event's result and the answer, less its reason."""
+    (`registration_of`, `plan_of`, `message`, `params_of` with the request's own values as the auditor's, as the
+    Lean's `paramsOf` reads it), and the events through `p2_party.Books` on a challenger replaying the case's 2W
+    coins: the held store, every event's result and the answer, less its reason."""
     with M.decoding():
         data = M.hex_(v, "registration")
     try:
@@ -354,7 +347,7 @@ def p2_session(v) -> dict:
     with M.decoding():
         line = M.hex_(v, "request")
     try:
-        params = p2_party.params_of(reg, p2_party.message(line, "request"))
+        params = lean_params(reg, line)
     except (ConnectionError, ValueError, KeyError, TypeError):
         return {"refused": "request"}
     with M.decoding():
@@ -372,6 +365,13 @@ def p2_session(v) -> dict:
 
 
 P2_STEP_NS = 400
+
+
+def lean_params(reg: p2.Registration, line: bytes):
+    """The parameters of the request `line` as the Lean's `P2Session.paramsOf` reads them: the request's own values,
+    which `p2_party.params_of` takes as the auditor's (the party holds them to its own, `p2_party.SESSION`)."""
+    request = p2_party.message(line, "request")
+    return p2_party.params_of(reg, request, request)
 
 
 def p2_line(key: str, value) -> bytes:
@@ -472,7 +472,7 @@ def p2_held(reg: p2.Registration, data: bytes, line: bytes):
     try:
         doc = json.loads(data)
         plan = p2_party.plan_of(doc, p2_party.registration_of(doc))
-        return plan, p2_party.params_of(reg, p2_party.message(line, "request"))
+        return plan, lean_params(reg, line)
     except (ConnectionError, ValueError, KeyError, TypeError) as e:
         return e
 
@@ -624,7 +624,7 @@ def test_an_honest_session_over_the_committed_store_is_accepted_in_lean(server, 
     req = p2_party.request_of(reg.node, windows=2, passes=2, samples=3, window_ns=2 * P2_STEP_NS,
                               deadline_ns=P2_STEP_NS)
     coins_ = [expand(b"committed coin %d" % j, coins.COIN_BYTES) for j in range(4)]
-    events = p2_events(committed, Plan.whole(reg.blocks), p2_party.params_of(reg, req), coins_, 0)
+    events = p2_events(committed, Plan.whole(reg.blocks), p2_party.params_of(reg, req, req), coins_, 0)
     v = {"registration": json.dumps(p2_party.registration_json(reg)).encode().hex(),
          "request": p2_line("request", req).hex(), "coins": [c.hex() for c in coins_], "chunk": 2, "not_before_ns": 0,
          "events": events}

@@ -91,10 +91,10 @@ def test_a_subprotocol_whose_piece_did_not_run_is_undecided_not_run_naming_the_c
     got = S.pieces(tmp_path, 1, tmp_path / "pieces", env={})
     lines = capsys.readouterr().out.splitlines()
     assert [(g["verdict"], g["reason"]) for g in got.values()] == [("undecided", S.NOT_RUN)] * 4
-    assert [line.split(" (")[0] for line in lines] == ["NOT RUN PoUW", "NOT RUN the bandwidth audit", "NOT RUN PoUS",
+    assert [line.split(" (")[0] for line in lines] == ["NOT RUN PoUW", "NOT RUN PoUS", "NOT RUN the bandwidth audit",
                                                        "NOT RUN the network certifier"]
-    for line, (cmd, owner) in zip(lines, (("POUW_CMD", "compute-accounting"), ("BANDWIDTH_CMD", "memory-accounting"),
-                                          ("POUS_CMD", "memory-accounting"), ("CERTIFIER_CMD", "network-accounting"))):
+    for line, (cmd, owner) in zip(lines, (("POUW_CMD", "compute-accounting"), ("POUS_CMD", "memory-accounting"),
+                                          ("BANDWIDTH_CMD", "memory-accounting"), ("CERTIFIER_CMD", "network-accounting"))):
         assert f"({cmd} unset; {owner}): " in line
     for key, (_name, comp, _owner, what) in S.PIECES.items():
         written = (tmp_path / "pieces" / comp / "answer.json").read_text()
@@ -170,7 +170,7 @@ def test_a_piece_runs_within_its_limit_and_one_out_of_time_or_refused_says_so(tm
     env = {"PATH": f"{bin_}:{os.defpath}", "PIECE_TIMEOUT": "7m", "BANDWIDTH_TIMEOUT": "0", "BANDWIDTH_CMD": "true",
            "POUS_CMD": 'echo "PoUS REFUSED: the card has a compute process" > "$3/refused.txt"; exit 3'}
     got = S.pieces(tmp_path, 1, tmp_path / "pieces", env=env, node="n")
-    assert (tmp_path / "limits").read_text().split() == ["0", "7m"]
+    assert (tmp_path / "limits").read_text().split() == ["7m", "0"]
     assert got["bandwidth"] == {"verdict": "undecided", "rc": 124, "error": True,
                                 "reason": "its piece ran (exit 124, out of time at 0) and wrote no answer; "
                                           "its log is bandwidth/piece.log"}

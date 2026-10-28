@@ -30,25 +30,28 @@
 #     (`prove_path/run.sh` with PP_RECORDS=1, `records_audit.py`): C-Flock `--zk` on the drawn proof blocks behind the Lean
 #     firewall, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
 #     layer 0's SiluMul_v2 at step 1), not the window circuit's.
-#  4. PoUW (H1 credit), the bandwidth audit, PoUS and the network certifier: `served_verdicts.py pieces` runs each one's piece
-#     where POUW_CMD, BANDWIDTH_CMD, POUS_CMD or CERTIFIER_CMD names it (its public answer.json; its case in D/private),
-#     one at a time, each within <COMPONENT>_TIMEOUT (else PIECE_TIMEOUT, default 60m), else answers it undecided, "not
-#     run", and says NOT RUN with the command it lacks and its owner; a piece that refused to run (refused.txt) is "not
-#     run" too, since only the protocol's answer rejects, and one that ran and wrote no answer errs, undecided. A piece
-#     that needs a GPU takes its own `gpu-lease`, the serve's being over. POUS_CMD defaults to
+#  4. PoUW (H1 credit), PoUS, the bandwidth audit and the network certifier: `served_verdicts.py pieces` runs each one's
+#     piece where POUW_CMD, POUS_CMD, BANDWIDTH_CMD or CERTIFIER_CMD names it (its public answer.json; its case in
+#     D/private), one at a time, each within <COMPONENT>_TIMEOUT (else PIECE_TIMEOUT, default 60m), else answers it
+#     undecided, "not run", and says NOT RUN with the command it lacks and its owner; a piece that refused to run
+#     (refused.txt) is "not run" too, since only the protocol's answer rejects, and one that ran and wrote no answer
+#     errs, undecided. A piece that needs a GPU takes its own `gpu-lease`, the serve's being over. POUS_CMD defaults to
 #     'bash benchmarks/pous/served_piece.sh "$@"' where the tree has it and this node holds the memory challenger's key
-#     (~/.ssh/vy-auditor2-pous), and BANDWIDTH_CMD to 'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"' where
-#     the tree has it and this node holds the bandwidth verifier's key (~/.ssh/vy-auditor2-bw) and its registered store
-#     (BW_STORE's setup.json); set empty, not run. A subprotocol that runs on the serving engine (H1's
-#     `--protocols pouw:...`) goes in SERVE_ARGS, serve-openai's further arguments, and its piece reads what it wrote in
-#     the serve dir. The wipe's piece runs in step 1 instead: with WIPE_CMD set (by default
-#     'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"' where the tree has it; empty, none), serve()
-#     calls it in TREE, under the serve's lease and before serve-openai starts, within WIPE_TIMEOUT (default 20m), with
-#     (the serve dir D, `all`, $OUT/pieces/wipe), since the window isn't picked yet, and says its last line as WIPE. The
-#     record reads its pieces/wipe/answer.json, and takes the wipe into the block record only when that answer accepts
-#     and pieces/wipe/served.json names this node as the server it ran on. A wipe that wrote no answer (refused, or
-#     failed before its judge) is undecided, one served elsewhere stays out of the block record, and one whose answer
-#     rejects fails the run with no block record: a failed wipe is never accepted.
+#     (~/.ssh/vy-auditor2-pous). That piece runs the bandwidth session over the store it holds and writes its answer
+#     where the bandwidth piece's goes, which BANDWIDTH_CMD collects: by default, once POUS_CMD is set, '"$PY"
+#     benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window "$2" --out "$3"'; with no PoUS piece,
+#     'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"' where the tree has it and this node holds the
+#     bandwidth verifier's key (~/.ssh/vy-auditor2-bw) and its registered store (BW_STORE's setup.json). Set empty, a
+#     command is not run.
+#     A subprotocol that runs on the serving engine (H1's `--protocols pouw:...`) goes in SERVE_ARGS, serve-openai's
+#     further arguments, and its piece reads what it wrote in the serve dir. The wipe's piece runs in step 1 instead:
+#     with WIPE_CMD set (by default 'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"' where the tree
+#     has it; empty, none), serve() calls it in TREE, under the serve's lease and before serve-openai starts, within
+#     WIPE_TIMEOUT (default 20m), with (the serve dir D, `all`, $OUT/pieces/wipe), since the window isn't picked yet,
+#     and says its last line as WIPE. The record reads its pieces/wipe/answer.json, and takes the wipe into the block
+#     record only when that answer accepts and pieces/wipe/served.json names this node as the server it ran on. A wipe
+#     that wrote no answer (refused, or failed before its judge) is undecided, one served elsewhere stays out of the
+#     block record, and one whose answer rejects fails the run with no block record: a failed wipe is never accepted.
 #  5. the record: `served_verdicts.py record`: the all-protocols window report ($OUT/record/verdicts.json, every row a
 #     core answer) whose verdict is onsite's Lean verdict (`composite.py onsite`, the `onsite` executable) when the pieces'
 #     cases (each in its private directory under D, else beside its public answer) make up onsite, else remote's
@@ -112,9 +115,12 @@ MAIN_SHA=${MAIN_SHA-$(git -C "$TREE" rev-parse HEAD 2>/dev/null)}
 [ -f "$TREE/benchmarks/pous/served_piece.sh" ] && [ -f "$HOME/.ssh/vy-auditor2-pous" ] \
   && POUS_CMD=${POUS_CMD-'bash benchmarks/pous/served_piece.sh "$@"'}
 # shellcheck disable=SC2016
-[ -f "$TREE/benchmarks/one_stage/served_bandwidth.sh" ] && [ -f "$HOME/.ssh/vy-auditor2-bw" ] \
-  && [ -f "${BW_STORE:-/workspace/research/pous-store/mem69-v2}/setup.json" ] \
-  && BANDWIDTH_CMD=${BANDWIDTH_CMD-'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'}
+if [ -n "${POUS_CMD:-}" ]; then
+  BANDWIDTH_CMD=${BANDWIDTH_CMD-'"$PY" benchmarks/one_stage/served_bandwidth.py collect --serve-dir "$1" --window "$2" --out "$3"'}
+elif [ -f "$TREE/benchmarks/one_stage/served_bandwidth.sh" ] && [ -f "$HOME/.ssh/vy-auditor2-bw" ] \
+  && [ -f "${BW_STORE:-/workspace/research/pous-store/mem69-v2}/setup.json" ]; then
+  BANDWIDTH_CMD=${BANDWIDTH_CMD-'bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'}
+fi
 export H1_KEY_SHA512 H1_GATE H1_PEER WINDOW_STEPS MAIN_SHA WIPE_CMD POUS_CMD BANDWIDTH_CMD
 ROOT=${SERVE_ROOT:-/workspace/research/vllm-served-verdicts}
 D=${D:-$ROOT/${RESEARCH_RUN_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}}
@@ -366,7 +372,8 @@ fi
 if [ -n "${PP_CHALLENGER:-}" ]; then
   say "COINS sampled proofs: the live challenger $PP_CHALLENGER (peer ${PP_PEER:-?}); $H1_COINS"
 else
-  say "COINS sampled proofs: the verifier's own live coins (Lean's IO.getRandomBytes, in-process); $H1_COINS"
+  say "COINS sampled proofs: the verifier's own live coins (Lean's IO.getRandomBytes, in-process); $H1_COINS; the bandwidth" \
+      "audit's: vy-auditor-2's bw_party, inside PoUS's piece"
 fi
 
 # 1-2. the endpoint and its requests, under the GPU lease

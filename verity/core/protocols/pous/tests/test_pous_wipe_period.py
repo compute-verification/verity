@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pytest
 
+from pous_fakes import Clock
 import pous_test_signer as ts
 from verity.core.deploy.stream import Side
 from verity.core.protocols.pous import memory_challenger as mc
@@ -33,20 +34,9 @@ SMALL = sw.WipeParams(64, W.READS, 1, 1_000, (("gpu", 64 * sw.LABEL_BYTES),))
 M = W.SEGMENT_LABELS * sw.LABEL_BITS
 
 
-class Clock:
-    """Each reading 1 ns after the last."""
-
-    def __init__(self) -> None:
-        self.now = 10 ** 9
-
-    def __call__(self) -> int:
-        self.now += 1
-        return self.now
-
-
 def _run(params: sw.WipeParams = SMALL, secret: bytes = b"wipe period", **kw) -> W.Wipe:
     return W.run("n0", params, signer=ts.TestSigner(secret, 2), log=ts.session_log(), schemes=ts.SCHEMES,
-                 protocol=TEST_ID, clock=kw.pop("clock", Clock()), coin_secret=b"coins", **kw)
+                 protocol=TEST_ID, clock=kw.pop("clock", Clock(10 ** 9, 1)), coin_secret=b"coins", **kw)
 
 
 SEGMENT_2152 = 11_709_069
@@ -135,7 +125,7 @@ def test_the_challenger_chooses_the_reads(tmp_path) -> None:
 
 def test_a_late_read_is_rejected() -> None:
     """The sixth read's answer arrives a deadline after it was sent; the session ends there."""
-    clock = Clock()
+    clock = Clock(10 ** 9, 1)
 
     class Late(sw.Prover):
         reads = 0
@@ -163,7 +153,7 @@ def _split(params: sw.WipeParams, prover: sw.Prover, signer, stop_after: int | N
     def side() -> None:
         with a, a.makefile("rwb") as f:
             got["c"] = WP.serve(f, WP.request_of("n0", params), signer=signer, log=ts.session_log(), egress_bits=0,
-                                clock=Clock())
+                                clock=Clock(10 ** 9, 1))
 
     t = threading.Thread(target=side)
     t.start()

@@ -19,20 +19,22 @@ circuit refuses a request carried across windows), at most ``--slots`` of them (
 earliest. ``--window K`` holds K to the same rules. Prints ``{window, requests, users, steps, refused}``, ``steps`` the
 window's ``[lo, hi)`` in the run's committed engine steps.
 
-``pieces``: each subprotocol after sampled proofs (`PIECES`: PoUW, the bandwidth audit, PoUS, the network certifier) runs
-its piece where one is named (``POUW_CMD``, ``BANDWIDTH_CMD``, ``POUS_CMD``, ``CERTIFIER_CMD``: a command run in the tree as
+``pieces``: each subprotocol after sampled proofs (`PIECES`: PoUW, PoUS, the bandwidth audit, the network certifier) runs
+its piece where one is named (``POUW_CMD``, ``POUS_CMD``, ``BANDWIDTH_CMD``, ``CERTIFIER_CMD``: a command run in the tree as
 ``bash -c CMD _ SERVE_DIR WINDOW DIR``, which writes its core answer to ``DIR/answer.json``, the public one, and its case,
 what its Lean component reads, with its own answer on it, to its private directory, ``SERVE_DIR/private/<component>``,
 or to ``DIR`` when the case holds no witness), one at a time, each within ``<COMPONENT>_TIMEOUT`` (else
-``PIECE_TIMEOUT``, default `PIECE_TIMEOUT`). Each run leaves ``DIR/piece.json`` (`RAN`: the node it ran on, its exit, its
-limit). A piece that isn't named didn't run: its answer, written to ``DIR/answer.json``, is ``undecided`` with the reason
-``not run`` (`NOT_RUN`), and a ``NOT RUN`` line names it, the command it lacks and its owner. So is one that refused to
-run (``DIR/refused.txt``, `REFUSED`, naming why): only the protocol's answer rejects. A piece that ran and wrote neither
-is an error, and undecided. A development piece writes ``DIR/development.json`` (`DEVELOPMENT`) in place of a core
-answer: its verdict is printed as a development run's, and it credits nothing, so its answer is ``undecided`` when it
-accepts. A piece that audited another server than the node it ran on says so in ``DIR/served.json`` (`SERVED`:
-``{server, source}``, ``source`` ``fixture`` for an answer brought from a recorded run); one that names no server there
-leaves its answer about the node it ran on.
+``PIECE_TIMEOUT``, default `PIECE_TIMEOUT`). PoUS's piece runs before the bandwidth audit's: the bandwidth session is
+over the store PoUS's piece holds, and that piece writes its answer to the bandwidth piece's ``DIR``, which
+``BANDWIDTH_CMD`` collects. Each run leaves ``DIR/piece.json`` (`RAN`: the node it ran on, its exit, its limit). A piece
+that isn't named didn't run: its answer, written to ``DIR/answer.json``, is ``undecided`` with the reason ``not run``
+(`NOT_RUN`), and a ``NOT RUN`` line names it, the command it lacks and its owner. So is one that refused to run
+(``DIR/refused.txt``, `REFUSED`, naming why): only the protocol's answer rejects. A piece that ran and wrote neither is
+an error, and undecided. A development piece writes ``DIR/development.json`` (`DEVELOPMENT`) in place of a core answer:
+its verdict is printed as a development run's, and it credits nothing, so its answer is ``undecided`` when it accepts. A
+piece that audited another server than the node it ran on says so in ``DIR/served.json`` (`SERVED`: ``{server,
+source}``, ``source`` ``fixture`` for an answer brought from a recorded run); one that names no server there leaves its
+answer about the node it ran on.
 
 ``gate``: before serving with H1's coins from infra's gate (``--gate``, default ``H1_GATE``): refused while the key's lane
 (``--lane``) has a period open, which a reserve would join; prints one ``GATE`` line with the gate's latest pin and,
@@ -150,14 +152,13 @@ DEV_UNDECIDED = "a development run: it credits nothing"
 PIECES: dict[str, tuple[str, str, str, str]] = {
     "work": ("PoUW", "pouw", "compute-accounting",
              "H1's credit on the served window, its coins from vy-challenger-1's gate (H1_GATE)"),
-    "bandwidth": ("the bandwidth audit", "bandwidth", "memory-accounting",
-                  ("a remote bandwidth session over this node's registered store, against the auditor's verifier on "
-                   "vy-auditor-2; served_verdicts.sh sets it where the tree has benchmarks/one_stage/served_bandwidth.sh "
-                   "and this node the verifier's key and the store")),
     "space": ("PoUS", "pous", "memory-accounting",
               ("PoUS over the served model's int8 weights on the serving card, against the memory challenger on "
                "vy-auditor-2; served_verdicts.sh sets it where the tree has benchmarks/pous/served_piece.sh and this node "
                "the challenger's key")),
+    "bandwidth": ("the bandwidth audit", "bandwidth", "memory-accounting",
+                  ("PoUB-P2's session over the store the PoUS piece holds, which that piece runs (POUS_CMD, "
+                   "benchmarks/pous/served_piece.py) and BANDWIDTH_CMD collects (served_bandwidth.py collect)")),
     "communication": ("the network certifier", "certifier", "network-accounting",
                       "the network certifier in front of the serving endpoint"),
 }
