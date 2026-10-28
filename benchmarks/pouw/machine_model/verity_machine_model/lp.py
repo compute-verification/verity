@@ -32,7 +32,6 @@ class Solution:
     infl: float                    # U/F_low - 1
     tau: float                     # 1 / (σ · honest_real)
     tau_max: float                 # stage 3's τ
-    lam_tau_max: dict[str, float]
     infl_at_tau_max: float
     attacks: tuple[Attack, ...]    # the attacks the LP constrained
     refused: tuple[str, ...]       # kinds with no coefficient on the rows
@@ -102,6 +101,6 @@ def solve(model: Model, census: Census, status: dict[str, str], attacks: list[At
     return Solution(
         lam=lam, theta={r: x / sig for r, x in lam.items()}, sigma=sig,
         infl=sum(h * x for h, x in zip(hon, s2.x)) / MACS, tau=1 / (sig * model.honest_real),
-        tau_max=1 / (sum(lam3.values()) * model.honest_real), lam_tau_max=lam3,
+        tau_max=1 / (sum(lam3.values()) * model.honest_real),
         infl_at_tau_max=sum(v * price(census, lam3, k) for k, v in model.honest.items() if k != "MMA") / MACS,
         attacks=used, refused=tuple(sorted(set(census) - priced)))
