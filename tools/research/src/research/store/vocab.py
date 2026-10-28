@@ -83,6 +83,7 @@ PIPELINE = "pipeline"
 KERNEL_OUTCOME = "kernel_outcome"
 KERNEL_OUTCOMES = ("screened", "frontier", "kept", "dropped", "voided", "superseded")
 KERNEL_REASON = "kernel_reason"
+UNIT_LOWERING = "unit_lowering"
 
 # ---- verification labels: an independent verifier, never the producer ----------------------------------------------------------------
 
@@ -338,6 +339,8 @@ VOCAB: dict[str, Key] = {k.name: k for k in (
        "not judged; frontier: a distinct route kept for search; kept: adopted; dropped; voided: it didn't measure what it claims; "
        "superseded); the latest label wins", KERNEL_OUTCOMES),
     _k(KERNEL_REASON, GROUP_RESULT, TEXT, "on a kernel-attempt/v1 record: the kernel_outcome's reason, one line"),
+    _k(UNIT_LOWERING, GROUP_RESULT, TEXT, "on a `benchmarks/unit_lowering` run, by its lane: the leaderboard's row, a JSON object "
+       "(--value-json) {k, tile [R, C], form flat|structural, peak_gib, wall_min, guard pass|fail|n/a, approach, commit branch@sha}"),
     _k(MEMORY_LINE_OF_RECORD, GROUP_RESULT, TEXT, "on a gate run's verifier run, by its lane: its memory line of record is the "
        "auditor_line.json of --ref's auditor_line.py run, as `lean conditional on NAMES`: that file's line_by, which must be lean (the "
        "Lean verifier's line, held exactly to line.py's; a line.py-only line is not of record), and the names of its conditional_on in "
