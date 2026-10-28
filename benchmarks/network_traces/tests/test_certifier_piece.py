@@ -3,9 +3,8 @@ the gate's fetch, witness and all, 0700 under the serve dir's private/certifier,
 and its outcome. The piece, on a serve dir whose window was the warden's synthetic run's certified requests (the run
 `test_warden_chain.gate_run` publishes in the gate's layout), runs as `served_verdicts.py pieces` runs it and writes
 `network-period`'s answer only when the chain accepted and the window's requests are certified ones in the scan's
-link-window: the period mirror's certifier/v0 accept (`period_case`'s honest clock period, one-stage v2 taken as
-accepting its link-windows' proofs, which the mirror can't run) then goes through `served_verdicts.py record` into the
-block record's certifier leg, which `block_record.check` holds and its schema admits. A window request the warden
+link-window: the period mirror's certifier/v0 accept (`period_case`) then goes through `served_verdicts.py record` into
+the block record's certifier leg, which `block_record.check` holds and its schema admits. A window request the warden
 didn't certify is rejected before any chain runs; a chain that refused, requests outside the scan's link-window and a
 period the check rejects are rejects; a step that can't run (no kept run, no report, no build, the time limit) refuses,
 which leaves the certifier missing. The leak guard reads the piece's DIR against the run's witness."""
