@@ -40,6 +40,10 @@ judgement; `check.py` holds the policy.
   unfolded once (`lifted`, `liftOf`), as `shape` reads it. Beside them, the definitions under `meaning` the head unfolds
   through (`chain`, `headChain`); and each pin's `accept_all`, the verifiers accepting everything it applies
   (`acceptAllOf`).
+- each pin's `inline`: the `Prop` binders of its statement, with a definition under `meaning` it applies unfolded once
+  (`liftOf`), in each conjunct, instance binders aside, each split past its leading `∀` over data and at `∧`
+  (`inlineParts`): as printed with those `∀`s, its head as written and past reducible unfolding (`premiseHead`), whether
+  it is a plain range (`plainRange`), whether it is closed, and whether the statement as written binds it (`outer`).
 - `instances`: each constant with a declaration range whose name (a private one's as written) ends in a component
   starting with `inst`, with that component as an identifier (`id`) and where its declaration's name is (`at`: line,
   codepoint column). An anonymous `instance` has its name there as the keyword `instance` itself.
@@ -852,6 +856,67 @@ partial def conclusionOf (env : Environment) (meaning : Array Name) (t : Expr) (
       ("negated", toJson negated), ("inner", toJson (inner.map toString))]],
       hs.any (·.isConstOf ``False))
 
+/-- The casts a side of a plain range may stand under (`(n : ℝ)`, `(i : ℕ)` of `i : Fin n`). -/
+def casts : Array Name :=
+  #[`Nat.cast, `Int.cast, `Rat.cast, `NNRat.cast, `Int.ofNat, `Fin.val, `Subtype.val, `NNReal.toReal, `ENNReal.ofNNReal]
+
+def rawNat : Expr → Bool
+  | .lit (.natVal _) => true
+  | _ => false
+
+/-- A side of a plain range, under its casts: `some 0` for a numeral, `some 1` for a bound variable, `some 2` for a bound
+variable applied to bound variables (`f i`), none for anything else. -/
+partial def rangeSide (e : Expr) : Option Nat :=
+  let e := e.consumeMData
+  if rawNat e || e.isAppOfArity ``Zero.zero 2 || e.isAppOfArity ``One.one 2 then some 0
+  else if e.isAppOfArity ``OfNat.ofNat 3 then if rawNat (e.getArg! 1).consumeMData then some 0 else none
+  else if e.isFVar then some 1
+  else if e.getAppFn.isFVar && e.getAppArgs.all (·.consumeMData.isFVar) then some 2
+  else match e.getAppFn with
+    | .const c _ => if casts.contains c && e.getAppNumArgs > 0 then rangeSide e.appArg! else none
+    | _ => none
+
+/-- Whether `t` is a plain range: `a ≤ b` or `a < b` (`≥`, `>` alike), each side a numeral or a bound variable, or one side
+a numeral and the other a bound variable applied to bound variables (`0 ≤ f i`), either under casts. -/
+def plainRange (t : Expr) : Bool :=
+  let t := t.consumeMData
+  [``LE.le, ``LT.lt, ``GE.ge, ``GT.gt].any (t.isAppOfArity · 4) &&
+    match rangeSide (t.getArg! 2), rangeSide (t.getArg! 3) with
+    | some a, some b => (a < 2 && b < 2) || (a + b == 2 && a != b)
+    | _, _ => false
+
+/-- The parts of a premise `t` for the inline rule, under the binders `ys` stripped so far: past its leading `∀` over data
+(`∀ ω`), split at `∧`. Each is printed with those binders, with its head as written and past reducible unfolding
+(`premiseHead`, which also passes its antecedents: `A → X` asks less than `X`), and whether it is a plain range. -/
+partial def inlineParts (moduleOf : Name → Option Name) (ys : Array Expr) (t : Expr) : MetaM (Array Json) := do
+  let t := t.consumeMData
+  if let .forallE n d b bi := t then
+    unless ← isProp d do
+      return ← withLocalDecl n bi d fun y => inlineParts moduleOf (ys.push y) (b.instantiate1 y)
+  if t.isAppOfArity ``And 2 then
+    return (← inlineParts moduleOf ys t.appFn!.appArg!) ++ (← inlineParts moduleOf ys t.appArg!)
+  let head := t.getAppFn.constName?
+  let unfolded ← premiseHead moduleOf 4 t
+  return #[Json.mkObj [("type", toJson (toString (← ppExpr (← mkForallFVars ys t)))), ("head", toJson (head.map toString)),
+    ("unfolded", toJson (unfolded.map toString)), ("range", toJson (plainRange t))]]
+
+/-- Each pin's `inline`: the `Prop` binders of the statement `t`, a definition under `meaning` it applies unfolded once
+(`liftOf`), in each of its conjuncts, instance binders aside, split by `inlineParts`, each with its binder's name, whether
+it is closed, and whether the statement as written binds it (`outer`: among the leading binders `liftOf` keeps). -/
+def inlineOf (env : Environment) (meaning : Array Name) (moduleOf : Name → Option Name) (t : Expr) : MetaM (Array Json) := do
+  let s ← plain (((liftOf env meaning t).map (·.2)).getD t)
+  let outer ← forallTelescope (← plain t) fun xs _ => pure xs.size
+  let cs := conjuncts s
+  cs.foldlM (init := #[]) fun out c => forallTelescope c fun xs _ => do
+    let mut acc := out
+    for h : i in [0:xs.size] do
+      let d ← xs[i].fvarId!.getDecl
+      if d.binderInfo.isInstImplicit || !(← isProp d.type) then continue
+      for p in ← inlineParts moduleOf #[] d.type do
+        acc := acc.push (((p.setObjVal! "binder" (toJson d.userName.toString)).setObjVal! "closed"
+          (toJson (!d.type.hasFVar))).setObjVal! "outer" (toJson (cs.length == 1 && i < outer)))
+    return acc
+
 def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning premises : Array Name)
     (listed built : NameSet) (axioms : Std.HashMap Name NameSet)
     (ranges : Std.HashMap Name DeclarationRanges) (rs : Array (Name × Name × ConstantInfo) × Array (Name × Name)) (n : Name) :
@@ -886,6 +951,7 @@ def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning
       return toJson (← ps.mapM fun p => do
         let some h := (p.getObjValAs? String "head").toOption | return p
         return p.setObjVal! "unfolds" (← unfoldsOf env meaning premises listed built moduleOf h.toName))) <|> pure Json.null),
+    ("inline", ← (return toJson (← inlineOf env meaning moduleOf ci.type)) <|> pure Json.null),
     ("body", ← (do
       let read (t : Expr) : MetaM (List (String × Json)) := do
         let (h, neg, ks) ← bodyHead t
