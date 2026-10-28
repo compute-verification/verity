@@ -66,9 +66,9 @@ ALLOWED = {
     # a workload declare to it, so neither gains an ml edge.
     "core.wire": set(),
     "core.deploy": {"core.wire"},
-    "core.protocols.profile": {"ml.circuits"},
     # A record entry (`Core.Record`): the form every protocol's signed, chained record entries take.
     "core.protocols.record": set(),
+    "core.protocols.profile": {"ml.circuits"},
     # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof service's challenger
     # draws with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
     # Its challenger, firewall, workers and verifier are

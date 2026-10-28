@@ -11,6 +11,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # driver's receipts (and its commitments); test_step_plan the step's pass (step.py, which imports word_codec's kv
 # modules) under the driver's block layout.
 inputs = ["benchmarks/word_codec/kv.py", "benchmarks/word_codec/kv_bench.py", "benchmarks/word_codec/kv_exhaust.py",
+          "verity/core/protocols/record.py",
           "benchmarks/word_codec/kv_receipt.py", "benchmarks/word_codec/kv_twin.py",
           "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/bandwidth/__init__.py", "verity/core/protocols/bandwidth/tags.py",
@@ -18,4 +19,4 @@ inputs = ["benchmarks/word_codec/kv.py", "benchmarks/word_codec/kv_bench.py", "b
           "verity/core/claims/__init__.py",
           "verity/core/protocols/sampled_proofs/challenger.py", "verity/core/protocols/sampled_proofs/remote.py",
           "verity/ml/__init__.py", "verity/ml/crypto",
-          "verity/ml/commitments", "verity/ml/randomness", "verity/core/protocols/record.py"]
+          "verity/ml/commitments", "verity/ml/randomness"]
