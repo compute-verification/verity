@@ -81,11 +81,11 @@ record and keeps the wipe uncounted otherwise.
 `served_session.py` is the runbook of the served session of record, the network certifier in front of a served model.
 `plan` checks the request with this tree's gate and prints each run's command and the endpoint's flags. `session` runs
 the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpoint on the peer's loopback, by default
-the served H200 node's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed
-(prompts of the class's 1,024 reach the relay late), each answered greedily with at most 64 ids, ending at the base
-model's EOS id 128001. It runs at a given UTC time when asked. The endpoint is started by hand (serve-openai directly
-with `examples/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors. Its records
-are published as an artifact without `requests.jsonl`, whose prompt ids stay on the served node, and with
+the H200 peer's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (prompts
+of the class's 1,024 reach the relay late), each answered greedily with at most 64 ids, ending at the base model's EOS
+id 128001. It runs at a given UTC time when asked. The endpoint is started by hand (serve-openai directly with
+`examples/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors. Its records are
+published as an artifact without `requests.jsonl`, whose prompt ids stay on the served node, and with
 `request_users.jsonl`, each engine request's `engine_id` and its warden user in `requests.jsonl`'s order. `chain`
 rebuilds `requests.jsonl` from that map and the kept warden run's certified I/O in a 0700 directory beside the kept
 fetch, so the endpoint step checks the endpoint's trace against the certified I/O. The session's fetch, with
