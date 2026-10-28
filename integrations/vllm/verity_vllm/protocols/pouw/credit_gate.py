@@ -20,11 +20,14 @@ y is dq of their z and the served y is theirs.
   ``<untraced>`` is a tensor no traced op wrote, ``<none>`` a z the path never computed.
 * **What it sees.** Only ops through torch's dispatcher.  A kernel launched outside it (a cubin through the driver) writes
   nothing the trace sees, so its output is ``<untraced>`` and earns nothing: a fused kernel is credited once it is a
-  dispatcher op (``torch.library``) returning its z and its y.
+  dispatcher op (``torch.library``) returning its z and its y.  Ops run `outside` the trace are not seen either; that is
+  for work beside the call that writes neither its y nor its z and runs no GEMM, so its verdict is the same without it.
 """
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from functools import cache
 from typing import Any, Iterable, Mapping, Sequence
@@ -161,6 +164,18 @@ class Trace:
         return self.invocations[self.writer[k]] if k in self.writer else None
 
 
+@contextmanager
+def outside() -> Iterator[None]:
+    """The ops inside run past the innermost dispatch mode when it is a `Trace`'s, which doesn't see them; under any other
+    innermost mode, or none, they run as they would."""
+    from torch.utils._python_dispatch import _get_current_dispatch_mode, _pop_mode_temporarily
+    if not isinstance(_get_current_dispatch_mode(), _mode()):
+        yield
+        return
+    with _pop_mode_temporarily():
+        yield
+
+
 def verdict(trace: Trace, y: Any, z: Any) -> dict[str, Any]:
     """The credit rule on one call: y, the tensor the linear handed back to vLLM, and z, the credited kernel's output (None if
     the path computed none)."""
@@ -185,4 +200,4 @@ def reasons(verdicts: Iterable[Mapping[str, Any]]) -> dict[str, int]:
 
 
 __all__ = ["GEMMS", "GEMM_COUNT", "Invocation", "KNOWN", "NONE", "NOT_CREDITED", "NOT_GEMMS", "RECORDS", "Trace", "UNTRACED",
-           "key", "reasons", "verdict"]
+           "key", "outside", "reasons", "verdict"]
