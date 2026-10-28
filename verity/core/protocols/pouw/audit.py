@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from verity.core.protocols.pouw.salt import pouw_salt, pouw_window
 from verity.errors import ProtocolError
 from verity.ml.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
-from verity.ml.commitments import hm96
+from verity.ml.commitments import domains, hm96
 from verity.ml.commitments.gates import sha512 as sha512_gates
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, sha512_row_seg_digest
 from verity.ml.randomness import derive
@@ -39,10 +39,10 @@ from verity.ml.randomness import derive
 from .coins import CoinCommitment, CoinOpening, coin_reason
 from .protocol import DomainError, Matmul, PoUWScheme, Tile, tagged
 
-SALT_DOMAIN = "verity/pouw/salt/v1"
-EPOCH_SALT_DOMAIN = "verity/pouw/epoch-salt/v1"
-ROW_SCHEMA = "verity/pouw/row/v1"
-TILE_SCHEMA = "verity/pouw/tile/v1"
+SALT_DOMAIN = domains.POUW_UNVERIFIED_SALT
+EPOCH_SALT_DOMAIN = domains.POUW_EPOCH_SALT
+ROW_SCHEMA = domains.POUW_AUDIT_ROW
+TILE_SCHEMA = domains.POUW_AUDIT_TILE
 #: ``frame-v3-sha512`` with hm96-sha512 leaves (module docstring)
 HM96 = "hm96-sha512"
 HM96_KEY = hm96.SHA512.default_key
@@ -117,11 +117,11 @@ def rows_domain(binding: bytes, owner: int, count: int, hash: str = "sha256", di
 
 
 def weight_binding(weight: int) -> bytes:
-    return tagged("verity/pouw/weight-rows/v1", weight)
+    return tagged(domains.POUW_WEIGHT_ROWS, weight)
 
 
 def activation_binding(salt: bytes, index: int) -> bytes:
-    return tagged("verity/pouw/activation-rows/v1", salt, index)
+    return tagged(domains.POUW_ACTIVATION_ROWS, salt, index)
 
 
 def commit_rows(binding: bytes, owner: int, rows: Sequence[bytes], hash: str = "sha256", salt_key: bytes | None = None,
@@ -135,7 +135,7 @@ def commit_rows(binding: bytes, owner: int, rows: Sequence[bytes], hash: str = "
 
 
 def weights_root(weight_roots: Mapping[int, bytes]) -> bytes:
-    return tagged("verity/pouw/weights/v1", *(p for w in sorted(weight_roots) for p in (w, weight_roots[w])))
+    return tagged(domains.POUW_WEIGHTS_ROOT, *(p for w in sorted(weight_roots) for p in (w, weight_roots[w])))
 
 
 @dataclass(frozen=True, slots=True)
@@ -234,7 +234,7 @@ def tile_refs(scheme: PoUWScheme, workload: Workload) -> list[TileRef]:
 
 
 def transcript_binding(epoch: Epoch) -> bytes:
-    return tagged("verity/pouw/transcript/v1", epoch.salt, epoch.weights_root)
+    return tagged(domains.POUW_TRANSCRIPT, epoch.salt, epoch.weights_root)
 
 
 def transcript_domain(epoch: Epoch, count: int, hash: str = "sha256") -> CommitmentDomain:
