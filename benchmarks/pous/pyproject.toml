@@ -41,4 +41,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/pouw/protocol.py", "verity/core/protocols/pouw/salt.py",
           "verity/core/protocols/pouw/window.py", "verity/core/protocols/sampled_proofs/one_stage/__init__.py",
           "verity/core/protocols/sampled_proofs/one_stage/partition.py",
-          "verity/core/protocols/sampled_proofs/one_stage/registered.py"]
+          "verity/core/protocols/sampled_proofs/one_stage/registered.py",
+          # the deployment layer and its wire, which the memory challenger's and the wipe's sides are started through
+          # (`deploy.stream.Side`) and the challenger's parties run on
+          "verity/core/deploy", "verity/core/wire"]
