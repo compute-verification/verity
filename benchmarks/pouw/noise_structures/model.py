@@ -27,9 +27,8 @@ from check import mac_ands, sparse_hi, wraps
 CLK = 1.769e9  # measured event clock under the served GEMM, run b57f
 SMS = 132
 S8 = 4096.0  # s8 wgmma MACs a SM-clock (theta tensor.s8.k32, measured 4095.6)
-# b1 .and.popc against the honest s8 GEMM. r20261028-090323-2c56 (#6216) measured BMMA at 21,845 MACs a SM-clock, 8.00×
-# mma.sync s8's 2,731 but 5.33× wgmma s8's 4,096 (S8): 3/16 against the served GEMM. 1/8 is the default, a margin to
-# the cheater; `--r-b 0.1875` prices the measured b1 against wgmma.
+# b1 at 8× s8, measured: BGMMA m64n256k256 runs 32,764.6 b1 MACs a SM-clock against s8's 4,095.6 (h200-sxm-141gb.toml on
+# cursor/compute-research-h200-tensor-main-ea24, GD-BITS' source); mma.sync's BMMA is 8.00× mma.sync s8 (r20261028-090323-2c56)
 R_B = 1 / 8
 SP24 = 0.5  # 2:4 sparse s8 wgmma, A in registers: 8191 logical MACs a SM-clock (dc/README, wgsprs_s8)
 ALU = 64.0  # IADD3/LOP3 results a SM-clock (theta alu.iadd3 sheet 64, alu.lop3 measured 63.01)
@@ -188,8 +187,9 @@ def hyb(c: Call, name: str, perm: str, word_bits: int, amp_v: int = 80, amp_u: i
         lanes: int = 1, wrap_cost: str | None = None, v32: bool = False) -> list[Row]:
     """Dither-style periodic noise: V, U period L', words every L = t·L' (W of them).
 
-    v32: Dither v3.2's layout, T_s for s < ⌈K/L⌉ only (T_S is implied by O, not committed), so W·L < K and a call
-    credits at most (K − L)/K. Otherwise a word at K is committed too ("v3.2 plus a committed T_S").
+    v32: Dither v3.2's per-cell values (dither/PROTOCOL.md): T_s for s = 1..S − 1 with S = ⌈K/L⌉ and O, T_S implied by O,
+    so W = S − 1 and a call credits (S − 1)·L/K. Otherwise W is free and a word at K may be committed too ("v3.2 plus a
+    committed T_S").
 
     Two honest routes for O: the peel (the noised GEMM over the whole K, then 4L'/K of tail products and a wrap correction
     over the wrapped entries, priced at `WRAP_G[wrap_cost]` G a unit wrap rate), or the recompute that Dither v3.2's served
@@ -210,7 +210,7 @@ def hyb(c: Call, name: str, perm: str, word_bits: int, amp_v: int = 80, amp_u: i
                 seg = t * lp
                 floor = (rb * seg + min(cs * lp, (1 - rb) * seg)) / seg
                 credit = w * seg
-                if v32 and credit >= c.k:
+                if v32 and w != -(-c.k // seg) - 1:
                     continue
                 if floor < 1 - 1e-9:
                     continue
@@ -507,11 +507,9 @@ def j_pouw(steps: dict, tl: dict) -> dict:
 
 def forced_table() -> dict:
     """HYB's forced fraction of G per credited MAC at A = B = 0 (the best attack found), by π, word bits and t = 1..8:
-    min(1, r_b + c/t) at ±80 and 1-bit dithers, for both b1 prices. Unpermuted noise at W = 1; it falls to 2 + 1/W limbs
-    as W grows."""
-    return {f"r_b {rb:g}, {perm} π, {wb}-bit": [round(min(1.0, rb + c_segment(perm, t, 80, wb, 1)[0] / t), 3)
-                                                 for t in range(1, 9)]
-            for rb in (1 / 8, 3 / 16) for perm in ("tile", "segment", "none") for wb in (16, 8)}
+    min(1, R_B + c/t) at ±80 and 1-bit dithers. Unpermuted noise at W = 1; it falls to 2 + 1/W limbs as W grows."""
+    return {f"{perm} π, {wb}-bit": [round(min(1.0, R_B + c_segment(perm, t, 80, wb, 1)[0] / t), 3) for t in range(1, 9)]
+            for perm in ("tile", "segment", "none") for wb in (16, 8)}
 
 
 def best(rows: list[Row], min_credit: float) -> Row | None:
@@ -524,11 +522,9 @@ def main() -> int:
     p.add_argument("--out", type=pathlib.Path, required=True)
     p.add_argument("--min-credit", type=float, default=0.75)
     p.add_argument("--wrap-cost", choices=sorted(WRAP_G), default="measured")
-    p.add_argument("--r-b", type=float, default=R_B, help="b1 MAC-time in s8 G (1/8, or 0.1875 against wgmma)")
     p.add_argument("--route", choices=("peel", "recompute"), help="pin HYB's honest route (peel: O from the credited GEMM)")
     a = p.parse_args()
     WRAP_COST[0] = a.wrap_cost
-    globals()["R_B"] = a.r_b
     if a.route:
         ROUTES[:] = [a.route]
     out = []
@@ -602,7 +598,7 @@ def render(rep: dict) -> str:
                          f"{v['prove_gpu_s']:.0f} | {v['J S 1']:.0f} | {v['J S 1000']:.2f} | {v['J S 100000']:.3f} |")
     if "forced_frac" in rep:
         lines += ["", "## HYB's forced fraction of G per credited MAC at A = B = 0 (best attack found), ±80, 1-bit dithers", "",
-                  "| b1 price, π, word | " + " | ".join(f"t {t}" for t in range(1, 9)) + " |", "|---" * 9 + "|"]
+                  "| π, word | " + " | ".join(f"t {t}" for t in range(1, 9)) + " |", "|---" * 9 + "|"]
         lines += [f"| {k} | " + " | ".join(f"{x:.3f}" for x in v) + " |" for k, v in rep["forced_frac"].items()]
     shown = {(1, 1), (1, 8), (1, 32), (4, 8), (8, 8), (16, 16), (32, 32)}
     for rb, tl in rep.get("tiles", {}).items():
