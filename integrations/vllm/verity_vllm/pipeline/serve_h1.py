@@ -15,8 +15,8 @@ own Commit.
   template a call (S × the linears), its tile units (`units`, S × slot(T)/32 × Σn/32) the batch's members, so its
   descriptor, declaring it and its digest grow with the calls, not the units. The server logs both counts and both
   times. The digest is hashed as the descriptor is written, ``h1/`` `PROGRAM` beside `PROGRAM_META` (`served.write_program`),
-  so the period-open of it (``served_verdicts.py period open``) can go out once the server listens, before any window
-  reserves.
+  and ``served_verdicts.py program`` writes the same file without serving, so the period-open of it (``served_verdicts.py
+  period open``) goes out before the server starts, ahead of window 0's reserve at startup.
 * **Coins.** With ``--challenger-gate CMD`` and ``--challenger-peer NAME`` (`sessions_of`), the auditor host's
   challenger's, one session a window through infra's gate (`GateSessions`, `commit_coins.Gate`): window 0's session is
   reserved (scheme `pouw_h1_challenger.SCHEME`, `pouw_h1_challenger.families` (S)) at startup (`arm_of`) and window
@@ -55,7 +55,11 @@ admission and gaps, the credit gate, the coins, the commitment's calls root, its
 port, how the session closed and its end entry) and where its time went (``seconds``); a window whose H1 failed to open
 or close carries its error there instead, and the Commit serves on. ``serve.json``'s ``protocols`` is
 `H1Windows.describe`, ``summary.json``'s ``pouw_h1`` `H1Windows.summary` with the windows that failed.
-``--protocols-config`` is the pouw settings the server doesn't set itself, ``{"pouw": {...}}`` (`config_of`)."""
+``--protocols-config`` is the pouw settings the server doesn't set itself, ``{"pouw": {...}}`` (`config_of`). Its ``unit``
+and ``ks`` shape the declared Program: ``{"pouw": {"unit": "j10r", "ks": [2048]}}`` declares J10-R's tile unit
+(`pouw_h1_served.unit_of`) over the linears at K 2,048 alone, the form a period's guarantee covers (core's
+`period_check.form`), and the linears at any other K serve on their arm unrecorded, uncredited as attention is. Unset,
+the Program is v1's over every linear."""
 from __future__ import annotations
 
 import bisect
@@ -221,9 +225,9 @@ def drawn_units(commits: Mapping[str, Any], layout: Mapping[str, Any], k: int, s
     from verity.core.protocols.pouw import credit as CR
     from verity.core.protocols.sampled_proofs.challenger import LiveOpening
 
-    draw = commits.get("draw") or {}
-    if draw.get("coin") is None:
-        raise ValueError("the window opened no draw coin" + (f" ({draw['refused']})" if draw.get("refused") else ""))
+    draw = commits.get("draw")                              # None: the window committed no draw root
+    if draw is None or draw.get("coin") is None:
+        raise ValueError("the window opened no draw coin" + (f" ({draw['refused']})" if draw and draw.get("refused") else ""))
     got, why = CR.drawn(LiveOpening.from_json(draw["coin"]).coin.hex(), stream, draw.get("root"),
                         {"receipts": draw.get("receipts")}, dict(layout), k)
     if why is not None:
@@ -441,7 +445,10 @@ class H1Windows:
         self.draws: Any = None
         self._layout: dict[str, Any] | None = None
         self._period_k: dict[str, int] = {}
-        self.layers = PHK.layers(model, pouw.linear_types())
+        pw = pouw.Settings.of(self.config.get("pouw", {}))
+        self.layers = PHK.layers(model, pouw.linear_types(), pw.ks)
+        if unit is None:
+            self.unit = unit = SV.unit_of(pw.unit)
         if not self.layers:
             raise ValueError(f"{ENTRY}: the served model has no int8 linear H1 records (serve an int8 precision)")
         shapes = [tuple(int(d) for d in m.weight.shape) for m in self.layers]
@@ -678,7 +685,8 @@ class H1Windows:
             if why is not None:
                 raise ValueError(f"{why[0]}: {why[1]}")
             self._period_k[period] = k
-        return self._period_k[period], (run.commits.get("session") or {}).get("root"), f"period {period}'s open"
+        session = run.commits.get("session")                # None: no gate session carried the run's coins
+        return self._period_k[period], session.get("root") if session else None, f"period {period}'s open"
 
     def _outcome(self, window: int, run: Any, held: dict[str, Any] | None, end: dict[str, Any] | None,
                  seconds: dict[str, float]) -> dict[str, Any]:

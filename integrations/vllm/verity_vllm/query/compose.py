@@ -24,7 +24,6 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
     for r in reqs:
         for s in range(int(r["max_tokens"])):
             by_engine.setdefault(int(r.get("arrive_step", 0)) + s, []).append((r["request_id"], s))
-    hidden_family = parts[reqs[0]["request_id"]]["query"]["attention_hidden_family"]
     ids: list[dict[str, Any]] = []
     engine_of = {(rid, s): e for e, members in by_engine.items() for rid, s in members}
     unreturned = [dict(row, program_digest=pdig, component_digest=row["program_digest"], engine_step=engine_of.get((rid, row["step"]), row.get("engine_step")))
@@ -44,35 +43,10 @@ def compose_global(fixture: Mapping[str, Any], parts: Mapping[str, dict[str, Any
         for rid, s in members:
             emb = next((x for x in parts[rid]["identities"] if x["family"] == "input_token_ids" and x["step"] == s), None)
             rows_of[rid] = int(emb["rows"]) if emb else 0
-        attn_union: dict[str, dict[str, Any]] = {}
         for rid, s in members:
             for row in parts[rid]["identities"]:
-                if row["step"] != s or row["family"] == "weights":
-                    continue
-                g = dict(row, program_digest=pdig, component_digest=row["program_digest"], engine_step=e)
-                if row["family"] == hidden_family:
-                    a = attn_union.setdefault(row["op_path"], {"requests": [], "n_seq": 0, "max_rows": 0, "T_max": 0, "module": row.get("attention_module")})
-                    a["requests"].append(rid); a["n_seq"] += 1
-                    a["max_rows"] = max(a["max_rows"], int(row["geometry"]["rows"])); a["T_max"] = max(a["T_max"], int(row["geometry"]["seqlen_k"]))
-                else:
-                    ids.append(g)
-        for op, a in sorted(attn_union.items()):
-            comp = parts[a["requests"][0]]
-            pre = next(x for x in comp["identities"] if x["family"] == hidden_family and x["op_path"] == op and x["step"] == 0)
-            dec = next((x for x in comp["identities"] if x["family"] == hidden_family and x["op_path"] == op and x["step"] == 1), None)
-            D = int(pre["geometry"]["D"])
-            if hidden_family[:3] == "fa3":       # FA3 packs a KV group's query heads into its rows: HB = KVH, M = rows * NH / KVH
-                KVH = int(pre["geometry"]["HB"])
-                NH = KVH * (int(pre["geometry"]["M"]) // max(1, int(pre["geometry"]["rows"])))
-            else:                                # FA2: a prefill's slabs are its query heads, a swapped decode's its KV heads
-                NH = int(pre["geometry"]["HB"])
-                KVH = int(dec["geometry"]["HB"]) if dec is not None and int(dec["geometry"]["M"]) > 1 else NH
-            fn = fmt.fa3_geometry if hidden_family[:3] == "fa3" else fmt.fa2_geometry
-            HB, M, NB, BN, gname = fn(a["T_max"], a["max_rows"] * a["n_seq"], NH, KVH, D, a["n_seq"])
-            ids.append({"family": hidden_family, "program_digest": pdig, "request_id": "*", "requests": a["requests"], "step": "*", "engine_step": e, "invocation": 0,
-                        "op_path": op, "output_member": gname, "element_range": [0, fmt.mat_total_words(HB, M, NB, BN, D)], "rank": rank, "dtype": "u32",
-                        "geometry": {"HB": HB, "M": M, "NB": NB, "BN": BN, "D": D, "seqlen_k": a["T_max"], "rows": a["max_rows"] * a["n_seq"], "n_seq": a["n_seq"]},
-                        "attention_module": a["module"]})
+                if row["step"] == s and row["family"] != "weights":
+                    ids.append(dict(row, program_digest=pdig, component_digest=row["program_digest"], engine_step=e))
         engine_steps_out.append({"engine_step": e, "members": [{"request_id": rid, "step": s, "rows": rows_of[rid]} for rid, s in members],
                                  "rows": sum(rows_of.values()), "n_seq": len(members)})
     ids.sort(key=fmt.row_key)

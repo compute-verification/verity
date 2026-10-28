@@ -18,8 +18,10 @@ from typing import Any
 import pytest
 import torch
 
+from verity.core.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.challenger import CoinError
 from verity_vllm.engine import handle
+from verity_vllm.errors import Refused
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import commit_coins as CC
 from verity_vllm.pipeline import serve_h1 as SH
@@ -27,13 +29,14 @@ from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
+from verity_vllm.protocols.pouw.h1 import served as SV
 
 from tests.pipeline.test_commit_coins import GATE, KEY, PEER, _Auditor
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Serving, records, serve_concurrently
 from tests.protocols import challenger_host as CH
 from tests.protocols.test_pouw_h1 import Runner, _so
 from tests.protocols.test_pouw_h1_commit import K, ROWS, STEPS, Committer, Linear, Model, _ids, _manifest_sites, _served_commit
-from tests.protocols.test_pouw_h1_served import _unit
+from tests.protocols.test_pouw_h1_served import StandInJ10R, _unit
 
 #: each window's two requests: step 0 admits both (prompt tokens, cap), step 1 decodes a row of each
 PROMPTS = ({"a": [5, 6, 7], "b": [8, 9]}, {"c": [11, 12], "d": [13, 14, 15, 16]})
@@ -44,9 +47,9 @@ class _Server:
     and the bench row's int8 source at engine steps 0..S-1 of each window (the committer's steps restart at its reset),
     the stand-in model, and the engine's runner, which `handle.model_runner` hands H1."""
 
-    def __init__(self, monkeypatch, quant=None):
+    def __init__(self, monkeypatch, quant=None, model=None):
         monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
-        self.runner, self.model, self.com = Runner(), Model(), Committer()
+        self.runner, self.model, self.com = Runner(), model or Model(), Committer()
         monkeypatch.setattr(handle, "model_runner", lambda llm: self.runner)
         self.port, self.src = _served_commit(self.com, self.model, _manifest_sites(range(STEPS)) if quant is None else quant)
         self.src.install()
@@ -62,7 +65,7 @@ class _Server:
             self.com._plan_shape = (len(got), len(prompts))
             self.port._pre(None, (torch.tensor(got), torch.arange(len(got))), {})
             for layer in self.model.model.layers:
-                layer((torch.randn(len(run.owners[s]), K, generator=g) * 3).bfloat16())
+                layer((torch.randn(len(run.owners[s]), layer.weight.shape[1], generator=g) * 3).bfloat16())
             self.com._cur = None
         return run
 
@@ -177,7 +180,8 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
     families for S rounds, as this peer), round 0 opens it on the window's open root once its port listens, and the
     window's close waits for its end entry, closed and complete. The window's salt, round and draw coins are that
     session's, its record carries the session without its secret, and the verifier's check of the record against the
-    auditor's ledger (`pouw_h1_challenger.session_reason`) passes."""
+    auditor's ledger (`pouw_h1_challenger.session_reason`) passes. No file the windows wrote holds the weight trees' salt
+    key (`pouw_h1.WEIGHT_KEY`), raw or in hex."""
     srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
     ports: list[int] = []
     sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle,
@@ -206,6 +210,8 @@ def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, mo
     assert len(set(sids)) == 2 and ports == [7811, 7811]
     reserves = [shlex.split(a[-1]) for a in auditor.argv if shlex.split(a[-1])[0] == "reserve"]
     assert reserves == [["reserve", "--peer", PEER, "--scheme", PHC.SCHEME, "--families", PHC.families(STEPS)]] * 2
+    written = [f.read_bytes() for f in tmp_path.rglob("*") if f.is_file()]
+    assert written and not any(PH.WEIGHT_KEY in b or PH.WEIGHT_KEY.hex().encode() in b for b in written)
     srv.src.uninstall()
 
 
@@ -511,7 +517,7 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_drawn_rea
     def seal() -> None:
         try:
             released.append(draws.release(0, dev))
-        except SL.DrawRefused as e:
+        except Refused as e:
             released.append(e)
     sealer = threading.Thread(target=seal)
     sealer.start()
@@ -566,13 +572,13 @@ def test_a_window_with_no_draw_refuses_its_release_by_name(tmp_path, monkeypatch
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions)
     arm.drawing(draws)
     assert arm.close(3) is None
-    with pytest.raises(SL.DrawRefused, match="window 3's H1 window never opened"):
+    with pytest.raises(Refused, match="window 3's H1 window never opened"):
         draws.wait(window=3)
     arm.open(0)
     srv.serve(PROMPTS[0], 0)
     out = arm.close(0)
     assert out["tied"] and "joined no period" in out["draw"]["refused"], out
-    with pytest.raises(SL.DrawRefused, match="joined no period"):
+    with pytest.raises(Refused, match="joined no period"):
         draws.wait(window=0)
     assert arm.describe()["draw"] == f"put as {SH.DRAWER} into the draw-gated release"
     srv.src.uninstall()
@@ -725,3 +731,25 @@ def test_the_window_program_holds_a_tile_unit_for_each_32_rows_of_slot_and_32_co
     assert SH.units(llama, 2048, 1) == 64 * 11_776 == 753_664
     assert SH.units(llama, 1536, 1) == SH.units(llama, 2048, 1)
     assert SH.units(llama, 512, 16) == 16 * 16 * 11_776
+
+
+def test_the_pouw_settings_unit_and_ks_serve_a_j10r_window_over_the_linears_at_one_k(tmp_path, monkeypatch):
+    """``{"pouw": {"unit": "j10r", "ks": [K]}}`` over a linear at K and one at 2K: H1's linears, its declared Program (its
+    tile unit the setting's, `pouw_h1_served.unit_of`), its registered weights and its tap are the K linear's alone, so
+    the Program's units are J10-R's at one K; the 2K linear serves on its arm unhooked, and the window names it
+    uncovered, as it does attention. The window ties at ROOTS1 as one over every linear does."""
+    monkeypatch.setattr(SV, "unit_of", lambda name: _unit(defn=StandInJ10R) if name == "j10r" else None)
+    srv = _Server(monkeypatch, model=Model(ks=(K, 2 * K)))
+    dense, wide = srv.model.model.layers
+    arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path,
+                       config={"pouw": {"unit": "j10r", "ks": [K]}})
+    assert arm.layers == [dense] and arm.describe()["linears"] == 1
+    assert HW.is_j10r(arm.program) and [k for k, _t in arm.program.fn.S().TILES] == [K]
+    arm.open(0)
+    assert "apply" in vars(dense.quant_method) and "apply" not in vars(wide.quant_method)
+    run = srv.serve(PROMPTS[0], 0)
+    out = arm.close(0)
+    assert out["tied"] and (out["steps_served"], out["refused"]) == (STEPS, []), out
+    assert {(c.layer, c.k) for c in run.calls} == {(0, K)} and len(run.calls) == STEPS
+    assert f"outside the pouw setting 'ks' [{K}]" in run.details["uncovered"]
+    srv.src.uninstall()

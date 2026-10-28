@@ -36,7 +36,7 @@ names it loads under ``--precision pin`` too.
 The engine is `verity_vllm.LLM` (in-process engine core, Model Runner V2), stepped by one thread, the process's main
 thread (`EngineLoop`): each HTTP request is admitted with ``add_request`` under the engine id ``cmpl-<hex>-0`` (vLLM's
 ``f"{request_id}-{i}"``), and vLLM's scheduler batches whatever is admitted; each engine output goes back to its
-request's connection as it comes. The HTTP side is an asyncio server on its own thread, one request per connection.
+request's connection as it comes. The HTTP side is an asyncio server on its own thread (`serve_http`), one request per connection.
 Requests reach the engine in the order the frontend parsed them (``--admit arrival``, the default), or in the network
 certifier's release order (``--admit release-order``: `serve_admit.ReleaseOrder`, which says what the certifier sends), where each step's
 rows also keep the scheduler's order, so a step's new rows are in admission order (`serve_admit.keep_scheduler_rows`;
@@ -65,7 +65,7 @@ ingress, its finish, its committed rows and seeds, and its check), ``request_use
 and taps (the acquisition plan under ``acquisition/``). ``--scheme vllm-v1`` (SHA-256, 32-byte roots) only serves again the
 recorded vllm-v1 run ``--of-record`` names (`serve_seal.scheme_refusal`). ``--seal`` seals each closed
 window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
-commits the attention interiors without retaining them, and each seal's manifest names them (`serve_seal.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
+commits the attention interiors without retaining them, and each seal's manifest names them (`serve_retention.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
 device pool until every subprotocol named has drawn the window, then keeps on host, and seals, only the leaves their drawn
 blocks open (`serve_release`; PoUW H1's, ``pouw``, from its arm in process once each window's draw coin is open,
 `serve_h1.H1Windows.drawn`, any other's through ``--draws-dir``). Each
@@ -119,6 +119,8 @@ from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrd
 from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, disk_record, ingress_of, param_of,
                                                records_mirror, served_statics, user_of)
 from verity_vllm.pipeline import serve_learn as SL
+from verity_vllm.pipeline.serve_http import HttpThread
+from verity_vllm.pipeline.serve_retention import RetentionOptions, retention_record
 from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
                                                  VllmProtocol, error_body, framing_agrees, http_chunk, sse, usage_of)
 
@@ -233,7 +235,7 @@ class Options:
                                           help="--protocols' settings, {\"pouw\": {...}}: a JSON object, or a JSON file (serve_h1.config_of)")
     gate: SH.GateOptions = group(SH.GateOptions)
     remote: SR.RemoteOptions = group(SR.RemoteOptions)
-    retention: SS.RetentionOptions = group(SS.RetentionOptions)
+    retention: RetentionOptions = group(RetentionOptions)
     learning: SL.LearnOptions = group(SL.LearnOptions)
 
 
@@ -559,40 +561,6 @@ class Server:
                 self.abort(adm.engine_id)
 
 
-class HttpThread(threading.Thread):
-    """``server`` on ``host:port`` in this thread's own event loop: ``ready`` is set once it listens (``address``), and
-    `shutdown` stops it from any thread."""
-
-    def __init__(self, server: Server, host: str, port: int) -> None:
-        super().__init__(name="http", daemon=True)
-        self.server, self.host, self.port = server, host, port
-        self.ready = threading.Event()
-        self.address: tuple[str, int] | None = None
-        self.error: BaseException | None = None
-        self._loop: asyncio.AbstractEventLoop | None = None
-        self._done: asyncio.Event | None = None
-
-    def run(self) -> None:
-        async def main() -> None:
-            self._loop, self._done = asyncio.get_running_loop(), asyncio.Event()
-            srv = await asyncio.start_server(self.server.handle, self.host, self.port, limit=1 << 22, backlog=256)
-            self.address = tuple(srv.sockets[0].getsockname()[:2])
-            self.ready.set()
-            async with srv:
-                await self._done.wait()
-
-        try:
-            asyncio.run(main())
-        except BaseException as e:
-            self.error = e
-            self.ready.set()
-
-    def shutdown(self) -> None:
-        if self._loop is not None and self._done is not None:
-            self._loop.call_soon_threadsafe(self._done.set)
-        self.join()
-
-
 # ---------------------------------------------------------------------------------------------------------------- main
 
 def engine_options(opts: Options) -> dict[str, Any]:
@@ -697,7 +665,7 @@ def main(opts: Options) -> int:
     defaults: dict[str, Any] = {}                            # vLLM's neutral defaults: the request brings its sampling
     tok = llm.get_tokenizer()
     trace = advice_trace(out, llm)
-    mirror = records_mirror(out, opts.copy_records_to)
+    mirror = records_mirror(out, opts.copy_records_to, before=trace.drain)
     windows = sealer = warmed = arm = None
     draws, draws_dir = RL.release_of(opts, out)
     if com is not None:
@@ -765,7 +733,7 @@ def main(opts: Options) -> int:
               "remote_session": session.describe() if session is not None else None, "row_scheduling": row,
               "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy", "required_manifest",
                                                                   "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
-              "required_manifest_path": getattr(com, "required_manifest_path", None), **SS.retention_record(opts, com),
+              "required_manifest_path": getattr(com, "required_manifest_path", None), **retention_record(opts, com),
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
               "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
               "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of(llm.model)}
