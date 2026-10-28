@@ -2,7 +2,7 @@
                                           delivery route and the mma.sync seed, Strassen's ALU-for-tensor-core
                                           exchange rate (at the honest L and the no-fold L), B_RF and c ≈ ρ₈/B_RF,
                                           each honest profile's r_H against r_min and γ, those ratios per second,
-                                          every RT-UNITS unit's verdict, and SHA-512 against the public figures and
+                                          every unit's verdict, and SHA-512 against the public figures and
                                           the card's ceiling, each on the data sheet and measured, with its
                                           arithmetic; --check prints the figures alone; exits 1 when a figure
                                           doesn't hold"""
@@ -61,7 +61,7 @@ def run(args) -> int:
         for name, x in s.rates.items():
             print(f"             {name}: {x:.3f}")
     print(f"  at the no-fold receipt's L, where the k = L/2 products are k32 MMAs at full rate (post-additions only; the "
-          f"pre-additions and operand fix-ups are BET-ALGO-LAB's), the cheapest route's exchange:")
+          f"pre-additions and operand fix-ups uncounted), the cheapest route's exchange:")
     for big in T.NOFOLD_L:
         cells = []
         for reading in T.READINGS:
@@ -119,7 +119,7 @@ def _per_second(t: T.Theta, L: int) -> None:
 
 
 def _units(t: T.Theta) -> None:
-    print(f"\nunits RT-UNITS lists ({len(T.UNITS)}), each with its verdict; a bounded or open unit's most work a SM-clock "
+    print(f"\nunits ({len(T.UNITS)}), each with its verdict; a bounded or open unit's most work a SM-clock "
           f"over the rate it stands in for, on the sheet / measured:")
     for verdict, meaning in T.VERDICTS.items():
         us = [u for u in t.units.values() if u.verdict == verdict]

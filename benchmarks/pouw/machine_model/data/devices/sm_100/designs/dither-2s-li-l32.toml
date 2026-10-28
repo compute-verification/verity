@@ -1,7 +1,7 @@
 # Dither-2S with the LI fold at L = 32 on the B200 (sm_100): two-sided dither serving the last checked word and P·V's
 # peel, LI receipts on every committed word. The noise is dither-2s-l32's, and ε_skip is this design's own at its ♭
-# (eps_budget's `design_skip`); the fold, honest and ε_mand are DC-DESIGN's (note:20261017T0805Z-draft-dc-design §3,
-# §4): LI binds honest on the B200's lane facet, so output counting closes the lane route.
+# (eps_budget's `design_skip`); the fold, honest and ε_mand are measured: LI binds honest on the B200's lane
+# facet, so output counting closes the lane route.
 name = "dither-2s-li-l32"
 title = "Dither-2S, LI, L = 32"
 summary = "Dither-2S on the B200 at L = 32: two-sided dither serving the last checked word, LI receipts, P·V's peel"
@@ -27,26 +27,26 @@ IMAD = 0.5
 
 [skip.served]
 eps = 0.00839
-source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭ (SPEC §2.9), ♭ 4.035 SMSP-cycles a 4096-MAC MMA on DC-100; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's peel 0.839%: its tail 0.446%, the sums DG, S and X(0) 0.331%, the served epilogue 0.0626%. With P·V's served output checked it is 0.666% (8B) / 0.261% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of BC-KERNEL r2's tail instructions (4 mma.sync m16n8k32, 4 IMAD, 11.5 other), its sums by vfold (#2300, decision 91) and served epilogue at one an issue cycle, on sm_120's instruction counts for the same kernel source, on this device's Π (note:20261017T0320Z-draft-eps1-calc Round 10)"
+source = "eps_budget.py (benchmarks/pouw, `design_skip`, `floor_skip`): Corollary D3's ε_skip, the skippable work at its issue-model price over the floor program's bound B_♭, ♭ 4.035 SMSP-cycles a 4096-MAC MMA on DC-100; the most over Llama-3.1-8B and 70B at 2K, 8K and 32K, prefill and decode (decode's ♭ its compute alone), every served output free. At 8B 2K prefill: P·V's peel 0.839%: its tail 0.446%, the sums DG, S and X(0) 0.331%, the served epilogue 0.0626%. With P·V's served output checked it is 0.666% (8B) / 0.261% (70B) there. Skip terms: the peel's tail at the larger of 1.57 of ♭'s MACs a strip product and Π's price of BC-KERNEL r2's tail instructions (4 mma.sync m16n8k32, 4 IMAD, 11.5 other), its sums by vfold and served epilogue at one an issue cycle, on sm_120's instruction counts for the same kernel source, on this device's Π"
 
 [mand.fold]
 eps = 0.0
-source = "named assumptions: LI at 1 lane instruction a word is the cheapest implementation of the fold (FOLD-OPT); LI's binding rests on KLI₂₄ (decision 65), (RT), (G₃) and (HO_U) (decision 59; (HO) itself fails in serving)"
+source = "named assumptions: LI at 1 lane instruction a word is the cheapest implementation of the fold (FOLD-OPT); LI's binding rests on KLI₂₄, (RT), (G₃) and (HO_U) ((HO) itself fails in serving)"
 
 [clock]
 eps = 0.0
-source = "f_H unmeasured on the B200 (EPS1 DC measured f_max = 1965 MHz at default clocks, 06:01Z): 0 here, so γ with the clock gap is γ, a lower bound"
+source = "f_H unmeasured on the B200 (f_max = 1965 MHz at default clocks, @b200-fmax): 0 here, so γ with the clock gap is γ, a lower bound"
 
 [luck]
 delta = 4.547473508864641e-13
 p = 0.75
 checks = 48000
-source = "SPEC §5 (note:20261017T0324Z-draft-eps1-spec): Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41 (note:20261016T0005Z-draft-luck-loss-round4 §1)"
+source = "Theorem S at p = 3/4 over one week of 12.6 s rounds, δ′ = 2^-41"
 
-[baseline]          # honest's own lane program: its words belong to the baseline, not to ε (the brief §2)
+[baseline]          # honest's own lane program: its words belong to the baseline, not to ε
 name = "dp4a"
 program = { IMAD = 8 }
-source = "dp4a at 8 IDP4A a word at L = 32, on IMAD's class as sm_120 prices it (no IDP4A kind in EPS1 DC's census); no LDS kind either, so its loads are unpriced"
+source = "dp4a at 8 IDP4A a word at L = 32, on IMAD's class as sm_120 prices it (no IDP4A kind in this device's census); no LDS kind either, so its loads are unpriced"
 
 [routes]
 lanes = true

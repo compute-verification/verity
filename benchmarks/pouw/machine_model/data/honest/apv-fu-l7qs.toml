@@ -8,7 +8,7 @@
 # as apv_l7qs), and the whole P.V with its producers (U, V, the X sums) 3.32x (apv_l7qs with its P~ pass 5.95x).
 name = "apv-fu-l7qs"
 status = "measured"
-source = "BC-KERNEL's apv_fu (benchmarks/pouw/edited_gemm/apv.cu) at s = 2048, H = 32, rep = 4, `eps_profile.py OUT --json`, census VF3n-16's classes, scaled by 2,490,368 / 2,228,224 MMAs to a useful MMA (r20261017-092503-35ff; receipts and f equal to apv_l7qs's, which is bit-exact against checked_strip's pv_words and pv_served)"
+source = "BC-KERNEL's apv_fu (benchmarks/pouw/edited_gemm/apv.cu) at s = 2048, H = 32, rep = 4, `eps_profile.py OUT --json`, census VF3n-16's classes, scaled by 2,490,368 / 2,228,224 MMAs to a useful MMA (receipts and f equal to apv_l7qs's, which is bit-exact against checked_strip's pv_words and pv_served)"
 L = 32
 
 [mma]
@@ -34,11 +34,11 @@ UTMA16K = 0.0041
 
 [measured]
 cycles_per_mma = 52.0484        # the hot median at its clock a useful MMA; ncu 51.6800; work bound 26.1149 on JI3n_0 (eps_sched 0.498)
-source = "apv_fu at s = 2048, H = 32, rep = 4 (r20261017-092503-35ff): hot 0.0765 ms against apv_plain's 0.0420"
+source = "apv_fu at s = 2048, H = 32, rep = 4: hot 0.0765 ms against apv_plain's 0.0420"
 
 [operands]      # the least operand delivery a program pays a MMA when the design names none (`--operands floor`)
 floor = { LDSM_X4 = 0.2 }
-source = "SPEC §3.4: an IMMA.16832 needs A in 4 registers a lane and B in 2, no instruction writes more than 4, and a register tile with 4ab + 4a + 2b <= 240 delivers >= 1/b + 1/(2a), least 0.20 at (a, b) = (5, 10) (note:20261017T0324Z-draft-eps1-spec)"
+source = "an IMMA.16832 needs A in 4 registers a lane and B in 2, no instruction writes more than 4, and a register tile with 4ab + 4a + 2b <= 240 delivers >= 1/b + 1/(2a), least 0.20 at (a, b) = (5, 10)"
 
 [fold]          # the fold inside per_mma, lane instructions a committed word (12 warp instructions a useful MMA at L = 32)
 name = "duo"    # u = y ^ d ^ k (LOP3); y = u*a + z (IMAD); z = rotl(u, r) + y (LEA.HI)
