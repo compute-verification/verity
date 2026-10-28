@@ -1,0 +1,5 @@
+# The filler's exact int8 GEMM on 2-bit operands streamed by TMA, on the H200 (u2_gemm.cu), sustained at the board's power
+# cap, beside SHA-512 and against cuBLASLt (bench.py, run on a GPU node by run.sh). Not a package: bench.py's host side and
+# the SASS gate run here as a suite, no GPU.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
