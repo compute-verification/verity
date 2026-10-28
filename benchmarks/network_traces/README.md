@@ -106,15 +106,20 @@ the verifier's own coins, and a challenger that fails fails the round.
 (`CERTIFIER_FRONT`) runs before that run's requests: the gate's scan rehearsal sends one group of the window circuit's
 class (4 prompts of 24 ids, 4 ids out, `--window-per-group`) to serve-openai, all of it in link-window 0, so the engine
 closes it into the run's earliest window, the one the run audits, and the gate's fetch is kept in the serve dir's
-`private/certifier`. Its `piece` (`CERTIFIER_CMD`) runs the chain's warden path on that fetch with the serve dir's
-endpoint records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows
-form of the scan's link-window (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
+`private/certifier`. A request's answer must be whole D·τ after its admission, 2.7 s at the scan's 100 ms tick; for a
+slower endpoint `--bucket-ms` runs the scan at a longer tick, up to 4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`)
+runs the chain's warden path on that fetch with the serve dir's endpoint records, run dir and quarantine private
+beside the fetch, and answers with `network-period check` on the rows form of the scan's
+link-window (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
 of the audited window is a certified one inside that link-window, and the Lean check accepts; beside that answer goes
 its case, `case.json`, as `composite.py` reads a piece's (inline, about 83 MB on a served window). Only the protocol
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
 late, say), a drawing round whose challenger session didn't open or whose evidence doesn't hold, or a step that can't
 run, the piece refuses (`refused.txt`), which leaves the certifier missing. Each round's challenger evidence goes in
-its public files.
+its public files. An accept's profile names its placement: the certifier on the gate's host, each drawing round's
+coins from the auditor's challenger, and the chain, the period check and their Flock sessions' coins on the prover's
+node, so `trusted-host` is assumed with the auditor's devices not placed. The chain's endpoint report, whose rows count
+each Commit window's requests, stays beside the fetch.
 
 ## The chain's run of record
 
@@ -158,15 +163,19 @@ synthetic run, or N2 on `CR_N2_STANDIN=simulated`) never makes the report accept
 says why.
 
 **The record's leak guard** (`leak_guard.py`). Custody publishes the whole run dir, `inputs/` with it, so the job moves
-each gate sent under `inputs/` to the quarantine once it is unpacked, and on every exit runs the guard on the run dir.
-The guard moves to the quarantine (`CR_QUARANTINE`, by default `quarantine/RUN` beside the runs root, 0700) every file
-that holds a gate run's witness: one under a `witness/` directory or named as `leak_guard.json` declares, one holding an
-aligned witness piece raw or as hex at any offset, an archive member that does, or an archive it can't read through.
-The run then fails (exit 3), and `out/leak-guard.json` names each find by its path alone. A piece the gate's public
-files hold, as they are or with their JSON written again, is no find. The false positives are declared data,
-`leak_guard.json`'s `allow`, each entry written only after its find was read by counts and digests; the one there
-excuses the stall probe's cgroup counters in the runner's own `resources.jsonl`. A signal before the guard runs, or a
-guard that can't run, withholds `out/`, `inputs/` and the logs whole.
+each gate sent under `inputs/` to the quarantine once it is unpacked, writes every output (its own stdout and stderr
+too) to a hold outside the run dir (`$Q/held`), and on every exit runs the guard on the run dir and the hold. The guard
+moves to the quarantine (`CR_QUARANTINE`, by default `quarantine/RUN` beside the runs root, 0700) every file that holds
+a gate run's witness: one under a `witness/` directory or named as `leak_guard.json` declares, one holding an aligned
+witness piece raw or as hex at any offset, an archive member that does, or an archive it can't read through. Only then
+does it release the rest of the hold to `out/`. A find fails the run (exit 3), and `out/leak-guard.json` names each find
+by its path alone. A file equal to one of the gate's public files (by sha256, so a gate's published bundle and its
+members aren't scanned) is no find, nor is a piece those files hold, as they are or with their JSON written again. The
+false positives are declared data, `leak_guard.json`'s `allow`, each entry written only after its find was read by
+counts and digests; the one there excuses the stall probe's cgroup counters in the runner's own `resources.jsonl`. The
+guard's cost is linear in the bytes it reads, and past its budget (`--budget-s`) it stops. A signal (before or during
+the guard), a guard past its budget, or one that can't run releases nothing and withholds `out/`, `inputs/` and the logs
+whole; a SIGKILL leaves the hold where it is, out of the record.
 
 **The relay path** (`CR_PATH=warden`, `chain_record.WARDEN`). Every step reads the relay's own run (the gate's
 `warden-rehearse`, its witness under `witness/`; `warden_chain.py`), and a proxy rehearsal's run, whose records come

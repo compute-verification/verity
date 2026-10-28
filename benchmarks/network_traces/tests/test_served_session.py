@@ -14,11 +14,14 @@ link's peer and ``local`` for a dry run, and a challenger it can't name, or a CR
 scan's coins, is refused before chain_record.sh runs."""
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import os
 import shlex
 import shutil
+import signal
+import subprocess
 import sys
 import tarfile
 from datetime import datetime, UTC
@@ -32,22 +35,32 @@ import served_session as SS  # noqa: E402
 import scan_zk as sz  # noqa: E402
 
 RUN = "c20261028T120000Z-0000"
+#: a witness value (the stub's witness/certified.jsonl) its status plants with STUB_NOTE: two of the guard's text pieces
+PLANTED = hashlib.sha256(b"a certified line").hexdigest()
+#: the warden's stall probe's record of its cgroup, as the gate's unit runs it: the unit's name begins one of the guard's
+#: aligned text pieces (`leak_guard.TEXT` bytes), as it did on a served run
+_CGROUP = '{"cgroups": {"warden": {"path": "/sys/fs/cgroup/system.slice/system-vy\\\\x2dcertifier.slice/'
+STALLS = (" " * (-len(_CGROUP) % 32) + _CGROUP + f'vy-certifier@{RUN}.service"}}}}}}\n').encode()
 
 STUB = r'''#!PYTHON
-import io, json, os, sys, tarfile
+import io, json, os, signal, sys, tarfile
 from pathlib import Path
 d, cmd = Path(os.environ["STUB_DIR"]), sys.argv[-1]
 if cmd.startswith("warden-rehearse "):
     (d / "prompts.json").write_bytes(sys.stdin.buffer.read())
     (d / "request").write_text(cmd)
-    print(json.dumps({"run": "RUN", "device": "warden"}))
+    print(json.dumps({"device": "warden", "run": "RUN", "unit": "vy-certifier@RUN.service"}, sort_keys=True))
 elif cmd == "status RUN":
-    print(json.dumps({"run": "RUN", "end": {"rc": 0}}))
+    if os.environ.get("STUB_FIFO"):
+        open(os.environ["STUB_FIFO"], "w")
+        signal.pause()
+    print(json.dumps({"run": "RUN", "end": {"rc": 0}, "note": os.environ.get("STUB_NOTE")}))
 elif cmd == "fetch RUN":
     files = {"end.json": json.dumps({"run": "RUN", "rc": 0, "verdict": {"accepted": True, "problems": 0}}).encode(),
              "out/deployment.json": json.dumps({"windows": 4, "origin_unix": 1.5,
                                                 "params": {"window": 32, "bucket_ms": 100}}).encode(),
-             "out/certificates.jsonl": b"", "witness/prompts.json": (d / "prompts.json").read_bytes()}
+             "out/certificates.jsonl": b"", "witness/prompts.json": (d / "prompts.json").read_bytes(),
+             "witness/certified.jsonl": b"PLANTED\n", "witness/stalls.json": STALLS}
     if (d / "leak").exists():
         files["out/cells.jsonl"] = (d / "prompts.json").read_bytes()
     buf = io.BytesIO()
@@ -59,7 +72,7 @@ elif cmd == "fetch RUN":
     sys.stdout.buffer.write(buf.getvalue())
 else:
     sys.exit(f"stub gate: no verb {cmd!r}")
-'''.replace("PYTHON", sys.executable).replace("RUN", RUN)
+'''.replace("PYTHON", sys.executable).replace("STALLS", repr(STALLS)).replace("RUN", RUN).replace("PLANTED", PLANTED)
 
 
 def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it():
@@ -129,7 +142,10 @@ def test_a_session_keeps_the_lanes_fetch_apart_and_publishes_the_bundle_less_wit
     assert [p.stat().st_mode & 0o777 for p in (keep, keep / RUN, kept)] == [0o700, 0o700, 0o600]
     assert f"{RUN}/witness/prompts.json" in SS.members(kept.read_bytes())
     out = tmp_path / "out"
-    assert sorted(p.name for p in out.iterdir()) == ["bundle.tgz", "session.json", "start.json", "status.json"]
+    assert sorted(p.name for p in out.iterdir()) == ["bundle.tgz", "leak-guard.json", "session.json", "status.json"]
+    report = json.loads((out / "leak-guard.json").read_text())
+    assert (report["verdict"], report["gate_runs"], report["held"], report["released"]) == ("clean", [RUN], 3, 3)
+    assert list((keep / "held").iterdir()) == []
     shown = SS.members((out / "bundle.tgz").read_bytes())
     assert sorted(shown) == [f"{RUN}/end.json", f"{RUN}/out/certificates.jsonl", f"{RUN}/out/deployment.json"]
     doc = json.loads((out / "session.json").read_text())
@@ -143,6 +159,65 @@ def test_a_published_file_holding_a_prompt_is_removed_and_the_session_exits_4(tm
     (tmp_path / "leak").touch()
     assert _session(tmp_path, monkeypatch) == 4
     assert not (tmp_path / "out" / "bundle.tgz").exists() and (tmp_path / "out" / "session.json").exists()
+
+
+def test_a_published_file_holding_a_witness_value_is_moved_out_and_the_session_exits_4(tmp_path, monkeypatch):
+    """The gate's status planting a value of the witness (no prompt's ids): the leak guard moves status.json to KEEP's
+    quarantine and releases the rest."""
+    monkeypatch.setenv("STUB_NOTE", PLANTED)
+    assert _session(tmp_path, monkeypatch) == 4
+    out, q = tmp_path / "out", tmp_path / "keep" / "quarantine"
+    assert sorted(p.name for p in out.iterdir()) == ["bundle.tgz", "leak-guard.json", "session.json"]
+    assert [p.name for p in q.glob("*/files/status.json")] == ["status.json"]
+    assert [d["path"] for d in json.loads((out / "leak-guard.json").read_text())["found"]] == ["status.json"]
+
+
+def test_sigterm_mid_session_releases_nothing(tmp_path):
+    """A timeout's SIGTERM to the job's process group while it polls the gate (its status held on a FIFO the test opens)
+    ends the session (exit 143) with nothing released: --out stays empty and its files stay in KEEP's hold."""
+    (tmp_path / "bin").mkdir()
+    (tmp_path / "bin" / "ssh").write_text(STUB)
+    (tmp_path / "bin" / "ssh").chmod(0o755)
+    (tmp_path / "out").mkdir()
+    fifo = tmp_path / "status.fifo"
+    os.mkfifo(fifo)
+    env = dict(os.environ, PATH=f"{tmp_path / 'bin'}{os.pathsep}{os.defpath}", STUB_DIR=str(tmp_path),
+               STUB_FIFO=str(fifo))
+    p = subprocess.Popen([sys.executable, str(HERE / "served_session.py"), "session", "--out", str(tmp_path / "out"),
+                          "--keep", str(tmp_path / "keep"), "--key", str(tmp_path / "key"), "--prompts", "3"],
+                         env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, start_new_session=True)
+    with open(fifo, "rb"):
+        os.killpg(p.pid, signal.SIGTERM)
+        said, _ = p.communicate()
+    assert p.returncode == 143, said
+    assert "SIGTERM ended the session: nothing released" in said
+    assert list((tmp_path / "out").iterdir()) == []
+    (hold,) = (tmp_path / "keep" / "held").iterdir()
+    assert list(hold.iterdir()) == [] and (tmp_path / "keep" / RUN / "start.json").is_file()
+
+
+def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_warden_records(tmp_path, monkeypatch):
+    """The gate's start reply names the run's systemd unit, vy-certifier@RUN.service, as the warden's stall probe
+    records its cgroup in the witness (stalls.json), and no public file of the run holds it: published, the leak guard
+    holds the reply as a piece of the witness, and an accepted session exited 4. The reply goes to KEEP/RUN alone
+    (0600), so the session exits on the gate's verdict."""
+    assert _session(tmp_path, monkeypatch) == 0
+    out, kept = tmp_path / "out", tmp_path / "keep" / RUN
+    reply = kept / "start.json"
+    assert json.loads(reply.read_bytes())["unit"] == f"vy-certifier@{RUN}.service"
+    assert reply.stat().st_mode & 0o777 == 0o600 and not (out / "start.json").exists()
+    assert json.loads((out / "leak-guard.json").read_text())["found"] == []
+    published, q = tmp_path / "published", tmp_path / "q"
+    published.mkdir()
+    shutil.copyfile(reply, published / "start.json")
+    got = subprocess.run([sys.executable, str(HERE / "leak_guard.py"), str(published), str(q), "--gates",
+                          str(kept / "fetch.tar.gz"), "--dry", "--report", str(tmp_path / "report.json")],
+                         capture_output=True, text=True)
+    assert got.returncode == 3, got.stdout + got.stderr
+    assert [d["path"] for d in json.loads((tmp_path / "report.json").read_text())["found"]] == ["start.json"]
+    doc = json.loads((q / "leak-guard.json").read_text())
+    (piece,) = [p for f in doc["found"] for p in f["pieces_found"]]
+    assert (piece["witness"], piece["keypath"]) == (f"{RUN}/witness/stalls.json", ["unit"])
 
 
 def test_a_keep_inside_out_is_refused_before_anything_is_sent(tmp_path, monkeypatch):
