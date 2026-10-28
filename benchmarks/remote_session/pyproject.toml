@@ -42,4 +42,4 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "benchmarks/live_challenger/auditor.py", "benchmarks/live_challenger/host.json", "benchmarks/live_challenger/serve.py",
           "benchmarks/live_challenger/tests/stub_serve.py",
           "integrations/vllm/verity_vllm/settings.py", "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py",
-          "integrations/vllm/verity_vllm/engine", "integrations/vllm/verity_vllm/protocols/remote_bandwidth"]
+          "integrations/vllm/verity_vllm/engine", "integrations/vllm/verity_vllm/protocols/remote_bandwidth", "verity/core/protocols/record.py"]

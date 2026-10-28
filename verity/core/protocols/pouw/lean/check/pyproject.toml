@@ -57,4 +57,4 @@ inputs = ["verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py
           "verity/core/primitives/lms/lean/lean-toolchain", "verity/core/primitives/lms/lean/Lms.lean",
           "verity/core/primitives/lms/lean/Lms",
           "verity/core/service/flock/lakefile.toml", "verity/core/service/flock/lake-manifest.json",
-          "verity/core/service/flock/lean-toolchain", "verity/core/service/flock/Flock"]
+          "verity/core/service/flock/lean-toolchain", "verity/core/service/flock/Flock", "verity/core/protocols/record.py"]

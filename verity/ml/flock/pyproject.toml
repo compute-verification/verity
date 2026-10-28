@@ -44,7 +44,7 @@ inputs = [
     "verity/core/service/flock/Flock/Zk.lean",
     # test_lean_rec_cap_guards.py builds Flock.Test.RecCap, which the Lean check no longer does; its imports reach it through
     # the flock-verify artifact
-    "verity/core/service/flock/Flock/Test/RecCap.lean",
+    "verity/core/service/flock/Flock/Test/RecCap.lean", "verity/core/protocols/record.py",
 ]
 parallel = true
 # an xdist worker peaked at 15.6 GB (16 Oct, vy-nebius-cpu-1: 38 of them OOM'd a 600 GiB check); `--mem-gb` divides by this

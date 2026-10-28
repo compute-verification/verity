@@ -25,4 +25,4 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "benchmarks/live_challenger/serve.py",
           # the host's deployed files (the configuration the gate reads, the tunnel's ports), and the store's client its
           # publish imports from the pinned tree
-          "tools/research/src/research"]
+          "tools/research/src/research", "verity/core/protocols/record.py"]

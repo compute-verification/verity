@@ -73,6 +73,17 @@ the toy protocol whose guards cover both.
 protocol whose acceptance isn't a sampling design over proof blocks (a timed storage audit, a certificate check) declares its
 own profile type and JSON.
 
+## Records (`CoreProtocol/Record.lean`)
+
+`Core.Record` is a record entry: one message of a run's transcript (a registration, a commitment, the challenger's
+coins or sample, a proof, a verdict), `{body, kind, prev, schema, seq, session, sig}`. `body` is the message, `kind` its
+kind under `schema` (the protocol's entry schema and version), `session` its session or `null`, and entry `i` has
+`seq = i` and `prev` the SHA-512 of entry `i - 1`'s line (`Record.ZERO` first). `sig` signs `Record.message role I d`,
+SHA-512 of the protocol's role, the signer's LMS identifier and `d`, the schema's tagged SHA-512 of the entry without its
+sig (`Record.unsigned`). `Record.ofJson` reads the form; what a protocol accepts beyond it (its schemas, kinds, bodies,
+signer and sessions) is its own check. The auditor's ledger (`SampledProofs.Challenger.ledgerEntry?`, schemas
+`verity/challenger-auditor/v1|v2`) reads its entries through it. `verity/core/protocols/record.py` is its Python.
+
 ## Properties
 
 A protocol's properties go in `Security/Properties/<Protocol>.lean`, stated against `P.check` (or `P.Accepts`) with its

@@ -21,4 +21,4 @@ inputs = ["verity/ml/circuits", "verity/ml/kernels/__init__.py", "verity/ml/kern
           "verity/ml/crypto", "verity/ml/randomness",
           "verity/core/service/flock/lakefile.toml", "verity/core/service/flock/lake-manifest.json",
           "verity/core/service/flock/lean-toolchain", "verity/core/service/flock/Flock/Field.lean",
-          "verity/core/service/flock/Flock/Bytes.lean", "verity/core/service/flock/Flock/Canon.lean"]
+          "verity/core/service/flock/Flock/Bytes.lean", "verity/core/service/flock/Flock/Canon.lean", "verity/core/protocols/record.py"]

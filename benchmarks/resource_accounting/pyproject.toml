@@ -18,4 +18,4 @@ inputs = ["benchmarks/pouw/harness/price_twins.py", "benchmarks/pouw/harness/pri
           "verity/core/protocols/pous", "verity/core/claims",
           "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/sampled_proofs/challenger.py",
           "verity/ml/__init__.py", "verity/ml/circuits",
-          "verity/ml/commitments", "verity/ml/crypto", "verity/ml/kernels", "verity/ml/randomness"]
+          "verity/ml/commitments", "verity/ml/crypto", "verity/ml/kernels", "verity/ml/randomness", "verity/core/protocols/record.py"]
