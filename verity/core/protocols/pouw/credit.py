@@ -38,7 +38,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   every K's template in one form.
 * **A unit's ok is the verifier's** (`registered_file`'s ``o1``): the statement's output row ``ok`` reads the window's
   ok rows ``<prefix>ok``, row u unit u's, the one word 1 under its public `core_check.ok_salt` (h1_prove's
-  registration, #3124), which credit registers itself and names at that known content. A unit that computed 0 opens no
+  registration), which credit registers itself and names at that known content. A unit that computed 0 opens no
   row of it, and a session that opened ok at another root is refused.
 
 * **The credited set is fixed before the draw** (`_credited`). Each row of the window's manifest (the serving process's
@@ -100,7 +100,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
 * **The round log is the challenger's** (`core_check.rounds`): the round roots `window` reads are the ones the
   challenger's signed log shows it received, in order, each round's coin opened once after its root. A log the
   challenger never received is refused, however its draw root and A trees agree with it.
-* **A period counts only closed and complete** (`period`, RT4-INT-42): its windows are exactly those the auditor's
+* **A period counts only closed and complete** (`period`): its windows are exactly those the auditor's
   ledger lists in the period's close, in that order, each opened and ended complete. A period with no close, or with
   a window missing, out of order or not its own, earns nothing, so no window is chosen after the fact. Under
   `period_credit` each window's session must have run main's code and the window must prove the circuit the period's
@@ -264,12 +264,12 @@ MODEL_FIX = ("open the period with the gate's --model, which signs the auditor's
              "pins (models.json)")
 #: the period-open's field holding the commit it opened under (40 lowercase hex on main's first-parent line): every
 #: window of the period must be pinned within the freshness floor (`STALE_FIELD`) of it, counted in first-parent commits
-#: from this pin and never from main's head (`committed_pin`, `_pin_hygiene`, CMP74-FOLLOW). Optional: a period-open that
+#: from this pin and never from main's head (`committed_pin`, `_pin_hygiene`). Optional: a period-open that
 #: records none isn't held to it
 PERIOD_PIN_FIELD = "pinned"
 #: the period-open's field holding the freshness floor (a nonnegative integer): a window counts only when its pin is at
 #: most this many first-parent commits behind the period's open pin on main's line (`_pin_hygiene`, measured from that
-#: pin, never from main's head, so main moving on never refuses a window fresh at its open, CMP74-FOLLOW). Optional,
+#: pin, never from main's head, so main moving on never refuses a window fresh at its open). Optional,
 #: default 0 when the open pins but records no floor; infra sets it generously, about a day of first-parent commits
 STALE_FIELD = "pin_floor"
 #: the period-open's field holding the rows of record's fixed length: ``{max_tokens, stop}``,
@@ -2319,7 +2319,7 @@ def _pin_hygiene(name: str, i: int, main: Any, pinned: str, period_pin: str | No
     open recorded (`period_pin`, `committed_pin`; `floor`, `committed_floor`, default 0 when the open pins but records no
     floor), measured from that pin and never from main's head, so main moving on never refuses a window fresh at its open;
     None when it is recent enough or the open records no pin.  The per-window pin and circuit are
-    `challenger.credited_session`'s; this is the period-level hygiene on top (CMP74-FOLLOW).  `unit` names what `i`
+    `challenger.credited_session`'s; this is the period-level hygiene on top.  `unit` names what `i`
     counts (``pass`` in a Pearl-C period, `pearl_c_period_credit`)."""
     if period_pin is None:
         return None
