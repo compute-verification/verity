@@ -1,6 +1,6 @@
 """The first recursive session's inner side (hiding model architectures, lane rec-v0; ``80-rec-inner.sh``): the inner
-statement staged as M0's ``verity/flock-circuit`` over RoPE d64 (or another subcircuit, or a served window's member),
-proved by the unmodified prover against ``verity_flock.rec_live``'s proxy and coin server.
+statement staged as M0's ``verity/flock-circuit`` over RoPE d64, proved by the unmodified prover against
+``verity_flock.rec_live``'s proxy and coin server.
 
     python rec_inner.py stage --n N --sets DIR --out DIR [--plain-leaves] [--subcircuit ID] [--seed S]
                               [--sparse SHAPE --stacked FLOCK_CIRCUIT [--forge cell]]
