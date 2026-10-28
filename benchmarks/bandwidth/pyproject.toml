@@ -7,8 +7,9 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # tests/ reads tagger.cu's text (the twins' constants) and imports gpu.py and reference.py, which import the bandwidth audit
 # and PoUS's verifier and geometry; reference.py reads the bandwidth audit's pinned vectors.
-# PoUW's, PoUS's and the bandwidth audit's Python verifiers answer through Core.Answer's Python (`answer.py`).
-inputs = ["verity/core/protocols/answer.py", "verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/bandwidth", "verity/core/protocols/pous",
           "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/commitments", "verity/ml/crypto",
-          "verity/ml/randomness"]
+          "verity/ml/randomness",
+          # PoUW's, PoUS's and the bandwidth audit's Python verifiers answer through Core.Answer's Python (`answer.py`).
+          "verity/core/protocols/answer.py"]
