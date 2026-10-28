@@ -58,8 +58,8 @@ def digest (obj : Json) : Option String :=
 /-- `Q_word` v1's `X`, and the most `Q_call` v1's `X` may be: the width rule of the queries applied here. -/
 def QUERY_X : Nat := 16
 
-/-- The widest public size class of a unit's committed bits (the claims' `Claims.Sampling.unitClassMax`; ASK-61, Daniel,
-19 Oct 2:59 PM PDT, provisional). 16 sets the classes back to the former literal limit alone. -/
+/-- The widest public size class of a unit's committed bits (the claims' `Claims.Sampling.unitClassMax`,
+provisional). 16 sets the classes back to the former literal limit alone. -/
 def UNIT_CLASS_MAX : Nat := 262144
 
 /-- The public size classes, ascending: the powers of two from 16 to `UNIT_CLASS_MAX` (the claims' `unitClasses`). -/
