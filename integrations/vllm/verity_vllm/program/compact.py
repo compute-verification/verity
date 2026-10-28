@@ -21,7 +21,7 @@ inner rows is one progression built in O(1) from its descriptor; a gather over T
 
 The same shape carries CANONICAL sources: `head + (base, delta, count)` with the record's tuple `head + base` per run, e.g.
 `("N", (s, jj, lo, hi), (ds, djj, dl, dh), count)` -- the producers of a gather are one per step in decode (ds = 1) or consecutive in
-one step in prefill (djj = 1).  `compare.InstanceSequence.canon` maps a progression UNIFORMLY when the mapping provably is (same producer; producers
+one step in prefill (djj = 1).  `compare.Prog.canon` maps a progression UNIFORMLY when the mapping provably is (same producer; producers
 affine in the node index inside one step or across equal-sized steps; a weights window inside one field) and per run otherwise, then
 re-normalises with the same greedy rule (`rle_mapped`) so canonical operands compare exactly as the record's do.  `expand` gives the
 record's runs back wherever its BYTES are needed (canonical sha256 serialisation, the <= 12 wiring / xreq examples).
@@ -297,10 +297,10 @@ HASH_RLE_RUNS = 1 << 16
 
 def hash_operand(items: list[tuple]) -> list | dict:
     """One canonical operand as `program_compare._canonical_hash` serialises it: the record's per-run tuples, except an operand in
-    progression form (`InstanceSequence.canon` without unfolding: `rle_mapped`'s normal form) of more than HASH_RLE_RUNS runs, which is serialised
+    progression form (`Prog.canon` without unfolding: `rle_mapped`'s normal form) of more than HASH_RLE_RUNS runs, which is serialised
     as `{"rle": its progressions}`.  The normal form is a function of the run list and expands back to it, so equal hashes still mean
     equal run lists; the tag keeps the two serialisations apart.  [GLM-5.3] a strided W_UK_T / W_UV read is ~1e6 runs in ~2048
-    progressions, 156 such reads a decode step: expanding them is ~5e9 tuples a hash.  A record-form InstanceSequence expands every operand, so the
+    progressions, 156 such reads a decode step: expanding them is ~5e9 tuples a hash.  A record-form Prog expands every operand, so the
     two forms' hashes agree on every operand of at most HASH_RLE_RUNS runs."""
     if items and all(is_prog(t) for t in items) and n_runs(items) > HASH_RLE_RUNS:
         return {"rle": [list(t) for t in items]}
@@ -487,7 +487,7 @@ def rle_runs(mapped_runs: list[tuple], n_base: int) -> list[tuple]:
 
 def lean_root(desc: dict, registry) -> dict:
     """The root body of a descriptor as compact instances WITHOUT building its Node / Coll / Refs objects (codec.decode_program builds
-    them for every root node, then compare.InstanceSequence expanded their runs and dropped the IR).  Every non-root definition is decoded by
+    them for every root node, then compare.Prog expanded their runs and dropped the IR).  Every non-root definition is decoded by
     decode_program's own reader, `codec.definition_decoder`, refusals included (they are the Definitions' small bodies: their spec
     ids come from the same SpecializedDefinition objects, `descriptor_id`, so the spec strings are the record's).  Returns
     {"nodes": [(k, fid, form, args, out_str, n)], "n_nodes", "params"}.  Root-body semantics mirrored from codec.decode_program:
