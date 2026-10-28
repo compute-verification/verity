@@ -87,18 +87,19 @@ from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
 from verity.core.protocols.pouw.protocol import U64, tagged
-from verity.ml.commitments import Commitment, Opening, VerificationLimits, verify_opening
+from verity.ml.commitments import Commitment, Opening, VerificationLimits, domains, verify_opening
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth
 from verity.ml.commitments.rowleaf import row_leaf, sha512_row_v2_digest
+from verity.ml.commitments.scheme import DIGEST_BYTES
 from verity.ml.crypto import lms
 from verity.ml.randomness import derive, frame
 
-ID = "verity/pouw/v1"
-ONE_STAGE = "verity/sampled-proofs/one-stage/v1"
+ID = domains.POUW_PROTOCOL
+ONE_STAGE = domains.ONE_STAGE_PROTOCOL
 SCHEME = "frame-v3-sha512/hm96-sha512"
-FORMATS = ("verity/registration/v1", "verity/registration/v2")
+FORMATS = (domains.REGISTRATION_V1, domains.REGISTRATION)
 LEVEL = "unit"
 PARAMS_KEYS = ("check", "context", "delta", "eps", "grid_bits", "length", "query", "range")
 LENGTH_PARAM_KEYS = ("max_tokens", "stop")
@@ -110,23 +111,23 @@ _DIGEST = re.compile(r"[0-9a-f]{128}")
 #: its salt (X), and the registered weights' entries (W, where it registers no ``W`` root)
 WINDOW_VALUES = ("activations", "registered")
 #: `values_root`'s domain tag
-VALUES_TAG = b"verity/pouw-window-values/v1"
+VALUES_TAG = domains.POUW_PERIOD_VALUES.encode()
 #: one-stage's window domain (`registration.window_domain`), the window root's
-SERVED_DOMAIN = "verity/one-stage/served-domain/v1"
+SERVED_DOMAIN = domains.ONE_STAGE_SERVED_DOMAIN
 #: a tile proof's first two rows: its A row and its B row, each side's fp8-p row schema
 #: (`circuit.leaves.ROW_SCHEMA["fp8-p", X | W]`)
-OPENED = (("a", "hm96-sha512/row-seg/v1"), ("b", "hm96-sha512/row/v2"))
+OPENED = (("a", domains.HM96_SHA512_ROW_SEG), ("b", domains.HM96_SHA512_ROW))
 #: the ports of those rows, the pinned circuit's first two (`served_zk/stage_tile.py`'s ``in_rows``)
 PC8_PORTS = ("a0", "b0")
 SALT_BYTES = 192
 BC_BYTES = 128
-ROW_V2 = "hm96-sha512/row/v2"
+ROW_V2 = domains.HM96_SHA512_ROW
 #: a salted unit's public row: the window's certified salt, the unit's position (a u64) and its entry's side roots
-PUBLIC_ROW_BITS = 8 * (PS.SALT_BYTES + 8 + 2 * 64)
+PUBLIC_ROW_BITS = 8 * (PS.SALT_BYTES + 8 + 2 * DIGEST_BYTES["sha512"])
 #: a J10-R unit's public row (`h1tile.PouwH1Tile5`'s): `PUBLIC_ROW_BITS`, then its call's first position ``call`` and its
 #: ``blocks``, its first row block and its first column block in its call's stream, each a u64
 PUBLIC_ROW_J10R_BITS = PUBLIC_ROW_BITS + 8 * 3 * 8
-PUBLIC_ROW_SALT_DOMAIN = b"verity/pouw/public-row-salt/v1\0"
+PUBLIC_ROW_SALT_DOMAIN = domains.POUW_PUBLIC_ROW_SALT.encode() + b"\0"
 
 
 class Salted(NamedTuple):
@@ -673,7 +674,7 @@ def _fromhex(s: Any, n: int) -> bytes | None:
 
 
 def _path(x: Any) -> list[bytes] | None:
-    sibs = [_fromhex(s, 64) for s in x] if isinstance(x, list) else None
+    sibs = [_fromhex(s, DIGEST_BYTES["sha512"]) for s in x] if isinstance(x, list) else None
     return None if sibs is None or None in sibs else sibs
 
 
@@ -730,13 +731,13 @@ def public_row_salt(context: str, position: int) -> bytes:
     blocks of `PUBLIC_ROW_SALT_DOMAIN` ‖ u64be(len) ‖ context ‖ u64be(position) ‖ u8(i)."""
     ctx = context.encode()
     head = PUBLIC_ROW_SALT_DOMAIN + len(ctx).to_bytes(8, "big") + ctx + position.to_bytes(8, "big")
-    return b"".join(hashlib.sha512(head + bytes([i])).digest() for i in range(SALT_BYTES // 64))
+    return b"".join(hashlib.sha512(head + bytes([i])).digest() for i in range(SALT_BYTES // DIGEST_BYTES["sha512"]))
 
 
 #: the ok row the verifier accepts: a unit's one output bit, 1, in its one word (h1_prove's `OK`)
 OK_ROW = (1,)
 #: the ok row's hm96 salt tag (h1_prove's)
-OK_SALT_TAG = b"verity/pouw/h1-prove/ok-row-salt/v0\0"
+OK_SALT_TAG = domains.POUW_H1_OK_ROW_SALT.encode() + b"\0"
 
 
 def ok_salt(context: str, position: int) -> bytes:
@@ -835,7 +836,7 @@ def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op
     roots = {r["port"]: r for r in rec["roots"]}
     if roots.get(Wd.PORT, {}).get("domain") != dom.domain_id.hex():
         return "the registered window domain is not the window's served domain"
-    root = _fromhex(roots[Wd.PORT]["root"], 64)
+    root = _fromhex(roots[Wd.PORT]["root"], DIGEST_BYTES["sha512"])
     if root is None:
         return "the registered window root is not a SHA-512 digest"
     try:
@@ -917,22 +918,23 @@ def opening(p: dict, c: dict, units: list[int] | None, unit: int, pub: bytes, op
 
 # ---- the pass's epoch and the window's draw --------------------------------------------------------------------------------
 
-MANIFEST_SCHEMA = "verity-vllm/pouw-pearl-c-run/v2"
+MANIFEST_SCHEMA = domains.VLLM_PEARL_C_RUN
 #: a pass recorded before epoch coins, salted from a beacon: only a replay of a recorded pass reads it
-MANIFEST_RECORDED = "verity-vllm/pouw-pearl-c-run/v1"
+MANIFEST_RECORDED = domains.VLLM_PEARL_C_RUN_V1
 #: a pass salted by the network certifier, `salt.pouw_salt` of its PoUW window's reveal: only a certified window's
 #: verifier, which holds the reveal, reads it, and that verifier reads no other
-MANIFEST_CERTIFIED = "verity-vllm/pouw-pearl-c-run/v3"
+MANIFEST_CERTIFIED = domains.VLLM_PEARL_C_RUN_CERTIFIED
 #: the e2e-service passes' coin commitment, whose binding and weights' root are the first 32 bytes
 #: of `tagged`: only a replay of a recorded pass reads it
-COINS_RECORDED = "verity/pouw/epoch-coins/v2"
+COINS_RECORDED = domains.POUW_EPOCH_COINS_RECORDED
 #: a coin commitment's scheme: (the bytes of `tagged` its binding and the weights' root keep, the weights' root's tag)
-COIN_VERSIONS = {Co.SCHEME: (64, "verity/pouw/weights/v1"), COINS_RECORDED: (32, "verity/pouw/weights/v2")}
+COIN_VERSIONS = {Co.SCHEME: (DIGEST_BYTES["sha512"], domains.POUW_WEIGHTS_ROOT),
+                 COINS_RECORDED: (32, domains.POUW_WEIGHTS_ROOT_RECORDED)}
 #: the e2e-service's first coin commitments, named `coins.SCHEME` but on SHA-256 as core
 #: was then: bound by `tagged_sha256`, and the draw's key and stream `derive_v1`'s.  Only a replay of a recorded draw
 #: reads it, after the current binding (none of their passes was retained, so the pass's rule doesn't)
 COIN_EARLY = Co.SCHEME
-DRAW_DOMAIN = "verity/pouw/served-zk-draw/v1"
+DRAW_DOMAIN = domains.POUW_SERVED_ZK_SAMPLING
 _OPENING = "a coin opening is {epoch, label, after, coin, salt, path}: an integer, a string, hex, and SHA-512 digests"
 _MATMULS = "the pass's matmuls are not a list of objects with integer index, m, k, n and weight"
 _WEIGHTS = "the pass's weights are not an object from each weight, in decimal, to an object with a hex root"
@@ -955,7 +957,7 @@ def coins_of(j: Any, recorded: bool) -> tuple[str, int, bytes]:
     if not (_int(j.get("epoch")) and j["epoch"] >= 0):
         raise Refused("an epoch is a nonnegative integer")
     root = _hex(j.get("root"))
-    if root is None or len(root) != 64:
+    if root is None or len(root) != DIGEST_BYTES["sha512"]:
         raise Refused("a coin commitment's root is 64 bytes")
     return j["scheme"], j["epoch"], root
 
@@ -966,7 +968,7 @@ def opening_of(j: Any) -> Co.CoinOpening:
         raise Refused(_OPENING)
     hexes = [_hex(j.get(k)) for k in ("after", "coin", "salt")]
     path = [_hex(p) for p in j["path"]] if isinstance(j.get("path"), list) else None
-    if None in hexes or path is None or any(p is None or len(p) != 64 for p in path):
+    if None in hexes or path is None or any(p is None or len(p) != DIGEST_BYTES["sha512"] for p in path):
         raise Refused(_OPENING)
     return Co.CoinOpening(j["epoch"], j["label"], *hexes, tuple(path))
 
@@ -979,12 +981,12 @@ def tagged_sha256(tag: str, *parts: Any) -> bytes:
 def derive_v1(source: bytes, domain: str, context: dict) -> bytes:
     """`randomness.derive` as it was (``verity/randomness/derive/v1``, SHA-256): `COIN_EARLY`'s draw key."""
     ctx = b"".join(frame(k) + frame(context[k]) for k in sorted(context))
-    return hashlib.sha256(b"verity/randomness/derive/v1\0" + frame(source) + frame(domain) + frame(ctx)).digest()
+    return hashlib.sha256(domains.RANDOMNESS_DERIVE_V1.encode() + b"\0" + frame(source) + frame(domain) + frame(ctx)).digest()
 
 
 def stream_v1(key: bytes, index: str, n: int) -> bytes:
     """`Key.stream` as it was (``verity/randomness/stream/v1``, SHA-256 blocks): `COIN_EARLY`'s draw stream."""
-    head = b"verity/randomness/stream/v1\0" + key + frame(frame(index))
+    head = domains.RANDOMNESS_STREAM_V1.encode() + b"\0" + key + frame(frame(index))
     return b"".join(hashlib.sha256(head + c.to_bytes(8, "big")).digest() for c in range((n + 31) // 32))[:n]
 
 
@@ -1297,7 +1299,7 @@ def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
     """`challenger.Verify` under the verifier's challenger key: LMS over SHA-512 at (64, W, H) (`verity.ml.crypto.lms`).
     A signature that doesn't decode raises `ValueError`, which `challenger.record_reason` reads as one that doesn't
     verify."""
-    p = lms.Params(64, key.W, key.H)
+    p = lms.Params(DIGEST_BYTES["sha512"], key.W, key.H)
     return lms.verify(p, key.public, message, lms.Signature.decode(p, signature))
 
 

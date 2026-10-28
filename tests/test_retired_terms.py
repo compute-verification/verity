@@ -38,7 +38,8 @@ DOC_TERMS = {
     "physical block": "server-time block",
     "thread block": "CTA",
     "KV block": "KV page",
-    "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, the wipe), or run",
+    "leg": "the subprotocol's name (sampled proofs, PoUW, the inference-only policy, PoUS, PoUB, network certification, "
+           "memory wipes), or run",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
@@ -60,6 +61,9 @@ ALLOWED: dict[str, str] = {
 }
 
 PENDING: dict[str, str] = {
+    "verity/core/protocols/pouw/credit.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean after the check window",
+    "verity/core/protocols/pouw/tests/test_pouw_credit.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean after the check window",
+    "integrations/vllm/tests/protocols/test_credit_gate.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean after the check window",
     "benchmarks/live_challenger/README.md": "queued PRs add the term here; the proof-service rename follows them",
     "integrations/vllm/verity_vllm/pipeline/serve_h1.py": "queued PRs add the term here; the proof-service rename follows them",
     "integrations/vllm/tests/pipeline/test_serve_h1.py": "queued PRs add the term here; the proof-service rename follows them",

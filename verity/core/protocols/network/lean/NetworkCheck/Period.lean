@@ -120,8 +120,8 @@ against that salted digest is a later change to its circuit (the certifier PROTO
 
 * the commitment registers the parameters' audits and `m` link-windows, and the evidence answers each;
 * each audit's reads of the scan's state rows (`verity/certifier/scan-state/v1`, which a compute window reads row
-  b − 1 of: its registration's `registered` entries of that value), on the commitment alone, as onsite refuses a
-  registration other than the one its committing component committed to (`Core.Composition.mismatch`): each read names
+  b − 1 of: its registration's `registered` entries of that value), on the commitment alone, as onsite refuses
+  subprotocols tied to one record that committed to two (`Core.Composition.strays`): each read names
   the root and domain under which a link-window's scan registration names its state rows (its `roots` entry
   `scan/state`), which the scan's proofs tie to the certified cells. A read under another root, or under a domain no
   link-window's scan names, is refused, and so is any read in the clock form, which has no scan;
@@ -943,8 +943,8 @@ def stateOf (reg : Registration) : Option (String × String) :=
   let roots : Array Json := match reg.record.getObjValD "roots" with | .arr xs => xs | _ => #[]
   (roots.find? fun e => e.getObjValD "port" == .str statePort).bind rootDomain
 
-/-- Audit `i`'s reads of the scan's state rows, on the commitment alone, as onsite's registration check refuses a
-registration other than the one its committing component committed to (`Core.Composition.mismatch`): each read names
+/-- Audit `i`'s reads of the scan's state rows, on the commitment alone, as onsite refuses subprotocols tied to one
+record that committed to two (`Core.Composition.strays`): each read names
 the root and domain the scan's registration of a link-window (`scans`, the period's first at `first`) names its state
 rows under, which the scan's proofs tie to the certified cells. The clock form (`scans` none) has no scan, so any read
 of its state there is refused. -/

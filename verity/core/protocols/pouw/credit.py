@@ -65,7 +65,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   `tile_k`, its fix the K to pad to). Its root's nodes other than inputs must be, in order, each call's (M/R)·(n/C)
   instances of K's template, so the record names the units the circuit has. The cost is the descriptor's nodes and the
   record's calls, never the gates they unroll to.
-* **K is committed, and ε is what it established** (`committed_k`, `established`): K is the proof system's selection,
+* **K is committed, and ε is what it established** (`committed_k`, `established`): K is the proof service's selection,
   committed in the period-open (`K_FIELD`, in the auditor's signed ledger beside the period's circuit and cap) before
   any window's draw. A period whose open commits none is refused, and so is a window with fewer than K units, whose
   draw would not be K's. PoUW carries no ε target: `period_credit` reports each window's credited served work C and
@@ -197,13 +197,14 @@ from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, chunks, l
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.ml.commitments import domains
 
 #: the verifier of record over a statement's proof files (`proofs.verify`)
 Run = Callable[..., tuple[list | None, tuple[str, str] | None]]
 
-CALLS_TAG = b"verity/pouw/h1/calls/v2\0"
-DRAW_TAG = "verity/pouw/h1/draw/v1"
-ROUND_TAG = "verity/pouw/h1/round-a/v1"
+CALLS_TAG = domains.POUW_H1_CALLS.encode() + b"\0"
+DRAW_TAG = domains.POUW_H1_SAMPLING
+ROUND_TAG = domains.POUW_H1_ROUND_A
 #: each manifest row's credit bit
 CREDIT = "credit"
 #: each manifest row's served rows m_s: its step's rows in slots 0 .. m_s - 1 of its call's M, the rest empty
@@ -222,7 +223,7 @@ _DIGEST = re.compile(r"[0-9a-f]{128}")
 _DIGITS = re.compile(r"[1-9][0-9]*")
 _A = re.compile(r"([1-9][0-9]*)(?:@([0-9]+))?")
 _HEX = re.compile(r"(?:[0-9a-f]{2})+")
-_FRAME = b"veritor/protocol/merkle/frame/v3\0"
+_FRAME = domains.FRAME_V3.encode() + b"\0"
 
 SALT_FORM = "the window's Program salt is not a SHA-512 digest (128 lowercase hex)"
 CALLS_FORM = "the window's manifest is not a list of call rows"
@@ -237,7 +238,7 @@ CHANGED = ("the draw root over the manifest (each call's credit bit among it), i
            "followed: a credit bit, a call or the Commit record changed after the draw coin, or the draw opened after "
            "another root. Commit every call's credit bit in its manifest row, and the Commit record, before the draw "
            "root, and never change them after the draw coin")
-#: the period-open's field holding the draw's K, the proof system's selection, committed before any draw
+#: the period-open's field holding the draw's K, the proof service's selection, committed before any draw
 K_FIELD = "draw_k"
 #: the most a committed K may be
 MAX_K = 1 << 24
@@ -312,7 +313,7 @@ _TEMPLATE = re.compile(r"k[1-9][0-9]*|live")
 DESCRIPTOR_HEX = ("the window's descriptor is not the bytes of the circuit its proofs were verified against in "
                   "lowercase hex (its canonical JSON without annotations, the bytes program_digest hashes)")
 #: the descriptor schema `layout_of` reads
-SCHEMA = "verity-ir/descriptor/v1"
+SCHEMA = domains.IR_DESCRIPTOR
 #: h1window's Program function, `h1window.PouwH1Window`, and its record's bindings in order
 WINDOW_FN = "PouwH1Window_v3"
 RECORD = ("TILES", "LINEARS", "CALLS", "M", "PREFIX")
@@ -345,9 +346,9 @@ LOG_FORM = "the round log is not a nonempty list"
 ENTRIES_FORM = "the window's registered entries are not a list of objects"
 NO_A = ("the window registers no A value (…/a/<K>, or a round's …/a/<K>@<s>), so nothing ties its units' A rows to "
         "the round roots: register the window's A values")
-COMMIT_TAG = b"verity/pouw/h1/commit/v1\0"
+COMMIT_TAG = domains.POUW_H1_COMMIT.encode() + b"\0"
 #: the served Commit's record: one-stage's registration record with registered values
-COMMIT_FORMAT = "verity/registration/v2"
+COMMIT_FORMAT = domains.REGISTRATION
 COMMIT_FORM = ("the window's Commit record is not the bytes in lowercase hex of a verity/registration/v2 record in "
                "canonical JSON whose registered values are a list of objects: the served Commit runs in the window's "
                "engine, and its record is bound under the window's calls_root before the draw coin")
@@ -365,7 +366,7 @@ PUB_PORT = "pub"
 OK_PORT, OK_VALUE = "o1", "ok"
 #: round 0's request root (``requests``, the one the window's open root binds): its request table's root with round 0's
 #: input-ids table's root inside (`requests_root`)
-REQUESTS_IDS_TAG = "verity/pouw/h1/requests/ids/v1"
+REQUESTS_IDS_TAG = domains.POUW_H1_REQUEST_IDS
 IDS_OUTSIDE = ("round 0's request root (requests, the one the window's open root binds) is not requests_root of its "
                "request table's root (request_table) and its input-ids table's root, so round 0's input ids are not "
                "fixed before the salt: commit round 0's input-ids table inside round 0's request table, under the "
@@ -547,7 +548,7 @@ def no_served(i: int, t: int) -> str:
 
 def no_rows(name: str) -> str:
     return (f"period {name}'s open commits no table rows T ({ROWS_FIELD}, a positive integer: each round's request and "
-            "slot tables' leaves), so no window's served rows m_s are bounded by its tables: the proof system commits T "
+            "slot tables' leaves), so no window's served rows m_s are bounded by its tables: the proof service commits T "
             "in the period-open, beside its draw K, before any draw")
 
 
@@ -818,7 +819,8 @@ def layout_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
     multiple of `TILE_K_STEP` below `TILE_K_LIMIT`, checked before K's template), and the root's nodes other than inputs
     are each call's (M/R)·(n/C) instances of its K's template, in the calls' order: a call one instance and a batch its
     members, as the template query counts units (`Q_template_instances`). Its cost is the descriptor's bytes, never the
-    gates its nodes unroll to."""
+    gates its nodes unroll to. The Lean reads the descriptor through C-Flock's decoder (`Credit.programOf`), so it also
+    refuses (`DESCRIPTOR_FORM`) a descriptor that decoder refuses; this checks only its form (`_parsed`)."""
     def no(why: str) -> tuple[None, tuple[str, str]]:
         return None, ("layout", why)
 
@@ -942,7 +944,7 @@ def _receipt_words(ret: Any) -> int:
 
 
 #: the partition object a window's statements are verified under: every instance of each K's template one unit
-PARTITION_FORMAT = "verity/partition/v1"
+PARTITION_FORMAT = domains.PARTITION
 QUERY = ("Q_template_instances", 0)
 
 
@@ -1086,7 +1088,7 @@ def law(ss: list[dict], k: Any) -> tuple[str, str] | None:
     sizes = [sum(hi - lo for lo, hi in s["units"]) for s in ss]
     if sum(sizes) < k:
         return "budget", (f"the window's {sum(sizes)} units are fewer than K = {k}, the K its period committed, so its "
-                          f"draw would not be K's: the proof system commits a K at most every window's units "
+                          f"draw would not be K's: the proof service commits a K at most every window's units "
                           f"({K_FIELD} in the period-open)")
     total = sum(s["work"] * n for s, n in zip(ss, sizes))
     for s, n in zip(ss, sizes):
@@ -2217,7 +2219,7 @@ def committed_k(ledger: list, name: str) -> tuple[int | None, tuple[str, str] | 
     k = body.get(K_FIELD)
     if not (type(k) is int and 1 <= k <= MAX_K):
         return None, ("budget", f"period {name}'s open commits no draw K ({K_FIELD}, a positive integer at most 2^24), "
-                                "so its windows have no K to be drawn with: the proof system commits K in the "
+                                "so its windows have no K to be drawn with: the proof service commits K in the "
                                 "period-open, beside its circuit and cap, before any draw")
     return k, None
 

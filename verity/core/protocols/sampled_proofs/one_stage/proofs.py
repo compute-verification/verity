@@ -1,4 +1,4 @@
-"""A statement's proof files, verified by C-Flock's Lean verifier of record (`flock-verify verify --zk`, the Lake package
+"""A statement's proof files, verified by C-Flock's Lean verifier (`flock-verify verify --zk`, the Lake package
 `verity/core/service/flock`, built with `lake` on first use): the proof system's own run of the verifier, so a protocol
 reads each session's verdict from that run, never from a verdict record the prover hands in.
 
@@ -16,9 +16,10 @@ descriptor without annotations, which an accepted verdict must give as the parti
 its registered finding (each port's value and opened root) and the proof blocks it proved, the public file's global proof block
 indices of the instances its session drew (`unit_draw`), read only off a session the verifier accepted.
 
-`ks_form_why` mirrors `verify --zk`'s refusal of a statement form the sampled audit's knowledge soundness
-(`SampledKSLiveV4`) does not cover, on the files' heads (`Flock.KsScope.filesWhy`, which `flock-verify ks-form` runs alone).
-A session Lean accepts whose files it refuses is a ``form`` refusal, so the mirror can only refuse more.
+`ks_form_why` mirrors `verify --zk`'s refusal of a circuit outside the unit's form the sampled audit's knowledge
+soundness (`SampledKSLiveV4`, and `SampledKSLiveV5` at a shared-row public file) covers, on the circuit file's head
+(`Flock.KsScope.filesWhy`, which `flock-verify ks-form` runs alone). A session Lean accepts whose files it refuses is a
+``form`` refusal, so the mirror can only refuse more.
 
 The verifier reads the whole circuit file once a call, in time and memory linear in it (about six times the file at
 peak), then O(proof) a session: so a protocol verifies one statement a stratum, every drawn proof block of it an instance.
@@ -57,7 +58,7 @@ _DIGEST = re.compile(r"[0-9a-f]{128}")
 #: an input bound at registration (`program.REGISTERED_ID`, Lean's `Program.inputId?`), a descriptor's `definitions` key
 _REGISTERED_INPUT = re.compile(r"RegisteredInput[1-9][0-9]*_v1")
 _CHUNK = 1 << 24
-#: `Flock.KsScope.SCOPE_WHY` and `TABLES_WHY`, `verify --zk`'s last refusals (`ks_form_why`)
+#: `Flock.KsScope.SCOPE_WHY` (`ks_form_why`) and `TABLES_WHY`, the head of `verify --zk`'s refusals of a shared-row file
 SCOPE_WHY = ("a circuit outside the unit's form under --zk (scopeOkH: the unit reads its one input group and returns the "
              "outputs)")
 TABLES_WHY = "a shared-row public file (header shared_rows) under --zk"
@@ -140,19 +141,20 @@ def _unit_head(circuit: Path) -> tuple[dict, list[str]] | None:
 
 
 def ks_form_why(circuit: Path, public: Path) -> str | None:
-    """`Flock.KsScope.filesWhy` on a `verity/flock-circuit` statement's files, with `ProvedScope.refusal`'s text: a circuit
-    outside the unit's form (`ProvedScope.scopeOkH`'s two conditions past `ProvedScope.check`'s: the unit reads one
-    input group, and META's ``out_net``, the net returning the outputs, is the unit), then a shared-row public file
-    (header ``shared_rows``); None when neither applies or the circuit file's head is not in that form. `verify` refuses a
-    session Lean accepts that it refuses, so it can only refuse more; `flock-verify ks-form` is the Lean it mirrors."""
+    """`Flock.KsScope.filesWhy`'s scope refusal on a `verity/flock-circuit` statement's files, with
+    `ProvedScope.refusal`'s text: a circuit outside the unit's form (`ProvedScope.scopeOkH`'s two conditions past
+    `ProvedScope.check`'s: the unit reads one input group, and META's ``out_net``, the net returning the outputs, is the
+    unit); None when it applies or the circuit file's head is not in that form. A shared-row public file (header
+    ``shared_rows``) is Lean's alone to refuse (`KsScope.sharedWhy`, outside the form `SampledKSLiveV5` covers), since
+    its check loads the whole file and computes every port's root. `verify` refuses a session Lean accepts that it
+    refuses, so it can only refuse more; `flock-verify ks-form` is the Lean it mirrors."""
+    del public
     head = _unit_head(circuit)
     if head is not None:
         meta, unit = head
         groups = unit[4] if len(unit) > 4 else None
         if meta.get("out_net", "unit") != "unit" or groups != "1":
             return _refusal(SCOPE_WHY)
-    if "shared_rows" in _header(public):
-        return _refusal(TABLES_WHY)
     return None
 
 
@@ -180,7 +182,7 @@ def proved_units(public: Path, session: Path) -> tuple[int, ...]:
 
 def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapping[str, Any],
            registered: Mapping[str, Any] | None = None) -> tuple[list[Finding] | None, tuple[str, str] | None]:
-    """Each of `proof`'s sessions verified by the verifier of record against the verifier's own `program` (its
+    """Each of `proof`'s sessions verified by C-Flock's Lean verifier against the verifier's own `program` (its
     descriptor's bytes), `partition` and `registered` file (None only for a program that reads no registered value, such
     as N2's, whose proof block opens the committed value inside its circuit), on the circuit file the auditor committed as
     `circuit_sha512`; the findings in session order and None, or None and the refusal (``registered``: `registered` is

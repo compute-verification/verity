@@ -10,11 +10,11 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
   owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing.
   - `verity/core/`: the verifiers, trusted code. `verity/core/protocols/` holds the integrity profile (`profile`) and one
-    package per protocol: sampled proofs, PoUW, proof of useful space (PoUS), the bandwidth audit, proof of useful
-    bandwidth (PoUB) and network certification, each a Python verifier until its Lean verifier (its `lean/`) replaces
-    it; the inference-only policy (`network/nci/`) is Lean only. `claims` holds the security claims' ids,
-    `service/flock/` C-Flock's Lean verifier and the ZK server (`Flock.Firewall`), `service/firewall/` the ZK server's
-    release side, and `difftest` the Python held to each Lean.
+    package per protocol: sampled proofs, PoUW, proof of useful space (PoUS), proof of useful bandwidth (PoUB) and
+    network certification, each a Python verifier until its Lean verifier (its `lean/`) replaces it; the
+    inference-only policy (`network/nci/`) is Lean only. `claims` holds the security claims' ids, `service/flock/`
+    C-Flock's Lean verifier and the ZK server (`Flock.Firewall`), `service/firewall/` the ZK server's release side, and
+    `difftest` the Python held to each Lean.
   - `verity/ml/`: Python and CUDA: the provers, and Python that mirrors the Lean for speed. `circuits` (format in
     `circuits/PROTOCOL.md`; `ops`, the primitive circuits' Definitions; `silicon`, the GPUs' exact semantics),
     `kernels`, `commitments`, `crypto`, `randomness` (the one challenge derivation), `private_circuits`, `definitions`
@@ -167,7 +167,8 @@ on review, and the full check runs after landing (how a PR lands: the team skill
   refactored onto the shared one.
 - **One vocabulary.** A concept more than one guarantee reads (the circuit, commitments and hashes, coins and draws,
   probability, partitions and proof blocks, devices and signatures) has one definition, in `Core` or `Hash`, which every
-  area and protocol reads; an area defines only its own, and no new Lean adds a second definition.
+  area and protocol reads; an area defines only its own, and no new Lean or Python adds a second definition
+  (`tests/test_lean_vocabulary.py`).
 - **Lean is code or security analysis.** Code stays with its component and never requires `Security/`: C-Flock's
   executable verifier and the ZK server (`verity/core/service/flock/`, with the release side in
   `verity/core/service/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
