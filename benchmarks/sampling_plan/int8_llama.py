@@ -3,13 +3,13 @@ fitted cost model, the cuts the generator finds, the frontier of ε against the 
 granularity by window, ε and commitment regime, the frontier's sensitivity to its inputs, the tensors committed at more
 than one scale, and the weight classes' weights at each target.
 
-Units are decision 106's: every s8 dot unit checks its seed and derives its own noise (2 + 2 ceil(L b / 512) SHA-512
+Units: every s8 dot unit checks its seed and derives its own noise (2 + 2 ceil(L b / 512) SHA-512
 compressions), opens its operand rows and its output in circuit, and carries its own work (MACs, W_ref's proxy).  A dot
 may be cut into K-chunks (`S8Dot{T0 = input}`), each committing its running sum, and tiles of r x c dots are offered,
-each a unit when its outputs fit a size class.  B is GPU-seconds of overhead per plain GPU-second over a window (BUDGET's unit), the
-total: everything is committed at serve time (ASK-25), so B holds every scale's serve-time commitments under the PoUW
+each a unit when its outputs fit a size class.  B is GPU-seconds of overhead per plain GPU-second over a window (the budget model's unit),
+the total: everything is committed at serve time, so B holds every scale's serve-time commitments under the PoUW
 scheme (`inputs.serve_rows`: the Commit's taps, PoUW's work blocks, the bits they pin, the remote audit's receipts) beside
-the proving, the units' commitments, the witnesses' replay and the zero-work subcircuits.  The `floor` scheme is #2457's
+the proving, the units' commitments, the witnesses' replay and the zero-work subcircuits.  The `floor` scheme is the earlier
 accounting, its one measured term (`commit_floor`) and nothing else.
 
     uv run python benchmarks/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
@@ -41,7 +41,7 @@ WINDOWS = {"round": 1, "hour": 3600 / 12.6, "day": 86400 / 12.6, "week": 48_000}
 TARGETS = (1e-3, 1e-4)
 REGIMES = (("plain", 1.0, 1.0), ("prefix", 0.0, 1.0), ("prefix, sessions/256", 0.0, 1 / 256))
 BUDGETS = (0.065, 0.07, 0.08, 0.1, 0.15, 0.2, 0.5, 1.0, 2.0, 5.0)
-#: the sampling spend at #2457's operating point, B = 0.1 less its 0.060 floor: the operating B is the serve-time total plus it
+#: the sampling spend at the `floor` scheme's operating point, B = 0.1 less its 0.060 floor: the operating B is the serve-time total plus it
 SPEND = 0.04
 #: a layer's linear calls (qkv, o_proj, gate_up, down), each hashing its tile leaves as it ends
 CALLS = 4
@@ -137,7 +137,7 @@ def serve(v: dict, m: Model, scheme: str | None, w: dict, *, kv: bool = False) -
         return ()
     if scheme == "floor":
         a = (m.hidden + m.heads * m.head_dim + m.hidden + m.intermediate) * w["tokens"] * m.layers
-        return (Commitment("floor", "s8 A operands, R = 128 leaves (COMMIT-GPU r5)", a,
+        return (Commitment("floor", "s8 A operands, R = 128 leaves (measured)", a,
                            cost=v["commit_floor"] * w["window_gpu_s"]),)
     rate, step = v["commit_per_byte"], int(v["decode_tokens"])
     out = []
