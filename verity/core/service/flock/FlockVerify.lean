@@ -734,7 +734,8 @@ proved to how its files set it up (`RecSetup.checkShape`, `RecSetup.checkForm`):
 verity/flock-circuit+plain-leaves`, `--rec-inner-statement-coins os`, no `--rec-inner-tables`, and a `--rec-inner-draw`
 of every unit in order.
 Each DIR holds `session.json`
-and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order,
+and `<table>.rep<r>.bin` for each table and rep. The draw-less statement is set up once, and each drawn session at its own
+draw; one verdict line per session, in order,
 naming with `--program` the digest of the verifier's own program it verified against (`program_sha512`, `ProvedScope.programDigest`),
 with `--rec-part J` its part (`rec_part`), with `--rec-rows F` the SHA-512 of the shared rows file it checked
 (`rec_rows_sha512`), with `--rec-inner F` the SHA-512 of the inner shape file it read (`rec_inner_sha512`), and with
@@ -921,8 +922,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let ksParsed := if tags.hiddenOutputs && !templated then parsed else HmOut.parse tags circuitB tables
   let ksFiles := if zk then PortRoots.checkOf ksParsed tags pubB else .ok ()
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
-  -- each statement is set up once, when a session first needs it: the population's, and each draw's
-  let mut setups : Array (Option String × Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json)) := #[]
+  -- the population's statement is set up once, when a session first needs it; a drawn session at its own draw, never at
+  -- another session's (draws have no faithful cache key: `canon` refuses a non-integer number that `recordDraw` keeps)
+  let mut population : Option (Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json)) := none
   let mut coinKeys : Array String := #[]
   let mut all := true
   for dir in dirs do
@@ -931,13 +933,12 @@ def verifyCmd (args : List String) : IO UInt32 := do
       catch e => pure (Except.error s!"session files: {e}")
     -- a drawn session is verified against the drawn units' statement (Σ covers the draw); several tables split the draw
     let draw := if tags.hm96Rows then record.toOption.bind recordDraw else none
-    let key := draw.map fun d => (canon d).toOption.getD ""
     let mut st : Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json) := .error "setup: none"
-    match setups.find? (·.1 == key) with
-    | some (_, s) => st := s
-    | none =>
+    match draw, population with
+    | none, some s => st := s
+    | _, _ =>
       st := setupOf draw
-      setups := setups.push (key, st)
+      if draw.isNone then population := some st
       IO.eprintln s!"setup{if draw.isSome then " (drawn)" else ""}: {(← IO.monoMsNow) - t1} ms"
     let files ← match record, st with
       | .ok r, .ok (spec, _, _) =>
