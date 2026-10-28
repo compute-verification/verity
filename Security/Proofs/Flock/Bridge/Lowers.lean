@@ -598,7 +598,7 @@ theorem refIn_append_inputs {Cp : Claims.Sampling.Prog} {U I : List ℕ}
 /-- In a program that reads only earlier gates, `U` with input gates `I` added computes what `U` does: it reads an
 input of `I` as its committed value, as `U` reads it from outside. -/
 theorem runIn_append_inputs {Cp : Claims.Sampling.Prog} {U I : List ℕ} (hI : ∀ i ∈ I, Cp.gates[i]? = some .input)
-    (htop : ∀ p x, Cp.gates[p]? = some x → ∀ i ∈ x.reads, i < p) (ref : ℕ → Option Bool) :
+    (htop : ∀ (p : ℕ) (x : BGate), Cp.gates[p]? = some x → ∀ i ∈ x.reads, i < p) (ref : ℕ → Option Bool) :
     ∀ g, Cp.runIn ref (U ++ I) g = Cp.runIn ref U g := by
   intro g
   induction g using Nat.strong_induction_on with
@@ -622,7 +622,7 @@ theorem runIn_append_inputs {Cp : Claims.Sampling.Prog} {U I : List ℕ} (hI : �
 /-- **`U` with input gates `I` added is correct** exactly when `U` is and each input of `I` is opened, in a program
 that reads only earlier gates. -/
 theorem correct_append_inputs {Cp : Claims.Sampling.Prog} {U I : List ℕ} (hI : ∀ i ∈ I, Cp.gates[i]? = some .input)
-    (htop : ∀ p x, Cp.gates[p]? = some x → ∀ i ∈ x.reads, i < p) (ref : ℕ → Option Bool) :
+    (htop : ∀ (p : ℕ) (x : BGate), Cp.gates[p]? = some x → ∀ i ∈ x.reads, i < p) (ref : ℕ → Option Bool) :
     Cp.Correct ref (U ++ I) ↔ Cp.Correct ref U ∧ ∀ i ∈ I, ref i ≠ none := by
   have hc : ∀ i ∈ I, ∀ b, Cp.gates[i]? ≠ some (.const b) := fun i hi b => by rw [hI i hi]; simp
   have hrunI : ∀ S, ∀ i ∈ I, Cp.runIn ref S i = ref i := fun S i hi => by
