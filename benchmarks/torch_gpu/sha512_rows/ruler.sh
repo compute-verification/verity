@@ -10,8 +10,9 @@
 # set; a lease waits its turn and holds the GPU at most LEASE_MIN minutes. mix.jsonl: per build, the rate and clock beside
 # the SASS pipe mix's bound (ALU/64, IMAD slots/64 with IMAD.WIDE 2 and IMAD.HI 2.09, issue/128; SM-clocks a compression).
 #
-#   research run --on vy-dc-h200-3 --project verity --campaign hash --source . --cwd source --timeout 240m \
-#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/torch_gpu/sha512_rows/ruler.sh
+#   OUT=DIR bash benchmarks/torch_gpu/sha512_rows/ruler.sh
+#
+# Needs a CUDA GPU (an H200 for sm_90a), CUDA's nvcc and ncu, and `gpu-lease` on PATH.
 # VARIANTS (default "0000 0011 0003 0030 0033 1033 0333"), ROUNDS (9), LEASE_MIN (14), LEASES (0: builds and
 # counts only), JOBS (parallel nvcc, 6).
 set -uo pipefail
