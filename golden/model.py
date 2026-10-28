@@ -14,7 +14,7 @@ B4, one H200, window circuit 4,32,4; the demo's point is T 512 with 64 real toke
 The design dict (`design(**overrides)` builds one; `SCHEMA` lists every key, its default and its allowed values;
 `normalize` refuses an unknown key):
 
-    point     T, real_tokens, seqs, steps_per_window, async
+    point     T, real_tokens, seqs, steps_per_window, async, window_class
     forward   kernels ("stock" | "commit_taps"), gemm_eff, kfa3, graphs
     commit    on, values ("every_op" | "dedup" | "fused_mlp" | "layer" | "layer_kv" | "partition"), bytes_per_token,
               bits_per_word, row_bytes, hash_eff, corun, seal ("tree" | "none" | "roots"), host ("today" | "fixed"),
@@ -28,7 +28,7 @@ The design dict (`design(**overrides)` builds one; `SCHEMA` lists every key, its
     prover    o_per_and, staged_per_and, stmt_fixed, stmt_per_and, speed, m_max, shared
     lowering  gates_per_and, s_per_gate, bytes_per_gate, per ("template" | "instance"), ram_gib
     verify    stmt_fixed, stmt_per_and
-    price     cpu_s_in_gpu_s, cpu_in_J
+    price     cpu_s_in_gpu_s, cpu_in_J, baseline ("same" | "fastest")
 
 Units: ms for serve time a step, GPU-s and CPU-s for proving and verification a window, bytes and ANDs as counted.
 """
@@ -82,8 +82,9 @@ INPUTS: dict[str, tuple[float, str, str]] = {
     "hash_eff_today": (0.4966, "M", f"{B921}: 149.0 M compressions in 64.12 ms of hash kernels at 1,966 MHz ({LEVERS})"),
     "hash_overlap_today": (0.2245, "M", f"{B921}: 1 - 49.72 ms exclusive / 64.12 ms kernel time of the Commit's hashing"),
     "hash_mhz": (1966.0, "M", f"{B921} the Commit's hashing clock"),
-    "corun_share": (0.167, "M", "r20261028-012220-309e: beside a streamed GEMM, 2 hash warps an SM get 0.167 of the bar "
-                                "at kappa 1.001 (66.5 GB/s at 4 KiB rows)"),
+    "corun_share": (0.167, "E", "r20261028-012220-309e: beside a synthetic GEMM at 98.8% of peak, 2 chain-kernel hash "
+                                "warps an SM get 0.167 of the bar at kappa 1.001 (66.5 GB/s at 4 KiB rows); a model for "
+                                "the Commit's row kernel beside the served GEMM until GD-HASH measures it"),
     "gemm_corun_penalty_per_hash_cycle": (0.347, "D", f"{B921}'s int8 GEMM 26.95 M cycles against {B57F}'s 17.12 M "
                                                       f"(+9.83 M), over the 28.3 M hash cycles that overlapped it"),
     "taps_ms": (1.41, "M", f"{B921}'s attention and elementwise kernels 8.78 ms against {B57F}'s 7.37 (the Commit's taps)"),
@@ -121,16 +122,17 @@ INPUTS: dict[str, tuple[float, str, str]] = {
     "wrap_g_frac": (0.25, "E", "the wrap terms 256(w_X W'^T + X w_W^T + ...) of Dither's identity, as a share of G: an "
                                "estimate pending GD-DENOISE (sparse ternary w_X at the noise's wrap rate)"),
     "noise_fused_keep": (0.1, "E", "noise added in the GEMM's operand load keeps 10% of a separate HBM pass (estimate)"),
-    # proving: C-Flock --zk, costfit over ZK_RUN (sm_120), GPU-s
-    "o_per_and": (1.0870e-8, "M", f"{ZK_RUN}: GPU-s a drawn proof block's AND (prove fit, sigma 0.149)"),
-    "staged_per_and": (1.0160e-10, "M", f"{ZK_RUN}: GPU-s a staged proof block's AND"),
-    "stmt_fixed": (3.029, "M", f"{ZK_RUN}: GPU-s a touched statement"),
-    "stmt_per_and": (3.5095e-6, "M", f"{ZK_RUN}: GPU-s a statement per AND of its proof block (its build)"),
-    "stage_fixed": (1.571, "M", f"{ZK_RUN}: CPU-s to stage a statement"),
-    "stage_per_and": (5.944e-7, "M", f"{ZK_RUN}: CPU-s a statement per AND of its proof block"),
-    "stage_per_and_staged": (2.855e-9, "M", f"{ZK_RUN}: CPU-s a staged proof block's AND"),
-    "verify_fixed": (12.436, "M", f"{ZK_RUN}: Lean verify --zk CPU-s a statement (sigma 0.108)"),
-    "verify_per_and": (6.710e-6, "M", f"{ZK_RUN}: Lean verify --zk CPU-s a statement per AND of its proof block"),
+    # proving: C-Flock --zk, costfit over ZK_RUN. Measured on sm_120 at ~3-6 M ANDs a block; estimates for the H200
+    # (and for larger blocks) until GD-PROVER's H200 fit lands.
+    "o_per_and": (1.0870e-8, "E", f"{ZK_RUN}: GPU-s a drawn proof block's AND (prove fit, sigma 0.149)"),
+    "staged_per_and": (1.0160e-10, "E", f"{ZK_RUN}: GPU-s a staged proof block's AND"),
+    "stmt_fixed": (3.029, "E", f"{ZK_RUN}: GPU-s a touched statement"),
+    "stmt_per_and": (3.5095e-6, "E", f"{ZK_RUN}: GPU-s a statement per AND of its proof block (its build)"),
+    "stage_fixed": (1.571, "E", f"{ZK_RUN}: CPU-s to stage a statement"),
+    "stage_per_and": (5.944e-7, "E", f"{ZK_RUN}: CPU-s a statement per AND of its proof block"),
+    "stage_per_and_staged": (2.855e-9, "E", f"{ZK_RUN}: CPU-s a staged proof block's AND"),
+    "verify_fixed": (12.436, "E", f"{ZK_RUN}: Lean verify --zk CPU-s a statement (sigma 0.108)"),
+    "verify_per_and": (6.710e-6, "E", f"{ZK_RUN}: Lean verify --zk CPU-s a statement per AND of its proof block"),
     "h200_vs_sm120": (1.0, "E", "C-Flock's prover on the H200 against the RTX PRO 6000: taken equal until GD-PROVER"),
     "m_max": (35, "M", "C-Flock circuit.rs M_MAX: m = k_log + nbl <= 35 (note:proofs/20261028T1837Z-report-partopt)"),
     "sha512_ands": (58_120, "M", "optimize.SHA512_ANDS: one SHA-512 compression in Boolean form (hm96 PROTOCOL 5)"),
@@ -142,7 +144,10 @@ INPUTS: dict[str, tuple[float, str, str]] = {
     "attn_ands_per_mac": (600, "E", "bf16 attention's ANDs a MAC in circuit: estimate pending GD-PARTITION"),
     "h1_tile_gates": (1.0e9, "M", "the brief: the K 2,048 32x32 H1 tile is about 1e9 gates, OOM at 600 GiB (TOP-138)"),
     # lowering (TOP-138) and prices
-    "lower_bytes_per_gate": (600.0, "M", "the brief: about 600 B a gate at the H1 tile (OOM at 600 GiB), TOP-138"),
+    "lower_bytes_per_gate": (16 * 2 ** 30 / 1.0e9, "E", "TOP-138's target: the 1e9-gate H1 tile in 16 GiB (17.2 B a "
+                                                        "gate); today's figure in lower_bytes_per_gate_today"),
+    "lower_bytes_per_gate_today": (600.0, "M", "the brief: about 600 B a gate at the H1 tile today (OOM at 600 GiB), "
+                                               "TOP-138; reported beside, as lower_peak_GiB_today"),
     "lower_s_per_gate": (0.9e-6, "E", "TOP-138's target, 1e9 gates in 15 min; today's figure pending TOP-138"),
     "gates_per_and": (3.5, "E", "the H1 tile's ~1e9 gates over its ~2.8e8 ANDs (1,024 cells x 64 s8 steps x 4,190)"),
     "cpu_s_in_gpu_s": (1 / 55, "M", "benchmarks/sampling_plan/inputs.py: vCPU $0.033/h against sm_120 $1.80/h"),
@@ -237,8 +242,12 @@ SCHEMA = {
         "T": (8192, "tokens a step the window circuit holds (the throughput point 8,192; the demo 512)"),
         "real_tokens": (None, "tokens the forward computes (None: T); the demo 64"),
         "seqs": (8, "sequences a step (B4's prefill mix: 8 x 1,024 at T 8,192; the demo 4 x 16)"),
-        "steps_per_window": (1, "engine steps a window (b921, a1fc, 5430: 1)"),
+        "steps_per_window": (1, "engine steps a window (b921, a1fc, 5430 seal every step: 1); the prove term scales "
+                                "as 1 / steps_per_window, since a window's draws are ~Lambda / eps whatever its size"),
         "async": (False, "LAG 1: the async stack's host gap (a new Program digest, SYNC-PATH a)"),
+        "window_class": ("8,1024,1", "the window class of the point's load (slots, prompt ids, outputs): the "
+                                     "throughput point's load is 8 prompts of 1,024 ids, max_tokens 1 (b57f, b921, "
+                                     "a1fc); the demo's is 4,32,4. Reported, not priced"),
     },
     "forward": {
         "kernels": ("stock", "'stock' or 'commit_taps' (the Commit's norm and rope taps, b921's forward)"),
@@ -260,11 +269,12 @@ SCHEMA = {
         "padded": (True, "commit all T rows (True) or only the real tokens' (False)"),
     },
     "pouw": {
-        "scheme": ("j10r", "off | j10r (as served: plain s8 + z/y records, noise only in drawn units) | jr2 (U fresh "
-                           "along K) | dither (noised operands, T_s every L)"),
+        "scheme": ("dither", "off | j10r (as served: plain s8 + z/y records, noise only in drawn units; values-only, "
+                             "earns 0 under guarantee 2) | jr2 (U fresh along K) | dither (noised operands, T_s every "
+                             "L: Dither's no-fold receipt)"),
         "K": (2048, "inner width of the credited linears (H1 credits the K = 2,048 linears)"),
         "L": (1024, "dither: segment, a 16-bit word a cell every L (L >= K: O alone, un-noised, credit 0)"),
-        "L_prime": (32, "noise period (J10-R: 32; dither: L / t)"),
+        "L_prime": (None, "noise period (None: dither 128, PROTOCOL.md's static setting at L 1,024, t 8; J10-R 32)"),
         "noise": ("periodic", "periodic | fresh (along K) | permuted (U's columns re-permuted each tile)"),
         "record_bytes_per_cell": (6, "J10-R's z/y records, 6 B a cell"),
         "trees": (2, "trees H1's records are hashed into (2 today: z table and zy@c; 1: Daniel's)"),
@@ -299,7 +309,7 @@ SCHEMA = {
     "lowering": {
         "gates_per_and": (None, "gates a proof block's AND (None: 3.5, the H1 tile)"),
         "s_per_gate": (None, "CPU-s a gate lowered (None: TOP-138's target 0.9 us)"),
-        "bytes_per_gate": (None, "peak bytes a gate (None: 600, the H1 tile today)"),
+        "bytes_per_gate": (None, "peak bytes a gate (None: TOP-138's target 17.2; today's 600 is reported beside)"),
         "per": ("template", "template (lowered once a shape, cached) | instance (every drawn block)"),
         "ram_gib": (16.0, "RAM a lowering may use (TOP-138's target 16 GiB)"),
     },
@@ -310,12 +320,15 @@ SCHEMA = {
     "price": {
         "cpu_s_in_gpu_s": (None, "GPU-s a CPU-second (None: 1/55)"),
         "cpu_in_J": (True, "count lowering and staging CPU at the price ratio in J's proving term"),
+        "baseline": ("same", "t_stock: same (the stock forward at the design's point and scheduler: b57f's sync "
+                             "stack, or 2cd6's if point.async, so the serve term is verification's overhead alone) | "
+                             "fastest (the async stock, 2cd6's stack: the fastest unverified arm measured)"),
     },
 }
 
 PRESETS = {
     "throughput": {},
-    "demo": {"point": {"T": 512, "real_tokens": 64, "seqs": 4}},
+    "demo": {"point": {"T": 512, "real_tokens": 64, "seqs": 4, "window_class": "4,32,4"}},
 }
 
 
@@ -448,20 +461,47 @@ def commit_parts(d: dict, stock: dict, units: list) -> tuple[dict, dict]:
     return parts, info
 
 
+def l_prime(w: dict) -> int:
+    return w["L_prime"] or (128 if w["scheme"] == "dither" else 32)
+
+
 def pouw_forced_frac(d: dict) -> float:
-    """The least work a credited call forces, as a share of its plain s8 GEMM G, under SAK on noised operands.
-    Un-noised calls earn 0 (the brief): J10-R as served adds no noise at serve time, and at L >= K a dither cell
-    commits O alone. Dither: min(1, 1/8 + 3/t) (the floor note); J10-R's 9/64 = 1/8 + L'/K is reported beside."""
+    """The least work a credited call forces, as a share of its plain s8 GEMM G, under SAK on noised operands, at the
+    best attack found. Un-noised calls earn 0 (the brief): J10-R as served adds no noise at serve time, and at L >= K a
+    dither cell commits O alone. Dither, periodic or permuted (v3.2: V, U periodic in L' with pi fresh each tile):
+    min(1, 1/8 + 3/t) (the floor note); fresh noise along K, or JR2: G (estimate: no shared period to separate)."""
     w = d["pouw"]
     if w["scheme"] in ("off", "j10r"):
         return 0.0
     if w["scheme"] == "jr2":
-        return 1.0                                # estimate: U fresh along K leaves the floor note's split no period
-    L, Lp, K = w["L"], w["L_prime"], w["K"]
+        return 1.0
+    L, Lp, K = w["L"], l_prime(w), w["K"]
     if L >= K:
         return 0.0
+    if w["noise"] == "fresh":
+        return 1.0
     t = max(1, L // Lp)
     return min(1.0, 1.0 / I("b1_rate_vs_s8") + 3.0 / t)
+
+
+def pouw_credit(d: dict) -> dict:
+    """Guarantee 2's credit as a share of the four linears' int8 MACs: a dither call with L < K credits (K - L) / K of
+    its MACs (the floor note; S15 of note:compute-research/20261028T1900Z-report-gd-smell), and the work that credit
+    forces is the floor's share of it, at the best attack found (an upper bound on the floor, not a bound)."""
+    w = d["pouw"]
+    total = sum(K * N for _, K, N in LINEARS)
+    if w["scheme"] == "dither":
+        cred = sum(K * N * (K - w["L"]) / K for _, K, N in LINEARS if w["L"] < K) / total
+    elif w["scheme"] == "jr2":
+        cred = sum(K * N for _, K, N in LINEARS if K == w["K"]) / total
+    else:
+        cred = 0.0
+    return {"credited_share_of_linear_macs": cred,
+            "forced_share_at_best_attack": cred * pouw_forced_frac(d),
+            "earns_credit": cred > 0 and pouw_forced_frac(d) > 0,
+            "basis": "best attack found (an upper bound on the floor)" if w["scheme"] == "dither" else
+                     ("estimate (JR2: fresh U, no floor note)" if w["scheme"] == "jr2" else
+                      "un-noised at serve time: 0 under guarantee 2")}
 
 
 def _h1_main_ms_8k(h1_host: str) -> float:
@@ -491,7 +531,7 @@ def pouw_parts(d: dict, stock: dict) -> tuple[dict, dict]:
     tok = p["real_tokens"] or T
     G_ms = INT8_MACS_PER_TOKEN * tok / (theta(I("gemm_mhz")) * I("gemm_eff_per_clock"))
     k_share = sum(k * n for _, k, n in LINEARS if k == w["K"]) / sum(k * n for _, k, n in LINEARS)
-    parts, info = {}, {"forced_frac_of_G": pouw_forced_frac(d)}
+    parts, info = {}, {"forced_frac_of_G": pouw_forced_frac(d), "credit": pouw_credit(d)}
     if w["scheme"] in ("j10r", "jr2"):
         cells = H1_CELLS_PER_TOKEN * T
         cells8k = H1_CELLS_PER_TOKEN * 8192
@@ -528,13 +568,13 @@ def pouw_parts(d: dict, stock: dict) -> tuple[dict, dict]:
         parts["H1 device, beyond the host path"] = max(0.0, dev - host)
         parts["H1 round coin (engine thread)"] = coin
         info.update({"cells": cells, "records_GB": rec_gb, "h1_device_ms": dev,
-                     "j10r_floor_frac": 1 / 8 + w["L_prime"] / w["K"]})
+                     "j10r_floor_frac": 1 / 8 + l_prime(w) / w["K"]})
         if w["scheme"] == "jr2":
             dg = w["denoise_g_frac"] if w["denoise_g_frac"] is not None else 1.0
             parts["JR2: de-noising the K-credited calls (fresh U: estimate 1 G)"] = dg * G_ms * k_share
         return parts, info
     # dither
-    L, Lp = w["L"], w["L_prime"]
+    L, Lp = w["L"], l_prime(w)
     act_entries = LAYERS * tok * (3 * HIDDEN + INTER)          # the four linears' A operands, one int8 entry each
     pass_ms = 2 * (act_entries + WEIGHT_BYTES) / (I("hbm_GBs") * 1e6)
     parts["dither: noise and dither added to A and B"] = pass_ms * (I("noise_fused_keep") if w["noise_fused"] else 1)
@@ -665,7 +705,9 @@ def proving(d: dict, units: list, label: str) -> dict:
         out["classes"].append({"name": u["name"], "units": n, "work": u["work"], "ands_with_openings": ands,
                                "openings_share": 1 - (u["work"] + u["extra_ands"]) / ands, "q": q, "draws": draws,
                                "cap": cap, "statements": stmts, "gpu_s": gpu, "lower_cpu_s": lower,
-                               "lower_peak_GiB": peak, "stage_cpu_s": stage, "verify_cpu_s": verify})
+                               "lower_peak_GiB": peak,
+                               "lower_peak_GiB_today": gates * I("lower_bytes_per_gate_today") / 2 ** 30,
+                               "stage_cpu_s": stage, "verify_cpu_s": verify})
         out["draws"] += draws
         out["gpu_s"] += gpu
         out["statements"] += stmts
@@ -673,6 +715,7 @@ def proving(d: dict, units: list, label: str) -> dict:
         out["stage_cpu_s"] += stage
         out["verify_cpu_s"] += verify
         out["lower_peak_GiB"] = max(out["lower_peak_GiB"], peak)
+    out["lower_peak_GiB_today"] = max((c["lower_peak_GiB_today"] for c in out["classes"]), default=0.0)
     out["draws_bound"] = lam / s["eps"]
     return out
 
@@ -686,7 +729,16 @@ def J(dsg: dict | None = None) -> dict:
     (CPU-s a window), the draws, and J = (t_remote / t_stock - 1) + proving GPU-s / stock GPU-s a window."""
     d = normalize(dsg or {})
     stock = stock_parts(d)
-    t_stock = sum(stock.values())
+    if d["price"]["baseline"] == "fastest":
+        base = normalize({**d, "point": {**d["point"], "async": True}})
+        t_stock = sum(stock_parts(base).values())
+        anchor = f"async stock at the design's point (2cd6's stack, {C2CD6})"
+    elif d["price"]["baseline"] == "same":
+        t_stock = sum(stock.values())
+        anchor = (f"async stock (2cd6's stack, {C2CD6})" if d["point"]["async"] else
+                  f"sync stock (b57f's stack, {B57F})") + " at the design's point"
+    else:
+        raise ValueError(f"price.baseline {d['price']['baseline']!r}")
     units = d["partition"]["units"] or preset_units(d)
     remote = dict(stock)
     if d["forward"]["kernels"] == "commit_taps" and not d["commit"]["on"]:
@@ -712,6 +764,8 @@ def J(dsg: dict | None = None) -> dict:
         "serve_term": serve_term,
         "prove_term": prove_term,
         "t_stock_ms": t_stock,
+        "t_stock_anchor": anchor,
+        "window_class": d["point"]["window_class"],
         "t_remote_ms": t_remote,
         "stock_parts_ms": stock,
         "serve_overhead_ms": {k: v for k, v in remote.items() if k not in stock or remote[k] != stock[k]},
