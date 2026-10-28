@@ -41,6 +41,7 @@ gates the kernel on the demo's seeded weights at the H200 shape (`e2e_h200.serve
 | `configs.py` | the configs per kernel, arch and (N, K), `tune.py`'s gated winners |
 | `tune.py` | the config sweep (kbench's interleaved timing, each config gated before it is timed) |
 | `bench.py`, `lt.py`, `roofline.py` | time against M for the exact kernels, cuBLASLt int8 autotuned and vLLM's CUTLASS, against the s8 peak (measured and data-sheet readings) and the measured DRAM bandwidth |
+| `reduce.py` | the price of an s8 tensor-core reduction of a linear's s32 output O (its four bytes, its byte planes, its low byte, against a public r-column matrix), alone and beside the linear on a second stream, against one read of O and the linear itself; the SHA-512 compressions per T MAC of hashing only the reduction |
 | `commit.py` | a layer's op outputs as hm96-sha512 row tables, timed against the layer's linears |
 | `run.sh` | steps of these scripts on one leased GPU of an H200, a lease each, from build.sh's ship |
 
