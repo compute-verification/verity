@@ -34,8 +34,9 @@ Each case goes to its own directory under ``--private`` (``sampled-proofs-v2/``,
 0600): ``case.json`` (``{"params", "commitment", "evidence"}``, hex commitment and evidence, and v2's ``blobs``) and
 ``answer.json``, its Lean answer line, the directory `composite.py --cases` reads. The Lean runs on files in a 0700
 scratch directory under ``--private``. This prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written and
-a ``NOT_WRITTEN {"protocol", "reason"}`` line per case refused, and nothing of a case's params or evidence. Exit 0 when
-every case is written, 1 when one is refused, 64 on a usage error.
+a ``NOT_WRITTEN {"protocol", "reason"}`` line per case refused, and nothing of a case's params or evidence; the lines go
+to a private log (a reason may quote a5's ``case-v2-error.txt``), of which only a line's ``protocol`` and ``verdict``
+are public. Exit 0 when every case is written, 1 when one is refused, 64 on a usage error.
 """
 from __future__ import annotations
 
