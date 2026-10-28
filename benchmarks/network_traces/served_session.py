@@ -214,8 +214,10 @@ def prompts(n: int, ids: int, vocab: int, seed: bytes) -> list[list[int]]:
 
 
 def words(a: argparse.Namespace) -> list[str]:
+    tick = getattr(a, "bucket_ms", None)
     return ["warden-rehearse", "--peer", a.peer, "--port", str(a.port), "--minutes", str(a.minutes),
-            "--requests", str(a.requests), "--height", str(a.height), "--scan", "--prompts", "--tokens", str(a.tokens),
+            "--requests", str(a.requests), "--height", str(a.height), "--scan",
+            *(["--bucket-ms", str(tick)] if tick is not None else []), "--prompts", "--tokens", str(a.tokens),
             *(["--window-per-group"] if getattr(a, "window_per_group", False) else [])]
 
 
