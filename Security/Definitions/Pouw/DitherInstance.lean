@@ -5,36 +5,37 @@ import Definitions.Core.Accel.Principles
 # The headline's model on the cards: the H200 and the RTX PRO 6000 at θ (trusted)
 
 `Definitions.Pouw.Guarantees.Dither.WorkSound` is stated over an abstract accelerator `Accel`. This file ties that
-`Accel` to MODEL-SPEC's model (`Definitions.Core.Accel`) at a card's θ, so the headline can be read on
+`Accel` to the card model (`Definitions.Core.Accel`) at a card's θ, so the headline can be read on
 `Verity.Accel.H200.card` and `Verity.Accel.Sm120.card` (`Definitions.Pouw.Guarantees.DitherInstance`):
 
 * **the period's devices** (`Devices`): `n` cards of one table pooled into one machine (`poolCard`, a coarsening:
   the pooled cards share their stores and resources, so the links between them are free), at `f` ticks a second, and
-  the period's other devices (`Others`: the host CPUs and DPUs the cards reach without crossing a network certifier),
-  each resource at its θ rate;
+  the period's other devices (`Others`: the host CPUs and DPUs the cards reach without crossing a network
+  certifier), each resource at its θ rate;
 * **where a round's coin and words sit in the cards' memory** (`Layout`);
 * **`G` is the devices at the open parameters `x`** (`OnCard`): `G`'s resources are the pooled cards' and the others',
-  at θ's rates; its memory is theirs; its (P1) and (P2) are MODEL-SPEC's; and every words program the cards run is a
+  at θ's rates; its memory is theirs; its (P1) and (P2) are the card model's; and every words program the cards run is a
   program of `G` with the run's units as its use, its ticks and backlog as its wall time and no import;
-* **the public best methods** (`PubBest`), fixed per card and priced at the period's dual price (`pubCost`): D5 v2's
-  named programs (`pubBestH200`, `pubBestSm120`);
+* **the public best methods** (`PubBest`), fixed per card and priced at the period's dual price (`pubCost`): the
+  public-best menu's named programs (`pubBestH200`, `pubBestSm120`);
 * **the cards' hosts** (`HostRow`, `HostsCounted`): the AMX and SHA-512 rates of each card's share of its node's CPUs,
   which the period's devices count;
 * **an oracle call on the card** (`CallsAtPub`): one compression of a public SHA-512 schedule, the call step's use;
 * **the card's runs at `x`** (`CardRunsAt`): `Assumptions.CardWithinAccel`'s refinement at the open parameters it gives;
 * **the network certifier's counts** (`Counted`): the verifier refuses a period whose signed counts into
   or out of the devices, read from the devices' readings (`Readings`), pass the caps `E_in`, `E_out`;
-* **the auditor's clocks** (`Timed`): the challenger issues each sampling
-  block's coins at least `Δ` before the period's end, and the next block's only after every root of this one is in. The
-  verifier refuses a period in which the network certifier saw a root arrive more than `Δ` after its block's coins,
-  or a selected block's answer more than `τ_ans` after its check coin. Only selected blocks are answered, and an
-  answer may arrive after later blocks' coins. `TimedWorkFits` is what that buys: the sampling blocks' work within the
-  period's capacity, at any number of blocks.
+* **the auditor's clocks** (`Timed`): the challenger issues each sampling block's dither coins only after the
+  block's operand root is in, at least `Δ` before the period's end, and the next block's only after every root of
+  this one is in. The verifier refuses a period in which the network certifier saw a root arrive more than `Δ`
+  after its block's coins, or a selected block's answer more than `τ_ans` after its check coin. Only selected
+  blocks are answered, and an answer may arrive after later blocks' coins. `TimedWorkFits` and `AnswersFit` are
+  what that buys: the sampling blocks' commit phases and work within the period's capacity, at any number of
+  blocks, and each selected answer within the period.
 
 The open parameters `x` are not fixed here: the headline holds at every `x` meeting θ's floors (`Card.floors`: on the
 H200 `sync ≥ 1`, `b1 ≥ 1/8`, `madHi ≥ 2`, `slack ≥ 1`; on sm_120 `madHi ≥ 2` and no native `b1`) with the
 product form (`Assumptions.AccelProductForm`). Without the floors the model runs an `IMAD.HI`, a `b1` MAC or an
-`mma.sync` MAC for nothing, `ShaSpeed` at a card's rates is false in it, and the headline says nothing.
+`mma.sync` MAC for nothing, `SAKSha` at a card's rates is false in it, and the headline says nothing.
 -/
 
 open scoped NNRat
@@ -65,9 +66,9 @@ def poolCard (c : Verity.Accel.Card) (n : ℕ) (hn : 0 < n) : Verity.Accel.Card 
 
 /-- **The period's other devices**: every processor the period's cards reach without
 crossing a network certifier other than the cards themselves (host CPUs over PCIe or NVLink-C2C, DPUs), each
-resource with its θ rate in units a second (the machine model's per-node rows: SHA-512 and INT8 rates, DRAM, PCIe,
-C2C) and their memory in bits. Their programs are `Accel`'s like the cards', priced at the period's dual price, so the
-honest optimum may use them and the capacity `C` includes them. That the list is complete is the inventory premise
+resource with its θ rate in units a second (θ's per-node rows: SHA-512 and INT8 rates, DRAM, PCIe, C2C) and
+their memory in bits. Their programs are `Accel`'s like the cards', priced at the period's dual price, so the honest
+optimum may use them and the capacity `C` includes them. That the list is complete is the inventory premise
 (`Assumptions.PeriodInventory`). -/
 structure Others where
   Res : Type
@@ -78,7 +79,7 @@ structure Others where
 attribute [instance] Others.instRes
 
 /-- **The period's devices**: `n` cards of the table `c`, a tick `1/f` seconds (the clock the table's per-tick rates
-are at; the fleet's transfer reads CALIB's θ `clocks.fmax`: 1980 MHz on the H200, 2430 MHz on the RTX PRO
+are at; the fleet's transfer reads θ's `clocks.fmax`: 1980 MHz on the H200, 2430 MHz on the RTX PRO
 6000), and the other devices. The headline holds at every clock. -/
 structure Devices (c : Verity.Accel.Card) where
   n : ℕ
@@ -114,8 +115,8 @@ def cardUnits (m : Verity.Accel.Machine ι) (iss : List (List m.Instr)) (r : m.R
 
 * each card resource runs at `n ρ_r` units a tick, `n ρ_r f` a second, and each other device's at its θ rate;
 * `G`'s memory is the pooled cards' bits (on-chip and device memory) and the other devices';
-* `G`'s (P1) is MODEL-SPEC's integer path with the card's captured dots in product form, and its (P2) MODEL-SPEC's four
-  data-flow properties (`Definitions.Core.Accel.Principles`);
+* `G`'s (P1) is the card model's integer path with the card's captured dots in product form, and its (P2) the card
+  model's four data-flow properties (`Definitions.Core.Accel.Principles`);
 * every words program the cards run is one of `G`'s: for every memory `M₀` the round starts from (whatever the prover
   carried into it) and every program and schedule of the pooled machine meeting (G1) and (G2) from `M₀` with the coin
   written in, some words program of `G` computes the words the run leaves, uses exactly the run's units on each card
@@ -126,9 +127,9 @@ So `SAKMatmul` at `G` speaks of every words program of the card at `x`, at the c
 cost `H` and the capacity `C` are in the card's units. `G.ext` is the bits a run exchanges, which the network certifier
 counts (`Assumptions.CertifierSeesImports`). The commitment and the round's other programs read the oracle
 `P.Orc`, which the card machine has no instruction for: they reach it through `G`'s priced calls (G3), each at a public
-SHA-512 schedule's units on the card (`CallsAtPub`); that the card can't query the oracle more cheaply is ABSORB-THM's
-realization, open. A program of `G` cheaper than any of the card's makes
-`SAKMatmul` or `ShaSpeed` false at `G`, and the headline then says nothing at that `G`; the `G` the headline is read at
+SHA-512 schedule's units on the card (`CallsAtPub`); that the card can't query the oracle more cheaply is the
+realization premise `Assumptions.ShaRealize`, which is open. A program of `G` cheaper than any of the card's makes
+`SAKMatmul` or `SAKSha` false at `G`, and the headline then says nothing at that `G`; the `G` the headline is read at
 has the card's programs and no others. -/
 def OnCard (G : Accel) (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devices c) (P : RoundProto)
     (L : Layout (D.machine x) P) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) : Prop :=
@@ -151,12 +152,12 @@ def OnCard (G : Accel) (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devi
 schedule. -/
 abbrev ResUnits := Verity.Accel.Res → ℚ≥0
 
-/-- **The public best methods on the card table `c`**: the named public matmul programs (`mm`, units a naive MAC) and
-the pinned public SHA-512 schedules (`sha`, units a compression), each in the model's units, at the cheapest instance a
-prover can register (one constant must hold at every instance the prover may pick), with advice of the allowed size
-(forms of the fixed weights and lookup tables, D5's pricing). The headline prices them at the period's dual price
-(`pubCost`): the cheapest of the named programs there, times the round's MACs or compressions. So `pub_mm` and `pub_sha`
-are fixed per card, not chosen per reading. -/
+/-- **The public best methods on the card table `c`**: the named public matmul programs (`mm`, units a naive MAC)
+and the pinned public SHA-512 schedules (`sha`, units a compression), each in the model's units, at the cheapest
+instance a prover can register (one constant must hold at every instance the prover may pick), with advice of the
+allowed size (forms of the fixed weights and lookup tables, priced as the public-best menu prices them). The
+headline prices them at the period's dual price (`pubCost`): the cheapest of the named programs there, times the
+round's MACs or compressions. So `pub_mm` and `pub_sha` are fixed per card, not chosen per reading. -/
 structure PubBest (c : Verity.Accel.Card) where
   mm : List ResUnits
   sha : List ResUnits
@@ -189,53 +190,53 @@ def shaUnits (a m i : ℚ≥0) : Verity.Accel.Res → ℚ≥0
   | .issue => i
   | _ => 0
 
-/-- **D5 v2's named public matmul programs on the H200**
-(`art:4eb6719838c94485978f03fe075cb004e7693a318c6c5b980590f4b3d2f01263`): protocol v3's
-round at A = B = 0, the frozen qkv shape (K 16384, n 16512) at the protocol's caps (t 2, L' 512), the hull of every
-route in D5 v2's menu (the tile route, PD2-1's O-route, the zero-high-digit peel, Strassen's orbit, the integral
-catalogue, every route beside the MMA) priced at the honest period's duals μ° without the hashing. Served (μ° on `alu`
-and `joint0`): the dense product with O by PD2-1's O-route, pub_mm 0.4853 against H_mm 0.4984. Job-only (μ° on `alu`
-alone, the matmul unpriced): the dense product with the peels, which is also the honest kernel. At a fixed price the
-cheapest listed program is at most any mixture of them, so the hull's pub at μ° is the list's minimum. D5's units in
-the model's: its tensor MAC-times as they are, its lane-issues over 32 (a warp instruction), its FMA-pipe lanes over
-2 (an `IMAD` or `IDP.4A` takes two of θ's 128, one of the model's 64 `imad` lanes) and its shared-memory bytes over 4
-(words). -/
+/-- **The public-best menu's named matmul programs on the H200**
+(`art:4eb6719838c94485978f03fe075cb004e7693a318c6c5b980590f4b3d2f01263`, computed by
+`benchmarks/pouw/theory/d5_v2.py` at `34866fd9f8`): protocol v3's round at A = B = 0, the frozen qkv shape
+(K 16384, n 16512) at the served caps (t 2, L' 512), the hull of every route in the menu (the tile route, the
+O-route, the zero-high-digit peel, Strassen's orbit, the integral catalogue, every route beside the MMA) priced at
+the honest period's duals μ° without the hashing. Served (μ° on `alu` and `joint0`): the dense product with O by the
+O-route, pub_mm 0.4853 against H_mm 0.4984. Job-only (μ° on `alu` alone, the matmul unpriced): the dense product
+with the peels, which is also the honest kernel. At a fixed price the cheapest listed program is at most any mixture
+of them, so the hull's pub at μ° is the list's minimum. The menu's units in the model's: its tensor MAC-times as
+they are, its lane-issues over 32 (a warp instruction), its FMA-pipe lanes over 2 (an `IMAD` or `IDP.4A` takes two
+of θ's 128, one of the model's 64 `imad` lanes) and its shared-memory bytes over 4 (words). -/
 def pubMmH200 : List ResUnits :=
   [mmUnits (35 / 32) (99 / 2097152) 0 0 (207 / 32768), mmUnits (9 / 8) (25 / 524288) 0 0 (53 / 8192)]
 
-/-- **D5 v2's named public matmul programs on the RTX PRO 6000** (as on the H200, at the caps t 3, L' 256). Served
-(μ° on `alu`, `rf` and `joint1`): Strassen's 2×2 orbit at depth 1, pub_mm 0.8255 against H_mm 0.8586. Job-only (μ° on
-`alu` and `rf`): the dense product with O by the zero-high-digit peel, pub_mm 0.2930 against H_mm 0.2974. And the honest
-kernel. Values off a dyadic are rounded down at the seventh decimal. D5's register-file words aren't a resource of the
-model and are dropped, which only lowers `pub_mm`. -/
+/-- **The public-best menu's named matmul programs on the RTX PRO 6000** (as on the H200, at the served caps t 3,
+L' 256). Served (μ° on `alu`, `rf` and `joint1`): Strassen's 2×2 orbit at depth 1, pub_mm 0.8255 against H_mm 0.8586.
+Job-only (μ° on `alu` and `rf`): the dense product with O by the zero-high-digit peel, pub_mm 0.2930 against H_mm
+0.2974. And the honest kernel. Values off a dyadic are rounded down at the seventh decimal. The menu's register-file
+words aren't a resource of the model and are dropped, which only lowers `pub_mm`. -/
 def pubMmSm120 : List ResUnits :=
   [mmUnits (59 / 64) (56829 / 40000000) (63 / 4000) 0 (1678031 / 40000000),
    mmUnits (67 / 64) (329 / 3145728) 0 0 (233 / 24576), mmUnits (17 / 16) (83 / 786432) 0 0 (59 / 6144)]
 
-/-- **The pinned public SHA-512 schedules on the H200, at the model's prices** (`ShaSpeed` is in model units, so
-`c_sha = 1` in the model): the default build of `commit_gpu`
-(measured 4.79 G/s; SHF 1,728, LOP3 912, IADD3 760, IMAD 152), A-wide + R-hi (D5's
-`pub_sha.H200`; IMAD 546, IMAD.WIDE 546, IMAD.HI 394) and A-wide + R-shf (IMAD 850, IMAD.WIDE 850), with these
-counts a compression. Priced as the model prices a lane (`opUse`): one
-ALU or `imad` lane, `IMAD.WIDE` two `imad` lanes, `IMAD.HI` at its floor `madHi = 2`, `1/32` of an issue slot.
-These are D5 v2's schedules too (the same ALU and issue counts). -/
+/-- **The pinned public SHA-512 schedules on the H200, at the model's prices** (`SAKSha` is in model units, so
+`c_sha = 1` in the model): the default build of `commit_gpu` (measured 4.79 G/s; SHF 1,728, LOP3 912, IADD3 760,
+IMAD 152), A-wide + R-hi (the menu's `pub_sha.H200`; IMAD 546, IMAD.WIDE 546, IMAD.HI 394) and A-wide + R-shf
+(IMAD 850, IMAD.WIDE 850), the counts a compression. Priced as the model prices a lane (`opUse`): one ALU or `imad`
+lane, `IMAD.WIDE` two `imad` lanes, `IMAD.HI` at its floor `madHi = 2`, `1/32` of an issue slot. These are the
+menu's schedules too (`benchmarks/pouw/theory/public_best.py`'s `SHA_SCHEDULES` at `34866fd9f8`, the same ALU and
+issue counts). -/
 def pubShaH200 : List ResUnits :=
   [shaUnits 3400 152 (3608 / 32), shaUnits 2460 2426 (4002 / 32), shaUnits 2550 2550 (4306 / 32)]
 
 /-- **The pinned public SHA-512 schedules on the RTX PRO 6000, at the model's prices** (as on the H200): the default
 build (measured 7.13 G/s; SHF 1,728, LOP3 927, IADD.64 760), R-shf (IMAD 852, IMAD.WIDE 852)
-and R-hi (D5's `pub_sha.RTXPRO6000`; IMAD 487, IMAD.WIDE 487, IMAD.HI 487). -/
+and R-hi (the menu's `pub_sha.RTXPRO6000`; IMAD 487, IMAD.WIDE 487, IMAD.HI 487). -/
 def pubShaSm120 : List ResUnits :=
   [shaUnits 3415 0 (3415 / 32), shaUnits 2563 2556 (4267 / 32), shaUnits 2441 2435 (3902 / 32)]
 
-/-- The H200's public best methods: D5 v2's named programs. -/
+/-- The H200's public best methods: the public-best menu's named programs. -/
 def pubBestH200 : PubBest Verity.Accel.H200.card := ⟨pubMmH200, pubShaH200⟩
 
-/-- The RTX PRO 6000's public best methods: D5 v2's named programs. -/
+/-- The RTX PRO 6000's public best methods: the public-best menu's named programs. -/
 def pubBestSm120 : PubBest Verity.Accel.Sm120.card := ⟨pubMmSm120, pubShaSm120⟩
 
-/-- **An oracle call costs a public SHA-512 compression on the card** (WORKSOUND-3's question at `ba41b902bf`): `G`'s
-oracle-call step (G3) uses, on the card's resources, the units of one compression of one of the public schedules
+/-- **An oracle call costs a public SHA-512 compression on the card**: `G`'s oracle-call step (G3)
+uses, on the card's resources, the units of one compression of one of the public schedules
 `pb.sha`, and nothing of the other devices. A call is one evaluation of a tree input: a leaf's is one compression and
 a node's (two digests) two, so one compression is the floor, and a card resource the schedule uses caps the calls at
 its capacity over the schedule's use of it (WorkSound's `cap_r ≤ Q callUse_r`). Host CPUs that hash are other work's
@@ -266,7 +267,7 @@ instance instFintypeHostRes : Fintype HostRes where
   elems := {.amx, .sha}
   complete r := by cases r <;> simp
 
-/-- **A card's share of its node's hosts**, in units a second (CALIB, θ's `host.cpu` rows). -/
+/-- **A card's share of its node's hosts**, in units a second (θ's `host.cpu` rows at `188907341d`). -/
 structure HostRow where
   amx : ℝ
   sha : ℝ
@@ -286,12 +287,12 @@ def HostsCounted {c : Verity.Accel.Card} (D : Devices c) (h : HostRow) : Prop :=
   ∃ j : HostRes → D.oth.Res, Function.Injective j ∧
     D.n * h.amx ≤ D.oth.rate (j .amx) ∧ D.n * h.sha ≤ D.oth.rate (j .sha)
 
-/-- **The H200 node's hosts, a card's share** (CALIB): 8 Xeon 8468 cores a GPU; AMX at 3.15% of the H200's dense
+/-- **The H200 node's hosts, a card's share**: 8 Xeon 8468 cores a GPU; AMX at 3.15% of the H200's dense
 INT8 (1979 TOPS, so 989.5 · 10¹² MACs a second), SHA-512 by AVX-512 multi-buffer at 2.934 · 10⁷ compressions a
 second a core (4.90% of the card's measured 4.79 G/s). -/
 noncomputable def hostH200 : HostRow := ⟨315 / 10000 * (1979 * 10 ^ 12 / 2), 8 * (2934 * 10 ^ 4)⟩
 
-/-- **The RTX PRO 6000 node's hosts, a card's share** (CALIB): 12 Xeon 6776P cores a GPU; AMX at 9.51% of the card's
+/-- **The RTX PRO 6000 node's hosts, a card's share**: 12 Xeon 6776P cores a GPU; AMX at 9.51% of the card's
 dense INT8 (10¹⁵ ops, 5 · 10¹⁴ MACs a second), SHA-512 at 3.012 · 10⁷ compressions a second a core (5.07% of the
 card's measured 7.13 G/s). -/
 noncomputable def hostSm120 : HostRow := ⟨951 / 10000 * (5 * 10 ^ 14), 12 * (3012 * 10 ^ 4)⟩
@@ -300,11 +301,12 @@ end Cards
 
 section Certifier
 
-/-- **The verdict with the network certifier's counts**: the service's verdict, and the
-certifier's signed counts of the bits into (`cin`) and out of (`cout`) the period's devices, as the verdict reads them
-from the devices' readings, are within the caps `E_in` and `E_out`, fixed before the period at served traffic; a
-period past either is refused. The counts exclude the certifier's own coin stream: the dither coin is
-the round's `Draw`, an input of its programs, not an exchanged bit (`Accel.ext`). -/
+/-- **The verdict with the network certifier's counts**: the service's verdict, and the certifier's signed counts of the
+bits into (`cin`) and out of (`cout`) the period's devices, as the verdict reads them from the devices' readings, are
+within the caps `E_in` and `E_out`, fixed before the period at served traffic; a period past either is refused. The
+counts exclude the challenger's coin stream and nothing else, as `Assumptions.CertifierSeesImports` defines it: the
+dither coin is the sampling block's `Draw`, an input of its programs, not an exchanged bit (`Accel.ext`). A replica on
+several nodes has one pair of counts, its certifiers' together. -/
 def Counted {P : RoundProto} {k : ℕ} {Obs : Type} (verdict : Verdict P k Obs) (cin cout : Obs → ℝ)
     (Ein Eout : ℝ) : Verdict P k Obs :=
   fun o x tr ob => verdict o x tr ob ∧ cin ob ≤ Ein ∧ cout ob ≤ Eout
@@ -313,14 +315,20 @@ end Certifier
 
 section Clock
 
-/-- **The verdict with the auditor's clocks**:
-the service's verdict, read with the challenger's signed issue times and the network certifier's signed arrival
-times, as the verdict reads them from the devices' readings `ob`.
+/-- **The verdict with the auditor's clocks**: the service's verdict, read with the challenger's signed issue times
+and the network certifier's signed arrival times, as the verdict reads them from the devices' readings `ob`. Each
+sampling block runs its commit phase, then its challenge phase, then its response phase, every commitment bound
+before any of its coins.
 
-* The challenger issues sampling block `b`'s dither coins at `t ob b`, at least `Δ` before the period's end, and
-  block `b + 1`'s only after every root of block `b` is in, so the blocks' work runs one block at a time.
-* The network certifier watches the replica's boundary. The period is refused if it saw a root of block `b` arrive
-  (`arrive ob b`) more than `Δ` after the block's dither coins.
+* **The commit phase.** The network certifier signs the arrival of sampling block `b`'s operand root
+  (`opArrive ob b`), and the challenger issues the block's dither coins at `t ob b`, after it: the period is refused
+  if `t ob b` came before `opArrive ob b`. So the block's registered instance is read at `opArrive`, before any coin
+  of the block. The coins' message is derived from that receipt (the derivation `OwnDither` rests on,
+  with the receipt's digest in its context), so the coins can't be issued against an operand root that wasn't in.
+* **The challenge phase.** The dither coins go out at least `Δ` before the period's end, and block `b + 1`'s only
+  after every root of block `b` is in, so the blocks run one at a time. The network certifier watches the replica's
+  boundary; the period is refused if it saw a root of block `b` arrive (`arrive ob b`) more than `Δ` after the block's
+  dither coins.
 * The challenger issues every sampling block's check coin, which carries whether the block is selected, at `tc ob b`,
   and the period is refused if that was before every root of the block was in: a prover told early
   that its block isn't selected could skip the block. The coin's message carries the digest of the certifier's
@@ -332,15 +340,16 @@ times, as the verdict reads them from the devices' readings `ob`.
 The number of sampling blocks and of selected ones is bounded by nothing here. The clocks are the auditor's devices,
 and nothing here reads a time the prover reports. -/
 def Timed {G : Accel} {P : RoundProto} {nsb : ℕ} {Obs : Type} (verdict : Verdict P nsb Obs) (Pd : Period G) (Δ : ℝ)
-    (t arrive : Obs → Fin nsb → ℝ) (sel : P.Chk → Prop) (τans : ℝ) (tc ansAt : Obs → Fin nsb → ℝ) :
+    (opArrive t arrive : Obs → Fin nsb → ℝ) (sel : P.Chk → Prop) (τans : ℝ) (tc ansAt : Obs → Fin nsb → ℝ) :
     Verdict P nsb Obs :=
   fun o x tr ob => verdict o x tr ob ∧ (∀ b, 0 ≤ t ob b ∧ t ob b + Δ ≤ Pd.T ∧ arrive ob b ≤ t ob b + Δ) ∧
+    (∀ b, opArrive ob b ≤ t ob b) ∧
     (∀ b b' : Fin nsb, (b : ℕ) + 1 = b' → arrive ob b ≤ t ob b') ∧ (∀ b, arrive ob b ≤ tc ob b) ∧
     ∀ b, sel (x b).2 → 0 ≤ tc ob b ∧ tc ob b + τans ≤ Pd.T ∧ ansAt ob b ≤ tc ob b + τans
 
-/-- **An accepted period's sampling blocks' work fits the period**: for every prover whose period the verdict accepts,
-its sampling blocks' timed use (`Prover.timedUse`: each block's work, from its dither coins to its commitment) is,
-resource by resource, at most the period's capacity `Period.cap`. This is what lets the headline count that use
+/-- **An accepted period's sampling blocks' commit phases and work fit the period**: for every prover whose period the
+verdict accepts, its sampling blocks' timed use (`Prover.timedUse`: each block's commit phase and work, from the
+previous block's work to its commitment) is, resource by resource, at most the period's capacity `Period.cap`. This is what lets the headline count that use
 against the period's devices: it was done on them, inside the period. -/
 def TimedWorkFits (G : Accel) (P : RoundProto) (nsb : ℕ) {Obs : Type} (verdict : Verdict P nsb Obs)
     (dev : Readings G P nsb Obs) (Pd : Period G) : Prop :=
