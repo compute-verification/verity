@@ -11,7 +11,7 @@ What differs from nvf4_bench.py:
    subnormals, up to 448), 1 exponent fields 4 .. 10 (2^-3 .. 15).  Tensor scales 1.0 (f32) for cuBLASLt; CUTLASS's kind-1
    kernels and the plain entries read none.
 2. model: nv_ref_words (fp8_bench.cu's) against BLACKWELL_SM120_E4M3_M16N8K32 (verity.ml.kernels.tc.group_sum_total_batch
-   chained from +0; if this tree's verity lacks it, its parameters as cursor/sm120-fp8-capture-75d4 pins them) and, the
+   chained from +0) and, the
    gate's negative control, against ADA_E4M3_M16N8K32 (two groups of 16 in a 14-bit adder), which must differ somewhere.
    The model gate fails closed: it fails when verity can't be imported.
 3. Baselines of the harness's kind 1 (FP8 E4M3, per-tensor scales): CUTLASS (default the two the harness's gate run
