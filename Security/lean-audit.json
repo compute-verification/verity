@@ -46210,7 +46210,8 @@
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
-    "Flock.SecurityProofs.SampledKSLiveV3"
+    "Flock.SecurityProofs.SampledKSLiveV3",
+    "Flock.SecurityProofs.SampledKSLiveV5"
    ]
   },
   "Proofs.Flock.Claims.Sampling.Leaf": {
@@ -46224,7 +46225,8 @@
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
-    "Flock.SecurityProofs.SampledKSLiveV3"
+    "Flock.SecurityProofs.SampledKSLiveV3",
+    "Flock.SecurityProofs.SampledKSLiveV5"
    ]
   },
   "Proofs.Flock.Claims.Sampling.Path": {
@@ -46244,7 +46246,8 @@
     "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
-    "Flock.SecurityProofs.SampledKSLiveV3"
+    "Flock.SecurityProofs.SampledKSLiveV3",
+    "Flock.SecurityProofs.SampledKSLiveV5"
    ]
   },
   "Proofs.Flock.Claims.Sampling.Reference.Prover": {
@@ -52636,12 +52639,12 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.HiddenExec.PlacedP": {
-   "digest": "c0298ecf0c4454d197293788b119c614aaa56b837b6ceb2ba99437e208036c5b",
+   "digest": "e3c937b1f2041e7180235aa8b437a9f5439441941748a7f078f71447ca510b34",
    "definitions": {
     "FlockSoundness.Discharge.HiddenExec.AcceptedHP": "47c76c8cb342f7c4f6a6815f67823c317cc832c1db689cfbff1810e1b1cc602c",
     "FlockSoundness.Discharge.HiddenExec.AcceptedHP.cf": "718f83f5a573ee70253fdd1badd9368d3fffb0bf3fae027d985df43bd1c5c5ec",
     "FlockSoundness.Discharge.HiddenExec.AcceptedHP.coins": "bf050d239607efedb9b0b0f3aad49941353289a41bb26448d4d2c88d0c801e68",
-    "FlockSoundness.Discharge.HiddenExec.AcceptedHP.col": "d8991f302cad84c0d0d388f87817746228eb5289b57625aaf2a646486af6ccbf",
+    "FlockSoundness.Discharge.HiddenExec.AcceptedHP.col": "cf8b4da2da134d58456271963acfc37321358d687b4e850e0516775415f9aaea",
     "FlockSoundness.Discharge.HiddenExec.AcceptedHP.draw": "0c2757f130677e362561d0c4cce32b1c9222d63da509073fa7b5a9af51a71828",
     "FlockSoundness.Discharge.HiddenExec.AcceptedHP.own": "200b3fab2b7ce2b781f12e677f618cbd36d155b4d40e8aedb9cea750198d208f",
     "FlockSoundness.Discharge.HiddenExec.AcceptedHP.partition": "7d4b6d9408a5ef3718b4399ee71998b5d5c29d8cade124dd4fd0bdb2ccbd9387",
@@ -52806,9 +52809,9 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.HiddenExec.SitesP": {
-   "digest": "76c52cca14331b570bdc0fbf6728be9a149800e49e64ec59512cef6925ebbd2c",
+   "digest": "1d308a7d48404470109c30b245db0e522de886254833e544dc3efb6fad271851",
    "definitions": {
-    "FlockSoundness.Discharge.HiddenExec.TableHP.acc": "28ff346708ba0b2c39835cad82c2274f47bdb761458111b253d534750a3b5a99"
+    "FlockSoundness.Discharge.HiddenExec.TableHP.acc": "febd82581d4e1c465c298aea197da48c27476ac7ae900edfb74151fde1f1da11"
    },
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveV5"]
   },
@@ -58507,6 +58510,7 @@
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
     "Flock.SecurityProofs.SampledKSLiveV3",
+    "Flock.SecurityProofs.SampledKSLiveV5",
     "RecDeploy.HonestHalfFixture.honest_half_fixture"
    ]
   },
