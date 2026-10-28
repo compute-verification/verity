@@ -7,6 +7,9 @@ y [M, N] bf16 with s_a [M] and s_w [N] (the exact linear's words). The kernel ma
 X·Wᵀ exactly when no form carries (`Lib.flags` counts A's carry bits since `Lib.reset`, `b_forms` returns B's), and
 X·Wᵀ mod 2^8 always. `corrections(x, w)` is the rest, 256·(c_A·w_Bᵀ + w_A·c_Bᵀ) + 65536·c_A·c_Bᵀ assembled, in torch.
 
+`fix_lists(c_B)` folds B's carries into s8orbit_bfix's lists once a weight, and `Lib.bfix` adds their 256·X~·Gᵀ to y32
+after the orbit: exact where A's forms don't carry; `a_terms` is the rest where they do.
+
 The plain int8 GEMM entry: `p = prepare(w)` once at load (w [N, K] int8), then `int_mm(x, p, out=None)` -> x·wᵀ int32
 [M, N], exact, with the cubin at $S8_ORBIT_CUBIN (else build/s8_orbit.cubin here).
 """
@@ -51,6 +54,17 @@ class Params(C.Structure):
 
 
 assert C.sizeof(Params) == 384 and Params.sa.offset == 256 and Params.M.offset == 304
+
+
+class FixParams(C.Structure):
+    _fields_ = [("x", u64), ("y32", u64), ("ptr", u64), ("ent", u64), ("M", C.c_int32), ("N", C.c_int32), ("K", C.c_int32),
+                ("pad", C.c_int32)]
+
+
+assert C.sizeof(FixParams) == 48
+#: s8orbit_bfix's rows and columns a CTA, its pair-row chunk, and its shared memory
+FR, FC, FCHUNK = 32, 128, 2048
+FIX_SMEM = max(FR * (FCHUNK + 4), 4 * FR * (FC + 1) * 4)
 
 
 def stage_bytes(bn: int) -> int:
@@ -114,6 +128,50 @@ def _exact_mm(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     return (a.double() @ b.double().t()).long()
 
 
+def fix_lists(cb: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, int]:
+    """s8orbit_bfix's lists of B's carries cb [7, N/2, K/2]: G_qb = Σ_j σ_qj s_jb c_B,j for quadrant q and A block b (the
+    sign of M_j in C_q times that of A_b in A_j), entry (o, g) of list q (N/2) + c at pair-row byte o = bm K + bk K/2 + k.
+    Returns ptr int32 [2N (H + 1)] (each list's first entry in each 2,048-byte chunk, H = K / 1024, and its end), ent int32
+    (o << 8 | (uint8) g, by list then o) and G's entries."""
+    _, hn, hk = cb.shape
+    k2, h = 4 * hk, hk // 512
+    names = ("11", "12", "21", "22")
+    keys, gs = [], []
+    for qi, q in enumerate(names):
+        for b in names:
+            g = torch.zeros((hn, hk), dtype=torch.int16, device=cb.device)
+            for j, sq in C_SUMS[q]:
+                for blk, sb in A_FORMS[j]:
+                    if blk == b:
+                        g += sq * sb * cb[j].to(torch.int16)
+            nz = g.nonzero()
+            if nz.numel():
+                c, k = nz[:, 0], nz[:, 1]
+                keys.append((qi * hn + c) * k2 + (int(b[0]) - 1) * (k2 // 2) + (int(b[1]) - 1) * hk + k)
+                gs.append(g[c, k])
+    key = torch.cat(keys) if keys else torch.zeros(0, dtype=torch.int64, device=cb.device)
+    gv = torch.cat(gs) if gs else torch.zeros(0, dtype=torch.int16, device=cb.device)
+    assert gv.numel() == 0 or int(gv.abs().max()) < 128
+    key, order = torch.sort(key)
+    gv = gv[order]
+    bounds = torch.arange(4 * hn, device=cb.device)[:, None] * k2 + torch.arange(h + 1, device=cb.device)[None, :] * FCHUNK
+    ptr = torch.searchsorted(key, bounds.reshape(-1)).to(torch.int32)
+    ent = (((key % k2) << 8) | (gv.long() & 0xFF)).to(torch.int32)
+    return ptr, ent if ent.numel() else torch.zeros(1, dtype=torch.int32, device=cb.device), int(key.numel())
+
+
+def a_terms(x: torch.Tensor, wb: torch.Tensor) -> torch.Tensor:
+    """What A's carries add, [M, N] int64: 256·c_A·w_Bᵀ assembled (with s8orbit_bfix's 256·A·c_Bᵀ, the rest of O)."""
+    _, ca = forms(x, A_FORMS, True)
+    p = []
+    for j in range(7):
+        acc = torch.zeros((x.shape[0] // 2, wb.shape[1]), dtype=torch.int64, device=x.device)
+        if ca[j].any():
+            acc += 256 * _exact_mm(ca[j], wb[j])
+        p.append(acc)
+    return assemble(p)
+
+
 def assemble(p: list[torch.Tensor]) -> torch.Tensor:
     q = {name: sum(s * p[j] for j, s in terms) for name, terms in C_SUMS.items()}
     return torch.cat([torch.cat([q["11"], q["12"]], 1), torch.cat([q["21"], q["22"]], 1)], 0)
@@ -163,6 +221,8 @@ class Lib:
             f = self.fn(f"s8orbit_{bn}")
             self.ck("cuFuncSetAttribute", f, MAX_DYN_SMEM, smem(bn))
             self.fns[bn] = f
+        self.fix = self.fn("s8orbit_bfix")
+        self.ck("cuFuncSetAttribute", self.fix, MAX_DYN_SMEM, FIX_SMEM)
         self.maps: dict[tuple, bytes] = {}
         self.flags_t = torch.zeros(1, dtype=torch.int64, device="cuda")
         self.layout = self._layout()
@@ -179,15 +239,17 @@ class Lib:
         self.ck("cuModuleGetFunction", C.byref(f), self.mod, name.encode())
         return f
 
-    def _launch(self, f: vp, grid: int, threads: int, shared: int, param) -> None:
+    def _launch(self, f: vp, grid: int | tuple[int, int], threads: int, shared: int, param) -> None:
         params = (vp * 1)(C.addressof(param))
-        self.ck("cuLaunchKernel", f, grid, 1, 1, threads, 1, 1, shared, vp(torch.cuda.current_stream().cuda_stream), params, None)
+        gx, gy = grid if isinstance(grid, tuple) else (grid, 1)
+        self.ck("cuLaunchKernel", f, gx, gy, 1, threads, 1, 1, shared, vp(torch.cuda.current_stream().cuda_stream), params, None)
 
     def _layout(self) -> dict:
         out = torch.zeros(16, dtype=torch.int32, device="cuda")
         self._launch(self.fn("s8orbit_layout"), 1, 1, 0, u64(out.data_ptr()))
         got = out.tolist()
         want = [C.sizeof(Params), Params.sa.offset, Params.M.offset] + [v for bn in TILES for v in (smem(bn), stages(bn))]
+        want += [C.sizeof(FixParams), FIX_SMEM]
         if got[:len(want)] != want:
             raise RuntimeError(f"{self.path}'s s8orbit_layout {got[:len(want)]} is not orbit_gpu.py's {want}: rebuild or update")
         return {f"n{bn}": {"smem": smem(bn), "stages": stages(bn)} for bn in TILES}
@@ -255,6 +317,19 @@ class Lib:
         self._launch(self.fns[bn], grid, NT, smem(bn), p)
         return {"grid": grid, "tiles": tiles, "bn": bn, "stages": stages(bn)}
 
+    def bfix(self, x: torch.Tensor, y32: torch.Tensor, ptr: torch.Tensor, ent: torch.Tensor) -> dict:
+        """y32 += 256 X~·Gᵀ, B's carries' share of O (`fix_lists`' ptr and ent of the same weight), after `mm`."""
+        m, k = x.shape
+        n = y32.shape[1]
+        assert k % 1024 == 0 and m % 2 == 0 and x.is_contiguous() and y32.dtype == torch.int32 and y32.is_contiguous()
+        assert ptr.dtype == torch.int32 and ptr.numel() == 2 * n * (k // 1024 + 1) and ent.dtype == torch.int32
+        p = FixParams()
+        p.x, p.y32, p.ptr, p.ent = x.data_ptr(), y32.data_ptr(), ptr.data_ptr(), ent.data_ptr()
+        p.M, p.N, p.K = m, n, k
+        grid = (cdiv(n // 2, FC), cdiv(m // 2, FR))
+        self._launch(self.fix, grid, 256, FIX_SMEM, p)
+        return {"grid": grid}
+
 
 @functools.cache
 def lib() -> Lib:
@@ -264,13 +339,16 @@ def lib() -> Lib:
 @dataclass
 class Prepared:
     """A weight w [N, K] int8 made ready for `int_mm` once, at load: B's seven wrapped forms as the kernel reads them
-    ([7, N/2, K/2] int8) and their carries (int8, -1/0/1), with each form's count."""
+    ([7, N/2, K/2] int8), their carries (int8, -1/0/1) with each form's count, and s8orbit_bfix's lists of them (`fix_lists`;
+    None unless K is a multiple of 1,024) with G's entries."""
 
     n: int
     k: int
     wb: torch.Tensor
     cb: torch.Tensor
     carries: list[int]
+    fix: tuple[torch.Tensor, torch.Tensor] | None
+    g_entries: int
 
 
 def prepare(w: torch.Tensor) -> Prepared:
@@ -278,18 +356,31 @@ def prepare(w: torch.Tensor) -> Prepared:
     check_shape(2, w.shape[0], w.shape[1])
     assert w.dtype == torch.int8 and w.is_cuda
     wb, cb = forms(w, B_FORMS, False)
-    return Prepared(w.shape[0], w.shape[1], wb, cb, [int(torch.count_nonzero(cb[j])) for j in range(7)])
+    fix, g = None, 0
+    if w.shape[1] % 1024 == 0:
+        ptr, ent, g = fix_lists(cb)
+        fix = (ptr, ent)
+    return Prepared(w.shape[0], w.shape[1], wb, cb, [int(torch.count_nonzero(cb[j])) for j in range(7)], fix, g)
 
 
 def int_mm(x: torch.Tensor, p: Prepared, out: torch.Tensor | None = None, bn: int = 96) -> torch.Tensor:
     """x [M, K] int8 against a prepared w: x·wᵀ, int32 [M, N] (into `out` if given), exact. An odd M runs with one zero row
-    more. The corrections for both sides' carries are torch's (`corrections`)."""
+    more. B's carries are s8orbit_bfix's; A's, when the orbit's flags say its forms carried, are torch's (`a_terms`)."""
     m, k = x.shape
     assert x.dtype == torch.int8 and k == p.k, (x.dtype, k, p.k)
     xe = (x if m % 2 == 0 else torch.cat([x, x.new_zeros(1, k)])).contiguous()
     y = torch.empty((xe.shape[0], p.n), dtype=torch.int32, device=x.device)
-    lib().mm(xe, p.wb, y32=y, bn=bn)
-    o = (y.long() + corrections(xe, None, (p.wb, p.cb)) + (1 << 31)) % (1 << 32) - (1 << 31)
+    lb = lib()
+    lb.reset()
+    lb.mm(xe, p.wb, y32=y, bn=bn)
+    if p.fix is not None:
+        lb.bfix(xe, y, *p.fix)
+        extra = a_terms(xe, p.wb) if lb.flags else None
+    else:
+        extra = corrections(xe, None, (p.wb, p.cb))
     out = torch.empty((m, p.n), dtype=torch.int32, device=x.device) if out is None else out
-    out.copy_(o[:m])
+    if extra is None:
+        out.copy_(y[:m])
+    else:
+        out.copy_(((y.long() + extra + (1 << 31)) % (1 << 32) - (1 << 31))[:m])
     return out

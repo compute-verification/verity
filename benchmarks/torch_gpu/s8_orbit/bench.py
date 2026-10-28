@@ -5,6 +5,9 @@ Each arm is one item of about --seconds: back-to-back calls on one stream betwee
   int_mm        torch._int_mm(x, wᵀ), int32 out
   wgmma         s8_linear's wgmma.scaled_mm at its default config, bf16 out (the exact linear), when its cubin is given
   orbit<BN>     the orbit kernel, int32 out (`orbit_gpu.Lib.mm(y32=)`), and orbit<BN>.bf16 with the bf16 epilogue
+  bfix          s8orbit_bfix, B's carries' corrections after the orbit, and orbit<best>+bfix the two together
+κ, a correction MAC's time in tensor MACs (one MAC a B carry and a row of A, M/2 a carry), is bfix's time over those MACs
+against PEAK and against int_mm's time a MAC.
 X is int8 uniform on ±127; W is the checkpoint's [N, K] int8 (q, k, v and gate, up concatenated as served). An arm records
 ms a call, θ = MACs / s / PEAK (PEAK MACs a second at F_MAX), its SM clock and board power from NVML samples every 100 ms
 past the item's first second (NVML's power is a one-second average), θ at that clock (θ · F_MAX / MHz) and pJ a MAC. An
@@ -207,7 +210,8 @@ def main() -> int:
         x = torch.randint(-127, 128, (a.m, k), generator=gen, dtype=torch.int8, device="cuda")
         sa = torch.rand(a.m, generator=gen, device="cuda") / 64
         sw = torch.rand(n, generator=gen, device="cuda") / 64
-        wb, bc = G.b_forms(w)
+        prep = G.prepare(w)
+        wb, bc = prep.wb, prep.carries
         y32 = torch.empty((a.m, n), dtype=torch.int32, device="cuda")
         y = torch.empty((a.m, n), dtype=torch.bfloat16, device="cuda")
         clk = torch.zeros(4 * lib.sms, dtype=torch.int64, device="cuda")
@@ -224,14 +228,27 @@ def main() -> int:
             arms[f"orbit{bn}"] = {**info, **r, "cta_mhz": cta_mhz(clk, info["grid"])}
             r = rates(timed(lambda bn=bn: lib.mm(x, wb, y=y, sa=sa, sw=sw, bn=bn), a.seconds), macs, smi)
             arms[f"orbit{bn}.bf16"] = r
+        best = min(tiles, key=lambda bn: arms[f"orbit{bn}"]["ms"])
+        if prep.fix is not None:
+            r = timed(lambda: lib.bfix(x, y32, *prep.fix), a.seconds)
+            r.update(smi.window(r["t0"], r["t1"]))
+            arms["bfix"] = r
+            arms[f"orbit{best}+bfix"] = {"ms": arms[f"orbit{best}"]["ms"] + r["ms"]}
         base = arms["int_mm"]["ms"]
         for key, r in arms.items():
             r["vs_int_mm"] = r["ms"] / base
             if "wgmma" in arms:
                 r["vs_wgmma"] = r["ms"] / arms["wgmma"]["ms"]
-        rec = {"n": n, "k": k, "macs": macs, "b_carries": bc, "b_density": sum(bc) / (7 * (n // 2) * (k // 2)), "arms": arms}
+        rec = {"n": n, "k": k, "macs": macs, "b_carries": bc, "b_density": sum(bc) / (7 * (n // 2) * (k // 2)),
+               "g_entries": prep.g_entries, "best_tile": best, "arms": arms}
+        if "bfix" in arms:
+            # a correction MAC is one carry against one row of the other side (M/2 of them); kappa is its time in tensor MACs
+            per_mac = arms["bfix"]["ms"] / 1e3 / (sum(bc) * (a.m // 2))
+            rec["correction_macs"] = sum(bc) * (a.m // 2)
+            rec["kappa_vs_peak"] = per_mac * PEAK
+            rec["kappa_vs_int_mm"] = per_mac / (base / 1e3 / macs)
+            rec["kappa_g_vs_peak"] = arms["bfix"]["ms"] / 1e3 / (prep.g_entries * (a.m // 2)) * PEAK
         if sha:
-            best = min(tiles, key=lambda bn: arms[f"orbit{bn}"]["ms"])
             alone = timed(sha, a.seconds)
             alone["comps_per_s"] = sha.comps / (alone["ms"] / 1e3)
             alone["frac_bar"] = alone["comps_per_s"] / SHA_BAR
@@ -241,9 +258,10 @@ def main() -> int:
             for r in rec["beside"]:
                 r["vs_int_mm"] = r["ms"] / base
         doc["linears"][name] = rec
-        print(json.dumps({"linear": name, **{key: {f: r.get(f) for f in ("ms", "theta", "theta_clk", "vs_int_mm", "vs_wgmma",
-                                                                         "sm_mhz", "power_w", "pJ_per_mac", "cta_mhz")}
-                                             for key, r in arms.items()},
+        print(json.dumps({"linear": name, "kappa_vs_peak": rec.get("kappa_vs_peak"), "kappa_vs_int_mm": rec.get("kappa_vs_int_mm"),
+                          **{key: {f: r.get(f) for f in ("ms", "theta", "theta_clk", "vs_int_mm", "vs_wgmma", "sm_mhz", "power_w",
+                                                         "pJ_per_mac", "cta_mhz")}
+                             for key, r in arms.items()},
                           "beside": [{f: r.get(f) for f in ("ctas", "ms", "vs_int_mm", "sha_frac_bar")} for r in rec.get("beside", [])]}),
               flush=True)
         del w, x, wb, y32, y

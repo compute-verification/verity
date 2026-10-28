@@ -4,6 +4,7 @@
           linear's epilogue on X·Wᵀ (cvt.rn.f32, mul.rn s_a, mul.rn s_w, cvt.rn.bf16), at shapes with tails in every dim
   full    int8 X on ±127 against a checkpoint's linears (or W on ±127): y32 plus `orbit_gpu.corrections` equal to X·Wᵀ
           mod 2^32, with carry bits counted
+  bfix    X on ±63 (A's forms never carry) against each linear: the orbit, then s8orbit_bfix (B's carries), equal to X·Wᵀ
   entry   `orbit_gpu.int_mm`, the plain int8 GEMM entry with its corrections, equal to X·Wᵀ at M 1, 7, 34 and 2,048
 
     python gate.py --cubin C --out OUT [--snapshot DIR --layer 0] [--m 2048]
@@ -81,6 +82,30 @@ def full(lib: G.Lib, gen: torch.Generator, weights: dict[str, torch.Tensor], m: 
     return recs
 
 
+def bfix(lib: G.Lib, gen: torch.Generator, weights: dict[str, torch.Tensor], m: int) -> list[dict]:
+    """X on ±63 (A's forms never carry) against each weight: the orbit, then s8orbit_bfix, equal to X·Wᵀ."""
+    recs = []
+    for name, w in weights.items():
+        if w.shape[1] % 1024:
+            continue
+        p = G.prepare(w)
+        x = torch.randint(-63, 64, (m, w.shape[1]), generator=gen, dtype=torch.int8, device="cuda")
+        want = torch._int_mm(x, w.t())
+        for bn in G.TILES:
+            y32 = torch.zeros((m, w.shape[0]), dtype=torch.int32, device="cuda")
+            lib.reset()
+            lib.mm(x, p.wb, y32=y32, bn=bn)
+            uncorrected = int((y32 != want).sum())
+            lib.bfix(x, y32, *p.fix)
+            torch.cuda.synchronize()
+            bad = int((y32 != want).sum())
+            recs.append({"case": "bfix", "linear": name, "m": m, "n": w.shape[0], "k": w.shape[1], "bn": bn, "mismatches": bad,
+                         "uncorrected_mismatches": uncorrected, "a_carry_bits": lib.flags, "b_carries": sum(p.carries),
+                         "g_entries": p.g_entries, "ok": bad == 0 and lib.flags == 0 and (uncorrected > 0) == (p.g_entries > 0)})
+            print(json.dumps(recs[-1]), flush=True)
+    return recs
+
+
 def entry(gen: torch.Generator, weights: dict[str, torch.Tensor]) -> list[dict]:
     """`orbit_gpu.int_mm` (the plain int8 GEMM entry, corrections included) equal to X·Wᵀ, odd and small M too."""
     recs = []
@@ -116,7 +141,7 @@ def main() -> int:
     else:
         weights = {"random": torch.randint(-127, 128, (1024, 1024), generator=gen, dtype=torch.int8, device="cuda")}
     os.environ["S8_ORBIT_CUBIN"] = a.cubin
-    recs = small(lib, gen) + full(lib, gen, weights, a.m) + entry(gen, weights)
+    recs = small(lib, gen) + full(lib, gen, weights, a.m) + bfix(lib, gen, weights, a.m) + entry(gen, weights)
     doc = {"cubin_sha256": lib.sha256, "layout": lib.layout, "sms": lib.sms, "ok": all(r["ok"] for r in recs), "records": recs}
     (out / "gate.json").write_text(json.dumps(doc, indent=1) + "\n")
     print(json.dumps({"ok": doc["ok"], "n": len(recs), "failed": [r for r in recs if not r["ok"]][:5]}), flush=True)
