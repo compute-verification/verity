@@ -103,7 +103,7 @@ Not yet:
 - **PoUW under the ACCEL model**: Dither's [protocol](verity/core/protocols/pouw/dither/PROTOCOL.md) and the Lean's
   `Pouw.Dither`.
 - **Inference versus training**: the [inference-only policy](verity/core/protocols/network/nci/README.md), the
-  feasible set, the admissible set and the overhead lower bound in [GLOSSARY.md](GLOSSARY.md), and its numbers in
+  feasible set, the admissible set and the slowdown lower bound in [GLOSSARY.md](GLOSSARY.md), and its numbers in
   [`benchmarks/rho`](benchmarks/rho/README.md).
 
 ## Demos

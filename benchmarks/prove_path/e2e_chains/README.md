@@ -19,18 +19,18 @@ refactor item that changes it, and what has landed since.
 | Bandwidth (over PoUS's store) | all | none with a session layer | item 11 |
 | PoUB (over a node's registered store) | all | none with a session layer | item 11 |
 | Network certifier | all | none: `SampledAuditAccepted` is proved and listed in the lock, but it takes `Claims.Sampling.KS` as a hypothesis, and only `sampling_assembled`, not a lock guarantee, gives it | item 10: proved on main and listed in the lock. The leak step is proved and listed on main, at the registered inputs: c = #(`freeInputs` \ `reg`). That the trace's values at `reg` are the registration's is not proved on main |
-| NCI | all | none with a session layer; it rests on the assumption `PouwSound`, which no PoUW guarantee instantiates | item 11's NCI part: `PouwSound` replaced by item 9's e2e, after item 9 |
+| Inference-only policy | all | none with a session layer; it rests on the assumption `PouwSound`, which no PoUW guarantee instantiates | item 11's inference-only part: `PouwSound` replaced by item 9's e2e, after item 9 |
 | Remote (composite: sampled proofs and PoUW) | `--zk` | none: its composed theorem, `Verity.Soundness`, is not in Lean; its sampled-proofs half reads one-stage v1, which takes the sessions' verdicts as evidence, and its PoUW half is broken at the proof layer (above) | `Verity.Soundness`, after the Lean dedupe (owner soundness) |
 | Accounting (top layer) | — | Already modular: the pattern every lower layer should copy | — |
 
 Items 1 and 9–12 are the refactor's statement-changing steps: KS to sampling once (1), PoUW's headline from
-`SessionSoundAt` (9), the certifier's property (10), PoUS, bandwidth, PoUB and NCI over sampling (11), and
+`SessionSoundAt` (9), the certifier's property (10), PoUS, bandwidth, PoUB and the inference-only policy over sampling (11), and
 recursion's knowledge form (12). The rest (2–6, 8 and 13) are the refactor plan's other steps.
 
 **Premises in `Proofs/`.** `trees.except` (`Security/lean-audit.json`) exempts 33 module prefixes from the tree rule
 until C-Flock's spec is extracted (RECKSLOCK, Wed 4 Nov). 31 are C-Flock's; the other two, `Proofs.Accounting.TS.Session`
 and `Proofs.Pouw.PearlC.FlockTile`, are on PoUW's chain. None is PoUS's, bandwidth's, remote bandwidth's, the
-certifier's, NCI's or accounting's, so this is a C-Flock question, plus one PoUW definition.
+certifier's, the inference-only policy's or accounting's, so this is a C-Flock question, plus one PoUW definition.
 - **lean's list** (run r20261025-031300-0fcc, in CHAINMAP's note): 40 `Prop`-valued definitions under `trees.except`
   that a locked statement takes without a lock entry. 39 are C-Flock's, and one, `SoundAtBridge.RowsSession.CanonRead`,
   is PoUW's.
