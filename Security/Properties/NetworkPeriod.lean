@@ -21,7 +21,9 @@ supplies each of the statement's quantities as at most the check's number:
   `Dj^k` at most `jitter ^ steps`;
 - in the rows form the windows are the link-windows' scans: `#Ss ≤ ∏_c (cap_c + 1)` (a schedule is its lanes'
   lengths), the scan's free inputs at most its Program's (`free`), each window's faulty sets at most the sets of at most
-  `b` of its `N` units, `β` at most `b · max(b_ing, b_eg)` (`faulty_bits`), and `Dj^k` at most `jitter ^ steps`.
+  `b` of its `N` units, `β` at most `b · max(b_ing, b_eg)` (`faulty_bits`), and `Dj^k` at most `jitter ^ steps`; and
+  the count has one more factor, the advice's: each of the period's `m / g` execution blocks commits its advice as
+  exactly `|a|` bits, so `2^|a|` advice strings a block, `2^((m / g) · |a|)` in all (`advice`).
 -/
 
 namespace Properties.NetworkPeriod
@@ -41,14 +43,17 @@ def ClockKBoundsCount : Prop :=
       2 ^ (terms (Array.ofFn a) (Array.ofFn w) (Array.ofFn caps) jitter syncs windows).K
 
 /-- **The rows form's `K` bounds `PeriodLeakAccepted`'s count at the check's numbers.** For the caps `caps` of `m`
-connections and the facts `w` of `n` link-windows' scans, under one scan's terms `scan` and the jitter bound `jitter`:
-`#Ss` and `∏_c (cap_c + 1)` each at `∏_j (caps j + 1)` (`schedules` and `cells`), and window `i`'s `2^#(free inputs)`
-at `2 ^ scan.free`, `#faultySets` at `atMost N b`, `2^β` at `2 ^ (b · max(b_ing, b_eg))` and `Dj^k` at
-`jitter ^ scan.steps`, their product is at most `2 ^ K`. -/
+connections and the facts `w` of `n` link-windows' scans, under one scan's terms `scan`, the jitter bound `jitter`,
+`windows` sampling blocks in execution blocks of `group` and `advice` (|a|) advice bits an execution block:
+`#Ss` and `∏_c (cap_c + 1)` each at `∏_j (caps j + 1)` (`schedules` and `cells`), the advice at `2 ^ advice` for each
+of the `windows / group` execution blocks (`advice`), and window `i`'s `2^#(free inputs)` at `2 ^ scan.free`,
+`#faultySets` at `atMost N b`, `2^β` at `2 ^ (b · max(b_ing, b_eg))` and `Dj^k` at `jitter ^ scan.steps`, their product
+is at most `2 ^ K`. -/
 def RowsKBoundsCount : Prop :=
-  ∀ (facts : Array Facts) (scan : Scan) (jitter windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ) (w : Fin n → Facts),
-    (∏ j, (caps j + 1)) * ((∏ j, (caps j + 1)) * ∏ i, (2 ^ scan.free * atMost (w i).units (w i).wrong *
-        2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps)) ≤
-      2 ^ (rowsTerms facts scan (Array.ofFn w) (Array.ofFn caps) jitter windows).K
+  ∀ (facts : Array Facts) (scan : Scan) (jitter windows advice group : ℕ) {m n : ℕ} (caps : Fin m → ℕ)
+    (w : Fin n → Facts),
+    (∏ j, (caps j + 1)) * ((∏ j, (caps j + 1)) * (2 ^ (windows / group * advice) * ∏ i, (2 ^ scan.free *
+        atMost (w i).units (w i).wrong * 2 ^ ((w i).wrong * max scan.ingress scan.egress) * jitter ^ scan.steps))) ≤
+      2 ^ (rowsTerms facts scan (Array.ofFn w) (Array.ofFn caps) jitter windows advice group).K
 
 end Properties.NetworkPeriod

@@ -33,10 +33,11 @@ theorem capsTerm_ofFn {m : ℕ} (caps : Fin m → ℕ) : capsTerm (Array.ofFn ca
   rw [Array.map_ofFn]
   exact foldl_ofFn _
 
-theorem K_ofFn (facts : Array Facts) (scan : Scan) (jitter windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ)
+theorem K_ofFn (facts : Array Facts) (scan : Scan) (jitter windows advice group : ℕ) {m n : ℕ} (caps : Fin m → ℕ)
     (w : Fin n → Facts) :
-    (rowsTerms facts scan (Array.ofFn w) (Array.ofFn caps) jitter windows).K =
-      (∑ j, clog2 (caps j + 1)) + (∑ j, clog2 (caps j + 1)) + ∑ i, (scan.terms (w i) jitter).bits := by
+    (rowsTerms facts scan (Array.ofFn w) (Array.ofFn caps) jitter windows advice group).K =
+      (∑ j, clog2 (caps j + 1)) + (∑ j, clog2 (caps j + 1)) + windows / group * advice +
+        ∑ i, (scan.terms (w i) jitter).bits := by
   simp only [Public.K, rowsTerms, capsTerm_ofFn, Array.map_ofFn]
   rw [foldl_ofFn]
   rfl
@@ -53,7 +54,7 @@ theorem clockK_ofFn (jitter syncs windows : ℕ) {m n : ℕ} (caps : Fin m → �
     (w : Fin n → Facts) :
     (terms (Array.ofFn a) (Array.ofFn w) (Array.ofFn caps) jitter syncs windows).K =
       clog2 (syncs ^ windows) + (∑ j, clog2 (caps j + 1)) + ∑ i, (AuditTerms.of (a i) (w i) jitter).bits := by
-  simp only [Public.K, terms, capsTerm_ofFn, zip_ofFn, Array.map_ofFn]
+  simp only [Public.K, terms, capsTerm_ofFn, zip_ofFn, Array.map_ofFn, Nat.add_zero]
   rw [foldl_ofFn]
   rfl
 
@@ -67,9 +68,9 @@ theorem clockKBoundsCount : ClockKBoundsCount := by
   exact Nat.mul_le_mul (Nat.mul_le_mul (Nat.mul_le_mul le_rfl (le_two_pow_clog2 _)) le_rfl) (le_two_pow_clog2 _)
 
 theorem rowsKBoundsCount : RowsKBoundsCount := by
-  intro facts scan jitter windows m n caps w
-  rw [K_ofFn, pow_add, pow_add, mul_assoc]
-  refine Nat.mul_le_mul (caps_le caps) (Nat.mul_le_mul (caps_le caps) ?_)
+  intro facts scan jitter windows advice group m n caps w
+  rw [K_ofFn, pow_add, pow_add, pow_add, mul_assoc, mul_assoc]
+  refine Nat.mul_le_mul (caps_le caps) (Nat.mul_le_mul (caps_le caps) (Nat.mul_le_mul le_rfl ?_))
   rw [← Finset.prod_pow_eq_pow_sum]
   refine Finset.prod_le_prod fun i _ => ?_
   simp only [AuditTerms.bits, Scan.terms, pow_add]

@@ -327,10 +327,11 @@ def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail
 @pytest.mark.slow
 def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans_answer(tmp_path):
     """`scan_period.rows_case` of one link-window in the rows form's formats (`NetworkCheck.Period`; its Lean checks the
-    case on a node: scan_period.sh): the deployment's key, session and schedule, the registered Program and its
-    descriptor (``joint/program.json``) as the scan, the registration, and its answer, three records' certificates
-    (requests, responses, fails: its own) and two row registrations, each named by the registration's roots. The
-    period's mirror accepts the honest case, its scan's terms read off the test class's own templates, and refuses the
+    case on a node: scan_period.sh): the deployment's key, session and schedule, the class's advice bits for its one
+    execution block, the registered Program and its descriptor (``joint/program.json``) as the scan, the registration,
+    and its answer, three records' certificates (requests, responses, fails: its own) and two row registrations, each
+    named by the registration's roots. The period's mirror accepts the honest case, charging the class's advice bits,
+    its scan's terms read off the test class's own templates, and refuses the
     forged case (a certificate's signature changed) at the certificates, the tampered case (another Program's
     registration) at the registration and the chain case (the round's registration of the Program) at its refusal; a
     group of two link-windows is refused by name. Slow (the test class's Program, about 15 s): the period check reads
@@ -361,8 +362,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     registrations = [h.at.sides[s][0].registration for s in ("ingress", "egress")]
     (scan / "answers.json").write_text(json.dumps({"registration": reg, "windows": [
         {"window": 0, "answer": answer, "registrations": registrations}]}))
-    (scan / "summary.json").write_text(json.dumps({"rounds": {r: {"audit": {"why": {"x": "y"}}}
-                                                              for r in ("tampered", "chain")}}))
+    (scan / "summary.json").write_text(json.dumps({"class": asdict(sz.TEST.cls), "rounds": {
+        r: {"audit": {"why": {"x": "y"}}} for r in ("tampered", "chain")}}))
     dep, regs = json.loads((run / "deployment.json").read_text()), _cells(run)
     case = SP.rows_case(run, scan)
     p = case["params"]
@@ -370,6 +371,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     assert (p["key"], p["session"], p["schedule"], p["link"]) == (dep["key"]["public"], dep["session"], dep["params"],
                                                                   WS.LINK)
     assert (p["program"], p["windows"], p["first"], p["audits"]) == (reg["program"], 1, 0, [])
+    assert (p["advice"], p["group"]) == (sz.TEST.cls.ADVICE, 1)
     assert p["scan"] == json.loads((scan / "joint" / "program.json").read_text())
     assert json.loads(bytes.fromhex(case["commitment"])) == {"audits": [], "windows": [reg]}
     (x,) = json.loads(bytes.fromhex(case["evidence"]))["windows"]
@@ -384,6 +386,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
                                         16 + bits["egress"]["o1"])
     out = PC.reference(case)
     assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, 2 * T), out
+    assert out["public"]["advice"] == sz.TEST.cls.ADVICE, out
     refused = {r: PC.reference(SP.rows_case(run, scan, r)) for r in ("forged", "tampered", "chain")}
     assert {r: (a["verdict"], a["reason"]) for r, a in refused.items()} == {
         "forged": ("reject", "window 0: certificates (none of a window in which the network certifier refused a "

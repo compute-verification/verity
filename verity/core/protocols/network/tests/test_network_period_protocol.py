@@ -141,6 +141,32 @@ def test_the_scan_is_read_off_its_program(server):
             assert verdict == REJECT and "scan" in json.loads(out)["reason"], (n, out)
 
 
+def test_the_advice_is_charged_for_each_execution_block(server):
+    """The rows form charges |a| (`advice`) for each of the period's m / g execution blocks, whatever a block used,
+    beside its other terms, and Lean's public is the mirror's; and Lean and the mirror refuse, as parameters, an
+    execution block of no sampling block, a period that isn't whole execution blocks, and one whose first sampling
+    block isn't an execution block's first."""
+    groups = set()
+    for n in range(6):
+        case = build("rows-honest", n, small=n % 3 == 0)
+        p = case["params"]
+        groups.add(p["group"])
+        bare = reference(case | {"params": p | {"advice": 0}})["public"]
+        for advice in (0, 1, 96):
+            charged = case | {"params": p | {"advice": advice}}
+            out = reference(charged)["public"]
+            assert out["advice"] == p["windows"] // p["group"] * advice, (n, out)
+            assert out["K"] == bare["K"] + out["advice"], (n, out, bare)
+            assert D.replay(PORT, charged, server)[0] == ACCEPT, (n, advice)
+        for bad in ({"group": 0}, {"group": p["windows"] + 1},
+                    {"first": 2 * p["first"] + 1, "group": 2, "windows": 2 * p["windows"]}):
+            broken = case | {"params": p | bad}
+            assert reference(broken)["reason"].startswith("params:"), (n, bad, reference(broken))
+            verdict, out = D.replay(PORT, broken, server)
+            assert verdict == REJECT and json.loads(out)["reason"].startswith("params:"), (n, bad, out)
+    assert groups == {1, 2}, groups
+
+
 def test_a_scan_in_the_checker_form_is_refused_by_name(server):
     """A scan in the checker form, whose egress template takes the row its units compare as an input, is refused at the
     parameters by Lean and the mirror, by name, though its terms would read: no egress gate is an input
@@ -251,6 +277,8 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
                    for w in shown)
         assert all(x["schedules"] == x["cells"] and len(x["scans"]) == x["windows"]
                    and len({t["delta"] for t in x["scans"]}) == 1 for x in accepted)
+        assert all(a["public"]["advice"] == p["windows"] // p["group"] * p["advice"]
+                   for ks, c in drawn.items() if ks[0] == ACCEPT for a, p in [(answers[ks], c["params"])])
     assert PC.cases(3, form) == {k: (drawn[k, 3], answers[k, 3]) for k in KINDS}
     D.run(dataclasses.replace(PORT, inputs=st.sampled_from(list(drawn.values()))), examples=2 * len(drawn),
           server=server)
@@ -280,8 +308,8 @@ def test_the_rows_forms_bound_counts_what_it_says():
     """The rows form's K worked by hand (Lean's `rowsTerms` `#guard`s): 7 cells on one connection and 2 on another, 5
     bits for the schedules and 5 again for the fail cells, an audit in no term, and over 1 link-window one scan of 20
     units (T = 10) drawn at δ = 1/15 with at most 3 wrong (1351 sets), 1,120 free inputs, instances committing 300 and
-    512 bits, and jitter below 2 over its 10 steps; with every unit drawn, no faulty term; and eps over the scans' δ
-    alone."""
+    512 bits, and jitter below 2 over its 10 steps; with every unit drawn, no faulty term; 6 sampling blocks in
+    execution blocks of 2 with 96 advice bits each, 3 · 96 bits; and eps over the scans' δ alone."""
     p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 2), 0, 2, "a", None, b"", "", None, 1, WardenParams(),
                PC.Scan(10, 1120, 300, 512))
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [Facts(20, 5, Fraction(1, 15), 3)])
@@ -292,6 +320,10 @@ def test_the_rows_forms_bound_counts_what_it_says():
     assert out["audits"] == [{"delta": "1/10", "drawn": 3, "units": 10, "wrong_units": 4}]
     drawn = dataclasses.replace(p, audits=(), cells=(), jitter=1, scan=PC.Scan(4, 0, 300, 512))
     assert public(drawn, [], [Facts(8, 8, Fraction(1, 100), 0)])["K"] == 0
+    advised = public(dataclasses.replace(drawn, windows=6, advice=96, group=2), [],
+                     [Facts(8, 8, Fraction(1, 100), 0)] * 6)
+    assert (advised["advice"], advised["K"]) == (3 * 96, 3 * 96)
+    assert out["advice"] == 0
     two = dataclasses.replace(p, cells=(), windows=2, scan=PC.Scan(0, 0, 0, 0))
     assert public(two, [Facts(1, 1, Fraction(1, 10), 0)],
                   [Facts(1, 1, Fraction(1, 15), 0)] * 2)["eps"] == "2/15"

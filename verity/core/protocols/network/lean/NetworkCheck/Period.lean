@@ -39,13 +39,17 @@ the observations' jitter bound `Dj ≥ 1`, the network certifier's LMS public ke
 the link (the partition object's `program`, `LinkWindows.partition`), Σ_sync, and the period's `m ≥ 1` link-windows.
 The rows form has, in place of `sync_set`,
 
+    "advice": |a|, "group": g,
     "scan": descriptor,
     "schedule": {"bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells",
                  "lanes", "queue", "slots", "window"}
 
-the scan's Program, its descriptor (`verity-ir/descriptor/v1`, `scan_zk`'s `program.json`), and the network
-certifier's one fixed schedule (`warden.WardenParams`: each a positive integer, B = `cell_bytes` past a cell's 9-byte
-header, B, S = `lanes` · `slots` and T = `window` u32s, and `every`, the slot stride in buckets, dividing T, so each
+|a|, the advice bits of each execution block (a_j's one padded length, public, whatever a block uses), and g ≥ 1, the
+sampling blocks of each execution block: `m` is a multiple of g and `w₀` an execution block's first sampling block (a
+multiple of g), so the period is `m / g` whole execution blocks; the scan's Program, its descriptor
+(`verity-ir/descriptor/v1`, `scan_zk`'s `program.json`); and the network certifier's one fixed schedule
+(`warden.WardenParams`: each a positive integer, B = `cell_bytes` past a cell's 9-byte header, B, S = `lanes` · `slots`
+and T = `window` u32s, and `every`, the slot stride in buckets, dividing T, so each
 sampling block is T / `every` slot strides of `lanes` Program slots, `Schedule.programSlots` and
 `Schedule.windowPrograms`),
 whose digest `WardenParams.digest` every registration binds; its `program` is the scan's registered Program, the
@@ -141,9 +145,12 @@ in lowest terms (`Core.Ratio.toString`, `"0"` with no audits), as PoUS's and rem
 In the rows form the terms are `PeriodLeakAccepted`'s over its windows, the link-windows' scans, whose statements read
 the network certifier's rows; the compute audits read none, so they are in no term (they are acceptance conditions):
 
-    {"K": K, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "cells": c, "eps": m · δ,
-     "scans": [terms, …], "schedules": c, "windows": m}
+    {"K": K, "advice": (m / g) · |a|, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "cells": c,
+     "eps": m · δ, "scans": [terms, …], "schedules": c, "windows": m}
 
+* `advice` is the advice of the period's `m / g` execution blocks, each a string of exactly |a| bits, so `2^|a|`
+  values a block: it charges |a| for every execution block whether a block uses it or not, and reads no charge from a
+  proof, since nothing a block used is public;
 * `schedules` is `cells`, c = Σ_c ⌈log2 (cap_c + 1)⌉, as the statement multiplies `#Ss` and `∏_c (cap_c + 1)`. A
   schedule (`WardenSchedule`) is r and D, fixed, and each connection's admission bucket and lane length. The server
   sets a lane's length, when its stream ends, at most `cap_c` cells, and nothing else of it: the network certifier
@@ -239,10 +246,11 @@ structure Scan where
   egress : Nat
 
 /-- Which run the link-windows are: the clock form's, under Σ_sync, or the rows form's, under one schedule (and its
-digest), read by the scan whose terms are the last. -/
+digest), read by the scan whose terms are `scan`, with |a| (`advice`) the advice bits of each execution block and g
+(`group`) its sampling blocks. -/
 inductive Form where
   | clock (syncSet : NetworkCertifier.SyncSet)
-  | rows (schedule : Schedule) (digest : ByteArray) (scan : Scan)
+  | rows (schedule : Schedule) (digest : ByteArray) (scan : Scan) (advice group : Nat)
 
 structure Params where
   audits : Array Audit
@@ -347,7 +355,8 @@ def paramsKeys : List String :=
   ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
 
 def rowsParamsKeys : List String :=
-  ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule", "session", "windows"]
+  ["advice", "audits", "cells", "first", "group", "jitter", "key", "link", "lms", "program", "scan", "schedule",
+   "session", "windows"]
 
 def scheduleOf (j : Json) : V Schedule := do
   exactly j ["bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells", "lanes",
@@ -478,12 +487,20 @@ def paramsOf (j : Json) : V Params := do
   unless session.size = sessionBytes do throw s!"a certifier session id is {sessionBytes} bytes, not {session.size}"
   let program ← Flock.J.str j "program" "the object"
   unless isDigest program do throw "program: not a SHA-512 digest (128 lowercase hex digits)"
+  let windows ← Flock.J.nat j "windows" "the object"
+  unless 1 ≤ windows do throw "windows: a period has at least one link-window"
   let form ← if keysOf j == paramsKeys then do pure (Form.clock (← syncSetOf (← Flock.J.get j "sync_set" "the object")))
     else do
       let s ← scheduleOf (← Flock.J.get j "schedule" "the object")
-      pure (Form.rows s (← s.digest) (← scanOf (← Flock.J.get j "scan" "the object") program s))
-  let windows ← Flock.J.nat j "windows" "the object"
-  unless 1 ≤ windows do throw "windows: a period has at least one link-window"
+      let scan ← scanOf (← Flock.J.get j "scan" "the object") program s
+      let advice ← Flock.J.nat j "advice" "the object"
+      let group ← Flock.J.nat j "group" "the object"
+      unless 1 ≤ group do throw "group: an execution block has at least one sampling block"
+      unless windows % group == 0 do
+        throw s!"windows: the period is whole execution blocks, so {windows} is a multiple of group {group}"
+      unless first % group == 0 do
+        throw s!"first: an execution block's first sampling block, so {first} is a multiple of group {group}"
+      pure (Form.rows s (← s.digest) scan advice group)
   pure { audits, cells, first, jitter, link, lms, key, session, program, form, windows }
 
 /-- `registration.digest`: SHA-512(format ‖ 0 ‖ the canonical record), the record's own format the tag. -/
@@ -763,9 +780,11 @@ structure Public where
   /-- The rows form, whose units are its scans. -/
   rows : Bool := false
   schedules : Nat
+  /-- The rows form's advice: |a| bits for each of the period's execution blocks. -/
+  advice : Nat := 0
   windows : Nat
 
-def Public.K (x : Public) : Nat := x.schedules + x.cells + (x.units.map (·.bits)).foldl (· + ·) 0
+def Public.K (x : Public) : Nat := x.schedules + x.cells + x.advice + (x.units.map (·.bits)).foldl (· + ·) 0
 
 /-- `Σ_i δ_i` over the units, exactly, in lowest terms: the union bound on `K` failing. -/
 def Public.eps (x : Public) : Core.Ratio :=
@@ -786,12 +805,13 @@ def terms (audits : Array Audit) (facts : Array Facts) (cells : Array Nat) (jitt
     windows }
 
 /-- The rows form's terms: the cells' as the clock form's, the schedules' the same count (each connection's lane
-length, one of `cap_c + 1`, fixes its admission and the lanes it frees), and each link-window's scan's from the scan's
-terms. The compute audits are in no term. -/
-def rowsTerms (facts : Array Facts) (scan : Scan) (scans : Array Facts) (cells : Array Nat) (jitter windows : Nat) :
-    Public :=
+length, one of `cap_c + 1`, fixes its admission and the lanes it frees), the advice's |a| (`advice`) for each of the
+`windows / group` execution blocks, and each link-window's scan's from the scan's terms. The compute audits are in no
+term. -/
+def rowsTerms (facts : Array Facts) (scan : Scan) (scans : Array Facts) (cells : Array Nat)
+    (jitter windows advice group : Nat) : Public :=
   { audits := facts, cells := capsTerm cells, units := scans.map (scan.terms · jitter), rows := true,
-    schedules := capsTerm cells, windows }
+    schedules := capsTerm cells, advice := windows / group * advice, windows }
 
 structure Profile where
   link : String
@@ -813,7 +833,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
         let clear := clearClocks ss
         pairs.map fun ((reg, x), i) => (fun () => none) <$>
           windowCheck p clear ((e.windows.extract 0 i).filterMap (·.clockDigest?)) (p.first + i) reg x
-      | .rows s sd _ => pairs.map fun ((reg, x), i) => some <$> rowsWindowCheck p s sd (p.first + i) reg x
+      | .rows s sd _ _ _ => pairs.map fun ((reg, x), i) => some <$> rowsWindowCheck p s sd (p.first + i) reg x
     let scans := ws.filterMap (·.toOption.join)
     let oneDelta : Option (Core.Verdict × String) := scans[0]?.bind fun f0 =>
       (scans.find? (·.delta != f0.delta)).map fun f =>
@@ -826,7 +846,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
       let audits := as.filterMap (·.toOption)
       .accept (match p.form with
           | .clock ss => terms p.audits audits p.cells p.jitter (ss.deltas.length * ss.rhos.length) p.windows
-          | .rows _ _ scan => rowsTerms audits scan scans p.cells p.jitter p.windows)
+          | .rows _ _ scan advice group => rowsTerms audits scan scans p.cells p.jitter p.windows advice group)
         { link := p.link, windows := p.windows }
 
 def termsJson (ts : Array AuditTerms) : Json :=
@@ -843,7 +863,7 @@ def publicJson (x : Public) : Json :=
   Json.mkObj ([
     ("K", toJson x.K), ("audits", if x.rows then factsJson x.audits else termsJson x.units), ("cells", toJson x.cells),
     ("eps", .str x.eps.toString), ("schedules", toJson x.schedules), ("windows", toJson x.windows)] ++
-    (if x.rows then [("scans", termsJson x.units)] else []))
+    (if x.rows then [("advice", toJson x.advice), ("scans", termsJson x.units)] else []))
 
 def profileJson (pr : Profile) : Json :=
   Json.mkObj [("link", .str pr.link), ("windows", toJson pr.windows)]
@@ -885,12 +905,17 @@ def protocol : Core.Protocol where
 -- steps: 1351 sets of at most 3 of 20 units
 #guard atMost 20 3 == 1351 && clog2 1351 == 11
 #guard (rowsTerms #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }] ⟨10, 1120, 300, 512⟩
-  #[{ units := 20, drawn := 5, delta := ⟨1, 15⟩, wrong := 3 }] #[7, 2] 2 1).K ==
+  #[{ units := 20, drawn := 5, delta := ⟨1, 15⟩, wrong := 3 }] #[7, 2] 2 1 0 1).K ==
   (3 + 2) + (3 + 2) + (1120 + 11 + 3 * 512 + 10)
 -- every unit drawn: no wrong unit, so no faulty set and no faulty bits
-#guard (rowsTerms #[] ⟨4, 0, 300, 512⟩ #[{ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }] #[] 1 1).K == 0
+#guard (rowsTerms #[] ⟨4, 0, 300, 512⟩ #[{ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }] #[] 1 1 0 1).K ==
+  0
+-- 6 sampling blocks in execution blocks of 2, each with 96 advice bits: 3 · 96 bits beside the scans', whether or not
+-- a block used its advice
+#guard (rowsTerms #[] ⟨4, 0, 300, 512⟩ (Array.replicate 6 { units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 })
+  #[] 1 6 96 2).K == 3 * 96
 -- eps over the scans' δ = 1/15 and 1/15 is 2/15; the audit's 1/10 is in it no more
-#guard (rowsTerms #[⟨1, 1, ⟨1, 10⟩, 0⟩] ⟨0, 0, 0, 0⟩ #[⟨1, 1, ⟨1, 15⟩, 0⟩, ⟨1, 1, ⟨1, 15⟩, 0⟩] #[] 1 2
+#guard (rowsTerms #[⟨1, 1, ⟨1, 10⟩, 0⟩] ⟨0, 0, 0, 0⟩ #[⟨1, 1, ⟨1, 15⟩, 0⟩, ⟨1, 1, ⟨1, 15⟩, 0⟩] #[] 1 2 0 1
   ).eps.toString == "2/15"
 
 end NetworkCheck.Period

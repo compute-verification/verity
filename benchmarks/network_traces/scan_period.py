@@ -7,7 +7,8 @@ Lean.
 
 * **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
   and one schedule), the link `warden_serve.LINK`, the Program the scan's registration's, no compute audit, jitter
-  bound 1 (K's jitter term 0, assumed (J), not met at 1), and the scan that Program's
+  bound 1 (K's jitter term 0, assumed (J), not met at 1), one execution block of the one sampling block with the
+  scan's class's advice bits (``summary.json``'s ``class``, `ingress_scan.Class.ADVICE`), and the scan that Program's
   descriptor (``joint/program.json``), off which the period check reads the scan's terms; the commitment the scan's
   registration; the evidence the scan's answer, the certificates of W's three records (``certified.jsonl``:
   requests, responses, fails) and W's two row registrations (``cells.jsonl``, as ``answers.json`` carries them).
@@ -66,18 +67,20 @@ def rows_case(run: Path, scan: Path, round_: str = "honest") -> dict:
         raise SystemExit(f"{scan}: a group of {len(doc['windows'])} link-windows is one registration over all their "
                          "units, and the rows form reads one link-window's 2T: prove each with scan_zk.py --group 1")
     (x,) = doc["windows"]
+    summary = json.loads((scan / "summary.json").read_text())
     if round_ in ("honest", "forged"):
         reg, answer = doc["registration"], x["answer"]
     else:
         reg = json.loads((scan / round_ / "registration.json").read_text())
-        why = json.loads((scan / "summary.json").read_text())["rounds"][round_]["audit"]["why"]
+        why = summary["rounds"][round_]["audit"]["why"]
         answer = SZ.window_answer(reg, None, None, f"the scan's {round_} round refused: {why}")
     certs = certificates(run, x["window"])
     if round_ == "forged":
         sig = certs[1]["signature"]
         certs[1]["signature"] = sig[:-1] + ("1" if sig[-1] == "0" else "0")
     N, W, H = dep["key"]["params"]
-    params = {"audits": [], "cells": [], "first": x["window"], "jitter": 1, "key": dep["key"]["public"],
+    params = {"advice": summary["class"]["ADVICE"], "audits": [], "cells": [], "first": x["window"], "group": 1,
+              "jitter": 1, "key": dep["key"]["public"],
               "link": WS.LINK, "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
               "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": dict(dep["params"]),
               "session": dep["session"], "windows": 1}

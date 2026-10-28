@@ -71,8 +71,8 @@ UNIT = "unit"
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 PARAMS_KEYS = ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
-ROWS_PARAMS_KEYS = ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule",
-                    "session", "windows"]
+ROWS_PARAMS_KEYS = ["advice", "audits", "cells", "first", "group", "jitter", "key", "link", "lms", "program", "scan",
+                    "schedule", "session", "windows"]
 SCHEDULE_KEYS = sorted(f.name for f in dataclasses.fields(WardenParams))
 CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
 CLOCK_WINDOW_KEYS = ["answer", "certificates", "clock"]
@@ -132,6 +132,9 @@ class Params:
     #: the rows form's schedule and the scan's terms, read off its Program; None in the clock form
     schedule: WardenParams | None = None
     scan: Scan | None = None
+    #: the rows form's |a|, the advice bits of each execution block, and g, the sampling blocks of each
+    advice: int = 0
+    group: int = 1
 
 
 @dataclasses.dataclass(frozen=True)
@@ -342,16 +345,22 @@ def params(j) -> Params:
     program = _of(j["program"], str, "program")
     if not DIGEST.fullmatch(program):
         raise D.Reject("program: not a SHA-512 digest")
+    windows = _nat(j["windows"], "windows")
+    if windows < 1:
+        raise D.Reject("windows: a period has at least one link-window")
+    advice, group = 0, 1
     if "sync_set" in j:
         sync_set, schedule, scan = _sync_set(j["sync_set"]), None, None
     else:
         schedule = _schedule(j["schedule"])
         sync_set, scan = None, _scan(j["scan"], program, schedule)
-    windows = _nat(j["windows"], "windows")
-    if windows < 1:
-        raise D.Reject("windows: a period has at least one link-window")
+        advice, group = _nat(j["advice"], "advice"), _nat(j["group"], "group")
+        if group < 1:
+            raise D.Reject("group: an execution block has at least one sampling block")
+        if windows % group or first % group:
+            raise D.Reject("windows and first: the period is whole execution blocks of group sampling blocks")
     return Params(tuple(audits), cells, first, jitter, link, LmsKey(lp, key), session, program, sync_set, windows,
-                  schedule, scan)
+                  schedule, scan, advice, group)
 
 
 def registration_digest(record: dict) -> bytes:
@@ -597,13 +606,14 @@ def public(p: Params, facts: list[Facts], scans: list[Facts] | None = None) -> d
     if scans is None:
         units = [_terms(a.free, a.steps, a.bits, f, p.jitter) for a, f in zip(p.audits, facts)]
         schedules = clog2((len(p.sync_set.deltas) * len(p.sync_set.rhos)) ** p.windows)
-        out = {"audits": units}
+        advice, out = 0, {"audits": units}
     else:
         s = p.scan
         units = [_terms(s.free, s.steps, max(s.ingress, s.egress), f, p.jitter) for f in scans]
         schedules = cells
-        out = {"audits": [_facts_json(f) for f in facts], "scans": units}
-    K = schedules + cells + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"] for t in units)
+        advice = p.windows // p.group * p.advice
+        out = {"advice": advice, "audits": [_facts_json(f) for f in facts], "scans": units}
+    K = schedules + cells + advice + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"] for t in units)
     eps = sum((Fraction(t["delta"]) for t in units), Fraction(0))
     return out | {"K": K, "cells": cells, "eps": str(eps), "schedules": schedules, "windows": p.windows}
 
@@ -896,12 +906,16 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     n_windows = r.randint(least_windows, least_windows if small else 3)
     n_audits = r.randint(least_audits, max(least_audits, 1) if small else 2)
     first = r.choice([0, 0, r.randrange(1, 6)])
+    group = 1
     if rows:
         sched = bound = _small_schedule(r, small)
         widths = (r.randint(1, 3), r.randint(1, 4), r.randint(1, 3), r.randint(1, 2))
         scan = json.loads(scan_descriptor(sched.window, WR.row_bytes(sched), widths))
         program = program_sha512(scan)
         delta = r.choice(DELTAS)
+        group = 1 if small else r.choice([1, 1, 2])
+        n_windows, first = group * -(-n_windows // group), group * first
+        advice = r.choice([0, r.randrange(1, 1 << 24)])
     else:
         deltas = r.sample(range(4), r.randint(1, 3))
         rhos = r.sample([Fraction(1), Fraction(2), Fraction(1, 2), Fraction(3, 2)], r.randint(1, 3))
@@ -1157,15 +1171,15 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                    "lms": {"H": H, "N": N, "W": W, "toy": toy}, "program": program, "session": session.hex(),
                    "windows": n_windows}
     if rows:
-        case_params |= {"scan": scan, "schedule": schedule_json(bound)}
+        case_params |= {"advice": advice, "group": group, "scan": scan, "schedule": schedule_json(bound)}
     else:
         case_params["sync_set"] = {"deltas": deltas, "rhos": [[x.numerator, x.denominator] for x in rhos]}
     c_json = {"audits": audit_regs, "windows": window_regs}
     e_json = {"audits": audits, "windows": windows}
     if m == "first":
-        case_params["first"] = first + r.choice([1, -1] if first else [1])
+        case_params["first"] = first + group * r.choice([1, -1] if first else [1])
     elif m == "count-windows":
-        case_params["windows"] = n_windows + r.choice([1, -1] if n_windows > 1 else [1])
+        case_params["windows"] = n_windows + group * r.choice([1, -1] if n_windows > group else [1])
     elif m == "count-audits":
         case_params["audits"] = r.choice([audit_params[1:], [*audit_params, {
             "free": 0, "program": json.loads(audit_descriptor(((1, 2),))), "steps": 0}]])
@@ -1203,7 +1217,10 @@ def _bad_params(p: dict, n: int) -> list:
                       p | {"sync_set": ss | {"rhos": [[1, 0]]}}, p | {"sync_set": ss | {"deltas": [1, 1]}},
                       p | {"sync_set": ss | {"rhos": [[1, 2], [2, 4]]}}, p | {"sync_set": ss | {"x": 0}}]
     s = p["schedule"]
-    return out + [p | {"schedule": {k: v for k, v in s.items() if k != SCHEDULE_KEYS[n % len(s)]}},
+    return out + [p | {"group": 0}, p | {"group": True}, p | {"group": "1"}, p | {"advice": -1}, p | {"advice": True},
+                  p | {"group": p["windows"] + 1},
+                  p | {"first": 2 * p["first"] + 1, "group": 2, "windows": 2 * p["windows"]},
+                  p | {"schedule": {k: v for k, v in s.items() if k != SCHEDULE_KEYS[n % len(s)]}},
                   p | {"schedule": s | {"x": 1}}, p | {"schedule": [s]}, p | {"schedule": s | {"delay": 0}},
                   p | {"schedule": s | {"lanes": True}}, p | {"schedule": s | {"window": -1}},
                   p | {"schedule": s | {"queue": "1"}}, p | {"schedule": s | {"cell_bytes": 10}},

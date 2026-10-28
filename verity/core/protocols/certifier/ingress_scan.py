@@ -150,7 +150,11 @@ class Class:
     each bucket t ≡ 0 mod EVERY of the scan, with SLOTS = lanes Program slots) and WITHIN, the buckets a request's ingress
     may take (δ): a request admitted at s is anchored at the first boundary at or after s + WITHIN, whose Programs
     read the state before it; the warden's delay D, at least WITHIN + EVERY − 1 so that a request's anchor is at most
-    admitted + D, KO outputs a request at most and KI prompt ids a request at most, at most the ids a slot holds."""
+    admitted + D, KO outputs a request at most and KI prompt ids a request at most, at most the ids a slot holds.
+
+    ADVICE is |a|, the advice bits of each execution block: a_j's one padded length, public, which the period check
+    (`NetworkCheck.Period`'s `advice`) charges for every execution block whatever a block uses. It is no Definition's
+    static, so it changes no circuit."""
 
     B: int
     r: int
@@ -162,12 +166,15 @@ class Class:
     D: int = 27
     KO: int = 64
     KI: int = 1024
+    ADVICE: int = 1 << 23
 
     def __post_init__(self) -> None:
         for name in STATICS:
             v = getattr(self, name)
             if type(v) is not int or v < 1:
                 raise ValueError(f"{name} is a positive integer, not {v!r}")
+        if type(self.ADVICE) is not int or self.ADVICE < 0:
+            raise ValueError(f"ADVICE is a natural number, not {self.ADVICE!r}")
         if self.IDB > 32 or self.C >= 1 << 16 or self.EVERY >= 1 << 31 or self.WITHIN >= 1 << 31:
             raise ValueError(f"IDB <= 32, C < 2^16 and EVERY, WITHIN < 2^31, not IDB={self.IDB}, C={self.C}, "
                              f"EVERY={self.EVERY}, WITHIN={self.WITHIN}")
