@@ -14,6 +14,10 @@ Each sample is attributed to the kernels running at its time (CUPTI's kernel rec
 kernel: split by whether a device-to-host or host-to-device copy is running) or the categories of the kernels running.
 A label's loss is its share of the window times 100 less its mean Tensor Active, in points of Tensor Active; the losses sum
 to 100 less the mean.
+
+Tensor Active counts cycles at the clock the card ran (the GPC Clock Frequency metric, sampled with it). ``sm_clock_mhz`` is
+that clock's mean over the window, and ``tensor_active_pct_at_ref`` the tensor-busy cycles over the cycles the window would
+hold at ``--ref-mhz`` (1,830): the mean over samples of Tensor Active times the sample's clock over the reference.
 """
 from __future__ import annotations
 
@@ -172,7 +176,26 @@ def mean_in(ts: list[int], vs: list[float], lo: int, hi: int) -> float | None:
     return statistics.fmean(vs[a:b]) if b > a else None
 
 
-def analyse(sqlite: Path, trace: Path, T: int, sent_s: float | None = None) -> dict[str, Any]:
+def mhz(v: float) -> float:
+    """A clock sample in MHz: Nsight Systems reports the GPC clock in Hz under a [MHz] label."""
+    return v / 1e6 if v > 1e5 else v
+
+
+def at_clock(ts: list[int], tv: list[float], clock: tuple[list[int], list[float]] | None, lo: int, hi: int,
+             ref_mhz: float) -> tuple[float | None, float | None]:
+    """(mean SM clock in MHz, Tensor Active scaled to ``ref_mhz``) over [lo, hi]: each tensor sample times the clock sample
+    at or before it, over the reference."""
+    if clock is None or not clock[0]:
+        return None, None
+    cs, cv = clock
+    a, b = bisect.bisect_left(ts, lo), bisect.bisect_right(ts, hi)
+    got = [(tv[j], mhz(cv[max(0, bisect.bisect_right(cs, ts[j]) - 1)])) for j in range(a, b)]
+    if not got:
+        return None, None
+    return statistics.fmean(c for _, c in got), statistics.fmean(v * c for v, c in got) / ref_mhz
+
+
+def analyse(sqlite: Path, trace: Path, T: int, sent_s: float | None = None, ref_mhz: float = 1830.0) -> dict[str, Any]:
     """``sent_s``: when the load's last request was sent (`last_send`), from which the ``queued`` window starts."""
     db = sqlite3.connect(sqlite)
     z = utc0_ns(db)
@@ -181,6 +204,7 @@ def analyse(sqlite: Path, trace: Path, T: int, sent_s: float | None = None) -> d
         or next((i for n, i in names.items() if "tensor" in n.lower()), None)
     if tensor is None:
         raise SystemExit(f"no Tensor Active metric among {sorted(names)}")
+    gpc = next((i for n, i in names.items() if n.lower().startswith("gpc clock")), None)
     ts, tv = series[tensor]
     period = statistics.median(b - a for a, b in zip(ts, ts[1:])) if len(ts) > 1 else 0
     ks, cs = kernels(db), copies(db)
@@ -208,6 +232,9 @@ def analyse(sqlite: Path, trace: Path, T: int, sent_s: float | None = None) -> d
                                             "min": round(min(p for p in per if p is not None), 3),
                                             "max": round(max(p for p in per if p is not None), 3)},
              "tokens_per_s": round(T * len(idx) / ((hi - lo) / 1e9), 1)}
+        clk, ref = at_clock(ts, tv, series.get(gpc) if gpc is not None else None, lo, hi, ref_mhz)
+        w |= {"sm_clock_mhz": None if clk is None else round(clk, 1), "ref_mhz": ref_mhz,
+              "tensor_active_pct_at_ref": None if ref is None else round(ref, 3)}
         for n, i in names.items():
             if i != tensor and i in series:
                 m = mean_in(*series[i], lo, hi)
@@ -309,9 +336,10 @@ def main() -> int:
     ap.add_argument("--arm", default=None)
     ap.add_argument("--serve-dir", type=Path, default=None)
     ap.add_argument("--timings", type=Path, default=None)
+    ap.add_argument("--ref-mhz", type=float, default=1830.0)
     ap.add_argument("--out", required=True, type=Path)
     a = ap.parse_args()
-    doc: dict[str, Any] = {"arm": a.arm, "T": a.T, "N": a.N, **analyse(a.sqlite, a.trace, a.T, last_send(a.timings))}
+    doc: dict[str, Any] = {"arm": a.arm, "T": a.T, "N": a.N, **analyse(a.sqlite, a.trace, a.T, last_send(a.timings), a.ref_mhz)}
     if a.serve_dir is not None:
         doc["serve"] = windows(a.serve_dir)
     if a.timings is not None and a.timings.exists():
@@ -332,7 +360,9 @@ def main() -> int:
         w = doc.get(key)
         if not isinstance(w, dict) or "tensor_active_pct" not in w:
             continue
-        print(f"UTIL {a.arm} T {a.T} [{key}]: tensor active {w['tensor_active_pct']:.2f}% over {w['steps']} full steps, "
+        clock = (f" at {w['sm_clock_mhz']:.0f} MHz ({w['tensor_active_pct_at_ref']:.2f}% at {w['ref_mhz']:.0f} MHz)"
+                 if w.get("sm_clock_mhz") is not None else "")
+        print(f"UTIL {a.arm} T {a.T} [{key}]: tensor active {w['tensor_active_pct']:.2f}%{clock} over {w['steps']} full steps, "
               f"step wall {w['step_wall_ms']['mean']:.2f} ms (median {w['step_wall_ms']['median']:.2f}), GPU busy {w['gpu_busy_pct']:.1f}%, "
               f"D2H {w['copies']['d2h']['GB']:.1f} GB ({w['copies']['d2h']['busy_pct']:.1f}% of the time)")
         for r in w["losses"][:8]:

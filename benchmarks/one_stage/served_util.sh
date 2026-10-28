@@ -18,10 +18,14 @@
 #   graphs  stock with the engine's options overridden by UTIL_ENGINE_JSON (default: enforce_eager off, so torch.compile
 #           with CUDA graphs captured at every power of two up to T, and async scheduling on), without the bench row. Not
 #           our served stack: serve-openai serves eager, and the row's Program declares async scheduling off. Under async
-#           scheduling a step's slots stay held until the step before it is processed, so SEQS=2·T/1024 fills every step
-# Env: ARM, T (8192), N (64), WARM (2·T/1024), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments),
-# PYSAMPLE=1 (Nsight Systems' Python backtrace sampling at PYHZ, 1000, for the host gaps), SEQS (--max-num-seqs and
-# --window-requests, T/1024; the window's request cap also bounds the requests in flight).
+#           scheduling a step's slots stay held until the step before it is processed, so SEQS defaults to 2·T/1024
+#   async   stock eager with async scheduling on (UTIL_ENGINE_JSON's default {"async_scheduling": true}), without the bench
+#           row, as graphs
+# Env: ARM, T (8192), N (64), WARM (2·T/1024), GPU_HZ (10000), LEASE_MIN (90), EXTRA (more serve-openai arguments, split
+# on spaces), PROTOCOLS_CONFIG (one --protocols-config argument), PYSAMPLE=1 (Nsight Systems' Python backtrace sampling at
+# PYHZ, 1000, for the host gaps), SEQS (--max-num-seqs and --window-requests, T/1024, 2·T/1024 for graphs and async; the
+# window's request cap also bounds the requests in flight), HEADS (the merged heads, written to heads.txt with the tree's
+# commit and parents).
 # A Commit arm at T 8,192 needs VERITY_LEARN_HOST_BUDGET_MB above its step's committed bytes (the default 4,096 MiB fails
 # every step closed: "bounded staging: learning step 0 exceeds the transient host budget").
 # Published ($OUT): util.json and util.txt, the profile (prof.nsys-rep), serve.json, summary.json, windows.jsonl's timings
@@ -30,7 +34,8 @@
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 TREE=${TREE:-$PWD}
-ARM=${ARM:?ARM is stock, noseal, seal, h1 or graphs}; T=${T:-8192}; N=${N:-64}; SLOTS=$(( T / 1024 )); WARM=${WARM:-$(( 2 * SLOTS ))}
+ARM=${ARM:?ARM is stock, noseal, seal, h1, graphs or async}; T=${T:-8192}; N=${N:-64}; SLOTS=$(( T / 1024 )); WARM=${WARM:-$(( 2 * SLOTS ))}
+case $ARM in graphs|async) SEQS=${SEQS:-$(( 2 * SLOTS ))} ;; *) SEQS=${SEQS:-$SLOTS} ;; esac
 ROOT=${UTIL_ROOT:-/workspace/research/vllm-util80}
 VENV=${VENV:-/workspace/cp/venv312}; PY=$VENV/bin/python
 REPO=verity-int8/Llama-3.2-1B-INT8 REV=15b0976d400d796ee589e7737d03a919526bf800
@@ -40,14 +45,15 @@ NORM_TAP_SO=${NORM_TAP_SO:-$ROOT/norm_tap/build/verity_norm_tap.so}
 NSYS=${NSYS:-/usr/local/cuda-13.0/bin/nsys}
 SCR=$ROOT/scratch/${RESEARCH_RUN_ID:-local}; D=$SCR/serve
 PORT=${PORT:-18190}
-export TREE ARM T N SLOTS WARM ROOT VENV PY REPO REV ROW HIDDEN_SO NORM_TAP_SO NSYS SCR D PORT OUT
+export TREE ARM T N SLOTS SEQS WARM ROOT VENV PY REPO REV ROW HIDDEN_SO NORM_TAP_SO NSYS SCR D PORT OUT
 say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$OUT/steps.txt"; }
 
 if [ "${1:-}" != leased ]; then
-  case $ARM in stock|noseal|seal|h1|graphs) ;; *) say "ARM $ARM: not stock, noseal, seal, h1 or graphs"; exit 2 ;; esac
+  case $ARM in stock|noseal|seal|h1|graphs|async) ;; *) say "ARM $ARM: not stock, noseal, seal, h1, graphs or async"; exit 2 ;; esac
+  { echo "tree $(git -C "$TREE" log -1 --format='%H parents %P' 2>/dev/null)"; for h in ${HEADS:-}; do echo "$h"; done; } > "$OUT/heads.txt"
   [ $(( T % 1024 )) = 0 ] || { say "T $T: not a multiple of 1,024"; exit 2; }
   [ -f "$ROW/manifest.json" ] || { say "no B4 row Build under $ROOT"; exit 3; }
-  if [ "$ARM" != stock ] && [ "$ARM" != graphs ] && { [ ! -f "$HIDDEN_SO" ] || [ ! -f "$NORM_TAP_SO" ]; }; then
+  if [ "$ARM" != stock ] && [ "$ARM" != graphs ] && [ "$ARM" != async ] && { [ ! -f "$HIDDEN_SO" ] || [ ! -f "$NORM_TAP_SO" ]; }; then
     say "no taps: $HIDDEN_SO, $NORM_TAP_SO"; exit 3
   fi
   mkdir -p "$D"
@@ -61,8 +67,8 @@ if [ "${1:-}" != leased ]; then
   fi
   research keep "$ROOT/scratch" --owner @vllm --expires 3d --priority normal \
     --why "vllm-util80: serve dirs of the utilization runs (request bodies, outputs, H1 transcripts)" > /dev/null 2>&1
-  say "ARM $ARM T $T N $N WARM $WARM row $(basename "$ROW") tree $(git -C "$TREE" rev-parse --short HEAD 2>/dev/null)" \
-    "learn budget ${VERITY_LEARN_HOST_BUDGET_MB:-4096} MiB"
+  say "ARM $ARM T $T N $N WARM $WARM SEQS $SEQS row $(basename "$ROW") tree $(git -C "$TREE" rev-parse --short HEAD 2>/dev/null)" \
+    "learn budget ${VERITY_LEARN_HOST_BUDGET_MB:-4096} MiB heads ${HEADS:-}"
   GPU_LEASE_WHO=vllm-util80 gpu-lease 1 --wait --max-min "${LEASE_MIN:-90}" -- bash "$TREE/benchmarks/one_stage/served_util.sh" leased
   rc=$?
   say "LEASED PART rc=$rc"
@@ -80,12 +86,13 @@ export HF_HOME=/workspace/hf HF_HUB_OFFLINE=1 CUDA_HOME=/usr/local/cuda-13.0
 export PATH=$VENV/bin:$CUDA_HOME/bin:$HOME/.elan/bin:$PATH
 export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
 export TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
-export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
-nvidia-smi --query-gpu=name,uuid,clocks.max.sm,power.limit,memory.used --format=csv > "$OUT/gpu.txt" 2>&1
+export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=${VERITY_RETAIN:-host} HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
+nvidia-smi --query-gpu=name,uuid,clocks.sm,clocks.max.sm,clocks.applications.graphics,power.limit,memory.used --format=csv > "$OUT/gpu.txt" 2>&1
 args=(--model "$REPO" --revision "$REV" --out "$D" --port "$PORT" --precision verity_int8 --run-id "${RESEARCH_RUN_ID:-local}"
-      --admit arrival --window-requests "${SEQS:-$SLOTS}" --max-num-seqs "${SEQS:-$SLOTS}"
+      --admit arrival --window-requests "$SEQS" --max-num-seqs "$SEQS"
       --max-num-batched-tokens "$T" --max-model-len 1088 --window-steps 1 --no-prefix-caching)
-[ "$ARM" = graphs ] || args+=(--required-manifest "$ROW/manifest.json")
+[ "$ARM" = graphs ] || [ "$ARM" = async ] || args+=(--required-manifest "$ROW/manifest.json")
+[ -n "${PROTOCOLS_CONFIG:-}" ] && args+=(--protocols-config "$PROTOCOLS_CONFIG")
 commit=(--scheme rows-sha512 --gpu-tree --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb "${TAP_CAP_MB:-2048}"
         --window-gb 32 --seal-hold-gb 32 --seal-warm-gb 0 --disk-floor-gb "${DISK_FLOOR_GB:-20}")
 serve=("$PY" -m verity_vllm.pipeline.cli serve-openai)
@@ -94,9 +101,10 @@ case $ARM in
   noseal) args+=("${commit[@]}" --no-seal) ;;
   seal) args+=("${commit[@]}" --seal) ;;
   h1) args+=("${commit[@]}" "$([ "${H1_SEAL:-0}" = 1 ] && echo --seal || echo --no-seal)" --protocols pouw:eps1-sm120-h1fx1) ;;
-  graphs)
+  graphs|async)
     args+=(--no-commit)
     sizes=1; s=2; while [ "$s" -le "$T" ]; do sizes+=",$s"; s=$(( 2 * s )); done
+    [ "$ARM" = async ] && export UTIL_ENGINE_JSON=${UTIL_ENGINE_JSON:-'{"async_scheduling": true}'}
     export UTIL_ENGINE_JSON=${UTIL_ENGINE_JSON:-"{\"enforce_eager\": false, \"async_scheduling\": true, \"compilation_config\": {\"cudagraph_capture_sizes\": [$sizes]}}"}
     serve=("$PY" -c 'import json, os, sys
 from verity_vllm.pipeline import cli, serve_openai as so
@@ -121,7 +129,7 @@ for _ in $(seq 1 1500); do
   kill -0 "$srv" 2>/dev/null || break
   sleep 2
 done
-log() { grep -aE "SERVE-OPENAI|UTIL engine|H1|declare|Error|error|refus|Traceback" "$SCR/serve.log" | grep -av prompt | tail -${1:-40} > "$OUT/serve.log.txt"; }
+log() { grep -aE "SERVE-OPENAI|UTIL engine|\[engine\]|H1|declare|Error|error|refus|Traceback" "$SCR/serve.log" | grep -av prompt | tail -${1:-40} > "$OUT/serve.log.txt"; }
 if [ "$up" != 1 ]; then
   log 80; say "SERVE: not listening: $(grep -am1 -E 'UsageError|Error|refus' "$SCR/serve.log" | cut -c1-400)"
   "$NSYS" shutdown --session="$SESS" --kill=sigterm > /dev/null 2>&1; wait "$srv"; exit 10
