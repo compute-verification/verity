@@ -183,7 +183,11 @@ class Stamp:
         """``fn(C, *groups)``'s output forms, ``groups`` lists of this circuit's forms: its template's, renamed."""
         self.calls += 1
         if not self.calls % GC_CALLS:
-            gc.collect(0 if self.calls % (GC_CALLS << 4) else 1)
+            if self.calls % (GC_CALLS << 4):
+                gc.collect(0)
+            else:
+                gc.collect(1)
+                _trim()
         vs: set[int] = set()
         for g in groups:
             for f in g:
@@ -472,6 +476,7 @@ class StampLayout(IL.Layout):
                         yield ahead.popleft().result()
                 while ahead:
                     yield ahead.popleft().result()
+        _trim()
         yield self._tail_text().encode()
         print(f"STAMP-NETLIST {name}: threads={procs} tasks={len(tasks)} seconds={time.time() - t0:.1f} {_mem()}", file=sys.stderr,
               flush=True)
@@ -628,14 +633,36 @@ def unit_lowering(definition, name: str, in_rows, public=(), structural: bool = 
     for j, w in enumerate(ports.outs):
         st.output(f"out{j}", bits[at:at + w])
         at += w
+    _trim()
     walk, walk_mem = time.time() - t0, _mem()
     lay = StampLayout(st, [f"in{j}" for j in range(n_words)], [f"out{o}" for o in range(n_out)])
     lay.seconds["walk"] = walk
+    _trim()
     print(f"STAMP {name}: calls={st.calls} recorded={len(st.tids)} templates={len(st.templates)} closures={len(lay.closures)} "
           f"bits={st.nv} live_ands={lay.n_live} rows={lay.useful} walk_s={walk:.1f} live_cols_s={lay.seconds['live_cols']:.1f} "
           f"at start {start_mem}, after walk {walk_mem}, after layout {_mem()}", file=sys.stderr, flush=True)
     print(f"STAMP-TOP {name}: {_top(st, lay)}", file=sys.stderr, flush=True)
     return StampLowering(name, unit, units, None, lay), out_words
+
+
+def _trim() -> None:
+    """Return the C heap's free pages: the walk frees most of what it allocates, between blocks it keeps, so glibc's heap
+    stays at the walk's high-water mark, several times what is in use, unless trimmed."""
+    if _LIBC is not None:
+        _LIBC.malloc_trim(0)
+
+
+def _libc():
+    import ctypes
+
+    try:
+        libc = ctypes.CDLL(None)
+        return libc if hasattr(libc, "malloc_trim") else None
+    except OSError:
+        return None
+
+
+_LIBC = _libc()
 
 
 def _mem() -> str:
