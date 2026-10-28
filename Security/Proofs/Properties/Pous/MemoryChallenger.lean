@@ -143,7 +143,7 @@ private theorem tail_accepted (expected : Nat → Option ByteArray) (s : SignedS
   simp only [Id.run] at m1 m2
   rw [show ∀ (x : Id (Array String × Nat × Nat)) (f : _ → Id Verdict), (x >>= f) = f x.run from fun _ _ => rfl] at h
   by_cases hw : wr > 0 <;> by_cases hl : lt > 0 <;> simp [hw, hl, Id.run, accepted_acceptIf] at h
-  have h0 : rs.size = 0 := by simpa using (show rs.isEmpty = true from h)
+  have h0 : rs.size = 0 := by simp [h]
   have hw0 : wr = 0 := by omega
   have hl0 : lt = 0 := by omega
   subst hw0 hl0
