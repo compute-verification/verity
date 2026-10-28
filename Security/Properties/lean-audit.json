@@ -5419,21 +5419,6 @@
     "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
    ]
   },
-  "Definitions.Accounting.TS.Machine": {
-   "digest": "2279040738c1521c54f6a556c516019dc0610aedc92e30143707cc28cdbae52a",
-   "definitions": {
-    "Accounting.TS.Run": "3ef082b3d83e89810e99ff7698fc3ab8fc824405e38d111a6a6a1d8fc0757c6c"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
-    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
-    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
-    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
-    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
-    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
-    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
-   ]
-  },
   "Definitions.Accounting.TS.Play": {
    "digest": "dee814ec351156b99f1c96d31dd28577ff94b95220400606ac08ccb85782fa6e",
    "definitions": {
@@ -5518,6 +5503,21 @@
     "Accounting.TS.Head.vector": "14f9ff90b798685b3a6591654924ce58addeeefa8a5a563cdfa5c6b7008e6f58",
     "Accounting.TS.Head.writer": "fe67966d4083b487a52a4cd0169e51c81f774acf80a7a7823d45b12c6cb32027",
     "Accounting.TS.Labelled": "c0d114226df6e350ec6fc4c8d85142796b74b8283ae11bf223d97162bf41d871"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200",
+    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod",
+    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod",
+    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod",
+    "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod",
+    "Properties.Pouw.ServedValues.SecurityProofs.rightValues"
+   ]
+  },
+  "Definitions.Accounting.TS.Run": {
+   "digest": "2279040738c1521c54f6a556c516019dc0610aedc92e30143707cc28cdbae52a",
+   "definitions": {
+    "Accounting.TS.Run": "3ef082b3d83e89810e99ff7698fc3ab8fc824405e38d111a6a6a1d8fc0757c6c"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
