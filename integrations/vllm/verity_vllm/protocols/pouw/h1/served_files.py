@@ -1,6 +1,7 @@
-"""The served window's committed values for its prover (`pouw_h1_served`'s, which re-exports these): its registered trees
-(`trees`), each call's verifier ``--registered`` file (`reads_file`), and one window record's ``registered`` entries held
-to the prover's earlier records (`register`, `WindowValues`), each file named `file_name`. It imports nothing of `pouw_h1_served`: a run's
+"""The served window's registered values for its prover (`pouw_h1_served`'s, which re-exports these): its registered
+trees (`trees`), each call's verifier ``--registered`` file (`reads_file`), and the ``registered`` entries a window
+commitment record lists, held to the prover's earlier records (`register`, `RegisteredInputs`), each file named
+`file_name`. It imports nothing of `pouw_h1_served`: a run's
 ``served`` is its `Served`, read once the window is closed."""
 from __future__ import annotations
 
@@ -53,9 +54,10 @@ def reads_file(run: Any, call: int, ports: Mapping[str, str] | None = None, tp: 
 
 
 @dataclass(frozen=True)
-class WindowValues:
-    """What `register` returns: the window record's ``registered`` entries (every tree of the window), the window's open root, and
-    each call's ``--registered`` file."""
+class RegisteredInputs:
+    """What `register` returns: the ``registered`` entries (every tree of the window) and the open root that the window's
+    commitment record lists, and each call's ``--registered`` file. It is the prover's input to that record and to its
+    verifier calls, not the record: the record, its receipt and its digest are `service.WindowCommitmentRecord`'s."""
 
     registered: list[dict[str, Any]]
     window_root: str
@@ -63,7 +65,7 @@ class WindowValues:
 
 
 def register(run: Any, calls: Sequence[int] | None = None, log: Sequence[Mapping[str, Any]] = (),
-             directory: str | Path | None = None, ports: Mapping[str, str] | None = None) -> WindowValues:
+             directory: str | Path | None = None, ports: Mapping[str, str] | None = None) -> RegisteredInputs:
     """The window's trees as one record's ``registered`` entries, held to this prover's earlier records ``log`` (R7-held:
     a value an earlier record registered under the same domain with another root is refused), and the ``--registered``
     file of each of ``calls`` (default every call; `reads_file`), written as `file_name` in ``directory`` (default the
@@ -81,7 +83,7 @@ def register(run: Any, calls: Sequence[int] | None = None, log: Sequence[Mapping
         Path(d).mkdir(parents=True, exist_ok=True)
         for c, doc in files.items():
             (Path(d) / file_name(c)).write_bytes(canonical_json(doc))
-    return WindowValues([t.entry() for t in got], served.root, files)
+    return RegisteredInputs([t.entry() for t in got], served.root, files)
 
 
-__all__ = ["FILE", "WindowValues", "file_name", "reads_file", "register", "trees"]
+__all__ = ["FILE", "RegisteredInputs", "file_name", "reads_file", "register", "trees"]
