@@ -1,6 +1,6 @@
-"""Every example states its doneness on both axes and carries the evidence for each (`demos/README.md`).
+"""Every demo states its doneness on both axes and carries the evidence for each (`demos/README.md`).
 
-Each `demos/<name>/` has an `example.toml` that parses, with a known protocol, workload and placement, a `run` (moved, runs,
+Each `demos/<name>/` has a `demo.toml` that parses, with a known protocol, workload and placement, a `run` (moved, runs,
 placed) and a `proof` (none, stated, proved, measured), and the evidence every step up to each needs on its own axis, in the
 form that can be checked offline: run-id format, a guarantee listed in a `lean-audit.json`, lemma and proof names declared in
 the tracked `.lean` files (`verity_cli.demos`). The failure says what to add. The negatives hold the checker to refusing
@@ -14,7 +14,7 @@ import pytest
 from verity_cli import demos as E
 
 ROOT = Path(__file__).resolve().parents[1]
-ALL = E.examples(ROOT)
+ALL = E.demos(ROOT)
 RUN = "r20261024-055630-5377"
 LISTED = "NetTiming.Guarantees.SampledAuditAccepted"
 PROOF = "NetTiming.SecurityProofs.SampledAuditAccepted"
@@ -22,41 +22,41 @@ STATED = dict(guarantee=LISTED, honest=PROOF, nontrivial=PROOF)
 LOCAL = {"prover": "local", "verifier": "local"}
 
 
-def test_there_are_examples():
-    assert ALL, "demos/ holds no example"
+def test_there_are_demos():
+    assert ALL, "demos/ holds no demo"
 
 
 @pytest.mark.parametrize("ex", ALL, ids=lambda e: e.name)
-def test_example_has_what_it_claims(ex):
-    assert not (p := E.problems(ex, ROOT)), f"demos/{ex.name}/example.toml:\n  " + "\n  ".join(p)
+def test_demo_has_what_it_claims(ex):
+    assert not (p := E.problems(ex, ROOT)), f"demos/{ex.name}/demo.toml:\n  " + "\n  ".join(p)
 
 
-def _ex(run: str = "moved", proof: str = "none", /, **evidence) -> E.Example:
+def _ex(run: str = "moved", proof: str = "none", /, **evidence) -> E.Demo:
     placement = evidence.pop("placement", {"prover": "gpu-node", "verifier": "auditor-host"})
-    return E.Example("probe", {"protocol": "pous", "workload": "none", "run": run, "proof": proof, "placement": placement,
+    return E.Demo("probe", {"protocol": "pous", "workload": "none", "run": run, "proof": proof, "placement": placement,
                                "evidence": evidence})
 
 
-def _says(ex: E.Example, *words: str) -> None:
+def _says(ex: E.Demo, *words: str) -> None:
     p = "\n".join(E.problems(ex, ROOT))
     assert p and all(w in p for w in words), p
 
 
 def test_a_document_fault_is_named():
-    ex = E.Example("toy-onsite", {"protocol": ["pous"], "workload": "torch", "run": "served", "proof": 4,
+    ex = E.Demo("toy-onsite", {"protocol": ["pous"], "workload": "torch", "run": "served", "proof": 4,
                                   "placement": {"relay": "laptop"}, "evidence": {"run": []}, "extra": 1})
     _says(ex, "rename the directory", "unknown keys ['extra']", "a list of two or more", "workload 'torch'", "run 'served'",
           "proof 4", "'relay'", "relay = 'laptop'", "unknown evidence ['run']")
     _says(_ex(runs=["r2026-1"]), "'r2026-1' is neither a run id")
-    old = E.Example("probe", {"protocol": "pous", "workload": "none", "level": 1, "placement": LOCAL})
+    old = E.Demo("probe", {"protocol": "pous", "workload": "none", "level": 1, "placement": LOCAL})
     _says(old, "level is retired", "add run, one of moved", "add proof, one of none")
 
 
 def test_a_file_with_the_retired_level_reads_as_its_two_axes(tmp_path):
     d = tmp_path / "demos" / "toy"
     d.mkdir(parents=True)
-    (d / "example.toml").write_text('protocol = "pous"\nworkload = "none"\nlevel = 1\n')
-    (ex,) = E.examples(tmp_path)
+    (d / "demo.toml").write_text('protocol = "pous"\nworkload = "none"\nlevel = 1\n')
+    (ex,) = E.demos(tmp_path)
     assert (ex.data["run"], ex.data["proof"], "level" in ex.data) == ("runs", "none", False)
 
 
@@ -64,7 +64,7 @@ def test_each_run_step_needs_its_evidence():
     assert not E.problems(_ex(), ROOT)
     _says(_ex("runs"), "run runs: add a run of record")
     _says(_ex("runs", tests=["tests/test_demos.py::nope"]), "names no test")
-    assert not E.problems(_ex("runs", tests=["tests/test_demos.py::test_there_are_examples"]), ROOT)
+    assert not E.problems(_ex("runs", tests=["tests/test_demos.py::test_there_are_demos"]), ROOT)
     _says(_ex("placed", runs=[RUN], placement={"prover": "cpu-node", "verifier": "cpu-node"}),
           "put verifier (now cpu-node) on auditor-host")
     _says(_ex("placed", runs=[RUN], placement={"prover": "auditor-host", "verifier": "auditor-host"}),

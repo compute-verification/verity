@@ -168,18 +168,18 @@ over the monitoring period (`IntegrityHorizon`, `CircuitCreditPeriod`), not per 
 **No example runs the remote verifier yet:** `remote check` has no run of record. One example walks the whole
 lifecycle with a stand-in prover, and two run the sampled-proofs half for real:
 
-- `verity example lifecycle` (`demos/lifecycle/README.md`): the remote composite stepped through one monitoring period
+- `verity demo lifecycle` (`demos/lifecycle/README.md`): the remote composite stepped through one monitoring period
   on CPU in about 2 s: hardware registration, registration, declarations, live draws, each declaration's verdict and the
   period's accounting, with every deviation it lists refused by name. Its prover is a labelled stand-in for C-Flock, and
   its verdict is the composition's Python mirror over per-declaration stand-ins for the two subprotocols, not `remote
   check`. It runs; nothing about it is proved.
 
-- `verity example h200` (`demos/h200/README.md`): a fixed attention shape committed on one H200. Eight proof blocks
+- `verity demo h200` (`demos/h200/README.md`): a fixed attention shape committed on one H200. Eight proof blocks
   are drawn by one live coin, each is proved by C-Flock `--zk` and accepted by the Lean verifier, and a flipped bit is
   refused. At an 8-block draw, that allows at most 43.77% faulty proof blocks at δ = 1%. It runs, at proof level
   none, and isn't placed: its Lean verifier ran beside the prover. On a CPU at a small shape, run
   `uv run python demos/h200/run.py --out /tmp/e2e` (`--tamper l1.wup` must exit 3).
-- `verity example vllm` (`demos/vllm/README.md`): Llama-3.2-1B served by vLLM on one RTX PRO 6000, its values
+- `verity demo vllm` (`demos/vllm/README.md`): Llama-3.2-1B served by vLLM on one RTX PRO 6000, its values
   committed while serving, and a sampling period's proof blocks drawn by live coins, proved by C-Flock `--zk` and
   checked by the Lean verifier. It runs, at proof level none: no theorem yet ties those verdicts to a guarantee.
 

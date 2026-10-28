@@ -114,11 +114,11 @@ GPU machine.
 
 | Demo | What it serves and audits | Command | Details |
 | --- | --- | --- | --- |
-| The H200 demo | A fixed multi-query attention shape on one H200, every proof block's values committed. It runs sampled proofs: live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. The other onsite subprotocols (PoUS, the bandwidth audit, network certification, memory wipes) are only a skeleton on fixture coins, and the demo claims none of them. | `verity example h200` | `demos/h200/README.md`, `demos/h200/interfaces/README.md` |
-| vLLM | Llama-3.2-1B in bf16, served by vLLM on one RTX PRO 6000 through the committing endpoint. It runs sampled proofs: live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. | `verity example vllm` | `demos/vllm/README.md` |
+| The H200 demo | A fixed multi-query attention shape on one H200, every proof block's values committed. It runs sampled proofs: live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. The other onsite subprotocols (PoUS, the bandwidth audit, network certification, memory wipes) are only a skeleton on fixture coins, and the demo claims none of them. | `verity demo h200` | `demos/h200/README.md`, `demos/h200/interfaces/README.md` |
+| vLLM | Llama-3.2-1B in bf16, served by vLLM on one RTX PRO 6000 through the committing endpoint. It runs sampled proofs: live coins draw proof blocks, which C-Flock `--zk` proves and the Lean verifier checks. | `verity demo vllm` | `demos/vllm/README.md` |
 | Full utilization | An 8B model's linear layers in s8 at M = 16,384 on one H200, with PoUW crediting the work through Dither's no-fold receipt. No runner yet. | none yet | `demos/dither_full_util/README.md` |
 
-The remote protocol's demo is `verity example vllm`, its sampled-proofs half; PoUW's half has no runner yet.
+The remote protocol's demo is `verity demo vllm`, its sampled-proofs half; PoUW's half has no runner yet.
 
 The prover's side serves and proves. The auditor's side runs the verifier, the challenger that draws the live coins,
 the network certifier and the memory challenger, and those must run on machines the prover doesn't control.

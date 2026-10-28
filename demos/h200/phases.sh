@@ -4,7 +4,7 @@
 # Demo A is not one command: it is eight runs, each phase's output the next one's input, the coin drawn only after the registration is in the challenger's ledger. Each phase below starts its job by `research run`
 # on its machine (or, for `register`, here on the CPU) with the variables it names; --dry-run prints the command and starts
 # nothing, and further FLAGs go to `research run`. Its run of record in M3 proper, of record in the drawn blocks' tree
-# art:c6dffca9 (example.toml):
+# art:c6dffca9 (demo.toml):
 #   commit    the step on the H200 under a fresh salt secret kept on the node: 32 steps at batch 512, every op's output
 #             committed, roots.json out (m3proper_job.sh PHASE=commit)                          r20261026-233451-2217
 #   weights   CMP-160's registration of the 733 seeded INT8 weights under the served Program, its 0600 witness kept on the
