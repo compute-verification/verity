@@ -35,8 +35,7 @@
 # implied: dither.Shape(o=True); its params named served-*); with gemm=1 (a -DV31_WG build) its D comes from wg_proto.cuh's
 # GEMM, rp=4 hashing its O rows in the GEMM's producer warpgroup (rp=5: and a hash warpgroup of its own, r5h its
 # registers, and the prefix-sum rows in the GEMM of the prefix sums unless r5w=0; tst=1 its stores through shared memory
-# with TMA; rp=6 (7): between the ping-pong GEMM's mainloops (and in its producer warpgroup)), and the bench adds
-# wgmma.linear's arm (wgl).
+# with TMA), and the bench adds wgmma.linear's arm (wgl).
 # FILL_GATE_KNOBS=1 runs the gates (and FILL_DITHER's recheck) under the first variant's knobs (else v31.cu's defaults). FILL_DITHER=1 also runs fill_dither.py under the gate's lease (the GPU against dither.py itself; the tree must have
 # circuit/dither.py). FILL_NSYS=1 adds, before the bench, Nsight Systems on `v31 fill-once` (OVL_CALLS overlapped calls
 # after two serial ones) for each variant, L and shape: out/nsys-TAG-L-SHAPE.nsys-rep, its kernel trace and `v31.py
@@ -47,8 +46,8 @@
 # HYPOTHESIS, the attempt's, goes to $OUT/hypothesis.txt; MODE=gates|bench|prof|nsys|fill (default bench); SHAPES: bench's NAME:M:N:K list
 # (default D6's static shapes at m 8192); VARIANTS: bench's variants, each a comma-separated KEY=VALUE list over row (8192),
 # cprio (lo), carve (100), dyn (1), wrap (2; 1 to 7), wcw (256), ccta (1), pf (0), diag (0), sched (0), ltw (0), served (0),
-# gemm (0), wgbn (256), cm (0), wgg (16), rp (0), r5h (96), r5w (1), tst (0), hall (0), hchunk (0), wgw (1), lminb (5), sahead (0),
-# ppm (0), pph (1), lord (0) (v31.cu's Knobs) and nreg (the GEMM's
+# gemm (0), wgbn (256), cm (0), wgg (16), rp (0), r5h (96), r5w (1), tst (0), hall (0), hchunk (0), wgw (1), lminb (5), sahead (0) (v31.cu's
+# Knobs) and nreg (the GEMM's
 # register cap, V31_MAXNREG or under V31_WG V31_WG_NREG, a build of its own; default v31.cu's), and the commit's full (1),
 # sminb (4), lfold (0) and mask (0) (v31.cu's Knobs too), default row=8192; V31_ARMS, the fill bench's arms to time
 # (default all); REPS
@@ -79,7 +78,8 @@ git rev-parse HEAD > "$O/commit.txt" 2>&1
 : > "$O/rc.txt"
 # knob VARIANT KEY DEFAULT: the variant's KEY, else DEFAULT
 knob() { local v; v=$(tr ',' '\n' <<< "$1" | sed -n "s/^$2=//p" | tail -1); echo "${v:-$3}"; }
-# knob_env VARIANT: its knobs as v31.cu's environment
+# knob_env VARIANT: its knobs as v31.cu's environment, past those above rp 6 and 7 (v31.cu's ping-pong GEMM, each consumer
+# warpgroup hashing O rows while the other runs its mainloop; 7: warps 9 to 11 hashing too), ppm (0), pph (1) and lord (0)
 knob_env() {
   echo -n "V31_FULL=$(knob "$1" full 1) V31_SMINB=$(knob "$1" sminb 4) V31_LFOLD=$(knob "$1" lfold 0) V31_MASK=$(knob "$1" mask 0) "
   echo "V31_CPRIO=$(knob "$1" cprio lo) V31_CARVE=$(knob "$1" carve 100) V31_DYN=$(knob "$1" dyn 1) V31_WRAP=$(knob "$1" wrap 2)" \
