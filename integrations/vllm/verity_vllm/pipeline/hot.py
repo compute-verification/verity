@@ -53,8 +53,8 @@ from verity_vllm.config import option, workload_file
 
 SCHEMA = "verity-sweep/hot-commit/v1"
 # PATH / LD_LIBRARY_PATH are part of the identity: they decide which nvcc / ninja / CUDA libs a JIT build in the worker would use (a worker
-# spawned from a shell without the venv on PATH cannot build the native collector -- hotval4 e2e 05:36Z), so a client with a different
-# toolchain view must not inherit that engine
+# spawned from a shell without the venv on PATH cannot build the native collector), so a client with a different toolchain view
+# must not inherit that engine
 ENV_PREFIXES = ("PYTHONPATH", "PATH", "LD_LIBRARY_PATH", "VLLM_", "VERITY_", "CUDA_", "HF_", "TORCH", "NATIVE_COLLECT_BUILD", "HIDDEN_GPU_BUILD",
                 "TOKENIZERS_PARALLELISM", "OMP_")
 ENV_PER_JOB = {"VERITY_TIMELINE", "VERITY_FOOTPRINT", "VERITY_TRACEDUMP", "VERITY_HOT_RESTART_REASON", "VERITY_HOT_SUBMIT", "VERITY_WEIGHTS_HASH", "HASH_THREADS"}
@@ -289,7 +289,7 @@ def submit(argv: list[str], *, root: Path, idle_s: float, timeout_s: float | Non
     hints = unsafe_hints(argv)
     if hints:
         # torch-free pre-check of commit_delta.hot_unsafe_reasons: such a job would only be refused by the worker, so it must neither start
-        # one nor stop a live engine of another key on its way (hotval5 05:40Z: three negatives each spawned + stopped a worker)
+        # one nor stop a live engine of another key on its way
         log(f"[hot] HOT-UNSAFE by argv/env, no worker touched: {'; '.join(hints)}")
         return cold_run(argv, f"HOT-UNSAFE (client pre-check): {'; '.join(hints)}", log=log)
     t_key0 = time.time()
@@ -503,7 +503,7 @@ def serve(wdir: Path, *, idle_s: float, reason: str) -> int:
             if not queue:
                 if time.time() - last_job > idle_s:
                     return exit_with(f"idle {idle_s:.0f}s")
-                # [REL-07/REL-12] a release ship must never wait on an idle engine: the RELEASING marker (pod_release.sh) or a changed
+                # a release ship must never wait on an idle engine: the RELEASING marker (pod_release.sh) or a changed
                 # RELEASE.json (a new tree is on the pod: this worker's code identity is stale by definition) ends the worker at once
                 if releasing_live():
                     return exit_with("release in progress (RELEASING marker) -- idle engine released")

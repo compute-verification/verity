@@ -27,7 +27,6 @@ PROTOCOL SUMMARY (Match stage, GPU half: the capture entry -- one engine, one ar
   Invariants: the two lengths stay distinct per request (executed = served + LAG only on an EOS stop before the cap) and are functions
     of the served tokens + the attested lag, never of the trace; LAG is None (unattested) when the engine does not report it -- no default;
     the warm-up runs on throwaway prompts and is never part of the record; nothing observed from the run goes into spec_tokens.json.
-  Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
 """
 
 from __future__ import annotations
@@ -71,10 +70,9 @@ def dump_cos_sin(engine: "va.Engine", out: Path) -> Path | None:
         return None
     dtype = str(buf.dtype).removeprefix("torch.")
     if buf.dtype != torch.bfloat16:
-        # [r8 E-cleanup, fp16 (d) `cos_sin_cache` root] a served-fp16 model's table is float16: it used to be silently NOT observed
-        # (a reader then found no captured cos_sin_cache.npy, which reads as a capture defect).  Observe it in its own dtype
+        # A served-fp16 model's table is float16: observe it (an unobserved table reads as a capture defect) in its own dtype
         # under a dtype-qualified name -- never as `cos_sin_cache.npy`, whose readers take bf16 words -- and label it; the bf16
-        # path below is unchanged.  There is still no fp16 analytic table.
+        # path below is unchanged.  There is no fp16 analytic table.
         if buf.dtype != torch.float16:
             return None
         words = buf.detach().contiguous().view(torch.int16).cpu().numpy().view(np.uint16)
@@ -312,7 +310,7 @@ def main(args: Options) -> None:
     doc["lag"] = {"value": _lag, "async_scheduling": _asched,
                   "source": "vllm_adapter.resolved_async_scheduling(engine) after the build (= RunHeader.profile.engine_kwargs.async_scheduling)",
                   "rule": "served_output_len = len(generated_token_ids); executed_prefix_len = served_output_len + LAG iff finish_reason == 'stop' and "
-                          "served_output_len < max_tokens, else served_output_len; cap_exhausted = served_output_len == max_tokens"}
+                          "served_output_len < max_tokens, else served_output_len; cap_exhausted = served_output_len == max_tokens (R17-1)"}
     for r in wl["requests"]:
         rid = r["request_id"]
         acc = wl["accepted"].get(rid)
