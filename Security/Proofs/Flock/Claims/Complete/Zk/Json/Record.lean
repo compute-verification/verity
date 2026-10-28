@@ -102,7 +102,8 @@ theorem ascii_coins {ct : CoinTree.Spec} (h : Ascii (ct.coins "")) :
   unfold CoinTree.Spec.toJson at hg h ⊢
   cases hg with
   | obj hm _ =>
-  refine ⟨ascii_of_insert (k := "nonce") (v := Json.str "") hm (get?_mkObj_none (by decide)) h, ?_⟩
+  refine ⟨ascii_of_insert (k := "nonce") (v := Json.str "") hm
+    (get?_mkObj_none (by first | (simp only [List.map_cons, List.map_nil]; decide) | simp)) h, ?_⟩
   exact ascii_key (k := "nonce") (v := Json.str "") hm.insert h
     (by rw [Std.TreeMap.Raw.get?_eq_getElem?, Std.TreeMap.Raw.getElem?_insert_self hm])
 
