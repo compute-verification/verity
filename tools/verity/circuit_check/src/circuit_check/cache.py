@@ -248,8 +248,13 @@ def visible(root: Path) -> tuple[frozenset[str], frozenset[str]] | None:
             _VISIBLE[root] = None
         else:
             files = frozenset(x.decode() for x in r.stdout.split(b"\0") if x)
-            dirs = frozenset({"."} | {str(Path(f).parents[i]) for f in files for i in range(len(Path(f).parents) - 1)})
-            _VISIBLE[root] = (files, dirs)
+            dirs = {"."}
+            for f in files:
+                i = f.rfind("/")
+                while i > 0 and (d := f[:i]) not in dirs:
+                    dirs.add(d)
+                    i = f.rfind("/", 0, i)
+            _VISIBLE[root] = (files, frozenset(dirs))
     return _VISIBLE[root]
 
 
@@ -260,9 +265,23 @@ def _listing(root: Path, rel: str) -> str:
     return hashlib.sha512("\0".join(names).encode()).hexdigest()
 
 
+#: `_rel` of each absolute path asked, by root: it depends on nothing else but `_LINKS`, which `trace` sets with the root
+_RELS: dict[Path, dict[str, str | None]] = {}
+
+
 def _rel(path: Any) -> str | None:
     if isinstance(path, int) or not _ROOT:
         return None
+    if isinstance(path, str) and path.startswith("/"):
+        if (memo := _RELS.get(_ROOT[0])) is None:
+            memo = _RELS[_ROOT[0]] = {}
+        if (r := memo.get(path, memo)) is memo:
+            r = memo[path] = _rel_of(path)
+        return r
+    return _rel_of(path)
+
+
+def _rel_of(path: Any) -> str | None:
     try:
         p = Path(os.fsdecode(path))
         p = os.path.normpath(p if p.is_absolute() else Path.cwd() / p)
@@ -959,13 +978,20 @@ def _parsed_bytes(data: bytes) -> tuple[str, list, bool, bool]:
     return _PARSED[h]
 
 
+_ROOTS: dict[tuple, list[str]] = {}
+
+
 def _roots(root: Path) -> list[str]:
     """The import path's entries inside the tree (``sys.path`` order, relative to ``root``), where module names resolve."""
+    k = (str(root), os.getcwd(), *sys.path)
+    if k in _ROOTS:
+        return _ROOTS[k]
     out: list[str] = []
     for e in sys.path:
         rel = os.path.relpath(os.path.realpath(e or os.getcwd()), root)
         if not rel.startswith("..") and rel.split(os.sep)[0] != ".venv" and rel not in out:
             out.append(rel)
+    _ROOTS[k] = out
     return out
 
 
@@ -1364,27 +1390,69 @@ def _unit_at(spans: list, line: int) -> list[str]:
 # --- a target's reads -------------------------------------------------------------------------------------------------------
 
 _OUTSIDE: set[str] = set()
+_INTERPRETER: list[tuple[str, ...]] = []
 
 
 def _interpreter_dirs() -> tuple[str, ...]:
-    import sysconfig
+    if not _INTERPRETER:
+        import sysconfig
 
-    dirs = {sys.prefix, sys.base_prefix, sys.exec_prefix, sys.base_exec_prefix,
-            *(sysconfig.get_paths().get(k) for k in ("stdlib", "platstdlib", "purelib", "platlib"))}
-    return tuple({os.path.join(f(d), "") for d in dirs if d for f in (os.path.abspath, os.path.realpath)})
+        dirs = {sys.prefix, sys.base_prefix, sys.exec_prefix, sys.base_exec_prefix,
+                *(sysconfig.get_paths().get(k) for k in ("stdlib", "platstdlib", "purelib", "platlib"))}
+        _INTERPRETER.append(tuple({os.path.join(f(d), "") for d in dirs if d for f in (os.path.abspath, os.path.realpath)}))
+    return _INTERPRETER[0]
+
+
+#: the (name, file) of each module `_check_outside` has looked at, by what it counted as inside: a module's file stays put
+_LOOKED: dict[tuple[str, ...], set[tuple[str, str]]] = {}
+
+
+def _outside_modules() -> tuple[set[tuple[str, str]], list[tuple[str, Any]]]:
+    """The loaded modules from outside the tree and the interpreter's own directories, each (name, file) not looked at before,
+    and the set of those looked at, by what counts as inside."""
+    inside = (os.path.join(str(_ROOT[0]), ""), *_interpreter_dirs()) if _ROOT else ()
+    looked = _LOOKED.setdefault(inside, set())
+    out = []
+    for name, m in list(sys.modules.items()):
+        f = getattr(m, "__file__", None)
+        if isinstance(f, str) and (name, f) in looked:
+            continue
+        if not f or _rel(f) is not None or not inside or any(p.startswith(inside) for p in (os.path.abspath(f), os.path.realpath(f))):
+            if isinstance(f, str):
+                looked.add((name, f))
+            continue
+        out.append((name, f))
+    return looked, out
 
 
 def _check_outside() -> None:
     """A module imported from outside the tree and the interpreter's own directories (another tree's copy of a package, say) is a
     read no key can hold: the process's results after it are not stored (`untraced`)."""
-    inside = (os.path.join(str(_ROOT[0]), ""), *_interpreter_dirs()) if _ROOT else ()
-    for name, m in list(sys.modules.items()):
-        f = getattr(m, "__file__", None)
-        if not f or _rel(f) is not None:
-            continue
-        if inside and name not in _OUTSIDE and not any(p.startswith(inside) for p in (os.path.abspath(f), os.path.realpath(f))):
+    looked, out = _outside_modules()
+    for name, f in out:
+        if name not in _OUTSIDE:
             _OUTSIDE.add(name)
             _UNTRACED.append(f"imported {name} from {f}, outside the tree")
+        if isinstance(f, str):
+            looked.add((name, f))
+
+
+def warm() -> None:
+    """What `attributed` works out alike in every process forked from this one, worked out here once, before the forks: which
+    loaded modules are inside the tree, their paths, the import path's entries in the tree and the installed distributions'
+    packages.  Nothing it does is a read, and a module outside the tree is still found, and its process's results not stored,
+    in each process that looks."""
+    _INTERNAL.append(True)
+    try:
+        _outside_modules()
+        for m in list(sys.modules.values()):
+            if isinstance(f := getattr(m, "__file__", None), str):
+                _rel(_abspath(f))
+        _outside_tops()
+        if _ROOT:
+            _roots(_ROOT[0])
+    finally:
+        _INTERNAL.pop()
 
 
 _IMPORTS: dict[str, list[str]] = {}
@@ -1451,13 +1519,24 @@ def attributed(fr: Frame, units: Iterable[str] = (), roots: Iterable[Any] = ()) 
         _INTERNAL.pop()
 
 
+_ABSPATHS: dict[str, str] = {}
+
+
+def _abspath(f: Any) -> str:
+    if not (isinstance(f, str) and f.startswith("/")):
+        return os.path.abspath(f)
+    if (a := _ABSPATHS.get(f)) is None:
+        a = _ABSPATHS[f] = os.path.abspath(f)
+    return a
+
+
 def _attributed(fr: Frame, units: Iterable[str], roots: Iterable[Any]) -> dict[str, list[str]]:
     _check_outside()
     by_file = {}
     for name, m in list(sys.modules.items()):
         f = getattr(m, "__file__", None)
         if f:
-            by_file.setdefault(os.path.abspath(f), name)
+            by_file.setdefault(_abspath(f), name)
     acc = Frame()
     acc.merge(fr)
     if not roots:                                      # a template, or a named target that doesn't resolve: its whole bindings
@@ -1688,16 +1767,20 @@ def version() -> str:
 UNKEYED = frozenset({"VERITY_TEST_CACHE", "VERITY_TEST_CACHE_MIN_S"})
 
 
+_PLATFORM: list[str] = []
+
+
 def key(request: dict) -> dict:
     _INTERNAL.append(True)                             # the tracer's own work (`platform` runs `uname`): no input of a check
     try:
         # the system, the CPU and the C library, not `platform.platform()`: that names the host's kernel release, which differs
         # between pods and would keep one pod's reports from ever counting on another (`tools/verity/check/verdicts.py`)
-        plat = "-".join([platform.system(), platform.machine(), *platform.libc_ver()])
+        if not _PLATFORM:
+            _PLATFORM.append("-".join([platform.system(), platform.machine(), *platform.libc_ver()]))
     finally:
         _INTERNAL.pop()
     return {"schema": SCHEMA, "version": version(), "request": request, "python": sys.version, "optimize": sys.flags.optimize,
-            "platform": plat,
+            "platform": _PLATFORM[0],
             "registries": hashlib.sha256("\n".join(_REGISTRIES).encode()).hexdigest(),
             "environment": {k: v for k, v in sorted(os.environ.items())
                             if k.startswith(("VERITY_", "CIRCUIT_CHECK_")) and k not in UNKEYED}}
@@ -2124,4 +2207,4 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
 
 __all__ = ["PINS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "internal", "key", "lookup", "pin_files",
            "produced", "recorded_pins", "recording", "registries", "seen", "seen_all", "store", "task_list_reads", "trace", "tracing",
-           "unit_files", "unit_reads", "untraced", "version"]
+           "unit_files", "unit_reads", "untraced", "version", "warm"]

@@ -55,6 +55,59 @@ def test_a_target_that_raises_is_reported_not_lost():
     assert isinstance(v, cli.Killed) and v["how"] == "raised ValueError: no 5"
 
 
+#: three zygotes forked from a process of their own (a fork of pytest's could deadlock), each asked once so that it has started,
+#: then the fds each holds of this process's ends of the zygotes' pipes, and twelve items run across them
+ZYGOTES = """
+import json, os
+from circuit_check import cli
+
+def parent(_):
+    return os.getppid()
+
+zs = [cli.Zygote(parent, fork=True) for _ in range(3)]
+ends = {os.readlink(f"/proc/self/fd/{z.conn.fileno()}") for z in zs}
+held = []
+for z in zs:
+    z.conn.send((0, 0))
+    z.conn.recv()
+    held.append(sorted(ends & {os.readlink(f"/proc/{z._pid}/fd/{fd}") for fd in os.listdir(f"/proc/{z._pid}/fd")}))
+got = [v for _, v, _, _ in cli.parallel(parent, list(range(12)), 6, zygote=zs)]
+print(json.dumps({"pids": [z._pid for z in zs], "held": held, "parents": got, "codes": [z.exitcode() for z in zs]}))
+"""
+
+
+@pytest.mark.skipif(not os.path.isdir("/proc/self/fd"), reason="reads the zygotes' fds in /proc")
+def test_items_are_forked_from_every_zygote_and_no_zygote_holds_another_s_pipe():
+    """One zygote forks a 45 GiB task list's targets about a second apart however many jobs run (`cli.ZYGOTES`), so items go to
+    the zygote with the fewest running.  A zygote forked after another closes this process's end of the other's pipe: else
+    the first would not see its pipe end when this process died, and would wait for an item forever."""
+    import json
+    import subprocess
+    import sys
+
+    r = subprocess.run([sys.executable, "-c", ZYGOTES], capture_output=True, text=True, check=True)
+    out = json.loads(r.stdout.strip().splitlines()[-1])
+    assert out["held"] == [[], [], []]
+    assert len(out["parents"]) == 12 and set(out["parents"]) == set(out["pids"])
+    assert out["codes"] == [0, 0, 0]
+
+
+class _Fn:
+    def __init__(self, family: str | None = None) -> None:
+        if family is not None:
+            self.family = family
+
+
+def test_a_constructed_family_s_members_go_in_batches_where_the_first_was(monkeypatch):
+    """`cli._batched`: the members of a `CONSTRUCTED` family, each a few milliseconds to check, are batched `BATCH` at most to a
+    process, each batch where its first member was in the order; every other target stays alone, a template too."""
+    monkeypatch.setattr(cli, "BATCH", 2)
+    fams = ["Const", None, "Const", "Input", "Const", "And", "Input", "Const"]
+    tasks = [("definition", f"t{i}", None, {"roots": [_Fn(f)]}) for i, f in enumerate(fams)] + [("template", "tpl", None, {})]
+    assert cli._batched(list(range(len(tasks))), tasks) == [(0, 2), 1, (3, 6), (4, 7), 5, 8]
+    assert cli._batched([8, 7, 1], tasks) == [8, (7,), 1]
+
+
 def test_heavy_targets_run_alone():
     """`admit` under a 160 GB budget: a 150 GiB target starts only when nothing runs, and nothing starts beside it; light ones
     fill what is left, past a heavy one that does not fit; one over the budget runs alone."""
