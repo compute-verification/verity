@@ -57,7 +57,7 @@ commitment `b` and the evidence `e` decode under the component's decoders, its c
 (`Properties.Composition.DecodedAccepted` at `RemoteAudit.Protocol.protocol`), the commitment is the node's
 registration, and the session the parameters and the log decode to (`RemoteAudit.Protocol.sessionOf`) is the node's
 session parameters and windows a draw with the record's coins, append coins, clock floor and events. -/
-def Plays (node : Node) (rec : Record) (a b e : ByteArray) : Prop :=
+def Plays (node : Setup) (rec : Record) (a b e : ByteArray) : Prop :=
   ∃ (p : RemoteAudit.Protocol.Params) (ev : RemoteAudit.Protocol.Evidence),
     (Core.canonicalJson a >>= RemoteAudit.Protocol.decodeParams) = .ok p ∧
     RemoteAudit.Protocol.decodeCommitment b = .ok node.reg ∧ RemoteAudit.Protocol.decodeEvidence e = .ok ev ∧
@@ -66,13 +66,13 @@ def Plays (node : Node) (rec : Record) (a b e : ByteArray) : Prop :=
     ∃ pub prof, RemoteAudit.Protocol.check p node.reg ev = .accept pub prof
 
 /-- **The memory line of record, link-charged, at the bandwidth component.** `LineHeld`'s node, trace, records and
-premises verbatim, one coin for each of the session's draws (`Node.draws`), and the bytes the component is given at
+premises verbatim, one coin for each of the session's draws (`Setup.draws`), and the bytes the component is given at
 each outcome (`a`, `b`, `e`: the parameters, the commitment and the evidence): the probability that the component
 accepts bytes that play the record of `ω` on the node (`Plays`) while a stretch of the record's link-charged line
 credits more than the trace held over its span is at most `δs + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind)`,
 `LineHeld`'s bound. -/
 def LineHeldAtComponent : Prop :=
-  ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax)
+  ∀ (node : Setup) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax)
     (rest : Coins node.draws κ X → Fin node.draws → ℕ → ℕ) (recs : Cm → Coins node.draws κ X → Record)
     (correct : Cm → Fin node.draws → Coins node.draws κ X → Finset ℕ) (com : Coins node.draws κ X → Cm)
     (T : Trace (Coins node.draws κ X)) (R : Receipts node.draws κ X) (δs : ℝ)

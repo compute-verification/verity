@@ -102,16 +102,14 @@ theorem lineOfRecordAt_ok {g : ℕ} {sm : RemoteAudit.Session.Summary} {samples 
 
 /-- A line the record gives is `line` at the groups and draws `ofSummaryAt` reads off the Lean verifier's record of the
 session, its registered blocks the record's, and those groups are the record's (`Record.groups`). -/
-theorem lineOf_ok {node : Node} {r : Record} {l : Line} (h : lineOf node r = .ok l) :
+theorem lineOf_ok {node : Setup} {r : Record} {l : Line} (h : lineOf node r = .ok l) :
     ∃ sm gs ws, r.summary node = some sm ∧
       ofSummaryAt node.groupsPerCoin sm node.params.samples r.seen = .ok (gs, ws) ∧ r.groups node = gs ∧
       line gs node.per sm.blocks node.blockBytes node.chipBytes node.nodeBytes ws node.delta node.rates = .ok l := by
   unfold lineOf at h
-  split at h
-  · rename_i sm hsm
-    obtain ⟨gs, ws, hs, hl⟩ := lineOfRecordAt_ok h
-    exact ⟨sm, gs, ws, hsm, hs, by simp only [Record.groups, hsm, hs], hl⟩
-  · cases h
+  rcases hi : node.inputs with why | x <;> rcases hsm : r.summary node with _ | sm <;> simp only [hi, hsm] at h
+  obtain ⟨gs, ws, hs, hl⟩ := lineOfRecordAt_ok h
+  exact ⟨sm, gs, ws, rfl, hs, by simp only [Record.groups, hsm, hs], hl⟩
 
 /-- A state's summary has its windows and its registration's blocks. -/
 theorem summary_of {s : RemoteAudit.Session.State} {sm : RemoteAudit.Session.Summary} (h : s.summary = some sm) :
@@ -158,7 +156,7 @@ theorem windows_of_accepted {s : RemoteAudit.Session.State} (hout : s.outcome = 
     · cases hout
 
 /-- An accepted run, at any windows a draw, ends with the node's `windows` windows. -/
-theorem windows_of_verified {node : Node} {r : Record} {rs : Array RemoteAudit.Session.Result}
+theorem windows_of_verified {node : Setup} {r : Record} {rs : Array RemoteAudit.Session.Result}
     {s : RemoteAudit.Session.State} (hrun : r.run node = .ok (rs, s)) (hout : s.outcome = some "accepted") :
     s.windows.size = node.windows ∧ s.reg = node.reg := by
   obtain ⟨hp, hr⟩ := frame_run (show _root_.RemoteAudit.Shared.run node.groupsPerCoin
@@ -168,7 +166,7 @@ theorem windows_of_verified {node : Node} {r : Record} {rs : Array RemoteAudit.S
 
 /-- **One group a window**: the Lean verifier's record of a session it accepts, at any windows a draw, has the node's
 `windows` windows, and the node's registered blocks. -/
-theorem record_summary {node : Node} {r : Record} {sm : RemoteAudit.Session.Summary} (hv : Verified node r)
+theorem record_summary {node : Setup} {r : Record} {sm : RemoteAudit.Session.Summary} (hv : Verified node r)
     (hsm : r.summary node = some sm) : sm.windows.size = node.windows ∧ sm.blocks = node.blocks := by
   obtain ⟨rs, s, hrun, hout⟩ := hv
   have hs : s.summary = some sm := by
@@ -198,13 +196,13 @@ theorem card_le_inter {N : ℕ} (M R : Finset (Fin N)) : (M.card : ℝ) ≤ (M �
   linarith
 
 /-- Each form's charge in the model's units: `X = s/E + β (+ β_l)` and `B = B_r + B_d (+ B_l)`. -/
-theorem charge_units (node : Node) :
+theorem charge_units (node : Setup) :
     ((charges node.rates node.blockBytes).1.rate : ℝ) = node.squarings / node.encode + node.disk + 0 ∧
     ((charges node.rates node.blockBytes).1.burst : ℝ) = node.rebuildBurst + node.diskBurst + 0 ∧
     ((charges node.rates node.blockBytes).2.rate : ℝ) = node.squarings / node.encode + node.disk + node.link ∧
     ((charges node.rates node.blockBytes).2.burst : ℝ) = node.rebuildBurst + node.diskBurst + node.linkBurst := by
-  simp only [charges, ns, Node.squarings, Node.encode, Node.disk, Node.link, Node.rebuildBurst, Node.diskBurst,
-    Node.linkBurst]
+  simp only [charges, ns, Setup.squarings, Setup.encode, Setup.disk, Setup.link, Setup.rebuildBurst, Setup.diskBurst,
+    Setup.linkBurst]
   push_cast
   refine ⟨by ring, by ring, by ring, by ring⟩
 
@@ -239,7 +237,7 @@ theorem weights_le {Ω : Type} {T : Trace Ω} {ω : Ω} {u v : ℕ} {x : Stretch
 
 /-- On an accepting outcome where the receipts' sketch holds and the trace's wrong receipts are at most the W the
 record's line reads, every stretch of form `i` credits what the trace held over its span. -/
-theorem heldAt_of {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {rec : Ω → Record} (i : ℕ) (hi : i < 2)
+theorem heldAt_of {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Setup} {rec : Ω → Record} (i : ℕ) (hi : i < 2)
     {βl Bl : ℝ} (hβl : 0 ≤ node.rates.linkBytesPerS → 0 ≤ βl) (hl : Links T βl Bl)
     (hcr : (((if i = 0 then (charges node.rates node.blockBytes).1 else (charges node.rates node.blockBytes).2).rate
       : ℚ) : ℝ) = node.squarings / node.encode + node.disk + βl)
@@ -297,9 +295,9 @@ theorem heldAt_of {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {rec : �
     rcases hstart with h | h
     · exact ⟨h ▸ hre0, h ▸ le_rfl⟩
     · exact ⟨h ▸ le_rfl, h ▸ hre0⟩
-  have hE' : (0 : ℝ) < node.encode := by simp only [Node.encode]; exact_mod_cast hE
-  have hs' : (0 : ℝ) ≤ node.squarings := by simp only [Node.squarings, ns]; push_cast; positivity
-  have hβ' : (0 : ℝ) ≤ node.disk := by simp only [Node.disk, ns]; push_cast; positivity
+  have hE' : (0 : ℝ) < node.encode := by simp only [Setup.encode]; exact_mod_cast hE
+  have hs' : (0 : ℝ) ≤ node.squarings := by simp only [Setup.squarings, ns]; push_cast; positivity
+  have hβ' : (0 : ℝ) ≤ node.disk := by simp only [Setup.disk, ns]; push_cast; positivity
   have hwin := heldOverWindow_of K ω hE' hs' hβ' (hβl hl0) hl hsq hd hS hr hfP' hfg' hrel' hre' hpass' (hcov ω ha) hu.1 hu.2
     hk (hw l hline)
   rw [hKs, ← hspan] at hwin
@@ -313,7 +311,7 @@ theorem heldAt_of {Ω : Type} [Fintype Ω] {T : Trace Ω} {node : Node} {rec : �
   have hheld : (x.spanNs : ℝ) * ((T.blocks : ℝ) - x.time.lost) ≤
       T.heldOver ω (spanStart gs per m) (spanStop gs per m) := by
     rw [hNr]
-    simp only [Node.chipBlocks] at hwin
+    simp only [Setup.chipBlocks] at hwin
     linarith
   exact ⟨hspan, hheld, fun R hR => weights_le hwts hR hheld hspan⟩
 
@@ -340,7 +338,7 @@ theorem reach_of_fold (g : ℕ) (l : List RemoteAudit.Session.Event) :
       exact ih (acc.1.push r, s'') out h
 
 /-- Where the record's session runs every event, the state it reaches is its run's last. -/
-theorem reached_of_run {node : Node} {r : Record} {rs : Array RemoteAudit.Session.Result}
+theorem reached_of_run {node : Setup} {r : Record} {rs : Array RemoteAudit.Session.Result}
     {s : RemoteAudit.Session.State} (h : r.run node = .ok (rs, s)) : r.reached node = s := by
   unfold Record.run _root_.RemoteAudit.Shared.run at h
   rw [← Array.foldlM_toList] at h
@@ -387,7 +385,7 @@ theorem foldl_extract_congr {α β : Type} (f : α → ℕ) (g : β → ℕ) {as
 Lean verifier's record are those its windows have in the state the record's session reaches, and below
 `RECEIPT_LIMIT`, so `recordDraw`'s sizes: at one window a coin each window's is below it (`ReceiptsBelowLimit`), and
 above it the line refuses a draw that isn't (`ofSummaryAt_ok`). -/
-theorem receipts_of_line {node : Node} {r : Record} {sm : RemoteAudit.Session.Summary} (hv : Verified node r)
+theorem receipts_of_line {node : Setup} {r : Record} {sm : RemoteAudit.Session.Summary} (hv : Verified node r)
     (hsm : r.summary node = some sm)
     (hlim : 1 < node.groupsPerCoin → ∀ u ∈ drawReceipts node.groupsPerCoin sm.windows,
       u < RemoteAudit.Session.RECEIPT_LIMIT) :
@@ -406,7 +404,7 @@ theorem receipts_of_line {node : Node} {r : Record} {sm : RemoteAudit.Session.Su
   · have hrun' : RemoteAudit.Session.run (RemoteAudit.Session.State.init node.params node.reg r.coins r.appendCoins
         r.notBeforeNs) r.events = .ok (rs, s) := (Properties.RemoteAudit.Shared.run_le_one hg _ _).symm.trans hrun
     have hL := Properties.RemoteAudit.receiptsBelowLimit _ _ _ _ _ _ _ _ hrun'
-    have hD : node.draws = node.windows := by unfold Node.draws; rw [ite_eq_left hg]
+    have hD : node.draws = node.windows := by unfold Setup.draws; rw [ite_eq_left hg]
     rw [drawReceipts, ite_eq_left hg, hS]
     apply Array.ext
     · simp [hD, hW]
@@ -423,7 +421,7 @@ theorem receipts_of_line {node : Node} {r : Record} {sm : RemoteAudit.Session.Su
       rw [← hat]
       exact (min_eq_left hle).symm
   · have hD : node.draws = (node.windows + node.groupsPerCoin - 1) / node.groupsPerCoin := by
-      unfold Node.draws; rw [ite_eq_right hg]
+      unfold Setup.draws; rw [ite_eq_right hg]
     have hlim' := hlim (by omega)
     rw [drawReceipts, ite_eq_right hg] at hlim' ⊢
     apply Array.ext
@@ -451,7 +449,7 @@ theorem receiptMax_lt : receiptMax < 2 ^ 448 := by
 below the W every line of the record reads (`LineCoversSession`): the line reads each draw's receipts and draws off
 the record and refuses any draws but `min(s, U_c)`, the draw's at the session's `samples`, and the receipts are the
 draw's sizes (`receipts_of_line`). -/
-theorem wrong_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (Coins node.draws κ X)}
+theorem wrong_le_line {node : Setup} {κ : ℕ} {X : Type} {T : Trace (Coins node.draws κ X)}
     {rec : Coins node.draws κ X → Record} {correct : Fin node.draws → Coins node.draws κ X → Finset ℕ}
     {ω : Coins node.draws κ X} (hv : Verified node (rec ω))
     (hw : (T.wrong ω : ℝ) ≤ (recordDraw node rec correct).pooled node.delta ω) :
@@ -473,10 +471,10 @@ theorem wrong_le_line {node : Node} {κ : ℕ} {X : Type} {T : Trace (Coins node
   exact hw.trans hc
 
 /-- The node's `δ` is nonnegative, in the reals. -/
-theorem delta_nonneg (node : Node) : (0 : ℝ) ≤ (node.delta : ℝ) := NNRat.cast_nonneg _
+theorem delta_nonneg (node : Setup) : (0 : ℝ) ≤ (node.delta : ℝ) := NNRat.cast_nonneg _
 
 /-- **The trace of record is over the registration's blocks**: `Registered` holds of it, with no premise. -/
-theorem registered_ofRecord {Ω : Type} (T : Trace Ω) (node : Node) (rec : Ω → Record) :
+theorem registered_ofRecord {Ω : Type} (T : Trace Ω) (node : Setup) (rec : Ω → Record) :
     Registered (ofRecord T node rec) node := rfl
 
 /-- **The memory line of record, link-charged** (`LineHeld`), proved. -/
@@ -491,7 +489,7 @@ theorem lineHeld : LineHeld := by
   refine heldAt_of 1 (by omega) ?_ hl ?_ ?_ hsq hd hS hr hp hcov hN ha hω.1 h.1
     (wrong_le_line (correct := fun t ω => correct (com ω) t ω) hω.1 h.2)
   · intro h0
-    simp only [Node.link, ns]
+    simp only [Setup.link, ns]
     push_cast
     positivity
   · simpa using hc.2.2.1

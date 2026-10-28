@@ -240,7 +240,7 @@ def binding(record: audit.Record, node: Node) -> float:
     L_t a set holding every receipt window t opens at every outcome, s_t the session's draw cap and split_t the chance
     that the two runs' roots differ.  Both are the session's bounds, not one outcome's U_t and s'_t, which follow the
     prover's play: this charges them at `window_receipts` and the record's `samples`.  At `groups_per_coin` g > 1 the
-    term's t is a draw, one openings coin over g windows (`LineHeld`'s `Receipts` over `Node.draws`): ⌈W/g⌉ of them,
+    term's t is a draw, one openings coin over g windows (`LineHeld`'s `Receipts` over `Setup.draws`): ⌈W/g⌉ of them,
     each opening at most g·|L_t| receipts, its windows' together, at the cap s over them.  Where the cut fixes the
     roots, split_t = 0 and the term is Σ_t √(|L_t|·s_t)·q_t/2^256.5 (`Binding.binding_le_of_fixed`), this charge.  The
     deployed prover holds the coin commitment, from which it may compute a window's roots, so split_t has no bound

@@ -54,7 +54,7 @@ theorem acceptIsVerified : AcceptIsVerified := by
     · cases h
 
 /-- Bytes that play the record on the node, accepted by the component, are a session the Lean verifier accepts. -/
-theorem plays_verified {node : Node} {rec : Record} {a b e : ByteArray} (h : Plays node rec a b e) :
+theorem plays_verified {node : Setup} {rec : Record} {a b e : ByteArray} (h : Plays node rec a b e) :
     Verified node rec := by
   obtain ⟨p, ev, -, -, -, hs, pub, prof, hc⟩ := h
   obtain ⟨params, g, coins, appendCoins, notBeforeNs, events, rs, s, _, hs', hrun, hout, -, -⟩ :=
