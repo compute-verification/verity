@@ -86,6 +86,21 @@ def main(out: str) -> None:
     res["world"]["blocks"] = {1 << k: {"mean": (b := block(1 << k, L, Kw, **wr, per_mac=V["ands_per_mac"]))["ands"],
                                        "max": b["ands_max"], "tile": b["tile"]} for k in range(0, 8)}
     print("world", json.dumps({k: v for k, v in res["world"].items() if k != "blocks"}))
+    draws_1pct = math.log(1 / R["delta"]) / 0.01
+    res["draws_a_period_eps_S_1pct"] = draws_1pct
+    res["fresh_u"] = {}
+    for k in range(0, 9):
+        g = 1 << k
+        b = block(g, K, K, **rows, per_mac=V["ands_per_mac"])
+        bits = 10 if g == 1 else 16 / g
+        res["fresh_u"][g] = {"tile": b["tile"], "ands": b["ands_max"], "fits": {c: b["ands_max"] <= 2 ** c for c in CAPS},
+                             "receipt_bits_a_cell": bits, "receipt_cut": 10 / bits,
+                             "J_prove_planner_eps_S_1pct": draws_1pct * R["planner_s_per_draw"] * b["ands_max"] / g1["ands"]
+                             / R["period_gpu_s"]}
+        r = res["fresh_u"][g]
+        print(f"fresh-U g {g:3d} tile {r['tile']} block {r['ands'] / 1e6:6.1f}M "
+              f"fits {''.join('1' if r['fits'][c] else '0' for c in CAPS)} bits/cell {bits:.3g} cut {r['receipt_cut']:.3g} "
+              f"Jprove(1%) {r['J_prove_planner_eps_S_1pct']:.2e}")
     with open(out, "w") as fh:
         json.dump(res, fh, indent=1)
 
