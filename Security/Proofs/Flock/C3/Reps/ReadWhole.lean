@@ -12,12 +12,11 @@ rows read.
   `ReadCol` at `unitLog ≤ 32` (`Rows.ofNet_a`, `Rows.ofNet_b`).
 * `check_rsWhole`, `check_whole`: what each check accepted, with its refusals passed.
 * `readCol_whole`: a part's net that passed `partlyRead` reads a row-port element whole where it reads one of its bits;
-  `readCol_openWhole` at the opening's check, and `openReadCol_whole`, what `openingZeroAtL_wReadO` reads, at
-  `unitLog ≤ 32`.
+  `readCol_openWhole` at the opening's check, and `openReadCol_whole`, at `unitLog ≤ 32`.
 * `readCol_rs`, `readCol_acc`: the opening's part reads each column of its ring-switch and running-sum elements.
 
 This file imports no session, so the sessions read these directly: `RsReadCol` is `rsReadCol` (`RsFacts`, from
-`readCol_rsAt`) and `ResReadCol` is `resReadCol` (`ReadWholeAt`).
+`readCol_rsAt`).
 -/
 
 namespace FlockC3.Reps.ReadWhole
@@ -425,8 +424,8 @@ theorem readCol_openWhole {c : Flock.Circuit} (hU : Built c.unit) (h : RecOpenin
     simpa only [Prod.mk.injEq] using Except.ok.inj (hpart.symm.trans hpart₂)
   exact readCol_whole hU hu hn hw hq hb hr hb₀
 
-/-- **An element a `rec-opening` part holds is read whole or not at all** (what `openingZeroAtL_wReadO` reads, with the
-unit's `unitLog ≤ 32` that `OpeningZeroAtL` carries): `readCol_openWhole` at each circuit. -/
+/-- **An element a `rec-opening` part holds is read whole or not at all** (at the unit's `unitLog ≤ 32` that
+`OpeningZeroAtL` carries): `readCol_openWhole` at each circuit. -/
 theorem openReadCol_whole (sh : Flock.Shape) :
     ∀ (c : Flock.Circuit) (hU : Built c.unit) (m cl p : ℕ), Flock.RecOpening.check c = .ok () →
       c.unit.unitLog ≤ 32 → Flock.RecOpening.params c.unit.name = some (m, cl, p) →
