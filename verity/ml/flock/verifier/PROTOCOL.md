@@ -1291,7 +1291,7 @@ SHA-512, and the unit draw is live (§7.3). `Flock.HmRow` is its statement; the 
     are a private circuit's (`rec_algebra.Shape.holo`: each comb operand also reads its `h`). The shape is at that
     `holo`, so exactly one net is accepted: a holo statement on plain parts refuses, and so does a plain statement on
     holo parts. With `--rec-inner`, V*'s statements are built at the verifier's own `--hide` (`holo` in
-    `verity/rec-inner/v2`, `RecVStar.Inner.holo`), so a file's META `holo` must equal it, and every `VERDICT` line
+    `verity/rec-inner/v1`, `RecVStar.Inner.holo`), so a file's META `holo` must equal it, and every `VERDICT` line
     carries it as `private_circuit`. At `holo` true V*'s statements are its holo ones (`VStar.statementsHolo`: the parts
     of `specHolo`, whose files carry META `holo`), and a part's message rounds are `holoRepRounds`', `h`'s among them;
     an inner shape at which no group of the verifier's algebra (below) holds `h`'s round `m<hRound>` as a row port
