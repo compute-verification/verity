@@ -6,7 +6,9 @@ only, through every sub-Call.  A Boolean Definition names the word Definition it
 ``word``, a Definition, or for one with statics a function of its bindings, in which case it carries its word's name).  Those
 links are the one table this module reads: `boolean_version(fn)` is the registered Boolean Definition whose word is ``fn``,
 looked up among every module of `verity.ml.circuits.ops.boolean` and of `verity.ml.definitions.registry` (`registry.catalog`), and
-`NoBooleanVersion` names each Definition it finds none for.  A function-valued static is bound to its own Boolean version; a
+`NoBooleanVersion` names each Definition it finds none for.  A Boolean Definition marked ``opt_in`` is left out of the table:
+it serves only the callers that bind it (`HopperBF16WgmmaDot16_v3`, the training routes' k16 step), never `boolean_version`,
+so adding it moves no served Program.  A function-valued static is bound to its own Boolean version; a
 static the word has no counterpart for, to the Boolean version of the word Definition the Boolean Definition's ``word_statics``
 names for it.  A word primitive made on demand (`prims.const`'s `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`) has its
 Boolean version made on demand too (`_families`, by id: `made_on_demand`), since no module can register one per constant or
@@ -115,7 +117,7 @@ def _load() -> tuple[dict[str, list], dict[str, list], list[str]]:
     by_name: dict[str, list] = {}
     for d in list(REGISTRY.defs.values()):
         w = getattr(d, "word", None)
-        if not isinstance(d, CompositeDefinition) or w is None:
+        if not isinstance(d, CompositeDefinition) or w is None or getattr(d, "opt_in", False):
             continue
         if isinstance(w, FunctionDefinition):
             exact.setdefault(_fid(w), []).append(d)
