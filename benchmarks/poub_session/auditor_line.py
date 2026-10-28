@@ -155,7 +155,7 @@ import wire  # noqa: E402
 from verity.core.protocols.certifier import audit as caudit  # noqa: E402
 from verity.core.protocols.certifier import certificate as cert  # noqa: E402
 from verity.core.protocols.certifier.grid import GridParams, Reason, Status  # noqa: E402
-from verity.core.protocols.poub import audit, coins, ledger, line, pooled, receipts, timing  # noqa: E402
+from verity.core.protocols.poub import audit, coins, ledger, line, pooled, receipts, retired, timing  # noqa: E402
 from verity.core.protocols.poub import store as rstore  # noqa: E402
 from verity.core.protocols.sampled_proofs import challenger as Ch  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote  # noqa: E402
@@ -171,6 +171,9 @@ BURSTS = ("stated", "none")
 they were recorded at (`test_auditor_line_lean`; a burst of 0 states the rate down to one nanosecond)."""
 LANE = "memory-accounting"
 VERIFIER_TREE = "verity/core/protocols/poub"
+RETIRED_TREE = "verity/core/protocols/remote_bandwidth"
+"""`VERIFIER_TREE` at a commit before MEM-152's move, whose sessions' periods committed it under v0's id then
+(`poub.retired`)."""
 LEAN_VERDICTS = ("lean", "both")
 CHECKS = ("credited", "complete", "accepted", "pinned", "bound")
 """What a session's credit needs, each reported per session in this order."""
@@ -219,24 +222,27 @@ class Disagree(ValueError):
     """The Lean's line and `line.py`'s differ on the same inputs, so there is no line: where, and both values."""
 
 
-def descriptor(tree: str) -> bytes:
-    """The descriptor of the circuit a session of the verifier at git tree `tree` (`VERIFIER_TREE`'s) proves: what a
-    period's `--circuit` is the SHA-512 of."""
-    return f"{audit.PROTOCOL_ID} verifier tree {tree}".encode()
+def descriptor(tree: str, protocol: str = audit.PROTOCOL_ID) -> bytes:
+    """The descriptor of the circuit a session of the verifier `protocol` at git tree `tree` (`VERIFIER_TREE`'s)
+    proves: what a period's `--circuit` is the SHA-512 of."""
+    return f"{protocol} verifier tree {tree}".encode()
 
 
-def verifier_tree(commit: str, repo: Path = HERE.parents[1]) -> tuple[str, str]:
-    """The verifier run's recorded commit `commit` in full, and `VERIFIER_TREE`'s git tree there, read in `repo`'s
-    git."""
-    got = []
-    for rev in (f"{commit}^{{commit}}", f"{commit}^{{commit}}:{VERIFIER_TREE}"):
+def verifier_tree(commit: str, repo: Path = HERE.parents[1]) -> tuple[str, str, str]:
+    """The verifier run's recorded commit `commit` in full, `VERIFIER_TREE`'s git tree there and the verifier's id,
+    read in `repo`'s git; at a commit before MEM-152's move, `RETIRED_TREE`'s tree and v0's id then."""
+    def rev_parse(rev: str) -> str | None:
         p = subprocess.run(["git", "-C", str(repo), "rev-parse", "--verify", "--quiet", rev], capture_output=True,
                            text=True)
-        if p.returncode or len(p.stdout.strip()) != 40:
-            raise SystemExit(f"auditor_line: {repo}'s git has no {VERIFIER_TREE} at commit {commit}: run where git has "
-                             "the verifier run's commit (`git fetch origin COMMIT`), or pass --repo")
-        got.append(p.stdout.strip())
-    return got[0], got[1]
+        return None if p.returncode or len(p.stdout.strip()) != 40 else p.stdout.strip()
+
+    full = rev_parse(f"{commit}^{{commit}}")
+    for path, protocol in ((VERIFIER_TREE, audit.PROTOCOL_ID), (RETIRED_TREE, retired.PROTOCOL_ID)):
+        tree = full and rev_parse(f"{full}:{path}")
+        if tree:
+            return full, tree, protocol
+    raise SystemExit(f"auditor_line: {repo}'s git has no {VERIFIER_TREE} at commit {commit}: run where git has "
+                     "the verifier run's commit (`git fetch origin COMMIT`), or pass --repo")
 
 
 def requested_pin(out: Path) -> str | None:
@@ -1170,8 +1176,8 @@ def main(argv: list[str] | None = None) -> int:
     boundary = None if a.boundary is None else read_boundary(a.boundary, a.boundary_pin)
     commit, desc = None, None
     if a.commit is not None:
-        commit, tree = verifier_tree(a.commit, a.repo)
-        desc = descriptor(tree)
+        commit, tree, protocol = verifier_tree(a.commit, a.repo)
+        desc = descriptor(tree, protocol)
     pins = None if a.pins is None else [x for x in a.pins.read_text().split("\n") if x]
     first_parent = None if a.main is None else remote.main_lines(a.main)
     model = None
