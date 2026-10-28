@@ -311,6 +311,36 @@ def test_a_forgery_in_its_parts_place_must_not_compose(tmp_path, capsys):
     assert rc == 0 and any(ln.startswith("lean compose forged-sum-L0: REC-COMPOSE") and "FAILS" not in ln for ln in out)
 
 
+def test_a_forged_inner_composes_as_one_forgery(tmp_path, capsys):
+    """A forged inner coin (85's NEG_INNER) is every V* part verified against it: the parts that read the coin refuse it,
+    the others accept, as they should. Its parts are put in place together and that composition is refused, so the step
+    passes; putting in only a part that doesn't read the coin would compose and fail it."""
+    binary, h = _composer(tmp_path, 3)
+    for j, p in enumerate(("L0", "alg-p0", "cap")):
+        _vpart(tmp_path, p, j, h)
+    _vpart(tmp_path, "forged-inner-challenge-L0", 0, h)
+    _vpart(tmp_path, "forged-inner-challenge-alg-p0", 1, h, rc=1, accepted=False)
+    _vpart(tmp_path, "forged-inner-challenge-cap", 2, h)
+    parts = ["L0", "alg-p0", "cap", *(f"forged-inner-challenge-{p}" for p in ("L0", "alg-p0", "cap"))]
+    rc = LV.main(["--compose", binary, str(tmp_path), *parts])
+    out = capsys.readouterr().out.splitlines()
+    assert 'lean compose forged-inner-challenge (3 parts): REC-COMPOSE {"accepted": false, "parts": 3}' in out
+    assert rc == 0 and out[-1] == "lean: 3/3 accepted, 1/1 forgeries refused"
+
+
+def test_a_forgery_the_composition_accepts_fails(tmp_path, capsys):
+    """A forgery whose every part Lean accepts composes, and the step fails on it."""
+    binary, h = _composer(tmp_path, 2)
+    for j, p in enumerate(("L0", "alg-p0")):
+        _vpart(tmp_path, p, j, h)
+        _vpart(tmp_path, f"forged-inner-challenge-{p}", j, h)
+    rc = LV.main(["--compose", binary, str(tmp_path), "L0", "alg-p0", "forged-inner-challenge-L0",
+                  "forged-inner-challenge-alg-p0"])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 1 and any(ln.startswith("lean compose forged-inner-challenge (2 parts)") and ln.endswith("<- FAILS")
+                           for ln in out)
+
+
 def test_a_run_of_some_parts_is_not_composed(tmp_path, capsys):
     """``LEVELS`` picks some of V*'s parts: there is no recursive statement to compose, and the step says so."""
     binary, h = _composer(tmp_path, 3)
