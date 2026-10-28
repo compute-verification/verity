@@ -16,6 +16,11 @@ descriptor without annotations, which an accepted verdict must give as the parti
 its registered finding (each port's value and opened root) and the proof blocks it proved, the public file's global proof block
 indices of the instances its session drew (`unit_draw`), read only off a session the verifier accepted.
 
+`ks_form_why` mirrors `verify --zk`'s refusal of a circuit outside the unit's form the sampled audit's knowledge
+soundness (`SampledKSLiveV4`, and `SampledKSLiveV5` at a shared-row public file) covers, on the circuit file's head
+(`Flock.KsScope.filesWhy`, which `flock-verify ks-form` runs alone). A session Lean accepts whose files it refuses is a
+``form`` refusal, so the mirror can only refuse more.
+
 The verifier reads the whole circuit file once a call, in time and memory linear in it (about six times the file at
 peak), then O(proof) a session: so a protocol verifies one statement a stratum, every drawn proof block of it an instance.
 
@@ -40,6 +45,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from verity.ml.circuits.codec import canonical_json
+
 from .verifier import BUILD_LOCK, CORE
 from .verifier import PACKAGE as V2_PACKAGE
 
@@ -51,6 +58,10 @@ _DIGEST = re.compile(r"[0-9a-f]{128}")
 #: an input bound at registration (`program.REGISTERED_ID`, Lean's `Program.inputId?`), a descriptor's `definitions` key
 _REGISTERED_INPUT = re.compile(r"RegisteredInput[1-9][0-9]*_v1")
 _CHUNK = 1 << 24
+#: `Flock.KsScope.SCOPE_WHY` (`ks_form_why`) and `TABLES_WHY`, the head of `verify --zk`'s refusals of a shared-row file
+SCOPE_WHY = ("a circuit outside the unit's form under --zk (scopeOkH: the unit reads its one input group and returns the "
+             "outputs)")
+TABLES_WHY = "a shared-row public file (header shared_rows) under --zk"
 
 
 class LeanError(RuntimeError):
@@ -109,6 +120,48 @@ def _header(path: Path) -> Any:
         return json.loads(f.readline().decode())
 
 
+def _unit_head(circuit: Path) -> tuple[dict, list[str]] | None:
+    """The circuit file's META and its ``unit`` circuit's header line (``flock-ir-unit/v2 name rows const n_in_groups
+    ..``), read from the file's head; None for a file not in that form (a templated one among them). A META that is no
+    JSON raises: `verify` reads it only off a session Lean accepted, whose parser read it."""
+    with open(circuit, "rb") as f:
+        f.readline()
+        meta = f.readline().decode()
+        if not meta.startswith("META "):
+            return None
+        m = json.loads(meta[len("META "):])
+        while head := f.readline().decode().split():
+            if len(head) != 3 or head[0] != "CIRCUIT" or not head[2].isdigit():
+                return None
+            if head[1] == "unit":
+                return (m, f.readline().decode().split()) if isinstance(m, dict) else None
+            for _ in range(int(head[2])):
+                f.readline()
+    return None
+
+
+def ks_form_why(circuit: Path, public: Path) -> str | None:
+    """`Flock.KsScope.filesWhy`'s scope refusal on a `verity/flock-circuit` statement's files, with
+    `ProvedScope.refusal`'s text: a circuit outside the unit's form (`ProvedScope.scopeOkH`'s two conditions past
+    `ProvedScope.check`'s: the unit reads one input group, and META's ``out_net``, the net returning the outputs, is the
+    unit); None when it applies or the circuit file's head is not in that form. A shared-row public file (header
+    ``shared_rows``) is Lean's alone to refuse (`KsScope.sharedWhy`, outside the form `SampledKSLiveV5` covers), since
+    its check loads the whole file and computes every port's root. `verify` refuses a session Lean accepts that it
+    refuses, so it can only refuse more; `flock-verify ks-form` is the Lean it mirrors."""
+    del public
+    head = _unit_head(circuit)
+    if head is not None:
+        meta, unit = head
+        groups = unit[4] if len(unit) > 4 else None
+        if meta.get("out_net", "unit") != "unit" or groups != "1":
+            return _refusal(SCOPE_WHY)
+    return None
+
+
+def _refusal(why: str) -> str:
+    return f"refused: {why}: a statement form the soundness proof does not cover"
+
+
 def reads_registered(program: bytes) -> bool:
     """Whether the program descriptor `program` has an input bound at registration (a `RegisteredInput<w>_v1` among its
     `definitions`), or has no `definitions` object to tell: True unless it names none."""
@@ -135,7 +188,8 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
     `circuit_sha512`; the findings in session order and None, or None and the refusal (``registered``: `registered` is
     None and the program reads registered values, `reads_registered`; ``circuit``: the circuit file is not the
     committed one; ``proof``: a file is missing or the verifier's answer is not one verdict a session naming the
-    partition object's program). A session the verifier rejects is a finding, not a refusal.
+    partition object's program; ``form``: the verifier accepted a session whose files `ks_form_why` refuses). A session
+    the verifier rejects is a finding, not a refusal.
 
     The ``registered`` refusal is the verifier's own: without ``--registered``, Lean refuses a statement's registered
     reads only where its public file, which the prover writes, names them (`Registered.check`), and doesn't read a
@@ -173,9 +227,14 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
         return None, ("proof", f"the verifier answered no verdict for each session in order (exit {p.returncode}): "
                                f"{(p.stderr or p.stdout)[-400:]}")
     want = partition.get("program")
+    accepted = any(v.get("accepted") is True for v in lines)
+    form = ks_form_why(proof.circuit, proof.public) if accepted else None
     out = []
     for s, v in zip(proof.sessions, lines):
         ok = v.get("accepted") is True
+        if ok and form is not None:
+            return None, ("form", f"the verifier of record accepted session {s}, whose files its mirror refuses "
+                                  f"(`ks_form_why`): {form}")
         if ok and v.get("program_sha512") != want:
             return None, ("proof", f"session {s}'s verdict names program {v.get('program_sha512')}, not the partition "
                                    f"object's {want}")
@@ -202,12 +261,6 @@ def v2_executable() -> Path:
     if p.returncode != 0:
         raise LeanError(f"lake build {V2_EXE} in {V2_PACKAGE} failed ({p.returncode}):\n{p.stdout[-2000:]}{p.stderr[-2000:]}")
     return V2_PACKAGE / ".lake" / "build" / "bin" / V2_EXE
-
-
-def _canonical(x: Any) -> bytes:
-    """`x` in the canonical JSON `Core.canonicalJson` reads, for the integers, strings, lists and objects of ASCII keys
-    these inputs hold."""
-    return json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode()
 
 
 def evidence_v2(proof: Proof, names: Sequence[str] | None = None) -> tuple[dict, list[Path]]:
@@ -237,8 +290,8 @@ def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any]
            "registered": None if registered is None else dict(registered)}
     with tempfile.TemporaryDirectory(prefix="verity-proofs-v2-") as d:
         paths = (Path(d, "own.json"), Path(d, "proofs.json"))
-        paths[0].write_bytes(_canonical(own))
-        paths[1].write_bytes(_canonical(pr))
+        paths[0].write_bytes(canonical_json(own))
+        paths[1].write_bytes(canonical_json(pr))
         p = subprocess.run([str(v2_executable()), "verdicts", *map(str, paths), *map(str, blobs)], capture_output=True,
                            text=True)
     try:
@@ -263,7 +316,7 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
     with tempfile.TemporaryDirectory(prefix="verity-proofs-v2-") as d:
         paths = [Path(d, n) for n in ("params.json", "record.json", "evidence.json")]
         for path, x in zip(paths, (p2, record, e2)):
-            path.write_bytes(_canonical(x))
+            path.write_bytes(canonical_json(x))
         p = subprocess.run([str(v2_executable()), "check", *map(str, paths), *map(str, blobs)], capture_output=True,
                            text=True)
     try:
@@ -272,5 +325,6 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
         raise LeanError(f"{V2_EXE} check answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
 
 
-__all__ = ["EXE", "PACKAGE", "STATEMENT", "V2", "V2_EXE", "Finding", "LeanError", "Proof", "check_v2", "evidence_v2",
-           "executable", "file_sha512", "proved_units", "reads_registered", "v2_executable", "verdicts_v2", "verify"]
+__all__ = ["EXE", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "V2", "V2_EXE", "Finding", "LeanError", "Proof",
+           "check_v2", "evidence_v2", "executable", "file_sha512", "ks_form_why", "proved_units", "reads_registered",
+           "v2_executable", "verdicts_v2", "verify"]

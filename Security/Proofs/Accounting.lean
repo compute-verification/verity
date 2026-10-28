@@ -46,6 +46,7 @@ import Proofs.Accounting.RemoteHeld
 import Proofs.Accounting.RemoteHeld.Meets
 import Proofs.Accounting.RemoteHeld.OverTime
 import Proofs.Accounting.RemoteHeld.Draw
+import Proofs.Accounting.RemoteHeld.DrawMeets
 import Proofs.Accounting.RemoteHeld.Binding
 import Proofs.Accounting.RemoteHeld.Sketch
 import Proofs.Accounting.RemoteHeld.SketchLine
@@ -94,5 +95,6 @@ import Proofs.Accounting.Compose
 import Proofs.Accounting.ComposePeriod
 import Proofs.Accounting.ComposePeriod.Honest
 import Proofs.Accounting.Served
+import Proofs.Accounting.Coverage
 
 /-! `Proofs.Accounting`: the proofs of resource accounting's guarantees. -/

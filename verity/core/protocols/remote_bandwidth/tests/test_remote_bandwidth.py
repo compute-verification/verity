@@ -139,7 +139,7 @@ def drive(store, p: Params, schedule: timing.Schedule, *, tiles=None, verifier_t
     clock = Clock()
     s = Session(p, store.registration, verifier_tiles or tiles, coins_ or challenger(store, p, label), not_before_ns=0,
                 clock=clock)
-    prover = audit.Prover(store, tiles, s.commitment, entropy=Entropy(b"receipt salts"))
+    prover = audit.Prover(store, tiles, entropy=Entropy(b"receipt salts"))
     events = sorted([(0, 0, -1)] + [(b, 0, t) for t, b in enumerate(schedule.boundaries)]
                     + [(a, 1, (t, i)) for t, i, a in schedule.arrivals])
     challenges, passes, previous = {}, {}, store.registration.digest
@@ -276,8 +276,7 @@ def test_a_receipt_depends_on_its_block_not_its_position(stores, bind) -> None:
     """The plan's order is only the tree's: the same blocks listed in another order give each block the same receipt
     (z, when the receipts bind it, is the tile before the block's read), and a different root."""
     store = stores[receipts.DEFAULT, bind]
-    prover = audit.Prover(store, audit.NoiseTiles(96) if bind else None, challenger(store, params()).commitment,
-                          entropy=Entropy(b"s"))
+    prover = audit.Prover(store, audit.NoiseTiles(96) if bind else None, entropy=Entropy(b"s"))
     seed = receipts.seed(bytes(range(32)), 0, store.registration.digest)
     a = prover.pass_under(0, 0, seed, receipts.Plan(((0, 10),), N))
     b = prover.pass_under(0, 0, seed, receipts.Plan.of(list(reversed(range(10))), N))
@@ -575,7 +574,7 @@ def test_tiles_are_taken_only_by_a_registration_that_binds_z(store, stores) -> N
         with pytest.raises(ValueError, match="binds z takes PoUW's tiles"):
             Session(params_of(st), st.registration, tiles, challenger(st, params()), not_before_ns=0, clock=Clock())
         with pytest.raises(ValueError, match="binds z takes PoUW's tiles"):
-            audit.Prover(st, tiles, challenger(st, params()).commitment)
+            audit.Prover(st, tiles)
 
 
 def test_payload_leaves_hide_the_payload_under_their_salts(store) -> None:
@@ -747,8 +746,14 @@ def test_each_pass_is_seeded_by_the_chain_from_its_windows_coin(store) -> None:
     forged = dataclasses.replace(first, coin=bytes([first.coin[0] ^ 1]) + first.coin[1:])
     assert (coins.coin_reason(c.commitment, forged, coins.CHALLENGE, 0)
             == "coin does not open against the epoch's coin commitment")
-    with pytest.raises(ValueError, match="does not open"):
+    with pytest.raises(ValueError, match="sent again, another coin"):
         prover.run(forged, 0, store.registration.digest)
+    fresh = audit.Prover(store, None, entropy=Entropy(b"fresh"))
+    fresh.run(forged, 0, store.registration.digest)
+    with pytest.raises(ValueError, match="does not open"):
+        fresh.end(c.commitment, (forged,))
+    with pytest.raises(ValueError, match="is not the one opened"):
+        fresh.end(c.commitment, (first,))
     with pytest.raises(ValueError, match="openings coin"):
         prover.run(c.openings(0, first.after), 0, store.registration.digest)
     with pytest.raises(ValueError, match="already open"):
@@ -1023,6 +1028,14 @@ def test_opening_size_matches_the_timing_model(store) -> None:
     assert timing.wrong_bound(10 ** 6, timing.samples_for(1e-3, 2.0 ** -40), 2.0 ** -40) <= 10 ** 3
 
 
+@pytest.mark.parametrize("units, samples", [(1, 1), (100, 1), (1000, 37), (10_000, 500), (10_000, 10_000)])
+def test_the_closed_wrong_bound_is_above_the_profiles_exact_one(units, samples) -> None:
+    """`stated` charges `wrong_bound`, the closed form, where the profile's exact count bound for `Subset(s)` would take
+    seconds a window at the stated store; it is never below the exact bound."""
+    exact = IntegrityProfile(("receipt",), (units,), {"receipt": Subset(samples)}, 2.0 ** -40).bound()
+    assert exact <= timing.wrong_bound(units, samples, 2.0 ** -40) <= units
+
+
 def test_the_stated_claim_holds_in_every_window_and_for_the_horizons_sampling_term() -> None:
     """`PROTOCOL.md` §1 and §10's reading through the ledger, on one node whose store spans every tier, 94 GB of each
     GPU's HBM and host DRAM's share, at the node's R, S_chip and squaring ceiling.  At the stated T = 60 s and 33,273
@@ -1056,7 +1069,7 @@ def test_the_stated_claim_holds_in_every_window_and_for_the_horizons_sampling_te
 
 
 def test_the_node_constants_are_the_sums_over_its_devices() -> None:
-    """R, S_chip, the squaring ceiling and the SHA-512 rate are the node's (MEM-26): its 8 GPUs' and its host's, every
+    """R, S_chip, the squaring ceiling and the SHA-512 rate are the node's: its 8 GPUs' and its host's, every
     tier, each GPU's value kept apart for the benches that read one GPU."""
     assert timing.GPUS == 8
     assert timing.READ_BYTES_PER_S == 8 * 1.539e12 + 606.8e9 and timing.SPEC_BYTES_PER_S == 8 * 1.597e12 + 819.2e9
@@ -1070,11 +1083,11 @@ def test_the_node_constants_are_the_sums_over_its_devices() -> None:
 
 
 def test_the_write_ceilings_are_the_sheets_above_every_write_measured() -> None:
-    """One GPU's and the host DRAM's write ceilings (MEM-45) are their data sheets' rates, which bound every prover
-    where a measurement bounds only the kernels tried, each above every write its run measured: the card's 1,528.98
-    GB/s on the device and 56.39 streamed in (r20261020-211937-b9c0), the host's 207.69 (r20261020-212232-6ba5).  Each
-    docstring names its runs; a fill of derived codec labels is bounded by the labeller, about 1.05 GB/s a GPU under
-    the default codec, and no DPU's is stated."""
+    """One GPU's and the host DRAM's write ceilings are their data sheets' rates, which bound every prover where a
+    measurement bounds only the kernels tried, each above every write its bench measured: the card's 1,528.98 GB/s on
+    the device and 56.39 streamed in (`write.cu`), the host's 207.69 (`write_host.c`).  Each docstring names its
+    benches; a fill of derived codec labels is bounded by the labeller, about 1.05 GB/s a GPU under the default codec,
+    and no DPU's is stated."""
     assert timing.GPU_WRITE_BYTES_PER_S == timing.GPU_SPEC_BYTES_PER_S == 1.597e12 > 1528.98e9 > 56.39e9
     assert timing.HOST_WRITE_BYTES_PER_S == timing.HOST_SPEC_BYTES_PER_S == 819.2e9 > 207.69e9
     body = ast.parse(Path(timing.__file__).read_text()).body
@@ -1082,8 +1095,8 @@ def test_the_write_ceilings_are_the_sheets_above_every_write_measured() -> None:
             if isinstance(a, ast.Assign) and isinstance(a.targets[0], ast.Name) and isinstance(b, ast.Expr)
             and isinstance(b.value, ast.Constant)}
     gpu, host = docs["GPU_WRITE_BYTES_PER_S"], docs["HOST_WRITE_BYTES_PER_S"]
-    assert "r20261020-211937-b9c0" in gpu and "SQUARINGS_PER_S[width]" in gpu
-    assert "r20261020-212232-6ba5" in host and "r20261020-211937-b9c0" in host and "No DPU" in host
+    assert "benchmarks/bandwidth/write.cu" in gpu and "SQUARINGS_PER_S[width]" in gpu
+    assert "benchmarks/bandwidth/write_host.c" in host and "benchmarks/bandwidth/write.cu" in host and "No DPU" in host
     labels = timing.GPU_SQUARINGS_PER_S[codec.DEFAULT.field.name] * codec.BLOCK_BYTES / codec.DEFAULT.encode_squarings
     assert labels == pytest.approx(1.05e9, rel=0.01)
     assert not [name for name in vars(timing) if name.startswith("DPU_")]

@@ -10,6 +10,16 @@
    "imports": ["CoreProtocol.Example"],
    "except": [],
    "why": "the program is code: the core interface and C-Flock's Lean, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "CoreComposition.Blobs": {
+   "imports": ["CoreComposition.Registered", "CoreProtocol.Blobs"],
+   "except": [],
+   "why": "the program is code: the core interface and C-Flock's Lean, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "CoreComposition.Same": {
+   "imports": ["CoreComposition.Product"],
+   "except": [],
+   "why": "the program is code: the core interface and C-Flock's Lean, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   }
  },
  "dependencies": {

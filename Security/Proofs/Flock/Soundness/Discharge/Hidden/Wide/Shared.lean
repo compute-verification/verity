@@ -1,5 +1,6 @@
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.V2
 import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
 
 /-!
 # Shared rows (`OutputsCommittedWide`, `OutputsBindingWide`)
@@ -57,6 +58,45 @@ theorem bc_drawnW {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : Li
   rw [← hchunk g hr]
   exact bc_pinned' L regs hregs hz o hg hg2 (Array.getElem_mem_toList hpr) (hall _ hpr) hsz128
 
+/-- **`bc_drawnW` at `unpin st`'s layout**: the statement without Δ's pinned copies, which has a layout with or without
+pinned outputs (`unpin_layout`). -/
+theorem bc_drawnW_unpin {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
+    {d : Lean.Json} {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
+    (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) {pop : Public}
+    (hpop : HmOut.loadPublic tags st.c pf = .ok pop) {D : Draw.UnitDraw}
+    (hD : Draw.UnitDraw.ofJson d = .ok D) (hlt : ∀ u ∈ D.proved, u < D.population)
+    (L : FlockSoundness.Layout (unpin st))
+    (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
+    (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLog (st.m - st.c.kLog) r ∈ regs)
+    {z : Model.Witness (L.model regs).m} (hz : (L.model regs).Satisfies z) (o : Fin (2 ^ (L.model regs).nbl))
+    {g p : ℕ} (hg : g < st.c.g) (hg2 : g < 2 ^ st.c.g.log2) (hp : p < st.c.ports.size)
+    (hr : o.val * st.c.g + g < D.proved.size) :
+    Binding.bytesAt z (fun (j : Fin 128) (t : Fin 8) =>
+        (L.model regs).addr o (Layout.inBlockOr st.c.kLog (Layout.bcAddr st.c g p j.val t.val))) =
+      (pop.digest D.proved[o.val * st.c.g + g] p st.c.ports.size).data.toList := by
+  have s := setupHidden_spec' h
+  obtain ⟨pop', hpop', -, hdr⟩ := s.pub
+  rw [hpop] at hpop'
+  cases hpop'
+  have hdrawn : HmRow.drawn { st.c with outPorts := #[] } pop d = .ok st.pub := hdr d rfl
+  have hload := loadPublic_nil hpop
+  have hpopn : D.population = pop.n := by
+    obtain ⟨D', hD', hpn, -⟩ := Layout.drawn_spec hdrawn
+    rw [hD] at hD'
+    cases hD'
+    exact hpn
+  have hchunk : ∀ g' (hr' : o.val * st.c.g + g' < D.proved.size),
+      Layout.bcChunk st.c st.pub o.val g' p = pop.digest D.proved[o.val * st.c.g + g'] p st.c.ports.size :=
+    fun g' hr' => bcChunk_drawnW hload hdrawn hD hlt hr' hp
+  have hsz128 : ∀ g' ≤ g, (Layout.bcChunk st.c st.pub o.val g' p).size = 128 := fun g' hg' => by
+    have hr' : o.val * st.c.g + g' < D.proved.size := by omega
+    rw [hchunk g' hr']
+    exact pop_digest_sizeW hload (by rw [← hpopn]; exact hlt _ (Array.getElem_mem hr')) hp
+  obtain ⟨hrsz, hall⟩ := regions_get s.regions
+  have hpr : p < st.regions.size := hrsz ▸ hp
+  rw [← hchunk g hr]
+  exact bc_pinned' (st := unpin st) L regs hregs hz o hg hg2 (Array.getElem_mem_toList hpr) (hall _ hpr) hsz128
+
 open Hm Compose Flock.DeriveAll Types.Dag
 
 theorem outputs_committed_wide' : OutputsCommittedWide := by
@@ -68,7 +108,8 @@ theorem outputs_committed_wide' : OutputsCommittedWide := by
   have L0 : FlockSoundness.Layout (flatTwin st) := layout_of (st := flatTwin st) P s.pin rfl rfl s.m s.kLog
   have F0 : Aliased.UnitFacts tags (flatTwin st) := unitFacts_of_parse (st := flatTwin st) hp rfl
   have R : RowRanges st.c := RowRanges.ofL (st := flatTwin st) L0 F0.parse F0.check
-  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray := by rw [s.da, hidden_delta']
+  have hda : st.da = (HmRow.delta st.c st.pin).1 ++ (outPairs st.c).toArray := by
+    rw [s.da, hidden_delta_unpinned (unpinned_of_rep hp hcr hor)]
   have hrows : OutRowsW st.c := outRowsW_of hp hcr hu hor h64
   have hz0 := sat_flatAll L L0 F0 hda hrows hz
   have hzero : blockBit (L.model regs) z o (zeroCol st.c) = false :=
@@ -83,7 +124,7 @@ theorem outputs_committed_wide' : OutputsCommittedWide := by
         (bytesOf (blockBit (L.model regs) z o) 192 (saltCol st.c g (HmOut.nIn st.c + j))) := by
     have h2 : 2 * (st.c.ports.getD (HmOut.nIn st.c + j) default).words + 17 ≤
         128 * ((st.c.ports.getD (HmOut.nIn st.c + j) default).chunks + 1) := by omega
-    have := row_bc_tgt L0 F0 rfl hupv hz0 o hg hpl (by rw [getElem!_eq_getD']; exact hb)
+    have := row_bc_tgt L0 F0 rfl hupv (hz0.ex _) o hg hpl (by rw [getElem!_eq_getD']; exact hb)
       (by rw [getElem!_eq_getD']; exact hw.ge) (by rw [getElem!_eq_getD']; exact h2) hu
     rw [getElem!_eq_getD'] at this
     exact this

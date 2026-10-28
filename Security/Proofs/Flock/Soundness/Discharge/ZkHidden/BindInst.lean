@@ -42,6 +42,9 @@ variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
 
 /-- **The public plan's sites** (`sitesShH`'s, each acceptance at the rows' fit `hrf`). -/
 noncomputable def sitesShHI : SitesH (planShH (Reg := Reg) dj y₀) (tabShH dj y₀) where
+  A S _ _ _ := (tableShH dj y₀ S).twinA
+  B S _ _ _ := (tableShH dj y₀ S).twinB
+  sat S _ _ _ := (tableShH dj y₀ S).sat (zkTyped ht)
   acc S _ _ _ := (tableShH dj y₀ S).acc (zkTyped ht) hc hrf
   vu S _ u h := (tableShH dj y₀ S).vu u h
   hvu S _ u h := (tableShH dj y₀ S).hvu u h
@@ -185,6 +188,12 @@ variable {n mPts : ℕ} {Reg : Type} {I : Inputs} (dj : Finset (Fin n) → Lean.
 
 /-- **The public plan's sites at `J` tables** (`sitesShHJ`'s, each acceptance at the rows' fit `hrf`). -/
 noncomputable def sitesShHJI : SitesH (planShHJ (Reg := Reg) dj y₀) (tabShHJ dj y₀) where
+  A S R u _ := castM (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
+    (tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.twinA
+  B S R u _ := castM (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
+    (tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.twinB
+  sat S R u _ := twin_sat_cast (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
+    ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.sat (tableShHJ_typed dj y₀ ht S _))
   acc S R u _ := recastAccH ((tableShHJ dj y₀ S (partOf I (dj S) u.val)).2.acc
     (tableShHJ_typed dj y₀ ht S _) (tableShHJ_parse dj y₀ ht hc S _) hrf)
     (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm
