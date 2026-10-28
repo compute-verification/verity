@@ -3,6 +3,7 @@ import Proofs.Core.TC.Gadgets
 import Proofs.Core.TC.Sound
 import Proofs.Core.TC.AmpereSound
 import Proofs.Core.TC.Boundary
+import Proofs.Core.TC.Vectors
 
 /-!
 # Proofs of the tensor-core guarantees

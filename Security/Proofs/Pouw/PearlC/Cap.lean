@@ -4,6 +4,7 @@ import Proofs.Pouw.PearlC.Cap.IntForm
 import Proofs.Pouw.PearlC.Cap.Verdict
 import Proofs.Pouw.PearlC.Cap.SaltDeadStep
 import Proofs.Pouw.PearlC.Cap.SaltDead
+import Proofs.Pouw.PearlC.Cap.Pins
 
 /-!
 # The cap circuit's Lean pieces

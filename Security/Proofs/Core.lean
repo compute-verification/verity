@@ -31,6 +31,8 @@ import Proofs.Core.Bilinear
 import Proofs.Core.Blocks
 import Proofs.Core.Fp32.Vectors
 import Proofs.Pouw.Prob
+import Proofs.Core.Prims.Vectors
+import Proofs.Core.Scalar.Vectors
 
 /-!
 # Proofs of core's guarantees
