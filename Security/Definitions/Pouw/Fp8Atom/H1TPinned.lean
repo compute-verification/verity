@@ -6,12 +6,12 @@ import Definitions.Pouw.Fp8Atom.H1TVectors
 /-!
 # H-1T's pinned statements (trusted)
 
-M2 of `internal/pouw-fp8/lean-atom-m2-plan.md`: the map `DistinctLiveH1T` is about (`Pouw.Fp8Atom.H1T`), the facts
+The map `DistinctLiveH1T` is about (`Pouw.Fp8Atom.H1T`), the facts
 about it that do not need the Target A proof, and the FP32 lemmas that proof uses.
 
 The map is checked against three other computations (`verity/protocols/accounting/work/pouw/lean/scripts/h1t_vectors.py`;
 `Definitions/Pouw/Fp8Atom/H1TCoverage.json`).
-The generator checks every expected value below against an exact transcription of §3.1 over fractions, Track H's
+The generator checks every expected value below against an exact transcription of §3.1 over fractions,
 `h1t_ref` and `chain` (`h1_tagged.py`, the pinned map), and a float16 simulation of the kernel `h1t_form_xq`, before
 it writes them.
 
@@ -27,7 +27,7 @@ it writes them.
 
 The structure of the map:
 
-* **`H1TReadsFields`**: every credited word reads the salt only through `extract`, the fields of X-H1T-8's change 1.
+* **`H1TReadsFields`**: every credited word reads the salt only through `extract`, the fields the kernel reads.
 * **`H1TNotRawWord`**: no credited word is a raw XOF word, because no read bit is below bit 7. With "no credited word
   is constant", which is part of `DistinctLiveH1T`, this is "no credited word is free".
 * **`H1TTupleInjective`** and **`H1TTupleWrap`**: the 88,412 = 23·62·62 columns of a unit carry distinct tag tuples,
@@ -43,8 +43,8 @@ The FP32 add (`Pouw.Fp8Atom.Fp32`):
 
 * **`RnErr`**: `rn` is within half an ulp of `y`.
 * **`RnAddMovesHalf`**: a summand of more than half an ulp of a nonzero representable `r` moves the sum. This is the
-  absorption step of X-H1T-3 (absorbed implies `2·|i| ≤ ulp r`, at `±2^k` too), which `RnAddMoves` alone leaves open
-  on `[960, 1,024)`.
+  absorption step of the one-flip argument (absorbed implies `2·|i| ≤ ulp r`, at `±2^k` too), which `RnAddMoves` alone
+  leaves open on `[960, 1,024)`.
 * **`HalfOfInvolution`**: a predicate that an involution always falsifies holds on at most half of a finite set; the
   counting step of the half-salt clause's one-flip cases.
 -/

@@ -18,7 +18,8 @@ component accepts.
 
 The guarantee is knowledge soundness of the sampled audit: except with a bounded probability, when the verifier
 accepts, at most the profile's count of proof blocks are faulty. Its top statement is C-Flock's
-`Flock.Guarantees.SampledKSLiveV3` (`Security/Proofs/Flock/Bridge/Refused.lean`), proved, and it bounds the probability
+`Flock.Guarantees.SampledKSLiveV3`, stated in `Security/Proofs/Flock/Bridge/Refused.lean` and proved in
+`Security/Proofs/Flock/Bridge/KSLive.lean`, and it bounds the probability
 that `flock-verify --zk` accepts the files and the run passes the registration's population while the claim fails. It
 rests on these named assumptions:
 
@@ -26,12 +27,13 @@ rests on these named assumptions:
   idealized; its docstring says what that leaves out).
 - `RecordCustodyZKJ`: the record `flock-verify --zk` reads is the one the challenger wrote for the live session, and its
   draw file is the one `flock-verify draw` printed for the verifier's own draw.
-- `TableCRZ` and `LinkCRZC`: SHA-512's collision resistance (`ecr/sha-512`), for the collision finders the proof builds
-  from the prover.
+- `TableCRZAt` (`cr/sha-512`; the statement reads it through its abbreviation `TableCRZ`) and `LinkCRZC`
+  (`ecr/sha-512`): SHA-512's collision resistance, for the collision finders the proof builds from the prover.
 
 The draw happens after the registration, so the prover fixes everything a drawn proof block's statement depends on
-before any coin. In the remote protocol the coins come from the auditor's challenger, which adds two premises about
-where it runs (`CoinsConfidential` and `OneClock`, under "Where things are").
+before any coin. In the remote protocol the coins come from the auditor's challenger (or the verifier's own draw),
+which adds two premises about where it runs, `CoinsConfidential` and `OneClock` ("Where things are"). Both are prose
+only: no `.lean` file defines either.
 
 ## Outline
 
@@ -133,16 +135,18 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the prover's
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
+  A remote prover reads them the same way: one TCP stream at its own `127.0.0.1` port (`RemoteChallenger`), deployed
+  as the far end of that coin link (`benchmarks/live_challenger/coin_link.py`); remote has no coin path of its own yet.
   The challenger rests on two premises about where it runs, which the network certifier's spec and ACCEL's cite by
-  name:
+  name; both are prose only:
   - `CoinsConfidential`: the challenger's coin stream reaches the network certifier only over a path on auditor hosts
     (`trusted-host`), or the challenger and the certifier are one device at the boundary. So no machine outside the
     boundary reads a coin before the certifier admits it, and a path across a host the prover controls is not
     allowed: it would need an encrypted, authenticated channel, which the challenger doesn't have. Deployed, one
     auditor host runs both, and a window's coins leave it only on the peer's certifier coin link,
-    which the gate refuses to open without (`auditor.coin_ports`). In the Lean it is the Prop
-    `Pouw.Assumptions.CoinsConfidential`: a replica's prover is the same function whatever the other replicas' coins,
-    the form ACCEL's pooled guarantee `Pouw.Guarantees.Dither.FleetSound` takes as a hypothesis.
+    which the gate refuses to open without (`auditor.coin_ports`). It is not in Lean: no `.lean` file defines it.
+    ACCEL's pooled guarantee `Pouw.Guarantees.Dither.FleetSound` builds a form of it into its statement instead (each
+    unit's prover is a function of the other units' coins).
   - `OneClock`, a spec premise that no Lean statement reads: the challenger's release times and the certifier's
     ingress and receipt times are read on one clock. Deployed, that is the auditor host's. A challenger on a device of its own would have to keep its clock within
     1.03 s of the certifier's, the offset ACCEL's timing allows.

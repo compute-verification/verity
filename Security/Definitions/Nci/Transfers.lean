@@ -12,7 +12,7 @@ computes it and `b` takes it as an input. Everything else `R_b` reads from outsi
 input gate of `C` (`inputsRead`), since a gate outside every machine is an input gate. So
 `in(R_b) = transfersInto b ∪ inputsRead b`, two disjoint sets: what reaches `b` over the wire, and the inputs it reads.
 A transfer gate's value reaches `b` once, in `w g` bits, so `width (transfersInto b)` is the bits on the wire into `b`,
-and in the Boolean profile (`w = 1`, `Verity.Boolean`) `|transfersInto b|` is.
+and in the Boolean profile (`w = 1`, `FlockSoundness.Audit.Circuit.toCircuit`) `|transfersInto b|` is.
 
 The machines are a partition rather than a family of `Covering.Subcircuit`s for two reasons. A machine's gates are what
 compute credit counts, each computed gate credited to the one machine that computes it, so the credits add up to

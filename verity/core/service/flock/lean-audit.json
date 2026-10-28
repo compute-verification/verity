@@ -34,6 +34,7 @@
   "Flock.Test.RegFormats",
   "Flock.Test.RegComplete",
   "Flock.Test.RegProgram",
+  "Flock.Test.DescOfProg",
   "Flock.Test.RegCover",
   "Flock.Test.RegKnown",
   "Flock.Test.KnownRead",

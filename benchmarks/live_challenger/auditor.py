@@ -1,4 +1,4 @@
-"""The auditor host's challenger service (vy-challenger-1): `serve.py` runs only as the `auditor` user, from a pinned
+"""The auditor host's challenger service: `serve.py` runs only as the `auditor` user, from a pinned
 tree, one session a window, each recorded in a signed append-only ledger before its first coin.
 
     vy-challenger-gate reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE]
@@ -24,7 +24,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   (`vy-challenger-gate LANE`, from `/etc/vy/challenger-gate-keys`, `vy-challenger-setup`), and only such a key reserves and
   opens a window: the reserve records that name as `by`, its prover. A key forced with no name (the shared lane key, which
   the control pod's publisher holds) reads only: `status`, `ledger`, `pins`, `pubkey`, `fetch`. A lane names a window and gets a
-  session; it never names code. Infra's `vy-admin` runs the same gate (`sudo vy-challenger-gate VERB ...`, `by` vy-admin),
+  session; it never names code. The admin account `vy-admin` runs the same gate (`sudo vy-challenger-gate VERB ...`, `by` vy-admin),
   and it alone may reserve a window for a lane that has no key of its own (`--for LANE`: the reserve records `for` and
   keeps `by` vy-admin, and the window's prover is LANE). Nothing else runs as `research` there, and nothing runs as
   `auditor` but the session unit, `reserve`, `admit` and a rehearsal's unit (the certifier's or the warden's).
@@ -363,7 +363,7 @@ LOAD_SHAPES = ("h200", "tiny")
 #: a load's streams to the H200's sink, each through a tunnel of its own, and how many by default
 LOAD_STREAMS, LOAD_DEFAULT_STREAMS = (1, 8), 4
 #: the link's rate a load's minutes are sized on (about 95 MB/s, measured over 4 streams from this host to
-#: vy-dc-h200-2 through the tunnel), and the seconds the endpoint has after the load to answer
+#: the H200 through the tunnel), and the seconds the endpoint has after the load to answer
 LOAD_RATE, LOAD_READY_S = 80e6, 900
 #: a store write's minutes: interface 1's H200 stream generated (about 15 s a GiB a core), written and read back
 WEIGHTS_MINUTES = 150
@@ -385,13 +385,17 @@ class Refused(Exception):
     """A request the gate or the session refuses, with why."""
 
 
+#: the auditor host's name, which its records give it
+HOST_NAME: str = json.loads((HERE / "host.json").read_text())["name"]
+
+
 @dataclass(frozen=True)
 class Host:
     """Where the service keeps its state, and the name its records give the host."""
 
     root: Path = Path("/var/lib/vy-challenger")
     peers: Path = Path("/etc/vy/peers")
-    name: str = "vy-challenger-1"
+    name: str = HOST_NAME
     pins: Path = Path("/opt/vy-challenger/pins.jsonl")
 
     @property

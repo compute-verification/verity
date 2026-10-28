@@ -1,4 +1,4 @@
-"""R13 X-08 — the generic bf16-row x 0-d-bf16-tensor multiply (`ScalarTensorMul[aten]_v1` -> `Bf16MulScalarTensor_v1{N}`) as a
+"""The generic bf16-row x 0-d-bf16-tensor multiply (`ScalarTensorMul[aten]_v1` -> `Bf16MulScalarTensor_v1{N}`) as a
 REGISTERED kind of the pinned `b1-eager-v3` vocabulary.
 
 What is under test: `aten.mul.Tensor(x[.., N] bf16, s bf16 [] | [1])` (either operand order; `s` a buffer, a parameter or a graph
@@ -193,9 +193,9 @@ def test_per_column_scale_refused():
 
 
 def test_python_scalar_is_not_this_rule():
-    """`x * 48.0` is `aten.mul.Tensor(x, 48.0)` with a Python constant: NOT this rule (`not both graph values`).  [R15 dense] Since the
+    """`x * 48.0` is `aten.mul.Tensor(x, 48.0)` with a Python constant: NOT this rule (`not both graph values`).  Since the
     `bf16_mul_scalar` kind joined `b1-eager-v3` (`Bf16MulScalar_v1{N,C}`: ATen's bf16 x scalar kernel, difftested in quarantine/dense),
-    `Bf16ScalarChain[aten]_v1` binds it — a different, registered kind with the constant in its identity; before R15 it was refused."""
+    `Bf16ScalarChain[aten]_v1` binds it — a different, registered kind with the constant in its identity."""
     rep = _derive(XTimesPython(), torch.randn(2, 8).to(BF))
     assert RULE not in rep.provenance.get("rules_applied", ()), rep.provenance.get("rules_applied")
     assert rep.unsupported is None, rep.unsupported

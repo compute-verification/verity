@@ -42,7 +42,9 @@ def Desc.def? (d : Desc) (id : String) : Option DDef := (d.defs.find? (·.1 == i
 /-- An input primitive, `Input<w>_v1` or `RegisteredInput<w>_v1` (`Program.inputId?`): the input unit's gates, not a Call. -/
 def isInput (id : String) : Bool := Program.isInputId id
 
-def Desc.parse (bytes : ByteArray) : V Desc := do
+/-- `Desc.parse` in a verdict monad `M`, the program's SHA-512 by `sha512` (`Flock.With.Setup` runs it on the hash oracle). -/
+def Desc.parseWith {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT V M] (sha512 : ByteArray → M ByteArray)
+    (bytes : ByteArray) : M Desc := do
   let some text := String.fromUTF8? bytes | throw "program: not UTF-8"
   let j ← match JsonParse.parse text with
     | .ok j => pure j
@@ -72,7 +74,20 @@ def Desc.parse (bytes : ByteArray) : V Desc := do
     | _ => throw "program: definitions"
   let some root := (j.getObjValAs? String "root").toOption | throw "program: root"
   if (defs.find? (·.1 == root)).isNone then throw "program: the root is not a definition"
-  return { callees, defs, root, sha512 := Sha512.hash (← canon bare).toUTF8 }
+  return { callees, defs, root, sha512 := ← sha512 (← canon bare).toUTF8 }
+
+def Desc.parse (bytes : ByteArray) : V Desc := Desc.parseWith (fun b => pure (Sha512.hash b)) bytes
+
+/-- The descriptor as the template queries read it, from the program `Program.decode` decoded: its definitions in the
+decoder's order, each node naming its callee by that order, so `callees` is the definitions' keys. At every definition the
+root reaches it reads what `Desc.parse` reads from the same bytes; it holds no definition or callee the program doesn't
+reach. -/
+def Desc.ofProg (P : Program.Prog) : Desc where
+  callees := P.defs.map (·.key)
+  defs := P.defs.map fun d =>
+    (d.key, { prim := d.prim, nodes := d.body.nodes.map fun x => { form := x.form.name, fn := x.fn, n := x.n } })
+  root := (P.defs.getD P.root default).key
+  sha512 := P.sha512
 
 /-- Members of a node: a batch's (or a scan's iterations), else one. -/
 def DNode.members (x : DNode) : Nat := if x.form == "batch" || x.form == "scan" then x.n else 1

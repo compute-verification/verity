@@ -35,8 +35,8 @@ declared one, and the next squaring's `mma` operands leave u8.
   fixup group with no carry; wrong with probability ≈ `105·c_top / 256^8` ≈ 2^−44.
 * `seam_square` **160**, the cheapest: group 0's carry is computed first, the pass over limbs 4..127 ends in the top carry
   `c_top`, and limbs 0..3 are emitted last from `f_0 + 105·c_top`, so the fold needs no fixup. Wrong only when
-  `105·c_top` bumps group 0's carry (`seam_fails`): measured 25 in 131,072 inputs on a node (2^−12.4, run
-  r20261018-030322-ffbd; 2^−12.3 modeled from `c_top`'s mean 8,193), so a 3,063-squaring word is right ≈55% of the time.
+  `105·c_top` bumps group 0's carry (`seam_fails`): measured 25 in 131,072 inputs on a node (2^−12.4;
+  2^−12.3 modeled from `c_top`'s mean 8,193), so a 3,063-squaring word is right ≈55% of the time.
 * `holeb_square` 128 under a `derive` that returns the declared interval, refused under the hull.
 
 **Why 160 holds.** 160 = 128 byte gates + 32 group carries. Each output byte is an s8-family operand of the next
@@ -47,7 +47,7 @@ operands are columns or adjacent pairs `f_p + 256·f_{p+1}` within s32, the carr
 (balanced) digits and from any seam limb, under `OperandBits 128`: none uses fewer than 32 groups (u8 columns are 30 bits
 at limb 0 down to 23 at limb 127, s8 a bit narrower, and five columns fit only near the top, where merges are too
 few to save a group). The margin is small but real: a 31-group plan first appears at `OperandBits 130` (s8, merged) to
-136 (u8, unmerged) (run r20261018-060115-4966), so the 128-bit rule is what holds 160. Lazy reduction can't skip bytes, since each product's operands must be bytes. Nothing beats
+136 (u8, unmerged), so the 128-bit rule is what holds 160. Lazy reduction can't skip bytes, since each product's operands must be bytes. Nothing beats
 the renormalization floor `L − d(ε) = 119` (121 at 2^−20): the 128 bytes alone exceed it, by 41 units a squaring. In
 nonlinear units every construction also pays its column sums, `L² = 16,384` data products (`column_sums`), so
 `seam_square` costs 16,544 against `e = 374`. Numbers are *measured* by building and running the circuits here unless
@@ -994,8 +994,8 @@ def main() -> None:
                 "column_bits": [_iv_bits(iv) for iv in cols]}
     best = rows["seam_square"]["fixed_units"]
     result = {
-        "model": "Security/Definitions/Accounting/Gates/Model.lean @ 8225774747 (#2459), ported scalar; lean_units is "
-                 "the count before #2420",
+        "model": "Security/Definitions/Accounting/Gates/Model.lean @ 8225774747, ported scalar; lean_units is "
+                 "the count before the gather fix",
         "constructions": rows,
         "seam": {"samples": args.seam_samples, "fails": fails, "c_top_mean": sum(ctops) / len(ctops),
                  "c_top_max": max(ctops), "model_rate": DELTA * (sum(ctops) / len(ctops)) / 2 ** 32},
