@@ -152,7 +152,8 @@ theorem composed_run {n : ℕ} {rows inner : String} {ps : List PartRun} {evs : 
     obtain ⟨⟨s, _, e⟩, _⟩ := hall p hp
     rw [e]
     rfl
-  have hsh0 := hsh _ (List.mem_map_of_mem (f := (·.view.verdict)) List.mem_cons_self)
+  have hsh0 := hsh p0.view.verdict
+    (List.mem_map_of_mem (f := fun p : PartRun => p.view.verdict) (List.mem_cons_self (a := p0) (l := rest)))
   simp only [PartRun.view, PartView.verdict, Option.some.injEq] at hsh0
   rw [hshared p0 List.mem_cons_self] at hsh0
   subst hsh0
