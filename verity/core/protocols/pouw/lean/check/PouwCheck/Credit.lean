@@ -15,7 +15,7 @@ import SampledProofs.PyJson
 import SampledProofs.Registered
 
 /-!
-# A served window's credited set, its drawn units and their outcome, its A rows and its period (`credit.py`; RT4-INT-32, -34 and -42)
+# A served window's credited set, its drawn units and their outcome, its A rows and its period (`credit.py`)
 
 The verifier of record of `verity/core/protocols/pouw/credit.py`, which the difftest (`tests/test_difftest.py`) holds to
 it, string for string:
@@ -89,7 +89,7 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   session's registered finding, each registered port's value and the root its reads were opened against). The entries
   are the window's registration's: each A value's domain, and each other value's a proof opened, is `domainOf` the
   committed descriptor's SHA-512 and, for every value but the weights' `…/b/<K>` (`isHeld`) and round 0's `…/ids@0`,
-  the window's open root (`SampledProofs.Registered.domainAt`, PRF-127), for `…/ids@0` the window's session; each
+  the window's open root (`SampledProofs.Registered.domainAt`), for `…/ids@0` the window's session; each
   proof was verified against that descriptor, opened only values
   the window registers once, each at its registered root, and opened its unit's K's A value, the window's `…/a/<K>` or
   its call's round's `…/a/<K>@<s>`, and its K's weights `<PREFIX>b/<K>`. So the A rows `Internal.aLink` ties to the round roots are the ones each drawn unit's
@@ -996,7 +996,7 @@ round 0's input-ids table (`…/ids@0`, `idsStep?` 0) and request table (`…/re
 window's open root contains (`requestsRoot`, `Internal.arow`), bind the window's session `session` in that root's place
 (`domainBound` at `"session"`); every
 other value's rows are the window's own, its A rows and its calls' A and z tables among them, and its domain binds the
-window's open root (PRF-127). -/
+window's open root. -/
 def domainOf (program window session : String) (e : Json) : R String := do
   let v := (str? (get e "value")).getD ""
   let (words, leaves, bits) := ((nat? (get e "words")).getD 0, (nat? (get e "leaves")).getD 0,
@@ -2189,8 +2189,7 @@ def mainIndex? (main : Json) (commit : String) : Option Nat :=
 `main`, is too old for the period: its pin more than the period's freshness floor of first-parent commits behind the
 commit the period's open recorded (`periodPin`, `committedPin`; `floor`, `committedFloor`, default 0 when the open pins
 but records no floor), measured from that pin and never from main's head; `none` when it is recent enough or the open
-records no pin. The per-window pin and circuit are `creditedSession`'s; this is the period-level hygiene on top
-(CMP74-FOLLOW). -/
+records no pin. The per-window pin and circuit are `creditedSession`'s; this is the period-level hygiene on top. -/
 def pinHygiene (name : String) (i : Nat) (main : Json) (pinned : String) (periodPin : Option String)
     (floor : Option Nat) : Option (String × String) :=
   match periodPin with
