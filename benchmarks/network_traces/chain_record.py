@@ -140,18 +140,15 @@ def _json(path) -> dict | None:
     return json.loads(p.read_text()) if p and p.is_file() else None
 
 
-def subset_bound(n: int, k: int, delta: float) -> int | None:
-    """The fewest wrong units b such that an accepted draw of k of n units, uniform without replacement, hides more
-    than b except with probability δ: the least b with C(n − b − 1, k) / C(n, k) ≤ δ. Selection All (k = n) is 0."""
-    if n <= 0 or not 0 < k <= n:
-        return None
-    total = math.comb(n, k)
-    return next(b for b in range(n) if math.comb(n - b - 1, k) <= delta * total)
-
-
 def eps_at_delta(n: int, k: int, law: str) -> dict:
+    """At each δ, the most wrong units an accepted draw of k of n units, uniform without replacement, hides except with
+    probability δ: the integrity profile's count bound (`profile.Stratified.count_bound`, Lean `Bound.countBound`), the
+    largest K whose miss is at least δ. Selection All (k = n) is 0; None when nothing is drawn."""
+    from verity.core.protocols.profile import Stratified
+
+    uniform = Stratified.uniform(n, k) if 0 < k <= n else None
     return {"law": law, "units": n, "drawn": k,
-            "wrong_units_at_delta": {f"{d:.3g}": subset_bound(n, k, d) for d in DELTAS},
+            "wrong_units_at_delta": {f"{d:.3g}": None if uniform is None else uniform.count_bound(d) for d in DELTAS},
             "per_proof": "each proof's soundness error, ε_ks + ε_bind (KSLinOn's κ + √(γ·Pr B) + Pr[Bext]), "
                          "symbolic: Claims.Sampling.KS is a hypothesis until Flock.Guarantees.SampledKSLive"}
 
