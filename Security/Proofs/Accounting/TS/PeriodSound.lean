@@ -105,7 +105,7 @@ of one window the deployed check accepts and publishes a drawn unit on every pat
 theorem CheckProofSystemSound_nontrivial :
     ¬ ServiceSound prm (windows 1) opened (fun _ _ _ _ => False) 0 := by
   intro h
-  haveI : Nonempty (Paths Ω1 1) := ⟨((Paths.const true _, (Equiv.refl _, ())), ())⟩
+  have : Nonempty (Paths Ω1 1) := ⟨((Paths.const true _, (Equiv.refl _, ())), ())⟩
   refine absurd (h 0) (not_le.2 (lt_of_lt_of_le one_pos
     ((Accounting.SecurityProofs.FillerLuck.Cell.prob_all (Ω := Paths Ω1 1)).symm.le.trans
       (prob_mono fun x _ => ?_))))
