@@ -410,7 +410,7 @@ theorem keyProgHP_gate (hkeys : KeysRowP c hU pi (portRowW c))
     obtain ⟨u'', j, t, hoc⟩ := houts u _ hg hm x rfl
     have hno' : outRowOfP c hU n pi outs ((Const.Prog.instC (keyProgP c pi hU n) outs u).wire x) = none := hno
     rw [outRowOfP_wire outs x hm (unit_wireP outs x hm).2, Layout.outDecode_of hoc] at hno'
-    have hcr : HmOut.checkRows c = .ok () := (si.acc S R u hu).checkRowsU (hparse S R u hu)
+    have hcr : Hidden.RowsOut c := (si.acc S R u hu).checkRowsU (hparse S R u hu)
     have hlo := (si.acc S R u hu).leavesOut_ltU (hparse S R u hu) ho
     obtain ⟨hu', hj, ht, -⟩ := hoc
     have hget : c.leavesOut.getD u'' #[] = c.leavesOut[u'']! := by
@@ -420,7 +420,7 @@ theorem keyProgHP_gate (hkeys : KeysRowP c hU pi (portRowW c))
       refine hlo u'' hu' _ ?_
       rw [← hget]
       exact Array.getElem_mem_toList _
-    exact outBitRow_ne_none hcr hrf u hwlt ht hno'
+    exact outBitRow_ne_none_of_rowsOut hcr hrf u hwlt ht hno'
 
 include hparse hpi ho hrf houts in
 /-- **The single gates at `keyProgP`'s sites in hidden-output tables hold the registration's bits**

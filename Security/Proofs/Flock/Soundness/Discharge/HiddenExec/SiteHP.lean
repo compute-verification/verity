@@ -57,10 +57,11 @@ theorem rowsFitU {c : Flock.Circuit} (hce : HmOut.unrolled a.st.c = c) (hrf : Hi
   obtain ⟨nets, rfl⟩ := a.stmt_eq hce
   exact hrf
 
-/-- The statement circuit passes `HmOut.checkRows`, which reads no net. -/
-theorem checkRowsU {c : Flock.Circuit} (hce : HmOut.unrolled a.st.c = c) : HmOut.checkRows c = .ok () := by
+/-- The statement circuit's output rows pass `HmOut.checkRows`' checks of them (`Hidden.RowsOut`), which read no net
+(`checkPinned` does, and the statement circuit's nets are not the committed one's). -/
+theorem checkRowsU {c : Flock.Circuit} (hce : HmOut.unrolled a.st.c = c) : Hidden.RowsOut c := by
   obtain ⟨nets, rfl⟩ := a.stmt_eq hce
-  exact a.checkRows
+  exact fun j hj => Hidden.checkRows_out a.checkRows hj
 
 /-- **Every returned output is an output word** of the statement circuit (`Layout.check_out`). -/
 theorem leavesOut_ltU {c : Flock.Circuit} (hce : HmOut.unrolled a.st.c = c) (ho : c.outNet = c.unitNet) :
