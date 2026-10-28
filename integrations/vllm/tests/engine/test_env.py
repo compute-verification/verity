@@ -54,7 +54,7 @@ def test_a_step_gets_the_stage_rpc_bound_unless_the_operator_set_one(monkeypatch
 @pytest.mark.parametrize("module, fn", [("verity_vllm.pipeline.tp.capture", "main"), ("verity_vllm.pipeline.tp.commit", "main"),
                                         ("verity_vllm.pipeline.tp.match", "_engine_main")])
 def test_every_tp_engine_bounds_a_step_by_its_rpc_timeout_before_it_is_built(module, fn) -> None:
-    """vLLM's own 300 s stopped a GLM-5.3 B8 capture in its first observed step, a 256-token prefill; the greedy row's first one
+    """vLLM's own 300 s stopped a GLM-5.3 B8 capture in its first observed step, a 256-token prefill; the greedy workload's first one
     took 147 s on an idle host."""
     import importlib
     import inspect

@@ -13,7 +13,7 @@ import Proofs.Pouw.Dimension.OpenPipeProofs
   and an `fp32` value is an `FpStep` over them (`fpVal_step`).
 * **The count** (`perWordM4090`): a checked word is not in `V₀`, so it is a slot of the translation, and `theorem1Open`
   pays 16 per word.
-* **The range gap** (`a1fpOnRangeGap`, red team Phase 14): a checked word that takes a value `fpSem` never outputs
+* **The range gap** (`a1fpOnRangeGap`): a checked word that takes a value `fpSem` never outputs
   cannot be an FP32 step, so each is a distinct instruction at 16 (`count16`); `perWordM4090Gap` composes it with
   `embedFp`.
 -/
@@ -391,7 +391,7 @@ theorem a1fpFadd : A1fpFadd := by
   rw [sub_zero, one_mul]
   exact h'
 
-/-! ## The range gap (red team Phase 14, R14-1) -/
+/-! ## The range gap -/
 
 /-- **`CanonicalNaN` is satisfiable.** -/
 theorem canonicalNaNSat : CanonicalNaNSat := by
@@ -419,7 +419,7 @@ theorem gok_mem {G : Type} (C : List (G → ℚ) → ℕ → (G → ℚ) → Pro
 
 open Classical in
 /-- If every `w ∈ W` is the value of a priced instruction of `P`, and every priced instruction whose value is in `W`
-costs at least 16, then `16·|W| ≤ cost P` (red team Phase 14). -/
+costs at least 16, then `16·|W| ≤ cost P`. -/
 theorem count16 {G : Type} : ∀ (P : List (Instr G)) (W : Finset (G → ℚ)),
     (∀ w ∈ W, ∃ p, Instr.priced p w ∈ P) → (∀ p f, Instr.priced p f ∈ P → f ∈ W → 16 ≤ p) →
     16 * W.card ≤ cost P := by
@@ -470,7 +470,7 @@ theorem count16 {G : Type} : ∀ (P : List (Instr G)) (W : Finset (G → ℚ)),
         simp only [cost, List.map_cons, List.sum_cons] at h ⊢
         omega
 
-/-- **`A1_fp` at `γ = 0` from a range gap** (red team Phase 14, `a1fpOn_of_rangeGap`). -/
+/-- **`A1_fp` at `γ = 0` from a range gap** (`a1fpOn_of_rangeGap`). -/
 theorem a1fpOnRangeGap : A1fpOnRangeGap := by
   intro fpSem k m n N R A B U hind hU hgap L P hL hP S hS hSw
   classical
