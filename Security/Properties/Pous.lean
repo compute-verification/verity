@@ -71,7 +71,7 @@ def PublishesRoot : Prop :=
   ∀ (q : P2.Params) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray)) (pub : SetupProtocol.Public)
     (prof : Unit), SetupProtocol.protocol.check q c C = .accept pub prof → Published q c C pub
 
-/-- The registered point (`p2/PROTOCOL.md` v1.1, `p2-p16448-c21065`, profile `p2-2054B`): valid, its prime
+/-- The registered point (P2 v4, `p2-p16448-c21065`, profile `p2-2054B`): valid, its prime
 `2^16448 − 21065`, 2,056-byte blocks of 2,054 payload bytes, `2^16` blocks per segment in 8 segments, `2^19` in all. -/
 def Deployed : Prop :=
   let q := P2.Params.deployed
