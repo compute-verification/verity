@@ -70,13 +70,13 @@ open Classical in
 /-- **A feasible run's schedule fits the device**, when its locations `chip` and `mem` and its links are the device's,
 its memory per run is the hardware's and each op class runs at most at its rate. `Feasible`'s `Memory` bounds only the
 circuit's `state` (`memory_of_mem` derives it from the run's), so the run's memory is a hypothesis of its own. -/
-theorem fits_of_feasible {ι α E : Type} [Fintype α] (R : Actual.Run L) {H : Hardware L E} {ann : Annotation R.A E}
-    (hF : Feasible H R.A ann) (hM : R.Memory H.units H.M) (d : Device ι) (chip mem : Finset L)
+theorem fits_of_feasible {ι α E : Type} [Fintype α] (R : Actual.Run L) {H : Hardware L E} {usage : Usage R.A E}
+    (hF : Feasible H R.A usage) (hM : R.Memory H.units H.M) (d : Device ι) (chip mem : Finset L)
     (cls : Fin R.A.N → Option OpClass) (acct : Fin R.A.N → α) (hbm : E × L) (side : ι → E × L)
     (hΦ : ∀ o, R.A.ComputeRate {chip ∪ mem} (R.A.classPrice cls o) (fun _ => d.rate o))
     (hchip : chip ∈ H.units) (hmem : mem ∈ H.units) (hMc : H.M chip ≤ d.chip) (hMm : H.M mem ≤ d.mem)
     (hbw : H.β hbm.1 ≤ d.bw) (hcap : ∀ i, H.β (side i).1 ≤ d.cap i) :
-    (R.schedule chip mem cls acct ann.link hbm side).Fits d :=
+    (R.schedule chip mem cls acct usage.link hbm side).Fits d :=
   fits R d chip mem cls acct hbm side hΦ hM hchip hmem hMc hMm hF.2.2.2.2 hbw hcap
 
 open Classical in
