@@ -38,7 +38,7 @@ installed DIMMs aren't on record, and the part takes MRDIMMs up to 8800 MT/s (th
 
 
 @dataclass(frozen=True, slots=True)
-class DeviceFigures:
+class GpuFigures:
     """One device's figures (bytes a second, bytes, compressions and squarings a second)."""
 
     sku: str
@@ -68,7 +68,7 @@ class NodeFigures:
     tier, S_chip, the devices' SHA-512 rate and squaring ceiling, one device's and host DRAM's write ceilings. Its
     ``placeholders`` are the open figures it was read with."""
 
-    devices: tuple[DeviceFigures, ...]
+    devices: tuple[GpuFigures, ...]
     host: HostFigures
     placeholders: tuple[str, ...] = ()
 
@@ -146,9 +146,9 @@ class _Reader:
         return tuple(sorted(self.read))
 
 
-def _device(r: _Reader, sku: str) -> DeviceFigures:
+def _device(r: _Reader, sku: str) -> GpuFigures:
     card = r.card(sku, "gpu")
-    return DeviceFigures(sku, float(r.figure(card, "memory", "read")), float(r.figure(card, "memory", "bandwidth")),
+    return GpuFigures(sku, float(r.figure(card, "memory", "read")), float(r.figure(card, "memory", "bandwidth")),
                   int(r.figure(card, "store", "chip")), float(r.figure(card, "hash", "sha512")),
                   MappingProxyType({w: float(r.figure(card, "squaring", w)) for w in card["squaring"]}))
 
@@ -160,7 +160,7 @@ def _host(r: _Reader, sku: str) -> HostFigures:
                 int(r.figure(card, "link", "window")))
 
 
-def device_of(sku: str, placeholders: Sequence[str] = ()) -> DeviceFigures:
+def device_of(sku: str, placeholders: Sequence[str] = ()) -> GpuFigures:
     """The device figures of GPU card ``sku``."""
     r = _Reader(placeholders)
     d = _device(r, sku)
