@@ -4,7 +4,7 @@ There is no per-model profile module and no role -> module table.  A checkpoint 
 `profiles.generic.build_profile(role, world)` -- the κ pins of `vllm_d9105ea80_sm89_eager`, the architecture's pattern libraries
 (`gen_*_patterns`) and the role's HF `config.json` plus the declared family facts, which stay with the model facts in `engine.profiles`
 (`engine.profiles.family_facts.FAMILY_FACTS[model_type]`, the one place a family name appears).
-`verity_vllm.observe.fold.profiles.derived_<ROLE>[_tp<W>]` (and the X-07 name `dense_<ROLE>`) is materialised on import by the
+`verity_vllm.observe.fold.profiles.derived_<ROLE>[_tp<W>]` (and the legacy name `dense_<ROLE>`) is materialised on import by the
 finder below, so every `importlib.import_module(f"verity_vllm.observe.fold.profiles.{name}")` consumer (resolve_log, compare, gates, run_config,
 tp2_fold_match, cb_a) works unchanged in a fresh process.  The two protected base modules (`vllm_d9105ea80_sm89_eager`, `..._qwen15`) stay
 as the κ pin record and the golden corpus's profiles; `derived_B0` is the base module's profile derived from config.json, behind the

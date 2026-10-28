@@ -13,8 +13,8 @@ import tempfile
 from collections.abc import Mapping
 from typing import Any
 
-#: The engine's execution profile (CONTRACT.md §2 / §2.1), shared by production and replay: vLLM's defaults but for these, each
-#: with its reason in `REASONS`.  Batch invariance is the row's execution label's (`engine.served.EXECUTIONS`), not the profile's.
+#: The engine's execution profile, shared by production and replay: vLLM's defaults but for these, each
+#: with its reason in `REASONS`.  Batch invariance is the workload's execution label's (`engine.served.EXECUTIONS`), not the profile's.
 ENGINE = {
     "VLLM_USE_V2_MODEL_RUNNER": "1",
     "VLLM_ENABLE_V1_MULTIPROCESSING": "0",
@@ -37,7 +37,7 @@ REASONS = {
 }
 
 #: The meta-device instantiation of the pinned model class (``program/frontend/vllm_meta.py``).  Batch invariance is the Build
-#: target's (``TargetProfile.env()``, applied before vLLM is imported), which is the row's execution label's, not the profile's.
+#: target's (``TargetProfile.env()``, applied before vLLM is imported), which is the workload's execution label's, not the profile's.
 EXPORT = {
     "VLLM_USE_LAYERNAME": "0",
     "VLLM_DISABLE_SHARED_EXPERTS_STREAM": "1",
@@ -145,7 +145,7 @@ def disable_compile_cache() -> None:
 def prepare_compiled_process_cache() -> dict[str, Any]:
     """Before a COMPILED engine is built: make this process's Inductor output code identifiable.  (1) A fresh,
     empty TORCHINDUCTOR_CACHE_DIR unless the caller already exported one it marks as per-process (compiled_commit.sh) -- torch's default
-    /tmp/torchinductor_<user> is shared by every process on the pod, so a pin read from it would digest other rows' kernels; (2)
+    /tmp/torchinductor_<user> is shared by every process on the pod, so a pin read from it would digest other workloads' kernels; (2)
     VLLM_DISABLE_COMPILE_CACHE=1 -- a vLLM compile-cache hit replays another process's artifacts and emits no output code here (the pin
     would be null: a compiled record without positive evidence of compilation).  Costs one Inductor compilation per process (~70 s for
     Llama-3.2-1B), recorded in the header as compilation.compile_cache = disabled."""

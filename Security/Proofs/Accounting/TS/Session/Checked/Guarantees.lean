@@ -31,7 +31,7 @@ open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
 /-- **A checked unit's proof layer is sound at `δ` through its C-Flock sessions, fully checked.** For any window whose
-proof `i` of round `w` on the path `x` is the C-Flock session `sess x w i` (#2909's `RowsSession`) with outcome
+proof `i` of round `w` on the path `x` is the C-Flock session `sess x w i` (a `RowsSession`) with outcome
 `out x w i`, and the checked layer `checkedLayer sess out ok right` (accepted where flock-verify `--zk --registered`
 accepts, opening the committed rows at the registered reads, its relation the unit's Definition with the port `ok`
 registered): given `Flock.Guarantees.EndToEndRegisteredRows`' named assumptions at every session and every unit's

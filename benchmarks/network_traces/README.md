@@ -98,6 +98,17 @@ runs on, which the challenger's coin link reaches through that node's own line o
 warden run's witness never go on the prover's machine. Without the gate's coins the chain draws on the verifier's
 (`--coins verifier`, the default).
 
+`certifier_piece.py` is the network certifier's piece of `benchmarks/one_stage/served_verdicts.sh`. Its `front`
+(`CERTIFIER_FRONT`) runs before that run's requests: the gate's scan rehearsal sends one group of the window circuit's
+class (4 prompts of 24 ids, 4 ids out, `--window-per-group`) to serve-openai, all of it in link-window 0, so the engine
+closes it into the run's earliest window, the one the run audits, and the gate's fetch is kept in the serve dir's
+`private/certifier`. Its `piece` (`CERTIFIER_CMD`) runs the chain's warden path on that fetch with the serve dir's
+endpoint records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows
+form of the scan's link-window (`scan_period.rows_case`). The answer is accept only when the chain accepted, every request
+of the audited window is a certified one inside that link-window, and the Lean check accepts. Anything else is a reject,
+or undecided when a step couldn't run. With no fetch kept the piece refuses to run (`refused.txt`), which leaves the
+certifier missing.
+
 ## The chain's run of record
 
 The run of record takes the network chain end to end on the gate's machines:
@@ -191,7 +202,7 @@ The terms, in the generator reading of the scan's statement (each unit's registe
 - log2 #S_s = 0.
 - log2(cap_c + 1) = log2 66 = 6.04 bits a connection. Here cap_c bounds `WardenSchedule.cells c`, the egress cells of
   connection c's lane, which is egress_cells. The endpoint's slot count isn't a term of the network certifier's
-  schedule: it enters the compute audit's terms, which go into JointPeriod.
+  schedule: it enters the compute audit's terms, which go into JointPeriodLive.
 - The free inputs are the scan's `prog` rows: T·NP = 32 × 4,480 = 143,360 bits a link-window as registered today, or
   32 + KO·IDB = 1,120 bits a request if `prog` is an input only at its anchored entries.
 - No faulty term with every unit drawn, and D_j = 1, so the jitter term is 0: assumed (J), `NetTiming.JitterBounded`,
@@ -252,7 +263,7 @@ K also rests on these conditions:
 - At light traffic (40 requests over 43 link-windows, 0.93 a link-window, its scan's every unit drawn) the
   anchored table's machine-week is 1.01% of the weights and its machine-year 52.2%; as registered it is 1.37×
   a machine-week either way.
-- The compute audit's free inputs don't enter K: its δ goes into JointPeriod's sum.
+- The compute audit's free inputs don't enter K: its δ goes into JointPeriodLive's sum.
 
 The report names what it stands on beyond the theorem (`chain_record.STUBBED`, `WARDEN_STUBBED` and
 `HORIZON_CONDITION`) and what the theorem doesn't cover (its `uncovered`).

@@ -350,10 +350,9 @@ def lean(s: Sheet, data: Path) -> str:
     out += [""] + _wrap("Scope: the machine is one GPU's own SMs. Work a peer GPU on the node does over NVLink or "
                         "NVSwitch and sends back (whole tiles as 64-byte digests) is outside it: the sheet bounds what "
                         "the credited GPU's SMs compute, not which GPU computed a tile, and `Device.lean`'s side "
-                        "channels don't list NVLink peer offload (RT-SCOPE-1, note:20261019T0455Z-draft-rt-scope).", "")
+                        "channels don't list NVLink peer offload.", "")
     out += [""] + _wrap(f"`uv run machine-model --device {device} sheet --lean` prints this file from `{_rel(s)}`, and "
-                        "the machine model's tests hold it to that output. The grades, and where the sm_120 sheet's "
-                        "structure doesn't fit this device: note:20261019T0511Z-draft-mm-sheets.", "")
+                        "the machine model's tests hold it to that output.", "")
     out += ["-/", "", f"namespace Accounting.TS.Sheets.{s.name}", "", "noncomputable section", ""]
     # Not `deriving Fintype`: Mathlib's handler for an enumeration fails its own `rw [Finset.mem_mk, …]` under this
     # toolchain (r20261019-053835-0e45), so each instance lists the constructors.

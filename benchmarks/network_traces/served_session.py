@@ -79,13 +79,15 @@ The runs (the lane's gate key is on `AUDITOR`; KEEP is the lane's gate directory
 
     research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting --cwd source --timeout 90m \\
       -- bash -lc 'python3 benchmarks/network_traces/served_session.py session --out "$OUT" --at 2026-10-28T12:00:00Z'
-    research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting --cwd clone --timeout 180m \\
-      --send challenger-key.json -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 \\
-      tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 9900 -- nice -n 19 bash -c \\
+    research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting --cwd clone --timeout 270m \\
+      --store-read --send challenger-key.json -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 \\
+      tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 -- nice -n 19 bash -c \\
       'python3 benchmarks/network_traces/served_session.py chain --run RUN --endpoint ART \\
       --eos-ids 128001 --draw 8 --coins gate --challenger-key "$RESEARCH_RUN_DIR/inputs/challenger-key.json"'
 
-(``--coins verifier``, without ``--send`` and ``--challenger-key``, is the fallback);
+(``--store-read`` gives the job the read-only store key its fetch of the records art needs; ``--run-max`` leaves room
+over a dry chain of 16 requests on the gate's coins, which held its slot about 9,500 s, an hour of it the challenger's
+session; ``--coins verifier``, without ``--send`` and ``--challenger-key``, is the fallback);
 
 and the dry rehearsal, on `AUDITOR`, whose KEEP its dry chain reads:
 
@@ -170,7 +172,8 @@ def prompts(n: int, ids: int, vocab: int, seed: bytes) -> list[list[int]]:
 
 def words(a: argparse.Namespace) -> list[str]:
     return ["warden-rehearse", "--peer", a.peer, "--port", str(a.port), "--minutes", str(a.minutes),
-            "--requests", str(a.requests), "--height", str(a.height), "--scan", "--prompts", "--tokens", str(a.tokens)]
+            "--requests", str(a.requests), "--height", str(a.height), "--scan", "--prompts", "--tokens", str(a.tokens),
+            *(["--window-per-group"] if getattr(a, "window_per_group", False) else [])]
 
 
 def scratch_host(d: Path, peer: str) -> A.Host:
@@ -211,10 +214,12 @@ def plan(a: argparse.Namespace, data: bytes) -> dict:
                 "session": "research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting "
                            f"--cwd source --timeout {a.minutes + 60}m -- bash -lc '{session}'",
                 "chain": "research run --on vy-nebius-cpu-2 --source . --project verity --as network-accounting "
-                         "--cwd clone --timeout 180m -- env CHECK_SLOTS=/workspace/research/locks/network/slots "
-                         "python3 tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 9900 "
-                         "-- nice -n 19 python3 benchmarks/network_traces/served_session.py chain --run RUN "
-                         "--endpoint ART --eos-ids 128001"}}
+                         "--cwd clone --timeout 270m --store-read --send challenger-key.json -- "
+                         "env CHECK_SLOTS=/workspace/research/locks/network/slots "
+                         "python3 tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 "
+                         "-- nice -n 19 bash -c 'python3 benchmarks/network_traces/served_session.py chain --run RUN "
+                         "--endpoint ART --eos-ids 128001 --draw 8 --coins gate "
+                         "--challenger-key \"$RESEARCH_RUN_DIR/inputs/challenger-key.json\"'"}}
 
 
 def keep_dir(keep: Path, out: Path) -> Path:
@@ -307,7 +312,8 @@ def pinned() -> str:
 
 
 def local(a: argparse.Namespace, data: bytes, keep: Path) -> bytes:
-    """The dry rehearsal: this tree's gate on a scratch host under `keep`, the stand-in as its tunnel."""
+    """The dry rehearsal: this tree's gate on a scratch host under `keep`, the stand-in as its tunnel, or ``a.tunnel``
+    (``(ssh, port) -> argv``, a process listening on ``port``) when given."""
     host = scratch_host(keep / "local-gate", a.peer)
     rc, start = A.gate(["--ssh", shlex.join(words(a)), "--key", LANE], host, now=datetime.now(UTC),
                        token=secrets.token_hex(2), own=lambda p: None, certifier_active=lambda r: False,
@@ -321,7 +327,7 @@ def local(a: argparse.Namespace, data: bytes, keep: Path) -> bytes:
     stub = [sys.executable, str(HERE / "demo_stub.py"), "serve", "--prompt-ids", str(a.prompt_ids), "--tokens",
             str(a.tokens), "--vocab", str(a.vocab), "--out", str(endpoint)]
     A.certifier_run(host, run, pinned=pinned(), now=lambda: datetime.now(UTC),
-                    tunnel_argv=lambda ssh, port: [*stub, "--port", str(port)])
+                    tunnel_argv=getattr(a, "tunnel", None) or (lambda ssh, port: [*stub, "--port", str(port)]))
     return A.certifier_fetch(run, host, witness=True)
 
 
@@ -438,7 +444,8 @@ def endpoint_records(src: str, dest: Path, fetch: Path, eos: list[int]) -> str:
     if src.startswith("art:"):
         got = subprocess.run(["research", "data", "fetch", src, "--to", str(dest)], capture_output=True, text=True)
         if got.returncode:
-            raise Refused(f"research data fetch {src} (exit {got.returncode}): {got.stderr.strip()[-300:]}")
+            raise Refused(f"research data fetch {src} (exit {got.returncode}): {got.stderr.strip()[-300:]} (a `research "
+                          "run` job reads the store's remote only when launched with --store-read)")
     elif path.is_dir():
         if path.resolve() != dest.resolve():
             shutil.copytree(path, dest, dirs_exist_ok=True)

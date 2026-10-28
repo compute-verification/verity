@@ -38,9 +38,9 @@ at `c_root = 16,445` a block's encode is 32,890 (the P2 store's `codec.P2Codec.b
 model's recomputing responder spends `2 · 16,447 = 32,894` multiplication rounds a block (`PousP2Ring.tight_p16448`),
 above it.
 
-**Where it stands.** Not red-teamed at P2's width. The nearest evidence is the masked word codec's: no 4-dimensional
+**Where it stands.** No attack has been tried at P2's width. The nearest evidence is the masked word codec's: no 4-dimensional
 completion of a masked word at any width tried (none of 200), where the unmasked `k = 2`
-codec completes up to `x ≈ b/10` (r20261012-163319-2804). P2 differs in its width (one 16,448-bit word a block, where a
+codec completes up to `x ≈ b/10`. P2 differs in its width (one 16,448-bit word a block, where a
 lattice's dimension and reduction cost grow) and in its offset `t_j`. PoUS's guarantee prices its responder in
 sequential depth (`P2RingAuditSecure`), not in total work, so it does not give this form. -/
 def WorkHardnessP2 (cRoot : ℕ) (cost : ℕ → ℕ) : Prop := WorkHardness 16448 2 cRoot cost
@@ -62,7 +62,7 @@ node's compute re-encodes at most `s / (4 · 32,890) · (v − u) + B` units of 
 * `B` one maximal rebuild batch.
 
 **Unmeasured**: `s` at P2's width on the H200. The honest encode is 664.8 blocks a second on one H200
-(r20261025-234817-519a, 98.58 s a 65,536-block segment), about `2.19·10^7` squarings a second, a floor and not the
+(98.58 s a 65,536-block segment), about `2.19·10^7` squarings a second, a floor and not the
 ceiling; the ceiling wants the best kernel's rate at 16,448 bits, every GPU's and the host's, which is also the rate
 PoUS's `ring-op-ceiling` reads. -/
 def SquaringCeilingP2 (T : Trace Ω) (s B : ℝ) : Prop := SquaringCeiling T s (4 * 32890) B
