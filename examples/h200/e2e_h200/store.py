@@ -9,7 +9,7 @@ last block is zero-padded. Block j is (segment, block) = divmod(j, 2^16).
 
 **The decode call.** `Store.stage(name, dst)` writes linear ``name``'s codes, (N, K) s8, into the staging buffer ``dst`` (or a
 new one) from the blocks it overlaps, and `Store.load(name)` returns any tensor (scales, gains, embeddings) the same way: on the GPU by the staging decode
-(`p2_stage.stage.Store.decode_into`, memory-accounting's `libp2v1.so`) when its library's directory is given, else by
+(`p2_stage.stage.EncodedRows.decode_into`, memory-accounting's `libp2v1.so`) when its library's directory is given, else by
 the P2 reference on the CPU. Every stage is checked against the reference's refusals (a c >= p, or a decode wider than the
 payload): a refused block raises, never stages.
 
@@ -187,7 +187,7 @@ class P2Store(Store):
         self._stage = None
         if stage_lib:
             st = p2_stage()
-            self._stage, self._refused = st.Store(st.L.StoreLayout(PARAMS, (), self.prefix), rows, 0, stage_lib), st.StoreError
+            self._stage, self._refused = st.EncodedRows(st.L.StoreLayout(PARAMS, (), self.prefix), rows, 0, stage_lib), st.StoreError
 
     @classmethod
     def encode(cls, weights: Weights, salt: bytes, workers: int = 1, chunk_blocks: int = 16) -> P2Store:
