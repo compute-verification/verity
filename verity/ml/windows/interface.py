@@ -172,11 +172,13 @@ def _static(v: Any) -> Any:
     return v
 
 
+# A walk of its own, not the registry's `catalog.load(scope="ops")`: `ml.windows` may not import `ml.definitions`
+# (`ALLOWED` in tests/test_boundaries.py).
+
 @functools.cache
 def _load_catalog() -> None:
     """Import every module of `verity.ml.circuits.ops`, the catalog's, and the embedding's registered read
-    (`commitments.gates.embedding`): each registers its Definitions as it loads.  A walk of its own, not the registry's
-    `catalog.load(scope="ops")`: `ml.windows` may not import `ml.definitions` (`ALLOWED` in tests/test_boundaries.py)."""
+    (`commitments.gates.embedding`): each registers its Definitions as it loads."""
     from verity.ml.circuits import ops
 
     for m in pkgutil.walk_packages(ops.__path__, f"{ops.__name__}."):
