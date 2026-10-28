@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 import hashlib
 import json
 import random
@@ -65,7 +64,7 @@ def test_fields(name):
     assert _probable_prime(f.p)
     assert not any(_probable_prime((1 << f.n) - c) for c in range(1, f.c, 4))
     assert f.root_squarings == f.n - 3
-    assert f.root_multiplies == {"p512": 18, "p768": 18, "p1024": 21, "p1280": 18, "p1536": 19}[name]
+    assert K.root_multiplies(f) == {"p512": 18, "p768": 18, "p1024": 21, "p1280": 18, "p1536": 19}[name]
     assert f.word_bytes == f.n // 8 and f.c < 1 << 16
     with pytest.raises(ValueError, match="unknown field"):
         K.field("p511")
@@ -140,26 +139,14 @@ def test_masked_round_trip(name, rounds):
 
 @pytest.mark.parametrize("name", ["p512", "p1024"])
 @pytest.mark.parametrize("rounds,mask", [(2, False), (3, False), (2, True), (3, True)])
-def test_at_a_registrable_codec_the_key_and_words_are_the_stores(name, rounds, mask):
-    """At p512 and p1024, k ≥ 2, a key is the store codec's and so are its words, under the seed's key and a bound
-    offset; this module's own rounds, which k = 1 and the other fields take, give the same words, and its own
-    derivation the same constants and bound offset."""
-    k = K.key(name, SEED, rounds, mask=mask)
-    assert k.store == RB.key(SEED, RB.Codec(RB.FIELDS[name], rounds, mask))
-    assert (k.c, k.tau, k.mask, k.seed) == (k.store.c, k.store.tau, k.store.mask, SEED)
-    one = K.key(name, SEED, 1, mask=mask)
-    assert one.store is None and (one.c, one.tau, one.mask) == (k.c[:1], k.tau, k.mask)
+def test_at_a_registrable_codec_a_key_is_the_stores(name, rounds, mask):
+    """At p512 and p1024, k ≥ 2, a key (the store codec's derivation over a `Sloth`) has the constants, mask and seed
+    of `codec.key` for the codec a registration names, and so its words and bound offsets."""
+    k, s = K.key(name, SEED, rounds, mask=mask), RB.key(SEED, RB.Codec(RB.FIELDS[name], rounds, mask))
+    assert k.codec == RB.Sloth(RB.FIELDS[name], rounds, mask) and k.field is s.field is K.field(name)
+    assert (k.c, k.tau, k.mask, k.seed) == (s.c, s.tau, s.mask, s.seed)
     d, block = K.digest(_bound_data()), 3 * K.LAYERS + 17
-    b = K.binding(d, block, k)
-    assert b == RB.binding(d, block, k.store)
-    own, f = dataclasses.replace(k, store=None), k.field
-    rng = random.Random(f"{name}/k{rounds}/{mask}")
-    for i, m in enumerate(_edges(f) + [rng.randrange(f.p)]):
-        for off in (0, b):
-            y = K.encode_word(m, 1000 + i, k, off)
-            assert y == K.encode_word(m, 1000 + i, own, off)
-            assert K.decode_word(y, 1000 + i, k, off) == K.decode_word(y, 1000 + i, own, off) == m
-    assert K.key("p768", SEED, rounds, mask=mask).store is None
+    assert K.binding(d, block, k) == RB.binding(d, block, s)
 
 
 def test_sigma_is_an_involution_on_the_field():
@@ -310,7 +297,7 @@ def test_twin_root_is_the_chain(name):
     a = random.Random(f.n + 3).randrange(f.p)
     x, sq, mu = T.root(K.to_limbs(a, f), f)
     assert K.from_limbs(x) % f.p == pow(a, f.root_exp, f.p)
-    assert (sq, mu) == (f.root_squarings, f.root_multiplies)
+    assert (sq, mu) == (f.root_squarings, K.root_multiplies(f))
 
 
 @pytest.mark.parametrize("name", NAMES)
