@@ -5,7 +5,7 @@
 
 `run_row_v2.sh` calls this on EXIT of a `stage` run (the runner set RESEARCH_RUN_DIR): the stage's small account files are copied
 from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `$RESEARCH_RUN_DIR/outputs.json`, which
-`research.store.attempt.publish` turns into one artifact per entry. A run of several stages (`examples/vllm/commit.sh`) names them
+`research.store.attempt.publish` turns into one artifact per entry. A run of several stages (`demos/vllm/commit.sh`) names them
 all, and gets each stage's entries that stages.txt records (`build_stages`):
 
     plan    -> vllm-commit-plan/v1    plan/commit_plan.json (the Commit's plan: its key and the producer facts), plan.log,

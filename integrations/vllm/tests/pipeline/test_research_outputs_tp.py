@@ -276,7 +276,7 @@ def test_no_stage_publishes_request_values_placement_or_timing(tmp_path):
 
 
 def test_the_example_commit_publishes_its_stages_records_and_none_of_its_private_files(tmp_path):
-    """examples/vllm/commit.sh publishes what `research-outputs write` declares for the stages it names, and copies nothing into its
+    """demos/vllm/commit.sh publishes what `research-outputs write` declares for the stages it names, and copies nothing into its
     run record: the sealed bundle (the committed store with its salts, Kw in weights/tree.json, the opened weights, the requests'
     context, the manifest of the values the store doesn't retain), the slim keep and the Match's capture planes stay on the node."""
     lines = [ln for ln in COMMIT_SH.read_text().splitlines() if not ln.lstrip().startswith("#")]
