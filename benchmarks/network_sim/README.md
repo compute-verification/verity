@@ -4,14 +4,15 @@ The device graph, and a mock datacenter of Linux network namespaces that runs th
 accounting layer's declarations, `datacenter.Datacenter`, which `datacenter.examples` (`benchmarks/datacenter`) declares:
 `rtx_node` is the measured node (8 GPUs on two sockets, each GPU on a PCIe root port of its own, one NIC on socket 1) as
 one zone, `leaf_spine` puts such nodes behind a leaf-spine fabric, each through its zone's certifier, with hosts
-outside every zone, and `two_sites` joins two leaf-spines by a WAN between their spines. The code and its flags still
-call a zone a block (`datacenter.physical.Block`, `--blocks`).
+outside every zone, and `two_sites` joins two leaf-spines by a WAN between their spines. A zone is a
+`datacenter.physical.Zone`; the rest of the code and its flags still call a zone a block (`Datacenter.blocks`,
+`--blocks`).
 
 - `graph.py`: the exports, which read any `Datacenter` that validates, a fleet's merged one included: the netns plan
   `mockdc.py` stands up, and Shadow's GML. `python graph.py --blocks 2 --netns` prints `leaf_spine(2)`'s plan, and
   `--fleet` `two_sites(2)`'s.
-- `records.py`: the certifier's published records as `datacenter.observe.Record`s (port, sampling period, counts,
-  digest), the records an honest run declares by port and sampling period, and the certifiers' parameters as the
+- `records.py`: the certifier's published records as `datacenter.observe.PortRecord`s (port, sampling period,
+  counts, digest), the records an honest run declares by port and sampling period, and the certifiers' parameters as the
   declaration's `Cadence`; `datacenter.check_records` audits them.
 - `mockdc.py`: a declaration's netns plan stood up on one host, the certifier's proxy on each zone's uplink, both
   audits, and the account's charge for each zone.
@@ -42,7 +43,7 @@ have one boundary link, to a certifier, and which has a device of kind `outside`
 (`Fleet.merged`). `--fleet` is `two_sites` (below).
 
 It needs Linux with iproute2, iptables, setpriv and passwordless sudo, and a Python with numpy. Run it on
-vy-nebius-cpu-2 (its system `python3` has numpy), not on an agent VM. Every command takes the same `--declaration`, or
+a CPU node whose system `python3` has numpy, not on an agent VM. Every command takes the same `--declaration`, or
 `--fleet`, `--blocks`, `--leaves` and `--spines`, and `run` refuses a lab that is up in another shape.
 
 ~~~sh
@@ -52,11 +53,10 @@ python3 benchmarks/network_sim/mockdc.py run --out DIR [--salt] [--block b1=late
 python3 benchmarks/network_sim/mockdc.py down     # stop their processes, and delete every na-* namespace and veth
 ~~~
 
-As a recorded run, which leaves the lab up:
+As a recorded run on that node, its outputs in `$OUT`, which leaves the lab up:
 
 ~~~sh
-research run --on vy-nebius-cpu-2 --project verity --source . --cwd source -- \
-  bash -c 'M=benchmarks/network_sim/mockdc.py; python3 -B $M down && python3 -B $M up && python3 -B $M run --out "$OUT"'
+M=benchmarks/network_sim/mockdc.py; python3 -B $M down && python3 -B $M up && python3 -B $M run --out "$OUT"
 ~~~
 
 ## What a run checks
@@ -68,7 +68,7 @@ whose connection crosses the fabric. Each zone's server plays one strategy: `hon
 random bit per request; `late`, which holds a request in execution phase 0 past every sync; `extra`, which writes one
 event at a position the Program doesn't have; or `maintenance`, honest with its certifier down for execution phase 1
 (below). Each zone is audited twice. The certifier's audit is `audit.Audit`'s `check_link` and `check_ingress_link`
-on its raw and committed records. The datacenter record check is `datacenter.check_records` on its records as `datacenter.observe.Record`s against the ones an honest run of the Program publishes: each port
+on its raw and committed records. The datacenter record check is `datacenter.check_records` on its records as `datacenter.observe.PortRecord`s against the ones an honest run of the Program publishes: each port
 (`b0.cert:out` for what leaves the zone, `b0.cert:in` for what enters it) needs a record for each sampling period, with
 the declared counts and digest, and each carried sampling period leaves log2 of the sync set's size bits of timing
 advice. The declaration's cadence is the certifiers' calibrated parameters: frames of 4,096 bytes, buckets of 100 ticks
@@ -177,7 +177,7 @@ signs nothing: a stand-in LMS key (`lab_run.n2_verdicts`) signs N2's heads after
 ## The whole night
 
 `verity bench network_sim --out DIR` runs `run.py`, the night on the lab host in one process tree. `verity` isn't on
-vy-nebius-cpu-2's path, so there it is `python3 benchmarks/network_sim/run.py --out DIR`. It runs five things in turn:
+the lab host's path, so there it is `python3 benchmarks/network_sim/run.py --out DIR`. It runs five things in turn:
 - the accounting layer's demo (`python -m datacenter.demo`, `DIR/demo.txt`);
 - the mock datacenter in five zones, which take the five strategies, once plain and once with the salt;
 - the fleet (`up --fleet --blocks 2`), twice, with the first four strategies swapped between the sites
@@ -202,13 +202,14 @@ follow the rows. `DIR/summary.json` has the same. The exit status is 1 if a verd
 (`run.expected_block`, `run.expected_records`, `run.WORKLOAD`), a step exited nonzero, or a tick ran past its slack.
 `run.py`'s tests render its summary.
 
+As a recorded run of at most 90 minutes on the lab host, its outputs in `$OUT`:
+
 ~~~sh
-research run --on vy-nebius-cpu-2 --project verity --source . --cwd source --timeout 90m -- \
-  bash -c 'python3 -B benchmarks/network_sim/run.py --out "$OUT"'
+python3 -B benchmarks/network_sim/run.py --out "$OUT"
 ~~~
 
-`research run` publishes the night's `summary.txt` and `summary.json` with its outputs in the evidence store, where
-results are read.
+The run publishes the night's `summary.txt` and `summary.json` with its outputs in the evidence store, where results
+are read.
 
 ## N3, retired
 

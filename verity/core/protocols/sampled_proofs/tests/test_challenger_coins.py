@@ -3,8 +3,8 @@ the prover's commitment, concatenated in order, extended with the family's next 
 challenger's commitment before its bytes are used; the verifier replays it from the record (`challenger_stream`,
 `read_reason`) against the roots the challenger's signed log shows. A bad opening, a commitment drawn twice, coins the
 log doesn't show released after the commitment, coins of another commitment and a coin opened but not read are refused,
-in process, over a served challenger, and through the proof system's `Stream.select`; and the Lean verifier of
-record's run refuses an outcome whose coins' evidence fails (`Stream.outcome(coins=...)`)."""
+in process, over a served challenger, and through the proof system's `Stream.select`; and the Lean verifier's
+run refuses an outcome whose coins' evidence fails (`Stream.outcome(coins=...)`)."""
 
 from __future__ import annotations
 
@@ -163,7 +163,7 @@ def test_a_served_challengers_coins_replay_against_its_signed_log(tmp_path, sign
 
 def test_the_proof_system_draws_from_the_challengers_coins_after_the_receipt():
     """`Stream.select` with the coins as its `coins`, committed to the registration's digest after its receipt: the
-    draw both verifiers of record agree on, from bytes the verifier replays from the record. Without the commitment the
+    draw both verifiers agree on, from bytes the verifier replays from the record. Without the commitment the
     select reads no coin."""
     from test_service import _ports, _record, _stream
 
@@ -255,7 +255,7 @@ def assert_only_honest_coins_accepted(outcomes) -> None:
 def test_the_lean_run_refuses_a_draw_whose_coins_the_challenger_did_not_release_after_the_registration(
         tmp_path, signer, monkeypatch):  # noqa: F811
     """On a stream drawing from the challenger (`coin_source` `challenger`, which its digest names), every outcome's run
-    by the verifier of record (`Run.run`) checks the draw's coins: with their evidence for the registration's window
+    by the verifier (`Run.run`) checks the draw's coins: with their evidence for the registration's window
     (`window_root`) it accepts the honest draw, and it rejects, failing `run` with the select step's `coins`, each of
     `coin_outcomes`' other cases (a prover picking the window among them). A sampler beside the challenger's coins, and
     evidence for a sample that read none, are refused."""
