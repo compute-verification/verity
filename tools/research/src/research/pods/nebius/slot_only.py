@@ -40,6 +40,7 @@ SLOT_PATHS = ("tools/verity/check/slot.py",)
 #: `env CHECK_SLOTS=...` before slot.py: a pool of its own, with its own line, in one of these files (vy-nebius-cpu-1's
 #: `proofs` pool, 13 Oct), so a lane's runs never queue behind the merge checks
 POOL = re.compile(r"CHECK_SLOTS=/workspace/research/locks/[A-Za-z0-9_-]+/slots")
+LOCKS, POOL_NAME = "/workspace/research/locks", re.compile(r"[A-Za-z0-9_-]+")
 #: `research run --pool NAME`'s pools: `research` is any lane's research runs, where `research run --on auto` spills (INF-27,
 #: cpu-1's /workspace/research/locks/research/slots: 8-53 since 19 Oct, cores no check slot holds), `proofs` is proofs' Lean pool,
 #: `network` is network-accounting's proving pool (cpu-1, cpu-2, cpu-4, cpu-5 and node 1 hold one), `soundness` is soundness's
@@ -57,10 +58,17 @@ def in_pool(pool: str, lane: str, command: list[str], run_max: float | None = No
     cwd is its source).  `run_max` is the run's --timeout: slot.py counts it from taking the slot, so the wait in the pool's line
     isn't spent from it (INF-106), and a run with no slot in `wait_s` exits NOT_STARTED (75) without running CMD.  The
     runner's own timeout must then cover both (`research run --pool` makes it wait_s + S)."""
-    if pool not in POOLS:
-        raise ValueError(f"no pool {pool!r}: the pools are {', '.join(sorted(POOLS))}")
+    if not POOL_NAME.fullmatch(pool):
+        raise ValueError(f"no pool {pool!r}: a pool is a name of letters, digits, '_' or '-' (the pools every node may have are "
+                         f"{', '.join(sorted(POOLS))}; a node's own, as node 1's leanrec, are under {LOCKS})")
     limit = ["--wait-max", f"{wait_s:g}", "--run-max", f"{run_max:g}"] if run_max else []
-    return ["env", f"CHECK_SLOTS={POOLS[pool]}", "python3", SLOT_PATHS[0], "--by", lane, *limit, "--", "nice", "-n", "19", *command]
+    return ["env", f"CHECK_SLOTS={pool_slots(pool)}", "python3", SLOT_PATHS[0], "--by", lane, *limit, "--", "nice", "-n", "19",
+            *command]
+
+
+def pool_slots(pool: str) -> str:
+    """The slots file of `pool` on a node: one of POOLS, else a pool that node keeps of its own under LOCKS (`POOL`'s form)."""
+    return POOLS.get(pool) or f"{LOCKS}/{pool}/slots"
 
 
 def through_slot(command: object) -> bool:
