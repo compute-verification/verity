@@ -3,6 +3,9 @@ import Proofs.Properties.Composition
 import Proofs.Properties.Nci.DescVerdict
 import Proofs.Properties.Nci.Baseline
 import Proofs.Properties.Nci.BaselineSteps
+import Proofs.Properties.Nci
+import Proofs.Properties.Nci.Agrees
+import Proofs.Nci.FitWitness
 import Proofs.Properties.SampledProofs
 import Proofs.Nci.CompliesCK
 import Proofs.Core.Expand
@@ -17,7 +20,12 @@ component accepting its own case, with no component's record other than the firs
 acceptance is `NciCheck.Baseline.evaluate`'s with the record naming the circuit (`policy_accept`), which is
 `NciCheck.Desc.evaluate`'s and θ's provenance (`BaselineSteps.evaluate_ok`), whose verdict `DescReports`,
 `DescWitnesses` and `BaselineProvenance` read; `Nci.SecurityProofs.CompliesCK`, `ExpandComplies` and
-`Verity.Circuit.expand_boolean` give the padded `(c, k)`-partitions.
+`Verity.Circuit.expand_boolean` give the padded `(c, k)`-partitions. The parse, declaration and division an acceptance
+exhibits come from `DescAgrees` (the verdict is the gate-by-gate check's on an expansion) and `Decodes` (that check's
+verdicts are about a parse, a layout, a baseline and a division).
+
+The policy's existence clause is neither empty nor trivial: `policyMet_honest` exhibits a declaration and a division into
+nonempty inference blocks that meet the policy, and `policyMet_nontrivial` one the policy refuses at every `α`.
 -/
 
 namespace Properties.Remote.SecurityProofs
@@ -37,6 +45,50 @@ private theorem getObjVal?_mkObj {l : List (String × Json)} (hd : l.Pairwise (f
 theorem instance_program (p : NciCheck.Protocol.Params) (e : NciCheck.Protocol.Evidence) :
     (instanceOf p e).getObjVal? "program" = .ok (.str p.program) :=
   getObjVal?_mkObj (by simp) (by simp)
+
+theorem instance_gamma (p : NciCheck.Protocol.Params) (e : NciCheck.Protocol.Evidence) :
+    (instanceOf p e).getObjVal? "gamma" = .ok p.gamma :=
+  getObjVal?_mkObj (by simp) (by simp)
+
+theorem instance_alpha (p : NciCheck.Protocol.Params) (e : NciCheck.Protocol.Evidence) :
+    (instanceOf p e).getObjVal? "alpha" = .ok p.alpha :=
+  getObjVal?_mkObj (by simp) (by simp)
+
+/-- Two parses of one instance agree on its program, `Γ` and `α`. -/
+theorem parses_same {j : Json} {i i' : NciCheck.Instance} (h : Parses j i) (h' : Parses j i') :
+    i.program = i'.program ∧ i.gamma = i'.gamma ∧ i.num = i'.num ∧ i.den = i'.den := by
+  obtain ⟨hp, -, -, ⟨v, hv, hg⟩, ⟨a, b, hab, ha, hb⟩, -⟩ := h
+  obtain ⟨hp', -, -, ⟨v', hv', hg'⟩, ⟨a', b', hab', ha', hb'⟩, -⟩ := h'
+  rw [hp] at hp'
+  rw [hv] at hv'
+  rw [hab] at hab'
+  have e2 : v = v' := Except.ok.inj hv'
+  have e3 : a = a' ∧ b = b' := by simpa using Json.arr.inj (Except.ok.inj hab')
+  obtain ⟨rfl, rfl⟩ := e3
+  subst e2
+  exact ⟨Json.str.inj (Except.ok.inj hp'), Option.some.inj (hg.symm.trans hg'),
+    Option.some.inj (ha.symm.trans ha'), Option.some.inj (hb.symm.trans hb')⟩
+
+/-- Every parse of an expansion of the policy's instance carries the policy's parameters. -/
+theorem verifier_own {p : NciCheck.Protocol.Params} {e : NciCheck.Protocol.Evidence} {j' : Json}
+    {i : NciCheck.Instance} (hx : Expands (instanceOf p e) j') (hi : Parses j' i) : VerifierOwn p i := by
+  obtain ⟨i0, -, h0, -, theta', owner', h0', -, -⟩ := hx
+  obtain ⟨hpr, hg, hn, hd⟩ := parses_same h0' hi
+  obtain ⟨hp0, -, -, ⟨v, hv, hgv⟩, ⟨a, b, hab, ha, hb⟩, -⟩ := h0
+  rw [instance_program] at hp0
+  rw [instance_gamma] at hv
+  rw [instance_alpha] at hab
+  have e1 : p.program = i0.program := Json.str.inj (Except.ok.inj hp0)
+  have e2 : p.gamma = v := Except.ok.inj hv
+  have e3 : p.alpha = .arr #[a, b] := Except.ok.inj hab
+  have hpr' : i0.program = i.program := hpr
+  have hg' : i0.gamma = i.gamma := hg
+  have hn' : i0.num = i.num := hn
+  have hd' : i0.den = i.den := hd
+  refine ⟨(e1.trans hpr').symm, ?_, a, b, e3, ?_, ?_⟩
+  · rw [e2, hgv, hg']
+  · rw [ha, hn']
+  · rw [hb, hd']
 
 /-- An expansion of the policy's instance, and what it parses to, carry the declared circuit's text. -/
 theorem expands_program {p : NciCheck.Protocol.Params} {e : NciCheck.Protocol.Evidence} {j' : Json}
@@ -117,24 +169,51 @@ theorem names_program {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Comm
   rw [hP] at hn
   simpa using hn
 
+/-- `PolicyMet` from its first clause, every inference block meeting both bounds, at `α ≥ 0`: the rest follows
+(`Nci.Complies`, and the padded partitions by `CompliesCK`, `ExpandComplies` and `expand_boolean`). -/
+theorem policyMet_of_meets {d : Declaration} {n : ℕ} {U : Partition d.D n} {Γ : ℕ} {α : ℝ} (hα : 0 ≤ α)
+    (h : ∀ u, Meets d U Γ α u) : PolicyMet d U Γ α := by
+  have hcomp : Nci.Complies Γ α d := ⟨n, U, h⟩
+  refine ⟨h, hcomp, fun hB => Nci.SecurityProofs.CompliesCK _ _ d hB hcomp, ?_⟩
+  intro W hfan hw hW
+  exact Nci.SecurityProofs.CompliesCK _ _ d.expand (d.D.expand_boolean hfan)
+    (Nci.SecurityProofs.ExpandComplies Γ W _ d hα hw hW hcomp)
+
+/-- **Honest witness of the policy's existence clause**: a declaration and a division into nonempty inference blocks
+that meet the policy, `Nci.SecurityProofs.FitWitness`'s five-gate circuit in its two one-gate windows, at `Γ = 1` and
+`α = 3`. -/
+theorem policyMet_honest : ∃ (d : Declaration) (n : ℕ) (U : Partition d.D n) (Γ : ℕ) (α : ℝ),
+    0 < n ∧ (∀ u, (U.gates u).Nonempty) ∧ PolicyMet d U Γ α := by
+  have hs : ∀ u, Nci.SecurityProofs.FitWitness.decl.D.size (Nci.SecurityProofs.FitWitness.windows.gates u) = 1 := by
+    decide +kernel
+  refine ⟨Nci.SecurityProofs.FitWitness.decl, 2, Nci.SecurityProofs.FitWitness.windows, 1, 3, by norm_num,
+    by decide +kernel, policyMet_of_meets (by norm_num) fun u => ⟨(hs u).le, ?_⟩⟩
+  rw [hs u, Nat.cast_one, mul_one]
+  exact Nci.SecurityProofs.FitWitness.reads_le u
+
+/-- **Nontrivial witness of the policy's existence clause**: the policy refuses a declaration and a division into
+nonempty inference blocks, the same windows at `Γ = 0`, at every `α`: each block is a gate of width 1. -/
+theorem policyMet_nontrivial : ∃ (d : Declaration) (n : ℕ) (U : Partition d.D n),
+    (∀ u, (U.gates u).Nonempty) ∧ ∀ α : ℝ, ¬ PolicyMet d U 0 α := by
+  refine ⟨Nci.SecurityProofs.FitWitness.decl, 2, Nci.SecurityProofs.FitWitness.windows, by decide +kernel,
+    fun α h => ?_⟩
+  have hs : Nci.SecurityProofs.FitWitness.decl.D.size (Nci.SecurityProofs.FitWitness.windows.gates 0) = 1 := by
+    decide +kernel
+  have h0 := (h.1 0).1
+  omega
+
 /-- What a verdict of compliance on the policy's instance gives, on each of its expansions. -/
 theorem policy_met {p : NciCheck.Protocol.Params} {e : NciCheck.Protocol.Evidence} {out : Json}
     (hd : NciCheck.Desc.evaluate (instanceOf p e) = .ok out) (hc : out.getObjVal? "complies" = .ok (.bool true))
     {P : Prog} (hP : Flock.Program.decode p.program.toUTF8 = .ok P) :
     ∀ (j' : Json) (i : NciCheck.Instance) (d : Declaration) (n : ℕ) (U : Partition d.D n),
       Expands (instanceOf p e) j' → Parses j' i → LaysOut P d.D → Names i.theta d.θ → Divides i.owner U →
-        i.program = p.program ∧ PolicyMet d U i.gamma ((i.num : ℝ) / i.den) := by
+        VerifierOwn p i ∧ PolicyMet d U i.gamma ((i.num : ℝ) / i.den) := by
   intro j' i d n U hx hi hL hN hD
-  have hprog := expands_program hx hi
-  have hP' : Flock.Program.decode i.program.toUTF8 = .ok P := hprog ▸ hP
+  have hP' : Flock.Program.decode i.program.toUTF8 = .ok P := expands_program hx hi ▸ hP
   have hR := (NciCheck.Properties.SecurityProofs.DescReports _ _ hd).2 j' hx i P d n U hi hP' hL hN hD
-  have hmeets : ∀ u, Meets d U i.gamma ((i.num : ℝ) / i.den) u := hR.2.2.1.1 hc
-  have hcomp : Nci.Complies i.gamma ((i.num : ℝ) / i.den) d := ⟨n, U, hmeets⟩
-  have hα : (0 : ℝ) ≤ (i.num : ℝ) / i.den := div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)
-  refine ⟨hprog, hmeets, hcomp, fun hB => Nci.SecurityProofs.CompliesCK _ _ d hB hcomp, ?_⟩
-  intro W hfan hw hW
-  have hx' := Nci.SecurityProofs.ExpandComplies i.gamma W _ d hα hw hW hcomp
-  exact Nci.SecurityProofs.CompliesCK _ _ d.expand (d.D.expand_boolean hfan) hx'
+  exact ⟨verifier_own hx hi,
+    policyMet_of_meets (div_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)) (hR.2.2.1.1 hc)⟩
 
 /-- What the policy's acceptance establishes about its decoded case. -/
 theorem policyHeld {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Commitment}
@@ -142,15 +221,13 @@ theorem policyHeld {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Commitm
     (h : NciCheck.Protocol.check p c e = .accept pub prof) : PolicyHeld p c e := by
   obtain ⟨hn, out, hb, hc⟩ := policy_accept h
   obtain ⟨hd, -⟩ := NciCheck.Properties.SecurityProofs.BaselineSteps.evaluate_ok _ _ _ hb
-  obtain ⟨⟨j', hx⟩, -⟩ := NciCheck.Properties.SecurityProofs.DescReports _ _ hd
-  obtain ⟨i0, P, h0, hP0, -⟩ := hx
-  have hprog : i0.program = p.program := by
-    have a : (instanceOf p e).getObjVal? "program" = .ok (.str i0.program) := h0.1
-    rw [instance_program] at a
-    exact (Json.str.inj (Except.ok.inj a)).symm
-  have hP : Flock.Program.decode p.program.toUTF8 = .ok P := hprog ▸ hP0
+  obtain ⟨⟨j', hx⟩, hev⟩ := NciCheck.Properties.SecurityProofs.DescAgrees _ _ hd
+  obtain ⟨i, P, hpi, hP', D, hL, ⟨θ, hθ, hθin⟩, n, U, hD⟩ :=
+    NciCheck.Properties.SecurityProofs.Decodes _ _ (hev j' hx)
+  have hP : Flock.Program.decode p.program.toUTF8 = .ok P := expands_program hx hpi ▸ hP'
+  let d : Declaration := ⟨D, θ, hθin⟩
   exact ⟨P, hP, names_program hn hP, NciCheck.Properties.SecurityProofs.BaselineProvenance _ _ _ hb,
-    (NciCheck.Properties.SecurityProofs.DescReports _ _ hd).1, policy_met hd hc hP⟩
+    ⟨j', i, d, n, U, hx, hpi, hL, hθ, hD, policy_met hd hc hP j' i d n U hx hpi hL hθ hD⟩, policy_met hd hc hP⟩
 
 /-- What the one-stage audit's acceptance gives: its record keeps R2 against the audit's own verifier. -/
 theorem stage_registered {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
@@ -237,10 +314,10 @@ theorem acceptComplies : AcceptComplies := by
   obtain ⟨kI, kW, kS, pI, cI, eI, hev, -, -, -, hp, hc, he, ⟨pub', prof', hchk⟩, -⟩ := remote_accept h
   obtain ⟨hn, out, hb, hcomp⟩ := policy_accept hchk
   obtain ⟨hd, -⟩ := NciCheck.Properties.SecurityProofs.BaselineSteps.evaluate_ok _ _ _ hb
-  obtain ⟨P, hP, hname, -, -, -⟩ := policyHeld hchk
-  refine ⟨kI, kW, kS, pI, cI, eI, P, hev, hp, hc, he, hP, hname, ?_⟩
+  obtain ⟨P, hP, hname, -, ⟨j', i, d, n, U, hx, hpi, hL, hθ, -, hown, hmet⟩, -⟩ := policyHeld hchk
+  refine ⟨kI, kW, kS, pI, cI, eI, P, hev, hp, hc, he, hP, hname, ⟨j', i, d, hx, hpi, hL, hθ, hown, hmet.2.1⟩, ?_⟩
   intro j' i d hx hi hL hN
   have hP' : Flock.Program.decode i.program.toUTF8 = .ok P := expands_program hx hi ▸ hP
-  exact (NciCheck.Properties.SecurityProofs.DescWitnesses _ _ hd).2 j' hx i P d hi hP' hL hN hcomp
+  exact ⟨verifier_own hx hi, (NciCheck.Properties.SecurityProofs.DescWitnesses _ _ hd).2 j' hx i P d hi hP' hL hN hcomp⟩
 
 end Properties.Remote.SecurityProofs
