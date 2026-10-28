@@ -17,18 +17,6 @@ The statements a local bound is assembled from, one module per step of the argum
    rare (`CapabilityFloor`).
 
 A new premise, structure or kind of consumer is a new module or a new value of an existing type, consumed by the same
-steps. Improving the structure never strengthens a premise; a stronger premise is a new hypothesis, named as one. None
-is proved yet: `LocalBoundsStated` holds their text in the lock. The survey of all of it is
-`Security/Definitions/Nci/Capability/README.md`.
+steps. Improving the structure never strengthens a premise; a stronger premise is a new hypothesis, named as one. Each
+is proved (`Proofs.Nci.Capability`). The survey of all of it is `Security/Definitions/Nci/Capability/README.md`.
 -/
-
-namespace Nci.Guarantees
-
-/-- **The local bounds are stated**: each of them, equal to itself, so the lock records their text and every definition
-they read until they are proved. -/
-def LocalBoundsStated : Prop :=
-  let s := HeldBudget ∧ StatHeldBudget ∧ RecoveredBudget ∧ IncidenceCap ∧ OperandCapSeparate ∧ OperandCapJoint ∧
-    ImportOrRecompute ∧ RecomputeByGates ∧ RecomputeByState ∧ WeightedProductCap
-  s = s
-
-end Nci.Guarantees

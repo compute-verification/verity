@@ -125,17 +125,17 @@ candidate sufficient condition, not part of the repertoire.
 | Bound | From | Gives | Lean | Status |
 |---|---|---|---|---|
 | Reconstruction | the view | LDL_{t,R}(view) ≤ k' | `Verity.Guarantees.BlockDescription` | proved |
-| Held budget | description hardness | h = k' + λ | `Nci.Guarantees.HeldBudget` | stated |
-| Statistical held budget | min-entropy hardness | h = k + λ | `Nci.Guarantees.StatHeldBudget` | stated |
-| Recovered budget | source hardness, recovery | β_v·\|𝒥_I\| ≤ k' + δ + amb | `Nci.Guarantees.RecoveredBudget` | stated |
-| Incidence cap | incidence | min{r\|U\|\|V\|, a_out\|V\|} | `Nci.Guarantees.IncidenceCap` | stated |
-| Operand caps | budgets, incidence | q(h), separate or joint | `Nci.Guarantees.OperandCapSeparate`, `Nci.Guarantees.OperandCapJoint` | stated |
-| Import or recompute | certificate, weights | finished ≤ k + recomputed | `Nci.Guarantees.ImportOrRecompute` | stated |
-| Recompute by gates | weights | recomputed ≤ c/g | `Nci.Guarantees.RecomputeByGates` | stated |
-| Recompute by state | budget | recomputed = 0 | `Nci.Guarantees.RecomputeByState` | stated |
-| Weighted products | budget, served weight | Ω_I ≤ h_w·served | `Nci.Guarantees.WeightedProductCap` | stated |
+| Held budget | description hardness | h = k' + λ | `Nci.Guarantees.HeldBudget` | proved |
+| Statistical held budget | min-entropy hardness | h = k + λ | `Nci.Guarantees.StatHeldBudget` | proved |
+| Recovered budget | source hardness, recovery | β_v·\|𝒥_I\| ≤ k' + δ + amb | `Nci.Guarantees.RecoveredBudget` | proved |
+| Incidence cap | incidence | min{r\|U\|\|V\|, a_out\|V\|} | `Nci.Guarantees.IncidenceCap` | proved |
+| Operand caps | budgets, incidence | q(h), separate or joint | `Nci.Guarantees.OperandCapSeparate`, `Nci.Guarantees.OperandCapJoint` | proved |
+| Import or recompute | certificate, weights | finished ≤ k + recomputed | `Nci.Guarantees.ImportOrRecompute` | proved |
+| Recompute by gates | weights | recomputed ≤ c/g | `Nci.Guarantees.RecomputeByGates` | proved |
+| Recompute by state | budget | recomputed = 0 | `Nci.Guarantees.RecomputeByState` | proved |
+| Weighted products | budget, served weight | Ω_I ≤ h_w·served | `Nci.Guarantees.WeightedProductCap` | proved |
 | Counting | a per-block cap | \|C\| ≥ c·Ω/q | `Verity.Guarantees.Counting` | proved |
-| Coverage floor | coverage | Pr[success below the floor] ≤ η | `Nci.Guarantees.CapabilityFloor` | stated |
+| Coverage floor | coverage | Pr[success below the floor] ≤ η | `Nci.Guarantees.CapabilityFloor` | proved |
 
 ## Standard assemblies
 

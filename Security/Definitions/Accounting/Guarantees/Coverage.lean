@@ -24,10 +24,4 @@ def CapabilityFloor : Prop :=
     ∀ (C : In → Accounting.Actual.Run L) (pos : Fin m → L × ℕ × ℕ),
       G.prob (fun x 𝒴 => (C, x) ∈ 𝒜 ∧ Accounting.Overhead.Succeeds (C x) pos 𝒴 ∧ cost (C x) < min Lc Tmax) ≤ η
 
-/-- **The floor under coverage is stated**: `CapabilityFloor`, equal to itself, so the lock records its text and every
-definition it reads until it is proved. -/
-def CapabilityFloorStated : Prop :=
-  let s := CapabilityFloor
-  s = s
-
 end Nci.Guarantees

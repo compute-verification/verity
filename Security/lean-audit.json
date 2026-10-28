@@ -8311,11 +8311,11 @@
    "assumptions": [],
    "type_hash": "c4eb9f6f3eb171da49c3706a625d10ba7bc90ac1ca1672a9aa0ed2131ae404ed"
   },
-  "Nci.SecurityProofs.CapabilityFloorStated": {
+  "Nci.SecurityProofs.CapabilityFloor": {
    "owner": "@training",
-   "signature": ["Nci.SecurityProofs.CapabilityFloorStated : Nci.Guarantees.CapabilityFloorStated"],
+   "signature": ["Nci.SecurityProofs.CapabilityFloor : Nci.Guarantees.CapabilityFloor"],
    "assumptions": [],
-   "type_hash": "59290d671973da34f67270de003f2402871a562911ef57ab3a28867e6276a783"
+   "type_hash": ""
   },
   "Nci.SecurityProofs.CertificateSlack": {
    "owner": "@lean",
@@ -8443,6 +8443,24 @@
    "assumptions": [],
    "type_hash": "55856778f974cf265b7c2df6fc78adbf826e9d78ff0e128bc585a20f62d9ff39"
   },
+  "Nci.SecurityProofs.HeldBudget": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.HeldBudget : Nci.Guarantees.HeldBudget"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Nci.SecurityProofs.ImportOrRecompute": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.ImportOrRecompute : Nci.Guarantees.ImportOrRecompute"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Nci.SecurityProofs.IncidenceCap": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.IncidenceCap : Nci.Guarantees.IncidenceCap"],
+   "assumptions": [],
+   "type_hash": ""
+  },
   "Nci.SecurityProofs.IncompressibleContainedMatMulOn": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.IncompressibleContainedMatMulOn : Nci.Guarantees.IncompressibleContainedMatMulOn"],
@@ -8501,17 +8519,23 @@
    "assumptions": [],
    "type_hash": "56b3abe4e7f1fbd8138bf65756656359819ef018ae87587a78d8e71fa127ac0c"
   },
-  "Nci.SecurityProofs.LocalBoundsStated": {
-   "owner": "@training",
-   "signature": ["Nci.SecurityProofs.LocalBoundsStated : Nci.Guarantees.LocalBoundsStated"],
-   "assumptions": [],
-   "type_hash": "e307e33e9fe42d32c8be42e9bd41b04c95ce4e7bdce3b1468e915d9db2c00122"
-  },
   "Nci.SecurityProofs.LoomisWhitney": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.LoomisWhitney.{u_1, u_2, u_3} : Nci.Guarantees.LoomisWhitney"],
    "assumptions": [],
    "type_hash": "8053ef3dbe92445c64e1a0e3cda8165d50b20fd3ba310bea9aa323b673442a04"
+  },
+  "Nci.SecurityProofs.OperandCapJoint": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.OperandCapJoint : Nci.Guarantees.OperandCapJoint"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Nci.SecurityProofs.OperandCapSeparate": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.OperandCapSeparate : Nci.Guarantees.OperandCapSeparate"],
+   "assumptions": [],
+   "type_hash": ""
   },
   "Nci.SecurityProofs.OtherPositions": {
    "owner": "@lean",
@@ -8553,6 +8577,24 @@
    "assumptions": [],
    "type_hash": "5aba3326c25c0abfefc6969e6eac4e93768b23b0600102b7ecbec0504e979548"
   },
+  "Nci.SecurityProofs.RecomputeByGates": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.RecomputeByGates : Nci.Guarantees.RecomputeByGates"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Nci.SecurityProofs.RecomputeByState": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.RecomputeByState : Nci.Guarantees.RecomputeByState"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Nci.SecurityProofs.RecoveredBudget": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.RecoveredBudget : Nci.Guarantees.RecoveredBudget"],
+   "assumptions": [],
+   "type_hash": ""
+  },
   "Nci.SecurityProofs.ReferenceThreaded": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ReferenceThreaded : Nci.Guarantees.ReferenceThreaded"],
@@ -8564,6 +8606,12 @@
    "signature": ["Nci.SecurityProofs.ReferenceTraining : Nci.Guarantees.ReferenceTraining"],
    "assumptions": [],
    "type_hash": "104a6c9425013ffea4548e58627a31cf0d67358b3da5a64e483d59379ff1566b"
+  },
+  "Nci.SecurityProofs.StatHeldBudget": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.StatHeldBudget : Nci.Guarantees.StatHeldBudget"],
+   "assumptions": [],
+   "type_hash": ""
   },
   "Nci.SecurityProofs.ThreadedContainedInfo": {
    "owner": "@lean",
@@ -8708,6 +8756,12 @@
    "signature": ["Nci.SecurityProofs.VerdictLag : Nci.Guarantees.VerdictLag"],
    "assumptions": [],
    "type_hash": "51558189cb8ac35a53e5c07537281579e800e2b44a0681f6b7815b6b97af8b13"
+  },
+  "Nci.SecurityProofs.WeightedProductCap": {
+   "owner": "@training",
+   "signature": ["Nci.SecurityProofs.WeightedProductCap : Nci.Guarantees.WeightedProductCap"],
+   "assumptions": [],
+   "type_hash": ""
   },
   "NetTiming.SecurityProofs.CardCountsEqLe": {
    "owner": "@network-accounting",
@@ -12493,20 +12547,18 @@
    "Verity.SecurityProofs.NaiveBeatsStrassenServed": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model, on each of four fixed instances, rather than a Lean function's acceptance.",
    "Verity.SecurityProofs.NaiveBeatsStrassenServedSize": "frozen (no-function): It states a lower bound on the tensor-core cost of every recursion tree (Sched) for exact int8 matrix products in the cost model, on each of four fixed instances, rather than a Lean function's acceptance.",
    "Nci.SecurityProofs.DampenerRemotePeriodStated": "frozen (no-function): It states no property: it reads Nci.Guarantees.DampenerRemotePeriod, so the lock records its text, and it leaves when DampenerRemotePeriod's own theorem is proved and listed.",
-   "Nci.SecurityProofs.LocalBoundsStated": "frozen (no-function): It states no property: it reads the local bounds (Nci.Guarantees.HeldBudget, StatHeldBudget, RecoveredBudget, IncidenceCap, OperandCapSeparate, OperandCapJoint, ImportOrRecompute, RecomputeByGates, RecomputeByState, WeightedProductCap), so the lock records their text, and it leaves when they are proved.",
-   "Nci.SecurityProofs.CapabilityFloorStated": "frozen (no-function): It states no property: it reads Nci.Guarantees.CapabilityFloor, so the lock records its text, and it leaves when CapabilityFloor is proved.",
+   "Nci.SecurityProofs.HeldBudget": "frozen (no-function): It is Lemma 1 with description hardness, about an arbitrary registration of a (c,k)-partition, item family, decoder and evaluator (Nci.Capability.HeldPriceAtMost, Nci.Assumptions.DescriptionHard, Security/Definitions/Nci/Capability/Items.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
+   "Nci.SecurityProofs.StatHeldBudget": "frozen (no-function): It is the statistical held budget, about an arbitrary registration of a (c,k)-partition, item family and distribution of honest runs (Nci.Capability.HeldPriceAtMost, Nci.Assumptions.MinEntropyHard, Security/Definitions/Nci/Assumptions/Capability/Information.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
+   "Nci.SecurityProofs.RecoveredBudget": "frozen (no-function): It is Lemma 1 with a recoverable hard source, about an arbitrary registration of a (c,k)-partition, decoder, evaluator and source (Nci.Assumptions.SourceHard, Nci.Assumptions.Recovers, Security/Definitions/Nci/Assumptions/Capability/Information.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
+   "Nci.SecurityProofs.IncidenceCap": "frozen (no-function): It counts an arbitrary declaration's counted products completed within any gates, by their incidence with slots and operands (Nci.Capability.Incidence, Nci.Capability.completedIn, Security/Definitions/Nci/Capability/Products.lean), not about a function's code.",
+   "Nci.SecurityProofs.OperandCapSeparate": "frozen (no-function): It joins the incidence cap to separate slot and operand budgets over an arbitrary registration's counted products (Nci.Capability.Incidence, Nci.Capability.HeldPriceAtMost, Security/Definitions/Nci/Capability/Products.lean), not about a function's code.",
+   "Nci.SecurityProofs.OperandCapJoint": "frozen (no-function): It joins the incidence cap to one joint slot-and-operand budget over an arbitrary registration's counted products (Nci.Capability.Incidence, Nci.Capability.Items.sum, Security/Definitions/Nci/Capability/Products.lean), not about a function's code.",
+   "Nci.SecurityProofs.ImportOrRecompute": "frozen (no-function): It is about an arbitrary registration's proof blocks and consumers under the upstream certificate and overlap weights (Nci.Capability.Consumers.Upstream, Nci.Capability.Consumers.OverlapWeights, Security/Definitions/Nci/Capability/Consumers.lean), not about a function's code.",
+   "Nci.SecurityProofs.RecomputeByGates": "frozen (no-function): It is double counting over an arbitrary declaration's consumers with overlap weights, within any gates (Nci.Capability.Consumers.OverlapWeights, Security/Definitions/Nci/Capability/Consumers.lean), not about a function's code.",
+   "Nci.SecurityProofs.RecomputeByState": "frozen (no-function): It is about an arbitrary registration's proof blocks, a held budget and consumers whose recomputation needs state priced above it (Nci.Capability.HeldPriceAtMost, Nci.Capability.Consumers.RequiresState, Security/Definitions/Nci/Capability/Consumers.lean), not about a function's code.",
+   "Nci.SecurityProofs.WeightedProductCap": "frozen (no-function): It is about an arbitrary registration's proof blocks, counted products and a held slot budget (Nci.Capability.SlotsRead, Nci.Capability.HeldPriceAtMost, Security/Definitions/Nci/Capability/Products.lean), not about a function's code.",
+   "Nci.SecurityProofs.CapabilityFloor": "frozen (no-function): It bounds an event of an arbitrary task's probability (Accounting.Overhead.Task.prob), which shape.events does not list, over an arbitrary class and computation under coverage (Nci.Assumptions.CoversEfficientMethods, Security/Definitions/Accounting/Assumptions/Coverage.lean), not a function's acceptance.",
    "Nci.Guarantees.DampenerRemotePeriod": "unstated: DampenerRemote over a monitoring period of T windows on live coins, each protocol's premise replaced by its own guarantee's per-window form (CircuitCredit's conclusion for PouwSound; HiddenWindow.drawMiss_le and EndToEndHiddenDrawn for SampledDetection; NciCheck.Properties.Throttled's conclusion, which DescThrottles gives on the check of record's verdicts, for the thread bound), with TerminalDetection kept as a named premise; stated first, per Daniel's 17 Oct order (statement, red team, card, proof), its text recorded under DampenerRemotePeriodStated, and its theorem Nci.SecurityProofs.DampenerRemotePeriod is not proved yet.",
-   "Nci.Guarantees.HeldBudget": "unstated: Lemma 1 with description hardness bounds the priced state every proof block holds by k + ceil(log2 B) + a_blk + Lambda; proof not written yet.",
-   "Nci.Guarantees.StatHeldBudget": "unstated: min-entropy hardness bounds the priced state every proof block holds by k + Lambda, counting the block's views; proof not written yet.",
-   "Nci.Guarantees.RecoveredBudget": "unstated: source hardness with recovery at beta_v bits an output, up to amb bits of ambiguity, bounds a proof block's eligible outputs; proof not written yet.",
-   "Nci.Guarantees.IncidenceCap": "unstated: with at most r products per slot-operand pair and aout per operand, any gates compute at most min(r|U||V|, aout|V|) counted products whole; proof not written yet.",
-   "Nci.Guarantees.OperandCapSeparate": "unstated: separate slot and operand budgets with the incidence cap bound a proof block's counted products by any Q over their feasible region; proof not written yet.",
-   "Nci.Guarantees.OperandCapJoint": "unstated: one joint slot-and-operand budget with the incidence cap bounds a proof block's counted products by any Q over its feasible region; proof not written yet.",
-   "Nci.Guarantees.ImportOrRecompute": "unstated: under the upstream certificate and overlap weights, a proof block's served weight is at most its unregistered input bits plus its recomputed weight; proof not written yet.",
-   "Nci.Guarantees.RecomputeByGates": "unstated: with overlap weights and at least g required gates per use, the recomputed weight within any gates S is at most |S|/g; proof not written yet.",
-   "Nci.Guarantees.RecomputeByState": "unstated: when recomputing any use needs more updated state than every proof block holds, no proof block contains a use's required gates; proof not written yet.",
-   "Nci.Guarantees.WeightedProductCap": "unstated: a proof block's price-weighted counted products are at most its held slot budget times the weight of the uses it serves; proof not written yet.",
-   "Nci.Guarantees.CapabilityFloor": "unstated: under coverage of efficient methods, success below the floor on covered computations has probability at most eta; proof not written yet.",
    "Accounting.SecurityProofs.Remote.SketchBoundP2": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.SketchBoundSession at the P2 store's receipts (units of four 2,056-byte blocks, 257 sectors, 16 sign rows, SHA-512 tags) and rank 12, as Accounting.SecurityProofs.Remote.SketchBoundDeployed is at 4096-byte blocks' 128 sectors, with at most Q + P candidate seeds and Q receipt-hash queries for Q the hashes the prover can try over the session: SketchBound at Q/2^96 + (Q + P)(ε + N/2^512) + (Q + P)^2/2^257 under SketchRank 16 257 12 ε and SketchHashRandom at ε_ro = (Q + P)^2/2^257, the sign keys' birthday among at most Q + P seeds (drafted for the P2 store, not decided; note:20261025T2335Z-report-bw-block)",
    "Pouw.SecurityProofs.Dither.WorkSound": "frozen (verdict): a probability statement over a quantified service verdict whose soundness is the premise ServiceSound, not a property of one function; it gets the shape when the proof service's verdict is a named Lean function the event reads (CMP-136).",
    "Pouw.SecurityProofs.Dither.WorkSoundNoFold": "frozen (verdict): as WorkSound, on the no-fold round with ExtractOfRealize in place of ExtractAdv (CMP-136, RT-LEAN-2 L39).",
