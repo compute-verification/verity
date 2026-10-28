@@ -1,6 +1,6 @@
 """`serve_row` on CPU: serve-openai's engine schedules as ``--async-scheduling`` says (off by default), a bench row whose
 workload Program is specialized for the other scheduler is refused before the model loads, and a server whose engine
-resolved another scheduler is refused by name. The flag serves only with ``--no-commit`` for now."""
+resolved another scheduler is refused by name. The flag serves with the Commit on or off."""
 from __future__ import annotations
 
 import json
@@ -73,17 +73,16 @@ def test_the_engine_schedules_as_the_flag_says_and_a_row_specialized_for_the_oth
     assert f"SERVE-OPENAI engine resolved async_scheduling=True (--async-scheduling); the bench row declares True ({wp})" in capsys.readouterr().out
 
 
-def test_async_scheduling_serves_only_without_the_commit(tmp_path):
-    """The native collector's staging isn't held to async scheduling yet, so ``--async-scheduling`` with the Commit on (and so
-    with H1, which serves on it) is refused before the model loads; without the Commit, or without the flag, it isn't."""
+def test_async_scheduling_serves_with_the_commit_on_or_off(tmp_path):
+    """``--async-scheduling`` passes the preflight with the Commit on (and so with H1, which serves on it) as without it: the
+    learn-only warm-up learns the async steps' plans as it does the synchronous ones' (``serve_async_commit_gpu.py`` holds
+    the two schedulers' roots equal on an H200)."""
     (man := tmp_path / "manifest.json").write_text("{}")
     base = ["--model", "m", "--revision", "r", "--required-manifest", str(man)]
     on, bare, off = (cli.parse("serve-openai", base + more, environ={})
                      for more in (["--async-scheduling"], ["--async-scheduling", "--no-commit"], []))
-    assert RW.commit_refusal(off) is None and RW.commit_refusal(bare) is None
-    assert RW.commit_refusal(on).startswith("--async-scheduling serves only with --no-commit: the native collector's staging")
-    with pytest.raises(cli.UsageError, match="--async-scheduling serves only with --no-commit"):
-        so.preflight(on, which=lambda _: "/v/bin/ninja")
+    assert (on.commit, on.async_scheduling, bare.commit) == (True, True, False)
+    so.preflight(on, which=lambda _: "/v/bin/ninja")
     so.preflight(bare, which=lambda _: None)
     so.preflight(off, which=lambda _: "/v/bin/ninja")
 
