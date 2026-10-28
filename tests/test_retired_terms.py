@@ -65,7 +65,6 @@ PENDING: dict[str, str] = {
     "verity/core/protocols/pouw/PROTOCOL.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/protocols/pouw/README.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/protocols/pouw/dither/PROTOCOL.md": "queued PRs rewrite its lines; the proof-service rename follows them",
-    "verity/core/protocols/remote_bandwidth/PROTOCOL.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "verity/core/protocols/remote_bandwidth/README.md": "queued PRs rewrite its lines; the proof-service rename follows them",
     "Security/Proofs/NetworkCertifier/README.md": "#4690 adds lines",
     "benchmarks/census/README.md": "#4731 rewrites its lines",
