@@ -1971,6 +1971,14 @@ def printed(text: str) -> str:
     return " ".join(text.split())
 
 
+_QUALIFIED = re.compile(r"[A-Za-z_][\w']*(?:\.[\w']+)+")
+
+
+def unnamed(text: str) -> str:
+    """A premise as printed with each qualified name (`A.B.c`) one placeholder: what a rename leaves unchanged."""
+    return _QUALIFIED.sub("·", text)
+
+
 def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dict[str, list[str]]]:
     """(failures, the `shape.inline` an `--update` writes, every offender: {guarantee: its inline hypotheses as
     printed}, those `shape.inline` lists among them). Every `Prop` binder a lock-listed guarantee takes, its
@@ -1993,7 +2001,9 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
     hypothesis of the statement as written is the hypotheses rule's. `--update` keeps an entry only while its premise
     still offends, and that of a guarantee the lock doesn't list yet (one a PR ahead on `next` brings), and adds none, so
     the map only shrinks; its size is the formalization debt the AUDIT line prints. `--moved` carries an entry to its
-    guarantee's new name (`renamed_witnesses`, which renames `shape.inline` with the witnesses)."""
+    guarantee's new name (`renamed_witnesses`, which renames `shape.inline` with the witnesses). A premise whose
+    text differs from an entry no longer offending only in its qualified names (`unnamed`: a rename on another PR,
+    which `--moved` can't see in premise text) takes that entry's place and reason, so a rename never fails it."""
     spec = policy.get("shape") or {}
     allow = spec.get("inline", {})
     if not isinstance(allow, dict) or not all(isinstance(v, dict) and v and all(isinstance(w, str) and w.strip()
@@ -2034,9 +2044,15 @@ def inline_failures(policy: dict, facts: dict) -> tuple[list[Failure], dict, dic
             and statements.get(p.get("head"), g) == g))
         if bad:
             offenders[g] = bad
-        if still := {b: old[b] for b in bad if b in old}:
+        gone = [o for o in old if o not in bad]
+        renamed = {}
+        for b in [b for b in bad if b not in old]:
+            if (o := next((o for o in gone if unnamed(o) == unnamed(b)), None)) is not None:
+                renamed[b] = old[o]
+                gone.remove(o)
+        if still := {b: old[b] for b in bad if b in old} | renamed:
             kept[g] = still
-        if new := [b for b in bad if b not in old]:
+        if new := [b for b in bad if b not in old and b not in renamed]:
             fails.append(Failure("guarantees.inline-hypothesis", g, f"guarantees: {g} takes "
                                  f"{'; '.join(f'({b})' for b in new)}: an inline hypothesis, neither a named assumption "
                                  f"the lock lists, another listed guarantee's statement nor a plain range (`0 < x`, "

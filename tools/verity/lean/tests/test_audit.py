@@ -2047,6 +2047,24 @@ end Control
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_grandfathered_premise_renamed_on_another_pr_keeps_its_entry():
+    """A rename another PR makes changes a grandfathered premise's printed text only in its qualified names, which
+    `--moved` can't see there: the premise takes its old entry's place and reason. A premise that differs in more than
+    names is still new, and an entry whose premise is still there is never spent on another."""
+    why = "inline when the rule came"
+    allow = {"P.t": {"∀ (g : P.Gates.Gate), P.ok g": why, "P.f n = 3": why}}
+    pol, f = inlined(premise("∀ (g : P.Gates.IntGate), P.ok g", "forall"), premise("P.f n = 3", "Eq"))
+    held = pol | {"shape": {"premises": ["P.Assumptions"], "inline": allow}}
+    assert inline_codes(held, f) == []
+    assert A.judge(held, f, FILES, update=True)[1]["shape"]["inline"] == {
+        "P.t": {"∀ (g : P.Gates.IntGate), P.ok g": why, "P.f n = 3": why}}
+    grown = inlined(premise("∀ (g : P.Gates.IntGate), P.ok g ∧ P.ok g", "forall"), premise("P.f n = 3", "Eq"))[1]
+    assert inline_codes(held, grown) == ["guarantees.inline-hypothesis"]
+    twice = inlined(premise("P.f n = 3", "Eq"), premise("Q.f n = 3", "Eq"))[1]
+    assert inline_codes(pol | {"shape": {"inline": {"P.t": {"P.f n = 3": why}}}}, twice) == \
+        ["guarantees.inline-hypothesis"]
+
+
 def test_inline_hypotheses_are_read_past_lifts_foralls_and_conjunctions_on_a_real_build(tmp_path):
     """`Facts.lean`'s `inline` on a real build: plain ranges over bound variables and numerals, under a cast and of a
     family (`∀ i, 0 ≤ w i`), and a named assumption, bare and under a leading `∀ ω`, pass; a bound against a term, an
