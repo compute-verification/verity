@@ -133,7 +133,7 @@ def test_held_probes_each_undo_one_of_helds_costs(tmp_path, probe):
     s, ml = h.read_text(), m.read_text()
     assert ml.count(tb.K_RELEASE) == 1 and ("bar.red.or.pred" in s) == (probe != "held-warp")
     early = ml.index(tb.K_RELEASE) < ml.index("softmax.lazy_redo(")
-    assert early == (probe == "held-early-k")
+    assert early == (probe == "held-early-k") and ("flash::gemm" in ml) == (probe != "held-no-gemm")
 
 
 def test_thresh_keeps_the_max_only_within_tau(tmp_path):

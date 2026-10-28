@@ -33,8 +33,8 @@ kept block's exp2 unchecked, tests each row's block sum after it (below 2^16, so
 reduces that over the warpgroup with one bar.red.or where its warps meet anyway; on a failure the warpgroup recomputes
 S from K, which the mainloop then releases only after that test, and redoes the block exactly from the state saved
 before it (`redo_softmax`). `held-redo` fails every kept block's test, so its bytes must equal FA3's: the check of the
-redo path, which random inputs never take. `held-early-k` and `held-warp` are timing probes of held's costs, only for
-inputs where no redo runs (`lazy_max`). Without either flag softmax.h is untouched.
+redo path, which random inputs never take. `held-early-k`, `held-warp` and `held-no-gemm` are timing probes of held's
+costs, only for inputs where no redo runs (`lazy_max`). Without either flag softmax.h is untouched.
 """
 from __future__ import annotations
 
@@ -275,7 +275,9 @@ def patch_once(path: Path, s: str, patches) -> str:
 
 
 K_RELEASE = "pipeline_k.consumer_release(smem_pipe_read);  // release K\n"
-HELD_PROBES = ("held-early-k", "held-warp")
+REDO_GEMM = ("                    flash::gemm</*zero_init=*/true, /*wg_wait=*/0>(tiled_mma_qk, tSrQ, "
+             "tSrK(_, _, _, smem_pipe_read.index()), tSrS);\n")
+HELD_PROBES = ("held-early-k", "held-warp", "held-no-gemm")
 
 
 def lazy_max(softmax_h: Path, checked: bool = False, thresh: bool = False, held: bool = False, redo: bool = False,
@@ -285,7 +287,7 @@ def lazy_max(softmax_h: Path, checked: bool = False, thresh: bool = False, held:
     `probe` (with `held`) times one of held's costs away, and is only for inputs where no redo runs: `held-early-k`
     releases K where FA3 does, so a redo may read a stage the producer refilled; `held-warp` votes in each warp instead
     of the warpgroup's bar.red, so a redo that not every warp of the warpgroup takes hangs its wgmma (a spiked prompt's
-    padded rows never fail)."""
+    padded rows never fail); `held-no-gemm` redoes from the scores exp2 left, without the recompute's wgmma."""
     if thresh:
         softmax_h.write_text(patch_once(softmax_h, softmax_h.read_text(), THRESH_PATCHES))
         return
@@ -296,6 +298,9 @@ def lazy_max(softmax_h: Path, checked: bool = False, thresh: bool = False, held:
         if probe == "held-early-k":
             (old, new), = HELD_MAINLOOP[1:]
             loop = ((old, new.replace("                " + K_RELEASE, "")),)
+        if probe == "held-no-gemm":
+            (old, new), = HELD_MAINLOOP[1:]
+            loop = HELD_MAINLOOP[:1] + ((old, new.replace(REDO_GEMM, "")),)
         mainloop_h.write_text(patch_once(mainloop_h, mainloop_h.read_text(), loop))
         s = patch_once(softmax_h, s, HELD_PATCHES)
         if probe == "held-warp":
@@ -329,7 +334,8 @@ def main() -> None:
                     help="keep a warp's running max after the first key block (checked: biased exp2, sign-tested; "
                          "thresh: the max computed, kept while it rises by at most 8 in log2 units; held: block sums "
                          "tested after exp2, K held for a recompute; held-redo: every kept block recomputed, a test; "
-                         "held-early-k, held-warp: timing probes of held's costs, only where no redo runs)")
+                         "held-early-k, held-warp, held-no-gemm: timing probes of held's costs, only where no redo "
+                         "runs)")
     ap.add_argument("--jobs", default="8")
     ap.add_argument("--cuda", type=Path, default=Path("/usr/local/cuda"), help="the CUDA toolkit whose libcuda stub links")
     args = ap.parse_args()
