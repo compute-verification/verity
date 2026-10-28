@@ -1,8 +1,8 @@
-# units: the frozen decoder's non-matmul proof blocks on the H200 and the RTX PRO 6000
+# units: the H200 example's non-matmul proof blocks on the H200 and the RTX PRO 6000
 
-GPU kernels for the proof blocks between the matmuls of the frozen shape (MQA decoder, width 16384, 52 layers, 256 query heads of
-64, one KV head, MLP 65536, byte vocabulary, context 32), each word for word its CPU twin, both in circuits' forms (the
-CPU replay's templates, `ops.quant`'s quantizer, `ops.rows`' row Definitions), for the walking skeleton.
+GPU kernels for the proof blocks between the matmuls of the H200 example's model (`examples/h200/`: MQA decoder, width
+16384, 52 layers, 256 query heads of 64, one KV head, MLP 65536, byte vocabulary, context 32), each word for word its CPU
+twin, both in circuits' forms (the CPU replay's templates, `ops.quant`'s quantizer, `ops.rows`' row Definitions).
 `build.sh` builds `units.cu` for sm_90a (the H200) and sm_120a (the RTX PRO 6000), and `lib.py` loads the cubin of the
 device's arch.
 
