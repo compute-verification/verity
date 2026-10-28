@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 
+from verity.core.deploy.stream import Side
 from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.core.protocols.pous import wipe_period as W
@@ -38,9 +39,10 @@ def _load(name: str, path: Path):
 
 SPT = _load("pous_served_piece_tests", ROOT / "benchmarks" / "pous" / "tests" / "test_pous_served_piece.py")
 SC = _load("pous_served_case", ROOT / "benchmarks" / "pous" / "served_case.py")
+tsite = _load("pous_test_site", ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "pous_test_site.py")
 ts, served = SPT.ts, SPT.served
 WIPE_ID = mc.TEST_PREFIX + W.PROTOCOL
-SMALL_WIPE = sw.WipeParams(64, W.READS, 1, 1_000, (("gpu", 64 * sw.LABEL_BYTES),))
+SMALL_WIPE = sw.WipeParams(64, W.READS, 1, 1_000, (("gpu-hbm", 64 * sw.LABEL_BYTES),))
 
 
 def _mode(p: Path) -> int:
@@ -168,7 +170,7 @@ def test_weights_that_are_not_the_pins_make_no_pous_case(served, tmp_path, monke
 
 def test_a_pous_window_whose_session_did_not_complete_has_no_case(served, tmp_path):
     SPT.SP.run(served.serve, 3, served.out, hf_home=served.hf, device="cpu", node=SPT.NODE, private=served.private,
-               party=SPT.CP.Party(SPT.AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)),
+               party=Side(SPT.AUDITOR, (sys.executable, "-c", "import sys; sys.exit(3)"), ("127.0.0.1", 9)),
                pins=served.pins, schemes=ts.SCHEMES, protocol=SPT.TEST_PROTOCOL)
     with pytest.raises(SC.Refused, match="names no private directory: the run's session didn't complete"):
         SC.pous_piece(served.out, schemes=ts.SCHEMES, hf_home=served.hf, device="cpu", pins=served.pins)
@@ -177,7 +179,7 @@ def test_a_pous_window_whose_session_did_not_complete_has_no_case(served, tmp_pa
 def _wipe_window(tmp_path: Path, *, protocol: str = WIPE_ID, egress_bits: int = W.UNCOUNTED) -> tuple[Path, Path, W.Wipe]:
     """A served wipe's public directory as `served_wipe.sh` leaves it, and the serve dir its ``served.json`` names."""
     w = W.run("n0", SMALL_WIPE, signer=ts.TestSigner(b"served case wipe", 2, directory=tmp_path),
-              log=ts.session_log(tmp_path), schemes=ts.SCHEMES,
+              log=ts.session_log(tmp_path), site=tsite.site_of("n0", SMALL_WIPE.tiers), schemes=ts.SCHEMES,
               protocol=protocol, clock=iter(range(10 ** 9, 10 ** 12)).__next__, coin_secret=b"coins",
               egress_bits=egress_bits)
     assert w.verdict == "accept", w.answer
