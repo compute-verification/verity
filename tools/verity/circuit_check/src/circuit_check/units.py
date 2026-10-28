@@ -7,7 +7,8 @@ made now, unbuilt, so a registry a binding enumerates is read as it is now.  A b
 the request ``catalog-unit``, keyed by the binding's units and which of that binding's occurrences it is) holds the ids of its
 roots and what they reach (`_reach`): each primitive, specialization and reference by id, with its kind, family, gate count,
 whether it is Boolean, the ids its body calls (in the order `targets.reachable` visits them) and, where `targets.select` could
-keep it, its descriptor (`cache.descriptor`), name and descriptor id.  Its reads (`cache.unit_reads`) are what its units read
+keep it, its descriptor (`cache.descriptor`), name and descriptor id; a by-calls root (`targets.is_by_calls`) as ``bc``, its
+body unbuilt, so with no gates and no calls.  Its reads (`cache.unit_reads`) are what its units read
 and ran while they made its roots, the build of every Definition they reach, the bindings that made those, those modules' import
 closures, its units by digest and what the process read outside every recording; and the units of every binding that makes no
 root (one run for what it sets, as `syn.knob`'s), whose reads every record holds.  The registered primitives and static-free
@@ -115,6 +116,9 @@ def _reach(roots: list[Any], described: bool = True) -> tuple[dict[str, dict], d
     nodes: dict[str, dict] = {}
     for fid, fn in objs.items():
         k = _kind(fn)
+        if TG.is_by_calls(fn):
+            nodes[fid] = {"k": k, "f": TG.family(fn), "g": 0, "b": False, "bc": 1}
+            continue
         info = {"k": k, "f": TG.family(fn), "g": getattr(fn, "gates", 1), "b": bool(BL.is_boolean(fn))}
         if k == "S":
             info["c"] = _calls(fn)
@@ -124,6 +128,8 @@ def _reach(roots: list[Any], described: bool = True) -> tuple[dict[str, dict], d
     least: dict[str, int] = {}
     bits: dict[str, int] = {}
     for info in nodes.values():
+        if info.get("bc"):
+            continue
         least[info["f"]] = min(least.get(info["f"], info["g"]), info["g"])
         if info["b"]:
             bits[info["f"]] = min(bits.get(info["f"], info["g"]), info["g"])
@@ -143,9 +149,12 @@ def _reach(roots: list[Any], described: bool = True) -> tuple[dict[str, dict], d
 def _select(reached: dict[str, dict]) -> set[str]:
     """`targets.select` over records."""
     by: dict[str, list[tuple[str, dict]]] = {}
-    for fid, info in reached.items():
-        by.setdefault(info["f"], []).append((fid, info))
     out: set[str] = set()
+    for fid, info in reached.items():
+        if info.get("bc"):
+            out.add(fid)
+        else:
+            by.setdefault(info["f"], []).append((fid, info))
     for fns in by.values():
         keep = [f for f in fns if f[1]["g"] <= TG.MAX_GATES]
         if not keep:

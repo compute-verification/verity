@@ -12,7 +12,7 @@ and NaN):
   (c) every scale word equals the circuit's scale bit for bit (`RMSNormFusedCuda_v2`'s `RsqrtApprox` gate, `RMSNormTriton_v1`'s `inv`
       gate): every row against the vectorised twin (`program.kernels.derived_rows`, gate-checked in tests/program/test_derived_rows.py),
       and the first `IR_ROWS` rows of each case, every special row included, against the circuit's own evaluation (`ir_scale`: the gate's
-      value in the `verity.ml.circuits.evaluate.evaluate_call` transcript);
+      value in the `verity.ml.circuits.evaluation.evaluate_call` transcript);
   (d) Triton: the installed kernel's source is the pinned one, the copy is that source plus exactly `rms_norm_tap.TAP_LINES`
       (`source_diff`), and at every case's specialization the two kernels' PTX has the same sequence of floating-point, conversion and
       shuffle instructions (`arith_ops`), the copy adding one global store;
@@ -82,7 +82,7 @@ def ir_scale(kernel: str, N: int, eps: float, x: list[int], res: list[int] | Non
     standalone Call and read its scale gate from the transcript."""
     from verity.ml.circuits.evaluation.reference import standalone_call
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.evaluate import evaluate_call
+    from verity.ml.circuits.evaluation import evaluate_call
     from verity.ml.definitions.registry import b1
 
     spec = bind(b1.RMSNormFusedCuda if kernel == "cuda" else b1.RMSNormTriton, N=N, EPS=eps)

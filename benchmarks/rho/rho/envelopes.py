@@ -25,7 +25,7 @@ cryptography's advantage:
   `r_in` the certified prompt ingress and `r_side` the timing and side channels no certifier reads. `r_in` is
   `intake · α Φ`, at most `α Φ` since a server's ingress carries only its inference blocks' declared inputs;
   with `declared` (`regime.onsite-w63`), each server's declared inputs at a cadence the warden form's public parameters
-  set. Its δ is 0: the certifier is the auditor's device (`trusted-nebius-host`), and the side channels an assumed cap.
+  set. Its δ is 0: the certifier is the auditor's device (`trusted-host`), and the side channels an assumed cap.
 * The NCI check is a registration check, not an envelope: the declared circuit's `(c, k)`-partition into inference
   blocks (`Policy`), registered once.
 
@@ -226,10 +226,9 @@ class Wipe:
     game_delta_coin: float = 2.0**-128
     prf_advantage: float = 0.0
 
-    #: the per-server bound against `M_s` is memory-accounting's (Wed 28 Oct 06:00Z); per device, the streamed wipe
+    #: the per-server bound against `M_s` is a draft; per device, the streamed wipe
     SERVER = ("draft:wipe-per-server",)
-    DEVICE = ("Pous.Guarantees.StreamedWipeMeets2600GB", "Accounting.Guarantees.Actual.WipeReadHeld",
-              "Accounting.Guarantees.Actual.WipeLag")
+    DEVICE = ("Pous.Guarantees.StreamedWipeMeets2600GB",)
 
     def __post_init__(self) -> None:
         if self.per not in PER:

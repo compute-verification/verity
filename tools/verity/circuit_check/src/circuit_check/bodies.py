@@ -1,7 +1,7 @@
 """A composite's evaluation and its non-constant gates, body by body.
 
 The reference (`verity.ml.circuits.evaluation.evaluate`) walks a composite's standalone call gate by gate
-(`verity.ml.circuits.evaluate.evaluate_region`), and finds each gate and each of its operands from the root
+(`verity.ml.circuits.evaluation.evaluate_region`), and finds each gate and each of its operands from the root
 (`layout.Circuit.gate`, `layout.resolve_gate`); that search is most of what checking a large Definition costs. `evaluate`
 here compiles each specialized Definition's body once into local wires (its parameters' leaves, then each node's output
 leaves) and runs it per activation: the same gates, in the same canonical order, on the same operands, through the same
@@ -19,7 +19,7 @@ from collections import Counter
 from typing import Any, Sequence
 
 from verity.ml.circuits.defs import PrimitiveDefinition, SpecializedDefinition
-from verity.ml.circuits.evaluate import MissingValue
+from verity.ml.circuits.evaluation import MissingValue
 from verity.ml.circuits.evaluation.reference import RegisteredTable, resolve, standalone_call
 from verity.ml.circuits.evaluation.reference import evaluate as reference
 from verity.ml.circuits.layout import WIDE_FAN_IN

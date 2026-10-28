@@ -24,8 +24,8 @@ salt inputs and the two row inputs collide or are equal (`commit_tie`). The veri
 (`findColl (L.calls x s w ++ vcallsAt H D xO)`) to charge the collision. `layoutBTops` records the hm96 calls of the
 message-round ports only (`heldRows`), not of `v` or `out`. The layout of record, `DeployedR.layR`, adds them
 (`DeployedR.valCalls`): each instance's salt and row calls at `v` (its input columns, `rowHidden`) and at `out` (its
-output columns, `outRowForms`), and at a `rec-open` part's `dirs` (`openPorts`, whose check 5 evaluations are
-`openSetupSt`).
+output columns, `outRowForms`), and at a `rec-open` part's `coef` and `dirs` (`openPorts`, whose check 5 evaluations
+are `openSetupSt`).
 
 * `commit_tie`: two commit strings at SHA-512 agree, and both salts' and both rows' inputs are among a list of true
   evaluations with no collision, so the rows are equal.
@@ -128,14 +128,16 @@ def resSetupSt (src : Option RecCoins.Source) (st : Stmt) : List Msg :=
     | _, _ => []
   | _, _ => []
 
-/-- **Check 5's evaluations at one statement `st`** of a `rec-open` unit, at its source `src`: `checkOpen`'s at `dirs`
-(the verifier's `dirs` rows, `openRows`, under `verifierSalt` of META's `program_sha512`). None at any other unit. -/
+/-- **Check 5's evaluations at one statement `st`** of a `rec-open` unit, at its source `src`: `checkOpen`'s at `coef`
+and at `dirs` (the verifier's `coef` and `dirs` rows, `openRows`, under `verifierSalt` of META's `program_sha512`), in
+`checkOpen`'s order. None at any other unit. -/
 def openSetupSt (src : Option RecCoins.Source) (st : Stmt) : List Msg :=
   match RecOpen.params st.c.unit.name, src with
   | some (L, H), some f =>
     match (f.load st.c.unit.name).toOption, (st.c.metaJ.getObjValAs? String "program_sha512").toOption with
     | some inn, some prog => match FlockSoundness.Discharge.Recursion.openRows inn L H with
-      | some (_, dr) => commitIns dr (RecCoins.verifierSalt prog RecCoins.DIRS_VALUE)
+      | some (cr, dr) => commitIns cr (RecCoins.verifierSalt prog RecCoins.COEF_VALUE) ++
+          commitIns dr (RecCoins.verifierSalt prog RecCoins.DIRS_VALUE)
       | none => []
     | _, _ => []
   | _, _ => []
@@ -387,8 +389,8 @@ theorem mem_valPorts_open {r : XR} {s : ℕ} {ss : Array VStar.Stmt} (hss : RecV
   dsimp only
   exact List.mem_flatMap.2 ⟨nm, hnm, by rw [hq]; exact List.mem_map.2 ⟨i, List.mem_range.2 hi, rfl⟩⟩
 
-/-- **`DeployedR.layR` records check 5's calls at a `rec-open` part**: each instance `i < n`'s hm96 calls at port `dirs` are
-among part `s`'s recorded calls. -/
+/-- **`DeployedR.layR` records check 5's calls at a `rec-open` part**: each instance `i < n`'s hm96 calls at ports `coef`
+and `dirs` are among part `s`'s recorded calls. -/
 theorem portCalls_sub_layR_open (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     {x : Msg} {r : XR} (hr : readX x = some r) {s : ℕ} {ss : Array VStar.Stmt}
     (hss : RecVStar.statements r.shape = .ok ss) {lv LANES HH n : ℕ} (hsv : ss[s]? = some (.recOpen lv LANES HH n))
@@ -1470,7 +1472,9 @@ theorem resTie_staged {b : Brings} {IV : Claims.Verifier Coin}
 /-- **`resPieces_computes` with the tie at the pieces' copies only**, and the whole acceptance at hand: wherever part
 `s` accepts at an algebra part, each piece `ownQ` gives it holds where, at every staged statement and witness that pass
 `Flock.check`, agree with the messages and record true, collision-free calls, the piece sits at one of the statement's
-copies, of its group, at which check 5's tie holds (`ResTie`) and whose rows are what `elemAt` reads. The piece's key is
+copies, of its group, at which check 5's tie holds (`ResTie`) and whose residuals vanish at what `elemAt` reads wherever
+they vanish at the copy's rows (`ResZero`; the copy's rows being `elemAt`'s gives it, and so does their being
+`elemAt`'s up to an offset the residuals cancel, `PartS.resZero_off`). The piece's key is
 `(jj, o, g, u)`: the part's group `jj` (so pieces of different groups have different keys) and instance `o + g`'s unit
 `u` of the part's one table (`keyCopy`: block `(o + g) / c.g`, VU `(o + g) % c.g` at the part's own `c.g`, which the
 prover chooses), so the pieces needn't know `c.g`. Check 5 holds only
@@ -1506,9 +1510,11 @@ theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
               (keyCopy p ht w q.key) ∧
             ∀ os last, Bd.final (ms.getD (Bd.DE.V.k (Claims.Recursion.xI D x) - 1) []) = some (os, last) →
               os.length + 1 = Bd.DE.V.k (Claims.Recursion.xI D x) →
-              _root_.Flock.Readable.rowsRead ns nv (keyCopy p ht w q.key) =
-                elemAt (Claims.Recursion.xI D x) (Bd.opened os last)
-                  ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key) :
+              ResZero S (_root_.Flock.Readable.rowsRead ns nv (keyCopy p ht w q.key))
+                  (vvAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key) →
+                ResZero S (elemAt (Claims.Recursion.xI D x) (Bd.opened os last)
+                    ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key)
+                  (vvAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key)) :
     PiecesComputes Bd D pieces (resHolds elemAt vvAt) ownQ s x c ms := by
   obtain ⟨-, xO, w, hck, hT, hc, hs, hh, hp, hm, hrw⟩ := h
   obtain ⟨p, r', sv, hx, ht, hpi, hr', ⟨ss', hss', hsv'⟩, -, htab⟩ := stagedReads hs
@@ -1527,11 +1533,7 @@ theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
   obtain ⟨m, k, cl, jj, sh, holo, S, ns, nv, h1, h2, h3, h4, hro⟩ :=
     _root_.Flock.Readable.innerCopies ht' ho' (Nat.mod_lt _ hG) hu hcp
   obtain ⟨rfl, -, htie, hE⟩ := hch m k cl jj sh holo S ns nv h1 h2 h3 h4
-  have hz : ResZero q.S (_root_.Flock.Readable.rowsRead ns nv (keyCopy p ht' w q.key))
-      (vvAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key) :=
-    resVal_zero_of_tie hro htie
-  rw [hE os last hf hl] at hz
-  exact hz
+  exact hE os last hf hl (resVal_zero_of_tie hro htie)
 
 /-! ## The statements -/
 

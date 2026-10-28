@@ -5,17 +5,21 @@
     verity check --record [ARGS]    the check recorded as an Attempt (check.py --record; a lane's own: --on M --pool NAME)
     verity check move BASE HEAD     certify a pure move (check/move_check.py)
     verity bench NAME [ARGS]        benchmarks/NAME's runner (run.py or run.sh)
-    verity example NAME [ARGS]      examples/NAME's command (run.py or run.sh): its workload on its placement
+    verity run CONFIG [--party ROLE ...] [--on MACHINE] [--periods N] [--state DIR]
+                                    a deployment configuration's parties on this machine, and its verdict (run.py)
+    verity config new|check|hash    write, check or hash a deployment configuration (run.py)
+    verity example NAME [ARGS]      examples/NAME's command (`verity run` its config.toml, else its run.py or run.sh): its
+                                    workload on its placement
     verity example --status         every example's protocol, workload, run and proof, and each one's next missing evidence
-    verity lean try FILE [--on NODE] [--pool P] [--as LANE]
-                                    elaborate one Lean file on a node's warm slot tree (lean/lean_changed.py --try) and
-                                    print Lean's output: the edit loop (default vy-nebius-cpu-1, pool research)
+    verity lean try FILE            elaborate one Lean file, the edit loop: `lake env lean FILE` in the Lake package that
+                                    holds it, exiting with lean's status (on a project machine with --on NODE [--pool P])
 """
 from __future__ import annotations
 
 import argparse
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -24,7 +28,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parents[2]
 ROOT = HERE.parents[1]
-#: where `verity lean try` runs when --on names no node, and that node's pool for it
+LAKEFILES = ("lakefile.lean", "lakefile.toml")
+USAGE = "verity lean try FILE [--on NODE [--pool P] [--as LANE]]"
+#: the node whose pool `verity lean try --on` takes when --pool names none, and that pool
 TRY_NODE, TRY_POOL = "vy-nebius-cpu-1", "research"
 #: `research run --on`'s line naming the run it started (or refused)
 LAUNCHED = re.compile(r"^research: run (\S+) (?:launched|refused) on ", re.M)
@@ -73,16 +79,38 @@ def _snapshot(tmp: Path) -> Path:
     return tmp / "tree"
 
 
+def _lean_here(file: str) -> int:
+    """`lake env lean FILE` in the directory of the nearest lakefile above FILE, against that package's built imports."""
+    path = (ROOT / file if (ROOT / file).is_file() else Path(file)).resolve()
+    pkg = next((d for d in path.parents if any((d / name).is_file() for name in LAKEFILES)), None)
+    if not path.is_file() or path.suffix != ".lean" or pkg is None:
+        raise SystemExit(f"verity lean try: {file} is not a .lean file in a Lake package (a directory with a "
+                         f"{' or '.join(LAKEFILES)})")
+    where = pkg.relative_to(ROOT) if pkg.is_relative_to(ROOT) else pkg
+    lake = shutil.which("lake") or str(Path.home() / ".elan" / "bin" / "lake")
+    if not Path(lake).is_file():
+        raise SystemExit(f"verity lean try: no `lake` here: `bash tools/verity/lean/setup.sh {where}` installs elan, the "
+                         "toolchain and the package's dependencies, then `lake build` there builds its imports")
+    rel = os.path.relpath(path, pkg)
+    print(f"verity lean try: lake env lean {rel} (in {where})", flush=True)
+    return subprocess.run([lake, "env", "lean", rel], cwd=pkg).returncode
+
+
 def _lean(args: list[str]) -> int:
-    ap = argparse.ArgumentParser(prog="verity lean try", description="Elaborate one Lean file on a node's warm Lean slot tree "
-                                 "(tools/verity/lean/lean_changed.py --try through `research run`) and print Lean's output.")
-    ap.add_argument("file", metavar="FILE", help="the .lean file, from the repository's root")
-    ap.add_argument("--on", default=TRY_NODE, metavar="NODE", help=f"the node (default {TRY_NODE})")
-    ap.add_argument("--pool", help=f"its `research run` pool (default {TRY_POOL} on {TRY_NODE}, else the node's default)")
-    ap.add_argument("--as", dest="lane", metavar="LANE", help="the lane the pool's slot names (default $RESEARCH_LANE)")
+    ap = argparse.ArgumentParser(prog="verity lean try", description="Elaborate one Lean file: `lake env lean FILE` in the Lake "
+                                 "package that holds it (the nearest lakefile above FILE), against that package's built "
+                                 "imports (`lake build` there first), exiting with lean's status.")
+    ap.add_argument("file", metavar="FILE", help="the .lean file, from the repository's root or this directory")
+    ap.add_argument("--on", metavar="NODE", help="elaborate it on a project machine instead")
+    ap.add_argument("--pool", help="with --on: the machine's pool for it")
+    ap.add_argument("--as", dest="lane", metavar="LANE", help="with --on: the lane the pool's slot names (default $RESEARCH_LANE)")
     if not args or args[0] != "try":
-        raise SystemExit("verity lean try FILE [--on NODE] [--pool P] [--as LANE]")
+        raise SystemExit(USAGE)
     a = ap.parse_args(args[1:])
+    if a.on is None:
+        if a.pool or a.lane:
+            ap.error("--pool and --as go with --on")
+        return _lean_here(a.file)
     file = a.file if (ROOT / a.file).is_file() else os.path.relpath(Path(a.file).resolve(), ROOT)
     pool = a.pool or (TRY_POOL if a.on == TRY_NODE else None)
     research = [sys.executable, "-m", "research"]
@@ -125,10 +153,18 @@ def main(argv: list[str] | None = None) -> int:
         return _check(args[1:])
     if args[0] == "bench":
         return _runner("benchmarks", "bench", args[1:])
+    if args[0] in ("run", "config"):
+        from . import run
+
+        return (run.run_main if args[0] == "run" else run.config_main)(args[1:])
     if args[0] == "example" and args[1:] == ["--status"]:
         from verity_cli.examples import status
         return status(ROOT)
     if args[0] == "example":
+        if args[1:] and (config := ROOT / "examples" / args[1].replace("-", "_") / "config.toml").is_file():
+            from . import run
+
+            return run.run_main([str(config), *args[2:]])
         return _runner("examples", "example", args[1:])
     if args[0] == "lean":
         return _lean(args[1:])

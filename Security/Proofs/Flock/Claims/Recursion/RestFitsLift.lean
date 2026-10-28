@@ -110,7 +110,7 @@ theorem vals_vec (vs : List F128) (fs : List Frame) : vals (.vec vs :: fs) = vs 
 theorem vals_bytes (b : ByteArray) (fs : List Frame) : vals (.bytes b :: fs) = vals fs := rfl
 theorem vals_sq (k : UInt8) (n : ℕ) (fs : List Frame) : vals (.sq k n :: fs) = vals fs := rfl
 theorem vals_capFr (cap : Array ByteArray) (fs : List Frame) : vals (capFr cap :: fs) = vals fs := rfl
-theorem vals_nil : vals [] = [] := rfl
+theorem vals_nilR : vals [] = [] := rfl
 
 theorem vals_flatMap {α : Type} (F : α → List Frame) :
     ∀ l : List α, vals (l.flatMap F) = l.flatMap fun a => vals (F a)
@@ -131,7 +131,7 @@ theorem vals_chFr_length (p : LigeritoProof) : ∀ (msg k : ℕ), (vals (chFr p 
 
 theorem vals_introFr_length (p : LigeritoProof) (dim ood msg cbn : ℕ) :
     (vals (introFr p dim ood msg cbn)).length = 5 := by
-  simp only [introFr, vals_sq, vals_one, vals_append, vals_bytes, vals_nil, List.length_cons, List.length_append,
+  simp only [introFr, vals_sq, vals_one, vals_append, vals_bytes, vals_nilR, List.length_cons, List.length_append,
     vals_kFr_length, List.length_nil]
 
 theorem vals_queryFr (p : LigeritoProof) (lv : Flock.Level) (qn cn : ℕ) : vals (queryFr p lv qn cn) = [] := rfl
@@ -143,11 +143,11 @@ theorem vals_levelFr_length (sch : Flock.Schedule) (p : LigeritoProof) (i : ℕ)
   rw [vals_append, List.length_append, vals_chFr_length]
   by_cases hc : i + 1 < sch.levels.size - 1
   · rw [if_pos hc, if_pos hc]
-    simp only [vals_capFr, vals_append, vals_bytes, vals_sq, vals_nil, vals_queryFr, List.length_append,
+    simp only [vals_capFr, vals_append, vals_bytes, vals_sq, vals_nilR, vals_queryFr, List.length_append,
       vals_introFr_length, vals_kFr_length, List.length_nil]
     all_goals omega
   · rw [if_neg hc, if_neg hc]
-    simp only [vals_append, vals_bytes, vals_sq, vals_nil, vals_queryFr, vals_map_one, List.length_append,
+    simp only [vals_append, vals_bytes, vals_sq, vals_nilR, vals_queryFr, vals_map_one, List.length_append,
       Array.length_toList, List.length_nil]
     all_goals omega
 
@@ -163,7 +163,7 @@ theorem vals_ligFrames_length (sch : Flock.Schedule) (T : F128) (cap : Array Byt
         show (vals (levelFr sch p i)).length = 30
         rw [vals_levelFr_length, if_pos hi']), List.length_range', vals_levelFr_length]
     split <;> omega
-  simp only [ligFrames, vals_label, vals_one, vals_capFr, vals_sq, vals_bytes, vals_append, vals_nil, vals_queryFr,
+  simp only [ligFrames, vals_label, vals_one, vals_capFr, vals_sq, vals_bytes, vals_append, vals_nilR, vals_queryFr,
     List.length_cons, List.length_append, vals_kFr_length, vals_chFr_length, vals_introFr_length, List.length_nil,
     hlv]
   all_goals omega
@@ -175,7 +175,7 @@ theorem vals_zcFrames_length (m : ℕ) (digest cap : ByteArray) (z : ZerocheckPr
     rw [vals_flatMap, length_flatMap_eq (k := 2) ?_, List.length_range']
     intro _ _
     rfl
-  simp only [zcFrames, vals_label, vals_bytes, vals_sq, vals_vec, vals_one, vals_append, vals_nil,
+  simp only [zcFrames, vals_label, vals_bytes, vals_sq, vals_vec, vals_one, vals_append, vals_nilR,
     List.length_append, List.length_cons, List.length_nil, Array.length_toList, h]
   all_goals omega
 
@@ -186,17 +186,17 @@ theorem vals_lcFrames_length (k : ℕ) (l : LincheckProof) :
     rw [vals_flatMap, length_flatMap_eq (k := 2) ?_, List.length_range']
     intro _ _
     rfl
-  simp only [lcFrames, vals_label, vals_sq, vals_vec, vals_append, vals_nil, List.length_append,
+  simp only [lcFrames, vals_label, vals_sq, vals_vec, vals_append, vals_nilR, List.length_append,
     List.length_nil, Array.length_toList, h]
   all_goals omega
 
 theorem vals_rsFrames_length {sh : Shape} {p : Proof} (hp : ProofSizes sh p) :
     (vals (rsFrames sh.claims p.ringSwitches)).length = 128 * sh.claims := by
-  simp only [rsFrames, vals_label, vals_append, vals_sq, vals_nil, List.append_nil]
+  simp only [rsFrames, vals_label, vals_append, vals_sq, vals_nilR, List.append_nil]
   rw [vals_flatMap, length_flatMap_eq (k := 128) ?_, List.length_range', Nat.mul_comm]
   intro k hk
   rw [List.mem_range'_1] at hk
-  simp only [vals_label, vals_vec, vals_sq, vals_nil, List.append_nil, Array.length_toList, rs_size hp,
+  simp only [vals_label, vals_vec, vals_sq, vals_nilR, List.append_nil, Array.length_toList, rs_size hp,
     if_pos (show k < sh.claims by omega)]
 
 /-- **How many values a rep's frames absorb**, at a proof of the rep's shape. -/

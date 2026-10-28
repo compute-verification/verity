@@ -36,9 +36,11 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import price_twins as P
+from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
+settings = of(__file__)
 
 KIND = "kernel-attempt/v1"
 #: the gate code's version, so a record's validity is derived from it rather than voided by hand: 1 = the reference verifier
@@ -69,7 +71,7 @@ def _import_path(rel: str) -> None:
 def serving():
     """`verity.core.protocols.pouw.serving` when importable, else None."""
     try:
-        from verity.core.protocols.pouw import serving as S  # noqa: PLC0415
+        from verity.core.protocols.pouw import serving as S
     except ImportError:
         return None
     return S if hasattr(S, "KernelVariant") else None
@@ -78,15 +80,15 @@ def serving():
 def store_module():
     """`research.store.local` and `research.store.vocab`, from the environment or this checkout."""
     try:
-        from research.store import local, vocab  # noqa: PLC0415
+        from research.store import local, vocab
     except ImportError:
         _import_path("tools/research/src")
-        from research.store import local, vocab  # noqa: PLC0415
+        from research.store import local, vocab
     return local, vocab
 
 
 def now() -> str:
-    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def one_line(s: str | None, what: str) -> str | None:
@@ -571,7 +573,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("publish", help="put a run's records (its ledger/ directory) into the store")
     p.add_argument("run", type=Path, help="the run's directory, or its result JSON")
-    p.add_argument("--by", default=os.environ.get("GPU_LEASE_WHO") or os.environ.get("RESEARCH_LANE"))
+    p.add_argument("--by", default=settings.GPU_LEASE_WHO or settings.RESEARCH_LANE)
     o = sub.add_parser("outcome", help="label an attempt: screened, frontier, kept, dropped, voided or superseded")
     o.add_argument("art")
     o.add_argument("outcome", choices=OUTCOMES)
@@ -602,7 +604,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{a.art}: {', '.join(done) or 'unchanged'}")
         else:
             if a.refresh:
-                from research.store import cli as SC  # noqa: PLC0415
+                from research.store import cli as SC
                 SC.main(["refresh"] + (["--store", a.store] if a.store else []))
             rows = panel_rows(attempts(st))
             if a.json:

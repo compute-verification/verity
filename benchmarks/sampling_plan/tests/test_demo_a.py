@@ -1,7 +1,7 @@
-"""Demo A's frontier (`demo_a.py`): FAMILIES' subcircuits at their per-token counts and staged k_log, each unit's work
+"""Demo A's frontier (`demo_a.py`): the Definition map's subcircuits at their per-token counts and staged k_log, each unit's work
 its own ANDs and every unit its output bits, statements shared, core's risk wherever core computes it, the certificate
-`certify`'s where core's exact count is cheap and its location term never below it, at each budget the plan under top's
-rate no worse than either half's best alone, within the budget, the least sampling block the first whose share of its
+`certify`'s where core's exact count is cheap and its location term never below it, at each budget the plan under the
+exchange rate no worse than either half's best alone, within the budget, the least sampling block the first whose share of its
 GPU time affords a plan, PoUW's lanes their traced chunks and combine sharing statements, and M3's uniform draw and the
 tile strata's epsilon as core and PoUW state them."""
 
@@ -21,7 +21,7 @@ from verity.core.protocols.sampled_proofs.optimize import Objective, certify
 
 TINY = replace(D.SHAPE, batch=4, step_s=0.01)
 
-#: FAMILIES' table (PRF-166 db928eb0): units a token and a generated token, by Definition
+#: the Definition map's table: units a token and a generated token, by Definition
 FAMILIES = {"ScaledMmS8CoordinateRows_v1{K=16384": (5_118_464, 256), "ScaledMmS8CoordinateRows_v1{K=65536": (851_968, 0),
             "AllGather_v1{WORLD=64,": (13_416, 0), "AllGather_v1{WORLD=128,": (40_064, 2),
             "AllGather_v1{WORLD=2,": (6_656, 0), "RowAbsMax_v1{N=16384,RELU=True": (156, 0),

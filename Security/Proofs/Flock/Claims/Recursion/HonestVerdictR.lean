@@ -20,6 +20,9 @@ its ring switch's batched value (`Run.recTs`), and a last message the reader rea
   (`honestShaped`).
 * **Acceptance** (`honest_holdsR_of`, `honest_nextR_of`): the checks at `Run.recDec` are `holdsR` at the honest
   messages, and with the reading they make `nextR` accept.
+* **What the last message carries** (`readPs_opensOf`, `decR_opensOf`): the deployed reader (`rdR`) returns each proof's
+  openings only (`opensOf`). `readRep` takes from the last message's proof exactly the fields no frame absorbs, which
+  are its openings (`absorbedFrom_opensOf`), so `decR` decides the same at the proofs or their openings.
 -/
 
 namespace FlockComplete.Run
@@ -173,10 +176,11 @@ theorem decR_opensOf {rd rd' : Claims.Msg → Option FinalP} {x last : Claims.Ms
 
 open Rows in
 /-- **`decR` decides on the honest messages at `Run.recDec`**: `sessionRun_decides_coins`, with the decision
-`ReadsBack` names, where the last message reads as the files' proofs at the run's statement. -/
+`ReadsBack` names, where the last message reads as the files' proofs' openings (`opensOf`, what `rdR` returns) at
+the run's statement, and the proofs are shaped for their files (`recShaped`). -/
 theorem honest_decR (h64 : Claims.Out64 H) (o : Run H rel) {cs : List Coin} (hcs : o.CoinsAt cs)
     {rd : Claims.Msg → Option FinalP} {last : Claims.Msg} {fl : FinalP} (hrd : rd last = some fl)
-    (hst : fl.stmt = o.x) (hps : fl.ps = o.recPs) :
+    (hst : fl.stmt = o.x) (hps : fl.ps = o.recPs.map opensOf) (hsh : ShapedAt o.spec o.sts o.recC₁ o.recPs) :
     decR rd o.x (o.recMsgs cs last) cs = some (o.recDec cs) := by
   have hx := o.setup
   have htab := o.recTabsOk
@@ -225,17 +229,14 @@ theorem honest_decR (h64 : Claims.Out64 H) (o : Run H rel) {cs : List Coin} (hcs
     have hok := htab (k / 2) hk2
     obtain ⟨hd, hkl, hn⟩ := repCtx_bounds (r₀ := capRows o.recCaps) (cs := cs.tail.dropLast) hk2 hok.1 hok.2
     exact repRows_fit (o.recTs k) hsc (hon (hfc k (by rw [hsz]; omega))) hd hkl hn rs hrs
-  have hsh : ShapedAt o.spec o.sts o.recC₁ o.recPs := fun k hk => by
-    have hk0 : k < (filePs o.spec o.sts o.recC₁ o.proofs).size := hk
-    have hk' : k < 2 * o.sts.size := by
-      have h := hk0
-      rw [filePs_size, hsz] at h
-      exact h
-    have h := (hall k hk').2.2.2.2.2.2
-    rw [getElem!_pos (filePs o.spec o.sts o.recC₁ o.proofs) k hk0] at h
-    exact h
-  exact readsBack rd o.x last cs o.s o.spec o.sts o.recC₁ o.recCaps o.recPs o.recTs fl hx hcs.head
-    (fileCaps_size ..) hcaps (by unfold Run.recPs; rw [filePs_size, hsz]) hrep hfit0 hfit hrd hps hst hsh
+  have hl : (o.recMsgs cs last).getLast? = some last := by
+    unfold Run.recMsgs honestMsgs
+    exact List.getLast?_concat
+  rw [decR_opensOf (rd' := fun _ => some { fl with ps := o.recPs }) (fl' := { fl with ps := o.recPs }) hl hrd rfl rfl
+    hps]
+  exact readsBack (fun _ => some { fl with ps := o.recPs }) o.x last cs o.s o.spec o.sts o.recC₁ o.recCaps o.recPs
+    o.recTs { fl with ps := o.recPs } hx hcs.head (fileCaps_size ..) hcaps (by unfold Run.recPs; rw [filePs_size, hsz]) hrep hfit0 hfit rfl rfl
+    hst hsh
 
 /-! ## The checks at the honest decision -/
 
@@ -331,6 +332,22 @@ theorem honestShaped (h64 : Claims.Out64 H) : HonestShaped H := by
   rw [← getElem!_pos o.recPs k hk]
   exact h
 
+/-- **The honest proofs are shaped for their files**, as `ShapedAt` states it. -/
+theorem recShaped (h64 : Claims.Out64 H) (o : Run H rel) : ShapedAt o.spec o.sts o.recC₁ o.recPs := by
+  intro k hk
+  have hx := o.setup
+  obtain ⟨-, hts⟩ := setup_tables hx
+  have hc : o.resp 0 = o.recC₁.bytes := rfl
+  have hsz := (sessionS_reps h64 hc hts.symm o.recTabsOk o.ran [] []).1
+  have hk' : k < 2 * o.sts.size := by
+    have : k < o.recPs.size := hk
+    unfold Run.recPs at this
+    rwa [filePs_size, hsz] at this
+  have h := sessionS_shaped h64 hc hts.symm o.recTabsOk o.ran k hk'
+  show FlockVBridge.Family.ProofShaped _ o.recPs[k]
+  rw [← getElem!_pos o.recPs k hk]
+  exact h
+
 /-! ## Acceptance -/
 
 /-- The deployed plain verifier answers a coin only to a last message of tag `0`. -/
@@ -351,10 +368,10 @@ theorem act_ne_coin {zk : Bool} {x : Claims.Msg} {as : List Claims.Msg} {cs : Li
 
 theorem honest_actR (h64 : Claims.Out64 H) (o : Run H rel) {cs : List Coin} (hcs : o.CoinsAt cs)
     {rd : Claims.Msg → Option FinalP} {last : Claims.Msg} {fl : FinalP} (hrd : rd last = some fl)
-    (h0 : last.head? ≠ some 0) (hst : fl.stmt = o.x) (hps : fl.ps = o.recPs) :
+    (h0 : last.head? ≠ some 0) (hst : fl.stmt = o.x) (hps : fl.ps = o.recPs.map opensOf) :
     actR rd o.x (o.recMsgs cs last) cs = .decide (o.recDec cs).s (o.recDec cs).spec (o.recDec cs).sts
       (o.recDec cs).link (o.recDec cs).c₁ (o.recDec cs).mids (o.recDec cs).f := by
-  have hd := honest_decR h64 o hcs hrd hst hps
+  have hd := honest_decR h64 o hcs hrd hst hps (recShaped h64 o)
   have hl : (o.recMsgs cs last).getLast? = some last := by
     unfold Run.recMsgs honestMsgs
     exact List.getLast?_concat
@@ -368,7 +385,7 @@ theorem honest_actR (h64 : Claims.Out64 H) (o : Run H rel) {cs : List Coin} (hcs
 theorem honest_holdsR_of (h64 : Claims.Out64 H) (hV : HonestVerdict H) (hA : HonestAfter H)
     (o : Run H Readable.relation) {cs : List Coin} (hcs : o.CoinsAt cs) {rd : Claims.Msg → Option FinalP}
     {last : Claims.Msg} {fl : FinalP} (hrd : rd last = some fl) (h0 : last.head? ≠ some 0)
-    (hst : fl.stmt = o.x) (hps : fl.ps = o.recPs) :
+    (hst : fl.stmt = o.x) (hps : fl.ps = o.recPs.map opensOf) :
     ∀ q : VerdictR, holdsR H rd q o.x (o.recMsgs cs last) cs := by
   intro q
   unfold holdsR
@@ -384,7 +401,7 @@ theorem honest_holdsR_of (h64 : Claims.Out64 H) (hV : HonestVerdict H) (hA : Hon
 theorem honest_readOkR_of (h64 : Claims.Out64 H) (hR : HonestReads H) (o : Run H Readable.relation)
     {cs : List Coin} (hcs : o.CoinsAt cs) {rd : Claims.Msg → Option FinalP} {last : Claims.Msg} {fl : FinalP}
     (hrd : rd last = some fl) (h0 : last.head? ≠ some 0)
-    (hst : fl.stmt = o.x) (hps : fl.ps = o.recPs) :
+    (hst : fl.stmt = o.x) (hps : fl.ps = o.recPs.map opensOf) :
     ReadOkR rd o.x (o.recMsgs cs last) cs := by
   unfold ReadOkR
   rw [honest_actR h64 o hcs hrd h0 hst hps]
@@ -395,7 +412,7 @@ theorem honest_readOkR_of (h64 : Claims.Out64 H) (hR : HonestReads H) (o : Run H
 theorem honest_nextR_of (h64 : Claims.Out64 H) (hV : HonestVerdict H) (hA : HonestAfter H) (hR : HonestReads H)
     (o : Run H Readable.relation) {cs : List Coin} (hcs : o.CoinsAt cs) {rd : Claims.Msg → Option FinalP}
     {last : Claims.Msg} {fl : FinalP} (hrd : rd last = some fl) (h0 : last.head? ≠ some 0)
-    (hst : fl.stmt = o.x) (hps : fl.ps = o.recPs) :
+    (hst : fl.stmt = o.x) (hps : fl.ps = o.recPs.map opensOf) :
     ((nextR rd o.x (o.recMsgs cs last) cs).eval H).1 = .acc :=
   nextR_sound H rd o.x _ cs (honest_readOkR_of h64 hR o hcs hrd h0 hst hps)
     (honest_holdsR_of h64 hV hA o hcs hrd h0 hst hps)

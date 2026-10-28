@@ -1,5 +1,5 @@
 """`tools/verity/check/queue.toml`: the merge queue's admission rules parse and name the hold label; no change waits on a
-per-head grant (Daniel, 8 Oct).  `drive.toml`, drive's flags of record, parses as `research queue drive --config` reads it."""
+per-head grant.  `drive.toml`, drive's flags of record, parses as `research queue drive --config` reads it."""
 from __future__ import annotations
 
 from pathlib import Path

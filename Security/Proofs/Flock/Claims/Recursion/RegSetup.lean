@@ -13,9 +13,10 @@ evaluations outside the oracle, and `DecompBV`'s escape (`setupCalls`) searches 
 * `opensInputs reg bc pos path`: what `opens` hashes, the tree leaf's input, the frame-v3 leaf's and each climb node's
   (`climbInputs`, `leafInputs`). `opens_coll`: two different commit strings opened at one position under one root give
   two different inputs among them with one SHA-512 digest (`opens_binding`, keeping where the pair sits).
-* `regOpenings xO`: each opening the recursive setup at the V\* statement `xO` makes, `(reg, b ‖ c, position, path)` of
-  each statement's table row of each of the verifier's registered ports, as `checkPort` reads them (`portOpenings`).
-  `regIns xO`: their inputs, as messages.
+* `regOpenings xO`: each opening the recursive setup at the V\* statement `xO` makes of a row an instance reads,
+  `(reg, b ‖ c, position, path)` of the table row each statement's instance's ref names in each of the verifier's
+  registered ports, as `checkPort` reads them (`portOpenings`). Rows no instance references are left out: no conclusion
+  reads them, and their number is the prover's to stage. `regIns xO`: their inputs, as messages.
 * `RegSetup b`: the brings' setup lists `regIns` at every V\* statement; `withReg b` is `b` with them appended
   (`regSetup_withReg`), and the records `recBound` compiles list them (`regListed_recBound`).
 * `bc_eq_of_regOpenings`: at a record listing them, two listed openings at one position under one root (`SameRoot`),
@@ -140,14 +141,20 @@ end Flock.Registered
 
 namespace RecDeploy
 
-/-- **`checkPort`'s openings of `reg` at the statement `st`**: each row of the port's table, its `b ‖ c`, the position
-the header's entry gives it and its path, as `checkPort` reads them (`badRow`). -/
+/-- **`checkPort`'s openings of `reg` at the statement `st` that its instances read**: for each of the statement's `n`
+instances, the row of the port's table its ref names, that row's `b ‖ c`, the position the header's entry gives it and
+its path, as `checkPort` reads them (`badInstance`, `badRow`). A row no instance references is not listed: `checkPort`
+opens it too, but nothing concluded from an accepted statement reads it (`checkPort_at`, `Registered.Checked` and
+`bc_eq_of_regOpenings` are about the rows instances read), so its climb needs no escape. So a port lists at most `n`
+openings, which the setup's `m ≤ 35` refusal caps, and never the table's row count, which the prover stages. -/
 def portOpenings (st : _root_.Flock.Stmt) (reg : _root_.Flock.Registered.Port) : List (ByteArray × ℕ × ByteArray) :=
   match st.pub.tables, (List.range st.c.ports.size).find? (fun p => st.c.ports[p]!.name == reg.name),
       _root_.Flock.Registered.entry st.pub reg with
   | some t, some p, .ok (positions, paths) =>
-    (List.range (t.counts.getD p 0)).map fun r =>
-      (_root_.Flock.Registered.tableRow st.pub t p r, positions.getD r 0, paths.getD r ByteArray.empty)
+    (List.range st.pub.n).map fun i =>
+      (_root_.Flock.Registered.tableRow st.pub t p (_root_.Flock.Registered.ref t st.c.ports.size p i),
+        positions.getD (_root_.Flock.Registered.ref t st.c.ports.size p i) 0,
+        paths.getD (_root_.Flock.Registered.ref t st.c.ports.size p i) ByteArray.empty)
   | _, _, _ => []
 
 /-- **The openings the recursive setup makes at the V\* statement `xO`**: `portOpenings` of each of the verifier's
@@ -184,13 +191,14 @@ theorem regListed_recBound (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
     RegListed (recBound rel b L IV) := h
 
 theorem mem_portOpenings {st : _root_.Flock.Stmt} {reg : _root_.Flock.Registered.Port} {t : _root_.Flock.Tables}
-    {p : ℕ} {positions : Array ℕ} {paths : Array ByteArray} {r : ℕ} (ht : st.pub.tables = some t)
+    {p : ℕ} {positions : Array ℕ} {paths : Array ByteArray} (ht : st.pub.tables = some t)
     (hp : (List.range st.c.ports.size).find? (fun p => st.c.ports[p]!.name == reg.name) = some p)
-    (he : _root_.Flock.Registered.entry st.pub reg = .ok (positions, paths)) (hr : r < t.counts.getD p 0) :
-    (_root_.Flock.Registered.tableRow st.pub t p r, positions.getD r 0, paths.getD r ByteArray.empty) ∈
-      portOpenings st reg := by
+    (he : _root_.Flock.Registered.entry st.pub reg = .ok (positions, paths)) {i : ℕ} (hi : i < st.pub.n) :
+    (_root_.Flock.Registered.tableRow st.pub t p (_root_.Flock.Registered.ref t st.c.ports.size p i),
+      positions.getD (_root_.Flock.Registered.ref t st.c.ports.size p i) 0,
+      paths.getD (_root_.Flock.Registered.ref t st.c.ports.size p i) ByteArray.empty) ∈ portOpenings st reg := by
   simp only [portOpenings, ht, hp, he, List.mem_map, List.mem_range]
-  exact ⟨r, hr, rfl⟩
+  exact ⟨i, hi, rfl⟩
 
 theorem mem_regOpenings {xO : Claims.Msg} {s : RecIns} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
     {own : Array _root_.Flock.Registered.Port} {st : _root_.Flock.Stmt} {reg : _root_.Flock.Registered.Port}

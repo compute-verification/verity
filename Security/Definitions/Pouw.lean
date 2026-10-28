@@ -142,7 +142,7 @@ them by the rounding margin outright, unpinned.
 H-1T's per-tile count statement: the tiles, their domain `Tiling.AtLeast` and the output slots (`H1TTile`), the named
 assumption `TTH1T` (`H1TTileAssumptions`), and its two form checks (`H1TTileProofs`).
 
-## `FpG1`: FP8-g1 and W4A8-g1's operands (FPX-DESIGN)
+## `FpG1`: FP8-g1 and W4A8-g1's operands
 
 The encodings (`Encoding`): E4M3's integer grid to a bound, the doubled E2M1 grid, round to nearest onto a grid, the
 coin, an operand entry and a device's g1 grids. The int8 GEMM, the coin's rank-one terms and the epilogue (`Gemm`).
@@ -167,14 +167,13 @@ record's cell check. `Proofs.Pouw.H1Zy` proves it the check `TileChecks` reads.
 
 Π's shared definitions (`Defs`): the parameters, the E4M3 encoder, the BF16 conversion and the FP32 encoder, the row
 statistic, the noise and the forming chains, the promoted product chain, and U's two forms. The conformance vectors of
-the encoders, the conversion and the atom-mix chain (`EncVectors`, generated from `verity.ml.tc` by
-`internal/pouw-fp8/pearl-c-scripts/pearlc_enc_vectors.py`) and their kernel checks (`EncChecks`). P2, the clean-up
-chain (`Peel`): U's cancellation identities, where the rounding is, and the clean-up terms' liveness at degenerate
-inputs. P1, freezing under promotion (`Freeze`), and P3, the forming credit (`Forming`), from their lanes. The
-cheap-binding lane's game (`Game`), named protocol (`Instance`), named assumption TT_OUT (`TTOut`) and γ from it
-(`Gamma`). The hidden audit, the tile check as a proof over core's `Verity.Game` (`Hidden`), its open obligation that a
-drawn tile's proof is sound (`HiddenTile`), what a proof system gives per tile to meet it (`HiddenTileGame`, met in
-`SecurityProofs` through core's batch lemma) and the sampled audit's γ under it (`HiddenGamma`). The sampled audit's
+the encoders, the conversion and the atom-mix chain (`EncVectors`, generated from `verity.ml.tc`) and their kernel
+checks (`EncChecks`). P2, the clean-up chain (`Peel`): U's cancellation identities, where the rounding is, and the
+clean-up terms' liveness at degenerate inputs. P1, freezing under promotion (`Freeze`), and P3, the forming credit
+(`Forming`). The game (`Game`), named protocol (`Instance`), named assumption TT_OUT (`TTOut`) and γ
+from it (`Gamma`). The hidden audit, the tile check as a proof over core's `Verity.Game` (`Hidden`), its open obligation
+that a drawn tile's proof is sound (`HiddenTile`), what a proof system gives per tile to meet it (`HiddenTileGame`, met
+in `SecurityProofs` through core's batch lemma) and the sampled audit's γ under it (`HiddenGamma`). The sampled audit's
 completeness on a population of activations (`Completeness`), its one assumption, the honest tiles' measured cap rate
 (`HonestCap`, empirical), the proof that every honest word is an FP32 word's (`HonestWords`) and completeness from the
 two (`Completeness`).
@@ -186,7 +185,7 @@ two (`Completeness`).
 half step, a chain of them and a checkpoint, the XOR of several chains' states (`li_step`). Their binding statements
 are `Definitions.Pouw.Guarantees.Receipt`, proved in `Proofs.Pouw.Receipt`.
 
-## `TileBound`: the FP4-tile model (`docs/pouw/fp4-tile-model.md`, bc-d9842080)
+## `TileBound`: the FP4-tile model
 
 `Defs`: the model over `BLACKWELL_SM120_NVF4`'s tile gate, with per-slot pricing and the rewrite class (trusted
 definitions). `Proofs`: the block-support count and the cost bounds it gives.

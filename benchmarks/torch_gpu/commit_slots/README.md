@@ -40,6 +40,8 @@ plan = G.Plan(context, G.regroup(layout, 4))
 - `layout`: the step's public structure (`S.Layout`): groups (what one `add` commits) of units of rows, each row the
   concatenation of byte ranges (`S.Part(source, offset, nbytes)`) of a slot's row of the group's tensors. Every slot has
   the same layout; a unit holds at most 262,144 bits (its size class). The engine takes at most two parts a row.
+  Parts, rows, groups and their checks are `verity.ml.commitments.layout`'s; `S.load(path)` reads a layout file through
+  it, in the form `S._layout_json` writes.
   Groups are the prover's plumbing (one launch each): the layout's digest binds only its units' rows.
   A plan is linear in the layout's units: the layout digest is computed once (`Layout.digest`), every unit's domain id in
   one pass (`S.unit_domain_ids`, two SHA-512s a unit), and a group the layout repeats (its layers) is laid out once, so
@@ -120,28 +122,32 @@ quantizer (2 proof blocks of codes and one of the scale), down and residual.
 
 ## Files
 
-- `slots.py`: the reference, `edge_layout()`, `h200_layout()`, and `python slots.py fixture` (writes the fixture).
+- `slots.py`: the reference, `edge_layout()`, `h200_layout()`, `load()` (a layout file, through `commitments.layout`), and
+  `python slots.py fixture` (writes the fixture).
 - `slots_gpu.py`: `Plan`, `StepCommitter`, `commit` and `regroup` on the engine (`../sha512_rows/engine.py`, its builds
   cached under `~/.cache/verity/sha512_rows`). Its uploads go through pinned memory, so no call waits on the side stream.
 - `check.py`: the GPU's roots against the reference's (edge layouts, and the H200 layout at 4,096 to 20,480 slots on
   sampled slots); `bench.py`: GB/s and the share of a serving step at the frozen shape, alone and beside the layer's int8
   GEMMs; `step.py`: one step at a layout file (`slots._layout_json`'s form) timed by phase against the engine's peak,
-  with its peak memory, the leaf kernel alone, a profile and sampled slots against the reference, and `export --shared`,
-  circuits' shared-row layout (`--row-bytes B` cuts its shared rows to B bytes), `count`, a layout's compressions a row-slot on the
-  host twin, and `time --graphs 0 1`, steps eager and on graphs with the host's enqueue time; `launches.py`: an nsys
-  report's enqueue calls a step (how long each held the thread, and from which call they block); `gpu.sh`: these, with
-  the tests, under one GPU lease (its header has the `research run` line; `STEP_WRAP` runs `step.py` under a profiler).
+  with its peak memory, the leaf kernel alone, a profile and sampled slots against the reference; `count`, a layout's
+  compressions a row-slot on the host twin; and `time --graphs 0 1`, steps eager and on graphs with the host's enqueue
+  time. A file of FAMILIES' shared-row layout at B-byte rows is `e2e_h200.window.shared_layout(FROZEN, B)` written by
+  `S._layout_json`. `launches.py`: an nsys report's enqueue calls a step (how long each held the thread, and from which
+  call they block); `gpu.sh`: these, with the tests, under one GPU lease (`OUT=DIR bash gpu.sh` from the tree's root;
+  `STEP_WRAP` runs `step.py` under a profiler).
 - `tests/`: the reference against the fixture and C-Flock's salts and an independent tree build, openings and their
-  refusals, the host twin against the reference (regrouped layouts included), the streamed slot trees against the leaf
+  refusals, the edge layout and FAMILIES' 1 KiB layout written and loaded back to the same layout, digests and roots,
+  the host twin against the reference (regrouped layouts included), the streamed slot trees against the leaf
   matrix they replaced and the reference (unit counts around powers of two, groups cut anywhere, one-slot passes), a
   step's memory (counted: its frontier and one pass), a row-slot's compressions (counted), planning at six million
   units, the order a plan drops added tables in, and (with a GPU) the device against the host twin, at a near-full HBM
   no allocator retry while the side stream lags its reads, and a freed table's memory back at its read.
-- `overlap.py`: the commit beside `../../e2e_h200/`'s served step on one GPU: serving alone, the commit alone, today's
-  loop, and overlapped at low, high and equal priority (from the forward's host thread or one of its own), each with the
-  commit on every SM or on a green context of N (`MODE:LAYOUT:STEPS:N`, the forward on every SM, or `:Nr`, on the other
-  SMs' green context; `serve:LAYOUT:STEPS:Nr`, the served step alone there; `--host-lag`, the forward's host waiting on
-  the side stream's reads before it allocates), with nvidia-smi's clocks, power and HBM, torch's allocator counters,
-  each overlapped or capped step's roots against today's loop's and a `VERDICT` line a run; `overlap.sh`: it under one
-  GPU lease (its header has the `research run` line). `green_probe.py`: the commit on a green context of N SMs beside
-  int8 GEMMs on the other SMs or every SM, uncoupled or coupled as today's loop couples them (no model).
+- `overlap.py`: the commit beside `../../../examples/h200/`'s served step on one GPU: serving alone, the commit alone,
+  the serving loop, and overlapped at low, high and equal priority (from the forward's host thread or one of its own),
+  each with the commit on every SM or on a green context of N (`MODE:LAYOUT:STEPS:N`, the forward on every SM, or
+  `:Nr`, on the other SMs' green context; `serve:LAYOUT:STEPS:Nr`, the served step alone there; `--host-lag`, the
+  forward's host waiting on the side stream's reads before it allocates), with nvidia-smi's clocks, power and HBM,
+  torch's allocator counters, each overlapped or capped step's roots against the serving loop's and a `VERDICT` line a
+  run; `overlap.sh`: it under one GPU lease on an H200 (its header has the command). `green_probe.py`: the commit on a
+  green context of N SMs beside int8 GEMMs on the other SMs or every SM, uncoupled or coupled as the serving loop
+  couples them (no model).

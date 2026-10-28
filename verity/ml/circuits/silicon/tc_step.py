@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import math
 
-from verity.ml.circuits.boolean.forms import (ONE, ZERO, Circuit, L, NOT, OR, add, and_reduce, compress_columns, const, const_bits, lzc,
+from verity.ml.circuits.boolean.forms import (ONE, ZERO, Circuit, NOT, OR, add, and_reduce, compress_columns, const_bits, lzc,
                  multiply, mux, or_reduce, shl_window, shr, sub)
 
 S_BIAS = 254

@@ -11,6 +11,9 @@ compiler emits, where no gate may be one no output depends on.  Rows of record k
   partial by `TokenSelectChunk_v2` (`b1.TokenSelectChunk_v1` with its last lane's unread index increment gone), reduced with
   logits[0] by `TokenSelectCombine_v2` (`b1.TokenSelectCombine_v1` with each select's branches swapped, as the chunk step's
   are).  Flat, v1 and v3 lower to circuits quadratic in V; this one is linear.
+* `TokenSelectGroups_v1{C,G}`: `TokenSelectChunk_v2{G}` over each group of G of its C logits, the groups' bests as one array
+  and their indices as another, for `TokenSelectCombine_v2{V,G}`.  A unit's output rows then hold a word or two per group, so
+  they pass the 111 bytes C-Flock needs in some row of every unit, where a chunk's partial alone is 2 and 4 bytes.
 * `TopPKeepWord_v2{V,S}`: `topp_words.TopPKeepWord_v1{V,S}`'s word gates that its keep bits depend on (`live_replay`).  The keep
   word's builder applies each operation to whole vectors of lanes, and some lanes of a vector are read by nothing after it.
 * `TopPMask_v4{V,S}` and `GumbelTopPTokenSelect_v3{V,S}`: `TopPMask_v2{V,S}` and `GumbelTopPTokenSelect_v2{V,S}` over
@@ -23,6 +26,8 @@ compiler emits, where no gate may be one no output depends on.  Rows of record k
   `AttnBlock_v5` is about 9.2M ANDs at Llama's geometry, a head of 32 blocks past C-Flock's 2^27 block).  v18 writes its first
   visited block and its epilogue in its body; v19 Calls `AttnBlockFirst_v1` (that block's steps and padding, with no running
   state in, which an `AttnBlock_v5{FIRST=True}` Call would be passed and ignore) and `AttnHeadEnd_v1`.
+* `AttnBlockFirst_v2{D, NVIS, BN, DOT, VS}`: `AttnBlockFirst_v1` with each key's value as D / VS slices of VS columns, so
+  that a unit's v port, cut once an element, reads the value projection's output one slice a row.
 
 Each computes its v1's function word for word, except at V = 1, where v1's zero-length scan returns a wrong carry and these return
 index 0 (`tests/program/test_dead_free.py`); the attention versions compute v5's at every binding.
@@ -40,7 +45,7 @@ from verity.ml.circuits.liveness import Liveness
 from verity.ml.circuits.ops.fp32 import F32AddFtz
 from verity.ml.circuits.ops.prims import ZERO32, const
 from verity.ml.circuits.ops.scalar import BIT, BitAnd, BitNot, F32, F32Eq, I32Eq, SelectF32, SelectI32
-from verity.ml.circuits.refs import Affine, Coll as _Coll, Concat, Explicit, Refs, Strided, concat, tuple_of
+from verity.ml.circuits.refs import Affine, Coll as _Coll, Concat, Explicit, Refs, Strided, concat, strided_view, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.definitions.registry import fa2_check_inf as F2, prims as P, ref_prims as RP, sampling as SA, topp_words as TW
 from verity.ml.definitions.registry.b1 import NEG_INF_BF16, ZERO16, ArgmaxStep, TokenSelectChunkStep, chunks, f32c
@@ -188,6 +193,33 @@ def TokenSelectCombineV2(B, S, x0, best, idx):
         if c < n - 1:
             run = B.call(P.SelectBf16, keep, run, best[c])
     return run_i
+
+
+def _groups_type(S):
+    if not 1 <= S.G <= S.C:
+        raise ValueError(f"TokenSelectGroups_v1: groups of G = {S.G} of C = {S.C} logits (1 <= G <= C)")
+    n = len(chunks(S.C, S.G))
+    return (("x", Array(S.C, BF16)),), Tuple(Array(n, BF16), Array(n, I32))
+
+
+@composite("TokenSelectGroups", 1, ["C", "G"], _groups_type, conformance="model-untested")
+def TokenSelectGroupsV1(B, S, x):
+    """`TokenSelectChunk_v2{G}` over each group of G consecutive logits of the C (`chunks(C, G)`: the last group the rest),
+    each group's best a word of ``best`` and its index in the group a word of ``idx``: `TokenSelect_v4`'s chunks of G, C
+    logits of them in one unit, for `TokenSelectCombine_v2{V,G}` to read a unit's groups as one row of bests and one of
+    indices."""
+    full = S.C // S.G
+    best, idx = [], []
+    if full:
+        parts = B.batch(bind(TokenSelectChunkV2, C=S.G), x[0:full * S.G].reshape(Array(full, Array(S.G, BF16))), axes=(0,))
+        best.append(strided_view(parts, 0, 1, 2, 0, full))
+        idx.append(strided_view(parts, 1, 1, 2, 0, full))
+    if S.C % S.G:
+        last = B.call(bind(TokenSelectChunkV2, C=S.C % S.G), x[full * S.G:S.C])
+        best.append(last[0].refs)
+        idx.append(last[1].refs)
+    n = len(chunks(S.C, S.G))
+    return tuple_of(_Coll(Array(n, BF16), concat(best)), _Coll(Array(n, I32), concat(idx)))
 
 
 @composite("TokenSelect", 4, ["V"], lambda S: ((("logits", Array(S.V, BF16)),), I32), conformance="model-untested")
@@ -353,14 +385,38 @@ def AttnBlockFirstV1(B, S, q, k, v):
     """`AttentionHead_v18`'s first visited key block, NVIS = 1 ... BN keys: `AttnBlock_v5{D, NVIS, FIRST=True, BN, DOT, CHECK=True}`'s
     steps with no running state in (the first block reads none) and v18's padding (V rows zero past NVIS to the last k-step it
     runs, no K rows).  Returns the running state (max, lane sums, O) the next block reads."""
+    return _first_block(B, S, q, k, v, "AttnBlockFirst_v1")
+
+
+def _first_block(B, S, q, k, v, name):
     D, NVIS, BN = S.D, S.NVIS, S.BN
     if not 1 <= NVIS <= BN:
-        raise ValueError(f"AttnBlockFirst_v1: NVIS {NVIS} outside 1 ... BN = {BN}")
+        raise ValueError(f"{name}: NVIS {NVIS} outside 1 ... BN = {BN}")
     if NVIS < BN and NVIS % 16:  # the last k-step's V rows past NVIS meet P's zero words
         zero_row = _Coll(Array(D, BF16), concat([B.call(ZERO16).refs] * D))
         v = _Coll(Array(NVIS + -NVIS % 16, Array(D, BF16)), concat([v.refs] + [zero_row.refs] * (-NVIS % 16)))
     first = SimpleNamespace(D=D, NVIS=NVIS, FIRST=True, BN=BN, DOT=S.DOT, CHECK=True)
     return F2._check_inf_block(B, first, q, k, v, None, None, None, None, read_pads_only=True)
+
+
+def _slice_refuse(b: dict) -> str | None:
+    D, vs = b.get("D"), b.get("VS")
+    if vs is not None and not (type(vs) is int and vs >= 1 and (D is None or D % vs == 0)):
+        return f"VS must be a positive divisor of D (got D={D!r}, VS={vs!r})"
+    return None
+
+
+@composite("AttnBlockFirst", 2, ["D", "NVIS", "BN", "DOT", "VS"],
+           lambda S: ((("q", Array(S.D, BF16)), ("k", Array(S.NVIS, Array(S.D, BF16))),
+                       ("v", Array(S.NVIS * S.D // S.VS, Array(S.VS, BF16)))),
+                      Tuple(F32, Array(4, F32), Array(S.D, F32))),
+           conformance="not-yet-established: AttnBlockFirst_v1's function", refuse=_slice_refuse)
+def AttnBlockFirstV2(B, S, q, k, v):
+    """`AttnBlockFirst_v1{D, NVIS, BN, DOT}` with each key's value as D / VS slices of VS columns: v's element
+    ``t·D/VS + s`` is key t's columns [s·VS, (s+1)·VS), so a cut of v once an element reads one slice a row (a slice of the
+    value projection's output), where a cut of v1's v holds at least a whole key a row.  Its leaves are v1's v in the same
+    order, so the body is v1's over them, node for node."""
+    return _first_block(B, S, q, k, _Coll(Array(S.NVIS, Array(S.D, BF16)), v.refs), "AttnBlockFirst_v2")
 
 
 @composite("AttnHeadEnd", 1, ["D", "INV"],
@@ -406,7 +462,8 @@ def AttentionV19(B, S, q, kc, vc):
     return F2._check_inf_attention(B, S, q, kc, vc, AttentionHeadV19, ())
 
 
-__all__ = ["AttentionHeadV18", "AttentionHeadV19", "AttentionV18", "AttentionV19", "AttnBlockFirstV1", "AttnHeadEndV1", "CHUNK",
+__all__ = ["AttentionHeadV18", "AttentionHeadV19", "AttentionV18", "AttentionV19", "AttnBlockFirstV1", "AttnBlockFirstV2",
+           "AttnHeadEndV1", "CHUNK",
            "GumbelSelectF32GivenGreedyV2", "GumbelSelectF32V3", "GumbelTopPTokenSelectSharedGreedyV2", "GumbelTopPTokenSelectV3",
-           "RMSNormTritonV5", "TokenSelectChunkV2", "TokenSelectCombineV2", "TokenSelectV3", "TokenSelectV4", "TopPKeepWordV2",
-           "TopPMaskV3", "TopPMaskV4", "lane0_butterfly", "live_replay"]
+           "RMSNormTritonV5", "TokenSelectChunkV2", "TokenSelectCombineV2", "TokenSelectGroupsV1", "TokenSelectV3", "TokenSelectV4",
+           "TopPKeepWordV2", "TopPMaskV3", "TopPMaskV4", "lane0_butterfly", "live_replay"]

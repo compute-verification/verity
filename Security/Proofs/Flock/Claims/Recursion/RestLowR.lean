@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.DecompBDeployed
 import Proofs.Flock.Claims.Recursion.CapLowerPin
+import Proofs.Flock.Claims.Recursion.ResLowJP
 
 /-!
 # The rest's lowering (`RestLowR`, `SaltRowRest`) at the layout of record, and its joint form
@@ -29,8 +30,10 @@ true and free of collisions. The facts that don't read across parts stay at `Joi
 * `SaltRowsJ`: every round before the last, each commit string's salt and row, at the readers' messages of witnesses
   one a part whose calls are true. It gives `SaltRowRest` (`saltRowRest_of`) and, at the layout of record, `RestLowJ`
   (`restLowJ_of`), the reading's half being `restLowR_read`'s.
-* `recKSDecompLP_of_leavesJ` is `recKSDecompL_of_leaves` with `RestLowJ` for `RestLowR`, the cap tie pinned
-  (`CopyTopRP`), at `DecompBP` (`RecKSDecompLP`), and `recKSDecompDP_of_leavesJ` its instance at `DeployedR.layR elem`,
+* `decompBV_lastSplitP_sharesJRV`: the same with both shares asked under `JointV`, landing on `DecompBV`, so a share
+  may tie two parts through the compiled verifier's own evaluations (row E's, `Top.RowEJoint`).
+* `recKSDecompLV_of_leavesJ` is `recKSDecompL_of_leaves` with `RestLowJ` for `RestLowR`, the cap tie pinned
+  (`CopyTopRP`), at `DecompBV` (`RecKSDecompLV`), and `recKSDecompDV_of_leavesJ` its instance at `DeployedR.layR elem`,
   where `SaltRowsJ` alone stands for both leaves and the cap tie is `OutBindRP` and `SideCapR` (`capTop_ofP`).
 -/
 
@@ -114,6 +117,64 @@ theorem decompBP_lastSplitP_sharesJR (ownB : Msg → VerdictR → Option ℕ) (o
   exact partComputes_of_shares H rd pieces pholds hpieces rel colsE wE rowIn final w ownB ownQ _ L
     (hlowR x st hx hf c ws hJ s hs) (hlowP x st hx hf c ws hJ s hs)
 
+/-- **The composition with both shares under `JointV`**: `decompBP_lastSplitP_sharesJR` with both shares asked where
+every part accepts at its V\* statement and witness and no recorded call collides with another or with the compiled
+verifier's own evaluations at the statements (`JointV`), the pieces' share also where `ok` holds there, landing on
+`DecompBVS` at `PartAcceptsV` and `ok`. -/
+theorem decompBV_lastSplitP_sharesJRV (ownB : Msg → VerdictR → Option ℕ) (ownQ : Msg → Q → Option ℕ)
+    (rel' : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings) (L : LayoutB)
+    (IV : Claims.Verifier Coin) (shape : Claims.Recursion.Form → Prop) {Col' T' : Type}
+    (DO : Claims.Flock.Deploy Coin Col' T') (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
+    (ok : Msg → List Msg → List Claims.Flock.Wit → Prop)
+    (hR : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+      ∀ r ∈ (lastSplitP H rd pieces pholds hpieces).checks (Claims.Recursion.xI (recBound rel' b L IV) x), ∀ s,
+        ownP ownB ownQ x r = some s → s < (recBound rel' b L IV).nS x)
+    (hrest : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+      ∀ q ∈ ivChecks (bdDeployed rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w)
+          (deploySplit H rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w (nextR_coin rd H)
+            (lastSplitP H rd pieces pholds hpieces).toLast)
+          (Claims.Recursion.xI (recBound rel' b L IV) x),
+        ownHolders (recBound rel' b L IV) L (ownDeploy (ownJ (recBound rel' b L IV) L (ownP ownB ownQ))) x q = none →
+        (∀ r, q = .elem r → ∃ r', r = .last r') →
+        ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit), ws.length = (recBound rel' b L IV).nS x →
+          (∀ e ∈ L.allCalls x ws, H e.1 = e.2) →
+          q.Holds H (bdDeployed rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w)
+            (deploySplit H rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w (nextR_coin rd H)
+              (lastSplitP H rd pieces pholds hpieces).toLast)
+            (Claims.Recursion.xI (recBound rel' b L IV) x) c (L.msgs x ws))
+    (hlowR : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+      ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit),
+        OpenLower.JointV H (recBound rel' b L IV) L (PartAcceptsV H (recBound rel' b L IV) DO L shape shows cmt) x c
+          xs ws →
+        ∀ s < (recBound rel' b L IV).nS x,
+          RestComputes H (recBound rel' b L IV) (bdDeployed rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w)
+            (deploySplit H rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w (nextR_coin rd H)
+              (lastSplitP H rd pieces pholds hpieces).toLast)
+            (ownHolders (recBound rel' b L IV) L (ownDeploy (ownJ (recBound rel' b L IV) L (ownP ownB ownQ))))
+            s x c (L.msgs x ws))
+    (hlowP : ∀ (x : Msg) (st : Claims.Recursion.Stmt), (recBound rel' b L IV).parse x = some st → shape st.form →
+      ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit),
+        OpenLower.JointV H (recBound rel' b L IV) L (PartAcceptsV H (recBound rel' b L IV) DO L shape shows cmt) x c
+          xs ws → ok x xs ws →
+        ∀ s < (recBound rel' b L IV).nS x,
+          PiecesComputes (bdDeployed rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w) (recBound rel' b L IV)
+            pieces pholds ownQ s x c (L.msgs x ws)) :
+    DecompBVS H (recBound rel' b L IV) (bdDeployed rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w).IVStar L
+      shape (PartAcceptsV H (recBound rel' b L IV) DO L shape shows cmt) ok := by
+  have hD := ivstar_of_parts H (recBound rel' b L IV) _ L shape
+    (deploySplit H rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w (nextR_coin rd H)
+      (lastSplitP H rd pieces pholds hpieces).toLast) _ _
+    (ownedBy_deploy H rel (nextR rd) colsE wE FlockDeploy.joinR rowIn final w (nextR_coin rd H)
+      (lastSplitP H rd pieces pholds hpieces).toLast (ownJ (recBound rel' b L IV) L (ownP ownB ownQ)) _ L shape
+      (ownR_lt (lastSplitP H rd pieces pholds hpieces) (ownP ownB ownQ) _ L shape hR))
+    (stmtFixes_deploy H rel (nextR rd) colsE wE FlockDeploy.joinR_head rowIn final w (nextR_coin rd H)
+      (lastSplitP H rd pieces pholds hpieces).toLast (ownJ (recBound rel' b L IV) L (ownP ownB ownQ)) rel' b L IV
+      shape hrest)
+  refine OpenLower.decompBVS_of_jointV ?_ hD
+  intro x st hx hf c xs ws hJ hok s hs
+  exact partComputes_of_shares H rd pieces pholds hpieces rel colsE wE rowIn final w ownB ownQ _ L
+    (hlowR x st hx hf c xs ws hJ s hs) (hlowP x st hx hf c xs ws hJ hok s hs)
+
 end Compose
 
 /-! ## The record's reading is never a part's at the layout of record -/
@@ -188,15 +249,6 @@ theorem restLowJ_of (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg
   rw [firstHolder_last_layR _ elem hX] at hs
   cases hs
 
-/-- **`RecKSDecompL` with each part's check at its own witness**: `DecompBP` at `PartAcceptsP`, which
-`recursiveKSAt_of` takes. -/
-abbrev RecKSDecompLP : Prop :=
-  DecompBP FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) (bdR rd wE final w).IVStar L
-    Claims.Recursion.Form.Dense
-    (PartAcceptsP FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
-      (deployZkRec _root_.Flock.Readable.relation) L Claims.Recursion.Form.Dense
-      (showsPart recRead (bB b aux nOf hd rest)) (cmtTr recRead))
-
 end Leaves
 
 /-! ## The assembly with the rest's share at the parts' own messages -/
@@ -212,17 +264,28 @@ variable (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.
   (side : Msg → List Msg → OpenPiece → OpenSide) (posAt : Msg → List Coin → OpenPiece → ℕ)
   (ownR : Msg → ResPiece → Option ℕ)
 
-/-- **`RecKSDecompR` at layout `L` with each part's check at its own witness, from its leaves, the rest's share at the
-parts' own messages**: `recKSDecompL_of_leaves` with `RestLowJ` for `RestLowR` and the cap tie pinned (`CopyTopRP`). -/
-theorem recKSDecompLP_of_leavesJ
+/-- **`RecKSDecompR` at layout `L` at the V\* statements, from its leaves, at any `shows` implying `showsPart`**: both
+shares under `JointV` over `shows`, the residuals (`hres`) read there and where `ok` holds, every other leaf at
+`showsPart` (`jointV_shows`), landing on `DecompBVS` at `ok`. `recKSDecompLV_of_leavesJ` is it at `showsPart` and no
+side condition, `recKSDecompLV_of_leavesJD` at each part's decision (`showsDec`) and `ResLower.XsStaged`. -/
+theorem recKSDecompLV_of_leavesJS (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop)
+    (hsP : ∀ {s x xO c}, shows s x xO c → showsPart recRead (bB b aux nOf hd rest) s x xO c)
+    (ok : Msg → List Msg → List Claims.Flock.Wit → Prop)
     (hRdep : Top.TargetRDep rd (PD rd resP key elemAt vvAt side posAt) (Top.accRC rd key))
     (hDm : Top.TargetDMerkle rd (PD rd resP key elemAt vvAt side posAt) (Top.accRC rd key))
     (hEJ : Top.RowEJoint rd key FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) (bdR rd wE final w) L
-      Claims.Recursion.Form.Dense (acceptsL rd b aux nOf hd rest wE final w L))
+      Claims.Recursion.Form.Dense (acceptsLV rd b aux nOf hd rest wE final w L))
     (hB : BasesHold rd) (hF : FinalReadsL final L) (hLn : RoundLensL L) (hRd : ReadsAtL rd final L)
     (hSR : SaltRowRest rd b aux nOf hd rest wE final w L) (hOwn : PiecesOwned resP key ownR)
     (hlowR : RestLowJ rd b aux nOf hd rest wE final w L)
-    (hres : ResLowJ rd b aux nOf hd rest wE final w L resP elemAt vvAt ownR)
+    (hres : ∀ (x : Msg) (st : Claims.Recursion.Stmt), parse x = some st → Claims.Recursion.Form.Dense st.form →
+      ∀ (c : ℕ → Coin) (xs : List Msg) (ws : List Claims.Flock.Wit),
+        OpenLower.JointV FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) L
+          (PartAcceptsV FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
+            (deployZkRec _root_.Flock.Readable.relation) L Claims.Recursion.Form.Dense shows (cmtTr recRead)) x c xs
+            ws → ok x xs ws →
+        ∀ s < nS x, PiecesComputes (bdR rd wE final w) (recL rd b aux nOf hd rest wE final w L) resP
+          (resHolds elemAt vvAt) ownR s x c (L.msgs x ws))
     (hSch : OpenLower.SideSchR FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
       Claims.Recursion.Form.Dense recRead (bB b aux nOf hd rest) (cmtTr recRead) L (bdR rd wE final w) side
       (Rows.rowDPieces key))
@@ -235,7 +298,10 @@ theorem recKSDecompLP_of_leavesJ
     (hTop : OpenLower.CopyTopRP FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
       Claims.Recursion.Form.Dense recRead (bB b aux nOf hd rest) (cmtTr recRead) L (bdR rd wE final w) side
       (Rows.rowDPieces key) posAt) :
-    RecKSDecompLP rd b aux nOf hd rest wE final w L := by
+    DecompBVS FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) (bdR rd wE final w).IVStar L
+      Claims.Recursion.Form.Dense
+      (PartAcceptsV FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
+        (deployZkRec _root_.Flock.Readable.relation) L Claims.Recursion.Form.Dense shows (cmtTr recRead)) ok := by
   have h : Top.Targets rd (rowsD resP key) (holdsD rd key elemAt vvAt side posAt) (Top.accRC rd key) :=
     Top.targets_of_open rd _ _ _ hRdep hDm
       (Top.targetE_accRC rd key (fun P' ch h => Top.targetE_rowD rd P' ch key h) _
@@ -257,13 +323,13 @@ theorem recKSDecompLP_of_leavesJ
       (OpenLower.copyDirsR_of FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
         Claims.Recursion.Form.Dense recRead (bB b aux nOf hd rest) (cmtTr recRead) L (bdR rd wE final w)
         (Rows.rowDPieces key) posAt hDirs)) hTop
-  refine decompBP_lastSplitP_sharesJR FlockDeploy.sha512 rd (Top.pieces (rowsD resP key))
+  refine decompBV_lastSplitP_sharesJRV FlockDeploy.sha512 rd (Top.pieces (rowsD resP key))
     (Top.pholds (holdsD rd key elemAt vvAt side posAt))
     (Top.hpieces_of_targets rd (rowsD resP key) (holdsD rd key elemAt vvAt side posAt) (Top.accRC rd key) h)
     _root_.Flock.Readable.relation (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE
     rowInDeployed final w noB (ownD ownR) _root_.Flock.Readable.relation (bB b aux nOf hd rest) L
     (bdR rd wE final w).IVStar Claims.Recursion.Form.Dense (deployZkRec _root_.Flock.Readable.relation)
-    (showsPart recRead (bB b aux nOf hd rest)) (cmtTr recRead) ?_ ?_ ?_ ?_
+    shows (cmtTr recRead) ok ?_ ?_ ?_ ?_
   · -- hR
     intro x st hx hf r hr s hs
     exact VPieces.ownP_lt ownR ownQR (fun _ _ => none) hs
@@ -301,8 +367,9 @@ theorem recKSDecompLP_of_leavesJ
           rw [hs] at hown'
           cases hown'
   · -- hlowR
-    intro x st hx hf c ws hJ s hs q hq hown hnp
-    obtain ⟨hSRl, hRdl⟩ := hlowR x st hx hf c ws (joint_of_jointP hJ) s hs
+    intro x st hx hf c xs ws hJD s hs q hq hown hnp
+    have hJ := OpenLower.jointV_shows (shows' := showsPart recRead (bB b aux nOf hd rest)) hsP hJD
+    obtain ⟨hSRl, hRdl⟩ := hlowR x st hx hf c ws (joint_of_jointP (OpenLower.jointP_of_jointV hJ)) s hs
     rcases mem_ivChecks _ _ _ hq with rfl | ⟨j, hj, rfl⟩ | ⟨j, hj, i, hi, rfl | rfl⟩ | ⟨q', hq', rfl⟩
     · cases (hown : (none : Option ℕ) = some s)
     · cases (hown : (none : Option ℕ) = some s)
@@ -321,19 +388,53 @@ theorem recKSDecompLP_of_leavesJ
           | base _ => cases (hown : (none : Option ℕ) = some s)
           | piece p => exact (hnp p rfl).elim
   · -- hlowP
-    intro x st hx hf c ws hJ s hs
+    intro x st hx hf c xs ws hJD hok s hs
+    have hJ := OpenLower.jointV_shows (shows' := showsPart recRead (bB b aux nOf hd rest)) hsP hJD
+    have hJP := OpenLower.jointP_of_jointV hJ
     refine VPieces.piecesComputes_vown ownR ownQR (fun _ _ => none) (bdR rd wE final w)
       (recL rd b aux nOf hd rest wE final w L) resP (Rows.rowDPieces key) (fun _ => []) (resHolds elemAt vvAt)
-      (openE rd key side posAt) (fun _ _ _ _ => True) ⟨x, st, hx, hf, rfl⟩ (hres x st hx hf c ws (joint_of_jointP hJ) s hs) ?_ ?_
+      (openE rd key side posAt) (fun _ _ _ _ => True) ⟨x, st, hx, hf, rfl⟩
+      (hres x st hx hf c xs ws hJD hok s hs) ?_ ?_
     · have hop := OpenLower.openPieces_deployedP FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
         Claims.Recursion.Form.Dense recRead (bB b aux nOf hd rest) (cmtTr recRead) L (bdR rd wE final w) side
-        (Rows.rowDPieces key) posAt hC hT hx hf hJ hs
+        (Rows.rowDPieces key) posAt hC hT hx hf hJP hs
       have hac := Top.piecesComputes_accPiece rd key FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
-        (bdR rd wE final w) L Claims.Recursion.Form.Dense (acceptsL rd b aux nOf hd rest wE final w L) hEJ ownQR
-        x st hx hf c ws (joint_of_jointP hJ) s
+        (bdR rd wE final w) L Claims.Recursion.Form.Dense (acceptsLV rd b aux nOf hd rest wE final w L) hEJ ownQR
+        x st hx hf c xs ws hJ s
       exact fun q hq ho os last hfin hk => ⟨hop q hq ho os last hfin hk, hac q hq ho os last hfin hk⟩
     · intro q hq
       simp at hq
+
+/-- **`RecKSDecompR` at layout `L` at the V\* statements, from its leaves, the rest's share at the parts' own
+messages**: `recKSDecompL_of_leaves` with `RestLowJ` for `RestLowR` and the cap tie pinned (`CopyTopRP`), both shares
+under `JointV` (`decompBV_lastSplitP_sharesJRV`), the leaves stated under `Joint` or `JointP` read through
+`jointP_of_jointV`. -/
+theorem recKSDecompLV_of_leavesJ
+    (hRdep : Top.TargetRDep rd (PD rd resP key elemAt vvAt side posAt) (Top.accRC rd key))
+    (hDm : Top.TargetDMerkle rd (PD rd resP key elemAt vvAt side posAt) (Top.accRC rd key))
+    (hEJ : Top.RowEJoint rd key FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) (bdR rd wE final w) L
+      Claims.Recursion.Form.Dense (acceptsLV rd b aux nOf hd rest wE final w L))
+    (hB : BasesHold rd) (hF : FinalReadsL final L) (hLn : RoundLensL L) (hRd : ReadsAtL rd final L)
+    (hSR : SaltRowRest rd b aux nOf hd rest wE final w L) (hOwn : PiecesOwned resP key ownR)
+    (hlowR : RestLowJ rd b aux nOf hd rest wE final w L)
+    (hres : ResLowJP rd b aux nOf hd rest wE final w L resP elemAt vvAt ownR)
+    (hSch : OpenLower.SideSchR FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
+      Claims.Recursion.Form.Dense recRead (bB b aux nOf hd rest) (cmtTr recRead) L (bdR rd wE final w) side
+      (Rows.rowDPieces key))
+    (hO : OpenLower.CopyOpensR FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
+      Claims.Recursion.Form.Dense recRead (bB b aux nOf hd rest) (cmtTr recRead) L (bdR rd wE final w) side
+      (Rows.rowDPieces key))
+    (hDirs : OpenLower.CopyDirsTieR FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
+      Claims.Recursion.Form.Dense recRead (bB b aux nOf hd rest) (cmtTr recRead) L (bdR rd wE final w)
+      (Rows.rowDPieces key) posAt)
+    (hTop : OpenLower.CopyTopRP FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L)
+      Claims.Recursion.Form.Dense recRead (bB b aux nOf hd rest) (cmtTr recRead) L (bdR rd wE final w) side
+      (Rows.rowDPieces key) posAt) :
+    RecKSDecompLV rd b aux nOf hd rest wE final w L :=
+  decompBV_of_decompBVS <| recKSDecompLV_of_leavesJS rd b aux nOf hd rest wE final w L resP key elemAt vvAt side posAt
+    ownR (showsPart recRead (bB b aux nOf hd rest)) (fun h => h) (fun _ _ _ => True) hRdep hDm hEJ hB hF hLn hRd hSR
+    hOwn hlowR (fun x st hx hf c _ ws hJV _ s hs => hres x st hx hf c ws (OpenLower.jointP_of_jointV hJV) s hs) hSch hO
+    hDirs hTop
 
 end Assembly
 
@@ -350,17 +451,17 @@ variable (rd : Msg → Option FinalP) (b : Brings) (aux : Msg → ℕ → Flock.
 
 /-- **`RecKSDecompR`'s premise at the layout of record, each part's check at its own witness, the rest's two leaves
 as one**: `recKSDecompD_of_leaves` with `SaltRowRest` and `RestLowR` replaced by `SaltRowsJ` (`saltRowRest_of`,
-`restLowJ_of`), through `recKSDecompLP_of_leavesJ`, at the decision's positions `Rows.posAt`, where `TargetDMerkle` is
+`restLowJ_of`), through `recKSDecompLV_of_leavesJ`, at the decision's positions `Rows.posAt`, where `TargetDMerkle` is
 proved (`targetDMerkle_PD`), the cap tie from the pinned binding `OutBindRP` and the reader (`capTop_ofP`). -/
-theorem recKSDecompDP_of_leavesJ
+theorem recKSDecompDV_of_leavesJ
     (hRdep : Top.TargetRDep rd (PD rd resP key elemAt vvAt (OpenLower.sideAtR rd) Rows.posAt) (Top.accRC rd key))
     (hEJ : Top.RowEJoint rd key FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w (DeployedR.layR elem))
       (bdR rd wE final w) (DeployedR.layR elem) Claims.Recursion.Form.Dense
-      (acceptsL rd b aux nOf hd rest wE final w (DeployedR.layR elem)))
+      (acceptsLV rd b aux nOf hd rest wE final w (DeployedR.layR elem)))
     (hB : BasesHold rd) (hF : RestRead.FinalReads final (DeployedR.restR elem))
     (hRd : RestRead.ReadsAt rd final (DeployedR.restR elem))
     (hSRJ : SaltRowsJ rd wE final w (DeployedR.layR elem)) (hOwn : PiecesOwned resP key ownR)
-    (hres : ResLowJ rd b aux nOf hd rest wE final w (DeployedR.layR elem) resP elemAt vvAt ownR)
+    (hres : ResLowJP rd b aux nOf hd rest wE final w (DeployedR.layR elem) resP elemAt vvAt ownR)
     (hO : OpenLower.CopyOpensR FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w (DeployedR.layR elem))
       Claims.Recursion.Form.Dense recRead (bB b aux nOf hd rest) (cmtTr recRead) (DeployedR.layR elem)
       (bdR rd wE final w) (OpenLower.sideAtR rd) (Rows.rowDPieces key))
@@ -373,8 +474,8 @@ theorem recKSDecompDP_of_leavesJ
     (hCap : CapLower.SideCapR FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w (DeployedR.layR elem))
       Claims.Recursion.Form.Dense recRead (bB b aux nOf hd rest) (cmtTr recRead) (DeployedR.layR elem)
       (bdR rd wE final w) rd (Rows.rowDPieces key) Rows.posAt) :
-    RecKSDecompLP rd b aux nOf hd rest wE final w (DeployedR.layR elem) :=
-  recKSDecompLP_of_leavesJ rd b aux nOf hd rest wE final w (DeployedR.layR elem) resP key elemAt vvAt
+    RecKSDecompLV rd b aux nOf hd rest wE final w (DeployedR.layR elem) :=
+  recKSDecompLV_of_leavesJ rd b aux nOf hd rest wE final w (DeployedR.layR elem) resP key elemAt vvAt
     (OpenLower.sideAtR rd) Rows.posAt ownR hRdep (targetDMerkle_PD rd resP key elemAt vvAt _) hEJ hB hF
     (RestRead.roundLens (DeployedR.restR elem))
     (fun x hx c ws hl hT os last hf hos =>

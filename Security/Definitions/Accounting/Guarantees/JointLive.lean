@@ -3,7 +3,7 @@ import Definitions.Accounting.JointLive
 /-!
 # The joint guarantee over a causal game: a period, a horizon of periods, and server-time blocks (trusted)
 
-The rulings R5 and R4′: a period is one causal game (`Verity.Game`), each device release
+Soundness's R5 and R4′ (26 Oct, LEAN-62, LEAN-64): a period is one causal game (`Verity.Game`), each device release
 drawn after the bytes it answers and the evidence last; its claims are read off the run it ends in
 (`Accounting.PeriodLive`), the sampled-proofs claim on the fixed extractor's values (`PeriodLive.extract`), PoUW's in
 gates, and its break is the probability that a fixed finder built from the strategy outputs a collision
@@ -18,7 +18,7 @@ the probability that some subprotocol accepts while its claim fails is at most t
 
 * `JointPeriodLive`: one period, the five subprotocols (sampled proofs, PoUW, PoUS, the bandwidth audit and the network
   certifier);
-* `JointPeriodLiveECR`: the same in the per-prover form (`PeriodLive.error`) with `ecr/sha-512` asked of each finder, so the
+* `JointPeriodLiveECR`: the same in Daniel's form (`PeriodLive.error`) with `ecr/sha-512` asked of each finder, so the
   bound is numbers;
 * `JointHorizonLive`: `m` periods read off one game's run, each over its own circuit;
 * `JointHorizonBlocksLive`: `B` server-time blocks read off one game's run, with the wipe that opens each block and each
@@ -51,7 +51,7 @@ def JointPeriodLive : Prop :=
     ∀ s : Verity.Game.Strategy G,
       Verity.Game.prob (fun o => ∃ a, r.accepts a o ∧ ¬ r.Holds c s a o) G s ≤ ∑ a, err a s
 
-/-- **The joint guarantee over a period in the per-prover form, with `ecr/sha-512` asked of the finders only.** As
+/-- **The joint guarantee over a period in Daniel's form, with `ecr/sha-512` asked of the finders only.** As
 `JointPeriodLive`, with each subprotocol's error `δ_a(s) + loss_a(Pr[B_a^s finds a collision of H])`
 (`PeriodLive.error`), and suppose each subprotocol's loss is monotone and, at every strategy `s`, its finder meets
 `ecr/sha-512` at `H` (`Claims.ExpectedCR`: it outputs a collision with probability at most its expected calls over
@@ -121,27 +121,28 @@ suppose, over `G` at every strategy `s`:
 * the wipe that opens block `b` is accepted while more than `f · fill + 2λ` bits of foreign content plus the unfilled
   state survive beyond the committed carried state with probability at most `ε_wipe b s`;
 * block `b`'s PoUS accepts while, at some of its challenge times, its undeclared memory exceeds
-  `0.07 · U + S_chip + c` with probability at most `δ_PoUS b s`.
+  `σ_b · M + S_chip + c` (`σ_b` the share PoUS certifies for block `b`, `M` the device's memory) with probability at
+  most `δ_PoUS b s`.
 
 Then at every strategy `s` the probability that some block's accepted subprotocol's claim fails, some accepted wipe's
 survivor bound fails, or some block's memory term fails while its PoUS accepted is at most
 $$\sum_b \sum_a \mathrm{err}_{b,a}(s) + \sum_b \varepsilon_{\mathrm{wipe},b}(s) + \sum_b \delta_{\mathrm{PoUS},b}(s).$$
-**Gap:** the state a block carries across a wipe (the KV cache, committed before the wipe and re-read after
+**Gap (PRF-167):** the state a block carries across a wipe (the KV cache, committed before the wipe and re-read after
 it) is outside the integrity bound. -/
 def JointHorizonBlocksLive : Prop :=
   ∀ (ι α : Type) [Fintype ι] [Fintype α] (d : Device ι) (B : ℕ) (C : Fin B → Verity.Circuit) (O : Type)
-    (G : Verity.Game O) (S : BlocksLive d α B C G) (c : Fin B → Certificates) (fw : ℝ)
+    (G : Verity.Game O) (S : BlocksLive d α B C G) (c : Fin B → Certificates) (fw : ℝ) (σ : Fin B → ℝ)
     (err : Fin B → Audit → Verity.Game.Strategy G → ℝ≥0∞) (εWipe δPous : Fin B → Verity.Game.Strategy G → ℝ≥0∞),
     (∀ b a, (S.block b).Sound (c b) a (err b a)) →
     (∀ b (s : Verity.Game.Strategy G),
       Verity.Game.prob (fun o => (S.wipe b).accepts o ∧ ¬ (S.wipe b).Survives fw o) G s ≤ εWipe b s) →
     (∀ b (s : Verity.Game.Strategy G),
-      Verity.Game.prob (fun o => (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm s b o) G s ≤ δPous b s) →
+      Verity.Game.prob (fun o => (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm (σ b) s b o) G s ≤ δPous b s) →
     ∀ s : Verity.Game.Strategy G,
       Verity.Game.prob (fun o =>
           (∃ b a, (S.block b).accepts a o ∧ ¬ (S.block b).Holds (c b) s a o) ∨
           (∃ b, (S.wipe b).accepts o ∧ ¬ (S.wipe b).Survives fw o) ∨
-          (∃ b, (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm s b o)) G s ≤
+          (∃ b, (S.block b).accepts .pous o ∧ ¬ S.MemoryTerm (σ b) s b o)) G s ≤
         ∑ b, ∑ a, err b a s + ∑ b, εWipe b s + ∑ b, δPous b s
 
 end Accounting.Guarantees
