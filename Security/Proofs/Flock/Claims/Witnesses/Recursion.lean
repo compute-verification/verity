@@ -94,7 +94,7 @@ def ksR (Coin : Type) : Recursion.Deploy Coin where
 
 /-- A recursion statement in scope: a dense inner table at `m = 22`, `k_log = 6`, one region and four claims, with no
 RecSparse phase and no V* session. -/
-def recStmt : Recursion.Stmt where
+def recStmt : Recursion.CompiledStatement where
   inner := []
   innerDims := none
   circ := none

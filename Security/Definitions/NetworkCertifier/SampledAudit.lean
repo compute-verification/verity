@@ -12,11 +12,11 @@ units and N2's head checks are classes drawn `all`, and the internal step units 
 accepted audit then establishes about the egress, in the network certifier's terms (`Program`, `Accepted`), on
 sampling's own vocabulary: its statement, partition, design, faulty set and `M_δ`.
 
-**The layout** (`Layout`, public, part of the statement) says which of `C`'s gates hold each step's egress rows (per
-slot, a presence gate and the frame's bit gates) and its ingress (input gates, in bit order). It fits the program
-(`Layout.Fits`) when, before the horizon, the egress gates are gates `C` returns and not inputs, so their values are
-committed and computed by `C`, the ingress gates are inputs, and `C` is causal. The verifier refuses a statement whose
-layout doesn't fit, as it refuses one outside the sampling scope.
+**The layout** (`BoundaryGates`, public, part of the statement) says which of `C`'s gates hold each step's egress rows
+(per slot, a presence gate and the frame's bit gates) and its ingress (input gates, in bit order). It fits the program
+(`BoundaryGates.Fits`) when, before the horizon, the egress gates are gates `C` returns and not inputs, so their values
+are committed and computed by `C`, the ingress gates are inputs, and `C` is causal. The verifier refuses a statement
+whose layout doesn't fit, as it refuses one outside the sampling scope.
 
 **The circuit's Program** (`circuitProgram`) is `C` run on the ingress up to step `t` and the declared advice, read off
 at step `t`'s egress gates. The advice is the inputs other than the ingress, plus values held at a set of gates
@@ -41,9 +41,10 @@ namespace NetTiming
 
 open Claims Claims.Sampling
 
-/-- **The layout of the run's boundary** in a program's gates: at step `t`, slot `σ` of egress link `ℓ` is a presence
-gate and its frame's bit gates (`egress t ℓ σ`), and step `t`'s ingress is the gates `ingress t`, in bit order. -/
-structure Layout (L S : ℕ) where
+/-- **The boundary gates**, the layout of the run's boundary in a program's gates: at step `t`, slot `σ` of egress link
+`ℓ` is a presence gate and its frame's bit gates (`egress t ℓ σ`), and step `t`'s ingress is the gates `ingress t`, in
+bit order. -/
+structure BoundaryGates (L S : ℕ) where
   egress : ℕ → Fin L → Fin S → ℕ × List ℕ
   ingress : ℕ → List ℕ
 
@@ -70,7 +71,8 @@ termination_by g
 /-- **The inputs at ingress `ins`** over the horizon `k`: bit `j` of step `i`'s ingress gates, for `i < ins.length`,
 reads bit `j` of `ins[i]` (`false` past its end); an ingress gate of a later step before `k` reads `false`; every other
 input reads the advice `a`. -/
-def Layout.inputOf {L S : ℕ} (lay : Layout L S) (k : ℕ) (ins : List (List Bool)) (a : ℕ → Bool) (g : ℕ) : Bool :=
+def BoundaryGates.inputOf {L S : ℕ} (lay : BoundaryGates L S) (k : ℕ) (ins : List (List Bool)) (a : ℕ → Bool)
+    (g : ℕ) : Bool :=
   match (List.range ins.length).findSome? (fun i => ((lay.ingress i).findIdx? (· == g)).map (i, ·)) with
   | some (i, j) => (ins.getD i []).getD j false
   | none => if (List.range k).any (fun i => (lay.ingress i).contains g) then false else a g
@@ -78,7 +80,7 @@ def Layout.inputOf {L S : ℕ} (lay : Layout L S) (k : ℕ) (ins : List (List Bo
 /-- **The circuit's Program** over the horizon `k`: at step `t`, the egress rows `C` holds at the layout's egress gates,
 run on the ingress up to `t` and the declared advice `(a, free)`: the inputs other than the ingress (`a`), and the gates
 held at values (`free`). -/
-def circuitProgram {L S : ℕ} (C : Prog) (lay : Layout L S) (k : ℕ) :
+def circuitProgram {L S : ℕ} (C : Prog) (lay : BoundaryGates L S) (k : ℕ) :
     Program L S (List Bool) ((ℕ → Bool) × (ℕ → Option Bool)) where
   rows t ins adv ℓ := rowOf (valOver C (lay.inputOf k ins adv.1) adv.2) (lay.egress t ℓ)
 
@@ -90,7 +92,7 @@ def Depends (C : Prog) (i g : ℕ) : Prop :=
 egress gate is one `C` returns, so its value is committed, and is not an input, so `C` computes it (the circuit's Program
 would read an input egress gate from the advice, and so accept any rows the trace carries); every ingress gate is an
 input of `C`; and no egress gate of a step depends on an ingress gate of a later step (`C` is causal). -/
-def Layout.Fits {L S : ℕ} (lay : Layout L S) (C : Prog) (k : ℕ) : Prop :=
+def BoundaryGates.Fits {L S : ℕ} (lay : BoundaryGates L S) (C : Prog) (k : ℕ) : Prop :=
   (∀ t < k, ∀ ℓ σ, ∀ g ∈ slotGates (lay.egress t ℓ σ), g ∈ C.outs ∧ C.gates[g]? ≠ some .input) ∧
     (∀ t < k, ∀ g ∈ lay.ingress t, C.gates[g]? = some .input) ∧
     ∀ t < k, ∀ t' < k, t < t' → ∀ ℓ σ, ∀ g ∈ slotGates (lay.egress t ℓ σ), ∀ i ∈ lay.ingress t', ¬ Depends C i g
@@ -102,7 +104,7 @@ def traceVal (C : Prog) (ref : ℕ → Option Bool) (g : ℕ) : Bool := (C.read 
 /-- **What the trace's transfer gates carry**: at each step `t < k` the observation `o[t]` exists, its egress rows are
 the rows the trace holds at the layout's egress gates, and the operator's move on the observations before `t` is the
 ingress the trace holds at the layout's ingress gates. -/
-def Carries {L K S : ℕ} (lay : Layout L S) (C : Prog) (ref : ℕ → Option Bool)
+def Carries {L K S : ℕ} (lay : BoundaryGates L S) (C : Prog) (ref : ℕ → Option Bool)
     (op : ℕ → List (Obs L K S) → List Bool) (k : ℕ) (o : List (Obs L K S)) : Prop :=
   ∀ t (_ : t < k), ∃ h : t < o.length,
     (∀ ℓ, o[t].rows ℓ = rowOf (traceVal C ref) (lay.egress t ℓ)) ∧
@@ -134,8 +136,8 @@ advice `(traceVal C ref, free)`, its inputs the trace's committed values and `fr
 faulty units' committed gates (`FaultyGate`), makes `Accepted` by the circuit's Program, over the horizon, every observation
 sequence and operator the trace's transfer gates carry (`Carries`) with every status complete (`Covered`). The inputs
 are pinned to the trace, so the registered ones are what the registration commits. -/
-def RAcc (H : Msg → Msg) (Cm : Commitment Bool) (parse : Msg → Option Stmt) (partition : Stmt → Option Partition)
-    (L K S : ℕ) (lay : Stmt → Layout L S) (k : Stmt → ℕ) (δ : ℝ) : Rel Wit :=
+def RAcc (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement) (partition : AuditStatement → Option Partition)
+    (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) : Rel Wit :=
   fun x w => ∃ s P, parse x = some s ∧ partition s = some P ∧ RelS H Cm δ s P w ∧
     Disjoint (faulty H Cm s P w) (allSlots s.design P) ∧
     ∃ free : ℕ → Option Bool, (∀ g b, free g = some b → FaultyGate s.prog P (faulty H Cm s P w) g) ∧
@@ -149,8 +151,8 @@ section Claim
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
 /-- **The sampled audit's scope**: the sampling scope (`Scope`), and the statement's layout fits its program over its
-horizon (`Layout.Fits`). -/
-def ScopeAcc {L S : ℕ} (D : Deploy Coin Col T) (lay : Stmt → Layout L S) (k : Stmt → ℕ) (x : Msg) : Prop :=
+horizon (`BoundaryGates.Fits`). -/
+def ScopeAcc {L S : ℕ} (D : Deploy Coin Col T) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (x : Msg) : Prop :=
   Scope D x ∧ ∃ s, D.parse x = some s ∧ (lay s).Fits s.prog (k s)
 
 /-- **The sampled audit implies `Accepted`** at the deployment `D`, at the public layout `lay` and horizon `k` of each
@@ -158,7 +160,7 @@ statement. It holds on the statements in its scope (`ScopeAcc`), at every `δ �
 decoder that lists every trace within Flock's radius: `Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind`, with `KS`'s errors
 (`ε_ks = κ − δ + √(γ·Pr[B])`, Flock's error at the units' sessions; `ε_bind = Pr[B_ext]`). The selection enters only
 through `M_δ`. -/
-def KSAccepted (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : Stmt → Layout L S) (k : Stmt → ℕ) : Prop :=
+def KSAccepted (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) : Prop :=
   ∀ (δ : ℝ) decode, 0 ≤ δ → Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
     KSLinOn H D.V (ScopeAcc D lay k) (RAcc H D.commit D.parse D.partition L K S lay k δ) (E D decode) (κ D δ) (γ D)
       (fun _ => 1) (Bext H D.V (E D decode))

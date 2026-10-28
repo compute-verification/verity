@@ -59,16 +59,16 @@ open Claims Claims.Recursion
 /-! ## The readable scope's kinds -/
 
 /-- A V* session's full draw over four units. -/
-def fullDraw4 : Recursion.Draw := ⟨some 4, 4, [0, 1, 2, 3], []⟩
+def fullDraw4 : Recursion.DrawRecord := ⟨some 4, 4, [0, 1, 2, 3], []⟩
 
 /-- A statement at candidate 3's inner table (`m = 25`, `k_log = 22`, three regions, eight claims), its circuits private
 or not (`holo`), with no RecSparse phase and no R, and one V* session that draws every unit. -/
-def denseStmt (holo : Bool) : Recursion.Stmt :=
+def denseStmt (holo : Bool) : Recursion.CompiledStatement :=
   ⟨[], none, none, ⟨25, 22, 3, 8, holo, none, none, false⟩, [some fullDraw4]⟩
 
 /-- Candidate 3's sparse statement: its inner table, the RecSparse phase `(18, 13, 6, 0)`, R at `(23, 2)`, the inner
 statement's dimensions the form's, its unit range inside the block, and one V* session that draws every unit. -/
-def sparseStmt (holo : Bool) : Recursion.Stmt :=
+def sparseStmt (holo : Bool) : Recursion.CompiledStatement :=
   ⟨[], some (25, 22, 3), none, ⟨25, 22, 3, 8, holo, some (18, 13, 6, 0), some (23, 2), true⟩, [some fullDraw4]⟩
 
 theorem draws_full : ∀ d ∈ [some fullDraw4], ∃ e, d = some e ∧ e.Full := by
