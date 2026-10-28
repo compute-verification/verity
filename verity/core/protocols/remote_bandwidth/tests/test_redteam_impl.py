@@ -9,7 +9,7 @@ import pytest
 from remote_bandwidth_fakes import Clock, Entropy
 from test_remote_bandwidth import N, RTX, SCHEDULE, drive, finish, params, store  # noqa: F401
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, receipts, timing
-from verity.core.protocols.remote_bandwidth.audit import Session
+from verity.core.protocols.remote_bandwidth.audit import AuditRun
 
 BLOCK = 4096
 CAPACITY = N * BLOCK / 300e-9    # a pass of the store fills its 300 ns at the node's capacity
@@ -86,7 +86,7 @@ def joint_pass(store: audit.Store, window: int, i: int, seeds: tuple[bytes, byte
 
 
 def test_rb3_a_session_refuses_to_start_while_another_reads_the_store(store) -> None:  # noqa: F811
-    """`Session(not_before_ns=…)` is the only thing that keeps two sessions over one store from sharing reads
+    """`AuditRun(not_before_ns=…)` is the only thing that keeps two sessions over one store from sharing reads
     (`PROTOCOL.md` §5), and it was optional: left out, it failed open.  Two sessions run at once over one clock, both
     told they may start at 0, as only a verifier that runs them at once would; each block is read once a pass and
     serves a receipt of each chain.  Both are accepted with every receipt opened, and the two records together certify
@@ -94,9 +94,9 @@ def test_rb3_a_session_refuses_to_start_while_another_reads_the_store(store) -> 
     waits it out."""
     p = params(windows=2, samples=N * 3, window_ns=910)
     clock = Clock()
-    sessions = [Session(p, store.registration, None,
-                        coins.local(store.registration.digest, k, p.windows, Entropy(b"coins %d" % k), appends=1),
-                        not_before_ns=0, clock=clock) for k in (0, 1)]
+    sessions = [AuditRun(p, store.registration, None,
+                         coins.local(store.registration.digest, k, p.windows, Entropy(b"coins %d" % k), appends=1),
+                         not_before_ns=0, clock=clock) for k in (0, 1)]
     provers = [audit.Prover(store, None, entropy=Entropy(b"unused")) for _ in sessions]
     reads, entropy = [0], Entropy(b"joint salts")
     challenges = [s.start() for s in sessions]
@@ -118,12 +118,12 @@ def test_rb3_a_session_refuses_to_start_while_another_reads_the_store(store) -> 
     credited = sum(s.record().receipts for s in sessions)
     assert credited == 2 * reads[0] == 2 * 6 * N
     with pytest.raises((TypeError, ValueError)):
-        Session(p, store.registration, None,
-                coins.local(store.registration.digest, 2, p.windows, Entropy(b"coins 2"), appends=1), clock=clock)
+        AuditRun(p, store.registration, None,
+                 coins.local(store.registration.digest, 2, p.windows, Entropy(b"coins 2"), appends=1), clock=clock)
     end = max(s.record().end_ns for s in sessions)
-    nxt = Session(p, store.registration, None,
-                  coins.local(store.registration.digest, 3, p.windows, Entropy(b"coins 3"), appends=1),
-                  not_before_ns=end, clock=clock)
+    nxt = AuditRun(p, store.registration, None,
+                   coins.local(store.registration.digest, 3, p.windows, Entropy(b"coins 3"), appends=1),
+                   not_before_ns=end, clock=clock)
     clock.now = end - 1
     with pytest.raises(audit.SessionError, match="may still be reading"):
         nxt.start()
