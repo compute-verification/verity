@@ -32,8 +32,10 @@ request's max_tokens, at most KO.
   128,000 regular ids by default), drawn from a fresh secret seed this process alone holds: they are the prover's,
   which the gate writes to its run's ``witness/`` alone, so they are written nowhere here.
   - ``--gate USER@HOST`` (the challenger's gate, `GATE`, under the lane's gate key ``--key``): the request with the
-    prompts on its stdin (``start.json``), ``status`` every `POLL_S` seconds until the run ends (``status.json``), then
-    ``fetch``.
+    prompts on its stdin, whose reply goes to KEEP/RUN/start.json alone (0600), ``status`` every `POLL_S` seconds
+    until the run ends (``status.json``), then ``fetch``. The reply is the request's public fields and the run's
+    systemd unit, ``vy-certifier@RUN.service``, which the warden's witness also records (stalls.json's cgroup paths)
+    and no public file holds: published, the leak guard would hold it as a piece of the witness.
   - ``--gate local``, the dry rehearsal: this tree's gate on a scratch host under KEEP, its rehearsal run in this
     process (`auditor.certifier_run`), where the tunnel is the stand-in endpoint itself (`demo_stub.py serve --out`,
     the endpoint's records to KEEP/RUN/endpoint) listening on the port the run picks. The stand-in serves byte ids:
@@ -336,16 +338,21 @@ def wait_until(at: str, *, now=time.time, sleep=time.sleep) -> None:
         sleep(t - now())
 
 
-def remote(a: argparse.Namespace, data: bytes, out: Path, *, sleep=time.sleep) -> bytes:
-    """The session through the gate at `a.gate`: the lane's fetch of its run."""
+def remote(a: argparse.Namespace, data: bytes, out: Path, keep: Path, *, sleep=time.sleep) -> bytes:
+    """The session through the gate at `a.gate`: the lane's fetch of its run, its start reply in KEEP/RUN alone."""
     ssh = [*SSH, "-i", str(a.key), a.gate]
     got = subprocess.run([*ssh, shlex.join(words(a))], input=data, capture_output=True)
-    (out / "start.json").write_bytes(got.stdout)
     try:
         run = json.loads(got.stdout)["run"]
+        if not A.CERTIFIER_RUN.fullmatch(run):
+            raise ValueError(run)
     except (ValueError, KeyError, TypeError):
         raise Refused(f"the gate didn't start the session (exit {got.returncode}): {got.stdout[:400]!r} "
                       f"{got.stderr[-400:]!r}") from None
+    (keep / run).mkdir(mode=0o700, exist_ok=True)
+    fd = os.open(keep / run / "start.json", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "wb") as f:
+        f.write(got.stdout)
     print(f"gate run {run}", flush=True)
     while True:
         got = subprocess.run([*ssh, f"status {run}"], capture_output=True)
@@ -397,7 +404,7 @@ def _session(a: argparse.Namespace, data: bytes, ps: list[list[int]], keep: Path
     """The session, its files written to `hold`: its outcome and the kept fetch."""
     if a.at:
         wait_until(a.at)
-    full = local(a, data, keep) if a.gate == "local" else remote(a, data, hold)
+    full = local(a, data, keep) if a.gate == "local" else remote(a, data, hold, keep)
     shown = public(full)
     doc = outcome(shown)
     run = doc["run"]
