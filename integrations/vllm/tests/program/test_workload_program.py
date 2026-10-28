@@ -471,7 +471,7 @@ def test_repointing_keeps_every_id_and_refuses_a_substitute_of_another_id():
     a complete specialization formats its id once, so `Outer{F=..}`'s would go stale under a substitute of another id. Such
     a substitute is refused (E_IDENTITY, naming both ids) before anything is re-pointed, through the callee or the static."""
     import re
-    from verity.ml.circuits.codec import _spec_id
+    from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.defs import IdentityConflict, SpecializedDefinition
 
     def sig(S):
@@ -481,23 +481,23 @@ def test_repointing_keeps_every_id_and_refuses_a_substitute_of_another_id():
     outer = CompositeDefinition("GpTestRepointOuter", 1, ("F",), sig, lambda B, S, a: B.call(S.F, a), register=False)
     holder = CompositeDefinition("GpTestRepointHolder", 1, ("OPS",), sig, lambda B, S, a: B.call(_ADD, a, a), register=False)
     f, same, other = inner.bind(K=4), SpecializedDefinition(inner, {"K": 4}, ()), inner.bind(K=8)
-    assert same is not f and _spec_id(same) == _spec_id(f) != _spec_id(other)
+    assert same is not f and descriptor_id(same) == descriptor_id(f) != descriptor_id(other)
 
     o, h = SpecializedDefinition(outer, {"F": f}, ()), SpecializedDefinition(holder, {"OPS": {"f": f}}, ())
-    before = [(fn.id, _spec_id(fn), [_spec_id(n.fn) for n in fn.body.nodes]) for fn in (o, h)]
-    W._repoint(o, {_spec_id(f): same})
-    W._repoint(h, {_spec_id(f): same})
+    before = [(fn.id, descriptor_id(fn), [descriptor_id(n.fn) for n in fn.body.nodes]) for fn in (o, h)]
+    W._repoint(o, {descriptor_id(f): same})
+    W._repoint(h, {descriptor_id(f): same})
     assert o.bindings["F"] is o.body.nodes[-1].fn is same and h.bindings["OPS"]["f"] is same
-    assert [(fn.id, _spec_id(fn), [_spec_id(n.fn) for n in fn.body.nodes]) for fn in (o, h)] == before
+    assert [(fn.id, descriptor_id(fn), [descriptor_id(n.fn) for n in fn.body.nodes]) for fn in (o, h)] == before
     assert (o.id, h.id) == (SpecializedDefinition(outer, dict(o.bindings), ()).id,
                             SpecializedDefinition(holder, dict(h.bindings), ()).id)
 
-    why = re.escape(f"{_spec_id(f)!r} would be re-pointed to a definition of another id, {_spec_id(other)!r}")
+    why = re.escape(f"{descriptor_id(f)!r} would be re-pointed to a definition of another id, {descriptor_id(other)!r}")
     for fn, held, was in ((SpecializedDefinition(outer, {"F": f}, ()), lambda fn: fn.bindings["F"], before[0][0]),
                           (SpecializedDefinition(holder, {"OPS": {"f": f}}, ()), lambda fn: fn.bindings["OPS"]["f"], before[1][0])):
         assert fn.body.nodes and fn.id == was
         with pytest.raises(IdentityConflict, match="E_IDENTITY: " + why):
-            W._repoint(fn, {_spec_id(f): other})
+            W._repoint(fn, {descriptor_id(f): other})
         assert held(fn) is f and fn.id == was
 
 
