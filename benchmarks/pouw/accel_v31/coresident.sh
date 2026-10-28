@@ -4,7 +4,8 @@
 # `coresident REPS KTILES HREPS ITEM_MS KDIM` (coresident.jsonl; defaults 5 4096 2048 2000 4096), and the tables
 # (table.md). CFGS (optional): the configurations to run, comma-separated name prefixes (coresident.cu's CFGS). OPS
 # (optional, default s8): the operands' kinds, comma-separated, s8 (random int8) and u2 (the 2-bit values 0..3). RASTER
-# (optional, default 0, gemm_r5's order): the loaded tiles in bands of RASTER rows.
+# (optional, default 0, gemm_r5's order): the loaded tiles in bands of RASTER rows. HWS (optional, default 7,11,99): the
+# hash warps' counts.
 #   research run --on vy-dc-h200-3 --project verity --campaign C --source . --cwd source --env GPU_LEASE_WHO=LANE -- \
 #     bash benchmarks/pouw/accel_v31/coresident.sh
 # PROBE (a directory, optional): another probe's sources, built (nvcc -O3 PROBE/PROBE_MAIN) and run first under the same

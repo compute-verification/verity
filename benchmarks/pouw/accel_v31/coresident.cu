@@ -10,8 +10,8 @@
 //   NM     consumer warpgroups: 1 (a 64 x BN tile) or 2 (128 x BN, gemm_r5's)
 //   FORM   n128: one m64n128k32 a k32 atom (BN 128); alt: gemm_r5's 128 x 256 tile, two m64n128k32 an atom into
 //          accumulators 0..63 and 64..127 in turn (imma_atom<256, true>); chain: the same eight MMAs a k-tile, the four
-//          into 0..63 first, then the four into 64..127 (no n256: a m64n256k32 takes 154 of the launch's registers a
-//          thread, whatever setmaxnreg gives the consumers, and 512 threads have 128)
+//          into 0..63 first, then the four into 64..127; n256: one m64n256k32 an atom, which takes 154 of the launch's
+//          registers a thread whatever setmaxnreg gives the consumers, so at most 384 threads (168; 512 have 128)
 //   flags  res: the operands resident in one stage of shared memory, the consumers free-running (no barriers);
 //          bar: the producer warp hands the stages over on gemm_r5's full and empty mbarriers, loading nothing;
 //          load: the producer loads each k-tile with TMA from A (M x K) and B (N x K), tiles in gemm_r5's static
@@ -24,11 +24,12 @@
 //          TMA's SWIZZLE_128B rows; kg2 (resident only): two k-tiles a wgmma commit group in place of one;
 //          mc2, mc4 (with load): clusters of 2 or 4 CTAs on tiles one above the other, each loading its part of B's box
 //          into all of them (TMA multicast), so L2 serves B once a cluster; a stage is free once every CTA's consumers
-//          release it, and the grid is the CTAs whose clusters fit on the SMs at once
+//          release it, and the grid is the CTAs whose clusters fit on the SMs at once;
+//          s5, s8 (with load): five or eight stages of shared memory in place of four
 // NWG = NM: the consumers alone (the co-issue probe's 128-thread CTA), at the launch's registers, with no setmaxnreg.
 // A launch's arm: hash warps 0 (the GEMM alone) or NHW of the CTA's free warps (the producer's warpgroup's other three,
-// then the next warpgroups'): 7, 11 and the most it has; and with resident operands, the hash alone at each (no
-// consumers; each hash warp HREPS compressions).
+// then the next warpgroups'): each count HWS lists (7, 11 and 99 by default), a count past the most it has taken as
+// that most; and with resident operands, the hash alone at each (no consumers; each hash warp HREPS compressions).
 //
 // Per launch, from each CTA's consumer warp 0 (clock64 and %globaltimer at its first and last MMA) and its hash warps'
 // compression counts: the SM clock (clock64 over %globaltimer); theta, the INT8 MACs a second over 989.4 T (4,096 a
@@ -45,7 +46,8 @@
 //                                                        the configurations whose names start with one of its
 //                                                        comma-separated prefixes, else all; OPS: the operands' kinds
 //                                                        to run every configuration on, comma-separated, s8 by
-//                                                        default, the hash alone with the first)
+//                                                        default, the hash alone with the first; HWS: the hash
+//                                                        warps' counts, comma-separated)
 //
 // Build (sm_90a): nvcc -O3 -std=c++17 -gencode arch=compute_90a,code=sm_90a -Xptxas -v -o coresident coresident.cu -lcuda
 #include <cuda.h>
@@ -77,10 +79,11 @@ using u64 = unsigned long long;
 using u32 = uint32_t;
 using wgp::BK;
 
-enum Form { N128 = 0, ALT = 1, CHAIN = 2 };
+enum Form { N128 = 0, ALT = 1, CHAIN = 2, N256 = 3 };
 enum Flag { BAR = 1, LOAD = 2, EPI = 4, NOSW = 8, KG2 = 16, MC2 = 32, MC4 = 64 };
 __host__ __device__ constexpr int cluster_of(int fl) { return fl & MC4 ? 4 : fl & MC2 ? 2 : 1; }
-constexpr int STAGES = 4;
+constexpr int ST(int n) { return n << 8; }   // a loaded form's stages, in the flags above the rest
+__host__ __device__ constexpr int stages_of(int fl) { return fl >> 8 ? fl >> 8 : 4; }
 constexpr double BAR_RATE = 0.018029;   // compressions a SM-clock: 4.355e9 / (132 x 1830e6)
 constexpr double PEAK_MHZ = 1830;       // the clock of int8 wgmma's peak, 989.4 T MACs a second
 
@@ -145,8 +148,8 @@ template <int NM, int FORM> struct Shape {
   static constexpr int A_BYTES = TMC * BK, STAGE = (TMC + BN) * BK;
   static constexpr double MACS = (double)TMC * BN * BK;   // a k-tile's
 };
-template <int NM, int FORM, int FL> constexpr int smem_bytes() {
-  return 1024 + (FL & LOAD ? STAGES : 1) * Shape<NM, FORM>::STAGE + 16 * STAGES + 16;
+template <int NM, int FORM, int FL> __host__ __device__ constexpr int smem_bytes() {
+  return 1024 + (FL & LOAD ? stages_of(FL) : 1) * Shape<NM, FORM>::STAGE + 16 * stages_of(FL) + 16;
 }
 
 template <int NM, int FORM, int FL, int Y, int HR, int NWG>
@@ -157,14 +160,17 @@ __global__ void __launch_bounds__(NWG * 128, 1) cta(const __grid_constant__ Prm 
   static_assert(NM * Y + (NWG - NM) * HR <= NWG * BASE, "the warpgroups' registers exceed the launch's");
   static_assert(NWG == NM || (HR <= BASE && Y >= BASE), "the consumers take registers, the rest give them");
   static_assert(FORM != N128 || Y >= 96, "n128's 64 accumulators");
+  static_assert(FORM != N256 || BASE >= 160, "ptxas sizes a m64n256k32 by the launch's registers a thread, and it takes 154");
   static_assert(!(FL & (NOSW | KG2)) || !(FL & (BAR | LOAD | EPI)), "ns and kg2 are resident operands' forms");
+  static_assert(smem_bytes<NM, FORM, FL>() <= 232448, "the stages exceed a CTA's 227 KiB of shared memory");
+  constexpr int STAGES = stages_of(FL);
   constexpr bool bar = FL & (BAR | LOAD);
   constexpr int KG = FL & KG2 ? 2 : 1;   // k-tiles a commit group
   constexpr int CL = cluster_of(FL);      // the cluster's CTAs: M-neighbours on one column of tiles, sharing B's box
   static_assert(CL == 1 || (FL & LOAD), "multicast is a loaded form");
   extern __shared__ __align__(1024) uint8_t smem[];
   const uint32_t base = (wgp::smem_at(smem) + 1023) & ~1023u;
-  const uint32_t bars = base + (FL & LOAD ? STAGES : 1) * S::STAGE;   // full 0..3, empty 0..3, then done
+  const uint32_t bars = base + (FL & LOAD ? STAGES : 1) * S::STAGE;   // STAGES full, STAGES empty, then done
   u32* const done = reinterpret_cast<u32*>(smem + (bars - wgp::smem_at(smem)) + 16 * STAGES);
   const int tid = threadIdx.x, wg = tid / 128, warp = tid / 32, lane = tid % 32;
   const int tiles_m = p.M / S::TMC, tiles_n = p.N / S::BN, TK = p.K / BK, rank = CL == 1 ? 0 : cta_rank();
@@ -286,9 +292,9 @@ __global__ void __launch_bounds__(NWG * 128, 1) cta(const __grid_constant__ Prm 
 #pragma unroll
     for (int q = 0; q < KG; q++) {
       const uint32_t sd = (g + q) % TK != 0;
-      if constexpr (FORM == N128) {
+      if constexpr (FORM == N128 || FORM == N256) {
 #pragma unroll
-        for (int i = 0; i < 4; i++) wgp::imma<128>(d, da(i), db(i, 0), i > 0 || sd);
+        for (int i = 0; i < 4; i++) wgp::imma<S::BN>(d, da(i), db(i, 0), i > 0 || sd);
       } else if constexpr (FORM == ALT) {
 #pragma unroll
         for (int i = 0; i < 4; i++) {
@@ -373,10 +379,23 @@ static const Cfg CFGS[] = {
     CFG("y176_m1_alt_w5_lemc2", 1, ALT, LOAD | EPI | MC2, 176, 72, 5),
     CFG("y200_m1_alt_w5_lmc2", 1, ALT, LOAD | MC2, 200, 64, 5), CFG("y160_m1_n128_w5_lmc2", 1, N128, LOAD | MC2, 160, 80, 5),
     CFG("y160_m2_alt_w4_l", 2, ALT, LOAD, 160, 96, 4),     CFG("y160_m2_alt_w4_lmc2", 2, ALT, LOAD | MC2, 160, 96, 4),
+    // five stages in place of four (s5; eight for n128's smaller stage), and the hash warps at 80 registers (y160 alt)
+    CFG("y176_m1_alt_w5_l_s5", 1, ALT, LOAD | ST(5), 176, 72, 5),
+    CFG("y176_m1_alt_w5_lmc2_s5", 1, ALT, LOAD | MC2 | ST(5), 176, 72, 5),
+    CFG("y160_m1_n128_w5_l_s8", 1, N128, LOAD | ST(8), 160, 80, 5),
+    CFG("y160_m1_alt_w5_res", 1, ALT, 0, 160, 80, 5),      CFG("y160_m1_alt_w5_l", 1, ALT, LOAD, 160, 80, 5),
+    // 384 threads: one consumer warpgroup and 7 hash warps beside the producer, the launch's 168 registers a thread
+    // enough for a m64n256k32 (n256: one an atom, 80 bytes of shared memory a SM-clock to alt's 96)
+    CFG("y232_m1_n256_w3_res", 1, N256, 0, 232, 136, 3),   CFG("y232_m1_n256_w3_l", 1, N256, LOAD, 232, 136, 3),
+    CFG("y232_m1_n256_w3_le", 1, N256, LOAD | EPI, 232, 136, 3),
+    CFG("y232_m1_n256_w3_lmc2", 1, N256, LOAD | MC2, 232, 136, 3),
+    CFG("y232_m1_n256_w3_l_s5", 1, N256, LOAD | ST(5), 232, 136, 3),
+    CFG("y232_m1_n256_w3_lmc2_s5", 1, N256, LOAD | MC2 | ST(5), 232, 136, 3),
+    CFG("y232_m1_alt_w3_res", 1, ALT, 0, 232, 136, 3),     CFG("y232_m1_alt_w3_l", 1, ALT, LOAD, 232, 136, 3),
     // the consumers alone, as the co-issue probe's CTA (Y: the launch's registers)
     CFG("y255_m1_n128_w1_res", 1, N128, 0, 255, 0, 1), CFG("y255_m1_n128_w1_ns", 1, N128, NOSW, 255, 0, 1),
     CFG("y255_m1_alt_w1_res", 1, ALT, 0, 255, 0, 1),   CFG("y255_m1_alt_w1_ns", 1, ALT, NOSW, 255, 0, 1),
-    CFG("y255_m1_alt_w1_kg2", 1, ALT, KG2, 255, 0, 1),
+    CFG("y255_m1_alt_w1_kg2", 1, ALT, KG2, 255, 0, 1),     CFG("y255_m1_n256_w1_res", 1, N256, 0, 255, 0, 1),
 };
 
 static CUtensorMap tmap(const void* ptr, int depth, int rows, int box_rows) {
@@ -417,6 +436,14 @@ int main(int argc, char** argv) {
   }
   const std::string sel = getenv("CFGS") ? getenv("CFGS") : "", opl = getenv("OPS") ? getenv("OPS") : "s8";
   const int raster = getenv("RASTER") ? atoi(getenv("RASTER")) : 0;
+  std::vector<int> hwl;   // HWS: the hash warps' counts, past a CTA's most taken as its most
+  for (const char* h = getenv("HWS") ? getenv("HWS") : "7,11,99"; *h;) {
+    char* e;
+    const long v = strtol(h, &e, 10);
+    if (e == h || v <= 0 || (*e && *e != ',')) { fprintf(stderr, "HWS lists positive hash-warp counts, comma-separated\n"); return 2; }
+    hwl.push_back((int)v);
+    h = *e ? e + 1 : e;
+  }
   std::vector<std::pair<std::string, u32>> kinds;   // the operands' kinds, each a byte mask
   for (size_t i = 0; i <= opl.size();) {
     const size_t j = std::min(opl.find(',', i), opl.size());
@@ -484,9 +511,9 @@ int main(int argc, char** argv) {
       grid[&c - CFGS] = std::min(nsm / cl, nc) * cl;
     }
     printf("{\"cfg\": \"%s\", \"nm\": %d, \"bn\": %d, \"y\": %d, \"hr\": %d, \"threads\": %d, \"regs\": %d, \"local\": %zu, "
-           "\"smem\": %d, \"fl\": %d, \"cluster\": %d, \"ctas\": %d}\n",
-           c.name, c.nm, c.form == N128 ? 128 : 256, c.y, c.hr, 128 * c.nwg, fa.numRegs, fa.localSizeBytes, c.smem, c.fl, cl,
-           grid[&c - CFGS]);
+           "\"smem\": %d, \"fl\": %d, \"stages\": %d, \"cluster\": %d, \"ctas\": %d}\n",
+           c.name, c.nm, c.form == N128 ? 128 : 256, c.y, c.hr, 128 * c.nwg, fa.numRegs, fa.localSizeBytes, c.smem, c.fl,
+           c.fl & LOAD ? stages_of(c.fl) : 1, cl, grid[&c - CFGS]);
   }
   auto go = [&](const Cfg& c, const Prm& p) {
     const cudaLaunchConfig_t lc = config(c, grid[&c - CFGS]);
@@ -593,9 +620,10 @@ int main(int argc, char** argv) {
       const int maxhw = (c.nwg - c.nm) * 4 - 1;
       arm(c, groups, 0, "gemm");
       std::vector<int> hws;
-      for (int h : {7, 11})
-        if (h < maxhw) hws.push_back(h);
-      if (maxhw > 0) hws.push_back(maxhw);
+      for (int h : hwl)
+        if (maxhw > 0) hws.push_back(std::min(h, maxhw));
+      std::sort(hws.begin(), hws.end());
+      hws.erase(std::unique(hws.begin(), hws.end()), hws.end());
       for (int nhw : hws) {
         arm(c, groups, nhw, "gemm+hash");
         if (ki == 0 && !(c.fl & (LOAD | NOSW | KG2))) arm(c, 0, nhw, "hash");
