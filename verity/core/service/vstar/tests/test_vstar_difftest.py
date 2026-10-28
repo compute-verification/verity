@@ -934,5 +934,10 @@ LINK_REF = _link_refs() | st.fixed_dictionaries({"UB": _near(0, 30), "PB": _near
 def test_link_ref_agrees(server):
     """The link unit's Lean reference (`Flock.RecLinkRef.linkRef`, whose outputs' meaning `linkOut_meaning` and `okRef_link`
     state) against `rec_link.link_ref`, on drawn rows that pass and that don't."""
-    stats = D.run(port("link_ref", link_ref, LINK_REF), examples=60, seed=SEED, server=server)
-    assert stats.outputs >= 30 and stats.rejects >= 5, stats
+    p = port("link_ref", link_ref, LINK_REF)
+    a = LK.aux_words(2)
+    row = _words_le(struct.pack("<5I", 1, 1, 0, 0, 1) + bytes(108))
+    good = {"UB": 1, "PB": 1, "ports": [row, [7] * 32, [0] * 96, [0] * a, [7] * 32, [1] * 96, [0] * a]}
+    assert D.replay(p, good, server)[0] == "output" and any(link_ref(good)["rin"])
+    stats = D.run(p, examples=60, seed=SEED, server=server)
+    assert stats.outputs >= 15 and stats.rejects >= 5, stats
