@@ -113,7 +113,7 @@ theorem honest_partAccepts_layR (elem : (r : XR) → List (Fin r.w.parts.length 
     let I := Claims.Recursion.Inner.ofFlock DeployedR.bdR.deploy decI
     let D := recBound _root_.Flock.Readable.relation bR L DeployedR.bdR.IVStar
     NumsFixed bL.st →
-    ∀ {x : Msg} {w : Claims.Flock.Wit} {st : Claims.Recursion.Stmt}, Claims.Recursion.R D I x w →
+    ∀ {x : Msg} {w : Claims.Flock.Wit} {st : Claims.Recursion.CompiledStatement}, Claims.Recursion.R D I x w →
       D.parse x = some st → Claims.Recursion.Form.Dense st.form →
     ∀ (ω : Tape bL) (r : Fin (D.V.k x) → Coin),
       (Claims.run FlockDeploy.sha512 (refP I.V bL w) D.V x ω r).out = .acc →

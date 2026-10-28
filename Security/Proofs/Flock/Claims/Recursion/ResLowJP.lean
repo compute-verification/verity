@@ -42,7 +42,7 @@ abbrev acceptsLP :=
 /-- **The residual groups' share at the parts' own witnesses and messages** (`hlowP`'s `rec-residuals` kind): where
 every part accepts at its own witness and the parts' own messages (`JointP`), each group `ownR` gives part `s` holds. -/
 def ResLowJP : Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), parse x = some st → Claims.Recursion.Form.Dense st.form →
+  ∀ (x : Msg) (st : Claims.Recursion.CompiledStatement), parse x = some st → Claims.Recursion.Form.Dense st.form →
     ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
       JointP FlockDeploy.sha512 (recL rd b aux nOf hd rest wE final w L) L
         (acceptsLP rd b aux nOf hd rest wE final w L) x c ws →
