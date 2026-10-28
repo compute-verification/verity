@@ -9,8 +9,8 @@ debug setting on a run of record (one with ``RESEARCH_RUN_ID``); then writes the
 their digest, which ``params.txt`` (so the result's ``params``) carries as ``settings``.  ``run.py`` refuses the same before it
 launches.  85's other variables (``LEVELS``, ``PCPUS``, ...) pass through undeclared: 85 owns them.
 
-Stdlib only, as ``run.py`` is, and so are ``verity_bench.settings`` and ``verity_config``, which it imports from the tree:
-``job.sh`` runs it with the pod's python3.
+Stdlib only, as ``run.py`` is, and so are ``verity_bench.settings``, ``verity_config`` and ``verity.settings``, which it imports
+from the tree: ``job.sh`` runs it with the pod's python3.
 """
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "config"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "harness"))
+sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 from verity_bench.settings import check
 from verity_config.settings import VALUE, WHERE, Registry, Setting, csv

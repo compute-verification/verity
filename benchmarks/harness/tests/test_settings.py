@@ -70,7 +70,7 @@ def test_the_record_carries_the_value_settings_in_force() -> None:
 
 def test_an_unknown_verity_bench_variable_is_refused_by_name() -> None:
     assert settings.unknown({"VERITY_BENCH_VENV": "/v", "VERITY_BENCH_FULL": "1", "VERITY_RETAIN": "none", "PATH": "/b"}) == []
-    with pytest.raises(UnknownSetting, match="unknown setting VERITY_BENCH_VNEV: nothing reads it"):
+    with pytest.raises(UnknownSetting, match="unknown setting VERITY_BENCH_VNEV: nothing in the tree reads it"):
         settings.validate({"VERITY_BENCH_VNEV": "/v"}, of_record=False)
 
 

@@ -32,7 +32,7 @@ def test_every_variable_job_sh_reads_is_declared_and_every_declared_one_is_read(
 
 def test_run_refuses_an_unknown_job_variable_before_it_launches(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(RUN.subprocess, "run", lambda *a, **k: pytest.fail("launched"))
-    for bad, said in (("REPEAT_LAEN=1", "unknown setting REPEAT_LAEN: nothing reads it"),
+    for bad, said in (("REPEAT_LAEN=1", "unknown setting REPEAT_LAEN: nothing in the tree reads it"),
                       ("OPROVE_RUNZ=2", "unknown setting OPROVE_RUNZ"), ("REPEAT_LEAN=one", "REPEAT_LEAN='one'")):
         with pytest.raises(SystemExit, match=re.escape(said)):
             RUN.main(["run", "--dry-run", "--env", bad])
