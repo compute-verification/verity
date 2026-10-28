@@ -24,10 +24,10 @@ hiding salts, and only their check bits leave.
 * **The reads** are the protocol's (H1's: `pouw.leaf_lanes.reads`), each a ``--registered`` port (`port`) at the row the
   verifier derives: a read at a position the verifier doesn't derive is no public read. Rows swapped in the tree open at
   no read's position under the root, and a row of another tree opens under no root the record names.
-* **The opened roots** (`opened`): the roots the verifiers of record report opening the sessions' reads of the produced
+* **The opened roots** (`opened`): the roots the verdicts of record report opening the sessions' reads of the produced
   values against (`audit.session_registered`, unfiltered) must each be the record's: ``P-opened`` otherwise, a produced
   value not opened included.
-* **The shared openings** (`shared`): every row the verifiers of record report opening (the verdicts' ``openings``) of a
+* **The shared openings** (`shared`): every row the verdicts of record report opening (their ``openings``) of a
   value the verifier holds openings of (the record's, `openings`, and its own ports', `known`) must be that opening:
   ``P-shared`` otherwise. Two openings of one root are a SHA-512 collision; this check makes every session that reads a
   row read the one opening the record fixed, so no argument about the sessions' sharing rests on collision resistance.
@@ -207,7 +207,7 @@ def known_port(program: str, value: str, row: Sequence[int], salt: bytes, regist
 
 def opened(rec: Mapping[str, Any], session_registered: Mapping[str, str | None] | None) -> tuple[str, ...]:
     """``("P-opened",)`` unless each produced value of the accepted record ``rec`` was opened against its root: the
-    ``{value: root}`` the verifiers of record report (`audit.session_registered` without a registration, a value two of
+    ``{value: root}`` the verdicts of record report (`audit.session_registered` without a registration, a value two of
     them report under different roots None), at every produced value."""
     want = {e["value"]: e["root"] for e in rec["produced"]}
     got = dict(session_registered or {})

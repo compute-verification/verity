@@ -2,7 +2,7 @@
 `subset:k` of its n units, priced by Flock `prove --zk` on the CPU nodes instead of the GPU fit, and the share of
 each template's units the budget certifies.
 
-    python benchmarks/sampling_plan/cpu_budget.py --plan PLAN.json --slots 17 --hours 2.5 [--out DIR]
+    uv run python benchmarks/sampling_plan/cpu_budget.py --plan PLAN.json --slots 17 --hours 2.5 [--out DIR]
 
 * **A statement** holds up to `UNITS` sampled proof blocks of one template, at no more cost than one, since Flock pads a
   statement to 8 instance slots. Its m is k_log + 3, with k_log = ceil(log2(proved ANDs)), the unit's ANDs with its
@@ -26,8 +26,11 @@ import json
 from math import ceil, log, log2
 from pathlib import Path
 
-DELTAS = (1e-2, 1e-6)
-PERIODS = {"week": 7 * 86400, "month": 30 * 86400, "year": 365 * 86400}
+from verity.core.protocols.pous import wipe_monitoring
+
+#: core's reporting deltas, as floats, and its monitoring periods, seconds by name (`wipe_monitoring`)
+DELTAS = tuple(map(float, wipe_monitoring.DELTAS))
+PERIODS = dict(wipe_monitoring.PERIODS)
 SERVERS = 10_000
 UNITS = 8
 SLOT_CORES, SLOT_GB = 42, 120

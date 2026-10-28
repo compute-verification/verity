@@ -10,7 +10,8 @@ proved.
 * r, the monitored compute residual: r-hat, the share of monitored capacity outside the compute certificate
   (1 - W_cert/C), plus PoUW's deficit on the certified work, eps_W W_cert/C, plus the aggregation slack eps'. r-hat is
   idle and uncredited GPU time, plus host CPUs, which PoUW neither credits nor bounds and which count at their datasheet
-  peak. It trains at full efficiency unless the memory cap binds. A
+  peak. It trains at full efficiency unless the memory cap binds: at peak in eta, at MFU_0 in D (``evaluate``'s
+  ``residual_mfu``, the reference-efficiency assumption: free compute runs no better than the reference). A
   spatial unit's window reads its starting state plus its novel intake, K_w = state + lambda_in L, and contains at most
   K_w Lambda(K_w) / b_a counted multiplications (``ThreadedRuntime``, reads counted by width; counting them by
   information, which a wipe would bound, is open: ``ThreadedOfState`` rests on the falsified WeightsSupport,
@@ -21,7 +22,7 @@ proved.
   declared computation doesn't hold plus the slack. The slack is 1 - delta^(1/k) for k timed rounds (1/19 at k = 86 and
   delta = 1/100) plus the certificate's floor, the share of the store rebuildable from public data within the deadline.
   The novel intake is line rate or, under network accounting, side channels plus certified timing plus the declared
-  computation's novel intake, alpha F under NCI once the count check is in the ZK flow.
+  computation's novel intake, alpha F under the inference-only policy once the count check is in the ZK flow.
 * 1/rho_NCI: the declared computation trains at the thread bound, rho_T = b_a / (alpha Lambda(K)) declared gates per
   counted multiplication with Lambda(K) = max(e, 2K / (4 d b_w)), or at the tighter partial-sum law rho_PS when no dark
   compute can sum the inference blocks' partial sums. The residual reads them on the server for free; unmonitored compute
@@ -41,10 +42,10 @@ proved.
 The four terms bound counted multiplications relative to the reference recipe. A private recipe g times better in counted
 multiplications per unit of loss is a compute amplifier, multiplying eta by g; it cancels when verification is compared on
 against off. A recipe better at working under the mechanisms, m times more progress per counted multiplication, scales
-only the constrained terms (nu, mu and chi), not the residual or unmonitored compute. The compute dampener D is a hardware
-multiple: how many times more hardware-time the developer needs than an unconstrained developer with the same recipe on
-the same hardware, who reaches model-FLOP utilization mfu. Unmonitored compute trains like the unconstrained developer;
-the other terms are counted at peak, so 1/D <= s + (min(r + nu, mu) + chi) / mfu, and D is at least 1.
+only the constrained terms (nu, mu and chi), not the residual or unmonitored compute. The slowdown D, the
+hardware multiple over an unconstrained developer with the same recipe on the same hardware at model-FLOP utilization
+mfu, isn't computed here: it is the overhead calculator's ``rho.theorem.multiple_bound`` in Lean's form
+(``Nci.Dampener.remoteDampener``) on these terms (``remote_terms``) with the residual at MFU_0.
 
 The canvas "Compute efficiency under the verification stack" renders this model.
 
@@ -79,8 +80,6 @@ CREDITED_CLOCK_HZ = 2430e6
 #: a server's GPUs at the table's FP8 dense peak, 2 FLOP a MAC
 GPU_FLOPS = 2 * CARD["sms"] * CARD["tensor"] * CARD["clock_hz"]
 NODE_FLOPS = 8 * GPU_FLOPS
-#: two Xeon 6776Ps at their INT8 AMX datasheet peak: 128 cores x 2,048 ops per cycle x 3.6 GHz
-HOST_OPS = 128 * 2048 * 3.6e9
 
 #: defaults: the Kimi K2 calibration and forward chain; the GPUs' residual under the floor credit at f_max,
 #: 1 - ((1 - phi)/q_sched + phi)/q_clock = 0.323: honest kernels run 1.72x the floor at the nodes' locked clock,
@@ -89,8 +88,9 @@ HOST_OPS = 128 * 2048 * 3.6e9
 #: conditions; today nothing in a training window is credited); PoUW's deficit eps_W = 0.744% (CircuitCredit);
 #: the GPU clock above what PoUW credits, 0: PoUW credits 2,430 MHz, the card table's ceiling, which every
 #: card on vy-nebius-1 reports as its maximum, application, default and boost SM clock;
-#: the host CPUs at their INT8 AMX datasheet peak (``HOST_OPS``: 12.6% of the GPUs' FP8 rate at
-#: the card table's peak); 100,000 servers of 8 RTX PRO 6000s (vy-nebius-2's 2.668 TB) at the card table's peak for a
+#: the host CPUs at 0: hosts carry no compute (GLOSSARY.md, the device model), a server's compute is its accelerators'
+#: (two Xeon 6776Ps at their INT8 AMX datasheet peak, 12.6% of the GPUs' FP8 rate, is the sensitivity without that
+#: assumption); 100,000 servers of 8 RTX PRO 6000s (vy-nebius-2's 2.668 TB) at the card table's peak for a
 #: year;
 #: the deployed proof-of-space audit (k = 111 rounds at delta = 1/100; the slack counts the floor once) and the memory
 #: the fill doesn't reach (3.05 GB on-chip, 18.4 GB GPU reserve, 29.5 GB host gap, about 7 GB of DPU, BMC and flash); disks
@@ -101,7 +101,7 @@ HOST_OPS = 128 * 2048 * 3.6e9
 #: products (``REFERENCE_THREADED`` is the conditional (d, e)); injected bits valued with (d, e)-threading no further than
 #: ThreadedOfLayered certifies any at ReferenceLayered's bf16 embedding columns, and every gate of a block countable
 DEFAULTS = {
-    "unmonitored": 0.0, "residual": 0.323, "host_share": HOST_OPS / NODE_FLOPS,
+    "unmonitored": 0.0, "residual": 0.323, "host_share": 0.0,
     "clock_share": 1 - CREDITED_CLOCK_HZ / CARD["clock_hz"], "eps_w": 0.00744,
     "eps_agg": 1e-4,
     "pous_rounds": 111.0, "unfilled_gb": 58.0, "sigma": 1e3, "b_w": 2.5, "b_a": 4.0,
@@ -125,7 +125,7 @@ SPEC = [
     {"key": "eps_w", "label": "PoUW's deficit eps_W: the share of certified work a certificate that isn't wrong may credit without its running, which charges eps_W W_cert/C to r (CircuitCredit 0.744%; best plausible design 0.06-0.25%)", "unit": "", "min": 1e-4, "max": 0.1, "log": True, "zero": True},
     {"key": "eps_agg", "label": "Aggregation slack eps': the share of capacity whose PoUW certificates may be wrong, which Markov's inequality over the windows charges to r (1e-4 with per-window failure 3 x 2^-40 gives the theorem's delta of 2.7e-8; each halving costs about 4e-5 of PoUW's deficit)", "unit": "", "min": 1e-8, "max": 1e-2, "log": True, "zero": True},
     {"key": "clock_share", "label": "GPU capacity above the clock PoUW credits (0: PoUW credits 2,430 MHz, the card table's ceiling and the SKU's maximum, CMP-165; above 0 only on a card whose SKU or firmware reaches past its table)", "unit": "", "min": 1e-4, "max": 0.3, "log": True, "zero": True},
-    {"key": "host_share", "main": True, "label": "Host CPUs at datasheet peak, as a share of server compute at the card table's peak (Xeon 6776P INT8 AMX 12.6%; hosts without matrix units, two EPYC 9015s, 0.22%)", "unit": "", "min": 1e-6, "max": 0.5, "log": True, "zero": True},
+    {"key": "host_share", "label": "Host CPUs' compute, as a share of server compute at the card table's peak: 0 under hosts carry no compute; without that assumption, at datasheet peak (Xeon 6776P INT8 AMX 12.6%; hosts without matrix units, two EPYC 9015s, 0.22%)", "unit": "", "min": 1e-6, "max": 0.5, "log": True, "zero": True},
     {"key": "pous_rounds", "main": True, "label": "Proof-of-space rounds per audit (deployed 111; 1/19 needs 86; streamed labels make 74,000 cheap)", "unit": "", "min": 10, "max": 1e6, "log": True},
     {"key": "unfilled_gb", "main": True, "label": "Memory the fill doesn't reach, per server (measured gaps 51 plus about 7 of DPU, BMC and flash; on-chip alone 3.05)", "unit": "GB", "min": 0.01, "max": 1000, "log": True},
     {"key": "sigma", "main": True, "label": "Side channels per server", "unit": "bit/s", "min": 1, "max": 1e10, "log": True, "zero": True},
@@ -306,8 +306,8 @@ def ingress(p: dict, mech: dict) -> float:
 
 
 def audited_residual(p: dict) -> float:
-    """r-hat: the GPUs' uncredited share, their capacity above the credited clock, and the host CPUs, which count toward
-    it until something credits or bounds them."""
+    """r-hat: the GPUs' uncredited share, their capacity above the credited clock, and the host CPUs (0: hosts carry no
+    compute)."""
     return min(1.0, p["residual"] + p["host_share"] + p["clock_share"])
 
 
@@ -326,7 +326,9 @@ def state_threshold(p: dict, mech: dict) -> float:
     return residual_share(p) * p["node_flops"] * p["kappa"] * p["d"] * p["b_w"] * p["b_a"] / (4 * ingress(p, mech))
 
 
-def evaluate(p: dict, mech: dict) -> dict:
+def evaluate(p: dict, mech: dict, residual_mfu: float = 1.0) -> dict:
+    """The terms of eta at ``mech``, each in counted multiplications over the FLOP spent, the residual's capacity
+    training at ``residual_mfu`` of peak: 1 for eta, MFU_0 for D under the reference-efficiency assumption."""
     gpm = 2 / p["kappa"]
     H = p["years"] * YEAR
     C = p["nodes"] * p["node_flops"] * H
@@ -378,7 +380,7 @@ def evaluate(p: dict, mech: dict) -> dict:
         declared = declared_at(B)
         relay = B / (2 * p["b_p"])
         relay_res = min(res_ops, relay)
-        res_mults = (res_ops - relay_res) / gpm
+        res_mults = residual_mfu * (res_ops - relay_res) / gpm
         unmon = max(0.0, U - (relay - relay_res)) / gpm
         return min(p["m"] * declared + res_mults, p["m"] * region) + unmon, declared, res_mults, unmon
 
@@ -409,13 +411,19 @@ def evaluate(p: dict, mech: dict) -> dict:
     largest = max(terms, key=lambda t: terms[t])
     if largest == "declared":
         largest = "declared (thread bound)" if declared >= cap_T * (1 - 1e-9) else "declared (partial-sum law)"
-    inverse = terms["unmonitored"] / p["g"] + (terms["residual"] + terms["declared"] + terms["cheat"]) / p["g"] / p["mfu"]
     return {
         "efficiency": sum(terms.values()), **terms, "largest": largest, "memory_caps_residual": capped,
-        "dampener": max(1.0, 1 / inverse) if inverse > 0 else math.inf,
         "rho_T": rho_T, "crossing_bits": B, "wipe_state_bits": wipe_state, "envelope_bits": envelope,
         "state_threshold_bits": state_threshold(p, mech), "cheat_steps": k, "cheat_bits": bits,
     }
+
+
+def remote_terms(p: dict, r: dict) -> tuple[float, float]:
+    """``evaluate``'s terms as the ``s`` and ``x`` of ``Nci.Dampener.remoteDampener mfu s x``: the unmonitored share,
+    which trains like the unconstrained developer, and the rest in counted multiplications (so at a = 1/MFU_0,
+    ``multiple_bound``'s ``reference_efficiency=False``; the assumption is in ``r``'s residual, ``evaluate`` at
+    ``residual_mfu`` = MFU_0), each per the compute amplifier g (which cancels against the unconstrained developer's)."""
+    return r["unmonitored"] / p["g"], (r["residual"] + r["declared"] + r["cheat"]) / p["g"]
 
 
 def main(argv: list[str] | None = None) -> int:

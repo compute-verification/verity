@@ -698,7 +698,7 @@ def test_the_audit_record_holds_the_roots_the_reads_were_opened_against():
 
 def test_the_opened_roots_come_from_the_verifier_of_records_accepted_verdicts():
     """`session_registered` reads the Lean verdict's `registered` finding, only on an accepted verdict of record: a v2 audit
-    passes on what the verifier of record opened, and fails closed on anything else."""
+    passes on what the verifier opened, and fails closed on anything else."""
     prog = _program()
     reg = _registered(prog)
     rec, _ = _record(prog, reg)
@@ -984,7 +984,7 @@ def test_r7_holds_a_pinned_value_to_its_pin():
 
 
 def test_r7_reuses_an_earlier_outputs_commitment():
-    """A value that is an output of an earlier run (`outputs`; never NCI's baseline θ) takes that run's port: its entry
+    """A value that is an output of an earlier run (`outputs`; never the inference-only check's θ) takes that run's port: its entry
     has the port's domain and root, and the port's leaf count is the value's rows, so its rows stay under the earlier
     run's hiding leaves. The output overrides what the log or nothing would hold it to; a record or port the log doesn't
     hold, or a port of other leaves, is `R7-output`, and a malformed `outputs` is refused before the record is read."""

@@ -1,4 +1,4 @@
-"""n2_advised_zk's period draws on the auditor's challenger's coins (`Challenger`, ``--challenger local``): one local
+"""n2_advised_zk's period draws on the auditor's challenger's coins (`ChallengerCoins`, ``--challenger local``): one local
 session for every member, under live_challenger's stub of the Lean verifier's coins (as `test_a5_reserve` runs it), so
 nothing builds `sampled-proofs-verifier` and nothing is proved. Each member's sample is `LinkWindows.period_draw`'s on the
 session's coins: committed to its period's commitment, then `subset:K` read, then its turn ended (`drawn`)."""
@@ -50,7 +50,7 @@ def _session(tmp_path: Path, monkeypatch, names: list[str]):
     a = SimpleNamespace(challenger="local", main=str(main), gate_key=None, peer=None, challenger_key=None, draw=K)
     rounds = {n: SimpleNamespace(windows=[SimpleNamespace(root=_root(n, w)) for w in range(N)], advice=None)
               for n in names}
-    return n2.Challenger(a, rounds, tmp_path / "challenger"), rounds
+    return n2.ChallengerCoins(a, rounds, tmp_path / "challenger"), rounds
 
 
 def _draw(ch, name: str, rounds) -> dict:

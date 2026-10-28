@@ -1,4 +1,4 @@
-"""The NCI policy's check of a declared division, straight from the definitions: the reference `NciCheck.check` is held to.
+"""The inference-only policy's check of a declared division, straight from the definitions: the reference `NciCheck.check` is held to.
 
     check(instance) -> {"gates", "ius", "complies", "failure"} | {"error": code}
 

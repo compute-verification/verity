@@ -10,7 +10,7 @@ record or a digest (``ALLOWED``, one reason each; an entry that matches nothing 
 already queued on `next` rewrites (``PENDING``), until that PR lands and the rename follows it.
 
 The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``:
-"block" is reserved for parts of circuits, the subprotocols go by their names, and "leg" is retired). Their code
+"block" is reserved for parts of circuits, the subprotocols go by their names, and "leg", the dampener and NCI are retired). Their code
 keeps the old words until its owners rename it, so this scan skips code spans and fences, where a path (`legs/`) or a
 record key stays, and a term written as a quoted mention ("leg"); the table's rows name them too.
 """
@@ -56,6 +56,9 @@ DOC_TERMS = {
     "physical block": "server-time block",
     "thread block": "CTA",
     "KV block": "KV page",
+    "dampener, compute dampener": "the slowdown, slowdown(𝒢, 𝒜, η) (`Nci.Dampener` and `Dampener*` stay in backticks until renamed)",
+    "NCI, novel communication intensity": "the inference-only policy (`Nci*`, `NciCheck` and the `nci` directories stay in backticks until "
+                                          "renamed)",
     "leg": "the subprotocol's name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, the wipe), or run",
 }
 _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
@@ -65,7 +68,8 @@ _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}u
                        rf"|declar(?:es|ed|ing){_SPACE}(?:its|their|the){_SPACE}advice|sampled{_SPACE}units?"
                        rf"|units?{_SPACE}class(?:es)?|audit{_SPACE}coins?"
                        rf"|declaration{_SPACE}(?:blocks?|periods?)|sampling{_SPACE}(?:periods?|blocks?)|hm96{_SPACE}rows?"
-                       rf"|period's{_SPACE}(?:audit{_SPACE})?coins|reject(?:ion)?{_SPACE}domina\w*)\b)|\bIUs?\b"
+                       rf"|period's{_SPACE}(?:audit{_SPACE})?coins|reject(?:ion)?{_SPACE}domina\w*|dampeners?"
+                       rf"|novel{_SPACE}communication{_SPACE}intensity)\b)|\bIUs?\b|\bNCI\b"
                        rf"|\bcommit{_SPACE}periods?\b")
 #: The commitments' own docs, where hm96 rows keep their name.
 HM96_HOME = "verity/ml/commitments/"
@@ -141,6 +145,8 @@ PENDING: dict[str, str] = {
     "AGENTS.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "ARCHITECTURE.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
+    "benchmarks/verifier_cost/README.md": "queued PRs add the term here; the training vocabulary's rename follows them",
+    "benchmarks/prove_path/e2e_chains/README.md": "queued PRs on next rewrite lines the training vocabulary's rename touches; it follows them",
     "Security/Proofs/Flock/Soundness/Audit/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/bandwidth/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "benchmarks/network_e2e/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
@@ -317,3 +323,13 @@ def test_the_doc_scan_reads_the_reporting_terms():
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
         ("a.md", 1, "declared work"), ("a.md", 1, "declared workload"), ("a.md", 2, "declares its advice"),
         ("a.md", 2, "sampled units"), ("a.md", 2, "unit class"), ("a.md", 2, "audit coins")]
+
+
+def test_the_doc_scan_reads_the_training_terms():
+    """Training's vocabulary, on toy files: the dampener and NCI in prose, never their Lean names in code spans or paths."""
+    docs = {
+        "a.md": "The compute dampener D; Dampeners. NCI's check, novel\ncommunication intensity.\n"
+                "`Nci.Dampener.remoteDampener` and `benchmarks/nci`, the nci directory, NciCheck stay.\n",
+    }
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "dampener"), ("a.md", 1, "Dampeners"), ("a.md", 1, "NCI"), ("a.md", 1, "novel communication intensity")]

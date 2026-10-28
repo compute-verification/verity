@@ -16,7 +16,7 @@ The kinds:
   DeMo).
 * `partial`: a subset trained (a frozen prefix, a share of the experts), the rest registered.
 * `distill`: `full` on a teacher's outputs, the teacher's forward registered work.
-* `nci`: any algorithm of the NCI library (`benchmarks/nci/algorithms.json`) from its traits; `nci:<id>` names one with no
+* `nci`: any algorithm of the `benchmarks/nci` library (`benchmarks/nci/algorithms.json`) from its traits; `nci:<id>` names one with no
   table.
 
 A family may name a **precision** (`precision.<name>`, FP8 or NVFP4): the format sets `β_x`, caps every per-activation
@@ -415,7 +415,7 @@ def algorithms() -> Mapping[str, dict]:
 
 @dataclass(frozen=True, kw_only=True)
 class Nci(Premises):
-    """An algorithm of the NCI library (`benchmarks/nci/algorithms.json`), from its traits under `library.py`'s attacker
+    """An algorithm of the `benchmarks/nci` library (`benchmarks/nci/algorithms.json`), from its traits under `library.py`'s attacker
     convention (the rate a block pays per weight and per boundary entry capped at the literature's central rates,
     `nci.rate_cap` and `nci.boundary_bits_cap`), with the carried state capped as `Full`'s (`nci.state_bits_cap`):
 

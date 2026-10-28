@@ -36,7 +36,7 @@ a row, the size of the commitment the certifier makes of it row by row), never o
   input bits is unambiguous): the record's inference entries (``blocks.inference``, the window interface's
   `InferenceEntry`, each unit's (slot, step)) tile every template's units, and no (slot, step) has units on two servers;
   with two servers or more the record states them. Which server runs which units is protocol structure, deployment
-  configuration as NCI's declaration is, public and not a private partition, so this is checked in the clear with no
+  configuration as the inference-only policy's registration is, public and not a private partition, so this is checked in the clear with no
   proof block (`server_blocks`). The work is per entry, server run and digit: an entry's units on one run are at most
   two boxes a digit of its mixed radix, each a rectangle of (slot, step);
 - a transfer a new value, but a wire's other one, its kind in its direction (`transfer_rows.KINDS`), on a server, in its

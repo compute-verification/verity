@@ -145,9 +145,9 @@ A spec-level reference for network accounting's timing channel:
   and `ChargeLink_v1{N}`, the charge from the carry-in row held to the carry-out row (`protocol/charge-chain.md`). It
   takes the circuits, their evaluator and hm96 from `verity` and the produced rows from sampled proofs;
 - the whole window's charge (`window_charge`): `ChargeCount_v2{N, H, O}` and `ChargeLink_v2{N, H, O}` charge advice
-  v1's window with its hits and order entries and their counts, coded as `code_v1` codes them, with the order's
-  position and rank added to the carry and chained under the value `window-charge` (`protocol/charge-chain.md`, "The
-  whole window"). It takes what `charge_chain` takes;
+  v1's window (`Window`, the record `code_v1` codes) with its hits and order entries and their counts, coded as
+  `code_v1` codes them, with the order's position and rank added to the carry and chained under the value
+  `window-charge` (`protocol/charge-chain.md`, "The whole window"). It takes what `charge_chain` takes;
 - the active warden (`warden`): a relay that knows bytes only, between any client and any server. It forwards each
   direction's bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in
   bucket s + D + ⌊i/r⌋ from its admission s. A miss fails the connection closed with a `FAIL` cell that carries no
