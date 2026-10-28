@@ -625,6 +625,54 @@ def test_the_scan_leaves_out_each_members_refs_which_the_statement_fixes_and_sti
             sz.refs_of(member([bad(i) for i in range(n)]))
 
 
+def _a8():
+    """`a8`'s piece scan as `scan_zk.received` calls it: 16-byte pieces found raw or as hex in each file the verifier
+    received, and the control holding the held ones."""
+    def needles(p):
+        return {f: k for k, x in p.items() for f in (x, x.hex().encode())}
+
+    def find(data, t):
+        return {k: 1 for nd, k in t.items() if nd in data}
+
+    def received(vdir, control, pieces, held):
+        files = {f.name: {"bytes": f.stat().st_size, "found": find(f.read_bytes(), needles(pieces))}
+                 for f in sorted(vdir.iterdir())}
+        ctl = find(control.read_bytes(), needles(pieces))
+        return {"blobs": len(pieces), "files": files, "verifier_bytes": sum(x["bytes"] for x in files.values()),
+                "verifier_found": sorted({k for x in files.values() for k in x["found"]}),
+                "control": {"blobs_found": len(ctl), "holds_all": held <= set(ctl)}}
+
+    return SimpleNamespace(PIECE=16, needles=needles, find=find, received=received)
+
+
+def test_a_row_shorter_than_a_piece_is_found_whole_and_held_to_the_pieces_rule(tmp_path):
+    """w63k4's slot entries are 14 bytes, under the scan's 16-byte piece: `received` finds each whole (raw or as hex,
+    `leak_scan.find_whole`) beside the longer rows' cut pieces, leaves an all-zero one out as sparse, and `unseen` fails
+    the round where the verifier received one or the control doesn't hold it."""
+    entry = sz._bytes(sz.IS.entry_encode(sz.W63K4.cls, sz.IS.entry(3, [13, 110, 207])))
+    state = hashlib.sha512(b"state").digest()[:40]
+    assert len(entry) == 14
+    blobs = {"ingress-0 prog0 0": entry, "ingress-0 prog1 0": bytes(14), "ingress-0 o1 0": state}
+    control = tmp_path / "inst.bin"
+    control.write_bytes(state + entry)
+    vdir = tmp_path / "verifier"
+    vdir.mkdir()
+    (vdir / "proof.bin").write_bytes(hashlib.sha512(b"proof").digest())
+    rec = sz.received(_a8(), vdir, control, blobs, set(blobs), b"")
+    assert rec["whole_rows"]["rows"] == 1 and rec["sparse_pieces"] == 1 and sz.unseen(rec)
+    assert sorted(sz.LS.cut({"ingress-0 o1 0": state}, 16)) == [f"ingress-0 o1 0 @{o}" for o in (0, 16, 24, 32)]
+    assert rec["blobs"] == 4
+    for leak in (entry, entry.hex().encode()):
+        (vdir / "proof.bin").write_bytes(b"\xff" + leak)
+        rec = sz.received(_a8(), vdir, control, blobs, set(blobs), b"")
+        assert rec["whole_rows"]["verifier_found"] == ["ingress-0 prog0 0"] and not rec["verifier_found"]
+        assert not sz.unseen(rec)
+    (vdir / "proof.bin").write_bytes(hashlib.sha512(b"proof").digest())
+    control.write_bytes(state)
+    rec = sz.received(_a8(), vdir, control, blobs, set(blobs), b"")
+    assert rec["whole_rows"]["control"]["missing"] == ["ingress-0 prog0 0"] and not sz.unseen(rec)
+
+
 @pytest.mark.parametrize("name", sorted(sz.SETUPS))
 def test_schedule_prints_the_classs_schedule_as_warden_serves_flags(capsys, name):
     assert sz.main(["schedule", "--class", name]) == 0

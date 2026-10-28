@@ -128,7 +128,9 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   anyway (the circuits, zeros, the window's pads and `END` cells) and the sparse pieces (at most one nonzero byte); the
   prover's instance file, which holds them all, is the control. The instance holds each row's u16 words followed by
   the next row's, so a row's zero-padded last chunk isn't one the control holds; its last 16 bytes, which cover the
-  same tail, are (`leak_scan.public_pieces`' ``fields``).
+  same tail, are (`leak_scan.public_pieces`' ``fields``). A row shorter than a piece (w63k4's slot entries, 14 bytes)
+  is found whole, raw or as hex (`received`, `leak_scan.find_whole`), and held to the same: none found, the control
+  holding each.
 """
 from __future__ import annotations
 
@@ -1485,6 +1487,27 @@ def sparse(pieces: dict[str, bytes], held: set[str]) -> tuple[dict[str, bytes], 
     return {k: x for k, x in pieces.items() if k not in out}, held - out, len(out)
 
 
+def received(a8, vdir: Path, control: Path, blobs: dict[str, bytes], held: set[str], public: bytes) -> dict:
+    """What the verifier received (`vdir`) scanned for the witness `blobs`, less the sparse pieces: each row of at least
+    a piece cut whole less what `public` holds (`leak_scan.public_pieces`, found by `a8.received`), and each shorter
+    row (a slot entry at a small KO) found whole (`leak_scan.find_whole`, as ``whole_rows``); the `control` (the
+    instances) is to hold every one in `held`."""
+    short = {k: x for k, x in blobs.items() if len(x) < a8.PIECE}
+    pieces, kept, out = LS.public_pieces(a8, {k: x for k, x in blobs.items() if k not in short}, held, public,
+                                         fields=True)
+    pieces, kept, nsparse = sparse(pieces, kept)
+    short, short_held, nshort = sparse(short, held & set(short))
+    rec = {**a8.received(vdir, control, pieces, kept), "public_pieces": len(out), "sparse_pieces": nsparse + nshort}
+    if short:
+        rec["whole_rows"] = LS.find_whole(rec, short, vdir, control, short_held)
+    return rec
+
+
+def unseen(rec: dict) -> bool:
+    """No witness piece nor short row in what the verifier received (`received`), and the control holds them all."""
+    return all(not r["verifier_found"] and r["control"]["holds_all"] for r in (rec, rec.get("whole_rows")) if r)
+
+
 def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -1565,27 +1588,25 @@ def prove(a) -> int:
             if name == "honest":
                 summary["answers"] = answers(at, out, res, Fraction(a.delta), results.get("block"))
                 log(f"answers: link-windows {at.windows}, each {summary['answers']}")
-            blobs, held = blobs_of(members)
-            blobs, held, public = LS.public_pieces(M.a8, blobs, held, known(members, at), fields=True)
-            blobs, held, nsparse = sparse(blobs, held)
             inst = out / name / "instances.bin"
             inst.write_bytes(b"".join((m["dir"] / f"inst-{m['n']}.bin").read_bytes() for m in members))
-            res["received"] = {**M.a8.received(out / name / "verifier", inst, blobs, held),
-                               "public_pieces": len(public), "sparse_pieces": nsparse}
+            rec = res["received"] = received(M.a8, out / name / "verifier", inst, *blobs_of(members),
+                                             known(members, at))
             inst.unlink()
-            rec = res["received"]
-            good = expected(at, name, res) and not rec["verifier_found"] and rec["control"]["holds_all"]
+            good = expected(at, name, res) and unseen(rec)
             if coins is not None and name == "honest":
                 good = good and bool(res.get("coin_negatives")) and all(res["coin_negatives"].values())
             ok &= good
             summary["rounds"][name]["audit"] = res
+            whole = rec.get("whole_rows") or {"rows": 0, "verifier_found": []}
             log(f"round {name}: drawn {len(res.get('draw', {}).get('units') or [])} of {pg.units}, "
                 f"charge {res.get('charge')}, per unit {res.get('per_unit')}; proofs {res['verdicts']}, audit "
                 f"{res.get('audit')}, opened "
                 f"{ {k: v for k, v in res.get('opened', {}).items()} }, Lean {res['why']}, verifier received "
                 f"{rec['verifier_bytes']} bytes, witness pieces found there: {rec['verifier_found'] or 'none'} (of "
-                f"{len(blobs)}; {len(public)} public, {nsparse} sparse left out), control "
-                f"{rec['control']['blobs_found']}; {'as expected' if good else 'UNEXPECTED'}")
+                f"{rec['blobs']}; {rec['public_pieces']} public, {rec['sparse_pieces']} sparse left out), rows "
+                f"shorter than a piece found whole there: {whole['verifier_found'] or 'none'} (of {whole['rows']}), "
+                f"control {rec['control']['blobs_found']}; {'as expected' if good else 'UNEXPECTED'}")
             (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     if coins is not None:
         pub = coins.published or {}
