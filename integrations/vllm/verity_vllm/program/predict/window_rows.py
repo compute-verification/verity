@@ -16,9 +16,9 @@ cut at its residual add (`_Program.norms`): part AT its words of the node's seco
 its Definition's function of the window's values:
 - a slot's `ScanSlots_v2` every lane's first token and slot, occupancy word and head of the scan state row at its anchor
   (`io_shell.scan_reference`; its lane's row is the slot's, `scan_slots`), every later position's `TokenFeed_v1` below the
-  prompt cap its token and the slot it carries (`io_shell.feed_reference`), each token select's `OutCollect_v1` the select
-  collected on from the lane's head (`io_shell.collect_reference`), and the last position's `SlotEntry_v1` the slot's entry
-  (`io_shell.entry_reference`);
+  prompt cap its token and the slot it carries (`io_shell.feed_reference`), each token select's `SelectCollect_v1` its
+  second row, the select collected on from the lane's head (`io_shell.collect_reference`), and the last position's
+  `SelectEntry_v1` the slot's entry (`io_shell.entry_reference`);
 - each token select's group units each group's first maximum above -inf of its logits and its index in the group
   (`chunk_best`), and its ``x0`` unit ``logits[0]``;
 - each embedding read's verdict 1, its opening the table's row, salt and path at the token (the table's registered value,
@@ -475,8 +475,9 @@ class Rows:
 
     def _scan(self, P: Any, S: Slot, picks: Sequence[int]) -> None:
         """The slot's scan units: its `ScanSlots_v2` every lane's first token and slot, occupancy word and head of the scan
-        state row at its anchor (its lane's row the slot's, refused by name where it isn't), each position's `OutCollect_v1`
-        its select collected on from the lane's head, and its `SlotEntry_v1` its entry of the scan's Programs' row."""
+        state row at its anchor (its lane's row the slot's, refused by name where it isn't), each position's
+        `SelectCollect_v1` but the last its select collected on from the lane's head (its ``o1``; its select ``o0`` is the
+        node's), and the last's `SelectEntry_v1` its entry of the scan's Programs' row."""
         tid, u = P.scan_unit
         for k, lane in enumerate(_lanes(P, self.state, IO.scan_reference)):
             for i, v in enumerate(lane):
@@ -485,9 +486,12 @@ class Rows:
         if row != S.row:
             raise ValueError(f"{P.name}: its slot's row isn't lane {P.lane}'s of the scan state row at bucket {P.anchor}")
         KO = P.cls.outputs
-        for p, ((ctid, cu), tok) in enumerate(zip(P.collects, picks, strict=True)):
+        if len(P.collects) != len(picks) - 1:
+            raise ValueError(f"{P.name}: {len(P.collects)} collectors for {len(picks)} selects, not one each but the last's")
+        for p, tok in enumerate(picks):
             a = IO.collect_reference(a, tok, KO, p == 0)
-            self._put(ctid, cu, "o0", _i32(a), EVALUATED)
+            if p < len(P.collects):
+                self._put(*P.collects[p], "o1", _i32(a), EVALUATED)
         e = P.entry.bindings
         entry = IO.entry_reference(S.row[0], a, KO, e["IDB"], e["NP"], e["STOP"])
         self._put(*P.entry_unit, "o0", np.array([entry], dtype=np.uint16), EVALUATED)
