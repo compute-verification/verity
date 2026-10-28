@@ -104,21 +104,23 @@ class SealProcess:
             self.conn.send(msg)
         t_sent = time.perf_counter()
         hashed: dict[str, str] = {}
-        failed: BaseException | None = None
         try:
             _p, doc = RB.write_store_files(out, 0, com, rc, digests=hashed, extras=extras)
-            stored: tuple = ("stored", doc, hashed)
-        except Exception as e:  # noqa: BLE001  (raised below, unless a check the process ran first failed)
-            failed, stored = e, ("unstored",)
+        except Exception as e:
+            self.conn.send(("unstored",))
+            if (got := self._receive("seal"))[0] == "error":     # a check the process ran first: the window's error
+                RB.discard(out, 0)
+                raise SealFailed(got[1]) from e
+            raise
         t_written = time.perf_counter()
-        self.conn.send(stored)
+        self.conn.send(("stored", doc, hashed))
         try:
             if written is not None:
                 written()
         finally:
             got = self._receive("seal")
         if got[0] == "unstored":
-            raise failed if failed is not None else RuntimeError("the seal process found no store written")
+            raise RuntimeError("the seal process found no store written")
         if got[0] == "error":
             if got[2]:
                 RB.discard(out, 0)
