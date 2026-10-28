@@ -29,7 +29,7 @@ reg_extra = { value = 3371, unit = "word/SM", mark = "ceiling", source = "the un
 smem = { value = 131072, unit = "B/SM", mark = "ceiling", source = "whitepaper v1.1: 128 KB of L1 and shared memory an SM" }
 l2 = { value = 134217728, unit = "B", mark = "ceiling", source = "whitepaper v1.1, Table 4: L2 128 MB, taken as 128 MiB" }
 dram = { value = 103079215104, unit = "B", mark = "ceiling", source = "product page, 'GPU Memory 96 GB GDDR7', taken as 96 GiB" }
-chip = { value = 263163904, unit = "B", mark = "ceiling", source = "all of the card's on-chip storage, S_chip's device term: 188 SMs' registers, L1 and shared memory, L1.5, instruction caches, uniform registers and warp state, the L2, the TLB and 1 MiB of buffers (ra-pcie-exhaust #1852, chip.cu, runs art:2b6cac05 to art:90de6479)" }
+chip = { value = 263163904, unit = "B", mark = "ceiling", source = "all of the card's on-chip storage, S_chip's device term: 188 SMs' registers, L1 and shared memory, L1.5, instruction caches, uniform registers and warp state, the L2, the TLB and 1 MiB of buffers (chip.cu's enumeration, runs art:2b6cac05 to art:90de6479)" }
 
 # The resources' rates, each a SM-clock (the Lean's rho is SMs x this x the SM clock).
 [rate]

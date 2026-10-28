@@ -29,7 +29,7 @@ reg_extra = { value = 4494, unit = "word/SM", mark = "ceiling", source = "the un
 smem = { value = 262144, unit = "B/SM", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3: 'Combined L1 Cache / Shared Memory 256 KB' (shared memory alone is configurable to 228 KB, so the pool is the larger)" }
 l2 = { value = 52428800, unit = "B", mark = "ceiling", source = "H100 whitepaper V1.04 Table 3: 'L2 Cache Size 50 MB', taken as 50 MiB" }
 dram = { value = 151397597184, unit = "B", mark = "ceiling", source = "H200 data sheet, 'GPU Memory 141GB', taken as 141 GiB, above the 143,771 MiB the driver reports" }
-chip = { value = 0, unit = "B", mark = "placeholder", source = "not enumerated: the RTX card's store.chip is chip.cu's over sm_120 (ra-pcie-exhaust #1852); open until one over sm_90 replaces it" }
+chip = { value = 0, unit = "B", mark = "placeholder", source = "not enumerated: the RTX card's store.chip is chip.cu's enumeration over sm_120; open until one over sm_90 replaces it" }
 
 # The resources' rates, each a SM-clock (the Lean's rho is SMs x this x the SM clock).
 [rate]
