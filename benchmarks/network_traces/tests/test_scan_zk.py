@@ -10,11 +10,11 @@ its output 0, its state and view the honest ones. A group of link-windows (IO-TI
 template and link-window, its members the Program's ranges. A warden_serve run's directory (`--warden-run`, here the
 synthetic run published as `warden_serve.Publisher` publishes a served one) is read under its deployment's key, its
 registration's ``rows/<direction>/<w>`` roots (`scan_zk.warden_roots`) the root and domain of each row registration in
-``cells.jsonl``, and refused by name where a row, the key or the schedule isn't the warden's. Every round on a
-challenger session of its own (``--challenger``): flags that can't name one refused by name before anything runs, each
-round's root bound to the warden's signed link-windows, the step and the round, and the honest round's Spec what its
-registration shows (`service.check_public`) over the units its `Stream` takes. Nothing here lowers or proves
-(`scan_zk.prove` does, on a node)."""
+``cells.jsonl``, and refused by name where a row, the key or the schedule isn't the network certifier's. Every round
+on a challenger session of its own (``--challenger``): flags that can't name one refused by name before anything runs,
+each round's root bound to the network certifier's signed link-windows, the step and the round, and the honest round's
+Spec what its registration shows (`service.check_public`) over the units its `Stream` takes. Nothing here lowers or
+proves (`scan_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 

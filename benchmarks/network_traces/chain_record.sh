@@ -14,8 +14,8 @@
 #            (a sampled draw on signed clocks); else on the advice profile n2_advised_zk.py --e2e on the bound
 #            advice and the certifier's clock certificates, and on the others n2_zk.py prove
 #   scan     the scan's chained units, --zk, held by Lean verify --zk --registered (scan_zk.py prove, with
-#            --warden-run when CR_WARDEN_RUN names the gate's warden run and scan_zk takes it), each round drawn on a
-#            session of CR_CHALLENGER's
+#            --warden-run when CR_WARDEN_RUN names the gate's network certifier run and scan_zk takes it), each
+#            round drawn on a session of CR_CHALLENGER's
 #   tie      on the warden path, the I/O tie on the warden's ingress, proved (n2_tie_zk.py prove --class warden)
 #   report   $OUT/report/report.json and report.md (chain_record.py report)
 #   guard    on every exit, before custody publishes the run dir, the record's leak guard (leak_guard.py): each file in it

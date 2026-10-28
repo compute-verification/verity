@@ -80,14 +80,14 @@ network certifier's machine: P (``--coin-peer``, `AUDITOR` by default) is the no
 lane's gate key (``--key``) and the kept fetch. The challenger reserves one of P's ports in its /etc/vy/coin-ports and
 its coin link carries each session's coins over ssh to that port of P's loopback, where the round's client connects;
 only P's own line serves P, and a reserve for a node with no line is refused (`AUDITOR`'s line is ports 7821-7830,
-with its /etc/vy/peers entry). The client may run on any node, the served one included: the root is the warden's, and the
-gate opens it once and logs every coin it releases. ``--challenger local`` is a dry run's, a session on this machine
-under a key of its own. ``--main`` is the verifier's copy of main's first-parent history, fetched from the tree's
-origin into KEEP/RUN by default as n2_advised_zk.sh does; ``--challenger-key`` is the deployment's challenger-key/v1
-record (labelled ``challenger-key current``), sent with the run. A gate, peer, key or main that fails, or a session's
-evidence that doesn't hold, fails the round: nothing falls back to other coins. The CR_K=V may not name the
-challenger (CR_CHALLENGER, CR_MAIN, CR_PEER, CR_CHALLENGER_KEY, CR_GATE_KEY), and CR_SCAN_ARGS and CR_SCAN_CMD may
-not name the scan's coins (``--draw``, ``--challenger``, ``--peer``, ``--main``).
+with its /etc/vy/peers entry). The client may run on any node, the served one included: the root is the network
+certifier's, and the gate opens it once and logs every coin it releases. ``--challenger local`` is a dry run's, a
+session on this machine under a key of its own. ``--main`` is the verifier's copy of main's first-parent history,
+fetched from the tree's origin into KEEP/RUN by default as n2_advised_zk.sh does; ``--challenger-key`` is the
+deployment's challenger-key/v1 record (labelled ``challenger-key current``), sent with the run. A gate, peer, key or
+main that fails, or a session's evidence that doesn't hold, fails the round: nothing falls back to other coins. The
+CR_K=V may not name the challenger (CR_CHALLENGER, CR_MAIN, CR_PEER, CR_CHALLENGER_KEY, CR_GATE_KEY), and
+CR_SCAN_ARGS and CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--challenger``, ``--peer``, ``--main``).
 
 **The endpoint.** It is started by hand on `PEER` (`HAND_START`) ahead of the session's ``--at``, and it
 listens within about 35 s. Its records stay in its serve dir on h200-2: requests.jsonl (prompt and streamed ids) and

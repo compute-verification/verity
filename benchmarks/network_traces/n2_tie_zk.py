@@ -38,11 +38,11 @@ and the stream's registrations built from the stream's outcomes of record alone 
   table is the window's bucket rows under the warden's salts and paths, its registered port. A round registers,
   selects every window (Selection All, which reads no coin: the summary's ``coins``, beside every Flock session's
   own, `round_coins.FLOCK`), proves live behind the firewall, delivers, and decides on the proof: the verifier's own
-  Lean run with its own registered reads at the warden's root (`IngressTie.registered`), each ``pub`` row opened only
-  to its own copy
-  (its lanes from the advice and the release) and each ``o0`` row read. Per window: prove (the session's wall time,
-  the prover's ``prove_total_s``, proof bytes) and verify (the verifier of record's run, Lean included). The members
-  run one after another, one firewalled session at a time (`n2_zk.ONE_SESSION`: ``--jobs`` is 1).
+  Lean run with its own registered reads at the network certifier's root (`IngressTie.registered`), each ``pub`` row
+  opened only to its own copy (its lanes from the advice and the release) and each ``o0`` row read. Per window: prove
+  (the session's wall time, the prover's ``prove_total_s``, proof bytes) and verify (the verifier of record's run, Lean
+  included). The members run one after another, one firewalled session at a time (`n2_zk.ONE_SESSION`: ``--jobs`` is
+  1).
 * **What the verifier receives** is `RECEIVED` per window and the advice (``advice.json``), scanned for every piece of
   the windows' held cells and their salts but those the public circuit or an empty slot holds, and a member fails on a
   piece `leak_scan.scan` reads as ``leaked``, not on a find it reads as structured (across the format's fields, or

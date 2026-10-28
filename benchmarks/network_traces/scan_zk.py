@@ -108,14 +108,14 @@ session of the auditor's challenger of its own (``--challenger``, `round_coins`)
   instances' rows. A member none of whose units is drawn (G > 1) runs no session.
 * **The challenger's coins** (``--challenger local|gate:USER@HOST --main FILE``, `round_coins`): every round, the
   block round and the negatives too, draws as prove_path's records audit draws (`a5_coins`), on a session of the
-  auditor's challenger of its own, on the round's root (`round_coins.root` of the group's `window_root`, the warden's
-  session and the group's signed registrations, and the round's name). The round's stream (`RoundStream` on `spec_of`,
-  the joint round's own Program the generator form) on its coins (`a5_coins.RankCoins`) registers the round, the coins
-  commit to the registration's digest, and its select draws once (Lean's `Select.select` on the bytes read). Once the
-  session has ended, the outcome of record is the stream's with the coins' evidence, the Lean's whole run (`Run.run`,
-  coin source the challenger) held to the Python's (`coins_outcome`), and the session's evidence held by
-  `round_coins.RoundSession.held`; for the honest round each altered evidence (`a5_coins.negatives`, the evidence for
-  another window) is also refused by the Lean's run.
+  auditor's challenger of its own, on the round's root (`round_coins.root` of the group's `window_root`, the network
+  certifier's session and the group's signed registrations, and the round's name). The round's stream (`RoundStream`
+  on `spec_of`, the joint round's own Program the generator form) on its coins (`a5_coins.RankCoins`) registers the
+  round, the coins commit to the registration's digest, and its select draws once (Lean's `Select.select` on the bytes
+  read). Once the session has ended, the outcome of record is the stream's with the coins' evidence, the Lean's whole
+  run (`Run.run`, coin source the challenger) held to the Python's (`coins_outcome`), and the session's evidence held
+  by `round_coins.RoundSession.held`; for the honest round each altered evidence (`a5_coins.negatives`, the evidence
+  for another window) is also refused by the Lean's run.
   ``local`` is a development session on this machine (its own key; it shows the path, not an auditor's coins);
   ``gate:USER@HOST`` is the auditor's challenger's through its gate, its challenger on ``--peer``'s 127.0.0.1, under
   the deployment's key record ``--challenger-key``. The gate opens a root once, ever: a run's round is drawn once (the
@@ -1004,8 +1004,9 @@ def staged_wires(members: list[dict]) -> list[str]:
 
 def window_root(at: SimpleNamespace) -> str:
     """The group's root (128 hex digits), which each round's session root binds (`round_coins.root`): the SHA-512 of
-    the warden's session and the group's registrations, each link's in link-window order, whose heads the warden
-    signed. The gate opens a root once, ever, so each round of a warden run's group is drawn once."""
+    the network certifier's session and the group's registrations, each link's in link-window order, whose heads the
+    network certifier signed. The gate opens a root once, ever, so each round of a network certifier run's group is
+    drawn once."""
     return hashlib.sha512(canonical_json({"format": WINDOW_ROOT, "session": at.session.hex(),
                                           "registrations": {s: [x.registration for x in ws]
                                                             for s, ws in sorted(at.sides.items())}})).hexdigest()

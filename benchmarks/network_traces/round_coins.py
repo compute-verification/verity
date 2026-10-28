@@ -11,9 +11,9 @@ else, never the verifier's own randomness.
   the session's pin must be. Tests run ``local`` on live_challenger's stub of the Lean's coins
   (``benchmarks/live_challenger/tests/stub_serve.py``): the fake challenger.
 * **The root** (`root`): the SHA-512 of the run's base (what the auditor's devices signed, which the prover can't
-  vary: the scan's the warden's session and signed registrations, a sampled N2 period's its certificates), the step
-  and the round. The gate opens a root once, ever, so each round of a run draws once, and a rerun of the run can't
-  draw it again.
+  vary: the scan's the network certifier's session and signed registrations, a sampled N2 period's its
+  certificates), the step and the round. The gate opens a root once, ever, so each round of a run draws once, and a
+  rerun of the run can't draw it again.
 * **A round's session** (`RoundSession`: `a5_coins.start` for one rank). The round plans its need (`RankCoins.plan`,
   which opens the session), commits to its registration (`RankCoins.commit`), reads its coins and ends its turn
   (`RankCoins.drawn`: the segment the session released). `close` publishes the session's evidence, kept under its
