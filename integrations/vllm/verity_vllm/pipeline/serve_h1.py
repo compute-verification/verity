@@ -47,7 +47,11 @@ admission and gaps, the credit gate, the coins, the commitment's calls root, its
 port, how the session closed and its end entry) and where its time went (``seconds``); a window whose H1 failed to open
 or close carries its error there instead, and the Commit serves on. ``serve.json``'s ``protocols`` is
 `H1Windows.describe`, ``summary.json``'s ``pouw_h1`` `H1Windows.summary` with the windows that failed.
-``--protocols-config`` is the pouw settings the server doesn't set itself, ``{"pouw": {...}}`` (`config_of`)."""
+``--protocols-config`` is the pouw settings the server doesn't set itself, ``{"pouw": {...}}`` (`config_of`). Its ``unit``
+and ``ks`` shape the declared Program: ``{"pouw": {"unit": "j10r", "ks": [2048]}}`` declares J10-R's tile unit
+(`pouw_h1_served.unit_of`) over the linears at K 2,048 alone, the form a period's guarantee covers (core's
+`period_check.form`), and the linears at any other K serve on their arm unrecorded, uncredited as attention is. Unset,
+the Program is v1's over every linear."""
 from __future__ import annotations
 
 import dataclasses
@@ -365,7 +369,10 @@ class H1Windows:
         self.out, self.config, self.unit, self.sessions = Path(out), dict(config or {}), unit, sessions
         self.prover = None if prover is None else Path(prover)
         self.closer, self.clock = closer, clock
-        self.layers = PHK.layers(model, pouw.linear_types())
+        pw = pouw.Settings.of(self.config.get("pouw", {}))
+        self.layers = PHK.layers(model, pouw.linear_types(), pw.ks)
+        if unit is None:
+            self.unit = unit = SV.unit_of(pw.unit)
         if not self.layers:
             raise ValueError(f"{ENTRY}: the served model has no int8 linear H1 records (serve an int8 precision)")
         shapes = [tuple(int(d) for d in m.weight.shape) for m in self.layers]

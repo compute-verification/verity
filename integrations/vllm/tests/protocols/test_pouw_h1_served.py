@@ -1012,6 +1012,30 @@ def test_a_chunked_llama_window_registers_chunk_leaves_and_core_credit_ties_it()
         "weights", CR.other_weights_entry(pre + "b/14336", 14336, 32))
 
 
+#: one Llama-3.2-1B decoder layer's int8 linears (n, K): qkv, o and gate_up at the hidden size, down_proj at the
+#: intermediate size
+LLAMA_1B = {"qkv_proj": (3072, 2048), "o_proj": (2048, 2048), "gate_up_proj": (16384, 2048), "down_proj": (2048, 8192)}
+
+
+def test_the_pouw_setting_j10r_over_one_k_declares_the_form_a_periods_guarantee_covers():
+    """serve-openai's ``{"pouw": {"unit": "j10r", "ks": [2048]}}`` (`unit_of`, the linears at K = 2048): the Program it
+    declares over a Llama-3.2-1B layer at T 64, S 1 is J10-R's tile unit at one K, which core's `period_check.form`
+    takes, and credit reads it as J10-R. Unset (v1), it is refused for its per-unit noise, and J10-R with down_proj's
+    K = 8192 beside it for its two K's."""
+    from verity.core.protocols.pouw import period_check as PCK
+
+    def form(names, unit):
+        shapes = [LLAMA_1B[n] for n in names]
+        raw = SV.descriptor(SV.declared(shapes, dict(enumerate(names)), 64, 1, unit=SV.unit_of(unit)))
+        return PCK.form("p", [{"descriptor": raw.hex()}]), CR.shape_of(raw)
+
+    one_k = [n for n, (_n, k) in LLAMA_1B.items() if k == 2048]
+    why, shape = form(one_k, "j10r")
+    assert why is None and {k: t["j10r"] for k, t in shape["tiles"].items()} == {2048: True}
+    assert "takes per-unit noise" in form(one_k, None)[0]
+    assert "has units at 2 K's" in form(list(LLAMA_1B), "j10r")[0]
+
+
 def _last_chunk_code(w):
     codes = w[0].clone()
     codes[3, 14335] ^= 1
