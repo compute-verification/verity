@@ -571,7 +571,8 @@ def _layout_desc(seed: int, one_call: bool) -> tuple[str, int]:
 
 @st.composite
 def gate_requests(draw) -> dict:
-    """A random composite's Program and one of its gates, or one draw in eight a gate past its last."""
+    """A random composite's Program and one of its gates, or a gate past its last (about one draw in three: Hypothesis
+    draws an integer range's lower bound more often than its share)."""
     text, size = _layout_desc(draw(st.integers(0, RANDOM_SEEDS - 1)), draw(st.booleans()))
     g = draw(st.integers(size, size + 3)) if draw(st.integers(0, 7)) == 0 else draw(st.integers(0, size - 1))
     return {"program": json.loads(text), "gate": g}
@@ -590,9 +591,10 @@ PARTITION_PORT = DT.Port("verity-evaluate", "partition", reference=partition_ref
                          package=PKG)
 
 
+@pytest.mark.slow
 def test_layout_gates_drawn(server):
     stats = DT.run(GATE_PORT, examples=400, seed=0, server=server)
-    assert stats.outputs >= 300 and stats.rejects >= 20, stats
+    assert stats.outputs >= 200 and stats.rejects >= 20, stats
 
 
 def test_every_gate_of_some_programs(server):
