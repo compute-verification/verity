@@ -180,6 +180,26 @@ def checks(arms: Arms, arm: str, s: Step, bat: Step, ref) -> dict:
             "finite": bool(torch.isfinite(a[0].float()).all())}
 
 
+class Guard:
+    """Copies of every tensor a step's calls read, so a call that writes past its own buffers is named by the first check
+    after it rather than by a later arm's illegal address."""
+
+    def __init__(self, *steps: Step) -> None:
+        self.t = {f"{i}.{k}": x for i, s in enumerate(steps) for k, x in self.reads(s).items()}
+        self.ref = {k: x.clone() for k, x in self.t.items()}
+
+    @staticmethod
+    def reads(s: Step) -> dict:
+        out = {"qkv": s.qkv, "cu": s.cu, "used": s.used}
+        for name, (kc, vc, bt) in s.caches.items():
+            out |= {f"{name}.k": kc, f"{name}.v": vc, f"{name}.bt": bt}
+        return out
+
+    def changed(self) -> list[str]:
+        torch.cuda.synchronize()
+        return [k for k, x in self.t.items() if not torch.equal(x, self.ref[k])]
+
+
 def batched(m: dict, s: Step, seed: int) -> Step:
     """s's step with one more sequence (half its length) ahead of its own, the same q, k, v rows for s's sequences."""
     x = max(BLOCK, s.max // 2)
@@ -247,23 +267,32 @@ def main() -> None:
             softmax_scale=s.scale, causal=True, window_size=(-1, -1), block_table=bt, softcap=0.0, scheduler_metadata=None,
             fa_version=3, num_splits=1, return_softmax_lse=True)
         emit({"kind": "check", "prompt": prompt, "arm": "flash_attn_varlen_func", "vs_served": compare(snap(via), ref)})
+        guard = Guard(s, bat)
+
+        def intact(after: str) -> None:
+            if bad := guard.changed():
+                emit({"kind": "corrupt", "prompt": prompt, "after": after, "changed": bad})
+                raise SystemExit(f"{after} wrote into {bad}")
+
         macs = ar.attn_macs(m, lens)
         ready = []
         for a in names:
             if a != "served-eager":
                 emit({"kind": "check", "prompt": prompt, "arm": a, **checks(arms, a, s, bat, ref)})
+                intact(f"{a} check")
             f = arms.call(a.removesuffix("-eager"), s)
             emit({"kind": "prepare", "prompt": prompt, "arm": a})
             it = ar.prepare(emit, a, "bf16", macs, f, not a.endswith("-eager"), {"prompt": prompt, "t": s.t, "form": "whole"})
             for _ in range(3):
                 it["fn"]()
-            torch.cuda.synchronize()
+            intact(f"{a} prepare")
             ready.append(it)
         for r in range(args.rounds):
             for it in ready:
                 emit({"kind": "start", "prompt": prompt, "arm": it["arm"], "round": r})
                 emit(ar.window(args, nv, st, it, r))
-        del ready, s, bat
+                intact(f"{it['arm']} window")
+        del ready, s, bat, guard
         torch.cuda.empty_cache()
     if args.table:
         args.table.write_text(table(rows))
