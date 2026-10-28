@@ -889,8 +889,8 @@ def select(j):
 
 
 def design(j):
-    """`Pieces.design`: the sampling design of `select`'s draw (`audit.design`, Lean `Core.Draw.ofFlock`), C-Flock's law
-    held to core's `Core.Draw`, the work sampling design's among them."""
+    """`Pieces.design`: the sampling design of `select`'s draw (`audit.design`, Lean `Core.SamplingDesign.ofFlock`), C-Flock's law
+    held to core's `Core.SamplingDesign`, the work sampling design's among them."""
     return {"design": _json(audit.design(select(j)["draw"]).to_json())}
 
 
@@ -3098,7 +3098,7 @@ def test_the_select_piece_draws_every_rule(pieces):
 
 
 def test_a_work_draws_design_is_cores(pieces):
-    """C-Flock's work law held to `Core.Draw`: a work draw's sampling design, Lean's (`Core.Draw.ofFlock`) the Python's
+    """C-Flock's work law held to `Core.SamplingDesign`: a work draw's sampling design, Lean's (`Core.SamplingDesign.ofFlock`) the Python's
     (`audit.design`), is the profile's `work` case with each stratum's works and floor, and its sample's design is the
     stratified one at its k_s."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
