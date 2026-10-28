@@ -1,7 +1,10 @@
-"""`engine.int8_wgmma`, `int8_fused.product`'s sm_90a plan: its configs and plan rows on the CPU, and on an sm_90 GPU with nvcc
-every variant bit for bit against `exactlin_scaled_mm_tma` and an exact int32 product with exactlin's epilogue, at shapes
-that are no multiple of any tile, at -128 and 127, into a poisoned y, and replayed from a CUDA graph."""
+"""`engine.int8_wgmma`, `int8_fused.product`'s sm_90a plan: its configs and plan rows on the CPU, its PTX's rounding where
+nvcc is, and on an sm_90 GPU with nvcc every variant bit for bit against `exactlin_scaled_mm_tma` and an exact int32 product
+with exactlin's epilogue, at shapes that are no multiple of any tile, at -128 and 127, into a poisoned y, and replayed from
+a CUDA graph."""
 from __future__ import annotations
+
+import subprocess
 
 import pytest
 import torch
@@ -45,6 +48,23 @@ def test_the_row_is_the_last_whose_m_min_is_reached(monkeypatch):
     assert W.row(1 << 20, 256, 64, "sm_90") == ("com2_128x256", 8, 0)
     assert W.row(8192, 256, 128, "sm_90") is None
     assert W.row(8192, 256, 64, "sm_120") is None
+
+
+@pytest.mark.skipif(W.nvcc() is None, reason="nvcc required")
+def test_the_ptx_rounds_as_exactlin(tmp_path):
+    """The PTX nvcc makes of int8_wgmma.cu with the library's float flags: no FMA contraction and no FTZ, and the epilogue's
+    cvt.rn.f32.s32, two mul.rn.f32 and cvt.rn.bf16x2.f32 over wgmma's s8 product (as `int8_fused.ptx_check` holds the
+    Triton kernels)."""
+    assert "-fmad=false" in W.NVCC_FLAGS and not {"--use_fast_math", "-ftz=true"} & set(W.NVCC_FLAGS)
+    out = tmp_path / "int8_wgmma.ptx"
+    subprocess.run([W.nvcc(), "-ptx", "-O3", "-std=c++17", "-arch=sm_90a", "-fmad=false", "-o", str(out),
+                    str(W.HERE / "int8_wgmma.cu")], check=True)
+    ptx = out.read_text()
+    assert ptx.count(".ftz") == 0
+    assert sum(ptx.count(f) for f in ("fma.rn.f32", "mad.f32", "mad.rn.f32", "fma.rn.ftz.f32")) == 0
+    assert sum(ptx.count(f) for f in ("div.rn.f32", "div.approx", "div.full")) == 0
+    assert ptx.count("cvt.rn.f32.s32") >= 1 and ptx.count("mul.rn.f32") >= 2 and ptx.count("cvt.rn.bf16x2.f32") >= 1
+    assert ptx.count(".s32.s8.s8") >= 1
 
 
 def _operands(m, n, k, seed, extremes=False):
