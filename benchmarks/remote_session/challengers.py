@@ -8,7 +8,7 @@
   release log when the client closes the session. Not the auditor host: the verifier's machine is the audit's (never
   the prover's), but no ledger opens the session for its window, so the read is `challenger.session_of`'s, under the
   key the run wrote.
-- `Gate`: the auditor's challenger host, through its gate (`benchmarks/live_challenger/auditor.py`)
+- `ChallengerGate`: the auditor's challenger host, through its gate (`benchmarks/live_challenger/auditor.py`)
   under the lane's own gate key, over ssh (`ssh_gate`). Each session is reserved for this machine (`--peer`), inside
   the audit's period, and opened at its window root R (`coins.window`; the ledger opens one session a root, ever); the
   host serves it from its pinned tree and reaches this machine's 127.0.0.1 at the open's port through this machine's
@@ -157,7 +157,7 @@ def ssh_gate(ssh: Sequence[str]) -> Call:
     return call
 
 
-class Gate:
+class ChallengerGate:
     """Session coins from the auditor host's challenger, one gate session a session, its fetched directory, the ledger
     and the host's pins log under `out`. `pin` is the SHA-512 of the challenger's public key, `period` the audit's
     period on the ledger (the lane opens it, `period-open`, before the first session), `main` the auditor's own
@@ -257,7 +257,7 @@ class Gate:
 
 def of(kind: str, out: Path, key: Path | None, params: str | None, *, ssh: str | None = None, peer: str | None = None,
        pin: str | None = None, period: str | None = None, main: Path | None = None,
-       minutes: int = 120) -> Local | Serve | Gate:
+       minutes: int = 120) -> Local | Serve | ChallengerGate:
     """`--challenger KIND`'s source; `serve` needs its key directory, `gate` the host's ssh, this machine's peer name
     there, the challenger key's pin, the audit's period and the auditor's first-parent list of main, read here so a
     missing or unreadable one refuses the run before its first session."""
@@ -277,5 +277,5 @@ def of(kind: str, out: Path, key: Path | None, params: str | None, *, ssh: str |
                              "--challenger-main FILE (the auditor's own `git rev-list --first-parent origin/main`)")
         first_parent = remote.main_lines(main)
         out.mkdir(parents=True, exist_ok=True)
-        return Gate(out, ssh_gate(shlex.split(ssh)), peer, pin, period, first_parent, minutes=minutes)
+        return ChallengerGate(out, ssh_gate(shlex.split(ssh)), peer, pin, period, first_parent, minutes=minutes)
     raise ValueError(f"--challenger is one of {KINDS}")
